@@ -85,14 +85,17 @@ def zone_mask(sid: str, glb: str, z: dict, size: tuple, tmp: str, i: int) -> str
     orm = Image.fromarray(glb_image(glb, "_orm")).resize((W, H), Image.NEAREST)
     r = np.asarray(orm)[..., 1] / 255.0
     m &= (r >= lo) & (r <= hi)
-    if "maxL" in z:
+    if "maxL" in z or "minL" in z:
         from part_lab import srgb_to_lab
-        m &= srgb_to_lab(glb_image(glb, "_base") / 255.0)[..., 0] <= z["maxL"]
+        L = srgb_to_lab(glb_image(glb, "_base") / 255.0)[..., 0]
+        m &= (L <= z.get("maxL", 101)) & (L >= z.get("minL", -1))
     Image.fromarray((m * 255).astype("uint8")).save(out)
     return out
 
 
-def grade(sid: str, glb: str | None = None, dry: bool = False) -> dict:
+def grade(sid: str, glb: str | None = None, dry: bool = False, fresh: float = 0.0) -> dict:
+    """`fresh` (epoch s, pipeline.build passes its start): a part-map zone needs a part map written since then, so a
+    build whose paint path wrote none (a stale map whose texels no longer line up) is not graded through it"""
     recipes = json.load(open(RECIPES))
     if sid not in recipes:
         return {"sid": sid, "skipped": "no recipe"}
@@ -100,6 +103,9 @@ def grade(sid: str, glb: str | None = None, dry: bool = False) -> dict:
     glb = glb or os.path.join(GAME, "art", "out", "fighters", rec.get("fighter", sid), f"{sid}.glb")
     if any("parts" in z for z in rec["zones"]) and not os.path.isfile(os.path.join(PARTMAP, f"{sid}.npz")):
         return {"sid": sid, "skipped": f"no part map for {sid}: rebuild it"}
+    if any("parts" in z for z in rec["zones"]) and os.path.getmtime(os.path.join(PARTMAP, f"{sid}.npz")) < fresh:
+        print(f"WARNING {sid}: the part map predates this build (stale texel layout); zone grade skipped, use box zones")
+        return {"sid": sid, "skipped": "stale part map"}
     base = glb_image(glb, "_base")
     H, W = base.shape[:2]
     import shutil
@@ -112,7 +118,7 @@ def grade(sid: str, glb: str | None = None, dry: bool = False) -> dict:
         if dry:
             return {"sid": sid, "tint": tint}
         # the WebP quality: the highest of 84, 80, ... 60 that keeps the GLB within 24 KiB of its size before the grade
-        # and under 1160 KiB (the fighter budget is 1172, pipeline load_test); GPU memory is unchanged either way (the
+        # and under 1160 KiB (or, for a GLB already past that, no larger than it was) (the fighter budget is 1172, pipeline load_test); GPU memory is unchanged either way (the
         # decoded texture is the same 2048^2)
         trial = os.path.join(tmp, "trial.glb")
         for q in range(84, 59, -4):
@@ -120,7 +126,7 @@ def grade(sid: str, glb: str | None = None, dry: bool = False) -> dict:
             r = subprocess.run([node(), GRADE, trial, "--q", str(q)] + tint, cwd=GAME, capture_output=True, text=True)
             if r.returncode:
                 raise SystemExit(r.stderr[-1200:])
-            if os.path.getsize(trial) <= min(before + 24 * 1024, 1160 * 1024) or q <= 60:
+            if os.path.getsize(trial) <= max(min(before + 24 * 1024, 1160 * 1024), before) or q <= 60:
                 break
         shutil.copyfile(trial, glb)
         print(r.stdout.strip().replace(trial, glb))
@@ -133,4 +139,4 @@ if __name__ == "__main__":
     glb = a[a.index("--glb") + 1] if "--glb" in a else None
     ids = [k for k in json.load(open(RECIPES)) if not k.startswith("_")] if "--all" in a else [a[0]]
     for s in ids:
-        print(json.dumps(grade(s, glb, "--dry" in a)))
+        print(json.dumps(grade(s, glb, "--dry" in a, float(a[a.index("--fresh") + 1]) if "--fresh" in a else 0.0)))

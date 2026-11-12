@@ -9,6 +9,7 @@ from __future__ import annotations
 
 GOLD = "#FFD27A"   # Gleam (the game's gold)
 
+from kit_defs import ult_tell  # noqa: E402  (max2 VFX-10: the shared ultimate tell)
 from vfxkit import (CAP, CHALK, CHALK_DK, CHAR, DAWNGLASS, DUST, DUST2, EMBER, FLASH_R, INK, INK2, NOON, ORCHID, ROSE, SAP, SMOKE, SMOKE2, WHITE, beam, chips, decal,
                     dust, flash, glow, impact, ink, light, mesh, motes, petals, ribbon, shake, shards, shockwave, sparks, streaks, vfx, L)
 
@@ -323,7 +324,9 @@ def defs() -> list:
                    size=[0.12, 0.05], color="team", alpha=[0, 1, 0], emissive=3.0, texture="spark", stretch=0.03, blend="add"),
                  glow("origin", "team", 1.6, 0.8, 3.0, alpha=(0, 0.5, 1, 0), offset=[0, 1.0, 0]),
                  light("origin", "team", 8, 6, 0.8, attack=0.6),
-                 comment="T3 · Lumen · ultimate wind-up: a team ring closes in, light gathers inward and up (the warning)"))
+                 *ult_tell(0.75),
+                 comment="T3 · Lumen · ultimate wind-up: a team ring closes in, light gathers inward and up (the warning); max2: the "
+                         "closing hour-dial and the standing shaft every ultimate wind-up shares"))
     D.append(vfx("lib_ult_lumen", 1.4,
                  flash(4, at="ground", scale=1.6),
                  mesh("ground", "orb", [[0, 0.2], [0.2, 1.1], [1, 1.25]], 0.4, color=[WHITE, DAWNGLASS, "team"], alpha=(1, 0), emissive=12, rim="team",

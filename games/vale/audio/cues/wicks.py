@@ -84,16 +84,28 @@ def w_shieldwick_swing(v: int):
     return finish(L.out(), hp_hz=160, eq=SOFT_TOP)
 
 
+# (max2 SFX f) the bolt's takes differ in gesture, not only in seed: where the 'pff' peaks, whether its whoosh rises or
+# falls, how late and how thick the spark fizz comes in (round 1: STFT log-magnitude take correlation 0.989)
+BOLT_SHAPE = (
+    dict(bpk=0.03, w0=1300, w1=700, wpk=0.22, coff=0.004, rate=70, cl=0.0),
+    dict(bpk=0.012, w0=800, w1=1600, wpk=0.12, coff=0.018, rate=110, cl=2.0),
+    dict(bpk=0.05, w0=1500, w1=600, wpk=0.34, coff=0.0, rate=55, cl=-2.0),
+    dict(bpk=0.022, w0=1000, w1=1100, wpk=0.5, coff=0.03, rate=140, cl=1.0),
+)
+
+
 @cue('w_glimwick_bolt', 'combat', ('m', -21.0), AIR, variants=WICK_TAKES, **AIRK)
 def w_glimwick_bolt(v: int):
     k = vary('w_glimwick_bolt', v)
+    b = BOLT_SHAPE[v % len(BOLT_SHAPE)]
     r = R('w_glimwick_bolt', v=v)
     L = Layers(0.3)
-    L.add(breath(0.14 * k['dk'], 900 * k['fk'], 2300 * k['fk'], shape='breath', q=1.6, seed=f'wgb{v}', peak_at=0.03),
+    L.add(breath(0.14 * k['dk'], 900 * k['fk'], 2300 * k['fk'], shape='breath', q=1.6, seed=f'wgb{v}', peak_at=b['bpk']),
           0.0, peak_db=-2, width=0.4)
-    L.add(crackle(r, 0.22 * k['dk'], rate=70 + 25 * v, lo=1500 * k['fk2'], hi=5200, hiss=0.12, decay_s=0.09 * k['dk']),
-          0.004 + k['off'], peak_db=-9 + k['lv'])
-    L.add(S.whoosh(r, 0.18, 1300 * k['fk'], 700 * k['fk'], q=1.3, peak_at=0.22), 0.01 + k['off2'], peak_db=-5, width=0.5)
+    L.add(crackle(r, 0.22 * k['dk'], rate=b['rate'], lo=1500 * k['fk2'], hi=5200, hiss=0.12, decay_s=0.09 * k['dk']),
+          0.004 + b['coff'] + k['off'], peak_db=-9 + k['lv'] + b['cl'])
+    L.add(S.whoosh(r, 0.18, b['w0'] * k['fk'], b['w1'] * k['fk'], q=1.3, peak_at=b['wpk']), 0.01 + k['off2'], peak_db=-5,
+          width=0.5)
     L.add(S.thump(0.06, 300 * k['fk2'], 170, 0.008, 0.035 * k['dk'], 1.2), 0.0, peak_db=-12)
     return finish(L.out(), hp_hz=170, eq=SOFT_TOP)
 

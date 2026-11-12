@@ -8,6 +8,7 @@ content/audio.json with cuelib.REGISTRY:
     kits_a.py  f_<fighter>_<slot> the whole per-fighter kits, first half (ardit … lisvel)
     kits_b.py  f_<fighter>_<slot> the whole per-fighter kits, second half (marund … vashil)
     kits_c.py  f_<fighter>_hit / _dash (ability impacts, dashes) and the identity pass (contact, voicing) over the kits
+    impacts.py f_<fighter>_ult_hit / _<slot>_hit: the ult's and the heaviest Q/W/E's own impacts (max2 SFX-4)
     world.py   amb_* the maps' ambience loops (bus ambience; content lists them in audio.ambience.<map>)
     areas.py   f_<fighter>_<slot>_land / _zone: a kitted fighter's own area landings and zone loops (closing AUD-C1)
     states.py  c_haste, c_unstoppable, c_veil, c_shield_break: the buff states and the shield break (max SFX-7)
@@ -27,6 +28,7 @@ from . import fighters  # noqa: F401
 from . import kits_a  # noqa: F401
 from . import kits_b  # noqa: F401
 from . import kits_c  # noqa: F401  (after kits_a / kits_b: it wraps their identity cues)
+from . import impacts  # noqa: F401  (after kits_c: it builds on its impact blocks)
 from . import world  # noqa: F401
 from . import areas  # noqa: F401  (after world: it uses its periodic blocks)
 from . import zones  # noqa: F401  (after areas: it uses its zone blocks)

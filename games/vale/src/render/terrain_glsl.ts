@@ -439,6 +439,23 @@ export const GROUND_MAIN_GLSL = /* glsl */`
   // moss in the joints in sparse patches where few feet go
   float mossPS = smoothstep( 0.76, 0.9, valeNoise( p * 0.21 + 31.0 ) + ( tM.a - 0.6 ) * 0.5 + ( n2 - 0.5 ) * 0.2 ) * ( 1.0 - trackP );
   col = mix( col, uMoss * mossN * 0.85, jw * mossPS * 0.85 );
+  // max2 ENV-11 deck bays: the span was one even run of courses. Every 9 m a cross course of the shaft's paler drum
+  // stone (0.84 m) lies across the deck between two joints, a chalk-inlaid hour tick every 1.2 m along its middle, and
+  // each bay between takes its own tone (±2.5 %): the deck reads as the fallen needle's drums, bay by bay. Quiet at
+  // telegraph scale (hue and ≤ 3 L* on the band, joints a soft ×0.78)
+  {
+    float bx = p.x / 9.0 + 0.5, bi = floor( bx ), bl = ( fract( bx ) - 0.5 ) * 9.0 + ( valeNoise( p * 1.9 ) - 0.5 ) * 0.04;
+    float bayB = 1.0 - smoothstep( 0.42 - aa, 0.42 + aa, abs( bl ) );
+    float bayJ = 1.0 - smoothstep( 0.0, 0.03 + aa, abs( abs( bl ) - 0.42 ) );
+    col *= mix( 1.0 + 0.05 * ( valeHash12( vec2( bi, 5.3 ) ) - 0.5 ), 1.0, bayB );
+    vec3 bandC2 = uLane * longT * vec3( 0.965, 1.0, 1.06 ) * mix( vec3( 1.0 ), grainN, 0.6 ) * ( 1.02 + 0.03 * n2 );
+    float tq = abs( fract( p.y / 1.2 ) - 0.5 ) * 1.2;
+    float tick = ( 1.0 - smoothstep( 0.045 - aa, 0.045 + aa, tq ) ) * ( 1.0 - smoothstep( 0.15, 0.19, abs( bl ) ) );
+    col = mix( col, bandC2, bayB * 0.85 );
+    col = mix( col, mix( bandC2, uInscription, 0.45 ), tick * bayB * 0.55 );
+    col *= 1.0 - 0.22 * bayJ;
+    fh -= bayJ * 0.006;
+  }
   // the walked course: the deck is honed palest along the road and weathers darker, stone by stone, toward the drop
   // (r12 B5: the road owns the top of the terrain's value range; the outer courses sit a band lower)
   col *= mix( 1.0, 0.35, smoothstep( uLaneHalf - 0.8, uLaneHalf + 1.8, laneD + ( fl.x - 0.5 ) * 0.9 ) );
@@ -571,8 +588,23 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     vec2 prq = p - FT.xy;
     float prr = length( prq );
     float pstk = valeRingStroke( prr, atan( prq.y, prq.x ), PZ.w * 7.0 + float( k ) * 3.1 );
-    vec3 pc = valeFlag( pband * ( 0.975 + 0.05 * pstk ), pf, grainN, chip, 0.04, pband * 0.68, 0.1, ph, pj );
-    pc = mix( pc, uMoss * mossN * 0.85, pj * smoothstep( PZ.z - 3.0, PZ.z - 0.6, pd + wob ) );
+    // max2 ENV-5 plaza dressing: every flag its own stone (hue at its value, as the road's are: a warm, a cool and a
+    // pale family per side, ±3 % value, one flag in eleven a replaced one a step darker); a walked track paler from
+    // the fountain out toward the map's middle (where the lanes leave); wind-drift of litter and dust against the kerb
+    float pA = valeHash12( pf.zw * 1.17 + 4.3 ), pB = valeHash12( pf.zw * 0.61 + 9.1 );
+    vec3 pfam = pA < 0.34 ? vec3( 1.045, 1.0, 0.93 ) : pA < 0.67 ? vec3( 0.965, 0.995, 1.06 ) : vec3( 1.0, 1.0, 0.985 );
+    float pval = ( 0.97 + 0.06 * pB ) * ( valeHash12( pf.zw * 2.03 + 1.7 ) < 0.09 ? 0.9 : 1.0 );
+    vec2 toMid = normalize( uMapSize * 0.5 - FT.xy + vec2( 1e-3 ) );
+    float along = dot( p - FT.xy, toMid ), across = abs( dot( p - FT.xy, vec2( -toMid.y, toMid.x ) ) );
+    float ptrack = ( 1.0 - smoothstep( 1.6, 3.4, across + ( nMid - 0.5 ) * 1.2 ) ) * smoothstep( FT.z + 2.6, FT.z + 4.5, along );
+    vec3 pfl = pband * mix( pfam * pval, vec3( 1.035, 1.03, 1.0 ), ptrack * 0.6 );
+    vec3 pc = valeFlag( pfl * ( 0.975 + 0.05 * pstk ), pf, grainN, chip, 0.04, pband * 0.68, 0.1, ph, pj );
+    pc = mix( pc, uMoss * mossN * 0.85, pj * smoothstep( PZ.z - 3.0, PZ.z - 0.6, pd + wob ) * ( 1.0 - ptrack ) );
+    float pdrift = smoothstep( PZ.z - 3.4, PZ.z - 0.7, pd + ( valeNoise( p * 0.7 + 5.0 ) - 0.5 ) * 1.6 )
+                 * smoothstep( 0.45, 0.75, valeNoise( p * 0.33 + float( k ) * 9.0 ) ) * ( 1.0 - ptrack );
+    float pleaf = smoothstep( 0.62, 0.8, valeNoise( p * 3.1 + 2.0 ) * 0.6 + valeNoise( p * 7.3 ) * 0.4 );
+    vec3 driftC = mix( pband * vec3( 0.9, 0.86, 0.76 ) * grainN, uEarth * 1.6 * vec3( 1.1, 0.95, 0.7 ), pleaf );
+    pc = mix( pc, driftC, pdrift * 0.55 );
     float fr = length( p - FT.xy );
     // the fountain floor: one honed disc engraved with the twelve hours
     float ang = atan( p.y - FT.y, p.x - FT.x );
@@ -894,11 +926,12 @@ export const WALL_MAIN_GLSL = /* glsl */`
     float drift = smoothstep( 0.62, 0.8, valeNoise( q * 0.34 + 23.0 ) + ( tL.a - 0.6 ) * 0.6 ) * ( 1.0 - m * 0.6 );
     c *= mix( vec3( 1.0 ), sideT * 1.45, drift * 0.85 );
     float slabN = valeNoise( q * 0.41 + 51.0 ) + ( med - 0.5 ) * 0.2;
-    float slab = smoothstep( 0.74, 0.77, slabN );
-    float seam = smoothstep( 0.7, 0.74, slabN ) - slab;
-    vec3 slabC = uTop * 0.8 * ( 0.88 + 0.24 * valeNoise( q * 1.3 ) ) * mix( vec3( 1.0 ), tM.rgb / mM, 0.25 );
+    float slabW = max( fwidth( slabN ), 1e-4 );
+    float slab = smoothstep( 0.755 - slabW, 0.755 + slabW, slabN );
+    float seam = smoothstep( 0.725, 0.755 - slabW, slabN ) * ( 1.0 - slab );
+    vec3 slabC = uTop * 0.66 * ( 0.86 + 0.28 * valeNoise( q * 1.3 ) ) * mix( vec3( 1.0 ), tM.rgb / mM, 0.35 );
     c = mix( c, slabC, slab * 0.85 );
-    c *= 1.0 - 0.35 * seam;
+    c *= 1.0 - 0.45 * seam;
     c *= ( 1.0 + 0.75 * dap * vec3( 1.05, 1.0, 0.84 ) ) * ( 1.0 - 0.22 * hol );
     // just inside the lip a little more light reaches the floor (still darker than the walkable floor)
     float rimZ = 1.0 - smoothstep( 0.05, 1.4, wi + ( n2 - 0.5 ) * 0.4 );

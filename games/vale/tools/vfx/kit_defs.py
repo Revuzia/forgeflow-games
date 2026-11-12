@@ -234,6 +234,19 @@ def release(fam: str, S: str, k: float, cap: float, ult: bool) -> list:
     return out
 
 
+def ult_tell(life: float = 1.0) -> list:
+    """max2 VFX-10: an ultimate's wind-up must read across a fight, not only at the caster's hand. Two shapes nothing else
+    in a fight makes: an hour-dial of team light on the ground round the caster whose lit sector closes as the cast comes
+    due (the countdown dial the statuses use, here on the wind-up's own clock: the relationship colour, so an enemy ult
+    reads as danger), and a thin shaft of the caster's signature light standing up out of them, brightening to the release
+    (seen over bodies and other effects). Shared with the hand-tuned ult wind-ups (bespoke/tuned.json)."""
+    return [L("decal", at="caster", follow=True, shape="cone", style="light", texture="rune", radius=2.3, life=life, fitTime=True, hold=1.0,
+              color="team", alpha=[[0, 0.35], [0.3, 0.7], [1, 0.85]], emissive=[[0, 1.4], [1, 2.4]], countdown=True),
+            L("mesh", at="caster", follow=True, shape="shaft", offset=[0, -0.9, 0], scale=[[0, 0.25], [0.5, 0.5], [1, 0.62]], stretch=[0.5, 3.4, 0.5],
+              life=life, fitTime=True, hold=1.0, color=[SIG, NOON], alpha=[[0, 0.0], [0.25, 0.45], [1, 0.85]], emissive=[[0, 1.2], [1, 3.0]],
+              noise=0.35, scroll=[0, 2.2])]
+
+
 def windup(id_: str, rec: dict, ab: dict, slot: str) -> dict:
     kit = KIT[rec["id"]]
     ult = slot == "ult"
@@ -267,6 +280,7 @@ def windup(id_: str, rec: dict, ab: dict, slot: str) -> dict:
                         fitTime=True, hold=1.0, color=SIG, alpha=[[0, 0.0], [0.4, 0.22], [1, 0.4]], emissive=1.6))
         layers.append(L("distort", at="caster", follow=True, mode="ring", align="ground", size=[[0, 3.0], [1, 0.8]], strength=[[0, 0.0], [0.5, 0.006], [1, 0.01]],
                         life=1.0, fitTime=True))
+        layers += ult_tell()
     who = rec["name"]
     return vfx(id_, 1.0, *layers, comment=f"{'T4' if ult else 'T2'} · {kit['fam']} · {who} {slot} wind-up ({ab['id']}, {ab['castTime']} s, fitted): the "
                f"{kit['motif']} motif gathers at {S} in {who}'s signature, a signature ring at the feet with a closing team edge"

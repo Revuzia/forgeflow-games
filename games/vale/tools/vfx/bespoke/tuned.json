@@ -3040,6 +3040,110 @@
     ],
     "life": 1.0,
     "fitTime": true
+   },
+   {
+    "type": "decal",
+    "at": "caster",
+    "follow": true,
+    "shape": "cone",
+    "style": "light",
+    "texture": "rune",
+    "radius": 2.3,
+    "life": 1.0,
+    "fitTime": true,
+    "hold": 1.0,
+    "color": "team",
+    "alpha": [
+     [
+      0,
+      0.35
+     ],
+     [
+      0.3,
+      0.7
+     ],
+     [
+      1,
+      0.85
+     ]
+    ],
+    "emissive": [
+     [
+      0,
+      1.4
+     ],
+     [
+      1,
+      2.4
+     ]
+    ],
+    "countdown": true
+   },
+   {
+    "type": "mesh",
+    "at": "caster",
+    "follow": true,
+    "shape": "shaft",
+    "offset": [
+     0,
+     -0.9,
+     0
+    ],
+    "scale": [
+     [
+      0,
+      0.25
+     ],
+     [
+      0.5,
+      0.5
+     ],
+     [
+      1,
+      0.62
+     ]
+    ],
+    "stretch": [
+     0.5,
+     3.4,
+     0.5
+    ],
+    "life": 1.0,
+    "fitTime": true,
+    "hold": 1.0,
+    "color": [
+     "signature",
+     "#F4EFE2"
+    ],
+    "alpha": [
+     [
+      0,
+      0.0
+     ],
+     [
+      0.25,
+      0.45
+     ],
+     [
+      1,
+      0.85
+     ]
+    ],
+    "emissive": [
+     [
+      0,
+      1.2
+     ],
+     [
+      1,
+      3.0
+     ]
+    ],
+    "noise": 0.35,
+    "scroll": [
+     0,
+     2.2
+    ]
    }
   ]
  },
@@ -8149,7 +8253,7 @@
   ]
  },
  {
-  "$comment": "T4 · Shade · Felled Shard: a white streak from the sky and a white core; the great shard is driven in and stands for the shadow's 5 s (dark ironstone, pale honed edge, a team-lit cut top); a team ring to 2 m, an ink ring and a wide crack beyond it, heavy stone and dust thrown out (polish C2: the ground scar comes in 0.2 s after the landing, once the exposure beat has peaked: light first, then the mark) (CW1 refix C2: the shard lands honed-pale and hot, settling to ironstone over 0.2 s, so the first beat reads as light at its core, not a dark stone)",
+  "$comment": "T4 · Shade · Felled Shard: a white streak from the sky and a white core; the great shard is driven in and stands for the shadow's 5 s (dark ironstone, pale honed edge, a team-lit cut top); a team ring to 2 m, an ink ring and a wide crack beyond it, heavy stone and dust thrown out (polish C2: the ground scar comes in 0.2 s after the landing, once the exposure beat has peaked: light first, then the mark) (CW1 refix C2: the shard lands honed-pale and hot, settling to ironstone over 0.2 s, so the first beat reads as light at its core, not a dark stone) · max2 VFX-6: the struck body's own flash at x0.7 on this landing (feel hitFlash), so it keeps its inside (probe_combat_polish detailLost was 2, the limit)",
   "id": "hesmi_ult_shard",
   "duration": 2.4000000000000004,
   "teamTint": true,
@@ -8673,6 +8777,12 @@
     "life": 0.5,
     "align": "ground",
     "fit": true
+   },
+   {
+    "type": "feel",
+    "at": "ground",
+    "squash": 0.14,
+    "hitFlash": 0.7
    }
   ]
  },
@@ -9009,7 +9119,7 @@
   ]
  },
  {
-  "$comment": "T4 · Lumen · Sun Corridor lands: white core flash, sunlight pours straight down the 14 x 3 m shaft, a curtain of light stands round it with team edges brightest, a lit floor with team keylines, a burned strip, chips and dust along its length, motes",
+  "$comment": "T4 · Lumen · Sun Corridor lands: white core flash, sunlight pours straight down the 14 x 3 m shaft, a curtain of light stands round it with team edges brightest, a lit floor with team keylines, a burned strip, chips and dust along its length, motes · max2 VFX-6: the struck body's own flash at x0.7 on this landing (feel hitFlash), so it keeps its inside (probe_combat_polish detailLost was 2, the limit); its light pool 24 -> 14",
   "id": "lisvel_ult_corridor",
   "duration": 1.6,
   "teamTint": true,
@@ -9416,7 +9526,7 @@
     "type": "light",
     "at": "ground",
     "color": "signature",
-    "intensity": 24,
+    "intensity": 14,
     "radius": 12,
     "life": 0.6
    },
@@ -9451,6 +9561,12 @@
     "life": 0.5,
     "align": "ground",
     "fit": true
+   },
+   {
+    "type": "feel",
+    "at": "ground",
+    "squash": 0.14,
+    "hitFlash": 0.7
    }
   ]
  },
@@ -12394,7 +12510,7 @@
   ]
  },
  {
-  "$comment": "T4 · Shade · Lull the Rest: white core flash, the chosen one stands in a clear column of light while dusk falls on the rest: an ink shell settles over 5 m under a bright team rim and thins away, an ink wave rolls out with the team edge brightest, felt petals spiral down everywhere (sleep), an ink stain (polish C2: the ground scar comes in 0.2 s after the landing, once the exposure beat has peaked: light first, then the mark)",
+  "$comment": "T4 · Shade · Lull the Rest: white core flash, the chosen one stands in a clear column of light while dusk falls on the rest: an ink shell settles over 5 m under a bright team rim and thins away, an ink wave rolls out with the team edge brightest, felt petals spiral down everywhere (sleep), an ink stain (polish C2: the ground scar comes in 0.2 s after the landing, once the exposure beat has peaked: light first, then the mark) · max2 VFX-6: the struck body's own flash at x0.7 on this landing (feel hitFlash), so it keeps its inside (probe_combat_polish detailLost was 2, the limit)",
   "id": "nurrow_ult_lull",
   "duration": 1.9,
   "teamTint": true,
@@ -12880,6 +12996,12 @@
     "life": 0.5,
     "align": "ground",
     "fit": true
+   },
+   {
+    "type": "feel",
+    "at": "target",
+    "squash": 0.14,
+    "hitFlash": 0.7
    }
   ]
  },
@@ -21141,11 +21263,115 @@
     ],
     "life": 1.0,
     "fitTime": true
+   },
+   {
+    "type": "decal",
+    "at": "caster",
+    "follow": true,
+    "shape": "cone",
+    "style": "light",
+    "texture": "rune",
+    "radius": 2.3,
+    "life": 1.0,
+    "fitTime": true,
+    "hold": 1.0,
+    "color": "team",
+    "alpha": [
+     [
+      0,
+      0.35
+     ],
+     [
+      0.3,
+      0.7
+     ],
+     [
+      1,
+      0.85
+     ]
+    ],
+    "emissive": [
+     [
+      0,
+      1.4
+     ],
+     [
+      1,
+      2.4
+     ]
+    ],
+    "countdown": true
+   },
+   {
+    "type": "mesh",
+    "at": "caster",
+    "follow": true,
+    "shape": "shaft",
+    "offset": [
+     0,
+     -0.9,
+     0
+    ],
+    "scale": [
+     [
+      0,
+      0.25
+     ],
+     [
+      0.5,
+      0.5
+     ],
+     [
+      1,
+      0.62
+     ]
+    ],
+    "stretch": [
+     0.5,
+     3.4,
+     0.5
+    ],
+    "life": 1.0,
+    "fitTime": true,
+    "hold": 1.0,
+    "color": [
+     "signature",
+     "#F4EFE2"
+    ],
+    "alpha": [
+     [
+      0,
+      0.0
+     ],
+     [
+      0.25,
+      0.45
+     ],
+     [
+      1,
+      0.85
+     ]
+    ],
+    "emissive": [
+     [
+      0,
+      1.2
+     ],
+     [
+      1,
+      3.0
+     ]
+    ],
+    "noise": 0.35,
+    "scroll": [
+     0,
+     2.2
+    ]
    }
   ]
  },
  {
-  "$comment": "T4 · Lumen · Morning Toll (each toll): a white-core flash, a tall glass bell over the 4.5 m area rings (a squash) and dissolves along team seams, three rings roll out brightest at the edge, glass shaken off, chips out, a cracked ring stays; each later toll of the same cast beats again at half the ultimate's lift (feel exposureRepeat)",
+  "$comment": "T4 · Lumen · Morning Toll (each toll): a white-core flash, a tall glass bell over the 4.5 m area rings (a squash) and dissolves along team seams, three rings roll out brightest at the edge, glass shaken off, chips out, a cracked ring stays; each later toll of the same cast beats again at half the ultimate's lift (feel exposureRepeat) · max2 VFX-6: the struck body's own flash at x0.7 on this landing (feel hitFlash), so it keeps its inside (probe_combat_polish detailLost was 2, the limit)",
   "id": "vashil_ult_toll",
   "duration": 1.3,
   "teamTint": true,
@@ -21704,6 +21930,11 @@
    {
     "type": "feel",
     "exposureRepeat": 0.5
+   },
+   {
+    "type": "feel",
+    "at": "target",
+    "hitFlash": 0.7
    }
   ]
  }

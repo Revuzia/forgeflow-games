@@ -43,6 +43,10 @@ gate    Per variant, all automatic (a person still looks: `review`):
                    0.73 %, Highrim portrait v1/v2's lens and sun 0.11 / 0.32 %; accepted cards <= 0.05 %)
           menu     (third pass) the loading-card (splash) / draft-cell (portrait) crop: p50 70-110, <= 5 % over luma 200,
                    when the 3D card holds it
+          blockers (max2) card_qa.face_blockers on the painting's face disc: hollow / solid dark eye slot, blank face (no
+                   dark lid or pupil feature), glowing off-hue eye spots over card_qa.BLOCKER fail (calibrated on the round-1
+                   verdicts, a high-precision tripwire: in-sample 18 / 45 fails at 4 / 42 false alarms); streak, cracked and
+                   new dots are reported; the render's own hits are kept as blockers_3d
           store    a skin portrait: mean CIE76 dE against the shipped base portrait (256 px, the gen_store.ts measure) at its tier's
                    floor (standard 12, deluxe or legend 18); node tools/gen_store.ts --check is still run after accepting
 accept  Copies the variant (resized, then FIG_MEDIAN 3x3 median passes inside the render's figure: ruling 12's speckle bar) or
@@ -67,7 +71,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 GAME = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(GAME, "art", "blender", "common"))
 sys.path.insert(0, os.path.join(GAME, "tools", "imagegen"))
+sys.path.insert(0, HERE)
 import plates  # noqa: E402
+import card_qa  # noqa: E402
 
 RAW = os.path.join(GAME, "tools", "imagegen", "raw")
 CACHE = os.path.join(GAME, "art", ".cache", "fighters", "paint")
@@ -294,6 +300,15 @@ def gate_variant(sid: str, kind: str, P: np.ndarray, asp: float, F: np.ndarray, 
         lit = fm & (Fl[..., 0] > np.percentile(Fl[..., 0][fm], 40))
         tgt = lab(np.array([plates._hex(MASK_TARGET[sid])], np.float64))[0]
         r["mask_de"] = round(float(np.linalg.norm(lab(np.median(P[lit], 0)[None].astype(np.float64))[0] - tgt)), 1)
+    # (max2) the by-eye blocker detector (card_qa.face_blockers, calibrated on the round-1 verdicts): a painting that
+    # trips hollow / blank / glow fails; the 3D render's own reading is kept beside it (a render that trips it cannot
+    # ship as the fallback either); new bright dots the render lacks are reported
+    fb = card_qa.face_blockers(P, A, fp, kind, plates.fighter_of(sid), F)
+    fb3 = card_qa.face_blockers(F, A, fp, kind, plates.fighter_of(sid))
+    if fb:
+        r["blockers"] = {k: fb[k] for k in ("hollow", "blank", "glow", "streak", "cracked", "dots", "hits") if k in fb}
+    if fb3:
+        r["blockers_3d"] = fb3["hits"]
     tier = skin_tier(sid) if kind == "portrait" else None
     if tier:
         base = plates.load_image(plates.image_path(plates.fighter_of(sid), "portrait"))[..., :3]
@@ -337,6 +352,8 @@ def gate_variant(sid: str, kind: str, P: np.ndarray, asp: float, F: np.ndarray, 
         fails.append("prop")
     if tier and r["store_de"] < r["store_floor"]:
         fails.append("store_dE")
+    if fb and fb["hits"]:
+        fails.append("blocker:" + "/".join(fb["hits"]))
     r["fails"] = fails
     r["pass"] = not fails
     return r

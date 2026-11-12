@@ -200,7 +200,7 @@ function meshes(node: Object3D): Mesh[] {
 /** the see-through uniforms of a part that never fades (the plinth, the ruin, the base's hour-ticks): an exact no-op */
 const SF_OFF: Uniforms = { uSfY0: { value: 1e4 }, uSfY1: { value: 1e4 + 1 }, uSfA: { value: 1 }, uSfAlpha: { value: 1 }, uSfClip: { value: -1e4 }, uSoot: { value: 0 } };
 /** max2 ENV-6: soot by damage stage (the upper), on the ruin and on the rubble (0 = clean stone) */
-const SOOT = { stage: [0, 0, 0], ruin: 0, rubble: 0 }; // TMPAB
+const SOOT = { stage: [0, 0.6, 1.0], ruin: 0.9, rubble: 0.28 };
 const sfPatched = new WeakSet<Material>();
 
 /** a structure template's world material (actors.ts ModelLibrary, before its warm-up compile): the see-through code,

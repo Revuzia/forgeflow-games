@@ -183,7 +183,7 @@ def render(cid: str, files: list[str]) -> list[dict]:
                 rows.append(dict(id=cid, file=ref, error=info['error']))
                 break
             if spec.extra.get('post'):            # a post-master pass (kits_c.snap_post: a kit hit's onset transient)
-                y = spec.extra['post'](y, i % max(1, spec.variants))
+                y = spec.extra['post'](y, i % max(1, spec.variants), ceiling)
             if not spec.loop:
                 y = np.pad(y, ((0, 0), (ns_(LEAD_S), 0)))
             side = 0.5 * (y[0] - y[1])
@@ -472,7 +472,59 @@ def contract_gates(contract: dict) -> tuple[list[str], dict]:
     rep['epic'] = erep
     wf, wrep = wick_gate(contract)
     rep['wicks'] = wrep
-    return fails + pf + af + kf + xf + hf + ef + wf, rep
+    sf, srep = snap_gate(contract)
+    rep['snap'] = srep
+    return fails + pf + af + kf + xf + hf + ef + wf + sf, rep
+
+
+# ── max2: the hits' snap, the per-ability impacts, the shop's crisp clicks ────────────────────────
+KIT_RISE_MAX_MS = 3.0        # a kit hit's / ability impact's decoded onset (-40 dB) to peak, every take (kits_c snap pass) …
+UI_SHOP_RISE_MAX_MS = 5.0    # … and a shop action's (the press is the sound)
+UI_SHOP_CUES = ('ui_shop_buy', 'ui_shop_sell', 'ui_shop_undo', 'ui_shop_denied')
+
+
+def rise_ms(x: np.ndarray) -> float:
+    """ms from the -40 dB onset (sample envelope, max over channels) to the peak (sfx_ab's rise)."""
+    e = np.max(np.abs(stereo(x)), axis=0)
+    i = int(np.argmax(e > e.max() * 0.01))
+    return float((int(np.argmax(e)) - i) / SR * 1000.0)
+
+
+def snap_gate(contract: dict) -> tuple[list[str], dict]:
+    """(max2 SFX-2b / SFX-4 / SFX-10) every kit attack hit and ability hit, and every per-ability impact
+    (f_<fighter>_<slot>_hit, cues.impacts.SLOTS: the ult's and the heaviest Q/W/E's, each bound and rendered), lands with
+    its peak within KIT_RISE_MAX_MS of its onset on every take, except the cues kits_c.SNAP_TUNE sets to None (listed in
+    the report: their snap cost the identity gate); every shop action within UI_SHOP_RISE_MAX_MS, and the shop's
+    refusal is its own cue (events.shopDenied, not the general error)."""
+    from cues.impacts import SLOTS
+    from cues.kits_c import SNAP_TUNE
+    cues, ev = contract['cues'], contract.get('events', {})
+    fails: list[str] = []
+    rep: dict = {'rise': {}, 'exempt': sorted(c for c, t in SNAP_TUNE.items() if t is None), 'impacts': {}}
+    hits = [c for c in cues if c.startswith('f_') and (c.endswith('_attack_hit') or c.count('_') == 2 and c.endswith('_hit'))]
+    for fid, slots in SLOTS.items():
+        for sl in slots:
+            c = f'f_{fid}_{sl}_hit'
+            rep['impacts'].setdefault(fid, []).append(c)
+            if c not in cues:
+                fails.append(f'snap: {fid}.{sl} has no own impact {c} in audio.json')
+                continue
+            hits.append(c)
+    for c in hits + [u for u in UI_SHOP_CUES if u in cues]:
+        ps = [out_path(f) for f in cues[c]['files']]
+        if not all(os.path.exists(p) for p in ps):
+            fails.append(f'snap: {c} is not rendered')
+            continue
+        r = [round(rise_ms(decode(p)), 1) for p in ps]
+        rep['rise'][c] = r
+        top = UI_SHOP_RISE_MAX_MS if c.startswith('ui_') else KIT_RISE_MAX_MS
+        if c not in rep['exempt'] and max(r) > top:
+            fails.append(f'snap: {c} peaks {max(r):.1f} ms after its onset (> {top:g} ms)')
+    if ev.get('shopDenied') in (None, ev.get('error'), contract.get('ui', {}).get('error')):
+        fails.append('snap: events.shopDenied has no cue of its own (it is the general error)')
+    allr = [x for c, r in rep['rise'].items() if not c.startswith('ui_') for x in r]
+    rep['medianRiseMs'] = float(np.median(allr)) if allr else None
+    return fails, rep
 
 
 # ── the Wicks' own family (max SFX-1) ─────────────────────────────────────────────────────────────
@@ -951,8 +1003,9 @@ def heard_chains(contract: dict) -> dict:
             whoosh = ev.get('projectile') if proj and not kitted else None
             hit_lib = set()
             _hit_sfx({'effects': ab.get('effects', [])}, hit_lib)
-            hits = ([own('hit')] if own('hit') else sorted(hit_lib) or [ev.get('hitAbility')]) + \
-                   ([c for c in sorted(hit_lib) if c in semantic] if own('hit') else [])
+            imp = own(f'{slot}_hit') or own('hit')          # (max2 SFX-4) the slot's own impact first
+            hits = ([imp] if imp else sorted(hit_lib) or [ev.get('hitAbility')]) + \
+                   ([c for c in sorted(hit_lib) if c in semantic] if imp else [])
             abil[slot if slot not in abil else f'{slot}#{ab.get("id")}'] = {
                 'id': ab.get('id'), 'cast': cast, 'release': own('ult_release') if slot == 'ult' else None,
                 'areas': areas, 'projectile': whoosh, 'hits': [h for h in hits if h]}
@@ -1403,6 +1456,10 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def print_gates(fails: list[str], rep: dict) -> None:
+    sn = rep.get('snap', {})
+    if sn:
+        print(f"snap gate: {len(sn['rise'])} cues, median kit onset-to-peak {sn['medianRiseMs']} ms; exempt (identity): "
+              f"{', '.join(sn['exempt']) or '-'}; impacts {sum(len(v) for v in sn['impacts'].values())}")
     print(f"\ncontrol gate: {len(rep['controlKinds'])} control kinds ({', '.join(rep['controlKinds'])}); buffs voice {', '.join(rep['buffCues']) or '-'}")
     for k in rep['controlKinds']:
         c = rep['bound'].get(k)

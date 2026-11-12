@@ -149,7 +149,8 @@
 //               every 0.5 s, is voiced by its buff / heal / shield and the zone's loop, and as impacts it was up to 41 % of
 //               the sfx energy in a match, closing r3; before the ability's present.hitSfx; a hitSfx that content binds to a damage-type or crit
 //               role, SEMANTIC_HIT_ROLES, still sounds under it at SEMANTIC_KIT_GAIN, so a true-damage or crit
-//               ability keeps that timbre), dash its own dash (a displacement, the 'dash' the sim
+//               ability keeps that timbre; (max2 SFX-4) a slot's own impact, f_<fighter>_<slot>_hit (the ult's and the
+//               heaviest Q/W/E's, when content binds one), voices that slot's 'hit' in its place), dash its own dash (a displacement, the 'dash' the sim
 //               emits for a unit in the tick it knocks it airborne, keeps the generic one). death replaces the generic fall, passive is the
 //               proc (see `procs`), call is the lock-in motif the draft plays through fighterCall(). A slot content
 //               has no cue for falls back to the catalog's present and then the generic set, as before. A cue's
@@ -459,7 +460,8 @@ const PROC_ITEM_GAP_S = 1.5;
 const PROC_ITEM_DB = -4;
 const PERIODIC_ON = new Set(['interval', 'moveDistance']);
 /** a fighter's kit slots (see `kits` in the header): content's cue f_<fighter>_<slot> */
-const KIT_SLOTS = ['attack_swing', 'attack_hit', 'a1', 'a2', 'a3', 'ult_windup', 'ult_release', 'passive', 'death', 'call', 'hit', 'dash'] as const;
+const KIT_SLOTS = ['attack_swing', 'attack_hit', 'a1', 'a2', 'a3', 'ult_windup', 'ult_release', 'passive', 'death', 'call', 'hit', 'dash',
+  'a1_hit', 'a2_hit', 'a3_hit', 'ult_hit'] as const;
 type KitSlot = typeof KIT_SLOTS[number];
 const CAST_SLOTS = new Set<string>(['a1', 'a2', 'a3']);
 /** an epic unit's kit slots (see `epic` in the header): content's cue u_<unit>_<slot>; a1..a4 follow the unit's
@@ -2532,7 +2534,10 @@ class Engine implements ValeAudioPort {
         const lib = (e.sfx as string | undefined) ?? pr?.hitSfx;
         // a delivery touching your own side is no impact (see `kits` in the header): only a hitSfx content wrote for it
         if (src && dst && src.team === dst.team) { if (lib) this.cue(lib, at(dst), 1, 0, aw); break; }
-        const own = this.kit(src, 'hit');
+        // (max2 SFX-4) the slot's own impact when content binds one, else the kit's shared ability impact
+        const ab = this.ownAb.get(e.ability as string);
+        const slotHit = ab && src?.kind === 'fighter' && src.def === ab.fighter ? this.kits.get(ab.fighter)?.[`${ab.slot}_hit` as KitSlot] : undefined;
+        const own = slotHit ?? this.kit(src, 'hit');
         // a Ringshade-muffled ability blow (its damage, later in this batch, says `shaded`; the 'damage' case plays the thud)
         const hg = dst?.kind === 'structure' && !!this.ev('hitShaded') && this.shadedHits.has(`${e.src}:${e.dst}:${e.ability}`) ? SHADED_GAIN : 1;
         // a wave clear is texture, a blow on a fighter is the news (see WAVE_HIT_GAIN)

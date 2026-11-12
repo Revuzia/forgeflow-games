@@ -17,7 +17,18 @@ Reads the shipped cards (art/out/fighters/<fid>/[<skin>_]splash.png / portrait.p
            union of both figures' bounds + 16 px). GATE for a skin: >= 30.
   frame    (splash) the figure's mass centre across (fraction of the width), its top and feet rows (fractions of
            the height). GUIDE: mass 0.66-0.76, head ~0.10, feet ~0.95.
+  blockers (max2) the by-eye blocker detector (face_blockers) on the face disc (render notes' head point + face_off; the
+           disc resampled to 128 px so splash and portrait read alike). Measures: hollow (a dark interior slot: its
+           inscribed size x how much paler its rim is, no pale white beside it, no catch-light), blank (the face's darkest
+           5 % at least BLOCKER["blank"] of its median: no lid, pupil or eye shadow anywhere on it), glow (saturated spots
+           off the face's own hue), streak (thin dark vertical lines in the lower face), cracked (thin dark line share),
+           dots (small bright blobs the 3D render does not carry, painted cards). GATE: hollow / blank / glow over
+           BLOCKER; streak, cracked and dots are reported. Calibration on the round-1 verdicts: --calibrate (below).
 Exit 1 when a gate fails.
+
+    python3 art/tools/card_qa.py --calibrate _design/reviews/cards/max2_blocker_calib.json
+re-fits the BLOCKER thresholds from that file's per-card measures (round-1 cards, verify_ks2 / roll1 / roll2 labels),
+greedy at <= 10 % false alarms on the ok cards, and prints the hit rate in-sample and leave-one-fighter-out.
 """
 from __future__ import annotations
 
@@ -27,6 +38,7 @@ import sys
 
 import numpy as np
 from PIL import Image
+from scipy import ndimage as ndi
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GAME = os.path.dirname(os.path.dirname(HERE))
@@ -137,8 +149,25 @@ def card(sid: str, fid: str, kind: str) -> dict | None:
         r["frame"] = {"mass_x": round(float((xs * w).sum() / w.sum()) / W, 3), "x0": round(xs.min() / W, 3),
                       "x1": round(xs.max() / W, 3), "top": round(ys.min() / H, 3), "feet": round(ys.max() / H, 3)}
     r["pupil"] = pupils(img, a, sid, fid, kind, rp)
+    r["blockers"] = blockers_of(img, a, sid, fid, kind, rp)
     r["_img"], r["_a"] = img, a
     return r
+
+
+def blockers_of(img: np.ndarray, a: np.ndarray, sid: str, fid: str, kind: str, rp: str) -> dict | None:
+    mp = rp + ".json"
+    if not os.path.isfile(mp):
+        return None
+    sys.path.insert(0, os.path.join(GAME, "art", "blender", "common"))
+    import plates  # noqa: E402
+    with open(mp, encoding="utf-8") as f:
+        meta = json.load(f)
+    p = plates.params(fid, None if sid == fid else sid) or {}
+    ref = None
+    r3 = os.path.join(GAME, "art", ".cache", "fighters", "paint", f"{sid}_{kind}_3d.png")
+    if os.path.isfile(r3):
+        ref = load(r3)[..., :3]
+    return face_blockers(img, a, plates.face_point(meta, p, kind), kind, fid, ref)
 
 
 PUPIL_GATE = {"sukri"}     # (cards ks1 fix) fighters whose carved eyes carry a painted pupil: the pupil check is a GATE
@@ -204,6 +233,158 @@ def pupils(img: np.ndarray, a: np.ndarray, sid: str, fid: str, kind: str, rp: st
             "at": [round(float(px_.mean()) / W, 3), round(float(py.mean()) / H, 3)], "hole": hole, "ok": bool(ok)}
 
 
+# ── max2: the by-eye blocker detector ─────────────────────────────────────────────────────────────────────────────
+# Thresholds fitted on the round-1 cards (_design/reviews/cards/max2_blocker_calib.json, --calibrate): in-sample 18 / 45
+# sensitivity fails caught at 4 / 42 false alarms on the verifiers' ok cards; leave-one-fighter-out 14 / 45 at 5 / 42.
+# That is BELOW the asked 90 % / 10 %: the verifiers' reads (a hollow almond on a pale mask vs a dark wrap slit with lids
+# in it, a mannequin plate vs a glass visor) share their image statistics with ok cards, so this is a high-precision
+# tripwire, not a replacement for the adversarial look at full, card and chip size.
+BLOCKER = {"hollow": 14.02, "blank": 0.65, "glow": 0.343}
+BN = 128
+
+
+def _face_crop(img: np.ndarray, a: np.ndarray, fp, kind: str, fid: str) -> tuple[np.ndarray, np.ndarray]:
+    H, W = img.shape[:2]
+    rr = (0.05 if kind == "splash" else 0.15) * H * PUPIL_R.get(fid, 1.0)
+    cx, cy = fp[0] * W, fp[1] * H
+    box = (cx - rr, cy - rr, cx + rr, cy + rr)
+    im = Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8)).transform((BN, BN), Image.EXTENT, box, Image.BICUBIC)
+    al = Image.fromarray((np.clip(a, 0, 1) * 255).astype(np.uint8)).transform((BN, BN), Image.EXTENT, box, Image.BILINEAR)
+    return np.asarray(im).astype(np.float32) / 255, np.asarray(al).astype(np.float32) / 255
+
+
+def face_measures(img: np.ndarray, a: np.ndarray, fp, kind: str, fid: str) -> dict | None:
+    c, al = _face_crop(img, a, fp, kind, fid)
+    Y = (c @ Y709) * 255.0
+    mx, mn = c.max(-1), c.min(-1)
+    S = np.where(mx > 0, (mx - mn) / np.maximum(mx, 1e-5), 0.0)
+    yy, xx = np.mgrid[0:BN, 0:BN]
+    r = np.hypot(xx - BN / 2 + 0.5, yy - BN / 2 + 0.5) / (BN / 2)
+    disc = (r < 1.0) & (al > 0.5)
+    inner = disc & (r < 0.75)
+    if inner.sum() < 200:
+        return None
+    med = float(np.median(Y[disc]))
+    et = ndi.binary_dilation(~disc, iterations=2)
+    hol, evid = 0.0, 0
+    for thr in (0.45, 0.6):
+        lab, n = ndi.label(disc & (Y < thr * med), np.ones((3, 3)))
+        for i in range(1, n + 1):
+            m = lab == i
+            if m.sum() < 6 or (m & et).any():
+                continue
+            dt = ndi.distance_transform_edt(np.pad(m, 1))[1:-1, 1:-1].max()
+            ring = ndi.binary_dilation(m, iterations=3) & ~ndi.binary_dilation(m, iterations=1) & disc
+            if not ring.any():
+                continue
+            rm, cm = float(np.median(Y[ring])), float(Y[m].mean())
+            rw = float((Y[ring] > 1.08 * med).mean())
+            catch = float((Y[m].max() - cm) / med)
+            cy = np.nonzero(m)[0].mean() / BN
+            if 0.12 < cy < 0.85:
+                sc = (dt / BN * 100) * (rm / max(cm, 4.0)) * (1 - min(1.0, rw / 0.35)) * (1.0 if catch < 0.18 else 0.4)
+                hol = max(hol, sc)
+                evid += int(dt >= 1.5 and (rw > 0.2 or catch > 0.2))
+    m5 = ndi.median_filter(Y, 5)
+    L = disc & ((m5 - Y) > 0.09 * med)
+    thin = L & (ndi.distance_transform_edt(L) <= 1.5)
+    gy, gx = np.gradient(ndi.gaussian_filter(Y, 1.0))
+    vert = thin & (np.abs(gx) > 1.7 * np.abs(gy))
+    hsv = np.asarray(Image.fromarray((c * 255).astype(np.uint8)).convert("HSV")).astype(np.float32)
+    Hh = hsv[..., 0] / 255 * 360
+    base = disc & (S < 0.5)
+    hmed = float(np.median(Hh[base])) if base.sum() > 20 else 0.0
+    dh = np.abs((Hh - hmed + 180) % 360 - 180)
+    return {"hollow": round(hol, 3), "blank": round(float(np.percentile(Y[inner], 5) / med), 3),
+            "glow": round(float((inner & (S > 0.45) & (dh > 40) & (Y > 0.4 * med)).mean()), 4),
+            "streak": round(float(vert[inner & (yy > BN * 0.45)].mean()), 4), "cracked": round(float(thin[inner].mean()), 4),
+            "eye_evidence": int(min(evid, 4)), "face_med": round(med, 1)}
+
+
+def new_dots(img: np.ndarray, ref: np.ndarray, a: np.ndarray) -> int:
+    """small bright blobs (2-40 px, a 7 px top-hat over 40 luma) on the figure that the 3D render does not carry"""
+    out = []
+    for im in (img, ref):
+        Y = (im[..., :3] @ Y709) * 255.0
+        out.append(((Y - ndi.grey_opening(Y, size=(7, 7))) > 40) & (a > 0.9))
+    new = out[0] & ~ndi.binary_dilation(out[1], iterations=2)
+    lab, n = ndi.label(new)
+    if not n:
+        return 0
+    sz = ndi.sum(new, lab, range(1, n + 1))
+    return int(((sz >= 2) & (sz <= 40)).sum())
+
+
+def face_blockers(img: np.ndarray, a: np.ndarray, fp, kind: str, fid: str, ref: np.ndarray | None = None) -> dict | None:
+    """the by-eye blocker detector: measures plus `hits` (the BLOCKER classes over their threshold)"""
+    if fp is None:
+        return None
+    f = face_measures(img, a, fp, kind, fid)
+    if f is None:
+        return None
+    if ref is not None and ref.shape[:2] == img.shape[:2]:
+        f["dots"] = new_dots(img, ref, a)
+    f["hits"] = [k for k, t in BLOCKER.items() if f[k] >= t]
+    return f
+
+
+def calibrate(path: str) -> int:
+    """re-fit BLOCKER from the stored round-1 measures: greedy OR of thresholds, <= 10 % false alarms on the ok cards"""
+    with open(path, encoding="utf-8") as fh:
+        cal = json.load(fh)
+    rows = cal["cards"]
+    lab = np.array([r["label"] for r in rows])
+    fid = np.array([r["fid"] for r in rows])
+    keys = list(BLOCKER)
+    V = {k: np.array([r["measures"][k] for r in rows]) for k in keys}
+
+    def fit(idx):
+        sel, th = np.zeros(len(rows), bool), {}
+        ok, se = (lab == "ok") & idx, (lab == "sens") & idx
+        budget = int(np.floor(0.10 * ok.sum()))
+        while True:
+            best = None
+            for k in keys:
+                if k in th:
+                    continue
+                for t in np.unique(V[k][idx]):
+                    s2 = sel | (V[k] >= t)
+                    fa = int((s2 & ok).sum())
+                    if fa > budget:
+                        continue
+                    key = (int((s2 & se).sum()), -fa)
+                    if best is None or key > best[0]:
+                        best = (key, k, float(t))
+            if best is None or best[0][0] <= int((sel & se).sum()):
+                return th
+            th[best[1]] = best[2]
+            sel |= V[best[1]] >= best[2]
+
+    def hit(th, idx):
+        s = np.zeros(len(rows), bool)
+        for k, t in th.items():
+            s |= V[k] >= t
+        return s & idx
+
+    allx = np.ones(len(rows), bool)
+    th = fit(allx)
+    s = hit(th, allx)
+    lofo = np.zeros(len(rows), bool)
+    for f in np.unique(fid):
+        te = fid == f
+        lofo |= hit(fit(~te), te)
+    nS, nO = int((lab == "sens").sum()), int((lab == "ok").sum())
+    print(f"[calibrate] thresholds {th}")
+    print(f"[calibrate] in-sample: {int((s & (lab == 'sens')).sum())}/{nS} sensitivity fails caught, "
+          f"{int((s & (lab == 'ok')).sum())}/{nO} ok cards flagged, {int((s & (lab == 'other')).sum())}/"
+          f"{int((lab == 'other').sum())} other fails flagged")
+    print(f"[calibrate] leave-one-fighter-out: {int((lofo & (lab == 'sens')).sum())}/{nS} caught, "
+          f"{int((lofo & (lab == 'ok')).sum())}/{nO} ok flagged")
+    print("[calibrate] missed: " + ", ".join(r["card"] for r, h in zip(rows, s) if r["label"] == "sens" and not h))
+    print("[calibrate] false alarms: " + ", ".join(r["card"] for r, h in zip(rows, s) if r["label"] == "ok" and h))
+    return 0
+
+
 def mad(a: dict, b: dict) -> float:
     ya, xa = np.nonzero(a["_a"] > 0.6)
     yb, xb = np.nonzero(b["_a"] > 0.6)
@@ -226,6 +407,8 @@ def sids_of(fid: str) -> list[str]:
 def main(argv: list[str]) -> int:
     def opt(k):
         return argv[argv.index(k) + 1] if k in argv else None
+    if "--calibrate" in argv:
+        return calibrate(opt("--calibrate"))
     outp, jsonp = opt("--out"), opt("--json")
     fids = [a for i, a in enumerate(argv) if not a.startswith("--") and (i == 0 or argv[i - 1] not in ("--out", "--json"))]
     lines, rows, bad = [], [], 0
@@ -249,8 +432,10 @@ def main(argv: list[str]) -> int:
                 ok_m = r["mad"] is None or r["mad"] >= 30.0
                 pu = r.get("pupil")
                 ok_p = not (fid in PUPIL_GATE and pu is not None and not pu["ok"])
-                r["gates"] = {"speckle": ok_g, "highlights": ok_h, "mad": ok_m, "pupil": ok_p}
-                bad += (not ok_g) + (not ok_h) + (not ok_m) + (not ok_p)
+                bl = r.get("blockers")
+                ok_b = not (bl and bl["hits"])
+                r["gates"] = {"speckle": ok_g, "highlights": ok_h, "mad": ok_m, "pupil": ok_p, "blockers": ok_b}
+                bad += (not ok_g) + (not ok_h) + (not ok_m) + (not ok_p) + (not ok_b)
                 fr = r.get("frame", {})
                 lines.append(
                     f"  {sid:<22} {kind:<8} grain fig p50 {g['fig_p50']:5.2f} p90 {g['fig_p90']:5.2f} | plate p50 "
@@ -262,6 +447,9 @@ def main(argv: list[str]) -> int:
                     + (f" || mad {r['mad']:.1f}{'' if ok_m else ' !'}" if r["mad"] is not None else "")
                     + (f" || pupil {pu['pupil_luma']:.0f} vs iris {pu['iris_luma']:.0f} rgb {pu['pupil_rgb']}"
                        f"{'' if ok_p else ' !'}" if pu else "")
+                    + (f" || blockers hollow {bl['hollow']:.1f} blank {bl['blank']:.2f} glow {bl['glow']:.3f} streak "
+                       f"{bl['streak']:.3f} cracked {bl['cracked']:.3f}" + (f" dots {bl['dots']}" if "dots" in bl else "")
+                       + (f" ! {'/'.join(bl['hits'])}" if bl["hits"] else "") if bl else "")
                     + (f" || mass x {fr['mass_x']:.3f} ({fr['x0']:.2f}-{fr['x1']:.2f}) top {fr['top']:.3f} feet "
                        f"{fr['feet']:.3f}" if fr and kind == "splash" else ""))
                 rows.append({k: v for k, v in r.items() if not k.startswith("_")})

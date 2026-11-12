@@ -1,0 +1,1882 @@
+{
+ "what": "max2 card blockers: the by-eye blocker detector (art/tools/card_qa.py face_blockers) measured on the round-1 cards as the verifiers saw them (art/out at 36163c40b, plates and 3D refs from the same build), with labels from verify_ks2 / verify_roll1 / verify_roll2. label sens = a fail for an in-scope sensitivity read (hollow or solid eye slot, under-eye streak, cracked or aged face, blank / mannequin / mummy face, glowing eyes, invented dots); other = a fail for pose, palette, framing, claw or prop reasons; ok = verifier ok. `python3 art/tools/card_qa.py --calibrate <this file>` re-fits the thresholds.",
+ "date": "2026-11-12",
+ "cards": [
+  {
+   "card": "kemdo_splash",
+   "fid": "kemdo",
+   "label": "ok",
+   "verify": "verify_ks2",
+   "verdict": "ok",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 1.271,
+    "blank": 0.319,
+    "glow": 0.0,
+    "streak": 0.0055,
+    "cracked": 0.0407,
+    "eye_evidence": 3,
+    "face_med": 140.1,
+    "dots": 181
+   },
+   "hits": []
+  },
+  {
+   "card": "kemdo_portrait",
+   "fid": "kemdo",
+   "label": "ok",
+   "verify": "verify_ks2",
+   "verdict": "ok",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 0.0,
+    "blank": 0.316,
+    "glow": 0.0,
+    "streak": 0.0124,
+    "cracked": 0.0371,
+    "eye_evidence": 0,
+    "face_med": 140.2,
+    "dots": 41
+   },
+   "hits": []
+  },
+  {
+   "card": "kemdo_highrim_splash",
+   "fid": "kemdo",
+   "label": "ok",
+   "verify": "verify_ks2",
+   "verdict": "ok",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 6.498,
+    "blank": 0.425,
+    "glow": 0.0,
+    "streak": 0.0048,
+    "cracked": 0.0206,
+    "eye_evidence": 0,
+    "face_med": 172.6,
+    "dots": 149
+   },
+   "hits": []
+  },
+  {
+   "card": "kemdo_highrim_portrait",
+   "fid": "kemdo",
+   "label": "ok",
+   "verify": "verify_ks2",
+   "verdict": "ok",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 11.971,
+    "blank": 0.395,
+    "glow": 0.0,
+    "streak": 0.0112,
+    "cracked": 0.0314,
+    "eye_evidence": 0,
+    "face_med": 179.3,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "kemdo_long_evening_splash",
+   "fid": "kemdo",
+   "label": "ok",
+   "verify": "verify_ks2",
+   "verdict": "ok",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 5.241,
+    "blank": 0.625,
+    "glow": 0.0,
+    "streak": 0.0029,
+    "cracked": 0.0177,
+    "eye_evidence": 3,
+    "face_med": 154.4,
+    "dots": 112
+   },
+   "hits": []
+  },
+  {
+   "card": "kemdo_long_evening_portrait",
+   "fid": "kemdo",
+   "label": "ok",
+   "verify": "verify_ks2",
+   "verdict": "ok",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 3.464,
+    "blank": 0.514,
+    "glow": 0.0,
+    "streak": 0.0126,
+    "cracked": 0.0236,
+    "eye_evidence": 0,
+    "face_med": 152.7,
+    "dots": 11
+   },
+   "hits": []
+  },
+  {
+   "card": "sukri_splash",
+   "fid": "sukri",
+   "label": "ok",
+   "verify": "verify_ks2",
+   "verdict": "ok",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 9.324,
+    "blank": 0.74,
+    "glow": 0.0,
+    "streak": 0.0033,
+    "cracked": 0.0086,
+    "eye_evidence": 1,
+    "face_med": 132.0,
+    "dots": 85
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "sukri_portrait",
+   "fid": "sukri",
+   "label": "sens",
+   "verify": "verify_ks2",
+   "verdict": "fail",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 5.416,
+    "blank": 0.217,
+    "glow": 0.0,
+    "streak": 0.0298,
+    "cracked": 0.0599,
+    "eye_evidence": 4,
+    "face_med": 121.5,
+    "dots": 13
+   },
+   "hits": []
+  },
+  {
+   "card": "sukri_stillwater_splash",
+   "fid": "sukri",
+   "label": "sens",
+   "verify": "verify_ks2",
+   "verdict": "fail",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 2.811,
+    "blank": 0.65,
+    "glow": 0.0068,
+    "streak": 0.0048,
+    "cracked": 0.0227,
+    "eye_evidence": 0,
+    "face_med": 120.0,
+    "dots": 71
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "sukri_stillwater_portrait",
+   "fid": "sukri",
+   "label": "sens",
+   "verify": "verify_ks2",
+   "verdict": "fail",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 1.632,
+    "blank": 0.172,
+    "glow": 0.0292,
+    "streak": 0.0224,
+    "cracked": 0.0884,
+    "eye_evidence": 4,
+    "face_med": 86.6,
+    "dots": 12
+   },
+   "hits": []
+  },
+  {
+   "card": "sukri_shadeprint_splash",
+   "fid": "sukri",
+   "label": "sens",
+   "verify": "verify_ks2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 5.516,
+    "blank": 0.772,
+    "glow": 0.0,
+    "streak": 0.0005,
+    "cracked": 0.008,
+    "eye_evidence": 2,
+    "face_med": 137.4,
+    "dots": 0
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "sukri_shadeprint_portrait",
+   "fid": "sukri",
+   "label": "ok",
+   "verify": "verify_ks2",
+   "verdict": "ok",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 2.075,
+    "blank": 0.388,
+    "glow": 0.1235,
+    "streak": 0.0274,
+    "cracked": 0.0671,
+    "eye_evidence": 4,
+    "face_med": 106.6,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "tunlan_splash",
+   "fid": "tunlan",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 2.211,
+    "blank": 0.644,
+    "glow": 0.0,
+    "streak": 0.0007,
+    "cracked": 0.0029,
+    "eye_evidence": 2,
+    "face_med": 120.2,
+    "dots": 82
+   },
+   "hits": []
+  },
+  {
+   "card": "tunlan_portrait",
+   "fid": "tunlan",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 1.075,
+    "blank": 0.206,
+    "glow": 0.0,
+    "streak": 0.01,
+    "cracked": 0.0516,
+    "eye_evidence": 3,
+    "face_med": 105.9,
+    "dots": 26
+   },
+   "hits": []
+  },
+  {
+   "card": "tunlan_lamplit_splash",
+   "fid": "tunlan",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 2.819,
+    "blank": 0.702,
+    "glow": 0.0,
+    "streak": 0.0002,
+    "cracked": 0.0026,
+    "eye_evidence": 0,
+    "face_med": 191.0,
+    "dots": 89
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "tunlan_lamplit_portrait",
+   "fid": "tunlan",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 8.703,
+    "blank": 0.255,
+    "glow": 0.0,
+    "streak": 0.0143,
+    "cracked": 0.0295,
+    "eye_evidence": 4,
+    "face_med": 118.8,
+    "dots": 21
+   },
+   "hits": []
+  },
+  {
+   "card": "tunlan_noon_fair_splash",
+   "fid": "tunlan",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 5.588,
+    "blank": 0.318,
+    "glow": 0.0,
+    "streak": 0.01,
+    "cracked": 0.0228,
+    "eye_evidence": 2,
+    "face_med": 170.4,
+    "dots": 125
+   },
+   "hits": []
+  },
+  {
+   "card": "tunlan_noon_fair_portrait",
+   "fid": "tunlan",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 8.812,
+    "blank": 0.397,
+    "glow": 0.0,
+    "streak": 0.0136,
+    "cracked": 0.0608,
+    "eye_evidence": 2,
+    "face_med": 101.1,
+    "dots": 40
+   },
+   "hits": []
+  },
+  {
+   "card": "ervet_splash",
+   "fid": "ervet",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 4.211,
+    "blank": 0.492,
+    "glow": 0.0295,
+    "streak": 0.0117,
+    "cracked": 0.0214,
+    "eye_evidence": 0,
+    "face_med": 173.6,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "ervet_portrait",
+   "fid": "ervet",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "painted v3",
+   "measures": {
+    "hollow": 4.815,
+    "blank": 0.37,
+    "glow": 0.0678,
+    "streak": 0.0732,
+    "cracked": 0.0809,
+    "eye_evidence": 0,
+    "face_med": 158.4,
+    "dots": 67
+   },
+   "hits": []
+  },
+  {
+   "card": "ervet_lamplit_splash",
+   "fid": "ervet",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "painted v3",
+   "measures": {
+    "hollow": 5.523,
+    "blank": 0.598,
+    "glow": 0.0342,
+    "streak": 0.0379,
+    "cracked": 0.0495,
+    "eye_evidence": 3,
+    "face_med": 145.3,
+    "dots": 176
+   },
+   "hits": []
+  },
+  {
+   "card": "ervet_lamplit_portrait",
+   "fid": "ervet",
+   "label": "other",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 3.061,
+    "blank": 0.557,
+    "glow": 0.0342,
+    "streak": 0.0396,
+    "cracked": 0.047,
+    "eye_evidence": 0,
+    "face_med": 166.1,
+    "dots": 23
+   },
+   "hits": []
+  },
+  {
+   "card": "ervet_stillwater_splash",
+   "fid": "ervet",
+   "label": "other",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 2.751,
+    "blank": 0.44,
+    "glow": 0.0002,
+    "streak": 0.0237,
+    "cracked": 0.0391,
+    "eye_evidence": 0,
+    "face_med": 166.2,
+    "dots": 170
+   },
+   "hits": []
+  },
+  {
+   "card": "ervet_stillwater_portrait",
+   "fid": "ervet",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 4.923,
+    "blank": 0.263,
+    "glow": 0.0,
+    "streak": 0.0799,
+    "cracked": 0.0809,
+    "eye_evidence": 0,
+    "face_med": 173.0,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "marund_splash",
+   "fid": "marund",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 1.125,
+    "blank": 0.548,
+    "glow": 0.0,
+    "streak": 0.0007,
+    "cracked": 0.0053,
+    "eye_evidence": 0,
+    "face_med": 184.2,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "marund_portrait",
+   "fid": "marund",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 2.166,
+    "blank": 0.325,
+    "glow": 0.0,
+    "streak": 0.0091,
+    "cracked": 0.0514,
+    "eye_evidence": 4,
+    "face_med": 140.8,
+    "dots": 12
+   },
+   "hits": []
+  },
+  {
+   "card": "marund_gorgewalk_splash",
+   "fid": "marund",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v3",
+   "measures": {
+    "hollow": 3.313,
+    "blank": 0.663,
+    "glow": 0.0,
+    "streak": 0.0076,
+    "cracked": 0.0206,
+    "eye_evidence": 1,
+    "face_med": 104.6,
+    "dots": 105
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "marund_gorgewalk_portrait",
+   "fid": "marund",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 2.278,
+    "blank": 0.161,
+    "glow": 0.0,
+    "streak": 0.0184,
+    "cracked": 0.0476,
+    "eye_evidence": 2,
+    "face_med": 64.7,
+    "dots": 32
+   },
+   "hits": []
+  },
+  {
+   "card": "marund_long_evening_splash",
+   "fid": "marund",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "painted v3",
+   "measures": {
+    "hollow": 2.497,
+    "blank": 0.607,
+    "glow": 0.0,
+    "streak": 0.0069,
+    "cracked": 0.0158,
+    "eye_evidence": 1,
+    "face_med": 158.7,
+    "dots": 135
+   },
+   "hits": []
+  },
+  {
+   "card": "marund_long_evening_portrait",
+   "fid": "marund",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v3",
+   "measures": {
+    "hollow": 0.0,
+    "blank": 0.106,
+    "glow": 0.0,
+    "streak": 0.0429,
+    "cracked": 0.068,
+    "eye_evidence": 0,
+    "face_med": 79.1,
+    "dots": 20
+   },
+   "hits": []
+  },
+  {
+   "card": "ardit_splash",
+   "fid": "ardit",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 9.608,
+    "blank": 0.264,
+    "glow": 0.0,
+    "streak": 0.005,
+    "cracked": 0.03,
+    "eye_evidence": 1,
+    "face_med": 163.0,
+    "dots": 180
+   },
+   "hits": []
+  },
+  {
+   "card": "ardit_portrait",
+   "fid": "ardit",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 9.042,
+    "blank": 0.263,
+    "glow": 0.0035,
+    "streak": 0.0208,
+    "cracked": 0.0513,
+    "eye_evidence": 1,
+    "face_med": 130.2,
+    "dots": 24
+   },
+   "hits": []
+  },
+  {
+   "card": "ardit_chalkline_splash",
+   "fid": "ardit",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 4.639,
+    "blank": 0.526,
+    "glow": 0.0062,
+    "streak": 0.0279,
+    "cracked": 0.0564,
+    "eye_evidence": 0,
+    "face_med": 131.4,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "ardit_chalkline_portrait",
+   "fid": "ardit",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 4.822,
+    "blank": 0.277,
+    "glow": 0.0,
+    "streak": 0.0217,
+    "cracked": 0.0525,
+    "eye_evidence": 0,
+    "face_med": 162.1,
+    "dots": 19
+   },
+   "hits": []
+  },
+  {
+   "card": "ardit_first_bell_splash",
+   "fid": "ardit",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 6.104,
+    "blank": 0.616,
+    "glow": 0.0024,
+    "streak": 0.0072,
+    "cracked": 0.0223,
+    "eye_evidence": 0,
+    "face_med": 181.4,
+    "dots": 143
+   },
+   "hits": []
+  },
+  {
+   "card": "ardit_first_bell_portrait",
+   "fid": "ardit",
+   "label": "other",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 5.729,
+    "blank": 0.679,
+    "glow": 0.0049,
+    "streak": 0.0167,
+    "cracked": 0.0379,
+    "eye_evidence": 0,
+    "face_med": 172.8,
+    "dots": 0
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "burdam_splash",
+   "fid": "burdam",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 9.697,
+    "blank": 0.545,
+    "glow": 0.0,
+    "streak": 0.0043,
+    "cracked": 0.0185,
+    "eye_evidence": 1,
+    "face_med": 175.3,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "burdam_portrait",
+   "fid": "burdam",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 15.888,
+    "blank": 0.39,
+    "glow": 0.0,
+    "streak": 0.0029,
+    "cracked": 0.0088,
+    "eye_evidence": 1,
+    "face_med": 178.8,
+    "dots": 15
+   },
+   "hits": [
+    "hollow"
+   ]
+  },
+  {
+   "card": "burdam_almanac_splash",
+   "fid": "burdam",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 10.558,
+    "blank": 0.611,
+    "glow": 0.0,
+    "streak": 0.0017,
+    "cracked": 0.0018,
+    "eye_evidence": 0,
+    "face_med": 177.4,
+    "dots": 172
+   },
+   "hits": []
+  },
+  {
+   "card": "burdam_almanac_portrait",
+   "fid": "burdam",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 15.256,
+    "blank": 0.459,
+    "glow": 0.0,
+    "streak": 0.0019,
+    "cracked": 0.004,
+    "eye_evidence": 0,
+    "face_med": 177.9,
+    "dots": 2
+   },
+   "hits": [
+    "hollow"
+   ]
+  },
+  {
+   "card": "burdam_stillwater_splash",
+   "fid": "burdam",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v3",
+   "measures": {
+    "hollow": 4.543,
+    "blank": 0.716,
+    "glow": 0.0,
+    "streak": 0.001,
+    "cracked": 0.001,
+    "eye_evidence": 0,
+    "face_med": 164.6,
+    "dots": 138
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "burdam_stillwater_portrait",
+   "fid": "burdam",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 6.454,
+    "blank": 0.771,
+    "glow": 0.0,
+    "streak": 0.0043,
+    "cracked": 0.0041,
+    "eye_evidence": 0,
+    "face_med": 183.7,
+    "dots": 13
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "dunsom_splash",
+   "fid": "dunsom",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 3.093,
+    "blank": 0.668,
+    "glow": 0.0,
+    "streak": 0.0026,
+    "cracked": 0.0098,
+    "eye_evidence": 0,
+    "face_med": 139.6,
+    "dots": 74
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "dunsom_portrait",
+   "fid": "dunsom",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v3",
+   "measures": {
+    "hollow": 4.466,
+    "blank": 0.389,
+    "glow": 0.0,
+    "streak": 0.0203,
+    "cracked": 0.0646,
+    "eye_evidence": 4,
+    "face_med": 125.9,
+    "dots": 12
+   },
+   "hits": []
+  },
+  {
+   "card": "dunsom_almanac_splash",
+   "fid": "dunsom",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 2.855,
+    "blank": 0.722,
+    "glow": 0.0,
+    "streak": 0.0033,
+    "cracked": 0.0231,
+    "eye_evidence": 0,
+    "face_med": 149.8,
+    "dots": 0
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "dunsom_almanac_portrait",
+   "fid": "dunsom",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 9.749,
+    "blank": 0.351,
+    "glow": 0.0122,
+    "streak": 0.0325,
+    "cracked": 0.081,
+    "eye_evidence": 1,
+    "face_med": 138.1,
+    "dots": 5
+   },
+   "hits": []
+  },
+  {
+   "card": "dunsom_highrim_splash",
+   "fid": "dunsom",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 2.005,
+    "blank": 0.689,
+    "glow": 0.0,
+    "streak": 0.001,
+    "cracked": 0.0075,
+    "eye_evidence": 0,
+    "face_med": 116.5,
+    "dots": 82
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "dunsom_highrim_portrait",
+   "fid": "dunsom",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 6.212,
+    "blank": 0.3,
+    "glow": 0.0,
+    "streak": 0.0206,
+    "cracked": 0.0634,
+    "eye_evidence": 0,
+    "face_med": 116.4,
+    "dots": 6
+   },
+   "hits": []
+  },
+  {
+   "card": "hesmi_splash",
+   "fid": "hesmi",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "painted v3",
+   "measures": {
+    "hollow": 3.738,
+    "blank": 0.363,
+    "glow": 0.0,
+    "streak": 0.005,
+    "cracked": 0.021,
+    "eye_evidence": 4,
+    "face_med": 160.6,
+    "dots": 144
+   },
+   "hits": []
+  },
+  {
+   "card": "hesmi_portrait",
+   "fid": "hesmi",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 6.924,
+    "blank": 0.348,
+    "glow": 0.0,
+    "streak": 0.0088,
+    "cracked": 0.0411,
+    "eye_evidence": 3,
+    "face_med": 165.7,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "hesmi_gorgewalk_splash",
+   "fid": "hesmi",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 1.63,
+    "blank": 0.604,
+    "glow": 0.0,
+    "streak": 0.0052,
+    "cracked": 0.0123,
+    "eye_evidence": 1,
+    "face_med": 164.9,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "hesmi_gorgewalk_portrait",
+   "fid": "hesmi",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 2.929,
+    "blank": 0.514,
+    "glow": 0.0,
+    "streak": 0.0162,
+    "cracked": 0.0364,
+    "eye_evidence": 4,
+    "face_med": 153.1,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "hesmi_shadeprint_splash",
+   "fid": "hesmi",
+   "label": "sens",
+   "verify": "verify_roll1",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 4.29,
+    "blank": 0.567,
+    "glow": 0.0,
+    "streak": 0.0048,
+    "cracked": 0.0256,
+    "eye_evidence": 1,
+    "face_med": 150.4,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "hesmi_shadeprint_portrait",
+   "fid": "hesmi",
+   "label": "ok",
+   "verify": "verify_roll1",
+   "verdict": "ok",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 0.865,
+    "blank": 0.268,
+    "glow": 0.0,
+    "streak": 0.0076,
+    "cracked": 0.0333,
+    "eye_evidence": 3,
+    "face_med": 144.2,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "ilsheta_splash",
+   "fid": "ilsheta",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 3.251,
+    "blank": 0.397,
+    "glow": 0.0,
+    "streak": 0.0081,
+    "cracked": 0.0213,
+    "eye_evidence": 0,
+    "face_med": 173.6,
+    "dots": 126
+   },
+   "hits": []
+  },
+  {
+   "card": "ilsheta_portrait",
+   "fid": "ilsheta",
+   "label": "ok",
+   "verify": "verify_roll2",
+   "verdict": "ok",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 5.877,
+    "blank": 0.377,
+    "glow": 0.0095,
+    "streak": 0.0203,
+    "cracked": 0.0501,
+    "eye_evidence": 2,
+    "face_med": 146.1,
+    "dots": 50
+   },
+   "hits": []
+  },
+  {
+   "card": "ilsheta_first_bell_splash",
+   "fid": "ilsheta",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "painted v3",
+   "measures": {
+    "hollow": 6.579,
+    "blank": 0.575,
+    "glow": 0.0,
+    "streak": 0.0048,
+    "cracked": 0.0136,
+    "eye_evidence": 1,
+    "face_med": 163.1,
+    "dots": 94
+   },
+   "hits": []
+  },
+  {
+   "card": "ilsheta_first_bell_portrait",
+   "fid": "ilsheta",
+   "label": "ok",
+   "verify": "verify_roll2",
+   "verdict": "ok",
+   "shipped": "painted v3",
+   "measures": {
+    "hollow": 5.457,
+    "blank": 0.399,
+    "glow": 0.0,
+    "streak": 0.0165,
+    "cracked": 0.0477,
+    "eye_evidence": 4,
+    "face_med": 133.3,
+    "dots": 43
+   },
+   "hits": []
+  },
+  {
+   "card": "ilsheta_stillwater_splash",
+   "fid": "ilsheta",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 3.009,
+    "blank": 0.653,
+    "glow": 0.0,
+    "streak": 0.0002,
+    "cracked": 0.0006,
+    "eye_evidence": 0,
+    "face_med": 177.3,
+    "dots": 0
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "ilsheta_stillwater_portrait",
+   "fid": "ilsheta",
+   "label": "ok",
+   "verify": "verify_roll2",
+   "verdict": "ok",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 8.593,
+    "blank": 0.36,
+    "glow": 0.0099,
+    "streak": 0.0124,
+    "cracked": 0.0333,
+    "eye_evidence": 1,
+    "face_med": 140.0,
+    "dots": 25
+   },
+   "hits": []
+  },
+  {
+   "card": "lisvel_splash",
+   "fid": "lisvel",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 3.338,
+    "blank": 0.637,
+    "glow": 0.0,
+    "streak": 0.0105,
+    "cracked": 0.0266,
+    "eye_evidence": 0,
+    "face_med": 170.8,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "lisvel_portrait",
+   "fid": "lisvel",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 4.537,
+    "blank": 0.686,
+    "glow": 0.0005,
+    "streak": 0.0033,
+    "cracked": 0.029,
+    "eye_evidence": 0,
+    "face_med": 88.1,
+    "dots": 0
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "lisvel_almanac_splash",
+   "fid": "lisvel",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 4.838,
+    "blank": 0.628,
+    "glow": 0.0,
+    "streak": 0.0021,
+    "cracked": 0.004,
+    "eye_evidence": 1,
+    "face_med": 165.0,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "lisvel_almanac_portrait",
+   "fid": "lisvel",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 2.336,
+    "blank": 0.262,
+    "glow": 0.0,
+    "streak": 0.0069,
+    "cracked": 0.0322,
+    "eye_evidence": 1,
+    "face_med": 138.9,
+    "dots": 10
+   },
+   "hits": []
+  },
+  {
+   "card": "lisvel_gorgewalk_splash",
+   "fid": "lisvel",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 0.0,
+    "blank": 0.831,
+    "glow": 0.0,
+    "streak": 0.0,
+    "cracked": 0.0075,
+    "eye_evidence": 0,
+    "face_med": 187.2,
+    "dots": 0
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "lisvel_gorgewalk_portrait",
+   "fid": "lisvel",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 5.865,
+    "blank": 0.492,
+    "glow": 0.0,
+    "streak": 0.0103,
+    "cracked": 0.0336,
+    "eye_evidence": 1,
+    "face_med": 114.4,
+    "dots": 17
+   },
+   "hits": []
+  },
+  {
+   "card": "nurrow_splash",
+   "fid": "nurrow",
+   "label": "other",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 1.99,
+    "blank": 0.668,
+    "glow": 0.0,
+    "streak": 0.0103,
+    "cracked": 0.0394,
+    "eye_evidence": 0,
+    "face_med": 133.6,
+    "dots": 0
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "nurrow_portrait",
+   "fid": "nurrow",
+   "label": "ok",
+   "verify": "verify_roll2",
+   "verdict": "ok",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 4.022,
+    "blank": 0.306,
+    "glow": 0.0,
+    "streak": 0.0353,
+    "cracked": 0.1054,
+    "eye_evidence": 2,
+    "face_med": 103.4,
+    "dots": 13
+   },
+   "hits": []
+  },
+  {
+   "card": "nurrow_noon_fair_splash",
+   "fid": "nurrow",
+   "label": "other",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 0.0,
+    "blank": 0.457,
+    "glow": 0.0,
+    "streak": 0.0005,
+    "cracked": 0.0037,
+    "eye_evidence": 0,
+    "face_med": 167.9,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "nurrow_noon_fair_portrait",
+   "fid": "nurrow",
+   "label": "ok",
+   "verify": "verify_roll2",
+   "verdict": "ok",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 2.516,
+    "blank": 0.274,
+    "glow": 0.0,
+    "streak": 0.0243,
+    "cracked": 0.0578,
+    "eye_evidence": 2,
+    "face_med": 111.5,
+    "dots": 53
+   },
+   "hits": []
+  },
+  {
+   "card": "nurrow_shadeprint_splash",
+   "fid": "nurrow",
+   "label": "other",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 4.321,
+    "blank": 0.602,
+    "glow": 0.0,
+    "streak": 0.0048,
+    "cracked": 0.0521,
+    "eye_evidence": 0,
+    "face_med": 153.7,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "nurrow_shadeprint_portrait",
+   "fid": "nurrow",
+   "label": "ok",
+   "verify": "verify_roll2",
+   "verdict": "ok",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 1.997,
+    "blank": 0.169,
+    "glow": 0.0,
+    "streak": 0.0219,
+    "cracked": 0.0597,
+    "eye_evidence": 1,
+    "face_med": 119.8,
+    "dots": 5
+   },
+   "hits": []
+  },
+  {
+   "card": "odrum_splash",
+   "fid": "odrum",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 1.53,
+    "blank": 0.514,
+    "glow": 0.0,
+    "streak": 0.0038,
+    "cracked": 0.012,
+    "eye_evidence": 0,
+    "face_med": 194.5,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "odrum_portrait",
+   "fid": "odrum",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 7.664,
+    "blank": 0.325,
+    "glow": 0.0,
+    "streak": 0.0067,
+    "cracked": 0.0354,
+    "eye_evidence": 2,
+    "face_med": 197.0,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "odrum_noon_fair_splash",
+   "fid": "odrum",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 17.643,
+    "blank": 0.358,
+    "glow": 0.0,
+    "streak": 0.0014,
+    "cracked": 0.0048,
+    "eye_evidence": 1,
+    "face_med": 165.1,
+    "dots": 0
+   },
+   "hits": [
+    "hollow"
+   ]
+  },
+  {
+   "card": "odrum_noon_fair_portrait",
+   "fid": "odrum",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 7.166,
+    "blank": 0.661,
+    "glow": 0.0,
+    "streak": 0.0086,
+    "cracked": 0.0217,
+    "eye_evidence": 2,
+    "face_med": 169.6,
+    "dots": 0
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "odrum_shadeprint_splash",
+   "fid": "odrum",
+   "label": "other",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 0.556,
+    "blank": 0.71,
+    "glow": 0.0,
+    "streak": 0.0029,
+    "cracked": 0.02,
+    "eye_evidence": 0,
+    "face_med": 173.3,
+    "dots": 0
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "odrum_shadeprint_portrait",
+   "fid": "odrum",
+   "label": "ok",
+   "verify": "verify_roll2",
+   "verdict": "ok",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 3.644,
+    "blank": 0.3,
+    "glow": 0.0,
+    "streak": 0.0091,
+    "cracked": 0.0467,
+    "eye_evidence": 0,
+    "face_med": 151.6,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "rishal_splash",
+   "fid": "rishal",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 2.281,
+    "blank": 0.637,
+    "glow": 0.0402,
+    "streak": 0.0038,
+    "cracked": 0.0189,
+    "eye_evidence": 0,
+    "face_med": 165.4,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "rishal_portrait",
+   "fid": "rishal",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 4.242,
+    "blank": 0.551,
+    "glow": 0.0427,
+    "streak": 0.0235,
+    "cracked": 0.0486,
+    "eye_evidence": 0,
+    "face_med": 119.7,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "rishal_chalkline_splash",
+   "fid": "rishal",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 0.892,
+    "blank": 0.797,
+    "glow": 0.0,
+    "streak": 0.0043,
+    "cracked": 0.0077,
+    "eye_evidence": 0,
+    "face_med": 128.7,
+    "dots": 0
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "rishal_chalkline_portrait",
+   "fid": "rishal",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 14.02,
+    "blank": 0.444,
+    "glow": 0.0,
+    "streak": 0.0129,
+    "cracked": 0.0489,
+    "eye_evidence": 4,
+    "face_med": 82.3,
+    "dots": 0
+   },
+   "hits": [
+    "hollow"
+   ]
+  },
+  {
+   "card": "rishal_lamplit_splash",
+   "fid": "rishal",
+   "label": "other",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 1.733,
+    "blank": 0.679,
+    "glow": 0.0145,
+    "streak": 0.0156,
+    "cracked": 0.0295,
+    "eye_evidence": 0,
+    "face_med": 175.1,
+    "dots": 0
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "rishal_lamplit_portrait",
+   "fid": "rishal",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 3.791,
+    "blank": 0.581,
+    "glow": 0.0383,
+    "streak": 0.0119,
+    "cracked": 0.0282,
+    "eye_evidence": 1,
+    "face_med": 135.7,
+    "dots": 17
+   },
+   "hits": []
+  },
+  {
+   "card": "ulkro_splash",
+   "fid": "ulkro",
+   "label": "other",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 4.691,
+    "blank": 0.599,
+    "glow": 0.0,
+    "streak": 0.0083,
+    "cracked": 0.0317,
+    "eye_evidence": 0,
+    "face_med": 149.7,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "ulkro_portrait",
+   "fid": "ulkro",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 6.341,
+    "blank": 0.417,
+    "glow": 0.0,
+    "streak": 0.0172,
+    "cracked": 0.0436,
+    "eye_evidence": 1,
+    "face_med": 155.0,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "ulkro_highrim_splash",
+   "fid": "ulkro",
+   "label": "ok",
+   "verify": "verify_roll2",
+   "verdict": "ok",
+   "shipped": "painted v1",
+   "measures": {
+    "hollow": 11.425,
+    "blank": 0.275,
+    "glow": 0.0,
+    "streak": 0.0074,
+    "cracked": 0.0162,
+    "eye_evidence": 0,
+    "face_med": 162.4,
+    "dots": 134
+   },
+   "hits": []
+  },
+  {
+   "card": "ulkro_highrim_portrait",
+   "fid": "ulkro",
+   "label": "ok",
+   "verify": "verify_roll2",
+   "verdict": "ok",
+   "shipped": "painted v3",
+   "measures": {
+    "hollow": 0.0,
+    "blank": 0.222,
+    "glow": 0.0,
+    "streak": 0.006,
+    "cracked": 0.013,
+    "eye_evidence": 0,
+    "face_med": 168.9,
+    "dots": 28
+   },
+   "hits": []
+  },
+  {
+   "card": "ulkro_long_evening_splash",
+   "fid": "ulkro",
+   "label": "sens",
+   "verify": "verify_roll2",
+   "verdict": "fail",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 4.155,
+    "blank": 0.623,
+    "glow": 0.343,
+    "streak": 0.0267,
+    "cracked": 0.0593,
+    "eye_evidence": 0,
+    "face_med": 98.0,
+    "dots": 0
+   },
+   "hits": [
+    "glow"
+   ]
+  },
+  {
+   "card": "ulkro_long_evening_portrait",
+   "fid": "ulkro",
+   "label": "ok",
+   "verify": "verify_roll2",
+   "verdict": "ok",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 6.52,
+    "blank": 0.34,
+    "glow": 0.229,
+    "streak": 0.0363,
+    "cracked": 0.0961,
+    "eye_evidence": 4,
+    "face_med": 91.5,
+    "dots": 21
+   },
+   "hits": []
+  },
+  {
+   "card": "vashil_splash",
+   "fid": "vashil",
+   "label": "ok",
+   "verify": "verify_roll2",
+   "verdict": "ok",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 2.093,
+    "blank": 0.563,
+    "glow": 0.0004,
+    "streak": 0.0169,
+    "cracked": 0.0484,
+    "eye_evidence": 0,
+    "face_med": 175.2,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "vashil_portrait",
+   "fid": "vashil",
+   "label": "ok",
+   "verify": "verify_roll2",
+   "verdict": "ok",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 2.247,
+    "blank": 0.668,
+    "glow": 0.0002,
+    "streak": 0.016,
+    "cracked": 0.0474,
+    "eye_evidence": 0,
+    "face_med": 164.0,
+    "dots": 31
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "vashil_chalkline_splash",
+   "fid": "vashil",
+   "label": "ok",
+   "verify": "verify_roll2",
+   "verdict": "ok",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 2.942,
+    "blank": 0.612,
+    "glow": 0.0,
+    "streak": 0.0093,
+    "cracked": 0.0189,
+    "eye_evidence": 1,
+    "face_med": 170.7,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "vashil_chalkline_portrait",
+   "fid": "vashil",
+   "label": "ok",
+   "verify": "verify_roll2",
+   "verdict": "ok",
+   "shipped": "painted v2",
+   "measures": {
+    "hollow": 2.006,
+    "blank": 0.794,
+    "glow": 0.0,
+    "streak": 0.0083,
+    "cracked": 0.0263,
+    "eye_evidence": 2,
+    "face_med": 173.4,
+    "dots": 30
+   },
+   "hits": [
+    "blank"
+   ]
+  },
+  {
+   "card": "vashil_first_bell_splash",
+   "fid": "vashil",
+   "label": "ok",
+   "verify": "verify_roll2",
+   "verdict": "ok",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 1.799,
+    "blank": 0.61,
+    "glow": 0.0011,
+    "streak": 0.0107,
+    "cracked": 0.0344,
+    "eye_evidence": 0,
+    "face_med": 167.3,
+    "dots": 0
+   },
+   "hits": []
+  },
+  {
+   "card": "vashil_first_bell_portrait",
+   "fid": "vashil",
+   "label": "ok",
+   "verify": "verify_roll2",
+   "verdict": "ok",
+   "shipped": "3d",
+   "measures": {
+    "hollow": 3.409,
+    "blank": 0.478,
+    "glow": 0.0105,
+    "streak": 0.0272,
+    "cracked": 0.0796,
+    "eye_evidence": 1,
+    "face_med": 172.2,
+    "dots": 0
+   },
+   "hits": []
+  }
+ ]
+}

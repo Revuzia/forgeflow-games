@@ -42,24 +42,27 @@
   },
   "uv_coverage": 0.607,
   "bake": {
-    "base": 7.05,
-    "rough_metal": 7.24,
-    "normal": 2.66,
-    "ao": 3.76,
+    "base": 14.05,
+    "rough_metal": 5.85,
+    "normal": 4.02,
+    "ao": 3.62,
     "normal_fixed_px": 44580,
-    "projection": 176.88,
-    "pack_save": 177.14,
-    "total": 198.06
+    "projection": 347.65,
+    "pack_save": 347.93,
+    "total": 376.76
   },
   "tris": 23088,
   "mesh_top_m": 2.157,
-  "glb_bytes_raw": 2851812,
+  "glb_bytes_raw": 2852760,
   "optimize": {
     "ok": true,
-    "before": 2851812,
-    "after": 1105480
+    "before": 2852760,
+    "after": 1105680
   },
-  "glb_bytes": 1105480,
+  "zone_grade": {
+    "skipped": "no recipe"
+  },
+  "glb_bytes": 1105680,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -79,8 +82,8 @@
       "portrait": "art/out/fighters/burdam/burdam_stillwater_portrait.png"
     },
     "seconds": {
-      "splash": 89.1,
-      "portrait": 17.48
+      "splash": 104.98,
+      "portrait": 15.63
     }
   },
   "three_qa": {
@@ -112,24 +115,25 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/burdam/three_burdam_stillwater.png",
-    "seconds": 7.5,
+    "seconds": 10.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.42,
-      "model": 128.27,
-      "lows_bind": 4.69,
-      "uv": 3.34,
-      "bake": 198.06,
-      "export": 0.12,
-      "optimize": 0.84,
-      "load_test": 0.18,
-      "render": 107.06,
-      "three_qa": 7.73
+      "materials": 0.33,
+      "model": 94.0,
+      "lows_bind": 8.68,
+      "uv": 7.55,
+      "bake": 376.76,
+      "export": 0.27,
+      "optimize": 0.91,
+      "zone_grade": 0.0,
+      "load_test": 0.17,
+      "render": 121.05,
+      "three_qa": 10.97
     },
-    "total_s": 450.86
+    "total_s": 620.76
   },
   "run_ref_speed": 3.45,
   "height_m": 2.15
