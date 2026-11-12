@@ -299,7 +299,8 @@ CARDS = {
                               "power": 20.0, "size": 0.08}]},
         # (closing round 2: the head focal blew the scarf and the mask: softer and off-axis)
         # (max2 card round 2: the night mask read as a dark oval with point-of-light eyes at chip size: lifted a step)
-        "portrait": {"yaw": 34.0, "exposure": -0.5,
+        # (max2 card round 3: the tight crop lost the lantern, so a brighter moon rim and a step more exposure hold the highlights)
+        "portrait": {"yaw": 34.0, "exposure": -0.5, "rim_cool": 5.5,
                      "focal": [{"at": "head", "az": 200.0, "el": 0.0, "dist": 0.55, "color": "#FFC87E", "power": 30.0,
                                 "size": 0.3},
                                {"at": "x_lantern", "az": 180.0, "el": 0.0, "dist": 0.30, "color": "#FFD9A0",

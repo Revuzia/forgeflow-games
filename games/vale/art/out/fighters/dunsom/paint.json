@@ -174,79 +174,79 @@
  },
  "dunsom_almanac:portrait": {
   "shipped": "painted",
-  "variant": 2,
-  "why": "max2 r3: tight crop as the base, the night mask lifted a step (exposure -0.5, warm head key 30 W): a lit ochre mask with lidded eyes and pupils, no point-of-light read at 64 px; v2 passes every gate (3D alone misses blank 0.65 / highlights)",
+  "variant": 3,
+  "why": "max2 r3: tight head-and-shoulders crop (PORTRAIT_TIGHT: no lantern, brim cropped, face ~40 % of the width); the night mask lifted (exposure -0.5, warm head key 30 W) and a strong moon rim holds the highlights the lantern used to; v3 passes every gate incl. card_qa (blank 0.644, p99.9 230); lidded eyes with pupils on a lit ochre mask, no point-of-light read at 64 px",
   "model": "grok-imagine-image",
   "prompt_version": 5,
   "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. Add no colour, ornament, band or part that is not in the reference. Paint only what is visible in the reference: anything described below that is out of frame stays out of frame. Add no object, light source, sun disc, lens or prop that the reference does not show. Keep the reference's overall brightness and the background's value; do not brighten the image. A square head-and-shoulders portrait card. The cool dusk light in the reference is canonical: keep every colour exactly as rendered. The character: a tall, slender herder in a wide, low, round pale hood brim printed with fine tables (a shallow round brim, never tall or pointed) over a cream wrap, a smooth carved ochre wooden mask with two calm lidded carved eyes, each with a dark iris and a pupil, and a short rounded bill (never a long beak), a long coat with a leather belt, dark boots, holding a tall ink-black crook with a dark wooden lantern and small folded pages hung from its hook. The portrait shows only what the reference shows: a part named above that is out of frame stays out of frame. The mask is one smooth carved surface with no crack, split, seam or tile line across it. The cheeks and the band under the eyes are smooth carved planes: no new line, crack, drip or streak running down from an eye. Light: a low cool silver sun from the left, a warm rim light along the character's left edges, cooler shadow on the far side. Eyes: two calm lidded carved eyes, each with a dark iris, a pupil and one small catch-light, exactly as rendered and as muted; never glowing, never brighter or more saturated, never slits, never empty or hollow; no crack or line runs across the mask or down from an eye. Hands: gloved hands with separate fingers, knuckles and a thumb exactly as in the reference, each finger where it is rendered; never a mitten, a block or fused fingers. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
-  "raw": "tools/imagegen/raw/card_dunsom_almanac_portrait__v2.png",
-  "raw_sha256": "61f2445b7ceddcefde92db088cd5960116d483b9cef44d76d662c2efbd388c56",
+  "raw": "tools/imagegen/raw/card_dunsom_almanac_portrait__v3.png",
+  "raw_sha256": "4c5bf6ba03723d25814e21c631ff307bf8b1ac73a65f4ec9877f73fbc035b4f2",
   "gate": {
    "aspect_err": 0.0,
-   "struct": 0.998,
+   "struct": 0.997,
    "iou": 0.993,
-   "pal_mean": 1.9,
-   "pal_max": 2.2,
+   "pal_mean": 2.2,
+   "pal_max": 2.6,
    "face_range": 1.03,
    "face_dark": 1.04,
    "face_corr": 1.0,
    "new_colour": 0.0,
-   "eye_ds": -3.6,
-   "eye_dv": -4.1,
+   "eye_ds": -2.4,
+   "eye_dv": -3.7,
    "streak_cols": 0.0,
    "prop_out": 0.0,
    "prop_out_fill": 0.0,
    "prop_in": 0.0,
    "prop_in_fill": 0.0,
    "blockers": {
-    "hollow": 1.851,
-    "blank": 0.634,
+    "hollow": 1.809,
+    "blank": 0.633,
     "glow": 0.0,
-    "streak": 0.0115,
-    "cracked": 0.0263,
-    "dots": 45,
+    "streak": 0.0119,
+    "cracked": 0.0267,
+    "dots": 32,
     "hits": []
    },
    "blockers_3d": [],
-   "store_de": 30.9,
+   "store_de": 31.0,
    "store_floor": 18.0,
-   "menu_p50": 95,
-   "menu_over200": 1.5,
+   "menu_p50": 99,
+   "menu_over200": 5.8,
    "fails": [],
    "pass": true,
-   "variant": 2
+   "variant": 3
   },
   "figure_median": 1,
   "date": "2026-11-12"
  },
  "dunsom_almanac:splash": {
   "shipped": "3d",
-  "why": "max2 r2: no painted variant passes (all trip the blank tripwire, which also fires on this smooth mask's 3D; Almanac's add silhouette / palette / prop); the 3D finish of the rebuilt mask (MASK_CALM 1.0) reads one smooth carved lacquer face with calm lidded eyes, pupils and a short bill, no crack, seam, socket or streak, at full, card and chip size",
+  "why": "max2 r3: reframed as a three-quarter hero shot (box_lo / box_w / box_top; head ~3x larger, a raking head key); by eye the face reads (lidded eyes with pupils, brows, nose) at full and card size, but card_qa's blank tripwire still trips (0.70-0.92) and no painted variant passes (blank on all; silhouette / palette / prop / streak on some): gate miss, ship the live card unless the verifier clears it",
   "gates": [
    {
     "aspect_err": 0.0,
-    "struct": 0.946,
-    "iou": 0.51,
-    "pal_mean": 21.7,
-    "pal_max": 28.1,
-    "face_range": 1.16,
+    "struct": 0.897,
+    "iou": 0.678,
+    "pal_mean": 16.0,
+    "pal_max": 20.3,
+    "face_range": 1.07,
     "face_dark": null,
     "face_corr": 0.99,
     "new_colour": 0.0,
-    "eye_ds": -4.0,
-    "eye_dv": -7.2,
-    "streak_cols": 0.044,
+    "eye_ds": -3.7,
+    "eye_dv": -18.5,
+    "streak_cols": 0.0,
     "prop_out": 0.0,
-    "prop_out_fill": 0.0,
-    "prop_in": 0.001,
-    "prop_in_fill": 0.45,
+    "prop_out_fill": 1.0,
+    "prop_in": 0.0021,
+    "prop_in_fill": 0.67,
     "blockers": {
-     "hollow": 0.181,
-     "blank": 0.776,
+     "hollow": 2.82,
+     "blank": 0.811,
      "glow": 0.0,
-     "streak": 0.0115,
-     "cracked": 0.0228,
-     "dots": 196,
+     "streak": 0.0,
+     "cracked": 0.0066,
+     "dots": 354,
      "hits": [
       "blank"
      ]
@@ -255,10 +255,11 @@
      "blank"
     ],
     "menu_p50": 99,
-    "menu_over200": 0.6,
+    "menu_over200": 0.9,
     "fails": [
      "silhouette",
      "palette",
+     "prop",
      "blocker:blank"
     ],
     "pass": false,
@@ -266,28 +267,28 @@
    },
    {
     "aspect_err": 0.0,
-    "struct": 0.958,
-    "iou": 0.507,
-    "pal_mean": 23.8,
-    "pal_max": 31.5,
-    "face_range": 1.13,
+    "struct": 0.832,
+    "iou": 0.516,
+    "pal_mean": 22.4,
+    "pal_max": 29.1,
+    "face_range": 0.97,
     "face_dark": null,
     "face_corr": 0.99,
     "new_colour": 0.0,
-    "eye_ds": -4.7,
-    "eye_dv": -13.0,
-    "streak_cols": 0.067,
-    "prop_out": 0.0,
-    "prop_out_fill": 0.0,
-    "prop_in": 0.0022,
-    "prop_in_fill": 0.55,
+    "eye_ds": -2.6,
+    "eye_dv": -26.2,
+    "streak_cols": 0.0,
+    "prop_out": 0.0001,
+    "prop_out_fill": 0.75,
+    "prop_in": 0.0036,
+    "prop_in_fill": 0.39,
     "blockers": {
-     "hollow": 0.081,
-     "blank": 0.776,
+     "hollow": 2.924,
+     "blank": 0.81,
      "glow": 0.0,
-     "streak": 0.0083,
-     "cracked": 0.0199,
-     "dots": 221,
+     "streak": 0.0,
+     "cracked": 0.0064,
+     "dots": 341,
      "hits": [
       "blank"
      ]
@@ -295,8 +296,8 @@
     "blockers_3d": [
      "blank"
     ],
-    "menu_p50": 102,
-    "menu_over200": 0.7,
+    "menu_p50": 95,
+    "menu_over200": 0.8,
     "fails": [
      "silhouette",
      "palette",
@@ -308,28 +309,28 @@
    },
    {
     "aspect_err": 0.0,
-    "struct": 0.941,
-    "iou": 0.496,
-    "pal_mean": 24.0,
-    "pal_max": 30.0,
-    "face_range": 1.15,
+    "struct": 0.871,
+    "iou": 0.644,
+    "pal_mean": 19.1,
+    "pal_max": 28.0,
+    "face_range": 0.98,
     "face_dark": null,
-    "face_corr": 0.98,
+    "face_corr": 0.99,
     "new_colour": 0.0,
-    "eye_ds": -3.7,
-    "eye_dv": -13.0,
-    "streak_cols": 0.044,
+    "eye_ds": -2.9,
+    "eye_dv": -25.1,
+    "streak_cols": 0.022,
     "prop_out": 0.0,
     "prop_out_fill": 0.0,
-    "prop_in": 0.0027,
-    "prop_in_fill": 0.67,
+    "prop_in": 0.0023,
+    "prop_in_fill": 0.31,
     "blockers": {
-     "hollow": 1.946,
-     "blank": 0.769,
+     "hollow": 2.868,
+     "blank": 0.798,
      "glow": 0.0,
-     "streak": 0.0081,
-     "cracked": 0.0194,
-     "dots": 129,
+     "streak": 0.0,
+     "cracked": 0.0066,
+     "dots": 369,
      "hits": [
       "blank"
      ]
@@ -337,8 +338,8 @@
     "blockers_3d": [
      "blank"
     ],
-    "menu_p50": 97,
-    "menu_over200": 0.7,
+    "menu_p50": 91,
+    "menu_over200": 0.9,
     "fails": [
      "silhouette",
      "palette",
@@ -350,13 +351,7 @@
    }
   ],
   "prompt_version": 5,
-  "date": "2026-11-12",
-  "max2_r2": {
-   "status": "gate-miss: blank tripwire",
-   "card_qa": "blank 0.82 >= 0.65 (card_qa.BLOCKER; the only gate it misses)",
-   "note": "by eye: lidded eyes with pupils, no socket, crack or streak; the tripwire reads a smooth mask with small eyes as featureless. Not a pass under the full gate set: ship the live card unless the verifier clears it.",
-   "date": "2026-11-12"
-  }
+  "date": "2026-11-12"
  },
  "dunsom_highrim:portrait": {
   "shipped": "painted",
@@ -412,32 +407,32 @@
  },
  "dunsom_highrim:splash": {
   "shipped": "3d",
-  "why": "max2 r2: no painted variant passes (all trip the blank tripwire, which also fires on this smooth mask's 3D; Almanac's add silhouette / palette / prop); the 3D finish of the rebuilt mask (MASK_CALM 1.0) reads one smooth carved lacquer face with calm lidded eyes, pupils and a short bill, no crack, seam, socket or streak, at full, card and chip size",
+  "why": "max2 r3: reframed as a three-quarter hero shot (box_lo / box_w / box_top; head ~3x larger, a raking head key); by eye the face reads (lidded eyes with pupils, brows, nose) at full and card size, but card_qa's blank tripwire still trips (0.70-0.92) and no painted variant passes (blank on all; silhouette / palette / prop / streak on some): gate miss, ship the live card unless the verifier clears it",
   "gates": [
    {
     "aspect_err": 0.0,
-    "struct": 0.997,
-    "iou": 0.912,
-    "pal_mean": 4.7,
-    "pal_max": 8.2,
-    "face_range": 1.06,
+    "struct": 0.995,
+    "iou": 0.996,
+    "pal_mean": 3.7,
+    "pal_max": 6.9,
+    "face_range": 0.99,
     "face_dark": null,
     "face_corr": 1.0,
     "new_colour": 0.0,
-    "eye_ds": 0.2,
-    "eye_dv": -5.1,
+    "eye_ds": 1.2,
+    "eye_dv": -3.1,
     "streak_cols": 0.022,
     "prop_out": 0.0,
     "prop_out_fill": 0.0,
-    "prop_in": 0.0,
-    "prop_in_fill": 0.0,
+    "prop_in": 0.0005,
+    "prop_in_fill": 0.45,
     "blockers": {
-     "hollow": 1.432,
-     "blank": 0.758,
+     "hollow": 1.994,
+     "blank": 0.914,
      "glow": 0.0,
-     "streak": 0.0074,
-     "cracked": 0.0265,
-     "dots": 223,
+     "streak": 0.0031,
+     "cracked": 0.0069,
+     "dots": 259,
      "hits": [
       "blank"
      ]
@@ -445,8 +440,8 @@
     "blockers_3d": [
      "blank"
     ],
-    "menu_p50": 94,
-    "menu_over200": 3.1,
+    "menu_p50": 102,
+    "menu_over200": 2.9,
     "fails": [
      "blocker:blank"
     ],
@@ -455,28 +450,28 @@
    },
    {
     "aspect_err": 0.0,
-    "struct": 0.998,
-    "iou": 0.914,
-    "pal_mean": 2.5,
-    "pal_max": 5.4,
-    "face_range": 1.04,
+    "struct": 0.992,
+    "iou": 0.979,
+    "pal_mean": 6.5,
+    "pal_max": 10.5,
+    "face_range": 1.03,
     "face_dark": null,
     "face_corr": 1.0,
     "new_colour": 0.0,
-    "eye_ds": 0.1,
-    "eye_dv": -1.0,
-    "streak_cols": 0.022,
+    "eye_ds": 0.6,
+    "eye_dv": -5.9,
+    "streak_cols": 0.0,
     "prop_out": 0.0,
-    "prop_out_fill": 0.0,
+    "prop_out_fill": 0.67,
     "prop_in": 0.0,
     "prop_in_fill": 0.0,
     "blockers": {
-     "hollow": 1.121,
-     "blank": 0.755,
+     "hollow": 1.815,
+     "blank": 0.91,
      "glow": 0.0,
-     "streak": 0.0083,
-     "cracked": 0.0297,
-     "dots": 221,
+     "streak": 0.0029,
+     "cracked": 0.0073,
+     "dots": 267,
      "hits": [
       "blank"
      ]
@@ -484,8 +479,8 @@
     "blockers_3d": [
      "blank"
     ],
-    "menu_p50": 95,
-    "menu_over200": 3.1,
+    "menu_p50": 97,
+    "menu_over200": 3.0,
     "fails": [
      "blocker:blank"
     ],
@@ -494,28 +489,28 @@
    },
    {
     "aspect_err": 0.0,
-    "struct": 0.997,
-    "iou": 0.907,
-    "pal_mean": 4.7,
-    "pal_max": 10.1,
-    "face_range": 1.03,
+    "struct": 0.994,
+    "iou": 0.994,
+    "pal_mean": 4.9,
+    "pal_max": 8.6,
+    "face_range": 1.0,
     "face_dark": null,
     "face_corr": 1.0,
     "new_colour": 0.0,
-    "eye_ds": 0.3,
-    "eye_dv": -4.3,
-    "streak_cols": 0.022,
-    "prop_out": 0.0,
-    "prop_out_fill": 1.0,
-    "prop_in": 0.0,
-    "prop_in_fill": 0.0,
+    "eye_ds": 1.4,
+    "eye_dv": -4.6,
+    "streak_cols": 0.0,
+    "prop_out": 0.0001,
+    "prop_out_fill": 0.69,
+    "prop_in": 0.0006,
+    "prop_in_fill": 0.52,
     "blockers": {
-     "hollow": 1.27,
-     "blank": 0.753,
+     "hollow": 2.105,
+     "blank": 0.916,
      "glow": 0.0,
-     "streak": 0.0093,
-     "cracked": 0.0283,
-     "dots": 172,
+     "streak": 0.0021,
+     "cracked": 0.0072,
+     "dots": 280,
      "hits": [
       "blank"
      ]
@@ -523,8 +518,8 @@
     "blockers_3d": [
      "blank"
     ],
-    "menu_p50": 94,
-    "menu_over200": 2.4,
+    "menu_p50": 99,
+    "menu_over200": 2.6,
     "fails": [
      "blocker:blank"
     ],
@@ -533,12 +528,6 @@
    }
   ],
   "prompt_version": 5,
-  "date": "2026-11-12",
-  "max2_r2": {
-   "status": "gate-miss: blank tripwire",
-   "card_qa": "blank 0.77 >= 0.65 (card_qa.BLOCKER; the only gate it misses)",
-   "note": "by eye: lidded eyes with pupils, no socket, crack or streak; the tripwire reads a smooth mask with small eyes as featureless. Not a pass under the full gate set: ship the live card unless the verifier clears it.",
-   "date": "2026-11-12"
-  }
+  "date": "2026-11-12"
  }
 }
