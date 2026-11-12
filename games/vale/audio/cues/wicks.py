@@ -13,7 +13,8 @@ laning player heard).
 
 All are short, soft-topped (they fire many times a second in a wave fight) and quieter than a fighter's own kit. Each
 ships WICK_TAKES takes that change the RECIPE per take (body decay, filter, layer offsets, material frequencies), not
-only the seed or a detune, so the take-to-take spectra differ (the take-similarity gate in sfx_metrics.py).
+only the seed or a detune (TAKE_SHAPE: decay, material, a flam, the contact's level), so the takes differ in spectrum and
+in time (build.py's wick gate: spectral and time-frequency take similarity).
 """
 from __future__ import annotations
 
@@ -32,11 +33,31 @@ HITK = dict(tail_floor_db=-48.0, clip_drive=1.4, max_gr_db=6.0)
 SOFT_TOP = [('peak', 3300, -3.0, 0.8), ('high', 9000, -3.0)]
 
 
+# each take's SHAPE (max SFX fix 1: the takes differed by seed-sized offsets only, time-frequency similarity 0.99): its body
+# decay, its material frequency, its transient (a flam: a second contact gap ms later, or None) and the transient's level
+# (dB). The take's random offsets ride on top.
+TAKE_SHAPE = (
+    dict(dk=1.0, fk=1.0, flam=None, tl=0.0),
+    dict(dk=0.7, fk=1.1, flam=3.2, tl=2.0),
+    dict(dk=1.4, fk=0.9, flam=None, tl=-4.0),
+    dict(dk=0.85, fk=1.18, flam=1.8, tl=1.0),
+)
+
+
 def vary(cid: str, v: int) -> dict:
-    """A take's recipe offsets: body decay ±15 %, filter / material frequency ±10 %, layer offsets 0-3 ms."""
+    """A take's recipe: its TAKE_SHAPE, then offsets: body decay ±6 %, filter / material frequency ±5 %, layer offsets
+    0-3 ms, a layer level ±2.5 dB."""
     r = R(cid, 'vary', v)
-    return dict(dk=float(r.uniform(0.85, 1.15)), fk=float(r.uniform(0.9, 1.1)), fk2=float(r.uniform(0.9, 1.1)),
-                off=float(r.uniform(0.0, 0.003)), off2=float(r.uniform(0.0, 0.003)), lv=float(r.uniform(-2.5, 2.5)))
+    sh = TAKE_SHAPE[v % len(TAKE_SHAPE)]
+    return dict(dk=sh['dk'] * float(r.uniform(0.94, 1.06)), fk=sh['fk'] * float(r.uniform(0.95, 1.05)),
+                fk2=float(r.uniform(0.9, 1.1)), off=float(r.uniform(0.0, 0.003)), off2=float(r.uniform(0.0, 0.003)),
+                lv=float(r.uniform(-2.5, 2.5)), flam=sh['flam'], tl=sh['tl'])
+
+
+def flam(L, r, f: float, k: dict, peak_db: float, lp_hz: float) -> None:
+    """The take's second contact (TAKE_SHAPE flam), 6 dB under its first."""
+    if k['flam']:
+        L.add(lp(S.snap(r, f * 1.12, 1.0), lp_hz), k['flam'] / 1000.0, peak_db=peak_db + k['tl'] - 6.0)
 
 
 def brass_tick(r, f: float, t60: float) -> np.ndarray:
@@ -109,7 +130,8 @@ def w_wick_hit(v: int):
     k = vary('w_wick_hit', v)
     r = R('w_wick_hit', v=v)
     L = Layers(0.2)
-    L.add(lp(S.snap(r, 2300 * k['fk'], 1.4), 4200), 0.0, peak_db=-9)
+    L.add(lp(S.snap(r, 2300 * k['fk'], 1.4), 4200), 0.0, peak_db=-9 + k['tl'])
+    flam(L, r, 2300 * k['fk'], k, -9, 4200)
     L.add(tallow(r, 430 * k['fk'], 0.045 * k['dk']), 0.0, peak_db=0)
     L.add(tallow(R('w_wick_hit', 'b', v), 860 * k['fk2'], 0.03 * k['dk']), 0.0015 + k['off'] * 0.5, peak_db=-3 + k['lv'])
     L.add(S.thump(0.12, 190 * k['fk2'], 95, 0.01, 0.06 * k['dk'], 2.0), 0.0, peak_db=-9)
@@ -123,7 +145,8 @@ def w_glimwick_hit(v: int):
     r = R('w_glimwick_hit', v=v)
     L = Layers(0.24)
     L.add(tallow(r, 420 * k['fk'], 0.035 * k['dk']), 0.0, peak_db=-3)
-    L.add(S.burst(r, 0.03, 900 * k['fk2'], 3800, 0.01, q=0.8), 0.0, peak_db=-6)
+    L.add(S.burst(r, 0.03, 900 * k['fk2'], 3800, 0.01 * k['dk'], q=0.8), 0.0, peak_db=-6 + k['tl'])
+    flam(L, r, 2600 * k['fk'], k, -8, 4400)
     L.add(at_len(hiss(r, 0.16 * k['dk'], 3200 * k['fk'], 1800, q=1.4, attack=0.004, fall=2.2), 0.16), 0.006 + k['off'],
           peak_db=-10 + k['lv'], width=0.4)
     L.add(tink(1900 * k['fk2'], 0.07, 0.035, bright=0.25), 0.002 + k['off2'], peak_db=-16)
@@ -136,7 +159,8 @@ def w_wick_hit_heavy(v: int):
     k = vary('w_wick_hit_heavy', v)
     r = R('w_wick_hit_heavy', v=v)
     L = Layers(0.3)
-    L.add(lp(S.snap(r, 2000 * k['fk'], 1.8), 3800), 0.0, peak_db=-12)
+    L.add(lp(S.snap(r, 2000 * k['fk'], 1.8), 3800), 0.0, peak_db=-12 + k['tl'])
+    flam(L, r, 2000 * k['fk'], k, -12, 3800)
     L.add(tallow(r, 370 * k['fk'], 0.07 * k['dk']), 0.0, peak_db=0)
     L.add(tallow(R('w_wick_hit_heavy', 'b', v), 690 * k['fk2'], 0.045 * k['dk']), 0.001 + k['off2'] * 0.5, peak_db=-4)
     L.add(S.thump(0.2, 170 * k['fk2'], 80, 0.018, 0.1 * k['dk'], 2.6), 0.0, peak_db=-9)

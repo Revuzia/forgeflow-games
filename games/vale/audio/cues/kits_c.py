@@ -241,6 +241,167 @@ def with_body(x: np.ndarray) -> np.ndarray:
     return norm(xs + b * h)
 
 
+# ── the crack pass (max SFX-2): every kit hit's transient and air, per material, and a take shape of its own ─────────
+# A hit is a contact click, the body, and the "air" after it: the bright debris / sizzle that tells the ear something
+# broke. Each fighter's crack is struck in its own material and band (a glass tink set, a plate's inharmonic ring, stone
+# grit, a wood snap), so the identity distances hold; the air is a short swelling noise tail in the fighter's own
+# upper band. Levels are solved per take (bisection): the onset's > 2 kHz share up to CRACK_ONSET (the contact pass
+# then keeps the gate's soft top), the whole take's > 6 kHz share up to AIR_SHARE and its 2-6 kHz share up to
+# BITE_SHARE. A take already over a goal keeps its own level of that part (a floor of CRACK_MIN_DB re its peak).
+# fid → (material, crack centre Hz, air band lo-hi Hz, air t60 s)
+CRACK: dict[str, tuple[str, float, tuple[float, float], float]] = {
+    'ardit': ('plate', 3600.0, (6000.0, 10500.0), 0.16), 'burdam': ('stone', 2600.0, (4800.0, 8500.0), 0.14),
+    'dunsom': ('wood', 2200.0, (4000.0, 7000.0), 0.12), 'ervet': ('glass', 6400.0, (8000.0, 12500.0), 0.18),
+    'hesmi': ('stone', 2300.0, (4400.0, 7600.0), 0.15), 'ilsheta': ('wood', 3000.0, (5000.0, 9000.0), 0.13),
+    'kemdo': ('click', 7000.0, (9000.0, 13000.0), 0.10), 'lisvel': ('wood', 3800.0, (6000.0, 10000.0), 0.15),
+    'marund': ('stone', 2800.0, (5400.0, 9400.0), 0.17), 'nurrow': ('wood', 5000.0, (7000.0, 11500.0), 0.11),
+    'odrum': ('wood', 3200.0, (5000.0, 8000.0), 0.14), 'rishal': ('glass', 7400.0, (9000.0, 13500.0), 0.16),
+    'sukri': ('glass', 5400.0, (7000.0, 11000.0), 0.2), 'tunlan': ('wood', 2400.0, (4000.0, 6500.0), 0.12),
+    'ulkro': ('wood', 3400.0, (6000.0, 9000.0), 0.13), 'vashil': ('glass', 4600.0, (6500.0, 10000.0), 0.22),
+}
+CRACK_ONSET = 0.17           # the onset's > 2 kHz share a crack lifts a take to (the contact pass tames above 0.24)
+AIR_SHARE = 0.014            # the take's > 6 kHz energy share its air lifts it to …
+BITE_SHARE = 0.06            # … and its 2-6 kHz share
+CRACK_MIN_DB = -20.0         # a take already bright enough still gets its crack at this level re its peak
+AIR_MAX_DB = -9.0            # the air never comes nearer the peak than this (no hiss on top of a hit)
+# cue id → (level scale of the solved crack / grit / air, band ratio, mode): found by audio/crack_search.py so every
+# fighter keeps >= ID_MIN_DIST_DB from every other in its slot (a dark fighter's identity is its darkness: its crack is
+# small). mode 'full': crack, grit and air; 'crack': the onset crack and grit only (no air tail); 'plain': the take as
+# the recipe made it (no crack, no take shape). Absent: (1.0, 1.0, 'full').
+CRACK_TUNE: dict[str, tuple[float, float, str]] = {}
+HIT_TAKES = 4                # a kit attack hit and ability hit: 4 takes, each its own shape (TAKE_SHAPE)
+# per take: (crack centre ratio, flam: (gap ms, level dB) or None, crack length ms, air t60 ratio, air peak ms,
+#            body decay tau s after the first 30 ms (None: untouched), pitch ratio (playback slower > 1))
+TAKE_SHAPE = (
+    (1.00, None, 2.0, 1.00, 14.0, None, 1.0),
+    (1.07, (3.5, -5.0), 1.4, 0.75, 9.0, 0.22, 1.0),
+    (0.93, None, 3.2, 1.30, 22.0, 0.40, 1.0),
+    (1.12, (2.2, -8.0), 1.0, 0.90, 12.0, 0.30, 2 ** (30 / 1200)),
+)
+
+
+def _crack(fid: str, v: int, ratio: float = 1.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(crack, grit, air) for one take of a fighter's hit, each mono and peak-normalised: the crack is the 1-3 ms click
+    and its material's ring (glass tinks, plate partials, a wood snap's mode, stone's first chip), the grit the
+    material's short debris (2-6 kHz, 10-60 ms), the air a noise tail that swells to its peak and dies in the
+    fighter's upper band."""
+    mat, fc0, (alo, ahi), at60 = CRACK[fid]
+    cr, flam, cms, ar, apk, _, _ = TAKE_SHAPE[v % len(TAKE_SHAPE)]
+    r = R(f'f_{fid}_crack', v=v)
+    fc = fc0 * cr * ratio * r.uniform(0.97, 1.03)
+    alo, ahi = alo * ratio, min(ahi * ratio, 15000.0)
+    n = ns(0.06)
+    t = np.arange(n) / SR
+    k = max(8, ns(cms / 1000.0))
+    click = np.zeros(n)
+    click[:k] = r.standard_normal(k) * np.linspace(1.0, 0.0, k) ** 2
+    click = F.apply(click, [F.highpass(fc * 0.5, 0.7071), F.peaking(fc, 6.0, 1.2), F.lowpass(min(fc * 2.6, 15000.0), 0.7071)])
+    if mat == 'glass':
+        ring = sum(a * np.sin(2 * np.pi * fc * q * t + r.uniform(0, 6.28)) * np.exp(-6.9078 * t / d)
+                   for q, a, d in ((1.0, 1.0, 0.035), (1.52, 0.6, 0.022), (2.31, 0.35, 0.014)))
+    elif mat == 'plate':
+        ring = sum(a * np.sin(2 * np.pi * fc * q * t + r.uniform(0, 6.28)) * np.exp(-6.9078 * t / d)
+                   for q, a, d in ((1.0, 1.0, 0.05), (1.41, 0.7, 0.04), (1.83, 0.45, 0.03), (2.62, 0.3, 0.02)))
+    elif mat == 'wood':
+        ring = np.sin(2 * np.pi * fc * t) * np.exp(-6.9078 * t / 0.012) + 0.4 * np.sin(2 * np.pi * fc * 1.71 * t) * np.exp(-6.9078 * t / 0.007)
+    elif mat == 'stone':
+        ring = F.apply(r.standard_normal(n) * np.exp(-6.9078 * t / 0.01), [F.bandpass(fc, 2.5)])
+    else:
+        ring = np.sin(2 * np.pi * fc * t) * np.exp(-6.9078 * t / 0.006)
+    k2 = ns(0.0008)
+    ring[:k2] *= np.linspace(0.0, 1.0, k2)
+    crack = norm(click) + 0.55 * norm(ring)
+    if flam:
+        gap, gdb = flam
+        d = ns(gap / 1000.0)
+        crack[d:] += 10 ** (gdb / 20) * crack[:n - d] * np.cos(np.linspace(0, 0.3, n - d))
+    crack = norm(crack)
+    gl = ns(0.08)
+    grit = np.zeros(gl)
+    for _ in range(int(14 * (1.5 if v % len(TAKE_SHAPE) == 2 else 1.0))):
+        t0 = r.exponential(0.018)
+        if t0 > 0.065:
+            continue
+        g = ns(r.uniform(0.0006, 0.0025))
+        c = r.standard_normal(g) * np.linspace(1, 0, g) ** 2 * np.exp(-t0 / 0.025) * r.uniform(0.3, 1.0)
+        i0 = ns(t0)
+        grit[i0:i0 + g] += c[:max(0, min(g, gl - i0))]
+    grit = norm(F.apply(grit, [F.bandpass(min(fc * 0.85, 5200.0), 1.6), F.highpass(1800.0, 0.7071)]))
+    al = ns(max(0.12, at60 * ar * 1.2))
+    ta = np.arange(al) / SR
+    pk = apk / 1000.0
+    env = np.where(ta < pk, (ta / pk) ** 1.5, np.exp(-6.9078 * (ta - pk) / (at60 * ar)))
+    air = r.standard_normal(al) * env
+    air = F.apply(air, [F.highpass(alo, 0.7071), F.highpass(alo, 0.7071), F.lowpass(ahi, 0.7071), F.lowpass(ahi, 0.7071)])
+    air = norm(air * (1.0 + 0.35 * np.sin(2 * np.pi * r.uniform(28, 55) * ta + r.uniform(0, 6.28))))
+    fe = ns(0.01)
+    air[-fe:] *= np.linspace(1, 0, fe)
+    return crack, grit, air
+
+
+def _band_share(m: np.ndarray, lo: float, hi: float = 1e9) -> float:
+    P = np.abs(np.fft.rfft(m)) ** 2
+    f = np.fft.rfftfreq(m.size, 1 / SR)
+    return float(P[(f >= lo) & (f < hi)].sum() / (P[f > 20].sum() + 1e-30))
+
+
+def _place(n: int, layer: np.ndarray, i: int) -> np.ndarray:
+    y = np.zeros(n)
+    k = max(0, min(layer.size, n - i))
+    y[i:i + k] = layer[:k]
+    return y
+
+
+def _solve(base: np.ndarray, layer: np.ndarray, meas, goal: float, top: float) -> float:
+    """The smallest gain (re the base's peak, at most `top` linear) that lifts meas(base + g * layer) to goal."""
+    if meas(base + top * layer) <= goal:
+        return top
+    a, b = 0.0, top
+    for _ in range(22):
+        g = 0.5 * (a + b)
+        if meas(base + g * layer) < goal:
+            a = g
+        else:
+            b = g
+    return b
+
+
+def with_crack(x: np.ndarray, fid: str, v: int, cid: str) -> np.ndarray:
+    """The crack pass (see the section note): shape the take (TAKE_SHAPE: pitch, body decay), then add its crack at the
+    onset, the grit and the air just behind it, each at its solved level scaled by the cue's CRACK_TUNE."""
+    scale, ratio, mode = CRACK_TUNE.get(cid, (1.0, 1.0, 'full'))
+    if mode == 'plain':
+        return x
+    _, _, _, _, apk, tau, pr = TAKE_SHAPE[v % len(TAKE_SHAPE)]
+    xs = np.atleast_2d(np.asarray(x, float))
+    if xs.shape[0] == 1:
+        xs = np.vstack([xs[0], xs[0]])
+    if pr != 1.0:
+        xs = _lower(xs, pr)
+    e = np.max(np.abs(xs), axis=0)
+    i = int(np.argmax(e > e.max() * 0.01))
+    n = xs.shape[-1]
+    if tau:
+        t = (np.arange(n) - i) / SR - 0.03
+        xs = xs * np.where(t > 0, np.exp(-np.maximum(t, 0.0) / tau), 1.0)[None, :]
+    xs = norm(xs)
+    if scale <= 0:
+        return xs
+    crack, grit, air = _crack(fid, v, ratio)
+    lc, lg, la = _place(n, crack, i), _place(n, grit, i + ns(0.004)), _place(n, air, i + ns(0.002))
+    mid = xs.mean(axis=0)
+    fl = 10 ** (CRACK_MIN_DB / 20)
+    g_c = scale * max(fl, _solve(mid, lc, lambda m: _share(m), CRACK_ONSET, 0.8))
+    mid = mid + g_c * lc
+    g_g = scale * max(fl * 0.7, _solve(mid, lg, lambda m: _band_share(m, 2000.0, 6000.0), BITE_SHARE, 0.5))
+    mid = mid + g_g * lg
+    g_a = 0.0 if mode == 'crack' else scale * max(fl * 0.5, _solve(mid, la, lambda m: _band_share(m, 6000.0), AIR_SHARE,
+                                                                       10 ** (AIR_MAX_DB / 20)))
+    w = np.array([1.0, 0.92])            # the debris sits a touch off-centre (it sums back in mono)
+    side = (g_g * lg + g_a * la)
+    return norm(xs + (g_c * lc)[None, :] + side[None, :] * w[:, None] + 0.08 * np.vstack([side, -side]))
+
+
 def _stages(vc) -> tuple:
     return tuple(vc) if isinstance(vc, (list, tuple)) else ((vc,) if vc else ())
 
@@ -366,10 +527,13 @@ def _wrap(cid: str, fid: str) -> None:
         if slot in BODY_SLOTS:
             x = with_body(x)
         if slot in CONTACT_SLOTS:
+            x = with_crack(x, fid, v, _cid)
             x = with_contact(x, fid, v, _cid)
         return x
     voiced.__doc__ = (fn.__doc__ or '') + ' [kits_c identity pass]'
     spec.fn = voiced
+    if slot in CONTACT_SLOTS:
+        spec.variants = HIT_TAKES
 
 
 # ── recipes ──────────────────────────────────────────────────────────────────────────────────────

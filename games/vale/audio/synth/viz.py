@@ -114,14 +114,15 @@ def sheet(tiles: list[Image.Image], title: str, cols: int = 4, pad: int = 8) -> 
     tw = max(t.width for t in tiles); th = max(t.height for t in tiles)
     rows = int(math.ceil(len(tiles) / cols))
     W = cols * tw + (cols + 1) * pad
-    H = 40 + rows * th + (rows + 1) * pad
+    head = 58                       # the title, then the legend on its own line (a long title never runs into it)
+    H = head + rows * th + (rows + 1) * pad
     im = Image.new('RGB', (W, H), INK)
     d = ImageDraw.Draw(im)
-    d.text((pad, 10), title, fill=CHALK, font=font(18))
-    d.text((W - 330, 14), 'spectrogram 30 Hz-20 kHz log, -96..0 dBFS', fill=TEXT2, font=font(11))
+    d.text((pad, 8), title, fill=CHALK, font=font(18))
+    d.text((pad, 36), 'spectrogram 30 Hz-20 kHz log, -96..0 dBFS', fill=TEXT2, font=font(11))
     for i, t in enumerate(tiles):
         r, c = divmod(i, cols)
-        im.paste(t, (pad + c * (tw + pad), 40 + pad + r * (th + pad)))
+        im.paste(t, (pad + c * (tw + pad), head + pad + r * (th + pad)))
     return im
 
 

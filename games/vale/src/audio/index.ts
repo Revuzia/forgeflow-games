@@ -424,16 +424,16 @@ const YOU_CC_GAIN = Math.pow(10, 3 / 20);   // +3 dB: a control status landing o
 // ±GAIN_VAR_DB per play, and the same cue again within REPEAT_S of its last start plays REPEAT_DB down and up to
 // REPEAT_JITTER_S late, so a stack of hits blurs instead of flamming (one random number per play)
 const GAIN_VAR_DB = 1.2;
-const SHIELD_BREAK_GAP_S = 0.5;
+const SHIELD_BREAK_GAP_S = 0.5;   // one target's shield breaks sound at most this often (max SFX-7)
 // the map's room (max SFX-9): a spatial sfx voice sends ROOM_NEAR_DB re its own level at half the full-volume radius,
 // rising to ROOM_FAR_DB at the edge of hearing (far sounds are wetter); the room returns at ROOM_RETURN_DB
 const ROOM_NEAR_DB = -20;
 const ROOM_FAR_DB = -11;
 const ROOM_RETURN_DB = 10;      // (a normalised ConvolverNode returns about 9 dB of energy under its input: this puts a near
                                 // hit's room about 19 dB under it, a far one about 10 dB under: sfx_room_ab.py)
-const SHOOTERS_MAX = 256;
+const SHOOTERS_MAX = 256;         // attackers remembered for a shot landing after its shooter died (max SFX-1)
 const STRUCK_GAIN = 0.4;          // a structure's own answer under a blow (max SFX-5) …
-const STRUCK_GAP_S = 0.15;        // … at most this often per structure         // attackers remembered for a shot landing after its shooter died (max SFX-1)   // one target's shield breaks sound at most this often (max SFX-7)
+const STRUCK_GAP_S = 0.15;        // … at most this often per structure
 // the Gleam coins (max SFX-8): a last hit's gain, and its combo ladder (+GOLD_STEP_ST a rung within GOLD_CHAIN_S, GOLD_RUNGS high)
 const GOLD_GAIN = 0.8;
 const GOLD_CHAIN_S = 1.5;
@@ -556,15 +556,15 @@ class Engine implements ValeAudioPort {
   private readonly settled = new WeakMap<Promise<AudioBuffer | null>, AudioBuffer | null>();
   private readonly voices: Voice[] = [];
   private readonly lastPlay = new Map<string, number>();
-  private readonly wickHits: number[] = [];
-  private readonly shieldBroke = new Map<number, number>();
-  private readonly shooters = new Map<number, EntityLike>();
+  private readonly wickHits: number[] = [];                    // recent Wick-on-Wick blows near the ear (wickDuck)
+  private readonly shieldBroke = new Map<number, number>();     // a target's last shield break (context time)
+  private readonly shooters = new Map<number, EntityLike>();    // the last attackers, as they were (SHOOTERS_MAX)
   private readonly struckLast = new Map<number, number>();     // a structure's last struck answer (context time)
   private roomIn: GainNode | null = null;                       // the shared room send (see ROOM_NEAR_DB) …
   private room: ConvolverNode | null = null;
-  private roomOn = false;                                       // … live once the map's response is loaded   // the last attackers, as they were (SHOOTERS_MAX)   // a target's last shield break (context time)
+  private roomOn = false;                                       // … live once the map's response is loaded
   private goldRung = 0;                         // the Gleam ladder's rung, and its last last hit (context time)
-  private goldLast = -1e9;   // recent Wick-on-Wick blows near the ear (wickDuck)
+  private goldLast = -1e9;
   private vol: AudioSettings;
   private readonly cues: Record<string, CueDef>;
   /** engine event role → cue id (content/audio.json `events`) */
@@ -1074,8 +1074,6 @@ class Engine implements ValeAudioPort {
     return !!c;
   }
 
-  /** a fighter's own cue for a kit slot (see `kits` in the header); undefined when `x` is no fighter or content
-   *  has no such cue (the catalog's present and the generic roles then decide) */
   /** a Wick-on-Wick blow's gain (max SFX-1): WICK_HIT_GAIN, or WICK_DENSE_GAIN once WICK_DENSE_N of them landed near the
    *  ear within WICK_DENSE_S (a wave fight is texture under the fighters, not a machine gun) */
   private wickDuck(p: { x: number; y: number } | null): number {
@@ -1088,6 +1086,8 @@ class Engine implements ValeAudioPort {
     return w.length >= WICK_DENSE_N ? WICK_DENSE_GAIN : WICK_HIT_GAIN;
   }
 
+  /** a fighter's own cue for a kit slot (see `kits` in the header); undefined when `x` is no fighter or content
+   *  has no such cue (the catalog's present and the generic roles then decide) */
   private kit(x: EntityLike | undefined, slot: KitSlot): string | undefined {
     return x?.kind === 'fighter' && x.def ? this.kits.get(x.def)?.[slot] : undefined;
   }

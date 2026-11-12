@@ -78,6 +78,15 @@ FIG_MEDIAN = 1        # 3x3 median passes on the figure of an accepted painting 
                       # painting's pixel-scale grain read 2.6-5.2 on the figure; one pass reads 0.9-1.8, strokes survive)
 PROP = {"de_out": 10.0, "de_in": 14.0, "out_max": 0.001, "in_max": 0.001}
 MASK_TARGET = {"sukri_shadeprint": "#B39272"}   # ruling 2 / 30: the amber lacquer mask (the 3D card reads dE 4.2)
+# (cards ks1 fix) the HOLD: a painting is held to its render where the painter keeps breaking on-model in the same place:
+#   * the eyes (every card): each eye pixel's saturation at most the render's + EYE_HOLD_S (0-1) (verify ks1: amber iris
+#     rings, eye_ds +26..+48 even on light paints with palette dE ~2)
+#   * the carved mask (FACE_HOLD fighters: (disc radius x, mix)): the face disc mixed back toward the render's clean
+#     mask (all 6 + 3 pass 4 / ks1 Sukri splash variants painted grain lines down from the eyes)
+#   * a ruled mask colour (MASK_TARGET): plates.mask_to's gain on the painting's face disc
+# The hold runs before the gate and on the shipped card (shipped_painting), so the gate sees what ships.
+EYE_HOLD_S = 0.03
+FACE_HOLD = {"sukri": (2.2, 0.7)}
 STREAK_FACES = {"sukri"}      # fighters whose face under the eyes is bare (a carved mask): the tear-streak check runs
 GATE = {"new_colour": 0.0003, "eye_ds_cap": 15.0, "eye_ds": 30.0, "eye_dv": 30.0, "eye_dv2": 25.0, "streak_cols": 0.10, "mask_de": 10.0, "aspect": 0.015, "struct": 0.70, "iou": 0.80, "pal_mean": 14.0, "pal_max": 24.0,
         "face_range": 0.70, "face_dark": 0.5, "face_corr": 0.45}
@@ -447,6 +456,7 @@ def gate_card(sid: str, kind: str, n: int) -> list[dict]:
         if not os.path.isfile(fp):
             continue
         P, asp = load_variant(fp, kind)
+        P = hold(sid, kind, P, F, A, meta)
         g = gate_variant(sid, kind, P, asp, F, B, A, meta)
         g["variant"] = v
         out.append(g)
@@ -485,8 +495,10 @@ def review(fid: str, out_dir: str) -> None:
         gates = json.load(open(gp))
         ims = [Image.open(os.path.join(CACHE, f"{sid}_{kind}_3d.png")).convert("RGB")]
         labels = ["3D v2"]
+        F, A, meta_ = ref3d(sid, kind)
         for g in gates:
-            ims.append(Image.fromarray((load_variant(raw_variant(sid, kind, g["variant"]), kind)[0] * 255).astype(np.uint8)))
+            P = hold(sid, kind, load_variant(raw_variant(sid, kind, g["variant"]), kind)[0], F, A, meta_)   # as it ships
+            ims.append(Image.fromarray((np.clip(P, 0, 1) * 255).astype(np.uint8)))
             labels.append(f"v{g['variant']} {'PASS' if g['pass'] else 'fail ' + ','.join(g['fails'])}")
         meta = plates.load_meta(sid, kind)
         fp = plates.face_point(meta, params_of(sid), kind) or (0.5, 0.35)
@@ -509,11 +521,48 @@ def review(fid: str, out_dir: str) -> None:
         print(f"[paint] review {sid} {kind}: " + "; ".join(labels))
 
 
+def hold(sid: str, kind: str, P: np.ndarray, F: np.ndarray, A: np.ndarray, meta: dict | None) -> np.ndarray:
+    """(cards ks1 fix) the painting held to the render (see EYE_HOLD_S / FACE_HOLD / MASK_TARGET above)"""
+    fid = plates.fighter_of(sid)
+    p = params_of(sid) or {}
+    grow, mix = FACE_HOLD.get(fid, (1.8, 0.0))
+    disc = plates._face_disc(P.shape[:2], A, dict(p, mask_r=1.0), kind, meta, grow)
+    if disc is None:
+        return P
+    out = P.copy()
+    if mix > 0:
+        out = out * (1.0 - mix * disc[..., None]) + F * (mix * disc[..., None])
+    # the eyes: the render's inlay pixels (warm, S >= 0.48) in the disc, grown 2 px
+    def sat(x):
+        mx, mn = x.max(-1), x.min(-1)
+        return np.where(mx > 0, (mx - mn) / np.maximum(mx, 1e-5), 0.0)
+    SF = sat(F)
+    eye = (disc > 0.5) & (F[..., 0] > F[..., 2] + 0.08) & (SF >= 0.48)
+    g = eye.astype(np.float32)
+    h, w = g.shape
+    for _ in range(2):
+        pp = np.pad(g, 1)
+        g = np.max(np.stack([pp[dy:dy + h, dx:dx + w] for dy in range(3) for dx in range(3)]), axis=0)
+    g = blur(g[..., None], 1.0)[..., 0] if g.any() else g
+    SP = sat(out)
+    cap = np.clip(SF + EYE_HOLD_S, 0.0, 1.0)
+    k = np.where(SP > cap, cap / np.maximum(SP, 1e-5), 1.0)
+    L = (out @ np.array([0.2126, 0.7152, 0.0722], np.float32))[..., None]
+    capped = L + (out - L) * k[..., None]
+    out = out * (1.0 - g[..., None]) + capped * g[..., None]
+    if sid in MASK_TARGET:
+        comp = np.concatenate([out, np.ones_like(out[..., :1])], 2).astype(np.float32)
+        out = plates.mask_to(comp, A, dict(p, mask_to=MASK_TARGET[sid]), kind, meta)[..., :3]
+    return np.clip(out, 0.0, 1.0).astype(np.float32)
+
+
 def shipped_painting(sid: str, kind: str, v: int) -> np.ndarray:
-    """The accepted painting as shipped: resized to the card, then FIG_MEDIAN median passes inside the render's figure."""
+    """The accepted painting as shipped: resized to the card, held to the render (hold), then FIG_MEDIAN median passes
+    inside the render's figure."""
     P, _asp = load_variant(raw_variant(sid, kind, v), kind)
+    F, A, meta = ref3d(sid, kind)
+    P = hold(sid, kind, P, F, A, meta)
     if FIG_MEDIAN > 0:
-        _F, A, _m = ref3d(sid, kind)
         P = plates.median3(np.concatenate([P, A[..., None]], 2).astype(np.float32), FIG_MEDIAN)[..., :3]
     return P
 

@@ -142,13 +142,15 @@ def card(sid: str, fid: str, kind: str) -> dict | None:
 
 
 PUPIL_GATE = {"sukri"}     # (cards ks1 fix) fighters whose carved eyes carry a painted pupil: the pupil check is a GATE
+PUPIL_R = {"sukri": 1.8}   # the face disc's radius x this (Sukri's mask is twice a head's face: the eyes sit near its rim)
 
 
 def pupils(img: np.ndarray, a: np.ndarray, sid: str, fid: str, kind: str, rp: str) -> dict | None:
     """(cards ks1 fix: verify ks1's blocker, Shadeprint's pupils read as pale lavender holes through the mask) in the face
-    disc (render notes + the card's face_off): the eye pixels are the warm, saturated top 20 % (the honey / amber inlay),
-    grown 3 px; the pupil is the darkest 4 % of that region. GATE (PUPIL_GATE fighters): the pupil's luma at least 25
-    under the iris's median, and not cool (its blue at most its red + 8: a plate seen through a hole is the sky's hue)."""
+    disc (render notes + the card's face_off): the eye pixels are the warm, saturated top 20 % at S >= 0.48 (the honey / amber inlay),
+    grown 3 px; the pupil is the darkest 2 % of that region. GATE (PUPIL_GATE fighters): the pupil's luma at least 25
+    under the iris's median, and not cool (its blue at most its red + 8: a plate seen through a hole is the sky's hue);
+    no hole the iris ring closes is cool. (The composite can no longer drop an enclosed dark pixel: plates.split_shadow.)"""
     mp = rp + ".json"
     if not os.path.isfile(mp):
         return None
@@ -162,26 +164,44 @@ def pupils(img: np.ndarray, a: np.ndarray, sid: str, fid: str, kind: str, rp: st
         return None
     H, W = img.shape[:2]
     yy, xx = np.mgrid[0:H, 0:W]
-    rr = (0.05 if kind == "splash" else 0.15) * H
+    rr = (0.05 if kind == "splash" else 0.15) * H * PUPIL_R.get(fid, 1.0)
     fm = (((xx - fp[0] * W) ** 2 + (yy - fp[1] * H) ** 2) < rr * rr) & (a > 0.5)
     mx, mn = img.max(-1), img.min(-1)
     S = np.where(mx > 0, (mx - mn) / np.maximum(mx, 1e-5), 0.0)
     warm = fm & (img[..., 0] > img[..., 2] + 0.08) & (S > 0.35)
     if warm.sum() < 12:
         return None
-    eye = warm & (S >= np.percentile(S[warm], 80))
+    eye = warm & (S >= max(0.48, float(np.percentile(S[warm], 80))))    # the inlay (S ~0.6), never the mask (~0.36)
+    if eye.sum() < 8:
+        return None
     g = eye.astype(np.float32)
     for _ in range(3):
         pp = np.pad(g, 1)
         g = np.max(np.stack([pp[dy:dy + H, dx:dx + W] for dy in range(3) for dx in range(3)]), axis=0)
     reg = (g > 0) & fm
     Y = (img @ Y709) * 255.0
-    pup = reg & (Y <= np.percentile(Y[reg], 4))
+    pup = reg & (Y <= np.percentile(Y[reg], 2))
     iris = float(np.median(Y[eye]))
     pl = float(Y[pup].mean())
     pc = img[pup].mean(0) * 255.0
     ok = (pl <= iris - 25.0) and (pc[2] <= pc[0] + 8.0)
-    return {"iris_luma": round(iris, 1), "pupil_luma": round(pl, 1), "pupil_rgb": [int(round(v)) for v in pc], "ok": bool(ok)}
+    # the holes the iris ring closes all round (on the face disc's box): a see-through pupil is a COOL hole (the dusk
+    # sky's violet / blue through the mask; a warm hole is the mask's own wood between inlay pixels)
+    ys_, xs_ = np.nonzero(fm)
+    y0, y1, x0, x1 = ys_.min(), ys_.max() + 1, xs_.min(), xs_.max() + 1
+    holes = np.zeros_like(eye)
+    holes[y0:y1, x0:x1] = plates._enclosed(~eye[y0:y1, x0:x1])
+    holes &= fm
+    hole = None
+    if holes.sum() >= 4:
+        hc = img[holes].mean(0) * 255.0
+        hl = float(Y[holes].mean())
+        hole = {"px": int(holes.sum()), "luma": round(hl, 1), "rgb": [int(round(v)) for v in hc]}
+        hole["cool"] = bool(hc[2] > hc[0] + 8.0)
+        ok = ok and not hole["cool"]
+    py, px_ = np.nonzero(pup)
+    return {"iris_luma": round(iris, 1), "pupil_luma": round(pl, 1), "pupil_rgb": [int(round(v)) for v in pc],
+            "at": [round(float(px_.mean()) / W, 3), round(float(py.mean()) / H, 3)], "hole": hole, "ok": bool(ok)}
 
 
 def mad(a: dict, b: dict) -> float:
