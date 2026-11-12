@@ -76,6 +76,9 @@ test('PERF s15 #9: a wet patch\'s water sheet draws its terrain page\'s own geom
     assert.equal(pg.water.geometry, pg.mesh.geometry, 'the sheet draws the page geometry');
     assert.equal(pg.water.layers.mask, 1 << 2, 'on the water layer');
     assert.ok(pg.water.parent, 'in the scene');
+    // (the renderer's object sort computes a batch's bounding sphere from its slots: the page's)
+    (pg.water as unknown as { computeBoundingSphere(): void; boundingSphere: { radius: number } | null }).computeBoundingSphere();
+    assert.ok((pg.water as unknown as { boundingSphere: { radius: number } }).boundingSphere.radius > 0);
   }
   assert.ok(sheets > 0);
   const shown = tb.pages.reduce((s, pg) => s + (pg?.wVisibleN ?? 0), 0);

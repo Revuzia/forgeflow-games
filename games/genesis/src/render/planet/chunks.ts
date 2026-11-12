@@ -266,6 +266,9 @@ class PatchPage {
     w._maxVertexCount = src._maxVertexCount;
     w._maxIndexCount = src._maxIndexCount;
     w._geometryInitialized = true;
+    // (the slot count is the page's, live: three's getBoundingSphereAt — the renderer's sort calls it — and the
+    // validation of setVisibleAt / addInstance read it)
+    Object.defineProperty(w, '_geometryCount', { get: () => src._geometryCount, set: () => { /* the page's */ }, configurable: true });
     w.name = name;
     w.perObjectFrustumCulled = false;
     w.sortObjects = false;

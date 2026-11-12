@@ -1151,3 +1151,8 @@ long press frame-rate independent. Report after 1-2 verified.
   primary's near trees drew another world's iExtra = snow/char/leaf-loss/LOD role). Bisect queued: lp0 (town,
   lazypools=0 only) — run-s15c.sh, then soak3 (22 min, 320x180 High, babel) and ws1/ws0 (#9 A/B).
 - CONTAINER RESTART at ~23:22Z killed run-s15b (soak never ran); scratch survived; re-queued as run-s15c.sh.
+- BUG CAUGHT (dist30, the browser only): #9's companion sheet had _geometryCount 0, so three's object sort
+  (computeBoundingSphere -> getBoundingSphereAt) returned null and every frame threw ("frame failed ... applyMatrix4";
+  the soak's frameNo stuck at 9, lp0's save never ticked). Fix: the companion's _geometryCount is a getter of the
+  page's; node test calls computeBoundingSphere on a sheet. dist31: renders, 0 errors, also with all six switches off.
+  run-s15c.sh re-queued on dist31.
