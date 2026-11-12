@@ -280,8 +280,10 @@ CARDS = {
                                 "size": 0.25}]},
         "plate": {"sub_median": 1, "sub_paint_r": 0, "tint": "#7FA3A6", "sat": 0.75, "median": 0.28, "glow": [0.15, 0.62, 0.45, 0.06],
                   "glow_color": "#A9D2CC",
-                  # (max2 cards g1, verify roll2: a flat pale disc with two eyes, a blank lean): the glass eyes
-                  # deepened to a dark amber round their pupils
+                  # (max2 cards g1, verify roll2: a flat pale disc with two eyes, a blank lean; a pale outline round
+                  # the boot soles with almost no contact shadow): the glass eyes deepened to a dark amber round their
+                  # pupils, the boots' rim faded and a firmer contact shadow
+                  "contact": 1.7, "rim_low_k": 0.05, "splash_over": {"shadow_real": 0.65},
                   "retouch": {"splash": [{"op": "hue", "at": [0.028, 0.001], "r": [0.040, 0.012], "h": [5.0, 50.0], "s_min": 0.30, "sat": 0.8,
                                           "val": 0.55, "to": "#6B4424", "mix": 0.5}]}},
     },

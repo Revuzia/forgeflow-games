@@ -1,5 +1,5 @@
 {
- "_doc": "MAX2 U1(1) material zoning per fighter (art/tools/zone_grade.py; pipeline.build re-applies it after every build). Each zone: parts of the bake's part map, or boxes (rest position, Blender axes, m) x an ORM roughness band [lo, hi] x an optional min/max L*; hex = the hue (CIELAB angle of the colour), L = the zone's mean L*, C = its chroma, k = the texel's own L* deviation kept (default 1). Signature hues are content/fighters/<id>.json vfx.signature. Gate: lineup_qa sigPct >= 6 % and the bottom value band at L* 20-35. Round 2 (max2 r2): crown breaks (hoods, hats, halo, pauldrons) carry the signature hue at the covering's own value, so the top-down read leads with the signature and the bible's top band keeps its value (ruling 7: a pale covering over a pale robe gets a break); every zoned albedo ends with each reserved band at <= 8 % (ruling 32, zone_grade.py --reserve-cap). reserveModes: per band, how --reserve-cap moves texels (edge/lo/hi/sat; Burdam's harm browns turn redder, never gold).",
+ "_doc": "MAX2 U1(1) material zoning per fighter (art/tools/zone_grade.py; pipeline.build re-applies it after every build). Each zone: parts of the bake's part map, or boxes (rest position, Blender axes, m) x an ORM roughness band [lo, hi] x an optional min/max L*; hex = the hue (CIELAB angle of the colour), L = the zone's mean L*, C = its chroma, k = the texel's own L* deviation kept (default 1). Signature hues are content/fighters/<id>.json vfx.signature. Gate: lineup_qa sigPct >= 6 % and the bottom value band at L* 20-35. Round 2 (max2 r2): crown breaks (hoods, hats, halo, pauldrons) carry the signature hue at the covering's own value, so the top-down read leads with the signature and the bible's top band keeps its value (ruling 7: a pale covering over a pale robe gets a break); every zoned albedo ends with each reserved band at <= 8 % (ruling 32, zone_grade.py --reserve-cap). reserveModes: per band, how --reserve-cap moves texels (edge/lo/hi/sat; Burdam's harm browns turn redder, never gold). Round 2 fix (max2 r2f, U7): crown zones on the rest of the roster, chosen as a roster of hue families at the game camera so no two crowns of the same shape share one (zones may now intersect parts with rest-position boxes and --cyl rings: cx, cy, r0, r1, z0, z1); Tunlan's hat back to the concept's pale lacquered straw with the plum on its octagonal crown, an outer brim band and the iron rim (the r2 all-plum hat rendered as Dunsom's lilac disc at the game camera, hat dE76 13.3).",
  "kemdo": {
   "zones": [
    {
@@ -142,6 +142,24 @@
       2.4
      ]
     ]
+   },
+   {
+    "why": "r2f: the back hem and heels (rear, under 0.75 m, the darkest texels of any material) lifted toward the bottom band: lineup_qa facing 180 read 16.9, band 20-35",
+    "boxes": [
+     [
+      -0.8,
+      -0.1,
+      0.0,
+      0.8,
+      0.9,
+      0.75
+     ]
+    ],
+    "maxL": 24,
+    "hex": "#B30300",
+    "L": 28,
+    "C": 12,
+    "k": 0.6
    }
   ],
   "reserveModes": {
@@ -208,7 +226,17 @@
     ],
     "hex": "#9A00B4",
     "L": 34,
-    "C": 28
+    "C": 28,
+    "cyls": [
+     [
+      0,
+      0,
+      0,
+      0.21,
+      1.972,
+      2.3
+     ]
+    ]
    },
    {
     "why": "the sleeves a lighter plum",
@@ -218,16 +246,83 @@
     ],
     "hex": "#9A00B4",
     "L": 40,
-    "C": 22
+    "C": 22,
+    "cyls": [
+     [
+      0,
+      0,
+      0,
+      0.21,
+      1.972,
+      2.3
+     ]
+    ]
    },
    {
-    "why": "r2 crown break: the wide hat (the whole top-down read) a dusty plum at its own value; the brim rim stays dark as the edge break (L* 55, its own 53: lineup_qa's top band read 68 at L* 50)",
+    "why": "r2f: the hat back to the concept's pale lacquered straw at round 1's own value, a touch warmer (L* 53 C 14 h 72 -> L* 53 C 17 h 81; the hue sits in the harm band's HSV range, so it stays under 0.4 saturation): the r2 plum hat rendered as Dunsom's lilac disc at the game camera (hat dE76 13.3). A deeper honey straw (L* 40) with a wide plum band was tried: +2 dE in game for a lineup_qa top value band of 42.7 (bible 70-85), so not kept",
     "parts": [
      "hat"
     ],
+    "hex": "#C8A97A",
+    "L": 53,
+    "C": 17
+   },
+   {
+    "why": "r2f: the stepped octagonal crown a deep plum lacquer (the signature on the crown, read from above)",
+    "parts": [
+     "hat"
+    ],
+    "cyls": [
+     [
+      0,
+      0,
+      0,
+      0.21,
+      1.972,
+      2.3
+     ]
+    ],
     "hex": "#9A00B4",
-    "L": 55,
-    "C": 14
+    "L": 28,
+    "C": 16
+   },
+   {
+    "why": "r2f: a narrow plum band at the brim's outer edge (r 0.48-0.53 m) with the iron rim, so the straw disc reads edged in plum",
+    "parts": [
+     "hat"
+    ],
+    "cyls": [
+     [
+      0,
+      0,
+      0.48,
+      0.53,
+      1.86,
+      2.3
+     ]
+    ],
+    "hex": "#9A00B4",
+    "L": 30,
+    "C": 16
+   },
+   {
+    "why": "r2f: the iron rim a deep plum iron",
+    "parts": [
+     "hat_rim"
+    ],
+    "hex": "#9A00B4",
+    "L": 24,
+    "C": 9,
+    "cyls": [
+     [
+      0,
+      0,
+      0,
+      0.21,
+      1.972,
+      2.3
+     ]
+    ]
    }
   ]
  },
@@ -276,5 +371,135 @@
     "C": 26
    }
   ]
+ },
+ "ervet": {
+  "zones": [
+   {
+    "why": "U7 crown: the cream-grey helm a darker cool gunmetal (L* 53 -> 42), so the head no longer leads with cream and breaks from the pale pauldrons",
+    "parts": [
+     "helm"
+    ],
+    "hex": "#0078AB",
+    "L": 42,
+    "C": 5
+   },
+   {
+    "why": "U7 crown: the helm's crest ridge the signature magenta lacquer (read from above as a stripe over the helm)",
+    "parts": [
+     "crest"
+    ],
+    "hex": "#DF6CF2",
+    "L": 38,
+    "C": 26
+   },
+   {
+    "why": "U7: the cream scarf under the helm the signature magenta (the ring between the helm and the pauldrons)",
+    "parts": [
+     "scarf"
+    ],
+    "hex": "#DF6CF2",
+    "L": 46,
+    "C": 20
+   },
+   {
+    "why": "U7: the cream pauldrons (the pale shapes the game camera sees first beside the helm) a magenta-steel lacquer",
+    "parts": [
+     "pauldron_R",
+     "pauldron_L"
+    ],
+    "hex": "#DF6CF2",
+    "L": 44,
+    "C": 14
+   }
+  ]
+ },
+ "marund": {
+  "zones": [
+   {
+    "why": "U7 crown: the mason's dome cap (the whole top-down read, cream in game) the signature teal at its own value (hue 152: the sky ambient pushes a 162 teal toward blue at the game camera; HSV 153, outside the heal band)",
+    "parts": [
+     "cap"
+    ],
+    "hex": "#009854",
+    "L": 40,
+    "C": 14
+   },
+   {
+    "why": "U7: the cap band a paler teal",
+    "parts": [
+     "cap_band"
+    ],
+    "hex": "#009854",
+    "L": 50,
+    "C": 10
+   }
+  ]
+ },
+ "ardit": {
+  "zones": [
+   {
+    "why": "U7 crown: the cream helm a periwinkle-blued steel, darker than the pauldrons (L* 52 -> 40) and apart from Vashil's paler lilac hood",
+    "parts": [
+     "helm"
+    ],
+    "hex": "#6D6CF2",
+    "L": 40,
+    "C": 14
+   },
+   {
+    "why": "U7: the cream pauldrons and their tiers a pale periwinkle lacquer (the shoulders the game camera sees first)",
+    "parts": [
+     "pauldron_R",
+     "pauldron_L",
+     "tier_R",
+     "tier_L"
+    ],
+    "hex": "#6D6CF2",
+    "L": 62,
+    "C": 12
+   }
+  ]
+ },
+ "ilsheta": {
+  "zones": [
+   {
+    "why": "U7 crown: the pale hood the signature green at its own value (the chimney stays grey stone)",
+    "parts": [
+     "hood"
+    ],
+    "hex": "#74B300",
+    "L": 46,
+    "C": 22
+   }
+  ]
+ },
+ "lisvel": {
+  "zones": [
+   {
+    "why": "U7 crown: the cream head wrap a pale morning cyan (the cowl stays cream: the break under it)",
+    "parts": [
+     "wrap"
+    ],
+    "hex": "#6BE0F2",
+    "L": 62,
+    "C": 18
+   }
+  ]
+ },
+ "sukri": {
+  "zones": [
+   {
+    "why": "U7 crown: the cream hood a pale lemon at its own value",
+    "parts": [
+     "hood"
+    ],
+    "hex": "#F2F06C",
+    "L": 54,
+    "C": 24
+   }
+  ],
+  "reserveModes": {
+   "harm": "sat"
+  }
  }
 }

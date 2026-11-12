@@ -1,0 +1,69 @@
+{
+ "what": "max_units_ab seed 31 t 300 RIFT High, same frozen frame, picks in three runs (A tunlan,dunsom,vashil,ervet,marund / B odrum,ardit,ilsheta,lisvel,ulkro / C sukri,nurrow,hesmi,kemdo,burdam,rishal); before = round 2 as verified (_harness/_shots/maxunits/u7pre_*), after = r2 fix (u7post_*, Tunlan u7post3_A); fighters with no change are controls",
+ "perCrop": {
+  "tunlan": {
+   "meanAbsDiff": 7.96,
+   "changedPx>15": 9117
+  },
+  "dunsom": {
+   "meanAbsDiff": 1.71,
+   "changedPx>15": 1778
+  },
+  "vashil": {
+   "meanAbsDiff": 0.0,
+   "changedPx>15": 0
+  },
+  "ervet": {
+   "meanAbsDiff": 1.43,
+   "changedPx>15": 2330
+  },
+  "marund": {
+   "meanAbsDiff": 2.47,
+   "changedPx>15": 6221
+  },
+  "ardit": {
+   "meanAbsDiff": 5.34,
+   "changedPx>15": 7061
+  },
+  "ilsheta": {
+   "meanAbsDiff": 0.49,
+   "changedPx>15": 1010
+  },
+  "lisvel": {
+   "meanAbsDiff": 1.33,
+   "changedPx>15": 1813
+  },
+  "sukri": {
+   "meanAbsDiff": 0.54,
+   "changedPx>15": 351
+  },
+  "burdam": {
+   "meanAbsDiff": 0.33,
+   "changedPx>15": 220
+  },
+  "odrum": {
+   "meanAbsDiff": 2.76,
+   "changedPx>15": 1682
+  },
+  "ulkro": {
+   "meanAbsDiff": 0.0,
+   "changedPx>15": 0
+  },
+  "hesmi": {
+   "meanAbsDiff": 0.08,
+   "changedPx>15": 21
+  },
+  "nurrow": {
+   "meanAbsDiff": 1.08,
+   "changedPx>15": 235
+  },
+  "kemdo": {
+   "meanAbsDiff": 0.0,
+   "changedPx>15": 0
+  },
+  "rishal": {
+   "meanAbsDiff": 1.48,
+   "changedPx>15": 1869
+  }
+ }
+}

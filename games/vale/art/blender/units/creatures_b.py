@@ -1885,9 +1885,11 @@ class Sunsplinter(Monster):
     # tip: broken base B, axis 38 degrees above forward
     # MAX2 r2: the tip leans 28 degrees to its right and its base sits 14 cm right, so a Sunsplinter facing the camera
     # no longer stacks the slab on the orb's centre (verify1_q seed 19: unitPx 51,511 under its 51,944 gate)
-    TA = K.nrm(np.array([math.sin(math.radians(28)) * math.cos(math.radians(38)),
-                         -math.cos(math.radians(28)) * math.cos(math.radians(38)), math.sin(math.radians(38))]))
-    TB = np.array([0.14, -0.34, 1.98])
+    # MAX2 r2 fix (verify2_q minor: seed 19 cleared its gate by 1 %, the slab still over most of the orb): 28 -> 38 deg
+    # and the base 14 -> 21 cm right
+    TA = K.nrm(np.array([math.sin(math.radians(38)) * math.cos(math.radians(38)),
+                         -math.cos(math.radians(38)) * math.cos(math.radians(38)), math.sin(math.radians(38))]))
+    TB = np.array([0.21, -0.34, 1.98])
     TLS, TLP, TW0, TW1 = 1.02, 0.86, 0.3, 0.25
     TCUT = 0.5                                          # the stone pyramid stops here; the glazed point continues
     # CW4 (closing critic:monsters): a warm needle-stone (honey limestone in noon light) instead of flat chalk-grey;
