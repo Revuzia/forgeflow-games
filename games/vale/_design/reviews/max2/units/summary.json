@@ -309,5 +309,13 @@
   "U1(2) ORM bands": "unchanged: the bake already bands roughness per class (u1_orm_bands.json) and the shader reads the classes (cloth sheen, glass edge); the visible part of it this round is the U6 glass edge",
   "glasshorn icon": "glasshorn_icon.png still shows the fawn: hand-off to the cards/icons lane (icons are 3D renders from the GLB: art/blender/units/creatures.py --icons-only --only glasshorn)",
   "budgets (perf_1080 --prod, this tree, load 12-35)": "GATE PASS: High 210k tris / 151 draws / 39 programs, Ultra 244k / 158 / 39; match peak 456k tris (was 462k), 294 draws, 40 programs; timing not measured (machine busy). match memory not re-run: no texture size or count changed (decoded sizes identical), tris within +-8"
+ },
+ "round 2 close-out check": {
+  "at": "2026-11-12 12:35 CST",
+  "state": "the round-2 fix source, GLBs and sheets above landed through wip syncs 9be71bd99/284aa50dc/b85147e8e/e885e865c/b34fd9b15; tree clean for this lane",
+  "re-measured on the shipped GLBs (zone_grade.reserved_pct)": "harm % kemdo 4.45, burdam 6.52, vashil 0.05, tunlan 3.01, rishal 0.28 (tritanAltRose 6.56): every zoned fighter <= 8 %; odrum 38.6 and sukri 19.96 unchanged from baselines",
+  "GLB bytes": "burdam 1,185,148 (1157.4 KiB, budget 1172), kemdo 1,173,596, vashil 1,179,624, tunlan 1,184,156, rishal 1,186,868",
+  "gates": "npm run -s typecheck pass; npm run -s probe 55 passed 0 failed; npm run -s content:check 0 warnings",
+  "still open": "Burdam bottom band 16.9 at facing 180 (the skirt zone lift 24 -> 27 moved nothing: the dark mass at the back is the x_cowl chain, cards lane this round); U7 crowns on the other 10 fighters and all head modelling; glasshorn_icon.png fawn (icons lane); ruling 32 scope over unzoned bakes (lead call)"
  }
 }
