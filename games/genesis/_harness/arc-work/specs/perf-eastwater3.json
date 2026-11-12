@@ -1,6 +1,38 @@
 {
- "_doc": "PERF s11 item 5: babel 307987276 Rubolhin by the Lake by DAY (hour 11), low views east (alt ~60-100 m, under the deck); ft0 = fartrees off.",
+ "_doc": "PERF s11 item 5: babel 307987276 Rubolhin by the Lake by DAY (hour 11), low views east (alt ~60-100 m, under the deck); ft0 = fartrees off. pe3-stream / pe3-pond: the wet hillside cells 1.4-1.7 km east (probe-eastwater: 0.4 m films at h 0.5-12.7 m, a 5 m pond at 9.5-11.4 m), looking back west.",
  "shots": [
+  {
+   "name": "pe3-stream",
+   "params": "scenario=babel&source=worker&seed=307987276",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', lat: -10.4, lon: 163.4, dist: 220, tilt: 55, yaw: 270, fov: 55, hour: 11 }); await G.frames(10);",
+    "return { ok: 1, alt: globalThis.__GENESIS_R__?.stats?.altitude };"
+   ]
+  },
+  {
+   "name": "pe3-pond",
+   "params": "scenario=babel&source=worker&seed=307987276",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', lat: -12.7, lon: 159.5, dist: 220, tilt: 55, yaw: 270, fov: 55, hour: 11 }); await G.frames(10);",
+    "return { ok: 1, alt: globalThis.__GENESIS_R__?.stats?.altitude };"
+   ]
+  },
   {
    "name": "pe3-e120-y90",
    "params": "scenario=babel&source=worker&seed=307987276",

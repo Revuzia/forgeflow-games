@@ -1,0 +1,252 @@
+GENESIS Mac performance test, ROUND 2. Build b54f2105, recorded 2026-11-12 05:49–06:01 UTC.
+
+SETUP / DEVIATIONS
+- Build: every report says "build b54f2105+dirty built 2026-11-12T03:24Z". That is b54f2105 plus
+  uncommitted changes. The bundle (index-BjtsNBQr.js) contains b54f2105. Hard-reloaded once.
+- DISPLAY DIFFERS FROM ROUND 1: the built-in screen was not available. The only display attached was a
+  2560x1440 external screen (screen.isExtended=false). The owner maximised Chrome on it: css 2048x986,
+  dpr 1.25, canvas 2560x1232 (3.15 MP). Round 1 was the built-in screen at 2720x1194 (3.25 MP).
+  The pixel count is close, but the display is different, so compare round 1 to round 2 with care.
+- High now renders at FULL resolution here (2560x1233; shadow atlas 2048, gtao at half res).
+  In round 1, High rendered at 75% (2040x895 at dpr 2.5). The resolution scale seems to depend on dpr.
+- No other rendering tabs open (the Vale tab was closed). About 20 s of loading between runs; no temperature check was possible.
+- World: ?scenario=babel&seed=307987276 (town Rubolhin by the Lake), with each variant's flag before scenario=.
+  The "perf fixes (A/B switches, effective)" line confirms every flag took effect.
+- Effective defaults on this build: bldpage=1 fartrees=1 pagepool=1 patchworker=1 preupload=0 reach=1 shnear=1 span=0 zcons=1.
+
+METHOD (identical every run, same as round 1)
+- Wheel-zoom to the town in 4x10 ticks, then 2 back out; wait 10 s; Shift+F12; Record 20 s.
+- During the 20 s: D x20, W x15, wheel out 5, wheel in 6, A x20, S x15; then waited until the recording finished.
+- Reports were read with pbpaste, so the texts are exact. Every run covered alt 50–137 m and about 11–13 km travelled.
+- No menus or powers wheel opened in any run.
+
+RESULTS
+#  variant             fps   frame p50/p95 ms   main mean   GPU total mean   tris    feel
+1  ultra               1.5    667 / 1568         494        2219             28.3M   slideshow
+2  high                3.1    301 /  701         251         891             14.4M   slideshow (best)
+3  ultra-nopagepool    1.3    717 / 1718         580        2523             29.2M   slideshow
+4  ultra-noshnear      1.6    601 / 1835         432        1961             26.6M   slideshow
+5  ultra-nofartrees    1.1    985 / 1785         305        2743             11.8M   slideshow
+6  ultra-control       0.9   1218 / 2118         982        3709             26.6M   slideshow
+(GPU ms are the report's own numbers. It notes that this driver's timer spans overlap, so they exceed frame time.)
+
+READING
+- DRIFT: the control (run 6) ran 0.9 fps against 1.5 for run 1 on identical settings. The machine got slower
+  over the 12 minutes, so the run-to-run noise (about ±0.6 fps) is larger than any single flag's effect.
+  These single-flag A/Bs are NOT conclusive. Interleave repeats (e.g. ultra, X, ultra, X) to separate them.
+- pagepool: with it off, metal buffer allocs roughly tripled (6.5 -> 17.8 MB/frame) and post main time rose (185 -> 353 ms).
+  So pagepool does cut allocations. The fps effect is lost in the noise.
+- shnear: off gave 1.6 vs 1.5/0.9 for ultra. No visible difference; no clear cost or benefit.
+- fartrees: off cut tris 28M -> 11.8M, draws 1287 -> 872, patches built 2037 -> 276, main mean 494 -> 305 ms,
+  but fps did not rise (1.1). GPU post time stays about 1.2–1.6 s, so the GPU-side post chain is the limit, not tree geometry.
+- GPU cost on Ultra is scene (about 1.0 s) + post (about 1.2 s) per frame. High cuts scene to 242 ms and post to 588 ms
+  and is the only variant above 3 fps. Main-thread time is mostly bufferSubData/bufferData in the shadows and post slots,
+  with 50–70 uploads inside a pass per frame on Ultra and 245 on High.
+
+EXTRA CHECKS
+- Mouse drag at low fps: it PANS now. Two drags at about 1 fps moved the camera and the powers wheel did not open. Fixed.
+- Speed keys: 9 = 1000x (shows "x946 time-lapse"), then 1 returns to x1.00. Works.
+  Note: key 5 is 10x (shows x10.0), not 1000x as the protocol says. 5 then 1 also returns to x1.00.
+- Known issues, all still visible:
+  * White/grey full-screen frame while zooming through the cloud deck: yes, every run (about the 3rd zoom step).
+  * Far trees bright/blocky: yes. Zoomed out (High run especially), the trees on the near hill turn into
+    pale, flat, blocky blobs.
+  * Water covering the hills east of Rubolhin: yes, every run; the rippled lake surface with tree trunks showing through.
+
+FULL REPORT TEXTS (exact, table order, each followed by its feel note)
+
+================ 1 ultra ================
+GENESIS perf report v1 · 2026-11-12T05:49:55Z · 21.3 s · 30 frames · build b54f2105+dirty built 2026-11-12T03:24Z
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 2560x1232 (css 2048x986, render 2560x1233) | dpr 1.25 | zcons on | timer yes | switches scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): bldpage=1 fartrees=1 pagepool=1 patchworker=1 preupload=0 reach=1 shnear=1 span=0 zcons=1
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 667.3 p95 1567.9 p99 1868.2 max 1868.2 | fps 1.5 | >20ms 25 >33ms 24 >50ms 22
+main ms: mean 494.2 p95 1527.5 max 1579
+main by slot (mean/p95): ui.pre 0.1/0.2 planets 12.2/20.1 godfx 0.1/0.2 actors 0.1/0.2 shadows 294.5/1309.1 scene 1.4/2.1 post 185.1/777.6 audio 0.1/0.2 ui.post 0.5/0.9
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 117.5/731.5 scene 992.1/1306.7 post 1188.1/1859.8 | total 2218.5/3193.2 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+render: draws 1287 (max 1416) tris 28.3M shadow 19.5M | patches built 2037 | new programs 0
+gl calls (main ms/frame in the call): total 455.1 | framebuffer switches 51/frame | uploads inside a pass 68.5/frame
+  shadows|bufferSubData 216.55ms x194.8 6.46MB inpass 50.1 max 792.4 · post|bufferSubData 91.87ms x100.8 4.91MB inpass 6.4 max 766.6 · post|bufferData 64.73ms x13.5 1.93MB inpass 0.9 max 794.7 · shadows|bufferData 60.44ms x15.5 2.2MB inpass 7.8 max 1249 · post|texSubImage2D 20.48ms x1.4 0.13MB inpass 0.6 max 631.7 · shadows|bindVertexArray 0.28ms x795.8 max 0.1 · shadows|multiDrawElementsWEBGL 0.25ms x679.6 max 0.1 · scene|bindVertexArray 0.14ms x266 max 0.1 · post|multiDrawElementsWEBGL 0.09ms x190.5 max 0.1 · post|bindVertexArray 0.09ms x211.2 max 0.1 · scene|multiDrawElementsWEBGL 0.06ms x224.6 max 0.1 · shadows|texSubImage2D 0.05ms x0.4 0.06MB inpass 0.4 max 0.4 · scene|texSubImage2D 0.01ms x2.2 0.01MB inpass 2.2 max 0.1 · post|bindFramebuffer 0.01ms x43 max 0.1 · shadows|useProgram 0.01ms x15.7 max 0.1 · shadows|drawElementsInstanced 0.01ms x112.1 max 0.1
+metal buffer allocs (est., ANGLE-Metal): 6.5 MB/frame, fresh sizes 1.2 MB over the recording (a full GPU wait per 64 MB fresh) | shadows 3.6MB x25.2 · post 2.9MB x20.3
+render targets (slot name WxH format [msaa] binds/frame draws/frame): shadows shadowAtlas 4096x4096 r8 6/791.8 · post atmoA 2560x1233 rgba16f 4/9.2 · post hdr 2560x1233 rgba16f msaa4 2/191.5 · scene hdr 2560x1233 rgba16f msaa4 1/265 · post gtao 2560x1233 rgba16f 1/1 · post gtaoBlur 2560x1233 rgba16f 1/1 · post sceneCopy 2560x1233 rgba16f 1/1 · post linDepth 2560x1233 r32f 1/1 · post prevColor 2560x1233 rgba16f 1/1 · post ldr 2560x1233 rgba8 1/2 · post cloudsHistB 2560x1233 2xrgba16f 0.5/0.5 · post bloom0 1280x616 rgba16f 2/2 · post cloudsHistA 2560x1233 2xrgba16f 0.5/0.5 · post cloudsRaw 1280x617 2xrgba16f 1/1 · post godA 640x308 rgba16f 2/2 · post bloom1 640x308 rgba16f 2/2 · post godMask 640x308 rgba16f 1/1 · post godB 640x308 rgba16f 1/1 · post bloom2 320x154 rgba16f 2/2 · post bloom3 160x77 rgba16f 2/2 · post bloom4 80x38 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom5 40x19 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 20x9 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt1 1x1 rg32f 0.5/0.5 · post adapt0 1x1 rg32f 0.5/0.5
+camera: alt 50-137 m, travelled 11537 m | sim speed 1
+long tasks: 16 (max 1580 ms, total 15884 ms)
+hitches >50ms: 22
+  t 0.6s 1352 ms: main 27 [planets 15 shadows 9 post 2] gpu 1818.6 | draws 1343 built 97 +prog 0 | alt 60 moved 294 m | longtask 1185
+  t 3.8s 701 ms: main 1275 [shadows 1257 planets 13 post 3] gpu 1351.3 | draws 1022 built 100 +prog 0 | alt 137 moved 280 m | longtask 1276
+  t 3.9s 1284 ms: main 21 [planets 13 shadows 6 post 1] gpu 1508.3 | draws 1022 built 70 +prog 0 | alt 137 moved 302 m | longtask 1276
+  t 5.2s 1352 ms: main 24 [planets 13 shadows 7 post 2] gpu 2084.4 | draws 1110 built 48 +prog 0 | alt 137 moved 1201 m | longtask 1342
+  t 7.5s 1535 ms: main 25 [planets 12 shadows 6 post 5] gpu 2340.7 | draws 1265 built 60 +prog 0 | alt 137 moved 1185 m | longtask 1528
+  t 8.3s 784 ms: main 805 [post 778 planets 16 shadows 9] gpu 2774.8 | draws 1282 built 73 +prog 0 | alt 137 moved 157 m | longtask 806
+  t 9.2s 801 ms: main 825 [post 799 planets 17 shadows 7] gpu 2931.2 | draws 1287 built 69 +prog 0 | alt 137 moved 263 m | longtask 826
+  t 9.2s 834 ms: main 30 [planets 15 shadows 10 post 2] gpu 2240.4 | draws 1283 built 80 +prog 0 | alt 50 moved 244 m | longtask 826
+  t 10.8s 1568 ms: main 23 [planets 9 shadows 9 post 2] gpu 1803 | draws 1296 built 85 +prog 0 | alt 50 moved 1104 m | longtask 1580
+  t 12.9s 1318 ms: main 762 [post 742 planets 9 shadows 8] gpu 2317.5 | draws 1312 built 70 +prog 0 | alt 50 moved 1067 m | longtask 1326
+  t 13.6s 767 ms: main 661 [post 638 planets 12 shadows 9] gpu 2193 | draws 1334 built 66 +prog 0 | alt 50 moved 204 m | longtask 762
+  t 19.4s 1868 ms: main 26 [planets 13 shadows 9 post 1] gpu 2466.6 | draws 1415 built 96 +prog 0 | alt 51 moved 1367 m | longtask 1280
+worst per 1 s: 1352 633 0 1284 0 1352 16 1535 784 834 1568 0 1318 767 667 584 684 0 684 1868 584
+FEEL: slideshow (1.5 fps). White/grey full-screen frame passing through the cloud deck on the way down; water still covers the hills east of Rubolhin.
+
+================ 2 high ================
+GENESIS perf report v1 · 2026-11-12T05:51:55Z · 20.8 s · 63 frames · build b54f2105+dirty built 2026-11-12T03:24Z
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset high | canvas 2560x1232 (css 2048x986, render 2560x1233) | dpr 1.25 | zcons on | timer yes | switches scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): bldpage=1 fartrees=1 pagepool=1 patchworker=1 preupload=0 reach=1 shnear=1 span=0 zcons=1
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 301 p95 700.6 p99 1034.2 max 1034.2 | fps 3.1 | >20ms 44 >33ms 44 >50ms 44
+main ms: mean 251.3 p95 676.5 max 1025.5
+main by slot (mean/p95): planets 9/19.7 godfx 0.1/0.2 actors 0.1/0.2 shadows 130.1/341.9 scene 1.3/3.1 post 110.2/338.5 audio 0.1/0.2 ui.post 0.4/1 other 0.1/0.2
+gpu ms (mean/p95): planets 0/0 actors 0.1/0 shadows 60.3/326.2 scene 241.9/277.1 post 588.3/910.7 | total 890.6/1351.8 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+render: draws 744 (max 775) tris 14.4M shadow 9.3M | patches built 5546 | new programs 0
+gl calls (main ms/frame in the call): total 231 | framebuffer switches 36.2/frame | uploads inside a pass 244.7/frame
+  shadows|bufferSubData 109.25ms x355.2 7.95MB inpass 115.1 max 346.4 · post|bufferSubData 106.47ms x280.5 6.14MB inpass 124.9 max 346.7 · shadows|bufferData 9.42ms x4 0.57MB inpass 0.9 max 318.5 · shadows|texSubImage2D 5.09ms x0.3 0.05MB inpass 0.3 max 323.9 · shadows|bindVertexArray 0.18ms x407.4 max 0.1 · shadows|multiDrawElementsWEBGL 0.13ms x336.3 max 0.1 · scene|bindVertexArray 0.09ms x173.5 max 0.1 · post|bindVertexArray 0.09ms x146.9 max 0.1 · post|multiDrawElementsWEBGL 0.05ms x127 max 0.1 · scene|multiDrawElementsWEBGL 0.04ms x139.6 max 0.1 · post|bufferData 0.04ms x1.9 0.27MB inpass 1.9 max 1.9 · post|texSubImage2D 0.04ms x0.8 0.07MB inpass 0.6 max 1.4 · shadows|drawElementsInstanced 0.02ms x68.1 max 0.1 · post|bindFramebuffer 0.02ms x33 max 0.1 · post|drawArrays 0.01ms x34 max 0.1 · post|clear 0.01ms x26 max 0.1
+metal buffer allocs (est., ANGLE-Metal): 9.4 MB/frame, fresh sizes 1.2 MB over the recording (a full GPU wait per 64 MB fresh) | shadows 6.1MB x42.9 · post 3.3MB x23
+render targets (slot name WxH format [msaa] binds/frame draws/frame): shadows shadowAtlas 2048x2048 r8 5/404.4 · post atmoA 2560x1233 rgba16f 4/8.8 · post hdr 2560x1233 rgba16f 1.5/127.5 · scene hdr 2560x1233 rgba16f 1/172.5 · post sceneCopy 2560x1233 rgba16f 1/1 · post linDepth 2560x1233 r32f 1/1 · post prevColor 2560x1233 rgba16f 1/1 · post ldr 2560x1233 rgba8 1/2 · post cloudsHistA 2560x1233 2xrgba16f 0.5/0.5 · post cloudsHistB 2560x1233 2xrgba16f 0.5/0.5 · post bloom0 1280x616 rgba16f 2/2 · post gtao 1280x617 rgba16f 1/1 · post gtaoBlur 1280x617 rgba16f 1/1 · post cloudsRaw 1280x617 2xrgba16f 1/1 · post godA 640x308 rgba16f 2/2 · post bloom1 640x308 rgba16f 2/2 · post godMask 640x308 rgba16f 1/1 · post godB 640x308 rgba16f 1/1 · post bloom2 320x154 rgba16f 2/2 · post bloom3 160x77 rgba16f 2/2 · actors cube 192x192 rgba16f 0.2/0.2 · post bloom4 80x38 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom5 40x19 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 20x9 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt0 1x1 rg32f 0.5/0.5 · post adapt1 1x1 rg32f 0.5/0.5
+camera: alt 50-137 m, travelled 11130 m | sim speed 1
+long tasks: 38 (max 1026 ms, total 16899 ms)
+hitches >50ms: 44
+  t 0.4s 951 ms: main 28 [planets 13 shadows 9 post 3] gpu 1171.8 | draws 761 built 81 +prog 0 | alt 60 moved 258 m | longtask 604
+  t 1.4s 684 ms: main 300 [post 281 planets 12 shadows 4] gpu 568.4 | draws 598 built 83 +prog 0 | alt 137 moved 1158 m | longtask 677
+  t 4.5s 667 ms: main 16 [planets 11 shadows 2 post 1] gpu 497.1 | draws 686 built 97 +prog 0 | alt 137 moved 198 m | longtask 926
+  t 6.2s 651 ms: main 273 [shadows 252 planets 14 post 5] gpu 584.8 | draws 729 built 163 +prog 0 | alt 50 moved 237 m | longtask 644
+  t 8.3s 684 ms: main 15 [planets 9 shadows 4 post 2] gpu 811.7 | draws 770 built 96 +prog 0 | alt 50 moved 240 m | longtask 675
+  t 10.8s 1034 ms: main 17 [planets 10 shadows 4 post 1] gpu 1137.2 | draws 774 built 96 +prog 0 | alt 51 moved 250 m | longtask 1026
+  t 11.5s 634 ms: main 15 [planets 9 shadows 4 post 1] gpu 1109 | draws 774 built 96 +prog 0 | alt 51 moved 263 m | longtask 325
+  t 13.1s 651 ms: main 12 [planets 5 shadows 5 post 2] gpu 1780.6 | draws 774 built 99 +prog 0 | alt 51 moved 232 m | longtask 640
+  t 14s 634 ms: main 11 [planets 5 shadows 4 post 1] gpu 1102.1 | draws 774 built 99 +prog 0 | alt 51 moved 118 m | longtask 639
+  t 14.7s 634 ms: main 16 [planets 5 shadows 5 post 4] gpu 1351.8 | draws 774 built 97 +prog 0 | alt 51 moved 168 m | longtask 314
+  t 16s 701 ms: main 13 [planets 6 shadows 4 post 1] gpu 1359 | draws 775 built 98 +prog 0 | alt 51 moved 947 m | longtask 686
+  t 19s 701 ms: main 12 [planets 6 shadows 4 post 1] gpu 1131.3 | draws 775 built 96 +prog 0 | alt 51 moved 222 m | longtask 702
+worst per 1 s: 951 684 317 334 667 301 651 350 684 601 1034 634 617 651 634 601 701 617 701 617 17
+FEEL: slideshow (3.1 fps; best of the set). Zoomed out, the trees on the near hill turn into pale, flat, blocky blobs (far trees bright/blocky). Same cloud white-out and water on hills.
+
+================ 3 ultra-nopagepool ================
+GENESIS perf report v1 · 2026-11-12T05:54:07Z · 21.7 s · 28 frames · build b54f2105+dirty built 2026-11-12T03:24Z
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 2560x1232 (css 2048x986, render 2560x1233) | dpr 1.25 | zcons on | timer yes | switches pagepool=0&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): bldpage=1 fartrees=1 pagepool=0 patchworker=1 preupload=0 reach=1 shnear=1 span=0 zcons=1
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 717.2 p95 1718.2 p99 2034.3 max 2034.3 | fps 1.3 | >20ms 27 >33ms 25 >50ms 24
+main ms: mean 579.9 p95 1308.3 max 1473.6
+main by slot (mean/p95): planets 13/20 godfx 0.1/0.1 actors 0.1/0.2 shadows 211.3/1286.7 scene 1.4/1.7 post 353.4/823 audio 0.1/0.2 ui.post 0.5/0.9
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 55.1/50.6 scene 1075.5/1386.3 post 1489.8/2395.9 | total 2523.3/3739.1 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+render: draws 1261 (max 1447) tris 29.2M shadow 20M | patches built 2304 | new programs 0
+gl calls (main ms/frame in the call): total 536.9 | framebuffer switches 46/frame | uploads inside a pass 52.4/frame
+  post|bufferSubData 169.48ms x57.9 4.12MB inpass 3.8 max 819.9 · post|bufferData 148.34ms x35.7 5.08MB inpass 2.4 max 860.6 · shadows|bufferSubData 100.7ms x171.3 5.14MB inpass 28.4 max 813.1 · shadows|bufferData 96.35ms x40.9 5.82MB inpass 10.4 max 818.1 · post|texSubImage2D 21.13ms x1.3 0.13MB inpass 0.7 max 611.7 · shadows|bindVertexArray 0.25ms x782.1 max 0.1 · shadows|multiDrawElementsWEBGL 0.18ms x668.5 max 0.1 · scene|bindVertexArray 0.08ms x259 max 0.1 · post|bindVertexArray 0.08ms x205.8 max 0.1 · scene|multiDrawElementsWEBGL 0.07ms x218.2 max 0.1 · post|multiDrawElementsWEBGL 0.06ms x186.2 max 0.1 · shadows|drawElementsInstanced 0.03ms x109.6 max 0.1 · shadows|texSubImage2D 0.03ms x0.3 0.06MB inpass 0.3 max 0.2 · scene|texSubImage2D 0.02ms x6.4 0MB inpass 6.4 max 0.1 · scene|drawElements 0.01ms x3 max 0.1 · post|bindFramebuffer 0.01ms x38 max 0.1
+metal buffer allocs (est., ANGLE-Metal): 17.8 MB/frame, fresh sizes 1.2 MB over the recording (a full GPU wait per 64 MB fresh) | shadows 9.1MB x64.1 · post 8.7MB x61
+render targets (slot name WxH format [msaa] binds/frame draws/frame): shadows shadowAtlas 4096x4096 r8 6/778.1 · post atmoA 2560x1233 rgba16f 4/9.2 · scene hdr 2560x1233 rgba16f msaa4 1/258 · post gtao 2560x1233 rgba16f 1/1 · post gtaoBlur 2560x1233 rgba16f 1/1 · post sceneCopy 2560x1233 rgba16f 1/1 · post linDepth 2560x1233 r32f 1/1 · post hdr 2560x1233 rgba16f msaa4 1/186.2 · post prevColor 2560x1233 rgba16f 1/1 · post ldr 2560x1233 rgba8 1/2 · post cloudsHistA 2560x1233 2xrgba16f 0.5/0.5 · post bloom0 1280x616 rgba16f 2/2 · post cloudsHistB 2560x1233 2xrgba16f 0.5/0.5 · post cloudsRaw 1280x617 2xrgba16f 1/1 · post godA 640x308 rgba16f 2/2 · post bloom1 640x308 rgba16f 2/2 · post godMask 640x308 rgba16f 1/1 · post godB 640x308 rgba16f 1/1 · post bloom2 320x154 rgba16f 2/2 · post bloom3 160x77 rgba16f 2/2 · post bloom4 80x38 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom5 40x19 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 20x9 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt0 1x1 rg32f 0.5/0.5 · post adapt1 1x1 rg32f 0.5/0.5
+camera: alt 50-137 m, travelled 10930 m | sim speed 1
+long tasks: 20 (max 1673 ms, total 17347 ms)
+hitches >50ms: 24
+  t 0.7s 2034 ms: main 27 [planets 15 shadows 8 post 2] gpu 3157.5 | draws 1309 built 97 +prog 0 | alt 60 moved 1053 m | longtask 1673
+  t 2.8s 1468 ms: main 671 [post 650 planets 13 shadows 5] gpu 1865.6 | draws 1037 built 97 +prog 0 | alt 137 moved 279 m | longtask 1474
+  t 4.9s 1302 ms: main 710 [shadows 688 planets 12 post 8] gpu 3114.5 | draws 1195 built 109 +prog 0 | alt 137 moved 276 m | longtask 1309
+  t 5.6s 717 ms: main 715 [post 694 planets 12 shadows 6] gpu 3602.3 | draws 1251 built 77 +prog 0 | alt 137 moved 300 m | longtask 715
+  t 7.3s 834 ms: main 895 [post 870 planets 13 shadows 9] gpu 3122.5 | draws 1291 built 55 +prog 0 | alt 137 moved 245 m | longtask 895
+  t 7.4s 901 ms: main 23 [planets 14 shadows 6 scene 1] gpu 2490.8 | draws 1291 built 55 +prog 0 | alt 137 moved 1011 m | longtask 895
+  t 9.9s 1718 ms: main 845 [post 823 planets 12 shadows 8] gpu 3739.1 | draws 1447 built 69 +prog 0 | alt 137 moved 301 m | longtask 876
+  t 10.8s 851 ms: main 851 [shadows 825 planets 20 post 4] gpu 1918.6 | draws 1203 built 97 +prog 0 | alt 50 moved 1210 m | longtask 852
+  t 11.5s 867 ms: main 734 [post 708 planets 16 shadows 7] gpu 2145.5 | draws 1212 built 79 +prog 0 | alt 50 moved 237 m | longtask 852
+  t 12.3s 734 ms: main 744 [post 725 planets 9 shadows 8] gpu 1828.9 | draws 1241 built 93 +prog 0 | alt 50 moved 277 m | longtask 744
+  t 12.9s 751 ms: main 665 [post 646 planets 9 shadows 8] gpu 1694.5 | draws 1255 built 74 +prog 0 | alt 50 moved 231 m | longtask 744
+  t 15.7s 735 ms: main 719 [post 696 shadows 12 planets 9] gpu 2325.6 | draws 1322 built 44 +prog 0 | alt 50 moved 31 m | longtask 729
+worst per 1 s: 2034 0 1468 0 1302 717 717 901 0 1718 851 867 751 667 617 735 717 701 651 651 634
+FEEL: slideshow (1.3 fps). Nothing visibly different from ultra.
+
+================ 4 ultra-noshnear ================
+GENESIS perf report v1 · 2026-11-12T05:56:16Z · 22.2 s · 35 frames · build b54f2105+dirty built 2026-11-12T03:24Z
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 2560x1232 (css 2048x986, render 2560x1233) | dpr 1.25 | zcons on | timer yes | switches shnear=0&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): bldpage=1 fartrees=1 pagepool=1 patchworker=1 preupload=0 reach=1 shnear=0 span=0 zcons=1
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 600.5 p95 1835 p99 1901.5 max 1901.5 | fps 1.6 | >20ms 32 >33ms 27 >50ms 27
+main ms: mean 432 p95 1720.6 max 1836.3
+main by slot (mean/p95): planets 14.8/26.4 godfx 0.1/0.1 actors 0.1/0.3 shadows 240.2/1208.7 scene 1.4/2.8 post 174.7/646.4 audio 0.2/0.2 ui.post 0.4/1.1
+gpu ms (mean/p95): planets 0/0 actors 0.1/0 shadows 77.2/576.5 scene 771.9/1063.1 post 1172.5/2070.1 | total 1960.5/3090.1 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+render: draws 1201 (max 1383) tris 26.6M shadow 18.5M | patches built 2258 | new programs 0
+gl calls (main ms/frame in the call): total 395.9 | framebuffer switches 46.4/frame | uploads inside a pass 69.6/frame
+  shadows|bufferSubData 177.53ms x243.9 5.69MB inpass 45.1 max 619.4 · post|bufferSubData 118.02ms x90.4 4.74MB inpass 6 max 642.8 · shadows|bufferData 49.63ms x22.9 3.26MB inpass 12 max 638.3 · post|bufferData 33.79ms x20.8 2.97MB inpass 1.4 max 620.8 · post|texSubImage2D 16.07ms x1.3 0.12MB inpass 0.6 max 575.3 · shadows|bindVertexArray 0.27ms x747.6 max 0.1 · shadows|multiDrawElementsWEBGL 0.21ms x611.9 max 0.1 · post|bindVertexArray 0.11ms x191.9 max 0.1 · scene|bindVertexArray 0.08ms x244.6 max 0.1 · scene|multiDrawElementsWEBGL 0.07ms x203.5 max 0.1 · post|multiDrawElementsWEBGL 0.04ms x172.3 max 0.1 · shadows|drawElementsInstanced 0.02ms x131.7 max 0.1 · shadows|texSubImage2D 0.02ms x0.5 0.09MB inpass 0.5 max 0.1 · post|bindFramebuffer 0.01ms x38 max 0.1 · post|useProgram 0.01ms x20.6 max 0.1 · scene|bufferSubData 0.01ms x16.5 0.01MB max 0.1
+metal buffer allocs (est., ANGLE-Metal): 10.9 MB/frame, fresh sizes 1.2 MB over the recording (a full GPU wait per 64 MB fresh) | post 5.6MB x39.6 · shadows 5.3MB x37.1
+render targets (slot name WxH format [msaa] binds/frame draws/frame): shadows shadowAtlas 4096x4096 r8 6/743.6 · post atmoA 2560x1233 rgba16f 4/9.2 · scene hdr 2560x1233 rgba16f msaa4 1/243.6 · post gtao 2560x1233 rgba16f 1/1 · post gtaoBlur 2560x1233 rgba16f 1/1 · post sceneCopy 2560x1233 rgba16f 1/1 · post linDepth 2560x1233 r32f 1/1 · post hdr 2560x1233 rgba16f msaa4 1/172.3 · post prevColor 2560x1233 rgba16f 1/1 · post ldr 2560x1233 rgba8 1/2 · post cloudsHistB 2560x1233 2xrgba16f 0.5/0.5 · post cloudsHistA 2560x1233 2xrgba16f 0.5/0.5 · post bloom0 1280x616 rgba16f 2/2 · post cloudsRaw 1280x617 2xrgba16f 1/1 · post godA 640x308 rgba16f 2/2 · post bloom1 640x308 rgba16f 2/2 · post godMask 640x308 rgba16f 1/1 · post godB 640x308 rgba16f 1/1 · post bloom2 320x154 rgba16f 2/2 · post bloom3 160x77 rgba16f 2/2 · actors cube 256x256 rgba16f 0.3/0.3 · post bloom4 80x38 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom5 40x19 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 20x9 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt1 1x1 rg32f 0.5/0.5 · post adapt0 1x1 rg32f 0.5/0.5
+camera: alt 50-137 m, travelled 11731 m | sim speed 1
+long tasks: 19 (max 1969 ms, total 17262 ms)
+hitches >50ms: 27
+  t 0.1s 1902 ms: main 31 [planets 16 shadows 7 audio 4] gpu 3049 | draws 1181 built 17 +prog 0 | alt 60 moved 1131 m | longtask 1969
+  t 4.5s 1835 ms: main 29 [planets 18 shadows 6 post 2] gpu 1417.4 | draws 1011 built 43 +prog 0 | alt 137 moved 1358 m | longtask 1837
+  t 6.4s 684 ms: main 605 [shadows 575 planets 19 post 6] gpu 1336.5 | draws 1014 built 59 +prog 0 | alt 137 moved 279 m | longtask 687
+  t 7.6s 634 ms: main 601 [shadows 582 planets 12 post 6] gpu 1220.3 | draws 1070 built 115 +prog 0 | alt 137 moved 139 m | longtask 617
+  t 8.3s 651 ms: main 622 [shadows 595 planets 18 post 7] gpu 1445.5 | draws 1130 built 54 +prog 0 | alt 137 moved 152 m | longtask 622
+  t 9.6s 1285 ms: main 25 [planets 16 shadows 5 post 2] gpu 2011.7 | draws 1170 built 24 +prog 0 | alt 50 moved 179 m | longtask 1289
+  t 10.9s 1268 ms: main 27 [planets 15 shadows 7 post 3] gpu 1642.6 | draws 1164 built 77 +prog 0 | alt 50 moved 1437 m | longtask 1267
+  t 12.7s 1168 ms: main 585 [post 565 planets 12 shadows 7] gpu 2917.3 | draws 1223 built 89 +prog 0 | alt 50 moved 220 m | longtask 1168
+  t 14s 667 ms: main 651 [post 627 planets 14 shadows 8] gpu 2673.1 | draws 1285 built 78 +prog 0 | alt 50 moved 299 m | longtask 665
+  t 14.6s 651 ms: main 637 [shadows 614 planets 12 post 9] gpu 2071.1 | draws 1314 built 103 +prog 0 | alt 50 moved 270 m | longtask 651
+  t 15.2s 634 ms: main 580 [post 556 planets 14 shadows 8] gpu 2035.8 | draws 1314 built 97 +prog 0 | alt 50 moved 951 m | longtask 638
+  t 18.1s 1718 ms: main 25 [planets 14 shadows 8 post 1] gpu 1992.9 | draws 1383 built 96 +prog 0 | alt 51 moved 1025 m | longtask 1721
+worst per 1 s: 1902 618 617 0 1835 617 684 634 651 1285 1268 0 1168 667 651 634 0 0 1718 584 584
+FEEL: slideshow (1.6 fps). Nothing visibly different; shadows looked the same at this frame rate.
+
+================ 5 ultra-nofartrees ================
+GENESIS perf report v1 · 2026-11-12T05:58:49Z · 23.3 s · 23 frames · build b54f2105+dirty built 2026-11-12T03:24Z
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 2560x1232 (css 2048x986, render 2560x1233) | dpr 1.25 | zcons on | timer yes | switches fartrees=0&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): bldpage=1 fartrees=0 pagepool=1 patchworker=1 preupload=0 reach=1 shnear=1 span=0 zcons=1
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 985 p95 1784.8 p99 1851.5 max 1851.5 | fps 1.1 | >20ms 21 >33ms 19 >50ms 19
+main ms: mean 304.7 p95 1027.3 max 2610.4
+main by slot (mean/p95): ui.pre 0.1/0.1 planets 14.1/22.7 godfx 0.1/0.2 actors 0.1/0.2 shadows 164.3/980.2 scene 1.6/3 post 123.3/962.4 audio 0.2/0.5 ui.post 0.6/1.2 other 0.1/0.2
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 245.9/914.5 scene 847.1/930.1 post 1649.5/2750.2 | total 2742.5/3700.1 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+render: draws 872 (max 1043) tris 11.8M shadow 7.5M | patches built 276 | new programs 0
+gl calls (main ms/frame in the call): total 269.8 | framebuffer switches 51/frame | uploads inside a pass 35.1/frame
+  shadows|bufferData 78.94ms x7.5 1.07MB inpass 7.5 max 974.8 · post|bufferSubData 74.63ms x30.6 1.37MB inpass 1.7 max 959.8 · shadows|bufferSubData 72.93ms x36.5 1.87MB inpass 22.3 max 884.4 · post|texSubImage2D 41.86ms x1.8 0.16MB inpass 0.9 max 1002.3 · shadows|bindVertexArray 0.3ms x536.6 max 0.1 · shadows|multiDrawElementsWEBGL 0.25ms x465.1 max 0.2 · scene|texSubImage2D 0.22ms x1.8 0.01MB inpass 1.8 max 4.8 · scene|bindVertexArray 0.11ms x181.8 max 0.1 · post|bindVertexArray 0.11ms x144.8 max 0.1 · post|bufferData 0.09ms x6.9 0.98MB inpass 0.5 max 0.2 · scene|multiDrawElementsWEBGL 0.07ms x151.2 max 0.1 · post|multiDrawElementsWEBGL 0.06ms x123.9 max 0.1 · shadows|texSubImage2D 0.05ms x0.5 0.08MB inpass 0.5 max 0.2 · scene|bufferSubData 0.03ms x18.1 0.01MB max 0.1 · shadows|drawElementsInstanced 0.03ms x67.5 max 0.1 · shadows|useProgram 0.01ms x11.4 max 0.1
+metal buffer allocs (est., ANGLE-Metal): 6 MB/frame, fresh sizes 1.2 MB over the recording (a full GPU wait per 64 MB fresh) | shadows 3MB x21.3 · post 2.9MB x20.6
+render targets (slot name WxH format [msaa] binds/frame draws/frame): shadows shadowAtlas 4096x4096 r8 6/532.6 · post atmoA 2560x1233 rgba16f 4/9.8 · post hdr 2560x1233 rgba16f msaa4 2/124.9 · scene hdr 2560x1233 rgba16f msaa4 1/180.8 · post gtao 2560x1233 rgba16f 1/1 · post gtaoBlur 2560x1233 rgba16f 1/1 · post sceneCopy 2560x1233 rgba16f 1/1 · post linDepth 2560x1233 r32f 1/1 · post prevColor 2560x1233 rgba16f 1/1 · post ldr 2560x1233 rgba8 1/2 · post cloudsHistA 2560x1233 2xrgba16f 0.5/0.5 · post cloudsHistB 2560x1233 2xrgba16f 0.5/0.5 · post bloom0 1280x616 rgba16f 2/2 · post cloudsRaw 1280x617 2xrgba16f 1/1 · post godA 640x308 rgba16f 2/2 · post bloom1 640x308 rgba16f 2/2 · post godMask 640x308 rgba16f 1/1 · post godB 640x308 rgba16f 1/1 · post bloom2 320x154 rgba16f 2/2 · post bloom3 160x77 rgba16f 2/2 · post bloom4 80x38 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom5 40x19 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 20x9 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt0 1x1 rg32f 0.5/0.5 · post adapt1 1x1 rg32f 0.5/0.5
+camera: alt 50-137 m, travelled 10906 m | sim speed 1
+long tasks: 7 (max 2796 ms, total 7887 ms)
+hitches >50ms: 19
+  t 2s 1051 ms: main 39 [planets 22 shadows 11 post 2] gpu 1969.5 | draws 1043 built 8 +prog 0 | alt 60 moved 323 m
+  t 3s 1001 ms: main 28 [planets 14 shadows 8 post 3] gpu 2668.7 | draws 838 built 14 +prog 0 | alt 137 moved 280 m
+  t 4.1s 1034 ms: main 27 [planets 16 shadows 6 scene 2] gpu 1991.2 | draws 838 built 10 +prog 0 | alt 137 moved 294 m
+  t 7.9s 1018 ms: main 17 [planets 10 shadows 4 post 1] gpu 2608.6 | draws 846 built 14 +prog 0 | alt 137 moved 219 m
+  t 10s 1017 ms: main 1027 [post 1005 planets 13 shadows 5] gpu 5052.3 | draws 849 built 8 +prog 0 | alt 137 moved 1066 m | longtask 1028
+  t 10s 1018 ms: main 15 [planets 9 shadows 4 post 1] gpu 2947.6 | draws 849 built 27 +prog 0 | alt 137 moved 238 m | longtask 1028
+  t 12.8s 1051 ms: main 16 [planets 8 shadows 4 post 1] gpu 3637.2 | draws 859 built 8 +prog 0 | alt 137 moved 317 m | longtask 2796
+  t 13.8s 1785 ms: main 979 [post 962 planets 11 shadows 4] gpu 1982.7 | draws 859 built 15 +prog 0 | alt 137 moved 302 m | longtask 2796
+  t 13.8s 1001 ms: main 16 [planets 9 shadows 4 post 1] gpu 3352.2 | draws 863 built 8 +prog 0 | alt 137 moved 1856 m | longtask 980
+  t 16.7s 1852 ms: main 19 [planets 11 shadows 5 post 1] gpu 2056.4 | draws 868 built 8 +prog 0 | alt 50 moved 1374 m | longtask 940
+  t 18.7s 1085 ms: main 21 [planets 10 shadows 6 other 2] gpu 2681 | draws 872 built 8 +prog 0 | alt 50 moved 332 m
+  t 23.3s 985 ms: main 2610 [shadows 1756 post 833 planets 13] gpu 2642.1 | draws 872 built 46 +prog 0 | alt 50 moved 229 m
+worst per 1 s: 967 0 1051 1001 1034 951 934 1018 0 1018 0 0 1051 1785 17 984 1852 983 1085 983 0 0 0 985
+FEEL: slideshow (1.1 fps). Distant forests gone (bare green from orbit, bald hilltop by the town); tris 11.8M vs ~27-28M.
+
+================ 6 ultra-control ================
+GENESIS perf report v1 · 2026-11-12T06:01:29Z · 22 s · 18 frames · build b54f2105+dirty built 2026-11-12T03:24Z
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 2560x1232 (css 2048x986, render 2560x1233) | dpr 1.25 | zcons on | timer yes | switches scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): bldpage=1 fartrees=1 pagepool=1 patchworker=1 preupload=0 reach=1 shnear=1 span=0 zcons=1
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 1217.7 p95 2118.3 p99 2118.3 max 2118.3 | fps 0.9 | >20ms 18 >33ms 14 >50ms 14
+main ms: mean 981.7 p95 2111.5 max 2111.5
+main by slot (mean/p95): planets 15.1/24.6 actors 0.1/0.2 shadows 414.5/2006.1 scene 1.4/3.9 post 549.7/2005.7 audio 0.1/0.3 ui.post 0.5/1.2 other 0.2/2.6
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 87.4/1016.2 scene 1456.6/2021.1 post 2165.1/3442.4 | total 3709.1/5434.7 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+render: draws 1175 (max 1306) tris 26.6M shadow 18.5M | patches built 1313 | new programs 0
+gl calls (main ms/frame in the call): total 905.5 | framebuffer switches 46/frame | uploads inside a pass 55.4/frame
+  post|bufferData 275.8ms x30 4.27MB inpass 2 max 1182 · shadows|bufferSubData 264.74ms x260.2 6.48MB inpass 29.2 max 1035.8 · post|bufferSubData 242.29ms x83.7 5.79MB inpass 5.6 max 1270.7 · shadows|bufferData 121.52ms x34.9 4.99MB inpass 11.9 max 1194.9 · shadows|bindVertexArray 0.29ms x731.3 max 0.1 · shadows|multiDrawElementsWEBGL 0.24ms x627.7 max 0.8 · post|texSubImage2D 0.23ms x2.1 0.21MB inpass 0.9 max 3 · post|bindVertexArray 0.09ms x187.6 max 0.1 · scene|bindVertexArray 0.06ms x240.9 max 0.1 · scene|multiDrawElementsWEBGL 0.05ms x202.3 max 0.1 · shadows|texSubImage2D 0.05ms x0.6 0.1MB inpass 0.6 max 0.2 · post|multiDrawElementsWEBGL 0.05ms x167.7 max 0.1 · scene|texSubImage2D 0.02ms x5.3 0.02MB inpass 5.3 max 0.1 · scene|bufferSubData 0.02ms x18.1 0.01MB max 0.1 · shadows|drawElementsInstanced 0.01ms x99.6 max 0.1 · shadows|bindFramebuffer 0.01ms x2 max 0.1
+metal buffer allocs (est., ANGLE-Metal): 12.7 MB/frame, fresh sizes 3.6 MB over the recording (a full GPU wait per 64 MB fresh) | shadows 6.8MB x46.4 · post 6MB x41.8
+render targets (slot name WxH format [msaa] binds/frame draws/frame): shadows shadowAtlas 4096x4096 r8 6/727.3 · post atmoA 2560x1233 rgba16f 4/9.7 · scene hdr 2560x1233 rgba16f msaa4 1/239.9 · post gtao 2560x1233 rgba16f 1/1 · post gtaoBlur 2560x1233 rgba16f 1/1 · post sceneCopy 2560x1233 rgba16f 1/1 · post linDepth 2560x1233 r32f 1/1 · post hdr 2560x1233 rgba16f msaa4 1/167.7 · post prevColor 2560x1233 rgba16f 1/1 · post ldr 2560x1233 rgba8 1/2 · post cloudsHistB 2560x1233 2xrgba16f 0.5/0.5 · post bloom0 1280x616 rgba16f 2/2 · post cloudsHistA 2560x1233 2xrgba16f 0.5/0.5 · post cloudsRaw 1280x617 2xrgba16f 1/1 · post godA 640x308 rgba16f 2/2 · post bloom1 640x308 rgba16f 2/2 · post godMask 640x308 rgba16f 1/1 · post godB 640x308 rgba16f 1/1 · post bloom2 320x154 rgba16f 2/2 · post bloom3 160x77 rgba16f 2/2 · post bloom4 80x38 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom5 40x19 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 20x9 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt1 1x1 rg32f 0.5/0.5 · post adapt0 1x1 rg32f 0.5/0.5
+camera: alt 50-137 m, travelled 12887 m | sim speed 1
+long tasks: 13 (max 2112 ms, total 18591 ms)
+hitches >50ms: 14
+  t 1.1s 2118 ms: main 27 [planets 15 shadows 7 post 2] gpu 4210.1 | draws 1177 built 49 +prog 0 | alt 60 moved 1628 m | longtask 1080
+  t 3.2s 2102 ms: main 25 [planets 18 shadows 4 post 1] gpu 2103.1 | draws 1016 built 72 +prog 0 | alt 137 moved 1991 m | longtask 2112
+  t 6.3s 1117 ms: main 2022 [shadows 2006 planets 12 post 2] gpu 2191 | draws 1017 built 97 +prog 0 | alt 137 moved 251 m | longtask 2023
+  t 6.4s 2019 ms: main 19 [planets 12 shadows 5 post 1] gpu 2079.9 | draws 1017 built 75 +prog 0 | alt 137 moved 1356 m | longtask 2023
+  t 9.7s 2002 ms: main 1306 [post 1283 planets 13 shadows 7] gpu 2570.9 | draws 1102 built 54 +prog 0 | alt 137 moved 1066 m | longtask 2015
+  t 10.9s 1318 ms: main 1219 [post 1192 planets 15 shadows 9] gpu 2989.5 | draws 1117 built 82 +prog 0 | alt 137 moved 227 m | longtask 1306
+  t 12s 1218 ms: main 1075 [shadows 1046 planets 17 post 10] gpu 3925.5 | draws 1243 built 65 +prog 0 | alt 137 moved 1397 m | longtask 1219
+  t 14.3s 1118 ms: main 1213 [post 1186 planets 14 shadows 8] gpu 5434.7 | draws 1273 built 64 +prog 0 | alt 137 moved 164 m | longtask 1213
+  t 15.5s 1218 ms: main 1190 [post 1156 planets 25 shadows 7] gpu 4394.2 | draws 1305 built 68 +prog 0 | alt 137 moved 1214 m | longtask 1213
+  t 16.8s 1200 ms: main 1239 [shadows 1209 planets 19 post 8] gpu 4978.6 | draws 1237 built 53 +prog 0 | alt 50 moved 155 m | longtask 1240
+  t 16.8s 1235 ms: main 26 [planets 16 shadows 7 post 1] gpu 2821.7 | draws 1235 built 57 +prog 0 | alt 50 moved 1387 m | longtask 1240
+  t 19.8s 2035 ms: main 995 [post 971 planets 12 shadows 9] gpu 3929.3 | draws 1286 built 112 +prog 0 | alt 50 moved 300 m | longtask 2029
+worst per 1 s: 0 2118 0 2102 0 0 2019 0 33 2002 1318 1218 0 1084 1118 1218 1235 0 33 2035 1001
+FEEL: slideshow (0.9 fps), slower than run 1 (1.5) on identical settings, so the machine drifted slower over the session. Same visuals as run 1.
+
+STATE LEFT BEHIND
+- One Genesis tab open (Ultra, time at 1x). Chrome maximised on the external screen.
+- Files: forgeflow-games/genesis_mac_perf_round2_2026-11-12.txt (untracked); per-run files in the session scratchpad (round2/).

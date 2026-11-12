@@ -438,6 +438,17 @@ void farFetch() {
   ivec2 b = ivec2(gl_VertexID * ${FAR_HULL_TEXELS}, int(iHull + 0.5));
   vec4 t0 = texelFetch(uFarHulls, b, 0), t1 = texelFetch(uFarHulls, b + ivec2(1, 0), 0), t2 = texelFetch(uFarHulls, b + ivec2(2, 0), 0);
   fPos = t0.xyz; fNrm = vec3(t0.w, t1.xy); fCol = vec3(t1.zw, t2.x); fWind = t2.y; fCard = t2.z; fCrown = t2.w;
+  // PERF s12: a crown whose foliage covers only part of its hull (farcrown.ts fill: a palm's star of fronds) shows
+  // that share of its footprint: where its clumps are too small to open as gaps (the fragment shader does that when
+  // they are resolved), the crown is drawn narrower by sqrt(fill) instead, so a far forest covers the ground as much
+  // as the near trees do (shadows too: the depth pass runs the same fetch)
+  if (fCard > 0.25 && fCrown > 1.5) {
+    float fFill = clamp(fCrown - 2.0, 0.2, 1.0);
+    vec3 ipF = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
+    float thF = length(vec3(instanceMatrix[1][0], instanceMatrix[1][1], instanceMatrix[1][2]));
+    float pxF = thF * uPxPerRad / max(distance(ipF, uCamBody), 1.0);
+    fPos.xz *= mix(sqrt(fFill), 1.0, smoothstep(14.0, 40.0, pxF));
+  }
 }
 #define position fPos
 #define normal fNrm
@@ -504,8 +515,13 @@ ${LEAF_ALPHA}
     float cl = clamp(0.55 + 0.45 * heart - 0.6 * gap, 0.0, 1.0);
     vegCrownV = mix(0.6, mix(0.25, 0.98, cl), cAA);
     diffuseColor.rgb *= mix(0.9, mix(0.78, 1.04, cl) * (0.92 + 0.16 * cv.z), cAA);
+    // the share of the hull the crown's foliage covers (farcrown.ts: 2 + fill): the rest opens as whole clumps where
+    // they are resolved (the ground and the crown's inside show through, as between a palm's fronds); unresolved, the
+    // hull's value drops toward what the open share would show (shade and floor)
+    float fill = vCrown > 1.5 ? clamp(vCrown - 2.0, 0.2, 1.0) : 1.0;
     float rim = 1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition)));
-    if (cAA > 0.5 && gap > 0.5 && rim > 0.45) discard;
+    if (cAA > 0.5 && (cv.z > fill + 0.05 || (gap > 0.5 && rim > 0.45))) discard;
+    diffuseColor.rgb *= mix(1.0, mix(0.85, 1.0, fill), 1.0 - cAA);
   }
 #endif
   // foliage right by the camera (within ~5 m), and all of a tree's foliage when the camera is inside its crown, fades

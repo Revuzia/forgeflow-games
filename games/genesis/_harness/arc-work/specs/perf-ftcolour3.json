@@ -1,0 +1,53 @@
+{
+ "_doc": "PERF s12 far trees after the crown shading / canopy hand-over / hue fix: compare with ftc-far, ftc-near (vegrange=1600), ft1-d2000, ft1b-d0150.",
+ "shots": [
+  {
+   "name": "ftc3-d500",
+   "params": "scenario=babel&source=worker&seed=307987276&farbudget=400",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', poi: 'forest', dist: 500, tilt: 50, hour: 10 }); await G.frames(14);",
+    "return { ok: 1, alt: globalThis.__GENESIS_R__?.stats?.altitude };"
+   ]
+  },
+  {
+   "name": "ftc3-d2000",
+   "params": "scenario=babel&source=worker&seed=307987276&farbudget=400",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', poi: 'forest', dist: 2000, tilt: 50, hour: 10 }); await G.frames(14);",
+    "return { ok: 1, alt: globalThis.__GENESIS_R__?.stats?.altitude };"
+   ]
+  },
+  {
+   "name": "ftc3-d150",
+   "params": "scenario=babel&source=worker&seed=307987276&farbudget=400",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', poi: 'forest', dist: 150, tilt: 50, hour: 10 }); await G.frames(14);",
+    "return { ok: 1, alt: globalThis.__GENESIS_R__?.stats?.altitude };"
+   ]
+  }
+ ]
+}

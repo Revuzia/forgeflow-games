@@ -80,7 +80,7 @@ export function farCrownGeometry(kind: TreeKind, variant: number, lod: 0 | 1, le
   // sprays, the floor between): measured on the babel forest at 500 m, near crowns vs hulls (ftc-near / ftc-far), the
   // hull read paler and bluer at the same lighting. The crown-depth shading in the far shader takes the value down;
   // this takes out the hull's cast toward blue-grey (foliage only; bark keeps its own colour)
-  if (leafy) { cr *= 0.86; cb *= 0.68; }
+  if (leafy) { cr *= 0.76; cg *= 0.88; cb *= 0.6; }
   const y0 = pct(ys, 0.04), y1 = Math.max(y0 + 0.05, pct(ys, 0.985));
   // the silhouette radius at a height: a high percentile of the crown's radial extent in a slice around it (cards
   // reach past the visual mass; the percentile keeps the hull to what reads as the crown)
@@ -103,6 +103,64 @@ export function farCrownGeometry(kind: TreeKind, variant: number, lod: 0 | 1, le
   const rMax = Math.max(1e-3, ...rings.map((r) => r[1]));
   for (const r of rings) r[1] = Math.max(r[1], rMax * 0.25);
   rings[0][1] *= lod === 0 ? 0.75 : 0.8;
+  // PERF s12: how much of the hull's footprint the crown's foliage really covers seen from above (a palm's star of
+  // fronds fills a third of its disc, a broadleaf crown most of it): the leaf triangles rasterised onto a 24 x 24 grid
+  // over the widest ring, x 0.75 for the spray cards' own holes. The far shader opens that share of the hull's clumps
+  // (whole clumps: gaps to the ground, as under the near crowns); stored in aCrown (2 + fill) of the crown vertices.
+  let fill = 1;
+  if (leafy && src.getIndex()) {
+    const G = 24, cov = new Uint8Array(G * G), Rf = rMax * 1.05;
+    const I = src.getIndex()!.array as ArrayLike<number>;
+    const gx = (x: number) => ((x - cx) / Rf * 0.5 + 0.5) * G, gz = (z: number) => ((z - cz) / Rf * 0.5 + 0.5) * G;
+    for (let t = 0; t + 2 < I.length; t += 3) {
+      const a = I[t], b = I[t + 1], c = I[t + 2];
+      if (!isLeaf(a) || !isLeaf(b) || !isLeaf(c)) continue;
+      const ax = gx(P[a * 3]), az = gz(P[a * 3 + 2]), bx2 = gx(P[b * 3]), bz2 = gz(P[b * 3 + 2]), cx2 = gx(P[c * 3]), cz2 = gz(P[c * 3 + 2]);
+      const x0 = Math.max(0, Math.floor(Math.min(ax, bx2, cx2))), x1 = Math.min(G - 1, Math.ceil(Math.max(ax, bx2, cx2)));
+      const z0 = Math.max(0, Math.floor(Math.min(az, bz2, cz2))), z1 = Math.min(G - 1, Math.ceil(Math.max(az, bz2, cz2)));
+      const area = (bx2 - ax) * (cz2 - az) - (cx2 - ax) * (bz2 - az);
+      for (let zi = z0; zi <= z1; zi++) for (let xi = x0; xi <= x1; xi++) {
+        const px = xi + 0.5, pz = zi + 0.5;
+        const w0 = (bx2 - px) * (cz2 - pz) - (cx2 - px) * (bz2 - pz), w1 = (cx2 - px) * (az - pz) - (ax - px) * (cz2 - pz), w2 = (ax - px) * (bz2 - pz) - (bx2 - px) * (az - pz);
+        if (Math.abs(area) < 1e-9) continue;
+        if ((w0 >= 0 && w1 >= 0 && w2 >= 0) || (w0 <= 0 && w1 <= 0 && w2 <= 0)) cov[zi * G + xi] = 1;
+      }
+    }
+    let inDisc = 0, hit = 0;
+    for (let zi = 0; zi < G; zi++) for (let xi = 0; xi < G; xi++) {
+      const dx = (xi + 0.5) / G * 2 - 1, dz = (zi + 0.5) / G * 2 - 1;
+      if (dx * dx + dz * dz > 1 / (1.05 * 1.05)) continue;
+      inDisc++; hit += cov[zi * G + xi];
+    }
+    const top = inDisc ? hit / inDisc : 1;
+    // and from the side (x-y), against the hull's own profile: vertical sprays (a conifer's tiers) are lines from above
+    const sv = new Uint8Array(G * G), Hs = Math.max(1e-3, y1 - y0);
+    const sx = (x: number) => ((x - cx) / Rf * 0.5 + 0.5) * G, sy = (y: number) => ((y - y0) / Hs) * G;
+    for (let t = 0; t + 2 < I.length; t += 3) {
+      const a = I[t], b = I[t + 1], c = I[t + 2];
+      if (!isLeaf(a) || !isLeaf(b) || !isLeaf(c)) continue;
+      const ax = sx(P[a * 3]), ay = sy(P[a * 3 + 1]), bx2 = sx(P[b * 3]), by2 = sy(P[b * 3 + 1]), cx2 = sx(P[c * 3]), cy2 = sy(P[c * 3 + 1]);
+      const area = (bx2 - ax) * (cy2 - ay) - (cx2 - ax) * (by2 - ay);
+      if (Math.abs(area) < 1e-9) continue;
+      const x0 = Math.max(0, Math.floor(Math.min(ax, bx2, cx2))), x1 = Math.min(G - 1, Math.ceil(Math.max(ax, bx2, cx2)));
+      const z0 = Math.max(0, Math.floor(Math.min(ay, by2, cy2))), z1 = Math.min(G - 1, Math.ceil(Math.max(ay, by2, cy2)));
+      for (let zi = z0; zi <= z1; zi++) for (let xi = x0; xi <= x1; xi++) {
+        const px = xi + 0.5, pz = zi + 0.5;
+        const w0 = (bx2 - px) * (cy2 - pz) - (cx2 - px) * (by2 - pz), w1 = (cx2 - px) * (ay - pz) - (ax - px) * (cy2 - pz), w2 = (ax - px) * (by2 - pz) - (bx2 - px) * (ay - pz);
+        if ((w0 >= 0 && w1 >= 0 && w2 >= 0) || (w0 <= 0 && w1 <= 0 && w2 <= 0)) sv[zi * G + xi] = 1;
+      }
+    }
+    // the hull's profile radius at a height (its rings; the bottom and top points)
+    const prof: [number, number][] = [[y0, 0], ...rings.map((r) => [r[0], r[1]] as [number, number]), [y1, 0]];
+    const profR = (y: number): number => { for (let j = 1; j < prof.length; j++) if (y <= prof[j][0]) { const [ya, ra] = prof[j - 1], [yb, rb] = prof[j]; return ra + (rb - ra) * ((y - ya) / Math.max(1e-6, yb - ya)); } return 0; };
+    let inP = 0, hitP = 0;
+    for (let zi = 0; zi < G; zi++) {
+      const r = profR(y0 + ((zi + 0.5) / G) * Hs);
+      for (let xi = 0; xi < G; xi++) { const x = cx + (((xi + 0.5) / G) * 2 - 1) * Rf; if (Math.abs(x - cx) > r) continue; inP++; hitP += sv[zi * G + xi]; }
+    }
+    const side = inP ? hitP / inP : 1;
+    fill = Math.min(1, Math.max(0.25, Math.max(top, side) * 0.75));
+  }
   const S = lod === 0 ? 5 : 4;
   const pos: number[] = [], nrm: number[] = [], col: number[] = [], aw: number[] = [], acard: number[] = [], acrown: number[] = [];
   const yc = (y0 + y1) / 2, ry = Math.max(1e-3, span / 2);
@@ -113,7 +171,7 @@ export function farCrownGeometry(kind: TreeKind, variant: number, lod: 0 | 1, le
       // ellipsoid-gradient normals: a smooth, rounded crown (foliage normals are bent outward in the tree meshes too)
       let nx = (x - cx) / (rMax * rMax), ny = (y - yc) / (ry * ry), nz = (z - cz) / (rMax * rMax);
       const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
-      nrm.push(nx, ny, nz); col.push(cr, cg, cb); aw.push(wsum); acard.push(leafCard); acrown.push(0.8);
+      nrm.push(nx, ny, nz); col.push(cr, cg, cb); aw.push(wsum); acard.push(leafCard); acrown.push(leafy ? 2 + fill : 0.8);
     } else {
       const l = Math.hypot(x - cx, z - cz) || 1;
       nrm.push((x - cx) / l, 0, (z - cz) / l); col.push(barkR, barkG, barkB); aw.push(0); acard.push(0); acrown.push(1.2);

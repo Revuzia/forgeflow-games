@@ -941,3 +941,18 @@ long press frame-rate independent. Report after 1-2 verified.
   tunnel open (350 m clear zone) and the in-cloud fog's transmittance floor uCamMist = 0.45 (shader: stepT =
   max(exp(-dens fl), uCamMist)): the ground reads through mist. Only while the camera is inside the shell: from
   outside / above the deck nothing changes (test). Both switches print in the perf report header.
+- ITEM 2 FAR TREES LOOK (landed, tsc clean, render-fartrees 4/4; browser A/B in progress): measured with the probe
+  switch `?vegrange=1600` (same forest at 500 m as near trees, ftc-near) vs hulls (ftc-far): hulls green-pixel share
+  0.90 vs 0.35, lit hull pixels ~1.5x brighter and bluer, and the terrain painted its canopy stand-in (green carpet)
+  under the hulls where the near trees stand on brown floor. Fixes, no extra draws:
+  (a) terrainmat uCanopyFade (planetview): with the far layer drawing, the canopy stand-in takes over only where a
+      14 m tree is 6 -> 3 px tall (FAR_PX.out), not at the near hand-over band: the floor under far trees is the floor.
+  (b) far fragment shader (VEG_FAR): crown clumps (voronoi in the tree's unit frame) lit through the crown-depth term
+      the near leaves use (new vegCrownV feeds VEG_LIGHT / VEG_AMBIENT), dark gaps, ragged open gaps on the outline;
+      whole clumps open by the crown's FILL where resolved.
+  (c) farcrown.ts FILL per hull = foliage coverage of the hull from above / the side (leaf triangles rasterised on a
+      24x24 grid, x0.75 for spray holes; palm 0.56, broadleaf 0.74, conifer 0.72), stored in aCrown (2 + fill);
+      unresolved crowns (< ~14-40 px tall) are drawn narrower by sqrt(fill) in farFetch (shadows too).
+  (d) hue: foliage hull colour x (0.76, 0.88, 0.6) (was paler / bluer than the near crowns at the same light).
+  ftc2 (a+b+d first values): green share 0.53, green mean (77,117,30) vs near (67,104,29); ftc3 (+fill gaps, hue):
+  (69,109,24), share 0.52 (crowns still too wide at 400-700 m: clumps unresolved there) -> (c) narrowing; ftc4 queued.
