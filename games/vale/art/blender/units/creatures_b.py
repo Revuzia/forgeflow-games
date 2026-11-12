@@ -860,6 +860,11 @@ def build(cr: Monster, args) -> dict:
         report["glb_bytes_raw"] = os.path.getsize(glb)
     with T.step("optimize"):
         report["optimize"] = export.optimize(glb, fighter=True)
+    # MAX2: monsters are metalness 0 like the fighters (U2, content:check checkZeroMetal); the bake's BSDF keeps a
+    # metallic factor, so every rebuild zeroes it here instead of by hand
+    import subprocess
+    subprocess.run(["python3", os.path.join(scene.TOOLS_DIR, "glb_zero_metal.py"), glb], cwd=scene.GAME_DIR, check=True,
+                   capture_output=True)
     report["glb_bytes"] = os.path.getsize(glb)
     os.makedirs(CACHE, exist_ok=True)
     scene.save_blend(os.path.join(CACHE, f"{cr.ID}.blend"))
@@ -1872,10 +1877,14 @@ class Sunsplinter(Monster):
     ICON = True
     ICON_LIGHT = (1.0, 1.1, 1.6)
     ICON_BG = ((0.24, 0.21, 0.27), (0.05, 0.045, 0.065))
-    C = np.array([0.0, 0.0, 1.66])
+    # MAX2 "the Sunsplinter core" (closing2 NEU-1: an orb with a sparse ring in an empty pit): the noon orb grows from
+    # 0.42 to 0.56 m radius (1.8x its area at the game camera) and sits 8 cm lower so the tip and the halo clear it;
+    # the glass sunburst, its crown splinters and the keel move out with it. Same sphere segments: same tris.
+    CORE_R = 0.56
+    C = np.array([0.0, 0.0, 1.58])
     # tip: broken base B, axis 38 degrees above forward
     TA = K.nrm(np.array([0.0, -math.cos(math.radians(38)), math.sin(math.radians(38))]))
-    TB = np.array([0.0, -0.25, 1.98])
+    TB = np.array([0.0, -0.36, 1.98])
     TLS, TLP, TW0, TW1 = 1.02, 0.86, 0.3, 0.25
     TCUT = 0.5                                          # the stone pyramid stops here; the glazed point continues
     # CW4 (closing critic:monsters): a warm needle-stone (honey limestone in noon light) instead of flat chalk-grey;
@@ -1911,14 +1920,14 @@ class Sunsplinter(Monster):
             a_ = math.radians(az + rng.uniform(-10, 10))
             v = K.nrm(np.array([math.sin(a_) * 0.55, -math.cos(a_) * 0.55, -1.0]))
             ax = K.nrm(v + np.array([0, 0, -0.6]))
-            self.stones.append(dict(c=C + v * 0.82, v=v, ax=ax, L=rng.uniform(0.6, 0.72), w=rng.uniform(0.17, 0.2),
+            self.stones.append(dict(c=C + v * 0.95, v=v, ax=ax, L=rng.uniform(0.6, 0.72), w=rng.uniform(0.17, 0.2),
                                     roll=rng.uniform(0, 90), band=False, bpos=0.0, iron=False, axis=np.array([0, 0, 1.0]),
                                     seed=rng.randint(1 << 30)))
         self.glass = []
         NG = 7
         for i in range(NG):
             v = ring_dir(self.nG, 2 * math.pi * i / NG)
-            self.glass.append(dict(c=C + v * 0.72, v=v, L=0.42, r=0.07, axis=self.nG))
+            self.glass.append(dict(c=C + v * 0.86, v=v, L=0.42, r=0.07, axis=self.nG))
         self.chips = []
         for i in range(6):
             v = ring_dir(self.nC, 2 * math.pi * (i + 0.25) / 6)
@@ -2051,7 +2060,7 @@ class Sunsplinter(Monster):
 
         def orb(name, u_, v_):
             bm = bmesh.new()
-            bmesh.ops.create_uvsphere(bm, u_segments=u_, v_segments=v_, radius=0.42)
+            bmesh.ops.create_uvsphere(bm, u_segments=u_, v_segments=v_, radius=self.CORE_R)
             for b_ in bm.verts:
                 b_.co = b_.co + Vector(self.C)
             me = bpy.data.meshes.new(name)
@@ -2072,7 +2081,7 @@ class Sunsplinter(Monster):
         v, f = [], []
         for k in range(12):
             d = K.nrm(rng.normal(size=3) * np.array([1, 1, 0.6]))
-            crystal(v, f, self.C + d * 0.3, self.C + d * 0.52, 0.04, 0.03, sides=5, tip=0.09, twist=rng.uniform(0, 1))
+            crystal(v, f, self.C + d * (self.CORE_R - 0.12), self.C + d * (self.CORE_R + 0.12), 0.05, 0.038, sides=5, tip=0.09, twist=rng.uniform(0, 1))
         sp = mesh_object("sunsplinter_splinters", v, f, col)
         out.append(("glass", sp, "core", None))
         # the sunburst: identical dawnglass rays pointing out of the orb on a tilted ring, one bone each
@@ -2106,7 +2115,7 @@ class Sunsplinter(Monster):
         ticks above it (a sundial's lines, no hands), mirrored under the orb so a turning clip still shows one."""
         n = len(V)
         rel = V - self.C
-        th = np.degrees(np.arccos(np.clip(np.abs(rel[:, 2]) / 0.42, 0, 1)))        # angle from the nearer pole
+        th = np.degrees(np.arccos(np.clip(np.abs(rel[:, 2]) / self.CORE_R, 0, 1)))        # angle from the nearer pole
         az = np.degrees(np.arctan2(rel[:, 1], rel[:, 0]))
         col = np.tile(K.hexc("#F4AE3E"), (n, 1))
         col = mix_hex(col, K.hexc("#D07C26"), sarr(62, 88, th) * 0.85)              # burnt limb, an equatorial band
@@ -2334,11 +2343,11 @@ class Sunsplinter(Monster):
             fl = smooth((t - CH) / 0.05) * (1 - smooth((t - CH - 0.05) / 0.15))
             body(P, lift=(0.02 * ch * math.sin(2 * math.pi * t * 31) * (t < CH), 0, -0.08 * ch * (t < CH) + 0.1 * fl))
             if t < CH:
-                P.scl["core"] = 1.0 + 0.6 * ch ** 1.5 + 0.035 * math.sin(2 * math.pi * t * 23) * ch
+                P.scl["core"] = 1.0 + 0.45 * ch ** 1.5 + 0.035 * math.sin(2 * math.pi * t * 23) * ch
             elif t < CH + 0.05:
-                P.scl["core"] = lerp(1.6, 2.5, smooth((t - CH) / 0.05))
+                P.scl["core"] = lerp(1.2, 1.88, smooth((t - CH) / 0.05))
             else:
-                P.scl["core"] = lerp(2.5, 1.0, smooth((t - CH - 0.05) / (1.0 - CH - 0.05)))
+                P.scl["core"] = lerp(1.88, 1.0, smooth((t - CH - 0.05) / (1.0 - CH - 0.05)))
             P.r("head", p=44 * smooth(t / 0.3) * (1 - smooth((t - CH - 0.05) / 0.15)))
             P.loc["head"] = np.array([0, 0.15, 0.25]) * smooth(t / 0.3) * (1 - smooth((t - CH - 0.05) / 0.15))
             pull = smooth(t / CH) * (1 - smooth((t - CH) / 0.04))

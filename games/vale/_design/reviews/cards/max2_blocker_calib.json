@@ -1878,5 +1878,30 @@
    },
    "hits": []
   }
- ]
+ ],
+ "round2": {
+  "date": "2026-11-12",
+  "bar": ">= 90 % of the 45 sensitivity fails caught with <= 10 % (4 / 42) false alarms on the ok cards",
+  "result": "NOT MET. Shipped detector unchanged (BLOCKER hollow / blank / glow): in-sample 18/45 at 4/42, leave-one-fighter-out 14/45 at 5/42.",
+  "tried": [
+   {
+    "model": "L2 logistic regression (numpy IRLS) on 37 interpretable face-disc measures (value bands, dark shares, ridge lines by orientation, eye-band dark slots and their inner structure, glow, symmetry, edges) plus the six shipped measures",
+    "in_sample": "32/45 at 4/42",
+    "lofo": "21/45 at 16/42"
+   },
+   {
+    "model": "the same plus a 3x3x6 gradient-orientation (HOG) face descriptor, 91 features",
+    "in_sample": "45/45 at 4/42 (lambda 0.3-1)",
+    "lofo": "29/45 at 30/42",
+    "note": "memorises the fighters (every fail of a fighter shares its mask); unusable out of sample"
+   },
+   {
+    "model": "forward selection of the measures scored on leave-one-fighter-out catches (false alarms over 4 penalised)",
+    "in_sample": "18/45 at 4/42 (one measure: eye-band 5th percentile value)",
+    "lofo": "17/45 at 4/42"
+   }
+  ],
+  "why": "the verifiers' reads are semantic: an eyeless glass or blue-slit visor is ok (Ervet, Vashil) while an eyeless plate is a mannequin (Rishal); a calm lidded eye and a hollow almond hole differ by a few pixels of lid and pupil at card size; mummy-wrap reads depend on what the wrap covers. Image statistics on 87 labelled cards from 16 fighters cannot separate them without learning the fighters themselves.",
+  "next": "a vision-model judge (a fixed rubric prompt on the full card, the card size and the face chip) would fit this bar; it needs an image-understanding call that tools/imagegen/run_xai.py does not have (it only generates and edits), so it is left for the lead / owner to approve. Until then the by-eye review at full, card and chip size stays the deciding gate; face_blockers stays a high-precision tripwire."
+ }
 }

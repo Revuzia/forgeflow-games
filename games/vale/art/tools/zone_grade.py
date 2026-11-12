@@ -56,6 +56,19 @@ def glb_image(path: str, suffix: str) -> np.ndarray:
     raise SystemExit(f"{path}: no image named *{suffix}")
 
 
+RESERVED = {"ally": (200, 225), "harm": (28, 50), "tritanAltRose": (340, 350), "heal": (125, 150)}  # tokens vfx.reservedHuesHSV
+
+
+def reserved_pct(rgb: np.ndarray) -> dict:
+    """ruling 32 (tokens art.skins.never): % of the albedo's painted texels above 40 % HSV saturation inside each
+    reserved hue band"""
+    hsv = np.asarray(Image.fromarray(rgb.astype("uint8")).convert("HSV")).astype(np.float32)
+    h, sat = hsv[..., 0] / 255 * 360, hsv[..., 1] / 255
+    used = rgb.max(-1) > 2
+    tot = max(int(used.sum()), 1)
+    return {k: round(100.0 * float(((h >= a) & (h <= b) & (sat > 0.4) & used).sum()) / tot, 2) for k, (a, b) in RESERVED.items()}
+
+
 def node() -> str:
     for p in ("/opt/homebrew/opt/node@22/bin/node", "/opt/homebrew/bin/node"):
         if os.path.isfile(p):
@@ -128,8 +141,15 @@ def grade(sid: str, glb: str | None = None, dry: bool = False, fresh: float = 0.
                 raise SystemExit(r.stderr[-1200:])
             if os.path.getsize(trial) <= max(min(before + 24 * 1024, 1160 * 1024), before) or q <= 60:
                 break
+        # ruling 32: a zone grade keeps every reserved band at <= 8 % of the albedo (or, where the bake already sat
+        # above the cap, never raises it); a grade that breaks it is not applied and the build fails
+        pre, post = reserved_pct(base), reserved_pct(glb_image(trial, "_base"))
+        bad = {k: (pre[k], post[k]) for k in RESERVED if post[k] > max(8.0, pre[k]) + 0.05}
+        if bad:
+            raise SystemExit(f"{sid}: zone grade breaks the reserved-hue cap (ruling 32, before -> after %): {bad}")
         shutil.copyfile(trial, glb)
         print(r.stdout.strip().replace(trial, glb))
+        print(f"{sid}: reserved hues (ruling 32) % before {pre} after {post}")
         print(f"{sid}: WebP q {q}, GLB {before / 1024:.1f} -> {os.path.getsize(glb) / 1024:.1f} KiB")
     return {"sid": sid, "ok": True}
 

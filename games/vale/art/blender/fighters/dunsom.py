@@ -1908,7 +1908,7 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
 # and the lidded almond eyes are painted on the sculpt's eyeball and lid: a shaded lacquer lid, a dark lash line, a muted
 # warm white, a dark umber iris with a pupil and one small catch-light (a reflection, nothing emissive), a soft lower lid
 EYE_WHITE, EYE_IRIS, EYE_PUPIL, EYE_CATCH, EYE_LASH = "#C4A47A", "#4A2C15", "#140C07", "#FFF0D6", "#2A190D"
-MASK_CALM = 0.85              # the tiles' painted value variation pulled this far toward one smooth lacquer
+MASK_CALM = 1.0               # the tiles' painted value variation pulled this far toward one smooth lacquer (max2 cards r2: 0.85 left tile patches whose atlas-island edges read as cracks under the Almanac night card; 1.0 keeps only the soft top light)
 
 
 def _mask_inlays(c, pp):

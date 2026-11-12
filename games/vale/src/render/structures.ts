@@ -200,7 +200,7 @@ function meshes(node: Object3D): Mesh[] {
 /** the see-through uniforms of a part that never fades (the plinth, the ruin, the base's hour-ticks): an exact no-op */
 const SF_OFF: Uniforms = { uSfY0: { value: 1e4 }, uSfY1: { value: 1e4 + 1 }, uSfA: { value: 1 }, uSfAlpha: { value: 1 }, uSfClip: { value: -1e4 }, uSoot: { value: 0 } };
 /** max2 ENV-6: soot by damage stage (the upper), on the ruin and on the rubble (0 = clean stone) */
-const SOOT = { stage: [0, 0.6, 1.0], ruin: 0.9, rubble: 0.28 };
+const SOOT = { stage: [0, 0.8, 1.0], ruin: 0.9, rubble: 0.75 };
 const sfPatched = new WeakSet<Material>();
 
 /** a structure template's world material (actors.ts ModelLibrary, before its warm-up compile): the see-through code,
@@ -237,8 +237,11 @@ if ( uSoot > 0.0 ) {
   vec3 sp = vValeWorld;
   float n1 = valeSootN( sp.xz * 2.3 + sp.y * vec2( 0.7, -0.5 ) );
   float st = valeSootN( vec2( ( sp.x - sp.z ) * 3.1, sp.y * 0.45 ) );
-  float sm = smoothstep( 0.42, 0.8, n1 * 0.55 + st * 0.5 + uSoot * 0.32 - 0.12 ) * uSoot;
-  outgoingLight *= mix( vec3( 1.0 ), vec3( 0.46, 0.4, 0.34 ), sm );
+  // (max2 fix: the soot climbs from the foot: heavier low on the stone, where the fire sat, and a warm grime under it)
+  float foot = 1.0 - smoothstep( 0.4, 3.2, sp.y );
+  float sm = smoothstep( 0.38, 0.74, n1 * 0.55 + st * 0.5 + uSoot * 0.4 + foot * 0.18 - 0.14 ) * uSoot;
+  outgoingLight *= mix( vec3( 1.0 ), vec3( 0.88, 0.8, 0.7 ), min( 1.0, uSoot * 1.2 ) );
+  outgoingLight *= mix( vec3( 1.0 ), vec3( 0.42, 0.36, 0.3 ), sm );
 }
 #include <opaque_fragment>`);
   };

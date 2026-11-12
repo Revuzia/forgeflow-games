@@ -1673,7 +1673,7 @@ float valeMouthWide( vec2 p ) {
     float curl = smoothstep( -0.12, 0.0, mt ) * ( 1.0 - smoothstep( 0.0, 0.22, mt ) );
     outgoingLight *= 1.0 - 0.3 * curl * ms;
     float pale = clamp( crest * 1.15 + st * 0.95, 0.0, 1.0 ) * ms;
-    outgoingLight = mix( outgoingLight, vec3( min( ol * 2.1 + uWaterLap * 1.6, 0.17 ) ) * vec3( 1.0, 0.99, 0.95 ), pale * 0.92 );
+    outgoingLight = mix( outgoingLight, vec3( min( ol * 2.4 + uWaterLap * 1.9, 0.2 ) ) * vec3( 1.0, 0.99, 0.95 ), pale * 0.95 );
     outgoingLight += vec3( uWaterLap * 0.8 ) * mist * ms;
     float spill = step( 0.0, mt );
     diffuseColor.a = max( diffuseColor.a, ( pale * 0.7 + mist * 0.25 ) * ( 1.0 - spill ) );
@@ -1683,7 +1683,7 @@ float valeMouthWide( vec2 p ) {
   if ( uMouthN.z > 0.5 && mt > 0.0 ) {
     float colM2 = valeNoise( vec2( mu * 4.1, 8.3 ) );
     float pale2 = ms * smoothstep( 0.45, 0.76, valeNoise( vec2( mu * 9.0, mt * 0.7 - uWaterT * 2.4 ) ) ) * ( 1.0 - smoothstep( 0.15 + 0.4 * colM2, 0.7 + 0.45 * colM2, mt ) );
-    diffuseColor.a = ms * max( 0.5 * ( 1.0 - smoothstep( 0.05, ${SPILL_M.toFixed(2)}, mt ) ), pale2 * 0.8 );
+    diffuseColor.a = ms * max( 0.55 * ( 1.0 - smoothstep( 0.05, ${SPILL_M.toFixed(2)}, mt ) ), pale2 * 0.9 );
   }
 }
 #include <opaque_fragment>`);

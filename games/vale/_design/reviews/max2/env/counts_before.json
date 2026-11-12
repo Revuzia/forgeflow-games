@@ -1,0 +1,128 @@
+{
+ "rift_core": {
+  "tris": 131453,
+  "calls": 154,
+  "programs": 39,
+  "geometries": 111,
+  "textures": 181
+ },
+ "rift_gate": {
+  "tris": 147635,
+  "calls": 160,
+  "programs": 39,
+  "geometries": 112,
+  "textures": 181
+ },
+ "rift_tower": {
+  "tris": 143168,
+  "calls": 128,
+  "programs": 39,
+  "geometries": 122,
+  "textures": 181
+ },
+ "rift_jungle_w": {
+  "tris": 160653,
+  "calls": 113,
+  "programs": 39,
+  "geometries": 124,
+  "textures": 181
+ },
+ "rift_xi": {
+  "tris": 152032,
+  "calls": 110,
+  "programs": 39,
+  "geometries": 131,
+  "textures": 182
+ },
+ "rift_shaft": {
+  "tris": 177513,
+  "calls": 105,
+  "programs": 39,
+  "geometries": 149,
+  "textures": 187
+ },
+ "rift_shaft_s": {
+  "tris": 147442,
+  "calls": 91,
+  "programs": 39,
+  "geometries": 151,
+  "textures": 187
+ },
+ "rift_seat": {
+  "tris": 144268,
+  "calls": 105,
+  "programs": 39,
+  "geometries": 152,
+  "textures": 192
+ },
+ "rift_jungle_e": {
+  "tris": 195272,
+  "calls": 124,
+  "programs": 39,
+  "geometries": 183,
+  "textures": 194
+ },
+ "rift_slab": {
+  "tris": 95860,
+  "calls": 86,
+  "programs": 39,
+  "geometries": 188,
+  "textures": 194
+ },
+ "rift_slab2": {
+  "tris": 100564,
+  "calls": 81,
+  "programs": 39,
+  "geometries": 188,
+  "textures": 194
+ },
+ "rift_outflow": {
+  "tris": 108125,
+  "calls": 91,
+  "programs": 39,
+  "geometries": 192,
+  "textures": 196
+ },
+ "rift_jungle_s": {
+  "tris": 188772,
+  "calls": 123,
+  "programs": 39,
+  "geometries": 211,
+  "textures": 202
+ },
+ "bridge_base": {
+  "tris": 136658,
+  "calls": 159,
+  "programs": 38,
+  "geometries": 135,
+  "textures": 147
+ },
+ "bridge_deck": {
+  "tris": 141237,
+  "calls": 147,
+  "programs": 38,
+  "geometries": 158,
+  "textures": 148
+ },
+ "bridge_snap": {
+  "tris": 298958,
+  "calls": 158,
+  "programs": 38,
+  "geometries": 178,
+  "textures": 153
+ },
+ "fray_centre": {
+  "tris": 132142,
+  "calls": 94,
+  "programs": 30,
+  "geometries": 54,
+  "textures": 106
+ },
+ "fray_stones": {
+  "tris": 34864,
+  "calls": 66,
+  "programs": 30,
+  "geometries": 60,
+  "textures": 107
+ }
+}

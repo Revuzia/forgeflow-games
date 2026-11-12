@@ -8,7 +8,7 @@ thrown outward is harm or control, motes rising are help. Built into content/vfx
 """
 from __future__ import annotations
 
-from vfxkit import (CHALK, CHALK_DK, DAWNGLASS, DUST, DUST2, EMBER, INK, INK2, NOON, SAP, SMOKE, SMOKE2, L, chips, decal, dust, flash, glow, ink, light, mesh, motes, ribbon,
+from vfxkit import (CHALK, CHALK_DK, CHAR, DAWNGLASS, DUST, DUST2, EMBER, INK, INK2, NOON, SAP, SMOKE, SMOKE2, L, chips, decal, dust, flash, glow, ink, light, mesh, motes, ribbon,
                     shards, shockwave, vfx)
 
 RESIN = "#D9A15A"      # warm resin amber (Resinburn): the burn of sap, never the heal hue
@@ -272,8 +272,11 @@ def defs() -> list:
                    aspect=0.45, blend="add"),
                  decal("origin", "light", [[0, 0.5], [0.4, 3.0], [1, 3.0]], 0.6, shape="cone", angle=70, color=SUN, alpha=(0.55, 0.3, 0), emissive=1.6,
                        fit=True),
-                 decal("origin", "scorch", 2.6, 1.0, shape="cone", angle=60, color=INK2, alpha=(0.55, 0.4, 0), emissive=1.2, rim=SUN, fit=True),
-                 comment="T2 · Lumen · Sunsplinter's sweep: a fan of sun-glass sweeps the arc, splinters fly, the cone scorches"))
+                 # max2 r2: the scorch follows the front (it stood at its full 2.6 m from the first frame, a black wedge ahead of the
+                 # light) and is a warm char, not near-black ink
+                 decal("origin", "scorch", [[0, 0.4], [0.5, 2.6], [1, 2.6]], 1.0, shape="cone", angle=60, color=CHAR, alpha=(0, 0.5, 0),
+                       emissive=1.2, rim=SUN, fit=True),
+                 comment="T2 · Lumen · Sunsplinter's sweep: a fan of sun-glass sweeps the arc, splinters fly, the cone scorches behind the front"))
     D.append(vfx("lib_longshade_sweep", 0.8,
                  # max2: a ground sweep, not a mesh: the long shadow runs out across the cone as an ink decal that grows with a thin
                  # lamp-amber arc on its front; fewer, smaller warm-grey smoke puffs (was a cream sheet with black blobs)

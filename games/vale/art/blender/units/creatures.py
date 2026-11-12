@@ -233,10 +233,14 @@ class Glasshorn(Creature):
     # CW4 (closing critic:monsters): a dawn-fawn coat (it read as an untextured off-white solid): warm fawn back
     # with a dark umber saddle stripe, paler flanks dappled with rows of cream hour-dots, cream belly, dark legs
     # and socks, a cream ruff and rump; the cool dawnglass antlers now stand off a warm body
-    PAL = {"hide": "#B48D63", "flank": "#C8A57C", "belly": "#E6DAC2", "leg": "#6F5741", "sock": "#3B3029",
-           "ruff": "#E2D3B6", "muzzle": "#4F3F33", "nose": "#2A2522", "eye": "#1B1917", "hoof": "#2F2925",
-           "ear_in": "#C99C88", "rump": "#EDE4D2", "tick": "#5A4433", "pedicle": "#E8E1D2", "saddle": "#7B5A3E",
-           "dot": "#EFE4CC", "coat_hi": "#E0C196", "coat_lo": "#8E6B48"}
+    # MAX2 (closing2 NEU-3, critic gap 5, "the Glasshorn restyle"): it read as a realistic spotted fawn. Now a VALE dusk
+    # stag: a dusk-slate coat under a deep mantle, a chalk mane and belly, chalk dial chevrons on the flanks (the
+    # sundial's hour lines, not a fawn's dapple), pale dawnglass hour ticks across the mantle that tie the body to the
+    # glass rack, and ink-dark legs. Every hue stays out of the reserved bands (all under 40 % saturation).
+    PAL = {"hide": "#77738F", "flank": "#8A86A2", "belly": "#E6DED0", "leg": "#45425B", "sock": "#29273A",
+           "ruff": "#ECE5D6", "muzzle": "#3A3850", "nose": "#22212E", "eye": "#17161F", "hoof": "#2A2836",
+           "ear_in": "#B7A9C2", "rump": "#EDE7DA", "tick": "#C9DCEA", "pedicle": "#E8E1D2", "saddle": "#3B3854",
+           "dot": "#EEE7D8", "coat_hi": "#A29EBB", "coat_lo": "#5B5776", "divide": "#2E2C42"}
 
     def joints(self):
         return dict(
@@ -369,23 +373,33 @@ class Glasshorn(Creature):
     def hard(self, col):
         """Antlers: clusters of faceted dawnglass crystals on chalk pedicles (rigid to antler.L/R)."""
         out = []
+        # MAX2 restyle: the rack spreads 1.35x wider and 1.2x deeper about the pedicle (the top-down game camera reads
+        # width, not height; the tips stay under HEIGHT), its crystals 1.15x thicker; same crystal count, same tris
+        base = np.array([0.072, -0.872, 1.765])
+        sc = np.array([1.35, 1.2, 1.0])
+
+        def xtal(v, f, a, b, ra, rb, **kw):
+            return crystal(v, f, a, b, ra * 1.15, rb * 1.15, **kw)
         for s, sx in (("L", 1), ("R", -1)):
             v, f = [], []
-            m = lambda p: (p[0] * sx, p[1], p[2])  # noqa: E731
+
+            def m(p, sx=sx):
+                q = base + (np.array(p) - base) * sc
+                return (q[0] * sx, q[1], q[2])
             tw = 0.3 if sx > 0 else -0.3
             # main beam (three stacked crystals) up, out and back, the top curling forward
-            crystal(v, f, m((0.072, -0.872, 1.765)), m((0.165, -0.835, 1.96)), 0.05, 0.043, twist=tw)
-            crystal(v, f, m((0.155, -0.838, 1.94)), m((0.265, -0.80, 2.09)), 0.042, 0.034, twist=tw + 0.4)
-            crystal(v, f, m((0.255, -0.802, 2.075)), m((0.33, -0.85, 2.165)), 0.033, 0.024, tip=0.05, twist=tw + 0.8)
+            xtal(v, f, m((0.072, -0.872, 1.765)), m((0.165, -0.835, 1.96)), 0.05, 0.043, twist=tw)
+            xtal(v, f, m((0.155, -0.838, 1.94)), m((0.265, -0.80, 2.09)), 0.042, 0.034, twist=tw + 0.4)
+            xtal(v, f, m((0.255, -0.802, 2.075)), m((0.33, -0.85, 2.165)), 0.033, 0.024, tip=0.05, twist=tw + 0.8)
             # brow tine (forward over the face), trez tine, crown points, a back point
-            crystal(v, f, m((0.095, -0.86, 1.83)), m((0.135, -0.98, 1.875)), 0.03, 0.022, tip=0.07, twist=tw)
-            crystal(v, f, m((0.19, -0.83, 1.99)), m((0.23, -0.95, 2.065)), 0.026, 0.019, tip=0.06, twist=tw + 0.2)
-            crystal(v, f, m((0.27, -0.80, 2.09)), m((0.36, -0.73, 2.15)), 0.024, 0.017, tip=0.055, twist=tw + 0.5)
-            crystal(v, f, m((0.285, -0.81, 2.10)), m((0.29, -0.90, 2.16)), 0.022, 0.016, tip=0.05, twist=tw + 0.9)
-            crystal(v, f, m((0.215, -0.81, 2.02)), m((0.27, -0.71, 2.07)), 0.022, 0.016, tip=0.05, twist=tw + 1.2)
+            xtal(v, f, m((0.095, -0.86, 1.83)), m((0.135, -0.98, 1.875)), 0.03, 0.022, tip=0.07, twist=tw)
+            xtal(v, f, m((0.19, -0.83, 1.99)), m((0.23, -0.95, 2.065)), 0.026, 0.019, tip=0.06, twist=tw + 0.2)
+            xtal(v, f, m((0.27, -0.80, 2.09)), m((0.36, -0.73, 2.15)), 0.024, 0.017, tip=0.055, twist=tw + 0.5)
+            xtal(v, f, m((0.285, -0.81, 2.10)), m((0.29, -0.90, 2.16)), 0.022, 0.016, tip=0.05, twist=tw + 0.9)
+            xtal(v, f, m((0.215, -0.81, 2.02)), m((0.27, -0.71, 2.07)), 0.022, 0.016, tip=0.05, twist=tw + 1.2)
             # small shards at the beam joints (crystal growth)
-            crystal(v, f, m((0.16, -0.84, 1.95)), m((0.205, -0.86, 1.995)), 0.016, 0.012, tip=0.03, twist=tw)
-            crystal(v, f, m((0.26, -0.80, 2.08)), m((0.235, -0.75, 2.12)), 0.014, 0.01, tip=0.03, twist=tw)
+            xtal(v, f, m((0.16, -0.84, 1.95)), m((0.205, -0.86, 1.995)), 0.016, 0.012, tip=0.03, twist=tw)
+            xtal(v, f, m((0.26, -0.80, 2.08)), m((0.235, -0.75, 2.12)), 0.014, 0.01, tip=0.03, twist=tw)
             ob = mesh_object(f"antler_{s}", v, f, col)
             ob.data.polygons.foreach_set("use_smooth", np.zeros(len(ob.data.polygons), dtype=bool))
             out.append(("antlers", ob, f"antler.{s}"))
@@ -440,17 +454,14 @@ class Glasshorn(Creature):
         cover = _smooth_arr(0.05, 0.5, nz) * _smooth_arr(1.1, 1.22, z) * _smooth_arr(-0.5, -0.36, y) * _smooth_arr(0.6, 0.46, y)
         col = col * (1 - 0.62 * cover[:, None]) + c("saddle") * 0.62 * cover[:, None]
         divide = _smooth_arr(0.05, 0.02, np.abs(z - 0.97 - 0.05 * np.sin(y * 9.0))) * _smooth_arr(-0.5, -0.4, y) * _smooth_arr(0.55, 0.45, y)
-        col = col * (1 - 0.8 * divide[:, None]) + c("tick") * 0.8 * divide[:, None]
-        # rows of cream hour-dots along each flank (a fawn's dapple, laid out like dial marks)
-        side = _smooth_arr(0.15, 0.55, np.abs(N[:, 0])) * _smooth_arr(0.85, 0.95, z) * _smooth_arr(1.32, 1.22, z) \
+        col = col * (1 - 0.8 * divide[:, None]) + c("divide") * 0.8 * divide[:, None]
+        # MAX2: chalk dial chevrons on each flank (the sundial's hour lines fanning back from the shoulder, pointing
+        # forward), bold enough to read at 28.5 m; they replace the fawn's dapple rows
+        side = _smooth_arr(0.15, 0.55, np.abs(N[:, 0])) * _smooth_arr(0.9, 0.98, z) * _smooth_arr(1.3, 1.2, z) \
             * _smooth_arr(-0.36, -0.26, y) * _smooth_arr(0.5, 0.4, y)
-        dots = np.zeros(n)
-        for row_z, off in ((1.15, 0.0), (1.04, 0.5)):
-            cy = (y + 0.3) / 0.13 + off
-            dy = (cy - np.round(cy)) * 0.13
-            dd = np.hypot(dy, z - row_z)
-            dots = np.maximum(dots, _smooth_arr(0.046, 0.034, dd))
-        col = col * (1 - 0.85 * (dots * side)[:, None]) + c("dot") * 0.85 * (dots * side)[:, None]
+        cv = (y + 0.9 * np.abs(z - 1.09)) / 0.17
+        chev =_smooth_arr(0.13, 0.08, np.abs(cv - np.round(cv)))
+        col = col * (1 - 0.88 * (chev * side)[:, None]) + c("dot") * 0.88 * (chev * side)[:, None]
         rough = np.full(n, 0.82)
         # tagged regions (nearest tag wins, 1 cm blend)
         dmin = np.min(np.stack(list(tags.values())), 0)
@@ -1573,6 +1584,11 @@ def build(cr: Creature, args) -> dict:
         report["glb_bytes_raw"] = os.path.getsize(glb)
     with T.step("optimize"):
         report["optimize"] = export.optimize(glb, fighter=True)
+    # MAX2: monsters are metalness 0 like the fighters (U2, content:check checkZeroMetal); the bake's BSDF keeps a
+    # metallic factor, so every rebuild zeroes it here instead of by hand
+    import subprocess
+    subprocess.run(["python3", os.path.join(scene.TOOLS_DIR, "glb_zero_metal.py"), glb], cwd=scene.GAME_DIR, check=True,
+                   capture_output=True)
     report["glb_bytes"] = os.path.getsize(glb)
     os.makedirs(CACHE, exist_ok=True)
     scene.save_blend(os.path.join(CACHE, f"{cr.ID}.blend"))

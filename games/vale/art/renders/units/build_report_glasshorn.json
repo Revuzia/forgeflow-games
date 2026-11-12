@@ -7,15 +7,15 @@
     "fixed_vertices": 0
   },
   "tris": 8032,
-  "uv_coverage": 0.582,
+  "uv_coverage": 0.629,
   "bake": {
-    "base": 1.43,
-    "rough_metal": 0.86,
-    "normal": 1.53,
-    "ao": 1.11,
-    "normal_fixed_px": 2887,
-    "pack_save": 0.16,
-    "total": 5.14
+    "base": 1.84,
+    "rough_metal": 1.49,
+    "normal": 1.42,
+    "ao": 1.75,
+    "normal_fixed_px": 3771,
+    "pack_save": 0.59,
+    "total": 7.14
   },
   "bake_holes_filled": 0,
   "clips": {
@@ -60,7 +60,7 @@
       "soft_reach": 0
     }
   },
-  "mesh_top_m": 2.201,
+  "mesh_top_m": 2.196,
   "min_z": {
     "idle": [
       0.004,
@@ -118,21 +118,21 @@
       ]
     ]
   },
-  "glb_bytes_raw": 1777680,
+  "glb_bytes_raw": 1854804,
   "optimize": {
     "ok": true,
-    "before": 1777680,
-    "after": 482412
+    "before": 1854804,
+    "after": 499404
   },
-  "glb_bytes": 482412,
+  "glb_bytes": 499404,
   "inspect": [
-    "    prim material=glasshorn_body tris=7600 verts=5285 [JOINTS_0,POSITION,NORMAL,TEXCOORD_0,WEIGHTS_0]",
+    "    prim material=glasshorn_body tris=7600 verts=5468 [JOINTS_0,POSITION,NORMAL,TEXCOORD_0,WEIGHTS_0]",
     "    prim material=glasshorn_dawnglass tris=432 verts=912 [JOINTS_0,POSITION,NORMAL,TEXCOORD_0,WEIGHTS_0]",
     "  material glasshorn_body: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.00,0.00,0.00 base=1,1,1,1",
     "  material glasshorn_dawnglass: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.55,0.55,0.55 base=1,1,1,1",
-    "  texture glasshorn_normal: image/webp ? 53.9 KiB",
-    "  texture glasshorn_orm: image/webp ? 28.6 KiB",
-    "  texture glasshorn_base: image/webp ? 80.5 KiB",
+    "  texture glasshorn_normal: image/webp ? 57.0 KiB",
+    "  texture glasshorn_orm: image/webp ? 33.1 KiB",
+    "  texture glasshorn_base: image/webp ? 84.5 KiB",
     "  clip attack1      1.000 s (30 f) channels=26 bones=25",
     "  clip cast_a1      1.167 s (35 f) channels=27 bones=26",
     "  clip death        1.500 s (45 f) channels=29 bones=28",
@@ -142,13 +142,13 @@
   "load_test": {
     "ok": true,
     "log": [
-      "[three] art/out/units/glasshorn.glb (471 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: glasshorn_base 1024x1024 80K, glasshorn_normal 1024x1024 54K, glasshorn_orm 512x512 29K",
-      "  skinned meshes: glasshorn_1(5285v), glasshorn_2(912v)",
+      "[three] art/out/units/glasshorn.glb (488 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: glasshorn_base 1024x1024 85K, glasshorn_normal 1024x1024 57K, glasshorn_orm 512x512 33K",
+      "  skinned meshes: glasshorn_1(5468v), glasshorn_2(912v)",
       "  bones: 32 (root hips spine chest neck neck2 head antlerL antlerR earL earR jaw scapulaL upper_armL forearmL handL hoofL scapulaR upper_armR forearmR handR hoofR tail tail2 thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:1.000s/26tr, cast_a1:1.167s/27tr, death:1.500s/29tr, idle:3.000s/30tr, run:0.700s/30tr",
       "  tracks checked: 142; materials: glasshorn_body, glasshorn_dawnglass; textures: glasshorn_body.map=1024x1024, glasshorn_body.normalMap=1024x1024, glasshorn_body.roughnessMap=512x512, glasshorn_body.metalnessMap=512x512, glasshorn_body.aoMap=512x512, glasshorn_dawnglass.map=1024x1024, glasshorn_dawnglass.normalMap=1024x1024, glasshorn_dawnglass.roughnessMap=512x512, glasshorn_dawnglass.metalnessMap=512x512, glasshorn_dawnglass.aoMap=512x512, glasshorn_dawnglass.emissiveMap=1024x1024",
-      "  tris: 8032; bind-pose bounds (three units, Y up): 0.80 x 2.20 x 2.01; facing (-0.00, 1.00); head bone y 1.67; runRefSpeed 3.4",
+      "  tris: 8032; bind-pose bounds (three units, Y up): 1.01 x 2.19 x 2.01; facing (-0.00, 1.00); head bone y 1.67; runRefSpeed 3.4",
       "  run: 21 f, planted samples 27, max foot-speed error 1.9%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -157,22 +157,22 @@
     "ok": true,
     "out": "art/renders/units/glasshorn.png",
     "log": [
-      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.398,0.004,-0.809],[0.398,2.201,1.197]],\"facing\":[0,1],\"headY\":1.67,\"heightPx1080\":118,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1800],\"clips\":5,\"out\":\"art/renders/units/glasshorn.png\",\"seconds\":9.9}"
+      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.503,0.004,-0.809],[0.503,2.196,1.197]],\"facing\":[0,1],\"headY\":1.67,\"heightPx1080\":118,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1800],\"clips\":5,\"out\":\"art/renders/units/glasshorn.png\",\"seconds\":160.6}"
     ]
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "sculpt": 4.02,
-      "bind": 0.18,
-      "uv": 3.77,
-      "bake": 5.41,
-      "clips": 0.35,
-      "ground_qa": 0.11,
-      "export": 0.44,
-      "optimize": 0.68,
-      "qa": 10.31
+      "sculpt": 3.66,
+      "bind": 0.34,
+      "uv": 5.74,
+      "bake": 8.1,
+      "clips": 0.66,
+      "ground_qa": 0.22,
+      "export": 1.08,
+      "optimize": 1.32,
+      "qa": 13.31
     },
-    "total_s": 25.33
+    "total_s": 34.53
   }
 }

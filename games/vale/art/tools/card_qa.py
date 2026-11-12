@@ -239,6 +239,10 @@ def pupils(img: np.ndarray, a: np.ndarray, sid: str, fid: str, kind: str, rp: st
 # That is BELOW the asked 90 % / 10 %: the verifiers' reads (a hollow almond on a pale mask vs a dark wrap slit with lids
 # in it, a mannequin plate vs a glass visor) share their image statistics with ok cards, so this is a high-precision
 # tripwire, not a replacement for the adversarial look at full, card and chip size.
+# max2 round 2 (max2_blocker_calib.json "round2"): wider descriptors were fitted too (37 measures: logistic 32/45 at 4/42
+# in-sample but 21/45 at 16/42 leave-one-fighter-out; with a HOG face descriptor 45/45 in-sample, 29/45 at 30/42 out of
+# sample: it learns the fighters). None generalises past this tripwire, so the thresholds stay; the bar needs a
+# vision-model judge (not built: run_xai has no image-understanding call).
 BLOCKER = {"hollow": 14.02, "blank": 0.65, "glow": 0.343}
 BN = 128
 

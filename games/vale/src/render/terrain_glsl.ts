@@ -447,13 +447,13 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     float bx = p.x / 9.0 + 0.5, bi = floor( bx ), bl = ( fract( bx ) - 0.5 ) * 9.0 + ( valeNoise( p * 1.9 ) - 0.5 ) * 0.04;
     float bayB = 1.0 - smoothstep( 0.42 - aa, 0.42 + aa, abs( bl ) );
     float bayJ = 1.0 - smoothstep( 0.0, 0.03 + aa, abs( abs( bl ) - 0.42 ) );
-    col *= mix( 1.0 + 0.05 * ( valeHash12( vec2( bi, 5.3 ) ) - 0.5 ), 1.0, bayB );
-    vec3 bandC2 = uLane * longT * vec3( 0.965, 1.0, 1.06 ) * mix( vec3( 1.0 ), grainN, 0.6 ) * ( 1.02 + 0.03 * n2 );
+    col *= mix( 1.0 + 0.09 * ( valeHash12( vec2( bi, 5.3 ) ) - 0.5 ), 1.0, bayB );
+    vec3 bandC2 = uLane * longT * vec3( 0.95, 1.0, 1.08 ) * mix( vec3( 1.0 ), grainN, 0.45 ) * ( 1.07 + 0.03 * n2 );
     float tq = abs( fract( p.y / 1.2 ) - 0.5 ) * 1.2;
     float tick = ( 1.0 - smoothstep( 0.045 - aa, 0.045 + aa, tq ) ) * ( 1.0 - smoothstep( 0.15, 0.19, abs( bl ) ) );
     col = mix( col, bandC2, bayB * 0.85 );
-    col = mix( col, mix( bandC2, uInscription, 0.45 ), tick * bayB * 0.55 );
-    col *= 1.0 - 0.22 * bayJ;
+    col = mix( col, mix( bandC2, uInscription, 0.55 ), tick * bayB * 0.7 );
+    col *= 1.0 - 0.34 * bayJ;
     fh -= bayJ * 0.006;
   }
   // the walked course: the deck is honed palest along the road and weathers darker, stone by stone, toward the drop
@@ -592,8 +592,8 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     // pale family per side, ±3 % value, one flag in eleven a replaced one a step darker); a walked track paler from
     // the fountain out toward the map's middle (where the lanes leave); wind-drift of litter and dust against the kerb
     float pA = valeHash12( pf.zw * 1.17 + 4.3 ), pB = valeHash12( pf.zw * 0.61 + 9.1 );
-    vec3 pfam = pA < 0.34 ? vec3( 1.045, 1.0, 0.93 ) : pA < 0.67 ? vec3( 0.965, 0.995, 1.06 ) : vec3( 1.0, 1.0, 0.985 );
-    float pval = ( 0.97 + 0.06 * pB ) * ( valeHash12( pf.zw * 2.03 + 1.7 ) < 0.09 ? 0.9 : 1.0 );
+    vec3 pfam = pA < 0.34 ? vec3( 1.07, 1.0, 0.89 ) : pA < 0.67 ? vec3( 0.95, 0.99, 1.09 ) : vec3( 1.0, 1.0, 0.98 );
+    float pval = ( 0.95 + 0.08 * pB ) * ( valeHash12( pf.zw * 2.03 + 1.7 ) < 0.09 ? 0.86 : 1.0 );
     vec2 toMid = normalize( uMapSize * 0.5 - FT.xy + vec2( 1e-3 ) );
     float along = dot( p - FT.xy, toMid ), across = abs( dot( p - FT.xy, vec2( -toMid.y, toMid.x ) ) );
     float ptrack = ( 1.0 - smoothstep( 1.6, 3.4, across + ( nMid - 0.5 ) * 1.2 ) ) * smoothstep( FT.z + 2.6, FT.z + 4.5, along );

@@ -25,7 +25,7 @@ warnings.filterwarnings('ignore')
 
 import numpy as np  # noqa: E402
 
-STATES = ('default', (0.3, 2.0), (0.3, 1.0), None)
+STATES = ('default', (0.3, 2.0), (0.3, 1.0), (0.1, 1.0), None)   # (0.1, 1.0): max2 round 2, the lightest easing
 SLOTS = ('attack_hit', 'hit')
 
 
@@ -58,11 +58,12 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--margin', type=float, default=0.15)
     ap.add_argument('-j', type=int, default=6)
+    ap.add_argument('--slots', default=','.join(SLOTS), help='comma-separated slots to search (pairs only meet within a slot)')
     a = ap.parse_args()
     import json
     import build as B
     with open(B.CONTRACT, encoding='utf8') as f:
-        ids = [k for k in json.load(f)['cues'] if k.startswith('f_') and any(k == f"f_{k.split('_')[1]}_{s}" for s in SLOTS)]
+        ids = [k for k in json.load(f)['cues'] if k.startswith('f_') and any(k == f"f_{k.split('_')[1]}_{s}" for s in a.slots.split(','))]
     with cf.ProcessPoolExecutor(max_workers=a.j) as ex:
         F = dict(zip(ids, ex.map(_feats, ids)))
     bar = B.ID_MIN_DIST_DB + a.margin
