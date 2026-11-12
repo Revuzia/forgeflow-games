@@ -71,6 +71,7 @@ def main() -> int:
     ap.add_argument('--margin', type=float, default=0.4)
     ap.add_argument('-j', type=int, default=7)
     ap.add_argument('--out')
+    ap.add_argument('--boost', default='', help='cue ids (comma-separated) whose brightness counts 3x (the review named them)')
     ap.add_argument('--cache', help='a pickle of the measured features (reused, and written after measuring)')
     a = ap.parse_args()
     import build as B
@@ -122,7 +123,8 @@ def main() -> int:
         ki = {c: [(o, n) for o, n in keys] for c in sc}
         Hs = {c: np.array([F[(c, o, n)]['hi'] for o, n in ki[c]]) for c in sc}
         Ts = {c: [np.array(F[(c, o, n)]['takes']) for o, n in ki[c]] for c in sc}
-        S = {c: np.array([score(c, o, n) for o, n in ki[c]]) for c in sc}
+        boost = set(filter(None, a.boost.split(',')))
+        S = {c: np.array([score(c, o, n) for o, n in ki[c]]) * (3.0 if c in boost else 1.0) for c in sc}
 
         def bandD(A, Bm):
             amx, bmx = A.max(1)[:, None, None], Bm.max(1)[None, :, None]

@@ -93,7 +93,8 @@ CARDS = {
         "plate": {"glow": [0.15, 0.62, 0.45, 0.10], "glow_color": "#F2D6B0"},
     },
     "ardit_chalkline": {
-        "splash": {"clip": "cast_a1", "t": 0.45, "yaw": 26.0, "pitch": -3.0, "lens": 58.0, "fill": 0.82, "x": 0.70,
+        "splash": {"clip": "cast_a1", "t": 0.45, "yaw": -24.0,   # (card engineer 1: at yaw 26 the pavise covered the body and the helm read small behind it; from the spear side the visor, the spear and the chalked pavise all read)
+                   "pitch": -3.0, "lens": 58.0, "fill": 0.82, "x": 0.70,
                    "key_az": 150.0, "key_el": 34.0, "key_color": "#C9D4F0", "sun": 2.5, "rim_cool": 2.2,
                    "rim_warm": 0.3, "bounce": 0.25, "bounce_color": "#8E9CC0", "accent": 1.4, "exposure": -0.35,
                    "focal": [{"at": "head", "az": 160.0, "el": 15.0, "dist": 0.8, "color": "#DCE6FF", "power": 22.0,
