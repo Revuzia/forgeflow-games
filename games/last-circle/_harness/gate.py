@@ -245,6 +245,8 @@ GATES = [
     ("probe_match_sweep", "probe_match.py", ["--sweep", "--swimcheck"], 7200, False),
     # Wave 9 R1B pass 3: the scripted Volcano Rim pen (isla_viva seed 5, 3 setups: every setup reaches its goal in 30 s with 0 stuck episodes). Control: probe_match-plant-no-pen-fix
     ("probe_match_pencheck", "probe_match.py", ["--pencheck"], 1800, False),
+    # W9 R1 fix mergefix: the scripted Coco Village corner (isla_viva seed 1, 3 setups: reach in 30 s, 0 stuck episodes). Control: probe_match-plant-no-early-turn
+    ("probe_match_cornercheck", "probe_match.py", ["--cornercheck"], 1800, False),
     # the same-seed replay, the census (>= 3 guns per player) and the path search on SAVANNA: 3 whole matches (11 twice, 12), ~2 min
     ("probe_match_ashgrid", "probe_match.py", ["--runs", "11:ashgrid,11:ashgrid,12:ashgrid", "--paths-maps", "ashgrid", "--small-run"], 7200, False),
     ("leaktest", "leaktest.py", [], 7200, False),
@@ -766,6 +768,9 @@ P23_PENDING_NEG = [
     # ---- Wave 9 R1 fix round 2 (lanes botpen / doorstuck): each new row's planted fault MUST FAIL (exit 1)
     ("p23_fall-plant-no-turn-reprobe", "p23/fall.py", ["--plant", "no-turn-reprobe", "--parts", "lip"], 3600),   # W9 R1 botpen: p23_fall 'bots-avoid lips turned' (edgeGuard's turned-heading re-probe off)
     ("probe_match-plant-no-door-funnel", "probe_match.py", ["--sweep", "--plant", "no-door-funnel"], 7200),   # W9 R1 doorstuck: bots.js doorFunnel off -> probe_match_sweep MUST FAIL (checker: 11/2, ashgrid s1 7, isla_viva s2 5)
+    # ---- Wave 9 R1 fix round 3 (lane mergefix): each new row's planted fault MUST FAIL (exit 1)
+    ("probe_match-plant-no-calm-lag", "probe_match.py", ["--pencheck", "--plant", "no-calm-lag"], 1800),      # W9 R1 mergefix: calmHeld CALM_ROUTE_ONLY off -> probe_match_pencheck MUST FAIL (setup 3 never)
+    ("probe_match-plant-no-early-turn", "probe_match.py", ["--cornercheck", "--plant", "no-early-turn"], 1800),  # W9 R1 mergefix: EDGE_EARLY off -> probe_match_cornercheck MUST FAIL (never x3)
     ("p23_netseq-plant-pull-back", "p23/netseq.py", ["--plant", "pull-back"], 3600),
     ("p23_tierprof-plant-query-flood", "p23/tierprof.py", ["--plant", "query-flood", "--gpu", "default"], 5400),
     # p23_netlive (fix round): the host's order gate off (every packet 'new') must FAIL the late / duplicate row; the guest's revive gate off must
