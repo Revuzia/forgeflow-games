@@ -134,3 +134,11 @@ rivals.ts:32-41), Book UI, legends.
   (_shots/arc-tower-*.png incl. struck2, confuse3-near), struck mound v2, confuseHue s 0.7. Perf (CPU work/frame,
   before -> rising tower): low 14.7 -> 15.1 ms, medium 38.7 -> 34.9, high 33.9 -> 33.9 (shadows +0.7 ms); no preset
   lowered. Gate check3 810/810 (13:58Z). Hurl arcs / idol / covenant ring wait for stage B sim.
+
+## SIM-LANE NOTE from PERF (2026-11-12, render lane; not acted on by render)
+- Babel scenario seed 307987276, "Rubolhin by the Lake": several houses on the lake's edge stand IN the water (their
+  bases under the lake sheet) — shots _shots/pe3-e120-y60.png / -y90.png / -y120.png (day, orbit dist 120 tilt 70 on
+  settlement 1). Looks like building placement vs the lake level (or a lake level that rose after placement). Sim lane to
+  check placement / the lake level at those cells.
+- For the record: the tree-covered water cells east / south-east of the town are sea shallows with species
+  'mangrove' (habitat shore, water 0-2 m): sim-correct. Render now stands them in their water (PERF.md session 13).

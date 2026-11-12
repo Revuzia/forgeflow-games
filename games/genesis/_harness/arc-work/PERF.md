@@ -1032,3 +1032,16 @@ long press frame-rate independent. Report after 1-2 verified.
   (89,91,50): close. Further to (0.7, 0.72, 0.6) now in src; ftc6 queued (run-s13b.sh, after tq0 / tq1).
 - tq0 / tq1 (trackpad zoom through the deck, before / after, dist26) running in run-s13b.sh.
 - GATE check16 (session-13 tree: far-tree colour (0.7, 0.72, 0.6)): 923/923 pass; npm run build OK (build-prod15.log).
+- ITEM 5 CAUSE + FIX (landed, tsc clean, tests/render-mangrove.test.ts + vegcache / wildplants / fartrees green):
+  * A/B at the mangrove shore (pe4-m60-hideveg / -hidecover / -nowater, cmp-mangrove2.png LOOKED): the dark green
+    shapes in the water go with ?hide=veg and with ?water=0 nothing lies on the sea bed: they are the water's
+    reflections of the shore palms (screen-space), not objects under the sheet.
+  * The sim's mangrove stand (sea shallows 0.3-2 m, tree 0.8-0.9, sand 0.6 on the bed) was NEVER drawn: the scatter
+    refused every point in water (> 0.05 m) and on sand (> 0.5). vegetation.ts: SpeciesLook.wetMax (plants.json water[1]
+    of shore / water trees) — a tree of such a species stands in water up to wetMax + 0.3 m and on its sandy bed; land
+    trees and every shrub still never stand in water; the cell gate (water > 1 m) admits a wet species' cell.
+  * pe6-mangrove60 / 150 vs pe4 (cmp-mangrove4.png LOOKED): a mangrove stand now stands along the shore and into the
+    water's edge (trunks and crowns above the surface), reflected in the water.
+- FAR TREES ftc6 (0.7, 0.72, 0.6; cmp-ftc6.png LOOKED): crowns' green mean (74,111,28) vs ftc5 (76,114,28) vs near
+  (67,104,29); region and coverage unchanged (88,91,45 / 0.37): closer: KEPT.
+- STATE.md: sim-lane note on the lake-edge houses standing in the water.
