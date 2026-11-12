@@ -2715,12 +2715,10 @@ HEEL_CHALK = "#8E8983"        # chalked convex edges
 # fix pass 5: the concept's layout, fewer and bolder: two rows of three on the forehead, one group on each cheekbone
 # plane, two small ones on the chin under the frown (nine fine groups on the brow read as pock dots at range)
 # max2 card blockers: the two cheekbone groups (vertical strokes just under the eyes) read as tear streaks / scratches
-# across the face on the cards; the forehead keeps the ledger. max2 cards round 2: the two chin groups (vertical
-# strokes right under the frown) read as a stitched mouth on the portraits (Stillwater's streak gate, by eye at 128 px):
-# gone, the chin is clean lacquer like the cheeks
+# across the face on the cards; the forehead and chin keep the ledger
 TALLY_FRONT = [(-0.074, 2.101), (-0.012, 2.104), (0.050, 2.101),
                (-0.078, 2.071), (-0.012, 2.073), (0.054, 2.071)]
-TALLY_CHIN: list = []
+TALLY_CHIN = [(-0.040, 1.848), (0.016, 1.848)]
 # fix pass 4: no tallies on the crown (from the 52 degree camera 1-2 px strokes on the dome read as speckle, a
 # pock-marked skull); the back of the head carries four bold groups (the concept's back view), the dome clean lacquer
 TALLY_BACK = [(-0.052, 2.072), (0.062, 2.068), (-0.058, 1.995), (0.056, 1.992)]

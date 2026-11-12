@@ -491,7 +491,7 @@ def contract_gates(contract: dict) -> tuple[list[str], dict]:
 # ── max2: the hits' snap, the per-ability impacts, the shop's crisp clicks ────────────────────────
 KIT_RISE_MAX_MS = 3.0        # a kit hit's / ability impact's decoded onset (-40 dB) to peak, every take (kits_c snap pass) …
 UI_SHOP_RISE_MAX_MS = 5.0    # … and a shop action's (the press is the sound)
-UI_SHOP_CUES = ('ui_shop_buy', 'ui_shop_sell', 'ui_shop_undo', 'ui_shop_denied')
+UI_SHOP_CUES = ('ui_shop_buy', 'ui_shop_sell', 'ui_shop_undo', 'ui_shop_denied', 'ui_rank_up')
 
 
 def rise_ms(x: np.ndarray) -> float:

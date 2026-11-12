@@ -331,6 +331,10 @@ interface Place { att: number; pan: number; lpf: number; d?: number }
 /** per-play options: `aware` = a threat to your fighter (the awareness pass applies, and the voice-bus duck spares
  *  it); `onVoice` hears the voice once its file is decoded and started (the announcer times its line by it) */
 interface CueOpts { aware?: boolean; lift?: number; onVoice?: (v: Voice, buf: AudioBuffer) => void;
+  /** (max2 SFX-1b) the source is your own fighter: its kit cues play OWN_KIT_DB over the rest (see `mix focus`) */
+  you?: boolean;
+  /** (max2 SFX-1b) the source is a camp monster (not an epic unit): its cues play CAMP_DB under (see `mix focus`) */
+  camp?: boolean;
   /** a playback-rate multiplier over the cue's own pitchVar (the gold ladder's step-up) */
   rate?: number }
 
@@ -377,6 +381,18 @@ const HEAL_MIN_FRAC = 0.05;  // a heal tick chimes only at this share of the tar
 const HEAL_CHAIN_S = 1.2;    // … and not when the same target was healed this recently (a repeat chain: its first tick)
 // the mixer (see `buses` / `ducking` in the header)
 const MIX_TRIM_DB = 3.0;     // the engine's mix makeup after the master volume, before the limiter (see `buses`)
+// mix focus (max2 SFX-1b): round 1's live captures put the master at -19.6 to -20.2 LUFS on 3 of 5 (tokens -18 +/- 1.5)
+// and the fighters' kits under half of the heard sfx on a jungle-heavy seat (library camp cues: c_cast_big,
+// c_monster_fall, c_hit_magic, c_slam). A MOBA mix leads with the player's own hero: your fighter's kit cues play
+// OWN_KIT_DB over everyone else's, a camp monster's own sounds (its casts, abilities, blows and fall; never an epic
+// unit's kit) CAMP_DB under, and the sfx bus carries SFX_MAKEUP_DB of engine makeup over its slider (the threat path
+// too), so the sfx sits over the ambience bed it was level with (-23.4 / -24.3 LUFS integrated, Lisvel seed 21)
+const OWN_KIT_DB = 1.5;
+const CAMP_DB = -3;
+const SFX_MAKEUP_DB = 1.5;
+const OWN_KIT_GAIN = Math.pow(10, OWN_KIT_DB / 20);
+const CAMP_GAIN = Math.pow(10, CAMP_DB / 20);
+const SFX_MAKEUP = Math.pow(10, SFX_MAKEUP_DB / 20);
 const CLIP_KNEE = 0.7;       // the soft clip is linear up to −3.1 dBFS …
 const CLIP_CEIL = 0.891;     // … and bends everything above into −1 dBFS
 const VOICE_DUCK_DB = 6;     // music and ambience under an announcer line …
@@ -643,6 +659,8 @@ class Engine implements ValeAudioPort {
   private readonly passives = new Map<string, { kind: PassiveKind; cue?: string }>();
   /** fighter id → the kit slots content has a cue for (see `kits` in the header) */
   private readonly kits = new Map<string, Partial<Record<KitSlot, string>>>();
+  /** every fighter's kit cue id (mix focus: your own play OWN_KIT_DB over) */
+  private readonly kitCues = new Set<string>();
   /** the kits' lock-in calls' files (see `memory` in the header): draft-only, decoded while a draft runs */
   private readonly callFiles = new Set<string>();
   /** a fighter's own ability id (kit, passive, forms) → its fighter and slot (the as-heard area rule, see `kits`) */
@@ -739,6 +757,7 @@ class Engine implements ValeAudioPort {
       const k: Partial<Record<KitSlot, string>> = {};
       for (const s of KIT_SLOTS) if (this.cues[`f_${f.id}_${s}`]) k[s] = `f_${f.id}_${s}`;
       this.kits.set(f.id, k);
+      for (const id of Object.values(k)) if (id) this.kitCues.add(id);
       if (k.call) for (const file of this.cues[k.call]?.files ?? []) this.callFiles.add(file);
       // T3 wind-ups: every non-ult ability, a form's overrides included
       const abs: [string, AbilityLike | undefined][] = Object.entries(f.kit);
@@ -988,7 +1007,7 @@ class Engine implements ValeAudioPort {
     const mute = this.hidden && this.vol.muteInBackground;
     glide(this.master.gain, mute ? 0 : this.vol.master, t);
     for (const b of BUSES) {
-      glide(this.bus.get(b)!.gain, this.vol[b], t);
+      glide(this.bus.get(b)!.gain, this.vol[b] * (b === 'sfx' ? SFX_MAKEUP : 1), t);
       // never muted in the background; floored; a master at 0 (the player's full mute) is honoured, at once (an alert
       // can be due the next instant: no glide is left for it to sound through)
       const alert = this.vol.master <= 0 ? 0 : Math.max(ALERT_FLOOR, this.vol.master * this.vol[b]);
@@ -996,7 +1015,7 @@ class Engine implements ValeAudioPort {
       if (alert > 0) glide(ag, alert, t);
       else { ag.cancelScheduledValues(t); ag.setValueAtTime(0, t); }
     }
-    glide(this.threat.gain, this.vol.sfx, t);
+    glide(this.threat.gain, this.vol.sfx * SFX_MAKEUP, t);
     // accessibility (see `buses`): mono sums to one channel the speakers up-mix; soften re-wires its compressor in
     this.out.channelCount = this.vol.mono ? 1 : 2;
     const soften = !!this.vol.softenLoud;
@@ -1184,6 +1203,9 @@ class Engine implements ValeAudioPort {
     if (!cueId) return 'none';
     const c = this.cues[cueId];
     if (!c) return 'none';
+    // mix focus (see OWN_KIT_DB): your own fighter's kit over the rest, a camp monster's sounds under
+    if (o.you && this.kitCues.has(cueId)) gainMul *= OWN_KIT_GAIN;
+    if (o.camp) gainMul *= CAMP_GAIN;
     const ctx = this.ensure();
     if (!ctx || ctx.state !== 'running' || this.stalled) return 'off';      // a stalled clock: nothing would sound (see `release`)
     const now = ctx.currentTime;
@@ -2164,6 +2186,7 @@ class Engine implements ValeAudioPort {
     this.hurtLast.clear(); this.objAlive.clear();
     for (const o of client?.view.objectives ?? []) this.objAlive.set(o.id, o.alive);
     this.annQ = [];
+    this.rankSum = null;
     this.stopAmbience();
     this.evictCues();
     this.ambMap = client?.setup?.map ?? null;
@@ -2174,6 +2197,7 @@ class Engine implements ValeAudioPort {
         for (const e of evs) if (e.e === 'damage' && e.shaded && e.ability) this.shadedHits.add(`${e.src}:${e.dst}:${e.ability}`);
         for (const e of evs) this.onEvent(e as unknown as Record<string, unknown>);
         if (this.ults.size) this.settleUlts();
+        this.rankWatch(client);
         // a whole tick's lines are queued (and merged) before the best of them speaks
         if (this.annQ.length) this.pumpAnn();
       });
@@ -2182,6 +2206,18 @@ class Engine implements ValeAudioPort {
   }
 
   listener(focus: (() => { x: number; y: number } | null) | null): void { this.focus = focus; }
+
+  /** (max2 SFX-10) a skill point spent: your fighter's ability ranks rose since the last batch → events.rankUp (the sim
+   *  emits no event for it; the HUD's click and the auto-level both land here, on the tick the rank lands) */
+  private rankSum: number | null = null;
+  private rankWatch(client: MatchClient): void {
+    const me = client.view.players.find((p) => p.player === client.you);
+    if (!me) return;
+    let n = 0;
+    for (const a of me.abilities) n += a.rank;
+    if (this.rankSum !== null && n > this.rankSum) this.cue(this.ev('rankUp'), null);
+    this.rankSum = n;
+  }
 
   // ── ambience (see `ambience` in the header) ──────────────────────────────────────────────────────
   /** the emitters content binds for a map: audio.ambience[map] = [{ source, cue }] → a looping ambience cue (the old
@@ -2485,7 +2521,8 @@ class Engine implements ValeAudioPort {
     const onYou = youId !== undefined && (e.dst === youId || e.target === youId);
     // priority: an enemy (or a monster) aiming at you, or anything landing on you, +1; an ally's own action −1
     const lift = src ? (src.team !== mine ? (onYou ? 1 : 0) : src.id !== youId && !onYou ? -1 : 0) : onYou ? 1 : 0;
-    const aw: CueOpts = { aware: (!!src && src.team !== mine && src.kind !== 'minion') || onYou, lift };
+    const aw: CueOpts = { aware: (!!src && src.team !== mine && src.kind !== 'minion') || onYou, lift,
+      you: !!src && youId !== undefined && src.id === youId, camp: src?.kind === 'monster' && !this.uk(src) };
     if (this.ults.size) this.release(kind, e, src, aw);
     switch (kind) {
       case 'cast': {
@@ -2663,7 +2700,7 @@ class Engine implements ValeAudioPort {
         else if (k === 'summon') this.cue(this.ev('summonOut'), at(dst), 0.8);
         else if (k === 'monster') {
           const uk = this.uk(dst);
-          this.cue(uk ? uk.death : this.ev('monsterDeath'), at(dst));   // an epic unit's own fall (see `epic`)
+          this.cue(uk ? uk.death : this.ev('monsterDeath'), at(dst), 1, 0, { camp: !uk });   // an epic unit's own fall (see `epic`)
           if (dst) this.hurtLast.delete(dst.id);
         }
         break;

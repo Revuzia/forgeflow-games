@@ -252,6 +252,18 @@ def ui_shop_denied(v: int):
     return finish(room(L.out(), 'wood', wet=0.06), hp_hz=90, lp_hz=6000)
 
 
+@cue('ui_rank_up', 'ui', ('m', -22.0), UI_SHORT, instant=True, **UICHIME)
+def ui_rank_up(v: int):
+    """Spend a skill point (max2 SFX-10, events.rankUp: your fighter's ability ranks rose): a wooden notch cut into the
+    dial on the click, a D5 glass struck with it and an A5 a fifth over it 32 ms later (a step up), small and dry; not
+    the level-up's bloom (that one is the match's news, this is your own hand)."""
+    L = Layers(0.3)
+    L.add(at_len(esc('tock', 0.9, seed='ru'), 0.05), 0.0, peak_db=0)
+    L.add(glass('D5', 0.22, 0.8, decay=0.08, bright=0.6, seed='ru1', strike=1.4), 0.0, peak_db=-4)
+    L.add(glass('A5', 0.24, 0.8, decay=0.1, bright=0.6, seed='ru2'), 0.032, peak_db=-5)
+    return finish(room(L.out(), 'wood', wet=0.06), hp_hz=200, eq=[('peak', 3300, -2.5, 0.8)])
+
+
 @cue('ui_currency_tick', 'ui', ('m', -24.0), UI_TICK, **UITICK)
 def ui_currency_tick(v: int):
     """Gleam counting up (rapid repeats): a tiny A6 glass grain, 1 ms attack, partials barely there."""
