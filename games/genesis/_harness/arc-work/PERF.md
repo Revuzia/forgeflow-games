@@ -996,10 +996,14 @@ long press frame-rate independent. Report after 1-2 verified.
 - CONTAINER RESTARTS at ~06:5xZ? and ~08:21Z: run-s12h queue died after inv0; not yet re-run: ftc4 d2000/d150,
   deckmist2 (resting-in-deck before/after), eastwater5 (+pe3-stream / pe3-pond), tq0 / tq1 (trackpad zoom before/after).
 
+- DECKMIST VERIFIED (deckmist2, live src, babel, orbit dist 300 tilt 50, camera RESTING at alt 316 m inside the
+  180-420 m deck; _shots/dm-rest-off.png vs dm-rest-on.png, cmp-deckmist.png LOOKED): off = a fully white screen; on =
+  the town, its fields and trees read through a soft mist below, the deck still a cloud around and above. 0 errors.
+- FAR TREES at 2 km / 150 m (ftc4-d2000, ftc4-d150 vs ft1-d2000, ft1b-d0150; cmp-ftc4-alt.png LOOKED): the lime
+  speckle at 2 km is gone (the forest reads as a darker textured canopy), 150 m unchanged near, floor brown under far.
+
 ## NEXT (session 13), in order
-1. Re-queue ONE AT A TIME (dist26 = fresh unminified build): deckmist2 (spec perf-deckmist.json: dm-rest-off
-   deckmist=0 vs dm-rest-on, babel orbit dist 300 tilt 50 = alt ~316 m in the 180-420 m deck) -> LOOK: on = ground
-   readable through mist, off = white; tq0 / tq1 (wheelfixed trackpad -3 px/frame from dist 540: deckzoom=0&deckmist=0
+1. tq0 / tq1 (wheelfixed trackpad -3 px/frame from dist 540: deckzoom=0&deckmist=0
    vs default) -> perf-lum.py: no white frames with the fix; one shot from above the deck to confirm clouds unchanged
    from outside.
 2. Far trees: ftc4-d2000 / -d150 shots; crowns' G a bit high -> farcrown.ts cg factor 0.88 -> ~0.8, re-shoot d500.
