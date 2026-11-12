@@ -255,11 +255,11 @@ vec4 valeGlaze() {
   vec3 q = vW - uCenter;
   float ph = fract( uTime / 3.0 );
   float band = exp( -pow( ( q.y / max( uH, 0.5 ) - ( ph * 1.3 - 0.15 ) ) * 14.0, 2.0 ) ) * ( 1.0 - smoothstep( 0.8, 1.0, ph ) );
-  float a = 0.55 * rim + 0.1 * soft + 0.1 * band * ( 0.5 + soft );
+  float a = 0.4 * rim + 0.1 * soft + 0.1 * band * ( 0.5 + soft );
   a = a * uK + uFlash * ( 0.2 + 0.4 * max( rim, soft ) );
   // the occlusion fade thins the glaze with the tower
   a *= mix( 1.0, uSfA, smoothstep( uSfY0, uSfY1, vW.y ) );
-  return vec4( uColor * ( 0.9 + 0.5 * rim + 0.3 * band + uFlash ), clamp( a, 0.0, 0.6 ) );
+  return vec4( uColor * ( 0.85 + 0.25 * rim + 0.3 * band + uFlash ), clamp( a, 0.0, 0.6 ) );
 }
 vec4 valeFoot() {
   float f = 1.0 - abs( dot( normalize( vN ), normalize( vV ) ) );
