@@ -1105,3 +1105,36 @@ long press frame-rate independent. Report after 1-2 verified.
 3. Growth soak with many frames: perf-soak.mjs --views=babel at a small viewport (add --size=320x180 to its context)
    and --quality=high, 20+ min; sample __GENESIS_GPUMEM__ total / live.size / cpuProbe; look for a monotonic climb
    (pages never freed, lazy targets, orphaned buffers). In node, the chunk-pool tour tests can run thousands of frames.
+
+## SESSION 15 (2026-11-12 ~20:05Z) — the session-15 plan: cuts #3 #5 #6 #7 #8, gpu mem by owner + ANGLE transients, growth soak
+- CUTS landed (tsc clean; each behind a perfSwitch, default on):
+  #3 `?pagenormal=0` (chunks.ts NORMAL_ALIAS): a patch page's 'normal' IS its 'position' attribute (one array, one GL
+     buffer) — set right after the page's first addGeometry, before any draw; extract() keeps the alias. -1/16 of every
+     terrain + water page (3 of 48 floats a vertex), CPU and GPU. tests/render-pagenormal.test.ts.
+  #5 `?prevalias=0` (pipeline.ts PREV_ALIAS): no prevColor copy when an atmosphere composite ran: the water's tPrevColor
+     = last frame's final atmo target (input of keepPrevious; nothing writes atmoA/B before the next water pass); the
+     NaN guard moved into the ocean taps (prevTap). Airless frames copy into a prevColor made on first need. -11 MB at
+     1686x873 and one full-res pass fewer a frame.
+  #6 `?aoalias=0` (gtao.ts): full-res raw AO rendered into post.sceneCopy (idle until copyForWater, which runs after the
+     blur); the blur reads it by texelFetch (clamped; AO_FETCH define) since sceneCopy is linear-filtered. -11 MB.
+  #7 `?aoblur=0`: the blurred AO into post.atmoB when a composite follows, unless atmoB holds last frame's image (prevTex,
+     after an even number of composites); later composites unbind tAO (no feedback loop). Own targets made lazily. -11 MB.
+     (atmoVis is now built before the GTAO block.)
+  #8 `?lazypools=0` (vegetation.ts LAZY_POOLS / groundcover.ts gcRoom): near-tree buckets and ground-cover pools start at
+     256 and double up to the old caps (1200/3000/6000; gc 200-6000) during a fill — the same instances drawn; a grow
+     frees the old instance buffers (mesh.dispose) and, for trees, the old per-bucket geometry's own iExtra (shared
+     attributes stripped first). Each tree bucket has its OWN geometry (cached attributes + its iExtra): fixes the
+     shared-iExtra bug (2+ worlds). tests/render-lazypools.test.ts.
+- GPU MEM LINE (gpumem.ts): `gpu mem by owner` — buffers by their source array (WeakRef at bufferData, owner from the
+  scene walk sceneOwners(): first two named ancestors), textures / render targets by the three object three's
+  properties.get looked up right before the allocation (attach(renderer)); unmatched: 'tex:<name>', 'buffers (not in
+  the scene)' (= idle page pools, orphans). `angle transients (est.)`: ALWAYS ON — VAO -> buffers links (vertexAttribPointer,
+  index binds), VAO draw stamps (draw calls + WEBGL_multi_draw), a bufferSubData into a buffer drawn in the last 3 frames
+  = one whole-buffer copy (once per buffer per frame); bufferData bytes; texSubImage bytes; MB/frame over 120 frames,
+  max frame, in flight (last 3 frames), full GPU waits = fresh bytes / 64 MB, copied bytes by owner since load.
+  gpuMem.tick() per frame (renderer). tests/render-gpumem.test.ts (+2).
+- NODE SOAK tests/render-chunksoak.test.ts: 3000 frames, the same dive/climb loop round the planet 6 times: pool slots,
+  pages, idle pages, scene children, live patches peak at exactly the same level every lap (2336 / 146 / 15 / 146 / 800):
+  no climb. NOTE (not a leak): while flying, slot capacity is ~2.9x live (pages per level part-filled; compaction waits
+  SLACK_FRAMES=600 of lasting slack) — at rest it compacts.
+- A/B run-s15a.sh: cut2 (dist29 default) and cut2off (dist29, all five switches off) at the cut1 settings.

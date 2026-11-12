@@ -4,7 +4,21 @@
 // missed), kept from the moment the context is attached; the perf report prints it (`gpu mem` lines).
 // Cost: a Map update per allocation / delete call; nothing per draw.
 
-interface Obj { kind: 'buf' | 'tex2d' | 'tex3d' | 'cube' | 'rb'; bytes: number; desc: string; levels?: Map<string, number> }
+interface Obj {
+  kind: 'buf' | 'tex2d' | 'tex3d' | 'cube' | 'rb'; bytes: number; desc: string; levels?: Map<string, number>;
+  /** (PERF s15 ownership) a buffer's source array (its owner: the scene walk's), a texture's / target's three object */
+  src?: WeakRef<object>;
+  /** (PERF s15 ANGLE transients) the frame a whole-buffer copy was last counted, and the bytes copied in all */
+  copyFrame?: number; copied?: number;
+}
+
+/** frames a buffer counts as still read by the GPU after a draw (ANGLE-Metal: the GPU runs ~2-3 frames behind) */
+const IN_USE_FRAMES = 3;
+/** ANGLE-Metal's BufferManager waits for the whole GPU queue every this many bytes of fresh buffer allocations */
+const ANGLE_GC_BYTES = 64 * 1048576;
+/** frames the transient means are taken over */
+const WINDOW = 120;
+const mkRef = (o: object | null | undefined): WeakRef<object> | undefined => (o && typeof WeakRef !== 'undefined' ? new WeakRef(o) : undefined);
 
 /** bytes per texel of a (sized or unsized) internal format; unsized formats by their type */
 function bpp(gl: WebGL2RenderingContext, internal: number, format?: number, type?: number): number {
@@ -45,6 +59,25 @@ export class GpuMemAudit {
   private total0 = 0;
   /** retained CPU copies by owner (bytes), set by the renderer (scene walk at report time) */
   cpuProbe: (() => Map<string, number>) | null = null;
+  /**
+   * (PERF s15) who owns what, set by the renderer (scene walk at report time): typed arrays' ArrayBuffers and three
+   * textures -> owner name ('planet-0/vegetation' ...)
+   */
+  ownerProbe: (() => Map<object, string>) | null = null;
+  /** the three texture / render target whose GL storage is being allocated (three's properties.get, see attach) */
+  private lastTex: object | null = null;
+  private lastRT: object | null = null;
+  // ── ANGLE-Metal transients (always on): which buffers the GPU may still read, and what sub-updates cost ──
+  frame = 0;
+  private vao: object | null = null;
+  private vaoFrame = new Map<object, number>();
+  private bufVaos = new Map<object, Set<object>>();
+  private vaoBufs = new Map<object, Set<object>>();
+  /** this frame: bufferSubData calls / data bytes, whole-buffer copies (n / bytes), bufferData bytes, texSubImage bytes */
+  private cur = { subN: 0, subB: 0, copyN: 0, copyB: 0, dataB: 0, texB: 0 };
+  private hist: { subN: number; subB: number; copyN: number; copyB: number; dataB: number; texB: number }[] = [];
+  /** fresh Metal buffer bytes (copies + bufferData) since install: every ANGLE_GC_BYTES of them one full GPU wait */
+  freshTotal = 0;
 
   install(gl: WebGL2RenderingContext): void {
     if (this.installed === gl) return;
@@ -67,6 +100,8 @@ export class GpuMemAudit {
       e.levels!.set(key, bytes);
       e.bytes += bytes - prev;
       if (key === '0' || key.startsWith('0:') || kind === 'buf' || kind === 'rb') e.desc = desc;
+      if (kind === 'rb') { if (self.lastRT) e.src = mkRef(self.lastRT); }
+      else if (kind !== 'buf' && self.lastTex) e.src = mkRef(self.lastTex);
       self.total += bytes - prev;
       if (self.total > self.peak) self.peak = self.total;
     };
@@ -74,14 +109,62 @@ export class GpuMemAudit {
     const boundT = (t: number) => self.boundTex.get(`${self.unit}:${texTarget(t)}`) ?? null;
     wrap('activeTexture', (a) => { self.unit = (a[0] as number) - gl.TEXTURE0; });
     wrap('bindTexture', (a) => { self.boundTex.set(`${self.unit}:${a[0]}`, (a[1] as object) ?? null); });
-    wrap('bindBuffer', (a) => { self.boundBuf.set(a[0] as number, (a[1] as object) ?? null); });
+    wrap('bindBuffer', (a) => {
+      self.boundBuf.set(a[0] as number, (a[1] as object) ?? null);
+      // (an index buffer bound while a vertex array is bound belongs to that vertex array)
+      if (a[0] === gl.ELEMENT_ARRAY_BUFFER) self.link(a[1] as object);
+    });
     wrap('bindBufferBase', (a) => { self.boundBuf.set(a[0] as number, (a[2] as object) ?? null); });
     wrap('bindRenderbuffer', (a) => { self.rb = (a[1] as object) ?? null; });
     wrap('bufferData', (a) => {
       const s = a[1];
       const bytes = typeof s === 'number' ? s : s && typeof (s as ArrayBufferView).byteLength === 'number' ? (a[4] != null ? Number(a[4]) * ((s as Float32Array).BYTES_PER_ELEMENT ?? 1) : (s as ArrayBufferView).byteLength - (a[3] != null ? Number(a[3]) * ((s as Float32Array).BYTES_PER_ELEMENT ?? 1) : 0)) : 0;
-      set(self.boundBuf.get(a[0] as number), 'buf', 'b', bytes, a[0] === gl.ELEMENT_ARRAY_BUFFER ? 'index' : a[0] === gl.UNIFORM_BUFFER ? 'uniform' : 'vertex');
+      const o = self.boundBuf.get(a[0] as number);
+      set(o, 'buf', 'b', bytes, a[0] === gl.ELEMENT_ARRAY_BUFFER ? 'index' : a[0] === gl.UNIFORM_BUFFER ? 'uniform' : 'vertex');
+      const e = o ? self.live.get(o) : null;
+      if (e) e.src = mkRef(s && typeof s === 'object' ? (s as ArrayBufferView).buffer : undefined);
+      self.cur.dataB += bytes;
+      self.freshTotal += bytes;
     });
+    // (PERF s15) ANGLE-Metal: a bufferSubData into a buffer the GPU may still read takes a new Metal buffer of the WHOLE
+    // buffer's size and copies the rest across (BufferMtl putDataInNewBufferAndStartUsingNewBuffer); counted once per
+    // buffer per frame (the copy is not in use until its next draw)
+    wrap('bufferSubData', (a) => {
+      const o = self.boundBuf.get(a[0] as number);
+      const src = a[2] as ArrayBufferView | undefined;
+      const el = (src as Float32Array | undefined)?.BYTES_PER_ELEMENT ?? 1;
+      const b = src ? (a[4] != null ? Number(a[4]) * el : src.byteLength - (a[3] != null ? Number(a[3]) * el : 0)) : 0;
+      self.cur.subN++; self.cur.subB += b;
+      const e = o ? self.live.get(o) : null;
+      if (!o || !e || e.copyFrame === self.frame || !self.inUse(o)) return;
+      e.copyFrame = self.frame;
+      e.copied = (e.copied ?? 0) + e.bytes;
+      self.cur.copyN++; self.cur.copyB += e.bytes;
+      self.freshTotal += e.bytes;
+    });
+    const texSub = (bytes: number) => { self.cur.texB += bytes; };
+    wrap('texSubImage2D', (a) => { if (a.length >= 9 && typeof a[4] === 'number') { const t = a[7] as number; texSub((a[4] as number) * (a[5] as number) * bpp(gl, 0, a[6] as number, t)); } });
+    wrap('texSubImage3D', (a) => { if (a.length >= 11 && typeof a[5] === 'number') texSub((a[5] as number) * (a[6] as number) * (a[7] as number) * bpp(gl, 0, a[8] as number, a[9] as number)); });
+    // which buffers each vertex array reads (its attribute pointers and its index buffer), and when it was last drawn
+    wrap('bindVertexArray', (a) => { self.vao = (a[0] as object) ?? null; });
+    const vaoUses = (buf: object | null | undefined) => self.link(buf);
+    wrap('vertexAttribPointer', () => { vaoUses(self.boundBuf.get(gl.ARRAY_BUFFER)); });
+    wrap('vertexAttribIPointer', () => { vaoUses(self.boundBuf.get(gl.ARRAY_BUFFER)); });
+    wrap('deleteVertexArray', (a) => {
+      const v = a[0] as object;
+      self.vaoFrame.delete(v);
+      for (const b of self.vaoBufs.get(v) ?? []) self.bufVaos.get(b)?.delete(v);
+      self.vaoBufs.delete(v);
+    });
+    const drew = () => { if (self.vao) self.vaoFrame.set(self.vao, self.frame); };
+    for (const n of ['drawArrays', 'drawElements', 'drawArraysInstanced', 'drawElementsInstanced', 'drawRangeElements']) wrap(n, drew);
+    try {
+      const md = gl.getExtension?.('WEBGL_multi_draw') as Record<string, (...a: unknown[]) => unknown> | null;
+      if (md) for (const n of ['multiDrawElementsWEBGL', 'multiDrawArraysWEBGL', 'multiDrawElementsInstancedWEBGL', 'multiDrawArraysInstancedWEBGL']) {
+        const orig = md[n];
+        if (typeof orig === 'function') md[n] = function (this: unknown, ...args: unknown[]) { const r = orig.apply(md, args); drew(); return r; };
+      }
+    } catch { /* none */ }
     const tex2d = (target: number, level: number, internal: number, w: number, h: number, format?: number, type?: number) => {
       const cube = texTarget(target) === String(gl.TEXTURE_CUBE_MAP);
       const key = `${level}:${target}`;
@@ -116,10 +199,94 @@ export class GpuMemAudit {
     });
     wrap('renderbufferStorage', (a) => { const [, internal, w, h] = a as number[]; set(self.rb, 'rb', 'r', w * h * bpp(gl, internal), `${w}x${h} ${fmtName(gl, internal)}`); });
     wrap('renderbufferStorageMultisample', (a) => { const [, s, internal, w, h] = a as number[]; set(self.rb, 'rb', 'r', w * h * bpp(gl, internal) * Math.max(1, s), `${w}x${h} ${fmtName(gl, internal)} msaa${s}`); });
-    const drop = (a: unknown[]) => { const o = a[0] as object; const e = o ? self.live.get(o) : null; if (e) { self.total -= e.bytes; self.live.delete(o); } };
+    const drop = (a: unknown[]) => {
+      const o = a[0] as object; const e = o ? self.live.get(o) : null; if (e) { self.total -= e.bytes; self.live.delete(o); }
+      if (o) { for (const v of self.bufVaos.get(o) ?? []) self.vaoBufs.get(v)?.delete(o); self.bufVaos.delete(o); }
+    };
     wrap('deleteBuffer', drop);
     wrap('deleteTexture', drop);
     wrap('deleteRenderbuffer', drop);
+  }
+
+  /**
+   * (PERF s15 ownership) follow three's property lookups, so a texture or render-target allocation knows which three
+   * object it is for (WebGLTextures looks the texture / target up right before allocating its storage)
+   */
+  attach(renderer: { properties: { get(o: object): unknown } }): void {
+    const p = renderer.properties as { get(o: object): unknown; __gpumem?: boolean };
+    if (p.__gpumem) return;
+    p.__gpumem = true;
+    const orig = p.get.bind(p);
+    const self = this;
+    p.get = function (o: object) {
+      const t = o as { isTexture?: boolean; isRenderTarget?: boolean };
+      if (t && t.isTexture) self.lastTex = o; else if (t && t.isRenderTarget) self.lastRT = o;
+      return orig(o);
+    };
+  }
+
+  /** the bound vertex array reads `buf` */
+  private link(buf: object | null | undefined): void {
+    const v = this.vao;
+    if (!v || !buf) return;
+    let s = this.bufVaos.get(buf);
+    if (!s) { s = new Set(); this.bufVaos.set(buf, s); }
+    s.add(v);
+    let t = this.vaoBufs.get(v);
+    if (!t) { t = new Set(); this.vaoBufs.set(v, t); }
+    t.add(buf);
+  }
+  /** bookkeeping sizes (the growth soak: none of these may only climb) */
+  get trackSizes(): { live: number; bufVaos: number; vaoBufs: number; vaoFrame: number } {
+    return { live: this.live.size, bufVaos: this.bufVaos.size, vaoBufs: this.vaoBufs.size, vaoFrame: this.vaoFrame.size };
+  }
+
+  /** a buffer some vertex array drawn in the last IN_USE_FRAMES frames reads */
+  private inUse(buf: object): boolean {
+    const s = this.bufVaos.get(buf);
+    if (!s) return false;
+    for (const v of s) { const f = this.vaoFrame.get(v); if (f != null && this.frame - f < IN_USE_FRAMES) return true; }
+    return false;
+  }
+
+  /** a frame begins (the renderer): closes the last frame's transient counts */
+  tick(): void {
+    this.hist.push(this.cur);
+    if (this.hist.length > WINDOW) this.hist.shift();
+    this.cur = { subN: 0, subB: 0, copyN: 0, copyB: 0, dataB: 0, texB: 0 };
+    this.frame++;
+  }
+
+  /** the transient means over the last frames (MB / frame) and the ANGLE GC waits so far (probes, tests) */
+  transients(): { frames: number; subN: number; subMB: number; copyN: number; copyMB: number; dataMB: number; texMB: number; maxCopyMB: number; inFlightMB: number; gcWaits: number } {
+    const H = this.hist, n = Math.max(1, H.length), MB = 1048576;
+    const sum = (k: 'subN' | 'subB' | 'copyN' | 'copyB' | 'dataB' | 'texB') => H.reduce((s, x) => s + x[k], 0);
+    const last = H.slice(-IN_USE_FRAMES).reduce((s, x) => s + x.copyB + x.dataB, 0);
+    return {
+      frames: H.length, subN: sum('subN') / n, subMB: sum('subB') / n / MB, copyN: sum('copyN') / n, copyMB: sum('copyB') / n / MB,
+      dataMB: sum('dataB') / n / MB, texMB: sum('texB') / n / MB, maxCopyMB: H.reduce((m, x) => Math.max(m, x.copyB + x.dataB), 0) / MB,
+      inFlightMB: last / MB, gcWaits: Math.floor(this.freshTotal / ANGLE_GC_BYTES),
+    };
+  }
+
+  /** live GPU bytes by owner (the scene walk's owner of a buffer's array / a texture; else the target's or texture's name) */
+  byOwner(): Map<string, { b: number; n: number; copied: number }> {
+    let own: Map<object, string> | null = null;
+    try { own = this.ownerProbe?.() ?? null; } catch { own = null; }
+    const out = new Map<string, { b: number; n: number; copied: number }>();
+    for (const e of this.live.values()) {
+      const o = e.src?.deref();
+      let k = o ? own?.get(o) : undefined;
+      if (!k) {
+        const t = o as { name?: string; texture?: { name?: string }; textures?: { name?: string }[]; isRenderTarget?: boolean } | undefined;
+        const nm = t ? (t.isRenderTarget ? (t.textures?.[0]?.name || t.texture?.name) : t.name) : '';
+        k = nm ? `${e.kind === 'rb' ? 'rb' : 'tex'}:${nm}` : e.kind === 'buf' ? (o ? 'buffers (not in the scene)' : 'buffers (source gone)') : `${e.kind} (unnamed)`;
+      }
+      const s = out.get(k) ?? { b: 0, n: 0, copied: 0 };
+      s.b += e.bytes; s.n++; s.copied += e.copied ?? 0;
+      out.set(k, s);
+    }
+    return out;
   }
 
   /** the report lines: MB by kind (count), the largest objects, the peak */
@@ -143,6 +310,15 @@ export class GpuMemAudit {
       if (pm) L.push(`js heap: used ${mb(pm.usedJSHeapSize)} MB of ${mb(pm.totalJSHeapSize)} MB`);
     } catch { /* none */ }
     L.splice(1, 0, `gpu mem largest: ${big.join(' · ')}`);
+    // (PERF s15) by owner, and the ANGLE-Metal transients (always counted)
+    try {
+      const own = [...this.byOwner().entries()].sort((a, b) => b[1].b - a[1].b);
+      L.push(`gpu mem by owner (MB x objects): ${own.slice(0, 16).map(([k, s]) => `${k} ${mb(s.b)} x${s.n}`).join(' · ')}`);
+      const t = this.transients();
+      const cop = own.filter(([, s]) => s.copied > 0).sort((a, b) => b[1].copied - a[1].copied).slice(0, 8);
+      const r1 = (x: number) => (Math.round(x * 10) / 10).toString(), r2 = (x: number) => (Math.round(x * 100) / 100).toString();
+      L.push(`angle transients (est., ANGLE-Metal; mean over ${t.frames} frames): whole-buffer copies ${r2(t.copyMB)} MB/frame x${r1(t.copyN)} (max ${r1(t.maxCopyMB)} MB in a frame with bufferData) for ${r1(t.subN)} bufferSubData/frame of ${r2(t.subMB)} MB | bufferData ${r2(t.dataMB)} MB/frame | texSubImage ${r2(t.texMB)} MB/frame | in flight ~${r1(t.inFlightMB)} MB | ${t.gcWaits} full GPU waits so far (one per 64 MB fresh: ${r1(this.freshTotal / 1048576)} MB, ${r1(this.freshTotal / 1048576 / mins)} MB/min)${cop.length ? ` | copied by owner since load: ${cop.map(([k, s]) => `${k} ${mb(s.copied)} MB`).join(' · ')}` : ''}`);
+    } catch { /* none */ }
     // buffers by size class (patch pages, instance pools ...): how many of each size
     const sizes = new Map<number, number>();
     for (const e of this.live.values()) if (e.kind === 'buf' && e.bytes >= 65536) sizes.set(e.bytes, (sizes.get(e.bytes) ?? 0) + 1);

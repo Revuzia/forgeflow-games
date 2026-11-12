@@ -13,7 +13,9 @@ function fakeGl() {
   const noop = () => {};
   return { ...C, activeTexture: noop, bindTexture: noop, bindBuffer: noop, bindBufferBase: noop, bindRenderbuffer: noop, bufferData: noop,
     texImage2D: noop, texStorage2D: noop, texImage3D: noop, texStorage3D: noop, generateMipmap: noop, renderbufferStorage: noop,
-    renderbufferStorageMultisample: noop, deleteBuffer: noop, deleteTexture: noop, deleteRenderbuffer: noop } as unknown as WebGL2RenderingContext & typeof C;
+    renderbufferStorageMultisample: noop, deleteBuffer: noop, deleteTexture: noop, deleteRenderbuffer: noop,
+    bufferSubData: noop, texSubImage2D: noop, texSubImage3D: noop, bindVertexArray: noop, vertexAttribPointer: noop, vertexAttribIPointer: noop,
+    deleteVertexArray: noop, drawArrays: noop, drawElements: noop, drawArraysInstanced: noop, drawElementsInstanced: noop, drawRangeElements: noop } as unknown as WebGL2RenderingContext & typeof C;
 }
 
 test('buffers, textures (2D, mips, cube, 3D) and MSAA renderbuffers are counted and freed', () => {
@@ -40,4 +42,55 @@ test('buffers, textures (2D, mips, cube, 3D) and MSAA renderbuffers are counted 
   const L = a.lines();
   assert.match(L[0], /^gpu mem \(est\., live GL allocations\): total 0\.1 MB/);
   assert.match(L[1], /cube 64x64 rgba8 cube/);
+});
+
+test('PERF s15: ANGLE transients — a sub-update of a buffer drawn in the last 3 frames counts a whole-buffer copy, once a frame', () => {
+  const gl = fakeGl(), a = new GpuMemAudit();
+  a.install(gl);
+  const b = {}, idle = {}, vao = {};
+  gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(250000), 0x88e8); // 1 MB
+  gl.bindBuffer(gl.ARRAY_BUFFER, idle); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(250000), 0x88e8);
+  gl.bindVertexArray(vao); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0); gl.bindVertexArray(null);
+  a.tick();
+  // frame 1: drawn, then two sub-updates of the drawn buffer (one copy) and one of the never-drawn one (no copy)
+  gl.bindVertexArray(vao); gl.drawArrays(4, 0, 3); gl.bindVertexArray(null);
+  gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Float32Array(16)); gl.bufferSubData(gl.ARRAY_BUFFER, 64, new Float32Array(16));
+  gl.bindBuffer(gl.ARRAY_BUFFER, idle); gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Float32Array(16));
+  a.tick();
+  let t = a.transients();
+  assert.equal(t.frames, 2);
+  assert.equal(t.copyN, 0.5);
+  assert.equal(t.copyMB, 1e6 / 1048576 / 2);
+  assert.equal(t.subN, 1.5);
+  // three frames later the GPU is done with it: no copy
+  a.tick(); a.tick(); a.tick();
+  gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Float32Array(16));
+  a.tick();
+  t = a.transients();
+  assert.equal(t.copyN * t.frames, 1);
+  // a deleted vertex array leaves no link behind (nothing in the bookkeeping only climbs)
+  gl.deleteVertexArray(vao);
+  assert.equal(a.trackSizes.vaoBufs, 0);
+  assert.equal(a.trackSizes.vaoFrame, 0);
+  gl.deleteBuffer(b); gl.deleteBuffer(idle);
+  assert.equal(a.trackSizes.bufVaos, 0);
+  assert.equal(a.trackSizes.live, 0);
+  assert.match(a.lines().join('\n'), /angle transients \(est\./);
+});
+
+test('PERF s15: GPU bytes by owner — a buffer by its source array, a texture by the three object allocated for it', () => {
+  const gl = fakeGl(), a = new GpuMemAudit();
+  a.install(gl);
+  const tex = { isTexture: true, name: 'gtao' }, data = new Float32Array(1000), unknown = new Float32Array(10);
+  const props = { get: (o: object) => o };
+  a.attach({ properties: props });
+  a.ownerProbe = () => new Map<object, string>([[data.buffer, 'planet-0/vegetation']]);
+  gl.bindBuffer(gl.ARRAY_BUFFER, {}); gl.bufferData(gl.ARRAY_BUFFER, data, 0x88e4);
+  gl.bindBuffer(gl.ARRAY_BUFFER, {}); gl.bufferData(gl.ARRAY_BUFFER, unknown, 0x88e4);
+  props.get(tex);
+  gl.bindTexture(gl.TEXTURE_2D, {}); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 64, 64, 0, gl.RGBA, gl.HALF_FLOAT, null);
+  const own = a.byOwner();
+  assert.equal(own.get('planet-0/vegetation')?.b, 4000);
+  assert.equal(own.get('tex:gtao')?.b, 64 * 64 * 8);
+  assert.equal(own.get('buffers (not in the scene)')?.b, 40);
 });

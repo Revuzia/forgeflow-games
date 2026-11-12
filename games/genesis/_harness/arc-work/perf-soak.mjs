@@ -67,7 +67,16 @@ const sample = async () => {
     const gm = globalThis.__GENESIS_GPUMEM__;
     let cpu = -1;
     try { if (gm && gm.cpuProbe) { cpu = 0; for (const v of gm.cpuProbe().values()) cpu += v; cpu = Math.round(cpu / 1e5) / 10; } } catch { /* none */ }
-    return { gpuMB: gm ? Math.round(gm.total / 1e5) / 10 : -1, gpuPeakMB: gm ? Math.round(gm.peak / 1e5) / 10 : -1, gpuObjs: gm ? gm.live.size : -1, cpuMB: cpu, programs: i.programs?.length ?? -1, geometries: i.memory.geometries, textures: i.memory.textures, frames: s.frames, tick: Math.round(s.tick), fps: Math.round(s.fps * 10) / 10, snaps: s.snapshots, draws: R.stats.drawCalls };
+    // (PERF s15) the growth hunt: bookkeeping sizes, ANGLE transients, owners, the pools of the primary world
+    let ext = {};
+    try {
+      const vis = [...R.planets.values()][0];
+      const t = gm?.transients?.();
+      const own = gm?.byOwner ? [...gm.byOwner().entries()].sort((a, b) => b[1].b - a[1].b).slice(0, 10).map(([k, v]) => `${k}=${Math.round(v.b / 1e5) / 10}`) : [];
+      ext = { frameNo: R.frameNo, track: gm?.trackSizes, copyMB: t ? Math.round(t.copyMB * 100) / 100 : -1, dataMB: t ? Math.round(t.dataMB * 100) / 100 : -1, freshMB: gm ? Math.round(gm.freshTotal / 1e5) / 10 : -1, gcWaits: t?.gcWaits,
+        pools: vis?.lod?.poolCapacity?.(), idlePages: vis?.lod?.pagePool?.count, near: vis?.vegetation?.nearCapacity?.(), far: vis?.vegetation?.farStats ? { blocks: vis.vegetation.farStats.blocks, inst: vis.vegetation.farStats.instances, grows: vis.vegetation.farStats.grows } : null, own };
+    } catch (e) { ext = { extErr: String(e) }; }
+    return { ...ext, gpuMB: gm ? Math.round(gm.total / 1e5) / 10 : -1, gpuPeakMB: gm ? Math.round(gm.peak / 1e5) / 10 : -1, gpuObjs: gm ? gm.live.size : -1, cpuMB: cpu, programs: i.programs?.length ?? -1, geometries: i.memory.geometries, textures: i.memory.textures, frames: s.frames, tick: Math.round(s.tick), fps: Math.round(s.fps * 10) / 10, snaps: s.snapshots, draws: R.stats.drawCalls };
   });
   return { t: el(), ...r, heapMB: Math.round((heap.usedSize ?? 0) / 1e5) / 10, nodes: dom.nodes, listeners: dom.jsEventListeners, documents: dom.documents };
 };

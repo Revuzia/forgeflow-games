@@ -226,6 +226,9 @@ export class Renderer {
     // (PERF s14) the live GPU memory audit from the first allocation on (the perf report's 'gpu mem' lines)
     try { gpuMem.install(this.three.getContext() as WebGL2RenderingContext); } catch { /* unaudited */ }
     gpuMem.cpuProbe = () => cpuRetained(this.scene);
+    // (PERF s15) GPU bytes by owner: three's texture lookups name each texture allocation, the scene walk each array
+    try { gpuMem.attach(this.three); } catch { /* unattributed */ }
+    gpuMem.ownerProbe = () => sceneOwners(this.scene);
     enableConservativeDepth(this.three, Z_CONS);
     { const sp = wantSpanUploads(this.three); perfSwitchNote('span', sp ? '1' : '0'); installSpanUploads(sp); }
     if (PRE_UPLOAD) installTexturePreUpload();
@@ -366,6 +369,7 @@ export class Renderer {
     r.info.reset();
     const q = this.quality;
     this.frameNo++;
+    gpuMem.tick();
     // ── camera at the origin ──
     const cam = this.camera;
     cam.position.set(0, 0, 0);
@@ -1164,6 +1168,45 @@ function invalidateMsaa(r: WebGLRenderer, rt: WebGLRenderTarget): void {
  * (PERF s14 memory audit) the typed arrays live geometries and data textures keep on the CPU after upload, by owner
  * (the first two named ancestors: 'planet-0/vegetation', 'planet-0/life' ...), each array counted once
  */
+function ownerOf(o: { name: string; parent: unknown }): string {
+  const names: string[] = [];
+  let p: { name: string; parent: unknown } | null = o;
+  while (p) { if (p.name) names.unshift(p.name); p = p.parent as typeof p; }
+  return names.slice(0, 2).join('/') || '(unnamed)';
+}
+
+/**
+ * (PERF s15) the owner (first two named ancestors) of every typed array's ArrayBuffer and every texture the scene's
+ * objects hold (geometry attributes and index, instance matrices / colours, material maps and uniforms)
+ */
+function sceneOwners(scene: Scene): Map<object, string> {
+  const out = new Map<object, string>();
+  const put = (k: object | null | undefined, owner: string) => { if (k && !out.has(k)) out.set(k, owner); };
+  scene.traverse((o) => {
+    const m = o as { geometry?: { attributes?: Record<string, { array?: ArrayBufferView; data?: { array?: ArrayBufferView } }>; index?: { array?: ArrayBufferView } | null }; material?: unknown; name: string; parent: unknown };
+    const own = ownerOf(m);
+    if (m.geometry?.attributes) {
+      for (const k in m.geometry.attributes) { const a = m.geometry.attributes[k]; put((a.array ?? a.data?.array)?.buffer, own); }
+      put(m.geometry.index?.array?.buffer, own);
+    }
+    const im = o as { instanceMatrix?: { array?: ArrayBufferView }; instanceColor?: { array?: ArrayBufferView } | null; _matricesTexture?: object; _indirectTexture?: object; _colorsTexture?: object };
+    put(im.instanceMatrix?.array?.buffer, own);
+    put(im.instanceColor?.array?.buffer, own);
+    put(im._matricesTexture, own); put(im._indirectTexture, own); put(im._colorsTexture, own);
+    const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
+    for (const mt of mats as Record<string, unknown>[]) {
+      for (const k in mt) { const v = mt[k] as { isTexture?: boolean } | null; if (v && typeof v === 'object' && v.isTexture) put(v, own + ' (textures)'); }
+      const un = mt.uniforms as Record<string, { value?: unknown }> | undefined;
+      if (un) for (const k in un) {
+        const v = un[k]?.value as { isTexture?: boolean } | { isTexture?: boolean }[] | undefined;
+        if (Array.isArray(v)) { for (const x of v) if (x && x.isTexture) put(x, own + ' (textures)'); }
+        else if (v && v.isTexture) put(v, own + ' (textures)');
+      }
+    }
+  });
+  return out;
+}
+
 function cpuRetained(scene: Scene): Map<string, number> {
   const seen = new Set<ArrayBufferLike>();
   const out = new Map<string, number>();
