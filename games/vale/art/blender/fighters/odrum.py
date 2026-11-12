@@ -181,7 +181,9 @@ CARDS = {
                   "sub_max_k": 1.0, "haze": 0.02,
                   # (max2 g2 fix, verify_r2_g2a: dense cracks over the mask, solid yellow slits with no pupils: the thin
                   # crack lines closed, the slits painted as lidded eyes in the recesses)
-                  "retouch": {"splash": [{"op": "close", "px": 2, "at": [0.0, 0.0], "r": [0.05, 0.055]}, {"op": "eyes", "w": 4.0, "h": 1.5, "tilt": 0.12, "lid_k": 0.30, "iris": "#1E1714", "ink": "#151112", "lid": "#8C8290", "socket": 0.0, "smoke": [4.2, 2.4, 0.30], "line": 0.17, "crease": 0.0}],
+                  # (max2 g2 fix 2: the splash still tripped card_qa blank 0.72 and a yellow inlay rim showed round the
+                  # painted almonds: the rim taken to the lid grey (hue op), the socket shade 0 -> 0.35, smoke 0.30 -> 0.45)
+                  "retouch": {"splash": [{"op": "close", "px": 2, "at": [0.0, 0.0], "r": [0.05, 0.055]}, {"op": "hue", "h": [20.0, 80.0], "s_min": 0.12, "sat": 0.2, "val": 0.75, "to": "#8C8290", "mix": 0.6, "at": [0.0, 0.0], "r": [0.05, 0.05]}, {"op": "eyes", "w": 4.0, "h": 1.5, "tilt": 0.12, "lid_k": 0.30, "iris": "#1E1714", "ink": "#151112", "lid": "#8C8290", "socket": 0.35, "smoke": [4.2, 2.4, 0.45], "line": 0.17, "crease": 0.0}],
                               "portrait": [{"op": "close", "px": 4, "at": [0.0, 0.0], "r": [0.20, 0.22]}, {"op": "eyes", "w": 4.0, "h": 1.5, "tilt": 0.12, "lid_k": 0.55, "iris": "#2A211C", "ink": "#151112", "lid": "#8C8290", "socket": 0.0, "line": 0.12, "crease": 0.0}]}},
     },
 }

@@ -125,6 +125,8 @@ CARDS = {
         # hero frame, the head ~2x, so the slit holds two lidded eyes in the painted pass)
         # (max2 g2 fix, verify_r2_g2a: the victory frame held the thrower up like a bone and both gloves open as claws:
         # the base's release (Hurl, cast_a1 t 0.43), the thrower's dart in flight, the gloves low)
+        # (max2 g2 fix 2: the splash's painted eyes read as two closed dashes and tripped card_qa blank 0.68: the almonds
+        # 1.35 x 0.55 -> 1.7 x 0.75 cm, lid 0.45 -> 0.40, the socket shade 0.15 -> 0.60)
         "splash": {"clip": "cast_a1", "t": 0.43, "yaw": 16.0, "pitch": -4.0, "lens": 52.0, "fill": 0.86, "x": 0.70,
                    "box_lo": 0.75, "box_w": 0.60,
                    "key_az": 160.0, "key_el": 20.0, "key_color": "#E6D6EE", "sun": 2.6, "rim_cool": 1.2,
@@ -135,7 +137,7 @@ CARDS = {
                               "power": 40.0, "size": 0.4}]},
         "portrait": {"yaw": 16.0, "lens": 70.0},
         "plate": {"glow": [0.30, 0.62, 0.45, 0.10], "glow_color": "#F0A866",
-                  "retouch": {"splash": [{"op": "eyes", "w": 1.35, "h": 0.55, "tilt": 0.06, "lid_k": 0.45, "iris": "#211C1A", "ink": "#121012", "lid": "#8E6E5A", "socket": 0.15, "line": 0.08, "crease": 0.0}], "portrait": [{"op": "eyes", "w": 1.35, "h": 0.55, "tilt": 0.06, "lid_k": 0.45, "iris": "#211C1A", "ink": "#121012", "lid": "#8E6E5A", "socket": 0.15, "line": 0.08, "crease": 0.0}]}},
+                  "retouch": {"splash": [{"op": "eyes", "w": 1.7, "h": 0.75, "tilt": 0.06, "lid_k": 0.40, "iris": "#211C1A", "ink": "#121012", "lid": "#8E6E5A", "socket": 0.60, "line": 0.10, "crease": 0.0}], "portrait": [{"op": "eyes", "w": 1.35, "h": 0.55, "tilt": 0.06, "lid_k": 0.45, "iris": "#211C1A", "ink": "#121012", "lid": "#8E6E5A", "socket": 0.15, "line": 0.08, "crease": 0.0}]}},
     },
 }
 TEXTURE_SIZE = 2048

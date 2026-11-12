@@ -42,8 +42,8 @@ from synth.core import ns
 
 from .fighters import detune
 from .kit import Layers, finish, mono, norm, room
-from .kits_c import (FIGHTERS, HIT_TAKES, ROOMS, SNAP_RISE_MAX_MS, _band_share, _crack, _ease, _lower, _place, _sig,
-                     _solve, _tight, _voice, snap_post)
+from .kits_c import (EASE_SKIP, FIGHTERS, HIT_TAKES, ROOMS, SNAP_RISE_MAX_MS, _band_share, _crack, _ease, _lower, _place,
+                     _sig, _solve, _tight, _voice, snap_post)
 
 T_HEAVY = ('m', -16.0)
 T_ULT = ('m', -14.7)     # heard about 2.2 dB over the shared impact (catalog gains: both about -0.5 dB)
@@ -155,6 +155,17 @@ def _floors(x: np.ndarray, fid: str, v: int, i: int) -> np.ndarray:
     return x + a * la
 
 
+EASE_MATCH = True   # an impact takes the blow-first pass exactly when its fighter's shared impact does (kits_c.EASE_SKIP)
+
+
+def _eased(fid: str) -> bool:
+    return not (EASE_MATCH and f'f_{fid}_hit' in EASE_SKIP)
+
+
+def _ez(fid: str, x: np.ndarray) -> np.ndarray:
+    return _ease(x) if _eased(fid) else x
+
+
 def _opt(L: Layers, make, t: float, db: float | None) -> None:
     if db is not None:
         L.add(make(), t, peak_db=db)
@@ -180,13 +191,13 @@ def _make_heavy(fid: str, slot: str):
         _opt(L, lambda: crack, 0.0, p['crack'])
         _opt(L, lambda: grit, 0.003, p['grit'])
         _opt(L, lambda: _sub(0.3, 62 * detune(v, 40), 38, 0.025, 0.2), 0.0, p['sub'])
-        x = _ease(mono(room(L.out(), ROOMS[fid], wet=p['wet'])))
+        x = _ez(fid, mono(room(L.out(), ROOMS[fid], wet=p['wet'])))
         x = mono(_voice(finish(x, hp_hz=30), p.get('eq')))
-        return _ease(_floors(x, fid, v, _onset(x)) if p.get('floors', FLOORS) else x)
+        return _ez(fid, _floors(x, fid, v, _onset(x)) if p.get('floors', FLOORS) else x)
     recipe.__doc__ = (f"{fid.capitalize()}'s heaviest ability ({slot}) lands: its own impact a semitone down struck twice, "
                       f"its signature on the blow, its crack and grit, a sub thump under it.")
     recipe.__name__ = cid
-    REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, boost=0.0, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling, boost, ease=True)
+    REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, boost=0.0, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling, boost, ease=_eased(_fid))
     REGISTRY[cid].extra['rise_max_ms'] = SNAP_RISE_MAX_MS
     return recipe
 
@@ -210,14 +221,14 @@ def _make_ult(fid: str):
         _opt(L, lambda: grit, 0.004, p['grit'])
         _opt(L, lambda: air, 0.006, p['air'])
         _opt(L, lambda: _sub(0.9, 56 * detune(v, 40), 30, 0.04, 0.55), 0.0, p['sub'])
-        x = _ease(mono(room(L.out(), ROOMS[fid], wet=p['wet'])))
+        x = _ez(fid, mono(room(L.out(), ROOMS[fid], wet=p['wet'])))
         x = mono(_voice(finish(x, hp_hz=25), p.get('eq')))
-        return _ease(_floors(x, fid, v, _onset(x)) if p.get('floors', FLOORS) else x)
+        return _ez(fid, _floors(x, fid, v, _onset(x)) if p.get('floors', FLOORS) else x)
     recipe.__doc__ = (f"{fid.capitalize()}'s ult lands: its own impact struck hard with its signature and that "
                       f"signature's octave-down bloom, its crack, grit and air, a deep sub boom under it, in a wetter "
                       f"{ROOMS[fid]} room.")
     recipe.__name__ = cid
-    REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, boost=0.0, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling, boost, ease=True)
+    REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, boost=0.0, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling, boost, ease=_eased(_fid))
     REGISTRY[cid].extra['rise_max_ms'] = SNAP_RISE_MAX_MS
     return recipe
 

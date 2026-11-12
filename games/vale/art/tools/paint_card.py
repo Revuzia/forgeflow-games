@@ -11,7 +11,7 @@
     python3 art/tools/paint_card.py hand <sid>:<kind> <bone> --what "<the hand>"    # hand-only repaint (crop, edit, blend, gate)
                                                                                     # (bone "head": a face-only repaint, prompt "face")
     python3 art/tools/paint_card.py hand-accept <sid>:<kind> <bone> <variant> --why "<text>"
-    python3 art/tools/paint_card.py hand-gate <sid>:<kind> <bone> [--free 1]          # re-gate kept raws (--free: disc blend)
+    python3 art/tools/paint_card.py hand-gate <sid>:<kind> <bone> [--free 1|2]        # re-gate kept raws (--free: disc blend; 2: hard disc)
 
 paint   The 3D reference is composed fresh from the kept subject pass (art/.cache/fighters/plates/, plates.finish) into
         art/.cache/fighters/paint/<sid>_<kind>_3d.png, then sent to xAI's edit endpoint through tools/imagegen/run_xai.py
@@ -708,7 +708,7 @@ def hand_raw(sid, kind, bone, v):
     return os.path.join(RAW, f"hand_{sid}_{kind}_{bone}__v{v}.png")
 
 
-def hand_blend(base: np.ndarray, crop: np.ndarray, x0: int, y0: int, S: int, A: np.ndarray, free: bool = False) -> np.ndarray:
+def hand_blend(base: np.ndarray, crop: np.ndarray, x0: int, y0: int, S: int, A: np.ndarray, free: bool | int = False) -> np.ndarray:
     """the repainted crop over the card: a soft disc round the hand, limited to the figure (the plate is never touched).
     free (max2 g2 fix): the disc alone, so a repaint that closes a splayed hand also paints the plate back where the old
     fingers' spikes stood (limited to the figure, a closed hand left the spikes' ghosts round it: Nurrow's hip hand)"""
@@ -716,7 +716,9 @@ def hand_blend(base: np.ndarray, crop: np.ndarray, x0: int, y0: int, S: int, A: 
     d = np.hypot(xx - S / 2, yy - S / 2) / (S / 2)
     disc = np.clip((0.95 - d) / 0.3, 0.0, 1.0)
     if free:
-        disc = np.clip((0.80 - d) / 0.25, 0.0, 1.0)
+        # (max2 g2 fix 2) free 2 = hard: the repaint whole out to 0.85 of the crop's radius, faded by 0.97: the soft
+        # free disc (0.80 / 0.25) kept 30-60 % of the old splayed fingers' ghosts on Nurrow's hip hand (verify 3x crop)
+        disc = np.clip((0.97 - d) / 0.12, 0.0, 1.0) if int(free) >= 2 else np.clip((0.80 - d) / 0.25, 0.0, 1.0)
         out = base.copy()
         out[y0:y0 + S, x0:x0 + S] = base[y0:y0 + S, x0:x0 + S] * (1 - disc[..., None]) + crop * disc[..., None]
         return out
@@ -768,7 +770,7 @@ def hand_gate(sid: str, kind: str, bone: str, n: int, text: str = "", free: bool
         c = np.asarray(Image.open(fp).convert("RGB").resize((S, S), Image.LANCZOS), np.float32) / 255.0
         blended = hand_blend(base, c, x0, y0, S, A, free)
         bb = blended[y0:y0 + S, x0:x0 + S]
-        g = {"variant": v, "free": bool(free)}
+        g = {"variant": v, "free": int(free)}
         sm = lambda x: np.asarray(Image.fromarray((np.clip(x, 0, 1) * 255).astype(np.uint8)).resize((48, 48), Image.BILINEAR), np.float32).mean(-1)  # noqa: E731
         g["struct"] = round(float(np.corrcoef(sm(bb).ravel(), sm(bc).ravel())[0, 1]), 3)
         fm = A[y0:y0 + S, x0:x0 + S] > 0.9
@@ -896,10 +898,10 @@ def main(argv: list[str]) -> int:
         apply(pos[0])
     elif cmd == "hand":
         sid, kind = pos[0].split(":")
-        print(f"[paint] cost ~${hand(sid, kind, pos[1], opts.get('what', 'a hand'), n, opts.get('free') == '1'):.2f}")
+        print(f"[paint] cost ~${hand(sid, kind, pos[1], opts.get('what', 'a hand'), n, int(opts.get('free', 0))):.2f}")
     elif cmd == "hand-gate":
         sid, kind = pos[0].split(":")
-        hand_gate(sid, kind, pos[1], n, "", opts.get("free") == "1")
+        hand_gate(sid, kind, pos[1], n, "", int(opts.get("free", 0)))
     elif cmd == "hand-accept":
         hand_accept(pos[0], pos[1], int(pos[2]), opts.get("why", ""))
     elif cmd == "sheet":

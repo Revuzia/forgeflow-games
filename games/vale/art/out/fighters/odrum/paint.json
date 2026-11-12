@@ -167,13 +167,13 @@
   "hand": {
    "bone": "hand.L",
    "variant": 1,
-   "why": "max2 g2 fix (verify_r2_g2a 'stump hand'): the free hand repainted as a closed gloved fist with knuckles and a thumb",
+   "why": "max2 g2 fix 2: re-applied on the current 3D finish (the 15:02 re-render had dropped the accepted hand repaint; build does not replay hands): closed gloved fist, not a stump",
    "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: his free hand hanging by his side: a relaxed closed gloved fist with rounded knuckles and a thumb, clearly a hand, not a stump or a block, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
    "raw": "tools/imagegen/raw/hand_odrum_splash_hand.L__v1.png",
    "raw_sha256": "9ba124b94827289df43fa3ba3722201cd91f656c9c6732112b6714b435278947",
    "gate": {
     "variant": 1,
-    "free": false,
+    "free": 0,
     "struct": 0.993,
     "pal_mean": 2.1,
     "fails": [],
@@ -185,13 +185,13 @@
    {
     "bone": "hand.L",
     "variant": 1,
-    "why": "max2 g2 fix (verify_r2_g2a 'stump hand'): the free hand repainted as a closed gloved fist with knuckles and a thumb",
+    "why": "max2 g2 fix 2: re-applied on the current 3D finish (the 15:02 re-render had dropped the accepted hand repaint; build does not replay hands): closed gloved fist, not a stump",
     "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: his free hand hanging by his side: a relaxed closed gloved fist with rounded knuckles and a thumb, clearly a hand, not a stump or a block, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
     "raw": "tools/imagegen/raw/hand_odrum_splash_hand.L__v1.png",
     "raw_sha256": "9ba124b94827289df43fa3ba3722201cd91f656c9c6732112b6714b435278947",
     "gate": {
      "variant": 1,
-     "free": false,
+     "free": 0,
      "struct": 0.993,
      "pal_mean": 2.1,
      "fails": [],
@@ -524,13 +524,13 @@
   "hand": {
    "bone": "hand.R",
    "variant": 2,
-   "why": "max2 g2 fix (verify_r2_g2a): the skin's fragmented/holed hand mesh repainted as a solid closed gloved fist (hand-only repaint, palette and wraps kept); cropped at 3x and checked",
+   "why": "max2 g2 fix 2: re-applied on the current 3D finish (the 15:02 re-render had dropped the accepted hand repaint; build does not replay hands): a solid closed glove on the yoke, no holed mesh",
    "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: his hand gripping the wooden yoke pole on his shoulder: a solid, closed gloved fist wrapped round the pole, four fingers curled over it and the thumb under, one clean solid shape with no holes, gaps, shards or broken pieces, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
    "raw": "tools/imagegen/raw/hand_odrum_shadeprint_portrait_hand.R__v2.png",
    "raw_sha256": "2c6ba8b131977f86b46f55852aa7a0d1977cc139fbb16f140feb471b8e87e2f3",
    "gate": {
     "variant": 2,
-    "free": false,
+    "free": 0,
     "struct": 0.917,
     "pal_mean": 4.1,
     "fails": [],
@@ -542,13 +542,13 @@
    {
     "bone": "hand.R",
     "variant": 2,
-    "why": "max2 g2 fix (verify_r2_g2a): the skin's fragmented/holed hand mesh repainted as a solid closed gloved fist (hand-only repaint, palette and wraps kept); cropped at 3x and checked",
+    "why": "max2 g2 fix 2: re-applied on the current 3D finish (the 15:02 re-render had dropped the accepted hand repaint; build does not replay hands): a solid closed glove on the yoke, no holed mesh",
     "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: his hand gripping the wooden yoke pole on his shoulder: a solid, closed gloved fist wrapped round the pole, four fingers curled over it and the thumb under, one clean solid shape with no holes, gaps, shards or broken pieces, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
     "raw": "tools/imagegen/raw/hand_odrum_shadeprint_portrait_hand.R__v2.png",
     "raw_sha256": "2c6ba8b131977f86b46f55852aa7a0d1977cc139fbb16f140feb471b8e87e2f3",
     "gate": {
      "variant": 2,
-     "free": false,
+     "free": 0,
      "struct": 0.917,
      "pal_mean": 4.1,
      "fails": [],
@@ -560,7 +560,7 @@
  },
  "odrum_shadeprint:splash": {
   "shipped": "3d",
-  "why": "max2 g2 fix (verify_r2_g2a): the 3D finish with the card's stylised lidded eyes painted in the recesses (plates.paint_eyes: one dark muted iris under a lid, no sclera, no catch-light) in place of the face-only xAI repaint's photo-real eyes; mask cracks closed (retouch close); the slits' solid yellow covered by the eyes",
+  "why": "max2 g2 fix 2 (verify_r2_g2a: card_qa blank 0.72, solid yellow slits): the 3D finish with the painted lidded eyes, socket shade 0.35 and the yellow inlay rim taken to the lid grey; card_qa blank 0.48; hand repaint re-applied after",
   "gates": [
    {
     "aspect_err": 0.0,
@@ -679,16 +679,16 @@
   "date": "2026-11-12",
   "hand": {
    "bone": "hand.R",
-   "variant": 3,
-   "why": "max2 g2 fix (verify_r2_g2a): the skin's fragmented/holed hand mesh repainted as a solid closed gloved fist (hand-only repaint, palette and wraps kept); cropped at 3x and checked",
+   "variant": 2,
+   "why": "max2 g2 fix 2: v2 the one whole gripping glove (v1/v3 kept finger shards), re-applied on the re-composed finish; the ribbed bracer reads paler",
    "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: his hand gripping the wooden yoke pole on his shoulder: a solid, closed gloved fist wrapped round the pole, four fingers curled over it and the thumb under, one clean solid shape with no holes, gaps, shards or broken pieces, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
-   "raw": "tools/imagegen/raw/hand_odrum_shadeprint_splash_hand.R__v3.png",
-   "raw_sha256": "cb72beba5eeeedc99e1025383ba97bc29bc8b0bcb32e251d3a2bc2c105b5d916",
+   "raw": "tools/imagegen/raw/hand_odrum_shadeprint_splash_hand.R__v2.png",
+   "raw_sha256": "2f680579f9a6aeb599f0948470f3c0b4614eb44693eb0e3f2961767036901e4a",
    "gate": {
-    "variant": 3,
-    "free": false,
-    "struct": 0.907,
-    "pal_mean": 5.9,
+    "variant": 2,
+    "free": 0,
+    "struct": 0.874,
+    "pal_mean": 6.8,
     "fails": [],
     "pass": true
    },
@@ -697,16 +697,16 @@
   "hands": [
    {
     "bone": "hand.R",
-    "variant": 3,
-    "why": "max2 g2 fix (verify_r2_g2a): the skin's fragmented/holed hand mesh repainted as a solid closed gloved fist (hand-only repaint, palette and wraps kept); cropped at 3x and checked",
+    "variant": 2,
+    "why": "max2 g2 fix 2: v2 the one whole gripping glove (v1/v3 kept finger shards), re-applied on the re-composed finish; the ribbed bracer reads paler",
     "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: his hand gripping the wooden yoke pole on his shoulder: a solid, closed gloved fist wrapped round the pole, four fingers curled over it and the thumb under, one clean solid shape with no holes, gaps, shards or broken pieces, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
-    "raw": "tools/imagegen/raw/hand_odrum_shadeprint_splash_hand.R__v3.png",
-    "raw_sha256": "cb72beba5eeeedc99e1025383ba97bc29bc8b0bcb32e251d3a2bc2c105b5d916",
+    "raw": "tools/imagegen/raw/hand_odrum_shadeprint_splash_hand.R__v2.png",
+    "raw_sha256": "2f680579f9a6aeb599f0948470f3c0b4614eb44693eb0e3f2961767036901e4a",
     "gate": {
-     "variant": 3,
-     "free": false,
-     "struct": 0.907,
-     "pal_mean": 5.9,
+     "variant": 2,
+     "free": 0,
+     "struct": 0.874,
+     "pal_mean": 6.8,
      "fails": [],
      "pass": true
     },

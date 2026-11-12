@@ -278,7 +278,7 @@
  },
  "ulkro_long_evening:splash": {
   "shipped": "3d",
-  "why": "max2 g2: three-quarter hero frame (box_lo 0.75), face-only repaint follows (full-card paintings fail new_colour)",
+  "why": "max2 g2 fix 2 (verify_r2_g2a: card_qa blank 0.68): the painted almonds 1.7 x 0.75 cm under a lid 0.40 with socket shade 0.60, two calm lidded eyes in the slit; blank 0.64",
   "gates": [
    {
     "aspect_err": 0.0,
@@ -389,22 +389,7 @@
     "variant": 3
    }
   ],
-  "prompt_version": 6,
-  "date": "2026-11-12",
-  "hand": {
-   "bone": "head",
-   "variant": 1,
-   "why": "max2 g2: face-only repaint, two calm lidded eyes in the slit (verify_roll2 single-dot cyclops read)",
-   "prompt": "Repaint only the face in the middle of this crop as a well-drawn, hand-painted face: the same deep soft plum hood and the same narrow carved wooden eye-slit band over a pale face wrap, unchanged, and inside the slit two calm eyes with upper lids and dark pupils looking out; never glowing, never a single eye, no marks. Keep the head's position, size, angle, outline and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
-   "raw": "tools/imagegen/raw/hand_ulkro_long_evening_splash_head__v1.png",
-   "raw_sha256": "40fcd379d8ad616f558252ab5726ac7264eb4b4532ccde789104bf5079622fb5",
-   "gate": {
-    "variant": 1,
-    "struct": 0.992,
-    "pal_mean": 2.2,
-    "fails": [],
-    "pass": true
-   }
-  }
+  "prompt_version": 7,
+  "date": "2026-11-12"
  }
 }
