@@ -109,7 +109,7 @@
    "maxIoU": "resinback 0.36 (round 1); silhouette unchanged except the wider rack"
   },
   "note": "a first darker coat measured dL 9.3 / dE 29.1 and was lifted before shipping; harm-band albedo share 24.2 % -> 0.3 % (the buff camp no longer wears the danger hue)",
-  "budgets": "8032 -> 8032 tris, textures 1024/1024/512 unchanged, GLB 471 -> 488 KiB; bounds width 0.80 -> 1.01 m, top 2.196 m",
+  "budgets": "8032 -> 8032 tris, textures 1024/1024/512 unchanged, GLB 471 -> 491 KiB (503,180 B; round 1 said 488 KiB, corrected per verify1_r); bounds width 0.80 -> 1.01 m, top 2.196 m",
   "not changed": "glasshorn_icon.png still shows the fawn (icons are the card pipeline's)"
  },
  "Sunsplinter core (closing2 NEU-1)": {
@@ -167,5 +167,147 @@
   "U6 emissives": "Ilsheta's chimney glass is a kept factor-only material designed never emissive (ilsheta.py:814, glow is a warning, cap 0.8); the round-1 glass response is in world_material.ts. No spec beyond 'Ilsheta emissives' exists, and making it glow conflicts with the source's rule, so it waits for a lead call",
   "U7 heads": "no written spec (the round-1 plan file does not exist); head modelling of 14 fighters is a multi-session job and Burdam/Dunsom heads belong to the cards lane this round",
   "U1(2) ORM bands": "closed by measurement in part 1 (u1_orm_bands.json: the bake already bands roughness per class and the shader reads them); not rewritten"
+ },
+ "round 2 fix (verify1_q 7.3 / verify1_r 7.2)": {
+  "at": "2026-11-12 10:55 CST",
+  "ruling 32 (major, both verifiers)": {
+   "what": "zone_grade.py now reads ruling 32 strictly for zoned fighters: every reserved band ends <= 8 % of the albedo whatever the bake held (was max(8, pre-grade)). glb_paint_grade.mjs --reserve-cap moves the fewest, cheapest texels (those nearest the 0.4 saturation line) out of the band: hue-shifted past the band edge, saturation and value kept (Burdam: reserveModes harm=lo, browns turn a few degrees redder, never gold; Rishal: rose texels under 340 deg). A ladder (aim 7 -> 3 %, margin 6 -> 14 deg) re-tries until the encoded WebP holds the cap, else the build fails",
+   "burdam harm %": [
+    18.95,
+    6.52
+   ],
+   "unzoned bakes": "art/tools/reserved_baselines.json records every fighter/skin GLB's band shares; pipeline.build now checks every non-zoned rebuild against it (a bake may not rise above max(8, baseline) + 0.5). Odrum 38.6, Odrum Noon Fair 33.8, Rishal Lamplit 23.0, Ilsheta First Bell 20.5, Sukri 20.0, Dunsom 16.5, Tunlan Lamplit 15.8, Burdam Almanac 14.5, Ulkro 12.8, Dunsom Highrim 12.5, Burdam Stillwater 11.8, Kemdo Long Evening 11.3, Dunsom Almanac 9.8, Ervet Lamplit 9.4 stay over 8 % from their bakes: whether the cap covers whole unzoned bakes (and whether HSV is the right measure for dark browns) is still the lead's call",
+   "evidence": "r2_ruling32.json"
+  },
+  "U1(1) crown breaks + Rishal (major, verify1_q)": {
+   "what": "zone_grades.json r2: Kemdo hood signature coral at its own value + upper pauldron; Vashil hood lilac, cowl deep violet (ruling 7's dark break between pale hood and pale robe), halo ring pale lilac; Tunlan hat dusty plum (L* 55, C 14), dark brim rim kept; Burdam pauldrons oxblood (box x lacquer roughness x pale texels, the hood and cowl excluded by notBoxes: cards lane); Rishal torso zone grown (wider box, the pale tunic cloth included) at the content signature #B3004A (was #B3004A -> #B30066 in round 1)",
+   "lineup_qa sigPct facing 0 / 180, round 1 -> round 2": {
+    "kemdo": [
+     [
+      33.8,
+      42.0
+     ],
+     [
+      43.2,
+      54.6
+     ]
+    ],
+    "burdam": [
+     [
+      35.2,
+      38.0
+     ],
+     [
+      52.6,
+      52.3
+     ]
+    ],
+    "vashil": [
+     [
+      35.3,
+      43.3
+     ],
+     [
+      59.2,
+      65.0
+     ]
+    ],
+    "tunlan": [
+     [
+      15.3,
+      21.7
+     ],
+     [
+      71.1,
+      77.0
+     ]
+    ],
+    "rishal": [
+     [
+      14.1,
+      10.8
+     ],
+     [
+      26.8,
+      35.0
+     ]
+    ]
+   },
+   "lineup_qa bottom band facing 180, round 1 -> round 2": {
+    "tunlan": [
+     18.3,
+     21.0
+    ],
+    "burdam": [
+     16.9,
+     16.9
+    ],
+    "rishal": [
+     20.6,
+     20.7
+    ]
+   },
+   "game camera, same frozen frames (max_units_ab seeds 7 t 420 and 23 t 540, picks hesmi,kemdo,burdam,vashil,tunlan,rishal): signature-hue px": "see r2_zoning_gamecam_ab.json: vashil 1513 -> 3687 / 1757 -> 3416 (cream px 1677 -> 564 / 1519 -> 459), tunlan 2491 -> 6749 / 1555 -> 5818, rishal 695 -> 1560 / 5783 -> 6837, burdam 2086 -> 4071, kemdo 8165 -> 8950 / 2679 -> 3810",
+   "evidence": [
+    "r2_zoning_gamecam_ab.png",
+    "r2_zoning_lineup_ab.png",
+    "r2_zoning_lineup_pre.json",
+    "r2_zoning_lineup_post.json"
+   ],
+   "budgets": "no geometry or texture-size change (base colour WebP re-encoded only; decoded 2048^2 unchanged); GLB KiB kemdo 1148.7 -> 1146.1, burdam 1157.4 -> 1157.4 (WebP q64 to stay <= 1160), vashil 1152.3 -> 1152.0, tunlan 1149.8 -> 1156.4, rishal 1150.5 -> 1159.1; harness frame seed 23 tris 258,555 -> 258,563, calls 188/188, programs 39/39, textures 185/185",
+   "left": "Kemdo top band 55.7 (bake, pre-existing) and Burdam top/bottom bands (16.9 at facing 180; the low back hem and the cards lane's hood) are unchanged; Kemdo's hood reads coral-cream rather than strongly coral (kept at its own value so the top band does not drop)"
+  },
+  "Glasshorn (major, verify1_r: rib-cage read; minor verify1_q)": {
+   "what": "creatures.py: the flank chevrons replaced by one chalk sundial per haunch (a ring and eight short ticks radiating all round it: no mark runs rib-parallel, and a full sun, not a half fan that could read as a lashed eye), chalk 0.88 -> 0.62; coat two steps lighter (hide #9E9AB8 -> #BAB6D2, flank, coat_hi, coat_lo) and the mantle a little lighter",
+   "value_probe --monsters RIFT High seed 13 t 90 (and seed 7 t 70, identical): round 1 -> round 2": {
+    "dLstarP50": [
+     18.4,
+     24.5
+    ],
+    "dE76": [
+     32.2,
+     35.1
+    ],
+    "unitPx": [
+     18314,
+     18314
+    ]
+   },
+   "evidence": "r2_glasshorn_dial_ab.png (same seed / t / framing as verify1_q's v1q2c shot)",
+   "budgets": "8032 -> 8032 tris, textures unchanged, GLB 491 -> 489 KiB"
+  },
+  "Sunsplinter facing (minor, verify1_q)": {
+   "what": "creatures_b.py: the tip leans 28 deg to its right and its base sits 14 cm right, so a Sunsplinter facing the camera no longer stacks the slab on the orb's centre. (A slimmer shaft was tried first and measured no gain at seed 19, 51,494; reverted.)",
+   "value_probe --monsters unitPx t 400 (gate 51,944)": {
+    "seed 7": [
+     69879,
+     71571
+    ],
+    "seed 19": [
+     51511,
+     52464
+    ],
+    "seed 13": [
+     null,
+     69778
+    ],
+    "seed 23": [
+     null,
+     58396
+    ]
+   },
+   "evidence": "r2_sunsplinter_tip_ab.png: the round-1 GLB's own shots (verify1_q v1q2 / v1q2a) at the same seed, t, pit position and framing, against round 2; this also answers verify1_r's weak-A/B minor",
+   "budgets": "8216 -> 8218 tris (+2), textures unchanged, GLB 766 -> 774 KiB, top 3.201 m unchanged; sunsplinter_icon.png kept at the round-1 icon (icons are the cards lane's)"
+  },
+  "U6 emissives": {
+   "decision (industry standard, recorded here for the lead)": "glass reads by reflection, not emission: glow is VALE's warning cue (ilsheta.py GLASS_MAT, cap 0.8), and the genre keeps character glass non-emissive at rest. So U6 is done as the glass response, not as emissive",
+   "what": "world_material.ts glass branch (r < 0.25, no new program): Fresnel edge 0.5 -> 0.85, key glint 0.26 -> 0.4, middle diffuse cut 14 -> 22 %",
+   "evidence": "u6_glass_gamecam_ab.png (seed 7 t 420, picks ilsheta,kemdo,vashil,tunlan,rishal, same frozen frame model): the chimney rim and Kemdo's lens edge brighten; the change is small at 28.5 m (mean |diff| 0.18 on Ilsheta's crop, 474 px changed by > 15)",
+   "budgets": "programs 39 -> 39"
+  },
+  "U7 heads": "spec written (u7_heads_spec.json: crown-break, crown signature, value-band, ruling 7, sensitivity and budget bars; albedo first, then modelling). Started: the crown breaks above on Kemdo, Vashil and Tunlan (and Burdam's pauldrons). Not started: the other 10 fighters' crowns and every modelling change",
+  "U1(2) ORM bands": "unchanged: the bake already bands roughness per class (u1_orm_bands.json) and the shader reads the classes (cloth sheen, glass edge); the visible part of it this round is the U6 glass edge",
+  "glasshorn icon": "glasshorn_icon.png still shows the fawn: hand-off to the cards/icons lane (icons are 3D renders from the GLB: art/blender/units/creatures.py --icons-only --only glasshorn)",
+  "budgets (perf_1080 --prod, this tree, load 12-35)": "GATE PASS: High 210k tris / 151 draws / 39 programs, Ultra 244k / 158 / 39; match peak 456k tris (was 462k), 294 draws, 40 programs; timing not measured (machine busy). match memory not re-run: no texture size or count changed (decoded sizes identical), tris within +-8"
  }
 }

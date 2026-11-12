@@ -1,0 +1,10 @@
+{
+ "item": "max2 (e): the IMPW QA window is back at (0.15, 0.9) s (audio/cues/kits_c.py; round 1 had relaxed it to 0.14 s to pass a shaped f_odrum_hit take)",
+ "fix": "the cue was re-taken instead: kits_c.TAKE_TAU_MIN {'f_odrum_hit': 0.5} keeps its takes' body decay at tau >= 0.5 s after the first 30 ms (TAKE_SHAPE's short take used 0.22 s), so every take ends inside the restored window",
+ "evidence": {
+  "rebuild": "python3 audio/build.py --only f_odrum_hit (max2 round 2, 2026-11-12): QA pass, exit 0; the build is deterministic and the rebuilt files are byte-identical to the shipped ones (md5 f655820294e7bc2404bb9f3a14e128b0 for take 1), so what ships is the restored-window take",
+  "decodedDurationS": {"f_odrum_hit_1": 0.188, "f_odrum_hit_2": 0.169, "f_odrum_hit_3": 0.169},
+  "windowS": [0.15, 0.9],
+  "kitGate": "odrum hit 8.5 / 8.4 dB from its nearest neighbours (bar 8.0), build.py --gates PASS"
+ }
+}
