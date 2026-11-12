@@ -112,7 +112,9 @@ CARDS = {
         "plate": {"glow": [0.18, 0.58, 0.42, 0.10], "glow_color": "#F2D0A4", "sub_median": 2},
     },
     "ervet_stillwater": {
-        "splash": {"clip": "cast_a2", "t": 0.42, "yaw": -24.0, "pitch": -4.0, "lens": 50.0, "fill": 0.92, "x": 0.70,
+        # (max2 cards g1, verify roll1: cast_a2 t 0.42 kicked the right leg out with nothing under it, a broken one-foot
+        # stand: cast_a1's sweep, both boots planted, the blade out low)
+        "splash": {"clip": "cast_a1", "t": 0.40, "yaw": -24.0, "pitch": -4.0, "lens": 50.0, "fill": 0.92, "x": 0.70,
                    "key_az": 145.0, "key_el": 48.0, "key_color": "#E4F0EA", "sun": 3.0, "rim_cool": 1.6,
                    "rim_warm": 0.4, "bounce": 0.55, "bounce_color": "#9FC4BA", "accent": 1.4, "exposure": -0.55,
                    "focal": [{"at": "x_blade_tip", "az": 170.0, "el": 10.0, "dist": 0.9, "color": "#E6FFF6",
