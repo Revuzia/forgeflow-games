@@ -69,6 +69,7 @@ test('bisection: GPU ms per named pass inside scene / post (timer queries split 
     r.gpuBegin('shadows'); r.gpuMark('post:nope'); r.gpuEnd('shadows');
     r.gpuBegin('scene'); r.gpuMark('scene:opaque'); r.gpuEnd('scene');
     r.gpuBegin('post'); r.gpuMark('post:clouds'); r.gpuMark('post:atmo'); r.gpuEnd('post');
+    r.syncAdd('post:atmo', 40);
     slots.fill(1);
     r.frameDone(16.7, 8, slots, { drawCalls: 1, triangles: 1, shadowTris: 0, patchesBuilt: 0, altitude: 1, cam: [0, 0, 0], speed: 1, programs: 0 });
   }
@@ -78,4 +79,6 @@ test('bisection: GPU ms per named pass inside scene / post (timer queries split 
   assert.match(t, /gpu ms \(mean\/p95\): planets 0\/0 actors 0\/0 shadows 2\/2 scene 4\/4 post 6\/6/);
   assert.match(t, /gpu ms by pass .*scene 2\/2 · scene:opaque 2\/2 · post 2\/2 · post:clouds 2\/2 · post:atmo 2\/2/);
   assert.doesNotMatch(t, /post:nope/);
+  // (passsync) the gl.finish-timed wall ms per pass, per frame
+  assert.match(t, /pass ms \(passsync: gl\.finish per pass, mean per frame\): post:atmo 40/);
 });

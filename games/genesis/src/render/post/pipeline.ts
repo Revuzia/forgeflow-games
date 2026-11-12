@@ -26,6 +26,7 @@ import { perfSwitch } from '../perfswitch.ts';
 // PERF s12 bisection (diagnostics only, default on): `?bloom=0`, `?godrays=0` skip those passes
 const SW_BLOOM = perfSwitch('bloom');
 const SW_GOD = perfSwitch('godrays');
+const SW_LUM = perfSwitch('lum');
 import { LOGDEPTH_DECODE } from '../shaders/atmosphere.glsl.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 
@@ -705,26 +706,30 @@ export class PostPipeline {
       }
       r.autoClear = prevAuto;
     }
-    // exposure
-    let src: Texture = input;
-    let sw = this.w, sh = this.h;
-    for (let i = 0; i < this.lum.length; i++) {
-      const l = this.lumMat.uniforms;
-      l.tIn.value = src;
-      l.uSrcTexel.value.set(Math.max(1, sw / this.lum[i].width) / sw / 4 * 1, Math.max(1, sh / this.lum[i].height) / sh / 4 * 1);
-      l.uFirst.value = i === 0 ? 1 : 0;
-      fsq.render(r, this.lumMat, this.lum[i]);
-      src = this.lum[i].texture;
-      sw = this.lum[i].width; sh = this.lum[i].height;
+    perfmon.mark('post:lum');
+    // (bisection: ?lum=0 skips the luminance chain and the adaptation: the exposure freezes)
+    if (SW_LUM) {
+      // exposure
+      let src: Texture = input;
+      let sw = this.w, sh = this.h;
+      for (let i = 0; i < this.lum.length; i++) {
+        const l = this.lumMat.uniforms;
+        l.tIn.value = src;
+        l.uSrcTexel.value.set(Math.max(1, sw / this.lum[i].width) / sw / 4 * 1, Math.max(1, sh / this.lum[i].height) / sh / 4 * 1);
+        l.uFirst.value = i === 0 ? 1 : 0;
+        fsq.render(r, this.lumMat, this.lum[i]);
+        src = this.lum[i].texture;
+        sw = this.lum[i].width; sh = this.lum[i].height;
+      }
+      const a = this.adaptMat.uniforms;
+      a.tLum.value = this.lum[this.lum.length - 1].texture;
+      a.tPrev.value = this.adapt[this.adaptIdx].texture;
+      a.uDt.value = dt;
+      a.uCut.value = this.cut ? 1 : 0;
+      this.cut = false;
+      this.adaptIdx ^= 1;
+      fsq.render(r, this.adaptMat, this.adapt[this.adaptIdx]);
     }
-    const a = this.adaptMat.uniforms;
-    a.tLum.value = this.lum[this.lum.length - 1].texture;
-    a.tPrev.value = this.adapt[this.adaptIdx].texture;
-    a.uDt.value = dt;
-    a.uCut.value = this.cut ? 1 : 0;
-    this.cut = false;
-    this.adaptIdx ^= 1;
-    fsq.render(r, this.adaptMat, this.adapt[this.adaptIdx]);
     // tone map
     const t = this.tonemapMat.uniforms;
     t.tHDR.value = input;

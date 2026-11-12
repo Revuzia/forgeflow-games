@@ -23,3 +23,21 @@ export function perfSwitchNote(name: string, value: string): void { REG.set(name
 export function perfSwitchLine(): string {
   return [...REG.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([k, v]) => `${k}=${v}`).join(' ');
 }
+
+/**
+ * (PERF s12 bisection) a numeric URL parameter (`?atmosteps=8`): its value, or `def` when absent / not a number; the
+ * header line prints the value, or 'def'
+ */
+export function perfNum(name: string, def: number | null = null): number | null {
+  const q = query().get(name);
+  const v = q != null && q !== '' && Number.isFinite(Number(q)) ? Number(q) : null;
+  REG.set(name, v != null ? String(v) : 'def');
+  return v ?? def;
+}
+/** (bisection) a comma list (`?hide=veg,cover`): the set of names; the header prints it, or 'none' */
+export function perfList(name: string): Set<string> {
+  const q = query().get(name);
+  const s = new Set((q ?? '').split(',').map((x) => x.trim()).filter(Boolean));
+  REG.set(name, s.size ? [...s].join('+') : 'none');
+  return s;
+}

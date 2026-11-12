@@ -8,6 +8,13 @@
 // The automation surface reads the same numbers (window.__GENESIS__.perf()).
 
 import { PerfRecorder, type PerfContext, type PerfEnv } from './perfreport.ts';
+import { perfNum, perfSwitch } from './perfswitch.ts';
+
+// PERF s12 bisection (GPU-HUNT-PLAN §2): `?recms=10000` the report's recording length (default 20 s, whatever asks);
+// `?passsync=1` gl.finish() at every slot begin / end and pass mark while recording: per-pass ms that are exact on a
+// driver whose timer spans overlap (ANGLE-Metal), at the price of a lower fps
+const REC_MS = perfNum('recms');
+const PASS_SYNC = perfSwitch('passsync', false);
 
 export const PERF_SLOTS = [
   'view', 'ui.pre', 'camera', 'hover', 'planets', 'godfx', 'actors', 'uploads', 'shadows', 'scene', 'post', 'sim.pump', 'audio', 'ui.post', 'other',
@@ -73,14 +80,28 @@ export class PerfMonitor {
   /** the three.js renderer (app.ts): its render-target binds are traced while recording (target sizes / formats) */
   three: unknown = null;
 
+  private syncName: string | null = null;
+  private syncT = 0;
+  /** (passsync) finish the GPU's work so far, charge it to the pass that was running, start `name` (null: none) */
+  private sync(name: string | null): void {
+    if (!PASS_SYNC || !this.gl || !this.recorder.recording) return;
+    this.gl.finish();
+    const t = performance.now();
+    if (this.syncName) this.recorder.syncAdd(this.syncName, t - this.syncT);
+    this.syncName = name;
+    this.syncT = t;
+  }
+
   begin(slot: PerfSlot): void {
     if (!this.on) return;
+    this.sync(slot);
     this.open[SLOT_INDEX[slot]] = performance.now();
     if (this.recorder.recording) this.recorder.gpuBegin(slot);
   }
 
   end(slot: PerfSlot): void {
     if (!this.on) return;
+    this.sync(null);
     if (this.recorder.recording) this.recorder.gpuEnd(slot);
     const i = SLOT_INDEX[slot];
     this.cur[i] += performance.now() - this.open[i];
@@ -88,11 +109,14 @@ export class PerfMonitor {
 
   /** (bisection) a named GPU pass starts here inside the 'scene' / 'post' slot: timed separately while recording */
   mark(name: string): void {
-    if (this.on && this.recorder.recording) this.recorder.gpuMark(name);
+    if (!this.on || !this.recorder.recording) return;
+    this.sync(name);
+    this.recorder.gpuMark(name);
   }
 
   /** record `ms` of frames; `onDone` gets the report text */
   record(ms = 20000, onDone?: (text: string) => void): void {
+    if (REC_MS != null && REC_MS > 0) ms = REC_MS;
     this.on = true;
     this.recorder.attach(this.gl);
     this.recorder.attachRenderer(this.three);

@@ -52,6 +52,10 @@ import { SigilMarks } from './sigilfx.ts';
 import { sigilOfDisaster } from './sigils.ts';
 import { SignsLayer } from '../signs/signs.ts';
 import { DefianceArcs } from '../signs/defiance.ts';
+import { perfSwitch } from '../perfswitch.ts';
+
+// PERF s12 bisection (diagnostics, default on): `?decals=0` skips the ground decals pass
+const SW_DECALS = perfSwitch('decals');
 
 export interface BrushIn {
   planet: number;
@@ -576,6 +580,7 @@ export class GodFx {
 
   /** ground decals and FX lights, into the HDR scene (after the opaque pass, before the water and the atmosphere) */
   renderDecals(r: WebGLRenderer, scene: Scene, cam: PerspectiveCamera, post: PostPipeline): void {
+    if (!SW_DECALS) return;
     const vis = this.vis;
     if (!vis || !this.group.visible) return;
     this.decals.draw(r, scene, cam, post.hdr, post.linDepth.texture, post.w, post.h, vis.uniforms.uBodyToView.value as never, vis.camBody, this.lastReal);

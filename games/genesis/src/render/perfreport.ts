@@ -254,6 +254,9 @@ export class PerfRecorder {
   private pending: { q: WebGLQuery; slot: number; rec: FrameRec; name?: string }[] = [];
   /** the named pass the open query times (inside 'scene' / 'post'), or null */
   private openSub: string | null = null;
+  /** (passsync) wall ms after gl.finish() per pass name over the recording */
+  private syncMs = new Map<string, number>();
+  syncAdd(name: string, ms: number): void { this.syncMs.set(name, (this.syncMs.get(name) ?? 0) + ms); }
   private openSlot = -1;
   private cur: FrameRec | null = null;
   private lastCam: [number, number, number] | null = null;
@@ -309,6 +312,7 @@ export class PerfRecorder {
     this.recording = true;
     this.report = '';
     this.glTrace.reset();
+    this.syncMs = new Map();
     this.glTrace.slot = 'other';
     try { if (this.gl && !/[?&]gltrace=0(&|$)/.test(globalThis.location?.search ?? '')) { this.glTrace.install(this.gl); this.wrapThree(); } } catch { /* untraced */ }
     this.onDone = onDone ?? null;
@@ -456,6 +460,10 @@ export class PerfRecorder {
         L.push(`gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): ${parts.join(' · ')}`);
       }
     } else L.push(`gpu ms: ${this.ext || this.disjoint ? 'no results' : 'no timer query in this browser'}`);
+    if (this.syncMs.size) {
+      const n = Math.max(1, this.frames.length);
+      L.push(`pass ms (passsync: gl.finish per pass, mean per frame): ${[...this.syncMs].map(([k, v]) => `${k} ${f1(v / n)}`).join(' · ')}`);
+    }
     L.push(`render: draws ${Math.round(mean(F.map((r) => r.draws)))} (max ${Math.max(...F.map((r) => r.draws))}) tris ${f1(mean(F.map((r) => r.tris)) / 1e6)}M shadow ${f1(mean(F.map((r) => r.shadowTris)) / 1e6)}M | patches built ${F.reduce((a, r) => a + r.built, 0)} | new programs ${F.reduce((a, r) => a + r.programs, 0)}`);
     if (this.glTrace.stats.size) L.push(...this.glTrace.lines(this.frames.length));
     const alts = F.map((r) => r.alt);

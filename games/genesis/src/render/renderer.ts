@@ -11,7 +11,7 @@
 import { setCityLightsRenderer } from './planet/citylights.ts';
 import { siltLensClear } from './planet/silt.ts';
 import {
-  Frustum, Matrix3, Matrix4, NoToneMapping, PerspectiveCamera, Quaternion, Scene, Vector2, Vector3, Vector4, WebGLRenderer, type IUniform,
+  Frustum, Matrix3, Matrix4, MeshBasicMaterial, NoToneMapping, PerspectiveCamera, Quaternion, Scene, Vector2, Vector3, Vector4, WebGLRenderer, type IUniform, type WebGLRenderTarget,
 } from 'three';
 import { depthClamp, enableConservativeDepth } from './shaders/zcons.ts';
 import type { WorldView, PlanetView } from '../client/worldview.ts';
@@ -40,7 +40,7 @@ import { applyLaunchShake } from './fx/launch.ts';
 import { PhotoPost } from './camera/photo.ts';
 import { WorldFx, type WorldPlanetRef } from './fx/worlds.ts';
 import { perfmon } from './perfmon.ts';
-import { perfSwitch, perfSwitchNote } from './perfswitch.ts';
+import { perfList, perfNum, perfSwitch, perfSwitchNote } from './perfswitch.ts';
 // PERF s12 BISECTION switches (owner's M5 is GPU-bound: ~100x per pixel vs Vale). Each turns a heavy pass / feature
 // OFF for an A/B run only (`?msaa=0`, `?clouds=0`, ...); all default ON (the game's look), and the perf report header
 // prints their effective values. NOT quality settings: diagnostics.
@@ -49,6 +49,19 @@ const SW_CLOUDS = perfSwitch('clouds');
 const SW_WATER = perfSwitch('water');
 const SW_GTAO = perfSwitch('gtao');
 const SW_ATMO = perfSwitch('atmo');
+// (GPU-HUNT-PLAN §2) more bisection switches, all default = unchanged:
+const SW_SHADOWS = perfSwitch('shadows');
+const SW_SCENE = perfSwitch('scene');
+const SW_FLAT = perfSwitch('flat', false);
+const SW_FX = perfSwitch('fx');
+const SW_HIDE = perfList('hide');
+const P_RSCALE = perfNum('rscale');
+const P_ATMOSTEPS = perfNum('atmosteps');
+const P_CLOUDSTEPS = perfNum('cloudsteps');
+// cheap fix (GPU-HUNT-PLAN §1): after the last pass into the MSAA hdr its multisampled colour + depth are invalidated
+// (every later reader uses the resolved texture): a tile GPU need not store them. `?invalidate=0` = off
+const SW_INVALIDATE = perfSwitch('invalidate');
+let _flatMat: MeshBasicMaterial | null = null;
 import { flushTextureUploads, installSpanUploads, installTexturePreUpload, wantSpanUploads } from './upload.ts';
 /** PERF F20: textures flagged for upload go up before the frame's first pass (`?preupload=0` = at their draw, as before) */
 // (OFF by default since session 9, `?preupload=1` = on: the owner's M5 A/B ran 1.9 fps without it vs 1.2-1.3 with it;
@@ -249,13 +262,14 @@ export class Renderer {
     const pr = Math.min(dpr, this.quality.maxDpr);
     this.three.setPixelRatio(pr);
     this.three.setSize(this.cssW, this.cssH, false);
-    const w = Math.max(2, Math.round(this.cssW * pr * this.quality.renderScale));
-    const h = Math.max(2, Math.round(this.cssH * pr * this.quality.renderScale));
+    const rs = this.quality.renderScale * (P_RSCALE != null && P_RSCALE > 0 ? P_RSCALE : 1);
+    const w = Math.max(2, Math.round(this.cssW * pr * rs));
+    const h = Math.max(2, Math.round(this.cssH * pr * rs));
     this.post.setSize(w, h, SW_MSAA ? this.quality.msaa : 0);
     this.clouds.setSize(w, h, this.farClouds ? farViewQuality(this.quality, 2).cloudScale : this.quality.cloudScale);
     this.orbits.setResolution(w, h);
-    this.ships.setResolution(w, h, pr * this.quality.renderScale);
-    this.starfield.setPixelRatio(pr * this.quality.renderScale);
+    this.ships.setResolution(w, h, pr * rs);
+    this.starfield.setPixelRatio(pr * rs);
     this.camera.aspect = this.cssW / this.cssH;
     this.camera.updateProjectionMatrix();
     this.stats.renderW = w;
@@ -468,7 +482,7 @@ export class Renderer {
     this.stats.altitude = alt;
     this.lastRadius = primaryVis ? primaryVis.pv.params.radius : 1;
     this.stats.primary = primaryPv?.name ?? '';
-    const wantShadows = !!primaryVis && q.shadowCascades > 0 && alt < 3500;
+    const wantShadows = SW_SHADOWS && !!primaryVis && q.shadowCascades > 0 && alt < 3500;
     perfmon.end('actors');
     // PERF F20: the frame's texture uploads, before any render pass (upload.ts)
     perfmon.begin('uploads');
@@ -478,6 +492,7 @@ export class Renderer {
     const callsPre = r.info.render.calls, trisPre = r.info.render.triangles;
     if (primaryVis) primaryVis.uniforms.uShadowOn.value = wantShadows ? 1 : 0;
     if (wantShadows && primaryVis) {
+      perfmon.mark('scene:shadows');
       const pv = primaryVis.pv;
       _sun.set(pv.sunDir[0], pv.sunDir[1], pv.sunDir[2]);
       const far = Math.min(q.shadowDistance, Math.max(300, alt * 14 + 600));
@@ -502,7 +517,25 @@ export class Renderer {
     r.setRenderTarget(post.hdr);
     r.setClearColor(0x000000, 1);
     perfmon.mark('scene:opaque');
-    r.render(this.scene, cam);
+    if (!SW_SCENE) r.clear();
+    else {
+      // (bisection: ?flat=1 one plain material for everything opaque, ?hide=veg,cover,life,terrain)
+      const hv = SW_HIDE.size && primaryVis ? primaryVis : null;
+      const was = hv ? [hv.vegetation.group.visible, hv.groundCover.group.visible, hv.life.group.visible, hv.terrainMats.map((m) => m.visible)] as const : null;
+      if (hv) {
+        if (SW_HIDE.has('veg')) hv.vegetation.group.visible = false;
+        if (SW_HIDE.has('cover')) hv.groundCover.group.visible = false;
+        if (SW_HIDE.has('life')) hv.life.group.visible = false;
+        if (SW_HIDE.has('terrain')) for (const m of hv.terrainMats) m.visible = false;
+      }
+      if (SW_FLAT) this.scene.overrideMaterial = _flatMat ??= new MeshBasicMaterial({ color: 0x7a7a72 });
+      r.render(this.scene, cam);
+      this.scene.overrideMaterial = null;
+      if (hv && was) {
+        hv.vegetation.group.visible = was[0]; hv.groundCover.group.visible = was[1]; hv.life.group.visible = was[2];
+        hv.terrainMats.forEach((m, i) => { m.visible = was[3][i]; });
+      }
+    }
     const callsScene = r.info.render.calls, trisScene = r.info.render.triangles;
     perfmon.end('scene');
     perfmon.begin('post');
@@ -562,6 +595,9 @@ export class Renderer {
     atmoVis.length = 0;
     if (SW_ATMO) for (const v of this.planets.values()) if (v.atmo.has && this.shellVisible(v, pose)) atmoVis.push(v);
     atmoVis.sort((a, b) => this.distOf(b, pose) - this.distOf(a, pose));
+    // the water was the last pass into the MSAA hdr when composites follow (they and every pass after them read the
+    // resolved hdr.texture / depthTexture): its multisampled colour and depth need not be stored
+    if (SW_INVALIDATE && atmoVis.length && post.hdr.samples > 0) invalidateMsaa(r, post.hdr);
     if (aoS && atmoVis.length === 0) this.gtao.apply(r, this.fsq, aoS, post.depthTexture, cam.projectionMatrixInverse, cam.far, post.w, post.h, post.hdr.texture, post.atmoB, post.hdr);
     let outIdx = 0;
     let firstComposite = true;
@@ -587,7 +623,7 @@ export class Renderer {
           // (additive, ARC §10) the warned river seen through the deck from the town view
           lensClear: vis.uniforms.uSilt ? siltLensClear([vis.camBody.x, vis.camBody.y, vis.camBody.z], vis.camBody.length() - pv.params.radius,
             vis.uniforms.uSilt.value as Vector4[], vis.uniforms.uSiltK.value as number[]) : undefined,
-        }, q.cloudSteps, q.cloudLightSteps);
+        }, P_CLOUDSTEPS ?? q.cloudSteps, q.cloudLightSteps);
       }
       const m = this.atmoPass.material;
       this.atmoPass.bind(vis.atmo);
@@ -621,7 +657,7 @@ export class Renderer {
       u.uFar.value = cam.far;
       u.uPlanetPos.value.copy(planetPos);
       u.uSunDir.value.copy(sunDir);
-      u.uSteps.value = q.atmoSteps;
+      u.uSteps.value = P_ATMOSTEPS ?? q.atmoSteps;
       // aerial perspective on geometry: thin inside the air, physical from space
       const thick = vis.atmo.thickness;
       const altP = vis.altitude;
@@ -645,15 +681,15 @@ export class Renderer {
     // atmosphere, so smoke against the sky is never taken for stars, with soft depth from the linear depth copy ──
     FX_EXPOSURE.value = post.exposureTexture();
     perfmon.mark('post:fx');
-    if (primaryVis) primaryVis.renderFx(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post.linDepth.texture, post.w, post.h);
+    if (SW_FX && primaryVis) primaryVis.renderFx(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post.linDepth.texture, post.w, post.h);
     // the god layer's FX over the composited image (plumes, funnels, bolts, domes, auroras, the hand's glow…)
-    this.godfx.renderFx(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post, this.fsq);
+    if (SW_FX) this.godfx.renderFx(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post, this.fsq);
     // launch plumes, exhaust smoke, pad clouds, landing dust, explosions and the exhaust's light (render/fx/launch.ts)
     // (additive, ships lane: the opaque colour copy, for the heat shimmer over a lander's flame)
     this.ships.fx.sceneCopy = post.sceneCopy.texture;
-    this.ships.fx.render(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post.linDepth.texture, post.w, post.h);
+    if (SW_FX) this.ships.fx.render(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post.linDepth.texture, post.w, post.h);
     // the dust of debris rings, erasure flashes, birth swirls and molten shells, a falling moon's fire
-    this.worlds.render(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post.linDepth.texture, post.w, post.h);
+    if (SW_FX) this.worlds.render(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post.linDepth.texture, post.w, post.h);
 
     // ── white balance: like a camera set to "daylight here", neutralise the sun's colour at ~50° elevation on the
     // world we are at, so noon light reads white while sunsets (much redder than that) stay warm
@@ -1094,4 +1130,18 @@ export class Renderer {
     this.shadows.dispose();
     this.three.dispose();
   }
+}
+
+/**
+ * PERF s12 (GPU-HUNT-PLAN §1): invalidate an MSAA render target's multisampled colour and depth once nothing will read
+ * them again (three resolves them into the target's textures after each render; it invalidates only on OculusBrowser):
+ * a tile GPU then need not store the 4x buffers to memory at the end of the pass.
+ */
+function invalidateMsaa(r: WebGLRenderer, rt: WebGLRenderTarget): void {
+  const fb = (r.properties.get(rt) as { __webglMultisampledFramebuffer?: WebGLFramebuffer }).__webglMultisampledFramebuffer;
+  if (!fb) return;
+  const gl = r.getContext() as WebGL2RenderingContext;
+  r.state.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT]);
+  r.state.bindFramebuffer(gl.FRAMEBUFFER, null);
 }

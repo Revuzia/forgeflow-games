@@ -971,3 +971,15 @@ long press frame-rate independent. Report after 1-2 verified.
     zcons, fartrees, deckzoom, deckmist etc. all print in the report header's effective-switch line.
   * Smoke runs queued (run-s12f.sh: smoke1 default / smoke0 all off, ULTRA, --report): must show 0 errors and the
     pass line.
+- BISECTION, part 2 (GPU-HUNT-PLAN §2; landed, tsc clean, render-perfreport 3/3 incl. passsync line): perfswitch.ts
+  perfNum / perfList (numeric / list params print their value, or def / none). New switches, all default = unchanged:
+  passsync=1 (perfmon: gl.finish at every slot begin/end and pass mark while recording -> report line `pass ms
+  (passsync ...)`), scene:shadows mark, flat=1 (overrideMaterial MeshBasic on the opaque render), scene=0 (clear
+  instead), hide=veg,cover,life,terrain (primary planet, restored after the opaque render), shadows=0, rscale=<f>
+  (x renderScale), atmosteps=N, cloudsteps=N, decals=0 (godfx.renderDecals), fx=0 (particles / god FX / ships /
+  worlds), lum=0 (luminance chain + adaptation skipped: exposure frozen; new mark post:lum), recms=<ms> (report
+  length, whoever asks). NOTE for probes: a report needs >= ~5 recorded frames for timer results (smoke1/0 with 3
+  frames: 'no results'; smoke2 at 40 s: by-pass line present).
+- FIX (GPU-HUNT-PLAN §1a, `invalidate`, default ON): after the water pass, when atmosphere composites follow (every
+  later reader uses the resolved hdr.texture / depthTexture), gl.invalidateFramebuffer on the MSAA hdr's multisampled
+  framebuffer (colour + depth): a tile GPU need not store the 4x buffers. Picture A/B inv1 / inv0 queued.
