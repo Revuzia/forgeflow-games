@@ -1,0 +1,21 @@
+{
+ "_doc": "PERF s14: deck top resting (alt ~400 m) mist off/on; the gpu mem lines at Ultra near Rubolhin (1349x698 css, dpr 1).",
+ "shots": [
+  {
+   "name": "mem-ultra",
+   "params": "scenario=babel&source=worker&seed=307987276&perf=1",
+   "size": [
+    1349,
+    698
+   ],
+   "quality": "ultra",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 80, tilt: 60, yaw: 0, fov: 55, hour: 11 }); await G.frames(6);",
+    "const t = await G.perfReport(4000); return { mem: t.split('\\n').filter((l) => l.startsWith('gpu mem') || l.startsWith('render targets')) };"
+   ]
+  }
+ ]
+}
