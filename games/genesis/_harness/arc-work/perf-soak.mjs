@@ -44,7 +44,15 @@ await page.evaluate(() => window.__GENESIS__.ready);
 console.log('boot', el(), url);
 const speed = Number(opts.speed ?? 10);
 await page.evaluate((s) => window.__GENESIS__.setSpeed(s), speed).catch((e) => console.log('speed()', String(e)));
-const views = [
+const views = opts.views === 'babel' ? [
+  // (PERF s14) Rubolhin and around it at the owner's altitudes, a far view, back: patches, trees, pages come and go
+  { mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 90, tilt: 60 },
+  { mode: 'orbit', lat: -3.7, lon: 140, dist: 120, tilt: 60 },
+  { mode: 'orbit', lat: -10.4, lon: 150, dist: 150, tilt: 55 },
+  { mode: 'orbit', lat: 2, lon: 160, dist: 120, tilt: 60 },
+  { mode: 'orbit', lat: 12, lon: -30, dist: 7600 },
+  { mode: 'orbit', lat: -3.7, lon: 125, dist: 300, tilt: 45 },
+] : [
   { mode: 'orbit', poi: 'city', dist: 220, tilt: 50 },
   { mode: 'orbit', poi: 'city', dist: 1400, tilt: 40 },
   { mode: 'orbit', lat: 12, lon: -30, dist: 7600 },
@@ -56,7 +64,10 @@ const sample = async () => {
   const r = await page.evaluate(() => {
     const R = globalThis.__GENESIS_R__; const i = R.three.info;
     const s = window.__GENESIS__.state();
-    return { programs: i.programs?.length ?? -1, geometries: i.memory.geometries, textures: i.memory.textures, frames: s.frames, tick: Math.round(s.tick), fps: Math.round(s.fps * 10) / 10, snaps: s.snapshots, draws: R.stats.drawCalls };
+    const gm = globalThis.__GENESIS_GPUMEM__;
+    let cpu = -1;
+    try { if (gm && gm.cpuProbe) { cpu = 0; for (const v of gm.cpuProbe().values()) cpu += v; cpu = Math.round(cpu / 1e5) / 10; } } catch { /* none */ }
+    return { gpuMB: gm ? Math.round(gm.total / 1e5) / 10 : -1, gpuPeakMB: gm ? Math.round(gm.peak / 1e5) / 10 : -1, gpuObjs: gm ? gm.live.size : -1, cpuMB: cpu, programs: i.programs?.length ?? -1, geometries: i.memory.geometries, textures: i.memory.textures, frames: s.frames, tick: Math.round(s.tick), fps: Math.round(s.fps * 10) / 10, snaps: s.snapshots, draws: R.stats.drawCalls };
   });
   return { t: el(), ...r, heapMB: Math.round((heap.usedSize ?? 0) / 1e5) / 10, nodes: dom.nodes, listeners: dom.jsEventListeners, documents: dom.documents };
 };

@@ -40,10 +40,18 @@ export class GpuMemAudit {
   /** peak total over the page's life */
   peak = 0;
   total = 0;
+  /** (total, time) when installed: growth per minute over the page's life */
+  private t0 = 0;
+  private total0 = 0;
+  /** retained CPU copies by owner (bytes), set by the renderer (scene walk at report time) */
+  cpuProbe: (() => Map<string, number>) | null = null;
 
   install(gl: WebGL2RenderingContext): void {
     if (this.installed === gl) return;
     this.installed = gl;
+    this.t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+    this.total0 = this.total;
+    try { (globalThis as { __GENESIS_GPUMEM__?: GpuMemAudit }).__GENESIS_GPUMEM__ = this; } catch { /* none */ }
     const self = this;
     const g = gl as unknown as Record<string, (...a: unknown[]) => unknown>;
     const wrap = (name: string, after: (args: unknown[], ret: unknown) => void): void => {
@@ -121,8 +129,20 @@ export class GpuMemAudit {
     const mb = (b: number) => (Math.round(b / 1048576 * 10) / 10).toString();
     const parts = [...by.entries()].sort((a, b) => b[1].b - a[1].b).map(([k, s]) => `${k} ${mb(s.b)} MB x${s.n}`);
     const big = [...this.live.values()].sort((a, b) => b.bytes - a.bytes).slice(0, 12).map((e) => `${e.kind} ${e.desc} ${mb(e.bytes)}`);
-    const L = [`gpu mem (est., live GL allocations): total ${mb(this.total)} MB (peak ${mb(this.peak)}) | ${parts.join(' · ')}${cpuCopiesMB != null ? ` | cpu copies of geometry ${mb(cpuCopiesMB * 1048576)} MB` : ''}`];
-    L.push(`gpu mem largest: ${big.join(' · ')}`);
+    const mins = Math.max(1e-3, ((typeof performance !== 'undefined' ? performance.now() : 0) - this.t0) / 60000);
+    const growth = (this.total - this.total0) / mins;
+    // (the canvas itself: back buffer + depth-stencil + ~2 compositor buffers, not visible to GL calls)
+    const L = [`gpu mem (est., live GL allocations): total ${mb(this.total)} MB (peak ${mb(this.peak)}, ${mb(growth)} MB/min over ${Math.round(mins)} min) | ${parts.join(' · ')}${cpuCopiesMB != null ? ` | cpu copies of geometry ${mb(cpuCopiesMB * 1048576)} MB` : ''}`];
+    try {
+      const own = this.cpuProbe?.();
+      if (own && own.size) {
+        let t = 0; for (const v of own.values()) t += v;
+        L.push(`cpu retained (typed arrays of live geometry / data textures, by owner): total ${mb(t)} MB | ${[...own.entries()].sort((a, b) => b[1] - a[1]).slice(0, 14).map(([k, v]) => `${k} ${mb(v)}`).join(' · ')}`);
+      }
+      const pm = (globalThis.performance as unknown as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number } }).memory;
+      if (pm) L.push(`js heap: used ${mb(pm.usedJSHeapSize)} MB of ${mb(pm.totalJSHeapSize)} MB`);
+    } catch { /* none */ }
+    L.splice(1, 0, `gpu mem largest: ${big.join(' · ')}`);
     // buffers by size class (patch pages, instance pools ...): how many of each size
     const sizes = new Map<number, number>();
     for (const e of this.live.values()) if (e.kind === 'buf' && e.bytes >= 65536) sizes.set(e.bytes, (sizes.get(e.bytes) ?? 0) + 1);

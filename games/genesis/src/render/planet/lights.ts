@@ -62,6 +62,9 @@ export interface ShadowUniforms {
   uShadowTexel: IUniform<number>;
 }
 
+import { perfSwitch } from '../perfswitch.ts';
+
+const SH_STRIP = !perfSwitch('shcolour', false);
 const _corners: Vector3[] = Array.from({ length: 8 }, () => new Vector3());
 const _c = new Vector3();
 const _ls = new Vector3();
@@ -115,10 +118,39 @@ export class SunShadows {
   init(renderer: WebGLRenderer): void {
     const prev = renderer.getRenderTarget();
     renderer.setRenderTarget(this.rt);
+    this.stripColour(renderer);
     renderer.setClearColor(0xffffff, 1);
     renderer.clear(true, true, false);
     renderer.setClearColor(0x000000, 1);
     renderer.setRenderTarget(prev);
+  }
+
+  /**
+   * PERF s14 memory cut #2: the atlas's R8 colour attachment (16 MB at 4096², required by three's framebuffer setup,
+   * never written: casters draw with colorWrite off) is detached and freed once the framebuffer exists; the atlas is
+   * depth-only (complete in WebGL2). `?shcolour=1` keeps it. Called with this.rt bound.
+   */
+  private stripped: WebGLRenderTarget | null = null;
+  private stripColour(renderer: WebGLRenderer): void {
+    if (!SH_STRIP || this.stripped === this.rt) return;
+    this.stripped = this.rt;
+    try {
+      const gl = renderer.getContext() as WebGL2RenderingContext;
+      const fb = (renderer.properties.get(this.rt) as { __webglFramebuffer?: WebGLFramebuffer }).__webglFramebuffer;
+      const tex = (renderer.properties.get(this.rt.texture) as { __webglTexture?: WebGLTexture }).__webglTexture;
+      if (!fb || !tex) return;
+      renderer.state.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, null, 0);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+        // (put it back: never leave the atlas incomplete)
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+        return;
+      }
+      // the texture's storage goes back to the driver at once: respecify it as 1x1 (three still owns the object)
+      renderer.state.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 1, 1, 0, gl.RED, gl.UNSIGNED_BYTE, null);
+      renderer.state.bindTexture(gl.TEXTURE_2D, null as unknown as WebGLTexture);
+    } catch { /* keep the colour attachment */ }
   }
 
   setSize(size: number): void {
@@ -239,6 +271,7 @@ export class SunShadows {
     const prevAuto = renderer.autoClear;
     swap(true);
     renderer.setRenderTarget(this.rt);
+    this.stripColour(renderer);
     this.rt.scissorTest = false;
     this.rt.viewport.set(0, 0, this.size, this.size);
     renderer.setRenderTarget(this.rt);

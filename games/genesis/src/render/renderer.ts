@@ -221,6 +221,7 @@ export class Renderer {
     });
     // (PERF s14) the live GPU memory audit from the first allocation on (the perf report's 'gpu mem' lines)
     try { gpuMem.install(this.three.getContext() as WebGL2RenderingContext); } catch { /* unaudited */ }
+    gpuMem.cpuProbe = () => cpuRetained(this.scene);
     enableConservativeDepth(this.three, Z_CONS);
     { const sp = wantSpanUploads(this.three); perfSwitchNote('span', sp ? '1' : '0'); installSpanUploads(sp); }
     if (PRE_UPLOAD) installTexturePreUpload();
@@ -1147,4 +1148,44 @@ function invalidateMsaa(r: WebGLRenderer, rt: WebGLRenderTarget): void {
   r.state.bindFramebuffer(gl.FRAMEBUFFER, fb);
   gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT]);
   r.state.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+/**
+ * (PERF s14 memory audit) the typed arrays live geometries and data textures keep on the CPU after upload, by owner
+ * (the first two named ancestors: 'planet-0/vegetation', 'planet-0/life' ...), each array counted once
+ */
+function cpuRetained(scene: Scene): Map<string, number> {
+  const seen = new Set<ArrayBufferLike>();
+  const out = new Map<string, number>();
+  const add = (owner: string, a: { buffer?: ArrayBufferLike; byteLength?: number } | null | undefined) => {
+    if (!a || !a.buffer || seen.has(a.buffer)) return;
+    seen.add(a.buffer);
+    out.set(owner, (out.get(owner) ?? 0) + (a.buffer.byteLength ?? 0));
+  };
+  const ownerOf = (o: { name: string; parent: unknown }): string => {
+    const names: string[] = [];
+    let p: { name: string; parent: unknown } | null = o;
+    while (p) { if (p.name) names.unshift(p.name); p = p.parent as typeof p; }
+    return names.slice(0, 2).join('/') || '(unnamed)';
+  };
+  scene.traverse((o) => {
+    const m = o as { geometry?: { attributes?: Record<string, { array?: ArrayBufferView }>; index?: { array?: ArrayBufferView } | null }; material?: unknown; name: string; parent: unknown };
+    const own = ownerOf(m);
+    if (m.geometry?.attributes) {
+      for (const k in m.geometry.attributes) add(own, m.geometry.attributes[k].array as never);
+      add(own, m.geometry.index?.array as never);
+    }
+    const im = (o as { instanceMatrix?: { array?: ArrayBufferView }; instanceColor?: { array?: ArrayBufferView } | null });
+    add(own, im.instanceMatrix?.array as never);
+    add(own, im.instanceColor?.array as never);
+    const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
+    for (const mt of mats as { uniforms?: Record<string, { value?: unknown }> }[]) {
+      if (!mt.uniforms) continue;
+      for (const k in mt.uniforms) {
+        const v = mt.uniforms[k]?.value as { isDataTexture?: boolean; image?: { data?: ArrayBufferView } } | undefined;
+        if (v && v.isDataTexture) add(own + ' (textures)', v.image?.data as never);
+      }
+    }
+  });
+  return out;
 }

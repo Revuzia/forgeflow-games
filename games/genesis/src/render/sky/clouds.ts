@@ -61,7 +61,7 @@
 
 import {
   ClampToEdgeWrapping, GLSL3, HalfFloatType, LinearFilter, LinearMipmapLinearFilter, Matrix3, Matrix4,
-  NearestFilter, RGBAFormat, RepeatWrapping, ShaderMaterial, UnsignedByteType, Vector2, Vector3, Vector4,
+  NearestFilter, RGBAFormat, RGFormat, RepeatWrapping, ShaderMaterial, UnsignedByteType, Vector2, Vector3, Vector4,
   WebGL3DRenderTarget, WebGLCubeRenderTarget, WebGLRenderTarget, type Data3DTexture, type IUniform, type Texture,
   type WebGLRenderer,
 } from 'three';
@@ -1481,6 +1481,9 @@ export class CloudPass {
     this.noise = new CloudNoise();
     this.raw = mrt(4, 4, NearestFilter);
     this.hist = [mrt(4, 4, LinearFilter), mrt(4, 4, LinearFilter)];
+    // (PERF s14 memory cut #1) the history's aux holds (log2 distance, sample count) only — .zw are written 0 and read
+    // by nobody (resolve reads .xy, the atmosphere composite .x): RG16F instead of RGBA16F, bit-identical values
+    for (const h of this.hist) h.textures[1].format = RGFormat;
     this.raw.texture.name = 'cloudsRaw'; this.hist[0].texture.name = 'cloudsHistA'; this.hist[1].texture.name = 'cloudsHistB';
     this.wxRT = cubeTarget(this.wxSize);
     this.shRT = cubeTarget(this.wxSize);
