@@ -1,0 +1,110 @@
+{
+ "hesmi_splash": {
+  "axis_edge": 0.172,
+  "flat": 0.03,
+  "rim_dL_left": 15.8,
+  "rim_dL_right": 6.0,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 12.3,
+  "face": {
+   "p5": 31.6,
+   "p50": 66.5,
+   "p95": 84.2,
+   "range": 52.6,
+   "dark_share": 0.094,
+   "edge": 3.48
+  }
+ },
+ "hesmi_portrait": {
+  "axis_edge": 0.177,
+  "flat": 0.027,
+  "rim_dL_left": -3.2,
+  "rim_dL_right": -13.4,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 11.7,
+  "face": {
+   "p5": 26.9,
+   "p50": 68.6,
+   "p95": 77.3,
+   "range": 50.4,
+   "dark_share": 0.311,
+   "edge": 2.44
+  }
+ },
+ "hesmi_gorgewalk_splash": {
+  "axis_edge": 0.194,
+  "flat": 0.015,
+  "rim_dL_left": 14.6,
+  "rim_dL_right": 2.5,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 7.9,
+  "face": {
+   "p5": 42.4,
+   "p50": 68.2,
+   "p95": 90.7,
+   "range": 48.2,
+   "dark_share": 0.222,
+   "edge": 3.09
+  }
+ },
+ "hesmi_gorgewalk_portrait": {
+  "axis_edge": 0.144,
+  "flat": 0.022,
+  "rim_dL_left": 0.7,
+  "rim_dL_right": -0.8,
+  "rim_side": "even",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 4.7,
+  "face": {
+   "p5": 28.0,
+   "p50": 63.7,
+   "p95": 90.9,
+   "range": 63.0,
+   "dark_share": 0.184,
+   "edge": 2.1
+  }
+ },
+ "hesmi_shadeprint_splash": {
+  "axis_edge": 0.216,
+  "flat": 0.014,
+  "rim_dL_left": 16.4,
+  "rim_dL_right": 2.9,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 2.2,
+  "face": {
+   "p5": 44.6,
+   "p50": 62.7,
+   "p95": 79.9,
+   "range": 35.3,
+   "dark_share": 0.051,
+   "edge": 2.49
+  }
+ },
+ "hesmi_shadeprint_portrait": {
+  "axis_edge": 0.234,
+  "flat": 0.02,
+  "rim_dL_left": 1.5,
+  "rim_dL_right": -16.7,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 0.5,
+  "face": {
+   "p5": 21.7,
+   "p50": 60.5,
+   "p95": 75.1,
+   "range": 53.4,
+   "dark_share": 0.098,
+   "edge": 2.1
+  }
+ }
+}
