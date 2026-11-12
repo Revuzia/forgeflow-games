@@ -27,6 +27,16 @@ import { perfSwitch } from '../perfswitch.ts';
 const SW_BLOOM = perfSwitch('bloom');
 const SW_GOD = perfSwitch('godrays');
 const SW_LUM = perfSwitch('lum');
+/**
+ * PERF s15 (GPU-MEMORY-PLAN cut #5): the water's reflections read LAST frame's composited image. That was a full-res
+ * RGBA16F copy (prevColor, 11 MB at 1686x873) made every frame from the atmosphere target the composites and the FX
+ * wrote. Nothing writes atmoA / atmoB between keepPrevious and the next frame's water pass (the next composites come
+ * after it), so the water samples that target itself: no copy target, one full-screen pass fewer a frame. The copy's
+ * NaN guard moved into the ocean's taps (ocean.ts PREV_SANE). Frames without an atmosphere composite (an airless view:
+ * the last image is post.hdr, which the next scene pass overwrites) still copy, into a target made on first need.
+ * Bit-identical. `?prevalias=0` = the old copy every frame.
+ */
+export const PREV_ALIAS = perfSwitch('prevalias');
 import { LOGDEPTH_DECODE } from '../shaders/atmosphere.glsl.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 
@@ -525,8 +535,10 @@ export class PostPipeline {
   linDepth!: WebGLRenderTarget;
   atmoA!: WebGLRenderTarget;
   atmoB!: WebGLRenderTarget;
-  /** last frame's composited HDR (sky, clouds, haze) — water reflections sample it */
-  prevColor!: WebGLRenderTarget;
+  /** the copy of last frame's composited HDR, when it needs one (PREV_ALIAS: airless frames only, made on first need) */
+  prevColor: WebGLRenderTarget | null = null;
+  /** last frame's composited HDR (sky, clouds, haze) — water reflections sample it: prevColor, or the atmosphere target itself */
+  prevTex: Texture | null = null;
   prevValid = false;
   /** set by the renderer when a star's disc fills the view: exposure from the disc, bloom almost off */
   starExposure = 1;
@@ -590,7 +602,8 @@ export class PostPipeline {
     this.linDepth = rt(w, h, FloatType, RedFormat, NearestFilter);
     this.atmoA = rt(w, h);
     this.atmoB = rt(w, h);
-    this.prevColor = rt(w, h);
+    this.prevColor = PREV_ALIAS ? null : rt(w, h);
+    this.prevTex = null;
     const q = (n: number) => Math.max(1, Math.floor(n / 4));
     this.godMask = rt(q(w), q(h));
     this.godA = rt(q(w), q(h));
@@ -603,9 +616,9 @@ export class PostPipeline {
     }
     this.ldr = rt(w, h, UnsignedByteType, RGBAFormat, LinearFilter);
     // (names for the perf report's render-target list)
-    const nm: [WebGLRenderTarget, string][] = [[this.hdr, 'hdr'], [this.sceneCopy, 'sceneCopy'], [this.linDepth, 'linDepth'], [this.atmoA, 'atmoA'], [this.atmoB, 'atmoB'],
+    const nm: [WebGLRenderTarget | null, string][] = [[this.hdr, 'hdr'], [this.sceneCopy, 'sceneCopy'], [this.linDepth, 'linDepth'], [this.atmoA, 'atmoA'], [this.atmoB, 'atmoB'],
       [this.prevColor, 'prevColor'], [this.godMask, 'godMask'], [this.godA, 'godA'], [this.godB, 'godB'], [this.ldr, 'ldr']];
-    for (const [t, n] of nm) t.texture.name = n;
+    for (const [t, n] of nm) if (t) t.texture.name = n;
     this.bloomMips.forEach((t, i) => { t.texture.name = `bloom${i}`; });
     this.cut = true;
   }
@@ -628,12 +641,18 @@ export class PostPipeline {
     fsq.render(r, this.copyMat, this.linDepth);
   }
 
-  /** keep this frame's composited HDR for next frame's reflections */
-  keepPrevious(r: WebGLRenderer, fsq: FullscreenQuad, input: Texture): void {
+  /**
+   * keep this frame's composited HDR for next frame's reflections; `stable` = `input` is an atmosphere target nothing
+   * writes before the next frame's water pass (PREV_ALIAS: sampled in place, no copy)
+   */
+  keepPrevious(r: WebGLRenderer, fsq: FullscreenQuad, input: Texture, stable = false): void {
+    if (PREV_ALIAS && stable) { this.prevTex = input; this.prevValid = true; return; }
+    if (!this.prevColor) { this.prevColor = rt(this.w, this.h); this.prevColor.texture.name = 'prevColor'; }
     const u = this.copyMat.uniforms;
     u.tColor.value = input;
     u.uMode.value = 0;
     fsq.render(r, this.copyMat, this.prevColor);
+    this.prevTex = this.prevColor.texture;
     this.prevValid = true;
   }
 

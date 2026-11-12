@@ -62,6 +62,10 @@ const P_CLOUDSTEPS = perfNum('cloudsteps');
 // cheap fix (GPU-HUNT-PLAN §1): after the last pass into the MSAA hdr its multisampled colour + depth are invalidated
 // (every later reader uses the resolved texture): a tile GPU need not store them. `?invalidate=0` = off
 const SW_INVALIDATE = perfSwitch('invalidate');
+/** PERF s15 cut #6 (post/gtao.ts): full-res raw AO in the scene copy (idle until the copy for the water) */
+const SW_AOALIAS = perfSwitch('aoalias');
+/** PERF s15 cut #7 (post/gtao.ts): the blurred AO in atmoB when an atmosphere composite follows */
+const SW_AOBLUR = perfSwitch('aoblur');
 let _flatMat: MeshBasicMaterial | null = null;
 import { flushTextureUploads, installSpanUploads, installTexturePreUpload, wantSpanUploads } from './upload.ts';
 /** PERF F20: textures flagged for upload go up before the frame's first pass (`?preupload=0` = at their draw, as before) */
@@ -548,6 +552,11 @@ export class Renderer {
     // water surface itself took AO. (aoFactor weighs each AO sample by depth, so water pixels, whose depth is the
     // sheet's, keep their light.)
     const aoS = q.ssao && SW_GTAO ? aoFor(q.name) : null;
+    // the atmosphere composites to come (far to near; PERF s15: decided before the GTAO, which may borrow atmoB)
+    const atmoVis = _atmoList;
+    atmoVis.length = 0;
+    if (SW_ATMO) for (const v of this.planets.values()) if (v.atmo.has && this.shellVisible(v, pose)) atmoVis.push(v);
+    atmoVis.sort((a, b) => this.distOf(b, pose) - this.distOf(a, pose));
     if (aoS) {
       if (primaryVis) _sunView.copy(primaryVis.uniforms.uSunDirView.value as Vector3); else _sunView.set(0, 0, -1);
       const ss = (a: number, b: number, x: number) => smoothstepN(a, b, x);
@@ -555,7 +564,12 @@ export class Renderer {
       // SKY_FILL), the sky wins as the sun sets
       const skyRatio = 0.13 + 0.87 * (1 - ss(0.0, 0.45, camSunEl));
       perfmon.mark('post:gtao');
-      this.gtao.compute(r, this.fsq, aoS, post.depthTexture, cam.projectionMatrixInverse, cam.projectionMatrix, cam.far, post.w, post.h, this.frameNo, _sunView, skyRatio, ss(-0.02, 0.06, camSunEl));
+      // (PERF s15 cuts #6 / #7: targets idle until after the first composite lent to the AO — the scene copy is written
+      // next by the copy for the water; atmoB, unless it holds last frame's image the water is about to reflect
+      // (pipeline PREV_ALIAS after an even number of composites), is written next by a second composite or the FX)
+      const blurTo = SW_AOBLUR && atmoVis.length > 0 && !(post.prevValid && post.prevTex === post.atmoB.texture) ? post.atmoB : null;
+      this.gtao.compute(r, this.fsq, aoS, post.depthTexture, cam.projectionMatrixInverse, cam.projectionMatrix, cam.far, post.w, post.h, this.frameNo, _sunView, skyRatio, ss(-0.02, 0.06, camSunEl),
+        SW_AOALIAS ? post.sceneCopy : null, blurTo);
     }
     // ── water (reads copies of colour and linear depth) ──
     let anyWater = false;
@@ -568,8 +582,8 @@ export class Renderer {
     this.waterScene.tSceneColor.value = post.sceneCopy.texture;
     this.waterScene.tSceneDepth.value = post.linDepth.texture;
     (this.waterScene.uResolution.value as Vector2).set(post.w, post.h);
-    this.waterScene.tPrevColor.value = post.prevColor.texture;
-    this.waterScene.uPrevValid.value = post.prevValid ? 1 : 0;
+    this.waterScene.tPrevColor.value = post.prevValid ? post.prevTex : null;
+    this.waterScene.uPrevValid.value = post.prevValid && post.prevTex ? 1 : 0;
     (this.waterScene.uProj.value as Matrix4).copy(cam.projectionMatrix);
     this.waterScene.uFrame.value = this.frameNo % 64;
     perfmon.mark('post:water');
@@ -595,10 +609,6 @@ export class Renderer {
     // contact shadows (GTAO, Medium+) on the ambient share of the lit scene, before aerial perspective and clouds:
     // folded into the first atmosphere composite; without air applied here and written back into post.hdr (via atmoB),
     // so passes that draw into post.hdr when no atmosphere runs still start from it
-    const atmoVis = _atmoList;
-    atmoVis.length = 0;
-    if (SW_ATMO) for (const v of this.planets.values()) if (v.atmo.has && this.shellVisible(v, pose)) atmoVis.push(v);
-    atmoVis.sort((a, b) => this.distOf(b, pose) - this.distOf(a, pose));
     // the water was the last pass into the MSAA hdr when composites follow (they and every pass after them read the
     // resolved hdr.texture / depthTexture): its multisampled colour and depth need not be stored
     if (SW_INVALIDATE && atmoVis.length && post.hdr.samples > 0) invalidateMsaa(r, post.hdr);
@@ -646,7 +656,7 @@ export class Renderer {
         const [aw, ah] = this.gtao.resultSize;
         (u.uAoRes.value as Vector2).set(aw, ah);
         u.uAoStrength.value = aoS.strength;
-      }
+      } else u.tAO.value = null; // (PERF s15: the AO may be in atmoB, which a second composite writes: no feedback loop)
       firstComposite = false;
       // the moonlit sky of the planet the camera is on
       (u.uMoonDir.value as Vector3).copy(_moonDir);
@@ -701,7 +711,7 @@ export class Renderer {
     this.whiteBalance(primaryVis, starCol);
     // ── post ──
     perfmon.mark('post:keep');
-    post.keepPrevious(r, this.fsq, input);
+    post.keepPrevious(r, this.fsq, input, atmoVis.length > 0);
     const sun = this.sunScreen(pose, primaryVis);
     // exposure key (mid-grey target, the scene's log-average): 0.133 by day (→ ~122/255 on the curve), dusky at
     // twilight (0.095), dark at night (0.013: moonlit ground ~12–25/255). The metering floor opens up at night so moonlit

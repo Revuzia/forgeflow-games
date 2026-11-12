@@ -31,7 +31,43 @@ import { treeGeometry } from '../gen/treegen.ts';
 import { BASE_PACK } from '../../data/index.ts';
 import type { BufferGeometry } from 'three';
 import { leafClusterTexture } from '../gen/leaftex.ts';
-import { makeVegMaterial, PLANT_PROBE, PLANT_REGISTRY_LISTENERS, whiteColors } from './vegetation.ts';
+import { LAZY_POOLS, makeVegMaterial, PLANT_PROBE, PLANT_REGISTRY_LISTENERS, whiteColors } from './vegetation.ts';
+
+/** PERF s15 cut #8 (vegetation.ts LAZY_POOLS): a ground cover pool starts at this many instances and doubles to its cap */
+const GC_START = 256;
+/** a pool's instance cap (its capacity is m.instanceMatrix.count) */
+const capOf = (m: InstancedMesh): number => (m.userData as { max?: number }).max ?? m.instanceMatrix.count;
+/** a pool of up to `max` instances (lazily: GC_START, grown by gcRoom) */
+function pool(g: BufferGeometry, mat: InstancedMesh['material'], max: number): InstancedMesh {
+  const m = new InstancedMesh(g, mat, LAZY_POOLS ? Math.min(GC_START, max) : max);
+  m.userData.max = max;
+  return m;
+}
+/**
+ * room for instance `n` in pool `m`: grows a lazy pool (x2, up to its cap) keeping its first `n` instances — new
+ * instance matrix / colour arrays and buffers (mesh.dispose frees the old GL buffers; the geometry and its single
+ * iExtra, whose divisor is the cap, stay); false at the cap
+ */
+export function gcRoom(m: InstancedMesh, n: number): boolean {
+  const cap = m.instanceMatrix.count;
+  if (n < cap) return true;
+  const max = capOf(m);
+  if (cap >= max) return false;
+  const nc = Math.min(max, cap * 2);
+  const im = new InstancedBufferAttribute(new Float32Array(nc * 16), 16);
+  im.setUsage(DynamicDrawUsage);
+  (im.array as Float32Array).set((m.instanceMatrix.array as Float32Array).subarray(0, n * 16));
+  const oc = m.instanceColor;
+  let ic: InstancedBufferAttribute | null = null;
+  if (oc) {
+    ic = new InstancedBufferAttribute(new Float32Array(nc * 3).fill(1), 3);
+    (ic.array as Float32Array).set((oc.array as Float32Array).subarray(0, n * 3));
+  }
+  m.dispose();
+  m.instanceMatrix = im;
+  m.instanceColor = ic;
+  return true;
+}
 import type { Vector3 } from 'three';
 import { towerClearings } from './tower.ts';
 
@@ -196,9 +232,9 @@ export class GroundCover {
       return g;
     };
     for (let v = 0; v < KVARS[GK.crop]; v++) {
-      const m = new InstancedMesh(plain(cropClump(CROP_TYPES[v >> 1], v & 1), 6000), farMat, 6000);
+      const m = pool(plain(cropClump(CROP_TYPES[v >> 1], v & 1), 6000), farMat, 6000);
       m.instanceMatrix.setUsage(DynamicDrawUsage);
-      whiteColors(m, 6000);
+      whiteColors(m, m.instanceMatrix.count);
       m.count = 0;
       m.frustumCulled = false;
       m.matrixAutoUpdate = false;
@@ -222,9 +258,9 @@ export class GroundCover {
       const row: InstancedMesh[] = [];
       for (let v = 0; v < KVARS[k]; v++) {
         const [g, cap] = geo(k, v);
-        const m = new InstancedMesh(plain(g, cap), mat, cap);
+        const m = pool(plain(g, cap), mat, cap);
         m.instanceMatrix.setUsage(DynamicDrawUsage);
-        whiteColors(m, cap);
+        whiteColors(m, m.instanceMatrix.count);
         m.count = 0;
         m.frustumCulled = false;
         m.matrixAutoUpdate = false;
@@ -543,7 +579,7 @@ export class GroundCover {
         if (d > range) continue;
         const kind = rec[i + 6], variant = rec[i + 7];
         const mesh = this.meshes[kind]?.[variant];
-        if (!mesh || counts[kind][variant] >= mesh.instanceMatrix.count) continue;
+        if (!mesh || !gcRoom(mesh, counts[kind][variant])) continue;
         let grow = 1;
         let cr = rec[i + 8], cg = rec[i + 9], cb = rec[i + 10];
         if (kind === GK.crop) {
@@ -662,7 +698,7 @@ export class GroundCover {
           const grow = st.grow * Math.min(1, Math.max(0, (d - CROP_RANGE * 0.7) / (CROP_RANGE * 0.3)));
           if (grow <= 0.01) continue;
           const m = this.farMeshes[variant];
-          if (!m || counts[variant] >= m.instanceMatrix.count) continue;
+          if (!m || !gcRoom(m, counts[variant])) continue;
           const ux = rec[i], uy = rec[i + 1], uz = rec[i + 2];
           let ex = uz, ez = -ux;
           const el = Math.hypot(ex, ez) || 1;

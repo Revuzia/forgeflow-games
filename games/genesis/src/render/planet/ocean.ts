@@ -182,6 +182,9 @@ uniform float uWind;
 uniform sampler2D tSceneColor;
 uniform sampler2D tSceneDepth;
 uniform sampler2D tPrevColor;
+// (PERF s15 cut #5: the previous frame is sampled in its atmosphere target, not a sanitised copy: the copy's NaN / Inf
+// guard, per tap)
+vec3 prevTap(vec2 uv) { vec3 c = texture(tPrevColor, uv).rgb; return (any(isnan(c)) || any(isinf(c)) || !(dot(c, c) < 1e18)) ? vec3(0.0) : c; }
 uniform float uPrevValid;
 uniform mat4 uProj;
 uniform vec2 uResolution;
@@ -326,7 +329,7 @@ vec4 ssr(vec3 posV, vec3 rV, vec3 nV) {
       // ripples and roughness blur what the water reflects: three taps across the surface's own tilt
       vec2 px = 1.0 / uResolution;
       vec2 sp = nV.xy * px * 6.0;
-      vec3 rc = (texture(tPrevColor, puv).rgb * 2.0 + texture(tPrevColor, puv + sp).rgb + texture(tPrevColor, puv - sp).rgb) * 0.25;
+      vec3 rc = (prevTap(puv) * 2.0 + prevTap(puv + sp) + prevTap(puv - sp)) * 0.25;
       float far = 1.0 - smoothstep(0.3, 0.8, t1 / 400.0);
       return vec4(rc, e.x * e.y * facing * far);
     }

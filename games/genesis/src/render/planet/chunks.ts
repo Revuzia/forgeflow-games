@@ -265,6 +265,22 @@ class PatchPage {
   }
 }
 
+/**
+ * PERF s15 (GPU-MEMORY-PLAN cut #3): a patch's 'normal' attribute IS its 'position' (geometryOf), but three's
+ * BatchedMesh._initializeGeometry gives every page attribute its own array and GL buffer, so each page held a second
+ * copy of the positions (3 of its 48 floats a vertex: ~0.13 MB CPU + 0.13 MB GPU a page). Right after a page's first
+ * addGeometry (before its first draw, so no GL buffer exists yet) the page's 'normal' becomes its 'position': one
+ * array, one buffer, bound to both vertex attributes. setGeometryAt then copies the same data into it twice (the
+ * update ranges coincide and three merges them: one upload). Pages never resize (setGeometrySize would split them
+ * again). Same vertex data, same image. `?pagenormal=0` keeps the copy. (three r186)
+ */
+const NORMAL_ALIAS = perfSwitch('pagenormal');
+function aliasNormal(mesh: BatchedMesh): void {
+  const g = mesh.geometry;
+  const pos = g.getAttribute('position');
+  if (pos && g.getAttribute('normal') && g.getAttribute('normal') !== pos) g.setAttribute('normal', pos);
+}
+
 /** PERF F23: `?pagepool=0` = F17's pages dropped (GL buffers deleted) and patches moved between pages to free them */
 const PAGE_POOL = perfSwitch('pagepool');
 /** frames an idle page is kept beyond the reserve before its GL buffers are deleted */
@@ -382,6 +398,7 @@ class PatchBatch {
     if (k === undefined) {
       k = p.used++;
       p.geomId[k] = p.mesh.addGeometry(geo, NVERT, NINDEX);
+      if (k === 0 && NORMAL_ALIAS) aliasNormal(p.mesh);
       p.instId[k] = p.mesh.addInstance(p.geomId[k]);
       // (a new instance starts visible: count it, then hide it)
       p.vis[k] = 1;
@@ -435,8 +452,11 @@ class PatchBatch {
     const geo = new BufferGeometry();
     for (const name of Object.keys(src.attributes)) {
       const a = src.getAttribute(name);
+      if (name === 'normal' && a === src.getAttribute('position')) continue;
       geo.setAttribute(name, new Float32BufferAttribute((a.array as Float32Array).slice(vs * a.itemSize, (vs + NVERT) * a.itemSize), a.itemSize));
     }
+    // (the batch's 'normal' is its 'position': the copy's too)
+    if (src.getAttribute('normal') === src.getAttribute('position')) geo.setAttribute('normal', geo.getAttribute('position'));
     geo.setIndex(indexBuffer());
     return geo;
   }

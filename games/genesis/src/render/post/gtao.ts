@@ -154,14 +154,28 @@ const BLUR_FRAG = /* glsl */ `
 varying vec2 vUv;
 uniform sampler2D tAO;
 uniform vec2 uRes;
+#ifdef AO_FETCH
+// (PERF s15 cut #6: the raw AO may live in a linearly filtered target (the scene copy): exact texels by texelFetch —
+// what the nearest-filtered own target gave, the offsets landing on texel corners, clamped to the edge as before)
+vec3 aoTexel(ivec2 p) { return texelFetch(tAO, clamp(p, ivec2(0), ivec2(uRes) - 1), 0).rgb; }
+#endif
 void main() {
+#ifdef AO_FETCH
+  ivec2 pc = ivec2(gl_FragCoord.xy);
+  vec3 c = aoTexel(pc);
+#else
   vec3 c = texture(tAO, vUv).rgb;
+#endif
   float z0 = c.g;
   vec2 acc = vec2(0.0);
   float w = 0.0;
   for (int j = -2; j <= 1; j++)
   for (int i = -2; i <= 1; i++) {
+#ifdef AO_FETCH
+    vec3 s = aoTexel(pc + ivec2(i + 1, j + 1));
+#else
     vec3 s = texture(tAO, vUv + (vec2(float(i), float(j)) + 0.5) / uRes).rgb;
+#endif
     float wz = exp(-abs(s.g - z0) / max(z0 * 0.03, 0.05));
     acc += s.rb * wz;
     w += wz;
@@ -219,9 +233,19 @@ uniform sampler2D tIn;
 void main() { gl_FragColor = vec4(texture(tIn, vUv).rgb, 1.0); }
 `;
 
+/**
+ * PERF s15 (GPU-MEMORY-PLAN cuts #6 / #7): at full-resolution AO (Ultra / Cinematic) the two GTAO targets are each a
+ * full-res RGBA16F target (11 MB at 1686x873) that lives only between the GTAO pass and the first composite. The
+ * renderer lends targets that are idle then: the raw AO goes into the scene copy (rewritten by the copy for the water
+ * right after the blur has read it; `?aoalias=0` keeps an own target) and the blur into atmoB when an atmosphere
+ * composite follows (read by the first composite, which writes atmoA; `?aoblur=0` keeps an own target). Own targets
+ * are made only on first need (half-res AO, an airless view).
+ */
 export class GtaoPass {
-  private ao: WebGLRenderTarget;
-  private blur: WebGLRenderTarget;
+  private ao: WebGLRenderTarget | null = null;
+  private blur: WebGLRenderTarget | null = null;
+  /** the target this frame's blurred AO is in */
+  private res: WebGLRenderTarget | null = null;
   private aoMat = passMaterial(GTAO_FRAG, {
     tDepth: { value: null }, uInvProj: { value: new Matrix4() }, uFar: { value: 2e7 }, uDepthRes: { value: new Vector2(1, 1) },
     uRes: { value: new Vector2(1, 1) }, uProjScale: { value: 500 }, uRadius: { value: 1.6 }, uSlices: { value: 2 }, uSteps: { value: 6 },
@@ -230,6 +254,7 @@ export class GtaoPass {
     uShadowOn: { value: 0 }, uShadowCount: { value: 0 }, uShadowTexel: { value: 1 },
   });
   private blurMat = passMaterial(BLUR_FRAG, { tAO: { value: null }, uRes: { value: new Vector2(1, 1) } });
+  private blurFetchMat = passMaterial(BLUR_FRAG, { tAO: { value: null }, uRes: { value: new Vector2(1, 1) } }, { defines: { AO_FETCH: 1 } });
   private applyMat = passMaterial(APPLY_FRAG, {
     tDepth: { value: null }, uInvProj: { value: new Matrix4() }, uFar: { value: 2e7 }, uDepthRes: { value: new Vector2(1, 1) },
     tScene: { value: null }, tAO: { value: null }, uAoRes: { value: new Vector2(1, 1) }, uAoStrength: { value: 0.9 }, uAoOn: { value: 1 },
@@ -238,19 +263,27 @@ export class GtaoPass {
   private w = 0;
   private h = 0;
 
-  constructor() {
-    const mk = () => new WebGLRenderTarget(2, 2, { type: HalfFloatType, format: RGBAFormat, minFilter: LinearFilter, magFilter: LinearFilter, depthBuffer: false });
-    this.ao = mk();
-    this.blur = mk();
-    this.ao.texture.name = 'gtao'; this.blur.texture.name = 'gtaoBlur';
-    this.ao.texture.minFilter = this.ao.texture.magFilter = NearestFilter;
+  private own(which: 'ao' | 'blur'): WebGLRenderTarget {
+    let t = this[which];
+    if (!t) {
+      t = new WebGLRenderTarget(Math.max(2, this.w), Math.max(2, this.h), { type: HalfFloatType, format: RGBAFormat, minFilter: LinearFilter, magFilter: LinearFilter, depthBuffer: false });
+      t.texture.name = which === 'ao' ? 'gtao' : 'gtaoBlur';
+      if (which === 'ao') t.texture.minFilter = t.texture.magFilter = NearestFilter;
+      this[which] = t;
+    } else if (t.width !== this.w || t.height !== this.h) t.setSize(this.w, this.h);
+    return t;
   }
 
   setSize(w: number, h: number): void {
     if (w === this.w && h === this.h) return;
     this.w = w; this.h = h;
-    this.ao.setSize(w, h);
-    this.blur.setSize(w, h);
+    this.ao?.setSize(w, h);
+    this.blur?.setSize(w, h);
+  }
+
+  /** a lent target the pass may use (its size and format), else null */
+  private fits(t: WebGLRenderTarget | null | undefined): WebGLRenderTarget | null {
+    return t && t.width === this.w && t.height === this.h && t.samples === 0 && t.texture.type === HalfFloatType && t.texture.format === RGBAFormat ? t : null;
   }
 
   /** the cascaded sun shadow uniforms (by reference) for the sun-share estimate */
@@ -259,7 +292,7 @@ export class GtaoPass {
   }
 
   /** the blurred AO target (r = AO, g = view depth, b = sun share) and its resolution, for the folded apply */
-  get result(): Texture { return this.blur.texture; }
+  get result(): Texture { return (this.res ?? this.own('blur')).texture; }
   get resultSize(): [number, number] { return [this.w, this.h]; }
 
   /**
@@ -267,7 +300,8 @@ export class GtaoPass {
    * skyRatio: sky / direct-sun irradiance at the camera; sunUp: 0..1 the sun is above the horizon.
    */
   compute(r: WebGLRenderer, fsq: FullscreenQuad, s: AoSettings, depth: Texture, invProj: Matrix4, proj: Matrix4, far: number,
-          fullW: number, fullH: number, frame: number, sunView: Vector3, skyRatio: number, sunUp: number): void {
+          fullW: number, fullH: number, frame: number, sunView: Vector3, skyRatio: number, sunUp: number,
+          scratch: WebGLRenderTarget | null = null, blurTo: WebGLRenderTarget | null = null): void {
     const aw = Math.max(2, Math.round(fullW * s.scale)), ah = Math.max(2, Math.round(fullH * s.scale));
     this.setSize(aw, ah);
     (this.aoMat.uniforms.uSunView.value as Vector3).copy(sunView);
@@ -285,11 +319,14 @@ export class GtaoPass {
     a.uSlices.value = s.slices;
     a.uSteps.value = s.steps;
     a.uFrameMod.value = frame % 2;
-    fsq.render(r, this.aoMat, this.ao);
-    const b = this.blurMat.uniforms;
-    b.tAO.value = this.ao.texture;
+    const raw = this.fits(scratch) ?? this.own('ao');
+    fsq.render(r, this.aoMat, raw);
+    const bm = raw === this.ao ? this.blurMat : this.blurFetchMat;
+    const b = bm.uniforms;
+    b.tAO.value = raw.texture;
     b.uRes.value.set(aw, ah);
-    fsq.render(r, this.blurMat, this.blur);
+    this.res = this.fits(blurTo) ?? this.own('blur');
+    fsq.render(r, bm, this.res);
   }
 
   /** the standalone apply (worlds without air): `scene` × AO into `out`, copied on into `back` when given */
@@ -302,7 +339,7 @@ export class GtaoPass {
     p.uFar.value = far;
     p.uDepthRes.value.set(fullW, fullH);
     p.tScene.value = scene;
-    p.tAO.value = this.blur.texture;
+    p.tAO.value = this.result;
     p.uAoRes.value.set(aw, ah);
     p.uAoStrength.value = s.strength;
     fsq.render(r, this.applyMat, out);
@@ -317,7 +354,7 @@ export class GtaoPass {
   }
 
   dispose(): void {
-    this.ao.dispose(); this.blur.dispose();
-    this.aoMat.dispose(); this.blurMat.dispose(); this.applyMat.dispose(); this.copyMat.dispose();
+    this.ao?.dispose(); this.blur?.dispose();
+    this.aoMat.dispose(); this.blurMat.dispose(); this.blurFetchMat.dispose(); this.applyMat.dispose(); this.copyMat.dispose();
   }
 }

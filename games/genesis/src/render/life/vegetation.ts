@@ -681,6 +681,8 @@ interface Bucket {
   geoR: number; eMax: number;
   /** PERF F22: the farthest instance's distance from the rebuild camera (m) */
   dMax: number;
+  /** PERF s15 cut #8: the instance cap the pool may grow to (its capacity is mesh.instanceMatrix.count) */
+  max: number;
 }
 /** the fields a cell's plants read besides the ground and the stamped tree / shrub / burnt / treeSpecies (PERF F9) */
 const VEG_INPUTS = ['water', 'temperature', 'moisture', 'snow', 'crop', 'road', 'sand', 'soil', 'shrubSpecies'] as const;
@@ -793,6 +795,35 @@ function plantInstance(pv: PlanetView, rec: Float32Array, i: number, env: PlantE
 // ── PERF P2 far layer: settings and types ──
 /** the far layer on by default; `?fartrees=0` = the old hand-over (whole trees shrink into the canopy shading) */
 const FAR_DEFAULT = perfSwitch('fartrees');
+/**
+ * PERF s15 (GPU-MEMORY-PLAN cut #8): the near trees' instance pools (one per kind x variant x LOD) were made at their
+ * full capacity up front — 1,200 / 3,000 / 6,000 instances x 100 B (matrix, colour, extra, distance) whether a world
+ * has that species or not: ~65 MB of CPU arrays and their GL buffers. They start at NEAR_START and double, on demand
+ * during a fill, up to the same caps (so exactly the same trees are drawn). Each bucket also gets its own geometry —
+ * the cached tree geometry's attributes and index plus the bucket's own iExtra — instead of setting iExtra on the
+ * shared cached geometry (a second world's Vegetation overwrote the first's: its trees read the other world's snow,
+ * char and LOD roles). A grow frees the old instance buffers (mesh.dispose: instance matrix / colour; the bucket's own
+ * geometry with only its iExtra left in it). `?lazypools=0` = full pools on the shared geometry, as before.
+ */
+export const LAZY_POOLS = perfSwitch('lazypools');
+const NEAR_START = 256;
+
+/** a bucket's own geometry: `src`'s attributes and index (shared, uploaded once) and its own iExtra */
+export function bucketGeometry(src: BufferGeometry, extra: InstancedBufferAttribute): BufferGeometry {
+  const g = new BufferGeometry();
+  g.setIndex(src.getIndex());
+  for (const k of Object.keys(src.attributes)) if (k !== 'iExtra') g.setAttribute(k, src.getAttribute(k));
+  g.setAttribute('iExtra', extra);
+  g.boundingSphere = src.boundingSphere;
+  g.boundingBox = src.boundingBox;
+  return g;
+}
+/** free a bucket geometry's own buffers (its iExtra) and nothing it shares (a geometry's dispose frees every buffer it holds) */
+export function disposeBucketGeometry(g: BufferGeometry): void {
+  g.setIndex(null);
+  for (const k of Object.keys(g.attributes)) if (k !== 'iExtra') g.deleteAttribute(k);
+  g.dispose();
+}
 /** PERF F22: trees left out of the cascades their shadows cannot reach by view depth (`?shnear=0` = off) */
 const SH_NEAR = perfSwitch('shnear');
 /** main-thread ms a frame for making far blocks (scatter + instance data of a cell, ~0.1 ms each) */
@@ -897,12 +928,13 @@ export class Vegetation {
     for (let k = 0; k < KINDS.length; k++) {
       for (let v = 0; v < VARIANTS; v++) {
         for (let l = 0; l < LODS; l++) {
-          const geo = treeGeometry(KINDS[k], l, v);
-          const shrubby = SHRUB_KINDS.includes(KINDS[k]);
-          const cap = (l === 0 ? 1200 : l === 1 ? 3000 : 6000) * (shrubby ? 1 : 1);
+          const src = treeGeometry(KINDS[k], l, v);
+          const max = l === 0 ? 1200 : l === 1 ? 3000 : 6000;
+          const cap = LAZY_POOLS ? Math.min(NEAR_START, max) : max;
           const extra = new InstancedBufferAttribute(new Float32Array(cap * 4), 4);
           extra.setUsage(DynamicDrawUsage);
-          geo.setAttribute('iExtra', extra);
+          let geo = src;
+          if (LAZY_POOLS) geo = bucketGeometry(src, extra); else src.setAttribute('iExtra', extra);
           const mesh = new InstancedMesh(geo, this.material, cap);
           mesh.instanceMatrix.setUsage(DynamicDrawUsage);
           whiteColors(mesh, cap);
@@ -910,13 +942,59 @@ export class Vegetation {
           mesh.frustumCulled = false;
           mesh.matrixAutoUpdate = false;
           const depth = new ShaderMaterial({ vertexShader: VEG_DEPTH_VERT, fragmentShader: VEG_DEPTH_FRAG, uniforms: depthUniforms, colorWrite: false, side: DoubleSide });
-          geo.computeBoundingSphere();
-          const bs = geo.boundingSphere!;
-          this.buckets.push({ mesh, depth, count: 0, kind: k, variant: v, lod: l, extra, dist: new Float32Array(cap), binEnd: new Uint32Array(NB), geoR: bs.center.length() + bs.radius, eMax: 0, dMax: 0 });
+          src.computeBoundingSphere();
+          const bs = src.boundingSphere!;
+          if (LAZY_POOLS) geo.boundingSphere = bs;
+          this.buckets.push({ mesh, depth, count: 0, kind: k, variant: v, lod: l, extra, dist: new Float32Array(cap), binEnd: new Uint32Array(NB), geoR: bs.center.length() + bs.radius, eMax: 0, dMax: 0, max });
           this.nearGroup.add(mesh);
         }
       }
     }
+  }
+
+  /**
+   * room for one more instance in near bucket `b`: grows a lazy pool (x2, up to its cap) keeping its first `count`
+   * instances; false at the cap (PERF s15 cut #8)
+   */
+  private room(b: Bucket): boolean {
+    const cap = b.mesh.instanceMatrix.count;
+    if (b.count < cap) return true;
+    if (cap >= b.max) return false;
+    const nc = Math.min(b.max, cap * 2), n = b.count;
+    const old = b.mesh;
+    const extra = new InstancedBufferAttribute(new Float32Array(nc * 4), 4);
+    extra.setUsage(DynamicDrawUsage);
+    (extra.array as Float32Array).set((b.extra.array as Float32Array).subarray(0, n * 4));
+    const geo = bucketGeometry(old.geometry, extra);
+    const mesh = new InstancedMesh(geo, old.material as MeshStandardMaterial, nc);
+    mesh.instanceMatrix.setUsage(DynamicDrawUsage);
+    (mesh.instanceMatrix.array as Float32Array).set((old.instanceMatrix.array as Float32Array).subarray(0, n * 16));
+    mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(nc * 3).fill(1), 3);
+    if (old.instanceColor) (mesh.instanceColor.array as Float32Array).set((old.instanceColor.array as Float32Array).subarray(0, n * 3));
+    mesh.count = old.count;
+    mesh.visible = old.visible;
+    mesh.frustumCulled = false;
+    mesh.matrixAutoUpdate = false;
+    mesh.layers.mask = old.layers.mask;
+    mesh.name = old.name;
+    const dist = new Float32Array(nc);
+    dist.set(b.dist.subarray(0, n));
+    const parent = old.parent;
+    parent?.remove(old);
+    old.dispose();
+    disposeBucketGeometry(old.geometry);
+    parent?.add(mesh);
+    b.mesh = mesh; b.extra = extra; b.dist = dist;
+    this.nearGrows++;
+    return true;
+  }
+  /** near pools grown (PERF s15 cut #8; tests, the perf report) */
+  nearGrows = 0;
+  /** the near pools' instance capacity and its cap (tests, the perf report) */
+  nearCapacity(): { cap: number; max: number } {
+    let cap = 0, max = 0;
+    for (const b of this.buckets) { cap += b.mesh.instanceMatrix.count; max += b.max; }
+    return { cap, max };
   }
 
   setShadowCasting(on: boolean): void {
@@ -1218,7 +1296,7 @@ export class Vegetation {
         else { la = 2; }
         const bA = this.buckets[base + la];
         const bB = lb >= 0 ? this.buckets[base + lb] : null;
-        if (bA.count >= bA.mesh.instanceMatrix.count || (bB && bB.count >= bB.mesh.instanceMatrix.count)) continue;
+        if (!this.room(bA) || (bB && !this.room(bB))) continue;
         const q = i / REC;
         const sxMax = ni.sx[q];
         for (const [b, role] of bB ? [[bA, ra], [bB, rb]] as const : [[bA, ra]] as const) {
@@ -1885,7 +1963,7 @@ export class Vegetation {
   }
 
   dispose(): void {
-    for (const b of this.buckets) { b.mesh.dispose(); b.depth.dispose(); }
+    for (const b of this.buckets) { b.mesh.dispose(); b.depth.dispose(); if (LAZY_POOLS) disposeBucketGeometry(b.mesh.geometry); }
     for (const b of this.far) if (b) { b.mesh.dispose(); b.mesh.geometry.setIndex(null); b.mesh.geometry.deleteAttribute('position'); b.mesh.geometry.deleteAttribute('normal'); b.mesh.geometry.dispose(); }
     this.farMat.dispose(); this.farDepth.dispose();
     this.material.dispose();
