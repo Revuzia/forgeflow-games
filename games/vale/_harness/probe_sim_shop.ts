@@ -64,6 +64,21 @@ section('access rules', () => {
   if (spot) { e5.x = spot[0]; e5.y = spot[1]; w5.hashDirty = true; }
   s5.step();
   check("'base': anywhere on the home platform (15 m from the fountain, outside the counter circle)", !!spot && p5.canShop, spot);
+  // the far side of the base, just inside the inner gates (24 m), still counts; beyond the base (30 m) does not
+  const ring = (r: number): [number, number] | null => {
+    for (let a = 0; a < 64; a++) {
+      const x = f5[0] + Math.cos(a / 64 * Math.PI * 2) * r, y = f5[1] + Math.sin(a / 64 * Math.PI * 2) * r;
+      if (Math.hypot(x - sh5.at[0], y - sh5.at[1]) > sh5.radius + 0.5 && x > 0 && y > 0 && x < w5.mapDef.size[0] && y < w5.mapDef.size[1]) return [x, y];
+    }
+    return null;
+  };
+  const far = ring(24), out = ring(30);
+  if (far) { e5.x = far[0]; e5.y = far[1]; w5.hashDirty = true; }
+  s5.step();
+  check("'base': the far side of the base (24 m, inside the inner gates)", !!far && p5.canShop, far);
+  if (out) { e5.x = out[0]; e5.y = out[1]; w5.hashDirty = true; }
+  s5.step();
+  check("'base': not past the base (30 m)", !!out && !p5.canShop, out);
 });
 
 section('pool, basic buy, stats, buy event', () => {

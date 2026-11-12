@@ -64,8 +64,9 @@ function inCircle(x: number, y: number, c: { at: readonly [number, number] | num
   return dx * dx + dy * dy <= c.radius * c.radius;
 }
 
-/** the home platform: a seat this close to its own fountain counts as in base for shopping (m) */
-const BASE_ZONE_R = 18;
+/** the whole base: a seat this close to its own fountain counts as in base for shopping (m). Reaches just inside the
+ *  inner gate line (RIFT 27.6 m, BRIDGE 25.7 m from the fountain), so the fountain, the core and its Needles are in (ruling 31) */
+const BASE_ZONE_R = 25;
 
 /** may this seat use the shop right now (rules.shopAccess) */
 export function canShopNow(w: World, p: Player): boolean {
