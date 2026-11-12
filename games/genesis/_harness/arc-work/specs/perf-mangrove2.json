@@ -1,0 +1,53 @@
+{
+ "_doc": "PERF s13: what draws the green shapes under the sea shallows at the mangrove shore (compare pe4-mangrove60).",
+ "shots": [
+  {
+   "name": "pe4-m60-hideveg",
+   "params": "scenario=babel&source=worker&seed=307987276&hide=veg",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', lat: -10.4, lon: 139.6, dist: 60, tilt: 70, yaw: 300, fov: 55, hour: 11 }); await G.frames(10);",
+    "return { ok: 1, alt: globalThis.__GENESIS_R__?.stats?.altitude };"
+   ]
+  },
+  {
+   "name": "pe4-m60-hidecover",
+   "params": "scenario=babel&source=worker&seed=307987276&hide=cover",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', lat: -10.4, lon: 139.6, dist: 60, tilt: 70, yaw: 300, fov: 55, hour: 11 }); await G.frames(10);",
+    "return { ok: 1, alt: globalThis.__GENESIS_R__?.stats?.altitude };"
+   ]
+  },
+  {
+   "name": "pe4-m60-nowater",
+   "params": "scenario=babel&source=worker&seed=307987276&water=0",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', lat: -10.4, lon: 139.6, dist: 60, tilt: 70, yaw: 300, fov: 55, hour: 11 }); await G.frames(10);",
+    "return { ok: 1, alt: globalThis.__GENESIS_R__?.stats?.altitude };"
+   ]
+  }
+ ]
+}

@@ -1012,3 +1012,22 @@ long press frame-rate independent. Report after 1-2 verified.
    cells 0.2-2.8 m BELOW the lake level with tree cover 0.5-0.9 (flooded forest the sim keeps) -> trunks seen through
    water = 'ghosts'. Decide render-side (shore film over slope cells) vs sim-side (sim lane: trees in deep water).
 4. Item 4 reduced-res post: only with A/B-identical shots; the owner's bisection report decides which pass matters.
+
+## SESSION 13 (2026-11-12 ~09:00Z) — after the ship of 92d06936
+- ITEM 5 EAST WATER, findings (shots LOOKED, babel 307987276 by day, live src):
+  * pe3-stream / pe3-pond (the wet hillside cells 1.4-1.7 km east: 0.4 m films, a 5 m hill pond; cmp-pe3.png): the
+    pond draws as a clean pond, the films draw nothing visible; NO water sheet on the hills there.
+  * pe3-e120-y60/90/120 (cmp-pe3b.png; yaw seems to change little): the town on its lake, no water on hills; several
+    houses on the lake's edge stand in the water (sim building placement vs the lake level: worth a sim-lane look).
+  * SIM FACTS (probe scratchpad flood.ts / sp22.ts): the cells 0.3-2 m under water with tree 0.8-0.9 east / south-east
+    of the town are OCEAN cells (sea shallows) of species 22 = MANGROVE (habitat shore, water [0, 2] m, salinity 1):
+    sim-correct by the content table.
+  * pe4-mangrove60 (alt ~45 m over that shore, LOOKED): the sea shallows show DARK GREEN BLOBS just under the water
+    surface along the shore and no mangrove standing out of the water = the likely 'trunks / trees as ghosts'. Either
+    the near vegetation scatter places the mangroves sunk (base on the sea bed, crown under the sheet) or skips
+    them while something green (ground cover / canopy) is drawn on the sea bed and refracted. NEXT: find which
+    (queued: perf-mangrove2.json = hide=veg / hide=cover / water=0 at the same pose, run-s13b.sh last), then make a mangrove stand read as
+    trees standing in the water (trunks and prop roots out of the water, crowns above it), never green shapes under it.
+- FAR TREES colour: ftc5 (green factor 0.8): green-pixel mean (76,114,28) vs near (67,104,29), region (88,91,45) vs
+  (89,91,50): close. Further to (0.7, 0.72, 0.6) now in src; ftc6 queued (run-s13b.sh, after tq0 / tq1).
+- tq0 / tq1 (trackpad zoom through the deck, before / after, dist26) running in run-s13b.sh.
