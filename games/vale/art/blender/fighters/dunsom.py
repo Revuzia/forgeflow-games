@@ -12,8 +12,8 @@ wrapped below); normals and AO bake from the sculpt.
 
 Where the concept and the brief disagree:
   * the concept's look wins (the approved look): a broad shallow felt cone-hat (0.71 m across, the brief's 0.62 is
-    the painting's 0.72 read short), a lavender hood framing a golden-ochre carved mask of irregular tiles (the
-    painted cracks are carved: proto/dunsom_relief.py), a khaki scarf over the chin, a long lavender felt coat open
+    the painting's 0.72 read short), a lavender hood framing a golden-ochre carved mask (max2 card blockers: one smooth
+    lacquered-wood face with calm lidded carved eyes; the painting's tile cracks are wiped, no longer carved), a khaki scarf over the chin, a long lavender felt coat open
     below the belt, ochre gloves, the crook in the right fist at chest height, its hook curling OUT with the lantern
     hanging beside the hood. The crook top stands at ~2.2 m (the painting's 2.17: under the HP bar from either facing).
   * the brief wins on the facing cue: the crook leans a little forward (the fist 0.22 m in front of the shoulder) and
