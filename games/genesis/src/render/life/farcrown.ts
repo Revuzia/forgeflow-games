@@ -80,7 +80,7 @@ export function farCrownGeometry(kind: TreeKind, variant: number, lod: 0 | 1, le
   // sprays, the floor between): measured on the babel forest at 500 m, near crowns vs hulls (ftc-near / ftc-far), the
   // hull read paler and bluer at the same lighting. The crown-depth shading in the far shader takes the value down;
   // this takes out the hull's cast toward blue-grey (foliage only; bark keeps its own colour)
-  if (leafy) { cr *= 0.74; cg *= 0.8; cb *= 0.6; }
+  if (leafy) { cr *= 0.7; cg *= 0.72; cb *= 0.6; }
   const y0 = pct(ys, 0.04), y1 = Math.max(y0 + 0.05, pct(ys, 0.985));
   // the silhouette radius at a height: a high percentile of the crown's radial extent in a slice around it (cards
   // reach past the visual mass; the percentile keeps the hull to what reads as the crown)
