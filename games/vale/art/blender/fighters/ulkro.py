@@ -84,10 +84,11 @@ CARDS = {
     "ulkro": {
         # (card engineer 2, closing2: t 0.50 was the follow-through, the thrower low and pointing down: the draw over the
         # shoulder, the left arm pointing at the target)
-        # (max2 g2, verify_roll2: at yaw 8 the drawn dart stood up the middle of the face (an arrow-through-head read)
-        # and the slit's stitch ticks read as teeth on the bust: the camera round to 32 deg so the dart clears the
-        # face, and a three-quarter hero frame (head ~2x) so the painted pass can keep two lidded eyes)
-        "splash": {"clip": "cast_a1", "t": 0.30, "yaw": 32.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+        # (max2 g2, verify_roll2: on the draw (t 0.30) the dart in the hand stood up the middle of the face, an
+        # arrow-through-head read on splash and bust alike, and turning the camera only laid it across the slit: the
+        # release (t 0.43), the thrower whipped forward and the dart gone, the face clear; a three-quarter hero frame
+        # (head ~2x) so the painted pass can keep two lidded eyes)
+        "splash": {"clip": "cast_a1", "t": 0.43, "yaw": 16.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
                    "box_lo": 0.75, "box_w": 0.70,
                    "key_az": 205.0, "key_el": 14.0, "key_color": "#FFD2A0", "sun": 3.2, "rim_cool": 1.0,
                    "rim_warm": 1.4, "bounce": 0.55, "bounce_color": "#D8A47A", "accent": 1.6, "exposure": -0.5,
@@ -95,8 +96,11 @@ CARDS = {
                               "power": 55.0, "size": 0.25},
                              {"at": "head", "az": 170.0, "el": 10.0, "dist": 0.8, "color": "#FFDCB8", "power": 26.0,
                               "size": 0.3}]},
-        "portrait": {"yaw": 32.0, "lens": 70.0},
-        "plate": {"glow": [0.22, 0.56, 0.42, 0.10], "glow_color": "#F2C496"},
+        "portrait": {"yaw": 16.0, "lens": 70.0},
+        # (max2 g2, verify_roll2: the compose washed the figure milky against the render: less plate haze, match and
+        # light wrap over the figure, so the sandstone hood and brown tunic keep the render's value and chroma)
+        "plate": {"glow": [0.22, 0.56, 0.42, 0.10], "glow_color": "#F2C496", "haze": 0.0, "match": 0.12,
+                  "wrap": 0.16, "amb_tint": 0.30},
     },
     "ulkro_highrim": {
         # (card engineer 2, closing2: Bound's leap floated the figure off the ground: the Hamstring Dart's crouch, feet down)
