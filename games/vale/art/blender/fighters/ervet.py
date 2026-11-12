@@ -98,7 +98,8 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.96, "yaw": 24.0, "pitch":
 # and light (the same clip, t and key; a closer lens).
 CARDS = {
     "ervet": {
-        "splash": {"clip": "cast_a3", "t": 0.25, "yaw": 30.0, "pitch": -5.0, "lens": 50.0, "fill": 0.88, "x": 0.70,
+        "splash": {"clip": "cast_a3", "t": 0.12, "yaw": 30.0, "pitch": -5.0,   # (card engineer 1: t 0.25 raised the forearm over the star visor, closing ervet-C2-M1; t 0.12 draws the blade across with the visor clear)
+                   "lens": 50.0, "fill": 0.88, "x": 0.70,
                    "box_top": 2.25,      # the raised blade leaves the frame: the body fills the card (speckle 4.4 on a small figure)
                    "key_az": 220.0, "key_el": 24.0, "key_color": "#FFDDB4", "sun": 3.2, "rim_cool": 1.3,
                    "rim_warm": 0.9, "bounce": 0.5, "bounce_color": "#E6C49E", "accent": 1.7,
