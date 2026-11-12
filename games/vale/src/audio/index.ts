@@ -184,7 +184,8 @@
 //               else the role 'proc.<item|boon|team|unit>'. The proc IS the payoff's sound: passive damage dealt
 //               without a delivery (no 'hit') is voiced by the proc that follows it in the same tick. A periodic
 //               trigger (interval, moveDistance) reminds at most every PROC_PERIODIC_S per owner, the rest at most
-//               every PROC_GAP_S per passive and owner. `procStats` counts what became of every proc (dev / probes)
+//               every PROC_GAP_S per passive and owner (an item's generic 'proc.item' every PROC_ITEM_GAP_S, PROC_ITEM_DB
+//               down: the attack it rides already sounds). `procStats` counts what became of every proc (dev / probes)
 //   ambience    the map's world: content's audio.ambience[<map id>] lists { source, cue } → a looping cue on the
 //               ambience bus (older content: events 'ambient.<map id>.<source>' → cue; the emitter keeps that label).
 //               <source> names an art.ambient group of that map (an effect's vfx, a critter id, a prop's fx vfx
@@ -451,6 +452,11 @@ const REPEAT_JITTER_S = 0.004;
 const LOOP_DEFAULT_S = 2.5;  // a looping cue with no stated life stops after this
 const PROC_GAP_S = 0.3;      // one passive of one owner sounds at most this often (an on-hit passive on every attack)
 const PROC_PERIODIC_S = 6;   // … and a periodic one (an aura's tick, a run-up stack) only reminds this often
+// an item's generic proc (an on-hit item with no sound of its own, 'proc.item'): it fires on nearly every attack, whose
+// own kit sound already says it landed, so it is a reminder, not a second hit (max SFX fix 1: in a Lisvel capture it was
+// 12.5 % of the heard sfx, as many plays as her attacks): at most every PROC_ITEM_GAP_S per item and owner, PROC_ITEM_DB under
+const PROC_ITEM_GAP_S = 1.5;
+const PROC_ITEM_DB = -4;
 const PERIODIC_ON = new Set(['interval', 'moveDistance']);
 /** a fighter's kit slots (see `kits` in the header): content's cue f_<fighter>_<slot> */
 const KIT_SLOTS = ['attack_swing', 'attack_hit', 'a1', 'a2', 'a3', 'ult_windup', 'ult_release', 'passive', 'death', 'call', 'hit', 'dash'] as const;
@@ -2627,8 +2633,10 @@ class Engine implements ValeAudioPort {
         if (!cueId || !this.cues[cueId]) { this.procStats.unbound++; break; }
         const now = this.ctx?.currentTime ?? 0;
         const key = `${id}:${e.src as number}`;
-        if (now - (this.procLast.get(key) ?? -1e9) < (PERIODIC_ON.has(e.on as string) ? PROC_PERIODIC_S : PROC_GAP_S)) { this.procStats.throttled++; break; }
-        const r = this.cue(cueId, at(dst ?? src), 1, 0, aw);
+        const item = !pv?.cue && pv?.kind === 'item';
+        const gap = PERIODIC_ON.has(e.on as string) ? PROC_PERIODIC_S : item ? PROC_ITEM_GAP_S : PROC_GAP_S;
+        if (now - (this.procLast.get(key) ?? -1e9) < gap) { this.procStats.throttled++; break; }
+        const r = this.cue(cueId, at(dst ?? src), item ? Math.pow(10, PROC_ITEM_DB / 20) : 1, 0, aw);
         if (r === 'played') this.procLast.set(key, now);
         this.procStats[r === 'none' ? 'unbound' : r]++;
         break;
