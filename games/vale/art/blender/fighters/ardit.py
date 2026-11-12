@@ -96,7 +96,7 @@ CARDS = {
         "splash": {"clip": "cast_a1", "t": 0.45, "yaw": -24.0,   # (card engineer 1: at yaw 26 the pavise covered the body and the helm read small behind it; from the spear side the visor, the spear and the chalked pavise all read)
                    "pitch": -3.0, "lens": 58.0, "fill": 0.82, "x": 0.70,
                    "key_az": 150.0, "key_el": 34.0, "key_color": "#C9D4F0", "sun": 2.5, "rim_cool": 2.2,
-                   "rim_warm": 0.3, "bounce": 0.25, "bounce_color": "#8E9CC0", "accent": 1.4, "exposure": -0.35,
+                   "rim_warm": 0.3, "bounce": 0.25, "bounce_color": "#8E9CC0", "accent": 1.4, "exposure": -0.95,   # (ce1: -0.35 washed the ink-grey steel to white from the spear side)
                    "focal": [{"at": "head", "az": 160.0, "el": 15.0, "dist": 0.8, "color": "#DCE6FF", "power": 22.0,
                               "size": 0.25},
                              {"at": "x_spear_tip", "az": 140.0, "el": 20.0, "dist": 0.6, "color": "#E4EEFF",

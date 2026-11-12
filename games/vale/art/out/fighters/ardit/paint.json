@@ -103,6 +103,89 @@
   "figure_median": 1,
   "date": "2026-11-11"
  },
+ "ardit_chalkline:splash": {
+  "shipped": "3d",
+  "why": "ce1: re-staged from the spear side (yaw -24: at 26 the pavise hid the body) and exposed -0.95; 9 of 9 variants over three renders darken the pale-lit steel toward the brief's ink grey and add warm light (silhouette 0.61-0.77, new colour); the 3D finish v2 card ships",
+  "gates": [
+   {
+    "aspect_err": 0.0,
+    "struct": 0.962,
+    "iou": 0.764,
+    "pal_mean": 11.8,
+    "pal_max": 15.6,
+    "face_range": 1.18,
+    "face_dark": 1.33,
+    "face_corr": 0.99,
+    "new_colour": 0.02205,
+    "eye_ds": -12.3,
+    "eye_dv": -17.3,
+    "prop_out": 0.0,
+    "prop_out_fill": 0.0,
+    "prop_in": 0.0002,
+    "prop_in_fill": 0.55,
+    "menu_p50": 94,
+    "menu_over200": 1.0,
+    "fails": [
+     "silhouette",
+     "new_colour"
+    ],
+    "pass": false,
+    "variant": 1
+   },
+   {
+    "aspect_err": 0.0,
+    "struct": 0.962,
+    "iou": 0.771,
+    "pal_mean": 10.9,
+    "pal_max": 14.3,
+    "face_range": 1.18,
+    "face_dark": 1.36,
+    "face_corr": 0.99,
+    "new_colour": 0.00323,
+    "eye_ds": -2.9,
+    "eye_dv": -0.5,
+    "prop_out": 0.0,
+    "prop_out_fill": 0.0,
+    "prop_in": 0.0,
+    "prop_in_fill": 0.0,
+    "menu_p50": 96,
+    "menu_over200": 1.1,
+    "fails": [
+     "silhouette",
+     "new_colour"
+    ],
+    "pass": false,
+    "variant": 2
+   },
+   {
+    "aspect_err": 0.0,
+    "struct": 0.975,
+    "iou": 0.771,
+    "pal_mean": 11.1,
+    "pal_max": 15.8,
+    "face_range": 1.07,
+    "face_dark": 1.32,
+    "face_corr": 0.98,
+    "new_colour": 0.01733,
+    "eye_ds": -1.9,
+    "eye_dv": -17.3,
+    "prop_out": 0.0,
+    "prop_out_fill": 0.0,
+    "prop_in": 0.0003,
+    "prop_in_fill": 0.57,
+    "menu_p50": 89,
+    "menu_over200": 0.6,
+    "fails": [
+     "silhouette",
+     "new_colour"
+    ],
+    "pass": false,
+    "variant": 3
+   }
+  ],
+  "prompt_version": 4,
+  "date": "2026-11-11"
+ },
  "ardit_first_bell:portrait": {
   "shipped": "painted",
   "variant": 2,

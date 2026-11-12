@@ -1,0 +1,110 @@
+{
+ "ardit_splash": {
+  "axis_edge": 0.32,
+  "flat": 0.03,
+  "rim_dL_left": -8.6,
+  "rim_dL_right": 7.3,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": true,
+  "dab": 6.1,
+  "face": {
+   "p5": 21.0,
+   "p50": 67.5,
+   "p95": 80.4,
+   "range": 59.4,
+   "dark_share": 0.237,
+   "edge": 4.22
+  }
+ },
+ "ardit_portrait": {
+  "axis_edge": 0.254,
+  "flat": 0.011,
+  "rim_dL_left": -4.5,
+  "rim_dL_right": 15.5,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": true,
+  "dab": 8.9,
+  "face": {
+   "p5": 13.7,
+   "p50": 55.3,
+   "p95": 89.8,
+   "range": 76.2,
+   "dark_share": 0.284,
+   "edge": 3.41
+  }
+ },
+ "ardit_chalkline_splash": {
+  "axis_edge": 0.33,
+  "flat": 0.015,
+  "rim_dL_left": 14.0,
+  "rim_dL_right": -1.8,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 5.0,
+  "face": {
+   "p5": 27.3,
+   "p50": 54.9,
+   "p95": 85.2,
+   "range": 57.9,
+   "dark_share": 0.117,
+   "edge": 4.48
+  }
+ },
+ "ardit_chalkline_portrait": {
+  "axis_edge": 0.319,
+  "flat": 0.021,
+  "rim_dL_left": 2.6,
+  "rim_dL_right": -5.5,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 2.7,
+  "face": {
+   "p5": 15.3,
+   "p50": 67.0,
+   "p95": 74.5,
+   "range": 59.2,
+   "dark_share": 0.249,
+   "edge": 3.0
+  }
+ },
+ "ardit_first_bell_splash": {
+  "axis_edge": 0.187,
+  "flat": 0.011,
+  "rim_dL_left": -9.7,
+  "rim_dL_right": 3.2,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": true,
+  "dab": 8.5,
+  "face": {
+   "p5": 47.8,
+   "p50": 74.1,
+   "p95": 88.4,
+   "range": 40.5,
+   "dark_share": 0.122,
+   "edge": 3.42
+  }
+ },
+ "ardit_first_bell_portrait": {
+  "axis_edge": 0.2,
+  "flat": 0.011,
+  "rim_dL_left": -24.8,
+  "rim_dL_right": -7.1,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 7.5,
+  "face": {
+   "p5": 31.2,
+   "p50": 61.7,
+   "p95": 74.2,
+   "range": 43.0,
+   "dark_share": 0.132,
+   "edge": 2.72
+  }
+ }
+}
