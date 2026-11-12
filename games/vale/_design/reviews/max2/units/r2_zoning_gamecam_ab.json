@@ -3,99 +3,99 @@
   "signature": "#F2896C",
   "sigHuePx before->after": [
    8165,
-   7966
+   8989
   ],
   "creamPx before->after": [
    939,
-   885
+   932
   ]
  },
  "seed7_vashil_4": {
   "signature": "#A66CF2",
   "sigHuePx before->after": [
    1513,
-   1513
+   3692
   ],
   "creamPx before->after": [
    1677,
-   1677
+   561
   ]
  },
  "seed7_tunlan_5": {
   "signature": "#9A00B4",
   "sigHuePx before->after": [
    2491,
-   2491
+   6809
   ],
   "creamPx before->after": [
    261,
-   261
+   254
   ]
  },
  "seed7_rishal_6": {
   "signature": "#B3004A",
   "sigHuePx before->after": [
    695,
-   692
+   1562
   ],
   "creamPx before->after": [
    862,
-   862
+   858
   ]
  },
  "seed23_kemdo_2": {
   "signature": "#F2896C",
   "sigHuePx before->after": [
    2679,
-   2677
+   3810
   ],
   "creamPx before->after": [
    469,
-   469
+   475
   ]
  },
  "seed23_burdam_3": {
   "signature": "#B30300",
   "sigHuePx before->after": [
    2086,
-   2080
+   4144
   ],
   "creamPx before->after": [
    503,
-   503
+   483
   ]
  },
  "seed23_vashil_4": {
   "signature": "#A66CF2",
   "sigHuePx before->after": [
    1757,
-   1757
+   3418
   ],
   "creamPx before->after": [
    1519,
-   1519
+   456
   ]
  },
  "seed23_tunlan_5": {
   "signature": "#9A00B4",
   "sigHuePx before->after": [
    1555,
-   1555
+   5895
   ],
   "creamPx before->after": [
    260,
-   260
+   255
   ]
  },
  "seed23_rishal_6": {
   "signature": "#B3004A",
   "sigHuePx before->after": [
    5783,
-   5856
+   6805
   ],
   "creamPx before->after": [
    1190,
-   1199
+   1234
   ]
  }
 }

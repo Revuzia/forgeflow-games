@@ -1,5 +1,5 @@
 {
- "_doc": "MAX2 U1(1) material zoning per fighter (art/tools/zone_grade.py; pipeline.build re-applies it after every build). Each zone: parts of the bake's part map, or boxes (rest position, Blender axes, m) x an ORM roughness band [lo, hi] x an optional min/max L*; hex = the hue (CIELAB angle of the colour), L = the zone's mean L*, C = its chroma, k = the texel's own L* deviation kept (default 1). Signature hues are content/fighters/<id>.json vfx.signature. Gate: lineup_qa sigPct >= 6 % and the bottom value band at L* 20-35. Round 2 (max2 r2): crown breaks (hoods, hats, halo, pauldrons) carry the signature hue at the covering's own value, so the top-down read leads with the signature and the bible's top band keeps its value (ruling 7: a pale covering over a pale robe gets a break); every zoned albedo ends with each reserved band at <= 8 % (ruling 32, zone_grade.py --reserve-cap).",
+ "_doc": "MAX2 U1(1) material zoning per fighter (art/tools/zone_grade.py; pipeline.build re-applies it after every build). Each zone: parts of the bake's part map, or boxes (rest position, Blender axes, m) x an ORM roughness band [lo, hi] x an optional min/max L*; hex = the hue (CIELAB angle of the colour), L = the zone's mean L*, C = its chroma, k = the texel's own L* deviation kept (default 1). Signature hues are content/fighters/<id>.json vfx.signature. Gate: lineup_qa sigPct >= 6 % and the bottom value band at L* 20-35. Round 2 (max2 r2): crown breaks (hoods, hats, halo, pauldrons) carry the signature hue at the covering's own value, so the top-down read leads with the signature and the bible's top band keeps its value (ruling 7: a pale covering over a pale robe gets a break); every zoned albedo ends with each reserved band at <= 8 % (ruling 32, zone_grade.py --reserve-cap). reserveModes: per band, how --reserve-cap moves texels (edge/lo/hi/sat; Burdam's harm browns turn redder, never gold).",
  "kemdo": {
   "zones": [
    {
@@ -105,7 +105,7 @@
     "C": 24
    },
    {
-    "why": "r2: the cream shoulder plates an oxblood lacquer (box x lacquer roughness x the pale texels only; the hood, cowl and mask stay the cards lane's)",
+    "why": "r2: the cream shoulder plates an oxblood lacquer (box x lacquer roughness x the pale texels only; the hood, cowl and mask stay the cards lane's); notBoxes keeps the hood and cowl out (cards lane)",
     "boxes": [
      [
       0.33,
@@ -131,9 +131,22 @@
     "minL": 45,
     "hex": "#B30300",
     "L": 40,
-    "C": 22
+    "C": 22,
+    "notBoxes": [
+     [
+      -0.36,
+      -0.7,
+      1.5,
+      0.36,
+      0.75,
+      2.4
+     ]
+    ]
    }
-  ]
+  ],
+  "reserveModes": {
+   "harm": "lo"
+  }
  },
  "vashil": {
   "zones": [
@@ -214,7 +227,7 @@
     ],
     "hex": "#9A00B4",
     "L": 55,
-    "C": 18
+    "C": 14
    }
   ]
  },

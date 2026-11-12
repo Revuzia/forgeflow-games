@@ -1,0 +1,26 @@
+{
+ "fighter_dunsom_10": {
+  "r1glass->r2glass": 0.03
+ },
+ "fighter_hesmi_8": {
+  "r1glass->r2glass": 0.18
+ },
+ "fighter_ilsheta_1": {
+  "r1glass->r2glass": 0.18
+ },
+ "fighter_kemdo_2": {
+  "r1glass->r2glass": 0.05
+ },
+ "fighter_kemdo_6": {
+  "r1glass->r2glass": 0.27
+ },
+ "fighter_rishal_5": {
+  "r1glass->r2glass": 0.04
+ },
+ "fighter_tunlan_4": {
+  "r1glass->r2glass": 0.0
+ },
+ "fighter_vashil_3": {
+  "r1glass->r2glass": 0.06
+ }
+}

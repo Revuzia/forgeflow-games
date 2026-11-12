@@ -217,6 +217,7 @@ for (const spec of args.flatMap((a, i) => (a === '--part-tint' ? [args[i + 1]] :
 // smallest that meets the cap. Per band, --reserve-mode band=edge|sat (default: every band edge):
 //   edge  hue-shifted just outside the band's nearer edge (by --reserve-margin deg, default 4), saturation and value
 //         kept (a harm-band brown turns a little redder or yellower and stays a brown of the same strength)
+//   lo/hi as edge, always past the band's low (or high) edge (a harm brown turns redder, never gold)
 //   sat   desaturated to --reserve-sat (default 0.30), hue and value kept
 // The lossy WebP encode pulls some moved texels back, so zone_grade.py aims a few points under the cap and checks.
 if (args.includes('--reserve-cap')) {
@@ -248,7 +249,7 @@ if (args.includes('--reserve-cap')) {
     for (const [p] of hit.slice(0, excess)) {
       const [h, s, v] = hsv(p);
       const ns = how === 'sat' ? Number(opt('--reserve-sat', 0.3)) : s;
-      const nh = how === 'sat' ? h : (h < (a + b) / 2 ? a - margin + 360 : b + margin) % 360;
+      const nh = how === 'sat' ? h : how === 'lo' ? (a - margin + 360) % 360 : how === 'hi' ? b + margin : (h < (a + b) / 2 ? a - margin + 360 : b + margin) % 360;
       // HSV -> RGB at the new hue / saturation, the value kept
       const c = v * ns, x = c * (1 - Math.abs(((nh / 60) % 2) - 1)), m = v - c;
       const [r1, g1, b1] = nh < 60 ? [c, x, 0] : nh < 120 ? [x, c, 0] : nh < 180 ? [0, c, x] : nh < 240 ? [0, x, c] : nh < 300 ? [x, 0, c] : [c, 0, x];

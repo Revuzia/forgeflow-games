@@ -317,6 +317,9 @@ const CHAR_LIGHT = /* glsl */`
   //     light along its folds), so a robe no longer reads as the same plaster as a chalk pauldron;
   //   glass (r < 0.25, VALE dawnglass): dark-centred and bright-edged: a tight glint from the character key, a Fresnel
   //     edge in the glass's own hue and 14 % less diffuse in the middle; at rest it stays under the bloom threshold.
+  //     MAX2 r2 (U6, Ilsheta's chimney glass and every fighter's dawnglass): glass reads by reflection, never emission
+  //     (glow is the game's warning cue, ilsheta.py GLASS_MAT); the edge 0.5 -> 0.85 and the glint 0.26 -> 0.4 so the
+  //     rim shows at the 28.5 m camera, the middle 22 % darker (was 14 %) so the edge reads against it.
   if ( valeCharMat > 0.5 && valeCharMode > 1.1 ) {
     float valeR = roughnessFactor;
     vec3 valeK = normalize( valeKeyDir );
@@ -337,8 +340,8 @@ const CHAR_LIGHT = /* glsl */`
       float valeGlint = pow( saturate( dot( geometryNormal, valeH ) ), 64.0 ) * saturate( valeNdL * 4.0 );
       float valeEdge = valeF * valeF * valeF;
       vec3 valeHue = diffuseColor.rgb / max( max( diffuseColor.r, max( diffuseColor.g, diffuseColor.b ) ), 0.02 );
-      reflectedLight.directDiffuse *= 1.0 - min( 0.14 * valeCharMat, 0.9 ) * valeGlass * ( 1.0 - valeEdge );
-      reflectedLight.directSpecular += valeShare * valeGlass * valeCharRim.rgb * ( 0.26 * valeGlint + 0.5 * valeEdge * mix( vec3( 1.0 ), valeHue, 0.6 ) );
+      reflectedLight.directDiffuse *= 1.0 - min( 0.22 * valeCharMat, 0.9 ) * valeGlass * ( 1.0 - valeEdge );
+      reflectedLight.directSpecular += valeShare * valeGlass * valeCharRim.rgb * ( 0.4 * valeGlint + 0.85 * valeEdge * mix( vec3( 1.0 ), valeHue, 0.6 ) );
     }
   }
   // a jungle monster takes the world's light (sun, sky, its crown share) and shows its own glow (a gloamoth's wing,

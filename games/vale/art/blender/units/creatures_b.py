@@ -1882,12 +1882,12 @@ class Sunsplinter(Monster):
     # the glass sunburst, its crown splinters and the keel move out with it. Same sphere segments: same tris.
     CORE_R = 0.56
     C = np.array([0.0, 0.0, 1.58])
-    # tip: broken base B, axis 46 degrees above forward (MAX2 r2: was 38 degrees from (0, -0.36, 1.98); facing the
-    # camera, the tip slab covered the orb's top at the game camera and the unit's pixel count read under its gate at
-    # some facings (verify1_q seed 19): the base 8 cm higher and the blade steeper lift it off the orb)
-    TA = K.nrm(np.array([0.0, -math.cos(math.radians(46)), math.sin(math.radians(46))]))
-    TB = np.array([0.0, -0.34, 2.06])
-    TLS, TLP, TW0, TW1 = 1.02, 0.86, 0.3, 0.25
+    # tip: broken base B, axis 38 degrees above forward
+    TA = K.nrm(np.array([0.0, -math.cos(math.radians(38)), math.sin(math.radians(38))]))
+    TB = np.array([0.0, -0.36, 1.98])
+    # MAX2 r2: the shaft a sixth slimmer (TW0 0.3 -> 0.25, TW1 0.25 -> 0.21): facing the camera, the slab covered the
+    # orb's top and the unit's pixel count fell under its gate at some facings (verify1_q seed 19); same segments, same tris
+    TLS, TLP, TW0, TW1 = 1.02, 0.86, 0.25, 0.21
     TCUT = 0.5                                          # the stone pyramid stops here; the glazed point continues
     # CW4 (closing critic:monsters): a warm needle-stone (honey limestone in noon light) instead of flat chalk-grey;
     # umber bronze bands, gold-leaf hour ticks catching the noon, fresh pale fractures, inked shard ridges

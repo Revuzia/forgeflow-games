@@ -95,12 +95,16 @@ def zone_mask(sid: str, glb: str, z: dict, size: tuple, tmp: str, i: int) -> str
         m = np.isin(pm["part"], [names.index(p) for p in z["parts"]])
         Image.fromarray((m * 255).astype("uint8")).resize((W, H), Image.NEAREST).save(out)
         return out
-    box = os.path.join(tmp, f"box{i}.png")
-    cmd = [node(), GRADE, glb]
-    for b in z["boxes"]:
-        cmd += ["--box", ",".join(str(v) for v in b)]
-    subprocess.run(cmd + ["--mask-out", box], check=True, cwd=GAME, capture_output=True)
-    m = np.asarray(Image.open(box).convert("L")) >= 128
+    def boxmask(boxes, tag):
+        box = os.path.join(tmp, f"{tag}{i}.png")
+        cmd = [node(), GRADE, glb]
+        for b in boxes:
+            cmd += ["--box", ",".join(str(v) for v in b)]
+        subprocess.run(cmd + ["--mask-out", box], check=True, cwd=GAME, capture_output=True)
+        return np.asarray(Image.open(box).convert("L")) >= 128
+    m = boxmask(z["boxes"], "box")
+    if "notBoxes" in z:       # texels to leave alone (another lane's part, e.g. Burdam's hood and cowl)
+        m &= ~boxmask(z["notBoxes"], "not")
     lo, hi = z.get("rough", [0.0, 1.0])
     orm = Image.fromarray(glb_image(glb, "_orm")).resize((W, H), Image.NEAREST)
     r = np.asarray(orm)[..., 1] / 255.0
@@ -146,7 +150,7 @@ def grade(sid: str, glb: str | None = None, dry: bool = False, fresh: float = 0.
             for q in range(84, 59, -4):
                 shutil.copyfile(glb, trial)
                 r = subprocess.run([node(), GRADE, trial, "--q", str(q), "--reserve-cap", str(aim), "--reserve-margin",
-                                    str(margin)] + tint, cwd=GAME, capture_output=True, text=True)
+                                    str(margin)] + [x for k, v in rec.get("reserveModes", {}).items() for x in ("--reserve-mode", f"{k}={v}")] + tint, cwd=GAME, capture_output=True, text=True)
                 if r.returncode:
                     raise SystemExit(r.stderr[-1200:])
                 if os.path.getsize(trial) <= max(min(before + 24 * 1024, 1160 * 1024), before) or q <= 60:

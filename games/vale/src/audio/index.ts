@@ -511,6 +511,10 @@ const AMB_CALM_LIFT_DB = 3;  // the emitters away from a fight (below AMB_DUCK_F
 const AMB_DUCK_DB = 6;       // … the ambience bus under a fight: full duck at fight heat AMB_DUCK_FULL …
 const AMB_DUCK_FROM = 0.2;   // … none below this (a lone poke); the heat counts fighter-vs-fighter damage only
 const AMB_DUCK_FULL = 0.6;
+// (max2 SFX-1b) mix density: the sfx bus eases FIGHT_SFX_DB at the same fight heat (the threat path, what lands on YOU,
+// is not eased): a brawling seat's sum of every kit ran 2.4 LU over a jungle seat's (-16.7 / -18.3 LUFS, one build),
+// against the master's 3 LU token band; eased, both seats sit inside it with the calm lift above
+const FIGHT_SFX_DB = 3;
 const FIGHT_HIT = 0.12;      // fight heat per fighter-vs-fighter hit near the listener (or your living fighter) …
 const FIGHT_DECAY = 0.15;    // … cooling per second
 const AMB_FADE_S = 1.5;      // emitters fade in on attach, out on detach
@@ -706,6 +710,8 @@ class Engine implements ValeAudioPort {
   /** the attached match's map while its emitters wait for the context */
   private ambMap: string | null = null;
   private ambDuck: GainNode | null = null;
+  /** FIGHT_SFX_DB: the sfx bus under a fight, between the bus and its voice duck */
+  private sfxHeat: GainNode | null = null;
   /** the clock watch (see `release` in the header): the last baseline (wall s, ctx s) and whether the clock stands */
   private clockWall = 0;
   private clockCtx = 0;
@@ -846,6 +852,9 @@ class Engine implements ValeAudioPort {
           const dg = ctx.createGain();
           this.deadLpf = lpf; this.deadGain = dg;
           g.connect(this.duckGain).connect(lpf).connect(dg).connect(d);
+        } else if (b === 'sfx') {
+          this.sfxHeat = ctx.createGain();
+          g.connect(this.sfxHeat).connect(d);
         } else g.connect(d);
       } else g.connect(this.mix);
     }
@@ -2315,10 +2324,9 @@ class Engine implements ValeAudioPort {
       em.pan.pan.setTargetAtTime(pl.pan, t, 0.35);
       em.lpf.frequency.setTargetAtTime(pl.lpf || 20000, t, 0.35);
     }
-    if (this.ambDuck) {
-      const k = Math.max(0, Math.min(1, (this.fight - AMB_DUCK_FROM) / (AMB_DUCK_FULL - AMB_DUCK_FROM)));
-      this.ambDuck.gain.setTargetAtTime(Math.pow(10, (AMB_CALM_LIFT_DB - (AMB_CALM_LIFT_DB + AMB_DUCK_DB) * k) / 20), t, k > 0 ? 0.4 : 1.5);
-    }
+    const k = Math.max(0, Math.min(1, (this.fight - AMB_DUCK_FROM) / (AMB_DUCK_FULL - AMB_DUCK_FROM)));
+    if (this.ambDuck) this.ambDuck.gain.setTargetAtTime(Math.pow(10, (AMB_CALM_LIFT_DB - (AMB_CALM_LIFT_DB + AMB_DUCK_DB) * k) / 20), t, k > 0 ? 0.4 : 1.5);
+    this.sfxHeat?.gain.setTargetAtTime(Math.pow(10, -FIGHT_SFX_DB * k / 20), t, k > 0 ? 0.4 : 1.5);
   }
 
   /** an emitter's gain / pan / low-pass from all its points (energy sum, capped at full) */
