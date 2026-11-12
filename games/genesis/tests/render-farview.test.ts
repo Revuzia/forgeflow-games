@@ -48,7 +48,7 @@ test('P18: a far wooded hill breaks up too (the canopy, not only the sward)', as
   assert.ok(+m![1] >= 100 && +m![1] <= 300 && +m![2] >= 400 && +m![2] <= 1000, `fade ${m![1]}..${m![2]} m`);
   assert.match(m![3], /fbm3\(P \* 0\.0\d+/, 'grove-scale drifts');
   assert.match(m![3], /concave/, 'crests and hollows');
-  const at = TM.indexOf('float cMid'), crown = TM.indexOf('tc *= 0.62 + 0.55 * crown'), inst = TM.indexOf('float inst = uVegFade');
+  const at = TM.indexOf('float cMid'), crown = TM.indexOf('tc *= 0.62 + 0.55 * crown'), inst = TM.indexOf('float inst = uCanopyFade');
   assert.ok(crown > 0 && crown < at && at < inst, 'after the crown shading, before the instanced-tree hand-over');
 });
 
