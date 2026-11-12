@@ -1,0 +1,94 @@
+{
+ "lane": "units (fighters, monsters and Wicks in game), max2 round 2",
+ "verifier": "verify1, quality lens (adversarial)",
+ "at": "2026-11-12 09:30 CST",
+ "head": "14ba4086c",
+ "pass": false,
+ "score": 7.3,
+ "items": [
+  {
+   "id": "U1(1) material zoning (Kemdo, Burdam, Vashil, Tunlan, Rishal)",
+   "verdict": "better",
+   "evidence": "I re-captured on the current build at two new seeds (max_units_ab --variants all, seed 23 t 540 and seed 31 t 300, zoned fighters seated on the viewer's side) and compared them with the round-1 v2u mat crops. Kemdo's robe and wrap now read coral/terracotta, Vashil's robe violet, Tunlan's robe plum under the hat, and Burdam's coat oxblood. Signature-hue pixels in the body region, round 1 -> now: Burdam 1200 -> 3537/3498, Vashil 0 -> 766/2160. Kemdo and Tunlan counts are confounded by brown ground and purple VFX, but the hue reads by eye. Residual: hoods, hats and shoulders stay cream, so from the top-down camera Tunlan (hat) and Burdam (hood and pauldrons, in a real fight crop) still lead with cream. Rishal is weakest: the zone hue is rose #B30066, not the content signature #B3004A (crimson). Only pink trousers or hips read, at 204 px on seed 23 and 7 px on seed 31, where she was inside a shield bubble."
+  },
+  {
+   "id": "U1(2) ORM roughness bands per part class",
+   "verdict": "same",
+   "evidence": "Closed by measurement only (u1_orm_bands.json); no ORM or shader change. Round-1 verify2 already found that the material response cannot be seen at 28.5 m, and I saw no cloth, leather or lacquer separation in the new crops."
+  },
+  {
+   "id": "U3 Ervet/Odrum recall stillness",
+   "verdict": "better",
+   "evidence": "I re-ran max_units_life (t 45, life on), and the harness metric is unchanged since 0c978b63f. Ervet recall holds 20 frames (was 70), Odrum recall 10 (was 60), Vashil channel 10, Lisvel channel 14, and Burdam recall 19. Every channel and recall hold is 20 frames or less. The fix is real: actors.ts LIFE.still.hold 1.6 -> 2.8, with no change to the measure."
+  },
+  {
+   "id": "Hesmi captured in game",
+   "verdict": "better",
+   "evidence": "Hesmi is in frame on both of my seeds (v1q2/all_fighter_hesmi_6.png, v1q2h/all_fighter_hesmi_1.png). Round 1's crop was empty on every seed."
+  },
+  {
+   "id": "Glasshorn restyle (fawn -> VALE dusk stag)",
+   "verdict": "better",
+   "evidence": "value_probe --monsters, seed 13 t 90 (a new seed), reproduces the claim exactly: dE76 32.2, dL* p50 18.4, harm-band albedo 0.32 %. The coat now reads as VALE's own lilac stag instead of a realistic dappled fawn. Costs and risks: value separation from the floor fell (dL* p50 25.4 -> 18.4). At the 28.5 m camera the white flank chevrons read like a rib cage on a dark body, and the 'dial' meaning does not come through. The 1.35x rack reads narrow from the camp's camera angle. The in-game unit no longer matches its fawn icon."
+  },
+  {
+   "id": "Sunsplinter core (orb 0.42 -> 0.56 m)",
+   "verdict": "better",
+   "evidence": "value_probe --monsters, RIFT High, seed 7 t 400, reproduces unitPx 69,879, eroded px 41,534 and dE 44.1. At seed 19 t 400, where the tip slab faces the camera and covers the orb, unitPx is 51,511, 0.8 % under the 51,944 gate. The orb reads larger and more solid in both shots."
+  },
+  {
+   "id": "Monster builds zero metal",
+   "verdict": "better",
+   "evidence": "Both new GLBs have metallicFactor 0 on every material. The engineer reports content:check at 0 warnings."
+  },
+  {
+   "id": "Ruling 32 gate in zone_grade.py",
+   "verdict": "same",
+   "evidence": "This is a process guard with no visible change. My re-measure of all 50 GLBs with zone_grade.reserved_pct reproduces the engineer's figures exactly (burdam 18.95, odrum 38.6, sukri 19.96, dunsom 16.46, ulkro 12.77, rishal 0.21, kemdo 4.47). The gate passes on max(8 %, pre-grade share), which is looser than the ruling's text."
+  },
+  {
+   "id": "U6 emissives (Ilsheta)",
+   "verdict": "same",
+   "evidence": "Not done. The reason given, that the source rules her chimney glass never emissive (ilsheta.py:814), is reasonable but leaves the plan item open."
+  },
+  {
+   "id": "U7 heads",
+   "verdict": "same",
+   "evidence": "Not done; there is no spec and Burdam and Dunsom belong to the cards lane. Cream, low-detail heads and hoods still dominate the top-down read on most fighters."
+  }
+ ],
+ "problems": [
+  {
+   "severity": "major",
+   "what": "Ruling 32 is not met on Burdam, the fighter it names. Base burdam.glb has 18.95 % of albedo texels above 40 % saturation in the harm band, against the 8 % cap. The lane's new gate allows max(8 %, pre-grade share), which encodes a looser reading than the ruling's text ('zones are hue-shifted or desaturated until the cap holds'). Odrum 38.6, Sukri 20.0, Dunsom 16.5 and Ulkro 12.8 also sit over the cap from their bakes.",
+   "evidence": "My reserved_pct run over art/out/fighters/*/*.glb (scratchpad r32.py) reproduces the engineer's numbers. The engineer reported it and relaxed nothing, so this is an open lead ruling, not a hidden miss. It still keeps the lane from passing.",
+   "fix": "The lead rules whether the cap covers whole bakes and whether HSV saturation is the right measure for dark browns (V around 0.29). Until then, either desaturate Burdam's bake browns under the cap, keeping the oxblood coat at hue around 1 degree, outside the 28-50 degree band, or record the ruling's scope in owner_rulings.md."
+  },
+  {
+   "severity": "major",
+   "what": "The lane is still below par against the LoL gauge. Hoods, hats, heads and shoulders stay cream, so from the top-down camera several zoned fighters still read cream-topped. U7 heads and U6 emissives are not done, and ORM banding has no visible effect at 28.5 m.",
+   "evidence": "In the v1q2 / v1q2h crops, Tunlan's hat and Burdam's hood and pauldrons are the largest areas seen top-down. Burdam in a real fight (v1q2h burdam_7) reads mostly cream. Rishal's signature reaches only her trousers or hips.",
+   "fix": "Extend zoning to the top-down read: the crown, hood or hat brim gets a darker or signature value break (respecting ruling 7 and the cards lane's Burdam/Dunsom heads), and Rishal's torso zone grows to the visible chest and shoulders. Write a U7 spec and start it on two to three fighters; get the lead's call on U6."
+  },
+  {
+   "severity": "minor",
+   "what": "Glasshorn's white flank chevrons read as a rib cage at the gameplay camera, and value separation from the floor fell (dL* p50 25.4 -> 18.4).",
+   "evidence": "value_rift_high_v1q2c_mon_glasshorn.png, cropped at 2x (scratchpad gh.png).",
+   "fix": "Break the chevrons into dial ticks that do not run rib-parallel down the flank (fewer, shorter, or angled with the dial arc), and lift the coat or mantle value split a few L*."
+  },
+  {
+   "severity": "minor",
+   "what": "Sunsplinter's pixel gate depends on facing: at seed 19 t 400 the tip slab covers the orb and unitPx is 51,511, under the 51,944 gate.",
+   "evidence": "_harness/_reports/v1q2_mon.json (seed 19) against v1q2_mon_a.json (seed 7, 69,879).",
+   "fix": "Gate across at least three seeds or facings (value_probe --monsterYaws), or move the orb further out from under the tip."
+  },
+  {
+   "severity": "minor",
+   "what": "glasshorn_icon.png still shows the fawn, so the in-game unit no longer matches its icon.",
+   "evidence": "The engineer's notDone, confirmed: the icon was not regenerated.",
+   "fix": "Hand it to the cards/icons lane."
+  }
+ ],
+ "budgets": "Harness fight frames, RIFT High at load: seed 23 t 540 had 268,475 tris, 183 calls, 39 programs and 194 textures; seed 31 t 300 had 321,645 tris, 236 calls, 39 programs and 197 textures. Both are inside the 500k / 450 / 40 bars. GLB check against 501e85d8f: Glasshorn 8032 -> 8032 tris, textures 1024/512/1024 unchanged, 471 -> 491 KiB. Sunsplinter 8216 -> 8216 tris, textures unchanged, 787 -> 766 KiB. Triangle-neutral and texture-memory-neutral as claimed, so perf_1080 --prod and probe_match_memory were not re-run (the heavy slots were held by other lanes' perf and memory runs). Frame timing is left to the final idle gate.",
+ "notes": "Re-captures are in _harness/_shots/maxunits/v1q2 and v1q2h, plus _harness/_shots/value_rift_high_v1q2*_mon_*.png, and the life run is in the scratchpad's life.json. The lane is clearly better than round 1 at the gameplay camera: zoning colour now reads on four of the five fighters, Hesmi is captured, the long holds are gone, and Glasshorn and Sunsplinter are both VALE's own and stronger. It fails on the open ruling-32 major for Burdam and on still being below par (7.3 < 7.5), with U6 and U7 open. No sensitivity blocker was seen. Originality: nothing reads as copied from LoL. No audio items are in this lane's claim."
+}
