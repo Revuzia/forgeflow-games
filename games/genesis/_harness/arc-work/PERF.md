@@ -1031,3 +1031,4 @@ long press frame-rate independent. Report after 1-2 verified.
 - FAR TREES colour: ftc5 (green factor 0.8): green-pixel mean (76,114,28) vs near (67,104,29), region (88,91,45) vs
   (89,91,50): close. Further to (0.7, 0.72, 0.6) now in src; ftc6 queued (run-s13b.sh, after tq0 / tq1).
 - tq0 / tq1 (trackpad zoom through the deck, before / after, dist26) running in run-s13b.sh.
+- GATE check16 (session-13 tree: far-tree colour (0.7, 0.72, 0.6)): 923/923 pass; npm run build OK (build-prod15.log).
