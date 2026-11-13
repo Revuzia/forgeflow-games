@@ -280,8 +280,8 @@ const MIX = {
   "resort/town": { house_s: 16, house_m: 18, villa: 22, shop: 24, midrise: 12, lot: 6, shell: 8 },
   "resort/village": { house_s: 24, house_m: 20, villa: 18, shop: 22, shed: 3 * SHED_W, lot: 6, shell: 4 },
   "lodge/core": { midrise: 20, shop: 30, cabin: 16, lodge2: 18, hall: 10, lot: 4, shell: 6 },                     // (stage B: two-storey lodges take from the cabins)
-  "lodge/town": { cabin: 28, lodge2: 24, house_m: 12, shop: 16, hall: 8, shed: 2 * SHED_W, lot: 6, shell: 4 },        // (W10: cabins 38 -> 28, to two-storey lodges and house_m)
-  "lodge/village": { cabin: 32, lodge2: 22, house_m: 14, shop: 12, hall: 6, shed: 3 * SHED_W, lot: 4, shell: 2 },     // (W10: cabins 46 -> 32)
+  "lodge/town": { cabin: 42, lodge2: 10, house_m: 12, shop: 16, hall: 8, shed: 2 * SHED_W, lot: 6, shell: 4 },        // (W10: cabins 38 -> 42, lodges 18 -> 10, house_m 8 -> 12: ~45 % two-storey - the bigger homes' floor area
+  "lodge/village": { cabin: 48, lodge2: 6, house_m: 14, shop: 12, hall: 6, shed: 3 * SHED_W, lot: 4, shell: 2 },      //  is most of Deepwood's loot: more broke the map's loot count, homes gate) (W10: cabins 46 -> 48, lodges 14 -> 6, house_m 8 -> 14)
 };
 // Wave 7 completion, city theme only: what an empty lot can be besides parking / a pocket park / a yard. maps.js draws each one from boxes (a gas station: canopy, pumps, kiosk; a
 // market: striped stalls; a plaza: a clock tower; a court: a sports court with stands and floodlights); streetProps leaves them undressed, a lot too small for its landmark is a yard.
@@ -1262,7 +1262,7 @@ function yardItems(rng, kind, theme, opts) {
     spec.variant = V;
     if (V === "farmstead") {
       spec.yw = 34; spec.yd = 16; spec.silo = true; spec.cars = 1;
-      spec.rows.N.push(dimsOf("barn", 22)); spec.rows.N.push(dimsOf("shed", 8));
+      spec.rows.N.push(dimsOf("barn", 22)); if (rng() < 0.4) spec.rows.N.push(dimsOf("shed", 8));           // (W10 R1A: the barn's shed 2 times in 5 - barn + 2 houses are the 3 enterable buildings)
       spec.rows.S.push(dimsOf("house_m", 12.5)); spec.rows.S.push(dimsOf("house_s", 10));
       if (rng() < 0.25) spec.rows.E.push(dimsOf("shed", 10));                                 // (W10 R1A: half as often)
     } else if (V === "depot") {
@@ -1274,13 +1274,13 @@ function yardItems(rng, kind, theme, opts) {
       spec.yw = 26; spec.yd = 12; spec.fence = false; spec.cars = 3;
       const nH = rint(rng, 3, 4), order = ["N", "S", "N", "S"];
       for (let k = 0; k < nH; k++) spec.rows[order[k]].push(dimsOf(house(), 10));
-      if (opts.variety && rng() < 0.5) spec.rows[rng() < 0.5 ? "W" : "E"].push(dimsOf("shed", 8));         // (Wave 7 completion: a hamlet has its shed too; W10 R1A: half the time)
+      if (opts.variety && rng() < 0.25) spec.rows[rng() < 0.5 ? "W" : "E"].push(dimsOf("shed", 8));        // (Wave 7 completion: a hamlet has its shed too; W10 R1A: a quarter of the time)
     } else {
       const nH = opts.variety ? rint(rng, 3, 4) : rint(rng, 2, 4);                           // (Wave 7 completion, Savanna: a homestead is three or four houses, not two or three, in a 26 m yard)
       if (opts.variety) spec.yw = 26;
       const order = ["N", "S", "N", "S"];
       for (let k = 0; k < nH; k++) spec.rows[order[k]].push(dimsOf(house(), 10));
-      { const side = rng() < 0.5 ? "W" : "E"; if (rng() < 0.5 || nH < 3) spec.rows[side].push(dimsOf("shed", 12)); }        // (W10 R1A: a homestead of 3-4 houses has its shed half the time; one of 2 always - a compound needs 3 enterable buildings)
+      { const side = rng() < 0.5 ? "W" : "E"; if (rng() < 0.25 || nH < 3) spec.rows[side].push(dimsOf("shed", 12)); }       // (W10 R1A: a homestead of 3-4 houses has its shed a quarter of the time; one of 2 always - a compound needs 3 enterable buildings)
       if (V === "tower") { spec.tower = true; spec.yw = 28; spec.yd = 16; spec.cars = 2; }
     }
   } else if (kind === "farm") {
