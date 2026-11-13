@@ -249,6 +249,32 @@ if (args.includes('--reserve-cap')) {
     }
     const excess = hit.length - Math.floor(cap * used);
     if (excess <= 0) { console.log(`reserve-cap ${name}: ${(100 * hit.length / used).toFixed(2)} % (aim ${(100 * cap).toFixed(1)} %) kept`); continue; }
+    if (how === 'knee') {
+      // max2 r4 (Odrum's honey mask): a soft-knee saturation compressor over the whole band instead of moving the
+      // cheapest texels to one fixed saturation. Below the knee (--reserve-knee, default 0.30) nothing changes; above it
+      // the saturation is compressed by one slope chosen so that only the aim share stays over 0.4. The map is smooth in
+      // saturation and feathered over 6 deg of hue outside the band, so the honey keeps its hue, value and texture
+      // (no bone-white patches) and the lossy encode keeps the result (a fixed target re-saturates in the WebP).
+      const knee = Number(opt('--reserve-knee', 0.3));
+      hit.sort((x, y) => y[1] - x[1]);
+      const t = hit[Math.max(0, Math.floor(cap * used) - 1)][1];      // the saturation that may stay over 0.4
+      const k = Math.min(1, (0.4 - knee) / Math.max(1e-3, t - knee)) * 0.995;
+      let moved = 0;
+      for (let p = 0; p < W * H; p++) {
+        const [h, s, v] = hsv(p);
+        if (s <= knee || Math.max(data[p * C], data[p * C + 1], data[p * C + 2]) <= 2) continue;
+        const out = h < a ? a - h : h > b ? h - b : 0;
+        const w = out >= 6 ? 0 : out <= 0 ? 1 : 1 - out / 6;
+        if (!w) continue;
+        const ns = s + w * ((knee + (s - knee) * k) - s);
+        const c = v * ns, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = v - c;
+        const [r1, g1, b1] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+        data[p * C] = Math.round(r1 + m); data[p * C + 1] = Math.round(g1 + m); data[p * C + 2] = Math.round(b1 + m);
+        moved++;
+      }
+      console.log(`reserve-cap ${name}: ${(100 * hit.length / used).toFixed(2)} % -> knee ${knee} slope ${k.toFixed(3)} (${moved} texels, knee)`);
+      continue;
+    }
     hit.sort((x, y) => x[1] - y[1]);
     for (const [p] of hit.slice(0, excess)) {
       const [h, s, v] = hsv(p);

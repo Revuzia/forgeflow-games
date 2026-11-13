@@ -55,8 +55,9 @@
 //     spawned early (its spawnAt set to now, the sim's own spawn path), then the LISTENER (the engine's listener(), the
 //     camera focus a renderer would give) placed on each pit's edge (PIT_EDGE_M from the pit, where an emitter is at
 //     full). Per pit, --window s with the presence on, then --window s with it off (its emitter's gain node lifted out
-//     of the bus): the presence alone is the energy difference; music, ambience bus and the duck read per block (blocks
-//     under a fight or an announcer duck are dropped). Gates per pit: the presence >= PIT_UNDER_MUSIC_LU (12) under the
+//     of the bus): the presence as played is its emitter's own output x the ducks x the bus gain (cross-checked by the
+//     bus energy difference on - off); music, ambience bus and the ducks read per block (blocks under a fight or an
+//     announcer duck are dropped; a pit taken mid-capture is not measured). Gates per pit: the presence >= PIT_UNDER_MUSIC_LU (12) under the
 //     music bus, the whole ambience bus there >= AMB_UNDER_MUSIC_LU (8) under it; reported: the bus without it, the
 //     presence's own short-term swell at its emitter (K-weighted, 3 s, p97 - p3).
 // Exit 0 = gates hold, 1 = a gate fails, 2 = the run itself failed. Reports → _harness/_reports/fw_CW2_runtime_<mode>.json.
@@ -668,6 +669,9 @@ async function runPits() {
       return list.filter((c) => c.def.objective).map((c) => { if (c.spawnAt > W.time) c.spawnAt = W.time; return c.def.id; });
     });
     await page.waitForFunction(() => { const v = window.__vale.state.match.value.view; return v.objectives.length > 0 && v.objectives.every((o) => o.alive); }, null, { timeout: 30000, polling: 250 });
+    // the engine builds a pit's emitter on its next ambience pass and starts it once the file decodes
+    await page.waitForFunction(() => { const a = window.__valeAudio, v = window.__vale.state.match.value.view;
+      return v.objectives.every((o) => a.pits.get(o.id)?.src); }, null, { timeout: 30000, polling: 250 });
     // music, ambience bus (K-weighted, as the match mode) + each pit emitter's own gain node
     await page.evaluate(() => {
       const a = window.__valeAudio, g = a.graph, ctx = g.ctx;
@@ -682,7 +686,7 @@ async function runPits() {
       const proc = ctx.createScriptProcessor(4096, N, 1);
       window.__pitCap = [];
       proc.onaudioprocess = (ev) => { const ib = ev.inputBuffer, n = ib.length;
-        const row = [ctx.currentTime, a.ambDuck?.gain.value ?? 1, a.vduck?.get('ambience')?.gain.value ?? 1];
+        const row = [ctx.currentTime, a.ambDuck?.gain.value ?? 1, a.vduck?.get('ambience')?.gain.value ?? 1, g.bus.ambience.gain.value];
         for (let s2 = 0; s2 < stems.length; s2++) { let ss = 0; for (let c = 0; c < 2; c++) { const d = ib.getChannelData(2 * s2 + c); for (let i = 0; i < n; i++) ss += d[i] * d[i]; } row.push(ss / n); }
         window.__pitCap.push(row); };
       const z = ctx.createGain(); z.gain.value = 0; merger.connect(proc); proc.connect(z); z.connect(ctx.destination);
@@ -696,11 +700,13 @@ async function runPits() {
       await page.evaluate((p) => { window.__valeAudio.listener(() => p); }, at);
       await page.waitForTimeout(3000);                      // the emitters' placement glide (0.35 s) and a short-term window
       const on = [await mark()]; await page.waitForTimeout(WIN * 1000); on.push(await mark());
-      await page.evaluate((id) => { const em = window.__pitEm[id]; try { em.gain.disconnect(window.__valeAudio.ambDuck); } catch { /* */ } }, o.id);
+      await page.evaluate((id) => { const em = window.__pitEm[id]; try { em?.gain.disconnect(window.__valeAudio.ambDuck); } catch { /* */ } }, o.id);
       await page.waitForTimeout(1000);
       const off = [await mark()]; await page.waitForTimeout(WIN * 1000); off.push(await mark());
-      await page.evaluate((id) => { const em = window.__pitEm[id]; em.gain.connect(window.__valeAudio.ambDuck); }, o.id);
-      const st = await page.evaluate(({ id }) => { const a = window.__valeAudio; const em = a.pits.get(id); return em ? { att: em.att, playing: !!em.src, cue: em.cue } : null; }, { id: o.id });
+      await page.evaluate((id) => { const em = window.__pitEm[id]; try { em?.gain.connect(window.__valeAudio.ambDuck); } catch { /* */ } }, o.id);
+      // the pit must have lived through both windows (a bot may take the objective): else it is not measured
+      const st = await page.evaluate(({ id }) => { const a = window.__valeAudio; const em = a.pits.get(id);
+        return em && em === window.__pitEm[id] ? { att: em.att, playing: !!em.src, cue: em.cue } : null; }, { id: o.id });
       rep.pits.push({ ...o, listener: at, on, off, emitter: st });
       log('pit', o.unit, JSON.stringify(st));
     }
@@ -709,7 +715,7 @@ async function runPits() {
     const blk = 4096 / rep.rate;
     const clean = (r) => r[1] > 0.95 && r[2] > 0.95;          // no fight duck, no announcer duck
     const lu = (rows, k) => LU(rows.reduce((acc, r) => acc + r[k], 0) / Math.max(1, rows.length));
-    const col = (n) => 3 + names.indexOf(n);
+    const col = (n) => 4 + names.indexOf(n);
     for (const p of rep.pits) {
       const won = cap.filter((r) => r[0] >= p.on[0] && r[0] < p.on[1]), woff = cap.filter((r) => r[0] >= p.off[0] && r[0] < p.off[1]);
       const con = won.filter(clean), coff = woff.filter(clean);
@@ -718,20 +724,24 @@ async function runPits() {
       const eOn = 10 ** ((aOn - mOn) / 10), eOff = 10 ** ((aOff - mOff) / 10);
       const pres = eOn > eOff ? -10 * Math.log10(eOn - eOff) : null;
       const em = movAvg(con.map((r) => r[col(p.id)]), 35).map(LU).filter((x) => x > -90);
+      // the presence as the bus plays it: its emitter's own output (gain x attenuation) x the duck, the announcer duck and
+      // the ambience bus gain (the slider), squared into energy, against the music bus in the same blocks
+      const pBus = LU(con.reduce((acc, r) => acc + r[col(p.id)] * (r[1] * r[2] * r[3]) ** 2, 0) / Math.max(1, con.length));
       p.result = { cleanBlocksOn: con.length, cleanBlocksOff: coff.length, droppedOn: won.length - con.length, droppedOff: woff.length - coff.length,
-        busUnderMusicLU: r2(mOn - aOn), busWithoutPresenceUnderMusicLU: r2(mOff - aOff), presenceUnderMusicLU: pres === null ? 'below the bus noise' : r2(pres),
+        busUnderMusicLU: r2(mOn - aOn), busWithoutPresenceUnderMusicLU: r2(mOff - aOff), presenceUnderMusicLU: r2(mOn - pBus),
+        presenceByDifferenceUnderMusicLU: pres === null ? 'below the windows\' drift' : r2(pres),
         presenceShortTermSwellLU: em.length ? r2(pct(em, 97) - pct(em, 3)) : null, musicOn: r2(mOn), musicOff: r2(mOff), seconds: r2(con.length * blk) };
       delete p.on; delete p.off;
     }
     rep.gates = {};
     for (const p of rep.pits) {
-      const enough = p.result.cleanBlocksOn * blk >= WIN / 3 && p.result.cleanBlocksOff * blk >= WIN / 3;
-      rep.gates[`${p.unit}PresenceUnderMusicGe${PIT_UNDER_MUSIC_LU}`] = !enough ? null : p.result.presenceUnderMusicLU === 'below the bus noise' || p.result.presenceUnderMusicLU >= PIT_UNDER_MUSIC_LU;
+      const enough = !!p.emitter && p.result.cleanBlocksOn * blk >= WIN / 3 && p.result.cleanBlocksOff * blk >= WIN / 3;
+      rep.gates[`${p.unit}PresenceUnderMusicGe${PIT_UNDER_MUSIC_LU}`] = !enough ? null : p.result.presenceUnderMusicLU >= PIT_UNDER_MUSIC_LU;
       rep.gates[`${p.unit}PitBusUnderMusicGe${AMB_UNDER_MUSIC_LU}`] = !enough ? null : p.result.busUnderMusicLU >= AMB_UNDER_MUSIC_LU;
-      rep.gates[`${p.unit}PresencePlaying`] = !!p.emitter?.playing && p.emitter.att > 0.99;
+      rep.gates[`${p.unit}PresencePlaying`] = !p.emitter ? null : p.emitter.playing && p.emitter.att > 0.99;
     }
     rep.notMeasured = Object.entries(rep.gates).filter(([, v]) => v === null).map(([k]) => k);
-    rep.pass = rep.pits.length > 0 && Object.values(rep.gates).every((v) => v !== false) && !rep.err;
+    rep.pass = rep.pits.length > 0 && rep.notMeasured.length < Object.keys(rep.gates).length && Object.values(rep.gates).every((v) => v !== false) && !rep.err;
   } catch (e) { rep.err = String(e?.message ?? e); }
   rep.logs = logs.slice(0, 30);
   await browser.close().catch(() => {});
