@@ -1,0 +1,870 @@
+{
+ "what": "max2 SFX-2 refix (verify1_q minor): the kit hits' blow lands first, not only a sample-peak click. kits_c._tight cuts the body's attack ramp, kits_c._ease holds every later 2 ms RMS 0.5 dB under the strike (around the snap). 32 kit hits (attack_hit + hit), round-2 shipped files (before) vs refix (after), decoded.",
+ "summary": {
+  "all32": {
+   "before": {
+    "medianRmsRiseMs": 7.4,
+    "medianSampleRiseMs": 2.1
+   },
+   "after": {
+    "medianRmsRiseMs": 3.1500000000000004,
+    "medianSampleRiseMs": 2.2
+   }
+  },
+  "eased": {
+   "before": {
+    "n": 14,
+    "medianRmsRiseMs": 6.85
+   },
+   "after": {
+    "n": 14,
+    "medianRmsRiseMs": 2.6
+   }
+  },
+  "skipped": {
+   "before": {
+    "n": 18,
+    "medianRmsRiseMs": 7.4
+   },
+   "after": {
+    "n": 18,
+    "medianRmsRiseMs": 7.4
+   }
+  }
+ },
+ "cues": {
+  "f_ardit_attack_hit": {
+   "before": {
+    "rms": 7.3,
+    "rmsMed": 7.1,
+    "rise": 1.5,
+    "b26": 0.0772,
+    "b6": 0.0048
+   },
+   "after": {
+    "rms": 7.3,
+    "rmsMed": 7.1,
+    "rise": 1.5,
+    "b26": 0.0772,
+    "b6": 0.0048
+   },
+   "eased": false,
+   "snapExempt": false
+  },
+  "f_ardit_hit": {
+   "before": {
+    "rms": 11.3,
+    "rmsMed": 7.9,
+    "rise": 10.4,
+    "b26": 0.0308,
+    "b6": 0.0178
+   },
+   "after": {
+    "rms": 11.3,
+    "rmsMed": 7.9,
+    "rise": 10.4,
+    "b26": 0.0308,
+    "b6": 0.0178
+   },
+   "eased": false,
+   "snapExempt": true
+  },
+  "f_burdam_attack_hit": {
+   "before": {
+    "rms": 47.6,
+    "rmsMed": 31.6,
+    "rise": 1.0,
+    "b26": 0.2965,
+    "b6": 0.0031
+   },
+   "after": {
+    "rms": 47.6,
+    "rmsMed": 31.6,
+    "rise": 1.0,
+    "b26": 0.2965,
+    "b6": 0.0031
+   },
+   "eased": false,
+   "snapExempt": false
+  },
+  "f_burdam_hit": {
+   "before": {
+    "rms": 36.9,
+    "rmsMed": 13.5,
+    "rise": 46.1,
+    "b26": 0.2275,
+    "b6": 0.0067
+   },
+   "after": {
+    "rms": 36.9,
+    "rmsMed": 13.5,
+    "rise": 46.1,
+    "b26": 0.2275,
+    "b6": 0.0067
+   },
+   "eased": false,
+   "snapExempt": true
+  },
+  "f_dunsom_attack_hit": {
+   "before": {
+    "rms": 44.3,
+    "rmsMed": 10.7,
+    "rise": 1.5,
+    "b26": 0.0,
+    "b6": 0.0
+   },
+   "after": {
+    "rms": 44.3,
+    "rmsMed": 10.7,
+    "rise": 1.5,
+    "b26": 0.0,
+    "b6": 0.0
+   },
+   "eased": false,
+   "snapExempt": false
+  },
+  "f_dunsom_hit": {
+   "before": {
+    "rms": 12.5,
+    "rmsMed": 10.9,
+    "rise": 11.3,
+    "b26": 0.005,
+    "b6": 0.0005
+   },
+   "after": {
+    "rms": 3.1,
+    "rmsMed": 2.2,
+    "rise": 11.0,
+    "b26": 0.0034,
+    "b6": 0.0004
+   },
+   "eased": true,
+   "snapExempt": true
+  },
+  "f_ervet_attack_hit": {
+   "before": {
+    "rms": 5.8,
+    "rmsMed": 5.3,
+    "rise": 2.5,
+    "b26": 0.05,
+    "b6": 0.0636
+   },
+   "after": {
+    "rms": 2.6,
+    "rmsMed": 2.5,
+    "rise": 1.9,
+    "b26": 0.051,
+    "b6": 0.0489
+   },
+   "eased": true,
+   "snapExempt": false
+  },
+  "f_ervet_hit": {
+   "before": {
+    "rms": 11.5,
+    "rmsMed": 7.9,
+    "rise": 1.8,
+    "b26": 0.0328,
+    "b6": 0.0154
+   },
+   "after": {
+    "rms": 2.8,
+    "rmsMed": 2.7,
+    "rise": 2.1,
+    "b26": 0.0281,
+    "b6": 0.0114
+   },
+   "eased": true,
+   "snapExempt": false
+  },
+  "f_hesmi_attack_hit": {
+   "before": {
+    "rms": 27.6,
+    "rmsMed": 2.7,
+    "rise": 2.4,
+    "b26": 0.0378,
+    "b6": 0.0
+   },
+   "after": {
+    "rms": 2.5,
+    "rmsMed": 2.0,
+    "rise": 2.4,
+    "b26": 0.0411,
+    "b6": 0.0
+   },
+   "eased": true,
+   "snapExempt": false
+  },
+  "f_hesmi_hit": {
+   "before": {
+    "rms": 8.2,
+    "rmsMed": 7.7,
+    "rise": 3.7,
+    "b26": 0.0334,
+    "b6": 0.0129
+   },
+   "after": {
+    "rms": 8.2,
+    "rmsMed": 7.7,
+    "rise": 3.7,
+    "b26": 0.0334,
+    "b6": 0.0129
+   },
+   "eased": false,
+   "snapExempt": true
+  },
+  "f_ilsheta_attack_hit": {
+   "before": {
+    "rms": 5.0,
+    "rmsMed": 2.7,
+    "rise": 1.9,
+    "b26": 0.0814,
+    "b6": 0.0168
+   },
+   "after": {
+    "rms": 5.0,
+    "rmsMed": 2.7,
+    "rise": 1.9,
+    "b26": 0.0814,
+    "b6": 0.0168
+   },
+   "eased": false,
+   "snapExempt": false
+  },
+  "f_ilsheta_hit": {
+   "before": {
+    "rms": 7.9,
+    "rmsMed": 5.1,
+    "rise": 1.1,
+    "b26": 0.1242,
+    "b6": 0.0096
+   },
+   "after": {
+    "rms": 4.0,
+    "rmsMed": 2.7,
+    "rise": 2.9,
+    "b26": 0.1164,
+    "b6": 0.0086
+   },
+   "eased": true,
+   "snapExempt": false
+  },
+  "f_kemdo_attack_hit": {
+   "before": {
+    "rms": 11.8,
+    "rmsMed": 4.8,
+    "rise": 2.2,
+    "b26": 0.1167,
+    "b6": 0.2714
+   },
+   "after": {
+    "rms": 11.8,
+    "rmsMed": 4.8,
+    "rise": 2.2,
+    "b26": 0.1167,
+    "b6": 0.2714
+   },
+   "eased": false,
+   "snapExempt": false
+  },
+  "f_kemdo_hit": {
+   "before": {
+    "rms": 11.9,
+    "rmsMed": 8.7,
+    "rise": 7.6,
+    "b26": 0.1697,
+    "b6": 0.02
+   },
+   "after": {
+    "rms": 5.7,
+    "rmsMed": 2.7,
+    "rise": 2.8,
+    "b26": 0.1654,
+    "b6": 0.0167
+   },
+   "eased": true,
+   "snapExempt": true
+  },
+  "f_lisvel_attack_hit": {
+   "before": {
+    "rms": 3.4,
+    "rmsMed": 3.2,
+    "rise": 3.0,
+    "b26": 0.074,
+    "b6": 0.0011
+   },
+   "after": {
+    "rms": 2.8,
+    "rmsMed": 2.1,
+    "rise": 1.9,
+    "b26": 0.0714,
+    "b6": 0.0008
+   },
+   "eased": true,
+   "snapExempt": false
+  },
+  "f_lisvel_hit": {
+   "before": {
+    "rms": 26.8,
+    "rmsMed": 25.2,
+    "rise": 1.0,
+    "b26": 0.0375,
+    "b6": 0.019
+   },
+   "after": {
+    "rms": 26.8,
+    "rmsMed": 25.2,
+    "rise": 1.0,
+    "b26": 0.0375,
+    "b6": 0.019
+   },
+   "eased": false,
+   "snapExempt": false
+  },
+  "f_marund_attack_hit": {
+   "before": {
+    "rms": 7.8,
+    "rmsMed": 6.8,
+    "rise": 1.1,
+    "b26": 0.0562,
+    "b6": 0.0309
+   },
+   "after": {
+    "rms": 7.8,
+    "rmsMed": 6.8,
+    "rise": 1.1,
+    "b26": 0.0562,
+    "b6": 0.0309
+   },
+   "eased": false,
+   "snapExempt": false
+  },
+  "f_marund_hit": {
+   "before": {
+    "rms": 17.0,
+    "rmsMed": 10.7,
+    "rise": 1.1,
+    "b26": 0.0545,
+    "b6": 0.0232
+   },
+   "after": {
+    "rms": 17.0,
+    "rmsMed": 10.7,
+    "rise": 1.1,
+    "b26": 0.0545,
+    "b6": 0.0232
+   },
+   "eased": false,
+   "snapExempt": false
+  },
+  "f_nurrow_attack_hit": {
+   "before": {
+    "rms": 16.6,
+    "rmsMed": 15.2,
+    "rise": 1.1,
+    "b26": 0.0516,
+    "b6": 0.0273
+   },
+   "after": {
+    "rms": 2.7,
+    "rmsMed": 2.5,
+    "rise": 2.4,
+    "b26": 0.0515,
+    "b6": 0.0317
+   },
+   "eased": true,
+   "snapExempt": false
+  },
+  "f_nurrow_hit": {
+   "before": {
+    "rms": 23.6,
+    "rmsMed": 14.3,
+    "rise": 27.9,
+    "b26": 0.0064,
+    "b6": 0.0214
+   },
+   "after": {
+    "rms": 23.6,
+    "rmsMed": 14.3,
+    "rise": 27.9,
+    "b26": 0.0064,
+    "b6": 0.0214
+   },
+   "eased": false,
+   "snapExempt": true
+  },
+  "f_odrum_attack_hit": {
+   "before": {
+    "rms": 3.2,
+    "rmsMed": 3.1,
+    "rise": 1.8,
+    "b26": 0.0704,
+    "b6": 0.0055
+   },
+   "after": {
+    "rms": 3.2,
+    "rmsMed": 3.1,
+    "rise": 1.8,
+    "b26": 0.0704,
+    "b6": 0.0055
+   },
+   "eased": false,
+   "snapExempt": false
+  },
+  "f_odrum_hit": {
+   "before": {
+    "rms": 4.5,
+    "rmsMed": 3.8,
+    "rise": 6.4,
+    "b26": 0.2069,
+    "b6": 0.0122
+   },
+   "after": {
+    "rms": 4.5,
+    "rmsMed": 3.8,
+    "rise": 6.4,
+    "b26": 0.2069,
+    "b6": 0.0122
+   },
+   "eased": false,
+   "snapExempt": true
+  },
+  "f_rishal_attack_hit": {
+   "before": {
+    "rms": 2.9,
+    "rmsMed": 2.7,
+    "rise": 2.4,
+    "b26": 0.1684,
+    "b6": 0.0401
+   },
+   "after": {
+    "rms": 3.0,
+    "rmsMed": 2.8,
+    "rise": 2.0,
+    "b26": 0.1824,
+    "b6": 0.0326
+   },
+   "eased": true,
+   "snapExempt": false
+  },
+  "f_rishal_hit": {
+   "before": {
+    "rms": 6.8,
+    "rmsMed": 5.8,
+    "rise": 1.4,
+    "b26": 0.0677,
+    "b6": 0.0062
+   },
+   "after": {
+    "rms": 3.5,
+    "rmsMed": 3.0,
+    "rise": 2.6,
+    "b26": 0.0672,
+    "b6": 0.002
+   },
+   "eased": true,
+   "snapExempt": false
+  },
+  "f_sukri_attack_hit": {
+   "before": {
+    "rms": 3.3,
+    "rmsMed": 3.2,
+    "rise": 2.6,
+    "b26": 0.0481,
+    "b6": 0.0234
+   },
+   "after": {
+    "rms": 3.3,
+    "rmsMed": 3.2,
+    "rise": 2.6,
+    "b26": 0.0481,
+    "b6": 0.0234
+   },
+   "eased": false,
+   "snapExempt": false
+  },
+  "f_sukri_hit": {
+   "before": {
+    "rms": 3.3,
+    "rmsMed": 3.2,
+    "rise": 1.8,
+    "b26": 0.0919,
+    "b6": 0.0129
+   },
+   "after": {
+    "rms": 3.8,
+    "rmsMed": 2.7,
+    "rise": 2.7,
+    "b26": 0.1115,
+    "b6": 0.0133
+   },
+   "eased": true,
+   "snapExempt": false
+  },
+  "f_tunlan_attack_hit": {
+   "before": {
+    "rms": 31.5,
+    "rmsMed": 14.1,
+    "rise": 2.8,
+    "b26": 0.1337,
+    "b6": 0.0107
+   },
+   "after": {
+    "rms": 3.2,
+    "rmsMed": 2.9,
+    "rise": 2.3,
+    "b26": 0.1041,
+    "b6": 0.011
+   },
+   "eased": true,
+   "snapExempt": false
+  },
+  "f_tunlan_hit": {
+   "before": {
+    "rms": 29.8,
+    "rmsMed": 17.9,
+    "rise": 0.5,
+    "b26": 0.0115,
+    "b6": 0.0
+   },
+   "after": {
+    "rms": 2.1,
+    "rmsMed": 2.1,
+    "rise": 2.2,
+    "b26": 0.0093,
+    "b6": 0.0
+   },
+   "eased": true,
+   "snapExempt": false
+  },
+  "f_ulkro_attack_hit": {
+   "before": {
+    "rms": 18.2,
+    "rmsMed": 13.1,
+    "rise": 2.0,
+    "b26": 0.0561,
+    "b6": 0.0001
+   },
+   "after": {
+    "rms": 2.4,
+    "rmsMed": 2.2,
+    "rise": 1.8,
+    "b26": 0.0425,
+    "b6": 0.0001
+   },
+   "eased": true,
+   "snapExempt": false
+  },
+  "f_ulkro_hit": {
+   "before": {
+    "rms": 52.0,
+    "rmsMed": 27.6,
+    "rise": 51.6,
+    "b26": 0.0265,
+    "b6": 0.0102
+   },
+   "after": {
+    "rms": 52.0,
+    "rmsMed": 27.6,
+    "rise": 51.6,
+    "b26": 0.0265,
+    "b6": 0.0102
+   },
+   "eased": false,
+   "snapExempt": true
+  },
+  "f_vashil_attack_hit": {
+   "before": {
+    "rms": 6.1,
+    "rmsMed": 5.4,
+    "rise": 1.0,
+    "b26": 0.0549,
+    "b6": 0.0139
+   },
+   "after": {
+    "rms": 6.1,
+    "rmsMed": 5.4,
+    "rise": 1.0,
+    "b26": 0.0549,
+    "b6": 0.0139
+   },
+   "eased": false,
+   "snapExempt": false
+  },
+  "f_vashil_hit": {
+   "before": {
+    "rms": 10.7,
+    "rmsMed": 6.9,
+    "rise": 2.2,
+    "b26": 0.0569,
+    "b6": 0.0109
+   },
+   "after": {
+    "rms": 10.7,
+    "rmsMed": 6.9,
+    "rise": 2.2,
+    "b26": 0.0569,
+    "b6": 0.0109
+   },
+   "eased": false,
+   "snapExempt": false
+  }
+ },
+ "easeSkip": "18 of 32 keep their own body (kits_c.EASE_SKIP): the blow-first pass took them or a neighbour under the 8 dB kit identity bar (audio/snap_search.py --ease), plus f_odrum_hit (eased it sat 7.98 dB from f_burdam_hit; its own body already peaks 1.6-2.2 ms as mastered) and f_kemdo_attack_hit (eased, one take put a sample peak 12 ms in, past the snap). Their files are unchanged from round 2.",
+ "darkHits": "not lifted this round: the 7 dark hits keep their per-cue records in sfx2c_onset_hf_record.json (dunsom_attack_hit, dunsom_hit, tunlan_hit, ulkro_attack_hit, hesmi_attack_hit, lisvel_attack_hit, nurrow_hit).",
+ "pairsSheet": "sfx2d_blow_first_ab.png",
+ "pairs": {
+  "tunlan_hit": {
+   "before": {
+    "lufs": -16.79724646419436,
+    "tp": -1.7797714204093078,
+    "rise_ms": 0.32291666666666663,
+    "centroid": 698.2339389373651,
+    "b2_6": 0.0141121252850265,
+    "b6_12": 4.776863894620416e-05,
+    "b12": 2.2860691470575026e-08,
+    "side": 0.025250319872571113,
+    "dur_ms": 369.02604166666663,
+    "takes": 4,
+    "takeSim": 0.998631689736834,
+    "takeTfSim": 0.9788066297930976,
+    "files": [
+     "f_tunlan_hit_1.ogg",
+     "f_tunlan_hit_2.ogg",
+     "f_tunlan_hit_3.ogg",
+     "f_tunlan_hit_4.ogg"
+    ]
+   },
+   "after": {
+    "lufs": -17.095147540481346,
+    "tp": -1.7214576716681171,
+    "rise_ms": 1.6354166666666665,
+    "centroid": 684.2523456278677,
+    "b2_6": 0.011653786245129616,
+    "b6_12": 3.85691264282639e-05,
+    "b12": 1.7013278825794818e-08,
+    "side": 0.03036429469796349,
+    "dur_ms": 356.74999999999994,
+    "takes": 4,
+    "takeSim": 0.9967927789780375,
+    "takeTfSim": 0.9816300480188049,
+    "files": [
+     "f_tunlan_hit_1.ogg",
+     "f_tunlan_hit_2.ogg",
+     "f_tunlan_hit_3.ogg",
+     "f_tunlan_hit_4.ogg"
+    ]
+   }
+  },
+  "ulkro_attack_hit": {
+   "before": {
+    "lufs": -17.440408866613986,
+    "tp": -2.4401606607481288,
+    "rise_ms": 1.3541666666666667,
+    "centroid": 459.11528245859216,
+    "b2_6": 0.05770775269538923,
+    "b6_12": 0.00023779402898660489,
+    "b12": 1.9341735658650686e-06,
+    "side": 0.0026761611943974992,
+    "dur_ms": 328.4583333333333,
+    "takes": 4,
+    "takeSim": 0.968285909007949,
+    "takeTfSim": 0.9760586014578003,
+    "files": [
+     "f_ulkro_attack_hit_1.ogg",
+     "f_ulkro_attack_hit_2.ogg",
+     "f_ulkro_attack_hit_3.ogg",
+     "f_ulkro_attack_hit_4.ogg"
+    ]
+   },
+   "after": {
+    "lufs": -17.59286005504071,
+    "tp": -2.174918986203829,
+    "rise_ms": 1.375,
+    "centroid": 433.1595217658988,
+    "b2_6": 0.05202092502043089,
+    "b6_12": 0.00034159400248630833,
+    "b12": 3.7352995140788945e-06,
+    "side": 0.0032801045084188928,
+    "dur_ms": 334.44791666666663,
+    "takes": 4,
+    "takeSim": 0.9507947103628693,
+    "takeTfSim": 0.9083289456972004,
+    "files": [
+     "f_ulkro_attack_hit_1.ogg",
+     "f_ulkro_attack_hit_2.ogg",
+     "f_ulkro_attack_hit_3.ogg",
+     "f_ulkro_attack_hit_4.ogg"
+    ]
+   }
+  },
+  "nurrow_attack_hit": {
+   "before": {
+    "lufs": -17.39816461071922,
+    "tp": -1.835967419932584,
+    "rise_ms": 1.0104166666666665,
+    "centroid": 883.776113593633,
+    "b2_6": 0.06568549568996429,
+    "b6_12": 0.036589829568677956,
+    "b12": 0.0015498433048622157,
+    "side": 0.011853869698238241,
+    "dur_ms": 302.3697916666667,
+    "takes": 4,
+    "takeSim": 0.9663116496699113,
+    "takeTfSim": 0.9665815455379299,
+    "files": [
+     "f_nurrow_attack_hit_1.ogg",
+     "f_nurrow_attack_hit_2.ogg",
+     "f_nurrow_attack_hit_3.ogg",
+     "f_nurrow_attack_hit_4.ogg"
+    ]
+   },
+   "after": {
+    "lufs": -17.39626051948013,
+    "tp": -2.9127662640265983,
+    "rise_ms": 1.6510416666666667,
+    "centroid": 887.530103928271,
+    "b2_6": 0.06321386179490392,
+    "b6_12": 0.04088136415972976,
+    "b12": 0.001260309690947086,
+    "side": 0.013111764345675764,
+    "dur_ms": 289.3385416666667,
+    "takes": 4,
+    "takeSim": 0.9812358074698209,
+    "takeTfSim": 0.962716339209645,
+    "files": [
+     "f_nurrow_attack_hit_1.ogg",
+     "f_nurrow_attack_hit_2.ogg",
+     "f_nurrow_attack_hit_3.ogg",
+     "f_nurrow_attack_hit_4.ogg"
+    ]
+   }
+  },
+  "kemdo_hit": {
+   "before": {
+    "lufs": -17.02743416962749,
+    "tp": -3.9146159616490555,
+    "rise_ms": 7.447916666666666,
+    "centroid": 1440.9889345196589,
+    "b2_6": 0.17829558249914745,
+    "b6_12": 0.02757011288922661,
+    "b12": 0.004054845089202736,
+    "side": 0.016173592427501767,
+    "dur_ms": 328.5104166666667,
+    "takes": 4,
+    "takeSim": 0.9631658164512311,
+    "takeTfSim": 0.9693244573564619,
+    "files": [
+     "f_kemdo_hit_1.ogg",
+     "f_kemdo_hit_2.ogg",
+     "f_kemdo_hit_3.ogg",
+     "f_kemdo_hit_4.ogg"
+    ]
+   },
+   "after": {
+    "lufs": -17.02393695393123,
+    "tp": -4.7040229899705155,
+    "rise_ms": 2.6458333333333335,
+    "centroid": 1471.7876052258853,
+    "b2_6": 0.17081031905439054,
+    "b6_12": 0.0251289011442062,
+    "b12": 0.003712087664476418,
+    "side": 0.01937519600429962,
+    "dur_ms": 330.18229166666663,
+    "takes": 4,
+    "takeSim": 0.9694164720053948,
+    "takeTfSim": 0.9686387873681737,
+    "files": [
+     "f_kemdo_hit_1.ogg",
+     "f_kemdo_hit_2.ogg",
+     "f_kemdo_hit_3.ogg",
+     "f_kemdo_hit_4.ogg"
+    ]
+   }
+  },
+  "tunlan_attack_hit": {
+   "before": {
+    "lufs": -17.645241730823635,
+    "tp": -1.840263401834731,
+    "rise_ms": 2.3177083333333335,
+    "centroid": 1581.8784127148162,
+    "b2_6": 0.14767687083290237,
+    "b6_12": 0.013243667194452788,
+    "b12": 0.0001460971521167597,
+    "side": 0.010280254028876983,
+    "dur_ms": 220.53645833333331,
+    "takes": 4,
+    "takeSim": 0.9871687975169866,
+    "takeTfSim": 0.9893413867376923,
+    "files": [
+     "f_tunlan_attack_hit_1.ogg",
+     "f_tunlan_attack_hit_2.ogg",
+     "f_tunlan_attack_hit_3.ogg",
+     "f_tunlan_attack_hit_4.ogg"
+    ]
+   },
+   "after": {
+    "lufs": -17.291468531173727,
+    "tp": -1.310456963562153,
+    "rise_ms": 2.0052083333333335,
+    "centroid": 1568.565433430891,
+    "b2_6": 0.13548929889483988,
+    "b6_12": 0.012854225540779935,
+    "b12": 0.0001398458230324225,
+    "side": 0.011688233870450385,
+    "dur_ms": 204.23958333333337,
+    "takes": 4,
+    "takeSim": 0.9816114930916711,
+    "takeTfSim": 0.9836661033272293,
+    "files": [
+     "f_tunlan_attack_hit_1.ogg",
+     "f_tunlan_attack_hit_2.ogg",
+     "f_tunlan_attack_hit_3.ogg",
+     "f_tunlan_attack_hit_4.ogg"
+    ]
+   }
+  },
+  "dunsom_hit": {
+   "before": {
+    "lufs": -16.989045135133427,
+    "tp": -1.8373934970352874,
+    "rise_ms": 9.125,
+    "centroid": 359.4892950361109,
+    "b2_6": 0.007969361455259717,
+    "b6_12": 0.0008593753652726669,
+    "b12": 9.001097132687759e-05,
+    "side": 0.017940832789135074,
+    "dur_ms": 262.703125,
+    "takes": 4,
+    "takeSim": 0.9618063959183286,
+    "takeTfSim": 0.9448640864870514,
+    "files": [
+     "f_dunsom_hit_1.ogg",
+     "f_dunsom_hit_2.ogg",
+     "f_dunsom_hit_3.ogg",
+     "f_dunsom_hit_4.ogg"
+    ]
+   },
+   "after": {
+    "lufs": -16.989136713179374,
+    "tp": -1.6663031701286688,
+    "rise_ms": 4.838541666666667,
+    "centroid": 348.71415431444086,
+    "b2_6": 0.005735760829526652,
+    "b6_12": 0.0005513885815502601,
+    "b12": 8.416692882699433e-05,
+    "side": 0.02325845312010577,
+    "dur_ms": 251.91666666666669,
+    "takes": 4,
+    "takeSim": 0.970402184937799,
+    "takeTfSim": 0.936704280102673,
+    "files": [
+     "f_dunsom_hit_1.ogg",
+     "f_dunsom_hit_2.ogg",
+     "f_dunsom_hit_3.ogg",
+     "f_dunsom_hit_4.ogg"
+    ]
+   }
+  }
+ }
+}

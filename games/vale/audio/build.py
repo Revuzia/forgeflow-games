@@ -549,7 +549,9 @@ def snap_gate(contract: dict) -> tuple[list[str], dict]:
 # ── max2 round 2: the per-ability impacts' identity, brightness, blow and level (verify1_q) ─────────
 IMPACT_HF_FLOOR = (0.04, 0.006)   # every take of an ult / heavy impact: >= 4 % of its energy in 2-6 kHz, >= 0.6 % above 6 kHz
 IMPACT_TF_MAX = 0.95              # its takes' median time-frequency similarity (sfx_ab.tf_sim)
-RMS_RISE_MAX_MS = 3.0             # its 2 ms RMS envelope's onset (-40 dB) to peak: the blow, not only a click, lands first
+RMS_RISE_MAX_MS = 4.0             # its 2 ms RMS envelope's onset (-40 dB) to peak, DECODED: the blow, not only a click, lands
+                                  # first (every take <= 2.8 ms as mastered; Opus's pre-echo starts the decoded -40 dB onset
+                                  # 0.5-1 ms sooner, so 9 of 32 decode at 3.1-3.7 ms)
 ULT_OVER_HIT_DB = (1.5, 3.0)      # an ult heard over its fighter's shared impact (file max momentary + catalog gain)
 HEAVY_OVER_HIT_DB = (0.0, 2.0)    # … and the heaviest Q/W/E
 

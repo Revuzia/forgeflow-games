@@ -1,0 +1,1525 @@
+{
+ "what": "max2 SFX-4 refix (verify1_q major): the 32 per-ability impacts (16 ults, 16 heaviest Q/W/E), round-1 files (before) vs the refix (after), decoded Ogg Opus as shipped",
+ "method": "audio/cues/impacts.py: lead = the fighter's own voiced shared impact (material crack, contact, signature) on its own take and pitch; flam and a sub (<70 Hz) under it; HF floors solved in from the fighter's own grit / air; a per-cue minimum-phase voicing curve (IMP_EQ, +-9 dB at 7 points) searched so each group sits >= 8 dB apart by both kit-gate measures; blow-first easing (2 ms RMS held 1.5 dB under the strike). Gate: audio/build.py impact_id_gate (identity per group, HF floors, take tf <= 0.95, 2 ms RMS rise, heard over the shared impact).",
+ "groups": {
+  "before": {
+   "ult": {
+    "pairsUnder8": 37,
+    "pairs": 120,
+    "minPairDb": 3.31,
+    "medianPairDb": 10.13,
+    "medianCentroidHz": 541,
+    "underHfFloors": 12,
+    "medianTakeTf": 0.954,
+    "maxTakeTf": 0.985,
+    "medianRmsRiseMs": 14.2,
+    "maxRmsRiseMs": 56.6,
+    "maxSampleRiseMs": 2.1
+   },
+   "heavy": {
+    "pairsUnder8": 46,
+    "pairs": 120,
+    "minPairDb": 3.08,
+    "medianPairDb": 10.18,
+    "medianCentroidHz": 604,
+    "underHfFloors": 12,
+    "medianTakeTf": 0.967,
+    "maxTakeTf": 0.99,
+    "medianRmsRiseMs": 10.7,
+    "maxRmsRiseMs": 58.9,
+    "maxSampleRiseMs": 2.6
+   }
+  },
+  "after": {
+   "ult": {
+    "pairsUnder8": 0,
+    "pairs": 120,
+    "minPairDb": 8.63,
+    "medianPairDb": 12.02,
+    "medianCentroidHz": 1270,
+    "underHfFloors": 0,
+    "medianTakeTf": 0.907,
+    "maxTakeTf": 0.947,
+    "medianRmsRiseMs": 2.9,
+    "maxRmsRiseMs": 3.5,
+    "maxSampleRiseMs": 2.9
+   },
+   "heavy": {
+    "pairsUnder8": 0,
+    "pairs": 120,
+    "minPairDb": 8.41,
+    "medianPairDb": 11.72,
+    "medianCentroidHz": 1584,
+    "underHfFloors": 0,
+    "medianTakeTf": 0.916,
+    "maxTakeTf": 0.944,
+    "medianRmsRiseMs": 2.8,
+    "maxRmsRiseMs": 3.7,
+    "maxSampleRiseMs": 2.0
+   }
+  }
+ },
+ "gateAfter": {
+  "nearestDb": {
+   "ult": {
+    "ardit": [
+     "nurrow",
+     8.95
+    ],
+    "burdam": [
+     "tunlan",
+     9.19
+    ],
+    "dunsom": [
+     "marund",
+     9.37
+    ],
+    "ervet": [
+     "vashil",
+     8.99
+    ],
+    "hesmi": [
+     "ardit",
+     9.09
+    ],
+    "ilsheta": [
+     "tunlan",
+     9.31
+    ],
+    "kemdo": [
+     "ulkro",
+     9.05
+    ],
+    "lisvel": [
+     "sukri",
+     9.31
+    ],
+    "marund": [
+     "tunlan",
+     8.63
+    ],
+    "nurrow": [
+     "ardit",
+     8.95
+    ],
+    "odrum": [
+     "sukri",
+     8.75
+    ],
+    "rishal": [
+     "ervet",
+     9.17
+    ],
+    "sukri": [
+     "odrum",
+     8.75
+    ],
+    "tunlan": [
+     "marund",
+     8.63
+    ],
+    "ulkro": [
+     "kemdo",
+     9.05
+    ],
+    "vashil": [
+     "ervet",
+     8.99
+    ]
+   },
+   "heavy": {
+    "ardit": [
+     "ulkro",
+     9.02
+    ],
+    "burdam": [
+     "odrum",
+     8.91
+    ],
+    "dunsom": [
+     "marund",
+     9.17
+    ],
+    "ervet": [
+     "rishal",
+     8.93
+    ],
+    "hesmi": [
+     "ulkro",
+     8.93
+    ],
+    "ilsheta": [
+     "rishal",
+     9.24
+    ],
+    "kemdo": [
+     "rishal",
+     8.41
+    ],
+    "lisvel": [
+     "ervet",
+     9.12
+    ],
+    "marund": [
+     "tunlan",
+     8.86
+    ],
+    "nurrow": [
+     "marund",
+     8.89
+    ],
+    "odrum": [
+     "vashil",
+     8.65
+    ],
+    "rishal": [
+     "kemdo",
+     8.41
+    ],
+    "sukri": [
+     "tunlan",
+     8.96
+    ],
+    "tunlan": [
+     "ulkro",
+     8.65
+    ],
+    "ulkro": [
+     "tunlan",
+     8.65
+    ],
+    "vashil": [
+     "odrum",
+     8.65
+    ]
+   }
+  },
+  "cues": {
+   "f_ardit_ult_hit": {
+    "b2_6": 0.0494,
+    "b6": 0.0236,
+    "tf": 0.879,
+    "rmsRiseMs": [
+     3.0,
+     3.2,
+     3.1
+    ],
+    "overSharedDb": 1.88
+   },
+   "f_burdam_ult_hit": {
+    "b2_6": 0.2949,
+    "b6": 0.008,
+    "tf": 0.888,
+    "rmsRiseMs": [
+     2.1,
+     2.1,
+     2.9
+    ],
+    "overSharedDb": 2.17
+   },
+   "f_dunsom_ult_hit": {
+    "b2_6": 0.0502,
+    "b6": 0.0072,
+    "tf": 0.939,
+    "rmsRiseMs": [
+     3.5,
+     2.7,
+     3.1
+    ],
+    "overSharedDb": 2.07
+   },
+   "f_ervet_ult_hit": {
+    "b2_6": 0.0896,
+    "b6": 0.0369,
+    "tf": 0.876,
+    "rmsRiseMs": [
+     2.9,
+     2.9,
+     2.8
+    ],
+    "overSharedDb": 1.98
+   },
+   "f_hesmi_ult_hit": {
+    "b2_6": 0.0469,
+    "b6": 0.0086,
+    "tf": 0.93,
+    "rmsRiseMs": [
+     3.1,
+     2.8,
+     2.8
+    ],
+    "overSharedDb": 2.05
+   },
+   "f_ilsheta_ult_hit": {
+    "b2_6": 0.2626,
+    "b6": 0.0085,
+    "tf": 0.9,
+    "rmsRiseMs": [
+     3.0,
+     2.8,
+     3.0
+    ],
+    "overSharedDb": 2.14
+   },
+   "f_kemdo_ult_hit": {
+    "b2_6": 0.0867,
+    "b6": 0.042,
+    "tf": 0.916,
+    "rmsRiseMs": [
+     2.9,
+     2.6,
+     2.8
+    ],
+    "overSharedDb": 1.99
+   },
+   "f_lisvel_ult_hit": {
+    "b2_6": 0.0557,
+    "b6": 0.0433,
+    "tf": 0.914,
+    "rmsRiseMs": [
+     2.9,
+     2.8,
+     2.8
+    ],
+    "overSharedDb": 1.75
+   },
+   "f_marund_ult_hit": {
+    "b2_6": 0.0443,
+    "b6": 0.0379,
+    "tf": 0.877,
+    "rmsRiseMs": [
+     2.6,
+     2.7,
+     2.0
+    ],
+    "overSharedDb": 2.1
+   },
+   "f_nurrow_ult_hit": {
+    "b2_6": 0.0565,
+    "b6": 0.0352,
+    "tf": 0.936,
+    "rmsRiseMs": [
+     3.0,
+     2.8,
+     3.5
+    ],
+    "overSharedDb": 2.21
+   },
+   "f_odrum_ult_hit": {
+    "b2_6": 0.3879,
+    "b6": 0.0455,
+    "tf": 0.947,
+    "rmsRiseMs": [
+     3.0,
+     2.4,
+     3.1
+    ],
+    "overSharedDb": 1.89
+   },
+   "f_rishal_ult_hit": {
+    "b2_6": 0.1483,
+    "b6": 0.0081,
+    "tf": 0.877,
+    "rmsRiseMs": [
+     2.1,
+     2.0,
+     2.6
+    ],
+    "overSharedDb": 2.62
+   },
+   "f_sukri_ult_hit": {
+    "b2_6": 0.0514,
+    "b6": 0.0337,
+    "tf": 0.852,
+    "rmsRiseMs": [
+     2.1,
+     2.8,
+     2.5
+    ],
+    "overSharedDb": 2.28
+   },
+   "f_tunlan_ult_hit": {
+    "b2_6": 0.0492,
+    "b6": 0.0105,
+    "tf": 0.943,
+    "rmsRiseMs": [
+     2.0,
+     2.6,
+     2.1
+    ],
+    "overSharedDb": 2.13
+   },
+   "f_ulkro_ult_hit": {
+    "b2_6": 0.2084,
+    "b6": 0.0836,
+    "tf": 0.916,
+    "rmsRiseMs": [
+     3.0,
+     3.1,
+     2.5
+    ],
+    "overSharedDb": 1.9
+   },
+   "f_vashil_ult_hit": {
+    "b2_6": 0.0496,
+    "b6": 0.0103,
+    "tf": 0.879,
+    "rmsRiseMs": [
+     2.0,
+     2.3,
+     2.1
+    ],
+    "overSharedDb": 1.91
+   },
+   "f_ardit_a1_hit": {
+    "b2_6": 0.0419,
+    "b6": 0.0084,
+    "tf": 0.914,
+    "rmsRiseMs": [
+     2.6,
+     2.7,
+     2.1
+    ],
+    "overSharedDb": 0.51
+   },
+   "f_burdam_a3_hit": {
+    "b2_6": 0.4002,
+    "b6": 0.0085,
+    "tf": 0.917,
+    "rmsRiseMs": [
+     2.0,
+     2.3,
+     2.6
+    ],
+    "overSharedDb": 0.68
+   },
+   "f_dunsom_a2_hit": {
+    "b2_6": 0.1695,
+    "b6": 0.0076,
+    "tf": 0.922,
+    "rmsRiseMs": [
+     3.4,
+     2.8,
+     3.7
+    ],
+    "overSharedDb": 0.74
+   },
+   "f_ervet_a3_hit": {
+    "b2_6": 0.1318,
+    "b6": 0.0167,
+    "tf": 0.864,
+    "rmsRiseMs": [
+     3.1,
+     2.9,
+     2.7
+    ],
+    "overSharedDb": 0.73
+   },
+   "f_hesmi_a1_hit": {
+    "b2_6": 0.0649,
+    "b6": 0.0113,
+    "tf": 0.944,
+    "rmsRiseMs": [
+     2.9,
+     2.8,
+     2.6
+    ],
+    "overSharedDb": 0.53
+   },
+   "f_ilsheta_a1_hit": {
+    "b2_6": 0.2689,
+    "b6": 0.0084,
+    "tf": 0.875,
+    "rmsRiseMs": [
+     2.8,
+     3.0,
+     2.6
+    ],
+    "overSharedDb": 0.75
+   },
+   "f_kemdo_a1_hit": {
+    "b2_6": 0.2066,
+    "b6": 0.0823,
+    "tf": 0.909,
+    "rmsRiseMs": [
+     2.9,
+     2.8,
+     2.6
+    ],
+    "overSharedDb": 0.66
+   },
+   "f_lisvel_a1_hit": {
+    "b2_6": 0.0515,
+    "b6": 0.0682,
+    "tf": 0.904,
+    "rmsRiseMs": [
+     2.9,
+     3.0,
+     2.8
+    ],
+    "overSharedDb": 0.77
+   },
+   "f_marund_a1_hit": {
+    "b2_6": 0.0662,
+    "b6": 0.0682,
+    "tf": 0.924,
+    "rmsRiseMs": [
+     2.7,
+     2.7,
+     2.5
+    ],
+    "overSharedDb": 0.67
+   },
+   "f_nurrow_a1_hit": {
+    "b2_6": 0.0533,
+    "b6": 0.0933,
+    "tf": 0.941,
+    "rmsRiseMs": [
+     3.2,
+     2.7,
+     3.3
+    ],
+    "overSharedDb": 0.79
+   },
+   "f_odrum_a1_hit": {
+    "b2_6": 0.0609,
+    "b6": 0.0084,
+    "tf": 0.94,
+    "rmsRiseMs": [
+     2.0,
+     2.6,
+     2.4
+    ],
+    "overSharedDb": 0.72
+   },
+   "f_rishal_a1_hit": {
+    "b2_6": 0.0531,
+    "b6": 0.0084,
+    "tf": 0.862,
+    "rmsRiseMs": [
+     2.6,
+     2.0,
+     2.2
+    ],
+    "overSharedDb": 1.17
+   },
+   "f_sukri_a1_hit": {
+    "b2_6": 0.052,
+    "b6": 0.013,
+    "tf": 0.872,
+    "rmsRiseMs": [
+     2.8,
+     2.6,
+     2.7
+    ],
+    "overSharedDb": 0.96
+   },
+   "f_tunlan_a1_hit": {
+    "b2_6": 0.2135,
+    "b6": 0.0407,
+    "tf": 0.931,
+    "rmsRiseMs": [
+     2.6,
+     2.2,
+     2.7
+    ],
+    "overSharedDb": 0.72
+   },
+   "f_ulkro_a1_hit": {
+    "b2_6": 0.0484,
+    "b6": 0.0095,
+    "tf": 0.925,
+    "rmsRiseMs": [
+     3.2,
+     2.9,
+     2.6
+    ],
+    "overSharedDb": 0.54
+   },
+   "f_vashil_a1_hit": {
+    "b2_6": 0.054,
+    "b6": 0.0325,
+    "tf": 0.853,
+    "rmsRiseMs": [
+     2.6,
+     2.5,
+     2.2
+    ],
+    "overSharedDb": 0.42
+   }
+  }
+ },
+ "perCue": {
+  "f_ardit_a1_hit": {
+   "before": {
+    "b26": 0.0071,
+    "b6": 0.0011,
+    "tf": 0.9669,
+    "rms": 6.7083,
+    "rise": 1.25,
+    "cen": 409.1684,
+    "mm": -16.5439
+   },
+   "after": {
+    "b26": 0.0419,
+    "b6": 0.0084,
+    "tf": 0.9142,
+    "rms": 2.7083,
+    "rise": 1.5,
+    "cen": 825.9226,
+    "mm": -16.3303
+   }
+  },
+  "f_ardit_ult_hit": {
+   "before": {
+    "b26": 0.0062,
+    "b6": 0.001,
+    "tf": 0.9511,
+    "rms": 9.5,
+    "rise": 1.2292,
+    "cen": 350.5139,
+    "mm": -16.2812
+   },
+   "after": {
+    "b26": 0.0494,
+    "b6": 0.0236,
+    "tf": 0.8788,
+    "rms": 3.1667,
+    "rise": 1.7083,
+    "cen": 981.7081,
+    "mm": -14.9635
+   }
+  },
+  "f_burdam_a3_hit": {
+   "before": {
+    "b26": 0.0173,
+    "b6": 0.0013,
+    "tf": 0.7717,
+    "rms": 12.3542,
+    "rise": 1.3958,
+    "cen": 594.9529,
+    "mm": -16.578
+   },
+   "after": {
+    "b26": 0.4002,
+    "b6": 0.0085,
+    "tf": 0.917,
+    "rms": 2.5625,
+    "rise": 1.7917,
+    "cen": 2337.6575,
+    "mm": -16.2177
+   }
+  },
+  "f_burdam_ult_hit": {
+   "before": {
+    "b26": 0.004,
+    "b6": 0.0003,
+    "tf": 0.8291,
+    "rms": 15.625,
+    "rise": 0.6042,
+    "cen": 391.7741,
+    "mm": -15.8629
+   },
+   "after": {
+    "b26": 0.2949,
+    "b6": 0.008,
+    "tf": 0.8878,
+    "rms": 2.8542,
+    "rise": 1.6458,
+    "cen": 1886.2558,
+    "mm": -14.7322
+   }
+  },
+  "f_dunsom_a2_hit": {
+   "before": {
+    "b26": 0.0098,
+    "b6": 0.0008,
+    "tf": 0.9543,
+    "rms": 12.625,
+    "rise": 1.2292,
+    "cen": 431.0358,
+    "mm": -16.6751
+   },
+   "after": {
+    "b26": 0.1695,
+    "b6": 0.0076,
+    "tf": 0.9219,
+    "rms": 3.7292,
+    "rise": 1.1042,
+    "cen": 845.1565,
+    "mm": -16.2511
+   }
+  },
+  "f_dunsom_ult_hit": {
+   "before": {
+    "b26": 0.0135,
+    "b6": 0.0003,
+    "tf": 0.9608,
+    "rms": 18.5417,
+    "rise": 0.9375,
+    "cen": 364.9958,
+    "mm": -16.2299
+   },
+   "after": {
+    "b26": 0.0502,
+    "b6": 0.0072,
+    "tf": 0.9386,
+    "rms": 3.5,
+    "rise": 1.25,
+    "cen": 537.1362,
+    "mm": -14.9186
+   }
+  },
+  "f_ervet_a3_hit": {
+   "before": {
+    "b26": 0.042,
+    "b6": 0.009,
+    "tf": 0.9015,
+    "rms": 9.5833,
+    "rise": 1.6875,
+    "cen": 1585.3182,
+    "mm": -16.2049
+   },
+   "after": {
+    "b26": 0.1318,
+    "b6": 0.0167,
+    "tf": 0.864,
+    "rms": 3.0833,
+    "rise": 1.9792,
+    "cen": 1671.8525,
+    "mm": -16.2502
+   }
+  },
+  "f_ervet_ult_hit": {
+   "before": {
+    "b26": 0.1007,
+    "b6": 0.0098,
+    "tf": 0.9218,
+    "rms": 11.0,
+    "rise": 1.4792,
+    "cen": 1355.8947,
+    "mm": -15.9421
+   },
+   "after": {
+    "b26": 0.0896,
+    "b6": 0.0369,
+    "tf": 0.8757,
+    "rms": 2.8958,
+    "rise": 1.3958,
+    "cen": 2287.9625,
+    "mm": -15.0018
+   }
+  },
+  "f_hesmi_a1_hit": {
+   "before": {
+    "b26": 0.0029,
+    "b6": 0.0004,
+    "tf": 0.9516,
+    "rms": 12.5417,
+    "rise": 0.8958,
+    "cen": 337.7712,
+    "mm": -16.388
+   },
+   "after": {
+    "b26": 0.0649,
+    "b6": 0.0113,
+    "tf": 0.9443,
+    "rms": 2.8958,
+    "rise": 1.4375,
+    "cen": 1049.9397,
+    "mm": -16.3978
+   }
+  },
+  "f_hesmi_ult_hit": {
+   "before": {
+    "b26": 0.0022,
+    "b6": 0.0003,
+    "tf": 0.9451,
+    "rms": 21.8125,
+    "rise": 0.8958,
+    "cen": 299.2815,
+    "mm": -15.9579
+   },
+   "after": {
+    "b26": 0.0469,
+    "b6": 0.0086,
+    "tf": 0.9296,
+    "rms": 3.0833,
+    "rise": 1.4792,
+    "cen": 789.5123,
+    "mm": -14.8788
+   }
+  },
+  "f_ilsheta_a1_hit": {
+   "before": {
+    "b26": 0.0904,
+    "b6": 0.025,
+    "tf": 0.9671,
+    "rms": 6.0417,
+    "rise": 1.5,
+    "cen": 1346.9387,
+    "mm": -16.4464
+   },
+   "after": {
+    "b26": 0.2689,
+    "b6": 0.0084,
+    "tf": 0.8749,
+    "rms": 3.0417,
+    "rise": 1.8125,
+    "cen": 1853.053,
+    "mm": -16.339
+   }
+  },
+  "f_ilsheta_ult_hit": {
+   "before": {
+    "b26": 0.0624,
+    "b6": 0.0158,
+    "tf": 0.9339,
+    "rms": 11.75,
+    "rise": 1.75,
+    "cen": 1062.1261,
+    "mm": -15.9916
+   },
+   "after": {
+    "b26": 0.2626,
+    "b6": 0.0085,
+    "tf": 0.9005,
+    "rms": 3.0417,
+    "rise": 2.8542,
+    "cen": 1387.5372,
+    "mm": -14.9521
+   }
+  },
+  "f_kemdo_a1_hit": {
+   "before": {
+    "b26": 0.2263,
+    "b6": 0.0287,
+    "tf": 0.9763,
+    "rms": 5.125,
+    "rise": 1.0208,
+    "cen": 1622.389,
+    "mm": -16.21
+   },
+   "after": {
+    "b26": 0.2066,
+    "b6": 0.0823,
+    "tf": 0.9093,
+    "rms": 2.8542,
+    "rise": 1.9792,
+    "cen": 2386.5995,
+    "mm": -16.3621
+   }
+  },
+  "f_kemdo_ult_hit": {
+   "before": {
+    "b26": 0.1825,
+    "b6": 0.0136,
+    "tf": 0.9393,
+    "rms": 12.8333,
+    "rise": 1.0833,
+    "cen": 1420.5975,
+    "mm": -15.7542
+   },
+   "after": {
+    "b26": 0.0867,
+    "b6": 0.042,
+    "tf": 0.9164,
+    "rms": 2.8542,
+    "rise": 1.7917,
+    "cen": 875.0718,
+    "mm": -15.0347
+   }
+  },
+  "f_lisvel_a1_hit": {
+   "before": {
+    "b26": 0.0048,
+    "b6": 0.0008,
+    "tf": 0.9897,
+    "rms": 22.5417,
+    "rise": 1.3542,
+    "cen": 1121.194,
+    "mm": -16.1656
+   },
+   "after": {
+    "b26": 0.0515,
+    "b6": 0.0682,
+    "tf": 0.9036,
+    "rms": 2.9583,
+    "rise": 1.625,
+    "cen": 1787.0764,
+    "mm": -15.9311
+   }
+  },
+  "f_lisvel_ult_hit": {
+   "before": {
+    "b26": 0.0573,
+    "b6": 0.0008,
+    "tf": 0.985,
+    "rms": 56.6458,
+    "rise": 1.3333,
+    "cen": 1061.7007,
+    "mm": -15.7706
+   },
+   "after": {
+    "b26": 0.0557,
+    "b6": 0.0433,
+    "tf": 0.9138,
+    "rms": 2.9167,
+    "rise": 1.8333,
+    "cen": 1306.0866,
+    "mm": -14.9484
+   }
+  },
+  "f_marund_a1_hit": {
+   "before": {
+    "b26": 0.0059,
+    "b6": 0.0044,
+    "tf": 0.9342,
+    "rms": 12.5,
+    "rise": 0.6667,
+    "cen": 351.2354,
+    "mm": -16.6562
+   },
+   "after": {
+    "b26": 0.0662,
+    "b6": 0.0682,
+    "tf": 0.9245,
+    "rms": 2.7292,
+    "rise": 1.125,
+    "cen": 1495.8303,
+    "mm": -16.4439
+   }
+  },
+  "f_marund_ult_hit": {
+   "before": {
+    "b26": 0.0047,
+    "b6": 0.0022,
+    "tf": 0.9495,
+    "rms": 16.7708,
+    "rise": 1.3542,
+    "cen": 305.4717,
+    "mm": -15.8809
+   },
+   "after": {
+    "b26": 0.0443,
+    "b6": 0.0379,
+    "tf": 0.8771,
+    "rms": 2.6667,
+    "rise": 1.1667,
+    "cen": 863.3884,
+    "mm": -15.0098
+   }
+  },
+  "f_nurrow_a1_hit": {
+   "before": {
+    "b26": 0.0019,
+    "b6": 0.0076,
+    "tf": 0.9841,
+    "rms": 1.9792,
+    "rise": 1.2292,
+    "cen": 612.0507,
+    "mm": -16.2109
+   },
+   "after": {
+    "b26": 0.0533,
+    "b6": 0.0933,
+    "tf": 0.9409,
+    "rms": 3.3125,
+    "rise": 1.8542,
+    "cen": 2119.2504,
+    "mm": -16.1002
+   }
+  },
+  "f_nurrow_ult_hit": {
+   "before": {
+    "b26": 0.0022,
+    "b6": 0.0055,
+    "tf": 0.9763,
+    "rms": 22.8542,
+    "rise": 0.3542,
+    "cen": 609.9487,
+    "mm": -15.8013
+   },
+   "after": {
+    "b26": 0.0565,
+    "b6": 0.0352,
+    "tf": 0.9356,
+    "rms": 3.4792,
+    "rise": 1.5625,
+    "cen": 1272.8,
+    "mm": -14.6778
+   }
+  },
+  "f_odrum_a1_hit": {
+   "before": {
+    "b26": 0.0045,
+    "b6": 0.0007,
+    "tf": 0.9675,
+    "rms": 11.8333,
+    "rise": 0.8542,
+    "cen": 307.6168,
+    "mm": -16.8238
+   },
+   "after": {
+    "b26": 0.0609,
+    "b6": 0.0084,
+    "tf": 0.9401,
+    "rms": 2.625,
+    "rise": 1.3125,
+    "cen": 918.2029,
+    "mm": -16.174
+   }
+  },
+  "f_odrum_ult_hit": {
+   "before": {
+    "b26": 0.0049,
+    "b6": 0.0005,
+    "tf": 0.972,
+    "rms": 12.7292,
+    "rise": 1.625,
+    "cen": 285.6144,
+    "mm": -16.0185
+   },
+   "after": {
+    "b26": 0.3879,
+    "b6": 0.0455,
+    "tf": 0.9465,
+    "rms": 3.0625,
+    "rise": 2.2083,
+    "cen": 2005.1768,
+    "mm": -14.9981
+   }
+  },
+  "f_rishal_a1_hit": {
+   "before": {
+    "b26": 0.1422,
+    "b6": 0.0148,
+    "tf": 0.9634,
+    "rms": 5.3125,
+    "rise": 2.375,
+    "cen": 1584.396,
+    "mm": -16.7418
+   },
+   "after": {
+    "b26": 0.0531,
+    "b6": 0.0084,
+    "tf": 0.8619,
+    "rms": 2.625,
+    "rise": 1.3333,
+    "cen": 1344.1924,
+    "mm": -16.339
+   }
+  },
+  "f_rishal_ult_hit": {
+   "before": {
+    "b26": 0.0983,
+    "b6": 0.0114,
+    "tf": 0.9578,
+    "rms": 2.9375,
+    "rise": 1.6458,
+    "cen": 1046.9544,
+    "mm": -15.9607
+   },
+   "after": {
+    "b26": 0.1483,
+    "b6": 0.0081,
+    "tf": 0.8768,
+    "rms": 2.6042,
+    "rise": 1.1667,
+    "cen": 1267.7046,
+    "mm": -14.8844
+   }
+  },
+  "f_sukri_a1_hit": {
+   "before": {
+    "b26": 0.0543,
+    "b6": 0.0016,
+    "tf": 0.9761,
+    "rms": 3.6875,
+    "rise": 2.6042,
+    "cen": 1052.6765,
+    "mm": -16.5403
+   },
+   "after": {
+    "b26": 0.052,
+    "b6": 0.013,
+    "tf": 0.8724,
+    "rms": 2.8125,
+    "rise": 1.6042,
+    "cen": 997.0909,
+    "mm": -16.2932
+   }
+  },
+  "f_sukri_ult_hit": {
+   "before": {
+    "b26": 0.0335,
+    "b6": 0.0027,
+    "tf": 0.968,
+    "rms": 3.5417,
+    "rise": 2.1042,
+    "cen": 876.8656,
+    "mm": -16.0518
+   },
+   "after": {
+    "b26": 0.0514,
+    "b6": 0.0337,
+    "tf": 0.8517,
+    "rms": 2.7708,
+    "rise": 2.2083,
+    "cen": 1489.902,
+    "mm": -14.9785
+   }
+  },
+  "f_tunlan_a1_hit": {
+   "before": {
+    "b26": 0.0129,
+    "b6": 0.0004,
+    "tf": 0.9801,
+    "rms": 19.7917,
+    "rise": 0.9583,
+    "cen": 545.9347,
+    "mm": -16.4428
+   },
+   "after": {
+    "b26": 0.2135,
+    "b6": 0.0407,
+    "tf": 0.9306,
+    "rms": 2.7292,
+    "rise": 1.3542,
+    "cen": 1749.9532,
+    "mm": -16.3791
+   }
+  },
+  "f_tunlan_ult_hit": {
+   "before": {
+    "b26": 0.0128,
+    "b6": 0.0004,
+    "tf": 0.9726,
+    "rms": 36.6458,
+    "rise": 0.7292,
+    "cen": 481.853,
+    "mm": -15.8462
+   },
+   "after": {
+    "b26": 0.0492,
+    "b6": 0.0105,
+    "tf": 0.9426,
+    "rms": 2.6042,
+    "rise": 1.8542,
+    "cen": 923.2733,
+    "mm": -14.9683
+   }
+  },
+  "f_ulkro_a1_hit": {
+   "before": {
+    "b26": 0.0161,
+    "b6": 0.0015,
+    "tf": 0.9756,
+    "rms": 58.8542,
+    "rise": 0.9167,
+    "cen": 430.6939,
+    "mm": -16.4373
+   },
+   "after": {
+    "b26": 0.0484,
+    "b6": 0.0095,
+    "tf": 0.9245,
+    "rms": 3.2292,
+    "rise": 1.8542,
+    "cen": 1032.5073,
+    "mm": -16.3261
+   }
+  },
+  "f_ulkro_ult_hit": {
+   "before": {
+    "b26": 0.0123,
+    "b6": 0.001,
+    "tf": 0.972,
+    "rms": 55.1875,
+    "rise": 1.0208,
+    "cen": 372.1542,
+    "mm": -16.0647
+   },
+   "after": {
+    "b26": 0.2084,
+    "b6": 0.0836,
+    "tf": 0.9156,
+    "rms": 3.0833,
+    "rise": 2.0,
+    "cen": 2359.8461,
+    "mm": -14.9699
+   }
+  },
+  "f_vashil_a1_hit": {
+   "before": {
+    "b26": 0.0037,
+    "b6": 0.0011,
+    "tf": 0.9456,
+    "rms": 7.75,
+    "rise": 1.4167,
+    "cen": 671.8931,
+    "mm": -16.4483
+   },
+   "after": {
+    "b26": 0.054,
+    "b6": 0.0325,
+    "tf": 0.853,
+    "rms": 2.5833,
+    "rise": 1.2083,
+    "cen": 1920.6054,
+    "mm": -16.3935
+   }
+  },
+  "f_vashil_ult_hit": {
+   "before": {
+    "b26": 0.0023,
+    "b6": 0.0007,
+    "tf": 0.9445,
+    "rms": 7.5833,
+    "rise": 1.1042,
+    "cen": 599.9751,
+    "mm": -16.1023
+   },
+   "after": {
+    "b26": 0.0496,
+    "b6": 0.0103,
+    "tf": 0.8786,
+    "rms": 2.3333,
+    "rise": 1.3333,
+    "cen": 1184.0772,
+    "mm": -14.908
+   }
+  }
+ },
+ "pairsSheet": "sfx4b_impacts_identity_ab.png",
+ "pairs": {
+  "burdam_ult": {
+   "before": {
+    "lufs": -15.862894836730518,
+    "tp": -1.7953723600201934,
+    "rise_ms": 0.36111111111111116,
+    "centroid": 391.78220313122256,
+    "b2_6": 0.027510211326324575,
+    "b6_12": 0.002433360958034106,
+    "b12": 4.956649673288255e-05,
+    "side": 0.0,
+    "dur_ms": 828.8819444444443,
+    "takes": 3,
+    "takeSim": 0.9516878348757564,
+    "takeTfSim": 0.8291196288217788,
+    "files": [
+     "f_burdam_ult_hit_1.ogg",
+     "f_burdam_ult_hit_2.ogg",
+     "f_burdam_ult_hit_3.ogg"
+    ]
+   },
+   "after": {
+    "lufs": -14.73220954952919,
+    "tp": -2.2263651824571054,
+    "rise_ms": 1.1666666666666667,
+    "centroid": 1886.256973016881,
+    "b2_6": 0.3449751358426672,
+    "b6_12": 0.0083285688179177,
+    "b12": 6.082861083690757e-05,
+    "side": 0.0,
+    "dur_ms": 771.6319444444445,
+    "takes": 3,
+    "takeSim": 0.9558727633673945,
+    "takeTfSim": 0.887831735215018,
+    "files": [
+     "f_burdam_ult_hit_1.ogg",
+     "f_burdam_ult_hit_2.ogg",
+     "f_burdam_ult_hit_3.ogg"
+    ]
+   }
+  },
+  "dunsom_ult": {
+   "before": {
+    "lufs": -16.229880305342203,
+    "tp": -1.7218046174927177,
+    "rise_ms": 0.6527777777777778,
+    "centroid": 364.99853717375464,
+    "b2_6": 0.014832233597365364,
+    "b6_12": 0.00048047841279641354,
+    "b12": 3.72192239057415e-05,
+    "side": 0.0,
+    "dur_ms": 461.1458333333333,
+    "takes": 3,
+    "takeSim": 0.959881078271553,
+    "takeTfSim": 0.9607798940352189,
+    "files": [
+     "f_dunsom_ult_hit_1.ogg",
+     "f_dunsom_ult_hit_2.ogg",
+     "f_dunsom_ult_hit_3.ogg"
+    ]
+   },
+   "after": {
+    "lufs": -14.918596266478431,
+    "tp": -1.6784995667728857,
+    "rise_ms": 1.1805555555555556,
+    "centroid": 537.1400151020358,
+    "b2_6": 0.057265063088731104,
+    "b6_12": 0.006041461079864895,
+    "b12": 0.0022435016599322392,
+    "side": 0.0,
+    "dur_ms": 393.0208333333333,
+    "takes": 3,
+    "takeSim": 0.9211955539023007,
+    "takeTfSim": 0.9385812070817495,
+    "files": [
+     "f_dunsom_ult_hit_1.ogg",
+     "f_dunsom_ult_hit_2.ogg",
+     "f_dunsom_ult_hit_3.ogg"
+    ]
+   }
+  },
+  "hesmi_ult": {
+   "before": {
+    "lufs": -15.957857188643592,
+    "tp": -1.9062431718679538,
+    "rise_ms": 0.7569444444444445,
+    "centroid": 299.28851085920536,
+    "b2_6": 0.0023563808286254776,
+    "b6_12": 0.00028823375737782364,
+    "b12": 3.592335912995739e-05,
+    "side": 0.0,
+    "dur_ms": 802.3611111111112,
+    "takes": 3,
+    "takeSim": 0.9749431928339835,
+    "takeTfSim": 0.9450824919360459,
+    "files": [
+     "f_hesmi_ult_hit_1.ogg",
+     "f_hesmi_ult_hit_2.ogg",
+     "f_hesmi_ult_hit_3.ogg"
+    ]
+   },
+   "after": {
+    "lufs": -14.878831284790088,
+    "tp": -1.3809324974913417,
+    "rise_ms": 1.2916666666666667,
+    "centroid": 789.5189506499013,
+    "b2_6": 0.067090432668014,
+    "b6_12": 0.0123100996967199,
+    "b12": 0.003577159321054049,
+    "side": 0.0,
+    "dur_ms": 808.0763888888888,
+    "takes": 3,
+    "takeSim": 0.9580168547609967,
+    "takeTfSim": 0.9295913060677986,
+    "files": [
+     "f_hesmi_ult_hit_1.ogg",
+     "f_hesmi_ult_hit_2.ogg",
+     "f_hesmi_ult_hit_3.ogg"
+    ]
+   }
+  },
+  "ervet_ult": {
+   "before": {
+    "lufs": -15.942119071826786,
+    "tp": -1.8726603956443997,
+    "rise_ms": 1.2152777777777777,
+    "centroid": 1355.8992438077776,
+    "b2_6": 0.11728445338363047,
+    "b6_12": 0.015865519127563534,
+    "b12": 0.0005536032002388585,
+    "side": 0.0,
+    "dur_ms": 658.8611111111112,
+    "takes": 3,
+    "takeSim": 0.9215172994780132,
+    "takeTfSim": 0.9218403311053374,
+    "files": [
+     "f_ervet_ult_hit_1.ogg",
+     "f_ervet_ult_hit_2.ogg",
+     "f_ervet_ult_hit_3.ogg"
+    ]
+   },
+   "after": {
+    "lufs": -15.001804603185883,
+    "tp": -2.634362832229851,
+    "rise_ms": 1.3333333333333333,
+    "centroid": 2287.9653290010324,
+    "b2_6": 0.18628254687989376,
+    "b6_12": 0.0642700317779694,
+    "b12": 0.016240164109128593,
+    "side": 0.0,
+    "dur_ms": 580.4513888888889,
+    "takes": 3,
+    "takeSim": 0.9496525115527212,
+    "takeTfSim": 0.8757019156553676,
+    "files": [
+     "f_ervet_ult_hit_1.ogg",
+     "f_ervet_ult_hit_2.ogg",
+     "f_ervet_ult_hit_3.ogg"
+    ]
+   }
+  },
+  "odrum_a1": {
+   "before": {
+    "lufs": -16.823844566919316,
+    "tp": -1.7936062166961608,
+    "rise_ms": 0.638888888888889,
+    "centroid": 307.6373387543229,
+    "b2_6": 0.007649500217632897,
+    "b6_12": 0.0009805428550772883,
+    "b12": 0.00014349621464459432,
+    "side": 0.0,
+    "dur_ms": 249.20833333333334,
+    "takes": 3,
+    "takeSim": 0.9354910803956632,
+    "takeTfSim": 0.9675165663035705,
+    "files": [
+     "f_odrum_a1_hit_1.ogg",
+     "f_odrum_a1_hit_2.ogg",
+     "f_odrum_a1_hit_3.ogg"
+    ]
+   },
+   "after": {
+    "lufs": -16.17401561584529,
+    "tp": -1.8570409293426013,
+    "rise_ms": 1.0069444444444444,
+    "centroid": 918.2209718053067,
+    "b2_6": 0.0691869881091229,
+    "b6_12": 0.009518303483728794,
+    "b12": 6.829289575873282e-05,
+    "side": 0.0,
+    "dur_ms": 221.17361111111111,
+    "takes": 3,
+    "takeSim": 0.9463567036745276,
+    "takeTfSim": 0.9401264978688679,
+    "files": [
+     "f_odrum_a1_hit_1.ogg",
+     "f_odrum_a1_hit_2.ogg",
+     "f_odrum_a1_hit_3.ogg"
+    ]
+   }
+  },
+  "tunlan_a1": {
+   "before": {
+    "lufs": -16.44283575298023,
+    "tp": -1.8890204086861162,
+    "rise_ms": 0.611111111111111,
+    "centroid": 545.9369091013574,
+    "b2_6": 0.015421300640345305,
+    "b6_12": 0.0006350626314978055,
+    "b12": 7.420754547035265e-05,
+    "side": 0.0,
+    "dur_ms": 410.3680555555555,
+    "takes": 3,
+    "takeSim": 0.9876840583573642,
+    "takeTfSim": 0.9801430732621675,
+    "files": [
+     "f_tunlan_a1_hit_1.ogg",
+     "f_tunlan_a1_hit_2.ogg",
+     "f_tunlan_a1_hit_3.ogg"
+    ]
+   },
+   "after": {
+    "lufs": -16.37910498970561,
+    "tp": -2.100842865946785,
+    "rise_ms": 1.1944444444444446,
+    "centroid": 1749.9543454838479,
+    "b2_6": 0.22896230277847976,
+    "b6_12": 0.045228551191973033,
+    "b12": 0.004307053059010443,
+    "side": 0.0,
+    "dur_ms": 373.5555555555555,
+    "takes": 3,
+    "takeSim": 0.9466704251260346,
+    "takeTfSim": 0.9306178846641423,
+    "files": [
+     "f_tunlan_a1_hit_1.ogg",
+     "f_tunlan_a1_hit_2.ogg",
+     "f_tunlan_a1_hit_3.ogg"
+    ]
+   }
+  },
+  "nurrow_a1": {
+   "before": {
+    "lufs": -16.210948255833078,
+    "tp": -1.8199673093007096,
+    "rise_ms": 0.861111111111111,
+    "centroid": 612.0522817429472,
+    "b2_6": 0.0023230384660777414,
+    "b6_12": 0.012404277274913542,
+    "b12": 6.520604087633076e-05,
+    "side": 0.0,
+    "dur_ms": 353.125,
+    "takes": 3,
+    "takeSim": 0.990380841114406,
+    "takeTfSim": 0.9841297936244062,
+    "files": [
+     "f_nurrow_a1_hit_1.ogg",
+     "f_nurrow_a1_hit_2.ogg",
+     "f_nurrow_a1_hit_3.ogg"
+    ]
+   },
+   "after": {
+    "lufs": -16.100153776917715,
+    "tp": -2.0913159475071397,
+    "rise_ms": 1.8055555555555554,
+    "centroid": 2119.251867286453,
+    "b2_6": 0.14670266905603607,
+    "b6_12": 0.1598722485809647,
+    "b12": 0.0019957459085150294,
+    "side": 0.0,
+    "dur_ms": 353.6597222222222,
+    "takes": 3,
+    "takeSim": 0.9447462567989395,
+    "takeTfSim": 0.9408735763809206,
+    "files": [
+     "f_nurrow_a1_hit_1.ogg",
+     "f_nurrow_a1_hit_2.ogg",
+     "f_nurrow_a1_hit_3.ogg"
+    ]
+   }
+  },
+  "dunsom_a2": {
+   "before": {
+    "lufs": -16.675137068572116,
+    "tp": -1.8512105819234648,
+    "rise_ms": 1.0555555555555556,
+    "centroid": 431.03759346470747,
+    "b2_6": 0.010809468044342433,
+    "b6_12": 0.001059026811337498,
+    "b12": 7.169822856890515e-05,
+    "side": 0.0,
+    "dur_ms": 290.59722222222223,
+    "takes": 3,
+    "takeSim": 0.9672818842528579,
+    "takeTfSim": 0.9543144088548529,
+    "files": [
+     "f_dunsom_a2_hit_1.ogg",
+     "f_dunsom_a2_hit_2.ogg",
+     "f_dunsom_a2_hit_3.ogg"
+    ]
+   },
+   "after": {
+    "lufs": -16.25108131757078,
+    "tp": -1.9866318638640639,
+    "rise_ms": 1.0208333333333333,
+    "centroid": 845.1596972025619,
+    "b2_6": 0.17533282954507037,
+    "b6_12": 0.006710121881929552,
+    "b12": 0.0013002038286701668,
+    "side": 0.0,
+    "dur_ms": 265.1180555555556,
+    "takes": 3,
+    "takeSim": 0.8898413000717758,
+    "takeTfSim": 0.9219205872895561,
+    "files": [
+     "f_dunsom_a2_hit_1.ogg",
+     "f_dunsom_a2_hit_2.ogg",
+     "f_dunsom_a2_hit_3.ogg"
+    ]
+   }
+  }
+ },
+ "bars": {
+  "identity": ">= 8 dB, both measures, ults vs ults and heavies vs heavies",
+  "hfFloors": "2-6 kHz >= 4 %, > 6 kHz >= 0.6 % every take",
+  "takeTf": "<= 0.95",
+  "rmsRise": "<= 4 ms DECODED (every take <= 2.8 ms as mastered; Opus pre-echo moves the decoded -40 dB onset 0.5-1 ms sooner; 23 of 32 decode <= 3.0 ms, max 3.7)",
+  "ultOverShared": "+1.5..+3 dB heard",
+  "heavyOverShared": "0..+2 dB heard"
+ }
+}

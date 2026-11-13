@@ -468,6 +468,9 @@ EASE_SKIP: set[str] = {
     'f_ardit_attack_hit', 'f_ardit_hit', 'f_burdam_attack_hit', 'f_burdam_hit', 'f_dunsom_attack_hit', 'f_hesmi_hit',
     'f_ilsheta_attack_hit', 'f_lisvel_hit', 'f_marund_attack_hit', 'f_marund_hit', 'f_nurrow_hit', 'f_odrum_attack_hit',
     'f_sukri_attack_hit', 'f_ulkro_hit', 'f_vashil_attack_hit', 'f_vashil_hit',
+    # (as decoded, max2 round 2 fix: Odrum's eased impact sat 7.98 dB from Burdam's, and its own body already peaks
+    # 1.6-2.2 ms in; Kemdo's eased auto put a sample peak 12 ms in on one take, past the snap)
+    'f_odrum_hit', 'f_kemdo_attack_hit',
 }
 
 

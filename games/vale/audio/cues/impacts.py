@@ -4,24 +4,24 @@ keeps voicing the rest. src/audio/index.ts plays f_<fighter>_<slot>_hit on a 'hi
 binds it, else f_<fighter>_hit.
 
 Round 2 (verify1_q: the round-1 impacts shared one dark pitch-dropping boom, so ults and heavies were confusable
-across fighters, centroid 541 / 604 Hz against the shared hits' 1300, 24 of 32 under the HF floors): each impact is now
-LED by the fighter's own blow, i.e. its shared impact as kits_c voices it (its material, its crack tuned so the 16 sit
->= 8 dB apart, its contact) on its own take, with its signature instrument struck on top, and the weight comes UNDER
-it, never over it:
+across fighters (ult pairs under the 8 dB identity bar 37/120, heavies 46/120), centroid 541 / 604 Hz against the
+shared hits' 1300, 24 of 32 under the HF floors). Each impact is now LED by the fighter's own blow, its shared impact as
+kits_c voices it (its material, its crack and contact, its signature instrument struck through it) on its own take
+and pitch (TAKE_SEMIS: the takes differ in pitch as well as shape), and the weight comes UNDER it, never over it:
 
-  heavy   the fighter's shared impact a semitone down, struck twice (a second, lower blow of another take FLAM_S later:
-          the ear hears a bigger blow from the same hand), its signature struck with it, the material's crack and grit
-          at the onset, and a sub thump below 120 Hz (under the identity bands: it adds weight, not a common colour).
-  ult     the shared impact at its own pitch with the signature struck hard and its octave-down bloom ringing on, the
-          crack, grit and the material's air tail in the fighter's own upper band, a deep sub boom under 120 Hz, in a
-          wetter home room; the loudest blow of the kit (max momentary T_ULT, about 2 dB over the shared impact as
-          heard).
+  heavy   that blow, struck twice (a second, quieter blow FLAM_S later: a bigger blow from the same hand), a sub thump
+          under 70 Hz (below the identity bands: weight, not a common colour).
+  ult     that blow and its flam in a wetter home room, a deep sub boom under 70 Hz; the loudest blow of the kit
+          (max momentary T_ULT, about 2 dB over the shared impact as heard).
 
-Every body layer's attack is cut to its peak (_tight: the 2 ms RMS envelope peaks within TIGHT_MS of the onset, so
-the blow itself lands sooner, not only a click in front of it), then the HF floors are solved in (HF_FLOOR: the grit
-for 2-6 kHz, the air for > 6 kHz, each at the least level that reaches its floor on the finished take). Per cue,
-IMP_TUNE moves the pitch and the signature's level where two fighters' impacts would sit under the identity bar
-(audio/build.py impact_id_gate: 8 dB by both measures, ults against ults and heavies against heavies).
+then the HF floors are solved in (_floors: the fighter's own grit for 2-6 kHz and its air for > 6 kHz, each at the
+least level that reaches HF_FLOOR), and the cue gets its own VOICING (IMP_EQ: a minimum-phase curve over EQ_HZ, +-9 dB at
+most). The curves were searched so every pair of ults, and every pair of heavies, sits >= 8 dB apart by both kit-gate
+measures with the floors held (audio/build.py impact_id_gate), modelling each cue's bands under a curve, then
+re-rendering and refining from the real takes. The blow lands first: the take's later 2 ms RMS is held IMP_EASE_DB
+under its strike (kits_c._ease, before the master and around the snap), so a flam, boom or room never rides over it.
+IMP_TUNE holds the few per-cue fixes (a wider take pitch spread, a shorter strike window, a denser soft clip), each
+with its reason.
 
 Mono (they are spatial: the engine pans them, with the pan-law compensation for a mono source; mono halves their
 decoded memory) and snapped like the kit hits (kits_c.snap_post). All original synthesis; every random choice is seeded
@@ -47,10 +47,11 @@ from .kits_c import (EASE_SKIP, FIGHTERS, HIT_TAKES, ROOMS, SNAP_RISE_MAX_MS, _b
 
 T_HEAVY = ('m', -16.0)
 T_ULT = ('m', -14.7)     # heard about 2.2 dB over the shared impact (catalog gains: both about -0.5 dB)
-HEAVYW = (0.2, 1.0)
+HEAVYW = (0.15, 1.0)    # (the shared impact's own window, kits_c.IMPW: Odrum's drum lands in 0.2 s)
 ULTW = (0.3, 1.6)
-IMPK = dict(tail_floor_db=-54.0, clip_drive=1.5, max_gr_db=6.0)
-ULTK = dict(tail_floor_db=-56.0, clip_drive=1.5, max_gr_db=6.0)    # the ult's ring and boom run on longer
+IMPK = dict(tail_floor_db=-54.0, clip_drive=1.5, max_gr_db=9.0)   # (cuelib's default GR budget: the snap re-strikes the
+                                                                   # onset after the master, so its limiter only shaves the raw crack)
+ULTK = dict(tail_floor_db=-56.0, clip_drive=1.5, max_gr_db=9.0)    # the ult's ring and boom run on longer
 TAKES = 3
 DELIVERY_OPS = ('projectile', 'area', 'zone', 'dash')
 CONTENT = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', '..', 'content'))
@@ -110,11 +111,17 @@ P_HEAVY = dict(semis=0.0, flam=-6.0, flam_semis=0.0, sig=None, crack=None, grit=
                ease_ms=1.0)
 P_ULT = dict(semis=0.0, flam=-5.0, sig=None, bloom=None, crack=None, grit=None, air=None, sub=-10.0, wet=0.12, base=0, floors=True,
              ease_ms=1.0)
-# … and per cue (found by the identity search: every pair of ults, and of heavies, >= 8 dB apart by both measures)
+# … and per cue
 IMP_TUNE: dict[str, dict] = {
     # (takes still near-clones after the voicing: a wider pitch spread between them)
     'f_kemdo_a1_hit': {'ts': (0.0, -1.8, 1.5)}, 'f_tunlan_ult_hit': {'ts': (0.0, -1.8, 1.5)},
-    'f_odrum_ult_hit': {'ts': (0.0, -2.5, 2.0)},
+    'f_hesmi_a1_hit': {'ts': (0.0, -2.2, 1.8)},
+    'f_odrum_ult_hit': {'ts': (0.0, -2.5, 2.0), 'flam': -8.0},   # (its drum's second stroke rode over the snap)
+    # (Dunsom's wood knocks twice within 3 ms: the strike window is shorter)
+    'f_dunsom_ult_hit': {'ease_ms': 0.5}, 'f_dunsom_a2_hit': {'ease_ms': 0.5},
+    # (Marund's eased blow is all crack: a denser soft clip shaves it before the limiter, GR <= the 9 dB budget)
+    'f_marund_ult_hit': {'clip': 3.0}, 'f_marund_a1_hit': {'clip': 3.0, 'ts': (0.0, -1.2, -0.5)}, 'f_ervet_ult_hit': {'clip': 3.0},
+    'f_ervet_a3_hit': {'clip': 3.0},
 }
 
 
@@ -182,38 +189,38 @@ EQ_HZ = (160.0, 315.0, 630.0, 1250.0, 2500.0, 5000.0, 10000.0)   # the voicing c
 # identity measures with the HF floors held (found by modelling each cue's bands under a curve and searching the
 # curves, then re-rendering and refining; +-9 dB at most)
 IMP_EQ: dict[str, tuple[float, ...]] = {
-    'f_ardit_ult_hit': (-6, -4.5, 4.5, 3, -7.5, 6, 9),
-    'f_burdam_ult_hit': (-9, 6, 4.5, 0, 1.5, 9, -9),
-    'f_dunsom_ult_hit': (-4.5, 3, -7.5, -3, 4.5, -9, 3),
-    'f_ervet_ult_hit': (-3, 6, 0, 0, 0, 6, 6),
-    'f_hesmi_ult_hit': (-4.5, -6, 4.5, -6, 9, -9, 6),
-    'f_ilsheta_ult_hit': (3, 4.5, -7.5, -9, 1.5, 9, -9),
-    'f_kemdo_ult_hit': (7.5, -6, -6, -9, 4.5, 4.5, 7.5),
-    'f_lisvel_ult_hit': (1.5, 7.5, -4.5, -4.5, -4.5, 0, 4.5),
-    'f_marund_ult_hit': (0, -7.5, 4.5, -6, -4.5, 6, 6),
-    'f_nurrow_ult_hit': (-6, 4.5, -9, -6, 0, 6, -4.5),
-    'f_odrum_ult_hit': (-9, -3, -9, 6, 7.5, 4.5, 4.5),
-    'f_rishal_ult_hit': (0, -9, -9, 0, 6, 1.5, 0),
-    'f_sukri_ult_hit': (-9, -3, 6, 0, -1.5, 0, 3),
-    'f_tunlan_ult_hit': (-4.5, -7.5, 4.5, 1.5, -3, 4.5, -3),
-    'f_ulkro_ult_hit': (-9, -7.5, -9, -4.5, 6, 4.5, 6),
+    'f_ardit_ult_hit': (-7.5, -4.5, 4.5, 3, -7.5, 6, 4.5),
+    'f_burdam_ult_hit': (-9, 4.5, 1.5, 1.5, 1.5, 9, -9),
+    'f_dunsom_ult_hit': (-7.5, 3, -7.5, -3, 4.5, -9, 3),
+    'f_ervet_ult_hit': (-4.5, 7.5, -1.5, 0, 0, 6, 6),
+    'f_hesmi_ult_hit': (0, -6, 4.5, -6, 9, -9, 6),
+    'f_ilsheta_ult_hit': (0, 4.5, -9, -9, 4.5, 9, -9),
+    'f_kemdo_ult_hit': (7.5, -4.5, -6, -9, 4.5, 4.5, 7.5),
+    'f_lisvel_ult_hit': (0, 9, -4.5, -4.5, -6, 0, 1.5),
+    'f_marund_ult_hit': (-1.5, -7.5, 4.5, -9, -4.5, 6, 7.5),
+    'f_nurrow_ult_hit': (-6, 4.5, -9, -6, 0, 7.5, -7.5),
+    'f_odrum_ult_hit': (-6, -3, -9, 3, 7.5, 6, 4.5),
+    'f_rishal_ult_hit': (-1.5, -9, -9, 0, 6, 1.5, 0),
+    'f_sukri_ult_hit': (-9, -6, 4.5, 0, -1.5, 0, 6),
+    'f_tunlan_ult_hit': (-6, -9, 4.5, -3, -4.5, 4.5, -3),
+    'f_ulkro_ult_hit': (-9, -7.5, -9, -3, 6, 6, 6),
     'f_vashil_ult_hit': (-6, -6, 3, 3, -4.5, 6, 0),
-    'f_ardit_a1_hit': (-9, 1.5, 0, -3, -1.5, 0, -6),
-    'f_burdam_a3_hit': (-9, -7.5, -1.5, 0, 1.5, 7.5, -9),
-    'f_dunsom_a2_hit': (-6, 1.5, -9, -9, 3, -3, -1.5),
-    'f_ervet_a3_hit': (7.5, 7.5, -6, -6, 0, 6, 3),
-    'f_hesmi_a1_hit': (-6, -9, 4.5, -1.5, 7.5, -9, 6),
-    'f_ilsheta_a1_hit': (3, -9, -9, 4.5, 6, 9, -7.5),
-    'f_kemdo_a1_hit': (-4.5, -9, 3, 1.5, 4.5, 7.5, 9),
-    'f_lisvel_a1_hit': (0, 0, 0, -1.5, -4.5, 0, 6),
-    'f_marund_a1_hit': (3, -6, -1.5, -1.5, -7.5, 9, 9),
-    'f_nurrow_a1_hit': (0, 3, -7.5, -9, -9, 7.5, 9),
-    'f_odrum_a1_hit': (0, -4.5, -1.5, 3, -4.5, 1.5, -4.5),
-    'f_rishal_a1_hit': (-1.5, -9, -9, 0, 0, 0, 0),
-    'f_sukri_a1_hit': (-1.5, 6, -9, -7.5, -1.5, -6, 0),
-    'f_tunlan_a1_hit': (-3, -3, -3, -1.5, 6, 9, 3),
-    'f_ulkro_a1_hit': (-9, 0, -1.5, -1.5, -4.5, 0, 0),
-    'f_vashil_a1_hit': (-6, -9, -9, 6, -1.5, 4.5, 9),
+    'f_ardit_a1_hit': (-9, -1.5, 0, -1.5, -1.5, 0, -6),
+    'f_burdam_a3_hit': (-9, -9, -4.5, 4.5, 1.5, 9, -9),
+    'f_dunsom_a2_hit': (-9, 0, -9, -9, 7.5, -3, -1.5),
+    'f_ervet_a3_hit': (9, 9, -7.5, -9, -3, 7.5, 1.5),
+    'f_hesmi_a1_hit': (-7.5, -9, 4.5, -1.5, 9, -9, 6),
+    'f_ilsheta_a1_hit': (1.5, -7.5, -9, 3, 6, 9, -7.5),
+    'f_kemdo_a1_hit': (-7.5, -9, 1.5, 4.5, 6, 9, 9),
+    'f_lisvel_a1_hit': (0, 3, 0, -1.5, -4.5, 0, 6),
+    'f_marund_a1_hit': (1.5, -4.5, 3, -1.5, -6, 9, 9),
+    'f_nurrow_a1_hit': (3, 1.5, -9, -9, -9, 7.5, 4.5),
+    'f_odrum_a1_hit': (0, -7.5, -1.5, 3, -9, 1.5, -4.5),
+    'f_rishal_a1_hit': (-1.5, -9, -9, 0, -3, 0, 0),
+    'f_sukri_a1_hit': (-1.5, 4.5, -9, -9, 1.5, -9, -3),
+    'f_tunlan_a1_hit': (-3, -4.5, -4.5, -1.5, 6, 9, 7.5),
+    'f_ulkro_a1_hit': (-9, -4.5, -1.5, 0, -4.5, 0, -4.5),
+    'f_vashil_a1_hit': (-9, -9, -9, 6, -1.5, 4.5, 9),
 }
 
 
@@ -270,6 +277,7 @@ def _make_heavy(fid: str, slot: str):
     recipe.__name__ = cid
     REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, boost=0.0, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling, boost, ease=_eased(_fid), ease_db=IMP_EASE_DB)
     REGISTRY[cid].extra['rise_max_ms'] = SNAP_RISE_MAX_MS
+    REGISTRY[cid].clip_drive = IMP_TUNE.get(cid, {}).get('clip', REGISTRY[cid].clip_drive)
     return recipe
 
 
@@ -302,6 +310,7 @@ def _make_ult(fid: str):
     recipe.__name__ = cid
     REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, boost=0.0, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling, boost, ease=_eased(_fid), ease_db=IMP_EASE_DB)
     REGISTRY[cid].extra['rise_max_ms'] = SNAP_RISE_MAX_MS
+    REGISTRY[cid].clip_drive = IMP_TUNE.get(cid, {}).get('clip', REGISTRY[cid].clip_drive)
     return recipe
 
 
