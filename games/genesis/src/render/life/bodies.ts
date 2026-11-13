@@ -5,6 +5,7 @@
 // Buckets grow by doubling; the CPU writes only what moved.
 
 import { uploadPrefix } from '../upload.ts';
+import { ringify } from '../bufring.ts';
 import {
   BufferGeometry, DynamicDrawUsage, Float32BufferAttribute, Group, InstancedBufferAttribute, InstancedMesh, Matrix4,
   type IUniform, type Material, type ShaderMaterial, type MeshStandardMaterial,
@@ -96,6 +97,8 @@ export class BodyBuckets {
     const mesh = new InstancedMesh(g, material, cap);
     mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     mesh.count = 0;
+    // (PERF s16) rewritten every frame into buffers drawn every frame: a ring of 3 per attribute (bufring.ts)
+    ringify(mesh, ['instanceMatrix', 'iAnim', 'iColA', 'iColB', 'iColC', 'iStyle', 'iFade']);
     mesh.frustumCulled = false;
     mesh.matrixAutoUpdate = false;
     mesh.visible = false;

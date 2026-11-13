@@ -6,6 +6,7 @@
 // life layer's particles and night lights (life.ts collectFx reads `fires`). Instanced like the boats (boats.ts): the
 // building material and depth, one bucket per prop, grown on demand.
 import { uploadPrefix } from '../upload.ts';
+import { ringify } from '../bufring.ts';
 import {
   DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, type BufferGeometry, type IUniform, type Material, type ShaderMaterial,
 } from 'three';
@@ -54,6 +55,8 @@ export class Camps {
     geo.setAttribute('iInfo', info);
     const mesh = new InstancedMesh(geo, this.material, cap);
     mesh.instanceMatrix.setUsage(DynamicDrawUsage);
+    // (PERF s16) rewritten every frame into buffers drawn every frame: a ring of 3 per attribute (bufring.ts)
+    ringify(mesh, ['instanceMatrix', 'iState', 'iInfo']);
     mesh.count = 0;
     mesh.frustumCulled = false;
     mesh.matrixAutoUpdate = false;
