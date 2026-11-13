@@ -2902,6 +2902,8 @@ export function generate(parcel, opts) {
     // (housegen notes "pieces in view") were short - one-cell rooms with two doors and a window, thin L baths, a living room between two doors. No rng is drawn
     // here: a room that already reads is untouched.
     if (phase === 5) {
+      // (W10 R1A: a ruin's room is searched to 4 - its furniture x1.15 hid the third piece from the game's camera, housegen_demo_looks ruin_house.f0r2 showed 2)
+      const NEED5 = TH.ruined ? 4 : 3;
       const V5 = roomView(R);
       if (!V5.ents.length) return X;
       later(() => {
@@ -2912,7 +2914,7 @@ export function generate(parcel, opts) {
         // first-person judge; the looks gate keeps reporting such a room).
         const model5 = (acc) => { R._acc = acc; if (acc) R._accMask = (1 << Math.min(30, V5.ents.length)) - 1; R._ext = null; R._tall = null; for (const q of placed) q.vis = null; };
         model5(true);
-        if (bestView(R).n >= 3) return;
+        if (bestView(R).n >= NEED5) return;
         const run5 = () => {
         const FL = s[f], budget5 = (cat) => tris[f] + cat.tris <= TB;
         const cnt = () => viewCounts(R);
@@ -2930,7 +2932,7 @@ export function generate(parcel, opts) {
         };
         const search = (ei) => {
           const e = V5.ents[ei], want = 1 << ei;
-          const need = () => cnt()[ei] < 3;
+          const need = () => cnt()[ei] < NEED5;
           const fqTo = Math.abs(e.fu) > 0.5 ? (e.fu > 0 ? 3 : 1) : (e.fv > 0 ? 2 : 0);   // a free piece's front toward the entrance
           for (const mode of ["wall", "free"]) for (const id of ids) {
             if (!need()) break;
@@ -2974,12 +2976,12 @@ export function generate(parcel, opts) {
         }
         };
         run5();
-        if (bestView(R).n >= 3) return;
+        if (bestView(R).n >= NEED5) return;
         R._pm = 0; RW.stale = true;
         run5();
-        if (bestView(R).n >= 3) return;
+        if (bestView(R).n >= NEED5) return;
         model5(false);                                    // (the fallback: the eye-only model, as before Wave 9)
-        if (bestView(R).n >= 3) return;
+        if (bestView(R).n >= NEED5) return;
         run5();
       });
       return X;
