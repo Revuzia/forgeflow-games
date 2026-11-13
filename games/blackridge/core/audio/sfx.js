@@ -1497,6 +1497,46 @@ export function makeSfx(env) {
     }
   }
 
+  // [lane dom] STRONGHOLD zone cues — synthesized (no audio files), on the
+  // UI bus, team-aware from the LISTENER's side (team 0 = the player's team):
+  //   ours captured  → rising major triad (the "got it" sting)
+  //   theirs captured / we lost one → falling minor pair (the "lost it" sting)
+  //   neutralised (by us) → two-step up; enemy starts on a zone we hold → a
+  //   short low alarm pulse (rate-limited 2.5 s per zone)
+  // Other zone states (contested, defended) stay silent — the HUD covers them.
+  const zoneAlarmT = {};
+  function onZone(d) {
+    if (!d || !env.ac) return;
+    const o = uiOut(1);
+    const us = d.team === 0;
+    if (d.state === "captured") {
+      if (us) {
+        thump(o, { f0: 523.3, f1: 523.3, durMs: 110, gain: 0.09, type: "triangle" });
+        thump(o, { f0: 659.3, f1: 659.3, durMs: 110, gain: 0.09, type: "triangle", when: 0.1 });
+        thump(o, { f0: 784.0, f1: 784.0, durMs: 260, gain: 0.1, type: "triangle", when: 0.2 });
+      } else {
+        thump(o, { f0: 392.0, f1: 392.0, durMs: 170, gain: 0.08, type: "sawtooth" });
+        thump(o, { f0: 311.1, f1: 300.0, durMs: 380, gain: 0.08, type: "sawtooth", when: 0.17 });
+      }
+    } else if (d.state === "neutralised") {
+      if (us) {
+        thump(o, { f0: 587.3, f1: 587.3, durMs: 90, gain: 0.08, type: "triangle" });
+        thump(o, { f0: 880.0, f1: 880.0, durMs: 160, gain: 0.08, type: "triangle", when: 0.09 });
+      } else {
+        thump(o, { f0: 466.2, f1: 466.2, durMs: 140, gain: 0.08, type: "square" });
+        thump(o, { f0: 349.2, f1: 340.0, durMs: 320, gain: 0.07, type: "square", when: 0.15 });
+      }
+    } else if (d.state === "capturing" && !us && d.owner === 0) {
+      const t = env.ac.currentTime;
+      if (t - (zoneAlarmT[d.zone] || -9) < 2.5) return;
+      zoneAlarmT[d.zone] = t;
+      for (let i = 0; i < 2; i++) {
+        thump(o, { f0: 440, f1: 440, durMs: 90, gain: 0.07, type: "square", when: i * 0.2 });
+        thump(o, { f0: 370, f1: 370, durMs: 90, gain: 0.07, type: "square", when: i * 0.2 + 0.1 });
+      }
+    }
+  }
+
   function onWhiz(d) {
     if (!d || !d.pos) return;
     // a shotgun volley sends several pellets past you in the same tick — one
@@ -1631,6 +1671,131 @@ export function makeSfx(env) {
     burst(o, { f: 2400, q: 8, durMs: 6, gain: 0.03 });
   }
 
+  // ---- [equipment lane] FLASHBANG / SMOKE / CONCUSSION / TRIPMINE ----------------
+  // All synthesized or built from samples already shipped (click, click_a/_b,
+  // cloth, imp_metal, expl_frag) — no new audio files (the payload gate).
+  // The bridge registration lives in core/fx/equipment_fx.js (audio.js is not
+  // this lane's file); it calls sfx.onEquip(d) through __FPS__.audio.sfx.
+  let eqRing = null;
+  function eqStopRing() {
+    if (!eqRing) return;
+    const r = eqRing; eqRing = null;
+    try { const t = env.ac.currentTime; r.g.gain.cancelScheduledValues(t); r.g.gain.setTargetAtTime(0, t, 0.05); r.o.stop(t + 0.4); if (r.o2) r.o2.stop(t + 0.4); } catch (e) { /* already stopped */ }
+  }
+  function onEquip(d) {
+    if (!d || !env.ac || !env.buses) return;
+    const ph = d.phase;
+    if (ph === "flashed" || ph === "stunned") { if (d.who === "P") ownStatus(d); return; }
+    if (!d.pos) return;
+    if (ph === "out") {
+      const out = env.spatial(d.pos, 30);
+      if (!out) return;
+      burst(out, { f: 900, sweepTo: 520, q: 0.7, durMs: 200, gain: 0.07 });           // throw whoosh
+      if (d.who === "P") {
+        const a = buf("click_a"); if (a) voice(a, env.spatial(null), { rate: 1.7, gain: 0.16 });   // pin
+        const b = buf("click_b"); if (b) voice(b, env.spatial(null), { rate: 1.9, gain: 0.08, when: 0.05 });
+      }
+    } else if (ph === "bounce") {
+      const out = env.spatial(d.pos, 30);
+      if (!out) return;
+      const b = buf("click");
+      if (b) voice(b, out, { gain: 0.26, rate: (d.kind === "smoke" ? 1.15 : 1.4) + rng() * 0.12 });
+      else burst(out, { f: 3000, q: 6, durMs: 14, gain: 0.16 });
+      thump(out, { f0: d.kind === "smoke" ? 420 : 640, f1: 300, durMs: 34, gain: 0.07, type: "triangle" }); // can body
+    } else if (ph === "pop") {
+      const c = camPos();
+      const dist = Math.hypot(d.pos[0] - c[0], (d.pos[1] || 0) - c[1], d.pos[2] - c[2]);
+      const when = Number.isFinite(dist) ? dist / 343 : 0;
+      if (d.kind === "flash") {
+        const out = env.spatial(d.pos, 160);
+        if (!out) return;
+        // a hard bright CRACK, not a frag's boom: broadband snap + short high body
+        burst(out, { f: 3200, q: 0.5, durMs: 110, gain: 0.6, when, decayMs: 40 });
+        burst(out, { f: 7000, q: 0.8, durMs: 60, gain: 0.35, when });
+        thump(out, { f0: 210, f1: 70, durMs: 150, gain: 0.45, when });
+        const b = buf("expl_frag"); if (b) voice(b, out, { gain: 0.22, rate: 1.9, when, hp: 900 });
+        const conv = env.tailIn(env.zoneOf(d.pos[0], d.pos[1] || 0, d.pos[2]));
+        if (conv) burst(conv, { f: 2500, q: 0.6, durMs: 300, gain: 0.25, when, decayMs: 120 });
+      } else if (d.kind === "stun") {
+        const out = env.spatial(d.pos, 140);
+        if (!out) return;
+        // a deep concussive THUD with a rattle in it
+        thump(out, { f0: 95, f1: 28, durMs: 650, gain: 0.75, when });
+        thump(out, { f0: 48, f1: 30, durMs: 800, gain: 0.45, when });
+        burst(out, { f: 380, q: 0.5, durMs: 320, gain: 0.32, when, decayMs: 110 });
+        const b = buf("expl_frag"); if (b) voice(b, out, { gain: 0.3, rate: 0.75, when, lp: 1400 });
+      } else {
+        const out = env.spatial(d.pos, 45);
+        if (!out) return;
+        // smoke: the fuse pop and a long hiss as the can vents
+        thump(out, { f0: 320, f1: 140, durMs: 45, gain: 0.18, when });
+        burst(out, { f: 2600, q: 0.45, durMs: 4200, gain: 0.085, when: when + 0.03, decayMs: 1800 });
+        burst(out, { f: 900, q: 0.6, durMs: 2600, gain: 0.05, when: when + 0.05, decayMs: 1200 });
+      }
+    } else if (ph === "plant") {
+      const out = env.spatial(d.pos, 18);
+      if (!out) return;
+      const cl = buf("cloth"); if (cl) voice(cl, out, { rate: 1.05, gain: 0.14 });
+      thump(out, { f0: 170, f1: 95, durMs: 55, gain: 0.12, when: 0.12 });              // set down
+      const a = buf("click_a"); if (a) voice(a, out, { rate: 0.85, gain: 0.2, when: 0.28 }); // arm switch
+      thump(out, { f0: 2350, f1: 2350, durMs: 40, gain: 0.025, when: 0.5 });            // armed chirp
+    } else if (ph === "trip") {
+      const out = env.spatial(d.pos, 30);
+      if (!out) return;
+      thump(out, { f0: 2600, f1: 2600, durMs: 45, gain: 0.09 });                        // trip chirp
+      thump(out, { f0: 3100, f1: 3100, durMs: 45, gain: 0.09, when: 0.07 });
+    } else if (ph === "destroy") {
+      const out = env.spatial(d.pos, 40);
+      if (!out) return;
+      const b = buf("imp_metal"); if (b) voice(b, out, { rate: 1.2, gain: 0.3 });
+      burst(out, { f: 4200, q: 1.5, durMs: 70, gain: 0.22 });                           // sparks
+      thump(out, { f0: 260, f1: 90, durMs: 90, gain: 0.2 });
+    }
+  }
+  // the player's own state: a flash RINGS (high tone, the world ducked to a
+  // murmur, recovering with the whiteout); a concussion THROBS (world ducked,
+  // a low pulsing wub). Both feed the limiter like the existing tinnitus.
+  function ownStatus(d) {
+    const ac = env.ac, B = env.buses;
+    if (!B || !B.duck || !B.limiter) return;
+    const t = ac.currentTime;
+    const dur = Math.max(0.5, Math.min(6, fin(d.dur, 2)));
+    const amt = Math.max(0.1, Math.min(1, fin(d.amt, 0.5)));
+    eqStopRing();
+    try {
+      B.duck.gain.cancelScheduledValues(t);
+      if (d.phase === "flashed") {
+        B.duck.gain.setTargetAtTime(0.12 + 0.3 * (1 - amt), t, 0.02);
+        B.duck.gain.setTargetAtTime(1, t + dur * 0.5, dur * 0.22);
+        const o = ac.createOscillator(), o2 = ac.createOscillator(), g = ac.createGain();
+        o.type = "sine"; o.frequency.value = 3150;
+        o2.type = "sine"; o2.frequency.value = 3167;            // a slow beat: the ear's ring wavers
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.075 * amt, t + 0.02);
+        g.gain.setTargetAtTime(0, t + dur * 0.45, dur * 0.25);
+        o.connect(g); o2.connect(g); g.connect(B.limiter);
+        o.start(t); o2.start(t); o.stop(t + dur + 1.2); o2.stop(t + dur + 1.2);
+        env.voices += 2;
+        eqRing = { o, o2, g };
+      } else {
+        B.duck.gain.setTargetAtTime(0.4, t, 0.04);
+        B.duck.gain.setTargetAtTime(1, t + dur * 0.7, dur * 0.15);
+        const o = ac.createOscillator(), g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
+        o.type = "sine"; o.frequency.value = 62;
+        lfo.type = "sine"; lfo.frequency.value = 4.2;
+        lg.gain.value = 0.05 * amt;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.06 * amt, t + 0.05);
+        g.gain.setTargetAtTime(0, t + dur * 0.6, dur * 0.18);
+        lfo.connect(lg); lg.connect(g.gain);
+        o.connect(g); g.connect(B.limiter);
+        o.start(t); lfo.start(t); o.stop(t + dur + 1); lfo.stop(t + dur + 1);
+        env.voices += 2;
+        eqRing = { o, o2: lfo, g };
+      }
+    } catch (e) { err(e, "equip:own"); }
+  }
+
   // ---- match / loadout events with no sound before this pass ----------------------
   function onRespawn(d) {
     if (!d || !(d.who === "P" || d.actorId === 0)) return;
@@ -1705,6 +1870,7 @@ export function makeSfx(env) {
     cookWasLive = false;
     lastGrenWarn = -10;
     lastLoot = -10;
+    eqStopRing(); // [equipment lane]
     volley.volleys = 0; volley.n = 0; volley.skipped = 0; volley.shooter = null;
     volley.lastPellet = -1; volley.t = -9;
     fb.t = -9; fb.kind = 0; fb.hits = 0;
@@ -1719,6 +1885,8 @@ export function makeSfx(env) {
     reset, ui, radioSquelch,
     onShot, onHurt, onDeath, onReload, onSwitch, onAds, onStep, onLand, onJump,
     onEmpty, onBark, onObjective, onWhiz, onExplosion, onGrenade,
+    onZone, // [lane dom]
     onRespawn, onResupply, onLoot, grenadePin, cookTick, ammoRattle,
+    onEquip, // [equipment lane]
   };
 }

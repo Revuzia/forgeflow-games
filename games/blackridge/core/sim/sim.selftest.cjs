@@ -832,6 +832,10 @@ async function main() {
       "loot", "pickup", "streak", "medal", "score",
       // 2026-10-14 additive: player take-off (sfx.onJump) — a jump was silent until landing
       "jump",
+      // [equipment lane] additive: flashbang / smoke / concussion / tripmine — ONE
+      // type, phased (out|bounce|pop|flashed|stunned|plant|trip|destroy|remove|
+      // smokeEnd); see core/sim/equipment.js header + equipment.selftest.cjs
+      "equip",
     ]);
     const seen = new Set();
     const sim = S.createSim({

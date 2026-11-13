@@ -16,10 +16,10 @@
 // everything unlocked) and show the level that unlocks them.
 
 import {
-  PRIMARIES, SECONDARIES, LETHALS, EQUIPMENT_COMING, EQUIPMENT_NAMES,
+  PRIMARIES, SECONDARIES, LETHALS, TACTICALS, EQUIPMENT_NAMES,
   PERKS, PERKS_BY_TIER, CLASS_COUNT, NAME_MAX,
 } from "../sim/classes.js";
-import { createLoadouts } from "../meta/loadouts.js";
+import { createLoadouts, STORE_KEY } from "../meta/loadouts.js";
 
 const WNAME = {
   warden: "M-72 WARDEN", vesper: "KS-23 VESPER", breaker: "B-12 BREAKER",
@@ -156,13 +156,35 @@ export function createLoadoutUI(ctx) {
   publishSpec();
   store.onChange(publishSpec);
 
+  // [equipment lane] the TACTICAL slot. meta/loadouts.js update() copies only
+  // name/primary/secondary/lethal/perks from a patch, so a tactical change that
+  // the store ignores is written through the store's own record + reload (the
+  // record is re-validated by classes.validateClass on that load). Once the
+  // store copies `tactical` itself, the first branch does the whole job.
+  function setTactical(i, id) {
+    store.update(i, { tactical: id });
+    const cur = store.get(i);
+    if (cur && cur.tactical === id) return true;
+    try {
+      const rec = store.record();
+      if (!rec.classes[i]) return false;
+      rec.classes[i].tactical = id;
+      localStorage.setItem(STORE_KEY, JSON.stringify(rec));
+      store.reload();
+      publishSpec();
+      const c2 = store.get(i);
+      return !!(c2 && c2.tactical === id);
+    } catch (e) { return false; }
+  }
+
   function classSummary(i) {
     const k = store.kitFor(i, prog());
     const perks = k.perks.filter(Boolean).map((id) => PERKS[id].name);
     return {
       name: k.name,
       weapons: [k.primary, k.secondary].filter(Boolean).map((w) => WNAME[w] || w.toUpperCase()).join(" · ") +
-        (k.lethal ? " · " + (EQUIPMENT_NAMES[k.lethal] || k.lethal.toUpperCase()) : ""),
+        (k.lethal ? " · " + (EQUIPMENT_NAMES[k.lethal] || k.lethal.toUpperCase()) : "") +
+        (k.tactical ? " · " + (EQUIPMENT_NAMES[k.tactical] || k.tactical.toUpperCase()) : ""),
       perks: perks.length ? perks.join(" · ") : "NO PERKS UNLOCKED",
       kit: k,
     };
@@ -199,8 +221,8 @@ export function createLoadoutUI(ctx) {
     }).join("");
     const prim = PRIMARIES.map((w) => optBtn("primary", w, WNAME[w], WROLE[w], c.primary === w, "weapon:" + w)).join("");
     const sec = SECONDARIES.map((w) => optBtn("secondary", w, WNAME[w], WROLE[w], c.secondary === w, "weapon:" + w)).join("");
-    const leth = Object.keys(LETHALS).map((id) => optBtn("lethal", id, EQUIPMENT_NAMES[id], "x" + LETHALS[id].count, c.lethal === id, "equip:" + id))
-      .concat(EQUIPMENT_COMING.map((id) => optBtn("soon", id, EQUIPMENT_NAMES[id] || id, "", false, null, true))).join("");
+    const leth = Object.keys(LETHALS).map((id) => optBtn("lethal", id, EQUIPMENT_NAMES[id], "x" + LETHALS[id].count, c.lethal === id, "equip:" + id)).join("");
+    const tact = Object.keys(TACTICALS).map((id) => optBtn("tactical", id, EQUIPMENT_NAMES[id], "x" + TACTICALS[id].count, c.tactical === id, "equip:" + id)).join("");
     const perkRows = PERKS_BY_TIER.map((ids, ti) =>
       `<div class="lo-sec">${TIER_LABEL[ti]}</div><div class="lo-opts">` +
       ids.map((id) => optBtn("perk" + (ti + 1), id, PERKS[id].name, "", c.perks[ti] === id, "perk:" + id)).join("") +
@@ -211,6 +233,7 @@ export function createLoadoutUI(ctx) {
     if (kit.primary !== c.primary) lockedOut.push(WNAME[c.primary] + " → " + (WNAME[kit.primary] || "none"));
     c.perks.forEach((p, ti) => { if (p && kit.perks[ti] !== p) lockedOut.push(PERKS[p].name + " → " + (kit.perks[ti] ? PERKS[kit.perks[ti]].name : "empty")); });
     if (c.lethal && kit.lethal !== c.lethal) lockedOut.push((EQUIPMENT_NAMES[c.lethal] || c.lethal) + " → none");
+    if (c.tactical && kit.tactical !== c.tactical) lockedOut.push((EQUIPMENT_NAMES[c.tactical] || c.tactical) + " → none");
 
     edRoot.querySelector(".lo-ed").innerHTML =
       `<div class="lo-list"><h2>Classes</h2>${tabs}</div>` +
@@ -219,6 +242,7 @@ export function createLoadoutUI(ctx) {
       `<div class="lo-sec">Primary</div><div class="lo-opts">${prim}</div>` +
       `<div class="lo-sec">Secondary</div><div class="lo-opts">${sec}</div>` +
       `<div class="lo-sec">Lethal</div><div class="lo-opts">${leth}</div>` +
+      `<div class="lo-sec">Tactical</div><div class="lo-opts">${tact}</div>` +
       perkRows +
       `<div class="lo-desc">${esc(edDesc)}</div>` +
       (lockedOut.length ? `<div class="lo-warn">LOCKED — DEPLOYS AS: ${esc(lockedOut.join(" · "))}</div>` : "") +
@@ -243,10 +267,10 @@ export function createLoadoutUI(ctx) {
     if (act === "done") { closeEditor(); return; }
     const k = t.getAttribute("data-k"), id = t.getAttribute("data-id");
     if (!k) return;
-    if (k === "soon") { edDesc = (EQUIPMENT_NAMES[id] || id) + " — not in service yet."; renderEditor(); return; }
-    const key = k === "primary" || k === "secondary" ? "weapon:" + id : k === "lethal" ? "equip:" + id : "perk:" + id;
+    const key = k === "primary" || k === "secondary" ? "weapon:" + id : k === "lethal" || k === "tactical" ? "equip:" + id : "perk:" + id;
     if (k.startsWith("perk")) edDesc = PERKS[id].name + " — " + PERKS[id].desc;
     else if (k === "lethal") edDesc = LETHALS[id].name + " — " + LETHALS[id].desc;
+    else if (k === "tactical") edDesc = TACTICALS[id].name + " — " + TACTICALS[id].desc;
     else edDesc = WNAME[id] + " — " + WROLE[id];
     if (!unlocked(key)) {
       const lv = unlockLv(key);
@@ -255,6 +279,7 @@ export function createLoadoutUI(ctx) {
       return;
     }
     if (k.startsWith("perk")) store.update(edIdx, { perk: { tier: +k.slice(4), id } });
+    else if (k === "tactical") setTactical(edIdx, id);
     else store.update(edIdx, { [k]: id });
     renderEditor();
   }
@@ -400,7 +425,20 @@ export function createLoadoutUI(ctx) {
       else if (d.phase === "live" && pkMode === "start") closePicker();
       else if (d.phase === "ended") closePicker();
     });
-    bridge.register("death", (d) => { if (d && d.victim === "P" && classMatch() && matchPhase() !== "ended") openPicker("respawn"); });
+    bridge.register("death", (d) => {
+      if (!(d && d.victim === "P" && classMatch() && matchPhase() !== "ended")) return;
+      // [integration v146] wait for the killcam replay; poll on wall clock (rAF may be paused)
+      const kc = () => { try { return window.__FPS__ && window.__FPS__.killcam && window.__FPS__.killcam.isReplaying(); } catch (e) { return false; } };
+      let tries = 0;
+      const tick = () => {
+        if (matchPhase() === "ended") return;
+        const st = ctx.sim && ctx.sim() && ctx.sim().state;
+        if (st && st.player && st.player.alive) return;          // already respawned
+        if (kc() && tries++ < 60) { setTimeout(tick, 150); return; }
+        openPicker("respawn");
+      };
+      setTimeout(tick, 200);
+    });
     bridge.register("respawn", (d) => { if (d && d.who === "P" && pkMode === "respawn") closePicker(); syncChip(); });
     bridge.register("mission:start", () => syncChip());
     bridge.register("mission:end", () => { closePicker(); syncChip(); });

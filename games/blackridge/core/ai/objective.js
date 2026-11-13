@@ -39,6 +39,7 @@ import { makeComms } from "./comms.js";
 import { assign as assignTdm } from "./roles/tdm.js";
 import { assign as assignCtf } from "./roles/ctf.js";
 import { assign as assignFfa } from "./roles/ffa.js";
+import { assign as assignDom } from "./roles/dom.js"; // [lane dom] STRONGHOLD
 
 // ---------------------------------------------------------------- constants
 export const OBJ_PERF = { calls: 0, totalMs: 0, avgMs: 0, lastMs: 0, maxMs: 0 };
@@ -62,6 +63,10 @@ export const REASONS = Object.freeze({
   CUTOFF_INFEASIBLE: "CUTOFF_INFEASIBLE", RETURN_FLAG: "RETURN_FLAG",
   CARRY: "CARRY", HOLD_NEAR_STAND: "HOLD_NEAR_STAND", STALL_BREAKER: "STALL_BREAKER",
   LEASH: "LEASH", HUNT: "HUNT", EVADE: "EVADE", SURVIVE: "SURVIVE",
+  // [lane dom] STRONGHOLD (zone control)
+  ZONE_CAPTURE: "ZONE_CAPTURE", ZONE_NEUTRALISE: "ZONE_NEUTRALISE",
+  ZONE_DEFEND: "ZONE_DEFEND", ZONE_RESPOND: "ZONE_RESPOND",
+  ZONE_SUPPORT: "ZONE_SUPPORT", ZONE_ROAM: "ZONE_ROAM",
 });
 
 // Tier W, named once (Part 3.8 / AC-35): the facts this layer may read from
@@ -69,6 +74,7 @@ export const REASONS = Object.freeze({
 export const PUBLIC_FACTS = Object.freeze([
   "score", "clock", "phase", "killfeed", "flagState", "flagDroppedPos",
   "carrierBeacon3s6m", "leaderMark", "collapseRing", "ownTeamState",
+  "zoneState", // [lane dom] owner / capture team / bar / CONTESTED — the HUD's zone chips
 ]);
 
 const PASS_PERIOD_TICKS = 30;      // 2 Hz commander cadence (bot_ai §2.4)
@@ -383,7 +389,9 @@ function situationOf(m, team, modeId) {
   const progress = limit > 0 ? Math.max(us, them) / limit : 0;
   const timeFrac = timeLimit > 0 ? Math.min(1, elapsed / timeLimit) : 0;
   const urgency = Math.max(progress, timeFrac);
-  const K = modeId === "ctf" ? 1 : (modeId === "ffa" ? 6 : 8);
+  // [lane dom] STRONGHOLD scores ~1 point per held zone per tick — a lead of
+  // 30 is what 8 kills is in TDM
+  const K = modeId === "ctf" ? 1 : (modeId === "ffa" ? 6 : (modeId === "dom" ? 30 : 8));
   const pressure = Math.max(-1, Math.min(1, -(us - them) / K)) * urgency;
   return { us, them, limit, elapsed, timeLimit, timeFrac, urgency, pressure };
 }
@@ -448,9 +456,17 @@ function updateBeacons(st, m, t) {
 // ---------------------------------------------------------------- watch
 function flagSig(m) {
   const flags = m.state.flags;
-  if (!flags || !flags.length) return "";
   let s = "";
-  for (const f of flags) s += f.id + ":" + f.state + ":" + (f.carrier != null ? f.carrier : "") + "|";
+  if (flags && flags.length) {
+    for (const f of flags) s += f.id + ":" + f.state + ":" + (f.carrier != null ? f.carrier : "") + "|";
+  }
+  // [lane dom] STRONGHOLD zone owner / capture-team / contested changes are
+  // Tier-W objective events too (the bar's fill level is not — it would
+  // preempt every tick)
+  const zones = m.state.mode && m.state.mode.zones;
+  if (zones && zones.length) {
+    for (const z of zones) s += z.id + ":" + z.owner + ":" + z.capTeam + ":" + (z.contested ? 1 : 0) + "|";
+  }
   return s;
 }
 
@@ -675,5 +691,6 @@ function runPass(sim, st, m, modeId, pass, t, preempt, squad) {
 
   if (modeId === "ctf") assignCtf(ctx);
   else if (modeId === "ffa") assignFfa(ctx);
+  else if (modeId === "dom") assignDom(ctx); // [lane dom]
   else assignTdm(ctx);
 }

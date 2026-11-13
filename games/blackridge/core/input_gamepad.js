@@ -14,9 +14,13 @@
 //   A / X    jump            B/O  crouch · slide while sprinting (toggle or hold)
 //   X / []   reload — HOLD = interact
 //   Y / /\   swap weapon     RB   frag (hold = cook, release = throw)
-//   LB       signal sweep (streak 1)
-//   D-pad    up mortar · right airstrike · left orbital (designate: RT confirm,
-//            LT / B cancel) · down = inspect weapon
+//   LB       TACTICAL: flash / smoke / concussion ([equipment lane]; the CoD
+//            bumper pair - LB tactical, RB lethal; a tripmine kit plants on RB).
+//            The signal sweep that lived here moved to D-pad DOWN, so all four
+//            call-ins share the D-pad.
+//   D-pad    down signal sweep · up mortar · right airstrike · left orbital
+//            (designate: RT confirm, LT / B cancel)
+//   R3       inspect weapon (moved off D-pad down; melee has no sim verb yet)
 //   Start    pause           Back/View  scoreboard (hold)
 //
 // MENUS: whenever input is gated (title, PVP menu, pause, settings, debrief),
@@ -100,16 +104,16 @@ export function padLayout(id) {
 
 export const GLYPHS = {
   xbox: { fire: "RT", ads: "LT", jump: "A", crouch: "B", reload: "X", interact: "HOLD X", swap: "Y",
-    grenade: "RB", streak: "LB / D-PAD", inspect: "D-PAD ↓", pause: "MENU", score: "VIEW", sprint: "L3",
+    grenade: "RB", tactical: "LB", streak: "D-PAD", inspect: "R3", pause: "MENU", score: "VIEW", sprint: "L3",
     move: "L-STICK", look: "R-STICK", confirm: "A", back: "B", designateOk: "RT", designateCancel: "LT" },
   ps: { fire: "R2", ads: "L2", jump: "✕", crouch: "○", reload: "□", interact: "HOLD □", swap: "△",
-    grenade: "R1", streak: "L1 / D-PAD", inspect: "D-PAD ↓", pause: "OPTIONS", score: "TOUCHPAD", sprint: "L3",
+    grenade: "R1", tactical: "L1", streak: "D-PAD", inspect: "R3", pause: "OPTIONS", score: "TOUCHPAD", sprint: "L3",
     move: "L-STICK", look: "R-STICK", confirm: "✕", back: "○", designateOk: "R2", designateCancel: "L2" },
   kbm: { fire: "LMB", ads: "RMB", jump: "SPACE", crouch: "C", reload: "R", interact: "F", swap: "Q",
-    grenade: "G", streak: "6-9", inspect: "I", pause: "ESC", score: "TAB", sprint: "SHIFT",
+    grenade: "G", tactical: "E", streak: "6-9", inspect: "I", pause: "ESC", score: "TAB", sprint: "SHIFT",
     move: "WASD", look: "MOUSE", confirm: "ENTER", back: "ESC", designateOk: "LMB", designateCancel: "RMB" },
   touch: { fire: "FIRE", ads: "AIM", jump: "JUMP", crouch: "CROUCH", reload: "RELOAD", interact: "USE", swap: "SWAP",
-    grenade: "GRENADE", streak: "TRAY", inspect: "—", pause: "II", score: "SCORE", sprint: "PUSH STICK",
+    grenade: "GRENADE", tactical: "TAC", streak: "TRAY", inspect: "—", pause: "II", score: "SCORE", sprint: "PUSH STICK",
     move: "LEFT THUMB", look: "RIGHT THUMB", confirm: "TAP", back: "II", designateOk: "FIRE", designateCancel: "AIM" },
 };
 
@@ -278,7 +282,7 @@ export function createGamepad(hooks) {
 
   function releaseGameplay() {
     if (driving.fire) hooks.release("fire");
-    hooks.release("jump"); hooks.release("reload"); hooks.release("grenade");
+    hooks.release("jump"); hooks.release("reload"); hooks.release("grenade"); hooks.release("tactical");
     if (interactOn) hooks.release("interact");
     interactOn = false; xHeld = -1;
     if (driving.move) { state.moveX = 0; state.moveZ = 0; hooks.refreshMove(); }
@@ -342,12 +346,13 @@ export function createGamepad(hooks) {
     if (edge(BTN.Y)) state.switchTo = "next";
     if (edge(BTN.RB)) hooks.press("grenade");
     if (up(BTN.RB)) hooks.release("grenade");
-    if (edge(BTN.LB)) { input.cancelDesignate(); state.streak = 1; }
+    if (edge(BTN.LB)) hooks.press("tactical");           // [equipment lane]
+    if (up(BTN.LB)) hooks.release("tactical");
+    if (edge(BTN.DOWN)) { input.cancelDesignate(); state.streak = 1; } // signal sweep
     if (edge(BTN.UP)) input.designateTier(2);
     if (edge(BTN.RIGHT)) input.designateTier(3);
     if (edge(BTN.LEFT)) input.designateTier(4);
-    if (edge(BTN.DOWN)) input.inspect();
-    // R3: reserved for melee — no sim verb exists yet, deliberately a no-op.
+    if (edge(BTN.R3)) input.inspect();
     if (edge(BTN.START)) { hooks.key("Escape", "keydown"); hooks.key("Escape", "keyup"); }
     if (edge(BTN.BACK)) hooks.key("Tab", "keydown");
     if (up(BTN.BACK)) hooks.key("Tab", "keyup");

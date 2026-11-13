@@ -100,6 +100,9 @@ export const KEY_ACTIONS = [
   ["sprint", "ShiftLeft", "Sprint"], ["reload", "KeyR", "Reload"],
   ["grenade", "KeyG", "Frag"], ["interact", "KeyF", "Interact"],
   ["last", "KeyQ", "Last weapon"], ["inspect", "KeyI", "Inspect weapon"],
+  // [equipment lane] tactical (flash / smoke / concussion). Q is "last weapon"
+  // and 4 is weapon slot 4, so the free key next to them: E.
+  ["tactical", "KeyE", "Tactical"],
 ];
 const KEYBIND_KEY = "blackridge.keybinds.v1";
 const RESERVED_CODES = /^(Digit[0-9]|Escape|Tab)$/;
@@ -124,6 +127,7 @@ export function createInput(canvas, settings) {
     jump: false, crouch: false, sprint: false,
     fire: false, ads: false, reload: false,
     grenade: false,
+    tactical: false, // [equipment lane] tactical throw (edge verb, latched like grenade)
     switchTo: null, // 'slot1'..'slot5' | 'next' | 'prev' | 'last' | weaponId | null — consumed by buildCmd
     streak: 0,      // 1..4 = activate that killstreak tier (keys 6/7/8/9) — one-shot, consumed by buildCmd
     interact: false,
@@ -142,7 +146,7 @@ export function createInput(canvas, settings) {
   // is a different bug. `switchTo` is already one-shot by construction.
   // `grenade` IS latched: combat_spec §5.9 is press=pin / release=throw, so a
   // one-tick true followed by false is exactly "quick tap = uncooked throw".
-  const latch = { fire: false, jump: false, reload: false, grenade: false, interact: false };
+  const latch = { fire: false, jump: false, reload: false, grenade: false, interact: false, tactical: false };
   const LATCHED = Object.keys(latch);
 
   function press(k) {
@@ -250,6 +254,7 @@ export function createInput(canvas, settings) {
         ads: on ? state.ads : false,
         reload: on ? (state.reload || latch.reload) : false,
         grenade: on ? (state.grenade || latch.grenade) : false,
+        tactical: on ? (state.tactical || latch.tactical) : false,
         switchTo: on ? state.switchTo : null,
         streak: on ? state.streak : 0,
         interact: on ? (state.interact || latch.interact) : false,
@@ -292,7 +297,12 @@ export function createInput(canvas, settings) {
     // ---- private extras (probes read these; not the frozen surface) --------
     // The live look scale, so a probe can assert the zoom law instead of
     // inferring it from two camera projections.
-    _lookScale() { return LOOK_SCALE * (settings ? settings.sens : 1) * aimZoomScale(); },
+    _lookScale() { return LOOK_SCALE * (settings ? settings.sens : 1) * aimZoomScale() * input.lookMult; },
+    // [equipment lane] concussion turn-rate multiplier for the HUMAN's look
+    // (mouse, stick, touch, assist). Written each frame by core/fx/equipment_fx.js
+    // from equipment.stunTurnMult(player) - view-side because the sim takes the
+    // human's yaw from cmd. 1 = unaffected. Recoil (recoil.js) is NOT scaled.
+    lookMult: 1,
     _zoom() { return aimZoomScale(); },
     get _latch() { return { ...latch }; },
     // killstreak designate mode: 0 none, 2..4 = the tier being aimed (see keydown)
@@ -353,10 +363,10 @@ export function createInput(canvas, settings) {
         assistOut = IDLE_ASSIST;
       }
       if (f.active) {
-        const look = pad.applyLook(dt, aimZoomScale("padAdsSens"), assistOut.slow);
+        const look = pad.applyLook(dt, aimZoomScale("padAdsSens") * input.lookMult, assistOut.slow); // [equipment lane]
         lastPadLook = look;
       } else lastPadLook = null;
-      if (assistOut.dYaw || assistOut.dPitch) input.addLook(assistOut.dYaw, assistOut.dPitch);
+      if (assistOut.dYaw || assistOut.dPitch) input.addLook(assistOut.dYaw * input.lookMult, assistOut.dPitch * input.lookMult);
     },
     /** Rumble taps on the sim->view bridge (boot attachAll). */
     attach(bridge) {
@@ -408,7 +418,7 @@ export function createInput(canvas, settings) {
 
   // ---------------------------------------------------------------- lane PAD
   const KEY_GLYPH_VERB = { jump: "jump", crouch: "crouch", sprint: "sprint", reload: "reload", grenade: "grenade",
-    interact: "interact", swap: "last", inspect: "inspect" };
+    interact: "interact", swap: "last", inspect: "inspect", tactical: "tactical" };
   function keyLabel(code) {
     if (!code) return "—";
     return String(code).replace(/^Key/, "").replace(/^Digit/, "").replace(/Left$|Right$/, "")
@@ -441,7 +451,7 @@ export function createInput(canvas, settings) {
     const G = GLYPHS[pad.layout] || GLYPHS.xbox;
     const sep = " &nbsp;·&nbsp; ";
     return [`${G.move} move`, `${G.look} look`, `${G.fire} fire`, `${G.ads} ads`, `${G.reload} reload · hold ${G.reload} interact`,
-      `${G.jump} jump`, `${G.crouch} crouch`, `${G.sprint} sprint`, `${G.swap} swap`, `${G.grenade} grenade`,
+      `${G.jump} jump`, `${G.crouch} crouch`, `${G.sprint} sprint`, `${G.swap} swap`, `${G.grenade} grenade`, `${G.tactical} tactical`,
       `${G.streak} streaks`, `${G.score} scoreboard`, `${G.pause} pause`].join(sep).toLowerCase();
   }
   function setDevice(d) {
@@ -489,6 +499,7 @@ export function createInput(canvas, settings) {
       case "ShiftLeft": case "ShiftRight": state.sprint = true; break;
       case "KeyR": press("reload"); break;
       case "KeyG": press("grenade"); break;
+      case "KeyE": press("tactical"); break; // [equipment lane]
       case "KeyF": press("interact"); break;
       case "KeyI": input.inspect(); break;   // view-only (see state.inspect)
       // FIVE fixed weapon slots (weapon_data.js WEAPON_SLOT) + Q = last weapon.
@@ -513,7 +524,7 @@ export function createInput(canvas, settings) {
       }
       case "Escape": designate = 0; break;
     }
-    if (designate && /^(Digit[1-5]|KeyQ|KeyG|KeyR)$/.test(code)) designate = 0; // switching hands cancels
+    if (designate && /^(Digit[1-5]|KeyQ|KeyG|KeyR|KeyE)$/.test(code)) designate = 0; // switching hands cancels
   });
 
   window.addEventListener("keyup", (e) => {
@@ -526,6 +537,7 @@ export function createInput(canvas, settings) {
       case "ShiftLeft": case "ShiftRight": state.sprint = false; break;
       case "KeyR": release("reload"); break;
       case "KeyG": release("grenade"); break;
+      case "KeyE": release("tactical"); break; // [equipment lane]
       case "KeyF": release("interact"); break;
     }
   });
@@ -582,7 +594,7 @@ export function createInput(canvas, settings) {
     // (assist off, keyboard glyphs). 3 px floor ignores a nudged desk.
     if (input.lastDevice !== "kbm" && (Math.abs(e.movementX) + Math.abs(e.movementY) > 3) && e.isTrusted) setDevice("kbm");
     if (!input.enabled || !input.pointerLocked) return;
-    const s = LOOK_SCALE * (settings ? settings.sens : 1.0) * aimZoomScale();
+    const s = LOOK_SCALE * (settings ? settings.sens : 1.0) * aimZoomScale() * input.lookMult; // [equipment lane] concussion
     input.addLook(-e.movementX * s, -e.movementY * s * invY());
   });
 
@@ -601,7 +613,7 @@ export function createInput(canvas, settings) {
     for (const k of Object.keys(keys)) keys[k] = false;
     refreshMove();
     state.jump = state.crouch = state.sprint = false;
-    state.fire = state.ads = state.reload = state.grenade = state.interact = false;
+    state.fire = state.ads = state.reload = state.grenade = state.interact = state.tactical = false;
     for (let i = 0; i < LATCHED.length; i++) latch[LATCHED[i]] = false;
   });
 

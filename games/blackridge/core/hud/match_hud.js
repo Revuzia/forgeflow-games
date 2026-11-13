@@ -494,6 +494,13 @@ export function createMatchHud(ctx) {
       `After 8 seconds of carrying, the enemy sees roughly where you are.`,
       `A dropped flag returns in 30 seconds — instantly if a defender touches it.`,
     ],
+    // [lane dom] STRONGHOLD (zone control)
+    dom: (r) => [
+      `Hold the zones: +1 for every zone you hold every ${r.scoreTickS || 2.5} seconds. First to ${r.scoreLimit} wins. ${fmtClock(r.timeLimitS)}.`,
+      `Stand in a ring to take it. More of you, faster. Enemies inside freeze it.`,
+      `An enemy zone must be neutralised before you can capture it.`,
+      `A tie goes to overtime: no respawns — the next point wins it.`,
+    ],
     ffa: (r) => [
       `First to ${r.scoreLimit} kills wins. ${fmtClock(r.timeLimitS)}. Everyone is hostile.`,
       `Respawn in ${r.respawnS} seconds.`,
@@ -504,7 +511,7 @@ export function createMatchHud(ctx) {
     const m = M();
     if (!m || m.phase !== "warmup") { warmEl.style.display = "none"; return; }
     warmEl.style.display = "block";
-    const name = { tdm: "SKIRMISH", ctf: "CAPTURE THE FLAG", ffa: "FREE-FOR-ALL" }[m.modeId] || m.modeId;
+    const name = { tdm: "SKIRMISH", ctf: "CAPTURE THE FLAG", ffa: "FREE-FOR-ALL", dom: "STRONGHOLD" }[m.modeId] || m.modeId; // [lane dom]
     warmEl.querySelector(".mode").textContent = name;
     const s = sim();
     const rules = s && s.match && s.match.m ? s.match.m.rules : { scoreLimit: 50, timeLimitS: 480, respawnS: 4, captureLimit: 3 };
@@ -591,7 +598,9 @@ export function createMatchHud(ctx) {
     if (d && d.phase === "overtime") {
       const m = M();
       setBanner("OVERTIME", m && m.modeId === "ffa"
-        ? "NO RESPAWNS — LAST LEADER STANDING" : "NO RESPAWNS — FIRST DEATH LOSES", 4.0);
+        ? "NO RESPAWNS — LAST LEADER STANDING"
+        : m && m.modeId === "dom" ? "NO RESPAWNS — NEXT POINT WINS" // [lane dom]
+          : "NO RESPAWNS — FIRST DEATH LOSES", 4.0);
     }
     refresh();
   }

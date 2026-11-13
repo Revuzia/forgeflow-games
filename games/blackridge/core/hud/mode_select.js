@@ -35,12 +35,16 @@ const FALLBACK_RULES = {
   tdm: { displayName: "SKIRMISH", scoreLimit: 50, timeLimitS: 480, respawnS: 4 },
   ctf: { displayName: "CAPTURE THE FLAG", captureLimit: 3, timeLimitS: 720, respawnS: 5 },
   ffa: { displayName: "FREE-FOR-ALL", scoreLimit: 25, timeLimitS: 480, respawnS: 3 },
+  // [lane dom] STRONGHOLD — defaults-only (no content.modes block needed);
+  // the numbers mirror core/match/modes/dom.js DOM_DEFAULTS
+  dom: { displayName: "STRONGHOLD", scoreLimit: 200, timeLimitS: 600, respawnS: 4, scoreTickS: 2.5, captureS: 10, neutraliseS: 5 },
 };
 
 const PITCH = {
   tdm: "5 v 5 · first team to the kill limit",
   ctf: "5 v 5 · take theirs, get it home",
   ffa: "10 players · everyone is hostile",
+  dom: "5 v 5 · take the zones, hold them, bleed their score", // [lane dom]
 };
 
 const DIFFICULTIES = ["casual", "standard", "hard"];
@@ -172,6 +176,12 @@ export function createModeSelect(ctx, cb) {
       `Carriers: no tac-sprint, no grenades, no regen · 8s carry reveals you`,
       `A dropped flag returns in 30s — instantly if a defender touches it`,
     ];
+    if (id === "dom") return [ // [lane dom]
+      `Three zones · +1 per zone you hold every ${r.scoreTickS}s · first to ${r.scoreLimit} wins · ${fmtMin(r.timeLimitS)}`,
+      `Stand in a ring to capture it (${r.captureS}s alone, faster together) · enemies inside freeze it`,
+      `An enemy zone must be neutralised first (${r.neutraliseS}s) · respawn in ${r.respawnS}s near the zones you hold`,
+      `Tie → overtime: no respawns, the next point wins it`,
+    ];
     return [
       `First to ${r.scoreLimit} kills wins · ${fmtMin(r.timeLimitS)} · everyone is hostile`,
       `Respawn in ${r.respawnS}s`,
@@ -191,7 +201,7 @@ export function createModeSelect(ctx, cb) {
     if (panel) state.map = loadMap(ctx.content && ctx.content.arenas); // same, for the arena row
     state.panel = panel || state.panel;
     if (!state.panel) return;
-    const cards = ["tdm", "ctf", "ffa"].map((id) => {
+    const cards = ["tdm", "ctf", "ffa", "dom"].map((id) => { // [lane dom] + STRONGHOLD
       const r = contentRules(id);
       const on = state.mode === id;
       const ok = available(id);

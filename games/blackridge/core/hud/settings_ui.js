@@ -215,8 +215,9 @@ export function createSettingsUI(ctx) {
     }
   }
   const PAD_ROWS = [["fire", "fire"], ["ads", "aim down sights"], ["jump", "jump"], ["crouch", "crouch · slide"],
-    ["reload", "reload (hold: interact)"], ["swap", "swap weapon"], ["grenade", "frag (hold to cook)"],
-    ["sprint", "sprint"], ["streak", "streaks (↑ mortar · → airstrike · ← orbital)"], ["inspect", "inspect"],
+    ["reload", "reload (hold: interact)"], ["swap", "swap weapon"], ["grenade", "lethal (hold to cook)"],
+    ["tactical", "tactical"],
+    ["sprint", "sprint"], ["streak", "call-ins (↓ sweep · ↑ mortar · → airstrike · ← orbital)"], ["inspect", "inspect"],
     ["score", "scoreboard"], ["pause", "pause"]];
   function syncPadMap() {
     const inp = ctx.input;
@@ -224,7 +225,7 @@ export function createSettingsUI(ctx) {
     padMapEl.innerHTML =
       (inp.padConnected ? "" : `<span style="opacity:.6">no controller detected — connect one and press any button</span><br>`) +
       PAD_ROWS.map(([v, t]) => `<b style="color:#e8e8e4;font-weight:400">${inp.padGlyph(v)}</b> ${t}`).join("<br>") +
-      `<br><span style="opacity:.6">R3 reserved for melee</span>`;
+      "";
   }
   function syncAll() { for (const r of VALUE_ROWS) syncRow(r); syncBinds(); syncPadMap(); }
   window.addEventListener("br:inputdevice", () => { if (visible) syncPadMap(); });

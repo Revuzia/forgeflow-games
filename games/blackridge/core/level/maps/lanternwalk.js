@@ -952,3 +952,20 @@ export const ARENA_SPEC = {
     tdmHomeEast: ["SC_MARKET", "SC_GALLERY"],
   },
 };
+
+// ===========================================================================
+// STRONGHOLD ZONES [lane dom] — DATA ONLY, consumed at runtime by
+// core/match/modes/dom.js (the zone-control mode). Three capture zones: A on
+// the AMBER (team 0, west) side, B the contested centre, C on the SLATE
+// (team 1, east) side. Placement was MEASURED on this map's baked nav
+// (bakeNav cell 0.75, flood from each CTF stand): every centre is a walkable
+// ground node, 100% of the r-disk is on nav, no collider box within 1.5 m at
+// body height, >= 5 m from every spawn point, and the A/C pair is symmetric
+// in nav distance to the two stands (asymmetry <= 2 m). No geometry, collider
+// or nav change was made for these.
+// ===========================================================================
+export const STRONGHOLD_ZONES = [
+  { id: "A", pos: [-11.0, 0, 19.0], r: 4.0 },   // Lantern yard mouth (AMBER side) — nav 25.3 m from the AMBER stand, 56.1 m from SLATE's
+  { id: "B", pos: [-8.0, 0, -1.5], r: 4.0 },   // the plaza (contested centre) — 36.1 / 34.4 m
+  { id: "C", pos: [11.0, 0, -7.0], r: 4.0 },   // Kirov boulevard mouth (SLATE side) — 55.5 / 25.4 m
+];

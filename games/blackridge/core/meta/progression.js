@@ -40,10 +40,10 @@ export const UNLOCKS = {
   "weapon:corvus": 6,
   // equipment
   "equip:frag": 1,
-  "equip:flash": 5,
-  "equip:smoke": 10,
-  "equip:stun": 16,
-  "equip:claymore": 20,
+  "equip:flash": 1,
+  "equip:smoke": 3,
+  "equip:stun": 6,
+  "equip:claymore": 8,
   // perks
   // one perk per tier is open from level 1 so a class is a full class on day one
   "perk:scavenger": 1,
@@ -117,6 +117,9 @@ export const XP = {
   flagCapture: 300,
   flagReturn: 100,
   flagTaken: 50,
+  zoneCapture: 150,      // [lane dom] STRONGHOLD — you were in the ring when it flipped to you
+  zoneNeutralise: 50,    // [lane dom] an enemy zone drained to neutral with you in it
+  zoneDefend: 50,        // [lane dom] a kill at a zone your team holds (on top of the kill)
   objective: 250,        // campaign beat (objective done)
   medal: {               // medal text -> XP (HEADSHOT and "N KILL STREAK" medals are
     "FIRST BLOOD": 100,  // covered by the headshot / streak awards — not double-paid)
@@ -540,6 +543,15 @@ export function createProgression(ctx, opts) {
       if (d.state === "captured") { ensureSession().hl.caps++; rec.life.caps++; award("objective", XP.flagCapture, "Flag captured"); }
       else if (d.state === "returned") award("objective", XP.flagReturn, "Flag returned");
       else if (d.state === "taken") award("objective", XP.flagTaken, "Flag taken");
+      else return;
+      touch();
+    },
+    // [lane dom] STRONGHOLD zone events (byWho lists every operator credited)
+    zonecap(d) {
+      if (!d || !Array.isArray(d.byWho) || d.byWho.indexOf("P") < 0) return;
+      if (d.state === "captured") { ensureSession().hl.caps++; rec.life.caps++; award("objective", XP.zoneCapture, "Zone " + d.label + " captured"); }
+      else if (d.state === "neutralised") award("objective", XP.zoneNeutralise, "Zone " + d.label + " neutralised");
+      else if (d.state === "defended") award("objective", XP.zoneDefend, "Zone " + d.label + " defended");
       else return;
       touch();
     },

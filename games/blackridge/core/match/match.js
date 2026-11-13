@@ -25,7 +25,7 @@
 // Nothing in 1–9 allocates per tick after start() on the hot paths.
 
 import { areEnemies, makeRoster, bindBody } from "./roster.js";
-import { validateMatchContent, hasPvpContent } from "./contract.js";
+import { validateMatchContent, hasPvpContent, pointSetOf } from "./contract.js";
 import { resolveDifficulty } from "../pvp/pvp_tuning.js";
 
 const DT = 1 / 60;
@@ -42,7 +42,7 @@ const OOB_GRACE_S = 5.0;       // C18 backstop — a probe asserts it never kill
 // registerMode() (boot.js imports each landed modes/<id>.js and registers
 // it), so a mode lane that has not landed yet is a REPORTED content error at
 // makeMatch, never a page-fatal import crash.
-export const MODE_IDS = ["tdm", "ctf", "ffa"];
+export const MODE_IDS = ["tdm", "ctf", "ffa", "dom"]; // [lane dom] + STRONGHOLD (zone control)
 export const MODES = {}; // id → createMode(ctx)
 
 export function registerMode(id, createMode) {
@@ -56,6 +56,7 @@ const DRIVER_DEFAULTS = {
   tdm: { scoreLimit: 50, timeLimitS: 480, respawnS: 4.0, protectS: 1.5 },
   ctf: { captureLimit: 3, timeLimitS: 720, respawnS: 5.0, respawnPressureS: 8.0, protectS: 1.5 },
   ffa: { scoreLimit: 25, timeLimitS: 480, respawnS: 3.0, protectS: 2.0 },
+  dom: { scoreLimit: 200, timeLimitS: 600, respawnS: 4.0, protectS: 1.5 }, // [lane dom]
 };
 
 // ------------------------------------------------------- [P2] kill resupply
@@ -352,7 +353,7 @@ export function makeMatch(content, emit, opts = {}) {
   function eligiblePoints(actor) {
     const pts = [];
     for (const p of arena.spawnPoints) {
-      if (p.modes && !p.modes.includes(modeId)) continue;
+      if (p.modes && !p.modes.includes(pointSetOf(modeId))) continue; // [lane dom] borrowed sets
       if (mode.teamCount === 2 && p.team != null && p.team !== actor.team) continue;
       const cl = arena.clusters[p.cluster];
       if (cl && cl.team != null && mode.teamCount === 2 && cl.team !== actor.team) continue;
@@ -675,6 +676,12 @@ export function makeMatch(content, emit, opts = {}) {
       emit("mission:start", { missionId: `match:${modeId}`, epoch: sim.epoch || 0 });
 
       setMatchPhase(sim, "warmup");
+
+      // [lane dom] opt-in: a mode whose spawn hooks (spawnVeto/spawnBias) must
+      // already apply to the INITIAL wave publishes itself on the facade here,
+      // before the wave (ctf wires the same seam itself in mode.start, which is
+      // after it). Modes without the flag are untouched.
+      if (mode.facadeBeforeSpawn && !m.mode) m.mode = mode;
 
       // spawn all 10 (first spawn: 0 s delay — C12)
       for (const a of ms.roster.actors) spawnActor(sim, a, { first: true });

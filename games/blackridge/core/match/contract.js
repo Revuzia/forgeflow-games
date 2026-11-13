@@ -16,6 +16,16 @@
 // blocks, hasPvpContent() is false and callers synthesize a flagged fallback
 // instead of failing the boot (the boot-without-content.json philosophy).
 
+// [lane dom] BORROWED POINT SETS — a mode listed here plays on another mode's
+// spawn-point set (point.modes / cluster.modes are filtered by the LENDER's
+// id) and needs no content.modes block of its own: its rules come from the
+// mode module's own `defaults`, and content.modes[<id>] still overrides them
+// when present. The gate therefore skips the registry-needs-a-block clause
+// and the >=6-per-cluster clause for a borrower (the lender's clause already
+// covers the exact same points). STRONGHOLD (dom) spawns on the tdm set.
+export const BORROWED_POINT_SETS = Object.freeze({ dom: "tdm" });
+export function pointSetOf(modeId) { return BORROWED_POINT_SETS[modeId] || modeId; }
+
 export function hasPvpContent(content) {
   return !!(content && (content.arena || content.modes || content.teams ||
     content.botRoster || content.spawnPoints || content.clusters || content.flags));
@@ -62,6 +72,7 @@ export function validateMatchContent(content, opts = {}) {
       if (!modeIds.includes(k)) errors.push(`content.modes.${k}: not in MODES registry`);
     }
     for (const id of modeIds) {
+      if (BORROWED_POINT_SETS[id]) continue; // [lane dom] defaults-only borrower
       if (!Object.prototype.hasOwnProperty.call(modes, id)) {
         errors.push(`MODES registry '${id}' has no content.modes block`);
       }
@@ -101,6 +112,7 @@ export function validateMatchContent(content, opts = {}) {
   // mode (a point with no `modes` field is eligible in every mode).
   const modeList = modeIds || Object.keys(modes).filter((k) => !k.startsWith("_"));
   for (const mid of modeList) {
+    if (BORROWED_POINT_SETS[mid]) continue; // [lane dom] the lender's clause covers it
     const perCluster = {};
     for (const p of points) {
       if (p.modes && !p.modes.includes(mid)) continue;

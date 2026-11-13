@@ -47,6 +47,8 @@
 // keeps A1's ballistic probes clean, and is the C14 warm-up freeze lever.
 
 import { PERK_FX } from "../sim/classes.js";
+// [equipment lane] a flashed bot sees nothing; smoke blocks sight lines
+import { isBlind, smokeBlocks } from "../sim/equipment.js";
 
 const BASE_FILL = 2.5;
 const DECAY_PER_S = 0.25;
@@ -329,6 +331,7 @@ export function perceive(bot, sim, world, dt, rngAi) {
   // decay path for a candidate the bot cannot possibly see.
   const alert = bot.state === "alert";
   const maxRange = detectRange(1, alert);
+  const blindNow = isBlind(bot, t); // [equipment lane]
   const survivors = [];
   for (const c of cands) {
     if (c.facing === 0 || c.d > maxRange) {
@@ -381,8 +384,11 @@ export function perceive(bot, sim, world, dt, rngAi) {
     const headY = body.pos[1] + (body.stance === "crouch" ? 1.02 : 1.55);
     const losA = [body.pos[0], c.chestY, body.pos[2]];
     const losB = [body.pos[0], headY, body.pos[2]];
-    const visible = c.facing > 0 &&
-      (!world.losBlocked(eye, losA) || !world.losBlocked(eye, losB));
+    // [equipment lane] blind (flash >= BLIND_LVL) = no sight at all; smoke
+    // blocks a line that crosses >= 1.6 m of cloud (equipment.smokeBlocks)
+    const visible = c.facing > 0 && !blindNow &&
+      ((!world.losBlocked(eye, losA) && !smokeBlocks(sim, eye, losA)) ||
+       (!world.losBlocked(eye, losB) && !smokeBlocks(sim, eye, losB)));
     if (flash && visible) L = 1.0;
 
     const range = detectRange(L, alert);
