@@ -2724,16 +2724,25 @@ export function generate(parcel, opts) {
     const placed = R._ps || (R._ps = []);                 // the room's pieces (a live list: put / unput / the walk keep it)
     // a box rect x [ya, yb] (above this floor) is free: inside the room, out of door / stair / leaf zones, clear of every other piece it shares
     // heights with (4 cm apart; touching for a counter row), and nothing taller than the sill in front of a window
+    // (W10 R1A, CPU) the pieces valid() tests against, for one height band and host, kept while the room's pieces do not change (a scan tests ~100 spots
+    // with the same band): the same pieces in the same order, so the same answer
+    let vMemo = null;
     const valid = (r, ya, yb, touch, host) => {
       if (r[0] < inner[0] - 1e-6 || r[1] < inner[1] - 1e-6 || r[2] > inner[2] + 1e-6 || r[3] > inner[3] + 1e-6) return false;
       for (const hr of holes) if (ovl(r, hr, 0)) return false;
       for (const k of keep) if (ovl(r, k.r, 1e-6)) return false;
-      for (const p of placed) {                            // (a piece inside this room's walls can only meet this room's pieces)
-        if (p.cat.deco || p === host) continue;
-        const pa = p.y0 || 0, pb = pa + p.cat.h;
-        if (pb <= ya + 1e-6 || pa >= yb - 1e-6) continue;
-        if (ovl(r, p.rect, touch ? 0.001 : -0.04)) return false;
+      if (!vMemo || vMemo.ver !== R._pv || vMemo.ya !== ya || vMemo.yb !== yb || vMemo.host !== host) {
+        const l = [];
+        for (const p of placed) {                          // (a piece inside this room's walls can only meet this room's pieces)
+          if (p.cat.deco || p === host) continue;
+          const pa = p.y0 || 0, pb = pa + p.cat.h;
+          if (pb <= ya + 1e-6 || pa >= yb - 1e-6) continue;
+          l.push(p);
+        }
+        vMemo = { ver: R._pv, ya, yb, host, l };
       }
+      const ml = vMemo.l, m = touch ? 0.001 : -0.04;
+      for (let i = 0; i < ml.length; i++) if (ovl(r, ml[i].rect, m)) return false;
       if (yb > SILL - (home ? 0.03 : 0.05)) for (const z of wins) if (ovl(r, z, 1e-6)) return false;     // (W10 R1A: a home 3 cm, the x1.15 sofa backs stand 1.16 m)
       return true;
     };
@@ -2799,12 +2808,12 @@ export function generate(parcel, opts) {
       }
       return got >= np && n >= 16;
     };
-    const unput = (p) => { R._tall = null; if (RW.inc && RW.inc.has(p)) RW.stale = true; const i = furn.indexOf(p); if (i >= 0) furn.splice(i, 1); const j = placed.indexOf(p); if (j >= 0) placed.splice(j, 1); tris[f] -= p.cat.tris; R.spent -= p.cat.tris; if (p.host) p.host.tops = (p.host.tops || 1) - 1; };
+    const unput = (p) => { R._tall = null; R._pv = (R._pv || 0) + 1; if (RW.inc && RW.inc.has(p)) RW.stale = true; const i = furn.indexOf(p); if (i >= 0) furn.splice(i, 1); const j = placed.indexOf(p); if (j >= 0) placed.splice(j, 1); tris[f] -= p.cat.tris; R.spent -= p.cat.tris; if (p.host) p.host.tops = (p.host.tops || 1) - 1; };
     const put = (cat, u, v, fq, tint, extra) => {
       const w = fq % 2 ? cat.d : cat.w, d = fq % 2 ? cat.w : cat.d;
       const rect = [u - w / 2, v - d / 2, u + w / 2, v + d / 2];
       const p = Object.assign({ cat, room: R, f, u, v, fq, rect, tint: tint || 0, order: furn.length, y0: 0 }, extra || {});
-      furn.push(p); placed.push(p); R.spent += cat.tris; R._tall = null;
+      furn.push(p); placed.push(p); R.spent += cat.tris; R._tall = null; R._pv = (R._pv || 0) + 1;
       tris[f] += cat.tris;
       if (p.host) p.host.tops = (p.host.tops || 0) + 1;
       return p;
