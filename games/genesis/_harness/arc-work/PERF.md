@@ -1331,3 +1331,27 @@ long press frame-rate independent. Report after 1-2 verified.
 - PROBE _harness/arc-work/probe-freeze.mjs (babel town view at rest, waits for the freeze, shots <tag>-1/-2, report).
   dist38 = unminified build of the above. run-s17a.sh (queued behind run-s16g/h): freeze-s17a-on.log (freeze=1
   gpuprobe=1), freeze-s17a-off.log (freeze=0 speed=0 gpuprobe=1); shots freeze/fz1-*.png, fz0-*.png.
+- s16 QUEUE RESULTS: copies-s16on5 (dist37): rest copies 0.00 MB/frame in ALL 3 views (view 3 was 11.7 copies/frame);
+  flight 0.02 / 0.46 / 0.10 MB. deck old (deckfull=0) vs new (dist32), LOOKED side by side: old 456 m = opaque white
+  slab over the coast (white 0.292), old 220 m = all white-grey fog (lum 0.743); new 456 = translucent deck, coast seen
+  (0.03), new 220 = clear coast + forest (0.454). The owner's round-4 white stops are fixed by deckfull=1.
+- FIRST local freeze run (dist38, high 400x225) was useless: SwiftShader ~35 s a frame at high, and landing NEVER went
+  quiet at rest. FINDING (open, check later): at rest, camera still, sim speed 0, low preset, babel town view, the
+  terrain keeps BUILDING ~60-100 patches a frame (report 'built' per frame, patches built 1223-2067 in a 20-frame
+  recording) while draws / tris stay constant -> LOD churn (build -> evict -> rebuild?) in chunks.ts (evict budget
+  max(maxCached, 1.5 x selected); lastUsed). Costs worker + main 'planets' ms (13-24 ms here). Not yet traced.
+- freeze REWORK (because of that): FREEZE takes hold when every patch manager is quiet FREEZE_QUIET (90, ?freezequiet=)
+  frames OR the camera (each manager's camBody) rested FREEZE_STILL_S (15 s, ?freezestill=) — the report says which
+  ('by landing converged' / 'by camera at rest ... while landing was still busy'). freeze=1 sets sim speed 0 FROM THE
+  START (so every body frame is at rest). Report: new line 'uploads per frame (all slots): ...' (every upload kind,
+  not just the top 16). gpuprobe: each sync = gl.finish + a 1-texel gl.readPixels (a read must wait); 'queue drain'
+  ms (the first sync: frames in flight + set-up) printed separately.
+- LOCAL PROOF (dist40, low 256x144, babel town view, still camera; freeze-s17c-on/off.log, gpuprobe-s17c.log):
+  freeze=1: active 'by camera at rest 15 s while landing was still busy'; recorded 45 s: gl trace has NO bufferData /
+  bufferSubData / texSubImage at all (uploads inside a pass 0/frame), patches built 0, draws 149 constant, main 11.5
+  ms/frame. freeze=0 speed=0: uploads inside a pass 0.4/frame, patches built 1223, main 30.8 ms. Shots fz0-2 vs fz1-2
+  (LOOKED): same town, lake, trees; diff 2.10/255, 2.8% px > 16 = foliage sway + water sparkle specks only (d-fz.png);
+  fz1-1 vs fz1-2 (same frozen run) 3.24/255: the animation floor.
+  gpuprobe=1 (192x108): boot fresh-full 0.54 · fresh-64 0.15 · hdr 0.44 · atlas 0.88 ms/pass; rec 0.38/0.13/0.59/0.31;
+  rec at 49 s 0.30/0.10/0.29/0.21 (that probe's queue drain held a whole 43 s SwiftShader frame: hence drain split out).
+  Probe frames left out of the stats (+2). 0 page errors in all runs.

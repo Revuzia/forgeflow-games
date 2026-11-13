@@ -31,6 +31,8 @@ export interface ProbeResult {
   w: number; h: number;
   /** wall ms of an empty sync (finish + 1-texel read) right after another: the sync's own floor */
   finishMs: number;
+  /** wall ms of the first sync: the GPU work queued before the probe (frames in flight) plus its set-up draining */
+  drainMs: number;
   sets: ProbeSet[];
   /** wall ms the whole probe took, set-up included */
   totalMs: number;
@@ -42,7 +44,7 @@ export const BOOT_PROBES: ProbeResult[] = [];
 const f2 = (x: number) => (Math.round(x * 100) / 100).toString();
 export function probeLine(p: ProbeResult): string {
   return `gpuprobe ${p.tag} t ${f2(p.t)}s ${p.w}x${p.h} (ms per pass, passes): ` + p.sets.map((s) => `${s.name} ${f2(s.passes ? s.ms / s.passes : 0)} (${s.passes})`).join(' · ')
-    + ` | empty sync ${f2(p.finishMs)} ms | probe total ${Math.round(p.totalMs)} ms`;
+    + ` | queue drain ${Math.round(p.drainMs)} ms | empty sync ${f2(p.finishMs)} ms | probe total ${Math.round(p.totalMs)} ms`;
 }
 
 let copyMat: ShaderMaterial | null = null;
@@ -82,7 +84,7 @@ export function probeGpu(r: WebGLRenderer, fsq: FullscreenQuad, w: number, h: nu
   const { copy, shadow } = mats();
   const A = target(w, h), B = target(w, h), a = target(64, 64), b = target(64, 64);
   const sets: ProbeSet[] = [];
-  let finishMs = 0;
+  let finishMs = 0, drainMs = 0;
   try {
     // set-up, untimed: allocate and clear every target, link both programs
     for (const t of [A, B, a, b]) { r.setRenderTarget(t); r.clear(true, false, false); }
@@ -93,7 +95,7 @@ export function probeGpu(r: WebGLRenderer, fsq: FullscreenQuad, w: number, h: nu
     // driver does with finish)
     const px = new Float32Array(4);
     const sync = () => { gl.finish(); try { gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, px); } catch { /* unreadable: finish alone */ } };
-    sync();
+    { const t = performance.now(); sync(); drainMs = performance.now() - t; }
     { const t = performance.now(); sync(); finishMs = performance.now() - t; }
     // a timed set: `n` passes, the first 4 in one finish; the rest (in one more) only while a pass costs < 30 ms
     const run = (name: string, n: number, pass: (i: number) => void) => {
@@ -116,5 +118,5 @@ export function probeGpu(r: WebGLRenderer, fsq: FullscreenQuad, w: number, h: nu
     r.autoClear = prevAuto;
     for (const t of [A, B, a, b]) t.dispose();
   }
-  return { tag, t: performance.now() / 1000, w, h, finishMs, sets, totalMs: performance.now() - T0 };
+  return { tag, t: performance.now() / 1000, w, h, finishMs, drainMs, sets, totalMs: performance.now() - T0 };
 }

@@ -228,6 +228,12 @@ export class GlTrace {
     const rows = [...this.stats.entries()].sort((a, b) => b[1].ms - a[1].ms);
     const tot = rows.reduce((x, [, s]) => x + s.ms, 0);
     const L = [`gl calls (main ms/frame in the call): total ${f1(tot * k)} | framebuffer switches ${f1(this.passSwitches * k)}/frame | uploads inside a pass ${f1(this.inPassUploads * k)}/frame`];
+    {
+      // (s17, freeze proof) every upload call kind summed over all slots, even when it is outside the top 16 below
+      const up = new Map<string, { n: number; bytes: number }>();
+      for (const [key, st] of this.stats) { const op = key.slice(key.indexOf('|') + 1); if (!GL_UPLOADS.has(op)) continue; const u = up.get(op) ?? { n: 0, bytes: 0 }; u.n += st.n; u.bytes += st.bytes; up.set(op, u); }
+      L.push(`uploads per frame (all slots): ${up.size ? [...up].map(([op, u]) => `${op} x${f1(u.n * k)} ${f2((u.bytes * k) / 1e6)}MB`).join(' · ') : 'none'}`);
+    }
     L.push('  ' + rows.slice(0, 16).map(([key, s]) => `${key} ${f2(s.ms * k)}ms x${f1(s.n * k)}${s.bytes ? ` ${f2((s.bytes * k) / 1e6)}MB` : ''}${s.inPass ? ` inpass ${f1(s.inPass * k)}` : ''} max ${f1(s.max)}`).join(' · '));
     if (this.metal.size) {
       const ms = [...this.metal.entries()].sort((a, b) => b[1].bytes - a[1].bytes);

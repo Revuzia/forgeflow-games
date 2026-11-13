@@ -11,7 +11,7 @@ test('report v2: HEADLINE second, probe frames left out of the stats', () => {
   for (let i = 0; i < 12; i++) {
     rec.frameBegin();
     // frame 5 runs a probe: it and frame 6 (whose interval holds it) leave the stats
-    if (i === 5) rec.probeDone({ tag: 'rec', t: 0, w: 4, h: 4, finishMs: 0, sets: [{ name: 'fresh-64', passes: 32, ms: 3.2 }], totalMs: 900 });
+    if (i === 5) rec.probeDone({ tag: 'rec', t: 0, w: 4, h: 4, finishMs: 0, drainMs: 0, sets: [{ name: 'fresh-64', passes: 32, ms: 3.2 }], totalMs: 900 });
     rec.frameDone(i === 6 ? 1000 : 100, 10, slots, null);
   }
   rec.stop();
