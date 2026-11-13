@@ -4338,7 +4338,7 @@ export async function buildMap(W, mapId) {
       for (let i = 0; i < a.idx.length; i++) hgGlass.idx.push(a.idx[i] + base);
     }
     for (const [key, a] of md.groups.furniture) { const mat = key.split("|")[0]; toChunk(a, HG_INDOOR, mat === "wood" ? 1 : 2); }
-    for (const f of H.furniture) if (f.src === "kit") C.kit.push({ type: f.kit.type, x: f.kit.x, y: f.kit.y, z: f.kit.z, rot: f.kit.rot, min: f.min, max: f.max });
+    for (const f of H.furniture) if (f.src === "kit") C.kit.push({ type: f.kit.type, x: f.kit.x, y: f.kit.y, z: f.kit.z, rot: f.kit.rot, scale: f.kit.scale == null ? 1 : f.kit.scale, min: f.min, max: f.max });
     // colliders: structure boxes, ramps (stairs + roof planks), furniture - housegen's order
     const c0 = colliders.length, nBox = H.boxes.reduce((n, q) => n + (q.c ? 1 : 0), 0), roofRamps = [];
     for (const c of HG.collidersOf(H, mkCollider)) colliders.push(c);
@@ -4391,6 +4391,9 @@ export async function buildMap(W, mapId) {
     const types = new Set();
     for (const C of hgChunks.values()) for (const e of C.kit) types.add(e.type);
     const tpl = new Map();                                                     // type -> [{ pos (the GLB mesh's matrix applied), nor, idx, col [r, g, b] }] | null
+    // (W10 R1A) the GLB is in the kit's NATIVE units: a piece is drawn at the type's manifest suggested_scale x the entry's scale (housegen FURN_K) - the size its
+    // collider has. Until W10 the pieces were drawn at native size (1 / 2.2 of their colliders: knee-high counters standing apart, a lamp floating over a nightstand)
+    const tplScale = new Map();
     const _v = new THREE.Vector3(), _n = new THREE.Vector3(), _nm = new THREE.Matrix3();
     if (kit && !low && typeof kit.parts === "function") {
       for (const t of types) {
@@ -4413,6 +4416,8 @@ export async function buildMap(W, mapId) {
           out.push({ pos, nor, idx, col: c });
         }
         tpl.set(t, out.length ? out : null);
+        const T = kit.manifest && kit.manifest.types && kit.manifest.types[t];
+        tplScale.set(t, T && T.suggested_scale > 0 ? T.suggested_scale : 1);
       }
     }
     const COSQ = [1, 0, -1, 0], SINQ = [0, 1, 0, -1];
@@ -4472,12 +4477,12 @@ export async function buildMap(W, mapId) {
         v += n;
       }
       for (const e of kitL) {
-        const kp = tpl.get(e.type), c = COSQ[e.rot & 3], sn = SINQ[e.rot & 3];
+        const kp = tpl.get(e.type), c = COSQ[e.rot & 3], sn = SINQ[e.rot & 3], ks = (tplScale.get(e.type) || 1) * (e.scale || 1);
         if (kp) {
           for (const t of kp) {
             const base = v, cr = c8(t.col[0] * HG_INDOOR), cg = c8(t.col[1] * HG_INDOOR), cb = c8(t.col[2] * HG_INDOOR);
             for (let i = 0; i < t.pos.length; i += 3) {
-              const lx = t.pos[i], ly = t.pos[i + 1], lz = t.pos[i + 2], px = e.x + lx * c + lz * sn, py = e.y + ly, pz = e.z - lx * sn + lz * c;
+              const lx = t.pos[i] * ks, ly = t.pos[i + 1] * ks, lz = t.pos[i + 2] * ks, px = e.x + lx * c + lz * sn, py = e.y + ly, pz = e.z - lx * sn + lz * c;
               const nx = t.nor[i], ny = t.nor[i + 1], nz = t.nor[i + 2], wx = nx * c + nz * sn, wz = -nx * sn + nz * c;
               P[v * 3] = px; P[v * 3 + 1] = py; P[v * 3 + 2] = pz;
               N[v * 3] = n8(wx); N[v * 3 + 1] = n8(ny); N[v * 3 + 2] = n8(wz);

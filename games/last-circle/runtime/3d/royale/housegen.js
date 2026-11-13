@@ -143,6 +143,12 @@ export const OVERHANG = 0.35;              // stepped (hip) roofs overhang the w
 export const CAPSULE = Object.freeze({ r: 0.45, h: 1.8, step: 0.55 });   // player.js STEP_UP, sim PLAYERK
 export const MAX_FLOORS = 3;               // O3
 export const TRI_BUDGET = 4000;            // per furnished storey
+// ---- Wave 10 round 1 (lane R1A, the houses audit): homes (use house, not a ruin) - each switch below is ON in the game; the homes gate (_harness/p23/homes.py) plants turn one off
+export const MIN_ROOM_W = 2;               // a home's rooms are >= 2 cells (5.0 m) on the narrow side (audit 11: 19.7 % were 2.5 m wide); one 1 x 2-cell bath nook per floor is the exception
+export const FURN_K = 1.15;                // every piece of furniture (kit and authored) x FURN_K, drawn AND collided (audit 3: 2.26 m doors, 3.4 m storeys and 2.5 m cells
+                                           // against real-size furniture read as a doll's house); window sills (SILL) and door sizes are NOT scaled
+const COL_K = FURN_K;                      // the kit's COLLIDER scale (= FURN_K; the homes gate's scale-draw-only plant sets 1: drawn bigger than collided)
+export const HOME_PROGRAMME = true;        // every home holds living + kitchen + bedroom + bath; >= 150 m2 of rooms adds a second bedroom (audit 12)
 export const RISER_MAX = 0.18;             // stair visual: steps no taller than this
 export const STAIR_RUN = 2 * U;            // 5 m
 export const GRID = 0.25;                  // the capsule walk's sample pitch
@@ -430,6 +436,9 @@ const AUTH = {
 // authored pieces: their footprint is the EXACT extent of their parts (recentred on the origin), so a piece placed against a wall touches it and
 // never reaches into it (round 1 sized a few by a nominal w / d: shop counters and crates stood 1-2 cm inside the wall)
 for (const A of Object.values(AUTH)) {
+  // (W10 R1A) x FURN_K: every part's box and the loot surface (a wall piece's mount height mountY is a height on the WALL, not scaled)
+  for (const pt of A.parts) for (let q = 0; q < 6; q++) pt[q] = Math.round(pt[q] * FURN_K * 10000) / 10000;
+  if (A.surface) A.surface = Math.round(A.surface * FURN_K * 1000) / 1000;
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
   for (const p of A.parts) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[3]); z0 = Math.min(z0, p[2]); z1 = Math.max(z1, p[5]); }
   A.ox = r3((x0 + x1) / 2); A.oz = r3((z0 + z1) / 2); A.w = r3(x1 - x0); A.d = r3(z1 - z0);
@@ -438,7 +447,8 @@ for (const A of Object.values(AUTH)) {
 const authTris = (a) => a.parts.reduce((n, pt) => n + (a.plate ? 2 : pt[1] === 0 && !a.mountY ? 10 : 12), 0);
 function buildCatalog(over, remap) {
   const C = {};
-  const kit = (id, type, surface, extra) => { const b = KIT_BOXES[type]; C[id] = Object.assign({ id, src: "kit", type, w: r3(b.max[0] - b.min[0]), d: r3(b.max[2] - b.min[2]), h: b.max[1], tris: b.tris, surface: surface || null, deco: !!b.deco, mount: "floor", y0: 0 }, extra || {}); };
+  // (W10 R1A) a kit piece's footprint / height / loot surface x COL_K (= FURN_K): the collider of the piece the game draws at suggested_scale x FURN_K
+  const kit = (id, type, surface, extra) => { const b = KIT_BOXES[type]; C[id] = Object.assign({ id, src: "kit", type, w: r3((b.max[0] - b.min[0]) * COL_K), d: r3((b.max[2] - b.min[2]) * COL_K), h: r3(b.max[1] * COL_K), tris: b.tris, surface: surface ? r3(surface * COL_K) : null, deco: !!b.deco, mount: "floor", y0: 0 }, extra || {}); };
   kit("bookcase", "furniture/bookcaseClosed");
   kit("tv", "furniture/cabinetTelevision", 0.682);
   kit("box", "furniture/cardboardBoxClosed", 0.618);
@@ -613,7 +623,8 @@ export function generate(parcel, opts) {
   const use = P.use || (rng() < TH.shop ? "shop" : "house");
   const FHu = P.fh != null ? P.fh : USE_FH[use];
   const tall = use === "tower" || use === "midrise";      // tall shells: the storeys over the walkable ones (O3) stay CLOSED
-  const store = use === "shop" && nx >= 11 && nz >= 8;    // (P23 / LC-29) a DEPARTMENT STORE (towngen's Old Mall, 30 x 22.5 m; no other shop is that wide): big trading floors on every storey, no flat upstairs
+  const store = use === "shop" && nx >= 11 && nz >= 8;
+  const home = use === "house" && !TH.ruined && !tall;          // (W10 R1A) a HOME: its rooms are planned by homeRects (no strip rooms) and get the full programme    // (P23 / LC-29) a DEPARTMENT STORE (towngen's Old Mall, 30 x 22.5 m; no other shop is that wide): big trading floors on every storey, no flat upstairs
   let S = Math.min(P.storeysAsked, MAX_FLOORS);
   if (P.storeysAsked > MAX_FLOORS && !tall) notes.push("storeys " + P.storeysAsked + " -> " + MAX_FLOORS + " (O3: <= 3 walkable floors)");
   if (S >= 2 && FHu > STAIR_MAX_RISE + 1e-9) { notes.push("storeys " + S + " -> 1: a " + FHu + " m storey is too tall for a 5 m stair"); S = 1; }
@@ -648,7 +659,11 @@ export function generate(parcel, opts) {
     const side = strips.length ? (strips[0].at === 0 ? 1 : 0) : (rng() < 0.5 ? 0 : 1);       // 0 = cut on the -u side, 1 = +u side
     const cw = rint(rng, 1, Math.max(1, Math.min(nx >> 1, nx - 2 - (strips.length ? 1 : 0))));
     const cd = rint(rng, 1, Math.max(1, Math.min(nz >> 1, nz - 2)));
-    cut = side ? [nx - cw, 0, nx, cd] : [0, 0, cw, cd];
+    // (W10 R1A) a home's L leaves >= MIN_ROOM_W cells beside and in front of the removed corner (else no room there could be 5 m wide): the corner is clamped, or the
+    // plan stays a rectangle
+    const restW = nx - (strips.length ? 1 : 0), cw2 = home ? clamp(cw, MIN_ROOM_W, restW - MIN_ROOM_W) : cw, cd2 = home ? clamp(cd, MIN_ROOM_W, nz - MIN_ROOM_W) : cd;
+    // ... and keeps >= 16 cells of rooms per floor (4 rooms of 2 x 2: the programme's living, kitchen, bedroom and bath on a bungalow)
+    if (!home || (restW - cw2 >= MIN_ROOM_W && cw2 >= MIN_ROOM_W && nz - cd2 >= MIN_ROOM_W && cd2 >= MIN_ROOM_W && restW * nz - cw2 * cd2 >= 16)) cut = side ? [nx - cw2, 0, nx, cd2] : [0, 0, cw2, cd2];
   } else if (P.plan === "L") notes.push("plan L -> rect (needs >= 4 x 4 cells and <= 2 storeys with a side stair)");
   const inFoot = (i, j) => i >= 0 && j >= 0 && i < nx && j < nz && !(cut && i >= cut[0] && i < cut[2] && j >= cut[1] && j < cut[3]);
   // (lane K1) is the ground in front of an exterior doorway on edge (ori, i, j) free of the caller's other buildings (P.near) for DOOR_OUT? (no rng)
@@ -741,7 +756,7 @@ export function generate(parcel, opts) {
     const target = use === "shed" ? 1 : use === "barn" ? (restCells >= 24 ? 2 : 1) : use === "hall" ? (restCells >= 24 ? 3 : 2)
       : store ? clamp(Math.round(restCells / 14), 2, 4)
         : use === "shop" && f === 0 ? (restCells >= 12 ? 2 : 1) : clamp(Math.round(restCells / 4), 1, 6);
-    const rects = guillotine(rng, ri0, rj0, ri1, rj1, target);
+    const rects = home ? homeRects(rng, ri0, rj0, ri1, rj1, target, cut, MIN_ROOM_W) : guillotine(rng, ri0, rj0, ri1, rj1, target);
     for (const r of rects) {
       const cells = [];
       for (let j = r[1]; j < r[3]; j++) for (let i = r[0]; i < r[2]; i++) { const c = cIdx(i, j); if (type[c] === 1 && stripOf[c] < 0) cells.push(c); }
@@ -886,6 +901,30 @@ export function generate(parcel, opts) {
     if (TH.ruined) for (const x of regs) if (x.r.kind !== "bath" && x.r.kind !== "hall") x.r.kind = "ruin";
   };
   for (const F of floors) kindsFor(F);
+  // (W10 R1A, audit 12) a home's programme: living + kitchen + bedroom + bath somewhere in the house (an office / storage room, else a second room of a kind
+  // the house has twice, takes the missing kind: living / kitchen on the ground floor, the bath the smallest, a bedroom the biggest - upstairs first); >= 150 m2
+  // of rooms adds a second bedroom the same way. A pure function of the plan (no rng).
+  if (home && HOME_PROGRAMME) {
+    const all = [];
+    for (const F of floors) for (const r of F.regs) if (!r.hall) all.push({ r, f: F.f, n: r.cells.length, root: F.f === 0 && F.regs.indexOf(r) === F.root });
+    const count = (k) => all.filter((o) => o.r.kind === k).length;
+    const donors = (want) => {
+      const spare = all.filter((o) => (o.r.kind === "office" || o.r.kind === "storage") && !o.root);
+      const dup = all.filter((o) => ["bedroom", "bath", "kitchen", "living"].includes(o.r.kind) && o.r.kind !== want && count(o.r.kind) >= 2 && !o.root);
+      return spare.length ? spare : dup;
+    };
+    const take = (want, list) => {
+      if (!list.length) return false;
+      const ground = list.filter((o) => o.f === 0), up = list.filter((o) => o.f > 0);
+      const pool = want === "living" || want === "kitchen" ? (ground.length ? ground : list) : want === "bedroom" ? (up.length ? up : list) : list;
+      const by = pool.slice().sort((a, b) => (want === "bath" ? a.n - b.n : b.n - a.n) || a.f - b.f || a.r.cells[0] - b.r.cells[0]);
+      by[0].r.kind = want;
+      return true;
+    };
+    for (const k of ["living", "kitchen", "bath", "bedroom"]) if (!count(k)) take(k, donors(k));
+    const area = all.reduce((a, o) => a + o.n * U * U, 0);
+    if (area >= 150 && count("bedroom") < 2) take("bedroom", all.filter((o) => (o.r.kind === "office" || o.r.kind === "storage") && !o.root));
+  }
   // which of the wall cells two rooms share gets the door: the middle one, among those with no stair approach / exit on either side (a doorway
   // that opens onto a stairwell landing shows the stair, not the room: nothing can stand in its view)
   const pickEdge = (F, list) => {
@@ -3492,9 +3531,9 @@ export function generate(parcel, opts) {
     if (p.host) { rec.mount = "top"; rec.on = p.host._rid; }                      // stands on that piece's top (rec.min[1] = its surface)
     else if (p.y0) rec.mount = "wall";                                              // hung on the wall, rec.min[1] above the floor (a wall cabinet)
     if (cat.src === "kit") {
-      const kb = KIT_BOXES[cat.type], bcx = (kb.min[0] + kb.max[0]) / 2, bcz = (kb.min[2] + kb.max[2]) / 2;
-      const [ox, oz] = rotQ(wq, bcx, bcz);                  // the manifest origin = the footprint centre minus the rotated bbox centre
-      rec.kit = { type: cat.type, x: r3(wx - ox), y: r3(ys), z: r3(wz - oz), rot: wq };
+      const kb = KIT_BOXES[cat.type], bcx = (kb.min[0] + kb.max[0]) / 2 * FURN_K, bcz = (kb.min[2] + kb.max[2]) / 2 * FURN_K;
+      const [ox, oz] = rotQ(wq, bcx, bcz);                  // the manifest origin = the footprint centre minus the rotated bbox centre (drawn x FURN_K)
+      rec.kit = { type: cat.type, x: r3(wx - ox), y: r3(ys), z: r3(wz - oz), rot: wq, scale: FURN_K };     // (W10 R1A: scale = the multiplier on the type's suggested_scale)
     } else {
       const A = AUTH[cat.auth || cat.id], parts = [];
       // hidden faces (world bits): a plate draws one face (a rug its top; a picture its face, local +z -> world FACE[wq]); a box resting on the floor or
@@ -3766,6 +3805,54 @@ function guillotine(rng, i0, j0, i1, j1, k) {
   return rooms;
 }
 
+/** (W10 R1A) a HOME's rooms: the rest-of-plan rectangle [i0, j0, i1, j1) (minus the L plan's removed corner, when it reaches in) cut into <= k rectangles,
+ *  each >= minW cells on BOTH sides, plus at most one 1 x 2-cell nook (a bath: aspect 2.0) when no other cut fits. Every rectangle is all walkable cells. */
+function homeRects(rng, i0, j0, i1, j1, k, cut, minW) {
+  let rooms = [[i0, j0, i1, j1]];
+  if (cut) {
+    const c = [Math.max(i0, cut[0]), Math.max(j0, cut[1]), Math.min(i1, cut[2]), Math.min(j1, cut[3])];
+    if (c[0] < c[2] && c[1] < c[3]) {
+      // the L as two rectangles: split along the corner's x edge or its z edge, whichever leaves the wider narrowest side
+      const xs = c[0] === i0 ? [c[2], i1] : [i0, c[0]], zs = c[1] === j0 ? [c[3], j1] : [j0, c[1]];
+      const o1 = [[i0, zs[0], i1, zs[1]], [xs[0], c[1], xs[1], c[3]]], o2 = [[xs[0], j0, xs[1], j1], [c[0], zs[0], c[2], zs[1]]];
+      const mn = (o) => Math.min(...o.map((r) => Math.min(r[2] - r[0], r[3] - r[1])));
+      rooms = mn(o1) > mn(o2) ? o1 : mn(o2) > mn(o1) ? o2 : rng() < 0.5 ? o1 : o2;
+    }
+  }
+  let nook = 0, guard = 0;
+  while (rooms.length < k && guard++ < 24) {
+    let best = -1, ba = 0;
+    for (let a = 0; a < rooms.length; a++) {
+      const r = rooms[a], w = r[2] - r[0], d = r[3] - r[1];
+      if ((w >= 2 * minW || d >= 2 * minW) && w * d > ba) { ba = w * d; best = a; }
+    }
+    if (best >= 0) {
+      const r = rooms[best], w = r[2] - r[0], d = r[3] - r[1];
+      let alongI = w > d ? true : d > w ? false : rng() < 0.5;
+      if ((alongI ? w : d) < 2 * minW) alongI = !alongI;
+      const L = alongI ? w : d;
+      const cutAt = clamp(Math.round(L * (0.38 + 0.24 * rng())), minW, L - minW);
+      if (alongI) { rooms[best] = [r[0], r[1], r[0] + cutAt, r[3]]; rooms.push([r[0] + cutAt, r[1], r[2], r[3]]); }
+      else { rooms[best] = [r[0], r[1], r[2], r[1] + cutAt]; rooms.push([r[0], r[1] + cutAt, r[2], r[3]]); }
+      continue;
+    }
+    // no room can be halved: one 1 x 2 nook off a room whose other side is 2 cells (the bath), at most one per floor
+    if (nook || minW < 2) break;
+    let nb = -1, nAlong = false, na = 0;
+    for (let a = 0; a < rooms.length; a++) {
+      const r = rooms[a], w = r[2] - r[0], d = r[3] - r[1];
+      if (d === 2 && w >= 1 + minW && w * d > na) { na = w * d; nb = a; nAlong = true; }
+      if (w === 2 && d >= 1 + minW && w * d > na) { na = w * d; nb = a; nAlong = false; }
+    }
+    if (nb < 0) break;
+    const r = rooms[nb], hi = rng() < 0.5;
+    if (nAlong) { const x = hi ? r[2] - 1 : r[0] + 1; rooms[nb] = hi ? [r[0], r[1], x, r[3]] : [x, r[1], r[2], r[3]]; rooms.push(hi ? [x, r[1], r[2], r[3]] : [r[0], r[1], x, r[3]]); }
+    else { const z = hi ? r[3] - 1 : r[1] + 1; rooms[nb] = hi ? [r[0], r[1], r[2], z] : [r[0], z, r[2], r[3]]; rooms.push(hi ? [r[0], z, r[2], r[3]] : [r[0], r[1], r[2], z]); }
+    nook++;
+  }
+  return rooms;
+}
+
 // ── moving a house up or down (pure) ─────────────────────────────────────────────────────────────────────────────────────────────────────
 /** translateY(house, dy) -> house: the same house standing dy higher (a NEW object; the input is not changed). generate() is a pure function of the parcel and
  *  every height in its output is the pad height plus a term that does not depend on it, so generate({ ...parcel, y }) and translateY(generate({ ...parcel, y: 0 }), y)
@@ -3838,7 +3925,7 @@ export function leafColliderCount(H) { return 2 * ((H && H.doorLeaves) || []).le
 /** the kit furniture as citykit.place() entries (x y z = the manifest origin at the floor, rot = quarter-turn index) */
 export function kitEntries(H, district) {
   const out = [];
-  for (const p of H.furniture) if (p.src === "kit") out.push({ type: p.kit.type, x: p.kit.x, y: p.kit.y, z: p.kit.z, rot: p.kit.rot, district: district || H.id });
+  for (const p of H.furniture) if (p.src === "kit") out.push({ type: p.kit.type, x: p.kit.x, y: p.kit.y, z: p.kit.z, rot: p.kit.rot, scale: p.kit.scale == null ? 1 : p.kit.scale, district: district || H.id });
   return out;
 }
 
@@ -4167,7 +4254,8 @@ export function buildHouse(THREE, H, opts) {
         const im = new THREE.InstancedMesh(pt.geometry, pt.material, list.length);
         list.forEach((e, k) => {
           const c = COS[e.rot], s = SIN[e.rot];
-          Mx.set(c, 0, s, e.x, 0, 1, 0, e.y, -s, 0, c, e.z, 0, 0, 0, 1);
+          const ks = e.scale == null ? 1 : e.scale;         // (W10 R1A: the entry's scale on top of the template's suggested_scale)
+          Mx.set(c * ks, 0, s * ks, e.x, 0, ks, 0, e.y, -s * ks, 0, c * ks, e.z, 0, 0, 0, 1);
           if (pt.local) Mx.multiply(pt.local);
           im.setMatrixAt(k, Mx);
         });
