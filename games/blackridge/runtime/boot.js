@@ -77,7 +77,12 @@ try {
   // starts at LOW quality (dynres still scales from there); a saved choice wins.
   const isTouch = touchMod.isTouchDevice();
   try {
-    if (isTouch && typeof localStorage !== "undefined" && !localStorage.getItem("blackridge.settings.v1")) {
+    // [lane settings] "first run" = no saved settings in ANY version (the v2
+    // record or the legacy v1 key) — settings.js hasSaved(); the old literal
+    // v1-key check would re-force LOW on every load once v1 stops being written.
+    const firstRun = settingsMod.hasSaved ? !settingsMod.hasSaved()
+      : (typeof localStorage !== "undefined" && !localStorage.getItem("blackridge.settings.v1"));
+    if (isTouch && firstRun) {
       setSetting("quality", "low");
     }
   } catch (e) { /* private mode: defaults stand */ }
@@ -289,9 +294,12 @@ try {
   const { createGrenadeFx } = await import(`../core/fx/grenadefx.js${V}`);
   const { createZoneFx } = await import(`../core/fx/zone_fx.js${V}`); // [lane dom] STRONGHOLD zone visuals
   const { createEquipmentFx } = await import(`../core/fx/equipment_fx.js${V}`); // [equipment lane]
+  const { createMinimap } = await import(`../core/hud/minimap.js${V}`); // [minimap lane]
   const { createAchievements } = await import(`../core/meta/achievements.js${V}`);
   const { createProgression } = await import(`../core/meta/progression.js${V}`);   // [progression] device-saved XP
   const { createAfterAction } = await import(`../core/hud/after_action.js${V}`);   // [progression] feed + after-action
+  const { createChallenges } = await import(`../core/meta/challenges.js${V}`);     // [challenges] daily/weekly/career
+  const { createChallengesUI } = await import(`../core/hud/challenges_ui.js${V}`); // [challenges] panel + toasts + AAR section
   // World (third-person) weapon models for ground loot. Imported WITHOUT the ?v=
   // suffix on purpose: soldiers.js imports this module query-less, so this resolves
   // to the SAME instance — one GLB prototype cache for the bots' guns AND the loot.
@@ -332,10 +340,13 @@ try {
   const grenadeFx = createGrenadeFx(ctx);
   const zoneFx = createZoneFx(ctx); // [lane dom]
   const equipFx = createEquipmentFx(ctx, { audio, input }); // [equipment lane] flash/smoke/stun/tripmine view + overlays
+  const minimap = createMinimap(ctx, { hud }); // [minimap lane] top-left minimap + M full map (mounted in the HUD root)
   const touch = isTouch ? touchMod.createTouchControls(ctx) : null;
   const achievements = createAchievements(ctx);   // ForgeFlow portal unlocks (achievements.json)
   const progression = ctx.progression = createProgression(ctx);   // [progression]
   const afterAction = createAfterAction(ctx, progression);        // [progression]
+  const challenges = ctx.challenges = createChallenges(ctx, progression); // [challenges]
+  const challengesUI = createChallengesUI(ctx, challenges);                // [challenges]
   killcam.bind({ fx, audio, soldiers });   // [killcam replay] re-emit recorded shots + drive ghost actors
   ctx.touch = touch;
   ctx.cue = (n) => streakAudio.cue(n);   // match_hud clock warnings
@@ -358,6 +369,70 @@ try {
     resume: () => pauseCtl.resume(),
     toggle: () => pauseCtl.toggle(),
   };
+
+  // ---- [lane settings] ROBUSTNESS: WebGL context loss + tab-hidden pause ----
+  // Context loss (driver reset, GPU process crash, too many contexts): the
+  // default is a dead canvas forever. preventDefault() on webglcontextlost asks
+  // the browser to restore; three.js r172 re-initialises its GL state on
+  // webglcontextrestored and re-uploads geometry/textures/targets lazily from
+  // the CPU-side objects it still holds, so the game recovers WITHOUT a reload.
+  // While lost: no draws (frame skips post.render), the campaign pauses, a
+  // notice shows. Restored: post rebuilds its chain, the notice clears, the
+  // pause overlay stays up for the player to resume. If the browser has not
+  // restored within 8 s (or restoring throws), the notice offers a reload.
+  // PVP is not paused (it is presented as live). Tab hidden → campaign pause.
+  const gfxCtx = { lost: false, losses: 0, restores: 0, timer: 0, el: null };
+  function campaignLive() {
+    const s = sim && sim.state;
+    return !!s && !s.match && (s.phase === "infil" || s.phase === "assault" || s.phase === "exfil");
+  }
+  function gfxNotice(text, withReload) {
+    if (!gfxCtx.el) {
+      const el = document.createElement("div");
+      el.id = "br-gfx-notice";
+      el.style.cssText = "position:fixed;left:50%;top:16%;transform:translateX(-50%);z-index:90;" +
+        "padding:14px 22px;background:rgba(6,8,12,.92);border:1px solid rgba(217,164,65,.5);" +
+        "color:#e8e8e4;font:13px/1.6 ui-sans-serif,'Segoe UI',system-ui,sans-serif;letter-spacing:.12em;" +
+        "text-transform:uppercase;text-align:center;pointer-events:auto;display:none";
+      document.body.appendChild(el);
+      gfxCtx.el = el;
+    }
+    const el = gfxCtx.el;
+    if (!text) { el.style.display = "none"; return; }
+    el.innerHTML = `<div>${text}</div>` + (withReload
+      ? `<button data-a="reload" class="a10-item" style="margin:10px auto 0;display:inline-block">Reload game</button>` : "");
+    const b = el.querySelector("button");
+    if (b) b.onclick = () => location.reload();
+    el.style.display = "block";
+  }
+  canvas.addEventListener("webglcontextlost", (e) => {
+    e.preventDefault(); // without this the context can never come back
+    gfxCtx.lost = true; gfxCtx.losses++;
+    console.warn("[boot] WebGL context LOST — pausing render, waiting for restore");
+    if (campaignLive() && !pauseCtl.active) pauseCtl.pause();
+    gfxNotice("Graphics device reset — recovering…", false);
+    clearTimeout(gfxCtx.timer);
+    gfxCtx.timer = setTimeout(() => {
+      if (gfxCtx.lost) gfxNotice("The graphics device did not come back.", true);
+    }, 8000);
+  }, false);
+  canvas.addEventListener("webglcontextrestored", () => {
+    clearTimeout(gfxCtx.timer);
+    try {
+      post.resize(window.innerWidth, window.innerHeight); // fresh composer targets on the new context
+      gfxCtx.lost = false; gfxCtx.restores++;
+      console.info("[boot] WebGL context restored — rendering resumed without reload");
+      gfxNotice("Graphics restored", false);
+      setTimeout(() => { if (!gfxCtx.lost) gfxNotice(null); }, 1800);
+    } catch (err) {
+      console.error("[boot] context restore failed:", err && err.message);
+      gfxNotice("Graphics could not be restored.", true);
+    }
+  }, false);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && campaignLive() && !pauseCtl.active && input.enabled) pauseCtl.pause();
+  });
+  ctx.gfxCtx = gfxCtx; // diagnostics (settings lane checks)
 
   const menu = createMenu(ctx, {
     onStartMission: () => startMission({}),
@@ -387,8 +462,10 @@ try {
       }
     });
     equipFx.attach(bridge); // [equipment lane]
+    minimap.attach(bridge); // [minimap lane]
     achievements.attach(bridge);
     progression.attach(bridge); afterAction.attach(bridge);   // [progression]
+    challenges.attach(bridge); // [challenges]
     streakAudio.attach(bridge);
     // A0 wiring per architecture §3.11: player shots kick recoil + viewmodel.
     // v2.2 swept-projectile convention: impactOnly resolution replays and
@@ -684,6 +761,7 @@ try {
     grenadeFx.update(dt);
     zoneFx.update(); // [lane dom]
     equipFx.update(dt); // [equipment lane]
+    minimap.update(dt); // [minimap lane] self-throttled to <= 20 Hz
     if (touch) touch.update(dt);
     achievements.update(dt);
     audio.update(dt);
@@ -717,8 +795,23 @@ try {
     };
   }
 
+  // [lane settings] FRAME-RATE CAP (settings.fpsCap 30/60/120/uncapped). A
+  // capped frame that is not yet due returns BEFORE `last` moves, so the next
+  // rendered frame's dt covers the whole interval — the fixed-step sim and the
+  // accumulator see exactly the wall time that passed, nothing is dropped or
+  // doubled. The due time advances by whole intervals (re-anchored after a
+  // stall) so a 144 Hz display capped at 60 averages 60, not 48. 1.5 ms of
+  // tolerance absorbs vsync jitter. The synchronous stepFrames path (tests,
+  // hidden tabs) is never capped.
+  let capDue = 0;
   function frame(nowMs) {
     requestAnimationFrame(frame);
+    const capHz = S.fpsCap && S.fpsCap !== "uncapped" ? Number(S.fpsCap) || 0 : 0;
+    if (capHz > 0) {
+      const minMs = 1000 / capHz;
+      if (nowMs < capDue - 1.5) return;
+      capDue = nowMs - capDue > minMs ? nowMs + minMs : capDue + minMs;
+    }
     const dtMs = nowMs - last;
     last = nowMs;
     // Lower clamp: the first rAF timestamp can precede the captured `last`,
@@ -759,7 +852,7 @@ try {
     const alpha = renderAlpha;
     viewUpdates(dt, alpha);
     dynres.update();
-    post.render(scene, camera);
+    if (!gfxCtx.lost) post.render(scene, camera); // [lane settings] no draws on a lost context
     perf.frame(dtMs);
   }
 
@@ -826,6 +919,8 @@ try {
     get sim() { return sim; },
     lights, fx, hud, vm, soldiers, audio, ldHud, lootFx, streakFx,
     progression, afterAction, // [progression]
+    challenges, challengesUI, // [challenges]
+    minimap, // [minimap lane] stats() / toggleFull() for checks
     killcam, // [killcam replay] state()/skip() for checks
     settings: S,
     version: `v${VN}`, // MUST equal the boot.js?v number

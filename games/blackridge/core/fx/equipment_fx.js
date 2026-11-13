@@ -533,7 +533,8 @@ export function createEquipmentFx(ctx, deps) {
     // ---- player overlays
     const p = s.state.player;
     const alive = !!(p && p.alive);
-    const fl = alive ? flashLevel(p, t) : 0;
+    const fi = ctx.settings && Number(ctx.settings.flashIntensity);        // [integration v147]
+    const fl = (alive ? flashLevel(p, t) : 0) * (fi > 0 && fi <= 1 ? fi : 1);
     const st = alive ? stunLevel(p, t) : 0;
     flashEl.style.opacity = fl > 0.003 ? fl.toFixed(3) : "0";
     flashEl.style.backdropFilter = fl > 0.05 ? `blur(${(fl * 10).toFixed(1)}px)` : "";

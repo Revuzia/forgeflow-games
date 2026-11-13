@@ -253,6 +253,16 @@ export function createLoadoutHud(ctx) {
     return [(proj.x * 0.5 + 0.5) * window.innerWidth, (-proj.y * 0.5 + 0.5) * window.innerHeight];
   }
 
+  // [lane settings] "how do I switch to it" on the device in hand: a number key
+  // on keyboard, the swap button on a controller, the SWAP button on touch.
+  function switchHint(slot) {
+    const inp = ctx.input;
+    const dev = inp && inp.lastDevice;
+    if (dev === "pad" && inp.glyph) return `${inp.glyph("swap")} to switch`;
+    if (dev === "touch") return "tap SWAP to switch";
+    return `press ${slot} to switch`;
+  }
+
   // ----------------------------------------------------------------- events
   function onPickup(d) {
     if (!d || d.who !== "P") return;
@@ -261,7 +271,7 @@ export function createLoadoutHud(ctx) {
     } else {
       const slot = d.slot >= 0 ? d.slot + 1 : "";
       showToast(`PICKED UP  <b>${FULL_NAMES[d.weaponId] || d.name}</b>  [${slot}]` +
-        (d.equipped ? "" : `<small>press ${slot} to switch</small>`));
+        (d.equipped ? "" : `<small>${switchHint(slot)}</small>`)); // [lane settings] device-aware
       if (d.slot >= 0 && slotEls[d.slot]) {
         const s = slotEls[d.slot].s;
         s.classList.remove("flash"); void s.offsetWidth; s.classList.add("flash");
@@ -442,7 +452,11 @@ export function createLoadoutHud(ctx) {
     if (des) {
       const def = TIERS[des - 1];
       call.classList.add("on");
-      const html = `${def ? def.name : "STRIKE"} — MARK TARGET<b>[LMB] CONFIRM  ·  [RMB] CANCEL</b>`;
+      // [lane settings] device-aware glyphs (RT/LT · R2/L2 · LMB/RMB · FIRE/AIM);
+      // rebuilt every frame through the dataset.h compare, so a device switch
+      // mid-designate updates the prompt on the next frame.
+      const g = (v, dflt) => (ctx.input && ctx.input.glyph ? ctx.input.glyph(v) : dflt);
+      const html = `${def ? def.name : "STRIKE"} — MARK TARGET<b>[${g("designateOk", "LMB")}] CONFIRM  ·  [${g("designateCancel", "RMB")}] CANCEL</b>`;
       if (call.dataset.h !== html) { call.innerHTML = html; call.dataset.h = html; }
     } else if (soonest) {
       const left = Math.max(0, soonest.endT - s.state.time);

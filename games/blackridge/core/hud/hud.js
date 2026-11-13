@@ -506,6 +506,13 @@ body.dom-live #mh-score{display:none;}
 #a10-dom .dm-ann div{font-size:17px;letter-spacing:.3em;margin-bottom:6px;opacity:0;white-space:nowrap;}
 `;
 
+// [lane settings] live colour-blind team palette (settings.js teamColors via the
+// live-instance handle; null = the authored AMBER / SLATE tints).
+function liveTeamColors() {
+  const h = globalThis.__BR_SETTINGS__;
+  return h && h.teamColors ? h.teamColors() : null;
+}
+
 function createZoneHud(ctx, root) {
   // CSS rides in the a10-style element (the composite copies its text)
   {
@@ -547,6 +554,9 @@ function createZoneHud(ctx, root) {
   const NEUTRAL = "#e8e8e4";
   const tintOf = (team) => {
     if (team !== 0 && team !== 1) return NEUTRAL;
+    // [lane settings] colour-blind palette (team 0 = the player's side)
+    const cb = liveTeamColors();
+    if (cb) return team === 0 ? cb.friend : cb.enemy;
     const t = st.teams && st.teams[team];
     return (t && t.tint) || TINT[team];
   };
@@ -606,7 +616,7 @@ function createZoneHud(ctx, root) {
     const s0 = M.teams[0].score, s1 = M.teams[1].score;
     const rules = sim.match && sim.match.m ? sim.match.m.rules : null;
     const lim = rules && rules.scoreLimit ? rules.scoreLimit : 200;
-    const sig = s0 + ":" + s1 + ":" + lim;
+    const sig = s0 + ":" + s1 + ":" + lim + ":" + tintOf(0); // [lane settings] palette in the sig
     if (sig !== st.lastScore) {
       st.lastScore = sig;
       const n0 = (M.teams[0].name || "AMBER"), n1 = (M.teams[1].name || "SLATE");
@@ -716,6 +726,38 @@ export function createHud(ctx) {
   const wName = (id) => (W[id] && W[id].name) || id || "";
   const wClass = (id) => (W[id] && W[id].class) || "ar";
 
+  // [lane settings] HUD SIZE + OPACITY (settings.hudScale / hudOpacity).
+  // The CSS `scale` property composes with each block's own `transform`
+  // (translateX(-50%) centring), and the transform-origin is chosen per anchor
+  // so every block stays pinned to the edge it hangs from: centre-translated
+  // blocks scale about (0,0)/(0,100%) — which maps their centre onto itself —
+  // corner blocks about their corner. Opacity rides `filter: opacity()`, which
+  // MULTIPLIES with the inline opacity the fades write instead of fighting it.
+  // World-anchored markers, the crosshair (own settings) and the full-screen
+  // damage / flash layers are deliberately excluded. Selectors for blocks owned
+  // by other lanes (#ld-*, #br-xpfeed, #mm-wrap) are style-only.
+  if (!document.getElementById("br-hudscale-style")) {
+    const hs = document.createElement("style");
+    hs.id = "br-hudscale-style";
+    hs.textContent = `
+#compass,#a10-grenade,#a10-dom .dm-score,#a10-dom .dm-chips,#br-xpfeed,#ld-medal,.ld-medal{scale:var(--br-hud-s,1);transform-origin:0 0;}
+#ammo,#a10-health{scale:var(--br-hud-s,1);transform-origin:100% 100%;}
+#killfeed{scale:var(--br-hud-s,1);transform-origin:100% 0;}
+#objective,#a10-banner,#ld-bar,.ld-bar,#ld-streaks,.ld-streaks{scale:var(--br-hud-s,1);transform-origin:0 100%;}
+#compass,#a10-grenade,#a10-dom .dm-score,#a10-dom .dm-chips,#br-xpfeed,#ammo,#a10-health,#killfeed,#objective,#a10-banner,
+#ld-bar,.ld-bar,#ld-streaks,.ld-streaks,#ld-medal,.ld-medal,#mm-wrap,#mhud{filter:opacity(var(--br-hud-o,1));}
+`;
+    document.head.appendChild(hs);
+  }
+  function applyHudScale() {
+    const S = ctx.settings || {};
+    const de = document.documentElement;
+    de.style.setProperty("--br-hud-s", String(Number(S.hudScale) > 0 ? Number(S.hudScale) : 1));
+    de.style.setProperty("--br-hud-o", String(Number(S.hudOpacity) > 0 ? Number(S.hudOpacity) : 1));
+  }
+  applyHudScale();
+  if (ctx.onChange) { ctx.onChange("hudScale", applyHudScale); ctx.onChange("hudOpacity", applyHudScale); }
+
   // ------------------------------------------------------------------ DOM
   const root = document.createElement("div");
   root.id = "hud";
@@ -767,10 +809,46 @@ export function createHud(ctx) {
   cross.innerHTML =
     `<div class="a10-x a10-xv" data-k="t"></div><div class="a10-x a10-xv" data-k="b"></div>` +
     `<div class="a10-x a10-xh" data-k="l"></div><div class="a10-x a10-xh" data-k="r"></div>` +
-    `<div class="a10-dot"></div>`;
+    `<div class="a10-dot"></div>` +
+    `<div class="a10-xring" style="position:absolute;left:0;top:0;border-radius:50%;box-sizing:border-box;` +
+    `display:none;box-shadow:0 0 0 1px rgba(0,0,0,.45),inset 0 0 0 1px rgba(0,0,0,.45)"></div>`;
   root.appendChild(cross);
   const xT = cross.children[0], xB = cross.children[1], xL = cross.children[2], xR = cross.children[3];
   const xDot = cross.children[4];
+  const xRing = cross.children[5]; // [lane settings] "circle" crosshair style
+
+  // [lane settings] CROSSHAIR OPTIONS (settings.js xhStyle / xhDot / xhColor /
+  // xhSize / xhOpacity) + hit-marker toggle. Applied on change and re-checked
+  // by signature in update() (cheap string compare), so a setting written by
+  // any path — the panel, an import, the harness — lands the same frame.
+  const XH_COLORS = { white: "#e8e8e4", green: "#5dff8a", cyan: "#4fe3ff", yellow: "#ffe14d", magenta: "#ff5cf0" };
+  const xh = { sig: "", arm: 9, thick: 2, style: "cross", col: "#e8e8e4", op: 0.9 };
+  function applyCrosshair() {
+    const S = ctx.settings || {};
+    const sig = [S.xhStyle, S.xhDot, S.xhColor, S.xhSize, S.xhOpacity, S.hitmarker].join("|");
+    if (sig === xh.sig) return;
+    xh.sig = sig;
+    const size = Number(S.xhSize) > 0 ? Number(S.xhSize) : 1;
+    xh.style = S.xhStyle || "cross";
+    xh.arm = Math.max(4, Math.round(9 * size));
+    xh.thick = Math.max(1, Math.round(2 * size * 2) / 2);
+    xh.col = XH_COLORS[S.xhColor] || XH_COLORS.white;
+    xh.op = Number.isFinite(Number(S.xhOpacity)) ? Number(S.xhOpacity) : 0.9;
+    const arms = xh.style === "cross";
+    for (const a of [xT, xB]) { a.style.width = xh.thick + "px"; a.style.height = xh.arm + "px"; a.style.marginLeft = (-xh.thick / 2) + "px"; }
+    for (const a of [xL, xR]) { a.style.height = xh.thick + "px"; a.style.width = xh.arm + "px"; a.style.marginTop = (-xh.thick / 2) + "px"; }
+    for (const a of [xT, xB, xL, xR]) { a.style.display = arms ? "" : "none"; a.style.background = xh.col; }
+    const dotOn = xh.style === "dot" || (xh.style !== "off" && S.xhDot !== "off");
+    const dz = Math.max(2, Math.round(3 * size));
+    xDot.style.display = dotOn ? "" : "none";
+    xDot.style.background = xh.col;
+    xDot.style.width = xDot.style.height = dz + "px";
+    xDot.style.left = xDot.style.top = (-dz / 2) + "px";
+    xRing.style.display = xh.style === "circle" ? "" : "none";
+    xRing.style.border = `${xh.thick}px solid ${xh.col}`;
+    hm.style.display = S.hitmarker === "off" ? "none" : "";
+    st.lastGap = -1; st.lastCrossA = -1; // force the next update to re-place / re-fade
+  }
 
   // reload ring + dry flash ----------------------------------------------
   const RING_R = 7, RING_C = 2 * Math.PI * RING_R;
@@ -896,6 +974,17 @@ export function createHud(ctx) {
   subEl.innerHTML = `<span class="sp"></span><span class="ln"></span>`;
   root.appendChild(subEl);
   const subSp = subEl.querySelector(".sp"), subLn = subEl.querySelector(".ln");
+  // [lane settings] subtitle size (settings.js subSize): font + strip width.
+  const SUB_SIZE = { small: [13, 480], medium: [15, 560], large: [19, 700] };
+  let subSizeApplied = "";
+  function applySubSize() {
+    const k = (ctx.settings && ctx.settings.subSize) || "medium";
+    if (k === subSizeApplied) return;
+    subSizeApplied = k;
+    const [fs, mw] = SUB_SIZE[k] || SUB_SIZE.medium;
+    subEl.style.fontSize = fs + "px";
+    subEl.style.maxWidth = `min(${mw}px,${k === "large" ? 44 : 30}vw)`;
+  }
 
   // vignette / desat / flash / fade ---------------------------------------------
   const vig = document.createElement("div"); vig.id = "a10-vignette"; root.appendChild(vig);
@@ -1319,7 +1408,7 @@ export function createHud(ctx) {
     const vh = window.innerHeight || 1080;
 
     // ---- crosshair: THE live effectiveSpread (§2.5 shared model, §4.6 px map)
-    const weapon = W[p.weapon.id];
+    const weapon = (sim && typeof sim.weaponOf === "function" && sim.weaponOf(p, p.weapon.id)) || W[p.weapon.id]; // [integration v147]
     let crossAlpha = 0.9;
     // WAVE-10 AIM-TRUTH: the reticle is anchored to the AIM RAY, not to the
     // centre pixel. viewmodel.js adds a RENDER-ONLY fire-response offset to
@@ -1337,6 +1426,7 @@ export function createHud(ctx) {
     // readable and compensable. Projection is exact (full YXZ basis incl.
     // roll), costs one transform per frame, and needs no THREE import.
     reticleOffset(p);
+    applyCrosshair(); // [lane settings] no-op unless a crosshair setting changed
     if (weapon) {
       const spread = effectiveSpread(weapon, playerSpreadState(sim));
       const fovRad = (ctx.camera ? ctx.camera.fov : 74) * Math.PI / 180;
@@ -1347,14 +1437,20 @@ export function createHud(ctx) {
         const g = gap.toFixed(1);
         // 9 = the arm's own length (a10-xv height / a10-xh width) — the inner
         // end of each tick lands exactly `gap` px from centre.
-        xT.style.transform = `translate(0,${-(+g + 9)}px)`;
+        // [lane settings] arm length follows the crosshair-size setting (was 9)
+        xT.style.transform = `translate(0,${-(+g + xh.arm)}px)`;
         xB.style.transform = `translate(0,${g}px)`;
-        xL.style.transform = `translate(${-(+g + 9)}px,0)`;
+        xL.style.transform = `translate(${-(+g + xh.arm)}px,0)`;
         xR.style.transform = `translate(${g}px,0)`;
+        if (xh.style === "circle") {
+          const r = Math.max(6, +g + xh.arm * 0.5);
+          xRing.style.width = xRing.style.height = (2 * r).toFixed(1) + "px";
+          xRing.style.transform = `translate(${-r}px,${-r}px)`;
+        }
       }
     }
     // ADS: crosshair fades out entirely (§4.6); hidden while dead too
-    crossAlpha = 0.9 * (1 - (p.weapon.adsT || 0));
+    crossAlpha = xh.op * (1 - (p.weapon.adsT || 0)); // [lane settings] opacity setting (default 0.9)
     if (!p.alive) crossAlpha = 0;
     if (Math.abs(crossAlpha - st.lastCrossA) > 0.02) {
       st.lastCrossA = crossAlpha;
@@ -1565,11 +1661,19 @@ export function createHud(ctx) {
 
     // ---- subtitles (mission radio — private drains until the A0 amendment)
     drainRadioInto(sim);
+    // [lane settings] subtitles OFF: the queue drains silently (radio squelch
+    // audio still plays — drainRadioInto) and the strip stays hidden.
+    if (ctx.settings && ctx.settings.subtitles === "off") {
+      st.subQ.length = 0;
+      if (st.subShown) { st.subShown = false; subEl.style.opacity = "0"; }
+    }
+    applySubSize();
     if (st.subQ.length && t >= st.subUntil) {
       const s = st.subQ.shift();
       subSp.textContent = s.speaker ? s.speaker + ":" : "";
       subLn.textContent = s.line || "";
-      st.subUntil = t + Math.min(5.5, Math.max(2.4, (s.line || "").length * 0.055));
+      st.subUntil = t + (s.dur > 0 ? Math.min(12, s.dur)
+        : Math.min(5.5, Math.max(2.4, (s.line || "").length * 0.055)));
       st.subShown = true;
       subEl.style.opacity = "0.95";
     } else if (st.subShown && t >= st.subUntil && !st.subQ.length) {
@@ -1703,6 +1807,20 @@ export function createHud(ctx) {
       bridge.register("mission:end", onMissionEnd);
     },
     update,
+    // [lane settings] SUBTITLE HOOK for text callouts (e.g. the barks lane):
+    //   hud.subtitle("Contact left!", { speaker: "RAVEN 2-2", dur: 2.5 })
+    // Same strip and queue as the mission radio lines; respects the Subtitles
+    // on/off + size settings. `priority:true` jumps the queue. Returns false
+    // when subtitles are off (nothing queued). Never throws.
+    subtitle(text, opts = {}) {
+      if (!text) return false;
+      if (ctx.settings && ctx.settings.subtitles === "off") return false;
+      const item = { speaker: opts.speaker ? String(opts.speaker) : "", line: String(text),
+        dur: Number(opts.dur) > 0 ? Number(opts.dur) : 0 };
+      if (opts.priority) { st.subQ.unshift(item); st.subUntil = -9; }
+      else { if (st.subQ.length >= 6) st.subQ.shift(); st.subQ.push(item); }
+      return true;
+    },
     show() {
       root.style.display = "block";
       // the page controls hint reads as clutter over a live mission HUD;

@@ -5,7 +5,8 @@
 //
 // Record (key "blackridge.classes", v1):
 //   { v: 1, selected: 0..4, playlist: "classes" | "pistol", classes: [5 × class] }
-//   class = { name, primary, secondary, lethal, perks: [tier1, tier2, tier3] }
+//   class = { name, primary, secondary, lethal, perks: [tier1, tier2, tier3],
+//             builds: { <weaponId>: { attach: [ids], camo } } }   (gunsmith; optional)
 // A missing, unparsable, wrong-version or partially-bad record is repaired
 // field by field against DEFAULT_CLASSES (never thrown away wholesale unless it
 // is not an object at all), and the repaired record is written back.
@@ -19,6 +20,14 @@
 // perk / lethal never reaches a match even if the saved class names it.
 
 import { DEFAULT_CLASSES, CLASS_COUNT, validateClass, resolveKit } from "../sim/classes.js";
+import { validateBuild } from "../sim/attachments.js"; // [gunsmith]
+
+// deep-enough copy of a class (perks + gunsmith builds are the nested parts)
+function copyClass(c) {
+  const builds = {};
+  for (const w of Object.keys(c.builds || {})) builds[w] = { attach: c.builds[w].attach.slice(), camo: c.builds[w].camo || null };
+  return { ...c, perks: c.perks.slice(), builds };
+}
 
 export const STORE_KEY = "blackridge.classes";
 export const STORE_VERSION = 1;
@@ -79,8 +88,8 @@ export function createLoadouts(opts) {
   read();
 
   const api = {
-    classes() { return rec.classes.map((c) => ({ ...c, perks: c.perks.slice() })); },
-    get(i) { const c = rec.classes[i | 0]; return c ? { ...c, perks: c.perks.slice() } : null; },
+    classes() { return rec.classes.map(copyClass); },
+    get(i) { const c = rec.classes[i | 0]; return c ? copyClass(c) : null; },
     selected() { return rec.selected; },
     select(i) {
       if (!Number.isInteger(i) || i < 0 || i >= CLASS_COUNT) return false;
@@ -92,7 +101,18 @@ export function createLoadouts(opts) {
     update(i, patch) {
       const cur = rec.classes[i | 0];
       if (!cur || !patch) return false;
-      const next = { ...cur, perks: cur.perks.slice() };
+      const next = copyClass(cur);
+      // [gunsmith] {build: {weapon, attach?, camo?}} — attach/camo each optional (a
+      // camo pick keeps the attachments); an illegal build is rejected, never repaired
+      if (patch.build && typeof patch.build === "object") {
+        const wid = patch.build.weapon;
+        const prev = next.builds[wid] || { attach: [], camo: null };
+        const want = { attach: "attach" in patch.build ? patch.build.attach : prev.attach,
+                       camo: "camo" in patch.build ? patch.build.camo : prev.camo };
+        const vb = validateBuild(wid, want);
+        if (vb.fixed) return false;
+        if (vb.build.attach.length || vb.build.camo) next.builds[wid] = vb.build; else delete next.builds[wid];
+      }
       for (const k of ["name", "primary", "secondary", "lethal", "tactical"]) if (k in patch) next[k] = patch[k];
       if (Array.isArray(patch.perks)) next.perks = patch.perks.slice(0, 3);
       if (patch.perk && patch.perk.tier >= 1 && patch.perk.tier <= 3) next.perks[patch.perk.tier - 1] = patch.perk.id;
@@ -111,7 +131,7 @@ export function createLoadouts(opts) {
     reset(i) {
       const d = DEFAULT_CLASSES[i | 0];
       if (!d) return false;
-      rec.classes[i | 0] = { ...d, perks: d.perks.slice() };
+      rec.classes[i | 0] = copyClass(d);
       changed();
       return true;
     },

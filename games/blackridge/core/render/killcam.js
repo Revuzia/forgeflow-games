@@ -879,7 +879,8 @@ body.kc-on #mh-killcam,body.kc-on #ld-root,body.kc-on #hud > *{visibility:hidden
       if (!paused()) finalWaitT += dt;
       if (finalPendingT >= 0 && (finalWaitT >= FINAL_WAIT_MAX)) freezeFinal();
       if (finalPendingT < 0) {
-        const ok = finalKill.valid && camera && startReplay("final", finalClip, finalKill, Infinity);
+        const kcOff = ctx.settings && ctx.settings.killcam === "off";   // [integration v147]
+        const ok = !kcOff && finalKill.valid && camera && startReplay("final", finalClip, finalKill, Infinity);
         if (!ok) { mode = "idle"; release(); releaseHeld(); return false; }
       } else {
         // the post-roll is still arriving: keep whatever view we have
@@ -937,7 +938,7 @@ body.kc-on #mh-killcam,body.kc-on #ld-root,body.kc-on #hud > *{visibility:hidden
         const you = m && m.actors[0];
         const budget = you && you.respawnAtT >= 0 ? you.respawnAtT - st.time - RESPAWN_MARGIN : Infinity;
         const kill = { t: rp.killT, a: rp.killer, v: 0, head: rp.head, weapon: rp.weapon };
-        if (!startReplay("death", ring, kill, budget)) mode = "orbit";
+        if ((ctx.settings && ctx.settings.killcam === "off") || !startReplay("death", ring, kill, budget)) mode = "orbit";
         else return driveReplay(0);
       }
     }

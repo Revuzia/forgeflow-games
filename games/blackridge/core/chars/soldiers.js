@@ -53,6 +53,20 @@ function dampAngle(cur, target, lambda, dt) {
 
 export function createSoldiers(ctx) {
   const actors = new Map();       // botId -> rec
+  // [lane settings] colour-blind team outlines: palette from the LIVE settings
+  // handle (settings.js teamColors — never a bare import, see its note), and
+  // a mode change re-rims every live actor instead of waiting for respawns.
+  ctx.teamColors = ctx.teamColors || (() => {
+    const h = globalThis.__BR_SETTINGS__;
+    return h && h.teamColors ? h.teamColors() : null;
+  });
+  if (ctx.onChange) ctx.onChange("colorblind", () => {
+    const cb = ctx.teamColors();
+    for (const rec of actors.values()) {
+      const a = rec && rec.actor;
+      if (a && a._rimSide) a.setRim(cb ? cb[a._rimSide] : a._rimAuthored, 0.4);
+    }
+  });
   const pendingSpawns = [];       // spawn events that arrived before protos
   const protos = {};              // bodyName -> proto
   const wpnProtos = {};           // kind -> Group proto
@@ -255,7 +269,11 @@ export function createSoldiers(ctx) {
         const rimHex = friendly
           ? ((twoTeams && ms.teams[0] && ms.teams[0].tint) || "#d9a441")   // AMBER
           : ((twoTeams && ms.teams[1] && ms.teams[1].tint) || "#7c9fd0"); // SLATE
-        actor.setRim(rimHex, 0.4);
+        // [lane settings] colour-blind palette overrides the authored pair
+        const cb = ctx.teamColors ? ctx.teamColors() : null;
+        actor._rimSide = friendly ? "friend" : "enemy";
+        actor._rimAuthored = rimHex;
+        actor.setRim(cb ? cb[actor._rimSide] : rimHex, 0.4);
       }
     }
     // Resolve the gun model from the bot's LIVE weapon, falling back to the

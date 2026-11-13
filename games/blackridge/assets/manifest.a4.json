@@ -37,6 +37,13 @@
       "kind": "generated",
       "license": "Original (Meshy, owner account; base wpn_shotgun.glb per games/last-circle/CREDITS.md) + authored dressing",
       "source": "tools/a4_build_fp_weapons.py"
+    },
+    {
+      "path": "assets/weapons/attachments.glb",
+      "bytes": 351644,
+      "kind": "generated",
+      "license": "Original (authored procedural hard-surface parts)",
+      "source": "tools/a5_build_guns.py -- attachments (gunsmith: optics, muzzle devices, grips, lasers, tube extension; geometry only, materials bound to the host gun at runtime; loaded on demand in class matches)"
     }
   ]
 }

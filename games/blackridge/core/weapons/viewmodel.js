@@ -60,7 +60,7 @@
 
 import * as THREE from "three";
 import { WEAPONS, SWAY, VIEWMODEL, FEEL, SLOT_ORDER } from "./weapon_data.js";
-import { loadWeaponGLB, loadedPrototypes, loadAllWeapons, invalidateWeapon } from "./weapon_meshes.js";
+import { loadWeaponGLB, loadedPrototypes, loadAllWeapons, invalidateWeapon, applyGunsmith } from "./weapon_meshes.js";
 // The SAME stride model the footsteps run on (player.js §1.6).
 import { strideLength } from "../sim/player.js";
 
@@ -638,6 +638,47 @@ export function createViewmodel(ctx) {
   }
   warmAllWhenReady();
 
+  // ---- gunsmith ---------------------------------------------------------------
+  // The player's class build for the gun on screen: geometry + camo on the shared
+  // prototype (weapon_meshes.applyGunsmith) and `current.w` = the EFFECTIVE table the
+  // sim fires (sim.weaponOf: adsTime, adsFov, recoil, scope flag) with the ADS pose
+  // re-aimed at the fitted optic's sight line (posAds.y = -sightY, the same
+  // by-construction alignment rule every factory sight uses). Re-fitted when the
+  // weapon, the prototype or the kit object changes (a respawn re-kits = new object);
+  // a body without a build gets the factory gun back (prototypes are shared).
+  let gsKit, gsGroup = null, gsId = null;
+  function gsSync(sim, p) {
+    const kit = (p && p.kit) || null;
+    if (kit === gsKit && current.group === gsGroup && current.id === gsId) return;
+    const id = current.id;
+    const b = kit && kit.builds ? kit.builds[id] || null : null;
+    const info = applyGunsmith(current.group, id, b);
+    if (!info) return;                  // attachments.glb still streaming: try next frame
+    gsKit = kit; gsGroup = current.group; gsId = id;
+    const eff = (sim && sim.weaponOf && p ? sim.weaponOf(p, id) : null) || WEAPONS[id] || null;
+    if (eff && info.sightY != null && eff.view && eff.view.posAds) {
+      const v = Object.assign({}, eff.view, { sightY: info.sightY,
+        posAds: [eff.view.posAds[0], -info.sightY, eff.view.posAds[2]] });
+      current.w = Object.assign({}, eff, { view: v });
+    } else {
+      current.w = eff;
+    }
+    current.gs = info;
+  }
+  // one live viewmodel per page: input.js / recoil.js read the fitted table through
+  // this global (a bare module import would instantiate a second copy — see recoil.js)
+  try {
+    globalThis.__BR_GUNSMITH__ = {
+      weapon(id) {
+        if (current && current.id === id && current.w) return current.w;
+        const sim = ctx.sim && ctx.sim();
+        const p = sim && sim.state && sim.state.player;
+        return sim && sim.weaponOf && p ? sim.weaponOf(p, id) : null;
+      },
+      get fitted() { return current ? { id: current.id, gs: current.gs || null, w: current.w } : null; },
+    };
+  } catch (e) { /* headless */ }
+
   // ---- equip ----------------------------------------------------------------
   function installProto(weaponId, proto) {
     if (current && current.group && current.group.parent === mount) {
@@ -646,6 +687,7 @@ export function createViewmodel(ctx) {
     setLayersDeep(proto);
     mount.add(proto);
     current = { id: weaponId, w: WEAPONS[weaponId] || null, group: proto };
+    gsKit = undefined; // [gunsmith] re-fit the build on the next update
     // arms/parts back to their authored rest (a cached prototype may have been
     // left mid-animation by the previous equip)
     resetParts(proto);
@@ -695,7 +737,7 @@ export function createViewmodel(ctx) {
   }
 
   function kick(weaponId) {
-    const w = WEAPONS[weaponId];
+    const w = (current && current.id === weaponId && current.w) || WEAPONS[weaponId]; // [gunsmith] fitted build
     if (!w || !w.recoil) return;
     let n = 1;
     // Dedup impactOnly/pen replays AND multi-pellet volleys via the fire-time-only
@@ -1267,6 +1309,7 @@ export function createViewmodel(ctx) {
         equip(wantId).then(() => { swapPending = null; });
       }
     }
+    if (current) gsSync(sim, p); // [gunsmith] fit the player's build (attachments, camo) to the gun on screen
     const w = current && current.w;
     const wp = wp0;
 
@@ -1452,6 +1495,9 @@ export function createViewmodel(ctx) {
       if (adsFull && w) {
         const id = current.id;
         let amp = (SWAY.adsAmpDeg[id] != null ? SWAY.adsAmpDeg[id] : 0.03) * DEG;
+        // [gunsmith] sway belongs to the OPTIC: a magnified scope on any gun fights the
+        // scope wobble, a 1x dot on the DMR holds like a rifle (factory guns unchanged)
+        amp = isScoped ? Math.max(amp, 0.12 * DEG) : Math.min(amp, 0.035 * DEG);
         const movingMult = isScoped ? (SWAY.scopedMovingMult || SWAY.corvusMovingMult) : SWAY.movingMult;
         if (speedNorm > 0.03) amp *= movingMult;
         // settle: ×2 → ×1 over FEEL.adsSettleS after ADS completes
@@ -1520,7 +1566,7 @@ export function createViewmodel(ctx) {
       // camera shake (see SHAKE): sum-of-sines noise, three incommensurate rates
       trauma = Math.max(0, trauma - SHAKE.decay * dt);
       shakeT += dt;
-      const tt = trauma * trauma;
+      const tt = trauma * trauma * (S && S.shake != null ? S.shake : 1); // [lane settings] camera-shake scale
       let shP = 0, shY = 0, shR = 0;
       if (tt > 1e-5) {
         const w = shakeT * SHAKE.hz;
@@ -1567,7 +1613,7 @@ export function createViewmodel(ctx) {
       const halfAim = Math.tan(0.5 * DEG * Math.max(1, fovAim));
       const magWorld = Math.max(1e-3, halfBase / Math.max(1e-6, halfAim));
       const magVm = share === 0 ? 1 : Math.pow(magWorld, share);
-      const vmFov = 2 * Math.atan(Math.tan(0.5 * DEG * VIEWMODEL.fovDeg) / magVm) / DEG;
+      const vmFov = 2 * Math.atan(Math.tan(0.5 * DEG * (VIEWMODEL.fovDeg + ((S && S.vmFovAdj) || 0))) / magVm) / DEG; // [lane settings] weapon FOV adj
       if (Math.abs(vmCamera.fov - vmFov) > 0.01) {
         vmCamera.fov = vmFov;
         vmCamera.updateProjectionMatrix();

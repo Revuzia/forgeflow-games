@@ -5,10 +5,13 @@
 // rules the sim enforces.
 //
 // A CLASS (what the player saves/edits):
-//   { name, primary, secondary, lethal, tactical, perks:[tier1, tier2, tier3] }
+//   { name, primary, secondary, lethal, tactical, perks:[tier1, tier2, tier3],
+//     builds: { <weaponId>: { attach:[ids], camo } } }   (gunsmith, attachments.js;
+//   optional — a class without `builds` runs every gun exactly as weapon_data ships it)
 // A KIT (what a body spawns with — a class resolved against the weapons table
 // and the unlock gate):
-//   { classId, name, primary, secondary, lethal, lethalCount, tactical, tacticalCount, perks:[...] }
+//   { classId, name, primary, secondary, lethal, lethalCount, tactical, tacticalCount, perks:[...],
+//     builds: { <primary>: {attach, camo}, <secondary>: {attach, camo} } }  (locks applied)
 // A body that spawned from a kit carries `body.kit` and `body.perks` ({id:true}
 // map — JSON-safe for snapshots). Bodies without `perks` (campaign, pistol-start
 // playlist, every pre-existing selftest) get no perk effect anywhere: every perk
@@ -18,6 +21,8 @@
 // too, chosen deterministically from (match seed, actorId, archetype) by an
 // integer hash — no shared rng stream is consumed, so turning classes on never
 // shifts any other draw in the match.
+
+import { validateBuild, gateBuild, opponentBuild } from "./attachments.js";
 
 // ------------------------------------------------------------------ weapons
 // Fixed choice lists. Ids only — display names come from weapon_data.js in the
@@ -128,7 +133,21 @@ export function validateClass(c, index) {
     fixed++;
     return def.perks[ti];
   });
-  return { cls: { name, primary, secondary, lethal, tactical, perks }, fixed };
+  // GUNSMITH builds, kept per weapon id (switching the primary away and back keeps
+  // its build). Absent = none, and NOT a repair: every pre-gunsmith record is legal.
+  const builds = {};
+  if (src.builds != null) {
+    if (typeof src.builds !== "object" || Array.isArray(src.builds)) fixed++;
+    else {
+      for (const wid of Object.keys(src.builds)) {
+        if (PRIMARIES.indexOf(wid) < 0 && SECONDARIES.indexOf(wid) < 0) { fixed++; continue; }
+        const r = validateBuild(wid, src.builds[wid]);
+        fixed += r.fixed;
+        if (r.build.attach.length || r.build.camo) builds[wid] = r.build;
+      }
+    }
+  }
+  return { cls: { name, primary, secondary, lethal, tactical, perks, builds }, fixed };
 }
 
 // Resolve a class into the kit a body spawns with. `isUnlocked(key)` is the
@@ -158,6 +177,13 @@ export function resolveKit(cls, opts) {
     for (const x of PERKS_BY_TIER[ti]) if (ok("perk:" + x)) return x;
     return null;
   });
+  // gunsmith: only the kit's two guns, locked attachments / camo dropped
+  const builds = {};
+  for (const wid of [primary, secondary]) {
+    if (!wid || !v.builds[wid]) continue;
+    const g = gateBuild(wid, v.builds[wid], ok);
+    if (g.attach.length || g.camo) builds[wid] = g;
+  }
   return {
     classId: o.classId != null ? o.classId : null,
     name: v.name,
@@ -166,6 +192,7 @@ export function resolveKit(cls, opts) {
     tactical,
     tacticalCount: tactical ? TACTICALS[tactical].count : 0,
     perks,
+    builds,
   };
 }
 
@@ -211,10 +238,18 @@ export function opponentClass(seed, actorId, archetype) {
   const h0 = hash32(seed, actorId, 1);
   const shape = pool[h0 % pool.length];
   const perks = PERKS_BY_TIER.map((ids, ti) => ids[hash32(seed, actorId, 11 + ti) % ids.length]);
+  // [integration v147] one in three operators hidden made the Signal Sweep feel broken
+  if (perks[1] === "ghost" && (hash32(seed, actorId, 31) & 1)) perks[1] = "fastHands";
   const tacs = ROLE_TACTICAL[role];
   const tactical = tacs[hash32(seed, actorId, 22) % tacs.length];
   const lethal = (hash32(seed, actorId, 21) % 100) < ROLE_MINE_PCT[role] ? "claymore" : "frag";
-  return { name: shape.name, primary: shape.primary, secondary: "pike", lethal, tactical, perks };
+  // gunsmith: operators run plausible builds too (same hash, no rng stream)
+  const builds = {};
+  const bp = opponentBuild(hash32, seed, actorId, shape.primary, role, 0);
+  if (bp.attach.length || bp.camo) builds[shape.primary] = bp;
+  const bs = opponentBuild(hash32, seed, actorId, "pike", role, 1);
+  if (bs.attach.length || bs.camo) builds.pike = bs;
+  return { name: shape.name, primary: shape.primary, secondary: "pike", lethal, tactical, perks, builds };
 }
 
 // Integer index of a fixed STREAK threshold after perks.

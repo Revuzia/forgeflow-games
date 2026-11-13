@@ -127,6 +127,43 @@ async function main() {
   ok(prog.weaponLevel("corvus") === P.weaponLevelForXp(1000) && prog.weaponLevel("corvus") >= 3, "10 corvus kills -> weapon level " + prog.weaponLevel("corvus"));
   ok(events.some((e) => e.type === "weaponlevel" && e.weapon === "corvus" && e.unlocks.indexOf("attach:corvus:reddot") >= 0), "weapon level 2 announces its red-dot unlock");
 
+  console.log("== medal XP cap (per match) ==");
+  match = { sameTeam: (a, b) => b === 99 };
+  ok(P.XP.medalMatchCap === 1500, "medal cap is 1,500 XP per match");
+  fire("match:start", { mode: "tdm" });
+  const m0 = prog.xp();
+  // an ordinary strong match: first blood, 2 longshots, revenge, 3 doubles, a triple, a quad
+  for (const tx of ["FIRST BLOOD", "LONGSHOT", "LONGSHOT", "REVENGE", "DOUBLE KILL", "DOUBLE KILL", "DOUBLE KILL", "TRIPLE KILL", "QUAD KILL"]) fire("medal", { text: tx });
+  const normal = 100 + 50 + 50 + 50 + 150 + 100 + 150;
+  ok(prog.xp() - m0 === normal && normal < P.XP.medalMatchCap, "a strong ordinary match is untouched (+" + normal + ")");
+  // a chained multi-kill run: x5..x30 would pay 26 x 200 = 5,200 uncapped
+  for (let n = 5; n <= 30; n++) fire("medal", { text: "MULTI KILL x" + n });
+  ok(prog.xp() - m0 === P.XP.medalMatchCap && prog.medalXpThisMatch === P.XP.medalMatchCap, "chained multi-kill medals stop paying at the cap (+" + (prog.xp() - m0) + ")");
+  const evBefore = events.length;
+  fire("medal", { text: "FIRST BLOOD" });
+  ok(prog.xp() - m0 === P.XP.medalMatchCap && events.length === evBefore, "past the cap: no XP and no feed tick");
+  fire("mission:end", { result: "won", match: { modeId: "tdm", result: "win", winnerTeam: 0, actors: [] } });
+  ok(prog.lastReport.highlights.medals.length === 9 + 26 + 1, "capped medals still count in the report highlights");
+  const medCat = prog.lastReport.cats.find((c) => c.cat === "medal");
+  ok(medCat && medCat.xp === P.XP.medalMatchCap, "report medal category = the cap");
+  fire("match:start", { mode: "tdm" });
+  const m1 = prog.xp();
+  fire("medal", { text: "TRIPLE KILL" });
+  ok(prog.xp() - m1 === 100, "the cap resets with the next match");
+  fire("mission:end", { result: "lost", match: { modeId: "tdm", result: "forfeit", actors: [] } });
+
+  console.log("== session-end hook ==");
+  let hookSaw = null;
+  const offHook = prog.onSessionEnd((d, result) => { hookSaw = { d, result, ended: prog.lastReport }; prog.award("challenge", 1000, "Daily: test"); });
+  fire("match:start", { mode: "tdm" });
+  const rp0 = prog.lastReport;
+  fire("mission:end", { result: "won", match: { modeId: "tdm", result: "win", winnerTeam: 0, actors: [] } });
+  ok(hookSaw && hookSaw.result === "won" && hookSaw.ended === rp0, "onSessionEnd runs before the report is built");
+  const chCat = prog.lastReport.cats.find((c) => c.cat === "challenge");
+  ok(chCat && chCat.xp === 1000 && chCat.label === "Challenges", "XP awarded in the hook lands in this match's report as 'Challenges'");
+  offHook();
+  match = null;
+
   console.log("== unlock queries ==");
   const q = P.createProgression({}, { storage: memStorage() });
   ok(q.isUnlocked("weapon:warden") && q.isUnlocked("weapon:pike"), "AR + pistol unlocked at level 1");

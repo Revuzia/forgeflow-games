@@ -149,6 +149,9 @@ export const WEAPONS = {
     switchS: 0.40, raiseS: 0.40, holsterS: 0.28,
     sprintOutMs: 160, tacSprintOutMs: 240,
     muzzleVel: 999, tracerEvery: 2, // "hitscan" CQB; §3.1: 1-in-2
+    // [gunsmith] the integral can, exposed as data (shot events carry `suppressed`;
+    // sfx/muzzle read it). A COMPENSATOR build replaces the can (attachments.js).
+    suppressed: true,
     penetration: { classes: ["soft"], retain: 0.45, maxThickM: 0.15 },
     view: {
       glb: "assets/weapons/vesper.glb",

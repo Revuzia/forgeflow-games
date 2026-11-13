@@ -630,12 +630,15 @@ export function createWeather(ctx) {
   // ------------------------------------------------------------ quality tier
   function applyQuality(q) {
     const preset = QUALITY_PRESETS[q] || QUALITY_PRESETS.med;
-    rain.geometry.instanceCount = Math.min(RAIN_MAX, preset.rainCount);
-    splash.geometry.instanceCount = Math.min(SPLASH_MAX, preset.splashCount);
+    // [lane settings] rain density slider: × the preset's counts (1 = preset)
+    const dens = Math.max(0, Math.min(1, Number(ctx.settings.rainDensity ?? 1)));
+    rain.geometry.instanceCount = Math.round(Math.min(RAIN_MAX, preset.rainCount) * dens);
+    splash.geometry.instanceCount = Math.round(Math.min(SPLASH_MAX, preset.splashCount) * dens);
     crown.geometry.instanceCount = splash.geometry.instanceCount;
   }
   applyQuality(ctx.settings.quality);
   ctx.onChange("quality", (q) => applyQuality(q));
+  ctx.onChange("rainDensity", () => applyQuality(ctx.settings.quality)); // [lane settings]
 
   // ------------------------------------------------------------------ update
   let t = 0;

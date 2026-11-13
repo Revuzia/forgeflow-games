@@ -690,7 +690,7 @@ export function makeSfx(env) {
       dist = Math.hypot(origin[0] - c[0], (origin[1] || 0) - c[1], origin[2] - c[2]);
       if (!Number.isFinite(dist) || dist > 300) return;
     }
-    const suppressed = w === "vesper";
+    const suppressed = !!d.suppressed; // [gunsmith] sim shot-event flag (Vesper's can, or a fitted suppressor)
     if (suppressed && !own && dist > SUP_MAX_M) return;
     // voice budget: under load distant fire is dropped first, never the player's
     // and never a shooter close enough to matter

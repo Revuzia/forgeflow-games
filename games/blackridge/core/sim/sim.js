@@ -37,6 +37,7 @@ import { makeLoot } from "./loot.js";
 import { makeStreaks } from "./streaks.js";
 import { resolveKit, perkMap, opponentClass, DEFAULT_CLASSES } from "./classes.js";
 import { perksOnDeath } from "./perks.js";
+import { weaponForBody } from "./attachments.js"; // [gunsmith] per-body effective weapon tables
 // [equipment lane] tactical + lethal equipment (flash/smoke/stun/tripmine)
 import { stepEquipment, equipOnShot, equipOnDeath, resetStatus as resetEquipStatus } from "./equipment.js";
 
@@ -105,7 +106,9 @@ export function createSim(opts = {}) {
   };
   const kitSlots = classes.playerKit ? [classes.playerKit.primary, classes.playerKit.secondary].filter(Boolean) : null;
   const primary = kitSlots && kitSlots.length ? kitSlots[0] : loadoutSlots[0];
-  const wTable = weapons[primary] || { mag: 30, reserve: 120 };
+  // [gunsmith] the kit's build (extended mag) sizes the starting ammo
+  const kitBody = classes.playerKit ? { kit: classes.playerKit } : null;
+  const wTable = weaponForBody(weapons, kitBody, primary) || { mag: 30, reserve: 120 };
 
   const state = {
     tick: 0,
@@ -148,7 +151,7 @@ export function createSim(opts = {}) {
   state.player._slotAmmo = {};
   for (const id of state.player.slots) {
     if (!id) continue;
-    const wt = weapons[id];
+    const wt = weaponForBody(weapons, kitBody, id); // [gunsmith]
     state.player._slotAmmo[id] = { mag: wt ? wt.mag : 0, reserve: wt ? wt.reserve : 0 };
   }
   if (classes.playerKit) {
@@ -161,13 +164,14 @@ export function createSim(opts = {}) {
   function applyKit(body, kit) {
     const ids = [kit.primary, kit.secondary].filter((id) => id && weapons[id]);
     const first = ids[0] || loadoutSlots[0];
-    const wt = weapons[first] || { mag: 30, reserve: 120 };
+    const kb = { kit }; // [gunsmith] ammo sized by the kit's build
+    const wt = weaponForBody(weapons, kb, first) || { mag: 30, reserve: 120 };
     body.slots = slotsFromList(ids.length ? ids : [first]);
     body._lastWeapon = null;
     body._slotAmmo = {};
     for (const sId of body.slots) {
       if (!sId) continue;
-      const t2 = weapons[sId];
+      const t2 = weaponForBody(weapons, kb, sId); // [gunsmith]
       if (t2) body._slotAmmo[sId] = { mag: t2.mag, reserve: t2.reserve };
     }
     const w = body.weapon;
@@ -336,7 +340,7 @@ export function createSim(opts = {}) {
       const startWeapon = kit ? null : (mode && pvpLoadout && pvpLoadout.slots && pvpLoadout.slots[0]) || null;
       const weaponId = (kit && weapons[kit.primary] && kit.primary) || startWeapon ||
         (arch ? arch.weapon : (weapons.warden ? "warden" : Object.keys(weapons)[0]));
-      const wt = weapons[weaponId] || { mag: 30, reserve: 90 };
+      const wt = weaponForBody(weapons, kit ? { kit } : null, weaponId) || { mag: 30, reserve: 90 }; // [gunsmith]
       const bot = {
         id,
         archetype: spec.archetype,
@@ -445,6 +449,9 @@ export function createSim(opts = {}) {
 
     // ---- loadout classes (class matches only; inert otherwise)
     classes,
+    /** [gunsmith] the weapon table `body` actually fires for `id` (its kit's
+     *  build folded in; the shared table itself for every body without one). */
+    weaponOf(body, id) { return weaponForBody(weapons, body, id); },
     /** Choose the human's class. Takes effect on the NEXT respawn (the CoD
      *  rule), or right now with {immediate:true} — the match-start picker uses
      *  that during warm-up, before a shot can be fired. `cls` is a saved class
