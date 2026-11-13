@@ -875,6 +875,7 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
     staticFor = rec.staticRef ? t - rec.staticSinceT : 0;
   }
   if (hasFire && !brain.gPlanned && !(obj && obj.noGrenade) &&
+      (bot.grenades == null || bot.grenades > 0) && // class kit lethal count (class matches only)
       t >= brain.grenBlockUntil &&
       squad.grenadeReady(bot.id, t) &&
       sim.internal.grenades.length === 0 &&
@@ -1395,6 +1396,7 @@ function act(sim, nav, squad, bot, dt, t) {
         const v = GRENADE.BOT_THROW_V;
         const vel = [-Math.sin(yaw) * cp * v, sp * v, -Math.cos(yaw) * cp * v];
         spawnGrenade(sim, bot.id, org, vel); // 3.8 s fuse from release
+        if (bot.grenades != null) bot.grenades = Math.max(0, bot.grenades - 1); // class kit count
         squad.noteGrenade(bot.id, t, band.grenCdS);
       }
     }

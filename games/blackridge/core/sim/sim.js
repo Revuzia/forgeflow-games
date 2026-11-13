@@ -35,6 +35,8 @@ import { makeSquad } from "../ai/squad.js";
 import { slotsFromList, grant as grantWeapon } from "./loadout.js";
 import { makeLoot } from "./loot.js";
 import { makeStreaks } from "./streaks.js";
+import { resolveKit, perkMap, opponentClass, DEFAULT_CLASSES } from "./classes.js";
+import { perksOnDeath } from "./perks.js";
 
 const DT = 1 / 60;
 
@@ -82,7 +84,25 @@ export function createSim(opts = {}) {
   const loadoutSlots = (mode && pvpLoadout && pvpLoadout.slots)
     || (content && content.mission && content.mission.loadout && content.mission.loadout.slots)
     || ["warden", "pike"];
-  const primary = loadoutSlots[0];
+  // LOADOUT CLASSES (core/sim/classes.js). A PVP sim spawns every combatant
+  // from a CLASS kit (primary + secondary + lethal + three perks) when the
+  // match asks for it — opts.classes, else content.pvpClassSelected (the
+  // mode-select screen writes it, same ctx.content channel as the campaign's
+  // difficultySelected). Absent, or {enabled:false} (the PISTOL START
+  // playlist), keeps the pistol-start-and-scavenge rule above byte-for-byte —
+  // every headless selftest and the campaign take that path.
+  const classCfg = mode ? (opts.classes || (content && content.pvpClassSelected) || null) : null;
+  const classesOn = !!(classCfg && classCfg.enabled !== false);
+  const classes = {
+    on: classesOn,
+    seed: (seed >>> 0),
+    playerKit: classesOn
+      ? resolveKit((classCfg && classCfg.player) || DEFAULT_CLASSES[0], { weapons, classId: classCfg && classCfg.classId != null ? classCfg.classId : 0 })
+      : null,
+    pendingKit: null, // takes effect at the next respawn (sim.setPlayerClass)
+  };
+  const kitSlots = classes.playerKit ? [classes.playerKit.primary, classes.playerKit.secondary].filter(Boolean) : null;
+  const primary = kitSlots && kitSlots.length ? kitSlots[0] : loadoutSlots[0];
   const wTable = weapons[primary] || { mag: 30, reserve: 120 };
 
   const state = {
@@ -104,9 +124,10 @@ export function createSim(opts = {}) {
         id: primary, mag: wTable.mag, reserve: wTable.reserve, state: "idle",
         ads: false, adsT: 0, recoilIndex: 0, stateT: 0,
       },
-      slots: slotsFromList(loadoutSlots),
+      slots: slotsFromList(kitSlots || loadoutSlots),
       speedNorm: 0,
-      grenades: (content && content.mission && content.mission.loadout && content.mission.loadout.grenades) || tun.grenades,
+      grenades: classes.playerKit ? classes.playerKit.lethalCount
+        : (content && content.mission && content.mission.loadout && content.mission.loadout.grenades) || tun.grenades,
       lastDamageT: -999,
       _slotAmmo: null,
       _m: null,
@@ -125,6 +146,33 @@ export function createSim(opts = {}) {
     if (!id) continue;
     const wt = weapons[id];
     state.player._slotAmmo[id] = { mag: wt ? wt.mag : 0, reserve: wt ? wt.reserve : 0 };
+  }
+  if (classes.playerKit) {
+    state.player.kit = Object.assign({}, classes.playerKit);
+    state.player.perks = perkMap(classes.playerKit);
+  }
+
+  // Put a resolved kit on a body (player or bot): fixed-slot weapons with full
+  // ammo, the primary in hand, lethal count, perk map.
+  function applyKit(body, kit) {
+    const ids = [kit.primary, kit.secondary].filter((id) => id && weapons[id]);
+    const first = ids[0] || loadoutSlots[0];
+    const wt = weapons[first] || { mag: 30, reserve: 120 };
+    body.slots = slotsFromList(ids.length ? ids : [first]);
+    body._lastWeapon = null;
+    body._slotAmmo = {};
+    for (const sId of body.slots) {
+      if (!sId) continue;
+      const t2 = weapons[sId];
+      if (t2) body._slotAmmo[sId] = { mag: t2.mag, reserve: t2.reserve };
+    }
+    const w = body.weapon;
+    w.id = first; w.mag = wt.mag; w.reserve = wt.reserve;
+    w.state = "idle"; w.stateT = 0; w.ads = false; w.adsT = 0;
+    w.recoilIndex = 0; w._shotCount = 0; w._reloadCommitted = false;
+    body.grenades = kit.lethalCount | 0;
+    body.kit = Object.assign({}, kit);
+    body.perks = perkMap(kit);
   }
 
   let nextBotId = 1;
@@ -159,6 +207,7 @@ export function createSim(opts = {}) {
       if (type === "death" && data) {
         if (sim.loot) sim.loot.onDeath(sim, data);
         if (sim.streaks) sim.streaks.onDeath(sim, data);
+        if (classes.on) perksOnDeath(sim, data); // SALVAGER resupply (class matches only)
       }
       emit(type, data);
     },
@@ -271,8 +320,13 @@ export function createSim(opts = {}) {
       // difficulty setting, it is an unwinnable match. The archetype still
       // drives BEHAVIOUR (rifleman/cqb/marksman positioning) — only the starting
       // gun is equalised, and bots pick up racks by walkover like anyone else.
-      const startWeapon = (mode && pvpLoadout && pvpLoadout.slots && pvpLoadout.slots[0]) || null;
-      const weaponId = startWeapon || (arch ? arch.weapon : (weapons.warden ? "warden" : Object.keys(weapons)[0]));
+      // CLASS MATCH: the operator's class kit (sim.kitForActor, passed in by
+      // match.js spawnActor) replaces the pistol start — same symmetry, every
+      // combatant spawns armed from a class.
+      const kit = classes.on && spec.kit ? spec.kit : null;
+      const startWeapon = kit ? null : (mode && pvpLoadout && pvpLoadout.slots && pvpLoadout.slots[0]) || null;
+      const weaponId = (kit && weapons[kit.primary] && kit.primary) || startWeapon ||
+        (arch ? arch.weapon : (weapons.warden ? "warden" : Object.keys(weapons)[0]));
       const wt = weapons[weaponId] || { mag: 30, reserve: 90 };
       const bot = {
         id,
@@ -312,6 +366,7 @@ export function createSim(opts = {}) {
         slots: slotsFromList([startWeapon || weaponId]),
         _slotAmmo: { [startWeapon || weaponId]: { mag: wt.mag, reserve: wt.reserve } },
       };
+      if (kit) applyKit(bot, kit);
       state.bots.push(bot);
       sim.emit("spawn", { botId: id, archetype: bot.archetype, pos: bot.pos.slice(), yaw: bot.yaw });
       return id;
@@ -356,6 +411,12 @@ export function createSim(opts = {}) {
      *  weapon does not persist across lives. */
     resetBodyLoadout(body) {
       if (!body) return;
+      if (classes.on && body === state.player) {
+        // a class picked while dead (or mid-life) lands here, on the respawn
+        if (classes.pendingKit) { classes.playerKit = classes.pendingKit; classes.pendingKit = null; }
+        applyKit(body, classes.playerKit);
+        return;
+      }
       const id = loadoutSlots[0];
       const wt = weapons[id] || { mag: 30, reserve: 120 };
       body.slots = slotsFromList(loadoutSlots);
@@ -370,6 +431,31 @@ export function createSim(opts = {}) {
       w.id = id; w.mag = wt.mag; w.reserve = wt.reserve;
       w.state = "idle"; w.stateT = 0; w.ads = false; w.adsT = 0;
       w.recoilIndex = 0; w._shotCount = 0;
+    },
+
+    // ---- loadout classes (class matches only; inert otherwise)
+    classes,
+    /** Choose the human's class. Takes effect on the NEXT respawn (the CoD
+     *  rule), or right now with {immediate:true} — the match-start picker uses
+     *  that during warm-up, before a shot can be fired. `cls` is a saved class
+     *  ({name, primary, secondary, lethal, perks}); it is validated + resolved
+     *  here, so a malformed one can never put an illegal kit in the sim.
+     *  Returns the resolved kit, or null when this sim is not a class match. */
+    setPlayerClass(cls, o = {}) {
+      if (!classes.on) return null;
+      const kit = resolveKit(cls, { weapons, classId: o.classId != null ? o.classId : null, index: o.classId | 0 });
+      if (o.immediate && state.player.alive) {
+        classes.playerKit = kit; classes.pendingKit = null;
+        applyKit(state.player, kit);
+      } else {
+        classes.pendingKit = kit;
+      }
+      return kit;
+    },
+    /** Kit for a non-human roster actor (match.js spawnActor), or null. */
+    kitForActor(actor) {
+      if (!classes.on || !actor) return null;
+      return resolveKit(opponentClass(classes.seed, actor.actorId | 0, actor.archetype), { weapons, classId: "op" });
     },
 
     /**

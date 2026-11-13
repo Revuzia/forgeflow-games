@@ -215,6 +215,8 @@ export function createScoreboard(ctx) {
     st.autoAt = Date.now() + 20000;
     if (st.autoIv) clearInterval(st.autoIv);
     st.autoIv = setInterval(() => {
+      // [progression] the after-action report sits over the board: hold the clock
+      if (shell.afterAction && shell.afterAction.open) { st.autoAt = Date.now() + 20000; autoEl.textContent = ""; return; }
       const left = Math.ceil((st.autoAt - Date.now()) / 1000);
       if (left <= 0) { exitTo("modeselect"); return; }
       autoEl.textContent = `MODE SELECT IN ${left}`;
@@ -222,9 +224,12 @@ export function createScoreboard(ctx) {
     const bump = () => { st.autoAt = Date.now() + 20000; };
     root.addEventListener("pointermove", bump);
     root.addEventListener("keydown", bump);
+    // [progression] XP / level / unlock report first; CONTINUE reveals this board
+    if (shell.afterAction && shell.afterAction.showPending) shell.afterAction.showPending(bump);
   }
 
   function closeBoard() {
+    if (shell.afterAction && shell.afterAction.open) shell.afterAction.close(false); // [progression]
     st.end = false;
     st.held = false;
     root.classList.remove("end");

@@ -57,6 +57,41 @@ const ROWS = [
   { key: "music", label: "Music volume", kind: "range", min: 0, max: 1, step: 0.05, fmt: PCT },
   { key: "sfx", label: "SFX volume", kind: "range", min: 0, max: 1, step: 0.05, fmt: PCT },
   { key: "ambience", label: "Ambience volume", kind: "range", min: 0, max: 1, step: 0.05, fmt: PCT },
+  // ---- lane PAD (2026-11): look options shared by every device, then the
+  // controller block, then keyboard rebinding. Ranges transcribe settings.js.
+  { kind: "section", label: "Look & aim assist" },
+  { key: "invertY", label: "Invert look Y", kind: "seg", options: ["off", "on"] },
+  { key: "aimAssist", label: "Aim assist", kind: "seg", options: ["off", "standard", "focused"],
+    hint: (v) => v === "off" ? "no assistance" : v === "focused"
+      ? "stronger slowdown + tracking · controller & touch only"
+      : "slowdown near targets + light tracking · controller & touch only" },
+  { kind: "section", label: "Controller" },
+  { key: "padSensX", label: "Look sensitivity · horizontal", kind: "range", min: 0.2, max: 3.0, step: 0.05,
+    fmt: (v) => "×" + Number(v).toFixed(2), hint: (v) => `${Math.round(195 * v)}° per second at full push` },
+  { key: "padSensY", label: "Look sensitivity · vertical", kind: "range", min: 0.2, max: 3.0, step: 0.05,
+    fmt: (v) => "×" + Number(v).toFixed(2), hint: (v) => `${Math.round(137 * v)}° per second at full push` },
+  { key: "padAdsSens", label: "ADS sensitivity · controller", kind: "range", min: 0.2, max: 2.0, step: 0.01,
+    fmt: (v) => "×" + Number(v).toFixed(2),
+    hint: (v) => Math.abs(v - 1) < 0.005 ? "zoom-matched" : (v < 1 ? "slower down the sights" : "faster down the sights") },
+  { key: "padCurve", label: "Response curve", kind: "seg", options: ["linear", "standard", "dynamic"],
+    hint: (v) => v === "linear" ? "stick travel = turn speed" : v === "dynamic"
+      ? "finest near centre, full speed at the rim" : "precise near centre (recommended)" },
+  { key: "padAccel", label: "Look acceleration", kind: "range", min: 0, max: 1, step: 0.05, fmt: PCT,
+    hint: (v) => v <= 0 ? "off" : `up to +${Math.round(80 * v)}% turn speed when held at full push` },
+  { key: "padDeadL", label: "Dead zone · left stick", kind: "range", min: 0, max: 0.4, step: 0.01, fmt: PCT,
+    hint: () => "raise if you drift while not touching the stick" },
+  { key: "padDeadR", label: "Dead zone · right stick", kind: "range", min: 0, max: 0.4, step: 0.01, fmt: PCT,
+    hint: () => "raise if the view creeps on its own" },
+  { key: "padTrigger", label: "Trigger threshold", kind: "range", min: 0.05, max: 0.9, step: 0.05, fmt: PCT,
+    hint: (v) => v <= 0.15 ? "hair trigger" : "how far to pull before fire / aim" },
+  { key: "padSprint", label: "Sprint", kind: "seg", options: ["l3", "auto"],
+    hint: (v) => v === "auto" ? "sprints at full forward push" : "click left stick; stopping or aiming ends it" },
+  { key: "padCrouch", label: "Crouch button", kind: "seg", options: ["toggle", "hold"] },
+  { key: "padRumble", label: "Vibration", kind: "seg", options: ["on", "off"],
+    hint: () => "on fire, hits and explosions" },
+  { kind: "padmap", label: "Controller layout" },
+  { kind: "section", label: "Keyboard" },
+  { kind: "binds", label: "Key bindings" },
 ];
 
 export function createSettingsUI(ctx) {
@@ -89,10 +124,30 @@ export function createSettingsUI(ctx) {
   panel.className = "a10-panel";
   const refs = {}; // key → {valEl, inputEl|btns}
   let html = "";
+  const hintSpan = (key) => `<span class="hint" data-h="${key}" style="font-size:10.5px;letter-spacing:.08em;` +
+    `text-transform:none;color:rgba(232,232,228,.36)"></span>`;
   for (const r of ROWS) {
-    if (r.kind === "seg") {
+    if (r.kind === "section") {
+      html += `<h2 style="margin:26px 0 6px">${r.label}</h2>`;
+    } else if (r.kind === "padmap") {
+      html += `<div class="a10-row" style="align-items:flex-start"><span class="lbl">${r.label}</span>` +
+        `<span data-padmap style="font-size:11px;letter-spacing:.06em;line-height:1.65;text-align:right;` +
+        `color:rgba(232,232,228,.62);text-transform:none"></span></div>`;
+    } else if (r.kind === "binds") {
+      const acts = (ctx.input && ctx.input.keyActions) || [];
+      html += acts.map(([a, , lbl]) =>
+        `<div class="a10-row"><span class="lbl">${lbl}</span>` +
+        `<span class="a10-seg"><button data-bind="${a}" style="min-width:92px"></button></span></div>`).join("");
+      if (acts.length) {
+        html += `<div class="a10-row"><span class="lbl">${r.label}</span>` +
+          `<span class="a10-seg"><button data-bindreset="1">reset to default</button></span></div>`;
+      }
+    } else if (r.kind === "seg") {
+      const lbl = r.hint
+        ? `<span style="display:flex;flex-direction:column;gap:4px"><span class="lbl">${r.label}</span>${hintSpan(r.key)}</span>`
+        : `<span class="lbl">${r.label}</span>`;
       html +=
-        `<div class="a10-row"><span class="lbl">${r.label}</span>` +
+        `<div class="a10-row">${lbl}` +
         `<span class="a10-seg" data-k="${r.key}">` +
         r.options.map((o) => `<button data-o="${o}">${o}</button>`).join("") +
         `</span></div>`;
@@ -117,9 +172,11 @@ export function createSettingsUI(ctx) {
   root.appendChild(panel);
   document.body.appendChild(root);
 
-  for (const r of ROWS) {
+  const VALUE_ROWS = ROWS.filter((r) => r.key);
+  for (const r of VALUE_ROWS) {
     if (r.kind === "seg") {
-      refs[r.key] = { btns: Array.from(panel.querySelectorAll(`.a10-seg[data-k="${r.key}"] button`)) };
+      refs[r.key] = { btns: Array.from(panel.querySelectorAll(`.a10-seg[data-k="${r.key}"] button`)),
+        hintEl: panel.querySelector(`.hint[data-h="${r.key}"]`) };
     } else {
       refs[r.key] = {
         inputEl: panel.querySelector(`input[data-k="${r.key}"]`),
@@ -135,6 +192,7 @@ export function createSettingsUI(ctx) {
     const ref = refs[r.key];
     if (r.kind === "seg") {
       for (const b of ref.btns) b.classList.toggle("on", b.getAttribute("data-o") === v);
+      if (ref.hintEl && r.hint) ref.hintEl.textContent = r.hint(v);
     } else {
       // Don't fight the user's drag: only push when materially different.
       if (Math.abs(Number(ref.inputEl.value) - v) > (r.step || 0.01) / 2) ref.inputEl.value = v;
@@ -142,10 +200,37 @@ export function createSettingsUI(ctx) {
       if (ref.hintEl && r.hint) ref.hintEl.textContent = r.hint(v);
     }
   }
-  function syncAll() { for (const r of ROWS) syncRow(r); }
+  // lane PAD: key-binding buttons + the controller map (glyphs follow the
+  // connected pad's layout — Xbox or PlayStation wording).
+  const bindBtns = Array.from(panel.querySelectorAll("button[data-bind]"));
+  const padMapEl = panel.querySelector("[data-padmap]");
+  let capturing = null;
+  function syncBinds() {
+    const inp = ctx.input;
+    if (!inp || !inp.getBind) return;
+    for (const b of bindBtns) {
+      const a = b.getAttribute("data-bind");
+      b.textContent = capturing === a ? "press a key…" : inp.keyLabel(inp.getBind(a));
+      b.classList.toggle("on", capturing === a);
+    }
+  }
+  const PAD_ROWS = [["fire", "fire"], ["ads", "aim down sights"], ["jump", "jump"], ["crouch", "crouch · slide"],
+    ["reload", "reload (hold: interact)"], ["swap", "swap weapon"], ["grenade", "frag (hold to cook)"],
+    ["sprint", "sprint"], ["streak", "streaks (↑ mortar · → airstrike · ← orbital)"], ["inspect", "inspect"],
+    ["score", "scoreboard"], ["pause", "pause"]];
+  function syncPadMap() {
+    const inp = ctx.input;
+    if (!padMapEl || !inp || !inp.padGlyph) return;
+    padMapEl.innerHTML =
+      (inp.padConnected ? "" : `<span style="opacity:.6">no controller detected — connect one and press any button</span><br>`) +
+      PAD_ROWS.map(([v, t]) => `<b style="color:#e8e8e4;font-weight:400">${inp.padGlyph(v)}</b> ${t}`).join("<br>") +
+      `<br><span style="opacity:.6">R3 reserved for melee</span>`;
+  }
+  function syncAll() { for (const r of VALUE_ROWS) syncRow(r); syncBinds(); syncPadMap(); }
+  window.addEventListener("br:inputdevice", () => { if (visible) syncPadMap(); });
 
   // Mirror external writes (quality presets from code, harness set()s, …).
-  for (const r of ROWS) ctx.onChange(r.key, () => syncRow(r));
+  for (const r of VALUE_ROWS) ctx.onChange(r.key, () => syncRow(r));
 
   // ------------------------------------------------------------------ input
   panel.addEventListener("input", (e) => {
@@ -157,6 +242,16 @@ export function createSettingsUI(ctx) {
   panel.addEventListener("click", (e) => {
     const t = e.target;
     if (!t || !t.getAttribute) return;
+    const bindA = t.getAttribute("data-bind");
+    if (bindA && ctx.input && ctx.input.captureNextKey) {
+      capturing = bindA; syncBinds();
+      ctx.input.captureNextKey((code) => {
+        if (code) ctx.input.rebind(bindA, code);
+        capturing = null; syncBinds();
+      });
+      return;
+    }
+    if (t.getAttribute("data-bindreset") && ctx.input && ctx.input.resetBinds) { ctx.input.resetBinds(); syncBinds(); return; }
     const o = t.getAttribute("data-o");
     if (o == null) return;
     const seg = t.closest(".a10-seg");

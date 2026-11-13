@@ -19,6 +19,7 @@
 
 import { MODES } from "../match/match.js";
 import { loadStats } from "./scoreboard.js";
+import { getLoadoutUI } from "./loadout_ui.js";
 
 const esc = (s) => String(s).replace(/[&<>"]/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -123,12 +124,19 @@ function ensureCardStyle() {
 .w6-stats{font-size:10px;letter-spacing:.18em;opacity:.45;margin:10px 0 0;}
 .w6-err{display:none;color:var(--a10-red,#ff4d4d);font-size:12px;
   letter-spacing:.08em;margin-top:12px;}
+.w6-cls{flex-wrap:wrap;}
+.w6-cls button.edit{border-style:dashed;}
+.w6-kit{font-size:10.5px;letter-spacing:.1em;line-height:1.7;opacity:.7;margin:4px 0 12px;}
 `;
   document.head.appendChild(el);
 }
 
 export function createModeSelect(ctx, cb) {
   ensureCardStyle();
+  // LOADOUT CLASSES: the class store + editor/picker (core/hud/loadout_ui.js).
+  // A failure there must never take the mode-select screen down with it.
+  let lo = null;
+  try { lo = getLoadoutUI(ctx); } catch (e) { console.warn("[mode_select] loadout UI unavailable:", e && e.message); }
 
   const state = {
     mode: "tdm",
@@ -201,6 +209,32 @@ export function createModeSelect(ctx, cb) {
     const maps = ids.map((id) =>
       `<button data-map="${esc(id)}" class="${state.map === id ? "on" : ""}">${esc(mapLabel(id))}</button>`).join("");
 
+    // LOADOUT row: playlist (CLASSES / PISTOL START), the five saved classes,
+    // EDIT CLASSES. Same `.w6-diff` chrome as the map row.
+    let loadoutRow = "";
+    if (lo) {
+      lo.publishSpec(); // progression may have moved since the last render
+      const st = lo.store;
+      const pistol = st.playlist() === "pistol";
+      const play = `<button data-play="classes" class="${pistol ? "" : "on"}">Classes</button>` +
+        `<button data-play="pistol" class="${pistol ? "on" : ""}">Pistol start</button>`;
+      let cls = "", kit = "";
+      if (!pistol) {
+        cls = st.classes().map((c, i) =>
+          `<button data-cls="${i}" class="${st.selected() === i ? "on" : ""}">${esc(c.name)}</button>`).join("") +
+          `<button data-cls="edit" class="edit">Edit classes</button>`;
+        const sm = lo.classSummary(st.selected());
+        kit = `${esc(sm.weapons)}<br>${esc(sm.perks)}`;
+      } else {
+        kit = "Everyone deploys with the GS-9 Pike and a frag · rifles are won from the map racks";
+      }
+      loadoutRow =
+        `<div style="font-size:10px;letter-spacing:.24em;opacity:.5;margin:14px 0 6px">LOADOUT</div>` +
+        `<div class="w6-diff w6-play" style="margin-bottom:6px">${play}</div>` +
+        (cls ? `<div class="w6-diff w6-cls" style="margin-bottom:4px">${cls}</div>` : "") +
+        `<div class="w6-kit">${kit}</div>`;
+    }
+
     state.panel.innerHTML =
       `<h2>Mode select</h2>` +
       `<div class="body">` +
@@ -208,6 +242,7 @@ export function createModeSelect(ctx, cb) {
       `<div class="w6-rules">${rulesLines(state.mode).map(esc).join("<br>")}</div>` +
       `<div style="font-size:10px;letter-spacing:.24em;opacity:.5;margin-bottom:6px">MAP</div>` +
       `<div class="w6-diff w6-map" style="margin-bottom:6px">${maps}</div>` +
+      loadoutRow +
       `<div class="w6-stats">${esc(statsLine(state.mode))}</div>` +
       `<div class="w6-err"></div>` +
       `</div>`;
@@ -226,6 +261,18 @@ export function createModeSelect(ctx, cb) {
         render();
       });
     });
+    if (lo) {
+      state.panel.querySelectorAll(".w6-play button[data-play]").forEach((b) => {
+        b.addEventListener("click", () => { lo.store.setPlaylist(b.getAttribute("data-play")); render(); });
+      });
+      state.panel.querySelectorAll(".w6-cls button[data-cls]").forEach((b) => {
+        b.addEventListener("click", () => {
+          const v = b.getAttribute("data-cls");
+          if (v === "edit") lo.openEditor(() => render());
+          else { lo.store.select(+v); render(); }
+        });
+      });
+    }
   }
 
   return {

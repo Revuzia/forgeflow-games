@@ -288,6 +288,8 @@ try {
   const { createStreakAudio } = await import(`../core/audio/streak_audio.js${V}`);
   const { createGrenadeFx } = await import(`../core/fx/grenadefx.js${V}`);
   const { createAchievements } = await import(`../core/meta/achievements.js${V}`);
+  const { createProgression } = await import(`../core/meta/progression.js${V}`);   // [progression] device-saved XP
+  const { createAfterAction } = await import(`../core/hud/after_action.js${V}`);   // [progression] feed + after-action
   // World (third-person) weapon models for ground loot. Imported WITHOUT the ?v=
   // suffix on purpose: soldiers.js imports this module query-less, so this resolves
   // to the SAME instance — one GLB prototype cache for the bots' guns AND the loot.
@@ -328,6 +330,8 @@ try {
   const grenadeFx = createGrenadeFx(ctx);
   const touch = isTouch ? touchMod.createTouchControls(ctx) : null;
   const achievements = createAchievements(ctx);   // ForgeFlow portal unlocks (achievements.json)
+  const progression = ctx.progression = createProgression(ctx);   // [progression]
+  const afterAction = createAfterAction(ctx, progression);        // [progression]
   ctx.touch = touch;
   ctx.cue = (n) => streakAudio.cue(n);   // match_hud clock warnings
   // designate mode only opens for a call-in you can actually use
@@ -360,6 +364,7 @@ try {
   ctx.mission = () => mission; // v2.2 (A10 radio subtitles; A11 scenario hold)
 
   function attachAll() {
+    input.attach(bridge); // [lane PAD] controller rumble on shot / hurt / explosion
     fx.attach(bridge);
     soldiers.attach(bridge);
     audio.attach(bridge);
@@ -368,6 +373,7 @@ try {
     streakFx.attach(bridge);
     grenadeFx.attach(bridge);
     achievements.attach(bridge);
+    progression.attach(bridge); afterAction.attach(bridge);   // [progression]
     streakAudio.attach(bridge);
     // A0 wiring per architecture §3.11: player shots kick recoil + viewmodel.
     // v2.2 swept-projectile convention: impactOnly resolution replays and
@@ -643,6 +649,7 @@ try {
       camHist.yOff *= Math.exp(-Math.min(dt, 0.1) / STEP_SMOOTH_TAU);
       if (Math.abs(camHist.yOff) < 0.002) camHist.yOff = 0;
     }
+    input.update(dt); // [lane PAD] gamepad poll + menu focus + aim assist (input filter, view-side)
     recoil.update(dt);
     vm.update(dt, alpha); // alpha drives the camera's POSITION only — never
     // yaw/pitch, which stay raw off input.state (interpolating look would buy
@@ -798,6 +805,7 @@ try {
     renderer, scene, camera,
     get sim() { return sim; },
     lights, fx, hud, vm, soldiers, audio, ldHud, lootFx, streakFx,
+    progression, afterAction, // [progression]
     settings: S,
     version: `v${VN}`, // MUST equal the boot.js?v number
     _bridge: bridge, // private extra (v2.2): harness/diagnostic event taps —
