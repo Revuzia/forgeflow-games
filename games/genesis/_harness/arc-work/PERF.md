@@ -1298,3 +1298,13 @@ long press frame-rate independent. Report after 1-2 verified.
   2.4 / 0 / 11.7; packHot 0; the rest copies in view 3 = capHot 52 (level L3 at its page allowance while compaction
   waits). -> at the allowance a COLD idle pool page is still taken (PagePool.hasCold: no new memory). node flight hot
   10 / 3823. dist37; run-s16h.sh = copies-s16on5 after the deck runs (run-s16g: deck new, old at 400x225).
+- GATE check24 (final code incl. hasCold): npm run check 940/940 pass, exit 0; npm run build exit 0 (build-prod22.log).
+- (1) DECK SHOTS new (dist32 = HEAD deckfull on, 400x225, babel standard landing, resting), LOOKED, 0 errors:
+  540 m (alt 527) cloud tops + coast/forest/sea around them (white 0.27 = the tops); 456 m (465) ground, coast and
+  translucent near cloud, NOT white (0.03); 383 (392) mist over the coast, ground visible (0.03); 320 (329) coast and
+  sea through mist (0.07); 266 / 220 / 181 m clear, coast + trees sharp, the deck's underside beyond (white 0). Owner's
+  round-4 white stops (456, 220) are clear. deck/new-aNNN.png.
+- QUEUED at hand-back (run-s16g.sh -> run-s16h.sh): deck-old (?deckfull=0, deck/old-aNNN.png, deck-old.log) for the
+  side-by-side, then copies-s16on5.log (dist37 = final code). NEXT for a successor: look at old vs new, check on5 (view 3
+  rest copies should drop from 11.7 to ~0; capHot ~0); then round-4 item 3 (Amonshis water: probe-amonshis.mjs, plan
+  under ROUND 4) and item 4 (worker heaps in the report).
