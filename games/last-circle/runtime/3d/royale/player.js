@@ -258,6 +258,14 @@ const SKINS = ["soldier", "athlete", "wraith", "juggernaut", "viper"];
 const RIM_COOL = 0x9cc8ff;               // faint cool edge for everyone
 const RIM_ALLY = 0x3dffa0;               // SQUAD UP teammate edge (friendly green)
 const RIM_NEAR = 0.16, RIM_FAR = 0.36;   // strength at <= 8 m / >= 60 m from the camera
+// (W10 R1B, combat finding 15) desktop at medium and up: the far rim is raised so the green / camo skins read on grass at 50 m
+// (player_rim's far rows). Peak term RIM_FAR_DESK * RIM_GAIN = 0.46 * 0.8 = 0.37, under the plan's 0.45 ceiling. Low and
+// touch keep RIM_FAR. Applied per view pass when the tier changes (rimSync).
+const RIM_FAR_DESK = 0.46;
+let _rimFarNow = RIM_FAR;
+// (W10 R1B, combat finding 7 step 1) skin / cloth roughness derived from the albedo in the body shader: ONE shared knob,
+// 1 on desktop medium+, 0 on low and touch (the W9 look, roughness as authored)
+const SHEEN_K = { value: 1 };
 const RIM_ALLY_NEAR = 0.30, RIM_ALLY_FAR = 0.45;
 const RIM_GAIN = { value: 0.8 };
 // -- character exposure (R4, player_rim) --------------------------------------
@@ -911,13 +919,15 @@ export async function loadActorModels(W) {
         // from the cache to a material expecting the new uniforms
         // "Dith1" (P23, LC-32): the camera-focus body's screen-door dither (uniform zDither, 1 = opaque) is in the program too
         // "Exp1" (R4): the character exposure (uniform zExpK = CHAR_EXPO) is in the program too
-        m.customProgramCacheKey = () => "lcZoneTintRim1Dith1Exp1";
+        // "Rgh1" (W10 R1B): the albedo-derived roughness (uniform zShK) is in the program too - one program, as before
+        m.customProgramCacheKey = () => "lcZoneTintRim1Dith1Exp1Rgh1";
         m.onBeforeCompile = (sh) => {
           sh.uniforms.zLegs = { value: zc[0] }; sh.uniforms.zTorso = { value: zc[1] }; sh.uniforms.zHead = { value: zc[2] };
           // rim light: colour + (near, far) strength per material (SQUAD UP allies get
           // their own colour, see applyRim), one shared master gain for tuning
           sh.uniforms.zRimCol = { value: new THREE.Color(RIM_COOL) };
-          sh.uniforms.zRimP = { value: new THREE.Vector2(RIM_NEAR, RIM_FAR) };
+          sh.uniforms.zRimP = { value: new THREE.Vector2(RIM_NEAR, _rimFarNow) };
+          sh.uniforms.zShK = SHEEN_K;
           sh.uniforms.zRimK = RIM_GAIN;
           sh.uniforms.zExpK = CHAR_EXPO;
           m.userData.zRimCol = sh.uniforms.zRimCol;
@@ -934,11 +944,17 @@ export async function loadActorModels(W) {
           // injected AFTER <color_fragment>, which in three r172's meshphysical
           // fragment runs after <map_fragment> — so diffuseColor is already
           // (diffuse * texture) and dividing `diffuse` out leaves the texture.
-          sh.fragmentShader = "varying float vZoneY;\nuniform vec3 zLegs;\nuniform vec3 zTorso;\nuniform vec3 zHead;\nuniform vec3 zFlash;\nuniform vec3 zRimCol;\nuniform vec2 zRimP;\nuniform float zRimK;\nuniform float zExpK;\nuniform float zDither;\n" + sh.fragmentShader.replace(
+          sh.fragmentShader = "varying float vZoneY;\nuniform vec3 zLegs;\nuniform vec3 zTorso;\nuniform vec3 zHead;\nuniform vec3 zFlash;\nuniform vec3 zRimCol;\nuniform vec2 zRimP;\nuniform float zRimK;\nuniform float zExpK;\nuniform float zDither;\nuniform float zShK;\n" + sh.fragmentShader.replace(
             "#include <color_fragment>",
             // (P23, LC-32) 4x4 ordered (Bayer) screen-door: a fragment whose threshold is at or above zDither is dropped
             "if ( zDither < 0.999 ) {\n    vec2 zdp = mod( floor( gl_FragCoord.xy ), 4.0 );\n    vec4 zr = zdp.y < 0.5 ? vec4( 0.0, 8.0, 2.0, 10.0 ) : zdp.y < 1.5 ? vec4( 12.0, 4.0, 14.0, 6.0 ) : zdp.y < 2.5 ? vec4( 3.0, 11.0, 1.0, 9.0 ) : vec4( 15.0, 7.0, 13.0, 5.0 );\n    float zb = ( zdp.x < 0.5 ? zr.x : zdp.x < 1.5 ? zr.y : zdp.x < 2.5 ? zr.z : zr.w ) / 16.0 + 0.03125;\n    if ( zb >= zDither ) discard;\n  }\n" +
-            "#include <color_fragment>\n  vec3 zTint = mix(zLegs, zTorso, smoothstep(0.80, 1.00, vZoneY));\n  zTint = mix(zTint, zHead, smoothstep(1.45, 1.60, vZoneY));\n  diffuseColor.rgb = diffuseColor.rgb / max(vec3(0.0001), diffuse) * zTint * zFlash;"
+            "#include <color_fragment>\n  vec3 zTint = mix(zLegs, zTorso, smoothstep(0.80, 1.00, vZoneY));\n  zTint = mix(zTint, zHead, smoothstep(1.45, 1.60, vZoneY));\n  vec3 zAlb = diffuseColor.rgb / max(vec3(0.0001), diffuse);\n  diffuseColor.rgb = zAlb * zTint * zFlash;"
+          ).replace(
+            // (W10 R1B) ROUGHNESS FROM ALBEDO (one value, 0.272, made arms read as pink plastic and the suit as latex): the
+            // texture's warm mid tones (skin) take ~0.55, everything else cloth ~0.8, bright neutral texels (buckles, metal
+            // trim) keep the authored value. max(): nothing gets shinier than it was. zShK = 0 is the authored look.
+            "#include <roughnessmap_fragment>",
+            "#include <roughnessmap_fragment>\n  {\n    float zL = dot( zAlb, vec3( 0.2126, 0.7152, 0.0722 ) );\n    float zW = clamp( ( zAlb.r - zAlb.b ) / max( zAlb.r, 0.001 ), 0.0, 1.0 );\n    float zSk = smoothstep( 0.22, 0.5, zW ) * smoothstep( 0.02, 0.08, zL ) * ( 1.0 - smoothstep( 0.55, 0.85, zL ) );\n    float zMt = smoothstep( 0.45, 0.7, zL ) * ( 1.0 - smoothstep( 0.08, 0.25, zW ) );\n    float zR = mix( max( roughnessFactor, mix( 0.8, 0.55, zSk ) ), roughnessFactor, zMt );\n    roughnessFactor = mix( roughnessFactor, zR, zShK );\n  }"
           ).replace(
             // RIM (VALORANT-style readability edge): added to the OUTGOING light, so it
             // is the same everywhere on the cast whatever the sun/shade there, which is
@@ -982,6 +998,7 @@ export async function loadActorModels(W) {
     // the capsule only shrinks when this actor can actually be SEEN crouching
     a.hasCrouchClip = !!a.clips.crouch;
     a.armBones = findArmBones(rig.scene);   // runtime arm-pose layer (pose.js)
+    a._grip = captureGrip(rig.scene, a.armBones);   // (W10 R1B) support-hand palm + finger curl (rest pose, before any clip plays)
     // detect a defective slouching rig (Meshy shipped drifter at ~27°; the
     // rest sit at 1-5°) → straighten its torso every frame
     a.obj.updateMatrixWorld(true);
@@ -2066,6 +2083,7 @@ function viewPass(W, dt) {
   _viewN++;
   const ex = W.kernel && W.kernel.renderer ? W.kernel.renderer.toneMappingExposure : 0;
   CHAR_EXPO.value = ex > 0.05 ? CHAR_EXPO_REF / ex : 1;       // (R4) characters keep the pre-G2 exposure (CHAR_EXPO)
+  rimSync(W);
   cam.updateMatrixWorld();
   _pm.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
   _frustum.setFromProjectionMatrix(_pm);
@@ -2108,7 +2126,7 @@ function viewPass(W, dt) {
     // pistol in the drop shots (LOOK/camera-characters/shots/03_parachute_tpp.png);
     // nobody shoots from a parachute, and the weapon is back on the first grounded
     // frame because this line runs every frame. Also one fewer draw per nearby glider.
-    if (a.weaponMesh) a.weaponMesh.visible = d2 < wl2 && !a.emoting && !a.gliding;
+    if (a.weaponMesh) a.weaponMesh.visible = d2 < wl2 && !a.emoting && !a.gliding && a.alive;
     if (!a.nameTag) continue;
     // Peers stay tagged out to 250 m — the game's own gunfire-audible radius
     // (hud.js: `if (d < 12 || d > 250) return;` on the direction chevrons), so a
@@ -2133,8 +2151,24 @@ function applyRim(a, mode) {
   const ud = b && b.material && b.material.userData;
   if (!ud || !ud.zRimCol) return;
   ud.zRimCol.value.setHex(mode === 2 ? RIM_ALLY : RIM_COOL);
-  ud.zRimP.value.set(mode === 2 ? RIM_ALLY_NEAR : RIM_NEAR, mode === 2 ? RIM_ALLY_FAR : RIM_FAR);
+  ud.zRimP.value.set(mode === 2 ? RIM_ALLY_NEAR : RIM_NEAR, mode === 2 ? RIM_ALLY_FAR : _rimFarNow);
   a._rimMode = mode;
+}
+
+/** (W10 R1B) desktop medium and up: the raised far rim and the albedo-derived roughness; low / touch: the W9 look. A tier
+ *  change re-applies the rim on every actor (two field reads per frame otherwise). */
+function deskHi(W) {
+  if (W._gfx && W._gfx.touch) return false;
+  const t = W.gfxTier || (W._gfx && W._gfx.tier) || (W.settings && W.settings.graphics) || "medium";
+  return t !== "low";
+}
+function rimSync(W) {
+  const hi = deskHi(W);
+  SHEEN_K.value = hi ? 1 : 0;
+  const rf = hi ? RIM_FAR_DESK : RIM_FAR;
+  if (rf === _rimFarNow) return;
+  _rimFarNow = rf;
+  for (const a of W.actors) if (a._bodies && (a._rimMode | 0) !== 2) applyRim(a, 1);
 }
 
 /** One live actor's view state for this frame. */
@@ -3177,6 +3211,7 @@ function animate(W, a, dt) {
       const FK = fam ? FAM_KEYS[fam] : null;
       const useMixamoGun = !!(FK && a.clips[FK.idle]);
       selectClip(W, a, gs, fam, FK, useMixamoGun);
+      a._ikNear = a === W._camFocus || a === W.player || a._dEff < IK_NEAR_M;
 
       // moving reload overlay: upper-body reload layered over the locomotion
       // clip playing above (disjoint track sets — the mixer blends them clean)
@@ -3218,7 +3253,9 @@ function animate(W, a, dt) {
       else if (a.gliding) mode = "hang";
       else if (a.swimming) mode = null;
       else if (armed && a.weapon.state === "reloading") mode = "reload";
-      else if (armed && !combat) mode = "lowReady";
+      // (W10 R1B, combat finding 6) a PISTOL is carried in the two-hand chest hold (gunReady + the support hand cupping the
+      // grip) in and out of combat: the hip carry pointed it at the ground and fired it from the waist
+      else if (armed && !combat && !isPistol(a)) mode = "lowReady";
       else if (armed) mode = "gunReady";
       else mode = "relax";
       // AIM OFFSET (industry-standard upper-body layer): additively lean the
@@ -3254,6 +3291,8 @@ function animate(W, a, dt) {
         if (a.armBones.spine2) addLeanTwist(a.armBones.spine2, lean * 0.5, twist * 0.5);
         else if (a.armBones.spine && !a.armBones.spine1) addLeanTwist(a.armBones.spine, lean, twist);
       }
+      // (W10 R1B) the hit jolt on the base Spine (additive, any speed), only on a frame the mixer re-keyed the bones
+      if (layers && a.armBones && a.armBones.spine1 && a._joltT != null) joltLayer(W, a);
       // straighten a slouched rig BEFORE the arm layer (arms hang off the
       // spine, so upright must happen first) — skip mid-air/emote where the
       // clip owns the whole body
@@ -3326,8 +3365,18 @@ function animate(W, a, dt) {
       //
       // gunReady only: the reload pose owns the left arm (mag change), lowReady
       // carries relaxed, and swim/glide/emote clips own the whole body.
-      if (layers && a.hand && a.weaponMesh && a.armBones && a.armBones.lArm && !a.emoting &&
-          a._armMode === "gunReady" && a._armW > 0.5) supportHandIK(a);
+      // (W10 R1B, combat finding 1) ...and on EVERY long gun: the Mixamo rifle clips own the arms (mode null), so the support
+      // hand used to stay where the clip put it - open, at or past the muzzle. It now grips the gun's own handguard anchor
+      // (weapons.js measureProto) on top of the clip (owner question 1: an IK correction layered on a Mixamo clip), palm
+      // turned up around the guard, fingers curled on the skins that have finger bones. Near actors only (IK_NEAR_M), never
+      // while the reload / throw owns the left arm. Phones keep the W9 hands (no extra bone work on touch).
+      const ikOn = !!(layers && a.hand && a.weaponMesh && a.armBones && a.armBones.lArm && !a.emoting && armed && a.alive && !a.downed &&
+        !a.gliding && !a.swimming && !a._throwOv && !a._ovReload && a.weapon.state !== "reloading" && a._ikNear && !ikTouch(W) &&
+        ((mixamoAim && weldOn) || ((a._armMode === "gunReady" || a._armMode === "lowReady") && a._armW > 0.5)));
+      const ikWant = ikOn ? 1 : 0;
+      a._ikW = a._ikW == null ? ikWant : a._ikW + (ikWant - a._ikW) * Math.min(1, dt * 12);
+      if (ikOn) supportHandIK(a, mixamoAim ? Math.max(a._ikW, 0.02) : K.clamp((a._armW - 0.5) * 2, 0, 1) * a._ikW);
+      else if (a._gripPosed) releaseGrip(a);
     } else if (farAnim && !a.emoting) farWeld(a);
   }
 }
@@ -3417,11 +3466,14 @@ function selectClip(W, a, gs, fam, FK, useMixamoGun) {
     // clip's own authored stride rate; the orientation warp turned the body so the clip walks exactly along the velocity
     playLocoKey(a, gs);
   }
-  else if (useMixamoGun && gs > 0.7) {
+  else if ((useMixamoGun || pistolLegs(a)) && gs > 0.7) {
+    // (W10 R1B, combat finding 6) a PISTOL runs on the rifle LEG clips too (stride-matched, planted feet); its arms are the
+    // pose layer's two-hand chest hold. The Meshy run it used slid the planted foot at 2.8 m/s.
     const back = (a.vel.x * -Math.sin(a._bodyYaw - Math.PI) + a.vel.z * -Math.cos(a._bodyYaw - Math.PI)) < -0.5;
     const dirK = back ? -0.9 : 1;
-    const runKey = FK.run;
-    const walkKey = FK.walk;
+    const FKx = FK || FAM_KEYS.rifle;
+    const runKey = FKx.run;
+    const walkKey = FKx.walk;
     if (C.rifle_run_g && !back) {
       // (P23, LC-10) forward rifle set re-baked feet-down; play rate = ground speed / the authored stride speed
       if (a.sprinting && gs > 5.5 && C.rifle_sprint_g) playAnim(a, "rifle_sprint_g", paTs(K.clamp(gs / CLIP_SPEED.rifle_sprint_g, 0.6, 1.6)));
@@ -3444,8 +3496,8 @@ function selectClip(W, a, gs, fam, FK, useMixamoGun) {
     a._turnNew = false;
     playAnim(a, a._turnClip, _paTurn);
   }
-  else if (useMixamoGun) {
-    playAnim(a, C.rifle_idle_g ? "rifle_idle_g" : FK.idle);
+  else if (useMixamoGun || pistolLegs(a)) {
+    playAnim(a, C.rifle_idle_g ? "rifle_idle_g" : (FK || FAM_KEYS.rifle).idle);
   }
   else if (gs > 0.7) {
     const back = (a.vel.x * -Math.sin(a._bodyYaw - Math.PI) + a.vel.z * -Math.cos(a._bodyYaw - Math.PI)) < -0.5;
@@ -3469,6 +3521,11 @@ const AIR_CLIP_MIN_S = 0.16;          // unsupported for less than this (a stair
 // walk <-> run clip hysteresis (m/s). The ADS pace (3.8 m/s) stays on the WALK set (at ~2x): in game its strafes skate 0.91-1.16x
 // its forward, against 1.3-2.2x for the run strafes at 0.85x (F:/lc_p23/player/reports/calib2.log, calib3.log)
 const RUN_ON = 4.6, RUN_OFF = 4.2, SPRINT_STRAFE_ON = 5.3;
+/** (W10 R1B) a pistol carry that takes the rifle leg clips (the stride-matched Mixamo set is loaded on this actor) */
+function pistolLegs(a) {
+  const C = a.clips;
+  return !!(C && C.rifle_run_g && C.rifle_idle_g && isPistol(a));
+}
 /** A pistol in the hands (the procedural-arms carry). */
 function isPistol(a) {
   const def = a.weapon && K.WEAPONS && K.WEAPONS[a.weapon.id];
@@ -3594,7 +3651,7 @@ function barrelWeld(a, bodyFwdYaw, twist, mixamoAim) {
 }
 
 /** SUPPORT HAND: two-bone IK of the left arm onto the weapon's foregrip. */
-function supportHandIK(a) {
+function supportHandIK(a, blend) {
   // the wid stamp gate: equipSlot changes a.weapon.id synchronously but
   // the mesh swap is microtask-deferred, and bots equip BEFORE this
   // updater runs — without the stamp check the measure below read the
@@ -3603,35 +3660,43 @@ function supportHandIK(a) {
   // confirmed 2/2). Stamp mismatch -> skip, re-measure after the flush.
   if (a._gripFor !== a.weapon.id &&
       a.weaponMesh.userData.wid === a.weapon.id) {
-    // foregrip point, HOLDER space, measured once per weapon swap: the
-    // proto is normalized/centered with +Z the barrel, so the support
-    // palm cups forward of center by a class fraction of the front half,
-    // on the underside. Async proto: no geometry yet -> retry next frame.
-    // matrixWorld refresh first — same stale-matrix trap validateAttachments
-    // hit (a 0.62 m AR measured 0.01 m against a not-yet-baked holder).
-    a.obj.updateMatrixWorld(true);
-    _ikM.copy(a.hand.matrixWorld).invert();
-    let zMax = 0, yMin = 0, found = false;
-    a.weaponMesh.traverse((o) => {
-      if (!(o.isMesh || o.isSkinnedMesh) || !o.geometry) return;
-      if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
-      const bb = o.geometry.boundingBox;
-      _ikM2.copy(_ikM).multiply(o.matrixWorld);
-      for (let ci = 0; ci < 8; ci++) {
-        _fgS.set(ci & 1 ? bb.max.x : bb.min.x, ci & 2 ? bb.max.y : bb.min.y,
-                 ci & 4 ? bb.max.z : bb.min.z).applyMatrix4(_ikM2);
-        if (!found) { zMax = _fgS.z; yMin = _fgS.y; found = true; }
-        else { zMax = Math.max(zMax, _fgS.z); yMin = Math.min(yMin, _fgS.y); }
-      }
-    });
-    if (found) {
-      const cls = (K.WEAPONS[a.weapon.id] || {}).cls;
-      // pistol: support hand cups the firing hand at the grip, not the
-      // muzzle; long guns grip the front half; pump/bolt sit further out
-      const zF = cls === "pistol" ? 0.05 : cls === "shotgun" ? 0.55
-               : cls === "launcher" ? 0.3 : cls === "sniper" ? 0.5 : 0.45;
-      a._gripLocal = new THREE.Vector3(0, yMin * 0.6, zMax * zF);
+    // (W10 R1B) the gun's own support-hand anchor, measured from its geometry once per proto (weapons.js measureProto, HOLDER
+    // space = the proto's space: grip at the origin, +Z the barrel). The class-fraction estimate below is the fallback.
+    const gd = a.weaponMesh.userData.guard;
+    if (gd) {
+      a._gripLocal = new THREE.Vector3(gd.x, gd.y, gd.z);
       a._gripFor = a.weapon.id;
+    } else {
+      // foregrip point, HOLDER space, measured once per weapon swap: the
+      // proto is normalized/centered with +Z the barrel, so the support
+      // palm cups forward of center by a class fraction of the front half,
+      // on the underside. Async proto: no geometry yet -> retry next frame.
+      // matrixWorld refresh first — same stale-matrix trap validateAttachments
+      // hit (a 0.62 m AR measured 0.01 m against a not-yet-baked holder).
+      a.obj.updateMatrixWorld(true);
+      _ikM.copy(a.hand.matrixWorld).invert();
+      let zMax = 0, yMin = 0, found = false;
+      a.weaponMesh.traverse((o) => {
+        if (!(o.isMesh || o.isSkinnedMesh) || !o.geometry) return;
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        const bb = o.geometry.boundingBox;
+        _ikM2.copy(_ikM).multiply(o.matrixWorld);
+        for (let ci = 0; ci < 8; ci++) {
+          _fgS.set(ci & 1 ? bb.max.x : bb.min.x, ci & 2 ? bb.max.y : bb.min.y,
+                   ci & 4 ? bb.max.z : bb.min.z).applyMatrix4(_ikM2);
+          if (!found) { zMax = _fgS.z; yMin = _fgS.y; found = true; }
+          else { zMax = Math.max(zMax, _fgS.z); yMin = Math.min(yMin, _fgS.y); }
+        }
+      });
+      if (found) {
+        const cls = (K.WEAPONS[a.weapon.id] || {}).cls;
+        // pistol: support hand cups the firing hand at the grip, not the
+        // muzzle; long guns grip the front half; pump/bolt sit further out
+        const zF = cls === "pistol" ? 0.05 : cls === "shotgun" ? 0.55
+                 : cls === "launcher" ? 0.3 : cls === "sniper" ? 0.5 : 0.45;
+        a._gripLocal = new THREE.Vector3(0, yMin * 0.6, zMax * zF);
+        a._gripFor = a.weapon.id;
+      }
     }
   }
   if (a._gripLocal && a._gripFor === a.weapon.id) {
@@ -3670,7 +3735,8 @@ function supportHandIK(a) {
         ? K.clamp((-bq + Math.sqrt(disc)) / (2 * gz2), 0, 1)
         : K.clamp(-bq / (2 * gz2), 0, 1);
       _fgW.copy(_fgL).addScaledVector(_fgS, t);
-    }
+      a._gripSlid = true;
+    } else a._gripSlid = false;
     // pole: elbow points down and out to the character's LEFT (left dir
     // for yaw = (-cos, 0, +sin)) — the bend real support stances produce.
     // Without it the bend plane is whatever the clip left, and the elbow
@@ -3679,8 +3745,110 @@ function supportHandIK(a) {
     _fgL.x -= Math.cos(a.yaw) * 0.25; _fgL.y -= 0.45; _fgL.z += Math.sin(a.yaw) * 0.25;
     // blend follows the arm-pose weight so the hand eases on/off with the
     // gunReady transition instead of snapping
-    twoBoneIK(a.armBones.lArm, a.armBones.lFore, a.armBones.lHand, _fgW,
-              K.clamp((a._armW - 0.5) * 2, 0, 1), _fgL);
+    twoBoneIK(a.armBones.lArm, a.armBones.lFore, a.armBones.lHand, _fgW, blend, _fgL);
+    // (W10 R1B) a second pass lands the wrist: one pass's shoulder swing leaves it a few cm off when the clip's elbow plane is
+    // far from the solved one (2 bones, cheap)
+    twoBoneIK(a.armBones.lArm, a.armBones.lFore, a.armBones.lHand, _fgW, blend, _fgL);
+    gripHand(a, blend);
+  }
+}
+
+// ── (W10 R1B) support-hand palm + finger curl ─────────────────────────────────────────────────────────────────────────────────
+const IK_NEAR_M = 30;                     // the support-hand IK, palm and finger curl run on actors nearer than this (and the focus)
+const FINGER_CURL = [0.95, 1.15, 0.8];    // rad per joint (proximal, middle, distal): the fingers wrap a ~5 cm handguard
+const THUMB_CURL = [0.3, 0.45, 0.3];
+const _ghQ = new THREE.Quaternion(), _ghP = new THREE.Quaternion(), _ghQ2 = new THREE.Quaternion();
+const _ghM = new THREE.Matrix4(), _ghL = new THREE.Matrix4();
+const _ghB = new THREE.Vector3(), _ghU = new THREE.Vector3(), _ghX = new THREE.Vector3(), _ghF = new THREE.Vector3();
+const _ghN = new THREE.Vector3(), _ghS = new THREE.Vector3(), _ghPl = new THREE.Vector3();
+function ikTouch(W) { return !!(W._gfx && W._gfx.touch); }
+/** At rig load (bones in their rest pose): the left hand's finger direction and palm normal in hand space, and per finger joint
+ *  its rest rotation and the bone-local axis that curls it toward the palm. null when the rig has no left hand. */
+function captureGrip(root, bones) {
+  if (!bones || !bones.lHand) return null;
+  const by = {};
+  root.traverse((o) => { if (o.isBone) by[o.name.replace(/^mixamorig:?/i, "")] = o; });
+  root.updateMatrixWorld(true);
+  const H = new THREE.Vector3(), M1 = new THREE.Vector3(), I1 = new THREE.Vector3(), P1 = new THREE.Vector3();
+  bones.lHand.getWorldPosition(H);
+  const hq = bones.lHand.getWorldQuaternion(new THREE.Quaternion()).invert();
+  // default (no finger bones): Mixamo's hand axes, +Y along the hand, +X out of the left palm
+  const out = { fingerL: new THREE.Vector3(0, 1, 0), palmL: new THREE.Vector3(1, 0, 0), joints: [], fingers: 0,
+                handClip: bones.lHand.quaternion.clone(), handLast: null };
+  const mid = by.LeftHandMiddle1, idx = by.LeftHandIndex1, pk = by.LeftHandPinky1 || by.LeftHandRing1;
+  if (mid && idx && pk) {
+    mid.getWorldPosition(M1); idx.getWorldPosition(I1); pk.getWorldPosition(P1);
+    const f = M1.clone().sub(H).normalize();
+    // palm normal = finger direction x (index - pinky) for a LEFT hand; the rest pose holds the palm DOWN, so a normal that
+    // came out pointing up is flipped (the sign check is the pose, not a convention)
+    const n = f.clone().cross(I1.clone().sub(P1)).normalize();
+    if (n.y > 0) n.negate();
+    out.fingerL.copy(f).applyQuaternion(hq);
+    out.palmL.copy(n).applyQuaternion(hq);
+    out.palmW0 = n.clone();
+    for (const fn of ["Index", "Middle", "Ring", "Pinky", "Thumb"]) {
+      for (let j = 1; j <= 3; j++) {
+        const b = by["LeftHand" + fn + j], c = by["LeftHand" + fn + (j + 1)];
+        if (!b || !c) continue;
+        const bp = b.getWorldPosition(new THREE.Vector3()), cp = c.getWorldPosition(new THREE.Vector3());
+        // rotating the finger about (finger x palm-normal) turns it toward the palm side
+        const ax = cp.sub(bp).normalize().cross(n);
+        if (ax.lengthSq() < 1e-6) continue;
+        ax.normalize().applyQuaternion(b.getWorldQuaternion(new THREE.Quaternion()).invert());
+        out.joints.push({ b, rest: b.quaternion.clone(), ax, ang: fn === "Thumb" ? THUMB_CURL[j - 1] : FINGER_CURL[j - 1],
+                          clip: b.quaternion.clone(), last: null });
+      }
+    }
+    out.fingers = out.joints.length;
+  }
+  return out;
+}
+/** Palm up and around the guard, fingers curled. Absolute writes (clip value slerped to the grip pose), so a bone the mixer did
+ *  not re-key this frame is never turned twice; the clip's own values are kept, so releaseGrip hands the hand back exactly. */
+function gripHand(a, w) {
+  const G = a._grip;
+  if (!G || w <= 0.01) return;
+  const lh = a.armBones.lHand;
+  // the gun's frame (holder: +Z barrel, +Y up, +X the shooter's left under the barrel weld)
+  a.hand.getWorldQuaternion(_ghQ);
+  _ghB.set(0, 0, 1).applyQuaternion(_ghQ); _ghU.set(0, 1, 0).applyQuaternion(_ghQ); _ghX.set(1, 0, 0).applyQuaternion(_ghQ);
+  // fingers run under the guard to its far (right) side and a little forward; the palm faces up and in, onto the guard
+  _ghF.copy(_ghX).multiplyScalar(-0.8).addScaledVector(_ghB, 0.55).addScaledVector(_ghU, 0.15).normalize();
+  _ghN.copy(_ghU).multiplyScalar(0.85).addScaledVector(_ghX, -0.45);
+  _ghN.addScaledVector(_ghF, -_ghN.dot(_ghF)).normalize();
+  // R maps the hand-local (finger, palm, finger x palm) frame onto the world (F, N, F x N) frame
+  _ghPl.copy(G.palmL).addScaledVector(G.fingerL, -G.palmL.dot(G.fingerL)).normalize();
+  _ghS.copy(G.fingerL).cross(_ghPl).normalize();
+  _ghL.makeBasis(G.fingerL, _ghPl, _ghS).transpose();
+  _ghX.copy(_ghF).cross(_ghN).normalize();
+  _ghM.makeBasis(_ghF, _ghN, _ghX).multiply(_ghL);
+  _ghQ2.setFromRotationMatrix(_ghM);                         // the hand's wanted WORLD rotation
+  // the clip's value: a bone the mixer re-keyed no longer holds what this wrote last frame
+  if (!G.handLast || !lh.quaternion.equals(G.handLast)) G.handClip.copy(lh.quaternion);
+  lh.parent.getWorldQuaternion(_ghP).invert();
+  _ghP.multiply(_ghQ2);                                      // local = parent^-1 * world
+  lh.quaternion.copy(G.handClip).slerp(_ghP, Math.min(1, w));
+  G.handLast = (G.handLast || new THREE.Quaternion()).copy(lh.quaternion);
+  for (let i = 0; i < G.joints.length; i++) {
+    const J = G.joints[i];
+    if (!J.last || !J.b.quaternion.equals(J.last)) J.clip.copy(J.b.quaternion);
+    _ghQ.setFromAxisAngle(J.ax, J.ang);
+    _ghP.copy(J.rest).multiply(_ghQ);
+    J.b.quaternion.copy(J.clip).slerp(_ghP, Math.min(1, w));
+    J.last = (J.last || new THREE.Quaternion()).copy(J.b.quaternion);
+  }
+  a._gripPosed = true;
+}
+/** IK off (reload, throw, far, a consumable in hand): the hand and fingers go back to what the clip last wrote. */
+function releaseGrip(a) {
+  const G = a._grip;
+  a._gripPosed = false;
+  if (!G || !a.armBones || !a.armBones.lHand) return;
+  if (G.handLast && a.armBones.lHand.quaternion.equals(G.handLast)) a.armBones.lHand.quaternion.copy(G.handClip);
+  G.handLast = null;
+  for (const J of G.joints) {
+    if (J.last && J.b.quaternion.equals(J.last)) J.b.quaternion.copy(J.clip);
+    J.last = null;
   }
 }
 
@@ -4620,6 +4788,9 @@ function hurtActor(W, victim, dmg, attackerId, weaponId, isHead) {
   // frozen mid-stride by a full-body clip reads worse than no flinch. The arm
   // pose layer still owns the arms afterward, so an armed victim keeps the gun
   // up while torso/legs stagger — exactly the layered read shipping BRs use.
+  // (W10 R1B, combat finding 12) every hit that lands jolts the torso (an additive layer on the clip, any speed): the gate below
+  // keeps the full-body clip to slow victims, so a moving target used to show no reaction at all
+  if (!res.dead && res.dealt > 0 && victim.alive) startJolt(W, victim, att);
   if (!res.dead && res.dealt >= 10 && victim.onGround && !victim.swimming && !victim.gliding &&
       W.t - (victim._hitReactAt || -9) > 1.2 && Math.hypot(victim.vel.x, victim.vel.z) < 4) {
     victim._hitReactAt = W.t;
@@ -4662,8 +4833,40 @@ function hurtDowned(W, victim, dmg, attackerId, weaponId, isHead, att) {
   if (victim.downedHp <= 0) finishDowned(W, victim, attackerId, weaponId);
 }
 
+// ── (W10 R1B) hit jolt ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+// A short additive rotation of the base Spine bone (no other layer writes it on the Mixamo rigs: the aim lean / twist live on
+// Spine1 / Spine2): the upper body rocks away from the shot, peaking at JOLT_PEAK rad JOLT_RISE_S after the hit and gone by
+// JOLT_S. Written through addLeanTwist, so a frozen clip never folds it in twice.
+const JOLT_S = 0.3, JOLT_RISE_S = 0.05, JOLT_PEAK = 0.13;
+function startJolt(W, v, att) {
+  let f = 1, sd = 0;
+  if (att && att !== v) {
+    const dx = att.pos.x - v.pos.x, dz = att.pos.z - v.pos.z, l = Math.hypot(dx, dz) || 1;
+    const by = v._hasBodyYaw ? v._bodyYaw - Math.PI : v.yaw;
+    const fx = -Math.sin(by), fz = -Math.cos(by);
+    f = (dx * fx + dz * fz) / l;                   // + = shot from the front
+    sd = (dx * -fz + dz * fx) / l;                 // + = shot from the right
+  }
+  v._joltT = W.t; v._joltF = f; v._joltS = sd;
+}
+/** the jolt's (lean, twist) this frame, or null when it has ended and been taken back */
+function joltLayer(W, a) {
+  const sp = a.armBones && a.armBones.spine;
+  if (!sp || a._joltT == null) return;
+  const u = W.t - a._joltT;
+  let e = 0;
+  if (u >= 0 && u < JOLT_S) e = u < JOLT_RISE_S ? u / JOLT_RISE_S : Math.exp(-(u - JOLT_RISE_S) / 0.07);
+  // a front hit rocks the chest back (-x bends back on these spines), a side hit twists it away; never less than 0.6 of the peak
+  const fb = Math.abs(a._joltF) > 0.35 ? -Math.sign(a._joltF) : -0.6, tw = -a._joltS * 0.8;
+  addLeanTwist(sp, JOLT_PEAK * e * fb, JOLT_PEAK * e * tw);
+  a._joltA = JOLT_PEAK * e;
+  if (u >= JOLT_S) a._joltT = null;                // the (0, 0) write above took the last addition back
+}
+
 // ── corpses + death falls (P1.6) ───────────────────────────────────────────────────────────
-const CORPSE_MIN_HOLD_S = 3, CORPSE_MAX_HOLD_S = 6, CORPSE_SINK_S = 1.2, CORPSE_SINK_M = 1.6;
+// (W10 R1B, combat finding 11) the body HOLDS 7 s (it began sinking at ~3 s), then FADES out (the screen-door dither the body
+// program already carries, zDither) while it settles a little: CORPSE_SINK_M 1.6 -> 0.25, so it no longer drops through the floor
+const CORPSE_MIN_HOLD_S = 7, CORPSE_MAX_HOLD_S = 7, CORPSE_SINK_S = 1.2, CORPSE_SINK_M = 0.25;
 // ART-A measured the soldier mesh 8-17 cm BELOW the floor in the final pose of every fall (the shipped
 // death: 14.8 cm). The body is raised by this much while it goes down, so it lies on the ground, not in it.
 const CORPSE_LIFT_M = 0.1, CORPSE_LIFT_S = 1.0;
@@ -4720,6 +4923,9 @@ function corpseStep(W, a, dt) {
   if (!a.obj.parent) { a._sinkT = -1; return; }             // its group was cleared (match restart)
   const k = t >= CORPSE_SINK_S ? 1 : t / CORPSE_SINK_S;
   a.obj.position.y = a._sinkY0 + CORPSE_LIFT_M - CORPSE_SINK_M * (k * k * (3 - 2 * k));
+  // (W10 R1B) the fade: no shadow from a dissolving body (the depth pass does not dither), dither 1 -> 0 over the window
+  if (a._bodyShadow) { a._bodyShadow = false; for (let i = 0; i < a._bodies.length; i++) a._bodies[i].castShadow = false; }
+  applyDither(a, Math.max(0, 1 - k));
   if (k >= 1) {
     a._sinkT = -1;
     a.obj.parent.remove(a.obj);
@@ -4814,6 +5020,9 @@ export function killActor(W, victim, killerId, weaponId) {
     W.stats.killsByCls[kcls] = (W.stats.killsByCls[kcls] || 0) + 1;
   }
   W.events.emit("actorDied", victim, killerId, weaponId);
+  // (W10 R1B, combat finding 11) the held gun goes on the frame its loot copy spawns (loot.js deathDrop runs inside the emit
+  // above): it stayed in the dead hand while also lying on the ground. The per-frame weapon-visibility line keeps it hidden.
+  if (victim.weaponMesh) victim.weaponMesh.visible = false;
   // death anim then sink away
   // A bot killed while its mixer was skipped (far / off screen, C4 flags) would
   // otherwise keep that flag forever — update() skips dead actors, so the view
