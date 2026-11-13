@@ -1288,3 +1288,13 @@ long press frame-rate independent. Report after 1-2 verified.
   (dist36), deck new / old.
 - IMAGE A/B ab16/on-*.png (dist35) vs ab16/off-*.png (bufring=0 freshland=0), perf-descent lowsun phase babel 640x360;
   diff: python3 _harness/arc-work/imgdiff.py A B [OUT].
+- A/B LOOKED (dist35 on vs bufring=0 freshland=0, babel 640x360, 0 errors both): town 2.66/255 (0.22% px > 16): lake
+  ripples / sparkle and foliage-sway specks only; houses, ground, roads identical. regionlow 1.63, ridgelow 1.42 (city-
+  light sparkle, cloud edges, the pulsing selection ring), townlow 6.31 mean but 0.16% > 16 (uniform in-cloud haze
+  noise at 209 m; the ring). No missing / stale geometry. Diffs ab16/d-*.png.
+- GATE check23 (all of the above incl. compaction rule): npm run check 940/940 pass, exit 0; npm run build exit 0
+  (build-prod21.log).
+- copies-s16on4 (dist36): mean 0.43 MB/frame x4.4 (from 8.26 x100 off), flight 0.4 / 7.6 / 0.2 copies a frame, rest
+  2.4 / 0 / 11.7; packHot 0; the rest copies in view 3 = capHot 52 (level L3 at its page allowance while compaction
+  waits). -> at the allowance a COLD idle pool page is still taken (PagePool.hasCold: no new memory). node flight hot
+  10 / 3823. dist37; run-s16h.sh = copies-s16on5 after the deck runs (run-s16g: deck new, old at 400x225).

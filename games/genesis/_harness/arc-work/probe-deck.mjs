@@ -21,7 +21,7 @@ const server = createServer((req, res) => { let p = decodeURIComponent((req.url 
 await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-gpu-sandbox'] });
-const [vw, vh] = String(opts.size ?? '480x270').split('x').map(Number);
+const [vw, vh] = String(opts.size ?? '400x225').split('x').map(Number);
 const page = await (await browser.newContext({ viewport: { width: vw, height: vh } })).newPage();
 page.setDefaultTimeout(3600000);
 const errors = [];

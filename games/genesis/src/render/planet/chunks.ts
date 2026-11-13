@@ -445,6 +445,8 @@ export class PagePool {
     while (this.idle.length > cap || (this.idle.length > IDLE_RESERVE && this.frame - this.idle[0].since > IDLE_FRAMES)) this.idle.shift()!.p.dispose();
   }
   get count(): number { return this.idle.length; }
+  /** (PERF s16) an idle page the GPU no longer reads */
+  hasCold(): boolean { for (const e of this.idle) if (e.p.cold) return true; return false; }
   dispose(): void { for (const e of this.idle) e.p.dispose(); this.idle = []; }
 }
 
@@ -521,7 +523,8 @@ class PatchBatch {
       if (pi < 0 && packed) pi = -2;
       if (pi < 0) {
         const need = Math.ceil((this.liveSlots + 1) / PATCH_PAGE);
-        if (this.pageCount >= need + Math.max(FRESH_EXTRA, Math.ceil(need * 0.75))) pi = -2;
+        // (past the allowance a page the pool already holds still serves: no new memory)
+        if (this.pageCount >= need + Math.max(FRESH_EXTRA, Math.ceil(need * 0.75)) && !this.pool?.hasCold()) pi = -2;
       }
     }
     if (pi === -2 || !FRESH_LAND) {
