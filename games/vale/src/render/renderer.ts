@@ -13,7 +13,7 @@
 //     setSettings(patch)              colourblind palette, camera lock / edge pan / pan speed,
 //                                     reduce motion, screen shake, HUD scale, health bar ticks
 //     pickGround(x, y)                CSS px → sim (x, y) on the walkable plane, or null
-//     pickEntity(x, y)                CSS px → the visible entity under the cursor, or null
+//     pickEntity(x, y, opts?)         CSS px → the visible entity under the cursor, or null (opts: filter, near-miss slop)
 //     worldToScreen(x, y, h?)         sim (x, y, height) → CSS px
 //     setAim(aim | null)              your own aim indicator (8 % fill, 60 % edge, dashed range ring)
 //     setHover(id) · setTarget(id)    hover outline (HARM 2.5 px enemy/neutral, ally 1.5 px); minion bars when targeted
@@ -61,6 +61,8 @@ import { RING, RingLayer } from './overlay/rings.ts';
 import { FLASH_RING_OVER_M, TELE_SHAPE, TelegraphLayer, type TeleSpec, flashContourDepth } from './overlay/telegraphs.ts';
 import { FRAY_SEATS, INK, isFfaMode, Palette, type ColorblindMode } from './palette.ts';
 import { PostChain } from './post.ts';
+import { pickUnit, type Pickable, type PickOptions } from './pick.ts';
+export type { PickOptions } from './pick.ts';
 import { calibAgain, calibVerdict, calibWindow, type CalibWindow } from './calibration.ts';
 import { DynamicResolution, type FrameBound, GpuTimer, PRESETS, resolveQuality, type ResolvedQuality } from './quality.ts';
 import { Sky } from './sky.ts';
@@ -160,7 +162,7 @@ export interface Renderer {
   setQuality(video: Settings['video']): void;
   setSettings(patch: Partial<Settings>): void;
   pickGround(x: number, y: number): { x: number; y: number } | null;
-  pickEntity(x: number, y: number): EntityId | null;
+  pickEntity(x: number, y: number, opts?: PickOptions): EntityId | null;
   worldToScreen(x: number, y: number, height?: number): { x: number; y: number; visible: boolean };
   /** the match camera's focus point on the ground, in sim units and axes (x, y = world x, z) — the audio
    *  listener rides it (W3 AUD-9); the last match focus while the menu is up */
@@ -1245,30 +1247,17 @@ class ValeRenderer implements Renderer {
     return { x: hit.x, y: hit.z };
   }
 
-  pickEntity(x: number, y: number): EntityId | null {
+  /** the unit under the cursor (CSS px); see render/pick.ts */
+  pickEntity(x: number, y: number, opts?: PickOptions): EntityId | null {
     if (this.mode !== 'match') return null;
-    const cam = this.rig.camera;
-    let best: EntityId | null = null, bestScore = Infinity;
+    return pickUnit(this.rig.camera, this.cssW, this.cssH, this.pickables(), x, y, opts);
+  }
+  private *pickables(): Iterable<Pickable> {
     for (const a of this.actors.values()) {
       const v = a.view;
-      if (!v || !a.visible || !v.alive || !v.targetable || a.leaving >= 0) continue;
-      if (v.kind === 'pickup') continue;
-      _v.set(a.x, a.h, a.y).project(cam);
-      _v2.set(a.x, a.h + a.artHeight, a.y).project(cam);
-      if (_v.z > 1) continue;
-      const fx = (_v.x * 0.5 + 0.5) * this.cssW, fy = (-_v.y * 0.5 + 0.5) * this.cssH;
-      const hy = (-_v2.y * 0.5 + 0.5) * this.cssH;
-      const ppm = Math.abs(fy - hy) / Math.max(0.3, a.artHeight);
-      const rx = Math.max(16, (v.radius + 0.15) * ppm);
-      const top = Math.min(hy, fy - 24) - 6, bottom = fy + rx * 0.6;
-      if (y < top || y > bottom) continue;
-      const dx = Math.abs(x - fx);
-      if (dx > rx) continue;
-      // nearest to the cursor wins; fighters before units at equal distance
-      const score = dx + Math.abs(y - (fy + hy) / 2) * 0.3 + (v.kind === 'fighter' ? 0 : 8);
-      if (score < bestScore) { bestScore = score; best = a.id; }
+      if (!v || !a.visible || !v.alive || !v.targetable || a.leaving >= 0 || v.kind === 'pickup') continue;
+      yield { id: a.id, x: a.x, y: a.y, h: a.h, artHeight: a.artHeight, view: v };
     }
-    return best;
   }
 
   worldToScreen(x: number, y: number, height = 0): { x: number; y: number; visible: boolean } {

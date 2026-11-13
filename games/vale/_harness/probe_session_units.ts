@@ -48,7 +48,7 @@ section('ManualClock', () => {
 
 section('settings: defaults, ladder, patching', () => {
   const s = defaultSettings();
-  const need = ['a1', 'a2', 'a3', 'ult', 'spell1', 'spell2', 'item1', 'item2', 'item3', 'item4', 'item5', 'item6', 'recall', 'shop', 'scoreboard', 'ping', 'attackMove', 'stop', 'cameraLock', 'centerCamera', 'selfCastMod'];
+  const need = ['a1', 'a2', 'a3', 'ult', 'spell1', 'spell2', 'item1', 'item2', 'item3', 'item4', 'item5', 'item6', 'recall', 'shop', 'scoreboard', 'ping', 'attackMove', 'stop', 'cameraLock', 'centerCamera', 'selfCastMod', 'fightersOnly'];
   check('default binds cover every action, no chat bind, no duplicate keys', need.every((k) => typeof s.controls.binds[k] === 'string') && !('chat' in s.controls.binds)
     && new Set(Object.values(DEFAULT_BINDS)).size === Object.values(DEFAULT_BINDS).length);
   check("default video preset 'high' with the High ladder values", s.video.preset === 'high' && s.video.renderScale === 1 && s.video.shadows === 2 && s.video.bloom && s.video.antialias === 'smaa');

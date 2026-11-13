@@ -185,7 +185,7 @@ function Audio(p: { s: Settings; set: SetFn }): JSX.Element {
 const ACTION_GROUPS: { key: string; actions: string[] }[] = [
   { key: 'abilities', actions: ['a1', 'a2', 'a3', 'ult', 'spell1', 'spell2'] },
   { key: 'items', actions: ['item1', 'item2', 'item3', 'item4', 'item5', 'item6'] },
-  { key: 'commands', actions: ['attackMove', 'stop', 'recall', 'shop', 'ping', 'scoreboard'] },
+  { key: 'commands', actions: ['attackMove', 'fightersOnly', 'stop', 'recall', 'shop', 'ping', 'scoreboard'] },
   { key: 'camera', actions: ['cameraLock', 'centerCamera'] },
 ];
 

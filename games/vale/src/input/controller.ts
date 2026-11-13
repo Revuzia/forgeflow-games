@@ -3,11 +3,19 @@
 // camera seam (structural `InputRenderer`, the RENDER lane's createRenderer implements all of it) and
 // the HUD's hooks for the things that are not commands (shop, scoreboard, ping wheel, markers).
 //
-//   right-click ground      move (attack-move when controls.attackMoveOnClick); held = keeps steering
-//   right-click enemy       attack it (chases)
-//   Shift + right-click     attack-move: walk there, stop and attack what comes in range; the clicked enemy first; never chases
+//   right-click ground      move (an attack-move click when controls.attackMoveOnClick); held and dragged =
+//                           keeps steering toward the cursor (only real pointer motion re-steers: a still mouse
+//                           over a following camera never walks the hero on by itself)
+//   right-click enemy       attack it (chases). Forgiving: enemies only (you and allies in front never steal
+//                           the click), a near miss within PICK_SLOP_PX still counts
+//   Shift + right-click     attack-move click (ruling 33): the enemy under the cursor, else the enemy nearest
+//   A then left-click       the click point within CLICK_RADIUS_M, is attacked (chased, like right-click on it);
+//                           on open ground: walk there, stop for the first enemy in range, never chase
+//   fightersOnly (hold)     every click and attack-move above considers enemy fighters only (wider radius)
 //   left-click              confirm an aimed ability, finish A attack-move, otherwise select a unit to inspect
-//   A then left-click       attack-move · S stop · B recall · P shop · Tab scoreboard (hold)
+//   S stop · B recall · P shop · Tab scoreboard (hold)
+//   hover                   the outline shows exactly what a click would attack (the attack-move target
+//                           while Shift is held or A is armed)
 //   Q W E R D F 1–6         cast: quick cast (controls.quickCast) at the cursor, or normal cast = aim
 //                           first (the renderer draws your indicator), then left-click or the key again;
 //                           right-click / Esc cancels; the self-cast modifier casts unit abilities on you
@@ -34,11 +42,13 @@ export interface CameraLike {
   focusOn(x: number, y: number): void;
   centerOnSelf(): void;
 }
+/** renderer pick options (render/renderer.ts PickOptions): keep only units a command can use; accept near misses (px) */
+export interface PickOpts { filter?: (v: EntityView) => boolean; slop?: number }
 /** what input uses of the renderer (render/renderer.ts Renderer; every member optional so the client
  *  still runs without a renderer, ?render=0) */
 export interface InputRenderer {
   pickGround?(x: number, y: number): { x: number; y: number } | null;
-  pickEntity?(x: number, y: number): EntityId | null;
+  pickEntity?(x: number, y: number, opts?: PickOpts): EntityId | null;
   worldToScreen?(x: number, y: number, height?: number): { x: number; y: number; visible: boolean };
   setAim?(aim: AimSpecLike | null): void;
   setHover?(id: EntityId | null): void;
@@ -75,6 +85,14 @@ export const PING_ORDER: readonly PingKind[] = ['alert', 'danger', 'onMyWay', 'm
 const PING_LIMIT = 5, PING_WINDOW_MS = 4000;
 const WHEEL_DEADZONE = 26;
 const HOLD_MOVE_MS = 140;
+/** hold-steer re-issues only after the pointer itself moved this far (CSS px) since the last order */
+const HOLD_MIN_PX = 8;
+/** a click this close (CSS px) to an enemy's hit box still counts as on it */
+const PICK_SLOP_PX = 14;
+/** attack-move click: the enemy whose edge is nearest the click point within this (m) is the target */
+const CLICK_RADIUS_M = 2;
+/** … with fightersOnly held (fighters only, so the radius can be wider) */
+const FIGHTER_CLICK_RADIUS_M = 3;
 const HOVER_MS = 50;
 /** the pointer's cached hit-test target is trusted this long before the browser hit-tests again */
 const HUD_RETEST_MS = 250;
@@ -107,6 +125,10 @@ export class InputController {
   private rightHeldAttack = false;
   private lastHoldMove = 0;
   private lastMoveTo: { x: number; y: number } | null = null;
+  /** pointer position (CSS px) when the held right button last issued an order */
+  private holdPx = { x: -1, y: -1 };
+  /** Shift as the last pointer event saw it (key events land in `held`) */
+  private ptrShift = false;
   /** middle-drag pan; scouting = it began on a locked camera, so release returns to your fighter */
   private middle: { gx: number; gy: number; scouting: boolean } | null = null;
   private hoverAt = 0;
@@ -142,10 +164,41 @@ export class InputController {
     if (x < 0) return null;
     return this.r.pickGround?.(x, y) ?? null;
   }
-  private entityAt(x = this.ptr.x, y = this.ptr.y): EntityView | null {
+  private entityAt(x = this.ptr.x, y = this.ptr.y, opts?: PickOpts): EntityView | null {
     if (x < 0) return null;
-    const id = this.r.pickEntity?.(x, y);
+    const id = opts ? this.r.pickEntity?.(x, y, opts) : this.r.pickEntity?.(x, y);
     return id === null || id === undefined ? null : this.client.view.entity(id) ?? null;
+  }
+  /** is the bound fightersOnly key (or mouse button) held */
+  private fightersOnly(): boolean {
+    const c = this.keymap.code('fightersOnly');
+    return !!c && this.held.has(c);
+  }
+  private shiftHeld(): boolean { return this.ptrShift || this.held.has('ShiftLeft') || this.held.has('ShiftRight'); }
+  /** an enemy this click may attack (fighters only while fightersOnly is held) */
+  private foe(e: EntityView | null): boolean { return this.enemy(e) && (e!.kind === 'fighter' || !this.fightersOnly()); }
+  /** the enemy under the cursor for an attack click: enemies only, near misses forgiven */
+  private enemyAt(): EntityView | null {
+    const t = this.entityAt(this.ptr.x, this.ptr.y, { filter: (v) => this.foe(v), slop: PICK_SLOP_PX });
+    return t && this.foe(t) ? t : null;
+  }
+  /**
+   * the enemy an attack-move click means: the one under the cursor, else the visible enemy whose edge is
+   * nearest the click point `g` within CLICK_RADIUS_M (ties: lower id), else none (a ground attack-move).
+   * Presentation-side and from the visible view only; the sim receives an explicit target id.
+   */
+  private attackMoveTarget(g: { x: number; y: number } | null): EntityView | null {
+    const t = this.enemyAt();
+    if (t || !g) return t;
+    const R = this.fightersOnly() ? FIGHTER_CLICK_RADIUS_M : CLICK_RADIUS_M;
+    let best: EntityView | null = null, bestD = Infinity;
+    for (const e of this.client.view.entities) {
+      if (!this.foe(e)) continue;
+      const d = Math.hypot(e.x - g.x, e.y - g.y) - e.radius;
+      if (d > R) continue;
+      if (d < bestD - 1e-9 || (Math.abs(d - bestD) <= 1e-9 && best !== null && e.id < best.id)) { bestD = d; best = e; }
+    }
+    return best;
   }
   private enemy(e: EntityView | null): boolean {
     return !!e && e.alive && e.targetable && e.team !== this.team && (e.visibleMask & (1 << this.team)) !== 0 && e.kind !== 'pickup' && e.kind !== 'projectile' && e.kind !== 'zone';
@@ -188,6 +241,7 @@ export class InputController {
   private releaseAll(): void {
     this.held.clear();
     this.rightHeld = false;
+    this.ptrShift = false;
     if (this.middle?.scouting) this.r.camera?.scout(false);
     this.middle = null;
     if (this.wheel.value) this.wheel.value = null;
@@ -203,23 +257,40 @@ export class InputController {
     else if (aim && body) {
       const g = this.ground();
       if (g) {
-        const hov = aim.def.targeting.kind === 'unit' ? this.entityAt() : null;
-        const valid = hov && unitMatches(aim.def.targeting.filter, body, hov, this.team) ? hov : null;
+        const valid = this.aimUnitAt(aim.def, body);
         this.r.setAim?.(aimSpec(aim.def, body, g, valid));
       }
     }
     if (now - this.hoverAt > HOVER_MS && this.ptr.inside) {
       this.hoverAt = now;
-      const e = this.ptr.x >= 0 && !this.overHud(now) ? this.entityAt() : null;
-      const id = e && e.id !== body?.id ? e.id : null;
-      // every hovered unit but you: the renderer outlines enemies and neutrals in HARM, allies in their colour
+      const over = this.ptr.x >= 0 && !this.overHud(now);
+      // the outline shows what a click does: the attack target (the attack-move target while Shift is held or A
+      // is armed), else any other unit but you (left-click selects it); enemies and neutrals in HARM, allies in their colour
+      const armed = this.attackMove.value || this.shiftHeld();
+      let id: EntityId | null = null;
+      let cur: 'default' | 'attack' | 'ally' | 'aim' | 'attackMove';
+      if (aim) {
+        const e = over ? this.aimUnitAt(aim.def, body) ?? this.entityAt() : null;
+        id = e && e.id !== body?.id ? e.id : null;
+        cur = 'aim';
+      } else {
+        const foe = over ? (armed || this.settings.controls.attackMoveOnClick ? this.attackMoveTarget(this.ground()) : this.enemyAt()) : null;
+        const e = foe ?? (over ? this.entityAt() : null);
+        id = e && e.id !== body?.id ? e.id : null;
+        cur = armed ? 'attackMove' : foe ? 'attack' : e && e.team === this.team && e.id !== body?.id ? 'ally' : 'default';
+      }
       if (id !== this.hoverId) { this.hoverId = id; this.r.setHover?.(id); }
-      this.cursor.value = aim ? 'aim' : this.attackMove.value ? 'attackMove' : e && this.enemy(e) ? 'attack' : e && e.team === this.team && e.id !== body?.id ? 'ally' : 'default';
+      this.cursor.value = cur;
     }
-    if (this.rightHeld && !aim && now - this.lastHoldMove > HOLD_MOVE_MS) {
-      this.lastHoldMove = now;
+    // hold-to-steer: only real pointer motion re-steers (a locked camera following the hero moves the ground
+    // under a still cursor; that alone must never keep the hero walking)
+    if (this.rightHeld && !aim && now - this.lastHoldMove > HOLD_MOVE_MS && Math.hypot(this.ptr.x - this.holdPx.x, this.ptr.y - this.holdPx.y) >= HOLD_MIN_PX) {
       const g = this.ground();
-      if (g && (!this.lastMoveTo || Math.hypot(g.x - this.lastMoveTo.x, g.y - this.lastMoveTo.y) > 0.6)) this.moveTo(g, this.rightHeldAttack, false);
+      if (g && (!this.lastMoveTo || Math.hypot(g.x - this.lastMoveTo.x, g.y - this.lastMoveTo.y) > 0.6)) {
+        this.lastHoldMove = now;
+        this.holdPx = { x: this.ptr.x, y: this.ptr.y };
+        this.moveTo(g, this.rightHeldAttack, false);
+      }
     }
     if (this.centring) this.r.camera?.centerOnSelf();
   }
@@ -264,6 +335,7 @@ export class InputController {
   }
   private onKeyUp(e: KeyboardEvent): void {
     this.held.delete(e.code);
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.ptrShift = false;
     const acts = this.keymap.actions(e.code);
     for (const a of acts) this.action(a, false, false, false);
   }
@@ -355,7 +427,7 @@ export class InputController {
     if (cur && cur.slot === slot) { this.confirmAim(); return; }        // the key again casts at the cursor
     if (this.settings.controls.quickCast) {
       if (kind === 'unit') {
-        const t = this.entityAt();
+        const t = this.aimUnitAt(def, body);
         if (t && unitMatches(def.targeting.filter, body, t, this.team)) { this.cancelAim(); this.sendCast(slot, { target: t.id }); }
         else this.startAim(slot, def);        // nothing valid under the cursor: aim instead of wasting the press
         return;
@@ -364,6 +436,14 @@ export class InputController {
       if (g) { this.cancelAim(); this.sendCast(slot, this.pointFor(def, body, g)); return; }
     }
     this.startAim(slot, def);
+  }
+
+  /** a valid target of a unit-targeted ability under the cursor (only valid units compete, near misses forgiven) */
+  private aimUnitAt(def: AbilityCore, body: EntityView | undefined): EntityView | null {
+    if (!body || def.targeting.kind !== 'unit') return null;
+    const ok = (v: EntityView): boolean => unitMatches(def.targeting.filter, body, v, this.team);
+    const t = this.entityAt(this.ptr.x, this.ptr.y, { filter: ok, slop: PICK_SLOP_PX });
+    return t && ok(t) ? t : null;
   }
 
   private pointFor(def: AbilityCore, body: EntityView, g: { x: number; y: number }): { x: number; y: number } {
@@ -388,7 +468,7 @@ export class InputController {
     // aimed before the loss of control landed: refuse now (the aim stays, ready for when it ends)
     if (this.castLocked()) { this.hooks.denied(aim.slot, 'cc'); return false; }
     if (aim.def.targeting.kind === 'unit') {
-      const t = this.entityAt();
+      const t = this.aimUnitAt(aim.def, body);
       if (!t || !unitMatches(aim.def.targeting.filter, body, t, this.team)) { this.hooks.denied(aim.slot, 'target'); return false; }
       this.cancelAim();
       this.sendCast(aim.slot, { target: t.id });
@@ -410,7 +490,20 @@ export class InputController {
     this.ptr.x = e.clientX; this.ptr.y = e.clientY; this.ptr.inside = true;
     this.ptrTarget = e.target;
     this.hudAt = performance.now();
+    this.ptrShift = e.shiftKey;
     this.r.camera?.setPointer(e.clientX, e.clientY, true);
+    // chorded buttons (Pointer Events): pressing or releasing a button while another is down fires no
+    // pointerdown/pointerup, only a pointermove that names the changed button. The button mask is the truth.
+    if (e.pointerType === 'mouse' || e.pointerType === '') {
+      if (this.rightHeld && (e.buttons & 2) === 0) this.rightHeld = false;
+      if (e.button === 0 || e.button === 2) {
+        const down = (e.buttons & (e.button === 0 ? 1 : 2)) !== 0;
+        const onSurface = e.target === this.surface || (e.target instanceof Node && this.surface.contains(e.target));
+        if (down && onSurface && !this.hooks.blocked()) {
+          if (e.button === 0) this.leftDown(e); else this.rightDown(e.shiftKey);
+        } else if (!down && e.button === 2) this.releaseRight();
+      }
+    }
     const w = this.wheel.value;
     if (w) {
       const dx = e.clientX - w.x, dy = e.clientY - w.y;
@@ -427,9 +520,10 @@ export class InputController {
 
   private onDown(e: PointerEvent): void {
     this.ptr.x = e.clientX; this.ptr.y = e.clientY; this.ptr.inside = true;
+    this.ptrShift = e.shiftKey;
     if (this.hooks.blocked()) return;
     const bound = this.keymap.actions(mouseCode(e.button)).filter((a) => a !== 'selfCastMod');
-    if (e.button > 2 && bound.length) { e.preventDefault(); for (const a of bound) this.action(a, true); return; }
+    if (e.button > 2 && bound.length) { e.preventDefault(); this.held.add(mouseCode(e.button)); for (const a of bound) this.action(a, true); return; }
     if (e.button === 1) {
       e.preventDefault();
       const g = this.ground();
@@ -446,10 +540,43 @@ export class InputController {
     else if (e.button === 2) this.rightDown(e.shiftKey);
   }
   private onUp(e: PointerEvent): void {
-    if (e.button === 2) this.rightHeld = false;
+    this.ptr.x = e.clientX; this.ptr.y = e.clientY;
+    if (e.button === 2) this.releaseRight();
+    else if (this.rightHeld && (e.buttons & 2) === 0) this.rightHeld = false;   // right went up first (chorded)
     if (e.button === 1) { if (this.middle?.scouting) this.r.camera?.scout(false); this.middle = null; }
+    if (e.button > 2) this.held.delete(mouseCode(e.button));
     const bound = e.button > 2 ? this.keymap.actions(mouseCode(e.button)) : [];
     for (const a of bound) this.action(a, false);
+  }
+  /** the right button went up: a steer that the pointer moved since the last order ends at the cursor itself */
+  private releaseRight(): void {
+    if (!this.rightHeld) return;
+    this.rightHeld = false;
+    if (this.aiming.value || this.hooks.blocked() || Math.hypot(this.ptr.x - this.holdPx.x, this.ptr.y - this.holdPx.y) < HOLD_MIN_PX) return;
+    const g = this.ground();
+    if (g && (!this.lastMoveTo || Math.hypot(g.x - this.lastMoveTo.x, g.y - this.lastMoveTo.y) > 0.3)) this.moveTo(g, this.rightHeldAttack, false);
+  }
+  private armHold(attack: boolean): void {
+    this.rightHeld = true; this.rightHeldAttack = attack;
+    this.lastHoldMove = performance.now();
+    this.holdPx = { x: this.ptr.x, y: this.ptr.y };
+  }
+  private attackUnit(t: EntityView): void {
+    this.client.send({ type: 'attack', target: t.id });
+    this.hooks.marker({ x: t.x, y: t.y, kind: 'attack', target: t.id });
+  }
+  /**
+   * an attack-move click (Shift + right-click, A + left-click, right-click with attackMoveOnClick): attack the
+   * enemy it means (attackMoveTarget), else attack-move to the ground point; `hold` arms steering for a ground
+   * click with the right button (never for a unit: a steer would replace the attack with a ground order)
+   */
+  private attackMoveClick(hold: boolean): void {
+    const g = this.ground();
+    const t = this.attackMoveTarget(g);
+    if (t) { this.attackUnit(t); return; }
+    if (!g) return;
+    this.moveTo(g, true, true);
+    if (hold) this.armHold(true);
   }
 
   private leftDown(e: PointerEvent): void {
@@ -459,9 +586,7 @@ export class InputController {
     if (this.attackMove.value) {
       this.attackMove.value = false;
       this.cursor.value = 'default';
-      const t = this.entityAt();
-      if (t && this.enemy(t)) { this.client.send({ type: 'attack', target: t.id }); this.hooks.marker({ x: t.x, y: t.y, kind: 'attack', target: t.id }); return; }
-      if (g) this.moveTo(g, true, true);
+      this.attackMoveClick(false);
       return;
     }
     if (e.altKey && g) { this.sendPing('alert', g.x, g.y, this.entityAt()?.id); return; }
@@ -475,26 +600,13 @@ export class InputController {
     if (this.attackMove.value) { this.attackMove.value = false; this.cursor.value = 'default'; }
     const body = this.body;
     if (!body || !body.alive) return;
-    const t = this.entityAt();
-    if (shift) {
-      const foe = t && this.enemy(t) ? t : null;
-      const at = foe ?? this.ground();
-      if (!at) return;
-      this.moveTo({ x: at.x, y: at.y }, true, true, foe?.id);
-      this.rightHeld = true; this.rightHeldAttack = true;
-      this.lastHoldMove = performance.now();
-      return;
-    }
-    if (t && this.enemy(t)) {
-      this.client.send({ type: 'attack', target: t.id });
-      this.hooks.marker({ x: t.x, y: t.y, kind: 'attack', target: t.id });
-      return;
-    }
+    if (shift || this.settings.controls.attackMoveOnClick) { this.attackMoveClick(true); return; }
+    const t = this.enemyAt();
+    if (t) { this.attackUnit(t); return; }
     const g = this.ground();
     if (!g) return;
-    this.moveTo(g, this.settings.controls.attackMoveOnClick, true);
-    this.rightHeld = true; this.rightHeldAttack = false;
-    this.lastHoldMove = performance.now();
+    this.moveTo(g, false, true);
+    this.armHold(false);
   }
 
   /** move (or attack-move) to a ground point; minimap right-clicks come through here too */

@@ -3,7 +3,14 @@
 //
 // Goals: a move order walks to its point; attack/cast orders chase until in range (attack.ts and
 // abilities.ts start the action once in range); taunt chases the taunter; fear walks away from
-// its source. Units do not walk while winding up an attack, while casting (unless
+// its source. An attack-move walks to its point and stops for the enemy it attacks; one with a
+// picked enemy (prefer) chases that enemy first, past nearer enemies, while it stays attackable.
+// A move goal is snapped once, when issued, to where the order can finish (nav.snapGoal: a click
+// into a wall, a structure or the border ends at the nearest open point near the click, a
+// pocket the walker cannot reach at the nearest point it can). Arrival: within 5 cm of the
+// point, or ARRIVE_STALL_TICKS of direct approach without real progress near it (a crowd
+// standing on the spot), or ARRIVE_GIVE_UP_TICKS of it anywhere (truly stuck): the order ends
+// instead of shoving or sliding in place forever. Units do not walk while winding up an attack, while casting (unless
 // canMoveWhileCasting / channel.canMove), while rooted or hard-CC'd. A move order cancels an
 // attack windup and a channel (unless channel.canMove) but never a cast windup: the cast
 // resolves and the walk starts after it.
@@ -51,6 +58,13 @@ const SKIP_CHECK_TICKS = 5;
 const NO_PROGRESS_TICKS = 15;
 /** a blocked waypoint closer than this (m) is treated as reached */
 const WAYPOINT_GIVE_UP = 2;
+/** ticks of direct approach at under ARRIVE_PROGRESS of full speed before a walker near its point (within its
+ *  radius + ARRIVE_NEAR) counts as arrived */
+const ARRIVE_STALL_TICKS = 10;
+/** … before a walker anywhere gives up on its point (nothing left to walk around: the path is spent) */
+const ARRIVE_GIVE_UP_TICKS = 60;
+const ARRIVE_NEAR = 1;
+const ARRIVE_PROGRESS = 0.3;
 /** peak height (m) of airborne arcs */
 const KNOCK_ARC = 1.2;
 const near: Entity[] = [];
@@ -62,6 +76,8 @@ const tmp = { x: 0, y: 0 };
 export function issueMove(w: World, e: Entity, x: number, y: number, attackMove: boolean, prefer = -1): void {
   const m = w.mapDef.size;
   x = Math.max(0, Math.min(m[0] - 1e-3, x)); y = Math.max(0, Math.min(m[1] - 1e-3, y));
+  // the goal the order can actually finish at (never a point inside a wall the walker would slide against)
+  if (w.nav.snapGoal(e.x, e.y, x, y, tmp)) { x = tmp.x; y = tmp.y; }
   // a windup always finishes (the walk starts after release); a channel ends unless it allows moving
   const cs = e.cast;
   if (cs && cs.phase === 'channel' && !cs.def.channel?.canMove) interruptCast(w, e, false);
@@ -69,6 +85,7 @@ export function issueMove(w: World, e: Entity, x: number, y: number, attackMove:
   e.order = attackMove ? ORDER_ATTACK_MOVE : ORDER_MOVE;
   e.orderX = x; e.orderY = y; e.orderTarget = attackMove ? prefer : -1; e.pendingSlot = -1;
   e.path.length = 0; e.pathGoalX = NaN;
+  e.arriveStall = 0;
 }
 export function issueAttack(w: World, e: Entity, t: Entity): void {
   if (t === e) return;
@@ -296,6 +313,12 @@ function goalOf(w: World, e: Entity): boolean {
   switch (e.order) {
     case ORDER_MOVE: tmp.x = e.orderX; tmp.y = e.orderY; return true;
     case ORDER_ATTACK_MOVE: {
+      // a picked enemy is chased first (attack.ts desiredAttackTarget drops it once it is lost)
+      const picked = e.orderTarget >= 0 ? w.live(e.orderTarget) : null;
+      if (picked && attackable(w, e, picked)) {
+        if (inAttackRange(e, picked)) return false;
+        tmp.x = picked.x; tmp.y = picked.y; return true;
+      }
       const cur = w.live(e.atkTarget);
       if (cur && attackable(w, e, cur) && inAttackRange(e, cur)) return false;
       tmp.x = e.orderX; tmp.y = e.orderY; return true;
@@ -427,13 +450,25 @@ export function movementSystem(w: World): void {
     }
     if (wants) {
       const gx = tmp.x, gy = tmp.y;
-      if (e.order === ORDER_MOVE || e.order === ORDER_ATTACK_MOVE) {
+      // walking to the order's own point (not chasing a picked enemy)
+      const toPoint = (e.order === ORDER_MOVE || e.order === ORDER_ATTACK_MOVE) && gx === e.orderX && gy === e.orderY;
+      let d0 = 0;
+      if (toPoint) {
         const dx = gx - e.x, dy = gy - e.y;
-        if (dx * dx + dy * dy < 0.0025) { e.order = ORDER_NONE; e.path.length = 0; continue; }
+        d0 = dx * dx + dy * dy;
+        if (d0 < 0.0025) { arrive(e); continue; }
+        d0 = Math.sqrt(d0);
       }
+      const direct = e.path.length === 0;
       stepToward(w, e, gx, gy);
-      if ((e.order === ORDER_MOVE || e.order === ORDER_ATTACK_MOVE) && Math.abs(e.x - e.orderX) + Math.abs(e.y - e.orderY) < 0.05) {
-        e.order = ORDER_NONE; e.path.length = 0;
+      if (toPoint) {
+        if (Math.abs(e.x - e.orderX) + Math.abs(e.y - e.orderY) < 0.05) { arrive(e); continue; }
+        // direct approach without real progress: a crowd on the spot, or a body pinned against a corner
+        const d1 = Math.sqrt((gx - e.x) * (gx - e.x) + (gy - e.y) * (gy - e.y));
+        if (direct && e.path.length === 0 && d0 - d1 < e.stats.moveSpeed * TICK_DT * ARRIVE_PROGRESS) {
+          e.arriveStall++;
+          if ((e.arriveStall >= ARRIVE_STALL_TICKS && d1 < e.radius + ARRIVE_NEAR) || e.arriveStall >= ARRIVE_GIVE_UP_TICKS) arrive(e);
+        } else e.arriveStall = 0;
       }
     } else if ((e.ccMask & CC_HARD) === 0) {
       // idle units yield softly to overlapping neighbours
@@ -443,6 +478,10 @@ export function movementSystem(w: World): void {
     }
   }
   w.hashDirty = true;
+}
+
+function arrive(e: Entity): void {
+  e.order = ORDER_NONE; e.orderTarget = -1; e.path.length = 0; e.arriveStall = 0;
 }
 
 // ── view state ──────────────────────────────────────────────────────────────────────────────────

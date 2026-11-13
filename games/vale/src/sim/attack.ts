@@ -7,7 +7,8 @@
 // A pending empowered attack (buff.empowerAttacks) adds its rangeBonus and is consumed on release;
 // its effects run on hit with the buff's context. attackHit triggers fire on every landed attack.
 //
-// Targets: taunt forces the taunter; an attack order chases its target; attack-move and idle
+// Targets: taunt forces the taunter; an attack order chases its target; an attack-move with a
+// picked enemy (prefer) commits to it while it is attackable; attack-move and idle
 // units (autoAttack) acquire the best enemy in range — lowest acquireScore (hooks.acquireScore,
 // default: nearest, structures and wards last). Units that are moving, casting, dashing,
 // disarmed, feared or hard-CC'd do not start attacks; losing the target (dead or untargetable) or
@@ -84,8 +85,13 @@ export function desiredAttackTarget(w: World, e: Entity): Entity | null {
       return null;
     }
     case ORDER_ATTACK_MOVE: {
-      const picked = w.live(e.orderTarget); // the enemy the player clicked: first choice while in range, never chased
-      if (picked && attackable(w, e, picked) && inAttackRange(e, picked)) return picked;
+      // the enemy the player picked: committed to (movement.ts walks to it, past nearer enemies) while it
+      // stays attackable; once it dies, hides or leaves vision the order is a plain attack-move to its point
+      if (e.orderTarget >= 0) {
+        const picked = w.live(e.orderTarget);
+        if (picked && attackable(w, e, picked)) return picked;
+        e.orderTarget = -1;
+      }
       const cur = w.live(e.atkTarget);
       if (cur && attackable(w, e, cur) && inAttackRange(e, cur)) return cur;
       return acquireTarget(w, e);

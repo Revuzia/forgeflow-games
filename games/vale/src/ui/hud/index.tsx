@@ -38,7 +38,7 @@ import '../styles/hud.css';
 /** first-match hints, one every few seconds once the match is live (once per device) */
 const HINTS: { key: string; params: Action[] }[] = [
   { key: 'hint.move', params: [] },
-  { key: 'hint.attack', params: [] },
+  { key: 'hint.attack', params: ['fightersOnly'] },
   { key: 'hint.abilities', params: ['a1', 'a2', 'a3', 'ult'] },
   { key: 'hint.shop', params: [] },
   { key: 'hint.ping', params: ['ping'] },
@@ -219,7 +219,7 @@ function selecting(r: InputRenderer, model: HudModel): InputRenderer {
     get camera() { return r.camera; },
   };
   if (r.pickGround) w.pickGround = (x, y) => r.pickGround!(x, y);
-  if (r.pickEntity) w.pickEntity = (x, y) => r.pickEntity!(x, y);
+  if (r.pickEntity) w.pickEntity = (x, y, o) => r.pickEntity!(x, y, o);
   if (r.worldToScreen) w.worldToScreen = (x, y, h) => r.worldToScreen!(x, y, h);
   if (r.setAim) w.setAim = (a) => r.setAim!(a);
   if (r.setHover) w.setHover = (id) => r.setHover!(id);

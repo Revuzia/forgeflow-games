@@ -33,10 +33,11 @@ export const ACTION_LABELS: Record<string, string> = {
   item1: 'Item slot 1', item2: 'Item slot 2', item3: 'Item slot 3', item4: 'Item slot 4', item5: 'Item slot 5', item6: 'Item slot 6',
   recall: 'Recall', shop: 'Open shop', scoreboard: 'Scoreboard (hold)', ping: 'Ping', attackMove: 'Attack-move', stop: 'Stop',
   cameraLock: 'Camera lock', centerCamera: 'Centre camera (hold)', selfCastMod: 'Self-cast modifier',
+  fightersOnly: 'Target fighters only (hold)',
 };
 export const ACTION_GROUPS: { title: string; actions: string[] }[] = [
   { title: 'Abilities', actions: ['a1', 'a2', 'a3', 'ult', 'spell1', 'spell2'] },
   { title: 'Items', actions: ['item1', 'item2', 'item3', 'item4', 'item5', 'item6'] },
-  { title: 'Commands', actions: ['attackMove', 'stop', 'recall', 'shop', 'ping', 'scoreboard'] },
+  { title: 'Commands', actions: ['attackMove', 'fightersOnly', 'stop', 'recall', 'shop', 'ping', 'scoreboard'] },
   { title: 'Camera', actions: ['cameraLock', 'centerCamera'] },
 ];

@@ -2,7 +2,8 @@
 // KeyboardEvent.code (layout-independent) or a mouse button ('Mouse0'..'Mouse4'); defaults live in
 // src/session/settings.ts. This module inverts that table for the controller and gives the HUD its key
 // labels. Action vocabulary (code, not content): a1 a2 a3 ult spell1 spell2 item1..item6 recall shop
-// scoreboard ping attackMove stop cameraLock centerCamera selfCastMod.
+// scoreboard ping attackMove stop cameraLock centerCamera selfCastMod fightersOnly (held: clicks and
+// attack-moves consider enemy fighters only).
 
 import type { SlotT } from '../contracts/catalog.ts';
 import type { Settings } from '../contracts/session.ts';
@@ -10,7 +11,7 @@ import type { Settings } from '../contracts/session.ts';
 export type Action =
   | 'a1' | 'a2' | 'a3' | 'ult' | 'spell1' | 'spell2'
   | 'item1' | 'item2' | 'item3' | 'item4' | 'item5' | 'item6'
-  | 'recall' | 'shop' | 'scoreboard' | 'ping' | 'attackMove' | 'stop' | 'cameraLock' | 'centerCamera' | 'selfCastMod';
+  | 'recall' | 'shop' | 'scoreboard' | 'ping' | 'attackMove' | 'stop' | 'cameraLock' | 'centerCamera' | 'selfCastMod' | 'fightersOnly';
 
 export const CAST_ACTIONS: readonly Action[] = ['a1', 'a2', 'a3', 'ult', 'spell1', 'spell2', 'item1', 'item2', 'item3', 'item4', 'item5', 'item6'];
 export const LEVEL_SLOTS = ['a1', 'a2', 'a3', 'ult'] as const;

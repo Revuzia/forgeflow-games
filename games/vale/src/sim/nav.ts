@@ -373,6 +373,49 @@ export class NavGrid {
     return true;
   }
 
+  /**
+   * Where a move order to (x, y) should end for a walker at (fromX, fromY), so the order can finish: (x, y)
+   * itself when it is open and reachable. A blocked point (a wall, a tree line, a structure's footprint, the
+   * map border) goes to the open point on the click→walker line nearest the click (the walker's side: walk
+   * toward the click and stop at the obstacle), unless the nearest open cell is more than `sideSlack` m nearer
+   * the click and within `near` m of it (a click just inside a thin obstacle's far face). A point in a pocket the walker cannot
+   * reach goes to the nearest cell it can reach. Writes `out`; false when nothing is open at all.
+   */
+  snapGoal(fromX: number, fromY: number, x: number, y: number, out: V2, near = 3, sideSlack = 2.5): boolean {
+    const t: V2 = { x: 0, y: 0 };
+    let cs = this.componentAt(fromX, fromY);
+    if (cs < 0 && this.nearestWalkable(fromX, fromY, t, 8)) cs = this.componentAt(t.x, t.y);
+    let gx = x, gy = y;
+    if (!this.walkable(x, y)) {
+      // A: the nearest open cell (ties to the walker's side); B: the open point on the click → walker line nearest
+      // the click (the walker's side of the obstacle). B wins unless A is clearly nearer the click: a click into a
+      // wall never sends the walker around it to the far face
+      const okA = this.nearestWalkable(x, y, t, 64, fromX, fromY);
+      const ax = t.x, ay = t.y;
+      const dA = okA ? Math.sqrt((ax - x) * (ax - x) + (ay - y) * (ay - y)) : Infinity;
+      const dx = fromX - x, dy = fromY - y, l = Math.sqrt(dx * dx + dy * dy);
+      const step = this.cell * 0.5;
+      let okB = false, bx = 0, by = 0;
+      for (let s = step; s < l + step; s += step) {
+        const f = Math.min(1, s / Math.max(l, 1e-9));
+        const px = x + dx * f, py = y + dy * f;
+        if (!this.walkable(px, py) || (cs >= 0 && this.componentAt(px, py) !== cs)) continue;
+        // settle on the open cell's centre (solidly inside, not on the clearance rim)
+        bx = (Math.floor(px / this.cell) + 0.5) * this.cell; by = (Math.floor(py / this.cell) + 0.5) * this.cell;
+        if (!this.walkable(bx, by)) { bx = px; by = py; }
+        okB = true;
+        break;
+      }
+      const dB = okB ? Math.sqrt((bx - x) * (bx - x) + (by - y) * (by - y)) : Infinity;
+      if (okB && (dB <= dA + sideSlack || dA > near)) { gx = bx; gy = by; }
+      else if (okA) { gx = ax; gy = ay; }
+      else return false;
+    }
+    if (cs >= 0 && this.componentAt(gx, gy) !== cs && this.nearestInComponent(gx, gy, cs, t)) { gx = t.x; gy = t.y; }
+    out.x = gx; out.y = gy;
+    return true;
+  }
+
   // ── path entry point ──────────────────────────────────────────────────────────────────────
   /**
    * Path from a to b for a body of `radius` (clamped to 0.45 cells: waypoints hug blocked cells,

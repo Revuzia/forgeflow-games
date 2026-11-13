@@ -386,6 +386,8 @@ export class Entity implements EntityView {
   skipCheck = 0;
   /** consecutive ticks of walking without real progress toward the current waypoint */
   noProgress = 0;
+  /** consecutive ticks of direct approach to a move order's point without real progress (arrival watchdog) */
+  arriveStall = 0;
   /** static blocker (structures): never moves, pushes units out */
   static = false;
   /** radius this entity blocks in the nav grid (structures; 0 = none) — removed on death */
