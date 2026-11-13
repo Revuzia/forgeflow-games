@@ -148,3 +148,22 @@ test('putGrowable rings a rebuilt geometry buffer (and its index): a new member 
   const a2 = putGrowable(geo, 'position', new Float32Array(5000), 3);
   assert.ok(a2.array.length >= 5000 && ringOf(a2) && !ringOf(a2)!.members.includes(a0));
 });
+
+test('ringIntercept: a BatchedMesh page writing its own attributes rotates its buffers, one per frame, same arrays', async () => {
+  const { BatchedMesh, BoxGeometry: Box } = await import('three');
+  const { ringIntercept } = await import('../src/render/bufring.ts');
+  const bm = new BatchedMesh(8, 2000, 4000, new MeshBasicMaterial());
+  ringTick();
+  bm.addGeometry(new Box());
+  ringIntercept(bm.geometry);
+  const p0 = bm.geometry.getAttribute('position'), i0 = bm.geometry.index!;
+  ringTick();
+  bm.addGeometry(new Box(2, 2, 2));
+  const p1 = bm.geometry.getAttribute('position') as InstancedBufferAttribute, i1 = bm.geometry.index!;
+  assert.notEqual(p1, p0); assert.notEqual(i1, i0);
+  assert.equal(p1.array, (p0 as InstancedBufferAttribute).array);
+  // member 1 never uploaded: it is sent every range written since the ring began (the second box's)
+  assert.ok(p1.updateRanges.length >= 1 && p1.updateRanges[0].start === 24 * 3, JSON.stringify(p1.updateRanges));
+  ringTick(); bm.addGeometry(new Box(3, 3, 3)); ringTick(); bm.addGeometry(new Box(4, 4, 4));
+  assert.equal(bm.geometry.getAttribute('position'), p0, 'back to the first after 3 frames');
+});

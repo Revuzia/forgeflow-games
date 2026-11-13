@@ -86,7 +86,7 @@ class Ring {
     const m = this.members[this.cur];
     const d = this.dirty[this.cur];
     m.clearUpdateRanges();
-    for (let k = 0; k < d.length; k += 2) m.addUpdateRange(d[k], d[k + 1] - d[k]);
+    for (let k = 0; k < d.length; k += 2) addRangeRaw.call(m, d[k], d[k + 1] - d[k]);
     m.needsUpdate = true;
   }
   /** the mesh went: free the members three does not know to free (all but the one installed; `all`: every one) */
@@ -120,6 +120,8 @@ export function addRange(d: number[], s: number, e: number): void {
 }
 
 const RINGS = new WeakMap<object, Ring>();
+/** BufferAttribute's own addUpdateRange (as patched by upload.ts F16, if on), also for members whose method is intercepted */
+const addRangeRaw = function (this: Attr, start: number, count: number): void { BufferAttribute.prototype.addUpdateRange.call(this, start, count); };
 
 /**
  * ring the named attributes of a mesh ('instanceMatrix', 'instanceColor' or geometry attribute names) — call right
@@ -159,12 +161,15 @@ export function ringOf(a: object): { members: readonly object[]; cur: number } |
  * ring a geometry's attribute (or 'index') in place — putGrowable's buffers, rewritten whole at each rebuild; the
  * geometry's dispose frees the extra members
  */
-export function ringGeo(geo: BufferGeometry, name: string): void {
+export function ringGeo(geo: BufferGeometry, name: string, intercept = false): void {
   if (!BUF_RING) return;
   const a = (name === 'index' ? geo.index : geo.attributes[name]) as Attr | null | undefined;
   if (!a || RINGS.has(a) || (a as unknown as { isInterleavedBufferAttribute?: boolean }).isInterleavedBufferAttribute) return;
   const r = new Ring(null, geo, name, a);
   for (const m of r.members) RINGS.set(m, r);
+  // (intercept: code that writes the attribute itself — three's BatchedMesh setGeometryAt / optimize — calls
+  // addUpdateRange on whichever member it got: each call becomes the ring's mark)
+  if (intercept) for (const m of r.members) m.addUpdateRange = (start: number, count: number) => r.mark(start, count);
   const free = () => { r.free(); geo.removeEventListener('dispose', free); };
   geo.addEventListener('dispose', free);
 }
@@ -173,4 +178,14 @@ export function ringGeo(geo: BufferGeometry, name: string): void {
 export function ringDrop(a: object | null | undefined): void {
   const r = a ? RINGS.get(a) : undefined;
   if (r) r.free(true);
+}
+
+/**
+ * (PERF s16) ring every attribute and the index of a geometry that three writes itself (a BatchedMesh page, after its
+ * first addGeometry made the attributes): each addUpdateRange goes to the ring
+ */
+export function ringIntercept(geo: BufferGeometry): void {
+  if (!BUF_RING) return;
+  for (const n of Object.keys(geo.attributes)) ringGeo(geo, n, true);
+  if (geo.index) ringGeo(geo, 'index', true);
 }

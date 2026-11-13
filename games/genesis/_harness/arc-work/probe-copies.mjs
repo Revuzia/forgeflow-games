@@ -46,6 +46,7 @@ for (const v of views) {
     return [...by].sort((a, b) => b[1][0] - a[1][0]).slice(0, 12).map(([k, r]) => `${k}: ${(r[0] / 1e6).toFixed(2)} MB in ${r[1]} bufs`);
   });
   console.log('  rest copies by owner:', who.join(' | '));
+  console.log('  terrain landings so far:', JSON.stringify(await page.evaluate(() => globalThis.__GENESIS_FRESH__ ?? null)));
   console.log('view', JSON.stringify(v), 'flight/frame', JSON.stringify(fly), 'rest/frame', JSON.stringify(still));
 }
 const out = await page.evaluate(() => {

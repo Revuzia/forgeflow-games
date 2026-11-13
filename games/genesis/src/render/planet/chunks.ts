@@ -399,6 +399,9 @@ const PAGE_POOL = perfSwitch('pagepool');
  */
 const FRESH_LAND = perfSwitch('freshland');
 const FRESH_EXTRA = 6;
+/** (probes) landings by where they went: a cold page, a new page, the fullest page past the allowance, compaction */
+export const FRESH_STATS = { cold: 0, fresh: 0, capHot: 0, packHot: 0, packCold: 0 };
+try { (globalThis as Record<string, unknown>).__GENESIS_FRESH__ = FRESH_STATS; } catch { /* no global */ }
 /** frames an idle page is kept beyond the reserve before its GL buffers are deleted */
 const IDLE_FRAMES = 900;
 /** idle pages always kept */
@@ -530,6 +533,13 @@ class PatchBatch {
         if (p.live > best) { best = p.live; pi = i; }
       }
     }
+    if (FRESH_LAND) {
+      const p = pi >= 0 ? this.pages[pi] : null;
+      if (!p) FRESH_STATS.fresh++;
+      else if (packed) { if (p.cold) FRESH_STATS.packCold++; else FRESH_STATS.packHot++; }
+      else if (p.cold) FRESH_STATS.cold++;
+      else FRESH_STATS.capHot++;
+    }
     if (pi < 0) {
       pi = this.pages.indexOf(null);
       if (pi < 0) pi = this.pages.length;
@@ -651,6 +661,13 @@ class PatchBatch {
       for (let i = 0; i < this.pages.length; i++) { const p = this.pages[i]; if (p && p.live > 0 && p.live < least) { least = p.live; pi = i; } }
       if (pi < 0) break;
       const p = this.pages[pi]!;
+      // (PERF s16 FRESH_LAND) move patches only into pages the GPU no longer reads (no whole-page copies): while the
+      // others are all drawn the slack waits (bounded by alloc's page allowance)
+      if (FRESH_LAND) {
+        let room = 0;
+        for (let i = 0; i < this.pages.length; i++) { const q = this.pages[i]; if (q && i !== pi && q.cold) room += PATCH_PAGE - q.live; }
+        if (room < p.live) break;
+      }
       const freeSet = new Set(p.free);
       for (let k = 0; k < p.used; k++) {
         if (freeSet.has(k)) continue;

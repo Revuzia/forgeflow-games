@@ -16,6 +16,7 @@ import {
 } from 'three';
 import { BLD_INST_PER_ROW, makeBuildingDepthMaterial, makeBuildingMaterial } from './buildingmat.ts';
 import { perfSwitch } from '../perfswitch.ts';
+import { ringIntercept } from '../bufring.ts';
 
 /** PERF F21 (session 9): geometry PAGES of a fixed size instead of one batch whose buffers double; `?bldpage=0` = old */
 const PAGED = perfSwitch('bldpage');
@@ -85,6 +86,7 @@ export class BldPage {
     m.onBeforeRender = (_r, _s, camera, geometry) => this.prepareDraws(camera, geometry);
   }
 
+  private ringed = false;
   fits(nv: number, ni: number): boolean { return this.mesh.unusedVertexCount >= nv && this.mesh.unusedIndexCount >= ni; }
 
   /** after compaction the geometry would fit */
@@ -95,6 +97,9 @@ export class BldPage {
 
   addGeom(geo: BufferGeometry, nv: number, ni: number): number {
     const id = this.mesh.addGeometry(geo);
+    // (PERF s16) buildings land in pages drawn every frame (a whole-page copy per attribute on ANGLE-Metal): the page's
+    // buffers are a ring of 3 (bufring.ts; three's own addUpdateRange calls feed it), made once the attributes exist
+    if (!this.ringed) { this.ringed = true; ringIntercept(this.mesh.geometry); }
     this.bs.delete(id);
     this.ids.add(id);
     this.liveV += nv; this.liveI += ni;
@@ -137,6 +142,7 @@ export class BldPage {
     while (vu + nv > vc) vc *= 2;
     while (iu + ni > ic) ic *= 2;
     this.mesh.setGeometrySize(vc, ic);
+    this.ringed = false;
     (this as { vCap: number }).vCap = vc; (this as { iCap: number }).iCap = ic;
   }
 
