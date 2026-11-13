@@ -10,7 +10,9 @@
 //               while shooting (the standard mobile-shooter grip).
 //   buttons     AIM (toggle) · JUMP · CROUCH (toggle; while sprinting = slide)
 //               · RELOAD · GRENADE (hold = cook, release = throw) · SWAP (next
-//               weapon) · USE · SCORE (hold, matches) · PAUSE.
+//               weapon) · USE · TAC (tactical: flash / smoke / concussion, shown
+//               only while the class carries one, with the count) · SCORE
+//               (hold, matches) · PAUSE.
 //   streaks     the killstreak tray tiles become buttons: tap a READY tile.
 //               Sweep launches at once; mortar/airstrike/orbital enter the
 //               designate mode (FIRE confirms on the preview ring, AIM cancels).
@@ -74,6 +76,10 @@ function css() {
 #tc-reload{width:50px;height:50px;right:calc(104px + env(safe-area-inset-right));bottom:calc(194px + env(safe-area-inset-bottom));}
 #tc-nade{width:50px;height:50px;right:calc(200px + env(safe-area-inset-right));bottom:calc(70px + env(safe-area-inset-bottom));}
 #tc-swap{width:50px;height:50px;right:calc(200px + env(safe-area-inset-right));bottom:calc(140px + env(safe-area-inset-bottom));}
+#tc-tac{width:46px;height:46px;right:calc(258px + env(safe-area-inset-right));bottom:calc(104px + env(safe-area-inset-bottom));font-size:9px;
+  flex-direction:column;line-height:1.1;}
+#tc-tac.hide{display:none;}
+#tc-tac b{font-weight:400;font-size:12px;color:#d9a441;}
 #tc-use{width:46px;height:46px;right:calc(204px + env(safe-area-inset-right));bottom:calc(210px + env(safe-area-inset-bottom));font-size:10px;}
 #tc-pause{width:40px;height:40px;left:calc(12px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));border-radius:8px;}
 #tc-score{width:40px;height:40px;left:calc(60px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));border-radius:8px;font-size:9px;}
@@ -139,6 +145,7 @@ export function createTouchControls(ctx) {
     nade: mk("div", "tc-nade", "tc-btn", ICON.nade),
     swap: mk("div", "tc-swap", "tc-btn", ICON.swap),
     use: mk("div", "tc-use", "tc-btn", "USE"),
+    tac: mk("div", "tc-tac", "tc-btn hide", "TAC<b>0</b>"), // [equipment lane]
     pause: mk("div", "tc-pause", "tc-btn", ICON.pause),
     score: mk("div", "tc-score", "tc-btn", "SCORE"),
   };
@@ -257,6 +264,7 @@ export function createTouchControls(ctx) {
   hold(B.nade, () => input.touchPress("grenade"), () => input.touchRelease("grenade"));
   hold(B.swap, () => { input.state.switchTo = "next"; });
   hold(B.use, () => input.touchPress("interact"), () => input.touchRelease("interact"));
+  hold(B.tac, () => input.touchPress("tactical"), () => input.touchRelease("tactical")); // [equipment lane]
   hold(B.pause, () => { key("Escape", "keydown"); key("Escape", "keyup"); });
   hold(B.score, () => key("Tab", "keydown"), () => key("Tab", "keyup"));
 
@@ -278,7 +286,7 @@ export function createTouchControls(ctx) {
     looks.clear();
     for (const k of Object.keys(B)) B[k].classList.remove("down");
     input.touchRelease("fire"); input.touchRelease("jump"); input.touchRelease("reload");
-    input.touchRelease("grenade"); input.touchRelease("interact");
+    input.touchRelease("grenade"); input.touchRelease("interact"); input.touchRelease("tactical");
     input.state.moveX = 0; input.state.moveZ = 0; input.state.sprint = false;
   }
 
@@ -304,6 +312,11 @@ export function createTouchControls(ctx) {
       B.crouch.classList.toggle("on", !!input.state.crouch);
       B.fire.classList.toggle("designate", !!input.designate);
       B.score.classList.toggle("hide", !s.match);
+      { // [equipment lane] tactical button: only with a tactical in the kit; shows the count
+        const pl = s.state.player, has = !!(pl.kit && pl.kit.tactical), n = pl.tactical | 0;
+        B.tac.classList.toggle("hide", !has);
+        if (has && B.tac._n !== n) { B.tac._n = n; B.tac.lastChild.textContent = String(n); B.tac.style.opacity = n > 0 ? "" : ".45"; }
+      }
       // an emptied stick must not leave the player creeping
       if (!mv && (input.state.moveX || input.state.moveZ) && !input._keysHeld()) { input.state.moveX = 0; input.state.moveZ = 0; }
     },

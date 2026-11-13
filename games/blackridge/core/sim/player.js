@@ -17,6 +17,8 @@ import { fireShot, dirFromAngles } from "./ballistics.js";
 import { resolveSwitch as resolveSwitchTarget, normalise as normaliseLoadout } from "./loadout.js";
 import { spawnGrenade, detonateAt } from "./grenades.js";
 import { hasPerk, PERK_FX } from "./classes.js";
+// [equipment lane] tactical throw verb, tripmine planting, concussion slow
+import { stepPlayerEquipment, plantFromBody, stunLevel, stunMoveMult } from "./equipment.js";
 
 export const MOVE = {
   WALK: 4.6, STRAFE_MULT: 0.9, BACK_MULT: 0.76,
@@ -194,7 +196,8 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
   const fwdArc = cmd.moveZ > 0.01 && Math.abs(cmd.moveX) <= cmd.moveZ + 0.001;
   // fire held/buffered blocks sprint (fire press during sprint drops it and
   // must not re-enter until the trigger is released — §1.8)
-  const wantSprint = !!cmd.sprint && fwdArc && !m.sliding && !cmd.ads &&
+  const stunned = stunLevel(p, t) > 0; // [equipment lane] a concussion kills the sprint
+  const wantSprint = !!cmd.sprint && fwdArc && !m.sliding && !cmd.ads && !stunned &&
     !cmd.fire && !buffered("fire") &&
     t >= m.fireToSprintLockUntil && p.weapon.state !== "switching";
   if (m.sprintState === "none") {
@@ -265,6 +268,8 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
       const dirz = m.sprintState !== "none" ? f[1] : wish[1] / wl;
       wish[0] = dirx * target; wish[1] = dirz * target;
     }
+    // [equipment lane] concussion: every move speed x0.55 at full stun, easing out
+    if (stunned) { const sm = stunMoveMult(p, t); wish[0] *= sm; wish[1] *= sm; }
   }
 
   // ---- slide physics (§1.4) or ground/air accel (§1.2)
@@ -456,8 +461,17 @@ function stepPlayerWeaponVerbs(state, cmd, world, weapons, dt, sim, mantling) {
   const m = p._m;
   const t = state.time;
 
-  // grenade (R6/§5.9): press = pin (cook starts), release = throw
-  if (m.cooking) {
+  // [equipment lane] tactical verb (cmd.tactical): flash / smoke / concussion throw
+  stepPlayerEquipment(sim, p, cmd, t, mantling);
+
+  // grenade (R6/§5.9): press = pin (cook starts), release = throw.
+  // [equipment lane] a TRIPMINE lethal plants on the press instead (grounded only).
+  if (p.kit && p.kit.lethal === "claymore") {
+    if (t - m.buf.grenade <= MOVE.BUFFER_S && (p.grenades || 0) > 0 && !mantling && p.grounded) {
+      m.buf.grenade = -9;
+      if (plantFromBody(sim, "P", p, p.yaw)) p.grenades--;
+    }
+  } else if (m.cooking) {
     m.grenFuseLeft -= dt;
     if (m.grenFuseLeft <= 0) {
       m.cooking = false;
@@ -779,10 +793,12 @@ export function stepBotLocomotion(sim, bot, dt) {
   {
     const wpn = sim.weapons && bot.weapon ? sim.weapons[bot.weapon.id] : null;
     let tgt = null;
+    const stunned = stunLevel(bot, sim.state.time) > 0; // [equipment lane] no sprint while concussed
     if (cmd.crouch) tgt = hasPerk(bot, "doubleTime") ? MOVE.CROUCH * PERK_FX.doubleTime.crouchMult : MOVE.CROUCH;
-    else if (cmd.sprint && mz > 0.5) tgt = MOVE.SPRINT;
+    else if (cmd.sprint && mz > 0.5 && !stunned) tgt = MOVE.SPRINT;
     else if (bot.weapon && bot.weapon.ads) tgt = MOVE.WALK * (wpn && wpn.adsMoveMult != null ? wpn.adsMoveMult : 0.6);
     if (tgt != null && wl > 0.01) { wx = (wx / wl) * tgt; wz = (wz / wl) * tgt; }
+    if (stunned) { const sm = stunMoveMult(bot, sim.state.time); wx *= sm; wz *= sm; } // [equipment lane]
   }
 
   const dvx = wx - bot.vel[0], dvz = wz - bot.vel[2];

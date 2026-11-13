@@ -5,10 +5,10 @@
 // rules the sim enforces.
 //
 // A CLASS (what the player saves/edits):
-//   { name, primary, secondary, lethal, perks:[tier1, tier2, tier3] }
+//   { name, primary, secondary, lethal, tactical, perks:[tier1, tier2, tier3] }
 // A KIT (what a body spawns with — a class resolved against the weapons table
 // and the unlock gate):
-//   { classId, name, primary, secondary, lethal, lethalCount, perks:[...] }
+//   { classId, name, primary, secondary, lethal, lethalCount, tactical, tacticalCount, perks:[...] }
 // A body that spawned from a kit carries `body.kit` and `body.perks` ({id:true}
 // map — JSON-safe for snapshots). Bodies without `perks` (campaign, pistol-start
 // playlist, every pre-existing selftest) get no perk effect anywhere: every perk
@@ -26,12 +26,22 @@ export const PRIMARIES = ["warden", "vesper", "breaker", "corvus"];
 export const SECONDARIES = ["pike"];
 
 // ---------------------------------------------------------------- equipment
-// Only the frag ships in this lane. The other ids are listed (so the editor can
-// show them as COMING) but are never valid in a class.
+// LETHAL slot (frag | tripmine) and TACTICAL slot (flashbang | smoke |
+// concussion). Effects + numbers: core/sim/equipment.js (EQUIP). A body carries
+// its lethal count in `body.grenades` (the frozen frag field — a tripmine kit
+// counts mines there) and its tactical count in `body.tactical`.
 export const LETHALS = {
   frag: { id: "frag", name: "FRAG", count: 1, desc: "Cookable fragmentation grenade." },
+  claymore: { id: "claymore", name: "TRIPMINE", count: 1,
+    desc: "Directional mine, planted facing your aim. Fires on the first hostile through its cone. Two live at most; shoot one to clear it." },
 };
-export const EQUIPMENT_COMING = ["flash", "smoke", "stun", "claymore"];
+export const TACTICALS = {
+  flash: { id: "flash", name: "FLASHBANG", count: 2, desc: "Blinds and deafens anyone facing the burst for up to four seconds. Your squad gets a fraction." },
+  smoke: { id: "smoke", name: "SMOKE", count: 2, desc: "Fifteen seconds of thick cover. Nothing sees or locks on through it." },
+  stun:  { id: "stun",  name: "CONCUSSION", count: 2, desc: "Slows movement and aim and kills a sprint for a few seconds." },
+};
+// kept for older importers: nothing is "coming" any more
+export const EQUIPMENT_COMING = [];
 export const EQUIPMENT_NAMES = {
   frag: "FRAG", flash: "FLASHBANG", smoke: "SMOKE", stun: "CONCUSSION", claymore: "TRIPMINE",
 };
@@ -80,11 +90,11 @@ export const CLASS_COUNT = 5;
 export const NAME_MAX = 14;
 
 export const DEFAULT_CLASSES = [
-  { name: "ASSAULT",  primary: "warden",  secondary: "pike", lethal: "frag", perks: ["scavenger", "fastHands", "quickfix"] },
-  { name: "RUNNER",   primary: "vesper",  secondary: "pike", lethal: "frag", perks: ["doubleTime", "hardline", "deadsilence"] },
-  { name: "MARKSMAN", primary: "corvus",  secondary: "pike", lethal: "frag", perks: ["flak", "ghost", "quickfix"] },
-  { name: "BREACHER", primary: "breaker", secondary: "pike", lethal: "frag", perks: ["doubleTime", "fastHands", "deadsilence"] },
-  { name: "RECON",    primary: "warden",  secondary: "pike", lethal: "frag", perks: ["scavenger", "ghost", "deadsilence"] },
+  { name: "ASSAULT",  primary: "warden",  secondary: "pike", lethal: "frag", tactical: "flash", perks: ["scavenger", "fastHands", "quickfix"] },
+  { name: "RUNNER",   primary: "vesper",  secondary: "pike", lethal: "frag", tactical: "stun",  perks: ["doubleTime", "hardline", "deadsilence"] },
+  { name: "MARKSMAN", primary: "corvus",  secondary: "pike", lethal: "frag", tactical: "smoke", perks: ["flak", "ghost", "quickfix"] },
+  { name: "BREACHER", primary: "breaker", secondary: "pike", lethal: "frag", tactical: "flash", perks: ["doubleTime", "fastHands", "deadsilence"] },
+  { name: "RECON",    primary: "warden",  secondary: "pike", lethal: "frag", tactical: "smoke", perks: ["scavenger", "ghost", "deadsilence"] },
 ];
 
 export function cleanName(s, fallback) {
@@ -107,6 +117,9 @@ export function validateClass(c, index) {
   // still locked resolves to null, and must not be "repaired" into a default
   // the player has not unlocked). Anything else unknown is repaired.
   const lethal = src.lethal === null ? null : LETHALS[src.lethal] ? src.lethal : (fixed++, def.lethal);
+  // tactical slot (added after v1 records were saved: a record without one is
+  // repaired to the slot default, exactly like any other missing field)
+  const tactical = src.tactical === null ? null : TACTICALS[src.tactical] ? src.tactical : (fixed++, def.tactical);
   const inPerks = Array.isArray(src.perks) ? src.perks : [];
   const perks = [0, 1, 2].map((ti) => {
     const id = inPerks[ti];
@@ -115,7 +128,7 @@ export function validateClass(c, index) {
     fixed++;
     return def.perks[ti];
   });
-  return { cls: { name, primary, secondary, lethal, perks }, fixed };
+  return { cls: { name, primary, secondary, lethal, tactical, perks }, fixed };
 }
 
 // Resolve a class into the kit a body spawns with. `isUnlocked(key)` is the
@@ -137,6 +150,7 @@ export function resolveKit(cls, opts) {
   const primary = pickW(v.primary, PRIMARIES);
   const secondary = pickW(v.secondary, SECONDARIES);
   const lethal = v.lethal && ok("equip:" + v.lethal) ? v.lethal : null;
+  const tactical = v.tactical && ok("equip:" + v.tactical) ? v.tactical : null;
   // three positions, one per tier; null = that tier is empty
   const perks = v.perks.map((id, ti) => {
     if (id && ok("perk:" + id)) return id;
@@ -149,6 +163,8 @@ export function resolveKit(cls, opts) {
     name: v.name,
     primary, secondary, lethal,
     lethalCount: lethal ? LETHALS[lethal].count : 0,
+    tactical,
+    tacticalCount: tactical ? TACTICALS[tactical].count : 0,
     perks,
   };
 }
@@ -182,13 +198,23 @@ export function roleOf(archetype) {
   return ROLE_POOLS[base] ? base : "rifleman";
 }
 
+// Equipment by role: entry men carry flashes and concussions, riflemen any
+// tactical, marksmen smoke and concussions; a share of riflemen and most
+// marksmen hold a flank with a tripmine instead of a frag.
+const ROLE_TACTICAL = { cqb: ["flash", "stun", "flash"], rifleman: ["flash", "smoke", "stun"], marksman: ["smoke", "stun"] };
+const ROLE_MINE_PCT = { cqb: 0, rifleman: 25, marksman: 55 };
+
 // Deterministic class for operator `actorId` in a match seeded `seed`.
 export function opponentClass(seed, actorId, archetype) {
-  const pool = ROLE_POOLS[roleOf(archetype)];
+  const role = roleOf(archetype);
+  const pool = ROLE_POOLS[role];
   const h0 = hash32(seed, actorId, 1);
   const shape = pool[h0 % pool.length];
   const perks = PERKS_BY_TIER.map((ids, ti) => ids[hash32(seed, actorId, 11 + ti) % ids.length]);
-  return { name: shape.name, primary: shape.primary, secondary: "pike", lethal: "frag", perks };
+  const tacs = ROLE_TACTICAL[role];
+  const tactical = tacs[hash32(seed, actorId, 22) % tacs.length];
+  const lethal = (hash32(seed, actorId, 21) % 100) < ROLE_MINE_PCT[role] ? "claymore" : "frag";
+  return { name: shape.name, primary: shape.primary, secondary: "pike", lethal, tactical, perks };
 }
 
 // Integer index of a fixed STREAK threshold after perks.

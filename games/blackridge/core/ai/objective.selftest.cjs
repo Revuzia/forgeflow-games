@@ -98,6 +98,7 @@ function syntheticContent(realArchetypes, modeOverrides) {
       tdm: { scoreLimit: 40, timeLimitS: 180, respawnS: 2.0, protectS: 0.5 },
       ctf: { captureLimit: 3, timeLimitS: 60, respawnS: 1.0, protectS: 0.5 },
       ffa: { scoreLimit: 20, timeLimitS: 120, respawnS: 1.5, protectS: 0.5 },
+      dom: { scoreLimit: 60, timeLimitS: 150, respawnS: 1.5, protectS: 0.5, scoreTickS: 1.0, captureS: 5, neutraliseS: 2.5 }, // [lane dom]
     }, modeOverrides || {}),
     archetypes: realArchetypes,
     pickups: [],
@@ -117,6 +118,7 @@ async function main() {
     const files = [
       "core/ai/objective.js", "core/ai/comms.js",
       "core/ai/roles/tdm.js", "core/ai/roles/ctf.js", "core/ai/roles/ffa.js",
+      "core/ai/roles/dom.js", // [lane dom]
     ];
     // forbidden: live player/enemy transform + the LETHALITY state. Any hit
     // in source (comments included — the string must not exist) is a FAIL.
@@ -394,6 +396,140 @@ async function main() {
     }
   }
 
+  // ================================================== 4b. STRONGHOLD roles [lane dom]
+  section("STRONGHOLD role machine (capture / defend / respond / roam) — real pass path, mock facade");
+  {
+    const mkMulberryD = (seed) => {
+      let s = seed >>> 0;
+      return () => {
+        s = (s + 0x6d2b79f5) >>> 0;
+        let z = s;
+        z = Math.imul(z ^ (z >>> 15), z | 1);
+        z ^= z + Math.imul(z ^ (z >>> 7), z | 61);
+        return ((z ^ (z >>> 14)) >>> 0) / 4294967296;
+      };
+    };
+    // same mock shape as the CTF one above; the board lives where the mode
+    // publishes it (state.match.mode.zones — Tier W, the HUD's zone chips)
+    function mockDom(opts) {
+      const bodies = [], actors = [], emitLog = [];
+      const teams = [{ id: 0, name: "AMBER", score: opts.us || 0 }, { id: 1, name: "SLATE", score: opts.them || 0 }];
+      actors.push({ actorId: 0, kind: "human", team: 0, alive: opts.humanPos != null, who: "P", deaths: 0, duty: null, _lastPos: null });
+      let nextId = 1;
+      for (const spec of opts.bots) {
+        const id = nextId++;
+        bodies.push({ id, alive: true, hp: 100, pos: spec.pos.slice(), yaw: 0, vel: [0, 0, 0], state: "patrol",
+          archetype: "rifleman", team: 0, percept: null, lastHitT: null });
+        actors.push({ actorId: id, kind: "bot", team: 0, alive: true, who: id, deaths: 0, duty: null, _lastPos: null });
+      }
+      for (let i = 0; i < 5; i++) actors.push({ actorId: 100 + i, kind: "bot", team: 1, alive: true, who: 900 + i, deaths: 0, duty: null, _lastPos: null });
+      const zones = opts.zones.map((z) => Object.assign({ r: 4, capTeam: -1, prog: 0, contested: false, phase: "idle" }, z));
+      const state = { time: 100, tick: 6000, bots: bodies,
+        match: { modeId: "dom", phase: opts.phase || "live", teams, flags: [], elapsed: opts.elapsed || 100, actors, mode: { zones } } };
+      const m = {
+        phase: opts.phase || "live",
+        arena: { id: "lanternwalk", bounds: { min: [-58, -2, -52], max: [46, 14, 42] } },
+        rules: { scoreLimit: 200, timeLimitS: 600 }, state: state.match, actors, clusters: {},
+        bodyOf(a) { return a.kind === "human" ? null : bodies.find((b) => b.id === a.who) || null; },
+        posOf(a) { if (a.kind === "human") return opts.humanPos || null; const b = bodies.find((x) => x.id === a.who); return b ? b.pos : null; },
+      };
+      const sim = { state, match: { m }, rng: { obj: mkMulberryD(9) }, emit: (type, data) => emitLog.push({ type, data }) };
+      return { sim, bodies, emitLog, step: () => OBJ.objectiveStep(sim, null, { requestBark: () => true }, 1 / 60) };
+    }
+    // lanternwalk's real zone sites (core/level/maps/lanternwalk.js)
+    const A = [-11, 0, 19], Bz = [-8, 0, -1.5], C = [11, 0, -7];
+    const board = (oA, oB, oC, extra) => [
+      Object.assign({ id: "A", pos: A, side: 0, owner: oA }, (extra && extra.A) || {}),
+      Object.assign({ id: "B", pos: Bz, side: -1, owner: oB }, (extra && extra.B) || {}),
+      Object.assign({ id: "C", pos: C, side: 1, owner: oC }, (extra && extra.C) || {}),
+    ];
+    const fourBots = [{ pos: [-30, 0, 10] }, { pos: [-25, 0, 5] }, { pos: [-20, 0, 14] }, { pos: [-28, 0, -5] }];
+    const zoneOf = (b) => {
+      if (!b || !b._obj || !b._obj.anchor) return null;
+      let best = null, bd = Infinity;
+      for (const [id, p] of [["A", A], ["B", Bz], ["C", C]]) {
+        const d = Math.hypot(b._obj.anchor[0] - p[0], b._obj.anchor[2] - p[2]);
+        if (d < bd) { bd = d; best = id; }
+      }
+      return best;
+    };
+    // the order's TARGET zone: a far capturer's anchor is a lane waypoint, so
+    // read the slot key the role layer latched (kind:zone)
+    const targetOf = (w, b) => {
+      const rec = w.sim._w7 && w.sim._w7.recs.get(b.id);
+      return rec && rec._domKey ? rec._domKey.split(":")[1] : null;
+    };
+    const summary = (w) => w.bodies.map((b) => (b._obj ? b._obj.role + "/" + b._obj.reason + "@" + targetOf(w, b) : "-")).join(" ");
+    const reasonsOk = (w) => w.emitLog.filter((e) => e.type === "objrole").every((e) => Object.values(OBJ.REASONS).includes(e.data.reason));
+
+    // PRESS: behind, holding nothing → most of the team on ONE target, cap 3
+    {
+      const w = mockDom({ us: 20, them: 60, zones: board(1, -1, 1), bots: fourBots });
+      w.step();
+      const cap = w.bodies.filter((b) => b._obj && b._obj.role === "attack");
+      const per = {};
+      for (const b of cap) { const z = targetOf(w, b); per[z] = (per[z] || 0) + 1; }
+      const maxOne = Math.max(0, ...Object.values(per));
+      ok(cap.length >= 3, `PRESS (behind, 0 held): ${cap.length}/4 capture (${summary(w)})`);
+      ok(maxOne >= 2 && maxOne <= 3, `the push concentrates (${JSON.stringify(per)}) but never > 3 on one zone`);
+      ok(reasonsOk(w), "every objrole reason ∈ the closed enum");
+      const first = Object.keys(per).sort((a, b) => per[b] - per[a])[0];
+      ok(first === "A" || first === "B", `primary target is a near/neutral zone, not the far enemy C (${first})`);
+    }
+    // CONTROL: ahead and holding 2 → one defender on EACH held zone, a push on the third
+    {
+      const w = mockDom({ us: 90, them: 40, zones: board(0, 0, 1), bots: fourBots });
+      w.step();
+      const def = w.bodies.filter((b) => b._obj && b._obj.role === "defend");
+      const defZones = new Set(def.map((b) => targetOf(w, b)));
+      const att = w.bodies.filter((b) => b._obj && b._obj.role === "attack").map((b) => targetOf(w, b));
+      ok(defZones.has("A") && defZones.has("B"), `CONTROL (ahead, A+B held): both held zones defended (${summary(w)})`);
+      ok(att.includes("C"), "…and someone keeps pressure on C");
+    }
+    // THREAT: our A contested → two responders
+    {
+      const w = mockDom({ us: 60, them: 60, zones: board(0, -1, 1, { A: { contested: true, capTeam: 1, prog: 0.3 } }), bots: fourBots });
+      w.step();
+      const resp = w.bodies.filter((b) => b._obj && b._obj.reason === "ZONE_RESPOND" && targetOf(w, b) === "A");
+      ok(resp.length === 2, `contested held zone A → 2 responders (${summary(w)})`);
+      ok(resp.every((b) => b._obj.priority >= 0.85), "responders hold the ground at priority ≥ 0.85 (feet stay on the zone through the fight)");
+      const inRing = resp.filter((b) => Math.hypot(b.pos[0] - A[0], b.pos[2] - A[2]) <= 24)
+        .every((b) => Math.hypot(b._obj.anchor[0] - A[0], b._obj.anchor[2] - A[2]) <= 4);
+      ok(inRing, "a responder near the zone is posted INSIDE the ring (standing in it blocks the capture)");
+    }
+    // rebalance with the score
+    {
+      const behind = mockDom({ us: 10, them: 80, zones: board(0, -1, 1), bots: fourBots }); behind.step();
+      const ahead = mockDom({ us: 80, them: 10, zones: board(0, 0, 1), bots: fourBots }); ahead.step();
+      const nAtt = (w) => w.bodies.filter((b) => b._obj && b._obj.role === "attack").length;
+      const nDef = (w) => w.bodies.filter((b) => b._obj && b._obj.role === "defend").length;
+      ok(nAtt(behind) > nAtt(ahead) && nDef(ahead) > nDef(behind),
+        `roles rebalance with the score: behind ${nAtt(behind)} attack / ${nDef(behind)} defend; ahead ${nAtt(ahead)} / ${nDef(ahead)}`);
+    }
+    // the human's zone pulls support (teammates visibly help)
+    {
+      const w = mockDom({ us: 60, them: 60, humanPos: [10, 0, -6], zones: board(0, -1, 1), bots: fourBots });
+      w.step();
+      const sup = w.bodies.filter((b) => b._obj && b._obj.reason === "ZONE_SUPPORT");
+      ok(sup.length >= 1 && sup.every((b) => targetOf(w, b) === "C"), `human working enemy C → ${sup.length} bot(s) sent to support it (${summary(w)})`);
+      const onC = w.bodies.filter((b) => b._obj && targetOf(w, b) === "C").length;
+      ok(onC + 1 <= 3, `anti-pile counts the human: ${onC} bots + the human on C ≤ 3`);
+    }
+    // overtime: everyone presses
+    {
+      const w = mockDom({ us: 120, them: 120, phase: "overtime", zones: board(0, -1, 1), bots: fourBots });
+      w.step();
+      const att = w.bodies.filter((b) => b._obj && b._obj.role === "attack").length;
+      ok(att >= 3, `overtime (next point wins): ${att}/4 on the attack (${summary(w)})`);
+    }
+    // information audit, dom-specific: the private per-team head counts are never read
+    {
+      const src = fs.readFileSync(path.join(GAME_DIR, "core/ai/roles/dom.js"), "utf8");
+      ok(!src.includes("_st") && !src.includes(".priv") && !src.includes(".who["),
+        "roles/dom.js reads only the PUBLIC zone board (no private head counts)");
+    }
+  }
+
   // ================================================== 5-7. live batteries
   const RNGm = await import(u("core/rng.js"));
   void RNGm;
@@ -404,7 +540,7 @@ async function main() {
   const WEAPONS = WD.WEAPONS;
 
   const modeSource = {};
-  for (const id of ["tdm", "ffa", "ctf"]) {
+  for (const id of ["tdm", "ffa", "ctf", "dom"]) {
     const p = path.join(GAME_DIR, `core/match/modes/${id}.js`);
     if (fs.existsSync(p)) {
       const mod = await import(u(`core/match/modes/${id}.js`));
@@ -632,6 +768,30 @@ async function main() {
       console.log(`  info  layered ${layered} vs unlayered ${unlayered} bot shots`);
     }
   }
+
+  if (modeSource.dom !== "real") {
+    skip("STRONGHOLD mode module missing — live battery skipped");
+  } else {
+    section("live STRONGHOLD — roles, reasons, captures, no stuck bots [lane dom]");
+    {
+      OBJ.OBJ_TEST.disableWrites = false;
+      let worstStuck = 0, endedAll = true;
+      const seen = new Set();
+      for (const seed of [41, 42]) {
+        const r = runMatch("dom", seed, { maxTicks: 60 * 240 });
+        if (!r.snap || r.snap.phase !== "ended") endedAll = false;
+        worstStuck = Math.max(worstStuck, r.stuckWorst);
+        ok(r.badReasons.size === 0, `seed ${seed}: every _obj.reason ∈ enum` + (r.badReasons.size ? ` — BAD: ${[...r.badReasons].join(",")}` : ""));
+        for (const x of r.objRolesSeen) seen.add(x);
+        const caps = (r.sim.state.match.mode && r.sim.state.match.mode.caps) || [0, 0];
+        ok(caps[0] > 0 && caps[1] > 0, `seed ${seed}: both teams capture (${caps.join(":")}, score ${r.snap.teams.map((t) => t.score).join(":")})`);
+      }
+      ok(endedAll, "all seeded STRONGHOLD matches ended");
+      ok(seen.has("attack") && seen.has("defend"), `capture + defend roles both live (${[...seen].join(",")})`);
+      ok(worstStuck <= 20, `no bot stuck: worst <0.5 m window ${worstStuck.toFixed(1)} s ≤ 20 s`);
+    }
+  }
+
 
   if (modeSource.ffa !== "real") {
     skip("FFA mode module missing — solo-radio battery skipped");

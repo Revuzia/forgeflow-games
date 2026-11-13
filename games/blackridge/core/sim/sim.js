@@ -37,13 +37,15 @@ import { makeLoot } from "./loot.js";
 import { makeStreaks } from "./streaks.js";
 import { resolveKit, perkMap, opponentClass, DEFAULT_CLASSES } from "./classes.js";
 import { perksOnDeath } from "./perks.js";
+// [equipment lane] tactical + lethal equipment (flash/smoke/stun/tripmine)
+import { stepEquipment, equipOnShot, equipOnDeath, resetStatus as resetEquipStatus } from "./equipment.js";
 
 const DT = 1 / 60;
 
 const NULL_CMD = {
   moveX: 0, moveZ: 0, yaw: 0, pitch: 0, jump: false, crouch: false,
   sprint: false, fire: false, ads: false, reload: false, switchTo: null,
-  interact: false, grenade: false, streak: 0,
+  interact: false, grenade: false, streak: 0, tactical: false,
 };
 
 export function createSim(opts = {}) {
@@ -128,6 +130,7 @@ export function createSim(opts = {}) {
       speedNorm: 0,
       grenades: classes.playerKit ? classes.playerKit.lethalCount
         : (content && content.mission && content.mission.loadout && content.mission.loadout.grenades) || tun.grenades,
+      tactical: classes.playerKit ? classes.playerKit.tacticalCount | 0 : 0, // [equipment lane]
       lastDamageT: -999,
       _slotAmmo: null,
       _m: null,
@@ -135,6 +138,7 @@ export function createSim(opts = {}) {
     bots: [],
     objectives: [],
     match: null, // filled by match.start() in PVP (Part 3.2); null in campaign
+    smokes: [],  // [equipment lane] live smoke volumes {id,pos,radius,density,until} (equipment.js; aim_assist reads)
     counters: {
       shotsFired: 0, shotsHit: 0, kills: 0, headshots: 0,
       damageDealt: 0, damageTaken: 0, deaths: 0,
@@ -171,6 +175,8 @@ export function createSim(opts = {}) {
     w.state = "idle"; w.stateT = 0; w.ads = false; w.adsT = 0;
     w.recoilIndex = 0; w._shotCount = 0; w._reloadCommitted = false;
     body.grenades = kit.lethalCount | 0;
+    body.tactical = kit.tacticalCount | 0; // [equipment lane]
+    resetEquipStatus(body);                 // [equipment lane] no flash/stun carried across a life
     body.kit = Object.assign({}, kit);
     body.perks = perkMap(kit);
   }
@@ -201,6 +207,7 @@ export function createSim(opts = {}) {
     tuning: tun, // C25 balance seam — identity in wave 1; W11 flips the data
     emit: (type, data) => {
       if (type === "shot" && !data.impactOnly && !data.pen) internal.shotsAnyTotal++;
+      if (type === "shot" && data && data.hit && internal.equip) equipOnShot(sim, data); // [equipment lane] shoot a tripmine
       // Deaths feed the world systems BEFORE the event is bridged: loot drops the
       // body's gun where it fell; streaks count the kill (and may emit its medal
       // events, which the HUD reads in the same dispatch).
@@ -208,6 +215,7 @@ export function createSim(opts = {}) {
         if (sim.loot) sim.loot.onDeath(sim, data);
         if (sim.streaks) sim.streaks.onDeath(sim, data);
         if (classes.on) perksOnDeath(sim, data); // SALVAGER resupply (class matches only)
+        if (internal.equip) equipOnDeath(sim, data); // [equipment lane] owner's tripmines expire
       }
       emit(type, data);
     },
@@ -279,6 +287,7 @@ export function createSim(opts = {}) {
       // 5. projectiles + grenades + damage resolution + regen
       stepProjectiles(sim, DT);
       stepGrenades(sim, world, DT);
+      stepEquipment(sim, world, DT); // [equipment lane] canisters, smoke volumes, tripmines
       stepHealth(sim, DT);
 
       // 5.5 world systems: ground loot pick-ups + the streak call-ins in flight
@@ -417,6 +426,7 @@ export function createSim(opts = {}) {
         applyKit(body, classes.playerKit);
         return;
       }
+      resetEquipStatus(body); // [equipment lane]
       const id = loadoutSlots[0];
       const wt = weapons[id] || { mag: 30, reserve: 120 };
       body.slots = slotsFromList(loadoutSlots);

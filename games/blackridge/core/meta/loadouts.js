@@ -93,14 +93,15 @@ export function createLoadouts(opts) {
       const cur = rec.classes[i | 0];
       if (!cur || !patch) return false;
       const next = { ...cur, perks: cur.perks.slice() };
-      for (const k of ["name", "primary", "secondary", "lethal"]) if (k in patch) next[k] = patch[k];
+      for (const k of ["name", "primary", "secondary", "lethal", "tactical"]) if (k in patch) next[k] = patch[k];
       if (Array.isArray(patch.perks)) next.perks = patch.perks.slice(0, 3);
       if (patch.perk && patch.perk.tier >= 1 && patch.perk.tier <= 3) next.perks[patch.perk.tier - 1] = patch.perk.id;
       const v = validateClass(next, i);
       if (v.fixed && !("name" in patch && Object.keys(patch).length === 1)) {
         // only a name may be silently cleaned (case/length); any other repair = illegal patch
         const onlyName = v.cls.primary === next.primary && v.cls.secondary === next.secondary &&
-          v.cls.lethal === next.lethal && v.cls.perks.every((p, ti) => p === next.perks[ti]);
+          v.cls.lethal === next.lethal && (v.cls.tactical || null) === (next.tactical || null) &&
+          v.cls.perks.every((p, ti) => p === next.perks[ti]);
         if (!onlyName) return false;
       }
       rec.classes[i | 0] = v.cls;

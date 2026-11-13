@@ -30,6 +30,9 @@ import { spawnGrenade, GRENADE } from "../sim/grenades.js";
 import { objectiveStep } from "./objective.js"; // W7 slot 3a (bot_ai §2.4)
 import * as STEER from "./steer.js";               // BOT-AI PASS: planning + path following
 import { tierOf, owns } from "../sim/loadout.js";    // BOT-AI PASS: weapon tiers for swap / loot decisions
+// [equipment lane] flash / smoke / concussion / tripmine use + reactions
+import * as EQAI from "./equip_ai.js";
+import { equipAimMult, stunTurnMult } from "../sim/equipment.js";
 
 const DEG = Math.PI / 180;
 
@@ -311,7 +314,7 @@ function mkBrain(bot, t) {
     // retreat
     retreatRolled: false, retreatGo: false, retreatIdleFrom: -9,
     // grenade
-    gPlanned: false, gReleaseT: -9, gPitch: 0, gTarget: null,
+    gPlanned: false, gReleaseT: -9, gPitch: 0, gTarget: null, gKind: null, // gKind: null/"frag" = frag, else a tactical [equipment lane]
     // referee hooks (squad.js writes)
     forceFlank: false, forceDisengage: false,
     flankUntil: -9, flankSide: null,
@@ -466,6 +469,7 @@ function think(sim, nav, squad, bot, t) {
 
   perceive(bot, sim, sim.world, dtT, rng);
   const P = bot.percept;
+  EQAI.noticeEquipment(sim, bot, brain, t, rng, band); // [equipment lane] spot enemy tripmines
 
   // W3: mirror the current target's reaction latch into brain.* (a target
   // switch NEVER re-rolls a latched reaction — the latch travels with the
@@ -529,6 +533,7 @@ function think(sim, nav, squad, bot, t) {
       // BOT-AI PASS: an under-armed bot detours to a rack / drop (PVP) before
       // resuming its orders; a running detour owns the goal until it ends
       if (considerLoot(sim, nav, squad, bot, brain, band, t)) break;
+      EQAI.planMine(sim, bot, brain, t, rng, band); // [equipment lane] idle at an anchor: tripmine a flank
       // W3 H4: the objective layer's anchor owns the idle anchor outright
       const obj = bot._obj;
       if (obj && obj.anchor) {
@@ -732,6 +737,7 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
     if (brain.retreatGo && !lastStand) {
       const threatRef = P.lastKnown || (squad.squadLastKnown(bot.id, who) || {}).pos || null;
       if (threatRef) {
+        EQAI.retreatSmoke(sim, bot, brain, t, rng, band, threatRef, solveArcPitch); // [equipment lane]
         setState(sim, bot, brain, "retreat");
         squad.release(bot.id);
         const dest = pickRetreatCover(sim, nav, bot, brain, threatRef, rng);
@@ -876,6 +882,7 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
   }
   if (hasFire && !brain.gPlanned && !(obj && obj.noGrenade) &&
       (bot.grenades == null || bot.grenades > 0) && // class kit lethal count (class matches only)
+      EQAI.lethalIsFrag(bot) && // [equipment lane] a tripmine kit throws no frags
       t >= brain.grenBlockUntil &&
       squad.grenadeReady(bot.id, t) &&
       sim.internal.grenades.length === 0 &&
@@ -891,6 +898,7 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
         brain.grenBlockUntil = t + 15; // decided against it (recruits almost never commit)
       } else if (pitch != null) {
         brain.gPlanned = true;
+        brain.gKind = "frag";
         brain.gReleaseT = t + 1.2; // §5.9 telegraph: bark 1.2 s BEFORE release
         brain.gPitch = pitch;
         brain.gTarget = target;
@@ -898,6 +906,16 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
       }
     }
   }
+
+  // [equipment lane] tactical use (flash/concussion before a push, smoke to
+  // cross or screen) + a tripmine while holding cover with no contact
+  if (!brain.gPlanned) {
+    EQAI.planTactical(sim, bot, brain, t, rng, band, {
+      threat, seenNow, lostS, staticFor, objDrive, obj, pushOn, lastStand, solveArcPitch,
+      setGoal: (pos, sprint) => setGoal(nav, sim, brain, bot, pos, sprint),
+    });
+  }
+  if (!seenNow && lostS > 4 && brain.arrived && !brain.gPlanned) EQAI.planMine(sim, bot, brain, t, rng, band);
 }
 
 function enterFlank(sim, nav, squad, bot, brain, t, rng) {
@@ -1367,6 +1385,10 @@ function act(sim, nav, squad, bot, dt, t) {
   c.interact = false; c.grenade = false;
   brain.mvActive = false; // steer.js re-arms it when a path is followed this tick
 
+  // [equipment lane] blinded / looking away from a flash / clearing a noticed
+  // tripmine own the tick (equip_ai.react)
+  if (EQAI.react(sim, bot, brain, c, dt, t, rng, band, { squad, P })) { brain.wasFiring = c.fire; return; }
+
   // ---- live-grenade dodge (any live frag within 6.5 m → sprint away)
   const gl = sim.internal.grenades;
   for (let i = 0; i < gl.length; i++) {
@@ -1388,7 +1410,9 @@ function act(sim, nav, squad, bot, dt, t) {
     c.yaw = brain.curYaw; c.pitch = 0.3;
     if (t >= brain.gReleaseT) {
       brain.gPlanned = false;
-      if (sim.internal.grenades.length === 0) {
+      if (brain.gKind && brain.gKind !== "frag") {
+        EQAI.releaseTactical(sim, bot, brain); // [equipment lane] flash / smoke / concussion
+      } else if (sim.internal.grenades.length === 0) {
         const eye = eyeOf(bot);
         const org = [eye[0], eye[1] - 0.15, eye[2]];
         const yaw = yawTo(org, brain.gTarget);
@@ -1750,7 +1774,7 @@ function act(sim, nav, squad, bot, dt, t) {
     }
     if (turnRate < 5.0) turnRate = 5.0;
   }
-  if (!c.fire) brain.curYaw = approachYaw(brain.curYaw, desYaw, turnRate * dt);
+  if (!c.fire) brain.curYaw = approachYaw(brain.curYaw, desYaw, turnRate * stunTurnMult(bot, t) * dt); // [equipment lane] concussion
   c.yaw = brain.curYaw;
   c.pitch = desPitch;
   // BOT-AI PASS: the feet follow steer.js's WORLD-SPACE heading expressed in
@@ -1808,7 +1832,7 @@ function rollJitter(sim, bot, brain, band, rng, t) {
   const evasive = fresh && ((tb.grounded === false) || (pm && pm.sliding)) ? 1.5 : 1;
   const botMoving = Math.hypot(bot.vel[0], bot.vel[2]) > 0.5 ? 1.5 : 1;
   const flinch = (bot.flinchUntil || -9) > t ? (bot.flinchStacks || 1) * FLINCH_SIGMA_PER_STACK : 0;
-  const sigma = band.jitter * acquire * evasive * botMoving + flinch;
+  const sigma = (band.jitter * acquire * evasive * botMoving + flinch) * equipAimMult(bot, t); // [equipment lane] flash/stun
   brain.jitterY = gauss(rng) * sigma;
   brain.jitterP = gauss(rng) * sigma;
   brain.lastSigma = sigma;

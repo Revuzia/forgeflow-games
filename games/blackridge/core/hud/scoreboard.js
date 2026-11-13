@@ -140,7 +140,8 @@ export function createScoreboard(ctx) {
     const m = M();
     if (!m) { tblEl.innerHTML = ""; return; }
     const ctf = m.modeId === "ctf", ffa = m.modeId === "ffa";
-    const modeCols = ctf ? `<th>CAP</th><th>RET</th>` : ffa ? `<th>PLACE</th>` : `<th>STREAK</th>`;
+    const dom = m.modeId === "dom"; // [lane dom] zone captures + defend kills
+    const modeCols = ctf ? `<th>CAP</th><th>RET</th>` : ffa ? `<th>PLACE</th>` : dom ? `<th>CAP</th><th>DEF</th>` : `<th>STREAK</th>`;
     const header =
       `<tr><th class="l">NAME</th><th>SCORE</th>` +
       `<th>K</th><th>D</th><th>A</th>${modeCols}</tr>`;
@@ -148,6 +149,7 @@ export function createScoreboard(ctx) {
     const rowsOf = (list, placeOf) => list.map((a) => {
       const mode = ctf
         ? `<td>${a.captures || 0}</td><td>${a.returns || 0}</td>`
+        : dom ? `<td>${a.captures || 0}</td><td>${a.defends || 0}</td>`
         : ffa ? `<td>${placeOf ? placeOf(a) : ""}</td>`
           : `<td>${a.bestStreak || 0}</td>`;
       return `<tr class="${a.actorId === 0 ? "me" : ""}${a.alive ? "" : " dead"}">` +

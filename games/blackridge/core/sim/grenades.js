@@ -9,6 +9,7 @@
 
 import { applyDamage } from "./damage.js";
 import { hasPerk, PERK_FX } from "./classes.js";
+import { blastEquipment } from "./equipment.js"; // [equipment lane] blasts clear tripmines
 
 export const GRENADE = {
   FUSE_S: 3.8,
@@ -74,6 +75,8 @@ function explode(sim, who, pos, source, opts) {
   for (const b of sim.state.bots) {
     if (b.alive) applyTo(b.id, b.pos, b.stance, b);
   }
+  // [equipment lane] tripmines inside half the blast radius are destroyed
+  if (sim.internal.equip) blastEquipment(sim, pos, R * 0.5, who);
 }
 
 // Frozen stub signature. Ticked in tick-order slot 5 (with projectiles).

@@ -28,6 +28,7 @@
 
 import { makeInfluence } from "./influence.js";
 import { mulberry32 } from "../rng.js";
+import { pointSetOf } from "./contract.js"; // [lane dom] borrowed point sets
 
 // ---------------------------------------------------------------------------
 // C8 — both weight tables side by side. Weights are the tuning surface; the
@@ -162,6 +163,8 @@ export function makeSpawns(arena, opts = {}) {
   function mModeId(m) {
     return (m.state && m.state.modeId) || (m.mode && m.mode.id) || "tdm";
   }
+  // [lane dom] the point set a mode spawns on (STRONGHOLD borrows tdm's)
+  function mPointSet(m) { return pointSetOf(mModeId(m)); }
   function mIsFFA(m) {
     return mModeId(m) === "ffa" || (m.mode && m.mode.teamCount === "perActor");
   }
@@ -261,7 +264,7 @@ export function makeSpawns(arena, opts = {}) {
 
   function bestFlipCluster(m, team, t) {
     const enemyHome = enemyHomeOf(m, team);
-    const modeId = mModeId(m);
+    const modeId = mPointSet(m); // [lane dom]
     let best = null, bestV = -Infinity;
     for (const id in clusters) {
       if (id === enemyHome) continue;
@@ -444,7 +447,7 @@ export function makeSpawns(arena, opts = {}) {
   function pick(m, actor) {
     const t = mTime(m);
     const ffa = mIsFFA(m);
-    const modeId = mModeId(m);
+    const modeId = mPointSet(m); // [lane dom] point-set id (== mode id unless borrowed)
     const V = ffa ? VETOES.ffa : VETOES.team;
     const R = ffa ? VETOES.relax.ffa : VETOES.relax.team;
     const rng = mRng(m);

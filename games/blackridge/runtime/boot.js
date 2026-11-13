@@ -158,7 +158,7 @@ try {
       return null;
     }
   }
-  for (const id of ["tdm", "ctf", "ffa"]) {
+  for (const id of ["tdm", "ctf", "ffa", "dom"]) { // [lane dom] + STRONGHOLD
     const mm = await importIfPresent(`./core/match/modes/${id}.js`, `../core/match/modes/${id}.js`);
     if (mm && mm.createMode) matchMod.registerMode(id, mm.createMode);
     else console.warn(`[boot] mode '${id}' not landed yet — its lane registers it via core/match/modes/${id}.js`);
@@ -287,6 +287,8 @@ try {
   const { createStreakFx } = await import(`../core/fx/streakfx.js${V}`);
   const { createStreakAudio } = await import(`../core/audio/streak_audio.js${V}`);
   const { createGrenadeFx } = await import(`../core/fx/grenadefx.js${V}`);
+  const { createZoneFx } = await import(`../core/fx/zone_fx.js${V}`); // [lane dom] STRONGHOLD zone visuals
+  const { createEquipmentFx } = await import(`../core/fx/equipment_fx.js${V}`); // [equipment lane]
   const { createAchievements } = await import(`../core/meta/achievements.js${V}`);
   const { createProgression } = await import(`../core/meta/progression.js${V}`);   // [progression] device-saved XP
   const { createAfterAction } = await import(`../core/hud/after_action.js${V}`);   // [progression] feed + after-action
@@ -328,10 +330,13 @@ try {
   const streakFx = createStreakFx(ctx);
   const streakAudio = createStreakAudio(ctx);
   const grenadeFx = createGrenadeFx(ctx);
+  const zoneFx = createZoneFx(ctx); // [lane dom]
+  const equipFx = createEquipmentFx(ctx, { audio, input }); // [equipment lane] flash/smoke/stun/tripmine view + overlays
   const touch = isTouch ? touchMod.createTouchControls(ctx) : null;
   const achievements = createAchievements(ctx);   // ForgeFlow portal unlocks (achievements.json)
   const progression = ctx.progression = createProgression(ctx);   // [progression]
   const afterAction = createAfterAction(ctx, progression);        // [progression]
+  killcam.bind({ fx, audio, soldiers });   // [killcam replay] re-emit recorded shots + drive ghost actors
   ctx.touch = touch;
   ctx.cue = (n) => streakAudio.cue(n);   // match_hud clock warnings
   // designate mode only opens for a call-in you can actually use
@@ -372,6 +377,16 @@ try {
     ldHud.attach(bridge);
     streakFx.attach(bridge);
     grenadeFx.attach(bridge);
+    // [lane dom] STRONGHOLD: zone visuals + the synthesized zone cues (sfx.onZone)
+    zoneFx.attach(bridge);
+    bridge.register("zonecap", (d) => {
+      const core = ctx.__audioCore;
+      const sx = core && core.sfx;
+      if (sx && sx.onZone && core.env && core.env.ac && core.env.ac.state === "running") {
+        try { sx.onZone(d); } catch (e) { /* audio never breaks the frame */ }
+      }
+    });
+    equipFx.attach(bridge); // [equipment lane]
     achievements.attach(bridge);
     progression.attach(bridge); afterAction.attach(bridge);   // [progression]
     streakAudio.attach(bridge);
@@ -658,13 +673,17 @@ try {
     // the camera, so this writes into a genuinely free slot rather than
     // overwriting the rig's work every frame.
     killcam.update(dt);
-    soldiers.update(dt, alpha);
+    // [killcam replay] while a replay is on screen the soldiers draw the
+    // recorded clip (killcam swaps ctx.sim for that one call); else live.
+    if (!killcam.driveSoldiers(soldiers, dt)) soldiers.update(dt, alpha);
     fx.update(dt);
     hud.update(dt);
     ldHud.update(dt);
     lootFx.update(dt);
     streakFx.update(dt);
     grenadeFx.update(dt);
+    zoneFx.update(); // [lane dom]
+    equipFx.update(dt); // [equipment lane]
     if (touch) touch.update(dt);
     achievements.update(dt);
     audio.update(dt);
@@ -681,7 +700,7 @@ try {
     for (let i = 0; i < n; i++) {
       renderer.info.reset();
       stepSim();
-      bridge.dispatch(bus.drain());
+      bridge.dispatch(killcam.filterEvents(bus.drain())); // [killcam replay] holds mission:end for the final kill cam
       // alpha 1 = the tick just stepped, so the interpolated base position is
       // IDENTICAL to p.pos and every captured battery frame is unchanged.
       viewUpdates(dtStep, 1);
@@ -728,7 +747,7 @@ try {
       }
     }
 
-    bridge.dispatch(bus.drain());
+    bridge.dispatch(killcam.filterEvents(bus.drain())); // [killcam replay] holds mission:end for the final kill cam
     // PAUSE: the branch above discards the accumulator (doctrine §5), so
     // acc/DT reads 0 while paused — which would yank every interpolated view
     // back a full tick on the frame the menu opens (up to 13 cm of camera at
@@ -750,6 +769,7 @@ try {
   phase(5, "compiling shaders");
   await prewarm(renderer, scene, camera, [
     ...fx.prewarmables(),
+    ...equipFx.prewarmables(), // [equipment lane]
     ...(vm.prewarmables ? vm.prewarmables() : []),
     ...(weather.prewarmables ? weather.prewarmables() : []),
   ]);
@@ -806,6 +826,7 @@ try {
     get sim() { return sim; },
     lights, fx, hud, vm, soldiers, audio, ldHud, lootFx, streakFx,
     progression, afterAction, // [progression]
+    killcam, // [killcam replay] state()/skip() for checks
     settings: S,
     version: `v${VN}`, // MUST equal the boot.js?v number
     _bridge: bridge, // private extra (v2.2): harness/diagnostic event taps —

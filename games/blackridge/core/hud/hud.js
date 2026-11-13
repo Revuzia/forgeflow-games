@@ -460,6 +460,249 @@ function weaponGlyphSvg(cls) {
 }
 
 // ---------------------------------------------------------------------------
+// [lane dom] STRONGHOLD objective HUD — lives INSIDE #hud so the capture
+// harness (testsurface HUD composite: #hud + a10-style) photographs it.
+//   - score line (replaces match_hud's #mh-score while a STRONGHOLD match is
+//     live — body.dom-live, the same scoped-CSS handoff match_hud uses for
+//     the campaign killfeed): team colours, the limit, a pulse near the end
+//   - three zone chips under the clock: owner colour, the capture bar in the
+//     capturing team's colour, CONTESTED blink, the chip you stand in lifts
+//   - world markers: a diamond + letter + metres over each zone, clamped to
+//     the screen edge when off-screen / behind, hidden for the zone you are in
+//   - the capture bar (centre-lower) while you stand in a ring
+//   - announcer lines from the `zonecap` event: "B CAPTURED", "WE LOST A",
+//     "ENEMY CAPTURED C", "A UNDER ATTACK", "C NEUTRALISED"
+// View-only: reads sim.state.match.mode.zones (public board) and writes
+// nothing back. All DOM is pooled at creation; per-frame work is change-gated.
+// ---------------------------------------------------------------------------
+const ZONE_CSS = `
+/* [lane dom] STRONGHOLD */
+body.dom-live #mh-score{display:none;}
+#a10-dom{position:absolute;inset:0;display:none;}
+#a10-dom .dm-score{position:absolute;top:44px;left:50%;transform:translateX(-50%);
+  font-size:20px;letter-spacing:.12em;white-space:nowrap;}
+#a10-dom .dm-score .sep{opacity:.4;margin:0 10px;font-size:13px;letter-spacing:.2em;vertical-align:2px;}
+#a10-dom .dm-score.pulse{animation:a10DomPulse 1.1s ease-in-out infinite;}
+@keyframes a10DomPulse{0%,100%{opacity:1}50%{opacity:.55}}
+#a10-dom .dm-chips{position:absolute;top:96px;left:50%;transform:translateX(-50%);display:flex;gap:10px;}
+#a10-dom .dm-chip{position:relative;width:30px;height:30px;border:2px solid rgba(232,232,228,.55);
+  background:rgba(12,14,16,.45);display:flex;align-items:center;justify-content:center;
+  font-size:16px;letter-spacing:0;line-height:1;transition:transform .12s;}
+#a10-dom .dm-chip .bar{position:absolute;left:0;bottom:0;height:4px;width:0;}
+#a10-dom .dm-chip.here{transform:scale(1.22);}
+#a10-dom .dm-chip.contested{animation:a10DomBlink .5s steps(2,start) infinite;}
+@keyframes a10DomBlink{0%{border-color:#ff4d4d}100%{border-color:#e8e8e4}}
+#a10-dom .dm-mk{position:absolute;transform:translate(-50%,-100%);text-align:center;white-space:nowrap;}
+#a10-dom .dm-mk .dia{width:22px;height:22px;margin:0 auto;transform:rotate(45deg);
+  border:2px solid currentColor;background:rgba(12,14,16,.5);display:flex;align-items:center;justify-content:center;}
+#a10-dom .dm-mk .dia span{transform:rotate(-45deg);font-size:13px;line-height:1;}
+#a10-dom .dm-mk .m{font-size:10px;letter-spacing:.12em;margin-top:5px;opacity:.85;}
+#a10-dom .dm-mk.contested .dia{animation:a10DomBlink .5s steps(2,start) infinite;}
+#a10-dom .dm-cap{position:absolute;left:50%;bottom:31%;transform:translateX(-50%);text-align:center;display:none;}
+#a10-dom .dm-cap .t{font-size:15px;letter-spacing:.26em;margin-bottom:7px;}
+#a10-dom .dm-cap .track{width:280px;height:6px;background:rgba(232,232,228,.18);margin:0 auto;position:relative;}
+#a10-dom .dm-cap .fill{position:absolute;left:0;top:0;bottom:0;width:0;}
+#a10-dom .dm-ann{position:absolute;top:140px;left:50%;transform:translateX(-50%);text-align:center;}
+#a10-dom .dm-ann div{font-size:17px;letter-spacing:.3em;margin-bottom:6px;opacity:0;white-space:nowrap;}
+`;
+
+function createZoneHud(ctx, root) {
+  // CSS rides in the a10-style element (the composite copies its text)
+  {
+    const el = document.getElementById("a10-style");
+    if (el && el.textContent.indexOf("[lane dom] STRONGHOLD") < 0) el.textContent += ZONE_CSS;
+  }
+  const box = document.createElement("div");
+  box.id = "a10-dom";
+  box.innerHTML =
+    `<div class="dm-score"></div><div class="dm-chips"></div>` +
+    `<div class="dm-mks"></div>` +
+    `<div class="dm-cap"><div class="t"></div><div class="track"><div class="fill"></div></div></div>` +
+    `<div class="dm-ann"></div>`;
+  root.appendChild(box);
+  const scoreEl = box.querySelector(".dm-score"), chipsEl = box.querySelector(".dm-chips");
+  const mksEl = box.querySelector(".dm-mks"), capEl = box.querySelector(".dm-cap");
+  const capT = capEl.querySelector(".t"), capFill = capEl.querySelector(".fill");
+  const annEl = box.querySelector(".dm-ann");
+  const chips = [], mks = [], anns = [];
+  for (let i = 0; i < 3; i++) {
+    const c = document.createElement("div");
+    c.className = "dm-chip";
+    c.innerHTML = `<span class="l"></span><div class="bar"></div>`;
+    chipsEl.appendChild(c);
+    chips.push({ el: c, l: c.querySelector(".l"), bar: c.querySelector(".bar"), sig: "" });
+    const k = document.createElement("div");
+    k.className = "dm-mk";
+    k.innerHTML = `<div class="dia"><span></span></div><div class="m"></div>`;
+    k.style.display = "none";
+    mksEl.appendChild(k);
+    mks.push({ el: k, l: k.querySelector("span"), m: k.querySelector(".m"), sig: "", pos: "" });
+    const a = document.createElement("div");
+    annEl.appendChild(a);
+    anns.push({ el: a, t: -99, text: "" });
+  }
+  const st = { on: false, lastScore: "", capSig: "", teams: null, v: null };
+
+  const TINT = ["#d9a441", "#7c9fd0"];
+  const NEUTRAL = "#e8e8e4";
+  const tintOf = (team) => {
+    if (team !== 0 && team !== 1) return NEUTRAL;
+    const t = st.teams && st.teams[team];
+    return (t && t.tint) || TINT[team];
+  };
+  const rgba = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+
+  function announce(text, color, t) {
+    // newest on top; the oldest slot is recycled
+    let slot = anns[0];
+    for (const a of anns) if (a.t < slot.t) slot = a;
+    slot.t = t; slot.text = text;
+    slot.el.textContent = text;
+    slot.el.style.color = color;
+    for (const a of anns.slice().sort((x, y) => y.t - x.t)) annEl.appendChild(a.el);
+  }
+
+  function onZone(d, t) {
+    if (!d || !st.on) return;
+    const us = d.team === 0;
+    if (d.state === "captured") {
+      if (us) announce(`${d.label} CAPTURED`, tintOf(0), t);
+      else announce(`ENEMY CAPTURED ${d.label}`, tintOf(1), t);
+    } else if (d.state === "neutralised") {
+      if (d.prevOwner === 0) announce(`WE LOST ${d.label}`, "#ff4d4d", t);
+      else announce(`${d.label} NEUTRALISED`, tintOf(0), t);
+    } else if (d.state === "capturing" && d.team === 1 && d.owner === 0) {
+      announce(`${d.label} UNDER ATTACK`, "#ff4d4d", t);
+    }
+  }
+
+  function project(pos, out) {
+    const cam = ctx.camera, TH = ctx.THREE;
+    if (!cam || !TH) return false;
+    if (!st.v) st.v = new TH.Vector3();
+    st.v.set(pos[0], pos[1], pos[2]).project(cam);
+    out[0] = st.v.x; out[1] = st.v.y; out[2] = st.v.z;
+    return true;
+  }
+  const scr = [0, 0, 0];
+
+  function update(sim, t) {
+    const M = sim && sim.state.match;
+    const zones = M && M.modeId === "dom" && M.mode && M.mode.zones;
+    const live = !!(zones && zones.length && M.phase !== "ended");
+    if (live !== st.on) {
+      st.on = live;
+      box.style.display = live ? "block" : "none";
+      document.body.classList.toggle("dom-live", live);
+      if (!live) for (const a of anns) { a.t = -99; a.el.style.opacity = "0"; }
+    }
+    if (!live) return;
+    st.teams = M.teams;
+    const p = sim.state.player;
+    // ---- score line
+    const s0 = M.teams[0].score, s1 = M.teams[1].score;
+    const rules = sim.match && sim.match.m ? sim.match.m.rules : null;
+    const lim = rules && rules.scoreLimit ? rules.scoreLimit : 200;
+    const sig = s0 + ":" + s1 + ":" + lim;
+    if (sig !== st.lastScore) {
+      st.lastScore = sig;
+      const n0 = (M.teams[0].name || "AMBER"), n1 = (M.teams[1].name || "SLATE");
+      scoreEl.innerHTML =
+        `<span style="color:${tintOf(0)}">${n0} ${s0}</span>` +
+        `<span class="sep">/ ${lim}</span>` +
+        `<span style="color:${tintOf(1)}">${s1} ${n1}</span>`;
+      scoreEl.classList.toggle("pulse", Math.max(s0, s1) >= lim - 20);
+    }
+    // ---- which ring are we in?
+    let here = -1;
+    if (p.alive) {
+      for (let i = 0; i < zones.length; i++) {
+        const z = zones[i];
+        if (Math.hypot(p.pos[0] - z.pos[0], p.pos[2] - z.pos[2]) <= z.r &&
+            Math.abs(p.pos[1] - z.pos[1]) <= 2.5) { here = i; break; }
+      }
+    }
+    // ---- chips + markers
+    const vw = window.innerWidth || 1280, vh = window.innerHeight || 720;
+    for (let i = 0; i < 3; i++) {
+      const c = chips[i], k = mks[i], z = zones[i];
+      if (!z) { c.el.style.display = "none"; k.el.style.display = "none"; continue; }
+      const own = tintOf(z.owner);
+      const prog = z.prog > 0 ? Math.round(z.prog * 100) : 0;
+      const csig = z.label + own + prog + (z.capTeam) + (z.contested ? "c" : "") + (here === i ? "h" : "");
+      if (csig !== c.sig) {
+        c.sig = csig;
+        c.el.style.display = "flex";
+        c.l.textContent = z.label;
+        c.el.style.borderColor = own;
+        c.el.style.color = own;
+        c.el.style.background = z.owner >= 0 ? rgba(own, 0.28) : "rgba(12,14,16,.45)";
+        c.bar.style.width = prog + "%";
+        c.bar.style.background = tintOf(z.capTeam);
+        c.el.className = "dm-chip" + (z.contested ? " contested" : "") + (here === i ? " here" : "");
+      }
+      // marker
+      if (here === i || !p.alive) { if (k.el.style.display !== "none") k.el.style.display = "none"; continue; }
+      if (!project([z.pos[0], z.pos[1] + 2.4, z.pos[2]], scr)) { k.el.style.display = "none"; continue; }
+      let x, y;
+      const behind = scr[2] > 1;
+      if (!behind && scr[0] >= -0.95 && scr[0] <= 0.95 && scr[1] >= -0.9 && scr[1] <= 0.9) {
+        x = (scr[0] * 0.5 + 0.5) * vw; y = (-scr[1] * 0.5 + 0.5) * vh;
+      } else {
+        // off-screen: pin to the left/right edge on the bearing side, one
+        // row per zone (A over B over C) so edge markers never stack
+        const rel = relDegTo(sim, z.pos);
+        x = rel >= 0 ? vw - 40 : 40;
+        y = vh * 0.36 + i * 52;
+      }
+      const dist = Math.round(Math.hypot(z.pos[0] - p.pos[0], z.pos[2] - p.pos[2]));
+      const msig = z.label + own + (z.contested ? "c" : "") + dist;
+      if (msig !== k.sig) {
+        k.sig = msig;
+        k.l.textContent = z.label;
+        k.el.style.color = own;
+        k.m.textContent = dist + " m";
+        k.el.className = "dm-mk" + (z.contested ? " contested" : "");
+      }
+      const psig = x.toFixed(0) + "," + y.toFixed(0);
+      if (psig !== k.pos) { k.pos = psig; k.el.style.left = x.toFixed(0) + "px"; k.el.style.top = y.toFixed(0) + "px"; }
+      if (k.el.style.display !== "block") k.el.style.display = "block";
+    }
+    // ---- capture bar
+    let capSig = "";
+    if (here >= 0) {
+      const z = zones[here];
+      let text, color, frac;
+      if (z.contested) { text = "CONTESTED"; color = "#ff4d4d"; frac = z.prog; }
+      else if (z.owner === 0 && z.prog > 0) { text = `DEFENDING ${z.label}`; color = tintOf(1); frac = z.prog; }
+      else if (z.owner === 0) { text = `${z.label} SECURED`; color = tintOf(0); frac = 1; }
+      else if (z.owner === 1) { text = `NEUTRALISING ${z.label}`; color = tintOf(0); frac = z.capTeam === 0 ? z.prog : 0; }
+      else { text = `CAPTURING ${z.label}`; color = tintOf(z.capTeam >= 0 ? z.capTeam : 0); frac = z.prog; }
+      capSig = text + color + Math.round(frac * 200);
+      if (capSig !== st.capSig) {
+        capT.textContent = text;
+        capT.style.color = color;
+        capFill.style.width = (Math.max(0, Math.min(1, frac)) * 100).toFixed(1) + "%";
+        capFill.style.background = color;
+      }
+    }
+    if (capSig !== st.capSig) { st.capSig = capSig; capEl.style.display = capSig ? "block" : "none"; }
+    // ---- announcer TTL (2.6 s, sim time)
+    for (const a of anns) {
+      const age = t - a.t;
+      const op = age >= 0 && age < 2.6 ? (age < 2.1 ? 0.95 : 0.95 * (2.6 - age) / 0.5) : 0;
+      const os = op.toFixed(2);
+      if (a.el.style.opacity !== os) a.el.style.opacity = os;
+    }
+  }
+
+  return { update, onZone, _box: box };
+}
+
+// ---------------------------------------------------------------------------
 // createHud
 // ---------------------------------------------------------------------------
 export function createHud(ctx) {
@@ -640,6 +883,7 @@ export function createHud(ctx) {
   objEl.innerHTML = `<div class="t"></div><div class="l"></div><div class="u"></div>`;
   root.appendChild(objEl);
   const objT = objEl.querySelector(".t"), objL = objEl.querySelector(".l"), objU = objEl.querySelector(".u");
+  const zoneHud = createZoneHud(ctx, root); // [lane dom] STRONGHOLD objective HUD
   const banner = document.createElement("div");
   banner.id = "a10-banner";
   banner.innerHTML = `<span class="x">⨯</span><span class="n"></span>`;
@@ -1200,11 +1444,12 @@ export function createHud(ctx) {
     }
     if (res !== st.lastRes) { st.lastRes = res; amRes.textContent = "/ " + res; }
     const nades = p.grenades | 0;
-    if (nades !== st.lastNades) {
-      st.lastNades = nades;
+    const lethalId = (p.kit && p.kit.lethal) || "frag";           // [integration v146]
+    if (nades !== st.lastNades || lethalId !== st.lastLethal) {
+      st.lastNades = nades; st.lastLethal = lethalId;
       amNades.className = "a10-nades" + (nades < 1 ? " empty" : "");
       amNades.innerHTML =
-        `<span>FRAG</span>` +
+        `<span>${lethalId === "claymore" ? "MINE" : "FRAG"}</span>` +
         `<svg class="g" width="10" height="13" viewBox="0 0 10 13" fill="currentColor">` +
         `<rect x="3.4" y="0" width="3.2" height="1.6"/>` +
         `<rect x="5" y="1.1" width="4" height="1.1" rx="0.4" transform="rotate(-22 5 1.1)"/>` +
@@ -1295,6 +1540,9 @@ export function createHud(ctx) {
       w.el.style.left = (cw / 2 + rel * PX_PER_DEG).toFixed(1) + "px";
       w.el.style.opacity = (0.8 * (1 - age / 4)).toFixed(2);
     }
+
+    // ---- [lane dom] STRONGHOLD zones (no-op outside a STRONGHOLD match)
+    zoneHud.update(sim, t);
 
     // ---- objective toast (amber underline sweep, never a blocking banner)
     const oAge = t - st.objToastT;
@@ -1446,6 +1694,7 @@ export function createHud(ctx) {
       bridge.register("hurt", onHurt);
       bridge.register("death", onDeath);
       bridge.register("objective", onObjective);
+      bridge.register("zonecap", (d) => zoneHud.onZone(d, simNow())); // [lane dom]
       bridge.register("reload", onReload);
       bridge.register("empty", onEmpty);
       bridge.register("grenade", onGrenade);
