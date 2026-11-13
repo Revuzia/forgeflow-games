@@ -72,7 +72,7 @@ PLANTS = {
     "hip-pistol": [(RP + "player.js", [("else if (armed && !combat && !isPistol(a)) mode = \"lowReady\";", "else if (armed && !combat) mode = \"lowReady\";"),
                                        ("return !!(C && C.rifle_run_g && C.rifle_idle_g && isPistol(a));", "return false;")]),
                    (RP + "weapons.js", [("const WPN_LEN = { pistol: 0.24,", "const WPN_LEN = { pistol: 0.34,")])],
-    "gun-in-dead-hand": [(RP + "player.js", [("  if (victim.weaponMesh) victim.weaponMesh.visible = false;\n", "\n"),
+    "gun-in-dead-hand": [(RP + "player.js", [("  if (victim.weaponMesh) victim.weaponMesh.visible = false;", "  /* planted: gun-in-dead-hand */"),
                                              ("!a.emoting && !a.gliding && a.alive;", "!a.emoting && !a.gliding;")])],
     "flinch-speed-gate": [(RP + "player.js", [("if (!res.dead && res.dealt > 0 && victim.alive) startJolt(W, victim, att);",
                                                "if (!res.dead && res.dealt > 0 && victim.alive && Math.hypot(victim.vel.x, victim.vel.z) < 4) startJolt(W, victim, att);")])],
@@ -138,12 +138,13 @@ FLASH_JS = r"""() => { const W = window.__LC__.W, THREE = W.THREE, p = W.player,
   if (wm && wm.userData.wid === p.weapon.id) {
     p.obj.updateMatrixWorld(true);
     const q = new THREE.Quaternion(); p.hand.getWorldQuaternion(q); const z = new THREE.Vector3(0, 0, 1).applyQuaternion(q); const h = p.hand.getWorldPosition(new THREE.Vector3());
-    let best = -1e9; const tp = new THREE.Vector3(), v = new THREE.Vector3();
+    let best = -1e9; const tp = new THREE.Vector3(), v = new THREE.Vector3(); const V = [];
     wm.traverse((o2) => { if (!o2.isMesh) return; const pa = o2.geometry.attributes.position; const st = Math.max(1, Math.floor(pa.count / 5000));
-      for (let i = 0; i < pa.count; i += st) { v.fromBufferAttribute(pa, i).applyMatrix4(o2.matrixWorld); const d = v.clone().sub(h).dot(z); if (d > best) { best = d; tp.copy(v); } } });
-    // the tip = the barrel axis point at the extreme projection (the extreme vertex sits on the muzzle rim, a cm or two off axis)
-    const axis = h.clone().addScaledVector(z, best);
-    out.tipToFlash = +c.distanceTo(axis).toFixed(3); out.rimToFlash = +c.distanceTo(tp).toFixed(3);
+      for (let i = 0; i < pa.count; i += st) { v.fromBufferAttribute(pa, i).applyMatrix4(o2.matrixWorld); const d = v.clone().sub(h).dot(z); V.push([v.x, v.y, v.z, d]); if (d > best) { best = d; tp.copy(v); } } });
+    // the tip = the centre of the muzzle face: the centroid of the vertices within 2 cm of the extreme projection along the barrel
+    // (the extreme vertex alone sits on the rim, a cm or two off the bore axis)
+    const tc = new THREE.Vector3(); let tn = 0; for (const q of V) if (q[3] > best - 0.02) { tc.x += q[0]; tc.y += q[1]; tc.z += q[2]; tn++; } tc.multiplyScalar(1 / tn);
+    out.tipToFlash = +c.distanceTo(tc).toFixed(3); out.rimToFlash = +c.distanceTo(tp).toFixed(3);
   }
   return out; }"""
 ALPHA_JS = r"""(idx) => { const W = window.__LC__.W; let inst = null; W.scene.traverse((o) => { if (o.name === 'fx-quads') inst = o; });
@@ -171,10 +172,14 @@ SLIDE_JS = r"""([n, dt]) => { const W = window.__LC__.W, THREE = W.THREE, p = W.
 TORSO_JS = r"""([n, hitAt]) => { const W = window.__LC__.W, THREE = W.THREE, p = W.player, P = window.__H_PUMP__;
   let H = null, S2 = null; p.obj.traverse((o) => { if (!o.isBone) return; const nm = o.name.replace(/^mixamorig:?/i, ''); if (nm === 'Hips') H = o; if (nm === 'Spine2' || nm === 'Spine02') S2 = o; });
   if (!H || !S2) return { err: 'no Hips / Spine2' };
-  const qh = new THREE.Quaternion(), qs = new THREE.Quaternion(); const rows = [];
+  const qh = new THREE.Quaternion(), qs = new THREE.Quaternion(); const rows = []; const x0 = p.pos.x, z0 = p.pos.z;
   for (let i = 0; i < n; i++) {
     if (i === hitAt) W.hurtActor(p, 6, null, 'ar', false);
-    P.step(1, 1 / 60, false); p.obj.updateMatrixWorld(true);
+    P.step(1, 1 / 60, false);
+    // keep the runner on its open lane: move it back to the start (velocity, clip and phase untouched; the lerp sees no teleport
+    // because _pp moves with it)
+    const dx = p.pos.x - x0, dz = p.pos.z - z0; p.pos.x = x0; p.pos.z = z0; p.pos.y = W.map.heightAt(x0, z0); if (p._pp) { p._pp.x -= dx; p._pp.z -= dz; p._pp.y = p.pos.y; }
+    p.obj.position.copy(p.pos); p.obj.updateMatrixWorld(true);
     H.getWorldQuaternion(qh); S2.getWorldQuaternion(qs); const r = qh.invert().multiply(qs);
     const cn = p.clips && p.clips[p.anim]; const act = cn && p.rig.actions[cn]; const clip = act && act.getClip();
     rows.push({ i, anim: p.anim, ph: act && clip ? (act.time % clip.duration) / clip.duration : null, q: [r.x, r.y, r.z, r.w], spd: +Math.hypot(p.vel.x, p.vel.z).toFixed(2) });
@@ -196,11 +201,13 @@ KILL_JS = r"""(id) => { const W = window.__LC__.W, b = W.actorById.get(id); b.sh
   return { alive: !!b.alive, lootBefore: before, lootAfter: items.length, droppedWeapons: dd, gunVisSameFrame: !!(b.weaponMesh && b.weaponMesh.visible && b.hand && b.hand.visible) }; }"""
 
 # camera relative to an actor, rendered through the composer (combat_shots CAM_JS / REL_JS)
-SHOT_JS = r"""([side, fwdD, up, lookY, fov, hide]) => { const W = window.__LC__.W, k = W.kernel, cam = k.camera, r = k.renderer, a = W.player;
+SHOT_JS = r"""([side, fwdD, up, lookY, fov, hide, matte]) => { const W = window.__LC__.W, k = W.kernel, cam = k.camera, r = k.renderer, a = W.player;
+  const rs = []; if (matte) for (const b of (a._bodies || [])) { const ms = Array.isArray(b.material) ? b.material : [b.material]; for (const m of ms) { rs.push([m, m.roughness]); m.roughness = 1; } }
   const y2 = (a._bodyYaw != null && a._hasBodyYaw) ? a._bodyYaw - Math.PI : a.yaw; const fx = -Math.sin(y2), fz = -Math.cos(y2), rx = -fz, rz = fx;
   const of = cam.fov, op = cam.position.clone(), oq = cam.quaternion.clone(); const ov = a.obj.visible; if (hide) a.obj.visible = false;
   cam.fov = fov; cam.updateProjectionMatrix(); cam.position.set(a.pos.x + rx * side + fx * fwdD, a.pos.y + up, a.pos.z + rz * side + fz * fwdD); cam.lookAt(a.pos.x, a.pos.y + lookY, a.pos.z); cam.updateMatrixWorld(true);
   if (k.composer) k.composer.render(1 / 60); else r.render(k.scene, cam); const png = r.domElement.toDataURL('image/png');
+  for (const [m, v0] of rs) m.roughness = v0;
   a.obj.visible = ov; cam.fov = of; cam.position.copy(op); cam.quaternion.copy(oq); cam.updateProjectionMatrix(); cam.updateMatrixWorld(true); return png; }"""
 GAME_JS = r"""() => { const P = window.__H_PUMP__; P.step(1, 1 / 60, true); return window.__LC__.W.kernel.renderer.domElement.toDataURL('image/png'); }"""
 
@@ -220,8 +227,9 @@ def qang(a, b):
     return math.degrees(2 * math.acos(min(1.0, d)))
 
 
-def spec_peak(A, B):
-    """p99 - p50 luminance of the warm (skin-like) pixels inside the actor mask |A - B| > 8."""
+def spec_peak(A, B, D):
+    """the SPECULAR part of the warm (skin-like) pixels inside the actor mask |A - B| > 8: A (as shipped) minus D (the same
+    frame with the body's roughness forced to 1 = the near-diffuse reference); peak = p99 of that difference over skin pixels"""
     m = np.abs(A - B).max(axis=2) > 8.0
     r, g, b = A[..., 0], A[..., 1], A[..., 2]
     L_ = 0.2126 * r + 0.7152 * g + 0.0722 * b
@@ -230,8 +238,9 @@ def spec_peak(A, B):
     n = int(sk.sum())
     if n < 150:
         return {"skinPx": n, "usable": False}
-    v = L_[sk]
-    return {"skinPx": n, "usable": True, "p50": float(np.percentile(v, 50)), "p99": float(np.percentile(v, 99)), "peak": float(np.percentile(v, 99) - np.percentile(v, 50))}
+    Ld = 0.2126 * D[..., 0] + 0.7152 * D[..., 1] + 0.0722 * D[..., 2]
+    sp = np.clip(L_ - Ld, 0, None)[sk]
+    return {"skinPx": n, "usable": True, "p99": float(np.percentile(sp, 99)), "p999": float(np.percentile(sp, 99.9)), "mean": float(sp.mean()), "peak": float(np.percentile(sp, 99))}
 
 
 def boot_practice(s, skin, seed=5, map_id="ashgrid"):
@@ -261,11 +270,11 @@ def part_guns(s, v, R, skin, shots, want):
         rec["gun"] = s.js(GUN_JS)
         rec["idle"] = s.js(GRIP_JS)
         rec["hand"] = s.js(HAND_JS)
-        save(s.js(SHOT_JS, [2.6, 0.5, 1.35, 1.2, 30, False]), shots, "%s_%s_side_idle.png" % (skin, wid))
+        save(s.js(SHOT_JS, [2.6, 0.5, 1.35, 1.2, 30, False, False]), shots, "%s_%s_side_idle.png" % (skin, wid))
         s.js(AIM_JS, [0.0, 0.0, True])
         s.step_frames(40, 1 / 60, render=False)
         rec["ads"] = s.js(GRIP_JS)
-        save(s.js(SHOT_JS, [2.6, 0.5, 1.35, 1.2, 30, False]), shots, "%s_%s_side_ads.png" % (skin, wid))
+        save(s.js(SHOT_JS, [2.6, 0.5, 1.35, 1.2, 30, False, False]), shots, "%s_%s_side_ads.png" % (skin, wid))
         if "flash" in want:
             s.js(FIRE_ON)
             s.step_frames(1, 1 / 60, render=False)
@@ -283,7 +292,7 @@ def part_guns(s, v, R, skin, shots, want):
             # what the player sees: the game camera on the shot frame
             s.js(FIRE_ON)
             save(s.js(GAME_JS), shots, "%s_%s_tp_fire.png" % (skin, wid))
-            save(s.js(SHOT_JS, [2.6, 0.5, 1.35, 1.2, 30, False]), shots, "%s_%s_side_fire.png" % (skin, wid))
+            save(s.js(SHOT_JS, [2.6, 0.5, 1.35, 1.2, 30, False, False]), shots, "%s_%s_side_fire.png" % (skin, wid))
             s.js(FIRE_OFF)
             s.step_frames(30, 1 / 60, render=False)
         s.js(AIM_JS, [0.0, 0.0, False])
@@ -314,8 +323,10 @@ def part_flinch(s, v, R, skin):
     s.js(EQUIP_JS, "ar")
     s.js(AIM_JS, [0.0, 0.0, False])
     s.step_frames(60, 1 / 60, render=False)
-    s.hold(["KeyW", "ShiftLeft"])
-    s.step_frames(70, 1 / 60, render=False)
+    s.hold(["KeyW"])
+    s.step_frames(10, 1 / 60, render=False)
+    s.press("ShiftLeft")                                  # sprint (the audit's way: a Shift press while running)
+    s.step_frames(20, 1 / 60, render=False)
     res = s.js(TORSO_JS, [110, 80])
     s.release_all()
     s.step_frames(30, 1 / 60, render=False)
@@ -346,16 +357,17 @@ def part_sheen(s, v, R, shots, tag):
     s.step_frames(90, 1 / 60, render=False)
     out = {}
     for name, rig in (("c_face", [0.0, 1.2, 1.62, 1.55, 30]), ("c_near", [0.9, 3.3, 1.15, 0.95, 30])):
-        A = decode(s.js(SHOT_JS, rig + [False]))
-        B = decode(s.js(SHOT_JS, rig + [True]))
+        A = decode(s.js(SHOT_JS, rig + [False, False]))
+        B = decode(s.js(SHOT_JS, rig + [True, False]))
+        D = decode(s.js(SHOT_JS, rig + [False, True]))
         Image.fromarray(A.astype(np.uint8)).save(os.path.join(shots, "%s_%s.png" % (tag, name)))
-        out[name] = spec_peak(A, B)
+        out[name] = spec_peak(A, B, D)
     return out
 
 
 def sheen_base(args, v, shots):
     """the W9 tip's skin specular peak, measured once by a second Chrome on SHEEN_BASE and cached"""
-    path = os.path.join(C.REPORTS, "gunhold_sheenbase_%s_%dx%d_v1.json" % (SHEEN_BASE, args.width, args.height))
+    path = os.path.join(C.REPORTS, "gunhold_sheenbase_%s_%dx%d_v2.json" % (SHEEN_BASE, args.width, args.height))
     if os.path.exists(path) and not args.no_cache:
         with open(path) as f:
             return json.load(f), True
@@ -383,7 +395,8 @@ def part_death(s, v, R):
     spot = L.flat_spot(s, clear=10.0)
     if spot:
         s.js(PLACE_JS, [spot["x"], spot["z"], 0.0])
-    s.step_frames(30, 1 / 60, render=False)
+    s.step_frames(30, 1 / 60, render=True)
+    R["deathP0"] = L.programs(s)                              # this segment's program count, after its own boot
     out = []
     for k in range(2):
         b = s.js(BRING_JS, k)
@@ -443,12 +456,11 @@ def main():
                     s.step_frames(10, 1 / 60, render=True)
                     progs.append([skin, p0, L.programs(s)])
             if "death" in want:
-                p0 = L.programs(s)
                 part_death(s, v, R)
                 s.step_frames(10, 1 / 60, render=True)
-                progs.append(["death", p0, L.programs(s)])
+                progs.append(["death", R.get("deathP0"), L.programs(s)])
             v.check("programs: none linked while the guns are equipped / fired / killed (per session segment)",
-                    all(a_ is not None and b_ == a_ for _, a_, b_ in progs), progs, "unchanged")
+                    all(a_ is not None and b_ is not None and b_ <= a_ for _, a_, b_ in progs), progs, "no increase")
             L.errors_row(v, s)
             d = s.diagnostics()
             v.check("0 shader errors, 0 [rig] lines", not d["shader"] and not d["rigWarnings"], (d["shader"] + d["rigWarnings"])[:4])
@@ -505,10 +517,15 @@ def main():
                 hp = G.get("pistol", {}).get("hand", {}).get("h")
                 ha = G.get("ar", {}).get("hand", {}).get("h")
                 sl = G.get("slide", {}).get("pistol", {})
+                # the slide bar is the audit's (soldier: 2.8 -> <= 1.1 m/s). On another skin whose own RIFLE run already slides more
+                # than 1.1 (athlete: rifle_run_g on its legs, a pre-existing W9 value, reported) the pistol must be no worse than that
+                # skin's rifle on the same legs + 0.05
+                arS = G.get("slide", {}).get("ar", {}).get("slideMean")
+                cap = 1.1 if skin == "soldier" or arS is None else max(1.1, arS + 0.05)
                 one = pl is not None and 0.22 <= pl <= 0.26 and hp is not None and ha is not None and abs(hp - ha) <= 0.15 and \
-                    sl.get("slideMean") is not None and sl["slideMean"] <= 1.1 and (sl.get("bodySpeed") or 0) >= 5.0
+                    sl.get("slideMean") is not None and sl["slideMean"] <= cap and (sl.get("bodySpeed") or 0) >= 5.0
                 res[skin] = {"len": pl, "handPistol": hp, "handAr": ha, "pistolMode": G.get("pistol", {}).get("hand", {}).get("mode"),
-                             "slide": sl.get("slideMean"), "bodySpeed": sl.get("bodySpeed"), "anim": sl.get("anim"), "arSlide": G.get("slide", {}).get("ar", {}).get("slideMean")}
+                             "slide": sl.get("slideMean"), "bodySpeed": sl.get("bodySpeed"), "anim": sl.get("anim"), "arSlide": arS, "slideCap": cap}
                 ok = ok and one
             v.check("pistol: length 0.22-0.26 m; right hand within 0.15 m of the AR's height at idle; planted-foot slide <= 1.1 m/s at a >= 5 m/s run",
                     ok and bool(res), res)

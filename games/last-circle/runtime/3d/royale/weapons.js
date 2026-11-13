@@ -290,19 +290,20 @@ function measureProto(g, id) {
   let guard;
   if (pistol) {
     // two-hand pistol: the support hand cups the firing hand under / left of the grip
-    guard = new THREE.Vector3(0.035, -0.07, -0.01);
+    guard = new THREE.Vector3(0.035, -0.085, -0.02);
   } else {
     const zg = Math.min(GUARD_ZMAX, Math.max(GUARD_ZMIN, (GUARD_F[id] || 0.5) * zMax));
     // the underside of the handguard at that station (the narrow central band, so a side rail or bipod leg does not count)
     let yLo = 1e9, cx = 0, cn = 0;
     for (let i = 0; i < pts.length; i += 3) {
-      if (Math.abs(pts[i + 2] - zg) > 0.03 || Math.abs(pts[i]) > 0.05) continue;
+      // ...and no lower than 10 cm under the bore (a box magazine or a folded bipod under the guard is not the guard)
+      if (Math.abs(pts[i + 2] - zg) > 0.03 || Math.abs(pts[i]) > 0.05 || pts[i + 1] < tip.y - 0.1) continue;
       if (pts[i + 1] < yLo) yLo = pts[i + 1];
       cx += pts[i]; cn++;
     }
     if (yLo > 1e8) yLo = tip.y - 0.03;
     // the WRIST sits just under and to the left (+X in holder space) of the guard, a little behind the palm
-    guard = new THREE.Vector3((cn ? cx / cn : 0) + 0.03, yLo - 0.03, zg - 0.03);
+    guard = new THREE.Vector3((cn ? cx / cn : 0) + 0.04, yLo - 0.045, zg - 0.03);
   }
   g.userData.tip = tip;
   g.userData.guard = guard;
@@ -1040,7 +1041,12 @@ function fire(W, a, def) {
   // fallback for the one frame a swap has not re-meshed yet (the wid stamp) and for a gun with no geometry.
   let muzzle = null;
   const wm = a.weaponMesh, tip = wm && wm.userData.wid === a.weapon.id ? wm.userData.tip : null;
-  if (a.hand && tip) {
+  if (a.hand && tip && a._hmW && W.t - a._hmT <= 0.1) {
+    // the holder as drawn last view pass (player.js animate), plus the gun's own kick offset inside the holder
+    // (the kick this shot starts pulls the gun back VM_KICK x 5 cm on the next step: the flash is placed at the kicked tip it is drawn with)
+    _tipV.set(tip.x + wm.position.x, tip.y + wm.position.y, tip.z - (VM_KICK[def.cls] || 1) * 0.05).applyMatrix4(a._hmW);
+    muzzle = { x: _tipV.x, y: _tipV.y, z: _tipV.z };
+  } else if (a.hand && tip) {
     wm.updateWorldMatrix(true, false);
     _tipV.set(tip.x, tip.y, tip.z).applyMatrix4(wm.matrixWorld);
     muzzle = { x: _tipV.x, y: _tipV.y, z: _tipV.z };

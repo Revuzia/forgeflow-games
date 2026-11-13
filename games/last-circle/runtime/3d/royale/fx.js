@@ -1571,8 +1571,7 @@ function wireEvents(W) {
     // shotFired once per fire() — so a shotgun throws one shell, correctly.
     if (weaponId !== "glauncher") {
       spawn({
-        // (W10 R1B) from the ejection port (~0.3 m behind the measured tip), not the muzzle
-        x: mx - dir.x * 0.3, y: my - 0.05 - dir.y * 0.3, z: mz - dir.z * 0.3,
+        x: mx, y: my - 0.05, z: mz,
         vx: -dir.z * 1.6 - dir.x * 0.8, vy: 1.7, vz: dir.x * 1.6 - dir.z * 0.8,
         color: 0xc9a227, size: 0.045, life: 1.5, gravity: -9, drag: 0.2, st: ST_BRASS,
       });

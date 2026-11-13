@@ -3274,15 +3274,19 @@ function animate(W, a, dt) {
       // (P23, LC-10 / LC-64) a PISTOL (procedural arms) in combat - a warped strafe, a planted turn - twists its chest back onto
       // the aim as well (base pistols always squared the whole body to the aim in combat, so their chest never left it); the
       // arms below aim in that twisted frame. Out of combat it keeps the base carry: chest on the run, barrel <= 0.6 rad off it.
-      const pistolTwist = !useMixamoGun && armed && isPistol(a) && (combat || a._turnT >= 0) && a.onGround && !a.gliding &&
+      // (W10 R1B) a pistol on the rifle LEG clips takes the rifle's chest twist as well (the Mixamo lean + twist below, the arms
+      // aiming in that twisted frame): the rifle clips carry their own chest, and the 0.6-rad carry clamp left the barrel 77 deg
+      // off it on a sideways run (rigcheck (c))
+      const pistolRifle = !useMixamoGun && armed && pistolLegs(a);
+      const pistolTwist = !useMixamoGun && !pistolRifle && armed && isPistol(a) && (combat || a._turnT >= 0) && a.onGround && !a.gliding &&
         !a.swimming && !a.emoting && a.alive && !a.downed && !a.mantleT;
-      if (!useMixamoGun && !pistolTwist) twist = K.clamp(aimDelta, -0.6, 0.6);
+      if (!useMixamoGun && !pistolTwist && !pistolRifle) twist = K.clamp(aimDelta, -0.6, 0.6);
       if (layers && a.armBones && pistolTwist) {
         // (not Spine: uprightTorso re-aims it after this)
         if (a.armBones.spine1 && a.armBones.spine2) { addTwistY(a.armBones.spine1, twist / 2); addTwistY(a.armBones.spine2, twist / 2); }
       }
-      a._armYawOff = (layers && pistolTwist) ? twist : 0;
-      if (layers && a.armBones && useMixamoGun && armed && a.onGround && !a.gliding && !a.swimming && !a.emoting && a.alive && !a.downed) {
+      a._armYawOff = (layers && (pistolTwist || pistolRifle)) ? twist : 0;
+      if (layers && a.armBones && (useMixamoGun || pistolRifle) && armed && a.onGround && !a.gliding && !a.swimming && !a.emoting && a.alive && !a.downed) {
         // negative: +rotation.x on these spines bends FORWARD, and looking UP
         // (pitch > 0) must arch the torso BACK (verified by pitch-sweep probe)
         const lean = K.clamp(a.pitch, -1.1, 1.1) * -0.30;
@@ -3342,7 +3346,7 @@ function animate(W, a, dt) {
       // run (off screen: the shadow-range weld), the spine carries the clip's own yaw, NOT the aim twist, so the weld uses twist 0 there. It
       // used the full twist: a Mixamo rifle bot landing off screen (seed 11, s15, AR, aimDelta 1.0 rad) had its barrel 0.95 rad one side of
       // the body and its bladed rifle chest ~0.95 rad the other: barrel . chest -0.335 / -0.223, the gun backwards in its shadow.
-      const spineTwisted = pistolTwist || (useMixamoGun && armed && a.onGround && !a.gliding && !a.swimming && !a.emoting && a.alive && !a.downed);
+      const spineTwisted = pistolTwist || ((useMixamoGun || pistolRifle) && armed && a.onGround && !a.gliding && !a.swimming && !a.emoting && a.alive && !a.downed);
       // (R4, rigcheck_ashgrid (c)) ...and ONCE on a frame the mixer did not re-key the bones when the gun has not been welded to the
       // pose they hold: a bot that lands (or swaps guns) off screen beyond shadow range has its mixer policy-skipped, so the weld above
       // never ran on the ground and the holder kept its glide-time grip on the frozen pose (seed 7 s18 juggernaut LMG, 219 m off
@@ -3377,6 +3381,14 @@ function animate(W, a, dt) {
       a._ikW = a._ikW == null ? ikWant : a._ikW + (ikWant - a._ikW) * Math.min(1, dt * 12);
       if (ikOn) supportHandIK(a, mixamoAim ? Math.max(a._ikW, 0.02) : K.clamp((a._armW - 0.5) * 2, 0, 1) * a._ikW);
       else if (a._gripPosed) releaseGrip(a);
+      // (W10 R1B) the gun holder's world matrix as POSED this frame (weld + arm layers): a shot fires in weapons.update, before
+      // this pass re-poses the bones the mixer just re-keyed, so the muzzle read there from the live bones sat where the CLIP
+      // holds the hand (a pistol on the rifle legs: 0.14 m off the drawn barrel). weapons.js fire reads this instead.
+      if (layers && armed && a.hand && a.weaponMesh) {
+        a.hand.updateWorldMatrix(true, false);
+        (a._hmW || (a._hmW = new THREE.Matrix4())).copy(a.hand.matrixWorld);
+        a._hmT = W.t;
+      }
     } else if (farAnim && !a.emoting) farWeld(a);
   }
 }
@@ -3813,8 +3825,14 @@ function gripHand(a, w) {
   a.hand.getWorldQuaternion(_ghQ);
   _ghB.set(0, 0, 1).applyQuaternion(_ghQ); _ghU.set(0, 1, 0).applyQuaternion(_ghQ); _ghX.set(1, 0, 0).applyQuaternion(_ghQ);
   // fingers run under the guard to its far (right) side and a little forward; the palm faces up and in, onto the guard
-  _ghF.copy(_ghX).multiplyScalar(-0.8).addScaledVector(_ghB, 0.55).addScaledVector(_ghU, 0.15).normalize();
-  _ghN.copy(_ghU).multiplyScalar(0.85).addScaledVector(_ghX, -0.45);
+  if (isPistol(a)) {
+    // two-hand pistol (cup and saucer): the support palm under the firing fist, fingers wrapping forward and over to its right
+    _ghF.copy(_ghX).multiplyScalar(-0.6).addScaledVector(_ghB, 0.6).addScaledVector(_ghU, 0.25).normalize();
+    _ghN.copy(_ghU).addScaledVector(_ghX, -0.3);
+  } else {
+    _ghF.copy(_ghX).multiplyScalar(-0.8).addScaledVector(_ghB, 0.55).addScaledVector(_ghU, 0.15).normalize();
+    _ghN.copy(_ghU).multiplyScalar(0.85).addScaledVector(_ghX, -0.45);
+  }
   _ghN.addScaledVector(_ghF, -_ghN.dot(_ghF)).normalize();
   // R maps the hand-local (finger, palm, finger x palm) frame onto the world (F, N, F x N) frame
   _ghPl.copy(G.palmL).addScaledVector(G.fingerL, -G.palmL.dot(G.fingerL)).normalize();
