@@ -544,6 +544,7 @@ function burst(o) {
 // sparks. Start-low brightness (gain 0.48 / 0.42, see STYLE_TAB) and a 55-70 ms life: it must read as a flash, not a lamp.
 const FLASH_K = { pistol: 0.8, smg: 0.85, ar: 1.0, shotgun: 1.5, sniper: 1.3, glauncher: 1.4 };
 const FLASH_CORE_M = 0.21, FLASH_CORE_S = 0.075;
+const _lastFlash = { wid: null, idx: -1, size: 0, life: 0, hi: false };
 /** (W10 R1B) the bigger flash + glow: desktop at medium and up (a field read per shot, no allocation) */
 function flashHi(W) {
   if (!W || fxTouch(W)) return false;
@@ -558,10 +559,12 @@ function muzzleFlash(x, y, z, dir, weaponId) {
   // (W10 R1B, combat finding 14) core 0.14 -> 0.21 m (never smaller on the light guns: k floors at 1 for the core) and
   // 55 -> 75 ms, so it holds >= 2 frames at full strength at 60 fps; plus ONE frame of a wide, dim glow (same pool, no draw)
   // desktop medium and up only: low and touch keep the W9 flash (0.14 m x k, 55 ms, no glow)
-  if (flashHi(_simW)) {
-    spawnRaw(x, y, z, 0, 0, 0, 0xffe9a8, FLASH_CORE_M * Math.max(1, k), FLASH_CORE_S, 0, 0, null, 0, ST_FLASH);
-    spawnRaw(x, y, z, 0, 0, 0, 0x5a4022, 0.5 * Math.max(1, k), 0.04, 0, 0, null, 0, ST_HALO);
-  } else spawnRaw(x, y, z, 0, 0, 0, 0xffe9a8, 0.14 * k, 0.055, 0, 0, null, 0, ST_FLASH);
+  const hi = flashHi(_simW);
+  const core = hi ? spawnRaw(x, y, z, 0, 0, 0, 0xffe9a8, FLASH_CORE_M * Math.max(1, k), FLASH_CORE_S, 0, 0, null, 0, ST_FLASH)
+                  : spawnRaw(x, y, z, 0, 0, 0, 0xffe9a8, 0.14 * k, 0.055, 0, 0, null, 0, ST_FLASH);
+  if (hi) spawnRaw(x, y, z, 0, 0, 0, 0x5a4022, 0.5 * Math.max(1, k), 0.04, 0, 0, null, 0, ST_HALO);
+  // read-back (gunhold): the last flash core's pool slot and spawn values (no allocation: one reused record)
+  _lastFlash.wid = weaponId; _lastFlash.idx = core.idx; _lastFlash.size = core.size; _lastFlash.life = core.life0; _lastFlash.hi = hi;
   spawnRaw(x + dir.x * 0.06, y + dir.y * 0.06, z + dir.z * 0.06, 0, 0, 0, gx ? gx.halo : 0xffb85c, 0.12 * k, 0.07, 0, 0, null, 0, ST_HALO);
   for (let i = 0; i < 3; i++) {
     spawnRaw(x, y, z, dir.x * 7 + (Math.random() - 0.5) * 3, dir.y * 7 + (Math.random() - 0.3) * 3, dir.z * 7 + (Math.random() - 0.5) * 3,
@@ -1999,6 +2002,7 @@ export function readback(W) {
     fall: { count: dbnoStats.fallFx, last: dbnoStats.lastFall },
     decals: decalMesh ? { slots: DECAL_ALL, bullet: Math.min(decalCursor, DECAL_N), scorch: Math.min(scorchPlaced, SCORCH_N), group: decalMesh.parent ? decalMesh.parent.name : null } : null,
     camShake: W ? +(W.camShake || 0).toFixed(3) : 0,
+    muzzle: _lastFlash.idx >= 0 ? Object.assign({}, _lastFlash) : null,
   };
 }
 
