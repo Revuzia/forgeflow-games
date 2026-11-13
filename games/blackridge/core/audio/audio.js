@@ -106,6 +106,7 @@ export function createAudio(ctx) {
   let tinnitusLast = -100;        // sim-clock guard (max once / 20 s)
   let slideGain = null, slideSrc = null; // §7.4 slide scrape loop
   let muffleOpen = true;
+  let supOpen = true; // suppression low-pass released
   const duckHeat = {};            // zone → {h, t} for the §7.3 tail duck
   // H1 (2026-08-25, owner request): laboured-breathing loop at CRITICAL hp.
   // No breathing take exists in the CC0 set (assets/audio audited: steps/
@@ -523,6 +524,24 @@ export function createAudio(ctx) {
           // release over ~1.5 s as regen passes 50 hp
           buses.hpMuffle.frequency.setTargetAtTime(20000, t, 0.4);
           muffleOpen = true;
+        }
+
+        // SUPPRESSION (sfx.onWhiz / onHurt feed ctx.suppress 0..1): near misses pull
+        // the mix under a low-pass for a moment and let go within ~1 s. Only above
+        // 35 hp — below that the low-health muffle already owns this filter.
+        {
+          const sup = Math.max(0, fin(ctx.suppress, 0) - dt * 0.85);
+          ctx.suppress = sup;
+          if (hp >= 35) {
+            if (sup > 0.04) {
+              const k = 1 - sup;
+              buses.hpMuffle.frequency.setTargetAtTime(2400 + 17600 * k * k, t, 0.05);
+              supOpen = false;
+            } else if (!supOpen) {
+              buses.hpMuffle.frequency.setTargetAtTime(20000, t, 0.25);
+              supOpen = true;
+            }
+          }
         }
 
         // H1 laboured breathing: starts below 30 hp (CRITICAL), hysteresis

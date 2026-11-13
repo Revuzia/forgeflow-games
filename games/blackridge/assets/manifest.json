@@ -10,8 +10,8 @@
   "source": "str"
  },
  "payload_sums_bytes": {
-  "menu": 5870636,
-  "mission": 4319022,
+  "menu": 5887556,
+  "mission": 4332310,
   "menu_budget": 6815744,
   "mission_budget": 5242880
  },
@@ -1226,7 +1226,7 @@
   },
   {
    "path": "assets/weapons/breaker.glb",
-   "bytes": 383896,
+   "bytes": 383772,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_shotgun.glb per games/last-circle/CREDITS.md) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
@@ -1236,7 +1236,7 @@
   },
   {
    "path": "assets/weapons/corvus.glb",
-   "bytes": 586412,
+   "bytes": 583244,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_sniper.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
@@ -1246,7 +1246,7 @@
   },
   {
    "path": "assets/weapons/pike.glb",
-   "bytes": 377872,
+   "bytes": 377008,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_pistol.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
@@ -1256,7 +1256,7 @@
   },
   {
    "path": "assets/weapons/vesper.glb",
-   "bytes": 571320,
+   "bytes": 587900,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_smg.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
@@ -1266,7 +1266,7 @@
   },
   {
    "path": "assets/weapons/warden.glb",
-   "bytes": 486228,
+   "bytes": 504012,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_ar.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",

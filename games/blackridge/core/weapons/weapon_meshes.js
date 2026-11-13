@@ -80,6 +80,54 @@ function isArmMesh(o) {
   return false;
 }
 
+// The arm meshes are cube-projected for the weave, so every face is its own UV island
+// and the exporter splits every vertex: the shipped normals render the hand FACETED
+// (2026-11-13 capture). Rebuild smooth normals across position-coincident vertices,
+// keeping creases sharper than ~55 deg (cuff edges, sleeve hem).
+function smoothByPosition(geo) {
+  if (!geo || geo.userData.__brSmoothed || !geo.attributes.position) return;
+  geo.userData.__brSmoothed = true;
+  const pos = geo.attributes.position, idx = geo.index;
+  const triCount = idx ? idx.count / 3 : pos.count / 3;
+  const vi = (t, k) => (idx ? idx.getX(t * 3 + k) : t * 3 + k);
+  const key = (i) => Math.round(pos.getX(i) * 20000) + "," + Math.round(pos.getY(i) * 20000) + "," + Math.round(pos.getZ(i) * 20000);
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3();
+  const faceN = new Float32Array(triCount * 3);
+  const groups = new Map();            // position key -> [tri, tri, ...]
+  const keys = new Array(pos.count);
+  for (let t = 0; t < triCount; t++) {
+    const i0 = vi(t, 0), i1 = vi(t, 1), i2 = vi(t, 2);
+    a.fromBufferAttribute(pos, i0); b.fromBufferAttribute(pos, i1); c.fromBufferAttribute(pos, i2);
+    n.subVectors(b, a).cross(c.sub(a));           // area-weighted
+    faceN[t * 3] = n.x; faceN[t * 3 + 1] = n.y; faceN[t * 3 + 2] = n.z;
+    for (const i of [i0, i1, i2]) {
+      const k = keys[i] || (keys[i] = key(i));
+      let g = groups.get(k); if (!g) groups.set(k, g = []);
+      g.push(t);
+    }
+  }
+  const out = new Float32Array(pos.count * 3);
+  const COS = Math.cos(55 * Math.PI / 180);
+  const fn = new THREE.Vector3(), own = new THREE.Vector3();
+  for (let t = 0; t < triCount; t++) {
+    own.set(faceN[t * 3], faceN[t * 3 + 1], faceN[t * 3 + 2]).normalize();
+    for (let k = 0; k < 3; k++) {
+      const i = vi(t, k);
+      if (out[i * 3] || out[i * 3 + 1] || out[i * 3 + 2]) continue;
+      n.set(0, 0, 0);
+      for (const t2 of groups.get(keys[i])) {
+        fn.set(faceN[t2 * 3], faceN[t2 * 3 + 1], faceN[t2 * 3 + 2]);
+        const l = fn.length();
+        if (l > 0 && fn.dot(own) / l > COS) n.add(fn);
+      }
+      n.normalize();
+      out[i * 3] = n.x; out[i * 3 + 1] = n.y; out[i * 3 + 2] = n.z;
+    }
+  }
+  geo.setAttribute("normal", new THREE.BufferAttribute(out, 3));
+  if (geo.attributes.tangent) geo.deleteAttribute("tangent");   // stale; three derives a frame
+}
+
 // Doctrine §1 defensive repair + light strip + shadow discipline.
 function repair(group) {
   const doomedLights = [];
@@ -92,7 +140,7 @@ function repair(group) {
     // receiveShadow is a UNIFORM in the vendored r172 (no shader permutation).
     o.receiveShadow = true;
     o.frustumCulled = false; // camera-space rig; bounds vs frustum lie
-    if (isArmMesh(o)) o.userData.isArm = true;
+    if (isArmMesh(o)) { o.userData.isArm = true; smoothByPosition(o.geometry); }
     const list = Array.isArray(o.material) ? o.material : [o.material];
     for (let i = 0; i < list.length; i++) {
       const m = list[i];
@@ -110,6 +158,12 @@ function repair(group) {
       // The generator authors lens discs (br_glass) and a coating ring (br_arcoat)
       // OPAQUE; transparency is applied here on purpose (glTF alphaMode round-trips
       // are exporter-version dependent, and an opaque lens BLINDS the optic).
+      // RED DOT (generator material br5_dot): unlit, un-tonemapped, always crisp
+      if (/_dot$/i.test(m.name || "")) {
+        const dm = new THREE.MeshBasicMaterial({ name: m.name, color: 0xff2a1a, toneMapped: false, fog: false });
+        list[i] = dm; repaired.add(dm); m.dispose();
+        continue;
+      }
       if (/glass|arcoat/i.test(m.name || "")) {
         const rim = /arcoat/i.test(m.name || "");
         m.transparent = true;
@@ -136,20 +190,24 @@ function repair(group) {
             name: m.name,
             // vertex colours carry the albedo; this factor is the night treatment (see the
             // gun-metal note below): the vm key + rim over-light dark fabric to a pale card
-            color: isSleeve ? new THREE.Color(0.75, 0.75, 0.75) : new THREE.Color(0.58, 0.58, 0.58),
+            color: isSleeve ? new THREE.Color(0.85, 0.85, 0.85) : new THREE.Color(0.70, 0.70, 0.70),
             vertexColors: !!m.vertexColors,
             map: m.map || null,
             normalMap: m.normalMap || null,
             normalScale: m.normalScale ? m.normalScale.clone() : new THREE.Vector2(1, 1),
             roughness: Math.min(1, Math.max(0.3, m.roughness == null ? 0.85 : m.roughness)),
             metalness: 0.0,
-            envMapIntensity: 0.35,
+            // (2026-11-13, measured live) dark cloth (albedo ~0.01) under the ~15-unit
+            // night pool is ALL specular: the default 4% dielectric lobe out-shone the
+            // diffuse 5:1 and rendered olive sleeves pale blue-grey. Cloth is not glossy.
+            specularIntensity: 0.22,
+            envMapIntensity: 0.15,
             side: THREE.FrontSide,
             // Sheen is ADDED on top of the diffuse term and does not scale with albedo: at
             // ~14 units of irradiance a (0.16,0.14,0.11) sheen colour turned dark fabric into
             // cream-coloured card (measured: vertex colour 0.007 linear, rendered ~0.5).
             // Kept as a faint rim accent only.
-            sheen: 0.35,
+            sheen: 0.0,          // sheen is additive and albedo-independent: same pale wash
             sheenRoughness: 0.85,
             sheenColor: isSleeve ? new THREE.Color(0.030, 0.034, 0.028) : new THREE.Color(0.050, 0.044, 0.036),
           });
@@ -174,7 +232,7 @@ function repair(group) {
         // measured live, black-albedo A/B: the stock goes from (170,180,205) to near black.
         // 0.5x lands dark gunmetal with the form carried by the key and rim.
         if (m.color) m.color.setScalar(/metal|optic/i.test(m.name || "") ? 0.85 : 0.70);
-        m.envMapIntensity = 0.5;
+        m.envMapIntensity = /metal|optic/i.test(m.name || "") ? 0.85 : 0.4;   // metal needs something to reflect
         // The roughness map's low end (0.36 on worn steel) is a narrow lobe that turns the muzzle-flash
         // light and the moon into a foil-like glitter on a hand-sized part. The shader clamps the
         // PRODUCT at 1, so a factor of 1.5 lifts the whole map (0.36 -> 0.54) and keeps its variance.

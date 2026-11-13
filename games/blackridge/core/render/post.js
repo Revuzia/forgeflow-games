@@ -613,6 +613,8 @@ export function createPost(ctx) {
         if (p.weapon && typeof p.weapon.adsT === "number") boost += 0.05 * p.weapon.adsT;
         if (typeof p.hp === "number" && p.hp < 35) boost += 0.04 * (1 - p.hp / 35);
       }
+      // suppression: near misses close the vignette in (audio.js decays ctx.suppress)
+      if (ctx.suppress > 0.02) boost += 0.11 * Math.min(1, ctx.suppress);
       u.uVigBoost.value = boost;
 
       // CA kick decay (×3 for ~150 ms — explosions hook via api.caKick())

@@ -992,10 +992,28 @@ export function makeSfx(env) {
     if (!out) return;
     thump(out, { f0: 95, f1: 60, durMs: 100, gain: 0.2 });
     burst(out, { f: 380, q: 0.8, durMs: 70, gain: 0.1 });
+    // DIRECTION (2026-11-13): the hit also snaps from the side it came from — d.dir is
+    // victim -> attacker, so a source 2 m along it pans/attenuates like the shooter
+    if (d.dir) {
+      const c = camPos();
+      const o2 = env.spatial([c[0] + d.dir[0] * 2, c[1] + (d.dir[1] || 0) * 2, c[2] + d.dir[2] * 2], 12);
+      if (o2) {
+        burst(o2, { f: 2400, sweepTo: 900, q: 1.4, durMs: 55, gain: 0.22 });
+        thump(o2, { f0: 180, f1: 90, durMs: 60, gain: 0.16 });
+      }
+    }
+    env.ctx.suppress = Math.min(1, (env.ctx.suppress || 0) + 0.3);
   }
 
   function onDeath(d) {
     if (!d) return;
+    if (d.victim === "P") {
+      // your own death: the body hits, the world drops away (it used to be silent)
+      const o = feedbackOut(1);
+      thump(o, { f0: 120, f1: 38, durMs: 420, gain: 0.34 });
+      thump(o, { f0: 440, f1: 110, durMs: 900, gain: 0.07, when: 0.05, type: "triangle" });
+      burst(o, { f: 900, sweepTo: 200, q: 0.7, durMs: 500, gain: 0.10, when: 0.03 });
+    }
     if (d.attacker === "P" && d.victim !== "P") {
       // kill thock (§4.1): heavier than the hit tick — see killThock()
       killThock(!!d.headshot);
@@ -1061,6 +1079,11 @@ export function makeSfx(env) {
     if (!out) return;
     const near = 1 - Math.min(1, fin(d.dist, 1.5) / 3);
     burst(out, { f: 3800, sweepTo: 2200, q: 1.8, durMs: 90, gain: 0.16 + 0.2 * near });
+    // the round's passing hiss after the crack, and SUPPRESSION: every near miss
+    // adds to env.ctx.suppress (audio.js muffles the mix with it, post.js closes
+    // the vignette) — being shot at should feel like being shot at (2026-11-13)
+    burst(out, { f: 6500, sweepTo: 1800, q: 0.9, durMs: 160, gain: 0.05 + 0.06 * near, when: 0.02 });
+    env.ctx.suppress = Math.min(1, (env.ctx.suppress || 0) + 0.16 + 0.22 * near);
   }
 
   function onExplosion(d) {

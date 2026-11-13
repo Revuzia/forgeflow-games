@@ -249,12 +249,14 @@ def paint(o):
     nz = (np.sin(co[:, 0] * 310 + co[:, 1] * 170) * np.sin(co[:, 1] * 420 - co[:, 2] * 260) * 0.5 + 0.5)
     edge = edge * (0.55 + 0.45 * nz) * wear_k
     c = np.tile(col, (n, 1))
-    c *= (1.0 - 0.45 * cav)[:, None]
+    c *= (1.0 - 0.30 * cav)[:, None]
     if kind == "metal":
         w = np.array(WEAR["metal"])
-        c = c * (1 - 0.55 * edge[:, None]) + w * (0.55 * edge[:, None])
+        # (2026-11-13) was 0.55: almost every vertex of a low-poly bevelled part is ON an
+        # edge, so the blend repainted whole faces (in game: metal mean 0.055 vs base 0.011)
+        c = c * (1 - 0.10 * edge[:, None]) + w * (0.10 * edge[:, None])
     else:
-        c = c * (1.0 + 0.55 * edge)[:, None]
+        c = c * (1.0 + 0.18 * edge)[:, None]
     if "Col" in me.color_attributes:
         me.color_attributes.remove(me.color_attributes["Col"])
     ca = me.color_attributes.new(name="Col", type="FLOAT_COLOR", domain="POINT")
@@ -288,11 +290,18 @@ def materials():
     M = {}
     # names: weapon_meshes.repair() keys the colour factor on /metal|optic/ (0.85) vs 0.70
     # (judged on the studio renders: the first pass's 0.35 / 0.30 read as hammered metal and cork)
-    M["metal"] = _g["_mat_vcol"]("br5_metal", 0.50, micro_normal("metal"), nstrength=0.14, metallic=0.35)
+    M["metal"] = _g["_mat_vcol"]("br5_metal", 0.40, micro_normal("metal"), nstrength=0.14, metallic=0.60)
     M["poly"] = _g["_mat_vcol"]("br5_polymer", 0.62, micro_normal("metal"), nstrength=0.10, metallic=0.0)
     M["grip"] = _g["_mat_vcol"]("br5_polymer_grip", 0.74, micro_normal("poly"), nstrength=0.40, metallic=0.0)
     M["rubber"] = _g["_mat_vcol"]("br5_rubber", 0.86, micro_normal("poly"), nstrength=0.8, metallic=0.0)
-    M["optic"] = _g["_mat_vcol"]("br5_optic", 0.42, micro_normal("metal"), nstrength=0.20, metallic=0.35)
+    M["optic"] = _g["_mat_vcol"]("br5_optic", 0.38, micro_normal("metal"), nstrength=0.20, metallic=0.55)
+    d = bpy.data.materials.get("br5_dot") or bpy.data.materials.new("br5_dot")
+    d.use_nodes = True
+    db = next(n for n in d.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    db.inputs["Base Color"].default_value = (1.0, 0.05, 0.03, 1)
+    db.inputs["Emission Color"].default_value = (1.0, 0.05, 0.03, 1)
+    db.inputs["Emission Strength"].default_value = 6.0
+    M["dot"] = d            # weapon_meshes.repair() swaps it for an unlit, un-tonemapped red
     g = bpy.data.materials.get("br5_glass") or bpy.data.materials.new("br5_glass")
     g.use_nodes = True
     b = next(n for n in g.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
@@ -320,6 +329,36 @@ def pic_rail(name, y0, y1, z_base, half_w=0.0105, node="base", col=None):
             y += 0.0100
     part(name, b, col or COL["anod"], "metal", node, bevel=0.0004, seg=1)
     return zt
+
+
+def reddot(y, rail_top, sight_z, half_w=0.0165, win_h=0.0125, node="dressing"):
+    """Holographic / red-dot optic (2026-11-13): a clamp, a hooded window frame you look
+    THROUGH (no lens geometry: nothing to tint or fog the sight picture) and one
+    emissive dot sitting exactly on the sight line. At ADS the eye is on that line by
+    construction (SOCKET_sight), so the dot is the point of aim; it rides the gun
+    through sway and recoil like a real collimated sight seen slightly off-axis."""
+    z0 = rail_top + 0.006
+    top = sight_z + win_h + 0.0035
+
+    def body(bm):
+        rbox(bm, -0.0125, 0.0125, y - 0.026, y + 0.026, rail_top - 0.004, z0)                 # clamp base
+        cyl_x(bm, y - 0.014, rail_top - 0.0005, 0.0125, 0.0180, 0.0045, seg=14)                 # clamp nuts
+        cyl_x(bm, y + 0.014, rail_top - 0.0005, 0.0125, 0.0180, 0.0045, seg=14)
+        prism_y(bm, [(-half_w, z0 - 0.001), (half_w, z0 - 0.001), (half_w, top - 0.004), (half_w - 0.004, top),
+                     (-half_w + 0.004, top), (-half_w, top - 0.004)], y - 0.020, y + 0.022)     # hood
+        rbox(bm, -0.0105, 0.0105, y - 0.034, y - 0.020, z0 - 0.001, sight_z - win_h - 0.001)   # battery box
+        cyl_x(bm, y - 0.027, z0 + 0.006, -0.0105, -0.0150, 0.0048, seg=14)                      # brightness dial
+
+    def cut(bm):
+        iw = half_w - 0.0030
+        prism_y(bm, [(-iw, sight_z - win_h), (iw, sight_z - win_h), (iw, sight_z + win_h - 0.003),
+                     (iw - 0.003, sight_z + win_h), (-iw + 0.003, sight_z + win_h), (-iw, sight_z + win_h - 0.003)],
+                y - 0.040, y + 0.040)                                                           # the window
+    part("optic_body", body, COL["optic"], "optic", node, bevel=0.0009, seg=2, angle=25, cut=cut)
+
+    def dot(bm):
+        cyl_y(bm, 0.0, sight_z, y + 0.0100, y + 0.0104, 0.00095, seg=12)
+    part("optic_dot", dot, (1.0, 0.05, 0.03), "dot", node, bevel=0)
 
 
 def iron_rear(y, rail_top, sight_z, node="dressing"):
@@ -653,6 +692,8 @@ def gun_ar(spec):
     sz = spec["sight_z"]
     if spec.get("optic") == "scope":
         scope(spec["scope_y"][0], spec["scope_y"][1], sz, rail_top=rail_top)
+    elif spec.get("optic") == "reddot":
+        reddot(spec["optic_y"], rail_top, sz, half_w=spec.get("optic_w", 0.0165), win_h=spec.get("optic_h", 0.0125))
     else:
         iron_rear(spec["rear_y"], rail_top, sz)
         iron_front(spec["front_y"], rail_top, sz)
@@ -804,14 +845,15 @@ def gun_pike():
 
 SPECS = {
     "warden": dict(bore_z=0.062, recv=(-0.104, 0.090), magwell=(0.060, 0.118), handguard=(0.090, 0.405),
-                   hg_r=0.0270, barrel_end=0.620, muzzle="a2", muzzle_end=0.683, sight_z=0.134,
-                   rear_y=-0.080, front_y=0.385, lower_z0=0.000,
+                   hg_r=0.0270, barrel_end=0.620, muzzle="a2", muzzle_end=0.683, sight_z=0.126,
+                   optic="reddot", optic_y=-0.030, lower_z0=0.000,
                    stock=dict(kind="carbine", y_tube=-0.236, y0=-0.262, y1=-0.150),
                    mag=dict(depth=0.170, curve=0.042, half_w=0.0112, col=COL["fde"]),
                    furniture=COL["fde"], grip_col=COL["poly"]),
     "vesper": dict(bore_z=0.042, recv=(-0.095, 0.105), magwell=(0.038, 0.078), handguard=(0.105, 0.300),
                    hg_r=0.0225, barrel_end=0.330, muzzle="can", can_r=0.0185, muzzle_end=0.609,
-                   sight_z=0.0997, rear_y=-0.074, front_y=0.282, lower_z0=-0.006,
+                   sight_z=0.0997, optic="reddot", optic_y=-0.020, optic_w=0.0145, optic_h=0.0105,
+                   lower_z0=-0.006,
                    stock=dict(kind="skeleton", y_tube=-0.120, y0=-0.253),
                    mag=dict(depth=0.120, curve=0.010, half_w=0.0095, col=COL["poly"]),
                    furniture=COL["poly"], grip_col=COL["poly"], gas_block=False),
@@ -853,9 +895,10 @@ A5_POSE = {
     ],
     "pike": [
         ("R", (0.028, -0.066, 0.004), (0.0, 0.90, -0.43), (-1.0, 0.0, 0.0),
-         {"index_curl": (8, 12, 6), "elbow_world": (0.20, -0.95, -0.20)}),
+         {"index_curl": (8, 12, 6), "elbow_world": (0.30, -0.74, -0.60), "sleeve_r0": 0.033, "sleeve_r": 0.040}),
         ("L", (-0.043, -0.026, 0.000), (0.1, 0.7, -0.7), (1.0, 0.0, 0.0),
-         {"elbow_world": (-0.35, -0.90, -0.25), "curl": (50, 70, 40), "thumb_rot": (0, 0, 5, 5)}),
+         {"elbow_world": (-0.42, -0.66, -0.62), "curl": (50, 70, 40), "thumb_rot": (0, 0, 5, 5),
+          "sleeve_r0": 0.033, "sleeve_r": 0.040}),
     ],
 }
 

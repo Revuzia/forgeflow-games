@@ -121,8 +121,8 @@ export const WEAPONS = {
       // report — single source; posAds.y = -sightY puts the sight line on
       // the vm camera's center ray BY CONSTRUCTION)
       glb: "assets/weapons/warden.glb",
-      posHip: [0.14, -0.105, -0.33], posAds: [0, -0.134, -0.34],
-      muzzle: [0, 0.062, -0.683], eject: [0.016, 0.061, 0.019], sightY: 0.134,
+      posHip: [0.14, -0.105, -0.33], posAds: [0, -0.126, -0.27],   // 2026-11-13: closer — the red-dot window should own the centre of the view
+      muzzle: [0, 0.062, -0.683], eject: [0.016, 0.061, 0.019], sightY: 0.126,
       scale: 1,
     },
   },
@@ -146,7 +146,7 @@ export const WEAPONS = {
     penetration: { classes: ["soft"], retain: 0.45, maxThickM: 0.15 },
     view: {
       glb: "assets/weapons/vesper.glb",
-      posHip: [0.135, -0.10, -0.30], posAds: [0, -0.0997, -0.31],
+      posHip: [0.135, -0.10, -0.30], posAds: [0, -0.0997, -0.25],
       muzzle: [0, 0.042, -0.609], eject: [0.016, 0.041, 0.01], sightY: 0.0997,
       scale: 1,
       anim: { kind: "gripmag", tilt: [20, 8, -34], lift: [-0.045, 0.09, 0.02], magDrop: 0.10 },
