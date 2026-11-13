@@ -1,0 +1,24 @@
+{
+ "lane": "Sound effects (max2 sfx), round 2, check 2",
+ "lens": "quality: audibly better for a League-level player in a real fight",
+ "date": "2026-11-12 18:50 Central",
+ "build": "HEAD a0af27706",
+ "pass": false,
+ "score": 7.3,
+ "items": [
+  {"id": "c SFX-4 per-ability impacts", "verdict": "better", "evidence": "My numpy decode, round-1 files vs shipped files, RMS 1/3-octave distance. Ults: pairs under 8 dB 29/120 -> 0/120 (min 3.97 -> 9.06), median centroid 538 -> 1269 Hz, under 4 % 2-6 kHz 11 -> 0, tf median 0.940 -> 0.915 (max 0.952), 2 ms RMS rise median 13.4 -> 2.2 ms (max 3.0). Heavies: 30/120 -> 0/120 (min 3.90 -> 8.83), centroid 578 -> 1586 Hz, tf 0.913 (max 0.947), rise 10.0 -> 2.2 ms (max 3.5). K-weighted heard over the shared hit: ults +1.75 to +2.62 dB (median 2.06), heavies +0.42 to +1.17 dB. Kit coherence: impact nearest its own fighter's shared hit 13/32 -> 26/32. No clipping (peaks 0.60-0.87). Major closed."},
+  {"id": "b kit-hit transients and dark hits", "verdict": "better", "evidence": "Shared kit hits, 2 ms RMS rise median 7.04 -> 2.68 ms (sample-peak median 1.55 ms). Still over 3 ms on 15/32, including high-traffic autos: burdam_attack_hit 31.1 ms, lisvel_hit 24.5, ulkro_hit 26.9, nurrow_hit 13.7, marund_hit 10.3. Dark hits are unchanged: dunsom_attack_hit has 0.002 % 2-6 kHz and 0 above 6 kHz, tunlan_hit 1.2 % / 0.004 %, ulkro_attack_hit 5.2 % / 0.03 %, hesmi_attack_hit 4.7 % / 0.007 %. Each has a recorded per-cue reason, which the brief allows. f_hesmi_hit's snap exemption still has no reason of its own."},
+  {"id": "a runtime mix", "verdict": "same", "evidence": "The engineer re-ran only seeds 21 and 7 after the louder impacts (+2 dB over the shared hit) and the +3 dB pan-law gain on panned mono voices. Both PASS. Seeds 3 and 11 were not re-run. On the previous build, seed 3 was -16.97 LUFS, 0.47 LU under the -16.5 top bound. My seed 3/11 probes were queued but had not finished when I had to report. The brief requires all four seeds to PASS on the shipped build, so this is unverified."},
+  {"id": "d SFX-10 UI and shop", "verdict": "better", "evidence": "Measured as heard: buy -24.0, sell -25.0, undo -26.1, denied -24.4, open -25.4, close -26.3 and ping wheel -29.4 LUFS-M, all with a 1.1-2.4 ms rise. Hover was lifted to -36.9, 9.5 dB under the click. The door and wheel cues are still dark (2-6 kHz 0.6-1.5 %)."},
+  {"id": "e IMPW window", "verdict": "better", "evidence": "audio/cues/kits_c.py:56 has IMPW = (0.15, 0.9)."},
+  {"id": "f Wick take variation", "verdict": "better", "evidence": "My STFT tf: median 0.909 across 7 cues (0.79-0.953), under the 0.97 target."},
+  {"id": "regression", "verdict": "same", "evidence": "content:check OK with 0 warnings. The lane's tree is clean. The change is audio only. Decoded impact PCM goes down."}
+ ],
+ "problems": [
+  {"what": "Runtime mix not re-verified on seeds 3 and 11 after a loudness-raising change", "severity": "major", "evidence": "Ults are now +2 dB over the shared hit, up from +1, and panned mono voices get +3 dB. Seed 3 was already 0.47 LU from the top bound. Only seeds 7 and 21 were re-captured.", "fix": "Run probe_audio_runtime match on seeds 3, 7, 11 and 21 on HEAD and require all to PASS. If seed 3 goes over -16.5, trim MIX_TRIM_DB or the impact gains."},
+  {"what": "Dark and slow shared kit hits remain on frequent autos", "severity": "minor", "evidence": "dunsom_attack_hit has 0 % above 2 kHz. burdam_attack_hit has a 31 ms RMS rise, ulkro_hit 27 ms and lisvel_hit 24.5 ms.", "fix": "Add an air or crack layer to tunlan_hit, ulkro_attack_hit and hesmi_attack_hit. Search the ease per cue with the identity gate in the loop."},
+  {"what": "f_hesmi_hit snap exemption has no per-cue reason", "severity": "minor", "evidence": "sfx2c_onset_hf_record.json lists it under snapExempt without its own why.", "fix": "Record the reason or snap it."}
+ ],
+ "budgets": "Audio only: triangles, draws and shader programs are unchanged. Decoded impact PCM went down 9.98 -> 8.96 MB. perf_1080 and probe_match_memory were not re-run (not needed for an audio-only change). Frame timing is left to the final idle gate.",
+ "notes": "SFX-4 is fixed at the source and is now clearly better than round 1. The lane is near par. It fails on default-to-fail: the four-seed runtime PASS the brief requires is not shown on the shipped build, and the mix got louder in the same round."
+}
