@@ -53,7 +53,7 @@ import { noteMoved } from './triggers.ts';
 import type { World } from './world.ts';
 import { zoneBlocks } from './zones.ts';
 import { datan2, dcos, dsin } from './dmath.ts';
-import { collectDiscs, discsClear, laneDiscs, laneLen, planLane } from './bodypath.ts';
+import { collectDiscs, discsClear, laneDiscs, laneLen, planLane, RASTER_SLACK } from './bodypath.ts';
 
 /** goal drift (m) that forces a new path */
 export const REPATH_DIST = 1;
@@ -83,11 +83,18 @@ const LANE_RECHECK = 5;
 const LANE_AHEAD = 4;
 /** ticks before a failed plan is retried (walk straight and shove meanwhile) */
 const LANE_RETRY = 10;
+/** a lane longer than LANE_DETOUR × the straight line + LANE_DETOUR_M, or leading more than LANE_AWAY m further from its
+ *  end than the walker starts, is not taken */
+const LANE_DETOUR = 1.5;
+const LANE_DETOUR_M = 1.5;
+const LANE_AWAY = 0.5;
 /** progress watchdog window (ticks, ~1 s) and the share of a full-speed walk it must gain off the route left */
 const WATCH_TICKS = 30;
 const WATCH_PROGRESS = 0.3;
 /** … unless it covered at least this share of a full-speed walk of ground (walking round a wave, not stuck) */
 const WATCH_MOVED = 0.6;
+/** … or that ended this much (m) further from its point than it started (carried off, however far it moved) */
+const WATCH_LOST = 0.5;
 /** no-progress windows in a row after which a move to a point ends even though lanes keep being found */
 const WATCH_MAX = 4;
 const ARRIVE_NEAR = 1;
@@ -435,21 +442,25 @@ function updateLane(w: World, e: Entity, aimX: number, aimY: number, gx: number,
       e.laneCheck = LANE_RECHECK;
       const ex = e.lane[e.lane.length - 2], ey = e.lane[e.lane.length - 1];
       collectDiscs(w, e, Math.min(e.x, ex) - 2, Math.min(e.y, ey) - 2, Math.max(e.x, ex) + 2, Math.max(e.y, ey) + 2, ux, uy, gx, gy, ARRIVE_NEAR, e.laneAll);
-      // the way straight on cleared (with room to spare): drop the lane
-      const look = Math.min(aD, goalD, LANE_LOOK + 1);
-      if (discsClear(e.x, e.y, e.x + ux * look, e.y + uy * look, -0.15) && w.nav.lineOfWalk(e.x, e.y, aimX, aimY, r)) { clearLane(e); return; }
+      // the way straight to the lane's end cleared (with room to spare): drop the lane
+      if (discsClear(e.x, e.y, ex, ey, -0.15) && w.nav.lineOfWalk(e.x, e.y, ex, ey, r) && w.nav.lineOfWalk(ex, ey, aimX, aimY, r)) {
+        clearLane(e);
+        e.lane.push(ex, ey);   // walk straight to it (the leg resumes there)
+        e.laneIdx = 0;
+        return;
+      }
       // the lane ahead (LANE_AHEAD m of it) still clear?
       let px = e.x, py = e.y, left = LANE_AHEAD, ok = true;
       for (let i = e.laneIdx * 2; i + 1 < e.lane.length && left > 0; i += 2) {
         const qx = e.lane[i], qy = e.lane[i + 1];
-        if (!discsClear(px, py, qx, qy, 0.1)) { ok = false; break; }
+        if (!discsClear(px, py, qx, qy, RASTER_SLACK + 0.1)) { ok = false; break; }
         left -= Math.sqrt((qx - px) * (qx - px) + (qy - py) * (qy - py));
         px = qx; py = qy;
       }
       if (ok) return;
       clearLane(e);
       e.laneCheck = 0;
-      // fall through: re-plan from here
+      // fall through: re-plan from here (the shortest way round now: keeping a side cost more in the wave probe)
     }
   }
   if (e.laneCheck > 0) { e.laneCheck--; return; }
@@ -465,7 +476,7 @@ function updateLane(w: World, e: Entity, aimX: number, aimY: number, gx: number,
   if (s < aD) { while (s < aD && s < L + 4 && inDisc(s)) s = Math.min(aD, s + 0.25); }
   if (inDisc(s)) { s = L; while (s > look && inDisc(s)) s -= 0.25; }
   const tx = e.x + ux * s, ty = e.y + uy * s;
-  if (!inDisc(s) && planLane(w, e, tx, ty, r, e.lane)) {
+  if (!inDisc(s) && planLane(w, e, tx, ty, r, e.lane) && laneFair(e, tx, ty)) {
     e.laneIdx = 0; e.laneAimX = aimX; e.laneAimY = aimY; e.laneCheck = LANE_RECHECK; e.lanePlanned = true;
     const fx = e.lane[0] - e.x, fy = e.lane[1] - e.y;
     e.steerSide = ux * fy - uy * fx > 0 ? -1 : 1;
@@ -473,6 +484,25 @@ function updateLane(w: World, e: Entity, aimX: number, aimY: number, gx: number,
     clearLane(e);
     e.laneCheck = LANE_RETRY;
   }
+}
+
+/** a lane is taken only when it goes round, not back: at most LANE_DETOUR × the straight line + LANE_DETOUR_M long and
+ *  never more than LANE_AWAY m further from its end than the walker starts (a pocket the bodies closed round it is
+ *  shoved through instead, and the progress watchdog decides) */
+function laneFair(e: Entity, tx: number, ty: number): boolean {
+  const d0 = Math.sqrt((tx - e.x) * (tx - e.x) + (ty - e.y) * (ty - e.y));
+  if (laneLen(e.x, e.y, e.lane, 0) > d0 * LANE_DETOUR + LANE_DETOUR_M) return false;
+  let px = e.x, py = e.y;
+  const lim = (d0 + LANE_AWAY) * (d0 + LANE_AWAY);
+  for (let i = 0; i + 1 < e.lane.length; i += 2) {
+    const qx = e.lane[i], qy = e.lane[i + 1];
+    for (const f of [0.5, 1]) {
+      const x = px + (qx - px) * f, y = py + (qy - py) * f;
+      if ((x - tx) * (x - tx) + (y - ty) * (y - ty) > lim) return false;
+    }
+    px = qx; py = qy;
+  }
+  return true;
 }
 
 function stepToward(w: World, e: Entity, gx: number, gy: number): void {
@@ -554,8 +584,10 @@ function stepToward(w: World, e: Entity, gx: number, gy: number): void {
     const full = speed * WATCH_TICKS * TICK_DT;
     // walking round a wave gains little route but covers ground; being pinned or inching does neither
     const shift = Math.sqrt((nx - e.watchX) * (nx - e.watchX) + (ny - e.watchY) * (ny - e.watchY));
+    // … unless it was carried AWAY from its point (a wave marching through it): ground covered then is no progress
+    const lost = Math.sqrt((gx - nx) * (gx - nx) + (gy - ny) * (gy - ny)) - Math.sqrt((gx - e.watchX) * (gx - e.watchX) + (gy - e.watchY) * (gy - e.watchY)) > WATCH_LOST;
     e.watchTicks = 0;
-    if (gain < full * WATCH_PROGRESS && shift < full * WATCH_MOVED) {
+    if (gain < full * WATCH_PROGRESS && (shift < full * WATCH_MOVED || lost)) {
       e.watchStage++;
       // a second window in a row with no lane found since the first: boxed in, the move to a point ends
       if (e.watchStage >= 2 && !e.lanePlanned) e.watchStage = WATCH_MAX;

@@ -15,16 +15,40 @@ import type { World } from './world.ts';
 export const LANE_CELL = 0.25;
 /** margin (m) kept between the walker's body and a body it passes */
 const LANE_MARGIN = 0.05;
+/** discs are rasterised this much (m) smaller than they are (half a cell), and pulled lanes may graze them by it */
+export const RASTER_SLACK = LANE_CELL * 0.5;
 /** the planning box: the walker and the lane's end, padded this much (m) on every side (room to go round a wave) */
 const LANE_PAD = 4;
 /** cells per side at most (the box is shrunk round the walker and the end when the pad would exceed it) */
 const LANE_N = 112;
 const SQRT2 = Math.SQRT2;
+
 const NDX = [1, -1, 0, 0, 1, 1, -1, -1];
 const NDY = [0, 0, 1, -1, 1, -1, 1, -1];
 
-/** a body that may block a lane: centre, and the radius the walker's centre must stay out of */
-export interface Disc { x: number; y: number; r: number }
+/** how far ahead (s) a moving body's path is blocked: a lane passes beside where it is going, not where it stood */
+const SWEEP_S = 0.25;
+/** a body that may block a lane: the segment its centre sweeps over SWEEP_S (from (x, y) to (x2, y2); a point when it
+ *  stands), and the radius the walker's centre must stay out of */
+export interface Disc { x: number; y: number; x2: number; y2: number; r: number }
+/** squared distance from (px, py) to the segment a–b, and the closest point (into seg) */
+const seg = { x: 0, y: 0 };
+function pointSeg2(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const abx = bx - ax, aby = by - ay, l2 = abx * abx + aby * aby;
+  let t = l2 > 1e-12 ? ((px - ax) * abx + (py - ay) * aby) / l2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  seg.x = ax + abx * t; seg.y = ay + aby * t;
+  return (px - seg.x) * (px - seg.x) + (py - seg.y) * (py - seg.y);
+}
+/** squared distance between segments a–b and c–d */
+function segSeg2(ax: number, ay: number, bx: number, by: number, cx: number, cy: number, dx: number, dy: number): number {
+  // they cross: 0
+  const d1 = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax), d2 = (bx - ax) * (dy - ay) - (by - ay) * (dx - ax);
+  const d3 = (dx - cx) * (ay - cy) - (dy - cy) * (ax - cx), d4 = (dx - cx) * (by - cy) - (dy - cy) * (bx - cx);
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return 0;
+  return Math.min(segPointDist2(ax, ay, bx, by, cx, cy), segPointDist2(ax, ay, bx, by, dx, dy),
+    segPointDist2(cx, cy, dx, dy, ax, ay), segPointDist2(cx, cy, dx, dy, bx, by));
+}
 
 const blocked = new Uint8Array(LANE_N * LANE_N);
 const gCost = new Float32Array(LANE_N * LANE_N);
@@ -75,10 +99,12 @@ export function collectDiscs(w: World, e: Entity, minX: number, minY: number, ma
     const gr = R0 + goalNear;
     if ((o.x - gx) * (o.x - gx) + (o.y - gy) * (o.y - gy) < gr * gr) continue;
     let R = R0 + LANE_MARGIN;
-    const d = Math.sqrt((o.x - e.x) * (o.x - e.x) + (o.y - e.y) * (o.y - e.y));
+    // a moving body blocks where it is going over SWEEP_S (a standing one, where it stands)
+    const x2 = o.x + o.vx * SWEEP_S, y2 = o.y + o.vy * SWEEP_S;
+    const d = Math.sqrt(pointSeg2(e.x, e.y, o.x, o.y, x2, y2));
     if (d < R) R = Math.max(0, d - 0.02);
-    const disc = discPool.pop() ?? { x: 0, y: 0, r: 0 };
-    disc.x = o.x; disc.y = o.y; disc.r = R;
+    const disc = discPool.pop() ?? { x: 0, y: 0, x2: 0, y2: 0, r: 0 };
+    disc.x = o.x; disc.y = o.y; disc.x2 = x2; disc.y2 = y2; disc.r = R;
     laneDiscs.push(disc);
   }
 }
@@ -89,10 +115,9 @@ export function discsClear(ax: number, ay: number, bx: number, by: number, slack
     const d = laneDiscs[i];
     const R = d.r - slack;
     if (R <= 0) continue;
-    if (segPointDist2(ax, ay, bx, by, d.x, d.y) < R * R) {
+    if (segSeg2(ax, ay, bx, by, d.x, d.y, d.x2, d.y2) < R * R) {
       // a disc the walker starts inside (shrunk to its distance) only blocks moving into it
-      const sx = ax - d.x, sy = ay - d.y;
-      if (sx * sx + sy * sy < (d.r + 1e-3) * (d.r + 1e-3) && (bx - ax) * sx + (by - ay) * sy >= 0) continue;
+      if (pointSeg2(ax, ay, d.x, d.y, d.x2, d.y2) < (d.r + 1e-3) * (d.r + 1e-3) && (bx - ax) * (ax - seg.x) + (by - ay) * (ay - seg.y) >= 0) continue;
       return false;
     }
   }
@@ -148,15 +173,18 @@ export function planLane(w: World, e: Entity, tx: number, ty: number, r: number,
   }
   for (let k = 0; k < laneDiscs.length; k++) {
     const d = laneDiscs[k];
-    if (d.r <= 0) continue;
-    const i0 = Math.max(0, Math.floor((d.x - d.r - minX) / C)), i1 = Math.min(W - 1, Math.floor((d.x + d.r - minX) / C));
-    const j0 = Math.max(0, Math.floor((d.y - d.r - minY) / C)), j1 = Math.min(H - 1, Math.floor((d.y + d.r - minY) / C));
-    const r2 = d.r * d.r;
+    // a cell is blocked when its centre is inside the disc shrunk by RASTER_SLACK: a gap the exact discs leave open
+    // never closes on cell rounding (the string pulling below checks the exact discs, within that slack)
+    const rr = d.r - RASTER_SLACK;
+    if (rr <= 0) continue;
+    const lo = Math.min(d.x, d.x2), hi = Math.max(d.x, d.x2), loY = Math.min(d.y, d.y2), hiY = Math.max(d.y, d.y2);
+    const i0 = Math.max(0, Math.floor((lo - rr - minX) / C)), i1 = Math.min(W - 1, Math.floor((hi + rr - minX) / C));
+    const j0 = Math.max(0, Math.floor((loY - rr - minY) / C)), j1 = Math.min(H - 1, Math.floor((hiY + rr - minY) / C));
+    const r2 = rr * rr;
     for (let j = j0; j <= j1; j++) {
-      const y = minY + (j + 0.5) * C - d.y;
+      const y = minY + (j + 0.5) * C;
       for (let i = i0; i <= i1; i++) {
-        const x = minX + (i + 0.5) * C - d.x;
-        if (x * x + y * y < r2) blocked[j * W + i] = 1;
+        if (pointSeg2(minX + (i + 0.5) * C, y, d.x, d.y, d.x2, d.y2) < r2) blocked[j * W + i] = 1;
       }
     }
   }
@@ -211,7 +239,7 @@ export function planLane(w: World, e: Entity, tx: number, ty: number, r: number,
     let j = i + 1;
     while (j + 1 < count) {
       const bx = pts[2 * (j + 1)], by = pts[2 * (j + 1) + 1];
-      if (!discsClear(ax, ay, bx, by, 0.02) || !nav.lineOfWalk(ax, ay, bx, by, r)) break;
+      if (!discsClear(ax, ay, bx, by, RASTER_SLACK) || !nav.lineOfWalk(ax, ay, bx, by, r)) break;
       j++;
     }
     ax = pts[2 * j]; ay = pts[2 * j + 1];
