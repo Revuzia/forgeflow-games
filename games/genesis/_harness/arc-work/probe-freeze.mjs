@@ -32,6 +32,19 @@ await page.goto(url);
 await page.waitForFunction(() => !!window.__GENESIS__);
 await page.evaluate(() => window.__GENESIS__.ready);
 await page.evaluate((c) => window.__GENESIS__.camera(c), { mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 90, tilt: 60, hour: 10, blend: 0 });
+// --decals=1: every frame, four large decals (scorch / ring / FX light / tint: all three decal groups) on the ground
+// under the camera, partly under the lake (hdrmerge A/B: decals must stay under the water)
+if (opts.decals) await page.evaluate(() => {
+  const fx = globalThis.__GENESIS_FX__.fx, dp = fx.decals;
+  const vis = [...globalThis.__GENESIS_R__.planets.values()][0];
+  const orig = dp.prepare.bind(dp);
+  dp.prepare = (...a) => {
+    const c = vis.camBody, l = Math.hypot(c.x, c.y, c.z), g = l - globalThis.__GENESIS_R__.stats.altitude;
+    const mk = (type, r, cr, cg, cb, ca) => ({ type, x: c.x / l * g, y: c.y / l * g, z: c.z / l * g, r, ax: 0, ay: 0, az: 0, cr, cg, cb, ca, p0: r, p1: 0, p2: 0, p3: 0, q0: 0, q1: 0, q2: 0, q3: 0 });
+    dp.add(mk(5, 160, 0.2, 0.15, 0.1, 0.9)); dp.add(mk(8, 120, 1, 0.8, 0.3, 1)); dp.add(mk(10, 140, 1, 0.5, 0.2, 1)); dp.add(mk(7, 260, 1, 0.6, 0.6, 0.6));
+    return orig(...a);
+  };
+});
 // let the landing converge (freeze=1 takes hold after 90 quiet frames); at most --wait frames
 const wait = Number(opts.wait ?? 200);
 let f = 0;
