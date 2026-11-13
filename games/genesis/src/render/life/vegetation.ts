@@ -22,6 +22,7 @@
 //     deciduous species from late autumn to spring. Trees cast shadows.
 
 import { uploadPrefix } from '../upload.ts';
+import { ringify, ringMark, ringOf } from '../bufring.ts';
 import {
   BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, MeshStandardMaterial, ShaderMaterial, Vector3, Vector4,
   type IUniform, type Texture,
@@ -872,6 +873,8 @@ function flushRanges(a: InstancedBufferAttribute | BufferAttribute, ranges: numb
   const r: [number, number][] = [];
   for (let k = 0; k < ranges.length; k += 2) r.push([ranges[k], ranges[k] + ranges[k + 1]]);
   r.sort((x, y) => x[0] - y[0]);
+  // (PERF s16) a ringed bucket: its next buffer takes every range written since that buffer's own last upload
+  if (ringOf(a)) { const len = a.array.length; for (const [s1, e1] of r) ringMark(a, s1 * w, Math.min(len, e1 * w) - s1 * w); return; }
   a.clearUpdateRanges();
   let s0 = -1, e0 = -1;
   const len = a.array.length;
@@ -938,6 +941,7 @@ export class Vegetation {
           const mesh = new InstancedMesh(geo, this.material, cap);
           mesh.instanceMatrix.setUsage(DynamicDrawUsage);
           whiteColors(mesh, cap);
+          ringify(mesh, ['instanceMatrix', 'instanceColor', 'iExtra']);
           mesh.count = 0;
           mesh.frustumCulled = false;
           mesh.matrixAutoUpdate = false;
@@ -971,6 +975,7 @@ export class Vegetation {
     (mesh.instanceMatrix.array as Float32Array).set((old.instanceMatrix.array as Float32Array).subarray(0, n * 16));
     mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(nc * 3).fill(1), 3);
     if (old.instanceColor) (mesh.instanceColor.array as Float32Array).set((old.instanceColor.array as Float32Array).subarray(0, n * 3));
+    ringify(mesh, ['instanceMatrix', 'instanceColor', 'iExtra']);
     mesh.count = old.count;
     mesh.visible = old.visible;
     mesh.frustumCulled = false;
@@ -1485,6 +1490,8 @@ export class Vegetation {
     mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     whiteColors(mesh, cap);
     if (!mesh.instanceColor) mesh.setColorAt(0, _c.setRGB(1, 1, 1));
+    // (PERF s16) cells land in far buckets drawn every frame: a ring of 3 per instance attribute (bufring.ts)
+    ringify(mesh, ['instanceMatrix', 'instanceColor', 'iExtra', 'iHull']);
     (mesh.instanceMatrix.array as Float32Array).fill(0);
     mesh.frustumCulled = false;
     mesh.matrixAutoUpdate = false;

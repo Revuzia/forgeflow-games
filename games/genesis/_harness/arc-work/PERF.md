@@ -1241,3 +1241,29 @@ long press frame-rate independent. Report after 1-2 verified.
   The LOCAL bounds (cloudField's base 0.05-0.1, top 0.2-0.62 / 0.9-1.0 storms of the shell) all lie inside the shell,
   so covering shell-20 .. shell+60 covers them; a per-spot bound would need the weather cube on the CPU. NOT yet shot.
 - GATE check21 (cloud fix): 934/934 pass, exit 0; npm run build exit 0 (build-prod20.log). Handed back: context exhausted; (1) elimination, (3), (4) for a fresh session (NEXT above).
+
+## SESSION 16 (2026-11-13 ~02:45Z) — (1) deck shots, (2) ANGLE copies [lead: round 5 = 15-19 MB/frame copies on the M5, priority]
+- PROBE probe-deck.mjs (arc-work): babel 307987276, the standard landing (start view centre, lat 17.876 lon -35.0 =
+  Amonshis spot; shell 180-420 m), camera RESTING at --stops (orbit dist searched for stats.altitude, autoTilt), shots
+  deck/<tag>-aNNN.png + white fraction. dist32 = HEAD build (deckfull on). run-s16a.sh (new), run-s16b.sh (old after
+  the copies probes).
+- (2) CHANGES (tsc clean; each a perfSwitch, default on):
+  `?bufring=0` src/render/bufring.ts: ringify(mesh, names) = 3 BufferAttributes over ONE shared array per attribute;
+    uploadPrefix / ringMark rotate the installed member at most once a frame (geometry.setAttribute or
+    mesh.instanceMatrix/instanceColor swap; three re-points the VAO) and send it every range written since ITS last
+    upload (sorted range list, <= 24 ranges; onUploadCallback clears; the first upload captures the GL buffer, the
+    mesh's dispose deletes the non-installed members). Ringed: life/bodies.ts (people, animals, crowds: instanceMatrix
+    + iAnim iColA iColB iColC iStyle iFade), boats.ts, camps.ts (instanceMatrix iState iInfo), vegetation near buckets
+    (instanceMatrix instanceColor iExtra; also after a lazy-pool grow) and far buckets (+ iHull; flushRanges -> ringMark
+    per range). renderer.ts: setRingGL + ringTick() after gpuMem.tick().
+  `?freshland=0` chunks.ts FRESH_LAND: PatchPage.drawnAt (keepIndirectTable's onBeforeRender stamps mesh.userData.drawn
+    = ringFrame(); water sheet included), .cold = not drawn in the last RING_N=3 frames. alloc(): fullest COLD page with
+    room; else a new page (pool.take prefers a cold idle page) while pages < need + max(6, 0.75 need); else the fullest
+    (as before). Compaction (packed) prefers cold pages, never opens one.
+  gpumem.ts: in-use now follows each VAO's CURRENT buffer per slot (vaoSlots); a re-pointed buffer keeps the frame it was
+    last drawn through it (bufFrame) — without this a ring's members all looked in use through the shared VAO.
+- NODE tests/render-bufring.test.ts (4): addRange; ring rotation (3 distinct buffers on 3 frames, member 1 on frame 4
+  gets frames 2-3's ranges, same array, instanceMatrix swapped); gpumem re-pointed slot; flight (grid 48, 900 frames,
+  draws stamped): page writes into pages drawn in the last 3 frames 185 / 3947 = 4.7% (freshland=0: 4190 / 5848 = 72%),
+  pages peak 168 vs 146 (+15%). chunkpool / chunksoak / chunkrest / pagenormal / lazypools / gpumem: 20/20 pass.
+- dist33 = HEAD + the above. Browser A/B queued (run-s16b.sh): copies-s16on.log / copies-s16off.log.

@@ -29,7 +29,17 @@ const views = [
   { mode: 'orbit', lat: -10.4, lon: 150, dist: 150, tilt: 55 },
 ];
 const n = Number(opts.frames ?? 30);
-for (const v of views) { await page.evaluate((c) => window.__GENESIS__.camera(c), { ...v, hour: 10, blend: 1.5 }); await page.evaluate((k) => window.__GENESIS__.frames(k), n); }
+// (s16) per view: the flight's frames, then --rest frames at rest — copies per frame of each part (gpuMem's history)
+const rest = Number(opts.rest ?? 10);
+const part = (k) => page.evaluate((k) => { const h = globalThis.__GENESIS_GPUMEM__.hist.slice(-k); const s = (f) => h.reduce((a, x) => a + x[f], 0) / Math.max(1, h.length); return { copyN: +s('copyN').toFixed(1), copyMB: +(s('copyB') / 1e6).toFixed(2), subN: +s('subN').toFixed(1), subMB: +(s('subB') / 1e6).toFixed(2), dataMB: +(s('dataB') / 1e6).toFixed(2) }; }, k);
+for (const v of views) {
+  await page.evaluate((c) => window.__GENESIS__.camera(c), { ...v, hour: 10, blend: 1.5 });
+  await page.evaluate((k) => window.__GENESIS__.frames(k), n);
+  const fly = await part(n);
+  await page.evaluate((k) => window.__GENESIS__.frames(k), rest);
+  const still = await part(rest);
+  console.log('view', JSON.stringify(v), 'flight/frame', JSON.stringify(fly), 'rest/frame', JSON.stringify(still));
+}
 const out = await page.evaluate(() => {
   const gm = globalThis.__GENESIS_GPUMEM__;
   const L = gm.lines().filter((l) => /angle transients|by owner/.test(l));

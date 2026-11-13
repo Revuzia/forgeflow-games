@@ -44,14 +44,14 @@ let dist = stops[0];
 const rows = [];
 for (const target of stops) {
   // search the orbit dist that rests the camera at `target` m over the ground
-  for (let k = 0; k < 5; k++) {
+  for (let k = 0; k < 3; k++) {
     await page.evaluate((c) => window.__GENESIS__.camera(c), { mode: 'orbit', lat: spot.lat, lon: spot.lon, dist, hour, blend: 0 });
     await page.evaluate(() => window.__GENESIS__.frames(2));
     const a = await alt();
     if (Math.abs(a - target) < 3) break;
     dist = Math.max(20, dist * target / Math.max(5, a));
   }
-  await page.evaluate((n) => window.__GENESIS__.frames(n), Number(opts.settle ?? 8));
+  await page.evaluate((n) => window.__GENESIS__.frames(n), Number(opts.settle ?? 6));
   const a = await alt();
   const p = join(OUT, `${tag}-a${String(target).padStart(3, '0')}.png`);
   await page.screenshot({ path: p });

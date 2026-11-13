@@ -24,17 +24,22 @@ let gl: WebGL2RenderingContext | null = null;
 export function setRingGL(g: WebGL2RenderingContext | null): void { gl = g; }
 /** a frame begins (the renderer) */
 export function ringTick(): void { frame++; }
+/** the frame counter (ticked at the start of every renderer frame) */
+export function ringFrame(): number { return frame; }
 
 type Attr = BufferAttribute;
 class Ring {
   readonly members: Attr[];
-  /** element span [lo, hi) written since each member's last upload (lo >= hi: none) */
-  readonly lo: number[];
-  readonly hi: number[];
+  /** element ranges [s0, e0, s1, e1, ...] (sorted, disjoint) written since each member's last upload */
+  readonly dirty: number[][];
   readonly bufs: (WebGLBuffer | null)[];
   cur = 0;
   lastFlip = -1;
-  constructor(readonly mesh: Mesh, readonly name: string, first: Attr) {
+  readonly mesh: Mesh;
+  readonly name: string;
+  constructor(mesh: Mesh, name: string, first: Attr) {
+    this.mesh = mesh;
+    this.name = name;
     this.members = [first];
     const Ctor = first.constructor as new (arr: ArrayLike<number>, size: number, norm?: boolean, mpa?: number) => Attr;
     for (let i = 1; i < RING_N; i++) {
@@ -44,14 +49,13 @@ class Ring {
       m.name = first.name;
       this.members.push(m);
     }
-    this.lo = this.members.map(() => 0);
-    this.hi = this.members.map(() => 0);
+    this.dirty = this.members.map(() => []);
     this.bufs = this.members.map(() => null);
     this.members.forEach((m, i) => {
       m.onUploadCallback = () => {
         // (three calls this right after its bufferData / bufferSubData, the member's buffer still bound)
         if (!this.bufs[i] && gl) this.bufs[i] = gl.getParameter(gl.ARRAY_BUFFER_BINDING) as WebGLBuffer | null;
-        this.lo[i] = 0; this.hi[i] = 0;
+        this.dirty[i].length = 0;
       };
     });
   }
@@ -72,14 +76,12 @@ class Ring {
     if (count <= 0) return;
     // (another owner replaced the attribute: this ring no longer draws; leave it)
     if (this.members.indexOf(this.installed() as Attr) < 0) return;
-    const end = start + count;
-    for (let i = 0; i < this.members.length; i++) {
-      if (this.lo[i] >= this.hi[i]) { this.lo[i] = start; this.hi[i] = end; } else { this.lo[i] = Math.min(this.lo[i], start); this.hi[i] = Math.max(this.hi[i], end); }
-    }
+    for (const d of this.dirty) addRange(d, start, start + count);
     if (this.lastFlip !== frame) { this.lastFlip = frame; this.cur = (this.cur + 1) % this.members.length; this.install(this.members[this.cur]); }
     const m = this.members[this.cur];
+    const d = this.dirty[this.cur];
     m.clearUpdateRanges();
-    m.addUpdateRange(this.lo[this.cur], this.hi[this.cur] - this.lo[this.cur]);
+    for (let k = 0; k < d.length; k += 2) m.addUpdateRange(d[k], d[k + 1] - d[k]);
     m.needsUpdate = true;
   }
   /** the mesh went: free the members three does not know to free (all but the one installed) */
@@ -92,6 +94,23 @@ class Ring {
       this.bufs[i] = null;
       RINGS.delete(this.members[i]);
     }
+  }
+}
+
+/** ranges a member keeps apart before the closest two are merged (each is one bufferSubData) */
+const MAX_RANGES = 24;
+/** add [s, e) to a sorted disjoint range list (touching / overlapping ranges merge; past MAX_RANGES the closest pair) */
+export function addRange(d: number[], s: number, e: number): void {
+  let i = 0;
+  while (i < d.length && d[i + 1] < s) i += 2;
+  // d[i..] ends at or after s: merge every range that starts at or before e
+  let j = i;
+  while (j < d.length && d[j] <= e) { s = Math.min(s, d[j]); e = Math.max(e, d[j + 1]); j += 2; }
+  d.splice(i, j - i, s, e);
+  while (d.length > MAX_RANGES * 2) {
+    let best = 2, gap = Infinity;
+    for (let k = 2; k < d.length; k += 2) { const g = d[k] - d[k - 1]; if (g < gap) { gap = g; best = k; } }
+    d.splice(best - 1, 2);
   }
 }
 

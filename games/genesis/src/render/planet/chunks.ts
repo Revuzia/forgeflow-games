@@ -33,6 +33,7 @@ import {
   type PatchArrays, type PatchReply, type PatchRequest,
 } from './patchbuild.ts';
 import { capGap, shadowReach } from './shadowreach.ts';
+import { RING_N, ringFrame } from '../bufring.ts';
 import { perfSwitch } from '../perfswitch.ts';
 
 export { PATCH_RES };
@@ -254,6 +255,14 @@ class PatchPage {
     keepIndirectTable(this.mesh);
   }
   get live(): number { return this.used - this.free.length; }
+  /** (PERF s16) the last frame this page's buffers were drawn (terrain or its water sheet; keepIndirectTable) */
+  get drawnAt(): number {
+    const a = (this.mesh.userData.drawn as number | undefined) ?? -1e9;
+    const b = (this.water?.userData.drawn as number | undefined) ?? -1e9;
+    return Math.max(a, b);
+  }
+  /** (PERF s16) not drawn in the last RING_N frames: a write into its buffers is in place on ANGLE-Metal */
+  get cold(): boolean { return ringFrame() - this.drawnAt >= RING_N; }
 
   /** the water sheet over this page's slots (made on first use: shares the page's geometry, nothing is copied) */
   ensureWater(material: Material, name: string): BatchedMesh {
@@ -348,6 +357,7 @@ function keepIndirectTable(mesh: BatchedMesh): void {
   m.onBeforeRender = function (this: typeof m, ...a: Parameters<BatchedMesh['onBeforeRender']>) {
     const tex = this._indirectTexture;
     const v = tex ? tex.version : 0;
+    this.userData.drawn = ringFrame();
     BatchedMesh.prototype.onBeforeRender.apply(this, a);
     if (tex && v > 0 && this._indirectTexture === tex) tex.version = v;
   };
@@ -380,6 +390,15 @@ function aliasNormal(mesh: BatchedMesh): void {
 
 /** PERF F23: `?pagepool=0` = F17's pages dropped (GL buffers deleted) and patches moved between pages to free them */
 const PAGE_POOL = perfSwitch('pagepool');
+/**
+ * PERF s16 (the owner's M5: 15-19 MB a frame of ANGLE whole-buffer copies): a patch landing in a page the GPU drew in
+ * the last 3 frames made ANGLE copy all 13 of the page's attribute buffers (168 kB each). Landings now go to a page
+ * not drawn in the last RING_N frames (a hidden / idle page, else a new one from the page pool), up to FRESH_EXTRA
+ * (or half the live pages) more pages than the live patches need; past that, the fullest page as before. The
+ * patches and their draws are the same: the same image. `?freshland=0` = the fullest page with room, drawn or not.
+ */
+const FRESH_LAND = perfSwitch('freshland');
+const FRESH_EXTRA = 6;
 /** frames an idle page is kept beyond the reserve before its GL buffers are deleted */
 const IDLE_FRAMES = 900;
 /** idle pages always kept */
@@ -400,7 +419,10 @@ export class PagePool {
   private idle: { p: PatchPage; since: number }[] = [];
   frame = 0;
   take(material: Material, layers: number, name: string, group: Group): PatchPage | null {
-    const e = this.idle.pop();
+    // (PERF s16 FRESH_LAND) the most recently idle page the GPU no longer reads
+    let at = this.idle.length - 1;
+    if (FRESH_LAND) for (let i = this.idle.length - 1; i >= 0; i--) if (this.idle[i].p.cold) { at = i; break; }
+    const e = at >= 0 ? this.idle.splice(at, 1)[0] : undefined;
     if (!e) return null;
     e.p.reset(material, layers, name);
     e.p.setParent(group);
@@ -476,15 +498,37 @@ class PatchBatch {
     for (const p of this.pages) if (p) p.mesh.layers.mask = this.layers;
   }
 
-  /** store a patch geometry, returning its slot (hidden until shown); `avoid` = a page not to use (compaction) */
-  alloc(geo: BufferGeometry, avoid = -1): number {
+  /**
+   * store a patch geometry, returning its slot (hidden until shown); `avoid` = a page not to use (compaction);
+   * `packed` = the fullest page with room whether the GPU reads it or not (compaction)
+   */
+  alloc(geo: BufferGeometry, avoid = -1, packed = false): number {
     // the fullest page with room (keeps pages dense, so evictions empty whole pages)
     let pi = -1, best = -1;
-    for (let i = 0; i < this.pages.length; i++) {
-      const p = this.pages[i];
-      if (!p || i === avoid) continue;
-      if (p.free.length === 0 && p.used >= PATCH_PAGE) continue;
-      if (p.live > best) { best = p.live; pi = i; }
+    // PERF s16 FRESH_LAND: first among the pages the GPU no longer reads (no ANGLE whole-page copy); else a new page
+    // while the level holds fewer than its live pages + its allowance; else the fullest (a drawn page: one copy)
+    if (FRESH_LAND) {
+      for (let i = 0; i < this.pages.length; i++) {
+        const p = this.pages[i];
+        if (!p || i === avoid || !p.cold) continue;
+        if (p.free.length === 0 && p.used >= PATCH_PAGE) continue;
+        if (p.live > best) { best = p.live; pi = i; }
+      }
+      // (compaction never opens a page: it falls back to the fullest)
+      if (pi < 0 && packed) pi = -2;
+      if (pi < 0) {
+        const need = Math.ceil((this.liveSlots + 1) / PATCH_PAGE);
+        if (this.pageCount >= need + Math.max(FRESH_EXTRA, Math.ceil(need * 0.75))) pi = -2;
+      }
+    }
+    if (pi === -2 || !FRESH_LAND) {
+      pi = -1; best = -1;
+      for (let i = 0; i < this.pages.length; i++) {
+        const p = this.pages[i];
+        if (!p || i === avoid) continue;
+        if (p.free.length === 0 && p.used >= PATCH_PAGE) continue;
+        if (p.live > best) { best = p.live; pi = i; }
+      }
     }
     if (pi < 0) {
       pi = this.pages.indexOf(null);
@@ -612,7 +656,7 @@ class PatchBatch {
         if (freeSet.has(k)) continue;
         const from = pi * PATCH_PAGE + k;
         const geo = this.extract(from);
-        const to = this.alloc(geo, pi);
+        const to = this.alloc(geo, pi, true);
         geo.dispose();
         this.show(to, p.vis[k] === 1);
         if (p.wvis[k] === 1) this.showWater(to, true);
