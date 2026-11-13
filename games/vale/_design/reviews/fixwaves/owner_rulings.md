@@ -303,4 +303,15 @@ Pick: fighter-body clicks with a minion touching behind 36,244 / 808,704 → 0, 
 
 Deep wall click BRIDGE tunlan: 7.62 m → 4.18 m from the click. The 120 deep clicks a map end within 1 m of the best reachable point. The 300 shallow RIFT clicks stay 0 / 0 / 0 (0 more than 1 m from the click, 0 paths over 1.6 × net + 1 m). A hold-steer re-sent every 4 ticks walks exactly the single click's path.
 
-Probes: probe_sim_core_orders (ruling 38 fixtures and live block) and probe_input_clicks (front-most body sweep, held-button re-send). Full bot soak (--full --lineup shuffle): see the commit for both seed windows.
+Probes: probe_sim_core_orders (ruling 38 fixtures and live block) and probe_input_clicks (front-most body sweep, held-button re-send). Full bot soak (--full --lineup shuffle):
+
+| Gate | Round 3, seeds 1-20 / 21-40 | Ruling 38, seeds 1-20 / 21-40 | Target |
+|---|---|---|---|
+| Veteran beats novice | 31 / 33 of 40 (64 / 80 pooled) | 36 / 36 of 40 (72 / 80 pooled; the baseline commit had 71 / 80) | ≥ 85 % |
+| BRIDGE games ending in sudden death | 11 / 4 of 40 | 3 / 7 of 40 | ≤ 25 % |
+
+Two gates still fail:
+- **FRAY placement:** ulkro is 3.27 / 3.29 and nurrow 3.48 on seeds 1-20, against 3.5-7.5. Before this ruling, nurrow was 3.36, and the baseline commit already failed on ulkro, so this is a kit balance item, not movement.
+- **RIFT veteran's median longest stretch without a death from 3:00:** 3.4 min on seeds 1-20, against ≤ 3 min. It is 2.9 on seeds 21-40, and adept passes in both windows. This is a watch item for the next soak.
+
+Reports: _harness/_reports/fw_W4_soak_ctl_r4_s1 and fw_W4_soak_ctl_r4_s21.
