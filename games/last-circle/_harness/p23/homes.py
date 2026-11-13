@@ -13,7 +13,7 @@ clocks, lamps, plants, bins, art, posters, rugs, wall shelves, mirrors, whiteboa
 
 Rows (any FAIL -> exit 1; the census not running -> exit 2):
   home-size     0 homes under 100 m2 of footprint (W x D), 0 homes at 7.5 x 7.5 m                                  [audit: 403 at 7.5 x 7.5; half <= 75 m2]
-  storeys       >= 40 % of homes two-storey pooled over the 12 builds, each map >= 30 %                             [16.9 %]
+  storeys       >= 30 % of homes two-storey pooled over the 12 builds (40 % before plan scope cut 1, pass 2), each map >= 30 %                             [16.9 %]
   programme     100 % of homes hold living + kitchen + bedroom + bath; median rooms (corridors not counted) >= 5     [median 3; no kitchen 48.9 %]
   sheds         one-room enterable buildings <= 8 % of all enterable buildings                                       [15 %]
   coverage      lived rooms: median floor coverage (standing pieces' footprint / room area) >= 25 %; <= 10 % under 15 %   [15 %; 53 % under 15 %]
@@ -65,7 +65,13 @@ HG = "runtime/3d/royale/housegen.js"
 TG = "runtime/3d/royale/towngen.js"
 MJ = "runtime/3d/royale/maps.js"
 # plant -> (rows that must FAIL, [(file, regex, replacement)]) - each regex must match exactly once in the scratch copy (else could-not-judge)
+STOREYS_POOLED = 30          # (pass 2: plan scope cut 1 - was 40)
+
 PLANTS = {
+    # (pass 2, scope cut 1: the storeys floor is 30 % - the 7.5 m one-storey house_s alone leaves ~34 % two-storey, so storeys gets its own control, flat-homes)
+    "flat-homes": ({"storeys"}, [(TG, r'house_s: \{ use: "house", gen: "house", dims: \[[^\n]*?\], floors: \[[^\]]*\]', 'house_s: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10]], floors: [1]'),
+                                 (TG, r'house_m: \{ use: "house", gen: "house", dims: \[[^\n]*?\], floors: \[[^\]]*\]', 'house_m: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10]], floors: [1]'),
+                                 (TG, r'cabin: \{ use: "house", gen: "house", dims: \[[^\n]*?\], floors: \[[^\]]*\]', 'cabin: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10], [10, 12.5]], floors: [1]')]),
     "tiny-homes": ({"home-size", "storeys"}, [(TG, r'house_s: \{ use: "house", gen: "house", dims: \[[^\n]*?\], floors: \[[^\]]*\]',
                                                  'house_s: { use: "house", gen: "house", dims: [[7.5, 7.5], [10, 7.5]], floors: [1]')]),
     # (pass 2) the plan's control: the audit's furnishing back (the VIEW_WANT top-up alone: no area quota, no centre-of-room groups) -> density. It cannot fail
@@ -171,8 +177,10 @@ def judge(v, d, base):
         per[R["map"]][0] += sum(1 for b in hs if b["storeys"] >= 2)
         per[R["map"]][1] += len(hs)
     perp = {m: pct(a, n) for m, (a, n) in per.items()}
-    v.check("storeys", two >= 40 and all(x >= 30 for x in perp.values()), "two-storey homes %.1f %% pooled (bar >= 40); per map %s (bar >= 30 each)" % (
-        two, ", ".join("%s %.1f %%" % kv for kv in perp.items())), ">= 40 % pooled, >= 30 % per map")
+    # (W10 R1A pass 2) PLAN SCOPE CUT (1) taken: perf_district ashgrid s2026 drop view x1.371 triangles (bar x1.25) -> "2-storey share 40 % -> 30 % (the floor of the
+    # row)". STOREYS_POOLED is that floor; the per-map floor stays 30 %
+    v.check("storeys", two >= STOREYS_POOLED and all(x >= 30 for x in perp.values()), "two-storey homes %.1f %% pooled (bar >= %d, plan scope cut 1); per map %s (bar >= 30 each)" % (
+        two, STOREYS_POOLED, ", ".join("%s %.1f %%" % kv for kv in perp.items())), ">= %d %% pooled, >= 30 %% per map" % STOREYS_POOLED)
     # programme
     need = ("living", "kitchen", "bedroom", "bath")
     miss = [b for b in homes if not all(k in b["kinds"].split("+") for k in need)]

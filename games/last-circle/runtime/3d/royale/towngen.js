@@ -228,7 +228,7 @@ const ARCH = {
   // (Wave 10 R1A, houses audit findings 1 + 12: the 7.5 x 7.5 / 7.5 x 10 homes were 2-3 room boxes - a kitchen and a living room, no bedroom, no bath; the smallest home is
   // 10 x 10 m now and the small house and the cabin may have two floors - with the owner's default, 40-50 % of homes two-storey)
   house_s: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10]], floors: [1, 1, 2], fh: 3.4 },          // (floors drawn uniformly from the list: one in three two-storey)
-  house_m: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10]], floors: [1, 2], fh: 3.4 },
+  house_m: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10]], floors: [1, 1, 2], fh: 3.4 },          // (W10 R1A scope cut 1, perf_district ashgrid s2026 drop x1.371: the two-storey share 44.5 -> ~35 %, the row floor 30 %)
   cabin: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10], [10, 12.5]], floors: [1, 1, 1, 2], fh: 3.4 },      // (one in four two-storey: Deepwood's loot count, see the lodge mixes)
   shop: { use: "shop", gen: "house", dims: [[10, 10], [12.5, 10], [12.5, 12.5]], floors: [1, 2], fh: 4.0 },
   midrise: { use: "midrise", gen: "tower", dims: [[12.5, 12.5], [15, 15]], floors: [2, 3], fh: 4.0 },
