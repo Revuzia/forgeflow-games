@@ -411,7 +411,7 @@
     "c_proc_team": {"files": ["assets/audio/c_proc_team_1.ogg", "assets/audio/c_proc_team_2.ogg", "assets/audio/c_proc_team_3.ogg"], "bus": "sfx", "gain": 0.5, "pitchVar": 0.03, "maxVoices": 3, "priority": 5, "spatial": true, "loop": false, "cooldown": 0.05},
     "c_proc_unit": {"files": ["assets/audio/c_proc_unit_1.ogg", "assets/audio/c_proc_unit_2.ogg", "assets/audio/c_proc_unit_3.ogg"], "bus": "sfx", "gain": 0.6, "pitchVar": 0.03, "maxVoices": 3, "priority": 5, "spatial": true, "loop": false, "cooldown": 0.05},
     "amb_rift_air": {"files": ["assets/audio/amb_rift_air.ogg"], "bus": "ambience", "gain": 0.82, "pitchVar": 0, "maxVoices": 1, "priority": 3, "spatial": false, "loop": true, "cooldown": 0},
-    "amb_rift_canopy": {"files": ["assets/audio/amb_rift_canopy.ogg"], "bus": "ambience", "gain": 0.832, "pitchVar": 0, "maxVoices": 1, "priority": 3, "spatial": true, "loop": true, "cooldown": 0},
+    "amb_rift_canopy": {"files": ["assets/audio/amb_rift_canopy.ogg"], "bus": "ambience", "gain": 0.6, "pitchVar": 0, "maxVoices": 1, "priority": 3, "spatial": true, "loop": true, "cooldown": 0},
     "amb_rift_water": {"files": ["assets/audio/amb_rift_water.ogg"], "bus": "ambience", "gain": 0.891, "pitchVar": 0, "maxVoices": 1, "priority": 3, "spatial": true, "loop": true, "cooldown": 0},
     "amb_rift_insects": {"files": ["assets/audio/amb_rift_insects.ogg"], "bus": "ambience", "gain": 0.535, "pitchVar": 0.02, "maxVoices": 1, "priority": 3, "spatial": true, "loop": true, "cooldown": 0},
     "amb_bridge_air": {"files": ["assets/audio/amb_bridge_air.ogg"], "bus": "ambience", "gain": 0.82, "pitchVar": 0, "maxVoices": 1, "priority": 3, "spatial": false, "loop": true, "cooldown": 0},

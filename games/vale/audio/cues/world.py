@@ -161,16 +161,17 @@ def amb_rift_air(v: int):
 
 @cue('amb_rift_canopy', 'loop', ('int', -25.0), win(8.0), **LOOPK)
 def amb_rift_canopy(v: int):
-    """Leaves stirring in the canopy: a dense rustle of tiny leaf grains swelling with each gust, over a soft
-    breath of wind through the branches."""
+    """Leaves stirring in the canopy: a dense, soft rustle of tiny leaf grains that thickens and thins a little, over
+    a faint breath of air through the branches. No gusts (ruling 34: its 24 points cover the jungle, so a swell here
+    is heard as the map's wind)."""
     r = R('amb_rift_canopy', v=v)
     D = 8.0
     n = ns(D)
-    gust = wobble(n, r, (1, 2, 3), 0.7)
-    gate = np.clip(gust / gust.max(), 0, 1) ** 1.5
-    rustle = scatter(n, r, 900.0, lambda rr: grain(rr, 1800, 6500, (3.0, 14.0), 1.4), gate)
-    rustle = F.apply(rustle, [F.highpass(1200, 0.7), F.lowpass(8000, 0.7)], circular=True)
-    breath = band_noise(n, r, 900.0 * gust ** 0.8, 0.8, slope=-3.0) * gust ** 2
+    gust = wobble(n, r, (1, 2, 3), 0.25, seam_lull=False)
+    gate = np.clip(gust / gust.max(), 0, 1)
+    rustle = scatter(n, r, 900.0, lambda rr: grain(rr, 1500, 5000, (3.0, 14.0), 1.4), gate)
+    rustle = F.apply(rustle, [F.highpass(1000, 0.7), F.lowpass(6000, 0.7)], circular=True)
+    breath = band_noise(n, r, 800.0 * gust ** 0.5, 0.8, slope=-3.5) * gust
     return loop_out(norm(rustle) * 0.8 + norm(breath) * 0.35, hp_hz=200, lp_hz=9000)
 
 

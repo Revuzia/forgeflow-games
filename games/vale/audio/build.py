@@ -1422,7 +1422,7 @@ def ambience_gate(contract: dict) -> tuple[list[str], dict]:
             if not all(os.path.exists(out_path(f)) for f in d['files']):
                 fails.append(f'ambience: {c} is not rendered')
             elif src == 'bed':
-                rows[src].update(bed_level(c, d, cues.get(f'mus_match_{mid}')))
+                rows[src].update(bed_level(c, d, (contract.get('music') or {}).get(f"mus_match_{mid.removeprefix('map_')}")))
                 b = rows[src]
                 if b.get('underMusicLU') is not None and b['underMusicLU'] < BED_UNDER_MUSIC_LU:
                     fails.append(f"ambience: {mid}'s bed {c} plays {b['underMusicLU']:.1f} LU under the match music "

@@ -320,6 +320,7 @@ try {
       }
       if (!sp) return { mode, skip: 'no gap' };
     }
+    const under = await page.evaluate((p) => { const e = document.elementFromPoint(p.x, p.y); return e ? e.tagName.toLowerCase() + '.' + [...e.classList].slice(0, 2).join('.') : null; }, sp);
     const n0 = (await state()).ncmd;
     const slopHit = mode === 'gap' ? await pickAt(sp.x, sp.y, 14) : null;
     await page.mouse.move(sp.x, sp.y);
@@ -337,7 +338,7 @@ try {
     if (mode === 'gap') { await sleep(200); await waitIdle(8000); } else await sleep(3000);
     const tr = await traceFrom(t0);
     const hits = [...new Set(tr.map((p) => p.atk).filter((x) => x >= 0))];
-    const out = { mode, intended, sent, ok: sent === intended, attackedAfter: hits.slice(0, 4), extraCmds: cmds.length - 1 };
+    const out = { mode, under: under?.startsWith('div.hudsurface') ? undefined : under, at: [Math.round(sp.x), Math.round(sp.y)], intended, sent, ok: sent === intended, attackedAfter: hits.slice(0, 4), extraCmds: cmds.length - 1 };
     if (mode === 'gap') { const end = tr[tr.length - 1]; out.slopWouldHit = slopHit; out.endDist = +Math.hypot(end.x - ground.x, end.y - ground.y).toFixed(2); out.orderEnd = end.order; }
     await page.keyboard.press('KeyS');
     await sleep(250);
@@ -355,13 +356,13 @@ try {
   // ── F2. plain move straight through the enemy wave to a point 6 m past it ─────────────────────
   {
     const res = [];
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 6; i++) {
       await park();
       const c2 = await clash();
       const ux = c2.bx - c2.ax, uy = c2.by - c2.ay, L = Math.hypot(ux, uy) || 1;
       let g = null, p = null, walk = false, onBox = null;
       for (let k = 0; k < 12; k++) {
-        const fw = 1.5 + (k % 4) * 1.2, lat = (i - 1.5) * 1.5 + (Math.floor(k / 4) - 1) * 1.5;
+        const fw = 1.5 + (k % 4) * 1.2, lat = ((i % 4) - 1.5) * 1.5 + (Math.floor(k / 4) - 1) * 1.5;
         const gg = { x: c2.bx + (ux / L) * fw + lat * (-uy / L), y: c2.by + (uy / L) * fw + lat * (ux / L) };
         const ww = await vale(page, (v, g) => v.state.match.value.sim.world.nav.walkable(g.x, g.y), gg);
         if (!ww) continue;
@@ -376,11 +377,20 @@ try {
       await page.mouse.click(p.x, p.y, { button: 'right' });
       await sleep(200);
       const cmds = await cmdsSince(s0.ncmd);
-      const s1 = await waitIdle(9000);
+      if (i === 1) { await sleep(2000); await snap(page, 'F2_mid_walk'); }
+      const s1 = await waitIdle(12000);
+      const wtr = await traceFrom(s0.t);
+      let wpath = 0, rev = 0, lastDir = null, acc = { x: 0, y: 0 };
+      for (let k = 1; k < wtr.length; k++) {
+        const dx = wtr[k].x - wtr[k - 1].x, dy = wtr[k].y - wtr[k - 1].y; wpath += Math.hypot(dx, dy);
+        acc.x += dx; acc.y += dy;
+        if (Math.hypot(acc.x, acc.y) > 0.4) { const d = Math.atan2(acc.y, acc.x); if (lastDir !== null) { let dd = Math.abs(d - lastDir); if (dd > Math.PI) dd = 2 * Math.PI - dd; if (dd > Math.PI / 2) rev++; } lastDir = d; acc = { x: 0, y: 0 }; }
+      }
+      const straight = Math.hypot(g.x - s0.me.x, g.y - s0.me.y);
       await sleep(1500);
       const tr = await traceFrom(s1.t);
       let path = 0; for (let k = 1; k < tr.length; k++) path += Math.hypot(tr[k].x - tr[k - 1].x, tr[k].y - tr[k - 1].y);
-      res.push({ walkable: walk, onEnemyBox: onBox, cmd: cmds.map((c) => c.type + (c.target !== undefined ? '#' + c.target : '')).join(','), ended: s1.me.order === 0, secs: +(s1.t - s0.t).toFixed(2), endDist: +Math.hypot(s1.me.x - g.x, s1.me.y - g.y).toFixed(2), postArrivePath: +path.toFixed(2) });
+      res.push({ straight: +straight.toFixed(2), walked: +wpath.toFixed(2), reversals: rev, walkable: walk, onEnemyBox: onBox, cmd: cmds.map((c) => c.type + (c.target !== undefined ? '#' + c.target : '')).join(','), ended: s1.me.order === 0, secs: +(s1.t - s0.t).toFixed(2), endDist: +Math.hypot(s1.me.x - g.x, s1.me.y - g.y).toFixed(2), postArrivePath: +path.toFixed(2) });
       if (i === 0) await snap(page, 'F2_through_wave');
     }
     report.scenarios.throughWave = res;
