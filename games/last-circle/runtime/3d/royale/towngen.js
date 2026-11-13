@@ -225,9 +225,11 @@ function groundOf(S, x0, z0, x1, z1) {
 // second floor and a second strip (w >= 12.5) for a third. gen = which maps.js generator draws it today (house() / tower()); Wave 8's
 // house grammar replaces both and reads the room / door / stair records.
 const ARCH = {
-  house_s: { use: "house", gen: "house", dims: [[7.5, 7.5], [10, 7.5]], floors: [1], fh: 3.4 },
+  // (Wave 10 R1A, houses audit findings 1 + 12: the 7.5 x 7.5 / 7.5 x 10 homes were 2-3 room boxes - a kitchen and a living room, no bedroom, no bath; the smallest home is
+  // 10 x 10 m now and the small house and the cabin may have two floors - with the owner's default, 40-50 % of homes two-storey)
+  house_s: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10]], floors: [1, 2], fh: 3.4 },
   house_m: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10]], floors: [1, 2], fh: 3.4 },
-  cabin: { use: "house", gen: "house", dims: [[7.5, 7.5], [10, 7.5], [7.5, 10]], floors: [1, 2], fh: 3.4 },
+  cabin: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10], [10, 12.5]], floors: [1, 2], fh: 3.4 },
   shop: { use: "shop", gen: "house", dims: [[10, 10], [12.5, 10], [12.5, 12.5]], floors: [1, 2], fh: 4.0 },
   midrise: { use: "midrise", gen: "tower", dims: [[12.5, 12.5], [15, 15]], floors: [2, 3], fh: 4.0 },
   tower: { use: "tower", gen: "tower", dims: [[15, 15], [17.5, 17.5]], floors: [3], fh: 4.0 },
@@ -265,18 +267,21 @@ const THEMES = {
   ruin: { house: ["suburban", ["slate", "sand", "brick"]], big: ["commercial", ["slate", "sand"]], shell: "house" },
   mill: { house: ["suburban", ["brick", "slate", null]], big: ["commercial", ["brick", "slate"]], shell: "house" },
 };
+// Wave 10 R1A (houses audit: 15 % of the enterable buildings were one-room sheds; bar <= 8 %): every shed weight below is the old one roughly halved, x SHED_W
+// (1; the homes gate's shed-flood plant raises it)
+export const SHED_W = 1;
 // archetype weights per theme / kind ("lot" = a parcel with no building: parking, pocket park, yard; "shell" = closed kit building)
 const MIX = {
   "city/core": { tower: 30, midrise: 36, shop: 16, lot: 1.5, shell: 24 },                                          // (Wave 7 completion: random lots halved here too: the landmark lots are the forced ones)
-  "city/town": { house_s: 18, house_m: 24, shop: 24, midrise: 12, shed: 2, lot: 1.5, shell: 22 },                 // (Wave 7 completion: the random lots halved: a town's landmark lots are mostly the forced ones, see lmQuota)
-  "city/village": { house_s: 26, house_m: 24, shop: 22, midrise: 4, shed: 6, lot: 3, shell: 20 },
-  "city/yard": { hall: 36, shed: 22, shop: 12, lot: 8, shell: 10 },
+  "city/town": { house_s: 18, house_m: 24, shop: 24, midrise: 12, shed: 1 * SHED_W, lot: 1.5, shell: 22 },                 // (Wave 7 completion: the random lots halved: a town's landmark lots are mostly the forced ones, see lmQuota)
+  "city/village": { house_s: 26, house_m: 24, shop: 22, midrise: 4, shed: 2 * SHED_W, lot: 3, shell: 20 },
+  "city/yard": { hall: 36, shed: 10 * SHED_W, shop: 12, lot: 8, shell: 10 },
   "resort/core": { midrise: 30, shop: 30, house_m: 12, villa: 14, lot: 4, shell: 10 },                            // (stage B: villas - two real floors and a balcony - take from house_m)
   "resort/town": { house_s: 16, house_m: 18, villa: 22, shop: 24, midrise: 12, lot: 6, shell: 8 },
-  "resort/village": { house_s: 24, house_m: 20, villa: 18, shop: 22, shed: 8, lot: 6, shell: 4 },
-  "lodge/core": { midrise: 20, shop: 30, cabin: 22, lodge2: 12, hall: 10, lot: 4, shell: 6 },                     // (stage B: two-storey lodges take from the cabins)
-  "lodge/town": { cabin: 38, lodge2: 18, house_m: 8, shop: 16, hall: 8, shed: 6, lot: 6, shell: 4 },
-  "lodge/village": { cabin: 46, lodge2: 14, house_m: 8, shop: 12, hall: 6, shed: 8, lot: 4, shell: 2 },
+  "resort/village": { house_s: 24, house_m: 20, villa: 18, shop: 22, shed: 3 * SHED_W, lot: 6, shell: 4 },
+  "lodge/core": { midrise: 20, shop: 30, cabin: 16, lodge2: 18, hall: 10, lot: 4, shell: 6 },                     // (stage B: two-storey lodges take from the cabins)
+  "lodge/town": { cabin: 28, lodge2: 24, house_m: 12, shop: 16, hall: 8, shed: 2 * SHED_W, lot: 6, shell: 4 },        // (W10: cabins 38 -> 28, to two-storey lodges and house_m)
+  "lodge/village": { cabin: 32, lodge2: 22, house_m: 14, shop: 12, hall: 6, shed: 3 * SHED_W, lot: 4, shell: 2 },     // (W10: cabins 46 -> 32)
 };
 // Wave 7 completion, city theme only: what an empty lot can be besides parking / a pocket park / a yard. maps.js draws each one from boxes (a gas station: canopy, pumps, kiosk; a
 // market: striped stalls; a plaza: a clock tower; a court: a sports court with stands and floodlights); streetProps leaves them undressed, a lot too small for its landmark is a yard.
@@ -705,7 +710,9 @@ function fillBlock(S, rng, blk, theme, kind, shellBudgetLeft, idBase, out) {
   const grow = theme === "city";                                  // Wave 7 polish: the city theme builds dense, the other themes are the Wave-6 plan
   const nTarget = grow ? (kind === "core" ? 4 : kind === "yard" ? rint(rng, 5, 6) : kind === "village" ? rint(rng, 6, 8) : rint(rng, 6, 8))
     : kind === "core" ? rint(rng, 3, 4) : kind === "yard" ? rint(rng, 4, 6) : kind === "village" ? rint(rng, 6, 8) : rint(rng, 5, 8);
-  const minSide = grow ? (kind === "core" ? 18 : kind === "yard" ? 13 : 10) : kind === "core" ? 14 : kind === "yard" ? 13 : 12;
+  // (W10 R1A: town / village parcels at least 12.5 m a side - the 10 x 10 m smallest home needs 10 m of frontage and depth after the margins; a 10 m city parcel left
+  // 8.5 m, room for a shed only)
+  const minSide = grow ? (kind === "core" ? 18 : kind === "yard" ? 13 : 12.5) : kind === "core" ? 14 : kind === "yard" ? 13 : 12.5;
   const rects = splitBlock(rng, bx0, bz0, bx1, bz1, nTarget, minSide, kind === "core" && !grow);
   const items = rects.map((r) => {
     const f = parcelFacing(rng, r, bx0, bz0, bx1, bz1);
@@ -770,13 +777,15 @@ function fillBlock(S, rng, blk, theme, kind, shellBudgetLeft, idBase, out) {
         const good = pool.filter((k, j) => cov[j] >= MIN_COVER);
         if (good.length) pool = good;
         else { const mx = Math.max(...cov); pool = pool.filter((k, j) => cov[j] >= mx - 1e-9 && mx > 0); }
+        if (kind !== "yard" && pool.length && pool.every((k) => k === "shed")) pool = [];          // (W10 R1A: a parcel only a shed fits is a lot outside a works yard)
       }
       while (pool.length && !fit) {
         const k = wpick(rng, pool, (q) => mix[q]);
         pool.splice(pool.indexOf(k), 1);
         fit = fitArch(rng, k, fw, fd, 0, grow);
       }
-      if (!fit) fit = fitArch(rng, "shed", fw, fd, 0, grow);
+      // (W10 R1A: a parcel too small for any of its mix's buildings is an open lot - a yard, a pocket park, parking - not a one-room shed: the 10 x 10 m home
+      // minimum left a 7.5 m parcel nothing else, and sheds were 24 % of the enterable buildings; a mix that names sheds still draws them above)
     }
     if (!fit) { out.parcels.push(makeLotParcel(id, blk.id, it.rect, it.fx, it.fz, rng, grow ? LOT_KINDS[kind] || null : null)); continue; }       // (a downtown lot is a car park, a pocket park or a landmark, never a bare yard)
     const sub = subRng(out.seed, out.id, id);
@@ -1009,7 +1018,7 @@ function convertToEnterable(S, L, p, theme) {
   const rng = subRng(L.seed, L.id, p.id + "x");
   const [fx, fz] = p.facing, [fw, fd] = room(p.rect, fx, fz);
   let fit = null;
-  for (const k of ["house_m", "shop", "house_s", "cabin", "shed"]) { fit = fitArch(rng, k, fw, fd, 0, theme === "city"); if (fit) break; }
+  for (const k of ["house_m", "shop", "house_s", "cabin"]) { fit = fitArch(rng, k, fw, fd, 0, theme === "city"); if (fit) break; }      // (W10 R1A: no shed - a parcel too small for a home stays what it was)
   if (!fit) return false;
   // remove an old shell's (nonexistent) interior; rebuild as an enterable building in the same parcel
   const made = makeBuildingParcel(S, rng, p.id, p.block, p.rect, fx, fz, fit, theme);
@@ -1241,7 +1250,9 @@ function yardItems(rng, kind, theme, opts) {
   const dimsOf = (key, maxW) => {
     const A = ARCH[key], fit = A.dims.filter((dm) => dm[0] <= maxW + 1e-6);
     const dm = fit.length ? fit[Math.floor(rng() * fit.length)] : A.dims[0];
-    return { key, w: dm[0], d: dm[1], floors: key === "villa" || key === "lodge2" ? 2 : 1, fh: A.fh, use: A.use, gen: A.gen };
+    // (W10 R1A: a compound's small house / cabin may have its second floor too, like a town's - fitArch's draw: one of A.floors when the plan is deep enough for a stair)
+    const fl = key === "villa" || key === "lodge2" ? 2 : A.use === "house" && A.floors.length > 1 && dm[1] >= 10 && rng() < 0.5 ? 2 : 1;
+    return { key, w: dm[0], d: dm[1], floors: fl, fh: A.fh, use: A.use, gen: A.gen };
   };
   const spec = { yw: 24, yd: 14, rows: { N: [], S: [], E: [], W: [] }, fields: 0, fence: true, silo: false, cars: 2, variant: "homestead", containers: 0, tower: false };
   if (kind === "compound") {
@@ -1253,30 +1264,30 @@ function yardItems(rng, kind, theme, opts) {
       spec.yw = 34; spec.yd = 16; spec.silo = true; spec.cars = 1;
       spec.rows.N.push(dimsOf("barn", 22)); spec.rows.N.push(dimsOf("shed", 8));
       spec.rows.S.push(dimsOf("house_m", 12.5)); spec.rows.S.push(dimsOf("house_s", 10));
-      if (rng() < 0.5) spec.rows.E.push(dimsOf("shed", 10));
+      if (rng() < 0.25) spec.rows.E.push(dimsOf("shed", 10));                                 // (W10 R1A: half as often)
     } else if (V === "depot") {
       spec.yw = 34; spec.yd = 18; spec.cars = 6; spec.containers = 3;
       spec.rows.N.push(dimsOf("hall", 20)); spec.rows.N.push(dimsOf("shed", 8));
-      spec.rows.S.push(dimsOf("shed", 10)); spec.rows.S.push(dimsOf("shed", 10));
-      if (rng() < 0.5) spec.rows.E.push(dimsOf("shed", 10));
+      if (rng() < 0.5) spec.rows.S.push(dimsOf("shed", 10));                                   // (W10 R1A: at most one shed on the south row, not two; the east one a quarter of the time)
+      if (rng() < 0.25) spec.rows.E.push(dimsOf("shed", 10));
     } else if (V === "hamlet") {
       spec.yw = 26; spec.yd = 12; spec.fence = false; spec.cars = 3;
       const nH = rint(rng, 3, 4), order = ["N", "S", "N", "S"];
       for (let k = 0; k < nH; k++) spec.rows[order[k]].push(dimsOf(house(), 10));
-      if (opts.variety) spec.rows[rng() < 0.5 ? "W" : "E"].push(dimsOf("shed", 8));         // (Wave 7 completion: a hamlet has its shed too)
+      if (opts.variety && rng() < 0.5) spec.rows[rng() < 0.5 ? "W" : "E"].push(dimsOf("shed", 8));         // (Wave 7 completion: a hamlet has its shed too; W10 R1A: half the time)
     } else {
       const nH = opts.variety ? rint(rng, 3, 4) : rint(rng, 2, 4);                           // (Wave 7 completion, Savanna: a homestead is three or four houses, not two or three, in a 26 m yard)
       if (opts.variety) spec.yw = 26;
       const order = ["N", "S", "N", "S"];
       for (let k = 0; k < nH; k++) spec.rows[order[k]].push(dimsOf(house(), 10));
-      spec.rows[rng() < 0.5 ? "W" : "E"].push(dimsOf("shed", 12));
+      { const side = rng() < 0.5 ? "W" : "E"; if (rng() < 0.5) spec.rows[side].push(dimsOf("shed", 12)); }        // (W10 R1A: a homestead has its shed half the time)
       if (V === "tower") { spec.tower = true; spec.yw = 28; spec.yd = 16; spec.cars = 2; }
     }
   } else if (kind === "farm") {
     spec.yw = 36; spec.yd = 18; spec.fields = 3; spec.silo = true; spec.cars = 2;
     spec.rows.N.push(dimsOf("barn", 22)); spec.rows.N.push(dimsOf("shed", 8));
     spec.rows.S.push(dimsOf("house_m", 12.5)); spec.rows.S.push(dimsOf("house_s", 10)); spec.rows.S.push(dimsOf("house_s", 10));
-    spec.rows.E.push(dimsOf("house_s", 12)); spec.rows.E.push(dimsOf("shed", 6)); spec.rows.W.push(dimsOf("shed", 12)); spec.rows.W.push(dimsOf("house_s", 10));
+    spec.rows.E.push(dimsOf("house_s", 12)); spec.rows.W.push(dimsOf("house_s", 10));           // (W10 R1A: the farm's sheds 3 -> 1, the north one by the barn)
   } else if (kind === "green") {                     // a village green: a 40 x 26 m common with houses on all four sides (3 + 3 + 2 + 2)
     spec.yw = 40; spec.yd = 26; spec.fence = false; spec.cars = 2;
     const bag = Object.keys(mix).filter((k) => k !== "lot" && k !== "shell" && k !== "midrise" && mix[k] > 0);
@@ -1296,7 +1307,7 @@ function yardItems(rng, kind, theme, opts) {
         if (used > L) break;
       }
     }
-    spec.rows.E.push(dimsOf("shed", 7.5)); spec.rows.W.push(dimsOf(rng() < 0.5 ? "house_s" : "shed", 7.5));
+    if (rng() < 0.5) spec.rows[rng() < 0.5 ? "E" : "W"].push(dimsOf("shed", 7.5));                // (W10 R1A: one shed at an end of the lane half the time; a 7.5 m end is too narrow for a home)
     if (theme === "mill") for (const side of ["N", "S"]) spec.rows[side].unshift(Object.assign(dimsOf("midrise", 12.5), { floors: 2 }));      // the mill itself: two storeys, a bank each
   }
   return spec;
@@ -1576,7 +1587,7 @@ function docksAttempt(seed, poi, S, waterY, theme, opts) {
   const len = Math.min(DOCK_LEN, Math.floor((best.run * 4) / 12) * 12);
   const top = r2(waterY + DOCK_TOP);
   const decks = [{ role: "spine", rect: rectAlong(P0, dx, dz, -2, len, -2, 2) }];
-  const mix = [["house_s", 30], ["house_m", 30], ["shop", 22], ["shed", 8], ["cabin", 10]];
+  const mix = [["house_s", 30], ["house_m", 30], ["shop", 22], ["shed", 8 * SHED_W], ["cabin", 10]];
   let n = 0;
   for (let s = 8; s + 6 <= len + 0.01; s += DOCK_PITCH) for (const side of [-1, 1]) {
     const pr = rectAlong(P0, dx, dz, s - 6, s + 6, side < 0 ? -12.5 : 2, side < 0 ? -2 : 12.5);
@@ -1696,7 +1707,7 @@ const CRATER_RINGS = [{ R: 54, step: 31 }, { R: 80, step: 30 }, { R: 106, step: 
 function craterAttempt(seed, poi, S, waterY, theme, opts) {
   const V = [poi.x, poi.z], rng = subRng(seed, poi.id, "crater");
   const L = specialRecord(seed, poi, theme, "crater");
-  const mixAll = [["house_m", 36], ["house_s", 32], ["cabin", 16], ["shed", 8], ["shop", 8]];
+  const mixAll = [["house_m", 36], ["house_s", 32], ["cabin", 16], ["shed", 3 * SHED_W], ["shop", 8]];
   const ctx = { S, seed, poi, theme, L, taken: [], plots: [], walls: [], avoid: opts.avoid || [], fw: 12.5, fd: 10.5, margin: 2.0 };
   const pieces = [], arches = [], taken = ctx.taken, avoid = ctx.avoid;
   const slopeAt = (x, z) => { const a = S.h(x + 5, z) - S.h(x - 5, z), b = S.h(x, z + 5) - S.h(x, z - 5); return dist2(a, b) / 10; };
@@ -1919,7 +1930,7 @@ function millAttempt(seed, poi, S, waterY, theme, opts) {
     wheel = { u: r3(u), te: r3(te), land, side: sd, r: MILL_WHEEL_R, rect: rect.map(r3) };
     taken.push(rect);
   }
-  const mixAll = [["cabin", 36], ["house_m", 22], ["house_s", 22], ["shed", 10], ["shop", 4], ["hall", 6]];
+  const mixAll = [["cabin", 30], ["house_m", 26], ["house_s", 22], ["shed", 4 * SHED_W], ["shop", 4], ["hall", 6]];
   const slopeAt = (x, z) => { const a = S.h(x + 5, z) - S.h(x - 5, z), b = S.h(x, z + 5) - S.h(x, z - 5); return dist2(a, b) / 10; };
   const phase = rng() * 30;
   let millPlaced = false;
