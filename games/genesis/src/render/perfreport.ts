@@ -137,6 +137,8 @@ export class GlTrace {
   private bound = new Map<number, WebGLBuffer | null>();
   private bufSize = new WeakMap<WebGLBuffer, number>();
   private drawn = false;
+  /** (s17) uploads after a draw, waiting to see whether the next draw goes into the SAME framebuffer (a split pass) */
+  private pendingIn: GlStat[] = [];
   private restore: (() => void)[] = [];
 
   /** wrap the context's (and WEBGL_multi_draw's) calls; idempotent */
@@ -188,7 +190,7 @@ export class GlTrace {
     return r;
   }
 
-  reset(): void { this.targets.clear(); this.stats.clear(); this.metal.clear(); this.sizesSeen.clear(); this.passSwitches = 0; this.inPassUploads = 0; this.drawn = false; }
+  reset(): void { this.targets.clear(); this.stats.clear(); this.metal.clear(); this.sizesSeen.clear(); this.passSwitches = 0; this.inPassUploads = 0; this.drawn = false; this.pendingIn.length = 0; }
 
   /** the Metal allocation a buffer call implies (see MetalAlloc) */
   private noteMetal(op: string, a: unknown[], bytes: number): void {
@@ -208,17 +210,24 @@ export class GlTrace {
 
   private note(op: string, ms: number, a: unknown[]): void {
     let inPass = 0, bytes = 0;
-    if (op === 'bindFramebuffer') { this.passSwitches++; this.drawn = false; }
-    else if (GL_DRAWS.has(op)) { this.drawn = true; this.tgtRec().draws++; }
+    // (s17) an upload counts 'inside a pass' only when it splits one: it follows a draw and the NEXT draw goes into the
+    // same framebuffer (no bindFramebuffer between). An upload between the last draw into one target and the first
+    // into another ends nothing that would not end anyway (the upsched slot sits there).
+    if (op === 'bindFramebuffer') { this.passSwitches++; this.drawn = false; this.pendingIn.length = 0; }
+    else if (GL_DRAWS.has(op)) {
+      this.drawn = true; this.tgtRec().draws++;
+      if (this.pendingIn.length) { for (const st of this.pendingIn) st.inPass++; this.inPassUploads += this.pendingIn.length; this.pendingIn.length = 0; }
+    }
     else if (GL_UPLOADS.has(op)) {
       bytes = uploadBytes(op, a);
-      if (this.drawn) { inPass = 1; this.inPassUploads++; }
+      if (this.drawn) inPass = 1;
       if (op === 'bufferData' || op === 'bufferSubData') this.noteMetal(op, a, bytes);
     }
     const key = `${this.slot}|${op}`;
     let s = this.stats.get(key);
     if (!s) { s = { ms: 0, n: 0, bytes: 0, inPass: 0, max: 0 }; this.stats.set(key, s); }
-    s.ms += ms; s.n++; s.bytes += bytes; s.inPass += inPass;
+    s.ms += ms; s.n++; s.bytes += bytes;
+    if (inPass) this.pendingIn.push(s);
     if (ms > s.max) s.max = ms;
   }
 
