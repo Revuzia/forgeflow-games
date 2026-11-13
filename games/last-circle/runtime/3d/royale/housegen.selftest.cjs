@@ -53,17 +53,16 @@ const HG = path.join(__dirname, "housegen.js");
 const TG = path.join(__dirname, "towngen.js");
 const MANIFEST = path.join(ROOT, "assets", "props", "city", "manifest.json");
 const MANIFEST_INT = path.join(ROOT, "assets", "props", "city", "manifest_interior.json");     // lane H2 (Wave 8 stage A); merged into manifest.json in stage B
-/** (W10 R1A) X (a {min, max} box) lies inside the union of the boxes S (xz plane; S's height spans must hold X's): coordinate-compressed, 1 mm */
-function insideUnion(X, S) {
-  const r = (v) => Math.round(v * 1000);
-  const xs = new Set([r(X.min[0]), r(X.max[0])]), zs = new Set([r(X.min[2]), r(X.max[2])]);
-  const T = S.filter((b) => b.min[1] <= X.min[1] + 1e-3 && b.max[1] >= X.max[1] - 1e-3 && b.max[0] > X.min[0] && b.min[0] < X.max[0] && b.max[2] > X.min[2] && b.min[2] < X.max[2]);
-  for (const b of T) { for (const v of [r(b.min[0]), r(b.max[0])]) if (v > r(X.min[0]) && v < r(X.max[0])) xs.add(v); for (const v of [r(b.min[2]), r(b.max[2])]) if (v > r(X.min[2]) && v < r(X.max[2])) zs.add(v); }
-  const X1 = [...xs].sort((a, b) => a - b), Z1 = [...zs].sort((a, b) => a - b);
-  for (let i = 0; i + 1 < X1.length; i++) for (let j = 0; j + 1 < Z1.length; j++) {
-    const cx = (X1[i] + X1[i + 1]) / 2, cz = (Z1[j] + Z1[j + 1]) / 2;
-    if (!T.some((b) => r(b.min[0]) <= cx && r(b.max[0]) >= cx && r(b.min[2]) <= cz && r(b.max[2]) >= cz)) return false;
-  }
+/** (W10 R1A) two sets of boxes of ONE height span cover the same plan area, to the millimetre (coordinate-compressed: every cell of the joint grid is in both
+ *  unions or in neither) */
+function sameUnion(A, B) {
+  const r = (v) => Math.round(v * 1000), xs = new Set(), zs = new Set();
+  for (const b of A.concat(B)) { xs.add(r(b.min[0])); xs.add(r(b.max[0])); zs.add(r(b.min[2])); zs.add(r(b.max[2])); }
+  const X = [...xs].sort((a, b) => a - b), Z = [...zs].sort((a, b) => a - b), xi = new Map(X.map((v, i) => [v, i])), zi = new Map(Z.map((v, i) => [v, i]));
+  const nx = X.length - 1, nz = Z.length - 1, ca = new Uint8Array(Math.max(1, nx * nz)), cb = new Uint8Array(Math.max(1, nx * nz));
+  const mark = (L, c) => { for (const b of L) { const i0 = xi.get(r(b.min[0])), i1 = xi.get(r(b.max[0])), j0 = zi.get(r(b.min[2])), j1 = zi.get(r(b.max[2])); for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) c[j * nx + i] = 1; } };
+  mark(A, ca); mark(B, cb);
+  for (let k = 0; k < ca.length; k++) if (ca[k] !== cb[k]) return false;
   return true;
 }
 function loadManifest() {
@@ -199,7 +198,7 @@ function checkHouse(H, HGmod, MAN) {
     for (const [k, g] of grp) {
       if (g.mc.some((b) => b.h !== 63 || !b.c)) { bad = k + ": a cover box draws a face or does not collide"; break; }
       if (!g.mc.length || !g.cm.length) { bad = k + ": covers without replaced boxes (or replaced boxes without covers)"; break; }
-      if (g.cm.some((b) => !insideUnion(b, g.mc)) || g.mc.some((b) => !insideUnion(b, g.cm))) { bad = k + ": the covers are not the union of the boxes they replace"; break; }
+      if (!sameUnion(g.cm, g.mc)) { bad = k + ": the covers are not the union of the boxes they replace"; break; }
     }
     if (bad) E("vis-col", bad); }
   (() => {                                       // (a section of its own function: smaller units for the optimizing compiler)
@@ -1417,6 +1416,11 @@ else if (require.main === module) (async () => {
       let errs; try { plant(H); errs = checkHouse(H, HGmod, MAN); } catch (e) { errs = ["threw: " + e.message]; }
       ok(errs.some((e) => e.startsWith("roof:")), "negative control [roof]: " + label + " is caught", errs.slice(0, 2).join(" | ") || "no error raised");
     }
+    // (W10 R1A) the control of the collision covers' union check: one cover 10 cm short of the boxes it replaces
+    { const H = JSON.parse(JSON.stringify(g0)), c = H.boxes.find((b) => b.mergedCol && b.max[0] - b.min[0] > 0.3);
+      let errs = ["no collision cover in the house"];
+      if (c) { c.max[0] -= 0.1; try { errs = checkHouse(H, HGmod, MAN); } catch (e) { errs = ["threw: " + e.message]; } }
+      ok(errs.some((e) => e.includes("the covers are not the union")), "negative control [vis-col]: a collision cover 10 cm short of the boxes it replaces is caught", errs.slice(0, 2).join(" | ") || "no error raised"); }
     const p2 = Object.assign({}, PS[0], { theme: "city", storeys: 2 });
     ok(fnv(JSON.stringify(HGmod.generate(p2))) !== fnv(JSON.stringify(HGmod.generate(Object.assign({}, p2, { seed: (p2.seed + 1) >>> 0 })))), "negative control [determinism]: a different seed gives a different house (the hash compare bites)");
   }

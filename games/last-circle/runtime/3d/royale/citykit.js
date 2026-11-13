@@ -14,7 +14,7 @@
  *   kit.dispose();                                                                            // from disposeMapResources: frees what a group traverse cannot
  *
  * list = [{ type, x, y, z, rot, scale?, district, palette? }, ...]
- *   type     a manifest id such as "suburban/building-type-a" (typeIds() lists the 153). Unknown types are skipped and reported in `skipped`.
+ *   type     a manifest id such as "suburban/building-type-a" (typeIds() lists the 152). Unknown types are skipped and reported in `skipped`.
  *            Wave 8 (stage A2, lane H5): the interior kit is merged - 55 furniture / wall types (Kenney Furniture Kit 2.0 + 3 Quaternius pieces, CC0) with exact
  *            colliders in COLLIDER_BOXES below: collider_mode "steps" (stairs: one box per tread, nothing to hide under), "none" (rugs, the pallet: nothing at body
  *            height, so colliderFor gives [] and the far / fallback box drawing skips them). Only the GLBs of the types a place() list DRAWS are fetched
@@ -138,7 +138,6 @@ const COLLIDER_BOXES = Object.freeze({
   "cars/truck": [-1.125,0,-2.5,1.175,1.326,2.5,-1.275,0,0.9,1.325,1.326,1.1],
   "cars/van": [-1.125,0,-2.33,1.175,1.377,2.32,-1.275,0,0.87,1.325,1.377,1.12],
   "furniture/bathroomCabinet": [-0.253,0,-0.143,0.253,0.858,0.143],
-  "furniture/bathroomMirror": [-0.331,0,-0.159,0.331,0.956,0.159],
   "furniture/bathroomSink": [-0.374,0,-0.319,0.374,1.232,0.319],
   "furniture/bathroomSinkSquare": [-0.473,0,-0.33,0.473,1.276,0.33],
   "furniture/bathtub": [-1.309,0,-0.616,1.309,0.924,0.616],
@@ -191,7 +190,7 @@ const COLLIDER_BOXES = Object.freeze({
   "furniture/lampSquareTable": [-0.132,0,-0.132,0.132,0.638,0.132],
   "furniture/lampWall": [-0.249,0,-0.165,0.249,0.204,0.165],
   "furniture/loungeChair": [-0.539,0,-0.451,0.539,1.012,0.451],
-  "furniture/loungeChairRelax": [-0.539,0,-0.742,0.539,1.386,0.742],
+  "furniture/loungeChairRelax": [-0.539,0,-0.692,0.611,1.386,0.408,-0.439,0,-0.742,0.511,1.386,0.458],
   "furniture/loungeDesignSofa": [-1.232,0,-0.451,1.232,0.88,0.451],
   "furniture/loungeDesignSofaCorner": [0.515,0,-1.485,1.515,0.88,1.515,-1.485,0,-1.485,0.465,0.88,-0.535],
   "furniture/loungeSofa": [0,0,-0.902,2.156,1.012,0],
@@ -206,7 +205,7 @@ const COLLIDER_BOXES = Object.freeze({
   "furniture/rugSquare": [],
   "furniture/shelfLarge": [-0.061,0,-0.17,0.389,1.997,0.18,-0.761,0,-0.17,-0.661,1.997,0.18,0.739,0,-0.17,0.789,1.997,0.18],
   "furniture/shelfTall": [-0.658,0,-0.259,0.658,1.988,0.259],
-  "furniture/showerRound": [-0.618,0,-0.618,0.618,2.407,0.618],
+  "furniture/showerRound": [-0.318,0,-0.618,0.682,1.963,0.432,-0.618,0,-0.618,-0.368,2.407,0.082,0.032,0,0.482,0.682,2.407,0.682,-0.418,0,0.132,-0.368,2.407,0.182],
   "furniture/sideTable": [-0.022,0,-0.462,1.154,0.846,0.022],
   "furniture/sideTableDrawers": [-0.588,0,-0.245,0.588,0.846,0.245],
   "furniture/stoolBar": [0,0,-0.506,0.584,0.957,0],

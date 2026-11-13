@@ -31,7 +31,7 @@ Plant (Wave 9, lane R1A; only the designated row counts, exit 1 = the fault was 
                             where it starts) -> view-pixels must FAIL (lodge_tower.f1r1, the Wave-8 storage room whose boxes hide behind the rack from the camera)
   --plant sparse            (W10 R1A) housegen.js served with the area quota and the centre groups off (the homes furnished as the audit found them) ->
                             view-lived and view-lived-cover must FAIL
-W10 R1A rows: view-lived (every lived room - living, bedroom, kitchen, dining - of the homes shows >= 5 pieces from its best doorway, the third-person camera) and
+W10 R1A rows: view-lived (every lived room - living, bedroom, kitchen, dining - of the homes shows >= 5 of its own substantive (non-filler) pieces from its best doorway, the third-person camera) and
 view-lived-cover (>= 20 % of the frame below the horizon is furniture: every piece hidden at once, the changed pixels under the horizon row).
 Screenshots (LOOK at them): per use a contact sheet (street, the front from the third-person camera, stepping in through the front door, the biggest room
 from its doorway), the compound sheet, the storeys cut-away sheet, and every building's every room from its doorway (third person).
@@ -312,7 +312,8 @@ PROBE = r"""
           const hr = Math.max(0, Math.min(h, Math.floor((V.y + 1) / 2 * h)));        // readPixels rows run from the bottom: rows 0 .. hr-1 lie under the horizon
           for (let k = 0, end = hr * w * 4; k < end; k += 4) { below++; if (Math.abs(px[k] - ref[k]) + Math.abs(px[k + 1] - ref[k + 1]) + Math.abs(px[k + 2] - ref[k + 2]) > 24) fpx++; } }
         tp(e.x, e.y, e.z, e.fx, e.fz);
-        let n = 0, own = 0; const per = [];
+        let n = 0, own = 0, subst = 0; const per = [];
+        const FILL = /clock|lamp|[pP]lant|trash|art|poster|rug|wallShelf|mirror|whiteboard|runner|coatRack|monitor|carton|box\/box|televisionModern|Microwave/;   // (homes census FILL / housegen FILLER_TYPE)
         for (const p of q.H.furniture) {
           if (p.floor !== r.floor || p.deco || p.max[1] - p.min[1] < 0.25) continue;
           const cx = (p.min[0] + p.max[0]) / 2 - e.x, cz = (p.min[2] + p.max[2]) / 2 - e.z;
@@ -320,9 +321,9 @@ PROBE = r"""
           const o = ops.get(p.id); if (!o) continue;
           o.hide(); tp(e.x, e.y, e.z, e.fx, e.fz); const px = read(); o.show();
           let d = 0; for (let k = 0; k < px.length; k += 4) if (Math.abs(px[k] - ref[k]) + Math.abs(px[k + 1] - ref[k + 1]) + Math.abs(px[k + 2] - ref[k + 2]) > 24) d++;
-          if (d >= 60) { n++; if (p.room === r.id) own++; per.push((p.room === r.id ? "" : "(next) ") + p.cat + ":" + d); }
+          if (d >= 60) { n++; if (p.room === r.id) { own++; if (!FILL.test(p.type || "")) subst++; } per.push((p.room === r.id ? "" : "(next) ") + p.cat + ":" + d); }
         }
-        out.push({ house: q.H.id, use: q.H.use, room: r.id, kind: r.kind, floor: r.floor, views: r.views.length, model: e.seen, inView: n, own, per, at: [+e.x.toFixed(2), +e.z.toFixed(2)], pulled: t.pulled,
+        out.push({ house: q.H.id, use: q.H.use, room: r.id, kind: r.kind, floor: r.floor, views: r.views.length, model: e.seen, inView: n, own, subst, per, at: [+e.x.toFixed(2), +e.z.toFixed(2)], pulled: t.pulled,
           furnShare: below ? +(fpx / below).toFixed(3) : 0 });
       }
     }
@@ -419,9 +420,9 @@ def main_fn(v, args):
                 # (W10 R1A) a HOME's lived rooms (living, bedroom, kitchen, dining) from their best doorway, the game's camera: >= LIVED_MIN pieces seen and >= COVER_MIN of the
                 # frame below the horizon is furniture (owner: "tiny homes with little furniture")
                 lived = [r for r in vp if r.get("use") == "house" and r["kind"] in LIVED]
-                few = [r for r in lived if r["inView"] < LIVED_MIN]
-                v.check("view-lived", bool(lived) and not few, "%d of %d lived rooms of the homes show >= %d pieces (>= %d px each) from the third-person camera at their best doorway; mean %.1f; short %s" % (
-                    len(lived) - len(few), len(lived), LIVED_MIN, PX_MIN, sum(r["inView"] for r in lived) / max(1, len(lived)), [(r["house"], r["room"], r["kind"], r["inView"]) for r in few[:8]]))
+                few = [r for r in lived if r.get("subst", 0) < LIVED_MIN]
+                v.check("view-lived", bool(lived) and not few, "%d of %d lived rooms of the homes show >= %d of their OWN SUBSTANTIVE pieces (not filler; >= %d px each) from the third-person camera at their best doorway; mean %.1f (all pieces in view %.1f); short %s" % (
+                    len(lived) - len(few), len(lived), LIVED_MIN, PX_MIN, sum(r.get("subst", 0) for r in lived) / max(1, len(lived)), sum(r["inView"] for r in lived) / max(1, len(lived)), [(r["house"], r["room"], r["kind"], r.get("subst"), r["inView"]) for r in few[:8]]))
                 bare = [r for r in lived if r.get("furnShare", 0) < COVER_MIN]
                 v.check("view-lived-cover", bool(lived) and not bare, "%d of %d lived rooms: furniture >= %.0f %% of the frame below the horizon; median %.1f %%; short %s" % (
                     len(lived) - len(bare), len(lived), COVER_MIN * 100, 100 * sorted(r.get("furnShare", 0) for r in lived)[len(lived) // 2] if lived else 0, [(r["house"], r["room"], r["kind"], r.get("furnShare")) for r in bare[:8]]))
