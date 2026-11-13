@@ -1,0 +1,238 @@
+{
+ "lane": "completeness critic, max pass round 2 (max2)",
+ "date": "2026-11-13 02:35 Central",
+ "head": "f9aa8e3d4",
+ "read": "_design/reviews/max/critic.json; max2/{env,sfx,units,vfx}/verify*_q/_r.json and summaries; max2/idle_gates.json; cards/verify_r2_{bd1,bd2,g1a,g1b,g2a,g2b}.json (+ verify_ks2 for Kemdo, whose cards did not change in round 2); git log since 2026-11-12 00:00.",
+ "roundOneGaps": [
+  {
+   "gap": "1 SFX runtime mix failed (loudness, kit share)",
+   "status": "closed",
+   "evidence": "sfx verify3_q 7.6 and verify3_r 7.6 both pass: own captures on seeds 3/7/11/21 all PASS (-17.03/-18.59/-18.26/-18.18 LUFS, kit 64-76.5 %). Idle gate audio_match PASS on all 4 seeds. Watch: after ruling 34's ambience change the idle run read seeds 7/11/21 at -19.23 to -19.44, only 0.06-0.27 LU inside the -19.5 floor."
+  },
+  {
+   "gap": "2 hits not snappier; abilities share one hit sound (SFX-2, SFX-4)",
+   "status": "partly",
+   "evidence": "SFX-4 closed: 32 own per-ability impacts, 0/120 ult and heavy pairs under 8 dB, 0 under the HF floors (verify2_r, verify3_q). SFX-2 partly: shared kit-hit median rise 6.9 -> 2.25 ms, but 11 of 32 shared hits are still over 3 ms (ulkro_hit 26.9 ms, burdam_attack_hit 31.1 ms) and Dunsom/Ulkro/Hesmi/Tunlan autos stay dark (centroid 341-555 Hz). The impact gate was relaxed 3 -> 4 ms (RMS_RISE_MAX_MS) and is still relaxed. IMPW 0.15 s restored."
+  },
+  {
+   "gap": "3 SFX-10 UI and shop sounds not done",
+   "status": "closed",
+   "evidence": "verify3_q 'better': shop_buy/sell/undo onset 45-90 -> 1.1-1.6 ms, new ui_shop_open/close/denied/ping_wheel, hover audible. My spot-check: P fires ui_shop_open, Escape fires ui_shop_close."
+  },
+  {
+   "gap": "4 VFX lane: no fix round, every verify1 problem open",
+   "status": "closed (minors left)",
+   "evidence": "vfx verify1_q 7.8 and verify1_r 7.6 both pass: structure light 5.5 m x5, scorch #5A5046, warm-grey smoke, open silence bell, additive sweeps, respawn rings, summon stain gone, 10 lib_item_* procs, lib_monster_fall bound. Left: lib_wick_death near-black ink blob, ink specks in silence/summon, VFX-6 Hesmi/Nurrow/Vashil still at detailLost 2 (the limit), VFX-11 heat ring invisible, enrage out of scope (no sim state). My spot-checks confirm the death and monster-fall fixes in game."
+  },
+  {
+   "gap": "5 units below par; zoning open",
+   "status": "partly",
+   "evidence": "Zoning done (sigPct 12-37 %), Tunlan hat collision fixed (dE ~45), Marund/Ervet/Lisvel/Sukri crowns read, Glasshorn rib read fixed, Sunsplinter core larger, ruling 32 cap enforced. But the lane failed all six verifies (7.2 / 7.2 / 7.3): verify3_q major, Ardit's new crown renders lilac (h 304) and makes a three-way lilac collision with Vashil and Dunsom; Hesmi/Odrum/Burdam/Ilsheta tops still cream; U6 glass, U1(2) ORM and U7 head modelling not done."
+  },
+  {
+   "gap": "6 environment closed at 7.4",
+   "status": "closed (minors left)",
+   "evidence": "env verify1_q 7.5 and verify1_r 7.6 both pass: Hourtier and Lampbough species in groves (-2.5 % tris per tree), outflow fall reads, rubble and soot states exist. The quality verifier saw no change at the game camera for ENV-5 plaza, ENV-11 deck bays or ENV-1 floor break-up; god rays deferred with a recorded reason. My run loaded hourtier.glb and lampbough.glb in a RIFT match."
+  },
+  {
+   "gap": "7 every fighter's cards fail; Burdam/Dunsom model blockers",
+   "status": "partly",
+   "evidence": "Burdam and Dunsom hollow-mask / cracked-skull blockers fixed at the model; card_qa gained blank/hollow/cracked/glow/streak tripwires. Latest verifiers: 56 of 96 cards ok, 40 fail, and no fighter reaches 7.5 (scores 2.5 Hesmi to 6.0 Kemdo). Open blockers: Rishal cheek tear-lines (all 6), decal eyes on Odrum/Ulkro splashes, Odrum Shadeprint salmon cracked mask, mummy reads on Lisvel Almanac/Gorgewalk and Ulkro Highrim, all 6 Burdam/Dunsom splashes on card_qa blank. Most splashes are still the 3D finish on a painted plate, not the painted figure ruling 30 asks for. CW5 Vashil cowl is still a geometry gate no card can close."
+  },
+  {
+   "gap": "8 frame timing of the integrated build not proven",
+   "status": "open",
+   "evidence": "Idle gate: realtime_match not measured 3 times and match_memory not measured 3 times (outside load up to 70). The --prod sweep frame budgets pass, and memory 'would pass' (RIFT <= 2784 MB). Match seed 11 now peaks at 497k of 500k triangles (round 1: 462k)."
+  },
+  {
+   "gap": "9 shop only in an 18 m circle",
+   "status": "closed",
+   "evidence": "Ruling 31, commit 36163c40b: buy anywhere in your own base (25 m)."
+  }
+ ],
+ "gaps": [
+  {
+   "what": "Integrated round-2 build has no valid real-time frame run and no valid match-memory run",
+   "why": "Rulings 20/27/28 need an idle realtime_match (>= 99 % of seconds at 58+) and match memory <= 3000 MB. Both were not measured 3 times each (load up to 70 from other sessions). The triangle margin is 3k: seed 11 peaks at 497k of 500k.",
+   "howToFix": "When no other session holds a heavy slot and load is < 3: run perf_1080 --prod --no-build --match-only --match-scale 1 --match-min 26 and probe_match_memory --fake-audio once each. Find the ~35k growth in seed 11's teamfight (actors 251-273k) and pay some back before anything new lands on fighters or VFX."
+  },
+  {
+   "what": "Units lane failed every verify and has an open major: Ardit's crown renders lilac",
+   "why": "verify3_q: Ardit's helm and pauldrons read L* 71.5 C 23.8 h 304 at the game camera, the same hue family as Vashil's hood and Dunsom's hat, so three fighters share a lilac top. That is a readability regression added in round 2. Score 7.3 against the 7.5 par. Hesmi, Odrum, Burdam and Ilsheta still lead with cream tops; U6, U1(2) and U7 heads are not done.",
+   "howToFix": "Regrade Ardit's crown into a hue no one else uses (for example deep cobalt h ~250-260, or revert to round 1), gated with lineup_qa dE76 >= 25 to Vashil and Dunsom. Give Hesmi/Odrum/Ilsheta crown breaks under ruling 32. Then a fresh q/r verify pair. Until then the units changes are not on the ship list."
+  },
+  {
+   "what": "Cards: 40 of 96 fail, no fighter at par, several open blockers",
+   "why": "Latest verifiers (bd2, g1b, g2b): Rishal 0/6 (cheek tear-lines, ruling-1 class), Hesmi 0/6, decal eyes on Odrum and Ulkro splashes, Odrum Shadeprint salmon cracked mask, mummy reads on Lisvel Almanac/Gorgewalk and Ulkro Highrim, broken hands (Odrum Noon Fair, Ulkro), Vashil First Bell crack slashes, all 6 Burdam/Dunsom splashes fail on blank. Scores 2.5-6.0. Most splashes are still the 3D finish standing small on a plate, not a painted, figure-led card (ruling 30).",
+   "howToFix": "Fix the blockers first (Rishal cheek geometry or paint, real painted eyes on the Odrum/Ulkro splashes, Odrum Shadeprint lacquer per ruling 2, wrap reads). Then a true paint pass with a larger figure, designed value and rim light. Re-verify all 16 fighters, including Kemdo, whose cards were not looked at in round 2."
+  },
+  {
+   "what": "Passing portraits ship beside failing live splashes",
+   "why": "burdam_portrait, burdam_almanac_portrait, dunsom_portrait, dunsom_almanac_portrait, odrum_portrait, odrum_noon_fair_portrait and ulkro_portrait pass, but their splashes stay on the pre-round-1 live versions, which still carry the hollow-mask (Burdam), cracked-mask (Dunsom) and hollow-eye faces. The base/skin/portrait consistency rule is broken if only the portraits ship.",
+   "howToFix": "Lead call: ship a portrait only with a passing splash of the same skin, or accept the mismatch in owner_rulings. The faster fix is to bring the matching splashes to ok."
+  },
+  {
+   "what": "Shared kit-hit transients and dark autos (SFX-2) not finished; the impact gate is still relaxed",
+   "why": "11 of 32 shared hits are over the 3 ms onset (ulkro_hit 26.9 ms, burdam_attack_hit 31.1 ms, marund_hit 10.3 ms). Dunsom/Ulkro/Hesmi/Tunlan autos sit at 341-555 Hz centroid with ~0 % above 6 kHz, and those are heard on every auto. RMS_RISE_MAX_MS is 4.0 though every shipped impact measures <= 2.94 ms.",
+   "howToFix": "Set RMS_RISE_MAX_MS back to 3.0 (free today). Add a 1-3 ms bright transient layer to the 4 dark autos and the 2 slow hits while keeping identity distance >= 8.15 dB, then re-run the 4-seed runtime match."
+  },
+  {
+   "what": "Runtime loudness margin after ruling 34",
+   "why": "The ambience change (4f33c7b11) landed after sfx verify3. At the idle gate seeds 7/11/21 read -19.23 to -19.44 LUFS, 0.06-0.27 LU inside the -19.5 floor and about 1 LU quieter than verify3. Part of the loudness token was carried by the ambience lift (AMB_CALM_LIFT_DB 3), which ruling 34 now cuts.",
+   "howToFix": "Re-run probe_audio_runtime match on seeds 3/7/11/21 on an idle machine. If any seat is under -19.2, lift the sfx bus (not the ambience) by ~0.5-1 dB and keep seed 3 under -16.5."
+  },
+  {
+   "what": "VFX leftovers",
+   "why": "lib_wick_death (minion death, the most frequent death in a fight) still puts out a near-black ink blob. Ink specks (#17181B) remain in the silence bell and summon rise. VFX-6: Hesmi, Nurrow and Vashil ults stay at detailLost 2, the limit; Nurrow's claimed gain did not reproduce. The VFX-11 heat ring cannot be seen. The VFX lane had one verify pair (08:39/08:56) and was not re-verified after later units, env and cards changes.",
+   "howToFix": "Move lib_wick_death's ink_puff to the warm-grey smoke used elsewhere, and swap the #17181B ring emitters. Do the actor victim-flash dedupe for the three ults (units-lane file). Drop VFX-11 or make it visible on High/Ultra. Run one regression check of the VFX gallery on the final build."
+  },
+  {
+   "what": "Environment items that do not read at the game camera",
+   "why": "The quality verifier saw no perceptible change for ENV-5 plaza dressing (frame mean 82.0 -> 81.6) or ENV-11 deck bays, and saw the clearing floor break-up as 'same' with decal-like ellipses. The Lampbough reads rust or autumn, not amber. God rays are deferred with a recorded reason.",
+   "howToFix": "Either raise the deck-bay and plaza tone steps until they read at 28.5 m (value_probe-gated, inside B5) or record them as subtle-by-design. Warm the Lampbough toward amber in shadow."
+  },
+  {
+   "what": "Tree-level gates that block a clean ship are red, though not caused by round-2 art",
+   "why": "value_probe fray_low.fighterTop25 85.3 > 85 (Tunlan framed after ruling 33's sim change). npm run probe failed probe_sim_bot_soak laning 62.3 % < 65 % after the pathing work (another session is soak-testing it). card_qa has 7 blank misses.",
+   "howToFix": "Lead: pin value_probe's FRAY lineup or darken Tunlan's hat band for FRAY light. The pathing session closes the bot-soak gate. Ship only from a tree where probe and value_probe are green."
+  }
+ ],
+ "weakABs": [
+  "sfx: the runtime loudness PASS (verify3) predates ruling 34's ambience change, and the loudness was partly carried by the ambience lift. The idle re-run sits 0.06-0.27 LU inside the floor.",
+  "sfx SFX-2 'better' rests on the median rise (2.25 ms). 11 of 32 shared hits still miss 3 ms, and the impacts gate was relaxed 3 -> 4 ms and max_gr 6 -> 9 dB in the same commit that made them pass.",
+  "env ENV-5 plaza: verify1_r 'better', verify1_q 'same, no perceptible change'. ENV-1 floor break-up: r 'better (modest)', q 'same'. ENV-11 deck bays: 'same' in both.",
+  "vfx VFX-6: 'same' in both verifies; the engineer's Nurrow 2 -> 1 and Vashil box-white claims come from a subset run and did not reproduce in --ults all.",
+  "vfx: one q/r pair at 08:39/08:56 on 2026-11-12; nothing re-checked it after the units GLBs, env shaders and cards changed later that day (combat_polish at the idle gate is the only later check).",
+  "units U1(2) ORM bands and U6 glass are 'closed by measurement' with no change at all; Sunsplinter tip 'same'.",
+  "cards: each fix-round state was judged by one verifier (bd2, g1b, g2b). Kemdo's 6 'ok' come from round-1 ks2 (fighter score 6.0) and were not re-read in round 2.",
+  "idle gate: e2e all, audio_match and combat_polish passed under load up to 36, so they are pass evidence, not idle closing evidence. realtime_match and match_memory were never measured."
+ ],
+ "spotChecks": [
+  {
+   "claim": "SFX-10 (sfx verify3_q 'better'): the shop door has its own crisp cues, ui_shop_open on open and ui_shop_close on close",
+   "result": "holds",
+   "evidence": "Live practice RIFT on my own dev server (:5199, current tree), Ardit team 0. The real P key opened .hud .lshop, and the cue log after it began with ui_shop_open. Escape closed it, and the log began with ui_shop_close. 0 console lines. Script: scratchpad crit2_spot.mjs, log crit2/run2.log."
+  },
+  {
+   "claim": "VFX-4 (vfx verify1_q/r 'better'): the fighter death shatter has a warm char and no near-black ink puff over the body (round-1 critic's spot-check defect)",
+   "result": "holds",
+   "evidence": "Died under the enemy outer Needle (level 13 Ardit, t 114 s). Frames at +150 / +450 / +950 ms (crit2/death2_strip.png): a dial tick ring, white chips and pale-grey smoke over the body, and a mid-grey char disc, fading by ~1 s. No near-black puff or black disc (the death view is desaturated, so this checks value, not hue). Death cues fire: f_ardit_death, m_self_down, c_shield_break, c_needle_shot/hit."
+  },
+  {
+   "claim": "VFX-5c (vfx verify1_q 'better'): monsters fall with their own look (lib_monster_fall) and sound, not the minion's black-ink wick death",
+   "result": "holds, brief",
+   "evidence": "Killed a Little Gloamoth at the a_gloamoths camp (t ~66 s). The frame on the death tick (crit2/mon2_strip.png) shows a warm white-gold flash with orange embers at the body and no black ink. By +80 ms only a few embers are left, and I could not see the radial crack star at +80 or +280 ms. The cue log has c_monster_fall (plus c_seal_set and m_gleam), so the monster death sound is bound and fires. Network: hourtier.glb and lampbough.glb load in the match (ENV-1)."
+  }
+ ],
+ "shipList": [
+  "env (max2 ENV, verify1_q 7.5 + verify1_r 7.6 pass): ENV-1 Hourtier and Lampbough crown species in RIFT groves (-2.5 % tris per tree); ENV-1 clearing floor break-up; ENV-4 outflow feathered edge and fall; ENV-5 base plaza dressing; ENV-6 rubble heap and tower soot by damage stage; ENV-11 BRIDGE deck bays (in code, barely visible); god rays not built",
+  "vfx (max2 VFX, verify1_q 7.8 + verify1_r 7.6 pass): structure_break light 5.5 m x5 and warm smoke; death_shatter warm char; ink_puff to warm grey (structure_break/land/death); silence open bell; resist_shred bright ring; Sunsplinter/Longshade/cone sweeps as decal + emitter (no opaque cone, no black wedge); respawn dial rings; summon rise without the ink stain; 10 lib_item_* proc defs (items.json: 15 vfx refs only); lib_monster_fall bound to monsterDeath; VFX-10 ult wind-up hour-dials; VFX-6 Lisvel ult landing",
+  "sfx (max2 SFX, verify3_q 7.6 + verify3_r 7.6 pass): runtime mix (MIX_TRIM_DB, OWN_KIT_DB, CAMP_DB, FIGHT_SFX_DB); shared kit-hit transients snapped (8 cues re-rendered); SFX-4 32 per-ability impact cues; SFX-10 shop buy/sell/undo re-takes, ui_shop_open/close/denied, ui_ping_wheel, audible hover; IMPW 0.15 s with the f_odrum_hit re-take; Wick take variation",
+  "cards: only the 50 round-2 cards in cardsPass whose files changed (Kemdo's 6 are unchanged and already live). Keep every cardsFail card on its live version.",
+  "CONDITION for all of the above: they passed both verifiers and every idle gate that ran (perf_1080 --prod counts and frames, content, typecheck, build, e2e, audio_match, combat_polish, gen_store). realtime_match and match_memory were not measured, so the hard-gate set is not complete. Ship after one idle run of each passes, from a tree where npm run probe and value_probe are green (both red today for non-round-2 reasons).",
+  "NOT on the list: units lane (U1 zoning, U7 crowns, Tunlan hat, Glasshorn restyle, Sunsplinter core/tip, ruling-32 regrades). It failed all six verifies (open major: Ardit lilac crown). Its GLBs are already in the tree with the cards lane's Burdam/Dunsom model fixes, so a ship of the tree carries it unless the lead accepts it by ruling or Ardit's crown is fixed first."
+ ],
+ "cardsPass": [
+  "burdam_portrait",
+  "burdam_almanac_portrait",
+  "dunsom_portrait",
+  "dunsom_almanac_portrait",
+  "sukri_splash",
+  "sukri_portrait",
+  "sukri_stillwater_splash",
+  "sukri_stillwater_portrait",
+  "sukri_shadeprint_splash",
+  "sukri_shadeprint_portrait",
+  "tunlan_splash",
+  "tunlan_lamplit_splash",
+  "tunlan_lamplit_portrait",
+  "tunlan_noon_fair_splash",
+  "tunlan_noon_fair_portrait",
+  "ervet_splash",
+  "ervet_portrait",
+  "ervet_lamplit_splash",
+  "ervet_lamplit_portrait",
+  "ervet_stillwater_splash",
+  "ervet_stillwater_portrait",
+  "marund_splash",
+  "marund_portrait",
+  "marund_long_evening_splash",
+  "marund_long_evening_portrait",
+  "ardit_splash",
+  "ardit_portrait",
+  "ardit_chalkline_splash",
+  "ardit_chalkline_portrait",
+  "ardit_first_bell_splash",
+  "ilsheta_splash",
+  "ilsheta_portrait",
+  "ilsheta_first_bell_portrait",
+  "ilsheta_stillwater_portrait",
+  "lisvel_splash",
+  "lisvel_portrait",
+  "lisvel_gorgewalk_portrait",
+  "nurrow_splash",
+  "nurrow_portrait",
+  "nurrow_noon_fair_splash",
+  "nurrow_noon_fair_portrait",
+  "nurrow_shadeprint_splash",
+  "nurrow_shadeprint_portrait",
+  "odrum_portrait",
+  "odrum_noon_fair_portrait",
+  "ulkro_portrait",
+  "vashil_splash",
+  "vashil_portrait",
+  "vashil_chalkline_splash",
+  "vashil_first_bell_splash",
+  "kemdo_splash",
+  "kemdo_portrait",
+  "kemdo_highrim_splash",
+  "kemdo_highrim_portrait",
+  "kemdo_long_evening_splash",
+  "kemdo_long_evening_portrait"
+ ],
+ "cardsFail": [
+  "burdam_splash",
+  "burdam_almanac_splash",
+  "burdam_stillwater_splash",
+  "burdam_stillwater_portrait",
+  "dunsom_splash",
+  "dunsom_almanac_splash",
+  "dunsom_highrim_splash",
+  "dunsom_highrim_portrait",
+  "tunlan_portrait",
+  "marund_gorgewalk_splash",
+  "marund_gorgewalk_portrait",
+  "ardit_first_bell_portrait",
+  "hesmi_splash",
+  "hesmi_portrait",
+  "hesmi_gorgewalk_splash",
+  "hesmi_gorgewalk_portrait",
+  "hesmi_shadeprint_splash",
+  "hesmi_shadeprint_portrait",
+  "ilsheta_first_bell_splash",
+  "ilsheta_stillwater_splash",
+  "lisvel_almanac_splash",
+  "lisvel_almanac_portrait",
+  "lisvel_gorgewalk_splash",
+  "odrum_splash",
+  "odrum_noon_fair_splash",
+  "odrum_shadeprint_splash",
+  "odrum_shadeprint_portrait",
+  "rishal_splash",
+  "rishal_portrait",
+  "rishal_chalkline_splash",
+  "rishal_chalkline_portrait",
+  "rishal_lamplit_splash",
+  "rishal_lamplit_portrait",
+  "ulkro_splash",
+  "ulkro_highrim_splash",
+  "ulkro_highrim_portrait",
+  "ulkro_long_evening_splash",
+  "ulkro_long_evening_portrait",
+  "vashil_chalkline_portrait",
+  "vashil_first_bell_portrait"
+ ],
+ "cardsNote": "56 pass / 40 fail by the latest verifier per group (bd2 for Burdam/Dunsom, g1b for Sukri/Tunlan/Ervet/Marund/Ardit/Hesmi/Ilsheta, g2b for Lisvel/Nurrow/Odrum/Rishal/Ulkro/Vashil; Kemdo from round-1 ks2, unchanged since). No card file changed after those verdicts. 'Pass' means no blocker and on-model; no fighter's set reaches the 7.5 par (scores 2.5-6.0). Fighters with all 6 passing: Sukri, Ervet, Nurrow, Kemdo.",
+ "verdictHolds": false,
+ "verdictNote": "Round 2 closed the round-1 SFX mix fail, the per-ability impacts, SFX-10, every round-1 VFX problem and the env par miss, and all three of those lanes pass both verifiers. It did not finish the owner's ask. The units lane is still under par with a new lilac collision. 40 of 96 cards fail and no fighter's cards reach par. Shared autos are still dark or slow. The integrated build has no valid real-time frame or match-memory run, with 3k of triangle margin. The env, vfx and sfx changes are safe to ship once the two idle gates pass."
+}
