@@ -1414,3 +1414,15 @@ long press frame-rate independent. Report after 1-2 verified.
   and swap(false) (renderer.ts shadows.render / shadows.warm): never a perspective camera. No polygonOffset anywhere
   (grep), depth clamp off in the shadow pass: gl_FragCoord.z == the rasterised depth, so the atlas is the same.
   NOTE: the terrain casts with its depth twin (planetview.swapDepth), not the 1900-line terrain shader.
+- UPSCHED BUG FOUND + FIXED (A/B dist42 medium 256x144 speed 1, up-s17e-*.log): upsched=1 had main 1789 ms/frame
+  (uploads slot 801, scene 907; bufferSubData 3.27 MB/frame, one call 6.4 s) vs upsched=0 30.6 ms (0.29 MB). Cause:
+  BatchedMesh.setGeometryAt holds the attribute object it fetched BEFORE its addUpdateRange, which ringIntercept turns
+  into ring.mark (rotating the installed member); three then sets needsUpdate on the OLD member with no ranges, and
+  earlyAttr sent that whole array (a building page, ~0.4-0.5 MB) into a buffer the GPU was still reading (stall).
+  Fix: a ring member drops a bare (range-less) needsUpdate once its buffer exists (the ring's dirty list holds those
+  bytes for its next install); test 'upsched: a ring member drops a bare needsUpdate'. After (dist44, s17f-b1s1.log):
+  main 41 ms (uploads slot 2.0 ms), bufferSubData x52 0.42 MB/frame ALL in the uploads slot, texSubImage2D 4.3 of 6.6
+  in the slot; 'uploads inside a pass' 2.1/frame (scene texSubImage2D 1.9 left: textures not yet owner-scheduled).
+- perfreport GlTrace (s17): an upload counts 'inside a pass' only if the NEXT draw goes into the same framebuffer (no
+  bindFramebuffer between): one between the last draw into a target and the first into another splits nothing (that is
+  where the uploads slot sits). tests/render-gltrace.test.ts updated.
