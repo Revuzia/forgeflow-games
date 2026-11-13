@@ -7,8 +7,8 @@ identity distance (audio/build.py id_distance, both measures) + a codec margin f
 
     python3 blow_search.py [--margin 0.15] [-j 4] [--out tune.json]
 
-Every option is rendered and mastered (cuelib.master, then the cue's post pass, no codec) and measured as the kit gate
-does; coordinate descent from the shipped tables (feasible) moves each target to its best-scoring option with no pair
+Every option is built as audio/build.render ships it (master, post pass, loudness lift loop, Opus) and decoded, then
+measured as the kit gate does; coordinate descent from the shipped tables (feasible) moves each target to its best-scoring option with no pair
 under the bar. Prints the tables to paste into kits_c.
 """
 from __future__ import annotations
@@ -73,6 +73,66 @@ def options(cid: str) -> list[dict]:
     return [{'ease': e, 'crack': c, 'snap': s} for e in eases for c in cracks for s in snaps]
 
 
+def _built(sp, v: int, cid: str) -> np.ndarray:
+    """One take exactly as audio/build.render ships it (the loudness lift, codec ceiling and late-peak boost loop), encoded
+    to Opus in a scratch folder and decoded: the kit gate measures decoded files, and the build's re-mastering after an
+    ease moves a take's spectrum by up to 2 dB (a render-domain search missed by that much)."""
+    import dataclasses
+    import tempfile
+    import build as B
+    from cuelib import CEILING_DBTP, master, measure
+    raw = sp.fn(v)
+    ceiling, boost, lift = CEILING_DBTP, 0.0, 0.0
+    tmp = tempfile.mkdtemp(prefix='blow_')
+    for attempt in range(7):
+        y, info = master(raw, sp if not lift else dataclasses.replace(sp, target=(sp.target[0], sp.target[1] + lift)), ceiling)
+        y = sp.extra['post'](y, v, ceiling, boost)
+        y = np.pad(y, ((0, 0), (B.ns_(B.LEAD_S), 0)))
+        side, mid = 0.5 * (y[0] - y[1]), 0.5 * (y[0] + y[1])
+        mono = float(np.sqrt(np.mean(side ** 2))) < 0.005 * float(np.sqrt(np.mean(mid ** 2)) + 1e-12)
+        wav, ogg = os.path.join(tmp, f'{cid}_{v}.wav'), os.path.join(tmp, f'{cid}_{v}.ogg')
+        B._write(wav, mid if mono else y)
+        B.encode_opus(wav, ogg, 1 if mono else 2)
+        dec = B.decode(ogg)
+        over = float(B.L.true_peak(dec)) - B.TP_MAX
+        late = bool(sp.extra.get('rise_max_ms')) and B.rise_ms(dec) > sp.extra['rise_max_ms']
+        short = sp.target[1] - measure(dec, sp.target[0], False)
+        if (over <= 0 and not late and abs(short) <= 0.5) or attempt == 6:
+            break
+        if abs(short) > 0.5:
+            lift += 0.6 * short
+        if over > 0:
+            ceiling -= over + 0.3
+        if late:
+            boost += 1.5
+    for f in os.listdir(tmp):
+        os.remove(os.path.join(tmp, f))
+    os.rmdir(tmp)
+    return dec
+
+
+def _shipped(cid: str):
+    """The shipped state's features, from the decoded files in audio/out (the kit gate's own input)."""
+    import glob
+    import build as B
+    fs = sorted(glob.glob(os.path.join(HERE, 'out', f'{cid}_[0-9].ogg'))) or [os.path.join(HERE, 'out', f'{cid}.ogg')]
+    return (cid, 0), _measure([B.decode(f) for f in fs])
+
+
+def _measure(zs: list) -> dict:
+    import build as B
+    centres = 1000.0 * 2.0 ** (np.arange(-16, 13) / 3.0)
+    ps = [10 ** (B.third_octave_db(z) / 10) for z in zs]
+    hi = np.mean(ps, axis=0)[centres >= B.ID_FROM_HZ * 0.99]
+    hi = hi / (hi.sum() + 1e-30)
+    ms = [np.atleast_2d(z).mean(axis=0) for z in zs]
+    return {'hi': 10 * np.log10(np.maximum(hi, 1e-9)), 'takes': [B.confuse_db(z) for z in zs],
+            'rms': float(np.median([_rms_rise(z) for z in zs])), 'rmsMax': float(max(_rms_rise(z) for z in zs)),
+            'peak': float(max(_peak_rise(z) for z in zs)), 's26': float(min(_share(m, 2000.0, 6000.0) for m in ms)),
+            's6': float(min(_share(m, 6000.0) for m in ms)),
+            'top': float(max(B.transient_share(z) for z in zs)), 'lap': float(max(B.laptop_loss(z) for z in zs))}
+
+
 def _feat(job):
     import build as B
     from cuelib import REGISTRY, master
@@ -89,22 +149,7 @@ def _feat(job):
     K.SNAP_TUNE[cid] = (K.SNAP_MARGIN_DB, K.SNAP_MAX_MS) if opt['snap'] == 'default' else (
         tuple(opt['snap']) if opt['snap'] else None)
     sp = REGISTRY[cid]
-    centres = 1000.0 * 2.0 ** (np.arange(-16, 13) / 3.0)
-    ps, takes, rr, pr, s26, s6, lo = [], [], [], [], [], [], []
-    for v in range(sp.variants):
-        z = sp.extra['post'](master(sp.fn(v), sp)[0], v)
-        ps.append(10 ** (B.third_octave_db(z) / 10))
-        takes.append(B.confuse_db(z))
-        rr.append(_rms_rise(z))
-        pr.append(_peak_rise(z))
-        m = np.atleast_2d(z).mean(axis=0)
-        s26.append(_share(m, 2000.0, 6000.0))
-        s6.append(_share(m, 6000.0))
-    hi = np.mean(ps, axis=0)[centres >= B.ID_FROM_HZ * 0.99]
-    hi = hi / (hi.sum() + 1e-30)
-    return (cid, k), {'hi': 10 * np.log10(np.maximum(hi, 1e-9)), 'takes': takes, 'rms': float(np.median(rr)),
-                      'rmsMax': float(np.max(rr)), 'peak': float(np.max(pr)), 's26': float(np.min(s26)),
-                      's6': float(np.min(s6))}
+    return (cid, k), _measure([_built(sp, v, cid) for v in range(sp.variants)])
 
 
 def score(f: dict, cid: str) -> float:
@@ -125,10 +170,11 @@ def main() -> int:
     with open(B.CONTRACT, encoding='utf8') as f:
         ids = [k for k in json.load(f)['cues'] if k.startswith('f_') and any(k == f"f_{k.split('_')[1]}_{s}" for s in SLOTS)]
     opts = {c: (options(c) if c in SLOW or c in DARK else options(c)[:1]) for c in ids}
-    jobs = [(c, k, o) for c in ids for k, o in enumerate(opts[c])]
+    jobs = [(c, k, o) for c in ids for k, o in enumerate(opts[c]) if k]
     print(f'{len(jobs)} renders', flush=True)
     with cf.ProcessPoolExecutor(max_workers=a.j) as ex:
-        F = dict(ex.map(_feat, jobs, chunksize=2))
+        F = dict(ex.map(_shipped, ids))         # the shipped state: the decoded files in audio/out
+        F.update(ex.map(_feat, jobs, chunksize=2))
     if a.out:
         import pickle
         with open(a.out + '.pkl', 'wb') as f:
@@ -155,7 +201,7 @@ def main() -> int:
             floor = min(bar, nearest(c, st[c]))       # a pair already under the bar (render domain) may not get closer
             for k in range(len(opts[c])):
                 n = nearest(c, k)
-                if n < floor:
+                if n < floor or F[(c, k)]['top'] > B.TRANSIENT_SOFT_TOP or F[(c, k)]['lap'] > B.LAPTOP_MAX_LU:
                     continue
                 s = score(F[(c, k)], c)
                 if (s, n) > best[:2] and s > best[0] + 0.02:

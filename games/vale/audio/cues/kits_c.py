@@ -278,7 +278,7 @@ CRACK_TUNE: dict[str, tuple] = {
     'f_ardit_hit': (0.8, 1.55, 'crack'),
     'f_burdam_attack_hit': (1.0, 1.55, 'full', 0.28),
     'f_burdam_hit': (0.55, 0.8, 'full'),
-    'f_dunsom_attack_hit': (0.0, 1.0, 'full'),
+    'f_dunsom_attack_hit': (0.3, 1.0, 'air'),     # max2 round 2 fix: a breath of air (a crack or grit moves it to Hesmi's)
     'f_dunsom_hit': (0.3, 1.0, 'crack'),
     'f_ervet_attack_hit': (1.0, 1.55, 'full'),
     'f_ervet_hit': (1.0, 1.55, 'full'),
@@ -292,7 +292,7 @@ CRACK_TUNE: dict[str, tuple] = {
     'f_marund_attack_hit': (0.8, 1.55, 'full'),
     'f_marund_hit': (1.0, 1.55, 'full'),
     'f_nurrow_attack_hit': (1.0, 1.0, 'crack', 0.28),
-    'f_nurrow_hit': (0.3, 0.65, 'full'),
+    'f_nurrow_hit': (0.3, 0.65, 'air'),           # max2 round 2 fix: the air alone (its crack sat 8.1 dB from Dunsom's)
     'f_odrum_attack_hit': (0.55, 0.8, 'full'),
     'f_odrum_hit': (1.0, 0.65, 'full'),
     'f_rishal_attack_hit': (1.0, 1.55, 'full'),
@@ -481,7 +481,12 @@ EASE_SKIP: set[str] = {
 # per cue (max2 round 2 fix, audio/blow_search.py): (cut the attack ramp (_tight), ease dB or None) for a cue whose full
 # blow-first pass cost the identity gate but a partial one does not (a lighter ease keeps part of its swell); it overrides
 # EASE_SKIP for that cue
-EASE_TUNE: dict[str, tuple[bool, float | None]] = {}
+EASE_TUNE: dict[str, tuple[bool, float | None]] = {
+    # decoded search (blow_search.py, bar 8.15 dB): Lisvel's impact's 25 ms bloom eased 2 dB under its strike with its
+    # attack ramp kept (the full pass took it under the bar); Vashil's auto takes the full pass after all once the
+    # neighbours below moved; Odrum's auto's 2 dB ease lifts its > 6 kHz share over the 0.6 % floor
+    'f_lisvel_hit': (False, 2.0), 'f_vashil_attack_hit': (True, 0.5), 'f_odrum_attack_hit': (False, 2.0),
+}
 
 
 def _env2(x: np.ndarray) -> np.ndarray:
@@ -553,8 +558,10 @@ SNAP_TUNE: dict[str, tuple[float, float] | None] = {
     # the ability impacts whose snap took a neighbour under the 8 dB identity bar (snap_search.py, margin 0.15 dB): the
     # 'hit' slot is the kit's most crowded (every fighter's impact a whole tone under its own attack hit); since SFX-4
     # each voices only its fighter's two lighter abilities (the ult and the heaviest Q/W/E have their own snapped impact)
-    'f_ardit_hit': None, 'f_burdam_hit': None, 'f_dunsom_hit': None, 'f_hesmi_hit': None, 'f_kemdo_hit': None,
-    'f_nurrow_hit': None, 'f_odrum_hit': None, 'f_ulkro_hit': None,
+    'f_hesmi_hit': None, 'f_kemdo_hit': None, 'f_odrum_hit': None, 'f_ulkro_hit': None,
+    # max2 round 2 fix (blow_search.py, decoded, bar 8.15 dB): with Nurrow's crack turned to air, Ardit's, Burdam's and
+    # Nurrow's impacts take the default snap and Dunsom's the lightest one (onset-to-peak 10-46 ms -> 0.9-3.0 ms)
+    'f_dunsom_hit': (0.1, 1.0),
 }
 SNAP_PEAK_DBFS = -1.8         # the transient's sample peak (the mastering's true-peak ceiling is -1.5 dBTP)
 SNAP_RISE_MAX_MS = 3.0        # the build re-masters a take whose DECODED onset-to-peak is over this, its easing BOOSTED (see build.render)
