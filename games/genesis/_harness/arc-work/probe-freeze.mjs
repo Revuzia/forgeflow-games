@@ -33,15 +33,15 @@ await page.waitForFunction(() => !!window.__GENESIS__);
 await page.evaluate(() => window.__GENESIS__.ready);
 await page.evaluate((c) => window.__GENESIS__.camera(c), { mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 90, tilt: 60, hour: 10, blend: 0 });
 // let the landing converge (freeze=1 takes hold after 90 quiet frames); at most --wait frames
-const wait = Number(opts.wait ?? 400);
+const wait = Number(opts.wait ?? 200);
 let f = 0;
-for (; f < wait; f += 20) {
-  await page.evaluate(() => window.__GENESIS__.frames(20));
+for (; f < wait; f += 5) {
+  await page.evaluate(() => window.__GENESIS__.frames(5));
   const st = await page.evaluate(() => globalThis.__GENESIS_FREEZE__ ? { on: globalThis.__GENESIS_FREEZE__.on, active: globalThis.__GENESIS_FREEZE__.active, quiet: globalThis.__GENESIS_FREEZE__.quiet } : null);
-  if (!st || !st.on) { if (f >= Number(opts.settle ?? 200)) break; continue; }
+  if (!st || !st.on) { if (f >= Number(opts.settle ?? 40)) break; continue; }
   if (st.active) break;
 }
-await page.evaluate(() => window.__GENESIS__.frames(10));
+await page.evaluate(() => window.__GENESIS__.frames(3));
 console.log('settled after', f, 'frames; freeze', JSON.stringify(await page.evaluate(() => globalThis.__GENESIS_FREEZE__)));
 await page.screenshot({ path: join(OUT, `${tag}-1.png`) });
 const st0 = await page.evaluate(() => ({ ...globalThis.__GENESIS_R__.stats }));

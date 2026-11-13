@@ -8,10 +8,10 @@
 // triangles with NO uploads: its fps against the base run splits "frame structure" (uploads breaking Metal passes,
 // ANGLE copies) from "GPU execution" (the passes' own cost). The perf report prints the state (freezeLine).
 
-import { perfSwitch, perfSwitchNote } from './perfswitch.ts';
+import { perfNum, perfSwitch, perfSwitchNote } from './perfswitch.ts';
 
-/** frames in a row with no landing activity before the freeze takes hold */
-export const FREEZE_QUIET = 90;
+/** frames in a row with no landing activity before the freeze takes hold (`?freezequiet=N`: local probes) */
+export const FREEZE_QUIET = Math.max(1, perfNum('freezequiet', 90) ?? 90);
 
 export const FREEZE = {
   /** `?freeze=1` was asked for */
