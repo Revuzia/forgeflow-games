@@ -1308,3 +1308,26 @@ long press frame-rate independent. Report after 1-2 verified.
   side-by-side, then copies-s16on5.log (dist37 = final code). NEXT for a successor: look at old vs new, check on5 (view 3
   rest copies should drop from 11.7 to ~0; capHot ~0); then round-4 item 3 (Amonshis water: probe-amonshis.mjs, plan
   under ROUND 4) and item 4 (worker heaps in the report).
+
+## SESSION 17 (2026-11-13 ~06:00Z) — ROADMAP-60FPS steps 1-2 (gputimer, report headline, gpuprobe, freeze)
+- Binding plan: _harness/arc-work/ROADMAP-60FPS.md. Order: steps 1-2 shippable first (decide the branch on the Mac), then
+  4 (upsched), 6 (hdrmerge), 7 (orthodepth), 3 (rtalias), 5 (ringfence/lifesplit). Every step a perfSwitch, default on.
+- STEP 1 (code): perfreport.ts `?gputimer=0` (no TIME_ELAPSED queries; 'gpu ms: off'); report v2: line 2 = HEADLINE
+  (fps | interval p50/p95 | main ms/frame and % of wall | long tasks, ms NOT inside the frames' main work, per s); a NOTE
+  line (ANGLE-Metal gpu ms = summed command-buffer spans); a 'machine (fill in ...)' line for pressure colour / swap /
+  GPU process / tab MB / separate instance + js heap and deviceMemory.
+- STEP 2 (code): src/render/gpuprobe.ts `?gpuprobe=1` (default off): probeGpu(r, fsq, w, h, existing, tag): fresh rgba16f
+  A,B at render size + a,b 64x64, made+cleared+programs linked untimed; empty-finish floor; timed sets, each in one
+  gl.finish: fresh-full 32 copies A<->B, fresh-64 32 copies, hdr->fresh 8 (samples post.hdr.texture), atlas->fresh 8
+  (sampler2DShadow on the shadow atlas). First batch 4 passes; the rest only if < 30 ms a pass (the line says passes).
+  Runs at renderer frame 3 ('boot') and while the report records (start + every 5 s, 'rec'); probe frames and the next
+  (its interval) are left out of all report stats. Lines 'gpuprobe <tag> ...' in the report; console.info; window
+  .__GENESIS_PROBES__.
+  src/render/freeze.ts `?freeze=1` (default off): FREEZE.active once chunks.select saw no ready/pending/built for 90
+  frames in a row (freezeLandTick); then: chunks landReady stops; ringMark drops marks (returns true) and uploadPrefix
+  returns (bodies/boats/camps/roads instances/cover/veg rings); vegetation.update returns after the wind; groundcover
+  .update, roads.update, particles.setEmitters, fieldtex.update, dirtex.update, overlaytex.fill return; app.ts frame():
+  sim.setSpeed(0) while active (ONE line in app.ts, ui lane file: noted). Report line 'freeze: ACTIVE for N s' / waiting.
+- PROBE _harness/arc-work/probe-freeze.mjs (babel town view at rest, waits for the freeze, shots <tag>-1/-2, report).
+  dist38 = unminified build of the above. run-s17a.sh (queued behind run-s16g/h): freeze-s17a-on.log (freeze=1
+  gpuprobe=1), freeze-s17a-off.log (freeze=0 speed=0 gpuprobe=1); shots freeze/fz1-*.png, fz0-*.png.

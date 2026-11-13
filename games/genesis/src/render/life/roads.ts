@@ -15,6 +15,7 @@
 // glows (the building shader's lantern part), and the nearest become point lights (render/life/nightlights.ts).
 
 import { putGrowable, uploadPrefix } from '../upload.ts';
+import { FREEZE } from '../freeze.ts';
 import {
   BufferAttribute, BufferGeometry, DoubleSide, DynamicDrawUsage, Float32BufferAttribute, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, Mesh,
   MeshStandardMaterial, ShaderMaterial, Uint32BufferAttribute, type IUniform,
@@ -442,6 +443,8 @@ export class Roads {
   update(pv: PlanetView, camX: number, camY: number, camZ: number, buildings: Buildings): void {
     this.group.visible = this.enabled;
     if (!this.enabled) return;
+    // (`?freeze=1`, ROADMAP step 2) frozen: no ribbon / lamp rebuilds
+    if (FREEZE.active) return;
     const road = pv.fields.get('road');
     const R = pv.params.radius;
     const rc = Math.hypot(camX, camY, camZ);

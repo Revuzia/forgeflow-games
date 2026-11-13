@@ -47,3 +47,19 @@ session will send an updated table.
 
 ## What to send back
 All report texts (one per variant) plus the one-line feel notes, in the order of the table.
+
+## ROADMAP steps 1-2 (session 17): clean measuring + the two diagnostics that pick the next fix
+Run these in a SEPARATE Chrome instance (Terminal: `open -na 'Google Chrome' --args --user-data-dir=/tmp/genesis-perf`),
+Ultra, same seed, same Amonshis landing framing. Before each run fill in the report's `machine (fill in ...)` line from
+Activity Monitor: memory pressure colour, swap used, "Google Chrome Helper (GPU)" memory and CPU %, this tab's memory.
+The report's line 2 is the HEADLINE (fps, interval p50/p95, main share, long-task ms not in main): decide on that.
+
+Order ABAB (A, B, A, B; at least 3 pairs where noted), STILL camera (land, wait 10 s, then Record 20 s without touching
+anything) unless the row says pan:
+| # | name | URL ending | what it tells us |
+|---|------|-----------|------------------|
+| 1 | base | `index.html` | the baseline (twice in a row: should agree within 10%) |
+| 2 | probe | `index.html?gpuprobe=1` | 'gpuprobe' lines: ms per trivial copy pass at boot and in-world, new vs existing targets, full size vs 64x64 |
+| 3 | freeze | `index.html?freeze=1&gpuprobe=1` | wait until the report would say 'freeze: ACTIVE' (about 10 s after landing settles), then record, still camera |
+| 4 | notimer | `index.html?gputimer=0` | ABAB against #1: what the GPU timers cost by themselves |
+Also, once: the same base run in your normal Chrome (with the other tabs) right after a separate-instance run.

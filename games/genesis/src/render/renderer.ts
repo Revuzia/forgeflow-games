@@ -11,7 +11,7 @@
 import { setCityLightsRenderer } from './planet/citylights.ts';
 import { siltLensClear } from './planet/silt.ts';
 import {
-  Frustum, Matrix3, Matrix4, MeshBasicMaterial, NoToneMapping, PerspectiveCamera, Quaternion, Scene, Vector2, Vector3, Vector4, WebGLRenderer, type IUniform, type WebGLRenderTarget,
+  Frustum, Matrix3, Matrix4, MeshBasicMaterial, NoToneMapping, PerspectiveCamera, Quaternion, Scene, Vector2, Vector3, Vector4, WebGLRenderer, type IUniform, type Texture, type WebGLRenderTarget,
 } from 'three';
 import { depthClamp, enableConservativeDepth } from './shaders/zcons.ts';
 import type { WorldView, PlanetView } from '../client/worldview.ts';
@@ -42,6 +42,7 @@ import { WorldFx, type WorldPlanetRef } from './fx/worlds.ts';
 import { perfmon } from './perfmon.ts';
 import { gpuMem } from './gpumem.ts';
 import { ringTick, setRingGL } from './bufring.ts';
+import { BOOT_PROBES, GPU_PROBE, probeGpu, probeLine, type ProbeResult } from './gpuprobe.ts';
 import { perfList, perfNum, perfSwitch, perfSwitchNote } from './perfswitch.ts';
 // PERF s12 BISECTION switches (owner's M5 is GPU-bound: ~100x per pixel vs Vale). Each turns a heavy pass / feature
 // OFF for an A/B run only (`?msaa=0`, `?clouds=0`, ...); all default ON (the game's look), and the perf report header
@@ -365,6 +366,21 @@ export class Renderer {
     return out;
   }
 
+  /** (gpuprobe) once at boot (frame 3), then whenever the recording perf report asks (start, every 5 s) */
+  private gpuProbe(): void {
+    const boot = this.frameNo === 3;
+    if (!boot && !perfmon.recorder.probeDue()) return;
+    const atlas = this.shadows.uniforms.uShadowMap.value as Texture | null;
+    const res = probeGpu(this.three, this.fsq, this.post.w, this.post.h, [
+      { name: 'hdr', tex: this.post.hdr?.texture ?? null },
+      { name: 'atlas', tex: atlas, shadow: true },
+    ], boot ? 'boot' : 'rec');
+    if (boot) BOOT_PROBES.push(res); else perfmon.recorder.probeDone(res);
+    const g = globalThis as unknown as { __GENESIS_PROBES__?: ProbeResult[] };
+    (g.__GENESIS_PROBES__ ??= []).push(res);
+    console.info(probeLine(res));
+  }
+
   render(view: WorldView, pose: CameraPose, dt: number, time: number): void {
     const t0 = performance.now();
     const r = this.three;
@@ -373,6 +389,8 @@ export class Renderer {
     this.frameNo++;
     gpuMem.tick();
     ringTick();
+    // ROADMAP step 2 (`?gpuprobe=1`): trivial copies timed at boot and while the perf report records (gpuprobe.ts)
+    if (GPU_PROBE) this.gpuProbe();
     // ── camera at the origin ──
     const cam = this.camera;
     cam.position.set(0, 0, 0);

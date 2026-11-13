@@ -9,8 +9,14 @@
 // percentiles, hitches over 50 ms with what was happening in them, GPU ms per pass, canvas / DPR / preset and the
 // GPU's renderer string. Costs nothing unless recording (the hooks are one branch).
 
-import { perfSwitchLine } from './perfswitch.ts';
+import { perfSwitch, perfSwitchLine } from './perfswitch.ts';
 import { gpuMem } from './gpumem.ts';
+import { BOOT_PROBES, GPU_PROBE, probeLine, type ProbeResult } from './gpuprobe.ts';
+import { FREEZE, freezeLine } from './freeze.ts';
+
+// ROADMAP-60FPS step 1: `?gputimer=0` records without the EXT_disjoint_timer_query TIME_ELAPSED queries (on ANGLE-Metal
+// they are summed command-buffer spans, and may themselves cost: the A/B says how much)
+const GPU_TIMER = perfSwitch('gputimer', true);
 
 declare const __GENESIS_BUILD__: string | undefined;
 /** the commit + build time vite.config.ts stamps into the bundle ('dev' when run from source) */
@@ -51,6 +57,8 @@ interface FrameRec {
   gpu: Float64Array;
   /** GPU ms per named pass inside the 'scene' and 'post' groups (perfmon.mark) */
   sub: Map<string, number>;
+  /** (gpuprobe) the probe ran in this frame, or in the one before (its interval holds the probe): left out of the stats */
+  probe: boolean;
 }
 
 interface TimerExt { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number }
@@ -294,10 +302,25 @@ export class PerfRecorder {
   /** the GL context whose passes are timed (null: no GPU column) */
   attach(gl: WebGL2RenderingContext | null): void {
     this.gl = gl;
-    try { this.ext = gl ? (gl.getExtension('EXT_disjoint_timer_query_webgl2') as TimerExt | null) : null; } catch { this.ext = null; }
+    try { this.ext = gl && GPU_TIMER ? (gl.getExtension('EXT_disjoint_timer_query_webgl2') as TimerExt | null) : null; } catch { this.ext = null; }
   }
 
   get hasGpuTimer(): boolean { return !!this.ext; }
+
+  /** (gpuprobe, ROADMAP step 2) probes taken while recording; one at the start, then one every 5 s */
+  private probes: ProbeResult[] = [];
+  private lastProbe = -1e9;
+  private probeSkipNext = false;
+  /** the renderer asks at the top of its frame: is a GPU probe due now? */
+  probeDue(): boolean { return GPU_PROBE && this.recording && !!this.cur && performance.now() - this.lastProbe >= 5000; }
+  /** a probe ran in this frame: keep its result; this frame and the next (whose interval holds it) leave the stats */
+  probeDone(res: ProbeResult): void {
+    this.lastProbe = performance.now();
+    res.t = (this.lastProbe - this.t0) / 1000;
+    this.probes.push(res);
+    if (this.cur) this.cur.probe = true;
+    this.probeSkipNext = true;
+  }
 
   start(ms: number, onDone?: (text: string) => void): void {
     this.frames = [];
@@ -314,6 +337,9 @@ export class PerfRecorder {
     this.report = '';
     this.glTrace.reset();
     this.syncMs = new Map();
+    this.probes = [];
+    this.lastProbe = -1e9;
+    this.probeSkipNext = false;
     this.glTrace.slot = 'other';
     try { if (this.gl && !/[?&]gltrace=0(&|$)/.test(globalThis.location?.search ?? '')) { this.glTrace.install(this.gl); this.wrapThree(); } } catch { /* untraced */ }
     this.onDone = onDone ?? null;
@@ -373,7 +399,8 @@ export class PerfRecorder {
   /** the start of a frame being recorded (perfmon.frameStart) */
   frameBegin(): void {
     if (!this.recording) return;
-    this.cur = { t: 0, iv: 0, work: 0, slots: new Float64Array(this.slotNames.length), draws: 0, tris: 0, shadowTris: 0, built: 0, programs: 0, alt: 0, moved: 0, speed: 0, note: '', gpu: new Float64Array(GPU_SLOTS.length).fill(-1), sub: new Map() };
+    this.cur = { t: 0, iv: 0, work: 0, slots: new Float64Array(this.slotNames.length), draws: 0, tris: 0, shadowTris: 0, built: 0, programs: 0, alt: 0, moved: 0, speed: 0, note: '', gpu: new Float64Array(GPU_SLOTS.length).fill(-1), sub: new Map(), probe: this.probeSkipNext };
+    this.probeSkipNext = false;
   }
 
   /** the end of a frame (perfmon.frameEnd): its interval, the main thread's ms and slots, and the app's context */
@@ -434,17 +461,42 @@ export class PerfRecorder {
 
   /** the report text (compact, for pasting) */
   compose(): string {
-    const F = this.frames.slice(1);
+    const all = this.frames.slice(1);
+    // (gpuprobe) the probe's frames (and the next one, whose interval holds it) are left out of every statistic
+    const F = all.filter((r) => !r.probe);
     const L: string[] = [];
     const env = this.env;
-    const dur = F.length ? (F[F.length - 1].t - F[0].t + F[0].iv) / 1000 : 0;
-    L.push(`GENESIS perf report v1 · ${new Date().toISOString().slice(0, 19)}Z · ${f1(dur)} s · ${F.length} frames · build ${BUILD_STAMP}`);
-    if (env) L.push(`gpu: ${env.gpu} | preset ${env.preset} | canvas ${env.canvas} | dpr ${env.dpr}${env.extra ? ' | ' + env.extra : ''}`);
-    L.push(`perf fixes (A/B switches, effective): ${perfSwitchLine() || 'none'}`);
-    if (typeof navigator !== 'undefined') L.push(`ua: ${navigator.userAgent.replace(/\s+/g, ' ').slice(0, 160)} | cores ${navigator.hardwareConcurrency ?? '?'}`);
+    const dur = all.length ? (all[all.length - 1].t - all[0].t + all[0].iv) / 1000 : 0;
+    L.push(`GENESIS perf report v2 · ${new Date().toISOString().slice(0, 19)}Z · ${f1(dur)} s · ${F.length} frames${all.length > F.length ? ` (+${all.length - F.length} probe frames left out)` : ''} · build ${BUILD_STAMP}`);
     if (!F.length) { L.push('no frames recorded'); return L.join('\n'); }
     const iv = F.map((r) => r.iv), wk = F.map((r) => r.work);
     const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / Math.max(1, a.length);
+    // ROADMAP step 1 — the HEADLINE: fps, interval p50 / p95, the main thread's own share, and long-task ms the frame's
+    // own main work does not explain (the page waiting on something else: GC, other tasks, the GPU process)
+    {
+      const lt = this.longTasks;
+      let ltAll = 0, ltOut = 0;
+      for (const x of lt) {
+        let inMain = 0;
+        for (const r of all) { const a = Math.max(x.t, r.t - r.work), b = Math.min(x.t + x.d, r.t); if (b > a) inMain += b - a; }
+        ltAll += x.d; ltOut += Math.max(0, x.d - inMain);
+      }
+      const wall = Math.max(1e-3, dur * 1000);
+      const workAll = all.reduce((a, r) => a + r.work, 0);
+      L.push(`HEADLINE: fps ${f1(1000 / Math.max(1e-3, mean(iv)))} | interval p50 ${f1(pct(iv, 0.5))} p95 ${f1(pct(iv, 0.95))} ms | main ${f1(mean(wk))} ms/frame = ${Math.round((100 * workAll) / wall)}% of wall (the rest waits: GPU / GPU process / vsync) | long tasks ${lt.length}, ${Math.round(ltAll)} ms, NOT in main ${Math.round(ltOut)} ms = ${f1(ltOut / (wall / 1000))} ms/s`);
+    }
+    L.push('NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps');
+    if (env) L.push(`gpu: ${env.gpu} | preset ${env.preset} | canvas ${env.canvas} | dpr ${env.dpr}${env.extra ? ' | ' + env.extra : ''}`);
+    L.push(`perf fixes (A/B switches, effective): ${perfSwitchLine() || 'none'}`);
+    {
+      const pm = (globalThis.performance as unknown as { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
+      const dm = typeof navigator !== 'undefined' ? (navigator as unknown as { deviceMemory?: number }).deviceMemory : undefined;
+      L.push(`machine (fill in from Activity Monitor): memory pressure colour ___ | swap used ___ GB | GPU process ___ MB | this tab ___ MB | separate Chrome instance yes/no ___ || page: js heap ${pm ? `${Math.round(pm.usedJSHeapSize / 1e6)} MB` : '?'}${dm ? ` | deviceMemory ${dm} GB` : ''}`);
+    }
+    if (typeof navigator !== 'undefined') L.push(`ua: ${navigator.userAgent.replace(/\s+/g, ' ').slice(0, 160)} | cores ${navigator.hardwareConcurrency ?? '?'}`);
+    // ROADMAP step 2 diagnostics: the GPU probe (boot and while recording) and the freeze state
+    if (GPU_PROBE) for (const p of [...BOOT_PROBES, ...this.probes]) L.push(probeLine(p));
+    if (FREEZE.on) L.push(freezeLine());
     L.push(`frame ms: p50 ${f1(pct(iv, 0.5))} p95 ${f1(pct(iv, 0.95))} p99 ${f1(pct(iv, 0.99))} max ${f1(Math.max(...iv))} | fps ${f1(1000 / Math.max(1e-3, mean(iv)))} | >20ms ${iv.filter((x) => x > 20).length} >33ms ${iv.filter((x) => x > 33.4).length} >50ms ${iv.filter((x) => x > 50).length}`);
     L.push(`main ms: mean ${f1(mean(wk))} p95 ${f1(pct(wk, 0.95))} max ${f1(Math.max(...wk))}`);
     const sl = this.slotNames.map((n, i) => [n, mean(F.map((r) => r.slots[i])), pct(F.map((r) => r.slots[i]), 0.95)] as [string, number, number]).filter((x) => x[1] >= 0.05);
@@ -460,7 +512,7 @@ export class PerfRecorder {
         const parts = names.map((n) => { const v = F.map((r) => r.sub.get(n) ?? -1).filter((x) => x >= 0); return `${n} ${f1(mean(v))}/${f1(pct(v, 0.95))}`; });
         L.push(`gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): ${parts.join(' · ')}`);
       }
-    } else L.push(`gpu ms: ${this.ext || this.disjoint ? 'no results' : 'no timer query in this browser'}`);
+    } else L.push(`gpu ms: ${!GPU_TIMER ? 'off (?gputimer=0)' : this.ext || this.disjoint ? 'no results' : 'no timer query in this browser'}`);
     if (this.syncMs.size) {
       const n = Math.max(1, this.frames.length);
       L.push(`pass ms (passsync: gl.finish per pass, mean per frame): ${[...this.syncMs].map(([k, v]) => `${k} ${f1(v / n)}`).join(' · ')}`);

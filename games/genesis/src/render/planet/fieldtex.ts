@@ -37,6 +37,7 @@ import type { FieldName } from '../../sim/types.ts';
 import type { PlanetView } from '../../client/worldview.ts';
 import { surfaceGradients } from '../../sim/grid/surface.ts';
 import { CityLights } from './citylights.ts';
+import { FREEZE } from '../freeze.ts';
 import { BASE_PACK } from '../../data/index.ts';
 import { FIELD_ROW, FieldPacker, SOURCES, TEX_NAMES, type PackReply, type PackRequest, type TexName } from './fieldpack.ts';
 
@@ -218,6 +219,8 @@ export class FieldTextures {
 
   /** upload whatever changed since the last call (or land the worker's job); true if heights / water changed */
   update(): boolean {
+    // (`?freeze=1`, ROADMAP step 2) a frozen world uploads no field texture
+    if (FREEZE.active) return false;
     const g0 = this.geomVersion;
     if (!this.job) {
       const dirty: TexName[] = [];

@@ -10,6 +10,7 @@
 import { DataTexture, LinearFilter, RGBAFormat, RepeatWrapping, ClampToEdgeWrapping, SRGBColorSpace, UnsignedByteType, type IUniform } from 'three';
 import type { Vector3 } from 'three';
 import { newHit, type IcoGrid } from '../../sim/grid/icogrid.ts';
+import { FREEZE } from '../freeze.ts';
 
 /** texture size for a grid of frequency n: ~1.3 texels per cell spacing at the equator (the texels are interpolated
  * between cells, and the texture is filtered), 256..1024 wide */
@@ -74,6 +75,8 @@ export class OverlayMap {
    * Rows not yet built stay transparent.
    */
   fill(rgba: Uint8Array): void {
+    // (`?freeze=1`, ROADMAP step 2) a frozen world uploads no overlay
+    if (FREEZE.active) return;
     const { data, cells, wts } = this;
     const n = Math.min(this.builtRows * this.w, this.w * this.h);
     for (let i = 0; i < n; i++) {

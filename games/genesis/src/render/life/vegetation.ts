@@ -23,6 +23,7 @@
 
 import { uploadPrefix } from '../upload.ts';
 import { ringify, ringMark, ringOf } from '../bufring.ts';
+import { FREEZE } from '../freeze.ts';
 import {
   BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, MeshStandardMaterial, ShaderMaterial, Vector3, Vector4,
   type IUniform, type Texture,
@@ -1226,6 +1227,8 @@ export class Vegetation {
       const want = Math.min(2.5, Math.max(0.3, 0.35 + speed / 7));
       WIND_K.value += (want - WIND_K.value) * 0.02;
     }
+    // (`?freeze=1`, ROADMAP step 2) frozen: no far flushRanges, no near rebuilds, no prefetch (the instances stay)
+    if (FREEZE.active) return;
     // (the scatter's own fields — tree, shrub, burnt, species — drop only the cells around a changed value: below)
     const stamp = `${this.density}|${PLANT_PROBE.version}`;
     // PERF F9: a new ground drops only the cached cells whose inputs changed (below), not the whole cache

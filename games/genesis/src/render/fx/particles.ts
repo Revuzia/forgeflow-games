@@ -29,6 +29,7 @@ import {
   type WebGLRenderer, type WebGLRenderTarget, type Scene,
 } from 'three';
 import { putGrowable } from '../upload.ts';
+import { FREEZE } from '../freeze.ts';
 import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 
@@ -479,6 +480,8 @@ export class Particles {
 
   /** rebuild the instance buffers for a new emitter list (not per frame) */
   setEmitters(list: FxEmitter[]): void {
+    // (`?freeze=1`, ROADMAP step 2) a frozen world keeps its emitters
+    if (FREEZE.active) return;
     let n = 0;
     for (const e of list) n += e.count;
     const origin = new Float32Array(Math.max(1, n) * 3), wind = new Float32Array(Math.max(1, n) * 3), param = new Float32Array(Math.max(1, n) * 4), idx = new Float32Array(Math.max(1, n) * 2);

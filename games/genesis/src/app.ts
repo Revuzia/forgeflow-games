@@ -49,6 +49,7 @@ import { store } from './ui/dom.ts';
 import { wantTitle, hasPlayed, markPlayed } from './ui/title.ts';
 import { humanize, tollOf } from './ui/words.ts';
 import { perfmon } from './render/perfmon.ts';
+import { FREEZE } from './render/freeze.ts';
 import { encodeThumb, cpuCanvas, canvasJpegURL, thumbOfFrame, warmThumbWorker } from './client/thumbjpeg.ts';
 /** save pictures that came too late for their save (test surface, shot scripts) */
 export const THUMB_STATS = { late: 0, lastLate: false };
@@ -761,6 +762,8 @@ export class App implements UiHost {
     // the frame rate shown is the true one (dt is clamped for the camera and the clock, the rate is not)
     if (raw > 0) { this.frameSec = raw; this.fps = this.fps * 0.85 + (1 / raw) * 0.15; if (1 / raw < this.fps * 0.5) this.fps = 1 / raw; }
     perfmon.frameStart(now);
+    // (PERF `?freeze=1`, ROADMAP step 2: render/freeze.ts) once the world is frozen the sim runs at speed 0
+    if (FREEZE.active && this.sim.view.speed !== 0) this.sim.setSpeed(0);
     try {
       const view = this.sim.view;
       perfmon.begin('view');

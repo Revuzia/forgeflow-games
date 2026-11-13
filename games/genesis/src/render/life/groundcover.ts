@@ -21,6 +21,7 @@
 //     Ground cover casts no shadows (too small to matter at the cascade resolutions).
 
 import { uploadPrefix } from '../upload.ts';
+import { FREEZE } from '../freeze.ts';
 import { Color, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, DynamicDrawUsage, type IUniform } from 'three';
 import type { PlanetView } from '../../client/worldview.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
@@ -496,6 +497,8 @@ export class GroundCover {
 
   /** refresh instances around the camera (body frame, m); quick when the camera has not moved */
   update(pv: PlanetView, camBody: Vector3, frame: number): void {
+    // (`?freeze=1`, ROADMAP step 2) frozen: the cover keeps its instances
+    if (FREEZE.active) return;
     // (the dev probe's crop remap: rebuild everything, near and far)
     if (PLANT_PROBE.version !== this.probeV) { this.probeV = PLANT_PROBE.version; this.cache.clear(); this.stale.clear(); this.farCache.clear(); this.lastFrame = -1e9; this.farLastFrame = -1e9; }
     let stamp = '';

@@ -8,6 +8,7 @@
 import { CubeTexture, DataTexture, LinearFilter, RGBAFormat, UnsignedByteType, ClampToEdgeWrapping } from 'three';
 import type { IcoGrid } from '../../sim/grid/icogrid.ts';
 import { newHit } from '../../sim/grid/icogrid.ts';
+import { FREEZE } from '../freeze.ts';
 
 export class DirFieldCube {
   readonly size: number;
@@ -66,6 +67,8 @@ export class DirFieldCube {
    * A null field leaves the channel at `fallback`.
    */
   update(fields: (ArrayLike<number> | null)[], scale: number[] = [1, 1, 1, 1], bias: number[] = [0, 0, 0, 0], fallback: number[] = [0, 0, 0, 0]): void {
+    // (`?freeze=1`, ROADMAP step 2) a frozen world uploads no direction texture
+    if (FREEZE.active) return;
     const per = this.size * this.size;
     const cells = this.cells, w = this.weights;
     for (let face = 0; face < 6; face++) {

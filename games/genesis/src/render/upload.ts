@@ -5,12 +5,15 @@
 import { BufferAttribute, InstancedBufferAttribute, Texture } from 'three';
 import type { BufferGeometry, InterleavedBufferAttribute, WebGLRenderer } from 'three';
 import { BUF_RING, ringDrop, ringGeo, ringMark } from './bufring.ts';
+import { FREEZE } from './freeze.ts';
 
 type Attr = BufferAttribute | InstancedBufferAttribute;
 
 /** mark items [0, count) of `a` for upload (nothing when count is 0) */
 export function uploadPrefix(a: Attr | InterleavedBufferAttribute | null | undefined, count: number): void {
   if (!a || count <= 0) return;
+  // (`?freeze=1`, ROADMAP step 2) a frozen world uploads nothing (bodies / boats / camps / roads / cover keep their GPU data)
+  if (FREEZE.active) return;
   // (PERF s16) a ringed attribute uploads through its next buffer (bufring.ts)
   if (ringMark(a, 0, Math.min((a as Attr).array.length, count * a.itemSize))) return;
   const b = a as Attr;

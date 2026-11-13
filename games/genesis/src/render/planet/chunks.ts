@@ -35,6 +35,7 @@ import {
 import { capGap, shadowReach } from './shadowreach.ts';
 import { RING_N, ringFrame } from '../bufring.ts';
 import { perfSwitch } from '../perfswitch.ts';
+import { FREEZE, freezeLandTick } from '../freeze.ts';
 
 export { PATCH_RES };
 
@@ -1153,13 +1154,15 @@ export class ChunkLOD {
   }
 
   select(ctx: ChunkSelectContext): Patch[] {
+    // (`?freeze=1`, ROADMAP step 2) landing has converged once nothing landed, queued or built for a while: then it stops
+    freezeLandTick(this.ready.length > 0 || this.pending.size > 0 || this.builtThisFrame > 0);
     this.builtThisFrame = 0;
     this.curFrame = ctx.frame;
     this.buildBudgetNow = ctx.buildBudget;
     this.buildMsNow = ctx.buildMs ?? 0;
     this.buildT0 = performance.now();
     this.stats.horizonCulled = 0;
-    if (this.port || this.ready.length > 0) this.landReady();
+    if (!FREEZE.active && (this.port || this.ready.length > 0)) this.landReady();
     const out: Patch[] = [];
     const cam = ctx.camBody;
     const rc = cam.length();

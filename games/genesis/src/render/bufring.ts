@@ -13,6 +13,7 @@
 import { BufferAttribute, InstancedBufferAttribute } from 'three';
 import type { BufferGeometry, InstancedMesh, Mesh } from 'three';
 import { perfSwitch } from './perfswitch.ts';
+import { FREEZE } from './freeze.ts';
 
 export const BUF_RING = perfSwitch('bufring', true);
 /** GPU buffers per ringed attribute: the members rotate at most once a frame, so one written now was last drawn N frames ago */
@@ -147,6 +148,8 @@ export function ringify(mesh: Mesh, names: string[]): void {
 export function ringMark(a: object | null | undefined, start: number, count: number): boolean {
   const r = a ? RINGS.get(a) : undefined;
   if (!r) return false;
+  // (`?freeze=1`) a frozen world uploads nothing: the mark is dropped (the GPU keeps what it has)
+  if (FREEZE.active) return true;
   r.mark(start, count);
   return true;
 }
