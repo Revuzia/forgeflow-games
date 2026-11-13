@@ -160,6 +160,37 @@
     "L": 28,
     "C": 12,
     "k": 0.6
+   },
+   {
+    "why": "u3 crown break: the cream cowl round the neck a deep oxblood, so the head reads ringed from above (box x cloth roughness x pale texels; the head and mask, the cards lane's, excluded by a ring)",
+    "boxes": [
+     [
+      -0.42,
+      -0.7,
+      1.62,
+      0.42,
+      0.75,
+      2.0
+     ]
+    ],
+    "rough": [
+     0.84,
+     1.0
+    ],
+    "minL": 33,
+    "notCyls": [
+     [
+      0.02,
+      -0.02,
+      0,
+      0.15,
+      1.85,
+      2.3
+     ]
+    ],
+    "hex": "#B30300",
+    "L": 30,
+    "C": 12
    }
   ],
   "reserveModes": {
@@ -419,38 +450,47 @@
  "ardit": {
   "zones": [
    {
-    "why": "U7 crown: the cream helm a periwinkle-blued steel, darker than the pauldrons (L* 52 -> 40) and apart from Vashil's paler lilac hood",
+    "why": "u3 crown: the helm a slate blue (CIELAB h ~265), out of the lilac family of Vashil's hood and Dunsom's hat (verify3_q: the r2f periwinkle rendered lilac, h 304, dE76 8)",
     "parts": [
      "helm"
     ],
-    "hex": "#6D6CF2",
-    "L": 40,
-    "C": 14
+    "hex": "#3F6F9F",
+    "L": 42,
+    "C": 36
    },
    {
-    "why": "U7: the cream pauldrons and their tiers a pale periwinkle lacquer (the shoulders the game camera sees first)",
+    "why": "u3: pauldrons and tiers a paler slate lacquer (the shoulders the game camera sees first)",
     "parts": [
      "pauldron_R",
      "pauldron_L",
      "tier_R",
      "tier_L"
     ],
+    "hex": "#3F6F9F",
+    "L": 54,
+    "C": 24
+   },
+   {
+    "why": "u3: the signature periwinkle moves to the coat (mid body), so the crown leaves the lilac family and sigPct holds",
+    "parts": [
+     "coat"
+    ],
     "hex": "#6D6CF2",
-    "L": 62,
-    "C": 12
+    "L": 42,
+    "C": 18
    }
   ]
  },
  "ilsheta": {
   "zones": [
    {
-    "why": "U7 crown: the pale hood the signature green at its own value (the chimney stays grey stone)",
+    "why": "U7/u3 crown: the pale hood the signature green, darker and stronger than r2f (L 46 C 22 read sage-cream at the game camera)",
     "parts": [
      "hood"
     ],
     "hex": "#74B300",
-    "L": 46,
-    "C": 22
+    "L": 42,
+    "C": 32
    }
   ]
  },
@@ -482,5 +522,56 @@
   "reserveModes": {
    "harm": "sat"
   }
+ },
+ "hesmi": {
+  "zones": [
+   {
+    "why": "u3 crown break: the cream hood a deep signature violet (box over the hood x cloth roughness; the face wrap and eye band excluded, no part map)",
+    "boxes": [
+     [
+      -0.4,
+      -0.45,
+      1.86,
+      0.4,
+      0.32,
+      2.32
+     ]
+    ],
+    "rough": [
+     0.8,
+     1.0
+    ],
+    "notBoxes": [
+     [
+      -0.17,
+      -0.5,
+      1.84,
+      0.17,
+      -0.14,
+      2.14
+     ]
+    ],
+    "hex": "#5C0EC2",
+    "L": 34,
+    "C": 24
+   }
+  ]
+ },
+ "odrum": {
+  "zones": [
+   {
+    "why": "u3 crown break: the grey felt cap a deep signature olive, darker than the honey mask (the mask itself untouched)",
+    "parts": [
+     "cap"
+    ],
+    "hex": "#B3A400",
+    "L": 36,
+    "C": 22
+   }
+  ],
+  "reserveModes": {
+   "harm": "sat"
+  },
+  "reserveSat": 0.25
  }
 }

@@ -160,7 +160,8 @@ def grade(sid: str, glb: str | None = None, dry: bool = False, fresh: float = 0.
             for q in range(84, 59, -4):
                 shutil.copyfile(glb, trial)
                 r = subprocess.run([node(), GRADE, trial, "--q", str(q), "--reserve-cap", str(aim), "--reserve-margin",
-                                    str(margin)] + [x for k, v in rec.get("reserveModes", {}).items() for x in ("--reserve-mode", f"{k}={v}")] + tint, cwd=GAME, capture_output=True, text=True)
+                                    str(margin)] + [x for k, v in rec.get("reserveModes", {}).items() for x in ("--reserve-mode", f"{k}={v}")]
+                               + (["--reserve-sat", str(rec["reserveSat"])] if "reserveSat" in rec else []) + tint, cwd=GAME, capture_output=True, text=True)
                 if r.returncode:
                     raise SystemExit(r.stderr[-1200:])
                 if os.path.getsize(trial) <= max(min(before + 24 * 1024, 1160 * 1024), before) or q <= 60:
