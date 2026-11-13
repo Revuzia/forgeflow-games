@@ -68,8 +68,9 @@ MJ = "runtime/3d/royale/maps.js"
 PLANTS = {
     "tiny-homes": ({"home-size", "storeys"}, [(TG, r'house_s: \{ use: "house", gen: "house", dims: \[[^\n]*?\], floors: \[[^\]]*\]',
                                                  'house_s: { use: "house", gen: "house", dims: [[7.5, 7.5], [10, 7.5]], floors: [1]')]),
-    # (pass 2) the plan's control: the audit's furnishing back (the VIEW_WANT top-up alone: no area quota, no centre-of-room groups) -> coverage AND density
-    "sparse": ({"coverage", "density"}, [(HG, r"export const AREA_QUOTA = true;", "export const AREA_QUOTA = false;"),
+    # (pass 2) the plan's control: the audit's furnishing back (the VIEW_WANT top-up alone: no area quota, no centre-of-room groups) -> density. It cannot fail
+    # coverage on this build: the x1.15 furniture alone holds the median at 27.6 % (8.4 % of rooms under 15 %; measured 2026-11-13) - coverage's control is 'bare'
+    "sparse": ({"density"}, [(HG, r"export const AREA_QUOTA = true;", "export const AREA_QUOTA = false;"),
                                          (HG, r"export const CENTRE_GROUPS = true;", "export const CENTRE_GROUPS = false;")]),
     # (the quota alone off leaves coverage at ~28 %: the centre groups and the x1.15 furniture carry it - coverage's own plant is the audit's furnishing back)
     "bare": ({"coverage", "density"}, [(HG, r"export const AREA_QUOTA = true;", "export const AREA_QUOTA = false;"),
