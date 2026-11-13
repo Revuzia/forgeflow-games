@@ -384,7 +384,10 @@ const HEAL_CHAIN_S = 1.2;    // … and not when the same target was healed this
 // (max2 SFX-1b: 3.0 -> 3.5) round 1's live captures put the master at -19.6 to -20.2 LUFS on 3 of 5 (tokens -18 +/- 1.5):
 // in a quiet stretch the master is mostly the ambience bed and the music, so an sfx-only lift moved it 0.4 dB for 2.4 dB
 // of sfx (and cost a teamfight seat the announcer's 3 dB margin); the whole mix's makeup moves every seat alike
-const MIX_TRIM_DB = 3.5;     // the engine's mix makeup after the master volume, before the limiter (see `buses`)
+// max2 round 2 fix: 3.5 -> 3.2 after the louder impacts and the pan-law gain put the brawler seat (seed 3, Lisvel)
+// at -16.74 / -16.78 LUFS, 0.25 LU from the band's top, with the other seats at -17.8 to -18.3: the whole spread moves
+// down 0.3 LU, centred on the -18 token
+const MIX_TRIM_DB = 3.2;     // the engine's mix makeup after the master volume, before the limiter (see `buses`)
 // mix focus (max2 SFX-1b): the fighters' kits were under half of the heard sfx on a jungle-heavy seat (library camp
 // cues: c_cast_big, c_monster_fall, c_hit_magic, c_slam). A MOBA mix leads with the player's own hero: your fighter's
 // kit cues play OWN_KIT_DB over everyone else's, and a camp monster's own sounds (its casts, abilities, blows and fall;

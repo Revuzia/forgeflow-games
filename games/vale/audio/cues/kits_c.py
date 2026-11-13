@@ -269,7 +269,7 @@ CRACK_MIN_DB = -20.0         # a take already bright enough still gets its crack
 AIR_MAX_DB = -9.0            # the air never comes nearer the peak than this (no hiss on top of a hit)
 # cue id → (level scale of the solved crack / grit / air, band ratio, mode): found by audio/crack_search.py so every
 # fighter keeps >= ID_MIN_DIST_DB from every other in its slot (a dark fighter's identity is its darkness: its crack is
-# small). mode 'full': crack, grit and air; 'crack': the onset crack and grit only (no air tail); 'plain': the take as
+# small). mode 'full': crack, grit and air; 'crack': the onset crack and grit only (no air tail); 'air': the air tail only; 'plain': the take as
 # the recipe made it (no crack, no take shape). Absent: (1.0, 1.0, 'full'). An optional 4th value is the grit's length
 # (s, default GRIT_S): a longer grit is the material's splinter / crumble / tinkle running on behind the crack (a dark
 # take's body otherwise drowns a short grit's 2-6 kHz share), its level cap GRIT_LONG_TOP instead of GRIT_TOP.
@@ -425,7 +425,7 @@ def with_crack(x: np.ndarray, fid: str, v: int, cid: str) -> np.ndarray:
         xs = np.vstack([xs[0], xs[0]])
     if pr != 1.0:
         xs = _lower(xs, pr)
-    if cid not in EASE_SKIP:
+    if (EASE_TUNE[cid][0] if cid in EASE_TUNE else cid not in EASE_SKIP):
         xs = _tight(xs)                  # the body starts on its blow (max2 round 2: see _tight)
     e = np.max(np.abs(xs), axis=0)
     i = int(np.argmax(e > e.max() * 0.01))
@@ -440,6 +440,10 @@ def with_crack(x: np.ndarray, fid: str, v: int, cid: str) -> np.ndarray:
     lc, lg, la = _place(n, crack, i), _place(n, grit, i + ns(0.004)), _place(n, air, i + ns(0.002))
     mid = xs.mean(axis=0)
     fl = 10 ** (CRACK_MIN_DB / 20)
+    if mode == 'air':                    # the air tail only (max2 round 2 fix: a dark hit's crack and grit cost its identity)
+        g_a = scale * max(fl * 0.5, _solve(mid, la, lambda m: _band_share(m, 6000.0), AIR_SHARE, 10 ** (AIR_MAX_DB / 20)))
+        side = g_a * la
+        return norm(xs + side[None, :] * np.array([1.0, 0.92])[:, None] + 0.08 * np.vstack([side, -side]))
     g_c = scale * max(fl, _solve(mid, lc, lambda m: _share(m), CRACK_ONSET, 0.8))
     mid = mid + g_c * lc
     g_g = scale * max(fl * 0.7, _solve(mid, lg, lambda m: _band_share(m, 2000.0, 6000.0), BITE_SHARE,
@@ -472,6 +476,12 @@ EASE_SKIP: set[str] = {
     # 1.6-2.2 ms in; Kemdo's eased auto put a sample peak 12 ms in on one take, past the snap)
     'f_odrum_hit', 'f_kemdo_attack_hit',
 }
+
+
+# per cue (max2 round 2 fix, audio/blow_search.py): (cut the attack ramp (_tight), ease dB or None) for a cue whose full
+# blow-first pass cost the identity gate but a partial one does not (a lighter ease keeps part of its swell); it overrides
+# EASE_SKIP for that cue
+EASE_TUNE: dict[str, tuple[bool, float | None]] = {}
 
 
 def _env2(x: np.ndarray) -> np.ndarray:
@@ -585,6 +595,8 @@ def snap_post(y: np.ndarray, fid: str, v: int, cid: str = '', ceiling: float = -
     that puts the window's peak on SNAP_PEAK_DBFS. After the mastering, so its soft clip colours the body exactly as it
     did (a transient added before it moved the clip's harmonics and so the fighter's spectrum)."""
     eased = (cid not in EASE_SKIP) if ease is None else ease     # the blow first (_ease), around the snap
+    if ease is None and cid in EASE_TUNE:
+        eased, ease_db = EASE_TUNE[cid][1] is not None, (EASE_TUNE[cid][1] or ease_db)
     if eased:
         y = _ease(y, db=ease_db)
     tune = SNAP_TUNE.get(cid, (SNAP_MARGIN_DB, SNAP_MAX_MS))
