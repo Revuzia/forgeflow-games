@@ -114,7 +114,7 @@
  * max abs sqrt; quarter turns from exact tables (no sin / cos / atan).
  */
 
-export const VERSION = 6;                  // 6: Wave 9 round 1 (lane R1A, LC-91 + W9) - door leaves (H.doorLeaves: a closed and an open slab collider per leaf, swing discs kept clear of furniture / floor loot, the swing side's door zone 1.2 m), phase 5 judged and searched with the accurate (third-person camera + eye) model, the eye-only search its fallback; 5: Wave 8 fix round (lane K1) - phase 5 (every room shows >= 3 of its own pieces to the doorway eye), the outline door keeps off straight-across / thin-opposite edges, P.near + DOOR_OUT (no street / back door onto an alley), a ruin's wreckage (remnants, rubble, scorch, cracks, moss, weeds, broken panes) from its own stream; 4: stage B (lane I1) - meshData / translateY exports, the machine's exact colliders, no clutter staircase, a room reads from its own pieces; 3: round 3 (lane H6) - themes, pitched roofs (house.roofs / gables, roof ramps), relief, dense layouts; 2: round 2 (lane H4) - uses, storey heights, shells, dressing, rooms[].walk / anchor / views, furniture mount / on
+export const VERSION = 7;                  // 7: Wave 10 round 1 (lane R1A) - homes: room programme (living + kitchen + bedroom + bath), rooms >= 2 cells wide, furniture x FURN_K 1.15, the area quota (>= 6 pieces a lived room), centre groups, one closed kitchen run with wall units and a hood, bath sets, filler caps, loot by room area; 6: Wave 9 round 1 (lane R1A, LC-91 + W9) - door leaves (H.doorLeaves: a closed and an open slab collider per leaf, swing discs kept clear of furniture / floor loot, the swing side's door zone 1.2 m), phase 5 judged and searched with the accurate (third-person camera + eye) model, the eye-only search its fallback; 5: Wave 8 fix round (lane K1) - phase 5 (every room shows >= 3 of its own pieces to the doorway eye), the outline door keeps off straight-across / thin-opposite edges, P.near + DOOR_OUT (no street / back door onto an alley), a ruin's wreckage (remnants, rubble, scorch, cracks, moss, weeds, broken panes) from its own stream; 4: stage B (lane I1) - meshData / translateY exports, the machine's exact colliders, no clutter staircase, a room reads from its own pieces; 3: round 3 (lane H6) - themes, pitched roofs (house.roofs / gables, roof ramps), relief, dense layouts; 2: round 2 (lane H4) - uses, storey heights, shells, dressing, rooms[].walk / anchor / views, furniture mount / on
 
 // ── constants ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 export const U = 2.5;                      // grid module (towngen CELL)
@@ -3052,7 +3052,7 @@ export function generate(parcel, opts) {
         let id = pool[qi++ % pool.length];
         if (tris[f] > TB - 700) id = ["dresser", "wallCab", "ottoman", "bookcaseLow", "shelf"][qi % 5];      // (a full storey: authored pieces, 20-60 triangles)
         if (fails.has(id)) { miss++; return; }
-        const q = tryWall(id, "corner", { tint: tintW, noView: true }) || freeAt(id);          // (a corner scan tries every wall spot: "center" only orders them differently)
+        const q = tryWall(id, "corner", { tint: tintW }) || freeAt(id);          // (a corner scan tries every wall spot: "center" only orders them differently)
         if (!q) { miss++; fails.add(id); return; }
         miss = 0;
       });
