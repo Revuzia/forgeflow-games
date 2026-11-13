@@ -207,7 +207,7 @@ export class Ambience {
         b.knobs[`lowF${s}`]?.set(170 + 480 * g * (0.4 + this.windN), now, 0.15);
         // a narrow band of noise holds a small fraction of the roar's energy: the whistle (the howl over ridges and
         // round the god's ears high up) needs a much larger gain to be heard, and rises with the gusts
-        b.knobs[`high${s}`]?.set(3.2 * (0.06 + t.windPitch) * Math.pow(gust, 1.5), now, 0.12);
+        b.knobs[`high${s}`]?.set(2.3 * (0.04 + t.windPitch) * Math.pow(gust, 1.5), now, 0.12);
         b.knobs[`highF${s}`]?.set(280 + 1400 * t.windPitch * (0.5 + 0.7 * g), now, 0.25);
         b.knobs[`highQ${s}`]?.set(3 + 16 * t.windPitch, now, 0.3);
       }

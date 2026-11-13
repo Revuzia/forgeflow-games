@@ -480,7 +480,9 @@ export class SceneProbe {
     const farS = 1 / (1 + (alt / 900) ** 2);
     const windN = clamp01(wind / 20);
     const altWind = smoothstep(15, 520, alt);
-    lay.wind = inAir * clamp01(0.14 + 0.55 * windN + 0.5 * altWind + 0.6 * stormWind);
+    // owner 2026-11-13: the wind was heard 'always', a heavy roar even in calm air near the ground. Calm, low air is now
+    // nearly silent; ordinary breezes stay soft (power curve); altitude and real storms still bring the full roar
+    lay.wind = inAir * clamp01(0.03 + 0.4 * Math.pow(windN, 1.6) + 0.5 * altWind + 0.6 * stormWind);
     lay.windPitch = clamp01(windN * 0.6 + altWind * 0.45 + stormWind * 0.4 + (temp < -5 ? 0.15 : 0));
     lay.gust = clamp01(0.25 + windN * 0.6 + stormWind * 0.5);
     // waves break at the waterline: as loud as it is near (a lake laps, the sea pounds; wind and storms raise it)
