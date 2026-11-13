@@ -1355,3 +1355,9 @@ long press frame-rate independent. Report after 1-2 verified.
   gpuprobe=1 (192x108): boot fresh-full 0.54 · fresh-64 0.15 · hdr 0.44 · atlas 0.88 ms/pass; rec 0.38/0.13/0.59/0.31;
   rec at 49 s 0.30/0.10/0.29/0.21 (that probe's queue drain held a whole 43 s SwiftShader frame: hence drain split out).
   Probe frames left out of the stats (+2). 0 page errors in all runs.
+- GATE check26 (final steps 1-2 code): npm run check 939/939 pass, exit 0; npm run build exit 0 (build-prod24.log).
+  MAC-TEST-PROTOCOL.md: new section 'ROADMAP steps 1-2' (separate Chrome instance, machine line, ABAB, rows base /
+  gpuprobe=1 / freeze=1&gpuprobe=1 still camera / gputimer=0).
+- HANDED BACK for the ship. NEXT (session 17 resumed or successor): read the owner's gpuprobe / freeze reports and pick
+  the branch (ROADMAP §2 step 2); then step 4 upsched, 6 hdrmerge, 7 orthodepth, 3 rtalias, 5 ringfence/lifesplit;
+  and trace the at-rest patch churn above (node: chunk soak with a still camera, count builtTotal per frame).
