@@ -38,10 +38,26 @@ if (opts.decals) await page.evaluate(() => {
   const fx = globalThis.__GENESIS_FX__.fx, dp = fx.decals;
   const vis = [...globalThis.__GENESIS_R__.planets.values()][0];
   const orig = dp.prepare.bind(dp);
+  // (the FX group is hidden while no FX runs: both decal paths check it; shown for this probe in both modes alike)
+  for (const k of ['prepareDecals', 'renderDecals']) { const o = fx[k].bind(fx); fx[k] = (...a) => { fx.group.visible = true; return o(...a); }; }
   dp.prepare = (...a) => {
+    // the ground point at the screen centre: the view's forward (body frame) from the body -> view rotation, the ray from
+    // the camera met with the sphere of the ground radius under the camera
     const c = vis.camBody, l = Math.hypot(c.x, c.y, c.z), g = l - globalThis.__GENESIS_R__.stats.altitude;
-    const mk = (type, r, cr, cg, cb, ca) => ({ type, x: c.x / l * g, y: c.y / l * g, z: c.z / l * g, r, ax: 0, ay: 0, az: 0, cr, cg, cb, ca, p0: r, p1: 0, p2: 0, p3: 0, q0: 0, q1: 0, q2: 0, q3: 0 });
-    dp.add(mk(5, 160, 0.2, 0.15, 0.1, 0.9)); dp.add(mk(8, 120, 1, 0.8, 0.3, 1)); dp.add(mk(10, 140, 1, 0.5, 0.2, 1)); dp.add(mk(7, 260, 1, 0.6, 0.6, 0.6));
+    const e = vis.uniforms.uBodyToView.value.elements;
+    const dx = -e[2], dy = -e[5], dz = -e[8];
+    const bq = c.x * dx + c.y * dy + c.z * dz, cq = l * l - g * g, disc = bq * bq - cq;
+    const t = disc > 0 ? -bq - Math.sqrt(disc) : 0;
+    const P = { x: c.x + dx * t, y: c.y + dy * t, z: c.z + dz * t };
+    globalThis.__DECAL_AT__ = { t, P };
+    const mk = (type, r, cr, cg, cb, ca) => ({ type, x: P.x, y: P.y, z: P.z, r, ax: 0, ay: 0, az: 0, cr, cg, cb, ca, p0: r, p1: 0, p2: 0, p3: 0, q0: 0, q1: 0, q2: 0, q3: 0 });
+    const up = { x: P.x / g, y: P.y / g, z: P.z / g };
+    const at = (d) => Object.assign(d, { ax: up.x, ay: up.y, az: up.z });
+    // scorch (over): p0 radius, p1 strength, p2 noise; FX light (tint + add): p0 reach, p1 power, p2 height, p3 falloff;
+    // crater (tint group 2)
+    dp.add(at(Object.assign(mk(5, 70, 1, 1, 1, 1), { p0: 60, p1: 0.8, p2: 3.3 })));
+    dp.add(at(Object.assign(mk(10, 90, 1, 0.55, 0.2, 1), { p0: 90, p1: 4e3, p2: 20, p3: 40 })));
+    dp.add(at(Object.assign(mk(16, 50, 1, 1, 1, 1), { p0: 40, p1: 0.8, p2: 2 })));
     return orig(...a);
   };
 });
@@ -55,6 +71,7 @@ for (; f < wait; f += 5) {
   if (st.active) break;
 }
 await page.evaluate(() => window.__GENESIS__.frames(3));
+console.log('decal at', JSON.stringify(await page.evaluate(() => globalThis.__DECAL_AT__ ?? null)));
 console.log('settled after', f, 'frames; freeze', JSON.stringify(await page.evaluate(() => globalThis.__GENESIS_FREEZE__)));
 await page.screenshot({ path: join(OUT, `${tag}-1.png`) });
 const st0 = await page.evaluate(() => ({ ...globalThis.__GENESIS_R__.stats }));

@@ -1426,3 +1426,15 @@ long press frame-rate independent. Report after 1-2 verified.
 - perfreport GlTrace (s17): an upload counts 'inside a pass' only if the NEXT draw goes into the same framebuffer (no
   bindFramebuffer between): one between the last draw into a target and the first into another splits nothing (that is
   where the uploads slot sits). tests/render-gltrace.test.ts updated.
+- GATE check28 (churn fix + steps 4, 6, 7 + detector): npm run check 944/944 pass, exit 0; npm run build exit 0
+  (build-prod26.log).
+- IMAGE A/B (dist44, medium 256x144 = 2 shadow cascades, babel town view, speed 0, LOOKED; s17f-*.log, freeze/*.png):
+  noise floor b1 vs b2 (two base runs) 3.22/255, b1-1 vs b1-2 (same run) 3.02. vs base: orthodepth=0 2.73,
+  hdrmerge=0 3.12, upsched=0 2.94 — all at/below the floor; diff images = foliage-sway / water specks, shadows (palm,
+  houses) identical. 0 page errors. (No decals in that view: hdrmerge re-checked with injected decals, below.)
+- UPSCHED A/B speed 1 (dist44): upsched=0: shadows bufferSubData x17 + scene x29 per frame, texSubImage in shadows /
+  scene / post, 'uploads inside a pass' 4.6/frame. upsched=1: ALL bufferSubData (x52, 0.42 MB) in the uploads slot,
+  texSubImage 4.3 of 6.6 there, inside a pass 2.1/frame (scene texSubImage2D x1.9 left = textures no owner schedules
+  yet: three's own BatchedMesh tables / others; next). SwiftShader main ms not comparable (41 vs 31, planets-slot noise).
+- probe-freeze.mjs --decals=1: patches the page's DecalPass.prepare to add 4 decals (scorch / ring / FX light / tint,
+  all 3 groups) at the ground point at the screen centre every frame. run-s17g.sh: dc1 / dc0 (hdrmerge=0) / dc2.
