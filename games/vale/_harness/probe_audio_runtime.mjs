@@ -49,6 +49,16 @@
 //     tones in place of the bed (200 Hz, 4 kHz, on the music bus). Gates: the engine reports the dead state while down
 //     and not after; the bed's > 2 kHz band falls >= 10 dB while down; the 200 Hz tone falls DEAD_DB (2.5-3.5 dB) and the
 //     4 kHz tone >= 20 dB (the 900 Hz low-pass); the bed's whole and high band come back within 3 dB after the respawn (the bed itself moves a dB or two between 8 s windows).
+//   node _harness/probe_audio_runtime.mjs pits [--queue rift_coop] [--seed N] [--window 24] [--out <json>]
+//     (ruling 37 round 2) the epic objectives' pit presences live: a whole-match capture rarely hears them (Longshade
+//     first spawns at 960 s; a 420 s capture never does). A real match (render off, autopilot), every objective camp
+//     spawned early (its spawnAt set to now, the sim's own spawn path), then the LISTENER (the engine's listener(), the
+//     camera focus a renderer would give) placed on each pit's edge (PIT_EDGE_M from the pit, where an emitter is at
+//     full). Per pit, --window s with the presence on, then --window s with it off (its emitter's gain node lifted out
+//     of the bus): the presence alone is the energy difference; music, ambience bus and the duck read per block (blocks
+//     under a fight or an announcer duck are dropped). Gates per pit: the presence >= PIT_UNDER_MUSIC_LU (12) under the
+//     music bus, the whole ambience bus there >= AMB_UNDER_MUSIC_LU (8) under it; reported: the bus without it, the
+//     presence's own short-term swell at its emitter (K-weighted, 3 s, p97 - p3).
 // Exit 0 = gates hold, 1 = a gate fails, 2 = the run itself failed. Reports → _harness/_reports/fw_CW2_runtime_<mode>.json.
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -60,7 +70,7 @@ import { holdHeavy } from './heavy_slot.mjs';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BASE = process.env.VALE_URL ?? 'http://localhost:5190';
 const args = process.argv.slice(2);
-const mode = args[0] === 'match' ? 'match' : args[0] === 'dead' ? 'dead' : 'sync';
+const mode = args[0] === 'match' ? 'match' : args[0] === 'dead' ? 'dead' : args[0] === 'pits' ? 'pits' : 'sync';
 const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
 const OUT = opt('--out', join(HERE, '_reports', `fw_CW2_runtime_${mode}.json`));
 const HITS = Number(opt('--hits', 50));
@@ -641,7 +651,94 @@ async function runDead() {
   return rep;
 }
 
-const rep = mode === 'sync' ? await runSync() : mode === 'dead' ? await runDead() : await runMatch();
+// ── the objectives' pit presences, live (ruling 37 round 2) ───────────────────────────────────────
+const PIT_EDGE_M = 10;            // the engine's AMB_INNER_M: an emitter is at full within this of its point
+const PIT_UNDER_MUSIC_LU = 12;    // ruling 37: a positional emitter on its point >= 12 LU under the music
+async function runPits() {
+  const WIN = Number(opt('--window', 24));
+  const { browser, page, logs } = await openFake(`/?dev=1&render=0&autopilot=1&autoflow=1${SEED ? `&seed=${SEED}` : ''}`);
+  const rep = { probe: 'probe_audio_runtime', mode: 'pits', queue: QUEUE, sessionSeed: SEED, windowS: WIN, err: null, pits: [] };
+  try {
+    await startMatch(page, QUEUE);
+    await page.waitForFunction(() => (window.__vale.state.match.value?.view.time ?? 0) > 15, null, { timeout: 180000, polling: 500 });
+    rep.rate = await page.evaluate(() => window.__valeAudio.graph.ctx.sampleRate);
+    rep.spawned = await page.evaluate(() => {
+      const W = window.__vale.state.match.value.sim.world;
+      const list = W.ext.camps?.list ?? [];
+      return list.filter((c) => c.def.objective).map((c) => { if (c.spawnAt > W.time) c.spawnAt = W.time; return c.def.id; });
+    });
+    await page.waitForFunction(() => { const v = window.__vale.state.match.value.view; return v.objectives.length > 0 && v.objectives.every((o) => o.alive); }, null, { timeout: 30000, polling: 250 });
+    // music, ambience bus (K-weighted, as the match mode) + each pit emitter's own gain node
+    await page.evaluate(() => {
+      const a = window.__valeAudio, g = a.graph, ctx = g.ctx;
+      const K = (src) => { const hs = ctx.createBiquadFilter(); hs.type = 'highshelf'; hs.frequency.value = 1681.974; hs.gain.value = 3.9998;
+        const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 38.135; hp.Q.value = -6.015; src.connect(hs); hs.connect(hp); return hp; };
+      const pits = [...a.pits.entries()];
+      window.__pitEm = Object.fromEntries(pits.map(([id, em]) => [id, em]));
+      const stems = [g.bus.music, g.bus.ambience, ...pits.map(([, em]) => em.gain)].map(K);
+      window.__pitNames = ['music', 'ambience', ...pits.map(([id]) => id)];
+      const N = stems.length * 2, merger = ctx.createChannelMerger(N);
+      stems.forEach((node, i) => { const sp = ctx.createChannelSplitter(2); node.connect(sp); sp.connect(merger, 0, 2 * i); sp.connect(merger, 1, 2 * i + 1); });
+      const proc = ctx.createScriptProcessor(4096, N, 1);
+      window.__pitCap = [];
+      proc.onaudioprocess = (ev) => { const ib = ev.inputBuffer, n = ib.length;
+        const row = [ctx.currentTime, a.ambDuck?.gain.value ?? 1, a.vduck?.get('ambience')?.gain.value ?? 1];
+        for (let s2 = 0; s2 < stems.length; s2++) { let ss = 0; for (let c = 0; c < 2; c++) { const d = ib.getChannelData(2 * s2 + c); for (let i = 0; i < n; i++) ss += d[i] * d[i]; } row.push(ss / n); }
+        window.__pitCap.push(row); };
+      const z = ctx.createGain(); z.gain.value = 0; merger.connect(proc); proc.connect(z); z.connect(ctx.destination);
+      window.__pitKeep = [proc, merger, z];
+    });
+    const names = await page.evaluate(() => window.__pitNames);
+    const objs = await page.evaluate(() => window.__vale.state.match.value.view.objectives.map((o) => ({ id: o.id, unit: o.unit, at: o.at })));
+    const mark = async () => page.evaluate(() => window.__valeAudio.graph.ctx.currentTime);
+    for (const o of objs) {
+      const at = { x: o.at[0] - PIT_EDGE_M, y: o.at[1] };   // the pit's edge on the west side (off the noon line's mid lane)
+      await page.evaluate((p) => { window.__valeAudio.listener(() => p); }, at);
+      await page.waitForTimeout(3000);                      // the emitters' placement glide (0.35 s) and a short-term window
+      const on = [await mark()]; await page.waitForTimeout(WIN * 1000); on.push(await mark());
+      await page.evaluate((id) => { const em = window.__pitEm[id]; try { em.gain.disconnect(window.__valeAudio.ambDuck); } catch { /* */ } }, o.id);
+      await page.waitForTimeout(1000);
+      const off = [await mark()]; await page.waitForTimeout(WIN * 1000); off.push(await mark());
+      await page.evaluate((id) => { const em = window.__pitEm[id]; em.gain.connect(window.__valeAudio.ambDuck); }, o.id);
+      const st = await page.evaluate(({ id }) => { const a = window.__valeAudio; const em = a.pits.get(id); return em ? { att: em.att, playing: !!em.src, cue: em.cue } : null; }, { id: o.id });
+      rep.pits.push({ ...o, listener: at, on, off, emitter: st });
+      log('pit', o.unit, JSON.stringify(st));
+    }
+    await page.evaluate(() => window.__valeAudio.listener(null));
+    const cap = await page.evaluate(() => window.__pitCap);
+    const blk = 4096 / rep.rate;
+    const clean = (r) => r[1] > 0.95 && r[2] > 0.95;          // no fight duck, no announcer duck
+    const lu = (rows, k) => LU(rows.reduce((acc, r) => acc + r[k], 0) / Math.max(1, rows.length));
+    const col = (n) => 3 + names.indexOf(n);
+    for (const p of rep.pits) {
+      const won = cap.filter((r) => r[0] >= p.on[0] && r[0] < p.on[1]), woff = cap.filter((r) => r[0] >= p.off[0] && r[0] < p.off[1]);
+      const con = won.filter(clean), coff = woff.filter(clean);
+      const mOn = lu(con, col('music')), aOn = lu(con, col('ambience')), mOff = lu(coff, col('music')), aOff = lu(coff, col('ambience'));
+      // the presence alone: the bus energy with it, less the bus without it, each against its own window's music
+      const eOn = 10 ** ((aOn - mOn) / 10), eOff = 10 ** ((aOff - mOff) / 10);
+      const pres = eOn > eOff ? -10 * Math.log10(eOn - eOff) : null;
+      const em = movAvg(con.map((r) => r[col(p.id)]), 35).map(LU).filter((x) => x > -90);
+      p.result = { cleanBlocksOn: con.length, cleanBlocksOff: coff.length, droppedOn: won.length - con.length, droppedOff: woff.length - coff.length,
+        busUnderMusicLU: r2(mOn - aOn), busWithoutPresenceUnderMusicLU: r2(mOff - aOff), presenceUnderMusicLU: pres === null ? 'below the bus noise' : r2(pres),
+        presenceShortTermSwellLU: em.length ? r2(pct(em, 97) - pct(em, 3)) : null, musicOn: r2(mOn), musicOff: r2(mOff), seconds: r2(con.length * blk) };
+      delete p.on; delete p.off;
+    }
+    rep.gates = {};
+    for (const p of rep.pits) {
+      const enough = p.result.cleanBlocksOn * blk >= WIN / 3 && p.result.cleanBlocksOff * blk >= WIN / 3;
+      rep.gates[`${p.unit}PresenceUnderMusicGe${PIT_UNDER_MUSIC_LU}`] = !enough ? null : p.result.presenceUnderMusicLU === 'below the bus noise' || p.result.presenceUnderMusicLU >= PIT_UNDER_MUSIC_LU;
+      rep.gates[`${p.unit}PitBusUnderMusicGe${AMB_UNDER_MUSIC_LU}`] = !enough ? null : p.result.busUnderMusicLU >= AMB_UNDER_MUSIC_LU;
+      rep.gates[`${p.unit}PresencePlaying`] = !!p.emitter?.playing && p.emitter.att > 0.99;
+    }
+    rep.notMeasured = Object.entries(rep.gates).filter(([, v]) => v === null).map(([k]) => k);
+    rep.pass = rep.pits.length > 0 && Object.values(rep.gates).every((v) => v !== false) && !rep.err;
+  } catch (e) { rep.err = String(e?.message ?? e); }
+  rep.logs = logs.slice(0, 30);
+  await browser.close().catch(() => {});
+  return rep;
+}
+
+const rep = mode === 'sync' ? await runSync() : mode === 'dead' ? await runDead() : mode === 'pits' ? await runPits() : await runMatch();
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(rep, null, 1));
 const brief = { ...rep }; delete brief.rows; delete brief.cues; delete brief.logs;

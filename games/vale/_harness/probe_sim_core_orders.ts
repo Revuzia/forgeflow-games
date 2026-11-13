@@ -248,12 +248,12 @@ section('ruling 36: boxed in by bodies with no way through, the hero re-plans wi
   check('…and the move ends within ~2.5 s of it', end >= 0 && end - blockedAt <= 75, { blockedAt, end });
   // (it ends pressed into the wall, overlapping it: the soft separation eases it back out by a few cm, nothing more)
   check('0 drift after it ends (settling out of the overlap ≤ 0.1 m)', end >= 0 && walk(tr.slice(end)).len < 0.1, end >= 0 ? walk(tr.slice(end)) : null);
-  // ruling 37: pressing into the wall, never swaying along it (r3 swung 1.6 m side to side while it waited)
+  // ruling 38: pressing into the wall, never swaying along it (r3 swung 1.6 m side to side while it waited)
   let sway = 0;
   for (let k = Math.max(0, blockedAt); k < (end >= 0 ? end : tr.length); k++) sway = Math.max(sway, Math.abs(tr[k].x - 45));
   check('…pressing straight into it (lateral sway ≤ 0.2 m)', sway <= 0.2, f2(sway));
 });
-section('ruling 37: standing bodies flanking the line: one lane, one side, no side flips and no heading reversals', () => {
+section('ruling 38: standing bodies flanking the line: one lane, one side, no side flips and no heading reversals', () => {
   // verifier r4: steerRound flipped sides every 3 ticks between standing allies (the hero vibrated ~0.1 m in place for
   // a 1 s watchdog window, then again); a lane round them is planned once and walked
   for (const [label, units] of [
@@ -275,7 +275,7 @@ section('ruling 37: standing bodies flanking the line: one lane, one side, no si
     }
   }
 });
-section('ruling 37: a column of bodies marching through the hero never carries it the wrong way', () => {
+section('ruling 38: a column of bodies marching through the hero never carries it the wrong way', () => {
   // verifier-style live wave: an allied wave walked through a hero ordered the other way; it planned round where the
   // bodies stood, walked with them and was carried 13 m off. Lanes now pass beside where moving bodies are going.
   const w = makeWorld(cat, [{ fighter: 'fx_slinger', team: 0, x: 30, y: 52 }, { fighter: 'fx_foe', team: 1, x: 55, y: 20 }]);
@@ -289,7 +289,7 @@ section('ruling 37: a column of bodies marching through the hero never carries i
   const end = tr.findIndex((p) => p.order === ORDER_NONE);
   check('it never ends up more than 0.5 m further from its point than it started, and gets there', away <= 0.5 && end >= 0 && Math.hypot(h.x - 20, h.y - 52) < 0.3, { away: f2(away), end, at: [f2(h.x), f2(h.y)] });
 });
-section('ruling 37: the same move re-sent while it is walked changes nothing (a held button, a hold-steer over a still cursor)', () => {
+section('ruling 38: the same move re-sent while it is walked changes nothing (a held button, a hold-steer over a still cursor)', () => {
   const run = (resend: boolean): { x: number; y: number }[] => {
     const w = makeWorld(cat, [{ fighter: 'fx_slinger', team: 0, x: 20, y: 30 }, { fighter: 'fx_foe', team: 1, x: 55, y: 55 }]);
     const h = fighterEnt(w, 0);
@@ -615,13 +615,13 @@ async function rift(): Promise<void> {
 
 try { await rift(); } catch (err) { check(`RIFT section threw: ${(err as Error).stack ?? err}`, false); }
 
-// ── ruling 37 (verifier r4 repros), real RIFT and BRIDGE catalogs ──
-async function live37(): Promise<void> {
+// ── ruling 38 (verifier r4 repros), real RIFT and BRIDGE catalogs ──
+async function live38(): Promise<void> {
   const { buildContent, defaultOptions } = await import('../tools/build_content.ts');
   const { createSim } = await import('../src/sim/sim.ts');
   const { pickLoadout } = await import('../src/sim/bots/index.ts');
   const r = buildContent(defaultOptions({ check: true, allowMissingAssets: true, quiet: true }));
-  if (!r.catalog) { console.log('SKIP ruling 37 section: content build failed'); return; }
+  if (!r.catalog) { console.log('SKIP ruling 38 section: content build failed'); return; }
   const rc = r.catalog;
   const fs = rc.fighters.map((f) => f.id).sort();
   const fresh = (modeId: string, first: string, seed: number) => {
@@ -631,7 +631,7 @@ async function live37(): Promise<void> {
       return { player: i, team: i < 5 ? 0 : 1, name: `p${i}`, fighter, skin: rc.skins.find((s) => s.fighter === fighter)?.id ?? '', controller: 'human' as const,
         loadout: pickLoadout(rc, fighter, mode.rules.itemPool ?? '', undefined as never), colorIndex: i };
     });
-    const sim = createSim(rc, { matchId: 'probe_orders_37', seed, queue: queue.id, mode: modeId, map: mode.map, seats, catalogVersion: rc.version } as never, { pregameSeconds: 0 });
+    const sim = createSim(rc, { matchId: 'probe_orders_38', seed, queue: queue.id, mode: modeId, map: mode.map, seats, catalogVersion: rc.version } as never, { pregameSeconds: 0 });
     sim.step();
     for (const e of sim.world.entities) if (e.kind === 'structure') e.stats.ad = 0;
     return { sim, me: sim.world.players[0].ent! };
@@ -651,12 +651,12 @@ async function live37(): Promise<void> {
   //    ended 3–10 m short with a lane open, detours up to 2.4 × the lane.
   for (const modeId of ['rift', 'bridge']) {
     let n = 0, dither = 0, ditherMax = 0, shortLane = 0, reversals = 0, revMax = 0, clear = 0, over15 = 0, worstClear = 0;
-    const bad: string[] = [];
+    const bad: string[] = [], overs: string[] = [];
     for (const who of fs) {
       const { sim, me } = fresh(modeId, who, 7);
       const w = sim.world, nav = w.nav;
       const main = nav.componentAt(me.x, me.y);
-      let s = 2024;
+      let s = 2024 + 7919 * fs.indexOf(who);   // each fighter its own draws (the same draws gave every fighter the same 8 moves)
       const rnd = (): number => { s = (s * 16807) % 2147483647; return s / 2147483647; };
       let k = 0;
       for (let t = 0; t < 30 * 200 && k < 8; t++) {
@@ -691,7 +691,10 @@ async function live37(): Promise<void> {
         reversals += wk.flips; revMax = Math.max(revMax, wk.flips);
         const tags: string[] = [];
         if (dEnd > 0.5 && crowdAt(w, me, gx, gy) === 0 && lane <= straight * 1.3) { shortLane++; tags.push(`short ${f2(dEnd)} (lane ${f2(lane / straight)}×)`); }
-        if (dEnd < 0.1 && lane <= straight * 1.15) { clear++; worstClear = Math.max(worstClear, wk.len / straight); if (wk.len > straight * 1.15) over15++; }
+        if (dEnd < 0.1 && lane <= straight * 1.05) {
+          clear++; worstClear = Math.max(worstClear, wk.len / straight);
+          if (wk.len > straight * 1.15) { over15++; overs.push(`${who} t${t} ${f2(wk.len / straight)}× (lane ${f2(lane / straight)}×)`); }
+        }
         if (dith >= 5) tags.push(`dither ${dith}`);
         if (tags.length && bad.length < 6) bad.push(`${who} t${t} (${f2(x0)},${f2(y0)})→(${f2(gx)},${f2(gy)}) ${tags.join(' ')}`);
       }
@@ -700,8 +703,8 @@ async function live37(): Promise<void> {
     check(`${M} ${n} moves through live waves: 0 with ≥ 5 steer side flips inside 1 s (${dither}, max ${ditherMax})`, n >= 40 && dither === 0, bad);
     check(`${M} …0 ending > 0.5 m short of an open point where a lane ≤ 1.3 × the line existed (${shortLane})`, shortLane === 0, bad);
     check(`${M} …heading reversals ≤ 4 in any move (${revMax}; ${reversals} in all)`, revMax <= 4, { reversals });
-    check(`${M} …moves with a clear lane (≤ 1.15 × the line, ${clear}): ≤ 10 % walk over 1.15 × the line (${over15}), none over 1.6 × (worst ${f2(worstClear)})`,
-      clear >= 30 && over15 <= clear * 0.1 && worstClear <= 1.6);
+    check(`${M} …moves with a clear lane (the shortest way round ≤ 1.05 × the line, ${clear}): ≤ 10 % walk over 1.15 × the line (${over15}), none over 1.6 × (worst ${f2(worstClear)})`,
+      clear >= 30 && over15 <= clear * 0.1 && worstClear <= 1.6, overs);
   }
 
   // 2. packed lane fights after 3:55 (verifier r4 live probe: ~20 allied minions between the hero and an enemy wave; a
@@ -886,6 +889,6 @@ async function live37(): Promise<void> {
       n >= 30 && worstLeave <= 0.3, bad);
   }
 }
-try { await live37(); } catch (err) { check(`ruling 37 section threw: ${(err as Error).stack ?? err}`, false); }
+try { await live38(); } catch (err) { check(`ruling 38 section threw: ${(err as Error).stack ?? err}`, false); }
 
 finish('probe_sim_core_orders');

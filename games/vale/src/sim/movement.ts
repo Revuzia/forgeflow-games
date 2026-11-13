@@ -5,10 +5,12 @@
 // abilities.ts start the action once in range); taunt chases the taunter; fear walks away from
 // its source. An attack-move walks to its point and stops for the enemy it attacks; one with a
 // picked enemy (prefer) chases that enemy first, past nearer enemies, while it stays attackable.
-// A move goal is snapped once, when issued, to where the order can finish (nav.snapGoal, ruling 36: a
+// A move goal is snapped once, when issued, to where the order can finish (nav.snapGoal, rulings 36/38: a
 // click into a wall, a structure or the border ends at the open point nearest the click that this
 // walker's body reaches without walking away from the click, else where its straight walk toward the
-// click stops; a pocket the walker cannot reach at the nearest point it can). Arrival: within 5 cm of the
+// click stops; a pocket the walker cannot reach at the nearest point it can). The same move re-sent while it is
+// walked, or after it finished at its goal, changes nothing (a held button re-sends its point; ruling 38); re-sent
+// after the walk gave up short, it tries again. Arrival: within 5 cm of the
 // point, or ARRIVE_STALL_TICKS of direct approach without real progress near it (a crowd
 // standing on the spot), or ARRIVE_GIVE_UP_TICKS of it anywhere (truly stuck): the order ends
 // instead of shoving or sliding in place forever. Units do not walk while winding up an attack, while casting (unless
@@ -20,11 +22,14 @@
 // walking, waypoints that are already in line of walk are skipped, and a walker that makes no
 // progress for NO_PROGRESS_TICKS (jostled in a crowd, a body parked on a corner node) treats a
 // near waypoint as reached or recomputes its route.
-// Steering (fighters, rulings 35/36): standing, slower or oncoming bodies on the line are passed along
-// their tangents (steerRound). Progress watchdog (fighters, steering included): a ~1 s window that
-// gains under 30 % of a full-speed walk off the route left and covers under 60 % of one of ground
-// (steering in place, inching) re-plans and walks the route without
-// steering for a window; a second one in a row ends a move to a point (no steering in place).
+// Body lanes (fighters, ruling 38, sim/bodypath.ts; superseding rulings 35/36's per-tick steering): bodies in the way
+// (standing, crossing the line or coming at it; never allies walking the same way) within LANE_LOOK m are walked round
+// along a lane planned once on a fine grid and re-planned only when a body steps into it: one side, the least detour,
+// no per-tick side choice to dither on. Progress watchdog (fighters, lanes included): a ~1 s window that gains under
+// 30 % of a full-speed walk off the route left and covers under 60 % of one of ground (pinned, inching), or that ends
+// further from the point than it began (carried off by a wave), re-plans with every body counted and a longer lane
+// allowed; a second such window in a row with no lane found ends a move to a point (boxed in: it stops cleanly), as do
+// WATCH_MAX in a row or WATCH_TOTAL in all. A tiny step back against the last heading (pinned, jostled) is not taken.
 // Separation: overlapping mobile units push each other apart softly (half the overlap per tick,
 // less when idle); structures are hard circles. Walls win: a step into a blocked cell slides
 // along the free axis or stops. Blocking zones act like walls for the units they block.
@@ -75,14 +80,14 @@ const ARRIVE_STALL_TICKS = 10;
 const ARRIVE_GIVE_UP_TICKS = 60;
 const PINNED_PROGRESS = 0.03;
 /** a walking fighter looks this far (m) ahead for bodies in its way (sim/bodypath.ts inTheWay) and plans a lane round
- *  them (ruling 37) */
+ *  them (ruling 38) */
 const LANE_LOOK = 3;
 /** a lane ends at most this far (m) along the route leg (the walk resumes the route there) */
 const LANE_REACH = 14;
 /** ticks between checks that the lane ahead is still clear (a body stepped into it: re-plan) */
 const LANE_RECHECK = 5;
 /** how far (m) ahead along the lane the check looks */
-const LANE_AHEAD = Number(process.env.LAHEAD ?? 4);
+const LANE_AHEAD = 4;
 /** ticks before a failed plan is retried (walk straight and shove meanwhile) */
 const LANE_RETRY = 10;
 /** a lane longer than LANE_DETOUR × the straight line + LANE_DETOUR_M, or leading more than LANE_AWAY m further from its
@@ -90,6 +95,10 @@ const LANE_RETRY = 10;
 const LANE_DETOUR = 1.5;
 const LANE_DETOUR_M = 1.5;
 const LANE_AWAY = 0.5;
+/** … after a no-progress window (pinned in a wave): up to this long */
+const LANE_DETOUR_STUCK = 2.2;
+const LANE_DETOUR_STUCK_M = 2;
+const LANE_AWAY_STUCK = 2;
 /** progress watchdog window (ticks, ~1 s) and the share of a full-speed walk it must gain off the route left */
 const WATCH_TICKS = 30;
 const WATCH_PROGRESS = 0.3;
@@ -99,8 +108,12 @@ const WATCH_MOVED = 0.6;
 const WATCH_LOST = 0.5;
 /** no-progress windows in a row after which a move to a point ends even though lanes keep being found */
 const WATCH_MAX = 4;
+/** … or in all, over the whole order */
+const WATCH_TOTAL = 6;
 const ARRIVE_NEAR = 1;
 const ARRIVE_PROGRESS = 0.3;
+/** a walker's move under this share of a full step that goes back against its last heading is jostle, not taken */
+const JITTER_SHARE = 0.3;
 /** peak height (m) of airborne arcs */
 const KNOCK_ARC = 1.2;
 const near: Entity[] = [];
@@ -113,7 +126,7 @@ export function issueMove(w: World, e: Entity, x: number, y: number, attackMove:
   const m = w.mapDef.size;
   x = Math.max(0, Math.min(m[0] - 1e-3, x)); y = Math.max(0, Math.min(m[1] - 1e-3, y));
   // the same move re-sent while it is still being walked (a held button re-sending its point, a hold-steer over a
-  // still cursor): a no-op, so the walker keeps its snapped goal, route and lane (ruling 37: re-snapping from mid-route
+  // still cursor): a no-op, so the walker keeps its snapped goal, route and lane (ruling 38: re-snapping from mid-route
   // re-planned to a corner node behind it and ended further from the click than a single click)
   const same = Math.abs(e.orderReqX - x) + Math.abs(e.orderReqY - y) < 0.05;
   if (same && e.order === (attackMove ? ORDER_ATTACK_MOVE : ORDER_MOVE) && (!attackMove || e.orderTarget === prefer)) return;
@@ -427,12 +440,12 @@ function routeLeft(e: Entity, x: number, y: number, gx: number, gy: number): num
 }
 
 /** reset the progress watchdog (a new order, or not walking) */
-export function resetWatch(e: Entity): void { e.watchTicks = 0; e.watchStage = 0; e.laneAll = false; e.lanePlanned = false; clearLane(e); e.laneCheck = 0; }
+export function resetWatch(e: Entity): void { e.watchTicks = 0; e.watchStage = 0; e.watchFails = 0; e.laneAll = false; e.lanePlanned = false; clearLane(e); e.laneCheck = 0; }
 function clearLane(e: Entity): void { e.lane.length = 0; e.laneIdx = 0; e.steerSide = 0; }
 const onLane = (e: Entity): boolean => e.lane.length > 0 && e.laneIdx * 2 < e.lane.length;
 
 /**
- * Body lanes for a walking fighter (ruling 37, sim/bodypath.ts): when bodies in its way (standing or coming at it; not
+ * Body lanes for a walking fighter (ruling 38, sim/bodypath.ts): when bodies in its way (standing or coming at it; not
  * allies walking with it, not the unit it is going for, not a crowd on its own point) block its line within LANE_LOOK m,
  * it plans a lane round them on a fine grid, out to LANE_REACH m along its route leg, and walks it: one side, committed,
  * the least detour. The lane ahead is re-checked every LANE_RECHECK ticks: a body stepped into it re-plans from where
@@ -497,16 +510,19 @@ function updateLane(w: World, e: Entity, aimX: number, aimY: number, gx: number,
   }
 }
 
-/** a lane is taken only when it goes round, not back: at most LANE_DETOUR × the straight line + LANE_DETOUR_M long and
+/** a lane is taken only when it goes round, not back: at most LANE_DETOUR × the straight line + LANE_DETOUR_M long (after
+ *  a no-progress window, pinned in a pocket of the wave: LANE_DETOUR_STUCK × + LANE_DETOUR_STUCK_M, LANE_AWAY_STUCK back) and
  *  never more than LANE_AWAY m behind the walker along its line to the lane's end (sidestepping a wave is fine; a lane
  *  that backs out of a pocket the bodies closed round it is not: that walker shoves, and the progress watchdog decides) */
 function laneFair(e: Entity, tx: number, ty: number): boolean {
   const d0 = Math.sqrt((tx - e.x) * (tx - e.x) + (ty - e.y) * (ty - e.y));
   if (d0 < 1e-6) return true;
-  if (laneLen(e.x, e.y, e.lane, 0) > d0 * LANE_DETOUR + LANE_DETOUR_M) return false;
+  // pinned for a watchdog window already: a longer way round beats pressing on (and stopping short)
+  const stuck = e.watchStage > 0;
+  if (laneLen(e.x, e.y, e.lane, 0) > d0 * (stuck ? LANE_DETOUR_STUCK : LANE_DETOUR) + (stuck ? LANE_DETOUR_STUCK_M : LANE_DETOUR_M)) return false;
   const ux = (tx - e.x) / d0, uy = (ty - e.y) / d0;
   for (let i = 0; i + 1 < e.lane.length; i += 2) {
-    if ((e.lane[i] - e.x) * ux + (e.lane[i + 1] - e.y) * uy < -LANE_AWAY) return false;
+    if ((e.lane[i] - e.x) * ux + (e.lane[i + 1] - e.y) * uy < -(stuck ? LANE_AWAY_STUCK : LANE_AWAY)) return false;
   }
   return true;
 }
@@ -518,7 +534,8 @@ function stepToward(w: World, e: Entity, gx: number, gy: number): void {
   const nav = w.nav;
   const r = Math.min(e.radius, nav.cell * 0.45);
   const goalMoved = !(Math.abs(gx - e.pathGoalX) + Math.abs(gy - e.pathGoalY) <= REPATH_DIST);
-  if (goalMoved || (e.path.length === 0 && --e.pathCheck <= 0)) {
+  // (a lane round bodies is planned against the walls too: the straight-line recheck waits until it is walked)
+  if (goalMoved || (e.path.length === 0 && !onLane(e) && --e.pathCheck <= 0)) {
     if (goalMoved) clearLane(e);
     e.pathGoalX = gx; e.pathGoalY = gy;
     e.pathIdx = 0;
@@ -533,14 +550,14 @@ function stepToward(w: World, e: Entity, gx: number, gy: number): void {
   }
   const onPath = e.path.length > 0 && e.pathIdx * 2 < e.path.length;
   const routeX = onPath ? e.path[e.pathIdx * 2] : gx, routeY = onPath ? e.path[e.pathIdx * 2 + 1] : gy;
-  // a walking fighter walks a lane round the bodies in its way (ruling 37) instead of grinding through them
+  // a walking fighter walks a lane round the bodies in its way (ruling 38) instead of grinding through them
   if (e.kind === 'fighter') updateLane(w, e, routeX, routeY, gx, gy, r);
   const laned = onLane(e);
   const aimX = laned ? e.lane[e.laneIdx * 2] : routeX, aimY = laned ? e.lane[e.laneIdx * 2 + 1] : routeY;
   const aimD0 = Math.sqrt((aimX - e.x) * (aimX - e.x) + (aimY - e.y) * (aimY - e.y));
   const want = Math.min(budget, aimD0);
   let x = e.x, y = e.y;
-  // progress watchdog (rulings 36, 37), lanes included: the route length left when this window opened
+  // progress watchdog (rulings 36, 38), lanes included: the route length left when this window opened
   const watch = e.kind === 'fighter';
   if (watch && e.watchTicks === 0) { e.watchRem = routeLeft(e, e.x, e.y, gx, gy); e.watchX = e.x; e.watchY = e.y; }
   // walk the lane, then the waypoint list, within this tick's budget
@@ -595,14 +612,18 @@ function stepToward(w: World, e: Entity, gx: number, gy: number): void {
     e.watchTicks = 0;
     if (gain < full * WATCH_PROGRESS && (shift < full * WATCH_MOVED || lost)) {
       e.watchStage++;
-      // a second window in a row with no lane found since the first: boxed in, the move to a point ends
-      if (e.watchStage >= 2 && !e.lanePlanned) e.watchStage = WATCH_MAX;
+      // a second window in a row with no lane found since the first: boxed in, the move to a point ends; so does a move
+      // that has spent WATCH_TOTAL windows without progress in all (bounced about a fight, never getting through)
+      if ((e.watchStage >= 2 && !e.lanePlanned) || ++e.watchFails >= WATCH_TOTAL) e.watchStage = WATCH_MAX;
       e.pathGoalX = NaN; e.pathCheck = 0; e.noProgress = 0;
       clearLane(e); e.laneCheck = 0; e.laneAll = true; e.lanePlanned = false;
     } else { e.watchStage = 0; e.laneAll = false; }
   }
-  const mdx = nx - e.x, mdy = ny - e.y;
-  const moved = Math.sqrt(mdx * mdx + mdy * mdy);
+  let mdx = nx - e.x, mdy = ny - e.y;
+  let moved = Math.sqrt(mdx * mdx + mdy * mdy);
+  // pinned against bodies, a step and the push back cancel to a few cm that alternate in sign tick to tick (the hero
+  // vibrating and its model spinning round): a tiny move back against the way it last moved is not taken
+  if (moved > 0 && moved < speed * TICK_DT * JITTER_SHARE && mdx * dcos(e.facing) + mdy * dsin(e.facing) < 0) { mdx = 0; mdy = 0; moved = 0; }
   if (moved < 1e-6) { if (--e.pathCheck <= 0) { e.pathGoalX = NaN; e.pathCheck = DIRECT_RECHECK_TICKS; } return; } // stuck: repath soon
   e.facing = datan2(mdy, mdx);
   e.vx = mdx / TICK_DT; e.vy = mdy / TICK_DT;

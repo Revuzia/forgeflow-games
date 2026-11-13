@@ -1,4 +1,4 @@
-// VALE sim — body lanes (ruling 37): the local plan a walking fighter follows round the units in its way.
+// VALE sim — body lanes (ruling 38): the local plan a walking fighter follows round the units in its way.
 //
 // The nav grid knows walls and structures only; units are soft bodies that push each other apart. A fighter whose
 // line ahead is blocked by bodies that will not clear it by themselves (standing, or coming at it) plans a lane round
@@ -13,8 +13,10 @@ import type { World } from './world.ts';
 
 /** lane grid cell (m) */
 export const LANE_CELL = 0.25;
-/** margin (m) kept between the walker's body and a body it passes */
-const LANE_MARGIN = Number(process.env.LMARGIN ?? -0.1);
+/** margin (m) between the walker's body and a body its lane passes: negative, a lane may brush a body by this much
+ *  (soft bodies shoulder past each other; a positive margin made lanes longer: 1 in 8 clear-lane moves over 1.15 ×
+ *  in the wave probe against 1 in 25 at -0.1) */
+const LANE_MARGIN = -0.1;
 /** discs are rasterised this much (m) smaller than they are (half a cell), and pulled lanes may graze them by it */
 export const RASTER_SLACK = LANE_CELL * 0.5;
 /** the planning box: the walker and the lane's end, padded this much (m) on every side (room to go round a wave) */
@@ -65,8 +67,9 @@ export const laneDiscs: Disc[] = [];
 const discPool: Disc[] = [];
 
 /**
- * Is body `o` in the way of walker `e` heading along unit (ux, uy)? Standing, slow, or coming at it (rulings 36, 37):
- * a body walking away along the line, or across it at speed, clears the line by itself and is never walked round.
+ * Is body `o` in the way of walker `e` heading along unit (ux, uy)? Standing, crossing its line or coming at it (rulings
+ * 36, 37): only a body walking away along the line (an ally heading the same way) clears it by itself and is never
+ * walked round. (Leaving crossing bodies out let a column marching across the line shoulder the walker along with it.)
  * `all`: every body counts (the progress watchdog's re-plan: allies walking with it have not cleared the way).
  */
 export function inTheWay(e: Entity, o: Entity, ux: number, uy: number, all: boolean): boolean {
@@ -83,7 +86,9 @@ export function inTheWay(e: Entity, o: Entity, ux: number, uy: number, all: bool
     }
     return true;
   }
-  return o.vx * ux + o.vy * uy < -0.3 * spd;                   // oncoming
+  // moving: in the way unless it walks away along the walker's line (an ally heading the same way clears it by itself);
+  // one crossing the line or coming at it is where the walker would be going
+  return o.vx * ux + o.vy * uy < 0.3 * spd;
 }
 
 /**
@@ -106,12 +111,13 @@ export function collectDiscs(w: World, e: Entity, minX: number, minY: number, ma
     const gr = R0 + goalNear;
     if ((o.x - gx) * (o.x - gx) + (o.y - gy) * (o.y - gy) < gr * gr) continue;
     let R = R0 + LANE_MARGIN;
-    // a moving body blocks where it is going over SWEEP_S (a standing one, where it stands)
-    const x2 = o.x + o.vx * SWEEP_S, y2 = o.y + o.vy * SWEEP_S;
-    const d = Math.sqrt(pointSeg2(e.x, e.y, o.x, o.y, x2, y2));
+    // a moving body blocks where it is going over SWEEP_S as well (a standing one, where it stands). (Sweeping each
+    // body out to when the walker would reach it read the bodies' jostling as intent: 2-3 × the over-long detours.)
+    const x1 = o.x, y1 = o.y, x2 = o.x + o.vx * SWEEP_S, y2 = o.y + o.vy * SWEEP_S;
+    const d = Math.sqrt(pointSeg2(e.x, e.y, x1, y1, x2, y2));
     if (d < R) R = Math.max(0, d - 0.02);
     const disc = discPool.pop() ?? { x: 0, y: 0, x2: 0, y2: 0, r: 0 };
-    disc.x = o.x; disc.y = o.y; disc.x2 = x2; disc.y2 = y2; disc.r = R;
+    disc.x = x1; disc.y = y1; disc.x2 = x2; disc.y2 = y2; disc.r = R;
     laneDiscs.push(disc);
   }
 }

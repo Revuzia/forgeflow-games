@@ -401,7 +401,9 @@ export class Entity implements EntityView {
   watchRem = 0;
   watchX = 0; watchY = 0;
   watchStage = 0;
-  /** body lane (ruling 37, sim/bodypath.ts): waypoints round the units in the way, followed before the route resumes;
+  /** no-progress windows over the whole order (a move bounced about a fight for WATCH_TOTAL of them ends) */
+  watchFails = 0;
+  /** body lane (ruling 38, sim/bodypath.ts): waypoints round the units in the way, followed before the route resumes;
    *  the route aim it was planned for; ticks to the next lane check (or, with no lane, until a failed plan is retried) */
   lane: number[] = [];
   laneIdx = 0;

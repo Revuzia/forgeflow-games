@@ -92,7 +92,7 @@ const HOLD_MOVE_MS = 140;
 /** hold-steer re-issues only after the pointer itself moved this far (CSS px) since the last order */
 const HOLD_MIN_PX = 8;
 /** while the button is held, the last point is re-sent this often (ms) when the hero stands more than HOLD_RETRY_NEAR m
- *  short of it (a walk that gave up in a packed wave tries again; ruling 37) */
+ *  short of it (a walk that gave up in a packed wave tries again; ruling 38) */
 const HOLD_RETRY_MS = 500;
 const HOLD_RETRY_NEAR = 2;
 /** a click this close (CSS px) to an enemy's hit box still counts as on it: attack clicks and plain right-clicks
@@ -320,7 +320,7 @@ export class InputController {
     }
     // a held button keeps its order alive (genre: holding the button keeps re-issuing the move): every HOLD_RETRY_MS the
     // last point is re-sent while the hero stands more than HOLD_RETRY_NEAR m short of it. The sim ignores the same
-    // point while that order is still being walked and restarts it after the walk gave up (a packed wave, ruling 37).
+    // point while that order is still being walked and restarts it after the walk gave up (a packed wave, ruling 38).
     // Always the point last sent, never the cursor's ground under a following camera (ruling 33)
     if (this.rightHeld && !aim && this.lastMoveTo && now - this.lastHoldMove > HOLD_RETRY_MS) {
       const b = this.body;

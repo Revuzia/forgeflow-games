@@ -36,7 +36,9 @@ Contract gates (every build, over the shipped files in audio/out; `--gates` runs
              or a resource has a rendered proc cue (f_<fighter>_passive, else its present.sfx / hitSfx); every other
              triggered passive (items, boons, team buffs, units) has a present.sfx / hitSfx or its 'proc.<kind>' role
   ambience   every map (content/maps, read only) has 4-6 emitters audio.ambience.<map> [{source, cue}] → rendered ambience-bus
-             loops: at most one 'bed' (not spatial), every other source an art.ambient group of that map with points
+             loops: at most one 'bed' (not spatial), every other source an art.ambient group of that map with points;
+             every looping ambience-bus cue (the objectives' pit presences too) held to ruling 37's levels, swell, top
+             and whoosh gates (AMB_* / PRES_* / BED_*), none unbound
   instant    (final parity AUD-m1) every recipe flagged `instant` (a cue for an instant event: a blink, a level-up, a
              respawn, a summon, a pickup, a ping …) lands on its frame: its first sample within 20 dB of its peak comes
              by INSTANT_MS (the 5 ms codec lead included); swells belong to deliberate wind-ups only
@@ -458,13 +460,32 @@ AMB_MIN, AMB_MAX = 4, 6          # ambience emitters per map (final parity AUD-8
 BED_UNDER_MUSIC_LU = 11.0
 BED_HF_MAX = 0.08
 BED_SWELL_LU = 5.0
-BED_MIN_S = 12.0
+BED_MIN_S = 24.0             # ruling 37 r2: was 12 (the fair's 12 s loop rang the same stall bells every 12 s)
+# ruling 37 r2: a bed's low end, as played, against the match music's quietest 10 s (RMS) window, 1/3-octave bands
+# BED_LOW_BANDS: at most BED_LOW_OVER_QUIET_DB over it (the RIFT bed's 125 Hz body sat 15-16 dB over the music's quiet
+# stretch: a faint low roar on headphones whenever the score thinned)
+BED_LOW_BANDS = (80.0, 100.0, 125.0, 160.0)
+BED_LOW_OVER_QUIET_DB = 6.0
 AMB_EMIT_UNDER_MUSIC_LU = 12.0
 AMB_BUSY_N = 2
 AMB_BUSY_UNDER_MUSIC_LU = 8.0
 AMB_WASH = ('amb_rift_canopy', 'amb_rift_water', 'amb_bridge_updraft', 'amb_lamp_flame')
 AMB_WASH_HF_MAX = 0.25
 AMB_WASH_SWELL_LU = 5.0
+# ruling 37 round 2: the standard covers EVERY looping cue on the ambience bus, not only content's audio.ambience. An
+# epic objective's pit presence (u_<unit>_presence, epic gate) is a positional emitter of its map (the camp's map in
+# content/maps), held to the emitter level (>= AMB_EMIT_UNDER_MUSIC_LU under that map's music, at full on its pit edge),
+# counted in the map's busiest spot, swelling <= PRES_SWELL_LU, <= AMB_WASH_HF_MAX above 2 kHz (the Longshade presence
+# played 3.9 LU OVER the music at its pit and breathed a 260-400 Hz band twice a loop: a 4 s heavy-wind whoosh). Every
+# continuous loop (the beds, AMB_WASH, the presences) is also held against the whoosh itself, which the 3 s short-term
+# swell misses: its 250 Hz - 2 kHz band (0.5 s RMS, 0.25 s hop, circular) moves <= AMB_BAND_SWELL_DB (p3 - p97), and no
+# lag of 2 s to half the loop repeats that envelope with autocorrelation >= AMB_PERIODIC_AC while it moves >=
+# AMB_PERIODIC_MIN_DB (the old updraft: 5.6 dB, 0.71 at 3.75 s; Longshade 4.9 dB, 0.98 at 2 s). A looping ambience-bus
+# cue that no map and no pit binds fails (nothing may play on the bus ungated).
+PRES_SWELL_LU = 3.0
+AMB_BAND_SWELL_DB = 4.5
+AMB_PERIODIC_AC = 0.6
+AMB_PERIODIC_MIN_DB = 3.0
 
 
 def _read(rel: str):
@@ -1382,10 +1403,13 @@ def ambience_gate(contract: dict) -> tuple[list[str], dict]:
     fails: list[str] = []
     cues, ev = contract['cues'], contract.get('events', {})
     maps = {}
+    pits: dict[str, list[str]] = {}                  # map id → its objective units (their pit presence, ruling 37 r2)
     for path in sorted(glob.glob(os.path.join(CONTENT, 'maps', '*.json'))):
         with open(path, encoding='utf8') as f:
             md = json.load(f)
         maps[md['id']] = (md.get('art') or {}).get('ambient') or {}
+        pits[md['id']] = sorted({u['unit'] for c_ in md.get('camps', []) if c_.get('objective') for u in c_.get('units', [])})
+    gated: set[str] = set()
     rep: dict = {}
     bound: dict[str, list[tuple[str, str]]] = {}
     for mid, lst in (contract.get('ambience') or {}).items():
@@ -1419,6 +1443,7 @@ def ambience_gate(contract: dict) -> tuple[list[str], dict]:
                 pts += sum(len(x.get('at', [])) for x in art.get('props', [])
                            if (x.get('fx') or {}).get('vfx') == src or os.path.splitext(os.path.basename(x.get('model', '')))[0] == src)
             rows[src] = {'cue': c, 'points': pts}
+            gated.add(c)
             d = cues.get(c)
             if not d:
                 fails.append(f'ambience: {mid}.{src} → {c} is not in audio.json')
@@ -1446,6 +1471,8 @@ def ambience_gate(contract: dict) -> tuple[list[str], dict]:
                 if c in AMB_WASH and b['swellLU'] > AMB_WASH_SWELL_LU:
                     fails.append(f"ambience: {c} is a continuous wash that swells {b['swellLU']:.1f} LU over its loop "
                                  f'(want <= {AMB_WASH_SWELL_LU})')
+                if c in AMB_WASH:
+                    fails += whoosh_fails(c, b)
             else:
                 rows[src].update(bed_level(c, d, (contract.get('music') or {}).get(f"mus_match_{mid.removeprefix('map_')}")))
                 b = rows[src]
@@ -1459,6 +1486,37 @@ def ambience_gate(contract: dict) -> tuple[list[str], dict]:
                     fails.append(f"ambience: {mid}'s bed {c} swells {b['swellLU']:.1f} LU over its loop (want <= {BED_SWELL_LU})")
                 if b['seconds'] < BED_MIN_S - 0.05:
                     fails.append(f"ambience: {mid}'s bed {c} loops every {b['seconds']:.1f} s (want >= {BED_MIN_S})")
+                lo = bed_low(c, d, (contract.get('music') or {}).get(f"mus_match_{mid.removeprefix('map_')}"))
+                if lo is not None:
+                    b['lowOverQuietDB'] = lo
+                    if lo[1] > BED_LOW_OVER_QUIET_DB:
+                        fails.append(f"ambience: {mid}'s bed {c} sits {lo[1]:.1f} dB over the music's quietest 10 s at {lo[0]:g} Hz "
+                                     f'(1/3 octave, want <= {BED_LOW_OVER_QUIET_DB}): a low roar in the quiet stretches')
+                fails += whoosh_fails(c, b)
+        # the map's objective pits (ruling 37 r2): each presence a positional emitter at its pit, held to the emitter
+        # level, the presence swell, the wash top and the whoosh gates, and counted in the busiest spot
+        for unit in pits.get(mid, []):
+            c = f'u_{unit}_presence'
+            d = cues.get(c)
+            if not d:
+                continue                                  # the epic gate fails a missing presence
+            gated.add(c)
+            src = f'objective.{unit}'
+            rows[src] = {'cue': c, 'points': 1}
+            if not all(os.path.exists(out_path(f)) for f in d['files']):
+                fails.append(f'ambience: {c} is not rendered')
+                continue
+            rows[src].update(bed_level(c, d, (contract.get('music') or {}).get(f"mus_match_{mid.removeprefix('map_')}")))
+            b = rows[src]
+            if b.get('underMusicLU') is not None and b['underMusicLU'] < AMB_EMIT_UNDER_MUSIC_LU:
+                fails.append(f"ambience: {mid}'s pit presence {c} plays {b['underMusicLU']:.1f} LU under the match music at "
+                             f'its pit (want >= {AMB_EMIT_UNDER_MUSIC_LU})')
+            if b['swellLU'] > PRES_SWELL_LU:
+                fails.append(f"ambience: {c} swells {b['swellLU']:.1f} LU over its loop (want <= {PRES_SWELL_LU})")
+            if b['hfShare'] > AMB_WASH_HF_MAX:
+                fails.append(f"ambience: {c} has {100 * b['hfShare']:.1f} % of its energy above 2 kHz "
+                             f'(want <= {100 * AMB_WASH_HF_MAX:.0f} %)')
+            fails += whoosh_fails(c, b)
         bed = rows.get('bed') or {}
         emu = sorted((x['underMusicLU'] for s_, x in rows.items() if s_ != 'bed' and x.get('underMusicLU') is not None))
         if bed.get('underMusicLU') is not None:
@@ -1471,7 +1529,74 @@ def ambience_gate(contract: dict) -> tuple[list[str], dict]:
         rep[mid] = rows
         if not AMB_MIN <= len(ems) <= AMB_MAX:
             fails.append(f'ambience: {mid} has {len(ems)} emitters (want {AMB_MIN}-{AMB_MAX})')
+    for c, d in sorted(cues.items()):
+        if d.get('bus') == 'ambience' and d.get('loop') and c not in gated:
+            fails.append(f'ambience: {c} is a looping ambience-bus cue that no map (audio.ambience) and no objective pit '
+                         f'binds: nothing on the bus plays ungated (ruling 37)')
     return fails, rep
+
+
+def whoosh(m: np.ndarray) -> dict:
+    """The periodic-whoosh measure of a mono loop (see AMB_BAND_SWELL_DB): its 250 Hz - 2 kHz band's 0.5 s RMS envelope
+    (0.25 s hop, circular), the envelope's range (p97 - p3, dB) and its strongest autocorrelation at a lag of 2 s to
+    half the loop."""
+    M = np.fft.rfft(m)
+    fM = np.fft.rfftfreq(m.size, 1.0 / SR)
+    band = np.fft.irfft(np.where((fM >= 250) & (fM <= 2000), M, 0), m.size)
+    sq = np.concatenate([band, band[:SR // 2]]) ** 2
+    cs = np.concatenate([[0.0], np.cumsum(sq)])
+    hop, w = SR // 4, SR // 2
+    starts = np.arange(0, m.size, hop)
+    env = 10 * np.log10((cs[starts + w] - cs[starts]) / w + 1e-20)
+    e = env - env.mean()
+    E_ = np.fft.rfft(e)
+    ac = np.fft.irfft(E_ * np.conj(E_), e.size) / (e @ e + 1e-12)
+    lag = np.arange(e.size) * hop / SR
+    ok = (lag >= 2.0) & (lag <= lag[-1] / 2 + 0.01)
+    k = int(np.argmax(np.where(ok, ac, -9.0))) if ok.any() else 0
+    return {'bandSwellDB': round(float(np.percentile(env, 97) - np.percentile(env, 3)), 2),
+            'periodicAC': round(float(ac[k]) if ok.any() else 0.0, 3), 'periodicLagS': round(float(lag[k]), 2)}
+
+
+def whoosh_fails(c: str, b: dict) -> list[str]:
+    """A continuous ambience loop's whoosh gates (AMB_BAND_SWELL_DB, AMB_PERIODIC_*)."""
+    out = []
+    if b['bandSwellDB'] > AMB_BAND_SWELL_DB:
+        out.append(f"ambience: {c}'s 250 Hz - 2 kHz band swells {b['bandSwellDB']:.1f} dB over its loop (want <= {AMB_BAND_SWELL_DB})")
+    if b['periodicAC'] >= AMB_PERIODIC_AC and b['bandSwellDB'] >= AMB_PERIODIC_MIN_DB:
+        out.append(f"ambience: {c} whooshes: its 250 Hz - 2 kHz band ({b['bandSwellDB']:.1f} dB) repeats every "
+                   f"{b['periodicLagS']:.2f} s (autocorrelation {b['periodicAC']:.2f}, want < {AMB_PERIODIC_AC})")
+    return out
+
+
+def _third_db(x: np.ndarray, fc: float) -> float:
+    """A signal's mean power (dB) in the 1/3-octave band at fc (channels averaged)."""
+    m = np.mean(np.atleast_2d(x), axis=0)
+    sp = np.abs(np.fft.rfft(m)) ** 2
+    fr = np.fft.rfftfreq(m.size, 1.0 / SR)
+    return 10 * math.log10(sp[(fr >= fc * 2 ** (-1 / 6)) & (fr < fc * 2 ** (1 / 6))].sum() * 2 / m.size ** 2 + 1e-30)
+
+
+_QUIET: dict[str, np.ndarray] = {}
+
+
+def bed_low(c: str, d: dict, mus: dict | None) -> tuple[float, float] | None:
+    """(band Hz, dB) of a bed's worst BED_LOW_BANDS band over its music's quietest 10 s window, both as played."""
+    if not mus or not mus.get('file') or not os.path.exists(out_path(mus['file'])):
+        return None
+    key = mus['file']
+    if key not in _QUIET:
+        y = decode(out_path(key))
+        w = 10 * SR
+        e = np.concatenate([[0.0], np.cumsum(np.mean(y ** 2, axis=0))])
+        starts = np.arange(0, max(1, y.shape[1] - w), SR)
+        s0 = int(starts[np.argmin(e[starts + w] - e[starts])])
+        _QUIET[key] = y[:, s0:s0 + w] * mus.get('gain', 1.0)
+    q = _QUIET[key]
+    x = decode(out_path(d['files'][0])) * d.get('gain', 1.0)
+    over = [(f, _third_db(x, f) - _third_db(q, f)) for f in BED_LOW_BANDS]
+    f, v = max(over, key=lambda z: z[1])
+    return (f, round(v, 2))
 
 
 def bed_level(c: str, d: dict, mus: dict | None) -> dict:
@@ -1485,6 +1610,7 @@ def bed_level(c: str, d: dict, mus: dict | None) -> dict:
     st = st[np.isfinite(st)]
     out = {'lufs': round(i_bed, 2), 'gain': d.get('gain', 1.0), 'hfShare': round(float(sp[fr > 2000].sum() / sp.sum()), 4),
            'swellLU': round(float(np.max(st) - np.min(st)), 2), 'seconds': round(x.shape[1] / SR, 2), 'underMusicLU': None}
+    out.update(whoosh(m))
     heard = i_bed + 20 * math.log10(max(1e-6, d.get('gain', 1.0)))
     if mus and mus.get('file') and os.path.exists(out_path(mus['file'])):
         i_mus = L.integrated(decode(out_path(mus['file'])))
@@ -1670,14 +1796,16 @@ def print_gates(fails: list[str], rep: dict) -> None:
         for s_, x in rows.items():
             if s_ not in ('bed', 'busiest') and 'lufs' in x:
                 print(f"  {'':11s} {x['cue']:20s} {x['lufs']} LUFS x{x['gain']}, {x['underMusicLU']} LU under the music on its point, "
-                      f"{100 * x['hfShare']:.1f} % > 2 kHz, swell {x['swellLU']} LU")
+                      f"{100 * x['hfShare']:.1f} % > 2 kHz, swell {x['swellLU']} LU, band {x['bandSwellDB']} dB "
+                      f"(ac {x['periodicAC']} @ {x['periodicLagS']} s)")
         if 'busiest' in rows:
             print(f"  {'':11s} busiest spot (bed + {rows['busiest']['of'] - 1} loudest emitters at full): "
                   f"{rows['busiest']['underMusicLU']} LU under the music")
         b = rows.get('bed')
         if b and 'lufs' in b:
             print(f"  {'':11s} bed {b['lufs']} LUFS x{b['gain']}, {b['underMusicLU']} LU under the music, "
-                  f"{100 * b['hfShare']:.1f} % > 2 kHz, swell {b['swellLU']} LU, {b['seconds']} s loop")
+                  f"{100 * b['hfShare']:.1f} % > 2 kHz, swell {b['swellLU']} LU, band {b['bandSwellDB']} dB "
+                  f"(ac {b['periodicAC']} @ {b['periodicLagS']} s), {b['seconds']} s loop")
     kr = rep.get('kits', {})
     whole = [f for f, x in kr.get('fighters', {}).items() if not x['missing']]
     print(f"kit gate: {len(whole)}/{len(kr.get('fighters', {}))} fighters with a whole kit ({len(KIT_SLOTS)} slots);"

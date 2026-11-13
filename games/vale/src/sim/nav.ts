@@ -28,7 +28,8 @@ const SQRT2 = Math.SQRT2;
 const SHORT_QUERY = 16;
 /** snapGoal (ruling 36): a candidate must be this much (m) nearer the click than the straight walk's stop point */
 const SNAP_MARGIN = 0.25;
-/** … and within this (m) of the click */
+/** … and within this (m) of the click (ruling 38: 4 m left a deep click stopping on the walker's side while an open
+ *  point 1–2.5 m nearer the click was reachable at 1.1 ×) */
 const SNAP_REACH = 16;
 /** … and its route at most SNAP_DETOUR × straight + SNAP_DETOUR_M long (never walk away from the click) */
 const SNAP_DETOUR = 1.3;
@@ -40,7 +41,8 @@ const SNAP_FAR_M = 1;
 const SNAP_AWAY = 0.5;
 /** route confirmations per snap (the flood prices the rest; candidates in straight line of walk cost one march) */
 const SNAP_SEARCHES = 6;
-/** candidates further (m) than this from the walker are only taken in straight line of walk (bounds the flood) */
+/** candidates further (m) than this from the walker are only taken in straight line of walk (the flood is bounded
+ *  anyway: it never leaves the disc round the click the walker starts on) */
 const SNAP_FLOOD_D = 24;
 /** does the polyline from (sx, sy) through out[] stay within `R` m of (cx, cy)? (vertices and segment midpoints) */
 function routeNear(sx: number, sy: number, out: readonly number[], cx: number, cy: number, R: number): boolean {
@@ -419,7 +421,8 @@ export class NavGrid {
    * the click that the WALKER can reach without walking away from the click: strictly nearer the click than its
    * straight walk toward the click gets (by SNAP_MARGIN), and either in straight line of walk for its body
    * (the same radius test stepToward uses) or at most SNAP_DETOUR × straight + SNAP_DETOUR_M of route away, or along a
-   * longer route (≤ SNAP_FAR × straight + SNAP_FAR_M) that never takes it further from the click than it starts.
+   * longer route (≤ SNAP_FAR × straight + SNAP_FAR_M); every route one that never takes it more than SNAP_AWAY further
+   * from the click than it starts (ruling 38: the pricing flood is confined to that disc round the click).
    * Failing that, the end of the walker's straight walk toward the click (stop at the obstacle). Every candidate
    * is nearer the click than the walker, so a held cursor just inside a face never steps it backwards.
    * Writes `out`; false when nothing is open at all.

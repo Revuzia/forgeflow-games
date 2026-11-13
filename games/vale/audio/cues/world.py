@@ -7,7 +7,7 @@ Vale's own fiction (_design/WORLD.md):
              amb_rift_water     the Fallen Shaft's shallows lapping at the needle segments (at the glints)
              amb_rift_insects   dial-crickets: insects that keep time in escapement ticks (at the shallows' insects)
     BRIDGE   amb_bridge_air     the high wind over Needlespan, a thin whistle off the shaft (the bed)
-             amb_bridge_updraft the gorge breathing up past the deck's edges (at the updraft points)
+             amb_bridge_updraft air rising steadily past the deck's edges, a flutter now and then (at the updraft points)
              amb_bridge_creak   the fallen needle settling: slow stone groans, chalk grit trickling (at the dust)
     FRAY     amb_fray_murmur    the Shadowless Noon fair beyond the rim: a warm, far crowd, stall bells (the bed)
              amb_fray_bunting   bunting fluttering on the rim
@@ -32,6 +32,14 @@ the band empty, a steady hiss is heard as wind). Slowly evolving: no layer swell
 a few dB over several coprime cycles, its seam nowhere special; no gust**2 shapes, no wash sweeping its band up on a
 swell, the classic synthetic "whoosh"). Wind gusts are rare, short, quiet, mono-compatible accents (m_gorge_gust),
 never a loop's own shape.
+
+Ruling 37 round 2: the standard holds for EVERY looping cue on the ambience bus, the epic objectives' pit presences
+(cues/epic.py u_<unit>_presence: an emitter at the pit, >= 12 LU under the music on its edge) included, and the
+build's whoosh gates (AMB_BAND_SWELL_DB / AMB_PERIODIC_*) read what the 3 s swell misses: a 250 Hz - 2 kHz band moving
+in a regular cycle. The updraft is now a steady, fixed-band rush with random flutters (the old one swept 320 -> 700 Hz
+twice a loop); the valley bed's low end is cut under RIFT_AIR_HP_HZ (its 125 Hz region read as a low roar in the RIFT
+music's quiet stretches); the fair's bed runs 36 s with its stall bells at random (the old 12 s loop rang the same
+bells every 12 s).
 """
 from __future__ import annotations
 
@@ -53,6 +61,10 @@ LOOPK = dict(loop=True, max_gr_db=6.0)
 BED_LUFS = -33.0             # the beds' asset loudness (ruling 34; audio/build.py BED_* gates hold it)
 BED_SWELL_DB = 4.0           # the most a bed's level drifts over its loop, peak to peak
 BED_S = 24.0                 # the wind beds' loop
+UPDRAFT_S = 13.0
+FAIR_S = 36.0                # the fair's bed: long enough that no stall bell repeats where the ear can count it
+RIFT_AIR_HP_HZ = 170.0       # the valley bed's low cut (ruling 37 round 2: its 125 Hz region read as a low roar)
+BRIDGE_AIR_HP_HZ = 120.0     # the bridge bed's (the same gate: audio/build.py BED_LOW_*)
 SEAM_GUARD_S = 0.03
 
 
@@ -152,16 +164,19 @@ def loop_out(x: np.ndarray, hp_hz: float = 30.0, lp_hz: float | None = None) -> 
 @cue('amb_rift_air', 'loop', ('int', BED_LUFS), win(BED_S), **LOOPK)
 def amb_rift_air(v: int):
     """The valley breeze over the hour-lines: a warm, low, steady breath of air drifting slowly (never a gust), a
-    faint soft top band-limited under 3 kHz, wide and quiet. No tone (the score owns the key). Ruling 34."""
+    faint soft top band-limited under 3 kHz, wide and quiet. No tone (the score owns the key). Ruling 34. Its low end
+    is cut under RIFT_AIR_HP_HZ (24 dB/oct, ruling 37 round 2): the old body peaked at 125 Hz, 16 dB over the RIFT
+    music's quietest stretch there, a faint low roar on headphones."""
     r = R('amb_rift_air', v=v)
     n = ns(BED_S)
     lvl = drift(n, r, (2, 3, 5, 7), 3.0)
-    low = band_noise(n, r, 240.0 * drift(n, r, (3, 4, 7), 1.5), 0.7, slope=-4.5, ch=2)
+    low = band_noise(n, r, 300.0 * drift(n, r, (3, 4, 7), 1.5), 0.7, slope=-4.0, ch=2)
     air = band_noise(n, r, 1300.0 * drift(n, r, (2, 5, 9), 1.5), 0.9, slope=-3.0, ch=2)
     air = F.apply(air, [F.lowpass(2400, 0.7071)], circular=True)
     aenv = drift(n, r, (3, 5, 8), 3.0)
     m = 0.5 * (low[0] + low[1]) * lvl + 0.07 * 0.5 * (air[0] + air[1]) * aenv
     s = 0.5 * (low[0] - low[1]) * lvl + 0.07 * 0.5 * (air[0] - air[1]) * aenv
+    m, s = (F.apply(z, [F.highpass(RIFT_AIR_HP_HZ, 0.7071), F.highpass(RIFT_AIR_HP_HZ, 0.7071)], circular=True) for z in (m, s))
     return loop_out(wide(m, s, 0.8), hp_hz=40, lp_hz=3000)
 
 
@@ -253,7 +268,9 @@ def amb_rift_insects(v: int):
 def amb_bridge_air(v: int):
     """High wind over Needlespan, held soft: a broad, steady rush of exposed air that drifts a little more than the
     valley's (still no gust), a thin whistle off the shaft's carved edge kept low and constant (it bends slowly, it
-    never swells), and the gorge's low breath far underneath. Wide, band-limited under 3.5 kHz. Ruling 34."""
+    never swells), and the gorge's low breath far underneath. Wide, band-limited under 3.5 kHz. Ruling 34. Its low end
+    is cut under BRIDGE_AIR_HP_HZ (24 dB/oct, ruling 37 round 2: the gorge breath sat 8 dB over the BRIDGE music's
+    quietest stretch at 100 Hz)."""
     r = R('amb_bridge_air', v=v)
     n = ns(BED_S)
     lvl = drift(n, r, (2, 3, 5, 7, 11), BED_SWELL_DB)
@@ -263,22 +280,29 @@ def amb_bridge_air(v: int):
     wl = 0.06 * np.max(np.abs(rush)) * drift(n, r, (3, 7), 2.0)
     m = 0.5 * (rush[0] + rush[1]) * lvl + norm(whistle) * wl + 0.8 * 0.5 * (low[0] + low[1])
     s = 0.5 * (rush[0] - rush[1]) * lvl + 0.8 * 0.5 * (low[0] - low[1])
+    m, s = (F.apply(z, [F.highpass(BRIDGE_AIR_HP_HZ, 0.7071), F.highpass(BRIDGE_AIR_HP_HZ, 0.7071)], circular=True) for z in (m, s))
     return loop_out(wide(m, s, 0.85), hp_hz=30, lp_hz=3500)
 
 
-@cue('amb_bridge_updraft', 'loop', ('int', -25.0), win(8.0), **LOOPK)
+@cue('amb_bridge_updraft', 'loop', ('int', -25.0), win(UPDRAFT_S), **LOOPK)
 def amb_bridge_updraft(v: int):
-    """The gorge breathing up past the deck's edge: two slow, shallow rises per loop (the band lifts a little as each
-    one swells, about 5 dB) over a steady low pull of air. Heard only near the deck's edges (engine AMB_RANGE)."""
+    """Air coming up past the deck's edge: a steady, soft rush whose band never moves (ruling 37 round 2: the old 8 s
+    loop swept its band 320 -> 700 Hz on two rises a loop, a periodic whoosh), its level drifting a dB or two over
+    coprime cycles, a low pull under it, and now and then, at random, a short flutter (a few hundredths of a second of
+    air catching an edge). Heard only near the deck's edges (engine AMB_RANGE). 13 s."""
     r = R('amb_bridge_updraft', v=v)
-    D = 8.0
+    D = UPDRAFT_S
     n = ns(D)
-    t = np.arange(n) / n
-    rise = 0.5 - 0.5 * np.cos(TAU * 2 * t + 0.5 * np.sin(TAU * t))     # two rises, a little uneven, smooth
-    centre = 320.0 + 380.0 * rise
-    body = band_noise(n, r, centre, 0.9, slope=-3.5) * (0.55 + 0.45 * rise)
-    pull = band_noise(n, r, np.full(n, 160.0), 0.8, slope=-5.0) * drift(n, r, (1, 3), 1.5)
-    return loop_out(norm(body) + 0.6 * norm(pull), hp_hz=45, lp_hz=3500)
+    air = band_noise(n, r, np.full(n, 650.0), 0.7, slope=-3.0) * drift(n, r, (2, 3, 5, 7), 2.0)
+    pull = band_noise(n, r, np.full(n, 170.0), 0.8, slope=-5.0) * drift(n, r, (3, 5), 1.5)
+    flut = np.zeros(n)
+    for _ in range(int(r.poisson(0.4 * D))):
+        k = ns(r.uniform(0.18, 0.5))
+        u = np.arange(k) / k
+        am = 0.55 + 0.45 * np.sin(TAU * r.uniform(9, 16) * u * k / SR + r.uniform(0, TAU))
+        g = F.apply(O.white(k, r), [F.bandpass(r.uniform(600, 1400), 1.6)]) * np.sin(np.pi * u) ** 2 * am
+        add_at(flut, g * r.uniform(0.4, 1.0), onset(r, n), wrap=True)
+    return loop_out(norm(air) + 0.55 * norm(pull) + 0.22 * norm(flut), hp_hz=60, lp_hz=3000)
 
 
 @cue('amb_bridge_creak', 'loop', ('int', -25.0), win(10.0), **LOOPK)
@@ -315,13 +339,15 @@ def amb_bridge_creak(v: int):
 
 
 # ── FRAY ─────────────────────────────────────────────────────────────────────────────────────────
-@cue('amb_fray_murmur', 'loop', ('int', BED_LUFS), win(12.0), **LOOPK)
+@cue('amb_fray_murmur', 'loop', ('int', BED_LUFS), win(FAIR_S), **LOOPK)
 def amb_fray_murmur(v: int):
     """The Shadowless Noon fair beyond the rim: a warm, far crowd (many soft voices made of noise through
     shifting vowel bands, never words), small stall bells now and then, carried on a light breeze. Wide,
-    distant, low-passed: company, not a crowd roaring."""
+    distant, low-passed: company, not a crowd roaring. 36 s (ruling 37 round 2: the old 12 s loop rang the same 3-5
+    bells at the same places every 12 s); the bells fall at random across it, each its own note and strike, a few of
+    them far off, never two within a second of each other."""
     r = R('amb_fray_murmur', v=v)
-    D = 12.0
+    D = FAIR_S
     n = ns(D)
     t = np.arange(n) / SR
     side = np.zeros(n)
@@ -333,7 +359,7 @@ def amb_fray_murmur(v: int):
         cyc = max(1, round(syl * D))                                   # whole syllable cycles per loop
         ph = r.uniform(0, TAU)
         sylenv = np.clip(np.sin(TAU * cyc * t / D + ph + 0.6 * np.sin(TAU * t / D * max(1, round(cyc / 7)))), 0, None) ** 1.5
-        talk = np.clip(wobble(n, r, (1, 2, 3), 0.6, seam_lull=False) - 0.25, 0, None)  # each voice talks, then listens (softly: ruling 34)
+        talk = np.clip(wobble(n, r, (2, 3, 5, 7), 0.6, seam_lull=False) - 0.25, 0, None)  # each voice talks, then listens (softly: ruling 34)
         f1 = 500.0 * (1 + 0.35 * np.sin(TAU * max(1, round(cyc / 2)) * t / D + r.uniform(0, TAU)))
         f2 = 1500.0 * (1 + 0.3 * np.sin(TAU * max(1, round(cyc / 3)) * t / D + r.uniform(0, TAU)))
 
@@ -348,10 +374,18 @@ def amb_fray_murmur(v: int):
     crowd_m = F.apply(mid, [F.lowpass(2600, 0.7), F.highpass(180, 0.7)], circular=True)
     crowd_s = F.apply(side, [F.lowpass(2600, 0.7), F.highpass(180, 0.7)], circular=True)
     bells = np.zeros(n)
-    for _ in range(int(r.integers(3, 6))):
-        note = r.choice(['D6', 'A5', 'F6', 'E6', 'G6'])
-        b = I.dawnglass(hz(note), 1.2, 0.6, seed=f'fair{r.integers(0, 99)}', decay_scale=0.5)
-        add_at(bells, norm(b[0]) * r.uniform(0.3, 0.7), onset(r, n), wrap=True)
+    at: list[float] = []
+    for _ in range(int(r.integers(8, 12))):
+        s0 = onset(r, n) / SR
+        if any(min(abs(s0 - a_), D - abs(s0 - a_)) < 1.0 for a_ in at):
+            continue
+        at.append(s0)
+        note = r.choice(['D6', 'A5', 'F6', 'E6', 'G6', 'C6'])
+        b = norm(I.dawnglass(hz(note) * r.uniform(0.995, 1.005), 1.2, r.uniform(0.4, 0.7), seed=f'fair{r.integers(0, 999)}',
+                             decay_scale=r.uniform(0.4, 0.6))[0])
+        if r.uniform() < 0.4:                                          # a stall farther off: softer, duller
+            b = F.apply(b, [F.lowpass(r.uniform(2500, 4000), 0.7)]) * 0.5
+        add_at(bells, b * r.uniform(0.3, 0.7), ns(s0), wrap=True)
     breeze = band_noise(n, r, 450.0 * drift(n, r, (2, 3), 1.0), 0.7, slope=-4.5) * drift(n, r, (1, 2, 3), 2.0)
     m = norm(crowd_m) + 0.12 * norm(bells) + 0.08 * norm(breeze)
     s = norm(crowd_s) * 0.7

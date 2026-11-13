@@ -15,7 +15,7 @@ ability's area: the cue rides the area's delay and lands exactly where the sim l
 or someone starting it), death, presence (the pit's seamless loop on the ambience bus while it lives).
 Loudness (max momentary, asset level): swing -17.5 and hit -15.5 (2 dB over a fighter's -19.5 / -17.5, and content
 gives them a fighter's gains: an objective's blow is never under a fighter's, r07's weight ladder), cast -17,
-landings -14.5..-13.5 (a fighter's ult release level, -14.5, and up), roar -14, death -13; presence -24 LUFS integrated.
+landings -14.5..-13.5 (a fighter's ult release level, -14.5, and up), roar -14, death -13; presence PRES_LUFS integrated (content's gain puts it >= 12 LU under the music at the pit).
 
 Also here: c_monster_fall, a camp monster's fall (events.monsterDeath), so a camp no longer dies on its own hit cue.
 """
@@ -31,13 +31,13 @@ from synth import env as E
 from synth import filters as F
 from synth import osc as O
 from synth import sfx as S
-from synth.core import SR, TAU, hz, ns
+from synth.core import SR, TAU, add_at, hz, ns
 
 from .fighters import detune
 from .kit import (Layers, R, bell, breath, bubble, crumble, glass, hollow, ink, lp, norm, rev, room, shimmer, swell_into,
                   tink)
 from .kit import finish as _fin
-from .world import band_noise, loop_out, scatter, wide, wobble
+from .world import band_noise, drift, loop_out, onset, win
 
 SWING = (0.15, 0.7)
 HITW = (0.15, 0.9)
@@ -52,7 +52,10 @@ LOOPK = dict(loop=True, max_gr_db=6.0)
 SOFT_TOP = [('peak', 3300, -3.0, 0.8), ('high', 9000, -3.0)]
 CALM = [('peak', 3300, -2.5, 0.8)]
 V3 = 3
-PRES_S = 8.0
+# the pits' presence loops (ruling 37, all of the ambience bus): felt more than heard, non-periodic, long coprime loops
+PRES_LUFS = -27.0
+PRES_LONG_S = 26.0
+PRES_SUN_S = 22.0
 
 _UNITS = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'content', 'units.json'))
 _U: dict[str, dict] = {}
@@ -252,27 +255,33 @@ def u_longshade_death(v: int):
     return _fin(room(L.out(), 'hall', wet=0.16), hp_hz=30, lp_hz=7000, eq=CALM)
 
 
-@cue('u_longshade_presence', 'loop', ('int', -24.0), (PRES_S - 0.01, PRES_S + 0.01), **LOOPK)
+@cue('u_longshade_presence', 'loop', ('int', PRES_LUFS), win(PRES_LONG_S), **LOOPK)
 def u_longshade_presence(v: int):
-    """Longshade's pit while it lives: something vast breathing slowly where the shadow ends — a low shade drone (D1 /
-    A1, beating), a breath rising and falling twice a loop, ink welling up now and then. Seamless."""
+    """Longshade's pit while it lives: something vast lying still where the shadow ends, felt more than heard (ruling
+    37: the old 8 s loop breathed a 260-400 Hz noise band up and down twice a loop, a 4 s heavy-wind whoosh). A low
+    shade drone (D2 / A2, a faint D1 under it) whose partials each drift a dB or two over their own coprime cycles (no
+    beating pair: a beat is a periodic swell), a dark, steady body of low air whose band never moves, and ink welling up
+    at random now and then. No breath, no rise; above 2 kHz only a faint, steady air floor. Mono (the engine places it
+    at the pit). Seamless; 26 s, so no cycle of it repeats where the ear can count it."""
     r = R('u_longshade_presence', v=v)
-    D = PRES_S
+    D = PRES_LONG_S
     n = ns(D)
     t = np.arange(n) / SR
     tone = np.zeros(n)
-    for f, a in ((hz('D2') / 2, 1.0), (hz('D2') / 2 + 0.25, 0.7), (hz('A1'), 0.5), (hz('D2'), 0.35), (hz('D2') + 0.25, 0.25)):
+    for f, a, cyc in ((hz('D2'), 1.0, (2, 3, 5)), (hz('A2'), 0.55, (3, 5, 7)), (hz('D2') / 2, 0.35, (2, 5, 7)),
+                      (hz('D3'), 0.3, (3, 4, 7)), (hz('F3'), 0.12, (2, 3, 7))):
         fs = max(1, round(f * D)) / D
-        tone += a * np.sin(TAU * fs * t + r.uniform(0, TAU))
-    tone = F.apply(tone, [F.lowpass(600, 0.7)], circular=True)
-    breathe = 0.55 + 0.45 * np.sin(TAU * 2 * t / D - np.pi / 2) ** 2
-    air = band_noise(n, r, 260 + 140 * breathe, 0.9, slope=-4.0) * breathe
-    welling = scatter(n, r, 2.5, lambda rr: bubble(rr.uniform(90, 240), rr.uniform(0.08, 0.14), rr.uniform(1.4, 2.0), 0.08)
-                      * rr.uniform(0.3, 0.9))
-    hush = band_noise(n, r, np.full(n, 7500.0), 0.7, slope=-1.0) * breathe     # the faint air over the pit
-    mid = norm(tone) * (0.8 + 0.2 * breathe) + 0.55 * norm(air) + 0.3 * norm(welling) + 0.06 * norm(hush)
-    side = band_noise(n, r, np.full(n, 500.0), 0.8, slope=-4.0) * breathe
-    return loop_out(wide(norm(mid), norm(side), 0.35), hp_hz=28, lp_hz=10000)
+        tone += a * np.sin(TAU * fs * t + r.uniform(0, TAU)) * drift(n, r, cyc, 2.0)
+    tone = F.apply(tone, [F.lowpass(500, 0.7)], circular=True)
+    body = band_noise(n, r, np.full(n, 190.0), 0.8, slope=-4.0) * drift(n, r, (2, 3, 5, 7), 2.0)
+    welling = np.zeros(n)
+    for _ in range(int(r.poisson(0.45 * D))):                         # ink welling up at random, never on a beat
+        g = bubble(r.uniform(90, 220), r.uniform(0.09, 0.16), r.uniform(1.3, 1.9), 0.09) * r.uniform(0.3, 1.0)
+        add_at(welling, g, onset(r, n), wrap=True)
+    # a faint, steady air floor over the pit (no swell): the codec's seam needs a little top to hide in
+    hush = band_noise(n, r, np.full(n, 6500.0), 0.7, slope=-1.0)
+    out = norm(tone) + 0.45 * norm(body) + 0.18 * norm(welling) + 0.02 * norm(hush)
+    return loop_out(out, hp_hz=32, lp_hz=9000)
 
 
 # ── Sunsplinter ─────────────────────────────────────────────────────────────────────────────────
@@ -431,25 +440,29 @@ def u_sunsplinter_death(v: int):
     return _fin(room(L.out(), 'glass', wet=0.18), hp_hz=50, lp_hz=12000, eq=CALM)
 
 
-@cue('u_sunsplinter_presence', 'loop', ('int', -24.0), (PRES_S - 0.01, PRES_S + 0.01), **LOOPK)
+@cue('u_sunsplinter_presence', 'loop', ('int', PRES_LUFS), win(PRES_SUN_S), **LOOPK)
 def u_sunsplinter_presence(v: int):
-    """Sunsplinter's pit while it lives: light humming in the broken glass — a high glass drone (A4 / E5 / A5,
-    beating slowly), a warm hum under it, glints ringing off the shards now and then. Seamless."""
+    """Sunsplinter's pit while it lives: light humming quietly in the broken glass (ruling 37: the old 8 s loop swelled
+    its glass drone and a 3.5 kHz air band on one shared slow wobble). A soft glass drone (A4 / E5 / A5) over a warm
+    hum (D3 / A3), each partial drifting a dB or two on its own coprime cycles (no beating pair), a faint steady shimmer
+    of air low in the band (about 1.2 kHz, never moving), and glints ringing off the shards at random, sparse and
+    quiet. Mono (the engine places it at the pit). Seamless; 22 s."""
     r = R('u_sunsplinter_presence', v=v)
-    D = PRES_S
+    D = PRES_SUN_S
     n = ns(D)
     t = np.arange(n) / SR
     tone = np.zeros(n)
-    for f, a in ((hz('A4'), 1.0), (hz('A4') + 0.25, 0.8), (hz('E5'), 0.6), (hz('E5') + 0.375, 0.45), (hz('A5'), 0.3),
-                 (hz('D3'), 0.5)):
+    for f, a, cyc in ((hz('A4'), 1.0, (2, 3, 5)), (hz('E5'), 0.55, (3, 5, 7)), (hz('A5'), 0.25, (2, 5, 7)),
+                      (hz('D3'), 0.7, (3, 4, 7)), (hz('A3'), 0.45, (2, 3, 7))):
         fs = max(1, round(f * D)) / D
-        tone += a * np.sin(TAU * fs * t + r.uniform(0, TAU))
-    lfo = wobble(n, r, (1, 2), 0.3)
-    glints = scatter(n, r, 1.5, lambda rr: tink(hz(str(rr.choice(['D6', 'E6', 'A6', 'C7']))), 0.6, 0.45, 0.4) * rr.uniform(0.3, 0.9))
-    air = band_noise(n, r, np.full(n, 3500.0), 1.0, slope=-2.0) * lfo
-    mid = norm(tone) * lfo + 0.35 * norm(glints) + 0.25 * norm(air)
-    side = band_noise(n, r, np.full(n, 5000.0), 0.9, slope=-2.0) * lfo
-    return loop_out(wide(norm(mid), norm(side), 0.3), hp_hz=120, lp_hz=10000)
+        tone += a * np.sin(TAU * fs * t + r.uniform(0, TAU)) * drift(n, r, cyc, 2.0)
+    glints = np.zeros(n)
+    for _ in range(int(r.poisson(0.5 * D))):
+        g = tink(hz(str(r.choice(['D6', 'E6', 'A6', 'C7']))), 0.6, 0.45, 0.4) * r.uniform(0.25, 0.8)
+        add_at(glints, g, onset(r, n), wrap=True)
+    air = band_noise(n, r, np.full(n, 1200.0), 0.9, slope=-3.0) * drift(n, r, (2, 3, 5), 1.5)
+    out = norm(tone) + 0.22 * norm(glints) + 0.12 * norm(air)
+    return loop_out(out, hp_hz=110, lp_hz=6000)
 
 
 # ── camps ───────────────────────────────────────────────────────────────────────────────────────

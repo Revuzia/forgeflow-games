@@ -167,6 +167,39 @@ section('Shift + right-click on open ground attack-moves; the held button steers
   focus(50, 50);
 });
 
+section('ruling 38: a held button keeps its order alive: the last point re-sent every 500 ms while the hero stands short of it', () => {
+  // verifier r4: once the watchdog ended a move in a packed wave, a held right button sent nothing more and the hero
+  // stood for the rest of the hold. The re-send is always the point last sent, never the ground under a cursor that a
+  // following camera slid (ruling 33), and nothing at all once the hero stands at it.
+  lane();
+  const c = controller();
+  const t0 = performance.now();
+  at(c, toScreen(45, 56));
+  c.rightDown(false);
+  const first = last() as { type: string; x: number; y: number };
+  check('the click moves', first?.type === 'move' && Math.abs(first.x - 45) < 0.05 && Math.abs(first.y - 56) < 0.05, first);
+  c.lastHoldMove = t0;
+  const n = sent.length;
+  focus(48, 54);                         // the camera follows: the ground under the still cursor is now elsewhere
+  c.frame(t0 + 300);
+  check('nothing re-sent inside 500 ms', sent.length === n, sent.slice(n));
+  c.frame(t0 + 620);
+  const re = last() as { type: string; x: number; y: number; attackMove?: boolean };
+  check('at 500 ms the SAME point is re-sent (not the slid cursor ground), a plain move', sent.length === n + 1 && re.type === 'move' && re.x === first.x && re.y === first.y && !re.attackMove, sent.slice(n));
+  c.frame(t0 + 900);
+  check('…not again inside the next 500 ms', sent.length === n + 1);
+  c.frame(t0 + 1250);
+  check('…and again after it', sent.length === n + 2 && (last() as { x: number }).x === first.x);
+  views = views.map((v) => (v.id === 1 ? { ...v, x: 45.6, y: 55.2 } as EntityView : v));   // the hero got there
+  c.frame(t0 + 1900);
+  check('the hero within 2 m of the point: nothing re-sent', sent.length === n + 2, sent.slice(n));
+  views = views.map((v) => (v.id === 1 ? { ...v, x: 50, y: 52 } as EntityView : v));
+  c.onUp({ button: 2, buttons: 0, clientX: c.ptr.x, clientY: c.ptr.y } as PointerEvent);
+  c.frame(t0 + 2600);
+  check('released: nothing re-sent', sent.length === n + 2, sent.slice(n));
+  focus(50, 50);
+});
+
 section('plain right-click: an ally in front never turns an enemy click into a move; near misses attack', () => {
   views = [unit(1, 'fighter', 0, 40, 40, 0.5), unit(10, 'minion', 1, 50, 50, 0.45), unit(30, 'minion', 0, 50, 50.8, 0.45)];
   const c = controller();
@@ -309,6 +342,50 @@ section('ruling 36: the pick box leans with the body (a fighter\'s head beats a 
   at(c3, toScreen(55.5, 49.15, 0.6));
   c3.rightDown(true);
   check('the minion\'s own body (clear of the fighter) still picks the minion', last()?.type === 'attack' && (last() as { target: number }).target === 11, last());
+});
+
+section('ruling 38: a click on a fighter\'s drawn body never picks a minion touching it from behind (front-most body wins)', () => {
+  // verifier r4: with a minion touching a fighter 15–45° behind it, clicks on the fighter's shoulders and head (h 0.85–0.95,
+  // 0.15 m off its axis on the minion's side) went to the minion: 36,244 of 808,704 (4.5 %). Real art heights and radii
+  // (tall ardit 2.48, dunsom 2.05, short sukri 1.65; minions 1.0–1.7 tall, radius 0.65), two resolutions, three zooms,
+  // nine screen positions; and a click on the minion's head where the fighter does not cover it still picks the minion.
+  const fighters = [{ H: 2.48, r: 0.68 }, { H: 2.05, r: 0.55 }, { H: 1.65, r: 0.5 }];
+  const minions = [{ H: 1.0 }, { H: 1.1 }, { H: 1.7 }];
+  const view = (id: number, kind: Kind, x: number, y: number, radius: number): EntityView => unit(id, kind, 1, x, y, radius);
+  let total = 0, wrong = 0, vis = 0, visWrong = 0;
+  const bad: string[] = [];
+  for (const [w, h] of [[1920, 1080], [1280, 720]]) for (const dist of [CAMERA.minDistance, CAMERA.distance, CAMERA.maxDistance]) {
+    const cm = new PerspectiveCamera(CAMERA.fovDeg, w / h, 1, 400);
+    const p = (CAMERA.pitchDeg * Math.PI) / 180;
+    cm.position.set(50, Math.sin(p) * dist, 50 + Math.cos(p) * dist); cm.rotation.set(-p, 0, 0); cm.updateMatrixWorld(true); cm.updateProjectionMatrix();
+    const scr = (x: number, y: number, hh: number): { x: number; y: number } => { const v = new Vector3(x, hh, y).project(cm); return { x: (v.x * 0.5 + 0.5) * w, y: (-v.y * 0.5 + 0.5) * h }; };
+    for (const [u, vv] of [[0.5, 0.5], [0.08, 0.5], [0.92, 0.5], [0.5, 0.15], [0.5, 0.9], [0.1, 0.15], [0.9, 0.15], [0.1, 0.9], [0.9, 0.9]]) {
+      const dir = new Vector3(u * 2 - 1, -(vv * 2 - 1), 0.5).unproject(cm).sub(cm.position).normalize();
+      const t = -cm.position.y / dir.y, gx = cm.position.x + dir.x * t, gy = cm.position.z + dir.z * t;
+      for (const f of fighters) for (const m of minions) for (const ang of [0, 15, -15, 30, -30, 45, -45, 70, -70]) {
+        const a = (ang * Math.PI) / 180, D = f.r + 0.65, mx = gx + Math.sin(a) * D, my = gy - Math.cos(a) * D;
+        const units: Pickable[] = [
+          { id: 1, x: gx, y: gy, h: 0, artHeight: f.H, view: view(1, 'fighter', gx, gy, f.r) },
+          { id: 2, x: mx, y: my, h: 0, artHeight: m.H, view: view(2, 'minion', mx, my, 0.65) },
+        ];
+        for (const hf of [0.95, 0.85, 0.65]) for (const lat of [-0.15, 0, 0.15]) {
+          const c = scr(gx + lat, gy, f.H * hf);
+          if (c.x < 0 || c.x > w || c.y < 0 || c.y > h) continue;
+          total++;
+          if (pickUnit(cm, w, h, units, c.x, c.y, { slop: 14 }) !== 1) { wrong++; if (bad.length < 4) bad.push(`${w}×${h} d${dist} (${u},${vv}) H${f.H} minion ${m.H} at ${ang}° click h${hf} lat${lat}`); }
+        }
+        // the minion's head where the fighter's drawn body does not cover it (more than its radius + 6 px off the
+        // fighter's axis, or above its head)
+        const mh = scr(mx, my, m.H * 0.85), fh = scr(gx, gy, f.H), ff = scr(gx, gy, 0), fw = Math.abs(scr(gx + f.r, gy, 0).x - ff.x);
+        const tt = Math.min(1, Math.max(0, (ff.y - mh.y) / (ff.y - fh.y))), axisX = ff.x + (fh.x - ff.x) * tt;
+        if ((mh.y >= fh.y - 4 && Math.abs(mh.x - axisX) < fw + 6) || mh.x < 0 || mh.x > w || mh.y < 0 || mh.y > h) continue;
+        vis++;
+        if (pickUnit(cm, w, h, units, mh.x, mh.y, { slop: 14 }) !== 2) visWrong++;
+      }
+    }
+  }
+  check(`${total} clicks on a fighter's drawn shoulders, head and chest with a minion touching it: 0 pick the minion (${wrong})`, total > 10000 && wrong === 0, bad);
+  check(`${vis} clicks on a minion's head clear of the fighter: 0 pick the fighter (${visWrong})`, vis > 1000 && visWrong === 0);
 });
 
 section('ruling 36: moving units are picked where they are drawn; overlap goes to the body nearest the cursor', () => {

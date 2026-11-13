@@ -9,7 +9,7 @@
 // a box centred on the feet x let a short minion behind it take a click on that head).
 // A click on a unit's drawn body (half its collision radius either side of that axis, about its shoulders, from the
 // head down to the feet) goes to the front-most such body, as a rendered pick would: the unit nearer the camera
-// covers what stands behind it (ruling 37: a minion touching a fighter 15-45° behind it took clicks on the fighter's
+// covers what stands behind it (ruling 38: a minion touching a fighter 15-45° behind it took clicks on the fighter's
 // shoulders and head).
 // Bodies side by side (feet within FRONT_PX on screen), and clicks off every body but inside boxes, go to the box
 // whose body axis is nearest the cursor; an exact tie goes to the unit nearer the camera, then the lower id.
