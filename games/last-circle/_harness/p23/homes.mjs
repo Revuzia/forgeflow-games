@@ -21,8 +21,22 @@ const TWICE = argv.includes("--twice");
 const { makeEnv } = await import(pathToFileURL(path.join(HERE, "..", "world_env.mjs")).href);
 const E = await makeEnv({ root: ROOT, vendor: arg("vendor", null) || undefined });
 const { buildMap } = await E.importMaps();
+// the kit's furniture GLBs are EXT_meshopt_compression files (world_env's own GLB reader refuses them): load them as the game does - three's GLTFLoader with
+// the vendored MeshoptDecoder - so maps.js BAKES the real GLB vertices and the 'scale' row reads the box those baked vertices span (globalThis.__LC_KITDRAWN)
+const JSM = path.join(E.ROOT, "assets", "vendor", "three", "examples", "jsm");
+const { GLTFLoader } = await import(pathToFileURL(path.join(JSM, "loaders", "GLTFLoader.js")).href);
+const { MeshoptDecoder } = await import(pathToFileURL(path.join(JSM, "libs", "meshopt_decoder.module.js")).href);
+await MeshoptDecoder.ready;
+const GL = new GLTFLoader(); GL.setMeshoptDecoder(MeshoptDecoder);
+const _kitGlb = {};
+async function loadGLTF(url) {
+  const rel = String(url).replace(/^.*?assets\//, "assets/").split("?")[0];
+  if (!/^assets\/props\/city\/furniture\//.test(rel)) return E.loadGLTF(url);
+  if (!_kitGlb[rel]) { const b = fs.readFileSync(path.join(ROOT, rel)); _kitGlb[rel] = await GL.parseAsync(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength), ""); }
+  return _kitGlb[rel].scene.clone(true);
+}
+const makeW = (s) => { const W = E.makeW(s); W.kernel.loadGLTF = loadGLTF; return W; };
 let HG = null;
-const MAN = JSON.parse(fs.readFileSync(path.join(ROOT, "assets", "props", "city", "manifest.json"), "utf8"));
 try { HG = await import(pathToFileURL(path.join(ROOT, "runtime", "3d", "royale", "housegen.js")).href); } catch (e) { HG = null; }
 
 const FILL = /clock|lamp|[pP]lant|trash|art|poster|rug|wallShelf|mirror|whiteboard|runner|coatRack|monitor|carton|box\/box|televisionModern|Microwave/;
@@ -59,8 +73,8 @@ const SOFA = /[sS]ofa(?!Ottoman)/, COFFEE = /tableCoffee|coffee/, TVU = /cabinet
 const SINKB = /bathroomSink|box\/basin/, MIRROR = /bathroomMirror|box\/mirror/, WASH = /shower|bathtub/;
 const FLOORLAMP = /lamp(Round|Square)Floor|box\/lampFloor/, PLANT = /pottedPlant/, CLOCK = /clock/;
 
-function homeRows(M) {
-  const out = { buildings: [], rooms: [], kit: { n: 0, bad: 0, worst: 0, worstId: null, ks: {} }, loot: { points: M.lootPoints ? M.lootPoints.length : 0, house: 0, chests: 0 }, homeLoot: 0, homeArea: 0 };
+function homeRows(M, KD) {
+  const out = { buildings: [], rooms: [], kit: { n: 0, drawn: 0, boxes: 0, bad: 0, worst: 0, worstId: null, ks: {} }, loot: { points: M.lootPoints ? M.lootPoints.length : 0, house: 0, chests: 0 }, homeLoot: 0, homeArea: 0 };
   for (const H of M.houses) {
     const home = H.use === "house" && H.theme !== "ruin";
     const nonHall = H.rooms.filter((r) => r.kind !== "hall");
@@ -69,26 +83,7 @@ function homeRows(M) {
       clocks: H.furniture.filter((q) => CLOCK.test(q.type)).length };
     out.loot.house += H.loot.length; out.loot.chests += H.chests.length;
     out.buildings.push(b);
-    // kit pieces: the collider housegen hands the game vs the box the kit DRAWS for that entry: manifest.json's bbox_min_m / bbox_max_m (the drawn GLB's extent at
-    // suggested_scale, kitcollide's decode row) x the entry's scale, turned by citykit's exact quarter turn (x' = x cos + z sin, z' = -x sin + z cos)
-    for (const q of H.furniture) {
-      if (q.src !== "kit") continue;
-      const k = q.kit.scale == null ? 1 : q.kit.scale, T = MAN.types[q.kit.type];
-      out.kit.ks[k] = (out.kit.ks[k] || 0) + 1;
-      out.kit.n++;
-      if (!T) { out.kit.bad++; continue; }
-      const c = [1, 0, -1, 0][q.kit.rot & 3], sn = [0, 1, 0, -1][q.kit.rot & 3];
-      const mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
-      for (const lx of [T.bbox_min_m[0], T.bbox_max_m[0]]) for (const lz of [T.bbox_min_m[2], T.bbox_max_m[2]]) {
-        const x = q.kit.x + k * (lx * c + lz * sn), z = q.kit.z + k * (-lx * sn + lz * c);
-        mn[0] = Math.min(mn[0], x); mx[0] = Math.max(mx[0], x); mn[2] = Math.min(mn[2], z); mx[2] = Math.max(mx[2], z);
-      }
-      mn[1] = q.kit.y + k * T.bbox_min_m[1]; mx[1] = q.kit.y + k * T.bbox_max_m[1];
-      let d = 0;
-      for (let a = 0; a < 3; a++) d = Math.max(d, Math.abs(mn[a] - q.min[a]), Math.abs(mx[a] - q.max[a]));
-      if (!(d <= 0.02)) out.kit.bad++;
-      if (!(d <= out.kit.worst)) { out.kit.worst = r3(d); out.kit.worstId = q.id + " " + q.kit.type; }
-    }
+    for (const q of H.furniture) if (q.src === "kit") { const k = q.kit.scale == null ? 1 : q.kit.scale; out.kit.ks[k] = (out.kit.ks[k] || 0) + 1; out.kit.n++; }
     if (!home) continue;
     const roomArea = H.rooms.reduce((a, r) => a + r.area, 0);
     out.homeLoot += H.loot.length + H.chests.length; out.homeArea += roomArea;
@@ -120,6 +115,16 @@ function homeRows(M) {
           (m.min[2] + m.max[2]) / 2 > b.min[2] - 0.3 && (m.min[2] + m.max[2]) / 2 < b.max[2] + 0.3)) ? 1 : 0 });
     }
   }
+  // kit pieces: the collider housegen hands the game vs the box of the vertices maps.js BAKED for that entry (buildHouseFurniture's draw path, read through its
+  // __LC_KITDRAWN hook: the real GLB at the draw scale maps.js applies). A piece drawn as its collider box (GLB not loaded) is counted apart: not a judged draw
+  for (const r of KD || []) {
+    out.kit.drawn++;
+    if (!r.glb) { out.kit.boxes++; continue; }
+    let d = 0;
+    for (let a = 0; a < 3; a++) d = Math.max(d, Math.abs(r.drawn[a] - r.min[a]), Math.abs(r.drawn[a + 3] - r.max[a]));
+    if (!(d <= 0.02)) out.kit.bad++;
+    if (!(d <= out.kit.worst)) { out.kit.worst = r3(d); out.kit.worstId = r.type; }
+  }
   out.loot.total = out.loot.points + out.loot.chests;            // (map.lootPoints already holds every house's points, maps.js: the house column is a part of it)
   return out;
 }
@@ -128,11 +133,12 @@ const res = { root: ROOT, maps: MAPS, seeds: SEEDS, furnK: HG && HG.FURN_K != nu
 const w = console.warn; console.warn = () => {};
 const hashOf = (o) => crypto.createHash("sha1").update(JSON.stringify(o)).digest("hex").slice(0, 16);
 for (const m of MAPS) for (const s of SEEDS) {
-  globalThis.__LC_BOXES = null;
+  globalThis.__LC_BOXES = null; globalThis.__LC_KITDRAWN = [];
   const t0 = Date.now();
-  const M = await buildMap(E.makeW(s), m);
+  const M = await buildMap(makeW(s), m);
   res.genVersion = M.genVersion;
-  const R = homeRows(M);
+  const R = homeRows(M, globalThis.__LC_KITDRAWN);
+  globalThis.__LC_KITDRAWN = null;
   R.map = m; R.seed = s; R.ms = Date.now() - t0; R.hash = hashOf([R.buildings, R.rooms]);
   res.builds.push(R);
   process.stderr.write(`${m} ${s}: ${M.houses.length} buildings ${R.ms} ms hash ${R.hash}\n`);
@@ -140,9 +146,9 @@ for (const m of MAPS) for (const s of SEEDS) {
 }
 if (TWICE) {
   const m = MAPS[0], s = SEEDS[0];
-  globalThis.__LC_BOXES = null;
-  const M = await buildMap(E.makeW(s), m);
-  const R = homeRows(M);
+  globalThis.__LC_BOXES = null; globalThis.__LC_KITDRAWN = null;
+  const M = await buildMap(makeW(s), m);
+  const R = homeRows(M, null);
   res.determinism = { map: m, seed: s, a: res.builds[0].hash, b: hashOf([R.buildings, R.rooms]) };
   try { M.dispose && M.dispose(); } catch (e) { /* as above */ }
 }

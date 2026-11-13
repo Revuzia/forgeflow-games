@@ -25,8 +25,8 @@ Rows (any FAIL -> exit 1; the census not running -> exit 2):
   bath-set      baths: a basin with a mirror over it >= 90 %, a shower or tub >= 90 % (plan item 7)
   filler        filler <= 35 % of a home's pieces (pooled); clocks <= 1 in every home; floor lamps <= 1 and potted plants <= 1 in every room   [48.8 %]
   narrow        living / kitchen / bedroom: the narrow side of the room's biggest rectangle >= 5.0 m in >= 98 %; bath long / narrow <= 2.0 in >= 95 %   [19.7 % at 2.5 m]
-  scale         housegen.FURN_K in [1.15, 1.25] and every kit piece's collider == the box the kit DRAWS for its entry (manifest bbox x the entry's scale,
-                citykit's quarter turn) within 2 cm (0 mismatches)                                                   [k = 1.0]
+  scale         housegen.FURN_K in [1.15, 1.25] and every kit piece's collider == the box of the vertices maps.js BAKES for it (buildHouseFurniture, the real
+                meshopt GLB at maps.js's draw scale, read through its Node-only __LC_KITDRAWN hook) within 2 cm (0 mismatches)   [k = 1.0]
   tris          furnished home storeys: p90 <= 6,000 triangles (housegen's own count of what it draws)                [p50 3,341]
   loot          every map x seed: the map's loot points (map.lootPoints - it holds every house's points - + house chests) within +-10 % of the W9 tip
   loot-density  homes' loot points (+ chests) per m2 of room, per map (4 seeds pooled), within +-15 % of the W9 tip (the plan's loot row, second half)
@@ -38,6 +38,7 @@ Plants (a scratch copy of runtime/ + assets/props with ONE source edit; each mus
   scale-draw-only (kit drawn at k, colliders at 1) -> scale     no-programme (the minimum programme off) -> programme       shed-flood (shed weights x20) -> sheds
   no-sets (the centre groups off) -> sets       tri-flood (TRI_BUDGET 6000 -> 60000 and the quota 1 per 1.5 m2) -> tris     loot-drop (house loot halved) -> loot
   rng-leak (Math.random in the furnisher) -> determinism     no-bath-set (no mirror / shower) -> bath-set     (loot-drop also -> loot-density)
+  draw-scale-drop (maps.js reads suggested_scale off citykit's indexed manifest: the pass-1 bug, pieces baked at native size x k) -> scale
 """
 from __future__ import annotations
 
@@ -62,6 +63,7 @@ SEEDS = "1,7,1234,2026"
 W9_TIP = "361c5ec3"          # the Wave-9 round-1 tip Wave 10 starts from (master 361c5ec3 = LIVE_REV b7e245ef + the gates baseline move): the loot baseline. NEVER moves
 HG = "runtime/3d/royale/housegen.js"
 TG = "runtime/3d/royale/towngen.js"
+MJ = "runtime/3d/royale/maps.js"
 # plant -> (rows that must FAIL, [(file, regex, replacement)]) - each regex must match exactly once in the scratch copy (else could-not-judge)
 PLANTS = {
     "tiny-homes": ({"home-size", "storeys"}, [(TG, r'house_s: \{ use: "house", gen: "house", dims: \[[^\n]*?\], floors: \[[^\]]*\]',
@@ -75,6 +77,8 @@ PLANTS = {
     "gap-kitchen": ({"kitchen-run"}, [(HG, r"export const KITCHEN_RUN = true;", "export const KITCHEN_RUN = false;")]),
     "strip-rooms": ({"narrow"}, [(HG, r"export const MIN_ROOM_W = 2;", "export const MIN_ROOM_W = 1;")]),
     "scale-draw-only": ({"scale"}, [(HG, r"const COL_K = FURN_K;", "const COL_K = 1;")]),
+    # the pass-1 bug back: maps.js reads the raw manifest key (`suggested_scale`) off citykit's INDEXED manifest (it keeps `.scale`): every piece baked at native x k
+    "draw-scale-drop": ({"scale"}, [(MJ, r"return T && T\.scale > 0 \? T\.scale : 1;", "return T && T.suggested_scale > 0 ? T.suggested_scale : 1;")]),
     "no-programme": ({"programme"}, [(HG, r"export const HOME_PROGRAMME = true;", "export const HOME_PROGRAMME = false;")]),
     "shed-flood": ({"sheds"}, [(TG, r"export const SHED_W = 1;", "export const SHED_W = 20;")]),
     "no-sets": ({"sets"}, [(HG, r"export const CENTRE_GROUPS = true;", "export const CENTRE_GROUPS = false;")]),
@@ -220,13 +224,19 @@ def judge(v, d, base):
     bath_ok = pct(sum(1 for r in bs if r["nw"] > 0 and r["nl"] / r["nw"] <= 2.0 + 1e-9), len(bs))
     v.check("narrow", wide >= 98 and bath_ok >= 95, "living / kitchen / bedroom %d: narrow side >= 5.0 m in %.1f %% (bar >= 98); baths %d: aspect <= 2.0 in %.1f %% (bar >= 95)" % (
         len(lk), wide, len(bs), bath_ok), ">= 98 %, >= 95 %")
-    # scale
+    # scale: the collider vs the box of the vertices maps.js BAKED for the entry (buildHouseFurniture's draw path, the real GLB at maps.js's draw scale)
     k = d.get("furnK") or 1
     kn = sum(R["kit"]["n"] for R in B)
+    kd = sum(R["kit"].get("drawn", 0) for R in B)
+    kx = sum(R["kit"].get("boxes", 0) for R in B)
     kb = sum(R["kit"]["bad"] for R in B)
     kw = max(B, key=lambda R: R["kit"]["worst"])["kit"]
-    v.check("scale", 1.15 - 1e-9 <= k <= 1.25 + 1e-9 and kn > 0 and kb == 0, "FURN_K %.3f (bar 1.15 .. 1.25); kit pieces %d, collider != drawn box (> 2 cm) %d (bar 0); worst %.3f m (%s); entry scales %s" % (
-        k, kn, kb, kw["worst"], kw["worstId"], json.dumps(B[0]["kit"]["ks"])), "k in [1.15, 1.25], 0 mismatches")
+    msg = "FURN_K %.3f (bar 1.15 .. 1.25); kit pieces %d, baked by maps.js %d (GLB %d, collider-box stand-ins %d); baked box != collider (> 2 cm) %d (bar 0); worst %.3f m (%s); entry scales %s" % (
+        k, kn, kd, kd - kx, kx, kb, kw["worst"], kw["worstId"], json.dumps(B[0]["kit"]["ks"]))
+    if kn == 0 or kd != kn or kx > 0:
+        v.cnj("scale", msg + " - every kit piece must be baked from its GLB to judge the draw path")
+    else:
+        v.check("scale", 1.15 - 1e-9 <= k <= 1.25 + 1e-9 and kb == 0, msg, "k in [1.15, 1.25], 0 mismatches")
     # tris
     st = [t for b in homes for t in b["tris"] if t > 0]
     v.check("tris", bool(st) and q(st, 0.9) <= 6000, "home storeys %d: triangles p50 %d, p90 %d (bar <= 6000), max %d" % (len(st), q(st, 0.5), q(st, 0.9), max(st)), "p90 <= 6000")

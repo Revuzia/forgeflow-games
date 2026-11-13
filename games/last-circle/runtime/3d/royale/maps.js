@@ -774,6 +774,14 @@ function mkHeightFn(mapId, seed) {
 //     (crates by storm phase) and death piles (a dead man's whole bag on one spot). A version-6 client builds a different world from the same seed.
 export const MAP_GEN_VERSION = 9;                   // see map.genVersion (9 = Wave 10 round 1 (lane R1A): homes 10 x 10 m and up, ~45 % two-storey, room programme, furniture x1.15, area quota, kitchens / baths, fewer sheds, loot by home room area - towngen VERSION 5, housegen VERSION 7; 8 = Wave 9 (round 1, lane R1A): door leaves on the furnished houses - new slab colliders, furniture and loot moved off the swings, housegen VERSION 6, the doors' start state; 7 = the parity release P1-P3, above; 6 = Wave 8: every enterable town / compound building on all three maps is a furnished housegen.js house - its walls, floors, roofs, furniture and colliders; 5 = Wave 7b: Isla Viva's resort towns, docks village and crater-rim village, Deepwood's lodge villages and mill-and-bridge compound; Savanna's world is identical to 4; 4 = Wave 7 completion: Savanna's polished city - taller downtown, parcel palettes, richer compounds, landmarks, merged street dressing; 3 = Wave 7: Savanna's towns; 2 = Wave 6 layout; an old client has no export and counts as 1)
 const FALLBACK_GEN_VERSION = { ashgrid: 2, isla_viva: 4, deepwood: 4 };   // the generator version of the layout a page plays when towngen.js / citykit.js do not load (see prepareCity): Savanna's Wave-6 layout is 2; Isla Viva's and Deepwood's pre-7b worlds are 4 (their maps were identical in 2, 3 and 4, only the loot settled differently from 3)
+/** (W10 R1A) the factor maps.js bakes a house kit piece's GLB vertices by (buildHouseFurniture): the GLB is in the kit's NATIVE units, so a piece is drawn at its
+ *  type's scale - citykit's indexed manifest keeps the raw suggested_scale as `.scale` - x the entry's scale (housegen FURN_K): the size of its collider.
+ *  Exported for _harness/p23/homes.mjs (w10_homes 'scale' row), which measures the drawn box through these two functions. */
+export function kitTypeDrawScale(manifest, type) {
+  const T = manifest && manifest.types && manifest.types[type];
+  return T && T.scale > 0 ? T.scale : 1;
+}
+export function kitDrawScale(typeScale, entryScale) { return (typeScale > 0 ? typeScale : 1) * (entryScale > 0 ? entryScale : 1); }
 export const LAT_CELLS = 608;                       // 8 chunks x 76 near-LOD cells (see CHUNKS / NEAR_SEG in buildMap)
 export const LAT_N = LAT_CELLS + 1;                 // 609 nodes per side
 export const LAT_PITCH = SIZE / LAT_CELLS;          // 2.6316 m
@@ -4416,8 +4424,7 @@ export async function buildMap(W, mapId) {
           out.push({ pos, nor, idx, col: c });
         }
         tpl.set(t, out.length ? out : null);
-        const T = kit.manifest && kit.manifest.types && kit.manifest.types[t];
-        tplScale.set(t, T && T.suggested_scale > 0 ? T.suggested_scale : 1);
+        tplScale.set(t, kitTypeDrawScale(kit.manifest, t));
       }
     }
     const COSQ = [1, 0, -1, 0], SINQ = [0, 1, 0, -1];
@@ -4477,7 +4484,8 @@ export async function buildMap(W, mapId) {
         v += n;
       }
       for (const e of kitL) {
-        const kp = tpl.get(e.type), c = COSQ[e.rot & 3], sn = SINQ[e.rot & 3], ks = (tplScale.get(e.type) || 1) * (e.scale || 1);
+        const kp = tpl.get(e.type), c = COSQ[e.rot & 3], sn = SINQ[e.rot & 3], ks = kitDrawScale(tplScale.get(e.type), e.scale);
+        const v0 = v;
         if (kp) {
           for (const t of kp) {
             const base = v, cr = c8(t.col[0] * HG_INDOOR), cg = c8(t.col[1] * HG_INDOOR), cb = c8(t.col[2] * HG_INDOOR);
@@ -4511,6 +4519,13 @@ export async function buildMap(W, mapId) {
           quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1]);
           quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0]);
           quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0]);
+        }
+        // (W10 R1A) a harness hook (w10_homes 'scale' row, Node only - unset in the game): the box of the vertices just BAKED for this entry vs its collider
+        const KD = globalThis.__LC_KITDRAWN;
+        if (KD && v > v0) {
+          const m = [1e9, 1e9, 1e9, -1e9, -1e9, -1e9];
+          for (let w = v0; w < v; w++) for (let a = 0; a < 3; a++) { const x = P[w * 3 + a]; if (x < m[a]) m[a] = x; if (x > m[a + 3]) m[a + 3] = x; }
+          KD.push({ type: e.type, glb: !!kp, drawn: m, min: e.min, max: e.max });
         }
       }
       const geo = new THREE.BufferGeometry();
