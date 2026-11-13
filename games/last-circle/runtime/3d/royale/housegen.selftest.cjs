@@ -193,7 +193,7 @@ function checkHouse(H, HGmod, MAN) {
   // (W10 R1A) the collision covers (housegen mergeColliderBoxes): per part kind and height span, the cover boxes (mergedCol, nothing drawn) and the drawn
   // boxes they replace (cm) are the SAME solid - each inside the union of the other set, to the millimetre - and a cover never draws a face
   { const grp = new Map(), key = (b) => b.p + "|" + Math.round(b.min[1] * 1000) + "|" + Math.round(b.max[1] * 1000);
-    for (const b of H.boxes) if (b.cm || b.mergedCol) { let g = grp.get(key(b)); if (!g) grp.set(key(b), g = { cm: [], mc: [] }); (b.mergedCol ? g.mc : g.cm).push(b); }
+    for (const b of H.boxes) if (b.cm || b.mergedCol) { const kb = key(b); let g = grp.get(kb); if (!g) grp.set(kb, g = { cm: [], mc: [] }); (b.mergedCol ? g.mc : g.cm).push(b); }
     let bad = null;
     for (const [k, g] of grp) {
       if (g.mc.some((b) => b.h !== 63 || !b.c)) { bad = k + ": a cover box draws a face or does not collide"; break; }
@@ -615,9 +615,11 @@ function checkHouse(H, HGmod, MAN) {
     }
   }
   // ---- floor loot is on free floor: never inside or under a piece's collider (a coffee table, a pallet: the walk steps over them)
+  const solidByFloor = new Map();                // (W10 R1A, CPU: the solid pieces per floor, listed once - was a scan of every piece per loot point)
+  for (const q of H.furniture) if (!q.deco) { let l = solidByFloor.get(q.floor); if (!l) solidByFloor.set(q.floor, l = []); l.push(q); }
   for (const l of H.loot) {
     if (l.on !== "floor") continue;
-    const p = H.furniture.find((q) => !q.deco && q.floor === l.floor && l.x > q.min[0] - 0.05 && l.x < q.max[0] + 0.05 && l.z > q.min[2] - 0.05 && l.z < q.max[2] + 0.05);
+    const p = (solidByFloor.get(l.floor) || []).find((q) => l.x > q.min[0] - 0.05 && l.x < q.max[0] + 0.05 && l.z > q.min[2] - 0.05 && l.z < q.max[2] + 0.05);
     if (p) { E("loot", "floor loot " + l.id + " under / inside " + p.cat); break; }
   }
   // ---- nav graph: every room joined to the street

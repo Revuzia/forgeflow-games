@@ -168,6 +168,7 @@ export const LOOT_K_LODGE = 0.5;           // (W10 R1A) a lodge / mill building 
 export const LOOT_K = Object.freeze({ home: 1, house: 0.6, shop: 0.85, midrise: 0.95, tower: 1, hall: 0.8, shed: 0.7, barn: 1 });
 export const RNG_LEAK = false;             // (the homes gate's rng-leak plant: Math.random in the quota - the census must see two builds differ)
 const FILLER_TYPE = /clock|lamp|[pP]lant|trash|art|poster|rug|wallShelf|mirror|whiteboard|runner|coatRack|monitor|carton|box\/box|televisionModern|Microwave/;   // (the homes census's FILL list)
+const FILLER_MEMO = new Map(), isFiller = (t) => { let v = FILLER_MEMO.get(t); if (v === undefined) FILLER_MEMO.set(t, (v = FILLER_TYPE.test(t))); return v; };   // (W10 R1A, CPU: one regex test per kit type)
 /** (W10 R1A) a catalog entry's filler-cap class (0 none, 1 clock, 2 floor lamp, 3 potted plant), cached on the entry */
 const capKind = (c) => { if (c._capK === undefined) { const t = c.type || ""; c._capK = /clock/.test(t) ? 1 : /lamp(Round|Square)Floor/.test(t) ? 2 : /pottedPlant/.test(t) ? 3 : 0; } return c._capK; };
 const QUOTA_KINDS = new Set(["living", "bedroom", "kitchen"]);
@@ -273,18 +274,19 @@ function shuffle(r, a) { for (let i = a.length - 1; i > 0; i--) { const j = Math
 const MERGE_PARTS = { wall: 1, slab: 1, fill: 1, trim: 1 };
 function coverRects(xs, zs, cov, nx, nz, xFirst, lap) {
   // (lap: a rectangle grows through cells another rectangle already holds - overlapping covers: a wall cross is 2 boxes, not 3)
+  // (cell (a, b) of the scan = cov[a * sa + b * sb]: strides instead of index closures - W10 R1A, CPU; the same rectangles)
   const used = new Uint8Array(nx * nz), out = [];
-  const A = xFirst ? nx : nz, B = xFirst ? nz : nx;
-  const at = xFirst ? (a, b) => b * nx + a : (a, b) => a * nx + b;
-  const can = (a, b) => cov[at(a, b)] && (lap || !used[at(a, b)]);
+  const A = xFirst ? nx : nz, B = xFirst ? nz : nx, sa = xFirst ? 1 : nx, sb = xFirst ? nx : 1;
   for (let b = 0; b < B; b++) for (let a = 0; a < A; a++) {
-    if (!cov[at(a, b)] || used[at(a, b)]) continue;
-    let a0 = a, a1 = a; while (a1 + 1 < A && can(a1 + 1, b)) a1++;
-    if (lap) while (a0 > 0 && can(a0 - 1, b)) a0--;
-    const row = (bb) => { for (let k = a0; k <= a1; k++) if (!can(k, bb)) return false; return true; };
+    const k0 = a * sa + b * sb;
+    if (!cov[k0] || used[k0]) continue;
+    let a0 = a, a1 = a;
+    while (a1 + 1 < A) { const k = (a1 + 1) * sa + b * sb; if (!(cov[k] && (lap || !used[k]))) break; a1++; }
+    if (lap) while (a0 > 0) { const k = (a0 - 1) * sa + b * sb; if (!(cov[k] && (lap || !used[k]))) break; a0--; }
+    const row = (bb) => { for (let q = a0; q <= a1; q++) { const k = q * sa + bb * sb; if (!(cov[k] && (lap || !used[k]))) return false; } return true; };
     let b0 = b, b1 = b; while (b1 + 1 < B && row(b1 + 1)) b1++;
     if (lap) while (b0 > 0 && row(b0 - 1)) b0--;
-    for (let bb = b0; bb <= b1; bb++) for (let k = a0; k <= a1; k++) used[at(k, bb)] = 1;
+    for (let bb = b0; bb <= b1; bb++) for (let q = a0; q <= a1; q++) used[q * sa + bb * sb] = 1;
     out.push(xFirst ? [xs[a0], zs[b0], xs[a1 + 1], zs[b1 + 1]] : [xs[b0], zs[a0], xs[b1 + 1], zs[a1 + 1]]);
   }
   return out;
@@ -2334,6 +2336,23 @@ export function generate(parcel, opts) {
   const SXA = new Float64Array(NU), SZA = new Float64Array(NV);
   for (let a = 0; a < NU; a++) SXA[a] = su(a);
   for (let b = 0; b < NV; b++) SZA[b] = sv(b);
+  // (W10 R1A, CPU) blockInto's clearing stamp (value 0) that logs each cell it changes as (index, old value): the room-walk cache takes the last piece it took in
+  // out again by undoing the log (unput right after a passed check - the furnisher's commonest move), instead of rebuilding the room from the structure
+  const blockLog = (fr, sfl, u0, u1, yA, yB, v0, v1, extra, log) => {
+    if (!(yB > sfl + CAPSULE.step && yA < sfl + CAPSULE.h)) return;
+    const r = CAPSULE.r + WALK_MARGIN + (extra || 0), r2 = r * r;
+    const a0 = Math.max(0, Math.floor((u0 - r + W / 2 + RING) / GRID - 0.5)), a1 = Math.min(NU - 1, Math.ceil((u1 + r + W / 2 + RING) / GRID - 0.5));
+    const b0 = Math.max(0, Math.floor((v0 - r + D / 2 + RING) / GRID - 0.5)), b1 = Math.min(NV - 1, Math.ceil((v1 + r + D / 2 + RING) / GRID - 0.5));
+    for (let b = b0; b <= b1; b++) {
+      const z = SZA[b], ez = z < v0 ? v0 - z : z > v1 ? z - v1 : 0;
+      if (ez >= r) continue;
+      const ez2 = ez * ez, o = b * NU;
+      for (let a = a0; a <= a1; a++) {
+        const x = SXA[a], ex = x < u0 ? u0 - x : x > u1 ? x - u1 : 0;
+        if (ex * ex + ez2 < r2 && fr[o + a] !== 0) { log.push(o + a, fr[o + a]); fr[o + a] = 0; }
+      }
+    }
+  };
   const blockInto = (fr, sfl, u0, u1, yA, yB, v0, v1, stampV, extra) => {      // (extra: PASS_MARGIN for the ports check)
     const val = stampV || 0;
     if (!(yB > sfl + CAPSULE.step && yA < sfl + CAPSULE.h)) return;
@@ -2783,7 +2802,7 @@ export function generate(parcel, opts) {
       const pm = R._pm != null ? R._pm : PASS_MARGIN;
       if (!RW.free || RW.stale) {                          // (stale: a piece of the cache was taken out - set where pieces leave a room; was a scan of the cache per call)
         RW.stale = false;
-        RW.free = RW.free || new Uint8Array(NS); RW.inc = new Set();
+        RW.free = RW.free || new Uint8Array(NS); RW.inc = new Set(); RW.log = [];
         const sf0 = pm ? structFreeP[f] : structFree[f];
         for (let b = wb0; b <= wb1; b++) { const o = b * NU; for (let a = wa0; a <= wa1; a++) RW.free[o + a] = sf0[o + a]; }
       }
@@ -2791,7 +2810,7 @@ export function generate(parcel, opts) {
       const pend = placed.filter((p) => !RW.inc.has(p)), st = ++roomStamp.b;
       for (const p of pend) for (const pb of pieceBoxes(p)) blockInto(roomBlk, s[f], pb[0], pb[1], pb[2], pb[3], pb[4], pb[5], st, pm);
       const ok = roomOK0(RW.free, st);
-      if (ok) for (const p of pend) { for (const pb of pieceBoxes(p)) blockInto(RW.free, s[f], pb[0], pb[1], pb[2], pb[3], pb[4], pb[5], 0, pm); RW.inc.add(p); }
+      if (ok) for (const p of pend) { const lg = []; for (const pb of pieceBoxes(p)) blockLog(RW.free, s[f], pb[0], pb[1], pb[2], pb[3], pb[4], pb[5], pm, lg); RW.inc.add(p); RW.log.push(p, lg); }
       return ok;
     };
     const roomOK0 = (fr, bst) => {
@@ -2813,7 +2832,12 @@ export function generate(parcel, opts) {
       }
       return got >= np && n >= 16;
     };
-    const unput = (p) => { R._tall = null; R._pv = (R._pv || 0) + 1; if (RW.inc && RW.inc.has(p)) RW.stale = true; const i = furn.indexOf(p); if (i >= 0) furn.splice(i, 1); const j = placed.indexOf(p); if (j >= 0) placed.splice(j, 1); tris[f] -= p.cat.tris; R.spent -= p.cat.tris; if (p.host) p.host.tops = (p.host.tops || 1) - 1; };
+    const unput = (p) => { R._tall = null; R._pv = (R._pv || 0) + 1;
+      if (RW.inc && RW.inc.has(p)) {                      // (the piece the cache took in last: its cells back as they were; any other: the cache is rebuilt)
+        const L = RW.log;
+        if (!RW.stale && L && L.length && L[L.length - 2] === p) { const lg = L.pop(); L.pop(); for (let i = lg.length - 2; i >= 0; i -= 2) RW.free[lg[i]] = lg[i + 1]; RW.inc.delete(p); }
+        else RW.stale = true;
+      } const i = furn.indexOf(p); if (i >= 0) furn.splice(i, 1); const j = placed.indexOf(p); if (j >= 0) placed.splice(j, 1); tris[f] -= p.cat.tris; R.spent -= p.cat.tris; if (p.host) p.host.tops = (p.host.tops || 1) - 1; };
     const put = (cat, u, v, fq, tint, extra) => {
       const w = fq % 2 ? cat.d : cat.w, d = fq % 2 ? cat.w : cat.d;
       const rect = [u - w / 2, v - d / 2, u + w / 2, v + d / 2];
@@ -2877,7 +2901,7 @@ export function generate(parcel, opts) {
       // storey budget first, the dressing what is left
       if (phase === 1 && home && AREA_QUOTA && QUOTA_KINDS.has(R.kind) && !opts._now) {
         const c0 = CATALOG[id] || CATALOG[ALIAS[id]];
-        if (c0 && FILLER_TYPE.test(c0.type || "")) { (R._decor || (R._decor = [])).push(() => tryWall(id, pref, Object.assign({}, opts, { _now: true }))); return null; }
+        if (c0 && isFiller(c0.type || "")) { (R._decor || (R._decor = [])).push(() => tryWall(id, pref, Object.assign({}, opts, { _now: true }))); return null; }
       }
       const cat = catOf(id);
       if (!cat || !budgetOK(cat)) return null;
@@ -2915,7 +2939,7 @@ export function generate(parcel, opts) {
       if (!p && R._acc && opts.seen) { R._acc = false; p = scan(cat, false); R._acc = true; if (p) p.vis = null; }
       return p;
     };
-    const tryAt = (id, u, v, fq, tint, touch, noRoom) => {        // a piece centred at (u, v) facing fq (noRoom: the caller runs roomOK itself - tableSet)
+    const tryAt = (id, u, v, fq, tint, touch) => {        // a piece centred at (u, v) facing fq
       const cat = catOf(id);
       if (!cat || !budgetOK(cat)) return null;
       const w = fq % 2 ? cat.d : cat.w, d = fq % 2 ? cat.w : cat.d;
@@ -2924,7 +2948,7 @@ export function generate(parcel, opts) {
         if ((cat.wall || cat.h > 0.05) && inLeafDisc(f, rect)) return null; }     // (Wave 9: never behind an open door leaf either, nor in its swing unless a rug)
       else if (!valid(rect, 0, cat.h, touch)) return null;
       const p = put(cat, u, v, fq, tint);
-      if (!cat.deco && !noRoom && !roomOK()) { unput(p); return null; }
+      if (!cat.deco && !roomOK()) { unput(p); return null; }
       return p;
     };
     // a piece standing ON another one's top (a lamp on a nightstand, a TV on its cabinet, a microwave on a counter): back to the host's back edge
@@ -2998,42 +3022,39 @@ export function generate(parcel, opts) {
         }
         return n;
       };
-      for (const tq of home ? [tq0, 1 - tq0] : [tq0]) for (const [pu, pv] of pts) {          // (W10 R1A: a home's table also turned across the room)
-        if (chPre && anyT && seats(pu, pv, tq) < need) continue;
-        // (W10 R1A, CPU) the room-walk check (roomOK) runs ONCE for the table and every chair that passes valid(): a placed piece only takes floor away, so when
-        // the room still joins its ports with all of them in, it joined them after each one - the set the one-piece-at-a-time order keeps, the same output. Only
-        // when that check fails is the set taken out and re-tried one piece at a time, as before.
-        const ch0 = chairId ? catOf(chairId) : null;
-        const tl = tryAt(tableId, pu, pv, tq, undefined, undefined, !!ch0);
-        if (!tl) continue;
-        let t = tl, n = 0;
+      const skipped = [];
+      let stopAll = false;
+      for (const tq of home ? [tq0, 1 - tq0] : [tq0]) { if (stopAll) break; for (const [pu, pv] of pts) {          // (W10 R1A: a home's table also turned across the room)
+        // (W10 R1A, CPU: the seat count is judged before the table at EVERY spot - a spot with fewer valid seats than the set needs fails with the table in too.
+        // Whether ANY spot takes the table alone (which failure the room records) is settled after the search, only when no set was placed)
+        if (chPre && seats(pu, pv, tq) < need) { if (!anyT) skipped.push([pu, pv, tq]); continue; }
+        const t = tryAt(tableId, pu, pv, tq);
+        if (!t) continue;
+        anyT = true;
+        if (!chairId) return t;
+        const ch = catOf(chairId);
+        if (!ch) return t;
+        const off = t.cat.d / 2 + 0.12 + ch.d / 2, sp = t.cat.w >= 1.7 ? [-0.5, 0.5] : [0];
+        const sides = tq === 0 ? [[0, off, 2], [0, -off, 0]] : [[off, 0, 3], [-off, 0, 1]];
+        let n = 0;
         const chs = [];
-        const chairsAt = (one) => {
-          const ch = catOf(chairId);
-          if (!ch) return false;
-          const off = t.cat.d / 2 + 0.12 + ch.d / 2, sp = t.cat.w >= 1.7 ? [-0.5, 0.5] : [0];
-          const sides = tq === 0 ? [[0, off, 2], [0, -off, 0]] : [[off, 0, 3], [-off, 0, 1]];
-          for (const [ou, ov, q] of sides) for (const s2 of sp) {
-            if (n >= (maxChairs || 6)) break;
-            const cu2 = pu + ou + (tq === 0 ? s2 : 0), cv2 = pv + ov + (tq === 0 ? 0 : s2);
-            const c = tryAt(chairId, cu2, cv2, q, undefined, undefined, !one);
-            if (c) { n++; chs.push(c); }
-          }
-          return true;
-        };
-        if (!ch0) { anyT = true; if (!chairId) return t; return t; }
-        if (!chairsAt(false)) { if (roomOK()) { anyT = true; return t; } unput(t); continue; }      // (catOf gave no chair this time: the table alone, checked)
-        if (!roomOK()) {
-          for (let i = chs.length - 1; i >= 0; i--) unput(chs[i]);
-          chs.length = 0; n = 0;
-          if (!roomOK()) { unput(t); continue; }
-          anyT = true;
-          chairsAt(true);
-        } else anyT = true;
+        let broke = -1;                                     // (W10 R1A, CPU) the chair count at which the catalog / the storey's budget gave no chair
+        for (const [ou, ov, q] of sides) for (const s2 of sp) {
+          if (n >= (maxChairs || 6)) break;
+          const cu2 = pu + ou + (tq === 0 ? s2 : 0), cv2 = pv + ov + (tq === 0 ? 0 : s2);
+          if (broke < 0) { const cc = catOf(chairId); if (!cc || !budgetOK(cc)) broke = n; }
+          const c = tryAt(chairId, cu2, cv2, q);
+          if (c) { n++; chs.push(c); }
+        }
+        // the table and k chairs leave the same budget and pieces at EVERY spot: when no chair was to be had after k < the set's minimum, no spot can seat the
+        // set - the rest of the search is the same failure, skipped (the room records the set as tried with a table in: anyT)
+        const setMin = home && CENTRE_GROUPS && (maxChairs || 6) >= 2 ? 2 : 1;
+        if (broke >= 0 && broke < setMin && (n === 0 || n < setMin)) { for (let i = chs.length - 1; i >= 0; i--) unput(chs[i]); unput(t); stopAll = true; break; }
         // (W10 R1A: a home's dining set seats two at least - a table with one chair is not one; the next spot is tried)
-        if (n === 0 || (home && CENTRE_GROUPS && n < 2 && (maxChairs || 6) >= 2)) { for (const c of chs) unput(c); unput(t); continue; }
+        if (n === 0 || (home && CENTRE_GROUPS && n < 2 && (maxChairs || 6) >= 2)) { for (let i = chs.length - 1; i >= 0; i--) unput(chs[i]); unput(t); continue; }      // (last placed first: the room-walk cache undoes them)
         return t;
-      }
+      } }
+      if (!anyT) for (const [pu, pv, tq] of skipped) { const t = tryAt(tableId, pu, pv, tq); if (t) { unput(t); anyT = true; break; } }
       if (tsf) tsf.add(anyT ? tsk : tc.id + "|none");
       return null;
     };
@@ -3188,7 +3209,7 @@ export function generate(parcel, opts) {
         if (kn && (tableSet("tableCloth", "chairMod", 4) || tableSet("table", "chair", 4) || tableSet("diningTable", "chairMod", 4) || tableSet("diningTable", "chairMod", 2))) kn.noDining = false;
       });
       const goal = Math.max(QUOTA_MIN, Math.ceil(area / QUOTA_M2 - 1e-9));
-      const subs = () => placed.filter((q) => !q.slot && !FILLER_TYPE.test(q.cat.type || "")).length;
+      const subs = () => { let n = 0; for (const q of placed) if (!q.slot && !isFiller(q.cat.type || "")) n++; return n; };
       const pool = QUOTAPOOL[kind];
       const cu0 = (inner[0] + inner[2]) / 2, cv0 = (inner[1] + inner[3]) / 2;     // (the layouts' own cu0 / cv0 are declared below this phase's return)
       // (a piece that found no spot in this room finds none later in the phase either - the room only fills up, the storey's budget only shrinks: not searched again)
