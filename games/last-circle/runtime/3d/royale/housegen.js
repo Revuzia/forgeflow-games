@@ -157,7 +157,13 @@ export const FILLER_CAPS = true;           // a home: <= 1 clock, <= 1 floor lam
 export const CENTRE_GROUPS = true;         // a home's sets: sofa + coffee table + armchairs + TV unit; bed + 2 nightstands + wardrobe / dresser; a dining set by the kitchen
 export const KITCHEN_RUN = true;           // the base units stand as ONE run (touching), upper cabinets over it, a hood over the stove, on a wall with no window when one exists
 export const BATH_SET = true;              // a home's bath: a basin with a mirror over it, a tub or a shower
-export const LOOT_KEEP = 1;                // the share of a home's loot points kept (1: all; the homes gate's loot-drop plant halves it)
+export const LOOT_KEEP = 1;                // the share of a building's loot points kept on top of LOOT_K (1: all; the homes gate's loot-drop plant halves it)
+// (W10 R1A) bigger homes, more rooms, bigger town parcels: the per-room loot rule (1-3 points a room) would hand out +20-25 % more loot a map. The points a room
+// keeps, by use (the map's loot count stays within +-10 % of the Wave-9 build; homes 1 x 1.0, ruined houses / shops / mid-rises thinned)
+export const HOME_LOOT_M2 = 0.074;        // (W10 R1A) a home room's loot points a m2 (x LOOT_K.home; x HOME_LOOT_THEME: the Savanna homes held more, Deepwood's - most of its loot - less)
+export const HOME_LOOT_THEME = Object.freeze({ city: 1.25, lodge: 0.98, mill: 0.98 });
+export const LOOT_K_LODGE = 0.5;           // (W10 R1A) a lodge / mill building (Deepwood) that is not a home keeps x this of its points on top of LOOT_K (there homes hold ~85 % of the loot)
+export const LOOT_K = Object.freeze({ home: 1, house: 0.6, shop: 0.85, midrise: 0.95, tower: 1, hall: 0.8, shed: 0.7, barn: 1 });
 export const RNG_LEAK = false;             // (the homes gate's rng-leak plant: Math.random in the quota - the census must see two builds differ)
 const FILLER_TYPE = /clock|lamp|[pP]lant|trash|art|poster|rug|wallShelf|mirror|whiteboard|runner|coatRack|monitor|carton|box\/box|televisionModern|Microwave/;   // (the homes census's FILL list)
 const QUOTA_KINDS = new Set(["living", "bedroom", "kitchen"]);
@@ -898,7 +904,7 @@ export function generate(parcel, opts) {
       const seq = store ? ["shop", "shop", "storage", "office"] : use === "shop" ? ["shop", "storage", "office", "storage"] : use === "shed" ? ["storage"] : use === "barn" ? ["barn", "storage"]
         : use === "hall" ? ["warehouse", "office", "storage", "bath"] : tall ? ["lobby", "office", "storage", "bath", "office", "storage"]
           : P.theme === "lodge" || P.theme === "farm" ? ["living", "kitchen", "storage", "bedroom", "bath", "office"]
-            : P.theme === "mill" ? ["warehouse", "office", "storage", "bath", "office", "storage"]
+            : P.theme === "mill" && !home ? ["warehouse", "office", "storage", "bath", "office", "storage"]          // (W10 R1A: a mill's HOME is furnished as a home)
               : P.theme === "resort" ? ["living", "kitchen", "bedroom", "bath", "bedroom", "office"] : ["living", "kitchen", "bath", "office", "bedroom", "storage"];
       // a barn / hall: the BIGGEST room is the barn / warehouse floor wherever the front door is
       const ord = use === "barn" || use === "hall" ? rest.slice().sort((a, b) => b.n - a.n || a.i - b.i) : order;
@@ -951,6 +957,8 @@ export function generate(parcel, opts) {
       by[0].r.kind = want;
       return true;
     };
+    // a 1 x 2 nook a stair landing opened into is the landing's hall (its door zones and the stair approach leave no wall for a tub): the bath goes elsewhere
+    for (const o of all) if (o.r.landing && o.n <= 3 && o.r.kind === "bath" && all.filter((q) => q.f === o.f && q !== o).length >= 2) o.r.kind = "hall";
     // a lived room cut to a 1 x 2-cell nook is the floor's bath (swapped with a bigger bath on that floor) or a box room; one bath a floor (a second, bigger one is a bedroom)
     for (const o of all) {
       if (o.n >= 4 || !["living", "kitchen", "bedroom"].includes(o.r.kind)) continue;
@@ -1018,12 +1026,22 @@ export function generate(parcel, opts) {
     for (let j = 1; j < nz; j++) for (let i = 0; i < nx; i++) if (F.eH[j * nx + i] === 1 && !F.extH[j * nx + i]) addCand(cellAt(i, j - 1), cellAt(i, j), "H", i, j);
     for (let i = 1; i < nx; i++) for (let j = 0; j < nz; j++) if (F.eV[i * nz + j] === 1 && !F.extV[i * nz + j]) addCand(cellAt(i - 1, j), cellAt(i, j), "V", i, j);
     const root = F.root;
+    // (W10 R1A) a home's kitchen next to its living room: a kitchen that shares no wall with it trades places with a bedroom (>= 4 cells) that does
+    if (home && CENTRE_GROUPS) {
+      const ck = (x, y) => cand.has(x < y ? x + "|" + y : y + "|" + x);
+      const ki = R.findIndex((q) => q && q.kind === "kitchen"), li = R.findIndex((q) => q && q.kind === "living");
+      if (ki >= 0 && li >= 0 && !ck(ki, li)) {
+        const bi = R.findIndex((q, i) => q && q.kind === "bedroom" && q.cells.length >= 4 && ck(i, li));
+        if (bi >= 0) { R[bi].kind = "kitchen"; R[ki].kind = "bedroom"; }
+      }
+    }
     const seen = new Uint8Array(nR); seen[root] = 1;
     const queue = [root], later = [], linked = new Set();
     const leafy = (ri) => R[ri].kind === "bath";
     // (W10 R1A) a home's front room (the living room) opens into at most 2 rooms when the others can be reached through them: a hub with 4-5 doorways is all door zone
+    // (a 25 m2 front room - 4 cells - into ONE: with the front door and two doorways it held 5 pieces at most, the homes gate's 6-a-room minimum)
     let rootDeg = 0;
-    const held = [];
+    const held = [], deg = [];                               // (and a room of <= 5 cells past it - its own doorway in - into one more: each a chain, not a hub)
     for (;;) {
     while (queue.length || later.length) {
       const a = queue.length ? queue.shift() : later.shift();
@@ -1033,10 +1051,13 @@ export function generate(parcel, opts) {
         const k = a < b ? a + "|" + b : b + "|" + a;
         if (cand.has(k)) nb.push(b);
       }
+      if (home && a === root) nb.sort((x, y) => (R[y].kind === "kitchen" ? 1 : 0) - (R[x].kind === "kitchen" ? 1 : 0) || x - y);     // (the front room's doorway: to the kitchen first - its dining set may stand here)
       for (const b of nb) {
         if (seen[b]) continue;
-        if (home && a === root && rootDeg >= 2 && !R[root].hall) { if (!held.includes(b)) held.push(b); continue; }
+        if (home && a === root && rootDeg >= (R[root].cells.length <= 5 ? 1 : 2) && !R[root].hall) { if (!held.some((h) => h[1] === b)) held.push([a, b]); continue; }
+        if (home && a !== root && R[a].cells.length <= 5 && (deg[a] || 0) >= 1 && !R[a].hall) { if (!held.some((h) => h[1] === b)) held.push([a, b]); continue; }
         if (a === root) rootDeg++;
+        deg[a] = (deg[a] || 0) + 1;
         seen[b] = 1;
         const k = a < b ? a + "|" + b : b + "|" + a, list = cand.get(k);
         const e = pickEdgeA(F, list, a, b);
@@ -1045,23 +1066,34 @@ export function generate(parcel, opts) {
         (leafy(b) ? later : queue).push(b);
       }
     }
-    // a held room nobody else reached: through the front room after all
-    const hb = held.find((b) => !seen[b]);
-    if (hb == null) break;
-    const kr = root < hb ? root + "|" + hb : hb + "|" + root, e = pickEdgeA(F, cand.get(kr), root, hb);
-    seen[hb] = 1; rootDeg++;
-    R[hb].entry = mkDoor(F, e.ori, e.i, e.j, "interior", root, hb);
+    // a held room nobody else reached: through the room that held it after all
+    const hh = held.find((h) => !seen[h[1]]);
+    if (hh == null) break;
+    const [ha, hb] = hh;
+    const kr = ha < hb ? ha + "|" + hb : hb + "|" + ha, e = pickEdgeA(F, cand.get(kr), ha, hb);
+    seen[hb] = 1; if (ha === root) rootDeg++; deg[ha] = (deg[ha] || 0) + 1;
+    R[hb].entry = mkDoor(F, e.ori, e.i, e.j, "interior", ha, hb);
     linked.add(kr);
     (leafy(hb) ? later : queue).push(hb);
     }
     F.sealed = [];
     for (let b = 0; b < nR; b++) if (!seen[b]) F.sealed.push(b);
+    // (W10 R1A) a home's kitchen opens into its living room when they share a wall (the dining set may stand in either: census "kitchen or a room it opens into")
+    if (home && CENTRE_GROUPS) {
+      const ki = R.findIndex((q) => q && q.kind === "kitchen"), li = R.findIndex((q) => q && q.kind === "living");
+      const kk = ki < li ? ki + "|" + li : li + "|" + ki;
+      if (ki >= 0 && li >= 0 && seen[ki] && seen[li] && cand.has(kk) && !linked.has(kk)) {
+        const e = pickEdgeA(F, cand.get(kk), Math.min(ki, li), Math.max(ki, li));
+        mkDoor(F, e.ori, e.i, e.j, "interior", Math.min(ki, li), Math.max(ki, li));
+        linked.add(kk);
+      }
+    }
     // a second way round now and then (PUBG houses rarely dead-end): one extra door between two rooms not yet joined directly
     if (rng() < 0.35) {
       // (never into a room of <= 2 cells: a 5 x 2.5 m room with three doorways is all door zone - nothing can stand where a doorway sees it)
       // (W10 R1A: in a home, never into a room that already has 2 doorways - a 25 m2 living room with four doorways is all door zone)
       const nDoors = (ri) => doors.filter((d) => d.floor === F.f && (d.a === ri || d.b === ri)).length;
-      const keys = [...cand.keys()].filter((k) => !linked.has(k) && !k.split("|").some((x) => leafy(+x) || R[+x].cells.length <= 2 || (home && nDoors(+x) >= 2))).sort();
+      const keys = [...cand.keys()].filter((k) => !linked.has(k) && !k.split("|").some((x) => leafy(+x) || R[+x].cells.length <= 2 || (home && (nDoors(+x) >= 2 || (+x === root && R[root].cells.length <= 5))))).sort();
       if (keys.length) {
         const k = pick(rng, keys), [a, b] = k.split("|").map(Number);
         const list = cand.get(k), e = pickEdgeA(F, list, a, b);
@@ -1089,6 +1121,10 @@ export function generate(parcel, opts) {
     const nD0 = (ri) => doors.filter((d) => d.floor === 0 && (d.a === ri || d.b === ri)).length;
     let far = cands.filter((e) => !(e[0] === "H" && e[2] === nz) && !opp(e) && doorOut(e[0], e[1], e[2]));
     if (home) { const few = far.filter((e) => nD0(F0.region[e[3]]) < 2); if (few.length) far = few; }
+    // (nor a third doorway into a small room - <= 5 cells: no back door then; outpost@p36 seed 2026, a 25 m2 living room with 3 doorways held 5 pieces)
+    if (home) far = far.filter((e) => nD0(F0.region[e[3]]) < 2 || F0.regs[F0.region[e[3]]].cells.length > 5);
+    // (and never into a bedroom or a bath - no back door then: its leaf and door zone left a 5 x 5 m bedroom no wall for the bed - logging@p19)
+    if (home) far = far.filter((e) => !["bedroom", "bath"].includes(F0.regs[F0.region[e[3]]].kind));
     if (far.length) { const e = pick(rng, far); mkDoor(F0, e[0], e[1], e[2], "back", F0.region[e[3]], null); }
   }
   // READ FROM ITS DOOR: every room gets a door on its OUTLINE (its bounding rectangle: where a player standing in the doorway sees the whole room
@@ -1159,7 +1195,9 @@ export function generate(parcel, opts) {
       // (a store room keeps its walls for shelving: a third of the windows a living room would get)
       const rk = F.region[c] >= 0 ? F.regs[F.region[c]].kind : null;
       // (W10 R1A: a home's kitchen too - its counter run, wall units and hood need a wall without a window; it keeps the one window every room gets)
-      if (rng() >= (rk === "storage" || rk === "warehouse" || rk === "barn" || (rk === "kitchen" && home && KITCHEN_RUN) ? p * 0.35 : p)) return false;
+      // (and a home's small lived room - <= 5 cells - with three doorways: its walls are its furniture's; outpost@p36 seed 2026, 3 doors + 3 windows held 5 pieces)
+      const crowd = home && AREA_QUOTA && QUOTA_KINDS.has(rk) && F.regs[F.region[c]].cells.length <= 5 && doors.filter((d) => d.floor === F.f && (d.a === F.region[c] || d.b === F.region[c])).length >= 3;
+      if (rng() >= (rk === "storage" || rk === "warehouse" || rk === "barn" || (rk === "kitchen" && home && KITCHEN_RUN) || (rk === "bath" && home && BATH_SET) || crowd ? p * 0.35 : p)) return false;
       arr[idx] = 3;
       roomWin.set(F.region[c], (roomWin.get(F.region[c]) || 0) + 1);
       return true;
@@ -2716,7 +2754,7 @@ export function generate(parcel, opts) {
       if (opts.runFirst) order.sort((a, b) => (opts.runFirst(b) ? 1 : 0) - (opts.runFirst(a) ? 1 : 0));
       // (the view model steers a piece only while the room still reads short from its entrance; a room that already shows VIEW_WANT takes the
       // rest where they fit - the expensive sight lines are not drawn for every candidate spot of every extra piece)
-      const want = cat.h >= 0.25 && (opts.seen || opts.want || bestView(R).n < VIEW_WANT) ? (opts.want || target()) : 0, spare = [];
+      const want = !opts.noView && cat.h >= 0.25 && (opts.seen || opts.want || bestView(R).n < VIEW_WANT) ? (opts.want || target()) : 0, spare = [];   // (noView: the area quota's pieces go where they fit)
       // until the room's best entrance sees VIEW_WANT pieces, its extras (phase 1) go only where it sees them
       const mustSee = opts.seen || (phase === 1 && want && bestView(R).n < VIEW_WANT);
       const attempt = (run, t, g, side, m) => {
@@ -2802,27 +2840,36 @@ export function generate(parcel, opts) {
     const tableSet = (tableId, chairId, maxChairs) => {
       const tc = catOf(tableId);
       if (!tc) return null;
-      const cu = (inner[0] + inner[2]) / 2, cv = (inner[1] + inner[3]) / 2, tq = iw >= idp ? 0 : 1;
+      // (W10 R1A: a home's set that found no spot is not searched again - the room only fills up: by its table piece alone when no spot took the table at all)
+      const tsf = home ? R._tsfail || (R._tsfail = new Set()) : null, tsk = tc.id + "|" + chairId + "|" + (maxChairs || 6);
+      if (tsf && (tsf.has(tsk) || tsf.has(tc.id + "|none"))) return null;
+      let anyT = false;
+      const cu = (inner[0] + inner[2]) / 2, cv = (inner[1] + inner[3]) / 2, tq0 = iw >= idp ? 0 : 1;
       const pts = [];
       for (let du = -2; du <= 2; du += 0.5) for (let dv = -2; dv <= 2; dv += 0.5) pts.push([cu + du, cv + dv]);
       pts.sort((a, b) => ((a[0] - cu) * (a[0] - cu) + (a[1] - cv) * (a[1] - cv)) - ((b[0] - cu) * (b[0] - cu) + (b[1] - cv) * (b[1] - cv)) || a[0] - b[0] || a[1] - b[1]);
-      for (const [pu, pv] of pts) {
+      for (const tq of home ? [tq0, 1 - tq0] : [tq0]) for (const [pu, pv] of pts) {          // (W10 R1A: a home's table also turned across the room)
         const t = tryAt(tableId, pu, pv, tq);
         if (!t) continue;
+        anyT = true;
         if (!chairId) return t;
         const ch = catOf(chairId);
         if (!ch) return t;
         const off = t.cat.d / 2 + 0.12 + ch.d / 2, sp = t.cat.w >= 1.7 ? [-0.5, 0.5] : [0];
         const sides = tq === 0 ? [[0, off, 2], [0, -off, 0]] : [[off, 0, 3], [-off, 0, 1]];
         let n = 0;
+        const chs = [];
         for (const [ou, ov, q] of sides) for (const s2 of sp) {
           if (n >= (maxChairs || 6)) break;
           const cu2 = pu + ou + (tq === 0 ? s2 : 0), cv2 = pv + ov + (tq === 0 ? 0 : s2);
-          if (tryAt(chairId, cu2, cv2, q)) n++;
+          const c = tryAt(chairId, cu2, cv2, q);
+          if (c) { n++; chs.push(c); }
         }
-        if (n === 0) { unput(t); continue; }
+        // (W10 R1A: a home's dining set seats two at least - a table with one chair is not one; the next spot is tried)
+        if (n === 0 || (home && CENTRE_GROUPS && n < 2 && (maxChairs || 6) >= 2)) { for (const c of chs) unput(c); unput(t); continue; }
         return t;
       }
+      if (tsf) tsf.add(anyT ? tsk : tc.id + "|none");
       return null;
     };
     const nStanding = () => placed.filter(counted).length;
@@ -2940,34 +2987,81 @@ export function generate(parcel, opts) {
     // (W10 R1A) phase 6 = THE AREA QUOTA of a home's lived rooms: substantive pieces (not filler) until the room holds max(QUOTA_MIN, area / QUOTA_M2) - against a
     // wall (corner, then centre spots), else free-standing on a 0.5 m lattice from the room's middle out (an armchair, a chair, a stool, a side table); every spot
     // still passes valid() and roomOK(). Round-robin with the other rooms of the storey (one piece per room per turn) inside the home's storey budget.
+    // (W10 R1A) a breakfast nook: the small square table with its back to a wall, a chair at each free end facing it (a kitchen whose middle is its walkway)
+    const nook = () => {
+      const ch = catOf("chairMod");
+      if (!ch) return null;
+      // (the square table: a chair at each free end; the long table: two chairs side by side in front of it)
+      for (const [tid, ends] of [["diningTable", true], ["tableA", false], ["diningTable", false]]) for (const pref of ["center", "corner"]) {
+        const tried = new Set();
+        for (let n = 0; n < 12; n++) {
+          const t = tryWall(tid, pref, { tint: tintW, also: (run, g) => !tried.has(Math.round(g.u * 100) + ":" + Math.round(g.v * 100)) });
+          if (!t) break;
+          tried.add(Math.round(t.u * 100) + ":" + Math.round(t.v * 100));
+          const dir = FACE[t.fq], side = [dir[1], -dir[0]], got = [];
+          const endS = [1, -1].map((sg) => { const off = t.cat.w / 2 + 0.12 + ch.d / 2; return [t.u + side[0] * sg * off, t.v + side[1] * sg * off, turnOfDir(-side[0] * sg, -side[1] * sg)]; });
+          const frontS = (t.cat.w >= 1.2 ? [1, -1] : [0]).map((sg) => { const fo = t.cat.d / 2 + 0.12 + ch.d / 2, so = Math.min(0.42, t.cat.w / 2 - 0.05) * sg; return [t.u + dir[0] * fo + side[0] * so, t.v + dir[1] * fo + side[1] * so, turnOfDir(-dir[0], -dir[1])]; });
+          for (const [cu, cv, q] of ends ? endS.concat(frontS) : frontS.concat(endS)) { if (got.length >= 2) break; const c = tryAt("chairMod", Math.round(cu * 1000) / 1000, Math.round(cv * 1000) / 1000, q); if (c) got.push(c); }
+          if (got.length >= 2) return t;
+          for (const c of got) unput(c);
+          unput(t);
+        }
+      }
+      return null;
+    };
     if (phase === 6) {
       if (!(home && AREA_QUOTA && QUOTA_KINDS.has(kind))) return X;
+      // (W10 R1A) a kitchen that had no room for its dining set: once more first (a small table and 2 chairs), else the living room it opens into takes it
+      if (CENTRE_GROUPS && kind === "kitchen" && R.noDining && (tableSet("diningTable", "chairMod", 2) || tableSet("table", "chair", 2) || tableSet("tableA", "chairMod", 2) || nook())) R.noDining = false;
+      if (CENTRE_GROUPS && kind === "living") later(() => {
+        const kn = doors.filter((d) => d.floor === f && (d.a === R.ri || d.b === R.ri)).map((d) => (d.a === R.ri ? d.b : d.a))
+          .map((ri) => roomRecs.find((q) => q.floor === f && q.ri === ri)).find((q) => q && q.kind === "kitchen" && q.noDining);
+        if (kn && (tableSet("tableCloth", "chairMod", 4) || tableSet("table", "chair", 4) || tableSet("diningTable", "chairMod", 4) || tableSet("diningTable", "chairMod", 2))) kn.noDining = false;
+      });
       const goal = Math.max(QUOTA_MIN, Math.ceil(area / QUOTA_M2 - 1e-9));
       const subs = () => placed.filter((q) => !q.slot && !FILLER_TYPE.test(q.cat.type || "")).length;
       const pool = QUOTAPOOL[kind];
       const cu0 = (inner[0] + inner[2]) / 2, cv0 = (inner[1] + inner[3]) / 2;     // (the layouts' own cu0 / cv0 are declared below this phase's return)
-      const freeAt = (id) => {
+      // (a piece that found no spot in this room finds none later in the phase either - the room only fills up, the storey's budget only shrinks: not searched again)
+      const fails = R._qfail || (R._qfail = new Set());
+      const ptsBy = R._qpts || (R._qpts = new Map());
+      const freeAt = (id, all) => {
         const c = catOf(id);
         if (!c || c.h > 1.3 || c.mount !== "floor") return null;
-        const pts = [];
         const hw = Math.max(c.w, c.d) / 2 + 0.05;
-        for (let pu = inner[0] + hw; pu <= inner[2] - hw + 1e-6; pu += 0.25) for (let pv = inner[1] + hw; pv <= inner[3] - hw + 1e-6; pv += 0.25) pts.push([(pu - cu0) * (pu - cu0) + (pv - cv0) * (pv - cv0), pu, pv]);
+        const stp = all ? 0.25 : 0.5;                                                // (the 0.5 m lattice; the under-minimum rescue the 0.25 m one)
+        let pts = ptsBy.get(hw + ":" + stp);
+        if (!pts) {
+        pts = [];
+        for (let pu = inner[0] + hw; pu <= inner[2] - hw + 1e-6; pu += stp) for (let pv = inner[1] + hw; pv <= inner[3] - hw + 1e-6; pv += stp) pts.push([(pu - cu0) * (pu - cu0) + (pv - cv0) * (pv - cv0), pu, pv]);
         pts.sort((a, b) => b[0] - a[0] || a[1] - b[1] || a[2] - b[2]);            // (the room's edges first: its middle is where people walk between the doorways)
-        for (const [, pu, pv] of pts.slice(0, 160)) {
+        ptsBy.set(hw + ":" + stp, pts);
+        }
+        for (const [, pu, pv] of all ? pts : pts.slice(0, 48)) {
           const fq = Math.abs(pu - cu0) >= Math.abs(pv - cv0) ? (pu > cu0 ? 3 : 1) : (pv > cv0 ? 2 : 0);          // facing the room's middle
-          const q = tryAt(id, Math.round(pu * 1000) / 1000, Math.round(pv * 1000) / 1000, fq, tintW);
+          const q = tryAt(id, Math.round(pu * 1000) / 1000, Math.round(pv * 1000) / 1000, fq, tintW) || (all ? tryAt(id, Math.round(pu * 1000) / 1000, Math.round(pv * 1000) / 1000, (fq + 1) % 4, tintW) : null);
           if (q) return q;
         }
         return null;
       };
       let miss = 0, qi = RNG_LEAK && Math.random() < 0.5 ? 1 : 0;
+      // (the first pool.length turns fill every room of the storey to QUOTA_MIN, the rest to its area goal: a big room's goal spent the storey's budget
+      // while a bedroom beside it stood at 3 - metro@p0, Ashgrid seed 2026)
       for (let n = 0; n < 3 * pool.length; n++) later(() => {
-        if (subs() >= goal || miss >= pool.length) return;
+        if (subs() >= (n < pool.length ? Math.min(goal, QUOTA_MIN) : goal) || (miss >= pool.length && n >= pool.length)) return;
         let id = pool[qi++ % pool.length];
         if (tris[f] > TB - 700) id = ["dresser", "wallCab", "ottoman", "bookcaseLow", "shelf"][qi % 5];      // (a full storey: authored pieces, 20-60 triangles)
-        const q = tryWall(id, "corner", { tint: tintW }) || tryWall(id, "center", { tint: tintW }) || freeAt(id);
-        if (!q) { miss++; return; }
+        if (fails.has(id)) { miss++; return; }
+        const q = tryWall(id, "corner", { tint: tintW, noView: true }) || freeAt(id);          // (a corner scan tries every wall spot: "center" only orders them differently)
+        if (!q) { miss++; fails.add(id); return; }
         miss = 0;
+      });
+      // (a room still under QUOTA_MIN: the small pieces once more, anywhere on the lattice - its middle too - where the room's ports stay joined)
+      for (const id of ["wallCab", "sideTable", "ottoman", "stool", "wallCab", "chairMod", "bookcaseLow", "sideTable", "ottoman", "stool"]) later(() => {
+        if (subs() >= QUOTA_MIN || fails.has(id + "*")) return;
+        const c = catOf(id);
+        if (c && c.mount === "wall") { if (!tryWall(id, "center", { tint: tintW, noView: true })) fails.add(id + "*"); return; }
+        if (!(tryWall(id, "corner", { tint: tintW, noView: true }) || freeAt(id, true))) fails.add(id + "*");
       });
       return X;
     }
@@ -3129,15 +3223,42 @@ export function generate(parcel, opts) {
     };
     // the sofa SET: a coffee table in front of the sofa on a big rug, an armchair at its side facing it, a side table + lamp beside the sofa
     const sofaSet = (sofa) => {
-      if (!sofa || !furn.includes(sofa)) return;
+      if (!sofa || !furn.includes(sofa) || R._sofaSet) return;
+      R._sofaSet = true;
       const cid = rng() < 0.5 ? "coffee" : "coffeeSq", cc = catOf(cid) || catOf("coffee"); if (!cc) return;
-      const [cu, cv] = inFront(sofa, 0.42, cc);
-      let cof = tryAt(cid, cu, cv, sofa.fq) || tryAt("coffeeSq", cu, cv, sofa.fq);
-      // (W10 R1A) a home: the coffee table may stand a little further out, or shifted along the sofa (a door zone in front of its middle)
-      if (!cof && home && CENTRE_GROUPS) for (const [gap, sd] of [[0.6, 0], [0.42, 0.5], [0.42, -0.5], [0.8, 0], [0.6, 0.6], [0.6, -0.6]]) {
-        const [cu2, cv2] = inFront(sofa, gap, catOf("coffeeSq") || cc, sd);
-        cof = tryAt("coffeeSq", cu2, cv2, sofa.fq) || tryAt(cid, cu2, cv2, sofa.fq);
-        if (cof) break;
+      const coffeeFor = (sofa, near) => {
+        const [cu, cv] = inFront(sofa, 0.42, cc);
+        let cof = tryAt(cid, cu, cv, sofa.fq) || tryAt("coffeeSq", cu, cv, sofa.fq);
+        // (W10 R1A) a home: the coffee table may stand a little further out, or shifted along the sofa (a door zone in front of its middle)
+        if (!cof && home && CENTRE_GROUPS) for (const [gap, sd] of [[0.6, 0], [0.42, 0.5], [0.42, -0.5], [0.8, 0], [0.6, 0.6], [0.6, -0.6]]) {
+          const [cu2, cv2] = inFront(sofa, gap, catOf("coffeeSq") || cc, sd);
+          cof = tryAt("coffeeSq", cu2, cv2, sofa.fq) || tryAt(cid, cu2, cv2, sofa.fq);
+          if (cof) break;
+        }
+        // (and else anywhere within 2.2 m of the sofa on a 0.25 m lattice, nearest first: a living room's coffee table, census bar 90 %)
+        if (!cof && home && CENTRE_GROUPS && !near) {
+          // (in front of the sofa only - the half the sofa faces: a coffee table behind it is not its set)
+          const pts = [], fd = FACE[sofa.fq];
+          for (let du = -2.2; du <= 2.2 + 1e-6; du += 0.25) for (let dv = -2.2; dv <= 2.2 + 1e-6; dv += 0.25) { const d2 = du * du + dv * dv; if (d2 <= 4.84 && d2 > 0.3 && du * fd[0] + dv * fd[1] > 0.3) pts.push([d2, Math.round((sofa.u + du) * 1000) / 1000, Math.round((sofa.v + dv) * 1000) / 1000]); }
+          pts.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+          for (const [, pu, pv] of pts) { cof = tryAt("coffeeSq", pu, pv, sofa.fq) || tryAt("coffeeSq", pu, pv, (sofa.fq + 1) % 4); if (cof) break; }
+        }
+        return cof;
+      };
+      let cof = coffeeFor(sofa);
+      // (W10 R1A) a home's sofa with no room for its coffee table moves to another wall spot (up to 8) where the pair fits; else it goes back where it stood
+      if (!cof && home && CENTRE_GROUPS && sofa.run && R.sofa === sofa) {
+        const key = (g) => Math.round(g.u * 100) + ":" + Math.round(g.v * 100), tried = new Set([key(sofa)]);
+        const back = [sofa.cat, sofa.u, sofa.v, sofa.fq, sofa.tint, { y0: 0, run: sofa.run, t: sofa.t, sideways: sofa.sideways }];
+        unput(sofa);
+        for (let n = 0; n < 8 && !cof; n++) {
+          const s2 = tryWall(sofa.cat.id, "center", { tint: sofa.tint, also: (run, g) => !tried.has(key(g)) });
+          if (!s2) break;
+          tried.add(key(s2));
+          cof = coffeeFor(s2, true);                                         // (the spots straight in front of it: the lattice was searched for the first sofa)
+          if (cof) { sofa = s2; R.sofa = s2; } else unput(s2);
+        }
+        if (!cof) { sofa = put(...back); R.sofa = sofa; if (!roomOK()) { unput(sofa); R.sofa = null; return; } }
       }
       if (!cof) return;
       tryAt(area >= 22 ? "rugLarge" : "rug", cof.u, cof.v, sofa.fq % 2 ? 1 : 0, pick(rng, RUG)) || tryAt("rugSmall", cof.u, cof.v, sofa.fq % 2 ? 1 : 0, pick(rng, RUG));
@@ -3165,6 +3286,7 @@ export function generate(parcel, opts) {
           if (!tv && home && CENTRE_GROUPS) tv = tryWall("tv", "center", opp) || tryWall("tv", "corner");     // (W10 R1A: the TV unit even where its set cannot stand)
           if (tv) stackOn(tv, "tvSet");
         });
+        if (home && CENTRE_GROUPS) later(() => sofaSet(R.sofa));                  // (W10 R1A: a home's sofa set is a KEY group: coffee table + armchairs before the extras)
       } else {
         later(() => sofaSet(R.sofa));
         if (home && CENTRE_GROUPS) later(() => {
@@ -3277,10 +3399,17 @@ export function generate(parcel, opts) {
       if (core) {
         later(() => {
           const blanket = pick(rng, BLANKET);
-          const bed = tryWall(big ? "bed" : "bedSingle", "center", { tint: blanket }) || tryWall("bedSingle", "center", { tint: blanket, sideways: true }) ||
+          let bed = tryWall(big ? "bed" : "bedSingle", "center", { tint: blanket }) || tryWall("bedSingle", "center", { tint: blanket, sideways: true }) ||
             (home ? tryWall(big ? "bed" : "bedSingle", "corner", { tint: blanket }) || tryWall("bedSingle", "corner", { tint: blanket, sideways: true }) : null);      // (W10 R1A: a home's bedroom keeps its bed)
+          // (W10 R1A: else a home's single bed anywhere it fits, head to the nearest wall - a bedroom with no bed becomes a store room and the home loses its bedroom)
+          if (!bed && home) {
+            const bc = catOf("bedSingle"), pts = [];
+            if (bc) for (let pu = inner[0] + 0.5; pu <= inner[2] - 0.5 + 1e-6; pu += 0.25) for (let pv = inner[1] + 0.5; pv <= inner[3] - 0.5 + 1e-6; pv += 0.25) pts.push([Math.min(pu - inner[0], inner[2] - pu, pv - inner[1], inner[3] - pv), Math.round(pu * 1000) / 1000, Math.round(pv * 1000) / 1000]);
+            pts.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+            for (const [, pu, pv] of pts) { for (const q of [0, 1, 2, 3]) { bed = tryAt("bedSingle", pu, pv, q, blanket); if (bed) break; } if (bed) break; }
+          }
           R.bed = bed;
-          if (bed && !bed.sideways) {
+          if (bed && !bed.sideways && bed.run) {
             let n = 0;
             for (const sd of [1, -1]) {
               const ns = catOf("nightstand");
@@ -3311,16 +3440,36 @@ export function generate(parcel, opts) {
     } else if (kind === "bath") {
       if (core && home && BATH_SET) {
         later(() => tryWall("toilet", "corner"));
-        later(() => tryWall("bathtub", "corner", { sideways: true }) || tryWall("shower", "corner") || tryWall("shower", "center") || tryWall("bathtub", "center", { sideways: true }));
-        later(() => {
-          // (W10 R1A) the basin with a mirror hung over it (a drawn-only plate on the wall behind it, never in a leaf's swing or on a stairwell wall)
-          const b = tryWall("basin", "center", { tint: 0xe9e6dc }) || tryWall("basin", "corner", { tint: 0xe9e6dc });
+        // (the basin before the tub: a 2.5 x 5 m bath with a tub and a toilet had no wall left for it - 26 of 205 Deepwood baths; a small bath takes a shower first)
+        const wash = () => (area <= 12.5 ? tryWall("shower", "corner") || tryWall("shower", "center") || tryWall("bathtub", "corner", { sideways: true })
+          : tryWall("bathtub", "corner", { sideways: true }) || tryWall("shower", "corner") || tryWall("shower", "center")) || tryWall("bathtub", "center", { sideways: true });
+        // (W10 R1A) the basin with a mirror hung over it (a drawn-only plate on the wall behind it, never in a leaf's swing or on a stairwell wall)
+        // (the mirror only on ONE solid wall cell edge - its own collider box: not across a cell joint, a window, a doorway or a rail; housegen.selftest vis-col "hung flat")
+        // (judged on the wall COLLIDER boxes themselves - one box covers the plate's width and height: 1.55 - 2.2 m above the floor)
+        const onSolid = (run, t, w) => solidRuns.some((q) => q.axis === run.axis && q.sg === run.sg && Math.abs(q.line - run.line) < 1e-6 && q.t0 <= t - w / 2 + 1e-6 && q.t1 >= t + w / 2 - 1e-6) &&
+          boxes.some((bx) => bx.p === "wall" && bx.c && bx.fl === f && bx.y0 <= s[f] + 1.55 + 1e-3 && bx.y1 >= s[f] + 2.2 - 1e-3 && (run.axis === "u"
+            ? Math.abs((bx.v0 + bx.v1) / 2 - run.line) < 1e-3 && bx.u0 <= t - w / 2 + 1e-3 && bx.u1 >= t + w / 2 - 1e-3
+            : Math.abs((bx.u0 + bx.u1) / 2 - run.line) < 1e-3 && bx.v0 <= t - w / 2 + 1e-3 && bx.v1 >= t + w / 2 - 1e-3));
+        const basinSet = () => {
+          const mw = CATALOG.mirrorHi ? CATALOG.mirrorHi.w : 0, mirOK = (run, g) => onSolid(run, run.axis === "u" ? g.u : g.v, mw);
+          const b = tryWall("basin", "center", { tint: 0xe9e6dc, also: mirOK }) || tryWall("basin", "corner", { tint: 0xe9e6dc, also: mirOK }) ||
+            tryWall("basin", "center", { tint: 0xe9e6dc }) || tryWall("basin", "corner", { tint: 0xe9e6dc });
           const mc = b && b.run ? CATALOG.mirrorHi : null;
+          let m = null;
           if (mc) {
             const g = wallRect(b.run, mc, b.t);
-            const bad = keep.some((k) => (k.why === "stair" || k.why === "leaf") && ovl(g.rect, k.r, 1e-6)) || inLeafDisc(f, g.rect);
-            if (!bad) put(mc, g.u, g.v, g.fq, 0xd8d8d8);
+            const bad = !onSolid(b.run, b.t, mc.w) || keep.some((k) => (k.why === "stair" || k.why === "leaf") && ovl(g.rect, k.r, 1e-6)) || inLeafDisc(f, g.rect);
+            if (!bad) m = put(mc, g.u, g.v, g.fq, 0xd8d8d8);
           }
+          return b ? [b, m] : null;
+        };
+        later(() => {
+          const bs = basinSet();
+          if (wash()) return;
+          // (no wall left for a tub or a shower beside the basin: the wash first, then the basin where it still fits)
+          if (bs) { for (const p of bs) if (p) unput(p); }
+          wash();
+          basinSet();
         });
       } else if (core) { later(() => tryWall("toilet", "corner")); later(() => tryWall("basin", "center", { tint: 0xe9e6dc })); later(() => tryWall("bathtub", "corner", { sideways: true })); }
       else {
@@ -3625,10 +3774,17 @@ export function generate(parcel, opts) {
     return !leafHides(f, su(a), sv(b), u, v);
   };
   (() => {                                                   // (loot: own function, see above)
+  const lootMain = roomRecs.filter((q) => q.kind !== "hall").sort((x, y) => y.cells.length - x.cells.length || x.floor - y.floor || x.ri - y.ri)[0] || roomRecs[0];
   for (const R of roomRecs) {
     const f = R.floor, area = R.cells.length * U * U;
     let want = R.kind === "hall" ? (rng() < 0.3 ? 1 : 0) : 1 + (area >= 15 ? 1 : 0) + (area >= 35 ? 1 : 0);
-    if (home && LOOT_KEEP < 1) want = Math.round(want * LOOT_KEEP);
+    {   // (W10 R1A) thinned by LOOT_K x LOOT_KEEP: floor(want x k + a hash of the room in [0, 1)) - no rng drawn, the house's stream is untouched
+      // (a home's room, not its hall: HOME_LOOT_M2 points a m2 the same way - the Wave-9 homes held ~0.08 a m2 of room; bigger, two-storey homes keep the density)
+      const k = (home ? LOOT_K.home : (LOOT_K[use] != null ? LOOT_K[use] : 1) * (P.theme === "lodge" || P.theme === "mill" ? LOOT_K_LODGE : 1)) * LOOT_KEEP, hr = (hash32(P.id + ":" + R.floor + ":" + R.ri + ":loot") % 1000) / 1000;
+      if (home && R.kind !== "hall") want = Math.floor(area * HOME_LOOT_M2 * (HOME_LOOT_THEME[P.theme || "city"] || 1) * k + hr);
+      else if (k < 1) want = Math.floor(want * k + hr);
+      if (R === lootMain && want < 1 && LOOT_KEEP >= 1) want = 1;            // (every building keeps a point: its biggest room - housegen.selftest "every house has loot points")
+    }
     // (not on a washbasin, a stool, a bath: NOHOST; nor on a piece carrying another or hung on the wall)
     // (not on a top a planner could "climb" to over a low neighbour - a carton beside a crate makes two 0.45 m steps: the walker is sent up a
     // staircase it cannot climb, interiorcheck's loot-reach planned exactly that)

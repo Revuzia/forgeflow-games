@@ -28,14 +28,15 @@ Rows (any FAIL -> exit 1; the census not running -> exit 2):
   scale         housegen.FURN_K in [1.15, 1.25] and every kit piece's collider == the box the kit DRAWS for its entry (manifest bbox x the entry's scale,
                 citykit's quarter turn) within 2 cm (0 mismatches)                                                   [k = 1.0]
   tris          furnished home storeys: p90 <= 6,000 triangles (housegen's own count of what it draws)                [p50 3,341]
-  loot          every map x seed: the map's loot points (ground + house + chests) within +-10 % of the W9 tip; homes' loot per m2 of room per map within +-15 %
+  loot          every map x seed: the map's loot points (map.lootPoints - it holds every house's points - + house chests) within +-10 % of the W9 tip
+  loot-density  homes' loot points (+ chests) per m2 of room, per map (4 seeds pooled), within +-15 % of the W9 tip (the plan's loot row, second half)
   determinism   the first map x seed built twice gives the same census hash
 Plants (a scratch copy of runtime/ + assets/props with ONE source edit; each must exit 1 on its rows):
   tiny-homes (7.5 x 7.5 back in towngen ARCH house_s, one floor) -> home-size, storeys     sparse (the area quota off: VIEW_WANT top-up only) -> coverage, density
   clock-spam (the clock / lamp / plant caps off) -> filler      gap-kitchen (base units spaced, not run) -> kitchen-run     strip-rooms (1-cell minimum width) -> narrow
   scale-draw-only (kit drawn at k, colliders at 1) -> scale     no-programme (the minimum programme off) -> programme       shed-flood (shed weights x20) -> sheds
   no-sets (the centre groups off) -> sets       tri-flood (TRI_BUDGET 6000 -> 60000 and the quota 1 per 1.5 m2) -> tris     loot-drop (house loot halved) -> loot
-  rng-leak (Math.random in the furnisher) -> determinism     no-bath-set (no mirror / shower) -> bath-set
+  rng-leak (Math.random in the furnisher) -> determinism     no-bath-set (no mirror / shower) -> bath-set     (loot-drop also -> loot-density)
 """
 from __future__ import annotations
 
@@ -74,7 +75,7 @@ PLANTS = {
     "no-sets": ({"sets"}, [(HG, r"export const CENTRE_GROUPS = true;", "export const CENTRE_GROUPS = false;")]),
     "tri-flood": ({"tris"}, [(HG, r"export const TRI_BUDGET_HOME = 6000;", "export const TRI_BUDGET_HOME = 60000;"),
                              (HG, r"export const QUOTA_M2 = 4;", "export const QUOTA_M2 = 1.5;")]),
-    "loot-drop": ({"loot"}, [(HG, r"export const LOOT_KEEP = 1;", "export const LOOT_KEEP = 0.5;")]),
+    "loot-drop": ({"loot", "loot-density"}, [(HG, r"export const LOOT_KEEP = 1;", "export const LOOT_KEEP = 0.5;")]),
     "rng-leak": ({"determinism"}, [(HG, r"export const RNG_LEAK = false;", "export const RNG_LEAK = true;")]),
     "no-bath-set": ({"bath-set"}, [(HG, r"export const BATH_SET = true;", "export const BATH_SET = false;")]),
 }
@@ -246,8 +247,10 @@ def judge(v, d, base):
             dens.append("%s %.4f -> %.4f /m2 (x%.3f)" % (m, b0, a, r))
             if not 0.85 <= r <= 1.15:
                 bad.append(dens[-1])
-        v.check("loot", not bad and bool(parts), "vs %s: map loot %s | home loot per m2 %s%s" % (W9_TIP, "; ".join(parts), "; ".join(dens), (" | OUT: " + "; ".join(bad)) if bad else ""),
-                "+-10 % per map x seed; +-15 % per m2 per map")
+        bad_map = [b for b in bad if " s" in b.split(" -> ")[0]]
+        bad_den = [b for b in bad if b not in bad_map]
+        v.check("loot", not bad_map and bool(parts), "vs %s: map loot %s%s" % (W9_TIP, "; ".join(parts), (" | OUT: " + "; ".join(bad_map)) if bad_map else ""), "+-10 % per map x seed")
+        v.check("loot-density", not bad_den and bool(dens), "vs %s: home loot per m2 %s%s" % (W9_TIP, "; ".join(dens), (" | OUT: " + "; ".join(bad_den)) if bad_den else ""), "+-15 % per map")
     # determinism
     dt = d.get("determinism")
     if not dt:

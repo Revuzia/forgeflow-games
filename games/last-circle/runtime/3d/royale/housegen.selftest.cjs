@@ -491,7 +491,9 @@ function checkHouse(H, HGmod, MAN) {
   for (const p of H.furniture) triF[p.floor] += p.src === "kit" ? MAN.types[p.kit.type].tris : p.parts.reduce((a, bi) => a + 12 - 2 * pop(H.boxes[bi].h || 0), 0);
   for (const rf of H.roofs || []) triF[S - 1] += 2 + 4 + (rf.freeLow ? 2 : 0) + (rf.freeHigh ? 2 : 0) + 2 * rf.soffit.length;
   for (const g of H.gables || []) triF[S - 1] += g.pts.length - 2;
-  for (let f = 0; f < S; f++) if (triF[f] > TRI_BUDGET) E("budget", "floor " + f + " has " + triF[f] + " triangles");
+  // (W10 R1A: a home's storey - use house, not a ruin - draws up to TRI_BUDGET_HOME, itself held <= 6000 here; every other storey TRI_BUDGET)
+  const TBH = H.use === "house" && H.theme !== "ruin" && !(HGmod.THEMES && HGmod.THEMES[H.theme] && HGmod.THEMES[H.theme].ruined) ? Math.min(6000, HGmod.TRI_BUDGET_HOME || TRI_BUDGET) : TRI_BUDGET;
+  for (let f = 0; f < S; f++) if (triF[f] > TBH) E("budget", "floor " + f + " has " + triF[f] + " triangles (budget " + TBH + ")");
   })();
   // ---- reach: capsule walk on the colliders
   const x0 = H.aabb.min[0] - RING, z0 = H.aabb.min[2] - RING, NX = Math.ceil((H.aabb.max[0] + RING - x0) / GRID), NZ = Math.ceil((H.aabb.max[2] + RING - z0) / GRID);
@@ -1249,7 +1251,7 @@ else if (require.main === module) (async () => {
   row("windows", "windows: empty aperture, sill 1.20 / header 2.30, shootable standing, cover crouched, no tall piece in front");
   row("vis-col", "colliders == visual extents (structure exact; kit vs manifest bbox, authored, steps vs ramp within 2 cm)");
   row("stairs", "stairs <= 45 deg, lip 0, top on the next floor, hole >= stairHeadroomRun");
-  row("budget", "<= " + TRI_BUDGET + " triangles per storey (recounted)");
+  row("budget", "<= " + TRI_BUDGET + " triangles per storey, a home's <= " + Math.min(6000, HGmod.TRI_BUDGET_HOME || TRI_BUDGET) + " (recounted)");
   row("roof", "pitched roofs: every plank IS its ramp (<= 45 deg, underside drawn only outside the walls); the attic sealed by layers under the plank; end walls on the layers");
   row("loot", "floor loot points on free floor (never inside / under a piece's collider)");
   row("staircase", "no furniture staircase: no low clutter (lowest top 0.2-0.55 m) within 0.9 m of a piece one step up");
