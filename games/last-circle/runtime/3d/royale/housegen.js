@@ -141,6 +141,7 @@ export const RAIL_H = 1.0, RAIL_T = 0.1;   // the half-wall across a stairwell h
 export const PARAPET = 0.6;                // flat roofs: the parapet above the roof surface
 export const OVERHANG = 0.35;              // stepped (hip) roofs overhang the walls' outer faces
 export const CAPSULE = Object.freeze({ r: 0.45, h: 1.8, step: 0.55 });   // player.js STEP_UP, sim PLAYERK
+const CROUCH_H = 1.54;                                     // (W10 R1A) the crouched capsule (royale.js: 1.36 + 0.18 m) - nothing lower over a floor fits under it
 export const MAX_FLOORS = 3;               // O3
 export const TRI_BUDGET = 4000;            // per furnished storey
 // ---- Wave 10 round 1 (lane R1A, the houses audit): homes (use house, not a ruin) - each switch below is ON in the game; the homes gate (_harness/p23/homes.py) plants turn one off
@@ -261,6 +262,66 @@ const r3 = (v) => Math.round(v * 1000) / 1000;
 function shuffle(r, a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 
 // ── quarter turns (towngen's tables) ────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── (W10 R1A) collider merge: the structure's collision as the exact union of its boxes ────────────────────────────────────────────────
+// A room-by-room plan cuts a storey's slab into one box per room and its walls into one box per run between junctions: a query at a room junction got 3-4
+// slabs and every wall stub (houseload collider-load x1.6-1.9). Boxes of one part kind and one height span are replaced IN THE COLLISION by a rectangle
+// cover of their union (coordinate-compressed grid, the fewer of the x-first and z-first greedy covers): the same solid, so every mover, bullet and support
+// answer is unchanged. The drawn boxes stay as they were (c 0, cm 1); the cover boxes are collision-only (h 63: no face drawn, mergedCol 1). A group whose
+// cover is not smaller is left alone. The footstep surface inside a house is houseAt's (maps.js houseFloors: the DRAWN slabs, per room), never a cover's.
+const MERGE_PARTS = { wall: 1, slab: 1, fill: 1, trim: 1 };
+function coverRects(xs, zs, cov, nx, nz, xFirst, lap) {
+  // (lap: a rectangle grows through cells another rectangle already holds - overlapping covers: a wall cross is 2 boxes, not 3)
+  const used = new Uint8Array(nx * nz), out = [];
+  const A = xFirst ? nx : nz, B = xFirst ? nz : nx;
+  const at = xFirst ? (a, b) => b * nx + a : (a, b) => a * nx + b;
+  const can = (a, b) => cov[at(a, b)] && (lap || !used[at(a, b)]);
+  for (let b = 0; b < B; b++) for (let a = 0; a < A; a++) {
+    if (!cov[at(a, b)] || used[at(a, b)]) continue;
+    let a0 = a, a1 = a; while (a1 + 1 < A && can(a1 + 1, b)) a1++;
+    if (lap) while (a0 > 0 && can(a0 - 1, b)) a0--;
+    const row = (bb) => { for (let k = a0; k <= a1; k++) if (!can(k, bb)) return false; return true; };
+    let b0 = b, b1 = b; while (b1 + 1 < B && row(b1 + 1)) b1++;
+    if (lap) while (b0 > 0 && row(b0 - 1)) b0--;
+    for (let bb = b0; bb <= b1; bb++) for (let k = a0; k <= a1; k++) used[at(k, bb)] = 1;
+    out.push(xFirst ? [xs[a0], zs[b0], xs[a1 + 1], zs[b1 + 1]] : [xs[b0], zs[a0], xs[b1 + 1], zs[a1 + 1]]);
+  }
+  return out;
+}
+/** (W10 R1A) the collision cover of boxes (in place): returns the number of collider boxes saved. Exported for the selftest. */
+export function mergeColliderBoxes(boxes, palette) {
+  const groups = new Map(), n0 = boxes.length;
+  for (let bi = 0; bi < n0; bi++) {
+    const b = boxes[bi];
+    if (!b.c || !MERGE_PARTS[b.p]) continue;
+    const key = b.p + "|" + Math.round(b.min[1] * 1000) + "|" + Math.round(b.max[1] * 1000);
+    let g = groups.get(key); if (!g) groups.set(key, g = []); g.push(bi);
+  }
+  let saved = 0;
+  for (const g of groups.values()) {
+    if (g.length < 2) continue;
+    const xv = [], zv = [];
+    for (const bi of g) { const b = boxes[bi]; xv.push(Math.round(b.min[0] * 1000), Math.round(b.max[0] * 1000)); zv.push(Math.round(b.min[2] * 1000), Math.round(b.max[2] * 1000)); }
+    const xs = [...new Set(xv)].sort((a, b) => a - b), zs = [...new Set(zv)].sort((a, b) => a - b);
+    const nx = xs.length - 1, nz = zs.length - 1;
+    if (nx * nz > 4096) continue;                        // (never on a house: a guard on the grid's size)
+    const xi = new Map(xs.map((v, i) => [v, i])), zi = new Map(zs.map((v, i) => [v, i]));
+    const cov = new Uint8Array(nx * nz);
+    for (const bi of g) {
+      const b = boxes[bi], i0 = xi.get(Math.round(b.min[0] * 1000)), i1 = xi.get(Math.round(b.max[0] * 1000)), j0 = zi.get(Math.round(b.min[2] * 1000)), j1 = zi.get(Math.round(b.max[2] * 1000));
+      for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) cov[j * nx + i] = 1;
+    }
+    let R = null;
+    // (partitions only: overlapping covers are fewer boxes but stack two over one floor - a query there gets both)
+    for (const xf of [true, false]) { const c = coverRects(xs, zs, cov, nx, nz, xf, false); if (!R || c.length < R.length) R = c; }
+    if (R.length >= g.length) continue;
+    const s = boxes[g[0]], y0 = s.min[1], y1 = s.max[1];
+    for (const bi of g) { boxes[bi].c = 0; boxes[bi].cm = 1; }      // (cm: its collision is carried by a cover box - maps.js houseFloors reads the drawn slabs)
+    for (const r of R) boxes.push({ p: s.p, min: [r[0] / 1000, y0, r[1] / 1000], max: [r[2] / 1000, y1, r[3] / 1000], f: s.f.slice(), h: 63, c: 1, fl: s.fl, mergedCol: 1 });
+    saved += g.length - R.length;
+  }
+  return saved;
+}
+
 const COS = [1, 0, -1, 0], SIN = [0, 1, 0, -1];
 export const FACE = [[0, 1], [1, 0], [0, -1], [-1, 0]];        // quarter turn q -> world direction of local +Z
 const turnOfDir = (dx, dz) => (dz > 0.5 ? 0 : dx > 0.5 ? 1 : dz < -0.5 ? 2 : 3);
@@ -505,9 +566,16 @@ function buildCatalog(over, remap) {
     const a = AUTH[id];
     let h = 0;
     for (const p of a.parts) h = Math.max(h, p[4]);
-    // lowTop: the lowest top among its colliders (a toilet's bowl, 0.46, under its 0.8 tank): what a planner may step onto
-    const lowTop = a.cols.length ? Math.min(...a.cols.map((g) => Math.max(...g.map((k) => a.parts[k][4])))) : r3(h);
-    C[id] = { id, auth: id, src: "box", type: "box/" + id, w: a.w, d: a.d, h: r3(h), lowTop: r3(lowTop), tris: authTris(a), surface: a.surface || null, deco: !!a.deco, wall: !!a.wall, mount: a.mountY ? "wall" : a.top ? "top" : "floor", y0: a.mountY || 0 };
+    // (W10 R1A) colKeep: the collider groups a mover can meet. A group that lies wholly under another group of the piece whose underside is lower over the
+    // floor than a crouched mover is tall (a table's legs under its top, a workbench's shelf under its worktop) is met by that top first: it is left out of
+    // the collision (a bullet under the top passes the legs, as in most shooters; the drawn parts are unchanged). Quarter turns keep "wholly under".
+    const gb = a.cols.map((g) => { const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity]; for (const k of g) { const q = a.parts[k]; for (let ax = 0; ax < 3; ax++) { mn[ax] = Math.min(mn[ax], q[ax]); mx[ax] = Math.max(mx[ax], q[ax + 3]); } } return [mn, mx]; });
+    const colKeep = [];
+    gb.forEach((B, i) => { if (!gb.some((Aq, j) => j !== i && Aq[0][0] <= B[0][0] + 1e-4 && Aq[1][0] >= B[1][0] - 1e-4 && Aq[0][2] <= B[0][2] + 1e-4 && Aq[1][2] >= B[1][2] - 1e-4 &&
+      Aq[0][1] >= B[1][1] - 1e-3 && Aq[0][1] + (a.mountY || 0) < CROUCH_H)) colKeep.push(i); });
+    // lowTop: the lowest top among its (reachable) colliders (a toilet's bowl, 0.46, under its 0.8 tank): what a planner may step onto
+    const lowTop = colKeep.length ? Math.min(...colKeep.map((i) => gb[i][1][1])) : r3(h);
+    C[id] = { id, auth: id, src: "box", type: "box/" + id, w: a.w, d: a.d, h: r3(h), lowTop: r3(lowTop), tris: authTris(a), surface: a.surface || null, deco: !!a.deco, wall: !!a.wall, mount: a.mountY ? "wall" : a.top ? "top" : "floor", y0: a.mountY || 0, colKeep: colKeep.length < a.cols.length ? colKeep : null };
   }
   // alt: the piece it replaces (an authored stand-in): the furnisher takes it when the room's / storey's triangle budget cannot take the kit piece
   for (const [id, type, surface, extra] of over || []) { const prev = C[id]; kit(id, type, surface, extra); if (prev) C[id].alt = prev; }
@@ -2480,8 +2548,9 @@ export function generate(parcel, opts) {
     for (let ei = 0; ei < V.ents.length && ei < 30; ei++) {
       if (only && !(only & (1 << ei))) continue;
       const e = V.ents[ei];
-      const occE = near(occ, VIS_OCC, e.u, ey, e.v);
-      const o3 = acc ? near(occX || e.occ3, VIS_OCC3, e.cu, e.cy, e.cv) : null, one = acc && occX ? e.body : null;
+      // (lazy: built at the first sample point inside the view cone - most entrances see none of a candidate spot's points)
+      let occE = null, o3 = null;
+      const one = acc && occX ? e.body : null;
       let n = 0;
       for (let pi = 0; pi < 30; pi += 3) {
         const p0 = P[pi], p1 = P[pi + 1], p2 = P[pi + 2];
@@ -2494,6 +2563,7 @@ export function generate(parcel, opts) {
         if (Math.abs(dy) > hz * TAN_V) continue;
         const dist = Math.sqrt(hz * hz + dy * dy);
         if (dist < 0.2 || dist > 30) continue;
+        if (occE === null) occE = near(occ, VIS_OCC, e.u, ey, e.v);
         if (segBlocked(e.u, ey, e.v, p0, p1, p2, occE, 1 - 0.02 / dist, tall, rect, null)) continue;
         // (the accurate model) and from the third-person camera - through the doorway, past the body
         if (acc) { const du3 = p0 - e.cu, dv3 = p2 - e.cv, dy3 = p1 - e.cy, fwd3 = du3 * e.fu + dv3 * e.fv;
@@ -2503,7 +2573,9 @@ export function generate(parcel, opts) {
           const hz3 = Math.sqrt(fwd3 * fwd3 + lat3 * lat3);
           if (Math.abs(dy3) > hz3 * TAN_V3) continue;
           const dist3 = Math.sqrt(hz3 * hz3 + dy3 * dy3);
-          if (dist3 > 30 || segBlocked(e.cu, e.cy, e.cv, p0, p1, p2, o3, 1 - 0.02 / dist3, tall, rect, one)) continue; }
+          if (dist3 > 30) continue;
+          if (o3 === null) o3 = near(occX || e.occ3, VIS_OCC3, e.cu, e.cy, e.cv);
+          if (segBlocked(e.cu, e.cy, e.cv, p0, p1, p2, o3, 1 - 0.02 / dist3, tall, rect, one)) continue; }
         if (++n >= 2) break;
       }
       if (n >= 2) m |= 1 << ei;
@@ -3935,12 +4007,15 @@ export function generate(parcel, opts) {
           for (const k of g) { const bb = outBoxes[parts[k]]; for (let a = 0; a < 3; a++) { mn[a] = Math.min(mn[a], bb.min[a]); mx[a] = Math.max(mx[a], bb.max[a]); } }
           return { min: mn, max: mx };
         });
+        const keep = cat.colKeep;            // (W10 R1A) the groups a mover can meet (buildCatalog: colKeep)
+        if (keep) rec.cols = keep.map((i) => rec.cols[i]);
       } else rec.cols = [];
     }
     if (cat.deco) { rec.deco = true; rec.cols = []; }
     furniture.push(rec);
   }
   })();
+  mergeColliderBoxes(outBoxes, palette);                    // (W10 R1A) the structure's collision as the union of its boxes (after every index into outBoxes is taken)
   // ramps (world): dir from the local rising direction
   const outRamps = ramps.map((rp) => {
     const wb = wbox(rp.lr[0], rp.lr[1], rp.y0, rp.y1, rp.lr[2], rp.lr[3]);

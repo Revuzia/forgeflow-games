@@ -1424,9 +1424,10 @@
     T.bordCount = bordCount; T.holes = holeList;
     T.extStart = null; T.extTo = null; T.extCost = null; T.extKind = null; T.pend = null; T.linked = [];
     // the lookup lists were built wide for the bake; keep them narrow (they are read by every replay of this tile for the rest of the match)
-    if (nearItems.length < 65535 && cs.n < 65535) {
-      T.nearStart = Uint16Array.from(nearStart); T.nearItems = Uint16Array.from(nearItems);
-    }
+    // (W10 R1A) the two narrow on their own: a list ITEM is a collider id (16 bits while the set holds < 65535), a START an offset into the list (16 bits while the
+    // list holds < 65535). A furnished downtown tile has > 65535 items (W10's bigger homes and their x1.15 furniture): both stayed 32-bit - downtown 3.21 -> 4.61 MB
+    if (cs.n < 65535) T.nearItems = Uint16Array.from(nearItems);
+    if (nearItems.length < 65535) T.nearStart = Uint16Array.from(nearStart);
     if (nK >= STRIDE) throw new Error("navgrid: a tile may hold at most " + (STRIDE - 1) + " nodes");
     var tEnd = now();
     T.stats = {
