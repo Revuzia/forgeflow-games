@@ -748,7 +748,7 @@ export function generate(parcel, opts) {
   const TH = THEMES[P.theme];
   // (W10 R1A item 8) this house's model variety (VARIETY): its own stream, so every other draw of the house is what it was
   const VAR = {};
-  { const rv = subRng(P.seed, P.id, "kitvar"); if (!(typeof process !== "undefined" && process.env.LC_NOVAR)) for (const [id, v] of VARIETY) { const x = rv(); if (x < 0.5 && CATALOG[v]) VAR[id] = v; } }
+  { const rv = subRng(P.seed, P.id, "kitvar"); if (!(typeof process !== "undefined" && process.env.LC_NOVAR)) for (const [id, v] of VARIETY) { const x = rv(); if (x < 0.5 && CATALOG[v] && !(typeof process !== "undefined" && (process.env.LC_VAROFF || "").split(",").includes(v))) VAR[id] = v; } }
   const rr5 = TH.ruined ? subRng(P.seed, P.id, "ruin") : null;          // (K1) a ruin's wreckage: its own stream (the house's rooms and furniture keep theirs)
   const { nx, nz } = P;
   const W = nx * U, D = nz * U;
