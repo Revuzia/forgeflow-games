@@ -1213,3 +1213,30 @@ long press frame-rate independent. Report after 1-2 verified.
 - STILL OPEN: #10 compact far-tree format (not started); round-4 items 1, 2, 4 (see ROUND 4 above); soak with
   thousands of frames in a browser (SwiftShader gives ~300 frames in 22 min — needs a GPU machine or the owner's Mac);
   sample the 'copied by owner' list in perf-soak; normalise page owner names.
+
+## SESSION 15b (after the ship of HEAD) — lead's order: (1) ANGLE copies, (2) clouds, (3) Amonshis water, (4) workers
+- (1) OWNERS of the ANGLE whole-buffer copies (probe-copies.mjs, dist31, babel 307987276, HIGH 320x180, 3 views x 25
+  frames, copies1.log): 6 MB/frame of whole-buffer copies (81 buffers/frame) for 139 bufferSubData/frame of 3.3 MB
+  data; + bufferData 1.8 MB/frame, texSubImage 1.8 MB/frame; ~58 MB in flight. Copied since load (88 frames):
+  planet-0/vegetation 97.8 MB (524 kB / 131 kB / 98 kB buffers = far-tree bucket matrix / extra / colour arrays,
+  flushRanges every frame as cells enter + near rebuilds), planet-0/life 65.5 MB (393 / 524 / 262 kB vertex buffers
+  and a 131 kB index: per-frame instance data of people / animals / crowds, re-sent every frame into buffers drawn every
+  frame), terrain pages (each landing copies a page's 13 attribute buffers of 168 kB = 2.2 MB: L3-p15 26.8 MB, L4-p5
+  19.2, L3-p16 19.2, L3-p18 17.2, L4-p4 17.2 ... the biggest group in total), 'buffers (not in the scene)' 30.7 MB.
+  CAVEAT: the 'fresh' / GC-wait count is an UPPER bound — if ANGLE's BufferManager recycles same-size buffers once the
+  GPU is done with them (F16/F17 relied on that), steady-state copies of the same buffers allocate nothing new; what
+  is certain is the copy bandwidth (6 MB/frame) and the stalls on buffers still in flight.
+  NEXT (not started, fresh session): (a) life per-frame instance buffers -> a ring of 3 InstancedBufferAttributes per
+  mesh rotated each frame (write the one drawn 3 frames ago; ~2x their 13 MB extra) or uniform/texture path; (b) far
+  trees: stage cell landings and flush each bucket at most once every 3 frames into a buffer not drawn since (ring of
+  2-3), or append-only into a fresh tail page; (c) terrain landings: prefer a page not drawn in the last 3 frames
+  (pool / idle / hidden pages) and batch a frame's landings into it; (d) count 'fresh' only for sizes ANGLE cannot
+  recycle (GlTrace's sizesSeen rule) so the GC estimate is not an upper bound.
+- (2) CLOUDS landed `?deckfull=0` (sky/clouds.ts deckTunnel): on Gaia (R 3000, air 600 m) the shell is 180-420 m, so
+  the owner's 456 m white stop is 36 m ABOVE the shell (inShell 0: near zone 35 m, the deck's top right under the lens)
+  and 220 m is 40 m over its base (2.5x rule: 220 m of clear air; every ray but the steepest ran into full cloud). The
+  resting clear zone now holds from 20 m under the base to 60 m over the top (fading over 40 m more), at least
+  DECK_FLOOR = 450 m (round 3's fine stops had 335-627), and outside the shell a 1e-4 camFog switches the shader's near
+  zone on (no fog itself). 540 m: unchanged (the tops visible on the way down). tests/render-decktunnel.test.ts (+1).
+  The LOCAL bounds (cloudField's base 0.05-0.1, top 0.2-0.62 / 0.9-1.0 storms of the shell) all lie inside the shell,
+  so covering shell-20 .. shell+60 covers them; a per-spot bound would need the weather cube on the CPU. NOT yet shot.
