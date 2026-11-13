@@ -1,0 +1,224 @@
+{
+ "what": "max2 SFX round 2 fix: probe_audio_runtime match on seeds 3, 7, 11 and 21 on this tree (rift_coop, 300 s, default seats, Chrome fake audio output, dev server after npm run content), after MIX_TRIM_DB 3.5 -> 3.2 (src/audio/index.ts) and the kit-hit blow / snap / air refix. Before = verify2_r's captures of HEAD a0af27706 (same seeds and seats)",
+ "tokens": "master integrated -18 +/- 1.5 LUFS; fighter kit share >= 50 %",
+ "seeds": {
+  "3": {
+   "before": {
+    "pass": true,
+    "seat": "lisvel",
+    "masterI": -16.78,
+    "sfxI": -18.65,
+    "ambienceI": -23.71,
+    "kitPct": 67.08,
+    "failedGates": []
+   },
+   "after": {
+    "pass": true,
+    "seat": "lisvel",
+    "masterI": -16.99,
+    "sfxI": -18.51,
+    "ambienceI": -23.67,
+    "kitPct": 67.88,
+    "failedGates": []
+   },
+   "afterTop": [
+    [
+     "f_lisvel_a1_hit",
+     12.09
+    ],
+    [
+     "f_lisvel_attack_hit",
+     6.75
+    ],
+    [
+     "f_marund_attack_hit",
+     5.88
+    ],
+    [
+     "f_lisvel_attack_swing",
+     5.03
+    ],
+    [
+     "c_hit_phys_light",
+     4.13
+    ],
+    [
+     "f_marund_attack_swing",
+     4.12
+    ],
+    [
+     "f_ulkro_attack_hit",
+     4.03
+    ],
+    [
+     "f_marund_passive",
+     3.62
+    ]
+   ]
+  },
+  "7": {
+   "before": {
+    "pass": true,
+    "seat": "kemdo",
+    "masterI": -18.29,
+    "sfxI": -22.69,
+    "ambienceI": -23.24,
+    "kitPct": 76.97,
+    "failedGates": []
+   },
+   "after": {
+    "pass": true,
+    "seat": "kemdo",
+    "masterI": -18.56,
+    "sfxI": -22.58,
+    "ambienceI": -23.32,
+    "kitPct": 77.26,
+    "failedGates": []
+   },
+   "afterTop": [
+    [
+     "f_kemdo_attack_hit",
+     40.33
+    ],
+    [
+     "f_kemdo_attack_swing",
+     21.34
+    ],
+    [
+     "f_kemdo_hit",
+     6.13
+    ],
+    [
+     "f_kemdo_a3",
+     5.68
+    ],
+    [
+     "c_proc_item",
+     2.79
+    ],
+    [
+     "c_proc_team",
+     2.1
+    ],
+    [
+     "c_hit_magic",
+     2.02
+    ],
+    [
+     "c_cast_big",
+     1.67
+    ]
+   ]
+  },
+  "11": {
+   "before": {
+    "pass": true,
+    "seat": "ervet",
+    "masterI": -17.94,
+    "sfxI": -22.25,
+    "ambienceI": -23.87,
+    "kitPct": 64.19,
+    "failedGates": []
+   },
+   "after": {
+    "pass": true,
+    "seat": "ervet",
+    "masterI": -18.18,
+    "sfxI": -22.24,
+    "ambienceI": -23.84,
+    "kitPct": 64.25,
+    "failedGates": []
+   },
+   "afterTop": [
+    [
+     "f_ervet_attack_hit",
+     8.89
+    ],
+    [
+     "f_burdam_attack_hit",
+     7.53
+    ],
+    [
+     "f_ervet_attack_swing",
+     6.38
+    ],
+    [
+     "m_enemy_windup",
+     5.08
+    ],
+    [
+     "f_burdam_attack_swing",
+     4.95
+    ],
+    [
+     "w_glimwick_hit",
+     4.74
+    ],
+    [
+     "f_burdam_passive",
+     4.57
+    ],
+    [
+     "f_ervet_passive",
+     4.32
+    ]
+   ]
+  },
+  "21": {
+   "before": {
+    "pass": true,
+    "seat": "ardit",
+    "masterI": -17.82,
+    "sfxI": -21.03,
+    "ambienceI": -23.23,
+    "kitPct": 76.12,
+    "failedGates": []
+   },
+   "after": {
+    "pass": true,
+    "seat": "ardit",
+    "masterI": -18.18,
+    "sfxI": -21.33,
+    "ambienceI": -23.26,
+    "kitPct": 76.04,
+    "failedGates": []
+   },
+   "afterTop": [
+    [
+     "f_ardit_attack_hit",
+     26.08
+    ],
+    [
+     "f_ardit_attack_swing",
+     14.54
+    ],
+    [
+     "f_ardit_hit",
+     9.77
+    ],
+    [
+     "f_ardit_a2",
+     5.41
+    ],
+    [
+     "f_ardit_a3",
+     2.5
+    ],
+    [
+     "c_proc_team",
+     2.37
+    ],
+    [
+     "c_proc_item",
+     2.37
+    ],
+    [
+     "f_rishal_a1_hit",
+     1.62
+    ]
+   ]
+  }
+ },
+ "sheet": "_design/reviews/max2/sfx/sfx1e_runtime_lisvel3_ab.png (seed 3, the seat nearest the top bound)",
+ "result": "4/4 PASS every gate. Master spread -16.78..-18.29 -> -16.99..-18.56 LUFS (brawler seat 0.28 -> 0.49 LU inside the top bound; the quietest seat 1.21 LU inside the bottom)."
+}
