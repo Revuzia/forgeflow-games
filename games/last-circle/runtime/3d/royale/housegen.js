@@ -545,6 +545,7 @@ const FREEPOOL = { living: ["armchair", "ottoman", "lampSq", "plant"], bedroom: 
 // (stage B) the small pieces the rescue pass may add to any room still short of 3 of its own pieces in view
 const RESCUE = ["wallShelf", "wallCab", "plant", "lampSq", "trash", "sideTable", "bookcaseLow", "filingCab", "chairMod", "box"];
 // (stage B) the low clutter a mover steps onto in passing (lowest top 0.2 .. 0.55 m): never within 0.9 m of a piece one more step up (see stairsOK)
+const VIS_OCC = [], VIS_OCC3 = [];          // (W10 R1A: the occluders near one entrance's sight lines, reused buffers - see visMask)
 const VIS_PTS = new Float64Array(30);      // (the view model's sample points: one buffer, generate() is synchronous)
 const STEP_CLUTTER = new Set(["rubble", "carton", "cartonOpen", "sacks", "hayBale", "boxStack", "box", "boxOpen", "palletLoad"]);
 // pieces nothing is stood on (a lamp on a bed, a box on a crate stack): everything else with a flat top may carry a lamp / a small plant / a box
@@ -2466,10 +2467,21 @@ export function generate(parcel, opts) {
     let q = 6;
     for (let a = -1; a <= 1; a += 2) for (let b = -1; b <= 1; b += 2) for (let c = -1; c <= 1; c += 2) { P[q++] = cu + a * hu; P[q++] = cy + b * hy; P[q++] = cv + c * hv; }
     let m = 0;
+    // (W10 R1A, CPU) per entrance, the occluders that can block ANY of its 10 sight lines - the ones meeting the box round the eye (camera) and the 10 points; a
+    // sight line's own box lies inside it, so segHit skips every other one anyway: the same answer, one pass over the list instead of ten (two lists, accurate)
+    let px0 = Infinity, px1 = -Infinity, py0 = Infinity, py1 = -Infinity, pz0 = Infinity, pz1 = -Infinity;
+    for (let pi = 0; pi < 30; pi += 3) { const a = P[pi], b = P[pi + 1], c = P[pi + 2]; if (a < px0) px0 = a; if (a > px1) px1 = a; if (b < py0) py0 = b; if (b > py1) py1 = b; if (c < pz0) pz0 = c; if (c > pz1) pz1 = c; }
+    const near = (list, out, ax, ay, az) => {
+      const x0 = ax < px0 ? ax : px0, x1 = ax > px1 ? ax : px1, y0 = ay < py0 ? ay : py0, y1 = ay > py1 ? ay : py1, z0 = az < pz0 ? az : pz0, z1 = az > pz1 ? az : pz1;
+      out.length = 0;
+      for (let i = 0; i < list.length; i++) { const b = list[i]; if (b.u1 <= x0 || b.u0 >= x1 || b.y1 <= y0 || b.y0 >= y1 || b.v1 <= z0 || b.v0 >= z1) continue; out.push(b); }
+      return out;
+    };
     for (let ei = 0; ei < V.ents.length && ei < 30; ei++) {
       if (only && !(only & (1 << ei))) continue;
       const e = V.ents[ei];
-      const o3 = acc ? (occX || e.occ3) : null, one = acc && occX ? e.body : null;
+      const occE = near(occ, VIS_OCC, e.u, ey, e.v);
+      const o3 = acc ? near(occX || e.occ3, VIS_OCC3, e.cu, e.cy, e.cv) : null, one = acc && occX ? e.body : null;
       let n = 0;
       for (let pi = 0; pi < 30; pi += 3) {
         const p0 = P[pi], p1 = P[pi + 1], p2 = P[pi + 2];
@@ -2482,7 +2494,7 @@ export function generate(parcel, opts) {
         if (Math.abs(dy) > hz * TAN_V) continue;
         const dist = Math.sqrt(hz * hz + dy * dy);
         if (dist < 0.2 || dist > 30) continue;
-        if (segBlocked(e.u, ey, e.v, p0, p1, p2, occ, 1 - 0.02 / dist, tall, rect, null)) continue;
+        if (segBlocked(e.u, ey, e.v, p0, p1, p2, occE, 1 - 0.02 / dist, tall, rect, null)) continue;
         // (the accurate model) and from the third-person camera - through the doorway, past the body
         if (acc) { const du3 = p0 - e.cu, dv3 = p2 - e.cv, dy3 = p1 - e.cy, fwd3 = du3 * e.fu + dv3 * e.fv;
           if (fwd3 <= 0.3) continue;
@@ -2849,7 +2861,25 @@ export function generate(parcel, opts) {
       const pts = [];
       for (let du = -2; du <= 2; du += 0.5) for (let dv = -2; dv <= 2; dv += 0.5) pts.push([cu + du, cv + dv]);
       pts.sort((a, b) => ((a[0] - cu) * (a[0] - cu) + (a[1] - cv) * (a[1] - cv)) - ((b[0] - cu) * (b[0] - cu) + (b[1] - cv) * (b[1] - cv)) || a[0] - b[0] || a[1] - b[1]);
+      // (W10 R1A, CPU) the chairs a spot could seat, judged BEFORE the table is put (the furnisher's dominant cost was a table put, its room-walk check, chairs
+      // tried and all of it taken out again): the chair the budget gives once the table is in, each chair spot's valid() - a chair never overlaps its own table
+      // (0.12 m apart) and the chairs placed first only take spots away, so fewer valid spots than the set needs = the full attempt fails the same way. The table is
+      // still tried at such a spot until one fits (anyT: which failure the room records)
+      const need = !chairId ? 0 : home && CENTRE_GROUPS && (maxChairs || 6) >= 2 ? 2 : 1;
+      let chPre = null;
+      if (need) { tris[f] += tc.tris; R.spent += tc.tris; chPre = catOf(chairId); tris[f] -= tc.tris; R.spent -= tc.tris; }
+      const seats = (pu, pv, tq) => {
+        const off = tc.d / 2 + 0.12 + chPre.d / 2, sp = tc.w >= 1.7 ? [-0.5, 0.5] : [0];
+        const sides = tq === 0 ? [[0, off, 2], [0, -off, 0]] : [[off, 0, 3], [-off, 0, 1]];
+        let n = 0;
+        for (const [ou, ov, q] of sides) for (const s2 of sp) {
+          const u = pu + ou + (tq === 0 ? s2 : 0), v = pv + ov + (tq === 0 ? 0 : s2), w = q % 2 ? chPre.d : chPre.w, d = q % 2 ? chPre.w : chPre.d;
+          if (valid([u - w / 2, v - d / 2, u + w / 2, v + d / 2], 0, chPre.h)) n++;
+        }
+        return n;
+      };
       for (const tq of home ? [tq0, 1 - tq0] : [tq0]) for (const [pu, pv] of pts) {          // (W10 R1A: a home's table also turned across the room)
+        if (chPre && anyT && seats(pu, pv, tq) < need) continue;
         const t = tryAt(tableId, pu, pv, tq);
         if (!t) continue;
         anyT = true;
@@ -3594,7 +3624,7 @@ export function generate(parcel, opts) {
     const cands = roomRecs.filter((r) => r.floor === f && r.kind !== "hall" && r.kind !== "bath");
     if (cands.length && rng() < 0.6) pick(rng, cands).chest = true;
   }
-  const roundRobin = (queues) => { for (let more = true; more;) { more = false; for (const q of queues) if (q.length) { q.shift()(); more = true; } } };
+  const roundRobin = (queues) => { const at = queues.map(() => 0); for (let more = true; more;) { more = false; for (let i = 0; i < queues.length; i++) { const q = queues[i]; if (at[i] < q.length) { q[at[i]++](); more = true; } } } };   // (W10 R1A, CPU: an index, not shift(); a queue only grows at its end)
   // the storey's budget: shares by area with a floor (a 6 m2 bathroom still gets its set), a reserve held back for the in-view pieces of phase 3
   for (let f = 0; f < S; f++) {
     const mine = roomRecs.filter((r) => r.floor === f), wt = (r) => (SHAREW[r.kind] || 1) * (r.cells.length + 2), wsum = mine.reduce((a, r) => a + wt(r), 0);
