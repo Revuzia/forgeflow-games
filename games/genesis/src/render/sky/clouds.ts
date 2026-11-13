@@ -1395,6 +1395,12 @@ const DECK_ZOOM = perfSwitch('deckzoom');
 // the old white-out (default on; `?deckmist=0` = the white-out, for A/B). Only inside the shell: from outside and above
 // the deck is unchanged
 const DECK_MIST = perfSwitch('deckmist', true);
+/** round 4: the resting clear zone spans the whole deck and its edge bands (`?deckfull=0` = round 3's inShell rule) */
+const DECK_FULL = perfSwitch('deckfull', true);
+/** metres over the shell's top / under its base the full clear zone still holds (then fades over 40 m) */
+export const DECK_ABOVE = 60, DECK_BELOW = 20;
+/** the resting clear zone's least radius (m): round 3's stops at 266-383 m (335-627 m of clear air) read fine */
+export const DECK_FLOOR = 450;
 
 export interface TunnelState { t: number; r: number; v: number; vS: number; open: number }
 export function newTunnelState(): TunnelState { return { t: 0, r: 0, v: 0, vS: 0, open: 0 }; }
@@ -1426,12 +1432,24 @@ export function deckTunnel(st: TunnelState, r0: number, now: number, innerR: num
   let near = r0 > innerR - 400 && r0 < outerR + 400 ? st.open : 0;
   if (DECK_MIST) near = Math.max(near, 0.7 * inShell);
   // (a tiny positive fog keeps the shader's near-zone path on while the tunnel is open outside the shell edge)
-  const camFog = Math.max(inShell * (1 - near), near > 0.01 ? 1e-4 : 0);
+  let camFog = Math.max(inShell * (1 - near), near > 0.01 ? 1e-4 : 0);
   let nearR = 35 + near * (DECK_ZOOM ? 450 : Math.min(450, 60 + st.v * 0.6));
   // (round 3, owner: stepping down into the deck's UPPER part stayed fully white: from up there the deck below the
   // camera is longer than the 350 m clear zone along the view — the clear zone of a resting camera reaches through the
   // deck beneath it, ~2.5x its height above the deck base)
-  if (DECK_MIST && inShell > 0) nearR = Math.max(nearR, inShell * Math.min(1200, 120 + 2.5 * Math.max(0, r0 - innerR)));
+  // (round 4, owner stepping down 1 notch at a time, resting 3.5 s: white at 456 m — just ABOVE the shell, 36 m over
+  // its top, the deck right under the lens — and almost white at 220 m — 40 m over the shell's base, where the 2.5x
+  // rule gave only 220 m of clear air and every ray but the steepest ran into full cloud. The resting clear zone now
+  // covers the WHOLE deck: it holds from DECK_BELOW under the shell's base to DECK_ABOVE over its top (fading out over
+  // the next 40 m, so a descent still sees the cloud tops from higher up), and never drops under DECK_FLOOR m)
+  if (DECK_MIST && DECK_FULL) {
+    const inDeck = Math.min(1, Math.max(0, (r0 - (innerR - DECK_BELOW - 40)) / 40)) * Math.min(1, Math.max(0, (outerR + DECK_ABOVE + 40 - r0) / 40));
+    if (inDeck > 0) {
+      nearR = Math.max(nearR, inDeck * Math.min(1200, Math.max(DECK_FLOOR, 120 + 2.5 * Math.max(0, r0 - innerR))));
+      // (outside the shell the shader applies the near zone only with a positive fog: a tiny one, no fog itself)
+      camFog = Math.max(camFog, 1e-4);
+    }
+  } else if (DECK_MIST && inShell > 0) nearR = Math.max(nearR, inShell * Math.min(1200, 120 + 2.5 * Math.max(0, r0 - innerR)));
   // (deckmist: the fog in front of the lens lets at least 45 % of the view through while resting in the deck)
   return { camFog, nearR, mist: DECK_MIST ? 0.45 * inShell : 0 };
 }

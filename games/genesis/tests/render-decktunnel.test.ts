@@ -58,3 +58,19 @@ test('a camera resting inside the deck sees through a thinned mist (owner ruling
   for (let f = 0; f < 120; f++) last = deckTunnel(above, OUTER + 600, 1000 + f * 16.7, INNER, OUTER, 0);
   assert.ok(last.camFog === 0 && last.nearR < 40 && last.mist === 0, `above the deck: ${JSON.stringify(last)}`);
 });
+
+test('round 4: resting in the deck\'s edge bands (just over its top, just over its base) the clear zone still spans the deck', () => {
+  // Gaia: radius 3000, air 600 m: the shell 180-420 m; the owner's white stops were 456 m and 220 m
+  const R = 3000, inner = R + 180, outer = R + 420;
+  const shell = (r: number) => Math.min(1, Math.max(0, (r - inner + 20) / 20)) * Math.min(1, Math.max(0, (outer + 20 - r) / 20));
+  const rest = (alt: number) => { const st = newTunnelState(); let t = { camFog: 0, nearR: 0, mist: 0 }; for (let f = 0; f < 300; f++) t = deckTunnel(st, R + alt, 1000 + f * 16.7, inner, outer, shell(R + alt)); return t; };
+  const top = rest(456);
+  assert.ok(top.nearR >= (456 - 180) * 2.5, `456 m (36 m over the top): the clear zone reaches through the deck below (${top.nearR})`);
+  assert.ok(top.camFog > 0 && top.camFog < 1e-3 && top.mist === 0, `456 m: the near zone on, no fog of its own (${JSON.stringify(top)})`);
+  const base = rest(220);
+  assert.ok(base.nearR >= 450, `220 m (40 m over the base): ${base.nearR}`);
+  for (const alt of [266, 320, 383]) assert.ok(rest(alt).nearR >= 450, `${alt} m`);
+  // from higher up the descent still shows the cloud tops (540 m: no clear zone)
+  assert.ok(rest(540).nearR < 40, `540 m: ${rest(540).nearR}`);
+  assert.ok(rest(181).nearR >= 450 || rest(181).nearR < 40, 'below the deck: either way the deck is above');
+});
