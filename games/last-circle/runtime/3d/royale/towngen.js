@@ -1268,7 +1268,7 @@ function yardItems(rng, kind, theme, opts) {
     } else if (V === "depot") {
       spec.yw = 34; spec.yd = 18; spec.cars = 6; spec.containers = 3;
       spec.rows.N.push(dimsOf("hall", 20)); spec.rows.N.push(dimsOf("shed", 8));
-      if (rng() < 0.5) spec.rows.S.push(dimsOf("shed", 10));                                   // (W10 R1A: at most one shed on the south row, not two; the east one a quarter of the time)
+      spec.rows.S.push(dimsOf("shed", 10));                                                    // (W10 R1A: one shed on the south row, not two - a depot keeps the 3 enterable buildings a compound needs; the east one a quarter of the time)
       if (rng() < 0.25) spec.rows.E.push(dimsOf("shed", 10));
     } else if (V === "hamlet") {
       spec.yw = 26; spec.yd = 12; spec.fence = false; spec.cars = 3;
@@ -1590,7 +1590,7 @@ function docksAttempt(seed, poi, S, waterY, theme, opts) {
   const mix = [["house_s", 30], ["house_m", 30], ["shop", 22], ["shed", 8 * SHED_W], ["cabin", 10]];
   let n = 0;
   for (let s = 8; s + 6 <= len + 0.01; s += DOCK_PITCH) for (const side of [-1, 1]) {
-    const pr = rectAlong(P0, dx, dz, s - 6, s + 6, side < 0 ? -12.5 : 2, side < 0 ? -2 : 12.5);
+    const pr = rectAlong(P0, dx, dz, s - 6, s + 6, side < 0 ? -14.5 : 2, side < 0 ? -2 : 14.5);       // (W10 R1A: 12.5 m deep, was 10.5: a 10 x 10 m home stands on it)
     let wetPts = 0, hiPts = 0;
     for (let a = 0; a < 3; a++) for (let c = 0; c < 3; c++) {
       const x = pr[0] + (pr[2] - pr[0]) * (a + 0.5) / 3, z = pr[1] + (pr[3] - pr[1]) * (c + 0.5) / 3, h = S.h(x, z);
@@ -1600,7 +1600,9 @@ function docksAttempt(seed, poi, S, waterY, theme, opts) {
     if (wetPts < 5 || hiPts > 0) continue;                                                              // (a platform on a hill - a bank beside the landing - would bury its deck: skipped)
     // what stands on it: the archetype is drawn first (the stream does not depend on which platforms fit), then fitted to 10.5 x 8.9 m
     const key = wpick(rng, mix, (q) => q[1])[0];
-    let fit = fitArch(rng, key, 10.5, 8.9, 0, false) || fitArch(rng, "shed", 10.5, 8.9, 0, false);
+    let fit = fitArch(rng, key, 10.5, 10.9, 0, false);
+    if (!fit && rng() < 0.4) fit = fitArch(rng, "shed", 10.5, 10.9, 0, false);                         // (W10 R1A: a 10 x 10 m home is too deep for a platform: a boat shed on two in five, the rest stay open decks)
+    if (!fit) continue;
     const across = side * (3 + fit.d / 2), face = [-side * px, -side * pz];
     const cx = P0[0] + dx * s + px * across, cz = P0[1] + dz * s + pz * across;
     decks.push({ role: "platform", rect: pr });
