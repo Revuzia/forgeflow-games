@@ -229,7 +229,7 @@ const ARCH = {
   // 10 x 10 m now and the small house and the cabin may have two floors - with the owner's default, 40-50 % of homes two-storey)
   house_s: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10]], floors: [1, 1, 2], fh: 3.4 },          // (floors drawn uniformly from the list: one in three two-storey)
   house_m: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10]], floors: [1, 2], fh: 3.4 },
-  cabin: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10], [10, 12.5]], floors: [1, 1, 2], fh: 3.4 },
+  cabin: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10], [10, 12.5]], floors: [1, 1, 1, 2], fh: 3.4 },      // (one in four two-storey: Deepwood's loot count, see the lodge mixes)
   shop: { use: "shop", gen: "house", dims: [[10, 10], [12.5, 10], [12.5, 12.5]], floors: [1, 2], fh: 4.0 },
   midrise: { use: "midrise", gen: "tower", dims: [[12.5, 12.5], [15, 15]], floors: [2, 3], fh: 4.0 },
   tower: { use: "tower", gen: "tower", dims: [[15, 15], [17.5, 17.5]], floors: [3], fh: 4.0 },
@@ -280,8 +280,8 @@ const MIX = {
   "resort/town": { house_s: 16, house_m: 18, villa: 22, shop: 24, midrise: 12, lot: 6, shell: 8 },
   "resort/village": { house_s: 24, house_m: 20, villa: 18, shop: 22, shed: 3 * SHED_W, lot: 6, shell: 4 },
   "lodge/core": { midrise: 20, shop: 30, cabin: 16, lodge2: 18, hall: 10, lot: 4, shell: 6 },                     // (stage B: two-storey lodges take from the cabins)
-  "lodge/town": { cabin: 42, lodge2: 10, house_m: 12, shop: 16, hall: 8, shed: 2 * SHED_W, lot: 6, shell: 4 },        // (W10: cabins 38 -> 42, lodges 18 -> 10, house_m 8 -> 12: ~45 % two-storey - the bigger homes' floor area
-  "lodge/village": { cabin: 48, lodge2: 6, house_m: 14, shop: 12, hall: 6, shed: 3 * SHED_W, lot: 4, shell: 2 },      //  is most of Deepwood's loot: more broke the map's loot count, homes gate) (W10: cabins 46 -> 48, lodges 14 -> 6, house_m 8 -> 14)
+  "lodge/town": { cabin: 46, lodge2: 6, house_m: 12, shop: 16, hall: 8, shed: 2 * SHED_W, lot: 6, shell: 4 },        // (W10: cabins 38 -> 46, lodges 18 -> 6, house_m 8 -> 12: ~37 % two-storey - the bigger homes' floor area
+  "lodge/village": { cabin: 50, lodge2: 4, house_m: 14, shop: 12, hall: 6, shed: 3 * SHED_W, lot: 4, shell: 2 },      //  is most of Deepwood's loot: more broke the map's loot count, homes gate) (W10: cabins 46 -> 50, lodges 14 -> 4, house_m 8 -> 14)
 };
 // Wave 7 completion, city theme only: what an empty lot can be besides parking / a pocket park / a yard. maps.js draws each one from boxes (a gas station: canopy, pumps, kiosk; a
 // market: striped stalls; a plaza: a clock tower; a court: a sports court with stands and floodlights); streetProps leaves them undressed, a lot too small for its landmark is a yard.
@@ -1246,7 +1246,9 @@ function yardItems(rng, kind, theme, opts) {
   const mix = mixFor(theme === "ruin" || theme === "mill" ? "lodge" : theme === "farm" ? "lodge" : theme, "village");
   // (stage B) a resort / lodge compound's house is a two-storey villa / lodge a quarter of the time - the same one draw, so the Savanna themes (farm, ruin) are draw for draw what they were
   const two = theme === "resort" ? "villa" : theme === "lodge" ? "lodge2" : null;
-  const house = () => { const r = rng(); return two && r >= 0.55 && r < 0.8 ? two : r < 0.55 ? "house_s" : "house_m"; };
+  // (W10 R1A: a lodge compound's house is a cabin - one in four two-storey - and a two-storey lodge one time in 12: Deepwood's homes are most of its loot, and
+  // its bigger two-storey homes' floor area broke the map's loot count, homes gate)
+  const house = () => { const r = rng(); if (theme === "lodge") return r < 0.08 ? "lodge2" : r < 0.85 ? "cabin" : "house_m"; return two && r >= 0.55 && r < 0.8 ? two : r < 0.55 ? "house_s" : "house_m"; };
   const dimsOf = (key, maxW) => {
     const A = ARCH[key], fit = A.dims.filter((dm) => dm[0] <= maxW + 1e-6);
     const dm = fit.length ? fit[Math.floor(rng() * fit.length)] : A.dims[0];

@@ -32,7 +32,8 @@ Rows (any FAIL -> exit 1; the census not running -> exit 2):
   loot-density  homes' loot points (+ chests) per m2 of room, per map (4 seeds pooled), within +-15 % of the W9 tip (the plan's loot row, second half)
   determinism   the first map x seed built twice gives the same census hash
 Plants (a scratch copy of runtime/ + assets/props with ONE source edit; each must exit 1 on its rows):
-  tiny-homes (7.5 x 7.5 back in towngen ARCH house_s, one floor) -> home-size, storeys     sparse (the area quota off: VIEW_WANT top-up only) -> coverage, density
+  tiny-homes (7.5 x 7.5 back in towngen ARCH house_s, one floor) -> home-size, storeys     sparse (the area quota off: VIEW_WANT top-up only) -> density
+  bare (the quota and the centre groups off, furniture x1: the audit's furnishing) -> coverage, density
   clock-spam (the clock / lamp / plant caps off) -> filler      gap-kitchen (base units spaced, not run) -> kitchen-run     strip-rooms (1-cell minimum width) -> narrow
   scale-draw-only (kit drawn at k, colliders at 1) -> scale     no-programme (the minimum programme off) -> programme       shed-flood (shed weights x20) -> sheds
   no-sets (the centre groups off) -> sets       tri-flood (TRI_BUDGET 6000 -> 60000 and the quota 1 per 1.5 m2) -> tris     loot-drop (house loot halved) -> loot
@@ -65,7 +66,11 @@ TG = "runtime/3d/royale/towngen.js"
 PLANTS = {
     "tiny-homes": ({"home-size", "storeys"}, [(TG, r'house_s: \{ use: "house", gen: "house", dims: \[[^\n]*?\], floors: \[[^\]]*\]',
                                                  'house_s: { use: "house", gen: "house", dims: [[7.5, 7.5], [10, 7.5]], floors: [1]')]),
-    "sparse": ({"coverage", "density"}, [(HG, r"export const AREA_QUOTA = true;", "export const AREA_QUOTA = false;")]),
+    "sparse": ({"density"}, [(HG, r"export const AREA_QUOTA = true;", "export const AREA_QUOTA = false;")]),
+    # (the quota alone off leaves coverage at ~28 %: the centre groups and the x1.15 furniture carry it - coverage's own plant is the audit's furnishing back)
+    "bare": ({"coverage", "density"}, [(HG, r"export const AREA_QUOTA = true;", "export const AREA_QUOTA = false;"),
+                                       (HG, r"export const CENTRE_GROUPS = true;", "export const CENTRE_GROUPS = false;"),
+                                       (HG, r"export const FURN_K = 1.15;", "export const FURN_K = 1;")]),
     "clock-spam": ({"filler"}, [(HG, r"export const FILLER_CAPS = true;", "export const FILLER_CAPS = false;")]),
     "gap-kitchen": ({"kitchen-run"}, [(HG, r"export const KITCHEN_RUN = true;", "export const KITCHEN_RUN = false;")]),
     "strip-rooms": ({"narrow"}, [(HG, r"export const MIN_ROOM_W = 2;", "export const MIN_ROOM_W = 1;")]),
