@@ -1022,6 +1022,16 @@ function settleShares(S, L, theme) {
     const cand = L.parcels.filter((p) => (p.use === "lot" || p.use === "shell") && !p.ident).sort((a, b) => rank(a) - rank(b) || area(b) - area(a) || (a.id < b.id ? -1 : 1));
     for (const p of cand) { if (nE >= TOWN_MIN_ENTERABLE) break; if (convertToEnterable(S, L, p, theme)) nE++; }
   }
+  // ... and they stand IN the town: a building counts for its town while its middle lies within poi.r + 15 m (citycheck's attribution, probe_city poiOf;
+  // 1 m kept back for the detector's collider footprint). Crane Heights held 7 enterables on seed 48 with 2 of them 105.9 m out (limit 105): 5 counted.
+  const inTown = (p) => { const a = p.building ? p.building.aabb : [p.rect[0], p.rect[1], p.rect[2], p.rect[3]]; return Math.hypot((a[0] + a[2]) / 2 - L.poi.x, (a[1] + a[3]) / 2 - L.poi.z) < L.poi.r + 14; };
+  let nIn = L.parcels.filter((p) => p.building && p.building.enterable && inTown(p)).length;
+  if (nIn < TOWN_MIN_ENTERABLE && L.blocks.length) {
+    const area = (p) => (p.rect[2] - p.rect[0]) * (p.rect[3] - p.rect[1]);
+    const rank = (p) => (p.use === "lot" && !LANDMARK_LOTS.includes(p.lot) ? 0 : p.use === "shell" ? 1 : 2);
+    const cand = L.parcels.filter((p) => (p.use === "lot" || p.use === "shell") && !p.ident && inTown(p)).sort((a, b) => rank(a) - rank(b) || area(b) - area(a) || (a.id < b.id ? -1 : 1));
+    for (const p of cand) { if (nIn >= TOWN_MIN_ENTERABLE) break; if (convertToEnterable(S, L, p, theme) && inTown(p)) nIn++; }
+  }
 }
 const TOWN_MIN_ENTERABLE = 6;
 function convertToEnterable(S, L, p, theme) {
