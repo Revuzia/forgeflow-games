@@ -1560,6 +1560,19 @@ function topClear(M, x, z, surf, p) {
   }
   return true;
 }
+/** (W10 R1A) an item's body - +-ITEM_R round (x, z), from y + 0.05 to y + 0.7 (lootcheck's inSolid test, + 1 cm) - overlaps no solid box: the given point of a
+ *  house loot point is held to it too (W10's bigger furniture put given points 0.12 - 0.13 m off a wall: the item's 0.15 m body stood in the wall) */
+const ITEM_R = 0.16;
+function bodyClear(M, x, z, y) {
+  const cs = M.queryColliders(x, z, ITEM_R + 0.05, _hCols);
+  for (let i = 0; i < cs.length; i++) {
+    const c = cs[i];
+    if (c.kind !== "box" || c.dead) continue;
+    if (x <= c.minX - ITEM_R || x >= c.maxX + ITEM_R || z <= c.minZ - ITEM_R || z >= c.maxZ + ITEM_R) continue;
+    if (c.maxY > y + 0.05 && c.minY < y + 0.7) return false;
+  }
+  return true;
+}
 /** the hover an item at (x, z) on `surf` can have under whatever starts above it (a wall cabinet, a shelf board, the ceiling); -1 = no room */
 function hoverAt(M, x, z, surf) {
   const cs = M.queryColliders(x, z, 0.2, _hCols);
@@ -1590,6 +1603,7 @@ function houseSpot(M, e, k) {
       // that top - a lamp, a TV, a register - nor over a taller part of the piece itself: a counter run's sink block, a gondola's upper shelf)
       const h = hoverAt(M, x, z, surf);
       if (h < 0) { if (k === 0 && j === 0) return false; continue; }   // nothing fits over the given point: the point is not used
+      if (!bodyClear(M, x, z, surf + h)) continue;                      // (W10) the item's body would stand in a wall / a piece: the next offset
       _hs.x = x; _hs.z = z; _hs.hover = h;
       return true;
     }
@@ -1601,8 +1615,10 @@ function houseSpot(M, e, k) {
     const x = l.x + o[0] * sc, z = l.z + o[1] * sc;
     const given = k === 0 && j === 0;
     if (!given && (!inRoom(e.R, x, z) || !spotClear(M, x, z, surf, 0.2))) continue;
+    if (given && !spotClear(M, x, z, surf, 0.05)) continue;          // (W10) something pokes up through the floor at the given point (its ring would sit inside it)
     const h = hoverAt(M, x, z, surf);
     if (h < 0) { if (given) return false; continue; }
+    if (!bodyClear(M, x, z, surf + h)) continue;                        // (W10) the item's body would stand in a wall / a piece: the next offset
     _hs.x = x; _hs.z = z; _hs.hover = h;
     return true;
   }
