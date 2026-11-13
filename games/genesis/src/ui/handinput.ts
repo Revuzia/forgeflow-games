@@ -70,6 +70,8 @@ export class HandInput {
   private lastStroke = 0;
   private slapping = false;
   private longPressFired = false;
+  /** the last frame found the press held still past LONG_PRESS_MS (fires on the next such frame) */
+  private longPressArmed = false;
   /** ⇧E: aiming a throw (the hand holds still; the arc runs to the cursor) */
   private aiming = false;
   /** what the pointer rests on (a person, a herd…): the hint names it, the App rings it */
@@ -118,6 +120,7 @@ export class HandInput {
     this.trail = [{ x, y, t }];
     this.samples = [];
     this.longPressFired = false;
+    this.longPressArmed = false;
     this.slapping = this.slapMod(e as PointerEvent);
     const held = this.held();
     if (held) {
@@ -182,10 +185,15 @@ export class HandInput {
     const now = performance.now();
     const held = this.heldFor(now);
     if (this.state === 'press' && !this.slapping && this.path < 10 && held > HOLD_MS) void this.grab(this.lastX, this.lastY);
-    if (this.state === 'ground' && !this.longPressFired && this.path < LONG_PRESS_PX && held > LONG_PRESS_MS && this.onLongPress) {
+    // (owner round 4: at ~2 fps one drag opened the radial — the hold crossed the threshold in the one frame whose
+    // moves had not reached 8 px yet. The press must look held still in TWO frames in a row past the threshold: one
+    // more frame's moves to show a drag; ~16 ms later at 60 fps)
+    const still = this.state === 'ground' && !this.longPressFired && this.path < LONG_PRESS_PX && held > LONG_PRESS_MS && !!this.onLongPress;
+    if (still && this.longPressArmed && this.onLongPress) {
       this.longPressFired = true;
       this.onLongPress(this.downX, this.downY);
     }
+    this.longPressArmed = still;
     if (this.state === 'idle' && pointer && !this.aiming && !toolArmed) this.sendMove(pointer[0], pointer[1], !!this.held());
     this.updateHint(pointer, toolArmed);
     this.updateBadge(pointer);

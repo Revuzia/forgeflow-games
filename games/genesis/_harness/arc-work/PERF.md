@@ -1162,3 +1162,47 @@ long press frame-rate independent. Report after 1-2 verified.
   'sandbox' first) the primary's near trees drew ANOTHER world's iExtra (zeros: no canopy shade, LOD role 0 = no
   cross-fade roles, no snow / char / leaf loss); with per-bucket geometry they draw their own. Single-world sessions:
   unchanged. Owner A/B: default vs ?lazypools=0 (only differs where 2+ worlds were built).
+- GATE check19 (after two container restarts; dist31 source = HEAD 4f47e96d + nothing since): npm run check 932/932
+  pass, exit 0; npm run build exit 0 (build-prod18.log).
+- SOAK soak3 (dist31, babel 307987276, HIGH 320x180, 6 views round Rubolhin + orbit, 22 min, alongside other jobs):
+  only 319 frames (SwiftShader ~0.25 fps even at 320x180) — NOT the thousands asked for; the node chunk soak (3000
+  frames) stands in for the terrain pools. Over 22 min: gpu 97 -> 173 -> 188-225 MB plateau, cpu retained 168-204
+  plateau, JS heap 30-43 flat, programs 180 flat, textures ~200 flat, page slots 960-1152 for 736-795 live, idle pages
+  0-8, near-tree capacity 56.8k of 673k (lazy pools work: was 673k up front). Mild climbs to watch: GL objects
+  1342 -> 1910, three geometries 105 -> 151, gpumem VAO links 1165 -> 1687, far-tree blocks 353 -> 988 (cache filling as
+  views add ground; bounded by the planet). No error.
+  BIG FINDING — ANGLE transients: 'copyMB' (whole-buffer copies for bufferSubData into buffers drawn in the last 3
+  frames) is 3.7-5.1 MB PER FRAME at steady state, fresh 1757 MB in 319 frames (~5.5 MB/frame incl. bufferData). At the
+  Mac's frame rates that is a 64 MB ANGLE GC wait every ~12 frames. The by-owner copy list is in the perf report's
+  'angle transients' line (not sampled by the soak: NEXT add it) — get it from the owner's next report or a perf-play
+  run with the report printed.
+  Owner names: pages count per page ('planet-0/terrain-L1-p0') — NEXT normalise /-p\d+$/ in sceneOwners. Largest owner
+  'planet-0/life (textures)' 60 MB (building / life data textures): a lead for the tab-memory gap (round 4 item 4).
+
+## ROUND 4 (MAC-ROUND4-6b46e1b4.txt) — started in session 15
+- ITEM 3 INPUT (done, src/ui/handinput.ts at the lead's request): the long press now fires only when the press looks
+  held still in TWO frames in a row past 620 ms (longPressArmed): at ~2 fps the threshold was crossed in the one frame
+  whose moves were still < 8 px, so a slow-starting drag opened the radial. +1 frame of delay (16 ms at 60 fps).
+  tests/ui-longpress.test.ts: the 2 fps drag case added (fails on the old guard), the timing test allows 2 frames.
+- ITEM 1 WATER AT AMONSHIS (open): _harness/arc-work/probe-amonshis.mjs. The point under the babel start view's centre
+  (--km=0: the 'standard zoom landing') IS "5.1 km west of Amonshis by the Lake" (nearest living settlement, 5064 m):
+  lat 17.88, lon -35.0. It is a palm beach on a coast: land cells at +0.6 / +5.4 m, sea cells -19..-74 m (water = depth,
+  level 0). At orbit dist 90 / tilt 62 over it, 609 of 639 selected patches carry a water sheet (almost every patch is
+  wet near this coast). SwiftShader shots (amon/b-d90-t*.png; 'turn' does not turn an orbit at a lat/lon) show the beach,
+  shallows with palm shadows on the floor, an island — no sheet over a hill seen YET. NEXT: reproduce the owner's own
+  path (start view -> wheel deltaY -800 notches at the canvas centre down to 60 m, the start heading), shoot, then the
+  same with ?water=0 and with the debug hide list; for any wet patch over land, dump per-vertex tH (water level) vs tG
+  (ground) for the dry cells (the 'held just under their ground' rule and the drape lift in ocean.ts VERT ~l.100) — the
+  likely culprit is the shore level of dry cells in a mostly-wet patch, or the 18 cm drape on cells the sim calls
+  flooded, at the hill's height.
+- ITEM 2 CLOUDS (open): deckTunnel (sky/clouds.ts ~1410) bases the clear zone on the global shell (cloudInner/Outer =
+  radius + 0.3 / 0.7 x air thickness) with a 20 m edge ramp (inShell); near both shell edges inShell < 1 shrinks the
+  near zone and the mist floor; and the in-cloud fog (shader ~l.937) integrates the LOCAL density over min(nearR*0.6, tEnd).
+  Owner: white at 456 m (top band) and 220 m (bottom band). NEXT: a probe stepping the owner's stops at the landing spot
+  (shots + uNearR / uCamFog / inShell / local hf + cloudDetailed density at the camera), then make the clear zone use the
+  deck's local top / base at that spot (wx-dependent) and keep it full over the whole thickness (no taper inside).
+- ITEM 4 TAB MEMORY (open): gpumem's by-owner line now exists; soak3's biggest owner is 'planet-0/life (textures)'
+  60 MB. Unaccounted in the audit: worker heaps (sim worker, 1-2 patch workers, fieldpack worker: each its own V8 heap
+  + transferred arrays), the canvas swap chain, Chrome's own per-tab overhead. NEXT: measureUserAgentSpecificMemory is
+  unavailable (not cross-origin isolated); ask the owner for chrome://memory-internals or Task Manager's per-worker rows,
+  and add worker heap sizes to the report (each worker posts performance.memory on request).

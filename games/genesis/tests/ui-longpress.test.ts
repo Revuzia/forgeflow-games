@@ -29,7 +29,8 @@ test('a still press opens the radial after 620 ms of wall time, whatever the fra
       h.down(300, 200, mods, clock);
       let fired = -1;
       for (let t = 0; t <= 3000 && fired < 0; t += frameMs) { clock = 10_000 + t; h.frame([300, 200]); if (opened.length) fired = t; }
-      assert.ok(fired >= 620 && fired < 620 + frameMs + 1, `${frameMs} ms frames: fired at ${fired}`);
+      // (PERF s15, owner round 4: held still in two frames in a row past the threshold — one frame later)
+      assert.ok(fired >= 620 && fired < 620 + 2 * frameMs + 1, `${frameMs} ms frames: fired at ${fired}`);
     }
   } finally { performance.now = realNow; }
 });
@@ -50,6 +51,23 @@ test('a press queued behind a long frame (old event time) is not a long press wh
     h.frame([340, 210]);
     assert.equal(opened.length, 0, 'a drag never opens the radial');
     assert.equal(h.up(340, 210, 11_900), 'done');
+  } finally { performance.now = realNow; }
+});
+
+test('owner round 4: at ~2 fps a drag whose first frame past 620 ms had moved < 8 px does not open the radial', () => {
+  performance.now = () => clock;
+  try {
+    const { h, opened } = hand();
+    clock = 20_000;
+    h.down(300, 200, mods, clock);
+    clock = 20_470; h.frame([300, 200]);
+    // the drag starts slowly: 3 px by the frame that crosses the threshold
+    clock = 20_930; h.move(303, 200, clock); h.frame([303, 200]);
+    assert.equal(opened.length, 0, 'not on the first frame past the threshold');
+    // the next frame's moves show the drag
+    clock = 21_400; h.move(360, 215, clock); h.frame([360, 215]);
+    assert.equal(opened.length, 0, 'a drag never opens the radial');
+    assert.equal(h.up(360, 215, 21_500), 'done');
   } finally { performance.now = realNow; }
 });
 
