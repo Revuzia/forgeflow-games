@@ -2915,7 +2915,7 @@ export function generate(parcel, opts) {
       if (!p && R._acc && opts.seen) { R._acc = false; p = scan(cat, false); R._acc = true; if (p) p.vis = null; }
       return p;
     };
-    const tryAt = (id, u, v, fq, tint, touch) => {        // a piece centred at (u, v) facing fq
+    const tryAt = (id, u, v, fq, tint, touch, noRoom) => {        // a piece centred at (u, v) facing fq (noRoom: the caller runs roomOK itself - tableSet)
       const cat = catOf(id);
       if (!cat || !budgetOK(cat)) return null;
       const w = fq % 2 ? cat.d : cat.w, d = fq % 2 ? cat.w : cat.d;
@@ -2924,7 +2924,7 @@ export function generate(parcel, opts) {
         if ((cat.wall || cat.h > 0.05) && inLeafDisc(f, rect)) return null; }     // (Wave 9: never behind an open door leaf either, nor in its swing unless a rug)
       else if (!valid(rect, 0, cat.h, touch)) return null;
       const p = put(cat, u, v, fq, tint);
-      if (!cat.deco && !roomOK()) { unput(p); return null; }
+      if (!cat.deco && !noRoom && !roomOK()) { unput(p); return null; }
       return p;
     };
     // a piece standing ON another one's top (a lamp on a nightstand, a TV on its cabinet, a microwave on a counter): back to the host's back edge
@@ -3000,22 +3000,36 @@ export function generate(parcel, opts) {
       };
       for (const tq of home ? [tq0, 1 - tq0] : [tq0]) for (const [pu, pv] of pts) {          // (W10 R1A: a home's table also turned across the room)
         if (chPre && anyT && seats(pu, pv, tq) < need) continue;
-        const t = tryAt(tableId, pu, pv, tq);
-        if (!t) continue;
-        anyT = true;
-        if (!chairId) return t;
-        const ch = catOf(chairId);
-        if (!ch) return t;
-        const off = t.cat.d / 2 + 0.12 + ch.d / 2, sp = t.cat.w >= 1.7 ? [-0.5, 0.5] : [0];
-        const sides = tq === 0 ? [[0, off, 2], [0, -off, 0]] : [[off, 0, 3], [-off, 0, 1]];
-        let n = 0;
+        // (W10 R1A, CPU) the room-walk check (roomOK) runs ONCE for the table and every chair that passes valid(): a placed piece only takes floor away, so when
+        // the room still joins its ports with all of them in, it joined them after each one - the set the one-piece-at-a-time order keeps, the same output. Only
+        // when that check fails is the set taken out and re-tried one piece at a time, as before.
+        const ch0 = chairId ? catOf(chairId) : null;
+        const tl = tryAt(tableId, pu, pv, tq, undefined, undefined, !!ch0);
+        if (!tl) continue;
+        let t = tl, n = 0;
         const chs = [];
-        for (const [ou, ov, q] of sides) for (const s2 of sp) {
-          if (n >= (maxChairs || 6)) break;
-          const cu2 = pu + ou + (tq === 0 ? s2 : 0), cv2 = pv + ov + (tq === 0 ? 0 : s2);
-          const c = tryAt(chairId, cu2, cv2, q);
-          if (c) { n++; chs.push(c); }
-        }
+        const chairsAt = (one) => {
+          const ch = catOf(chairId);
+          if (!ch) return false;
+          const off = t.cat.d / 2 + 0.12 + ch.d / 2, sp = t.cat.w >= 1.7 ? [-0.5, 0.5] : [0];
+          const sides = tq === 0 ? [[0, off, 2], [0, -off, 0]] : [[off, 0, 3], [-off, 0, 1]];
+          for (const [ou, ov, q] of sides) for (const s2 of sp) {
+            if (n >= (maxChairs || 6)) break;
+            const cu2 = pu + ou + (tq === 0 ? s2 : 0), cv2 = pv + ov + (tq === 0 ? 0 : s2);
+            const c = tryAt(chairId, cu2, cv2, q, undefined, undefined, !one);
+            if (c) { n++; chs.push(c); }
+          }
+          return true;
+        };
+        if (!ch0) { anyT = true; if (!chairId) return t; return t; }
+        if (!chairsAt(false)) { if (roomOK()) { anyT = true; return t; } unput(t); continue; }      // (catOf gave no chair this time: the table alone, checked)
+        if (!roomOK()) {
+          for (let i = chs.length - 1; i >= 0; i--) unput(chs[i]);
+          chs.length = 0; n = 0;
+          if (!roomOK()) { unput(t); continue; }
+          anyT = true;
+          chairsAt(true);
+        } else anyT = true;
         // (W10 R1A: a home's dining set seats two at least - a table with one chair is not one; the next spot is tried)
         if (n === 0 || (home && CENTRE_GROUPS && n < 2 && (maxChairs || 6) >= 2)) { for (const c of chs) unput(c); unput(t); continue; }
         return t;
