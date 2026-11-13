@@ -401,8 +401,16 @@ export class Entity implements EntityView {
   watchRem = 0;
   watchX = 0; watchY = 0;
   watchStage = 0;
-  /** ticks left with steering round units switched off (after a no-progress window: walk the route and shove) */
-  steerOff = 0;
+  /** body lane (ruling 37, sim/bodypath.ts): waypoints round the units in the way, followed before the route resumes;
+   *  the route aim it was planned for; ticks to the next lane check (or, with no lane, until a failed plan is retried) */
+  lane: number[] = [];
+  laneIdx = 0;
+  laneAimX = 0; laneAimY = 0;
+  laneCheck = 0;
+  /** the watchdog's re-plan: every body counts (allies walking with it have not cleared the way) */
+  laneAll = false;
+  /** a lane was found since the last no-progress window (else a second such window ends a move to a point) */
+  lanePlanned = false;
   /** static blocker (structures): never moves, pushes units out */
   static = false;
   /** radius this entity blocks in the nav grid (structures; 0 = none) — removed on death */

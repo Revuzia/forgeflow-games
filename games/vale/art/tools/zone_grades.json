@@ -396,32 +396,32 @@
     "C": 5
    },
    {
-    "why": "U7 crown: the helm's crest ridge the signature magenta lacquer (read from above as a stripe over the helm)",
+    "why": "U7 crown: the helm's crest ridge the signature magenta lacquer (read from above as a stripe over the helm); u3: the magenta leans redder (CIELAB h 351, was 323) so it reads magenta, not lilac, beside Ardit, Hesmi and Dunsom",
     "parts": [
      "crest"
     ],
-    "hex": "#DF6CF2",
+    "hex": "#E0609F",
     "L": 38,
-    "C": 26
+    "C": 32
    },
    {
-    "why": "U7: the cream scarf under the helm the signature magenta (the ring between the helm and the pauldrons)",
+    "why": "U7: the cream scarf under the helm the signature magenta (the ring between the helm and the pauldrons); u3: the magenta leans redder (CIELAB h 351, was 323) so it reads magenta, not lilac, beside Ardit, Hesmi and Dunsom",
     "parts": [
      "scarf"
     ],
-    "hex": "#DF6CF2",
+    "hex": "#E0609F",
     "L": 46,
-    "C": 20
+    "C": 26
    },
    {
-    "why": "U7: the cream pauldrons (the pale shapes the game camera sees first beside the helm) a magenta-steel lacquer",
+    "why": "U7: the cream pauldrons (the pale shapes the game camera sees first beside the helm) a magenta-steel lacquer; u3: the magenta leans redder (CIELAB h 351, was 323) so it reads magenta, not lilac, beside Ardit, Hesmi and Dunsom",
     "parts": [
      "pauldron_R",
      "pauldron_L"
     ],
-    "hex": "#DF6CF2",
+    "hex": "#E0609F",
     "L": 44,
-    "C": 14
+    "C": 20
    }
   ]
  },
@@ -450,13 +450,13 @@
  "ardit": {
   "zones": [
    {
-    "why": "u3 crown: the helm a slate blue (CIELAB h ~265), out of the lilac family of Vashil's hood and Dunsom's hat (verify3_q: the r2f periwinkle rendered lilac, h 304, dE76 8)",
+    "why": "u3 crown: the helm a deep slate blue (CIELAB h ~256), out of the lilac family of Vashil's hood and Dunsom's hat (verify3_q: the r2f periwinkle rendered lilac, h 304, dE76 8)",
     "parts": [
      "helm"
     ],
-    "hex": "#3F6F9F",
+    "hex": "#33739C",
     "L": 42,
-    "C": 36
+    "C": 38
    },
    {
     "why": "u3: pauldrons and tiers a paler slate lacquer (the shoulders the game camera sees first)",
@@ -466,9 +466,9 @@
      "tier_R",
      "tier_L"
     ],
-    "hex": "#3F6F9F",
+    "hex": "#33739C",
     "L": 54,
-    "C": 24
+    "C": 26
    },
    {
     "why": "u3: the signature periwinkle moves to the coat (mid body), so the crown leaves the lilac family and sigPct holds",
@@ -526,7 +526,7 @@
  "hesmi": {
   "zones": [
    {
-    "why": "u3 crown break: the cream hood a deep signature violet (box over the hood x cloth roughness; the face wrap and eye band excluded, no part map)",
+    "why": "u3 crown break: the cream hood a deep aubergine in the signature violet, dark enough (in game L* ~45) to stay apart from Vashil's and Dunsom's light lilac tops (box over the hood x cloth roughness; the face wrap and eye band excluded, no part map)",
     "boxes": [
      [
       -0.4,
@@ -552,8 +552,8 @@
      ]
     ],
     "hex": "#5C0EC2",
-    "L": 34,
-    "C": 24
+    "L": 20,
+    "C": 20
    }
   ]
  },

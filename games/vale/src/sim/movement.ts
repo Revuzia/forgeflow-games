@@ -53,6 +53,7 @@ import { noteMoved } from './triggers.ts';
 import type { World } from './world.ts';
 import { zoneBlocks } from './zones.ts';
 import { datan2, dcos, dsin } from './dmath.ts';
+import { collectDiscs, discsClear, laneDiscs, laneLen, planLane } from './bodypath.ts';
 
 /** goal drift (m) that forces a new path */
 export const REPATH_DIST = 1;
@@ -71,27 +72,24 @@ const ARRIVE_STALL_TICKS = 10;
  *  crowd) before a walker anywhere gives up on its point (nothing left to walk around: the path is spent) */
 const ARRIVE_GIVE_UP_TICKS = 60;
 const PINNED_PROGRESS = 0.03;
-/** a walking fighter looks this far (m) ahead for units standing on its line and steers round them (ruling 35) */
-const STEER_LOOK = 3;
-/** clearance (m) kept past a steered-round body */
-const STEER_MARGIN = 0.1;
-/** a clear heading on the other side must be this much (rad) nearer the line before a steer flips sides */
-const STEER_STICK = 0.2;
-/** headings are tried every STEER_STEP rad, out to 135° each side (backing out of a pocket the wave closed round
- *  it); a heading is clear for STEER_CLEAR m of walking */
-const STEER_STEP = Math.PI / 36;
-const STEER_DIRS = 28;
-const STEER_CLEAR = 1.6;
-const STEER_COS: number[] = [];
-const STEER_SIN: number[] = [];
-for (let k = 0; k < STEER_DIRS; k++) { STEER_COS.push(dcos(k * STEER_STEP)); STEER_SIN.push(dsin(k * STEER_STEP)); }
-/** a body walking away along the line faster than this fraction of the walker's speed is not steered round */
-const STEER_FOLLOW = 0.75;
+/** a walking fighter looks this far (m) ahead for bodies in its way (sim/bodypath.ts inTheWay) and plans a lane round
+ *  them (ruling 37) */
+const LANE_LOOK = 3;
+/** a lane ends at most this far (m) along the route leg (the walk resumes the route there) */
+const LANE_REACH = 10;
+/** ticks between checks that the lane ahead is still clear (a body stepped into it: re-plan) */
+const LANE_RECHECK = 5;
+/** how far (m) ahead along the lane the check looks */
+const LANE_AHEAD = 4;
+/** ticks before a failed plan is retried (walk straight and shove meanwhile) */
+const LANE_RETRY = 10;
 /** progress watchdog window (ticks, ~1 s) and the share of a full-speed walk it must gain off the route left */
 const WATCH_TICKS = 30;
 const WATCH_PROGRESS = 0.3;
 /** … unless it covered at least this share of a full-speed walk of ground (walking round a wave, not stuck) */
 const WATCH_MOVED = 0.6;
+/** no-progress windows in a row after which a move to a point ends even though lanes keep being found */
+const WATCH_MAX = 4;
 const ARRIVE_NEAR = 1;
 const ARRIVE_PROGRESS = 0.3;
 /** peak height (m) of airborne arcs */
@@ -100,9 +98,6 @@ const near: Entity[] = [];
 const passT: number[] = [];
 const passU: Entity[] = [];
 const tmp = { x: 0, y: 0 };
-const steerLo: number[] = [];
-const steerHi: number[] = [];
-const steerR: number[] = [];
 
 // ── orders ──────────────────────────────────────────────────────────────────────────────────────
 export function issueMove(w: World, e: Entity, x: number, y: number, attackMove: boolean, prefer = -1): void {
@@ -396,99 +391,16 @@ function separate(w: World, e: Entity, x: number, y: number, factor: number): vo
   tmp.x = x + ox; tmp.y = y + oy;
 }
 
-/**
- * Local steering for a walking fighter (rulings 35, 36): bodies within STEER_LOOK m ahead (not the unit it is going
- * for, not a crowd on its own point) are walked round instead of shoved through. Only bodies that are standing,
- * slower than the walker, or coming at it count: one walking the same way about as fast clears the line by itself
- * (no sidestep behind an ally heading to the same spot). Headings are tried every STEER_STEP rad out to 135° each
- * side; a heading is clear when the walker could go STEER_CLEAR m along it (or to its aim) without its body
- * meeting a counted body (radius + STEER_MARGIN; a body it already touches only blocks headings into it) or a wall.
- * The clear heading nearest the line wins, so it passes the bodies along their tangents: the least detour, re-aimed
- * every tick. The side steered last tick is kept unless the other is STEER_STICK rad nearer the line (an exact tie
- * to the right). Boxed in (no clear heading): the heading that gains the most ground before a body, if it beats
- * walking straight. Writes the unit heading into tmp and returns true, or false: walk straight (and shove).
- */
-function steerRound(w: World, e: Entity, ux: number, uy: number, reach: number): boolean {
-  const look = Math.min(STEER_LOOK, reach);
-  if (look < 0.3) return false;
-  const n = w.hash.query(e.x + ux * look * 0.5, e.y + uy * look * 0.5, look * 0.5 + e.radius + 1.2, near);
-  steerLo.length = 0; steerHi.length = 0; steerR.length = 0;
-  const follow = STEER_FOLLOW * e.stats.moveSpeed;
-  for (let i = 0; i < n; i++) {
-    const o = near[i];
-    if (o === e || !o.alive || o.dash || o.static || o.kind === 'ward' || o.kind === 'pickup' || o.kind === 'projectile' || o.kind === 'zone') continue;
-    if (o.id === e.orderTarget || o.id === e.atkTarget) continue;
-    const ox = o.x - e.x, oy = o.y - e.y;
-    const fwd = ox * ux + oy * uy;
-    const d = Math.sqrt(ox * ox + oy * oy);
-    // behind, out of reach, or crowding the point itself (the arrival watchdog ends a move into a crowd on its point)
-    if (fwd <= -o.radius || d > look + o.radius + e.radius || fwd >= reach - (o.radius + e.radius + ARRIVE_NEAR)) continue;
-    // walking away along the line about as fast as the walker: it is not in the way for long
-    if (o.vx * ux + o.vy * uy > follow) continue;
-    steerLo.push(ox); steerHi.push(oy); steerR.push(e.radius + o.radius);
-  }
-  if (steerLo.length === 0) return false;
-  const clear = Math.min(STEER_CLEAR, look);
-  const f0 = steerFree(ux, uy, look);
-  if (f0 >= look - 1e-9) return false;   // the line itself is clear
-  const nav = w.nav;
-  const probe = Math.min(clear, reach);
-  let best = -1, bestSide = 0, bestGain = f0, bestK = -1, bestKSide = 0;
-  let firstR = -1, firstL = -1;
-  for (let k = 1; k < STEER_DIRS; k++) {
-    for (const side of [1, -1]) {
-      if ((side > 0 ? firstR : firstL) >= 0) continue;
-      const c = STEER_COS[k], sn = STEER_SIN[k] * side;
-      const dx = ux * c + uy * sn, dy = uy * c - ux * sn;   // + side = right of the heading
-      const f = steerFree(dx, dy, look);
-      const okWall = (): boolean => nav.lineOfWalk(e.x, e.y, e.x + dx * probe, e.y + dy * probe, 0);
-      if (f >= clear - 1e-9) { if (okWall()) { if (side > 0) firstR = k; else firstL = k; } continue; }
-      const gain = f * c + (side === e.steerSide ? 0.05 : 0);
-      if (gain > bestGain + 1e-6 && okWall()) { bestGain = gain; bestK = k; bestKSide = side; }
-    }
-    if (firstR >= 0 && firstL >= 0) break;
-  }
-  if (firstR >= 0 || firstL >= 0) {
-    const kr = firstR >= 0 ? firstR : Infinity, kl = firstL >= 0 ? firstL : Infinity;
-    const stick = STEER_STICK / STEER_STEP;
-    if (e.steerSide > 0) bestSide = kl < kr - stick ? -1 : 1;
-    else if (e.steerSide < 0) bestSide = kr < kl - stick ? 1 : -1;
-    else bestSide = kl < kr ? -1 : 1;
-    if ((bestSide > 0 ? kr : kl) === Infinity) bestSide = -bestSide;
-    best = bestSide > 0 ? kr : kl;
-  } else if (bestK >= 0) { best = bestK; bestSide = bestKSide; }
-  if (best < 0) return false;
-  e.steerSide = bestSide;
-  const c = STEER_COS[best], sn = STEER_SIN[best] * bestSide;
-  tmp.x = ux * c + uy * sn; tmp.y = uy * c - ux * sn;
-  return true;
-}
-/** how far (m, up to `cap`) the walker can go along unit heading (dx, dy) before its body meets a counted body */
-function steerFree(dx: number, dy: number, cap: number): number {
-  let free = cap;
-  for (let i = 0; i < steerLo.length; i++) {
-    const ox = steerLo[i], oy = steerHi[i], R = steerR[i];
-    const along = ox * dx + oy * dy;
-    const d2 = ox * ox + oy * oy;
-    if (d2 < R * R) {
-      // already touching: only a heading into it is blocked (sliding past or away is free)
-      if (along > Math.sqrt(d2) * 0.35) return 0;
-      continue;
-    }
-    if (along <= 0) continue;
-    const Rm = R + STEER_MARGIN;
-    const perp2 = d2 - along * along;
-    if (perp2 >= Rm * Rm) continue;
-    const t = along - Math.sqrt(Rm * Rm - perp2);
-    if (t < free) free = t < 0 ? 0 : t;
-  }
-  return free;
-}
-
-/** route length left from (x, y): to the current waypoint and along the rest of the path, else straight to the goal */
+/** route length left from (x, y): along the lane (if any), to the current waypoint and along the rest of the path, else
+ *  straight to the goal */
 function routeLeft(e: Entity, x: number, y: number, gx: number, gy: number): number {
-  if (e.path.length === 0 || e.pathIdx * 2 >= e.path.length) return Math.sqrt((gx - x) * (gx - x) + (gy - y) * (gy - y));
-  let px = x, py = y, l = 0;
+  let l = 0;
+  if (e.lane.length > 0 && e.laneIdx * 2 < e.lane.length) {
+    l = laneLen(x, y, e.lane, e.laneIdx * 2);
+    x = e.lane[e.lane.length - 2]; y = e.lane[e.lane.length - 1];
+  }
+  if (e.path.length === 0 || e.pathIdx * 2 >= e.path.length) return l + Math.sqrt((gx - x) * (gx - x) + (gy - y) * (gy - y));
+  let px = x, py = y;
   for (let i = e.pathIdx * 2; i + 1 < e.path.length; i += 2) {
     const qx = e.path[i], qy = e.path[i + 1];
     l += Math.sqrt((qx - px) * (qx - px) + (qy - py) * (qy - py));
@@ -498,7 +410,70 @@ function routeLeft(e: Entity, x: number, y: number, gx: number, gy: number): num
 }
 
 /** reset the progress watchdog (a new order, or not walking) */
-export function resetWatch(e: Entity): void { e.watchTicks = 0; e.watchStage = 0; e.steerOff = 0; }
+export function resetWatch(e: Entity): void { e.watchTicks = 0; e.watchStage = 0; e.laneAll = false; e.lanePlanned = false; clearLane(e); e.laneCheck = 0; }
+function clearLane(e: Entity): void { e.lane.length = 0; e.laneIdx = 0; e.steerSide = 0; }
+const onLane = (e: Entity): boolean => e.lane.length > 0 && e.laneIdx * 2 < e.lane.length;
+
+/**
+ * Body lanes for a walking fighter (ruling 37, sim/bodypath.ts): when bodies in its way (standing or coming at it; not
+ * allies walking with it, not the unit it is going for, not a crowd on its own point) block its line within LANE_LOOK m,
+ * it plans a lane round them on a fine grid, out to LANE_REACH m along its route leg, and walks it: one side, committed,
+ * the least detour. The lane ahead is re-checked every LANE_RECHECK ticks: a body stepped into it re-plans from where
+ * the walker stands; a straight line that cleared drops the lane. No lane (boxed in): walk straight and shove, retried
+ * after LANE_RETRY ticks. steerSide reports the side the lane passes on (+1 right, −1 left).
+ */
+function updateLane(w: World, e: Entity, aimX: number, aimY: number, gx: number, gy: number, r: number): void {
+  const aD = Math.sqrt((aimX - e.x) * (aimX - e.x) + (aimY - e.y) * (aimY - e.y));
+  if (aD < 1e-6) { clearLane(e); return; }
+  const ux = (aimX - e.x) / aD, uy = (aimY - e.y) / aD;
+  const goalD = Math.sqrt((gx - e.x) * (gx - e.x) + (gy - e.y) * (gy - e.y));
+  if (onLane(e)) {
+    // the route moved on (a new waypoint, a chased unit moved off): the lane was for another leg
+    if (Math.abs(e.laneAimX - aimX) + Math.abs(e.laneAimY - aimY) > REPATH_DIST) clearLane(e);
+    else {
+      if (--e.laneCheck > 0) return;
+      e.laneCheck = LANE_RECHECK;
+      const ex = e.lane[e.lane.length - 2], ey = e.lane[e.lane.length - 1];
+      collectDiscs(w, e, Math.min(e.x, ex) - 2, Math.min(e.y, ey) - 2, Math.max(e.x, ex) + 2, Math.max(e.y, ey) + 2, ux, uy, gx, gy, ARRIVE_NEAR, e.laneAll);
+      // the way straight on cleared (with room to spare): drop the lane
+      const look = Math.min(aD, goalD, LANE_LOOK + 1);
+      if (discsClear(e.x, e.y, e.x + ux * look, e.y + uy * look, -0.15) && w.nav.lineOfWalk(e.x, e.y, aimX, aimY, r)) { clearLane(e); return; }
+      // the lane ahead (LANE_AHEAD m of it) still clear?
+      let px = e.x, py = e.y, left = LANE_AHEAD, ok = true;
+      for (let i = e.laneIdx * 2; i + 1 < e.lane.length && left > 0; i += 2) {
+        const qx = e.lane[i], qy = e.lane[i + 1];
+        if (!discsClear(px, py, qx, qy, 0.1)) { ok = false; break; }
+        left -= Math.sqrt((qx - px) * (qx - px) + (qy - py) * (qy - py));
+        px = qx; py = qy;
+      }
+      if (ok) return;
+      clearLane(e);
+      e.laneCheck = 0;
+      // fall through: re-plan from here
+    }
+  }
+  if (e.laneCheck > 0) { e.laneCheck--; return; }
+  const look = Math.min(LANE_LOOK, aD, goalD);
+  if (look < 0.3) return;
+  collectDiscs(w, e, Math.min(e.x, e.x + ux * look) - 1.5, Math.min(e.y, e.y + uy * look) - 1.5, Math.max(e.x, e.x + ux * look) + 1.5, Math.max(e.y, e.y + uy * look) + 1.5, ux, uy, gx, gy, ARRIVE_NEAR, e.laneAll);
+  if (laneDiscs.length === 0 || discsClear(e.x, e.y, e.x + ux * look, e.y + uy * look, 0)) return;
+  // blocked: plan to a point on the leg past the bodies (the aim itself when it is near)
+  const L = Math.min(aD, LANE_REACH);
+  collectDiscs(w, e, Math.min(e.x, e.x + ux * L) - 4, Math.min(e.y, e.y + uy * L) - 4, Math.max(e.x, e.x + ux * L) + 4, Math.max(e.y, e.y + uy * L) + 4, ux, uy, gx, gy, ARRIVE_NEAR, e.laneAll);
+  let s = L;
+  const inDisc = (d: number): boolean => !discsClear(e.x + ux * d, e.y + uy * d, e.x + ux * d, e.y + uy * d, 0);
+  if (s < aD) { while (s < aD && s < L + 4 && inDisc(s)) s = Math.min(aD, s + 0.25); }
+  if (inDisc(s)) { s = L; while (s > look && inDisc(s)) s -= 0.25; }
+  const tx = e.x + ux * s, ty = e.y + uy * s;
+  if (!inDisc(s) && planLane(w, e, tx, ty, r, e.lane)) {
+    e.laneIdx = 0; e.laneAimX = aimX; e.laneAimY = aimY; e.laneCheck = LANE_RECHECK; e.lanePlanned = true;
+    const fx = e.lane[0] - e.x, fy = e.lane[1] - e.y;
+    e.steerSide = ux * fy - uy * fx > 0 ? -1 : 1;
+  } else {
+    clearLane(e);
+    e.laneCheck = LANE_RETRY;
+  }
+}
 
 function stepToward(w: World, e: Entity, gx: number, gy: number): void {
   const speed = e.stats.moveSpeed;
@@ -508,6 +483,7 @@ function stepToward(w: World, e: Entity, gx: number, gy: number): void {
   const r = Math.min(e.radius, nav.cell * 0.45);
   const goalMoved = !(Math.abs(gx - e.pathGoalX) + Math.abs(gy - e.pathGoalY) <= REPATH_DIST);
   if (goalMoved || (e.path.length === 0 && --e.pathCheck <= 0)) {
+    if (goalMoved) clearLane(e);
     e.pathGoalX = gx; e.pathGoalY = gy;
     e.pathIdx = 0;
     if (nav.lineOfWalk(e.x, e.y, gx, gy, r)) { e.path.length = 0; e.pathCheck = DIRECT_RECHECK_TICKS; }
@@ -520,35 +496,31 @@ function stepToward(w: World, e: Entity, gx: number, gy: number): void {
     while ((e.pathIdx + 1) * 2 < e.path.length && nav.lineOfWalk(e.x, e.y, e.path[e.pathIdx * 2 + 2], e.path[e.pathIdx * 2 + 3], r)) e.pathIdx++;
   }
   const onPath = e.path.length > 0 && e.pathIdx * 2 < e.path.length;
-  const aimX = onPath ? e.path[e.pathIdx * 2] : gx, aimY = onPath ? e.path[e.pathIdx * 2 + 1] : gy;
+  const routeX = onPath ? e.path[e.pathIdx * 2] : gx, routeY = onPath ? e.path[e.pathIdx * 2 + 1] : gy;
+  // a walking fighter walks a lane round the bodies in its way (ruling 37) instead of grinding through them
+  if (e.kind === 'fighter') updateLane(w, e, routeX, routeY, gx, gy, r);
+  const laned = onLane(e);
+  const aimX = laned ? e.lane[e.laneIdx * 2] : routeX, aimY = laned ? e.lane[e.laneIdx * 2 + 1] : routeY;
   const aimD0 = Math.sqrt((aimX - e.x) * (aimX - e.x) + (aimY - e.y) * (aimY - e.y));
   const want = Math.min(budget, aimD0);
   let x = e.x, y = e.y;
-  // progress watchdog (ruling 36), steering included: the route length left when this window opened
+  // progress watchdog (rulings 36, 37), lanes included: the route length left when this window opened
   const watch = e.kind === 'fighter';
   if (watch && e.watchTicks === 0) { e.watchRem = routeLeft(e, e.x, e.y, gx, gy); e.watchX = e.x; e.watchY = e.y; }
-  // a walking fighter steers round units standing on its line (rulings 35, 36) instead of grinding through them
-  let steered = false;
-  if (e.steerOff > 0) e.steerOff--;
-  if (e.kind === 'fighter' && aimD0 > 1e-6 && e.steerOff === 0) {
-    const ux = (aimX - e.x) / aimD0, uy = (aimY - e.y) / aimD0;
-    const goalD = Math.sqrt((gx - e.x) * (gx - e.x) + (gy - e.y) * (gy - e.y));
-    if (steerRound(w, e, ux, uy, Math.min(aimD0, goalD))) {
-      x = e.x + tmp.x * budget; y = e.y + tmp.y * budget; budget = 0;
-      steered = true;
-    } else e.steerSide = 0;
-  } else e.steerSide = 0;
-  // walk the waypoint list within this tick's budget
-  for (let guard = 0; guard < 4 && budget > 1e-9; guard++) {
+  // walk the lane, then the waypoint list, within this tick's budget
+  for (let guard = 0; guard < 6 && budget > 1e-9; guard++) {
     let wx: number, wy: number;
-    const usingPath = e.path.length > 0 && e.pathIdx * 2 < e.path.length;
-    if (usingPath) { wx = e.path[e.pathIdx * 2]; wy = e.path[e.pathIdx * 2 + 1]; }
+    const lane = onLane(e);
+    const usingPath = !lane && e.path.length > 0 && e.pathIdx * 2 < e.path.length;
+    if (lane) { wx = e.lane[e.laneIdx * 2]; wy = e.lane[e.laneIdx * 2 + 1]; }
+    else if (usingPath) { wx = e.path[e.pathIdx * 2]; wy = e.path[e.pathIdx * 2 + 1]; }
     else { wx = gx; wy = gy; }
     const dx = wx - x, dy = wy - y;
     const d = Math.sqrt(dx * dx + dy * dy);
     if (d <= budget) {
       x = wx; y = wy; budget -= d;
-      if (usingPath) { e.pathIdx++; if (e.pathIdx * 2 >= e.path.length) { e.path.length = 0; } }
+      if (lane) { e.laneIdx++; if (!onLane(e)) clearLane(e); }
+      else if (usingPath) { e.pathIdx++; if (e.pathIdx * 2 >= e.path.length) { e.path.length = 0; } }
       else break;
     } else { x += (dx / d) * budget; y += (dy / d) * budget; budget = 0; }
   }
@@ -563,30 +535,33 @@ function stepToward(w: World, e: Entity, gx: number, gy: number): void {
     else { nx = e.x; ny = e.y; e.pathGoalX = NaN; }
   }
   if (w.blockingZones.length > 0 && zoneBlocks(w, e, nx, ny) && !zoneBlocks(w, e, e.x, e.y)) { nx = e.x; ny = e.y; }
-  // progress watchdog: jostled in place (separation cancelling the step) for NO_PROGRESS_TICKS →
-  // a near waypoint counts as reached, otherwise the route is recomputed from here
+  // jostled in place (separation cancelling the step) for NO_PROGRESS_TICKS → on a lane: re-plan it; else a near
+  // waypoint counts as reached, otherwise the route is recomputed from here
   const aimD1 = Math.sqrt((aimX - nx) * (aimX - nx) + (aimY - ny) * (aimY - ny));
-  if (want > 1e-6 && !steered && aimD0 - aimD1 < want * 0.25) {
+  if (want > 1e-6 && aimD0 - aimD1 < want * 0.25) {
     if (++e.noProgress >= NO_PROGRESS_TICKS) {
       e.noProgress = 0;
-      if (onPath && aimD1 < WAYPOINT_GIVE_UP && (e.pathIdx + 1) * 2 < e.path.length) e.pathIdx++;
+      if (laned) { clearLane(e); e.laneCheck = 0; }
+      else if (onPath && aimD1 < WAYPOINT_GIVE_UP && (e.pathIdx + 1) * 2 < e.path.length) e.pathIdx++;
       else { e.pathGoalX = NaN; e.pathCheck = 0; }
     }
   } else e.noProgress = 0;
-  // the window closes: under WATCH_PROGRESS of a full-speed walk off the route left (steering in place, inching
-  // sideways in a wave, pinned on a body) → re-plan from here and walk the route without steering for a window;
-  // a second such window in a row tells movementSystem to end a move to a point (watchStage 2)
+  // the window closes: under WATCH_PROGRESS of a full-speed walk off the route left and under WATCH_MOVED of one in
+  // ground (pinned, inching, shoved back and forth) → re-plan from here with every body counted; movementSystem ends a
+  // move to a point after a second such window unless that re-plan found a lane (and after WATCH_MAX regardless)
   if (watch && ++e.watchTicks >= WATCH_TICKS) {
     const gain = e.watchRem - routeLeft(e, nx, ny, gx, gy);
     const full = speed * WATCH_TICKS * TICK_DT;
-    // walking round a wave gains little route but covers ground; steering in place or inching does neither
+    // walking round a wave gains little route but covers ground; being pinned or inching does neither
     const shift = Math.sqrt((nx - e.watchX) * (nx - e.watchX) + (ny - e.watchY) * (ny - e.watchY));
     e.watchTicks = 0;
     if (gain < full * WATCH_PROGRESS && shift < full * WATCH_MOVED) {
       e.watchStage++;
+      // a second window in a row with no lane found since the first: boxed in, the move to a point ends
+      if (e.watchStage >= 2 && !e.lanePlanned) e.watchStage = WATCH_MAX;
       e.pathGoalX = NaN; e.pathCheck = 0; e.noProgress = 0;
-      e.steerOff = WATCH_TICKS; e.steerSide = 0;
-    } else e.watchStage = 0;
+      clearLane(e); e.laneCheck = 0; e.laneAll = true; e.lanePlanned = false;
+    } else { e.watchStage = 0; e.laneAll = false; }
   }
   const mdx = nx - e.x, mdy = ny - e.y;
   const moved = Math.sqrt(mdx * mdx + mdy * mdy);
@@ -627,20 +602,21 @@ export function movementSystem(w: World): void {
         if (d0 < 0.0025) { arrive(e); continue; }
         d0 = Math.sqrt(d0);
       }
-      const direct = e.path.length === 0;
+      const direct = e.path.length === 0 && !onLane(e);
       stepToward(w, e, gx, gy);
       if (toPoint) {
         if (Math.abs(e.x - e.orderX) + Math.abs(e.y - e.orderY) < 0.05) { arrive(e); continue; }
         // direct approach without real progress: a crowd on the spot, or a body pinned against a corner
         const d1 = Math.sqrt((gx - e.x) * (gx - e.x) + (gy - e.y) * (gy - e.y));
         const step = e.stats.moveSpeed * TICK_DT, gain = d0 - d1;
-        const straight = direct && e.path.length === 0;
+        const straight = direct && e.path.length === 0 && !onLane(e);
         if (straight && gain < step * ARRIVE_PROGRESS) e.arriveStall++; else e.arriveStall = 0;
         if (straight && gain < step * PINNED_PROGRESS) e.arrivePinned++; else e.arrivePinned = 0;
-        if ((e.arriveStall >= ARRIVE_STALL_TICKS && d1 < e.radius + ARRIVE_NEAR) || e.arrivePinned >= ARRIVE_GIVE_UP_TICKS || e.watchStage >= 2) arrive(e);
+        if ((e.arriveStall >= ARRIVE_STALL_TICKS && d1 < e.radius + ARRIVE_NEAR) || e.arrivePinned >= ARRIVE_GIVE_UP_TICKS
+          || e.watchStage >= WATCH_MAX) arrive(e);
       }
     } else if ((e.ccMask & CC_HARD) === 0) {
-      if (e.watchTicks !== 0 || e.watchStage !== 0) resetWatch(e);
+      if (e.watchTicks !== 0 || e.watchStage !== 0 || e.lane.length > 0) resetWatch(e);
       // idle units yield softly to overlapping neighbours
       separate(w, e, e.x, e.y, 0.2);
       const dx = tmp.x - e.x, dy = tmp.y - e.y;
