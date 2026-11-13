@@ -1,0 +1,19 @@
+================================================================================================
+CRESTBOUND contrast check — walked surface vs the fog band, floor 3.5:1
+------------------------------------------------------------------------------------------------
+course       theme    station  deck rgb         fog rgb            ratio  verdict
+------------------------------------------------------------------------------------------------
+keep         keep     spawn    [33, 64, 74]     [97, 88, 93]       1.61:1  low (spawn, not gated)
+keep         keep     cp1      [33, 66, 78]     [124, 107, 100]    2.12:1  FAIL
+keep         keep     cp2      [75, 84, 81]     [61, 36, 22]       1.84:1  FAIL
+keep         keep     cp3      [42, 78, 84]     [48, 28, 20]       1.78:1  FAIL
+keep         keep     cp4      [162, 143, 108]  [165, 136, 98]     1.06:1  FAIL
+verdant-1    verdant  spawn    [39, 142, 135]   [46, 39, 28]       3.73:1  ok
+verdant-1    verdant  cp1      [34, 141, 134]   [28, 90, 40]       2.05:1  FAIL
+verdant-1    verdant  cp2      [89, 162, 143]   [138, 129, 100]    1.29:1  FAIL
+verdant-1    verdant  cp3      [124, 123, 109]  [41, 46, 34]       3.26:1  FAIL
+verdant-1    verdant  cp4      [33, 141, 134]   [43, 41, 31]       3.63:1  ok
+------------------------------------------------------------------------------------------------
+shots in C:\Users\TestRun\Claude Claw\forgeflow-games\games\crestbound\_shots\contrast
+VERDICT: UNREADABLE (7 failing checkpoint stations)
+RESULT: FAIL

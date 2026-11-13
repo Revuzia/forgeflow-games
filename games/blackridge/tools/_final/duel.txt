@@ -1,0 +1,33 @@
+duel_probe  n=40 per cell   (Warden rifleman, flat open ground, player in plain view)
+
+player standing  at 15 m
+band      see->shot s   hit%   ttk s   win%   pre-reaction rounds
+recruit         5.09    68.5    1.27     95   0
+regular         3.21    71.7    1.02    100   0
+hardened        2.81    75.0    0.75    100   0
+veteran         2.19    81.2    0.66    100   0
+expert          1.96    85.1    0.63    100   0
+
+player standing  at 30 m
+band      see->shot s   hit%   ttk s   win%   pre-reaction rounds
+recruit         9.09    43.9    1.78     53   0
+regular         9.41    76.9    0.67     68   0
+hardened        7.81    84.0    1.29     83   0
+veteran         7.45    85.8    0.48     95   0
+expert          4.40    51.0    0.90    100   0
+
+player STRAFING  at 15 m
+band      see->shot s   hit%   ttk s   win%   pre-reaction rounds
+recruit         4.06    61.5    1.46    100   0
+regular         2.37    74.1    0.81    100   0
+hardened        1.75    77.6    0.58    100   0
+veteran         1.48    80.5    0.52    100   0
+expert          1.36    83.2    0.43    100   0
+
+player STRAFING  at 30 m
+band      see->shot s   hit%   ttk s   win%   pre-reaction rounds
+recruit         8.50    46.0    1.91     70   0
+regular         7.62    72.5    0.90     95   0
+hardened        6.72    82.3    0.50    100   0
+veteran         6.59    82.1    0.47    100   0
+expert          3.52    52.5    1.03    100   0

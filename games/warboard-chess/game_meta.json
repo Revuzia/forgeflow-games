@@ -1,0 +1,11 @@
+{
+  "title": "Chess",
+  "short_description": "A calm, classic game of 3D chess — hand-turned wooden pieces on a clean board, with a thoughtful AI across four skill levels.",
+  "description": "Classic chess in clean 3D. A full ruleset — legal moves, check, checkmate, castling, en passant and promotion — with a proper Staunton set: turned ivory and ebony pieces (and a sculpted knight) that lift, glide and set down as you play. Face a tactical AI at four strengths (Novice to Grandmaster), orbit the board freely, or play a friend online. Unhurried and quiet — a board game, not a battle.",
+  "genre": "board_game",
+  "sub_genre": "chess",
+  "difficulty": "medium",
+  "status": "published",
+  "controls_keyboard": "Left-click a piece to select · click a highlighted square to move · Right-drag rotate camera · scroll zoom · Esc pause · F3 debug",
+  "tags": ["board-game", "chess", "strategy", "turn-based", "3d", "classic"]
+}

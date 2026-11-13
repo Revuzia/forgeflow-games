@@ -1,0 +1,101 @@
+{
+ "C:/Users/TestRun/AppData/Local/Temp/claude/C--Users-TestRun-Claude-Claw/fe7123c7-88cd-4a67-b2b5-dcae3effdcc7/scratchpad/oos/travis1/03_TR_DarknessBehind_LOOP_01.wav": {
+  "bpm_est": 89.1,
+  "onsets_per_s": 1.41,
+  "rms1s_p10_p90_db": [
+   -9.9,
+   -7.8
+  ],
+  "gt2k_share": 0.005,
+  "flatness": 0.0039,
+  "analysed_s": 21.3
+ },
+ "C:/Users/TestRun/AppData/Local/Temp/claude/C--Users-TestRun-Claude-Claw/fe7123c7-88cd-4a67-b2b5-dcae3effdcc7/scratchpad/oos/travis1/04_TR_ElectricPhase_LOOP_01.wav": {
+  "bpm_est": 112.3,
+  "onsets_per_s": 3.55,
+  "rms1s_p10_p90_db": [
+   -8.6,
+   -7.8
+  ],
+  "gt2k_share": 0.029,
+  "flatness": 0.0371,
+  "analysed_s": 8.7
+ },
+ "C:/Users/TestRun/AppData/Local/Temp/claude/C--Users-TestRun-Claude-Claw/fe7123c7-88cd-4a67-b2b5-dcae3effdcc7/scratchpad/oos/travis1/WAV_TR_07_RETROWAVE_LOOP_01.wav": {
+  "bpm_est": 99.4,
+  "onsets_per_s": 2.97,
+  "rms1s_p10_p90_db": [
+   -10.4,
+   -9.0
+  ],
+  "gt2k_share": 0.022,
+  "flatness": 0.0357,
+  "analysed_s": 19.2
+ },
+ "C:/Users/TestRun/AppData/Local/Temp/claude/C--Users-TestRun-Claude-Claw/fe7123c7-88cd-4a67-b2b5-dcae3effdcc7/scratchpad/oos/travis2/01_TR_Beginning_LOOP_01.wav": {
+  "bpm_est": 89.1,
+  "onsets_per_s": 1.92,
+  "rms1s_p10_p90_db": [
+   -7.8,
+   -6.6
+  ],
+  "gt2k_share": 0.008,
+  "flatness": 0.0082,
+  "analysed_s": 21.3
+ },
+ "C:/Users/TestRun/AppData/Local/Temp/claude/C--Users-TestRun-Claude-Claw/fe7123c7-88cd-4a67-b2b5-dcae3effdcc7/scratchpad/oos/travis2/02_TR_Outbreak_LOOP_01.wav": {
+  "bpm_est": 99.4,
+  "onsets_per_s": 4.17,
+  "rms1s_p10_p90_db": [
+   -10.3,
+   -7.8
+  ],
+  "gt2k_share": 0.011,
+  "flatness": 0.0018,
+  "analysed_s": 19.2
+ },
+ "C:/Users/TestRun/AppData/Local/Temp/claude/C--Users-TestRun-Claude-Claw/fe7123c7-88cd-4a67-b2b5-dcae3effdcc7/scratchpad/oos/travis2/03_TR_Disorder_LOOP_01.wav": {
+  "bpm_est": 99.4,
+  "onsets_per_s": 3.39,
+  "rms1s_p10_p90_db": [
+   -7.5,
+   -6.4
+  ],
+  "gt2k_share": 0.007,
+  "flatness": 0.0131,
+  "analysed_s": 19.2
+ },
+ "C:/Users/TestRun/AppData/Local/Temp/claude/C--Users-TestRun-Claude-Claw/fe7123c7-88cd-4a67-b2b5-dcae3effdcc7/scratchpad/oos/travis2/04_TR_Anxiety_LOOP_01.wav": {
+  "bpm_est": 99.4,
+  "onsets_per_s": 2.4,
+  "rms1s_p10_p90_db": [
+   -7.4,
+   -6.9
+  ],
+  "gt2k_share": 0.023,
+  "flatness": 0.0375,
+  "analysed_s": 19.2
+ },
+ "C:/Users/TestRun/AppData/Local/Temp/claude/C--Users-TestRun-Claude-Claw/fe7123c7-88cd-4a67-b2b5-dcae3effdcc7/scratchpad/oos/travis2/05_TR_Chasm_LOOP_01.wav": {
+  "bpm_est": 198.8,
+  "onsets_per_s": 4.17,
+  "rms1s_p10_p90_db": [
+   -8.6,
+   -7.7
+  ],
+  "gt2k_share": 0.011,
+  "flatness": 0.018,
+  "analysed_s": 19.2
+ },
+ "C:/Users/TestRun/AppData/Local/Temp/claude/C--Users-TestRun-Claude-Claw/fe7123c7-88cd-4a67-b2b5-dcae3effdcc7/scratchpad/oos/travis2/06_TR_Arrival_LOOP_01.wav": {
+  "bpm_est": 89.1,
+  "onsets_per_s": 1.97,
+  "rms1s_p10_p90_db": [
+   -6.2,
+   -5.5
+  ],
+  "gt2k_share": 0.01,
+  "flatness": 0.0083,
+  "analysed_s": 10.7
+ }
+}

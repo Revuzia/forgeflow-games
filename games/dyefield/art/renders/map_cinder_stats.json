@@ -1,0 +1,388 @@
+{
+ "map": "cinder",
+ "glb": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\dyefield\\art\\gltf\\map_cinder.glb",
+ "glb_mb": 7.328,
+ "tris_total": 93793,
+ "tris_paint": 31230,
+ "objects": [
+  "col_bridge_rails",
+  "deco_banners",
+  "deco_buoys",
+  "deco_flags",
+  "deco_horizon",
+  "deco_kelp",
+  "deco_lanterns",
+  "deco_palm_fronds",
+  "deco_rigging",
+  "deco_ropes",
+  "deco_seastacks",
+  "oob_chan_east",
+  "oob_chan_east_m",
+  "oob_chan_lagoon",
+  "oob_chan_lagoon_m",
+  "oob_chan_mid_w",
+  "oob_chan_mid_w_m",
+  "oob_chan_west",
+  "oob_chan_west_m",
+  "oob_sea",
+  "paint_basalt",
+  "paint_crate",
+  "paint_plank",
+  "paint_sand",
+  "paint_wreck",
+  "paint_wreck_deck",
+  "solid_bridge_posts",
+  "solid_bridge_under",
+  "solid_cliff",
+  "solid_coral",
+  "solid_driftwood",
+  "solid_lanterns",
+  "solid_masts",
+  "solid_pad_A",
+  "solid_pad_B",
+  "solid_palm_trunks",
+  "solid_seabed",
+  "solid_spring_rims",
+  "solid_undersides",
+  "spring_beach",
+  "spring_beach_m",
+  "spring_mid",
+  "spring_mid_m"
+ ],
+ "atlas": {
+  "size": 1024,
+  "tris": 31230,
+  "islands": 712,
+  "paint_area": 5562.269213413548,
+  "uv_fraction": 0.36569013396615846,
+  "texels_per_meter": 8.302914695698064,
+  "texels_claimed": 383247,
+  "overlap_texels": 0,
+  "fold_texels": 0,
+  "margin_violation_texels": 0,
+  "border_violation_texels": 0,
+  "uv_min": [
+   0.0039062281139194965,
+   0.0039062106516212225
+  ],
+  "uv_max": [
+   0.9831200242042542,
+   0.9959481954574585
+  ],
+  "density_min": 8.280435677261176,
+  "density_max": 8.307675471284687,
+  "density_mean": 8.302914651192657,
+  "islands_outside_15pct": 0,
+  "area_outside_15pct": 0,
+  "blender_select_overlap_faces": 8
+ },
+ "fixups": [],
+ "version": 1,
+ "layout": "data/layouts/cinder.json",
+ "bridges": [
+  {
+   "id": "bridge_w",
+   "ends": [
+    [
+     -25.2,
+     0.33,
+     -31.6
+    ],
+    [
+     -25.2,
+     0.5,
+     -19.4
+    ]
+   ],
+   "length": 12.2,
+   "mid_deck_y": 0.915,
+   "width": 2.5
+  },
+  {
+   "id": "bridge_w_m",
+   "ends": [
+    [
+     25.2,
+     0.33,
+     31.6
+    ],
+    [
+     25.2,
+     0.5,
+     19.4
+    ]
+   ],
+   "length": 12.2,
+   "mid_deck_y": 0.915,
+   "width": 2.5
+  },
+  {
+   "id": "bridge_mid",
+   "ends": [
+    [
+     -19.8,
+     0.5,
+     6.0
+    ],
+    [
+     -7.0,
+     0.9,
+     6.0
+    ]
+   ],
+   "length": 12.8,
+   "mid_deck_y": 1.15,
+   "width": 2.5
+  },
+  {
+   "id": "bridge_mid_m",
+   "ends": [
+    [
+     19.8,
+     0.5,
+     -6.0
+    ],
+    [
+     7.0,
+     0.9,
+     -6.0
+    ]
+   ],
+   "length": 12.8,
+   "mid_deck_y": 1.15,
+   "width": 2.5
+  }
+ ],
+ "springs": [
+  {
+   "node": "spring_beach",
+   "pad_top": [
+    26.5,
+    0.45,
+    -33.0
+   ],
+   "df_launch": [
+    1.9473,
+    11.5542,
+    10.5156
+   ],
+   "target": [
+    29.5,
+    0.45,
+    -16.8
+   ],
+   "apex": 4.9,
+   "flight_s": 1.541
+  },
+  {
+   "node": "spring_beach_m",
+   "pad_top": [
+    -26.5,
+    0.45,
+    33.0
+   ],
+   "df_launch": [
+    -1.9473,
+    11.5542,
+    -10.5156
+   ],
+   "target": [
+    -29.5,
+    0.45,
+    16.8
+   ],
+   "apex": 4.9,
+   "flight_s": 1.541
+  },
+  {
+   "node": "spring_mid",
+   "pad_top": [
+    -20.5,
+    0.65,
+    -1.8
+   ],
+   "df_launch": [
+    7.6507,
+    14.8492,
+    1.0201
+   ],
+   "target": [
+    -7.0,
+    3.5,
+    0.0
+   ],
+   "apex": 8.0,
+   "flight_s": 1.765
+  },
+  {
+   "node": "spring_mid_m",
+   "pad_top": [
+    20.5,
+    0.65,
+    1.8
+   ],
+   "df_launch": [
+    -7.6507,
+    14.8492,
+    -1.0201
+   ],
+   "target": [
+    7.0,
+    3.5,
+    -0.0
+   ],
+   "apex": 8.0,
+   "flight_s": 1.765
+  }
+ ],
+ "oob": {
+  "oob_sea": {
+   "min": [
+    -90.0,
+    -9.0,
+    -100.0
+   ],
+   "max": [
+    90.0,
+    -0.8,
+    100.0
+   ]
+  },
+  "oob_chan_lagoon": {
+   "min": [
+    -17.5,
+    -8,
+    -30.5
+   ],
+   "max": [
+    17.5,
+    -0.8,
+    -10.5
+   ]
+  },
+  "oob_chan_lagoon_m": {
+   "min": [
+    -17.5,
+    -8,
+    10.5
+   ],
+   "max": [
+    17.5,
+    -0.8,
+    30.5
+   ]
+  },
+  "oob_chan_west": {
+   "min": [
+    -38,
+    -8,
+    -30.5
+   ],
+   "max": [
+    -17.5,
+    -0.8,
+    -20.5
+   ]
+  },
+  "oob_chan_west_m": {
+   "min": [
+    17.5,
+    -8,
+    20.5
+   ],
+   "max": [
+    38,
+    -0.8,
+    30.5
+   ]
+  },
+  "oob_chan_east": {
+   "min": [
+    17.5,
+    -8,
+    -30.5
+   ],
+   "max": [
+    38,
+    -0.8,
+    -20.5
+   ]
+  },
+  "oob_chan_east_m": {
+   "min": [
+    -38,
+    -8,
+    20.5
+   ],
+   "max": [
+    -17.5,
+    -0.8,
+    30.5
+   ]
+  },
+  "oob_chan_mid_w": {
+   "min": [
+    -17.5,
+    -8,
+    -10.5
+   ],
+   "max": [
+    -8.0,
+    -0.8,
+    21.0
+   ]
+  },
+  "oob_chan_mid_w_m": {
+   "min": [
+    8.0,
+    -8,
+    -21.0
+   ],
+   "max": [
+    17.5,
+    -0.8,
+    10.5
+   ]
+  }
+ },
+ "terrain": {
+  "halfX": 40,
+  "halfZ": 52,
+  "step": 0.8,
+  "bedY": -2.6,
+  "bottomY": -6.0,
+  "ripple": 0.07
+ },
+ "ao": {
+  "file": "map_cinder_ao.png",
+  "size": 1024,
+  "samples": 64,
+  "distance": 2.0,
+  "device": "GPU OPTIX (NVIDIA RTX A2000 Laptop GPU)",
+  "seconds": 7.0,
+  "baked_texels": 383253,
+  "dilated_texels": 640085,
+  "mean": 0.8856,
+  "std": 0.1931,
+  "min": 0.0,
+  "p05": 0.4844,
+  "p50": 0.9844,
+  "p95": 1.0,
+  "max": 1.0,
+  "hist10": [
+   5424,
+   1860,
+   2583,
+   3705,
+   6044,
+   14197,
+   18459,
+   28811,
+   37239,
+   264931
+  ],
+  "crate_side_base_mean": 0.4954,
+  "crate_side_upper_mean": 0.6645,
+  "sane": true
+ }
+}

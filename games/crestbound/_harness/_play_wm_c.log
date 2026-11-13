@@ -1,0 +1,96 @@
+IN COURSE: {"gstate": "playing", "course": "verdant-3", "pos": [0, 1.9, 42], "vel": [0, -0.19, 0], "pstate": "idle", "grounded": true, "facing": 0, "surface": "grass", "inWater": false, "submerged": false, "climbing": false, "camYaw": 0.672, "camPitch": 0.22, "camDist": 1.81, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false}
+=== RE-VERIFY  the granary cellar stuck (claimed BLOCKER, must confirm) ===
+  on the mezzanine: {"p": [-8, 17.45, -16], "st": "land", "sp": 0, "gr": true, "surf": "wood", "cd": 4.45, "clk": 0.41}
+  after the pound: {"p": [-8, 17.45, -16], "st": "idle", "sp": 0, "gr": true, "surf": "wood", "cd": 3.78, "clk": 2.97} events ['land:7.858333333333', 'jump:single', 'land:12.86666666666'] snap {"coins": 0, "sigils": 0, "crests": 0, "cp": 0, "deaths": 0, "raceMs": null, "power": null}
+  just standing in the cellar, no input: [[[-8, 17.45, -16], "idle", true, "wood", false], [[-8, 17.45, -16], "idle", true, "wood", false], [[-8, 17.45, -16], "idle", true, "wood", false], [[-8, 17.45, -16], "idle", true, "wood", false], [[-8, 17.45, -16], "idle", true, "wood", false], [[-8, 17.45, -16], "idle", true, "wood", false], [[-8, 17.45, -16], "idle", true, "wood", false], [[-8, 17.45, -16], "idle", true, "wood", false], [[-8, 17.45, -16], "idle", true, "wood", false], [[-8, 17.45, -16], "idle", true, "wood", false]]
+  now WALK for the south door, 10 s of held W:
+  -> {"p": [-7.74, 17.45, -12.38], "st": "idle", "sp": 0, "gr": true, "surf": "wood", "cd": 6.8, "clk": 11.07} events ['slide', 'bonk'] deaths []
+  and JUMP a few times:
+  -> {"p": [-7.74, 17.45, -19.62], "st": "idle", "sp": 0, "gr": true, "surf": "wood", "cd": 1.37, "clk": 13.41} events ['jump:single', 'wallkick', 'jump:wallkick', 'land:14.32499999999', 'jump:double', 'land:10.49999999999']
+=== PROBE  what is the big black mass on the granary terrace? ===
+  biggest colliders on the granary terrace: [{"half": [10, 0.5, 4], "c": [6, 11.8, -8], "surf": "normal", "ref": null}, {"half": [6.4, 0.17, 4.9], "c": [-8, 21.4, -16], "surf": "normal", "ref": null}, {"half": [5.2, 0.25, 3.7], "c": [-8, 17.2, -16], "surf": "wood", "ref": "breakable"}, {"half": [5.2, 0.25, 2], "c": [9, 16.5, -23], "surf": "normal", "ref": null}, {"half": [5.6, 0.11, 4.1], "c": [-8, 13.5, -16], "surf": "normal", "ref": null}, {"half": [1.7, 0.8, 1.7], "c": [9.6, 16.9, -22], "surf": "normal", "ref": null}, {"half": [0.25, 4, 2.08], "c": [-2.3, 17.6, -16], "surf": "normal", "ref": null}, {"half": [1.83, 4, 0.25], "c": [-10, 17.6, -20.3], "surf": "normal", "ref": null}, {"half": [1.83, 4, 0.25], "c": [-6, 17.6, -20.3], "surf": "normal", "ref": null}, {"half": [1.17, 4, 0.25], "c": [-10.7, 17.6, -11.8], "surf": "normal", "ref": null}, {"half": [1.17, 4, 0.25], "c": [-5.3, 17.6, -11.8], "surf": "normal", "ref": null}, {"half": [0.25, 4, 1.04], "c": [-2.3, 17.6, -19.5], "surf": "normal", "ref": null}]
+=== BEAT 5  THE RIDGE STAIR UNDER THE SWINGING SACKS ===
+  stair foot: {"p": [-6, 13.92, -19.5], "st": "idle", "sp": 0, "gr": true, "surf": "normal", "cd": 6.2, "clk": 15.95}
+  climb: [[[-6, 14.24, -19.62], "bonk", 0], [[-6, 14.24, -19.62], "bonk", 0], [[-6, 14.24, -19.62], "bonk", 0], [[-6, 14.24, -19.62], "bonk", 0], [[-6, 14.24, -19.62], "bonk", 0], [[-6, 14.24, -19.62], "bonk", 0], [[-6, 14.24, -19.62], "bonk", 0], [[-6, 14.24, -19.62], "bonk", 0], [[-6, 14.24, -19.62], "bonk", 0], [[-6, 14.24, -19.62], "bonk", 0], [[-6, 14.24, -19.62], "bonk", 0], [[-6, 14.24, -19.62], "bonk", 0], [[-6, 14.24, -19.62], "bonk", 0], [[-6, 14.24, -19.62], "bonk", 0], [[-6, 14.24, -19.62], "bonk", 0], [[-6, 14.24, -19.62], "bonk", 0], [[-6, 14.24, -19.62], "bonk", 0], [[-6, 14.24, -19.62], "bonk", 0]]
+  -> {"p": [-6, 14.24, -19.62], "st": "idle", "sp": 0, "gr": true, "surf": "normal", "cd": 4.03, "clk": 19.79} events ['land:8.624999999999', 'land:5.301675912385', 'bonk'] deaths []
+  --- run it again to see whether a sack ever hits me ---
+  2nd run -> {"p": [-6, 14.24, -19.62], "st": "idle", "sp": 0, "gr": true, "surf": "normal", "cd": 4.03, "clk": 23.09} events ['land:5.558333333333', 'bonk'] deaths []
+  --- stand STILL under the first sack [-6, 22.60, -21.4] len 3.4 amp 46deg ---
+  standing under sack 1: [[[-6, 15.52, -21.32], "idle", true, "normal", false], [[-6, 15.52, -21.32], "idle", true, "normal", false], [[-6, 15.52, -21.32], "idle", true, "normal", false], [[-6, 15.52, -21.32], "idle", true, "normal", false], [[-6, 15.52, -21.32], "idle", true, "normal", false], [[-6, 15.52, -21.32], "idle", true, "normal", false], [[-6, 15.52, -21.32], "idle", true, "normal", false], [[-6, 15.52, -21.32], "idle", true, "normal", false], [[-6, 15.52, -21.32], "idle", true, "normal", false], [[-6, 15.52, -21.32], "idle", true, "normal", false], [[-6, 15.52, -21.32], "idle", true, "normal", false], [[-6, 15.52, -21.32], "idle", true, "normal", false], [[-6, 15.52, -21.32], "idle", true, "normal", false], [[-6, 15.52, -21.32], "idle", true, "normal", false]]
+  events [] deaths []
+  --- THE CART RAMP at x=+9 (13.90 -> 19.10 over 9 m = 30deg) ---
+  ramp: [[[8.99, 14.89, -19.15], "run"], [[9.65, 14.87, -19.92], "bonk"], [[10.46, 14.64, -19.92], "bonk"], [[10.81, 14.51, -20.09], "run"], [[11.1, 14.22, -21.09], "run"], [[11.11, 14.05, -22.44], "run"], [[12.2, 13.93, -25.21], "run"], [[12.52, 14.31, -26.46], "run"], [[12.83, 15.17, -28.15], "run"], [[13.07, 15.7, -29.02], "slopeSlide"], [[13.58, 16.24, -29.84], "slopeSlide"], [[14.24, 16.25, -30], "slopeSlide"], [[15.31, 15.72, -29.41], "run"], [[16.34, 15.37, -28.88], "run"]]
+  -> {"p": [16.96, 15.19, -28.46], "st": "skid", "sp": 2.11, "gr": true, "surf": "grass", "cd": 4.72, "clk": 32.31} events ['bonk', 'slide', 'slide', 'slide', 'slide', 'slide']
+  --- SACK GULLY crags 9.6/-22 (17.70) -> 16/-26 (19.10) -> 22/-29.4 (20.30), SIGIL 5 at [16, 20.50, -26] ---
+  crag 1: {"p": [9.6, 17.7, -22], "st": "idle", "sp": 0, "gr": true, "surf": "normal", "cd": 6.07, "clk": 33.5}
+   -> {"p": [17.42, 13.92, -25.61], "st": "idle", "sp": 0.15, "gr": true, "surf": "grass", "cd": 5.36, "clk": 35.44} want y~19.10
+   -> {"p": [20.39, 15.34, -26.88], "st": "idle", "sp": 0.28, "gr": true, "surf": "grass", "cd": 3.19, "clk": 37} want y~20.30
+  snap {"coins": 3, "sigils": 0, "crests": 0, "cp": 0, "deaths": 0, "raceMs": null, "power": null} events ['land:6.469886580555', 'land:18.97499999999', 'jump:single', 'land:7.116666666666', 'slide', 'slide', 'slide'] deaths []
+
+=== BEAT 6  THE RIDGE PATH, ROTOR GATES, MILLS 2 AND 3, THE WING NEST ===
+  cp-ridge: {"p": [-4, 19.2, -30], "st": "idle", "sp": 0, "gr": true, "surf": "grass", "cd": 5.9, "clk": 38.27} snap {"coins": 4, "sigils": 0, "crests": 0, "cp": 3, "deaths": 0, "raceMs": null, "power": null}
+  --- ROTOR GATE 1 [-11, 20.35, -32.6] style bar, 3 arms, period 7 ---
+  go [-11.0, -32.6] [walk into rotor gate 1] -> [-9.88, 19.3, -32.18] idle d=1.20 ARRIVED
+   {"p": [-9.88, 19.39, -32.78], "st": "idle", "sp": 0.13, "gr": true, "surf": "grass", "cd": 6.8, "clk": 41.11} events ['checkpoint:3', 'collect:checkpoint', 'land:7.685666741544', 'land:0.854376853791', 'bonk'] deaths []
+  standing STILL in the rotor's sweep for 8 s:
+  still in rotor 1: [[[-9.88, 19.46, -33.13], "idle", true, "grass", false], [[-9.88, 19.56, -33.65], "idle", true, "grass", false], [[-9.88, 19.82, -34.34], "idle", true, "grass", false], [[-11.2, 20.59, -34.34], "idle", true, "grass", false], [[-11.2, 20.59, -34.34], "idle", true, "grass", false], [[-11.56, 20.77, -34.31], "idle", true, "grass", false], [[-11.56, 20.77, -34.31], "idle", true, "grass", false], [[-11.56, 20.77, -34.31], "idle", true, "grass", false], [[-11.56, 20.77, -34.31], "idle", true, "grass", false], [[-11.56, 20.77, -34.31], "idle", true, "grass", false], [[-11.56, 20.77, -34.31], "idle", true, "grass", false], [[-11.56, 20.77, -34.31], "idle", true, "grass", false], [[-11.56, 20.77, -34.31], "idle", true, "grass", false], [[-11.56, 20.77, -34.31], "idle", true, "grass", false], [[-11.56, 20.77, -34.31], "idle", true, "grass", false], [[-11.56, 20.77, -34.31], "idle", true, "grass", false]]
+  events [] deaths []
+  --- ridge path west to mill 3's jump pad [-30, 20.14, -44] power 7.0 ---
+  go [-30.0, -44.0] [mill 3 jump pad] -> [-4, 19.2, -30] idle d=29.53 DID NOT ARRIVE  STUCK
+   {"p": [-4, 19.2, -30], "st": "idle", "sp": 0, "gr": true, "surf": "grass", "cd": 6.8, "clk": 7.22}
+  jump pad launch: [[[-8.02, 19.2, -31.22], "run"], [[-9.51, 19.27, -32.14], "run"], [[-10.17, 19.98, -33.35], "fall"], [[-10.17, 19.99, -33.74], "wallslide"], [[-10.11, 19.85, -34.15], "land"], [[-10.16, 20.05, -34.54], "run"], [[-10.42, 20.31, -34.77], "run"], [[-10.8, 20.65, -35], "run"], [[-11.31, 21.08, -35.26], "run"], [[-12.36, 21.7, -35.82], "run"], [[-13.89, 22.23, -36.62], "run"], [[-15.09, 22.61, -37.23], "run"], [[-15.5, 22.73, -37.43], "run"], [[-15.9, 22.85, -37.63], "run"]]
+  -> {"p": [-16.81, 23.1, -38.05], "st": "idle", "sp": 0.12, "gr": true, "surf": "grass", "cd": 6.8, "clk": 10.31} events ['death:void', 'land:0', 'checkpoint:3', 'collect:checkpoint', 'land:2.464515935214']
+  --- THE WING NEST [-34, 26.60, -44] on mill 3's balcony ---
+  on the balcony: {"p": [-31.46, 25.72, -44], "st": "idle", "sp": 0, "gr": true, "surf": "normal", "cd": 6.75, "clk": 11.3} snap {"coins": 7, "sigils": 0, "crests": 0, "cp": 3, "deaths": 1, "raceMs": null, "power": null}
+  go [-34.0, -44.0] [stand on the nest] -> [-41.75, 28.06, -44.12] fall d=7.75 DID NOT ARRIVE
+  snap {"coins": 7, "sigils": 1, "crests": 0, "cp": 3, "deaths": 1, "raceMs": null, "power": null} events ['land:10.57822047436', 'slide', 'land:13.99166666666', 'land:8.624999999999', 'slide', 'land:12.17092203293', 'land:6.708333333333', 'land:4.807712158323', 'land:0', 'land:0', 'bonk']
+  --- SIGIL 7, mill 3's sail shelf [-30.08, 29.50, -44] : ride the sail ---
+  mill 3 colliders: [[-34, 24, -44, 1.9, 4, 1.9], [-32.13, 25.58, -42.13, 0.62, 0.14, 2.36], [-35.87, 25.58, -42.13, 0.62, 0.14, 2.36], [-35.87, 25.58, -45.87, 0.62, 0.14, 2.36], [-32.13, 25.58, -45.87, 0.62, 0.14, 2.36], [-30.48, 29.73, -44, 3.42, 0.17, 0.91], [-32.27, 24.48, -44, 3.42, 0.17, 0.91], [-37.52, 26.27, -44, 3.42, 0.17, 0.91], [-35.73, 31.52, -44, 3.42, 0.17, 0.91]]
+  --- THE BELL [4, 20.60, -30] breakable, trigger bell-rung ---
+  at the bell: {"p": [3.95, 19.49, -32.46], "st": "land", "sp": 1.4, "gr": true, "surf": "grass", "cd": 3.72, "clk": 14.83}
+  reading the bell sign from here
+  go [4.0, -30.0] [up to the bell] -> [3.65, 19.29, -31.24] idle d=1.29 ARRIVED
+   {"p": [3.65, 19.29, -31.24], "st": "idle", "sp": 0.06, "gr": true, "surf": "grass", "cd": 6.77, "clk": 16.05} events ['land:31.24166666666', 'land:14.40044854721', 'bonk']
+  JUMP + POUND the bell:
+  after pound: {"p": [3.62, 19.28, -31.23], "st": "idle", "sp": 0.06, "gr": true, "surf": "grass", "cd": 6.78, "clk": 17.24} events ['jump:single', 'pound', 'poundLand', 'land:40'] snap {"coins": 7, "sigils": 1, "crests": 0, "cp": 3, "deaths": 1, "raceMs": null, "power": null} was {"coins": 7, "sigils": 1, "crests": 0, "cp": 3, "deaths": 1, "raceMs": null, "power": null}
+  --- THE VANISH STAIRCASE: 5 flagstones 9.4/-30 (21.60) .. 31/-30 (28.00), crag 38/-30 (30.60) ---
+  flagstones now: [{"p": [9.4, 21.3, -30], "solid": true, "vis": false}, {"p": [14.8, 22.9, -30], "solid": true, "vis": false}, {"p": [20.2, 24.5, -30], "solid": true, "vis": false}, {"p": [25.6, 26.1, -30], "solid": true, "vis": false}, {"p": [31, 27.7, -30], "solid": true, "vis": false}]
+  running for stone 1: [[[3.93, 19.27, -30.9], "run", true], [[5.04, 19.28, -30.53], "run", true], [[6.34, 19.18, -30.18], "run", true], [[7.2, 18.96, -29.92], "run", true], [[8.92, 18.04, -29.36], "slopeSlide", true], [[10.66, 16.38, -28.48], "slopeSlide", true]]
+   -> {"p": [13.82, 16.56, -25.28], "st": "wallslide", "sp": 6.84, "gr": false, "surf": "normal", "cd": 6.48, "clk": 19.15} want y~23.20 MISS
+   FELL OFF THE STAIR
+  -> {"p": [14.02, 13.02, -22.63], "st": "idle", "sp": 0.06, "gr": true, "surf": "grass", "cd": 3.13, "clk": 19.66} snap {"coins": 7, "sigils": 1, "crests": 0, "cp": 3, "deaths": 1, "raceMs": null, "power": null} events ['slide', 'slide', 'jump:slope', 'land:17.69166666666'] deaths [{'c': 'void', 'p': [-27.8, -20.1, -40]}]
+
+=== BEAT 7  THE GREAT MILL, THE SCAFFOLD, THE SKY PLATFORM ===
+  cp-yard: {"p": [22, 23.6, -44], "st": "idle", "sp": 0, "gr": true, "surf": "grass", "cd": 3.55, "clk": 20.58} snap {"coins": 7, "sigils": 1, "crests": 0, "cp": 4, "deaths": 1, "raceMs": null, "power": null}
+  --- ROUTE A, THE SCAFFOLD: six ledges 24.60 .. 31.60, then gallery 32.04 ---
+  ledge 1: {"p": [17, 24.6, -44.2], "st": "idle", "sp": 0, "gr": true, "surf": "normal", "cd": 6.77, "clk": 21.57}
+   ledge 2 -> {"p": [18.21, 23.82, -41.29], "st": "idle", "sp": 0.03, "gr": true, "surf": "grass", "cd": 6.77, "clk": 23.13} want y~26.00 MISS
+  events ['checkpoint:4', 'collect:checkpoint', 'land:7.483289275309', 'land:5.558333333333', 'jump:single', 'land:8.874999999999'] deaths []
+  --- THE GALLERY 32.04 + SIGIL 8 [28, 33.50, -48] ---
+  go [28.0, -48.0] [gallery / sigil 8] -> [27.73, 30.2, -44.9] idle d=3.11 DID NOT ARRIVE  STUCK
+   {"p": [27.73, 30.2, -44.9], "st": "idle", "sp": 0, "gr": true, "surf": "normal", "cd": 2.4, "clk": 27.39} snap {"coins": 9, "sigils": 1, "crests": 0, "cp": 4, "deaths": 1, "raceMs": null, "power": null} events ['land:6.710024186200', 'slide', 'land:6', 'bonk']
+  --- ROUTE B, THE SAIL RIDE: board the gondola at the bottom of the sweep ---
+  boarding plinth (24.80): {"p": [22, 24.8, -48], "st": "idle", "sp": 0, "gr": true, "surf": "normal", "cd": 2.51, "clk": 28.42}
+  lowest great-mill gondola: [26.72, 25.68, -48, 0.25]
+  RIDING THE GREAT MILL (no input): [[[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false], [[31.1, 23.6, -48], "idle", true, "grass", false]]
+  events ['land:7.091666666666', 'land:15.52499999999'] deaths [] snap {"coins": 9, "sigils": 1, "crests": 0, "cp": 4, "deaths": 1, "raceMs": null, "power": null}
+  after 8.8 s of ride: {"p": [31.1, 23.6, -48], "st": "idle", "sp": 0, "gr": true, "surf": "grass", "cd": 6.8, "clk": 38.23}
+  --- THE SKY PLATFORM (35.90) and the OPEN CREST [47, 37.40, -48] ---
+  on the deck: {"p": [41, 35.9, -48], "st": "idle", "sp": 0, "gr": true, "surf": "normal", "cd": 5.94, "clk": 38.83}
+  go [47.0, -48.0] [walk to the crest] -> [46.82, 35.9, -48.02] skid d=0.18 ARRIVED
+   {"p": [46.82, 35.9, -48.02], "st": "skid", "sp": 2.6, "gr": true, "surf": "normal", "cd": 2.33, "clk": 41.06} snap {"coins": 12, "sigils": 1, "crests": 1, "cp": 4, "deaths": 1, "raceMs": null, "power": null} was {"coins": 11, "sigils": 1, "crests": 0, "cp": 4, "deaths": 1, "raceMs": null, "power": null} events ['land:7.475021508837']
+  after the celebration: {"gstate": "clear", "course": "verdant-3", "pos": [46.82, 35.9, -48.02], "vel": [2.59, -0.19, 0.25], "pstate": "skid", "grounded": true, "facing": -1.667, "surface": "normal", "inWater": false, "submerged": false, "climbing": false, "camYaw": -1.667, "camPitch": 0.22, "camDist": 6.8, "camPos": null, "crests": 1, "cardOpen": false, "menuOpen": false} snap {"coins": 12, "sigils": 1, "crests": 1, "cp": 4, "deaths": 1, "raceMs": null, "power": null}
+  --- THE CHAFF CANNON [14, 23.10, -40], target = the sky platform ---
+  at the cannon: {"p": [14, 24, -37], "st": "skid", "sp": 2.6, "gr": true, "surf": "normal", "cd": 6.65, "clk": 44.07}
+  go [14.0, -40.0] [into the cannon] -> [14, 24, -37] skid d=3.00 DID NOT ARRIVE  STUCK
+  pressed E -> {"p": [14, 24, -37], "st": "skid", "sp": 2.6, "gr": true, "surf": "normal", "cd": 6.8, "clk": 47.49} events []
+  pressed SPACE -> {"p": [14.53, 22.3, -36.75], "st": "idle", "sp": 0.17, "gr": true, "surf": "grass", "cd": 6.8, "clk": 49.19} events ['land:12.07499999999'] deaths []
+
+=== OVER-DRESSING CHECK: what the frame is made of at the yard ===
+  mill yard: {"fps": 22, "draws": 165, "tris": 284972, "p99": 413.9}
+  sky platform       {"fps": 24, "draws": 91, "tris": 141870, "p99": 413.9}
+  ridge path         {"fps": 23, "draws": 209, "tris": 375954, "p99": 822.9}
+  granary terrace    {"fps": 25, "draws": 155, "tris": 295502, "p99": 822.9}
+  spawn              {"fps": 24, "draws": 96, "tris": 168842, "p99": 822.9}
+wrote C:\Users\TestRun\Claude Claw\forgeflow-games\games\crestbound\_harness\_play_wm_c.json
+CONSOLE: []

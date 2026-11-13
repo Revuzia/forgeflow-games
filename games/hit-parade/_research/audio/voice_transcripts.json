@@ -1,0 +1,386 @@
+{
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Patrick/Cocky/Male_BattleStart_01_Patrick2.wav": {
+  "text": "Let's do this!",
+  "duration_s": 1.07
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Patrick/Cocky/Male_BattleStart_02_Patrick2.wav": {
+  "text": "Heh, no problem.",
+  "duration_s": 1.34
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Patrick/Cocky/Male_BattleWon_01_Patrick2.wav": {
+  "text": "never stood a chance.",
+  "duration_s": 1.28
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Patrick/Cocky/Male_BattleWon_02_Patrick2.wav": {
+  "text": "That was too easy.",
+  "duration_s": 1.52
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Patrick/Cocky/Male_ChargeUp_01_Patrick2.wav": {
+  "text": "Here goes.",
+  "duration_s": 0.63
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Patrick/Cocky/Male_ChargeUp_02_Patrick2.wav": {
+  "text": "See if you can dodge this!",
+  "duration_s": 1.4
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Patrick/Cocky/Male_CriticalHit_01_Patrick2.wav": {
+  "text": "They never saw it coming.",
+  "duration_s": 1.62
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Patrick/Cocky/Male_CriticalHit_02_Patrick2.wav": {
+  "text": "right in the sweet spot!",
+  "duration_s": 1.33
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Patrick/Cocky/Male_Distraught_01_Patrick2.wav": {
+  "text": "Umm, we're in trouble now, aren't we? Ah, great.",
+  "duration_s": 4.11
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Patrick/Cocky/Male_DungeonCleared_01_Patrick2.wav": {
+  "text": "Now that that's all said and done, it's time for my favorite part, treasure hunting.",
+  "duration_s": 5.52
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Patrick/Cocky/Male_Idle_01_Patrick2.wav": {
+  "text": "I could be out treasure hunting right now.",
+  "duration_s": 1.67
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Patrick/Cocky/Male_Idle_02_Patrick2.wav": {
+  "text": "Pretty boring just standing here.",
+  "duration_s": 2.95
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/BattleStart/Male_BattleStart_01_Jamaal5.wav": {
+  "text": "What an insult! You put these opponents against me?!",
+  "duration_s": 3.32
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/BattleStart/Male_BattleStart_02_Jamaal5.wav": {
+  "text": "Time to test my new spells!",
+  "duration_s": 1.62
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/BattleStart/Male_BattleStart_03_Jamaal5.wav": {
+  "text": "Let's see how they handle my blade.",
+  "duration_s": 2.6
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/BattleStart/Male_BattleStart_04_Jamaal5.wav": {
+  "text": "Watch yourself!",
+  "duration_s": 0.95
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/BattleStart/Male_BattleStart_05_Jamaal5.wav": {
+  "text": "They shall feel my fury!",
+  "duration_s": 2.11
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/BattleStart/Male_BattleStart_06_Jamaal5.wav": {
+  "text": "Stay back, they're all mine!",
+  "duration_s": 2.19
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/BattleStart/Male_BattleStart_07_Jamaal5.wav": {
+  "text": "Here we go!",
+  "duration_s": 0.9
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/BattleWon/Male_BattleWon_01_Jamaal5.wav": {
+  "text": "Oh hell, the greatest warrior!",
+  "duration_s": 1.84
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/BattleWon/Male_BattleWon_02_Jamaal5.wav": {
+  "text": "Next time, you'll think twice!",
+  "duration_s": 2.14
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/BattleWon/Male_BattleWon_03_Jamaal5.wav": {
+  "text": "No! It can't be over! I'm not done yet!",
+  "duration_s": 2.89
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/BattleWon/Male_BattleWon_04_Jamaal5.wav": {
+  "text": "Ugh, get up! I'm not done with you yet!",
+  "duration_s": 2.61
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/BattleWon/Male_BattleWon_05_Jamaal5.wav": {
+  "text": "YES! This is delicious! HAHA!",
+  "duration_s": 3.0
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/BattleWon/Male_BattleWon_06_Jamaal5.wav": {
+  "text": "Of course you're lost!",
+  "duration_s": 1.57
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/BattleWon/Male_BattleWon_07_Jamaal5.wav": {
+  "text": "What kind of idiot goes against the best warrior in the entire world?",
+  "duration_s": 4.6
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/CriticalHit/Male_CriticalHit_01_Jamaal5.wav": {
+  "text": "My aim, unparalleled.",
+  "duration_s": 1.87
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/CriticalHit/Male_CriticalHit_02_Jamaal5.wav": {
+  "text": "Take this!",
+  "duration_s": 0.87
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/CriticalHit/Male_CriticalHit_03_Jamaal5.wav": {
+  "text": "CRITICAL HIT!",
+  "duration_s": 0.92
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/ChargeUp/Male_ChargeUp_01_Jamaal5.wav": {
+  "text": "HUUUUUUUUUUUUUUUUUUUUUUU",
+  "duration_s": 2.11
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/ChargeUp/Male_ChargeUp_02_Jamaal5.wav": {
+  "text": "YAGA-A-A-A-A-AA-AA!",
+  "duration_s": 2.71
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/CB Sounddesign - Sci-Fi Voices Volume 01 Mothership/Mothership_Access_denied.wav": {
+  "text": "Access Denied.",
+  "duration_s": 2.75
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/CB Sounddesign - Sci-Fi Voices Volume 01 Mothership/Mothership_Awaiting_response.wav": {
+  "text": "Awaiting response",
+  "duration_s": 2.75
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/CB Sounddesign - Sci-Fi Voices Volume 01 Mothership/Mothership_Entering_hostile_territory_All_crew_members_be_on_high_alert.wav": {
+  "text": "Entering hostile territory. All crew members, be on high alert.",
+  "duration_s": 6.84
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/CB Sounddesign - Sci-Fi Voices Volume 01 Mothership/Mothership_Initiating_strike_teams_infiltrating_enemy_ships.wav": {
+  "text": "Initiating Strike Teams. Infiltrating Enemy Ships.",
+  "duration_s": 5.48
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/CB Sounddesign - Sci-Fi Voices Volume 02 Big Battle Robot/Androids detected.wav": {
+  "text": "androids detected",
+  "duration_s": 3.53
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/CB Sounddesign - Sci-Fi Voices Volume 02 Big Battle Robot/HQ rubble cleared Preparing for new construction.wav": {
+  "text": "HQ rubble cleared, preparing for new construction.",
+  "duration_s": 5.87
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/CB Sounddesign - Sci-Fi Voices Volume 02 Big Battle Robot/Progress insufficient.wav": {
+  "text": "Progress insufficient.",
+  "duration_s": 2.23
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/CB Sounddesign - Sci-Fi Voices Volume 02 Big Battle Robot/Target acquired Engaging stealth mode.wav": {
+  "text": "Target acquired. Engaging stealth mode.",
+  "duration_s": 4.45
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/CB Sounddesign - Sci-Fi Voices Volume 03 Advanced Android/Carrying out orders.wav": {
+  "text": "Carrying out orders.",
+  "duration_s": 2.48
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/CB Sounddesign - Sci-Fi Voices Volume 03 Advanced Android/Hostile presence detected.wav": {
+  "text": "Hostile presence detected.",
+  "duration_s": 2.68
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/CB Sounddesign - Sci-Fi Voices Volume 03 Advanced Android/Maintenance complete.wav": {
+  "text": "maintenance complete",
+  "duration_s": 2.39
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/CB Sounddesign - Sci-Fi Voices Volume 03 Advanced Android/Uploading information.wav": {
+  "text": "Uploading information.",
+  "duration_s": 2.76
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Jake Fielding - Circus Ambiences/VOXFem_Accouncement Wet, Ringmaster, Performer, Dialogue_JF_Circus_01.wav": {
+  "text": "Ladies and gentlemen, boys and girls, there will now be a 20 minute interval. During this time you are able to purchase hot and cold drinks, candy floss, popcorn, flushing lights and a range of souvenirs. If you'd like to purchase something, please remain in your seats and raise your hands. One of our sellers will come to you.",
+  "duration_s": 19.43
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Jake Fielding - Train Onboards/VOXFem_Train Tannoy Announcement_JF_Train Tracks_02.wav": {
+  "text": "This train is for Oxford.",
+  "duration_s": 2.28
+ },
+ "F:/games/unity-assets/Evil Mind__Medieval Fantasy Audio Bundle Music Ambience Effects/Assets/Medieval Fantasy Audio Bundle/FX/Voice Approve 1.mp3": {
+  "text": "Mm-hmm.",
+  "duration_s": 0.91
+ },
+ "F:/games/unity-assets/Evil Mind__Medieval Fantasy Audio Bundle Music Ambience Effects/Assets/Medieval Fantasy Audio Bundle/FX/Voice Approve 2.mp3": {
+  "text": "Hm.",
+  "duration_s": 0.84
+ },
+ "F:/games/unity-assets/Evil Mind__Medieval Fantasy Audio Bundle Music Ambience Effects/Assets/Medieval Fantasy Audio Bundle/FX/Voice Approve 3.mp3": {
+  "text": "Mm-hmm.",
+  "duration_s": 0.91
+ },
+ "F:/games/unity-assets/Evil Mind__Medieval Fantasy Audio Bundle Music Ambience Effects/Assets/Medieval Fantasy Audio Bundle/FX/Voice Approve 4.mp3": {
+  "text": "Hm.",
+  "duration_s": 1.12
+ },
+ "F:/games/unity-assets/Evil Mind__Medieval Fantasy Audio Bundle Music Ambience Effects/Assets/Medieval Fantasy Audio Bundle/FX/Voice Approve 5.mp3": {
+  "text": "Hm.",
+  "duration_s": 0.89
+ },
+ "F:/games/unity-assets/Evil Mind__Medieval Fantasy Audio Bundle Music Ambience Effects/Assets/Medieval Fantasy Audio Bundle/FX/Voice Old RPG Approve.mp3": {
+  "text": "Whoo!",
+  "duration_s": 0.91
+ },
+ "F:/games/unity-assets/Evil Mind__Halloween Audio Kit Music Ambience Effects/Assets/Halloween Audio Kit/FX/Trick or Treat.mp3": {
+  "text": "Trick or treat!",
+  "duration_s": 1.8
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/ChargeUp/Male_ChargeUp_03_Jamaal5.wav": {
+  "text": "HEEET RUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU",
+  "duration_s": 2.59
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Dark/BattleStart/Male_BattleStart_01_Jamaal4.wav": {
+  "text": "Leave now, or die.",
+  "duration_s": 2.96
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Dark/BattleStart/Male_BattleStart_02_Jamaal4.wav": {
+  "text": "You are no match for me.",
+  "duration_s": 1.8
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Dark/BattleStart/Male_BattleStart_03_Jamaal4.wav": {
+  "text": "I will not back down.",
+  "duration_s": 1.75
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Dark/CriticalHit/Male_CriticalHit_01_Jamaal4.wav": {
+  "text": "There's plenty more where that came from.",
+  "duration_s": 3.35
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Dark/CriticalHit/Male_CriticalHit_02_Jamaal4.wav": {
+  "text": "Critical Hit",
+  "duration_s": 1.06
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Dark/CriticalHit/Male_CriticalHit_03_Jamaal4.wav": {
+  "text": "Your end is near.",
+  "duration_s": 1.44
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Dark/Rage/Male_Rage_01_Jamaal4.wav": {
+  "text": "AHHHHHHHHH",
+  "duration_s": 2.97
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Dark/Rage/Male_Rage_02_Jamaal4.wav": {
+  "text": "Ahhhhhhh!",
+  "duration_s": 4.47
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Dark/Rage/Male_Rage_03_Jamaal4.wav": {
+  "text": "RRRRRRRRRRRRRRRRRRRRRR",
+  "duration_s": 4.48
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/Emotions/Male_Confused_01_Jamaal5.wav": {
+  "text": "Yeah?",
+  "duration_s": 0.88
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/Emotions/Male_Confused_02_Jamaal5.wav": {
+  "text": "Huh?",
+  "duration_s": 0.29
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/Emotions/Male_Happy_01_Jamaal5.wav": {
+  "text": "Haha!",
+  "duration_s": 0.84
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Samuel/BattleStart/Male_BattleStart_01_Samuel.wav": {
+  "text": "Time for some target practice!",
+  "duration_s": 1.23
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Samuel/BattleStart/Male_BattleStart_02_Samuel.wav": {
+  "text": "Easy peasy.",
+  "duration_s": 0.78
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Samuel/BattleStart/Male_BattleStart_03_Samuel.wav": {
+  "text": "Don't worry guys, I've got spirits.",
+  "duration_s": 1.89
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Samuel/CriticalHit/Male_CriticalHit_01_Samuel.wav": {
+  "text": "I could miss by try.",
+  "duration_s": 1.36
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Samuel/CriticalHit/Male_CriticalHit_02_Samuel.wav": {
+  "text": "Oh man, did I give you a boo-boo?",
+  "duration_s": 2.05
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Samuel/CriticalHit/Male_CriticalHit_03_Samuel.wav": {
+  "text": "See? Spirits.",
+  "duration_s": 1.75
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Samuel/BattleOver/Male_BattleOver_01_Samuel.wav": {
+  "text": "Good hunting, fellas!",
+  "duration_s": 0.93
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Samuel/BattleOver/Male_BattleOver_02_Samuel.wav": {
+  "text": "Just let me reload and we'll be back to prancing around in no time.",
+  "duration_s": 2.94
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Samuel/BattleOver/Male_BattleOver_03_Samuel.wav": {
+  "text": "What happened? I was taking a nap.",
+  "duration_s": 1.99
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Nile/BattleStart/Male_BattleStart_01_Nile.wav": {
+  "text": "Time for some target practice!",
+  "duration_s": 2.08
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Nile/BattleStart/Male_BattleStart_02_Nile.wav": {
+  "text": "Hmph. No problem.",
+  "duration_s": 1.65
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Nile/BattleStart/Male_BattleStart_03_Nile.wav": {
+  "text": "Let's see them dodge my attack!",
+  "duration_s": 2.15
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Nile/CriticalHit/Male_CriticalHit_01_Nile.wav": {
+  "text": "My aim is unparalleled.",
+  "duration_s": 2.6
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Nile/CriticalHit/Male_CriticalHit_02_Nile.wav": {
+  "text": "My aim is unparalleled.",
+  "duration_s": 2.51
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Nile/CriticalHit/Male_CriticalHit_03_Nile.wav": {
+  "text": "My aim is unparalleled.",
+  "duration_s": 2.35
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Nile/Dissapointed_Angry/Male_DissapointedAngry_01_Nile.wav": {
+  "text": "THIS CAN'T BE HAPPENING",
+  "duration_s": 1.69
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Nile/Dissapointed_Angry/Male_DissapointedAngry_02_Nile.wav": {
+  "text": "THIS CAN'T BE HAPPENING",
+  "duration_s": 1.6
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Nile/Dissapointed_Angry/Male_DissapointedAngry_03_Nile.wav": {
+  "text": "THIS CAN'T BE HAPPENING!",
+  "duration_s": 1.55
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Edwyn/BattleStart/Male_BattleStart_01_Edwyn.wav": {
+  "text": "Again with the fighting!",
+  "duration_s": 1.65
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Edwyn/BattleStart/Male_BattleStart_02_Edwyn.wav": {
+  "text": "Again with the fighting.",
+  "duration_s": 1.83
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Edwyn/BattleStart/Male_BattleStart_03_Edwyn.wav": {
+  "text": "again with a fighting.",
+  "duration_s": 1.53
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Edwyn/CriticalHit/Male_CriticalHit_01_Edwyn.wav": {
+  "text": "And stay down!",
+  "duration_s": 1.22
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Edwyn/CriticalHit/Male_CriticalHit_02_Edwyn.wav": {
+  "text": "and STAY DOWN!",
+  "duration_s": 1.12
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Edwyn/CriticalHit/Male_CriticalHit_03_Edwyn.wav": {
+  "text": "AWESOME!",
+  "duration_s": 0.94
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/KarenK/BattleStart/Female_BattleStart_01_KarenK.wav": {
+  "text": "Time for some target practice.",
+  "duration_s": 2.02
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/KarenK/BattleStart/Female_BattleStart_02_KarenK.wav": {
+  "text": "Hm, no problem.",
+  "duration_s": 1.67
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/KarenK/BattleStart/Female_BattleStart_03_KarenK.wav": {
+  "text": "Huh, no problem.",
+  "duration_s": 1.61
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/KarenK/CriticalHit/Female_CriticalHit_01_KarenK.wav": {
+  "text": "My aim is unparalleled.",
+  "duration_s": 2.19
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/KarenK/CriticalHit/Female_CriticalHit_02_KarenK.wav": {
+  "text": "Boom, feel the sting.",
+  "duration_s": 1.74
+ },
+ "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/KarenK/CriticalHit/Female_CriticalHit_03_KarenK.wav": {
+  "text": "They never saw it coming.",
+  "duration_s": 1.37
+ },
+ "F:/games/unity-assets/Cyberleaf Studio__Deep Space - Music Pack/Assets/Cyberleaf Music - Deep Space/OneHundred/OneHundred.wav": {
+  "text": "Music Music Music Music Music Music Music Music Music Music Music Music Music ...",
+  "duration_s": 197.49
+ }
+}

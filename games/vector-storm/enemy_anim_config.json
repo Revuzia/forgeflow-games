@@ -1,0 +1,116 @@
+{
+  "atlas_key": "enemies_atlas",
+  "atlas_png": "enemies.png",
+  "atlas_xml": "enemies.xml",
+  "by_name": {
+    "Blue Square": {
+      "kenney_type": "slime_normal",
+      "base_frame": "slime_normal_rest"
+    },
+    "Diamond": {
+      "kenney_type": "slime_normal",
+      "base_frame": "slime_normal_rest"
+    },
+    "Snake": {
+      "kenney_type": "worm_normal",
+      "base_frame": "worm_normal_rest"
+    },
+    "Pinwheel": {
+      "kenney_type": "slime_normal",
+      "base_frame": "slime_normal_rest"
+    },
+    "Gravity Well": {
+      "kenney_type": "slime_normal",
+      "base_frame": "slime_normal_rest"
+    }
+  },
+  "animations": [
+    {
+      "key": "slime_normal_idle",
+      "frames": [
+        "slime_normal_rest",
+        "slime_normal_rest"
+      ],
+      "frameRate": 3,
+      "repeat": -1
+    },
+    {
+      "key": "slime_normal_walk",
+      "frames": [
+        "slime_normal_walk_a",
+        "slime_normal_walk_b",
+        "slime_normal_walk_a",
+        "slime_normal_walk_b"
+      ],
+      "frameRate": 10,
+      "repeat": -1
+    },
+    {
+      "key": "slime_normal_squash",
+      "frames": [
+        "slime_normal_flat",
+        "slime_normal_flat"
+      ],
+      "frameRate": 6,
+      "repeat": 0
+    },
+    {
+      "key": "slime_normal_hit",
+      "frames": [
+        "slime_normal_rest",
+        "slime_normal_rest"
+      ],
+      "frameRate": 10,
+      "repeat": 0
+    },
+    {
+      "key": "slime_normal_dead",
+      "frames": [
+        "slime_normal_flat",
+        "slime_normal_flat"
+      ],
+      "frameRate": 6,
+      "repeat": 0
+    },
+    {
+      "key": "worm_normal_idle",
+      "frames": [
+        "worm_normal_rest",
+        "worm_normal_rest"
+      ],
+      "frameRate": 3,
+      "repeat": -1
+    },
+    {
+      "key": "worm_normal_walk",
+      "frames": [
+        "worm_normal_move_a",
+        "worm_normal_move_b",
+        "worm_normal_move_a",
+        "worm_normal_move_b"
+      ],
+      "frameRate": 10,
+      "repeat": -1
+    },
+    {
+      "key": "worm_normal_hit",
+      "frames": [
+        "worm_normal_rest",
+        "worm_normal_rest"
+      ],
+      "frameRate": 10,
+      "repeat": 0
+    },
+    {
+      "key": "worm_normal_dead",
+      "frames": [
+        "worm_normal_rest",
+        "worm_normal_rest"
+      ],
+      "frameRate": 6,
+      "repeat": 0
+    }
+  ],
+  "animation_registrations_js": "        if (!this.anims.exists(\"slime_normal_idle\")) {\n          this.anims.create({ key: \"slime_normal_idle\", frames: [\n            { key: \"enemies_atlas\", frame: \"slime_normal_rest\" },\n          { key: \"enemies_atlas\", frame: \"slime_normal_rest\" }\n          ], frameRate: 3, repeat: -1 });\n        }\n        if (!this.anims.exists(\"slime_normal_walk\")) {\n          this.anims.create({ key: \"slime_normal_walk\", frames: [\n            { key: \"enemies_atlas\", frame: \"slime_normal_walk_a\" },\n          { key: \"enemies_atlas\", frame: \"slime_normal_walk_b\" },\n          { key: \"enemies_atlas\", frame: \"slime_normal_walk_a\" },\n          { key: \"enemies_atlas\", frame: \"slime_normal_walk_b\" }\n          ], frameRate: 10, repeat: -1 });\n        }\n        if (!this.anims.exists(\"slime_normal_squash\")) {\n          this.anims.create({ key: \"slime_normal_squash\", frames: [\n            { key: \"enemies_atlas\", frame: \"slime_normal_flat\" },\n          { key: \"enemies_atlas\", frame: \"slime_normal_flat\" }\n          ], frameRate: 6, repeat: 0 });\n        }\n        if (!this.anims.exists(\"slime_normal_hit\")) {\n          this.anims.create({ key: \"slime_normal_hit\", frames: [\n            { key: \"enemies_atlas\", frame: \"slime_normal_rest\" },\n          { key: \"enemies_atlas\", frame: \"slime_normal_rest\" }\n          ], frameRate: 10, repeat: 0 });\n        }\n        if (!this.anims.exists(\"slime_normal_dead\")) {\n          this.anims.create({ key: \"slime_normal_dead\", frames: [\n            { key: \"enemies_atlas\", frame: \"slime_normal_flat\" },\n          { key: \"enemies_atlas\", frame: \"slime_normal_flat\" }\n          ], frameRate: 6, repeat: 0 });\n        }\n        if (!this.anims.exists(\"worm_normal_idle\")) {\n          this.anims.create({ key: \"worm_normal_idle\", frames: [\n            { key: \"enemies_atlas\", frame: \"worm_normal_rest\" },\n          { key: \"enemies_atlas\", frame: \"worm_normal_rest\" }\n          ], frameRate: 3, repeat: -1 });\n        }\n        if (!this.anims.exists(\"worm_normal_walk\")) {\n          this.anims.create({ key: \"worm_normal_walk\", frames: [\n            { key: \"enemies_atlas\", frame: \"worm_normal_move_a\" },\n          { key: \"enemies_atlas\", frame: \"worm_normal_move_b\" },\n          { key: \"enemies_atlas\", frame: \"worm_normal_move_a\" },\n          { key: \"enemies_atlas\", frame: \"worm_normal_move_b\" }\n          ], frameRate: 10, repeat: -1 });\n        }\n        if (!this.anims.exists(\"worm_normal_hit\")) {\n          this.anims.create({ key: \"worm_normal_hit\", frames: [\n            { key: \"enemies_atlas\", frame: \"worm_normal_rest\" },\n          { key: \"enemies_atlas\", frame: \"worm_normal_rest\" }\n          ], frameRate: 10, repeat: 0 });\n        }\n        if (!this.anims.exists(\"worm_normal_dead\")) {\n          this.anims.create({ key: \"worm_normal_dead\", frames: [\n            { key: \"enemies_atlas\", frame: \"worm_normal_rest\" },\n          { key: \"enemies_atlas\", frame: \"worm_normal_rest\" }\n          ], frameRate: 6, repeat: 0 });\n        }",
+  "enemy_kenney_map_js": "const ENEMY_KENNEY_MAP = {\n    \"Blue Square\": \"slime_normal\",\n    \"Diamond\": \"slime_normal\",\n    \"Snake\": \"worm_normal\",\n    \"Pinwheel\": \"slime_normal\",\n    \"Gravity Well\": \"slime_normal\"\n  };"
+}

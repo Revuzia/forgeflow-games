@@ -1,0 +1,168 @@
+{
+  "_doc": "Data-driven kits. Adding a 5th kit = a new entry here + a model in art/gltf (model hook = 'model'). Units: metres, seconds, tank percent (0-100), damage vs 100 HP. 'stats' are the 0-10 loadout bars (Range / Damage / Fire rate / Mobility / Coverage). Numbers are phase-4/6 starting values; tuning truth moves here, never into code.",
+  "_changes": [
+    "BOTFIX balance (2026-09-25, game-director call; numbers only): POP-WELL paint.impactRadius 1.1 -> 1.45 and paint.airburstRadius 0.6 -> 0.85 (it readied WELLSPRING ~0.5x per bot per match: 330 weighted m2 painted vs SHEET-DRUM 800); WELLSPRING chargePoints 180 -> 165. Measured with node _harness/probe_bots.ts --lineup mixed --seeds 1..8 on each map: POP-WELL WELLSPRING ready 3.38 / 2.13 / 4.13 per match per kit of 2 bots (Pier 18 / Lockwell / Cinder), used 2.50 / 1.75 / 2.25; before, ~0.5 ready per bot per match on Pier 18.",
+    "WASHOUT limits (2026-09-29, CORE lane, CONTRACT_WASHOUT W1; new block 'washout'): teamLimit 51, ffaLimit 20; seaCreditSeconds 5 and spawnProtectSeconds 2.0 are the contract's values. Tuned with node _harness/probe_bots.ts --rule washout --tune (npm run probe:washout:tune): bot-only WASHOUT matches, mixed lineup, skill swell, 3:00, NO limit, seeds 1-8 on pier18 / lockwell / cinder = 24 matches per mode; the leader's score at the horn decides whether a limit would have been reached (the sim never reads the limit before it is hit). TEAMS leader at the horn: min 41, p25 47, median 51, p75 59, max 61, mean 51.8 (histogram 41:2 44:1 45:2 47:3 49:1 50:3 51:1 52:1 54:1 55:1 56:1 59:2 60:3 61:2; per map pier18 49-56, lockwell 55-61, cinder 41-47) -> limit 51 reached in 12 of 24 matches (50.0 %; pier18 4/8, lockwell 8/8, cinder 0/8). FFA leader at the horn: min 14, p25 17, median 20, p75 23, max 31, mean 20.6 (histogram 14:1 15:1 16:2 17:4 18:3 20:2 21:2 22:2 23:1 25:1 26:3 28:1 31:1; per map pier18 22-31, lockwell 15-22, cinder 14-20) -> limit 20 reached in 13 of 24 (54.2 %; pier18 8/8, lockwell 4/8, cinder 1/8). Limits inside the 35-65 % target: TEAMS 50-55, FFA 19-22. The first placeholders 30 / 10 were reached in 24 of 24.",
+    "WASHOUT follow-up (2026-09-30, CORE lane, CONTRACT_WASHOUT W1 CHANGED): the limits are now PER MAP in data/maps.json <map>.washout {teamLimit, ffaLimit} (re-tuned on the final core code of the same day: pier18 52 / 23, lockwell 59 / 17, cinder 45 / 17; each reached by the leader in 37.5-62.5 % of that map's no-limit bot matches, seeds 1-8 — the distributions are in the maps.json _changes entry of the same date; the first tuning's 52 / 24, 59 / 19, 46 / 18 had drifted out of the band for lockwell FFA and cinder FFA). teamLimit 51 / ffaLimit 20 here stay as the FALLBACK for a map without its own block (or with a bad value). Why: the single values reached unevenly per map (TEAMS 51: pier18 4/8, lockwell 8/8, cinder 0/8; FFA 20: pier18 8/8, lockwell 4/8, cinder 1/8). Same day, same lane, rule fixes (no numbers changed): spawn protection ends only on an action that happens and when the runner deals damage from any source, a wash clears it, and 'score' follows its 'washed' event at once.",
+    "POP-WELL range (2026-10-05, owner request: 'increase the range on pop well a bit, although not as much as needle glint, its almost like a rifle but has very short range'; numbers only): fire.maxRange 9 -> 12 m and fire.projectileSpeed 18 -> 22 m/s. At 9 m POP-WELL was the shortest ranged kit (MIST-RASP 13, NEEDLE-GLINT 12-30, SHEET-DRUM flick 7.5). 12 m is +33 % but stays under MIST-RASP's 13 m and far below NEEDLE-GLINT; the faster shot keeps the flight time to max range at 0.55 s (was 0.50 s) so it still reads as a rifle round instead of a lob. Damage, fire rate, tank cost, splash and paint are unchanged. The touch aim assist and the burst fuse read the kit's reach from this data, so they follow it. BOTS: core/bots/tactics.ts holds POP-WELL bots in a fixed BURST_MIN..BURST_MAX = 5..9 m band (constants, not data), so bots keep fighting at their old distance and do NOT exploit the extra reach; only their projectile (faster, flies on to 12 m on a miss) changes, so determinism hashes change only in matches that contain a POP-WELL runner. stats.range stays 5 (MIST-RASP is 5 at 13 m).", "2026-10-18 owner balance pass: NEEDLE-GLINT tankFull 18 -> 33, so a full tank (100) fires exactly 3 fully charged shots (3 x 33 = 99; a 4th needs 33 and the charge is capped by the tank, so it is at most a weak tap; tankMin 4 unchanged). SHEET-DRUM gets its own hp 150 (1.5x the global hp 100; a kit 'hp' overrides the global value, read by Runner.maxHp). Side effects: a full NEEDLE-GLINT shot (140) and a roller flatten (140) no longer one-shot a SHEET-DRUM; regen refills to 150; the net snapshot scales hp by the largest kit hp."
+  ],
+  "hp": 100,
+  "respawnSeconds": 3,
+  "kits": [
+    {
+      "id": "mist-rasp",
+      "name": "MIST-RASP",
+      "role": "SHOOTER",
+      "blurb": "Fast stream, mid range, high coverage, low burst.",
+      "model": "kit_mist_rasp",
+      "sub": "jelly-charge",
+      "special": "cloudburst",
+      "stats": { "range": 5, "damage": 4, "fireRate": 8, "mobility": 7, "coverage": 8 },
+      "fire": {
+        "type": "stream",
+        "shotsPerSecond": 8.5,
+        "tankPerShot": 0.9,
+        "damage": 34,
+        "projectileSpeed": 26,
+        "straightTime": 0.2,
+        "gravity": 24,
+        "spreadDeg": 4.5,
+        "jumpSpreadDeg": 10,
+        "maxRange": 13,
+        "paint": { "impactRadius": 0.95, "dripEvery": 0.14, "dripRadius": 0.5 },
+        "moveSpeedWhileFiring": 0.82
+      }
+    },
+    {
+      "id": "sheet-drum", "hp": 150,
+      "name": "SHEET-DRUM",
+      "role": "ROLLER",
+      "blurb": "Wide floor coat while walking. Roll over a foe to flatten them.",
+      "model": "kit_sheet_drum",
+      "sub": "jelly-charge",
+      "special": "wellspring",
+      "stats": { "range": 3, "damage": 9, "fireRate": 3, "mobility": 5, "coverage": 10 },
+      "fire": {
+        "type": "roll",
+        "rollWidth": 2.1,
+        "rollSpeed": 4.4,
+        "tankPerMetre": 0.85,
+        "flattenDamage": 140,
+        "flattenReach": 0.55,
+        "flick": {
+          "windup": 0.28,
+          "cooldown": 0.62,
+          "tankCost": 9,
+          "splats": 6,
+          "reach": 7.5,
+          "damageNear": 70,
+          "damageFar": 30,
+          "paintRadius": 0.8
+        }
+      }
+    },
+    {
+      "id": "needle-glint",
+      "name": "NEEDLE-GLINT",
+      "role": "CHARGER",
+      "blurb": "Hold to charge a glint line. Release for a long splat line.",
+      "model": "kit_needle_glint",
+      "sub": "jelly-charge",
+      "special": "cloudburst",
+      "stats": { "range": 10, "damage": 10, "fireRate": 2, "mobility": 3, "coverage": 4 },
+      "fire": {
+        "type": "charge",
+        "chargeSeconds": 1.0,
+        "minRange": 12,
+        "maxRange": 30,
+        "damageMin": 40,
+        "damageFull": 140,
+        "tankFull": 33,
+        "tankMin": 4,
+        "moveSpeedWhileCharging": 0.35,
+        "glintVisibleToEnemies": true,
+        "paint": { "lineSpacing": 0.8, "lineRadius": 0.55, "endRadius": 1.15 }
+      }
+    },
+    {
+      "id": "pop-well",
+      "name": "POP-WELL",
+      "role": "BLASTER",
+      "blurb": "Slow airborne bursts. A direct hit deletes; paint per shot is poor.",
+      "model": "kit_pop_well",
+      "sub": "jelly-charge",
+      "special": "wellspring",
+      "stats": { "range": 5, "damage": 10, "fireRate": 3, "mobility": 6, "coverage": 3 },
+      "fire": {
+        "type": "burst",
+        "shotsPerSecond": 1.35,
+        "tankPerShot": 8,
+        "projectileSpeed": 22,
+        "maxRange": 12,
+        "airburstAtMaxRange": true,
+        "directDamage": 125,
+        "splashDamage": 55,
+        "splashRadius": 2.2,
+        "paint": { "impactRadius": 1.45, "airburstRadius": 0.85 }
+      }
+    }
+  ],
+  "subs": [
+    {
+      "id": "jelly-charge",
+      "name": "JELLY CHARGE",
+      "blurb": "Arc throw. Lands as a jelly puddle, then pops.",
+      "model": "sub_jelly_charge",
+      "tankCost": 70,
+      "throwSpeed": 13,
+      "gravity": 18,
+      "puddleFuse": 0.8,
+      "blastRadius": 3.0,
+      "damageCenter": 180,
+      "damageEdge": 30,
+      "paintRadius": 3.2
+    }
+  ],
+  "specials": [
+    {
+      "id": "cloudburst",
+      "name": "CLOUDBURST",
+      "blurb": "Throw a rain cell that soaks a disk of turf.",
+      "model": "special_cloudburst",
+      "chargePoints": 190,
+      "throwRange": 20,
+      "hoverHeight": 2.8,
+      "duration": 6.0,
+      "soakRadius": 5.0,
+      "dropsPerSecond": 30,
+      "dropPaintRadius": 0.55,
+      "damagePerSecond": 8
+    },
+    {
+      "id": "wellspring",
+      "name": "WELLSPRING",
+      "blurb": "Jump and slam: paints a ring and knocks foes back.",
+      "model": "special_wellspring",
+      "chargePoints": 165,
+      "leapHeight": 3.2,
+      "ringRadius": 6.0,
+      "ringWidth": 1.4,
+      "coreDamage": 60,
+      "coreRadius": 3.0,
+      "knockback": 9
+    }
+  ],
+  "specialCharge": {
+    "_doc": "Points toward the equipped special: 1 point per weighted m² of turf newly dyed, +20 per wash. Meter keeps 50% on being washed.",
+    "pointsPerSquareMetre": 1,
+    "pointsPerWash": 20,
+    "keepOnWashed": 0.5
+  },
+  "washout": {
+    "_doc": "WASHOUT rule (CONTRACT_WASHOUT W1): a credited wash scores 1 for the washer's crew. teamLimit / ffaLimit = the crew score that ends the match at once (TEAMS / FREE-FOR-ALL) on a map WITHOUT its own data/maps.json <map>.washout block — every built map has one, tuned per map on bot-only matches so the leader reaches it in roughly 35-65 % of 3:00 matches (see _changes here and in maps.json). seaCreditSeconds = a sea wash is credited to the last foe who damaged the victim within this window. spawnProtectSeconds = no damage / wash / knockback after a WASHOUT respawn, ended early by an action that happens (a shot / roll / flick / charge, a thrown sub, a started special), by dealing damage from any source, or by a wash.",
+    "teamLimit": 51,
+    "ffaLimit": 20,
+    "seaCreditSeconds": 5,
+    "spawnProtectSeconds": 2.0, "duelLimit": 10
+  }
+}

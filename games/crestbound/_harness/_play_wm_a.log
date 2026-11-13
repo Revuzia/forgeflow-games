@@ -1,0 +1,56 @@
+IN COURSE: {"gstate": "playing", "course": "verdant-3", "pos": [0, 1.9, 42], "vel": [0, -0.19, 0], "pstate": "idle", "grounded": true, "facing": 0, "surface": "grass", "inWater": false, "submerged": false, "climbing": false, "camYaw": 0, "camPitch": 0.22, "camDist": 4.08, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false}
+snap {"coins": 0, "sigils": 0, "crests": 0, "cp": 0, "deaths": 0, "raceMs": null, "power": null}
+SANITY held-W 2 s: [0, 1.9, 42] -> [0, -0.67, 34.68]  = 7.32 m
+
+=== BEAT 1  RIVERMEAD ===
+  orbit Q 1.2 s: camYaw 0 -> 2.453   camPitch 0.22 -> 0.22
+  orbit E 2.4 s: camYaw -> -2.97
+  orbit UP (R) 0.8 s: camPitch 0.22 -> -0.02
+  orbit DOWN (V) 1.6 s: camPitch -> 0.95
+  recenter Z -> camYaw 0 facing 0
+  --- READ THE SIGN at [3.4, ~3.95, 51] (spawn board) ---
+  go [2.0, 48.0] [toward the spawn sign] -> [2.49, 1.99, 49.83] idle d=1.89 DID NOT ARRIVE
+  standing at [2.49, 1.99, 49.83] reading the board
+  --- the HUNDRED COINS pedestal [-6, 3.45, 51] + paddock ring [-12, 3.2, 50] ---
+  go [-6.0, 51.0] [coins pedestal] -> [-4.77, 2, 51.18] idle d=1.24 ARRIVED
+  snap {"coins": 0, "sigils": 0, "crests": 0, "cp": 0, "deaths": 0, "raceMs": null, "power": null}
+  go [-12.0, 50.0] [paddock coin ring] -> [-12.07, 2.16, 49.72] idle d=0.29 ARRIVED
+  snap {"coins": 1, "sigils": 0, "crests": 0, "cp": 0, "deaths": 0, "raceMs": null, "power": null} events ['splash:true', 'land:3.444074858653', 'surface', 'land:7.669082698436', 'land:0', 'checkpoint:0', 'collect:checkpoint', 'bonk', 'bonk']
+  --- the BALE STACK at [-9, 2.75, 47] top 3.50, and [-9.2, 45..] ---
+  go [-9.0, 49.0] [approach bales] -> [-7.58, 1.73, 48.58] idle d=1.48 ARRIVED
+  bale hop: [[[-12.85, 2.18, 48.25], "land", true], [[-15.09, 2.42, 47.54], "run", true], [[-16.79, 2.61, 46.96], "run", true], [[-19.24, 2.78, 46], "run", true], [[-21.91, 2.76, 44.81], "run", true], [[-24.43, 2.57, 43.48], "run", true], [[-26.17, 2.36, 42.45], "run", true], [[-27.62, 2.2, 41.51], "run", true]]
+  -> {"gstate": "playing", "course": "verdant-3", "pos": [-28.16, 2.09, 41.09], "vel": [-0.01, -0.22, -0.1], "pstate": "idle", "grounded": true, "facing": 0.976, "surface": "grass", "inWater": false, "submerged": false, "climbing": false, "camYaw": 0.95, "camPitch": 0.22, "camDist": 6.8, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false}
+  --- THE BUMBLER (meadow patrol) ---
+  critters: [{"k": "gnasher", "w": [0, 0, 0], "kills": 1, "cols": 2}, {"k": "bumbler", "w": [0, 0, 0], "kills": 0, "cols": 1}, {"k": "bumbler", "w": [0, 0, 0], "kills": 0, "cols": 1}, {"k": "bumbler", "w": [0, 0, 0], "kills": 0, "cols": 1}, {"k": "skitter", "w": [0, 0, 0], "kills": 0, "cols": 1}, {"k": "skitter", "w": [0, 0, 0], "kills": 0, "cols": 1}]
+
+=== BEAT 2  THE QUAY, THE LOGS, THE CURRENT ===
+  go [0, 41.0] [walk to cp-riverbank [0,1.90,42]] -> [-0.17, 2.3, 39.45] idle d=1.56 ARRIVED
+  snap {"coins": 4, "sigils": 0, "crests": 0, "cp": 0, "deaths": 0, "raceMs": null, "power": null} events ['bonk', 'slide', 'bonk', 'bonk', 'bonk', 'jump:single', 'land:11.20583333333', 'land:7.499804941014']
+  go [0, 38.6] [quay north edge z=37.5] -> [-0.02, 0.01, 35.05] swimIdle d=3.55 DID NOT ARRIVE  STUCK
+  reading the quay signs from here: [-0.04, 0.01, 35.05]
+  --- JUMP quay -> LOG A (top 1.20, z 30.7..34.3). Release the stick at the apex. ---
+  jump trail: [[[-0.03, 0.11, 34.68], "swimDive", false], [[-0.03, 0.11, 34.68], "swimDive", false], [[-0.02, 0.11, 34.68], "swimIdle", false], [[-0.02, 0.11, 34.68], "swimIdle", false], [[-0.02, 0.11, 34.68], "swimIdle", false], [[-0.02, 0.11, 34.68], "swimIdle", false], [[-0.02, 0.11, 34.68], "swimIdle", false], [[-0.02, 0.11, 34.68], "swimIdle", false], [[-0.02, 0.11, 34.68], "swimIdle", false], [[-0.02, 0.11, 34.68], "swimIdle", false]]
+  landed: {"gstate": "playing", "course": "verdant-3", "pos": [-0.02, 0.11, 34.68], "vel": [0, 0, 0], "pstate": "swimIdle", "grounded": false, "facing": -0.008, "surface": "normal", "inWater": true, "submerged": false, "climbing": false, "camYaw": -0.008, "camPitch": 0.22, "camDist": 2.69, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false} events ['splash:true', 'land:3.777916548810', 'surface', 'jump:surface', 'splash:true']
+  --- back on the quay, jump again and KEEP RUNNING to log B ---
+  hop 1: [[[0, -0.35, 34.68], "swimDive", false], [[0, -0.35, 34.68], "swim", false], [[0, -0.35, 34.68], "swimIdle", false], [[0, -0.35, 34.68], "swimIdle", false], [[0, -0.35, 34.68], "swimIdle", false], [[0, -0.35, 34.68], "swimIdle", false]]
+  -> {"gstate": "playing", "course": "verdant-3", "pos": [0, -0.35, 34.68], "vel": [-0.0, 0, 0], "pstate": "swimIdle", "grounded": false, "facing": 0, "surface": "normal", "inWater": true, "submerged": false, "climbing": false, "camYaw": 0, "camPitch": 0.22, "camDist": 2.4, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false} events ['surface', 'land:4.883333333333', 'splash:true', 'surface', 'jump:surface', 'splash:true']
+  --- FALL IN ON PURPOSE: can a player swim out? ---
+  in the river: {"gstate": "playing", "course": "verdant-3", "pos": [3.12, 0.2, 29], "vel": [4.23, 0, 0], "pstate": "swimIdle", "grounded": false, "facing": 0, "surface": "normal", "inWater": true, "submerged": false, "climbing": false, "camYaw": -0.162, "camPitch": 0.22, "camDist": 6.66, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false}
+  hold W toward the NORTH jetty [0, 2.60, 21] and swim:
+  go [0, 21.0] [swim north to the jetty] -> [15.84, 0.27, 21.13] swimIdle d=15.84 DID NOT ARRIVE
+  -> {"gstate": "playing", "course": "verdant-3", "pos": [15.93, 0.27, 21.14], "vel": [2.43, 0, 0.04], "pstate": "swimIdle", "grounded": false, "facing": 1.562, "surface": "normal", "inWater": true, "submerged": false, "climbing": false, "camYaw": 1.562, "camPitch": 0.22, "camDist": 6.8, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false} events [] deaths []
+  --- if that failed: let the current take me and try the east shallows ---
+  carried by the current, no input: [[[18.69, 0.28, 21.2], "swimIdle", false, "normal", true], [[21.21, 0.29, 21.31], "swimIdle", false, "normal", true], [[22.55, 0.29, 21.38], "swimIdle", false, "normal", true], [[23.67, 0.3, 21.45], "swimIdle", false, "normal", true], [[24.57, 0.31, 21.51], "swimIdle", false, "normal", true], [[25.25, 0.31, 21.57], "swimIdle", false, "normal", true], [[26.15, 0.31, 21.63], "swimIdle", false, "normal", true], [[27.06, 0.32, 21.7], "swimIdle", false, "normal", true], [[28.42, 0.32, 21.79], "swimIdle", false, "normal", true], [[30.83, 0.33, 21.95], "swimIdle", false, "normal", true], [[32.11, 0.33, 22.03], "swimIdle", false, "normal", true], [[33.25, 0.34, 22.09], "swimIdle", false, "normal", true], [[34.16, 0.34, 22.13], "swimIdle", false, "normal", true], [[35.06, 0.34, 22.15], "swimIdle", false, "normal", true], [[35.97, 0.34, 22.17], "swimIdle", false, "normal", true], [[37.34, 0.34, 22.19], "swimIdle", false, "normal", true]]
+  now swim for the nearest bank:
+  go [37.57, 10.190000000000001] [swim to north bank] -> [46.99, 0.56, 22.12] slopeSlide d=15.20 DID NOT ARRIVE
+  -> {"gstate": "playing", "course": "verdant-3", "pos": [46.99, 0.56, 22.12], "vel": [3.01, -0.12, 0.28], "pstate": "slopeSlide", "grounded": true, "facing": -0.713, "surface": "grass", "inWater": true, "submerged": false, "climbing": false, "camYaw": 0.596, "camPitch": 0.22, "camDist": 6.8, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false}
+  STILL in the water - trying JUMP (stroke) + W for 8 s
+  -> {"gstate": "playing", "course": "verdant-3", "pos": [24.07, 1.76, 23.59], "vel": [-8.77, 0.5, 1.02], "pstate": "jump1", "grounded": false, "facing": 1.686, "surface": "normal", "inWater": false, "submerged": false, "climbing": false, "camYaw": 1.686, "camPitch": 0.22, "camDist": 6.8, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false}
+  --- SIGIL 1 on the riverbed [-14, -3.30, 28] (bed -4.89): dive for it ---
+  at the deep pool: {"gstate": "playing", "course": "verdant-3", "pos": [-14.11, -0.06, 28.06], "vel": [0.17, -2.03, 0.34], "pstate": "swim", "grounded": false, "facing": 1.686, "surface": "normal", "inWater": true, "submerged": false, "climbing": false, "camYaw": 1.713, "camPitch": 0.22, "camDist": 6.8, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false}
+  held crouch to sink -> {"gstate": "playing", "course": "verdant-3", "pos": [-8.76, -1.86, 28.21], "vel": [4.51, -0.4, 0.01], "pstate": "swimIdle", "grounded": false, "facing": 1.686, "surface": "normal", "inWater": true, "submerged": true, "climbing": false, "camYaw": 1.686, "camPitch": 0.22, "camDist": 6.8, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false} snap {"coins": 11, "sigils": 0, "crests": 0, "cp": 0, "deaths": 0, "raceMs": null, "power": null} events ['surface', 'land:0', 'slide', 'splash:true', 'surface', 'land:0', 'slide', 'splash:true', 'surface', 'jump:surface', 'land:2.716666666666', 'slide', 'slide', 'jump:slope', 'land:8.183333333333', 'slide', 'slide', 'jump:slope', 'splash:true', 'surface', 'jump:surface', 'splash:true', 'surface', 'jump:surface', 'splash:true', 'surface', 'jump:surface', 'splash:true', 'surface', 'jump:surface', 'splash:true', 'surface', 'jump:surface', 'splash:true', 'surface', 'jump:surface', 'splash:true', 'surface', 'jump:surface', 'land:6.549999999999', 'jump:slope', 'splash:true', 'surface', 'jump:surface', 'splash:true', 'surface', 'jump:surface', 'splash:true', 'surface', 'jump:surface', 'splash:true']
+  swim about the bed -> {"gstate": "playing", "course": "verdant-3", "pos": [-1.43, -3.7, 28.1], "vel": [3.31, -0.29, -0.03], "pstate": "swimIdle", "grounded": false, "facing": 1.547, "surface": "normal", "inWater": true, "submerged": true, "climbing": false, "camYaw": 1.547, "camPitch": 0.22, "camDist": 6.8, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false} snap {"coins": 11, "sigils": 0, "crests": 0, "cp": 0, "deaths": 0, "raceMs": null, "power": null}
+  now SURFACE: hold jump
+  -> {"gstate": "playing", "course": "verdant-3", "pos": [10.92, -0.29, 28.02], "vel": [0.08, 0, -0.0], "pstate": "swimDive", "grounded": false, "facing": 1.547, "surface": "normal", "inWater": true, "submerged": false, "climbing": false, "camYaw": 1.547, "camPitch": 0.22, "camDist": 2.4, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false} events ['surface', 'jump:surface', 'splash:true', 'surface', 'jump:surface', 'splash:true', 'surface', 'jump:surface', 'splash:true', 'surface', 'jump:surface', 'splash:true']
+wrote C:\Users\TestRun\Claude Claw\forgeflow-games\games\crestbound\_harness\_play_wm_a.json
+CONSOLE: []

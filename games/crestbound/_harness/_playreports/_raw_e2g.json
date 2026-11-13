@@ -1,0 +1,1014 @@
+{
+ "log": [
+  "boot state: keep",
+  "goto ember-2 cp=None -> playing ember-2 [0, 6, 47]",
+  "colliders at the flight-1 head / landing (x 16..26, y 10..16, z 14..22):",
+  "    {\"c\": [18.5, 8.1, 21.4], \"h\": [1.5, 2.1, 0.2], \"top\": 10.2, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [18.5, 8.28, 21], \"h\": [1.5, 2.27, 0.2], \"top\": 10.55, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [18.5, 8.45, 20.6], \"h\": [1.5, 2.45, 0.2], \"top\": 10.9, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [18.5, 8.63, 20.2], \"h\": [1.5, 2.63, 0.2], \"top\": 11.25, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [18.5, 8.8, 19.8], \"h\": [1.5, 2.8, 0.2], \"top\": 11.6, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [18.5, 8.97, 19.4], \"h\": [1.5, 2.97, 0.2], \"top\": 11.95, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [18.5, 9.15, 19], \"h\": [1.5, 3.15, 0.2], \"top\": 12.3, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [18.5, 9.32, 18.6], \"h\": [1.5, 3.32, 0.2], \"top\": 12.65, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [18.5, 9.5, 18.2], \"h\": [1.5, 3.5, 0.2], \"top\": 13, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [21, 12.7, 17], \"h\": [4, 0.3, 2], \"top\": 13, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [23, 13.18, 18.2], \"h\": [1.5, 0.17, 0.2], \"top\": 13.35, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [23, 13.35, 18.6], \"h\": [1.5, 0.35, 0.2], \"top\": 13.7, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [23, 13.53, 19], \"h\": [1.5, 0.52, 0.2], \"top\": 14.05, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [23, 13.7, 19.4], \"h\": [1.5, 0.7, 0.2], \"top\": 14.4, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [23, 13.88, 19.8], \"h\": [1.5, 0.88, 0.2], \"top\": 14.75, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [23, 14.05, 20.2], \"h\": [1.5, 1.05, 0.2], \"top\": 15.1, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [23, 14.22, 20.6], \"h\": [1.5, 1.22, 0.2], \"top\": 15.45, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [23, 14.4, 21], \"h\": [1.5, 1.4, 0.2], \"top\": 15.8, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [23, 14.57, 21.4], \"h\": [1.5, 1.57, 0.2], \"top\": 16.15, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [23, 14.75, 21.8], \"h\": [1.5, 1.75, 0.2], \"top\": 16.5, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [23, 14.93, 22.2], \"h\": [1.5, 1.92, 0.2], \"top\": 16.85, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "  run_to [18.5, 15.0] walk flight 1 to the landing -> [18.5, 12.3, 19.38] d=4.38 NOT-ARRIVED STUCK deaths+0",
+  "flight-1 walk stopped at [18.5, 12.3, 19.38] ps=run",
+  "  jump onto landing try 1 -> [19.91, 13, 18.78] ps=idle",
+  "catwalk A + trolley colliders:",
+  "    {\"c\": [4.06, 13, 12.82], \"h\": [1.06, 7, 0.82], \"top\": 20, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [5.63, 14.47, 12.82], \"h\": [0.5, 5.53, 0.82], \"top\": 20, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [7.5, 13, 12.82], \"h\": [1.38, 7, 0.82], \"top\": 20, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [9.38, 14.47, 12.82], \"h\": [0.5, 5.53, 0.82], \"top\": 20, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [11.25, 13, 12.82], \"h\": [1.38, 7, 0.82], \"top\": 20, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [13.13, 14.47, 12.82], \"h\": [0.5, 5.53, 0.82], \"top\": 20, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [14.31, 13, 12.82], \"h\": [0.69, 7, 0.82], \"top\": 20, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [14.18, 13, 12.75], \"h\": [0.82, 7, 0.75], \"top\": 20, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [14.18, 14.47, 14], \"h\": [0.82, 5.53, 0.5], \"top\": 20, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [0, 20.15, 28], \"h\": [15.3, 0.15, 16.3], \"top\": 20.3, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "    {\"c\": [8, 20, 9], \"h\": [2, 0.3, 4], \"top\": 20.3, \"surf\": \"normal\", \"solid\": true, \"grp\": \"world\", \"kind\": null}",
+  "  board try 1: at jump [10.46, 21.08, 9] -> after 1.5 s [9.65, 20.75, 9] (y trolley top 20.75, catwalk 20.30)",
+  "  board try 2: at jump [10.42, 20.75, 9] -> after 1.5 s [9.44, 20.75, 9] (y trolley top 20.75, catwalk 20.30)",
+  "  board try 3: at jump [13.17, 22.17, 9] -> after 1.5 s [15.97, 18.57, 9] (y trolley top 20.75, catwalk 20.30)",
+  "vanish grates: [{\"p\": [8, 20.1, 1.5], \"s\": [4, 0.4, 2.4], \"cyc\": {\"on\": 2.6, \"off\": 1.6, \"warn\": 0.5, \"phase\": 0}, \"solid\": true}, {\"p\": [8, 20.1, -4.5], \"s\": [4, 0.4, 2.4], \"cyc\": {\"on\": 2.6, \"off\": 1.6, \"warn\": 0.5, \"phase\": 1.4}, \"solid\": false}, {\"p\": [8, 20.1, -10.5], \"s\": [4, 0.4, 2.4], \"cyc\": {\"on\": 2.6, \"off\": 1.6, \"warn\": 0.5, \"phase\": 2.8}, \"solid\": true}, {\"p\": [2, 20.1, -29], \"s\": [4, 0.4, 2.6], \"cyc\": {\"on\": 2.6, \"off\": 1.6, \"warn\": 0.5, \"phase\": 0.7}, \"solid\": true}, {\"p\": [-6, 3.2, -14], \"s\": [7, 0.4, 2.4], \"cyc\": {\"on\": 2.4, \"off\": 1.8, \"warn\": 0.6, \"phase\": 0}, \"solid\": true}, {\"p\": [6, 24.8, -14], \"s\": [6, 0.4, 6], \"cyc\": {\"on\": 25, \"off\": 8, \"warn\": 2, \"phase\": 0}, \"solid\": false}]",
+  "  hop -> grate 1      end [8.49, 20.75, 8.44] d=6.96 ps=idle deaths=0",
+  "  hop -> grate 2      end [8.32, 20.3, 5.42] d=9.93 ps=land deaths=0",
+  "  hop -> grate 3      end [8.15, 15.05, -2.75] d=7.75 ps=fall deaths=0",
+  "  hop -> seesaw       end [5.95, 1.42, -17.99] d=2.53 ps=swimIdle deaths=0",
+  "  hop -> platform C   end [-2.12, 1.76, -18.84] d=5.51 ps=swimIdle deaths=0",
+  "  hop -> grate 4      end [-2.12, 2.06, -19.44] d=10.41 ps=swimIdle deaths=0",
+  "  hop -> platform D   end [-2.12, 2.32, -19.93] d=15.62 ps=swimIdle deaths=0"
+ ],
+ "res": {
+  "stair_cols": [
+   {
+    "c": [
+     18.5,
+     8.1,
+     21.4
+    ],
+    "h": [
+     1.5,
+     2.1,
+     0.2
+    ],
+    "top": 10.2,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     18.5,
+     8.28,
+     21
+    ],
+    "h": [
+     1.5,
+     2.27,
+     0.2
+    ],
+    "top": 10.55,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     18.5,
+     8.45,
+     20.6
+    ],
+    "h": [
+     1.5,
+     2.45,
+     0.2
+    ],
+    "top": 10.9,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     18.5,
+     8.63,
+     20.2
+    ],
+    "h": [
+     1.5,
+     2.63,
+     0.2
+    ],
+    "top": 11.25,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     18.5,
+     8.8,
+     19.8
+    ],
+    "h": [
+     1.5,
+     2.8,
+     0.2
+    ],
+    "top": 11.6,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     18.5,
+     8.97,
+     19.4
+    ],
+    "h": [
+     1.5,
+     2.97,
+     0.2
+    ],
+    "top": 11.95,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     18.5,
+     9.15,
+     19
+    ],
+    "h": [
+     1.5,
+     3.15,
+     0.2
+    ],
+    "top": 12.3,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     18.5,
+     9.32,
+     18.6
+    ],
+    "h": [
+     1.5,
+     3.32,
+     0.2
+    ],
+    "top": 12.65,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     18.5,
+     9.5,
+     18.2
+    ],
+    "h": [
+     1.5,
+     3.5,
+     0.2
+    ],
+    "top": 13,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     21,
+     12.7,
+     17
+    ],
+    "h": [
+     4,
+     0.3,
+     2
+    ],
+    "top": 13,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     23,
+     13.18,
+     18.2
+    ],
+    "h": [
+     1.5,
+     0.17,
+     0.2
+    ],
+    "top": 13.35,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     23,
+     13.35,
+     18.6
+    ],
+    "h": [
+     1.5,
+     0.35,
+     0.2
+    ],
+    "top": 13.7,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     23,
+     13.53,
+     19
+    ],
+    "h": [
+     1.5,
+     0.52,
+     0.2
+    ],
+    "top": 14.05,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     23,
+     13.7,
+     19.4
+    ],
+    "h": [
+     1.5,
+     0.7,
+     0.2
+    ],
+    "top": 14.4,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     23,
+     13.88,
+     19.8
+    ],
+    "h": [
+     1.5,
+     0.88,
+     0.2
+    ],
+    "top": 14.75,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     23,
+     14.05,
+     20.2
+    ],
+    "h": [
+     1.5,
+     1.05,
+     0.2
+    ],
+    "top": 15.1,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     23,
+     14.22,
+     20.6
+    ],
+    "h": [
+     1.5,
+     1.22,
+     0.2
+    ],
+    "top": 15.45,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     23,
+     14.4,
+     21
+    ],
+    "h": [
+     1.5,
+     1.4,
+     0.2
+    ],
+    "top": 15.8,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     23,
+     14.57,
+     21.4
+    ],
+    "h": [
+     1.5,
+     1.57,
+     0.2
+    ],
+    "top": 16.15,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     23,
+     14.75,
+     21.8
+    ],
+    "h": [
+     1.5,
+     1.75,
+     0.2
+    ],
+    "top": 16.5,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     23,
+     14.93,
+     22.2
+    ],
+    "h": [
+     1.5,
+     1.92,
+     0.2
+    ],
+    "top": 16.85,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   }
+  ],
+  "stair_walk": {
+   "end": [
+    18.5,
+    12.3,
+    19.38
+   ],
+   "arrived": false,
+   "stuck": true,
+   "trace": [
+    [
+     56.86,
+     [
+      18.5,
+      8.8,
+      23.36
+     ],
+     "run"
+    ],
+    [
+     56.96,
+     [
+      18.5,
+      9.5,
+      22.46
+     ],
+     "run"
+    ],
+    [
+     57.28,
+     [
+      18.5,
+      12.3,
+      19.53
+     ],
+     "run"
+    ],
+    [
+     57.61,
+     [
+      18.5,
+      12.3,
+      19.38
+     ],
+     "bonk"
+    ],
+    [
+     57.76,
+     [
+      18.5,
+      12.3,
+      19.38
+     ],
+     "bonk"
+    ],
+    [
+     57.91,
+     [
+      18.5,
+      12.3,
+      19.38
+     ],
+     "bonk"
+    ],
+    [
+     58.01,
+     [
+      18.5,
+      12.3,
+      19.38
+     ],
+     "bonk"
+    ],
+    [
+     58.11,
+     [
+      18.5,
+      12.3,
+      19.38
+     ],
+     "bonk"
+    ],
+    [
+     58.16,
+     [
+      18.5,
+      12.3,
+      19.38
+     ],
+     "bonk"
+    ],
+    [
+     58.26,
+     [
+      18.5,
+      12.3,
+      19.38
+     ],
+     "bonk"
+    ],
+    [
+     58.36,
+     [
+      18.5,
+      12.3,
+      19.38
+     ],
+     "bonk"
+    ],
+    [
+     58.46,
+     [
+      18.5,
+      12.3,
+      19.38
+     ],
+     "bonk"
+    ]
+   ]
+  },
+  "stair_jump": [
+   {
+    "try": 1,
+    "end": [
+     19.91,
+     13,
+     18.78
+    ],
+    "ps": "idle"
+   }
+  ],
+  "catwalk_cols": [
+   {
+    "c": [
+     4.06,
+     13,
+     12.82
+    ],
+    "h": [
+     1.06,
+     7,
+     0.82
+    ],
+    "top": 20,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     5.63,
+     14.47,
+     12.82
+    ],
+    "h": [
+     0.5,
+     5.53,
+     0.82
+    ],
+    "top": 20,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     7.5,
+     13,
+     12.82
+    ],
+    "h": [
+     1.38,
+     7,
+     0.82
+    ],
+    "top": 20,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     9.38,
+     14.47,
+     12.82
+    ],
+    "h": [
+     0.5,
+     5.53,
+     0.82
+    ],
+    "top": 20,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     11.25,
+     13,
+     12.82
+    ],
+    "h": [
+     1.38,
+     7,
+     0.82
+    ],
+    "top": 20,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     13.13,
+     14.47,
+     12.82
+    ],
+    "h": [
+     0.5,
+     5.53,
+     0.82
+    ],
+    "top": 20,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     14.31,
+     13,
+     12.82
+    ],
+    "h": [
+     0.69,
+     7,
+     0.82
+    ],
+    "top": 20,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     14.18,
+     13,
+     12.75
+    ],
+    "h": [
+     0.82,
+     7,
+     0.75
+    ],
+    "top": 20,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     14.18,
+     14.47,
+     14
+    ],
+    "h": [
+     0.82,
+     5.53,
+     0.5
+    ],
+    "top": 20,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     0,
+     20.15,
+     28
+    ],
+    "h": [
+     15.3,
+     0.15,
+     16.3
+    ],
+    "top": 20.3,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   },
+   {
+    "c": [
+     8,
+     20,
+     9
+    ],
+    "h": [
+     2,
+     0.3,
+     4
+    ],
+    "top": 20.3,
+    "surf": "normal",
+    "solid": true,
+    "grp": "world",
+    "kind": null
+   }
+  ],
+  "trolley_board": [
+   {
+    "try": 1,
+    "at_jump": [
+     10.46,
+     21.08,
+     9
+    ],
+    "after": [
+     9.65,
+     20.75,
+     9
+    ],
+    "ps": "idle",
+    "deaths": 0
+   },
+   {
+    "try": 2,
+    "at_jump": [
+     10.42,
+     20.75,
+     9
+    ],
+    "after": [
+     9.44,
+     20.75,
+     9
+    ],
+    "ps": "idle",
+    "deaths": 0
+   },
+   {
+    "try": 3,
+    "at_jump": [
+     13.17,
+     22.17,
+     9
+    ],
+    "after": [
+     15.97,
+     18.57,
+     9
+    ],
+    "ps": "fall",
+    "deaths": 0
+   }
+  ],
+  "vanish": [
+   {
+    "p": [
+     8,
+     20.1,
+     1.5
+    ],
+    "s": [
+     4,
+     0.4,
+     2.4
+    ],
+    "cyc": {
+     "on": 2.6,
+     "off": 1.6,
+     "warn": 0.5,
+     "phase": 0
+    },
+    "solid": true
+   },
+   {
+    "p": [
+     8,
+     20.1,
+     -4.5
+    ],
+    "s": [
+     4,
+     0.4,
+     2.4
+    ],
+    "cyc": {
+     "on": 2.6,
+     "off": 1.6,
+     "warn": 0.5,
+     "phase": 1.4
+    },
+    "solid": false
+   },
+   {
+    "p": [
+     8,
+     20.1,
+     -10.5
+    ],
+    "s": [
+     4,
+     0.4,
+     2.4
+    ],
+    "cyc": {
+     "on": 2.6,
+     "off": 1.6,
+     "warn": 0.5,
+     "phase": 2.8
+    },
+    "solid": true
+   },
+   {
+    "p": [
+     2,
+     20.1,
+     -29
+    ],
+    "s": [
+     4,
+     0.4,
+     2.6
+    ],
+    "cyc": {
+     "on": 2.6,
+     "off": 1.6,
+     "warn": 0.5,
+     "phase": 0.7
+    },
+    "solid": true
+   },
+   {
+    "p": [
+     -6,
+     3.2,
+     -14
+    ],
+    "s": [
+     7,
+     0.4,
+     2.4
+    ],
+    "cyc": {
+     "on": 2.4,
+     "off": 1.8,
+     "warn": 0.6,
+     "phase": 0
+    },
+    "solid": true
+   },
+   {
+    "p": [
+     6,
+     24.8,
+     -14
+    ],
+    "s": [
+     6,
+     0.4,
+     6
+    ],
+    "cyc": {
+     "on": 25,
+     "off": 8,
+     "warn": 2,
+     "phase": 0
+    },
+    "solid": false
+   }
+  ],
+  "catwalk_walk": [
+   {
+    "target": [
+     8,
+     1.5
+    ],
+    "tag": "grate 1",
+    "end": [
+     8.49,
+     20.75,
+     8.44
+    ],
+    "d": 6.96,
+    "ps": "idle",
+    "deaths": 0,
+    "y": 20.75
+   },
+   {
+    "target": [
+     8,
+     -4.5
+    ],
+    "tag": "grate 2",
+    "end": [
+     8.32,
+     20.3,
+     5.42
+    ],
+    "d": 9.93,
+    "ps": "land",
+    "deaths": 0,
+    "y": 20.3
+   },
+   {
+    "target": [
+     8,
+     -10.5
+    ],
+    "tag": "grate 3",
+    "end": [
+     8.15,
+     15.05,
+     -2.75
+    ],
+    "d": 7.75,
+    "ps": "fall",
+    "deaths": 0,
+    "y": 15.05
+   },
+   {
+    "target": [
+     8,
+     -16.5
+    ],
+    "tag": "seesaw",
+    "end": [
+     5.95,
+     1.42,
+     -17.99
+    ],
+    "d": 2.53,
+    "ps": "swimIdle",
+    "deaths": 0,
+    "y": 1.42
+   },
+   {
+    "target": [
+     2,
+     -22.5
+    ],
+    "tag": "platform C",
+    "end": [
+     -2.12,
+     1.76,
+     -18.84
+    ],
+    "d": 5.51,
+    "ps": "swimIdle",
+    "deaths": 0,
+    "y": 1.76
+   },
+   {
+    "target": [
+     2,
+     -29.0
+    ],
+    "tag": "grate 4",
+    "end": [
+     -2.12,
+     2.06,
+     -19.44
+    ],
+    "d": 10.41,
+    "ps": "swimIdle",
+    "deaths": 0,
+    "y": 2.06
+   },
+   {
+    "target": [
+     2,
+     -35.0
+    ],
+    "tag": "platform D",
+    "end": [
+     -2.12,
+     2.32,
+     -19.93
+    ],
+    "d": 15.62,
+    "ps": "swimIdle",
+    "deaths": 0,
+    "y": 2.32
+   }
+  ]
+ },
+ "console": [
+  "warning: [Course ember-2] props.js had no entry for: girders, pipes, slabs, antennae, fins"
+ ]
+}

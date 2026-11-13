@@ -1,0 +1,28 @@
+jab           grade C   x1.2  +    12 pts  ratings + 4.0 -> 154.0 (C)
+cross         grade C   x1.2  +    18 pts  ratings + 5.0 -> 159.0 (C)
+hook          grade C   x1.2  +    24 pts  ratings + 6.0 -> 165.0 (C)
+uppercut      grade C   x1.2  +    48 pts  ratings +12.0 -> 177.0 (C)
+air_juggle    grade C   x1.2  +    36 pts  ratings + 8.0 -> 185.0 (C)
+air_juggle    grade C   x1.2  +    36 pts  ratings + 4.8 -> 189.8 (C)
+ground_slam   grade C   x1.2  +   900 pts (first x3)  ratings +30.0 -> 219.8 (B)
+stomp_otg     grade B   x1.5  +   900 pts (first x3)  ratings +16.0 -> 235.8 (B)
+ko_grunt      grade B   x1.5  +   150 pts  ratings +20.0 -> 255.8 (B)
+parry         grade B   x1.5  +   900 pts (first x3)  ratings +35.0 -> 290.8 (B)
+jab           grade B   x1.5  +    15 pts  ratings + 4.0 -> 294.8 (B)
+cross         grade B   x1.5  +    22 pts  ratings + 5.0 -> 299.8 (B)
+hook          grade B   x1.5  +    30 pts  ratings + 6.0 -> 305.8 (A)
+wall_splat    grade A   x2.0  +  1500 pts (first x3)  ratings +30.0 -> 335.8 (A)
+throw         grade A   x2.0  +   160 pts  ratings +18.0 -> 353.8 (A)
+env_kill      grade A   x2.0  + 12000 pts (first x3)  ratings +60.0 -> 413.8 (S)
+COMBO CASH-OUT 14 hits: round(5*14^1.5)=262 x2.5 = +655
+TOTAL after sequence A: 17406   ratings 413.8 (S)
+
+MASHER (5x J-C-H + KO, same 20 actions):
+hook          grade B   x1.5  +    30 pts  ratings + 3.6 -> 257.0 (B)
+ko_grunt      grade B   x1.5  +   150 pts  ratings +12.0 -> 269.0 (B)
+COMBO CASH-OUT 15 hits: round(5*15^1.5)=290 x1.5 = +435
+TOTAL masher: 1436   ratings 269.0 (B)
+
+HIT AT S:
+PLAYER HIT: combo of 4 forfeited, ratings S -> B
+stylish sequence, no first-time bonuses: 6606 pts, ratings 413.8 (S)

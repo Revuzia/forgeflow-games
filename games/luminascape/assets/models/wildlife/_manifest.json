@@ -1,0 +1,306 @@
+{
+ "lion": {
+  "title": "Lion",
+  "tri": 1350,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Lion\" by Poly by Google, https://poly.pizza/m/3XAJojWxSWz. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "elephant": {
+  "title": "Elephant",
+  "tri": 1116,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Elephant\" by Poly by Google, https://poly.pizza/m/a27MA0rXyyj. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "tiger": {
+  "title": "Tiger",
+  "tri": 742,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Tiger\" by Poly by Google, https://poly.pizza/m/5A3w06FXUup. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "giraffe": {
+  "title": "Giraffe",
+  "tri": 1100,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Giraffe\" by Poly by Google, https://poly.pizza/m/0VkNrGSGXOO. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "rhino": {
+  "title": "Rhino",
+  "tri": 1025,
+  "lic": "CC-BY 3.0",
+  "creator": "Tom VanAntwerp",
+  "attr": "\"Rhino\" by Tom VanAntwerp, https://poly.pizza/m/9deYXdpoeTC. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "hippo": {
+  "title": "Hippo",
+  "tri": 900,
+  "lic": "CC-BY 3.0",
+  "creator": "jeremy",
+  "attr": "\"Hippo\" by jeremy, https://poly.pizza/m/6fQJsxfOGUP. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "gorilla": {
+  "title": "Gorilla",
+  "tri": 576,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Gorilla\" by Poly by Google, https://poly.pizza/m/bmfQ1j9CeO2. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "bear": {
+  "title": "Bear",
+  "tri": 570,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Bear\" by Poly by Google, https://poly.pizza/m/0PXWfxfb0Hu. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "kangaroo": {
+  "title": "Kangaroo",
+  "tri": 760,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Kangaroo\" by Poly by Google, https://poly.pizza/m/7BiPR-oOGgX. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "camel": {
+  "title": "Camel",
+  "tri": 822,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Camel\" by Poly by Google, https://poly.pizza/m/7XeLogrxLad. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "leopard": {
+  "title": "Snow leopard",
+  "tri": 988,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Snow leopard\" by Poly by Google, https://poly.pizza/m/26tTvxyxkPC. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "cheetah": {
+  "title": "Cheetah",
+  "tri": 980,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Cheetah\" by Poly by Google, https://poly.pizza/m/5y59KqZXxWf. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "bison": {
+  "title": "Bison",
+  "tri": 1492,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Bison\" by Poly by Google, https://poly.pizza/m/9sTrha-TxdS. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "gazelle": {
+  "title": "Gazelle",
+  "tri": 810,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Gazelle\" by Poly by Google, https://poly.pizza/m/bPYIQ_XQbrj. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "antelope": {
+  "title": "Antelope",
+  "tri": 1168,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Antelope\" by Poly by Google, https://poly.pizza/m/dC2-G-IF8rz. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "crocodile": {
+  "title": "Crocodile",
+  "tri": 1032,
+  "lic": "CC-BY 3.0",
+  "creator": "jeremy",
+  "attr": "\"Crocodile\" by jeremy, https://poly.pizza/m/fnUp2MrGjmr. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "koala": {
+  "title": "Koala",
+  "tri": 548,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Koala\" by Poly by Google, https://poly.pizza/m/fzCu8FM0HfB. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "sloth": {
+  "title": "Sloth",
+  "tri": 1608,
+  "lic": "CC-BY 3.0",
+  "creator": "marioba",
+  "attr": "\"Sloth\" by marioba, https://poly.pizza/m/KiJBu1Shwo. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "toucan": {
+  "title": "Toco Toucan",
+  "tri": 1836,
+  "lic": "CC-BY 3.0",
+  "creator": "Anonymous",
+  "attr": "\"Toco Toucan\" by Anonymous, https://poly.pizza/m/fFVqukPnc62. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "owl": {
+  "title": "Owl",
+  "tri": 1520,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Owl\" by Poly by Google, https://poly.pizza/m/eoAo21aoZHJ. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "eagle": {
+  "title": "Eagle",
+  "tri": 499,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Eagle\" by Poly by Google, https://poly.pizza/m/d7CSLvsHULY. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "penguin": {
+  "title": "Penguin",
+  "tri": 456,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Penguin\" by Poly by Google, https://poly.pizza/m/fBXvsC6pe_V. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "turtle": {
+  "title": "Turtle",
+  "tri": 3930,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Turtle\" by Poly by Google, https://poly.pizza/m/2LCcq8vhqJ3. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "seal": {
+  "title": "Seal",
+  "tri": 392,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Seal\" by Poly by Google, https://poly.pizza/m/fudlK4rnsI-. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "walrus": {
+  "title": "Walrus",
+  "tri": 512,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Walrus\" by Poly by Google, https://poly.pizza/m/2ivrvruGzxc. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "goat": {
+  "title": "Goat",
+  "tri": 958,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Goat\" by Poly by Google, https://poly.pizza/m/d7dImmjtF8E. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "orangutan": {
+  "title": "Orangutan",
+  "tri": 1858,
+  "lic": "CC-BY 3.0",
+  "creator": "cameron_",
+  "attr": "\"Orangutan\" by cameron_, https://poly.pizza/m/kD8hdFa32e. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "boar": {
+  "title": "Boar",
+  "tri": 782,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Boar\" by Poly by Google, https://poly.pizza/m/57fSWum6F1P. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "otter": {
+  "title": "River otter",
+  "tri": 1084,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"River otter\" by Poly by Google, https://poly.pizza/m/dJW3JeUWXQ-. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "duck": {
+  "title": "Duck",
+  "tri": 852,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Duck\" by Poly by Google, https://poly.pizza/m/6HpauUCfIAb. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "crane": {
+  "title": "Sandhill crane",
+  "tri": 898,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Sandhill crane\" by Poly by Google, https://poly.pizza/m/dazPSSmELaQ. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "pelican": {
+  "title": "American White Pelican",
+  "tri": 1128,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"American White Pelican\" by Poly by Google, https://poly.pizza/m/2J2HY1oq8l2. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "octopus": {
+  "title": "Octopus",
+  "tri": 754,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Octopus\" by Poly by Google, https://poly.pizza/m/9-b6-yqrwEe. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "lizard": {
+  "title": "Lizard",
+  "tri": 1351,
+  "lic": "CC-BY 3.0",
+  "creator": "madtrollstudio",
+  "attr": "\"Lizard\" by madtrollstudio, https://poly.pizza/m/0z3NJc5zAE. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "badger": {
+  "title": "Badger",
+  "tri": 640,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Badger\" by Poly by Google, https://poly.pizza/m/8k4cduyRhi4. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "beaver": {
+  "title": "Beaver",
+  "tri": 568,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Beaver\" by Poly by Google, https://poly.pizza/m/fwtA7VLrXPr. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "squirrel": {
+  "title": "Squirrel",
+  "tri": 716,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Squirrel\" by Poly by Google, https://poly.pizza/m/caxos24uWC9. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ },
+ "chipmunk": {
+  "title": "Chipmunk",
+  "tri": 862,
+  "lic": "CC-BY 3.0",
+  "creator": "Poly by Google",
+  "attr": "\"Chipmunk\" by Poly by Google, https://poly.pizza/m/0GiSxpS79Ao. Licence at https://creativecommons.org/licenses/by/3.0",
+  "glb": true
+ }
+}

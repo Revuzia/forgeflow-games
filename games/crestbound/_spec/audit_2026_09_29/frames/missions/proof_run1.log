@@ -1,0 +1,24 @@
+goto http://127.0.0.1:8913/games/crestbound/index.html?dev=1&quality=low&autoscale=0
+title after 82 s True
+NEW GAME button at [264.390625, 382.671875]
+in the Keep: True {'state': 'keep', 'course': 'keep', 'loading': False}
+[run1] placed at the Bailey gate stand-out spot {'yaw': 1.571, 'exit': [-18.1, 0.05, -6], 'locked': False}
+[run1] hand-stepped walk (real KeyW held): {"frames": 10, "state": "card", "pos": [-18.61, -0.0, -6], "near": 0, "dwell": 0}
+[run1] card raised by the walk-in: True
+  card on open: MISSION 1 OF 7  ·  A CLIMB | CREST ON THE RAMPARTS | ['CREST ON THE RAMPARTS*', 'EIGHT SIGILS OF THE MEADOW', 'A HUNDRED COINS', 'WHAT THE GNASHER GUARDS', 'THE WARDEN OF THE RIDGE', 'MEADOW DASH', 'THE LONG WAY ROUND']
+  frame _spec\audit_2026_09_29\frames\missions\01_card_default.png
+  after 4x ArrowRight: MISSION 5 OF 7  ·  A WARDEN | THE WARDEN OF THE RIDGE | sel [5]
+  frame _spec\audit_2026_09_29\frames\missions\02_card_mission5.png
+[run1] course loaded: True {'state': 'cinematic', 'course': 'verdant-1', 'loading': False}
+  RUN 1 mission: {"id": "boss", "index": 4, "name": "THE WARDEN OF THE RIDGE", "present": ["sigils", "coins", "secret", "boss", "wing"], "absent": ["open", "race"], "routes": {"north-door": true}, "at": [-2, 18, -54], "counts": {"added": 3, "removed": 0, "moved": 1, "set": 1}}
+  critters: [{"kind": "gnasher", "tag": null, "pos": [-8, 7.4, -2]}, {"kind": "bumbler", "tag": null, "pos": [-7.97, 2.55, 35.99]}, {"kind": "bumbler", "tag": "yard-bumbler", "pos": [-6.97, 16.79, -49]}, {"kind": "bumbler", "tag": null, "pos": [20.03, 7.68, 10.99]}, {"kind": "skitter", "tag": null, "pos": [-30.03, 5.07, -2.07]}, {"kind": "skitter", "tag": null, "pos": [30.09, 17.1, -2.01]}, {"kind": "warden", "tag": "warden", "pos": [-2, 16.4, -54]}]
+  crests built: [{"id": "sigils", "present": false, "home": [0, 10.45, -24], "race": false}, {"id": "coins", "present": false, "home": [-5, 3.45, 41], "race": false}, {"id": "secret", "present": false, "home": [-12, 7.95, -6], "race": false}, {"id": "boss", "present": false, "home": [-2, 18, -54], "race": false}, {"id": "wing", "present": true, "home": [4.2, 31.8, -22], "race": false}] | def.crests 7
+  mill period 16 | north door ray hit None | runstatsOff True none none
+  frame _spec\audit_2026_09_29\frames\missions\03_boss_arrival.png
+  frame _spec\audit_2026_09_29\frames\missions\04_boss_v1_courtyard.png
+  frame _spec\audit_2026_09_29\frames\missions\04_boss_v2_ring.png
+  frame _spec\audit_2026_09_29\frames\missions\04_boss_v3_tower.png
+  frame _spec\audit_2026_09_29\frames\missions\04_boss_v4_overview.png
+  mission 5, walked over the race start spot: {"before": -1, "startedAtFrame": -1, "frames": 150, "raceMs": -1, "runstatsOff": true, "timersDisplay": "none", "deathsDisplay": "none", "pos": [0.62, 4.2, 3.86]}
+  frame _spec\audit_2026_09_29\frames\missions\04_boss_v5_no_race.png
+exit 1

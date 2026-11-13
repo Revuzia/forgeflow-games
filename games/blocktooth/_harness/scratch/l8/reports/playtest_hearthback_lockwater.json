@@ -1,0 +1,211 @@
+{
+  "titan": "hearthback",
+  "biome": "lockwater",
+  "seed": 5,
+  "url": "http://localhost:5258/?dev=1&seed=5",
+  "seconds": 120.0,
+  "menus": {
+    "steps": [
+      "title\u2192select",
+      "titan confirmed",
+      "biome confirmed (DROP IN)"
+    ],
+    "firstScreen": "title",
+    "titanNav": "detected (2 key presses)",
+    "biomeNav": "detected (2 key presses)",
+    "afterDrop": "slate",
+    "titan": "hearthback",
+    "biome": "lockwater"
+  },
+  "eventPolls": 1366,
+  "finalState": {
+    "screen": "play",
+    "titan": "hearthback",
+    "biome": "lockwater",
+    "seed": 1235773684,
+    "t": 114.567,
+    "tick": 3437,
+    "rank": 1,
+    "height": 5,
+    "level": 7,
+    "xp": 41.736,
+    "hp": 313.954,
+    "maxHp": 318.24,
+    "mass": 112.093,
+    "x": 23.019,
+    "z": 57.759,
+    "heading": -31.416,
+    "enemies": 41,
+    "pickups": 5,
+    "floorsEaten": 0,
+    "buildingsLeveled": 0,
+    "propsEaten": 89,
+    "kills": 84,
+    "crushed": 0,
+    "drafts": {
+      "pending": 0,
+      "levelUps": 0,
+      "chests": 0,
+      "rerolls": 1,
+      "offer": null
+    },
+    "owned": {
+      "commuter_pass": 1,
+      "continuing_ed_credits": 1,
+      "night_shift_nurse": 1,
+      "lost_and_found": 1,
+      "rebar_ribcage": 1,
+      "padded_bumpers": 1
+    },
+    "boss": null,
+    "run": {
+      "phase": "waves",
+      "endT": -1,
+      "result": null,
+      "tonnage": 526,
+      "blocksLeveled": 0,
+      "peakRank": 1
+    },
+    "fps": 22.4,
+    "draws": 206,
+    "tris": 968924,
+    "programs": 148
+  },
+  "pass": true,
+  "fatal": null,
+  "zoom": {
+    "ok": true,
+    "detail": "wheel out \u00d76: zoom 2.00 (D 67.9 / auto 33.9) \u00b7 '=' held: zoom 0.55 \u00b7 Z: zoom 1.000 target 1.000"
+  },
+  "metrics": {
+    "moved": 651.919135486037,
+    "propsEaten0": 2,
+    "floorsEaten0": 0,
+    "props": 87,
+    "floors": 0,
+    "level": 7,
+    "rank": 1,
+    "draftsTaken": 6,
+    "draftsFailed": 0,
+    "spacePresses": 18,
+    "shiftPresses": 24,
+    "hookConfirmedByCd": 18,
+    "dashConfirmedByCharges": 24,
+    "hpLost": 31.66428571428554,
+    "pauses": 0,
+    "end": null,
+    "stuckDetours": 1,
+    "worldExposed": true,
+    "maxEnemies": 48
+  },
+  "events": {
+    "telegraphStart": 117,
+    "titanAttack": 98,
+    "propDestroyed": 89,
+    "telegraphFire": 111,
+    "explosion": 103,
+    "pickup": 200,
+    "waveStart": 16,
+    "enemySpawn": 125,
+    "alert": 5,
+    "vent": 18,
+    "ability": 18,
+    "dash": 24,
+    "footstep": 350,
+    "smash": 12,
+    "enemyFire": 144,
+    "bump": 8,
+    "levelUp": 6,
+    "objectiveSpawn": 2,
+    "enemyHit": 84,
+    "enemyKilled": 84,
+    "titanHurt": 15,
+    "projectileHit": 28,
+    "titanHeal": 9,
+    "upgradeProc": 2,
+    "ultCharged": 1,
+    "objectiveExpire": 2,
+    "rankUp": 1
+  },
+  "checks": [
+    [
+      "menus navigated by keys to hearthback + lockwater",
+      true
+    ],
+    [
+      "slate dismissed by a real key",
+      true
+    ],
+    [
+      "moved > 20 m (651.9 m)",
+      true
+    ],
+    [
+      "ate props/floors \u2265 3 (props 87, floors 0)",
+      true
+    ],
+    [
+      "levelled up (LV 7)",
+      true
+    ],
+    [
+      "draft taken with 1/2/3, owned grew (6 taken, 0 failed)",
+      true
+    ],
+    [
+      "Space \u2192 hook effect (18 hook events, 18 cd-confirmed, 18 presses)",
+      true
+    ],
+    [
+      "Shift \u2192 dash effect (24 dash events, 24 charge-confirmed, 24 presses)",
+      true
+    ],
+    [
+      "0 console/page/window errors, 0 shader diagnostics, 0 failed requests",
+      true
+    ],
+    [
+      "camera zoom by real wheel / '=' / Z (wheel out \u00d76: zoom 2.00 (D 67.9 / auto 33.9) \u00b7 '=' held: zoom 0.55 \u00b7 Z: zoom 1.000 target 1.000)",
+      true
+    ]
+  ],
+  "shots": [
+    "_harness/scratch/l8/play\\playtest\\hearthback_lockwater_title.png",
+    "_harness/scratch/l8/play\\playtest\\hearthback_lockwater_select_titan.png",
+    "_harness/scratch/l8/play\\playtest\\hearthback_lockwater_select_biome.png",
+    "_harness/scratch/l8/play\\playtest\\hearthback_lockwater_slate.png",
+    "_harness/scratch/l8/play\\playtest\\hearthback_lockwater_00.png",
+    "_harness/scratch/l8/play\\playtest\\hearthback_lockwater_01.png",
+    "_harness/scratch/l8/play\\playtest\\hearthback_lockwater_02.png",
+    "_harness/scratch/l8/play\\playtest\\hearthback_lockwater_03.png",
+    "_harness/scratch/l8/play\\playtest\\hearthback_lockwater_04.png",
+    "_harness/scratch/l8/play\\playtest\\hearthback_lockwater_05.png",
+    "_harness/scratch/l8/play\\playtest\\hearthback_lockwater_06.png",
+    "_harness/scratch/l8/play\\playtest\\hearthback_lockwater_07.png"
+  ],
+  "diagnostics": {
+    "consoleErrors": [],
+    "shader": [],
+    "warnings": [],
+    "pageErrors": [],
+    "screenshotErrors": [],
+    "windowErrors": [],
+    "failedRequests": []
+  },
+  "log": [
+    "[hearthback/lockwater] open http://localhost:5258/?dev=1&seed=5",
+    "[hearthback/lockwater]     ArrowRight \u2192 focus VOLT-KITE",
+    "[hearthback/lockwater]     ArrowRight \u2192 focus HEARTHBACK",
+    "[hearthback/lockwater]     ArrowRight \u2192 focus WHITE STACKS",
+    "[hearthback/lockwater]     ArrowRight \u2192 focus LOCKWATER",
+    "[hearthback/lockwater] menus: OK {\"steps\": [\"title\\u2192select\", \"titan confirmed\", \"biome confirmed (DROP IN)\"], \"firstScreen\": \"title\", \"titanNav\": \"detected (2 key presses)\", \"biomeNav\": \"detected (2 key presses)\", \"afterDrop\": \"slate\", \"titan\": \"hearthback\", \"biome\": \"lockwater\"}",
+    "[hearthback/lockwater] slate dismissed by Enter: True (screen=play)",
+    "[hearthback/lockwater] zoom check: wheel out \u00d76: zoom 2.00 (D 67.9 / auto 33.9) \u00b7 '=' held: zoom 0.55 \u00b7 Z: zoom 1.000 target 1.000 \u2192 OK",
+    "[hearthback/lockwater] draft #1: pressed Digit1 on offer ['commuter_pass', 'hb_open_burn_permit', 'overtime_shift'] \u2192 owned 0\u21921 (screen play)",
+    "[hearthback/lockwater] draft #2: pressed Digit2 on offer ['night_shift_nurse', 'continuing_ed_credits', 'long_arm_statute'] \u2192 owned 1\u21922 (screen play)",
+    "[hearthback/lockwater] draft #3: pressed Digit3 on offer ['scrap_dividend', 'long_crosswalk', 'night_shift_nurse'] \u2192 owned 2\u21923 (screen play)",
+    "[hearthback/lockwater] draft #4: pressed Digit1 on offer ['lost_and_found', 'pothole_report', 'glass_ceiling'] \u2192 owned 3\u21924 (screen play)",
+    "[hearthback/lockwater] draft #5: pressed Digit2 on offer ['hb_heatstroke_advisory', 'rebar_ribcage', 'pothole_report'] \u2192 owned 4\u21925 (screen play)",
+    "[hearthback/lockwater] draft #6: pressed Digit3 on offer ['slow_drip_permit', 'hb_thick_crust', 'padded_bumpers'] \u2192 owned 5\u21926 (screen play)"
+  ]
+}

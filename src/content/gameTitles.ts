@@ -1,0 +1,32 @@
+// Display names for the games the guides link to (guides name games by slug).
+export const GAME_TITLES: Record<string, string> = {
+  "arcane-realms": "Arcane Realms TCG",
+  ascendant: "Ascendant",
+  "ashwall-nights": "Ashwall Nights",
+  backgammon: "Backgammon",
+  "bastion-realms": "Bastion Realms",
+  blocktooth: "BLOCKTOOTH",
+  checkers: "Checkers",
+  "cosmic-coils": "Cosmic Coils",
+  dominoes: "Dominoes",
+  "dungeon-forge": "Dungeon Forge",
+  dyefield: "DYEFIELD",
+  "edge-keeper": "Edge Keeper",
+  "ember-sanctum": "Ember Sanctum",
+  "harpoon-pop": "Harpoon Pop",
+  "hit-parade": "HIT PARADE",
+  "iron-tide": "Iron Tide",
+  luminascape: "LuminaScape",
+  mahjong: "Mahjong Solitaire",
+  "pirates-cove": "Pirate's Cove",
+  rummikub: "Rummikub",
+  siegeheart: "Siegeheart",
+  skybattle: "Sky Battle",
+  "squish-keeper": "Squish Keeper",
+  thronedrift: "Thronedrift",
+  "tide-breakers": "Tide Breakers",
+  "vector-storm": "Vector Storm",
+  "warboard-chess": "Chess",
+};
+
+export const gameTitle = (slug: string): string => GAME_TITLES[slug] || slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());

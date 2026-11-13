@@ -1,0 +1,46 @@
+== TITLE (shipping build) ==
+
+== TITLE (?dev=1) ==
+
+== UNLOCK-ALL HATCH ==
+
+== GATE PLACEMENT ==
+  FAIL  ember-3: there is floor to stand on in front of it  dropped at the authored stand-out spot [4.5, -7.95, -9.1] and ended [4.5, -7.58, -9.1] (grounded=False)
+  FAIL  ember-4: there is floor to stand on in front of it  dropped at the authored stand-out spot [12, -7.95, -9.1] and ended [12, -7.41, -9.1] (grounded=False)
+  FAIL  rime-2: there is floor to stand on in front of it  dropped at the authored stand-out spot [-10.1, 6.35, -28] and ended [-10.1, 6.43, -28] (grounded=False)
+  FAIL  azure-2: there is floor to stand on in front of it  dropped at the authored stand-out spot [-22.1, 0.05, 22] and ended [-22.1, 0.59, 22] (grounded=False)
+  FAIL  azure-3: there is floor to stand on in front of it  dropped at the authored stand-out spot [-17, 12.65, 36.5] and ended [-17, 13.19, 36.5] (grounded=False)
+
+== GATE-OPENS CINEMATIC ==
+
+-- verdant-1  (requires 0 crests, painting)
+
+-- verdant-2  (requires 1 crest, painting)
+
+-- verdant-3  (requires 3 crests, painting)
+
+-- ember-1  (requires 5 crests, painting)
+
+-- ember-2  (requires 8 crests, painting)
+
+-- ember-3  (requires 12 crests, painting)
+
+-- ember-4  (requires 15 crests, painting)
+
+-- rime-1  (requires 18 crests, painting)
+
+-- rime-2  (requires 22 crests, painting)
+
+-- rime-3  (requires 26 crests, painting)
+
+-- azure-1  (requires 30 crests, glass)
+  FAIL  azure-1: walk-in (offset +1.0 m) raises the course card  state=keep pos=[24.16, 0, 30.98] prompt='ETIDEWELL TEMPLEAZURE SANCTUM   CRESTS 0 / 7' {"idx": 10, "near": 10, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 4.35}
+
+-- azure-2  (requires 35 crests, glass)
+  FAIL  azure-2: walk-in (offset +0.0 m) raises the course card  state=keep pos=[-22.19, 0, 22] prompt='EGEARHEART TOWERAZURE SANCTUM   CRESTS 0 / 7' {"idx": 11, "near": 11, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 3.29}
+
+-- azure-3  (requires 40 crests, door)
+  FAIL  azure-3: cancelling the card (offset +0.6 m) returns control  state='paused'
+
+GATECHECK FAILED  319 passed, 8 failed  (439s)
+exit 1

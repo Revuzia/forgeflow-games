@@ -1,0 +1,359 @@
+SF6 per-move-class statistics (median [min..max] n=rows)
+source: https://wiki.supercombo.gg (Cargo SF6_FrameData, SF6_CharacterData)
+frame-data rows fetched: 2450 ; characters: 34
+
+== stand light (rows=65, knockdown-on-hit rows=0)
+   startup       5 [4..9] n=63
+   active        3 [2..4] n=63
+   recovery      10 [6..17] n=63
+   hitAdv        3 [-2..6] n=63
+   blockAdv      -2 [-6..2] n=63
+   damage        300 [270..400] n=63
+   hitstun       16 [12..18] n=63
+   blockstun     10 [7..15] n=63
+   hitstop       9 [9..11] n=63
+   driveGain     250 [250..250] n=63
+   superGainHit  300 [300..300] n=63
+   driveDmgBlk   500 [500..500] n=63
+   pushbackBlk   0.36 [0..0.563] n=34
+   atkRange      1.13 [0.77..1.668] n=63
+
+== crouch light (rows=64, knockdown-on-hit rows=0)
+   startup       5 [4..6] n=62
+   active        3 [2..7] n=62
+   recovery      9 [7..16] n=62
+   hitAdv        4 [-5..6] n=62
+   blockAdv      -2 [-10..1] n=62
+   damage        260 [180..300] n=62
+   hitstun       15 [12..18] n=62
+   blockstun     10 [8..13] n=62
+   hitstop       9 [9..9] n=62
+   driveGain     250 [250..250] n=62
+   superGainHit  300 [300..300] n=62
+   driveDmgBlk   500 [500..500] n=62
+   pushbackBlk   0.38 [0..0.544] n=62
+   atkRange      1.08 [0.85..1.52] n=62
+
+== stand medium (rows=64, knockdown-on-hit rows=0)
+   startup       8 [5..14] n=62
+   active        3 [2..5] n=62
+   recovery      16 [10..21] n=62
+   hitAdv        3 [-2..7] n=62
+   blockAdv      -3 [-6..2] n=62
+   damage        600 [300..900] n=62
+   hitstun       23 [18..27] n=62
+   blockstun     17 [13..21] n=62
+   hitstop       11 [4..12] n=62
+   driveGain     1500 [800..3000] n=62
+   superGainHit  500 [250..900] n=62
+   driveDmgBlk   3000 [1500..6000] n=62
+   pushbackBlk   -
+   atkRange      1.47 [0.73..2.983] n=62
+
+== crouch medium (rows=64, knockdown-on-hit rows=1)
+   startup       8 [6..12] n=62
+   active        3 [2..13] n=62
+   recovery      16 [11..20] n=62
+   hitAdv        4 [-3..29] n=62
+   blockAdv      -2 [-10..1] n=62
+   damage        600 [500..700] n=62
+   hitstun       22 [19..26] n=61
+   blockstun     16 [13..20] n=62
+   hitstop       11 [9..11] n=62
+   driveGain     1500 [1000..3000] n=62
+   superGainHit  500 [500..800] n=62
+   driveDmgBlk   3000 [2000..6000] n=62
+   pushbackBlk   -
+   atkRange      1.45 [1.08..2.51] n=62
+
+== stand heavy (rows=64, knockdown-on-hit rows=0)
+   startup       12 [5..19] n=62
+   active        3 [1..9] n=62
+   recovery      20 [12..27] n=62
+   hitAdv        2 [-6..9] n=62
+   blockAdv      -3 [-11..4] n=62
+   damage        800 [100..1000] n=62
+   hitstun       26 [23..37] n=62
+   blockstun     20 [14..33] n=62
+   hitstop       13 [2..13] n=62
+   driveGain     3000 [250..4000] n=62
+   superGainHit  1000 [250..1200] n=62
+   driveDmgBlk   5000 [500..7000] n=62
+   pushbackBlk   -
+   atkRange      1.77 [1.222..3.624] n=62
+
+== crouch heavy (2HP) (rows=32, knockdown-on-hit rows=4)
+   startup       9 [7..19] n=31
+   active        4 [2..9] n=31
+   recovery      21 [15..35] n=31
+   hitAdv        2 [-3..35] n=31
+   blockAdv      -6 [-20..1] n=31
+   damage        800 [400..1000] n=31
+   hitstun       27 [24..36] n=27
+   blockstun     20 [16..29] n=31
+   hitstop       13 [5..13] n=31
+   driveGain     2500 [1000..4000] n=31
+   superGainHit  1000 [500..1200] n=31
+   driveDmgBlk   5000 [2500..7500] n=31
+   pushbackBlk   -
+   atkRange      1.20 [0.62..2.95] n=31
+
+== sweep (2HK) (rows=32, knockdown-on-hit rows=29)
+   startup       10 [8..14] n=31
+   active        3 [2..16] n=31
+   recovery      24 [14..28] n=31
+   hitAdv        33 [-1..40] n=31
+   blockAdv      -11 [-16..-3] n=31
+   damage        900 [400..1000] n=31
+   hitstun       23 [19..26] n=4
+   blockstun     18 [14..25] n=31
+   hitstop       13 [6..14] n=31
+   driveGain     3000 [1500..3500] n=31
+   superGainHit  1000 [500..1200] n=31
+   driveDmgBlk   4000 [2000..6000] n=31
+   pushbackBlk   -
+   atkRange      1.84 [1.38..3.057] n=31
+
+== command normal (dir+button) (rows=104, knockdown-on-hit rows=16)
+   startup       16 [5..37] n=102
+   active        3 [1..10] n=102
+   recovery      20 [3..40] n=102
+   hitAdv        3 [-9..54] n=102
+   blockAdv      -3 [-23..4] n=102
+   damage        800 [200..1300] n=102
+   hitstun       25 [17..36] n=85
+   blockstun     20 [8..29] n=102
+   hitstop       13 [5..17] n=102
+   driveGain     2000 [750..5000] n=102
+   superGainHit  1000 [250..1200] n=102
+   driveDmgBlk   4000 [1250..8000] n=102
+   pushbackBlk   -
+   atkRange      1.70 [0.591..3.47] n=101
+
+== air light (rows=64, knockdown-on-hit rows=0)
+   startup       5 [4..8] n=62
+   active        7 [3..10] n=62
+   recovery      3 [3..3] n=64
+   hitAdv        5 [-12..11] n=62
+   blockAdv      1 [-15..8] n=62
+   damage        300 [270..300] n=62
+   hitstun       13 [12..17] n=62
+   blockstun     9 [9..12] n=62
+   hitstop       9 [9..9] n=62
+   driveGain     500 [500..750] n=62
+   superGainHit  300 [300..300] n=62
+   driveDmgBlk   1500 [1500..1500] n=62
+   pushbackBlk   -
+   atkRange      0.82 [0.37..1.49] n=62
+
+== air medium (rows=64, knockdown-on-hit rows=0)
+   startup       7 [6..12] n=62
+   active        6 [2..8] n=62
+   recovery      3 [3..3] n=64
+   hitAdv        9 [-7..12] n=62
+   blockAdv      5 [-11..8] n=62
+   damage        600 [300..700] n=62
+   hitstun       17 [15..19] n=62
+   blockstun     13 [8..15] n=62
+   hitstop       11 [8..11] n=62
+   driveGain     1000 [500..1500] n=62
+   superGainHit  500 [250..700] n=62
+   driveDmgBlk   2500 [1250..3000] n=62
+   pushbackBlk   -
+   atkRange      1.09 [0.57..2.36] n=62
+
+== air heavy (rows=63, knockdown-on-hit rows=1)
+   startup       10 [8..13] n=61
+   active        6 [2..10] n=61
+   recovery      3 [3..3] n=63
+   hitAdv        9 [-5..23] n=61
+   blockAdv      4 [-9..11] n=61
+   damage        800 [400..900] n=61
+   hitstun       19 [19..25] n=60
+   blockstun     15 [15..19] n=61
+   hitstop       13 [10..13] n=61
+   driveGain     2000 [1000..2500] n=61
+   superGainHit  1000 [500..1000] n=61
+   driveDmgBlk   4000 [2000..5000] n=61
+   pushbackBlk   -
+   atkRange      1.13 [0.16..2.82] n=61
+
+== normal throw (fwd) (rows=31, knockdown-on-hit rows=31)
+   startup       5 [5..5] n=31
+   active        3 [3..3] n=31
+   recovery      23 [23..23] n=31
+   hitAdv        21.50 [11..34] n=30
+   blockAdv      -
+   damage        1200 [1082..1200] n=31
+   hitstun       -
+   blockstun     -
+   hitstop       -
+   driveGain     2000 [1000..2000] n=31
+   superGainHit  2000 [1000..2000] n=31
+   driveDmgBlk   -
+   pushbackBlk   -
+   atkRange      0.80 [0.8..0.9] n=30
+
+== projectile (236P-class) (rows=43, knockdown-on-hit rows=7)
+   startup       14 [10..56] n=40
+   active        7 [6..10] n=3
+   recovery      31.50 [9..38] n=40
+   hitAdv        -1 [-5..69] n=36
+   blockAdv      -5 [-11..21] n=36
+   damage        600 [200..700] n=37
+   hitstun       31.50 [28..34] n=30
+   blockstun     27 [26..43] n=37
+   hitstop       8 [5..10] n=37
+   driveGain     1000 [-20000..2000] n=37
+   superGainHit  600 [150..1000] n=37
+   driveDmgBlk   2500 [1000..4000] n=37
+   pushbackBlk   -
+   atkRange      -
+   examples: Akuma 236HP; Akuma 236LP; Akuma 236MP; Akuma 236[PP]; Akuma 236[P]; Akuma 236{P}; Akuma j.236P; Arjun 236HP; Arjun 236LP; Arjun 236MP; Dhalsim 236P; Dhalsim 236[P]; Elena 236HP; Elena 236LP; Elena 236MP; Guile [4]6HP; Guile [4]6LP; Guile [4]6MP; Ingrid 236HP; Ingrid 236LP; Ingrid 236MP; Ken 236HP; Ken 236LP; Ken 236MP
+
+== DP / anti-air reversal (623) (rows=57, knockdown-on-hit rows=51)
+   startup       7 [5..32] n=54
+   active        8 [2..13] n=54
+   recovery      24.50 [4..52] n=54
+   hitAdv        31 [2..42] n=54
+   blockAdv      -29 [-45..3] n=52
+   damage        1000 [300..1700] n=54
+   hitstun       27 [26..31] n=3
+   blockstun     20 [15..26] n=52
+   hitstop       14.50 [3..20] n=52
+   driveGain     2000 [500..4000] n=54
+   superGainHit  800 [250..1300] n=54
+   driveDmgBlk   4000 [1400..6000] n=52
+   pushbackBlk   -
+   atkRange      1.14 [0.6..3.386] n=54
+   examples: Akuma 623HP; Akuma 623LP; Akuma 623MP; Alex 623HK; Alex 623LK; Alex 623MK; Arjun 623HP; Arjun 623LP; Arjun 623MP; Cammy 623HK; Cammy 623LK; Cammy 623MK; Ed 623HP; Ed 623LP; Ed 623MP; Elena 623HK; Elena 623LK; Elena 623MK; Jamie 623HK; Jamie 623LK; Jamie 623MK; Juri 623HP; Juri 623LP; Juri 623MP
+   invuln cells: 1-10 Air; 1-10 Air; 5-6 Throw; 1-11 Air; 1-11 Air, 5-22 Lower Body; 1-12 Air; 1-13 Air; 1-14 Air; 1-14 Air, 8-23 Lower Body; 1-15 Air; 1-16 Air, 10-25 Lower Body; 1-16 Air; 6-8 Throw; 1-19 Air
+
+== command grab (rows=42, knockdown-on-hit rows=40)
+   startup       8 [4..55] n=41
+   active        3 [2..6] n=40
+   recovery      51 [3..57] n=40
+   hitAdv        27 [7..94] n=41
+   blockAdv      -
+   damage        2200 [0..3300] n=41
+   hitstun       59 [59..59] n=1
+   blockstun     -
+   hitstop       -
+   driveGain     5000 [-20000..7000] n=37
+   superGainHit  3000 [1000..4000] n=41
+   driveDmgBlk   -
+   pushbackBlk   -
+   atkRange      1.31 [0.9..4.24] n=34
+   examples: A.K.I. 2PP~LPLK; Akuma 6KKK~LPLK; Alex 2PP~2LPLK; Alex 2PP~LPLK; Alex 63214HP; Alex 63214LP; Alex 63214MP; Alex 63214P Backturn; Alex 63214PP Backturn; Alex 63214PP~6 Backturn; Arjun 63214P; Blanka 236HK; Blanka 236LK; Blanka 236MK; Cammy 236PP~LPLK; Cammy 236P~LPLK; Cammy 236[HP]~LPLK; E.Honda 63214HK; E.Honda 63214LK; E.Honda 63214MK; JP 214K; Jamie 63214K; Kimberly 236K (close)~P; Kimberly 236KK (close)~P
+
+== drive impact (rows=32, knockdown-on-hit rows=32)
+   startup       26 [26..26] n=32
+   active        2 [2..2] n=32
+   recovery      35 [35..35] n=32
+   hitAdv        35 [35..35] n=32
+   blockAdv      -3 [-3..-3] n=32
+   damage        800 [720..800] n=32
+   hitstun       -
+   blockstun     34 [34..34] n=32
+   hitstop       25 [25..25] n=32
+   driveGain     -10000 [-10000..-10000] n=32
+   superGainHit  3000 [3000..3000] n=32
+   driveDmgBlk   5000 [5000..5000] n=32
+   pushbackBlk   -
+   atkRange      2.52 [2.258..2.579] n=31
+
+== super Lv1 (rows=47, knockdown-on-hit rows=47)
+   startup       8.50 [6..42] n=46
+   active        5 [1..104] n=39
+   recovery      52.50 [13..201] n=46
+   hitAdv        23 [1..70] n=46
+   blockAdv      -32 [-99..-2] n=44
+   damage        2000 [10..3500] n=46
+   hitstun       -
+   blockstun     40.50 [16..110] n=44
+   hitstop       9 [1..39] n=44
+   driveGain     5000 [5000..5000] n=1
+   superGainHit  -10000 [-10000..-10000] n=47
+   driveDmgBlk   600 [150..2500] n=45
+   pushbackBlk   -
+   atkRange      2.61 [1.458..5.522] n=25
+
+== super Lv2 (rows=63, knockdown-on-hit rows=50)
+   startup       9 [1..71] n=62
+   active        6 [2..1500] n=53
+   recovery      39 [2..101] n=61
+   hitAdv        23.50 [-4..115] n=50
+   blockAdv      -29 [-94..65] n=49
+   damage        2800 [0..3500] n=57
+   hitstun       48 [33..48] n=5
+   blockstun     25 [15..122] n=55
+   hitstop       8.50 [0..23] n=54
+   driveGain     10000 [10000..10000] n=2
+   superGainHit  -20000 [-20000..-20000] n=63
+   driveDmgBlk   5000 [312..10000] n=56
+   pushbackBlk   -
+   atkRange      2.48 [1.13..8.63] n=35
+
+== super Lv3/CA (rows=65, knockdown-on-hit rows=65)
+   startup       10 [5..20] n=63
+   active        4 [2..27] n=63
+   recovery      58 [29..116] n=63
+   hitAdv        19 [4..71] n=63
+   blockAdv      -41.50 [-75..-24] n=56
+   damage        4500 [2600..5300] n=65
+   hitstun       -
+   blockstun     25 [17..54] n=56
+   hitstop       9 [2..20] n=56
+   driveGain     -
+   superGainHit  -30000 [-30000..-30000] n=65
+   driveDmgBlk   7500 [2500..10000] n=58
+   pushbackBlk   -
+   atkRange      1.94 [0.765..5.09] n=59
+
+== Character data (SF6_CharacterData)
+   hp            10000 [9000..11000] n=34
+   throwRange    0.80 [0.8..1.02] n=33
+   throwHurtbox  0.33 [0.33..0.49] n=33
+   fwdWalkSpd    0.05 [0.028..0.0561] n=33
+   bwdWalkSpd    0.03 [0.025..0.0366] n=33
+   fwdDashDist   1.41 [1..1.903] n=33
+   bwdDashDist   0.90 [0.601..1.254] n=33
+   fwdJumpDist   1.90 [1.725..2.1] n=33
+   jumpApex      2.12 [2.11..2.247] n=33
+   jumpSpd cells: 4+38+3; 4+38+3(6+40+3); 4+40+3; 4+42+3; 4+68+3; 5+38+3; 5+39+3
+
+   per character: name | hp | throwRange | fwdWalk | bwdWalk | fwdDash | bwdDash
+   A.K.I. | 10000 | 0.8 | 0.0452 | 0.032 | 1.300 | 1.079
+   Akuma | 9000 | 0.8 | 0.052 | 0.035 | 1.352 | 0.923
+   Alex | 10500 | 0.85 | 0.042 | 0.027 | 1.00 | 0.75
+   Arjun | 10500 |  |  |  |  | 
+   Blanka | 10000 | 0.9 | 0.047 | 0.032 | 1.578 | 1.169
+   C. Viper | 10000 | 0.8 | 0.0452 | 0.031 | 1.50 | 0.80
+   Cammy | 10000 | 0.8 | 0.0505 | 0.033 | 1.32 | 1.002
+   Chun-Li | 10000 | 0.8 | 0.050 | 0.035 | 1.508 | 1.211
+   Dee Jay | 10000 | 0.8 | 0.043 | 0.032 | 1.50 | 0.90
+   Dhalsim | 10000 | 0.8 | 0.028 | 0.025 | 1.467 | 1.00
+   E. Honda | 10500 | 0.9 | 0.045 | 0.025 | 1.058 | 0.601
+   Ed | 10000 | 0.8 | 0.0475 | 0.032 | 1.348 | 0.803
+   Elena | 10000 | 0.8 | 0.048 | 0.033 | 1.43 | 1.139
+   Guile | 10000 | 0.8 | 0.043 | 0.032 | 1.567 | 0.74
+   Ingrid | 10000 | 0.80 | 0.047 | 0.032 | 1.30 | 0.90
+   JP | 10000 | 0.8 | 0.037 | 0.025 | 1.454 | 1.003
+   Jamie | 10000 | 0.8 | 0.048 | 0.035 | 1.50 | 0.85
+   Juri | 10000 | 0.8 | 0.047 | 0.032 | 1.903 | 1.114
+   Ken | 10000 | 0.8 | 0.047 | 0.032 | 1.322 | 0.923
+   Kimberly | 10000 | 0.8 | 0.0505 (0.0561) | 0.033 (0.0366) | 1.409 | 0.893
+   Kimberly (Base) | 10000 | 0.8 | 0.0505 | 0.033 | 1.409 | 0.893
+   Kimberly (SA3) | 10000 | 0.8 | 0.0561 | 0.0366 | 1.409 | 0.893
+   Lily | 10000 | 0.8 | 0.042 | 0.027 | 1.261 | 0.940
+   Luke | 10000 | 0.8 | 0.047 | 0.032 | 1.467 | 0.751
+   M. Bison | 10000 | 0.8 | 0.048 | 0.0312 | 1.54 | 0.754
+   Mai | 10000 | 0.8 | 0.050 | 0.035 | 1.450 | 0.900
+   Manon | 10000 | 0.8 | 0.0452 | 0.031 | 1.499 | 1.254
+   Marisa | 10500 | 0.9 | 0.039 | 0.027 | 1.40 | 0.90
+   Rashid | 10000 | 0.8 | 0.045 | 0.032 | 1.20 (1.86) | 1.10 (1.91)
+   Ryu | 10000 | 0.8 | 0.047 | 0.032 | 1.252 | 0.923
+   Sagat | 10000 | 0.85 | 0.039 | 0.027 | 1.40 | 0.90
+   Terry | 10000 | 0.8 | 0.048 | 0.032 | 1.50 | 0.985
+   Yasmine | 10000 | 0.8 | 0.049 | 0.034 | 1.40 | 0.90
+   Zangief | 11000 | 1.02 | 0.0364 | 0.025 | 1.007 | 0.712

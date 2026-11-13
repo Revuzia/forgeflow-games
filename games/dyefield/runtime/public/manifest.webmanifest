@@ -1,0 +1,18 @@
+{
+  "name": "DYEFIELD",
+  "short_name": "DYEFIELD",
+  "description": "An original turf-paint shooter: 4 v 4 crews or an eight-runner free-for-all. The floor is the scoreboard.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#2f86dc",
+  "theme_color": "#2f86dc",
+  "categories": ["games"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

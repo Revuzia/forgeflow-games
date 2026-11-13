@@ -1,0 +1,5 @@
+nav_probe  pairs=150 seed=1 cell=0.75 mode=solo-walk driver=aiNavGoto
+meridian_ward  runs=30  route overlap (Jaccard, 1=one file): plain A* 0.70  planner 0.15  planner/plain mean path length x1.03
+lanternwalk    runs=30  route overlap (Jaccard, 1=one file): plain A* 0.79  planner 0.13  planner/plain mean path length x1.07
+switchyard     runs=30  route overlap (Jaccard, 1=one file): plain A* 0.81  planner 0.09  planner/plain mean path length x1.06
+saltmarket     runs=30  route overlap (Jaccard, 1=one file): plain A* 0.85  planner 0.14  planner/plain mean path length x1.06

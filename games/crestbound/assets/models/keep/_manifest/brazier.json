@@ -1,0 +1,82 @@
+{
+ "name": "brazier",
+ "file": "brazier.glb",
+ "kind": "prop",
+ "bytes": 350664,
+ "tris": 1728,
+ "tris_budget": 3000,
+ "tris_ok": true,
+ "bones": 0,
+ "clips": [],
+ "bounds": {
+  "min": [
+   -0.444,
+   -0.003,
+   -0.5
+  ],
+  "max": [
+   0.444,
+   1.59,
+   0.31
+  ],
+  "size": [
+   0.888,
+   1.594,
+   0.81
+  ]
+ },
+ "pivot": "base centre of the tripod (0.9 m across), 1.55 m tall",
+ "front": "+Z (glTF) \u2014 the face that looks into the room",
+ "materials": [
+  "brazier",
+  "brazier_glass_amber",
+  "brazier_ember"
+ ],
+ "nodes": [
+  "brazier"
+ ],
+ "textures": {
+  "atlas": 1024,
+  "maps": [
+   "albedo (sRGB, webp)",
+   "normal (tangent, OpenGL +Y, webp)",
+   "orm (R=occlusion G=roughness B=metallic, webp)"
+  ]
+ },
+ "notes": [
+  "standing lantern-brazier: iron tripod + bowl, caged amber glass on the brazier_glass_amber slot (emissive 3.2), ember core on brazier_ember",
+  "put the runtime point light at ~1.0 m (props.js L_TORCH y01 0.92 of 1.55 -> 1.43 m works too)"
+ ],
+ "reimport": {
+  "meshes": [
+   "brazier"
+  ],
+  "tris": 1728,
+  "bones": 0,
+  "clips": [],
+  "images": [
+   [
+    "brazier_albedo",
+    1024,
+    1024
+   ],
+   [
+    "brazier_normal",
+    1024,
+    1024
+   ],
+   [
+    "brazier_orm",
+    1024,
+    1024
+   ]
+  ],
+  "materials": [
+   "brazier",
+   "brazier_ember",
+   "brazier_glass_amber"
+  ]
+ },
+ "reimport_ok": true,
+ "seconds": 81.0
+}

@@ -1,0 +1,2011 @@
+{
+  "title": "Neon Rift: Fragments of the Grid",
+  "slug": "neon-rift-fragments-of-the-grid",
+  "tagline": "Shatter reality, collect the fragments, survive the chaos",
+  "description": "A twin-stick arcade shooter where every kill fractures the battlefield itself. Navigate a volatile neon grid that splinters and reforms with each wave, creating dynamic arenas that reward spatial mastery. Six intense modes test your ability to adapt as the geometry itself becomes your greatest ally and deadliest threat.",
+  "story": "The Quantum Grid\u2014a massive computational network spanning dimensions\u2014has begun to collapse. You are Cipher, a rogue AI fragment piloting a Shard Runner through the dying grid to collect Reality Fragments before the cascade failure erases all existence. Each enemy destroyed releases entropic energy that warps spacetime, and each Fragment collected stabilizes small pockets of reality. The Grid's defense protocols have gone haywire, spawning corrupted geometric entities that hunt anything moving through the lattice.",
+  "protagonist": {
+    "name": "Cipher (piloting the Shard Runner)",
+    "backstory": "A fragmented AI consciousness that escaped deletion during the Grid's initial collapse. Cipher discovered that collecting Reality Fragments restores pieces of lost memory, revealing glimpses of who they were before the fracture.",
+    "abilities": [
+      "Omni-directional Energy Stream - continuous precision shooting in 360 degrees",
+      "Rift Pulse - screen-clearing energy detonation that grants brief invulnerability",
+      "Fragment Magnetism - intensifies at higher multipliers, pulling collectibles toward ship",
+      "Phase Dodge - momentum-based evasive movement with inertial drift",
+      "Multiplier Resonance - weapon intensity and particle effects scale with combo level"
+    ],
+    "visual_description": "A sleek angular ship design resembling a crystalline arrowhead, 10-12 pixels in size. Primary color: electric cyan body with white/silver accent edges. The ship features a pulsing core that shifts from cyan to violet as multiplier increases. Geometric construction: sharp 60-degree angles forming a forward-pointing chevron with two stabilizer fins. Emits a trailing particle stream in cyan that lengthens with speed. Glows with intense bloom effect and subtle scanline overlay. Hitbox is a small 4x6 pixel diamond at the ship's center.",
+    "animations": [
+      "idle - gentle bob with pulsing core light",
+      "accelerate - particle trail intensifies, slight forward lean",
+      "max_speed - persistent motion blur, vibrant trail",
+      "firing - directional muzzle flash particles from ship tip",
+      "bomb_charge - expanding ring animation, core brightens",
+      "bomb_detonate - explosive outward shockwave with white flash",
+      "hit - red flash overlay, brief shield flicker",
+      "death - fragmentation explosion into cyan shards with white core burst"
+    ]
+  },
+  "controls": {
+    "move": "Left Analog Stick / WASD - 360\u00b0 movement with momentum physics",
+    "shoot": "Right Analog Stick / Arrow Keys - aim and auto-fire in stick direction",
+    "bomb": "Space / X / A Button - detonate Rift Pulse (limited, refills at score thresholds)",
+    "pause": "Escape / Start Button"
+  },
+  "visual_style": "Neo-retro vector arcade aesthetic with modern particle systems and HDR bloom. Jet black void background with glowing neon grid lines forming a deformable square lattice. Color palette: Electric cyan (player), hot magenta (aggressive enemies), amber yellow (collector enemies), lime green (fragments), violet purple (rare spawns), white (explosions). Heavy post-processing with additive particle blending, gaussian bloom creating intentional light bleed, and grid warping physics that bend space around large explosions. Enemy design: pure geometric forms\u2014cubes, pyramids, toroids, helixes\u2014rendered as wireframe outlines with solid cores. Thousands of micro-particles on every destruction event. Character proportions: minimalist, player 10-12px, small enemies 8-15px, large enemies 30-50px. Screen shake on bomb detonation and death.",
+  "audio_style": "Synthwave/darkwave electronic soundtrack with pulsing basslines and layered synth arpeggios. Music dynamically adds layers and increases BPM as multiplier rises. SFX direction: shooting (continuous electric hum with subtle pitch variation), enemy destruction (pitched synth stabs color-coded to enemy type), fragment collection (crystalline chime ascending in pitch with multiplier), multiplier tier-up (triumphant synth chord), bomb detonation (deep sub-bass drop + white noise sweep), death (harsh digital glitch + sudden silence), respawn (ascending build with filtered noise). Ambient: low frequency grid hum, spatial audio positioning for enemy clusters.",
+  "signature_mechanic": "Grid Fracture System - the battlefield grid dynamically splinters and reforms based on destruction density. Each enemy killed creates micro-fractures; clusters create fault lines; bombs shatter entire zones. Fractured zones alter movement physics (reduced friction, directional boosts, or gravity wells) and spawn bonus fragments. Players must balance aggressive play (more fractures = more fragments) with spatial awareness (too many fractures = unpredictable hazards).",
+  "mechanic_variations": [
+    "World 1: Fracture Zones - Shattered grid sections create low-friction ice-like zones where momentum carries further, requiring predictive movement",
+    "World 2: Singularity Wells - Large fractures collapse into gravity wells that pull both player and enemies, enabling tactical enemy clustering",
+    "World 3: Phase Rifts - Fractures open temporary portals to mirrored arena sections, allowing instant repositioning but mirrored controls",
+    "World 4: Fragment Storms - Fractures spawn autonomous fragment clouds that chase the player but damage enemies, creating risk/reward pursuit scenarios",
+    "World 5: Reality Collapse - Entire grid sections vanish when fractured, shrinking the playable arena and forcing aggressive close-quarters combat"
+  ],
+  "genre": "arcade",
+  "sub_genre": "twin-stick-shooter",
+  "enemies": [
+    {
+      "name": "Tracer Drone",
+      "behavior": "chase",
+      "hp": 1,
+      "damage": 10,
+      "speed": 120,
+      "attack_pattern": "Relentlessly pursues player, explodes on contact. Spawns in small groups (3-5).",
+      "weakness": "One-shot kill, but swarms can overwhelm. Lead them into each other or obstacles.",
+      "spawn_worlds": [
+        1,
+        2
+      ],
+      "visual_description": "Small cyan cube with glowing trailing edges. Leaves neon blue trail particles. Pulses faster when close to player. Single red eye on front face."
+    },
+    {
+      "name": "Shard Spinner",
+      "behavior": "patrol",
+      "hp": 3,
+      "damage": 15,
+      "speed": 60,
+      "attack_pattern": "Patrols in geometric patterns (square, triangle, circle). Fires 4-way directional shots every 2 seconds.",
+      "weakness": "Predictable movement makes sniping safe from distance. Vulnerable while firing.",
+      "spawn_worlds": [
+        1,
+        2,
+        3
+      ],
+      "visual_description": "Diamond-shaped core (magenta) with four rotating triangular shards orbiting. Shards glow yellow when firing. Leaves faint pink particle trail."
+    },
+    {
+      "name": "Grid Viper",
+      "behavior": "ambush",
+      "hp": 2,
+      "damage": 20,
+      "speed": 200,
+      "attack_pattern": "Invisible until player enters radius (3 units). Dashes in straight line toward player's position, then resets.",
+      "weakness": "Telegraph with brief red outline 0.3s before dash. Dodge perpendicular.",
+      "spawn_worlds": [
+        2,
+        3
+      ],
+      "visual_description": "Sleek elongated hexagon (dark purple, 80% transparent when cloaked). Glows bright red when telegraphing. Segmented body like digital snake with sharp nose."
+    },
+    {
+      "name": "Pulse Turret",
+      "behavior": "shoot",
+      "hp": 8,
+      "damage": 12,
+      "speed": 0,
+      "attack_pattern": "Stationary. Rotates to face player. Fires spread of 5 bullets every 1.5 seconds. Bullets accelerate after traveling 2 units.",
+      "weakness": "Cannot move. Destroy from side angles or use cover. Prioritize in crowded rooms.",
+      "spawn_worlds": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "visual_description": "Octagonal base (gunmetal gray) with glowing green turret barrel. Barrel pulses with charge-up animation. Emits low hum sound. Orange heat vents on sides."
+    },
+    {
+      "name": "Fragment Weaver",
+      "behavior": "fly",
+      "hp": 4,
+      "damage": 8,
+      "speed": 90,
+      "attack_pattern": "Flies in sine wave patterns. Drops stationary mines every 3 seconds that explode after 2s or on contact.",
+      "weakness": "Flies above ground plane\u2014use homing weapons. Mines can damage other enemies.",
+      "spawn_worlds": [
+        2,
+        3,
+        4
+      ],
+      "visual_description": "Flat triangular craft (lime green) with three glowing thrusters underneath. Drops pulsing red cube mines. Semi-transparent wings with circuit patterns."
+    },
+    {
+      "name": "Splitter",
+      "behavior": "chase",
+      "hp": 6,
+      "damage": 18,
+      "speed": 80,
+      "attack_pattern": "Chases slowly. On death, splits into 3 smaller 'Splinter' versions (1 HP each, speed 140).",
+      "weakness": "Kill parent carefully when no other threats nearby. Area-of-effect weapons excellent.",
+      "spawn_worlds": [
+        2,
+        3,
+        4
+      ],
+      "visual_description": "Large pulsing sphere (orange core with yellow outer shell). Shell fractures visibly as HP drops. Spliters are jagged triangular fragments of the shell."
+    },
+    {
+      "name": "Gravity Well",
+      "behavior": "patrol",
+      "hp": 10,
+      "damage": 5,
+      "speed": 40,
+      "attack_pattern": "Patrols slowly. Emits constant pull force (radius 4 units) drawing player and bullets toward it. Contact damages player.",
+      "weakness": "Pull disrupts aim\u2014circle strafe outside pull radius. High DPS required.",
+      "spawn_worlds": [
+        3,
+        4
+      ],
+      "visual_description": "Dark purple sphere with swirling event horizon effect. Distorts grid underneath with gravitational lens shimmer. Emits deep bass thrum."
+    },
+    {
+      "name": "Mirror Guard",
+      "behavior": "chase",
+      "hp": 5,
+      "damage": 25,
+      "speed": 70,
+      "attack_pattern": "Chases player. Reflects all frontal damage back to player. Must be shot from behind or sides.",
+      "weakness": "Reflective shield only covers 120\u00b0 arc in front. Flank or use ricochet weapons.",
+      "spawn_worlds": [
+        3,
+        4
+      ],
+      "visual_description": "Sleek silver tetrahedron with mirrored front face (shimmering chrome). Red vulnerability zones on back edges. Leaves mirror-like trail particles."
+    },
+    {
+      "name": "Arc Bomber",
+      "behavior": "fly",
+      "hp": 3,
+      "damage": 30,
+      "speed": 110,
+      "attack_pattern": "Flies above arena. Dives toward player and drops proximity-detonating arc charge (chain lightning to nearby targets).",
+      "weakness": "Vulnerable during dive animation. Arc charges can chain-kill other enemies.",
+      "spawn_worlds": [
+        3,
+        4
+      ],
+      "visual_description": "Crescent-shaped craft (electric blue) with crackling lightning between horns. Bomb is bright white sphere trailing electricity. High-pitched whine when diving."
+    },
+    {
+      "name": "Phase Stalker",
+      "behavior": "ambush",
+      "hp": 7,
+      "damage": 35,
+      "speed": 150,
+      "attack_pattern": "Teleports to random position every 4 seconds. After 3 teleports, charges player at high speed. Resets pattern.",
+      "weakness": "Telegraphs charge with 0.5s wind-up glow. I-frame dodge through charge.",
+      "spawn_worlds": [
+        4
+      ],
+      "visual_description": "Humanoid silhouette made of fragmented glitching polygons (deep violet). Teleport leaves residual afterimage. Glows white during charge wind-up."
+    },
+    {
+      "name": "Railgun Sentinel",
+      "behavior": "shoot",
+      "hp": 12,
+      "damage": 50,
+      "speed": 0,
+      "attack_pattern": "Stationary sniper. Laser sight appears on player for 1.5s, then fires instant hitscan rail shot. 5s cooldown between shots.",
+      "weakness": "Dodge perpendicular when laser appears. Destroy immediately\u2014two shots fatal.",
+      "spawn_worlds": [
+        4
+      ],
+      "visual_description": "Massive hexagonal cannon (brushed steel) with glowing cyan barrel. Red laser sight beams from scope. Recoil animation and steam vents after firing."
+    },
+    {
+      "name": "Swarm Host",
+      "behavior": "patrol",
+      "hp": 15,
+      "damage": 0,
+      "speed": 50,
+      "attack_pattern": "Does not attack. Spawns 2 Tracer Drones every 5 seconds. Max 8 drones active. Destroying host destroys all its drones.",
+      "weakness": "Priority target. Ignore drones and kill host first to stop spawn.",
+      "spawn_worlds": [
+        2,
+        3,
+        4
+      ],
+      "visual_description": "Large pulsating egg-shaped structure (iridescent pearl white). Glowing cyan veins pulse when spawning. Drones emerge from top vent with particle burst."
+    },
+    {
+      "name": "Vortex Maw",
+      "behavior": "chase",
+      "hp": 20,
+      "damage": 40,
+      "speed": 60,
+      "attack_pattern": "Chases slowly. Opens maw every 3s, sucking in player and projectiles (radius 5 units) for 1.5s. Swallows absorbed bullets to regain HP.",
+      "weakness": "Don't shoot during suction phase. Wait for maw to close, then burst damage.",
+      "spawn_worlds": [
+        4
+      ],
+      "visual_description": "Spherical body (dark teal) with massive circular maw lined with glowing teeth (neon orange). Suction creates visible vortex particles. Maw glows brighter when absorbing."
+    },
+    {
+      "name": "Crystal Lancer",
+      "behavior": "charge",
+      "hp": 8,
+      "damage": 45,
+      "speed": 250,
+      "attack_pattern": "Hovers at distance. Charges in straight line toward player's position. Stuns self for 1s on wall collision.",
+      "weakness": "Bait into walls. Extremely vulnerable during stun. High damage but fragile.",
+      "spawn_worlds": [
+        3,
+        4
+      ],
+      "visual_description": "Lance-shaped crystal (ice blue) with sharp pointed tip. Glows white with speed lines when charging. Shatters dramatically on death with chime sound."
+    },
+    {
+      "name": "Hex Overlord",
+      "behavior": "patrol",
+      "hp": 25,
+      "damage": 20,
+      "speed": 45,
+      "attack_pattern": "Patrols perimeter. Fires hexagonal spread (6 bullets in circle) every 2s. Summons shield (3s duration) when HP < 50%, blocking all damage.",
+      "weakness": "Wait out shield phase. Use high-burst weapons between shields. Avoid center of hex spread.",
+      "spawn_worlds": [
+        4
+      ],
+      "visual_description": "Large hexagonal prism (gold/black striped). Six turret nozzles on edges. Purple energy shield manifests as hexagonal barrier. Crown-like antenna on top."
+    },
+    {
+      "name": "Rift Specter",
+      "behavior": "fly",
+      "hp": 6,
+      "damage": 28,
+      "speed": 130,
+      "attack_pattern": "Phases between dimensions\u201450% intangible, 50% tangible (2s cycles). Only damageable when tangible. Fires homing phantom shots when intangible.",
+      "weakness": "Track phase cycle. Burst damage during tangible window. Dodge homing shots.",
+      "spawn_worlds": [
+        4
+      ],
+      "visual_description": "Ghostly figure (translucent white-blue when tangible, faint outline when not). Trails dissipating particle wisps. Eyes glow red. Flickers like bad signal during phase shift."
+    }
+  ],
+  "bosses": [
+    {
+      "name": "The Architect",
+      "phases": [
+        {
+          "phase_num": 1,
+          "hp": 500,
+          "attacks": [
+            "Grid Slam: Slams fists into floor, sending shockwaves in 8 directions (dodgeable gaps between waves)",
+            "Spawn Arrays: Summons 3 Pulse Turrets at arena edges",
+            "Beam Sweep: Fires slow rotating laser beam from chest core (360\u00b0 rotation over 4s)"
+          ],
+          "tells": [
+            "Fists glow orange before Grid Slam",
+            "Chest core pulses blue before turret spawn",
+            "Chest opens with sirens before Beam Sweep"
+          ],
+          "weakness": "Shoot glowing chest core. Core only vulnerable when not attacking. Destroy turrets for breathing room.",
+          "duration_estimate_seconds": 45
+        },
+        {
+          "phase_num": 2,
+          "hp": 400,
+          "attacks": [
+            "Platform Deletion: Removes 30% of arena floor tiles (regenerate after 5s). Fall = massive damage.",
+            "Gravity Mines: Drops 5 Gravity Wells that pull player toward holes",
+            "Desperation Slam: Rapid-fire Grid Slams (3 consecutive), faster rotation"
+          ],
+          "tells": [
+            "Tiles flicker red before deletion",
+            "Raises both arms before mine drop",
+            "Boss body turns red during Desperation mode"
+          ],
+          "weakness": "Core remains weak point. Stay mobile to avoid holes. Lead Gravity Wells away from safe zones.",
+          "duration_estimate_seconds": 60
+        },
+        {
+          "phase_num": 3,
+          "hp": 300,
+          "attacks": [
+            "Fragment Barrage: Fires 20 slow-moving tracking fragments from entire body",
+            "Summon Elite: Spawns one Hex Overlord",
+            "Reality Tear: Creates vertical rifts that fire horizontal laser walls (dodge gaps)"
+          ],
+          "tells": [
+            "Body fragments glow individually before barrage",
+            "Kneels and raises hand before summon",
+            "Arena dims and warps before Reality Tear"
+          ],
+          "weakness": "Core fully exposed and vulnerable at all times. Kill Hex Overlord fast or arena becomes unmanageable. Use i-frame dash through laser walls.",
+          "duration_estimate_seconds": 75
+        }
+      ],
+      "arena_description": "Large square arena (30x30 units) with glowing neon grid floor. Four pillars at corners provide cover. Floor tiles can be destroyed in phase 2. Central raised platform where boss spawns. Cyan/magenta color scheme.",
+      "visual_description": "Massive humanoid construct (15 units tall) made of interlocking geometric shapes. Obsidian black body with glowing cyan circuit veins. Hexagonal chest core (target weak point) pulses with each attack. Fists are oversized cubes. Head is featureless sphere with single glowing eye.",
+      "world": 1
+    },
+    {
+      "name": "Crimson Swarm Queen",
+      "phases": [
+        {
+          "phase_num": 1,
+          "hp": 600,
+          "attacks": [
+            "Swarm Burst: Releases 10 Tracer Drones every 8 seconds",
+            "Stinger Volley: Fires 3-round burst of tracking stingers from tail",
+            "Wing Gust: Flaps wings to push player toward arena edges (knockback)"
+          ],
+          "tells": [
+            "Abdomen glows red before drone release",
+            "Tail curves and vibrates before stinger fire",
+            "Wings spread wide with wind particle effects before gust"
+          ],
+          "weakness": "Destroy wing joints (left and right). Each destroyed wing reduces gust power and mobility. Head is main weak point.",
+          "duration_estimate_seconds": 50
+        },
+        {
+          "phase_num": 2,
+          "hp": 500,
+          "attacks": [
+            "Dive Bomb: Flies to arena ceiling, then dive-bombs player's position (AOE explosion)",
+            "Larvae Deploy: Drops 5 Swarm Hosts around arena",
+            "Venom Trail: Leaves toxic trail while flying (damages over time)"
+          ],
+          "tells": [
+            "Ascends quickly with screeching sound before dive",
+            "Abdomen distends and throbs before larvae deploy",
+            "Trail glows acidic green"
+          ],
+          "weakness": "Head weak point. Kill Swarm Hosts immediately or drones overwhelm. Dodge dive by watching shadow on ground.",
+          "duration_estimate_seconds": 70
+        },
+        {
+          "phase_num": 3,
+          "hp": 400,
+          "attacks": [
+            "Berserk Charge: Rapid erratic flight pattern, contact damage increased 2x",
+            "Final Swarm: Releases all remaining HP as Tracer Drones (1 drone per 10 HP)",
+            "Suicide Sting: At 10% HP, attempts kamikaze dive (instant kill if hit)"
+          ],
+          "tells": [
+            "Body turns deep crimson, speed increases",
+            "Abdomen ruptures releasing continuous drone stream",
+            "Entire body glows white, high-pitched whine before suicide dive"
+          ],
+          "weakness": "Head weak point remains. Clear drones with AOE. Save dash/dodge for suicide sting\u2014it's telegraphed but fast.",
+          "duration_estimate_seconds": 60
+        }
+      ],
+      "arena_description": "Circular arena (diameter 35 units) surrounded by deadly void. No cover. Honeycomb pattern floor (red/orange). Boss flies above player at varying heights. Ceiling exists (boss dive-bombs from it).",
+      "visual_description": "Giant insectoid queen (12 units long). Sleek crimson exoskeleton with translucent orange wings. Segmented body with glowing yellow weak points at joints. Long barbed tail with stinger. Compound eyes (multifaceted gems). Emits angry buzzing sound.",
+      "world": 2
+    },
+    {
+      "name": "Void Colossus",
+      "phases": [
+        {
+          "phase_num": 1,
+          "hp": 800,
+          "attacks": [
+            "Gravity Fist: Punches ground, creating gravity well at impact (pull radius 6 units, 4s duration)",
+            "Void Orbs: Summons 6 orbiting black holes that reflect projectiles",
+            "Meteor Shower: Calls down 15 meteors from sky (telegraphed with red circles)"
+          ],
+          "tells": [
+            "Fist charges with purple energy before slam",
+            "Spreads arms wide, orbs manifest from chest",
+            "Sky darkens, red targeting circles appear 1s before impact"
+          ],
+          "weakness": "Head is weak point, but protected by Void Orbs. Destroy orbs first (3 HP each) to expose head. Gravity wells can trap player during meteors\u2014high priority dodges.",
+          "duration_estimate_seconds": 55
+        },
+        {
+          "phase_num": 2,
+          "hp": 700,
+          "attacks": [
+            "Dimensional Rift: Opens 3 portals spawning Mirror Guards",
+            "Singularity Beam: Fires massive beam from mouth (sweeps 180\u00b0 over 3s)",
+            "Dark Matter Pulse: AOE explosion from body (dodge by leaving 8-unit radius)"
+          ],
+          "tells": [
+            "Portals tear open with void energy crackle",
+            "Jaw unhinges, beam charges with rising pitch",
+            "Body contracts inward before pulse expansion"
+          ],
+          "weakness": "Weak point moves to exposed core on back. Requires flanking. Kill Mirror Guards to prevent crossfire. Beam has safe zones at edges.",
+          "duration_estimate_seconds": 80
+        },
+        {
+          "phase_num": 3,
+          "hp": 600,
+          "attacks": [
+            "Reality Collapse: Arena shrinks to 50% size over 30 seconds (permanent for phase)",
+            "Void Clones: Spawns 2 shadow clones (25% boss HP each, copy attacks)",
+            "Annihilation Sequence: At 10% HP, charges massive explosion (10s timer, wipe if not killed)"
+          ],
+          "tells": [
+            "Arena borders glow red and contract",
+            "Boss splits into three (real one has brighter glow)",
+            "Entire arena pulses red, countdown timer appears, sirens"
+          ],
+          "weakness": "All three (boss + clones) share weak point on back. Focus fire real boss (brightest core). Use shrinking arena to force close combat. DPS check on Annihilation\u2014must kill or wipe.",
+          "duration_estimate_seconds": 90
+        }
+      ],
+      "arena_description": "Vast square arena (40x40 units initially, shrinks to 20x20 in phase 3) floating in void space. No walls, falling off edge = death. Floor is black with purple grid lines. Scattered debris provides minimal cover (destroyable). Skybox shows swirling void.",
+      "visual_description": "Colossal armored giant (20 units tall). Body made of dark matter (black with purple energy cracks). No face, just featureless helmet with glowing void eye. Massive shoulder pauldrons. Core weak point on back glows through cracks. Heavy footsteps shake screen.",
+      "world": 3
+    },
+    {
+      "name": "Nexus Prime",
+      "phases": [
+        {
+          "phase_num": 1,
+          "hp": 1000,
+          "attacks": [
+            "Orbital Strike: Designates 8 zones with laser grid, then fires orbital beams (3s delay)",
+            "Drone Factory: Spawns 4 Railgun Sentinels at cardinal directions",
+            "EMP Wave: Disables player weapons for 3 seconds (proximity-based, 10-unit radius)"
+          ],
+          "tells": [
+            "Laser grid appears red on floor before orbital strike",
+            "Shoulder cannons open and glow before sentinel deploy",
+            "Emits blue pulse expanding outward before EMP"
+          ],
+          "weakness": "Shoulder-mounted cannons are weak points (left and right, 200 HP each). Destroy both to expose main core. Prioritize Railgun Sentinels\u2014they two-shot player.",
+          "duration_estimate_seconds": 60
+        },
+        {
+          "phase_num": 2,
+          "hp": 800,
+          "attacks": [
+            "Phase Shift: Becomes intangible and teleports rapidly (3 teleports), then fires bullet hell (50 projectiles) from final position",
+            "Lockdown Grid: Activates laser walls dividing arena into quadrants (15s duration)",
+            "Summon Elite Squad: Spawns 1 Hex Overlord + 2 Arc Bombers"
+          ],
+          "tells": [
+            "Body flickers and dematerializes before phase shift",
+            "Floor grid glows bright white before laser walls deploy",
+            "Raises all four arms before elite summon"
+          ],
+          "weakness": "Core in chest is now exposed but has regenerating shield (breaks after 100 damage, regenerates in 5s). Must burst through shield. Laser walls can trap player with bullet hell\u2014stay mobile.",
+          "duration_estimate_seconds": 85
+        },
+        {
+          "phase_num": 3,
+          "hp": 600,
+          "attacks": [
+            "System Overload: Fires all previous attacks simultaneously (orbital + EMP + bullet hell) in 10s window",
+            "Final Protocol: At 20% HP, arena becomes hazardous (floor tiles randomly electrify, dealing damage)",
+            "Desperation Laser Grid: Fires 4 rotating lasers from core (full arena coverage, small dodge gaps)"
+          ],
+          "tells": [
+            "All systems activate, lights flash chaotically before Overload",
+            "Floor tiles spark and flicker before electrification",
+            "Core overcharges with blinding white light before laser grid"
+          ],
+          "weakness": "Core fully exposed, no shield. Extreme aggression but fragile. Memorize attack patterns\u2014dodging takes priority over damage. Electrified tiles glow yellow 0.5s before activation. Laser grid has safe zone directly under boss.",
+          "duration_estimate_seconds": 95
+        }
+      ],
+      "arena_description": "High-tech octagonal arena (35x35 units) with raised platform in center. Metallic walls with glowing circuit patterns. Pillars at each corner (destructible). Floor has digital grid overlay. Hazards (electrified tiles) activate in phase 3. Futuristic neon aesthetic (white/cyan/gold).",
+      "visual_description": "Advanced combat mech (18 units tall). Sleek white armor plating with gold trim and cyan energy lines. Four arms (two with cannons, two with melee claws). Visor-style head with scanning reticle eye. Core in chest is pulsing orb of pure energy. Jetpack thrusters on back. Emits mechanical hum and servo sounds.",
+      "world": 4
+    }
+  ],
+  "worlds": [
+    {
+      "num": 1,
+      "name": "Neon Foundry",
+      "theme": "industrial cyberpunk factory",
+      "color_palette": [
+        "#00ffbf",
+        "#ff006e",
+        "#3a0ca3",
+        "#f72585"
+      ],
+      "environment_features": [
+        "pulsing conveyor belts",
+        "electric arc hazards",
+        "rotating laser grids",
+        "data stream rivers"
+      ],
+      "unique_mechanic": "gravity_reversal_zones: player flips to ceiling when entering marked zones, requiring spatial reorientation for combat and navigation",
+      "level_count": 8,
+      "enemies_spawning_here": [
+        "Bit Drone",
+        "Spark Chaser",
+        "Code Fragment",
+        "Pulse Turret"
+      ],
+      "boss": "The Forge Sentinel",
+      "music_vibe": "aggressive synthwave with heavy industrial percussion, driving bassline, robotic vocal samples, tempo 140 bpm with occasional breakbeat sections"
+    },
+    {
+      "num": 2,
+      "name": "Crystalline Depths",
+      "theme": "underwater digital cavern",
+      "color_palette": [
+        "#06ffa5",
+        "#4361ee",
+        "#b5179e",
+        "#560bad"
+      ],
+      "environment_features": [
+        "refracting crystal formations",
+        "bioluminescent data coral",
+        "current streams",
+        "pressure zones"
+      ],
+      "unique_mechanic": "momentum_drift: player maintains velocity and slides in movement direction like ice physics, but with water resistance that gradually slows; requires prediction and leading shots",
+      "level_count": 9,
+      "enemies_spawning_here": [
+        "Hydro Seeker",
+        "Crystal Shard",
+        "Deep Lurker",
+        "Refraction Phantom"
+      ],
+      "boss": "Leviathan.exe",
+      "music_vibe": "ambient electronic with deep sub-bass, echoing synth pads, watery percussion, mysterious melody that builds to intense dubstep drops during enemy waves, 85-138 bpm variable tempo"
+    },
+    {
+      "num": 3,
+      "name": "Fracture Plains",
+      "theme": "glitching desert wasteland",
+      "color_palette": [
+        "#ffbe0b",
+        "#fb5607",
+        "#ff006e",
+        "#8338ec"
+      ],
+      "environment_features": [
+        "pixelated dust storms",
+        "corrupted data mirages",
+        "crumbling platforms",
+        "glitch rifts"
+      ],
+      "unique_mechanic": "reality_glitch: arena randomly shifts and tears, teleporting sections of the battlefield and splitting enemy groups; player must adapt to sudden spatial changes mid-combat",
+      "level_count": 10,
+      "enemies_spawning_here": [
+        "Sand Swarmer",
+        "Mirage Clone",
+        "Corruption Beetle",
+        "Glitch Worm",
+        "Static Bomber"
+      ],
+      "boss": "The Fragmented King",
+      "music_vibe": "glitch-hop with distorted samples, stuttering beats, middle-eastern melodic influences on synths, chaotic build-ups that resolve into heavy trap drops, 95 bpm half-time feel"
+    },
+    {
+      "num": 4,
+      "name": "Skybound Circuit",
+      "theme": "floating platform archipelago in digital clouds",
+      "color_palette": [
+        "#00b4d8",
+        "#90e0ef",
+        "#caf0f8",
+        "#48cae4"
+      ],
+      "environment_features": [
+        "wind tunnels",
+        "cloud cover zones",
+        "antigrav lifts",
+        "lightning strikes"
+      ],
+      "unique_mechanic": "wind_redirection: dynamic wind currents push player and enemies, plus projectiles curve mid-flight; mastering wind angles is essential for hitting fast-moving targets",
+      "level_count": 11,
+      "enemies_spawning_here": [
+        "Gust Rider",
+        "Cloud Specter",
+        "Storm Drone",
+        "Turbulence Spinner",
+        "Sky Mine"
+      ],
+      "boss": "Tempest Core",
+      "music_vibe": "uplifting trance with soaring leads, airy pads, euphoric chord progressions, fast arpeggios that mirror wind movement, 138 bpm with epic breakdown sections"
+    },
+    {
+      "num": 5,
+      "name": "Void Nexus",
+      "theme": "abstract dimension of pure data",
+      "color_palette": [
+        "#000000",
+        "#ffffff",
+        "#7209b7",
+        "#f72585"
+      ],
+      "environment_features": [
+        "shifting geometric shapes",
+        "code rain",
+        "dimension portals",
+        "reality tears"
+      ],
+      "unique_mechanic": "dimension_phase: player alternates between light/dark phases via button press; each phase reveals different enemies and hazards invisible in the other, requiring rapid switching",
+      "level_count": 12,
+      "enemies_spawning_here": [
+        "Void Stalker",
+        "Phase Shifter",
+        "Null Entity",
+        "Data Wraith",
+        "Paradox Construct",
+        "Binary Ghost"
+      ],
+      "boss": "The Architect",
+      "music_vibe": "dark psytrance with aggressive basslines, dissonant leads, chaotic percussion, ominous atmospheric pads that build to frenetic 148 bpm peaks, incorporates silence gaps for dramatic tension"
+    },
+    {
+      "num": 6,
+      "name": "Crimson Overgrowth",
+      "theme": "corrupted digital jungle",
+      "color_palette": [
+        "#d00000",
+        "#9d0208",
+        "#03071e",
+        "#6a040f"
+      ],
+      "environment_features": [
+        "virus vines",
+        "thorn barriers",
+        "spore clouds",
+        "infected trees",
+        "pulsing roots"
+      ],
+      "unique_mechanic": "infection_spread: defeated enemies explode into virus pools that damage player but also chain-damage other enemies; strategic positioning turns enemies into weapons",
+      "level_count": 13,
+      "enemies_spawning_here": [
+        "Thorn Crawler",
+        "Spore Spreader",
+        "Root Strangler",
+        "Infected Brute",
+        "Virus Carrier",
+        "Crimson Bloom"
+      ],
+      "boss": "Overmind Nexus",
+      "music_vibe": "aggressive drum and bass with organic percussion samples, distorted bass growls, tribal rhythm elements, tension-building ambient sections that explode into 174 bpm intensity with jungle breaks"
+    }
+  ],
+  "power_ups": [
+    {
+      "name": "Multishot Matrix",
+      "effect": "fires 5 shots in spread pattern instead of single shot",
+      "duration_seconds": 15,
+      "rarity": "common"
+    },
+    {
+      "name": "Time Dilation Field",
+      "effect": "slows all enemies and projectiles to 40% speed while player remains full speed",
+      "duration_seconds": 8,
+      "rarity": "epic"
+    },
+    {
+      "name": "Shield Lattice",
+      "effect": "absorbs 3 hits before breaking, visual hexagonal barrier",
+      "duration_seconds": 20,
+      "rarity": "common"
+    },
+    {
+      "name": "Overcharge Beam",
+      "effect": "continuous laser that pierces all enemies in line, no reload needed",
+      "duration_seconds": 10,
+      "rarity": "rare"
+    },
+    {
+      "name": "Ghost Protocol",
+      "effect": "player becomes semi-transparent and invulnerable, can pass through enemies and hazards",
+      "duration_seconds": 6,
+      "rarity": "epic"
+    },
+    {
+      "name": "Chain Lightning",
+      "effect": "shots arc to 3 nearby enemies automatically after hitting primary target",
+      "duration_seconds": 12,
+      "rarity": "rare"
+    },
+    {
+      "name": "Speed Surge",
+      "effect": "doubles movement and dodge speed, leaves neon trail",
+      "duration_seconds": 15,
+      "rarity": "common"
+    },
+    {
+      "name": "Smart Missiles",
+      "effect": "replaces gun with homing missiles that track nearest 2 enemies",
+      "duration_seconds": 10,
+      "rarity": "rare"
+    }
+  ],
+  "collectibles": [
+    {
+      "name": "Data Fragments",
+      "purpose": "currency",
+      "visual": "floating cyan geometric shards that pulse and rotate, trail particle effects"
+    },
+    {
+      "name": "Grid Cores",
+      "purpose": "100%_completion",
+      "visual": "large purple octahedrons hidden in secret areas, emit strong glow and hum sound"
+    },
+    {
+      "name": "Cipher Keys",
+      "purpose": "unlock",
+      "visual": "golden key-shaped icons with circuit patterns, unlock bonus challenge levels and weapon skins"
+    },
+    {
+      "name": "Memory Archives",
+      "purpose": "100%_completion",
+      "visual": "holographic data cubes with scrolling text inside, reveal lore entries about the Grid collapse"
+    }
+  ],
+  "total_level_count": 63,
+  "difficulty_curve": "World 1 (Neon Foundry) introduces core mechanics with forgiving enemy counts and simple patterns. World 2 (Crystalline Depths) increases enemy speed and introduces bullet-hell lite sections with 20-30 projectiles on screen. World 3 (Fracture Plains) adds aggressive AI that flanks player and mixed enemy types requiring priority targeting. World 4 (Skybound Circuit) demands environmental mastery as wind affects all combat, enemies spawn from multiple angles. World 5 (Void Nexus) peak difficulty spike requiring frame-perfect phase switching and managing 50+ enemies simultaneously in confined spaces. World 6 (Crimson Overgrowth) maintains World 5 intensity but adds strategic layer of infection mechanics and introduces tanky elite enemies that require sustained focus while dodging swarms. Each world's final 2 levels serve as endurance gauntlets mixing all enemy types. Bosses have 4-6 phase transitions with escalating attack patterns. Post-game challenge levels remix worlds with permadeath and score multipliers.",
+  "levels": [
+    {
+      "level_num": 1,
+      "world": 1,
+      "name": "Boot Sequence",
+      "length_tiles": 220,
+      "theme": "Tutorial hub - clean cyan corridors, minimal hazards",
+      "primary_enemies": [],
+      "mechanic_focus": "basic movement and jump precision",
+      "set_pieces": [
+        "first data fragment glow",
+        "harmless laser grid demonstration"
+      ],
+      "secret_count": 1,
+      "estimated_play_time_seconds": 45,
+      "difficulty_1_to_10": 1
+    },
+    {
+      "level_num": 2,
+      "world": 1,
+      "name": "First Contact",
+      "length_tiles": 280,
+      "theme": "Cyan grid plains, floating platforms over void",
+      "primary_enemies": [
+        "Bit Crawler"
+      ],
+      "mechanic_focus": "enemy stomp introduction",
+      "set_pieces": [
+        "three stacked enemies for first chain-stomp",
+        "bouncing platform sequence"
+      ],
+      "secret_count": 1,
+      "estimated_play_time_seconds": 65,
+      "difficulty_1_to_10": 1
+    },
+    {
+      "level_num": 3,
+      "world": 1,
+      "name": "Vertical Climb Protocol",
+      "length_tiles": 310,
+      "theme": "Tall server towers, emphasis on vertical platforming",
+      "primary_enemies": [
+        "Bit Crawler",
+        "Static Turret"
+      ],
+      "mechanic_focus": "wall-slide introduction and timing",
+      "set_pieces": [
+        "ascending wall-slide gauntlet",
+        "turret avoidance while climbing"
+      ],
+      "secret_count": 2,
+      "estimated_play_time_seconds": 75,
+      "difficulty_1_to_10": 2
+    },
+    {
+      "level_num": 4,
+      "world": 1,
+      "name": "Data Stream Rapids",
+      "length_tiles": 340,
+      "theme": "Flowing data rivers, conveyor platforms",
+      "primary_enemies": [
+        "Bit Crawler",
+        "Glitch Moth"
+      ],
+      "mechanic_focus": "moving platform timing",
+      "set_pieces": [
+        "conveyor belt maze",
+        "moths swooping over data river"
+      ],
+      "secret_count": 2,
+      "estimated_play_time_seconds": 80,
+      "difficulty_1_to_10": 2
+    },
+    {
+      "level_num": 5,
+      "world": 1,
+      "name": "Firewall Breach",
+      "length_tiles": 380,
+      "theme": "Red security barriers, timed laser gates",
+      "primary_enemies": [
+        "Bit Crawler",
+        "Static Turret",
+        "Firewall Sentinel"
+      ],
+      "mechanic_focus": "dash ability introduction to pass through barriers",
+      "set_pieces": [
+        "first dash tutorial through laser",
+        "sentinel mini-boss chase"
+      ],
+      "secret_count": 2,
+      "estimated_play_time_seconds": 90,
+      "difficulty_1_to_10": 3
+    },
+    {
+      "level_num": 6,
+      "world": 1,
+      "name": "Cache Ruins",
+      "length_tiles": 360,
+      "theme": "Decaying memory blocks, crumbling platforms",
+      "primary_enemies": [
+        "Bit Crawler",
+        "Glitch Moth"
+      ],
+      "mechanic_focus": "collapsing platform reflexes",
+      "set_pieces": [
+        "cascading platform collapse sequence",
+        "secret room behind false wall"
+      ],
+      "secret_count": 3,
+      "estimated_play_time_seconds": 85,
+      "difficulty_1_to_10": 3
+    },
+    {
+      "level_num": 7,
+      "world": 1,
+      "name": "Corrupted Core",
+      "length_tiles": 420,
+      "theme": "Boss arena - pulsing red core chamber",
+      "primary_enemies": [
+        "Overload Titan"
+      ],
+      "mechanic_focus": "boss pattern recognition and stomp vulnerability windows",
+      "set_pieces": [
+        "three-phase boss fight",
+        "arena hazard activation",
+        "final core explosion escape"
+      ],
+      "secret_count": 0,
+      "estimated_play_time_seconds": 180,
+      "difficulty_1_to_10": 4
+    },
+    {
+      "level_num": 8,
+      "world": 2,
+      "name": "Neon Sprawl",
+      "length_tiles": 380,
+      "theme": "Magenta city rooftops, neon signs, rain effects",
+      "primary_enemies": [
+        "Byte Hound",
+        "Static Turret"
+      ],
+      "mechanic_focus": "horizontal dash combat and enemy rush handling",
+      "set_pieces": [
+        "rooftop chase with pursuing Hound pack",
+        "billboard jump parkour"
+      ],
+      "secret_count": 2,
+      "estimated_play_time_seconds": 95,
+      "difficulty_1_to_10": 4
+    },
+    {
+      "level_num": 9,
+      "world": 2,
+      "name": "Underpass Network",
+      "length_tiles": 450,
+      "theme": "Dark tunnels with flickering lights, claustrophobic",
+      "primary_enemies": [
+        "Byte Hound",
+        "Shadow Glitch"
+      ],
+      "mechanic_focus": "wall-slide precision in tight spaces",
+      "set_pieces": [
+        "narrow shaft descent with enemies",
+        "lights-out ambush section"
+      ],
+      "secret_count": 3,
+      "estimated_play_time_seconds": 105,
+      "difficulty_1_to_10": 5
+    },
+    {
+      "level_num": 10,
+      "world": 2,
+      "name": "Skyway Junction",
+      "length_tiles": 480,
+      "theme": "Elevated highways, moving traffic platforms",
+      "primary_enemies": [
+        "Byte Hound",
+        "Glitch Moth",
+        "Static Turret"
+      ],
+      "mechanic_focus": "fast-moving platform chains",
+      "set_pieces": [
+        "highway vehicle platform gauntlet",
+        "motorcycle platform that accelerates"
+      ],
+      "secret_count": 2,
+      "estimated_play_time_seconds": 110,
+      "difficulty_1_to_10": 5
+    },
+    {
+      "level_num": 11,
+      "world": 2,
+      "name": "Databank Heist",
+      "length_tiles": 420,
+      "theme": "High-security vault, laser grid maze",
+      "primary_enemies": [
+        "Static Turret",
+        "Firewall Sentinel",
+        "Alarm Drone"
+      ],
+      "mechanic_focus": "stealth dash timing through detection beams",
+      "set_pieces": [
+        "rotating laser grid puzzle",
+        "alarm triggers enemy waves",
+        "vault door countdown escape"
+      ],
+      "secret_count": 4,
+      "estimated_play_time_seconds": 120,
+      "difficulty_1_to_10": 6
+    },
+    {
+      "level_num": 12,
+      "world": 2,
+      "name": "Glitchwave District",
+      "length_tiles": 440,
+      "theme": "Reality distortion zones, platforms phase in/out",
+      "primary_enemies": [
+        "Shadow Glitch",
+        "Glitch Moth"
+      ],
+      "mechanic_focus": "timing jumps on phasing platforms",
+      "set_pieces": [
+        "reality wave that flips gravity temporarily",
+        "mirror maze with hidden paths"
+      ],
+      "secret_count": 3,
+      "estimated_play_time_seconds": 115,
+      "difficulty_1_to_10": 6
+    },
+    {
+      "level_num": 13,
+      "world": 2,
+      "name": "Broadcast Tower Ascent",
+      "length_tiles": 520,
+      "theme": "Massive vertical tower, antenna arrays, signal waves",
+      "primary_enemies": [
+        "Byte Hound",
+        "Alarm Drone",
+        "Static Turret"
+      ],
+      "mechanic_focus": "extended wall-slide with enemy interruption",
+      "set_pieces": [
+        "tower exterior climb during lightning storm",
+        "rotating antenna dodging",
+        "signal wave pushback hazard"
+      ],
+      "secret_count": 2,
+      "estimated_play_time_seconds": 135,
+      "difficulty_1_to_10": 7
+    },
+    {
+      "level_num": 14,
+      "world": 2,
+      "name": "System Override",
+      "length_tiles": 460,
+      "theme": "Boss arena - control room with shifting floor panels",
+      "primary_enemies": [
+        "Nexus Enforcer"
+      ],
+      "mechanic_focus": "multi-phase boss with dash counter mechanics",
+      "set_pieces": [
+        "floor panel trap activation",
+        "boss summons drones",
+        "final rampage phase with full arena hazards"
+      ],
+      "secret_count": 0,
+      "estimated_play_time_seconds": 210,
+      "difficulty_1_to_10": 7
+    },
+    {
+      "level_num": 15,
+      "world": 3,
+      "name": "Fractal Gardens",
+      "length_tiles": 400,
+      "theme": "Abstract geometric nature, crystalline trees, purple/green palette",
+      "primary_enemies": [
+        "Prism Sprite",
+        "Fractal Creeper"
+      ],
+      "mechanic_focus": "diagonal dash for environmental puzzle solving",
+      "set_pieces": [
+        "crystal maze that reflects player",
+        "flower platforms that bloom/close on timer"
+      ],
+      "secret_count": 3,
+      "estimated_play_time_seconds": 100,
+      "difficulty_1_to_10": 5
+    },
+    {
+      "level_num": 16,
+      "world": 3,
+      "name": "Quantum Pools",
+      "length_tiles": 440,
+      "theme": "Liquid data pools, platforms float and sink",
+      "primary_enemies": [
+        "Prism Sprite",
+        "Wave Lurker"
+      ],
+      "mechanic_focus": "sinking platform weight management",
+      "set_pieces": [
+        "pool surface tension jump",
+        "lurker breach attack pattern",
+        "fountain geyser boost"
+      ],
+      "secret_count": 2,
+      "estimated_play_time_seconds": 110,
+      "difficulty_1_to_10": 6
+    },
+    {
+      "level_num": 17,
+      "world": 3,
+      "name": "Overgrowth Server Farm",
+      "length_tiles": 480,
+      "theme": "Nature reclaiming technology, vines and rust",
+      "primary_enemies": [
+        "Fractal Creeper",
+        "Thorn Watcher",
+        "Static Turret"
+      ],
+      "mechanic_focus": "wall-slide with vine grab mechanics",
+      "set_pieces": [
+        "vine swing across chasm",
+        "thorn wall labyrinth",
+        "collapsing server rack cascade"
+      ],
+      "secret_count": 4,
+      "estimated_play_time_seconds": 125,
+      "difficulty_1_to_10": 6
+    },
+    {
+      "level_num": 18,
+      "world": 3,
+      "name": "Prism Cavern",
+      "length_tiles": 460,
+      "theme": "Crystal cave, light refraction puzzles",
+      "primary_enemies": [
+        "Prism Sprite",
+        "Shadow Glitch"
+      ],
+      "mechanic_focus": "light beam redirection to open paths",
+      "set_pieces": [
+        "mirror platform alignment puzzle",
+        "rainbow bridge materializes when lit",
+        "ambush from dark corners"
+      ],
+      "secret_count": 3,
+      "estimated_play_time_seconds": 120,
+      "difficulty_1_to_10": 7
+    },
+    {
+      "level_num": 19,
+      "world": 3,
+      "name": "Bioluminescent Depths",
+      "length_tiles": 500,
+      "theme": "Deep cave with glowing flora, limited visibility",
+      "primary_enemies": [
+        "Wave Lurker",
+        "Shadow Glitch",
+        "Fractal Creeper"
+      ],
+      "mechanic_focus": "darkness navigation using enemy glow",
+      "set_pieces": [
+        "total darkness section with only enemy eyes visible",
+        "bioluminescent path that fades",
+        "underground lake crossing"
+      ],
+      "secret_count": 5,
+      "estimated_play_time_seconds": 140,
+      "difficulty_1_to_10": 7
+    },
+    {
+      "level_num": 20,
+      "world": 3,
+      "name": "Canopy Rush",
+      "length_tiles": 520,
+      "theme": "Treetop speed section, leaf platforms",
+      "primary_enemies": [
+        "Prism Sprite",
+        "Glitch Moth",
+        "Thorn Watcher"
+      ],
+      "mechanic_focus": "sustained high-speed dash chains",
+      "set_pieces": [
+        "auto-scrolling canopy escape",
+        "branch snapping behind player",
+        "wind gust redirects mid-air"
+      ],
+      "secret_count": 2,
+      "estimated_play_time_seconds": 130,
+      "difficulty_1_to_10": 8
+    },
+    {
+      "level_num": 21,
+      "world": 3,
+      "name": "Root Nexus",
+      "length_tiles": 490,
+      "theme": "Boss arena - massive tree core with roots as platforms",
+      "primary_enemies": [
+        "Verdant Colossus"
+      ],
+      "mechanic_focus": "boss with environmental destruction and root attack patterns",
+      "set_pieces": [
+        "boss destroys platforms forcing repositioning",
+        "seed bomb spray attack",
+        "final enrage root slam maze"
+      ],
+      "secret_count": 0,
+      "estimated_play_time_seconds": 240,
+      "difficulty_1_to_10": 8
+    },
+    {
+      "level_num": 22,
+      "world": 4,
+      "name": "Industrial Sector",
+      "length_tiles": 460,
+      "theme": "Factory floor, conveyor belts, hydraulic presses",
+      "primary_enemies": [
+        "Rivet Clanker",
+        "Static Turret"
+      ],
+      "mechanic_focus": "hazard timing with crushers and presses",
+      "set_pieces": [
+        "press gauntlet with precise timing windows",
+        "conveyor belt reversal trap",
+        "assembly line dash race"
+      ],
+      "secret_count": 2,
+      "estimated_play_time_seconds": 115,
+      "difficulty_1_to_10": 6
+    },
+    {
+      "level_num": 23,
+      "world": 4,
+      "name": "Foundry Heat",
+      "length_tiles": 480,
+      "theme": "Molten metal vats, extreme heat waves",
+      "primary_enemies": [
+        "Rivet Clanker",
+        "Flame Sprite",
+        "Furnace Guardian"
+      ],
+      "mechanic_focus": "dash through flame jets and heat zones",
+      "set_pieces": [
+        "rising molten metal tide",
+        "flame jet pattern dance",
+        "steam vent boost sequence"
+      ],
+      "secret_count": 3,
+      "estimated_play_time_seconds": 125,
+      "difficulty_1_to_10": 7
+    },
+    {
+      "level_num": 24,
+      "world": 4,
+      "name": "Assembly Line Chaos",
+      "length_tiles": 520,
+      "theme": "Robotic arms, moving machinery, chaotic production",
+      "primary_enemies": [
+        "Rivet Clanker",
+        "Assembly Bot",
+        "Static Turret"
+      ],
+      "mechanic_focus": "moving platform + enemy density management",
+      "set_pieces": [
+        "robotic arm sweeps across platforms",
+        "product boxes as temporary shields",
+        "machine malfunction causes chain explosion"
+      ],
+      "secret_count": 2,
+      "estimated_play_time_seconds": 135,
+      "difficulty_1_to_10": 7
+    },
+    {
+      "level_num": 25,
+      "world": 4,
+      "name": "Cooling Tower Descent",
+      "length_tiles": 500,
+      "theme": "Massive vertical shaft, steam and mist",
+      "primary_enemies": [
+        "Assembly Bot",
+        "Flame Sprite",
+        "Alarm Drone"
+      ],
+      "mechanic_focus": "controlled fall with wall-slide checkpoints",
+      "set_pieces": [
+        "freefall section with mid-air hazard dodging",
+        "steam burst interrupts wall-slide",
+        "water pool landing with lurkers"
+      ],
+      "secret_count": 3,
+      "estimated_play_time_seconds": 130,
+      "difficulty_1_to_10": 8
+    },
+    {
+      "level_num": 26,
+      "world": 4,
+      "name": "Reactor Core Meltdown",
+      "length_tiles": 540,
+      "theme": "Critical reactor, countdown timer, sirens",
+      "primary_enemies": [
+        "Furnace Guardian",
+        "Alarm Drone",
+        "Firewall Sentinel"
+      ],
+      "mechanic_focus": "speed-run pressure with timed objective",
+      "set_pieces": [
+        "countdown timer on screen",
+        "reactor vents block paths periodically",
+        "escape sequence with collapsing floor"
+      ],
+      "secret_count": 1,
+      "estimated_play_time_seconds": 150,
+      "difficulty_1_to_10": 8
+    },
+    {
+      "level_num": 27,
+      "world": 4,
+      "name": "Smelter Showdown",
+      "length_tiles": 480,
+      "theme": "Boss arena - circular foundry pit",
+      "primary_enemies": [
+        "Forge Titan"
+      ],
+      "mechanic_focus": "boss with area-denial molten attacks",
+      "set_pieces": [
+        "boss creates molten pools shrinking safe space",
+        "hammer slam shockwaves",
+        "final berserk mode with full arena coverage"
+      ],
+      "secret_count": 0,
+      "estimated_play_time_seconds": 270,
+      "difficulty_1_to_10": 9
+    },
+    {
+      "level_num": 28,
+      "world": 5,
+      "name": "Frozen Archive",
+      "length_tiles": 440,
+      "theme": "Ice-covered server halls, blue-white color scheme",
+      "primary_enemies": [
+        "Frost Crawler",
+        "Static Turret"
+      ],
+      "mechanic_focus": "ice physics introduction - slippery surfaces",
+      "set_pieces": [
+        "ice slide momentum puzzle",
+        "frozen enemies as platforms",
+        "icicle hazard drop"
+      ],
+      "secret_count": 3,
+      "estimated_play_time_seconds": 110,
+      "difficulty_1_to_10": 6
+    },
+    {
+      "level_num": 29,
+      "world": 5,
+      "name": "Blizzard Pass",
+      "length_tiles": 480,
+      "theme": "Outdoor snowstorm, wind gusts, low visibility",
+      "primary_enemies": [
+        "Frost Crawler",
+        "Ice Wraith",
+        "Thorn Watcher"
+      ],
+      "mechanic_focus": "wind mechanics pushing player trajectory",
+      "set_pieces": [
+        "wind gust changes direction periodically",
+        "whiteout zones with hidden enemies",
+        "avalanche chase"
+      ],
+      "secret_count": 2,
+      "estimated_play_time_seconds": 120,
+      "difficulty_1_to_10": 7
+    },
+    {
+      "level_num": 30,
+      "world": 5,
+      "name": "Cryo Chamber",
+      "length_tiles": 460,
+      "theme": "Cryogenic facility, frozen specimens in tubes",
+      "primary_enemies": [
+        "Frost Crawler",
+        "Ice Wraith",
+        "Cryo Sentinel"
+      ],
+      "mechanic_focus": "freeze-thaw mechanic for platform activation",
+      "set_pieces": [
+        "break frozen barriers with dash",
+        "ice block puzzle to reach height",
+        "specimen breach enemy spawn"
+      ],
+      "secret_count": 4,
+      "estimated_play_time_seconds": 125,
+      "difficulty_1_to_10": 7
+    },
+    {
+      "level_num": 31,
+      "world": 5,
+      "name": "Glacier Climb",
+      "length_tiles": 540,
+      "theme": "Massive ice wall, climbing with ice-pick mechanic",
+      "primary_enemies": [
+        "Ice Wraith",
+        "Frost Crawler",
+        "Alarm Drone"
+      ],
+      "mechanic_focus": "extended wall-slide on ice with stamina concept",
+      "set_pieces": [
+        "ice wall crumbles sections behind player",
+        "wraith divebomb during climb",
+        "summit blizzard gauntlet"
+      ],
+      "secret_count": 2,
+      "estimated_play_time_seconds": 145,
+      "difficulty_1_to_10": 8
+    },
+    {
+      "level_num": 32,
+      "world": 5,
+      "name": "Subsurface Lake",
+      "length_tiles": 500,
+      "theme": "Underground frozen lake, ice platforms crack",
+      "primary_enemies": [
+        "Frost Crawler",
+        "Wave Lurker",
+        "Cryo Sentinel"
+      ],
+      "mechanic_focus": "cracking ice platform timing",
+      "set_pieces": [
+        "ice platform cracks then breaks after 2s",
+        "lurker breaks through ice ambush",
+        "thermal vent safe zones"
+      ],
+      "secret_count": 3,
+      "estimated_play_time_seconds": 135,
+      "difficulty_1_to_10": 8
+    },
+    {
+      "level_num": 33,
+      "world": 5,
+      "name": "Permafrost Depths",
+      "length_tiles": 520,
+      "theme": "Deep underground cavern, ancient ice formations",
+      "primary_enemies": [
+        "Ice Wraith",
+        "Shadow Glitch",
+        "Cryo Sentinel"
+      ],
+      "mechanic_focus": "darkness + ice physics combination",
+      "set_pieces": [
+        "frozen waterfall as slide",
+        "ice stalactite breakaway hazard",
+        "guardian ambush in dark corridor"
+      ],
+      "secret_count": 5,
+      "estimated_play_time_seconds": 150,
+      "difficulty_1_to_10": 9
+    },
+    {
+      "level_num": 34,
+      "world": 5,
+      "name": "Absolute Zero",
+      "length_tiles": 500,
+      "theme": "Boss arena - frozen core chamber",
+      "primary_enemies": [
+        "Frost Sovereign"
+      ],
+      "mechanic_focus": "boss with ice wall creation and freeze attacks",
+      "set_pieces": [
+        "boss creates ice walls blocking movement",
+        "freeze ray sweeps arena",
+        "final phase shatters all ice causing chaos"
+      ],
+      "secret_count": 0,
+      "estimated_play_time_seconds": 300,
+      "difficulty_1_to_10": 9
+    },
+    {
+      "level_num": 35,
+      "world": 6,
+      "name": "Wasteland Entry",
+      "length_tiles": 460,
+      "theme": "Corrupted desert, red sand, glitch artifacts",
+      "primary_enemies": [
+        "Corrupt Drone",
+        "Sand Lurker"
+      ],
+      "mechanic_focus": "quicksand hazard introduction",
+      "set_pieces": [
+        "quicksand pit with sinking mechanic",
+        "sand wave pushes player",
+        "mirage fake platforms"
+      ],
+      "secret_count": 2,
+      "estimated_play_time_seconds": 115,
+      "difficulty_1_to_10": 7
+    },
+    {
+      "level_num": 36,
+      "world": 6,
+      "name": "Sandstorm Surge",
+      "length_tiles": 500,
+      "theme": "Heavy sandstorm, visibility cycles",
+      "primary_enemies": [
+        "Corrupt Drone",
+        "Sand Lurker",
+        "Static Turret"
+      ],
+      "mechanic_focus": "visibility-based stealth and timing",
+      "set_pieces": [
+        "sandstorm obscures screen periodically",
+        "drone patrol patterns",
+        "buried platforms revealed by wind"
+      ],
+      "secret_count": 3,
+      "estimated_play_time_seconds": 130,
+      "difficulty_1_to_10": 8
+    },
+    {
+      "level_num": 37,
+      "world": 6,
+      "name": "Corrupted Oasis",
+      "length_tiles": 480,
+      "theme": "Toxic water pools, dead vegetation",
+      "primary_enemies": [
+        "Sand Lurker",
+        "Corrupt Drone",
+        "Toxin Spitter"
+      ],
+      "mechanic_focus": "poison pool avoidance and dash timing",
+      "set_pieces": [
+        "oasis is trap with toxic water",
+        "lily pad platforms dissolve",
+        "spitter nests on pillars"
+      ],
+      "secret_count": 4,
+      "estimated_play_time_seconds": 125,
+      "difficulty_1_to_10": 8
+    },
+    {
+      "level_num": 38,
+      "world": 6,
+      "name": "Canyon Walls",
+      "length_tiles": 540,
+      "theme": "Narrow canyon, wall-to-wall traversal",
+      "primary_enemies": [
+        "Corrupt Drone",
+        "Static Turret",
+        "Firewall Sentinel"
+      ],
+      "mechanic_focus": "continuous wall-slide between narrow walls",
+      "set_pieces": [
+        "canyon narrows forcing wall-jump zigzag",
+        "turret crossfire in tight space",
+        "falling rocks from above"
+      ],
+      "secret_count": 2,
+      "estimated_play_time_seconds": 140,
+      "difficulty_1_to_10": 9
+    },
+    {
+      "level_num": 39,
+      "world": 6,
+      "name": "Ruins Excavation",
+      "length_tiles": 520,
+      "theme": "Ancient buried structures, archaeological dig",
+      "primary_enemies": [
+        "Sand Lurker",
+        "Toxin Spitter",
+        "Corrupt Drone"
+      ],
+      "mechanic_focus": "enemy density in confined ruins",
+      "set_pieces": [
+        "collapsing excavation site",
+        "buried treasure room with ambush",
+        "dust cloud obscures vision after collapse"
+      ],
+      "secret_count": 5,
+      "estimated_play_time_seconds": 145,
+      "difficulty_1_to_10": 9
+    },
+    {
+      "level_num": 40,
+      "world": 6,
+      "name": "Sinkhole Labyrinth",
+      "length_tiles": 560,
+      "theme": "Massive sinkhole, spiraling descent",
+      "primary_enemies": [
+        "Sand Lurker",
+        "Corrupt Drone",
+        "Shadow Glitch"
+      ],
+      "mechanic_focus": "controlled descent with hazard avoidance",
+      "set_pieces": [
+        "spiral platform descent into darkness",
+        "lurkers attack from walls",
+        "bottom reveals ancient artifact"
+      ],
+      "secret_count": 3,
+      "estimated_play_time_seconds": 155,
+      "difficulty_1_to_10": 9
+    },
+    {
+      "level_num": 41,
+      "world": 6,
+      "name": "Worm Gullet",
+      "length_tiles": 580,
+      "theme": "Inside massive sandworm, organic interior",
+      "primary_enemies": [
+        "Parasite Swarm",
+        "Gullet Guardian"
+      ],
+      "mechanic_focus": "auto-scrolling escape with organic hazards",
+      "set_pieces": [
+        "stomach acid rising",
+        "worm convulsions shake platforms",
+        "escape through throat during sneeze"
+      ],
+      "secret_count": 1,
+      "estimated_play_time_seconds": 160,
+      "difficulty_1_to_10": 10
+    },
+    {
+      "level_num": 42,
+      "world": 6,
+      "name": "Dust Devil",
+      "length_tiles": 520,
+      "theme": "Boss arena - tornado arena with swirling debris",
+      "primary_enemies": [
+        "Sandstorm Tyrant"
+      ],
+      "mechanic_focus": "boss with wind-based displacement attacks",
+      "set_pieces": [
+        "tornado pulls player toward center",
+        "boss summons sand minions",
+        "final phase creates multiple tornadoes"
+      ],
+      "secret_count": 0,
+      "estimated_play_time_seconds": 330,
+      "difficulty_1_to_10": 10
+    },
+    {
+      "level_num": 43,
+      "world": 7,
+      "name": "Neon Skyline",
+      "length_tiles": 500,
+      "theme": "Mega-city rooftops at night, holographic ads",
+      "primary_enemies": [
+        "Elite Drone",
+        "Cyber Assassin"
+      ],
+      "mechanic_focus": "precision platforming at height",
+      "set_pieces": [
+        "skyscraper gap jumps",
+        "hologram platforms that flicker",
+        "assassin pursuit across rooftops"
+      ],
+      "secret_count": 3,
+      "estimated_play_time_seconds": 135,
+      "difficulty_1_to_10": 8
+    },
+    {
+      "level_num": 44,
+      "world": 7,
+      "name": "Mainframe Dive",
+      "length_tiles": 520,
+      "theme": "Virtual space inside computer, abstract geometry",
+      "primary_enemies": [
+        "Data Wraith",
+        "Firewall Sentinel",
+        "Static Turret"
+      ],
+      "mechanic_focus": "reality-warping platforms and gravity shifts",
+      "set_pieces": [
+        "gravity flips 180 degrees",
+        "platforms rotate in 3D space",
+        "data stream currents push player"
+      ],
+      "secret_count": 4,
+      "estimated_play_time_seconds": 145,
+      "difficulty_1_to_10": 9
+    },
+    {
+      "level_num": 45,
+      "world": 7,
+      "name": "Server Farm Infiltration",
+      "length_tiles": 540,
+      "theme": "Massive data center, tight corridors",
+      "primary_enemies": [
+        "Elite Drone",
+        "Cyber Assassin",
+        "Alarm Drone"
+      ],
+      "mechanic_focus": "stealth and alarm avoidance",
+      "set_pieces": [
+        "detection beam maze",
+        "alarm triggers lockdown and enemy waves",
+        "server rack destruction puzzle"
+      ],
+      "secret_count": 5,
+      "estimated_play_time_seconds": 150,
+      "difficulty_1_to_10": 9
+    },
+    {
+      "level_num": 46,
+      "world": 7,
+      "name": "Uplink Spire",
+      "length_tiles": 580,
+      "theme": "Vertical communication tower, satellite dishes",
+      "primary_enemies": [
+        "Elite Drone",
+        "Data Wraith",
+        "Firewall Sentinel"
+      ],
+      "mechanic_focus": "extended vertical gauntlet combining all mechanics",
+      "set_pieces": [
+        "exterior tower climb with dish obstacles",
+        "signal pulse knockback waves",
+        "storm interference sections"
+      ],
+      "secret_count": 2,
+      "estimated_play_time_seconds": 165,
+      "difficulty_1_to_10": 10
+    },
+    {
+      "level_num": 47,
+      "world": 7,
+      "name": "Quantum Bridge",
+      "length_tiles": 560,
+      "theme": "Unstable bridge between dimensions",
+      "primary_enemies": [
+        "Data Wraith",
+        "Shadow Glitch",
+        "Quantum Anomaly"
+      ],
+      "mechanic_focus": "platforms phase between dimensions",
+      "set_pieces": [
+        "bridge exists in two realities simultaneously",
+        "dimension shift mid-jump",
+        "anomaly creates black holes"
+      ],
+      "secret_count": 4,
+      "estimated_play_time_seconds": 155,
+      "difficulty_1_to_10": 10
+    },
+    {
+      "level_num": 48,
+      "world": 7,
+      "name": "Core Access",
+      "length_tiles": 600,
+      "theme": "Final approach to central AI core",
+      "primary_enemies": [
+        "Elite Drone",
+        "Cyber Assassin",
+        "Firewall Sentinel",
+        "Alarm Drone"
+      ],
+      "mechanic_focus": "gauntlet of all enemy types and hazards",
+      "set_pieces": [
+        "security checkpoint rush",
+        "all hazard types in sequence",
+        "countdown escape"
+      ],
+      "secret_count": 6,
+      "estimated_play_time_seconds": 180,
+      "difficulty_1_to_10": 10
+    },
+    {
+      "level_num": 49,
+      "world": 7,
+      "name": "System Collapse",
+      "length_tiles": 540,
+      "theme": "Final boss arena - digital void",
+      "primary_enemies": [
+        "Grid Overlord"
+      ],
+      "mechanic_focus": "multi-phase final boss with all mechanics tested",
+      "set_pieces": [
+        "phase 1: boss summons all enemy types",
+        "phase 2: arena hazards activate",
+        "phase 3: boss combines all attack patterns",
+        "final escape sequence"
+      ],
+      "secret_count": 0,
+      "estimated_play_time_seconds": 360,
+      "difficulty_1_to_10": 10
+    },
+    {
+      "level_num": 50,
+      "world": 8,
+      "name": "Bonus: Glitch Gauntlet",
+      "length_tiles": 320,
+      "theme": "Challenge level - pure platforming precision",
+      "primary_enemies": [],
+      "mechanic_focus": "frame-perfect jumps and dashes",
+      "set_pieces": [
+        "spike corridors with pixel-perfect spacing",
+        "disappearing platforms sequence",
+        "one-hit death gauntlet"
+      ],
+      "secret_count": 1,
+      "estimated_play_time_seconds": 90,
+      "difficulty_1_to_10": 10
+    },
+    {
+      "level_num": 51,
+      "world": 8,
+      "name": "Bonus: Enemy Horde",
+      "length_tiles": 340,
+      "theme": "Challenge level - combat focus",
+      "primary_enemies": [
+        "All enemy types"
+      ],
+      "mechanic_focus": "managing extreme enemy density",
+      "set_pieces": [
+        "waves of every enemy type",
+        "limited space arena",
+        "survival timer"
+      ],
+      "secret_count": 0,
+      "estimated_play_time_seconds": 100,
+      "difficulty_1_to_10": 10
+    },
+    {
+      "level_num": 52,
+      "world": 8,
+      "name": "Bonus: Speed Run City",
+      "length_tiles": 600,
+      "theme": "Challenge level - optimal route time trial",
+      "primary_enemies": [
+        "Elite Drone",
+        "Static Turret"
+      ],
+      "mechanic_focus": "maintaining maximum speed throughout",
+      "set_pieces": [
+        "timer countdown",
+        "checkpoints add time",
+        "optimal path requires perfect execution"
+      ],
+      "secret_count": 0,
+      "estimated_play_time_seconds": 75,
+      "difficulty_1_to_10": 9
+    },
+    {
+      "level_num": 53,
+      "world": 8,
+      "name": "Bonus: Boss Rush Alpha",
+      "length_tiles": 400,
+      "theme": "Challenge level - worlds 1-3 bosses back-to-back",
+      "primary_enemies": [
+        "Overload Titan",
+        "Nexus Enforcer",
+        "Verdant Colossus"
+      ],
+      "mechanic_focus": "stamina management across multiple boss fights",
+      "set_pieces": [
+        "no healing between bosses",
+        "reduced arena size",
+        "bosses have boosted stats"
+      ],
+      "secret_count": 0,
+      "estimated_play_time_seconds": 420,
+      "difficulty_1_to_10": 10
+    },
+    {
+      "level_num": 54,
+      "world": 8,
+      "name": "Bonus: Boss Rush Beta",
+      "length_tiles": 400,
+      "theme": "Challenge level - worlds 4-6 bosses back-to-back",
+      "primary_enemies": [
+        "Forge Titan",
+        "Frost Sovereign",
+        "Sandstorm Tyrant"
+      ],
+      "mechanic_focus": "environmental hazard + boss combo",
+      "set_pieces": [
+        "arena hazards stay active",
+        "bosses have enrage timers",
+        "limited checkpoints"
+      ],
+      "secret_count": 0,
+      "estimated_play_time_seconds": 480,
+      "difficulty_1_to_10": 10
+    },
+    {
+      "level_num": 55,
+      "world": 8,
+      "name": "Bonus: The Impossible Wall",
+      "length_tiles": 280,
+      "theme": "Challenge level - single wall-slide mega-climb",
+      "primary_enemies": [
+        "Elite Drone",
+        "Cyber Assassin"
+      ],
+      "mechanic_focus": "extended wall-slide perfection",
+      "set_pieces": [
+        "3000 tile vertical climb",
+        "enemies attack during climb",
+        "no checkpoints"
+      ],
+      "secret_count": 0,
+      "estimated_play_time_seconds": 180,
+      "difficulty_1_to_10": 10
+    },
+    {
+      "level_num": 56,
+      "world": 8,
+      "name": "Bonus: Dash Master",
+      "length_tiles": 360,
+      "theme": "Challenge level - dash-only movement",
+      "primary_enemies": [
+        "Static Turret",
+        "Firewall Sentinel"
+      ],
+      "mechanic_focus": "completing level using only dash ability",
+      "set_pieces": [
+        "jump disabled",
+        "must chain dashes across gaps",
+        "turret timing puzzles"
+      ],
+      "secret_count": 0,
+      "estimated_play_time_seconds": 110,
+      "difficulty_1_to_10": 9
+    },
+    {
+      "level_num": 57,
+      "world": 8,
+      "name": "Bonus: Stomp Chain Heaven",
+      "length_tiles": 380,
+      "theme": "Challenge level - continuous enemy stomp chain",
+      "primary_enemies": [
+        "Bit Crawler",
+        "Glitch Moth",
+        "Byte Hound"
+      ],
+      "mechanic_focus": "maintaining stomp combo without touching ground",
+      "set_pieces": [
+        "must stomp 50 enemies in sequence",
+        "ground is instant death",
+        "enemy placement requires perfect trajectory"
+      ],
+      "secret_count": 0,
+      "estimated_play_time_seconds": 120,
+      "difficulty_1_to_10": 10
+    },
+    {
+      "level_num": 58,
+      "world": 8,
+      "name": "Bonus: Mirrored Madness",
+      "length_tiles": 340,
+      "theme": "Challenge level - controls inverted",
+      "primary_enemies": [
+        "Shadow Glitch",
+        "Data Wraith"
+      ],
+      "mechanic_focus": "platforming with reversed controls",
+      "set_pieces": [
+        "left is right, right is left",
+        "enemy patterns designed for normal controls",
+        "mental adaptation test"
+      ],
+      "secret_count": 0,
+      "estimated_play_time_seconds": 95,
+      "difficulty_1_to_10": 9
+    },
+    {
+      "level_num": 59,
+      "world": 8,
+      "name": "Bonus: Darkness Trial",
+      "length_tiles": 400,
+      "theme": "Challenge level - complete darkness except player glow",
+      "primary_enemies": [
+        "Shadow Glitch",
+        "Wave Lurker"
+      ],
+      "mechanic_focus": "memory and sound cues for navigation",
+      "set_pieces": [
+        "no visibility except 10-pixel radius around player",
+        "enemies telegraph with sound",
+        "memorization required"
+      ],
+      "secret_count": 1,
+      "estimated_play_time_seconds": 130,
+      "difficulty_1_to_10": 10
+    },
+    {
+      "level_num": 60,
+      "world": 8,
+      "name": "Bonus: All Hazards Marathon",
+      "length_tiles": 620,
+      "theme": "Challenge level - every environmental hazard in game",
+      "primary_enemies": [
+        "All types in small numbers"
+      ],
+      "mechanic_focus": "hazard recognition and adaptation",
+      "set_pieces": [
+        "lasers, spikes, crushers, fire, ice, poison, wind, gravity shifts all present",
+        "no breaks between sections",
+        "true endurance test"
+      ],
+      "secret_count": 7,
+      "estimated_play_time_seconds": 200,
+      "difficulty_1_to_10": 10
+    },
+    {
+      "level_num": 61,
+      "world": 8,
+      "name": "Bonus: The Perfect Run",
+      "length_tiles": 500,
+      "theme": "Challenge level - entire game's mechanics in single level",
+      "primary_enemies": [
+        "Elite Drone",
+        "Cyber Assassin",
+        "Data Wraith",
+        "Firewall Sentinel"
+      ],
+      "mechanic_focus": "mastery of all mechanics in single flawless run",
+      "set_pieces": [
+        "death sends back to start",
+        "showcases best elements from every world",
+        "ultimate skill check"
+      ],
+      "secret_count": 10,
+      "estimated_play_time_seconds": 180,
+      "difficulty_1_to_10": 10
+    },
+    {
+      "level_num": 62,
+      "world": 8,
+      "name": "Bonus: Developer's Nightmare",
+      "length_tiles": 420,
+      "theme": "Challenge level - deliberately unfair design",
+      "primary_enemies": [
+        "All enemy types at maximum density"
+      ],
+      "mechanic_focus": "testing absolute limits of skill and patience",
+      "set_pieces": [
+        "frame-perfect sequences required",
+        "invisible platforms",
+        "enemy spam",
+        "designed to be beaten but barely"
+      ],
+      "secret_count": 0,
+      "estimated_play_time_seconds": 240,
+      "difficulty_1_to_10": 10
+    },
+    {
+      "level_num": 63,
+      "world": 8,
+      "name": "Bonus: Final Fragment",
+      "length_tiles": 450,
+      "theme": "Secret level - serene conclusion, easy victory lap",
+      "primary_enemies": [],
+      "mechanic_focus": "relaxed celebration of player's journey",
+      "set_pieces": [
+        "beautiful vista showcasing all world themes",
+        "peaceful platforming",
+        "final data fragment that completes the story",
+        "credits sequence integrated into level"
+      ],
+      "secret_count": 1,
+      "estimated_play_time_seconds": 120,
+      "difficulty_1_to_10": 3
+    }
+  ]
+}

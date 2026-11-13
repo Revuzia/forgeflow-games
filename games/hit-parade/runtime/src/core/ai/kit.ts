@@ -1,0 +1,515 @@
+// HIT PARADE - what the CPU knows about its OWN fighter (lane AI). THREE-free, DOM-free, clock-free.
+//
+// How to input every move is not guessed from notation: it is MEASURED. buildKit() runs a private
+// sandbox Match (mode 'training', same GameData, same fighter, same control scheme), feeds each
+// candidate input (normals by direction, SIMPLE S+direction / ASSIST+S / S+H, every motion of the
+// kit's classic table with L/M/H/S, throws, IMPACT, air versions after a jump, charge motions after a
+// held charge) and records which compiled move actually started and after how many frames. So motion
+// priorities, shadowed motions, phase-2 moves the sim does not route yet, stance follow-ups, SIMPLE
+// fallbacks - all of it is exactly what the real sim does. The sandbox never touches the real match
+// (its own Int32Array); results are cached per (GameData, fighter, scheme).
+//
+// It also resolves the fighter JSON `cpu` block (style, rangeM, pokes, antiAir, punish, combo, zoning,
+// approach, grab, armor, counter, mixup, setup, escape, air, phase2, meter) into compiled move indexes.
+
+import type { FighterDef, GameData } from '../types.ts';
+import type { CFighter, CMove } from '../sim/compile.ts';
+import { K, STK, UK } from '../sim/compile.ts';
+import { createMatch, load, save, step } from '../sim/match.ts';
+import type { Match, Scheme } from '../sim/state.ts';
+import { F, PH, ST, W, fighterBase } from '../sim/layout.ts';
+import { B, MOTION, dirBits, motionSteps } from './pad.ts';
+import type { Step } from './pad.ts';
+
+export interface Recipe {
+  steps: Step[];
+  /** frames from the first step until the move's first frame (measured in the sandbox) */
+  lag: number;
+  air: boolean;
+  /** 0 none, 1 back charge, 2 down charge must be stored first */
+  charge: 0 | 1 | 2;
+  simple: boolean;
+  label: string;
+  /**
+   * CHANGED(AI) P2: where the recipe works. '' = from neutral (measured in the sandbox); 'chain' = only inside the
+   * parent move's cancel window (rekka / weave trigger, target combo; the route executor knows); 'stance' = only in
+   * STANCE (Lotus follow-ups: the button alone). CHANGED(AI3D): 'step' = a step-attack ("SS.<btn>", §35.12.5): its
+   * button while in SIDESTEP (from the sim's step buffer frame, 2 since fix_core §35.20) / SIDEWALK - the brain steps first.
+   */
+  ctx: '' | 'chain' | 'stance' | 'step';
+}
+
+/** CHANGED(AI) P2: what a unique move does for the planner (uniques.ts). */
+export type ToolKind = '' | 'counter' | 'teleport' | 'stance' | 'stanceFollow' | 'evade' | 'step' | 'ballShoot' | 'ballHover' | 'ballSummon' | 'install' | 'auto';
+
+export interface MoveInfo {
+  idx: number;
+  id: string;
+  cm: CMove;
+  recipe: Recipe | null;
+  roles: string[];
+  /** strike reach: box front + authored travel up to that box (U); 0 for non-strikes */
+  reach: number;
+  /** vertical coverage of the strike boxes (U, fighter-local) */
+  yLo: number;
+  yHi: number;
+  firstActive: number;
+  damage: number;
+  /** blockstun - (active + recovery), SF6 convention */
+  advBlock: number;
+  advHit: number;
+  proj: boolean;
+  grab: boolean;
+  /** grab reach, pushbox front to pushbox front (U) or -1 = centre reach */
+  grabGap: number;
+  grabReach: number;
+  invStrike: boolean;
+  invAir: boolean;
+  super: number; // 0, 1, 3
+  ex: boolean;
+  special: boolean;
+  normal: boolean;
+  low: boolean;
+  overhead: boolean;
+  armored: boolean;
+  kd: boolean;
+  /**
+   * does nothing by itself in the sim as built: no hitbox, no projectile, no grab, no cinematic (a stance
+   * entry, a teleport / counter / ball move whose unique the sim does not implement yet, a guard stance).
+   * The planner never throws one out as an attack.
+   */
+  inert: boolean;
+  // ---- CHANGED(AI) P2 (CONTRACT §28 uniques)
+  /** a recipe that needs no stored charge (SIMPLE S+dir) when `recipe` is a charge motion; null otherwise */
+  alt: Recipe | null;
+  tool: ToolKind;
+  /** counter catch window [f0, f1] (move frames) + catches projectiles; null = not a counter move */
+  counter: { f0: number; f1: number; proj: boolean } | null;
+  /** teleport: TPD code (0 behind, 1 front, 2 home) and its frame; -1 = none */
+  tele: number;
+  teleF: number;
+  /** low-profile / evasive window: lowest hurtbox top (U) of the move's hurtOverride and its frames (0 = none) */
+  evadeTop: number;
+  evadeF0: number;
+  evadeF1: number;
+  /** projectile invulnerability [f0, f1] (0, 0 = none) */
+  projInv0: number;
+  projInv1: number;
+  /** strike invulnerable from frame 1 through its first active frame (a reversal) */
+  revInv: boolean;
+  /** phase-2-only move (Ricky) */
+  phase2: boolean;
+  // ---- CHANGED(AI3D) (CONTRACT §35.12 FIGHTERS3D items 1-2, §35.15): 3D tracking class
+  /** tracks through its active frames (never stepped, §35.15 table) */
+  homing: boolean;
+  /** faces on frame 1 only (a read / reaction sidestep evades it over a long window) */
+  linear: boolean;
+  /** last re-facing move frame (compiled track.until) */
+  trackUntil: number;
+  /** a step-attack (input "SS.<btn>"): only out of SIDESTEP / SIDEWALK */
+  stepAtk: boolean;
+}
+
+export type ListName = 'pokes' | 'antiAir' | 'punish' | 'combo' | 'zoning' | 'approach' | 'grab' | 'armor' | 'counter'
+  | 'mixup' | 'setup' | 'escape' | 'air' | 'phase2' | 'antiStep';
+// CHANGED(AI3D): + `antiStep` (fighter JSON cpu.antiStep, §35.12.8: what to throw at a stepper)
+export const LIST_NAMES: readonly ListName[] = ['pokes', 'antiAir', 'punish', 'combo', 'zoning', 'approach', 'grab', 'armor', 'counter',
+  'mixup', 'setup', 'escape', 'air', 'phase2', 'antiStep'];
+
+export interface Kit {
+  id: string;
+  scheme: Scheme;
+  cf: CFighter;
+  def: FighterDef;
+  moves: MoveInfo[];
+  byId: Record<string, number>;
+  /** fighter JSON cpu lists as compiled indexes (moves with a measured recipe; combo keeps chain parts) */
+  lists: Record<ListName, number[]>;
+  /** role tag -> usable move indexes */
+  roles: Record<string, number[]>;
+  /** plan family (STYLE_ALIAS of the fighter's cpu.style) */
+  style: string;
+  /** the fighter JSON cpu.style as written (a cpu.json `styles` entry of that name wins over the family) */
+  rawStyle: string;
+  rangeLo: number; // U
+  rangeHi: number; // U
+  /** usable ground strikes sorted by startup (fastest first) */
+  groundStrikes: number[];
+  lights: number[];
+  projMoves: number[];
+  throwF: number;
+  throwB: number;
+  impact: number;
+  sup1: number;
+  sup3: number;
+  meterMove: number;
+  /** CHANGED(AI) P2: the §28 unique kind (UK.*) and the phase this recipe table was measured in (1, or 2 for Ricky) */
+  uk: number;
+  phase: number;
+  /** usable move indexes by tool kind */
+  tools: Record<string, number[]>;
+  /**
+   * CHANGED(AI3D): step-attacks by button (L / M / H; -1 none) - compiled CFighter.stepAtk with a ctx 'step' recipe;
+   * `stepAttack` = the fighter JSON cpu.stepAttack hint resolved ("SS.H" -> its move index, -1 none)
+   */
+  stepAtk: number[];
+  stepAttack: number;
+  /** CHANGED(AI3D): usable homing ground strikes from neutral (the stepper answer when no antiStep entry reaches) */
+  homingStrikes: number[];
+  /** calibration report (probe) */
+  report: { candidates: number; recipes: number; usable: number; unusable: string[] };
+}
+
+/** Style aliases: fighter JSON styles -> the plan families plans.ts implements. */
+export const STYLE_ALIAS: Readonly<Record<string, string>> = {
+  balanced: 'shoto', shoto: 'shoto', allrounder: 'shoto', rushdown: 'rushdown', grappler: 'grappler', zoner: 'zoner',
+  charge: 'charge', stance: 'stance', bigbody: 'bigbody', aerial: 'aerial', setplay: 'setplay', counter: 'counter',
+  boss_armor: 'bigbody', boss_showman: 'zoner',
+};
+
+const cache = new WeakMap<GameData, Map<string, Kit>>();
+
+/** CHANGED(AI) P2: the recipe a rekka / weave trigger (compiled CTrigger) needs in `scheme` */
+function triggerSteps(cm: CMove, scheme: Scheme): Step[] | null {
+  const tr = cm.trigger;
+  if (!tr) return null;
+  const lowBtn = (mask: number): number => (mask & 1 ? B.L : mask & 2 ? B.M : mask & 4 ? B.H : mask & 8 ? B.S : 0);
+  // SIMPLE: the motion form works there too (§1 "motion inputs also work in SIMPLE") and is unambiguous - a sibling's
+  // "5S" trigger matches S with ANY direction in core/sim/inputs.ts, so a "2S" ender could never come out (measured:
+  // Patch CUE 2 -> 2S gives CUE 3 overhead); the one-button form only for triggers without a motion
+  if (scheme !== 1 && tr.motion === 0) { // CHANGED(wf8 fix): EASY (2) parses SIMPLE's S routing too (CONTRACT §36.5 item 3 request)
+    if (tr.simpleDir >= 0) return [{ d: tr.simpleDir, b: B.S }];
+    if (tr.simpleBtn !== 0) return [{ d: 5, b: lowBtn(tr.simpleBtn) }];
+  }
+  const btn = lowBtn(tr.btnMask & 7) || lowBtn(tr.btnMask);
+  if (btn === 0) return null;
+  return tr.motion > 0 ? motionSteps(tr.motion, btn) : [{ d: 5, b: btn }];
+}
+
+function rolesOf(def: FighterDef, id: string): string[] {
+  const r = def.moves[id]?.role;
+  if (!r) return [];
+  return Array.isArray(r) ? r.slice() : [r];
+}
+
+interface Cand {
+  steps: Step[];
+  air: boolean;
+  charge: 0 | 1 | 2;
+  simple: boolean;
+  label: string;
+}
+
+const BTN = [B.L, B.M, B.H];
+const BTN_NAME = ['L', 'M', 'H'];
+
+function candidates(cf: CFighter, scheme: Scheme): Cand[] {
+  const out: Cand[] = [];
+  const add = (steps: Step[], label: string, air = false, charge: 0 | 1 | 2 = 0, simple = false): void => {
+    out.push({ steps, air, charge, simple, label });
+  };
+  // ground normals / command normals (direction + button on one frame)
+  for (const d of [5, 2, 6, 4, 3, 1]) for (let b = 0; b < 3; b++) add([{ d, b: BTN[b] }], `${d}${BTN_NAME[b]}`);
+  // air normals (after a neutral jump)
+  for (const d of [5, 2, 6, 4]) for (let b = 0; b < 3; b++) add([{ d, b: BTN[b] }], `j.${d}${BTN_NAME[b]}`, true);
+  // throws, IMPACT
+  add([{ d: 5, b: B.THROW }], 'THROW');
+  add([{ d: 4, b: B.THROW }], '4THROW');
+  add([{ d: 5, b: B.IMPACT }], 'IMPACT');
+  if (scheme !== 1) { // CHANGED(wf8 fix): EASY (2) = SIMPLE's S + direction too (a CPU given EASY by a deep link)
+    for (const d of [5, 6, 2, 4]) {
+      add([{ d, b: B.S }], `${d}S`, false, 0, true);
+      add([{ d, b: B.S | B.ASSIST }], `A${d}S`, false, 0, true);
+    }
+    add([{ d: 5, b: B.S | B.H }], 'S+H', false, 0, true);
+    add([{ d: 2, b: B.S | B.H }], '2S+H', false, 0, true);
+    add([{ d: 5, b: B.S }], 'j.S', true, 0, true);
+  }
+  // every motion the kit's classic table (and the automatic supers) uses
+  const motions: number[] = [];
+  for (const sp of cf.specials) if (motions.indexOf(sp.motion) < 0) motions.push(sp.motion);
+  for (const code of motions) {
+    const charge: 0 | 1 | 2 = code === MOTION.CHG_BF ? 1 : code === MOTION.CHG_DU ? 2 : 0;
+    const btns = scheme === 1 ? [B.L, B.M, B.H, B.S] : [B.L, B.M, B.H];
+    const names = ['L', 'M', 'H', 'S'];
+    btns.forEach((bt, k) => {
+      add(motionSteps(code, bt), `m${code}${names[k]}`, false, charge);
+      add(motionSteps(code, bt), `j.m${code}${names[k]}`, true, charge);
+    });
+  }
+  return out;
+}
+
+function sandbox(data: GameData, id: string, scheme: Scheme, phase: number): Match {
+  const m = createMatch({
+    mode: 'training', stage: 'rust_theater', seed: 1, timer: 0,
+    p: [{ fighter: id, color: 0, scheme, cpu: -1 }, { fighter: id, color: 1, scheme: 1, cpu: -1 }],
+  }, data);
+  let n = 0;
+  while (m.s[W.phase] !== PH.FIGHT && n++ < 2000) step(m, 0, 0);
+  for (let k = 0; k < 4; k++) step(m, 0, 0);
+  // CHANGED(AI) P2: phase 2 of a `phases` kit (Ricky) routes its phase-2 moves - set in the SANDBOX's own state only
+  if (phase === 2 && m.cf[0].uk === UK.PHASES) m.s[fighterBase(0) + F.uniq] = 2;
+  return m;
+}
+
+/** Runs one candidate in the sandbox; returns [started move idx, lag] or null. */
+function tryCand(m: Match, base: Int32Array, c: Cand, cf: CFighter, phase: number): [number, number] | null {
+  const s = m.s;
+  const b = fighterBase(0);
+  load(m, base);
+  if (phase === 2) s[b + F.uniq] = 2;
+  s[b + F.showtime] = m.sys.raw.showtime.bar * m.sys.raw.showtime.bars;
+  s[b + F.nerve] = m.sys.raw.nerve.bar * m.sys.raw.nerve.bars;
+  const feed = (w: number): void => step(m, w, 0);
+  if (c.charge !== 0) {
+    const d = c.charge === 1 ? 4 : 2;
+    for (let k = 0; k < m.sys.raw.motion.chargeFrames + 3; k++) feed(dirBits(d, s[b + F.facing]));
+  }
+  if (c.air) {
+    for (let k = 0; k < cf.prejump + 1; k++) feed(dirBits(8, s[b + F.facing]));
+    for (let k = 0; k < 4; k++) feed(0);
+    if (s[b + F.st] !== ST.AIR) return null;
+  }
+  let lag = 0;
+  const steps = c.steps;
+  for (let k = 0; k < steps.length + 4; k++) {
+    const st = k < steps.length ? steps[k] : null;
+    const w = st ? dirBits(st.d, s[b + F.facing]) | st.b : 0;
+    feed(w);
+    lag++;
+    if (s[b + F.st] === ST.ATTACK && s[b + F.mvF] === 1 && s[b + F.mv] >= 0) return [s[b + F.mv], lag];
+  }
+  return null;
+}
+
+function strikeGeometry(cm: CMove): { reach: number; yLo: number; yHi: number; first: number } {
+  let reach = 0;
+  let yLo = 1 << 30;
+  let yHi = -(1 << 30);
+  let first = cm.nBox > 0 ? 1 << 30 : cm.startup;
+  for (let k = 0; k < cm.nBox; k++) {
+    const o = k * 7;
+    const f0 = cm.boxes[o];
+    const x = cm.boxes[o + 2];
+    const y = cm.boxes[o + 3];
+    const w = cm.boxes[o + 4];
+    const h = cm.boxes[o + 5];
+    const travel = cm.curve[Math.max(0, Math.min(f0, cm.curve.length - 1))];
+    reach = Math.max(reach, x + (w >> 1) + travel);
+    yLo = Math.min(yLo, y - (h >> 1));
+    yHi = Math.max(yHi, y + (h >> 1));
+    first = Math.min(first, f0);
+  }
+  if (cm.nBox === 0) {
+    yLo = 0;
+    yHi = 0;
+  }
+  return { reach, yLo, yHi, first };
+}
+
+function moveDamage(cm: CMove): number {
+  if (cm.cin) {
+    let t = 0;
+    for (let k = 0; k < cm.cin.hitD.length; k++) t += cm.cin.hitD[k];
+    return t;
+  }
+  if (cm.nHid > 1) {
+    let t = 0;
+    for (let k = 0; k < cm.nHid; k++) t += cm.hidDmg[k];
+    return t;
+  }
+  return cm.damage;
+}
+
+/**
+ * Builds (or returns the cached) kit knowledge for fighter `id` under control scheme `scheme`. CHANGED(AI) P2: `phase`
+ * 2 = the recipe table of a `phases` kit after its phase change (§28.2: its SIMPLE keys and Lv3 re-route there).
+ */
+export function buildKit(data: GameData, cf: CFighter, scheme: Scheme, phase = 1): Kit {
+  let per = cache.get(data);
+  if (!per) {
+    per = new Map();
+    cache.set(data, per);
+  }
+  const ph = phase === 2 && cf.uk === UK.PHASES ? 2 : 1;
+  const key = `${cf.id}:${scheme}:${ph}`;
+  const hit = per.get(key);
+  if (hit) return hit;
+  const def = cf.def;
+  const m = sandbox(data, cf.id, scheme, ph);
+  const base = new Int32Array(m.s.length);
+  save(m, base);
+  const cands = candidates(cf, scheme);
+  const best: (Recipe | null)[] = cf.moves.map(() => null);
+  const noCharge: (Recipe | null)[] = cf.moves.map(() => null);
+  for (const c of cands) {
+    const r = tryCand(m, base, c, cf, ph);
+    if (!r) continue;
+    const [idx, lag] = r;
+    const cm = cf.moves[idx];
+    if (!cm) continue;
+    // a garbled motion that produced a plain normal is not a recipe for that normal
+    if (c.steps.length > 1 && cm.isNormalCat) continue;
+    const rec: Recipe = { steps: c.steps, lag, air: c.air, charge: c.charge, simple: c.simple, label: c.label, ctx: '' };
+    const prev = best[idx];
+    const better = !prev || lag < prev.lag || (lag === prev.lag && prev.simple && !c.simple) || (lag === prev.lag && prev.charge !== 0 && c.charge === 0);
+    if (better) best[idx] = rec;
+    // CHANGED(AI) P2: a SIMPLE charge kit also reaches its charge specials with S+dir and no charge (§19.2): keep that
+    // recipe as the fallback for when no charge is stored (the charge motion stays primary: full damage)
+    if (c.charge === 0) {
+      const pn = noCharge[idx];
+      if (!pn || lag < pn.lag) noCharge[idx] = rec;
+    }
+  }
+  const moves: MoveInfo[] = cf.moves.map((cm, idx) => {
+    const g = strikeGeometry(cm);
+    const roles = cm.snapId >= 0 ? rolesOf(def, cm.id) : [];
+    let recipe = best[idx];
+    // CHANGED(AI) P2: context recipes. A stance follow-up = its button in STANCE (§28.2 stance); a rekka / weave part
+    // = its compiled trigger inside the parent's window; a target-combo part = its normal inside the parent's window.
+    const followK = cf.uk === UK.STANCE ? cf.u.stFollow.indexOf(idx) : -1;
+    if (followK >= 0) recipe = { steps: [{ d: 5, b: BTN[followK] }], lag: 1, air: false, charge: 0, simple: false, label: `stance ${BTN_NAME[followK]}`, ctx: 'stance' };
+    else if (!recipe && cm.trigger) {
+      const tsteps = triggerSteps(cm, scheme);
+      if (tsteps) recipe = { steps: tsteps, lag: tsteps.length, air: cm.inAir, charge: 0, simple: scheme === 0, label: `trigger ${cm.id}`, ctx: 'chain' };
+    }
+    // CHANGED(AI3D): a step-attack = its button while stepping (the sim routes it from the SIDESTEP buffer frame / SIDEWALK)
+    if (!recipe && cm.stepAtk && cm.inBtn >= 0 && cm.inBtn <= 2) {
+      recipe = { steps: [{ d: 5, b: BTN[cm.inBtn] }], lag: 1, air: false, charge: 0, simple: false, label: `SS.${BTN_NAME[cm.inBtn]}`, ctx: 'step' };
+    }
+    if (!recipe && cm.chainOnly && cm.inBtn >= 0) {
+      // target-combo / chain part: only valid inside the parent's window (the route executor knows)
+      recipe = { steps: [{ d: cm.inDir, b: BTN[cm.inBtn] }], lag: 1, air: cm.inAir, charge: 0, simple: false, label: `chain ${cm.id}`, ctx: 'chain' };
+    }
+    const alt = recipe && recipe.charge !== 0 ? noCharge[idx] : null;
+    const isFollow = cf.moves.some((o) => o.counter !== undefined && o.counter.follow === idx);
+    let tool: ToolKind = '';
+    if (cm.counter) tool = 'counter';
+    else if (cm.teleport) tool = 'teleport';
+    else if (cm.stanceKind === STK.ENTER) tool = 'stance';
+    else if (cm.stanceKind === STK.FOLLOW) tool = 'stanceFollow';
+    else if (cm.ballAct === 1) tool = 'ballShoot';
+    else if (cm.ballAct === 2) tool = 'ballHover';
+    else if (cm.ballAct === 3) tool = 'ballSummon';
+    else if (cm.install) tool = 'install';
+    else if (cm.armorStep) tool = 'step';
+    else if (isFollow) tool = 'auto';
+    else if (cm.nBox === 0 && cm.proj === null && !cm.isGrab && cm.cin === null && (cm.nHurtOv > 0 || cm.inv[6] > 0)) tool = 'evade';
+    let evTop = 0;
+    let evF0 = 0;
+    let evF1 = 0;
+    for (let k = 0; k < cm.nHurtOv; k++) {
+      const top = cm.hurtOv[k * 5 + 4] + cm.hurtOv[k * 5 + 3];
+      if (evTop === 0 || top < evTop) {
+        evTop = top;
+        evF0 = cm.hurtOv[k * 5];
+        evF1 = cm.hurtOv[k * 5 + 1];
+      }
+    }
+    return {
+      idx, id: cm.id, cm, recipe, roles,
+      reach: g.reach, yLo: g.yLo, yHi: g.yHi, firstActive: g.first,
+      damage: moveDamage(cm),
+      advBlock: cm.blockstun - (cm.active + cm.recovery),
+      advHit: cm.hitstun - (cm.active + cm.recovery),
+      proj: cm.proj !== null,
+      grab: cm.isGrab,
+      grabGap: cm.grabGap,
+      grabReach: cm.grabReach,
+      invStrike: cm.inv[0] > 0 && cm.inv[0] <= cm.startup && cm.inv[1] >= cm.startup,
+      invAir: cm.inv[4] > 0 && cm.inv[4] <= cm.startup && cm.inv[5] >= cm.startup,
+      super: cm.level,
+      ex: cm.isEx,
+      special: cm.isSpecialCat,
+      normal: cm.isNormalCat,
+      low: cm.guard === 2,
+      overhead: cm.guard === 1,
+      armored: cm.armorHits > 0,
+      kd: cm.kd > 0,
+      inert: cm.nBox === 0 && cm.proj === null && !cm.isGrab && cm.cin === null,
+      alt,
+      tool,
+      counter: cm.counter ? { f0: cm.counter.f0, f1: cm.counter.f1, proj: cm.counter.proj } : null,
+      tele: cm.teleport ? cm.teleport.to : -1,
+      teleF: cm.teleport ? cm.teleport.f : 0,
+      evadeTop: evTop,
+      evadeF0: evF0,
+      evadeF1: evF1,
+      projInv0: cm.inv[6],
+      projInv1: cm.inv[7],
+      revInv: cm.inv[0] > 0 && cm.inv[0] <= 1 && cm.inv[1] >= cm.startup,
+      phase2: cm.phase2,
+      homing: cm.homing,
+      linear: cm.linear,
+      trackUntil: cm.trackUntil,
+      stepAtk: cm.stepAtk,
+    };
+  });
+  const byId: Record<string, number> = {};
+  for (const mi of moves) byId[mi.id] = mi.idx;
+  const usable = (idx: number): boolean => idx >= 0 && idx < moves.length && moves[idx].recipe !== null;
+  const cpu = (def.cpu ?? {}) as Record<string, unknown>;
+  const lists = {} as Record<ListName, number[]>;
+  for (const ln of LIST_NAMES) {
+    const raw = cpu[ln];
+    const names = Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [];
+    const idxs = names.map((n) => (byId[n] !== undefined ? byId[n] : -1));
+    lists[ln] = ln === 'combo' ? idxs.filter((x) => x >= 0) : idxs.filter(usable);
+  }
+  const roles: Record<string, number[]> = {};
+  for (const mi of moves) {
+    if (!mi.recipe) continue;
+    for (const r of mi.roles) (roles[r] ??= []).push(mi.idx);
+  }
+  const groundStrikes = moves
+    .filter((mi) => mi.recipe && !mi.recipe.air && mi.recipe.charge === 0 && mi.cm.isStrike && mi.cm.snapId >= 0 && mi.super === 0 && !mi.ex && !mi.cm.chainOnly && mi.cm.costShow === 0)
+    .sort((a, b) => a.cm.startup + a.recipe!.lag - (b.cm.startup + b.recipe!.lag))
+    .map((mi) => mi.idx);
+  const lights = groundStrikes.filter((k) => moves[k].normal && moves[k].cm.str === 0);
+  const projMoves = moves.filter((mi) => mi.recipe && mi.proj && !mi.recipe.air && mi.super === 0 && !mi.ex).map((mi) => mi.idx);
+  const style = STYLE_ALIAS[String(cpu.style ?? '')] ?? STYLE_ALIAS[String(def.archetype ?? '')] ?? 'shoto';
+  const rng = Array.isArray(cpu.rangeM) && cpu.rangeM.length === 2 ? (cpu.rangeM as number[]) : [1.2, 2.4];
+  const meterName = typeof cpu.meter === 'string' ? cpu.meter : '';
+  const unusable = moves.filter((mi) => mi.cm.snapId >= 0 && !mi.recipe && mi.tool !== 'auto').map((mi) => mi.id);
+  const route = ph === 2 ? cf.route2 : cf.route1;
+  const tools: Record<string, number[]> = {};
+  for (const mi of moves) if (mi.tool !== '' && mi.recipe) (tools[mi.tool] ??= []).push(mi.idx);
+  // CHANGED(AI3D): step-attacks (per button) + the JSON hint, homing ground strikes
+  const stepAtk = [0, 1, 2].map((bt) => (usable(cf.stepAtk[bt] ?? -1) ? cf.stepAtk[bt] : -1));
+  const hint = typeof cpu.stepAttack === 'string' ? cpu.stepAttack : '';
+  const hm = /^SS\.([LMH])$/.exec(hint);
+  const stepAttack = hm ? stepAtk[BTN_NAME.indexOf(hm[1])] : stepAtk.find((k) => k >= 0) ?? -1;
+  const homingStrikes = groundStrikes.filter((k) => moves[k].homing && moves[k].recipe!.ctx === '' && !moves[k].inert);
+  const kit: Kit = {
+    id: cf.id, scheme, cf, def, moves, byId, lists, roles, style, rawStyle: String(cpu.style ?? style),
+    rangeLo: Math.round(rng[0] * 100000), rangeHi: Math.round(rng[1] * 100000),
+    groundStrikes, lights, projMoves,
+    throwF: usable(cf.throwF) ? cf.throwF : -1,
+    throwB: usable(cf.throwB) ? cf.throwB : -1,
+    impact: usable(cf.impact) ? cf.impact : -1,
+    // CHANGED(AI) P2: the supers of THIS phase's routing (Ricky's phase-2 Lv3 is SEASON FINALE)
+    sup1: usable(route.sup1) ? route.sup1 : -1,
+    sup3: usable(route.sup3) ? route.sup3 : -1,
+    meterMove: byId[meterName] !== undefined && usable(byId[meterName]) ? byId[meterName] : usable(cf.sup1) ? cf.sup1 : -1,
+    uk: cf.uk,
+    phase: ph,
+    tools,
+    stepAtk,
+    stepAttack,
+    homingStrikes,
+    report: { candidates: cands.length, recipes: best.filter((r) => r !== null).length, usable: moves.filter((mi) => mi.recipe).length, unusable },
+  };
+  per.set(key, kit);
+  return kit;
+}
+
+/** Is `idx` a legal cancel / chain target from the running move `cur` (on contact)? */
+export function cancelsInto(cur: CMove, next: CMove): boolean {
+  if (cur.chains.indexOf(next.idx) >= 0) return true;
+  if (next.isSpecialCat && cur.cSpecial) return true;
+  if (next.isSuper && cur.cSuper) return true;
+  return false;
+}
+
+export { K };

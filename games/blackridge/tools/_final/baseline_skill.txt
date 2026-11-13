@@ -1,0 +1,8 @@
+
+skill_probe  maps=lanternwalk,switchyard,saltmarket modes=tdm seeds=4 secs=150  matches=72
+level     win%   K/D   kills deaths  acc%   ttk s  flank/min  react s  reversals/100 moves  idle-at-wall%
+casual     25.0  0.85    734    868  38.2   1.34      0.31     0.63          0.21          20.1
+standard   54.2  1.05    832    792  39.0   1.26      0.28     0.58          0.19          21.3
+hard       70.8  1.12    852    758  42.1   1.32      0.33     0.52          0.19          20.2
+monotonic casual < standard < hard:  win% YES  K/D YES  acc% YES  flank NO  ttk(down) NO  react(down) YES
+wall 522 s

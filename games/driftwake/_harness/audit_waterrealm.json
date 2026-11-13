@@ -1,0 +1,49 @@
+{
+  "cold": {
+    "tag": "cold",
+    "fxPixels": 25693,
+    "pickedAt_s": 5.5,
+    "addRGB": [
+      20.9,
+      22.5,
+      20.3
+    ],
+    "absRGB": [
+      123.2,
+      129.5,
+      128.0
+    ],
+    "dominant": "G",
+    "bbox": [
+      61,
+      288,
+      778,
+      719
+    ]
+  },
+  "enterRealm": "ash",
+  "realmNow": "ash",
+  "ash": {
+    "tag": "ash",
+    "fxPixels": 43331,
+    "pickedAt_s": 3.05,
+    "addRGB": [
+      25.8,
+      16.6,
+      9.1
+    ],
+    "absRGB": [
+      87.4,
+      46.2,
+      16.7
+    ],
+    "dominant": "R",
+    "bbox": [
+      0,
+      0,
+      1279,
+      719
+    ]
+  },
+  "dAdd_cold_vs_ash": 13.6
+}
