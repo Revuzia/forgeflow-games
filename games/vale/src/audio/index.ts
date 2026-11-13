@@ -389,7 +389,10 @@ const HEAL_CHAIN_S = 1.2;    // … and not when the same target was healed this
 // max2 round 2 fix: 3.5 -> 3.2 after the louder impacts and the pan-law gain put the brawler seat (seed 3, Lisvel)
 // at -16.74 / -16.78 LUFS, 0.25 LU from the band's top, with the other seats at -17.8 to -18.3: the whole spread moves
 // down 0.3 LU, centred on the -18 token
-const MIX_TRIM_DB = 3.2;     // the engine's mix makeup after the master volume, before the limiter (see `buses`)
+// ruling 34 (the map beds 10 dB under the music, no calm lift on the bed): the beds had carried 1.5-2.4 LU of the master
+// (seeds 3 / 7 / 11 / 21 at -18.56 / -20.81 / -20.07 / -20.59 LUFS with the beds cut at 3.2), so the makeup takes it back
+// whole-mix: 3.2 -> 5.0, the four seats centred on the -18 token again
+const MIX_TRIM_DB = 5.0;     // the engine's mix makeup after the master volume, before the limiter (see `buses`)
 // mix focus (max2 SFX-1b): the fighters' kits were under half of the heard sfx on a jungle-heavy seat (library camp
 // cues: c_cast_big, c_monster_fall, c_hit_magic, c_slam). A MOBA mix leads with the player's own hero: your fighter's
 // kit cues play OWN_KIT_DB over everyone else's, and a camp monster's own sounds (its casts, abilities, blows and fall;

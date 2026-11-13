@@ -8,10 +8,17 @@
 //         hold-steer; hold-steer re-issues only on real pointer motion (a following camera alone never walks the
 //         hero); a chorded right release ends the steer; fightersOnly (held) picks fighters only; the hover
 //         outline names exactly what the click will attack.
+//   ruling 36 (verifier r3): the pick box follows the projected feet → head segment (a leaning fighter's head beats a
+//         minion behind it); overlap and attack-move distance use the DRAWN position (renderer.unitPos); a plain
+//         right-click forgives 14 px on enemy minions / fighters again (8 near misses round a minion all attack, a
+//         click 24 px clear stays a move, never onto a monster); the HUD's renderer wrapper forwards every renderer
+//         method the controller calls (a dropped one fails here, not silently in the shipped game).
+import { readFileSync } from 'node:fs';
 import { PerspectiveCamera, Plane, Raycaster, Vector2, Vector3 } from 'three';
 import { check, finish, section } from './fixtures/sim_fixture.ts';
 import { InputController, type InputHooks, type InputRenderer, type PickOpts } from '../src/input/controller.ts';
 import { pickUnit, type Pickable } from '../src/render/pick.ts';
+import { selecting } from '../src/ui/hud/selecting.ts';
 import { CAMERA } from '../src/render/camera.ts';
 import { defaultSettings } from '../src/session/settings.ts';
 import type { Command, EntityView } from '../src/contracts/sim.ts';
@@ -43,7 +50,9 @@ let views: EntityView[] = [];
 const unit = (id: number, kind: Kind, team: number, x: number, y: number, radius: number): EntityView =>
   ({ id, kind, team, x, y, radius, alive: true, targetable: true, visibleMask: 0b11, statuses: [], vx: 0, vy: 0 }) as unknown as EntityView;
 const ART: Record<string, number> = { fighter: 1.9, minion: 1.1, structure: 6 };
-const pickables = (): Pickable[] => views.map((v) => ({ id: v.id, x: v.x, y: v.y, h: 0, artHeight: ART[v.kind] ?? 1.2, view: v }));
+/** where units are drawn (interpolated actors), when it differs from the sim position in the view */
+const drawn = new Map<number, { x: number; y: number }>();
+const pickables = (): Pickable[] => views.map((v) => { const d = drawn.get(v.id) ?? v; return { id: v.id, x: d.x, y: d.y, h: 0, artHeight: ART[v.kind] ?? 1.2, view: v }; });
 const pick = (x: number, y: number, o?: PickOpts): number | null => pickUnit(cam, W, H, pickables(), x, y, o);
 
 // ── the controller harness ──
@@ -58,14 +67,19 @@ const client = {
   },
   send: (c: Command) => { sent.push(c); },
 };
-const renderer: InputRenderer = { pickGround, pickEntity: (x, y, o) => pick(x, y, o), setHover: (id) => { hover = id; } };
+const bare: InputRenderer = {
+  pickGround, pickEntity: (x, y, o) => pick(x, y, o), setHover: (id) => { hover = id; },
+  unitPos: (id) => { const d = drawn.get(id) ?? views.find((v) => v.id === id); return d ? { x: d.x, y: d.y } : null; },
+};
+// the shipped wrapper (src/ui/hud/selecting.ts), so the probe runs the controller exactly as the game does
+const renderer: InputRenderer = selecting(bare, () => {});
 const hooks: InputHooks = {
   toggleShop() {}, closeShop: () => false, scoreboard() {}, denied() {}, marker() {}, setCameraLock() {}, blocked: () => false, pingsDisabled: () => false,
 };
 const surface = { contains: () => true } as unknown as HTMLElement;
 // the controller with its private pointer handlers reachable (the probe drives them directly)
 function controller(): any {
-  sent.length = 0; hover = null;
+  sent.length = 0; hover = null; drawn.clear();
   return new InputController({ client: client as never, renderer, index: {} as never, settings: defaultSettings(), hooks, surface }) as never;
 }
 const at = (c: Record<string, any>, p: { x: number; y: number }): void => { c.ptr.x = p.x; c.ptr.y = p.y; c.ptr.inside = true; };
@@ -174,11 +188,14 @@ section('plain right-click: an ally in front never turns an enemy click into a m
   c2.rightDown(false);
   check('a near miss (6 px) attacks instead of walking into the wave', last()?.type === 'attack', last());
   check('…and arms no steer', c2.rightHeld === false);
-  // verifier r2: the 14 px attack-click slop turned plain ground clicks beside enemies into chases
+  // ruling 36 (supersedes 35's 8 px): plain right-clicks forgive 14 px on enemy minions and fighters again
   const c3 = controller();
   at(c3, { x: side.x + 12, y: side.y });
   c3.rightDown(false);
-  check('a plain right-click 12 px clear of an enemy stays a move (attack clicks keep 14 px)', last()?.type === 'move', last());
+  check('a plain right-click 12 px clear of an enemy minion attacks it (14 px slop)', last()?.type === 'attack' && (last() as { target: number }).target === 10, last());
+  at(c3, { x: side.x + 24, y: side.y });
+  c3.rightDown(false);
+  check('…24 px clear (clearly away from it) stays a move', last()?.type === 'move', last());
   const c4 = controller();
   views = [unit(1, 'fighter', 0, 40, 40, 0.5), unit(40, 'monster', 2, 50, 50, 0.6)];
   const ms = toScreen(50.75, 50);
@@ -240,6 +257,90 @@ section('hover names exactly what the click will attack', () => {
   at(c, { x: side.x + 6, y: side.y });
   c.frame(performance.now() + 3000);
   check('a near miss on an enemy shows its outline and the attack cursor', hover === 10 && c.cursor.value === 'attack', { hover, cursor: c.cursor.value });
+});
+
+section('ruling 36: plain right-click near misses all round a minion attack it (live r3: 3-4 of 8 hit)', () => {
+  views = [unit(1, 'fighter', 0, 40, 40, 0.5), unit(10, 'minion', 1, 50, 50, 0.45)];
+  // the minion's box edge in 8 directions, then 4–13 px beyond it
+  const isOn = (p: { x: number; y: number }): boolean => pick(p.x, p.y, { filter: (v) => v.team === 1 }) === 10;
+  const mid = toScreen(50, 50, 0.5);
+  let hits = 0;
+  const miss: unknown[] = [];
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2, ux = Math.cos(a), uy = Math.sin(a);
+    let r = 0;
+    while (isOn({ x: mid.x + ux * r, y: mid.y + uy * r }) && r < 300) r += 0.5;
+    const gap = 4 + (k % 4) * 3;   // 4, 7, 10, 13 px
+    const p = { x: mid.x + ux * (r + gap), y: mid.y + uy * (r + gap) };
+    const c = controller();
+    at(c, p);
+    c.rightDown(false);
+    if (last()?.type === 'attack' && (last() as { target: number }).target === 10) hits++; else miss.push({ k, gap, sent: last() });
+  }
+  check('8 of 8 near misses (4–13 px off the box) attack the minion', hits === 8, miss);
+});
+
+section('ruling 36: the pick box leans with the body (a fighter\'s head beats a short minion behind it)', () => {
+  // verifier r3: Shift + right-click on an enemy fighter's head at (55, 50) picked the minion at (55.5, 49.15) behind it
+  views = [unit(1, 'fighter', 0, 45, 56, 0.5), unit(20, 'fighter', 1, 55, 50, 0.5), unit(11, 'minion', 1, 55.5, 49.15, 0.45)];
+  const lean = toScreen(55, 50, 1.9).x - toScreen(55, 50, 0).x;
+  check('(perspective leans the fighter\'s head off its feet column)', Math.abs(lean) > 10, lean.toFixed(1));
+  for (const h of [1.6, 1.75, 1.9]) {
+    const c = controller();
+    at(c, toScreen(55, 50, h));
+    c.rightDown(true);
+    check(`Shift + right-click on the fighter's head (h ${h}) attacks the fighter`, last()?.type === 'attack' && (last() as { target: number }).target === 20, last());
+    const c2 = controller();
+    at(c2, toScreen(55, 50, h));
+    c2.rightDown(false);
+    check(`…a plain right-click there too (h ${h})`, last()?.type === 'attack' && (last() as { target: number }).target === 20, last());
+  }
+  const c3 = controller();
+  at(c3, toScreen(55.5, 49.15, 0.6));
+  c3.rightDown(true);
+  check('the minion\'s own body (clear of the fighter) still picks the minion', last()?.type === 'attack' && (last() as { target: number }).target === 11, last());
+});
+
+section('ruling 36: moving units are picked where they are drawn; overlap goes to the body nearest the cursor', () => {
+  // verifier r3: an A-click on the centre of minion 1862 picked its overlapping neighbour 1863 (drawn vs sim position)
+  views = [unit(1, 'fighter', 0, 45, 56, 0.5), unit(1862, 'minion', 1, 52.6, 50, 0.45), unit(1863, 'minion', 1, 53.2, 50, 0.45)];
+  // both walking +x: the view (sim) is a tick ahead of where the renderer draws them
+  drawn.set(1862, { x: 52.2, y: 50 }); drawn.set(1863, { x: 52.8, y: 50 });
+  const keep = new Map(drawn);
+  for (const [id, h] of [[1862, 0.55], [1863, 0.55], [1862, 0.9], [1863, 0.9]] as const) {
+    const c = controller(); for (const [k, v] of keep) drawn.set(k, v);
+    const d = drawn.get(id)!;
+    c.action('attackMove', true);
+    at(c, toScreen(d.x, d.y, h));
+    c.leftDown({ altKey: false } as PointerEvent);
+    check(`A + click on the drawn centre of ${id} (h ${h}) attacks ${id}`, last()?.type === 'attack' && (last() as { target: number }).target === id, last());
+  }
+  // verifier r3: an A-click 0.9 m outside a minion cluster picked a far minion (sim positions) over the near one (drawn)
+  views = [unit(1, 'fighter', 0, 45, 56, 0.5), unit(3575, 'minion', 1, 54.0, 50, 0.45), unit(5566, 'minion', 1, 53.2, 51.4, 0.45)];
+  const c = controller();
+  drawn.set(3575, { x: 53.0, y: 50 });   // drawn 1 m behind its sim point (interpolating a fast step)
+  c.action('attackMove', true);
+  at(c, toScreen(51.55, 50));             // 1.0 m from 3575's drawn edge, 2.0 m from its sim edge, 1.7 m from 5566's
+  const g = pickGround(c.ptr.x, c.ptr.y)!;
+  const dDrawn = Math.hypot(g.x - 53.0, g.y - 50) - 0.45, dOther = Math.hypot(g.x - 53.2, g.y - 51.4) - 0.45, dSim = Math.hypot(g.x - 54, g.y - 50) - 0.45;
+  c.leftDown({ altKey: false } as PointerEvent);
+  check('A + click near the cluster attacks the minion nearest the click where it is DRAWN', dDrawn < dOther && dSim > dOther && last()?.type === 'attack' && (last() as { target: number }).target === 3575,
+    { sent: last(), dDrawn: dDrawn.toFixed(2), dOther: dOther.toFixed(2), dSim: dSim.toFixed(2) });
+});
+
+section('ruling 36: the HUD renderer wrapper forwards every renderer method the controller calls', () => {
+  const src = readFileSync(new URL('../src/input/controller.ts', import.meta.url), 'utf8');
+  const used = [...new Set([...src.matchAll(/this\.r\.(\w+)/g)].map((m) => m[1]))].sort();
+  check('(the controller calls renderer methods)', used.includes('unitPos') && used.includes('pickEntity'), used);
+  const calls: string[] = [];
+  const fake: Record<string, unknown> = { camera: { mode: 'locked' } };
+  for (const k of used) if (k !== 'camera') fake[k] = (...a: unknown[]) => { calls.push(k); void a; return null; };
+  const w = selecting(fake as InputRenderer, () => calls.push('select')) as Record<string, unknown>;
+  const missing = used.filter((k) => k === 'camera' ? w.camera !== fake.camera : typeof w[k] !== 'function');
+  check('every this.r.* the controller uses exists on the wrapped renderer', missing.length === 0, missing);
+  for (const k of used) if (k !== 'camera' && typeof w[k] === 'function') (w[k] as (...a: unknown[]) => unknown)(1, 2, 3);
+  const notThrough = used.filter((k) => k !== 'camera' && !calls.includes(k));
+  check('…and each one reaches the real renderer', notThrough.length === 0, notThrough);
 });
 
 finish('probe_input_clicks');

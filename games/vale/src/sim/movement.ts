@@ -69,8 +69,21 @@ const PINNED_PROGRESS = 0.03;
 const STEER_LOOK = 3;
 /** clearance (m) kept past a steered-round body */
 const STEER_MARGIN = 0.1;
-/** a gap on the other side must be this much (m) nearer before a steer flips sides */
-const STEER_STICK = 0.6;
+/** a clear heading on the other side must be this much (rad) nearer the line before a steer flips sides */
+const STEER_STICK = 0.2;
+/** headings are tried every STEER_STEP rad, out to 135° each side (backing out of a pocket the wave closed round
+ *  it); a heading is clear for STEER_CLEAR m of walking */
+const STEER_STEP = Math.PI / 36;
+const STEER_DIRS = 28;
+const STEER_CLEAR = 1.6;
+const STEER_COS: number[] = [];
+const STEER_SIN: number[] = [];
+for (let k = 0; k < STEER_DIRS; k++) { STEER_COS.push(dcos(k * STEER_STEP)); STEER_SIN.push(dsin(k * STEER_STEP)); }
+/** a body walking away along the line faster than this fraction of the walker's speed is not steered round */
+const STEER_FOLLOW = 0.75;
+/** progress watchdog window (ticks, ~1 s) and the share of a full-speed walk it must gain off the route left */
+const WATCH_TICKS = 30;
+const WATCH_PROGRESS = 0.3;
 const ARRIVE_NEAR = 1;
 const ARRIVE_PROGRESS = 0.3;
 /** peak height (m) of airborne arcs */
@@ -81,6 +94,7 @@ const passU: Entity[] = [];
 const tmp = { x: 0, y: 0 };
 const steerLo: number[] = [];
 const steerHi: number[] = [];
+const steerR: number[] = [];
 
 // ── orders ──────────────────────────────────────────────────────────────────────────────────────
 export function issueMove(w: World, e: Entity, x: number, y: number, attackMove: boolean, prefer = -1): void {
@@ -88,7 +102,7 @@ export function issueMove(w: World, e: Entity, x: number, y: number, attackMove:
   x = Math.max(0, Math.min(m[0] - 1e-3, x)); y = Math.max(0, Math.min(m[1] - 1e-3, y));
   e.orderReqX = x; e.orderReqY = y;
   // the goal the order can actually finish at (never a point inside a wall the walker would slide against)
-  if (w.nav.snapGoal(e.x, e.y, x, y, tmp)) { x = tmp.x; y = tmp.y; }
+  if (w.nav.snapGoal(e.x, e.y, x, y, tmp, e.radius)) { x = tmp.x; y = tmp.y; }
   // a windup always finishes (the walk starts after release); a channel ends unless it allows moving
   const cs = e.cast;
   if (cs && cs.phase === 'channel' && !cs.def.channel?.canMove) interruptCast(w, e, false);
@@ -97,12 +111,14 @@ export function issueMove(w: World, e: Entity, x: number, y: number, attackMove:
   e.orderX = x; e.orderY = y; e.orderTarget = attackMove ? prefer : -1; e.pendingSlot = -1;
   e.path.length = 0; e.pathGoalX = NaN;
   e.arriveStall = 0; e.arrivePinned = 0;
+  resetWatch(e);
 }
 export function issueAttack(w: World, e: Entity, t: Entity): void {
   if (t === e) return;
   if (e.atkTarget !== t.id) e.atkWindup = -1;
   e.order = ORDER_ATTACK; e.orderTarget = t.id; e.pendingSlot = -1;
   e.path.length = 0; e.pathGoalX = NaN;
+  resetWatch(e);
 }
 export function issueStop(w: World, e: Entity): void {
   e.order = ORDER_NONE; e.orderTarget = -1; e.pendingSlot = -1;
@@ -373,61 +389,108 @@ function separate(w: World, e: Entity, x: number, y: number, factor: number): vo
 }
 
 /**
- * Local steering for a walking fighter (ruling 35): units standing on its line within STEER_LOOK m (not the unit it
- * is going for) are walked round instead of shoved through. Each body ahead blocks a band of sideways offsets;
- * the free offset nearest the line wins (the side steered last tick kept unless the other is STEER_STICK m nearer,
- * an exact tie to the right), and only if open ground lies there. Returns the sideways offset (m, + = right of the
- * heading (ux, uy)) and the distance ahead it is taken over in tmp (x: offset, y: ahead), or false: walk straight.
+ * Local steering for a walking fighter (rulings 35, 36): bodies within STEER_LOOK m ahead (not the unit it is going
+ * for, not a crowd on its own point) are walked round instead of shoved through. Only bodies that are standing,
+ * slower than the walker, or coming at it count: one walking the same way about as fast clears the line by itself
+ * (no sidestep behind an ally heading to the same spot). Headings are tried every STEER_STEP rad out to 135° each
+ * side; a heading is clear when the walker could go STEER_CLEAR m along it (or to its aim) without its body
+ * meeting a counted body (radius + STEER_MARGIN; a body it already touches only blocks headings into it) or a wall.
+ * The clear heading nearest the line wins, so it passes the bodies along their tangents: the least detour, re-aimed
+ * every tick. The side steered last tick is kept unless the other is STEER_STICK rad nearer the line (an exact tie
+ * to the right). Boxed in (no clear heading): the heading that gains the most ground before a body, if it beats
+ * walking straight. Writes the unit heading into tmp and returns true, or false: walk straight (and shove).
  */
 function steerRound(w: World, e: Entity, ux: number, uy: number, reach: number): boolean {
   const look = Math.min(STEER_LOOK, reach);
   if (look < 0.3) return false;
-  const n = w.hash.query(e.x + ux * look * 0.5, e.y + uy * look * 0.5, look * 0.5 + e.radius + 1, near);
-  steerLo.length = 0; steerHi.length = 0;
-  let first = Infinity;
+  const n = w.hash.query(e.x + ux * look * 0.5, e.y + uy * look * 0.5, look * 0.5 + e.radius + 1.2, near);
+  steerLo.length = 0; steerHi.length = 0; steerR.length = 0;
+  const follow = STEER_FOLLOW * e.stats.moveSpeed;
   for (let i = 0; i < n; i++) {
     const o = near[i];
     if (o === e || !o.alive || o.dash || o.static || o.kind === 'ward' || o.kind === 'pickup' || o.kind === 'projectile' || o.kind === 'zone') continue;
     if (o.id === e.orderTarget || o.id === e.atkTarget) continue;
     const ox = o.x - e.x, oy = o.y - e.y;
     const fwd = ox * ux + oy * uy;
-    const rr = e.radius + o.radius + STEER_MARGIN;
-    // behind, too far, or crowding the point itself (the arrival watchdog ends a move into a crowd on its point)
-    if (fwd <= 0 || fwd > look || fwd >= reach - (o.radius + e.radius + ARRIVE_NEAR)) continue;
-    const lat = ox * uy - oy * ux;   // + = right of the heading
-    if (Math.abs(lat) >= rr) continue;
-    steerLo.push(lat - rr); steerHi.push(lat + rr);
-    if (fwd < first) first = fwd;
+    const d = Math.sqrt(ox * ox + oy * oy);
+    // behind, out of reach, or crowding the point itself (the arrival watchdog ends a move into a crowd on its point)
+    if (fwd <= -o.radius || d > look + o.radius + e.radius || fwd >= reach - (o.radius + e.radius + ARRIVE_NEAR)) continue;
+    // walking away along the line about as fast as the walker: it is not in the way for long
+    if (o.vx * ux + o.vy * uy > follow) continue;
+    steerLo.push(ox); steerHi.push(oy); steerR.push(e.radius + o.radius);
   }
-  if (steerLo.length === 0 || first === Infinity) return false;
-  // every body standing in the walker's own band: is 0 blocked? (it is: each band above holds |lat| < rr) — find
-  // the nearest free offset on each side by sweeping the bands outward
-  let right = 0, left = 0;
-  for (let changed = true; changed;) {
-    changed = false;
-    for (let i = 0; i < steerLo.length; i++) if (steerLo[i] < right + 1e-9 && steerHi[i] > right) { right = steerHi[i]; changed = true; }
-  }
-  for (let changed = true; changed;) {
-    changed = false;
-    for (let i = 0; i < steerLo.length; i++) if (steerHi[i] > left - 1e-9 && steerLo[i] < left) { left = steerLo[i]; changed = true; }
-  }
-  const ahead = Math.max(first, 0.5);
+  if (steerLo.length === 0) return false;
+  const clear = Math.min(STEER_CLEAR, look);
+  const f0 = steerFree(ux, uy, look);
+  if (f0 >= look - 1e-9) return false;   // the line itself is clear
   const nav = w.nav;
-  const okR = nav.walkable(e.x + ux * ahead + uy * right, e.y + uy * ahead - ux * right);
-  const okL = nav.walkable(e.x + ux * ahead + uy * left, e.y + uy * ahead - ux * left);
-  let side: number;
-  if (okR && okL) {
-    const dr = right, dl = -left;
-    if (e.steerSide > 0) side = dl < dr - STEER_STICK ? -1 : 1;
-    else if (e.steerSide < 0) side = dr < dl - STEER_STICK ? 1 : -1;
-    else side = dl < dr ? -1 : 1;
-  } else if (okR) side = 1;
-  else if (okL) side = -1;
-  else return false;
-  e.steerSide = side;
-  tmp.x = side > 0 ? right : left; tmp.y = ahead;
+  const probe = Math.min(clear, reach);
+  let best = -1, bestSide = 0, bestGain = f0, bestK = -1, bestKSide = 0;
+  let firstR = -1, firstL = -1;
+  for (let k = 1; k < STEER_DIRS; k++) {
+    for (const side of [1, -1]) {
+      if ((side > 0 ? firstR : firstL) >= 0) continue;
+      const c = STEER_COS[k], sn = STEER_SIN[k] * side;
+      const dx = ux * c + uy * sn, dy = uy * c - ux * sn;   // + side = right of the heading
+      const f = steerFree(dx, dy, look);
+      const okWall = (): boolean => nav.lineOfWalk(e.x, e.y, e.x + dx * probe, e.y + dy * probe, 0);
+      if (f >= clear - 1e-9) { if (okWall()) { if (side > 0) firstR = k; else firstL = k; } continue; }
+      const gain = f * c + (side === e.steerSide ? 0.05 : 0);
+      if (gain > bestGain + 1e-6 && okWall()) { bestGain = gain; bestK = k; bestKSide = side; }
+    }
+    if (firstR >= 0 && firstL >= 0) break;
+  }
+  if (firstR >= 0 || firstL >= 0) {
+    const kr = firstR >= 0 ? firstR : Infinity, kl = firstL >= 0 ? firstL : Infinity;
+    const stick = STEER_STICK / STEER_STEP;
+    if (e.steerSide > 0) bestSide = kl < kr - stick ? -1 : 1;
+    else if (e.steerSide < 0) bestSide = kr < kl - stick ? 1 : -1;
+    else bestSide = kl < kr ? -1 : 1;
+    if ((bestSide > 0 ? kr : kl) === Infinity) bestSide = -bestSide;
+    best = bestSide > 0 ? kr : kl;
+  } else if (bestK >= 0) { best = bestK; bestSide = bestKSide; }
+  if (best < 0) return false;
+  e.steerSide = bestSide;
+  const c = STEER_COS[best], sn = STEER_SIN[best] * bestSide;
+  tmp.x = ux * c + uy * sn; tmp.y = uy * c - ux * sn;
   return true;
 }
+/** how far (m, up to `cap`) the walker can go along unit heading (dx, dy) before its body meets a counted body */
+function steerFree(dx: number, dy: number, cap: number): number {
+  let free = cap;
+  for (let i = 0; i < steerLo.length; i++) {
+    const ox = steerLo[i], oy = steerHi[i], R = steerR[i];
+    const along = ox * dx + oy * dy;
+    const d2 = ox * ox + oy * oy;
+    if (d2 < R * R) {
+      // already touching: only a heading into it is blocked (sliding past or away is free)
+      if (along > Math.sqrt(d2) * 0.35) return 0;
+      continue;
+    }
+    if (along <= 0) continue;
+    const Rm = R + STEER_MARGIN;
+    const perp2 = d2 - along * along;
+    if (perp2 >= Rm * Rm) continue;
+    const t = along - Math.sqrt(Rm * Rm - perp2);
+    if (t < free) free = t < 0 ? 0 : t;
+  }
+  return free;
+}
+
+/** route length left from (x, y): to the current waypoint and along the rest of the path, else straight to the goal */
+function routeLeft(e: Entity, x: number, y: number, gx: number, gy: number): number {
+  if (e.path.length === 0 || e.pathIdx * 2 >= e.path.length) return Math.sqrt((gx - x) * (gx - x) + (gy - y) * (gy - y));
+  let px = x, py = y, l = 0;
+  for (let i = e.pathIdx * 2; i + 1 < e.path.length; i += 2) {
+    const qx = e.path[i], qy = e.path[i + 1];
+    l += Math.sqrt((qx - px) * (qx - px) + (qy - py) * (qy - py));
+    px = qx; py = qy;
+  }
+  return l;
+}
+
+/** reset the progress watchdog (a new order, or not walking) */
+export function resetWatch(e: Entity): void { e.watchTicks = 0; e.watchStage = 0; e.steerOff = 0; }
 
 function stepToward(w: World, e: Entity, gx: number, gy: number): void {
   const speed = e.stats.moveSpeed;
@@ -453,19 +516,20 @@ function stepToward(w: World, e: Entity, gx: number, gy: number): void {
   const aimD0 = Math.sqrt((aimX - e.x) * (aimX - e.x) + (aimY - e.y) * (aimY - e.y));
   const want = Math.min(budget, aimD0);
   let x = e.x, y = e.y;
-  // a walking fighter steers round units standing on its line (ruling 35) instead of grinding through them
+  // progress watchdog (ruling 36), steering included: the route length left when this window opened
+  const watch = e.kind === 'fighter';
+  if (watch && e.watchTicks === 0) e.watchRem = routeLeft(e, e.x, e.y, gx, gy);
+  // a walking fighter steers round units standing on its line (rulings 35, 36) instead of grinding through them
   let steered = false;
-  if (e.kind === 'fighter' && aimD0 > 1e-6) {
+  if (e.steerOff > 0) e.steerOff--;
+  if (e.kind === 'fighter' && aimD0 > 1e-6 && e.steerOff === 0) {
     const ux = (aimX - e.x) / aimD0, uy = (aimY - e.y) / aimD0;
     const goalD = Math.sqrt((gx - e.x) * (gx - e.x) + (gy - e.y) * (gy - e.y));
     if (steerRound(w, e, ux, uy, Math.min(aimD0, goalD))) {
-      const lat = tmp.x, fwd = tmp.y;
-      const sx = ux * fwd + uy * lat, sy = uy * fwd - ux * lat;
-      const sl = Math.sqrt(sx * sx + sy * sy);
-      x = e.x + (sx / sl) * budget; y = e.y + (sy / sl) * budget; budget = 0;
+      x = e.x + tmp.x * budget; y = e.y + tmp.y * budget; budget = 0;
       steered = true;
     } else e.steerSide = 0;
-  }
+  } else e.steerSide = 0;
   // walk the waypoint list within this tick's budget
   for (let guard = 0; guard < 4 && budget > 1e-9; guard++) {
     let wx: number, wy: number;
@@ -501,6 +565,18 @@ function stepToward(w: World, e: Entity, gx: number, gy: number): void {
       else { e.pathGoalX = NaN; e.pathCheck = 0; }
     }
   } else e.noProgress = 0;
+  // the window closes: under WATCH_PROGRESS of a full-speed walk off the route left (steering in place, inching
+  // sideways in a wave, pinned on a body) → re-plan from here and walk the route without steering for a window;
+  // a second such window in a row tells movementSystem to end a move to a point (watchStage 2)
+  if (watch && ++e.watchTicks >= WATCH_TICKS) {
+    const gain = e.watchRem - routeLeft(e, nx, ny, gx, gy);
+    e.watchTicks = 0;
+    if (gain < speed * WATCH_TICKS * TICK_DT * WATCH_PROGRESS) {
+      e.watchStage++;
+      e.pathGoalX = NaN; e.pathCheck = 0; e.noProgress = 0;
+      e.steerOff = WATCH_TICKS; e.steerSide = 0;
+    } else e.watchStage = 0;
+  }
   const mdx = nx - e.x, mdy = ny - e.y;
   const moved = Math.sqrt(mdx * mdx + mdy * mdy);
   if (moved < 1e-6) { if (--e.pathCheck <= 0) { e.pathGoalX = NaN; e.pathCheck = DIRECT_RECHECK_TICKS; } return; } // stuck: repath soon
@@ -550,9 +626,10 @@ export function movementSystem(w: World): void {
         const straight = direct && e.path.length === 0;
         if (straight && gain < step * ARRIVE_PROGRESS) e.arriveStall++; else e.arriveStall = 0;
         if (straight && gain < step * PINNED_PROGRESS) e.arrivePinned++; else e.arrivePinned = 0;
-        if ((e.arriveStall >= ARRIVE_STALL_TICKS && d1 < e.radius + ARRIVE_NEAR) || e.arrivePinned >= ARRIVE_GIVE_UP_TICKS) arrive(e);
+        if ((e.arriveStall >= ARRIVE_STALL_TICKS && d1 < e.radius + ARRIVE_NEAR) || e.arrivePinned >= ARRIVE_GIVE_UP_TICKS || e.watchStage >= 2) arrive(e);
       }
     } else if ((e.ccMask & CC_HARD) === 0) {
+      if (e.watchTicks !== 0 || e.watchStage !== 0) resetWatch(e);
       // idle units yield softly to overlapping neighbours
       separate(w, e, e.x, e.y, 0.2);
       const dx = tmp.x - e.x, dy = tmp.y - e.y;
@@ -564,6 +641,7 @@ export function movementSystem(w: World): void {
 
 function arrive(e: Entity): void {
   e.order = ORDER_NONE; e.orderTarget = -1; e.path.length = 0; e.arriveStall = 0; e.arrivePinned = 0;
+  resetWatch(e);
 }
 
 // ── view state ──────────────────────────────────────────────────────────────────────────────────

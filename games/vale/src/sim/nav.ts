@@ -24,6 +24,25 @@ import { dhypot } from './dmath.ts';
 /** extra metres around wall polygons that count as blocked for unit centres */
 export const WALL_CLEARANCE = 0.25;
 const SQRT2 = Math.SQRT2;
+/** straight distance (m) under which a corner-graph route clearly longer than the line is checked against grid A* */
+const SHORT_QUERY = 16;
+/** snapGoal (ruling 36): a candidate must be this much (m) nearer the click than the straight walk's stop point */
+const SNAP_MARGIN = 0.25;
+/** … and within this (m) of the click */
+const SNAP_REACH = 4;
+/** … and its route at most SNAP_DETOUR × straight + SNAP_DETOUR_M long (never walk away from the click) */
+const SNAP_DETOUR = 1.3;
+const SNAP_DETOUR_M = 0.5;
+/** route confirmations per snap (the flood prices the rest; candidates in straight line of walk cost one march) */
+const SNAP_SEARCHES = 6;
+/** candidates further (m) than this from the walker are only taken in straight line of walk (bounds the flood) */
+const SNAP_FLOOD_D = 12;
+/** length of the waypoint polyline from (sx, sy) through out[from…] */
+function polyLen(sx: number, sy: number, out: readonly number[], from: number): number {
+  let l = 0, px = sx, py = sy;
+  for (let i = from; i + 1 < out.length; i += 2) { l += dhypot(out[i] - px, out[i + 1] - py); px = out[i]; py = out[i + 1]; }
+  return l;
+}
 
 export class NavGrid {
   readonly w: number;
@@ -56,6 +75,7 @@ export class NavGrid {
   private cells: number[] = [];
   private pts: number[] = [];
   private leg: number[] = [];
+  private alt: number[] = [];
 
   // corner graph (lazy)
   private graphReady = false;
@@ -374,53 +394,123 @@ export class NavGrid {
   }
 
   /**
-   * Where a move order to (x, y) should end for a walker at (fromX, fromY), so the order can finish: (x, y)
-   * itself when it is open and reachable. A blocked point (a wall, a tree line, a structure's footprint, the
-   * map border) goes to the nearest open point to the click when that point is on the walker's side (straight open
-   * ground to it from the walker or from the click→walker line: slide along the face to beside the cursor); otherwise
-   * to the open point on the click→walker line nearest the click (walk toward the click and stop at the obstacle), unless the nearest open cell is more than `sideSlack` m nearer
-   * the click and within `near` m of it (a click just inside a thin obstacle's far face). A point in a pocket the walker cannot
-   * reach goes to the nearest cell it can reach. Writes `out`; false when nothing is open at all.
+   * Where a move order to (x, y) should end for a walker of `radius` at (fromX, fromY), so the order can finish
+   * (ruling 36): (x, y) itself when it is open (a pocket the walker cannot reach goes to the nearest cell it can).
+   * A blocked point (a wall, a tree line, a structure's footprint, the map border) goes to the open point nearest
+   * the click that the WALKER can reach without walking away from the click: strictly nearer the click than its
+   * straight walk toward the click gets (by SNAP_MARGIN), and either in straight line of walk for its body
+   * (the same radius test stepToward uses) or at most SNAP_DETOUR × straight + SNAP_DETOUR_M of route away.
+   * Failing that, the end of the walker's straight walk toward the click (stop at the obstacle). Every candidate
+   * is nearer the click than the walker, so a held cursor just inside a face never steps it backwards.
+   * Writes `out`; false when nothing is open at all.
    */
-  snapGoal(fromX: number, fromY: number, x: number, y: number, out: V2, near = 3, sideSlack = 2.5): boolean {
+  snapGoal(fromX: number, fromY: number, x: number, y: number, out: V2, radius = 0): boolean {
     const t: V2 = { x: 0, y: 0 };
-    let cs = this.componentAt(fromX, fromY);
-    if (cs < 0 && this.nearestWalkable(fromX, fromY, t, 8)) cs = this.componentAt(t.x, t.y);
-    let gx = x, gy = y;
-    if (!this.walkable(x, y)) {
-      // A: the nearest open cell (ties to the walker's side); B: the open point on the click → walker line nearest
-      // the click (the walker's side of the obstacle). B wins unless A is clearly nearer the click: a click into a
-      // wall never sends the walker around it to the far face
-      const okA = this.nearestWalkable(x, y, t, 64, fromX, fromY);
-      const ax = t.x, ay = t.y;
-      const dA = okA ? Math.sqrt((ax - x) * (ax - x) + (ay - y) * (ay - y)) : Infinity;
-      const dx = fromX - x, dy = fromY - y, l = Math.sqrt(dx * dx + dy * dy);
-      const step = this.cell * 0.5;
-      let okB = false, bx = 0, by = 0;
-      for (let s = step; s < l + step; s += step) {
-        const f = Math.min(1, s / Math.max(l, 1e-9));
-        const px = x + dx * f, py = y + dy * f;
-        if (!this.walkable(px, py) || (cs >= 0 && this.componentAt(px, py) !== cs)) continue;
-        // settle on the open cell's centre (solidly inside, not on the clearance rim)
-        bx = (Math.floor(px / this.cell) + 0.5) * this.cell; by = (Math.floor(py / this.cell) + 0.5) * this.cell;
-        if (!this.walkable(bx, by)) { bx = px; by = py; }
-        okB = true;
+    const r = Math.min(Math.max(0, radius), this.cell * 0.45);
+    // (sx, sy): where route checks start (a walker standing inside a structure's clearance rim: the nearest open cell)
+    let sx = fromX, sy = fromY;
+    let cs = this.componentAt(sx, sy);
+    if (cs < 0 && this.nearestWalkable(sx, sy, t, 8)) { cs = this.componentAt(t.x, t.y); sx = t.x; sy = t.y; }
+    if (this.walkable(x, y)) {
+      if (cs >= 0 && this.componentAt(x, y) !== cs && this.nearestInComponent(x, y, cs, t)) { out.x = t.x; out.y = t.y; return true; }
+      out.x = x; out.y = y; return true;
+    }
+    // B: the walker's straight walk toward the click, stopped at the obstacle
+    this.raycast(fromX, fromY, x, y, t);
+    let gx = t.x, gy = t.y;
+    if (!this.walkable(gx, gy)) { gx = sx; gy = sy; }
+    const dB = Math.sqrt((gx - x) * (gx - x) + (gy - y) * (gy - y));
+    // A: open cells nearer the click than B (by SNAP_MARGIN, within SNAP_REACH of it), nearest first
+    const R = Math.min(dB - SNAP_MARGIN, SNAP_REACH);
+    if (R > 0 && cs >= 0) {
+      const c = this.cell, cand = this.snapCand; cand.length = 0;
+      const x0 = Math.max(0, Math.floor((x - R) / c)), x1 = Math.min(this.w - 1, Math.floor((x + R) / c));
+      const y0 = Math.max(0, Math.floor((y - R) / c)), y1 = Math.min(this.h - 1, Math.floor((y + R) / c));
+      for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+        const i = cy * this.w + cx;
+        if (this.blocked[i] || this.comp[i] !== cs) continue;
+        const px = (cx + 0.5) * c, py = (cy + 0.5) * c;
+        const d = Math.sqrt((px - x) * (px - x) + (py - y) * (py - y));
+        if (d < R) cand.push(i);
+      }
+      const key = (i: number): number => { const px = ((i % this.w) + 0.5) * c, py = (Math.floor(i / this.w) + 0.5) * c; return (px - x) * (px - x) + (py - y) * (py - y); };
+      const keyS = (i: number): number => { const px = ((i % this.w) + 0.5) * c, py = (Math.floor(i / this.w) + 0.5) * c; return (px - sx) * (px - sx) + (py - sy) * (py - sy); };
+      cand.sort((a, b) => key(a) - key(b) || keyS(a) - keyS(b) || a - b);
+      // one bounded grid flood from the walker prices every candidate's route at once (octile cell steps, no corner
+      // cutting: within ~8 % of the string-pulled walk); clear passes and clear fails need no search, the narrow band
+      // between is confirmed with the walker's own planner (bounded)
+      let far = 0;
+      for (let k = 0; k < cand.length; k++) {
+        const i = cand[k], px = ((i % this.w) + 0.5) * c, py = (Math.floor(i / this.w) + 0.5) * c;
+        const D = Math.sqrt((px - sx) * (px - sx) + (py - sy) * (py - sy));
+        if (D <= SNAP_FLOOD_D && D > far) far = D;
+      }
+      const cost = this.snapCost; cost.length = 0;
+      this.flood(sx, sy, far * SNAP_DETOUR + SNAP_DETOUR_M + c);
+      for (let k = 0; k < cand.length; k++) cost.push(this.closedGen[cand[k]] === this.gen ? this.g[cand[k]] * c : Infinity);
+      let searches = 0;
+      const route = this.snapRoute;
+      const slack = c * 0.75;   // the walker's offset from its cell centre, start and end
+      for (let k = 0; k < cand.length; k++) {
+        const i = cand[k];
+        const px = ((i % this.w) + 0.5) * c, py = (Math.floor(i / this.w) + 0.5) * c;
+        if (this.lineOfWalk(sx, sy, px, py, r)) { gx = px; gy = py; break; }
+        const D = Math.sqrt((px - sx) * (px - sx) + (py - sy) * (py - sy));
+        const cap = D * SNAP_DETOUR + SNAP_DETOUR_M;
+        const g = cost[k];
+        if (!(g <= cap * 1.09 + slack)) continue;   // clearly longer (or beyond the flood)
+        if (g > cap - slack) {
+          if (searches >= SNAP_SEARCHES) continue;
+          searches++;
+          route.length = 0;
+          if (!this.boundedPath(sx, sy, px, py, route, r, cap)) continue;
+          const ex = route[route.length - 2], ey = route[route.length - 1];
+          if (Math.abs(ex - px) + Math.abs(ey - py) > 1e-6 || polyLen(sx, sy, route, 0) > cap) continue;
+        }
+        gx = px; gy = py;
         break;
       }
-      const dB = okB ? Math.sqrt((bx - x) * (bx - x) + (by - y) * (by - y)) : Infinity;
-      // A on the walker's side (open straight ground from the walker, or from B, to it): the nearest open point to
-      // the click wins outright — a shallow click into a wall face slides along the face to beside the cursor
-      // instead of stopping where the walker stands (B can be the walker's own cell for a diagonal click)
-      const sideA = okA && (cs < 0 || this.componentAt(ax, ay) === cs)
-        && (this.lineOfWalk(fromX, fromY, ax, ay) || (okB && this.lineOfWalk(bx, by, ax, ay)));
-      if (sideA) { gx = ax; gy = ay; }
-      else if (okB && (dB <= dA + sideSlack || dA > near)) { gx = bx; gy = by; }
-      else if (okA) { gx = ax; gy = ay; }
-      else return false;
     }
-    if (cs >= 0 && this.componentAt(gx, gy) !== cs && this.nearestInComponent(gx, gy, cs, t)) { gx = t.x; gy = t.y; }
     out.x = gx; out.y = gy;
     return true;
+  }
+  private snapCand: number[] = [];
+  private snapCost: number[] = [];
+  private snapRoute: number[] = [];
+  /** grid Dijkstra from (sx, sy) out to `maxCost` m (octile steps, no corner cutting); leaves cost/cell in g, marked
+   *  by closedGen === gen */
+  private flood(sx: number, sy: number, maxCost: number): void {
+    if (++this.gen >= 0xfffffff0) { this.gen = 1; this.openGen.fill(0); this.closedGen.fill(0); }
+    const gen = this.gen, w = this.w, hh = this.h, G = this.g, OG = this.openGen, CG = this.closedGen, B = this.blocked;
+    const start = Math.floor(sy / this.cell) * w + Math.floor(sx / this.cell);
+    const lim = maxCost / this.cell;
+    this.heapSize = 0;
+    G[start] = 0; OG[start] = gen;
+    this.heapPush(start, 0);
+    while (this.heapSize > 0) {
+      const n = this.heapPop();
+      if (CG[n] === gen) continue;
+      CG[n] = gen;
+      const nx = n % w, ny = (n / w) | 0, gn = G[n];
+      for (let k = 0; k < 8; k++) {
+        const ddx = NDX[k], ddy = NDY[k], mx = nx + ddx, my = ny + ddy;
+        if (mx < 0 || my < 0 || mx >= w || my >= hh) continue;
+        const m = my * w + mx;
+        if (B[m] || CG[m] === gen) continue;
+        let step = 1;
+        if (ddx !== 0 && ddy !== 0) { if (B[ny * w + mx] || B[my * w + nx]) continue; step = SQRT2; }
+        const ng = gn + step;
+        if (ng > lim) continue;
+        if (OG[m] !== gen || ng < G[m]) { G[m] = ng; OG[m] = gen; this.heapPush(m, ng); }
+      }
+    }
+  }
+  /** the route the walker would take from a to b (findPath, its grid searches capped for a route of at most `cap` m) */
+  private boundedPath(ax: number, ay: number, bx: number, by: number, out: number[], radius: number, cap: number): boolean {
+    const keep = this.maxExpand;
+    const n = cap / this.cell;
+    this.maxExpand = Math.min(keep, Math.ceil(n * n * 1.6) + 64);
+    try { return this.findPath(ax, ay, bx, by, out, radius); } finally { this.maxExpand = keep; }
   }
 
   // ── path entry point ──────────────────────────────────────────────────────────────────────
@@ -446,7 +536,30 @@ export class NavGrid {
     if (sx !== ax || sy !== ay) out.push(sx, sy);
     if (this.lineOfWalk(sx, sy, gx, gy, radius)) { out.push(gx, gy); return true; }
     const base = out.length;
-    if (this.useGraph && this.graphPath(sx, sy, gx, gy, radius, out)) return true;
+    // the centre line is open and only the body's side lines graze a blocked cell (a walker hugging a wall face,
+    // walking along it): a local grid search, never the corner graph, whose every route turns at a wall corner
+    // (verifier r3: a 2 m hop along a face went 9 m round a corner node)
+    if (radius > 0 && this.lineOfWalk(sx, sy, gx, gy, 0)) {
+      if (this.gridPath(sx, sy, gx, gy, out, radius)) return true;
+      out.length = base;
+    }
+    if (this.useGraph && this.graphPath(sx, sy, gx, gy, radius, out)) {
+      // corner nodes sit well off their corners (further still at shallow corners of a stepped face): a short
+      // query whose graph route is clearly longer than the straight line also tries the local grid search and
+      // keeps the shorter (verifier r3: a 6 m walk along a stepped lane wall went 9 m round a node)
+      const straight = dhypot(gx - sx, gy - sy);
+      if (straight < SHORT_QUERY) {
+        const lg = polyLen(sx, sy, out, base);
+        if (lg > straight * 1.2 + 1) {
+          const alt = this.alt; alt.length = 0;
+          if (this.gridPath(sx, sy, gx, gy, alt, radius)) {
+            const ax = alt[alt.length - 2], ay = alt[alt.length - 1];
+            if (Math.abs(ax - gx) + Math.abs(ay - gy) < 1e-6 && polyLen(sx, sy, alt, 0) < lg) { out.length = base; for (let i = 0; i < alt.length; i++) out.push(alt[i]); }
+          }
+        }
+      }
+      return true;
+    }
     out.length = base; // drop any partial legs from a failed graph attempt
     return this.gridPath(sx, sy, gx, gy, out, radius);
   }

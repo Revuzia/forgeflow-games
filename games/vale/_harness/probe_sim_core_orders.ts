@@ -42,6 +42,49 @@ function trace(w: World, e: Entity, ticks: number, each?: (k: number) => void): 
   return out;
 }
 const f2 = (n: number): string => n.toFixed(2);
+/** reference: shortest walk (m) for a body of radius r0 round standing discs (0.1 m grid, 16-neighbourhood Dijkstra; the
+ *  start and goal may touch a body); Infinity when no lane exists */
+function refPath(x0: number, y0: number, x1: number, y1: number, discs: { x: number; y: number; r: number }[], r0: number, walk: (x: number, y: number) => boolean): number {
+  const h = 0.1, pad = 4;
+  const minX = Math.min(x0, x1) - pad, minY = Math.min(y0, y1) - pad;
+  const W = Math.ceil((Math.abs(x1 - x0) + 2 * pad) / h), H = Math.ceil((Math.abs(y1 - y0) + 2 * pad) / h);
+  const blocked = new Uint8Array(W * H);
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const x = minX + (i + 0.5) * h, y = minY + (j + 0.5) * h;
+    if (!walk(x, y)) { blocked[j * W + i] = 1; continue; }
+    for (const d of discs) { const rr = d.r + r0; if ((x - d.x) ** 2 + (y - d.y) ** 2 < rr * rr) { blocked[j * W + i] = 1; break; } }
+  }
+  const si = Math.floor((x0 - minX) / h), sj = Math.floor((y0 - minY) / h), gi = Math.floor((x1 - minX) / h), gj = Math.floor((y1 - minY) / h);
+  // start/goal cells may be inside discs (touching): clear a small radius
+  for (const [ci, cj] of [[si, sj], [gi, gj]]) for (let dj = -7; dj <= 7; dj++) for (let di = -7; di <= 7; di++) { const i = ci + di, j = cj + dj; if (i >= 0 && j >= 0 && i < W && j < H) blocked[j * W + i] = 0; }
+  const dist = new Float64Array(W * H).fill(Infinity);
+  const N: [number, number][] = [];
+  for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) if ((di || dj) && (Math.abs(di) !== 2 || Math.abs(dj) !== 2) && !(Math.abs(di) === 2 && dj === 0) && !(Math.abs(dj) === 2 && di === 0)) N.push([di, dj]);
+  // simple binary heap
+  const heap: [number, number][] = [];
+  const push = (d: number, k: number) => { heap.push([d, k]); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+  const pop = () => { const t = heap[0]; const l = heap.pop()!; if (heap.length) { heap[0] = l; let i = 0; for (;;) { let c = 2 * i + 1; if (c >= heap.length) break; if (c + 1 < heap.length && heap[c + 1][0] < heap[c][0]) c++; if (heap[i][0] <= heap[c][0]) break; [heap[i], heap[c]] = [heap[c], heap[i]]; i = c; } } return t; };
+  const s = sj * W + si, g = gj * W + gi;
+  dist[s] = 0; push(0, s);
+  while (heap.length) {
+    const [d, k] = pop();
+    if (d > dist[k]) continue;
+    if (k === g) return d * h;
+    const i = k % W, j = (k / W) | 0;
+    for (const [di, dj] of N) {
+      const ni = i + di, nj = j + dj;
+      if (ni < 0 || nj < 0 || ni >= W || nj >= H) continue;
+      const m = nj * W + ni;
+      if (blocked[m]) continue;
+      if (Math.abs(di) + Math.abs(dj) > 1) { // check the intermediate cells
+        if (blocked[j * W + i + Math.sign(di)] && blocked[(j + Math.sign(dj)) * W + i]) continue;
+      }
+      const nd = d + Math.hypot(di, dj);
+      if (nd < dist[m]) { dist[m] = nd; push(nd, m); }
+    }
+  }
+  return Infinity;
+}
 
 // ── fixture map: the wall slab is x 28..32, y 0..45 (clearance 0.25), map 60 × 60 ──
 section('click into a wall: the goal snaps to the near side and the order ends', () => {
@@ -77,15 +120,28 @@ section('a click into the middle of a thick wall stops on the hero\'s side (no d
   check('the move ends', end >= 0, end);
   check('0 drift after it ends', walk(tr.slice(end)).len < 1e-6, walk(tr.slice(end)));
 });
-section('a click just inside the far face goes to that face (clearly nearer) and still ends', () => {
+section('a click just inside the far face of a long wall stops on the hero\'s side (the way round is 4× the line; ruling 36)', () => {
+  // ruling 36 supersedes the round-2 "far face when clearly nearer": a goal must not need a route longer than
+  // 1.3 × straight + 0.5 m; the slab's far face is ~70 m round its end for an 12 m line
   const w = makeWorld(cat, [{ fighter: 'fx_slinger', team: 0, x: 20, y: 10 }, { fighter: 'fx_foe', team: 1, x: 55, y: 55 }]);
   const h = fighterEnt(w, 0);
   issueMove(w, h, 31.9, 10, false);
-  check('the order point is open ground beside the click', w.nav.walkable(h.orderX, h.orderY) && Math.hypot(h.orderX - 31.9, h.orderY - 10) < 1.5, [f2(h.orderX), f2(h.orderY)]);
-  const tr = trace(w, h, 900);
+  check('the order point is open ground on the hero\'s side, on the click line', w.nav.walkable(h.orderX, h.orderY) && h.orderX < 28 && Math.abs(h.orderY - 10) < 0.6, [f2(h.orderX), f2(h.orderY)]);
+  const tr = trace(w, h, 150);
   const end = tr.findIndex((p) => p.order === ORDER_NONE);
-  check('the move ends (round the wall through the gap)', end >= 0, end);
+  check('the move ends with no heading flips', end >= 0 && walk(tr).flips === 0, { end, wk: walk(tr) });
   check('0 drift after it ends', end >= 0 && walk(tr.slice(end)).len < 1e-6);
+});
+section('a click just round the END of a wall, reachable within 1.3 × the line, goes there (ruling 36)', () => {
+  const w = makeWorld(cat, [{ fighter: 'fx_slinger', team: 0, x: 26, y: 43 }, { fighter: 'fx_foe', team: 1, x: 55, y: 55 }]);
+  const h = fighterEnt(w, 0);
+  issueMove(w, h, 30.5, 44.8, false);   // inside the slab's north end, 0.45 m from its open top edge
+  check('the goal is open, beside the click (past the corner)', w.nav.walkable(h.orderX, h.orderY) && Math.hypot(h.orderX - 30.5, h.orderY - 44.8) < 1.2, [f2(h.orderX), f2(h.orderY)]);
+  const x0 = h.x, y0 = h.y;
+  const tr = trace(w, h, 150);
+  const wk = walk(tr);
+  const straight = Math.hypot(h.orderX - x0, h.orderY - y0);
+  check('…and walks there within 1.3 × straight + 0.5 m', tr[tr.length - 1].order === ORDER_NONE && wk.len <= straight * 1.3 + 0.5, { len: f2(wk.len), straight: f2(straight) });
 });
 
 section('a shallow click just inside a wall face slides along the face to beside the click (no sticky walls)', () => {
@@ -148,6 +204,46 @@ section('a move to open ground past a dense minion clump walks round it (no grin
     const wk = walk(tr.slice(0, end < 0 ? tr.length : end));
     check(`${n} ${team ? 'enemy' : 'allied'} minions in the way: arrives inside 5 s (11.5 m straight), no back-and-forth`, end >= 0 && end < 150 && wk.flips === 0 && Math.hypot(h.x - 21.5, h.y - 40) < 0.2, { end, len: f2(wk.len), flips: wk.flips });
   }
+});
+section('ruling 36: a plain move through a standing wave with a clear lane detours ≤ 15 %', () => {
+  // two clumps of enemy minions leave a lane just off the straight line (verifier r3: 25–55 % detours through waves)
+  for (const team of [1, 0]) {
+    const w = makeWorld(cat, [{ fighter: 'fx_slinger', team: 0, x: 6, y: 52 }, { fighter: 'fx_foe', team: 1, x: 55, y: 20 }]);
+    const h = fighterEnt(w, 0);
+    for (let i = 0; i < 6; i++) addUnit(w, 'fx_dummy', team, 12 + (i % 3) * 0.95, 49.0 + Math.floor(i / 3) * 0.95);
+    for (let i = 0; i < 6; i++) addUnit(w, 'fx_dummy', team, 12.4 + (i % 3) * 0.95, 52.85 + Math.floor(i / 3) * 0.95);
+    issueMove(w, h, 20, 52, false);
+    const tr = trace(w, h, 200);
+    const end = tr.findIndex((p) => p.order === ORDER_NONE);
+    const wk = walk([{ x: 6, y: 52 }, ...tr.slice(0, end < 0 ? tr.length : end + 1)]);
+    check(`${team ? 'enemy' : 'allied'} wave with a lane: arrives, walked ≤ 1.15 × the 14 m line`, end >= 0 && Math.hypot(h.x - 20, h.y - 52) < 0.2 && wk.len <= 14 * 1.15, { end, len: f2(wk.len), flips: wk.flips });
+  }
+});
+section('ruling 36: an ally walking the same way ahead is not steered round', () => {
+  // verifier r3: a hero ordered to the same point as an ally 1.5 m ahead sidestepped 1.9 m and held the offset 3.5 s
+  const w = makeWorld(cat, [{ fighter: 'fx_slinger', team: 0, x: 10, y: 52 }, { fighter: 'fx_slinger', team: 0, x: 11.5, y: 52 }, { fighter: 'fx_foe', team: 1, x: 55, y: 20 }]);
+  const h = fighterEnt(w, 0), a = fighterEnt(w, 1);
+  issueMove(w, a, 22, 52, false); issueMove(w, h, 22, 52, false);
+  let off = 0;
+  const tr = trace(w, h, 150, () => { off = Math.max(off, Math.abs(h.y - 52)); });
+  check('the hero follows in line (lateral offset ≤ 0.3 m all the way)', off <= 0.3, f2(off));
+  check('…and its move ends near the point (the ally stands on it)', tr[tr.length - 1].order === ORDER_NONE && Math.hypot(h.x - 22, h.y - 52) < h.radius + a.radius + 1.2, [f2(h.x), f2(h.y)]);
+});
+section('ruling 36: boxed in by bodies with no way through, the hero re-plans within ~1 s and stops cleanly (no steering in place)', () => {
+  // a solid line of standing minions from the slab to the east map edge: no route exists for a walker
+  const w = makeWorld(cat, [{ fighter: 'fx_slinger', team: 0, x: 45, y: 20 }, { fighter: 'fx_foe', team: 1, x: 10, y: 55 }]);
+  const h = fighterEnt(w, 0);
+  for (let x = 32.6; x < 60; x += 0.85) addUnit(w, 'fx_dummy', 0, x, 24);
+  issueMove(w, h, 45, 30, false);
+  let replanAt = -1, blockedAt = -1;
+  const tr = trace(w, h, 240, (k) => {
+    if (blockedAt < 0 && h.y > 24 - 0.45 - h.radius - 0.15) blockedAt = k;   // reached the line of bodies
+    if (replanAt < 0 && h.watchStage >= 1) replanAt = k;
+  });
+  const end = tr.findIndex((p) => p.order === ORDER_NONE);
+  check('a no-progress window re-plans within ~1.3 s of meeting the line', blockedAt >= 0 && replanAt >= blockedAt && replanAt - blockedAt <= 40, { blockedAt, replanAt });
+  check('…and the move ends within ~2.5 s of it', end >= 0 && end - blockedAt <= 75, { blockedAt, end });
+  check('0 drift after it ends', end >= 0 && walk(tr.slice(end)).len < 0.05, end >= 0 ? walk(tr.slice(end)) : null);
 });
 section('a plain move never chases after arrival', () => {
   const w = makeWorld(cat, [{ fighter: 'fx_slinger', team: 0, x: 10, y: 55 }, { fighter: 'fx_foe', team: 1, x: 55, y: 20 }]);
@@ -219,9 +315,9 @@ async function rift(): Promise<void> {
   if (!mode || !queue) { console.log('SKIP RIFT section: no rift mode'); return; }
   const fs = rc.fighters.map((f) => f.id).sort();
   const hero = fs.includes('lisvel') ? 'lisvel' : fs[0];
-  const fresh = () => {
+  const fresh = (first: string = hero) => {
     const seats = Array.from({ length: 10 }, (_, i) => {
-      const fighter = i === 0 ? hero : fs[(i * 3) % fs.length];
+      const fighter = i === 0 ? first : fs[(i * 3) % fs.length];
       return { player: i, team: i < 5 ? 0 : 1, name: `p${i}`, fighter, skin: rc.skins.find((s) => s.fighter === fighter)?.id ?? '', controller: 'human' as const,
         loadout: pickLoadout(rc, fighter, mode.rules.itemPool ?? '', undefined as never), colorIndex: i };
     });
@@ -317,6 +413,147 @@ async function rift(): Promise<void> {
       longest < 10 && redundant < moves * 0.02, { moves, redundant, longest, faults: simRef.faults.slice(0, 2) });
   }
 
+  // ── ruling 36 (verifier r3 repros) ──
+  const quiet = (sim: ReturnType<typeof fresh>['sim'], me: Entity): void => {
+    // the hero alone and unhurt: other fighters idle at base, towers cannot kill it mid-measurement
+    for (const e of sim.world.entities) if (e.kind === 'structure' && e.team !== me.team) e.stats.ad = 0;
+  };
+  const walkOrder = (sim: ReturnType<typeof fresh>['sim'], me: Entity, gx: number, gy: number, ticks: number, each?: (k: number) => void) => {
+    const tr: { x: number; y: number; order: number }[] = [{ x: me.x, y: me.y, order: me.order }];
+    for (let k = 0; k < ticks; k++) {
+      if (k === 0) sim.command(0, { type: 'move', x: gx, y: gy });
+      each?.(k); me.hp = me.maxHp; sim.step();
+      tr.push({ x: me.x, y: me.y, order: me.order });
+      if (k > 2 && me.order === ORDER_NONE && !each) break;
+    }
+    return tr;
+  };
+  for (const [name, who, hx, hy, cx, cy] of [
+    ['dunsom deep wall click (r3: 9.45 m walked for 2.27 m)', 'dunsom', 105.69, 100.49, 106.35, 107.8],
+    ['shallow wall click (r3: 8.97 m walked for 2.13 m)', hero, 65.88, 50.64, 64, 49.96],
+    ['shallow wall click (r3: 6.48 m walked for 3.57 m)', hero, 23.21, 44.17, 27.2, 42.86],
+    ['top-lane wall click along the wall (r3 LIVE BLOCKER: 9 m the wrong way)', hero, 62.69, 8.33, 56.15, 8.22],
+  ] as const) {
+    if (!fs.includes(who)) continue;
+    const { sim, me } = fresh(who); quiet(sim, me); place(sim.world, me, hx, hy); sim.step();
+    const x0 = me.x, y0 = me.y;
+    const tr = walkOrder(sim, me, cx, cy, 300);
+    const wk = walk(tr);
+    let away = 0; for (const p of tr) away = Math.max(away, Math.hypot(p.x - cx, p.y - cy) - Math.hypot(x0 - cx, y0 - cy));
+    check(`RIFT ${name}: ends, walked ≤ 1.6 × net + 1 m, never > 1 m further from the click`, me.order === ORDER_NONE && wk.len <= 1.6 * wk.net + 1 && away <= 1,
+      { goal: [f2(me.orderX), f2(me.orderY)], end: [f2(me.x), f2(me.y)], walked: f2(wk.len), net: f2(wk.net), away: f2(away) });
+  }
+  {
+    // r3: hero (60.78, 60) at a wall face (x ≈ 61), the held cursor 0.8 m ahead inside it: snapped behind and backed 0.55 m
+    const { sim, me } = fresh(hero); quiet(sim, me); place(sim.world, me, 60.78, 60); sim.step();
+    const c = { x: 61.58, y: 60 };
+    const d0 = Math.hypot(me.x - c.x, me.y - c.y);
+    let back = 0;
+    for (let k = 0; k < 60; k++) {
+      if (k % 4 === 0) sim.command(0, { type: 'move', x: Math.max(c.x, me.x + 0.8), y: c.y });
+      me.hp = me.maxHp; sim.step();
+      back = Math.max(back, Math.hypot(me.x - c.x, me.y - c.y) - d0);
+    }
+    check('RIFT hold-steer into a wall face ahead never steps the hero backwards', back <= 0.02, { back: f2(back), at: [f2(me.x), f2(me.y)] });
+  }
+  {
+    // r3: 300 shallow wall clicks (17 sent the hero > 1 m away, 18 paths > 1.6 × net + 1 m); half along the hero's facing
+    // ray (a click just past the face it walks at), half anywhere within 7 m (diagonal / along-face clicks)
+    const { sim, me } = fresh(hero); quiet(sim, me);
+    const w = sim.world, nav = w.nav;
+    const [W, H] = w.mapDef.size;
+    const main = nav.componentAt(85, 58);
+    let s = 777;
+    const rnd = (): number => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+    const t = { x: 0, y: 0 }, route: number[] = [];
+    let n = 0, far = 0, long = 0, away1 = 0, open = 0, worst = 0;
+    const bad: string[] = [];
+    while (n < 300) {
+      const hx = 3 + rnd() * (W - 6), hy = 3 + rnd() * (H - 6);
+      if (!nav.walkable(hx, hy) || nav.componentAt(hx, hy) !== main) continue;
+      let cx: number, cy: number;
+      const a = rnd() * Math.PI * 2, ux = Math.cos(a), uy = Math.sin(a);
+      if (n % 2 === 0) {
+        let hit = -1;
+        for (let d = 0.1; d < 6; d += 0.05) if (!nav.walkable(hx + ux * d, hy + uy * d)) { hit = d; break; }
+        if (hit < 0) continue;
+        const depth = 0.15 + rnd() * 1.2, lat = (rnd() - 0.5);
+        cx = hx + ux * (hit + depth) - uy * lat; cy = hy + uy * (hit + depth) + ux * lat;
+      } else { const d = 1 + rnd() * 6; cx = hx + ux * d; cy = hy + uy * d; }
+      if (cx < 0 || cy < 0 || cx >= W || cy >= H || nav.walkable(cx, cy) || nav.wallFree(cx, cy)) continue;
+      if (!nav.nearestWalkable(cx, cy, t, 4) || Math.hypot(t.x - cx, t.y - cy) > (n % 2 === 0 ? 1.5 : 1)) continue;   // shallow
+      // walls only: no minion, monster or other fighter near enough to steer round (the wave tests below cover units)
+      if (w.entities.some((e) => e !== me && e.alive && !e.static && e.kind !== 'projectile' && e.kind !== 'zone' && (Math.hypot(e.x - hx, e.y - hy) < 10 || Math.hypot(e.x - cx, e.y - cy) < 10))) continue;
+      place(w, me, hx, hy); me.order = ORDER_NONE; sim.step();
+      const x0 = me.x, y0 = me.y, d0 = Math.hypot(x0 - cx, y0 - cy);
+      const tr = walkOrder(sim, me, cx, cy, 300);
+      n++;
+      const wk = walk(tr);
+      // the best end the rule allows, found independently: open cells nearest the click first, the first one the
+      // walker's own planner reaches within 1.3 × straight + 0.5 m (else the straight walk's stop at the obstacle)
+      nav.raycast(x0, y0, cx, cy, t);
+      let ref = Math.hypot(t.x - cx, t.y - cy);
+      const c = nav.cell;
+      const cells: [number, number, number][] = [];
+      for (let gy = Math.floor((cy - 4) / c); gy <= Math.floor((cy + 4) / c); gy++) for (let gx = Math.floor((cx - 4) / c); gx <= Math.floor((cx + 4) / c); gx++) {
+        const px = (gx + 0.5) * c, py = (gy + 0.5) * c, d = Math.hypot(px - cx, py - cy);
+        if (d < ref && nav.walkable(px, py) && nav.componentAt(px, py) === main) cells.push([d, px, py]);
+      }
+      cells.sort((p, q) => p[0] - q[0]);
+      for (const [d, px, py] of cells.slice(0, 12)) {
+        if (!nav.findPath(x0, y0, px, py, route, me.radius)) continue;
+        let l = 0, qx = x0, qy = y0; for (let i = 0; i < route.length; i += 2) { l += Math.hypot(route[i] - qx, route[i + 1] - qy); qx = route[i]; qy = route[i + 1]; }
+        if (Math.hypot(qx - px, qy - py) < 1e-3 && l <= Math.hypot(px - x0, py - y0) * 1.3 + 0.5) { ref = d; break; }
+      }
+      const exc = Math.hypot(me.x - cx, me.y - cy) - ref;
+      let away = 0; for (const p of tr) away = Math.max(away, Math.hypot(p.x - cx, p.y - cy) - d0);
+      worst = Math.max(worst, exc);
+      const tags: string[] = [];
+      if (exc > 1) { far++; tags.push('far'); }
+      if (wk.len > 1.6 * wk.net + 1) { long++; tags.push('long'); }
+      if (away > 1) { away1++; tags.push('away'); }
+      if (me.order !== ORDER_NONE) { open++; tags.push('open'); }
+      if (tags.length && bad.length < 6) bad.push(`${tags.join('+')} (${f2(x0)},${f2(y0)})→(${f2(cx)},${f2(cy)}) goal (${f2(me.orderX)},${f2(me.orderY)}) walked ${f2(wk.len)} net ${f2(wk.net)}`);
+    }
+    check(`RIFT 300 shallow wall clicks: 0 end > 1 m past the best reachable point (${far}), 0 paths > 1.6 × net + 1 m (${long}), 0 walk > 1 m away from the click (${away1}), all end (${open} open)`,
+      far === 0 && long === 0 && away1 === 0 && open === 0, { worstExcess: f2(worst), bad });
+  }
+  {
+    // r3: plain moves through a wave detoured 25–55 %. Real RIFT waves where they first meet: the hero 4 m behind the
+    // clash on its own side, a move 7.8–12 m across it at lateral offsets. Where a lane exists (the shortest way for
+    // its body round the standing bodies, a fine-grid search, is ≤ 10 % over the line) the walk is ≤ 15 % over it.
+    let lane = 0, worst = 0, worstRef = 0;
+    const over: string[] = [];
+    for (const dist of [7.8, 10]) for (const lat of [-1, -0.5, 0, 0.5, 1]) {
+      const { sim, me } = fresh(hero); quiet(sim, me);
+      const w = sim.world;
+      let pair: { a: Entity; b: Entity; d: number } | null = null;
+      for (let k = 0; k < 30 * 120; k++) {
+        me.hp = me.maxHp; sim.step();
+        if (k % 5) continue;
+        pair = null;
+        const ms = w.entities.filter((e) => e.kind === 'minion' && e.alive);
+        for (const a of ms) if (a.team === me.team) for (const b of ms) if (b.team !== me.team) { const d = Math.hypot(a.x - b.x, a.y - b.y); if (!pair || d < pair.d) pair = { a, b, d }; }
+        if (pair && pair.d < 6) break;
+      }
+      if (!pair) { check('RIFT waves meet within 120 s', false); break; }
+      for (let k = 0; k < 30; k++) { me.hp = me.maxHp; sim.step(); }
+      const mx = (pair.a.x + pair.b.x) / 2, my = (pair.a.y + pair.b.y) / 2;
+      let ux = pair.b.x - pair.a.x, uy = pair.b.y - pair.a.y; const ul = Math.hypot(ux, uy) || 1; ux /= ul; uy /= ul;
+      place(w, me, mx - ux * 4 + uy * lat, my - uy * 4 - ux * lat); sim.step();
+      const x0 = me.x, y0 = me.y, gx = x0 + ux * dist, gy = y0 + uy * dist;
+      const discs = w.entities.filter((e) => e !== me && e.alive && (e.kind === 'minion' || e.kind === 'fighter') && Math.hypot(e.x - x0, e.y - y0) < 16).map((e) => ({ x: e.x, y: e.y, r: e.radius }));
+      const ref = refPath(x0, y0, gx, gy, discs, me.radius, (x, y) => w.nav.walkable(x, y)) / dist - 1;
+      const tr = walkOrder(sim, me, gx, gy, 240);
+      const wk = walk(tr);
+      const det = wk.len / Math.max(1e-6, wk.net) - 1;
+      if (ref <= 0.10) {
+        lane++; worst = Math.max(worst, det); worstRef = Math.max(worstRef, ref);
+        if (det > 0.15 || Math.hypot(me.x - gx, me.y - gy) > 1.2) over.push(`${dist}/${lat}: ${f2(det)} (ref ${f2(ref)}) end ${f2(Math.hypot(me.x - gx, me.y - gy))}`);
+      }
+    }
+    check(`RIFT moves across a lane fight with a clear lane: walked ≤ 1.15 × the line (${lane} lane cases, worst ${f2(worst)})`, lane >= 5 && over.length === 0, { worstRef: f2(worstRef), over });
+  }
 }
 
 try { await rift(); } catch (err) { check(`RIFT section threw: ${(err as Error).stack ?? err}`, false); }

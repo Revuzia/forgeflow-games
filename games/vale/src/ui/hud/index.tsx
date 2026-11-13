@@ -27,6 +27,7 @@ import { HudContext, type HudCtx } from './ctx.ts';
 import { DialBar } from './dialbar.tsx';
 import { Minimap, minimapScale } from './minimap.tsx';
 import { type Caption as CaptionT, HudModel } from './model.ts';
+import { selecting } from './selecting.ts';
 import { DeathRecap, EndBanner, PracticePanel, Scoreboard } from './panels.tsx';
 import { ShopPanel } from './shop.tsx';
 import { AllyFrames, Feed, RecallBar, RespawnLine } from './side.tsx';
@@ -71,7 +72,7 @@ export function Hud(p: { client: MatchClient; onMenu?: () => void }): JSX.Elemen
   const mapShape: HudCtx['mapShape'] = model.ffa ? 'disc' : lanes <= 1 ? 'strip' : 'rect';
 
   const input = useMemo(() => new InputController({
-    client, renderer: selecting(r, model), index, settings: state.settings.peek(),
+    client, renderer: selecting(r, (id) => model.select(id)), index, settings: state.settings.peek(),
     surface: document.body,
     hooks: {
       toggleShop: () => { shopOpen.value = !shopOpen.value; sound.play(shopOpen.value ? 'shop_open' : 'shop_close'); },
@@ -209,21 +210,6 @@ function MenuButton(p: { onMenu: () => void }): JSX.Element {
       <span class="hmenu__key">{keyShort('Escape')}</span>
     </button>
   );
-}
-
-/** the renderer seam the input controller gets: the real renderer, plus target selection for the HUD's
- *  target plate (a left click on a unit selects it) */
-function selecting(r: InputRenderer, model: HudModel): InputRenderer {
-  const w: InputRenderer = {
-    setTarget: (id) => { r.setTarget?.(id); model.select(id); },
-    get camera() { return r.camera; },
-  };
-  if (r.pickGround) w.pickGround = (x, y) => r.pickGround!(x, y);
-  if (r.pickEntity) w.pickEntity = (x, y, o) => r.pickEntity!(x, y, o);
-  if (r.worldToScreen) w.worldToScreen = (x, y, h) => r.worldToScreen!(x, y, h);
-  if (r.setAim) w.setAim = (a) => r.setAim!(a);
-  if (r.setHover) w.setHover = (id) => r.setHover!(id);
-  return w;
 }
 
 const CAPTION_MS = 1200;

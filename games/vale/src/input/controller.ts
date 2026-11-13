@@ -7,7 +7,8 @@
 //                           keeps steering toward the cursor (only real pointer motion re-steers: a still mouse
 //                           over a following camera never walks the hero on by itself)
 //   right-click enemy       attack it (chases). Forgiving: enemies only (you and allies in front never steal
-//                           the click), a near miss within PICK_SLOP_PX still counts
+//                           the click), a near miss within PICK_SLOP_PX on an enemy minion, fighter or structure
+//                           still counts (never onto a neutral monster: a ground click beside a camp stays a move)
 //   Shift + right-click     attack-move click (ruling 33): the enemy under the cursor, else the enemy nearest
 //   A then left-click       the click point within CLICK_RADIUS_M, is attacked (chased, like right-click on it);
 //                           on open ground: walk there, stop for the first enemy in range, never chase
@@ -89,11 +90,9 @@ const WHEEL_DEADZONE = 26;
 const HOLD_MOVE_MS = 140;
 /** hold-steer re-issues only after the pointer itself moved this far (CSS px) since the last order */
 const HOLD_MIN_PX = 8;
-/** a click this close (CSS px) to an enemy's hit box still counts as on it */
+/** a click this close (CSS px) to an enemy's hit box still counts as on it: attack clicks and plain right-clicks
+ *  alike (ruling 36 supersedes ruling 35's 8 px for plain clicks: genre forgiveness, "hard to target minions") */
 const PICK_SLOP_PX = 14;
-/** … for a plain right-click (a move unless it is on an enemy): a near miss is forgiven less, and never onto a
- *  neutral monster (a ground click beside a camp wall must stay a move, not start a chase into the jungle) */
-const MOVE_SLOP_PX = 8;
 /** attack-move click: the enemy whose edge is nearest the click point within this (m) is the target */
 const CLICK_RADIUS_M = 2;
 /** … with fightersOnly held (fighters only, so the radius can be wider) */
@@ -189,12 +188,12 @@ export class InputController {
     const t = this.entityAt(this.ptr.x, this.ptr.y, { filter: (v) => this.foe(v), slop: PICK_SLOP_PX });
     return t && this.foe(t) ? t : null;
   }
-  /** the enemy a plain right-click attacks: one under the cursor, else a near miss within MOVE_SLOP_PX that is
+  /** the enemy a plain right-click attacks: one under the cursor, else a near miss within PICK_SLOP_PX that is
    *  not a neutral monster; anything else stays a move */
   private moveClickEnemy(): EntityView | null {
     const t = this.entityAt(this.ptr.x, this.ptr.y, { filter: (v) => this.foe(v) });
     if (t && this.foe(t)) return t;
-    const n = this.entityAt(this.ptr.x, this.ptr.y, { filter: (v) => this.foe(v) && v.kind !== 'monster', slop: MOVE_SLOP_PX });
+    const n = this.entityAt(this.ptr.x, this.ptr.y, { filter: (v) => this.foe(v) && v.kind !== 'monster', slop: PICK_SLOP_PX });
     return n && this.foe(n) && n.kind !== 'monster' ? n : null;
   }
   /**
