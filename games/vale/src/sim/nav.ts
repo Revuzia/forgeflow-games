@@ -33,10 +33,29 @@ const SNAP_REACH = 4;
 /** … and its route at most SNAP_DETOUR × straight + SNAP_DETOUR_M long (never walk away from the click) */
 const SNAP_DETOUR = 1.3;
 const SNAP_DETOUR_M = 0.5;
+/** … or at most SNAP_FAR × straight + SNAP_FAR_M along a route that never gets more than SNAP_AWAY m further from the
+ *  click than the walker starts (a distant point just inside a pit wall: the way in, not the near side of the wall) */
+const SNAP_FAR = 1.5;
+const SNAP_FAR_M = 1;
+const SNAP_AWAY = 0.5;
 /** route confirmations per snap (the flood prices the rest; candidates in straight line of walk cost one march) */
 const SNAP_SEARCHES = 6;
 /** candidates further (m) than this from the walker are only taken in straight line of walk (bounds the flood) */
 const SNAP_FLOOD_D = 12;
+/** does the polyline from (sx, sy) through out[] stay within `R` m of (cx, cy)? (vertices and segment midpoints) */
+function routeNear(sx: number, sy: number, out: readonly number[], cx: number, cy: number, R: number): boolean {
+  const R2 = R * R;
+  let px = sx, py = sy;
+  for (let i = 0; i + 1 < out.length; i += 2) {
+    const qx = out[i], qy = out[i + 1];
+    for (const f of [0.25, 0.5, 0.75, 1]) {
+      const x = px + (qx - px) * f, y = py + (qy - py) * f;
+      if ((x - cx) * (x - cx) + (y - cy) * (y - cy) > R2) return false;
+    }
+    px = qx; py = qy;
+  }
+  return true;
+}
 /** length of the waypoint polyline from (sx, sy) through out[from…] */
 function polyLen(sx: number, sy: number, out: readonly number[], from: number): number {
   let l = 0, px = sx, py = sy;
@@ -399,7 +418,8 @@ export class NavGrid {
    * A blocked point (a wall, a tree line, a structure's footprint, the map border) goes to the open point nearest
    * the click that the WALKER can reach without walking away from the click: strictly nearer the click than its
    * straight walk toward the click gets (by SNAP_MARGIN), and either in straight line of walk for its body
-   * (the same radius test stepToward uses) or at most SNAP_DETOUR × straight + SNAP_DETOUR_M of route away.
+   * (the same radius test stepToward uses) or at most SNAP_DETOUR × straight + SNAP_DETOUR_M of route away, or along a
+   * longer route (≤ SNAP_FAR × straight + SNAP_FAR_M) that never takes it further from the click than it starts.
    * Failing that, the end of the walker's straight walk toward the click (stop at the obstacle). Every candidate
    * is nearer the click than the walker, so a held cursor just inside a face never steps it backwards.
    * Writes `out`; false when nothing is open at all.
@@ -451,6 +471,7 @@ export class NavGrid {
       let searches = 0;
       const route = this.snapRoute;
       const slack = c * 0.75;   // the walker's offset from its cell centre, start and end
+      const d0 = Math.sqrt((sx - x) * (sx - x) + (sy - y) * (sy - y));
       for (let k = 0; k < cand.length; k++) {
         const i = cand[k];
         const px = ((i % this.w) + 0.5) * c, py = (Math.floor(i / this.w) + 0.5) * c;
@@ -458,15 +479,19 @@ export class NavGrid {
         const D = Math.sqrt((px - sx) * (px - sx) + (py - sy) * (py - sy));
         const cap = D * SNAP_DETOUR + SNAP_DETOUR_M;
         const g = cost[k];
-        if (!(g <= cap * 1.09 + slack)) continue;   // clearly longer (or beyond the flood)
-        if (g > cap - slack) {
-          if (searches >= SNAP_SEARCHES) continue;
-          searches++;
-          route.length = 0;
-          if (!this.boundedPath(sx, sy, px, py, route, r, cap)) continue;
-          const ex = route[route.length - 2], ey = route[route.length - 1];
-          if (Math.abs(ex - px) + Math.abs(ey - py) > 1e-6 || polyLen(sx, sy, route, 0) > cap) continue;
-        }
+        if (g <= cap - slack) { gx = px; gy = py; break; }   // clearly within the detour bound
+        // otherwise the walker's own route decides: within the bound, or (a longer way round, e.g. a distant point
+        // in a pit) one that never takes the walker further from the click than it starts
+        const capFar = D * SNAP_FAR + SNAP_FAR_M;
+        if (g < Infinity && g > capFar * 1.09 + slack) continue;   // priced by the flood: clearly too long
+        if (searches >= SNAP_SEARCHES) continue;
+        searches++;
+        route.length = 0;
+        if (!this.boundedPath(sx, sy, px, py, route, r, capFar)) continue;
+        const ex = route[route.length - 2], ey = route[route.length - 1];
+        if (Math.abs(ex - px) + Math.abs(ey - py) > 1e-6) continue;
+        const L = polyLen(sx, sy, route, 0);
+        if (L > capFar || (L > cap && !routeNear(sx, sy, route, x, y, d0 + SNAP_AWAY))) continue;
         gx = px; gy = py;
         break;
       }

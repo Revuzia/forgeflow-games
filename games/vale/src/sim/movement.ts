@@ -22,7 +22,8 @@
 // near waypoint as reached or recomputes its route.
 // Steering (fighters, rulings 35/36): standing, slower or oncoming bodies on the line are passed along
 // their tangents (steerRound). Progress watchdog (fighters, steering included): a ~1 s window that
-// gains under 30 % of a full-speed walk off the route left re-plans and walks the route without
+// gains under 30 % of a full-speed walk off the route left and covers under 60 % of one of ground
+// (steering in place, inching) re-plans and walks the route without
 // steering for a window; a second one in a row ends a move to a point (no steering in place).
 // Separation: overlapping mobile units push each other apart softly (half the overlap per tick,
 // less when idle); structures are hard circles. Walls win: a step into a blocked cell slides
@@ -89,6 +90,8 @@ const STEER_FOLLOW = 0.75;
 /** progress watchdog window (ticks, ~1 s) and the share of a full-speed walk it must gain off the route left */
 const WATCH_TICKS = 30;
 const WATCH_PROGRESS = 0.3;
+/** … unless it covered at least this share of a full-speed walk of ground (walking round a wave, not stuck) */
+const WATCH_MOVED = 0.6;
 const ARRIVE_NEAR = 1;
 const ARRIVE_PROGRESS = 0.3;
 /** peak height (m) of airborne arcs */
@@ -523,7 +526,7 @@ function stepToward(w: World, e: Entity, gx: number, gy: number): void {
   let x = e.x, y = e.y;
   // progress watchdog (ruling 36), steering included: the route length left when this window opened
   const watch = e.kind === 'fighter';
-  if (watch && e.watchTicks === 0) e.watchRem = routeLeft(e, e.x, e.y, gx, gy);
+  if (watch && e.watchTicks === 0) { e.watchRem = routeLeft(e, e.x, e.y, gx, gy); e.watchX = e.x; e.watchY = e.y; }
   // a walking fighter steers round units standing on its line (rulings 35, 36) instead of grinding through them
   let steered = false;
   if (e.steerOff > 0) e.steerOff--;
@@ -575,8 +578,11 @@ function stepToward(w: World, e: Entity, gx: number, gy: number): void {
   // a second such window in a row tells movementSystem to end a move to a point (watchStage 2)
   if (watch && ++e.watchTicks >= WATCH_TICKS) {
     const gain = e.watchRem - routeLeft(e, nx, ny, gx, gy);
+    const full = speed * WATCH_TICKS * TICK_DT;
+    // walking round a wave gains little route but covers ground; steering in place or inching does neither
+    const shift = Math.sqrt((nx - e.watchX) * (nx - e.watchX) + (ny - e.watchY) * (ny - e.watchY));
     e.watchTicks = 0;
-    if (gain < speed * WATCH_TICKS * TICK_DT * WATCH_PROGRESS) {
+    if (gain < full * WATCH_PROGRESS && shift < full * WATCH_MOVED) {
       e.watchStage++;
       e.pathGoalX = NaN; e.pathCheck = 0; e.noProgress = 0;
       e.steerOff = WATCH_TICKS; e.steerSide = 0;

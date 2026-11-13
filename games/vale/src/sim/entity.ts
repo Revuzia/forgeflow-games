@@ -396,9 +396,10 @@ export class Entity implements EntityView {
   /** the side (+1 right / −1 left of its heading) a walking fighter last steered round a unit ahead; 0: none */
   steerSide = 0;
   /** progress watchdog (ruling 36), steering included: ticks into the current window, the route length left at its
-   *  start, and how many windows in a row made no real progress (1: re-planned, 2: a move to a point stops) */
+   *  start, where it stood then, and how many windows in a row made no real progress (1: re-planned, 2: a move to a point stops) */
   watchTicks = 0;
   watchRem = 0;
+  watchX = 0; watchY = 0;
   watchStage = 0;
   /** ticks left with steering round units switched off (after a no-progress window: walk the route and shove) */
   steerOff = 0;
