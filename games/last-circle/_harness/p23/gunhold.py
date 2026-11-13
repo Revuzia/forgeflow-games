@@ -517,11 +517,10 @@ def main():
                 hp = G.get("pistol", {}).get("hand", {}).get("h")
                 ha = G.get("ar", {}).get("hand", {}).get("h")
                 sl = G.get("slide", {}).get("pistol", {})
-                # the slide bar is the audit's (soldier: 2.8 -> <= 1.1 m/s). On another skin whose own RIFLE run already slides more
-                # than 1.1 (athlete: rifle_run_g on its legs, a pre-existing W9 value, reported) the pistol must be no worse than that
-                # skin's rifle on the same legs + 0.05
+                # the slide bar is the plan's: planted-foot slide <= 1.1 m/s at run, on EVERY skin measured (no per-skin exception).
+                # The AR's slide on the same legs is reported beside it for diagnosis only; it never moves the cap.
                 arS = G.get("slide", {}).get("ar", {}).get("slideMean")
-                cap = 1.1 if skin == "soldier" or arS is None else max(1.1, arS + 0.05)
+                cap = 1.1
                 one = pl is not None and 0.22 <= pl <= 0.26 and hp is not None and ha is not None and abs(hp - ha) <= 0.15 and \
                     sl.get("slideMean") is not None and sl["slideMean"] <= cap and (sl.get("bodySpeed") or 0) >= 5.0
                 res[skin] = {"len": pl, "handPistol": hp, "handAr": ha, "pistolMode": G.get("pistol", {}).get("hand", {}).get("mode"),
