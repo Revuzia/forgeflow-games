@@ -1,0 +1,63 @@
+{
+  "description": "3D model assets for ForgeFlow Games pipeline (all CC0)",
+  "packs": {
+    "ultimate-monsters": {
+      "source": "Quaternius via poly.pizza",
+      "format": "GLB",
+      "count": 45,
+      "animated": true,
+      "browser_ready": true,
+      "path": "ultimate-monsters/",
+      "use": "ARPG enemies, RPG monsters, platformer bosses",
+      "sample_models": ["Alien.glb", "Blue Demon.glb", "Bunny.glb", "Cactoro.glb", "Armabee.glb"]
+    },
+    "modular-dungeon": {
+      "source": "Quaternius via itch.io",
+      "format": "FBX",
+      "count": 48,
+      "animated": false,
+      "browser_ready": false,
+      "needs_conversion": "FBX to GLB via Three.js FBXLoader or Blender CLI",
+      "path": "modular-dungeon/.Updated Modular Dungeon - May 2019/FBX/",
+      "use": "ARPG dungeon environments — walls, floors, doors, chests, torches, traps",
+      "sample_models": ["Wall_Modular.fbx", "Floor_Modular.fbx", "Torch.fbx", "Chest.fbx", "Spikes.fbx"]
+    },
+    "base-characters": {
+      "source": "Quaternius via itch.io",
+      "format": "glTF + FBX",
+      "gltf_count": 18,
+      "fbx_count": 26,
+      "animated": true,
+      "browser_ready": true,
+      "path_gltf": "base-characters/Universal Base Characters[Standard]/Base Characters/Godot - UE/",
+      "path_fbx": "base-characters/Universal Base Characters[Standard]/Base Characters/Unity/",
+      "use": "Player hero characters — rigged humanoids with customizable hairstyles",
+      "hero_models": {
+        "male": "Superhero_Male_FullBody.gltf",
+        "female": "Superhero_Female_FullBody.gltf"
+      },
+      "hairstyles_path": "base-characters/Universal Base Characters[Standard]/Hairstyles/",
+      "notes": "Compatible with Mixamo animations. Rigged with standard humanoid skeleton."
+    },
+    "medieval-weapons": {
+      "source": "Quaternius via itch.io",
+      "format": "FBX + OBJ",
+      "count": 24,
+      "animated": false,
+      "browser_ready": false,
+      "needs_conversion": "FBX to GLB",
+      "path": "medieval-weapons/Medieval Weapons Pack by Quaternius/FBX/",
+      "use": "ARPG loot drops — swords, axes, shields, bows, staffs",
+      "sample_models": ["Sword.fbx", "Axe.fbx", "Shield.fbx", "Bow.fbx"]
+    }
+  },
+  "total_3d_models": 135,
+  "browser_ready_models": 63,
+  "needs_conversion": 72,
+  "pipeline_notes": {
+    "gltf_loading": "Use Three.js GLTFLoader for .gltf/.glb files directly",
+    "fbx_loading": "Use Three.js FBXLoader for .fbx files (heavier but works)",
+    "conversion": "For best performance, convert FBX to GLB using Blender CLI batch script",
+    "animations": "Monster GLBs have embedded animations. Character models need Mixamo animations applied."
+  }
+}

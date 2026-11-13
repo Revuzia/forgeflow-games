@@ -1,0 +1,933 @@
+{
+  "$schema": "research_narrative.v1",
+  "generated_at": "2026-05-05T00:00:00Z",
+  "agent": "researcher",
+  "task": "narrative_rpg_genre_conventions",
+  "sources": [
+    "https://gamedesignskills.com/game-design/adventure/",
+    "https://medium.com/@Jamesroha/designing-for-adventure-93b67983acf7",
+    "https://blog.cloakedgames.com/2020/02/design-zelda-like-games.html",
+    "https://www.gamedeveloper.com/design/book-excerpt-world-design-for-2d-action-adventures",
+    "https://en.wikipedia.org/wiki/Outer_Wilds",
+    "https://dimasgibi.medium.com/hollow-knight-a-lesson-in-game-design-8cc4ff8aa1cd",
+    "https://finalfantasy.fandom.com/wiki/Battle_system",
+    "https://en.wikipedia.org/wiki/Chrono_Trigger",
+    "https://gamerant.com/best-jrpgs-active-time-battle-ranked/",
+    "https://gamedevacademy.org/how-to-create-a-turn-based-rpg-game-in-phaser-3-part-1/",
+    "https://gamedevacademy.org/how-to-create-a-turn-based-rpg-game-in-phaser-3-part-2/",
+    "https://gamedevacademy.org/how-to-create-a-turn-based-rpg-in-phaser-3-part-3/",
+    "https://rexrainbow.github.io/phaser3-rex-notes/docs/site/ui-dialog/",
+    "https://tropedia.fandom.com/wiki/Standard_Status_Effects",
+    "https://allthetropes.org/wiki/Standard_Status_Effects",
+    "https://finalfantasy.fandom.com/wiki/Bestiary_(Final_Fantasy)",
+    "https://www.thegamer.com/iconic-monsters-jrpgs/",
+    "https://en.wikibooks.org/wiki/A_Field_Guide_to_Final_Fantasy's_Creatures_and_Monsters/List_1",
+    "https://en.wikipedia.org/wiki/Torchlight",
+    "https://gamerant.com/isometric-arpgs-best-satisfying-combat/",
+    "https://www.tribality.com/articles/top-action-rpgs-arpgs-in-2026-the-best-isometric-loot-driven-games/",
+    "https://www.gamerguides.com/diablo-iv/guide/equipment/loot-drops/item-rarity-differences-in-diablo-4",
+    "https://diablo-archive.fandom.com/wiki/Item_Quality",
+    "https://maxroll.gg/d3/resources/elite-affixes",
+    "https://diablo.fandom.com/wiki/Monster_Traits_(Diablo_III)",
+    "https://en.wikipedia.org/wiki/Super_Mario_64",
+    "https://en.wikipedia.org/wiki/Banjo-Kazooie_(video_game)",
+    "https://strategywiki.org/wiki/Super_Mario_64/Controls",
+    "https://nintendowire.com/guides/super-mario-3d-all-stars/super-mario-64/ground-pound/",
+    "https://nintendowire.com/guides/super-mario-3d-all-stars/super-mario-64/triple-jump/",
+    "https://nintendowire.com/guides/super-mario-3d-all-stars/super-mario-64/wall-kick/",
+    "https://mario.fandom.com/wiki/Long_Jump",
+    "https://medium.com/javascript-alliance/creating-a-third-person-character-controller-in-three-js-20850e7f2fb2",
+    "https://discourse.threejs.org/t/third-person-camera/18624",
+    "https://dev.to/louis3797/a-threejs-3d-world-with-character-movements-third-person-camera-325g",
+    "https://www.gameuidatabase.com/gameData.php?id=35",
+    "https://zeldawiki.wiki/wiki/Inventory",
+    "https://zelda.fandom.com/wiki/Subscreen",
+    "https://zelda.fandom.com/wiki/Game_Over",
+    "https://interfaceingame.com/games/hollow-knight/",
+    "https://tvtropes.org/pmwiki/pmwiki.php/Main/GameBreakingBug"
+  ],
+  "genres": {
+    "adventure": {
+      "identity": "A primarily exploration-driven game where progression is gated by acquired tools, knowledge, or environmental traversal rather than by leveling or stat-grinding (Zelda BOTW, Hollow Knight, Outer Wilds).",
+      "controls": {
+        "keyboard": {
+          "WASD": "move",
+          "Space": "jump (3D) / context-action (2D)",
+          "Shift": "sprint / dash",
+          "E": "interact / talk / examine",
+          "F": "use equipped tool",
+          "Q": "secondary tool / cycle inventory slot",
+          "Tab": "open map",
+          "I": "open inventory",
+          "Esc": "pause"
+        },
+        "mouse": {
+          "left_click": "primary action / attack",
+          "right_click": "block / aim / focus",
+          "scroll": "cycle items / zoom map"
+        },
+        "gamepad": {
+          "left_stick": "move",
+          "right_stick": "camera",
+          "A_or_cross": "jump / confirm",
+          "B_or_circle": "dodge / cancel",
+          "X_or_square": "interact / attack",
+          "Y_or_triangle": "use tool",
+          "LB_RB": "cycle items",
+          "LT_RT": "aim / charge action",
+          "Start": "pause / map",
+          "Select": "inventory"
+        }
+      },
+      "player_abilities": [
+        "move",
+        "run",
+        "jump",
+        "climb",
+        "swim",
+        "interact",
+        "talk",
+        "examine",
+        "pick_up",
+        "drop",
+        "throw",
+        "attack_basic",
+        "block_or_parry",
+        "dodge_roll",
+        "use_tool (hookshot/grapple/scanner)",
+        "glide_or_paraglide (3D)",
+        "wall_slide_pogo (2D-Metroidvania)",
+        "fast_travel (after unlocking)",
+        "mark_map_pin"
+      ],
+      "progression_systems": [
+        "tool_unlocks (each tool opens new geography — Zelda key items)",
+        "ability_upgrades (double-jump, dash, glide — Hollow Knight charms / BOTW runes)",
+        "knowledge_progression (Outer Wilds: rumours / ship-log entries gate the player, not items)",
+        "world_state_flags (gates open, NPCs move, time-of-day)",
+        "health_capacity_increases (heart containers / mask shards)",
+        "equipment_durability_or_swap (BOTW weapons break, Hollow Knight charms slot)",
+        "currency (rupees / geo) for incremental upgrades — never the primary gate",
+        "completion_percent (collectibles, shrines, lore tablets)"
+      ],
+      "win_conditions": [
+        "Reach and defeat the final-boss / final-encounter",
+        "Reach a story end-state (Outer Wilds: solve the mystery and trigger the eye sequence)",
+        "Optional: 100% completion epilogue (Hollow Knight: True Ending requires Pantheon + Dream No More)"
+      ],
+      "lose_conditions": [
+        "Health depleted -> respawn at last bench/shrine/save point",
+        "Falling into hazard / out-of-bounds (lava, pit, void)",
+        "Story-specific timer expires (Outer Wilds: 22-min supernova loop — soft loss, resets the loop, knowledge persists)",
+        "Drown / oxygen depletes (where applicable)"
+      ],
+      "scenes": [
+        "Boot",
+        "Title",
+        "FileSelect",
+        "MainMenu",
+        "Cutscene_Intro",
+        "Overworld",
+        "Region",
+        "Dungeon_or_Area",
+        "Town",
+        "Interior",
+        "Combat (no transition — same scene)",
+        "Dialog (modal overlay)",
+        "Inventory",
+        "Map",
+        "QuestLog",
+        "PauseMenu",
+        "Save",
+        "Shop",
+        "Cutscene_Story",
+        "BossArena",
+        "GameOver",
+        "Credits"
+      ],
+      "npc_types": [
+        "shopkeeper",
+        "innkeeper / save-point host (Hollow Knight: bench-keeper variants)",
+        "quest-giver",
+        "lore-keeper / sage",
+        "merchant_traveling",
+        "neutral_villager",
+        "child / animal",
+        "warp / fast-travel guide",
+        "trainer / ability-teacher",
+        "named-mini-boss",
+        "named-final-boss"
+      ],
+      "enemy_types": [
+        "small_grunt (rats, husks, chuchus) — slow approach + light contact damage",
+        "ranged_pest (archer, spitter) — fires projectiles, low HP",
+        "shielded_bruiser — must be flanked or stunned first",
+        "flying_harasser (keese, aspids) — dive attack, hard to hit on ground",
+        "ambusher (stalfos, peeping mantis) — pops out of environment",
+        "elite_mini-boss — telegraph + phase change",
+        "named_boss — multi-phase, arena-specific mechanics"
+      ],
+      "inventory_categories": [
+        "weapons (often durable / swappable — BOTW)",
+        "tools / key items (hookshot, scanner, signalscope)",
+        "consumables (potion, food, elixir)",
+        "ammo (arrows, bombs)",
+        "key_items (story-locked, never dropped)",
+        "collectibles (lore tablets, korok seeds, charms)",
+        "currency",
+        "outfits / armor sets"
+      ],
+      "hud": [
+        "health_bar (hearts or pips)",
+        "stamina_wheel (BOTW climbing/sprinting)",
+        "equipped_tool_quickslot",
+        "currency_counter (only when relevant)",
+        "minimap_or_compass",
+        "objective_marker (optional, often disable-able)",
+        "dialog_box (modal, lower-third)",
+        "interaction_prompt ('Press E to talk')",
+        "temperature / oxygen / weather indicator (BOTW, Outer Wilds)"
+      ],
+      "iconic_mechanics": [
+        "Tool-gated traversal: a new item unlocks new map regions (Zelda's hookshot/bombs; Hollow Knight's mantis claw / monarch wings)",
+        "Knowledge-as-progression: Outer Wilds locks nothing behind items — only behind what the player has read in the ship-log",
+        "Environmental storytelling: lore is embedded in geometry, murals, and ambient detail rather than in text dumps"
+      ],
+      "sound": {
+        "sfx_required": [
+          "footstep_grass",
+          "footstep_stone",
+          "footstep_wood",
+          "jump",
+          "land",
+          "attack_swing",
+          "attack_hit",
+          "block",
+          "dodge",
+          "item_pickup",
+          "menu_open",
+          "menu_select",
+          "menu_back",
+          "dialog_advance",
+          "dialog_blip",
+          "secret_discovered",
+          "save",
+          "death",
+          "respawn"
+        ],
+        "music_slots": [
+          "title",
+          "overworld_day",
+          "overworld_night",
+          "town",
+          "dungeon",
+          "stealth_or_calm",
+          "combat",
+          "mini_boss",
+          "boss",
+          "victory_sting",
+          "game_over",
+          "credits"
+        ]
+      },
+      "common_bugs_anti_patterns": [
+        "Out-of-bounds geometry — player falls forever, no respawn trigger (Game-Breaking Bug archetype)",
+        "Soft-locked door: the script that unlocks it never fires because the player triggered the cutscene from the wrong angle",
+        "Save corruption when saving inside a transient state (mid-cutscene, mid-dialog)",
+        "Dialog softlock: pressing skip during a typewriter effect cancels the next-line trigger and freezes input",
+        "Music layer never resolves (combat track keeps playing after enemies die because the 'leave-combat' check fires before all enemies are despawned)",
+        "Tool-gate logic checks for the wrong inventory flag and locks endgame content",
+        "Camera clipping into walls in tight corridors (3D)",
+        "Picking up a key item in the wrong order skips a story flag set by the cutscene"
+      ],
+      "implementation_notes": {
+        "engine": "Phaser 3 for 2D (Hollow-Knight-like), Three.js for 3D (BOTW-like)",
+        "phaser": [
+          "Use Tilemap (Tiled JSON) for rooms; one Phaser.Scene per persistent area; door/transition objects swap scenes preserving player inventory in a Registry singleton.",
+          "Dialog box: rexUI Dialog plugin or hand-rolled Container with typewriter Text + advance-on-Enter. State machine: IDLE -> TYPING -> AWAITING_INPUT -> ADVANCE.",
+          "Combat: same-scene; spawn enemy sprites with arcade physics; player attack hitbox is a short-lived sensor.",
+          "Save: serialize Registry (inventory, flags, lastSavePointId) to localStorage as JSON. Never serialize Phaser game objects directly."
+        ],
+        "three_js": [
+          "Third-person camera: lerp camera position toward (player.position + offset), lookAt(player.position + headOffset). Use OrbitControls only as scaffolding — replace with custom follow camera before shipping.",
+          "Character controller: capsule collider (Rapier or Cannon-es), gravity, grounded check via short downward ray, jump impulse on grounded + jumpPressed.",
+          "Use AnimationMixer for skinned-mesh animations; cross-fade idle <-> run <-> jump.",
+          "Streaming: load region GLBs on demand, dispose old region's geometries/materials/textures to avoid GPU leaks."
+        ]
+      }
+    },
+    "rpg": {
+      "identity": "A party-based, story-driven game where progression is primarily numerical (XP, levels, equipment) and combat is resolved through menu-driven turn-based or ATB (Active Time Battle) commands (Final Fantasy, Chrono Trigger, Mother 3).",
+      "controls": {
+        "keyboard": {
+          "WASD_or_arrows": "move on field",
+          "Enter_or_Z": "confirm / talk / advance dialog",
+          "Esc_or_X": "cancel / open menu",
+          "Shift": "run on field (hold)",
+          "C": "open party menu",
+          "M": "open map (if present)"
+        },
+        "mouse": "Optional in classic JRPG — used in modern remakes for menu navigation only; not required.",
+        "gamepad": {
+          "left_stick_or_dpad": "move / menu navigate",
+          "A_or_cross": "confirm",
+          "B_or_circle": "cancel / back",
+          "X_or_square": "menu shortcut (items)",
+          "Y_or_triangle": "menu shortcut (magic)",
+          "Start": "main menu",
+          "Select": "secondary menu / mini-map"
+        }
+      },
+      "player_abilities": [
+        "move (field only — combat is menu-only)",
+        "talk",
+        "examine",
+        "open_chest",
+        "interact_with_object",
+        "command_attack (combat menu)",
+        "command_magic_or_skill",
+        "command_item",
+        "command_defend",
+        "command_run / flee",
+        "command_summon (FF tradition)",
+        "command_dual_tech / co-op (Chrono Trigger signature)",
+        "switch_party_member",
+        "save (at save points or anywhere depending on tradition)"
+      ],
+      "progression_systems": [
+        "experience_points (XP) — earned from each battle",
+        "character_level — caps stats and learnable abilities",
+        "stats: HP, MP/SP, ATK, DEF, MAG_ATK, MAG_DEF, SPD, LUCK",
+        "equipment: weapon, armor, helmet, accessory (party-member-specific slots)",
+        "spell/skill_unlocks (level-based or job-based)",
+        "job_or_class system (FF3/5/Tactics tradition)",
+        "story_flags (which chapter, which NPCs available, which areas open)",
+        "party_roster (acquire and lose members across the story)",
+        "gold / gil",
+        "limit_break / overdrive meter (modern FF)",
+        "affinity / relationship values (Mother 3, modern JRPGs)"
+      ],
+      "win_conditions": [
+        "Defeat final boss and watch ending cutscene",
+        "Optional: defeat super-boss / post-game content (Ozma, Lavos extra phases)",
+        "Optional: New Game Plus completion"
+      ],
+      "lose_conditions": [
+        "Party wipe (all combat-active members at 0 HP) — Game Over screen",
+        "Story-mandated loss is usually NOT a Game Over (the story continues — e.g. Final Fantasy I forced losses)",
+        "Specific instant-kill effects on a required member during scripted fight"
+      ],
+      "scenes": [
+        "Boot",
+        "Title",
+        "FileSelect",
+        "Cutscene_Intro",
+        "Field_Overworld",
+        "Field_Town",
+        "Field_Dungeon",
+        "Field_WorldMap (separate scale)",
+        "Battle (separate scene OR same-screen Chrono-Trigger-style)",
+        "BattleResults (XP/gold/level-up display)",
+        "Dialog (overlay on Field)",
+        "MainMenu (party / status / equip / magic / items / config / save)",
+        "Status",
+        "Equip",
+        "MagicOrSkillList",
+        "Inventory",
+        "Shop_Buy",
+        "Shop_Sell",
+        "Shop_Inn",
+        "SavePoint",
+        "Cutscene_Story",
+        "BossIntro",
+        "GameOver",
+        "Ending",
+        "Credits"
+      ],
+      "npc_types": [
+        "shopkeeper (weapon, armor, item, magic — typically split)",
+        "innkeeper (full-heal for gold)",
+        "save_point_attendant (or save-point object)",
+        "quest_giver",
+        "party_member_recruitable",
+        "party_member_temporary (guest)",
+        "info_villager (gives a one-line hint)",
+        "child / pet",
+        "named_storyline_npc (king, princess, mentor)",
+        "rival",
+        "antagonist / sub-boss",
+        "named_final_boss",
+        "summon_or_aeon (FF tradition — befriend / earn)"
+      ],
+      "enemy_types": [
+        "slime / flan — iconic weakest tier; iconic action: split when hit by physical, weak to ice/fire (Dragon Quest / FF tradition)",
+        "skeleton / undead — iconic action: revive after death (counter with holy/cure)",
+        "goblin / imp — basic melee, may steal gold",
+        "wolf / dire-wolf — fast, attacks twice per turn",
+        "bat — flying, hard to hit physically (counter: ranged/magic)",
+        "kobold mage — casts low-tier elemental spells",
+        "knight / armored — high DEF, weak to magic",
+        "ghost / wraith — physical-immune; magic-only",
+        "treasure_chest_mimic — disguised; iconic gotcha",
+        "tonberry — slow approach, one-shot when adjacent (iconic FF anti-archetype)",
+        "cactuar — high evasion, runs away, drops rare loot",
+        "chocobo / monster-mount — encountered before tameable",
+        "elemental (fire/ice/thunder/water) — weak to opposite element",
+        "dragon — high HP, breath attack hits party-wide (iconic boss-tier)",
+        "behemoth — hits whole party; iconic counter-attack on final blow (Final Strike)",
+        "named_boss (4 fiends / 4 archfiends / final boss) — multi-phase"
+      ],
+      "inventory_categories": [
+        "weapon (slot per character)",
+        "armor (body)",
+        "helmet (head)",
+        "accessory (1-2 slots — status immunity, stat boost)",
+        "consumable (potion, ether, antidote, phoenix-down)",
+        "key_item (story-locked, infinite, cannot drop)",
+        "material / crafting (modern JRPG)",
+        "currency (gil / gold)"
+      ],
+      "hud": {
+        "field": [
+          "minimap (optional)",
+          "party_leader_sprite",
+          "interaction_prompt",
+          "dialog_box_lower_third",
+          "name_speaker_tag"
+        ],
+        "battle": [
+          "party_member_panels (name, HP, MP, status icons)",
+          "ATB_bar (FF4-9) or turn_order_bar (FF10, modern)",
+          "command_menu (Attack / Magic / Item / Defend / Run)",
+          "sub_menu_for_spell_or_skill_list",
+          "target_cursor",
+          "damage_number_popups",
+          "status_effect_icons (poison, sleep, paralyze, confuse, silence, blind, petrify, doom)",
+          "limit_break_or_overdrive_meter (modern)",
+          "battle_message_log"
+        ]
+      },
+      "iconic_mechanics": [
+        "ATB / turn-based menu combat: command queue resolves on a per-character readiness gauge (Final Fantasy IV-IX) or strict turn order (Dragon Quest, Chrono Trigger)",
+        "Random encounters OR on-map encounters that trigger battle scene transition (Chrono Trigger eliminated random encounters and let battles happen on the map without transition — a defining design)",
+        "Limit / dual / triple techniques: combo abilities that require multiple party members to be ready and aligned (Chrono Trigger's signature — explicitly emphasized team synergy)",
+        "Status condition layer: poison/sleep/paralyze/confuse/silence/blind/petrify/doom — each with explicit per-turn behaviour and counter-item"
+      ],
+      "sound": {
+        "sfx_required": [
+          "menu_select",
+          "menu_back",
+          "menu_invalid",
+          "footstep",
+          "encounter_swoosh (random encounter trigger)",
+          "battle_transition_sting",
+          "attack_physical_hit",
+          "attack_critical",
+          "attack_miss",
+          "spell_cast_fire",
+          "spell_cast_ice",
+          "spell_cast_thunder",
+          "spell_cast_heal",
+          "item_use",
+          "level_up_fanfare",
+          "death_party_member",
+          "ko_thud",
+          "dialog_blip",
+          "save_chime",
+          "chest_open"
+        ],
+        "music_slots": [
+          "title",
+          "main_theme_or_prelude",
+          "overworld",
+          "town",
+          "dungeon_or_cave",
+          "castle",
+          "battle_normal",
+          "battle_boss",
+          "battle_final_boss",
+          "victory_fanfare (must NOT loop on win — short sting then resume field music)",
+          "game_over",
+          "ending",
+          "character_themes (per-party-member, played in cutscenes)",
+          "credits"
+        ]
+      },
+      "common_bugs_anti_patterns": [
+        "Battle music doesn't stop after victory: the 'leave-combat' transition didn't fire; happens when a new party member is added without resetting audio context, or when the player flees mid-track",
+        "Dialog softlock: skip-key skips the line that arms the next trigger; player input freezes",
+        "Item duplication: dropping an equipped item mid-equip-screen leaves a stale reference in the inventory array",
+        "Save corruption: saving during a battle scene transition writes a half-loaded state",
+        "XP overflow: at very high levels integer overflows into negative — instant level-up loop or freeze",
+        "Status effect persists after KO + revive (poison ticks the resurrected character to 0 immediately)",
+        "Permanently missable content: a chest in a one-way dungeon that disappears after the boss — pipeline-level missable check",
+        "Encounter rate stays elevated after the player equips an Encounter-Down accessory (flag set but not read)",
+        "Critical-hit floor: damage calculated before defense subtraction can underflow on weak enemies and heal them",
+        "Wrong character speaks a line because the dialog system uses the leader-slot index and the player swapped party order"
+      ],
+      "implementation_notes": {
+        "engine": "Phaser 3 — proven track for classic 2D JRPG (GameDev Academy + html5gamedevelopment + zenva tutorial series).",
+        "phaser_pattern": [
+          "FieldScene: Tiled tilemap for the world; player sprite with Arcade physics; invisible encounter zones trigger BattleScene.start().",
+          "BattleScene + UIScene running concurrently: BattleScene owns Unit instances (extend Phaser.GameObjects.Sprite, expose hp/mp/atk/def/spd); UIScene owns the menus and overlay HUD. Use scene.events to communicate (UIScene listens 'commandSelected'; BattleScene listens 'turnReady').",
+          "Turn engine: priority queue ordered by (readiness_gauge_full, then SPD, then random tiebreak). On each tick in update(), advance every unit's gauge by dt * unit.spd; when a player unit reaches full, pause and request input via UIScene.",
+          "Scene stacking: when BattleScene starts, FieldScene.scene.pause() preserves the field state; on victory, BattleScene.scene.stop() and FieldScene.scene.resume() — never re-create FieldScene or you lose flags.",
+          "Persist: Registry (game.registry) for inventory, party, gold, story flags. Save = JSON.stringify(registry.values) -> localStorage. Reload = registry.merge(parsed)."
+        ],
+        "dialog_system": "Use rexUI Dialog plugin OR a custom Container with typewriter Text and a fixed pump pattern: state machine TYPING -> WAIT_INPUT -> ADVANCE -> NEXT_PAGE -> CLOSE. Block field input while open by setting a global registry flag 'dialogOpen'."
+      }
+    },
+    "3d-arpg": {
+      "identity": "An isometric / fixed-camera 3D action-RPG built around real-time click-to-move-and-attack combat, randomized loot, and skill-tree character progression — the Diablo / Torchlight lineage, distinct from over-the-shoulder 3D ARPGs (Souls/Witcher) and from 2D ARPGs.",
+      "controls": {
+        "keyboard": {
+          "1-4": "skill slots (most builds use 4-6 active skills)",
+          "Q": "potion / health flask",
+          "W": "secondary potion / scroll",
+          "E": "interact",
+          "Tab": "open map",
+          "I": "inventory",
+          "C": "character / stats",
+          "S": "skill tree",
+          "T": "town portal",
+          "G": "drop / pick up gold (genre tradition)",
+          "Space": "dodge / dash (modern entries)",
+          "Esc": "pause / menu"
+        },
+        "mouse": {
+          "left_click": "move-to / primary attack on enemy",
+          "right_click": "secondary skill",
+          "shift_left_click": "stand-still attack (no move)",
+          "middle_click_or_alt": "highlight all loot on ground"
+        },
+        "gamepad": {
+          "left_stick": "move (modern entries support direct stick movement; classic Diablo was mouse-only)",
+          "right_stick": "aim (twin-stick mode)",
+          "A_or_cross": "primary skill",
+          "B_or_circle": "dodge",
+          "X_or_square": "interact / pick up loot",
+          "Y_or_triangle": "potion",
+          "LB_RB": "skill slots",
+          "LT_RT": "skill slots",
+          "Start": "menu",
+          "Select": "map"
+        }
+      },
+      "player_abilities": [
+        "move (click-to-walk OR direct stick)",
+        "basic_attack (primary skill — replaces autoattack from level 1)",
+        "secondary_skill",
+        "skill_slot_3 / 4 / 5 / 6 (build-defining)",
+        "dodge / dash (modern)",
+        "potion_quaff",
+        "town_portal (open a return scroll)",
+        "interact / pick_up_loot",
+        "salvage / break_down_item (at vendor)",
+        "identify_item (older entries)",
+        "stash / withdraw (shared stash across characters)",
+        "respec (varies by entry)"
+      ],
+      "progression_systems": [
+        "experience_points and character_level (typically 1-60 to 1-100)",
+        "skill_points or skill_unlocks (per level — fuel the skill tree / runeword / passive node graph)",
+        "paragon_levels (post-cap infinite XP — Diablo III/IV signature)",
+        "attribute_points (Strength / Dexterity / Intelligence / Vitality — manual in D2/Torchlight, automatic in D3/D4)",
+        "gear_loot: items roll random affixes; rarity tiers White / Blue (Magic) / Yellow (Rare) / Orange (Legendary) / Gold (Unique). Magic = 1 affix; Rare = 2-6 affixes; Legendary = 4 affixes plus a powerful Legendary affix; Unique = fixed unique effect, only one Unique equippable at a time (Diablo IV).",
+        "set_items (gold/green) — bonus when multiple set pieces equipped",
+        "magic_find / item_quantity stat (boosts loot drop rarity)",
+        "gem_sockets and runes",
+        "crafting_materials (salvaged from gear)",
+        "endgame: Sacred / Ancestral tiers, seasonal leagues, scalable dungeons (Maps / Greater Rifts / Pinnacle bosses)",
+        "currency: gold + crafting materials + endgame currencies (D2 runes, PoE orbs)"
+      ],
+      "win_conditions": [
+        "Complete the campaign (defeat final act boss)",
+        "But: campaign is the on-ramp — endgame begins at max level. Progression is open-ended (push higher rifts / maps / leagues / seasons)",
+        "Optional: complete season journey, achieve seasonal title, fill set / unique collection"
+      ],
+      "lose_conditions": [
+        "HP -> 0 — death respawns at last checkpoint / town with optional XP penalty",
+        "Hardcore mode: HP -> 0 = permanent character deletion (genre staple)",
+        "Disconnect during boss fight (online entries) — variable handling"
+      ],
+      "scenes": [
+        "Boot",
+        "Title",
+        "CharacterSelect",
+        "CharacterCreate",
+        "Cutscene_Intro",
+        "Town_Hub (vendors, stash, waypoint)",
+        "Outdoor_Zone",
+        "Dungeon_Floor (procedurally generated typical)",
+        "BossArena",
+        "EndgameMap_or_Rift",
+        "PortalTransition",
+        "Inventory",
+        "SkillTree",
+        "CharacterStatsPage",
+        "VendorScreen (Buy / Sell / Repair / Identify)",
+        "Stash",
+        "ArtisanCrafting",
+        "TradeWindow (online)",
+        "Map / Waypoint",
+        "GameOver_or_Death (cutscene + respawn UI)",
+        "SeasonalUI / LeaderboardScreen",
+        "Credits"
+      ],
+      "npc_types": [
+        "town_vendor_general",
+        "blacksmith / artisan_weapons",
+        "armorer",
+        "jeweler / gem_socket",
+        "alchemist",
+        "stash_keeper",
+        "waypoint_keeper",
+        "quest_giver_main",
+        "quest_giver_side / bounty_giver",
+        "lore_npc",
+        "follower_or_companion (D3 templar/scoundrel/enchantress, Torchlight pet)",
+        "trainer / respec_npc",
+        "named_act_boss",
+        "named_endgame_boss"
+      ],
+      "enemy_types": [
+        "trash_melee (skeleton, fallen, zombie) — swarm, low HP, contact damage",
+        "trash_ranged (archer skeleton, dark cultist) — kites, fragile",
+        "trash_caster (shaman, sorcerer) — fireball / curse, must be priority-killed",
+        "fast_runner (ghoul, fallen-imp) — interrupts kiting",
+        "exploder (suicide bomber, corpse) — runs in, detonates",
+        "summoner (necromancer) — raises waves of trash",
+        "brute (large melee, slow but high damage)",
+        "shielded_or_armored (must be back-attacked or stagger-broken)",
+        "champion_pack (3-5 enemies sharing one elite_affix — Molten / Mortar / Fire-Chains / Electrified / Frozen / Vortex / Jailer / Arcane-Enchanted)",
+        "rare_elite (single enemy with 2-4 affixes; on Diablo III: 1 affix at lvl 1-29, 2 at 30-49, 3 at 50-59, 4 at 60+)",
+        "treasure_goblin (loot-pinata, runs to portal — Diablo III signature)",
+        "named_act_boss (multi-phase, arena hazards)",
+        "world_boss (open-zone scheduled spawn)",
+        "rift_guardian (endgame Greater Rift terminator)"
+      ],
+      "inventory_categories": [
+        "weapon (1H, 2H, ranged, off-hand)",
+        "armor: helm, chest, gloves, boots, belt, pants",
+        "jewelry: 2 rings + 1 amulet",
+        "off-hand / shield / quiver",
+        "consumables: potions, scrolls",
+        "gems / runes (sockettable)",
+        "crafting_materials (salvage shards, legendary materials)",
+        "key_or_quest_items",
+        "currency: gold + endgame currencies"
+      ],
+      "hud": [
+        "health_globe / orb (left)",
+        "mana_or_resource_globe (right) — class-specific resource (Wrath, Fury, Hatred, Mana, Energy)",
+        "skill_bar (4-6 active slots with cooldown rings)",
+        "potion_slot_with_cooldown",
+        "experience_bar (bottom)",
+        "level_indicator",
+        "minimap_top_right",
+        "buff_debuff_icon_strip",
+        "loot_text_pop-ups (item-name floats above ground)",
+        "damage_number_popups (per-hit, color-coded by element)",
+        "boss_health_bar (top)",
+        "party_member_portraits (multiplayer)",
+        "chat_window (online)"
+      ],
+      "iconic_mechanics": [
+        "Loot loop: kill -> randomized drops -> compare affixes -> equip / salvage -> repeat. Magic Find / Item Quantity stats explicitly tilt the random tables.",
+        "Affix-driven elite packs: Champion / Rare / Unique monsters get bonus 'Elite Affixes' (Molten leaves a damaging trail, Mortar lobs ranged AoE, Fire-Chains links pack members, Electrified reflects sparks on hit, Frozen drops freeze pylons). Number of affixes scales with hero level.",
+        "Endgame-first design: campaign is on-ramp; the real game begins at max level via seasonal leagues, scalable dungeons, pinnacle bosses, and crafting progression.",
+        "Pet courier (Torchlight signature): companion runs back to town to sell trash loot so the player never leaves combat for inventory."
+      ],
+      "sound": {
+        "sfx_required": [
+          "footstep_metal",
+          "footstep_dirt",
+          "footstep_stone",
+          "weapon_swing_1h",
+          "weapon_swing_2h",
+          "ranged_release (bow / wand)",
+          "spell_cast_fire / cold / lightning / poison / arcane",
+          "spell_impact",
+          "hit_flesh / hit_armor / hit_undead",
+          "critical_hit_distinct",
+          "loot_drop_common",
+          "loot_drop_magic_blue",
+          "loot_drop_rare_yellow",
+          "loot_drop_legendary_orange (rising chime — must be unmissable)",
+          "loot_drop_unique_gold",
+          "potion_quaff",
+          "level_up",
+          "skill_unlock",
+          "town_portal_open",
+          "death_player",
+          "death_enemy",
+          "elite_pack_spawn_alert",
+          "boss_intro_roar",
+          "vendor_chime",
+          "ui_click",
+          "inventory_pickup",
+          "inventory_drop"
+        ],
+        "music_slots": [
+          "title",
+          "town_hub",
+          "outdoor_zone (per act / biome)",
+          "dungeon",
+          "boss",
+          "endgame_rift",
+          "victory_short_sting",
+          "death",
+          "credits"
+        ]
+      },
+      "common_bugs_anti_patterns": [
+        "Loot table mis-rolls: probability sum > 1.0 due to floating-point, drops are heavily skewed",
+        "Item duplication via inventory drag race condition (online) — must lock both source and target slots before transfer",
+        "Affix stacking exploit: Legendary affix multiplies an already-multiplicative stat -> infinite damage",
+        "Stuck-in-geometry: pathfinding gets player or pet wedged into a wall corner",
+        "Elite-pack affix combo creates unwinnable scenarios for melee (Frozen + Molten + Jailer all firing in a corridor)",
+        "Memory leak from never disposing dropped-item visual after auto-pickup",
+        "Skill cooldown not reset on death -> respawn with skills permanently on cooldown",
+        "Town-portal drops player into combat zone unexpectedly because waypoint position was overwritten",
+        "Hardcore false-death from server lag (client says alive, server says dead) -> permanent character loss complaint",
+        "Damage-over-time keeps ticking after enemy is dead, popping a 0-damage number forever"
+      ],
+      "implementation_notes": {
+        "engine": "Three.js with isometric (orthographic) camera and physics via Rapier or Cannon-es. For pure 2D-projected isometric, Phaser 3 is also viable but you lose true 3D.",
+        "three_js_pattern": [
+          "Camera: OrthographicCamera at fixed angle (~30 deg pitch, fixed yaw). Camera follows player by lerping camera.position toward (player.position + cameraOffset) every frame; never parent the camera to the player (rotation snapping looks bad).",
+          "Click-to-move: raycaster against ground plane on left-click; A* (or NavMesh-based pathfinding via three-pathfinding lib) computes path; player walks along path, abandons it on new click.",
+          "Combat: target acquisition via raycast on enemies; primary skill slot is 'auto-attack-on-target'; skills 2-6 fire-on-keypress with cooldown UI.",
+          "Loot generation: server (or deterministic client) rolls a loot table per-kill: roll rarity tier (weighted with magic-find), then per-affix-roll within the rarity's affix pool. Drop a Mesh + label that floats above ground until clicked.",
+          "Skill bar: HUD as DOM overlay or as a separate Three.js scene with OrthographicCamera; cooldown ring is a circular mask animated via shader or via SVG arc.",
+          "Save: serialize character (level, skills, inventory item[]) to localStorage or to a backend. Items are { baseId, rarity, affixes:[{stat,value}] }, never serialize the Mesh."
+        ],
+        "phaser_alternative": "If the target scope is small (browser game), Phaser 3 with sprite isometric tiles (e.g. phaser3-isometric plugin) is faster to ship but limits camera flexibility. The Diablo / Torchlight feel of true 3D depth comes through more cleanly in Three.js."
+      }
+    },
+    "3d-platformer": {
+      "identity": "A 3D action-platformer built around character traversal through hub-and-level worlds, with collectible-driven progression and a player-controlled or designer-anchored 3rd-person camera (Mario 64, Banjo-Kazooie, Astro Bot).",
+      "controls": {
+        "keyboard": {
+          "WASD": "move",
+          "Space": "jump",
+          "Shift": "run / hold-to-sprint (genre varies)",
+          "Ctrl_or_C": "crouch / ground-pound (hold in air)",
+          "E": "interact / talk",
+          "F": "use ability / context-action (Banjo: peck/beak-buster, Mario: punch)",
+          "Q": "secondary ability (egg-shoot, fire flower)",
+          "Tab": "pause / collectible map"
+        },
+        "mouse": "Right stick equivalent — controls the third-person camera (yaw/pitch). Left mouse can serve as primary action.",
+        "gamepad": {
+          "left_stick": "move (analog walk/run via tilt magnitude)",
+          "right_stick": "camera",
+          "A_or_cross": "jump (tap = jump, double-tap = double-jump, triple-tap-while-running = triple-jump in Mario tradition)",
+          "B_or_circle": "ground-pound / crouch / dive",
+          "X_or_square": "attack / context-action",
+          "Y_or_triangle": "secondary ability / pick-up-throw",
+          "LB_RB": "camera / strafe lock",
+          "LT_RT": "secondary",
+          "L3": "crouch lock",
+          "Start": "pause + collectible inventory",
+          "Select": "map"
+        }
+      },
+      "player_abilities": [
+        "walk (analog speed via stick tilt)",
+        "run",
+        "jump",
+        "double_jump",
+        "triple_jump (Mario 64 signature: rhythmic A-press while running yields highest leap with a vocalized cue on the third)",
+        "long_jump (Run + Crouch + Jump: Z + A in Mario 64)",
+        "back_flip (stationary crouch -> jump)",
+        "side_somersault (180-turn -> jump)",
+        "wall_kick / wall_jump (jump into wall, press jump exactly on contact)",
+        "ground_pound (in air -> crouch / B; cancels fall damage if timed near ground)",
+        "dive",
+        "punch / kick / attack",
+        "glide (Banjo's flight pad / Mario's wing cap / Astro's hover)",
+        "swim (in water volumes)",
+        "climb (specific surfaces)",
+        "interact / pick_up / throw",
+        "ride_mount (yoshi, kazooie, mount level)"
+      ],
+      "progression_systems": [
+        "primary_collectible_count: Power Stars (Mario 64) / Jiggies (Banjo) — gates access to new hub doors and the final boss",
+        "secondary_collectible: Coins (Mario) / Musical Notes (Banjo: 810/900 minimum to clear all doors) / Bots (Astro)",
+        "ability_unlocks: gradually expand the verb list (Banjo learns moves from Bottles; Mario gets caps; Astro gets new gadgets)",
+        "health_capacity: 8 HP -> larger via collectibles (Banjo's honeycomb pieces -> 1 extra unit per 6 honeycombs)",
+        "lives (classic — Mario 64 had 1-up mushrooms; modern entries often drop the lives mechanic)",
+        "world_unlocks: collectible thresholds open new hub doors / portals",
+        "boss_keys / story_flags",
+        "completion_percent (e.g., 100% requires 120/120 stars in Mario 64; 100/100 jiggies in Banjo)"
+      ],
+      "win_conditions": [
+        "Reach the required collectible threshold and defeat the final boss (Mario 64: 70/120 Power Stars to enter Bowser's final stage; Banjo-Kazooie: 94/100 Jiggies and 810/900 Notes to reach Grunty)",
+        "100% completion is the optional / true ending"
+      ],
+      "lose_conditions": [
+        "HP -> 0 -> Game Over OR exit-to-hub (modern). Mario 64 kicks Mario out of the level on death.",
+        "Falling out-of-bounds / into bottomless pit -> instant kill",
+        "Drowning (timer-based oxygen)",
+        "Lava / instant-kill hazard",
+        "Time limit on specific challenge (Mario 64 timed-star runs)"
+      ],
+      "scenes": [
+        "Boot",
+        "Title",
+        "FileSelect",
+        "Cutscene_Intro",
+        "Hub_World (Peach's Castle / Spiral Mountain / Tar Tarus)",
+        "Level (per-world, often non-linear sandbox or linear obstacle course)",
+        "SubLevel (mini-stage inside a level — painting world)",
+        "BossArena",
+        "PauseMenu (with collectible counter)",
+        "MoveList / AbilityList",
+        "MapScreen",
+        "Cutscene_Story",
+        "GameOver",
+        "Victory_Cutscene",
+        "Credits / EndingPicture"
+      ],
+      "npc_types": [
+        "hub_resident (Toads / Jinjos)",
+        "ability_teacher (Bottles in Banjo)",
+        "shopkeeper (Mumbo Jumbo for transformations)",
+        "quest_giver (level inhabitants asking for help -> Star/Jiggy reward)",
+        "rescue_target (5 captured Jinjos per level in Banjo)",
+        "racer / time-trial NPC (Mario 64: Koopa the Quick)",
+        "warp_npc (Lakitu cameraman — meta NPC for camera control)",
+        "named_mini_boss (King Bob-omb, Big Bully)",
+        "named_world_boss (Bowser, Grunty)"
+      ],
+      "enemy_types": [
+        "goomba / mumbo-style grunt — patrol, contact damage, stomp-defeated",
+        "koopa / shelled — stomp removes shell; can be picked up and thrown",
+        "spiked (urchin, spike-helmet) — cannot stomp; must hit with secondary ability",
+        "flying (paratroopa, bee, lakitu) — drop projectiles; defeated by jumping into them",
+        "ground_pound_only (chain chomp, big bully) — must use ground-pound or push into hazard",
+        "fire / lava (bowser-flame, podoboo)",
+        "water_enemy (eel, urchin in coral)",
+        "bouncing_explosive (bob-omb)",
+        "stationary_hazard (thwomp, fire-bar)",
+        "mini_boss (King Bob-omb / Big Bully / Eyerock) — multi-hit, telegraphed attack",
+        "world_boss (Bowser / Grunty) — multi-phase arena fight"
+      ],
+      "inventory_categories": [
+        "primary_collectibles (stars / jiggies / power moons)",
+        "secondary_collectibles (coins / notes / bots / shines)",
+        "health_pickups (mushroom / honeycomb)",
+        "ability_pickups (cap / power-up — temporary)",
+        "transformation_items (Mumbo's tokens)",
+        "key_items (rare, story-locked)"
+      ],
+      "hud": [
+        "health (HP wedges / pie / honeycomb)",
+        "primary_collectible_counter (stars/jiggies)",
+        "secondary_collectible_counter (coins/notes)",
+        "lives (if applicable — modern: omitted)",
+        "current_world_or_level_name",
+        "minimap (rare in genre — most rely on navigable hub)",
+        "objective_pop_up (one-line star/jiggy hint at level entry)",
+        "interaction_prompt",
+        "power-up_timer (cap / wing duration)",
+        "oxygen_meter (when underwater)",
+        "boss_health_bar"
+      ],
+      "iconic_mechanics": [
+        "Move-set as toolkit: every level is solvable with the same ~12 verbs (jump / triple-jump / long-jump / wall-kick / ground-pound / dive / punch / swim) — level design is built around composing these verbs",
+        "Hub-and-spoke level structure: a central hub gates levels behind collectible counts; each level is a small sandbox with multiple stars/jiggies (Mario 64 popularized; Banjo refined by keeping the player IN the level across stars rather than ejecting after each)",
+        "Player-controlled 3rd-person camera with snap-points for tricky platforms (Lakitu-cam in Mario 64; explicit C-button camera in Banjo). Modern entries auto-frame the camera while still allowing manual override. Fiddly camera in jumping sections is a documented genre weakness — design around it."
+      ],
+      "sound": {
+        "sfx_required": [
+          "jump_voice",
+          "double_jump_voice",
+          "triple_jump_voice (distinct, higher pitch — Mario 64 signature)",
+          "land_soft",
+          "land_hard",
+          "footstep_grass",
+          "footstep_metal",
+          "footstep_water",
+          "ground_pound_charge",
+          "ground_pound_impact",
+          "punch / attack",
+          "wall_kick_off",
+          "long_jump_yell",
+          "swim_stroke",
+          "splash",
+          "bubble_underwater",
+          "coin_collect",
+          "note_collect (ascending pitches per consecutive — Banjo signature)",
+          "primary_collectible_get_fanfare (Star/Jiggy jingle — must be musical, not a generic SFX)",
+          "ability_unlock",
+          "1-up",
+          "damage_take",
+          "death_yelp",
+          "fall_into_pit",
+          "menu_select",
+          "menu_back",
+          "pause_open"
+        ],
+        "music_slots": [
+          "title",
+          "file_select",
+          "hub_world",
+          "level_grass / level_water / level_fire / level_ice / level_haunted (per-biome)",
+          "boss_mini",
+          "boss_world",
+          "boss_final",
+          "underwater (often a remix of the level theme — Mario 64 staple)",
+          "powerup_short_loop (caps duration of a star-cap / wing-cap)",
+          "victory_short_sting",
+          "level_complete_jingle",
+          "game_over",
+          "credits"
+        ]
+      },
+      "common_bugs_anti_patterns": [
+        "Camera clipping into walls in narrow corridors — must use a spring-arm raycast that retracts the camera when occluded",
+        "Camera overshoot on rapid 180-turn — lerp factor too high; tune camera follow speed below player turn speed",
+        "Out-of-bounds: player squeezes through a vertex seam, falls forever — backstop with a kill-Y plane",
+        "Double-jump triggered after walking off a ledge -> air-jump-from-coyote-window stacks with double-jump and produces infinite jump; check 'wasGroundedRecently' OR 'doubleJumpUsed' but not both incorrectly",
+        "Ground-pound + wall-kick desync: ground-pound flag never clears so subsequent jumps register as 'still pounding'",
+        "Picking up an object cancels mid-air collision so the player drops through a moving platform",
+        "Lakitu-style auto-camera frames the player into a tree right before a tricky jump",
+        "Collectible counter persists across files because it's stored on the global Registry not the per-file slot",
+        "Triple-jump only fires when running on perfectly flat ground because slope-test floating-point gives < 1.0 grounded normal",
+        "Audio track for a transient cap (wing-cap) keeps looping after the powerup expires"
+      ],
+      "implementation_notes": {
+        "engine": "Three.js + a physics layer (Rapier preferred for capsule/character-controller; Cannon-es viable for simpler scope).",
+        "character_controller_pattern": [
+          "Capsule collider (player). Move via velocity = (inputDir * speed) + (0, verticalVel, 0). Apply gravity each frame.",
+          "Grounded-check: short downward raycast from capsule base. isGrounded sets coyote-time window (~0.1s) for late jump-press grace.",
+          "Jump state machine: GROUNDED -> JUMP_1 (impulse) -> AIR -> JUMP_2 (only if doubleJumpUnlocked && !doubleJumpUsed) -> LAND. Triple-jump requires running speed > threshold AND consecutive-jump counter resetting on land within a small window.",
+          "Ground-pound: while in AIR, on Crouch press -> set verticalVel = -large; lock horizontal input; on contact -> spawn shockwave + damage AOE around player.",
+          "Wall-kick: while in AIR and side-collision detected, on Jump press within ~0.15s of contact -> set verticalVel positive AND horizontal component away from wall."
+        ],
+        "camera_pattern": [
+          "Third-person follow camera: target = player.position + headOffset; desiredCamPos = target + Quaternion(yaw,pitch) * (0,0, -distance). Each frame, lerp camera.position toward desiredCamPos with a speed slightly slower than the player turn speed for that 'follow string' feeling described in Mario 64's camera.",
+          "Spring arm: raycast from target toward desiredCamPos; if hit < distance, snap camera to hit point - small offset to avoid clipping into walls.",
+          "Manual override: right-stick (or mouse) adjusts yaw/pitch deltas; auto-recenter behind player after N seconds of no input.",
+          "C-button snap-points (Banjo style): designer-placed CameraVolume zones force a specific yaw/pitch for tricky platforming sections."
+        ],
+        "level_authoring": "Each level is a separate Three.js scene OR a streaming chunk; the Hub is its own scene that warps to a level scene via portal collider. Persist player state (collectibles, abilities, lives) in a global Registry / Zustand store, never in the scene itself."
+      }
+    }
+  },
+  "cross_genre_engine_summary": {
+    "phaser_3": [
+      "2D adventure (Hollow-Knight-like): Tilemap rooms, scene-per-region, persistent player Registry.",
+      "JRPG: dual-scene battle (BattleScene + UIScene), Unit class extending Sprite, ATB/turn priority queue, Registry-backed save/load.",
+      "Dialog: rexUI Dialog plugin or hand-rolled Container with typewriter Text and TYPING/WAIT_INPUT/ADVANCE state machine."
+    ],
+    "three_js": [
+      "3D adventure / 3D platformer: capsule character controller via Rapier, grounded-check raycast, third-person spring-arm camera, region streaming with dispose-on-unload to avoid GPU memory leaks.",
+      "Isometric ARPG: OrthographicCamera at fixed angle, raycaster click-to-move with NavMesh pathfinding, randomized loot tables driven by rarity-weighted roll then per-affix roll, HUD as DOM overlay or separate orthographic scene."
+    ]
+  },
+  "errors": [],
+  "ts": "2026-05-05T00:00:00Z"
+}

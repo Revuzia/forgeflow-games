@@ -1,0 +1,758 @@
+{
+ "game-feel-juice": {
+  "score": "slightly_behind",
+  "vsAAA": "behind",
+  "verdict": "Last Circle's *informational* feedback layer is genuinely commercial-grade — coalesced colour-coded damage numbers, a priority-queued announcement system, spatialised limited audio, directional threat indicators and a death recap that beats most AAA death screens — but its *physical* feedback layer is close to absent: pulling the trigger produces no camera kick, no view-model movement, no FOV punch and no hitstop, and camShake is written in exactly two places in the entire codebase (explosions and taking damage), neither of which is your own gun. The result is a game that tells you what happened with excellent clarity but never makes you *feel* it, which is precisely the axis that separates a hobby build from a commercial product.",
+  "gaps": [
+   {
+    "gap": "Firing your own weapon produces zero physical feedback. There is no camera kick, no view-model movement, no FOV punch and no screen shake on any of the six weapons.",
+    "impact": "critical",
+    "effort": "S",
+    "evidence": "`grep -rn \"camShake *=\" runtime/` returns exactly four lines: fx.js:36 (init 0), fx.js:133 (explosion), fx.js:161 (player hurt), fx.js:280 (decay). The shotFired listener at fx.js:88-93 spawns 6 particles and nothing else. player.js:1090 computes wantFov from scope/ads/sprint only. weapons.js:217 parents a static proto.clone() to the hand and never touches it again. The only reaction to firing is an aim-pitch nudge of 0.006-0.05 rad (0.34°-2.86°).",
+    "recommendation": "In the shotFired handler, set W.camShake = Math.max(W.camShake, KICK[weaponId]) with a per-weapon table roughly proportional to the audio gains already tuned — smg ~0.045, ar ~0.07, pistol ~0.06, shotgun ~0.20, glauncher ~0.18, sniper ~0.26 — and only for a === W.player. In the same handler push a short FOV punch (+2° smg/ar, +5° shotgun/sniper) that decays over ~0.12s into the existing cam.fov lerp. Both are a handful of lines and they are the single highest-leverage change available on this dimension: with an SMG at 720 rpm the player pulls a trigger every 83ms and currently nothing on screen moves."
+   },
+   {
+    "gap": "Explosions have no flash and no shockwave. A 95-damage grenade-launcher round with a 3.5m splash radius resolves as 40 coloured cubes and a low-passed noise thump.",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "fx.js:129-134 is the entire visual: burst of 26 fire cubes + 14 smoke cubes, then a camShake of up to 0.5 within 40m. `grep -rn \"PointLight\"` finds none in the royale FX path. There is no expanding ring, no additive flash sprite, no ground scorch. Sim (royale.js:64) rates the launcher at damage 95, splashR 3.5, and explode() applies knockback up to 7 m/s plus 4 m/s vertical — the physics say 'explosion', the visuals say 'confetti'.",
+    "recommendation": "Two additions to the explosion handler, both reusing existing machinery. (1) An additive Sprite flash at the blast point, scale ramping 0→R*2.2 over ~90ms then fading — loot.js:189-204 already builds a radial canvas glow texture with AdditiveBlending you can reuse verbatim. (2) A pooled expanding ring: one THREE.RingGeometry mesh, additive, lying flat, scaling 0.2→R*1.6 over 250ms while alpha fades. Avoid a real PointLight — it forces shader recompiles across the scene on a browser GPU; the sprite reads as bright at bloom 0.14 anyway."
+   },
+   {
+    "gap": "No hitstop / sleep on kills, headshots or explosions — the most-cited technique in the canonical game-feel reference is entirely absent.",
+    "impact": "high",
+    "effort": "M",
+    "evidence": "`grep -rn \"hitstop|timeScale|slowmo|freeze\" runtime/` returns only animation-mixer timeScale (player.js:958-987, freezing far actors' mixers for LOD) and the HUD pause comment. Nothing scales the frame dt on impact. Vlambeer's talk names sleep — pausing for a frame or a few when enemies die, the player is hit, or things explode — as a core buildup technique.",
+    "recommendation": "Add a W.hitstopT that the frame loop honours by scaling dt (not by skipping the frame — keep rendering). 45-60ms on your own kill, 25-35ms on a headshot, 70ms on an explosion within 8m. CRITICAL CONSTRAINT: net.js runs a 12Hz broadcast and the host swaps silent guests for bots after 12s (hud.js:1964-1968 documents this), so in online matches scale only the CAMERA and FX update, never the sim step — or gate hitstop to single-player entirely. Even camera-only hitstop reads correctly."
+   },
+   {
+    "gap": "Zero permanence. No bullet decals, no shell casings, no scorch marks, no corpses — after a firefight the world is bit-identical to before it.",
+    "impact": "high",
+    "effort": "M",
+    "evidence": "`grep -rn \"casing|decal|bulletHole\" runtime/3d/` returns nothing. Bodies play a death clip then are silently removed by `setTimeout(..., 4500)` at player.js:1147 — no fade, no dissolve, no sink. Death loot (loot.js deathDrop) spawns items with no burst, no beam and no glow, while CHESTS get a glow sprite plus a vertical additive beam (loot.js:219-227) — so a killed player's loot is harder to spot than an untouched chest. Permanence is one of the three techniques Vlambeer names that this game ships none of.",
+    "recommendation": "Cheapest-first. (1) Shell casings: reuse the existing particle pool in the shotFired handler — 1 cube per shot, brass 0xc9a227, size 0.045, gravity -9, ejected right-and-back, life 1.5s. Costs one spawn() call. (2) Bullet decals: a second InstancedMesh of ~64 camera-facing quads in a ring buffer, placed at the impact point offset along the surface normal, alpha-fading over ~20s. The impact event already carries the hit position; segmentColliders already returns nx/ny/nz (weapons.js:555), so the normal is free. (3) Give death-drop loot the same glow sprite chests get — that is a two-line change and it fixes a real gameplay legibility problem as well as a juice one."
+   },
+   {
+    "gap": "The victory moment is a text banner over a static world plus 60 CSS-transition div elements. There is no camera move, no world-space celebration, no slow-motion on the final kill.",
+    "impact": "high",
+    "effort": "M",
+    "evidence": "hud.js:2039-2043 announceVictory shows a 34px Orbitron banner for 2600ms. hud.js:2133-2144 confetti() creates 60 absolutely-positioned 8x12px divs with a CSS `transition: top 2-4.5s linear` and removes them at 5000ms. audio.js:186-199 sting() plays four triangle-wave notes at 523/659/784/1046 Hz. During the 2600ms world hold (ffg_royale3d.js:333) the camera does nothing — the winner stands still in the third-person default at dist 4.2m while text sits over the top. This is the single most-screenshotted moment of the match.",
+    "recommendation": "Spend the 2600ms you already hold. (1) Slow the last 0.4s before the banner to ~0.35x (single-player, or camera-only online). (2) Orbit the camera around the winner during the hold — lerp the existing camera yaw offset through ~120° and pull dist 4.2 → 5.5 with a slight upward pitch; player.js already owns the orbit params. (3) Fire the existing particle pool as world-space fireworks: three or four 30-cube bursts at +12m above the winner on a 400ms stagger, gold/blue/green, gravity -4. (4) Trigger the winner's existing cheer emote clip (it is already bound to N). All four reuse systems that exist; none needs a new subsystem."
+   },
+   {
+    "gap": "The hitmarker does not change on the killing blow, so the moment you actually kill someone is visually identical to the moment you chip them for 13.",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "hud.js:1812-1825: the hitMarker handler sets colour to #ffd54a on headshot else #ffffff, fontSize 34px else 26px, opacity 1 for 170/120ms. The kill is signalled only in audio (audio.js:269-271, a 700→1050 Hz two-tone) and by the ELIMINATED banner. Call of Duty and Warzone have used a distinct red X kill-confirm hitmarker for over a decade and it is one of the most imitated feedback conventions in shooters.",
+    "recommendation": "In the actorDied listener, when killerId === W.player.id, immediately re-drive R.hitmark with a red (#ff4d4d) 40px glyph for ~280ms, overriding the head-priority latch (R._hitHeadUntil). Roughly six lines in a handler that already exists."
+   },
+   {
+    "gap": "Destructible props break silently on the visual channel. Barrels, trees and crates play a sound and vanish with no debris.",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "weapons.js:571 and :643 emit propBreak with {x, y, z, kind}. audio.js:286 listens and plays a two-blip break. fx.js has exactly nine listeners (shotFired, tracer, impact, explosion, swimState, swimStroke, actorHurt, actorDied, chestOpened) — propBreak is not among them. Destroying trees and rocks is literally Final Drop's advertised core loop, so this is the one comparison where I can point at a benchmark behaviour directly rather than inferring it.",
+    "recommendation": "One listener, one burst call, keyed off `kind`: wood 0x9a7f4f / 0x6b5335 at n=14 with gravity, stone 0xa9a9a9 / 0x7d7d7d at n=12, barrel already gets the explosion path. Three lines. Also add hardLand and landed dust puffs (both events are already emitted and already have audio listeners, at audio.js:285 and :299) — n=6-10 dirt-coloured cubes at the feet scaled by impact speed."
+   },
+   {
+    "gap": "No weapon ever builds a recoil pattern — the kick fully re-centres between every shot, so the gun never fights you.",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "weapons.js:432 kicks input.pitch by 0.011 rad for the AR. weapons.js:254 recovers at `Math.min(a.recoilPitch, dt * 0.12)`, i.e. 0.12 rad/s. At the AR's 330 rpm the inter-shot interval is 0.18s, which recovers 0.0216 rad against an 0.011 rad kick; the SMG at 720 rpm recovers 0.010 rad against 0.006. Every weapon therefore fully resets before the next round, and a full-auto burst produces a ~0.6° wobble at ~5.5 Hz rather than a climb.",
+    "recommendation": "Split the single kick into the two values commercial shooters use: a VISUAL kick that is large and fully recovers (feel), and an AIM kick that is small and only partly recovers (control). Concretely, keep recoilPitch as-is for the aim component but recover only ~70% of it, and add a separate camera-only pitch offset of 3-4x the current kick that recovers fast (~0.5 rad/s). This gets you a visible climb the player must fight without changing the effective spread model in sim/royale.js, which is shared with the crosshair bloom and would be a balance change rather than a feel change."
+   },
+   {
+    "gap": "The hurt vignette is binary — identical for a 5-damage graze and a 95-damage sniper hit — and there is no persistent low-HP state.",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "hud.js:1261 defines R.hurtTint as a red radial gradient at 0.4 alpha with a 0.3s transition; hud.js:1429 is the only driver: `R.hurtTint.style.opacity = W.t - p.lastDamageT < 0.7 ? \"1\" : \"0\"`. Nothing reads info.dmg or p.hp. The player has 100 HP + 100 shield (royale.js PLAYERK), so a sniper body shot at 105 damage and a distant pistol shot at ~10 produce the same screen.",
+    "recommendation": "Scale opacity by damage — roughly clamp(dmg/60, 0.25, 1) — and add a second always-on tint whose opacity ramps once hp drops below 35, so the last third of your health bar is felt rather than read. A slow pulse on that low-HP tint (the lcPulse keyframe already exists at hud.js:58) plus a faint heartbeat via the existing thump() would cost almost nothing and is the standard shooter convention."
+   },
+   {
+    "gap": "Enemies do not flash or react visually when hit. The only body confirmation is 4 particles at size 0.08 and a floating number.",
+    "impact": "medium",
+    "effort": "M",
+    "evidence": "fx.js:144-148: actorHurt spawns `n: 4` cubes at 0.08 size, life 0.35s, coloured 0x4aa8ff if the damage went to shield else 0xc23b3b. Nothing touches the victim's material. There is no flinch, no stagger, no hit reaction animation — `grep lastShotT runtime/3d/royale/player.js` shows the only combat-pose use is player.js:952 `const combat = a.input.ads || (W.t - a.lastShotT < 1.5)`, which is the SHOOTER's pose, not the victim's.",
+    "recommendation": "Add a shared overlay: on actorHurt, set a per-actor flashT and in the actor update multiply the material colour toward white (or toward red for health damage, blue for shield) for ~70ms. Do NOT use emissive — player.js:184-221 documents that the Meshy GLBs' emissive was deliberately stripped because emissiveMap was a self-illum preview hack and the albedos were baked dark; raising emissive back would regress the fullbright bug that was already fixed this session. A colour multiply on material.color with a saved original is safe and cheap. Note the shield-vs-health colour split you already have in the particles is the right distinction to carry through."
+   },
+   {
+    "gap": "Camera shake is per-frame white noise on position only, so it reads as buzz rather than impact and its character changes with framerate.",
+    "impact": "low",
+    "effort": "S",
+    "evidence": "player.js:1079-1081: `cam.position.x += (Math.random() - 0.5) * W.camShake; cam.position.y += (Math.random() - 0.5) * W.camShake * 0.6;`. Fresh Math.random() every frame, no temporal coherence, no rotational component, linear decay at fx.js:280 (`dt * 1.8`). At 144fps this is a 144Hz jitter; at 30fps it is a visible stutter — the same camShake value produces a different sensation on different hardware, which matters in a browser game running on unknown machines.",
+    "recommendation": "Drive x/y from a cheap smooth noise sampled on W.t (two sine sums at incommensurate frequencies is enough), add a small camera ROLL term (rotation.z) which is what actually sells impact, and square the decay (trauma^2 is the standard curve) so shake falls off sharply rather than lingering. Roughly ten lines in the block that already exists."
+   }
+  ]
+ },
+ "progression-retention": {
+  "score": "far_behind",
+  "vsAAA": "behind",
+  "verdict": "Last Circle has a real, working, well-surfaced progression layer inside the match — a persistent XP/level bar, three live challenge cards, a level-up banner that names its reward, and a lifetime career line on the menu — which is more than most browser 3D shooters ship at all. What it does not have is anything that operates on a timescale longer than one match: no daily reset, no leaderboard, no cloud save, and a reward table that runs dry at level 10 after roughly 4-6 hours, at which point every level-up announces \"RANK UP\" and pays nothing.",
+  "gaps": [
+   {
+    "gap": "No daily reset of any kind — nothing about the game changes because it is a new day",
+    "impact": "critical",
+    "effort": "M",
+    "evidence": "The only persisted keys are `lc_progress`, `lc_skin`, `lc_seen_intro`, `lc_settings` (grep of localStorage across runtime/). `pickChallenges` is called from `showHUD` (hud.js:1192), so challenges are regenerated per MATCH, never per day. There is no date stamp, no streak counter, no first-win-of-the-day bonus, no reset countdown anywhere in the codebase.",
+    "recommendation": "Add `lc_daily` keyed on the UTC date: three challenges drawn from an expanded pool that persist across matches within the day, plus a 'First win of the day: +750 XP' bonus and a 'Resets in HH:MM' countdown on the menu. The challenge structs and the live `addXP` path already exist — this is bookkeeping on top of them, not new machinery. Benchmark: ZombsRoyale.io ships 3 dailies per 24h plus 6 sets of 7 weeklies (verified)."
+   },
+   {
+    "gap": "The reward table ends at level 10 — all progression content is exhausted in roughly 4-6 hours, then levels pay literally nothing",
+    "impact": "critical",
+    "effort": "M",
+    "evidence": "MENU_SKINS has 5 entries with unlockLevel 1, 1, 3, 6, 10 (hud.js:119-124) — only three items are earnable. Cumulative XP to level 10 = 32,400 (sum of `800 + (l-1)*700` for l=1..9). At ~730 XP for an average standard match that is ~45 matches; at ~1,500 for a strong one, ~22. Past level 10 `levelUpSub` returns the string 'RANK UP', so the level-up banner fires for a reward that does not exist.",
+    "recommendation": "Extend to a ~30-tier track using rewards that need zero new art: material-tint variants of the 5 existing GLBs, callsign titles that render in the kill feed and on the post-match card, crosshair and parachute colours, and a named rank badge every 5 levels. All code-only, all appropriate for a browser build. Do not build a paid pass — the free track is the retention object."
+   },
+   {
+    "gap": "'Survived' time and its XP term count time spent SPECTATING, inflating the stat, the payout and the lifetime career",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "`timeS: Math.round(W.t)` in buildPostMatch (ffg_royale3d.js:346) is match wall-clock at the moment endMatch runs, and `W.t` keeps advancing after you die — the frame loop only stops it on `phase === 'over'` (ffg_royale3d.js:366), while dying leaves you in the supported spectate flow with its own spectator bar. Die at 0:45 of a 12:55 standard match, watch to the end, and the post-match card reads 'Survived 12:55', the formula pays 775/4 = 193 XP for it, and `career.timeAliveS += 775` (hud.js:1159). The per-match challenges are correctly guarded on `W.player.alive`; this end-of-match path is not",
+    "recommendation": "Read the real elimination time instead of W.t — `Match.eliminate` already stamps it into `this.feed` (royale.js:502), so the number is recorded and just needs to be looked up by victim id (fall back to W.t for the winner). Near-zero-cost fix in the generator, and it makes 'Survived' and career.timeAliveS true."
+   },
+   {
+    "gap": "The challenge pool is 5 entries and two of them appear in every single match",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "`pickChallenges` (hud.js:1192-1197) always returns CHAL_POOL[0] 'Survive 3 minutes' and CHAL_POOL[1] 'Get 1 elimination', plus one of three rotating on `level % 3`. A player has seen the entire system by their third match, and the third slot only changes when they level up.",
+    "recommendation": "Expand the pool to ~25 objectives spanning weapon class ('3 shotgun eliminations'), distance ('a kill past 120m'), precision ('5 headshots'), looting ('open 6 chests', 'land a supply drop'), survival ('take zero storm damage'), and placement, then draw 3 per day without repeating the previous day's set. The struct is a label + goal + xp + `prog(W)` closure over counters that already exist — each new entry is one line."
+   },
+   {
+    "gap": "No leaderboard, despite the exact infrastructure already shipping in a sibling game in this repo",
+    "impact": "high",
+    "effort": "M",
+    "evidence": "Nothing in runtime/ writes a score anywhere; grep for leaderboard/achievement across the game returns only the element-registry comment. Meanwhile net.js:22-23 already holds the Supabase URL + anon key, and games/dungeon-forge/runtime/net/cloud.js already runs a Supabase REST leaderboard against that same project. ZombsRoyale.io (verified) ranks players on eliminations-per-match and time-survived.",
+    "recommendation": "One table `lc_scores` (name, kills, placement, damage, ts) written on match end, a rolling 7-day window, top 50 rendered on the menu, and a personal-best row. Copy the graceful-degradation pattern from dungeon-forge's Cloud class — if the table is unreachable it silently falls back to a local best, so the game never breaks."
+   },
+   {
+    "gap": "Progress is localStorage-only: a cache clear wipes the career and nothing crosses devices",
+    "impact": "high",
+    "effort": "M",
+    "evidence": "`saveProgress` writes only `localStorage.setItem('lc_progress', ...)` (hud.js:~1142); there is no export, no import, no account, no server row. CrazyGames states the requirement explicitly: 'Players care A LOT about their progress in games, and expect their progress to synchronize across their devices', and requires the Data module, a custom backend, or automatic save unless progress is not applicable — Last Circle as shipped would not satisfy it.",
+    "recommendation": "Generate a player UUID on first run, persist the same `lc_progress` blob to a Supabase row keyed on it (same anon key already in net.js), and expose a copyable 'transfer code' in Settings so a player can move their career to another browser or machine. Local stays authoritative; cloud is a mirror, so offline play is unaffected."
+   },
+   {
+    "gap": "No career/stats screen, and two tracked lifetime stats are displayed nowhere",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "`career.damage` and `career.timeAliveS` are accumulated in recordMatch (hud.js:1158-1159) and never read by any render path — grep finds no other reference. Nothing computes win rate or K/D from the matches/wins/kills that ARE stored, and there is no per-map or per-weapon breakdown despite both being known at kill time.",
+    "recommendation": "A CAREER panel off the menu: win rate, K/D, average placement, total damage, total time alive, best placement, top-10s — every one derivable from data already persisted — plus per-map win counts and a favourite-weapon row (add two counter objects to CAREER0). This is the cheapest 'reason to open the menu' in the list."
+   },
+   {
+    "gap": "No persistent player identity — you are 'You' in your own kill feed",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "`playerName: 'You'` is in the settings defaults (ffg_royale3d.js:420) but grep of hud.js finds no field that edits it anywhere in Settings; net.js:117 works around this by substituting 'Player-' + a random suffix online.",
+    "recommendation": "A callsign field in Settings persisted with the rest of `lc_settings`, rendered in the kill feed, the post-match card and the leaderboard. Self-representation is a standard low-cost retention hook and it also removes the awkward 'Player-XYZ' fallback online."
+   },
+   {
+    "gap": "The menu advertises 'SEASON 1 · FREE TO PLAY' and there is no season",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "hud.js:499 renders the literal string 'SEASON 1  ·  FREE TO PLAY' in the top chrome bar. There is no season length, no end date, no seasonal reset, no seasonal reward, and no season identifier in `lc_progress`.",
+    "recommendation": "Either drop the label, or make it true by putting the extended tier track behind it with a visible end date and a season-over recap ('Season 1: 62 matches, 9 wins, reached tier 24'). A dated season is one of the few reasons a lapsed browser player comes back on a specific day; an undated one is just chrome."
+   },
+   {
+    "gap": "Match XP is banked only at endMatch, so a mid-match tab close loses everything except challenge XP",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "The kills/damage/placement/victory/time formula runs once inside showPostMatch (hud.js:2240) and calls addXP there. Challenge XP, by contrast, already flows through `addXP` live during the match, and addXP calls saveProgress on every award — so the incremental-persist pattern exists and is simply not used for kills.",
+    "recommendation": "Award and persist ~100 XP at the instant of each elimination (subtract it from the end-of-match total so nothing double-counts). It removes the all-or-nothing feel of a long standard match and it is the same one-line call the challenge path already makes."
+   },
+   {
+    "gap": "The flagship mode is the least efficient way to progress, and one standard match is longer than a top-quartile browser session",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "Standard storm runs 775s (12:55) vs quick's 239s (~4:00) (royale.js STORM_PHASES), but the XP formula is identical for both and only the `timeS/4` term scales with match length. Worked comparison: die at #20 with 1 kill and 250 damage — standard at 5:00 pays 405 + 325 challenge = 730 XP (~146/min); quick at 2:30 pays ~367 + 175 = 542 XP (~217/min). GameAnalytics 2024 puts the median session at 5-6 minutes and the top quartile at 8-9 — a full standard match exceeds a top-quartile session before it banks anything.",
+    "recommendation": "Apply a mode multiplier (~1.6x) to standard's match XP so the flagship mode is also the efficient one, and pair it with the incremental kill-XP fix above so a long match pays out continuously rather than only at the end. Do not shorten standard — 12:55 is a deliberate, correct pacing decision; fix the reward rate instead."
+   }
+  ]
+ },
+ "multiplayer": {
+  "score": "far_behind",
+  "vsAAA": "far_behind",
+  "verdict": "Last Circle's multiplayer is a well-conceived friends-only room-code mode — the slot-takeover model (humans occupy slots in a fixed 50-actor roster, disconnects hand the body back to a bot brain) is genuinely smarter than what most browser BRs do, and it means a 3-friend room is still a 50-player battle royale rather than a 3-player deathmatch. But it sits on a transport that cannot carry it: Supabase Realtime Broadcast bills 1 send + 1 per receiver, the free project cap is 100 msg/s, and a 4-human match generates ~240 msg/s before anyone fires a shot — so online play will hard-disconnect during matches, and there is no matchmaking, no invite link, no teams, no shared clock, and remote players render frozen in a jump pose.",
+  "gaps": [
+   {
+    "gap": "Every remote actor is animation-dead — they slide across the terrain frozen in a jump pose. `interpRemote` writes only `pos` and `yaw`; it never touches `a.vel` or `a.onGround`. `syncObj` picks the clip from `gs = hypot(a.vel.x, a.vel.z)` (permanently 0) and from `a.onGround`, which is initialised `false` at actor creation and is only ever set true inside `stepActor` — which `netRemote` actors explicitly skip. So the selector falls through to `else if (!a.onGround) playAnim(a, \"jump\", { once: true })` for every network-driven actor for the entire match. On a guest client that is all 49 other actors simultaneously.",
+    "impact": "critical",
+    "effort": "S",
+    "evidence": "player.js:1021-1028 `interpRemote` sets only `a.pos.lerp(...)` and `a.yaw += ...`. player.js:625 `if (a.netRemote) { interpRemote(W, a, dt); continue; }` — skips `stepActor` entirely. player.js:57 `onGround: false` at creation; the only assignments to `onGround = true` are at player.js:696 and :855, both inside `stepActor`. player.js:968 `else if (!a.onGround) playAnim(a, \"jump\", { once: true, startAt: JUMP_TAKEOFF_S })`. `pack()` (net.js:329-336) sends no velocity, no grounded flag, no crouch/ADS/sprint state.",
+    "recommendation": "In `interpRemote`, reconstruct velocity from the snapshot delta (`vel = (newTarget - oldTarget) / snapshotInterval`) before lerping — that alone restores walk/run/backpedal selection and costs zero wire bytes. Then add one packed byte to `pack()` carrying grounded/crouching/ads/sprinting/reloading as bit flags; it is free relative to the coordinates already being sent and it fixes crouch pose, ADS stance and reload animation on remotes at the same time. Also add `pitch` — remote players currently never look up or down. This is the first thing anyone sees when they play with a friend, so it should lead the fix queue regardless of what happens to the transport."
+   },
+   {
+    "gap": "The transport cannot carry the game. Supabase Realtime Broadcast bills 1 send + 1 per receiving subscriber, the free project cap is 100 messages/second, and a 4-human room generates ~240 msg/s with nobody shooting (host 12 state + ~12 bot-batch + 3 guests x 12 = ~60 sends, x3 receivers = ~180 receives) rising to 500-700 msg/s in an active midgame once the 90 ms gunfire relay engages. Supabase does not degrade gracefully at that cap — it disconnects the connection. The monthly quota is worse: one 12.25-minute quiet match burns ~176,000 of 2,000,000 messages, giving roughly 11 matches per month for the whole game on a project shared with every other ForgeFlow title. The declared `eventsPerSecond: 12` is itself contradicted by the host's own ~24 sends/s baseline.",
+    "impact": "critical",
+    "effort": "L",
+    "evidence": "net.js: `if (now - S.lastState > 83)` (12 Hz state), `if (S.net.isHost() && now - S.lastBots > 100)` (10 Hz bots, chunked at `list.length >= 24`), `if (now - (a._fireRelayT || 0) < 90) return` (11/s per firing actor). ffg_netplay.js:43 `realtime: { params: { eventsPerSecond: 12 } }` and :54 `broadcast: { self: false, ack: false }`. Supabase docs (fetched this session): free = 100 msg/s, 200 concurrent, 2M/month; \"Each broadcast message counts as one message sent plus one message per subscribed client that receives it\"; \"connections will be disconnected if your project is generating too many me",
+    "recommendation": "Stop relaying bots. The docstring already claims a deterministic world — finish the claim: seed the bot brains from the match seed, tick them on a fixed step, and make their LOD decisions independent of the local player's position (today both player.js:626 and the net.js near-set key off per-client positions, which is what forces the relay). Every client then simulates the same 46 bots and only human state crosses the wire. That deletes the single largest term. Then fold per-event messages (fire, emote, take, chest) into the same tick as the state packet instead of broadcasting each separately, and drop own-state from 12 Hz to 8 Hz — the lerp already adds ~100 ms of smoothing, so the perceptual cost is near zero. A 4-player match then costs 4 x 8 = 32 sends/s -> ~128 msg/s, which is 3 humans inside the free cap and ~15 concurrent matches on Pro. If online play earns real usage after that"
+   },
+   {
+    "gap": "Bot damage against a guest is credited to the host. `W.reportRemoteHit` hardcodes `attacker: W.player.id` — the *local* player — but on the host it is invoked for every one of 49 bots that hits a guest. The guest's kill feed reads \"<HostName> eliminated you\", the death-cam locks onto the host (`victim.spectating = killerId`), and the host's kill tally is inflated on every guest's client while the host's own client shows the correct number. Both call sites have the real owner in scope and simply do not pass it.",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "net.js:32-34 `W.reportRemoteHit = (target, dmg, weaponId, isHead) => { if (S && W.player) send(\"hitYou\", { target: target.id, dmg, attacker: W.player.id, weapon: weaponId, isHead }); }`. weapons.js:526 `if (W.reportRemoteHit) W.reportRemoteHit(t, dmg, p.weaponId, isHead);` with `p.ownerId` in scope four lines later at `W.actorById.get(p.ownerId)`. weapons.js:621 same omission with `ownerId` a live parameter of `explode()`. player.js:1150 `victim.spectating = killerId`. The unused exported `reportHit` at net.js:339 carries the identical flaw.",
+    "recommendation": "Add an `attackerId` parameter to `reportRemoteHit` and pass `p.ownerId` / `ownerId` from both weapons.js call sites. Delete or fix the dead `reportHit` export so it cannot be wired up later with the same bug."
+   },
+   {
+    "gap": "No shared match clock — the storm is in a different place on every screen. `W.t` starts at 0 independently per client and free-runs off local rAF; the single `sync` message that carries `t` is sent once at match start and never again. Storm state is `storm.stateAt(W.t)` and storm damage is applied locally by each client to its own actors. Divergence is guaranteed and monotonic: the lobby fill animation itself advances a random 3-7 cells per 140 ms so clients leave the lobby at different wall-clock times, map build is async and hardware-dependent, and a backgrounded tab throttles rAF to ~1 Hz while each step is capped at `Math.min(dt, 0.05)` — so a tabbed-out player's clock falls behind real time by orders of magnitude and never recovers. Across 8 phases and 735 s, two players will disagree about where the wall is and one will take damage the other believes is impossible.",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "storm.js:72 `const st = ctl.storm.stateAt(W.t);` and :111-140 apply damage locally, skipping `netRemote`. net.js:238-244 the `sync` handler `W.t = d.t` is reachable only from net.js:276-281 `onMatchStart`, which fires once. ffg_royale3d.js:358 `if (W.phase !== \"over\") W.t += step;` with `const step = Math.min(dt, 0.05);`. hud.js:882-883 `const step = 3 + Math.floor(Math.random() * 5);` on a 140 ms interval, so lobby duration is randomised per client. sim/royale.js STORM_PHASES.standard sums to 735 s.",
+    "recommendation": "Add `t` as one more field on the host's existing state packet — zero extra messages — and have guests slew `W.t` toward it (correct by a fraction of the error per frame rather than snapping, so the storm never teleports). Also gate the lobby exit on a fixed duration rather than a randomised fill animation so clients enter the drop phase together, and drive the fill bar off elapsed time instead of a random step count."
+   },
+   {
+    "gap": "No matchmaking and no invite link — getting a friend into your game means reading four characters aloud. `NetPlay.quickMatch()` is fully implemented in the shared transport (lobby channel, two-lowest-id pairing, deterministic symmetric room naming, and a linger-before-untrack fix for the orphaned-peer race) and Last Circle never calls it. The menu's \"QUICK MATCH\" is a game mode, not matchmaking, which makes the absence read as a feature that exists. Final Drop carries CrazyGames' \"With friends\" tag, which is the SDK `inviteLink()`/`showInviteButton()` pattern — a shareable URL carrying `roomId`.",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "ffg_netplay.js:86-118 `async quickMatch(timeoutMs)` — complete implementation. Grep for `quickMatch` across `runtime/` returns only ffg_netplay.js definitions and hud.js:112 `{ id: \"quick\", name: \"QUICK MATCH\", sub: \"5-minute storm · double loot · hot start\" }` — a mode entry. The only online entry point is hud.js:593 `online.onclick = () => W.events.emit(\"openOnline\", { mode: selMode })`. Room codes are 4 chars from a 31-char alphabet (net.js:150-155). Verified: CrazyGames SDK docs describe `inviteLink()` taking a param map including `roomId`, and `showInviteButton()` rendering a footer butto",
+    "recommendation": "Ship the deep link first — it is roughly twenty lines and the highest ratio in this whole assessment. Read `?room=CODE` on boot and auto-open the lobby pre-filled; add a COPY INVITE LINK button next to the code so the host pastes a URL into Discord instead of dictating letters. That works on the ForgeFlow portal today and maps one-to-one onto the CrazyGames invite SDK if the game ever ships there. Then wire the existing `quickMatch()` into a PUBLIC MATCH button — but sequence it after the transport work, because public matchmaking multiplies concurrent rooms against the same 100 msg/s cap, and it needs the trust boundary below."
+   },
+   {
+    "gap": "No teams, in a mode whose button says \"SQUAD UP\". There is no team assignment, no friendly-fire suppression, no shared team UI, and no knockdown/revive loop — grepping team/squad/revive/downed across every royale module returns nothing but an unused `downedAt: 0` field on the actor struct. Friends drop into the same match and are immediately obliged to shoot each other. For the multiplayer dimension this is the largest *design* miss: playing a battle royale with friends means playing on the same side, and Apex Legends is squads-only precisely because that is the mode's reason to exist.",
+    "impact": "high",
+    "effort": "M",
+    "evidence": "`grep -rn \"team\\|Team\\|squad\\|Squad\\|revive\\|downed\\|knock\" runtime/3d/royale/*.js runtime/sim/royale.js` returns only player.js:56 `downedAt: 0` (never read) and two unrelated knockback comments in weapons.js. hud.js:593 `const online = mkGhost(\"🌐  SQUAD UP\", subRow);`. sim/royale.js `Match.prototype.eliminate` ends the match at `this.alive.size === 1` — a single-survivor win condition with no team concept.",
+    "recommendation": "Add a `teamId` to the actor and to the roster in the `start` config; default every bot to its own team so the FFA behaviour of bot slots is unchanged and only humans in a room share one. Filter damage in `hurtActor` and the splash loop on matching `teamId`, tint teammate nametags and minimap blips, and change the win condition to last-team-standing. A knock-and-revive loop is the natural follow-on and is not exotic here — `downedAt` is already reserved on the actor, hp/shield already replicate, and the heal channel already implements a timed interruptible interaction that a revive can reuse wholesale. This costs nothing extra on the wire."
+   },
+   {
+    "gap": "You cannot tell your friend from a bot. `mkNameTag` paints every tag the same white on the same translucent pill for humans and bots alike, and the 46 bots carry deliberately human-looking handles from BOT_NAMES — \"SweatySteve\", \"ClutchClara\", \"NoScopeNate\", \"SoloQueueSue\". The whole point of a friends mode is knowing which silhouette is your friend, and the game does not tell you.",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "player.js:332-349 `mkNameTag` — `ctx.fillStyle = \"rgba(0,0,0,0.45)\"` for the pill and `ctx.fillStyle = \"#fff\"` for the text, with no branch on `a.isBot` or `a.netRemote`. sim/royale.js BOT_NAMES is a 68-entry list of human-style gamertags. Tags are additionally culled beyond 70 m (`d2 < 70 * 70`, player.js:639), so a friend across a valley has no marker at all.",
+    "recommendation": "Tint human nametags (and, once teams exist, teammate tags) a distinct colour, and add a small friend chevron above teammates that survives the 70 m tag cull — the same way every squad BR draws its squadmate markers. Add friend blips to the minimap from the state packets already arriving. This is a couple of hours of work and it is the difference between \"we are in the same match\" and \"we are playing together.\""
+   },
+   {
+    "gap": "The lobby is blind and a disconnect is permanent. The lobby prints a raw count and never the names — `S.peers` holds every peer's chosen name and is used only to build the roster, never rendered. There is no ready check, no kick, and no chat. Once the match starts there is no way back in: a refresh fires `bye`, the host hands your slot to a bot brain, and no rejoin path exists. Room codes are also unguarded against collision — two hosts can generate the same 4-char code and silently share a room.",
+    "impact": "medium",
+    "effort": "M",
+    "evidence": "net.js:123-127 the `peer` handler renders only `${Math.max(1, count)} player(s) connected`; `S.peers[from] = d.name` (net.js:173) is read only at net.js:142 to build the roster. net.js:157-159 `window.addEventListener(\"beforeunload\", ... send(\"bye\", { slot: \"s\" + S.mySlot }))`; the `bye` handler (net.js:223-231) attaches a bot brain and broadcasts `takeover`, with no inverse operation anywhere. net.js:150-155 `randCode()` picks 4 chars with no occupancy check.",
+    "recommendation": "Render the peer list from `S.peers` — names, slot numbers, and a host badge — so the lobby looks like a lobby. Then add rejoin: persist `{room, slot, seed}` to sessionStorage on match start, and on boot with a live session offer RECONNECT, which re-enters the channel and sends `reclaim{slot}`; the host inverts its existing takeover (detach brain, set `netRemote`) and replies with a full state sync. The host already owns all the machinery for this — it only ever runs it in one direction. For codes, have the host presence-check the channel before committing and re-roll on a hit."
+   },
+   {
+    "gap": "Zero trust boundary on inbound messages. Any peer in the room can send `hitYou` naming any slot with arbitrary damage, `died` for any slot, `take`/`chest` for any object id, and `start` with any config — the start guard is `!S.started` with no host check, so any peer can force the match to begin. For a private friends room this is a defensible trade and the shooter-authoritative model it enables is genuinely the right call for a relay with no server tick. But it is a hard precondition on the public matchmaking recommended above: a single crafted message ends a public lobby.",
+    "impact": "medium",
+    "effort": "M",
+    "evidence": "net.js:191-197 the `hitYou` handler applies `d.dmg` with no bound on magnitude, no check that the attacker exists or is in range, and no rate limit. net.js:218-222 the `died` handler sets `a.hp = 0; a.shield = 0; W.killActor(...)` for any slot named. net.js:174 `if (t === \"start\" && !S.started)` — no `from === hostId` check. `broadcast: { self: false, ack: false }` (ffg_netplay.js:54) means no sequence numbers, no dedup and no retransmit either, so a dropped `died` message silently desyncs a client's alive set with no reconciliation path — the `sync` message covers only `t` and loot, and fires",
+    "recommendation": "Keep the trust model as-is for code-gated friend rooms; it is the correct trade there. Before any public path ships, add host-side sanity checks on `hitYou` (cap damage at the weapon's max possible roll, require the attacker to be alive and within the weapon's range, rate-limit per attacker), restrict `start`/`died`/`takeover` to messages originating from the host peer id, and add a periodic host->guest roster reconciliation (alive set + kill counts) folded into the existing sync path so a dropped elimination self-heals instead of permanently forking the match state."
+   },
+   {
+    "gap": "Progression is local-only, so nothing survives the session socially. Level, XP and the full career record (matches, wins, kills, damage, bestPlacement, top10s) live in `localStorage[\"lc_progress\"]` — no server, no cross-device, no leaderboard, and no way to compare with the friends you just played four matches against. Final Drop's CrazyGames listing carries a Leaderboards tag; Last Circle has no server-side persistence of any kind.",
+    "impact": "medium",
+    "effort": "M",
+    "evidence": "hud.js:1081-1086 `JSON.parse(localStorage.getItem(\"lc_progress\") || \"{}\")` / `localStorage.setItem(\"lc_progress\", ...)`, with `CAREER0 = { matches: 0, wins: 0, kills: 0, damage: 0, bestPlacement: 0, top10s: 0, timeAliveS: 0 }`. Grepping `leaderboard|achievement|registry` across `runtime/`, `index.html` and `game_meta.json` returns no integration — the only Supabase reference in the game is the Realtime relay in net.js.",
+    "recommendation": "Post the post-match record to the existing FFG Supabase registry (the same project already backs games/achievements writes for other titles) and render two boards on the menu: a global weekly top-kills/top-wins, and a per-room board showing just the peers from your last match. The second is the one that matters for this dimension — a friends mode needs a scoreboard the friends can argue about, and the post-match panel already computes every number it needs."
+   }
+  ]
+ },
+ "audio": {
+  "score": "far_behind",
+  "vsAAA": "behind",
+  "verdict": "Last Circle's audio is a well-engineered synthesizer wired to an unusually broad event set — 33 events, four-surface bullet impacts, a four-stage mechanical reload timed off each weapon's reloadS, and a real brickwall limiter on the master — but it is missing the two things that matter most in a battle royale: 3D localisation and any recorded sample content. Final Drop ships 125 recorded clips (2.59 MB total) across 219 sound components, 194 of them true 3D positional, with per-weapon-class audible radii from 200 m to 600 m; Last Circle answers with ~10 synth primitives, a StereoPanner that cannot distinguish front from back or above from below, and one 260 m radius for all six weapon classes.",
+  "gaps": [
+   {
+    "gap": "No 3D spatialisation — the game cannot tell you front from back or above from below",
+    "impact": "critical",
+    "effort": "S",
+    "evidence": "audio.js spatial() uses `ctx.createStereoPanner()` and computes `pan = (dx*rightX + dz*rightZ)/dl * 0.8`, a dot product with the camera's right vector. A source directly ahead and a source directly behind both yield pan = 0.0. The vertical component is used for the distance term (`Math.hypot(dx, dz, (pos.y||0) - cam.position.y)`) but is discarded from panning entirely. Grep for createPanner/panningModel/HRTF across runtime/ returns zero hits. Final Drop: 194 of 219 sound components are positional:true (PannerNode). This matters more here than in most games because the map has sky islands, mult",
+    "recommendation": "Replace createStereoPanner with createPanner({ panningModel: 'HRTF', distanceModel: 'inverse', refDistance: 8, maxDistance: <per-event>, rolloffFactor: 1 }), set positionX/Y/Z from the source's world position, and update ctx.listener position + forwardX/Y/Z + upX/Y/Z from W.camera once per frame in the existing update loop. Keep the current gain curve as a supplementary trim if the inverse model feels wrong. This is roughly 40 lines in spatial() plus a listener sync, and it converts the single largest category-level miss into parity."
+   },
+   {
+    "gap": "Zero recorded SFX, and every gunshot of a class is bit-identical",
+    "impact": "critical",
+    "effort": "M",
+    "evidence": "assets/audio/ contains exactly three files, all music. Every weapon report is synthesised in shot(): one shared 1-second noise buffer created once in noiseBuf(), started with `n.start(t)` — always offset 0, no playbackRate variation, no filter jitter. At smg rpm 720 that is 12 acoustically identical bursts per second, which comb-filters into a robotic buzz rather than reading as automatic fire. Final Drop authors fire-1 and fire-2 slots at pitch 1.0 and 1.2 on every one of its ten weapons for exactly this reason.",
+    "recommendation": "Two tiers. Free and immediate: per shot, pick a random buffer offset (`n.start(t, Math.random()*0.8)`), randomise playbackRate ±10%, and jitter the filter start frequency ±8% — three lines, and it removes the machine-gun artefact tonight. Then invest in a ~1.5 MB pack of 12–18 recorded one-shots (6 weapon reports, 4 impact surfaces, 2 footstep surfaces, mag/rack) decoded once into AudioBuffers; at Final Drop's density that whole library costs less than one third of the current music payload."
+   },
+   {
+    "gap": "One gunshot audibility radius (260 m) for all six weapon classes — a sniper outranges its own report",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "shot() calls `spatial(pos, 260)` unconditionally. The sniper in sim/royale.js has falloff [200, 400], i.e. it deals full 105 damage to 200 m and floors at 40% beyond 400 m — so it can kill you from 300 m while its report is culled at 260 m and is already down to ~2% amplitude by 240 m under the (1−d/maxD)^1.4 curve. Meanwhile the shotgun (falloff [8,20], effective range ~20 m) is broadcast to the same 260 m. Final Drop scales by class: shotgun/launcher 200 m, SMG/pistol 300 m, AR 340 m, burst/red-eye 510 m, snipers 600 m. Distant gunfire is the primary rotation signal in a BR and right now it ",
+    "recommendation": "Add an `audibleM` field next to `falloff` in SIM.WEAPONS (shotgun 120, smg 200, pistol 220, ar 320, launcher 260, sniper 520) and pass `def.audibleM` into shot(). Pair it with a distance-dependent lowpass — at d/maxD > 0.4 open a second biquad whose cutoff falls from 3 kHz to 600 Hz — so far shots are muffled thumps and near shots are cracks. That gives players a range estimate as well as a bearing, which is the PUBG/Apex distance cue, and costs one extra node per shot."
+   },
+   {
+    "gap": "Footsteps carry no stance information — crouching buys no acoustic stealth",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "audio.js: `on(\"footstep\", (a) => thump(300 + Math.random()*90, 0.055, a === W.player ? 0.09 : 0.16, ..., 24))` — one fixed gain and one fixed 24 m radius regardless of stance. player.js only varies the stride distance (2.4 m walking, 3.2 m sprinting), so crouch-walking emits steps at the same volume and the same audible range as sprinting. sim/royale.js CROUCH = { speedMult: 0.45, heightMult: 0.86, eyeMult: 0.60, spreadMult: 0.62 } — crouch costs 55% of your speed and returns accuracy and a smaller silhouette, but zero stealth. Final Drop separates Walk (vol 0.15, max 30 m) from Run (vol 0.20,",
+    "recommendation": "Scale gain and maxD by stance in the footstep handler: crouch 0.07 / 11 m, walk 0.13 / 22 m, sprint 0.20 / 34 m, and drop the step pitch ~15% when crouching. The actor already carries a.crouching and a.sprinting. This is a five-line change that turns crouch into a real tactical decision and makes the 24 m blanket radius stop punishing careful play."
+   },
+   {
+    "gap": "Enemy actions other than shooting and walking are completely silent",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "In audio.js, reloadStart, reloadDone, weaponEquipped, healStart, healed and pickedUp all early-return with `if (a !== W.player)`, and `scopeState` (emitted at player.js:1093) has no audio listener at all — one of 19 emitted events with no audio handler. So an enemy reloading, swapping weapons, scoping in, or drinking a shield 8 m away makes no sound. Final Drop puts reload-start/reload-end/equip on the positional weapon entity and scope-in/scope-out on three weapons, and runs positional medkit and shield consumable loops at max 20 m plus damage grunts at max 30 m. 'He's reloading' and 'he's he",
+    "recommendation": "Delete the player-only guards and pass a.pos with tight radii: reload sequence 25 m, weapon equip 18 m, scope in/out 12 m, heal start/complete 20 m (a looping bed for the heal duration is better than two blips — the game already knows c.useS). Add a short scopeState listener while you're in the file. All of these are close-range cues so they cost nothing in mix density."
+   },
+   {
+    "gap": "No bullet whiz-by — you cannot hear that you are being shot at",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "The only near-miss feedback is the terminal impact sound: `on(\"impact\", ...)` plays a stone tick at 0.07 gain / 55 m, wood at 0.07 / 55 m, dirt at 0.06 / 45 m. A round that passes a metre from your head and lands on soft ground 40 m behind you produces a 0.06-gain thump you will not register, and one that flies into open air produces nothing at all. There is no supersonic crack, no suppression cue, and no direction on incoming fire other than the HUD's red damage arc after you have already been hit. weapons.js steps projectiles client-side (stepProjectiles), so the hook exists.",
+    "recommendation": "In stepProjectiles, when a live round's segment passes within ~3 m of the camera and was not fired by the player, play a 40 ms bandpassed noise crack (1.5–4 kHz) panned by which side it passed on, gain scaled by 1/(1+miss distance). Roughly 15 lines. This is the highest-value single sound you can add for the feel of being under fire, and it converts sniper fire from 'I died' into 'someone is shooting at me from the left'."
+   },
+   {
+    "gap": "The storm has no positional presence to navigate by",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "The storm's entire audio vocabulary is a non-positional 520→760 Hz sine siren repeated 2× on stormWarning and 3× on stormClosing, a 140 Hz sawtooth blip per 1 Hz damage tick, and a single 200 Hz thump when you cross into it (`on(\"playerStormState\", (inStorm) => { if (inStorm) thump(200, 0.5, 0.25); })`). There is no continuous wall roar, so with the storm wall behind you or in low visibility, sound gives you no bearing on it at all — and the storm's ramping damage (+50% per 6 s soaked, capped 3×) makes getting the rotation direction wrong expensive. Final Drop ships sfx_storm_move_start and sf",
+    "recommendation": "Add a looping low-band noise bed whose gain rises as (playerDist / st.radius) approaches 1 and whose pan points at the nearest point on the wall — storm.js already computes st.center and st.radius every frame, so the nearest wall point is one normalise away. Add a second layer that opens when st.closing is true so 'the wall is moving' is audible as well as visible."
+   },
+   {
+    "gap": "No ambience bed, no reverb, no occlusion — every sound is dry and placeless",
+    "impact": "medium",
+    "effort": "M",
+    "evidence": "Grep for Convolver, reverb, ambience or wind across runtime/ returns zero hits. There is no ambient loop of any kind: five maps with water, forest, and interiors all sound like an anechoic chamber between gunshots, and a firefight inside a building is acoustically identical to one in open field. Final Drop ships Forest_Daytime.mp3 (189 KB), Heavy Wind 2.mp3 (73 KB) and Underwater Cave Loop 2.mp3 (169 KB). Apex's audio team names occlusion and reverb as the two keys that let you tell whether a sound is in your space or somewhere else.",
+    "recommendation": "Two pieces. (1) One looping ambience bed per map biome, ~150 KB each, mixed at ~0.10 with gain crossfading on water proximity — this alone fixes the dead-air problem between engagements. (2) A single shared ConvolverNode fed by a short synthetic impulse (generate it procedurally: 0.6 s of exponentially-decaying noise, no download), with the wet send driven by whether the player is under a roof — the world already answers that via supportAt/blockedHoriz ceiling queries. Skip material-density occlusion; it is not worth the raycast budget in a browser."
+   },
+   {
+    "gap": "Music is 15 MB of 64 kbps audio that never changes and never ducks",
+    "impact": "medium",
+    "effort": "M",
+    "evidence": "assets/audio/ = music_menu.mp3 4.67 MB, music_match.mp3 5.18 MB, music_endgame.mp3 5.10 MB — 14.95 MB total, all at 64 kbps / 48 kHz, ~613/679/669 seconds each. Final Drop's entire audio payload, 125 clips, is 2.59 MB. One match track plays unchanged from drop to final circle with no intensity response to the lobby draining 50 → 5. And playTrack() creates a plain `new Audio(...)` element: music lives outside the WebAudio graph entirely, so it never passes the −6 dBFS master limiter and cannot be sidechained under gunfire — during a firefight the darksynth sits at the same level as the shots it",
+    "recommendation": "(a) Route music through ctx.createMediaElementSource(musicEl) → a musicGain → master, so it sits behind the limiter and can be ducked ~4 dB on shotFired/explosion with a 60 ms attack and 400 ms release. (b) Re-encode at 96–112 kbps and loop a well-chosen 3–4 minute section instead of shipping 11 minutes — that raises perceived quality and cuts roughly 10 MB from first load. (c) At <10 alive, crossfade to a tighter final-circle mix or just open a lowpass on the match track; a static score through the endgame is the single most noticeable difference from any AAA BR."
+   },
+   {
+    "gap": "Audio settings and accessibility stop at three volume sliders",
+    "impact": "low",
+    "effort": "S",
+    "evidence": "hud.js showSettings offers exactly three audio controls: Master (default 0.8), Music (0.5) and SFX (0.9). There is no separate UI/voice bus, no mono-downmix option, no dynamic-range or 'small speakers' preset, and no toggle for the screen-edge indicator ring — the footstep/gunfire/damage indicators are hard-on in stepIndicators() and update() with no setting behind them. Fortnite's equivalent, Visualize Sound Effects, is opt-in with size-scaled icons and colour coding by source type.",
+    "recommendation": "Add a mono-downmix toggle (a single ChannelMergerNode on the master path — matters for anyone playing on one earbud or with unilateral hearing loss, and it is the cheapest accessibility win available), a toggle for the indicator ring, and a compressed 'night mode' preset that raises the limiter ratio and lifts quiet cues. Optionally scale the indicator glyph size by proximity as Fortnite does, since the distance data is already in hand at the addIndicator call site."
+   },
+   {
+    "gap": "Reload SFX cannot be cancelled, and impact voices are uncapped",
+    "impact": "low",
+    "effort": "S",
+    "evidence": "The reload sequence is four setTimeout calls (110 ms, 55% and 86% of reloadS) with no stored handles, so swapping weapons or dying mid-reload still plays the mag-seat clunk and slide rack from a gun you are no longer holding. Separately, weapons.js emits one 'impact' event per pellet, and shotgun.pellets = 9 — a shotgun blast into a wall spawns up to nine simultaneous 2100 Hz square blips. The master limiter stops that clipping (as its comment intends) but not the phase-coherent metallic zap it produces.",
+    "recommendation": "Store the reload timeout handles on wpn and clear them on reloadDone, weapon swap and death. Cap impact voices at ~3 per 50 ms window with a simple timestamp counter in the impact handler, and randomise impact pitch ±12% so the survivors do not stack coherently."
+   }
+  ]
+ },
+ "map-design": {
+  "score": "slightly_behind",
+  "vsAAA": "behind",
+  "verdict": "The map SKELETON is genuinely good — 1600×1600 m (2.56 km²) with 8–9 named POIs per map puts POI density (3.2–3.5/km²) and player density (19.5/km²) at direct parity with Fortnite (~13–18 POIs over ~5 km², 20 players/km²), and three seeded maps with guaranteed geographic biome zones, hero-silhouette landmarks, sky islands with launch portals, and a live contest-heat drop screen is a stronger feature set than most browser BRs ship. The FIGHT SPACE inside that skeleton is where it falls down: with building permanently removed, every enterable structure in the game is a blind box you cannot shoot out of (houses have one 1.4 m door, zero windows, and a 3.90 m roof against a 1.93 m max mountable height; tower upper-floor \"window bands\" start at floor+2.80 m against a standing eyeline of floor+1.92 m), open-ground cover averages 54–90 m between solid props, and on Isla Viva six of eight POI centres sit at or below the waterline on every seed tested — Palm Bay generates 0 of 8 houses on half of them.",
+  "gaps": [
+   {
+    "gap": "No structure in the game can be fought FROM. Every enterable building is a blind box with one entrance and no usable firing aperture — with building removed, the map has zero interior fighting positions.",
+    "impact": "critical",
+    "effort": "M",
+    "evidence": "maps.js `house()` and `hut()` emit back/left/right walls plus a front wall split around a 1.4 m door and a lintel — there is no window gap anywhere in either function. The roof deck (`addBox(x, y + H + 0.35, z, w + 0.7, 0.3, d + 0.7, roofC)`, H=3.4) collides and sits at y+3.60..3.90, while max mountable height is jumpV^2/(2|g|) + STEP_UP = 7.8^2/(2*22) + 0.55 = 1.93 m, so roofs are unreachable. In `tower()`, upper floors set `wallH = FH - 1.2` at `wy = fy + wallH/2`, so walls span fy..fy+2.80 and the open band is fy+2.80..fy+4.00 — but the floor surface is at fy+0.30 and PLAYERK.eyeY is 1.62, ",
+    "recommendation": "Cut real windows in `house()`/`hut()`: a 1.2 m wide x 1.0 m tall gap centred at wall-mid-height ~1.6 m on the two side walls, built the same way the door already is (two wall segments + a lintel). Add a second door on the back wall so a house has two entrances and can be pushed and held. Lower the tower band from `FH - 1.2` to `FH - 2.2` and drop it to sit at floor+0.9..floor+2.1 so it straddles the standing and crouched eyelines — this is a one-constant change plus a wall-Y offset and it converts nine Ashgrid towers and the Riverside Mill from loot closets into holdable positions. Give houses roof access with the ramp helper that already exists (`addRamp`), the way `farmland()` already puts a hay ramp on the barn."
+   },
+   {
+    "gap": "Isla Viva's POI layout is authored against an island shape the seeded terrain does not produce — six of eight POI centres are at or below the waterline on every seed tested, and two of the three towns frequently generate zero buildings while still appearing as named, heat-rated landing zones.",
+    "impact": "critical",
+    "effort": "M",
+    "evidence": "POI coordinates are hardcoded but the terrain is seeded, and the island mask puts the coastline at roughly r=500-600 m (measured: land is 72% inside r<500 m, 55% inside r<600 m, 31% inside r<800 m) while Palm Bay sits at 528 m, Cliff Temples 484 m, Banana Farm 495 m, Jungle Market 517 m, Shipwreck 637 m, Lagoon 632 m. Centre ground heights across seeds 1/42/1234/777/99887/20260721/5/808: Palm Bay -3.8/-0.4/-2.1/-1.0/-3.1/+0.9/+0.8/-0.3; Banana Farm +1.5/-1.5/-0.3/-0.7/-0.9/-0.5/-1.2/-1.8; Cliff Temples -2.4/-0.4/+0.4/-1.6/+2.0/+1.6/-0.2/-0.7. Because `town()` skips a house when `heightAt0(hx,h",
+    "recommendation": "Add a terrain-aware POI placement pass at the top of the Isla Viva branch: for each POI, spiral-search outward from its authored (x,z) for the nearest point where heightAt0 exceeds minH over at least ~60% of a sampled disc of radius r*0.6, and snap the POI there before any generator runs. Keep Shipwreck Cove and Lagoon Docks exempt — they are intentionally coastal. Then guard `parkingLot()` and the two town chests with the same minH check the houses already use, so a POI never emits underwater furniture. Same fix protects Lakeside Cabins on Deepwood, which places 4/8 houses on 7 of 8 seeds."
+   },
+   {
+    "gap": "Open-ground cover is far too sparse for a BR with no building, and the flattest map is the sparsest. Ashgrid averages 88-90 m between solid props over terrain with a 1.9% grade, against a sniper that does full 105 damage to 200 m.",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "Measured by replicating the generator's noise, height function and `nearPoi` rejection over seeds 1234/777/99887: Ashgrid places 318/327/318 solid-collider props (tree 137-154, rocks 82-92, plus 36 cars, 40 barrels, 14 containers) over 2.56 km2 land = 1 per ~8,000 m2, mean spacing 88-90 m. Isla Viva 141/139/129 over 0.57-0.64 km2 land = 66-68 m. Deepwood 851/867/852 (pine 568-591, birch 204-214) over 2.53 km2 = 54-55 m — a 720-attempt pine scatter over 2.5 km2 is 0.23 trees per 1000 m2, roughly two orders of magnitude below a real forest. Bushes are absent from `propColliderKinds`, so all 113-",
+    "recommendation": "Everything is already instanced, so this is nearly free: raise the Deepwood pine scatter from 720 to ~2,500 and birch 260 to ~700; raise Ashgrid tree 190 to ~500, rocks 110 to ~350, and add a boulder/wreck cluster pass. More importantly, change the scatter from uniform-random to CLUSTERED — pick 40-60 cluster seeds per map and drop 6-12 props in a 10-15 m radius around each, which converts a uniform 90 m field into a landscape of usable cover islands ~40 m apart with open lanes between. Give bushes a low collider (radius ~0.9, top y+1.2) so crouching behind one actually blocks, which is what players expect from foliage."
+   },
+   {
+    "gap": "Isla Viva has no multi-storey building anywhere on the map, so it has no interior verticality at all.",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "`tower()` — the only generator that produces a multi-floor enterable structure — is called at maps.js:887 (a loop of 6 at Downtown Core), :891 (Metro Plaza), :922 (Old Mall), :931 (Crane Heights), all Ashgrid, and at :1030 (Riverside Mill) on Deepwood. There is no `tower()` call in the isla_viva branch. Its tallest built object is the 22 m lighthouse, which is a stack of solid boxes with no interior. Every other Isla Viva structure is a `house()` or `hut()` at 3.2-3.4 m with a collidable, unreachable roof.",
+    "recommendation": "Add three `tower()` calls to the isla_viva branch: a 3-floor stone tower at Cliff Temples (it is literally called Temples and is currently five 3-6 m cubes), a 2-floor warehouse at Lagoon Docks, and a 2-floor plantation house at Coco Village — the map's only reliably-dry town. Roughly ten lines, and it fixes the map's worst structural deficit."
+   },
+   {
+    "gap": "89% of the map is structurally empty — every building in the game sits inside a POI circle, with no landmarks, ruins, farmsteads or bunkers in the space between.",
+    "impact": "high",
+    "effort": "M",
+    "evidence": "`scatterTrees` rejects any placement with `nearPoi(x, z, 26)`, and every structure-emitting call in maps.js is made against a `pois[i]` anchor; the only geometry outside a POI radius is 5-7 sky islands (placed at 180-480 m from centre), 4 ground portals (placed at POI offsets anyway) and 130 loose `loot()` points. Σπr² over Isla Viva's eight POIs is 271,000 m2 = 10.6% of the 2.56 km2 map. Fortnite by contrast fills its inter-POI space with dozens of unnamed landmarks — gas stations, single houses, camps — which is the documented mechanism for making rotations interesting rather than empty.",
+    "recommendation": "Add a minor-landmark pass after the POI branch and before `buildRoads`: 12-20 unnamed structures per map, placed on land at least 60 m outside every POI radius and at least 120 m apart, drawn from a small kit you already own — a lone `house()`, a two-`hut()` camp, a `rangerTower()`, a 3-4 fragment ruin using the Rubble Row wall code, a fenced paddock. Give each one 1-2 floor items and a 25% chest chance so they are worth touching mid-rotation. This is the highest ratio of felt map quality to code written in the whole list."
+   },
+   {
+    "gap": "Several named POIs contain almost nothing — one has no structures at all — so the drop screen advertises landing zones that do not exist as places.",
+    "impact": "high",
+    "effort": "M",
+    "evidence": "Volcano Rim (r=130, Isla Viva) emits four chests on a 150 m ring and zero geometry — and because `nearPoi(x,z,26)` rejects trees within 156 m of it, it is also bald of props: a 130 m named POI that is pure open slope. Fire Watch (r=80, Deepwood) is one `rangerTower()` call. Ranger Ridge (r=120) is two. Hunter's Hollow (r=100) is four 2.6 m blinds. Old Quarry (r=110) is 12 rock props plus one hut. Container Yard (r=110) is 14 containers over ~38,000 m2 = one per 2,700 m2. Rubble Row (r=110) is 16 wall fragments spread over ±93 m = mean spacing ~46 m, too sparse to function as the cover playgrou",
+    "recommendation": "Set a floor of roughly 6-8 collidable structures per named POI and audit against it. Concretely: give Volcano Rim a ring of collapsed obsidian slabs plus a 2-floor observatory on the rim (it is the map's centrepiece and currently the worst POI in the game); triple Container Yard to ~40 containers and stack them two high with connecting ramps so it becomes the vertical CQB maze the name promises; double Rubble Row to ~35 fragments and cluster them into 5-6 defensible knots rather than uniform scatter; add a station building and a stairwell to The Overpass."
+   },
+   {
+    "gap": "Terrain contributes no cover at any scale a player can use — 7.27 m per heightfield quad means there are no ditches, berms, gullies or reverse slopes anywhere.",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "`const SEG = 220` over `SIZE = 1600` gives 7.27 m per quad, so the smallest representable feature is ~15 m across and heavily smoothed by `computeVertexNormals`. The height functions compound this: Ashgrid's finest octave is `fbm(x/40, z/40, seed+7, 2, 2.0, 0.5) * 1.6` — a maximum 1.6 m of 'rubble roughness'. Measured relief is 29.6 m on Ashgrid, 33.0 m on Deepwood, both across the full 1600 m span. Combined with the 88-90 m prop spacing on Ashgrid, a player crossing open ground there has literally nothing to break line of sight for a 9.4 s sprint.",
+    "recommendation": "Two cheap changes. Raise SEG from 220 to 320 (7.27 m -> 5.0 m per quad, ~2.1x vertex count on a plane that is already the cheapest mesh in the scene) and add a high-frequency ridged octave to each height function — something like `+ (0.5 - Math.abs(fbm(x/28, z/28, seed+9, 2, 2, 0.5) - 0.5)) * 5` — which produces 2-4 m gullies and berms at a scale a prone or crouched player can actually use. Do it on Ashgrid first: it is the flattest map and gains the most."
+   },
+   {
+    "gap": "Chest world-Y is computed at the POI CENTRE while the chest is placed at an offset of up to half the POI radius, so on any sloped POI chests float in the air or sink into the ground.",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "The pattern `chest(p.x + (rng() - 0.5) * p.r, heightAt0(p.x, p.z) + 0.6, p.z + (rng() - 0.5) * p.r, p.id)` appears in the Container Yard, Rubble Row and `farmland()` blocks, and `town()` closes with `chest(p.x + (rng() - 0.5) * R * 0.6, heightAt0(p.x, p.z) + 0.6, p.z + (rng() - 0.5) * R * 0.6, p.id)`. With Isla Viva relief at 70 m and POI radii of 90-130 m, a chest placed 40 m from the POI centre can easily be several metres off the real ground. On Isla Viva's submerged POIs it also puts chests underwater.",
+    "recommendation": "Replace `heightAt0(p.x, p.z)` with the chest's own sampled ground in all four call sites — compute the offset x/z first, then `heightAt0(cx, cz) + 0.6`. Add a `if (gy < waterY + 0.5) continue;` guard so no chest spawns in the sea. Five-line fix, four sites."
+   },
+   {
+    "gap": "Hero landmarks are solid props, not playable space — the most memorable silhouettes on each map are the ones you cannot enter.",
+    "impact": "medium",
+    "effort": "M",
+    "evidence": "`lighthouse()` is six stacked solid `addBox` bands plus a light room; `steeple()` is `addBox(x, y+4, z, 8, 8, 11)` for the church body — a solid 8x8x11 m block — plus a solid bell tower and spire; `farmland()`'s barn is `addBox(bx, by+2.4, bz, 8, 4.8, 12)`, solid, with only a hay ramp to a roof chest; the silo, the water tower tank and the Isla Viva shipwreck hull are all solid boxes. None has a hollow interior. The documented AAA principle is the opposite — landmarks are valued precisely because they are ENCLOSED spaces where designers can predict player interaction.",
+    "recommendation": "Hollow the three landmarks that most want it, reusing the wall-with-door-gap pattern `hut()` already implements: the church (a nave with a door at each end and a bell-tower ladder ramp to a 24 m sniper perch), the barn (a two-level interior with a hayloft, keeping the existing roof ramp), and the lighthouse (a spiral of `addRamp` segments to the 22 m light room). Each becomes a genuine destination rather than a navigation beacon."
+   },
+   {
+    "gap": "Six of the ~25 POIs across all three maps come out of the same `town()` generator and two more out of the same `farmland()` generator, differing only in roof colour and house count — so most POIs are not visually distinguishable from each other on approach.",
+    "impact": "medium",
+    "effort": "M",
+    "evidence": "`town()` builds Palm Bay, Coco Village and Jungle Market on Isla Viva, Savanna Outpost on Ashgrid, and Logging Camp and Lakeside Cabins on Deepwood; the only per-call variation is `wallCs`, `roofC`, `along` ('x' or 'z') and `nPer` (4 or 5). `farmland()` builds Banana Farm and Meadow Farm with identical geometry. That is 8 of 25 POIs from 2 generators. Beyond the single hero landmark each map receives, there is no per-POI silhouette differentiation.",
+    "recommendation": "Give `town()` a layout parameter beyond the axis: a crossroads variant (two perpendicular streets), a plaza variant (houses ringing an open square with a central well or monument), and a terraced variant (houses stepped up a slope) — the existing house-placement loop supports all three with different a0/set functions. Then give each town one signature structure it alone has (a market hall, a fuel depot, a clocktower) so it reads as itself at 300 m."
+   },
+   {
+    "gap": "No cross-map traversal tool exists other than sprinting and swimming, which is a specific problem on Isla Viva where 76% of the square is ocean.",
+    "impact": "medium",
+    "effort": "M",
+    "evidence": "Grepping the whole runtime for vehicle, zipline, boat, jumppad and launchpad returns zero hits — the only mobility verbs are MOVE.walk 6.0, MOVE.sprint 9.6, MOVE.swim 4.0, MOVE.swimSprint 5.6 and the launch portals. Measured Isla Viva land is 0.57-0.64 km2 of the 2.56 km2 map, and its coastal POIs sit 484-637 m from centre, so lateral movement between them either detours inland or crosses water at 42-58% of sprint speed. Compounding this, the storm's `radiusFrac` is applied to `W.map.half` with no knowledge of water, so an identical circle schedule squeezes players onto far less usable ground ",
+    "recommendation": "Skip vehicles — they are a large scope item and a physics/netcode risk. Add ziplines instead: they cost roughly what a portal costs, they already fit the launch-portal aesthetic, and they solve exactly this problem. Run 4-6 per map between POI pairs that the road graph already connects (the greedy NN tree gives you the pairs for free), plus 2-3 on Isla Viva spanning water. Separately, on water maps bias the storm circle centres toward land: when generating each circle, sample ~20 points in the candidate disc and reject centres where under half are above waterY — measured over 300 seeds, 4% of Isla Viva matches currently end with the final circle under 50% land and 9 of 300 end with it entirely in the sea."
+   }
+  ]
+ },
+ "first-60-seconds (onboarding, load, time-to-play, first-match legibility)": {
+  "score": "slightly_behind",
+  "vsAAA": "acceptable_for_browser",
+  "verdict": "Everything a player sees once they are in the match is genuinely good — the auto-opening how-to card, the contested-LZ drop screen, the pistol-on-spawn rule and a dense, correct HUD put Last Circle ahead of what Final Drop's own store page documents. The problem is everything before that: measured from the code's own constants, a first-time player stares at a blank dark page, then a menu, then a loading screen, then an unskippable 4.0 s lobby, then a 12 s map screen, then a 25.3–26.8 s parachute ride — roughly 45–70 seconds from opening the page to the first trigger pull, in the mode the game presents first.",
+  "gaps": [
+   {
+    "gap": "Nothing on screen between the first byte and the menu — no logo, no spinner, no progress, no error path",
+    "impact": "critical",
+    "effort": "S",
+    "evidence": "index.html is 14 lines and contains only <div id=\"game-container\"> over background #08131f. ffg_boot3d.js awaits the kernel + genre modules at top level (lines 12-13), which in turn pull three.js from cdn.jsdelivr.net as 16 chained requests (~1.5 MB decoded) plus ten local runtime modules and content.json. Measured with three.js already warm in cache: content.json resolves at 2,177 ms and the menu paints after that. Cold, on a real connection, that flat dark rectangle is materially longer. CrazyGames' own loading doc: '10 seconds — attention starts to wander. You must show feedback or preload ",
+    "recommendation": "Put a static splash directly in index.html — wordmark, a determinate bar, and a one-line tip — that paints on the first frame with zero JS, and have showMenu remove it. Free bytes, and it converts the worst part of the funnel from 'is this broken?' into 'it's loading.'"
+   },
+   {
+    "gap": "Time from clicking PLAY to the first trigger pull is ~45-70 s in the mode the game presents first",
+    "impact": "critical",
+    "effort": "M",
+    "evidence": "Summing the code's own constants: character assets 7,554 KB across 48 GLB requests (measured 2,604 ms on zero-latency localhost, realistically 4-10 s on a home connection) + showLobby's fill-then-3-2-1 = ~4.0 s with no skip handler + showDropSelect's 12 s auto-lock + a parachute descent I integrated straight from player.js constants (spawn y 240-270, freefall lerp to -20 m/s, chute auto-deploys at 110 m AGL, canopy -5.5 m/s) at 25.3-26.8 s with no input. The storm's first phase does not even begin for 80 s, so the entire first minute is transit.",
+    "recommendation": "Attack the three cheapest segments in order: make the 4.0 s lobby click-to-skip (nothing is loading during it — the roster was built before showLobby was called), let ENTER or a click on the map finish drop-select instantly, and shorten the descent (next item). Getting to ~25 s total is achievable without removing a single feature."
+   },
+   {
+    "gap": "No touch input of any kind — a mobile visitor gets a tappable menu and then an unplayable match",
+    "impact": "critical",
+    "effort": "L",
+    "evidence": "grep for touchstart|touchmove|ontouchstart|maxTouchPoints|isMobile across runtime/, game_controls.js and index.html returns exactly one hit: `window.addEventListener(\"pointerdown\", unlock)` in audio.js, an autoplay unlock. Movement, look, fire, ADS, reload, loot, weapon-swap and the chute are keyboard/mouse only. CrazyGames' gameplay requirements state the game 'should have intuitive controls on different types of devices' and that content must be readable at 800x450.",
+    "recommendation": "If mobile is in scope, this outranks every other item here because it is a 100% failure rate for that segment: left virtual stick, right look-drag, a fire button, and taps on the existing chute/interact/slot widgets. If mobile is explicitly out of scope, then detect touch at boot and show a one-line 'Last Circle needs a keyboard and mouse' card instead of a match the player cannot move in."
+   },
+   {
+    "gap": "The parachute owns 110 m of a ~240 m descent at 5.5 m/s — the slowest speed in the game — and nothing teaches the new player to cut it",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "player.js: `if (!a.chute && agl < (a.chuteToggled ? 22 : 110)) deployChute(W, a)` with `fallTarget = chuted ? -5.5 : ...`. Integrating: 25.3 s from y=240, 26.8 s from y=270 with no input; 14.5 s if the player cuts the chute; 9.3 s cut + sprint. The HOW TO PLAY card's SPACE line reads 'Jump · re-open the parachute in a long fall' — that describes redeploy, not the cut that halves the ride. The in-air 'CUT [SPACE]' button is correct but appears on the one screen where a first-timer is watching the ground, not the corner.",
+    "recommendation": "Drop the first-time auto-deploy from 110 m to ~60 m — the default descent falls to roughly 15-17 s while the freefall feel, the steering and the glide are all untouched. Then change the how-to line to 'SPACE — cut the chute to dive faster, tap again to re-open.'"
+   },
+   {
+    "gap": "QUICK MATCH already is the fast onboarding path, and nothing tells the player that",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "MODE.quick = ground drop (no glide, no drop-select), startRadiusFrac 0.75 (pre-shrunk), lootMult 1.8, 25 shield at spawn, storm phase 1 in 30 s vs standard's 80 s. So it skips the entire ~38 s of lobby-to-ground transit that standard imposes. But it sits second under BATTLE ROYALE and its subtitle reads '5-minute storm · double loot · hot start' — a variant, not a starting point. A first-time visitor clicks the top card.",
+    "recommendation": "On a profile with zero recorded matches (W.progress.career.matches === 0), promote QUICK MATCH to the top card, badge it 'START HERE — FIGHTING IN 10 SECONDS', and let BATTLE ROYALE take second. Zero new systems; it is a sort order and a string."
+   },
+   {
+    "gap": "A 4.79 MB menu music file downloads the instant the menu appears and competes with everything else in the funnel",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "Measured: music_menu.mp3, 4,785 KB, request start 2,540 ms, complete 3,198 ms — on localhost. It begins the moment showMenu calls startMenuMusic, i.e. exactly while the player is deciding which card to click, and it will still be in flight when the match's 7.5 MB of characters starts. The three tracks total 15.0 MB against 11.4 MB of GLB; CrazyGames' launch bar is 'build size below 20 MB' and 'load in under 10 seconds'.",
+    "recommendation": "Re-encode the three tracks to ~96 kbps mono loops (5 MB -> under 1 MB each) and hold the fetch until either the first user gesture or an idle callback, so the menu track never races the match assets for the same connection pool."
+   },
+   {
+    "gap": "The engine is a third-party CDN dependency with no fallback and no visible error path",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "The importmap in index.html points three and three/addons/ at cdn.jsdelivr.net, and ffg_boot3d.js awaits those imports at top level on lines 12-13 — outside the try/catch that starts on line 21. If jsdelivr is blocked (school and corporate networks routinely do this) or slow, the module throws before any handler exists: the player sees the flat #08131f rectangle forever, with a console.error they will never open. A local copy of the library already exists in the repo at forgeflow-games/three172.js.",
+    "recommendation": "Self-host three from the game's own origin, or keep the CDN as primary with a same-origin fallback specifier — and wrap the boot imports so a failure paints 'Could not load the game engine. Reload?' instead of nothing."
+   },
+   {
+    "gap": "First-ever match puts the player against the full skill spread with no protection",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "BOT_TIER_MIX.standard = [8,12,14,10,5] over 49 bots and nothing reads W.progress.level or career.matches — bots.js draws the tier purely from the seeded mix. So match one contains roughly 5 tier-5 bots (BOT_TIERS: 210 ms reaction, 0.9 deg aim error) and 10 tier-4 (300 ms, 1.8 deg). Apex, by contrast, requires training before any other mode and keeps new accounts in protected matchmaking until they place top five or clear challenges.",
+    "recommendation": "Skew the mix toward tiers 1-3 for the first two or three recorded matches (career.matches < 3), then hand back the full spread. One weighted table and one counter that already exists in lc_progress."
+   },
+   {
+    "gap": "The match loading bar is fake and unmoored from the actual work",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "showLoading seeds the fill at 30% and advances it 8% every 300 ms, capped at 92%, with a shimmer animation — none of it tied to real progress. Meanwhile the honest news is good: buildMap measured 302-701 ms and the 50 skeleton clones 23 ms, so essentially all of the wait is the 48 GLB requests, which are trivially countable.",
+    "recommendation": "Drive the bar off loaded-GLB count over expected count and label it ('Loading operatives 18/48'). It is the same screen, but a player who can see it moving waits; a player watching a fake bar stall at 92% reloads."
+   },
+   {
+    "gap": "Character animation clips load sequentially within each skin",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "preloadMeshySkin runs `for (const clip of MESHY_CLIPS) { ... await W.kernel.loader.loadAsync(...) }` — eight chained round-trips per skin, with the five skins in parallel via Promise.allSettled. On the zero-latency localhost this cost 2,604 ms for 48 requests / 7,554 KB; on a 60 ms RTT link the chaining alone adds roughly half a second per skin on top of the bytes, and it lands squarely in the pre-lobby wait.",
+    "recommendation": "Promise.all the clip loop. Same bytes, one round-trip deep instead of eight."
+   }
+  ]
+ },
+ "visuals": {
+  "score": "far_behind",
+  "vsAAA": "far_behind",
+  "verdict": "Last Circle's characters and weapons are genuinely competitive with the browser bar (15,490-tri, 24-bone rigs with real tactical silhouettes; six distinct 5–6k-tri weapon GLBs correctly gripped), and the renderer hygiene is smart — sRGB canvas albedo, metalness/emissive de-Meshy-fication, texel-snapped shadow centres, full per-match GPU disposal. But everything those characters stand in is far behind: I rendered all three maps live and the world is untextured boxes on a 7.27 m/vertex flat plane, lit by exactly two lights, with shadows that stop 55 m from the camera, roads that visibly shatter into floating slabs, and sky-islands that read as solid black cones — against Final Drop, which I instrumented live and found running 4-cascade CSM to 700 m, 262 lights, 863 LOD entities, a vegetation billboard atlas, and 19 distinct character outfits.",
+  "gaps": [
+   {
+    "gap": "Roads render as disconnected floating slabs on every sloped surface",
+    "impact": "critical",
+    "effort": "S",
+    "evidence": "maps.js road(): steps = ceil(len/9), and each step is a BoxGeometry(width, 0.14, seg) rotated in yaw only then translated to heightAt0(midpoint)+0.07 — no pitch, no per-vertex terrain sampling. In my Deepwood render (seed 777, Ranger Ridge) the road network is a field of scattered brown rectangles with visible gaps and floating edges; on Isla Viva the road climbing the volcano reads as a dashed staircase.",
+    "recommendation": "Stop extruding boxes. Build each road as one triangle strip: sample the terrain at every cross-section vertex (left edge, centre, right edge) at ~4 m spacing and lift by a constant 0.06 m, so the ribbon conforms continuously. Cheaper alternative that also kills the hard edge: drop road geometry entirely and paint the road into the terrain vertex colours during the terrain build (the loop already computes colorAt per vertex), plus a darker roughness — zero extra draw calls and no z-fighting."
+   },
+   {
+    "gap": "Sunlight shadows stop 55 m from the camera; the other ~99% of the visible world is unshadowed",
+    "impact": "critical",
+    "effort": "M",
+    "evidence": "ffg_royale3d.js applyGraphics(): SHADOW_EXT = { low: 55, medium: 55, high: 70 }, sun.shadow.camera far 400, volume slid to follow the player. Final Drop, read live: sun numCascades 4, shadowResolution 4096, shadowDistance 700. In my rendered Coco Village frame not one building casts a shadow onto the ground, so structures look pasted onto the terrain rather than sitting on it.",
+    "recommendation": "Swap the single shadow camera for three.js's own cascaded shadow maps — `three/addons/csm/CSM.js` is already reachable through the existing importmap (three/addons/ -> jsDelivr three@0.172.0/examples/jsm/), no build change. Practical split mode, 3 cascades on medium (1024/1024/1024) and 4 on high (2048 near), maxFar ~400 m. Keep the existing bias/normalBias and drop followShadow(), which CSM replaces."
+   },
+   {
+    "gap": "Every building in the game is an untextured box — no windows, doors, pitched roofs, or detail geometry",
+    "impact": "critical",
+    "effort": "L",
+    "evidence": "maps.js: hut(), house(), tower(), rangerTower(), lighthouse(), waterTower(), steeple(), farmland() are all composed exclusively of addBox()/addRamp() calls, merged into one mesh per hex colour with a single shared 256 px brick/panel CanvasTexture at STRUCT_TILE 2.6 m. Doors are a gap between two wall boxes; roofs are a flat slab plus a ridge-cap box. My Ashgrid 'Downtown Core' render shows six identical tan prisms on a flat plain — that is the map's densest POI. Final Drop uses Synty POLYGON kits (PolygonTown_01_A/_Glass, PolygonBattleRoyale_01_A, PolygonMilitary_01_A) across 159 prefab templa",
+    "recommendation": "Replace the box generators with a modular prefab kit and keep the generators only as placement logic. Kenney's CC0 City/Survival/Modular-Building kits or an equivalent Synty-style low-poly pack gives wall/door/window/roof/stair modules that snap on a grid — the existing addBox call sites become 'place module at (x,y,z,rot)'. Start with the ~8 modules that cover 80% of placements (wall, wall-with-window, wall-with-door, floor, flat roof, pitched roof, stair, railing). Collision can stay as the current AABBs."
+   },
+   {
+    "gap": "Terrain is 7.27 m per vertex, one un-chunked mesh, with zero ground clutter or contact darkening",
+    "impact": "critical",
+    "effort": "L",
+    "evidence": "maps.js: SIZE 1600, SEG 220 -> 7.27 m/vertex, 96,800 triangles in a single always-submitted PlaneGeometry; the only surface detail is a 256 px near-white grain texture tiled every 8 m at normalScale 0.55. The grid stairstep is visible on the volcano silhouette in my Isla Viva aerial, and in the Deepwood snow render the ground is a featureless pale sheet with faint grazing-angle streaks. Final Drop carries 863 LOD entities, a Ground Contact Blend system, and lightmapMaxResolution 2048.",
+    "recommendation": "Two changes, both affordable given the measured 36-198 draw calls. (1) Chunk the terrain into a 8x8 grid of 200 m tiles at ~3 m/vertex near the player and 12 m/vertex beyond ~300 m — same total triangle budget, four times the near-field silhouette fidelity, and per-chunk frustum culling for free. (2) Add an instanced ground-clutter layer (grass tufts, pebbles, fallen branches, 3 GLBs, ~2,000 instances) refreshed in a 60 m ring around the player; this is the single highest visual-return-per-triangle change available and would fill the empty green expanses that dominate every frame I captured."
+   },
+   {
+    "gap": "Sky-islands — the signature feature — render as solid black cones",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "maps.js sky-island block: the hanging rock is ConeGeometry(rad*0.9, rad*1.5, 8) with MeshStandardMaterial({ color: 0x7a6a58, roughness: 1 }), rotated 180 degrees so its lit surfaces face down. With only a HemisphereLight groundColor (#7c8672) reaching the underside, it renders near-black. In my Deepwood forest render and my Ashgrid downtown render the islands read as flat black triangles hanging in the sky.",
+    "recommendation": "Three cheap fixes together: lighten the rock to ~#9a8a75, raise the material's contribution from below by giving the island group its own tiny non-shadowing PointLight or by adding a vertex-colour gradient that brightens toward the tip, and raise the cone to 12-16 radial segments so it silhouettes as rock rather than a party hat. Even simpler: set the cone material's emissive to a 0.06-strength tint of the map's sky colour so the underside picks up skylight."
+   },
+   {
+    "gap": "Fog density is set so low there is no aerial perspective — the horizon is as saturated as your feet",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "maps.js MAPS: fog 0.00042 / 0.00045 / 0.00052 on FogExp2. At d=800 m and density 0.00045 the fog factor is 1-exp(-(0.36)^2) = 0.12, i.e. 12% blend. In my Ashgrid render a POI roughly 700 m out is fully saturated; in the Isla Viva aerial the whole island reads as one flat colour plate with a hard horizon line. Final Drop runs exp2 fog through a dedicated uranus-effects-environment-fog.js with a light blue-white fog colour.",
+    "recommendation": "Raise density to ~0.0018-0.0022 (about 75% blend at 800 m, 25% at 300 m) and set the fog colour to the sky dome's HORIZON colour rather than the flat sky key, so distant terrain dissolves into the skyline instead of cutting against it. Add a simple height falloff if you want the volcano peak to stay crisp while the coastline hazes."
+   },
+   {
+    "gap": "Ashgrid's sky is graded as dusk over noon-lit ground",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "maps.js sky block: zenith = new THREE.Color(K.sky).lerp(new THREE.Color(0x2f74c8), 0.55).multiplyScalar(0.9). With ashgrid's K.sky = '#e7cf98' (tan), that yields a dark slate-navy zenith over a tan horizon, while the same map's sun runs at intensity 2.05 warm-white with a 1.25 hemisphere fill. My render shows a stormy dusk sky sitting above brightly lit noon savanna — the two halves of the frame disagree.",
+    "recommendation": "Author the zenith colour per map as an explicit constant next to `sky` in the MAPS table instead of deriving it, and pick it to be consistent with the sun angle: for a golden savanna, a warm pale blue (~#8fb8d8) at zenith over #e7cf98 at horizon. Same treatment for the other two maps so each biome gets a deliberate two-colour sky ramp."
+   },
+   {
+    "gap": "No LOD and no foliage billboards — density can never be raised without a cliff",
+    "impact": "high",
+    "effort": "M",
+    "evidence": "Grep for LOD across runtime/3d returns only animation-mixer LOD in player.js; every prop is a full-detail InstancedMesh with all instances always submitted. Measured 1,565,770 triangles on the Deepwood aerial and 1,579,272 in the forest interior, at only 36-56 draw calls — the triangles are all trees, at full detail, at any distance. Final Drop runs 863 LOD entities (LOD0/1/2 chains) plus a dedicated billboard_vegetation_atlas.png and MI_FirTree4_Billboard.",
+    "recommendation": "Add a two-tier system per tree kind: the existing GLB inside ~90 m, and a two-quad cross-billboard (one 512 px atlas, alphaTest) beyond it, both as InstancedMesh with the instance split recomputed on a 1 Hz timer around the player. That typically drops foliage triangles 8-10x and buys the budget to roughly triple tree counts — which is what the sparse aerials actually need."
+   },
+   {
+    "gap": "Tone mapping is disabled, so bright surfaces clip flat",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "maps.js buildMap: `kn.renderer.toneMapping = THREE.NoToneMapping; kn.renderer.toneMappingExposure = 1.0;` with the comment that ACES 'was crushing + desaturating the whole scene into a muddy dusk'. Combined with player.js BODY_GAIN 3.2 (whose own calibration table records ~2.5% clipped pixels), the result is visible: in my Deepwood snow render the ground is a featureless blown white sheet, and character skin reads flat and hot in the third-person shot. Final Drop runs ACES2 (camera toneMapping 4) at exposure 0.7 and is the vibrant reference this game was chasing.",
+    "recommendation": "The problem was ACES's contrast curve, not tone mapping as such. three.js r172 ships THREE.NeutralToneMapping (Khronos PBR Neutral) and THREE.AgXToneMapping — Neutral preserves saturation far better than ACES while still rolling off highlights. Switch to NeutralToneMapping at exposure ~1.15, then re-run the existing luminance calibration and expect BODY_GAIN to come down to roughly 2.4-2.7. That recovers snow texture and skin detail without going back to the muddy look."
+   },
+   {
+    "gap": "Zero local lights in the world; every emissive-looking prop is an unlit box",
+    "impact": "medium",
+    "effort": "M",
+    "evidence": "Grepping runtime/3d for PointLight/SpotLight finds them only in hud.js (menu fill light and the two offscreen preview scenes) — a match scene contains exactly one DirectionalLight (2.05) and one HemisphereLight (1.25). The street lamps built by streetFurniture() are addBox(lx, y+4.9, lz, 0.5, 0.3, 0.5, '#ffe9a8') with no emissive and no light. Final Drop carries 215 spot and 46 point lights including named 'Gate Light' (#ffbc00) and per-POI 'Omni Light' at intensity 6.",
+    "recommendation": "Give the ~30 highest-value props a cheap emissive-plus-light treatment: set material.emissive on lamp heads, chest interiors, portal rings and supply-drop beacons, then attach a small non-shadowing PointLight (distance 12-18, decay 2) only to the nearest ~8 to the camera, recycled from a pool on a 2 Hz update. Eight extra lights costs almost nothing at the measured draw-call budget and instantly makes POIs read as places rather than props."
+   },
+   {
+    "gap": "Combat leaves no visual trace — no decals, no shell ejection",
+    "impact": "medium",
+    "effort": "M",
+    "evidence": "Grep for decal/blood/casing across runtime/3d returns nothing; fx.js emits only cube-particle bursts for muzzle flash, impact, explosion, hurt and death, plus DOM damage numbers. Final Drop ships a 'Material Weapon Impact Bullet', 'Material Scope Glint', 65 particle systems and a uranus-multiplayer-damage-fx.js. After a 30-round magazine into a wall, Last Circle's wall is pixel-identical to before.",
+    "recommendation": "Add a pooled decal layer: 128 InstancedMesh quads with a 4-frame bullet-hole atlas, oriented to the hit normal and pushed 1 cm out along it, ring-buffered and faded over ~20 s. Reuse the surface classification weapons.js already emits (flesh/wood/stone/dirt) to pick the atlas frame, and add a scorch frame on explosion. Shell casings can ride the existing fx particle pool with a longer life and a metallic colour."
+   },
+   {
+    "gap": "Cosmetic identity is five rigs under a hue wash, against nineteen distinct outfits",
+    "impact": "medium",
+    "effort": "M",
+    "evidence": "player.js SKINS = ['soldier','athlete','wraith','juggernaut','viper'] with per-actor variety from color.setHSL(hue, 0.22-0.38, 0.68-0.80) * 3.2. Final Drop's container list contains 19 separate character GLBs — fish-male/female variants with braids, glasses, headphones and mustaches, plus final-drop-scifi/samurai/apocalypse male and female and four ModernPolice sets. In a 50-player lobby Last Circle shows ten tinted copies of each of five bodies.",
+    "recommendation": "Do not generate ten more full rigs. Split each existing skin's albedo into 2-3 material zones (torso/legs/accent) so the wash can drive three independent colours instead of one, and add 3-4 attachment props parented to head/back bones (cap, helmet, backpack, mask) drawn from a small shared GLB. Five rigs x 3-colour zones x 4 attachments reads as dozens of distinct fighters for the cost of one small asset."
+   },
+   {
+    "gap": "The sky dome's faceted rim is visible over the ocean",
+    "impact": "low",
+    "effort": "S",
+    "evidence": "maps.js: sky is SphereGeometry(SIZE * 0.82 = 1312, 24, 16) recentred on the camera each frame, while the water plane is PlaneGeometry(SIZE * 1.6 = 2560). In my Isla Viva aerial a large hard-edged pale-blue polygon silhouette floats on the horizon behind the volcano — the dome's lower rim reading against water that extends past it.",
+    "recommendation": "Raise the dome radius above the water extent (SIZE * 1.4 or larger, still inside the 2000 m far plane once it is camera-centred) and raise segments to 32x24 so the gradient bands are not faceted. Then let the fog fix above dissolve the waterline into the dome so the seam stops mattering at all."
+   }
+  ]
+ },
+ "monetisation-readiness": {
+  "score": "far_behind",
+  "vsAAA": "acceptable_for_browser",
+  "verdict": "Last Circle is a genuinely well-built game with essentially zero commercial plumbing: I grepped the entire game for `crazygames|sdk|adsbygoogle|gtag|analytics|rewarded|midgame|banner|sitelock` and got no hits in any code file, so there is no ad path, no gameplay-state signalling, no cloud save, no invite link, and no sitelock. The retention scaffolding that ad revenue actually depends on — an XP curve, 5 level-gated skins, a 7-field career record, a day streak, rotating challenges, and a menu-free PLAY AGAIN requeue — is already built and is the real asset here; what's missing is the ~300 lines of integration that turn those existing moments into billable events, plus two shell defects (a prohibited custom fullscreen button and a dead Pause button) that would fail portal QA on sight.",
+  "gaps": [
+   {
+    "gap": "The shell ships a custom fullscreen button, which CrazyGames explicitly prohibits — an automatic QA rejection independent of game quality",
+    "impact": "critical",
+    "effort": "S",
+    "evidence": "CrazyGames gameplay requirements state verbatim: \"Custom in-game fullscreen buttons are prohibited.\" game_controls.js:196 builds `fs: _makeBtn(\"Fullscreen (F)\", SVG.fsEnter, toggleFullscreen)` into an always-visible fixed bar, and :217 binds `KeyF` as a hotkey. index.html:12 loads that script with `window.GAME_CONFIG={hide_bug_button:true, mute_hotkey:false}` — the bug button is suppressed but the fullscreen button is not.",
+    "recommendation": "game_controls.js:66 already honours `CFG.hide_controls === true` with an early return, and :217 already honours `CFG.fs_hotkey !== false`. For a portal build, set `hide_controls:true` in index.html's GAME_CONFIG (the portal supplies its own fullscreen chrome) and keep the current bar only for the self-hosted forgeflowgames.com build. Do this at the config layer so one index.html serves both targets."
+   },
+   {
+    "gap": "No portal SDK of any kind — which under CrazyGames' own tiering means ads are prohibited outright, not merely absent",
+    "impact": "critical",
+    "effort": "M",
+    "evidence": "grep -rniE \"crazygames|sdk|adsbygoogle|gtag|analytics|advertis|midgame|rewarded|banner|preroll|sitelock\" across every .js/.html/.json in the game returns zero code hits (only unrelated prose matches on the word \"banner\" in hud.js comments and \"advertised\" in player.js:383). CrazyGames docs state Basic implementation = `Gameplay start` event required, \"ads prohibited\"; Full implementation (gameplayStart/gameplayStop/sdkGameLoadingStart/sdkGameLoadingStop + Data + User) is what makes `ad.requestAd()` available.",
+    "recommendation": "Add a thin `sdk.js` shim that no-ops when `getEnvironment()` returns 'local' or 'disabled', then wire ~8 call sites that already exist as distinct states: sdkGameLoadingStart/Stop around the buildMap+loadActorModels block (ffg_royale3d.js:250-295); gameplayStart in the `begin()` closure (ffg_royale3d.js:305); gameplayStop in showPostMatch (hud.js:2211), showSettings, showHowToPlay and togglePause; happytime() on the victory branch of showPostMatch (hud.js:2226) — the docs say use it sparingly, and VICTORY ROYALE is precisely the moment it exists for. This is the single item that gates every other monetisation item on this list."
+   },
+   {
+    "gap": "The always-visible Pause button is inert on every screen — window.__PAUSE__ is read but never assigned anywhere in the game",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "grep -rn \"__PAUSE__\" across the game returns exactly four lines, ALL inside game_controls.js: :17 (a comment), :199 `if (window.__PAUSE__ && window.__PAUSE__.toggle) window.__PAUSE__.toggle();`, and :229-230 in the leave-fullscreen auto-pause path. Nothing in runtime/ ever assigns it. Second-order consequence: the documented auto-pause on exiting fullscreen also silently no-ops, so pressing ESC out of fullscreen mid-firefight leaves the player standing in the open. hud.js already contains a complete togglePause(W) that nothing exports.",
+    "recommendation": "In ffg_royale3d.js right after `hudMod.init(W)`, expose the bridge: `window.__PAUSE__ = { toggle: () => hudMod.requestPause(W), pause: () => hudMod.requestPause(W, true) };` and export a `requestPause` wrapper from hud.js that no-ops outside phase match/drop. One assignment makes ESC, the shell Pause button, and the fullscreen-exit hook all drive the same path — and gives you the gameplayStop call site you need anyway."
+   },
+   {
+    "gap": "Nothing to sell against a rewarded ad, and no midgame ad boundary declared — the two highest-RPM SDK surfaces have no design hook",
+    "impact": "high",
+    "effort": "M",
+    "evidence": "The SDK exposes `ad.requestAd(\"rewarded\", callbacks)` and `ad.requestAd(\"midgame\", callbacks)`. Last Circle's post-match screen (hud.js:2211-2305) offers only PLAY AGAIN and MAIN MENU; there is no reward the player would trade 30 seconds of attention for. The XP economy that a reward would plug into is already there: match payout is computed at hud.js:2249-2253 and challenge XP at hud.js:1447-1450.",
+    "recommendation": "Two placements, both of which respect the no-building / no-map-picker constraints because they are pure meta: (1) midgame ad fired on the PLAY AGAIN click before res.onAgain(), rate-limited to roughly one per 3 minutes of elapsed play so a 4-min Quick loop doesn't get double-served; (2) a rewarded ad on the post-match screen offering DOUBLE MATCH XP (reusing the `gained` value already computed at hud.js:2249) or a challenge-card reroll from CHAL_POOL. Both are cosmetic to the match itself — no competitive advantage sold, which keeps the game PEGI-12-clean and avoids pay-to-win complaints on a 50-bot lobby."
+   },
+   {
+    "gap": "Time-to-first-gameplay is at real risk against the ≤20s QA gate, and ~16s of it is self-inflicted fixed overhead",
+    "impact": "high",
+    "effort": "M",
+    "evidence": "After the single mode-card click: showLobby fills 50 cells at 3-7 per 140ms tick (~1.4s) then runs a 3-count at 900ms intervals = ~4.1s of non-interactive cutscene (hud.js:930-957); then showDropSelect sets `let left = W.mode === \"practice\" ? 1 : 12;` (hud.js:1106) — a 12-second auto-lock. Concurrently loadActorModels preloads all 5 skins, and within each skin preloadMeshySkin loops `for (const clip of MESHY_CLIPS)` with an `await` inside (player.js:131-136), i.e. 8 SERIAL round trips per skin, 45 GLB fetches and 7.59MB total. Three.js also comes from cdn.jsdelivr.net (index.html importmap) on",
+    "recommendation": "Three cheap wins, none of which touches game design: (1) Promise.all the 8 clip loads inside preloadMeshySkin instead of awaiting serially — same bytes, ~8x fewer round trips; (2) load only the player's chosen skin + 1 bot skin before the drop and stream the other 3 during the 12s drop-select, which is dead network time today; (3) cut the lobby fill tick from 140ms to ~60ms — the 50-name reveal reads the same at 0.6s as at 1.4s. Keep the 12s drop-select: it is genuine gameplay (you are reading heat numbers and choosing an LZ) and firing gameplayStart at its open makes it count as such."
+   },
+   {
+    "gap": "Zero integration with the portal's own already-built game bridge — leaderboards, achievements and cloud save exist and Last Circle uses none of them",
+    "impact": "high",
+    "effort": "M",
+    "evidence": "src/lib/gameBridge.ts implements a postMessage receiver for `forgeflow:score`, `forgeflow:achievement` (by id OR slug), `forgeflow:level_complete`, `forgeflow:game_over` and `forgeflow:save`. grep -rln \"forgeflow:\" across games/ returns three integrators — cosmic-coils, nebula-drift-cosmic-predator, neon-veil — and Last Circle is not among them. No achievements are defined for last-circle in any supabase/migrations/*.sql. The bridge source even carries the comment \"Good time for an interstitial ad\" at the level_complete branch. Meanwhile Last Circle computes placement, kills, damage, accuracy,",
+    "recommendation": "Emit `forgeflow:game_over` with a composite score on the post-match screen (hud.js:2211) and `forgeflow:achievement` on the milestones the code already detects — first win (res.victory), 5-kill game, level 3/6/10 skin unlocks (hud.js:2000 already fires on exactly those levels), 7-day streak. Mirror lc_progress via `forgeflow:save` so career survives a cleared cache. This is the difference between a career record that is a private number and one that is a competitive surface, and it is the one retention lever available before any external portal is involved."
+   },
+   {
+    "gap": "The unlock ladder is exhausted in roughly 27 matches, after which levelling pays nothing but a counter — and on an ad-funded game, post-ceiling retention IS the revenue",
+    "impact": "high",
+    "effort": "M",
+    "evidence": "xpForLevel(lvl) = 800 + (lvl-1)*700 (hud.js:1187) → 32,400 XP to reach level 10, the last skin (hud.js:129, viper @ unlockLevel 10). A typical match pays 2 kills (200) + 400 damage (80) + placement 20 (180) + ~400s survived (100) = 560, plus up to 625 in challenge XP = ~1,185. That is ~27 matches, i.e. a few evenings. Past level 10 the menu falls back to `careerGoal(c)` (hud.js:140-144), which is a raw kill-count milestone with no reward attached — the code comment at :553 admits the goal slot previously vanished entirely for a maxed account.",
+    "recommendation": "The cheapest high-yield extension that respects every hard constraint: attach unlockable weapon skins / tracer colours / kill-feed banners to levels 12-40 using the existing MENU_SKINS gating pattern, and make CHAL_POOL daily rather than per-match (the dayKey/dayStreak infrastructure at hud.js:1148-1172 already exists and is unused for anything but a streak counter). A daily-challenge reset is the standard reason a player opens a browser BR on day 2, and it is the exact surface a rewarded ad reroll monetises."
+   },
+   {
+    "gap": "Critical-path dependencies on third-party CDNs that neither the owner nor the portal controls",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "index.html's importmap resolves `three` to https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js and `three/addons/` to the same host; runtime/net/ffg_netplay.js:41 does `await import(\"https://esm.sh/@supabase/supabase-js@2\")` at lobby-open time. CrazyGames requires relative paths for bundle files and evaluates externally-hosted files against the ≤20s-to-gameplay rule. A vendored copy already exists in the repo at forgeflow-games/three172.js. NOTE: this is a robustness/latency risk rather than a stated hard fail — Final Drop is itself listed as \"Externally hosted (iframe)\", so exter",
+    "recommendation": "Vendor three.module.js and the two addons into assets/vendor/ and point the importmap at relative paths; pin and vendor supabase-js the same way (or lazy-load it only when SQUAD UP is clicked, which is already the case, so the risk there is contained to multiplayer). Removes a single point of failure on the loading path and takes the CDN latency out of the 20s budget."
+   },
+   {
+    "gap": "No player identity — the game never asks for a name, so the kill feed, the lobby and any future leaderboard all say \"You\"",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "`playerName: \"You\"` is a settings default at ffg_royale3d.js:420 but no UI writes it: the only `<input>` hud.js constructs is `inp.type = \"range\"` at hud.js:2510 (the volume sliders). net.js:117-119 works around the absence with `(W.settings.playerName && W.settings.playerName !== \"You\") ? ... : \"Player-\" + net.id.slice(-3)`. Meanwhile the game ships 68 hand-written bot names (sim/royale.js) so every opponent in the lobby has more identity than the player does.",
+    "recommendation": "Add one `<input maxlength=16>` at the top of showSettings (hud.js:2192) bound to W.settings.playerName, plus the same field on the SQUAD UP panel — net.js:98 already builds an input there for the room code, so the styling exists. player.js already ignores keydown when ev.target is an INPUT, so typing will not drive the character. This is a prerequisite for any leaderboard being meaningful."
+   },
+   {
+    "gap": "Shareability is effectively zero — the room code is unselectable text and a victory produces nothing a player can send anyone",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "net.js:130 ends the lobby flow at `Room <b>${net.room}</b> — share this code.` with no copy button; grep for `clipboard` across the game returns nothing; grep for `share|twitter|copy` in hud.js returns only unrelated matches. game_controls.js:65 additionally blocks the context menu page-wide with `capture:true`, so a player cannot even right-click-copy the code. The SDK provides showInviteButton({roomId})/inviteLink({roomId})/getInviteParam() built for exactly this, and the docs specify hiding the invite button once the room is full or the match has started.",
+    "recommendation": "Wire showInviteButton({roomId: net.room}) when the lobby opens and hideInviteButton() in the `begin()` closure at ffg_royale3d.js:305 (the docs require hiding it at gameplay start); read getInviteParam('roomId') on boot to auto-join. As a portal-independent fallback, add a copy-to-clipboard button next to the code in net.js and a share card on VICTORY ROYALE. In a 50-bot lobby the friend-invite is the main organic acquisition channel and it currently depends on a player typing a code they read aloud."
+   },
+   {
+    "gap": "No sitelock, which CrazyGames requires",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "CrazyGames technical requirements: \"Implement sitelock to prevent file theft\" and \"Whitelist all CrazyGames domains if using sitelock.\" grep for `sitelock|domain|location.hostname|referrer` across the game's code returns no domain check anywhere.",
+    "recommendation": "Add a hostname allowlist check in ffg_boot3d.js before boot3d() — permit localhost/127.0.0.1, forgeflowgames.com, the R2 origin, and the crazygames.com / crazygames.* domains, and bail with a message otherwise. Keep the list in one place; a sitelock that is hard to update becomes the reason a legitimate portal build refuses to run."
+   },
+   {
+    "gap": "No in-game analytics — you cannot measure whether any monetisation change helped or hurt",
+    "impact": "medium",
+    "effort": "S",
+    "evidence": "The portal has GA4 (pages/+Head.tsx:14, G-Z1R90RFQKP) and a `play_count` column ordered on in src/hooks/useGames.ts, but those are page-level. Inside the game nothing records menu→match conversion, drop-select abandonment, matches per session, average placement, or day-2 return. The data all exists in memory: W.match tracks kills/damage/placement, W.progress tracks matches/wins/dayStreak.",
+    "recommendation": "Emit a handful of events at the boundaries you are already instrumenting for the SDK (loading start/stop, gameplay start/stop, post-match) to GA4 via the parent frame or a 20-line beacon. The specific numbers to watch before touching ad frequency: matches per session, and the drop-off between menu-shown and first-match-started. Without these, an ad placement that costs you 15% of session length is invisible."
+   },
+   {
+    "gap": "Desktop-only: no touch input anywhere, forfeiting the mobile homepage and roughly a third of US portal traffic",
+    "impact": "medium",
+    "effort": "L",
+    "evidence": "grep for `touchstart|touchmove|ontouch|maxTouchPoints|joystick|orientation` across runtime/ and game_controls.js returns no input handlers (only unrelated hits on the word \"orientation\" in player.js's bone-rotation comments). CrazyGames requires ≤20MB initial download for mobile-homepage eligibility. HONEST CONTEXT: Final Drop is itself listed as \"Browser (desktop-only)\" and rates 9.2/10, and Similarweb puts CrazyGames US traffic at ~65% desktop — so this is parity with the primary benchmark, not a deficit against it.",
+    "recommendation": "Do NOT build touch controls to chase this — a 50-player third-person shooter with ADS, six weapons, chest-holds and a parachute does not survive twin-stick translation, and Final Drop's rating proves desktop-only is viable. Instead, detect touch at boot and show an honest \"desktop only\" card rather than letting a phone user load 8MB of GLB and then discover they cannot move. That is a one-screen change and it protects the rating, which is what portal placement actually keys off."
+   },
+   {
+    "gap": "3.6MB of unreferenced backup files shipped in the bundle, and 15MB of music at a bitrate that looks unnecessary for looping tracks",
+    "impact": "low",
+    "effort": "S",
+    "evidence": "Five `.openhands.bak` files totalling 3,790,564 bytes (juggernaut 820,244; athlete 789,888; wraith 766,152; soldier 711,308; viper 702,972) sit in assets/chars/meshy/; grep for \"openhands\" across all .js/.json/.html returns no code reference. The three MP3s total 15,681,306 bytes (14.95MB) for looping background tracks.",
+    "recommendation": "Delete the .bak files from the shipped tree (keep them in git history if wanted) and re-encode the music at a lower bitrate — these are looping ambient beds, not a soundtrack album. Neither threatens the 250MB cap, but both directly reduce the initial-download figure that the portal measures and the total the CDN serves on every cold load."
+   }
+  ]
+ },
+ "performance": {
+  "score": "slightly_behind",
+  "vsAAA": "behind",
+  "verdict": "Last Circle's simulation layer is genuinely excellent — 50 actors with AI, movement, ballistics, loot and storm cost 0.55 ms/frame — and its load footprint (16.8 MB to first playable match, 112 files) sits comfortably inside every CrazyGames hard limit, but the renderer wastes roughly 60% of its frame on geometry that is provably invisible: on Deepwood a ground camera submits 763 draw calls and 3,716,659 triangles, of which 505 calls and ~7.3 ms are loot pickups at a median distance of 1,132 m. Frustum culling is structurally disabled (all 30 InstancedMeshes have bounding radii of 850–1,011 m on a 1,600 m map; pointing the camera at empty sky still submits 2,901,932 triangles), and the frame is entirely CPU/draw-call bound — rendering at 64×36 costs the same as 1280×720 — which means the DPR-and-shadow-resolution quality tiers are aimed at a bottleneck that does not exist.",
+  "gaps": [
+   {
+    "gap": "Ground loot is rendered at unlimited distance — it is the single largest cost in the frame and roughly two thirds of all draw calls",
+    "impact": "critical",
+    "effort": "S",
+    "evidence": "Deepwood ground view: 763 draw calls / 3,716,659 tris / 12.6 ms. Hiding W._groups.loot: 258 calls / 5.33 ms. Loot = 505 draw calls and ~7.3 ms (14.4 us per call). Of the 134 top-level loot groups, the median distance from the camera was 1,132 m and the farthest 1,947 m; a 150 m cull left only 2 visible. Each item is a Group holding a rarity torus plus a cloned Meshy model (item_medkit 5,919 tris, wpn_sniper 6,143, wpn_glauncher 6,169) and each sub-mesh is its own draw call. Three.js only frustum-tests the leaf meshes, and with a 2,000 m far plane on a 1,600 m map the frustum contains most of t",
+    "recommendation": "In loot.js update(), toggle group.visible on a squared-distance test against the camera each frame (or every 4th frame over a rotating slice) with a cut at ~150 m. Measured effect on the exact frame profiled: 763 -> 258 draw calls, 12.6 -> 5.33 ms, a 2.4x render speedup for a few lines. Then add a cheap far tier — keep only the rarity ring, or a single additive billboard sprite, out to ~400 m so loot is still spottable from a rooftop without paying for a 6,000-triangle rifle."
+   },
+   {
+    "gap": "Frustum culling is structurally disabled for every large object in the world",
+    "impact": "critical",
+    "effort": "M",
+    "evidence": "Measured bounding-sphere radii: terrain 1,131 m, roads 603 m, and all 30 InstancedMeshes between 850 m and 1,011 m — on a 1,600 m map with camera.far = 2,000 and FOV 57. Every one of these intersects the frustum from anywhere on the map. Proof of the consequence: with the camera pointed straight up at empty sky the renderer still submitted 2,901,932 triangles. Merged structure batches are keyed by colour hex globally, so one 'grey concrete' batch spans the whole island and is submitted whenever any grey building is on screen.",
+    "recommendation": "Chunk spatially. In maps.js, bucket each prop kind's instance list into an 8x8 grid of 200 m cells and emit one InstancedMesh per (kind, primitive, cell) — bounding radius drops from ~1,000 m to ~140 m and culling starts working, at a modest increase in object count that is more than repaid. Do the same for the structure batches: key `batches` by (colour, POI) instead of colour alone, since POIs are already the natural spatial cluster. Consider three.js BatchedMesh as the alternative if you want per-object culling inside a single draw call."
+   },
+   {
+    "gap": "Kernel3D.loadGLTF has no in-flight request dedupe, so concurrent loads of the same asset each allocate their own copy of its textures",
+    "impact": "high",
+    "effort": "S",
+    "evidence": "Direct test in the running game: five concurrent kernel.loadGLTF() calls on one uncached URL produced 5 distinct THREE.Source objects; five sequential calls on the now-warm URL produced 1. Consequence in a live match: the scene holds 202 unique texture Sources while the GLTF/character caches hold only 46 — 156 duplicates. 143 of the live sources are 512x512, giving ~200 MB of estimated texture memory where ~65 MB would suffice. The loot group alone holds 134 unique sources and the actor group 57 (for 5 distinct skins). ffg_kernel_3d.js:251 checks `this._gltfCache[url]` before the await but nev",
+    "recommendation": "Add an `_gltfInflight` map: on miss, store the loadAsync promise before awaiting, have subsequent callers await the same promise, and delete the entry when it settles. Same three lines in loadCharacter. This is a generator-level fix in the shared FFG kernel, so it pays out across every 3D game in the portal, and it is the difference between ~200 MB and ~65 MB of texture residency on the 4 GB Chromebooks CrazyGames explicitly requires you to run on."
+   },
+   {
+    "gap": "The quality tiers scale the wrong axis — the frame is CPU/draw-call bound, not fill bound, so the settings menu barely moves frame rate",
+    "impact": "high",
+    "effort": "M",
+    "evidence": "Rendering the same view at 64x36 took 3.54 ms versus 3.33 ms at 1280x720 — eliminating 99.9% of the pixels changed nothing. Resolution sweep at fixed content: 1280x720 DPR1 10.9 ms, 1280x720 DPR1.5 11.24 ms, 1920x1080 DPR1 15.54 ms, 1920x1080 DPR1.5 18.41 ms — a 5x pixel increase for 1.7x the time. Tier sweep on ashgrid: high (DPR 2.0, shadow 4096) 319 calls / 4.06 ms, medium (DPR 1.5, 2048) 318 / 3.92 ms, low (DPR 1.0, no shadows, no bloom) 276 / 3.08 ms. The tier tables in ffg_royale3d.js:100-158 control DPR, shadow map size, anisotropy and bloom — none of which is the bottleneck.",
+    "recommendation": "Re-target the tiers at draw-call count once gaps 1 and 2 land. Make each tier own: loot cull radius (low 90 m / medium 150 m / high 250 m), prop instance-chunk draw distance, foliage density multiplier applied at scatterTrees time, actor model LOD switch distance, and whether distant actors drop to a single low-poly mesh. Keep DPR as a secondary knob for genuinely GPU-poor integrated parts, but stop presenting it as the main lever."
+   },
+   {
+    "gap": "The heaviest frame in the entire match is the very first one the player sees, and there is no character or held-weapon LOD",
+    "impact": "high",
+    "effort": "M",
+    "evidence": "With the camera at the 50-actor drop cluster: 1,010 draw calls, 4,456,503 triangles, 17.77 ms render-only — ~56 FPS before any game logic, on a discrete RTX A2000. The actor group holds 1,039,140 triangles across 100 meshes, i.e. ~20,800 tris per actor: a 12,761–15,636 triangle Meshy body plus a ~6,000 triangle held weapon that is full detail whether the holder is 3 m or 400 m away. Animation LOD exists (mixers freeze past 250 m, player.js:647/979) but there is no geometry LOD at any distance.",
+    "recommendation": "Two steps, cheapest first. (a) Swap the held weaponMesh for a ~200-triangle proxy beyond ~60 m — weapons.js already builds procedural box-primitive protos (protos.smg/sniper/glauncher) as GLB fallbacks, so the low-detail asset already exists; wire it as an LOD instead of a fallback. That alone removes ~300k triangles from the drop frame. (b) Generate one decimated body LOD per skin (target ~2,500 tris) and use THREE.LOD at ~80 m. Decimation can be a one-off offline step, not runtime."
+   },
+   {
+    "gap": "Tree instances always cast shadows and, being uncullable, run the shadow depth pass over the whole map's foliage every frame",
+    "impact": "medium",
+    "effort": "M",
+    "evidence": "Toggling shadowMap.enabled on the Deepwood ground view moved triangles 3,716,659 -> 2,379,359, i.e. the depth pass costs 1,337,300 triangles/frame — which matches the pine (943,605) plus birch (344,208) instanced totals almost exactly. Both InstancedMeshes have castShadow=true and radii of ~1,000 m, so the +/-55 m shadow camera can never reject them; every tree on a 1,600 m map is re-rendered into a 55 m shadow box every frame. maps.js:1223-1229 already documents this exact reasoning for why cars, barrels and rocks had their castShadow turned off — trees were deliberately exempted.",
+    "recommendation": "This is fixed for free by the chunked instancing in gap 2: once each foliage chunk has a ~140 m radius, the shadow frustum rejects all but the two or three chunks actually inside the +/-55 m box. If chunking slips, the interim fix is to maintain a small castShadow-enabled InstancedMesh rebuilt with only the ~40 nearest trees each time the player crosses a 20 m threshold, with the map-wide mesh set castShadow=false."
+   },
+   {
+    "gap": "Pickup and item models are AAA-hero-prop density for objects that are usually a few pixels on screen",
+    "impact": "medium",
+    "effort": "M",
+    "evidence": "Parsed from the GLBs: item_bandage 5,963 tris, item_medkit 5,919, item_shield_s 5,472, item_shield_l 6,126, wpn_ar 5,943, wpn_smg 5,962, wpn_pistol 5,955, wpn_shotgun 6,088, wpn_sniper 6,143, wpn_glauncher 6,169, deco_crystal 5,939 — every Meshy asset lands in a 5.5k–6.2k band with 3–4 512x512 PBR maps each. For comparison the hand-authored props in the same folder are 308 (barrel), 314 (rocks), 364 (bush), 1,681 (pine) triangles.",
+    "recommendation": "Run the Meshy outputs through a one-off decimation pass (gltf-transform simplify or Blender decimate) targeting ~800–1,200 triangles for pickups and ~2,000 for the held-weapon LOD0, and drop their texture sets to 256x256 for the 3 non-albedo maps. A bandage on the ground does not need a 512x512 roughness map. Combined with the loot distance cull this compounds: fewer triangles AND fewer of them submitted."
+   },
+   {
+    "gap": "Match build blocks the main thread for ~1.9 s with no incremental progress, and shader compilation adds a first-encounter hitch",
+    "impact": "medium",
+    "effort": "L",
+    "evidence": "Measured warm per-match build (all GLBs cached): 1,934 ms of frozen main thread. A Node replication of the pure noise work — 221x221 terrain vertices plus the 512x512 minimap, both calling the 5-octave fbm height function and colorAt — accounted for 39.8 ms and 90.9 ms respectively on this CPU, so the remaining ~1.8 s is geometry construction, mergeGeometries and GLTF/instancing work. Separately, shader programs went 0 -> 86 during match 1 before settling at 59, meaning the first match compiles ~86 programs on demand. There is a single `await nextFrame()` before buildMap and nothing after it.",
+    "recommendation": "Still inside CrazyGames' 20 s time-to-gameplay budget on this hardware, but on the 4 GB Chromebooks they gate on this is likely 4–6 s of a hard-frozen tab per match, repeated on every PLAY AGAIN. Yield to the event loop between build phases (terrain, structures, props, loot) so the loading screen can animate, move the 512x512 minimap raster into a Worker or an OffscreenCanvas since nothing depends on it until the HUD appears, and call renderer.compile(scene, camera) once during the lobby to move shader compilation into a moment the player already expects to wait."
+   }
+  ]
+ }
+}

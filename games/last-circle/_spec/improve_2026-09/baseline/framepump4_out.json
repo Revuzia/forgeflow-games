@@ -1,0 +1,111 @@
+{
+ "every": 30,
+ "envMenu": {
+  "dpr": 1.0000000149011612,
+  "rendererPR": 1.0000000149011612,
+  "buffer": [
+   1280,
+   720
+  ],
+  "programs": 18,
+  "shadowMapSize": 2048,
+  "shadowExt": 150,
+  "shadows": true,
+  "graphics": "medium",
+  "bloomEnabled": true,
+  "bloomStrength": 0.45,
+  "composerPasses": [
+   "RenderPass",
+   "UnrealBloomPass",
+   "OutputPass"
+  ],
+  "composerRTType": 1016,
+  "preserveDrawingBuffer": true,
+  "antialias": false
+ },
+ "menu": {
+  "label": "menu",
+  "frames": 60,
+  "renderedFrames": 6,
+  "simViewMs": {
+   "p50": 0.1,
+   "p90": 0.3,
+   "p99": 0.8,
+   "max": 0.8,
+   "mean": 0.17
+  },
+  "updaterMs": {
+   "p50": 0.1,
+   "p90": 0.3,
+   "p99": 0.7,
+   "max": 0.7,
+   "mean": 0.16
+  },
+  "mixerMs": {
+   "p50": 0,
+   "p90": 0,
+   "p99": 0,
+   "max": 0,
+   "mean": 0.0
+  },
+  "renderSubmitMs": {
+   "p50": 6.6,
+   "p90": 87132.9,
+   "p99": 87132.9,
+   "max": 87132.9,
+   "mean": 14578.32
+  },
+  "draws": {
+   "p50": 289,
+   "p90": 293,
+   "p99": 293,
+   "max": 293,
+   "mean": 289.67
+  },
+  "tris": {
+   "p50": 92578,
+   "p90": 92578,
+   "p99": 92578,
+   "max": 92578,
+   "mean": 92577.33
+  },
+  "programsEnd": 19,
+  "newProgramFrames": [
+   {
+    "i": 9,
+    "n": 1,
+    "submitMs": 87132.9,
+    "phase": "menu",
+    "t": 0
+   }
+  ],
+  "simViewOver22ms": 0,
+  "renderedOver450draws": 0
+ },
+ "startMatchMs": 205929,
+ "programsBeforeStartMatch": 19,
+ "programsAfterStartMatch": 46,
+ "envDrop": {
+  "dpr": 1.0000000149011612,
+  "rendererPR": 1.0000000149011612,
+  "buffer": [
+   1280,
+   720
+  ],
+  "programs": 46,
+  "shadowMapSize": 2048,
+  "shadowExt": 150,
+  "shadows": true,
+  "graphics": "medium",
+  "bloomEnabled": true,
+  "bloomStrength": 0.14,
+  "composerPasses": [
+   "RenderPass",
+   "UnrealBloomPass",
+   "OutputPass"
+  ],
+  "composerRTType": 1016,
+  "preserveDrawingBuffer": true,
+  "antialias": false
+ }
+}

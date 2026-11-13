@@ -1,0 +1,129 @@
+# Last Circle — Owner's Scorecard
+### vs. *Final Drop* (browser BR, CrazyGames) and AAA battle royales
+Sixteen dimensions, assessed against the shipped source. Numbers below are read off the code or measured live unless labelled otherwise.
+
+---
+
+## 1. Verdict
+
+**No — Last Circle is not competitive with Final Drop today, but the reason is narrower and more fixable than that sounds.** Eleven of sixteen dimensions are at parity or better: the combat math is Fortnite-calibrated almost to the decimal (AR = 30 damage × 5.5 shots/s = 165 DPS, the same number Fortnite's assault rifle produces), the bot AI is a 9-state utility brain with 5 skill tiers that out-designs the documented behaviour of Fortnite's and PUBG's bots, movement is faster and better-modelled than any AAA benchmark, and the drop-select screen — live contested-LZ heat read from the bots' actual declared targets — is a feature no benchmark, browser or AAA, ships at all. The simulation is not the problem: 50 actors with AI, physics, ballistics, loot and storm cost **0.55 ms/frame**. The problem is everything wrapped around it. The world those excellent systems run inside is untextured boxes on a 7.27 m/vertex plane lit by two lights with shadows that stop 55 m from the camera, against a Final Drop that was instrumented live running 4-cascade shadows to 700 m, 262 lights and 863 LOD entities. Audio is ~10 synthesised primitives with a stereo panner that cannot tell front from back, against Final Drop's 125 recorded clips and 194 true 3D positional emitters. Pulling the trigger moves nothing on screen. Progression runs dry at level 10. And there is no portal SDK, no sitelock, no analytics, and a custom fullscreen button that CrazyGames explicitly prohibits — so the game cannot currently be monetised at all. **Last Circle is a better-designed game than Final Drop that presents worse than Final Drop.** Closing that is a presentation and plumbing programme, not a redesign — and roughly a third of the total gap is reachable in S-sized edits.
+
+---
+
+## 2. Scorecard
+
+| Dimension | vs Final Drop | vs AAA | One-line note |
+|---|---|---|---|
+| **Bots & AI** | 🟢 ahead | ⚪ parity | 49 fully-simulated utility-brain bots, 5 tiers, LOS-gated — but they never shield up and cannot land a headshot |
+| **Movement** | 🟢 ahead | 🟡 acceptable | 9.6 m/s sprint (+48% on Fortnite), continuously-graded spread penalty — zero skill-expressive traversal verbs |
+| **Combat feel** | ⚪ parity | 🟡 acceptable | TTK band is genre-correct and well-spread; there is no recoil and no spray penalty underneath it |
+| **Drop & rotation** | ⚪ parity | 🔴 behind | Best drop-select screen in the genre; no aircraft, and the canopy is ⅓ the speed of every benchmark's |
+| **Loot & inventory** | ⚪ parity | 🟡 acceptable | Fortnite's healing table verbatim, seeded deterministic spawns; every consumable is a heal, chests are silent |
+| **Storm & pacing** | ⚪ parity | 🟡 acceptable | 8 seeded phases, next-circle preview, final circle deliberately holds at 9.4 m — quick mode's first wall outruns a sprint |
+| **UI / HUD** | ⚪ parity | 🟡 acceptable | Live 3D menu, truthful crosshair, Apex-grade death recap — 4 of 5 canvases render at 1 device pixel, no HUD scale |
+| **First 60 seconds** | 🟠 slightly behind | 🟡 acceptable | Everything after the drop is strong; 45–70 s of blank page, menus and float before the first trigger pull |
+| **Map design** | 🟠 slightly behind | 🔴 behind | POI and player density at literal Fortnite parity; no structure in the game can be fought *from* |
+| **Game feel / juice** | 🟠 slightly behind | 🔴 behind | Informational feedback is commercial-grade; physical feedback is close to absent |
+| **Performance** | 🟠 slightly behind | 🔴 behind | Sim costs 0.55 ms; the renderer wastes ~60% of the frame on provably invisible geometry |
+| **Visuals** | 🔴 far behind | 🔴 far behind | Characters and weapons hold up; the world they stand in does not |
+| **Audio** | 🔴 far behind | 🔴 behind | Broad event coverage and a real limiter, but no 3D and no recorded content |
+| **Progression / retention** | 🔴 far behind | 🔴 behind | Real XP/challenge/career layer — nothing operates on a timescale longer than one match |
+| **Multiplayer** | 🔴 far behind | 🔴 far behind | Slot-takeover model is genuinely smart; the transport disconnects mid-match at 4 players |
+| **Monetisation readiness** | 🔴 far behind | 🟡 acceptable | Zero commercial plumbing — no SDK, no ads, no sitelock, no analytics |
+
+---
+
+## 3. Where it already wins
+
+These are real, verified in the source, and worth protecting.
+
+- **The bot lobby is the product, and it is excellent.** 49 bots, all genuinely simulated every frame (no off-screen fake attrition), across 5 skill tiers from 700 ms / 7.5° reaction down to 210 ms / 0.9° — human-pro reaction time. LOS-gated by the same swept collider test the bullets use, so they cannot see or shoot through a wall. Aim error is modelled as a smooth ~2 s sine wave rather than per-shot white noise, so a sustained burst sweeps a coherent arc across a strafing target — which is what human tracking actually looks like. Bots hear gunfire at 250 m, break off 14-second stalemates, sprint out of the open the instant a reload starts, and disengage to heal while blending their escape vector toward the next circle. Fortnite's documented bots move in straight lines and stand still while shooting.
+- **Combat math is calibrated, not guessed.** TTK against a full 200 EHP bar: shotgun 0.75 s, SMG 0.92 s, AR 1.09 s, pistol 1.20 s, sniper 1.71 s. Nothing melts, nothing slogs, and the ordering matches each weapon's range band. Headshot multipliers match Fortnite verbatim. Six weapons on five ammo types with genuinely separate jobs, verified in the falloff table.
+- **The crosshair does not lie.** `fire()` and the reticle bloom call the *same* `effectiveSpread()` with the same state — so the cone you see is the cone you shoot, including crouch, ADS, movement and first-shot accuracy. A lot of shipped shooters, browser and otherwise, draw a reticle that lies about the gun.
+- **The drop-select screen has no equivalent in any benchmark.** Contest heat per POI is the *real* inbound count read off each bot's declared drop target, with QUIET/LIGHT/CONTESTED/HOT tiers and a fallback to the quietest named zone. Fortnite, Apex, PUBG and Warzone all make you guess.
+- **Movement is faster and better-modelled than AAA.** 9.6 m/s sprint against Fortnite 6.47, PUBG 6.3, Apex 5.7 — correct for a browser BR where rotations should not be a chore. The spread penalty is continuously graded by actual speed (1.00× still → 1.20× crouch-walk → 1.45× walk → 1.72× sprint → 2× airborne), not a binary moving flag. And **the sprint toggle is not a compromise — it is what Final Drop ships**, verbatim from its own control list.
+- **The storm makes a better call than the AAA benchmarks.** The final circle deliberately holds at 9.4 m instead of closing to zero, locked by a selftest. Fortnite and PUBG both close to zero and crown whoever happens to survive the simultaneous tick.
+- **Simulation performance is outstanding.** 0.55 ms/frame for the entire update pipeline; 16.83 MB to a playable match against CrazyGames' 50 MB cap; 112 files against a 1,500 cap; zero audio sample files. Per-match resource churn is verified flat across three back-to-back matches (geometries 591→591, textures 195→195, programs 59→59).
+- **Craft details that most shipped games miss.** Rarity double-encoded as colour *and* a Roman numeral (Fortnite is hue-only). A priority-queued announcement system so the elimination that drops the lobby to 10 is not overwritten by the "10 REMAIN" milestone in the same frame. A death recap that prints final-blow distance, damage you dealt, the killer's remaining HP, and literally prints "SO CLOSE." when they survived on ≤25 HP. A −6 dBFS brickwall limiter on the master bus. Cosmetic tracers capped at 200 m/s so hitscan shots are visible. A muzzle flash that erupts from the actual barrel bone.
+
+---
+
+## 4. The ten gaps that matter most
+
+Ranked by impact ÷ effort. Sizes: **S** = hours to a day, **M** = days, **L** = weeks.
+
+### 1. The gun does nothing when you pull the trigger — **S** *(combat-feel + game-feel-juice)*
+No camera kick, no view-model movement, no FOV punch, no screen shake on any of the six weapons. `camShake` is written in exactly two places in the entire codebase — explosions and taking damage — neither of which is your own gun. Underneath that, there is no recoil to control either: recovery runs at 0.12 rad/s (6.88 °/s), which exceeds every weapon's accumulation rate (AR 3.47, SMG 4.13, pistol 3.06 °/s), so no crosshair ever climbs, and `effectiveSpread` carries no burst-length term — holding the trigger is mechanically free. With an SMG at 720 rpm the player pulls a trigger every 83 ms and nothing on screen moves.
+**Do:** In the `shotFired` handler, set a per-weapon `camShake` (smg ~0.045, ar ~0.07, shotgun ~0.20, sniper ~0.26) plus a short FOV punch decaying over ~0.12 s, player-only. Separately, add an accumulating `burstHeat` term to `effectiveSpread` (+0.35°/shot on the AR, capped ~2.5× base, decaying over ~0.4 s) — because `fire()` and the crosshair already read the same function, the reticle visualises the growing cone for free. Both are edits inside code that already exists, and this is the single highest-leverage change available anywhere on this list.
+
+### 2. Loot renders at unlimited distance and eats two thirds of the frame — **S** *(performance)*
+On Deepwood a ground camera submits 763 draw calls and 3,716,659 triangles. **505 of those calls are loot pickups at a median distance of 1,132 m** — 7.3 ms of a 12.6 ms frame spent drawing 6,000-triangle rifles a kilometre away.
+**Do:** Toggle `group.visible` on a squared-distance test in `loot.js update()` with a cut at ~150 m. Measured effect on the exact frame profiled: **763 → 258 draw calls, 12.6 → 5.33 ms, a 2.4× render speedup for a few lines.** Then add a cheap far tier (rarity ring or a single additive billboard) out to ~400 m so loot is still spottable from a rooftop.
+
+### 3. Audio cannot tell you front from back — **S** *(audio)*
+The game uses `createStereoPanner`, which encodes left/right only. In a battle royale, positional audio *is* the primary information channel, and Final Drop was instrumented live running **194 true 3D positional emitters with per-weapon-class audible radii from 200 m to 600 m**; Last Circle answers with one 260 m radius for all six weapon classes — a sniper outranges its own report.
+**Do:** Swap to `createPanner({ panningModel: "HRTF", distanceModel: "inverse", refDistance: 8 })`, set source position from world position, and sync `ctx.listener` position + forward/up from the camera once per frame. Roughly 40 lines. Add an `audibleM` field per weapon in the same pass (shotgun 120 → sniper 520) with a distance-dependent lowpass so far shots are muffled thumps and near shots are cracks.
+
+### 4. Bots fight the whole match at half your effective HP and cannot land a headshot — **S** *(bots-and-ai)*
+Two one-line facts deflate the entire difficulty curve. Bots never drink shields until they are already hurt, so they roam at 100 EHP against the player's 200. And their aim point sits at feet + 1.15 m, which is **0.4 m below the head hitbox threshold** — no bot at any tier can physically land a headshot. Together that is roughly a 4–6× TTK advantage to the human, in a game where the bots *are* the game (multiplayer caps at 8 humans).
+**Do:** Add a low-priority top-off branch — out of combat, shield < 100, shield item in inventory → score HEAL ~30, above WANDER and below any live fight. Gate it by tier so tier-1/2 bots stay sloppy, which is a believable skill tell. Then bias the aim point upward by tier: keep +1.15 for tiers 1–2, +1.45 for tier 3, +1.55 for tiers 4–5, so the five scary bots in the lobby occasionally delete you and the other forty-four do not.
+
+### 5. The first sixty seconds are the worst part of the game — **S + M** *(first-60-seconds)*
+A first-time player gets a blank dark page with no logo, no spinner and no error path; then a menu; then a loading screen with a fake bar that stalls at 92%; then an unskippable 4.0 s lobby; then a 12 s map screen; then a 25.3–26.8 s parachute ride. **Roughly 45–70 seconds from opening the page to the first trigger pull**, in the mode the game presents first. Everything *after* that is genuinely good — the auto-opening how-to card, the contested-LZ screen, the pistol-on-spawn rule and a dense correct HUD all beat what Final Drop's store page documents.
+**Do, in order:** (a) A static splash in `index.html` — wordmark, determinate bar, one tip — that paints on the first frame with zero JS. (b) Make the 4.0 s lobby click-to-skip; nothing loads during it. (c) Let ENTER or a map click finish drop-select instantly. (d) Drop first-time auto-chute from 110 m to ~60 m and raise the canopy from −5.5 to ~−11 m/s vertical / 15 m/s horizontal — passive descent falls to ~13–14 s while horizontal reach *increases*. (e) On a zero-match profile, promote QUICK MATCH to the top card badged "START HERE". Target: ~25 s total, with no feature removed.
+
+### 6. Your friend is a corpse sliding across the ground in a jump pose — **S** *(multiplayer)*
+`interpRemote` writes only `pos` and `yaw` — never `vel`, never `onGround`. The animation selector reads ground speed (permanently 0) and `onGround` (initialised false, only ever set inside `stepActor`, which network actors skip), so it falls through to `playAnim(a, "jump")` for **every network-driven actor for the entire match**. On a guest client that is all 49 other actors simultaneously. This is the first thing anyone sees when they play with a friend.
+**Do:** Reconstruct velocity in `interpRemote` from the snapshot delta before lerping — zero wire bytes, restores walk/run/backpedal immediately. Then add one packed byte carrying grounded/crouching/ads/sprinting/reloading as bit flags, plus `pitch` so remote players can look up and down.
+
+### 7. Quick mode's first storm wall outruns a sprint — **S** *(storm-and-pacing)*
+Phase 1 cuts 588 m → 220 m, closing at 8.2–10.5 m/s against a 9.6 m/s sprint. A player who drops wide is dead through no decision of their own, in the mode most likely to be a new player's first match. Standard's phase 1 leaves almost no margin either, and none at all if you have to swim.
+**Do:** Insert one intermediate step in `STORM_PHASES.quick` (`{ wait: 25, shrink: 30, radiusFrac: 0.42, dps: 1 }`) — first wall drops to ~7.7 m/s, second to ~4.9 m/s, and quick becomes ~4.6 min, closer to its own label. For standard, lengthen phase 1's shrink from 80 s to 115 s (wall → 3.88 m/s, a 1.37× sprint margin) and cut its centre-offset factor from 0.8 to 0.4. Separately, delay the damage ramp — `floor(soak/12)` instead of `floor(soak/6)` — because the current ramp makes the opening storm 2.3× more lethal than Fortnite's and arrives 23× sooner.
+
+### 8. The world looks like a greybox — **S → L** *(visuals)*
+Three separate failures compound. Sunlight shadows stop **55 m** from the camera, leaving ~99% of the visible world unshadowed, against Final Drop's measured 4-cascade CSM to 700 m. Roads render as disconnected floating slabs on every sloped surface. Every building is an untextured box — no windows, no doors, no pitched roofs — on terrain with one vertex every 7.27 m and zero ground clutter, lit by exactly two lights. The characters (15,490 tris, 24 bones, real tactical silhouettes) and the six weapon GLBs are genuinely competitive; nothing they stand in is.
+**Do, cheapest first:** (a) **S** — Build roads as a terrain-conforming triangle strip, or paint them into the terrain vertex colours the build loop already computes (zero extra draw calls). (b) **S** — Raise fog density to ~0.0018–0.0022 and set fog colour to the sky dome's *horizon* colour so there is aerial perspective; author each map's zenith colour explicitly (Ashgrid currently reads as dusk over noon-lit ground). (c) **M** — Swap the single shadow camera for `three/addons/csm/CSM.js`, already reachable through the existing importmap, 3–4 cascades to ~400 m. (d) **L** — Replace the box generators with a modular prefab kit (Kenney CC0 or equivalent); keep the generators as placement logic and start with the ~8 modules covering 80% of placements. Add an instanced ground-clutter layer (~2,000 instances in a 60 m ring) — highest visual return per triangle available.
+
+### 9. Nothing in the map can be fought *from* — **M** *(map-design)*
+With building permanently removed, every enterable structure is a blind box you cannot shoot out of. Houses have one 1.4 m door, zero windows, and a 3.90 m roof against a 1.93 m maximum mountable height. Tower upper-floor "window bands" start at floor + 2.80 m against a standing eyeline of floor + 1.92 m — you cannot see out of them. Open-ground cover averages 54–90 m between solid props against a sniper that does full 105 damage to 200 m. POI and player density are at literal Fortnite parity; the fight space inside them is not.
+**Do:** Cut real windows in `house()`/`hut()` (1.2 × 1.0 m at ~1.6 m, built the same way the door already is) and add a back door so a house has two entrances and can be pushed and held. Lower the tower band from `FH − 1.2` to `FH − 2.2` and offset it to straddle the standing and crouched eyelines — one constant plus a wall-Y offset converts nine Ashgrid towers and the Riverside Mill from loot closets into holdable positions. Then cluster the prop scatter: 40–60 cluster seeds per map with 6–12 props each turns a uniform 90 m field into cover islands ~40 m apart. Separately and urgently: Isla Viva's POIs are authored against an island the seeded terrain does not produce — six of eight POI centres sit at or below the waterline on every seed tested, and Palm Bay generates **0 of 8 houses** on half of them. Add a terrain-aware snap pass before the generators run.
+
+### 10. There is no reason to come back tomorrow — **M** *(progression-retention)*
+The reward table ends at level 10, exhausted in roughly 4–6 hours / ~27 matches, after which every level-up announces "RANK UP" and pays nothing. There is no daily reset of any kind, no leaderboard (despite a sibling game in this repo already shipping the exact Supabase pattern), no cloud save, no player name, and the challenge pool is 5 entries of which two appear in every single match. The menu also advertises "SEASON 1" and there is no season.
+**Do:** (a) `lc_daily` keyed on the UTC date — 3 challenges from an expanded ~25-entry pool that persist across matches, a first-win-of-the-day bonus, and a "Resets in HH:MM" countdown. The challenge structs and the live `addXP` path already exist. (b) Extend to a ~30-tier track using rewards that need zero new art: material-tint variants of the 5 existing rigs, callsign titles rendered in the kill feed, crosshair and parachute colours, rank badges every 5 levels. (c) A `lc_scores` table with a rolling 7-day window and graceful local fallback. (d) A callsign field in Settings — you are currently "You" in your own kill feed. Also fix the generator bug where "Survived" time counts spectating: `Match.eliminate` already stamps the real elimination time into the feed.
+
+**Also critical, just below the ten:** the shipping plumbing (no portal SDK at all, a custom fullscreen button CrazyGames explicitly prohibits, a dead Pause button, no sitelock, no analytics — see §5, this is a gate not a gap); frustum culling is structurally disabled (all 30 InstancedMeshes have ~850–1,011 m bounding radii on a 1,600 m map, so pointing at empty sky still submits 2.9 M triangles — **M**, fixed by 8×8 spatial chunking); no slide, the one traversal verb Epic added *specifically because* Zero Build removed building (**M**); the multiplayer transport, which generates ~240 msg/s against Supabase's 100 msg/s free cap before anyone fires (**L**); and no throwables — the entire consumable category is healing, so every inventory decision is "which heal" (**M**, and the projectile path already exists for the grenade launcher).
+
+---
+
+## 5. What it would take to beat Final Drop
+
+In order. The honest read is that the first block is a weekend and moves four dimensions.
+
+**Phase 0 — the S-effort criticals (≈1 week, one developer).**
+Weapon kick + FOV punch + accumulating spray bloom. Loot distance cull. HRTF spatialisation + per-weapon audible radii. Bot shield top-off + tier-scaled aim height. Boot splash + click-to-skip lobby + instant drop-select + faster canopy. Remote-actor velocity reconstruction. Quick-mode storm phase-1 insertion + damage-ramp delay. Terrain-conforming roads + fog/sky grade. Chest proximity shimmer. Interact prompt that tells the truth when your inventory is full.
+*Every item is a bounded edit to code that already exists. Together they move combat-feel, game-feel-juice, performance, audio and first-60-seconds — and they are, per session-hour spent, worth more than everything below.*
+
+**Phase 1 — the art pass (2–4 weeks). This is the one that actually closes the headline gap.**
+Cascaded shadow maps to ~400 m. Modular building kit replacing the box generators, starting with the 8 modules that cover 80% of placements. Chunked terrain at ~3 m/vertex near-field plus an instanced ground-clutter layer. Foliage cross-billboard LOD so density can be tripled. Windows and second doors in houses; lowered tower bands; clustered prop scatter; the Isla Viva POI snap fix. Local lights on the ~30 highest-value props. Bullet decals and shell casings.
+*Visuals is the only dimension rated far behind on **both** benchmarks, and it is the dimension a player judges before they have pressed a key. Phase 1 without Phase 0 would still lose on feel; Phase 0 without Phase 1 still looks like a prototype. Both, in that order.*
+
+**Phase 2 — audio content (1–2 weeks).**
+A ~1.5 MB pack of 12–18 recorded one-shots (6 weapon reports, 4 impact surfaces, 2 footstep surfaces, mag/rack) — at Final Drop's density the whole library costs less than a third of the current music payload. Per-shot pitch/offset randomisation (three lines, removes the machine-gun artefact tonight). Stance-scaled footsteps so crouch buys real stealth. Bullet whiz-by. A storm bed panned at the nearest wall point. One ambience loop per biome. Re-encode the 15 MB of music to ~96–112 kbps looping sections and duck it under gunfire.
+
+**Phase 3 — retention (1–2 weeks).**
+Daily challenge reset, a ~30-tier code-only reward track, a weekly leaderboard, a callsign, cloud-mirrored progress, a career panel, and incremental per-kill XP so a mid-match tab-close does not lose everything. Apply a ~1.6× mode multiplier so the flagship 12:55 mode is also the efficient one — do not shorten it; the pacing is deliberate and correct.
+
+**Phase 4 — the ship gate (days, but blocking).**
+This is not optional and it is not a quality item: **no ads are permitted without the portal SDK, and the custom fullscreen button is an automatic QA rejection independent of game quality.** Set `hide_controls:true` for the portal build (the config already honours it), wire `window.__PAUSE__` so the Pause button and ESC drive one path, add the ~8 SDK call sites that already exist as distinct game states, add a hostname sitelock, vendor the three.js and Supabase CDN dependencies, and emit basic analytics so you can tell whether any of the above helped. Then the two ad surfaces that fit without touching the match: a midgame on PLAY AGAIN (which already requeues without rebuilding the menu — that boundary was built deliberately) and a rewarded double-XP / challenge-reroll on the post-match screen.
+
+**Phase 5 — multiplayer, only if online earns it.**
+The slot-takeover model is the best idea in the codebase and should be kept. But the transport must change before public matchmaking can ship: stop relaying bots (finish the deterministic-world claim the docstring already makes — seed bot brains from the match seed and make their LOD independent of client position), fold per-event messages into the state tick, drop own-state to 8 Hz. That takes a 4-player match from ~240 msg/s to ~128. Then the deep-link invite (`?room=CODE` + a copy-link button, ~20 lines, highest ratio in the whole assessment), then teams — "SQUAD UP" currently drops friends into a match obliged to shoot each other, and `downedAt` is already reserved on the actor struct.
+
+**Explicitly not on the list, and deliberately so:** building or harvesting (settled, and the map fixes in Phase 1 are the correct substitute); a map picker (random rotation stays); stamina or a hold-sprint (the toggle matches Final Drop's own control scheme and the HUD pip already solves the toggle-lies problem); vehicles (the map is 1,600 m and sprint is 9.6 m/s — ziplines are the right answer if traversal ever needs help); and touch controls (a 50-player third-person shooter with ADS, chest holds and a parachute does not survive twin-stick translation — detect touch at boot and show an honest "desktop only" card instead of letting a phone user load 8 MB of GLB and discover they cannot move).
+
+---
+
+**Bottom line for the owner:** you do not need more features to beat Final Drop — on feature count and design quality you already do, and the bot AI, drop-select and combat calibration are things a competitor would have to build from scratch. What you need is for the game to *look and feel* like what it already *is*. Phase 0 plus Phase 1 is the whole argument; Phase 4 is what makes it worth money.
+
+*Confidence: visuals and audio were verified by live instrumentation of both games. The other fourteen dimensions are grounded in the shipped source with benchmark claims drawn from published documentation — where a benchmark figure could not be verified, the analysts said so rather than inventing one.*

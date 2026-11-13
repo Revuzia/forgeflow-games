@@ -1,0 +1,16 @@
+P1-B (parity wave P1, audio) — 7 new one-shots, all CC0 1.0 (public domain), $0, no download:
+built offline from LOCAL copies of two Kenney packs already used by this game, plus a seeded
+procedural rumble (the project's own work) under the explosion.
+Builder: F:/lc_p1/P1-B/sfx_build/build_sfx.py (deterministic; mono 44.1 kHz Ogg Vorbis q3).
+
+  hit_flesh_0.ogg / hit_flesh_1.ogg   Kenney Impact Sounds 1.0: impactPunch_medium_000 / _002 (trimmed, normalised -3 dBFS)
+  hit_shield_0.ogg / hit_shield_1.ogg Kenney Interface Sounds 1.0: glass_002 / glass_003 (rate 1.06, trimmed, -3 dBFS)
+  shield_break_0.ogg                  Kenney Impact Sounds 1.0: impactGlass_heavy_000 + impactGlass_heavy_002 (rate 0.8)
+                                      + Kenney Interface Sounds 1.0: glass_004 (rate 0.9), layered, -1 dBFS
+  explosion_0.ogg / explosion_1.ogg   Kenney Impact Sounds 1.0: impactPunch_heavy_000 / _002 (rate 0.38), impactSoft_heavy_000
+                                      (rate 0.45), impactWood_light_001/_003, impactPlank_medium_001 (debris ticks)
+                                      + seeded lowpassed-noise rumble (seeds 1729 / 4111), 2.2 s, -1 dBFS
+
+Kenney packs: https://kenney.nl/assets/impact-sounds , https://kenney.nl/assets/interface-sounds
+Licence: CC0 1.0 Universal — commercial use permitted, no attribution required (see KENNEY-LICENSE.txt).
+Total added: 68,280 bytes (explosion_0 19,489 + explosion_1 19,681; hits + break 29,110). Budget <= 450 KB.

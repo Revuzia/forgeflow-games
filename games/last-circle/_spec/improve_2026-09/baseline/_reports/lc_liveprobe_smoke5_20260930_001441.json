@@ -1,0 +1,1266 @@
+{
+ "args": {
+  "maps": "deepwood",
+  "reps": 1,
+  "seed": 1234,
+  "menu": 3.0,
+  "drop": 4.0,
+  "ground": 5.0,
+  "again": 3.0,
+  "slice": 8.0,
+  "real": 1.5,
+  "max_slices": 3,
+  "width": 1600,
+  "height": 900,
+  "headed": false,
+  "profile": "dgpu-uncapped",
+  "uncapped": false,
+  "no_again": false,
+  "label": "smoke5"
+ },
+ "url": "http://127.0.0.1:8790/games/last-circle/index.html",
+ "results": [
+  {
+   "map": "deepwood",
+   "seed": 1234,
+   "rep": 1,
+   "windows": {
+    "menu": {
+     "worst": [
+      {
+       "cpu": 11150.2,
+       "upd": 0.7,
+       "rnd": 11149.5,
+       "calls": 273,
+       "dProg": null,
+       "dTex": null,
+       "dGeo": null,
+       "matchT": 0,
+       "alive": -1,
+       "dAlive": null
+      },
+      {
+       "cpu": 309.6,
+       "upd": 0.1,
+       "rnd": 309.5,
+       "calls": 282,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0,
+       "alive": -1,
+       "dAlive": 0
+      },
+      {
+       "cpu": 29.5,
+       "upd": 0.1,
+       "rnd": 29.4,
+       "calls": 282,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0,
+       "alive": -1,
+       "dAlive": 0
+      },
+      {
+       "cpu": 20.5,
+       "upd": 0.2,
+       "rnd": 20.3,
+       "calls": 282,
+       "dProg": 0,
+       "dTex": 1,
+       "dGeo": 7,
+       "matchT": 0,
+       "alive": -1,
+       "dAlive": 0
+      },
+      {
+       "cpu": 14.6,
+       "upd": 0.2,
+       "rnd": 14.4,
+       "calls": 282,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0,
+       "alive": -1,
+       "dAlive": 0
+      },
+      {
+       "cpu": 14.4,
+       "upd": 0.3,
+       "rnd": 14.1,
+       "calls": 280,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0,
+       "alive": -1,
+       "dAlive": 0
+      },
+      {
+       "cpu": 13.5,
+       "upd": 0.2,
+       "rnd": 13.3,
+       "calls": 280,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0,
+       "alive": -1,
+       "dAlive": 0
+      },
+      {
+       "cpu": 9.6,
+       "upd": 0.2,
+       "rnd": 9.4,
+       "calls": 280,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0,
+       "alive": -1,
+       "dAlive": 0
+      }
+     ],
+     "framesWithNewPrograms": 0,
+     "framesWithNewTextures": 1,
+     "framesWithNewGeometries": 1,
+     "cpu_over50ms": 2,
+     "cpu_over100ms": 2,
+     "shadowTris_med": 43335,
+     "frames": 28,
+     "seconds": 0.69,
+     "avgFps": 40.8,
+     "p50": 11.449999999998909,
+     "p95": 40.37499999999944,
+     "p99": 237.2229999999998,
+     "max": 308.7999999999993,
+     "over20": 0.1429,
+     "over33": 0.1071,
+     "cpuUpd_p50": 0.2,
+     "cpuUpd_p99": 0.7,
+     "cpuRender_p50": 7.9,
+     "cpuRender_p99": 8114.299999999987,
+     "cpuFrame_p50": 8.5,
+     "cpuFrame_p95": 197.5600000000004,
+     "cpuFrame_p99": 8114.8319999999885,
+     "cpuFrame_max": 11150.2,
+     "calls_med": 282,
+     "calls_max": 282,
+     "scene_med": 268,
+     "shadow_med": 61,
+     "tris_med": 92182,
+     "tris_max": 92182,
+     "programs": 19,
+     "programs_start": 19,
+     "geometries": 205,
+     "textures": 16,
+     "heapMB_start": 28,
+     "heapMB_end": 14.6,
+     "heapMB_max": 28,
+     "dpr": 1,
+     "buf": [
+      1600,
+      900
+     ],
+     "mixers": 0,
+     "phase_start": "menu",
+     "phase_end": "menu",
+     "alive_start": null,
+     "alive_end": null,
+     "pAlive_end": null,
+     "pGlide_end": null,
+     "sceneChildren": 5,
+     "gpu": {
+      "samples": 3,
+      "cpu_total_pct": 94,
+      "chrome_all": 9.8,
+      "others": 93.7,
+      "top_others": [
+       [
+        "WUDFHost",
+        56
+       ],
+       [
+        "dwm",
+        34.4
+       ],
+       [
+        "blender",
+        3.2
+       ],
+       [
+        "claude",
+        0.1
+       ]
+      ]
+     }
+    },
+    "_drop_state_start": {
+     "phase": "drop",
+     "t": 0.14550000000000002,
+     "alive": 50,
+     "player": {
+      "hp": 100,
+      "shield": 0,
+      "pos": {
+       "x": -430,
+       "y": 251.9822688482948,
+       "z": -380
+      },
+      "weapon": "pistol"
+     },
+     "map": "deepwood",
+     "mode": "standard",
+     "seed": 1234
+    },
+    "drop": {
+     "worst": [
+      {
+       "cpu": 1838.4,
+       "upd": 2.1,
+       "rnd": 1836.3,
+       "calls": 120,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 1.06,
+       "alive": 50,
+       "dAlive": 0
+      },
+      {
+       "cpu": 60.2,
+       "upd": 47.3,
+       "rnd": 12.9,
+       "calls": 119,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0.27,
+       "alive": 50,
+       "dAlive": 0
+      },
+      {
+       "cpu": 42.6,
+       "upd": 30.7,
+       "rnd": 11.9,
+       "calls": 119,
+       "dProg": null,
+       "dTex": null,
+       "dGeo": null,
+       "matchT": 0.22,
+       "alive": 50,
+       "dAlive": null
+      },
+      {
+       "cpu": 34.8,
+       "upd": 10.3,
+       "rnd": 24.5,
+       "calls": 119,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0.45,
+       "alive": 50,
+       "dAlive": 0
+      },
+      {
+       "cpu": 31.3,
+       "upd": 2.5,
+       "rnd": 28.8,
+       "calls": 121,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 1.11,
+       "alive": 50,
+       "dAlive": 0
+      },
+      {
+       "cpu": 30.2,
+       "upd": 6.8,
+       "rnd": 23.4,
+       "calls": 119,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0.38,
+       "alive": 50,
+       "dAlive": 0
+      },
+      {
+       "cpu": 29.5,
+       "upd": 11.7,
+       "rnd": 17.8,
+       "calls": 121,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 1.14,
+       "alive": 50,
+       "dAlive": 0
+      },
+      {
+       "cpu": 25.7,
+       "upd": 16.5,
+       "rnd": 9.2,
+       "calls": 116,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 2.19,
+       "alive": 50,
+       "dAlive": 0
+      }
+     ],
+     "framesWithNewPrograms": 0,
+     "framesWithNewTextures": 1,
+     "framesWithNewGeometries": 1,
+     "cpu_over50ms": 2,
+     "cpu_over100ms": 1,
+     "shadowTris_med": 6309186,
+     "frames": 154,
+     "seconds": 4.03,
+     "avgFps": 38.2,
+     "p50": 12.599999999998545,
+     "p95": 29.874999999997087,
+     "p99": 65.48899999999958,
+     "max": 1845,
+     "over20": 0.0909,
+     "over33": 0.0325,
+     "cpuUpd_p50": 2.7,
+     "cpuUpd_p99": 23.032000000000114,
+     "cpuRender_p50": 9.0,
+     "cpuRender_p99": 26.478000000000034,
+     "cpuFrame_p50": 11.8,
+     "cpuFrame_p95": 24.160000000000025,
+     "cpuFrame_p99": 50.69600000000014,
+     "cpuFrame_max": 1838.3999999999999,
+     "calls_med": 119,
+     "calls_max": 122,
+     "scene_med": 105,
+     "shadow_med": 64,
+     "tris_med": 8372786,
+     "tris_max": 8621942,
+     "programs": 81,
+     "programs_start": 81,
+     "geometries": 365,
+     "textures": 82,
+     "heapMB_start": 147,
+     "heapMB_end": 150.4,
+     "heapMB_max": 169.3,
+     "dpr": 1,
+     "buf": [
+      1600,
+      900
+     ],
+     "mixers": 50,
+     "phase_start": "drop",
+     "phase_end": "drop",
+     "alive_start": 50,
+     "alive_end": 50,
+     "pAlive_end": true,
+     "pGlide_end": true,
+     "sceneChildren": 9,
+     "gpu": {
+      "samples": 4,
+      "cpu_total_pct": 88.3,
+      "chrome_all": 30.5,
+      "others": 96,
+      "top_others": [
+       [
+        "dwm",
+        53
+       ],
+       [
+        "WUDFHost",
+        40
+       ],
+       [
+        "claude",
+        3
+       ],
+       [
+        "SystemSettings",
+        0
+       ]
+      ]
+     }
+    },
+    "ground": {
+     "worst": [
+      {
+       "cpu": 1160.5,
+       "upd": 4.2,
+       "rnd": 1156.3,
+       "calls": 114,
+       "dProg": null,
+       "dTex": null,
+       "dGeo": null,
+       "matchT": 29.3,
+       "alive": 50,
+       "dAlive": null
+      },
+      {
+       "cpu": 39.0,
+       "upd": 14.3,
+       "rnd": 24.7,
+       "calls": 115,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 29.9,
+       "alive": 48,
+       "dAlive": -1
+      },
+      {
+       "cpu": 33.5,
+       "upd": 13.5,
+       "rnd": 20,
+       "calls": 114,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 29.73,
+       "alive": 49,
+       "dAlive": 0
+      },
+      {
+       "cpu": 29.5,
+       "upd": 19.9,
+       "rnd": 9.6,
+       "calls": 114,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 29.45,
+       "alive": 49,
+       "dAlive": -1
+      },
+      {
+       "cpu": 25.5,
+       "upd": 8.7,
+       "rnd": 16.8,
+       "calls": 114,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 29.76,
+       "alive": 49,
+       "dAlive": 0
+      },
+      {
+       "cpu": 24.1,
+       "upd": 10.4,
+       "rnd": 13.7,
+       "calls": 114,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 29.87,
+       "alive": 49,
+       "dAlive": 0
+      },
+      {
+       "cpu": 22.2,
+       "upd": 10.2,
+       "rnd": 12,
+       "calls": 114,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 29.79,
+       "alive": 49,
+       "dAlive": 0
+      },
+      {
+       "cpu": 21.5,
+       "upd": 9,
+       "rnd": 12.5,
+       "calls": 114,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 29.37,
+       "alive": 50,
+       "dAlive": 0
+      }
+     ],
+     "framesWithNewPrograms": 0,
+     "framesWithNewTextures": 0,
+     "framesWithNewGeometries": 0,
+     "cpu_over50ms": 1,
+     "cpu_over100ms": 1,
+     "shadowTris_med": 1657474,
+     "frames": 70,
+     "seconds": 1.34,
+     "avgFps": 52.1,
+     "p50": 17.5,
+     "p95": 35.46500000000451,
+     "p99": 38.24599999999891,
+     "max": 42.80000000000291,
+     "over20": 0.3143,
+     "over33": 0.1429,
+     "cpuUpd_p50": 7.2,
+     "cpuUpd_p99": 15.979999999999984,
+     "cpuRender_p50": 9.7,
+     "cpuRender_p99": 364.17999999999677,
+     "cpuFrame_p50": 17.0,
+     "cpuFrame_p95": 27.5,
+     "cpuFrame_p99": 375.4499999999968,
+     "cpuFrame_max": 1160.5,
+     "calls_med": 115,
+     "calls_max": 115,
+     "scene_med": 101,
+     "shadow_med": 42,
+     "tris_med": 4337601,
+     "tris_max": 4337601,
+     "programs": 83,
+     "programs_start": 83,
+     "geometries": 380,
+     "textures": 87,
+     "heapMB_start": 164.2,
+     "heapMB_end": 156.5,
+     "heapMB_max": 175.8,
+     "dpr": 1,
+     "buf": [
+      1600,
+      900
+     ],
+     "mixers": 50,
+     "phase_start": "match",
+     "phase_end": "match",
+     "alive_start": 50,
+     "alive_end": 48,
+     "pAlive_end": true,
+     "pGlide_end": false,
+     "sceneChildren": 9,
+     "gpu": {
+      "samples": 5,
+      "cpu_total_pct": 91.9,
+      "chrome_all": 10.4,
+      "others": 101.0,
+      "top_others": [
+       [
+        "WUDFHost",
+        49.6
+       ],
+       [
+        "dwm",
+        44.9
+       ],
+       [
+        "claude",
+        6.5
+       ],
+       [
+        "WhatsApp.Root",
+        0
+       ]
+      ]
+     }
+    },
+    "endgame_realframes": {
+     "worst": [
+      {
+       "cpu": 4472.1,
+       "upd": 5.4,
+       "rnd": 4466.7,
+       "calls": 114,
+       "dProg": null,
+       "dTex": null,
+       "dGeo": null,
+       "matchT": 33.65,
+       "alive": 44,
+       "dAlive": null
+      },
+      {
+       "cpu": 1524.6,
+       "upd": 5.1,
+       "rnd": 1519.5,
+       "calls": 113,
+       "dProg": 0,
+       "dTex": 2,
+       "dGeo": 0,
+       "matchT": 50.9,
+       "alive": 33,
+       "dAlive": -4
+      },
+      {
+       "cpu": 360.5,
+       "upd": 5.3,
+       "rnd": 355.2,
+       "calls": 108,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 51.84,
+       "alive": 32,
+       "dAlive": 0
+      },
+      {
+       "cpu": 42.4,
+       "upd": 27.7,
+       "rnd": 14.7,
+       "calls": 111,
+       "dProg": 0,
+       "dTex": 3,
+       "dGeo": 0,
+       "matchT": 41.78,
+       "alive": 37,
+       "dAlive": 0
+      },
+      {
+       "cpu": 28.2,
+       "upd": 7.4,
+       "rnd": 20.8,
+       "calls": 110,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 42.1,
+       "alive": 37,
+       "dAlive": 0
+      },
+      {
+       "cpu": 25.6,
+       "upd": 5.9,
+       "rnd": 19.7,
+       "calls": 111,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 42.44,
+       "alive": 37,
+       "dAlive": 0
+      },
+      {
+       "cpu": 24.7,
+       "upd": 4.8,
+       "rnd": 19.9,
+       "calls": 108,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 51.92,
+       "alive": 32,
+       "dAlive": 0
+      },
+      {
+       "cpu": 23.2,
+       "upd": 11.8,
+       "rnd": 11.4,
+       "calls": 111,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 41.9,
+       "alive": 37,
+       "dAlive": 0
+      }
+     ],
+     "framesWithNewPrograms": 0,
+     "framesWithNewTextures": 2,
+     "framesWithNewGeometries": 0,
+     "cpu_over50ms": 3,
+     "cpu_over100ms": 3,
+     "shadowTris_med": 1369784,
+     "frames": 127,
+     "seconds": 4.46,
+     "avgFps": 28.5,
+     "p50": 17.29999999998836,
+     "p95": 32.80999999999767,
+     "p99": 756.3879999999785,
+     "max": 1048,
+     "over20": 0.3228,
+     "over33": 0.0394,
+     "cpuUpd_p50": 5.5,
+     "cpuUpd_p99": 12.709999999999985,
+     "cpuRender_p50": 9.2,
+     "cpuRender_p99": 1170.2099999999866,
+     "cpuFrame_p50": 15.2,
+     "cpuFrame_p95": 23.950000000000003,
+     "cpuFrame_p99": 1175.3699999999867,
+     "cpuFrame_max": 4472.099999999999,
+     "calls_med": 108,
+     "calls_max": 128,
+     "scene_med": 94,
+     "shadow_med": 48,
+     "tris_med": 3612989,
+     "tris_max": 3705145,
+     "programs": 84,
+     "programs_start": 83,
+     "geometries": 412,
+     "textures": 96,
+     "heapMB_start": 152.8,
+     "heapMB_end": 150.5,
+     "heapMB_max": 174.6,
+     "dpr": 1,
+     "buf": [
+      1600,
+      900
+     ],
+     "mixers": 50,
+     "phase_start": "match",
+     "phase_end": "match",
+     "alive_start": 44,
+     "alive_end": 30,
+     "pAlive_end": false,
+     "pGlide_end": false,
+     "sceneChildren": 9
+    }
+   },
+   "notes": [
+    "endgame: match not over after 3 slices (sim t=60.2, alive=30) - post-match / PLAY AGAIN skipped"
+   ],
+   "automated_chromes_at_start": [
+    {
+     "pid": 41600,
+     "headless": true
+    },
+    {
+     "pid": 39552,
+     "headless": true
+    },
+    {
+     "pid": 34260,
+     "headless": true
+    },
+    {
+     "pid": 31240,
+     "headless": true
+    },
+    {
+     "pid": 11132,
+     "headless": false
+    },
+    {
+     "pid": 14332,
+     "headless": true
+    },
+    {
+     "pid": 46392,
+     "headless": false
+    },
+    {
+     "pid": 38248,
+     "headless": false
+    },
+    {
+     "pid": 15624,
+     "headless": true
+    },
+    {
+     "pid": 47884,
+     "headless": true
+    },
+    {
+     "pid": 24556,
+     "headless": false
+    },
+    {
+     "pid": 44136,
+     "headless": true
+    }
+   ],
+   "boot_cold": {
+    "lastResponses": [
+     [
+      "/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap",
+      71794,
+      72237,
+      573
+     ],
+     [
+      "/games/last-circle/assets/chars/meshy/soldier.glb",
+      71918,
+      71989,
+      1958836
+     ],
+     [
+      "/games/last-circle/assets/props/tree.glb",
+      71883,
+      71911,
+      158708
+     ],
+     [
+      "/games/last-circle/assets/props/pine.glb",
+      71884,
+      71896,
+      93688
+     ],
+     [
+      "/games/last-circle/assets/props/rocks.glb",
+      71883,
+      71896,
+      48840
+     ],
+     [
+      "/games/last-circle/assets/props/palm.glb",
+      71882,
+      71894,
+      118032
+     ]
+    ],
+    "cdnCount": 17,
+    "cdnLastEnd": 667,
+    "localLastEnd": 71989,
+    "longtasks": {
+     "n": 3,
+     "ms": 6652,
+     "max": 5033,
+     "over250": 3
+    },
+    "marks": {
+     "splashSeen": 38.400000005960464,
+     "__LC__": 72079.20000000298,
+     "canvas": 72079.29999999702,
+     "__FFG3D__": 75261.20000000298,
+     "splashGone": 75564.29999999702
+    },
+    "paint": {
+     "first-paint": 8072,
+     "first-contentful-paint": 8072
+    },
+    "dcl": 114.5,
+    "load": 114.9,
+    "resources": 44,
+    "transferMB": 3.5,
+    "encodedMB": 3.49,
+    "glbCount": 5,
+    "glbMB": 2.27,
+    "wall_s": 75.73
+   },
+   "boot_warm": {
+    "lastResponses": [
+     [
+      "/games/last-circle/assets/chars/meshy/soldier.glb",
+      1114,
+      1119,
+      1958836
+     ],
+     [
+      "/games/last-circle/assets/props/pine.glb",
+      1081,
+      1084,
+      93688
+     ],
+     [
+      "/games/last-circle/assets/props/rocks.glb",
+      1080,
+      1084,
+      48840
+     ],
+     [
+      "/games/last-circle/assets/props/tree.glb",
+      1080,
+      1082,
+      158708
+     ],
+     [
+      "/games/last-circle/assets/props/palm.glb",
+      1079,
+      1081,
+      118032
+     ],
+     [
+      "/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap",
+      979,
+      982,
+      573
+     ]
+    ],
+    "cdnCount": 17,
+    "cdnLastEnd": 156,
+    "localLastEnd": 1119,
+    "longtasks": {
+     "n": 2,
+     "ms": 1904,
+     "max": 1558,
+     "over250": 2
+    },
+    "marks": {
+     "splashSeen": 30.200000002980232,
+     "__LC__": 1173.0999999940395,
+     "canvas": 1173.0999999940395,
+     "__FFG3D__": 1886.7999999970198,
+     "splashGone": 8550.59999999404
+    },
+    "paint": {
+     "first-paint": 916,
+     "first-contentful-paint": 916
+    },
+    "dcl": 67.2,
+    "load": 70.5,
+    "resources": 43,
+    "transferMB": 0,
+    "encodedMB": 3.49,
+    "glbCount": 5,
+    "glbMB": 2.27,
+    "wall_s": 12.38
+   },
+   "instrument": "ok",
+   "gl": {
+    "renderer": "ANGLE (NVIDIA, NVIDIA RTX A2000 Laptop GPU (0x000025B8) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "webgl2": true,
+    "maxTex": 16384,
+    "dpr": 1,
+    "pixelRatio": 1,
+    "graphics": "medium",
+    "shadow": true,
+    "bloom": true
+   },
+   "load": {
+    "ms": 43922,
+    "err": null,
+    "tl": [
+     {
+      "t": 0,
+      "tag": "start",
+      "phase": "menu",
+      "mapNew": false,
+      "actors": 0,
+      "mixers": 1,
+      "programs": 19,
+      "textures": 16,
+      "geometries": 206
+     },
+     {
+      "t": 20492,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": false,
+      "actors": 0,
+      "mixers": 0,
+      "programs": 28,
+      "textures": 26,
+      "geometries": 269
+     },
+     {
+      "t": 22518,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": false,
+      "actors": 0,
+      "mixers": 0,
+      "programs": 36,
+      "textures": 26,
+      "geometries": 270
+     },
+     {
+      "t": 27489,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": false,
+      "actors": 0,
+      "mixers": 0,
+      "programs": 37,
+      "textures": 26,
+      "geometries": 275
+     },
+     {
+      "t": 27541,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": false,
+      "actors": 0,
+      "mixers": 0,
+      "programs": 38,
+      "textures": 26,
+      "geometries": 293
+     },
+     {
+      "t": 29478,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": false,
+      "actors": 0,
+      "mixers": 0,
+      "programs": 40,
+      "textures": 27,
+      "geometries": 294
+     },
+     {
+      "t": 31220,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 1,
+      "programs": 47,
+      "textures": 33,
+      "geometries": 314
+     },
+     {
+      "t": 31459,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 0,
+      "programs": 48,
+      "textures": 33,
+      "geometries": 322
+     },
+     {
+      "t": 31789,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 0,
+      "programs": 49,
+      "textures": 41,
+      "geometries": 329
+     },
+     {
+      "t": 31848,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 0,
+      "programs": 49,
+      "textures": 45,
+      "geometries": 330
+     },
+     {
+      "t": 32932,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 1,
+      "programs": 49,
+      "textures": 45,
+      "geometries": 330
+     },
+     {
+      "t": 33553,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 3,
+      "programs": 49,
+      "textures": 45,
+      "geometries": 330
+     },
+     {
+      "t": 33669,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 2,
+      "programs": 49,
+      "textures": 45,
+      "geometries": 330
+     },
+     {
+      "t": 33856,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 0,
+      "programs": 49,
+      "textures": 45,
+      "geometries": 330
+     },
+     {
+      "t": 38803,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 1,
+      "programs": 49,
+      "textures": 45,
+      "geometries": 330
+     },
+     {
+      "t": 43470,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 50,
+      "programs": 77,
+      "textures": 46,
+      "geometries": 331
+     },
+     {
+      "t": 43922,
+      "tag": "resolved",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 50,
+      "programs": 78,
+      "textures": 61,
+      "geometries": 337
+     }
+    ],
+    "phase": "lobby",
+    "map": "deepwood",
+    "wall_s": 70.79
+   },
+   "lobby_skip_s": 4.308,
+   "land_ff": {
+    "wall_s": 4.76,
+    "state": {
+     "landed": true,
+     "s": {
+      "phase": "match",
+      "t": 28.96716666666725,
+      "alive": 50,
+      "player": {
+       "hp": 66,
+       "shield": 0,
+       "pos": {
+        "x": -430,
+        "y": 18.71130087124501,
+        "z": -403.36283954677236
+       },
+       "weapon": "pistol"
+      },
+      "map": "deepwood",
+      "mode": "standard",
+      "seed": 1234
+     }
+    }
+   },
+   "endgame": {
+    "wall_s": 24.82,
+    "over": false,
+    "slices": 3,
+    "trace_head": [
+     {
+      "t": 41.7,
+      "alive": 37,
+      "phase": "match",
+      "hp": 0,
+      "ffMs": 819
+     },
+     {
+      "t": 50.9,
+      "alive": 33,
+      "phase": "match",
+      "hp": 0,
+      "ffMs": 859
+     },
+     {
+      "t": 60.2,
+      "alive": 30,
+      "phase": "match",
+      "hp": 0,
+      "ffMs": 562
+     }
+    ],
+    "trace_tail": [
+     {
+      "t": 41.7,
+      "alive": 37,
+      "phase": "match",
+      "hp": 0,
+      "ffMs": 819
+     },
+     {
+      "t": 50.9,
+      "alive": 33,
+      "phase": "match",
+      "hp": 0,
+      "ffMs": 859
+     },
+     {
+      "t": 60.2,
+      "alive": 30,
+      "phase": "match",
+      "hp": 0,
+      "ffMs": 562
+     }
+    ],
+    "state": {
+     "phase": "match",
+     "t": 60.293566666686694,
+     "alive": 30,
+     "player": {
+      "hp": 0,
+      "shield": 0,
+      "pos": {
+       "x": -430,
+       "y": 18.71130087124501,
+       "z": -403.36283954677236
+      },
+      "weapon": "pistol"
+     },
+     "map": "deepwood",
+     "mode": "standard",
+     "seed": 1234
+    }
+   },
+   "postmatch_panel_s": null,
+   "window_errors": [],
+   "console": {
+    "boot_cold": {
+     "error": 1,
+     "warning": 0,
+     "samples": [
+      "[error] Failed to load resource: the server responded with a status of 404 (File not found) @http://127.0.0.1:8790/favicon.ico:0"
+     ]
+    },
+    "menu": {
+     "error": 1,
+     "warning": 0,
+     "samples": [
+      "[error] Failed to load resource: the server responded with a status of 404 (File not found) @http://127.0.0.1:8790/favicon.ico:0"
+     ]
+    },
+    "load": {
+     "error": 0,
+     "warning": 235,
+     "samples": [
+      "[warning] [rig] soldier FAILS the skeleton contract \u2014 missing: [Hips, Spine02, Spine01, Spine, Head, RightArm, RightForeArm, RightHand, LeftArm, LeftForeArm, LeftHand, RightUpLeg, RightLeg, RightFoot, LeftUpLeg, LeftLeg, LeftFoot, neck|Neck], skinnedMeshes: 1, handBone: NONE. Downstream: pose.js aim chain and the weapon holder will misbehave on this rig. @http://127.0.0.1:8790/games/last-circle/runtime/3d/royale/rig_pipeline.js?v=1789530264:88",
+      "[warning] [rig] soldier attachment issues: [weapon holder parented to \"mixamorigRightHand\" \u2014 legal: RightHand, FistR] @http://127.0.0.1:8790/games/last-circle/runtime/3d/royale/rig_pipeline.js?v=1789530264:177",
+      "[warning] [rig] athlete FAILS the skeleton contract \u2014 missing: [Hips, Spine02, Spine01, Spine, Head, RightArm, RightForeArm, RightHand, LeftArm, LeftForeArm, LeftHand, RightUpLeg, RightLeg, RightFoot, LeftUpLeg, LeftLeg, LeftFoot, neck|Neck], skinnedMeshes: 1, handBone: NONE. Downstream: pose.js aim chain and the weapon holder will misbehave on this rig. @http://127.0.0.1:8790/games/last-circle/runtime/3d/royale/rig_pipeline.js?v=1789530264:88",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandMiddle1.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandMiddle2.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandMiddle3.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264"
+     ]
+    },
+    "ground": {
+     "error": 0,
+     "warning": 6,
+     "samples": [
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigRightHandMiddle4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigRightHandRing4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigRightHandPinky4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandMiddle4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandRing4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandPinky4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264"
+     ]
+    },
+    "endgame": {
+     "error": 0,
+     "warning": 12,
+     "samples": [
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigRightHandMiddle4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigRightHandRing4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigRightHandPinky4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandMiddle4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandRing4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandPinky4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264"
+     ]
+    }
+   },
+   "pageerrors": [],
+   "pageerror_count": 0,
+   "reqfail": [],
+   "run_wall_s": 244.9,
+   "browser_version": "154.0.8037.58"
+  }
+ ]
+}

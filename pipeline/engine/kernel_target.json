@@ -1,0 +1,5 @@
+{
+ "_comment": "Three-kernel 3D render target (AAA: PBR + IBL + bloom). OFF by default — flipping enabled:true routes 3D genres to the AAA kernel instead of the from-scratch engine. DO NOT enable until validated with a nightly run (see pipeline/engine/AAA_HANDOFF.md for the exact claude -p validation command). Naively disabling the from-scratch engine would send 3D to Phaser — use THIS flag instead.",
+ "enabled": false,
+ "genres": ["tactics3d", "3d-tactics", "void-skirmish", "fps", "tps", "shooter3d", "3d-shooter", "exploration3d", "arena3d", "racing3d", "3d"]
+}

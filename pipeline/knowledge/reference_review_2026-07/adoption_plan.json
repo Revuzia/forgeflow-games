@@ -1,0 +1,118 @@
+{
+  "reviewed": "2026-07-27",
+  "sources": [
+    {
+      "source": "https://github.com/mshumer/Claude-of-Duty \u2014 browser FPS, Three.js r180/WebGL2, ~55k lines across 11 subsystems, built by orchestrated Claude agents; 100% procedural assets (no texture/model/audio files); single-player vs AI soldiers \u2014 NO netcode anywhere in the repo (verified against full file tree)",
+      "retrieved": true,
+      "note": "Read this session via WebFetch: repo page (1.0k stars), raw README.md, ARCHITECTURE.md, prompt.md, full git tree (recursive API), plus source files src/core/prewarm.js, src/ai/nav.js, src/ai/agent.js, tools/profile.mjs, tools/imagediff.mjs, tools/workflows/perf.js. All mechanisms and numbers below come from those fetches, not recollection. Caveats: (1) they use Vite \u2014 we have no build step, but every technique below is a runtime/tool-level pattern that ports; (2) prompt.md is thin (~941 B: 'build a CoD-level FPS, fan out sub-agents, harsh critic, loop until perfect') \u2014 the real process knowledge is in README's post-mortem and tools/workflows/perf.js, both read.",
+      "count": 16
+    },
+    {
+      "source": "https://x.com/MengTo/status/2080915786206789733 \u2014 Meng To, 2026-07-25: \"I'm open-sourcing my Three.js game dev skills... isometric action RPG with camera controls, VFX, audio, monster assets, combat systems\" \u2192 https://github.com/MengTo/Skills (MIT, 118 agent skills; 19 game-development SKILL.md files; demo game Vesperfall)",
+      "retrieved": true,
+      "note": "Direct x.com fetch returned HTTP 402; threadreaderapp showed only its login shell; nitter.net returned empty, nitter.poast.org 503, xcancel.com anti-bot wall. Recovered the exact tweet text, date, and metrics via api.fxtwitter.com JSON, then read the actual payload \u2014 the linked MIT-licensed GitHub repo MengTo/Skills \u2014 via gh api + raw.githubusercontent.com: the game-development README plus 11 SKILL.md files read in full this session (design-action-combat, build-threejs-enemy-systems, tune-enemy-ai, create-game-vfx, build-game-audio-feedback, optimize-threejs-games, test-playable-web-games, build-hybrid-game-assets, build-game-camera-controls, ship-web-games, build-isometric-arpg). Local copies in scratchpad\\mengto-skills\\ for follow-up.",
+      "count": 14
+    },
+    {
+      "source": "https://x.com/NickDevFE/status/2081258218240750035",
+      "retrieved": true,
+      "note": "Direct x.com fetch returned HTTP 402 and nitter/xcancel/threadreaderapp all failed, but the tweet text was recovered verbatim via the unauthenticated syndication endpoint (cdn.syndication.twimg.com/tweet-result?id=2081258218240750035). Post (2026-07-26, Nick @NickDevFE): \"img2threejs - v1.4 is officially released ... 1. Real internal structures instead of hollow shells 2. More accurate colors & PBR materials 3. Fine-grained parts for complex animations 4. Better volumetric\" (text truncated by the endpoint; a video is attached, not retrievable). Because the tweet is a release announcement, the concrete mechanisms below were pulled from the project's canonical sources: github.com/hoainho/img2threejs README and img2threejs.org.",
+      "count": 8
+    },
+    {
+      "source": "https://x.com/prasenx/status/2081262380445847924 \u2192 t.co link \u2192 github.com/StarKnightt/operation-ironhold (\"Operation Ironhold\": single-file 290 KB HTML FPS, three.js r128 CDN, built by Claude Opus 5 from 5 prompts; repo includes PROMPTS.md verbatim, tools/test-harness.js, tools/autoplay-bot.js). Parent tweet: \"built a full FPS game with claude opus 5 one HTML file. no assets. no build tools... 4 weapons with ADS, recoil, reloads; 10 AI enemies that flank, take cover, call out positions; sniper scope with breath holding...\"",
+      "retrieved": true,
+      "note": "x.com direct fetch returned HTTP 402; threadreaderapp showed only its login shell; nitter.net empty, nitter.poast.org 503, xcancel Cloudflare-blocked. Recovered the actual tweet via cdn.syndication.twimg.com/tweet-result?id=2081262380445847924 (full tweet text + quoted parent tweet), then followed the t.co redirect to the GitHub repo and fetched README, PROMPTS.md, tools/autoplay-bot.js, tools/test-harness.js. Caveat: file contents were read via WebFetch summarization of the real pages, not raw byte-level reads, so exact code lines are paraphrased; all mechanisms below trace to those fetches this session.",
+      "count": 14
+    }
+  ],
+  "synth": {
+    "adoptNow": [
+      {
+        "technique": "Shader pre-warm before frame 1 (renderer.compileAsync with a bound render target)",
+        "target": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\pipeline\\engine\\runtime\\3d\\ffg_kernel_3d.js (+ ffg_boot3d.js / ffg_scene_boot.js) \u2014 inherited by all 3D games; highest value Last Circle and Colosseum",
+        "plan": "After scene build and before revealing the game, enumerate every material the emit produced (scene walk + fx/decal/ragdoll pools), bind a small scratch WebGLRenderTarget, and run renderer.compileAsync(scene, camera) from 2-4 poses covering material/lighting variety; blit post/fx materials into the scratch target. Gotcha from source (measured): a render target MUST be bound during compile or three.js keys the programs to the unused canvas variant (25 of 47 wasted). Budget ~1-1.5s added to boot. Acceptance: renderer.info.programs delta = 0 during first combat (first muzzle flash / hit decal / ragdoll), asserted by the p99 gate item below. Verified gap: grep for compileAsync/prewarm across pipeline\\ returned zero hits this session."
+      },
+      {
+        "technique": "Fixed visible-light pool (light COUNT is a three.js shader-permutation key)",
+        "target": "Same kernel + emitted fx modules with dynamic lights (muzzle flash, explosions, torches): Last Circle, Colosseum, Thronedrift, Ember Sanctum",
+        "plan": "Audit emitted runtime for runtime light add/remove or .visible toggles; replace with a fixed pool allocated at boot, parked at intensity=0 with visible:true. Source measured +33-36 program recompiles at 640-900ms bursts each time the visible-light count changed. Direct extension of the existing strip-GLB-lights / DPR 1.5 / shadow-1024 doctrine; pipeline-level per the never-patch-games rule."
+      },
+      {
+        "technique": "p99 + hitch-attribution perf verdict (median FPS hides unplayability)",
+        "target": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\pipeline\\engine\\gates\\perf_gate.py (fps_verdict) + kernel window.__PERF__ + pipeline\\qa\\playtest_bot.py",
+        "plan": "Extend __PERF__.getPerformance() to record per-frame ms deltas plus renderer.info counters (programs/geometries/textures); extend fps_verdict with p50/p95/p99 and hitch attribution: hitch = frame > max(2*median, median+8ms); a program-count jump co-located with a hitch = shader compile, texture jump = upload stall. Fail on p99 floor even when avg passes (source: 94fps static benchmark vs p99 4-9fps in real gameplay). Verified: current gate scores avg>=40 / min>=24 only, no percentiles, no attribution \u2014 this is additive to an already-tested deterministic gate, unit-testable with synthetic sample arrays exactly like the existing fps_verdict tests."
+      },
+      {
+        "technique": "Content referential-integrity pass (catches the Colosseum no-opponent bug class)",
+        "target": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\pipeline\\engine\\gates\\contract_gate.py + schema\\content.schema.json per-genre profiles",
+        "plan": "After the existing schema-shape validation, add cross-reference checks: duplicate IDs; every bout/spawn/encounter reference resolves to a defined entity; every semantic clip-map entry resolves to a clip present in the GLB manifest; timing/range sanity. Colosseum's 6 champion bouts spawning no opponent is exactly this failure class \u2014 a dangling reference should be a loud blocking gate failure, not a silent no-spawn. Fits the existing learnings.jsonl rule that all content flows through one typed schema; verified this session that contract_gate.py validates shape only, not references."
+      },
+      {
+        "technique": "Honest placeholder fallback for unresolvable models (dev-visible, ship-blocking)",
+        "target": "Kernel asset-resolution/spawn path (runtime\\ffg_loader.js / ffg_kernel_3d.js) + engine\\gates\\run_gates.py",
+        "plan": "When a model or clip fails to resolve at spawn, substitute an unmistakable placeholder preserving footprint, pivot, collider, sockets, and move timing; push one record to window.__FFG_FALLBACKS__. run_gates.py fails the build if that array is non-empty. Complements (does not violate) the No Primitive Assets rule: dev-time only, and shipping is blocked while any fallback fired. Second net under the referential-integrity gate for asset-side failures."
+      },
+      {
+        "technique": "Fixture + benchmark routes via URL query params",
+        "target": "runtime\\ffg_shell.js boot path + qa bots (boss_bot.py, playtest_bot.py, playthrough_bot.py); works with the existing _play launcher + __FFG3D__ hooks",
+        "plan": "Fixture loader keyed off location.search: ?fixture=boss2 / ?fixture=lowhp jump directly into deep states (declared in the game's content JSON so the contract gate validates them); ?bench=1 runs one deterministic representative encounter then dumps a JSON snapshot (frame times, draw calls, triangles, renderer.info) via __FFG3D__. Gives QA bots minutes-not-hours access to boss phases in all 17 games and turns FPS-fix work into like-for-like before/after numbers instead of vibes."
+      },
+      {
+        "technique": "Bot-fairness combat constants: fire-token director + reaction delay + aim jitter + muzzle-block raycast",
+        "target": "Shared combat AI module (pipeline\\templates\\shared / emitted enemy modules) \u2014 Last Circle bot fill, Colosseum multi-opponent bouts, Thronedrift",
+        "plan": "Three drop-ins, ~100 LOC total at pipeline level: (a) director grants at most 2 simultaneous attack tokens, others reposition/flank; (b) 300-800ms LOS-to-first-shot delay scaled by distance and off-center angle plus ~0.018 rad aim jitter \u2014 the same two params double as difficulty tiers; (c) muzzle-to-target raycast refusal so enemies never fire through cover the player cannot shoot through. Melee analog for Colosseum: telegraph delay before attack commit. Constants lifted directly from sources as tuning starting points."
+      },
+      {
+        "technique": "Production playthrough deploy verification (prove the DEPLOYED game, not local)",
+        "target": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\pipeline\\deploy_game.py, extending the existing curl redirect + hashed-asset checks",
+        "plan": "After deploy, drive the LIVE URL headless: page load, first input, one core combat event asserted via __FFG3D__ hooks, console-error scan, plus the ?bench=1 snapshot; report deployed state separately from local readiness and record the rollback commit. Minutes per release; closes the exact stale-CDN/hashed-asset incident class we have already hit."
+      },
+      {
+        "technique": "Sequential single-owner passes for coupled systems + needsElsewhere reporting",
+        "target": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\pipeline\\engine\\v2_pipeline.py orchestration prompts / subagent report schema",
+        "plan": "Process change, prompt-level cost only: when a build/fix touches a coupled cluster (lighting+materials+post, combat+animation), assign ONE agent the whole cluster sequentially instead of parallel per-file fan-out; add a needsElsewhere field to subagent reports for cross-cutting requests instead of out-of-lane edits. Source evidence: three rounds of 6 parallel agents = +0.46 critic score with defects rising to 66; one sequential unified-ownership pass = +1.00 and defects 66 -> 26."
+      },
+      {
+        "technique": "Off-screen skinned-actor animation LOD (skip-with-accumulate)",
+        "target": "Kernel actor update loop (ffg_kernel_3d.js) \u2014 Last Circle (up to 50 skinned Meshy GLBs), Thronedrift waves, Bastion Realms creeps",
+        "plan": "Actors flagged off-screen evaluate skeletal pose 1 frame in 3 (_animSkip=2) with delta-time accumulated so the timeline stays continuous and there is no pop on becoming visible. Skinned pose evaluation is a top CPU cost in three.js crowds; trivial addition to the existing update loop, complements the DPR/shadow budget doctrine."
+      },
+      {
+        "technique": "Dynamic resolution scaling under the DPR-1.5 ceiling",
+        "target": "Kernel render loop (ffg_kernel_3d.js), shared perf module \u2014 all 17 games inherit",
+        "plan": "~30 LOC: monitor frame time and scale renderer pixel ratio between a floor (~1.0) and the existing 1.5 ceiling to hold 60fps on weak hardware. Keeps the current cap as the maximum, adds graceful degradation instead of hand-tuning per game; the p99 gate provides the regression check."
+      }
+    ],
+    "adoptLater": [
+      "Raycast-baked grid navmesh + A* + string pulling from collision geometry (zero authoring, fits no-build-step): required for Last Circle free-roam bot fill and richer Colosseum arena movement. Verified: only sim/tactical_grid.js has pathfinding today. Self-contained port but a real work item, not a bolt-on \u2014 sequence before the full bot FSM.",
+      "Full 8-state bot FSM with squad-level tokens (requestPeek/claimFlank) and hearing-updates-last-known-only perception \u2014 after navmesh lands; the adoptNow fairness constants are its down-payment.",
+      "Pixel regression gate for pipeline refactors + render-layer determinism contract (all randomness via injected rng, animation on engine clock, no per-frame allocs). Prerequisite decision: capture.py documents post-FX blacking out under headless SwiftShader, so the capture path must be settled first. Make determinism an emission rule in the next v2_pipeline touch so the gate is possible later \u2014 their retrofit cost was a 6-agent sweep.",
+      "Render-vs-reference vision gate: one packaged comparison sheet per pass, per-feature acceptance thresholds, blind A/B against 2-3 real benchmark screenshots of the same genre \u2014 extend fidelity_gate.py / ai_qa_panel.py; needs a claude -p budget decision since the vision gate is currently skipped in no-key runs.",
+      "Map-stripped (untextured MeshBasicMaterial override) silhouette check from 2-3 angles to catch hollow-shell/flat-card assets \u2014 batch with the vision-gate item above to share the claude -p budget.",
+      "userData runtime contract (sockets/colliders/destructionGroups) + GLB import-boundary normalization (forward axis, meters-per-unit, ground pivot, named sockets, semantic clip map) \u2014 codifies the ad hoc Meshy fixes (T-pose regen, Thronedrift palm sockets) into one loader-level contract; medium refactor of the asset loader.",
+      "Collision audit harness (tunnel/escape/ram/watch-maxStill stuck-enemy detection) + shot-registration fidelity test (ghost miss / false positive per weapon) in the selftest gate \u2014 cheap individually, queued behind the adoptNow gate work to keep this pass focused.",
+      "Per-subsystem preview harnesses + headless selftests for engine runtime modules (fx, actors, materials) so pipeline-fix agents iterate without full-game boots \u2014 extends the Tide Breakers selftest.cjs pattern.",
+      "Event vocabulary + ctx DI subsystem contract doc (canonical event names, surface-type vocabulary, hard per-subsystem budgets) as the agent contract \u2014 fold into the next v2_pipeline structural pass alongside the ARCHITECTURE.md that already exists.",
+      "Staged build passes (blockout -> gameplay -> art -> audio -> optimization) with per-stage acceptance gates + spec-before-code validated JSON (per game: entities/systems/asset list/socket contracts) \u2014 pipeline control-flow surgery; do when v2_pipeline is next opened for structural work.",
+      "Procedural SFX synthesis + generated convolution reverb in the engine audio module \u2014 extends existing procedural music; cuts per-game R2 audio weight and licensing surface.",
+      "Code-only procedural hard-surface prop factories (weapons, crates, arena props) to save Meshy credits and R2 bytes \u2014 ONLY behind the render-vs-reference vision gate; ungated primitive factories are exactly what the No Primitive Assets rule bans. Characters stay Meshy.",
+      "Selective procedural surface generators for stylized titles' ground/walls (Understone, Siegeheart) \u2014 source's own critics capped pure-procedural at 5.05/10; never for hero assets.",
+      "Single-file binned-SAH BVH for hitscan/melee-sweep raycasts \u2014 adopt only when the new p99 profiler shows raycast cost actually mattering.",
+      "Fragment-shader sky (magnification-proof) + ADS/gunfeel constants (0.2s settle, 40% ADS speed penalty, per-weapon zoom/FOV, 3s breath-hold) \u2014 when Last Circle gets scoped-weapon/viewmodel work.",
+      "Layered camera: base rig + temporary modifiers (lock-on, impact shake, occlusion policy) for Colosseum third-person melee \u2014 schedule with the next combat-feel pass; no open camera bug forces it now.",
+      "Vendor adapted MengTo SKILL.md game-dev skills (MIT) into the pipeline prompt corpus / .claude skills so every generated game inherits the same combat/QA/asset contracts \u2014 curation time, local copies already in scratchpad\\mengto-skills\\.",
+      "Hybrid asset decision table + per-asset provenance manifest (imported/procedural/generated-2D/reference + license) in engine output \u2014 license hygiene for the portal."
+    ],
+    "skipped": [
+      "Full AAA post chain (MRT prepass, GTAO, TAA, motion blur, Karis bloom): source's own numbers show 28-30fps p50 at DPR 2 on Apple silicon AFTER optimization \u2014 cannot hold 60fps on our mid-hardware DPR-1.5 target; our kernel already has the worthwhile subset (AgX/ACES tonemap + UnrealBloom, verified in render_quality_gate.py markers).",
+      "Characters/weapons from geometric primitives (Claude-of-Duty and Operation Ironhold): directly violates the No Primitive Assets standard; Meshy auto-rigged GLB strategy stays \u2014 the sources' own critic ceiling (5.05/10) validates it.",
+      "Single-file inline HTML distribution: fights our hashed-asset CDN cache-busting deploy model for zero gain.",
+      "Mining Claude-of-Duty for netcode: verified absent from the repo (full file tree read) \u2014 the 55k-line FPS is single-player; our 9-game verified MP stack remains ahead. Recorded so nobody looks for it later.",
+      "Viewmodel dual-scene lighting: known-unsolved trap in the source (~20x irradiance mismatch patched by cheating albedo to one-third) \u2014 recorded as a warning if any shooter ever adds a separate viewmodel scene; nothing to adopt.",
+      "Video-to-superprompt capture workflow (MengTo codex skills): not a game technique; our engine generates from specs, and existing screenshot flows cover marketing-page needs.",
+      "Projection-first photo de-lighting/camera-matching (img2threejs v1.4 weapon update): solves photo-reconstruction, which no current or planned pipeline of ours does.",
+      "Scripts-enforce/model-judges token-economy split: already our doctrine \u2014 render_quality_gate.py and perf_gate.py are deliberately deterministic no-claude-p gates (verified in their headers this session); no action needed."
+    ]
+  }
+}

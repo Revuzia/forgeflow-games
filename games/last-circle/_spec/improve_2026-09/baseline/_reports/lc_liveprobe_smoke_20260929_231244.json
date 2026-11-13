@@ -1,0 +1,106 @@
+{
+ "args": {
+  "maps": "ashgrid",
+  "reps": 1,
+  "seed": 1234,
+  "menu": 2.0,
+  "drop": 3.0,
+  "ground": 3.0,
+  "again": 2.0,
+  "slice": 8.0,
+  "real": 1.5,
+  "max_slices": 3,
+  "width": 1600,
+  "height": 900,
+  "headed": false,
+  "uncapped": false,
+  "no_again": false,
+  "label": "smoke"
+ },
+ "url": "http://127.0.0.1:8790/games/last-circle/index.html",
+ "results": [
+  {
+   "map": "ashgrid",
+   "seed": 1234,
+   "rep": 1,
+   "windows": {},
+   "notes": [
+    "PROBE EXCEPTION at stage boot_warm: Page.reload: Timeout 120000ms exceeded."
+   ],
+   "automated_chromes_at_start": [
+    {
+     "pid": 4320,
+     "headless": true
+    },
+    {
+     "pid": 38580,
+     "headless": true
+    },
+    {
+     "pid": 45732,
+     "headless": false
+    },
+    {
+     "pid": 45392,
+     "headless": true
+    },
+    {
+     "pid": 32564,
+     "headless": true
+    },
+    {
+     "pid": 45980,
+     "headless": true
+    },
+    {
+     "pid": 9468,
+     "headless": true
+    },
+    {
+     "pid": 41812,
+     "headless": true
+    },
+    {
+     "pid": 41516,
+     "headless": true
+    }
+   ],
+   "boot_cold": {
+    "marks": {
+     "splashSeen": 43.3999999910593,
+     "__LC__": 41016.5,
+     "canvas": 41016.59999999404,
+     "__FFG3D__": 47463.89999999106,
+     "splashGone": 47810.59999999404
+    },
+    "paint": {
+     "first-paint": 12772,
+     "first-contentful-paint": 12772
+    },
+    "dcl": 200.4,
+    "load": 201.2,
+    "resources": 45,
+    "transferMB": 4.19,
+    "encodedMB": 4.17,
+    "glbCount": 5,
+    "glbMB": 2.27,
+    "wall_s": 48.14
+   },
+   "window_errors": [],
+   "console": {
+    "boot_cold": {
+     "error": 1,
+     "warning": 0,
+     "samples": [
+      "[error] Failed to load resource: the server responded with a status of 404 (File not found) @http://127.0.0.1:8790/favicon.ico:0"
+     ]
+    }
+   },
+   "pageerrors": [],
+   "pageerror_count": 0,
+   "reqfail": [],
+   "run_wall_s": 357.8,
+   "browser_version": "154.0.8037.58"
+  }
+ ]
+}

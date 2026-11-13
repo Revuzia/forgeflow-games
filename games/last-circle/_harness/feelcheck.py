@@ -1,0 +1,701 @@
+#!/usr/bin/env python
+"""feelcheck - hit feedback a player reads in a fight (PLAN L7 / L8 gates; logic of _spec/.../baseline/fju/shots3.py + shots4.py).
+
+    python _harness/feelcheck.py
+    python _harness/feelcheck.py --disk --burst 3.7
+
+A standard match (ashgrid, seed 4242), the player landed (setup: guarded from the lobby on and land(protect=True) through the whole landing, so no
+bot can take the subject away before the rows start - Wave-7 fix round, the default config lost it 4 of 4 runs to a pistol bot touching down 33 m
+away; the landing's absorbed hits are printed), pointer lock by a REAL click, one bot pinned in front
+of the camera (setup: isDummy + netRemote, exactly as the feel-juice audit's shots3.py did), then REAL LMB input.
+The kernel's own loop is stopped and a TIMER-driven frame pump (setInterval 16 ms, dt = real elapsed, max 0.05) runs the
+frames, so the wall-clock parts of the HUD (setTimeout fades today) and the frame-driven parts (L7's dt clocks) both
+advance on this rAF-starved box. Read-back: __LC__.feel() (contract C9, lane L4) when it exists, else each module's
+own readback(W) (hud.js / fx.js / audio.js, contract C9, lanes L7 / L8), else the DOM (today's build: the "✕" marker
+element, numeric damage-number nodes, the reticle's child rects).
+
+  kill marker    pistol kill: the marker's LAST state is the kill style (red) and it is held at opacity >= 0.99 for
+                 >= 250 ms of GAME time (was: overwritten white 26 px in the same frame, hidden 113 ms later). hud.js advances the
+                 marker by the frame dt (MK.t += dt), and this gate steps 3 + 3 frames synchronously around the click, so ~100 ms of
+                 the hold passes with no wall time and no sampler reading: wall-clock samples can only see the rest (a 350 ms hold
+                 read 249, 204 and 198 ms). The sampler therefore reads the game's own marker age (readback ageMs) and judges in it:
+                 age of the last full-opacity sample >= 250 ms = PASS, the age at which it was first seen fading < 250 ms = FAIL,
+                 otherwise the game's own killHeldMs decides (see judge_kill)
+  reticle        every arm >= 2 px thick and >= 6 px long at rest, crouched-still (REAL C held) and sprinting (REAL
+                 Shift toggle + W) (was: ~0.9 px x 3.7 px - scale(0.457) of the whole element)
+  SMG burst      REAL LMB held --burst s on a shielded pinned bot: <= 1 live damage number per victim at every sample,
+                 no damage-number DOM node created by fx.js after the first 0.3 s (pool), music duck ramps <= 2 (L8; was 30)
+  shield break   the shield-break burst fires exactly once, on the breaking hit (fx readback; could-not-judge without it)
+
+The sampler (a 20 ms setInterval) starts only AFTER the module read-backs are loaded (LOAD_MODS_JS) and re-resolves its
+source at every sample: module readback(W) -> __LC__.feel() -> DOM (wave2/VERIFY.md 4a: it used to capture an empty module
+table once and report a false FAIL). A sample-based check that collected 0 readings is could-not-judge, never pass/fail.
+Falsifiers: `--plant kill-marker-short` (hud.js served with the kill hold 0.35 -> 0.05 s) must FAIL the kill-marker row;
+`--plant blind-sampler` (the Wave-2 defect re-created) must make it CNJ. `--selftest` runs the judges offline.
+Exit 0 pass / 1 fail / 2 could not judge.
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import common as C  # noqa: E402
+
+SPY_JS = r"""() => {
+  if (window.__FJ__) return 'already';
+  const FJ = window.__FJ__ = { log: [], created: 0, fxCreated: 0, since: 0, duck62: 0 };
+  // DOM spy (today's build): the marker element ('✕') style changes + numeric damage-number nodes
+  new MutationObserver((muts) => {
+    for (const m of muts) {
+      if (m.type === 'childList') for (const n of m.addedNodes) {
+        if (n.nodeType === 1 && n.style && /^\d/.test(n.textContent || '') && (n.style.willChange || '').includes('transform')) FJ.log.push({ t: performance.now(), k: 'dmgnum', txt: n.textContent, color: n.style.color });
+      }
+      if (m.type === 'attributes' && m.target.textContent === '✕') FJ.log.push({ t: performance.now(), k: 'mark', op: m.target.style.opacity, color: m.target.style.color, fs: m.target.style.fontSize });
+    }
+  }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['style'] });
+  const ce = document.createElement.bind(document);
+  document.createElement = function (tag) { FJ.created++; try { if (FJ.trace) { const s = new Error().stack || ''; if (/royale\/fx\.js/.test(s)) FJ.fxCreated++; } } catch (_) {} return ce.apply(null, arguments); };
+  const st = AudioParam.prototype.setTargetAtTime;
+  AudioParam.prototype.setTargetAtTime = function (v) { if (v === 0.62) FJ.duck62++; return st.apply(this, arguments); };
+  return 'ok';
+}"""
+
+# The module read-backs (hud / fx / audio readback(W), contract C9) loaded ONCE, BEFORE the sampler starts. Wave-2 defect
+# (wave2/VERIFY.md 4a): READ_JS returned early through __LC__.feel, so window.__FJ_MODS__ was never set when TICK_JS
+# started; the sampler fell back to a DOM marker search the four-tick marker no longer matches and collected 0 marker
+# samples -> a false FAIL. The same module URL (with the boot script's ?v=) is the instance the game itself imported.
+LOAD_MODS_JS = r"""async () => {
+  if (!window.__FJ_MODS__) {
+    const el = [...document.querySelectorAll('script[type=module]')].find((s) => /ffg_boot3d/.test(s.src));
+    const V = el ? new URL(el.src).search : '';
+    const base = new URL('runtime/3d/royale/', location.href.replace(/[^/]*$/, '')).href;
+    const mods = {};
+    for (const m of ['hud', 'fx', 'audio']) { try { mods[m] = await import(base + m + '.js' + V); } catch (e) { mods[m] = null; } }
+    window.__FJ_MODS__ = mods;
+  }
+  const out = {};
+  for (const m in window.__FJ_MODS__) { const mod = window.__FJ_MODS__[m]; out[m] = !!(mod && typeof mod.readback === 'function'); }
+  out.feel = typeof (window.__LC__ && window.__LC__.feel) === 'function';
+  return out;
+}"""
+
+READ_JS = r"""async () => {
+  const L = window.__LC__, W = L.W;
+  if (typeof L.feel === 'function') { try { return { via: '__LC__.feel', r: L.feel() }; } catch (e) { return { via: 'feel threw', err: String(e) }; } }
+  if (!window.__FJ_MODS__) {
+    const el = [...document.querySelectorAll('script[type=module]')].find((s) => /ffg_boot3d/.test(s.src));
+    const V = el ? new URL(el.src).search : '';
+    const base = new URL('runtime/3d/royale/', location.href.replace(/[^/]*$/, '')).href;
+    const mods = {};
+    for (const m of ['hud', 'fx', 'audio']) { try { mods[m] = await import(base + m + '.js' + V); } catch (e) { mods[m] = null; } }
+    window.__FJ_MODS__ = mods;
+  }
+  const out = {};
+  for (const m in window.__FJ_MODS__) { const mod = window.__FJ_MODS__[m]; if (mod && typeof mod.readback === 'function') { try { out[m] = mod.readback(W); } catch (e) { out[m] = { err: String(e) }; } } }
+  return { via: Object.keys(out).length ? 'module readback' : 'none', r: out };
+}"""
+
+TICK_JS = r"""(on) => {
+  if (!on) { clearInterval(window.__FJ_TICK__); clearInterval(window.__FJ_SAMP__); window.__FJ_TICK__ = window.__FJ_SAMP__ = null; return 'off'; }
+  if (window.__FJ_TICK__) return 'already';
+  const P = window.__H_PUMP__; let last = performance.now();
+  window.__FJ_S__ = window.__FJ_S__ || [];
+  window.__FJ_PAUSE__ = false;
+  const L = window.__LC__, W = L.W;
+  // read-back sources are resolved at EVERY sample (never captured once at start): the module readback(W), else the
+  // orchestrator's __LC__.feel() (C9), else the DOM. __FJ_BLIND__ (--plant blind-sampler only) forces the DOM path, which
+  // re-creates the Wave-2 ordering defect so the 0-sample rule can be shown to answer could-not-judge.
+  const src = () => {
+    if (window.__FJ_BLIND__) return { mods: {}, feel: null };
+    const mods = window.__FJ_MODS__ || {};
+    return { mods, feel: typeof L.feel === 'function' ? L.feel : null };
+  };
+  // the frame pump (dt = real elapsed, max 0.05); paused while the harness steps frames synchronously around a click
+  window.__FJ_TICK__ = setInterval(() => {
+    const now = performance.now(); const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000)); last = now;
+    if (window.__FJ_PAUSE__) return;
+    try { P.frame(dt, false); } catch (e) { (window.__FJ_ERR__ = window.__FJ_ERR__ || []).push(String(e && e.stack || e).slice(0, 400)); }
+  }, 16);
+  // a SEPARATE sampler, so the sampling rate does not depend on what a pumped frame costs on this box
+  window.__FJ_SAMP__ = setInterval(() => {
+    const s = { t: performance.now() };
+    try {
+      const { mods, feel } = src();
+      let fr = null;
+      const fl = () => (fr || (fr = feel()));
+      let h = null;
+      if (mods.hud && mods.hud.readback) { h = mods.hud.readback(W); s.src = 'module'; }
+      else if (feel) { h = fl().hud; s.src = 'feel'; }
+      // age / clk = the GAME's own time (hud.js MK.t and MK.clk, advanced by the frame dt): the kill-marker hold is judged in it, not in wall time
+      if (h) s.mk = h.marker ? { style: h.marker.style, op: h.marker.opacity, khMs: h.marker.killHeldMs, age: h.marker.ageMs, clk: h.marker.clockMs } : null;
+      else { s.src = 'dom'; const el = [...document.querySelectorAll('div')].find((d) => d.textContent === '✕'); if (el) s.mk = { style: /255, 77, 77|255, ?7[0-9], ?7[0-9]|ff4d4d/i.test(el.style.color) ? 'kill' : 'hit', op: parseFloat(el.style.opacity || '0'), color: el.style.color }; }
+      let f = null;
+      if (mods.fx && mods.fx.readback) f = mods.fx.readback(W);
+      else if (feel) f = fl().fx;
+      if (f) { s.nums = f.dmg ? f.dmg.maxPerVictim : null; s.breaks = f.shieldBreaks; s.breakId = f.lastShieldBreak ? f.lastShieldBreak.id : null; }
+      else { let n = 0; for (const e of document.querySelectorAll('div')) { if ((e.style.willChange || '').includes('transform') && /^\d/.test(e.textContent || '') && parseFloat(getComputedStyle(e).opacity) > 0.05) n++; } s.nums = n; }
+    } catch (e) { s.err = String(e); }
+    if (window.__FJ_S__.length < 6000) window.__FJ_S__.push(s);
+  }, 20);
+  return 'on';
+}"""
+
+# counts what the guard absorbed while the subject lands (hits on the local player: who, with what, how much, from how far, in which phase)
+LAND_SPY_JS = r"""() => { const W = window.__LC__.W, p = W.player; if (window.__FC_LAND__) return 'already';
+  const L = window.__FC_LAND__ = { hits: 0, dmg: 0, attackers: {}, maxDmg: 0, nearestM: null, phases: {} };
+  W.events.on('actorHurt', (v, info) => { if (v !== p) return; L.hits++; L.dmg += info.dmg || 0; L.maxDmg = Math.max(L.maxDmg, info.dmg || 0);
+    const a = info.attackerId != null ? W.actorById.get(info.attackerId) : null; const k = (info.attackerId || '?') + ':' + (info.weaponId || '?'); L.attackers[k] = (L.attackers[k] || 0) + 1;
+    L.phases[W.phase] = (L.phases[W.phase] || 0) + 1;
+    if (a) { const d = Math.hypot(a.pos.x - p.pos.x, a.pos.z - p.pos.z); L.nearestM = L.nearestM == null ? +d.toFixed(1) : Math.min(L.nearestM, +d.toFixed(1)); } });
+  return 'on'; }"""
+
+PLACE_JS = r"""(args) => { const W = window.__LC__.W, p = W.player, cam = W.camera;
+  cam.updateMatrixWorld(true);
+  const dir = new W.THREE.Vector3(); cam.getWorldDirection(dir);
+  let d = args.d;
+  // args.clear: the pin must have a clear line of fire (a fence or wall between the camera and the pin turns a legitimate cover block into a false 'no kill'):
+  // walk the distance in until nothing stands between the camera and the pin (never closer than 4 m)
+  if (args.clear && W.map.losBlocked) { while (d > 4 && W.map.losBlocked(cam.position.x, cam.position.y, cam.position.z, cam.position.x + dir.x * d, cam.position.y + dir.y * d, cam.position.z + dir.z * d)) d -= 1; }
+  const x = cam.position.x + dir.x * d, z = cam.position.z + dir.z * d, y = cam.position.y + dir.y * d;
+  const bot = W.actors.find((a) => a !== p && a.alive && !(args.skip || []).includes(a.id));
+  if (!bot) return null;
+  bot.isDummy = true; bot.netRemote = true; bot.gliding = false; if (bot.vel) bot.vel.set(0, 0, 0);
+  const g = W.map.heightAt(x, z);
+  bot.pos.set(x, Math.max(g, y - (args.aimY || 1.15)), z); bot.obj.position.copy(bot.pos);
+  bot.yaw = p.yaw + Math.PI; bot.obj.rotation.y = bot.yaw;
+  bot.hp = args.hp; bot.shield = args.shield;
+  if (args.live) { bot.isDummy = false; bot.netRemote = false; }   // a real kill: cleared in the SAME task, so the bot cannot walk off first
+  window.__FJ_HURT__ = []; window.__FJ_TGT__ = bot.id;
+  if (!window.__FJ_HOOKED__) { window.__FJ_HOOKED__ = true;
+    W.events.on('actorHurt', (v, info) => { if (v.id === window.__FJ_TGT__) window.__FJ_HURT__.push({ t: performance.now(), dmg: info.dmg, toShield: info.toShield, broke: !!info.broke }); });
+    W.events.on('actorDied', (v) => { if (v.id === window.__FJ_TGT__) window.__FJ_HURT__.push({ t: performance.now(), died: true }); }); }
+  return { id: bot.id, d, groundGap: +(bot.pos.y - g).toFixed(2) };
+}"""
+
+RETICLE_JS = r"""async () => {
+  if (!window.__FJ_MODS__) {
+    const el = [...document.querySelectorAll('script[type=module]')].find((s) => /ffg_boot3d/.test(s.src));
+    const V = el ? new URL(el.src).search : '';
+    const base = new URL('runtime/3d/royale/', location.href.replace(/[^/]*$/, '')).href;
+    const m = {}; for (const k of ['hud', 'fx', 'audio']) { try { m[k] = await import(base + k + '.js' + V); } catch (e) { m[k] = null; } }
+    window.__FJ_MODS__ = m;
+  }
+  const mods = window.__FJ_MODS__ || {};
+  if (mods.hud && mods.hud.readback) { const r = mods.hud.readback(window.__LC__.W).reticle;
+    if (r) return { via: 'readback', arms: r.arms, thick: r.armThickPx, len: r.armLenPx, gap: r.gapPx, kind: r.kind, weapon: r.weapon }; }
+  const cx = innerWidth / 2, cy = innerHeight / 2;
+  const vis = (e) => { for (let n = e; n && n.nodeType === 1; n = n.parentElement) { const s = getComputedStyle(n); if (s.display === 'none' || s.visibility === 'hidden' || parseFloat(s.opacity) === 0) return false; } return true; };
+  let best = null;
+  for (const e of document.querySelectorAll('div')) {
+    if (e.children.length < 2) continue;
+    const r = e.getBoundingClientRect();
+    if (r.width <= 0 || r.width > 140 || r.height > 140) continue;
+    if (Math.abs(r.left + r.width / 2 - cx) > 3 || Math.abs(r.top + r.height / 2 - cy) > 3) continue;
+    if (!vis(e)) continue;
+    const kids = [...e.children].map((k) => k.getBoundingClientRect()).filter((k) => k.width > 0 && k.height > 0);
+    const arms = kids.filter((k) => Math.max(k.width, k.height) / Math.max(0.01, Math.min(k.width, k.height)) >= 1.5);
+    if (arms.length >= 2 && (!best || r.width < best.w)) best = { w: r.width, arms: arms.map((k) => [+Math.min(k.width, k.height).toFixed(2), +Math.max(k.width, k.height).toFixed(2)]) };
+  }
+  if (!best) return { via: 'dom', arms: 0 };
+  return { via: 'dom', arms: best.arms.length, thick: Math.min(...best.arms.map((a) => a[0])), len: Math.min(...best.arms.map((a) => a[1])), box: +best.w.toFixed(1) };
+}"""
+
+
+# ─────────────────────────────── judges (pure; --selftest exercises them without a browser) ───────────────────────────────
+KILL_HOLD_MS = 250
+
+
+def _sources(samples):
+    out = {}
+    for x in samples:
+        k = x.get("src") or "?"
+        out[k] = out.get(k, 0) + 1
+    return out
+
+
+def _game_bounds(marked):
+    """(lower, upper) of the kill marker's full-opacity hold in the GAME's own milliseconds, from the first kill-style sample on; None when the
+    samples carry no game time (the DOM path, or a build whose readback has no ageMs).
+
+    hud.js holds opacity at 1 while MK.t < hold, then fades; MK.t is the time since the marker was shown, advanced by the frame dt. Opacity is
+    therefore 1 for the whole of [0, age] when a sample reads full opacity at `age`: the hold is AT LEAST the age of the last full-opacity
+    sample (lower), and AT MOST the age at which the next sample already reads fading (upper) - or, when the next sample finds the marker
+    hidden (age null), the last full age plus the game-clock gap to that sample. Both are in game time, so how long the box took to run the
+    frames cannot move them; only the game-time gap between two samples (<= 50 ms per pumped frame, 1/60 per stepped one) widens them."""
+    num = (int, float)
+    i0 = next((i for i, x in enumerate(marked) if x["mk"].get("style") == "kill" and isinstance(x["mk"].get("age"), num)), None)
+    if i0 is None:
+        return None
+    lower, last_i, i = 0.0, None, i0
+    while i < len(marked):
+        mk = marked[i]["mk"]
+        if not (mk.get("style") == "kill" and (mk.get("op") or 0) >= 0.99 and isinstance(mk.get("age"), num)):
+            break
+        if mk["age"] < lower:                   # the age went back down: a NEW show of the marker (a second kill), not this hold
+            break
+        lower, last_i = float(mk["age"]), i
+        i += 1
+    upper = None
+    if i < len(marked):
+        mk = marked[i]["mk"]
+        if mk.get("style") == "kill" and isinstance(mk.get("age"), num):
+            upper = float(mk["age"])            # the first sample that already reads fading: the hold ended before this age
+        elif last_i is not None:
+            ref = marked[last_i]["mk"]
+            if isinstance(ref.get("clk"), num) and isinstance(mk.get("clk"), num):
+                upper = lower + max(0.0, float(mk["clk"]) - float(ref["clk"]))
+    return lower, upper
+
+
+def judge_kill(samples, t_kill):
+    """(ok, detail): ok True / False, or None = could-not-judge when the sampler collected 0 marker readings after the
+    kill (a blind sampler must never report a verdict on the game - Wave-2 VERIFY.md 4a).
+
+    The hold is judged in the GAME's own time (see _game_bounds). Wave-5 verification and the 2026-10-13 full run: the sampler's WALL time read
+    a 350 ms hold as 249, 204 and 198 ms, while the game's own counters read killHeldMs 339 and a last full-opacity age of 324 ms. The
+    sampler was right about what it saw and wrong about what it measured: hud.js moves the marker by the frame dt, the gate steps 3 + 3 frames
+    synchronously around the click (pump paused), so about 100 ms of the hold passes with no wall time and no reading at all. So:
+      lower (age of the last full-opacity sample, game ms) >= 250   -> PASS
+      upper (age at which it was first seen fading)        < 250   -> FAIL, provably shorter (a planted 50 ms hold lands here)
+      otherwise (two samples straddle 250 game ms)                 -> the game's own accounting decides: hud readback marker.killHeldMs
+                                                                      (>= hold - one frame dt, i.e. >= 300 ms for the shipped 350 ms), and
+                                                                      could-not-judge when that number was not read.
+    Samples with no game time at all (the DOM path, an old build) fall back to the wall-clock rule: seen >= 250 ms PASS, seen + the two edge
+    sample intervals < 250 ms FAIL, otherwise the game's killHeldMs decides."""
+    after = [x for x in samples if x.get("t", -1e18) >= t_kill - 50]
+    marked = [x for x in after if x.get("mk")]
+    det = {"samples": len(after), "markerSamples": len(marked), "sources": _sources(after)}
+    if not marked:
+        det["why"] = "0 marker readings after the kill (sampler blind: no readback, no DOM marker)"
+        return None, det
+    shown = [x for x in marked if (x["mk"].get("op") or 0) >= 0.99]
+    last = shown[-1]["mk"] if shown else None
+    best = None                                   # (held, i0, i1): the longest run of kill-style, full-opacity samples (WALL ms; information, and the legacy rule)
+    run0 = None
+    for i, x in enumerate(marked):
+        ok = x["mk"].get("style") == "kill" and (x["mk"].get("op") or 0) >= 0.99
+        if ok and run0 is None:
+            run0 = i
+        if ok:
+            held_i = x["t"] - marked[run0]["t"]
+            if best is None or held_i > best[0]:
+                best = (held_i, run0, i)
+        else:
+            run0 = None
+    held, i0, i1 = best if best else (0.0, 0, 0)
+    gap_before = (marked[i0]["t"] - marked[i0 - 1]["t"]) if (best and i0 > 0) else 20.0
+    gap_after = (marked[i1 + 1]["t"] - marked[i1]["t"]) if (best and i1 + 1 < len(marked)) else 20.0
+    upper = held + gap_before + gap_after
+    game = [x["mk"].get("khMs") for x in marked if isinstance(x["mk"].get("khMs"), (int, float))]
+    game_ms = max(game) if game else None
+    gb = _game_bounds(marked)
+    det.update({"lastVisible": last, "wallHeldMs": round(held), "wallUpperBoundMs": round(upper) if best else None, "gapBeforeMs": round(gap_before), "gapAfterMs": round(gap_after),
+                "gameKillHeldMs": game_ms,
+                "gameLowerMs": round(gb[0]) if gb else None, "gameUpperMs": round(gb[1]) if gb and gb[1] is not None else None,
+                # game ms that had already passed when the sampler FIRST saw the kill style (the synchronously stepped frames): why wall time under-reads
+                "firstSeenAgeMs": next((x["mk"].get("age") for x in marked if x["mk"].get("style") == "kill" and isinstance(x["mk"].get("age"), (int, float))), None)})
+    if not (last and last.get("style") == "kill"):
+        return False, det
+    if gb is not None:
+        lo, up = gb
+        if lo >= KILL_HOLD_MS:
+            det["decidedBy"] = "the game's own marker age (full opacity seen up to %d game ms >= %d)" % (round(lo), KILL_HOLD_MS)
+            return True, det
+        if up is not None and up < KILL_HOLD_MS:
+            det["decidedBy"] = "the game's own marker age (already fading at %d game ms < %d)" % (round(up), KILL_HOLD_MS)
+            return False, det
+        if game_ms is None:
+            det["why"] = "two samples straddle %d game ms (%d..%s) and the game's own killHeldMs was not read" % (KILL_HOLD_MS, round(lo), "?" if up is None else round(up))
+            return None, det
+        det["decidedBy"] = "the game's own killHeldMs (samples straddle %d game ms: %d..%s)" % (KILL_HOLD_MS, round(lo), "?" if up is None else round(up))
+        return game_ms >= KILL_HOLD_MS, det
+    if held >= KILL_HOLD_MS:
+        det["decidedBy"] = "sampler wall clock (lower bound >= %d ms; no game time in the samples)" % KILL_HOLD_MS
+        return True, det
+    if upper < KILL_HOLD_MS:
+        det["decidedBy"] = "sampler wall clock (upper bound < %d ms; no game time in the samples)" % KILL_HOLD_MS
+        return False, det
+    if game_ms is None:
+        det["why"] = "the sampler's resolution (%d..%d ms) straddles %d ms and the game's own killHeldMs was not read" % (round(held), round(upper), KILL_HOLD_MS)
+        return None, det
+    det["decidedBy"] = "the game's own killHeldMs (sampler wall resolution %d..%d ms straddles %d ms)" % (round(held), round(upper), KILL_HOLD_MS)
+    return game_ms >= KILL_HOLD_MS, det
+
+
+def judge_live_numbers(samples, hits=0):
+    """(ok, maxLive, n): ok None when no sample carried a damage-number count (0 samples measured nothing), or when the
+    reader never saw a single number although `hits` rounds landed (a reader that sees nothing cannot pass '<= 1')."""
+    vals = [x.get("nums") for x in samples if isinstance(x.get("nums"), (int, float))]
+    if not vals:
+        return None, None, 0
+    mx = max(vals)
+    if mx == 0 and hits > 0:
+        return None, mx, len(vals)
+    return mx <= 1, mx, len(vals)
+
+
+def selftest():
+    """Offline proof of the judging rules (no browser): 0 samples -> CNJ, a 280 ms kill hold -> PASS, 50 ms -> FAIL, a coarse sampler
+    -> decided by the game's own number (or could-not-judge without it)."""
+    t = 1000.0
+
+    def run(ms, style="kill", step=20, kh=None):
+        n = int(ms / step) + 1
+        return [{"t": t + i * step, "src": "module", "mk": {"style": style, "op": 1.0, **({"khMs": kh} if kh is not None else {})}} for i in range(n)]
+
+    def fade(after_ms, step=20, kh=None):                     # the fade phase: kill style, opacity < 0.99, dense samples
+        return [{"t": t + after_ms + i * step, "src": "module", "mk": {"style": "kill", "op": 0.5, **({"khMs": kh} if kh is not None else {})}} for i in range(1, 12)]
+
+    def game_run(rows, kh=None, clk_gap=None, then_style=None):
+        """rows = [(wall t ms, marker age ms or None, opacity)]: samples that carry the game's own marker age and clock. A None age is a hidden
+        marker; its clock is the previous sample's + clk_gap. then_style: the style of the LAST sample (the marker got overwritten)."""
+        out, clk = [], 5000.0
+        for k, (tw, age, op) in enumerate(rows):
+            if k and age is not None:
+                clk += age - (rows[k - 1][1] or 0)
+            elif age is None and clk_gap is not None:
+                clk += clk_gap
+            style = (then_style if (then_style and k == len(rows) - 1) else ("kill" if age is not None else None))
+            out.append({"t": t + tw - 1000, "src": "module", "mk": {"style": style, "op": op, "age": age, "clk": clk, **({"khMs": kh} if kh is not None else {})}})
+        return out
+
+    def wall_run_198(game=True):
+        """3 stepped frames + 3 stepped frames after the click advance the game ~100 ms with no sampler running; then the 20 ms pump/sampler sees
+        198 wall ms of full-opacity kill style (ages 126..324) and the marker fades at 350."""
+        out = []
+        for k in range(11):
+            age = 126 + k * 20
+            mk = {"style": "kill", "op": 1.0, "khMs": 324 if age >= 324 else age}
+            if game:
+                mk.update({"age": min(age, 324), "clk": 7000 + age})
+            out.append({"t": t + 100 + k * 19.8, "src": "module", "mk": mk})
+        for k in range(1, 6):
+            mk = {"style": "kill", "op": 0.8 - 0.15 * k, "khMs": 339}
+            if game:
+                mk.update({"age": 340 + k * 20, "clk": 7000 + 340 + k * 20})
+            out.append({"t": t + 100 + 198 + k * 20, "src": "module", "mk": mk})
+        return out
+
+    cases = [
+        ("0 samples", judge_kill([], t)[0], None),
+        ("samples but no marker reading (blind DOM path)", judge_kill([{"t": t + i * 20, "src": "dom"} for i in range(30)], t)[0], None),
+        ("kill held 280 ms", judge_kill(run(280) + fade(280), t)[0], True),
+        ("kill held 60 ms (planted short hold, dense sampler)", judge_kill(run(60) + fade(60), t)[0], False),
+        ("marker overwritten white (hit style)", judge_kill(run(300, "body") + fade(300), t)[0], False),
+        # coarse sampler (a 600 ms pumped frame): 249 ms seen, true hold 350 ms: the game's own number decides
+        ("sampler saw 240 ms with 100 ms gaps, game says 340", judge_kill(run(240, step=80, kh=340) + fade(240, step=80, kh=340), t)[0], True),
+        ("same, game number not read -> could-not-judge", judge_kill(run(240, step=80) + fade(240, step=80), t)[0], None),
+        ("planted 50 ms hold seen by a coarse sampler (240 ms gaps), game says 50", judge_kill(run(0, step=240, kh=50) + fade(0, step=240, kh=50), t)[0], False),
+        ("sampler saw 60 ms with dense gaps but the game claims 340 (upper bound < 250 wins)", judge_kill(run(60, kh=340) + fade(60, kh=340), t)[0], False),
+        # ---- game time (2026-10-13): samples carry the marker's age / clock, so the judge no longer depends on how long the box took ----
+        # the full-run failure: ~100 game ms passed in synchronously stepped frames (no wall time, no sample), the sampler saw 198 wall ms
+        # (+20 +21 edge intervals = 239 < 250 on the old rule) of a hold the game timed at 324-339 ms
+        ("wall run 198 ms (old rule: upper bound 239 -> FAIL), game age 324 ms -> PASS", judge_kill(wall_run_198(), t)[0], True),
+        ("the same samples WITHOUT game time still FAIL on the legacy wall rule (the rule for builds with no ageMs)", judge_kill(wall_run_198(game=False), t)[0], False),
+        ("planted 50 ms hold: last full age 40, fading at 90 (coarse 50 ms game steps) -> FAIL", judge_kill(game_run([(1000, 20, 1.0), (1030, 40, 1.0), (1060, 90, 0.7), (1090, 140, 0.3)], kh=40), t)[0], False),
+        ("a real 150 ms hold (a regression, not the plant): full to 140, fading at 170 -> FAIL", judge_kill(game_run([(1000, 20, 1.0), (1030, 80, 1.0), (1060, 140, 1.0), (1090, 170, 0.9)], kh=150), t)[0], False),
+        ("shipped 350 ms hold: full to 300 then hidden 80 game ms later (upper 380) -> PASS on lower alone", judge_kill(game_run([(1000, 20, 1.0), (1030, 150, 1.0), (1060, 300, 1.0), (1090, None, 0.0)], clk_gap=80, kh=339), t)[0], True),
+        ("full to 200 game ms, next sample fading at 380: straddles 250, game says 339 -> PASS", judge_kill(game_run([(1000, 20, 1.0), (1030, 200, 1.0), (1060, 380, 0.5)], kh=339), t)[0], True),
+        ("the same straddle with the game number not read -> could-not-judge", judge_kill(game_run([(1000, 20, 1.0), (1030, 200, 1.0), (1060, 380, 0.5)]), t)[0], None),
+        ("full to 200 game ms, hidden after an 80 ms clock gap (upper 280) and the game says 200 -> FAIL", judge_kill(game_run([(1000, 20, 1.0), (1030, 200, 1.0), (1060, None, 0.0)], clk_gap=80, kh=200), t)[0], False),
+        ("kill style then overwritten by a white body marker at full opacity -> FAIL (the latch bug)", judge_kill(game_run([(1000, 20, 1.0), (1030, 120, 1.0)], then_style="body", kh=120), t)[0], False),
+        ("live numbers: 0 samples", judge_live_numbers([])[0], None),
+        ("live numbers: max 1", judge_live_numbers([{"nums": 1}, {"nums": 0}])[0], True),
+        ("live numbers: max 3", judge_live_numbers([{"nums": 3}])[0], False),
+        ("live numbers: 0 seen while 40 hits landed", judge_live_numbers([{"nums": 0}] * 50, 40)[0], None),
+    ]
+    bad = 0
+    for name, got, want in cases:
+        ok = got is want
+        bad += 0 if ok else 1
+        print("  %s  %-50s got %s want %s" % ("ok  " if ok else "BAD ", name, got, want))
+    print("feelcheck selftest: %d/%d" % (len(cases) - bad, len(cases)))
+    return 0 if not bad else 1
+
+
+# ─────────────────────────────── planted faults (--plant; each must make the gate FAIL / CNJ as stated) ─────────────────
+def plant_kill_hold(s, hold=0.05):
+    """kill-marker-short: serve hud.js with the kill tier's hold cut from 0.35 s to `hold` (a real game regression: the
+    kill confirm flashes for 50 ms). A PAGE route, so it wins over the DiskServer's context route; the original bytes come
+    from the same place the run serves from (--disk working copy / --rev blob / the server via route.fetch)."""
+    import re
+    import urllib.parse
+    st = {"served": 0, "patched": 0, "err": None}
+    pat = re.compile(rb"(kill:\s*\{[^}]*?hold:\s*)(\d*\.?\d+)")
+
+    def handler(route):
+        try:
+            u = urllib.parse.urlparse(route.request.url)
+            if s.disk is not None:
+                rel = urllib.parse.unquote(u.path[len(C.GAME_PATH):])
+                if s.disk.git is not None:
+                    body = s.disk.git.read(rel)
+                else:
+                    p = C.disk_file_for(u.path)
+                    body = open(p, "rb").read() if p else None
+            else:
+                body = route.fetch().body()
+            if body is None:
+                return route.fallback()
+            new, n = pat.subn(lambda m: m.group(1) + (b"%.2f" % hold), body, count=1)
+            st["served"] += 1
+            st["patched"] += n
+            route.fulfill(status=200, body=new, headers={"Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store",
+                                                         "Access-Control-Allow-Origin": "*"})
+        except Exception as e:
+            st["err"] = str(e)[:200]
+            route.fallback()
+    s.page.route(lambda url: "/runtime/3d/royale/hud.js" in url, handler)
+    return st
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    C.add_common_args(ap)
+    ap.add_argument("--burst", type=float, default=3.7, help="SMG trigger hold, minimum seconds (the audit's 3.7 s burst)")
+    ap.add_argument("--burst-shots", type=int, default=30, help="hold the SMG trigger until this many rounds fired (max 45 s)")
+    ap.add_argument("--map", default="ashgrid")
+    ap.add_argument("--seed", type=int, default=4242)
+    ap.add_argument("--plant", default=None, choices=["kill-marker-short", "blind-sampler"],
+                    help="FALSIFIER: kill-marker-short = hud.js served with the kill hold cut to 0.05 s (the kill-marker row MUST "
+                         "FAIL); blind-sampler = the Wave-2 ordering defect re-created (the sampler gets no read-back; the "
+                         "kill-marker row MUST be could-not-judge, never FAIL or PASS)")
+    ap.add_argument("--selftest", action="store_true", help="run the offline judge selftest only (no browser)")
+    args = ap.parse_args()
+    if args.selftest:
+        return selftest()
+    if args.plant and not args.report:
+        args.report = "feelcheck_plant_" + args.plant.replace("-", "_")
+
+    def body(v):
+        with C.Session(args, "feelcheck", launch_args=[]) as s:
+            plant = None
+            if args.plant == "kill-marker-short":
+                plant = plant_kill_hold(s)
+                v.note("PLANTED FAULT: hud.js served with the kill tier's hold 0.35 s -> 0.05 s (the kill-marker row MUST fail)")
+            s.boot()
+            if plant is not None:
+                v.info("plant applied", dict(plant))
+                if not plant["patched"]:
+                    v.cnj("planted fault", "the hud.js kill-hold pattern was not found / not served (%s) - nothing planted" % plant)
+                    return
+            s.js(SPY_JS)
+            for _ in range(3):
+                b = s.js("() => { const b = [...document.querySelectorAll('button')].find((x) => x.offsetParent && /^\\s*GOT IT\\s*$/.test(x.textContent)); if (!b) return null; const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }")
+                if not b:
+                    break
+                s.page.mouse.click(b[0], b[1])
+                s.sleep(0.4)
+            s.page.mouse.click(5, 5)                     # a user gesture: unlock audio so the music graph + duck exist
+            # Wave-7 fix round (7G): the test subject is guarded from the LOBBY on and PROTECTED through the whole landing. It used to be guarded only
+            # AFTER an unprotected land(), and that is a death trap on any seed whose drop point has an armed bot touching down near it: ashgrid seed 4242
+            # on the Wave-7 city map puts the player at (-380, -460) with bot s49 landing 33 m away with a pistol; land() keeps running until the DROP phase
+            # ends (about 4 s past touchdown, not until the player stands), the player spawns with 0 shield, 6 pistol hits of 11-30 kill it
+            # (4 of 4 runs: "the player died while landing (setup)"). Every config now takes the same path bootcheck does: guard in the lobby +
+            # land(protect=True) (hp / shield topped up after EVERY sim step), and a LAND_SPY counts the hits the guard absorbed so a run says so.
+            s.start_match("standard", args.seed, args.map, enter=True, guard=True)
+            s.js(LAND_SPY_JS)
+            land = s.land(120, protect=True)
+            land_spy = s.js("() => window.__FC_LAND__")
+            s.freeze_loop()
+            s.install_pump()
+            s.guard_player(True)          # a bot must not kill the test subject mid-burst (it fired 0 shots when it did)
+            s.step_frames(30, 1 / 60, render=False)
+            rb = s.js(READ_JS)
+            v.info("read-back source", rb.get("via"))
+            v.info("landing (guarded from the lobby, protected through every sim step)", {"land": land, "hitsAbsorbed": land_spy})
+            p_alive = s.js("() => window.__LC__.W.player.alive")
+            if not p_alive:
+                v.cnj("feel checks", "the player died while landing despite the guard (a single sim step dealt > 200 damage, or the guard did not install): %s" % land_spy)
+                return
+            # pointer lock first (that click may fire a round at nothing)
+            cv = s.js("() => { const c = window.__LC__.W.kernel.renderer.domElement; const r = c.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }")
+            s.page.mouse.click(cv["x"], cv["y"])
+            s.wait_js("() => !!document.pointerLockElement", 3, 0.1)
+            s.js("() => { for (const el of document.querySelectorAll('div')) if (el.textContent === 'CLICK TO LOOK AROUND') el.style.visibility = 'hidden'; }")
+            # the read-backs are loaded BEFORE the sampler starts (Wave-2 VERIFY.md 4a); the sampler re-resolves them per sample
+            if args.plant == "blind-sampler":
+                s.js("() => { window.__FJ_BLIND__ = true; }")
+                v.note("PLANTED FAULT: blind sampler (no module / feel read-back; DOM marker search only) - the kill-marker row MUST be CNJ")
+            else:
+                v.info("read-backs loaded before the sampler", s.js(LOAD_MODS_JS))
+            s.js(TICK_JS, True)
+            s.sleep(0.6)
+            # ---------------- reticle: rest / crouched-still / sprinting ----------------
+            s.press("Digit1")
+            s.sleep(0.8)
+            ret = {"rest": s.js(RETICLE_JS)}
+            s.page.keyboard.down("KeyC")
+            s.sleep(0.8)
+            ret["crouched"] = s.js(RETICLE_JS)
+            s.page.keyboard.up("KeyC")
+            s.sleep(0.4)
+            s.press("ShiftLeft")
+            s.page.keyboard.down("KeyW")
+            s.sleep(0.8)
+            ret["sprinting"] = s.js(RETICLE_JS)
+            s.page.keyboard.up("KeyW")
+            s.press("ShiftLeft")
+            s.sleep(0.5)
+            v.data["reticle"] = ret
+            bad = {k: r for k, r in ret.items() if not (r.get("arms", 0) >= 2 and (r.get("thick") or 0) >= 2 and (r.get("len") or 0) >= 6)}
+            v.check("reticle arms >= 2 px thick x >= 6 px long at rest, crouched-still and sprinting", not bad, ret)
+            # ---------------- pistol kill: the kill style must win and hold ----------------
+            # The semi-auto click edge lives 420 ms of WALL time (weapons.js edgeLive). On this box one pumped frame can
+            # cost more than that, so the click is followed by SYNCHRONOUSLY stepped frames (pump paused): the edge is
+            # consumed while fresh. The bot is placed and made killable in the same task as the click.
+            died, hurt, tgt, tries, shots_k = [], [], None, 0, 0
+            n0 = s.js("() => window.__FJ_S__.length")
+            k0 = s.js("() => window.__FJ__.log.length")
+            for tries in range(1, 4):
+                s.js("() => { window.__FJ_PAUSE__ = true; }")
+                tgt = s.js(PLACE_JS, {"d": 11, "hp": 5, "shield": 0, "live": True, "skip": [], "clear": True})
+                if not tgt:
+                    break
+                f0 = s.js("() => window.__LC__.W.stats.shotsFired")
+                s.page.mouse.down()
+                s.step_frames(3, 1 / 60, render=False)
+                s.page.mouse.up()
+                s.step_frames(3, 1 / 60, render=False)
+                shots_k += s.js("() => window.__LC__.W.stats.shotsFired") - f0
+                s.js("() => { window.__FJ_PAUSE__ = false; }")
+                s.sleep(1.4)
+                hurt = s.js("() => window.__FJ_HURT__")
+                died = [h for h in hurt if h.get("died")]
+                if died:
+                    break
+                s.sleep(0.6)                                 # the pistol's cooldown before the next click
+            if not tgt:
+                v.cnj("kill marker", "no bot to pin")
+                return
+            samples = s.js("(n) => window.__FJ_S__.slice(n)", n0)
+            domlog = s.js("(k) => window.__FJ__.log.slice(k).filter((e) => e.k === 'mark')", k0)
+            if not died:
+                v.cnj("pistol kill: the marker ends in the kill style, held >= 250 ms",
+                      "no kill in %d clicks (shots %d, hurt events %s)" % (tries, shots_k, hurt[:3]))
+            else:
+                ok_k, det_k = judge_kill(samples, died[0]["t"])
+                det_k.update({"domMarkerLog": domlog[-4:], "clicks": tries})
+                name_k = "pistol kill: the marker's last visible state is the kill style, held at opacity >= 0.99 for >= 250 ms"
+                if ok_k is None:
+                    v.cnj(name_k, det_k)
+                else:
+                    v.check(name_k, ok_k, det_k)
+            # ---------------- SMG burst: numbers + pool + duck ----------------
+            # held until >= --burst-shots rounds left the gun (a wall-clock burst fires 5 rounds when a pumped frame costs
+            # 600 ms on this box - 21:31 run); the target is a practice dummy (absorbs and resets, never dies)
+            s.js("() => { const W = window.__LC__.W, p = W.player; p.inventory.slots[1] = { kind: 'weapon', id: 'smg', rarity: 2, mag: 400 }; p.inventory.ammo.light = 999; }")
+            tgt2 = s.js(PLACE_JS, {"d": 9, "hp": 100, "shield": 100, "skip": [tgt["id"]]})
+            s.press("Digit2")
+            s.sleep(0.9)
+            aud0 = (s.js(READ_JS).get("r") or {}).get("audio")
+            d0 = s.js("() => window.__FJ__.duck62")
+            n0 = s.js("() => window.__FJ_S__.length")
+            s.js("() => { window.__FJ__.fxCreated = 0; window.__FJ__.trace = false; }")
+            shots0 = s.js("() => window.__LC__.W.stats.shotsFired")
+            t_b = time.time()
+            s.page.mouse.down()
+            s.sleep(0.3)
+            s.js("() => { window.__FJ__.fxCreated = 0; window.__FJ__.trace = true; }")
+            while time.time() - t_b < max(args.burst, 45.0):
+                s.sleep(0.25)
+                if time.time() - t_b >= args.burst and s.js("() => window.__LC__.W.stats.shotsFired") - shots0 >= args.burst_shots:
+                    break
+            s.page.mouse.up()
+            s.js("() => { window.__FJ__.trace = false; }")
+            burst_wall = round(time.time() - t_b, 1)
+            s.sleep(0.5)
+            shots = s.js("() => window.__LC__.W.stats.shotsFired") - shots0
+            hurt2 = s.js("() => window.__FJ_HURT__")
+            samples = s.js("(n) => window.__FJ_S__.slice(n)", n0)
+            ok_n, mx, n_num = judge_live_numbers(samples, len(hurt2 or []))
+            fxc = s.js("() => window.__FJ__.fxCreated")
+            aud1 = (s.js(READ_JS).get("r") or {}).get("audio")
+            d1 = s.js("() => window.__FJ__.duck62")
+            if shots < 5 or not hurt2:
+                v.cnj("SMG burst checks", "the burst did not land (shots %s, hits %d)" % (shots, len(hurt2)))
+            else:
+                det_n = {"maxLive": mx, "samplesWithCount": n_num, "samples": len(samples), "sources": _sources(samples),
+                         "hits": len(hurt2), "shots": shots, "wallS": burst_wall}
+                if ok_n is None:
+                    v.cnj("SMG burst: <= 1 live damage number per victim at every sample", det_n)
+                else:
+                    v.check("SMG burst: <= 1 live damage number per victim at every sample", ok_n, det_n)
+                v.check("SMG burst: no damage-number DOM node created by fx.js after 0.3 s (pool)", fxc == 0, {"fxCreateElement": fxc, "shots": shots})
+                if aud0 and aud1 and "duckRamps" in aud0:
+                    ramps = aud1["duckRamps"] - aud0["duckRamps"]
+                    v.check("SMG burst: music duck ramps <= 2 (audio readback)", ramps <= 2, {"duckRamps": ramps, "shots": shots, "wallS": burst_wall})
+                else:
+                    v.check("SMG burst: music duck ramps <= 2 (setTargetAtTime(0.62) count - today's duckMusic)", d1 - d0 <= 2,
+                            {"duckCalls": d1 - d0, "shots": shots, "wallS": burst_wall})
+            # ---------------- shield break ----------------
+            fx0 = (s.js(READ_JS).get("r") or {}).get("fx")
+            if not fx0 or "shieldBreaks" not in fx0:
+                v.cnj("shield break: exactly one burst, on the breaking hit", "needs fx.js readback() (contract C9, lane L7)")
+            else:
+                # SETUP: level the aim first. A 30+ round burst leaves the recoil-kicked pitch near the clamp, so a dummy
+                # placed along the camera ray hangs in the air and falls out of the line of fire (22:36 working-copy
+                # run: "no breaking hit landed (0 hits)").
+                s.js("() => { const p = window.__LC__.W.player; p.input.pitch = 0; p.recoilPitch = 0; p.recoilYaw = 0; }")
+                # ...and move the SMG dummy (still standing on the same ray at 9 m, absorbing every round) out of the line
+                if tgt2:
+                    s.js("(id) => { const W = window.__LC__.W, b = W.actorById.get(id); if (!b) return; b.pos.x += 40; b.pos.z += 40;"
+                         " b.pos.y = Math.max(W.map.heightAt(b.pos.x, b.pos.z), W.map.waterY); b.obj.position.copy(b.pos); }", tgt2["id"])
+                s.sleep(0.5)
+                tgt3 = s.js(PLACE_JS, {"d": 8, "hp": 100, "shield": 20, "skip": [tgt["id"], tgt2["id"] if tgt2 else None]})
+                n_sb = s.js("() => (window.__FJ_S__ || []).length")
+                s.sleep(0.3)
+                f_s = s.js("() => window.__LC__.W.stats.shotsFired")
+                s.page.mouse.down()
+                t_s = time.time()
+                while time.time() - t_s < 20 and not s.js("() => (window.__FJ_HURT__ || []).some((h) => h.broke)"):
+                    s.sleep(0.2)
+                s.sleep(0.3)
+                s.page.mouse.up()
+                s.sleep(0.4)
+                fx1 = (s.js(READ_JS).get("r") or {}).get("fx")
+                hurt3 = s.js("() => window.__FJ_HURT__")
+                breaks = [h for h in hurt3 if h.get("broke")]
+                nb_all = fx1["shieldBreaks"] - fx0["shieldBreaks"]
+                # fx.js counts EVERY shield break within 80 m of the camera, bots shooting each other included, so the global delta flakes (a
+                # second burst once in ~17 runs: "bursts 2, breakingHits 1"). The burst the row is about is the pinned target's: attribute each
+                # increment of the sampler's running count to fx's `lastShieldBreak.id` of that sample
+                nb = nb_all
+                attributed = None
+                try:
+                    smp = s.js("(n) => (window.__FJ_S__ || []).slice(n)", n_sb)
+                    prev, mine, others, seen_id = fx0["shieldBreaks"], 0, 0, False
+                    for x in smp:
+                        b = x.get("breaks")
+                        if not isinstance(b, (int, float)):
+                            continue
+                        if b > prev:
+                            seen_id = seen_id or x.get("breakId") is not None
+                            if tgt3 and x.get("breakId") == tgt3["id"]:
+                                mine += 1
+                            else:
+                                others += int(b - prev)
+                        prev = max(prev, b)
+                    if seen_id and tgt3:
+                        attributed = {"target": mine, "others": others}
+                        nb = mine
+                except Exception as e:                                # a sampler that could not be read keeps the global count
+                    attributed = {"error": str(e)[:80]}
+                if not breaks:
+                    v.cnj("shield break: exactly one burst, on the breaking hit", "no breaking hit landed (%d hits, %d rounds fired)" % (
+                        len(hurt3), s.js("() => window.__LC__.W.stats.shotsFired") - f_s))
+                else:
+                    v.check("shield break: exactly one burst, on the breaking hit", nb == 1, {"bursts": nb, "burstsAnywhere": nb_all, "attributed": attributed, "breakingHits": len(breaks), "hits": len(hurt3)})
+            s.js(TICK_JS, False)
+            errs = s.safe_js("() => window.__FJ_ERR__ || []", default=[])
+            d = s.diagnostics()
+            v.check("no game errors while the frames ran", not (errs or d["pageErrors"] or d["windowErrors"]),
+                    {"pumpErrors": errs[:2], "pageErrors": d["pageErrors"][:2], "windowErrors": d["windowErrors"][:2]})
+    return C.run_gate("feelcheck", body, args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

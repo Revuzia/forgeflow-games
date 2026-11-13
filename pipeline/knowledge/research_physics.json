@@ -1,0 +1,910 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-05-05T00:00:00Z",
+  "purpose": "Canonical physics-engine configurations per genre. Numbers are tuned for a 60fps Phaser 3 Arcade Physics game running at 1280x720, derived from iconic genre exemplars (Mario, Sonic, Celeste, Hades, Geometry Wars, etc.) and standard Phaser tutorial defaults. Values are pixel-space (px, px/sec, px/sec^2) — NOT meters. Use as canonical defaults in code-generation prompts; tweak per-game from these baselines, do not invent.",
+  "units": {
+    "distance": "pixels (px)",
+    "velocity": "pixels per second (px/sec)",
+    "acceleration": "pixels per second squared (px/sec^2)",
+    "time": "milliseconds (ms) for grace windows; seconds for lifetimes",
+    "viewport_assumption": "1280 x 720, 60fps, no DPI scaling"
+  },
+  "engine_choice_rules": [
+    "arcade — default for 99% of 2D genres. AABB collision, velocity-based, no rotation physics. Cheap, deterministic, ideal for code-gen.",
+    "matter — only when ragdoll bouncing, stacked physics objects, or angular momentum is essential to gameplay (e.g. Angry Birds-style siege). Heavier, harder to tune deterministically.",
+    "none — turn-based grid games (strategy, board, sokoban, tetris). Use tweens for animation; collision is array/grid lookup, not a physics step.",
+    "three_3d — only for true 3D platformer/arpg. Three.js + Cannon-es or Rapier. NOT a fan-out target unless the prompt explicitly asks for 3D."
+  ],
+  "sources": [
+    "https://hypertextbook.com/facts/2007/mariogravity.shtml",
+    "https://blog.hamaluik.ca/posts/super-mario-world-physics/",
+    "https://datacrystal.tcrf.net/wiki/Super_Mario_Bros._3/Notes",
+    "https://maddythorson.medium.com/celeste-and-towerfall-physics-d24bd2ae0fc5",
+    "https://maddythorson.medium.com/celeste-forgiveness-31e4a40399f1",
+    "https://threadreaderapp.com/thread/1238338574220546049.html",
+    "https://indieranger.com/physics-movement-and-control-in-celeste/",
+    "https://kb.speeddemosarchive.com/Sonic_the_Hedgehog/Game_Mechanics_and_Glitches",
+    "https://tasvideos.org/GameResources/Genesis/SonicTheHedgehog",
+    "https://setsideb.com/sonic-retros-physics-guide/",
+    "https://docs.phaser.io/phaser/getting-started/making-your-first-phaser-game",
+    "https://phaser.io/news/2019/06/making-things-jump-in-phaser3-tutorial",
+    "https://digitherium.com/blog/phaser-platformer-series-3-better-jumping",
+    "https://gamedevacademy.org/how-to-make-a-mario-style-platformer-with-phaser-3/",
+    "https://phaser.io/news/2025/04/full-course-how-to-make-a-zelda-like-game-with-phaser-3",
+    "https://midgame.dev/tutorials/posts/phaser/8-way-movement/",
+    "https://phaser.io/news/2026/01/build-a-sokoban-puzzle-game-in-phaser",
+    "https://github.com/nkholski/phaser-grid-physics",
+    "https://en.wikipedia.org/wiki/Twin-stick_shooter",
+    "https://www.gamedeveloper.com/design/7-twin-stick-shooters-that-game-developers-should-study",
+    "https://www.gamedeveloper.com/design/hotline-miami-2-wrong-number---we-are-all-perfectly-tuned-projectiles",
+    "https://shmups.wiki/library/Boghog's_bullet_hell_shmup_101",
+    "https://significant-bits.com/the-1-pixel-collision-box/",
+    "https://en.wikipedia.org/wiki/Star_Fox_(1993_video_game)",
+    "https://enterthegungeon.fandom.com/wiki/Dodge_Roll_(Move)",
+    "https://devforum.roblox.com/t/jumping-mechanics-for-obby-game/2859845",
+    "https://roblox.fandom.com/wiki/Jumping",
+    "https://kidscancode.org/godot_recipes/4.x/2d/coyote_time/index.html",
+    "https://www.ketra-games.com/2021/08/coyote-time-and-jump-buffering.html",
+    "https://www.thealmightyguru.com/Wiki/index.php?title=Coyote_time",
+    "https://error454.com/2013/10/23/platformer-physics-101-and-the-3-fundamental-equations-of-platformers/",
+    "https://stardewvalleywiki.com/Modding:Modder_Guide/APIs/Events",
+    "https://phaser.discourse.group/t/lessons-learned-from-building-a-turn-based-strategy-game-in-phaser/12265",
+    "https://aircada.com/blog/three-js-vs-phaser",
+    "https://discourse.threejs.org/t/rapier-vs-cannon-performance/53475",
+    "https://enable3d.io/"
+  ],
+  "genres": {
+    "platformer": {
+      "exemplars": ["Super Mario Bros", "Sonic the Hedgehog", "Celeste", "Hollow Knight"],
+      "physics_engine": "arcade",
+      "gravity": 900,
+      "gravity_notes": "900 px/sec^2 is the Phaser tutorial sweet spot for snappy Mario/Celeste feel. Mario-style: 800. Celeste-style: 900-1000 (heavier fall for tight platforming). Sonic-style: 650 plus slope-based extra acceleration. Hollow Knight: ~700 with jump-cut. NEVER below 500 (floats), NEVER above 1500 (unplayable).",
+      "player_movement": {
+        "move_speed_px_per_sec": 200,
+        "acceleration": 1500,
+        "drag_x": 1200,
+        "max_velocity_x": 250,
+        "max_velocity_y": 800,
+        "jump_velocity_px_per_sec": -500,
+        "double_jump": false,
+        "double_jump_velocity": -400,
+        "coyote_time_ms": 100,
+        "jump_buffer_ms": 100,
+        "wall_slide": false,
+        "wall_slide_speed_cap": 80,
+        "variable_jump_cut_ratio": 0.5,
+        "sprite_facing": true,
+        "notes": "variable_jump_cut_ratio 0.5 = release-jump-early multiplies upward velocity by 0.5 (Mario-style). coyote 100ms + jump_buffer 100ms is the Celeste-validated sweet spot."
+      },
+      "projectile_physics": {
+        "projectile_type": "straight_line",
+        "speed_px_per_sec": 600,
+        "gravity_applies": false,
+        "lifetime_ms": 2000,
+        "pierce_count": 0,
+        "notes": "Optional. Most platformers don't shoot. If the player throws bombs/javelins use parabolic with gravity 600."
+      },
+      "enemy_physics": {
+        "walker": {"gravity": 900, "speed": 80, "edge_detect": true, "turn_on_wall": true},
+        "flyer": {"gravity": 0, "speed": 100, "pattern": "sine_wave", "amplitude_y": 60, "freq_hz": 1.0},
+        "chaser": {"gravity": 900, "speed": 120, "activation_range_px": 250},
+        "static_turret": {"gravity": 0, "fire_interval_ms": 1500, "projectile_speed": 250},
+        "boss_arena": {"immovable": true, "gravity": 0, "phase_timer_ms": 4000}
+      },
+      "collision_setup": [
+        "this.physics.add.collider(player, ground) — solid ground tilemap collision",
+        "this.physics.add.overlap(player, coins, collectCoin) — collectibles never block",
+        "this.physics.add.overlap(player, enemies, takeDamage) — enemy contact kills/damages, not blocks",
+        "this.physics.add.collider(enemies, ground) — enemies stand on ground",
+        "Do NOT collide enemies with each other (they push each other off ledges and stack badly)"
+      ],
+      "camera": "lerp_follow",
+      "camera_lerp": 0.1,
+      "world_bounds": "scrolling — world larger than viewport; setBounds to level dimensions; cameras.main.setBounds same",
+      "animation_pattern": "frame-based atlas with idle/run/jump/fall states; auto-flipX based on velocity.x sign",
+      "iconic_physics_signature": "Variable jump height — release jump cuts upward velocity by ~50% (Mario), giving the player precise apex control. Without this, jumps feel binary and stiff.",
+      "common_physics_bugs": [
+        "jump_cut_not_applied — player flies to full apex regardless of release; missing the 'on key release, if velocity.y < 0 then velocity.y *= 0.5' branch in update()",
+        "wall_jump_off_thin_air — checking onWall() via hitbox overlap instead of body.blocked.left/right; player can wall-jump while merely near a wall",
+        "1px_floor_seam_fall_through — adjacent ground tiles with non-collidable bottom edges; fix by using tile-index colliders not per-tile collisions",
+        "infinite_air_jumps — coyote_time not zeroed on jump; player keeps jumping mid-air",
+        "wall_stuck_at_max_speed — drag_x is 0 and player slams into wall; arcade physics zeros velocity but tunneling can occur at >1000 px/sec into thin walls"
+      ]
+    },
+    "topdown": {
+      "exemplars": ["Zelda: A Link to the Past", "Hotline Miami", "Pokemon overworld"],
+      "physics_engine": "arcade",
+      "gravity": 0,
+      "gravity_notes": "Always 0. Top-down means no Y-axis falling. Set physics.config.arcade.gravity={x:0,y:0} explicitly.",
+      "player_movement": {
+        "move_speed_px_per_sec": 200,
+        "acceleration": 0,
+        "drag_x": 0,
+        "drag_y": 0,
+        "max_velocity_x": 200,
+        "max_velocity_y": 200,
+        "jump_velocity_px_per_sec": 0,
+        "double_jump": false,
+        "coyote_time_ms": 0,
+        "jump_buffer_ms": 0,
+        "diagonal_normalize": true,
+        "sprite_facing": true,
+        "facing_directions": 4,
+        "notes": "Stop-start movement: zero velocity each frame, set from input. Phaser 3 tutorial standard is 250 for Zelda-feel. Hotline Miami is faster (~280) — speed > defense is its whole identity. CRITICAL: normalize diagonal velocity (multiply by 0.7071 = 1/sqrt(2)) or use Phaser's setVelocity().normalize().scale(speed) — otherwise diagonals are 1.41x faster."
+      },
+      "projectile_physics": {
+        "projectile_type": "straight_line",
+        "speed_px_per_sec": 500,
+        "gravity_applies": false,
+        "lifetime_ms": 1500,
+        "pierce_count": 0,
+        "notes": "Hotline Miami bullet speed is intentionally fast — being seen by a gun-enemy is near-instant death."
+      },
+      "enemy_physics": {
+        "walker": {"gravity": 0, "speed": 80, "pattern": "patrol_path"},
+        "flyer": {"gravity": 0, "speed": 100, "pattern": "sine_wave"},
+        "chaser": {"gravity": 0, "speed": 130, "activation_range_px": 350, "los_required": true},
+        "static_turret": {"gravity": 0, "fire_interval_ms": 1200, "projectile_speed": 350, "rotates_to_player": true},
+        "boss_arena": {"immovable": true, "gravity": 0, "phase_timer_ms": 5000}
+      },
+      "collision_setup": [
+        "this.physics.add.collider(player, walls)",
+        "this.physics.add.collider(enemies, walls)",
+        "this.physics.add.overlap(player, enemies, takeDamage) — Hotline Miami: damage = death",
+        "this.physics.add.overlap(playerBullets, enemies, killEnemy)",
+        "this.physics.add.overlap(enemyBullets, player, takeDamage)",
+        "Do NOT collide enemies with each other"
+      ],
+      "camera": "lerp_follow",
+      "camera_lerp": 0.15,
+      "world_bounds": "tile-based world, world larger than viewport; setBounds to map size",
+      "animation_pattern": "4-direction frame-based atlas: walk-up, walk-down, walk-left, walk-right; idle = first frame of each direction",
+      "iconic_physics_signature": "Hotline Miami: instant death on contact — no health bar, speed > defense, retry is <1 second. Zelda: 8-axis movement with sword-swing locks rotation for 200ms.",
+      "common_physics_bugs": [
+        "diagonal_speed_141x — forgetting to normalize diagonal vector; player visibly faster on diagonals",
+        "stuck_on_wall_corner — AABB sliding along corners; fix by setting body.checkCollision per-side or using slightly inset hitboxes",
+        "enemy_stacks_on_player — overlap() but no separation; for damage-on-touch this is correct, but if enemy is 'pushable' you need collider not overlap",
+        "facing_doesnt_update_on_idle — sprite_facing tied to velocity, so when velocity=0 the last facing freezes (correct) but devs forget to expose facing for shooting direction"
+      ]
+    },
+    "arpg": {
+      "exemplars": ["Diablo 2/3 isometric", "Hades", "Path of Exile"],
+      "physics_engine": "arcade",
+      "gravity": 0,
+      "gravity_notes": "0. Isometric/top-down. Z-axis is fake via sprite y-sort, not physics gravity.",
+      "player_movement": {
+        "move_speed_px_per_sec": 220,
+        "acceleration": 0,
+        "drag_x": 0,
+        "drag_y": 0,
+        "max_velocity_x": 220,
+        "max_velocity_y": 220,
+        "jump_velocity_px_per_sec": 0,
+        "double_jump": false,
+        "dash_velocity": 700,
+        "dash_duration_ms": 200,
+        "dash_cooldown_ms": 600,
+        "dash_iframes_ms": 100,
+        "diagonal_normalize": true,
+        "sprite_facing": true,
+        "control_scheme": "wasd_or_click_to_move",
+        "notes": "Hades dash: ~700ms total animation but i-frames cover only the first half (~100ms). Dash is the SINGLE MOST IMPORTANT mechanic — Supergiant says every attack was designed around it. Dash distance ~140px (700 px/sec * 0.2s)."
+      },
+      "projectile_physics": {
+        "projectile_type": "straight_line",
+        "speed_px_per_sec": 550,
+        "gravity_applies": false,
+        "lifetime_ms": 1500,
+        "pierce_count": 0,
+        "notes": "Some weapons fire homing projectiles (track player or nearest enemy), some pierce. Boomerangs (Diablo's Wirt's Leg / Hades's Aspect of Beowulf) use lifetime + reverse-velocity at 50%."
+      },
+      "enemy_physics": {
+        "walker": {"gravity": 0, "speed": 90, "pattern": "approach_and_strike", "attack_range_px": 40},
+        "flyer": {"gravity": 0, "speed": 110, "pattern": "sine_wave_or_circle"},
+        "chaser": {"gravity": 0, "speed": 140, "activation_range_px": 400},
+        "static_turret": {"gravity": 0, "fire_interval_ms": 1000, "projectile_speed": 400},
+        "boss_arena": {"immovable": true, "gravity": 0, "phase_timer_ms": 6000, "telegraph_ms": 800}
+      },
+      "collision_setup": [
+        "this.physics.add.collider(player, walls)",
+        "this.physics.add.collider(enemies, walls)",
+        "this.physics.add.overlap(player, enemies, takeDamage) — but NOT during dash i-frames",
+        "this.physics.add.overlap(playerBullets, enemies, damageEnemy) — pierce-aware",
+        "this.physics.add.overlap(enemyBullets, player, takeDamage)",
+        "Do NOT collide enemies with each other (clogs doorways)"
+      ],
+      "camera": "lerp_follow",
+      "camera_lerp": 0.12,
+      "world_bounds": "room-based — each room is one screen; transitions reset camera bounds. Hades-style.",
+      "animation_pattern": "8-direction frame-based atlas; attack/dash/cast as separate states; sprite_facing via velocity OR mouse-cursor angle",
+      "iconic_physics_signature": "Hades dash with i-frames — short distance (~140px), short duration (~200ms), invincible during animation. Combat is dance: attack-dash-attack.",
+      "common_physics_bugs": [
+        "click_to_move_doesnt_update_target — player walks past click point because target is set on click but never updated as player moves",
+        "pathfinding_into_walls — cheap pathfinding picks a target inside a wall; fix by raycasting from player to target and clamping to last walkable tile",
+        "dash_iframes_persist_after_dash_ends — i-frame timer not cleared in update(); player invincible forever",
+        "dash_through_walls — dash sets velocity to 700 but no collision check during dash; player phases through walls. Fix: dash still respects collider, just gives i-frames vs damage.",
+        "enemies_stack_on_player — overlap() without separation. For melee enemies, this is correct (they damage on touch). For ranged enemies, add collider with player to keep distance."
+      ]
+    },
+    "arcade": {
+      "exemplars": ["Geometry Wars", "Smash TV", "Robotron 2084"],
+      "physics_engine": "arcade",
+      "gravity": 0,
+      "gravity_notes": "0. Twin-stick = pure 2D plane.",
+      "player_movement": {
+        "move_speed_px_per_sec": 280,
+        "acceleration": 0,
+        "drag_x": 0,
+        "drag_y": 0,
+        "max_velocity_x": 280,
+        "max_velocity_y": 280,
+        "jump_velocity_px_per_sec": 0,
+        "double_jump": false,
+        "diagonal_normalize": true,
+        "sprite_facing": true,
+        "control_scheme": "decoupled_aim_and_move",
+        "aim_method": "right_stick_or_mouse",
+        "fire_method": "auto_while_aiming OR right_stick_held",
+        "notes": "Decoupled aim is the GENRE. Left stick / WASD = move. Right stick / mouse = aim AND fire. Player ship rotates to aim direction; movement direction can be opposite (strafe-fire)."
+      },
+      "projectile_physics": {
+        "projectile_type": "straight_line",
+        "speed_px_per_sec": 800,
+        "gravity_applies": false,
+        "lifetime_ms": 1500,
+        "pierce_count": 0,
+        "fire_rate_ms": 100,
+        "notes": "Geometry Wars: continuous stream of bullets, very high fire rate (10/sec), bullets visually huge but hitboxes accurate. Bullets despawn off-screen."
+      },
+      "enemy_physics": {
+        "walker": {"gravity": 0, "speed": 60, "pattern": "patrol"},
+        "flyer": {"gravity": 0, "speed": 90, "pattern": "wave"},
+        "chaser": {"gravity": 0, "speed": 150, "pattern": "direct_pursuit"},
+        "static_turret": {"gravity": 0, "fire_interval_ms": 800, "projectile_speed": 350},
+        "boss_arena": {"immovable": false, "gravity": 0, "speed": 60, "phase_timer_ms": 4000},
+        "splitter": {"gravity": 0, "speed": 100, "spawns_on_death": 3, "spawn_speed": 130, "notes": "Geometry Wars Pinwheels — split into smaller versions on death"}
+      },
+      "collision_setup": [
+        "this.physics.add.overlap(playerBullets, enemies, killEnemy)",
+        "this.physics.add.overlap(player, enemies, gameOver) — instant death is the genre",
+        "Walls: for arena-bounded games, use world bounds + bounce on enemies",
+        "Do NOT collide enemies with each other (Robotron-style flow)"
+      ],
+      "camera": "static",
+      "world_bounds": "single-screen arena — setBounds to viewport, camera does not scroll. Player is restricted to arena.",
+      "animation_pattern": "tween-rotation — Geometry Wars uses vector graphics, rotating ship + scaling enemies via tween, NOT spritesheet animation. Particles for trails.",
+      "iconic_physics_signature": "Geometry Wars: decoupled aim/move + bloom-particle visual chaos + arena bounce on player ship. Robotron: single-screen, NEVER scrolls, enemies surround player from all sides.",
+      "common_physics_bugs": [
+        "bullet_overlap_dies_to_lifetime_only — bullets fired off-screen never destroyed because lifetime > arena traversal time; fix by checking world bounds and destroying",
+        "splitter_recursion_explosion — splitter spawns 3 splitters that spawn 3 each; cap at depth 2",
+        "rotation_snaps_per_frame — using setRotation() with raw input; smooth with lerp or angle interpolation",
+        "fire_rate_uneven — using time.now % rate instead of last_fire_ms timer; uneven gaps in bullet stream",
+        "enemy_spawns_on_player — spawn enemies at random points without min-distance check from player"
+      ]
+    },
+    "shmup": {
+      "exemplars": ["R-Type", "Galaga", "Ikaruga", "1942"],
+      "physics_engine": "arcade",
+      "gravity": 0,
+      "gravity_notes": "0. Side-scrolling or vertical-scrolling shmup; world scrolls past static-Y player.",
+      "player_movement": {
+        "move_speed_px_per_sec": 250,
+        "acceleration": 0,
+        "drag_x": 0,
+        "drag_y": 0,
+        "max_velocity_x": 250,
+        "max_velocity_y": 250,
+        "jump_velocity_px_per_sec": 0,
+        "double_jump": false,
+        "diagonal_normalize": true,
+        "sprite_facing": false,
+        "hitbox_size_px": 4,
+        "notes": "Player ship hitbox is TINY (1-4px) compared to sprite (~32px). This is the bullet-hell signature. Player movement bound to lower 60% of screen typically. Galaga: single-axis (X only). R-Type: 2-axis but fixed X-floor."
+      },
+      "projectile_physics": {
+        "projectile_type": "straight_line",
+        "speed_px_per_sec": 700,
+        "gravity_applies": false,
+        "lifetime_ms": 2500,
+        "pierce_count": 0,
+        "fire_rate_ms": 150,
+        "notes": "Player bullets fast (700+ px/sec). Enemy bullets slower (200-400 px/sec) so they're dodgeable. Bullet hell games push enemy bullets to 300 with hundreds on screen."
+      },
+      "enemy_physics": {
+        "walker": {"gravity": 0, "speed": 80, "pattern": "scroll_with_world"},
+        "flyer": {"gravity": 0, "speed": 120, "pattern": "swooping_arc"},
+        "chaser": {"gravity": 0, "speed": 100, "pattern": "homing_then_straight"},
+        "static_turret": {"gravity": 0, "fire_interval_ms": 1000, "projectile_speed": 300},
+        "boss_arena": {"immovable": false, "gravity": 0, "speed": 40, "phase_timer_ms": 8000, "phases": 3},
+        "formation": {"gravity": 0, "speed": 60, "pattern": "galaga_v_formation", "notes": "Galaga: enemies enter in choreographed loops, settle into V-formation, then peel off in waves"}
+      },
+      "collision_setup": [
+        "this.physics.add.overlap(playerBullets, enemies, killEnemy)",
+        "this.physics.add.overlap(enemyBullets, player, gameOver) — small player hitbox",
+        "this.physics.add.overlap(player, enemies, gameOver)",
+        "Auto-destroy any sprite past camera bounds for performance"
+      ],
+      "camera": "static",
+      "scroll_speed_px_per_sec": 80,
+      "world_bounds": "scrolling — viewport is fixed, world scrolls past. Vertical (Galaga, 1942) or horizontal (R-Type, Gradius). Player constrained to viewport.",
+      "animation_pattern": "frame-based atlas with tilt animation when moving (R-Type: ship banks left/right). Boss = multi-part rigged sprite.",
+      "iconic_physics_signature": "Tiny player hitbox (1-4px) inside large sprite — the DEFINING bullet-hell mechanic. Galaga: enemies fly in choreographed loops before settling into formation, creating threat-cycles.",
+      "common_physics_bugs": [
+        "hitbox_equals_sprite — player dies from any near-miss; MUST shrink hitbox via body.setSize(4,4)",
+        "bullet_count_explosion_50fps — 200+ bullets on screen tanks framerate; use object pooling (Phaser Group with createMultiple)",
+        "scroll_speed_drift — using scrollFactor on tilemap but enemies positioned in world coords drift; lock to scroll velocity",
+        "bullets_collide_with_each_other — accidentally colliding playerBullets group with itself; explicit overlap calls only",
+        "enemy_spawns_off_screen_top_visible — spawn at y=-50 not y=-200; enemy pops into view"
+      ]
+    },
+    "flight": {
+      "exemplars": ["Star Fox", "Wing Commander", "1942 (rail)"],
+      "physics_engine": "arcade",
+      "gravity": 0,
+      "gravity_notes": "0. Flight games suspend disbelief about gravity — ship moves freely.",
+      "player_movement": {
+        "move_speed_px_per_sec": 200,
+        "acceleration": 600,
+        "drag_x": 400,
+        "drag_y": 400,
+        "max_velocity_x": 250,
+        "max_velocity_y": 250,
+        "jump_velocity_px_per_sec": 0,
+        "double_jump": false,
+        "thrust_speed": 350,
+        "retro_speed": 80,
+        "diagonal_normalize": true,
+        "sprite_facing": false,
+        "tilt_animation": true,
+        "notes": "Star Fox signature: thrusters and retro-rockets temporarily speed up/slow down within a forced-scroll. Player has momentum (acceleration + drag) unlike top-down stop-start. Roll/barrel-roll bound to a key — temporary i-frames."
+      },
+      "projectile_physics": {
+        "projectile_type": "straight_line",
+        "speed_px_per_sec": 600,
+        "gravity_applies": false,
+        "lifetime_ms": 2000,
+        "pierce_count": 0,
+        "fire_rate_ms": 200,
+        "homing_lock_range_px": 400,
+        "notes": "Star Fox lock-on missiles use homing with a charged-shot mechanic."
+      },
+      "enemy_physics": {
+        "walker": {"gravity": 0, "speed": 0, "pattern": "ground_target"},
+        "flyer": {"gravity": 0, "speed": 150, "pattern": "wave_or_arc"},
+        "chaser": {"gravity": 0, "speed": 130, "pattern": "approach_then_pass"},
+        "static_turret": {"gravity": 0, "fire_interval_ms": 800, "projectile_speed": 250, "rotates_to_player": true},
+        "boss_arena": {"immovable": false, "gravity": 0, "speed": 50, "phase_timer_ms": 7000}
+      },
+      "collision_setup": [
+        "this.physics.add.overlap(playerBullets, enemies, killEnemy)",
+        "this.physics.add.overlap(enemyBullets, player, takeDamage) — flight games typically have shield/health, not 1-hit",
+        "this.physics.add.overlap(player, enemies, ramDamage)",
+        "this.physics.add.overlap(player, terrainObstacle, takeDamage) — wing-clip damage"
+      ],
+      "camera": "static",
+      "scroll_speed_px_per_sec": 120,
+      "world_bounds": "rail/auto-scroll — world scrolls past at fixed (or thrustable) speed. Player constrained to viewport rectangle.",
+      "animation_pattern": "frame-based atlas with bank-left/bank-right/level frames driven by velocity.x; engine-thrust particle effect",
+      "iconic_physics_signature": "Star Fox: thrust + retro within a forced-scroll. Player has agency over forward speed within a window, creating dodge-around-obstacle gameplay impossible in fixed-scroll shmups.",
+      "common_physics_bugs": [
+        "thrust_breaks_world_scroll — increasing player x doesn't match world scroll; world scrolls past faster than player thrusts forward, creating drift",
+        "barrel_roll_iframes_persist — i-frame timer not cleared",
+        "enemy_passes_through_player_at_high_relative_velocity — tunneling at >1000 px/sec relative; enable continuous collision in body.tilesAndPhysics",
+        "bank_animation_doesnt_return_to_level — only setting frame on key-down, not on key-up; ship stuck banked"
+      ]
+    },
+    "obby": {
+      "exemplars": ["Roblox-style obstacle course"],
+      "physics_engine": "arcade",
+      "gravity": 1000,
+      "gravity_notes": "1000 — obby physics emphasize precision over Mario-feel. Roblox default jump-power 50 = jumps to 7.35 studs in ~0.5s, mapped to pixels = stronger gravity than platformer.",
+      "player_movement": {
+        "move_speed_px_per_sec": 220,
+        "acceleration": 1500,
+        "drag_x": 1500,
+        "max_velocity_x": 250,
+        "max_velocity_y": 900,
+        "jump_velocity_px_per_sec": -480,
+        "double_jump": false,
+        "double_jump_velocity": -380,
+        "coyote_time_ms": 80,
+        "jump_buffer_ms": 80,
+        "wall_slide": false,
+        "variable_jump_cut_ratio": 0.5,
+        "sprite_facing": true,
+        "notes": "Roblox stud = 1 pixel mapping in 2D-obby translation. Roblox default WalkSpeed 16 studs/sec ≈ 220 px/sec at 14px/stud. Coyote/buffer slightly tighter (80ms) than platformer because obby precision is the genre."
+      },
+      "projectile_physics": {
+        "projectile_type": "straight_line",
+        "speed_px_per_sec": 400,
+        "gravity_applies": false,
+        "lifetime_ms": 1500,
+        "pierce_count": 0,
+        "notes": "Most obbies don't have player projectiles. Hazards = lava, kill-bricks, spinning-blades."
+      },
+      "enemy_physics": {
+        "walker": {"gravity": 1000, "speed": 0, "pattern": "static_killbrick"},
+        "flyer": {"gravity": 0, "speed": 80, "pattern": "spinning_obstacle"},
+        "chaser": {"gravity": 0, "speed": 150, "pattern": "chase_during_segment"},
+        "static_turret": {"gravity": 0, "fire_interval_ms": 1500, "projectile_speed": 250},
+        "boss_arena": {"immovable": true, "gravity": 0, "phase_timer_ms": 5000},
+        "kill_brick": {"gravity": 0, "immovable": true, "notes": "On overlap = respawn at last checkpoint"}
+      },
+      "collision_setup": [
+        "this.physics.add.collider(player, platforms)",
+        "this.physics.add.collider(player, movingPlatforms) — momentum transfer",
+        "this.physics.add.overlap(player, killBricks, respawnAtCheckpoint)",
+        "this.physics.add.overlap(player, checkpoint, setCheckpoint)",
+        "this.physics.add.overlap(player, finishLine, levelComplete)"
+      ],
+      "camera": "lerp_follow",
+      "camera_lerp": 0.1,
+      "world_bounds": "scrolling — long linear course; setBounds to course extent",
+      "animation_pattern": "frame-based atlas with idle/run/jump/fall; respawn-fade tween on checkpoint",
+      "iconic_physics_signature": "Checkpoint-based respawn loop — death is instant, retry is instant, course is long. Frustration tolerance built around <2-second restart.",
+      "common_physics_bugs": [
+        "checkpoint_not_saved_on_overlap — overlap triggers every frame inside checkpoint, accidentally resetting checkpoint position; use 'visited' flag",
+        "respawn_in_kill_brick — checkpoint placed inside an active kill brick zone; respawn-loop death",
+        "moving_platform_carries_player_double_speed — adding platform velocity to player velocity instead of just position; fix by snapping player.body.velocity.x to platform.body.velocity.x while standing",
+        "fall_off_world_no_respawn — missing world-bounds-bottom kill check; player falls forever"
+      ]
+    },
+    "adventure": {
+      "exemplars": ["Breath of the Wild (as inspiration for top-down adventure)", "Hollow Knight"],
+      "physics_engine": "arcade",
+      "gravity": 800,
+      "gravity_notes": "800 if side-scrolling adventure (Hollow Knight). 0 if top-down adventure (Zelda).",
+      "player_movement": {
+        "move_speed_px_per_sec": 220,
+        "acceleration": 1400,
+        "drag_x": 1200,
+        "max_velocity_x": 250,
+        "max_velocity_y": 800,
+        "jump_velocity_px_per_sec": -480,
+        "double_jump": true,
+        "double_jump_velocity": -420,
+        "coyote_time_ms": 100,
+        "jump_buffer_ms": 100,
+        "wall_slide": true,
+        "wall_slide_speed_cap": 100,
+        "wall_jump_x_velocity": 280,
+        "wall_jump_y_velocity": -460,
+        "dash_velocity": 600,
+        "dash_duration_ms": 250,
+        "dash_cooldown_ms": 700,
+        "dash_iframes_ms": 150,
+        "variable_jump_cut_ratio": 0.5,
+        "sprite_facing": true,
+        "notes": "Hollow Knight gives all platformer abilities + dash + wall-jump + double-jump. Adventure differs from pure platformer in having mid-game ability unlocks (Metroidvania)."
+      },
+      "projectile_physics": {
+        "projectile_type": "straight_line",
+        "speed_px_per_sec": 500,
+        "gravity_applies": false,
+        "lifetime_ms": 1500,
+        "pierce_count": 0,
+        "notes": "Soul/spell-based projectiles in Hollow Knight; resource-limited firing."
+      },
+      "enemy_physics": {
+        "walker": {"gravity": 800, "speed": 70, "pattern": "patrol_with_edge_detect"},
+        "flyer": {"gravity": 0, "speed": 90, "pattern": "sine_wave_chase"},
+        "chaser": {"gravity": 800, "speed": 110, "activation_range_px": 300},
+        "static_turret": {"gravity": 0, "fire_interval_ms": 1200, "projectile_speed": 300},
+        "boss_arena": {"immovable": true, "gravity": 0, "phase_timer_ms": 6000, "phases": 3, "telegraph_ms": 700}
+      },
+      "collision_setup": [
+        "this.physics.add.collider(player, ground)",
+        "this.physics.add.collider(enemies, ground)",
+        "this.physics.add.overlap(player, enemies, takeDamage) — but NOT during dash i-frames",
+        "this.physics.add.overlap(playerAttack, enemies, damageEnemy)",
+        "this.physics.add.overlap(player, room_transition, loadNextRoom)"
+      ],
+      "camera": "lerp_follow",
+      "camera_lerp": 0.1,
+      "world_bounds": "interconnected rooms — large world, room-based camera bounds",
+      "animation_pattern": "frame-based atlas; large state machine (idle/run/jump/fall/dash/wall-slide/attack/cast/hurt)",
+      "iconic_physics_signature": "Metroidvania ability progression — dash unlocks new traversal, double-jump opens previously inaccessible rooms. Physics constants don't change but the player's MOVESET grows.",
+      "common_physics_bugs": [
+        "dash_during_wall_slide_breaks_state — entering dash from wall-slide doesn't clear wall-slide flag; player dashes while gravity is still capped",
+        "double_jump_resets_on_landing_too_aggressively — using onCollide with ground; ANY ground touch (including 1-frame on a passthrough platform) refreshes; fix with on-ground state machine",
+        "wall_jump_off_corner_pixel — wall-detect via body.blocked.left fires for 1 frame on corner; player gets free wall-jumps off floor edges"
+      ]
+    },
+    "rpg": {
+      "exemplars": ["Final Fantasy 1-6 (overworld)", "Chrono Trigger"],
+      "physics_engine": "arcade",
+      "gravity": 0,
+      "gravity_notes": "0. Overworld is top-down; battle scene is none-physics tween-based.",
+      "player_movement": {
+        "move_speed_px_per_sec": 160,
+        "acceleration": 0,
+        "drag_x": 0,
+        "drag_y": 0,
+        "max_velocity_x": 160,
+        "max_velocity_y": 160,
+        "jump_velocity_px_per_sec": 0,
+        "double_jump": false,
+        "diagonal_normalize": true,
+        "sprite_facing": true,
+        "facing_directions": 4,
+        "grid_snapping": false,
+        "notes": "RPG overworld speed slower than action top-down (160 vs 220) — exploration pace. Chrono Trigger uses smooth movement; Pokemon uses 16px-grid snapping. Battle scene = 'none' physics, all tween animation."
+      },
+      "projectile_physics": {
+        "projectile_type": "homing",
+        "speed_px_per_sec": 600,
+        "gravity_applies": false,
+        "lifetime_ms": 800,
+        "pierce_count": 0,
+        "notes": "Battle-scene only. Spell projectiles = homing tweens to target sprite, fixed lifetime."
+      },
+      "enemy_physics": {
+        "walker": {"gravity": 0, "speed": 0, "notes": "Overworld: enemies are scripted NPCs OR random encounters (no physics body)"},
+        "battle_actor": {"gravity": 0, "speed": 0, "pattern": "tween_to_attack_position", "notes": "Battle scene: actors don't 'move' in physics sense; tween to attack position, tween back"}
+      },
+      "collision_setup": [
+        "this.physics.add.collider(player, walls) — overworld",
+        "this.physics.add.overlap(player, encounterZone, startBattle) — random encounter trigger",
+        "this.physics.add.overlap(player, npc, startDialogue)",
+        "Battle scene: NO physics colliders — turn-based, tween-only"
+      ],
+      "camera": "lerp_follow",
+      "camera_lerp": 0.15,
+      "world_bounds": "tile-based world larger than viewport; setBounds to map size; battle scene = static/no scroll",
+      "animation_pattern": "4-direction frame-based atlas (overworld) + battle-pose atlas (idle/attack/cast/hurt) for battle scene",
+      "iconic_physics_signature": "Two-mode physics — overworld is real-time arcade physics, battle is turn-based zero-physics tween system. Chrono Trigger broke tradition with seamless transition (battle in same scene), but most RPGs scene-switch.",
+      "common_physics_bugs": [
+        "encounter_zone_double_trigger — overlap fires every frame inside zone; use 'in_battle' flag to gate scene transition",
+        "battle_actor_tween_overlap — tweening 2 actors to same spot; check destination occupancy before tween start",
+        "overworld_speed_too_fast_for_tile_grid — moving 200 px/sec but tiles are 16px = 12 tiles/sec, encounter probability tuning breaks; slow to 160"
+      ]
+    },
+    "action": {
+      "exemplars": ["Hotline Miami 2", "Enter the Gungeon"],
+      "physics_engine": "arcade",
+      "gravity": 0,
+      "gravity_notes": "0. Top-down action. Z-axis is fake.",
+      "player_movement": {
+        "move_speed_px_per_sec": 240,
+        "acceleration": 0,
+        "drag_x": 0,
+        "drag_y": 0,
+        "max_velocity_x": 280,
+        "max_velocity_y": 280,
+        "jump_velocity_px_per_sec": 0,
+        "double_jump": false,
+        "dash_velocity": 600,
+        "dash_duration_ms": 350,
+        "dash_cooldown_ms": 800,
+        "dash_iframes_ms": 175,
+        "diagonal_normalize": true,
+        "sprite_facing": true,
+        "control_scheme": "decoupled_aim_and_move",
+        "notes": "Enter the Gungeon dodge roll: 700ms full animation, i-frames in first half (350ms / ~175ms i-frame). Movement faster than ARPG (240 vs 220) because death is faster too."
+      },
+      "projectile_physics": {
+        "projectile_type": "straight_line",
+        "speed_px_per_sec": 700,
+        "gravity_applies": false,
+        "lifetime_ms": 1500,
+        "pierce_count": 0,
+        "fire_rate_ms": 120,
+        "notes": "Gungeon variety: pierce 1-3, homing, parabolic (grenades), boomerang. Default = straight-line fast bullet."
+      },
+      "enemy_physics": {
+        "walker": {"gravity": 0, "speed": 75, "pattern": "patrol_until_los"},
+        "flyer": {"gravity": 0, "speed": 100, "pattern": "circle_strafe"},
+        "chaser": {"gravity": 0, "speed": 140, "pattern": "chase_with_los_break"},
+        "static_turret": {"gravity": 0, "fire_interval_ms": 700, "projectile_speed": 350, "rotates_to_player": true},
+        "boss_arena": {"immovable": false, "gravity": 0, "speed": 60, "phase_timer_ms": 5000, "phases": 3, "telegraph_ms": 600}
+      },
+      "collision_setup": [
+        "this.physics.add.collider(player, walls)",
+        "this.physics.add.collider(enemies, walls)",
+        "this.physics.add.overlap(player, enemies, takeDamage) — gated by dash_iframes_active flag",
+        "this.physics.add.overlap(playerBullets, enemies, damageEnemy)",
+        "this.physics.add.overlap(enemyBullets, player, takeDamage) — gated by dash_iframes_active",
+        "this.physics.add.overlap(playerBullets, walls, destroyBullet) — bullets stop at walls",
+        "Do NOT collide enemies with each other"
+      ],
+      "camera": "lerp_follow",
+      "camera_lerp": 0.18,
+      "world_bounds": "room-based — Gungeon-style dungeon room layout, room transitions reset bounds",
+      "animation_pattern": "frame-based atlas with attack/dash/hurt states; sprite_facing via mouse-cursor angle (decoupled from movement)",
+      "iconic_physics_signature": "Dodge-roll i-frames as the core defensive verb. Hotline Miami: instant death + instant restart. Gungeon: dodge-roll + bullet patterns trained around it.",
+      "common_physics_bugs": [
+        "iframes_dont_gate_overlap_callback — overlap fires regardless of i-frame state; gate inside callback with 'if (player.iframes > 0) return;'",
+        "dash_through_wall_with_iframes — dash sets velocity high but skips collider; player phases through wall during dash. Keep collider always-on; only damage gating is i-frame-controlled.",
+        "shoot_direction_uses_movement_not_aim — fire vector calculated from velocity instead of aim angle; can't strafe-fire backward",
+        "bullet_lifetime_too_long_clutters_screen — bullets persist 5 seconds, hundreds onscreen, tank framerate; 1.5s is the sweet spot"
+      ]
+    },
+    "puzzle": {
+      "exemplars": ["Tetris", "Bejeweled", "Sokoban"],
+      "physics_engine": "none",
+      "gravity": 0,
+      "gravity_notes": "0. Puzzle 'gravity' (Tetris pieces falling, Bejeweled gems falling) is simulated via tween or grid-step, NOT physics gravity. Implementing as physics gravity creates non-deterministic landings.",
+      "player_movement": {
+        "move_speed_px_per_sec": 0,
+        "grid_size_px": 32,
+        "step_duration_ms": 100,
+        "movement_method": "tween_to_grid_cell",
+        "notes": "Sokoban: player moves 1 cell per keypress, tween 100ms to new position. Tetris: piece falls 1 cell per N ms (level-dependent), tween smooth. Bejeweled: swap = 200ms tween of 2 cells. NEVER use physics velocity — breaks grid alignment."
+      },
+      "projectile_physics": {
+        "projectile_type": "none",
+        "notes": "Puzzle games don't fire projectiles."
+      },
+      "enemy_physics": {
+        "notes": "No enemies in classic puzzle. Sokoban has obstacles (walls, boxes); Tetris has 'gravity' as the antagonist (pieces falling at increasing speed)."
+      },
+      "collision_setup": [
+        "Grid-array lookup: grid[y][x] === 'wall' before allowing move",
+        "NO Phaser physics colliders — all collision is array-based",
+        "Match-3: scan grid for runs of 3+ same-color, mark for clear, tween clear, gravity-collapse remaining"
+      ],
+      "camera": "static",
+      "world_bounds": "single-screen — entire puzzle visible; setBounds to viewport",
+      "animation_pattern": "tween-based — tween position for movement, tween scale for clears, tween alpha for fade-out. NO frame animation typically.",
+      "iconic_physics_signature": "Tetris: piece falls 1 cell per X ms (level-dependent), accelerates with level. Soft-drop = fast manual fall; hard-drop = instant snap. Lock-delay = 500ms grace before piece locks (grants slide-under).",
+      "common_physics_bugs": [
+        "tween_overlap_chains — player presses move during tween; queueing system needed or input is dropped",
+        "grid_desync_from_render — physics body says cell (3,4) but rendered sprite shows (3,5) due to tween mid-flight; only commit grid-coord at tween-complete",
+        "match3_cascade_in_one_frame — checking for matches inside the same frame as the tween-complete; chains visually skip; sequence with promises or 200ms delay between cascade steps",
+        "tetris_lock_no_grace — piece locks instantly on touch; no slide-under play possible; need 500ms lock_delay timer that resets on rotation/move"
+      ]
+    },
+    "boardgame": {
+      "exemplars": ["Catan", "Azul", "Codenames"],
+      "physics_engine": "none",
+      "gravity": 0,
+      "gravity_notes": "0. Pure UI / state machine. Tween for card flips, dice rolls, piece moves.",
+      "player_movement": {
+        "move_speed_px_per_sec": 0,
+        "movement_method": "click_to_select_then_click_to_place",
+        "notes": "All movement is click-driven, tween-animated. No keyboard input typically. Piece tweens from origin to destination over 300-500ms."
+      },
+      "projectile_physics": {
+        "projectile_type": "none",
+        "notes": "Board games don't fire."
+      },
+      "enemy_physics": {
+        "notes": "AI opponents are turn-based logic, not physics bodies."
+      },
+      "collision_setup": [
+        "NO physics — pure pointer-input on Phaser GameObjects with setInteractive()",
+        "Validation is rules-based: 'is this hex adjacent to a city?' = graph lookup, not collision",
+        "Drag-and-drop pieces use Phaser input.setDraggable() with snap-to-cell on dragend"
+      ],
+      "camera": "static",
+      "world_bounds": "single-screen — whole board visible. Maybe pan/zoom for large maps (Catan).",
+      "animation_pattern": "tween-only — card flip = scaleX 0 then swap texture then scaleX 1. Dice = sprite atlas with random frame. Piece move = tween x/y over 400ms with ease-in-out.",
+      "iconic_physics_signature": "Turn-based state machine — explicit currentPlayerIndex, phase ('rolling', 'building', 'trading'), action queue. NO real-time physics. End-of-turn triggers next-turn cascade.",
+      "common_physics_bugs": [
+        "turn_cascade_recursion — endTurn() recursively calls endTurn() through all AI turns in one frame; freeze during AI thinking. FIX: chain via setTimeout or scene.time.delayedCall.",
+        "click_during_tween_breaks_state — piece tween in progress, click registers another move, two pieces moving simultaneously; gate input via input.enabled = false during tweens",
+        "drag_release_outside_valid_cell — piece drops in space; snap back to origin or to nearest valid cell, never leave floating",
+        "ai_thinking_blocks_main_thread — heavy AI evaluation in single frame; spread across requestAnimationFrame chunks or use Web Worker"
+      ]
+    },
+    "strategy": {
+      "exemplars": ["Civilization", "XCOM", "Advance Wars", "Into the Breach"],
+      "physics_engine": "none",
+      "gravity": 0,
+      "gravity_notes": "0. Pure grid/hex state machine. All movement is tween between cells.",
+      "player_movement": {
+        "move_speed_px_per_sec": 0,
+        "grid_size_px": 64,
+        "step_duration_ms": 250,
+        "movement_method": "click_unit_then_click_destination",
+        "notes": "Unit moves N cells per turn (movement_points). Path-tween from start to destination, hop-by-hop, 250ms per cell. Camera pans to follow unit during move."
+      },
+      "projectile_physics": {
+        "projectile_type": "tween_attack_animation",
+        "notes": "Attack 'projectile' is animated tween (arrow flies, then sprite damage flash). NOT physics. Fire-and-forget tween with onComplete callback to apply damage."
+      },
+      "enemy_physics": {
+        "ai_unit": {"speed": 0, "movement": "turn_based", "notes": "Same as player units; just AI-controlled. Pathfinding via A* on grid."}
+      },
+      "collision_setup": [
+        "NO Phaser physics — grid-array lookup",
+        "isWalkable(x,y) checks tile type + occupancy",
+        "Pathfinding: A* with movement_points budget; valid moves highlighted on tile-select"
+      ],
+      "camera": "follow",
+      "camera_lerp": 0.1,
+      "world_bounds": "tile/hex world larger than viewport — pan via mouse-edge or arrow keys. Civilization: huge maps (hundreds of tiles). XCOM: room-sized (10-30 tiles).",
+      "animation_pattern": "frame-based atlas for unit idle + attack + hurt + death; tween for movement between cells",
+      "iconic_physics_signature": "Turn-based state machine with phase enum: 'player_action', 'enemy_action', 'turn_resolution'. Into the Breach: enemy actions PRE-TELEGRAPHED at start of player turn — strategy comes from seeing what's coming.",
+      "common_physics_bugs": [
+        "turn_cascade_through_all_enemies_in_one_frame — for-loop through enemies calls .act() synchronously; entire enemy turn happens in 1 frame, no animation visible. FIX: enemy turns chained via promise/scene.time.delayedCall, ~400ms per enemy",
+        "tween_to_blocked_cell — A* path computed at click time; another unit moves into path; tween proceeds and units overlap. FIX: revalidate path mid-move, or block other units from entering claimed path tiles",
+        "fog_of_war_reveal_in_one_frame — toggling fog tiles all at once; jarring. FIX: cascade reveal in 50ms steps from unit position outward",
+        "infinite_undo_stack — every action pushed to undo stack with full state copy; memory blows up. Cap stack at 10-20 entries.",
+        "ai_evaluation_freezes_60fps — heavy minimax in update loop; chunk via requestAnimationFrame or move to Worker"
+      ]
+    },
+    "simulation": {
+      "exemplars": ["SimCity", "Stardew Valley", "RimWorld"],
+      "physics_engine": "arcade",
+      "gravity": 0,
+      "gravity_notes": "0. Top-down sim. 'Physics' is per-tick simulation, not Phaser physics.",
+      "player_movement": {
+        "move_speed_px_per_sec": 200,
+        "acceleration": 0,
+        "drag_x": 0,
+        "drag_y": 0,
+        "max_velocity_x": 200,
+        "max_velocity_y": 200,
+        "jump_velocity_px_per_sec": 0,
+        "double_jump": false,
+        "diagonal_normalize": true,
+        "sprite_facing": true,
+        "facing_directions": 4,
+        "notes": "Stardew Valley player walks; SimCity has no avatar (god-view). Stardew default ≈ 200 px/sec, 16x16 tiles. SimCity = camera pan only."
+      },
+      "projectile_physics": {
+        "projectile_type": "none",
+        "notes": "Sims don't fire (Stardew weapons are short-range melee tween)."
+      },
+      "enemy_physics": {
+        "monster": {"gravity": 0, "speed": 60, "pattern": "patrol_or_chase", "notes": "Stardew mine monsters use top-down pathing on grid"},
+        "npc_resident": {"gravity": 0, "speed": 30, "pattern": "scheduled_path", "notes": "Stardew NPCs walk pre-scripted paths. SimCity citizens use flow-field on roads."},
+        "static_building": {"immovable": true, "gravity": 0, "notes": "Buildings are grid-cell occupiers, not physics bodies. Simulation tick updates their state (production, decay)."}
+      },
+      "collision_setup": [
+        "this.physics.add.collider(player, solidObjects) — for top-down sims with avatar (Stardew)",
+        "this.physics.add.overlap(player, interactable, showPrompt)",
+        "Building placement: grid-array lookup, not physics overlap",
+        "SimCity: NO physics at all — pure tile-grid simulation"
+      ],
+      "camera": "lerp_follow_or_pan",
+      "camera_lerp": 0.1,
+      "world_bounds": "tile-based world MUCH larger than viewport — full farm/city map; setBounds to map size",
+      "animation_pattern": "frame-based atlas for player + npcs (4-direction walk); buildings = static sprites; particle effects for smoke/fire/water",
+      "iconic_physics_signature": "Tick-based simulation — Stardew is 60fps but game-time advances at 700ms per game-minute (7 minutes real = 1 game day). SimCity: simulation-tick separate from frame-tick; simulation runs at 1-10 ticks/sec depending on game speed setting.",
+      "common_physics_bugs": [
+        "simulation_tick_tied_to_framerate — production/growth runs every frame instead of every N seconds; framerate-dependent economy. FIX: explicit tick interval (every 1000ms increments game-time).",
+        "all_npcs_update_offscreen_every_frame — 100 NPCs each running pathfinding at 60fps; 6000 path-calcs/sec. FIX: only update visible NPCs every frame; offscreen NPCs update every 4-10 frames.",
+        "save_during_tween_breaks_state — saving while NPC mid-tween captures interpolated position; on load, NPC offset from grid. FIX: only save at tile-aligned positions, or store grid_x and tween-progress separately.",
+        "building_placement_overlaps — checking center-pixel only; large buildings overlap edges. Check ALL grid cells the building footprint covers."
+      ]
+    },
+    "3d-platformer": {
+      "exemplars": ["Super Mario 64", "Banjo-Kazooie"],
+      "physics_engine": "three_3d",
+      "physics_lib": "rapier",
+      "physics_lib_alt": "cannon-es",
+      "gravity": -30,
+      "gravity_notes": "Cannon-es / Rapier 3D gravity in m/s^2 (NOT pixels). -30 is the 3D-platformer canonical 'feel-heavy' value (vs Earth -9.8); Mario 64 uses ~3x Earth gravity in scaled units. Rapier is 5-10x faster than Cannon-es in benchmarks; prefer Rapier for new projects.",
+      "player_movement": {
+        "move_speed_m_per_sec": 6,
+        "acceleration": 30,
+        "drag": 8,
+        "max_velocity_horizontal": 8,
+        "jump_velocity_m_per_sec": 9,
+        "double_jump": true,
+        "double_jump_velocity": 7,
+        "triple_jump": true,
+        "triple_jump_velocity": 11,
+        "long_jump": true,
+        "long_jump_velocity_h": 12,
+        "long_jump_velocity_v": 5,
+        "coyote_time_ms": 120,
+        "jump_buffer_ms": 120,
+        "wall_slide": true,
+        "wall_jump_velocity": 9,
+        "variable_jump_cut_ratio": 0.5,
+        "facing_method": "rotation_y_to_movement_direction",
+        "notes": "Mario 64 jump variants: single jump, double jump (chain), triple jump (high), long jump (forward distance), wall jump, side flip. Each is a state in the move state machine. Camera-relative input (W moves forward in camera direction, not world Z+)."
+      },
+      "projectile_physics": {
+        "projectile_type": "parabolic",
+        "speed_m_per_sec": 15,
+        "gravity_applies": true,
+        "lifetime_ms": 3000,
+        "pierce_count": 0,
+        "notes": "Banjo eggs: arc with gravity. Mario throws shells: short-range parabolic."
+      },
+      "enemy_physics": {
+        "walker": {"gravity": -30, "speed": 3, "pattern": "patrol", "kinematic_body": true},
+        "flyer": {"gravity": 0, "speed": 5, "pattern": "circle_or_chase", "kinematic_body": true},
+        "chaser": {"gravity": -30, "speed": 5, "pattern": "direct_pursuit", "kinematic_body": true},
+        "boss_arena": {"immovable": false, "gravity": -30, "speed": 2, "phases": 3, "rigidbody": "kinematicVelocity"}
+      },
+      "collision_setup": [
+        "Rapier: rigidbody.dynamic for player; rigidbody.fixed for terrain; rigidbody.kinematicVelocity for enemies",
+        "Use capsule collider for player (avoids snagging on edges)",
+        "Use trimesh collider for static terrain (cheap, accurate)",
+        "Use ball collider for collectibles (overlap-only, sensor=true)",
+        "Sensor flag: collider.setSensor(true) for triggers (no physical collision, fires onIntersection event)"
+      ],
+      "camera": "lerp_follow_3d",
+      "camera_distance_m": 8,
+      "camera_pitch_deg": 25,
+      "camera_lerp": 0.1,
+      "world_bounds": "open 3D world (Mario 64 hub levels) or sectioned 3D world (Banjo); use AABB bounds for fall-out kill plane",
+      "animation_pattern": "skeletal animation (glTF skinned mesh) — Three.js AnimationMixer crossfades between idle/run/jump/fall/land",
+      "iconic_physics_signature": "Mario 64 triple-jump chain — single→double→triple, each higher than the last, requires landing-window timing. Banjo: hover-pad mid-jump extends air time, swimming uses fully 3D direction.",
+      "common_physics_bugs": [
+        "capsule_snags_on_edge — using box collider for player; player gets stuck on 1-unit ledges. FIX: capsule collider with rounded bottom.",
+        "kinematic_enemy_pushes_dynamic_player_through_floor — kinematic body with high velocity rams player through floor. FIX: clamp enemy velocity, or make enemies dynamic with high mass.",
+        "camera_clip_through_wall — camera lerps to behind-player but no raycast; camera sees inside wall. FIX: raycast from player to camera target, clamp distance to first hit.",
+        "3d_input_not_camera_relative — W always pushes Z+ in world; player moves wrong direction relative to view. FIX: rotate input vector by camera y-rotation before applying.",
+        "frame_dependent_physics — running rapier.step() in every render frame without fixed timestep; 144Hz monitor breaks physics. FIX: fixed timestep (60Hz) with accumulator pattern."
+      ]
+    },
+    "3d-arpg": {
+      "exemplars": ["Diablo 3 (isometric 3D)", "Path of Exile (3D)"],
+      "physics_engine": "three_3d",
+      "physics_lib": "rapier",
+      "gravity": -20,
+      "gravity_notes": "Lower gravity than 3d-platformer because there's no jumping — gravity only matters for projectile arcs and ragdolls.",
+      "player_movement": {
+        "move_speed_m_per_sec": 5,
+        "acceleration": 0,
+        "drag": 0,
+        "max_velocity_horizontal": 5,
+        "jump_velocity_m_per_sec": 0,
+        "double_jump": false,
+        "dash_velocity": 14,
+        "dash_duration_ms": 250,
+        "dash_cooldown_ms": 700,
+        "dash_iframes_ms": 150,
+        "facing_method": "rotation_y_to_cursor_world_position",
+        "control_scheme": "click_to_move_or_wasd",
+        "notes": "Camera fixed isometric (45deg pitch, ortho or low-FOV perspective). Click-to-move uses raycast from cursor to ground plane to find target. WASD optional for modern feel."
+      },
+      "projectile_physics": {
+        "projectile_type": "straight_line",
+        "speed_m_per_sec": 25,
+        "gravity_applies": false,
+        "lifetime_ms": 1500,
+        "pierce_count": 0,
+        "notes": "Most spells are straight-line at character height. Arc spells (Bone Spear) use parabolic. Boomerangs (Whirlwind range build) use lifetime-based reverse."
+      },
+      "enemy_physics": {
+        "walker": {"gravity": -20, "speed": 3, "pattern": "approach", "kinematic_body": true},
+        "flyer": {"gravity": 0, "speed": 4, "pattern": "swoop"},
+        "chaser": {"gravity": -20, "speed": 5, "pattern": "direct"},
+        "static_turret": {"gravity": 0, "fire_interval_ms": 1000, "projectile_speed": 18},
+        "boss_arena": {"immovable": false, "gravity": -20, "speed": 2, "phases": 3, "telegraph_ms": 800}
+      },
+      "collision_setup": [
+        "Rapier: capsule colliders for all actors",
+        "Trimesh for static terrain",
+        "Sensor colliders for AOE/zone effects",
+        "Player vs walls: collider (block movement)",
+        "Player vs enemies: collider (push), but damage via separate overlap check",
+        "Spells vs enemies: sensor + intersection event"
+      ],
+      "camera": "static_isometric",
+      "camera_distance_m": 12,
+      "camera_pitch_deg": 55,
+      "camera_yaw_deg": 45,
+      "world_bounds": "room/level-based; large 3D world streamed in chunks",
+      "animation_pattern": "skeletal animation with 8-direction movement blends + attack/cast/death",
+      "iconic_physics_signature": "Click-to-move with continuous target update — cursor-position raycast each frame, player walks toward cursor. Hold-LMB = walk-toward-cursor. Skill bound to RMB or hotkey.",
+      "common_physics_bugs": [
+        "click_target_doesnt_update_during_movement — click sets target once; player walks past it. FIX: while LMB held, raycast every frame and update target.",
+        "raycast_misses_ground_falls_through — clicking on far edge of map, raycast hits sky; target unset, player stops. FIX: raycast with infinite ray or large maxDistance.",
+        "isometric_camera_orthographic_breaks_perspective — using perspective camera at low FOV simulates ortho, but characters at edges are stretched. FIX: actually use OrthographicCamera.",
+        "kinematic_enemies_phase_through_each_other — no enemy-vs-enemy collision; enemies stack on player. FIX: enemy-vs-enemy collider with low mass (allows push, doesn't deadlock pathing).",
+        "spell_collider_too_thin_misses_enemies — laser sensor with 0.1m radius slips between enemy capsules; widen to 0.3-0.5m sensor radius."
+      ]
+    }
+  },
+  "code_generation_directives": [
+    "DEFAULT to physics_engine='arcade' for all 2D genres unless explicitly puzzle/board/strategy.",
+    "ALWAYS use the gravity value listed for the genre. Don't make up new gravity values.",
+    "ALWAYS implement coyote_time_ms and jump_buffer_ms for ANY platformer/obby/3d-platformer. The Celeste-validated 100ms is the sweet spot.",
+    "ALWAYS implement diagonal velocity normalization for top-down/arpg/action/shmup. body.velocity.normalize().scale(speed) — diagonals must NOT be 1.41x faster.",
+    "ALWAYS shrink player hitbox via body.setSize() for shmup (1-4px) and bullet-hell. Sprite size != hitbox size.",
+    "NEVER use physics gravity for puzzle game piece-falling (Tetris/Bejeweled). Use scene.time.addEvent or tween — physics is non-deterministic.",
+    "NEVER collide enemies with each other in arpg/action/twin-stick — they clog doorways and stack on player.",
+    "ALWAYS gate i-frame damage inside the overlap callback, NOT by disabling the collider — gameplay benefits from i-frame visual feedback.",
+    "ALWAYS put a 'turn_in_progress' flag on turn-based games (boardgame/strategy/puzzle) — without it, end-turn cascades all enemy turns in one frame.",
+    "ALWAYS use object pooling (Phaser Group with createMultiple) for bullets, particles, enemies in shmup/twin-stick — creating/destroying GameObjects per-frame tanks framerate.",
+    "FOR 3D, prefer Rapier over Cannon-es (5-10x faster) and Three.js with capsule colliders for the player."
+  ]
+}
