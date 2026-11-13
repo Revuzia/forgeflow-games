@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PerfRecorder } from '../src/render/perfreport.ts';
-import { FREEZE, FREEZE_QUIET, freezeLandTick, freezeLine } from '../src/render/freeze.ts';
+import { FREEZE, FREEZE_QUIET, FREEZE_STILL_S, freezeLandTick, freezeLine, freezeReset } from '../src/render/freeze.ts';
 
 test('report v2: HEADLINE second, probe frames left out of the stats', () => {
   const rec = new PerfRecorder(['scene', 'other']);
@@ -22,14 +22,27 @@ test('report v2: HEADLINE second, probe frames left out of the stats', () => {
   assert.ok(L.some((l) => l.startsWith('machine (fill in')));
 });
 
-test('freeze: takes hold only after FREEZE_QUIET quiet ticks in a row', () => {
-  FREEZE.on = true; FREEZE.active = false; FREEZE.quiet = 0;
-  for (let i = 0; i < FREEZE_QUIET - 1; i++) freezeLandTick(false);
-  freezeLandTick(true);
+test('freeze: takes hold after FREEZE_QUIET quiet ticks of every manager, or the camera at rest FREEZE_STILL_S', () => {
+  FREEZE.on = true; freezeReset();
+  // two managers; the second is busy once late: not yet
+  for (let i = 0; i < FREEZE_QUIET - 1; i++) { freezeLandTick(1, false, 0, 0, i); freezeLandTick(2, false, 5, 0, i); }
+  freezeLandTick(2, true, 5, 0, 99);
+  freezeLandTick(1, false, 0, 0, 99);
   assert.equal(FREEZE.active, false);
   assert.match(freezeLine(), /NOT frozen yet/);
-  for (let i = 0; i < FREEZE_QUIET; i++) freezeLandTick(false);
+  // (the camera moved every tick above: no rest fallback) now both quiet long enough
+  for (let i = 0; i < FREEZE_QUIET; i++) { freezeLandTick(1, false, 0, 0, 200 + i); freezeLandTick(2, false, 5, 0, 200 + i); }
   assert.equal(FREEZE.active, true);
-  assert.match(freezeLine(), /^freeze: ACTIVE/);
-  FREEZE.on = false; FREEZE.active = false; FREEZE.quiet = 0;
+  assert.match(freezeLine(), /^freeze: ACTIVE .* by landing converged/);
+  // a landing that never settles: the camera at rest freezes it (clock faked through performance.now)
+  freezeReset();
+  const real = performance.now.bind(performance);
+  let t = 1000;
+  (performance as { now: () => number }).now = () => t;
+  try {
+    for (let i = 0; i < 5; i++) { freezeLandTick(1, true, 0, 0, 0); t += (FREEZE_STILL_S * 1000) / 4; }
+    assert.equal(FREEZE.active, true);
+    assert.match(freezeLine(), /by camera at rest/);
+  } finally { (performance as { now: () => number }).now = real; }
+  FREEZE.on = false; freezeReset();
 });

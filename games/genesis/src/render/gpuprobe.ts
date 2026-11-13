@@ -7,6 +7,7 @@
 //   fresh 64    the same at 64x64 (no bandwidth to speak of: a pure per-pass cost)
 //   hdr->new    8 copies that SAMPLE the existing post.hdr colour texture (resolved MSAA) into a fresh target
 //   atlas->new  8 copies that sample the existing shadow atlas (depth, compare sampler) into a fresh target
+// (each batch ends with gl.finish() AND a 1-texel gl.readPixels of the last target drawn: a read must wait for it)
 // Milliseconds per pass at a few us-ms on a healthy GPU; 5-50 ms per pass in-world (fresh targets too) means H1.
 // The first batch of each set is 4 passes; when those already took > 30 ms a pass the rest is skipped (the probe must
 // not stall the page for seconds), and the line says how many passes ran. Every target is made, cleared and its
@@ -28,7 +29,7 @@ export interface ProbeResult {
   /** seconds into the recording (boot: since page load) */
   t: number;
   w: number; h: number;
-  /** wall ms of an empty gl.finish() right after another (the sync's own floor) */
+  /** wall ms of an empty sync (finish + 1-texel read) right after another: the sync's own floor */
   finishMs: number;
   sets: ProbeSet[];
   /** wall ms the whole probe took, set-up included */
@@ -41,7 +42,7 @@ export const BOOT_PROBES: ProbeResult[] = [];
 const f2 = (x: number) => (Math.round(x * 100) / 100).toString();
 export function probeLine(p: ProbeResult): string {
   return `gpuprobe ${p.tag} t ${f2(p.t)}s ${p.w}x${p.h} (ms per pass, passes): ` + p.sets.map((s) => `${s.name} ${f2(s.passes ? s.ms / s.passes : 0)} (${s.passes})`).join(' · ')
-    + ` | empty finish ${f2(p.finishMs)} ms | probe total ${Math.round(p.totalMs)} ms`;
+    + ` | empty sync ${f2(p.finishMs)} ms | probe total ${Math.round(p.totalMs)} ms`;
 }
 
 let copyMat: ShaderMaterial | null = null;
@@ -88,12 +89,16 @@ export function probeGpu(r: WebGLRenderer, fsq: FullscreenQuad, w: number, h: nu
     copy.uniforms.tSrc.value = A.texture; fsq.render(r, copy, B);
     copy.uniforms.tSrc.value = a.texture; fsq.render(r, copy, b);
     for (const e of existing) if (e.tex) { const m = e.shadow ? shadow : copy; m.uniforms.tSrc.value = e.tex; fsq.render(r, m, b); }
-    gl.finish();
-    { const t = performance.now(); gl.finish(); finishMs = performance.now() - t; }
+    // the sync: gl.finish() and a 1-texel read of the target last drawn (a read MUST wait for that pass, whatever a
+    // driver does with finish)
+    const px = new Float32Array(4);
+    const sync = () => { gl.finish(); try { gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, px); } catch { /* unreadable: finish alone */ } };
+    sync();
+    { const t = performance.now(); sync(); finishMs = performance.now() - t; }
     // a timed set: `n` passes, the first 4 in one finish; the rest (in one more) only while a pass costs < 30 ms
     const run = (name: string, n: number, pass: (i: number) => void) => {
       let done = 0, ms = 0;
-      const batch = (k: number) => { const t = performance.now(); for (let i = 0; i < k; i++) pass(done + i); gl.finish(); ms += performance.now() - t; done += k; };
+      const batch = (k: number) => { const t = performance.now(); for (let i = 0; i < k; i++) pass(done + i); sync(); ms += performance.now() - t; done += k; };
       batch(Math.min(4, n));
       if (done < n && ms / done < 30) batch(n - done);
       sets.push({ name, passes: done, ms });

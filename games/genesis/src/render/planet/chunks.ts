@@ -1155,7 +1155,7 @@ export class ChunkLOD {
 
   select(ctx: ChunkSelectContext): Patch[] {
     // (`?freeze=1`, ROADMAP step 2) landing has converged once nothing landed, queued or built for a while: then it stops
-    freezeLandTick(this.ready.length > 0 || this.pending.size > 0 || this.builtThisFrame > 0);
+    freezeLandTick(this.lodId, this.ready.length > 0 || this.pending.size > 0 || this.builtThisFrame > 0, ctx.camBody.x, ctx.camBody.y, ctx.camBody.z);
     this.builtThisFrame = 0;
     this.curFrame = ctx.frame;
     this.buildBudgetNow = ctx.buildBudget;

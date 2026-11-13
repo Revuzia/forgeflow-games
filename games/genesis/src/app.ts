@@ -762,8 +762,8 @@ export class App implements UiHost {
     // the frame rate shown is the true one (dt is clamped for the camera and the clock, the rate is not)
     if (raw > 0) { this.frameSec = raw; this.fps = this.fps * 0.85 + (1 / raw) * 0.15; if (1 / raw < this.fps * 0.5) this.fps = 1 / raw; }
     perfmon.frameStart(now);
-    // (PERF `?freeze=1`, ROADMAP step 2: render/freeze.ts) once the world is frozen the sim runs at speed 0
-    if (FREEZE.active && this.sim.view.speed !== 0) this.sim.setSpeed(0);
+    // (PERF `?freeze=1`, ROADMAP step 2: render/freeze.ts) the sim runs at speed 0 throughout
+    if (FREEZE.on && this.sim.view.speed !== 0) this.sim.setSpeed(0);
     try {
       const view = this.sim.view;
       perfmon.begin('view');
