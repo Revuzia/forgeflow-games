@@ -53,7 +53,7 @@ export function summonSystem(w: World): void {
       continue;
     }
     if (owner && mobile && dist2(e, owner.x, owner.y) > b.followRange * b.followRange) {
-      if (e.order !== ORDER_MOVE || Math.abs(e.orderX - owner.x) + Math.abs(e.orderY - owner.y) > 1) issueMove(w, e, owner.x, owner.y, false);
+      if (e.order !== ORDER_MOVE || Math.abs(e.orderReqX - owner.x) + Math.abs(e.orderReqY - owner.y) > 1) issueMove(w, e, owner.x, owner.y, false);
     } else if (e.order === ORDER_ATTACK || e.order === ORDER_MOVE) {
       issueStop(w, e);
     }

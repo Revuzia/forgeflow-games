@@ -358,6 +358,9 @@ export class Entity implements EntityView {
   // orders
   order = ORDER_NONE;
   orderX = 0; orderY = 0;
+  /** the point a move order asked for, before nav.snapGoal moved it to where the order can finish (orderX/Y);
+   *  command sources (bots, summons) compare re-requests against this, not the snapped goal */
+  orderReqX = NaN; orderReqY = NaN;
   orderTarget: EntityId = -1;
   /** ORDER_CAST: the cast to start once in range */
   pendingSlot = -1; pendingX = 0; pendingY = 0; pendingTarget: EntityId = -1;
@@ -390,6 +393,8 @@ export class Entity implements EntityView {
   arriveStall = 0;
   /** consecutive ticks of it pinned in place (not even creeping): the give-up watchdog */
   arrivePinned = 0;
+  /** the side (+1 right / −1 left of its heading) a walking fighter last steered round a unit ahead; 0: none */
+  steerSide = 0;
   /** static blocker (structures): never moves, pushes units out */
   static = false;
   /** radius this entity blocks in the nav grid (structures; 0 = none) — removed on death */

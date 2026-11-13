@@ -53,6 +53,8 @@ export interface InputRenderer {
   setAim?(aim: AimSpecLike | null): void;
   setHover?(id: EntityId | null): void;
   setTarget?(id: EntityId | null): void;
+  /** where a unit is drawn now (the interpolated actor the pick boxes use), in sim x/y */
+  unitPos?(id: EntityId): { x: number; y: number } | null;
   camera?: CameraLike;
 }
 
@@ -89,6 +91,9 @@ const HOLD_MOVE_MS = 140;
 const HOLD_MIN_PX = 8;
 /** a click this close (CSS px) to an enemy's hit box still counts as on it */
 const PICK_SLOP_PX = 14;
+/** … for a plain right-click (a move unless it is on an enemy): a near miss is forgiven less, and never onto a
+ *  neutral monster (a ground click beside a camp wall must stay a move, not start a chase into the jungle) */
+const MOVE_SLOP_PX = 8;
 /** attack-move click: the enemy whose edge is nearest the click point within this (m) is the target */
 const CLICK_RADIUS_M = 2;
 /** … with fightersOnly held (fighters only, so the radius can be wider) */
@@ -184,6 +189,14 @@ export class InputController {
     const t = this.entityAt(this.ptr.x, this.ptr.y, { filter: (v) => this.foe(v), slop: PICK_SLOP_PX });
     return t && this.foe(t) ? t : null;
   }
+  /** the enemy a plain right-click attacks: one under the cursor, else a near miss within MOVE_SLOP_PX that is
+   *  not a neutral monster; anything else stays a move */
+  private moveClickEnemy(): EntityView | null {
+    const t = this.entityAt(this.ptr.x, this.ptr.y, { filter: (v) => this.foe(v) });
+    if (t && this.foe(t)) return t;
+    const n = this.entityAt(this.ptr.x, this.ptr.y, { filter: (v) => this.foe(v) && v.kind !== 'monster', slop: MOVE_SLOP_PX });
+    return n && this.foe(n) && n.kind !== 'monster' ? n : null;
+  }
   /**
    * the enemy an attack-move click means: the one under the cursor, else the visible enemy whose edge is
    * nearest the click point `g` within CLICK_RADIUS_M (ties: lower id), else none (a ground attack-move).
@@ -196,7 +209,9 @@ export class InputController {
     let best: EntityView | null = null, bestD = Infinity;
     for (const e of this.client.view.entities) {
       if (!this.foe(e)) continue;
-      const d = Math.hypot(e.x - g.x, e.y - g.y) - e.radius;
+      // measured where the unit is drawn (the pick boxes' positions), so hover and click agree on a moving unit
+      const at = this.r.unitPos?.(e.id) ?? e;
+      const d = Math.hypot(at.x - g.x, at.y - g.y) - e.radius;
       if (d > R) continue;
       if (d < bestD - 1e-9 || (Math.abs(d - bestD) <= 1e-9 && best !== null && e.id < best.id)) { bestD = d; best = e; }
     }
@@ -277,7 +292,7 @@ export class InputController {
         id = e && e.id !== body?.id ? e.id : null;
         cur = 'aim';
       } else {
-        const foe = over ? (armed || this.settings.controls.attackMoveOnClick ? this.attackMoveTarget(this.ground()) : this.enemyAt()) : null;
+        const foe = over ? (armed || this.settings.controls.attackMoveOnClick ? this.attackMoveTarget(this.ground()) : this.moveClickEnemy()) : null;
         const e = foe ?? (over ? this.entityAt() : null);
         id = e && e.id !== body?.id ? e.id : null;
         cur = armed ? 'attackMove' : foe ? 'attack' : e && e.team === this.team && e.id !== body?.id ? 'ally' : 'default';
@@ -609,7 +624,7 @@ export class InputController {
     const body = this.body;
     if (!body || !body.alive) return;
     if (shift || this.settings.controls.attackMoveOnClick) { this.attackMoveClick(true); return; }
-    const t = this.enemyAt();
+    const t = this.moveClickEnemy();
     if (t) { this.attackUnit(t); return; }
     const g = this.ground();
     if (!g) return;

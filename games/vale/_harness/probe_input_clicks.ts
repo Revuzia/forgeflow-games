@@ -170,10 +170,24 @@ section('plain right-click: an ally in front never turns an enemy click into a m
   const c2 = controller();
   views = [unit(1, 'fighter', 0, 40, 40, 0.5), unit(10, 'minion', 1, 50, 50, 0.45)];
   const side = toScreen(50.6, 50);
-  at(c2, { x: side.x + 9, y: side.y });
+  at(c2, { x: side.x + 6, y: side.y });
   c2.rightDown(false);
-  check('a near miss attacks instead of walking into the wave', last()?.type === 'attack', last());
+  check('a near miss (6 px) attacks instead of walking into the wave', last()?.type === 'attack', last());
   check('…and arms no steer', c2.rightHeld === false);
+  // verifier r2: the 14 px attack-click slop turned plain ground clicks beside enemies into chases
+  const c3 = controller();
+  at(c3, { x: side.x + 12, y: side.y });
+  c3.rightDown(false);
+  check('a plain right-click 12 px clear of an enemy stays a move (attack clicks keep 14 px)', last()?.type === 'move', last());
+  const c4 = controller();
+  views = [unit(1, 'fighter', 0, 40, 40, 0.5), unit(40, 'monster', 2, 50, 50, 0.6)];
+  const ms = toScreen(50.75, 50);
+  at(c4, { x: ms.x + 5, y: ms.y });
+  c4.rightDown(false);
+  check('a near miss beside a neutral monster stays a move (no chase into a camp)', last()?.type === 'move', last());
+  at(c4, toScreen(50, 50, 0.4));
+  c4.rightDown(false);
+  check('…a click on the monster itself attacks it', last()?.type === 'attack' && (last() as { target: number }).target === 40, last());
 });
 
 section('fightersOnly (held) picks the enemy fighter over a minion under the cursor', () => {
@@ -223,7 +237,7 @@ section('hover names exactly what the click will attack', () => {
   c.frame(performance.now() + 2000);
   check('released: no outline on open ground', hover === null, hover);
   const side = toScreen(53.6, 51);
-  at(c, { x: side.x + 9, y: side.y });
+  at(c, { x: side.x + 6, y: side.y });
   c.frame(performance.now() + 3000);
   check('a near miss on an enemy shows its outline and the attack cursor', hover === 10 && c.cursor.value === 'attack', { hover, cursor: c.cursor.value });
 });

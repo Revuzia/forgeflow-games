@@ -65,6 +65,12 @@ const ARRIVE_STALL_TICKS = 10;
  *  crowd) before a walker anywhere gives up on its point (nothing left to walk around: the path is spent) */
 const ARRIVE_GIVE_UP_TICKS = 60;
 const PINNED_PROGRESS = 0.03;
+/** a walking fighter looks this far (m) ahead for units standing on its line and steers round them (ruling 35) */
+const STEER_LOOK = 3;
+/** clearance (m) kept past a steered-round body */
+const STEER_MARGIN = 0.1;
+/** a gap on the other side must be this much (m) nearer before a steer flips sides */
+const STEER_STICK = 0.6;
 const ARRIVE_NEAR = 1;
 const ARRIVE_PROGRESS = 0.3;
 /** peak height (m) of airborne arcs */
@@ -73,11 +79,14 @@ const near: Entity[] = [];
 const passT: number[] = [];
 const passU: Entity[] = [];
 const tmp = { x: 0, y: 0 };
+const steerLo: number[] = [];
+const steerHi: number[] = [];
 
 // ── orders ──────────────────────────────────────────────────────────────────────────────────────
 export function issueMove(w: World, e: Entity, x: number, y: number, attackMove: boolean, prefer = -1): void {
   const m = w.mapDef.size;
   x = Math.max(0, Math.min(m[0] - 1e-3, x)); y = Math.max(0, Math.min(m[1] - 1e-3, y));
+  e.orderReqX = x; e.orderReqY = y;
   // the goal the order can actually finish at (never a point inside a wall the walker would slide against)
   if (w.nav.snapGoal(e.x, e.y, x, y, tmp)) { x = tmp.x; y = tmp.y; }
   // a windup always finishes (the walk starts after release); a channel ends unless it allows moving
@@ -363,6 +372,63 @@ function separate(w: World, e: Entity, x: number, y: number, factor: number): vo
   tmp.x = x + ox; tmp.y = y + oy;
 }
 
+/**
+ * Local steering for a walking fighter (ruling 35): units standing on its line within STEER_LOOK m (not the unit it
+ * is going for) are walked round instead of shoved through. Each body ahead blocks a band of sideways offsets;
+ * the free offset nearest the line wins (the side steered last tick kept unless the other is STEER_STICK m nearer,
+ * an exact tie to the right), and only if open ground lies there. Returns the sideways offset (m, + = right of the
+ * heading (ux, uy)) and the distance ahead it is taken over in tmp (x: offset, y: ahead), or false: walk straight.
+ */
+function steerRound(w: World, e: Entity, ux: number, uy: number, reach: number): boolean {
+  const look = Math.min(STEER_LOOK, reach);
+  if (look < 0.3) return false;
+  const n = w.hash.query(e.x + ux * look * 0.5, e.y + uy * look * 0.5, look * 0.5 + e.radius + 1, near);
+  steerLo.length = 0; steerHi.length = 0;
+  let first = Infinity;
+  for (let i = 0; i < n; i++) {
+    const o = near[i];
+    if (o === e || !o.alive || o.dash || o.static || o.kind === 'ward' || o.kind === 'pickup' || o.kind === 'projectile' || o.kind === 'zone') continue;
+    if (o.id === e.orderTarget || o.id === e.atkTarget) continue;
+    const ox = o.x - e.x, oy = o.y - e.y;
+    const fwd = ox * ux + oy * uy;
+    const rr = e.radius + o.radius + STEER_MARGIN;
+    // behind, too far, or crowding the point itself (the arrival watchdog ends a move into a crowd on its point)
+    if (fwd <= 0 || fwd > look || fwd >= reach - (o.radius + e.radius + ARRIVE_NEAR)) continue;
+    const lat = ox * uy - oy * ux;   // + = right of the heading
+    if (Math.abs(lat) >= rr) continue;
+    steerLo.push(lat - rr); steerHi.push(lat + rr);
+    if (fwd < first) first = fwd;
+  }
+  if (steerLo.length === 0 || first === Infinity) return false;
+  // every body standing in the walker's own band: is 0 blocked? (it is: each band above holds |lat| < rr) — find
+  // the nearest free offset on each side by sweeping the bands outward
+  let right = 0, left = 0;
+  for (let changed = true; changed;) {
+    changed = false;
+    for (let i = 0; i < steerLo.length; i++) if (steerLo[i] < right + 1e-9 && steerHi[i] > right) { right = steerHi[i]; changed = true; }
+  }
+  for (let changed = true; changed;) {
+    changed = false;
+    for (let i = 0; i < steerLo.length; i++) if (steerHi[i] > left - 1e-9 && steerLo[i] < left) { left = steerLo[i]; changed = true; }
+  }
+  const ahead = Math.max(first, 0.5);
+  const nav = w.nav;
+  const okR = nav.walkable(e.x + ux * ahead + uy * right, e.y + uy * ahead - ux * right);
+  const okL = nav.walkable(e.x + ux * ahead + uy * left, e.y + uy * ahead - ux * left);
+  let side: number;
+  if (okR && okL) {
+    const dr = right, dl = -left;
+    if (e.steerSide > 0) side = dl < dr - STEER_STICK ? -1 : 1;
+    else if (e.steerSide < 0) side = dr < dl - STEER_STICK ? 1 : -1;
+    else side = dl < dr ? -1 : 1;
+  } else if (okR) side = 1;
+  else if (okL) side = -1;
+  else return false;
+  e.steerSide = side;
+  tmp.x = side > 0 ? right : left; tmp.y = ahead;
+  return true;
+}
+
 function stepToward(w: World, e: Entity, gx: number, gy: number): void {
   const speed = e.stats.moveSpeed;
   let budget = speed * TICK_DT;
@@ -387,6 +453,19 @@ function stepToward(w: World, e: Entity, gx: number, gy: number): void {
   const aimD0 = Math.sqrt((aimX - e.x) * (aimX - e.x) + (aimY - e.y) * (aimY - e.y));
   const want = Math.min(budget, aimD0);
   let x = e.x, y = e.y;
+  // a walking fighter steers round units standing on its line (ruling 35) instead of grinding through them
+  let steered = false;
+  if (e.kind === 'fighter' && aimD0 > 1e-6) {
+    const ux = (aimX - e.x) / aimD0, uy = (aimY - e.y) / aimD0;
+    const goalD = Math.sqrt((gx - e.x) * (gx - e.x) + (gy - e.y) * (gy - e.y));
+    if (steerRound(w, e, ux, uy, Math.min(aimD0, goalD))) {
+      const lat = tmp.x, fwd = tmp.y;
+      const sx = ux * fwd + uy * lat, sy = uy * fwd - ux * lat;
+      const sl = Math.sqrt(sx * sx + sy * sy);
+      x = e.x + (sx / sl) * budget; y = e.y + (sy / sl) * budget; budget = 0;
+      steered = true;
+    } else e.steerSide = 0;
+  }
   // walk the waypoint list within this tick's budget
   for (let guard = 0; guard < 4 && budget > 1e-9; guard++) {
     let wx: number, wy: number;
@@ -415,7 +494,7 @@ function stepToward(w: World, e: Entity, gx: number, gy: number): void {
   // progress watchdog: jostled in place (separation cancelling the step) for NO_PROGRESS_TICKS →
   // a near waypoint counts as reached, otherwise the route is recomputed from here
   const aimD1 = Math.sqrt((aimX - nx) * (aimX - nx) + (aimY - ny) * (aimY - ny));
-  if (want > 1e-6 && aimD0 - aimD1 < want * 0.25) {
+  if (want > 1e-6 && !steered && aimD0 - aimD1 < want * 0.25) {
     if (++e.noProgress >= NO_PROGRESS_TICKS) {
       e.noProgress = 0;
       if (onPath && aimD1 < WAYPOINT_GIVE_UP && (e.pathIdx + 1) * 2 < e.path.length) e.pathIdx++;

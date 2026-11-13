@@ -376,8 +376,9 @@ export class NavGrid {
   /**
    * Where a move order to (x, y) should end for a walker at (fromX, fromY), so the order can finish: (x, y)
    * itself when it is open and reachable. A blocked point (a wall, a tree line, a structure's footprint, the
-   * map border) goes to the open point on the click→walker line nearest the click (the walker's side: walk
-   * toward the click and stop at the obstacle), unless the nearest open cell is more than `sideSlack` m nearer
+   * map border) goes to the nearest open point to the click when that point is on the walker's side (straight open
+   * ground to it from the walker or from the click→walker line: slide along the face to beside the cursor); otherwise
+   * to the open point on the click→walker line nearest the click (walk toward the click and stop at the obstacle), unless the nearest open cell is more than `sideSlack` m nearer
    * the click and within `near` m of it (a click just inside a thin obstacle's far face). A point in a pocket the walker cannot
    * reach goes to the nearest cell it can reach. Writes `out`; false when nothing is open at all.
    */
@@ -407,7 +408,13 @@ export class NavGrid {
         break;
       }
       const dB = okB ? Math.sqrt((bx - x) * (bx - x) + (by - y) * (by - y)) : Infinity;
-      if (okB && (dB <= dA + sideSlack || dA > near)) { gx = bx; gy = by; }
+      // A on the walker's side (open straight ground from the walker, or from B, to it): the nearest open point to
+      // the click wins outright — a shallow click into a wall face slides along the face to beside the cursor
+      // instead of stopping where the walker stands (B can be the walker's own cell for a diagonal click)
+      const sideA = okA && (cs < 0 || this.componentAt(ax, ay) === cs)
+        && (this.lineOfWalk(fromX, fromY, ax, ay) || (okB && this.lineOfWalk(bx, by, ax, ay)));
+      if (sideA) { gx = ax; gy = ay; }
+      else if (okB && (dB <= dA + sideSlack || dA > near)) { gx = bx; gy = by; }
       else if (okA) { gx = ax; gy = ay; }
       else return false;
     }

@@ -189,8 +189,13 @@ export abstract class BotBase {
     const e = this.e, S = this.w.mapDef.size;
     x = Math.max(0.2, Math.min(S[0] - 0.2, x)); y = Math.max(0.2, Math.min(S[1] - 0.2, y));
     const want = attackMove ? ORDER_ATTACK_MOVE : ORDER_MOVE;
-    if (e.order === want && Math.abs(e.orderX - x) + Math.abs(e.orderY - y) < MOVE_EPS) return;
+    // compare against the point the last move ASKED for (orderReqX/Y): the sim snaps a blocked point to where the order
+    // can finish (orderX/Y), so the snapped goal never matches a re-request of the same thicket/wall point
+    if (e.order === want && Math.abs(e.orderReqX - x) + Math.abs(e.orderReqY - y) < MOVE_EPS) return;
     if (e.order === ORDER_NONE && Math.abs(e.x - x) + Math.abs(e.y - y) < 0.35) return;
+    // already finished a move to this same point (it ended at the snapped goal, short of the blocked point asked for)
+    if (e.order === ORDER_NONE && Math.abs(e.orderReqX - x) + Math.abs(e.orderReqY - y) < 0.35
+      && Math.abs(e.x - e.orderX) + Math.abs(e.y - e.orderY) < 0.6) return;
     // walking into range of a cast: let it resolve — unless a dodge needs the feet (a player drops the cast walk to
     // step out of a telegraph; CW3 critic bot-micro)
     if (e.order === ORDER_CAST && !dodge) return;

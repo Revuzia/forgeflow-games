@@ -1251,6 +1251,11 @@ class ValeRenderer implements Renderer {
     if (this.mode !== 'match') return null;
     return pickUnit(this.rig.camera, this.cssW, this.cssH, this.pickables(), x, y, opts);
   }
+  /** where a unit is drawn now (sim x/y of its interpolated actor), or null */
+  unitPos(id: EntityId): { x: number; y: number } | null {
+    const a = this.actors.get(id);
+    return a ? { x: a.x, y: a.y } : null;
+  }
   private *pickables(): Iterable<Pickable> {
     for (const a of this.actors.values()) {
       const v = a.view;
