@@ -320,10 +320,10 @@ INTERIOR = [
     ("kitchenCabinetUpperCorner", "furniture", _K / "kitchenCabinetUpperCorner.glb", KIT_SCALE, "bbox", ["kitchen"], "wall_cabinet_corner", "wall", {}),
     ("kitchenFridgeLarge", "furniture", _K / "kitchenFridgeLarge.glb", KIT_SCALE, "bbox", ["kitchen"], "fridge", "floor", {}),
     ("bathroomSink", "furniture", _K / "bathroomSink.glb", KIT_SCALE, "bbox", ["bathroom"], "basin", "floor", {}),
-    ("bathroomMirror", "furniture", _K / "bathroomMirror.glb", KIT_SCALE, "bbox", ["bathroom"], "mirror", "wall", {}),
-    ("showerRound", "furniture", _K / "showerRound.glb", KIT_SCALE, "bbox", ["bathroom"], "shower", "floor", {}),
+    # (bathroomMirror: left out again - at body height a thin plate over a shelf; footprint fails citykit's body cover, bbox kitcollide's phantom 0.264 > 0.25)
+    ("showerRound", "furniture", _K / "showerRound.glb", KIT_SCALE, "footprint", ["bathroom"], "shower", "floor", {}),
     ("loungeDesignSofaCorner", "furniture", _K / "loungeDesignSofaCorner.glb", KIT_SCALE, "footprint", ["living"], "sofa_corner", "floor", {}),
-    ("loungeChairRelax", "furniture", _K / "loungeChairRelax.glb", KIT_SCALE, "bbox", ["living"], "armchair", "floor", {}),
+    ("loungeChairRelax", "furniture", _K / "loungeChairRelax.glb", KIT_SCALE, "footprint", ["living"], "armchair", "floor", {}),
     ("chairRounded", "furniture", _K / "chairRounded.glb", KIT_SCALE, "bbox", ["dining", "kitchen"], "dining_chair", "floor", {}),
     ("bedBunk", "furniture", _K / "bedBunk.glb", KIT_SCALE, "bbox", ["bedroom"], "bed", "floor", {}),
     ("cabinetBedDrawerTable", "furniture", _K / "cabinetBedDrawerTable.glb", KIT_SCALE, "bbox", ["bedroom"], "nightstand", "floor", {}),

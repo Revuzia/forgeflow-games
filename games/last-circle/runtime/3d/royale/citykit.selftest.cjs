@@ -51,15 +51,15 @@ function refBox(b, q, k, x, y, z) {
   // (P23-fix / D10) the facade detail per graphics tier: OFF on low (the kit never fetches facade_detail.jpg at 0 - proven in the browser by F:/lc_p23/towns/fix/detail_probe.py)
   { const D = K.DETAIL_BY_TIER; ok(!!D && Object.isFrozen(D) && D.low === 0 && ["medium", "high", "ultra"].every((t) => D[t] > 0 && D[t] <= 1.5), "DETAIL_BY_TIER: low 0 (facade detail off), medium / high / ultra > 0", D); }
   const ids = K.typeIds();
-  ok(ids.length === 153, "153 types in the embedded table (81 + the 55 of the Wave-8 interior kit + the 17 of W10 R1A item 8)", ids.length);
+  ok(ids.length === 152, "152 types in the embedded table (81 + the 55 of the Wave-8 interior kit + the 16 of W10 R1A item 8)", ids.length);
   const mIds = Object.keys(manifest.types);
-  ok(mIds.length === 153 && mIds.every((id) => ids.includes(id)) && ids.every((id) => mIds.includes(id)), "the embedded table and manifest.json name the same 136 types");
+  ok(mIds.length === 152 && mIds.every((id) => ids.includes(id)) && ids.every((id) => mIds.includes(id)), "the embedded table and manifest.json name the same 136 types");
   const drift = K.tableDrift(manifest);
   ok(drift.length === 0, "the embedded collider table equals manifest.json EXACTLY (every box, every number)" + (drift.length ? " - run: node citykit.selftest.cjs --emit-table" : ""), drift.slice(0, 5));
   const modes = {};
   for (const id of mIds) modes[manifest.types[id].collider_mode] = (modes[manifest.types[id].collider_mode] || 0) + 1;
-  ok(Object.keys(modes).length === 7 && modes.bands === 8 && modes.bbox === 88 && modes.elevation === 6 && modes.footprint === 42 && modes.none === 4 && modes.pole === 3 && modes.steps === 2,
-    "collider modes (Wave 8 stage A2: the interior kit merged into manifest.json by art_b_city.py --interior-into-main; W10 R1A item 8: +15 bbox, +2 footprint): bands 8, bbox 88, elevation 6, footprint 42, none 4, pole 3, steps 2", modes);
+  ok(Object.keys(modes).length === 7 && modes.bands === 8 && modes.bbox === 85 && modes.elevation === 6 && modes.footprint === 44 && modes.none === 4 && modes.pole === 3 && modes.steps === 2,
+    "collider modes (Wave 8 stage A2: the interior kit merged into manifest.json by art_b_city.py --interior-into-main; W10 R1A item 8: +12 bbox, +4 footprint): bands 8, bbox 85, elevation 6, footprint 44, none 4, pole 3, steps 2", modes);
 
   // ---------------------------------------------------------------- mkCollider contract (maps.js:228)
   const mk = K.mkCollider("box", 1, 2, 3, 4, 5, 6, -1, null, -1, 0);
@@ -135,7 +135,7 @@ function refBox(b, q, k, x, y, z) {
     if ((mxY - mnY) < 0.5 * bh - 1e-9 || (mxX - mnX) < 0.4 * bw - 1e-9 || (mxZ - mnZ) < 0.4 * bd - 1e-9) { covFail++; covFirst = covFirst || [id, mxY - mnY, bh, mxX - mnX, bw, mxZ - mnZ, bd]; }
   }
   ok(bboxFail === 0, "all " + mIds.length + " collider sets sit inside the manifest bbox_m (+0.3 m, the intake's own rule)", { bboxFail, bboxFirst });
-  ok(covFail === 0 && covN === 146, "all " + covN + " collider sets that are neither pole nor none (146 = 153 - 3 pole - 4 none) cover the body (>= 50 % of the height, >= 40 % of each footprint side)", { covN, covFail, covFirst });
+  ok(covFail === 0 && covN === 145, "all " + covN + " collider sets that are neither pole nor none (145 = 152 - 3 pole - 4 none) cover the body (>= 50 % of the height, >= 40 % of each footprint side)", { covN, covFail, covFirst });
   ok(noneBad.length === 0, "the 4 collider-mode-none types (rugs, pallet) have no collider box and are drawn no higher than 0.30 m, the body band's floor (a player never meets them)", noneBad);
 
   // ---------------------------------------------------------------- composition, scale and translation are exact

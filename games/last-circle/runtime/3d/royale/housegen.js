@@ -364,16 +364,15 @@ export const KIT_BOXES = {
   "furniture/lampRoundFloor": { min: [-0.167, 0, -0.193], max: [0.167, 1.892, 0.193], tris: 76, m: "interior" },
   "furniture/loungeChair": { min: [-0.539, 0, -0.451], max: [0.539, 1.012, 0.451], tris: 124, m: "interior" },
   "furniture/coatRackStanding": { min: [-0.3, 0, -0.3], max: [0.3, 1.694, 0.3], tris: 185, m: "interior" },
-  // (W10 R1A item 8) the 17 Kenney Furniture Kit 2.0 pieces (CC0) copied in for the homes' variety (manifest.json rows; a literal copy as above). Placed as per-house
+  // (W10 R1A item 8) the 16 Kenney Furniture Kit 2.0 pieces (CC0) copied in for the homes' variety (manifest.json rows; a literal copy as above). Placed as per-house
   // variants (VARIETY): the double wall unit, the big hood, the drawer nightstand, the glass coffee table, the relax armchair, the rounded dining chair, the pedestal
   // basin, the vintage TV, the stacked washer-dryer, the bunk bed, the wall coat hooks. Shipped, not placed: the corner sofa (an L: one AABB leaves > 0.25 m empty), the
-  // round shower (2.77 m tall at FURN_K), the large fridge (wider than a kitchen-run unit), the upper corner unit, the mirror (the bath set's mirror is a drawn-only plate), the bench.
+  // round shower (2.77 m tall at FURN_K), the large fridge (wider than a kitchen-run unit), the upper corner unit, the bench (the mirror stayed out of the kit: no collider fits it).
   "furniture/hoodLarge": { min: [-0.473, 0, -0.313], max: [0.473, 0.813, 0.313], tris: 34, m: "interior" },
   "furniture/kitchenCabinetUpperDouble": { min: [-0.473, 0, -0.242], max: [0.473, 0.858, 0.242], tris: 230, m: "interior" },
   "furniture/kitchenCabinetUpperCorner": { min: [-0.237, 0, -0.231], max: [0.237, 0.858, 0.231], tris: 204, m: "interior" },
   "furniture/kitchenFridgeLarge": { min: [-0.572, 0, -0.446], max: [0.572, 2.024, 0.446], tris: 436, m: "interior" },
   "furniture/bathroomSink": { min: [-0.374, 0, -0.319], max: [0.374, 1.232, 0.319], tris: 312, m: "interior" },
-  "furniture/bathroomMirror": { min: [-0.331, 0, -0.159], max: [0.331, 0.956, 0.159], tris: 69, m: "interior" },
   "furniture/showerRound": { min: [-0.618, 0, -0.618], max: [0.618, 2.407, 0.618], tris: 958, m: "interior" },
   "furniture/loungeDesignSofaCorner": { min: [-1.485, 0, -1.485], max: [1.485, 0.88, 1.485], tris: 168, m: "interior" },
   "furniture/loungeChairRelax": { min: [-0.539, 0, -0.742], max: [0.539, 1.386, 0.742], tris: 184, m: "interior" },
