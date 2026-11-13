@@ -156,7 +156,17 @@ try {
       const x = e.clientX, y = e.clientY;
       const on = R.pickEntity(x, y, { filter: foe });
       const slopMF = R.pickEntity(x, y, { filter: (u) => foe(u) && (u.kind === 'minion' || u.kind === 'fighter'), slop: 14 });
-      H.downs.push({ t: v.state.match.value.sim.world.time, x, y, button: e.button, shift: e.shiftKey, intended: H.intended, onBox: on, slopPick: slopMF, gapIntended: gapTo(x, y, H.intended), ground: R.pickGround(x, y) });
+      const g = R.pickGround(x, y);
+      const amRule = (fOnly) => {
+        const ok = (u) => foe(u) && (!fOnly || u.kind === 'fighter');
+        const on = R.pickEntity(x, y, { filter: ok, slop: 14 });
+        if (on !== null) return on;
+        if (!g) return 'ground';
+        let best = null, bd = Infinity;
+        for (const u of v.state.match.value.view.entities) { if (!ok(u) || u.kind === 'pickup' || u.kind === 'projectile' || u.kind === 'zone') continue; const at = R.unitPos(u.id) ?? u; const d = Math.hypot(at.x - g.x, at.y - g.y) - u.radius; if (d <= (fOnly ? 3 : 2) && (d < bd - 1e-9 || (Math.abs(d - bd) <= 1e-9 && best !== null && u.id < best))) { bd = d; best = u.id; } }
+        return best ?? 'ground';
+      };
+      H.downs.push({ amRule: amRule(false), amRuleF: amRule(true), t: v.state.match.value.sim.world.time, x, y, button: e.button, shift: e.shiftKey, intended: H.intended, onBox: on, slopPick: slopMF, gapIntended: gapTo(x, y, H.intended), ground: R.pickGround(x, y) });
     }, { capture: true });
   });
   const lastDown = () => vale(page, () => window.__H.downs[window.__H.downs.length - 1] ?? null);
@@ -231,6 +241,7 @@ try {
         await setIntended(u.id);
         const pl = await planNear(u.id, off, rnd() < 0.5 ? 1 : -1);
         if (pl.err || !inView(pl.p)) { i--; skips++; continue; }
+        if (!(await page.evaluate((p) => document.elementFromPoint(p.x, p.y)?.classList.contains('hudsurface') ?? false, pl.p))) { i--; skips++; continue; }
         const n0 = (await state()).ncmd;
         await page.mouse.move(pl.p.x, pl.p.y);
         await page.mouse.click(pl.p.x, pl.p.y, { button: 'right' });
@@ -253,6 +264,134 @@ try {
       log('near', off, `${res['off' + off].ok}/${out.length} ok, rule-consistent ${res['off' + off].consistent}/${out.length}, skips ${skips}`);
     }
     report.scenarios.nearSweep = res;
+  }
+
+  // generic unit-click trial
+  /**
+   * mode: 'near' (plain RMB 8 px outside the box), 'center' (plain RMB on the body), 'shift' (Shift+RMB on ground
+   * 0.9 m from the intended minion in a cluster), 'amove' (A then LMB, same point), 'gap' (plain RMB on ground in
+   * a gap between enemy minions: intended = a move)
+   */
+  const trial = async (mode, opt = {}) => {
+    if (mode === 'fonly') {
+      // stand 4.5 m from the sparring fighter (toward our side), so it is in view with whatever is around it
+      const ok = await vale(page, (v) => {
+        const c = v.state.match.value, H = window.__H, W = c.sim.world;
+        const f = c.view.entities.find((u) => u.kind === 'fighter' && u.team !== H.team && u.alive);
+        if (!f) return false;
+        const me = W.entity(H.me);
+        const dx = me.x - f.x, dy = me.y - f.y, L = Math.hypot(dx, dy) || 1;
+        const a0 = Math.atan2(dy, dx);
+        for (const r of [4.5, 3.5, 5.5, 2.8]) for (let k = 0; k < 16; k++) { const an = a0 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.39; const x = f.x + Math.cos(an) * r, y = f.y + Math.sin(an) * r; if (W.nav.walkable(x, y)) { window.__harness({ type: 'practice', action: 'teleport', x, y }); return true; } }
+        return false;
+      });
+      if (!ok) return { mode, skip: 'no enemy fighter' };
+      await page.keyboard.press('KeyS');
+      await sleep(900);
+    } else await ensureWave();
+    const s = await state();
+    const foes = s.units.filter((u) => u.foe && (opt.kind ? u.kind === opt.kind : u.kind === 'minion') && inView({ x: u.sx, y: u.sy }));
+    if (!foes.length) return { mode, skip: 'no foes in view' };
+    let intended = null, sp = null, ground = null;
+    if (mode === 'near' || mode === 'center') {
+      const moving = foes.filter((u) => u.st === 'move');
+      const pool = moving.length ? moving : foes;
+      const u = pool[Math.floor(rnd() * pool.length)];
+      intended = u.id;
+      const geo = await vale(page, (v, id) => {
+        const R = v.state.renderer, a = R.actors.get(id), u = v.state.match.value.view.entity(id);
+        const f = R.worldToScreen(a.x, a.y, a.h), hd = R.worldToScreen(a.x, a.y, a.h + a.artHeight), side = R.worldToScreen(a.x + u.radius + 0.15, a.y, a.h);
+        return { fx: f.x, fy: f.y, hy: hd.y, rx: Math.max(16, Math.abs(side.x - f.x)) };
+      }, u.id);
+      sp = mode === 'center' ? { x: geo.fx, y: (geo.fy + geo.hy) / 2 } : { x: geo.fx + geo.rx + 8 * (rnd() < 0.5 ? 1 : -1) * 1 + (rnd() < 0.5 ? 0 : -2 * (geo.rx + 8)) , y: (geo.fy + geo.hy) / 2 };
+      if (mode === 'near') {
+        sp = null;
+        for (const dir of rnd() < 0.5 ? [1, -1] : [-1, 1]) for (const yy of [(geo.fy + geo.hy) / 2, geo.fy - 6, geo.hy + 4]) {
+          if (sp) break;
+          const p = { x: geo.fx + dir * (geo.rx + 8), y: yy };
+          if (!inView(p)) continue;
+          if ((await pickAt(p.x, p.y, 0)) !== null) continue;
+          if ((await pickAt(p.x, p.y, 14)) !== u.id) continue;
+          sp = p;
+        }
+        if (!sp) return { mode, skip: 'no clean near-miss side' };
+      }
+    } else if (mode === 'shift' || mode === 'amove' || mode === 'fonly') {
+      // a foe with another foe within 2.5 m (a cluster); click 0.9 m outward from the cluster centre, on no box
+      const all = s.units.filter((u) => u.foe);
+      const cluster = foes.filter((u) => foes.some((w) => w.id !== u.id && Math.hypot(w.x - u.x, w.y - u.y) < 2.5));
+      const pool = mode === 'fonly' ? foes : (cluster.length ? cluster : foes);
+      for (let k = 0; k < 12 && !sp; k++) {
+        const u = pool[Math.floor(rnd() * pool.length)];
+        const nb = all.filter((w) => w.id !== u.id && Math.hypot(w.x - u.x, w.y - u.y) < 4);
+        let cx = 0, cy = 0; for (const w of nb) { cx += w.x; cy += w.y; }
+        let dx, dy;
+        if (nb.length) { cx /= nb.length; cy /= nb.length; dx = u.x - cx; dy = u.y - cy; } else { const a = rnd() * 6.28; dx = Math.cos(a); dy = Math.sin(a); }
+        const L = Math.hypot(dx, dy) || 1;
+        // rotate a little each attempt
+        const ang = Math.atan2(dy, dx) + (k % 2 ? 1 : -1) * 0.35 * Math.floor(k / 2);
+        const off = opt.off ?? 0.9;
+        const g = { x: u.x + Math.cos(ang) * (u.r + off), y: u.y + Math.sin(ang) * (u.r + off) };
+        const cand = all.filter((w) => mode !== 'fonly' || w.kind === 'fighter');
+        // nearest by edge to g must be u (genre: the one nearest the click)
+        let best = null, bd = Infinity; for (const w of cand) { const d = Math.hypot(w.x - g.x, w.y - g.y) - w.r; if (d < bd) { bd = d; best = w; } }
+        if (best?.id !== u.id) continue;
+        const p = await toScreen(g.x, g.y);
+        if (!inView(p)) continue;
+        if ((await pickAt(p.x, p.y, 14)) !== null) continue;   // not on (or within slop of) any box
+        intended = u.id; sp = p; ground = g;
+      }
+      if (!sp) return { mode, skip: 'no clean near-miss point' };
+    } else if (mode === 'gap') {
+      // a ground point among/just past the enemy minions with >= 0.7 m edge clearance to every unit; not on any box (slop 0) but maybe within slop
+      const all = s.units;
+      for (let k = 0; k < 40 && !sp; k++) {
+        const u = foes[Math.floor(rnd() * foes.length)];
+        const a = rnd() * 6.28, d = 0.9 + rnd() * 1.6;
+        const g = { x: u.x + Math.cos(a) * (u.r + d), y: u.y + Math.sin(a) * (u.r + d) };
+        if (all.some((w) => Math.hypot(w.x - g.x, w.y - g.y) - w.r < 0.7)) continue;
+        const ok = await vale(page, (v, g) => v.state.match.value.sim.world.nav.walkable(g.x, g.y), g);
+        if (!ok) continue;
+        const p = await toScreen(g.x, g.y);
+        if (!inView(p)) continue;
+        if ((await pickAt(p.x, p.y, 0)) !== null) continue;
+        sp = p; ground = g; intended = 'move';
+      }
+      if (!sp) return { mode, skip: 'no gap' };
+    }
+    const under = await page.evaluate((p) => { const e = document.elementFromPoint(p.x, p.y); return e ? e.tagName.toLowerCase() + '.' + [...e.classList].slice(0, 2).join('.') : null; }, sp);
+    if (under && !under.startsWith('div.hudsurface')) return { mode, skip: 'a HUD element over the point: ' + under };
+    await setIntended(intended);
+    const n0 = (await state()).ncmd;
+    const slopHit = mode === 'gap' ? await pickAt(sp.x, sp.y, 14) : null;
+    await page.mouse.move(sp.x, sp.y);
+    await sleep(80);   // hover settles (50 ms cadence)
+    if (mode === 'shift') { await page.keyboard.down('Shift'); await page.mouse.click(sp.x, sp.y, { button: 'right' }); await page.keyboard.up('Shift'); }
+    else if (mode === 'fonly') { await page.keyboard.down('KeyZ'); await page.keyboard.down('Shift'); await page.mouse.click(sp.x, sp.y, { button: 'right' }); await page.keyboard.up('Shift'); await page.keyboard.up('KeyZ'); }
+    else if (mode === 'amove') { await page.keyboard.press('KeyA'); await sleep(40); await page.mouse.click(sp.x, sp.y, { button: 'left' }); }
+    else await page.mouse.click(sp.x, sp.y, { button: 'right' });
+    await sleep(60);
+    const cmds = await cmdsSince(n0);
+    const c0 = cmds.find((c) => c.type === 'attack' || c.type === 'move');
+    const sent = !c0 ? 'none' : c0.type === 'attack' ? c0.target : c0.attackMove ? (c0.prefer ?? 'amove-ground') : 'move';
+    // did the hero then attack the intended within 3 s (attacks: atk target on the trace)?
+    const t0 = (await state()).t;
+    if (mode === 'gap') { await sleep(200); await waitIdle(8000); } else await sleep(3000);
+    const tr = await traceFrom(t0);
+    const hits = [...new Set(tr.map((p) => p.atk).filter((x) => x >= 0))];
+    const out = { mode, under: under?.startsWith('div.hudsurface') ? undefined : under, at: [Math.round(sp.x), Math.round(sp.y)], intended, sent, ok: sent === intended, attackedAfter: hits.slice(0, 4), extraCmds: cmds.length - 1 };
+    if (mode === 'gap') { const end = tr[tr.length - 1]; out.slopWouldHit = slopHit; out.endDist = +Math.hypot(end.x - ground.x, end.y - ground.y).toFixed(2); out.orderEnd = end.order; }
+    await page.keyboard.press('KeyS');
+    await sleep(250);
+    return out;
+  };
+
+  for (const [mode, n, opt] of [['fonly', 4, { kind: 'fighter', off: 1.8 }], ['shift', 8], ['amove', 8]]) {
+    const res = [];
+    for (let i = 0; i < n; i++) { const r = await trial(mode, opt); r.down = await lastDown(); if (!r.skip && r.down) { r.ruleAtClick = mode === 'fonly' ? r.down.amRuleF : r.down.amRule; r.consistent = r.ruleAtClick === r.sent || (r.ruleAtClick === 'ground' && r.sent === 'amove-ground'); } if (r.skip) r.dbg = await vale(page, (v) => { const c = v.state.match.value, H = window.__H, R = v.state.renderer; return c.view.entities.filter((u) => u.kind === 'fighter' && u.id !== H.me).map((u) => ({ id: u.id, team: u.team, alive: u.alive, vis: (u.visibleMask & (1 << H.team)) !== 0, x: +u.x.toFixed(1), y: +u.y.toFixed(1), s: R.worldToScreen(u.x, u.y, 0) })); }); res.push(r); if (!r.skip && !r.ok) flags.push({ scenario: mode, ...r }); if (i === 0 || (!r.skip && !r.ok)) await snap(page, `${mode}_${i}${r.ok === false ? '_MISS' : ''}`); }
+    report.scenarios[mode] = res;
+    const done = res.filter((r) => !r.skip);
+    log(mode, `${done.filter((r) => r.ok).length}/${done.length} ok`, JSON.stringify(res));
   }
 
   // ── W. right-clicks on wall faces left / right / ahead / behind (screen directions) ─────────────────────
@@ -356,7 +495,7 @@ try {
         if (!c) break;
         const ok = await vale(page, (v, a) => {
           const nav = v.state.match.value.sim.world.nav, t = { x: -a.w.y, y: a.w.x };
-          for (let s = -6; s <= 6; s += 1) { const bx = a.c.x + t.x * s, by = a.c.y + t.y * s; if (!nav.walkable(bx, by)) return false; if (nav.walkable(bx + a.w.x * (a.c.L + 0.8), by + a.w.y * (a.c.L + 0.8))) return false; }
+          for (let s = -6; s <= 6; s += 0.5) { const bx = a.c.x + t.x * s, by = a.c.y + t.y * s; if (!nav.walkable(bx, by)) return false; let L = -1; for (let q = 0.1; q <= a.c.L + 1; q += 0.05) if (!nav.walkable(bx + a.w.x * q, by + a.w.y * q)) { L = q; break; } if (L < 0 || Math.abs(L - a.c.L) > 0.3) return false; if (nav.walkable(bx + a.w.x * (a.c.L + 0.8), by + a.w.y * (a.c.L + 0.8))) return false; }
           return true;
         }, { c, w });
         if (ok) sp = c;
@@ -385,6 +524,9 @@ try {
       const s1 = await waitIdle(6000);
       const tr = await traceFrom(s0.t);
       for (const q of tr) { const pr = (q.x - sp.x) * w.x + (q.y - sp.y) * w.y; maxProj = Math.max(maxProj, pr); back = Math.max(back, maxProj - pr); projs.push(pr); }
+      const tRel = (await state()).t;
+      const gaps = await vale(page, (v, a) => { const nav = v.state.match.value.sim.world.nav; return a.tr.filter((q) => q.t <= a.tRel).map((q) => { for (let s = 0; s <= 4; s += 0.03) if (!nav.walkable(q.x + a.w.x * s, q.y + a.w.y * s)) return s; return 4; }); }, { tr, w, tRel: s1.t });
+      let touched = false, gapAfter = 0; for (const gq of gaps) { if (gq < 0.6) touched = true; else if (touched) gapAfter = Math.max(gapAfter, gq); }
       let along_ = 0; { const e = tr[tr.length - 1]; along_ = ((e.x - sp.x) * t.x + (e.y - sp.y) * t.y) * along; }
       const m = await moveMetrics(s0.t, relG, s1.t);
       const nStill = (await state()).ncmd;
@@ -392,10 +534,12 @@ try {
       const post = await postPath(s1.t);
       const cmdsStill = (await state()).ncmd - nStill;
       const cmds = await cmdsSince(s0.ncmd);
-      const r = { dir: dn, faceDist: +sp.L.toFixed(2), cmds: cmds.length, kinds: [...new Set(cmds.map((c) => c.type))], stepBackFromWall: +back.toFixed(2), slidAlong: +along_.toFixed(2), cursorTravel: 5.6, ended: s1.me.order === 0, endToRelease: m?.endDist, maxAwayFromRelease: m?.maxAway, postArrive: post, cmdsWhileStill: cmdsStill };
+      const wtr = await vale(page, (v, a) => ({ tr: window.__H.trace.filter((p) => p.t >= a.t0).filter((_, i) => i % 6 === 0).map((p) => [+p.t.toFixed(2), +p.x.toFixed(2), +p.y.toFixed(2), p.order, p.st, p.atk]), cmds: window.__H.cmds.filter((c) => c.t >= a.t0).map((c) => [+c.t.toFixed(2), c.cmd.type, c.cmd.x, c.cmd.y]) }), { t0: s0.t });
+      const r = { trace: wtr, tEnd: s1.t, dir: dn, faceDist: +sp.L.toFixed(2), localGapAfterTouch: +gapAfter.toFixed(2), touched, cmds: cmds.length, kinds: [...new Set(cmds.map((c) => c.type))], stepBackFromWall: +back.toFixed(2), slidAlong: +along_.toFixed(2), cursorTravel: 5.6, ended: s1.me.order === 0, endToRelease: m?.endDist, maxAwayFromRelease: m?.maxAway, postArrive: post, cmdsWhileStill: cmdsStill };
       res.push(r);
       const bad = [];
       if (back > 0.3) bad.push('stepped back from the wall > 0.3 m');
+      if (gapAfter > 0.8) bad.push('left the face > 0.8 m while pressing into it');
       if (post > 0.3) bad.push('kept moving after arrival');
       if (cmdsStill > 0) bad.push('commands with a still mouse');
       if (!r.ended) bad.push('order never ended');
@@ -409,14 +553,15 @@ try {
   // ── HW. hold-steer through the enemy wave to a point past it (cursor kept on that ground point) ─────────
   {
     const res = [];
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 6; i++) {
+      const STILL = i >= 3;   // trials 3..5: the mouse held still after the press (no re-aim)
       await park();
       const c2 = await clash();
       if (c2.d === undefined) { res.push({ skip: 'no wave' }); continue; }
       const ux = c2.bx - c2.ax, uy = c2.by - c2.ay, L = Math.hypot(ux, uy) || 1;
       let g = null;
       for (let k = 0; k < 12 && !g; k++) {
-        const fw = 3 + (k % 3) * 1.5, lat = ((k >> 2) - 1) * 1.5 + (i - 1.5) * 0.8;
+        const fw = 3 + (k % 3) * 1.5, lat = ((k >> 2) - 1) * 1.5 + ((i % 4) - 1.5) * 0.8;
         const gg = { x: c2.bx + (ux / L) * fw - (uy / L) * lat, y: c2.by + (uy / L) * fw + (ux / L) * lat };
         if (!(await vale(page, (v, g) => v.state.match.value.sim.world.nav.walkable(g.x, g.y), gg))) continue;
         const pp = await toScreen(gg.x, gg.y);
@@ -436,9 +581,10 @@ try {
         p = await toScreen(g.x, g.y);
         const sel1 = await vale(page, (v, a) => { const pk = v.state.renderer.pickEntity(a.x, a.y, { filter: (u) => u.alive && u.team !== window.__H.team, slop: 0 }); return pk; }, p);
         if (sel1 !== null) sel++;
-        if (inView(p)) await page.mouse.move(p.x, p.y, { steps: 1 });
+        if (inView(p) && !STILL) await page.mouse.move(p.x, p.y, { steps: 1 });
         const s = await state();
         if (Math.hypot(s.me.x - g.x, s.me.y - g.y) < 0.8) { reached = true; break; }
+        if (STILL && s.me.order === 0) break;
       }
       await page.mouse.up({ button: 'right' });
       const s1 = await waitIdle(5000);
@@ -446,144 +592,20 @@ try {
       await sleep(1500);
       const post = await postPath(s1.t);
       const cmds = await cmdsSince(s0.ncmd);
-      const r = { straight: m?.d0, path: m?.path, endDist: m?.endDist, maxAway: m?.maxAway, regress: m?.regress, reached, secs: +(s1.t - s0.t).toFixed(2), cmds: cmds.length, kinds: [...new Set(cmds.map((c) => c.type + (c.target !== undefined ? '#' + c.target : '')))], cursorOverEnemyFrames: sel, ended: s1.me.order === 0, postArrive: post };
+      const trc = await vale(page, (v, a) => { const T = window.__H.trace.filter((p) => p.t >= a.t0 && p.t <= a.t1 + 1.5); return { tr: T.filter((_, i) => i % 6 === 0).map((p) => [+p.t.toFixed(2), +p.x.toFixed(2), +p.y.toFixed(2), p.order, p.st]), cmds: window.__H.cmds.filter((c) => c.t >= a.t0 && c.t <= a.t1 + 1.5).map((c) => [+c.t.toFixed(2), c.cmd.type, c.cmd.x !== undefined ? +c.cmd.x.toFixed(2) : c.cmd.target, c.cmd.y !== undefined ? +c.cmd.y.toFixed(2) : null]) }; }, { t0: s0.t, t1: s1.t });
+      const r = { still: STILL, g: { x: +g.x.toFixed(2), y: +g.y.toFixed(2) }, trace: trc, straight: m?.d0, path: m?.path, endDist: m?.endDist, maxAway: m?.maxAway, regress: m?.regress, reached, secs: +(s1.t - s0.t).toFixed(2), cmds: cmds.length, kinds: [...new Set(cmds.map((c) => c.type + (c.target !== undefined ? '#' + c.target : '')))], cursorOverEnemyFrames: sel, ended: s1.me.order === 0, postArrive: post };
       res.push(r);
       const bad = [];
       if (m && m.maxAway > 1) bad.push('moved away > 1 m');
       if (post > 0.3) bad.push('kept moving after release');
       if (cmds.some((c) => c.type === 'attack')) bad.push('a hold-steer became an attack');
       if (m && m.endDist > 2) bad.push('ended > 2 m from the held point');
+      if (m && m.path > 1.6 * m.d0 + 1) bad.push('path > 1.6 x straight + 1');
       if (bad.length) flags.push({ scenario: 'holdThroughWave', bad, ...r });
       if (i === 0 || bad.length) await snap(page, `holdwave_${i}${bad.length ? '_BAD' : ''}`);
     }
     report.scenarios.holdThroughWave = res;
     log('HW', JSON.stringify(res));
-  }
-
-  // generic unit-click trial
-  /**
-   * mode: 'near' (plain RMB 8 px outside the box), 'center' (plain RMB on the body), 'shift' (Shift+RMB on ground
-   * 0.9 m from the intended minion in a cluster), 'amove' (A then LMB, same point), 'gap' (plain RMB on ground in
-   * a gap between enemy minions: intended = a move)
-   */
-  const trial = async (mode, opt = {}) => {
-    if (mode === 'fonly') {
-      // stand 4.5 m from the sparring fighter (toward our side), so it is in view with whatever is around it
-      const ok = await vale(page, (v) => {
-        const c = v.state.match.value, H = window.__H, W = c.sim.world;
-        const f = c.view.entities.find((u) => u.kind === 'fighter' && u.team !== H.team && u.alive);
-        if (!f) return false;
-        const me = W.entity(H.me);
-        const dx = me.x - f.x, dy = me.y - f.y, L = Math.hypot(dx, dy) || 1;
-        window.__harness({ type: 'practice', action: 'teleport', x: f.x + (dx / L) * 4.5, y: f.y + (dy / L) * 4.5 });
-        return true;
-      });
-      if (!ok) return { mode, skip: 'no enemy fighter' };
-      await page.keyboard.press('KeyS');
-      await sleep(900);
-    } else await ensureWave();
-    const s = await state();
-    const foes = s.units.filter((u) => u.foe && (opt.kind ? u.kind === opt.kind : u.kind === 'minion') && inView({ x: u.sx, y: u.sy }));
-    if (!foes.length) return { mode, skip: 'no foes in view' };
-    let intended = null, sp = null, ground = null;
-    if (mode === 'near' || mode === 'center') {
-      const moving = foes.filter((u) => u.st === 'move');
-      const pool = moving.length ? moving : foes;
-      const u = pool[Math.floor(rnd() * pool.length)];
-      intended = u.id;
-      const geo = await vale(page, (v, id) => {
-        const R = v.state.renderer, a = R.actors.get(id), u = v.state.match.value.view.entity(id);
-        const f = R.worldToScreen(a.x, a.y, a.h), hd = R.worldToScreen(a.x, a.y, a.h + a.artHeight), side = R.worldToScreen(a.x + u.radius + 0.15, a.y, a.h);
-        return { fx: f.x, fy: f.y, hy: hd.y, rx: Math.max(16, Math.abs(side.x - f.x)) };
-      }, u.id);
-      sp = mode === 'center' ? { x: geo.fx, y: (geo.fy + geo.hy) / 2 } : { x: geo.fx + geo.rx + 8 * (rnd() < 0.5 ? 1 : -1) * 1 + (rnd() < 0.5 ? 0 : -2 * (geo.rx + 8)) , y: (geo.fy + geo.hy) / 2 };
-      if (mode === 'near') {
-        sp = null;
-        for (const dir of rnd() < 0.5 ? [1, -1] : [-1, 1]) for (const yy of [(geo.fy + geo.hy) / 2, geo.fy - 6, geo.hy + 4]) {
-          if (sp) break;
-          const p = { x: geo.fx + dir * (geo.rx + 8), y: yy };
-          if (!inView(p)) continue;
-          if ((await pickAt(p.x, p.y, 0)) !== null) continue;
-          if ((await pickAt(p.x, p.y, 14)) !== u.id) continue;
-          sp = p;
-        }
-        if (!sp) return { mode, skip: 'no clean near-miss side' };
-      }
-    } else if (mode === 'shift' || mode === 'amove' || mode === 'fonly') {
-      // a foe with another foe within 2.5 m (a cluster); click 0.9 m outward from the cluster centre, on no box
-      const all = s.units.filter((u) => u.foe);
-      const cluster = foes.filter((u) => foes.some((w) => w.id !== u.id && Math.hypot(w.x - u.x, w.y - u.y) < 2.5));
-      const pool = mode === 'fonly' ? foes : (cluster.length ? cluster : foes);
-      for (let k = 0; k < 12 && !sp; k++) {
-        const u = pool[Math.floor(rnd() * pool.length)];
-        const nb = all.filter((w) => w.id !== u.id && Math.hypot(w.x - u.x, w.y - u.y) < 4);
-        let cx = 0, cy = 0; for (const w of nb) { cx += w.x; cy += w.y; }
-        let dx, dy;
-        if (nb.length) { cx /= nb.length; cy /= nb.length; dx = u.x - cx; dy = u.y - cy; } else { const a = rnd() * 6.28; dx = Math.cos(a); dy = Math.sin(a); }
-        const L = Math.hypot(dx, dy) || 1;
-        // rotate a little each attempt
-        const ang = Math.atan2(dy, dx) + (k % 2 ? 1 : -1) * 0.35 * Math.floor(k / 2);
-        const off = opt.off ?? 0.9;
-        const g = { x: u.x + Math.cos(ang) * (u.r + off), y: u.y + Math.sin(ang) * (u.r + off) };
-        const cand = all.filter((w) => mode !== 'fonly' || w.kind === 'fighter');
-        // nearest by edge to g must be u (genre: the one nearest the click)
-        let best = null, bd = Infinity; for (const w of cand) { const d = Math.hypot(w.x - g.x, w.y - g.y) - w.r; if (d < bd) { bd = d; best = w; } }
-        if (best?.id !== u.id) continue;
-        const p = await toScreen(g.x, g.y);
-        if (!inView(p)) continue;
-        if ((await pickAt(p.x, p.y, 14)) !== null) continue;   // not on (or within slop of) any box
-        intended = u.id; sp = p; ground = g;
-      }
-      if (!sp) return { mode, skip: 'no clean near-miss point' };
-    } else if (mode === 'gap') {
-      // a ground point among/just past the enemy minions with >= 0.7 m edge clearance to every unit; not on any box (slop 0) but maybe within slop
-      const all = s.units;
-      for (let k = 0; k < 40 && !sp; k++) {
-        const u = foes[Math.floor(rnd() * foes.length)];
-        const a = rnd() * 6.28, d = 0.9 + rnd() * 1.6;
-        const g = { x: u.x + Math.cos(a) * (u.r + d), y: u.y + Math.sin(a) * (u.r + d) };
-        if (all.some((w) => Math.hypot(w.x - g.x, w.y - g.y) - w.r < 0.7)) continue;
-        const ok = await vale(page, (v, g) => v.state.match.value.sim.world.nav.walkable(g.x, g.y), g);
-        if (!ok) continue;
-        const p = await toScreen(g.x, g.y);
-        if (!inView(p)) continue;
-        if ((await pickAt(p.x, p.y, 0)) !== null) continue;
-        sp = p; ground = g; intended = 'move';
-      }
-      if (!sp) return { mode, skip: 'no gap' };
-    }
-    const under = await page.evaluate((p) => { const e = document.elementFromPoint(p.x, p.y); return e ? e.tagName.toLowerCase() + '.' + [...e.classList].slice(0, 2).join('.') : null; }, sp);
-    await setIntended(intended);
-    const n0 = (await state()).ncmd;
-    const slopHit = mode === 'gap' ? await pickAt(sp.x, sp.y, 14) : null;
-    await page.mouse.move(sp.x, sp.y);
-    await sleep(80);   // hover settles (50 ms cadence)
-    if (mode === 'shift') { await page.keyboard.down('Shift'); await page.mouse.click(sp.x, sp.y, { button: 'right' }); await page.keyboard.up('Shift'); }
-    else if (mode === 'fonly') { await page.keyboard.down('KeyZ'); await page.keyboard.down('Shift'); await page.mouse.click(sp.x, sp.y, { button: 'right' }); await page.keyboard.up('Shift'); await page.keyboard.up('KeyZ'); }
-    else if (mode === 'amove') { await page.keyboard.press('KeyA'); await sleep(40); await page.mouse.click(sp.x, sp.y, { button: 'left' }); }
-    else await page.mouse.click(sp.x, sp.y, { button: 'right' });
-    await sleep(60);
-    const cmds = await cmdsSince(n0);
-    const c0 = cmds.find((c) => c.type === 'attack' || c.type === 'move');
-    const sent = !c0 ? 'none' : c0.type === 'attack' ? c0.target : c0.attackMove ? (c0.prefer ?? 'amove-ground') : 'move';
-    // did the hero then attack the intended within 3 s (attacks: atk target on the trace)?
-    const t0 = (await state()).t;
-    if (mode === 'gap') { await sleep(200); await waitIdle(8000); } else await sleep(3000);
-    const tr = await traceFrom(t0);
-    const hits = [...new Set(tr.map((p) => p.atk).filter((x) => x >= 0))];
-    const out = { mode, under: under?.startsWith('div.hudsurface') ? undefined : under, at: [Math.round(sp.x), Math.round(sp.y)], intended, sent, ok: sent === intended, attackedAfter: hits.slice(0, 4), extraCmds: cmds.length - 1 };
-    if (mode === 'gap') { const end = tr[tr.length - 1]; out.slopWouldHit = slopHit; out.endDist = +Math.hypot(end.x - ground.x, end.y - ground.y).toFixed(2); out.orderEnd = end.order; }
-    await page.keyboard.press('KeyS');
-    await sleep(250);
-    return out;
-  };
-
-  for (const [mode, n, opt] of [['shift', 8], ['amove', 8], ['fonly', 4, { kind: 'fighter', off: 1.8 }]]) {
-    const res = [];
-    for (let i = 0; i < n; i++) { const r = await trial(mode, opt); r.down = await lastDown(); res.push(r); if (!r.skip && !r.ok) flags.push({ scenario: mode, ...r }); if (i === 0 || (!r.skip && !r.ok)) await snap(page, `${mode}_${i}${r.ok === false ? '_MISS' : ''}`); }
-    report.scenarios[mode] = res;
-    const done = res.filter((r) => !r.skip);
-    log(mode, `${done.filter((r) => r.ok).length}/${done.length} ok`, JSON.stringify(res));
   }
 
   // ── F2. plain move straight through the enemy wave to a point 6 m past it ─────────────────────

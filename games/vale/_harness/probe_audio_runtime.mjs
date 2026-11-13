@@ -32,7 +32,9 @@
 //     with match time. Gates (closing CW2 done, minors): heal chimes <= 6 per minute; enemyDown fires; announcer
 //     line peak (voice momentary max) >= 3 dB over the sfx short-term p99 (the sfx bus + threat path, measured
 //     before the voice duck); the master integrated within tokens.audio.loudness (-18 ± 1.5 LUFS; CW2 refix). Reported: the lines against the teamfight windows (sfx short-term above its p90),
-//     master integrated (tokens: -18 ± 1.5 LUFS; the closing review measured -19.0), ambience (about -28), music.
+//     master integrated (tokens: -18 ± 1.5 LUFS; the closing review measured -19.0), ambience, music. (Rulings 34 / 37)
+//     the ambience bus, as heard (bed + every emitter in earshot), sits >= AMB_UNDER_MUSIC_LU under the music bus over
+//     the match (integrated) and in its quiet stretches (sfx short-term <= its p25: mean energy against mean energy).
 //     enemyDownFires is gated only when an enemy fighter died in your team's sight (fog silences the rest): the probe
 //     counts the sim's own enemy fighter deaths, and when none has happened by --seconds minus 30 it forces one beside
 //     your fighter (killEntity on an enemy fighter, no killer: a kill of yours would sound as takedown instead; reported as forced), so the gate is always measured (closing r2 probe:runtime-gates).
@@ -66,7 +68,8 @@ const REFS = Number(opt('--refs', 60));
 const RUNS = Math.max(1, Number(opt('--runs', 3)));
 const LATE_IDLE_MS = 3;   // the frame loop reaching its pump within this of the rAF timestamp (p95): an idle main thread
 const REF_AT = ['out', 'master', 'sfx'];   // where a reference click joins: the output itself, the master's input, the sfx bus
-const ENGINE_OVER_MS = 4;   // the engine's own share of the offset (a quarter frame): decode-cache promise, fade-in, onset
+const ENGINE_OVER_MS = 4;
+const AMB_UNDER_MUSIC_LU = 8;   // (rulings 34 / 37) the ambience bus at least this far under the music bus (the norm: 8-12 dB)   // the engine's own share of the offset (a quarter frame): decode-cache promise, fade-in, onset
 const QUEUE = opt('--queue', 'rift_coop');
 const SECONDS = Number(opt('--seconds', 420));
 const FIGHTER = opt('--fighter', null);
@@ -462,6 +465,13 @@ async function runMatch() {
     }
     rep.seconds = r2(blocks.length * blk);
     rep.loudness = loud;
+    // (rulings 34 / 37) the map's ambience as heard, the whole bus (bed + every emitter in earshot), against the music:
+    // over the match, and in its quiet stretches (the sfx short-term at or under its p25: no fight, nothing near)
+    { const sfxSt3 = movAvg(ms.sfx, 35).map(LU), q25 = pct(sfxSt3, 25);
+      const qi = sfxSt3.map((v, i) => (v <= q25 ? i : -1)).filter((i) => i >= 0);
+      const mean = (a) => LU(qi.reduce((acc, i) => acc + a[i], 0) / Math.max(1, qi.length));
+      rep.ambience = { underMusicLU: loud.ambience.I === null || loud.music.I === null ? null : r2(loud.music.I - loud.ambience.I),
+        quietSeconds: r2(qi.length * blk), quietUnderMusicLU: qi.length ? r2(mean(movAvg(ms.music, 35)) - mean(movAvg(ms.ambience, 35))) : null }; }
     // the announcer over the fight: each line's momentary peak vs the sfx short-term p99, whole capture and teamfights
     const voiceMo = movAvg(ms.voice, 5).map(LU), sfxSt = movAvg(ms.sfx, 35).map(LU);
     const sfxP90 = pct(sfxSt, 90);
@@ -508,6 +518,9 @@ async function runMatch() {
       masterIntegratedInTokens: rep.seconds < 240 ? null : loud.out.I !== null && Math.abs(loud.out.I - TOK.integratedLUFS) <= TOK.toleranceLU,
       // (max SFX-1) in a laning capture the fighters' own kits are at least half of the sfx heard (closing2 / max: 34 %)
       fighterKitShareGe50: rep.seconds < 240 ? null : rep.kitShare.fighterPct >= 50,
+      // (rulings 34 / 37) the ambience bus felt, not heard: >= AMB_UNDER_MUSIC_LU under the music, whole match and quiet
+      ambienceUnderMusic: rep.seconds < 240 || rep.ambience.underMusicLU === null ? null : rep.ambience.underMusicLU >= AMB_UNDER_MUSIC_LU,
+      ambienceQuietUnderMusic: rep.seconds < 240 || rep.ambience.quietUnderMusicLU === null ? null : rep.ambience.quietUnderMusicLU >= AMB_UNDER_MUSIC_LU,
     };
     rep.tokens = TOK;
     // reported, not gated: the lines against the teamfight windows' sfx (measured before the 6 dB news-line duck, so

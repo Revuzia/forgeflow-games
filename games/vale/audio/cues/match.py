@@ -702,13 +702,14 @@ def m_noon_bell(v: int):
 def m_gorge_gust(v: int):
     """The Gorge Wind rises a step (role gorgeWind, on the ambience bus): a gust drawn up through the gorge, a
     band of air sweeping 220 -> 1300 Hz as it swells for 1.3 s, then falling away; a thin whistle off a needle's
-    edge rides its crest; wide, centred. Felt more than heard."""
+    edge rides its crest; centred, with a little width that sums back to mono exactly (ruling 37: the old wide
+    layers were anti-correlated, L/R -0.22, and lost about 4 dB on a mono speaker). Felt more than heard."""
     r = R('m_gorge_gust')
     L = Layers(3.0)
-    L.add(breath(3.0, 220, 1300, shape='breath', q=1.3, seed='gg', peak_at=1.3, vel=0.8, sweep_curve=0.8), 0.0, peak_db=0,
-          width=1.3)
-    L.add(breath(2.6, 120, 380, shape='breath', q=0.9, seed='gg2', peak_at=1.2, vel=0.7), 0.15, peak_db=-5, width=1.1)
-    L.add(breath(1.4, 900, 1250, shape='breath', q=7.0, seed='gg3', peak_at=0.6, vel=0.6), 0.8, peak_db=-16, pan=0.15)
+    L.add(spread(mono(breath(3.0, 220, 1300, shape='breath', q=1.3, seed='gg', peak_at=1.3, vel=0.8, sweep_curve=0.8)),
+                 0.35, 0.9), 0.0, peak_db=0)
+    L.add(mono(breath(2.6, 120, 380, shape='breath', q=0.9, seed='gg2', peak_at=1.2, vel=0.7)), 0.15, peak_db=-5)
+    L.add(mono(breath(1.4, 900, 1250, shape='breath', q=7.0, seed='gg3', peak_at=0.6, vel=0.6)), 0.8, peak_db=-16)
     return finish(L.out(), hp_hz=90, lp_hz=6000)
 
 

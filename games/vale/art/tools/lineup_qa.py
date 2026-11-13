@@ -373,6 +373,26 @@ def main():
                           "ok": True if sf else mx <= 0.80})
     res["pairs"] = pairs
     res["silhouetteOk"] = all(p["ok"] for p in pairs)
+    # (MAX2 r3, U7) crown collisions: dE76 between every pair of fighters' crown means (top 12 % of the silhouette),
+    # per facing; a pair's value is its minimum over the facings. Gate: >= 25 between different fighters (skins of
+    # one fighter are reported, not gated)
+    cps = []
+    for i in range(len(names)):
+        for j in range(i + 1, len(names)):
+            a, b = names[i], names[j]
+            per = {}
+            for f in A["facings"]:
+                ca = res["fighters"][a]["facings"][str(f)].get("crown")
+                cb = res["fighters"][b]["facings"][str(f)].get("crown")
+                if ca and cb:
+                    (La, _, _, aa, ba), (Lb, _, _, ab, bb) = ca["lab"], cb["lab"]
+                    per[str(f)] = round(math.sqrt((La - Lb) ** 2 + (aa - ab) ** 2 + (ba - bb) ** 2), 1)
+            if per:
+                sf = same_fighter(a, b)
+                mn = min(per.values())
+                cps.append({"a": a, "b": b, "sameFighter": sf, "dE76": per, "dE76Min": mn, "ok": True if sf else mn >= 25})
+    res["crownPairs"] = sorted(cps, key=lambda p: p["dE76Min"])
+    res["crownPairsOk"] = all(p["ok"] for p in cps)
     # sheet: colour / value / silhouette rows at 2x (nearest) of the true 1080p pixels
     def up2(a):
         return np.repeat(np.repeat(a, 2, 0), 2, 1)

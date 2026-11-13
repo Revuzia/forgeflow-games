@@ -443,15 +443,28 @@ def band_distance(a: np.ndarray, b: np.ndarray) -> float:
 CONTENT = os.path.normpath(os.path.join(HERE, '..', 'content'))
 PAYOFF_OPS = {'damage', 'status', 'mark', 'consumeMark', 'resource'}
 AMB_MIN, AMB_MAX = 4, 6          # ambience emitters per map (final parity AUD-8)
-# a map's bed (ruling 34, the owner's "heavy wind blowing"): felt more than heard, band-limited, slowly evolving.
-# As played (file integrated + cue gain) it sits >= BED_UNDER_MUSIC_LU under the map's match music (main stem + its
-# gain; both buses share their 0.6 default slider and the bed takes no calm lift); <= BED_HF_MAX of its energy above
-# 2 kHz (the music beds hold about 1 %); its short-term (3 s, circular) loudness moves <= BED_SWELL_LU over the loop
-# (the old 12 s beds swung 12.8 LU in a gust every loop); its loop >= BED_MIN_S
-BED_UNDER_MUSIC_LU = 8.0
+# a map's ambience (rulings 34 / 37, the owner's "heavy wind blowing"): the whole bus as heard, not the bed alone, is
+# felt more than heard, band-limited and slowly evolving. Levels "as played" are the file's integrated loudness + the
+# cue gain (no calm lift: there is none), against the map's match music (main stem + its gain; both buses share their
+# 0.6 default slider). The bed sits >= BED_UNDER_MUSIC_LU under the music, <= BED_HF_MAX of its energy above 2 kHz (the
+# music beds hold about 1 %), its short-term (3 s, circular) loudness moving <= BED_SWELL_LU over a loop >= BED_MIN_S
+# (the old 12 s beds swung 12.8 LU in a gust every loop). Every positional emitter, on its point (at full), sits
+# >= AMB_EMIT_UNDER_MUSIC_LU under the music; the busiest spot (the bed + the map's AMB_BUSY_N loudest emitters, all at
+# full) >= AMB_BUSY_UNDER_MUSIC_LU under it (ruling 37: the canopy and the shallows played over the bed, which left the
+# RIFT bus level with the music while the bed alone passed). A continuous noise wash (AMB_WASH: the layers heard as
+# air) holds <= AMB_WASH_HF_MAX of its energy above 2 kHz (the canopy's rustle-hiss held 47-61 %) and its short-term
+# loudness moves <= AMB_WASH_SWELL_LU over its loop (the shallows' wash swelled 13.5 dB three times a loop).
+# _harness/probe_audio_runtime.mjs gates the same standard live on the bus.
+BED_UNDER_MUSIC_LU = 11.0
 BED_HF_MAX = 0.08
 BED_SWELL_LU = 5.0
 BED_MIN_S = 12.0
+AMB_EMIT_UNDER_MUSIC_LU = 12.0
+AMB_BUSY_N = 2
+AMB_BUSY_UNDER_MUSIC_LU = 8.0
+AMB_WASH = ('amb_rift_canopy', 'amb_rift_water', 'amb_bridge_updraft', 'amb_lamp_flame')
+AMB_WASH_HF_MAX = 0.25
+AMB_WASH_SWELL_LU = 5.0
 
 
 def _read(rel: str):
@@ -1421,7 +1434,19 @@ def ambience_gate(contract: dict) -> tuple[list[str], dict]:
                     fails.append(f'ambience: {c} sounds from points ({mid}.{src}) but is not spatial')
             if not all(os.path.exists(out_path(f)) for f in d['files']):
                 fails.append(f'ambience: {c} is not rendered')
-            elif src == 'bed':
+            elif src != 'bed':
+                rows[src].update(bed_level(c, d, (contract.get('music') or {}).get(f"mus_match_{mid.removeprefix('map_')}")))
+                b = rows[src]
+                if b.get('underMusicLU') is not None and b['underMusicLU'] < AMB_EMIT_UNDER_MUSIC_LU:
+                    fails.append(f"ambience: {mid}.{src} ({c}) plays {b['underMusicLU']:.1f} LU under the match music on its "
+                                 f'point (want >= {AMB_EMIT_UNDER_MUSIC_LU})')
+                if c in AMB_WASH and b['hfShare'] > AMB_WASH_HF_MAX:
+                    fails.append(f"ambience: {c} is a continuous wash with {100 * b['hfShare']:.1f} % of its energy above 2 kHz "
+                                 f'(want <= {100 * AMB_WASH_HF_MAX:.0f} %)')
+                if c in AMB_WASH and b['swellLU'] > AMB_WASH_SWELL_LU:
+                    fails.append(f"ambience: {c} is a continuous wash that swells {b['swellLU']:.1f} LU over its loop "
+                                 f'(want <= {AMB_WASH_SWELL_LU})')
+            else:
                 rows[src].update(bed_level(c, d, (contract.get('music') or {}).get(f"mus_match_{mid.removeprefix('map_')}")))
                 b = rows[src]
                 if b.get('underMusicLU') is not None and b['underMusicLU'] < BED_UNDER_MUSIC_LU:
@@ -1434,6 +1459,15 @@ def ambience_gate(contract: dict) -> tuple[list[str], dict]:
                     fails.append(f"ambience: {mid}'s bed {c} swells {b['swellLU']:.1f} LU over its loop (want <= {BED_SWELL_LU})")
                 if b['seconds'] < BED_MIN_S - 0.05:
                     fails.append(f"ambience: {mid}'s bed {c} loops every {b['seconds']:.1f} s (want >= {BED_MIN_S})")
+        bed = rows.get('bed') or {}
+        emu = sorted((x['underMusicLU'] for s_, x in rows.items() if s_ != 'bed' and x.get('underMusicLU') is not None))
+        if bed.get('underMusicLU') is not None:
+            under = [bed['underMusicLU']] + emu[:AMB_BUSY_N]
+            busy = -10 * math.log10(sum(10 ** (-u / 10) for u in under))
+            rows['busiest'] = {'underMusicLU': round(busy, 2), 'of': len(under)}
+            if busy < AMB_BUSY_UNDER_MUSIC_LU:
+                fails.append(f"ambience: {mid}'s busiest spot (the bed + {len(under) - 1} loudest emitters at full) plays "
+                             f'{busy:.1f} LU under the match music (want >= {AMB_BUSY_UNDER_MUSIC_LU})')
         rep[mid] = rows
         if not AMB_MIN <= len(ems) <= AMB_MAX:
             fails.append(f'ambience: {mid} has {len(ems)} emitters (want {AMB_MIN}-{AMB_MAX})')
@@ -1631,7 +1665,15 @@ def print_gates(fails: list[str], rep: dict) -> None:
     am = rep.get('ambience', {})
     print(f'ambience gate: {len(am)} maps, {AMB_MIN}-{AMB_MAX} emitters each')
     for mid, rows in am.items():
-        print(f"  {mid:11s} " + ', '.join(f"{s}→{x['cue']}({'bed' if x['points'] is None else x['points']})" for s, x in rows.items()))
+        print(f"  {mid:11s} " + ', '.join(f"{s}→{x['cue']}({'bed' if x['points'] is None else x['points']})" for s, x in rows.items()
+                                         if s != 'busiest'))
+        for s_, x in rows.items():
+            if s_ not in ('bed', 'busiest') and 'lufs' in x:
+                print(f"  {'':11s} {x['cue']:20s} {x['lufs']} LUFS x{x['gain']}, {x['underMusicLU']} LU under the music on its point, "
+                      f"{100 * x['hfShare']:.1f} % > 2 kHz, swell {x['swellLU']} LU")
+        if 'busiest' in rows:
+            print(f"  {'':11s} busiest spot (bed + {rows['busiest']['of'] - 1} loudest emitters at full): "
+                  f"{rows['busiest']['underMusicLU']} LU under the music")
         b = rows.get('bed')
         if b and 'lufs' in b:
             print(f"  {'':11s} bed {b['lufs']} LUFS x{b['gain']}, {b['underMusicLU']} LU under the music, "

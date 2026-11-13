@@ -11,8 +11,9 @@
 //   A2  the bed is at full the whole match; at least one positional emitter is heard (> -20 dB) along the way
 //   A3  placement (engine ambPlace): on any point of an emitter's group it plays at full; 40 m clear of every point
 //       it is silent
-//   A4  the combat duck: the bus (ambDuck) at 0 dB below fight heat 0.2 and -6 dB at 0.6 and above; the positional emitters'
-//       calm lift (ambLift) +3 dB below 0.2 and 0 dB in a fight, the bed outside it (ruling 34: the bed takes no lift); fight heat
+//   A4  the combat duck: the bus (ambDuck) at 0 dB below fight heat 0.2 and -6 dB at 0.6 and above; every emitter, the bed
+//       and the positional ones, joins the duck directly with no calm lift (rulings 34 / 37: the lift put the map's
+//       ambience level with the match music away from fights); fight heat
 //       counts fighter-vs-fighter damage only: the wave-clear intensity, here held at 1, never ducks it
 //   A5  detach (the match ends): every emitter fades to silence and its source is stopped; nothing is left voiced
 // Also reported (not gated; the real metering is _harness/probe_audio_mix.mjs in Chrome): a loudness MODEL of the
@@ -208,14 +209,10 @@ for (const modeId of ['rift', 'bridge', 'fray']) {
   m.placement = placement;
   // A4: the duck
   const duck = {};
-  const lift = {};
-  for (const k of [0, 0.15, 0.4, 0.6, 0.9]) { eng.fight = k; eng.intensity = 1; eng.syncAmbience(); duck[k] = +dB(eng.ambDuck.gain.value).toFixed(2); lift[k] = +dB(eng.ambLift.gain.value).toFixed(2); }
+  for (const k of [0, 0.15, 0.4, 0.6, 0.9]) { eng.fight = k; eng.intensity = 1; eng.syncAmbience(); duck[k] = +dB(eng.ambDuck.gain.value).toFixed(2); }
   m.duckDb = duck;
-  m.liftDb = lift;
-  const bedEm = amb.find((e) => !e.pts.length);
-  if (bedEm && !bedEm.gain.outs.includes(eng.ambDuck)) failures.push(`A4 ${mode.map}: the bed does not join the duck directly (it would take the calm lift)`);
-  if (amb.some((e) => e.pts.length && !e.gain.outs.includes(eng.ambLift))) failures.push(`A4 ${mode.map}: a positional emitter skips the calm lift`);
-  if (Math.abs(lift[0] - 3) > 0.05 || Math.abs(lift[0.6]) > 0.05) failures.push(`A4 ${mode.map}: the positional calm lift is not +3 dB calm / 0 dB in a fight (${JSON.stringify(lift)})`);
+  const lifted = amb.filter((e) => !e.gain.outs.includes(eng.ambDuck)).map((e) => e.role);
+  if (lifted.length) failures.push(`A4 ${mode.map}: ${lifted.join(', ')} do not join the duck directly (a calm lift or another stage between)`);
   m.duckedShare = +(ducked / Math.max(1, samples)).toFixed(2);
   if (Math.abs(duck[0]) > 0.05 || Math.abs(duck[0.15]) > 0.05) failures.push(`A4 ${mode.map}: the bus is not at 0 dB below combat (${JSON.stringify(duck)})`);
   if (Math.abs(duck[0.6] + 6) > 0.05 || Math.abs(duck[0.9] + 6) > 0.05) failures.push(`A4 ${mode.map}: the bus is not -6 dB in a fight (${JSON.stringify(duck)})`);

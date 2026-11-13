@@ -18,14 +18,20 @@ Vale's own fiction (_design/WORLD.md):
 Every layer is periodic in the loop's length (frequency-domain noise, circular filtering, modulations with
 whole cycles, scattered events wrapped across the seam), so each file loops sample-exactly (build.py encodes
 loops seamlessly and QA's the seam). Positional emitters are mono (the engine pans them toward their points);
-the beds are wide stereo that sums to mono without combing. Asset loudness (gated integrated): beds BED_LUFS
-(-33: 10 LU under the music beds' -23, ruling 34), positional emitters -25; content/audio.json sets the cue gains.
+the beds are wide stereo that sums to mono without combing. Asset loudness (gated integrated): beds BED_LUFS (-33),
+positional emitters -25; content/audio.json sets the cue gains that put them where the standard below wants them.
 
-The beds' standard (ruling 34, the owner's "odd sound, almost like heavy wind blowing"): a map's bed is felt more than
-heard, about 10 dB under the match music as played and far under combat; band-limited (nothing much above 3 kHz, where
-the score leaves the band empty and a bed's hiss is heard as wind); slowly evolving with no periodic swell (a 24 s
-loop whose drift() moves the level by at most BED_SWELL_DB peak to peak, over several coprime cycles, its seam
-nowhere special). Wind gusts are rare, short, quiet accents (m_gorge_gust), never the bed's own shape.
+The ambience standard (rulings 34 and 37, the owner's "odd sound, almost like heavy wind blowing"): the WHOLE ambience
+bus as the player hears it (bed plus every positional emitter in earshot), not the bed alone, is felt more than heard:
+about 10 dB under the match music and far under combat, with no calm lift. The bed plays >= 11 LU under its map's
+music (about 12.5); each positional emitter at full (on its point) >= 12 LU under it (13-14.5); the busiest spot (the
+bed plus the map's two loudest emitters at full) >= 8 LU under it (audio/build.py AMB_* gates; _harness/probe_audio_runtime.mjs gates the bus
+live, whole match and quiet stretches). Band-limited: the bed holds almost nothing above 2 kHz and a continuous noise
+wash (canopy, water, updraft, flame) at most AMB_WASH_HF_MAX of its energy there (above 2 kHz, where the score leaves
+the band empty, a steady hiss is heard as wind). Slowly evolving: no layer swells periodically (drift() moves a level by
+a few dB over several coprime cycles, its seam nowhere special; no gust**2 shapes, no wash sweeping its band up on a
+swell, the classic synthetic "whoosh"). Wind gusts are rare, short, quiet, mono-compatible accents (m_gorge_gust),
+never a loop's own shape.
 """
 from __future__ import annotations
 
@@ -159,51 +165,67 @@ def amb_rift_air(v: int):
     return loop_out(wide(m, s, 0.8), hp_hz=40, lp_hz=3000)
 
 
-@cue('amb_rift_canopy', 'loop', ('int', -25.0), win(8.0), **LOOPK)
+@cue('amb_rift_canopy', 'loop', ('int', -25.0), win(12.0), **LOOPK)
 def amb_rift_canopy(v: int):
-    """Leaves stirring in the canopy: a dense, soft rustle of tiny leaf grains that thickens and thins a little, over
-    a faint breath of air through the branches. No gusts (ruling 34: its 24 points cover the jungle, so a swell here
-    is heard as the map's wind)."""
+    """Leaves stirring in the canopy, near: a sparse, soft patter of leaf ticks and small rustles (each one a short
+    band of leaf noise, mostly 500 Hz - 2 kHz, the bright edge rolled off under 2.8 kHz), its density drifting by a
+    couple of dB over coprime cycles. No air layer and no swell (ruling 37: its 24 points cover the jungle, so a steady
+    bright rustle there was heard as an always-on hiss; it is now a local detail heard near the trees)."""
     r = R('amb_rift_canopy', v=v)
-    D = 8.0
+    D = 12.0
     n = ns(D)
-    gust = wobble(n, r, (1, 2, 3), 0.25, seam_lull=False)
-    gate = np.clip(gust / gust.max(), 0, 1)
-    rustle = scatter(n, r, 900.0, lambda rr: grain(rr, 1500, 5000, (3.0, 14.0), 1.4), gate)
-    rustle = F.apply(rustle, [F.highpass(1000, 0.7), F.lowpass(6000, 0.7)], circular=True)
-    breath = band_noise(n, r, 800.0 * gust ** 0.5, 0.8, slope=-3.5) * gust
-    return loop_out(norm(rustle) * 0.8 + norm(breath) * 0.35, hp_hz=200, lp_hz=9000)
+    dens = drift(n, r, (2, 3, 5), 2.5)
+    gate = np.clip(dens / dens.max(), 0, 1)
+    ticks = scatter(n, r, 70.0, lambda rr: grain(rr, 500, 2000, (6.0, 22.0), 1.6), gate)
+    rustle = scatter(n, r, 9.0, lambda rr: F.apply(leaf_rustle(rr), [F.bandpass(rr.uniform(700, 1600), 0.9)]), gate)
+    out = norm(ticks) * 0.75 + norm(rustle) * 0.6
+    return loop_out(out, hp_hz=250, lp_hz=2800)
 
 
-@cue('amb_rift_water', 'loop', ('int', -25.0), win(8.0), **LOOPK)
+def leaf_rustle(r: np.random.Generator) -> np.ndarray:
+    """A small rustle: 80-220 ms of noise under an uneven, rough envelope (a twig brushing a few leaves)."""
+    k = ns(r.uniform(0.08, 0.22))
+    u = np.arange(k) / k
+    e = np.sin(np.pi * u) ** 1.5 * (0.6 + 0.4 * np.abs(np.sin(TAU * r.uniform(5, 11) * u + r.uniform(0, TAU))))
+    return O.white(k, r) * e * r.uniform(0.4, 1.0)
+
+
+@cue('amb_rift_water', 'loop', ('int', -25.0), win(12.0), **LOOPK)
 def amb_rift_water(v: int):
-    """The shallows lapping at the needle segments: three slow laps of a dark wash per loop, small bubbles and
-    drips clustered on each lap, a thin trickle between them."""
+    """The shallows at the needle segments: water you hear by its bubbles and small laps, not by a wash. Small
+    bubbles and drips at an even, drifting rate, soft little laps against the stone (short, shallow, irregular), a
+    thin trickle, over a low, steady, quiet murmur of moving water whose band never moves and whose level drifts by
+    a couple of dB (ruling 37: the old 8 s loop swelled 14 dB three times a loop and swept its band 380 -> 870 Hz on
+    each swell, a periodic whoosh heard as heavy wind)."""
     r = R('amb_rift_water', v=v)
-    D = 8.0
+    D = 12.0
     n = ns(D)
-    t = np.arange(n) / n
-    lap = 0.5 - 0.5 * np.cos(TAU * 3 * t + 0.4 * np.sin(TAU * t))     # three laps, unevenly spaced
-    lap = lap ** 2 * wobble(n, r, (1, 2), 0.25)
-    wash = band_noise(n, r, 380.0 * (0.7 + 0.6 * lap), 0.9, slope=-4.0) * (0.25 + lap)
+    murmur = band_noise(n, r, np.full(n, 420.0), 0.8, slope=-3.5) * drift(n, r, (2, 3, 5), 2.0)
+    rate = drift(n, r, (3, 5, 7), 3.0)
+    gate = np.clip(rate / rate.max(), 0, 1)
     bub = np.zeros(n)
-    count = int(r.poisson(14 * D))
-    for _ in range(count):
+    for _ in range(int(r.poisson(18 * D))):
         s = onset(r, n)
-        if r.uniform() > 0.25 + 0.75 * lap[s]:
+        if r.uniform() > gate[s]:
             continue
-        f0 = math.exp(r.uniform(math.log(350), math.log(1300)))
+        f0 = math.exp(r.uniform(math.log(380), math.log(1500)))
         b = bubble(f0, r.uniform(0.03, 0.07), r.uniform(1.5, 2.4), r.uniform(0.015, 0.04))
         add_at(bub, b * r.uniform(0.2, 1.0), s, wrap=True)
-    trickle = scatter(n, r, 160.0, lambda rr: grain(rr, 2500, 6000, (2.0, 8.0), 2.0))
-    out = norm(wash) * 0.9 + norm(bub) * 0.45 + norm(trickle) * 0.12
-    return loop_out(out, hp_hz=60, lp_hz=7500)
+    laps = np.zeros(n)
+    for _ in range(int(r.integers(7, 11))):                           # a soft lap now and then, never on a beat
+        k = ns(r.uniform(0.35, 0.6))
+        u = np.arange(k) / k
+        lap = F.apply(O.white(k, r), [F.bandpass(r.uniform(500, 800), 1.4)]) * np.sin(np.pi * u) ** 2 * (1 - u) ** 0.5
+        add_at(laps, lap * r.uniform(0.5, 1.0), onset(r, n), wrap=True)
+    trickle = scatter(n, r, 120.0, lambda rr: grain(rr, 1500, 3500, (2.0, 8.0), 2.0))
+    out = norm(bub) * 0.8 + norm(laps) * 0.35 + norm(murmur) * 0.3 + norm(trickle) * 0.1
+    return loop_out(out, hp_hz=90, lp_hz=5000)
 
 
 @cue('amb_rift_insects', 'loop', ('int', -25.0), win(6.0), **LOOPK)
 def amb_rift_insects(v: int):
     """Dial-crickets, the Vale's clock insects: two of them trade trains of tiny escapement ticks (one at about
-    4.3 kHz in fours, one lower in threes, answering), over the faintest wing-hiss."""
+    4.3 kHz in fours, one lower in threes, answering). Tonal ticks with silence between them, no hiss layer (ruling 37)."""
     r = R('amb_rift_insects', v=v)
     D = 6.0
     n = ns(D)
@@ -223,8 +245,7 @@ def amb_rift_insects(v: int):
                 for j in range(per):
                     add_at(y, tick(f * r.uniform(0.99, 1.01), r) * lvl, ns(tcur + j * 0.034), wrap=True)
             tcur += every * r.uniform(0.92, 1.08)
-    hiss = band_noise(n, r, np.full(n, 5200.0), 2.0, slope=0.0)
-    return loop_out(norm(y) + 0.05 * norm(hiss), hp_hz=1500, lp_hz=9000)
+    return loop_out(norm(y), hp_hz=1500, lp_hz=9000)
 
 
 # ── BRIDGE ───────────────────────────────────────────────────────────────────────────────────────
@@ -339,17 +360,18 @@ def amb_fray_murmur(v: int):
 
 @cue('amb_fray_bunting', 'loop', ('int', -25.0), win(6.0), **LOOPK)
 def amb_fray_bunting(v: int):
-    """Bunting on the rim: cloth flags snapping and fluttering in the noon breeze, busier in each gust."""
+    """Bunting on the rim: cloth flags fluttering in the noon breeze, a snap now and then. The breeze only leans on
+    them (about 4 dB over the loop, linear, never a squared gust; ruling 37)."""
     r = R('amb_fray_bunting', v=v)
     D = 6.0
     n = ns(D)
     t = np.arange(n) / n
-    gust = wobble(n, r, (1, 2, 3), 0.6)
+    gust = wobble(n, r, (1, 2, 3), 0.22, seam_lull=False)
     rate = 11.0 + 4.0 * np.sin(TAU * 2 * t)
     flap = 0.5 + 0.5 * np.sin(TAU * np.cumsum(rate) / SR * (round(np.sum(rate) / SR) / (np.sum(rate) / SR)))
-    cloth = band_noise(n, r, 1100.0 * gust ** 0.5, 0.8, slope=-2.0) * flap ** 3 * gust ** 2
-    snaps = scatter(n, r, 3.0, lambda rr: grain(rr, 600, 2200, (6.0, 18.0), 1.0), np.clip(gust - 1, 0, 1))
-    return loop_out(norm(cloth) + 0.4 * norm(snaps), hp_hz=200, lp_hz=7000)
+    cloth = band_noise(n, r, np.full(n, 1000.0), 0.8, slope=-2.5) * (0.35 + 0.65 * flap ** 3) * gust
+    snaps = scatter(n, r, 2.5, lambda rr: grain(rr, 600, 2200, (6.0, 18.0), 1.0), np.clip(gust / gust.max(), 0, 1))
+    return loop_out(norm(cloth) + 0.4 * norm(snaps), hp_hz=200, lp_hz=4500)
 
 
 @cue('amb_fray_lantern', 'loop', ('int', -25.0), win(8.0), **LOOPK)
@@ -359,7 +381,7 @@ def amb_fray_lantern(v: int):
     r = R('amb_fray_lantern', v=v)
     D = 8.0
     n = ns(D)
-    gust = wobble(n, r, (1, 2), 0.5)
+    gust = wobble(n, r, (1, 2), 0.25, seam_lull=False)                 # the breeze leans, never gusts (ruling 37)
     paper = scatter(n, r, 220.0, lambda rr: grain(rr, 900, 4000, (6.0, 30.0), 0.9), np.clip(gust / gust.max(), 0, 1) ** 2)
     chimes = np.zeros(n)
     for _ in range(int(r.integers(5, 9))):
