@@ -72,7 +72,7 @@ PLANTS = {
     "hip-pistol": [(RP + "player.js", [("else if (armed && !combat && !isPistol(a)) mode = \"lowReady\";", "else if (armed && !combat) mode = \"lowReady\";"),
                                        ("return !!(C && C.rifle_run_g && C.rifle_idle_g && isPistol(a));", "return false;")]),
                    (RP + "weapons.js", [("const WPN_LEN = { pistol: 0.24,", "const WPN_LEN = { pistol: 0.34,")])],
-    "gun-in-dead-hand": [(RP + "player.js", [("  if (victim.weaponMesh) victim.weaponMesh.visible = false;\n", "\n"),
+    "gun-in-dead-hand": [(RP + "player.js", [("  if (victim.weaponMesh) victim.weaponMesh.visible = false;", "  /* planted: gun-in-dead-hand */"),
                                              ("!a.emoting && !a.gliding && a.alive;", "!a.emoting && !a.gliding;")])],
     "flinch-speed-gate": [(RP + "player.js", [("if (!res.dead && res.dealt > 0 && victim.alive) startJolt(W, victim, att);",
                                                "if (!res.dead && res.dealt > 0 && victim.alive && Math.hypot(victim.vel.x, victim.vel.z) < 4) startJolt(W, victim, att);")])],
@@ -395,7 +395,8 @@ def part_death(s, v, R):
     spot = L.flat_spot(s, clear=10.0)
     if spot:
         s.js(PLACE_JS, [spot["x"], spot["z"], 0.0])
-    s.step_frames(30, 1 / 60, render=False)
+    s.step_frames(30, 1 / 60, render=True)
+    R["deathP0"] = L.programs(s)                              # this segment's program count, after its own boot
     out = []
     for k in range(2):
         b = s.js(BRING_JS, k)
@@ -455,10 +456,9 @@ def main():
                     s.step_frames(10, 1 / 60, render=True)
                     progs.append([skin, p0, L.programs(s)])
             if "death" in want:
-                p0 = L.programs(s)
                 part_death(s, v, R)
                 s.step_frames(10, 1 / 60, render=True)
-                progs.append(["death", p0, L.programs(s)])
+                progs.append(["death", R.get("deathP0"), L.programs(s)])
             v.check("programs: none linked while the guns are equipped / fired / killed (per session segment)",
                     all(a_ is not None and b_ is not None and b_ <= a_ for _, a_, b_ in progs), progs, "no increase")
             L.errors_row(v, s)
