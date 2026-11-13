@@ -1240,3 +1240,4 @@ long press frame-rate independent. Report after 1-2 verified.
   zone on (no fog itself). 540 m: unchanged (the tops visible on the way down). tests/render-decktunnel.test.ts (+1).
   The LOCAL bounds (cloudField's base 0.05-0.1, top 0.2-0.62 / 0.9-1.0 storms of the shell) all lie inside the shell,
   so covering shell-20 .. shell+60 covers them; a per-spot bound would need the weather cube on the CPU. NOT yet shot.
+- GATE check21 (cloud fix): 934/934 pass, exit 0; npm run build exit 0 (build-prod20.log). Handed back: context exhausted; (1) elimination, (3), (4) for a fresh session (NEXT above).
