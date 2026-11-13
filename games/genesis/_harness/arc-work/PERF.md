@@ -1156,3 +1156,9 @@ long press frame-rate independent. Report after 1-2 verified.
   the soak's frameNo stuck at 9, lp0's save never ticked). Fix: the companion's _geometryCount is a getter of the
   page's; node test calls computeBoundingSphere on a sheet. dist31: renders, 0 errors, also with all six switches off.
   run-s15c.sh re-queued on dist31.
+- BISECT lp0 (dist31 town, only lazypools=0) = the all-off image (bright near foliage); all-on = darker lower crowns.
+  So #8, and it is the shared-iExtra FIX, not a regression: iExtra.w's fraction is the canopy closure (VEG_AMBIENT:
+  trunks / inner crowns under a closed canopy get 0.34-0.42 of the sky). With 2+ PlanetVisuals (perf-play boots
+  'sandbox' first) the primary's near trees drew ANOTHER world's iExtra (zeros: no canopy shade, LOD role 0 = no
+  cross-fade roles, no snow / char / leaf loss); with per-bucket geometry they draw their own. Single-world sessions:
+  unchanged. Owner A/B: default vs ?lazypools=0 (only differs where 2+ worlds were built).
