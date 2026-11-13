@@ -171,7 +171,7 @@ export function createActor(W, opts) {
     // _sinkT: corpse timeline on SIM time (killActor / corpseStep), -1 = not a corpse;
     // _sinkFall: a corpse that died in the air drops to its floor first (_sinkVy, _sinkFloor).
     _rimMode: 0, _sinkT: -1, _sinkHold: 3, _sinkY0: 0, _sinkFall: false, _sinkVy: 0, _sinkFloor: 0,
-    _gripLocal: null, _gripFor: null, _mFrom: null, _mTo: null,
+    _gripLocal: null, _gripFor: null, _gripLocal9: null, _gripFor9: null, _mFrom: null, _mTo: null,
     lastHit: null, dmgFrom: null, lastHurtByActorT: 0, spectating: null,
     netTarget: null, netChute: false,
     isDummy: false, dummyDamage: 0, dummyHeadshots: 0, dummyPops: 0,
@@ -530,6 +530,16 @@ const CLIP_SPEED = {
   rifle_sprint_left: 6.946, rifle_sprint_right: 6.369,
   dbno_crawl: 0.426, dbno_crawl_fast: 1.504,
 };
+// (W10 R1B) per-skin planted-foot gain on a clip's sweep speed. The table above was calibrated on the soldier; the athlete's
+// rig plays rifle_run_g with a longer planted sweep, so at the soldier's rate its planted foot slid 1.47 m/s at a 6 m/s run
+// (gunhold pistol row; same legs under the AR). Measured in game (F:/lc_p23/w10/r1/R1B/build2/probe/stride.py, athlete at
+// 6 m/s): gain 1.0 -> 1.474, 1.1 -> 0.879, 1.2 -> 0.535, 1.3 -> 0.704, 1.45 -> 1.014 m/s. Soldier unchanged (1.014).
+const SKIN_STRIDE = { athlete: { rifle_run_g: 1.2 } };
+function clipSpeed(a, key, dflt) {
+  const v = CLIP_SPEED[key] || dflt;
+  const g = SKIN_STRIDE[a && a.skin];
+  return g && g[key] ? v * g[key] : v;
+}
 // directional sets per stance: [forward, left, back, right] (quadrant order of a._locoQ)
 // The measured travel heading of a directional clip relative to its nominal quadrant centre (rad, + = toward the character's
 // left), from the in-game skate calibration (F:/lc_p23/player/probes/p23_calib.py); 0 = exactly on its axis.
@@ -3375,12 +3385,15 @@ function animate(W, a, dt) {
       // turned up around the guard, fingers curled on the skins that have finger bones. Near actors only (IK_NEAR_M), never
       // while the reload / throw owns the left arm. Phones keep the W9 hands (no extra bone work on touch).
       const ikOn = !!(layers && a.hand && a.weaponMesh && a.armBones && a.armBones.lArm && !a.emoting && armed && a.alive && !a.downed &&
-        !a.gliding && !a.swimming && !a._throwOv && !a._ovReload && a.weapon.state !== "reloading" && a._ikNear && !ikTouch(W) &&
+        !a.gliding && !a.swimming && !a._throwOv && !a._ovReload && a.weapon.state !== "reloading" && a._ikNear && deskHi(W) &&
         ((mixamoAim && weldOn) || ((a._armMode === "gunReady" || a._armMode === "lowReady") && a._armW > 0.5)));
       const ikWant = ikOn ? 1 : 0;
       a._ikW = a._ikW == null ? ikWant : a._ikW + (ikWant - a._ikW) * Math.min(1, dt * 12);
       if (ikOn) supportHandIK(a, mixamoAim ? Math.max(a._ikW, 0.02) : K.clamp((a._armW - 0.5) * 2, 0, 1) * a._ikW);
       else if (a._gripPosed) releaseGrip(a);
+      // (W10 R1B) desktop Low and touch: the W9 tip's call, unchanged (gunReady only, no palm / fingers, its own grip cache)
+      if (!deskHi(W) && layers && a.hand && a.weaponMesh && a.armBones && a.armBones.lArm && !a.emoting &&
+          a._armMode === "gunReady" && a._armW > 0.5) supportHandIK9(a);
       // (W10 R1B) the gun holder's world matrix as POSED this frame (weld + arm layers): a shot fires in weapons.update, before
       // this pass re-poses the bones the mixer just re-keyed, so the muzzle read there from the live bones sat where the CLIP
       // holds the hand (a pistol on the rifle legs: 0.14 m off the drawn barrel). weapons.js fire reads this instead.
@@ -3489,7 +3502,7 @@ function selectClip(W, a, gs, fam, FK, useMixamoGun) {
     if (C.rifle_run_g && !back) {
       // (P23, LC-10) forward rifle set re-baked feet-down; play rate = ground speed / the authored stride speed
       if (a.sprinting && gs > 5.5 && C.rifle_sprint_g) playAnim(a, "rifle_sprint_g", paTs(K.clamp(gs / CLIP_SPEED.rifle_sprint_g, 0.6, 1.6)));
-      else if (runPick(a, gs)) playAnim(a, "rifle_run_g", paTs(K.clamp(gs / CLIP_SPEED.rifle_run_g, 0.55, 1.7)));
+      else if (runPick(a, gs)) playAnim(a, "rifle_run_g", paTs(K.clamp(gs / clipSpeed(a, "rifle_run_g", 4.475), 0.55, 1.7)));
       else playAnim(a, "rifle_walk_g", paTs(K.clamp(gs / CLIP_SPEED.rifle_walk_g, 0.4, 2.2)));
     }
     else if ((a.sprinting && gs > 5.5 && !back) || (gs > 4.4 && !back)) {
@@ -3551,7 +3564,7 @@ function runPick(a, gs) {
 /** Combat locomotion (LC-10): the clip syncObj picked for the quadrant (a._locoKey), at the stride-matched rate. */
 function playLocoKey(a, gs) {
   const key = a._locoKey;
-  const rs = CLIP_SPEED[key] || 2.0;
+  const rs = clipSpeed(a, key, 2.0);
   playAnim(a, key, paTs(K.clamp(gs / rs, 0.4, 2.6)));
 }
 /** In-air clip (LC-30): the take-off of a real jump, the hang near the apex, the long-fall flail. */
@@ -3765,6 +3778,98 @@ function supportHandIK(a, blend) {
   }
 }
 
+/** (W10 R1B) the W9 tip's SUPPORT HAND, verbatim (own grip cache): desktop Low and touch keep it, so those tiers render the W9
+ *  hands exactly (ground rule 'Phones'); medium and up take supportHandIK below. Two-bone IK onto the class foregrip. */
+function supportHandIK9(a) {
+  // the wid stamp gate: equipSlot changes a.weapon.id synchronously but
+  // the mesh swap is microtask-deferred, and bots equip BEFORE this
+  // updater runs — without the stamp check the measure below read the
+  // OUTGOING gun's geometry, applied the NEW class fraction, and cached
+  // the wrong grip for the whole hold (adversarial review finding,
+  // confirmed 2/2). Stamp mismatch -> skip, re-measure after the flush.
+  if (a._gripFor9 !== a.weapon.id &&
+      a.weaponMesh.userData.wid === a.weapon.id) {
+    // foregrip point, HOLDER space, measured once per weapon swap: the
+    // proto is normalized/centered with +Z the barrel, so the support
+    // palm cups forward of center by a class fraction of the front half,
+    // on the underside. Async proto: no geometry yet -> retry next frame.
+    // matrixWorld refresh first — same stale-matrix trap validateAttachments
+    // hit (a 0.62 m AR measured 0.01 m against a not-yet-baked holder).
+    a.obj.updateMatrixWorld(true);
+    _ikM.copy(a.hand.matrixWorld).invert();
+    let zMax = 0, yMin = 0, found = false;
+    a.weaponMesh.traverse((o) => {
+      if (!(o.isMesh || o.isSkinnedMesh) || !o.geometry) return;
+      if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+      const bb = o.geometry.boundingBox;
+      _ikM2.copy(_ikM).multiply(o.matrixWorld);
+      for (let ci = 0; ci < 8; ci++) {
+        _fgS.set(ci & 1 ? bb.max.x : bb.min.x, ci & 2 ? bb.max.y : bb.min.y,
+                 ci & 4 ? bb.max.z : bb.min.z).applyMatrix4(_ikM2);
+        if (!found) { zMax = _fgS.z; yMin = _fgS.y; found = true; }
+        else { zMax = Math.max(zMax, _fgS.z); yMin = Math.min(yMin, _fgS.y); }
+      }
+    });
+    if (found) {
+      const cls = (K.WEAPONS[a.weapon.id] || {}).cls;
+      // pistol: support hand cups the firing hand at the grip, not the
+      // muzzle; long guns grip the front half; pump/bolt sit further out
+      const zF = cls === "pistol" ? 0.05 : cls === "shotgun" ? 0.55
+               : cls === "launcher" ? 0.3 : cls === "sniper" ? 0.5 : 0.45;
+      a._gripLocal9 = new THREE.Vector3(0, yMin * 0.6, zMax * zF);
+      a._gripFor9 = a.weapon.id;
+    }
+  }
+  if (a._gripLocal9 && a._gripFor9 === a.weapon.id) {
+    a.hand.updateWorldMatrix(true, false);
+    _fgW.copy(a._gripLocal9); a.hand.localToWorld(_fgW);
+    // REACH-AWARE GRIP SLIDE: at full ADS the class foregrip can sit
+    // beyond the support arm's envelope (measured: AR grip 0.83 m from
+    // the left shoulder vs 0.65 m of arm) — solving anyway leaves a
+    // fully extended arm floating short of the rail, the exact "AI
+    // game" tell. Real shooters shorten the hold instead: slide the
+    // grip back along the barrel toward the receiver until reachable.
+    // Sphere(shoulder, 0.94*reach) ∩ barrel line, largest t in [0, gz].
+    // getWorldPosition (not setFromMatrixPosition): it refreshes the
+    // ancestor chain, and the LEFT arm is not covered by the hand-chain
+    // update above — after this frame's spine-aim writes the left
+    // shoulder's cached matrixWorld is stale by the aim delta.
+    a.armBones.lArm.getWorldPosition(_fgA);
+    a.armBones.lFore.getWorldPosition(_fgB);
+    a.armBones.lHand.getWorldPosition(_fgC);
+    const _reach = (_fgA.distanceTo(_fgB) + _fgB.distanceTo(_fgC)) * 0.94;
+    if (_fgA.distanceTo(_fgW) > _reach) {
+      _fgL.set(0, a._gripLocal9.y, 0); a.hand.localToWorld(_fgL);   // receiver end
+      _fgS.copy(_fgW).sub(_fgL);                                   // barrel run
+      const gz2 = _fgS.lengthSq();
+      _fgW.copy(_fgL).sub(_fgA);                                   // H - S
+      const bq = 2 * _fgS.dot(_fgW), cq = _fgW.lengthSq() - _reach * _reach;
+      const disc = bq * bq - 4 * gz2 * cq;
+      // disc<=0: the barrel line never enters the reach sphere. Fall back
+      // to the CLOSEST point on the segment (perpendicular foot -bq/2a),
+      // NOT t=0 — the receiver end can itself sit beyond reach (the right
+      // hand measured 1.04x the LEFT arm's extension on this rig), so
+      // t=0 could pick the segment's FARTHEST point and discard a
+      // solvable mid-gun grip (adversarial review finding, confirmed 2/2).
+      let t = 0;
+      if (gz2 > 1e-8) t = disc > 0
+        ? K.clamp((-bq + Math.sqrt(disc)) / (2 * gz2), 0, 1)
+        : K.clamp(-bq / (2 * gz2), 0, 1);
+      _fgW.copy(_fgL).addScaledVector(_fgS, t);
+    }
+    // pole: elbow points down and out to the character's LEFT (left dir
+    // for yaw = (-cos, 0, +sin)) — the bend real support stances produce.
+    // Without it the bend plane is whatever the clip left, and the elbow
+    // can read as jutting up/inward on some animation frames.
+    _fgL.copy(_fgA);
+    _fgL.x -= Math.cos(a.yaw) * 0.25; _fgL.y -= 0.45; _fgL.z += Math.sin(a.yaw) * 0.25;
+    // blend follows the arm-pose weight so the hand eases on/off with the
+    // gunReady transition instead of snapping
+    twoBoneIK(a.armBones.lArm, a.armBones.lFore, a.armBones.lHand, _fgW,
+              K.clamp((a._armW - 0.5) * 2, 0, 1), _fgL);
+  }
+}
+
 // ── (W10 R1B) support-hand palm + finger curl ─────────────────────────────────────────────────────────────────────────────────
 const IK_NEAR_M = 30;                     // the support-hand IK, palm and finger curl run on actors nearer than this (and the focus)
 const FINGER_CURL = [0.95, 1.15, 0.8];    // rad per joint (proximal, middle, distal): the fingers wrap a ~5 cm handguard
@@ -3773,7 +3878,6 @@ const _ghQ = new THREE.Quaternion(), _ghP = new THREE.Quaternion(), _ghQ2 = new 
 const _ghM = new THREE.Matrix4(), _ghL = new THREE.Matrix4();
 const _ghB = new THREE.Vector3(), _ghU = new THREE.Vector3(), _ghX = new THREE.Vector3(), _ghF = new THREE.Vector3();
 const _ghN = new THREE.Vector3(), _ghS = new THREE.Vector3(), _ghPl = new THREE.Vector3();
-function ikTouch(W) { return !!(W._gfx && W._gfx.touch); }
 /** At rig load (bones in their rest pose): the left hand's finger direction and palm normal in hand space, and per finger joint
  *  its rest rotation and the bone-local axis that curls it toward the palm. null when the rig has no left hand. */
 function captureGrip(root, bones) {
