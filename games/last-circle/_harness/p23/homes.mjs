@@ -108,15 +108,19 @@ function homeRows(M) {
         const cx = (h.min[0] + h.max[0]) / 2, cz = (h.min[2] + h.max[2]) / 2;
         return cx >= s.min[0] - 0.15 && cx <= s.max[0] + 0.15 && cz >= s.min[2] - 0.15 && cz <= s.max[2] + 0.15 && h.min[1] > s.max[1];
       }));
-      out.rooms.push({ h: H.id, kind: r.kind, floor: r.floor, area: r.area, nw: nw * 2.5, nl: nl * 2.5, cov: r3(fa / r.area), sub: f.filter((q) => !FILL.test(q.type)).length, all: f.length,
+      out.rooms.push({ h: H.id, kind: r.kind, floor: r.floor, area: r.area, nd: r.doors.length, nwin: H.windows.filter((x) => x.room === r.id).length, nw: nw * 2.5, nl: nl * 2.5, cov: r3(fa / r.area), sub: f.filter((q) => !FILL.test(q.type)).length, all: f.length,
         lamps: f.filter((q) => FLOORLAMP.test(q.type)).length, plants: f.filter((q) => PLANT.test(q.type)).length,
         bed: has(BED) ? 1 : 0, night: has(NIGHT) ? 1 : 0, ward: has(WARD) ? 1 : 0, sofa: has(SOFA) ? 1 : 0, coffee: has(COFFEE) ? 1 : 0, tv: has(TVU) ? 1 : 0,
         dine: r.kind === "kitchen" ? (dining(r.id) || [...(doorRooms.get(r.id) || [])].some(dining) ? 1 : 0) : 0,
         base: base.length, runs: base.length ? runs(base) : 0, upper: has(UPPER) ? 1 : 0, stove: stoves.length, hood: hoodOver ? 1 : 0,
-        bsink: has(SINKB) ? 1 : 0, mirror: has(MIRROR) ? 1 : 0, wash: has(WASH) ? 1 : 0 });
+        bsink: has(SINKB) ? 1 : 0, wash: has(WASH) ? 1 : 0,
+        // a mirror OVER a basin: its middle within 0.3 m of the basin's footprint (a mirror is a drawn-only wall plate authored 1.25 - 2.2 m up: its record's box
+        // starts at the floor, so only its place along the wall is judged)
+        mirror: f.some((m) => MIRROR.test(m.type) && f.some((b) => SINKB.test(b.type) && (m.min[0] + m.max[0]) / 2 > b.min[0] - 0.3 && (m.min[0] + m.max[0]) / 2 < b.max[0] + 0.3 &&
+          (m.min[2] + m.max[2]) / 2 > b.min[2] - 0.3 && (m.min[2] + m.max[2]) / 2 < b.max[2] + 0.3)) ? 1 : 0 });
     }
   }
-  out.loot.total = out.loot.points + out.loot.house + out.loot.chests;
+  out.loot.total = out.loot.points + out.loot.chests;            // (map.lootPoints already holds every house's points, maps.js: the house column is a part of it)
   return out;
 }
 

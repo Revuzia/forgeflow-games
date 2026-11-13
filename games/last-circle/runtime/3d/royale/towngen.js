@@ -63,7 +63,7 @@
  * VERSION is the generator version: any change that moves output bumps it (lane 7C's squad version guard reads it).
  */
 
-export const VERSION = 4;                          // 4 = Wave 7b (Isla Viva and Deepwood only: link roads routed round water and steep ground, plan.preferGrid, the docks / crater / mill layouts, themed lots and street dressing; Savanna's layouts are byte-identical to 3 apart from their `v` field); 3 = Wave 7 completion (Savanna / city theme only): stretched skyline shells (`sy`), landmark lots (gas / market / plaza / court), bigger homesteads and hamlets, no sand shell colormap; isla_viva and deepwood layouts are byte-identical to 2 (their `v` field aside). 2 = Wave 7: layoutMap({ reserve }), streetProps, Savanna compounds scattered (PLANS.ashgrid.compounds.inner / jitter); isla_viva and deepwood layouts are byte-identical to 1
+export const VERSION = 5;                          // 5 = Wave 10 R1A (every map: homes 10 x 10 m and up, one in three small houses / cabins two-storey, fewer sheds, town parcels >= 12.5 m a side, 12.5 m deep dock platforms); 4 = Wave 7b (Isla Viva and Deepwood only: link roads routed round water and steep ground, plan.preferGrid, the docks / crater / mill layouts, themed lots and street dressing; Savanna's layouts are byte-identical to 3 apart from their `v` field); 3 = Wave 7 completion (Savanna / city theme only): stretched skyline shells (`sy`), landmark lots (gas / market / plaza / court), bigger homesteads and hamlets, no sand shell colormap; isla_viva and deepwood layouts are byte-identical to 2 (their `v` field aside). 2 = Wave 7: layoutMap({ reserve }), streetProps, Savanna compounds scattered (PLANS.ashgrid.compounds.inner / jitter); isla_viva and deepwood layouts are byte-identical to 1
 
 // ── constants ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 export const PITCH = 56;                          // road centreline spacing: blocks stay inside the bot planner's 64 m window
@@ -227,9 +227,9 @@ function groundOf(S, x0, z0, x1, z1) {
 const ARCH = {
   // (Wave 10 R1A, houses audit findings 1 + 12: the 7.5 x 7.5 / 7.5 x 10 homes were 2-3 room boxes - a kitchen and a living room, no bedroom, no bath; the smallest home is
   // 10 x 10 m now and the small house and the cabin may have two floors - with the owner's default, 40-50 % of homes two-storey)
-  house_s: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10]], floors: [1, 2], fh: 3.4 },
+  house_s: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10]], floors: [1, 1, 2], fh: 3.4 },          // (floors drawn uniformly from the list: one in three two-storey)
   house_m: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10]], floors: [1, 2], fh: 3.4 },
-  cabin: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10], [10, 12.5]], floors: [1, 2], fh: 3.4 },
+  cabin: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10], [10, 12.5]], floors: [1, 1, 2], fh: 3.4 },
   shop: { use: "shop", gen: "house", dims: [[10, 10], [12.5, 10], [12.5, 12.5]], floors: [1, 2], fh: 4.0 },
   midrise: { use: "midrise", gen: "tower", dims: [[12.5, 12.5], [15, 15]], floors: [2, 3], fh: 4.0 },
   tower: { use: "tower", gen: "tower", dims: [[15, 15], [17.5, 17.5]], floors: [3], fh: 4.0 },
@@ -1251,7 +1251,7 @@ function yardItems(rng, kind, theme, opts) {
     const A = ARCH[key], fit = A.dims.filter((dm) => dm[0] <= maxW + 1e-6);
     const dm = fit.length ? fit[Math.floor(rng() * fit.length)] : A.dims[0];
     // (W10 R1A: a compound's small house / cabin may have its second floor too, like a town's - fitArch's draw: one of A.floors when the plan is deep enough for a stair)
-    const fl = key === "villa" || key === "lodge2" ? 2 : A.use === "house" && A.floors.length > 1 && dm[1] >= 10 && rng() < 0.5 ? 2 : 1;
+    const fl = key === "villa" || key === "lodge2" ? 2 : A.use === "house" && A.floors.length > 1 && dm[1] >= 10 ? A.floors[Math.floor(rng() * A.floors.length)] : 1;
     return { key, w: dm[0], d: dm[1], floors: fl, fh: A.fh, use: A.use, gen: A.gen };
   };
   const spec = { yw: 24, yd: 14, rows: { N: [], S: [], E: [], W: [] }, fields: 0, fence: true, silo: false, cars: 2, variant: "homestead", containers: 0, tower: false };
@@ -1280,7 +1280,7 @@ function yardItems(rng, kind, theme, opts) {
       if (opts.variety) spec.yw = 26;
       const order = ["N", "S", "N", "S"];
       for (let k = 0; k < nH; k++) spec.rows[order[k]].push(dimsOf(house(), 10));
-      { const side = rng() < 0.5 ? "W" : "E"; if (rng() < 0.5) spec.rows[side].push(dimsOf("shed", 12)); }        // (W10 R1A: a homestead has its shed half the time)
+      { const side = rng() < 0.5 ? "W" : "E"; if (rng() < 0.5 || nH < 3) spec.rows[side].push(dimsOf("shed", 12)); }        // (W10 R1A: a homestead of 3-4 houses has its shed half the time; one of 2 always - a compound needs 3 enterable buildings)
       if (V === "tower") { spec.tower = true; spec.yw = 28; spec.yd = 16; spec.cars = 2; }
     }
   } else if (kind === "farm") {
