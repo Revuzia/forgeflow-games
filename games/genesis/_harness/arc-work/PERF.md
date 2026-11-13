@@ -1206,3 +1206,10 @@ long press frame-rate independent. Report after 1-2 verified.
   + transferred arrays), the canvas swap chain, Chrome's own per-tab overhead. NEXT: measureUserAgentSpecificMemory is
   unavailable (not cross-origin isolated); ask the owner for chrome://memory-internals or Task Manager's per-worker rows,
   and add worker heap sizes to the report (each worker posts performance.memory on request).
+- #9 A/B ws1 (dist31 default) vs ws0 (?watershare=0), LOOKED: region 1.65/255 — lake, coast, sea identical; the
+  difference is far-tree clusters further along their streaming in ws1 (two forest patches) + a label; town 2.09/255 —
+  foliage sway only, the sea in the corner identical. 0 errors both.
+- GATE check20 (after the handinput change): npm run check 933/933 pass, exit 0; npm run build exit 0 (build-prod19).
+- STILL OPEN: #10 compact far-tree format (not started); round-4 items 1, 2, 4 (see ROUND 4 above); soak with
+  thousands of frames in a browser (SwiftShader gives ~300 frames in 22 min — needs a GPU machine or the owner's Mac);
+  sample the 'copied by owner' list in perf-soak; normalise page owner names.
