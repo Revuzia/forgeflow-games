@@ -65,7 +65,7 @@ export function texUpload(tex: Texture): void {
  * register a buffer attribute whose updates go up in the uploads slot (its first upload — three's bufferData — still
  * happens at its first draw, which is when its GL buffer becomes known here)
  */
-export function earlyAttr(a: BufferAttribute, isIndex = false): void {
+export function earlyAttr(a: BufferAttribute, isIndex = false, ringMember = false): void {
   if (!UPSCHED) return;
   const o = a as unknown as { __early?: boolean; onUploadCallback: () => void; updateRanges: { start: number; count: number }[] };
   if (o.__early) return;
@@ -88,6 +88,11 @@ export function earlyAttr(a: BufferAttribute, isIndex = false): void {
   Object.defineProperty(a, 'needsUpdate', {
     configurable: true,
     set(v: boolean) {
+      // (a ring member: the ring sends every write through mark() with its ranges. A bare needsUpdate with no ranges
+      // reaches a member three still holds after the ring moved on (BatchedMesh.setGeometryAt fetches the attribute
+      // before its addUpdateRange, which the ring intercepts): it would re-send the WHOLE array into a buffer the GPU
+      // may still read. Dropped; the ring's dirty list has those bytes for when the member is next installed.)
+      if (v === true && ringMember && bufOf.has(a) && o.updateRanges.length === 0) return;
       if (v === true && deferring() && bufOf.has(a) && (indexOk || !isIdx.has(a))) {
         // take the ranges three would have sent; an empty list means the whole array
         let r = rangesOf.get(a);

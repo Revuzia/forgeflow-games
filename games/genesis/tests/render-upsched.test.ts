@@ -69,3 +69,23 @@ test('upsched: a registered attribute uploads its ranges in the slot, three\'s v
   assert.equal(a.version, 2);
   uploadSchedReset();
 });
+
+test('upsched: a ring member drops a bare needsUpdate (no ranges) once its buffer exists', () => {
+  uploadSchedReset();
+  const gl = fakeGL();
+  const r = { getContext: () => gl, initTexture: () => {} } as never;
+  setUploadGL(gl as never);
+  const a = new BufferAttribute(new Float32Array(8), 4);
+  earlyAttr(a, false, true);
+  gl.setBound({ id: 'M' });
+  (a as unknown as { onUploadCallback: () => void }).onUploadCallback();
+  flushUploads(r);
+  uploadFrameBegin();
+  a.needsUpdate = true; // three's stale reference, no ranges
+  assert.equal(a.version, 0);
+  gl.calls.length = 0;
+  flushUploads(r);
+  assert.equal(gl.calls.filter((c) => c[0] === 'sub').length, 0, 'nothing re-sent');
+  uploadSchedReset();
+});
+

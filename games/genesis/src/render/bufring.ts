@@ -63,7 +63,7 @@ class Ring {
         this.dirty[i].length = 0;
       };
       // (ROADMAP step 4) the member's updates go up in the renderer's uploads slot, not inside a pass
-      earlyAttr(m, name === 'index');
+      earlyAttr(m, name === 'index', true);
     });
   }
   private installed(): Attr | undefined {
