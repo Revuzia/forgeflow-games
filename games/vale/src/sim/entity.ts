@@ -388,6 +388,8 @@ export class Entity implements EntityView {
   noProgress = 0;
   /** consecutive ticks of direct approach to a move order's point without real progress (arrival watchdog) */
   arriveStall = 0;
+  /** consecutive ticks of it pinned in place (not even creeping): the give-up watchdog */
+  arrivePinned = 0;
   /** static blocker (structures): never moves, pushes units out */
   static = false;
   /** radius this entity blocks in the nav grid (structures; 0 = none) — removed on death */

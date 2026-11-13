@@ -129,6 +129,8 @@ export class InputController {
   private holdPx = { x: -1, y: -1 };
   /** Shift as the last pointer event saw it (key events land in `held`) */
   private ptrShift = false;
+  /** the mouse button mask as the last pointer event reported it (chorded presses and releases) */
+  private buttons = 0;
   /** middle-drag pan; scouting = it began on a locked camera, so release returns to your fighter */
   private middle: { gx: number; gy: number; scouting: boolean } | null = null;
   private hoverAt = 0;
@@ -242,6 +244,7 @@ export class InputController {
     this.held.clear();
     this.rightHeld = false;
     this.ptrShift = false;
+    this.buttons = 0;
     if (this.middle?.scouting) this.r.camera?.scout(false);
     this.middle = null;
     if (this.wheel.value) this.wheel.value = null;
@@ -493,15 +496,18 @@ export class InputController {
     this.ptrShift = e.shiftKey;
     this.r.camera?.setPointer(e.clientX, e.clientY, true);
     // chorded buttons (Pointer Events): pressing or releasing a button while another is down fires no
-    // pointerdown/pointerup, only a pointermove that names the changed button. The button mask is the truth.
+    // pointerdown/pointerup, only a pointermove. The button mask is the truth: act on its changes only
     if (e.pointerType === 'mouse' || e.pointerType === '') {
-      if (this.rightHeld && (e.buttons & 2) === 0) this.rightHeld = false;
-      if (e.button === 0 || e.button === 2) {
-        const down = (e.buttons & (e.button === 0 ? 1 : 2)) !== 0;
-        const onSurface = e.target === this.surface || (e.target instanceof Node && this.surface.contains(e.target));
-        if (down && onSurface && !this.hooks.blocked()) {
-          if (e.button === 0) this.leftDown(e); else this.rightDown(e.shiftKey);
-        } else if (!down && e.button === 2) this.releaseRight();
+      const prev = this.buttons;
+      this.buttons = e.buttons;
+      if (this.rightHeld && (e.buttons & 2) === 0) this.releaseRight();
+      const pressed = e.buttons & ~prev;
+      if (pressed & 3) {
+        const onSurface = e.target === this.surface || (typeof Node !== 'undefined' && e.target instanceof Node && this.surface.contains(e.target));
+        if (onSurface && !this.hooks.blocked()) {
+          if (pressed & 1) this.leftDown(e);
+          if (pressed & 2) this.rightDown(e.shiftKey);
+        }
       }
     }
     const w = this.wheel.value;
@@ -521,6 +527,7 @@ export class InputController {
   private onDown(e: PointerEvent): void {
     this.ptr.x = e.clientX; this.ptr.y = e.clientY; this.ptr.inside = true;
     this.ptrShift = e.shiftKey;
+    this.buttons = e.buttons;
     if (this.hooks.blocked()) return;
     const bound = this.keymap.actions(mouseCode(e.button)).filter((a) => a !== 'selfCastMod');
     if (e.button > 2 && bound.length) { e.preventDefault(); this.held.add(mouseCode(e.button)); for (const a of bound) this.action(a, true); return; }
@@ -541,6 +548,7 @@ export class InputController {
   }
   private onUp(e: PointerEvent): void {
     this.ptr.x = e.clientX; this.ptr.y = e.clientY;
+    this.buttons = e.buttons;
     if (e.button === 2) this.releaseRight();
     else if (this.rightHeld && (e.buttons & 2) === 0) this.rightHeld = false;   // right went up first (chorded)
     if (e.button === 1) { if (this.middle?.scouting) this.r.camera?.scout(false); this.middle = null; }

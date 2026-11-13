@@ -202,7 +202,6 @@ const RESTORE_MAX_WAIT_MS = 8000;
 /** combat F5: which hard CC names itself on the plate when several hold a unit (most control lost first) */
 const CC_PLATE_ORDER = ['airborne', 'stun', 'sleep', 'taunt', 'fear', 'root', 'silence'];
 const _v = new Vector3();
-const _v2 = new Vector3();
 const _ndc = new Vector2();
 const _frustum = new Frustum();
 const _cullFrustum = new Frustum();

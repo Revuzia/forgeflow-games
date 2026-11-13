@@ -61,8 +61,10 @@ const WAYPOINT_GIVE_UP = 2;
 /** ticks of direct approach at under ARRIVE_PROGRESS of full speed before a walker near its point (within its
  *  radius + ARRIVE_NEAR) counts as arrived */
 const ARRIVE_STALL_TICKS = 10;
-/** … before a walker anywhere gives up on its point (nothing left to walk around: the path is spent) */
+/** ticks of direct approach pinned in place (under PINNED_PROGRESS of full speed: not even shoving through a
+ *  crowd) before a walker anywhere gives up on its point (nothing left to walk around: the path is spent) */
 const ARRIVE_GIVE_UP_TICKS = 60;
+const PINNED_PROGRESS = 0.03;
 const ARRIVE_NEAR = 1;
 const ARRIVE_PROGRESS = 0.3;
 /** peak height (m) of airborne arcs */
@@ -85,7 +87,7 @@ export function issueMove(w: World, e: Entity, x: number, y: number, attackMove:
   e.order = attackMove ? ORDER_ATTACK_MOVE : ORDER_MOVE;
   e.orderX = x; e.orderY = y; e.orderTarget = attackMove ? prefer : -1; e.pendingSlot = -1;
   e.path.length = 0; e.pathGoalX = NaN;
-  e.arriveStall = 0;
+  e.arriveStall = 0; e.arrivePinned = 0;
 }
 export function issueAttack(w: World, e: Entity, t: Entity): void {
   if (t === e) return;
@@ -465,10 +467,11 @@ export function movementSystem(w: World): void {
         if (Math.abs(e.x - e.orderX) + Math.abs(e.y - e.orderY) < 0.05) { arrive(e); continue; }
         // direct approach without real progress: a crowd on the spot, or a body pinned against a corner
         const d1 = Math.sqrt((gx - e.x) * (gx - e.x) + (gy - e.y) * (gy - e.y));
-        if (direct && e.path.length === 0 && d0 - d1 < e.stats.moveSpeed * TICK_DT * ARRIVE_PROGRESS) {
-          e.arriveStall++;
-          if ((e.arriveStall >= ARRIVE_STALL_TICKS && d1 < e.radius + ARRIVE_NEAR) || e.arriveStall >= ARRIVE_GIVE_UP_TICKS) arrive(e);
-        } else e.arriveStall = 0;
+        const step = e.stats.moveSpeed * TICK_DT, gain = d0 - d1;
+        const straight = direct && e.path.length === 0;
+        if (straight && gain < step * ARRIVE_PROGRESS) e.arriveStall++; else e.arriveStall = 0;
+        if (straight && gain < step * PINNED_PROGRESS) e.arrivePinned++; else e.arrivePinned = 0;
+        if ((e.arriveStall >= ARRIVE_STALL_TICKS && d1 < e.radius + ARRIVE_NEAR) || e.arrivePinned >= ARRIVE_GIVE_UP_TICKS) arrive(e);
       }
     } else if ((e.ccMask & CC_HARD) === 0) {
       // idle units yield softly to overlapping neighbours
@@ -481,7 +484,7 @@ export function movementSystem(w: World): void {
 }
 
 function arrive(e: Entity): void {
-  e.order = ORDER_NONE; e.orderTarget = -1; e.path.length = 0; e.arriveStall = 0;
+  e.order = ORDER_NONE; e.orderTarget = -1; e.path.length = 0; e.arriveStall = 0; e.arrivePinned = 0;
 }
 
 // ── view state ──────────────────────────────────────────────────────────────────────────────────

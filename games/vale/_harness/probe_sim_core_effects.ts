@@ -302,6 +302,9 @@ section('zone', () => {
   issueMove(w3, b3, 22, 20, false);
   stepSec(w3, 3);
   check('blocks: enemies cannot enter', b3.x < 18 - 1.5, b3.x);
+  check('blocks: the enemy pinned at the edge gives up its move (no endless push)', b3.order === 0, b3.order);
+  // the enemy now stands idle in the ally's way; step it aside so the next check measures the zone alone
+  b3.y = 26; w3.hashDirty = true;
   issueMove(w3, a3, 22, 20, false);
   stepSec(w3, 5);
   check('blocks enemies only: allies pass', a3.x > 19.5, a3.x);
