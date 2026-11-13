@@ -1,0 +1,45 @@
+{
+ "setup": {
+  "ok": true,
+  "realm": "cold"
+ },
+ "F status across re-seat": {
+  "oldId": 2,
+  "newId": 5,
+  "built": {
+   "hp": 1175,
+   "hpMax": 1200,
+   "poise": 10,
+   "poiseMax": 160,
+   "chill": 0,
+   "brittleLeft": 3.9,
+   "breakLeft": 0,
+   "slowLeft": 0
+  },
+  "preLeash": {
+   "hp": 1055,
+   "hpMax": 1200,
+   "poise": 10,
+   "poiseMax": 160,
+   "chill": 0,
+   "brittleLeft": 3.9,
+   "breakLeft": 0,
+   "slowLeft": 0
+  },
+  "postLeash": {
+   "hp": 1200,
+   "hpMax": 1200,
+   "poise": 160,
+   "poiseMax": 160,
+   "chill": 0,
+   "brittleLeft": 0,
+   "breakLeft": 0,
+   "slowLeft": 0
+  },
+  "dealtOn100Raw_beforeLeash": 120,
+  "dealtOn100Raw_afterLeash": 100,
+  "leashReturns": 1,
+  "regenFrac": 0.121
+ },
+ "pageerrors": []
+}

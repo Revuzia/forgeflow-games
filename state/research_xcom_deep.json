@@ -1,0 +1,368 @@
+{
+  "_meta": {
+    "agent": "researcher",
+    "task": "DEEP XCOM (EU2012 + XCOM2/WOTC) research for Void Skirmish 3D tactics clone - gaps pass",
+    "generated": "2026-06-03",
+    "purpose": "Hard-number, implementable answers to 6 gaps: enemy COUNT per mission, map SIZE (tiles), full enemy ROSTER with stats, AI behavior, campaign progression, difficulty knobs. Every number is from a cited source. Firaxis canonical stat tables (UFOpaedia infoboxes, GDC talk) are unflagged; community-measured figures (Steam/GameFAQs threads, fan datamine blogs) are explicitly flagged 'community-measured'.",
+    "abbrev": "EU = XCOM: Enemy Unknown/Within (2012); X2 = XCOM 2 / War of the Chosen (2016). WOTC = War of the Chosen expansion.",
+    "stat_difficulty_format": {
+      "EU": "All EU stat strings are Easy/Normal/Classic/Impossible (4 values). Single value = same on all difficulties.",
+      "X2": "All X2 stat strings are Rookie/Veteran/Commander/Legend (4 values). UFOpaedia infobox numbers are the source; Commander (3rd value) is the canonical 'standard' difficulty."
+    },
+    "movement_tile_conversion": {
+      "EU": "tiles_blue = floor(mobility * 0.666); dash = floor(mobility * 0.666 * 2). Mobility 12 = 7 tiles blue / 15 dash (straight line); diagonals are cheaper (12 mob = 5 diag-tiles blue). Source: ufopaedia Movement_(EU2012).",
+      "X2": "tiles_blue = mobility / 1.5; dash = blue * 2. Mobility 12 = 8 blue / 16 dash; 14 = 9; 15 = 10; 16 = 11; 18 = 12. Source: ufopaedia + Fandom Mobility + Steam consensus.",
+      "clone_note": "Void Skirmish's content.json stores enemy.movement as TILES (e.g. 4) and aim as 0-1 (e.g. 0.66). The enemy_roster below gives native XCOM stats PLUS a 'movement_tiles' field already converted to blue-move tiles for direct use. Aim 0-100 -> divide by 100 for the 0-1 field."
+    },
+    "fetch_note": "ufopaedia.org scraped via Python urllib (canonical infoboxes; WebFetch 403s it). Fandom + StrategyWiki 403 BOTH WebFetch and urllib - their numbers came via WebSearch summaries (community-measured / secondary). GDC 2018 Plot-and-Parcel PDF downloaded and text-extracted directly (Firaxis primary source). vigaroe.com (detailed fan datamine) is DNS-unreachable from this box; its figures arrived only via WebSearch snippets and are flagged."
+  },
+
+  "enemy_count_per_mission": {
+    "headline": "XCOM fields MORE aliens than the squad on every mission past the tutorial. Squad is 4 (EU early) to 6 (EU/X2 max). Aliens: 6-10 early, 12-18 mid/terror, 18-28 late/UFO/base. Aliens come in PODS of 1-3 (EU) or 2-3 (X2); only ~1 pod is active/visible at a time, which is why on-screen it can FEEL like only 3-5 enemies even when the map holds 12+. The clone must (a) raise totals and (b) deliver them as pods that reveal over the mission.",
+
+    "squad_size": {
+      "EU": "Starts at 4 deployable soldiers; upgradable to 5 then 6 (Officer Training School: Squad Size I and II). 6 is the campaign max.",
+      "X2": "Starts at 4; upgradable to 5 then 6 via Guerrilla Tactics School. 6 is standard max (mods/WOTC can reach more).",
+      "clone_recommendation": "Keep squad at 5 (the current Void Skirmish value). Enemy totals below are tuned against a 5-soldier squad."
+    },
+
+    "EU2012_CANONICAL": {
+      "source": "ufopaedia.org Alien_Deployment_(EU2012) - Firaxis-datamined Mission Deployment tables. CANONICAL (not community-measured). Format per cell: pods x (avg pod size) = total aliens. Difficulty columns Easy/Normal/Classic/Impossible.",
+      "pod_size_rule": "Each pod 1-3 aliens. Soldier pods = one species. Secondary pods (terror/UFO) = 1 main + 1-2 escorts of another species. Pods of 3 are the norm at higher difficulty; pods of 2 common on Easy/Normal and for special units (Sectopod, Mechtoid).",
+      "abductions": {
+        "note": "Abductions = Soldier pods only. Each mission gets a randomly-rolled difficulty rating shown on the selection screen.",
+        "first_mission": {"pods": 2, "total_aliens": {"Easy": 4, "Normal": 4, "Classic": 6, "Impossible": 8}},
+        "rating_easy": {"pods": 2, "total_aliens": {"Easy": 4, "Normal": 4, "Classic": 4, "Impossible": "N/A"}},
+        "rating_moderate": {"pods": 3, "total_aliens": {"Easy": 6, "Normal": 6, "Classic": 6, "Impossible": 8}},
+        "rating_difficult": {"pods": 4, "total_aliens": {"Easy": 8, "Normal": 8, "Classic": 8, "Impossible": 10}},
+        "rating_very_difficult": {"pods": 4, "total_aliens": {"Easy": 10, "Normal": 10, "Classic": 10, "Impossible": 12}}
+      },
+      "terror_sites": {
+        "note": "Terror = Secondary pods only, always rated Very Difficult. Civilians die each enemy turn. Can field up to 5 Cyberdiscs (or 5 Sectopods on Impossible).",
+        "first_mission": {"pods": 3, "total_aliens": {"Easy": 6, "Normal": 6, "Classic": 6, "Impossible": 9}},
+        "regular": {"pods": {"Easy": 3, "Normal": 4, "Classic": 5, "Impossible": 5}, "total_aliens": {"Easy": 8, "Normal": 10, "Classic": 12, "Impossible": 15}}
+      },
+      "council_missions": {
+        "note": "Soldier pods + DYNAMIC aliens that drop from the sky mid-mission (usually Thin Men). Asset-recovery variant has no dynamic drops. Totals ramp by month.",
+        "by_month_normal_difficulty": {
+          "March": {"pods": 3, "pod_aliens": 3, "dynamic": 2, "total": 5},
+          "April": {"pods": 4, "pod_aliens": 4, "dynamic": 2, "total": 6},
+          "May": {"pods": 4, "pod_aliens": 6, "dynamic": 2, "total": 8},
+          "June": {"pods": 4, "pod_aliens": 8, "dynamic": 3, "total": 11},
+          "July": {"pods": 4, "pod_aliens": 9, "dynamic": 4, "total": 13},
+          "August": {"pods": 4, "pod_aliens": 10, "dynamic": 6, "total": 16}
+        },
+        "classic_late": "Up to 18 total (12 pod + 6 dynamic)."
+      },
+      "ufo_missions": {
+        "note": "UFOs add a COMMANDER pod (1-3, on the bridge) plus Soldier pods, plus Secondary pods on Abductor-size and up. Landed UFOs field MORE than crashed (crash kills some aliens). Numbers below are total aliens (Normal/Classic ~ same; Impossible higher).",
+        "small_scout_crashed": {"pods": "3 Soldier", "total_aliens": 4},
+        "small_scout_landed": {"pods": "3 Soldier", "total_aliens": 9},
+        "large_scout_crashed": {"pods": "4 Soldier", "total_aliens": "7-9"},
+        "large_scout_landed": {"pods": "4 Soldier", "total_aliens": {"normal": 10, "impossible": 12}},
+        "abductor_crashed": {"pods": "3 Soldier + 1 Secondary", "total_aliens": 9},
+        "abductor_landed": {"pods": "3 Soldier + 1 Secondary", "total_aliens": 12},
+        "supply_barge_crashed": {"pods": "4 Soldier + 3 Secondary", "total_aliens": {"normal": "9-15", "impossible": "10-18"}},
+        "supply_barge_landed": {"pods": "4 Soldier + 3 Secondary", "total_aliens": {"normal": 16, "impossible": 21}},
+        "battleship": {"pods": "7 Soldier + 4 Secondary", "total_aliens": {"normal": 20, "impossible": 26}},
+        "alien_base": {"pods": "4 Soldier + 4 Secondary (+ 4 Drones, + 1 Sectoid Commander)", "total_aliens": {"normal": 21, "impossible": 28}},
+        "overseer": {"pods": "1-2 Soldier + 2 Secondary + Ethereal commander", "total_aliens": {"normal": 7, "classic": 10, "impossible": 12}}
+      },
+      "concrete_summary": "EARLY abduction = 2-3 pods x 3 = 6-9 aliens. MID terror/council = 4-5 pods = 10-16. LATE UFO/base = 7-11 pods = 18-28 aliens. The squad is 4-6. So aliens outnumber the squad ~1.5x early to ~4-5x late."
+    },
+
+    "XCOM2_VANILLA": {
+      "source_quality": "community-measured (Steam consensus threads + Fandom Game_difficulty summary). X2 has NO single published Firaxis deployment table like EU; numbers are datamined/measured by the community and vary with Force Level + region strength.",
+      "counting_caveat": "The pre-mission enemy-count display ONLY counts aliens in pods present at mission START. It EXCLUDES: telegraphed reinforcement drops, hidden Faceless on Retaliation, the Lost waves, turrets, and Chosen. Actual total fought is higher.",
+      "pods": "2-3 enemies each. Veteran = mostly 2/pod. Commander/Legend = mostly 3/pod (early pods can still be 2; Gatecrasher tutorial always has one 2-pod).",
+      "total_enemies_by_mission_rating_commander": {
+        "easy": 6,
+        "moderate": 8,
+        "difficult": 9,
+        "very_difficult": 11,
+        "note": "These are starting-pod aliens on Commander. Add 2-4 from a typical reinforcement drop. Retaliation adds 1-3 Faceless. Lost-infested maps add endless weak Lost waves on top."
+      },
+      "pods_per_mission_disputed": {
+        "value": "Easy 2-4 pods, Moderate 5-6, Difficult 7-8, Very Difficult 8-10",
+        "flag": "DISPUTED / likely Long-War-inflated. This pod-count source conflicts with the enemy-TOTAL source above (5-6 pods of 2-3 would be 10-18, not 8). Trust the enemy-TOTAL row (6/8/9/11) for VANILLA; the high pod counts describe Long War 2 or heavily-modded play.",
+        "source_quality": "community-measured, unreliable for vanilla"
+      },
+      "long_war_2_reference": {
+        "note": "LW2 (the big overhaul) is where the huge counts come from: activity-level bands extremely-light 7-9, very-light 10-12, light 13-15, light-moderate 16-18, moderate 19-21, moderate-heavy 22-24, heavy 25-27, very-heavy 28-30, extremely-heavy 31-34. Force Level 1-20. NOT vanilla - use only if you want LW-scale swarms.",
+        "source": "ufopaedia ADVENT_Unit_Deployments_(LW2)",
+        "source_quality": "canonical for the LW2 MOD, not base XCOM 2"
+      }
+    },
+
+    "clone_recommendation": {
+      "principle": "Owner wants MORE bad guys than the squad. XCOM agrees: never field fewer aliens than soldiers outside a tutorial. Deliver counts as PODS so the screen reveals them gradually (XCOM's signature pacing) instead of dumping all at once.",
+      "vs_current_build": "Current Void Skirmish (content.json) already ramps 9->18 enemies vs a 5-squad across 7 missions on 36x44 -> 48x56 grids. That LOW end (9) is fine but feels thin because there is no pod system (all 9 sit visible/aggressive at once = either trivial or overwhelming, never the XCOM reveal cadence). FIX = (1) bump totals to 8 -> 22, (2) GROUP into pods of 2-3 with dormant-until-LOS activation, (3) enlarge maps (see map_dimensions).",
+      "pod_sizing_formula": "enemies_total for mission i; pods = ceil(enemies_total / 3); assign 3 per pod, last pod gets the remainder (min 2). Place each pod as a cluster with a patrol anchor; keep dormant until a soldier gains LOS. On reveal, scatter to cover (see enemy_ai_behavior.activation).",
+      "recommended_totals_vs_squad5": "M1:8, M2:10, M3:12, M4:14, M5:16, M6:18, M7:22 (see campaign_ramp for full pod layout). Aliens always >= squad; ratio climbs from 1.6x to 4.4x."
+    }
+  },
+
+  "map_dimensions": {
+    "headline": "EU maps are 40-60 tiles per side, 2 or 4 height levels. X2 maps are assembled from parcels (12x12 / 12x24 / 24x24 tiles) dropped into hand-authored plots; a full plot is roughly 60-90+ tiles per side. A soldier crosses ~7-8 tiles on a single move and ~15-16 on a dash, so an XCOM map takes 4-8 dashes (8-15 turns) to cross end-to-end - that traversal time is WHY XCOM missions 'take a while'. For the clone the owner wants LARGE: push to 56-72 tiles per side.",
+
+    "EU2012": {
+      "per_side_tiles": "40-60 tiles wide x 40-60 deep (community-measured, GameFAQs/Steam).",
+      "height_levels": "2 or 4 vertical levels on most maps.",
+      "smallest_known": {"name": "Fallen Highway", "tiles": 3320, "source_quality": "community-measured"},
+      "base_defense": {"dims": "60x60", "tiles": 3600, "source_quality": "community-measured"},
+      "abduction_typical": "6,000-12,000 floor tiles (height ignored) -> roughly 55x55 to 70x70 bounding box if square, but playable footprint per level is ~40-55 per side (rest is height/blocked). source_quality: community-measured",
+      "ufo_crash_landing": "15,000-20,000 floor tiles (the big open wilderness approach + UFO interior).",
+      "map_pool": "~68 base maps + ~30 Enemy Within + 3 Slingshot DLC = ~115 total, ~82 unique (per ufopaedia Maps_(EU2012), canonical).",
+      "source_quality": "tile dimensions are community-measured (Firaxis never published them); map COUNTS are canonical."
+    },
+
+    "XCOM2_plot_parcel": {
+      "source": "GDC 2018 'Plot and Parcel: Procedural Level Design in XCOM 2', Brian Hess (Lead Level Designer, Firaxis). PRIMARY/CANONICAL - extracted directly from the talk PDF.",
+      "parcel_tile_sizes": {
+        "small": "12x12 tiles",
+        "medium": "12x24 tiles",
+        "large": "24x24 tiles",
+        "note": "Verbatim from the GDC slide 'Initial Parcel Rules'. Parcels have a random facing and randomly-drawn building content each load."
+      },
+      "plot": "The hand-authored master layout (roads/rivers/paths = 'Plot Cover Parcels'/PCPs) with empty slots sized for each parcel bucket. A plot is filled by random parcel draws + objective + patrol routes at load time.",
+      "shipped_content": "XCOM 2 shipped with 80 plots, 200+ parcels, 450+ PCPs (canonical, GDC slide 'Taking Stock').",
+      "effective_map_size": "A plot holding e.g. a couple of 24x24 large parcels + 12x24 mediums + road PCPs lands roughly 60-90 tiles per side overall. Firaxis did NOT publish a single official per-map tile dimension in the talk; the parcel sizes are the hard numbers. (effective per-side estimate = derived, flagged.)"
+    },
+
+    "soldier_traversal": {
+      "single_move_tiles": "EU mobility-12 soldier = 7 tiles (blue). X2 mobility-12 = 8 tiles (blue).",
+      "dash_tiles": "EU = 15 tiles; X2 = 16 tiles (both actions on movement).",
+      "turns_to_cross_a_50_tile_map": "~50 / 15 = ~3-4 dashes one-way if running straight and unopposed. Real missions = 8-15 player turns because you move in cover-to-cover hops (single moves, overwatch, fights), not continuous dashes. THIS is the 'XCOM takes a while' feel: the map is ~6-8 dashes deep, but you only safely advance 1 cover bound per turn.",
+      "source": "ufopaedia Movement_(EU2012) (canonical EU); Fandom Mobility + Steam consensus (X2, community-measured)."
+    },
+
+    "clone_recommendation": {
+      "principle": "Owner wants LARGE. The current 36x44 is BELOW XCOM's floor (40). Move to the upper half of XCOM's range and scale per mission so late maps feel like a campaign escalation.",
+      "per_side_tiles_by_mission": {
+        "M1": "48x48", "M2": "52x52", "M3": "56x56", "M4": "60x60",
+        "M5": "64x64", "M6": "68x68", "M7": "72x72"
+      },
+      "rationale": "48 = XCOM's small-but-real abduction; 60 = XCOM base-defense size; 72 = pushing toward a large UFO approach. All within the canonical 40-72 envelope, none cartoonishly large for a browser engine. Pair with single-move = 6-7 tiles and dash = 12-14 tiles (your enemy.movement of 4-6 tiles is on the low side; bump player blue-move to ~6 so a 60-tile map is ~5 dashes deep, matching XCOM's 8-12 turn pacing).",
+      "construction": "Assemble each map from authored 'parcel' chunks (cover clusters + a building or two) snapped onto tile anchors, with open road/plaza connective tissue between - exactly the plot+parcel recipe. Scatter low/high cover only at anchor points so the grid stays readable. Place pods along patrol anchors spread across the map so traversal naturally reveals them one at a time.",
+      "performance_note": "72x72 = 5,184 ground tiles single-level. Fine for the 3D engine IF you follow existing ForgeFlow FPS rules: instanced tile/cover meshes, strip GLB-embedded lights, DPR cap ~1.5, shadow map ~1024, frustum-cull off-camera parcels."
+    }
+  },
+
+  "enemy_roster": [
+    {"name": "Sectoid", "game": "EU", "tier": 1, "hp": "3/3/3/4", "hp_commander_equiv": 3, "aim": "65/65/75/75", "aim_01": 0.65, "movement_native": 12, "movement_tiles": 7, "damage": "2-4 (plasma pistol)", "signature": "Mind Merge (link to another Sectoid: linked unit gets +1HP/+25Will/+25crit; if merge-caster dies, linked unit dies). Early-game psi fodder; dies to one good hit."},
+    {"name": "Sectoid Commander", "game": "EU", "tier": 3, "hp": "10/10/14/14", "hp_commander_equiv": 14, "aim": "85/85/95/95", "aim_01": 0.95, "movement_native": 12, "movement_tiles": 7, "damage": "2-4 + psi", "signature": "Mind Control an XCOM soldier; Psi Panic; Mindfray (-Will). UFO commander pod after the alien base falls."},
+    {"name": "Thin Man", "game": "EU", "tier": 1, "hp": "3/3/4/6", "hp_commander_equiv": 4, "aim": "65/65/75/75", "aim_01": 0.65, "movement_native": 15, "movement_tiles": 9, "damage": "4-6 + poison", "signature": "Leaps walls/rooftops; Poison Spit (AoE cloud, -aim/-mobility DoT); leaves a poison cloud on death. Council-mission staple + dynamic sky-drop."},
+    {"name": "Floater", "game": "EU", "tier": 1, "hp": "4/4/4/6", "hp_commander_equiv": 4, "aim": "50/50/60/60", "aim_01": 0.50, "movement_native": 12, "movement_tiles": 7, "damage": "4-6", "signature": "Flight: can launch to any tile/high ground (costs the turn) for height aim+def. Low base aim. Has 35 fuel."},
+    {"name": "Heavy Floater", "game": "EU", "tier": 2, "hp": "12/12/14/16", "hp_commander_equiv": 14, "aim": "70/70/80/80", "aim_01": 0.80, "movement_native": 12, "movement_tiles": 7, "damage": "6-8", "signature": "Upgraded Floater; flight + Bombard (long-range grenade launch). Mid-game flyer."},
+    {"name": "Muton", "game": "EU", "tier": 2, "hp": "8/8/10/10", "hp_commander_equiv": 10, "aim": "70/70/80/80", "aim_01": 0.80, "movement_native": 12, "movement_tiles": 7, "damage": "4-6 + grenades", "signature": "Tanky line infantry; throws Alien Grenades; Intimidate (panic on wound). Weak to psi. The mid-game workhorse."},
+    {"name": "Muton Elite", "game": "EU", "tier": 3, "hp": "14/14/14/18", "hp_commander_equiv": 14, "aim": "80/80/90/100", "aim_01": 0.90, "movement_native": 12, "movement_tiles": 7, "damage": "8-10", "signature": "Late-game Muton; high aim, +20-30 defense, heavy plasma. Escorts Ethereals."},
+    {"name": "Berserker", "game": "EU", "tier": 2, "hp": "20/20/20/25", "hp_commander_equiv": 20, "aim": "melee", "aim_01": null, "movement_native": 17, "movement_tiles": 11, "damage": "8-10 (Muton Blade, melee)", "signature": "Bull Rush: charges in a straight line THROUGH cover for a heavy melee hit. Bloodlust: charges whoever wounds it. Hardened (-60% incoming crit). High HP melee bruiser."},
+    {"name": "Cyberdisc", "game": "EU", "tier": 2, "hp": "16/16/20/20", "hp_commander_equiv": 20, "aim": "70/70/80/80", "aim_01": 0.80, "movement_native": 18, "movement_tiles": 11, "damage": "7-9 cannon + grenades", "signature": "Robotic saucer; closed<->open assault form; Death Blossom (close-range AoE); Flight + Evasion (-20 aim vs it airborne); escorts Drones. Hardened."},
+    {"name": "Drone", "game": "EU", "tier": 1, "hp": "3/3/5/7", "hp_commander_equiv": 5, "aim": "60/60/70/70", "aim_01": 0.70, "movement_native": 12, "movement_tiles": 7, "damage": "1-3", "signature": "Small flying robot; repairs Cyberdiscs/Sectopods; weak beam. Robotic (immune to psi/poison/stun)."},
+    {"name": "Chryssalid", "game": "EU", "tier": 2, "hp": "8/8/8/8", "hp_commander_equiv": 8, "aim": "melee", "aim_01": null, "movement_native": 20, "movement_tiles": 13, "damage": "high melee + poison (EU2012 publishes no clean base-damage range; the hit is effectively lethal via crit and ALWAYS poisons)", "signature": "Fastest unit in EU (13 tiles blue / 26 dash). Melee hit poisons; a killed civilian/soldier becomes a ZOMBIE that hatches a NEW Chryssalid in ~3 turns. Terror-mission nightmare. damage_flag: community/qualitative - no canonical numeric range in EU stat table."},
+    {"name": "Zombie", "game": "EU", "tier": 2, "hp": "~4-6", "hp_commander_equiv": 5, "aim": "melee", "aim_01": null, "movement_native": "slow", "movement_tiles": 4, "damage": "low melee", "signature": "Spawned when a Chryssalid kills an organic. Slow shambler; if not killed within ~3 turns it births a Chryssalid. Kill it fast to deny the spawn. hp_flag: approximate, not a clean published table value."},
+    {"name": "Sectopod", "game": "EU", "tier": 3, "hp": "30/30/30/30", "hp_commander_equiv": 30, "aim": "80/80/90/90", "aim_01": 0.90, "movement_native": 12, "movement_tiles": 7, "damage": "9-11 cannon (AoE) + Cluster Bomb (6 per mini-bomb)", "signature": "Huge armored robot. Cannon Fire = AoE line damage; Cluster Bomb = telegraphed area barrage next turn. Hardened + Reinforced Armor (EW: -50% all damage). Robotic. Top-tier."},
+    {"name": "Ethereal", "game": "EU", "tier": 3, "hp": "20/20/20/25", "hp_commander_equiv": 20, "aim": "psi", "aim_01": null, "movement_native": 12, "movement_tiles": 7, "damage": "psi (Rift/Mindfray scale with target Will, not a fixed range)", "signature": "Top psi: Mind Control, Psi Panic, Rift (wide AoE psi, devastating vs low-Will/robotic), Reflect. Will 120-155. Final-boss tier (Uber Ethereal on the Temple Ship). damage_flag: will-scaled, no fixed base-damage number."},
+    {"name": "Outsider", "game": "EU", "tier": 1, "hp": "3/3/5/5", "hp_commander_equiv": 5, "aim": "70/70/80/80", "aim_01": 0.80, "movement_native": 12, "movement_tiles": 7, "damage": "4-6", "signature": "Crystalline UFO guardian (commander pod on Scouts early game). Shatters into a shard on death (research item). Appears from game start."},
+    {"name": "Mechtoid", "game": "EU", "tier": 2, "hp": "16/20/22/24", "hp_commander_equiv": 22, "aim": "60/70/80/80", "aim_01": 0.80, "movement_native": 14, "movement_tiles": 9, "damage": "6-8 (twin plasma)", "signature": "Enemy Within DLC. Sectoid-piloted mech; twin plasma volley; gains a 6HP 50%-damage-reduction shield if a Sectoid Mind Merges with it (kill the Sectoid to drop the shield). Robotic."},
+
+    {"name": "ADVENT Trooper", "game": "X2", "tier": 1, "hp": "3/3/4/4", "hp_commander_equiv": 4, "aim": "65/65/65/65", "aim_01": 0.65, "movement_native": 12, "movement_tiles": 8, "damage": "3 (4 crit) Mag Rifle", "signature": "Basic grunt, the bread-and-butter pod follower. No special ability. Takes cover, shoots, overwatches."},
+    {"name": "ADVENT Officer", "game": "X2", "tier": 1, "hp": "6/6/7/7", "hp_commander_equiv": 7, "aim": "65/75/75/75", "aim_01": 0.75, "movement_native": 12, "movement_tiles": 8, "damage": "3-4 rifle + 2-3 grenade", "signature": "Mark Target (all nearby Troopers focus-fire the marked soldier); Command Aura buffs allies; can summon reinforcements. Pod leader. Dodge 15, crit 10 (Cmd/Legend)."},
+    {"name": "ADVENT Stun Lancer", "game": "X2", "tier": 1, "hp": "4/6/7/8", "hp_commander_equiv": 7, "aim": "65/65/65/65", "aim_01": 0.65, "movement_native": "12/14/14/14", "movement_tiles": 9, "damage": "3-4 rifle + 2-4 Shock Lance (stun)", "signature": "RUSHES into melee with a stun baton (stuns/dazes a soldier = skip their next turn). Suicidally aggressive; closes distance every turn. Fast (9 tiles)."},
+    {"name": "ADVENT Shieldbearer", "game": "X2", "tier": 2, "hp": "6/6/8/9", "hp_commander_equiv": 8, "aim": "65/70/70/70", "aim_01": 0.70, "movement_native": 12, "movement_tiles": 8, "damage": "5-6 Mag Rifle", "signature": "Energy Shield: grants nearby allies a temporary HP shield (absorbs damage before HP). Priority kill - neutralizes a whole pod's effective HP. Tanky."},
+    {"name": "ADVENT MEC", "game": "X2", "tier": 2, "hp": "7/7/8/9", "hp_commander_equiv": 8, "aim": "70/75/75/75", "aim_01": 0.75, "movement_native": "12/12/14/14", "movement_tiles": 8, "damage": "4-6 Mag Cannon (shred 1) + 3 Micro-Missiles (AoE, shred 1)", "signature": "Robotic mech (2 armor approx). Micro-missiles = AoE. Hackable (Specialist can stun/control). High HP + armor. Robotic. armor_flag: ~2, prose-stated not in infobox."},
+    {"name": "ADVENT Turret", "game": "X2", "tier": 1, "hp": "4/4/5/6", "hp_commander_equiv": 5, "aim": "50", "aim_01": 0.50, "movement_native": 0, "movement_tiles": 0, "damage": "3-4 (+1)", "signature": "STATIONARY rooftop/checkpoint gun. Armor 1/2/3/3. Cannot move; only fires at LOS targets. Hackable. NOT counted in pre-mission enemy total. source_quality: community-measured (vigaroe via search)."},
+    {"name": "Sectoid", "game": "X2", "tier": 1, "hp": "7/8/8/10", "hp_commander_equiv": 8, "aim": "70/75/75/75", "aim_01": 0.75, "movement_native": 12, "movement_tiles": 8, "damage": "3-4 plasma", "signature": "Bigger psionic Sectoid. Mindspin (random Disorient/Panic/Mind Control). Psi Reanimate (raise a corpse as a Psi-Zombie). Takes DOUBLE damage from melee. Kill it to free its thralls. Will 80-100."},
+    {"name": "Viper", "game": "X2", "tier": 1, "hp": "7/8/8/10", "hp_commander_equiv": 8, "aim": "75/75/75/75", "aim_01": 0.75, "movement_native": "12/14/15/15", "movement_tiles": 9, "damage": "3-5 rifle + Bind 2-3 + Poison Spit 3 (pierce 1)", "signature": "Tongue Pull (yank a soldier out of cover toward the Viper) + Bind (coil/immobilize + DoT until allies kill the Viper or free them) + Poison Spit AoE. High Dodge (15/25/33). The signature X2 control enemy."},
+    {"name": "Muton", "game": "X2", "tier": 2, "hp": "8/8/9/11", "hp_commander_equiv": 9, "aim": "80/80/80/80", "aim_01": 0.80, "movement_native": "12/14/14/14", "movement_tiles": 9, "damage": "4-6 Beam Rifle (shred 1) + 4-5 grenade + 6-8 Bayonet", "signature": "Tank line infantry. Suppression (-aim pin + reaction fire). COUNTERATTACK: high chance to negate a melee attack and counter-stab. Throws grenades at clustered squads. The X2 mid-game wall."},
+    {"name": "Archon", "game": "X2", "tier": 3, "hp": "12/18/20/24", "hp_commander_equiv": 20, "aim": "75/75/75/75", "aim_01": 0.75, "movement_native": "14/15/15/15", "movement_tiles": 10, "damage": "7-8 ranged staff / 6-9 melee", "signature": "Flying angel (Dodge 25). Blazing Pinions: flies up and marks tiles, raining AoE rockets NEXT turn (telegraphed, like Cluster Bomb). Battle Frenzy: when wounded, gains +1 action for 2 turns and melees. High-mobility flyer."},
+    {"name": "Andromedon", "game": "X2", "tier": 3, "hp": "12/15/18/21 (+4 armor)", "hp_commander_equiv": 18, "aim": "70/80/80/80", "aim_01": 0.80, "movement_native": "12/14/14/14", "movement_tiles": 9, "damage": "9-11 Cannon (shred 2) + 5-7 Acid Bomb (shred 3, AoE)", "signature": "TWO-STAGE tank. Living form has 4 armor (3 on Rookie) + acid attacks that leave damaging pools. When the body dies, a robotic ANDROMEDON SHELL stands up (HP 14/14/18/21, 0 armor, melee 7-10) and keeps fighting = second health bar. Acid SHREDS armor."},
+    {"name": "Gatekeeper", "game": "X2", "tier": 3, "hp": "20/20/25/30", "hp_commander_equiv": 25, "aim": "70/80/80/80", "aim_01": 0.80, "movement_native": "15/16/16/16", "movement_tiles": 11, "damage": "9-12 Beam (Gateway 5-7, Consume 7-10, Dying Explosion 5 AoE)", "signature": "Floating armored sphere. Opens to fire a heavy beam; closes = high defense (25-40) + armor. Gateway/Consume can REANIMATE nearby corpses into Psi-Zombies and heal itself. Dying Explosion on death. Late-game heavy. Will 100-120."},
+    {"name": "Codex", "game": "X2", "tier": 2, "hp": "10/12/12/13", "hp_commander_equiv": 12, "aim": "75/80/75/75", "aim_01": 0.75, "movement_native": "12/12/14/14", "movement_tiles": 9, "damage": "4-5 (+2)", "signature": "TELEPORTS instead of walking (no-cooldown blink). Psionic Rift: marks a large area that DISABLES primary weapons inside it, then detonates next turn for damage. CLONE: every time it takes damage it splits into two, each with HALF the remaining HP. Hard to pin down. source_quality: stats community-measured (vigaroe/Fandom via search)."},
+    {"name": "Faceless", "game": "X2", "tier": 2, "hp": "8/10/10/12", "hp_commander_equiv": 10, "aim": "60/75/75/75", "aim_01": 0.75, "movement_native": "12/14/14/14", "movement_tiles": 9, "damage": "3-4 melee claws (long reach)", "signature": "DISGUISED as a civilian on Retaliation maps; transforms into a big melee blob when XCOM approaches (or when revealed). Undetectable until it transforms. Big HP, long melee reach. Not in the pre-mission count."},
+    {"name": "Chryssalid", "game": "X2", "tier": 3, "hp": "8/9/10/13", "hp_commander_equiv": 10, "aim": "75/75/75/75", "aim_01": 0.75, "movement_native": "12/12/15/15", "movement_tiles": 10, "damage": "5-6 poison claws", "signature": "Fast melee (Dodge 10-20). All hits POISON; a unit killed by the poison becomes a COCOON that hatches THREE new Chryssalids if not destroyed during gestation. Can BURROW (hide underground, cannot move while burrowed) and ambush. Swarm threat."},
+    {"name": "Sectopod", "game": "X2", "tier": 3, "hp": "30/28/32/40 (+4/4/5/6 armor)", "hp_commander_equiv": 32, "aim": "70/70/70/70", "aim_01": 0.70, "movement_native": "?/14/16/16", "movement_tiles": 10, "damage": "10-11 Blaster + Lightning Field (AoE) + Wrath Cannon (line)", "signature": "Two-tile-tall robot; occupies a 3x3 footprint (9 tiles), has 3 ACTIONS per turn. High Stance (extra reach/range). Lightning Field = melee-range AoE; Wrath Cannon = devastating line shot. Heavy armor + huge hack defense. Robotic. The X2 apex non-boss. source_quality: HP/armor community-measured (vigaroe via search)."},
+    {"name": "Avatar", "game": "X2", "tier": 4, "hp": "~20-40 + heavy psi", "hp_commander_equiv": 30, "aim": "high psi", "aim_01": null, "movement_native": 14, "movement_tiles": 9, "damage": "Psi Lance, Teleport-strike, Rift, summon Psi-Zombies", "signature": "FINAL BOSS. Self-heals, teleports, clones-of-Codex-style evasion, mass psi (Null Lance line, Psionic Rift, Dimensional Rift). The campaign-ending fight (3 Avatars in the final mission). hp_flag: scales with story/difficulty, no single clean published number."},
+    {"name": "The Lost (basic)", "game": "X2 WOTC", "tier": 1, "hp": "2", "hp_commander_equiv": 2, "aim": "75/75/85/90", "aim_01": 0.75, "movement_native": 8, "movement_tiles": 5, "damage": "low melee", "signature": "Zombie HORDE on ruined-city maps. Individually trivial (2 HP) but ENDLESS - spawn in waves of many. Attack BOTH XCOM and ADVENT. A rifle KILL grants a free 'Lost Headshot' bonus action (chain kills). source_quality: community-measured (vigaroe via search)."},
+    {"name": "The Lost (Dasher)", "game": "X2 WOTC", "tier": 1, "hp": "4", "hp_commander_equiv": 4, "aim": "75/75/85/90", "aim_01": 0.75, "movement_native": 24, "movement_tiles": 16, "damage": "low melee", "signature": "Fast Lost variant - mobility 24 (~16 tiles) closes huge gaps in one turn. More HP than basic. source_quality: community-measured."},
+    {"name": "The Lost (Brute/Howler)", "game": "X2 WOTC", "tier": 2, "hp": "7+ (rises to 14-20 in late waves)", "hp_commander_equiv": 14, "aim": "75/75/85/90", "aim_01": 0.75, "movement_native": 8, "movement_tiles": 5, "damage": "3-4 / 4-5 / 6-7 melee (+2 crit)", "signature": "Rare beefy Lost; slow but high HP, internal name 'Howler' (can call in more Lost). source_quality: community-measured."},
+    {"name": "ADVENT Purifier", "game": "X2 WOTC", "tier": 2, "hp": "~7-10", "hp_commander_equiv": 8, "aim": "65", "aim_01": 0.65, "movement_native": 12, "movement_tiles": 8, "damage": "flamethrower (AoE + burn DoT)", "signature": "Flamethrower trooper; sprays fire AoE that ignites cover. EXPLODES on death (area damage). Anti-Lost and anti-clustered-squad. hp_flag: approximate."},
+    {"name": "ADVENT Priest", "game": "X2 WOTC", "tier": 2, "hp": "~6-8", "hp_commander_equiv": 7, "aim": "70", "aim_01": 0.70, "movement_native": 12, "movement_tiles": 8, "damage": "rifle + psi", "signature": "Psi trooper: Mind Control, Stasis (lock a unit in a bubble for a turn), Holy Warrior (buff an ally with shield + reflect). Spawns Spectral Zombies. hp_flag: approximate."},
+    {"name": "Chosen Assassin", "game": "X2 WOTC", "tier": 4, "hp": "27 (tier1) -> ~40", "hp_commander_equiv": 27, "aim": "high", "aim_01": 0.80, "movement_native": 14, "movement_tiles": 9, "damage": "Sword melee (heavy) + shotgun", "signature": "Stealth boss rival. Goes invisible, closes and SLASHES; can KIDNAP a soldier and carry them off. 1 armor, 5 Dodge. Learns your tactics across the campaign; gets stronger each appearance. Her presence FREEZES the mission timer until she retreats. Permanently killed only at her Stronghold. source_quality: community-measured (vigaroe/Fandom via search)."},
+    {"name": "Chosen Hunter", "game": "X2 WOTC", "tier": 4, "hp": "25 (tier1) -> ~40", "hp_commander_equiv": 25, "aim": "very high (sniper)", "aim_01": 0.90, "movement_native": 14, "movement_tiles": 9, "damage": "Sniper rifle (long-range, high) + tranq + grapple", "signature": "Sniper boss rival. Grapples to high ground, picks off soldiers at range; Tracking Shot; can daze/capture. 1 armor, 10 Dodge (hardest to hit). Freezes timer; kidnaps; ramps over campaign. source_quality: community-measured."},
+    {"name": "Chosen Warlock", "game": "X2 WOTC", "tier": 4, "hp": "30 (tier1) -> ~40", "hp_commander_equiv": 30, "aim": "high psi", "aim_01": 0.80, "movement_native": 14, "movement_tiles": 9, "damage": "Psi (Spectral Army summon, Mind Control, teleport)", "signature": "Psi boss rival - toughest Chosen (2 armor, 30 HP). Summons a Spectral Army (zombie adds), Mind Controls, teleports. Freezes timer; kidnaps; ramps over campaign. source_quality: community-measured."}
+  ],
+
+  "enemy_ai_behavior": {
+    "headline": "XCOM AI = POD-BASED. Aliens are dormant in pods, patrol-drift toward the squad, and only ACT once a soldier's line-of-sight reveals the pod. On reveal they get a free 'scamper' to cover, then act next turn with aggressive flank/focus-fire logic. Firaxis deliberately UNDER-tunes flank-avoidance so the player can out-position the AI - it is beatable by design.",
+
+    "activation": {
+      "trigger": "An UNCONCEALED XCOM soldier gains line-of-sight to ANY member of a dormant pod. (In X2, an enemy can also activate by gaining LOS to a non-concealed soldier on the enemy turn, or by being flanked.)",
+      "on_reveal_scamper": "The whole pod plays a reveal beat and each member gets ONE free 'scamper' move toward the nearest cover that protects it from the spotters. This is a one-time repositioning that does NOT cost their upcoming turn. X2 specifically SPREADS the pod out on this move so one grenade/AoE can't wipe it (anti-cheese vs EU's clustered reveals).",
+      "scamper_exception": "If a soldier is ALREADY flanked or in the open when the pod reveals, members that have a shot SKIP the scamper and FIRE instead (this is the punish for triggering a pod with an exposed soldier).",
+      "then": "They act normally on the NEXT enemy turn with full offensive AI.",
+      "implementable": "pod = {units[], patrol_anchor, state:'dormant'}. Each enemy turn while dormant: drift patrol toward squad's last-known centroid by ~1 move. On any soldier gaining LOS to a unit: state='active'; for each member: if it has a valid shot on a flanked/exposed soldier -> shoot; else -> moveToNearestCoverAwayFrom(spotters) as a FREE action. Mark pod active; from next enemy turn run full AI."
+    },
+
+    "alert_states_X2": {
+      "green": "Concealed/unaware. If forced to activate while green (e.g. squad still concealed), pod takes only DEFENSIVE actions (hunker/overwatch), no offense.",
+      "yellow": "Aware via SOUND (gunfire, explosions, a dead ally seen) but not yet LOS-activated. Moves toward the disturbance; may take opportunistic shots; can become a reinforcement next turn.",
+      "red": "Fully activated/engaged: full offensive AI.",
+      "implementable": "Track pod.alert in {green,yellow,red}. Noise events (a nearby fight) flip green->yellow within a radius and pull the pod toward the noise. LOS reveal -> red."
+    },
+
+    "per_turn_priority_when_active": [
+      "1. KILL SHOT: if any move+shot can KILL a soldier this turn, do it (focus the unit it can finish). AI tries kill shots first.",
+      "2. FLANK: else move to a tile that FLANKS a soldier (ignores their cover + crit bonus) and shoot. Will leave cover / take low cover ONLY if that move yields a flank.",
+      "3. AoE: if an area ability hits 2+ soldiers, strongly prefer it (especially when no flank exists; sometimes even when one does).",
+      "4. BEST SAFE SHOT: else take the highest-hit-% shot from a tile that ALSO keeps the enemy in cover vs the most threats.",
+      "5. REPOSITION/HUNKER: if no good shot, move to better cover (un-flankable by one soldier move) and/or hunker/overwatch.",
+      "6. INTENTIONAL IMPERFECTION: flank-avoidance is loose - the AI often leaves a flank lane open for the player. Do NOT make it optimal."
+    ],
+
+    "movement_style": "Active enemies generally MOVE + SHOOT (close to a good firing tile, then fire) rather than pure-dash. Melee/rush types (Stun Lancer, Berserker, Chryssalid, Faceless, Archon-frenzied) DASH to close the gap. Ranged types hold cover and trade. Untriggered pods slowly drift toward the squad over several turns.",
+
+    "reinforcements": "On many (timed) X2 missions ADVENT drops reinforcements from a gunship: a FLARE marks the landing tiles the turn BEFORE they arrive (telegraphed). They land and act the following turn. Implement as a scheduled spawn with a 1-turn warning marker.",
+
+    "per_archetype_rules": {
+      "basic_ranged (ADVENT Trooper/Officer, Sectoid, Thin Man, Muton, Outsider)": "Standard priority list. Take cover, shoot best target, flank when free. Officer uses Mark Target on a high-value soldier; Sectoid prefers Mindspin/Reanimate when no clean flank; Muton throws a grenade at 2+ clustered soldiers and Suppresses a flanker.",
+      "melee_rusher (Stun Lancer, Berserker, Chryssalid, Faceless)": "Each turn DASH toward the nearest reachable soldier; attack if in range. Berserker Bull-Rushes in a straight line THROUGH cover. Chryssalid prioritizes organics it can convert and will burrow to ambush. Faceless stays disguised until a soldier is within ~melee approach, then transforms and strikes. Ignore self-preservation.",
+      "flyer (Floater, Heavy Floater, Cyberdisc, Archon)": "Use flight to take HIGH GROUND (aim+def) or reposition over obstacles. Archon: when un-flanked and facing 2+ targets, cast Blazing Pinions (mark AoE tiles, resolve next turn) then reposition; when WOUNDED, Battle Frenzy -> +1 action, dash-melee the nearest soldier. Cyberdisc opens to Death Blossom when 2+ soldiers are adjacent/close.",
+      "controller (Viper, Sectoid Commander, Ethereal, ADVENT Priest, Warlock)": "Prefer disabling abilities over plain shots. Viper: Tongue Pull a soldier OUT of cover (toward itself), then Bind it next turn (locks both); prioritize an isolated soldier. Sectoid Commander/Ethereal/Priest: Mind Control the strongest soldier or Panic/Stasis a key one; Rift on a low-Will cluster.",
+      "teleporter (Codex)": "Almost never walks - Teleport (no cooldown) to a flanking/safe tile. When facing 2+ soldiers, drop a Psionic Rift on them (disables their weapons, detonates next turn) then teleport away. On taking damage it CLONES (split HP); play both halves.",
+      "two_stage_tank (Andromedon)": "Living form: advance, Cannon the best target, drop Acid Bombs on clusters / to shred cover; tanks hits with 4 armor. On death -> spawn the Shell (own unit, melee, advances and punches).",
+      "heavy_boss (Sectopod, Gatekeeper)": "Slow, stays mid/back, uses 3 actions (Sectopod) to High-Stance + Wrath Cannon a line or Lightning Field a cluster. Gatekeeper opens to beam the best target or Consume/Gateway to reanimate corpses + heal; closes (high def) when threatened.",
+      "horde (the Lost)": "Mindless: every Lost dashes at the nearest living unit (XCOM OR ADVENT) and melees. Spawn in WAVES (many at once), trivial HP. Dasher closes from far. Reward player chain-kills (Lost Headshot bonus action on a rifle kill).",
+      "chosen_boss (Assassin/Hunter/Warlock)": "Recurring rival that INVADES mid-mission. Assassin: stealth-approach + sword + attempt KIDNAP of a low-HP soldier. Hunter: grapple to high ground + long-range sniper + tranq. Warlock: summon a Spectral Army (zombie adds) + Mind Control + teleport. Their presence FREEZES the mission timer. They retreat when low and return stronger later."
+    },
+
+    "clone_recommendation": {
+      "minimum_viable": "Replace the flat 'aggressive' AI with: (1) POD grouping + dormant/active state + LOS reveal + free scamper-to-cover, (2) the 5-step per-turn priority (kill > flank > AoE > best-safe-shot > reposition/hunker), (3) move+shoot for ranged, dash-to-close for melee. That alone makes it FEEL like XCOM.",
+      "stretch": "Add green/yellow/red alert (noise pulls pods), telegraphed reinforcement flares on later/timed missions, and 3-4 special movers (a Viper-style pull, an Archon-style telegraphed AoE, a Codex-style teleport+clone, a Chryssalid-style burrow/convert) to give the roster identity.",
+      "tuning": "Keep flank-avoidance imperfect on purpose. Cap how many pods can be active at once early (1-2) so the player isn't dogpiled; let more activate on bigger/later maps."
+    }
+  },
+
+  "campaign_ramp": [
+    {
+      "mission": 1, "name_suggestion": "First Contact / Insertion", "xcom_analog": "EU tutorial abduction / X2 Gatecrasher",
+      "map_tiles": "48x48", "squad_size": 5,
+      "enemy_count": 8, "enemy_to_squad_ratio": "1.6x",
+      "pod_layout": [{"size": 3, "tier": 1}, {"size": 3, "tier": 1}, {"size": 2, "tier": 1}],
+      "enemy_types": ["Trooper/Sectoid-equivalent (your 'Recon Drone' tier-1)", "1 pod-leader with Mark-Target or Mindspin flavor"],
+      "notes": "Tutorial-light. Only 1 pod active at a time. Pure tier-1. Teaches cover + reveal + overwatch. 8 > 5 so it already reads as 'outnumbered'."
+    },
+    {
+      "mission": 2, "name_suggestion": "Sweep", "xcom_analog": "EU Moderate abduction",
+      "map_tiles": "52x52", "squad_size": 5,
+      "enemy_count": 10, "enemy_to_squad_ratio": "2.0x",
+      "pod_layout": [{"size": 3, "tier": 1}, {"size": 3, "tier": 1}, {"size": 2, "tier": 2}, {"size": 2, "tier": 1}],
+      "enemy_types": ["tier-1 grunts", "introduce 1 tier-2 unit (a Muton-equivalent bruiser or a flyer)"],
+      "notes": "Allow up to 2 pods active. First tier-2 enemy as a difficulty spike inside one pod."
+    },
+    {
+      "mission": 3, "name_suggestion": "Terror in the Sector", "xcom_analog": "EU Terror Site",
+      "map_tiles": "56x56", "squad_size": 5,
+      "enemy_count": 12, "enemy_to_squad_ratio": "2.4x",
+      "pod_layout": [{"size": 3, "tier": 2}, {"size": 3, "tier": 1}, {"size": 3, "tier": 2}, {"size": 3, "tier": 1}],
+      "enemy_types": ["mix tier-1/tier-2", "add a melee RUSHER (Chryssalid/Stun-Lancer analog) to force aggression", "optional civilians-die-each-turn objective"],
+      "notes": "Mid-game wall. 4 pods. Introduce a special MOVER (rusher) so the player can't just turtle on overwatch."
+    },
+    {
+      "mission": 4, "name_suggestion": "Hard Target", "xcom_analog": "EU Difficult abduction / X2 Guerrilla Op (timed)",
+      "map_tiles": "60x60", "squad_size": 5,
+      "enemy_count": 14, "enemy_to_squad_ratio": "2.8x",
+      "pod_layout": [{"size": 3, "tier": 2}, {"size": 3, "tier": 2}, {"size": 3, "tier": 1}, {"size": 3, "tier": 2}, {"size": 2, "tier": 3}],
+      "enemy_types": ["mostly tier-2", "first tier-3 unit (a tank or controller) in a 2-pod", "consider a turn timer (objective fails at 0) to add X2 pressure"],
+      "notes": "First tier-3 enemy. Add a telegraphed reinforcement drop (1 pod of 2-3 arrives turn ~4) to teach the flare mechanic."
+    },
+    {
+      "mission": 5, "name_suggestion": "Heavy Resistance", "xcom_analog": "EU UFO Landing / X2 Supply Raid",
+      "map_tiles": "64x64", "squad_size": 5,
+      "enemy_count": 16, "enemy_to_squad_ratio": "3.2x",
+      "pod_layout": [{"size": 3, "tier": 2}, {"size": 3, "tier": 3}, {"size": 3, "tier": 2}, {"size": 3, "tier": 2}, {"size": 2, "tier": 3}, {"size": 2, "tier": 1}],
+      "enemy_types": ["tier-2 core", "2 tier-3 units (a heavy + a flyer or controller)", "1 special mover"],
+      "notes": "6 pods. Big map = traversal matters; spread pods so the squad reveals them across ~8-10 turns. Reinforcements optional."
+    },
+    {
+      "mission": 6, "name_suggestion": "Stronghold Assault", "xcom_analog": "EU Alien Base / X2 Facility",
+      "map_tiles": "68x68", "squad_size": 5,
+      "enemy_count": 18, "enemy_to_squad_ratio": "3.6x",
+      "pod_layout": [{"size": 3, "tier": 3}, {"size": 3, "tier": 2}, {"size": 3, "tier": 3}, {"size": 3, "tier": 2}, {"size": 3, "tier": 3}, {"size": 3, "tier": 2}],
+      "enemy_types": ["tier-2/tier-3 heavy mix", "include the toughest non-boss units (Sectopod/Gatekeeper/Andromedon analogs)"],
+      "notes": "6 full pods of 3. Penultimate. Interior 'base' parcel feel. Consider a mini-boss enemy (two-stage tank) in the rear pod."
+    },
+    {
+      "mission": 7, "name_suggestion": "Final Stand", "xcom_analog": "EU Temple Ship / X2 Fortress (Avatar)",
+      "map_tiles": "72x72", "squad_size": 5,
+      "enemy_count": 22, "enemy_to_squad_ratio": "4.4x",
+      "pod_layout": [{"size": 3, "tier": 3}, {"size": 3, "tier": 3}, {"size": 3, "tier": 2}, {"size": 3, "tier": 3}, {"size": 3, "tier": 2}, {"size": 3, "tier": 3}, {"size": 1, "tier": 4, "role": "BOSS"}],
+      "enemy_types": ["tier-3 heavy mix as the gauntlet", "1 BOSS unit (Ethereal/Avatar/Chosen analog: high HP, teleport/summon/psi, freezes any timer)"],
+      "notes": "22 vs 5 (4.4x) = the climactic swarm. Boss pod is a single powerful unit guarding the objective; clear the gauntlet pods to reach it. Could spawn add-waves (Lost-style) during the boss fight."
+    }
+  ],
+
+  "campaign_ramp_meta": {
+    "directly_usable": "enemy_count and pod_layout are ready to drive a generator. Algorithm: for mission i, read enemy_count -> instantiate pods from pod_layout -> for each pod pick (size) enemies of the given tier from a tier-bucketed roster -> place pod at a patrol anchor spread across the map_tiles grid -> set pod dormant. tier buckets map to enemy_roster[].tier (1=grunt,2=mid,3=heavy,4=boss).",
+    "ratio_curve": "1.6x -> 2.0 -> 2.4 -> 2.8 -> 3.2 -> 3.6 -> 4.4x. Always > 1x (aliens always outnumber the squad), escalating like XCOM's early-abduction-to-final-mission curve.",
+    "vs_xcom_canon": "M1-2 ~ EU early abductions (6-10). M3 ~ Terror (12). M4-5 ~ Difficult/UFO (14-16). M6 ~ Alien Base (18, vs canon 21). M7 ~ final swarm (22, vs canon Temple Ship/Battleship 20-26). Counts sit just under EU's late canon to stay fair for a 5-squad with a browser UI.",
+    "if_owner_wants_even_more": "Multiply enemy_count by 1.25-1.5 and raise pods accordingly (cap active pods at 2-3 so it stays playable). LW2 bands (up to 31-34) are the ceiling if you want true swarms - but raise squad size and add AoE tools to match."
+  },
+
+  "difficulty_knobs": {
+    "headline": "XCOM scales difficulty by tuning, in order of impact: (1) enemy COUNT + POD SIZE, (2) enemy HP, (3) enemy AIM/crit, (4) pod composition (tougher species earlier), (5) timers, (6) soldier HP/economy. The clone should expose these as per-difficulty multipliers.",
+
+    "EU2012": {
+      "source": "ufopaedia Alien_Deployment + per-enemy stat tables (canonical). Difficulties: Easy, Normal, Classic, Impossible.",
+      "enemy_count": "Same pod COUNT across most difficulties, but Impossible adds +1 to the rolled abduction difficulty AND removes per-species caps (e.g. 5 Sectopods can appear on a Terror site). Total aliens per mission rise on Classic/Impossible (abduction Difficult = 8 on Easy/Normal/Classic but 10 on Impossible; Very Difficult = 10 -> 12).",
+      "enemy_hp": "Most aliens gain HP on Classic/Impossible (Sectoid 3->4, Thin Man 4->6, Floater 4->6, Muton 10->10, Heavy Floater 14->16, Cyberdisc 16->20, Mechtoid 22->24, Muton Elite 14->18, Ethereal 20->25, Berserker 20->25). Sectopod flat 30.",
+      "enemy_aim": "Aim rises on Classic/Impossible (Sectoid 65->75, Muton 70->80, Cyberdisc 70->80, Muton Elite 80->90/100, Sectopod 80->90).",
+      "pod_size": "Higher difficulty favors 3-alien pods over 2.",
+      "player_side": "Lower difficulty = more soldier HP/aim leeway, cheaper research, slower panic. (EU base game is largely UNTIMED regardless of difficulty.)"
+    },
+
+    "XCOM2": {
+      "source": "Fandom Game_difficulty_(XCOM2) summary (community-measured). Difficulties: Rookie, Veteran, Commander, Legend.",
+      "pod_size": "The big lever. Veteran = mostly 2 enemies/pod. Commander/Legend = mostly 3/pod. (Force Level also raises pod size as the campaign advances.)",
+      "enemy_hp": "Enemies gain HP each step (see roster Rookie/Vet/Cmd/Legend columns: e.g. Sectoid 7/8/8/10, Muton 8/8/9/11, Archon 12/18/20/24, Gatekeeper 20/20/25/30, Andromedon 12/15/18/21). Some gain ARMOR on Commander+.",
+      "enemy_aim_crit": "Aim/crit rise (e.g. ADVENT Officer gains innate +10 crit on Commander/Legend; many aim bumps Rookie->Veteran).",
+      "timers": "Mission turn timers are TIGHTER on higher difficulty / Force Level (Guerrilla Ops ~6-8 turns, Council ~12). WOTC option can DOUBLE all timers.",
+      "force_level": "FL 1->20 drives WHICH enemies appear and how big pods are over the campaign (the real progression engine; see enemy_progression). Beyond FL20, no further composition change.",
+      "player_side": "Higher difficulty = less soldier HP, slower will recovery, harsher economy, faster Avatar doom clock."
+    },
+
+    "clone_recommendation": {
+      "expose_per_difficulty": {
+        "enemy_count_mult": "Easy 0.8 / Normal 1.0 / Hard 1.2 (apply to campaign_ramp enemy_count, then re-pod).",
+        "pod_size_target": "Easy 2 / Normal 3 / Hard 3 (Hard also raises max active pods).",
+        "enemy_hp_mult": "Easy 0.85 / Normal 1.0 / Hard 1.2 (or use the 4-column native stats directly).",
+        "enemy_aim_add": "Easy -10 / Normal 0 / Hard +10 (on the 0-100 aim before /100).",
+        "enemy_crit_add": "Easy 0 / Normal 0 / Hard +10.",
+        "timer": "Easy = none/long / Normal = generous / Hard = XCOM-tight (expose per-mission turn_limit, null=untimed).",
+        "active_pod_cap": "Easy 1 / Normal 2 / Hard 3 (how many pods may be in 'active' state simultaneously)."
+      },
+      "ordering": "Tune COUNT/POD-SIZE first (biggest felt difference), then HP, then aim/crit, then timers. Do NOT just inflate aim - XCOM's difficulty is mostly 'more, tankier enemies in bigger pods', which is exactly what the owner is asking for."
+    }
+  },
+
+  "sources": [
+    "https://www.ufopaedia.org/index.php/Alien_Deployment_(EU2012)  [CANONICAL - EU pod/alien-count-per-mission tables, scraped via urllib]",
+    "https://www.ufopaedia.org/index.php/Movement_(EU2012)  [CANONICAL - EU mobility->tiles conversion: 12 mob = 7 blue/15 dash]",
+    "https://www.ufopaedia.org/index.php/Maps_(EU2012)  [CANONICAL - EU map counts; per-map tile dims NOT published]",
+    "https://www.ufopaedia.org/index.php/Sectoid_(EU2012)  [CANONICAL - and the 14 other eu per-enemy stat pages: Sectoid_Commander, Thin_Man, Floater, Heavy_Floater, Muton, Muton_Elite, Berserker, Cyberdisc, Drone, Chryssalid, Sectopod, Ethereal, Outsider, Mechtoid - all _(EU2012)]",
+    "https://www.ufopaedia.org/index.php/Sectoid_(XCOM2)  [CANONICAL - and the X2 per-enemy stat pages: Viper, Muton, Archon, Andromedon, Gatekeeper, Faceless, Chryssalid, Sectopod, ADVENT_Trooper, ADVENT_Officer, ADVENT_Stun_Lancer, ADVENT_Shieldbearer, ADVENT_MEC, ADVENT_Turret - all _(XCOM2), scraped via urllib. Codex_(XCOM2) page is a stub.]",
+    "https://media.gdcvault.com/gdc2018/presentations/Hess_Brian_PlotAndParcel.pdf  [CANONICAL/PRIMARY - Firaxis GDC 2018; parcel sizes 12x12/12x24/24x24, 80 plots/200+ parcels/450+ PCPs; PDF downloaded + text-extracted]",
+    "https://gdcvault.com/play/1025387/Plot-and-Parcel-Procedural-Level  [GDC talk landing]",
+    "https://steamcommunity.com/app/268500/discussions/0/412447331651337721/  [community-measured - X2 enemy totals per rating]",
+    "https://steamcommunity.com/app/268500/discussions/0/358416640397568532/  [community-measured - X2 pod size by difficulty]",
+    "https://steamcommunity.com/app/268500/discussions/0/364041776196273323/  [community-measured - X2 pod activation/scamper/patrol]",
+    "https://steamcommunity.com/app/268500/discussions/0/1474221865203999530/  [community-measured - X2 AI targeting: kill-shot>flank, cover logic]",
+    "https://gamefaqs.gamespot.com/boards/655782-xcom-enemy-unknown/63878777  [community-measured - EU map tile sizes 40-60/side, base 60x60]",
+    "https://steamcommunity.com/app/200510/discussions/0/846964363960693455/  [community-measured - EU map sizes]",
+    "https://xcom.fandom.com/wiki/Game_difficulty_(XCOM_2)  [community-secondary via WebSearch - difficulty knobs; Fandom 403s direct fetch]",
+    "https://xcom.fandom.com/wiki/Mobility  [community-secondary via WebSearch - X2 mobility 12=8 blue/16 dash]",
+    "https://xcom.fandom.com/wiki/The_Chosen  [community-secondary via WebSearch - Chosen HP/armor/dodge]",
+    "http://www.vigaroe.com/  [fan datamine blog - DNS-unreachable from this box; Codex/Sectopod/Turret/Andromedon-armor/Lost/Chosen numbers came via WebSearch SNIPPETS only, flagged community-measured per affected roster entries]",
+    "https://www.ufopaedia.org/index.php/ADVENT_Unit_Deployments_(LW2)  [CANONICAL for the LONG WAR 2 MOD only - activity-level bands 7-34; NOT vanilla]"
+  ]
+}

@@ -1,0 +1,204 @@
+{
+  "titan": "molo",
+  "biome": "grideast",
+  "seed": 3,
+  "url": "http://localhost:5258/?dev=1&seed=3",
+  "seconds": 120.0,
+  "menus": {
+    "steps": [
+      "title\u2192select",
+      "titan confirmed",
+      "biome confirmed (DROP IN)"
+    ],
+    "firstScreen": "title",
+    "titanNav": "detected (0 key presses)",
+    "biomeNav": "detected (0 key presses)",
+    "afterDrop": "slate",
+    "titan": "molo",
+    "biome": "grideast"
+  },
+  "eventPolls": 1374,
+  "finalState": {
+    "screen": "play",
+    "titan": "molo",
+    "biome": "grideast",
+    "seed": 2061689331,
+    "t": 119.833,
+    "tick": 3595,
+    "rank": 1,
+    "height": 5.145,
+    "level": 7,
+    "xp": 1.346,
+    "hp": 252,
+    "maxHp": 252,
+    "mass": 95.551,
+    "x": 11.027,
+    "z": 39.714,
+    "heading": -26.704,
+    "enemies": 10,
+    "pickups": 0,
+    "floorsEaten": 0,
+    "buildingsLeveled": 0,
+    "propsEaten": 95,
+    "kills": 47,
+    "crushed": 0,
+    "drafts": {
+      "pending": 1,
+      "levelUps": 1,
+      "chests": 0,
+      "rerolls": 1,
+      "offer": null
+    },
+    "owned": {
+      "night_shift_nurse": 1,
+      "noise_ordinance": 1,
+      "rebar_molars": 1,
+      "molo_storm_drain_throat": 1,
+      "lost_and_found": 1
+    },
+    "boss": null,
+    "run": {
+      "phase": "waves",
+      "endT": -1,
+      "result": null,
+      "tonnage": 190,
+      "blocksLeveled": 0,
+      "peakRank": 1
+    },
+    "fps": 32.1,
+    "draws": 160,
+    "tris": 953256,
+    "programs": 142
+  },
+  "pass": true,
+  "fatal": null,
+  "zoom": {
+    "ok": true,
+    "detail": "wheel out \u00d76: zoom 2.00 (D 67.9 / auto 33.9) \u00b7 '=' held: zoom 0.55 \u00b7 Z: zoom 1.000 target 1.000"
+  },
+  "metrics": {
+    "moved": 675.8587772597673,
+    "propsEaten0": 0,
+    "floorsEaten0": 0,
+    "props": 95,
+    "floors": 0,
+    "level": 7,
+    "rank": 1,
+    "draftsTaken": 5,
+    "draftsFailed": 0,
+    "spacePresses": 13,
+    "shiftPresses": 24,
+    "hookConfirmedByCd": 13,
+    "dashConfirmedByCharges": 24,
+    "hpLost": 15.721548832721908,
+    "pauses": 0,
+    "end": null,
+    "stuckDetours": 1,
+    "worldExposed": true,
+    "maxEnemies": 16
+  },
+  "events": {
+    "waveStart": 16,
+    "enemySpawn": 57,
+    "alert": 3,
+    "ability": 13,
+    "dash": 24,
+    "footstep": 409,
+    "propDestroyed": 95,
+    "pulse": 102,
+    "pickup": 173,
+    "titanAttack": 66,
+    "enemyFire": 203,
+    "projectileHit": 55,
+    "enemyHit": 144,
+    "enemyKilled": 47,
+    "titanHurt": 7,
+    "levelUp": 6,
+    "titanHeal": 1,
+    "objectiveSpawn": 3,
+    "bump": 1,
+    "smash": 12,
+    "objectiveDone": 1,
+    "powerupSpawn": 1,
+    "powerup": 1,
+    "ultCharged": 1,
+    "objectiveExpire": 1,
+    "rankUp": 1
+  },
+  "checks": [
+    [
+      "menus navigated by keys to molo + grideast",
+      true
+    ],
+    [
+      "slate dismissed by a real key",
+      true
+    ],
+    [
+      "moved > 20 m (675.9 m)",
+      true
+    ],
+    [
+      "ate props/floors \u2265 3 (props 95, floors 0)",
+      true
+    ],
+    [
+      "levelled up (LV 7)",
+      true
+    ],
+    [
+      "draft taken with 1/2/3, owned grew (5 taken, 0 failed)",
+      true
+    ],
+    [
+      "Space \u2192 hook effect (13 hook events, 13 cd-confirmed, 13 presses)",
+      true
+    ],
+    [
+      "Shift \u2192 dash effect (24 dash events, 24 charge-confirmed, 24 presses)",
+      true
+    ],
+    [
+      "0 console/page/window errors, 0 shader diagnostics, 0 failed requests",
+      true
+    ],
+    [
+      "camera zoom by real wheel / '=' / Z (wheel out \u00d76: zoom 2.00 (D 67.9 / auto 33.9) \u00b7 '=' held: zoom 0.55 \u00b7 Z: zoom 1.000 target 1.000)",
+      true
+    ]
+  ],
+  "shots": [
+    "_harness/scratch/l8/play\\playtest\\molo_grideast_title.png",
+    "_harness/scratch/l8/play\\playtest\\molo_grideast_select_titan.png",
+    "_harness/scratch/l8/play\\playtest\\molo_grideast_select_biome.png",
+    "_harness/scratch/l8/play\\playtest\\molo_grideast_slate.png",
+    "_harness/scratch/l8/play\\playtest\\molo_grideast_00.png",
+    "_harness/scratch/l8/play\\playtest\\molo_grideast_01.png",
+    "_harness/scratch/l8/play\\playtest\\molo_grideast_02.png",
+    "_harness/scratch/l8/play\\playtest\\molo_grideast_03.png",
+    "_harness/scratch/l8/play\\playtest\\molo_grideast_04.png",
+    "_harness/scratch/l8/play\\playtest\\molo_grideast_05.png",
+    "_harness/scratch/l8/play\\playtest\\molo_grideast_06.png",
+    "_harness/scratch/l8/play\\playtest\\molo_grideast_07.png"
+  ],
+  "diagnostics": {
+    "consoleErrors": [],
+    "shader": [],
+    "warnings": [],
+    "pageErrors": [],
+    "screenshotErrors": [],
+    "windowErrors": [],
+    "failedRequests": []
+  },
+  "log": [
+    "[molo/grideast] open http://localhost:5258/?dev=1&seed=3",
+    "[molo/grideast] menus: OK {\"steps\": [\"title\\u2192select\", \"titan confirmed\", \"biome confirmed (DROP IN)\"], \"firstScreen\": \"title\", \"titanNav\": \"detected (0 key presses)\", \"biomeNav\": \"detected (0 key presses)\", \"afterDrop\": \"slate\", \"titan\": \"molo\", \"biome\": \"grideast\"}",
+    "[molo/grideast] slate dismissed by Enter: True (screen=play)",
+    "[molo/grideast] zoom check: wheel out \u00d76: zoom 2.00 (D 67.9 / auto 33.9) \u00b7 '=' held: zoom 0.55 \u00b7 Z: zoom 1.000 target 1.000 \u2192 OK",
+    "[molo/grideast] draft #1: pressed Digit1 on offer ['night_shift_nurse', 'loose_masonry', 'bottomless_appetite'] \u2192 owned 0\u21921 (screen play)",
+    "[molo/grideast] draft #2: pressed Digit2 on offer ['rubble_brunch', 'noise_ordinance', 'overtime_shift'] \u2192 owned 1\u21922 (screen play)",
+    "[molo/grideast] draft #3: pressed Digit3 on offer ['long_crosswalk', 'turn_lane_extension', 'rebar_molars'] \u2192 owned 2\u21923 (screen play)",
+    "[molo/grideast] draft #4: pressed Digit1 on offer ['molo_storm_drain_throat', 'public_address_system', 'town_hall_rally'] \u2192 owned 3\u21924 (screen play)",
+    "[molo/grideast] draft #5: pressed Digit2 on offer ['fast_track_permit', 'lost_and_found', 'glass_ceiling'] \u2192 owned 4\u21925 (screen play)"
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "url": "https://snowflow-lilac.vercel.app/",
+  "viewport": [
+    1280,
+    720
+  ],
+  "shots": [
+    {
+      "name": "06-surf-wake",
+      "desc": "Mid-carve on the snow-surf, wake wall at full height.",
+      "tests": "swept wake mesh, breaking-wave cross-section, curl/overhang, two spray populations, streaks",
+      "settle": 1.2,
+      "walk": 5,
+      "hasAfter": true,
+      "hasHold": false,
+      "file": "06-surf-wake.png",
+      "pageErrors": []
+    },
+    {
+      "name": "08-spell-ribbon",
+      "desc": "Spell 2 \u2014 held stream drawing precessing figure-eights.",
+      "tests": "parallel-transported frame, ribbon continuity, thin scored lines in the snow, dynamic light",
+      "settle": 1,
+      "walk": 2.2,
+      "hasAfter": false,
+      "hasHold": false,
+      "file": "08-spell-ribbon.png",
+      "pageErrors": []
+    }
+  ],
+  "failed": []
+}

@@ -1,0 +1,65 @@
+nav_probe  pairs=300 seed=1 cell=0.75 mode=solo-walk driver=brain-poke(baseline)
+meridian_ward  nodes=17757 bake=288.29ms pairs=300
+   found 300/300 (100.00%)  arrived 288/300 (96.00%)  badSeg 458/1807
+   t/ideal mean=1.40 p95=2.89   t/line mean=1.68 p95=3.45   path/line mean=1.19 p95=1.67
+   stuck events=236 (>3s: 126, longest 10.00s)  snag episodes=879 in 261 runs  hug%=18.43  skipWP=1368
+     FAIL {"why":"timeout","s":[38.6,0,-25.1],"g":[-37.1,0,-14.6],"plen":78,"left":11.4,"at":[-39.6,0,-3.5]}
+     FAIL {"why":"timeout","s":[46.1,0,44.6],"g":[-14.6,0,43.9],"plen":61,"left":4,"at":[-13.6,0,47.7]}
+     FAIL {"why":"timeout","s":[41.6,0,-5.6],"g":[50.6,0,47.6],"plen":56,"left":6.2,"at":[56.5,0,45.7]}
+     FAIL {"why":"timeout","s":[-28.9,0,-10.9],"g":[28.9,0,14.6],"plen":92,"left":2,"at":[29.1,0,16.6]}
+     FAIL {"why":"timeout","s":[25.1,0,-28.9],"g":[-11.6,0,-20.6],"plen":42,"left":3.8,"at":[-13.4,0,-17.3]}
+     FAIL {"why":"timeout","s":[-10.9,0,-1.9],"g":[45.4,0,-5.6],"plen":67,"left":4.4,"at":[41.3,0,-4.1]}
+     FAIL {"why":"timeout","s":[-46.1,0,-18.4],"g":[-56.6,0,24.4],"plen":44,"left":5.2,"at":[-54.4,0,19.6]}
+     FAIL {"why":"timeout","s":[43.9,0,-36.4],"g":[-46.1,0,-14.6],"plen":99,"left":2.5,"at":[-46.7,0,-17.1]}
+     FAIL {"why":"timeout","s":[13.9,0,4.9],"g":[41.6,0,2.6],"plen":61,"left":4.8,"at":[43.6,0,7]}
+     FAIL {"why":"timeout","s":[-1.1,0,-26.6],"g":[1.9,0,0.4],"plen":27,"left":1.4,"at":[2.3,0,1.7]}
+     FAIL {"why":"timeout","s":[36.4,0,-14.6],"g":[-13.1,0,-5.6],"plen":54,"left":7,"at":[-9.9,0,0.6]}
+     FAIL {"why":"timeout","s":[38.6,0,-25.9],"g":[-35.6,0,-27.4],"plen":77,"left":2.7,"at":[-38.3,0,-27]}
+lanternwalk    nodes=14963 bake=177.94ms pairs=300
+   found 300/300 (100.00%)  arrived 249/300 (83.00%)  badSeg 753/2585
+   t/ideal mean=1.53 p95=3.48   t/line mean=1.81 p95=4.02   path/line mean=1.17 p95=1.55
+   stuck events=425 (>3s: 225, longest 11.50s)  snag episodes=1518 in 274 runs  hug%=29.84  skipWP=2851
+     FAIL {"why":"timeout","s":[-7.4,0,-43.4],"g":[-32.1,0,14.4],"plen":77,"left":15.6,"at":[-47.7,0,13.6]}
+     FAIL {"why":"timeout","s":[-3.6,0,15.9],"g":[42.9,0,22.6],"plen":51,"left":10.7,"at":[33.5,0,27.7]}
+     FAIL {"why":"timeout","s":[-29.1,0,-23.9],"g":[45.9,0,-11.1],"plen":78,"left":5.4,"at":[40.8,0,-13]}
+     FAIL {"why":"timeout","s":[-7.4,0,-0.6],"g":[-48.6,0,4.6],"plen":45,"left":23,"at":[-25.6,0,3.1]}
+     FAIL {"why":"timeout","s":[13.6,0,-20.9],"g":[-50.9,0,-17.8],"plen":68,"left":7.3,"at":[-43.9,0,-15.7]}
+     FAIL {"why":"timeout","s":[27.9,0,-11.9],"g":[3.9,0,-26.9],"plen":30,"left":5.4,"at":[1,0,-31.4]}
+     FAIL {"why":"timeout","s":[-23.9,0,-36.6],"g":[-38.1,2.7,-16.4],"plen":69,"left":1.2,"at":[-37.2,0,-15.6]}
+     FAIL {"why":"timeout","s":[-35.1,0,30.1],"g":[1.3,0,-50.9],"plen":104,"left":8.1,"at":[8.2,0,-46.7]}
+     FAIL {"why":"timeout","s":[-28.8,0,10.6],"g":[30.9,0,9.1],"plen":61,"left":58.9,"at":[-27.9,0,12.6]}
+     FAIL {"why":"timeout","s":[-4.4,0,6.9],"g":[-2.1,0,-5.1],"plen":12,"left":7.4,"at":[5.2,0,-4]}
+     FAIL {"why":"timeout","s":[-29.1,0,14.4],"g":[37.6,0,-35.1],"plen":93,"left":82.1,"at":[-30.1,0,11.2]}
+     FAIL {"why":"timeout","s":[-44.1,0,-17.1],"g":[-8.1,0,17.4],"plen":54,"left":24.9,"at":[-27,3.6,1.2]}
+switchyard     nodes=16879 bake=165.08ms pairs=300
+   found 300/300 (100.00%)  arrived 241/300 (80.33%)  badSeg 891/3002
+   t/ideal mean=1.81 p95=3.77   t/line mean=2.01 p95=4.27   path/line mean=1.11 p95=1.38
+   stuck events=483 (>3s: 250, longest 35.50s)  snag episodes=1890 in 285 runs  hug%=30.41  skipWP=3096
+     FAIL {"why":"timeout","s":[16.4,0,-14.6],"g":[9.7,0,25.1],"plen":49,"left":7.9,"at":[8.6,0,17.3]}
+     FAIL {"why":"timeout","s":[-24.9,0,-40.8],"g":[-43.6,1.2,-25.9],"plen":28,"left":2.6,"at":[-41.2,0,-25]}
+     FAIL {"why":"timeout","s":[-34.6,0,13.1],"g":[-9.9,0,1.1],"plen":30,"left":6.7,"at":[-3.3,0,1.9]}
+     FAIL {"why":"timeout","s":[-33.1,0,18.4],"g":[19.4,0,-22.9],"plen":68,"left":4.4,"at":[15.2,0,-24.2]}
+     FAIL {"why":"timeout","s":[29.1,0,-22.9],"g":[-31.6,0,-9.4],"plen":68,"left":12.2,"at":[-35.4,0,2.2]}
+     FAIL {"why":"timeout","s":[-33.1,0,-34.9],"g":[-27.9,0,1.1],"plen":37,"left":3.4,"at":[-25.5,0,-1.2]}
+     FAIL {"why":"timeout","s":[24.2,0,-21.4],"g":[-36.4,1.2,-4.1],"plen":68,"left":25.2,"at":[-13,0,-13.4]}
+     FAIL {"why":"timeout","s":[-9.9,0,-43.6],"g":[-27.6,0,12.4],"plen":67,"left":3.2,"at":[-27.7,0,15.6]}
+     FAIL {"why":"timeout","s":[44.6,0,-28.9],"g":[34.4,1.2,37.9],"plen":70,"left":18.4,"at":[32.6,0,19.6]}
+     FAIL {"why":"timeout","s":[-32.4,0,-25.9],"g":[5.9,0,-0.4],"plen":48,"left":2.6,"at":[8.5,0,0]}
+     FAIL {"why":"timeout","s":[-43.6,0,24.4],"g":[21.6,0,-25.1],"plen":86,"left":3.7,"at":[19.4,0,-22.2]}
+     FAIL {"why":"timeout","s":[-7.6,0,-10.1],"g":[-32.4,0,21.4],"plen":41,"left":3.9,"at":[-29.7,0,18.6]}
+saltmarket     nodes=14717 bake=114.35ms pairs=300
+   found 300/300 (100.00%)  arrived 247/300 (82.33%)  badSeg 1273/4208
+   t/ideal mean=1.75 p95=3.37   t/line mean=2.64 p95=6.03   path/line mean=1.53 p95=3.33
+   stuck events=530 (>3s: 301, longest 11.00s)  snag episodes=2854 in 294 runs  hug%=34.95  skipWP=4224
+     FAIL {"why":"timeout","s":[15.1,0,-4.6],"g":[8.4,0,5.9],"plen":14,"left":3.4,"at":[7.5,1.1,2.6]}
+     FAIL {"why":"timeout","s":[-41.9,0,-39.1],"g":[-8.1,0,29.9],"plen":86,"left":17.4,"at":[-15.7,0,14.2]}
+     FAIL {"why":"timeout","s":[10.6,0,-18.1],"g":[38.4,0,-12.6],"plen":61,"left":26.6,"at":[12.4,0,-18.2]}
+     FAIL {"why":"timeout","s":[-9.6,0,-34.6],"g":[21.9,0,16.4],"plen":117,"left":6.5,"at":[28.2,0,14.5]}
+     FAIL {"why":"timeout","s":[-29.1,0,-1.6],"g":[-53.1,0,29.9],"plen":78,"left":7,"at":[-48.6,0,24.6]}
+     FAIL {"why":"timeout","s":[39.9,0,16.4],"g":[-39.6,0,13.1],"plen":102,"left":3.2,"at":[-40.7,0,16.1]}
+     FAIL {"why":"timeout","s":[-47.9,0,-4.6],"g":[-53.1,0,12.6],"plen":97,"left":40.6,"at":[-17.3,1.1,-6.6]}
+     FAIL {"why":"timeout","s":[34.6,0,0.6],"g":[31.6,0,-15.9],"plen":86,"left":30,"at":[9.9,0,4.7]}
+     FAIL {"why":"timeout","s":[8.7,0,14.1],"g":[-52.4,0,11.4],"plen":93,"left":36.2,"at":[-22.1,0,-8.4]}
+     FAIL {"why":"timeout","s":[-7.4,0,11.4],"g":[35.4,0,35.1],"plen":84,"left":7.3,"at":[30.4,0,29.8]}
+     FAIL {"why":"timeout","s":[-7.4,0,-28.6],"g":[-32.1,0,11.9],"plen":90,"left":23.4,"at":[-19.6,0,-7.9]}
+     FAIL {"why":"timeout","s":[-5.1,0,-12.6],"g":[-53.1,0,-30.9],"plen":63,"left":4,"at":[-49.8,0,-28.5]}

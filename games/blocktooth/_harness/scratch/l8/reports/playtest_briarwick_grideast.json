@@ -1,0 +1,209 @@
+{
+  "titan": "briarwick",
+  "biome": "grideast",
+  "seed": 6,
+  "url": "http://localhost:5258/?dev=1&seed=6",
+  "seconds": 120.0,
+  "menus": {
+    "steps": [
+      "title\u2192select",
+      "titan confirmed",
+      "biome confirmed (DROP IN)"
+    ],
+    "firstScreen": "title",
+    "titanNav": "detected (3 key presses)",
+    "biomeNav": "detected (0 key presses)",
+    "afterDrop": "slate",
+    "titan": "briarwick",
+    "biome": "grideast"
+  },
+  "eventPolls": 1330,
+  "finalState": {
+    "screen": "play",
+    "titan": "briarwick",
+    "biome": "grideast",
+    "seed": 1670745630,
+    "t": 109.9,
+    "tick": 3297,
+    "rank": 1,
+    "height": 5,
+    "level": 7,
+    "xp": 15.169,
+    "hp": 237.885,
+    "maxHp": 247.277,
+    "mass": 101.213,
+    "x": 84.827,
+    "z": 18.947,
+    "heading": -29.845,
+    "enemies": 11,
+    "pickups": 5,
+    "floorsEaten": 2,
+    "buildingsLeveled": 1,
+    "propsEaten": 70,
+    "kills": 95,
+    "crushed": 0,
+    "drafts": {
+      "pending": 0,
+      "levelUps": 0,
+      "chests": 0,
+      "rerolls": 1,
+      "offer": null
+    },
+    "owned": {
+      "spare_parts_bin": 2,
+      "padded_bumpers": 2,
+      "zoning_variance": 1,
+      "seismic_retrofit": 1
+    },
+    "boss": null,
+    "run": {
+      "phase": "waves",
+      "endT": -1,
+      "result": null,
+      "tonnage": 318,
+      "blocksLeveled": 0,
+      "peakRank": 1
+    },
+    "fps": 19.3,
+    "draws": 197,
+    "tris": 1036474,
+    "programs": 142
+  },
+  "pass": true,
+  "fatal": null,
+  "zoom": {
+    "ok": true,
+    "detail": "wheel out \u00d76: zoom 2.00 (D 67.9 / auto 33.9) \u00b7 '=' held: zoom 0.55 \u00b7 Z: zoom 1.000 target 1.000"
+  },
+  "metrics": {
+    "moved": 694.4046246625359,
+    "propsEaten0": 0,
+    "floorsEaten0": 0,
+    "props": 70,
+    "floors": 2,
+    "level": 7,
+    "rank": 1,
+    "draftsTaken": 6,
+    "draftsFailed": 0,
+    "spacePresses": 11,
+    "shiftPresses": 23,
+    "hookConfirmedByCd": 11,
+    "dashConfirmedByCharges": 21,
+    "hpLost": 103.61695238095247,
+    "pauses": 0,
+    "end": null,
+    "stuckDetours": 1,
+    "worldExposed": true,
+    "maxEnemies": 17
+  },
+  "events": {
+    "waveStart": 14,
+    "enemySpawn": 106,
+    "alert": 3,
+    "enemyFire": 198,
+    "bloomSpawn": 11,
+    "spore": 50,
+    "ability": 11,
+    "dash": 22,
+    "footstep": 380,
+    "propDestroyed": 70,
+    "vine": 89,
+    "titanAttack": 89,
+    "pickup": 193,
+    "titanHurt": 41,
+    "projectileHit": 142,
+    "enemyHit": 100,
+    "enemyKilled": 95,
+    "titanHeal": 35,
+    "smash": 31,
+    "levelUp": 6,
+    "bump": 2,
+    "objectiveSpawn": 2,
+    "ultCharged": 1,
+    "objectiveExpire": 2,
+    "upgradeProc": 2,
+    "rankUp": 1,
+    "floorBreak": 2,
+    "buildingCollapse": 1
+  },
+  "checks": [
+    [
+      "menus navigated by keys to briarwick + grideast",
+      true
+    ],
+    [
+      "slate dismissed by a real key",
+      true
+    ],
+    [
+      "moved > 20 m (694.4 m)",
+      true
+    ],
+    [
+      "ate props/floors \u2265 3 (props 70, floors 2)",
+      true
+    ],
+    [
+      "levelled up (LV 7)",
+      true
+    ],
+    [
+      "draft taken with 1/2/3, owned grew (6 taken, 0 failed)",
+      true
+    ],
+    [
+      "Space \u2192 hook effect (50 hook events, 11 cd-confirmed, 11 presses)",
+      true
+    ],
+    [
+      "Shift \u2192 dash effect (22 dash events, 21 charge-confirmed, 23 presses)",
+      true
+    ],
+    [
+      "0 console/page/window errors, 0 shader diagnostics, 0 failed requests",
+      true
+    ],
+    [
+      "camera zoom by real wheel / '=' / Z (wheel out \u00d76: zoom 2.00 (D 67.9 / auto 33.9) \u00b7 '=' held: zoom 0.55 \u00b7 Z: zoom 1.000 target 1.000)",
+      true
+    ]
+  ],
+  "shots": [
+    "_harness/scratch/l8/play\\playtest\\briarwick_grideast_title.png",
+    "_harness/scratch/l8/play\\playtest\\briarwick_grideast_select_titan.png",
+    "_harness/scratch/l8/play\\playtest\\briarwick_grideast_select_biome.png",
+    "_harness/scratch/l8/play\\playtest\\briarwick_grideast_slate.png",
+    "_harness/scratch/l8/play\\playtest\\briarwick_grideast_00.png",
+    "_harness/scratch/l8/play\\playtest\\briarwick_grideast_01.png",
+    "_harness/scratch/l8/play\\playtest\\briarwick_grideast_02.png",
+    "_harness/scratch/l8/play\\playtest\\briarwick_grideast_03.png",
+    "_harness/scratch/l8/play\\playtest\\briarwick_grideast_04.png",
+    "_harness/scratch/l8/play\\playtest\\briarwick_grideast_05.png",
+    "_harness/scratch/l8/play\\playtest\\briarwick_grideast_06.png",
+    "_harness/scratch/l8/play\\playtest\\briarwick_grideast_07.png"
+  ],
+  "diagnostics": {
+    "consoleErrors": [],
+    "shader": [],
+    "warnings": [],
+    "pageErrors": [],
+    "screenshotErrors": [],
+    "windowErrors": [],
+    "failedRequests": []
+  },
+  "log": [
+    "[briarwick/grideast] open http://localhost:5258/?dev=1&seed=6",
+    "[briarwick/grideast]     ArrowRight \u2192 focus VOLT-KITE",
+    "[briarwick/grideast]     ArrowRight \u2192 focus HEARTHBACK",
+    "[briarwick/grideast]     ArrowRight \u2192 focus BRIARWICK",
+    "[briarwick/grideast] menus: OK {\"steps\": [\"title\\u2192select\", \"titan confirmed\", \"biome confirmed (DROP IN)\"], \"firstScreen\": \"title\", \"titanNav\": \"detected (3 key presses)\", \"biomeNav\": \"detected (0 key presses)\", \"afterDrop\": \"slate\", \"titan\": \"briarwick\", \"biome\": \"grideast\"}",
+    "[briarwick/grideast] slate dismissed by Enter: True (screen=play)",
+    "[briarwick/grideast] zoom check: wheel out \u00d76: zoom 2.00 (D 67.9 / auto 33.9) \u00b7 '=' held: zoom 0.55 \u00b7 Z: zoom 1.000 target 1.000 \u2192 OK",
+    "[briarwick/grideast] draft #1: pressed Digit1 on offer ['spare_parts_bin', 'condemned_structure', 'public_address_system'] \u2192 owned 0\u21921 (screen play)",
+    "[briarwick/grideast] draft #2: pressed Digit2 on offer ['night_shift_nurse', 'padded_bumpers', 'seismic_retrofit'] \u2192 owned 1\u21922 (screen play)",
+    "[briarwick/grideast] draft #3: pressed Digit3 on offer ['property_line_dispute', 'fast_track_permit', 'spare_parts_bin'] \u2192 owned 2\u21923 (screen play)",
+    "[briarwick/grideast] draft #4: pressed Digit1 on offer ['zoning_variance', 'second_helping', 'downspout_suction'] \u2192 owned 3\u21924 (screen play)",
+    "[briarwick/grideast] draft #5: pressed Digit2 on offer ['code_violation', 'padded_bumpers', 'express_lane'] \u2192 owned 4\u21925 (screen play)",
+    "[briarwick/grideast] draft #6: pressed Digit3 on offer ['rebar_molars', 'utility_easement', 'seismic_retrofit'] \u2192 owned 5\u21926 (screen play)"
+  ]
+}

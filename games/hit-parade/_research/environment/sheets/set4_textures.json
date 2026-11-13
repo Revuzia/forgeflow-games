@@ -1,0 +1,293 @@
+[
+ {
+  "label": "PH asphalt_01",
+  "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_01/diffuse.jpg",
+  "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_01/rough.jpg",
+  "lic": "CC0 (Poly Haven)",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "PH asphalt_02",
+  "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_02/diffuse.jpg",
+  "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_02/rough.jpg",
+  "lic": "CC0 (Poly Haven)",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "PH asphalt_03",
+  "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_03/diffuse.jpg",
+  "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_03/rough.jpg",
+  "lic": "CC0 (Poly Haven)",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "PH asphalt_04",
+  "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_04/diffuse.jpg",
+  "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_04/rough.jpg",
+  "lic": "CC0 (Poly Haven)",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "PH asphalt_05",
+  "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_05/diffuse.jpg",
+  "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_05/rough.jpg",
+  "lic": "CC0 (Poly Haven)",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "PH asphalt_06",
+  "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_06/diffuse.jpg",
+  "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_06/rough.jpg",
+  "lic": "CC0 (Poly Haven)",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "PH asphalt_07",
+  "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_07/diffuse.jpg",
+  "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_07/rough.jpg",
+  "lic": "CC0 (Poly Haven)",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "PH asphalt_floor",
+  "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_floor/diffuse.jpg",
+  "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_floor/rough.jpg",
+  "lic": "CC0 (Poly Haven)",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "PH asphalt_pit_lane",
+  "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_pit_lane/diffuse.jpg",
+  "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_pit_lane/rough.jpg",
+  "lic": "CC0 (Poly Haven)",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "PH bitumen",
+  "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/bitumen/diffuse.jpg",
+  "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/bitumen/rough.jpg",
+  "lic": "CC0 (Poly Haven)",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "PH asbestos_sheet",
+  "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asbestos_sheet/diffuse.jpg",
+  "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asbestos_sheet/rough.jpg",
+  "lic": "CC0 (Poly Haven)",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "PH asbestos_sheet_02",
+  "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asbestos_sheet_02/diffuse.jpg",
+  "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asbestos_sheet_02/rough.jpg",
+  "lic": "CC0 (Poly Haven)",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "PH anti_slip_concrete",
+  "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/anti_slip_concrete/diffuse.jpg",
+  "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/anti_slip_concrete/rough.jpg",
+  "lic": "CC0 (Poly Haven)",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "JP JP_Concrete",
+  "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Concrete/JP_Concrete_A.tga",
+  "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Concrete/JP_Concrete_N.tga",
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "JP JP_Roof",
+  "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Roof/JP_Roof_A.tga",
+  "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Roof/JP_Roof_N.tga",
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "JP JP_Sidewalk",
+  "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Sidewalk/JP_Sidewalk_A.tga",
+  "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Sidewalk/JP_Sidewalk_N.tga",
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "JP JP_Red_Brick",
+  "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Red_Brick/JP_Red_Brick_A.tga",
+  "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Red_Brick/JP_Red_Brick_N.tga",
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "JP JP_Road_Hatches",
+  "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Road_Hatches/JP_Road_Hatches_A.tga",
+  "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Road_Hatches/JP_Road_Hatches_N.tga",
+  "lic": "Unity Asset Store EULA",
+  "tile": false,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "JP JP_Conditioner",
+  "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Conditioner/JP_Conditioner_A.tga",
+  "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Conditioner/JP_Conditioner_N.tga",
+  "lic": "Unity Asset Store EULA",
+  "tile": false,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "Blink Cracked_Concrete_Floor",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Cracked_Concrete_Floor/Cracked_Concrete_Floor_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Cracked_Concrete_Floor/Cracked_Concrete_Floor_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Cracked_Concrete_Floor/Cracked_Concrete_Floor_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ }
+]

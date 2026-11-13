@@ -1,0 +1,69 @@
+ASCENDANT - prop asset credits
+==============================================================================
+
+Every .glb in assets/props/<theme>/ was derived from a pack already vendored in
+forgeflow-games/pipeline/assets/3d-models/. Source packs:
+
+  [FP] Synty Fantasy Props (fantasy-props)
+  [MV] Synty Medieval Village MegaKit (medieval-village)
+  [PP] Poly Pizza community models (polypizza)
+
+glTF sources ([FP], [MV]) were re-baked to self-contained .glb by
+_spec-side tooling: node/mesh transforms flattened, the shared 2-7 MB Synty trim
+atlas sampled into per-vertex COLOR_0, and roughness/metalness taken from the
+median of the ORM map. No textures are embedded, so each prop is a few tens of
+kB instead of several MB. [PP] .glb files were copied verbatim.
+
+THEME     PROP ID        PACK      TRIS     BYTES  SOURCE FILE
+------------------------------------------------------------------------------------------------
+neon      crate.glb      PP         n/a     51876  _misc/Sci Fi Crate.glb
+neon      crate_small.glb PP         n/a      7636  _misc/Sci-fi Crate.glb
+neon      crate_tall.glb PP         n/a     46296  _misc/Scifi Crate.glb
+neon      container.glb  PP         n/a    243744  _misc/Scifi Container.glb
+neon      dumpster.glb   PP         n/a     19784  _misc/Dumpster.glb
+neon      coil.glb       FP        3744    165948  Chain_Coil.gltf
+neon      lantern.glb    FP        2822    125260  Lantern_Wall.gltf
+neon      cage.glb       FP        4588    182512  Cage_Small.gltf
+foundry   anvil.glb      FP         750     27248  Anvil.gltf
+foundry   anvil_log.glb  FP        3808    143196  Anvil_Log.gltf
+foundry   cauldron.glb   FP        2020     69692  Cauldron.gltf
+foundry   crate.glb      FP        2738    112208  Crate_Metal.gltf
+foundry   barrel.glb     FP         824     48492  Barrel.gltf
+foundry   bucket.glb     FP         540     21288  Bucket_Metal.gltf
+foundry   coil.glb       FP        3744    165948  Chain_Coil.gltf
+foundry   torch.glb      FP         970     41936  Torch_Metal.gltf
+foundry   workbench.glb  FP        1368     57124  Workbench.gltf
+foundry   pickaxe.glb    FP         776     28748  Pickaxe_Bronze.gltf
+spire     rubble.glb     FP        1113     70040  Vase_Rubble_Medium.gltf
+spire     brick_a.glb    MV         108      4752  Prop_Brick1.gltf
+spire     brick_b.glb    MV         126      5420  Prop_Brick3.gltf
+spire     crate.glb      FP        1576     60904  Crate_Wooden.gltf
+spire     cage.glb       FP        4588    182512  Cage_Small.gltf
+spire     rope.glb       FP        1748     49392  Rope_1.gltf
+spire     torch.glb      FP         970     41936  Torch_Metal.gltf
+spire     coil.glb       FP        3744    165948  Chain_Coil.gltf
+spire     banner.glb     FP         119      5940  Banner_2_Cloth.gltf
+temple    chandelier.glb FP        5680    233976  Chandelier.gltf
+temple    candles.glb    FP        2528     84212  CandleStick_Triple.gltf
+temple    candle_stand.glb FP        5738    205216  CandleStick_Stand.gltf
+temple    banner.glb     FP         138      7092  Banner_1_Cloth.gltf
+temple    banner_alt.glb FP         119      5948  Banner_2_Cloth.gltf
+temple    chalice.glb    FP         458     17960  Chalice.gltf
+temple    coins.glb      FP         960     41936  Coin_Pile.gltf
+temple    urn.glb        FP         598     20664  Vase_2.gltf
+temple    urn_tall.glb   FP         598     21268  Vase_4.gltf
+temple    pot.glb        FP        1068     40892  Pot_1.gltf
+temple    lantern.glb    FP        2822    125260  Lantern_Wall.gltf
+temple    arch_shelf.glb FP        1286     57496  Shelf_Arch.gltf
+hub       chest.glb      FP        2546    123116  Chest_Wood.gltf
+hub       torch.glb      FP         970     41936  Torch_Metal.gltf
+hub       banner.glb     FP         138      7092  Banner_1_Cloth.gltf
+hub       crate.glb      FP        1576     60904  Crate_Wooden.gltf
+hub       barrel.glb     FP         824     48492  Barrel.gltf
+hub       bench.glb      FP         404     18716  Bench.gltf
+hub       stool.glb      FP         152     10388  Stool.gltf
+hub       bookcase.glb   FP        2148     83904  Bookcase_2.gltf
+hub       lantern.glb    FP        2822    125260  Lantern_Wall.gltf
+hub       coins.glb      FP         960     41936  Coin_Pile.gltf
+
+Total: 49 files, 3.40 MB

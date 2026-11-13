@@ -1,0 +1,10 @@
+<!doctype html><html><body style="margin:0;background:#222"><canvas id="c"></canvas>
+<script type="module">
+import * as THREE from 'three';
+const r = new THREE.WebGLRenderer({canvas: document.getElementById('c'), antialias: true});
+r.setSize(640, 360); const s = new THREE.Scene(); s.background = new THREE.Color('#9fd8f0');
+const cam = new THREE.PerspectiveCamera(30, 640/360, 0.1, 100); cam.position.set(6,5,6); cam.lookAt(0,0.5,0);
+const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1,0), new THREE.MeshToonMaterial({color:'#3fae7f', flatShading:true}));
+m.position.y = 1; s.add(m); s.add(new THREE.HemisphereLight('#fff','#446',1)); const d = new THREE.DirectionalLight('#fff',2); d.position.set(3,5,2); s.add(d);
+let n = 0; r.setAnimationLoop(() => { m.rotation.y += 0.02; r.render(s, cam); if (++n > 20) window.__SNAP_READY__ = true; });
+</script></body></html>

@@ -1,0 +1,19 @@
+{
+  "title": "Sanctum Assault",
+  "short_description": "Top-down isometric arena wave survival — three champions, dual Warrior weapon modes, five mystical realm boards, combos, Shock, and juicy combat.",
+  "description": "Sanctum Assault is a polished top-down 3D arena fighter. Choose Warrior, Archer, or Mage and fight escalating enemy legions across five premium realm boards — Ember Crucible, Frostveil Circle, Stormspire Board, Umbral Fen, and Solar Bastion. Warrior swaps between Two-Handed and Sword & Shield kits mid-fight (including Block and Shield Bash Shock). Spamable basics, radial ability cooldowns, combo multipliers, burn/frost ground residuals, WAVE CLEAR banners, and a final REALM CLEARED victory screen. Desktop keyboard and mobile virtual joystick supported.",
+  "genre": "action",
+  "sub_genre": "arena-survival",
+  "difficulty": "medium",
+  "controls_keyboard": "WASD/ZQSD move · Mouse aim · LMB/J basic · 1-3 abilities · Q/Tab Warrior mode swap · Shift/K block (S&S) · Esc pause",
+  "tags": [
+    "action",
+    "arena",
+    "survival",
+    "waves",
+    "3d",
+    "threejs",
+    "singleplayer",
+    "mobile-friendly"
+  ]
+}

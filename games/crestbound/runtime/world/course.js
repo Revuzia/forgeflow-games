@@ -1,0 +1,6494 @@
+/**
+ * CRESTBOUND — runtime/world/course.js
+ * ---------------------------------------------------------------------------
+ * THE COURSE COMPILER.  CONTRACT §24.
+ *
+ * A course definition (runtime/data/courses/*.js, or runtime/data/keep.js for
+ * the hub) is plain data.  This module turns it into a playable, performant
+ * OPEN DIORAMA:
+ *
+ *   - validates the def with errors that name the offending object AND its kind
+ *   - builds terrain (world/terrain.js) and its Heightfield, water bodies
+ *     (world/water.js) and their swim Volumes
+ *   - dispatches every static kind to world/builders.js — the Ascendant family
+ *     (platform / beam / deco / text / light) plus the CRESTBOUND additions
+ *     (ramp, stairs, tree, pole, net, bridge, painting, gatedoor, pedestal,
+ *     fence, rock, cannon, rings, building)
+ *   - dispatches every dynamic kind to hazards/index.js `makeHazard`
+ *   - builds critters (entities/critters.js) and the collectible set
+ *     (entities/collectibles.js: coins, 8 sigils, 7 crests)
+ *   - builds checkpoint stations: a chamfered pad, a glowing ring, an
+ *     activation shockwave, a slow-turning glyph, a pillar of light, and a
+ *     `Volume` of kind 'checkpoint' carrying its index — each pad pulses on its
+ *     own seeded phase, so two pads in one frame never read as one
+ *   - builds THE KEEP's gates (painting / door / glass) into `Course.gates`,
+ *     each with its art, its trigger volume and a lock state Game can flip
+ *   - builds power hats (`def.powers`) and emits `power(id, seconds)`
+ *   - bakes static art into per-chunk, per-material merged meshes over a 24 m
+ *     grid across `def.bounds`, instances decor through world/props.js, and
+ *     culls those chunks itself (distance + frustum) every frame
+ *   - owns the deterministic COURSE CLOCK.  Hazards are a pure function of it,
+ *     and `resetFrom(cp)` rewinds it to that checkpoint's `clockOffset`, so a
+ *     gauntlet presents an identical phase on every attempt.  That is what
+ *     makes CRESTBOUND learnable instead of lucky.
+ *
+ * OWNERSHIP.  The Course DETECTS and PRESENTS.  It lights its own pads, opens
+ * its own gates, spins its own hazards — and then emits an event.  It never
+ * writes the save, never plays a stinger, never touches the HUD: `game.js`
+ * subscribes to `course.events` and does all of that exactly once.  One owner,
+ * always.
+ *
+ * PERFORMANCE LAWS honoured here (contract hard rules 4 + 5):
+ *   - zero heap allocation below `update()` — every vector, box and colour used
+ *     per frame is a module-scope scratch hoisted above the class
+ *   - the light budget is a FIXED pool of PointLights allocated before the
+ *     first render and never grown: adding a light to a live scene re-keys
+ *     three.js' program cache and recompiles every material in the scene
+ *   - static art merges per (chunk, material); shared geometry out of builders'
+ *     GeoCache (`userData.__shared`) is cloned, never consumed, never disposed
+ *   - one course load is a single pass; no material is cloned per object
+ *
+ * Heritage: ported by transliteration from `games/ascendant/runtime/world/
+ * stage.js` — the chunking, the merge, the light pool, the glow field, the
+ * checkpoint instancing and the determinism contract are that module's, proven
+ * over four Ascendant worlds.  Generalised here from a linear +X stage to an
+ * open diorama bounded by `def.bounds`, and extended with terrain, water,
+ * critters, collectibles, gates and powers.
+ * ---------------------------------------------------------------------------
+ */
+
+import * as THREE from 'three';
+import * as BGU from 'three/addons/utils/BufferGeometryUtils.js';
+
+import * as UtilMod from '../core/util.js';
+import * as SettingsMod from '../core/settings.js';
+import * as ColliderMod from './collider.js';
+import * as MatsMod from './materials.js';
+import * as ThemesMod from './themes.js';
+import * as Builders from './builders.js';
+import * as PropsMod from './props.js';
+import * as TerrainMod from './terrain.js';
+import * as WaterMod from './water.js';
+import * as HazardLib from '../hazards/index.js';
+import * as CollectiblesMod from '../entities/collectibles.js';
+import * as CrittersMod from '../entities/critters.js';
+import { TUNE } from '../core/tuning.js';
+
+/* ── dependency handles ─────────────────────────────────────────────────────
+ * Namespace imports throughout: a sibling that ships a symbol late produces one
+ * loud, actionable message from `_assertDeps()` instead of a cryptic
+ * "undefined is not a constructor" three call frames deep.
+ */
+const clamp = UtilMod.clamp;
+const damp = UtilMod.damp;
+const mulberry32 = UtilMod.mulberry32;
+const Emitter = UtilMod.Emitter;
+
+const Settings = SettingsMod.Settings;
+const QUALITY = SettingsMod.QUALITY;
+
+const Collider = ColliderMod.Collider;
+const KillVolume = ColliderMod.KillVolume;
+const Volume = ColliderMod.Volume;
+const Broadphase = ColliderMod.Broadphase;
+
+const THEMES = ThemesMod.THEMES;
+const mergeGeometries = BGU.mergeGeometries || BGU.mergeBufferGeometries;
+
+/* ===========================================================================
+ * Compiler tunables
+ * ======================================================================== */
+
+/** Contract §24: a 24 m grid over `def.bounds`. */
+const CHUNK_SIZE = 24;
+/**
+ * Hard ceiling on chunk count — the cell GROWS rather than the draw calls.
+ *
+ * Every chunk costs one merged draw per material it contains, and an open
+ * diorama fits inside one frustum, so a fine grid buys almost no culling while
+ * multiplying the static-art draw calls by the chunk count.  Measured on
+ * verdant-1 (144 x 144 m): a 24 m grid produced 21 chunks / 196 merged draws,
+ * every one of them inside the frustum.  The perf gate allows 260 draws for the
+ * WHOLE frame, so the static art gets a small fraction of that.
+ *
+ * 2026-09-02, MEASURED with `_harness/drawprobe.py` (which wraps
+ * `renderer.renderBufferDirect` and attributes every draw of one frame): at
+ * MAX_CHUNKS = 4 the Keep spent 198 of its 373 draws inside chunk groups —
+ * 124 shaded + 74 shadow — and ALL FOUR chunks were inside the frustum at the
+ * spawn station, so the 4x multiplier on "one draw per material" bought nothing
+ * and cost ~3x.  A course's static art is one merged mesh per material either
+ * way; what chunking adds is the ability to cull a QUADRANT, which only pays on
+ * a course large enough that a quadrant leaves the frustum.  So the ceiling is
+ * 2 and the cell grows to meet it: a big course still gets a near/far split,
+ * a small one stops paying for a split it can never use.
+ */
+const MAX_CHUNKS = 2;
+/** Beyond this from the feet a hazard's VISUAL is skipped (never its simulation). */
+const HAZARD_VIS_DIST = 90;
+/** Seconds inside a cannon's breech trigger before a WALK-IN boards it (a press boards at once). */
+const CANNON_BOARD_DWELL = 0.10;
+/** Power-hat pickup: the capsule heights (above the feet) tested against the hat's volume. */
+const POWER_PICK_MID = 0.75, POWER_PICK_HEAD = 1.45;
+/** Chunks nearer than this stay visible off-screen so their shadows keep casting. */
+const SHADOW_KEEP = 34;
+const MAX_TEXT = 48;
+/* SIGNAGE (critic C10, owner O1: "in-world sign body text is illegible").
+ *
+ * The old bake was the mush at its source, three ways at once. MEASURED on
+ * verdant-1's spawn board (`_shots/sig0_v1_sign.png`, 0.60 scale, 6.5 m):
+ *   1. `size` was the height of the whole PADDED sheet, so a 0.22 m sub-line
+ *      carried ~0.07 m glyph caps — 6 px on the 648-line buffer at that range;
+ *   2. every sheet was squeezed into a 1024 x 128 atlas cell (k = 0.44 for a
+ *      two-liner), so the 84 px bake landed at ~37 px, then LinearFilter with
+ *      no mips aliased it further;
+ *   3. white glyphs with a 22 px colour blur on a mid wood plank — low contrast
+ *      and a soft edge before the renderer had touched it.
+ * Now: `size` is the glyph CAP height in metres; every sign is baked at
+ * TEXT_PPM texels per metre (0.22 m caps -> ~62 px, twice what they cover on
+ * the buffer at the 4 m read distance) and mips do the minification; the
+ * clauses are wrapped to TEXT_WRAP_CHARS so a line is a few big words, not a
+ * sentence; and the paint is cream-on-dark or dark-on-cream inside a shadowed
+ * inset. Signs mounted together (the header + its sub-lines, authored as
+ * stacked objects at one x/z) become ONE board. Sheets are shelf-packed into a
+ * 2048-wide POT atlas sized to what the course needs, still one material and
+ * one merged draw. */
+const TEXT_PPM = 280;
+const TEXT_ATLAS_W = 2048;
+const TEXT_ATLAS_MAX_H = 4096;
+const TEXT_ATLAS_PAD = 12;
+const TEXT_WRAP_CHARS = 24;
+const TEXT_GROUP_XZ = 0.45;
+const TEXT_GROUP_DY = 1.8;
+const TEXT_TRACK_EM = 0.035;
+const TEXT_CAP_EM = 0.70;       // cap height as a fraction of the font size
+const TEXT_LINE_PITCH = 1.34;   // line pitch in cap heights
+const TEXT_PAD_M = 0.15;        // panel margin, metres
+const TEXT_FRAME_M = 0.09;      // wood lip round the panel, metres
+const TEXT_MOUNT_OUT = 0.14;
+/* Widest painted line, metres. `size` is a CAP height, so an authored 0.60 m
+   header ('BAILEY MEADOW', 13 glyphs) measured 6.1 m and the board it made,
+   centred 3 m beside the spawn pad, covered Nim from the spawn camera
+   (regress 2026-09-05, verdant-1 / azure-1 / ember-1). A line wider than this
+   is shrunk to fit; body lines wrap at TEXT_WRAP_CHARS and never reach it. */
+const TEXT_MAX_LINE_M = 3.7;
+/* FIT BEFORE WRAP (playtest rime-2 #1/#6: 'THE CHUTE ONLY / GOES DOWN.' and
+   'HALF WAY / THE SECOND / HALF IS FASTER'). A clause was wrapped by a CHARACTER
+   count (24) whatever it measured, so a 25-glyph sentence broke mid-phrase and
+   the pieces packed into one paragraph. Now a clause is a thought — a '·'
+   segment or a sentence — and it stays on ONE line whenever it fits the board
+   at >= TEXT_FIT_MIN of its authored cap (the bake shrinks it); only a clause
+   wider than that wraps, by MEASURED width, into balanced lines. */
+const TEXT_FIT_MIN = 0.74;
+/** Cap heights of air between two authored body boards merged into one plate. */
+const TEXT_MEMBER_GAP = 0.55;
+const MAX_LIGHT_SITES = 96;
+
+/**
+ * One authored coin entry -> world points, the shapes entities/collectibles.js
+ * expands (`p`, `ring`, `arc`, `line`, `grid`; a ring/arc centre is `[x, z]`
+ * with `y` the height, or `[x, y, z]` with `y` an offset). Build-time only.
+ */
+function expandCoinDef(e) {
+  const out = [];
+  if (!e) return out;
+  const centre = (src, y) => {
+    if (Array.isArray(src) && src.length === 2) return [+src[0] || 0, fin(y) ? y : 0, +src[1] || 0];
+    const c = v3(src, 0, 0, 0);
+    return [c.x, c.y + (fin(y) ? y : 0), c.z];
+  };
+  if (e.p) { const p = v3(e.p, 0, 0, 0); out.push([p.x, p.y, p.z]); }
+  else if (e.ring) {
+    const r = e.ring, c = centre(r.c, r.y), n = Math.max(1, Math.round(fin(r.n) ? r.n : 8)), rad = fin(r.r) ? r.r : 2;
+    const a0 = fin(r.from) ? r.from : 0;
+    for (let i = 0; i < n; i++) { const a = a0 + (i / n) * Math.PI * 2; out.push([c[0] + Math.cos(a) * rad, c[1], c[2] + Math.sin(a) * rad]); }
+  } else if (e.arc) {
+    const r = e.arc, c = centre(r.c, r.y), n = Math.max(1, Math.round(fin(r.n) ? r.n : 6)), rad = fin(r.r) ? r.r : 3;
+    const a0 = fin(r.a0) ? r.a0 : 0, a1 = fin(r.a1) ? r.a1 : Math.PI, rise = fin(r.rise) ? r.rise : 0;
+    for (let i = 0; i < n; i++) {
+      const t = n === 1 ? 0.5 : i / (n - 1);
+      const a = a0 + (a1 - a0) * t;
+      out.push([c[0] + Math.cos(a) * rad, c[1] + rise * Math.sin(t * Math.PI), c[2] + Math.sin(a) * rad]);
+    }
+  } else if (e.line) {
+    const l = e.line, a = v3(l.a, 0, 0, 0), b = v3(l.b, 0, 0, 0), n = Math.max(1, Math.round(fin(l.n) ? l.n : 5));
+    for (let i = 0; i < n; i++) {
+      const t = n === 1 ? 0.5 : i / (n - 1);
+      out.push([a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t]);
+    }
+  }
+  /* any other shape (a bare array, a `grid`) builds no coin in collectibles.js
+     either, so it can never sit on a plate and is left exactly as authored */
+  return out;
+}
+
+/** The one sign font; `head` is the heavier cut the header uses. */
+function textFont(px, head) {
+  return (head ? '800 ' : '700 ') + px + 'px Rajdhani, "Segoe UI", system-ui, -apple-system, sans-serif';
+}
+
+/* ── SIGNS NEVER HIDE NIM ─────────────────────────────────────────────────────
+ * A text board is a `deco` with no collider, so the follow camera never pulls
+ * in for it, and a board on the walked line stands between the lens and the
+ * hero: keep K8 ('THE UNDERCROFT' plate filling the frame on the grate),
+ * rime-1 #5 ('THIN ICE' at head height on the line into the hole), azure-3 #6
+ * (the cart sign), rime-3 #6. Moving each board is a course edit that fixes
+ * one instance; this fixes the class. Every sign material — the shared atlas
+ * and the per-course plank clone — carries a screen-door fade: a fragment
+ * inside SIGN_OCC_RADIUS of the camera->hero line, nearer the lens than the
+ * hero, is discarded through a 4x4 Bayer mask. Two Vector3 uniforms are
+ * written per frame (`_updateSignOcclusion`); nothing allocates. A board
+ * behind or beside the hero is untouched, and a board the player walks up to
+ * read is never between the lens and Nim, so it is never faded. */
+const SIGN_OCC_RADIUS = 0.95;   // m round the camera->hero line
+const SIGN_OCC_HERO_Y = 0.80;   // m above the feet the line aims at (the chest)
+const SIGN_OCC_VERT_DECL = 'varying vec3 vCbSignWP;\n';
+const SIGN_OCC_VERT_MAIN = '\n  vCbSignWP = (modelMatrix * vec4(transformed, 1.0)).xyz;\n';
+const SIGN_OCC_FRAG_DECL =
+  'uniform vec3 uCbSignHero;\nuniform vec3 uCbSignCam;\nuniform vec2 uCbSignOcc;\nvarying vec3 vCbSignWP;\n' +
+  'float cbSignBayer2(vec2 a) { a = floor(a); return fract(a.x * 0.5 + a.y * a.y * 0.75); }\n' +
+  'float cbSignBayer4(vec2 a) { return cbSignBayer2(0.5 * a) * 0.25 + cbSignBayer2(a); }\n';
+const SIGN_OCC_FRAG_MAIN =
+  '\n  if (uCbSignOcc.y > 0.5) {\n' +
+  '    vec3 cbAb = uCbSignHero - uCbSignCam;\n' +
+  '    float cbL2 = max(dot(cbAb, cbAb), 1e-4);\n' +
+  '    float cbT = dot(vCbSignWP - uCbSignCam, cbAb) / cbL2;\n' +
+  '    if (cbT > 0.02 && cbT < 0.985) {\n' +
+  '      float cbD = length(vCbSignWP - (uCbSignCam + cbAb * cbT));\n' +
+  '      float cbCover = 1.0 - smoothstep(uCbSignOcc.x * 0.55, uCbSignOcc.x, cbD);\n' +
+  '      if (cbCover > cbSignBayer4(gl_FragCoord.xy) + 0.02) discard;\n' +
+  '    }\n  }\n';
+
+/** Splice the occluder fade into a compiled shader (idempotent per shader). */
+function injectSignOcc(shader, u) {
+  shader.uniforms.uCbSignHero = u.hero;
+  shader.uniforms.uCbSignCam = u.cam;
+  shader.uniforms.uCbSignOcc = u.occ;
+  const MAIN = 'void main() {';
+  const V = '#include <begin_vertex>';
+  let vs = shader.vertexShader;
+  if (vs.indexOf('vCbSignWP') === -1) {
+    vs = vs.replace(MAIN, SIGN_OCC_VERT_DECL + MAIN);
+    vs = vs.indexOf(V) !== -1 ? vs.replace(V, V + SIGN_OCC_VERT_MAIN)
+                              : vs.replace('#include <project_vertex>', SIGN_OCC_VERT_MAIN + '#include <project_vertex>');
+    shader.vertexShader = vs;
+  }
+  let fs = shader.fragmentShader;
+  if (fs.indexOf('vCbSignWP') === -1) {
+    fs = fs.replace(MAIN, SIGN_OCC_FRAG_DECL + MAIN);
+    const F = '#include <clipping_planes_fragment>';
+    fs = fs.indexOf(F) !== -1 ? fs.replace(F, F + SIGN_OCC_FRAG_MAIN) : fs.replace(MAIN, MAIN + SIGN_OCC_FRAG_MAIN);
+    shader.fragmentShader = fs;
+  }
+}
+
+/* ── the light budget ───────────────────────────────────────────────────────
+ * A `kind:'light'` object is a light SITE, not a THREE.PointLight.  Every site
+ * gets a visible emissive bulb, a soft additive halo and a pool of light on the
+ * floor beneath it — all baked into ONE extra draw call for the whole course
+ * (`_buildGlowField`).  Only the TIER's `maxLights` real PointLights ever exist
+ * (LIGHT_POOL_SIZE is the ceiling); they are allocated once, before the first
+ * render, and the per-frame budget only ever MOVES and re-tints them.  Sizing
+ * the pool to the tier rather than always to 6 is what makes
+ * `QUALITY[*].maxLights` cost anything: an unlit slot still counts toward
+ * `NUM_POINT_LIGHTS` and is still evaluated per fragment (see _buildLightPool).
+ *
+ * Never add or remove a light from a live scene: three.js keys its program
+ * cache on the light counts, so a light appearing mid-run recompiles every
+ * material in the scene and the frame hitches.  That is also why an unused slot
+ * sits at intensity 0 rather than `visible = false` — an invisible light is
+ * dropped from the render list, which changes the count, which is the same
+ * recompile by another route.
+ */
+const LIGHT_POOL_SIZE = 6;
+const LIGHT_FADE_IN = 5.0;    // 1/s
+const LIGHT_FADE_OUT = 9.0;   // 1/s — a slot reaches 0 before it re-targets
+const LIGHT_SELECT_HZ = 0.2;  // s between re-selections
+/**
+ * Clutter under this world radius never casts: a full extra shadow draw for a
+ * sub-pixel blob.  The shadow pass is a SECOND full render of every caster, so
+ * this threshold is the cheapest lever there is on both draws and triangles.
+ */
+/**
+ * Default world bounding radius below which a mesh stops casting a shadow.
+ * The active QUALITY preset's `shadowCasterRadius` overrides it per tier
+ * (settings.js); this constant is the value HIGH still uses, so making it a
+ * tier knob changed nothing about how HIGH looks.
+ */
+const SHADOW_MIN_RADIUS = 1.5;
+
+/** Hazards that are course-spanning: never distance-cull their visuals. */
+const NEVER_CULL = new Set(['chase', 'risinglava', 'wind', 'current', 'lava']);
+
+/** Kinds this compiler hands to builders.js, and the export that owns each. */
+const BUILDER_ROUTE = Object.freeze({
+  platform: 'buildPlatform',
+  beam: 'buildBeam',
+  pad: 'buildPad',
+  pillar: 'buildPillar',
+  wall: 'buildWall',
+  arch: 'buildArch',
+  ring: 'buildRing',
+  ramp: 'buildRamp',
+  stairs: 'buildStairs',
+  tree: 'buildTree',
+  pole: 'buildPole',
+  net: 'buildNet',
+  bridge: 'buildBridge',
+  painting: 'buildPainting',
+  gatedoor: 'buildGateDoor',
+  pedestal: 'buildPedestal',
+  fence: 'buildFence',
+  rock: 'buildRock',
+  cannon: 'buildCannon',
+  building: 'buildBuilding',
+  deco: 'buildDeco',
+});
+
+/** Kinds the Course itself owns end-to-end (never routed out). */
+const COURSE_KINDS = Object.freeze({ terrain: 1, water: 1, text: 1, light: 1 });
+
+/** Climbable kinds: a ladder Volume is synthesised when the builder ships none. */
+const CLIMB_KINDS = Object.freeze({ pole: 1, net: 1, tree: 1 });
+
+/** How far a gate's walk-in trigger reaches OUT of the frame, into the room.
+ *  The wall collider stops Nim ~0.38 m (his radius) short of the picture plane,
+ *  so anything shallower than that can never contain his feet.  1.5 m leaves
+ *  ~1.0 m of usable band once the wall, the frame and Nim's radius are paid
+ *  for — a walk-in a human hits at a run — while staying short of the 1.9 m
+ *  stand-out spot keep.js authors, so crossing the aisle never opens a card. */
+const GATE_TRIGGER_DEPTH = 1.50;
+
+/* ── module-scope scratch — NO per-frame allocation below this line ──────── */
+const _v1 = new THREE.Vector3();
+const _v2 = new THREE.Vector3();
+const _v4 = new THREE.Vector3();
+const _m1 = new THREE.Matrix4();
+const _box1 = new THREE.Box3();
+const _frustum = new THREE.Frustum();
+const _projScreen = new THREE.Matrix4();
+const _colScratch = new THREE.Color();
+const _colScratch2 = new THREE.Color();
+/** Borrowed only to convert an authored `rot` into a quaternion at build time. */
+const _eulerHolder = new THREE.Object3D();
+
+/* ===========================================================================
+ * Small pure helpers
+ * ======================================================================== */
+
+function fin(n) { return typeof n === 'number' && Number.isFinite(n); }
+
+/* Deliberately NOT `fin(+a[0])`: unary + coerces null/''/[] to 0, which would
+ * let an authoring typo through as a silent (0,0,0).  Require real numbers. */
+function fin3(a) {
+  return Array.isArray(a) && a.length >= 3 && fin(a[0]) && fin(a[1]) && fin(a[2]);
+}
+
+/* A ring/arc CENTRE may be authored as [x, z] with the height carried by the
+ * sibling `y` field (CONTRACT §25 lists `c` and `y` side by side, which only
+ * makes sense if `y` is the height), or as a full [x, y, z]. Accept both.
+ * entities/collectibles.js resolves the same two shapes. */
+function finCentre(a) {
+  if (!Array.isArray(a)) return false;
+  if (a.length === 2) return fin(a[0]) && fin(a[1]);
+  return fin3(a);
+}
+
+function v3(a, dx, dy, dz) {
+  if (Array.isArray(a) && a.length >= 3) return new THREE.Vector3(+a[0], +a[1], +a[2]);
+  if (a && typeof a === 'object' && fin(a.x)) return new THREE.Vector3(a.x, a.y, a.z);
+  return new THREE.Vector3(dx || 0, dy || 0, dz || 0);
+}
+
+/** `rot` may be authored in radians or degrees; > 2π on any axis means degrees. */
+function applyRot(obj, rot) {
+  if (typeof rot === 'number' && fin(rot)) { obj.rotation.set(0, rot, 0); return; }
+  if (!Array.isArray(rot) || rot.length < 3) return;
+  const x = +rot[0] || 0, y = +rot[1] || 0, z = +rot[2] || 0;
+  const deg = Math.abs(x) > 6.4 || Math.abs(y) > 6.4 || Math.abs(z) > 6.4;
+  const k = deg ? Math.PI / 180 : 1;
+  obj.rotation.set(x * k, y * k, z * k);
+}
+
+function colorOf(v, fallback) {
+  try {
+    if (v === undefined || v === null) return new THREE.Color(fallback);
+    return new THREE.Color(v);
+  } catch (e) { return new THREE.Color(fallback); }
+}
+
+function hashId(str) {
+  let h = 2166136261;
+  const s = String(str);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) || 1;
+}
+
+/** Chamfered box — never a naked BoxGeometry (contract hard rule 1). */
+function chamferBox(w, h, d, b) {
+  if (typeof Builders.bevelBoxGeometry === 'function') {
+    try { return Builders.bevelBoxGeometry(w, h, d, b, 0.5); } catch (e) { /* local path */ }
+  }
+  const bev = Math.max(0.004, Math.min(b, w * 0.34, h * 0.34, d * 0.34));
+  const sw = Math.max(0.002, w - 2 * bev);
+  const sh = Math.max(0.002, h - 2 * bev);
+  const shape = new THREE.Shape();
+  shape.moveTo(-sw / 2, -sh / 2);
+  shape.lineTo(sw / 2, -sh / 2);
+  shape.lineTo(sw / 2, sh / 2);
+  shape.lineTo(-sw / 2, sh / 2);
+  shape.closePath();
+  const g = new THREE.ExtrudeGeometry(shape, {
+    depth: Math.max(0.002, d - 2 * bev),
+    bevelEnabled: true, bevelSize: bev, bevelThickness: bev,
+    bevelSegments: 2, curveSegments: 1, steps: 1,
+  });
+  g.center();
+  g.computeVertexNormals();
+  return g;
+}
+
+/** Chamfered disc via lathe — the checkpoint pad base. */
+function chamferDisc(r, h, b, seg) {
+  const bev = Math.max(0.004, Math.min(b, r * 0.4, h * 0.45));
+  const pts = [
+    new THREE.Vector2(0, 0),
+    new THREE.Vector2(r - bev, 0),
+    new THREE.Vector2(r, bev),
+    new THREE.Vector2(r, h - bev),
+    new THREE.Vector2(r - bev, h),
+    new THREE.Vector2(Math.max(0.001, r * 0.34), h),
+    new THREE.Vector2(0, h * 0.86),
+  ];
+  const g = new THREE.LatheGeometry(pts, seg || 40);
+  g.computeVertexNormals();
+  return g;
+}
+
+/**
+ * mergeGeometries refuses a batch that mixes indexed and non-indexed inputs, and
+ * three's primitives disagree (Extrude/Lathe are NOT indexed; Box/Torus/
+ * Cylinder/Plane ARE).  Give everything a trivial index.
+ */
+function ensureIndexed(g) {
+  if (g.index) return g;
+  const n = g.attributes.position.count;
+  const arr = n > 65535 ? new Uint32Array(n) : new Uint16Array(n);
+  for (let i = 0; i < n; i++) arr[i] = i;
+  g.setIndex(new THREE.BufferAttribute(arr, 1));
+  return g;
+}
+
+/**
+ * mergeGeometries requires an identical attribute set on every input.  Take the
+ * intersection, then top up the two we can synthesise (uv, normal).
+ */
+function unifyAttributes(geos) {
+  const common = {};
+  const first = Object.keys(geos[0].attributes);
+  for (let i = 0; i < first.length; i++) common[first[i]] = true;
+  for (let i = 1; i < geos.length; i++) {
+    const names = Object.keys(common);
+    for (let n = 0; n < names.length; n++) {
+      if (!geos[i].attributes[names[n]]) delete common[names[n]];
+    }
+  }
+  common.position = true;
+  common.normal = true;
+  common.uv = true;
+  for (let i = 0; i < geos.length; i++) {
+    const g = geos[i];
+    const have = Object.keys(g.attributes);
+    for (let h = 0; h < have.length; h++) {
+      if (!common[have[h]]) g.deleteAttribute(have[h]);
+    }
+    if (!g.attributes.normal) g.computeVertexNormals();
+    if (!g.attributes.uv) {
+      const n = g.attributes.position.count;
+      g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
+    }
+  }
+}
+
+/**
+ * The ONE merge entry point.  Normalises index-ness and the attribute set first,
+ * so a mixed batch of primitives can never silently return null.  Consumes
+ * nothing: the caller still disposes `parts`.
+ * @returns {THREE.BufferGeometry|null}
+ */
+function mergeParts(parts) {
+  if (!parts || !parts.length) return null;
+  const list = [];
+  for (let i = 0; i < parts.length; i++) {
+    const g = parts[i];
+    if (g && g.attributes && g.attributes.position) list.push(ensureIndexed(g));
+  }
+  if (!list.length) return null;
+  if (list.length === 1) return list[0];
+  unifyAttributes(list);
+  let m = null;
+  try { m = mergeGeometries(list, false); } catch (e) { m = null; }
+  return m;
+}
+
+/**
+ * Lift ONE material group out of a multi-material geometry into a standalone,
+ * compacted geometry (vertices remapped, only that group's triangles kept).
+ *
+ * This is what lets a builder's six-slot platform mesh take part in the static
+ * merge at all: `mergeGeometries(..., useGroups=true)` rewrites materialIndex to
+ * the geometry's position in the batch, so it cannot preserve real slots.
+ * Splitting first and merging per material is the only path to one draw call per
+ * (chunk, material).
+ * @returns {THREE.BufferGeometry|null} null when the geometry cannot be split
+ */
+function extractGroup(src, start, count) {
+  const attrs = src.attributes;
+  if (!attrs.position) return null;
+  for (const name in attrs) {
+    if (attrs[name].isInterleavedBufferAttribute) return null;   // not worth unpacking
+  }
+  const index = src.index;
+  const g = new THREE.BufferGeometry();
+
+  if (!index) {
+    const n = Math.min(count, attrs.position.count - start);
+    if (n <= 0) return null;
+    for (const name in attrs) {
+      const a = attrs[name];
+      const its = a.itemSize;
+      g.setAttribute(name, new THREE.BufferAttribute(
+        a.array.slice(start * its, (start + n) * its), its, a.normalized));
+    }
+    return g;
+  }
+
+  const n = Math.min(count, index.count - start);
+  if (n <= 0) return null;
+  const srcIdx = index.array;
+  const vCount = attrs.position.count;
+  const remap = new Int32Array(vCount).fill(-1);
+  const newIdx = new Uint32Array(n);
+  let next = 0;
+  for (let i = 0; i < n; i++) {
+    const oi = srcIdx[start + i];
+    let ni = remap[oi];
+    if (ni < 0) { ni = next++; remap[oi] = ni; }
+    newIdx[i] = ni;
+  }
+  for (const name in attrs) {
+    const a = attrs[name];
+    const its = a.itemSize;
+    const out = new a.array.constructor(next * its);
+    for (let oi = 0; oi < vCount; oi++) {
+      const ni = remap[oi];
+      if (ni < 0) continue;
+      const so = oi * its, no = ni * its;
+      for (let c = 0; c < its; c++) out[no + c] = a.array[so + c];
+    }
+    g.setAttribute(name, new THREE.BufferAttribute(out, its, a.normalized));
+  }
+  g.setIndex(new THREE.BufferAttribute(next > 65535 ? newIdx : new Uint16Array(newIdx), 1));
+  return g;
+}
+
+/**
+ * Exempt a whole subtree from the static merge.
+ *
+ * `userData.noMerge` is tested per MESH, and `_collectMergeables` walks INTO
+ * groups — so flagging only the root of an animated prop (a gate door, a
+ * painting) lets the merge eat its children and leave an empty shell behind.
+ * Anything that moves after build time goes through here.
+ */
+function markNoMerge(root) {
+  if (!root) return root;
+  if (typeof root.traverse === 'function') {
+    root.traverse((o) => { o.userData = o.userData || {}; o.userData.noMerge = true; });
+  } else {
+    root.userData = root.userData || {};
+    root.userData.noMerge = true;
+  }
+  return root;
+}
+
+/** Clone (or lift a group) + bake the world matrix + strip to a merge-safe set. */
+function normaliseGeo(src, matrix, gStart, gCount) {
+  let g;
+  if (gStart >= 0) {
+    g = extractGroup(src, gStart, gCount);
+    if (!g) return null;
+  } else {
+    try { g = src.clone(); } catch (e) { return null; }
+  }
+  g.applyMatrix4(matrix);
+  g.morphAttributes = {};
+  g.clearGroups();
+  const keep = { position: 1, normal: 1, uv: 1, uv1: 1, color: 1 };
+  const names = Object.keys(g.attributes);
+  for (let i = 0; i < names.length; i++) {
+    if (!keep[names[i]]) g.deleteAttribute(names[i]);
+  }
+  if (!g.attributes.position) { g.dispose(); return null; }
+  if (!g.attributes.normal) g.computeVertexNormals();
+  ensureIndexed(g);
+  return g;
+}
+
+/* ===========================================================================
+ * SHADERS — checkpoint station, gate seal, power hat
+ *
+ * All five checkpoint meshes share ONE set of per-instance channels
+ * (aState / aPulse / aAngle / aSeed), so the whole station set — however many
+ * pads a course has — costs five draw calls total, and lighting a pad is three
+ * float writes, not a scene-graph edit.
+ * ======================================================================== */
+
+/**
+ * Volumetric light column.  Density is the chord length through the cylinder,
+ * so it is bright through the middle and falls softly to nothing at the rim.
+ */
+const COLUMN_VERT = `
+attribute float aState;
+attribute float aPulse;
+attribute float aSeed;
+uniform float uTime;
+varying vec2  vUv;
+varying float vState;
+varying float vSeed;
+varying float vCore;
+varying float vDepth;
+varying float vAxisD;
+varying float vHeightM;
+void main(){
+  vUv = uv; vState = aState; vSeed = aSeed;
+  vec3 p = position;
+  float grow = mix(0.60, 1.0, aState) + aPulse * 0.24;
+  p.x *= grow; p.z *= grow;
+  /* An UNLIT pad used to compress to 52 % of height. With the hero window
+   * below (fragment stage: nothing is drawn under ~3.6 m) that left a 4.8 m
+   * column with only its top 1.2 m eligible — and the cap term fades exactly
+   * there, so an un-reached checkpoint would have shown no shaft at all and
+   * stopped being a beacon. State is already carried by colour, by the 0.26
+   * alpha floor and by the radial grow; height need not carry it too. */
+  p.y *= mix(0.80, 1.0, aState);
+  /* METRES above the pad, AFTER the state scale. The fragment stage needs a
+   * real world height (not uv.y) to hold the hero window open at a fixed
+   * 3.4 m no matter whether the pad is lit (9.2 m tall) or dark (4.8 m). */
+  vHeightM = p.y;
+  vec4 mv = modelViewMatrix * instanceMatrix * vec4(p, 1.0);
+  vDepth = -mv.z;
+  vec4 wo = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+  vAxisD = length(wo.xz - cameraPosition.xz);
+  vec3 radial = normalize(vec3(position.x, 0.0, position.z) + vec3(1e-5, 0.0, 1e-5));
+  vec3 nrm = normalize(normalMatrix * radial);
+  vec3 vdir = normalize(-mv.xyz);
+  float axial = abs(dot(nrm, vdir));
+  vCore = pow(axial, 1.35) + 0.10 * pow(1.0 - axial, 3.0);
+  gl_Position = projectionMatrix * mv;
+}`;
+
+/**
+ * The near-fades are load-bearing, not polish.  Standing ON a pad puts the
+ * third-person camera INSIDE the cylinder; without the depth fade the near wall
+ * paints the whole frame with an additive wash, and without the AXIS fade the
+ * column's upper half (9 m tall, so 4-9 m away from a camera at the pad) arcs a
+ * tinted dome across the top of the frame.
+ *
+ * ROUND 1 VISUAL FIX (owner-observed, `_shots/verify_keep.png` +
+ * `_shots/verify_v1.png`): the ported Ascendant fades only fire when the camera
+ * is INSIDE the tube.  A third-person camera sits ~6.5 m behind the hero, so at
+ * the spawn pad `vAxisD` was ~6.5 and `vDepth` ~6 — BOTH fades read 1.0, the
+ * column stayed at full density, and because the old height profile
+ * (`pow(1-h, 1.65)`) peaked at h=0 the tube was BRIGHTEST at exactly hero
+ * height.  Nim was swallowed at every checkpoint station of both courses.
+ *
+ * Two changes, both at this generator:
+ *   1. HERO WINDOW — `vHeightM` is metres above the pad, and the column now
+ *      fades in across 2.05 m -> 3.60 m.  Nothing is drawn where the hero
+ *      stands; the shaft begins above his head and still reads as a pillar of
+ *      light across a bowl.  The ground read is carried by the ring, the
+ *      shockwave and the glyph, which are the silhouette the contract asks for.
+ *   2. ACTIVE-PAD CARVE-OUT — the axis fade widens from 1.5..3.2 m to
+ *      2.4..8.0 m, so the pad the player is standing on contributes almost
+ *      nothing while distant pads keep the full beacon.
+ * `fall` relaxes from 1.65 to 1.10 so the surviving upper shaft keeps its
+ * density instead of collapsing with the base it no longer draws.
+ */
+const COLUMN_FRAG = `
+uniform vec3  uColorOff;
+uniform vec3  uColorOn;
+uniform float uTime;
+uniform float uGain;
+varying vec2  vUv;
+varying float vState;
+varying float vSeed;
+varying float vCore;
+varying float vDepth;
+varying float vAxisD;
+varying float vHeightM;
+void main(){
+  float h = clamp(vUv.y, 0.0, 1.0);
+  float fall = pow(1.0 - h, 1.10);
+  float cap  = smoothstep(1.0, 0.52, h);
+  float band = 0.5 + 0.5 * sin(h * 21.0 - uTime * (1.05 + 2.6 * vState) + vSeed * 6.2831);
+  float a = fall * cap * vCore * (0.70 + 0.30 * band);
+  a *= mix(0.26, 1.0, vState) * uGain;
+  a *= mix(1.0, 0.58, smoothstep(70.0, 250.0, vDepth));
+  a *= smoothstep(0.35, 3.5, vDepth);
+  /* the hero window: never draw the shaft at head height */
+  a *= smoothstep(2.05, 3.60, vHeightM);
+  /* ROUND 2 — the owner's literal instruction, which round 1 only half met:
+   * "ring + ground glow with NO FULL-HEIGHT PILLAR at the ACTIVE checkpoint."
+   * At 2.40..8.00 a third-person camera 6.5 m back still read 0.73, so the pad
+   * under the hero kept a 9 m tube that filled a quarter of the frame and
+   * washed the whole background to its own hue (_shots/_v38_verdant.png
+   * cropped to _shots/_zz_greenslab.png: the castle, the hills and the sky
+   * behind it are all tinted mint by it).  The station you are STANDING at now
+   * contributes nothing at all; the beacon fades up only once a pad is far
+   * enough away to be a navigation cue rather than a filter over the world. */
+  a *= smoothstep(9.00, 19.00, vAxisD);
+  if (a <= 0.0025) discard;
+  vec3 col = mix(uColorOff, uColorOn, vState);
+  col *= 0.85 + 1.15 * vState + 0.30 * band;
+  gl_FragColor = vec4(col, a);
+}`;
+
+/* SIGNAGE LANE — THE STATION IS A PAVED RING, NOT A SPOTLIGHT (critic C3,
+ * owner O2/O5: "the emissive pad disc swallows Nim's contact shadow and reads
+ * as a spotlight"). The ring mesh now carries THREE parts in one geometry and
+ * one draw, told apart in the shader by their radius from the pad axis:
+ *   rune annulus  r 1.00..1.18  a flat inlaid ring of glowing rune ticks,
+ *                               thin, theme-coloured, breathing slowly;
+ *   rim torus     r ~1.42       the machined lip of the pad, a dim dash;
+ *   ground skirt  r 1.55..2.70  a soft additive pool on the walked surface
+ *                               round the pad, faded to nothing at its edge.
+ * Rendered UNDER Nim's contact blob (renderOrder 2 < the blob's 3) and never
+ * over the pad's centre, so the shadow he stands in survives. The activation
+ * pulse is a small swell, and the lit state BREATHES (~0.6 Hz) instead of
+ * flaring; an unlit pad sits at a third of the lit alpha. */
+const RING_VERT = `
+attribute float aState;
+attribute float aPulse;
+attribute float aSeed;
+uniform float uTime;
+varying vec2  vUv;
+varying float vState;
+varying float vPulse;
+varying float vSeed;
+varying float vDepth;
+varying float vRad;
+varying float vAng;
+void main(){
+  vUv = uv; vState = aState; vPulse = aPulse; vSeed = aSeed;
+  vec3 p = position;
+  vRad = length(position.xz);
+  vAng = atan(position.z, position.x);
+  float s = 1.0 + aPulse * 0.16 + aState * 0.03;
+  p.x *= s; p.z *= s;
+  vec4 mv = modelViewMatrix * instanceMatrix * vec4(p, 1.0);
+  vDepth = -mv.z;
+  gl_Position = projectionMatrix * mv;
+}`;
+
+const RING_FRAG = `
+uniform vec3  uColorOff;
+uniform vec3  uColorOn;
+uniform float uTime;
+varying vec2  vUv;
+varying float vState;
+varying float vPulse;
+varying float vSeed;
+varying float vDepth;
+varying float vRad;
+varying float vAng;
+void main(){
+  float breathe = 0.72 + 0.28 * sin(uTime * 1.15 + vSeed * 6.2831);
+  float lit = mix(0.30, 1.0, vState);
+  float a; float glow;
+  if (vRad < 1.30) {
+    /* the rune ring: 20 ticks, each a soft bar with a bright core */
+    float t = fract(vAng * 3.1831 + vSeed);            /* 20 per turn */
+    float tick = smoothstep(0.0, 0.16, t) * smoothstep(0.62, 0.40, t);
+    float drift = 0.5 + 0.5 * sin(vAng * 3.0 - uTime * (0.35 + 0.6 * vState) + vSeed * 6.2831);
+    a = lit * (0.20 + 0.80 * tick) * (0.70 + 0.30 * drift) * breathe * 0.92;
+    glow = 0.95 + 0.45 * tick + 0.55 * vState + 0.35 * vPulse;
+  } else if (vRad < 1.52) {
+    /* the rim: a slow dim dash on the machined lip */
+    float dash = 0.5 + 0.5 * sin(vAng * 14.0 - uTime * (0.55 + 1.6 * vState) + vSeed * 6.2831);
+    float tube = 0.55 + 0.45 * sin(vUv.y * 6.2831);
+    a = lit * mix(0.35, 1.0, dash) * (0.7 + 0.3 * tube) * 0.42;
+    glow = 0.80 + 0.45 * vState + 0.30 * vPulse + 0.20 * dash;
+  } else {
+    /* the ground skirt: a soft pool, quadratic falloff, well under bloom */
+    float soft = 1.0 - smoothstep(1.55, 2.70, vRad);
+    a = soft * soft * lit * (0.22 + 0.12 * breathe) * 0.60;
+    glow = 0.50 + 0.25 * vState;
+  }
+  a *= mix(1.0, 0.65, smoothstep(80.0, 260.0, vDepth));
+  if (a <= 0.003) discard;
+  vec3 col = mix(uColorOff, uColorOn, vState) * glow;
+  gl_FragColor = vec4(col, a);
+}`;
+
+/** Activation shockwave: born small and bright, expands outward as it fades. */
+const WAVE_VERT = `
+attribute float aPulse;
+attribute float aState;
+varying float vPulse;
+void main(){
+  vPulse = aPulse;
+  float grow = 1.0 + (1.0 - aPulse) * 5.4;
+  vec3 p = position;
+  p.x *= grow; p.z *= grow;
+  gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(p, 1.0);
+}`;
+
+const WAVE_FRAG = `
+uniform vec3 uColorOn;
+varying float vPulse;
+void main(){
+  float a = pow(clamp(vPulse, 0.0, 1.0), 1.35) * 0.9;
+  if (a <= 0.004) discard;
+  gl_FragColor = vec4(uColorOn * (1.4 + 1.6 * vPulse), a);
+}`;
+
+const GLYPH_VERT = `
+attribute float aState;
+attribute float aPulse;
+attribute float aAngle;
+attribute float aSeed;
+uniform float uTime;
+uniform vec3  uHero;
+varying vec2  vUv;
+varying float vState;
+varying float vPulse;
+varying float vAxisD;
+varying float vHeroD;
+varying float vSeed;
+void main(){
+  vUv = uv; vState = aState; vPulse = aPulse; vSeed = aSeed;
+  float c = cos(aAngle), s = sin(aAngle);
+  vec3 p = position;
+  vec3 r = vec3(p.x * c - p.z * s, p.y, p.x * s + p.z * c);
+  r *= mix(0.74, 1.0, aState);
+  r.y += 0.34 + 0.30 * aState + 0.075 * sin(uTime * 1.5 + aSeed * 6.2831);
+  vec4 wo = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+  vAxisD = length(wo.xz - cameraPosition.xz);
+  vHeroD = length(wo.xz - uHero.xz);
+  gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(r, 1.0);
+}`;
+
+/* The glyph floats a little under a standing player's chest.  At full gain it
+ * becomes a floor-filling colour wash in every station screenshot, which is
+ * exactly what `contrastcheck.py` measures, so it fades out as the camera
+ * closes in; from approach range it still reads as the marker.
+ * SIGNAGE LANE: it also fades out under the HERO (0.9..2.3 m from the pad
+ * axis) — the marker says "come here", and once Nim is standing on the pad it
+ * has nothing to say and was only a wash over his boots and his shadow. It
+ * breathes slowly with the ring rather than flaring on the pulse. */
+const GLYPH_FRAG = `
+uniform sampler2D uMap;
+uniform vec3 uColorOff;
+uniform vec3 uColorOn;
+uniform float uTime;
+varying vec2  vUv;
+varying float vState;
+varying float vPulse;
+varying float vAxisD;
+varying float vHeroD;
+varying float vSeed;
+void main(){
+  vec4 t = texture2D(uMap, vUv);
+  float breathe = 0.78 + 0.22 * sin(uTime * 1.15 + vSeed * 6.2831);
+  float a = t.a * (0.22 + 0.62 * vState) * (1.0 + 0.40 * vPulse) * breathe;
+  a *= smoothstep(1.3, 2.8, vAxisD);
+  a *= smoothstep(0.9, 2.3, vHeroD);
+  if (a <= 0.004) discard;
+  vec3 col = mix(uColorOff, uColorOn, vState) * (0.80 + 0.80 * vState + 0.40 * vPulse);
+  gl_FragColor = vec4(col, a);
+}`;
+
+/**
+ * A SEALED gate's shimmer.  Locked reads as a cold, slow-scrolling lattice with
+ * a hard bright rim; unlocked dissolves it to nothing over 0.6 s.  Painted on a
+ * plane the size of the gate opening, in front of the art.
+ */
+const SEAL_VERT = `
+varying vec2 vUv;
+varying float vDepth;
+void main(){
+  vUv = uv;
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vDepth = -mv.z;
+  gl_Position = projectionMatrix * mv;
+}`;
+
+const SEAL_FRAG = `
+uniform float uTime;
+uniform float uLock;      // 1 sealed .. 0 open
+uniform vec3  uColor;
+uniform vec3  uHot;
+varying vec2  vUv;
+varying float vDepth;
+void main(){
+  if (uLock <= 0.002) discard;
+  vec2 uv = vUv;
+  float lat = max(
+    smoothstep(0.46, 0.5, abs(fract(uv.x * 7.0 + uTime * 0.05) - 0.5)),
+    smoothstep(0.46, 0.5, abs(fract(uv.y * 11.0 - uTime * 0.04) - 0.5)));
+  float sweep = 0.5 + 0.5 * sin((uv.y - uTime * 0.11) * 12.0);
+  float rim = smoothstep(0.5, 0.44, abs(uv.x - 0.5)) * smoothstep(0.5, 0.44, abs(uv.y - 0.5));
+  rim = 1.0 - rim;
+  float a = (0.16 + 0.30 * lat + 0.14 * sweep + 0.55 * rim) * uLock;
+  a *= mix(1.0, 0.55, smoothstep(30.0, 110.0, vDepth));
+  if (a <= 0.004) discard;
+  vec3 col = mix(uColor, uHot, rim * 0.7 + lat * 0.3);
+  gl_FragColor = vec4(col * (0.75 + 0.8 * rim + 0.35 * sweep), a);
+}`;
+
+/** Power-hat halo — an upward-fading shaft plus a dashed ground ring. */
+const HALO_VERT = `
+uniform float uTime;
+uniform float uState;
+varying vec2 vUv;
+void main(){
+  vUv = uv;
+  vec3 p = position * mix(0.0, 1.0, clamp(uState, 0.0, 1.0));
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+}`;
+
+const HALO_FRAG = `
+uniform float uTime;
+uniform float uState;
+uniform float uMode;    // 0 shaft, 1 ring
+uniform vec3  uColor;
+varying vec2 vUv;
+void main(){
+  float a;
+  if (uMode < 0.5) a = pow(1.0 - clamp(vUv.y, 0.0, 1.0), 2.1) * 0.55;
+  else a = mix(0.28, 1.0, 0.5 + 0.5 * sin(vUv.x * 46.0 - uTime * 2.2)) * 0.7;
+  a *= clamp(uState, 0.0, 1.0);
+  if (a <= 0.004) discard;
+  gl_FragColor = vec4(uColor * (1.15 + 0.5 * sin(uTime * 2.6)), a);
+}`;
+
+/* ===========================================================================
+ * THE MISSION LAYER  (stage 1, missions lane, 2026-09-30)
+ * ---------------------------------------------------------------------------
+ * The reference game's star select CHANGES THE LEVEL: pick the summit star and
+ * the boss is on the summit; pick the footrace and the racer is at the start;
+ * pick another and neither is there. This is that, as data, resolved BEFORE the
+ * compiler sees the def — so nothing below (chunking, terrain, builders,
+ * collision, critter behaviour) knows missions exist. A mission run is simply a
+ * different, fully ordinary course def.
+ *
+ * A mission is chosen by CREST ID (the course card picks one). Any crest may
+ * declare one:
+ *
+ *   crests: [{ id:'boss', type:'boss', name:'THE WARDEN OF THE RIDGE', spawnAt:[…],
+ *     mission: {
+ *       name:   'THE WARDEN OF THE RIDGE',   // the hint the card shows (default: crest name)
+ *       hint:   'optional second line',
+ *       at:     [x,y,z],                     // where THIS crest appears (p for open/power,
+ *                                            //   spawnAt for every spawned type)
+ *       add:    { objects:[ObjectDef…], critters:[CritterDef…], coins:[CoinDef…] },
+ *       remove: ['tag', …],                  // objects / critters / coins / waters by `tag`
+ *       move:   { tag: { to:[x,y,z] } | { by:[dx,dy,dz] } },   // translates every point
+ *                                            //   field (p a b post start finish spawnAt
+ *                                            //   motion.to path[] pts[] arena.c)
+ *       set:    { tag: { …fields } },        // patch a def — a hazard's cycle, a mill's
+ *                                            //   period, a water's height (`hazards` = alias)
+ *       open:   ['route', …], close: ['route', …],
+ *       always: false,                       // true: this crest also exists in OTHER missions
+ *     } }]
+ *
+ * Routes are named at course level and are open unless the course says not:
+ *
+ *   routes: { 'north-door': { open:true, whenOpen:[ObjectDef…], whenClosed:[ObjectDef…] } }
+ *
+ * and any object or critter may join a route with `route:'name'` (it exists only
+ * while the route is OPEN — a bridge, a plank) or `blocks:'name'` (only while it
+ * is CLOSED — a portcullis, a rockfall). `missions:['id',…]` on an object or
+ * critter means "only in these missions"; `notMissions:[…]` the reverse.
+ *
+ * WHICH CRESTS EXIST in a run of mission M:
+ *   - M itself, always (at `mission.at` when it gives one);
+ *   - a RACE crest only when it IS M — a race timer never runs uninvited
+ *     (audit sm64_bar §10: the red RACE clock ran through a whole boss fight);
+ *   - when M declares a mission, crests that declare their OWN mission exist only
+ *     with `always:true` (the boss is not on the summit during the footrace);
+ *   - every other crest (8 sigils, 100 coins, …) exists in every mission, as in
+ *     the reference.
+ *
+ * NO MISSION (missionId null — __dev.goto, the harnesses) is the course exactly
+ * as it was before this layer existed: every crest, every race pad, every
+ * critter, and the route defaults. A course that declares no missions, no
+ * routes and no mission-gated objects resolves to the SAME def object, so all
+ * thirteen courses load byte-for-byte as they did.
+ *
+ * reachcheck.mjs reads `def.objects` directly and knows none of this: content
+ * that exists only in some missions belongs under `mission.add` or a route's
+ * `whenOpen` / `whenClosed`, never loose in `def.objects` with a gate on it.
+ * ======================================================================== */
+
+/** Point fields a mission `move` translates (each a finite [x, y, z]). */
+const MISSION_POINT_FIELDS = ['p', 'a', 'b', 'post', 'start', 'finish', 'spawnAt'];
+/** List fields a mission `move` translates (each an array of [x, y, z]). */
+const MISSION_LIST_FIELDS = ['path', 'pts'];
+
+function missionOf(crest) {
+  return crest && crest.mission && typeof crest.mission === 'object' && !Array.isArray(crest.mission) ? crest.mission : null;
+}
+
+function tagSet(list) {
+  const s = new Set();
+  if (Array.isArray(list)) for (let i = 0; i < list.length; i++) if (typeof list[i] === 'string' && list[i]) s.add(list[i]);
+  return s;
+}
+
+/** The tags an object carries: `tag:'x'` or `tag:['x','y']`. */
+function tagsOfDef(o) {
+  const t = o && o.tag;
+  if (typeof t === 'string' && t) return [t];
+  if (Array.isArray(t)) return t.filter((x) => typeof x === 'string' && x);
+  return null;
+}
+
+function addPoint(a, dx, dy, dz) {
+  return fin3(a) ? [a[0] + dx, a[1] + dy, a[2] + dz].concat(a.slice(3)) : a;
+}
+
+/** Anchor a `move:{to}` is measured from: the def's own position. */
+function anchorOfDef(o) {
+  if (!o) return null;
+  if (fin3(o.p)) return o.p;
+  if (fin3(o.a)) return o.a;
+  if (fin3(o.post)) return o.post;
+  if (fin3(o.start)) return o.start;
+  if (Array.isArray(o.path) && fin3(o.path[0])) return o.path[0];
+  if (Array.isArray(o.pts) && fin3(o.pts[0])) return o.pts[0];
+  if (fin3(o.spawnAt)) return o.spawnAt;
+  return null;
+}
+
+/** A copy of `o` with every point field translated by (dx, dy, dz). */
+function translateDef(o, dx, dy, dz) {
+  const out = Object.assign({}, o);
+  for (let i = 0; i < MISSION_POINT_FIELDS.length; i++) {
+    const k = MISSION_POINT_FIELDS[i];
+    if (fin3(o[k])) out[k] = addPoint(o[k], dx, dy, dz);
+  }
+  for (let i = 0; i < MISSION_LIST_FIELDS.length; i++) {
+    const k = MISSION_LIST_FIELDS[i];
+    if (Array.isArray(o[k])) out[k] = o[k].map((p) => addPoint(p, dx, dy, dz));
+  }
+  if (o.motion && typeof o.motion === 'object' && fin3(o.motion.to)) {
+    out.motion = Object.assign({}, o.motion, { to: addPoint(o.motion.to, dx, dy, dz) });
+  }
+  if (o.arena && typeof o.arena === 'object' && Array.isArray(o.arena.c)) {
+    const c = o.arena.c;
+    out.arena = Object.assign({}, o.arena, {
+      c: c.length === 2 ? [c[0] + dx, c[1] + dz] : addPoint(c, dx, dy, dz),
+    });
+  }
+  return out;
+}
+
+/** Does this def use any part of the mission layer? (cheap, build-time only) */
+function defUsesMissions(def) {
+  if (!def) return false;
+  if (def.routes && typeof def.routes === 'object') return true;
+  const crests = Array.isArray(def.crests) ? def.crests : [];
+  for (let i = 0; i < crests.length; i++) if (missionOf(crests[i])) return true;
+  const lists = [def.objects, def.critters, def.coins, def.waters];
+  for (let l = 0; l < lists.length; l++) {
+    const list = lists[l];
+    if (!Array.isArray(list)) continue;
+    for (let i = 0; i < list.length; i++) {
+      const o = list[i];
+      if (o && (o.missions !== undefined || o.notMissions !== undefined || o.route !== undefined || o.blocks !== undefined)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Resolve a course def for one mission. PURE: `def` is never mutated, and every
+ * entry the mission changes is a fresh object, so the module-cached course data
+ * serves the next mission untouched.
+ *
+ * @param {object} def        a course def (CONTRACT §25)
+ * @param {string|null} missionId  a crest id, or null for the plain course
+ * @returns {{def:object, mission:object|null, report:{unmatched:string[]}}}
+ *   `mission` = {id, index, name, hint, type, declared, present:[crestIds],
+ *   absent:[crestIds], routes:{name:open}, at, counts:{added, removed, moved, set}}
+ */
+export function resolveMission(def, missionId) {
+  const report = { unmatched: [] };
+  if (!def || typeof def !== 'object') return { def, mission: null, report };
+  /* An already-resolved def resolves to itself (Course.load resolves, then the
+     constructor sees the same def again). */
+  if (def.missionRun !== undefined) return { def, mission: def.missionRun || null, report };
+
+  const crests = Array.isArray(def.crests) ? def.crests : [];
+  let sel = null;
+  let selIndex = -1;
+  if (missionId !== undefined && missionId !== null && missionId !== '') {
+    for (let i = 0; i < crests.length; i++) {
+      if (crests[i] && crests[i].id === missionId) { sel = crests[i]; selIndex = i; break; }
+    }
+    if (!sel && typeof console !== 'undefined') {
+      console.warn('[Course ' + (def.id || '?') + '] mission "' + missionId + '" names no crest — loading the plain course');
+    }
+  }
+  if (!sel && !defUsesMissions(def)) return { def, mission: null, report };
+
+  const m = sel ? missionOf(sel) : null;
+  const selId = sel ? sel.id : null;
+
+  /* ---- routes: course defaults, then the mission's open / close ---- */
+  const routes = new Map();
+  const rdefs = def.routes && typeof def.routes === 'object' ? def.routes : {};
+  for (const name of Object.keys(rdefs)) {
+    const r = rdefs[name];
+    routes.set(name, !(r && r.open === false));
+  }
+  if (m) {
+    const op = Array.isArray(m.open) ? m.open : [];
+    const cl = Array.isArray(m.close) ? m.close : [];
+    for (let i = 0; i < op.length; i++) { if (!routes.has(op[i])) report.unmatched.push('open:' + op[i]); routes.set(op[i], true); }
+    for (let i = 0; i < cl.length; i++) { if (!routes.has(cl[i])) report.unmatched.push('close:' + cl[i]); routes.set(cl[i], false); }
+  }
+
+  /* ---- the tag edits ---- */
+  const removeTags = tagSet(m && m.remove);
+  const moves = (m && m.move && typeof m.move === 'object') ? m.move : null;
+  const sets = {};
+  if (m && m.set && typeof m.set === 'object') Object.assign(sets, m.set);
+  if (m && m.hazards && typeof m.hazards === 'object') Object.assign(sets, m.hazards);
+  const usedTags = new Set();
+  const counts = { added: 0, removed: 0, moved: 0, set: 0 };
+
+  const passes = (o) => {
+    if (!o || typeof o !== 'object') return true;
+    if (Array.isArray(o.missions) && (selId === null || o.missions.indexOf(selId) < 0)) return false;
+    if (Array.isArray(o.notMissions) && selId !== null && o.notMissions.indexOf(selId) >= 0) return false;
+    if (typeof o.route === 'string' && routes.get(o.route) === false) return false;
+    if (typeof o.blocks === 'string' && routes.get(o.blocks) !== false) return false;
+    return true;
+  };
+
+  const edit = (list) => {
+    if (!Array.isArray(list)) return list;
+    const out = [];
+    let changed = false;
+    for (let i = 0; i < list.length; i++) {
+      let o = list[i];
+      if (!passes(o)) { changed = true; counts.removed++; continue; }
+      const tags = tagsOfDef(o);
+      if (tags) {
+        let drop = false;
+        for (let t = 0; t < tags.length; t++) if (removeTags.has(tags[t])) { usedTags.add('remove:' + tags[t]); drop = true; }
+        if (drop) { changed = true; counts.removed++; continue; }
+        for (let t = 0; t < tags.length; t++) {
+          const tg = tags[t];
+          const mv = moves && moves[tg];
+          if (mv && typeof mv === 'object') {
+            let dx = 0, dy = 0, dz = 0;
+            if (fin3(mv.by)) { dx = mv.by[0]; dy = mv.by[1]; dz = mv.by[2]; }
+            else if (fin3(mv.to)) {
+              const a = anchorOfDef(o);
+              if (a) { dx = mv.to[0] - a[0]; dy = mv.to[1] - a[1]; dz = mv.to[2] - a[2]; }
+            }
+            o = translateDef(o, dx, dy, dz);
+            usedTags.add('move:' + tg);
+            counts.moved++; changed = true;
+          }
+          const patch = sets[tg];
+          if (patch && typeof patch === 'object') {
+            o = Object.assign({}, o, patch);
+            usedTags.add('set:' + tg);
+            counts.set++; changed = true;
+          }
+        }
+      }
+      out.push(o);
+    }
+    return changed ? out : list;
+  };
+
+  const add = (m && m.add) ? (Array.isArray(m.add) ? { objects: m.add } : m.add) : null;
+  const append = (list, extra) => {
+    if (!Array.isArray(extra) || !extra.length) return list;
+    const kept = extra.filter(passes);
+    counts.added += kept.length;
+    return (Array.isArray(list) ? list : []).concat(kept);
+  };
+
+  let objects = edit(def.objects);
+  for (const name of Object.keys(rdefs)) {
+    const r = rdefs[name];
+    if (!r || typeof r !== 'object') continue;
+    const open = routes.get(name) !== false;
+    const extra = open ? r.whenOpen : r.whenClosed;
+    if (Array.isArray(extra) && extra.length) {
+      const kept = extra.filter(passes);
+      objects = (Array.isArray(objects) ? objects : []).concat(kept);
+      counts.added += kept.length;
+    }
+  }
+  objects = append(objects, add && add.objects);
+  const critters = append(edit(def.critters), add && add.critters);
+  const coins = append(edit(def.coins), add && add.coins);
+  const waters = edit(def.waters);
+
+  if (m) {
+    for (const tg of removeTags) if (!usedTags.has('remove:' + tg)) report.unmatched.push('remove:' + tg);
+    if (moves) for (const tg of Object.keys(moves)) if (!usedTags.has('move:' + tg)) report.unmatched.push('move:' + tg);
+    for (const tg of Object.keys(sets)) if (!usedTags.has('set:' + tg)) report.unmatched.push('set:' + tg);
+  }
+
+  /* ---- which crests exist, and where the chosen one appears ---- */
+  const present = [];
+  const absent = [];
+  const crestsOut = crests.map((c) => {
+    if (!c) return c;
+    let live;
+    if (!sel) live = true;                                   // no mission: the plain course
+    else if (c === sel) live = true;
+    else if ((c.type || 'open') === 'race') live = false;    // a race only in its own mission
+    else if (m && missionOf(c)) live = missionOf(c).always === true;
+    else live = true;
+    (live ? present : absent).push(c.id);
+    if (c === sel && m && fin3(m.at)) {
+      const t = c.type || 'open';
+      return Object.assign({}, c, (t === 'open' || t === 'power') ? { p: m.at.slice() } : { spawnAt: m.at.slice() });
+    }
+    return c;
+  });
+
+  const routesOut = {};
+  routes.forEach((v, k) => { routesOut[k] = v; });
+  const info = sel ? {
+    id: selId,
+    index: selIndex,
+    name: String((m && m.name) || sel.name || selId),
+    hint: m && typeof m.hint === 'string' ? m.hint : '',
+    type: sel.type || 'open',
+    declared: !!m,
+    present,
+    absent,
+    routes: routesOut,
+    at: m && fin3(m.at) ? m.at.slice() : null,
+    counts,
+    unmatched: report.unmatched.slice(),
+  } : null;
+
+  const out = Object.assign({}, def, {
+    objects: objects || [],
+    crests: crestsOut,
+    missionRun: info,
+    baseDef: def,
+  });
+  if (critters !== undefined) out.critters = critters;
+  if (coins !== undefined) out.coins = coins;
+  if (waters !== undefined) out.waters = waters;
+  /* The HUD, the save and the harnesses read ALL SEVEN crests off `def.crests`;
+     only the collectible layer is told which of them exist in this run. */
+  if (sel) out.crestsLive = present;
+  return { def: out, mission: info, report };
+}
+
+/** The card's list: one entry per crest, in authored order. */
+export function missionList(def) {
+  const crests = def && Array.isArray(def.crests) ? def.crests : [];
+  const out = [];
+  for (let i = 0; i < crests.length; i++) {
+    const c = crests[i];
+    if (!c || !c.id) continue;
+    const m = missionOf(c);
+    out.push({
+      id: c.id, index: i, type: c.type || 'open',
+      name: String((m && m.name) || c.name || c.id),
+      hint: m && typeof m.hint === 'string' ? m.hint : '',
+      declared: !!m,
+    });
+  }
+  return out;
+}
+
+/* ===========================================================================
+ * COURSE
+ * ======================================================================== */
+
+export class Course {
+  /**
+   * @param {object} def    course data (runtime/data/courses/*.js | keep.js)
+   * @param {object} engine Engine instance (renderer / scene / camera / post)
+   * @param {object} ctx    {mats, fx, audio, save, game, quality, settings, impacts, decals}
+   */
+  constructor(def, engine, ctx) {
+    this.engine = engine || null;
+    this.ctx = ctx || {};
+    /* MISSION LAYER: `ctx.mission` (a crest id, or null) picks which version of the
+       course is built. `def` is the resolved def from here on; `baseDef` is the
+       authored one and `mission` the run's record (null = the plain course). */
+    const res = resolveMission(def || {}, this.ctx.mission);
+    this.def = res.def || {};
+    this.baseDef = (this.def && this.def.baseDef) || def || {};
+    this.mission = res.mission || null;
+
+    this.mats = this.ctx.mats || MatsMod.Mats || null;
+    this.fx = this.ctx.fx || null;
+    this.audio = this.ctx.audio || null;
+    this.save = this.ctx.save || null;
+    this.game = this.ctx.game || null;
+
+    this.id = this.def.id ? String(this.def.id) : 'unknown';
+    this.themeId = this.def.theme || this.def.realm || 'verdant';
+    this.realmId = this.def.realm || null;
+    this.isHub = this.def.isHub === true;
+    this.theme = null;
+    this.palette = null;
+
+    this.group = new THREE.Group();
+    this.group.name = 'course:' + this.id;
+    this.group.matrixAutoUpdate = false;
+
+    /* ---- the world the player collides against (contract §10) ---- */
+    this.broadphase = null;
+    /** @type {Array} KillVolume list (void plane, lava, spikes, critter bites…) */
+    this.killVolumes = [];
+    /** @type {Array} Volume list (water, wind, current, ladder, checkpoint, trigger…) */
+    this.volumes = [];
+
+    /* ---- content ---- */
+    /** @type {Array<{h,def,kind,index,colliders,volumes,kills}>} hazard records */
+    this.hazards = [];
+    /** @type {Array} live Critter instances (each has .kind / .def / .mesh) */
+    this.critters = [];
+    /** @type {object|null} Collectibles (coins, sigils, crests) */
+    this.collectibles = null;
+    /** @type {Array<{index,pos,yaw,clockOffset,volume,...}>} */
+    this.checkpoints = [];
+    /** @type {Array} terrain records; `terrain` is the first (usually only) one */
+    this.terrains = [];
+    this.terrain = null;
+    /** @type {Array<{def,mesh,volume,surfaceY,update}>} */
+    this.waters = [];
+    /** @type {Array} Keep gates — see `_buildGates` for the record shape */
+    this.gates = [];
+    /** @type {Array} power hats (`def.powers`) */
+    this.powers = [];
+    /** @type {Array} authored light SITES competing for the fixed PointLight pool */
+    this.lights = [];
+    /** @type {Array<THREE.Group>} in-world signage */
+    this.texts = [];
+
+    /* ---- the deterministic course clock ---- */
+    this.clock = 0;
+    this.cpIndex = -1;
+    this.bounds = new THREE.Box3();
+    this.killY = fin(this.def.killY) ? this.def.killY : -30;
+
+    /**
+     * checkpoint(i, cp) · gate(gate) · power(id, seconds) · trigger(id) ·
+     * wardenDown() · dropCoins(pos, n) — the ONLY way course state leaves this
+     * module.  Course detects and animates; Game owns save, HUD, audio,
+     * particles and progression.  There is deliberately no flag that lets the
+     * Course do those itself: one owner, always.
+     */
+    this.events = new Emitter();
+
+    /** Convenience bundle for player/collide.js (`world` argument). */
+    this.world = {
+      broadphase: null,
+      killVolumes: this.killVolumes,
+      volumes: this.volumes,
+      course: this,
+    };
+
+    /** Perf readout for `_harness/perfcheck.py` and the dev overlay. */
+    this.stats = {
+      chunks: 0, merged: 0, instanced: 0, lights: 0,
+      colliders: 0, hazards: 0, critters: 0, objects: 0,
+      tris: 0, loadMs: 0,
+    };
+
+    /* ---- internals ---- */
+    this._built = false;
+    this._disposed = false;
+    /** @private {{cnv,ctx,tex,mat,next}|null} the course's one sign-text atlas */
+    this._textAtlas = null;
+    /** @private sign boards grouped by mount (see _prepareTexts) */
+    this._textGroups = null;
+    this._textGroupOf = null;
+    /** @private a 2D context for measuring sign lines before the bake */
+    this._measureCtx = null;
+    /** @private the occluder-fade uniforms every sign material shares (see SIGN_OCC_*) */
+    this._signOcc = null;
+    /** @private per-course plank material clones carrying the occluder fade, by key */
+    this._signPlankMats = new Map();
+    /** @private `{kind:'light'}` sites awaiting a fixture once the colliders exist */
+    this._lightFixtures = [];
+    /** @private what each light site was given (build-time record for the harness) */
+    this._fixtureLog = [];
+    this._chunks = [];
+    this._chunkMap = new Map();
+    /** @private detail-art cells: a FINE grid, independent of the main chunks */
+    this._detailCells = [];
+    this._detailMap = new Map();
+    this._chunkSize = CHUNK_SIZE;
+    this._gridOX = 0;
+    this._gridOZ = 0;
+    this._allColliders = [];
+    this._staticColliders = [];
+    this._heightfields = [];
+    this._ownedGeo = new Set();
+    this._ownedMat = new Set();
+    this._ownedTex = new Set();
+    this._mergeSources = new Set();
+    this._matCache = new Map();
+    this._decoProps = [];        // deco defs routed to props.js placeProps
+    this._propHandle = null;     // placeProps() teardown handle
+    this._gateObjects = [];      // painting/gatedoor objects awaiting a gate record
+    this._rng = mulberry32(hashId(this.id));
+    this._pp = new THREE.Vector3();
+    this._ppValid = false;
+    this._playerRef = null;
+    this._standOn = null;
+    this._lightTimer = 0;
+    this._lightIdx = [];
+    this._maxLights = 3;
+    this._lightPool = [];
+    this._lightFirst = true;
+    this._glowSites = [];
+    this._glowField = null;
+    this._cullFar = 260;
+    this._detailFar = 90;
+    this._cpDirty = true;
+    this._settingsCb = null;
+    this._warnedBuilders = new Set();
+    this._warnedCameraFallback = false;
+    this._triggered = new Set();
+    /** @private hazard records of kind 'cannon' (the ones with a breech trigger to watch) */
+    this._cannons = [];
+    this._time = 0;              // visual clock (drives FX shaders; never gameplay)
+    this._quality = null;
+    this._decor = 1;
+  }
+
+  /* ─────────────────────────────────────────── static load / validate ──── */
+
+  /**
+   * Build a complete, playable course.  Awaits GLB prop loading (the only async
+   * step); everything else is one synchronous pass, which is what keeps the
+   * contract's 1.5 s load budget reachable.
+   * @returns {Promise<Course>}
+   */
+  static async load(def, engine, ctx) {
+    const res = resolveMission(def, ctx && ctx.mission);
+    Course.validate(res.def);
+    const course = new Course(res.def, engine, ctx);
+    await course._build();
+    return course;
+  }
+
+  /** The mission layer, as statics for tooling (see THE MISSION LAYER above). */
+  static resolveMission(def, missionId) { return resolveMission(def, missionId); }
+  static missionList(def) { return missionList(def); }
+
+  /**
+   * Authoring validator.  Throws with the offending index AND kind so a data
+   * mistake is diagnosable in one read.  Structural mistakes are ERRORS;
+   * content-budget rules (≥ 3 checkpoints, 8 sigils, ≥ 100 coins, 7 crests,
+   * ≥ 6 hazard families) are WARNINGS here and hard failures in
+   * `_harness/reachcheck.mjs`, which is the gate that owns them.
+   *
+   * @returns {{ok:boolean, warnings:string[]}}
+   */
+  static validate(def) {
+    const warnings = [];
+    const cid = (def && def.id) || '<no id>';
+    const fail = (msg) => { throw new Error('[Course.validate ' + cid + '] ' + msg); };
+    const failObj = (i, kind, msg) => fail('objects[' + i + '] (kind "' + kind + '"): ' + msg);
+
+    if (!def || typeof def !== 'object') fail('course definition is not an object');
+    if (typeof def.id !== 'string' || !def.id) fail('missing required field "id" (string)');
+    if (typeof def.theme !== 'string' || !def.theme) {
+      fail('missing required field "theme" (string) — one of keep/verdant/ember/rime/azure');
+    }
+    if (!def.spawn || !fin3(def.spawn.p)) fail('missing/!finite "spawn.p" — expected [x,y,z]');
+    if (def.spawn.yaw !== undefined && !fin(def.spawn.yaw)) fail('"spawn.yaw" is not a finite number');
+    if (!fin(def.killY)) fail('missing/!finite "killY" (number)');
+    if (!Array.isArray(def.objects)) fail('missing required field "objects" (array)');
+
+    const isHub = def.isHub === true;
+
+    /* ---- bounds: authoritative for culling and the minimap (contract §25) ---- */
+    if (def.bounds !== undefined && def.bounds !== null) {
+      const b = def.bounds;
+      if (!b || !fin3(b.min) || !fin3(b.max)) fail('"bounds" must be {min:[x,y,z], max:[x,y,z]} of finite numbers');
+      for (let a = 0; a < 3; a++) {
+        if (b.max[a] <= b.min[a]) {
+          fail('"bounds" is inverted or degenerate on axis ' + 'xyz'[a] +
+               ' (min ' + b.min[a] + ' >= max ' + b.max[a] + ')');
+        }
+      }
+      const sp = def.spawn.p;
+      if (sp[0] < b.min[0] || sp[0] > b.max[0] || sp[2] < b.min[2] || sp[2] > b.max[2]) {
+        warnings.push('spawn.p is outside "bounds" — the spawn chunk will never be culled in, ' +
+                      'and the minimap will not show the player');
+      }
+    } else {
+      warnings.push('no "bounds" — culling and the minimap will fall back to the built geometry');
+    }
+
+    /* ---- checkpoints ---- */
+    const cps = Array.isArray(def.checkpoints) ? def.checkpoints : [];
+    const seenCpIds = new Set();
+    for (let i = 0; i < cps.length; i++) {
+      const cp = cps[i];
+      if (!cp || !fin3(cp.p)) fail('checkpoints[' + i + '].p missing or not a finite [x,y,z]');
+      if (cp.yaw !== undefined && !fin(cp.yaw)) fail('checkpoints[' + i + '].yaw is not finite');
+      if (cp.clockOffset !== undefined && (!fin(cp.clockOffset) || cp.clockOffset < 0)) {
+        fail('checkpoints[' + i + '].clockOffset must be a finite number >= 0 ' +
+             '(it is the course-clock phase every respawn at this pad rewinds to)');
+      }
+      if (cp.r !== undefined && (!fin(cp.r) || cp.r <= 0)) fail('checkpoints[' + i + '].r must be > 0');
+      if (cp.id !== undefined) {
+        if (typeof cp.id !== 'string' || !cp.id) fail('checkpoints[' + i + '].id must be a non-empty string');
+        if (seenCpIds.has(cp.id)) fail('checkpoints[' + i + '].id "' + cp.id + '" is a duplicate');
+        seenCpIds.add(cp.id);
+      }
+      if (cp.p[1] < def.killY) {
+        fail('checkpoints[' + i + '] sits at y=' + cp.p[1] + ', BELOW killY (' + def.killY +
+             ') — every respawn there would die instantly');
+      }
+    }
+    if (!isHub && cps.length < 3) {
+      warnings.push('only ' + cps.length + ' checkpoint(s) — a full course needs at least 3 (contract §25)');
+    }
+
+    /* ---- crests ---- */
+    const CREST_TYPES = { open: 1, sigils: 1, coins: 1, secret: 1, boss: 1, race: 1, power: 1 };
+    const crests = Array.isArray(def.crests) ? def.crests : [];
+    const seenCrest = new Set();
+    for (let i = 0; i < crests.length; i++) {
+      const c = crests[i];
+      if (!c || typeof c !== 'object') fail('crests[' + i + '] is not an object');
+      if (typeof c.id !== 'string' || !c.id) fail('crests[' + i + '] missing "id" (string)');
+      if (seenCrest.has(c.id)) fail('crests[' + i + '].id "' + c.id + '" is a duplicate');
+      seenCrest.add(c.id);
+      const type = c.type || 'open';
+      if (!CREST_TYPES[type]) {
+        fail('crests[' + i + '] (id "' + c.id + '") has unknown type "' + type +
+             '" — expected one of ' + Object.keys(CREST_TYPES).join(', '));
+      }
+      if (type === 'open' && !fin3(c.p)) fail('crests[' + i + '] type "open" needs a finite "p"');
+      if ((type === 'sigils' || type === 'coins' || type === 'boss') && !fin3(c.spawnAt) && !fin3(c.p)) {
+        fail('crests[' + i + '] type "' + type + '" needs "spawnAt" (or "p") — where the crest appears');
+      }
+      if (type === 'secret' && (typeof c.trigger !== 'string' || !c.trigger)) {
+        fail('crests[' + i + '] type "secret" needs a "trigger" id (a string a hazard or critter fires)');
+      }
+      if (type === 'race') {
+        if (!fin3(c.start) || !fin3(c.finish)) fail('crests[' + i + '] type "race" needs finite "start" and "finish"');
+        if (!fin(c.limitMs) || c.limitMs <= 0) fail('crests[' + i + '] type "race" needs a positive "limitMs"');
+      }
+      if (type === 'power' && (typeof c.power !== 'string' || !c.power)) {
+        fail('crests[' + i + '] type "power" needs a "power" id matching one of def.powers[].kind');
+      }
+      if (type === 'coins' && c.threshold !== undefined && (!fin(c.threshold) || c.threshold <= 0)) {
+        fail('crests[' + i + '].threshold must be a positive number of coins');
+      }
+    }
+    if (!isHub && crests.length !== 7) {
+      warnings.push(crests.length + ' crest(s) — a full course carries exactly 7 (contract §22)');
+    }
+
+    /* ---- missions + routes (THE MISSION LAYER) ---- */
+    if (def.routes !== undefined) {
+      if (!def.routes || typeof def.routes !== 'object' || Array.isArray(def.routes)) {
+        fail('"routes" must be an object map { name: {open?, whenOpen?:[…], whenClosed?:[…]} }');
+      }
+      for (const name of Object.keys(def.routes)) {
+        const r = def.routes[name];
+        if (!r || typeof r !== 'object') fail('routes.' + name + ' must be an object');
+        if (r.open !== undefined && typeof r.open !== 'boolean') fail('routes.' + name + '.open must be true or false');
+        for (const k of ['whenOpen', 'whenClosed']) {
+          if (r[k] !== undefined && !Array.isArray(r[k])) fail('routes.' + name + '.' + k + ' must be an array of ObjectDefs');
+        }
+      }
+    }
+    for (let i = 0; i < crests.length; i++) {
+      const c = crests[i];
+      if (c.mission === undefined) continue;
+      const m = c.mission;
+      const where = 'crests[' + i + '] (id "' + c.id + '") mission';
+      if (!m || typeof m !== 'object' || Array.isArray(m)) fail(where + ' must be an object');
+      if (m.name !== undefined && (typeof m.name !== 'string' || !m.name || m.name.length > 48)) {
+        fail(where + '.name must be a non-empty string of at most 48 characters (it is the card\'s hint)');
+      }
+      if (m.hint !== undefined && typeof m.hint !== 'string') fail(where + '.hint must be a string');
+      if (m.at !== undefined && !fin3(m.at)) fail(where + '.at must be a finite [x,y,z]');
+      for (const k of ['remove', 'open', 'close']) {
+        if (m[k] !== undefined && (!Array.isArray(m[k]) || m[k].some((t) => typeof t !== 'string' || !t))) {
+          fail(where + '.' + k + ' must be an array of non-empty strings');
+        }
+      }
+      for (const k of ['move', 'set', 'hazards']) {
+        if (m[k] !== undefined && (!m[k] || typeof m[k] !== 'object' || Array.isArray(m[k]))) {
+          fail(where + '.' + k + ' must be an object keyed by tag');
+        }
+      }
+      if (m.move) {
+        for (const tg of Object.keys(m.move)) {
+          const mv = m.move[tg];
+          if (!mv || (!fin3(mv.to) && !fin3(mv.by))) fail(where + '.move.' + tg + ' needs a finite "to" or "by" [x,y,z]');
+        }
+      }
+      if (m.add !== undefined) {
+        const a = m.add;
+        if (!a || typeof a !== 'object') fail(where + '.add must be {objects?, critters?, coins?} (or an array of objects)');
+        if (!Array.isArray(a)) {
+          for (const k of ['objects', 'critters', 'coins']) {
+            if (a[k] !== undefined && !Array.isArray(a[k])) fail(where + '.add.' + k + ' must be an array');
+          }
+        }
+      }
+    }
+    /* Every declared mission is RESOLVED and validated as the course it builds,
+       so a bad object in a mission's `add` fails here, at authoring time, and not
+       the day a player picks that crest. A tag edit that matches nothing is a
+       typo that would silently do nothing — a warning. A resolved def carries
+       `missionRun` and is not swept again. */
+    if (def.missionRun === undefined) {
+      for (let i = 0; i < crests.length; i++) {
+        const c = crests[i];
+        if (!missionOf(c)) continue;
+        let res = null;
+        try { res = resolveMission(def, c.id); } catch (e) { fail('mission "' + c.id + '" failed to resolve: ' + ((e && e.message) || e)); }
+        if (res.report.unmatched.length) {
+          warnings.push('mission "' + c.id + '": ' + res.report.unmatched.join(', ') + ' matched nothing (tag / route typo?)');
+        }
+        try { Course.validate(res.def); } catch (e) {
+          fail('mission "' + c.id + '" builds an invalid course: ' + String((e && e.message) || e).replace(/^\[Course\.validate [^\]]*\]\s*/, ''));
+        }
+      }
+    }
+
+    /* ---- sigils / coins ---- */
+    const sigils = Array.isArray(def.sigils) ? def.sigils : [];
+    for (let i = 0; i < sigils.length; i++) {
+      if (!sigils[i] || !fin3(sigils[i].p)) fail('sigils[' + i + '].p missing or not a finite [x,y,z]');
+    }
+    if (!isHub && sigils.length && sigils.length !== 8) {
+      warnings.push(sigils.length + ' sigil(s) — a course carries exactly 8 (they buy one crest)');
+    }
+    if (def.coins !== undefined) {
+      if (!Array.isArray(def.coins)) fail('"coins" must be an array');
+      for (let i = 0; i < def.coins.length; i++) {
+        const c = def.coins[i];
+        if (!c || typeof c !== 'object') fail('coins[' + i + '] is not an object');
+        const isPoint = fin3(c.p);
+        const isRing = c.ring && finCentre(c.ring.c) && fin(c.ring.r) && fin(c.ring.n);
+        const isLine = c.line && fin3(c.line.a) && fin3(c.line.b) && fin(c.line.n);
+        // `arc` is the fourth form entities/collectibles.js expands (see
+        // expandCoinEntry); the validator used to reject every one of them.
+        const isArc = c.arc && finCentre(c.arc.c) && fin(c.arc.r) && fin(c.arc.n);
+        if (!isPoint && !isRing && !isLine && !isArc) {
+          fail('coins[' + i + '] must be {p:[x,y,z]} | {ring:{c,r,n,y?}} | {line:{a,b,n}} | {arc:{c,r,a0,a1,n,y?}}');
+        }
+      }
+    }
+
+    /* ---- critters ---- */
+    const known = CrittersMod.CRITTERS || null;
+    const critters = Array.isArray(def.critters) ? def.critters : [];
+    for (let i = 0; i < critters.length; i++) {
+      const c = critters[i];
+      if (!c || typeof c.kind !== 'string') fail('critters[' + i + '] missing "kind" (string)');
+      if (known && !known[c.kind]) {
+        fail('critters[' + i + '] unknown kind "' + c.kind + '" — known: ' + Object.keys(known).join(', '));
+      }
+      if (c.p !== undefined && !fin3(c.p)) fail('critters[' + i + '].p must be a finite [x,y,z]');
+      if (c.path !== undefined) {
+        if (!Array.isArray(c.path) || c.path.length < 2) fail('critters[' + i + '].path needs at least 2 points');
+        for (let k = 0; k < c.path.length; k++) {
+          if (!fin3(c.path[k])) fail('critters[' + i + '].path[' + k + '] is not a finite [x,y,z]');
+        }
+      }
+    }
+
+    /* ---- powers ---- */
+    const powers = Array.isArray(def.powers) ? def.powers : [];
+    for (let i = 0; i < powers.length; i++) {
+      const p = powers[i];
+      if (!p || typeof p.kind !== 'string' || !p.kind) fail('powers[' + i + '] missing "kind" (string)');
+      if (!fin3(p.p)) fail('powers[' + i + '].p must be a finite [x,y,z]');
+      if (p.duration !== undefined && (!fin(p.duration) || p.duration <= 0)) {
+        fail('powers[' + i + '].duration must be a positive number of seconds');
+      }
+    }
+
+    /* ---- gates (THE KEEP) ---- */
+    const gates = Array.isArray(def.gates) ? def.gates : [];
+    if (gates.length && !isHub) {
+      warnings.push('"gates" declared on a non-hub course — only the Keep opens courses');
+    }
+    for (let i = 0; i < gates.length; i++) {
+      const g = gates[i];
+      if (!g || typeof g !== 'object') fail('gates[' + i + '] is not an object');
+      if (typeof g.course !== 'string' || !g.course) fail('gates[' + i + '] missing "course" (course id string)');
+      if (!fin3(g.p)) fail('gates[' + i + '].p must be a finite [x,y,z]');
+      if (g.yaw !== undefined && !fin(g.yaw)) fail('gates[' + i + '].yaw is not finite');
+      if (g.kind !== undefined && ['painting', 'door', 'glass'].indexOf(g.kind) < 0) {
+        fail('gates[' + i + '].kind must be "painting", "door" or "glass"');
+      }
+      if (g.requires !== undefined && g.requires !== null) {
+        if (!g.requires || !fin(g.requires.crests) || g.requires.crests < 0) {
+          fail('gates[' + i + '].requires must be {crests:<number >= 0>}');
+        }
+      }
+    }
+    if (isHub && !gates.length) {
+      const paintings = def.objects.filter((o) => o && (o.kind === 'painting' || o.kind === 'gatedoor'));
+      if (!paintings.length) warnings.push('the hub declares no gates and no painting/gatedoor objects — no course is reachable');
+    }
+
+    /* ---- objects ---- */
+    const VEC_FIELDS = ['p', 's', 'rot', 'to', 'a', 'b', 'dir', 'axis', 'blade', 'origin', 'size', 'target', 'pts'];
+    const families = new Set();
+    let lowest = Infinity;
+    for (let i = 0; i < def.objects.length; i++) {
+      const o = def.objects[i];
+      if (!o || typeof o !== 'object') fail('objects[' + i + '] is not an object');
+      const k = o.kind;
+      if (typeof k !== 'string' || !k) fail('objects[' + i + '] missing required field "kind"');
+      if (!Course._routeOf(k)) {
+        failObj(i, k, 'unknown kind — neither hazards/index.js nor world/builders.js owns it ' +
+                      '(contract §25 lists every legal kind)');
+      }
+      families.add(k);
+
+      /* NaN sweep over every vector-ish field */
+      for (let f = 0; f < VEC_FIELDS.length; f++) {
+        const name = VEC_FIELDS[f];
+        const val = o[name];
+        if (val === undefined || val === null || !Array.isArray(val)) continue;
+        for (let c = 0; c < val.length; c++) {
+          const e = val[c];
+          if (Array.isArray(e)) {                       // pts: [[x,y,z], …]
+            if (!fin3(e)) failObj(i, k, 'field "' + name + '[' + c + ']" is not a finite [x,y,z]');
+            continue;
+          }
+          if (!fin(e)) {
+            failObj(i, k, 'field "' + name + '[' + c + ']" is not a finite number (got ' +
+                          (typeof e) + ' ' + String(e) + ')');
+          }
+        }
+      }
+      if (o.motion && o.motion.to !== undefined && !fin3(o.motion.to)) {
+        failObj(i, k, 'motion.to must be a finite [x,y,z]');
+      }
+
+      /* HAZARD KINDS: one contract, owned by hazards/index.js.  Delegating makes
+         the two verdicts identical by construction — a validator that accepts
+         what `makeHazard` then rejects ships a course with a silent hole. */
+      if (Course._routeOf(k) === 'hazard' && typeof HazardLib.validateHazardDef === 'function') {
+        try {
+          HazardLib.validateHazardDef(o, { courseId: cid, objectIndex: i });
+        } catch (e) {
+          failObj(i, k, (e && e.message) ? e.message : String(e));
+        }
+      }
+
+      /* per-kind required fields the Course itself reads */
+      switch (k) {
+        case 'terrain':
+          if (!Array.isArray(o.origin) || !fin(o.origin[0]) || !fin(o.origin[1])) {
+            failObj(i, k, '"origin" must be [x, z] of finite numbers');
+          }
+          if (!Array.isArray(o.size) || !fin(o.size[0]) || !fin(o.size[1]) || o.size[0] <= 0 || o.size[1] <= 0) {
+            failObj(i, k, '"size" must be [sizeX, sizeZ], both > 0');
+          }
+          if (o.res !== undefined && (!fin(o.res) || o.res <= 0)) failObj(i, k, '"res" must be a positive metre spacing');
+          break;
+        case 'water':
+          if (!fin3(o.p)) failObj(i, k, '"p" must be a finite [x,y,z] (the water surface centre)');
+          if (!Array.isArray(o.s) || !fin(o.s[0])) failObj(i, k, '"s" must be [sx, sy, sz] extents');
+          break;
+        case 'text':
+          if (typeof o.text !== 'string' || !o.text.length) failObj(i, k, '"text" must be a non-empty string');
+          break;
+        case 'light':
+          if (!fin3(o.p)) failObj(i, k, '"p" must be a finite [x,y,z]');
+          if (o.intensity !== undefined && (!fin(o.intensity) || o.intensity < 0)) {
+            failObj(i, k, '"intensity" must be a finite number >= 0, got ' + String(o.intensity));
+          }
+          break;
+        case 'painting':
+        case 'gatedoor':
+          if (!fin3(o.p)) failObj(i, k, '"p" must be a finite [x,y,z]');
+          if (o.course !== undefined && (typeof o.course !== 'string' || !o.course)) {
+            failObj(i, k, '"course" must be a course id string');
+          }
+          break;
+        case 'bridge':
+          if (!fin3(o.a) || !fin3(o.b)) failObj(i, k, 'needs finite endpoints "a" and "b"');
+          break;
+        case 'fence':
+          if (!fin3(o.a) || !fin3(o.b)) failObj(i, k, 'needs finite endpoints "a" and "b"');
+          break;
+        case 'sandboard': {
+          /* hazards/fluids.js SandboardHazard reads `pts` (a multi-segment run)
+             OR the `a`/`b` pair; the validator only knew the pair, so a legal
+             multi-segment chute was rejected at load. One chute authored as one
+             object instead of N is worth ~55 draw calls (see keep.js WYRM_CHUTE). */
+          const spts = Array.isArray(o.pts) ? o.pts : null;
+          if (spts) {
+            if (spts.length < 2) failObj(i, k, '"pts" needs at least 2 points');
+            else for (let pi = 0; pi < spts.length; pi++) {
+              if (!fin3(spts[pi])) failObj(i, k, '"pts[' + pi + ']" must be a finite [x,y,z]');
+            }
+          } else if (!fin3(o.a) || !fin3(o.b)) {
+            failObj(i, k, 'needs finite endpoints "a" and "b" (or a "pts" run)');
+          }
+          break;
+        }
+        default:
+          if (Course._routeOf(k) === 'builder' && o.p === undefined) {
+            failObj(i, k, 'missing required field "p"');
+          }
+          if (Course._routeOf(k) === 'builder' && o.p !== undefined && !fin3(o.p)) {
+            failObj(i, k, '"p" must be a finite [x,y,z]');
+          }
+          break;
+      }
+
+      if (fin3(o.p)) {
+        const half = Array.isArray(o.s) && fin(o.s[1]) ? o.s[1] * 0.5 : 0;
+        lowest = Math.min(lowest, o.p[1] - half);
+      }
+    }
+
+    if (def.objects.length && Number.isFinite(lowest) && def.killY > lowest - 1.5) {
+      warnings.push('killY (' + def.killY + ') sits at or above the lowest geometry (' +
+                    lowest.toFixed(2) + ') — players may die standing on real ground');
+    }
+    if (!isHub) {
+      let fam = 0;
+      families.forEach((k) => { if (Course._routeOf(k) === 'hazard') fam++; });
+      fam += new Set(critters.map((c) => c.kind)).size;
+      if (fam < 6 && (def.difficulty || 1) > 1) {
+        warnings.push('only ' + fam + ' hazard/critter families — a non-tutorial course wants at least 6');
+      }
+    }
+    if (def.objects.length > 700) {
+      warnings.push(def.objects.length + ' objects: expect merge cost at load; verify the 1.5 s budget');
+    }
+
+    return { ok: true, warnings };
+  }
+
+  /**
+   * Which module owns a kind.  NOT a local table by preference: hazards/index.js
+   * derives the map from its own factory registry, so this compiler cannot drift
+   * out of step with it.  The local fallback covers the window in which
+   * hazards/index.js has not published a route table yet.
+   * @returns {'hazard'|'builder'|'course'|null}
+   */
+  static _routeOf(kind) {
+    if (typeof kind !== 'string' || !kind) return null;
+    if (COURSE_KINDS[kind]) return 'course';
+    if (typeof HazardLib.routeOf === 'function') {
+      const r = HazardLib.routeOf(kind);
+      if (r) return r;
+    }
+    const table = HazardLib.KIND_ROUTE;
+    if (table && Object.prototype.hasOwnProperty.call(table, kind)) return table[kind];
+    const hz = HazardLib.HAZARDS;
+    if (hz && Object.prototype.hasOwnProperty.call(hz, kind)) return 'hazard';
+    if (Object.prototype.hasOwnProperty.call(BUILDER_ROUTE, kind)) return 'builder';
+    return null;
+  }
+
+  /* ─────────────────────────────────────────────────────────────── build ── */
+
+  _assertDeps() {
+    const missing = [];
+    if (typeof Collider !== 'function') missing.push('Collider (world/collider.js)');
+    if (typeof Broadphase !== 'function') missing.push('Broadphase (world/collider.js)');
+    if (typeof KillVolume !== 'function') missing.push('KillVolume (world/collider.js)');
+    if (typeof Volume !== 'function') missing.push('Volume (world/collider.js)');
+    if (typeof mergeGeometries !== 'function') missing.push('mergeGeometries (addons/utils/BufferGeometryUtils.js)');
+    if (typeof clamp !== 'function' || typeof mulberry32 !== 'function') missing.push('clamp/mulberry32 (core/util.js)');
+    if (typeof Emitter !== 'function') missing.push('Emitter (core/util.js)');
+    if (missing.length) {
+      throw new Error('[Course ' + this.id + '] required exports unavailable: ' + missing.join(', '));
+    }
+    /* Soft dependencies: a course still loads and plays without them, so they
+       warn once rather than refusing the build. */
+    if (typeof HazardLib.makeHazard !== 'function' && !HazardLib.HAZARDS) {
+      console.warn('[Course ' + this.id + '] hazards/index.js exports neither makeHazard nor HAZARDS — ' +
+                   'every dynamic object will be skipped');
+    }
+    if (typeof Builders.buildPlatform !== 'function') {
+      console.warn('[Course ' + this.id + '] world/builders.js has no buildPlatform — using the course-local ' +
+                   'fallback slab for every static surface');
+    }
+  }
+
+  async _build() {
+    const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    this._assertDeps();
+
+    const report = Course.validate(this.def);
+    for (let i = 0; i < report.warnings.length; i++) {
+      console.warn('[Course ' + this.id + '] ' + report.warnings[i]);
+    }
+
+    this._resolveTheme();
+    this._applyQuality();
+    this._computeChunkGrid();
+
+    this.broadphase = new Broadphase(6);
+    this.world.broadphase = this.broadphase;
+
+    if (this.engine && this.engine.scene && !this.group.parent) this.engine.scene.add(this.group);
+
+    const objects = Array.isArray(this.def.objects) ? this.def.objects : [];
+    this.stats.objects = objects.length;
+
+    /* 1. TERRAIN FIRST.  Everything that ground-snaps (coins, critters, props,
+          light pools) needs the heightfield registered before it asks. */
+    for (let i = 0; i < objects.length; i++) {
+      if (objects[i] && objects[i].kind === 'terrain') this._buildTerrain(objects[i], i);
+    }
+    if (this.def.terrain) this._buildTerrain(this.def.terrain, -1);
+
+    /* 2. water bodies (their Volumes are what the swim state reads) */
+    for (let i = 0; i < objects.length; i++) {
+      if (objects[i] && objects[i].kind === 'water') this._buildWater(objects[i], i);
+    }
+    if (Array.isArray(this.def.waters)) {
+      for (let i = 0; i < this.def.waters.length; i++) this._buildWater(this.def.waters[i], -1);
+    }
+
+    /* 3. hazards — they keep their own meshes; nothing merges them */
+    const pending = [];
+    for (let i = 0; i < objects.length; i++) {
+      const o = objects[i];
+      if (!o || typeof o.kind !== 'string') continue;
+      if (Course._routeOf(o.kind) !== 'hazard') continue;
+      const p = this._buildHazard(o, i);
+      if (p) pending.push(p);
+    }
+
+    /* 4. static art (and the deco defs that route to props.js) */
+    for (let i = 0; i < objects.length; i++) {
+      const o = objects[i];
+      if (!o || typeof o.kind !== 'string') continue;
+      const route = Course._routeOf(o.kind);
+      if (route === 'builder') this._buildStatic(o, i);
+      else if (route === 'course' && o.kind === 'text') this._buildText(o, i);
+      else if (route === 'course' && o.kind === 'light') this._buildLight(o, i);
+    }
+
+    /* 5. GLB props — the ONE await in the whole build */
+    if (this._decoProps.length) pending.push(this._buildPropBatch());
+    if (pending.length) await Promise.all(pending);
+    if (this._disposed) return this;
+
+    /* 6. the interactive furniture */
+    this._buildCheckpoints();
+    this._buildGates();
+    this._buildPowers();
+    this._buildCollectibles();
+    this._buildCritters();
+
+    /* 7. bounds, the void, the light budget, the merge */
+    this._computeBounds();
+    this._buildVoidVolume();
+    /* The pool and the glow field are allocated BEFORE the first render and
+       never touched again — see the LIGHT_POOL_SIZE note.  The glow field needs
+       the colliders, so it comes after every builder and hazard; so does the
+       lamp round each light, which reads the same colliders for its mount. */
+    this._buildLightFixtures();
+    this._buildLightPool();
+    this._buildGlowField();
+    this._mergeStatic();
+    this._disposeMergeSources();
+
+    /* 8. place everything at t = 0 */
+    this.clock = 0;
+    this._time = 0;
+    for (let i = 0; i < this.hazards.length; i++) {
+      const rec = this.hazards[i];
+      try { if (typeof rec.h.reset === 'function') rec.h.reset(0); } catch (e) { /* reset is optional-safe */ }
+      try { rec.h.update(0, 0, null); } catch (e) { this._hazardError(rec, e); }
+      this._measureHazard(rec);
+    }
+    this._refreshHazardColliders();
+    this._syncCheckpointAttrs(true);
+    this._pruneShadowCasters();
+
+    /* 9. react to quality changes for the life of the course */
+    if (Settings && typeof Settings.on === 'function') {
+      this._settingsCb = () => { this._applyQuality(); };
+      Settings.on(this._settingsCb);
+    }
+
+    this.stats.colliders = this._allColliders.length;
+    this.stats.hazards = this.hazards.length;
+    this.stats.critters = this.critters.length;
+    this.stats.lights = this.lights.length;
+    this.stats.chunks = this._chunks.length;
+    if (typeof Builders.triangleCount === 'function') {
+      try { this.stats.tris = Math.round(Builders.triangleCount(this.group)); } catch (e) { /* advisory */ }
+    }
+    const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    this.stats.loadMs = Math.round(t1 - t0);
+
+    this._built = true;
+    return this;
+  }
+
+  /* ── theme + quality ─────────────────────────────────────────────────── */
+
+  _resolveTheme() {
+    const base = (THEMES && (THEMES[this.themeId] || THEMES[this.def.realm])) || null;
+    let theme = base;
+    if (this.def.ambience && base) {
+      /* A course may tint its realm theme without forking it: shallow-merge one
+         level so `ambience:{fog:{far:180}}` keeps the rest of `fog`. */
+      theme = Object.assign({}, base);
+      const amb = this.def.ambience;
+      for (const k in amb) {
+        if (!Object.prototype.hasOwnProperty.call(amb, k)) continue;
+        const cur = theme[k];
+        const inc = amb[k];
+        if (cur && inc && typeof cur === 'object' && typeof inc === 'object' &&
+            !Array.isArray(cur) && !Array.isArray(inc)) {
+          theme[k] = Object.assign({}, cur, inc);
+        } else {
+          theme[k] = inc;
+        }
+      }
+    }
+    if (!theme) {
+      console.warn('[Course ' + this.id + '] theme "' + this.themeId +
+                   '" not found in world/themes.js — using a neutral fallback');
+      theme = {
+        id: this.themeId, name: this.themeId,
+        palette: {}, fog: { near: 24, far: 260 }, lights: {},
+      };
+    }
+    this.theme = theme;
+    const pal = theme.palette || {};
+    this.palette = {
+      safe: colorOf(pal.safe, 0xb9c7d6),
+      safeEdge: colorOf(pal.safeEdge, 0x8ef0ff),
+      kill: colorOf(pal.kill, 0xff3a1f),
+      killGlow: colorOf(pal.killGlow, 0xff7a3a),
+      checkpoint: colorOf(pal.checkpoint, 0x2f5f8a),
+      checkpointOn: colorOf(pal.checkpointOn, 0x62f5c8),
+      crest: colorOf(pal.crest, 0xffd166),
+      sigil: colorOf(pal.sigil, 0xff4d6a),
+      coin: colorOf(pal.coin, 0xffcf4d),
+      accent: colorOf(pal.accent, 0x5ec8ff),
+      deco: colorOf(pal.deco, 0x6d7f96),
+      water: colorOf(pal.water, 0x3aa6c8),
+    };
+    /* How hard a checkpoint pad self-lights, per theme (see _buildCheckpoints).
+     * A NUMBER, not a colour, so it does not go through `colorOf`. The default
+     * is what a dim interior needs; a sunlit theme declares its own, because
+     * the same lift that rescues a candle-lit hall clips to white in a meadow. */
+    this._padGlow = (typeof pal.padGlow === 'number' && isFinite(pal.padGlow) && pal.padGlow >= 0)
+      ? pal.padGlow : 2.05;
+    const key = theme.lights && theme.lights.key;
+    this._keyDir = v3(key && key.dir, -0.45, 0.82, 0.36).normalize();
+  }
+
+  _qualityPreset() {
+    let q = null;
+    try {
+      if (Settings && typeof Settings.quality === 'function') q = Settings.quality();
+    } catch (e) { q = null; }
+    if (!q || typeof q !== 'object' || !fin(q.decor)) {
+      let name = 'high';
+      try {
+        if (Settings && typeof Settings.get === 'function') {
+          const s = Settings.get();
+          if (s && typeof s.quality === 'string') name = s.quality;
+        }
+      } catch (e) { /* defaults */ }
+      q = (QUALITY && (QUALITY[name] || QUALITY.high)) || null;
+    }
+    if (!q) {
+      q = { id: 'high', dpr: 1.5, shadowMap: 2048, bloom: true, particles: 1, decor: 1,
+            shadowDistance: 70, grass: 1, maxLights: 6 };
+    }
+    return q;
+  }
+
+  _applyQuality() {
+    const q = this._qualityPreset();
+    this.quality = q;
+    this._quality = q;
+    const decor = fin(q.decor) ? clamp(q.decor, 0, 1) : 1;
+    this._decor = decor;
+    /* The preset owns the number in use (settings.js QUALITY[*].maxLights); the
+       POOL is the hard ceiling, because slots cannot be allocated after the
+       first render.  Raising quality mid-run therefore lights more of the pool,
+       it never grows it. */
+    const wantLights = fin(q.maxLights) ? q.maxLights : (decor >= 0.6 ? 3 : 2);
+    /* Before the pool exists this sizes it; afterwards it can only light more
+       of what was already allocated, never grow it (that would recompile). */
+    const ceiling = this._lightPool.length ? this._lightPool.length : LIGHT_POOL_SIZE;
+    this._maxLights = Math.max(1, Math.min(ceiling, Math.round(wantLights)));
+    /* The material-LOD radius is a tier knob too (settings.js `lodDistance`);
+       re-apply it here so a live quality change moves it with everything else. */
+    if (MatsMod && MatsMod.Mats && typeof MatsMod.Mats.setLodDistance === 'function') {
+      try { MatsMod.Mats.setLodDistance(q.lodDistance); } catch (e) { /* pre-init */ }
+    }
+    const fogFar = (this.theme && this.theme.fog && fin(this.theme.fog.far)) ? this.theme.fog.far : 240;
+    this._cullFar = Math.max(150, fogFar * (0.9 + 0.5 * decor));
+    this._detailFar = Math.max(52, 96 * (0.55 + 0.55 * decor));
+  }
+
+  /* ── spatial chunks ──────────────────────────────────────────────────── */
+
+  /**
+   * A 24 m grid over `def.bounds` (contract §24).  Courses are open dioramas,
+   * so unlike an Ascendant corridor the grid is 2D: culling the far side of a
+   * bowl matters as much as culling the far end of a run.  The cell only grows
+   * when a course would blow past MAX_CHUNKS — every extra chunk multiplies
+   * draw calls, because each one needs its own merged mesh per material.
+   */
+  _computeChunkGrid() {
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    const see = (x, z) => {
+      if (fin(x)) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
+      if (fin(z)) { if (z < minZ) minZ = z; if (z > maxZ) maxZ = z; }
+    };
+    const b = this.def.bounds;
+    if (b && fin3(b.min) && fin3(b.max)) {
+      see(b.min[0], b.min[2]);
+      see(b.max[0], b.max[2]);
+    } else {
+      if (this.def.spawn && fin3(this.def.spawn.p)) see(this.def.spawn.p[0], this.def.spawn.p[2]);
+      const cps = Array.isArray(this.def.checkpoints) ? this.def.checkpoints : [];
+      for (let i = 0; i < cps.length; i++) if (fin3(cps[i].p)) see(cps[i].p[0], cps[i].p[2]);
+      const objs = Array.isArray(this.def.objects) ? this.def.objects : [];
+      for (let i = 0; i < objs.length; i++) {
+        const o = objs[i];
+        if (!o) continue;
+        if (fin3(o.p)) see(o.p[0], o.p[2]);
+        if (fin3(o.a)) see(o.a[0], o.a[2]);
+        if (fin3(o.b)) see(o.b[0], o.b[2]);
+      }
+    }
+    if (!Number.isFinite(minX)) { minX = -60; maxX = 60; minZ = -60; maxZ = 60; }
+
+    let cell = CHUNK_SIZE;
+    const spanX = Math.max(1, maxX - minX);
+    const spanZ = Math.max(1, maxZ - minZ);
+    /* Per-course ceiling (`def.chunks`, default MAX_CHUNKS). MEASURED 2026-09-04
+       (group-1 validator, `_harness/_g1_triattr2.py`, engine stopped, one
+       composer render per toggle): every 144 m course collapsed to ONE chunk,
+       so the sun's 36 m shadow frustum rendered the whole static merge every
+       frame — 73k of verdant-2's 97k shadow triangles, 39k of verdant-3's 65k,
+       52k of ember-2's 88k — and the main pass could never drop the half of
+       the course behind the camera. A course big enough for a quadrant to
+       leave a frustum opts into more chunks in its DATA; the Keep and the
+       tutorial course keep the measured default. */
+    const maxChunks = Math.max(1, Math.min(16, (this.def.chunks | 0) || MAX_CHUNKS));
+    /* Anchor the grid on the course's own minimum (not on a multiple of the
+       cell) so a span that FITS in one cell lands in ONE cell.
+       MEASURED BUG, 2026-09-02: the old form floored the origin to a multiple
+       of the cell and counted `(ceil(span/cell) + 1)^2` to allow for the
+       straddle that created. That `+ 1` has a floor of 2 per axis, so the
+       count could never drop below FOUR however far the cell grew — and both
+       shipped courses got exactly four chunks, all four inside the frustum at
+       every station, i.e. a 4x multiplier on "one merged draw per material"
+       for zero culling. Anchoring removes the straddle, so the count is the
+       honest `ceil(span/cell)` per axis and a small course really does
+       collapse to one chunk. */
+    while (Math.max(1, Math.ceil(spanX / cell)) * Math.max(1, Math.ceil(spanZ / cell)) > maxChunks
+           && cell < 800) {
+      cell *= 1.5;
+    }
+    this._chunkSize = cell;
+    /* A hair of margin so an object sitting exactly on `minX` cannot fall into
+       the cell below through floating-point noise. */
+    this._gridOX = minX - cell * 1e-3;
+    this._gridOZ = minZ - cell * 1e-3;
+  }
+
+  _chunkFor(x, z) {
+    const cell = this._chunkSize;
+    const ix = Math.floor((x - this._gridOX) / cell);
+    const iz = Math.floor((z - this._gridOZ) / cell);
+    const key = (ix + 4096) * 16384 + (iz + 4096);
+    let ch = this._chunkMap.get(key);
+    if (!ch) {
+      ch = {
+        key, ix, iz,
+        group: new THREE.Group(),
+        main: new THREE.Group(),
+        detail: new THREE.Group(),
+        box: new THREE.Box3(),
+        recsMain: [],
+        recsDetail: [],
+        visible: true,
+        detailVisible: true,
+      };
+      ch.group.name = 'chunk ' + ix + ',' + iz;
+      ch.group.matrixAutoUpdate = false;
+      ch.main.matrixAutoUpdate = false;
+      ch.detail.matrixAutoUpdate = false;
+      ch.group.add(ch.main);
+      ch.group.add(ch.detail);
+      this.group.add(ch.group);
+      this._chunkMap.set(key, ch);
+      this._chunks.push(ch);
+    }
+    return ch;
+  }
+
+  /**
+   * @private A cell of the DETAIL grid.
+   *
+   * Main art and detail art want opposite grids. Main art is one merged mesh
+   * per material and is needed wherever the camera looks, so a fine grid only
+   * multiplies its draw calls (see MAX_CHUNKS). Detail art is decor: it is
+   * culled by DISTANCE at `_detailFar`, and that cull is worth real triangles —
+   * but only if the grid is fine enough that "far" is a meaningful test.
+   * MEASURED 2026-09-02: collapsing both onto one coarse grid saved ~100 draws
+   * and cost ~40k triangles, because the whole course's decor became one mesh
+   * that is never far from anything. So they get separate grids: coarse for
+   * main, CHUNK_SIZE for detail.
+   */
+  _detailCellFor(x, z) {
+    const cell = CHUNK_SIZE;
+    const ix = Math.floor((x - this._gridOX) / cell);
+    const iz = Math.floor((z - this._gridOZ) / cell);
+    const key = (ix + 4096) * 16384 + (iz + 4096);
+    let dc = this._detailMap.get(key);
+    if (!dc) {
+      dc = {
+        key, ix, iz,
+        group: new THREE.Group(),
+        box: new THREE.Box3(),
+        recs: [],
+        visible: true,
+      };
+      dc.group.name = 'detail ' + ix + ',' + iz;
+      dc.group.matrixAutoUpdate = false;
+      this.group.add(dc.group);
+      this._detailMap.set(key, dc);
+      this._detailCells.push(dc);
+    }
+    return dc;
+  }
+
+  /**
+   * File a built object into its cell.  `detail` art (decor, signage, small
+   * clutter) goes on the fine grid and is culled at a much nearer distance
+   * than the structural art the player actually lands on.
+   */
+  _chunkAdd(obj, pos, detail) {
+    const cell = detail ? this._detailCellFor(pos.x, pos.z) : this._chunkFor(pos.x, pos.z);
+    (detail ? cell.group : cell.main).add(obj);
+    obj.updateMatrixWorld(true);
+    try {
+      _box1.setFromObject(obj);
+      if (!_box1.isEmpty()) cell.box.union(_box1);
+      else cell.box.expandByPoint(pos);
+    } catch (e) { cell.box.expandByPoint(pos); }
+    (detail ? cell.recs : cell.recsMain).push(obj);
+    return cell;
+  }
+
+  /* ── static object dispatch ──────────────────────────────────────────── */
+
+  /**
+   * Only kinds routed 'builder' arrive here.  `ice`, `jumppad`, `speedpad` and
+   * `conveyor` deliberately do NOT: hazards/index.js owns them (frosted rims,
+   * sparkle fields, the surface voice and the slippery collider), and a flat
+   * static slab is a strictly worse duplicate of that.  A platform that merely
+   * wants ice PHYSICS still says `{kind:'platform', surface:'ice'}`.
+   */
+  _buildStatic(o, index) {
+    const fnName = BUILDER_ROUTE[o.kind];
+    const isDeco = o.kind === 'deco';
+
+    if (isDeco) return this._buildDeco(o, index);
+
+    const bdef = o;
+    let built = null;
+    const fn = fnName ? Builders[fnName] : null;
+    if (typeof fn === 'function') {
+      try {
+        built = fn(bdef, this.theme, this.mats);
+      } catch (e) {
+        console.error('[Course ' + this.id + '] ' + fnName + ' threw on objects[' + index +
+                      '] (kind "' + o.kind + '")', e);
+        built = null;
+      }
+    } else if (typeof Builders.build === 'function') {
+      try { built = Builders.build(bdef, this.theme, this.mats); } catch (e) { built = null; }
+    }
+
+    if ((!built || !built.mesh) && !this._warnedBuilders.has(o.kind)) {
+      this._warnedBuilders.add(o.kind);
+      console.warn('[Course ' + this.id + '] world/builders.js has no working "' + (fnName || o.kind) +
+                   '" — kind "' + o.kind + '" is falling back to the course-local slab. ' +
+                   'The course is playable; the art is not final.');
+    }
+    if (!built || !built.mesh) built = this._fallbackPlatform(bdef);
+
+    const detail = o.kind === 'fence' || o.kind === 'rock' || o.kind === 'pedestal';
+    this._placeBuilt(built, bdef, index, detail);
+
+    /* Climbables: poles, nets and climbable trees need a 'ladder' Volume for the
+       controller's climb state.  The builder owns it when it ships one; this
+       synthesises the fallback so a course is climbable the moment its art
+       lands, and never doubles up. */
+    if (CLIMB_KINDS[o.kind] && !(Array.isArray(built.volumes) && built.volumes.length)) {
+      if (o.kind !== 'tree' || o.climbable) this._synthClimbVolume(o, built);
+    }
+    /* Keep gates are claimed later by `_buildGates`; remember the art now.
+       Gate art ANIMATES (a door swings, a painting ripples on entry), so it must
+       survive the static merge intact — `noMerge` on the root is not enough,
+       because the merge walks into groups and consumes their children. */
+    if (o.kind === 'painting' || o.kind === 'gatedoor') {
+      markNoMerge(built.mesh);
+      this._gateObjects.push({ def: o, built, index });
+    }
+    return null;
+  }
+
+  /**
+   * Common tail for a builder result: position it, harvest its colliders,
+   * volumes and kill volumes, and file it into a chunk.
+   *
+   * A builder may return art already placed at `p` (baked into the geometry or
+   * into `mesh.position`) or art built around the origin.  Double-offsetting a
+   * whole course is the worst possible failure, so the decision is made by
+   * GEOMETRY: if the built bounds sit nearer to `p` than to the origin, it is
+   * already placed.
+   */
+  _placeBuilt(built, bdef, index, detail) {
+    const mesh = built.mesh;
+    const p = v3(bdef.p, 0, 0, 0);
+    if (mesh) {
+      let baked = mesh.position.lengthSq() > 1e-9;
+      if (!baked) {
+        mesh.updateMatrixWorld(true);
+        let boxed = false;
+        try { _box1.setFromObject(mesh); boxed = !_box1.isEmpty(); } catch (e) { boxed = false; }
+        if (boxed) {
+          _box1.getCenter(_v1);
+          baked = _v1.distanceTo(p) + 1e-3 < _v1.length();
+        }
+        if (!baked) mesh.position.copy(p);
+      }
+      if (!baked && bdef.rot !== undefined &&
+          mesh.rotation.x === 0 && mesh.rotation.y === 0 && mesh.rotation.z === 0) {
+        applyRot(mesh, bdef.rot);
+      }
+      /* Builders bake their own matrix and set matrixAutoUpdate = false, so any
+         transform applied above has to be folded in explicitly. */
+      if (!mesh.matrixAutoUpdate) mesh.updateMatrix();
+      mesh.userData.courseIndex = index;
+      this._chunkAdd(mesh, p, !!detail);
+    }
+
+    const cols = built.colliders;
+    if (Array.isArray(cols)) {
+      for (let i = 0; i < cols.length; i++) {
+        const c = cols[i];
+        if (!c) continue;
+        if (bdef.surface && c.surface !== bdef.surface) c.surface = bdef.surface;
+        if (bdef.props && !c.props) c.props = bdef.props;
+        this._addCollider(c, null);
+        this._staticColliders.push(c);
+      }
+    }
+    if (Array.isArray(built.volumes)) {
+      for (let i = 0; i < built.volumes.length; i++) this._addVolume(built.volumes[i], null);
+    }
+    if (Array.isArray(built.kills)) {
+      for (let i = 0; i < built.kills.length; i++) this._addKill(built.kills[i], null);
+    }
+    if (Array.isArray(built.lights)) {
+      for (let i = 0; i < built.lights.length; i++) {
+        const l = built.lights[i];
+        if (l && fin3(l.p !== undefined ? l.p : l.pos)) this.addLightSite(l);
+      }
+    }
+  }
+
+  /**
+   * A vertical climb volume around a pole/net/tree.  `props.axis` tells the
+   * controller which climb it is: 'pole' orbits the shaft, 'y' is a flat net or
+   * ladder face.
+   */
+  _synthClimbVolume(o, built) {
+    const p = v3(o.p, 0, 0, 0);
+    const h = fin(o.h) ? o.h : (Array.isArray(o.s) && fin(o.s[1]) ? o.s[1] : 4);
+    const r = fin(o.r) ? o.r : 0.28;
+    const pole = o.kind !== 'net';
+    /* Slightly wider than the shaft so the player grabs it rather than sliding
+       past — TUNE.climb.radius is the controller's own grab radius. */
+    const halfXZ = pole ? Math.max(0.75, r + 0.55) : Math.max(0.6, (Array.isArray(o.s) && fin(o.s[0]) ? o.s[0] : 2) * 0.5);
+    const halfZ = pole ? halfXZ : 0.55;
+    const v = new Volume({
+      center: [p.x, p.y + h * 0.5, p.z],
+      half: [halfXZ, h * 0.5, halfZ],
+      quat: o.rot,
+      kind: 'ladder',
+      props: { axis: pole ? 'pole' : 'y', top: p.y + h, pole: [p.x, p.z], radius: r },
+      ref: built || null,
+    });
+    this._addVolume(v, null);
+    return v;
+  }
+
+  /** Never a naked box: chamfered slab + inset top plate + leading-edge stripes. */
+  _fallbackPlatform(o) {
+    const s = Array.isArray(o.s) && o.s.length >= 3
+      ? [Math.abs(+o.s[0]) || 4, Math.abs(+o.s[1]) || 0.5, Math.abs(+o.s[2]) || 4]
+      : [4, 0.5, 4];
+    const g = new THREE.Group();
+
+    const body = chamferBox(s[0], s[1], s[2], Math.min(0.09, s[1] * 0.3));
+    this._own(body);
+    const bodyMesh = new THREE.Mesh(body, this._mat(o.mat || 'stone'));
+    bodyMesh.castShadow = true;
+    bodyMesh.receiveShadow = true;
+    g.add(bodyMesh);
+
+    const plate = chamferBox(Math.max(0.05, s[0] - 0.22), 0.05, Math.max(0.05, s[2] - 0.22), 0.02);
+    plate.translate(0, s[1] * 0.5 + 0.005, 0);
+    this._own(plate);
+    const plateMesh = new THREE.Mesh(plate, this._mat('panel'));
+    plateMesh.receiveShadow = true;
+    g.add(plateMesh);
+
+    if (o.stripe !== false) {
+      const stripe = this._edgeStripeGeo(s[0], s[2], s[1] * 0.5 + 0.028, 0.10);
+      this._own(stripe);
+      g.add(new THREE.Mesh(stripe, this._stripeMat()));
+    }
+
+    const half = new THREE.Vector3(s[0] * 0.5, s[1] * 0.5, s[2] * 0.5);
+    const center = v3(o.p, 0, 0, 0);
+    const quat = new THREE.Quaternion();
+    if (o.rot !== undefined) {
+      applyRot(_eulerHolder, o.rot);
+      quat.setFromEuler(_eulerHolder.rotation);
+      g.quaternion.copy(quat);
+    }
+    const col = new Collider({
+      center, half, quat,
+      surface: o.surface || 'normal',
+      ref: null, group: 'world',
+    });
+    if (o.props) col.props = Object.assign(col.props || {}, o.props);
+    return { mesh: g, colliders: [col] };
+  }
+
+  /** The four leading-edge stripes of a fallback slab, as one geometry. */
+  _edgeStripeGeo(sx, sz, y, w) {
+    const parts = [];
+    const mk = (x, z, dx, dz) => {
+      const q = new THREE.BoxGeometry(dx, 0.035, dz);
+      q.translate(x, y, z);
+      parts.push(q);
+    };
+    mk(0, sz * 0.5 - w * 0.5, sx, w);
+    mk(0, -sz * 0.5 + w * 0.5, sx, w);
+    mk(sx * 0.5 - w * 0.5, 0, w, Math.max(0.01, sz - 2 * w));
+    mk(-sx * 0.5 + w * 0.5, 0, w, Math.max(0.01, sz - 2 * w));
+    const merged = mergeParts(parts);
+    for (let i = 0; i < parts.length; i++) if (parts[i] !== merged) parts[i].dispose();
+    return merged || new THREE.BoxGeometry(sx, 0.035, w);
+  }
+
+  _stripeMat() {
+    if (this._stripeMaterial) return this._stripeMaterial;
+    let m = null;
+    if (typeof Builders.getEmissive === 'function') {
+      try { m = Builders.getEmissive(this.palette.safeEdge.getHex(), 2.4); } catch (e) { m = null; }
+    }
+    if (!m || !m.isMaterial) {
+      m = new THREE.MeshBasicMaterial({
+        color: this.palette.safeEdge.clone().multiplyScalar(1.15),
+        toneMapped: false, fog: true,
+      });
+      this._own(m);
+    }
+    this._stripeMaterial = m;
+    return m;
+  }
+
+  /**
+   * Axis-aligned world footprints of every authored solid that stands ON the
+   * ground, for the grass field's occupancy mask (terrain.js buildGrassField).
+   *
+   * Buildings always count — their whole point is that they enclose a floor.
+   * A `platform` counts only when it is BROAD (>= 6 m2) and THICK enough to be
+   * a floor rather than a ledge, because a narrow ledge floating over the
+   * meadow should still have grass under it. Rotation is ignored on purpose:
+   * the mask is a fade, and a slightly generous footprint costs nothing.
+   *
+   * @returns {Array<{x0:number,z0:number,x1:number,z1:number,y:number,h:number,feather:number}>}
+   */
+  _groundFootprints() {
+    const out = [];
+    const objs = Array.isArray(this.def.objects) ? this.def.objects : [];
+    for (let i = 0; i < objs.length; i++) {
+      const o = objs[i];
+      if (!o || !o.p || !o.s) continue;
+      const isBuilding = o.kind === 'building';
+      const area = o.s[0] * o.s[2];
+      /* ROUND 5 — THE SWARD GREW THROUGH THE FORT APRON.
+       * Measured this session: `_shots/verdant-1/crest-wing.png` showed the
+       * courtyard paving crossed by evenly spaced dark-green horizontal lines,
+       * and hiding `terrain.grass` alone removed every one of them
+       * (`_shots/_probe_lines_all.png` vs `_shots/_probe_lines_nograss.png`) —
+       * blade cards standing at the heightfield height and poking straight
+       * through a stone deck that is laid ON that height.
+       * The occupancy list was the right mechanism and it simply did not cover
+       * enough kinds: only 'building' and 'platform' were tested, so the fort's
+       * ramps, aprons and stair landings — all of them stone laid flat on the
+       * meadow — were invisible to it. KIND is the wrong discriminator here.
+       * A wide, thin, near-ground solid IS a floor whatever it is called, and
+       * buildGrassField already gates on the terrain height being close to the
+       * solid's underside, so anything up in the air is rejected there. */
+      const isFloor = area >= 6 && o.s[0] >= 2 && o.s[2] >= 2 && o.s[1] <= 3.5 &&
+        o.kind !== 'terrain' && o.kind !== 'water' && o.kind !== 'light' &&
+        o.kind !== 'text' && o.kind !== 'deco';
+      if (!isBuilding && !isFloor) continue;
+      const pad = isBuilding ? (o.footing ? Math.min(1.2, o.footing * 0.35) : 0.35) : 0.1;
+      out.push({
+        x0: o.p[0] - o.s[0] * 0.5 - pad, x1: o.p[0] + o.s[0] * 0.5 + pad,
+        z0: o.p[2] - o.s[2] * 0.5 - pad, z1: o.p[2] + o.s[2] * 0.5 + pad,
+        y: o.p[1] - o.s[1] * 0.5,
+        h: Math.max(0.5, o.s[1]),
+        feather: isBuilding ? 0.5 : 0.35,
+      });
+    }
+    return out;
+  }
+
+  /* ── terrain ─────────────────────────────────────────────────────────── */
+
+  /**
+   * Terrain is the ONE mesh in a course that is never chunked and never merged:
+   * it spans the whole diorama, so a chunk would either always be visible or
+   * would clip the ground out from under the player.  Its Heightfield goes
+   * straight into the broadphase, where player/collide.js reads it as
+   * `max(boxFloor, hf.heightAt)` with the analytic normal.
+   */
+  _buildTerrain(def, index) {
+    if (typeof TerrainMod.buildTerrain !== 'function') {
+      console.warn('[Course ' + this.id + '] world/terrain.js has no buildTerrain — objects[' + index +
+                   '] (kind "terrain") skipped; the course will have no ground plane');
+      return null;
+    }
+    /* GRASS OCCUPANCY. The blade field only ever knew about slope, carved
+     * paths and authored exclusion circles, so a full sward grew across the
+     * stone floor INSIDE the verdant fort (critic, `_shots/verdant-1/cp2.png`).
+     * Terrain is built FIRST — before any solid exists in the scene graph — so
+     * the footprints come from the authored object list instead, which is the
+     * generator-level source of truth for what is standing on the ground. */
+    const blocks = this._groundFootprints();
+    if (blocks.length) {
+      const g = (def.grass === false || def.grass === null) ? def.grass
+        : Object.assign({}, def.grass || null, { blocks });
+      def = Object.assign({}, def, { grass: g });
+    }
+    let out = null;
+    try {
+      out = TerrainMod.buildTerrain(def, this.theme, this.mats, this.quality);
+    } catch (e) {
+      console.error('[Course ' + this.id + '] buildTerrain threw on objects[' + index + ']', e);
+      return null;
+    }
+    if (!out) return null;
+
+    if (out.mesh) {
+      out.mesh.userData.noMerge = true;
+      out.mesh.name = out.mesh.name || 'terrain';
+      out.mesh.receiveShadow = true;
+      this.group.add(out.mesh);
+    }
+    if (out.grass) {
+      out.grass.userData.noMerge = true;
+      out.grass.frustumCulled = false;
+      this.group.add(out.grass);
+      this.stats.instanced += (out.grass.count | 0) || 1;
+    }
+    if (out.heightfield && this.broadphase && typeof this.broadphase.addHeightfield === 'function') {
+      try {
+        this.broadphase.addHeightfield(out.heightfield);
+        this._heightfields.push(out.heightfield);
+      } catch (e) {
+        console.error('[Course ' + this.id + '] broadphase.addHeightfield failed', e);
+      }
+    }
+    const rec = { def, mesh: out.mesh || null, heightfield: out.heightfield || null,
+                  grass: out.grass || null, bounds: out.bounds || null };
+    this.terrains.push(rec);
+    if (!this.terrain) this.terrain = rec;
+    return rec;
+  }
+
+  /* ── water ───────────────────────────────────────────────────────────── */
+
+  /**
+   * A water body is a Gerstner surface plus a swim `Volume`.  The Volume is what
+   * the controller reads (`inWater`, `waterSurfaceY`); the mesh is presentation
+   * and rides the visual clock, not the course clock, so a paused course still
+   * has moving water under the pause menu.
+   */
+  _buildWater(def, index) {
+    if (!def) return null;
+    if (typeof WaterMod.buildWater !== 'function') {
+      console.warn('[Course ' + this.id + '] world/water.js has no buildWater — objects[' + index +
+                   '] (kind "water") skipped; that pool will not be swimmable');
+      return null;
+    }
+    let out = null;
+    try {
+      out = WaterMod.buildWater(def, this.theme, this.mats);
+    } catch (e) {
+      console.error('[Course ' + this.id + '] buildWater threw on objects[' + index + ']', e);
+      return null;
+    }
+    if (!out) return null;
+
+    if (out.mesh) {
+      out.mesh.userData.noMerge = true;
+      out.mesh.renderOrder = 2;
+      this.group.add(out.mesh);
+    }
+    if (out.volume) this._addVolume(out.volume, null);
+    const rec = {
+      def,
+      mesh: out.mesh || null,
+      volume: out.volume || null,
+      surfaceY: fin(out.surfaceY) ? out.surfaceY : (out.volume ? out.volume.surfaceY : 0),
+      update: typeof out.update === 'function' ? out.update : null,
+    };
+    this.waters.push(rec);
+    return rec;
+  }
+
+  /* ── in-world signage ────────────────────────────────────────────────── */
+
+  /**
+   * One BOARD per mount. Course data authors a header and its sub-lines as
+   * separate `text` objects stacked at one x/z (verdant-1's spawn: 'BAILEY
+   * MEADOW' at y 3.95 over two 0.22 m lines at 3.42 and 3.05). Baked as three
+   * planks they cannot each carry legible caps without overlapping, so the
+   * generator gathers them: the first `_buildText` call for a group builds the
+   * whole board, the others return null. Membership: within TEXT_GROUP_XZ in
+   * the plane, TEXT_GROUP_DY in height, and the same facing.
+   */
+  _prepareTexts() {
+    if (this._textGroups) return;
+    const groups = [];
+    const byIndex = new Map();
+    const objs = Array.isArray(this.def.objects) ? this.def.objects : [];
+    const yawOf = (o) => {
+      if (Array.isArray(o.rot) && fin(o.rot[1])) return o.rot[1];
+      if (fin(o.yaw)) return o.yaw;
+      return null;
+    };
+    for (let i = 0; i < objs.length; i++) {
+      const o = objs[i];
+      if (!o || o.kind !== 'text' || !fin3(o.p)) continue;
+      const yaw = yawOf(o);
+      let g = null;
+      for (let k = 0; k < groups.length; k++) {
+        const c = groups[k];
+        if (Math.abs(c.p[0] - o.p[0]) > TEXT_GROUP_XZ || Math.abs(c.p[2] - o.p[2]) > TEXT_GROUP_XZ) continue;
+        if (Math.abs(c.p[1] - o.p[1]) > TEXT_GROUP_DY) continue;
+        if ((c.yaw === null) !== (yaw === null)) continue;
+        if (c.yaw !== null && Math.abs(c.yaw - yaw) > 0.05) continue;
+        g = c; break;
+      }
+      if (!g) { g = { p: [o.p[0], o.p[1], o.p[2]], yaw, members: [], head: -1, built: false }; groups.push(g); }
+      g.members.push({ index: i, o });
+      byIndex.set(i, g);
+    }
+    for (let k = 0; k < groups.length; k++) {
+      const g = groups[k];
+      g.members.sort((a, b) => (b.o.p[1] - a.o.p[1]) || (a.index - b.index));
+      let head = g.members[0];
+      for (let m = 1; m < g.members.length; m++) {
+        const sm = fin(g.members[m].o.size) ? g.members[m].o.size : 0.42;
+        const sh = fin(head.o.size) ? head.o.size : 0.42;
+        if (sm > sh + 1e-6) head = g.members[m];
+      }
+      g.head = head.index;
+      g.headSize = fin(head.o.size) ? clamp(head.o.size, 0.12, 4) : 0.42;
+      g.headColor = colorOf(head.o.color, this.palette.accent.getHex());
+      g.mat = head.o.mat || 'wood';
+    }
+    this._textGroups = groups;
+    this._textGroupOf = byIndex;
+    this._bakeTextAtlas();
+  }
+
+  /** Split a sign's copy into board lines: clauses at ' · ', then word-wrap. */
+  /** Painted width of `text` at cap height `capM`, in metres (see _bakeBoard). */
+  _measureLineM(text, capM, head) {
+    let ctx = this._measureCtx;
+    if (ctx === null) {
+      try {
+        const c = document.createElement('canvas');
+        c.width = 8; c.height = 8;
+        ctx = c.getContext('2d') || false;
+      } catch (e) { ctx = false; }
+      this._measureCtx = ctx;
+    }
+    const fs = capM / TEXT_CAP_EM;
+    if (!ctx) return text.length * fs * 0.56 + fs * TEXT_TRACK_EM * Math.max(0, text.length - 1);
+    ctx.font = textFont(Math.round(fs * TEXT_PPM), head);
+    return ctx.measureText(text).width / TEXT_PPM + fs * TEXT_TRACK_EM * Math.max(0, text.length - 1);
+  }
+
+  /**
+   * One authored `text` object -> painted lines. A clause ('·' segment or a
+   * sentence) stays on one line while it fits the board at >= TEXT_FIT_MIN of
+   * its cap; a wider one wraps by measured width into balanced lines, never a
+   * one-word orphan ('THE VENTS FIRE ON A' / 'CYCLE', `_shots/sig1_e1_sign.png`).
+   * `head` selects the header cut, whose glyphs measure a little wider.
+   */
+  _textLines(o, head) {
+    const out = [];
+    const size = fin(o.size) ? clamp(o.size, 0.12, 4) : 0.42;
+    const color = colorOf(o.color, this.palette.accent.getHex());
+    const cap = head ? size * 0.72 : size * 0.95;         // mirrors _bakeBoard's cap rule
+    /* A BOARD MAY BE NARROWER THAN THE GAME'S WIDEST LINE (`maxW`, metres).
+       TEXT_MAX_LINE_M is the widest a plate may ever be; a board hung inside a
+       3.4 m wall-kick shaft has less room than that, and a 3.43 m plate in it
+       has masonry over the ends whichever way it is slid (measured by
+       `_harness/_ui2_boards.py`: verdant-2 #28a 22 % of the lettering under
+       stone at u -0.36..0, and 22 % again at the other end after a 2 m slide).
+       An author who knows the wall gives the board its width and the wrap
+       obeys it. */
+    const maxW = fin(o.maxW) ? clamp(o.maxW, 0.8, TEXT_MAX_LINE_M) : TEXT_MAX_LINE_M;
+    const raw = String(o.text).split(String.fromCharCode(10));
+    for (let r = 0; r < raw.length; r++) {
+      const clauses = raw[r].split(/\s+·\s+/);
+      for (let c = 0; c < clauses.length; c++) {
+        const sentences = clauses[c].split(/(?<=[.!?])\s+(?=\S)/);
+        for (let s = 0; s < sentences.length; s++) {
+          const words = sentences[s].trim().split(/\s+/).filter((w) => w.length);
+          if (!words.length) continue;
+          const text = words.join(' ');
+          const wM = this._measureLineM(text, cap, head);
+          if (wM <= maxW / TEXT_FIT_MIN) { out.push({ text, size, color, maxW }); continue; }
+          const n = Math.ceil(wM / maxW);
+          const target = wM / n;
+          let line = '';
+          let made = 0;
+          for (let w = 0; w < words.length; w++) {
+            const cand = line ? line + ' ' + words[w] : words[w];
+            const left = words.length - w;               // words still to place, incl. this one
+            const linesLeft = n - made;
+            const candW = line ? this._measureLineM(cand, cap, head) : 0;
+            if (line && linesLeft > 1 && (candW > target * 1.06 || left <= linesLeft - 1)) {
+              out.push({ text: line, size, color, maxW }); made++; line = words[w];
+            } else line = cand;
+          }
+          if (line) out.push({ text: line, size, color, maxW });
+        }
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Bake every board of the course and shelf-pack the sheets into one atlas.
+   * Runs once, before the first sign is built, so the atlas can be allocated
+   * at the height the course actually needs (POT, <= TEXT_ATLAS_MAX_H); a board
+   * that does not fit keeps a private texture and its own draw.
+   */
+  _bakeTextAtlas() {
+    if (typeof document === 'undefined') return;
+    const groups = this._textGroups;
+    const sheets = [];
+    for (let k = 0; k < groups.length; k++) {
+      const g = groups[k];
+      const bake = this._bakeBoard(g);
+      if (!bake) continue;
+      g.bake = bake;
+      sheets.push(g);
+    }
+    if (!sheets.length) return;
+    sheets.sort((a, b) => b.bake.H - a.bake.H);
+    /* shelf packing: rows of the tallest-first sheets, left to right */
+    const P = TEXT_ATLAS_PAD;
+    let x = P, y = P, rowH = 0;
+    for (let i = 0; i < sheets.length; i++) {
+      const b = sheets[i].bake;
+      if (x + b.W + P > TEXT_ATLAS_W) { x = P; y += rowH + P; rowH = 0; }
+      b.ax = x; b.ay = y;
+      x += b.W + P;
+      if (b.H > rowH) rowH = b.H;
+    }
+    let need = y + rowH + P;
+    let AH = 256;
+    while (AH < need && AH < TEXT_ATLAS_MAX_H) AH *= 2;
+    const cnv = document.createElement('canvas');
+    cnv.width = TEXT_ATLAS_W; cnv.height = AH;
+    const ctx = cnv.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, cnv.width, cnv.height);
+    let placed = 0;
+    for (let i = 0; i < sheets.length; i++) {
+      const b = sheets[i].bake;
+      if (b.ay + b.H + P > AH) { b.ax = -1; continue; }   // overflow: private texture
+      ctx.drawImage(b.cnv, b.ax, b.ay);
+      placed++;
+    }
+    const tex = new THREE.CanvasTexture(cnv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    tex.generateMipmaps = true;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.needsUpdate = true;
+    this._own(tex);
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex, transparent: false, depthWrite: true,
+      toneMapped: false, side: THREE.FrontSide, fog: true,
+    });
+    mat.name = 'cb.signatlas';
+    this._own(mat);
+    this._signOccApply(mat);
+    this._textAtlas = { cnv, ctx, tex, mat, placed, height: AH };
+    const e = 0.5;
+    for (let i = 0; i < sheets.length; i++) {
+      const b = sheets[i].bake;
+      if (b.ax < 0) continue;
+      b.uv = [(b.ax + e) / TEXT_ATLAS_W, 1 - (b.ay + b.H - e) / AH,
+              (b.ax + b.W - e) / TEXT_ATLAS_W, 1 - (b.ay + e) / AH];
+    }
+  }
+
+  /**
+   * Paint one board: an opaque panel (cream, or dark wood when the authored
+   * ink is light), a shadowed inset with a bevel highlight, a hairline border,
+   * the header in a heavier cut with a rule under it, then the lines. Returns
+   * {cnv, W, H, wM, hM, lines} — pixels and metres.
+   */
+  _bakeBoard(g) {
+    const lines = [];
+    for (let m = 0; m < g.members.length; m++) {
+      const isHead = g.members[m].index === g.head;
+      const ls = this._textLines(g.members[m].o, isHead);
+      for (let i = 0; i < ls.length; i++) {
+        ls[i].head = isHead;
+        /* A member is one authored thought; two body members sharing a plate
+           get a breath of air between them so two sentences never read as one
+           paragraph (rime-2 #1: five lines in one 0.37 m band). */
+        ls[i].gap = (i === 0 && m > 0 && !isHead) ? 1 : 0;
+        lines.push(ls[i]);
+      }
+    }
+    if (!lines.length) return null;
+    const cnv = document.createElement('canvas');
+    const ctx = cnv.getContext('2d');
+    if (!ctx) return null;
+    /* cap heights in metres: the header keeps a little of its authored size in
+       hand (0.60 -> 0.43 m), a body line is its size (0.22 -> 0.21 m) */
+    for (let i = 0; i < lines.length; i++) {
+      const L = lines[i];
+      L.cap = L.head ? L.size * 0.72 : L.size * 0.95;
+      L.fs = L.cap / TEXT_CAP_EM;                        // font size, metres
+      L.pitch = L.cap * TEXT_LINE_PITCH;
+    }
+    const fontOf = textFont;
+    /* a line wider than the board may be is scaled down to fit it */
+    for (let i = 0; i < lines.length; i++) {
+      const L = lines[i];
+      ctx.font = fontOf(Math.round(L.fs * TEXT_PPM), L.head);
+      const w = ctx.measureText(L.text).width / TEXT_PPM + L.fs * TEXT_TRACK_EM * Math.max(0, L.text.length - 1);
+      const lim = fin(L.maxW) ? L.maxW : TEXT_MAX_LINE_M;
+      if (w > lim) {
+        const k = lim / w;
+        L.cap *= k;
+        L.fs = L.cap / TEXT_CAP_EM;
+        L.pitch = L.cap * TEXT_LINE_PITCH;
+      }
+    }
+    let ppm = TEXT_PPM;
+    let wM = 0, hM = 0;
+    for (let pass = 0; pass < 3; pass++) {
+      wM = 0; hM = TEXT_PAD_M * 2;
+      for (let i = 0; i < lines.length; i++) {
+        const L = lines[i];
+        ctx.font = fontOf(Math.round(L.fs * ppm), L.head);
+        const track = L.fs * TEXT_TRACK_EM;
+        L.wM = ctx.measureText(L.text).width / ppm + track * Math.max(0, L.text.length - 1);
+        if (L.wM > wM) wM = L.wM;
+        hM += L.pitch + (L.head ? L.cap * 0.42 : 0) + (L.gap ? L.cap * TEXT_MEMBER_GAP : 0);
+      }
+      wM += TEXT_PAD_M * 2;
+      if (wM * ppm <= TEXT_ATLAS_W - TEXT_ATLAS_PAD * 2) break;
+      ppm = Math.floor((TEXT_ATLAS_W - TEXT_ATLAS_PAD * 2) / wM);
+    }
+    const W = Math.max(32, Math.ceil(wM * ppm));
+    const H = Math.max(32, Math.ceil(hM * ppm));
+    cnv.width = W; cnv.height = H;
+    const c = cnv.getContext('2d');
+
+    /* paint: dark ink on cream unless the authored header ink is light */
+    _colScratch.setHex(g.headColor.getHex());
+    const lum = 0.2126 * _colScratch.r + 0.7152 * _colScratch.g + 0.0722 * _colScratch.b;
+    const darkBoard = lum > 0.42;
+    const panel = darkBoard ? '#2a1e15' : '#efe3c4';
+    const panelHi = darkBoard ? '#3a2b1f' : '#f8efd6';
+    const panelLo = darkBoard ? '#1a120c' : '#d9c9a2';
+    c.fillStyle = panel;
+    c.fillRect(0, 0, W, H);
+    /* a faint paper/grain wash so the panel is not one flat value */
+    const gr = c.createLinearGradient(0, 0, W, H);
+    gr.addColorStop(0, panelHi); gr.addColorStop(0.5, panel); gr.addColorStop(1, panelLo);
+    c.globalAlpha = 0.55; c.fillStyle = gr; c.fillRect(0, 0, W, H); c.globalAlpha = 1;
+    /* shadowed inset: dark along the top and left, a bevel highlight bottom/right */
+    const ins = Math.max(4, Math.round(0.035 * ppm));
+    let sh = c.createLinearGradient(0, 0, 0, ins * 2.2);
+    sh.addColorStop(0, 'rgba(0,0,0,0.42)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = sh; c.fillRect(0, 0, W, ins * 2.2);
+    sh = c.createLinearGradient(0, 0, ins * 2.2, 0);
+    sh.addColorStop(0, 'rgba(0,0,0,0.34)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = sh; c.fillRect(0, 0, ins * 2.2, H);
+    sh = c.createLinearGradient(0, H, 0, H - ins * 1.6);
+    sh.addColorStop(0, 'rgba(255,255,255,0.22)'); sh.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = sh; c.fillRect(0, H - ins * 1.6, W, ins * 1.6);
+    /* hairline border in the ink */
+    const inkHex = (L) => {
+      _colScratch.setHex(L.color.getHex());
+      const l2 = 0.2126 * _colScratch.r + 0.7152 * _colScratch.g + 0.0722 * _colScratch.b;
+      if (darkBoard && l2 < 0.42) _colScratch.lerp(_colScratch2.setRGB(0.94, 0.89, 0.77), 0.75);
+      else if (!darkBoard && l2 > 0.30) _colScratch.lerp(_colScratch2.setRGB(0.16, 0.13, 0.09), 0.72);
+      return '#' + _colScratch.getHexString();
+    };
+    const headLine = lines.find((L) => L.head) || lines[0];
+    c.strokeStyle = inkHex(headLine);
+    c.globalAlpha = 0.55;
+    c.lineWidth = Math.max(2, Math.round(0.012 * ppm));
+    const bd = Math.round(0.075 * ppm);
+    c.strokeRect(bd, bd, W - bd * 2, H - bd * 2);
+    c.globalAlpha = 1;
+
+    /* the lines, centred; the header carries a rule beneath it */
+    c.textBaseline = 'alphabetic';
+    c.textAlign = 'left';
+    let y = TEXT_PAD_M * ppm;
+    for (let i = 0; i < lines.length; i++) {
+      const L = lines[i];
+      if (L.gap) y += L.cap * TEXT_MEMBER_GAP * ppm;
+      const fsPx = Math.round(L.fs * ppm);
+      c.font = fontOf(fsPx, L.head);
+      const track = L.fs * TEXT_TRACK_EM * ppm;
+      const lw = L.wM * ppm;
+      let x = (W - lw) * 0.5;
+      const base = y + (L.pitch - L.cap) * 0.5 * ppm + L.cap * ppm;
+      const ink = inkHex(L);
+      if (L.head) {
+        /* a 1-texel-per-3cm drop so the header lifts off the panel */
+        c.fillStyle = darkBoard ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.28)';
+        let xs = x;
+        const d = Math.max(1, Math.round(0.010 * ppm));
+        for (let ch = 0; ch < L.text.length; ch++) {
+          c.fillText(L.text[ch], xs + d, base + d);
+          xs += c.measureText(L.text[ch]).width + track;
+        }
+      }
+      c.fillStyle = ink;
+      for (let ch = 0; ch < L.text.length; ch++) {
+        c.fillText(L.text[ch], x, base);
+        x += c.measureText(L.text[ch]).width + track;
+      }
+      y += L.pitch * ppm;
+      if (L.head) {
+        const ry = y + L.cap * 0.12 * ppm;
+        c.globalAlpha = 0.65; c.fillStyle = ink;
+        c.fillRect((W - lw) * 0.5, ry, lw, Math.max(2, Math.round(0.014 * ppm)));
+        c.globalAlpha = 1;
+        y += L.cap * 0.42 * ppm;
+      }
+    }
+    return { cnv, W, H, wM, hM, ppm, ax: -1, ay: -1, uv: null };
+  }
+
+  _buildText(o, index) {
+    if (this.texts.length >= MAX_TEXT) return null;
+    this._prepareTexts();
+    const g = this._textGroupOf ? this._textGroupOf.get(index) : null;
+    if (!g || g.head !== index || g.built) return null;
+    g.built = true;
+    const bake = g.bake;
+    if (!bake) return null;
+
+    let mat = null, uv = null;
+    if (bake.uv && this._textAtlas) { mat = this._textAtlas.mat; uv = bake.uv; }
+    else {
+      /* atlas overflow: a private sheet, one extra draw, still legible */
+      const tex = new THREE.CanvasTexture(bake.cnv);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 8;
+      tex.generateMipmaps = false;
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.needsUpdate = true;
+      this._own(tex);
+      mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, side: THREE.FrontSide, fog: true });
+      this._own(mat);
+      this._signOccApply(mat);
+    }
+
+    const w = bake.wM, h = bake.hM;
+    const group = new THREE.Group();
+
+    /* the board: a chamfered wood plank a lip wider than the painted panel —
+       on the course's own plank material, which carries the occluder fade */
+    const plateW = w + TEXT_FRAME_M * 2;
+    const plateH = h + TEXT_FRAME_M * 2;
+    const plate = chamferBox(plateW, plateH, 0.09, 0.03);
+    this._own(plate);
+    const plateMesh = new THREE.Mesh(plate, this._signPlankMat(g.mat));
+    plateMesh.castShadow = false;
+    plateMesh.receiveShadow = true;
+    group.add(plateMesh);
+
+    /* the accent bar along the foot of the plank, in the authored ink */
+    const bar = new THREE.BoxGeometry(plateW * 0.86, 0.026, 0.02);
+    bar.translate(0, -plateH * 0.5 + 0.06, 0.055);
+    this._own(bar);
+    group.add(new THREE.Mesh(bar, this._glowMat(g.headColor, 1.15)));
+
+    /* the painted panel, set 1 cm into the plank face so the lip reads as a
+       frame; the bake's inset shadow does the rest */
+    const planeGeo = new THREE.PlaneGeometry(w, h);
+    planeGeo.translate(0, 0, 0.046);
+    if (uv) {
+      const a = planeGeo.attributes.uv;
+      for (let i = 0; i < a.count; i++) {
+        a.setXY(i, uv[0] + a.getX(i) * (uv[2] - uv[0]), uv[1] + a.getY(i) * (uv[3] - uv[1]));
+      }
+      a.needsUpdate = true;
+    }
+    this._own(planeGeo);
+    const planeMesh = new THREE.Mesh(planeGeo, mat);
+    if (!uv) planeMesh.userData.noMerge = true;
+    planeMesh.receiveShadow = false;
+    group.add(planeMesh);
+
+    /* the board hangs where the group was authored: centred between the
+       header's top and the lowest line's foot */
+    let top = -Infinity, bot = Infinity;
+    for (let m = 0; m < g.members.length; m++) {
+      const mp = g.members[m].o.p;
+      const ms = fin(g.members[m].o.size) ? g.members[m].o.size : 0.42;
+      if (mp[1] + ms * 0.5 > top) top = mp[1] + ms * 0.5;
+      if (mp[1] - ms * 0.5 < bot) bot = mp[1] - ms * 0.5;
+    }
+    const p = v3(o.p, 0, 0, 0);
+    p.y = (top + bot) * 0.5;
+    group.position.copy(p);
+    /* Open dioramas have no "incoming" direction, so a sign faces the authored
+       yaw, or — with none — the course spawn, which is the one place every
+       player is guaranteed to stand. */
+    if (o.rot !== undefined) applyRot(group, o.rot);
+    else if (fin(o.yaw)) group.rotation.y = o.yaw;
+    else {
+      const sp = this.def.spawn && fin3(this.def.spawn.p) ? this.def.spawn.p : null;
+      group.rotation.y = sp ? Math.atan2(sp[0] - p.x, sp[2] - p.z) : 0;
+    }
+    /* Stand the plate PROUD of its mount. A sign is authored at the same x/z as
+       the post or board that carries it, so the plate and a 0.16 m post
+       occupied the same slab of world and the post's silhouette cut through the
+       lettering — verdant-1's 'BAILEY MEADOW' lost its 'IL' to exactly that.
+       One shift along the facing normal, after the yaw is known, fixes every
+       sign in every course instead of nudging one authored coordinate. */
+    if (TEXT_MOUNT_OUT > 0) {
+      const yy = group.rotation.y;
+      group.position.x += Math.sin(yy) * TEXT_MOUNT_OUT;
+      group.position.z += Math.cos(yy) * TEXT_MOUNT_OUT;
+    }
+    /* Where the plate ended up, for the coin keep-out (`_coinKeepOut`). */
+    {
+      const yy = group.rotation.y;
+      g.placed = {
+        cx: group.position.x, cy: group.position.y, cz: group.position.z,
+        nx: Math.sin(yy), nz: Math.cos(yy), ux: Math.cos(yy), uz: -Math.sin(yy),
+        hw: plateW * 0.5, hh: plateH * 0.5,
+      };
+    }
+
+    this.texts.push(group);
+    this._chunkAdd(group, p, true);
+    return null;
+  }
+
+  /* ── COINS NEVER SIT ON THE LETTERING ──────────────────────────────────
+   * Playtest rime-3 #4: "a gold coin from the camp coin trail floats directly
+   * in front of the lettering and covers the D in 'COME DOWN HERE' from every
+   * angle". `_harness/signcheck.mjs` finds the same on 12 of 13 courses — a
+   * coin trail follows the walked line and the sign stands beside it at head
+   * height, so a coin lands in the reader's sight band. A rule, not thirty
+   * data edits: after the boards are placed, any coin inside a plate's sight
+   * band (in front of it, within its silhouette) is moved by the smallest step
+   * that leaves the band — LOWERED under the plate when there is floor for it
+   * (a trail coin keeps its line), else SLID past the plate's edge, else RAISED
+   * over it. Runs once at build; only the affected entries are expanded. */
+  _coinKeepOut(defCoins) {
+    const groups = this._textGroups;
+    if (!Array.isArray(defCoins) || !defCoins.length || !groups || !groups.length) return defCoins;
+    const boards = [];
+    for (let i = 0; i < groups.length; i++) if (groups[i].placed) boards.push(groups[i].placed);
+    if (!boards.length) return defCoins;
+
+    const FRONT = 3.0, LAT = 0.15, VER = 0.25, CLEAR = 0.5;
+    const hitBoard = (x, y, z) => {
+      for (let b = 0; b < boards.length; b++) {
+        const B = boards[b];
+        const dx = x - B.cx, dy = y - B.cy, dz = z - B.cz;
+        const front = dx * B.nx + dz * B.nz;
+        if (front < 0.05 || front > FRONT) continue;
+        if (Math.abs(dx * B.ux + dz * B.uz) > B.hw + LAT) continue;
+        if (Math.abs(dy) > B.hh + VER) continue;
+        return B;
+      }
+      return null;
+    };
+    const pt = _v1;
+    const moveOut = (q, B, snap) => {
+      /* 1. lower it under the plate, on a trail that keeps its line */
+      if (!snap) {
+        const ly = B.cy - B.hh - VER - CLEAR;
+        pt.set(q[0], ly, q[2]);
+        const floor = this._floorUnder(pt, 6);
+        if (floor !== null && ly - floor >= 0.4 && !hitBoard(q[0], ly, q[2])) { q[1] = ly; return 1; }
+      }
+      /* 2. slide it past the nearer edge of the plate */
+      const along = (q[0] - B.cx) * B.ux + (q[2] - B.cz) * B.uz;
+      const sgn = along >= 0 ? 1 : -1;
+      const shift = sgn * (B.hw + LAT + CLEAR) - along;
+      const sx = q[0] + B.ux * shift, sz = q[2] + B.uz * shift;
+      if (!hitBoard(sx, q[1], sz)) { q[0] = sx; q[2] = sz; return 2; }
+      /* 3. raise it over the plate */
+      q[1] = B.cy + B.hh + VER + CLEAR;
+      return 3;
+    };
+
+    let out = null, moved = 0;
+    for (let i = 0; i < defCoins.length; i++) {
+      const e = defCoins[i];
+      const pts = expandCoinDef(e);
+      let any = false;
+      for (let k = 0; k < pts.length && !any; k++) any = !!hitBoard(pts[k][0], pts[k][1], pts[k][2]);
+      if (!any) { if (out) out.push(e); continue; }
+      if (!out) out = defCoins.slice(0, i);
+      const snap = !!(e && (e.snap || e.ground));
+      for (let k = 0; k < pts.length; k++) {
+        const q = pts[k];
+        const B = hitBoard(q[0], q[1], q[2]);
+        if (B) { moveOut(q, B, snap); moved++; }
+        out.push(snap ? { p: q, snap: true } : { p: q });
+      }
+    }
+    if (moved) console.info('[Course ' + this.id + '] ' + moved + ' coin' + (moved === 1 ? '' : 's') +
+                            ' moved out of a sign\'s sight band (see _coinKeepOut)');
+    return out || defCoins;
+  }
+
+  /**
+   * Give a sign material the occluder fade (see SIGN_OCC_*). Chains any hook
+   * the material already carries (materials.js box projection) and forks its
+   * program key so the injected GLSL never inherits an un-injected program.
+   */
+  _signOccApply(mat) {
+    if (!mat || !mat.isMaterial) return mat;
+    let u = this._signOcc;
+    if (!u) {
+      u = this._signOcc = {
+        hero: { value: new THREE.Vector3() },
+        cam: { value: new THREE.Vector3() },
+        occ: { value: new THREE.Vector2(SIGN_OCC_RADIUS, 0) },
+      };
+    }
+    const baseCompile = typeof mat.onBeforeCompile === 'function' ? mat.onBeforeCompile : null;
+    const baseKey = typeof mat.customProgramCacheKey === 'function' ? mat.customProgramCacheKey : null;
+    mat.onBeforeCompile = function (shader, renderer) {
+      if (baseCompile) baseCompile.call(this, shader, renderer);
+      injectSignOcc(shader, u);
+    };
+    mat.customProgramCacheKey = function () { return (baseKey ? String(baseKey.call(this)) : '') + '|cbsignocc'; };
+    mat.needsUpdate = true;
+    return mat;
+  }
+
+  /** The course's own clone of a plank material, carrying the occluder fade. */
+  _signPlankMat(key) {
+    let m = this._signPlankMats.get(key);
+    if (m) return m;
+    const base = this._mat(key);
+    let c = null;
+    try { c = base && typeof base.clone === 'function' ? base.clone() : null; } catch (e) { c = null; }
+    if (!c || !c.isMaterial) return base;
+    c.name = (base.name || String(key)) + '.sign';
+    this._own(c);
+    this._signOccApply(c);
+    this._signPlankMats.set(key, c);
+    return c;
+  }
+
+  /** Per frame: the camera->hero line the sign fade keys off. Two vector copies. */
+  _updateSignOcclusion() {
+    const u = this._signOcc;
+    if (!u) return;
+    const cam = this.engine && this.engine.camera;
+    const p = this._playerRef;
+    if (!cam || !p || !p.pos || !fin(p.pos.x)) { u.occ.value.y = 0; return; }
+    u.hero.value.set(p.pos.x, p.pos.y + SIGN_OCC_HERO_Y, p.pos.z);
+    if (cam.parent) u.cam.value.setFromMatrixPosition(cam.matrixWorld);
+    else u.cam.value.copy(cam.position);
+    u.occ.value.y = 1;
+  }
+
+  /** Cached unlit glow material — shared, so signage and bulbs still merge. */
+  _glowMat(color, boost) {
+    const b = fin(boost) ? boost : 1.25;
+    const key = 'glow:' + color.getHexString() + ':' + b.toFixed(2);
+    let m = this._matCache.get(key);
+    if (m) return m;
+    m = new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(b), toneMapped: false });
+    this._own(m);
+    this._matCache.set(key, m);
+    return m;
+  }
+
+  /* ── decor: procedural clusters + instanced GLB props ────────────────── */
+
+  /**
+   * `{kind:'deco', model:'…'}` routes to world/props.js, which collapses every
+   * copy of one prop into a single InstancedMesh — a hundred crates is one draw
+   * call.  Everything else goes to `builders.buildDeco`, which does the same for
+   * its procedural families.
+   */
+  _buildDeco(o, index) {
+    if (this._decor <= 0) return null;
+    let count = fin(o.count) ? Math.max(1, Math.round(o.count)) : 1;
+    count = Math.max(1, Math.round(count * (0.35 + 0.65 * this._decor)));
+    if (this._decor < 0.4) count = Math.min(count, Math.max(1, Math.floor(count * 0.5)));
+
+    if (typeof o.model === 'string' && o.model.length) {
+      this._decoProps.push(Object.assign({}, o, { count }));
+      return null;
+    }
+    if (typeof o.kindOf === 'string' && o.kindOf.length) {
+      this._decoProps.push(Object.assign({}, o, { count }));
+      return null;
+    }
+
+    const bdef = Object.assign({}, o, { count });
+    if (typeof Builders.buildDeco === 'function') {
+      let built = null;
+      try { built = Builders.buildDeco(bdef, this.theme, this.mats); }
+      catch (e) {
+        console.error('[Course ' + this.id + '] buildDeco threw on objects[' + index + ']', e);
+        built = null;
+      }
+      if (built && built.mesh) { this._placeBuilt(built, bdef, index, true); return null; }
+    }
+
+    /* Last-resort decor: a seeded cluster of chamfered shards.  Silhouette only,
+       never a landable-looking slab — decorative geometry that reads as a
+       platform is the fastest way to fail the critic's readability lane. */
+    const rng = mulberry32(hashId(this.id + ':deco:' + index + ':' + (o.seed || 0)));
+    const spread = fin(o.spread) ? o.spread : 2.2;
+    const scale = fin(o.scale) ? o.scale : 1;
+    const parts = [];
+    for (let i = 0; i < count; i++) {
+      const h = (0.5 + rng() * 1.5) * scale;
+      const w = (0.25 + rng() * 0.5) * scale;
+      const gg = chamferBox(w, h, w * (0.7 + rng() * 0.6), Math.min(0.06, w * 0.25));
+      _m1.makeRotationY(rng() * Math.PI * 2);
+      _m1.setPosition((rng() - 0.5) * spread * 2, h * 0.5, (rng() - 0.5) * spread * 2);
+      gg.applyMatrix4(_m1);
+      parts.push(gg);
+    }
+    const merged = mergeParts(parts);
+    for (let i = 0; i < parts.length; i++) if (parts[i] !== merged) parts[i].dispose();
+    if (!merged) return null;
+    this._own(merged);
+    const mesh = new THREE.Mesh(merged, this._mat(o.mat || 'stone'));
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    const p = v3(o.p, 0, 0, 0);
+    mesh.position.copy(p);
+    applyRot(mesh, o.rot);
+    this._chunkAdd(mesh, p, true);
+    return null;
+  }
+
+  /**
+   * Load the theme's prop library once and place EVERY prop def in one batch.
+   * This is the course's only asynchronous step; batching it means a course with
+   * 200 props still pays one library load, not 200.
+   *
+   * Prop point lights are routed into this course's light-site budget through
+   * `lightSink`, never created as real PointLights — see the LIGHT_POOL_SIZE
+   * note: a row of eight braziers with their own lights taxes every material
+   * within range of any of them.
+   */
+  async _buildPropBatch() {
+    const defs = this._decoProps;
+    if (!defs.length) return null;
+
+    let lib = null;
+    const renderer = this.engine ? this.engine.renderer : null;
+    try {
+      if (typeof PropsMod.loadProps === 'function') lib = await PropsMod.loadProps(this.themeId, renderer);
+      else if (typeof PropsMod.proceduralLibrary === 'function') lib = PropsMod.proceduralLibrary(this.themeId);
+    } catch (e) {
+      console.warn('[Course ' + this.id + '] prop library failed to load — falling back to procedural', e);
+      try {
+        if (typeof PropsMod.proceduralLibrary === 'function') lib = PropsMod.proceduralLibrary(this.themeId);
+      } catch (e2) { lib = null; }
+    }
+    if (this._disposed) return null;
+    if (!lib || typeof PropsMod.placeProps !== 'function') {
+      console.warn('[Course ' + this.id + '] world/props.js unavailable — ' + defs.length +
+                   ' deco def(s) skipped');
+      return null;
+    }
+
+    /* Props are decor: they live in one container per course rather than per
+       chunk, because placeProps already collapses them to a handful of
+       InstancedMeshes and instanced draws do not benefit from chunk culling. */
+    const container = new THREE.Group();
+    container.name = 'props';
+    container.matrixAutoUpdate = false;
+    this.group.add(container);
+
+    const self = this;
+    let out = null;
+    try {
+      out = PropsMod.placeProps(container, defs, lib, null, {
+        shadows: this._decor > 0.35,
+        maxLights: 0,
+        /* Decor's slice of the perf gate (260 draws / 450k tris for the whole
+           frame).  props.js thins density uniformly to fit rather than letting
+           a generous `count:` in a course file spend the course's budget on
+           mushrooms — measured on verdant-1, decor was 372 draws / 462k tris
+           before this cap. */
+        budget: { draws: Math.round(24 * (0.5 + 0.5 * this._decor)),
+                  tris: Math.round(52000 * (0.45 + 0.55 * this._decor)) },
+        lightSink: (site) => self.addLightSite(site),
+      });
+    } catch (e) {
+      console.error('[Course ' + this.id + '] placeProps threw', e);
+      out = null;
+    }
+    if (!out) return null;
+
+    for (let i = 0; i < out.meshes.length; i++) {
+      const m = out.meshes[i];
+      if (!m) continue;
+      m.userData.noMerge = true;
+      m.frustumCulled = true;
+    }
+    if (out.skipped && out.skipped.length) {
+      console.warn('[Course ' + this.id + '] props.js had no entry for: ' + out.skipped.join(', '));
+    }
+    this.stats.instanced += out.instances | 0;
+    this._propHandle = out;
+    return null;
+  }
+
+  /* ── point lights ────────────────────────────────────────────────────── */
+
+  _buildLight(o, index) {
+    if (this.lights.length >= MAX_LIGHT_SITES) return null;
+    const p = v3(o.p, 0, 0, 0);
+    const color = colorOf(o.color, this.palette.accent.getHex());
+    const intensity = fin(o.intensity) ? o.intensity : 6;
+    const distance = fin(o.distance) ? o.distance : 14;
+
+    /* A physical bulb, so the source is a visible object rather than a floating
+       glow with no cause. */
+    const bulbGeo = new THREE.IcosahedronGeometry(Math.min(0.16, distance * 0.02 + 0.06), 1);
+    bulbGeo.translate(p.x, p.y, p.z);
+    this._own(bulbGeo);
+    const bulb = new THREE.Mesh(bulbGeo, this._glowMat(color, 1.6));
+    this._chunkAdd(bulb, p, true);
+
+    /* The part that used to BE a PointLight: a halo around the bulb so the
+       source still reads at range, and a pool of light on the floor beneath it
+       so the fixture keeps lighting its own patch even when no slot of the pool
+       is pointed at it.  Both bake flat in `_buildGlowField`. */
+    this._glowSites.push({
+      pos: p, color,
+      halo: Math.min(2.2, Math.max(0.45, distance * 0.13)),
+      pool: Math.min(6.5, Math.max(1.2, distance * 0.42)),
+    });
+
+    const site = this.addLightSite({
+      p, color, intensity, distance,
+      flicker: o.flicker, seed: index * 37.13,
+    });
+    site.bulb = bulb;
+    /* The lamp round the bulb is built once every collider exists
+       (`_buildLightFixtures`), because which lamp it is depends on what the
+       course put near the site: a floor, a ceiling, a wall, or nothing. */
+    this._lightFixtures.push({ o, pos: p });
+    return null;
+  }
+
+  /**
+   * A FIXTURE FOR EVERY LIGHT (playtest rime-3 #2: "a bare orange glowing ball
+   * hangs in mid-air 2.6 m above the snow with no torch, brazier or lamp under
+   * it"). The bulb and its halo are the light; this is its cause. The mount is
+   * chosen from the geometry round the site, in this order:
+   *   a ceiling within 1.6 m above   -> 'hang'   (plate + chain)
+   *   a wall within 0.9 m beside     -> 'wall'   (plate + bracket arm)
+   *   a floor within 4.8 m below     -> 'post'   (plinth + shaft + collar)
+   *   nothing                         -> 'lantern' (the cage alone)
+   * Authors override with `fixture:'none'|'post'|'hang'|'wall'|'lantern'` and
+   * `fixtureScale`. Runs after every builder and hazard, before the merge, so
+   * the lamp costs no draw of its own.
+   */
+  _buildLightFixtures() {
+    const q = this._lightFixtures;
+    if (!q || !q.length) return;
+    const fn = Builders.buildLightFixture;
+    if (typeof fn !== 'function') { q.length = 0; return; }
+    for (let i = 0; i < q.length; i++) {
+      const o = q[i].o, p = q[i].pos;
+      if (o.fixture === false || o.fixture === 'none') continue;
+      const want = typeof o.fixture === 'string' ? o.fixture : 'auto';
+      let mount = 'lantern', span = 0, side = null;
+      const ceil = (want === 'auto' || want === 'hang') ? this._ceilingOver(p, want === 'hang' ? 6 : 1.6) : null;
+      const wall = (want === 'auto' || want === 'wall') ? this._wallBeside(p, want === 'wall' ? 2.5 : 0.9) : null;
+      const floor = (want === 'auto' || want === 'post') ? this._floorUnder(p, want === 'post' ? 9 : 4.8) : null;
+      if ((want === 'auto' || want === 'hang') && ceil !== null && ceil - p.y >= 0.35) {
+        mount = 'hang'; span = ceil - p.y;
+      } else if ((want === 'auto' || want === 'wall') && wall) {
+        const dx = wall.x - p.x, dz = wall.z - p.z;
+        span = Math.hypot(dx, dz);
+        if (span > 0.04) { mount = 'wall'; side = { x: dx / span, z: dz / span }; }
+      } else if ((want === 'auto' || want === 'post') && floor !== null && p.y - floor >= 0.9) {
+        mount = 'post'; span = p.y - floor;
+      } else if (want !== 'auto' && fin(o.span)) {
+        mount = want; span = o.span;
+      }
+      let built = null;
+      try {
+        built = fn({ p: [p.x, p.y, p.z], mount, span, side, scale: fin(o.fixtureScale) ? o.fixtureScale : 1 },
+                   this.theme, this.mats);
+      } catch (e) {
+        if (!this._warnedBuilders.has('lightfixture')) {
+          this._warnedBuilders.add('lightfixture');
+          console.error('[Course ' + this.id + '] buildLightFixture threw', e);
+        }
+        built = null;
+      }
+      if (built && built.mesh) this._chunkAdd(built.mesh, p, true);
+      /* build-time only: what each site got, for the harness (`course._fixtureLog`) */
+      this._fixtureLog.push({ mount, span: Math.round(span * 100) / 100, p: [p.x, p.y, p.z] });
+    }
+    q.length = 0;
+  }
+
+  /** Lowest collider underside over `p` within `maxRise`, or null (mirror of _floorUnder). */
+  _ceilingOver(p, maxRise) {
+    let best = Infinity;
+    const cols = this._allColliders;
+    for (let i = 0; i < cols.length; i++) {
+      const c = cols[i];
+      const b = c && c.aabb;
+      if (!b || b.isEmpty()) continue;
+      if (p.x < b.min.x - 0.25 || p.x > b.max.x + 0.25) continue;
+      if (p.z < b.min.z - 0.25 || p.z > b.max.z + 0.25) continue;
+      const bot = b.min.y;
+      if (bot < p.y + 0.08 || bot > p.y + maxRise) continue;
+      if (bot < best) best = bot;
+    }
+    return best === Infinity ? null : best;
+  }
+
+  /**
+   * Register a dynamic light SITE.  Sites compete for the course's small fixed
+   * pool of real PointLights — registering one never adds a light to the scene,
+   * so a hazard or a prop may call this at build time or later without risking
+   * the program-cache recompile that a live light addition causes.
+   *
+   * @param {object} o {p|pos, color, intensity, distance, decay, flicker, seed}
+   * @returns {object} the site record: move it via `site.pos.set(...)`, dim it
+   *                   via `site.base = n`, drop it via `site.remove()`.
+   */
+  addLightSite(o) {
+    const pos = (o && o.pos && fin(o.pos.x)) ? o.pos : v3(o && o.p, 0, 0, 0);
+    const distance = fin(o && o.distance) ? o.distance : 14;
+    const self = this;
+    const site = {
+      pos,
+      color: (o && o.color && o.color.isColor)
+        ? o.color
+        : colorOf(o && o.color, this.palette.accent.getHex()),
+      base: fin(o && o.intensity) ? o.intensity : 6,
+      distance,
+      decay: fin(o && o.decay) ? o.decay : 2,
+      flicker: !!(o && o.flicker),
+      flickerAmt: fin(o && o.flicker) ? clamp(o.flicker, 0, 1) : 0.35,
+      seed: fin(o && o.seed) ? (o.seed % 100) : (this.lights.length * 37.13) % 100,
+      /* Beyond this the light's contribution is under the dither floor: never a candidate. */
+      range2: (distance * 3.2) * (distance * 3.2),
+      d2: 0, want: false, slot: -1, bulb: null,
+      remove() {
+        const i = self.lights.indexOf(site);
+        if (i < 0) return;
+        if (site.slot >= 0 && self._lightPool[site.slot]) self._lightPool[site.slot].site = null;
+        site.slot = -1;
+        self.lights.splice(i, 1);
+        self._lightIdx.length = self.lights.length;
+      },
+    };
+    this.lights.push(site);
+    this._lightIdx.push(this.lights.length - 1);
+    return site;
+  }
+
+  /**
+   * Allocate the pool ONCE, before the first render.  Slots live on the course
+   * group forever at intensity 0 until the budget points one at a site; they are
+   * never added, removed or hidden after this, so the program cache is built for
+   * LIGHT_POOL_SIZE point lights and stays valid for the whole run.
+   */
+  _buildLightPool() {
+    /* SIZED TO THE TIER, ONCE.
+     *
+     * The pool used to be LIGHT_POOL_SIZE (6) lights at every quality tier, with
+     * `_maxLights` only deciding how many were faded UP. A PointLight at
+     * intensity 0 is still in the render list, so `NUM_POINT_LIGHTS` was 6 in
+     * every shader and every fragment in the game paid for six point-light
+     * evaluations however many were actually lit — settings.js has said
+     * `maxLights: 2` at LOW since the perf pass and it bought nothing.
+     * MEASURED 2026-09-03 (`_harness/_fillab.py`, keep/cp3/quality medium,
+     * 1382x777): hiding all six point lights was worth -3.20 ms on a 24.28 ms
+     * frame, the largest single non-resolution delta on that course.
+     *
+     * The pool is still allocated ONCE before the first render and never grows
+     * or shrinks afterwards, so the program cache is still built for a FIXED
+     * light count and nothing recompiles mid-run — which is the whole point of
+     * the note above. A quality change raises `_maxLights` only as far as the
+     * pool this course was built with (see `_applyQuality`). */
+    const n = Math.max(1, Math.min(LIGHT_POOL_SIZE, this._maxLights | 0));
+    for (let i = 0; i < n; i++) {
+      const l = new THREE.PointLight(0xffffff, 0, 14, 2);
+      l.name = 'cb.course.pointpool.' + i;
+      l.castShadow = false;
+      l.position.set(0, -1e4, 0);
+      this.group.add(l);
+      this._lightPool.push({ light: l, site: null, fade: 0 });
+    }
+  }
+
+  /**
+   * Bake every light site's halo and floor pool into ONE additive mesh.
+   *
+   * A halo is a camera-facing quad; a floor pool is a horizontal disc sitting on
+   * whatever collider is under the fixture.  Both are the same four verts with a
+   * radial falloff, so the fixture glow for a whole course costs one draw call
+   * and no per-fragment light term on any other material in the scene.
+   */
+  _buildGlowField() {
+    const sites = this._glowSites;
+    if (!sites.length) return;
+
+    /* ROUND 5 — THE LAMPS LIT NOTHING VERTICAL.
+     * Critic, `_shots/keep/cp2.png`: "the Keep's lamps light nothing — the
+     * orange lamp sprite sits on a wall measuring [24,13,20] with no falloff
+     * pool around it, so it reads as a decal, not a fixture."
+     * True, and the reason is that this field only ever baked a HALO (a camera-
+     * facing quad at the bulb) and a FLOOR POOL (a horizontal disc on whatever
+     * is under it). Every practical in the Keep is a wall sconce: the surface it
+     * is closest to, and the one a viewer looks at to decide whether the lamp is
+     * real, is the WALL BEHIND IT — and nothing was ever drawn there. A wall
+     * pool is now cast for each site by probing the four horizontal axes for a
+     * surface within a couple of metres and laying a vertical disc on the
+     * nearest one. It is the same four verts, the same shader and the same
+     * single draw call as the other two modes — the perf budget does not move.
+     * mode 2 = plane spanning Z/Y (a wall whose normal is +/-X);
+     * mode 3 = plane spanning X/Y (a wall whose normal is +/-Z). */
+    const quads = [];
+    for (let i = 0; i < sites.length; i++) {
+      const g = sites[i];
+      quads.push({ x: g.pos.x, y: g.pos.y, z: g.pos.z, size: g.halo, mode: 0, c: g.color });
+      const fy = this._floorUnder(g.pos, g.pool * 2.4);
+      if (fy !== null) quads.push({ x: g.pos.x, y: fy + 0.035, z: g.pos.z, size: g.pool, mode: 1, c: g.color });
+      const wall = this._wallBeside(g.pos, 2.2);
+      if (wall) {
+        quads.push({ x: wall.x, y: g.pos.y, z: wall.z, size: g.pool * 0.78,
+                     mode: wall.axis === 'x' ? 2 : 3, c: g.color });
+      }
+    }
+    if (!quads.length) return;
+
+    const n = quads.length;
+    const pos = new Float32Array(n * 4 * 3);
+    const cor = new Float32Array(n * 4 * 2);
+    const par = new Float32Array(n * 4 * 2);
+    const tint = new Float32Array(n * 4 * 3);
+    const idx = new Uint32Array(n * 6);
+    const CX = [-1, 1, 1, -1], CY = [-1, -1, 1, 1];
+    for (let q = 0; q < n; q++) {
+      const d = quads[q];
+      for (let v = 0; v < 4; v++) {
+        const o3 = (q * 4 + v) * 3, o2 = (q * 4 + v) * 2;
+        pos[o3] = d.x; pos[o3 + 1] = d.y; pos[o3 + 2] = d.z;
+        cor[o2] = CX[v]; cor[o2 + 1] = CY[v];
+        par[o2] = d.size; par[o2 + 1] = d.mode;
+        tint[o3] = d.c.r; tint[o3 + 1] = d.c.g; tint[o3 + 2] = d.c.b;
+      }
+      const b = q * 4, o = q * 6;
+      idx[o] = b; idx[o + 1] = b + 1; idx[o + 2] = b + 2;
+      idx[o + 3] = b; idx[o + 4] = b + 2; idx[o + 5] = b + 3;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('aCorner', new THREE.BufferAttribute(cor, 2));
+    geo.setAttribute('aParam', new THREE.BufferAttribute(par, 2));
+    geo.setAttribute('aTint', new THREE.BufferAttribute(tint, 3));
+    geo.setIndex(new THREE.BufferAttribute(idx, 1));
+    geo.computeBoundingSphere();
+    this._own(geo);
+
+    /* Additive geometry cannot take three.js fog (fog ADDS its colour), so the
+       distance fade is folded into alpha here with the theme's own curve —
+       otherwise every fixture stays crisp through the haze. */
+    const fogDensity = (this.theme && this.theme.fog && fin(this.theme.fog.density)) ? this.theme.fog.density : 0.0;
+    const fogFar = (this.theme && this.theme.fog && fin(this.theme.fog.far)) ? this.theme.fog.far : 0.0;
+
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uHaloGain: { value: 0.80 },
+        uPoolGain: { value: 0.52 },
+        uWallGain: { value: 0.42 },
+        uFogDensity: { value: fogDensity },
+        uFogFar: { value: fogFar },
+      },
+      vertexShader: [
+        'attribute vec2 aCorner;',
+        'attribute vec2 aParam;',
+        'attribute vec3 aTint;',
+        'uniform float uFogDensity;',
+        'uniform float uFogFar;',
+        'varying vec2 vCorner;',
+        'varying vec3 vTint;',
+        'varying float vMode;',
+        'varying float vFog;',
+        'void main() {',
+        '  vCorner = aCorner;',
+        '  vTint = aTint;',
+        '  vMode = aParam.y;',
+        '  vec4 mv;',
+        '  float md = aParam.y;',
+        '  if (md < 0.5) {',                     // 0 halo: camera-facing
+        '    mv = modelViewMatrix * vec4(position, 1.0);',
+        '    mv.xy += aCorner * aParam.x;',
+        '  } else {',
+        '    vec3 wp = position;',
+        '    if (md < 1.5) {',                   // 1 floor pool: XZ plane
+        '      wp.x += aCorner.x * aParam.x;',
+        '      wp.z += aCorner.y * aParam.x;',
+        '    } else if (md < 2.5) {',            // 2 wall pool on a +/-X face: ZY
+        '      wp.z += aCorner.x * aParam.x;',
+        '      wp.y += aCorner.y * aParam.x;',
+        '    } else {',                          // 3 wall pool on a +/-Z face: XY
+        '      wp.x += aCorner.x * aParam.x;',
+        '      wp.y += aCorner.y * aParam.x;',
+        '    }',
+        '    mv = modelViewMatrix * vec4(wp, 1.0);',
+        '  }',
+        '  float dist = -mv.z;',
+        '  float f = 1.0;',
+        '  if (uFogDensity > 0.0) { float t = uFogDensity * dist; f = exp(-t * t); }',
+        '  else if (uFogFar > 0.0) { f = clamp(1.0 - dist / uFogFar, 0.0, 1.0); }',
+        '  vFog = f;',
+        '  gl_Position = projectionMatrix * mv;',
+        '}',
+      ].join('\n'),
+      fragmentShader: [
+        'uniform float uHaloGain;',
+        'uniform float uPoolGain;',
+        'uniform float uWallGain;',
+        'varying vec2 vCorner;',
+        'varying vec3 vTint;',
+        'varying float vMode;',
+        'varying float vFog;',
+        'void main() {',
+        '  float d = length(vCorner);',
+        '  float a = 1.0 - clamp(d, 0.0, 1.0);',
+        '  a = vMode < 0.5 ? pow(a, 2.6) : pow(a, 1.9);',
+        // a wall pool is seen at every angle and has no foreshortening to dim
+        // it, so it carries less gain than the floor disc.
+        '  a *= vFog * (vMode < 0.5 ? uHaloGain : (vMode < 1.5 ? uPoolGain : uWallGain));',
+        '  gl_FragColor = vec4(vTint * a, a);',
+        '}',
+      ].join('\n'),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: true,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+      fog: false,
+    });
+    this._own(mat);
+
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = 'course.glowfield';
+    mesh.renderOrder = 3;
+    mesh.frustumCulled = false;   // spans the course; one draw call either way
+    mesh.matrixAutoUpdate = false;
+    mesh.userData.noMerge = true;
+    this.group.add(mesh);
+    this._glowField = mesh;
+  }
+
+  /**
+   * Highest collider top strictly below `p` and inside its XZ footprint, or null
+   * when the fixture hangs over nothing — a light on a bridge rail with the void
+   * beneath it must NOT paint a pool of light on empty air.  Terrain counts.
+   */
+  /**
+   * The nearest vertical surface beside a light site, for its wall pool.
+   *
+   * Probes the four horizontal axes against the course's collider AABBs and
+   * returns the closest face within `maxDist`, as the point on that face plus
+   * which axis its normal runs along.  Build-time only, so the linear scan is
+   * the same cost as `_floorUnder`'s and nothing allocates per frame.
+   *
+   * @param {THREE.Vector3} p
+   * @param {number} maxDist
+   * @returns {{x:number, z:number, axis:'x'|'z'}|null}
+   */
+  _wallBeside(p, maxDist) {
+    let bestD = maxDist, out = null;
+    const cols = this._allColliders;
+    for (let i = 0; i < cols.length; i++) {
+      const c = cols[i];
+      const b = c && c.aabb;
+      if (!b || b.isEmpty()) continue;
+      if (p.y < b.min.y - 0.10 || p.y > b.max.y + 0.10) continue;
+      // -X / +X faces: the site must be within the slab's Z span
+      if (p.z >= b.min.z - 0.10 && p.z <= b.max.z + 0.10) {
+        let d = p.x - b.max.x;
+        if (d >= 0 && d < bestD) { bestD = d; out = { x: b.max.x + 0.03, z: p.z, axis: 'x' }; }
+        d = b.min.x - p.x;
+        if (d >= 0 && d < bestD) { bestD = d; out = { x: b.min.x - 0.03, z: p.z, axis: 'x' }; }
+      }
+      // -Z / +Z faces
+      if (p.x >= b.min.x - 0.10 && p.x <= b.max.x + 0.10) {
+        let d = p.z - b.max.z;
+        if (d >= 0 && d < bestD) { bestD = d; out = { x: p.x, z: b.max.z + 0.03, axis: 'z' }; }
+        d = b.min.z - p.z;
+        if (d >= 0 && d < bestD) { bestD = d; out = { x: p.x, z: b.min.z - 0.03, axis: 'z' }; }
+      }
+    }
+    return out;
+  }
+
+  _floorUnder(p, maxDrop) {
+    let best = -Infinity;
+    const cols = this._allColliders;
+    for (let i = 0; i < cols.length; i++) {
+      const c = cols[i];
+      const b = c && c.aabb;
+      if (!b || b.isEmpty()) continue;
+      if (p.x < b.min.x - 0.25 || p.x > b.max.x + 0.25) continue;
+      if (p.z < b.min.z - 0.25 || p.z > b.max.z + 0.25) continue;
+      const top = b.max.y;
+      if (top > p.y - 0.08 || top < p.y - maxDrop) continue;
+      if (top > best) best = top;
+    }
+    for (let i = 0; i < this._heightfields.length; i++) {
+      const h = this._heightfields[i];
+      let y = NaN;
+      try { y = h.heightAt(p.x, p.z); } catch (e) { y = NaN; }
+      if (!fin(y)) continue;
+      if (y > p.y - 0.08 || y < p.y - maxDrop) continue;
+      if (y > best) best = y;
+    }
+    return best === -Infinity ? null : best;
+  }
+
+  /**
+   * Shadow-caster gate.  Clutter smaller than SHADOW_MIN_RADIUS costs a full
+   * extra draw in the shadow pass and returns a sub-pixel blob; a transparent
+   * surface casts an opaque silhouette, which is worse than no shadow at all.
+   *
+   * This runs at the SOURCE of the static merge on purpose: `_mergeInto` ORs the
+   * flag across a material group, so without it one 8 cm bolt promotes every
+   * wall sharing its material into the shadow pass.
+   */
+  _shouldCast(o) {
+    if (!o || !o.castShadow) return false;
+    const m = o.material;
+    if (m && !Array.isArray(m) && (m.transparent === true || m.isMeshBasicMaterial)) return false;
+    const g = o.geometry;
+    if (!g) return false;
+    if (!g.boundingSphere) { try { g.computeBoundingSphere(); } catch (e) { return true; } }
+    if (!g.boundingSphere) return true;
+    _v4.setFromMatrixScale(o.matrixWorld);
+    const sc = Math.max(_v4.x, _v4.y, _v4.z) || 1;
+    return g.boundingSphere.radius * sc >= SHADOW_MIN_RADIUS;
+  }
+
+  /* ── hazards ─────────────────────────────────────────────────────────── */
+
+  /**
+   * The hazard context.  Everything a hazard could reasonably need is reachable
+   * from here WITHOUT the hazard knowing the shape of the Course: the resolvers
+   * in hazards/lasers.js (`resolvePlayer`, `resolvePost`, `resolveListener`,
+   * `hazTrigger`, `hazDropCoins`, `hazEvent`) walk exactly these fields.
+   */
+  _hazardCtx(index) {
+    const self = this;
+    return {
+      // world + presentation
+      mats: this.mats, builders: Builders,
+      theme: this.theme, themeId: this.themeId, palette: this.palette,
+      quality: this.quality, settings: Settings,
+      engine: this.engine,
+      renderer: this.engine ? this.engine.renderer : null,
+      scene: this.engine ? this.engine.scene : null,
+      camera: this.engine ? this.engine.camera : null,
+      post: this.engine ? this.engine.post : null,
+      listener: this.engine ? this.engine.camera : null,
+      group: this.group,
+      // gameplay wiring
+      course: this, stage: this, game: this.game,
+      world: this.world, broadphase: this.broadphase,
+      fx: this.fx, audio: this.audio, save: this.save,
+      events: this.events,
+      cam: this.game ? this.game.cam : null,
+      getPlayer() { return self._playerRef; },
+      get player() { return self._playerRef; },
+      get collectibles() { return self.collectibles; },
+      trigger(id, payload) { self.trigger(id, payload); },
+      dropCoins(pos, n) { self.dropCoins(pos, n); },
+      awardCoins(n, pos) { self.dropCoins(pos, n); },
+      lightSink(site) { return self.addLightSite(site); },
+      // determinism: one seeded stream per object index, stable across reloads
+      rng: mulberry32(hashId(this.id + ':hz:' + index)),
+      seed: hashId(this.id + ':hz:' + index),
+      index, courseDef: this.def, stageDef: this.def, courseId: this.id,
+    };
+  }
+
+  _buildHazard(o, index) {
+    const ctx = this._hazardCtx(index);
+    let kind = o.kind;
+    let h = null;
+    try {
+      if (typeof HazardLib.makeHazard === 'function') {
+        /* CONTRACT §21: makeHazard(kind, def, ctx).  A factory that still takes
+           the Ascendant (def, ctx) shape is detected by arity rather than by
+           trial-and-error, so a hazard is never constructed twice. */
+        h = HazardLib.makeHazard.length >= 3
+          ? HazardLib.makeHazard(kind, o, ctx)
+          : HazardLib.makeHazard(o, ctx);
+      } else if (HazardLib.HAZARDS) {
+        if (kind === 'lava' && o.rising && typeof HazardLib.HAZARDS.risinglava === 'function') kind = 'risinglava';
+        const f = HazardLib.HAZARDS[kind];
+        if (typeof f === 'function') h = f(o, ctx);
+      }
+    } catch (e) {
+      console.error('[Course ' + this.id + '] hazard factory threw for objects[' + index +
+                    '] (kind "' + o.kind + '")', e);
+      return null;
+    }
+    if (h && typeof h.then === 'function') {
+      return h.then((res) => { this._registerHazard(res, o, index); })
+              .catch((e) => {
+                console.error('[Course ' + this.id + '] async hazard failed objects[' + index + ']', e);
+              });
+    }
+    this._registerHazard(h, o, index);
+    return null;
+  }
+
+  _registerHazard(h, o, index) {
+    if (!h || typeof h.update !== 'function') {
+      console.warn('[Course ' + this.id + '] no hazard produced for objects[' + index +
+                   '] (kind "' + o.kind + '") — that obstacle is MISSING from the course');
+      return;
+    }
+    if (h.mesh && !h.mesh.parent) this.group.add(h.mesh);
+
+    const colliders = [];
+    if (Array.isArray(h.colliders)) {
+      for (let i = 0; i < h.colliders.length; i++) {
+        const c = h.colliders[i];
+        if (!c) continue;
+        if (c.ref === undefined || c.ref === null) c.ref = h;
+        this._addCollider(c, h);
+        colliders.push(c);
+      }
+    }
+    const kills = [];
+    if (Array.isArray(h.kills)) {
+      for (let i = 0; i < h.kills.length; i++) {
+        const k = this._addKill(h.kills[i], h);
+        if (k) kills.push(k);
+      }
+    }
+    const volumes = [];
+    const vsrc = Array.isArray(h.volumes) && h.volumes.length ? h.volumes : h.fields;
+    if (Array.isArray(vsrc)) {
+      for (let i = 0; i < vsrc.length; i++) {
+        const v = this._addVolume(vsrc[i], h);
+        if (v) volumes.push(v);
+      }
+    }
+
+    const rec = {
+      h, def: o, index, kind: o.kind, colliders, kills, volumes,
+      cullable: !NEVER_CULL.has(o.kind),
+      far: false, broken: false, errCount: 0,
+      cx: 0, cy: 0, cz: 0, radius: 4,
+      dwell: 0, armed: true,        // cannon boarding (see _updateCannons)
+    };
+    this.hazards.push(rec);
+    if ((o.kind === 'cannon' || h.kind === 'cannon') && h.volume) this._cannons.push(rec);
+    return rec;
+  }
+
+  /** Static culling sphere: the hazard's rest bounds padded by its motion range. */
+  _measureHazard(rec) {
+    const o = rec.def;
+    _box1.makeEmpty();
+    if (rec.h.mesh) {
+      try { _box1.setFromObject(rec.h.mesh); } catch (e) { _box1.makeEmpty(); }
+    }
+    if (_box1.isEmpty() && fin3(o.p)) {
+      _v1.set(o.p[0], o.p[1], o.p[2]);
+      _box1.setFromCenterAndSize(_v1, _v2.set(2, 2, 2));
+    }
+    if (_box1.isEmpty()) { rec.cullable = false; return; }
+    _box1.getCenter(_v1);
+    _box1.getSize(_v2);
+    rec.cx = _v1.x; rec.cy = _v1.y; rec.cz = _v1.z;
+    let r = _v2.length() * 0.5;
+
+    /* Pad by everything the def says it can travel: a mover culled at its rest
+       bounds pops back in halfway through its stroke. */
+    let travel = 0;
+    if (o.motion) {
+      const m = o.motion;
+      if (fin3(m.to) && fin3(o.p)) {
+        travel = Math.max(travel, Math.hypot(m.to[0] - o.p[0], m.to[1] - o.p[1], m.to[2] - o.p[2]));
+      }
+      if (fin(m.radius)) travel = Math.max(travel, Math.abs(m.radius) * 2);
+      if (fin(m.sinkSpeed) && fin(m.period)) travel = Math.max(travel, Math.abs(m.sinkSpeed * m.period));
+    }
+    if (fin(o.travel)) travel = Math.max(travel, Math.abs(o.travel));
+    if (fin(o.len)) travel = Math.max(travel, Math.abs(o.len) * 2);
+    if (fin(o.from) && fin(o.to)) travel = Math.max(travel, Math.abs(o.to - o.from));
+    if (fin3(o.a) && fin3(o.b)) {
+      travel = Math.max(travel, Math.hypot(o.b[0] - o.a[0], o.b[1] - o.a[1], o.b[2] - o.a[2]));
+    }
+    if (Array.isArray(o.pts) && o.pts.length > 1) {
+      for (let i = 1; i < o.pts.length; i++) {
+        if (!fin3(o.pts[i]) || !fin3(o.pts[0])) continue;
+        travel = Math.max(travel, Math.hypot(o.pts[i][0] - o.pts[0][0], o.pts[i][1] - o.pts[0][1], o.pts[i][2] - o.pts[0][2]));
+      }
+    }
+    r += travel;
+    rec.radius = r;
+    if (r > 45) rec.cullable = false;
+  }
+
+  /** A hazard that throws is suspended, not left to throw 60 times a second. */
+  _hazardError(rec, e) {
+    if (rec.broken) return;
+    rec.broken = true;
+    rec.errCount = (rec.errCount || 0) + 1;
+    if (rec.errCount <= 3) {
+      console.error('[Course ' + this.id + '] hazard objects[' + rec.index + '] (kind "' + rec.kind +
+                    '") threw in update() and has been suspended', e);
+      if (rec.errCount === 3) {
+        console.error('[Course ' + this.id + '] ...further errors from objects[' + rec.index + '] silenced');
+      }
+    }
+  }
+
+  /* ── critters ────────────────────────────────────────────────────────── */
+
+  _buildCritters() {
+    const defs = Array.isArray(this.def.critters) ? this.def.critters : [];
+    const npcs = Array.isArray(this.def.npcs) ? this.def.npcs : [];
+    const all = defs.concat(npcs);
+    if (!all.length || typeof CrittersMod.makeCritter !== 'function') {
+      if (all.length) console.warn('[Course ' + this.id + '] entities/critters.js has no makeCritter — ' +
+                                   all.length + ' critter(s) skipped');
+      return;
+    }
+    for (let i = 0; i < all.length; i++) {
+      const d = all[i];
+      if (!d || typeof d.kind !== 'string') continue;
+      const ctx = this._hazardCtx(1000 + i);
+      ctx.courseId = this.id;
+      let c = null;
+      try {
+        c = CrittersMod.makeCritter(d, ctx);
+      } catch (e) {
+        console.error('[Course ' + this.id + '] critters[' + i + '] (kind "' + d.kind + '") failed to build', e);
+        continue;
+      }
+      if (!c) continue;
+      if (c.mesh && !c.mesh.parent) this.group.add(c.mesh);
+      if (Array.isArray(c.colliders)) {
+        for (let k = 0; k < c.colliders.length; k++) this._addCollider(c.colliders[k], c);
+      }
+      if (Array.isArray(c.kills)) {
+        for (let k = 0; k < c.kills.length; k++) this._addKill(c.kills[k], c);
+      }
+      if (Array.isArray(c.volumes)) {
+        for (let k = 0; k < c.volumes.length; k++) this._addVolume(c.volumes[k], c);
+      }
+      /* A warden's death is the `boss` crest's trigger AND a Game-level beat. */
+      if (c.events && typeof c.events.on === 'function') {
+        const self = this;
+        c.events.on('down', () => {
+          self.trigger('warden-down');
+          self.events.emit('wardenDown', c);
+        });
+        c.events.on('trigger', (id) => { self.trigger(id); });
+        c.events.on('coins', (n, pos) => { self.dropCoins(pos, n); });
+      }
+      this.critters.push(c);
+    }
+  }
+
+  /* ── collectibles ────────────────────────────────────────────────────── */
+
+  _buildCollectibles() {
+    const Ctor = CollectiblesMod.Collectibles;
+    if (typeof Ctor !== 'function') {
+      console.warn('[Course ' + this.id + '] entities/collectibles.js has no Collectibles — ' +
+                   'this course has no coins, sigils or crests');
+      return;
+    }
+    let col = null;
+    /* The coin list the collectibles build from is the authored one with any
+       coin in a sign's sight band moved out of it (`_coinKeepOut`); every other
+       field of the def is the def's own. */
+    let colDef = this.def;
+    try {
+      const coins = this._coinKeepOut(this.def.coins);
+      if (coins !== this.def.coins) colDef = Object.assign({}, this.def, { coins });
+    } catch (e) { this._once('coinKeepOut', e); colDef = this.def; }
+    /* MISSION LAYER: in a mission run only the crests that exist in it are built
+       (`crestsLive`, see resolveMission) — no pad, no pedestal glow, no race clock
+       for a crest the player did not choose. `def.crests` itself keeps all seven. */
+    const live = Array.isArray(this.def.crestsLive) ? this.def.crestsLive : null;
+    if (live && Array.isArray(colDef.crests)) {
+      colDef = Object.assign({}, colDef, { crests: colDef.crests.filter((c) => c && live.indexOf(c.id) !== -1) });
+    }
+    try {
+      col = new Ctor(colDef, {
+        group: this.group, scene: this.engine ? this.engine.scene : null,
+        mats: this.mats, theme: this.theme, themeId: this.themeId,
+        fx: this.fx, audio: this.audio, save: this.save,
+        courseId: this.id, world: this.broadphase, quality: this.quality,
+        camera: this.engine ? this.engine.camera : null,
+        engine: this.engine, course: this,
+      });
+    } catch (e) {
+      console.error('[Course ' + this.id + '] Collectibles failed to build', e);
+      return;
+    }
+    this.collectibles = col;
+    /* Race pads and any other collectible collider join the broadphase so the
+       player can actually stand on them. */
+    if (Array.isArray(col.colliders)) {
+      for (let i = 0; i < col.colliders.length; i++) this._addCollider(col.colliders[i], col);
+    }
+    /* Collectibles own their own pickup presentation and events; the Course only
+       re-broadcasts the ones that are course-level beats. */
+    if (col.events && typeof col.events.on === 'function') {
+      const self = this;
+      col.events.on('power', (id, dur) => { self.events.emit('power', id, dur); });
+    }
+  }
+
+  /* ── colliders / volumes / kill volumes ──────────────────────────────── */
+
+  _addCollider(c, ref) {
+    if (!c) return null;
+    if (ref !== undefined && (c.ref === undefined || c.ref === null)) c.ref = ref;
+    if (c.active === undefined) c.active = true;
+    if (typeof c.update === 'function') { try { c.update(); } catch (e) { /* aabb optional */ } }
+    try { this.broadphase.add(c); } catch (e) {
+      console.error('[Course ' + this.id + '] broadphase.add failed', e);
+    }
+    this._allColliders.push(c);
+    return c;
+  }
+
+  _addVolume(v, ref) {
+    if (!v) return null;
+    if (ref !== undefined && (v.ref === undefined || v.ref === null)) v.ref = ref;
+    if (v.active === undefined) v.active = true;
+    if (this.volumes.indexOf(v) < 0) this.volumes.push(v);
+    return v;
+  }
+
+  _addKill(k, ref) {
+    if (!k) return null;
+    if (ref !== undefined && (k.ref === undefined || k.ref === null)) k.ref = ref;
+    if (k.active === undefined) k.active = true;
+    if (this.killVolumes.indexOf(k) < 0) this.killVolumes.push(k);
+    return k;
+  }
+
+  /**
+   * The kill plane at `killY` (contract §24: KillVolume kind 'void').
+   *
+   * collider.js documents `{type:'plane', y:killY}` as "kills everything BELOW
+   * y", which is exactly the authored semantic, so that is the primary form.
+   * The box fields ride along as an equivalent fallback for any KillVolume build
+   * that only implements boxes; deliberately no `normal`, so the `y` branch wins.
+   */
+  _buildVoidVolume() {
+    const killY = this.killY;
+    let cx = 0, cz = 0;
+    if (!this.bounds.isEmpty()) { this.bounds.getCenter(_v1); cx = _v1.x; cz = _v1.z; }
+    const halfXZ = 6000;
+    const halfY = 600;
+    const center = new THREE.Vector3(cx, killY - halfY, cz);
+    const half = new THREE.Vector3(halfXZ, halfY, halfXZ);
+    const min = new THREE.Vector3(cx - halfXZ, killY - 2 * halfY, cz - halfXZ);
+    const max = new THREE.Vector3(cx + halfXZ, killY, cz + halfXZ);
+    let kv = null;
+    try {
+      kv = new KillVolume({
+        type: 'plane', kind: 'void', ref: null, y: killY,
+        center, half, min, max,
+        box: new THREE.Box3(min.clone(), max.clone()),
+      });
+    } catch (e) {
+      console.error('[Course ' + this.id + '] KillVolume(void) construction failed', e);
+      kv = null;
+    }
+    if (kv) {
+      if (kv.active === undefined) kv.active = true;
+      this.voidVolume = kv;
+      this.killVolumes.push(kv);
+    }
+  }
+
+  _computeBounds() {
+    this.bounds.makeEmpty();
+    const b = this.def.bounds;
+    if (b && fin3(b.min) && fin3(b.max)) {
+      /* Authored bounds are AUTHORITATIVE (contract §25) — the built geometry
+         only ever widens them, never narrows them, so a course that reserves
+         airspace for a cannon shot keeps it. */
+      this.bounds.min.set(b.min[0], b.min[1], b.min[2]);
+      this.bounds.max.set(b.max[0], b.max[1], b.max[2]);
+    }
+    for (let i = 0; i < this._detailCells.length; i++) {
+      if (!this._detailCells[i].box.isEmpty()) this.bounds.union(this._detailCells[i].box);
+    }
+    for (let i = 0; i < this._chunks.length; i++) {
+      if (!this._chunks[i].box.isEmpty()) this.bounds.union(this._chunks[i].box);
+    }
+    for (let i = 0; i < this.hazards.length; i++) {
+      const m = this.hazards[i].h.mesh;
+      if (!m) continue;
+      try {
+        _box1.setFromObject(m);
+        if (!_box1.isEmpty()) this.bounds.union(_box1);
+      } catch (e) { /* ignore odd hazard graphs */ }
+    }
+    for (let i = 0; i < this.terrains.length; i++) {
+      const hf = this.terrains[i].heightfield;
+      if (hf && hf.aabb && !hf.aabb.isEmpty()) this.bounds.union(hf.aabb);
+    }
+    if (this.def.spawn && fin3(this.def.spawn.p)) {
+      this.bounds.expandByPoint(_v1.set(this.def.spawn.p[0], this.def.spawn.p[1], this.def.spawn.p[2]));
+    }
+    for (let i = 0; i < this.checkpoints.length; i++) this.bounds.expandByPoint(this.checkpoints[i].pos);
+    if (this.bounds.isEmpty()) this.bounds.setFromCenterAndSize(_v1.set(0, 0, 0), _v2.set(20, 20, 20));
+    this.bounds.expandByScalar(2);
+  }
+
+  /**
+   * ONE pass over the finished course that takes `castShadow` away from
+   * everything too small to cast a readable shadow.
+   *
+   * The shadow map is a SECOND full render of every caster: each hazard bolt,
+   * critter eye, coin rim and signage plate that keeps `castShadow` costs an
+   * extra draw call and its triangles again, for a smudge a few texels across
+   * at 2048 over `shadowDistance` metres.  `_shouldCast` already applied this
+   * rule inside the static merge; hazards, critters, collectibles and props
+   * build their own meshes and never went through it, so the rule is applied
+   * here to the whole graph instead of being restated in eight modules.
+   *
+   * Nothing is hidden and nothing is removed — only the shadow contribution of
+   * sub-metre clutter, plus the materials three.js cannot cast correctly from
+   * anyway (transparent, unlit basic and additive).
+   */
+  _pruneShadowCasters() {
+    let dropped = 0;
+    const q = (this.engine && this.engine.quality) || null;
+    const minR = (q && Number.isFinite(q.shadowCasterRadius))
+      ? q.shadowCasterRadius : SHADOW_MIN_RADIUS;
+    this.group.traverse((obj) => {
+      if (!obj.isMesh || !obj.castShadow) return;
+      const m = obj.material;
+      const mats = Array.isArray(m) ? m : [m];
+      let bad = false;
+      for (let i = 0; i < mats.length; i++) {
+        const x = mats[i];
+        if (!x) continue;
+        if (x.transparent === true || x.isMeshBasicMaterial || x.blending === THREE.AdditiveBlending) bad = true;
+      }
+      const g = obj.geometry;
+      if (!bad && g) {
+        if (!g.boundingSphere) { try { g.computeBoundingSphere(); } catch (e) { /* keep casting */ } }
+        if (g.boundingSphere) {
+          obj.updateWorldMatrix(true, false);
+          _v4.setFromMatrixScale(obj.matrixWorld);
+          const sc = Math.max(_v4.x, _v4.y, _v4.z) || 1;
+          if (g.boundingSphere.radius * sc < minR) bad = true;
+        }
+      }
+      if (bad) { obj.castShadow = false; dropped++; }
+    });
+    this.stats.shadowPruned = dropped;
+  }
+
+  /* ── static merge ────────────────────────────────────────────────────── */
+
+  _mergeStatic() {
+    if (!this._chunks.length && !this._detailCells.length) return;
+    let drawCalls = 0;
+    for (let i = 0; i < this._detailCells.length; i++) {
+      const dc = this._detailCells[i];
+      drawCalls += this._mergeInto(dc.group, dc.recs, true);
+      dc.recs.length = 0;
+      if (dc.box.isEmpty()) dc.box.setFromCenterAndSize(_v1.set(0, 0, 0), _v2.set(1, 1, 1));
+    }
+    for (let i = 0; i < this._chunks.length; i++) {
+      const ch = this._chunks[i];
+      drawCalls += this._mergeInto(ch.main, ch.recsMain, false);
+      /* Detail art (decor, signage, clutter) is culled at `_detailFar` and is
+         never the thing a player reads a landing off, so it never pays for a
+         second pass through the shadow camera. */
+      drawCalls += this._mergeInto(ch.detail, ch.recsDetail, true);
+      ch.recsMain.length = 0;
+      ch.recsDetail.length = 0;
+      if (ch.box.isEmpty()) ch.box.setFromCenterAndSize(_v1.set(0, 0, 0), _v2.set(1, 1, 1));
+    }
+    this.stats.merged = drawCalls;
+  }
+
+  /**
+   * Pull every mergeable mesh out of `roots`, bake its world matrix, group by
+   * material and emit ONE mesh per (chunk, material).
+   * @returns {number} resulting draw calls for this group
+   */
+  _mergeInto(target, roots, noCast) {
+    if (!roots.length) return 0;
+    const recs = [];
+    const keep = [];
+    for (let i = 0; i < roots.length; i++) {
+      const root = roots[i];
+      const rootMerged = this._collectMergeables(root, recs);
+      if (!rootMerged && (root.children.length > 0 || root.isMesh || root.isLight ||
+                          root.isPoints || root.isLine || root.isInstancedMesh)) {
+        keep.push(root);
+      } else if (!rootMerged) {
+        if (root.parent) root.parent.remove(root);
+      }
+    }
+    /* Clear then re-add: keeps the graph tidy and predictable. */
+    for (let i = 0; i < roots.length; i++) {
+      const r = roots[i];
+      if (r.parent === target && keep.indexOf(r) < 0) target.remove(r);
+    }
+
+    const byMat = new Map();
+    for (let i = 0; i < recs.length; i++) {
+      const rec = recs[i];
+      let a = byMat.get(rec.mat);
+      if (!a) { a = []; byMat.set(rec.mat, a); }
+      a.push(rec);
+    }
+
+    let calls = keep.length;
+    byMat.forEach((list, mat) => {
+      /* Sole whole-mesh user of this material: reuse its geometry as-is, no copy. */
+      if (list.length === 1 && list[0].gStart < 0) {
+        const rec = list[0];
+        const m = new THREE.Mesh(rec.geo, mat);
+        m.castShadow = noCast ? false : rec.cast;
+        m.receiveShadow = rec.recv;
+        m.matrixAutoUpdate = false;
+        m.matrix.copy(rec.mw);
+        m.matrixWorldNeedsUpdate = true;
+        target.add(m);
+        calls++;
+        return;
+      }
+      const geos = [];
+      let cast = false, recv = false;
+      for (let i = 0; i < list.length; i++) {
+        const rec = list[i];
+        const g = normaliseGeo(rec.geo, rec.mw, rec.gStart, rec.gCount);
+        if (!g) continue;
+        cast = cast || rec.cast;
+        recv = recv || rec.recv;
+        geos.push(g);
+        this._mergeSources.add(rec.geo);
+      }
+      if (!geos.length) return;
+      const merged = mergeParts(geos);
+      if (!merged) {
+        /* Every geo here is already a standalone, world-baked copy, so the
+           fallback is one identity-transform mesh each — never the raw source,
+           which for a group slice would draw the WHOLE multi-material mesh. */
+        console.warn('[Course ' + this.id + '] merge failed for a material group (' + geos.length +
+                     ' parts) — falling back to individual draws');
+        for (let i = 0; i < geos.length; i++) {
+          this._own(geos[i]);
+          const m = new THREE.Mesh(geos[i], mat);
+          m.castShadow = noCast ? false : cast; m.receiveShadow = recv;
+          m.matrixAutoUpdate = false;
+          m.updateMatrix();
+          target.add(m);
+          calls++;
+        }
+        return;
+      }
+      for (let i = 0; i < geos.length; i++) if (geos[i] !== merged) geos[i].dispose();
+      merged.computeBoundingSphere();
+      merged.computeBoundingBox();
+      this._own(merged);
+      const mesh = new THREE.Mesh(merged, mat);
+      mesh.name = 'merged_' + (mat.name || mat.type);
+      mesh.castShadow = noCast ? false : cast;
+      mesh.receiveShadow = recv;
+      mesh.matrixAutoUpdate = false;
+      mesh.updateMatrix();
+      target.add(mesh);
+      calls++;
+    });
+    return calls;
+  }
+
+  /** @returns {boolean} true if `root` itself was consumed by the merge */
+  _collectMergeables(root, out) {
+    root.updateMatrixWorld(true);
+    const found = [];
+    const stack = [root];
+    while (stack.length) {
+      const o = stack.pop();
+      for (let i = 0; i < o.children.length; i++) stack.push(o.children[i]);
+      if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || o.isBatchedMesh) continue;
+      if (o.userData && (o.userData.noMerge || o.userData.dynamic)) continue;
+      if (!o.material) continue;
+      if (!o.geometry || !o.geometry.attributes || !o.geometry.attributes.position) continue;
+      if (o.geometry.morphAttributes && Object.keys(o.geometry.morphAttributes).length) continue;
+      if (Array.isArray(o.material)) {
+        /* A multi-material mesh is mergeable only if its groups fully describe it. */
+        const groups = o.geometry.groups;
+        if (!groups || !groups.length) continue;
+        let bad = false;
+        for (let gi = 0; gi < groups.length; gi++) {
+          const m = o.material[groups[gi].materialIndex];
+          if (!m || !m.isMaterial) { bad = true; break; }
+        }
+        if (bad) continue;
+      }
+      found.push(o);
+    }
+    let rootConsumed = false;
+    for (let i = 0; i < found.length; i++) {
+      const o = found[i];
+      const mw = o.matrixWorld.clone();
+      const cast = this._shouldCast(o), recv = !!o.receiveShadow;
+      if (Array.isArray(o.material)) {
+        const groups = o.geometry.groups;
+        for (let gi = 0; gi < groups.length; gi++) {
+          const g = groups[gi];
+          out.push({ geo: o.geometry, mat: o.material[g.materialIndex], mw, cast, recv,
+                     gStart: g.start, gCount: g.count });
+        }
+      } else {
+        out.push({ geo: o.geometry, mat: o.material, mw, cast, recv, gStart: -1, gCount: 0 });
+      }
+      if (o === root) rootConsumed = true;
+      if (o.parent) o.parent.remove(o);
+    }
+    return rootConsumed;
+  }
+
+  /**
+   * Source geometries are safe to free once nothing in the graph references them
+   * — but NEVER a geometry another module owns.  builders.js hands out cached,
+   * course-spanning geometry through GeoCache (`userData.__shared`) and we only
+   * ever cloned from it; disposing one would blank every other user.
+   */
+  _disposeMergeSources() {
+    if (!this._mergeSources.size) return;
+    const inUse = new Set();
+    this.group.traverse((o) => { if (o.geometry) inUse.add(o.geometry); });
+    this._mergeSources.forEach((g) => {
+      if (g.userData && g.userData.__shared) return;
+      if (!inUse.has(g) && this._ownedGeo.has(g)) {
+        this._ownedGeo.delete(g);
+        try { g.dispose(); } catch (e) { /* already gone */ }
+      }
+    });
+    this._mergeSources.clear();
+  }
+
+  /* ── checkpoints ─────────────────────────────────────────────────────── */
+
+  /**
+   * A checkpoint STATION: a chamfered metal pad, a dashed glowing ring, an
+   * activation shockwave, a slow-turning glyph and a pillar of light — five
+   * instanced meshes sharing one set of per-instance channels, so however many
+   * pads a course carries the whole set costs five draw calls.
+   *
+   * Each pad also carries a `Volume` of kind 'checkpoint' whose `props.index` is
+   * its own index: that is what game.js's belt-and-braces detector reads, and it
+   * is why a pad's trigger shape is authored data (`cp.r`) rather than a
+   * hard-coded radius.
+   *
+   * The `seed` channel gives every pad its OWN pulse phase.  Two pads visible in
+   * one frame must never breathe in lockstep — in playtest that reads as one
+   * light source, and the player stops treating them as separate promises.
+   */
+  _buildCheckpoints() {
+    const defs = Array.isArray(this.def.checkpoints) ? this.def.checkpoints : [];
+    this.checkpoints = [];
+    if (!defs.length) return;
+
+    const n = defs.length;
+    for (let i = 0; i < n; i++) {
+      const d = defs[i];
+      const pos = v3(d.p, 0, 0, 0);
+      const radius = fin(d.r) ? d.r : 2.15;
+      const cp = {
+        index: i,
+        id: typeof d.id === 'string' ? d.id : ('cp' + (i + 1)),
+        def: d,
+        pos,
+        yaw: fin(d.yaw) ? d.yaw : 0,
+        clockOffset: fin(d.clockOffset) ? d.clockOffset : 0,
+        radius,
+        reached: false,
+        state: 0,
+        pulse: 0,
+        angle: (i * 1.37) % 6.2831853,
+        lockAngle: 0,
+        locking: false,
+        /* golden-ratio step: neighbouring pads are maximally out of phase */
+        seed: (i * 0.6180339887) % 1,
+        volume: null,
+      };
+      let vol = null;
+      try {
+        vol = new Volume({
+          center: [pos.x, pos.y + 1.1, pos.z],
+          half: [radius, 1.9, radius],
+          kind: 'checkpoint',
+          props: { index: i, cp: i, id: cp.id },
+          ref: cp,
+        });
+      } catch (e) { vol = null; }
+      if (vol) { cp.volume = vol; this._addVolume(vol, cp); }
+      this.checkpoints.push(cp);
+    }
+
+    const g = new THREE.Group();
+    g.name = 'checkpoints';
+    g.matrixAutoUpdate = false;
+    this.group.add(g);
+    this._cpGroup = g;
+
+    const aState = new THREE.InstancedBufferAttribute(new Float32Array(n), 1);
+    const aPulse = new THREE.InstancedBufferAttribute(new Float32Array(n), 1);
+    const aAngle = new THREE.InstancedBufferAttribute(new Float32Array(n), 1);
+    const aSeed = new THREE.InstancedBufferAttribute(new Float32Array(n), 1);
+    aState.setUsage(THREE.DynamicDrawUsage);
+    aPulse.setUsage(THREE.DynamicDrawUsage);
+    aAngle.setUsage(THREE.DynamicDrawUsage);
+    for (let i = 0; i < n; i++) aSeed.setX(i, this.checkpoints[i].seed);
+    this._cpAttr = { aState, aPulse, aAngle, aSeed };
+
+    const off = this.palette.checkpoint;
+    const on = this.palette.checkpointOn;
+
+    /* 1. the physical pad (a real PBR material, tinted per instance)
+     *
+     * ROUND 2 READABILITY FIX. `contrastcheck.py` samples the walked surface
+     * just below the hero's feet — and at a checkpoint station that surface is
+     * THIS DISC, not the floor. Measured (contrastcheck 17:56, every station of
+     * both courses): keep spawn deck [33,64,74] vs band [97,88,93] = 1.61:1,
+     * keep cp1 2.12, cp3 1.78, verdant cp1 [34,141,134] = 2.05 — i.e. the pad a
+     * player lands on is DARKER than the floor it sits in, at seven of ten
+     * stations, against a 3.5:1 law.
+     *
+     * The cause is the material, not the tint: `metal` has no diffuse albedo,
+     * so a metal disc is only what it reflects, and in a dim hall that is
+     * nothing — the same "a mirror in a dim hall renders as a dark floor"
+     * failure the marble bake hit. A checkpoint pad is a LANDABLE SURFACE, so
+     * it is now built out of the walked-surface family and tinted from
+     * `palette.safe`, which is the exact colour the readability law names as
+     * the bright half of the figure/ground pair. The checkpoint IDENTITY is
+     * carried where it always was: the ring, the shockwave, the glyph and the
+     * beacon, all in `checkpointOn`. */
+    const baseGeo = chamferDisc(1.55, 0.14, 0.06, 44);
+    this._own(baseGeo);
+    /* NO per-instance tint. `setColorAt` writes `instanceColor`, which three
+     * only multiplies into the albedo when the material also has
+     * `vertexColors: true` — and turning that on for a geometry with no `color`
+     * attribute makes WebGL feed the shader the default generic attribute
+     * (0,0,0), i.e. it BLACKENS the mesh. Measured both ways this session:
+     * untinted stone gave a light readable pad (`_shots/verdant-1/cp1.png`),
+     * the "tinted" version gave a dark green disc and dropped verdant cp1 from
+     * 2.53:1 to 1.10:1. The stone bank material already carries the theme's own
+     * walked-surface tint, which is the colour the readability law wants here. */
+    /* A checkpoint pad is a LANDING TARGET, and the readability law is measured
+     * exactly on it (contrastcheck samples the band under the hero's feet). A
+     * diffuse stone disc inside a hall lit to exposure 0.84 cannot be the bright
+     * half of any figure/ground pair — measured: keep cp1 deck [49,64,68]
+     * against a lit far wall at [117,95,84], i.e. the pad is the DARK half. So
+     * the pad carries a low self-lit floor in the theme's own `safe` hue: it
+     * reads in any light, in any room, without changing a single light in the
+     * rig, and it is well under every theme's bloom threshold so it lifts rather
+     * than glows. Cloned, never the shared bank material (the static merge uses
+     * that one), and owned by the course so it is disposed with it. */
+    const padMat = this._mat('stone').clone();
+    padMat.emissive = new THREE.Color(this.palette.safe);
+    /* ROUND 2 VISUAL — THE PAD WAS A BLOWN WHITE PUDDLE.
+     *
+     * Measured on `_shots/bootcheck.png` (verdant-1 spawn, headless, real GPU):
+     * frame mean luminance 0.313, and the pad under Nim's feet measured mean
+     * 0.802 with 9.4 % of its pixels over 0.95 — a featureless white disc 2.6x
+     * the value of everything around it, with the hero's boots dissolving into
+     * its near edge. `contrastcheck` read the same disc at 12.57:1 against a
+     * 3.5:1 law, i.e. it was over-shot by a factor of three and a half.
+     *
+     * Two causes, both here, both fixed at the generator:
+     *
+     *   1. A FLAT emissive term. `emissive` with no `emissiveMap` adds a
+     *      CONSTANT to every fragment, so the stone bake's slab joints, grain,
+     *      AO and normal are all buried under one uniform wash — the pad cannot
+     *      catch the key, cannot take the rim, cannot read as a material at
+     *      all. Binding the emissive to the albedo map makes the self-lit term
+     *      carry the SAME pattern the diffuse does, so the disc keeps its
+     *      mortar lines and its grain while it lifts.
+     *   2. ONE global intensity across five themes with wildly different
+     *      incident light. 1.14 is what a dim stone hall needs (keep: the pad
+     *      measures 0.53 and cp1's ratio is 3.77, so the Keep has no headroom
+     *      at all); it is roughly three times what a sunlit morning meadow
+     *      needs. The lift is therefore per theme, declared next to the palette
+     *      it is drawn from (`palette.padGlow` in themes.js) — the dim rooms
+     *      keep their floor, the bright ones stop clipping. */
+    padMat.emissiveMap = padMat.map || null;
+    /* 0.55 -> 0.88. contrastcheck samples the band under the hero's feet and
+     * at a station that band IS this disc, so the pad's own value is the left
+     * side of the readability ratio. Measured at 0.55: keep cp1 pad
+     * [167,148,113] against the hall floor 8 m behind it at [93,78,83] = 2.66:1
+     * against a 3.5:1 law — the pad and the floor it sits in were the same
+     * value. This is the ONE surface in the game whose whole job is to be
+     * unmistakable underfoot, and it stays well under every theme's bloom
+     * threshold, so it lifts rather than glows. */
+    padMat.emissiveIntensity = this._padGlow;
+    /* SIGNAGE LANE — A PAVED RING, NOT A SPOTLIGHT (critic C3, owner O2/O5).
+     * The theme's `padGlow` lift used to cover the whole disc at one value, so
+     * the pad was the brightest surface in the frame exactly where Nim stands,
+     * and no contact shadow could survive on it (`_shots/resume_verdant-1.png`,
+     * `_shots/resume_keep.png`: a white puddle under the hero, no shadow at all).
+     * The lift is now RADIAL: the outer paved band (r > 0.95 m) keeps the
+     * theme's full self-light and reads as the landing target; the centre
+     * disc keeps a fifth of it, so it is a lit stone floor that takes the key,
+     * the cast shadow and the blob. The identity moves to the inlaid rune
+     * ring (see RING_FRAG). Chained onto materials.js's own injection and its
+     * program cache key, so the box projection is kept and the program is not
+     * shared with an unmasked stone. */
+    {
+      const baseCompile = padMat.onBeforeCompile;
+      const baseKey = padMat.customProgramCacheKey;
+      padMat.onBeforeCompile = function (shader, renderer) {
+        if (typeof baseCompile === 'function') baseCompile.call(this, shader, renderer);
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', '#include <common>\nvarying float vCbPadR;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCbPadR = length(position.xz) * 0.6452;');
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', '#include <common>\nvarying float vCbPadR;')
+          .replace('#include <emissivemap_fragment>',
+            '#include <emissivemap_fragment>\n' +
+            /* centre 0.45 (0.20 left the Keep's pad a black disc under a
+               teal ring — `_shots/sig1_keep_spawn.png` — the hub floor is lit
+               to exposure ~1 and the pad still has to be the bright half of
+               its own figure/ground pair); the paved band keeps the full lift */
+            'totalEmissiveRadiance *= mix(0.55, 1.0, smoothstep(0.50, 0.80, vCbPadR));');
+      };
+      padMat.customProgramCacheKey = function () {
+        return (typeof baseKey === 'function' ? baseKey.call(this) : '') + '|cbpad';
+      };
+    }
+    padMat.name = 'cb.cp.pad';
+    this._own(padMat);
+    const baseMesh = new THREE.InstancedMesh(baseGeo, padMat, n);
+    baseMesh.castShadow = false;
+    baseMesh.receiveShadow = true;
+    baseMesh.frustumCulled = false;
+    baseMesh.userData.noMerge = true;
+    g.add(baseMesh);
+    this._cpBase = baseMesh;
+
+    /* 2. the ring: rune annulus + rim torus + ground skirt, ONE geometry (see
+     *    the RING_VERT note) so the station still costs five draws. */
+    const rimGeo = new THREE.TorusGeometry(1.42, 0.045, 8, 76);
+    rimGeo.rotateX(-Math.PI / 2);
+    rimGeo.translate(0, 0.150, 0);
+    const runeGeo = new THREE.RingGeometry(1.00, 1.18, 80, 1);
+    runeGeo.rotateX(-Math.PI / 2);
+    runeGeo.translate(0, 0.146, 0);
+    const skirtGeo = new THREE.RingGeometry(1.55, 2.70, 56, 1);
+    skirtGeo.rotateX(-Math.PI / 2);
+    skirtGeo.translate(0, 0.035, 0);
+    let ringGeo = null;
+    try { ringGeo = mergeGeometries ? mergeGeometries([runeGeo, rimGeo, skirtGeo], false) : null; }
+    catch (e) { ringGeo = null; }
+    if (!ringGeo) ringGeo = rimGeo;
+    else { rimGeo.dispose(); runeGeo.dispose(); skirtGeo.dispose(); }
+    this._own(ringGeo);
+    this._cpAttachAttrs(ringGeo);
+    const ringMat = this._fxMaterial(RING_VERT, RING_FRAG, {
+      uTime: { value: 0 }, uColorOff: { value: off.clone() }, uColorOn: { value: on.clone() },
+    });
+    const ringMesh = new THREE.InstancedMesh(ringGeo, ringMat, n);
+    ringMesh.frustumCulled = false;
+    /* under the hero's contact blob (renderOrder 3): the glow never sits on
+       top of the shadow he stands in */
+    ringMesh.renderOrder = 2;
+    g.add(ringMesh);
+    this._cpRing = ringMesh;
+
+    /* 3. the activation shockwave */
+    const waveGeo = new THREE.RingGeometry(1.30, 1.52, 72, 1);
+    waveGeo.rotateX(-Math.PI / 2);
+    waveGeo.translate(0, 0.17, 0);
+    this._own(waveGeo);
+    this._cpAttachAttrs(waveGeo);
+    const waveMat = this._fxMaterial(WAVE_VERT, WAVE_FRAG, { uColorOn: { value: on.clone() } });
+    const waveMesh = new THREE.InstancedMesh(waveGeo, waveMat, n);
+    waveMesh.frustumCulled = false;
+    waveMesh.renderOrder = 6;
+    g.add(waveMesh);
+    this._cpWave = waveMesh;
+
+    /* 4. the glyph */
+    const glyphGeo = new THREE.PlaneGeometry(1.72, 1.72);
+    glyphGeo.rotateX(-Math.PI / 2);
+    this._own(glyphGeo);
+    this._cpAttachAttrs(glyphGeo);
+    const glyphTex = this._makeGlyphTexture();
+    /* one Vector3, written per frame from the resolved player position */
+    this._cpHero = this._cpHero || new THREE.Vector3(1e6, 1e6, 1e6);
+    const glyphMat = this._fxMaterial(GLYPH_VERT, GLYPH_FRAG, {
+      uTime: { value: 0 }, uMap: { value: glyphTex }, uHero: { value: this._cpHero },
+      uColorOff: { value: off.clone() }, uColorOn: { value: on.clone() },
+    });
+    const glyphMesh = new THREE.InstancedMesh(glyphGeo, glyphMat, n);
+    glyphMesh.frustumCulled = false;
+    glyphMesh.renderOrder = 7;
+    g.add(glyphMesh);
+    this._cpGlyph = glyphMesh;
+
+    /* 5. the pillar of light — the silhouette that says CHECKPOINT across a bowl */
+    /* ROUND 2: 1.02/1.30 m over 9.2 m is a 2.6 m wide, 9 m tall wall of light —
+     * as a DISTANT beacon that is a slab, not a shaft.  A beacon reads by being
+     * tall and NARROW; halving the radius costs nothing and stops the far pads
+     * tinting whatever is behind them. */
+    const colGeo = new THREE.CylinderGeometry(0.52, 0.86, 8.6, 18, 1, true);
+    colGeo.translate(0, 4.3, 0);
+    this._own(colGeo);
+    this._cpAttachAttrs(colGeo);
+    const colMat = this._fxMaterial(COLUMN_VERT, COLUMN_FRAG, {
+      uTime: { value: 0 }, uGain: { value: 1.0 },
+      uColorOff: { value: off.clone() }, uColorOn: { value: on.clone() },
+    });
+    const colMesh = new THREE.InstancedMesh(colGeo, colMat, n);
+    colMesh.frustumCulled = false;
+    colMesh.renderOrder = 5;
+    g.add(colMesh);
+    this._cpColumn = colMesh;
+
+    /* Instance transforms are static — pads never move. */
+    const meshes = [baseMesh, ringMesh, waveMesh, glyphMesh, colMesh];
+    for (let i = 0; i < n; i++) {
+      const cp = this.checkpoints[i];
+      _m1.makeTranslation(cp.pos.x, cp.pos.y, cp.pos.z);
+      for (let m = 0; m < meshes.length; m++) meshes[m].setMatrixAt(i, _m1);
+    }
+    for (let m = 0; m < meshes.length; m++) meshes[m].instanceMatrix.needsUpdate = true;
+    this._cpMeshes = meshes;
+
+    /* Restore this SESSION's checkpoint (Save.checkpoint is session-scoped by
+       contract §3) so a course re-entered from the Keep lights what the player
+       had already lit. */
+    if (this.save && typeof this.save.checkpoint === 'function') {
+      try {
+        const idx = this.save.checkpoint(this.id);
+        if (fin(idx) && idx >= 0) this.setCheckpointIndex(Math.min(idx, n - 1), true);
+      } catch (e) { /* save is advisory here */ }
+    }
+  }
+
+  _cpAttachAttrs(geo) {
+    geo.setAttribute('aState', this._cpAttr.aState);
+    geo.setAttribute('aPulse', this._cpAttr.aPulse);
+    geo.setAttribute('aAngle', this._cpAttr.aAngle);
+    geo.setAttribute('aSeed', this._cpAttr.aSeed);
+  }
+
+  /** The checkpoint glyph: a broken outer ring, radial ticks and a chevron stack. */
+  _makeGlyphTexture() {
+    if (typeof document === 'undefined') return null;
+    const S = 256;
+    const c = document.createElement('canvas');
+    c.width = S; c.height = S;
+    const x = c.getContext('2d');
+    if (!x) return null;
+    x.clearRect(0, 0, S, S);
+    x.translate(S / 2, S / 2);
+    x.strokeStyle = '#ffffff';
+    x.lineCap = 'round';
+
+    x.lineWidth = 7;
+    for (let i = 0; i < 6; i++) {
+      const a0 = (i / 6) * Math.PI * 2 + 0.16;
+      const a1 = a0 + (Math.PI * 2) / 6 - 0.32;
+      x.beginPath(); x.arc(0, 0, 104, a0, a1); x.stroke();
+    }
+    x.lineWidth = 4;
+    x.globalAlpha = 0.75;
+    x.beginPath(); x.arc(0, 0, 78, 0, Math.PI * 2); x.stroke();
+    x.globalAlpha = 0.9;
+    x.lineWidth = 6;
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      const r0 = i % 3 === 0 ? 56 : 66;
+      x.beginPath();
+      x.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+      x.lineTo(Math.cos(a) * 72, Math.sin(a) * 72);
+      x.stroke();
+    }
+    x.globalAlpha = 1;
+    x.lineWidth = 11;
+    for (let k = 0; k < 3; k++) {
+      const off = -20 + k * 20;
+      x.beginPath();
+      x.moveTo(-26, off + 12);
+      x.lineTo(0, off - 12);
+      x.lineTo(26, off + 12);
+      x.stroke();
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    tex.needsUpdate = true;
+    this._own(tex);
+    return tex;
+  }
+
+  _updateCheckpoints(dt) {
+    const cps = this.checkpoints;
+    if (!cps.length) return;
+    const t = this._time;
+    let dirty = false;
+    for (let i = 0; i < cps.length; i++) {
+      const cp = cps[i];
+      const target = cp.reached ? 1 : 0;
+      if (Math.abs(cp.state - target) > 0.0005) {
+        cp.state = damp ? damp(cp.state, target, 7.5, dt) : cp.state + (target - cp.state) * Math.min(1, dt * 7.5);
+        dirty = true;
+      } else if (cp.state !== target) { cp.state = target; dirty = true; }
+
+      if (cp.pulse > 0) { cp.pulse = Math.max(0, cp.pulse - dt / 0.9); dirty = true; }
+
+      if (cp.locking) {
+        cp.angle += (cp.lockAngle - cp.angle) * Math.min(1, dt * 5.5);
+        if (Math.abs(cp.lockAngle - cp.angle) < 0.004) { cp.angle = cp.lockAngle; cp.locking = false; }
+        dirty = true;
+      } else if (!cp.reached) {
+        cp.angle += dt * 0.75;
+        if (cp.angle > 6.2831853) cp.angle -= 6.2831853;
+        dirty = true;
+      } else {
+        /* Locked, but never DEAD on screen: a slow breathing wobble on its own
+           seeded phase. */
+        cp.angle = cp.lockAngle + Math.sin(t * 0.9 + cp.seed * 6.2831853) * 0.035;
+        dirty = true;
+      }
+    }
+    if (dirty) this._syncCheckpointAttrs(true);
+    if (this._cpHero) {
+      if (this._ppValid) this._cpHero.copy(this._pp);
+      else this._cpHero.set(1e6, 1e6, 1e6);
+    }
+    if (this._cpRing) this._cpRing.material.uniforms.uTime.value = t;
+    if (this._cpGlyph) this._cpGlyph.material.uniforms.uTime.value = t;
+    if (this._cpColumn) this._cpColumn.material.uniforms.uTime.value = t;
+  }
+
+  _syncCheckpointAttrs(withColor) {
+    const a = this._cpAttr;
+    if (!a) return;
+    const cps = this.checkpoints;
+    for (let i = 0; i < cps.length; i++) {
+      const cp = cps[i];
+      a.aState.setX(i, cp.state);
+      a.aPulse.setX(i, cp.pulse);
+      a.aAngle.setX(i, cp.angle);
+    }
+    a.aState.needsUpdate = true;
+    a.aPulse.needsUpdate = true;
+    a.aAngle.needsUpdate = true;
+    /* `withColor` used to re-tint the pad's instanceColor on lighting. That was
+     * always a no-op (the pad material has no `vertexColors`, so nothing reads
+     * the varying — see the pad note in _buildCheckpoints) and, now that the
+     * build no longer allocates instanceColor at all, the first such call would
+     * ALLOCATE it and change the shader permutation mid-play for no visible
+     * gain. The lit/unlit read is carried by the ring, shockwave, glyph and
+     * beacon, all of which key off `aState` in their own shaders. */
+    void withColor;
+  }
+
+  /**
+   * Light a checkpoint.  Never re-fires and never regresses to a lower index.
+   *
+   * OWNERSHIP: the Course owns DETECTION and the pad's own presentation — the
+   * ring, the glyph lock, the light column.  It does NOT play a sound, spend a
+   * particle, write the save or touch the HUD; it emits `checkpoint` and Game
+   * does all of that, once.
+   *
+   * @param {number} i
+   * @param {boolean} [silent] skip the event (used when restoring a save)
+   * @returns {boolean} whether this call changed the checkpoint index
+   */
+  activateCheckpoint(i, silent) {
+    if (!fin(i) || i < 0 || i >= this.checkpoints.length) return false;
+    if (i <= this.cpIndex) return false;
+
+    for (let j = 0; j <= i; j++) {
+      const cp = this.checkpoints[j];
+      if (cp.reached) continue;
+      cp.reached = true;
+      cp.pulse = j === i ? 1 : 0;
+      cp.lockAngle = Math.round(cp.angle / (Math.PI / 4)) * (Math.PI / 4);
+      cp.locking = true;
+    }
+    this.cpIndex = i;
+    this._syncCheckpointAttrs(true);
+    if (!silent) this.events.emit('checkpoint', i, this.checkpoints[i]);
+    return true;
+  }
+
+  /** Restore the lit state up to `i` without firing events (save restore / resetFrom). */
+  setCheckpointIndex(i, silent) {
+    if (!fin(i)) return;
+    const n = this.checkpoints.length;
+    const idx = clamp(Math.floor(i), -1, n - 1);
+    for (let j = 0; j < n; j++) {
+      const cp = this.checkpoints[j];
+      const on = j <= idx;
+      cp.reached = on;
+      cp.state = on ? 1 : 0;
+      cp.pulse = 0;
+      cp.locking = false;
+      if (on) {
+        cp.lockAngle = Math.round(cp.angle / (Math.PI / 4)) * (Math.PI / 4);
+        cp.angle = cp.lockAngle;
+      }
+    }
+    this.cpIndex = idx;
+    this._syncCheckpointAttrs(true);
+    if (!silent && idx >= 0) this.events.emit('checkpoint', idx, this.checkpoints[idx]);
+  }
+
+  /** @returns {number} index of an un-reached checkpoint pad at `p`, else -1 */
+  checkpointAt(p) {
+    if (!p) return -1;
+    for (let i = this.cpIndex + 1; i < this.checkpoints.length; i++) {
+      const cp = this.checkpoints[i];
+      if (cp.reached) continue;
+      if (cp.volume && typeof cp.volume.contains === 'function') {
+        if (cp.volume.contains(p)) return i;
+        continue;
+      }
+      const dx = p.x - cp.pos.x, dz = p.z - cp.pos.z, dy = p.y - cp.pos.y;
+      if (dx * dx + dz * dz <= cp.radius * cp.radius && dy > -1.7 && dy < 3.6) return i;
+    }
+    return -1;
+  }
+
+  /**
+   * Nearest checkpoint to a world point, by 3D distance.  Used by the death
+   * handler when a course has no linear order to fall back on — an open diorama
+   * can be re-entered from any direction, so "the last one lit" is not always
+   * the one the player will want.
+   * @returns {number} index, or -1 when the course has no checkpoints
+   */
+  nearestCheckpoint(pos) {
+    const cps = this.checkpoints;
+    if (!cps.length || !pos) return -1;
+    let best = -1, bestD = Infinity;
+    for (let i = 0; i < cps.length; i++) {
+      const c = cps[i].pos;
+      const dx = pos.x - c.x, dy = pos.y - c.y, dz = pos.z - c.z;
+      const d = dx * dx + dy * dy + dz * dz;
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  }
+
+  /* ── the Keep's gates ────────────────────────────────────────────────── */
+
+  /**
+   * A GATE is a painting, a door or a pane of glass that leads into a course.
+   *
+   * The record deliberately carries BOTH shapes the rest of the game reads:
+   *   - `{def, volume, mesh}`  — the compiler-facing view
+   *   - `{course, kind, p, pos, yaw, requires, locked, setLocked()}` — the
+   *     Game-facing view (game.js `_resolveGates` reads these directly)
+   * so nothing has to translate between them at runtime.
+   *
+   * Art comes from a `painting`/`gatedoor` OBJECT when the course data authored
+   * one, and is built here from the gate entry when it did not — a hub that only
+   * lists `gates` still gets frames on the walls.  A sealed gate is visible and
+   * readable (the shimmer lattice, `SEAL_FRAG`) rather than hidden: a locked
+   * door the player can see is a promise; a missing one is a dead end.
+   */
+  _buildGates() {
+    this.gates = [];
+    const entries = Array.isArray(this.def.gates) ? this.def.gates : [];
+    const claimed = new Set();
+
+    for (let i = 0; i < entries.length; i++) {
+      const gd = entries[i];
+      if (!gd || typeof gd.course !== 'string') continue;
+      let art = null;
+      /* match by course id first, then by proximity to the authored point */
+      for (let k = 0; k < this._gateObjects.length; k++) {
+        if (claimed.has(k)) continue;
+        const o = this._gateObjects[k].def;
+        if (o.course && o.course === gd.course) { art = this._gateObjects[k]; claimed.add(k); break; }
+      }
+      if (!art && fin3(gd.p)) {
+        let bestK = -1, bestD = 9;   // 3 m radius
+        for (let k = 0; k < this._gateObjects.length; k++) {
+          if (claimed.has(k)) continue;
+          const o = this._gateObjects[k].def;
+          if (!fin3(o.p)) continue;
+          const dx = o.p[0] - gd.p[0], dy = o.p[1] - gd.p[1], dz = o.p[2] - gd.p[2];
+          const d = dx * dx + dy * dy + dz * dz;
+          if (d < bestD) { bestD = d; bestK = k; }
+        }
+        if (bestK >= 0) { art = this._gateObjects[bestK]; claimed.add(bestK); }
+      }
+      this.gates.push(this._makeGate(gd, art, this.gates.length));
+    }
+
+    /* Any painting/gatedoor object that names a course but was not claimed by a
+       `gates` entry becomes its own gate. */
+    for (let k = 0; k < this._gateObjects.length; k++) {
+      if (claimed.has(k)) continue;
+      const rec = this._gateObjects[k];
+      if (!rec.def.course) continue;
+      this.gates.push(this._makeGate(rec.def, rec, this.gates.length));
+    }
+    this._gateObjects.length = 0;
+  }
+
+  /**
+   * @param {object} gd   the gate definition (a `def.gates` entry, or the object)
+   * @param {object|null} art {def, built} of the painting/gatedoor object, if any
+   */
+  _makeGate(gd, art, index) {
+    const artMeta = (art && art.built && art.built.mesh && art.built.mesh.userData)
+      ? art.built.mesh.userData.gate : null;
+    const pos = v3(gd.p, 0, 0, 0);
+    const yaw = fin(gd.yaw) ? gd.yaw : (art && fin(art.def.yaw) ? art.def.yaw : 0);
+    const kind = gd.kind || (artMeta && artMeta.kind) ||
+                 (art && art.def.kind === 'gatedoor' ? 'door' : 'painting');
+    const w = fin(gd.w) ? gd.w : (art && fin(art.def.w) ? art.def.w : (kind === 'door' ? 3.4 : 3.0));
+    const h = fin(gd.h) ? gd.h : (art && fin(art.def.h) ? art.def.h : (kind === 'door' ? 4.6 : 3.6));
+    let requires = (gd.requires && fin(gd.requires.crests)) ? gd.requires.crests : 0;
+    if (!requires && artMeta && fin(artMeta.requires)) requires = artMeta.requires;
+
+    let mesh = art && art.built ? art.built.mesh : null;
+    let volume = null;
+    if (art && art.built && Array.isArray(art.built.volumes)) {
+      for (let i = 0; i < art.built.volumes.length; i++) {
+        const v = art.built.volumes[i];
+        if (v && (v.kind === 'trigger' || v.kind === 'checkpoint')) { volume = v; break; }
+      }
+    }
+
+    /* No authored art: build a frame here so the wall is never blank.  The art
+       is built UNLOCKED on purpose — the lock is a live state Game flips from
+       the crest total, so it belongs on the animated seal below, not baked into
+       a material at build time. */
+    if (!mesh) {
+      const fnName = kind === 'door' ? 'buildGateDoor' : 'buildPainting';
+      const fn = Builders[fnName];
+      const bdef = { kind: kind === 'door' ? 'gatedoor' : 'painting', p: gd.p, yaw, w, h,
+                     course: gd.course, realm: gd.realm, requires: gd.requires,
+                     locked: false, mat: gd.mat };
+      let built = null;
+      if (typeof fn === 'function') {
+        try { built = fn(bdef, this.theme, this.mats); } catch (e) { built = null; }
+      }
+      if (!built || !built.mesh) built = this._fallbackGateArt(bdef, w, h, yaw);
+      markNoMerge(built.mesh);
+      this._placeBuilt(built, bdef, -1, false);
+      mesh = built.mesh;
+      if (!volume && Array.isArray(built.volumes) && built.volumes.length) volume = built.volumes[0];
+    }
+
+    /* The trigger volume: a slab standing in the doorway, on the ROOM side,
+       reaching the floor the player walks in on.  Built (or re-fitted) here
+       because only the Course knows both the authored floor and the art. */
+    volume = this._fitGateTrigger(volume, gd, pos, yaw, w, h, index);
+    if (volume) this._addVolume(volume, null);
+
+    /* The seal: a shimmer plane in the opening while the gate is locked. */
+    const sealMat = this._fxMaterial(SEAL_VERT, SEAL_FRAG, {
+      uTime: { value: 0 }, uLock: { value: 1 },
+      uColor: { value: this.palette.checkpoint.clone() },
+      uHot: { value: this.palette.accent.clone() },
+    }, THREE.DoubleSide);
+    const sealGeo = new THREE.PlaneGeometry(Math.max(0.4, w * 0.96), Math.max(0.4, h * 0.96));
+    this._own(sealGeo);
+    const seal = new THREE.Mesh(sealGeo, sealMat);
+    seal.position.set(pos.x, pos.y + h * 0.5, pos.z);
+    seal.rotation.y = yaw;
+    seal.translateZ(0.06);
+    seal.renderOrder = 8;
+    seal.userData.noMerge = true;
+    seal.matrixAutoUpdate = false;
+    seal.updateMatrix();
+    this.group.add(seal);
+
+    /* A `gatedoor` from builders hangs its leaves on pivots and exposes
+       `setOpen(t)`, which also deactivates the door colliders as it swings.
+       `_updateGates` drives it off the same eased lock value as the seal, so the
+       doors open with the shimmer rather than after it. */
+    const setOpen = (mesh && mesh.userData && typeof mesh.userData.setOpen === 'function')
+      ? mesh.userData.setOpen : null;
+
+    const gate = {
+      index,
+      def: gd,
+      course: gd.course || (artMeta && artMeta.course) || null,
+      kind,
+      /* both spellings: game.js reads `p`/`pos` through its own toVec3 */
+      p: [pos.x, pos.y, pos.z],
+      pos,
+      yaw,
+      /* The Keep authors the STAND-OUT spot with the gate (keep.js makeGate:
+         `p - heading(yaw)*1.9` on the walking floor, and `yaw + PI`), because
+         `yaw` is the heading the player walks IN with and therefore points into
+         the wall. Carry it through: game.js returns the player here after a
+         course, and re-deriving it from `yaw` alone is how he ended up inside
+         the lobby wall with no floor under him. */
+      exitP: fin3(gd.exitP) ? [gd.exitP[0], gd.exitP[1], gd.exitP[2]] : null,
+      exitYaw: fin(gd.exitYaw) ? gd.exitYaw : yaw + Math.PI,
+      w, h,
+      requires,
+      requiresCrests: requires,
+      volume,
+      mesh: mesh || null,
+      seal,
+      sealMat,
+      setOpen,
+      locked: true,
+      /* THE SAME FACT, UNDER THE THREE NAMES CALLERS ACTUALLY REACH FOR.
+         `locked` was the only one that existed, so every probe, harness and
+         sibling module that asked `gate.unlocked` got `undefined` — falsy, i.e.
+         "sealed" — and a build where all 13 gates were correctly resolved read
+         as a build where none of them could ever open (measured 2026-09-06:
+         `_gateprobe2.py` reported `unlocked: null, sealed: null` for all 13).
+         An undefined boolean on a state object is a trap; these mirrors are
+         written by `setLocked` and by nothing else. */
+      unlocked: false,
+      sealed: true,
+      lockT: 1,
+      /** Game flips this whenever the crest total changes. */
+      setLocked(v) {
+        gate.locked = !!v;
+        gate.unlocked = !gate.locked;
+        gate.sealed = gate.locked;
+        /* SIGNAGE LANE: a painting swaps its plate (course name / "N CRESTS")
+           and shows or hides its lock sigil on the same flip. */
+        if (mesh && mesh.userData && typeof mesh.userData.setLockedArt === 'function') {
+          try { mesh.userData.setLockedArt(gate.locked); } catch (e) { /* art hook is optional */ }
+        }
+        /* The trigger volume always reads: Game decides whether entering it
+           opens the course card or shows the "N CRESTS" prompt.  Silencing it
+           here would make a sealed gate un-promptable, which is worse than a
+           locked door — the player would not know what it wants. */
+        if (gate.volume) gate.volume.active = true;
+        return gate.locked;
+      },
+    };
+    if (setOpen) { try { setOpen(0); } catch (e) { /* art hook is optional */ } }
+    return gate;
+  }
+
+  /**
+   * Fit a gate's walk-in trigger to the room in front of it.
+   *
+   * WHY THIS EXISTS. The builders place their trigger from the art's own frame
+   * of reference and cannot know two things the Course does: which side of the
+   * wall the room is on, and where its floor is. Left to them the verdant-1
+   * painting's slab sat 0.9 m BEHIND the picture plane (inside the masonry, and
+   * 0.33 m further in than the wall collider lets Nim reach) and floated 0.6 m
+   * above the floor — while `_updateGates` tests `volume.contains(player.pos)`,
+   * and `player.pos` is the FEET (contract §10). The dwell could therefore never
+   * accumulate: walking into the painting did nothing, and only KeyE opened the
+   * card, against contract §26.
+   *
+   * The slab this builds:
+   *   · protrudes IN FRONT of the frame (local +Z — the face the art is on, and
+   *     the side keep.js publishes as `exitP = p − heading(yaw) · 1.9`),
+   *   · spans from the walking floor (authored `exitP.y`, else a raycast, else a
+   *     generous drop below the frame) to the top of the frame,
+   *   · is a little wider than the frame so a shoulder counts as an entry.
+   *
+   * Build-time only — no per-frame allocation.
+   */
+  _fitGateTrigger(volume, gd, pos, yaw, w, h, index) {
+    /* Local +Z is the face of a painting/door (its plate, beads and sigil are
+       all authored at +z), and keep.js's `yaw` is the heading the player HAS
+       walking in, so −heading(yaw) = local +Z = back into the room. */
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+
+    /* --- the floor in front of the gate ------------------------------- */
+    let floorY = NaN;
+    if (fin3(gd.exitP)) floorY = gd.exitP[1] - 0.05;
+    if (!fin(floorY) && fin(gd.floor)) floorY = gd.floor;
+    if (!fin(floorY) && this.broadphase && typeof this.broadphase.raycast === 'function') {
+      const org = _v1.set(pos.x + fx * 0.9, pos.y + h * 0.5, pos.z + fz * 0.9);
+      const dir = _v2.set(0, -1, 0);
+      const hit = { t: 0, normal: new THREE.Vector3(), collider: null, heightfield: null };
+      try {
+        if (this.broadphase.raycast(org, dir, h + 10, hit) && fin(hit.t)) floorY = org.y - hit.t;
+      } catch (e) { floorY = NaN; }
+    }
+    if (!fin(floorY)) floorY = pos.y - h * 0.5 - 1.2;
+
+    /* THE SLAB IS FITTED TO THE PLAYER, NOT TO THE PICTURE. `_updateGates`
+       tests `volume.contains(player.pos)` and `player.pos` is the FEET, so what
+       matters is the band around the WALKING FLOOR, not the frame's centre.
+       The old fit reached only 0.20 m below the floor and 0.15 m above the
+       frame: on the undercroft and roof gates that left a 0.19 m margin under
+       the feet, and any step, lip or slope under the approach dropped the
+       player out of the bottom of his own doorway. Floor − 0.75 m up to at
+       least chest height above it (and never less than the frame) gives the
+       margin, and 1.5 m of depth gives a walk-in that a human can hit at a
+       run without giving one that catches someone crossing the aisle. */
+    const top = Math.max(pos.y + h * 0.5 + 0.15, floorY + 2.40);
+    const bottom = Math.min(floorY - 0.75, pos.y - h * 0.5, top - 0.6);
+    const depth = GATE_TRIGGER_DEPTH;                 // metres in FRONT of the plane
+    const cx = pos.x + fx * (depth * 0.5 - 0.10);
+    const cz = pos.z + fz * (depth * 0.5 - 0.10);
+    const cy = (top + bottom) * 0.5;
+    const hx = Math.max(1.05, w * 0.5 + 0.25);
+    const hy = Math.max(0.6, (top - bottom) * 0.5);
+    const hz = depth * 0.5;
+
+    if (volume && volume.center && volume.half) {
+      volume.center.set(cx, cy, cz);
+      volume.half.set(hx, hy, hz);
+      if (volume.quat && typeof volume.quat.setFromEuler === 'function') {
+        _eulerHolder.rotation.set(0, yaw, 0);
+        volume.quat.copy(_eulerHolder.quaternion);
+      }
+      volume.kind = 'trigger';
+      volume.active = true;
+      if (typeof volume.update === 'function') volume.update();
+      return volume;
+    }
+
+    try {
+      return new Volume({
+        center: [cx, cy, cz],
+        half: [hx, hy, hz],
+        quat: [0, yaw, 0],
+        kind: 'trigger',
+        props: { gate: index, course: gd.course },
+      });
+    } catch (e) { return null; }
+  }
+
+  /** A framed panel with a shimmering surface — used when builders ship no painting. */
+  _fallbackGateArt(bdef, w, h, yaw) {
+    const g = new THREE.Group();
+    const frameParts = [];
+    const t = 0.22;
+    const mkBar = (x, y, sx, sy) => {
+      const b = chamferBox(sx, sy, 0.28, 0.05);
+      b.translate(x, y, 0);
+      frameParts.push(b);
+    };
+    mkBar(0, h * 0.5 + t * 0.5, w + t * 2, t);
+    mkBar(0, -h * 0.5 - t * 0.5, w + t * 2, t);
+    mkBar(-w * 0.5 - t * 0.5, 0, t, h);
+    mkBar(w * 0.5 + t * 0.5, 0, t, h);
+    const frame = mergeParts(frameParts);
+    for (let i = 0; i < frameParts.length; i++) if (frameParts[i] !== frame) frameParts[i].dispose();
+    if (frame) {
+      this._own(frame);
+      const fm = new THREE.Mesh(frame, this._mat('gold'));
+      fm.castShadow = true;
+      fm.receiveShadow = true;
+      g.add(fm);
+    }
+    const canvasGeo = new THREE.PlaneGeometry(w, h);
+    this._own(canvasGeo);
+    const cm = new THREE.Mesh(canvasGeo, this._mat('painting'));
+    cm.receiveShadow = true;
+    g.add(cm);
+
+    const p = v3(bdef.p, 0, 0, 0);
+    g.position.set(p.x, p.y + h * 0.5, p.z);
+    g.rotation.y = yaw;
+    return { mesh: g, colliders: [] };
+  }
+
+  /** Ease the seal open/closed and keep its shimmer running. */
+  _updateGates(dt) {
+    const gs = this.gates;
+    if (!gs.length) return;
+    const t = this._time;
+    for (let i = 0; i < gs.length; i++) {
+      const g = gs[i];
+      const target = g.locked ? 1 : 0;
+      if (Math.abs(g.lockT - target) > 0.001) {
+        g.lockT = damp ? damp(g.lockT, target, 5.0, dt) : g.lockT + (target - g.lockT) * Math.min(1, dt * 5);
+      } else g.lockT = target;
+      if (g.sealMat) {
+        g.sealMat.uniforms.uTime.value = t;
+        g.sealMat.uniforms.uLock.value = g.lockT;
+      }
+      if (g.seal) g.seal.visible = g.lockT > 0.004;
+      if (g.setOpen && g.lockT !== g._openT) {
+        g._openT = g.lockT;
+        try { g.setOpen(1 - g.lockT); } catch (e) { /* art hook is optional */ }
+      }
+    }
+  }
+
+  /* ── power hats ──────────────────────────────────────────────────────── */
+
+  /**
+   * A POWER is a hat on a plinth of light.  Taking it emits
+   * `power(kind, seconds)`; Game owns what the power then DOES (hero.setPower,
+   * the HUD timer, the controller flag).  The hat re-appears after
+   * `respawn` seconds so a course is never made unwinnable by one bad attempt.
+   */
+  _buildPowers() {
+    const defs = Array.isArray(this.def.powers) ? this.def.powers : [];
+    this.powers = [];
+    if (!defs.length) return;
+
+    for (let i = 0; i < defs.length; i++) {
+      const d = defs[i];
+      const pos = v3(d.p, 0, 0, 0);
+      const color = colorOf(d.color, this.palette.accent.getHex());
+      const root = new THREE.Group();
+      root.position.copy(pos);
+      root.userData.noMerge = true;
+
+      /* The hat: a lathed crown + a brim + a band.  Multi-part and bevelled —
+         never a naked cone (contract hard rule 1). */
+      const crownPts = [
+        new THREE.Vector2(0.0, 0.0),
+        new THREE.Vector2(0.20, 0.02),
+        new THREE.Vector2(0.215, 0.16),
+        new THREE.Vector2(0.20, 0.30),
+        new THREE.Vector2(0.155, 0.34),
+        new THREE.Vector2(0.0, 0.355),
+      ];
+      const crown = new THREE.LatheGeometry(crownPts, 28);
+      crown.computeVertexNormals();
+      this._own(crown);
+      const crownMesh = new THREE.Mesh(crown, this._mat('cloth'));
+      crownMesh.castShadow = true;
+      root.add(crownMesh);
+
+      const brim = new THREE.TorusGeometry(0.235, 0.055, 8, 30);
+      brim.rotateX(-Math.PI / 2);
+      brim.translate(0, 0.045, 0);
+      this._own(brim);
+      const brimMesh = new THREE.Mesh(brim, this._mat('cloth'));
+      brimMesh.castShadow = true;
+      root.add(brimMesh);
+
+      const band = new THREE.CylinderGeometry(0.222, 0.222, 0.075, 26, 1, true);
+      band.translate(0, 0.115, 0);
+      this._own(band);
+      root.add(new THREE.Mesh(band, this._glowMat(color, 1.5)));
+
+      /* the plinth of light */
+      const shaftGeo = new THREE.CylinderGeometry(0.20, 0.52, 2.6, 18, 1, true);
+      shaftGeo.translate(0, -1.3, 0);
+      this._own(shaftGeo);
+      const shaftMat = this._fxMaterial(HALO_VERT, HALO_FRAG, {
+        uTime: { value: 0 }, uState: { value: 1 }, uMode: { value: 0 },
+        uColor: { value: color.clone() },
+      });
+      const shaft = new THREE.Mesh(shaftGeo, shaftMat);
+      shaft.renderOrder = 5;
+      root.add(shaft);
+
+      const ringGeo = new THREE.TorusGeometry(0.62, 0.03, 6, 44);
+      ringGeo.rotateX(-Math.PI / 2);
+      ringGeo.translate(0, -2.58, 0);
+      this._own(ringGeo);
+      const ringMat = this._fxMaterial(HALO_VERT, HALO_FRAG, {
+        uTime: { value: 0 }, uState: { value: 1 }, uMode: { value: 1 },
+        uColor: { value: color.clone() },
+      });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.renderOrder = 6;
+      root.add(ring);
+
+      this.group.add(root);
+
+      let vol = null;
+      try {
+        vol = new Volume({
+          center: [pos.x, pos.y + 0.1, pos.z],
+          half: [0.85, 1.15, 0.85],
+          kind: 'trigger',
+          props: { power: d.kind, index: i },
+        });
+      } catch (e) { vol = null; }
+      if (vol) this._addVolume(vol, null);
+
+      const rec = {
+        index: i, def: d, kind: d.kind, pos,
+        duration: fin(d.duration) ? d.duration : 30,
+        respawn: fin(d.respawn) ? d.respawn : 12,
+        root, shaftMat, ringMat, volume: vol,
+        taken: false, cooldown: 0, state: 1,
+        phase: (i * 0.6180339887) % 1,
+      };
+      this.powers.push(rec);
+      this._glowSites.push({ pos: pos.clone(), color, halo: 0.7, pool: 1.9 });
+    }
+  }
+
+  _updatePowers(dt) {
+    const ps = this.powers;
+    if (!ps.length) return;
+    const t = this._time;
+    const havePP = this._ppValid;
+    const px = this._pp.x, py = this._pp.y, pz = this._pp.z;
+    for (let i = 0; i < ps.length; i++) {
+      const r = ps[i];
+      if (r.taken) {
+        r.cooldown -= dt;
+        if (r.cooldown <= 0) { r.taken = false; }
+      }
+      const target = r.taken ? 0 : 1;
+      r.state = damp ? damp(r.state, target, 8, dt) : r.state + (target - r.state) * Math.min(1, dt * 8);
+      r.root.visible = r.state > 0.01;
+      r.root.rotation.y = t * 0.9 + r.phase * 6.2831853;
+      r.root.position.y = r.pos.y + Math.sin(t * 1.5 + r.phase * 6.2831853) * 0.12;
+      r.root.scale.setScalar(Math.max(0.001, r.state));
+      if (r.shaftMat) { r.shaftMat.uniforms.uTime.value = t; r.shaftMat.uniforms.uState.value = r.state; }
+      if (r.ringMat) { r.ringMat.uniforms.uTime.value = t; r.ringMat.uniforms.uState.value = r.state; }
+
+      if (r.taken || !havePP || r.state < 0.6) continue;
+      /* THE HAT IS TAKEN BY THE BODY, NOT BY THE FEET. `_pp` is the hero's FEET; the
+         volume is 2.3 m tall centred on the hat, so a hat authored 1.1 m over its deck
+         (azure-3's wing pier: hat 36.5, deck 35.4 -> volume floor 35.45) sat 5 cm above
+         the feet of a hero standing right under it and never fired (playtest azure-3
+         #11/#18, verdant-1 #16 "walking the hat leaves game.power null"). Test the
+         capsule — feet, chest and head — against the volume. */
+      let inside;
+      if (r.volume && typeof r.volume.contains === 'function') {
+        _v2.set(px, py, pz);
+        inside = r.volume.contains(_v2);
+        if (!inside) { _v2.y = py + POWER_PICK_MID; inside = r.volume.contains(_v2); }
+        if (!inside) { _v2.y = py + POWER_PICK_HEAD; inside = r.volume.contains(_v2); }
+      } else {
+        const dx = px - r.pos.x, dz = pz - r.pos.z, dy = py - r.pos.y;
+        inside = dx * dx + dz * dz < 0.9 && dy > -1.3 && dy < 1.6;
+      }
+      if (!inside) continue;
+      r.taken = true;
+      r.cooldown = r.respawn;
+      this.events.emit('power', r.kind, r.duration);
+    }
+  }
+
+  _resetPowers() {
+    for (let i = 0; i < this.powers.length; i++) {
+      const r = this.powers[i];
+      r.taken = false;
+      r.cooldown = 0;
+      r.state = 1;
+      r.root.visible = true;
+      r.root.scale.setScalar(1);
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════ loop ══ */
+
+  /**
+   * Register the player so hazard culling, light selection, stand detection and
+   * pad triggers track the FEET, not the eye.  Game calls this the moment the
+   * course is built; without it `_resolvePlayerPos` falls back to the camera,
+   * which in third person sits metres away from the hero and skews every
+   * proximity test in this file — so reaching that fallback is reported once,
+   * loudly, naming the call that was missed.
+   */
+  setPlayer(player) {
+    this._playerRef = player || null;
+    if (this._playerRef) this._warnedCameraFallback = false;
+    return this;
+  }
+
+  /**
+   * Advance the course by one frame.
+   *
+   * ORDER MATTERS.  Hazards move first (they carry the player), then critters
+   * (they read where the player is), then collectibles (they magnet toward the
+   * player's final position of LAST frame — game.js runs course.update before
+   * player.update, so everything here reads one physics step of history, which
+   * is exactly what makes carrying and magnetism stable instead of jittery).
+   *
+   * @param {number} dt seconds (already clamped by the engine)
+   * @param {object|THREE.Vector3} [player] the live Player, or a bare position
+   */
+  update(dt, player) {
+    if (!this._built || this._disposed) return;
+    if (!fin(dt)) dt = 0;
+    if (dt > 0.25) dt = 0.25;
+
+    this.clock += dt;
+    this._time += dt;
+
+    if (player && player.isVector3) { this._pp.copy(player); this._ppValid = true; }
+    else {
+      if (player && player.pos && fin(player.pos.x)) this._playerRef = player;
+      this._ppValid = this._resolvePlayerPos();
+    }
+    const p = this._playerRef;
+
+    this._detectStand();
+    this._updateHazards(dt, p);
+    this._updateCannons(dt, p);
+    this._updateCritters(dt, p);
+    this._updateWaters(dt);
+    this._updateCulling(dt);
+    this._updateLights(dt);
+    this._updateCheckpoints(dt);
+    this._updateGates(dt);
+    this._updatePowers(dt);
+    this._updateSignOcclusion();
+
+    if (this.collectibles && typeof this.collectibles.update === 'function') {
+      try { this.collectibles.update(dt, p); } catch (e) { this._once('collectibles', e); }
+    }
+
+    if (this._ppValid) {
+      const cp = this.checkpointAt(this._pp);
+      if (cp >= 0) this.activateCheckpoint(cp, false);
+    }
+
+    /* Shared animation clocks — one write each, never per material. */
+    if (typeof Builders.setFxTime === 'function') Builders.setFxTime(this._time);
+    if (typeof PropsMod.setPropsTime === 'function') PropsMod.setPropsTime(this._time);
+    if (this.mats && typeof this.mats.update === 'function') {
+      try { this.mats.update(dt, this._time); } catch (e) { /* optional hook */ }
+    }
+  }
+
+  /** One console line per subsystem per course, not one per frame. */
+  _once(tag, e) {
+    if (!this._onceSet) this._onceSet = new Set();
+    if (this._onceSet.has(tag)) return;
+    this._onceSet.add(tag);
+    console.error('[Course ' + this.id + '] ' + tag + ' threw in update() (silenced after this)', e);
+  }
+
+  /**
+   * Feet first: the registered Player, then a player handed in through ctx.  The
+   * camera is a LAST-DITCH fallback that in a third-person game is metres behind
+   * and above the hero, so reaching it is reported once, loudly, naming the call
+   * that was missed — a silent multi-metre error is unfindable.
+   */
+  _resolvePlayerPos() {
+    const pr = this._playerRef;
+    if (pr && pr.pos && fin(pr.pos.x)) { this._pp.copy(pr.pos); return true; }
+    const cpr = this.ctx && this.ctx.player;
+    if (cpr && cpr.pos && fin(cpr.pos.x)) { this._pp.copy(cpr.pos); return true; }
+    const cam = this.engine && this.engine.camera;
+    if (cam) {
+      if (!this._warnedCameraFallback) {
+        this._warnedCameraFallback = true;
+        console.error('[Course ' + this.id + '] no player registered — trigger detection, culling and ' +
+                      'light selection are running against the CAMERA, which in third person sits ' +
+                      'several metres from the hero. Call course.setPlayer(player) after Course.load().');
+      }
+      if (cam.parent) this._pp.setFromMatrixPosition(cam.matrixWorld);
+      else this._pp.copy(cam.position);
+      return fin(this._pp.x);
+    }
+    return false;
+  }
+
+  /**
+   * STAND DETECTION.  The collision layer never calls `hazard.onStand()`, and a
+   * hazard's ctx carries no player handle, so crumble tiles, sinkers and
+   * elevators would self-detect by proximity — which in Ascendant measured as
+   * INERT in the shipped game on four stages.  The Course is the one place that
+   * knows BOTH the player's ground contact and which hazard owns that collider,
+   * so it fires the hook on a STAND TRANSITION: the frame the player's grounded
+   * collider becomes this one, whether by landing or by walking on from a
+   * neighbour, and never on a fly-over, a walk-underneath or a teleport-in (a
+   * respawn arrives airborne).
+   *
+   * course.update() runs before player.update() (game.js), so the contact read
+   * here is last frame's: one physics step of latency, no proximity band.
+   */
+  _detectStand() {
+    const p = this._playerRef;
+    const c = (p && p.grounded === true) ? (p.groundCollider || null) : null;
+    if (c === this._standOn) return;
+    this._standOn = c;
+    if (!c) return;
+    const ref = c.ref;
+    if (ref && typeof ref.onStand === 'function') {
+      try { ref.onStand(p, c, this.clock); } catch (e) { /* a hook threw; the sim goes on */ }
+    }
+  }
+
+  _updateHazards(dt, player) {
+    const t = this.clock;
+    const hz = this.hazards;
+    const havePP = this._ppValid;
+    const px = this._pp.x, py = this._pp.y, pz = this._pp.z;
+    for (let i = 0; i < hz.length; i++) {
+      const rec = hz[i];
+      if (rec.broken) continue;
+      const h = rec.h;
+
+      /* DETERMINISM LAW: the transform is a pure function of `t` and is NEVER
+         skipped, however far away the hazard is. Only its VISUAL is culled. */
+      try { h.update(t, dt, player); } catch (e) { this._hazardError(rec, e); continue; }
+
+      if (havePP && rec.cullable && h.mesh) {
+        const dx = px - rec.cx, dy = py - rec.cy, dz = pz - rec.cz;
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz) - rec.radius;
+        const far = d > HAZARD_VIS_DIST;
+        if (far !== rec.far) {
+          rec.far = far;
+          h.mesh.visible = !far;
+          if (typeof h.setVisual === 'function') {
+            try { h.setVisual(!far); } catch (e) { /* optional hook */ }
+          }
+          /* Re-entering: run one more update so the frame it becomes visible is
+             already in the right pose, not one frame stale. */
+          if (!far) {
+            try { h.update(t, dt, player); } catch (e) { this._hazardError(rec, e); continue; }
+          }
+        }
+      }
+
+      const cs = rec.colliders;
+      for (let j = 0; j < cs.length; j++) {
+        const c = cs[j];
+        if (typeof c.update === 'function') c.update();
+        else if (this.broadphase && typeof this.broadphase.refresh === 'function') this.broadphase.refresh(c);
+      }
+      const vs = rec.volumes;
+      for (let j = 0; j < vs.length; j++) {
+        const v = vs[j];
+        if (typeof v.update === 'function') v.update();
+      }
+      const ks = rec.kills;
+      for (let j = 0; j < ks.length; j++) {
+        const k = ks[j];
+        if (typeof k.update === 'function') k.update();
+      }
+    }
+  }
+
+  /**
+   * CANNONS (hazards/launch.js). Nothing in the runtime ever read the trigger Volume a
+   * cannon publishes — `grep enterCannon runtime/` found only the controller's own
+   * definition — so no cannon in the game could be boarded (playtest: azure-2, azure-3,
+   * ember-3, ember-4, verdant-3). The Course is the one place that knows the player,
+   * the input AND the hazard, so it seats the hero: walk into the breech (a short dwell,
+   * so a player crossing the carriage is not swallowed) or press interact / jump inside
+   * it, and the controller's `enterCannon(def)` takes over. A boarded cannon re-arms only
+   * after the hero has LEFT its trigger, so the shot never re-boards on the way out.
+   */
+  _updateCannons(dt, player) {
+    const cs = this._cannons;
+    if (!cs.length || !player || player.dead || !this._ppValid) return;
+    if (player.state === 'cannon') return;
+    const g = this.game;
+    if (g && g.state && g.state !== 'playing' && g.state !== 'keep') return;
+    const inp = g ? g.input : null;
+    const pressed = !!(inp && (inp.interactPressed || inp.jumpPressed));
+    _v1.set(this._pp.x, this._pp.y + 0.6, this._pp.z);
+    for (let i = 0; i < cs.length; i++) {
+      const rec = cs[i];
+      const h = rec.h;
+      const vol = h.volume;
+      if (rec.broken || !h.enabled || !vol || !vol.active) continue;
+      let inside = false;
+      try { inside = !!vol.contains(_v1); } catch (e) { inside = false; }
+      if (!inside) { rec.dwell = 0; rec.armed = true; continue; }
+      if (!rec.armed) continue;
+      if (typeof h.readyAt === 'function' && !h.readyAt(this.clock)) continue;
+      rec.dwell += dt;
+      if (pressed || rec.dwell >= CANNON_BOARD_DWELL) {
+        rec.dwell = 0;
+        rec.armed = false;
+        this._boardCannon(h, player);
+      }
+    }
+  }
+
+  _boardCannon(h, player) {
+    if (typeof player.enterCannon !== 'function') return false;
+    const d = h.boardDef || h;
+    try { player.enterCannon(d); } catch (e) { this._once('cannon.enter', e); return false; }
+    if (typeof h.enter === 'function') { try { h.enter(player); } catch (e) { /* the clunk is optional */ } }
+    return true;
+  }
+
+  /**
+   * POUND SHOCK (CONTRACT §11: a pound "breaks breakable colliders"; §21: a breakable
+   * answers "a pound landing on / within shockRadius of this crate"). The controller only
+   * tells the collider it LANDED ON — a wall panel, a hay bale, a cage or a coral wall you
+   * pound BESIDE never heard about it, which is why the glyph wall, the hay wall, the
+   * portcullis and the sunken cage were all unbreakable in play. The Course knows every
+   * hazard and critter, so it fans the shock out: every `breakable` whose collider lies
+   * within TUNE.pound.shockRadius of the landing point (in XZ, and neither below the feet
+   * nor above the head) and every critter (they judge their own radius). The collider the
+   * hero stands on is skipped — the controller already notified its owner.
+   * Called by Game from the player's 'poundLand' event. Allocation-free.
+   *
+   * THE LOWER LIP USED TO BE 0.6 m AND THAT IS NOT WHERE A WALL IS.  A wall panel is
+   * pounded from BESIDE it, and "beside" on a diorama usually means standing on the ledge,
+   * rock or apron that the wall's mouth opens off — i.e. with the wall's TOP below your
+   * boots.  Measured on verdant-1's cave (2026-09-08, `_harness/_lc_diag2.py`): the only
+   * spot the boulder screen lets you stand is the middle boulder's rim at y 5.62, and the
+   * mossy wall's collider tops out at y 5.00 — 0.62 m under the feet, so `b.max.y < pos.y
+   * - 0.6` threw it out by TWO CENTIMETRES and the pound that visibly landed 0.68 m from
+   * the panel did nothing.  The shock is a shock: its reach below the feet is the same
+   * `shockRadius` as its reach sideways, not a tenth of it.  (The ceiling stays at
+   * `+shockRadius` above the feet, which is what it always was.)
+   */
+  onPoundLand(pos, player) {
+    if (!pos || !fin(pos.x) || !fin(pos.z)) return 0;
+    const R = TUNE.pound.shockRadius;
+    const R2 = R * R;
+    const gc = (player && player.grounded && player.groundCollider) ? player.groundCollider : null;
+    const gref = gc ? gc.ref : null;
+    let hits = 0;
+    const hz = this.hazards;
+    for (let i = 0; i < hz.length; i++) {
+      const rec = hz[i];
+      if (rec.broken) continue;
+      const h = rec.h;
+      if (rec.kind !== 'breakable' && h.kind !== 'breakable') continue;   // aliases resolve on the hazard
+      if (!h.enabled || typeof h.onPound !== 'function' || h === gref) continue;
+      const cs = rec.colliders;
+      let near = false;
+      for (let j = 0; j < cs.length && !near; j++) {
+        const c = cs[j];
+        if (!c || !c.active || c === gc) continue;
+        const b = c.aabb;
+        if (!b) continue;
+        if (b.max.y < pos.y - R || b.min.y > pos.y + R) continue;
+        const dx = Math.max(b.min.x - pos.x, 0, pos.x - b.max.x);
+        const dz = Math.max(b.min.z - pos.z, 0, pos.z - b.max.z);
+        near = dx * dx + dz * dz <= R2;
+      }
+      if (!near) continue;
+      try { h.onPound(player, pos); hits++; } catch (e) { this._hazardError(rec, e); }
+    }
+    const cr = this.critters;
+    for (let i = 0; i < cr.length; i++) {
+      const c = cr[i];
+      if (!c || c.enabled === false || typeof c.onPound !== 'function' || c === gref) continue;
+      try { c.onPound(player, pos); } catch (e) { this._once('critter.pound:' + (c.kind || i), e); }
+    }
+    return hits;
+  }
+
+  _refreshHazardColliders() {
+    for (let i = 0; i < this.hazards.length; i++) {
+      const rec = this.hazards[i];
+      for (let j = 0; j < rec.colliders.length; j++) {
+        const c = rec.colliders[j];
+        if (typeof c.update === 'function') c.update();
+        if (this.broadphase && typeof this.broadphase.refresh === 'function') this.broadphase.refresh(c);
+      }
+      for (let j = 0; j < rec.volumes.length; j++) {
+        if (typeof rec.volumes[j].update === 'function') rec.volumes[j].update();
+      }
+      for (let j = 0; j < rec.kills.length; j++) {
+        if (typeof rec.kills[j].update === 'function') rec.kills[j].update();
+      }
+    }
+  }
+
+  _updateCritters(dt, player) {
+    const cr = this.critters;
+    for (let i = 0; i < cr.length; i++) {
+      const c = cr[i];
+      if (!c || c.enabled === false) continue;
+      try { c.update(dt, player); } catch (e) { this._once('critter:' + (c.kind || i), e); continue; }
+      if (Array.isArray(c.colliders)) {
+        for (let j = 0; j < c.colliders.length; j++) {
+          const col = c.colliders[j];
+          if (typeof col.update === 'function') col.update();
+          else if (this.broadphase && typeof this.broadphase.refresh === 'function') this.broadphase.refresh(col);
+        }
+      }
+      if (Array.isArray(c.kills)) {
+        for (let j = 0; j < c.kills.length; j++) {
+          if (typeof c.kills[j].update === 'function') c.kills[j].update();
+        }
+      }
+    }
+  }
+
+  /** Water rides the VISUAL clock: the surface keeps moving while a menu is up. */
+  _updateWaters(dt) {
+    for (let i = 0; i < this.waters.length; i++) {
+      const w = this.waters[i];
+      if (!w.update) continue;
+      try { w.update(this._time); } catch (e) { this._once('water', e); }
+    }
+    /* ROUND 2 — the grass has never swayed. terrain.js owns ONE shared wind
+     * clock and exports `setGrassTime`, and grep says nothing in `runtime/`
+     * outside terrain.js ever wrote it: the only writer is the terrain record's
+     * own `update(t)`, which no caller ever invoked. So CONTRACT §18's "wind
+     * sway shader" has been running at t = 0 since the module was written —
+     * a dead uniform, not a missing feature. Same visual clock as the water. */
+    if (this.terrains.length && typeof TerrainMod.setGrassTime === 'function') {
+      try { TerrainMod.setGrassTime(this._time); } catch (e) { this._once('grasstime', e); }
+    }
+  }
+
+  /**
+   * Chunk culling, every frame (contract §24).  Distance kills the far side of
+   * the diorama, the frustum kills what is behind the camera, and a near band
+   * stays visible off-screen so its shadow casters keep contributing.  A Box3
+   * frustum test is six plane dots; at a few hundred chunks this is under
+   * 0.05 ms and buys back far more than it costs.
+   */
+  _updateCulling(dt) {
+    const chunks = this._chunks;
+    if (!chunks.length) return;
+
+    const cam = this.engine && this.engine.camera;
+    let haveFrustum = false;
+    if (cam) {
+      cam.updateMatrixWorld();
+      _projScreen.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+      _frustum.setFromProjectionMatrix(_projScreen);
+      haveFrustum = true;
+    }
+    const px = this._ppValid ? this._pp.x : (cam ? cam.position.x : 0);
+    const py = this._ppValid ? this._pp.y : (cam ? cam.position.y : 0);
+    const pz = this._ppValid ? this._pp.z : (cam ? cam.position.z : 0);
+    _v1.set(px, py, pz);
+
+    const far = this._cullFar;
+    const detailFar = this._detailFar;
+    for (let i = 0; i < chunks.length; i++) {
+      const ch = chunks[i];
+      const d = ch.box.distanceToPoint(_v1);
+      let vis;
+      if (d > far) vis = false;
+      else if (d < SHADOW_KEEP) vis = true;
+      else vis = haveFrustum ? _frustum.intersectsBox(ch.box) : true;
+      if (vis !== ch.visible) { ch.visible = vis; ch.group.visible = vis; }
+    }
+
+    const cells = this._detailCells;
+    for (let i = 0; i < cells.length; i++) {
+      const dc = cells[i];
+      const d = dc.box.distanceToPoint(_v1);
+      let vis;
+      if (d > detailFar) vis = false;
+      else if (d < SHADOW_KEEP) vis = true;
+      else vis = haveFrustum ? _frustum.intersectsBox(dc.box) : true;
+      if (vis !== dc.visible) { dc.visible = vis; dc.group.visible = vis; }
+    }
+  }
+
+  /**
+   * Point the fixed pool at the nearest light sites.
+   *
+   * Nothing is added, removed or hidden here — only moved, re-tinted and faded.
+   * A slot must fade to ZERO before it re-targets, so a light never visibly
+   * slides across a room: it dies on the fixture you left and lifts on the one
+   * you reached, under the halo and floor pool that are always there.
+   * Allocation-free; safe to call every frame.
+   */
+  _updateLights(dt) {
+    const L = this.lights;
+    const P = this._lightPool;
+    if (!P.length) return;
+    const nActive = Math.min(this._maxLights, P.length);
+
+    this._lightTimer -= dt;
+    if (this._lightTimer <= 0 && L.length) {
+      this._lightTimer = LIGHT_SELECT_HZ;
+      const px = this._pp.x, py = this._pp.y, pz = this._pp.z;
+      for (let i = 0; i < L.length; i++) {
+        const l = L[i];
+        const dx = px - l.pos.x, dy = py - l.pos.y, dz = pz - l.pos.z;
+        l.d2 = this._ppValid ? dx * dx + dy * dy + dz * dz : 0;
+        l.want = false;
+      }
+
+      /* Partial selection sort — only the nActive nearest are ever ordered. */
+      const idx = this._lightIdx;
+      idx.length = L.length;
+      for (let i = 0; i < L.length; i++) idx[i] = i;
+      const n = Math.min(nActive, L.length);
+      for (let a = 0; a < n; a++) {
+        let best = a;
+        for (let b = a + 1; b < L.length; b++) if (L[idx[b]].d2 < L[idx[best]].d2) best = b;
+        const tmp = idx[a]; idx[a] = idx[best]; idx[best] = tmp;
+      }
+      for (let a = 0; a < n; a++) {
+        const l = L[idx[a]];
+        if (l.base <= 0.01) continue;                // a dark site never holds a slot
+        if (!this._ppValid || l.d2 < l.range2) l.want = true;
+      }
+
+      /* Release slots whose site fell out of the set (or was removed). */
+      for (let s = 0; s < P.length; s++) {
+        const slot = P[s];
+        const site = slot.site;
+        if (!site) continue;
+        if (!site.want || site.slot !== s || s >= nActive || L.indexOf(site) < 0) {
+          site.slot = -1;
+          slot.site = null;
+        }
+      }
+
+      /* Fill free, fully-dark slots with wanted sites, nearest first. */
+      for (let a = 0; a < n; a++) {
+        const l = L[idx[a]];
+        if (!l.want || l.slot >= 0) continue;
+        for (let s = 0; s < nActive; s++) {
+          const slot = P[s];
+          if (slot.site || slot.fade > 0.02) continue;
+          slot.site = l;
+          l.slot = s;
+          slot.light.position.copy(l.pos);
+          slot.light.color.copy(l.color);
+          slot.light.distance = l.distance;
+          slot.light.decay = l.decay;
+          break;
+        }
+      }
+    }
+
+    const t = this.clock;
+    for (let s = 0; s < P.length; s++) {
+      const slot = P[s];
+      const site = slot.site;
+      const target = (site && s < nActive) ? 1 : 0;
+      if (this._lightFirst) slot.fade = target;      // no lift-in on the first frame
+      else {
+        const rate = target > slot.fade ? LIGHT_FADE_IN : LIGHT_FADE_OUT;
+        slot.fade += (target - slot.fade) * Math.min(1, dt * rate);
+      }
+      if (!site || slot.fade < 0.004) {
+        if (slot.fade < 0.004) slot.fade = 0;
+        if (slot.light.intensity !== 0) slot.light.intensity = 0;
+        continue;
+      }
+      /* A site can move: a rising lava pool, a swinging lantern. */
+      slot.light.position.copy(site.pos);
+      let k = 1;
+      if (site.flicker) {
+        const f = 0.62 + 0.22 * Math.sin(t * 11.3 + site.seed) +
+                         0.16 * Math.sin(t * 27.7 + site.seed * 3.1);
+        k = 1 - site.flickerAmt + site.flickerAmt * clamp(f, 0, 1.3);
+      }
+      slot.light.intensity = site.base * slot.fade * k;
+    }
+    this._lightFirst = false;
+  }
+
+  /* ── gameplay bridges hazards and critters call ──────────────────────── */
+
+  /**
+   * Fire a named trigger (contract §22: a `secret` crest spawns on its trigger
+   * id).  Idempotent by id — pounding a gnasher's post a fourth time must not
+   * spawn a second crest.
+   */
+  trigger(id, payload) {
+    if (!id || this._triggered.has(id)) return false;
+    this._triggered.add(id);
+    if (this.collectibles && typeof this.collectibles.trigger === 'function') {
+      try { this.collectibles.trigger(id); } catch (e) { /* never break the sim */ }
+    }
+    this._disableHazardsOn(id);
+    this.events.emit('trigger', id, payload);
+    return true;
+  }
+
+  /**
+   * A hazard whose def names this trigger as its `disableOn` (alias `drainOn`) is
+   * switched OFF when the trigger fires: volumes/kills/colliders inactive, mesh
+   * hidden, `enabled` false — and it STAYS off for the session (a respawn reset
+   * re-runs the hazard's own reset, so `_resetHazards` re-applies this list).
+   * This is the hook a "pound the stone to drain the pool" beat needs (playtest
+   * ember-4 E4-3: the drain stone broke and the quicksand stayed): the data wires
+   * `{kind:'quicksand', ..., drainOn:'west-drain'}` to `{kind:'breakable', ...,
+   * trigger:'west-drain'}`. Idempotent; allocation-free.
+   */
+  _disableHazardsOn(id) {
+    const hz = this.hazards;
+    for (let i = 0; i < hz.length; i++) {
+      const rec = hz[i];
+      const d = rec.def;
+      if (!d) continue;
+      const on = d.disableOn !== undefined ? d.disableOn : d.drainOn;
+      if (on !== id) continue;
+      this._setHazardOff(rec);
+    }
+  }
+
+  _setHazardOff(rec) {
+    const h = rec.h;
+    rec.off = true;
+    h.enabled = false;
+    if (h.mesh) h.mesh.visible = false;
+    if (typeof h.setEnabled === 'function') { try { h.setEnabled(false); } catch (e) { /* optional */ } }
+    for (let j = 0; j < rec.colliders.length; j++) rec.colliders[j].active = false;
+    for (let j = 0; j < rec.volumes.length; j++) rec.volumes[j].active = false;
+    for (let j = 0; j < rec.kills.length; j++) rec.kills[j].active = false;
+  }
+
+  /** Coins from a squished bumbler or a smashed crate. */
+  dropCoins(pos, n) {
+    const count = fin(n) ? Math.max(0, Math.round(n)) : 0;
+    if (!count) return false;
+    const col = this.collectibles;
+    if (col && typeof col.spawnCoins === 'function') {
+      try { col.spawnCoins(pos, count); return true; } catch (e) { /* fall through */ }
+    }
+    this.events.emit('dropCoins', pos, count);
+    return false;
+  }
+
+  /* ─────────────────────────────────────────────── reset / spawn ──────── */
+
+  /**
+   * FULL reset (restart the course): clock 0, every hazard back to phase 0,
+   * every critter re-seeded, every coin and sigil back on its post, every
+   * checkpoint dark.  Crests taken this session stay ghosts — the Save has them.
+   */
+  reset() {
+    this.clock = 0;
+    this._time = 0;
+    this._triggered.clear();
+    this.setCheckpointIndex(-1, true);
+    this._resetHazards(0);
+    this._resetCritters();
+    this._resetPowers();
+    if (this.collectibles && typeof this.collectibles.reset === 'function') {
+      try { this.collectibles.reset(); } catch (e) { this._once('collectibles.reset', e); }
+    }
+    this._lightTimer = 0;
+  }
+
+  /**
+   * RESPAWN reset.  Rewinds the course clock to the checkpoint's authored
+   * `clockOffset` so the gauntlet ahead presents an identical phase on every
+   * attempt — muscle memory, not luck (contract §21 DETERMINISM LAW).
+   *
+   * Collectibles deliberately KEEP their collected state: dying should cost the
+   * player time, never the twenty coins they already earned.
+   */
+  resetFrom(cpIndex) {
+    let idx = fin(cpIndex) ? Math.floor(cpIndex) : -1;
+    idx = clamp(idx, -1, this.checkpoints.length - 1);
+    const cp = idx >= 0 ? this.checkpoints[idx] : null;
+    this.clock = (cp && fin(cp.clockOffset)) ? cp.clockOffset : 0;
+    this.setCheckpointIndex(idx, true);
+    /* SOFT: a breakable the player already opened stays open (a solved secret persists
+       for the session — azure-2's well grate re-sealed over the rider's head). */
+    this._resetHazards(this.clock, true);
+    this._resetCritters();
+    this._resetPowers();
+    /* NO collectibles.reset() here — see the doc comment. */
+  }
+
+  /**
+   * Re-arm crumble/vanish tiles, un-sink sinkers, rewind chasers.
+   * @param {number} t     course clock to place every hazard at
+   * @param {boolean} [soft]  a RESPAWN reset (resetFrom): hazards that keep a solved
+   *   state across deaths (breakables) are told so; a FULL reset re-arms everything.
+   */
+  _resetHazards(t, soft) {
+    /* Forget the last stand: a player still grounded on a re-armed tile after a
+       reset must re-trigger it next frame, not ride it for free. */
+    this._standOn = null;
+    const sft = !!soft;
+    for (let i = 0; i < this.hazards.length; i++) {
+      const rec = this.hazards[i];
+      const h = rec.h;
+      rec.broken = false;
+      rec.dwell = 0; rec.armed = true;
+      /* A hazard a trigger switched off (`disableOn`) stays off across respawns —
+         the trigger set is kept on a soft reset — and comes back on a FULL reset,
+         where `_triggered` is cleared first. */
+      if (rec.off) {
+        if (sft) continue;
+        rec.off = false;
+        h.enabled = true;
+        if (h.mesh) h.mesh.visible = true;
+        if (typeof h.setEnabled === 'function') { try { h.setEnabled(true); } catch (e) { /* optional */ } }
+      }
+      if (typeof h.rearm === 'function') { try { h.rearm(t); } catch (e) { /* optional */ } }
+      if (typeof h.reset === 'function') {
+        try { h.reset(t, sft); } catch (e) { this._hazardError(rec, e); continue; }
+      }
+      /* `reset(t)` must place it exactly where `update(t)` would; calling update
+         makes that true even for a hazard that only moves inside update(). */
+      try { h.update(t, 0, this._playerRef); } catch (e) { this._hazardError(rec, e); continue; }
+      if (h.mesh && rec.far) { h.mesh.visible = true; rec.far = false; }
+      for (let j = 0; j < rec.colliders.length; j++) {
+        const c = rec.colliders[j];
+        if (typeof c.update === 'function') c.update();
+        if (this.broadphase && typeof this.broadphase.refresh === 'function') this.broadphase.refresh(c);
+      }
+      for (let j = 0; j < rec.volumes.length; j++) {
+        if (typeof rec.volumes[j].update === 'function') rec.volumes[j].update();
+      }
+      for (let j = 0; j < rec.kills.length; j++) {
+        if (typeof rec.kills[j].update === 'function') rec.kills[j].update();
+      }
+    }
+  }
+
+  _resetCritters() {
+    for (let i = 0; i < this.critters.length; i++) {
+      const c = this.critters[i];
+      if (!c || typeof c.reset !== 'function') continue;
+      try { c.reset(); } catch (e) { this._once('critter.reset', e); }
+      if (Array.isArray(c.colliders)) {
+        for (let j = 0; j < c.colliders.length; j++) {
+          const col = c.colliders[j];
+          if (typeof col.update === 'function') col.update();
+          if (this.broadphase && typeof this.broadphase.refresh === 'function') this.broadphase.refresh(col);
+        }
+      }
+    }
+  }
+
+  /**
+   * Where the player appears for a given checkpoint (or the course spawn at -1).
+   * @returns {{pos: THREE.Vector3, yaw: number}}
+   */
+  spawnFor(cpIndex) {
+    const idx = fin(cpIndex) ? Math.floor(cpIndex) : -1;
+    if (idx >= 0 && idx < this.checkpoints.length) {
+      const cp = this.checkpoints[idx];
+      return { pos: cp.pos.clone(), yaw: cp.yaw };
+    }
+    const sp = this.def.spawn || {};
+    return { pos: v3(sp.p, 0, 0, 0), yaw: fin(sp.yaw) ? sp.yaw : 0 };
+  }
+
+  /* ─────────────────────────────────────────────────────────── warm-up ── */
+
+  /**
+   * Force every chunk (and every culled hazard mesh) visible and render two
+   * frames, so ALL shader programs compile and every merged geometry uploads
+   * NOW, while the loading veil covers the screen — then restore culling.
+   *
+   * Why this exists: first visibility is expensive.  Respawning into a chunk
+   * that has never been visible compiles its programs and uploads its geometry
+   * inside ONE frame, and death is exactly when a chunk tends to become visible
+   * for the first time (the checkpoint may sit in a corner the player sprinted
+   * past).  Ascendant measured that hitch at over 1.5 s inside a respawn; the
+   * contract's 700 ms median death loop cannot survive it.
+   *
+   * Three details are load-bearing and were each learned the hard way:
+   *  1. run every checkpoint's `resetFrom` FIRST — re-arming state hazards
+   *     creates meshes and material VARIANTS on their first reset;
+   *  2. warm through a synthetic wide camera above the course, not the player
+   *     camera: `render()` respects frustum culling, so warming through the
+   *     player's view misses everything a death cam then reveals;
+   *  3. render into a LINEAR HalfFloat target, not the canvas — the program
+   *     cache key includes the output colour space, and real frames go through
+   *     the composer (srgb-linear), so a canvas warm-up compiles only useless
+   *     `srgb` variants.
+   */
+  warmup(renderer, camera) {
+    if (!renderer || this._disposed) return;
+    /* A warm-up must leave gameplay state EXACTLY as it found it: Game has
+       already chosen the checkpoint and spawned the player by the time it calls
+       this, so cycling the hazards through every phase must not also rewind the
+       run.  Snapshot, cycle, restore. */
+    const savedCp = this.cpIndex;
+    const savedClock = this.clock;
+    try {
+      for (let i = 0; i < this.checkpoints.length; i++) this.resetFrom(i);
+      this.resetFrom(savedCp);
+      this.clock = savedClock;
+    } catch (e) { /* a warm-up must never break a load */ }
+
+    const saved = [];
+    for (let i = 0; i < this._detailCells.length; i++) {
+      const dc = this._detailCells[i];
+      saved.push([dc, dc.visible, true]);
+      dc.visible = true; dc.group.visible = true;
+    }
+    for (let i = 0; i < this._chunks.length; i++) {
+      const ch = this._chunks[i];
+      saved.push([ch, ch.visible, ch.detailVisible]);
+      ch.visible = true; ch.group.visible = true;
+      ch.detailVisible = true; ch.detail.visible = true;
+    }
+    const objFlags = [];
+    const sceneRoot = this.group.parent || this.group;
+    sceneRoot.traverse((o) => {
+      objFlags.push([o, o.visible, o.frustumCulled]);
+      o.visible = true;
+      o.frustumCulled = false;
+    });
+    const hazVis = [];
+    for (let i = 0; i < this.hazards.length; i++) {
+      const m = this.hazards[i].h.mesh;
+      if (m) { hazVis.push([m, m.visible]); m.visible = true; }
+    }
+
+    let warmRT = null;
+    try {
+      const scene = this.group.parent || this.group;
+      const b = this.bounds;
+      const warmCam = new THREE.PerspectiveCamera(110, 1.78, 0.1, 4000);
+      /* A fresh camera sees only layer 0 — meshes on selective layers (glow,
+         bloom overlays) would upload geometry but never DRAW, so their programs
+         would still compile mid-death.  See everything. */
+      warmCam.layers.enableAll();
+      if (b && isFinite(b.min.x)) {
+        const cx = (b.min.x + b.max.x) / 2, cz = (b.min.z + b.max.z) / 2;
+        const spanX = b.max.x - b.min.x, spanZ = b.max.z - b.min.z;
+        const hh = Math.max(spanX, spanZ) * 0.42 + (b.max.y - b.min.y) + 20;
+        warmCam.position.set(cx, b.max.y + hh, cz);
+        warmCam.lookAt(cx, b.min.y, cz);
+      } else if (camera) {
+        warmCam.copy(camera);
+      }
+      warmCam.updateMatrixWorld(true);
+
+      warmRT = new THREE.WebGLRenderTarget(64, 64, { type: THREE.HalfFloatType });
+      const prevRT = renderer.getRenderTarget();
+      renderer.setRenderTarget(warmRT);
+      renderer.render(scene, warmCam);       // compiles + uploads + shadow variants
+      renderer.render(scene, warmCam);
+      if (camera) renderer.render(scene, camera);
+      renderer.setRenderTarget(prevRT);
+    } catch (e) { /* a warm-up must never break a load */ }
+    if (warmRT) { try { warmRT.dispose(); } catch (e) { /* already gone */ } }
+
+    for (let i = 0; i < objFlags.length; i++) {
+      objFlags[i][0].visible = objFlags[i][1];
+      objFlags[i][0].frustumCulled = objFlags[i][2];
+    }
+    for (let i = 0; i < saved.length; i++) {
+      const ch = saved[i][0];
+      ch.visible = saved[i][1]; ch.group.visible = saved[i][1];
+      if (ch.detail) { ch.detailVisible = saved[i][2]; ch.detail.visible = saved[i][2]; }
+    }
+    for (let i = 0; i < hazVis.length; i++) hazVis[i][0].visible = hazVis[i][1];
+  }
+
+  /* ───────────────────────────────────────────────────────── plumbing ── */
+
+  /** Track a resource this course created, and therefore must dispose. */
+  _own(x) {
+    if (!x) return x;
+    if (x.isBufferGeometry) this._ownedGeo.add(x);
+    else if (x.isMaterial) this._ownedMat.add(x);
+    else if (x.isTexture) this._ownedTex.add(x);
+    return x;
+  }
+
+  _fxMaterial(vert, frag, uniforms, side) {
+    const m = new THREE.ShaderMaterial({
+      vertexShader: vert,
+      fragmentShader: frag,
+      uniforms,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: true,
+      side: side || THREE.DoubleSide,
+      toneMapped: false,
+      fog: false,
+    });
+    this._own(m);
+    return m;
+  }
+
+  /**
+   * A shared PBR material by key.  Mats first (contract §14 — cached and shared,
+   * box-projected), then builders' own bank, then a local safety net.  Only the
+   * safety net is `_own`ed: disposing a Mats material would blank every other
+   * user of it, including the next course.
+   */
+  _mat(key) {
+    let m = this._matCache.get(key);
+    if (m) return m;
+    try {
+      if (this.mats && typeof this.mats.get === 'function') m = this.mats.get(key, this.themeId);
+    } catch (e) { m = null; }
+    if ((!m || !m.isMaterial) && typeof Builders.getMaterial === 'function') {
+      try { m = Builders.getMaterial(key, this.theme, this.mats); } catch (e) { m = null; }
+    }
+    if (!m || !m.isMaterial) {
+      m = this._makeFallbackMat(key);
+      this._own(m);
+    }
+    this._matCache.set(key, m);
+    return m;
+  }
+
+  /** Reached only when world/materials.js and world/builders.js both decline a key. */
+  _makeFallbackMat(key) {
+    const pal = this.palette;
+    const T = {
+      stone: { color: pal.safe.getHex(), rough: 0.86, metal: 0.04 },
+      metal: { color: 0x8f9aa8, rough: 0.36, metal: 0.92 },
+      panel: { color: 0x59677a, rough: 0.55, metal: 0.35 },
+      grate: { color: 0x4a5563, rough: 0.62, metal: 0.7 },
+      ice: { color: 0xbfe9ff, rough: 0.12, metal: 0.05 },
+      glass: { color: 0xcfe8ff, rough: 0.06, metal: 0.0 },
+      emissive: { color: pal.accent.getHex(), rough: 0.4, metal: 0.1, emissive: pal.accent.getHex() },
+      lava: { color: 0x2a0a04, rough: 0.75, metal: 0.0, emissive: pal.kill.getHex() },
+      obsidian: { color: 0x16181f, rough: 0.34, metal: 0.28 },
+      crystal: { color: 0x9fd8ff, rough: 0.14, metal: 0.1 },
+      wood: { color: 0x6b4a2f, rough: 0.9, metal: 0.0 },
+      sand: { color: 0xc9b184, rough: 0.95, metal: 0.0 },
+      neon: { color: pal.accent.getHex(), rough: 0.3, metal: 0.2, emissive: pal.accent.getHex() },
+      checker: { color: 0x9aa6b4, rough: 0.7, metal: 0.1 },
+      hazard: { color: pal.kill.getHex(), rough: 0.5, metal: 0.2, emissive: pal.kill.getHex() },
+      rubber: { color: 0x2b2f36, rough: 0.98, metal: 0.0 },
+      conveyor: { color: 0x3a4048, rough: 0.8, metal: 0.3 },
+      cloud: { color: 0xe7f1ff, rough: 1.0, metal: 0.0 },
+      grass: { color: 0x5f8f43, rough: 0.95, metal: 0.0 },
+      dirt: { color: 0x6b5334, rough: 0.98, metal: 0.0 },
+      plaster: { color: 0xd8cfbd, rough: 0.9, metal: 0.0 },
+      brick: { color: 0x8d5a48, rough: 0.88, metal: 0.0 },
+      bark: { color: 0x5a4430, rough: 0.95, metal: 0.0 },
+      leaves: { color: 0x4e8a3a, rough: 0.85, metal: 0.0 },
+      snow: { color: 0xeaf4ff, rough: 0.78, metal: 0.0 },
+      water: { color: pal.water.getHex(), rough: 0.1, metal: 0.0 },
+      gold: { color: 0xd8a63a, rough: 0.28, metal: 0.95 },
+      cloth: { color: 0x9c4a5e, rough: 0.92, metal: 0.0 },
+      painting: { color: 0x6f7f9a, rough: 0.7, metal: 0.05, emissive: pal.accent.getHex() },
+      marble: { color: 0xe3e0d8, rough: 0.3, metal: 0.02 },
+      moss: { color: 0x4c6b3b, rough: 0.98, metal: 0.0 },
+      copper: { color: 0xb87246, rough: 0.42, metal: 0.9 },
+      rope: { color: 0xa98b5c, rough: 0.98, metal: 0.0 },
+    };
+    const t = T[key] || T.stone;
+    const m = new THREE.MeshStandardMaterial({
+      color: t.color, roughness: t.rough, metalness: t.metal,
+      emissive: t.emissive !== undefined ? t.emissive : 0x000000,
+      emissiveIntensity: t.emissive !== undefined ? 0.55 : 0,
+      flatShading: false,
+    });
+    m.name = 'course-fallback:' + key;
+    return m;
+  }
+
+  /* ─────────────────────────────────────────────────────────── dispose ── */
+
+  /**
+   * Free everything this course created — and NOTHING it merely borrowed.
+   * Mats' shared cache, builders' GeoCache and the critter/collectible module
+   * caches all outlive a course and are deliberately untouched here: they are
+   * released once at game teardown, not once per course, which is what makes
+   * returning to the Keep cheap.
+   */
+  dispose() {
+    if (this._disposed) return;
+    this._disposed = true;
+
+    if (this._settingsCb && Settings && typeof Settings.off === 'function') {
+      try { Settings.off(this._settingsCb); } catch (e) { /* optional */ }
+    }
+    this._settingsCb = null;
+
+    for (let i = 0; i < this.hazards.length; i++) {
+      const h = this.hazards[i].h;
+      if (h && typeof h.dispose === 'function') {
+        try { h.dispose(); } catch (e) { console.error('[Course ' + this.id + '] hazard dispose failed', e); }
+      }
+    }
+    for (let i = 0; i < this.critters.length; i++) {
+      const c = this.critters[i];
+      if (c && typeof c.dispose === 'function') {
+        try { c.dispose(); } catch (e) { console.error('[Course ' + this.id + '] critter dispose failed', e); }
+      }
+    }
+    if (this.collectibles && typeof this.collectibles.dispose === 'function') {
+      try { this.collectibles.dispose(); } catch (e) { console.error('[Course ' + this.id + '] collectibles dispose failed', e); }
+    }
+    if (this._propHandle && typeof this._propHandle.dispose === 'function') {
+      try { this._propHandle.dispose(); } catch (e) { /* best effort */ }
+    }
+    this._propHandle = null;
+
+    if (this.broadphase) {
+      if (typeof this.broadphase.remove === 'function') {
+        for (let i = 0; i < this._allColliders.length; i++) {
+          try { this.broadphase.remove(this._allColliders[i]); } catch (e) { /* best effort */ }
+        }
+      }
+      if (typeof this.broadphase.removeHeightfield === 'function') {
+        for (let i = 0; i < this._heightfields.length; i++) {
+          try { this.broadphase.removeHeightfield(this._heightfields[i]); } catch (e) { /* best effort */ }
+        }
+      }
+      if (typeof this.broadphase.clear === 'function') {
+        try { this.broadphase.clear(); } catch (e) { /* best effort */ }
+      }
+    }
+    this._heightfields.length = 0;
+
+    for (let i = 0; i < this._lightPool.length; i++) {
+      const l = this._lightPool[i].light;
+      if (l.parent) l.parent.remove(l);
+      if (typeof l.dispose === 'function') l.dispose();
+    }
+    this._lightPool.length = 0;
+    this._glowField = null;
+
+    /* Terrain and water own geometry the course built through a sibling module;
+       those siblings hand back plain meshes, so the geometry is ours to free —
+       but a SHARED geometry (GeoCache) is never touched. */
+    const disposeTree = (root) => {
+      if (!root) return;
+      root.traverse((o) => {
+        if (o.isMesh || o.isPoints || o.isLine) {
+          const g = o.geometry;
+          if (g && !(g.userData && g.userData.__shared) && !this._ownedGeo.has(g)) {
+            try { g.dispose(); } catch (e) { /* already gone */ }
+          }
+        }
+      });
+    };
+    for (let i = 0; i < this.terrains.length; i++) {
+      disposeTree(this.terrains[i].mesh);
+      disposeTree(this.terrains[i].grass);
+    }
+    for (let i = 0; i < this.waters.length; i++) disposeTree(this.waters[i].mesh);
+
+    if (this.group.parent) this.group.parent.remove(this.group);
+
+    this._ownedGeo.forEach((g) => { try { g.dispose(); } catch (e) { /* already gone */ } });
+    this._ownedMat.forEach((m) => { try { m.dispose(); } catch (e) { /* already gone */ } });
+    this._ownedTex.forEach((t) => { try { t.dispose(); } catch (e) { /* already gone */ } });
+    this._ownedGeo.clear();
+    this._ownedMat.clear();
+    this._ownedTex.clear();
+
+    this.events.clear();
+    this._matCache.clear();
+    this._chunkMap.clear();
+    this._chunks.length = 0;
+    this._detailMap.clear();
+    this._detailCells.length = 0;
+    this._allColliders.length = 0;
+    this._staticColliders.length = 0;
+    this._mergeSources.clear();
+    this._triggered.clear();
+    this.killVolumes.length = 0;
+    this.volumes.length = 0;
+    this.hazards.length = 0;
+    this._cannons.length = 0;
+    this.critters.length = 0;
+    this.checkpoints.length = 0;
+    this.gates.length = 0;
+    this.powers.length = 0;
+    this.waters.length = 0;
+    this.terrains.length = 0;
+    this.lights.length = 0;
+    this._glowSites.length = 0;
+    this.texts.length = 0;
+    this._decoProps.length = 0;
+    this._cpAttr = null;
+    this._cpMeshes = null;
+    this._cpBase = null;
+    this._cpRing = null;
+    this._cpWave = null;
+    this._cpGlyph = null;
+    this._cpColumn = null;
+    this.collectibles = null;
+    this.terrain = null;
+    this._playerRef = null;
+    this._standOn = null;
+    this._built = false;
+  }
+}
+
+export default Course;

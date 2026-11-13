@@ -1,0 +1,152 @@
+[
+ {
+  "sheet": "sheet_01.png",
+  "characters": [
+   "Aj",
+   "akai_e_espiritu",
+   "Arissa",
+   "Brute",
+   "Castle Guard 02",
+   "castle_guard_01"
+  ]
+ },
+ {
+  "sheet": "sheet_02.png",
+  "characters": [
+   "Ch01_nonPBR",
+   "Ch02_nonPBR",
+   "Ch03_nonPBR",
+   "Ch05_nonPBR",
+   "Ch06_nonPBR",
+   "Ch07_nonPBR"
+  ]
+ },
+ {
+  "sheet": "sheet_03.png",
+  "characters": [
+   "Ch08_nonPBR",
+   "Ch09_nonPBR",
+   "Ch10_nonPBR",
+   "Ch15_nonPBR",
+   "Ch16_nonPBR",
+   "Ch17_nonPBR"
+  ]
+ },
+ {
+  "sheet": "sheet_04.png",
+  "characters": [
+   "Ch19_nonPBR",
+   "Ch20_nonPBR",
+   "Ch21_nonPBR",
+   "Ch22_nonPBR",
+   "Ch23_nonPBR",
+   "Ch24_nonPBR"
+  ]
+ },
+ {
+  "sheet": "sheet_05.png",
+  "characters": [
+   "Ch25_nonPBR",
+   "Ch26_nonPBR",
+   "Ch29_nonPBR",
+   "Ch31_nonPBR",
+   "Ch33_nonPBR",
+   "Ch34_nonPBR"
+  ]
+ },
+ {
+  "sheet": "sheet_06.png",
+  "characters": [
+   "Ch35_nonPBR",
+   "Ch39_nonPBR",
+   "Ch40_nonPBR",
+   "Ch42_nonPBR",
+   "Ch44_nonPBR",
+   "Ch45_nonPBR"
+  ]
+ },
+ {
+  "sheet": "sheet_07.png",
+  "characters": [
+   "Ch49_nonPBR",
+   "Ch50_nonPBR",
+   "copzombie_l_actisdato",
+   "Demon T Wiezzorek",
+   "Ely By K.Atienza",
+   "Erika Archer With Bow Arrow"
+  ]
+ },
+ {
+  "sheet": "sheet_08.png",
+  "characters": [
+   "Erika Archer",
+   "Eve By J.Gonzales",
+   "Exo Gray",
+   "exo_red",
+   "Ganfaul M Aure",
+   "Girlscout T Masuyama"
+  ]
+ },
+ {
+  "sheet": "sheet_09.png",
+  "characters": [
+   "goblin_d_shareyko",
+   "Heraklios By A. Dizon",
+   "Kachujin G Rosales",
+   "Knight D Pelegrini",
+   "Lola B Styperek",
+   "Maria J J Ong"
+  ]
+ },
+ {
+  "sheet": "sheet_10.png",
+  "characters": [
+   "Maria WProp J J Ong",
+   "Maw J Laygo",
+   "Medea By M. Arrebola",
+   "Mutant",
+   "Nightshade J Friedrich",
+   "Paladin J Nordstrom"
+  ]
+ },
+ {
+  "sheet": "sheet_11.png",
+  "characters": [
+   "Paladin WProp J Nordstrom",
+   "Parasite L Starkie",
+   "Peasant Girl",
+   "Peasant Man",
+   "Pirate By P. Konstantinov",
+   "Prisoner B Styperek"
+  ]
+ },
+ {
+  "sheet": "sheet_12.png",
+  "characters": [
+   "Pumpkinhulk L Shaw",
+   "Skeletonzombie T Avelange",
+   "Sporty Granny",
+   "Survivor A Lusth",
+   "Swat",
+   "Ty"
+  ]
+ },
+ {
+  "sheet": "sheet_13.png",
+  "characters": [
+   "Uriel A Plotexia",
+   "Vampire A Lusth",
+   "Vanguard By T. Choonyung",
+   "Warrok W Kurniawan",
+   "Warzombie F Pedroso",
+   "Whiteclown N Hallin"
+  ]
+ },
+ {
+  "sheet": "sheet_14.png",
+  "characters": [
+   "Yaku J Ignite",
+   "Zombiegirl W Kurniawan"
+  ]
+ }
+]

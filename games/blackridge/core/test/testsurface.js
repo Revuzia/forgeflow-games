@@ -1,0 +1,641 @@
+// core/test/testsurface.js [A11] — window.__FPS__.__test implementation.
+// Architecture §6 as amended R11 (+freeze/hud/give/setAmmo, aliases
+// startMatch→startMission, placePlayer→teleport+aim; perfStats member is
+// A0's). BOOT SEAM (A0, changelog v2.1b): the createTestSurface(ctx) export
+// name is frozen — boot constructs this once and assigns it to __FPS__.__test.
+//
+// ctx (from boot): THREE, renderer/scene/camera/canvas, settings/setSetting/
+// onChange, bus/bridge/input/perf, layout/colliders/nav/content, weapons,
+// sim() live getter, startMission(opts), stepFrames(n,dt) — the synchronous
+// REAL step+dispatch+render path with gl.finish timing — pauseCtl, V, version.
+//
+// Doctrine §5 discipline baked in:
+//  - fire()/press() dispatch REAL MouseEvent/KeyboardEvent through the input
+//    layer — never a sim bypass. pin() (driftwake §0.4) is reserved for HELD
+//    state that pointer lock would own (fire/ads/sprint holds).
+//  - Everything timed advances by SIM TICKS via a hidden-tab-proof hybrid:
+//    if rAF is driving the sim, wait on it; if not (hidden tab, or the
+//    scenario holds the pause gate), drive ctx.stepFrames() directly.
+//  - capture() renders THROUGH the real frame path (stepFrames → post chain)
+//    and reads the default framebuffer back in the SAME synchronous task,
+//    then POSTs /__shot/<name> — hidden-tab-proof, never a compositor
+//    screenshot, never toDataURL-of-the-live-canvas (colosseum lineage).
+//
+// The surface ships in production (deployverify drives it), sits behind no
+// flag, does nothing until called, and adds no per-frame cost.
+
+export function createTestSurface(ctx) {
+  const DT = 1 / 60;
+  const F = () => window.__FPS__ || null;
+
+  // ---------------------------------------------------------------- pins
+  // Held-input pinning (driftwake pin()): pointer lock cannot be forged and
+  // the page's own mouseup/blur handlers clear held flags — a constant getter
+  // is the one write nothing can undo. Real EDGE inputs still go through
+  // dispatched events; pinning is only for HELD state.
+  const pins = new Map(); // key -> pre-pin value
+
+  function pin(key, value = true) {
+    const st = ctx.input.state;
+    if (!pins.has(key)) pins.set(key, st[key]);
+    Object.defineProperty(st, key, { get: () => value, configurable: true, enumerable: true });
+  }
+
+  function unpin(key) {
+    const st = ctx.input.state;
+    if (!pins.has(key)) return;
+    const v = pins.get(key);
+    pins.delete(key);
+    Object.defineProperty(st, key, { value: v, writable: true, enumerable: true, configurable: true });
+  }
+
+  function unpinAll() { for (const k of [...pins.keys()]) unpin(k); }
+
+  // ---------------------------------------------------------------- freeze
+  // freeze(on): freeze the sim clock + bot AI for framing (harness_plan §1).
+  // Implemented as a sim.step no-op patch on the CURRENT sim instance so it
+  // needs no cooperation from the frame loop; __test.step() temporarily
+  // restores the real step so "advance the FIXED-dt sim n steps while
+  // frozen" works exactly as specified. NOTE: boot's frame loop still calls
+  // mission.tick each accumulated slot while frozen — with sim.time not
+  // advancing that is trigger-idempotent; scenarios that need a total hold
+  // use pauseCtl (which gates both) and keep freeze for framing only.
+  const frozen = { sim: null, realStep: null };
+
+  function setFreeze(on) {
+    const sim = ctx.sim();
+    if (on) {
+      if (frozen.sim === sim) return;
+      if (frozen.sim) setFreeze(false); // stale instance from a previous mission
+      frozen.sim = sim;
+      frozen.realStep = sim.step;
+      sim.step = function frozenStep() { /* frozen for framing (A11 freeze) */ };
+    } else if (frozen.sim) {
+      if (frozen.sim.step !== frozen.realStep) frozen.sim.step = frozen.realStep;
+      frozen.sim = null;
+      frozen.realStep = null;
+    }
+  }
+
+  function stepReal(n, dt) {
+    // Drive the real synchronous path even while frozen.
+    if (frozen.sim && frozen.sim === ctx.sim()) {
+      frozen.sim.step = frozen.realStep;
+      try { return ctx.stepFrames(n, dt); }
+      finally { frozen.sim.step = function frozenStep() {}; }
+    }
+    return ctx.stepFrames(n, dt);
+  }
+
+  // ---------------------------------------------------------------- ticks
+  function raf() {
+    return new Promise((resolve) => {
+      let done = false;
+      requestAnimationFrame(() => { done = true; resolve(); });
+      // Hidden tabs never fire rAF — fall through so tickAdvance can drive.
+      setTimeout(() => { if (!done) resolve(); }, 50);
+    });
+  }
+
+  async function tickAdvance(n) {
+    // Advance the sim by n ticks: passively if rAF is stepping it, actively
+    // via stepFrames when it is not (hidden tab / pause-held scenario).
+    const sim0 = ctx.sim();
+    const target = sim0.state.tick + n;
+    let last = sim0.state.tick;
+    let stagnant = 0;
+    let guard = 0;
+    while (ctx.sim() === sim0 && sim0.state.tick < target) {
+      if (++guard > n * 40 + 400) break; // absolute give-up, never hangs
+      await raf();
+      const t = sim0.state.tick;
+      if (t === last) {
+        if (++stagnant >= 2) {
+          stepReal(Math.min(4, target - t), DT);
+          stagnant = 0;
+        }
+      } else stagnant = 0;
+      last = sim0.state.tick;
+    }
+  }
+
+  // ---------------------------------------------------------------- aim
+  function setAimTo(x, y, z) {
+    const sim = ctx.sim();
+    const p = sim.state.player;
+    const ey = p.pos[1] + (p.stance === "crouch" ? 1.10 : 1.62);
+    const dx = x - p.pos[0], dy = y - ey, dz = z - p.pos[2];
+    const yaw = Math.atan2(-dx, -dz);
+    const pitch = Math.atan2(dy, Math.hypot(dx, dz) || 1e-9);
+    // input.state.yaw/pitch is the AUTHORITATIVE aim source — the sim copies
+    // cmd.yaw every tick (player.js), so writing sim state alone lasts one
+    // tick. Look writes are the one sanctioned non-event input path
+    // (harness_plan §2.5: pointer lock cannot be forged).
+    ctx.input.state.yaw = yaw;
+    ctx.input.state.pitch = pitch;
+    sim.aimAt(x, y, z); // immediate effect within the current tick too
+    return { yaw, pitch };
+  }
+
+  function setAimAngles(yaw, pitch) {
+    ctx.input.state.yaw = yaw;
+    ctx.input.state.pitch = Math.max(-1.55, Math.min(1.55, pitch || 0));
+    const sim = ctx.sim();
+    sim.state.player.yaw = ctx.input.state.yaw;
+    sim.state.player.pitch = ctx.input.state.pitch;
+  }
+
+  // ---------------------------------------------------------------- events tracker
+  // Harness-facing per-mission counters that the frozen sim counters do not
+  // split out (botShotsFired/botShotsHit/botTimeToFirstShotMs — harness_plan
+  // §2.5). Registered on the bridge AFTER each __test-driven startMission
+  // (bridge.clear() on mission start drops old handlers; stale ones are
+  // stamped out). Menu-button missions skip this tracker — the harness
+  // always drives through __test.
+  const track = {
+    stamp: 0, missionStartT: 0,
+    playerShotsFired: 0, botShotsFired: 0, botShotsHit: 0,
+    grenadesThrown: 0, reloads: 0,
+    botFirstShotMs: {}, firstPlayerDamageT: -1,
+  };
+
+  function attachTracker() {
+    const stamp = ++track.stamp;
+    const sim = ctx.sim();
+    track.missionStartT = sim.state.time;
+    track.playerShotsFired = 0; track.botShotsFired = 0; track.botShotsHit = 0;
+    track.grenadesThrown = 0; track.reloads = 0;
+    track.botFirstShotMs = {}; track.firstPlayerDamageT = -1;
+    ctx.bridge.register("shot", (d) => {
+      if (track.stamp !== stamp || !d) return;
+      if (d.pen) return; // penetration face FX events, entity always null
+      if (d.impactOnly) {
+        // late-resolving swept projectile: counts as a HIT record only
+        if (d.shooter !== "P" && d.hit && d.hit.entity === "P") track.botShotsHit++;
+        return;
+      }
+      if (d.shooter === "P") track.playerShotsFired++;
+      else {
+        track.botShotsFired++;
+        if (track.botFirstShotMs[d.shooter] == null) {
+          track.botFirstShotMs[d.shooter] =
+            Math.round((ctx.sim().state.time - track.missionStartT) * 1000);
+        }
+        if (d.hit && d.hit.entity === "P") track.botShotsHit++;
+      }
+    });
+    ctx.bridge.register("hurt", (d) => {
+      if (track.stamp !== stamp || !d) return;
+      if (d.victim === "P" && track.firstPlayerDamageT < 0) {
+        track.firstPlayerDamageT = ctx.sim().state.time - track.missionStartT;
+      }
+    });
+    ctx.bridge.register("grenade", (d) => {
+      if (track.stamp !== stamp || !d) return;
+      if (d.phase === "out") track.grenadesThrown++;
+    });
+    ctx.bridge.register("reload", (d) => {
+      if (track.stamp !== stamp || !d) return;
+      if (d.who === "P" && d.phase === "done") track.reloads++;
+    });
+  }
+
+  // ---------------------------------------------------------------- hud sweep
+  // TWO lists, and the split matters. hud(show) used to sweep ONE list with
+  // `el.style.display = show ? "" : "none"`, and that list contained the pause
+  // and menu overlays. Clearing the inline display on those does not restore
+  // "whatever pause.js wanted" — it removes the only thing hiding them, so
+  // hud(true) REVEALS THE PAUSE MENU over a live, unpaused mission. Measured:
+  // on a scripted C1 take with pauseCtl.active false before and after, a
+  // compositor grab taken right after hud(true) returned the full
+  // "PAUSED / RESUME / SETTINGS / ABANDON MISSION" overlay, read in the same
+  // JS task (wasPaused=false, stillPaused=false, #pause-overlay visible).
+  // Every hud:true page-screenshot in the battery therefore photographed the
+  // menu instead of the in-mission HUD.
+  //
+  // So: HUD_DOM toggles both ways (it is the HUD, the flag owns it), and
+  // OVERLAY_DOM is only ever HIDDEN — whether the pause menu belongs on
+  // screen is pause.js's decision and the harness must not overrule it.
+  const HUD_DOM = [
+    "#hud", "#crosshair", "#hitmarker", "#killfeed", "#ammo", "#compass",
+    "#objective", "#hint", "#perf", "#damage-vignette", "#threat-ring",
+    "#subtitles",
+  ];
+  const OVERLAY_DOM = [".overlay", "#pause", "#pause-overlay", ".pause-overlay"];
+  const overlayPrev = new Map(); // el -> inline display before the harness hid it
+
+  // ------------------------------------------------------- HUD COMPOSITE (W6)
+  // capture() reads the GL DRAWING BUFFER back. The HUD (core/hud/hud.js) is
+  // DOM, so `hud: true` was STRUCTURALLY invisible in every battery PNG through
+  // iter05 — D9 (HUD/UI craft) was graded on twenty frames that could not
+  // contain a HUD no matter how good the HUD was. The compositor-screenshot
+  // workaround is not a fix: it photographs the WHOLE PAGE (FFG shell chrome,
+  // whatever overlay pause.js has up) at a DIFFERENT moment than the read-back,
+  // which is why it had to fail closed on every scripted beat.
+  //
+  // The layer is rasterised from the LIVE DOM instead: the visible HUD subtree
+  // is serialised into an SVG <foreignObject>, decoded as an image, and drawn
+  // over the read-back frame inside the SAME capture() call — same tick, same
+  // pixels, no compositor, still hidden-tab-proof. Measured in-page before this
+  // was written: Chrome decodes the SVG at the layout size, does NOT taint the
+  // canvas (getImageData AND toDataURL both succeed), and it carries real HUD
+  // pixels. There is no second HUD model — this photographs the one hud.js
+  // built, in whatever state stepReal() just left it.
+  const HUD_LAYERS = ["#hud"];
+
+  // The contracted condensed family is a bundled woff2; an SVG-as-image may not
+  // fetch it (no external loads in that mode), so it rides inline as a data URI
+  // or the composite silently falls back to Arial Narrow and D9 grades a
+  // different typeface than the game ships. Fetched once, cached.
+  let fontCssP = null;
+  function hudFontCss() {
+    if (fontCssP) return fontCssP;
+    fontCssP = (async () => {
+      try {
+        const res = await fetch("./assets/fonts/oswald-400-latin.woff2");
+        if (!res.ok) return "";
+        const b = new Uint8Array(await res.arrayBuffer());
+        let s = "";
+        for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+        return "@font-face{font-family:'Oswald';font-style:normal;font-weight:400;" +
+               `src:url(data:font/woff2;base64,${btoa(s)}) format('woff2');}`;
+      } catch (e) { return ""; }
+    })();
+    return fontCssP;
+  }
+
+  function isVisible(el) {
+    const cs = getComputedStyle(el);
+    return cs.display !== "none" && cs.visibility !== "hidden" &&
+           +cs.opacity > 0.01 && el.getClientRects().length > 0;
+  }
+
+  function xmlText(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  }
+
+  /**
+   * Serialise the visible DOM layers into an SVG data URL sized to the LAYOUT
+   * viewport (the HUD is laid out in CSS px against innerWidth/innerHeight, so
+   * the raster must use those and be scaled into the capture rect).
+   * Returns null when nothing is visible — a hud(false) beauty shot composites
+   * nothing and is byte-for-byte the frame it was before.
+   */
+  async function hudLayerUrl(sels) {
+    const roots = [];
+    for (const sel of sels) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (isVisible(el)) roots.push(el);
+      }
+    }
+    if (!roots.length) return null;
+    let css = "";
+    for (const id of ["a10-style", "a10-shell-style"]) {
+      const s = document.getElementById(id);
+      if (s) css += s.textContent;
+    }
+    css = (await hudFontCss()) + xmlText(css);
+    const ser = new XMLSerializer();
+    let body = "";
+    for (const el of roots) {
+      const clone = el.cloneNode(true);
+      // The root may be shown by a class/stylesheet rule the clone still
+      // matches, but a harness sweep may also have written display:none onto
+      // the ORIGINAL and restored it — pin the computed value so the clone
+      // renders exactly what is on screen right now.
+      clone.style.display = getComputedStyle(el).display;
+      body += ser.serializeToString(clone);
+    }
+    const vw = window.innerWidth || 1920, vh = window.innerHeight || 1080;
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${vw}" height="${vh}" ` +
+      `viewBox="0 0 ${vw} ${vh}">` +
+      `<foreignObject x="0" y="0" width="${vw}" height="${vh}">` +
+      `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${vw}px;height:${vh}px">` +
+      `<style>${css}</style>${body}</div>` +
+      `</foreignObject></svg>`;
+    return { url: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg),
+             layers: roots.map((e) => e.id || e.className || "?"), vw, vh };
+  }
+
+  function decodeImage(url, giveUpMs = 4000) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      let settled = false;
+      const done = (v) => { if (!settled) { settled = true; resolve(v); } };
+      img.onload = () => done(img);
+      img.onerror = () => done(null);
+      setTimeout(() => done(null), giveUpMs);
+      img.src = url;
+    });
+  }
+
+  // Coverage of the rasterised layer, measured on a small scratch canvas so it
+  // costs nothing: the acceptance criterion for this lane is "the HUD is IN the
+  // PNG", and a silently-empty layer must be reported as empty, never as done.
+  function layerCoverage(img, vw, vh) {
+    try {
+      const cw = 240, ch = Math.max(1, Math.round(240 * vh / vw));
+      const c = document.createElement("canvas");
+      c.width = cw; c.height = ch;
+      const x = c.getContext("2d");
+      x.drawImage(img, 0, 0, cw, ch);
+      const d = x.getImageData(0, 0, cw, ch).data;
+      let n = 0;
+      for (let i = 3; i < d.length; i += 4) if (d[i] > 8) n++;
+      return { px: n, of: cw * ch };
+    } catch (e) { return { px: -1, of: 0, error: String(e) }; }
+  }
+
+  // ---------------------------------------------------------------- surface
+  const t = {
+    async startMission(opts = {}) {
+      setFreeze(false);
+      unpinAll();
+      const r = await ctx.startMission(opts);
+      attachTracker();
+      return r;
+    },
+
+    state() { return ctx.sim().snapshot(); },
+
+    step(n = 1, dt = DT) { return stepReal(n, dt); },
+
+    spawnBot(archetype, x, z, opts = {}) { return ctx.sim().spawnBot(archetype, x, z, opts); },
+
+    teleport(x, y, z) { ctx.sim().teleport("P", x, y, z); },
+
+    aimAt(x, y, z) { return setAimTo(x, y, z); },
+
+    aimAtBot(botId, part = "body") {
+      const b = ctx.sim().state.bots.find((b) => b.id === botId);
+      if (!b) return null;
+      // HIT_ZONES: head = top fraction; bot capsule ~1.8 m. Aim centers.
+      const yOff = part === "head" ? 1.68 : part === "limb" ? 0.6 : 1.05;
+      return setAimTo(b.pos[0], b.pos[1] + yOff, b.pos[2]);
+    },
+
+    async fire(n = 1) {
+      // REAL input path (doctrine §5): mousedown/mouseup MouseEvents on #view
+      // spanning n sim ticks. input.js listens mousedown on the canvas and
+      // mouseup on window.
+      const before = ctx.sim().state.counters.shotsFired;
+      ctx.canvas.dispatchEvent(new MouseEvent("mousedown", { button: 0, bubbles: true }));
+      await tickAdvance(Math.max(1, n | 0));
+      window.dispatchEvent(new MouseEvent("mouseup", { button: 0, bubbles: true }));
+      return { ticks: n | 0, shotsFired: ctx.sim().state.counters.shotsFired - before };
+    },
+
+    fireRaw(ticks = 1) {
+      // Fallback: pins input.state.fire for N ticks (synchronous).
+      pin("fire", true);
+      try { return stepReal(Math.max(1, ticks | 0), DT); }
+      finally { unpin("fire"); }
+    },
+
+    async press(code, ms = 80) {
+      // Real KeyboardEvent down/up (e.g. 'KeyR'), spanning the sim ticks the
+      // duration implies — frames, never wall clock.
+      window.dispatchEvent(new KeyboardEvent("keydown", { code, bubbles: true }));
+      await tickAdvance(Math.max(1, Math.round((ms / 1000) * 60)));
+      window.dispatchEvent(new KeyboardEvent("keyup", { code, bubbles: true }));
+      return true;
+    },
+
+    look(dyaw, dpitch) { ctx.input.addLook(dyaw, dpitch); },
+
+    damage(who, amount) { ctx.sim().damage(who, amount, "test"); },
+    god(on) { ctx.sim().setGod(!!on); },
+    noTarget(on) { ctx.sim().setNoTarget(!!on); },
+
+    counters() {
+      return {
+        ...ctx.sim().state.counters,
+        events: ctx.bus.countsByType(),
+        harness: {
+          playerShotsFired: track.playerShotsFired,
+          botShotsFired: track.botShotsFired,
+          botShotsHit: track.botShotsHit,
+          grenadesThrown: track.grenadesThrown,
+          reloads: track.reloads,
+          botTimeToFirstShotMs: { ...track.botFirstShotMs },
+          firstPlayerDamageT: track.firstPlayerDamageT,
+        },
+      };
+    },
+
+    resetCounters() { ctx.bus.resetCounters(); },
+
+    // setScenario/autoplay are routed by boot to scenarios.js/autoplay.js
+    // (createScenarios/createAutoplay own the implementations); these bodies
+    // only exist so the surface is complete if boot's routing ever changes.
+    async setScenario() { throw new Error("__test.setScenario not routed (boot wiring missing)"); },
+    async autoplay() { throw new Error("__test.autoplay not routed (boot wiring missing)"); },
+
+    /**
+     * Render one REAL frame (full step+dispatch+post chain via stepFrames)
+     * at w×h/dpr, read the default framebuffer back in the same synchronous
+     * task, downscale, and POST /__shot/<name>. Hidden-tab-proof: nothing
+     * here depends on rAF or the compositor. If the caller left the sim
+     * frozen (scenario hold), the frame renders without advancing the sim.
+     *
+     * window.__BR_SCENARIO__.captureDrive === 'untilShot' (set by
+     * scenarios.js for muzzle-flash framings) makes the capture step until a
+     * fresh player shot lands in the FINAL stepped tick, so the flash sprite
+     * + leased light are live in the read-back frame (55 ms flash cannot
+     * survive real-time settle waits — it must be re-armed at capture time).
+     */
+    async capture(name = "shot.png", w = 1600, h = 900, opts = {}) {
+      const { renderer, camera } = ctx;
+      const THREE = ctx.THREE;
+      const gl = renderer.getContext();
+      const prevPR = renderer.getPixelRatio();
+      const prevSize = renderer.getSize(new THREE.Vector2());
+      const prevAspect = camera.aspect;
+      const dpr = opts.dpr || prevPR;
+      const post = ctx.post || (F() && F().post) || null;
+
+      renderer.setPixelRatio(dpr);
+      renderer.setSize(w, h, false);
+      if (post && post.resize) post.resize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+
+      let buf, dbw, dbh;
+      try {
+        // ---- synchronous section: render + read in ONE task -------------
+        const drive = (window.__BR_SCENARIO__ && window.__BR_SCENARIO__.captureDrive) || null;
+        if (drive === "untilShot") {
+          const c0 = ctx.sim().state.counters.shotsFired;
+          const max = (window.__BR_SCENARIO__.maxTicks | 0) || 14;
+          let stepped = 0;
+          while (ctx.sim().state.counters.shotsFired === c0 && stepped < max) {
+            stepReal(1, DT);
+            stepped++;
+          }
+          // the shot tick itself rendered with the flash at age <= 1 tick
+          if (stepped === 0) stepReal(1, DT);
+        } else {
+          stepReal(1, DT);
+        }
+        renderer.setRenderTarget(null);
+        dbw = gl.drawingBufferWidth;
+        dbh = gl.drawingBufferHeight;
+        buf = new Uint8Array(dbw * dbh * 4);
+        gl.readPixels(0, 0, dbw, dbh, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+        // ------------------------------------------------------------------
+      } finally {
+        renderer.setPixelRatio(prevPR);
+        renderer.setSize(prevSize.x, prevSize.y, false);
+        if (post && post.resize) post.resize(prevSize.x, prevSize.y);
+        camera.aspect = prevAspect;
+        camera.updateProjectionMatrix();
+      }
+
+      // GL origin is bottom-left; canvas is top-left — flip rows.
+      const src = document.createElement("canvas");
+      src.width = dbw; src.height = dbh;
+      const sctx = src.getContext("2d");
+      const img = sctx.createImageData(dbw, dbh);
+      const row = dbw * 4;
+      for (let y = 0; y < dbh; y++) {
+        img.data.set(buf.subarray((dbh - 1 - y) * row, (dbh - y) * row), y * row);
+      }
+      sctx.putImageData(img, 0, 0);
+
+      // Downscale the DPR-supersampled buffer to the presentation size.
+      let out = src, outCtx = sctx;
+      if (dbw !== w || dbh !== h) {
+        out = document.createElement("canvas");
+        out.width = w; out.height = h;
+        outCtx = out.getContext("2d");
+        outCtx.imageSmoothingEnabled = true;
+        outCtx.imageSmoothingQuality = "high";
+        outCtx.drawImage(src, 0, 0, w, h);
+      }
+
+      // ---- HUD composite: the DOM layer this frame's tick actually shows.
+      // Drawn at the PRESENTATION size, after the downscale, so 1px HUD rules
+      // and the ammo numerals stay crisp instead of being supersampled to mush.
+      let hudInfo = { composited: false, reason: "no visible HUD layer" };
+      if (opts.hudLayer !== false) {
+        try {
+          const spec = await hudLayerUrl(opts.hudLayers || HUD_LAYERS);
+          if (spec) {
+            const img = await decodeImage(spec.url);
+            if (img) {
+              const cov = layerCoverage(img, spec.vw, spec.vh);
+              outCtx.drawImage(img, 0, 0, w, h);
+              hudInfo = { composited: true, layers: spec.layers,
+                          coveragePx: cov.px, coverageOf: cov.of };
+              if (cov.px === 0) {
+                hudInfo.composited = false;
+                hudInfo.reason = "layer rasterised EMPTY (0 opaque px)";
+              }
+            } else {
+              hudInfo = { composited: false, reason: "SVG layer failed to decode",
+                          layers: spec.layers };
+            }
+          }
+        } catch (e) {
+          hudInfo = { composited: false, reason: "composite threw: " + (e && e.message) };
+        }
+      }
+
+      const url = out.toDataURL(opts.jpeg ? "image/jpeg" : "image/png", opts.quality ?? 0.92);
+      let server = null;
+      try {
+        const res = await fetch(`/__shot/${name}`, { method: "POST", body: url });
+        server = await res.text();
+      } catch (e) {
+        server = "POST failed: " + (e && e.message);
+      }
+      return { name, w, h, bytes: url.length, server, hud: hudInfo };
+    },
+
+    pause(on) { on ? ctx.pauseCtl.pause() : ctx.pauseCtl.resume(); },
+
+    setTimeOfDay(k) {
+      // 'night' (default) | 'dusk' — night is the only shipped state (R2).
+      window.__BR_TIMEOFDAY__ = k;
+      const sky = ctx.sky || (F() && F().sky) || null;
+      if (sky && typeof sky.setTimeOfDay === "function") sky.setTimeOfDay(k);
+      return k;
+    },
+
+    // ---- R11 additions ---------------------------------------------------
+    freeze(on) { setFreeze(!!on); return !!on; },
+
+    hud(show) {
+      const hud = ctx.hud || (F() && F().hud) || null;
+      if (hud) { try { show ? hud.show() : hud.hide(); } catch (e) { /* stub */ } }
+      for (const sel of HUD_DOM) {
+        document.querySelectorAll(sel).forEach((el) => {
+          el.style.display = show ? "" : "none";
+        });
+      }
+      // Overlays are swept out of beauty shots and then RESTORED to exactly
+      // the inline display they had before the sweep — never to "", which is
+      // what revealed the pause menu. S6 still gets its overlay because
+      // pause.js puts it there on the real ESC path, which is the only thing
+      // entitled to decide the menu is up.
+      if (!show) {
+        for (const sel of OVERLAY_DOM) {
+          document.querySelectorAll(sel).forEach((el) => {
+            if (!overlayPrev.has(el)) overlayPrev.set(el, el.style.display);
+            el.style.display = "none";
+          });
+        }
+      } else {
+        for (const [el, prev] of overlayPrev) el.style.display = prev;
+        overlayPrev.clear();
+      }
+      return !!show;
+    },
+
+    give(weaponId) { ctx.sim().givePlayerWeapon(weaponId); return ctx.sim().state.player.weapon.id; },
+    setAmmo(n) { ctx.sim().setAmmo(n); return ctx.sim().state.player.weapon.mag; },
+
+    // ---- private additions (harness helpers — additive, never frozen) ----
+    // Hide whatever overlay DOM is up WITHOUT touching pauseCtl. The posed
+    // battery holds the world with the pause gate and pause.js is entitled to
+    // put its menu on screen for that — but a hud:true GAMEPLAY pose must not
+    // photograph the S6 menu, and now that capture() composites DOM, "it is
+    // only on screen, not in the PNG" is no longer true. Returns what it hid.
+    // Deliberately does NOT record into overlayPrev: that map is hud()'s
+    // restore ledger, and putting this sweep in it made hud(true) — which the
+    // battery calls right after setScenario — put the pause menu straight back
+    // on screen. Measured: the first S3 capture after this landed came back as
+    // a full-screen "PAUSED / RESUME / SETTINGS / ABANDON MISSION" page grab.
+    // A capture-time sweep is one-way; the next setScenario/page load resets it.
+    hideOverlays() {
+      const hid = [];
+      for (const sel of OVERLAY_DOM) {
+        document.querySelectorAll(sel).forEach((el) => {
+          if (getComputedStyle(el).display === "none") return;
+          el.style.display = "none";
+          hid.push(el.id || sel);
+        });
+      }
+      return hid;
+    },
+    hudVisible() {
+      const el = document.getElementById("hud");
+      return !!(el && isVisible(el));
+    },
+    pin, unpin, unpinAll,
+    isPaused() { return !!ctx.pauseCtl.active; },
+    isFrozen() { return !!frozen.sim; },
+    setAimAngles,
+    tickAdvance,
+  };
+
+  // Compatibility aliases (R11).
+  t.startMatch = (opts = {}) => t.startMission(opts);
+  t.placePlayer = (x, y, z, yaw = 0, pitch = 0) => {
+    t.teleport(x, y, z);
+    setAimAngles(yaw, pitch);
+  };
+
+  return t;
+}

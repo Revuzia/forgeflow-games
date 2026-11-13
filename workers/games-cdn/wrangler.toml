@@ -1,0 +1,10 @@
+name = "forgeflow-games-cdn"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+[[r2_buckets]]
+binding = "GAMES"
+bucket_name = "forgeflow-games"
+
+[vars]
+ALLOWED_ORIGIN = "https://forgeflowgames.com"

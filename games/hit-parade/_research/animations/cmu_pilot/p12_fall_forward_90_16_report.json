@@ -1,0 +1,158 @@
+{
+ "clip": {
+  "name": "p12_fall_forward_90_16",
+  "take": "90_16",
+  "start": 375,
+  "contact": 447,
+  "end": 500,
+  "kind": "fall",
+  "limb": "body"
+ },
+ "info": {
+  "frames_src": [
+   375,
+   377,
+   379,
+   381,
+   383,
+   385,
+   387,
+   389,
+   391,
+   393,
+   395,
+   397,
+   399,
+   401,
+   403,
+   405,
+   407,
+   409,
+   411,
+   413,
+   415,
+   417,
+   419,
+   421,
+   423,
+   425,
+   427,
+   429,
+   431,
+   433,
+   435,
+   437,
+   439,
+   441,
+   443,
+   445,
+   447,
+   449,
+   451,
+   453,
+   455,
+   457,
+   459,
+   461,
+   463,
+   465,
+   467,
+   469,
+   471,
+   473,
+   475,
+   477,
+   479,
+   481,
+   483,
+   485,
+   487,
+   489,
+   491,
+   493,
+   495,
+   497,
+   499,
+   500
+  ],
+  "mirror": false,
+  "fist_deg": 0,
+  "ratio_leg": 1.0297376350464418,
+  "floor_src": 0.1514664986444088,
+  "ank_src": 0.085701632274835,
+  "ank_tgt": 0.08729419619379541,
+  "fwd_src": [
+   -0.98714248708064,
+   0.1598427671125557,
+   0.0
+  ],
+  "step": 2
+ },
+ "frames": [
+  {
+   "max_dir_err_deg": 0.0,
+   "worst_bone": "Spine",
+   "min_foot_z": 0.757,
+   "min_foot_pt": "LeftToe_End.head",
+   "hips_z": 1.55,
+   "hips_xy": [
+    -0.014,
+    -0.03
+   ],
+   "hips_fwd_yaw_deg": -92.7,
+   "src_frame": 375,
+   "out_frame": 1
+  },
+  {
+   "max_dir_err_deg": 0.0,
+   "worst_bone": "Spine",
+   "min_foot_z": 1.224,
+   "min_foot_pt": "RightToe_End.head",
+   "hips_z": 1.321,
+   "hips_xy": [
+    -0.006,
+    -0.044
+   ],
+   "hips_fwd_yaw_deg": -170.1,
+   "src_frame": 416,
+   "out_frame": 21
+  },
+  {
+   "max_dir_err_deg": 0.0,
+   "worst_bone": "Spine",
+   "min_foot_z": 0.405,
+   "min_foot_pt": "RightFoot.head",
+   "hips_z": 0.013,
+   "hips_xy": [
+    0.042,
+    -0.178
+   ],
+   "hips_fwd_yaw_deg": -173.8,
+   "src_frame": 458,
+   "out_frame": 42
+  },
+  {
+   "max_dir_err_deg": 0.0,
+   "worst_bone": "Spine",
+   "min_foot_z": 0.015,
+   "min_foot_pt": "LeftToe_End.head",
+   "hips_z": 0.114,
+   "hips_xy": [
+    0.112,
+    -0.182
+   ],
+   "hips_fwd_yaw_deg": -175.2,
+   "src_frame": 500,
+   "out_frame": 64
+  }
+ ],
+ "max_dir_err_all_frames_deg": 0.0,
+ "min_foot_z_all_frames_m": 0.012,
+ "min_foot_at": {
+  "out_frame": 63,
+  "src_frame": 499,
+  "point": "LeftToe_End.head"
+ },
+ "frames_foot_below_3cm": 0,
+ "frames_total": 64
+}

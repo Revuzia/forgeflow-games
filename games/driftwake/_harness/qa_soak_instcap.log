@@ -1,0 +1,40 @@
+driver: started
+  [  10s] lap0:enter:sand        insts=5 live=3
+  [  40s] lap0:enter:ash         insts=16 live=3
+  [  70s] lap0:enter:cold        insts=17 live=1
+  [ 100s] lap1:enter:sand        insts=18 live=1
+  [ 120s] lap1:fought:sand       insts=19 live=8
+  [ 130s] lap1:enter:ash         insts=19 live=3
+  [ 160s] lap1:enter:cold        insts=19 live=1
+  [ 190s] lap1:fought:cold       insts=20 live=3
+  [ 200s] lap2:enter:sand        insts=21 live=2
+  [ 220s] lap2:fought:sand       insts=21 live=11
+  [ 230s] lap2:enter:ash         insts=21 live=2
+  [ 260s] lap2:enter:cold        insts=25 live=3
+  [ 290s] lap3:enter:sand        insts=32 live=2
+  [ 310s] lap3:fought:sand       insts=33 live=10
+  [ 320s] lap3:enter:ash         insts=33 live=2
+  [ 340s] lap3:fought:ash        insts=33 live=4
+  [ 350s] lap3:enter:cold        insts=34 live=3
+  [ 370s] lap3:fought:cold       insts=34 live=6
+  [ 380s] lap4:enter:sand        insts=34 live=2
+  [ 400s] lap4:fought:sand       insts=40 live=9  *** CAP HIT ***
+  [ 410s] lap4:enter:ash         insts=40 live=3  *** CAP HIT ***
+  [ 430s] lap4:fought:ash        insts=40 live=4  *** CAP HIT ***
+  [ 440s] lap4:enter:cold        insts=40 live=1  *** CAP HIT ***
+  [ 460s] lap4:fought:cold       insts=40 live=7  *** CAP HIT ***
+  [ 470s] lap5:enter:sand        insts=40 live=3  *** CAP HIT ***
+  [ 490s] lap5:fought:sand       insts=40 live=7  *** CAP HIT ***
+  [ 500s] lap5:enter:ash         insts=40 live=3  *** CAP HIT ***
+  [ 520s] lap5:fought:ash        insts=40 live=4  *** CAP HIT ***
+  [ 530s] lap5:enter:cold        insts=40 live=2  *** CAP HIT ***
+  [ 550s] FINAL                  insts=40 live=9  *** CAP HIT ***
+
+console warnings/errors: 6
+   [warning] meshEnemies: INSTANCE_MAX reached; 16_sand_dust_mage spawned without a body
+   [warning] meshEnemies: INSTANCE_MAX reached; 03_cold_frost_stalker spawned without a body
+   [warning] meshEnemies: INSTANCE_MAX reached; 01_cold_rime_imp spawned without a body
+   [warning] meshEnemies: INSTANCE_MAX reached; 01_cold_rime_imp spawned without a body
+   [warning] meshEnemies: INSTANCE_MAX reached; 75_v3_sand_bleached_bone_knight spawned without a body
+   [warning] meshEnemies: INSTANCE_MAX reached; 01_cold_rime_imp spawned without a body
+wrote C:\Users\TestRun\Claude Claw\forgeflow-games\games\driftwake\_harness\qa_soak_instcap_8894.out.json

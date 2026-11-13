@@ -1,0 +1,42 @@
+arena lanternwalk — colliders 518 boxes, nav baked
+
+== LIVE BATTERY — ctf × 10 seeds × 2 runs (real arena, real AI, Idle human) ==
+  ctf seed  1: end=723s result=win/0 kills=124 caps=3 first@163.1s stress=5.5 spawnDeaths=0 stuckIdle=12s hash=f8445e02
+  ctf seed  2: end=723s result=win/0 kills=125 caps=3 first@257.2s stress=5.6 spawnDeaths=0 stuckIdle=15s hash=c3ebaf2c
+  ctf seed  3: end=723s result=win/0 kills=131 caps=1 first@160s stress=5.6 spawnDeaths=0 stuckIdle=21s hash=86e668f7
+  ctf seed  4: end=365.6s result=win/1 kills=70 caps=3 first@32.2s stress=5.3 spawnDeaths=0 stuckIdle=10s hash=aaceeeb0
+  ctf seed  5: end=435.8s result=win/0 kills=85 caps=5 first@174.1s stress=5.4 spawnDeaths=0 stuckIdle=29s hash=2a4bd7b4
+  ctf seed  6: end=518.2s result=win/1 kills=95 caps=4 first@42s stress=5.4 spawnDeaths=0 stuckIdle=26s hash=f0d610c4
+  ctf seed  7: end=156s result=win/1 kills=28 caps=3 first@26.4s stress=4.4 spawnDeaths=0 stuckIdle=38s hash=9e94b552
+  ctf seed  8: end=723s result=win/1 kills=178 caps=0 stress=0.3 spawnDeaths=0 stuckIdle=77s hash=5c8452e2
+  ctf seed  9: end=723s result=win/1 kills=142 caps=1 first@140.4s stress=0.3 spawnDeaths=0 stuckIdle=82s hash=ecdb6d4
+  ctf seed 10: end=723s result=win/1 kills=153 caps=2 first@143s stress=5.6 spawnDeaths=0 stuckIdle=23s hash=96429857
+  info  battery wall time 632 s
+  PASS  AC-1 termination: every match ended within warmup+timeLimit+180+15 s
+  PASS  AC-2 watchdog: never fired
+  PASS  AC-3 result consistency: win/draw/forfeit + winner consistent with the deciding rule
+  FAIL  AC-4 stuck bots: none PUSHING against the world >20 s without moving (<0.5 m) — ctf:3=21s,ctf:5=29s,ctf:6=26s,ctf:7=38s,ctf:8=77s,ctf:9=82s,ctf:10=23s
+  info  worst stationary window of ANY kind 92 s (station/cover holds included — reported, not gated)
+  PASS  AC-7 determinism: same (mode,seed) twice → identical snapshot hash
+  PASS  AC-8 zero out-of-bounds deaths (the backstop never fired)
+  PASS  AC-9 zero deaths within 2.0 s of spawning
+  FAIL  AC-10 median spawnStress/pick 5.392 ≤ 0.5 (ladder is not choosing spawns)
+  PASS  spawn director wired on every match (no silent fallback-picker demotion)
+  PASS  AC-11 (live): no spawn point reused <12 s without ladder stress
+  info  AC-11/AC-12 statistical halves (2000-selection sweep, ffaSafety shape, V10) live in core/match/spawns.selftest.cjs — run by the wave gate
+  PASS  AC-5 three-state invariant held every sampled tick (no fourth state observed)
+  PASS  AC-5 flags.js invariantViolations === 0 in every match
+  PASS  AC-5 flagStuckResets === 0 in every match
+  PASS  AC-5 no flag DROPPED >45 s (worst 30 s; dropReturnS 30 enforces this)
+  PASS  AC-5 every flag ends AT_STAND or CARRIED
+  PASS  AC-6 stalemate forced reset ≤1 per match (worst 0)
+  PASS  AC-6 flag:captureBlocked fired 2× across the battery (rule reachable live)
+  info  AC-14 capture bar: 9/10 seeds with ≥1 capture; 1 capture-less seeds; median first capture 143 s
+  PASS  AC-14 PLAYABLE bar (≥8/20 seeds with a capture): 9/10
+  info  AC-14 SHIP bar NOT reached (needs ≥9/10 with a capture, zero capture-less seeds, median first ≤150 s) — CTF is at the PLAYABLE bar; the gap is a W7/W8 bot-comprehension finding, reported as such.
+
+---- matchprobe verdict ----
+16 passed, 2 failed, 0 skipped
+FAILED assertions:
+  !! AC-4 stuck bots: none PUSHING against the world >20 s without moving (<0.5 m) — ctf:3=21s,ctf:5=29s,ctf:6=26s,ctf:7=38s,ctf:8=77s,ctf:9=82s,ctf:10=23s
+  !! AC-10 median spawnStress/pick 5.392 ≤ 0.5 (ladder is not choosing spawns)

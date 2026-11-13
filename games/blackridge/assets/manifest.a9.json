@@ -1,0 +1,434 @@
+{
+ "lane": "A9-audio",
+ "updated": "2026-08-19",
+ "note": "Gun bodies = FFSL CC0 slices via last-circle; footsteps/impacts/foley/UI = Kenney CC0 via last-circle; beds/thunder/explosions/Corvus upgrades = Sonniss GDC 2024 slices (44.1k OGG, never raw WAVs). Mechanical gun layers, whiz, barks-squelch, flesh impacts, and the ENTIRE score (R14) are Web-Audio procedural - zero payload. All files load in the background during the menu (mission payload gate); boot/menu path fetches none of them.",
+ "entries": [
+  {
+   "path": "assets/audio/SONNISS-LICENSE.txt",
+   "bytes": 5273,
+   "kind": "imported",
+   "license": "license text",
+   "source": "sonniss.com/gdc-bundle-license (captured 2026-08-04)"
+  },
+  {
+   "path": "assets/audio/beds/harbor_distant_loop.ogg",
+   "bytes": 164243,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "pipeline/assets/sonniss-gdc2024/Jake Fielding - Industrial Harbor/AMBInd_Distant Port Atmos Dover (20-42s, seamless xfade loop 20s)"
+  },
+  {
+   "path": "assets/audio/beds/rain_night_loop.ogg",
+   "bytes": 270758,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "pipeline/assets/sonniss-gdc2024/Bolt - Backyard Rain & Thunder/RAIN_Rain at Night Slow Crescendo (180-202s, seamless xfade loop 20s)"
+  },
+  {
+   "path": "assets/audio/oneshots/expl_frag.ogg",
+   "bytes": 18866,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "pipeline/assets/sonniss-gdc2024/DavidDumais - Explosion SFX Pack/EXPLReal_Medium Realistic Explosion 15 (sliced 0-2.36s, 44.1k mono OGG)"
+  },
+  {
+   "path": "assets/audio/oneshots/expl_large.ogg",
+   "bytes": 39036,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "pipeline/assets/sonniss-gdc2024/DavidDumais - Explosion SFX Pack/DESTRCrsh_Designed Car Explosion 06 (sliced 0-4.6s, 44.1k mono OGG)"
+  },
+  {
+   "path": "assets/audio/oneshots/thunder_a.ogg",
+   "bytes": 83866,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "pipeline/assets/sonniss-gdc2024/Bolt - Backyard Rain & Thunder/RAIN_Distant Thunder... Thunderstorm C (sliced 67-77s)"
+  },
+  {
+   "path": "assets/audio/oneshots/thunder_b.ogg",
+   "bytes": 83438,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "pipeline/assets/sonniss-gdc2024/Bolt - Backyard Rain & Thunder/RAIN_Distant Thunder... Thunderstorm C (sliced 107.5-117.5s)"
+  },
+  {
+   "path": "assets/audio/sfx/FFSL-LICENSE.txt",
+   "bytes": 659,
+   "kind": "imported",
+   "license": "license text",
+   "source": "games/last-circle/assets/audio/sfx (in-dir licenses)"
+  },
+  {
+   "path": "assets/audio/sfx/KENNEY-LICENSE.txt",
+   "bytes": 980,
+   "kind": "imported",
+   "license": "license text",
+   "source": "games/last-circle/assets/audio/sfx (in-dir licenses)"
+  },
+  {
+   "path": "assets/audio/sfx/beltHandle1.ogg",
+   "bytes": 10820,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/beltHandle2.ogg",
+   "bytes": 15410,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/cloth1.ogg",
+   "bytes": 16508,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/cloth2.ogg",
+   "bytes": 11787,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/dropLeather.ogg",
+   "bytes": 11695,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/impactGeneric_light_000.ogg",
+   "bytes": 5827,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/impactGeneric_light_001.ogg",
+   "bytes": 5636,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/impactGeneric_light_002.ogg",
+   "bytes": 5795,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/impactGlass_light_000.ogg",
+   "bytes": 6526,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/impactGlass_light_001.ogg",
+   "bytes": 6544,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/impactGlass_light_002.ogg",
+   "bytes": 6562,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/impactMetal_light_000.ogg",
+   "bytes": 7651,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/impactMetal_light_001.ogg",
+   "bytes": 6967,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/impactMetal_light_002.ogg",
+   "bytes": 6804,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/impactPlank_medium_000.ogg",
+   "bytes": 12016,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/impactPlank_medium_001.ogg",
+   "bytes": 12082,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/impactPlank_medium_002.ogg",
+   "bytes": 12313,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/impactPlate_light_000.ogg",
+   "bytes": 10474,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/impactPlate_light_001.ogg",
+   "bytes": 11730,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/impactPlate_light_002.ogg",
+   "bytes": 9932,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/metalClick.ogg",
+   "bytes": 13615,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/metalLatch.ogg",
+   "bytes": 10208,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/shot_ar_0.ogg",
+   "bytes": 11822,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/shot_ar_1.ogg",
+   "bytes": 10811,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/shot_ar_2.ogg",
+   "bytes": 11441,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/shot_pistol_0.ogg",
+   "bytes": 11411,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/shot_pistol_1.ogg",
+   "bytes": 11384,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/shot_smg_0.ogg",
+   "bytes": 10982,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/shot_smg_1.ogg",
+   "bytes": 11718,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/shot_smg_2.ogg",
+   "bytes": 11977,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/shot_sniper_0.ogg",
+   "bytes": 10513,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/shot_sniper_1.ogg",
+   "bytes": 10517,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/shot_sniper_2.ogg",
+   "bytes": 10625,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/step_concrete_000.ogg",
+   "bytes": 5808,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/step_concrete_001.ogg",
+   "bytes": 6308,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/step_concrete_002.ogg",
+   "bytes": 6255,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/step_concrete_003.ogg",
+   "bytes": 5805,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/step_grass_000.ogg",
+   "bytes": 8290,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/step_grass_001.ogg",
+   "bytes": 8313,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/step_grass_002.ogg",
+   "bytes": 8278,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/step_grass_003.ogg",
+   "bytes": 8129,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/step_wood_000.ogg",
+   "bytes": 5949,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/step_wood_001.ogg",
+   "bytes": 5929,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/step_wood_002.ogg",
+   "bytes": 5895,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/step_wood_003.ogg",
+   "bytes": 6207,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/svd_mag.ogg",
+   "bytes": 11516,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "pipeline/assets/sonniss-gdc2024/Dramatic Cat - SVD Dragunov/GUNMech_... Magazine Insert Slow (sliced 5.7-7.0s)"
+  },
+  {
+   "path": "assets/audio/sfx/svd_shot_0.ogg",
+   "bytes": 16337,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "pipeline/assets/sonniss-gdc2024/Dramatic Cat - SVD Dragunov/GUNRif_... DESIGNED Single Shot Core Long (sliced 0-1.6s)"
+  },
+  {
+   "path": "assets/audio/sfx/ui_back_001.ogg",
+   "bytes": 6997,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/ui_click_001.ogg",
+   "bytes": 4876,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/ui_click_002.ogg",
+   "bytes": 4275,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/ui_confirmation_001.ogg",
+   "bytes": 8968,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  },
+  {
+   "path": "assets/audio/sfx/ui_error_001.ogg",
+   "bytes": 7373,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)"
+  }
+ ]
+}

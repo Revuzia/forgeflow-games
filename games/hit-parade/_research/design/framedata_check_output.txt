@@ -1,0 +1,47 @@
+move | startup | active | recovery | total f | total ms | hitstop att/vic f (ms)
+jab          |   6 |  3 |  10 |  18 |  300 | 4/6 (67/100)
+cross        |   7 |  3 |  12 |  21 |  350 | 5/7 (83/117)
+hook         |   9 |  3 |  14 |  25 |  417 | 6/8 (100/133)
+uppercut     |  12 |  4 |  20 |  35 |  583 | 9/11 (150/183)
+body_blow    |  11 |  3 |  18 |  31 |  517 | 8/10 (133/167)
+front_kick   |  13 |  4 |  18 |  34 |  567 | 10/12 (167/200)
+low_kick     |  10 |  3 |  16 |  28 |  467 | 6/8 (100/133)
+roundhouse   |  14 |  4 |  20 |  37 |  617 | 10/12 (167/200)
+heavy        |  20 |  4 |  24 |  47 |  783 | 12/14 (200/233)
+launcher     |  14 |  4 |  22 |  39 |  650 | 9/11 (150/183)
+grab         |   8 |  3 |  26 |  36 |  600 | 0/0 (0/0)
+pummel       |   6 |  2 |  12 |  19 |  317 | 5/7 (83/117)
+throw        |  10 |  6 |  20 |  35 |  583 | 8/10 (133/167)
+stomp        |  12 |  4 |  18 |  33 |  550 | 8/10 (133/167)
+dash_attack  |  10 |  8 |  24 |  41 |  683 | 8/10 (133/167)
+weapon_light |   9 |  4 |  16 |  28 |  467 | 6/8 (100/133)
+weapon_heavy |  18 |  5 |  26 |  48 |  800 | 12/14 (200/233)
+air_juggle   |   7 |  3 |  12 |  21 |  350 | 5/7 (83/117)
+
+CHAIN rush 4 (J-C-H-U)
+  jab -> cross: latest cancel k=14 (233 ms), frames left in jab=12, window=12 f (200 ms) OK
+  cross -> hook: latest cancel k=16 (267 ms), frames left in cross=14, window=14 f (233 ms) OK
+  hook -> uppercut: latest cancel k=15 (250 ms), frames left in hook=16, window=15 f (250 ms) OK
+  duration fastest 81 f = 1.35 s (3.0 hits/s); mid-window 98 f = 1.63 s (2.4 hits/s)
+CHAIN J-body blow
+  jab -> body_blow: latest cancel k=10 (167 ms), frames left in jab=12, window=10 f (167 ms) OK
+  duration fastest 49 f = 0.82 s (2.4 hits/s); mid-window 53 f = 0.88 s (2.3 hits/s)
+CHAIN J-C-launcher
+  jab -> cross: latest cancel k=14 (233 ms), frames left in jab=12, window=12 f (200 ms) OK
+  cross -> launcher: latest cancel k=11 (183 ms), frames left in cross=14, window=11 f (183 ms) OK
+  duration fastest 70 f = 1.17 s (2.6 hits/s); mid-window 79 f = 1.32 s (2.3 hits/s)
+CHAIN J-C-H-roundhouse
+  jab -> cross: latest cancel k=14 (233 ms), frames left in jab=12, window=12 f (200 ms) OK
+  cross -> hook: latest cancel k=16 (267 ms), frames left in cross=14, window=14 f (233 ms) OK
+  hook -> roundhouse: latest cancel k=13 (217 ms), frames left in hook=16, window=13 f (217 ms) OK
+  duration fastest 84 f = 1.40 s (2.9 hits/s); mid-window 100 f = 1.67 s (2.4 hits/s)
+CHAIN low-J-C
+  low_kick -> jab: latest cancel k=19 (317 ms), frames left in low_kick=18, window=18 f (300 ms) OK
+  jab -> cross: latest cancel k=14 (233 ms), frames left in jab=12, window=12 f (200 ms) OK
+  duration fastest 52 f = 0.87 s (3.5 hits/s); mid-window 65 f = 1.08 s (2.8 hits/s)
+CHAIN wpn L-L-H
+  weapon_light -> weapon_light: latest cancel k=20 (333 ms), frames left in weapon_light=19, window=19 f (317 ms) OK
+  weapon_light -> weapon_heavy: latest cancel k=11 (183 ms), frames left in weapon_light=19, window=11 f (183 ms) OK
+  duration fastest 90 f = 1.50 s (2.0 hits/s); mid-window 102 f = 1.70 s (1.8 hits/s)
+
+ALL LINKS >= 6 f latest-cancel margin: True

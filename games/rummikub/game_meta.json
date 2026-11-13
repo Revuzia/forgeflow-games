@@ -1,0 +1,11 @@
+{
+  "title": "Rummikub",
+  "short_description": "Calm 3D Rummikub — 106 numbered tiles, form runs and groups, race to empty your rack against a thoughtful AI.",
+  "description": "A cozy, unhurried game of Rummikub rendered in clean 3D. Draw from a pool of 106 tiles (1–13 in four colours, twice over, plus two jokers) and build them onto the table as GROUPS (the same number in different colours) and RUNS (consecutive numbers in one colour). Your first play — the initial meld — must total at least 30 points. Lay off spare tiles onto sets already on the table, use jokers as wild, and if you can't play, draw. Empty your rack before the AI empties its own to win. Turned ivory tiles on a warm felt table under soft light, with gentle piano. Click tiles in your rack to select, then Play.",
+  "genre": "board_game",
+  "sub_genre": "rummikub",
+  "difficulty": "medium",
+  "status": "published",
+  "controls_keyboard": "Left-click tiles in your rack to select · Play lays valid sets · Draw takes a tile · Right-drag rotate camera · scroll zoom · Esc pause · F3 debug",
+  "tags": ["board-game", "rummikub", "rummy", "tiles", "turn-based", "3d", "calm"]
+}

@@ -1,0 +1,225 @@
+{
+ "steps": [
+  {
+   "fight": {
+    "spawned": 8,
+    "keys": 10,
+    "woke": 8,
+    "peakInstances": 11,
+    "peakLive": 11
+   },
+   "snap": {
+    "tag": "S0:cold",
+    "realm": "cold",
+    "instances": 11,
+    "types": 10,
+    "insts": 11,
+    "instLive": 0,
+    "instPooled": 11,
+    "mats": 10,
+    "sceneKids": 64,
+    "geo": 30,
+    "tex": 55,
+    "programs": 60,
+    "shEntries": [
+     19,
+     9,
+     1
+    ],
+    "dpEntries": 17,
+    "regCount": 0,
+    "heapMB": 105.4
+   }
+  },
+  {
+   "fight": {
+    "spawned": 8,
+    "keys": 10,
+    "woke": 8,
+    "peakInstances": 10,
+    "peakLive": 10
+   },
+   "snap": {
+    "tag": "S1:sand",
+    "realm": "sand",
+    "instances": 10,
+    "types": 10,
+    "insts": 10,
+    "instLive": 1,
+    "instPooled": 9,
+    "mats": 10,
+    "sceneKids": 63,
+    "geo": 30,
+    "tex": 56,
+    "programs": 62,
+    "shEntries": [
+     18,
+     9,
+     1
+    ],
+    "dpEntries": 16,
+    "regCount": 1,
+    "heapMB": 104.8
+   }
+  },
+  {
+   "fight": {
+    "spawned": 8,
+    "keys": 10,
+    "woke": 8,
+    "peakInstances": 11,
+    "peakLive": 11
+   },
+   "snap": {
+    "tag": "S2:ash",
+    "realm": "ash",
+    "instances": 11,
+    "types": 10,
+    "insts": 11,
+    "instLive": 0,
+    "instPooled": 11,
+    "mats": 10,
+    "sceneKids": 64,
+    "geo": 31,
+    "tex": 58,
+    "programs": 62,
+    "shEntries": [
+     19,
+     8,
+     1
+    ],
+    "dpEntries": 17,
+    "regCount": 0,
+    "heapMB": 105.5
+   }
+  },
+  {
+   "fight": {
+    "spawned": 8,
+    "keys": 10,
+    "woke": 8,
+    "peakInstances": 10,
+    "peakLive": 10
+   },
+   "snap": {
+    "tag": "S3:cold",
+    "realm": "cold",
+    "instances": 10,
+    "types": 10,
+    "insts": 10,
+    "instLive": 0,
+    "instPooled": 10,
+    "mats": 10,
+    "sceneKids": 63,
+    "geo": 30,
+    "tex": 56,
+    "programs": 62,
+    "shEntries": [
+     18,
+     9,
+     1
+    ],
+    "dpEntries": 16,
+    "regCount": 0,
+    "heapMB": 106.2
+   }
+  },
+  {
+   "fight": {
+    "spawned": 8,
+    "keys": 10,
+    "woke": 8,
+    "peakInstances": 11,
+    "peakLive": 11
+   },
+   "snap": {
+    "tag": "S4:sand",
+    "realm": "sand",
+    "instances": 11,
+    "types": 10,
+    "insts": 11,
+    "instLive": 0,
+    "instPooled": 11,
+    "mats": 10,
+    "sceneKids": 64,
+    "geo": 30,
+    "tex": 57,
+    "programs": 62,
+    "shEntries": [
+     19,
+     9,
+     1
+    ],
+    "dpEntries": 17,
+    "regCount": 0,
+    "heapMB": 105.4
+   }
+  },
+  {
+   "fight": {
+    "spawned": 8,
+    "keys": 10,
+    "woke": 8,
+    "peakInstances": 12,
+    "peakLive": 12
+   },
+   "snap": {
+    "tag": "S5:ash",
+    "realm": "ash",
+    "instances": 12,
+    "types": 10,
+    "insts": 12,
+    "instLive": 0,
+    "instPooled": 12,
+    "mats": 10,
+    "sceneKids": 65,
+    "geo": 31,
+    "tex": 59,
+    "programs": 62,
+    "shEntries": [
+     20,
+     8,
+     1
+    ],
+    "dpEntries": 18,
+    "regCount": 0,
+    "heapMB": 106
+   }
+  },
+  {
+   "fight": {
+    "spawned": 8,
+    "keys": 10,
+    "woke": 8,
+    "peakInstances": 10,
+    "peakLive": 10
+   },
+   "snap": {
+    "tag": "S6:cold",
+    "realm": "cold",
+    "instances": 10,
+    "types": 10,
+    "insts": 10,
+    "instLive": 1,
+    "instPooled": 9,
+    "mats": 10,
+    "sceneKids": 63,
+    "geo": 30,
+    "tex": 56,
+    "programs": 62,
+    "shEntries": [
+     18,
+     9,
+     1
+    ],
+    "dpEntries": 16,
+    "regCount": 1,
+    "heapMB": 106.4
+   }
+  }
+ ],
+ "warns": [],
+ "errs": [],
+ "pageerrors": [],
+ "ok": true
+}

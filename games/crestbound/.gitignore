@@ -1,0 +1,21 @@
+# harness outputs and evidence — regenerated every run, never source
+_shots/
+_harness/*.json
+_harness/__pycache__/
+.playwright-mcp/
+*.pyc
+_harness/*.log
+_harness/_*.log
+_harness/_hzshots/
+_harness/*.png
+# scratch probes written by lanes — never source (tracked ones stay tracked)
+_harness/_*.py
+_harness/_*.mjs
+_harness/_*.sh
+_harness/_*
+assets/models/*/_turntable/
+assets/models/*/_work/
+# audit proof frames - evidence on disk, never source (logs/json beside them stay tracked)
+_spec/audit_*/frames/**/*.png
+_spec/audit_*/frames/**/*.jpg
+_spec/audit_*/frames/**/*.webp

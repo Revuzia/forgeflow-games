@@ -1,0 +1,59 @@
+name | input | startup | active | recovery | total | onhit | onblock | dmg
+Standing Light Punch |  | 4 | 3 | 7 | 13 | +4 | -1 | 300
+Standing Medium Punch |  | 6 | 4 | 11 (13 on whiff) | 20 (22 on whiff) | +7 | -1 | 600
+Standing Heavy Punch |  | 10 | 5 | 18 | 32 | +4 | -2 | 800
+Standing Light Kick |  | 5 | 3 | 11 | 18 | +2 | -4 | 300
+Standing Medium Kick |  | 9 | 3 | 18 | 29 | +4 | -4 | 700
+Standing Heavy Kick |  | 12 | 4 | 20 | 35 | +9 | +1 | 900
+Crouching Light Punch |  | 4 | 2 | 9 | 14 | +4 | -1 | 300
+Crouching Medium Punch |  | 6 | 4 | 13 (15 on whiff) | 22 (24 on whiff) | +5 | 0 | 600
+Crouching Heavy Punch |  | 9 | 6 | 21 | 35 | +1 | -7 | 800
+Crouching Light Kick |  | 5 | 2 | 10 | 16 | +3 | -3 | 200
+Crouching Medium Kick |  | 8 | 3 | 19 | 29 | +1 | -6 | 500
+Crouching Heavy Kick |  | 9 | 3 | 23 | 34 | Knockdown +40 | -12 | 900
+Forward + Medium Punch (Collarbone Breaker) |  | 20 | 4 | 19 | 42 | +3 | -3 | 300, 300
+Forward + Heavy Punch (Solar Plexus Strike) |  | 20 | 5 | 16 | 40 | +6 | +3 | 400, 400
+Back + Heavy Punch |  | 7 | 4 | 25 | 35 | +1 | -13 | 800
+Back + Heavy Kick (Axe Kick) |  | 10 | 5, 3 | 21 | 43 | 0 | -4 | 400, 400
+Forward + Heavy Kick (Whirlwind Kick) |  | 16 | 4 | 20 | 39 | +2 | -4 | 800
+Heavy Punch, Heavy Kick |  | 10, 9 | 5, 4 | 18, 20 | 32, 32 | +3, Knockdown +36 | -2, -8 | 800, 1000
+Medium Punch, Light Kick, Heavy Kick (Fuwa Triple Strike) |  | 6, 5, 17 | 4, 3, 4 | 11, 16, 20 | 20, 23, 40 | +7, +1, Knockdown +36 | -1, -4, -8 | 600, 300, 900
+Jump Light Punch |  | 4 | 10 | 3 Landing | -- | +5... | +1... | 300
+Jump Medium Punch |  | 5 | 5 | 3 Landing | -- | +10... | +7... | 350, 350
+Jump Heavy Punch |  | 9 | 6 | 3 Landing | -- | +9... | +5... | 800
+Jump Light Kick |  | 6 | 10 | 3 Landing | -- | +4... | +0... | 300
+Jump Medium Kick |  | 7 | 6 | 3 Landing | -- | +9... | +5... | 500
+Jump Heavy Kick |  | 10 | 8 | 3 Landing | -- | +10... | +6... | 800
+Hadoken (Light Punch) | Down, Down-Forward, Forward + Light Punch | 16 | ... | 31 | 47 | +2... | -5... | 700
+Hadoken (Medium Punch) | Down, Down-Forward, Forward + Medium Punch | 14 | ... | 33 | 47 | 0... | -7... | 700
+Hadoken (Heavy Punch) | Down, Down-Forward, Forward + Heavy Punch | 12 | ... | 35 | 47 | -2... | -9... | 700
+Hadoken (Overdrive) | Down, Down-Forward, Forward + PP | 12 | ... | 19 | 40 | Limited Juggle State, variable knockdown of +54 minimum | -1... | 400, 400
+Shoryuken (Light Punch) | Forward, Down, Down-Forward + Light Punch | 5 | 10 | 33 | 47 | Knockdown +38 | -23 | 1100
+Shoryuken (Medium Punch) | Forward, Down, Down-Forward + Medium Punch | 6 | 10 | 42 | 57 | Knockdown +34 | -32 | 1200
+Shoryuken (Heavy Punch) | Forward, Down, Down-Forward + Heavy Punch | 7 | 10 | 46 | 65 | Knockdown +37... | -36 | 1400
+Shoryuken (Overdrive) | Forward, Down, Down-Forward + PP | 6 | 10 | 52 | 67 | Knockdown +29 | -40 | 1600
+Tatsumaki Senpu-kyaku (Light Kick) | Down, Down-Back, Back + Light Kick | 12 | 3 | 32 | 46 | Knockdown +35 | -15 | 900
+Tatsumaki Senpu-kyaku (Medium Kick) | Down, Down-Back, Back + Medium Kick | 14... | 2, 2 | 31 | 61 | Knockdown +23... | -13 | 1000
+Tatsumaki Senpu-kyaku (Heavy Kick) | Down, Down-Back, Back + Heavy Kick | 16... | 2, 2, 2 | 31 | 78 | Knockdown +20... | -13 | 1200
+Tatsumaki Senpu-kyaku (Overdrive) | Down, Down-Back, Back + KK | 13... | 2, 2, 2, 2, 2 | 23 | 60 | Limited Juggle State,  Knockdown +57 | -14 | 200, 200, 200, 200, 200
+Aerial Tatsumaki Senpu-kyaku | (Forward Jump Only) Down, Down-Back, Back + K | 11 | 2 | 16... | ** | Limited Juggle State, variable Knockdown of +47(?) minimum | -1... | 900
+(Forward Jump Only) Aerial Tatsumaki Senpu-kyaku (Overdrive) | Down, Down-Back, Back + KK | 11 | 2, 3, 3, 3, 2 | 28... | ** | Limited Juggle State, variable Knockdown of +45(?) minimum | -30... | 1500
+High Blade Kick (Light Kick) | Down, Down-Forward, Forward + Light Kick | 14 | 6 | 22 | 41 | Knockdown +35 | -11 | 1100
+High Blade Kick (Medium Kick) | Down, Down-Forward, Forward + Medium Kick | 18 | 9 | 19 | 48 | Knockdown +40 | -8 | 1200
+High Blade Kick (Heavy Kick) | Down, Down-Forward, Forward + Heavy Kick | 27 | 9 | 16 | 50 | Knockdown +44 | -3 | 1300
+High Blade Kick (Overdrive) | Down, Down-Forward, Forward + Heavy Kick | 17 | 5 | 33 | 55 | Juggle state, knockdown +64 | -18 | 800
+Hashogeki (Light Punch) | Down, Down-Back, Back + Light Punch | 12 | 6 | 18 | 35 | +2 | -3 | 700
+Hashogeki (Medium Punch) | Down, Down-Back, Back + Medium Punch | 19 | 6 | 17 | 41 | +2 | -6 | 800
+Hashogeki (Heavy Punch) | Down, Down-Back, Back + Heavy Punch | 30 | 6 | 19 | 54 | Limited Juggle State, Knockdown +61 | +2 | 400, 400
+Hashogeki (Overdrive) | Down, Down-Back, Back + PP | 18 | 6 | 20 | 43 | +3 | +3 | 1100
+Denjin Charge | Down, Down + P | 52 |  |  | 52 |  |  | 
+Hadoken (Denjin Charge) | Down, Down-Forward, Forward + P | 12 | ... | 16 | 40 | Limited Juggle State, variable Knockdown of +52 minimum | -1 | 1000
+Hadoken (Denjin Charge + Overdrive) | Down, Down-Forward, Forward + PP | 12 | ... | 16 | 38 | Limited Juggle State, variable Knockdown of +57 minimum | +2 | 1200
+Hashogeki (Denjin Charge) | Down, Down-Back, Back + Heavy Punch | 20 | 6 | 19 | 44 | Limited Juggle State, variable knockdown of +62 minimum | +3 | 400, 800
+Hashogeki (Denjin Charge + Overdrive) | Down, Down-Back, Back + PP | 18 | 6 | 19 | 42 | Crumple on hit. Crumple knockdown of +87. | +4 | 800
+Shinku Hadoken (Level 1) | Down, Down-Forward, Forward, Down, Down-Forward, Forward + P | 7 | ** | ** | 87 | Knockdown +** | -24 | 2000 (2400)
+Shin Hashogeki (Level 2) | Down, Down-Back, Back, Down, Down-Back, Back + P | 12 | 6 | 39 | 56 | Knockdown +20 | -20 | 2800...2900 (3200...3300)
+Shin Shoryuken (Level 3) | Down, Down-Forward, Forward, Down, Down-Forward, Forward + K | 5 | 12 | 71 | 87 | Knockdown +14 (Knockdown +14) | -52 | 4000 (4500)
+Stats |  |  |  |  |  |  |  | 
+Forward Throw |  | 5 | 3 | 23 | 30 (whiff) / 96 (hit) | +17 |  | 1200
+Back Throw |  | 5 | 3 | 23 | 30 (whiff) / 100 (hit) | +11 |  | 1200

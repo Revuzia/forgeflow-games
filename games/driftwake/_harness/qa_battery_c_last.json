@@ -1,0 +1,122 @@
+{
+ "baseline": {
+  "ok": true,
+  "regCount": 4,
+  "dummies": 4,
+  "enemies": 0,
+  "barsOn": 0,
+  "blips": 0,
+  "px": 0,
+  "pz": 0
+ },
+ "aggro_far": {
+  "d0": 30,
+  "dEnd": 30,
+  "dMin": 30,
+  "states": [
+   0
+  ],
+  "hpLost": 0
+ },
+ "aggro_near": {
+  "tCombat": 0.09279999999701977,
+  "dMin": 1.0030017199563674,
+  "hits": [
+   [
+    2.8465,
+    4
+   ],
+   [
+    6.85570000000298,
+    4
+   ],
+   [
+    11.29309999999404,
+    4
+   ]
+  ],
+  "gaps": [
+   4.009,
+   4.437
+  ],
+  "dps": 1.4206899817688146
+ },
+ "iframes": {
+  "hits": 5,
+  "gaps": [
+   2.575,
+   2.456,
+   2.318,
+   0.636
+  ],
+  "total": 20,
+  "minGap": 0.636,
+  "dps": 2.5046649384497286
+ },
+ "telegraph": [
+  {
+   "windup": 0.28479999999701977,
+   "hit": 1.6927999999970198,
+   "ms": 1408,
+   "dmg": 22
+  },
+  {
+   "windup": 7.667199999988079,
+   "hit": 9.05809999999404,
+   "ms": 1391,
+   "dmg": 22
+  }
+ ],
+ "stun": {
+  "frozenS": 1.633,
+  "movingAt": 1.7419000000059606
+ },
+ "knockback": {
+  "tHit": null
+ },
+ "sprite": {
+  "boltSpawns": 8,
+  "hits": [
+   [
+    6.92240000000596,
+    5
+   ]
+  ],
+  "dMin": 14.645219611126455,
+  "dMax": 15.004319378442318,
+  "firedState": true
+ },
+ "leash": {
+  "tReturn": 17.92929999999702,
+  "maxHomeDist": 77.18128204345703,
+  "tHome": null,
+  "hpLow": 14,
+  "end": {
+   "hp": 14,
+   "hpMax": 24,
+   "state": 7
+  }
+ },
+ "cleanup": {
+  "before": {
+   "regCount": 4
+  },
+  "spawned": [
+   16,
+   17,
+   18,
+   19
+  ],
+  "midBars": 0,
+  "midAlive": 4,
+  "midCount": 8,
+  "after": {
+   "regCount": 4,
+   "aliveCount": 0,
+   "enemyKinds": 0,
+   "bolts": 0,
+   "barsOn": 0,
+   "blips": 0
+  }
+ }
+}
