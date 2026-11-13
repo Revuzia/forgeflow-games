@@ -14,6 +14,7 @@ import { BufferAttribute, InstancedBufferAttribute } from 'three';
 import type { BufferGeometry, InstancedMesh, Mesh } from 'three';
 import { perfSwitch } from './perfswitch.ts';
 import { FREEZE } from './freeze.ts';
+import { earlyAttr } from './uploadsched.ts';
 
 export const BUF_RING = perfSwitch('bufring', true);
 /** GPU buffers per ringed attribute: the members rotate at most once a frame, so one written now was last drawn N frames ago */
@@ -61,6 +62,8 @@ class Ring {
         if (!this.bufs[i] && gl) this.bufs[i] = gl.getParameter(name === 'index' ? gl.ELEMENT_ARRAY_BUFFER_BINDING : gl.ARRAY_BUFFER_BINDING) as WebGLBuffer | null;
         this.dirty[i].length = 0;
       };
+      // (ROADMAP step 4) the member's updates go up in the renderer's uploads slot, not inside a pass
+      earlyAttr(m, name === 'index');
     });
   }
   private installed(): Attr | undefined {

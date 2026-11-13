@@ -11,6 +11,7 @@ import { DataTexture, LinearFilter, RGBAFormat, RepeatWrapping, ClampToEdgeWrapp
 import type { Vector3 } from 'three';
 import { newHit, type IcoGrid } from '../../sim/grid/icogrid.ts';
 import { FREEZE } from '../freeze.ts';
+import { texUpload } from '../uploadsched.ts';
 
 /** texture size for a grid of frequency n: ~1.3 texels per cell spacing at the equator (the texels are interpolated
  * between cells, and the texture is filtered), 256..1024 wide */
@@ -93,7 +94,7 @@ export class OverlayMap {
       data[o + 3] = Math.min(255, s);
     }
     for (let i = n; i < this.w * this.h; i++) data[i * 4 + 3] = 0;
-    this.tex.needsUpdate = true;
+    texUpload(this.tex);
   }
 
   dispose(): void { this.tex.dispose(); }

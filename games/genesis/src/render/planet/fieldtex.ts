@@ -37,6 +37,7 @@ import type { FieldName } from '../../sim/types.ts';
 import type { PlanetView } from '../../client/worldview.ts';
 import { surfaceGradients } from '../../sim/grid/surface.ts';
 import { CityLights } from './citylights.ts';
+import { texUpload } from '../uploadsched.ts';
 import { FREEZE } from '../freeze.ts';
 import { BASE_PACK } from '../../data/index.ts';
 import { FIELD_ROW, FieldPacker, SOURCES, TEX_NAMES, type PackReply, type PackRequest, type TexName } from './fieldpack.ts';
@@ -211,7 +212,7 @@ export class FieldTextures {
 
   /** a texture refilled: upload it, and tell the chunk system when the heights / water / lava moved */
   private landedTex(name: TexName, lava: number): void {
-    this.tex[name].needsUpdate = true;
+    texUpload(this.tex[name]);
     if (name === 'A') this.geomVersion++;
     // (lava raises the terrain mesh by its depth: the chunk bounds follow a flow as they follow the ground)
     else if (name === 'M1' && lava !== this.lavaVersion) { this.lavaVersion = lava; this.geomVersion++; }

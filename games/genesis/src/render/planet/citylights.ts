@@ -16,6 +16,7 @@ import type { PlanetView } from '../../client/worldview.ts';
 import { BuildingFlag } from '../../sim/types.ts';
 import { extractRoads } from '../life/roadnet.ts';
 import { buildingAt } from '../life/catalog.ts';
+import { scheduleUpload } from '../uploadsched.ts';
 
 /** the encoding's top value (stored sqrt(v / CITY_VMAX)) */
 export const CITY_VMAX = 6;
@@ -203,7 +204,9 @@ export class CityLights {
         }
       }
     }
-    if (!this.uploadDirty(dirty)) this.texture.needsUpdate = true;
+    // (ROADMAP step 4) the boxes' texSubImage and the cube's generateMipmap run in the renderer's uploads slot, before
+    // any pass, not wherever this update falls (uploadsched.ts)
+    scheduleUpload(() => { if (!this.uploadDirty(dirty)) this.texture.needsUpdate = true; });
   }
 
   /**

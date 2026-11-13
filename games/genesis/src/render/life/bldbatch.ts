@@ -17,6 +17,7 @@ import {
 import { BLD_INST_PER_ROW, makeBuildingDepthMaterial, makeBuildingMaterial } from './buildingmat.ts';
 import { perfSwitch } from '../perfswitch.ts';
 import { ringIntercept } from '../bufring.ts';
+import { texUpload } from '../uploadsched.ts';
 
 /** PERF F21 (session 9): geometry PAGES of a fixed size instead of one batch whose buffers double; `?bldpage=0` = old */
 const PAGED = perfSwitch('bldpage');
@@ -185,7 +186,7 @@ export class BldPage {
     const o = this.offset(i);
     const d = this.data;
     d[o] = s0; d[o + 1] = s1; d[o + 2] = s2; d[o + 3] = s3;
-    this.texU.value.needsUpdate = true;
+    texUpload(this.texU.value);
   }
 
   cullShadow(keep: (x: number, y: number, z: number, r: number) => boolean): number {
@@ -212,7 +213,7 @@ export class BldPage {
     if (this.used === 0 && this.shown === 0 && !mesh.visible) return;
     this.shown = this.used;
     mesh.visible = this.used > 0;
-    this.texU.value.needsUpdate = true;
+    texUpload(this.texU.value);
   }
 
   private tableTex: unknown = null;

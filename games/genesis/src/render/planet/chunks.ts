@@ -36,6 +36,7 @@ import { capGap, shadowReach } from './shadowreach.ts';
 import { RING_N, ringFrame } from '../bufring.ts';
 import { perfSwitch } from '../perfswitch.ts';
 import { FREEZE, freezeLandTick } from '../freeze.ts';
+import { earlyGeo } from '../uploadsched.ts';
 
 export { PATCH_RES };
 
@@ -146,6 +147,8 @@ function browserPatchPort(): PatchPort | null {
 let nextLodId = 1;
 /** patch builds in flight per planet (a frame's requests beyond this wait for a later frame) */
 const MAX_INFLIGHT = 192;
+/** PERF s17: prefetched children stay in use and are asked for only into free cache room (no churn at rest) */
+const PREFETCH_KEEP = perfSwitch('prefetchkeep', true);
 
 // ───────────────────────────── patches ─────────────────────────────
 
@@ -559,6 +562,8 @@ class PatchBatch {
       k = p.used++;
       p.geomId[k] = p.mesh.addGeometry(geo, NVERT, NINDEX);
       if (k === 0 && NORMAL_ALIAS) aliasNormal(p.mesh);
+      // (ROADMAP step 4) the page's later landings go up in the renderer's uploads slot, not inside a shadow / scene pass
+      if (k === 0) earlyGeo(p.mesh.geometry);
       p.instId[k] = p.mesh.addInstance(p.geomId[k]);
       p.addWaterSlot(k);
       // (a new instance starts visible: count it, then hide it)
@@ -1222,8 +1227,17 @@ export class ChunkLOD {
         p.split = false;
         // PREFETCH (no pop-in): a leaf the camera is closing in on (within 1.35x its split distance) has its children
         // built ahead, so the split finds them ready instead of drawing the coarse patch until they land
-        if (!split && p.built && p.level < this.maxLevel && d < rSplit * 1.35 && this.pending.size < MAX_INFLIGHT / 2) {
-          for (const k of p.makeChildren()) this.ensureGeometry(k, true);
+        // (PERF s17, `?prefetchkeep=0` off) a prefetched child already built is IN USE (stamped: the eviction keeps it),
+        // and a new one is asked for only while the cache has room for it. Unstamped, the prefetched children were the
+        // eviction's first victims once the cache was full and the next frame asked for them again: at rest, with the
+        // camera still, 40-100 patches a frame built, landed and evicted forever (the babel town on the low preset)
+        if (!split && p.built && p.level < this.maxLevel && d < rSplit * 1.35) {
+          if (PREFETCH_KEEP) {
+            for (const k of p.makeChildren()) {
+              if (k.built) { k.lastUsed = ctx.frame; continue; }
+              if (this.pending.size < MAX_INFLIGHT / 2 && this.live.size + this.pending.size < this.cacheBudget()) this.ensureGeometry(k, true);
+            }
+          } else if (this.pending.size < MAX_INFLIGHT / 2) for (const k of p.makeChildren()) this.ensureGeometry(k, true);
         }
         if (p.built) { out.push(p); return true; }
         if (p.level <= 1) { this.ensureGeometry(p, false); out.push(p); return true; }
@@ -1347,8 +1361,11 @@ export class ChunkLOD {
   }
 
   /** drop geometry of long-unused patches when over the cache budget */
+  /** the patch cache's soft budget: what the eviction trims to (patches in use this frame always stay) */
+  private cacheBudget(): number { return Math.max(this.maxCached, Math.ceil(this.selected.length * 1.5)); }
+
   private evict(frame: number): void {
-    const budget = Math.max(this.maxCached, Math.ceil(this.selected.length * 1.5));
+    const budget = this.cacheBudget();
     if (this.live.size <= budget) return;
     // least recently used first, anything not in use this frame. (It once also had to be 120 frames old: at the few
     // frames a minute of a starved software renderer nothing ever qualified, and the cache grew past its budget for

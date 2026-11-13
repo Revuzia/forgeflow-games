@@ -1361,3 +1361,39 @@ long press frame-rate independent. Report after 1-2 verified.
 - HANDED BACK for the ship. NEXT (session 17 resumed or successor): read the owner's gpuprobe / freeze reports and pick
   the branch (ROADMAP §2 step 2); then step 4 upsched, 6 hdrmerge, 7 orthodepth, 3 rtalias, 5 ringfence/lifesplit;
   and trace the at-rest patch churn above (node: chunk soak with a still camera, count builtTotal per frame).
+
+### SESSION 17b (after the ship of steps 1-2) — lead: (1) the patch churn at rest, (2) step 4 upsched
+- CHURN TRACED (probe-churn.mjs: wraps every ChunkLOD's store / evict in the page; dist40 babel town, low, speed 0,
+  still): lod 0 live 857-921 = budget 921 (1.5 x 614 selected), ~40 builds a frame, as many evicted, pending stuck at
+  96-99 = MAX_INFLIGHT/2 = the PREFETCH cap, no Patch object rebuilt within 8 frames (an LRU cycle of ~23 frames).
+  CAUSE (chunks.ts select, worker path): PREFETCH built the 4 children of every leaf within 1.35x its split distance
+  but never stamped them in use (only visited patches get lastUsed = frame); the wanted set (selected + split ancestors
+  + prefetched children) exceeded the cache budget, so evict() dropped the prefetched children (LRU, + 64 slack every
+  time) and the next frames' prefetch asked for them again — forever, camera still.
+  NODE REPRO tests/render-chunkchurn.test.ts (fake worker port from render-patchworker; still camera; budget 1.5 x
+  selection): before 64 patches a frame forever (12800 over 200 frames at 230 m and at 60 m); cap 800 none.
+  FIX `?prefetchkeep=0` off (default on): a prefetched child already built is stamped in use (kept), a new one is asked
+  for only while live + pending < cacheBudget() (the eviction's budget, now one method). Drawn selection unaffected
+  (prefetched children are never drawn until the split). After: 0 builds at rest, selection identical (test asserts
+  the drawn selection is constant), live 261/371/375. Render tests 135/135 (patchworker equality with the main-thread
+  path included).
+  BROWSER (dist41, churn-s17d.log): 8 still frames: builds 0, evicted 0, pending 0, ready 0, live 921, selected 614
+  (was ~40 builds/frame, pending 99). Image pair prefetchkeep 1 vs 0: churn-s17d-pk1/pk0.log, freeze/pk*.png.
+- STEP 4 upsched (`?upsched=0` off, default on) — src/render/uploadsched.ts (new):
+  earlyAttr(attr): after three's first upload (GL buffer captured in onUploadCallback), needsUpdate = true between the
+  end of a frame's passes and the next frame's 'uploads' slot takes three's updateRanges, does NOT bump the version,
+  and flushUploads() sends them by gl.bufferSubData on COPY_WRITE_BUFFER (no VAO / element binding touched; index
+  buffers too, checked once with getError, else back to three) and then runs the attribute's onUploadCallback (the
+  rings clear their dirty lists there). Registered: every ring member (bufring.ts Ring: bodies, boats, camps,
+  vegetation, roads, decals, particles, building pages) and every terrain page's attributes + index (chunks.ts, after
+  the page's first addGeometry; earlyGeo). texUpload(tex) (owners: vfx emit/block, bldbatch texU state / visibility,
+  fieldtex landings, dirtex, overlaytex) and scheduleUpload(fn) (citylights' texSubImage boxes + generateMipmap) go up
+  in the same slot (renderer.initTexture / the owner's own GL). renderer.ts: setUploadGL; flushUploads(r) in the
+  'uploads' slot (after the PRE_UPLOAD flush); uploadFrameBegin() at the END of render() (so the next frame's updates
+  and a worker's between-frame landings wait for the slot). Until the first flush (node, no renderer) all immediate.
+  Not done from the roadmap's step-4 list: owner DOUBLE-BUFFERED data textures, chunks landReady byte cap + camera-
+  velocity prefetch, farcrown:280 / ships:521 (creation-time / label canvases: left).
+  test tests/render-upsched.test.ts (fake GL): ranges sent on COPY_WRITE_BUFFER with the right offsets and bytes,
+  version untouched, callback ran, texture + task in the slot, the old path after the flush.
+  Browser A/B queued: run-s17e.sh (dist42, medium 256x144 = 2 cascades): up-s17e-{1,0}-s{0,1}.log, shots
+  freeze/up{1,0}-s0-*.png (speed 0 image pair), speed-1 runs for 'uploads inside a pass' by slot.

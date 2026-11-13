@@ -42,6 +42,7 @@ import { WorldFx, type WorldPlanetRef } from './fx/worlds.ts';
 import { perfmon } from './perfmon.ts';
 import { gpuMem } from './gpumem.ts';
 import { ringTick, setRingGL } from './bufring.ts';
+import { flushUploads, setUploadGL, uploadFrameBegin } from './uploadsched.ts';
 import { BOOT_PROBES, GPU_PROBE, probeGpu, probeLine, type ProbeResult } from './gpuprobe.ts';
 import { perfList, perfNum, perfSwitch, perfSwitchNote } from './perfswitch.ts';
 // PERF s12 BISECTION switches (owner's M5 is GPU-bound: ~100x per pixel vs Vale). Each turns a heavy pass / feature
@@ -228,6 +229,7 @@ export class Renderer {
     // (PERF s14) the live GPU memory audit from the first allocation on (the perf report's 'gpu mem' lines)
     try { gpuMem.install(this.three.getContext() as WebGL2RenderingContext); } catch { /* unaudited */ }
     setRingGL(this.three.getContext() as WebGL2RenderingContext);
+    setUploadGL(this.three.getContext() as WebGL2RenderingContext);
     gpuMem.cpuProbe = () => cpuRetained(this.scene);
     // (PERF s15) GPU bytes by owner: three's texture lookups name each texture allocation, the scene walk each array
     try { gpuMem.attach(this.three); } catch { /* unattributed */ }
@@ -520,6 +522,8 @@ export class Renderer {
     // PERF F20: the frame's texture uploads, before any render pass (upload.ts)
     perfmon.begin('uploads');
     if (PRE_UPLOAD) flushTextureUploads(r);
+    // ROADMAP step 4 (`?upsched=0` off): every buffer / texture / owner upload scheduled this frame, before any pass
+    flushUploads(r);
     perfmon.end('uploads');
     perfmon.begin('shadows');
     const callsPre = r.info.render.calls, trisPre = r.info.render.triangles;
@@ -812,6 +816,9 @@ export class Renderer {
     this.settings.exposureBias -= evGod;
     if (this.cutFrames > 0) this.cutFrames--;
     perfmon.end('post');
+    // (ROADMAP step 4) from here (the next frame's updates, a worker's landing between frames) uploads wait for the
+    // next frame's 'uploads' slot (uploadsched.ts)
+    uploadFrameBegin();
     if (perfmon.on) perfmon.programs = r.info.programs?.length ?? 0;
     this.updateStats();
     this.stats.frameMs = performance.now() - t0;

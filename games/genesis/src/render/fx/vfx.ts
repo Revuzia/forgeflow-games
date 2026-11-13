@@ -23,6 +23,7 @@ import {
 import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
 import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
+import { texUpload } from '../uploadsched.ts';
 import { FX_DEPTH_GLSL, FX_LAYER } from './fxcommon.ts';
 
 /** particle systems (vertex shader branches). 0–19 and 40–59: the lit pass; 20–39: the emissive pass */
@@ -1024,8 +1025,9 @@ export class Vfx {
     for (const lv of this.live.values()) for (const b of lv.blocks) { if (b + 1 > hi) hi = b + 1; n += BLOCK; }
     this.geo.instanceCount = hi * BLOCK;
     this.group.visible = hi > 0;
-    if (this.dirtyEmit) { this.emitTex.needsUpdate = true; this.dirtyEmit = false; }
-    if (this.dirtyBlocks) { this.blockTex.needsUpdate = true; this.dirtyBlocks = false; }
+    // (ROADMAP step 4: uploaded in the renderer's uploads slot, not at its draw)
+    if (this.dirtyEmit) { texUpload(this.emitTex); this.dirtyEmit = false; }
+    if (this.dirtyBlocks) { texUpload(this.blockTex); this.dirtyBlocks = false; }
     this.uniforms.uViewToBody.value = viewToBody;
     (this.uniforms.uInvProj.value as Matrix4).copy(invProj);
     _sunV.copy(sunView);

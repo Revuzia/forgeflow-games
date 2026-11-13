@@ -9,6 +9,7 @@ import { CubeTexture, DataTexture, LinearFilter, RGBAFormat, UnsignedByteType, C
 import type { IcoGrid } from '../../sim/grid/icogrid.ts';
 import { newHit } from '../../sim/grid/icogrid.ts';
 import { FREEZE } from '../freeze.ts';
+import { texUpload } from '../uploadsched.ts';
 
 export class DirFieldCube {
   readonly size: number;
@@ -86,7 +87,7 @@ export class DirFieldCube {
         }
       }
     }
-    this.texture.needsUpdate = true;
+    texUpload(this.texture);
   }
 
   dispose(): void {
