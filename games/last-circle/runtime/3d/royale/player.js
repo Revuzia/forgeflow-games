@@ -3274,15 +3274,19 @@ function animate(W, a, dt) {
       // (P23, LC-10 / LC-64) a PISTOL (procedural arms) in combat - a warped strafe, a planted turn - twists its chest back onto
       // the aim as well (base pistols always squared the whole body to the aim in combat, so their chest never left it); the
       // arms below aim in that twisted frame. Out of combat it keeps the base carry: chest on the run, barrel <= 0.6 rad off it.
-      const pistolTwist = !useMixamoGun && armed && isPistol(a) && (combat || a._turnT >= 0) && a.onGround && !a.gliding &&
+      // (W10 R1B) a pistol on the rifle LEG clips takes the rifle's chest twist as well (the Mixamo lean + twist below, the arms
+      // aiming in that twisted frame): the rifle clips carry their own chest, and the 0.6-rad carry clamp left the barrel 77 deg
+      // off it on a sideways run (rigcheck (c))
+      const pistolRifle = !useMixamoGun && armed && pistolLegs(a);
+      const pistolTwist = !useMixamoGun && !pistolRifle && armed && isPistol(a) && (combat || a._turnT >= 0) && a.onGround && !a.gliding &&
         !a.swimming && !a.emoting && a.alive && !a.downed && !a.mantleT;
-      if (!useMixamoGun && !pistolTwist) twist = K.clamp(aimDelta, -0.6, 0.6);
+      if (!useMixamoGun && !pistolTwist && !pistolRifle) twist = K.clamp(aimDelta, -0.6, 0.6);
       if (layers && a.armBones && pistolTwist) {
         // (not Spine: uprightTorso re-aims it after this)
         if (a.armBones.spine1 && a.armBones.spine2) { addTwistY(a.armBones.spine1, twist / 2); addTwistY(a.armBones.spine2, twist / 2); }
       }
-      a._armYawOff = (layers && pistolTwist) ? twist : 0;
-      if (layers && a.armBones && useMixamoGun && armed && a.onGround && !a.gliding && !a.swimming && !a.emoting && a.alive && !a.downed) {
+      a._armYawOff = (layers && (pistolTwist || pistolRifle)) ? twist : 0;
+      if (layers && a.armBones && (useMixamoGun || pistolRifle) && armed && a.onGround && !a.gliding && !a.swimming && !a.emoting && a.alive && !a.downed) {
         // negative: +rotation.x on these spines bends FORWARD, and looking UP
         // (pitch > 0) must arch the torso BACK (verified by pitch-sweep probe)
         const lean = K.clamp(a.pitch, -1.1, 1.1) * -0.30;
@@ -3342,7 +3346,7 @@ function animate(W, a, dt) {
       // run (off screen: the shadow-range weld), the spine carries the clip's own yaw, NOT the aim twist, so the weld uses twist 0 there. It
       // used the full twist: a Mixamo rifle bot landing off screen (seed 11, s15, AR, aimDelta 1.0 rad) had its barrel 0.95 rad one side of
       // the body and its bladed rifle chest ~0.95 rad the other: barrel . chest -0.335 / -0.223, the gun backwards in its shadow.
-      const spineTwisted = pistolTwist || (useMixamoGun && armed && a.onGround && !a.gliding && !a.swimming && !a.emoting && a.alive && !a.downed);
+      const spineTwisted = pistolTwist || ((useMixamoGun || pistolRifle) && armed && a.onGround && !a.gliding && !a.swimming && !a.emoting && a.alive && !a.downed);
       // (R4, rigcheck_ashgrid (c)) ...and ONCE on a frame the mixer did not re-key the bones when the gun has not been welded to the
       // pose they hold: a bot that lands (or swaps guns) off screen beyond shadow range has its mixer policy-skipped, so the weld above
       // never ran on the ground and the holder kept its glide-time grip on the frozen pose (seed 7 s18 juggernaut LMG, 219 m off
