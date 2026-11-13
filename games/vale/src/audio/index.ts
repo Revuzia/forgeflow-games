@@ -391,7 +391,7 @@ const HEAL_CHAIN_S = 1.2;    // … and not when the same target was healed this
 // down 0.3 LU, centred on the -18 token
 // ruling 34 (the map beds 10 dB under the music, no calm lift on the bed): the beds had carried 1.5-2.4 LU of the master
 // (seeds 3 / 7 / 11 / 21 at -18.56 / -20.81 / -20.07 / -20.59 LUFS with the beds cut at 3.2), so the makeup takes it back
-// whole-mix: 3.2 -> 5.0, the four seats centred on the -18 token again
+// whole-mix: 3.2 -> 5.0 (seeds 3 / 7 / 11 / 21 at -17.15 / -18.84 / -18.27 / -19.17 LUFS, all four gates PASS)
 const MIX_TRIM_DB = 5.0;     // the engine's mix makeup after the master volume, before the limiter (see `buses`)
 // mix focus (max2 SFX-1b): the fighters' kits were under half of the heard sfx on a jungle-heavy seat (library camp
 // cues: c_cast_big, c_monster_fall, c_hit_magic, c_slam). A MOBA mix leads with the player's own hero: your fighter's
