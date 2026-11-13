@@ -1275,3 +1275,16 @@ long press frame-rate independent. Report after 1-2 verified.
   when a bigger attribute replaces a ring). Rings: roads ribbons, fx/particles. test (+1, 5/5). dist34.
   probe-copies.mjs prints 'rest copies by owner' (copied during the rest frames only). run-s16d.sh: copies-s16on2
   (dist34), then deck new / old (dist32; deck-new's first run was killed after the 540 m stop to free the slot).
+- copies-s16on2 (dist34): vegetation + roads gone; the remaining life copies were BUILDING pages (bldbatch.ts BldPage,
+  2^15-vertex BatchedMesh pages: position 393 kB, 524 kB 4-comp, index 131 kB) taking new buildings while drawn.
+  -> ringIntercept(geo) (bufring.ts): every attribute + index of a BatchedMesh page ringed, the members' addUpdateRange
+  overridden to feed the ring (three's setGeometryAt / optimize call it), made after the page's first addGeometry
+  (BldPage.addGeom; again after a non-paged grow). Decals (fx/decals.ts) ringed too. test (+1, 6/6).
+- copies-s16on3 (dist35): whole-buffer copies 0.57 MB/frame x4.4 (off run: 8.26 x100), GPU waits 4 vs 18; flight
+  0.2 / 6.4 / 0.6 copies a frame; life GONE; the rest = terrain pages at REST (~7 copies a frame): compaction moving
+  patches into drawn pages (packHot 101 of 6528 landings; capHot 13; FRESH_STATS / window.__GENESIS_FRESH__).
+  -> compaction moves a page's patches only when cold pages have room for them all, else the slack waits (bounded by
+  alloc's allowance). node flight: hot page writes 16 / 3828 = 0.4%. dist36. run-s16g.sh: ab16-off shots, copies-s16on4
+  (dist36), deck new / old.
+- IMAGE A/B ab16/on-*.png (dist35) vs ab16/off-*.png (bufring=0 freshland=0), perf-descent lowsun phase babel 640x360;
+  diff: python3 _harness/arc-work/imgdiff.py A B [OUT].
