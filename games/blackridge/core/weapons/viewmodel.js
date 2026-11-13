@@ -237,7 +237,10 @@ export function createViewmodel(ctx) {
   //   rim   — cool directional from behind-right: separates the dark gun/arms from
   //           the dark night scene with a silhouette edge (the readability fix).
   //   point — the old over-the-shoulder point, kept low (muzzle flash adds its own).
-  const vmFill = new THREE.HemisphereLight(0xa9bfdc, 0x2e2a26, 1.8);
+  // 2026-11-13 retune (measured on captures): the key came from near the camera axis,
+  // so every face pointing at the player was lit flat and pale. It now rakes down from
+  // upper-left; fill lowered and rim raised so form comes from shading, not from wash.
+  const vmFill = new THREE.HemisphereLight(0xa9bfdc, 0x2e2a26, 1.1);
   vmFill.name = "__vm_fill__";
   vmFill.layers.set(VM_LAYER);        // NOT enableAll — vm pass only
   ctx.scene.add(vmFill);              // scene-parented: hemi axis stays world-up
@@ -253,8 +256,8 @@ export function createViewmodel(ctx) {
     l.target = t;
     return l;
   };
-  const vmKeyDir = mkDir("__vm_key_dir__", 0xe8eef8, 2.2, [-0.5, 0.9, 0.7], [0.0, -0.1, -1.0]);
-  const vmRim = mkDir("__vm_rim__", 0x86a8ff, 1.5, [0.8, 0.5, -0.9], [0.0, 0.0, 0.0]);
+  const vmKeyDir = mkDir("__vm_key_dir__", 0xe8eef8, 1.7, [-0.7, 1.3, 0.15], [0.0, -0.1, -1.0]);
+  const vmRim = mkDir("__vm_rim__", 0x86a8ff, 1.9, [0.8, 0.5, -0.9], [0.0, 0.0, 0.0]);
   const VM_KEY_D = 0.42, VM_KEY_E = 0.45;
   const vmKey = new THREE.PointLight(0xc8d6ea, VM_KEY_E * VM_KEY_D * VM_KEY_D, 3.5, 2);
   vmKey.name = "__vm_key__";

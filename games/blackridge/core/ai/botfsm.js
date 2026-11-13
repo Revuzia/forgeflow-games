@@ -549,7 +549,10 @@ function think(sim, nav, squad, bot, t) {
       // of standing still (goal-following for this lives in act())
       if (!bot.patrol && brain.floorAnchor && brain.arrived && t >= brain.wanderAt) {
         brain.wanderAt = t + 6 + rng() * 6;
-        const p2 = nav ? nav.randomPoint(brain.anchor, 12, rng, 2) : null; // minClr 2: not in a doorway
+        // brain.anchor can be cleared by a role change while floorAnchor survives
+        // (2026-11-13: threw "reading '0' of null" in nav.randomPoint and froze the sim)
+        const wa = brain.anchor || brain.floorAnchor || bot.pos;
+        const p2 = nav ? nav.randomPoint(wa, 12, rng, 2) : null; // minClr 2: not in a doorway
         if (p2) setGoal(nav, sim, brain, bot, p2, band.loudP > 0 && rng() < band.loudP);
       }
       // BOT-AI PASS: an idle bot parked IN a doorway / against a wall (wall-
