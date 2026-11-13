@@ -193,7 +193,11 @@
     const eyeOf = () => ({ x: a.obj.position.x, y: a.obj.position.y + a._eyeY, z: a.obj.position.z });
     function sweep(noWall) {
       W.noCamWall = !!noWall;
-      const out = { spots: 0, wedged: 0, frames: 0, pulled: 0, violations: 0, examples: [] };
+      const out = { spots: 0, wedged: 0, frames: 0, pulled: 0, violations: 0, examples: [],
+        // (W10 R1A) in a LIVED room (living, bedroom, kitchen, dining): the lens's distance to the nearest wall box (0 inside one) - never under LIVED_WALL_M
+        livedFrames: 0, livedNear: 0, livedMin: Infinity, livedHist: [0, 0, 0, 0, 0], livedEx: [] };
+      const LIVED = { living: 1, bedroom: 1, kitchen: 1, dining: 1 }, LIVED_WALL_M = 0.3;
+      const boxDist = (x, y, z, c) => { const dx = Math.max(c.minX - x, 0, x - c.maxX), dy = Math.max(c.minY - y, 0, y - c.maxY), dz = Math.max(c.minZ - z, 0, z - c.maxZ); return Math.sqrt(dx * dx + dy * dy + dz * dz); };
       let s = 99; const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
       for (const r of H.rooms) {
         const pts = [];
@@ -213,6 +217,13 @@
               step(1); out.frames++;
               const e = eyeOf(), cp = cam.position, stt = W._camWall || {};
               if (stt.pulled) out.pulled++;
+              if (LIVED[r.kind]) {
+                let dm = Infinity;
+                for (const c of walls) { if (inBox(e.x, e.y, e.z, c, EPS)) continue; const d = boxDist(cp.x, cp.y, cp.z, c); if (d < dm) dm = d; }
+                out.livedFrames++; if (dm < out.livedMin) out.livedMin = dm;
+                out.livedHist[dm < 0.1 ? 0 : dm < 0.2 ? 1 : dm < 0.3 ? 2 : dm < 0.5 ? 3 : 4]++;
+                if (dm < LIVED_WALL_M) { out.livedNear++; if (out.livedEx.length < 4) out.livedEx.push({ room: r.id, kind: r.kind, d: r2(dm), eye: [e.x, e.y, e.z].map(r2), cam: [cp.x, cp.y, cp.z].map(r2), yaw: r2(yaw), pitch: pit }); }
+              }
               for (const c of walls) {
                 if (inBox(e.x, e.y, e.z, c, EPS)) continue;
                 let bad = null;

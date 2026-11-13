@@ -168,6 +168,8 @@ export const LOOT_K_LODGE = 0.5;           // (W10 R1A) a lodge / mill building 
 export const LOOT_K = Object.freeze({ home: 1, house: 0.6, shop: 0.85, midrise: 0.95, tower: 1, hall: 0.8, shed: 0.7, barn: 1 });
 export const RNG_LEAK = false;             // (the homes gate's rng-leak plant: Math.random in the quota - the census must see two builds differ)
 const FILLER_TYPE = /clock|lamp|[pP]lant|trash|art|poster|rug|wallShelf|mirror|whiteboard|runner|coatRack|monitor|carton|box\/box|televisionModern|Microwave/;   // (the homes census's FILL list)
+/** (W10 R1A) a catalog entry's filler-cap class (0 none, 1 clock, 2 floor lamp, 3 potted plant), cached on the entry */
+const capKind = (c) => { if (c._capK === undefined) { const t = c.type || ""; c._capK = /clock/.test(t) ? 1 : /lamp(Round|Square)Floor/.test(t) ? 2 : /pottedPlant/.test(t) ? 3 : 0; } return c._capK; };
 const QUOTA_KINDS = new Set(["living", "bedroom", "kitchen"]);
 // the substantive pieces a lived room's quota draws from, in order (kit where the kit has it; authored stand-ins where the budget asks)
 const QUOTAPOOL = {
@@ -362,6 +364,27 @@ export const KIT_BOXES = {
   "furniture/lampRoundFloor": { min: [-0.167, 0, -0.193], max: [0.167, 1.892, 0.193], tris: 76, m: "interior" },
   "furniture/loungeChair": { min: [-0.539, 0, -0.451], max: [0.539, 1.012, 0.451], tris: 124, m: "interior" },
   "furniture/coatRackStanding": { min: [-0.3, 0, -0.3], max: [0.3, 1.694, 0.3], tris: 185, m: "interior" },
+  // (W10 R1A item 8) the 17 Kenney Furniture Kit 2.0 pieces (CC0) copied in for the homes' variety (manifest.json rows; a literal copy as above). Placed as per-house
+  // variants (VARIETY): the double wall unit, the big hood, the drawer nightstand, the glass coffee table, the relax armchair, the rounded dining chair, the pedestal
+  // basin, the vintage TV, the stacked washer-dryer, the bunk bed, the wall coat hooks. Shipped, not placed: the corner sofa (an L: one AABB leaves > 0.25 m empty), the
+  // round shower (2.77 m tall at FURN_K), the large fridge (wider than a kitchen-run unit), the upper corner unit, the mirror (the bath set's mirror is a drawn-only plate), the bench.
+  "furniture/hoodLarge": { min: [-0.473, 0, -0.313], max: [0.473, 0.813, 0.313], tris: 34, m: "interior" },
+  "furniture/kitchenCabinetUpperDouble": { min: [-0.473, 0, -0.242], max: [0.473, 0.858, 0.242], tris: 230, m: "interior" },
+  "furniture/kitchenCabinetUpperCorner": { min: [-0.237, 0, -0.231], max: [0.237, 0.858, 0.231], tris: 204, m: "interior" },
+  "furniture/kitchenFridgeLarge": { min: [-0.572, 0, -0.446], max: [0.572, 2.024, 0.446], tris: 436, m: "interior" },
+  "furniture/bathroomSink": { min: [-0.374, 0, -0.319], max: [0.374, 1.232, 0.319], tris: 312, m: "interior" },
+  "furniture/bathroomMirror": { min: [-0.331, 0, -0.159], max: [0.331, 0.956, 0.159], tris: 69, m: "interior" },
+  "furniture/showerRound": { min: [-0.618, 0, -0.618], max: [0.618, 2.407, 0.618], tris: 958, m: "interior" },
+  "furniture/loungeDesignSofaCorner": { min: [-1.485, 0, -1.485], max: [1.485, 0.88, 1.485], tris: 168, m: "interior" },
+  "furniture/loungeChairRelax": { min: [-0.539, 0, -0.742], max: [0.539, 1.386, 0.742], tris: 184, m: "interior" },
+  "furniture/chairRounded": { min: [-0.22, 0, -0.22], max: [0.22, 1.001, 0.22], tris: 278, m: "interior" },
+  "furniture/bedBunk": { min: [-0.628, 0, -1.204], max: [0.628, 1.87, 1.204], tris: 567, m: "interior" },
+  "furniture/cabinetBedDrawerTable": { min: [-0.293, 0, -0.239], max: [0.293, 0.579, 0.239], tris: 138, m: "interior" },
+  "furniture/tableCoffeeGlass": { min: [-0.727, 0, -0.44], max: [0.727, 0.506, 0.44], tris: 136, m: "interior" },
+  "furniture/televisionVintage": { min: [-0.451, 0, -0.297], max: [0.451, 0.594, 0.297], tris: 280, m: "interior" },
+  "furniture/washerDryerStacked": { min: [-0.429, 0, -0.429], max: [0.429, 2.068, 0.429], tris: 986, m: "interior" },
+  "furniture/coatRack": { min: [-0.493, 0, -0.148], max: [0.493, 0.616, 0.148], tris: 122, m: "interior" },
+  "furniture/bench": { min: [-0.44, 0, -0.22], max: [0.44, 1.034, 0.22], tris: 163, m: "interior" },
   // round 2 (lane H4): the interior types round 1 left unused (kitchen wall cabinets, microwave, a slim TV, sofas, shelving, lamps, laundry, ...).
   // Not taken: hoodModern, deskCorner, loungeSofaCorner / Long, tableRound (their drawn shapes leave > 0.25 m of an AABB collider empty), lampWall /
   // lampSquareCeiling (< 0.25 m, or hung where the camera pulls in), books (decor under 0.25 m).
@@ -595,7 +618,9 @@ export const CATALOGS = {
     ["tvSet", "furniture/televisionModern", null, { mount: "top" }], ["sofaDesign", "furniture/loungeDesignSofa"],
     ["coffeeSq", "furniture/tableCoffeeSquare", 0.506], ["bookcaseOpen", "furniture/bookcaseOpen"], ["lampSq", "furniture/lampSquareFloor"], ["lampTable", "furniture/lampSquareTable", null, { mount: "top" }],
     ["nightLow", "furniture/cabinetBed", 0.513], ["bathCab", "furniture/bathroomCabinet", null, { mount: "wall", y0: 1.35 }],
-    ["tableCloth", "furniture/tableCloth", 0.719], ["chairMod", "furniture/chairModernCushion"], ["plantSmall", "furniture/plantSmall1", null, { mount: "top" }]],
+    ["tableCloth", "furniture/tableCloth", 0.719], ["chairMod", "furniture/chairModernCushion"], ["plantSmall", "furniture/plantSmall1", null, { mount: "top" }],
+    // (W10 R1A item 8) the variants (VARIETY): the double wall unit, the rounded dining chair, the pedestal basin
+    ["upperDbl", "furniture/kitchenCabinetUpperDouble", null, { mount: "wall", y0: 1.62 }], ["chairRound", "furniture/chairRounded"], ["basinPed", "furniture/bathroomSink"]],
   { box: "carton", boxOpen: "cartonOpen", chair: "chairMod", chairDesk: "officeChair", desk: "deskA", stove: "stoveBox", stool: "stoolA", coffee: "coffeeSq", screen: "monitor",
     ottoman: "stoolA", rack: "rackWall", pallet: "palletA", rugRect: "rugLarge", rugRound: "rugLarge", dresser: "dresserA", dryer: "washer", drawerCab: "counter", tableCross: "tableA",
     bookcaseLow: "shelfLow", bookcaseWide: "bookcase", coatRack: "coatRackA" }),
@@ -603,6 +628,13 @@ export const CATALOGS = {
 // the base profile has no round-2 kit types: a recipe asking for one gets the nearest piece the profile has (or nothing)
 const ALIAS = { rack: "shelf", lampSq: "plant", lamp: "plant", bookcaseLow: "shelfLow", bookcaseOpen: "bookcase", bookcaseWide: "bookcase", sofaDesign: "sofa", dresser: "sideTable",
   nightLow: "nightstand", drawerCab: "counter", chairMod: "chair", tableCross: "table", tableCloth: "table", coffeeSq: "coffee", boxOpen: "box", armchair: "chair", coatRack: "plant" };
+// (W10 R1A item 8) per-house model variety, AFTER the furnishing (so every placement, every draw of the furnishing stream and every gate count is what it was):
+// a placed kit piece of type T becomes its variant when the house drew it (its own stream, subRng "kitvar": half of the houses per variant, one choice for the
+// whole house) and the variant fits inside the piece's footprint, mounts the same way, carries nothing on its top and keeps the storey in budget. A
+// wall piece keeps its back on the wall. (The new kit pieces wider or deeper than the piece they would replace - the big hood, the glass coffee table, the
+// relax armchair, the vintage TV, the wall coat hooks, the stacked washer-dryer, the drawer nightstand (5 mm deeper) - and the bunk bed, 2.15 m tall, are shipped in the kit and not placed;
+// the interior profile's kit download stays <= 300 KB: housegen.selftest 'kit download')
+const VARIETY = [["furniture/kitchenCabinetUpper", "upperDbl"], ["furniture/chairModernCushion", "chairRound"], ["furniture/bathroomSinkSquare", "basinPed"]];
 // a room's share of its storey's triangle budget is weighted by what it must hold (a kitchen's counter row and dining set cost ~1,400 triangles,
 // a bathroom's set is mostly authored boxes, a hall holds a lamp and a plant)
 const SHAREW = { ruin: 0.8, kitchen: 2.0, living: 1.5, shop: 1.5, lobby: 1.3, bedroom: 1.2, meeting: 1.2, office: 1.0, warehouse: 1.0, barn: 1.0, storage: 0.7, bath: 0.8, hall: 0.5 };
@@ -715,6 +747,9 @@ export function generate(parcel, opts) {
   const kitProfile = opts && CATALOGS[opts.kit] ? opts.kit : DEFAULT_KIT, CATALOG = CATALOGS[kitProfile];
   const rng = subRng(P.seed, P.id, "house");
   const TH = THEMES[P.theme];
+  // (W10 R1A item 8) this house's model variety (VARIETY): its own stream, so every other draw of the house is what it was
+  const VAR = {};
+  { const rv = subRng(P.seed, P.id, "kitvar"); for (const [t, v] of VARIETY) { const x = rv(); if (x < 0.5 && CATALOG[v]) VAR[t] = CATALOG[v]; } }
   const rr5 = TH.ruined ? subRng(P.seed, P.id, "ruin") : null;          // (K1) a ruin's wreckage: its own stream (the house's rooms and furniture keep theirs)
   const { nx, nz } = P;
   const W = nx * U, D = nz * U;
@@ -2796,10 +2831,9 @@ export function generate(parcel, opts) {
     // (W10 R1A) a home's filler caps: one clock in the house, one floor lamp and one potted plant a room
     const capOK = (c) => {
       if (!c || !home || !FILLER_CAPS) return true;
-      const t = c.type || "";
-      if (/clock/.test(t)) return !furn.some((q) => /clock/.test(q.cat.type || ""));
-      if (/lamp(Round|Square)Floor/.test(t)) return !placed.some((q) => /lamp(Round|Square)Floor/.test(q.cat.type || ""));
-      if (/pottedPlant/.test(t)) return !placed.some((q) => /pottedPlant/.test(q.cat.type || ""));
+      const k = capKind(c);                              // (W10 R1A, CPU: the class cached on the catalog entry - was three regexes a lookup)
+      if (k === 1) return !furn.some((q) => capKind(q.cat) === 1);
+      if (k === 2 || k === 3) return !placed.some((q) => capKind(q.cat) === k);
       return true;
     };
     const catOf = (id) => { let c = CATALOG[id] || CATALOG[ALIAS[id]]; while (c && !budgetOK(c) && c.alt) c = c.alt; return capOK(c) ? c : null; };
@@ -3164,7 +3198,9 @@ export function generate(parcel, opts) {
         miss = 0;
       });
       // (a room still under QUOTA_MIN: the small pieces once more, anywhere on the lattice - its middle too - where the room's ports stay joined)
-      for (const id of ["wallCab", "sideTable", "ottoman", "stool", "wallCab", "chairMod", "bookcaseLow", "sideTable", "ottoman", "stool"]) later(() => {
+      // (pass 2: the room's own kind first - a living room short of 6 takes an armchair / a coffee table before the generic small pieces)
+      const RESCUE_KIND = { living: ["armchair", "coffeeSq", "armchair"], bedroom: ["dresser", "chairMod"], kitchen: ["stool", "chairMod"], dining: ["chairMod", "stool"] };
+      for (const id of (RESCUE_KIND[kind] || []).concat(["wallCab", "sideTable", "ottoman", "stool", "wallCab", "chairMod", "bookcaseLow", "sideTable", "ottoman", "stool"])) later(() => {
         if (subs() >= QUOTA_MIN || fails.has(id + "*")) return;
         const c = catOf(id);
         if (c && c.mount === "wall") { if (!tryWall(id, "center", { tint: tintW, noView: true })) fails.add(id + "*"); return; }
@@ -3827,6 +3863,17 @@ export function generate(parcel, opts) {
   for (let k = furn.length - 1; k >= 0; k--) if (furn[k].host && !furn.includes(furn[k].host)) { const p = furn[k], l = p.room._ps, q = l.indexOf(p); if (q >= 0) l.splice(q, 1); if (p.room._rw) p.room._rw.stale = true; tris[p.f] -= p.cat.tris; furn.splice(k, 1); removed++; }
   if (removed) notes.push("walk: removed " + removed + " piece(s) that closed a path");
 
+  // ---- (W10 R1A item 8) model variety: the house's variants swapped in for the pieces they fit (see VARIETY)
+  for (const p of furn) {
+    const v = VAR[p.cat.type];
+    if (!v || p.slot || p.tops || p.host || v.mount !== p.cat.mount || v.w > p.cat.w + 1e-6 || v.d > p.cat.d + 1e-6 || tris[p.f] - p.cat.tris + v.tris > TB) continue;
+    const dd = (p.cat.d - v.d) / 2, dir = FACE[p.fq];
+    if (p.run) { p.u -= dir[0] * dd; p.v -= dir[1] * dd; }                       // (a wall piece keeps its back on the wall)
+    const w = p.fq % 2 ? v.d : v.w, d = p.fq % 2 ? v.w : v.d;
+    p.rect = [p.u - w / 2, p.v - d / 2, p.u + w / 2, p.v + d / 2];
+    tris[p.f] += v.tris - p.cat.tris;
+    p.cat = v;
+  }
   // ---- loot points: furniture tops first (front edge, reachable), then free floor spots; chests on their slots
   const loot = [], underM = [];
   // (Wave 9) a door leaf's swing quarter disc (+ 0.15 m: the item's own size) is no place for floor loot: the leaf would sweep it / stand on it
