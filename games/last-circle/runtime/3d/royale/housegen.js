@@ -1229,6 +1229,12 @@ export function generate(parcel, opts) {
     if (home) far = far.filter((e) => nD0(F0.region[e[3]]) < 2 || F0.regs[F0.region[e[3]]].cells.length > 5);
     // (and never into a bedroom or a bath - no back door then: its leaf and door zone left a 5 x 5 m bedroom no wall for the bed - logging@p19)
     if (home) far = far.filter((e) => !["bedroom", "bath"].includes(F0.regs[F0.region[e[3]]].kind));
+    // (W10 R1A pass 2: and not in the last cell of its wall when another cell will do - a leaf shut 0.24 m from the corner is walked round: collisioncheck doors-closed,
+    // banana_farm@p2.d5 Isla Viva seed 7. A cell's wall runs on when the footprint holds the cells on both sides of it along that wall)
+    if (home) {
+      const runsOn = (e) => { const ci = e[3] % nx, cj = Math.floor(e[3] / nx); return e[0] === "H" ? inFoot(ci - 1, cj) && inFoot(ci + 1, cj) : inFoot(ci, cj - 1) && inFoot(ci, cj + 1); };
+      const mid = far.filter(runsOn); if (mid.length) far = mid;
+    }
     if (far.length) { const e = pick(rng, far); mkDoor(F0, e[0], e[1], e[2], "back", F0.region[e[3]], null); }
   }
   // READ FROM ITS DOOR: every room gets a door on its OUTLINE (its bounding rectangle: where a player standing in the doorway sees the whole room

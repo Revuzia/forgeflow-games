@@ -68,6 +68,10 @@ MJ = "runtime/3d/royale/maps.js"
 STOREYS_POOLED = 30          # (pass 2: plan scope cut 1 - was 40)
 
 PLANTS = {
+    # (pass 2, scope cut 1: the storeys floor is 30 % - the 7.5 m one-storey house_s alone leaves ~34 % two-storey, so storeys gets its own control, flat-homes)
+    "flat-homes": ({"storeys"}, [(TG, r'house_s: \{ use: "house", gen: "house", dims: \[[^\n]*?\], floors: \[[^\]]*\]', 'house_s: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10]], floors: [1]'),
+                                 (TG, r'house_m: \{ use: "house", gen: "house", dims: \[[^\n]*?\], floors: \[[^\]]*\]', 'house_m: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10]], floors: [1]'),
+                                 (TG, r'cabin: \{ use: "house", gen: "house", dims: \[[^\n]*?\], floors: \[[^\]]*\]', 'cabin: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10], [10, 12.5]], floors: [1]')]),
     "tiny-homes": ({"home-size", "storeys"}, [(TG, r'house_s: \{ use: "house", gen: "house", dims: \[[^\n]*?\], floors: \[[^\]]*\]',
                                                  'house_s: { use: "house", gen: "house", dims: [[7.5, 7.5], [10, 7.5]], floors: [1]')]),
     # (pass 2) the plan's control: the audit's furnishing back (the VIEW_WANT top-up alone: no area quota, no centre-of-room groups) -> density. It cannot fail
