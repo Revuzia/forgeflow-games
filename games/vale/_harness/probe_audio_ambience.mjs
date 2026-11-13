@@ -107,7 +107,7 @@ const { createAudioEngine } = await import('../src/audio/index.ts');
 
 const SETTINGS = { audio: { master: 0.8, music: 0.6, sfx: 0.8, voice: 0.9, ui: 0.7, ambience: 0.6, muteInBackground: true } };
 const dB = (a) => (a > 0 ? 20 * Math.log10(a) : -Infinity);
-// measured integrated loudness per ambience cue (audio/build.py --json); the recipe target otherwise
+// measured integrated loudness per ambience cue (audio/build.py --json); the recipe target otherwise (beds -33, ruling 34)
 const LINT = {};
 try {
   const b = JSON.parse(readFileSync(join(HERE, '_reports', 'fw_W3_procs_amb_build.json'), 'utf8'));
@@ -160,7 +160,7 @@ for (const modeId of ['rift', 'bridge', 'fray']) {
       (series[em.role] ??= []).push(em.att);
       const c = audio.cues[em.cue];
       // a positional emitter is a mono file through a StereoPanner: equal power, -3 dB against the bed's up-mix
-      p += (c.gain * em.att) ** 2 * 10 ** ((LINT[em.cue] ?? (c.spatial ? -25 : -23)) / 10) * (c.spatial ? 0.5 : 1);
+      p += (c.gain * em.att) ** 2 * 10 ** ((LINT[em.cue] ?? (c.spatial ? -25 : -33)) / 10) * (c.spatial ? 0.5 : 1);
     }
     const duckG = eng.ambDuck.gain.value;
     if (view.time >= 30 && view.time <= 210) {

@@ -527,7 +527,7 @@ const AMB_RELEASE_S = 3.5;   // the duck's return after a fight (time constant):
 // the positional emitters, and so the RIFT ambience bus, level with the match music in quiet stretches
 // (max2 SFX-1b) mix density: the sfx bus eases FIGHT_SFX_DB at the same fight heat (the threat path, what lands on YOU,
 // is not eased): a brawling seat's sum of every kit ran 2.4 LU over a jungle seat's (-16.7 / -18.3 LUFS, one build),
-// against the master's 3 LU token band; eased, both seats sit inside it with the calm lift above
+// against the master's 3 LU token band; eased, both seats sit inside it
 const FIGHT_SFX_DB = 3;
 const FIGHT_HIT = 0.12;      // fight heat per fighter-vs-fighter hit near the listener (or your living fighter) …
 const FIGHT_DECAY = 0.15;    // … cooling per second
