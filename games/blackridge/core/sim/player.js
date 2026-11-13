@@ -16,6 +16,7 @@
 import { fireShot, dirFromAngles } from "./ballistics.js";
 import { resolveSwitch as resolveSwitchTarget, normalise as normaliseLoadout } from "./loadout.js";
 import { spawnGrenade, detonateAt } from "./grenades.js";
+import { hasPerk, PERK_FX } from "./classes.js";
 
 export const MOVE = {
   WALK: 4.6, STRAFE_MULT: 0.9, BACK_MULT: 0.76,
@@ -219,7 +220,8 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
     if (sprintRepress && m.tacLeft > 0.2) m.sprintState = "tac";
   }
   if (m.sprintState === "tac") {
-    m.tacLeft -= dt;
+    // LONG STRIDE perk: the same 4 s tank drains at half rate (8 s of tac)
+    m.tacLeft -= hasPerk(p, "doubleTime") ? dt / PERK_FX.doubleTime.tacMult : dt;
     if (m.tacLeft <= 0) { m.tacLeft = 0; m.sprintState = "sprint"; }
   } else {
     m.tacLeft = Math.min(MOVE.TAC_MAX_S, m.tacLeft + (MOVE.TAC_MAX_S / MOVE.TAC_RECHARGE_S) * dt);
@@ -256,7 +258,7 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
     let target = null;
     if (m.sprintState === "tac") target = MOVE.TAC;
     else if (m.sprintState === "sprint") target = MOVE.SPRINT;
-    else if (p.stance === "crouch") target = MOVE.CROUCH;
+    else if (p.stance === "crouch") target = hasPerk(p, "doubleTime") ? MOVE.CROUCH * PERK_FX.doubleTime.crouchMult : MOVE.CROUCH;
     else if (p.weapon.ads) target = MOVE.WALK * (weapon && weapon.adsMoveMult != null ? weapon.adsMoveMult : 0.6);
     if (target != null && wl > 0.01) {
       const dirx = m.sprintState !== "none" ? f[0] : wish[0] / wl;
@@ -412,6 +414,7 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
         speed: hspeed,             // m/s at the moment of the foot-plant
         stride,                    // m of ground this footfall represents
         hz: hspeed / stride,       // instantaneous cadence, footfalls/s
+        quiet: hasPerk(p, "deadsilence"), // SOFT STEP perk — audio may duck the cue
       });
     }
   } else m.stepDist = STRIDE.PRIME_M; // primed so the first step lands quickly
@@ -520,7 +523,11 @@ export function stepActorWeapon(sim, who, vc, dt) {
   if (!weapon) return;
   const m = isP ? state.player._m : null;
 
-  w.stateT = (w.stateT || 0) + dt;
+  // DEFT HANDS perk: reload (mag and shell-by-shell) and weapon swap run on a
+  // faster clock — every timing below is a stateT threshold, so one scale
+  // covers commit points, shell cadence and the swap together.
+  const fastHands = (w.state === "reloading" || w.state === "switching") && hasPerk(actor, "fastHands");
+  w.stateT = (w.stateT || 0) + (fastHands ? dt / PERK_FX.fastHands.timeMult : dt);
 
   // ---- ADS (§2.4): blocked while sprinting / mantling / sliding-lock / reload
   const adsBlocked = (vc.sprintState && vc.sprintState !== "none") || vc.mantling ||
@@ -600,7 +607,8 @@ export function stepActorWeapon(sim, who, vc, dt) {
         w._shellPhase = "load";
         w._reloadDur = weapon.reload.startS + weapon.reload.perShellS * Math.max(1, weapon.mag - w.mag) + weapon.reload.endS;
       }
-      sim.emit("reload", { who, weaponId: w.id, phase: "start", duration: w._reloadDur, empty });
+      sim.emit("reload", { who, weaponId: w.id, phase: "start",
+        duration: hasPerk(actor, "fastHands") ? w._reloadDur * PERK_FX.fastHands.timeMult : w._reloadDur, empty });
     } else if (vc.reloadBufferedT != null && t - vc.reloadBufferedT <= MOVE.BUFFER_S) {
       vc.consumeReload && vc.consumeReload();
     }
@@ -771,7 +779,7 @@ export function stepBotLocomotion(sim, bot, dt) {
   {
     const wpn = sim.weapons && bot.weapon ? sim.weapons[bot.weapon.id] : null;
     let tgt = null;
-    if (cmd.crouch) tgt = MOVE.CROUCH;
+    if (cmd.crouch) tgt = hasPerk(bot, "doubleTime") ? MOVE.CROUCH * PERK_FX.doubleTime.crouchMult : MOVE.CROUCH;
     else if (cmd.sprint && mz > 0.5) tgt = MOVE.SPRINT;
     else if (bot.weapon && bot.weapon.ads) tgt = MOVE.WALK * (wpn && wpn.adsMoveMult != null ? wpn.adsMoveMult : 0.6);
     if (tgt != null && wl > 0.01) { wx = (wx / wl) * tgt; wz = (wz / wl) * tgt; }
@@ -822,7 +830,7 @@ export function stepBotLocomotion(sim, bot, dt) {
       sim.emit("step", {
         who: bot.id, surface: gHit ? gHit.surface : "concrete", sprint: !!cmd.sprint,
         foot: bot._stepFoot, stance: bot.stance,
-        speed: hspeed, stride, hz: hspeed / stride,
+        speed: hspeed, stride, hz: hspeed / stride, quiet: hasPerk(bot, "deadsilence"),
       });
     }
   } else bot._stepDist = bot._stepPrime; // re-prime keeps this bot's offset

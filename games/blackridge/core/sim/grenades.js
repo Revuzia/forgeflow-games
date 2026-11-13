@@ -8,6 +8,7 @@
 // spawnGrenade; bot v0 = 16 m/s, player 22 m/s — the CALLER sets velocity).
 
 import { applyDamage } from "./damage.js";
+import { hasPerk, PERK_FX } from "./classes.js";
 
 export const GRENADE = {
   FUSE_S: 3.8,
@@ -55,7 +56,7 @@ function explode(sim, who, pos, source, opts) {
   const world = sim.world;
   const hardOnly = (box) => (box.matClass || "hard") === "hard";
 
-  const applyTo = (victim, vpos, stance) => {
+  const applyTo = (victim, vpos, stance, body) => {
     if (noSelf && victim === who) return;
     const chest = [vpos[0], vpos[1] + (stance === "crouch" ? 0.8 : 1.1), vpos[2]];
     const d = Math.hypot(chest[0] - pos[0], chest[1] - pos[1], chest[2] - pos[2]);
@@ -63,13 +64,15 @@ function explode(sim, who, pos, source, opts) {
     let dmg = dC + (dE - dC) * (d / R);
     // §5.9: through `hard` cover 25% (crouching behind full cover survives)
     if (world.losBlocked(pos, chest, hardOnly)) dmg *= GRENADE.THROUGH_HARD;
+    // BLAST WEAVE perk (class matches): frags, cooks AND call-in strikes
+    if (hasPerk(body, "flak")) dmg *= PERK_FX.flak.explosiveMult;
     if (dmg > 0.5) applyDamage(sim, victim, dmg, who, "body", "grenade");
   };
 
   const p = sim.state.player;
-  if (p.alive) applyTo("P", p.pos, p.stance);
+  if (p.alive) applyTo("P", p.pos, p.stance, p);
   for (const b of sim.state.bots) {
-    if (b.alive) applyTo(b.id, b.pos, b.stance);
+    if (b.alive) applyTo(b.id, b.pos, b.stance, b);
   }
 }
 

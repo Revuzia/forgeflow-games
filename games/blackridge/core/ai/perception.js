@@ -46,6 +46,8 @@
 // noTarget (sim.flags.noTarget): the PLAYER does not exist to perception —
 // keeps A1's ballistic probes clean, and is the C14 warm-up freeze lever.
 
+import { PERK_FX } from "../sim/classes.js";
+
 const BASE_FILL = 2.5;
 const DECAY_PER_S = 0.25;
 const HEARD_CAP = 0.85;
@@ -247,7 +249,10 @@ export function perceive(bot, sim, world, dt, rngAi) {
     const hspeed = Math.hypot(body.vel[0], body.vel[2]);
     const grounded = body.grounded !== false; // bots are ground-locked
     if (grounded && hspeed > 0.8) {
-      const r = (hspeed >= 5.5 ? 14 : (body.stance === "crouch" ? 2.5 : 7)) * kHear;
+      // SOFT STEP perk (class matches — classes.js PERK_FX.deadsilence): the
+      // operator's footfalls carry 0.35x as far (sprint 4.9 m, walk 2.45 m)
+      const quiet = body.perks && body.perks.deadsilence ? PERK_FX.deadsilence.hearMult : 1;
+      const r = (hspeed >= 5.5 ? 14 : (body.stance === "crouch" ? 2.5 : 7)) * kHear * quiet;
       if (d <= r) {
         const fz = (body.stance === "crouch" ? 2 : 3) * kFuzz;
         const pos = [body.pos[0] + (rngAi() * 2 - 1) * fz, body.pos[1],

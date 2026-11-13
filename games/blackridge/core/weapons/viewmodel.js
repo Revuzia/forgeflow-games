@@ -323,7 +323,14 @@ export function createViewmodel(ctx) {
     return l;
   };
   const vmKeyDir = mkDir("__vm_key_dir__", 0xe8eef8, 1.7, [-0.7, 1.3, 0.15], [0.0, -0.1, -1.0]);
-  const vmRim = mkDir("__vm_rim__", 0x86a8ff, 1.9, [0.8, 0.5, -0.9], [0.0, 0.0, 0.0]);
+  // 2026-11-13 hip pass (measured, vm pass into a float RT): from [0.8, 0.5, -0.9] the rim
+  // came down at ~22 deg in front of the eye — exactly the mirror angle of the upward faces
+  // that sit close under the camera (shotgun stock / receiver top). Polymer p90 radiance was
+  // 0.092 with the rim on, 0.029 off: the "pale grey slab" (warden FDE stock p90 0.142).
+  // Swung round to the right side (from ahead-right to right, ~13 deg up) it still edges the
+  // receiver silhouette (warden metal p99 0.096, unchanged) while the stock glare falls to
+  // p90 0.056 (warden) / 0.029 (breaker).
+  const vmRim = mkDir("__vm_rim__", 0x86a8ff, 1.9, [1.0, 0.25, -0.3], [0.0, 0.0, 0.0]);
   const VM_KEY_D = 0.42, VM_KEY_E = 0.45;
   const vmKey = new THREE.PointLight(0xc8d6ea, VM_KEY_E * VM_KEY_D * VM_KEY_D, 3.5, 2);
   vmKey.name = "__vm_key__";
@@ -534,7 +541,11 @@ export function createViewmodel(ctx) {
       vmCamera.aspect = ctx.camera.aspect;
       vmCamera.updateProjectionMatrix();
     }
-    renderer.clearDepth();                 // R8: viewmodel never clips
+    // R8: viewmodel never clips. The depth MASK must be on for the clear to do anything:
+    // gl.clear honours glDepthMask, and three leaves it at the last-drawn material's
+    // depthWrite (the sentinel below has to write depth for exactly this reason).
+    renderer.state.buffers.depth.setMask(true);
+    renderer.clearDepth();
     renderer.render(ctx.scene, vmCamera);
     renderer.shadowMap.autoUpdate = sm;
     inPass = false;
@@ -545,10 +556,17 @@ export function createViewmodel(ctx) {
   // Interim auto-pass sentinel: fires at the end of any DEFAULT-framebuffer
   // scene render until a post chain claims the pass. colorWrite=false,
   // 1 degenerate triangle — costs one no-op draw call.
+  // 2026-11-13 (measured, warden hip): as an OPAQUE depthWrite:false object it fired in the
+  // middle of the frame with glDepthMask OFF, so the vm pass's clearDepth() was a no-op and
+  // the gun/arms were depth-tested against the WORLD's depth (a different projection):
+  // every vm pixel farther than ~0.4 m lost to the ground behind it — the support sleeve
+  // was cut to a 5 cm stub (the "flat blade" wedge) and rifle magazines vanished. Now it is
+  // TRANSPARENT (renderOrder 1e9 = last of the transparent list, after rain / decals / fog,
+  // so clearing depth cannot let those draw over the world) and writes depth (mask on).
   const sentinel = new THREE.Mesh(
     new THREE.BufferGeometry().setAttribute("position",
       new THREE.BufferAttribute(new Float32Array(9), 3)),
-    new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, depthTest: false }),
+    new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true, depthTest: false, transparent: true }),
   );
   sentinel.name = "__vm_autopass__";
   sentinel.frustumCulled = false;
@@ -1664,6 +1682,13 @@ export function createViewmodel(ctx) {
       if (so) pz -= so * adsEase;
     }
     let rx = 0, ry = 0, rz = 0;
+    // HIP CANT (view.rot, deg [pitch, yaw, roll], YXZ about the grip): the CoD hip pose —
+    // muzzle yawed in toward the screen centre, a touch of roll so the receiver side
+    // shows. Blended out with adsEase, so the sight picture is untouched.
+    if (view.rot) {
+      const k = (1 - adsEase) * DEG;
+      rx += view.rot[0] * k; ry += view.rot[1] * k; rz += view.rot[2] * k;
+    }
 
     if (sb > 0.001) {
       // §1.1/VT §5: sprint = gun across the chest, muzzle up-left, low (CoD "high port"): the

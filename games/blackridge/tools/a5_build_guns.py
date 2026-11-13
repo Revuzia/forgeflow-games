@@ -55,8 +55,11 @@ COL = {
     "anod":   lin((27, 28, 30)),      # black hard-anodized aluminium
     "steel":  lin((36, 36, 35)),      # parkerized / nitrided steel (barrel, pins)
     "poly":   lin((24, 24, 25)),      # black polymer
-    "fde":    lin((88, 74, 55)),      # flat dark earth polymer / cerakote
-    "fdem":   lin((80, 68, 52)),      # FDE on metal (cerakote) — slightly cooler
+    # (2026-11-13 hip/ADS pass) FDE was (88,74,55)/(80,68,52): linear 0.098 vs anodize 0.011,
+    # ~9x the receiver, so tan mags/stocks read as glowing slabs beside near-black metal at
+    # night. Halved and desaturated into the same exposure family (still clearly tan).
+    "fde":    lin((63, 56, 45)),      # flat dark earth polymer / cerakote
+    "fdem":   lin((58, 52, 43)),      # FDE on metal (cerakote) — slightly cooler
     "odg":    lin((46, 50, 38)),      # olive drab polymer
     "rubber": lin((24, 24, 24)),
     "slot":   lin((14, 14, 15)),      # inside of slots / bores
@@ -783,6 +786,9 @@ def gun_ar(spec):
     up_z1 = max(bz + 0.024 * s, bz + spec["hg_r"] - 0.001)   # flush with the handguard top
     hw = 0.0120 * s
     furn = spec.get("furniture", COL["poly"])
+    # (2026-11-13 hip pass) stocks use the textured "grip" polymer: at the hip the stock is the
+    # nearest upward-facing surface to the eye and smooth polymer caught the moon at grazing
+    # incidence as a pale slab in the bottom-right corner (same measurement as the breaker)
     recv_col = spec.get("recv_col", COL["anod"])
 
     # upper receiver: flat-top with a chamfered lower edge and the brass deflector hump
@@ -913,7 +919,7 @@ def gun_ar(spec):
         def stock_cut(bm):
             prism_x(bm, [(y0s + 0.020, tz - 0.016), (y1s - 0.040, tz - 0.016), (y0s + 0.026, tz - 0.054)],
                     -0.030, 0.030)                                                                 # lightening cut
-        part("stock", stock, furn, "poly", bevel=0.0026, seg=3, angle=25, cut=stock_cut)
+        part("stock", stock, furn, "grip", bevel=0.0026, seg=3, angle=25, cut=stock_cut)
     elif st["kind"] == "precision":
         y0s, y1s = st["y0"], st["y1"]
 
@@ -924,7 +930,7 @@ def gun_ar(spec):
             rbox(bm, -0.0215, 0.0215, y0s - 0.012, y0s + 0.002, tz - 0.082, tz + 0.030)            # buttpad
             prism_x(bm, [(y0s + 0.020, tz + 0.034), (y1s - 0.030, tz + 0.034), (y1s - 0.040, tz + 0.046),
                          (y0s + 0.030, tz + 0.048)], -0.0160, 0.0160)                               # cheek riser
-        part("stock", stock, furn, "poly", bevel=0.0030, seg=3, angle=25)
+        part("stock", stock, furn, "grip", bevel=0.0030, seg=3, angle=25)
     elif st["kind"] == "skeleton":
         y0s = st["y0"]
 
@@ -933,7 +939,7 @@ def gun_ar(spec):
                 cyl_y(bm, 0.0, zz, y0s + 0.004, ry0 - 0.004, 0.0055, seg=16)
             prism_x(bm, [(y0s, tz + 0.030), (y0s + 0.014, tz + 0.030), (y0s + 0.014, tz - 0.066),
                          (y0s, tz - 0.066)], -0.0180, 0.0180)
-        part("stock", stock, furn, "poly", bevel=0.0024, seg=2)
+        part("stock", stock, furn, "grip", bevel=0.0024, seg=2)
 
     # magazine (its own node: reload animation moves it)
     m = spec["mag"]
@@ -1027,17 +1033,47 @@ def gun_breaker():
         cyl_x(bm, 0.683, 0.074, -0.013, 0.013, 0.0030, seg=12)
     part("mag_tube", magtube, COL["anod"], "metal", "dressing", bevel=0.0010)
 
-    # ghost-ring rear on the receiver
+    # ghost-ring rear on the receiver. (2026-11-13 ADS pass) Moved from the receiver's middle
+    # (y 0.135) to its REAR (y 0.020), where Mossberg/Benelli ghost rings sit: at ADS the eye is
+    # ~14 cm behind the grip, so the ring now sits ~16 cm out and frames the bead (radius ~2.9
+    # deg) instead of being a 0.8-deg speck 42 cm away. Aperture 6.2 mm, wall 1.8 mm.
+    RY = 0.020
     def rear(bm):
-        rbox(bm, -0.010, 0.010, 0.120, 0.150, 0.110, 0.114)
-        for x0, x1 in ((-0.0105, -0.0060), (0.0060, 0.0105)):
-            prism_x(bm, [(0.128, 0.112), (0.146, 0.112), (0.142, 0.131), (0.132, 0.131)], x0, x1)
-        # ghost ring (2026-11-13: slimmer — a 1.2 mm wall instead of 2.6 mm; at ADS the ring
-        # sits ~10 cm from the eye and the old one framed the target in a black doughnut)
-        tube_ring_y(bm, 0, SZ, 0.1345, 0.1375, 0.0051, 0.0063, seg=32)
-        prism_x(bm, [(0.1335, 0.112), (0.1385, 0.112), (0.1375, SZ - 0.0058), (0.1345, SZ - 0.0058)],
-                -0.0016, 0.0016)
+        rbox(bm, -0.011, 0.011, RY - 0.016, RY + 0.016, 0.110, 0.1145)
+        for x0, x1 in ((-0.0120, -0.0076), (0.0076, 0.0120)):            # protective ears
+            prism_x(bm, [(RY - 0.009, 0.112), (RY + 0.009, 0.112), (RY + 0.005, SZ + 0.0088),
+                         (RY - 0.005, SZ + 0.0088)], x0, x1)
+        tube_ring_y(bm, 0, SZ, RY - 0.0016, RY + 0.0019, 0.0062, 0.0080, seg=40)
+        prism_x(bm, [(RY - 0.0026, 0.112), (RY + 0.0026, 0.112), (RY + 0.0016, SZ - 0.0072),
+                     (RY - 0.0016, SZ - 0.0072)], -0.0018, 0.0018)
     part("rear_sight", rear, COL["anod"], "metal", "dressing", bevel=0.0004, seg=1)
+
+    # SIGHT RIB (2026-11-13 ADS pass). At ADS the receiver's flat top sat 1.2 cm under the eye
+    # line, 7-26 cm away: bare anodized metal at grazing incidence mirrors the sky fill and the
+    # sight picture was one pale-grey slab. A matte, cross-serrated rib on the receiver plus a
+    # ventilated rib down the barrel give the eye the classic shotgun lane: ring -> rib -> bead.
+    def rcv_rib(bm):
+        rbox(bm, -0.0062, 0.0062, -0.008, 0.168, 0.1110, 0.1150)
+    def rcv_rib_cut(bm):
+        yy = -0.004
+        while yy < 0.164:
+            if not (RY - 0.019 < yy < RY + 0.017):                 # leave the rear-sight seat
+                rbox(bm, -0.010, 0.010, yy, yy + 0.0012, 0.1138, 0.1170)
+            yy += 0.0032
+    part("receiver_rib", rcv_rib, COL["poly"], "grip", bevel=0.0005, seg=1, cut=rcv_rib_cut, wear=0.3)
+
+    def vent_rib(bm):
+        rbox(bm, -0.0042, 0.0042, 0.176, 0.700, bz + 0.0128, bz + 0.0158)       # top strip
+        y = 0.190
+        while y < 0.690:                                                      # posts
+            rbox(bm, -0.0022, 0.0022, y, y + 0.006, bz + 0.0100, bz + 0.0130)
+            y += 0.034
+    def vent_rib_cut(bm):
+        yy = 0.180
+        while yy < 0.696:
+            rbox(bm, -0.008, 0.008, yy, yy + 0.0010, bz + 0.0146, bz + 0.0170)
+            yy += 0.0030
+    part("vent_rib", vent_rib, COL["poly"], "grip", "dressing", bevel=0.0004, seg=1, cut=vent_rib_cut, wear=0.3)
 
     roll_mark("marks_receiver", [("ZAROV ARMS", 0.0042, 0.0870),
                                  ("B-12 BREAKER", 0.0058, 0.0755),
@@ -1056,19 +1092,24 @@ def gun_breaker():
 
     # black stock (in-game: an olive stock 9 cm from the eye glared across the hip view's corner)
     def wrist(bm):
-        prism_x(bm, [(-0.012, 0.104), (-0.060, 0.088), (-0.110, 0.080), (-0.110, -0.026), (-0.080, -0.044), (-0.058, -0.068),
+        # (2026-11-13 ADS pass) comb dropped ~1 cm: with the cheek on the wrist the old comb ran
+        # 2-3.6 cm under the eye and filled the lower sight picture as a slab
+        prism_x(bm, [(-0.012, 0.100), (-0.060, 0.078), (-0.110, 0.068), (-0.110, -0.026), (-0.080, -0.044), (-0.058, -0.068),
                      (-0.040, -0.066), (-0.030, -0.046), (-0.022, -0.016), (-0.012, 0.030)], -0.0160, 0.0160)
-    part("stock_wrist", wrist, COL["poly"], "poly", bevel=0.0045, seg=3, angle=24)
+    # (2026-11-13 ADS pass) textured "grip" polymer, not smooth "poly": at ADS the wrist/comb
+    # top is the lower sight picture, and the smooth polymer's grazing moon specular rendered
+    # it a pale slab (measured median 0.031 vs 0.010 for the grip material in the same frame)
+    part("stock_wrist", wrist, COL["poly"], "grip", bevel=0.0045, seg=3, angle=24)
 
     def butt(bm):
-        prism_x(bm, [(-0.100, 0.082), (-0.232, 0.066), (-0.239, 0.058), (-0.239, -0.070),
+        prism_x(bm, [(-0.100, 0.070), (-0.232, 0.056), (-0.239, 0.048), (-0.239, -0.070),
                      (-0.228, -0.078), (-0.100, -0.028)], -0.0200, 0.0200)
     def butt_cut(bm):
         for x0, x1 in ((-0.030, -0.0185), (0.0185, 0.030)):            # recessed side panels
-            prism_x(bm, [(-0.130, 0.060), (-0.212, 0.050), (-0.212, -0.046), (-0.130, -0.014)], x0, x1)
+            prism_x(bm, [(-0.130, 0.050), (-0.212, 0.040), (-0.212, -0.046), (-0.130, -0.014)], x0, x1)
     part("stock_butt", butt, COL["poly"], "poly", bevel=0.0050, seg=3, angle=24, cut=butt_cut)
     def pad(bm):
-        rbox(bm, -0.0210, 0.0210, -0.252, -0.238, -0.076, 0.064)
+        rbox(bm, -0.0210, 0.0210, -0.252, -0.238, -0.076, 0.054)
     part("buttpad", pad, COL["rubber"], "rubber", bevel=0.0030, seg=2)
     return {"bore_z": bz, "sight_z": SZ, "muzzle_y": 0.750, "eject": (0.020, 0.100, 0.083),
             "focus": (0.090, 0.075)}
@@ -1179,6 +1220,10 @@ SPECS = {
                               fire=("SAFE", "FIRE"))),
 }
 
+# (2026-11-13 hip pass) support wrists moved ~1.2 cm in and ~1.4 cm down so the hand wraps
+# UNDER the handguard instead of sitting beside it in front of it (seen from the hip eye),
+# and the elbow drops more (z -0.72) and swings out less toward the camera: the old
+# (-0.62,-0.45,-0.64) ran the sleeve past the eye as a flat wedge to the frame edge.
 # support / trigger hand poses for THESE guns (same form as a4 ARM_POSE; seated on the
 # authored handguard undersides: warden 0.062-0.027 = 0.035, vesper 0.0195, corvus 0.030,
 # breaker pump 0.040)
@@ -1186,26 +1231,26 @@ A5_POSE = {
     "warden": [
         ("R", (0.040, -0.075, -0.040), (0.0, 1.0, 0.15), (-1.0, 0.0, 0.05),
          {"index_curl": (12, 16, 8), "elbow_world": (0.35, -0.70, -0.62)}),
-        ("L", (-0.062, 0.235, 0.026), (0.82, 0.48, -0.31), (0.35, 0.0, 0.94),
-         {"elbow_world": (-0.62, -0.45, -0.64), "curl": (40, 70, 35), "thumb_rot": (0, 0, 5, 5)}),
+        ("L", (-0.050, 0.235, 0.012), (0.82, 0.48, -0.31), (0.35, 0.0, 0.94),
+         {"elbow_world": (-0.55, -0.42, -0.72), "curl": (40, 70, 35), "thumb_rot": (0, 0, 5, 5)}),
     ],
     "vesper": [
         ("R", (0.040, -0.081, -0.046), (0.0, 1.0, 0.15), (-1.0, 0.0, 0.05),
          {"index_curl": (12, 16, 8), "elbow_world": (0.35, -0.70, -0.62)}),
-        ("L", (-0.058, 0.180, 0.010), (0.82, 0.48, -0.31), (0.35, 0.0, 0.94),
-         {"elbow_world": (-0.62, -0.45, -0.64), "curl": (44, 74, 38), "thumb_rot": (0, 0, 5, 5)}),
+        ("L", (-0.046, 0.180, -0.004), (0.82, 0.48, -0.31), (0.35, 0.0, 0.94),
+         {"elbow_world": (-0.55, -0.42, -0.72), "curl": (44, 74, 38), "thumb_rot": (0, 0, 5, 5)}),
     ],
     "corvus": [
         ("R", (0.040, -0.079, -0.044), (0.0, 1.0, 0.15), (-1.0, 0.0, 0.05),
          {"index_curl": (12, 16, 8), "elbow_world": (0.35, -0.70, -0.62)}),
-        ("L", (-0.064, 0.255, 0.020), (0.82, 0.48, -0.31), (0.35, 0.0, 0.94),
-         {"elbow_world": (-0.62, -0.45, -0.64), "curl": (38, 68, 34), "thumb_rot": (0, 0, 5, 5)}),
+        ("L", (-0.052, 0.255, 0.006), (0.82, 0.48, -0.31), (0.35, 0.0, 0.94),
+         {"elbow_world": (-0.55, -0.42, -0.72), "curl": (38, 68, 34), "thumb_rot": (0, 0, 5, 5)}),
     ],
     "breaker": [
         ("R", (0.036, -0.112, 0.004), (0.0, 0.92, -0.38), (-1.0, 0.0, 0.0),
          {"index_curl": (10, 14, 8), "elbow_world": (0.35, -0.70, -0.62)}),
-        ("L", (-0.062, 0.315, 0.032), (0.82, 0.48, -0.31), (0.35, 0.0, 0.94),
-         {"elbow_world": (-0.60, -0.50, -0.62), "curl": (40, 70, 35), "thumb_rot": (0, 0, 5, 5)}),
+        ("L", (-0.050, 0.315, 0.018), (0.82, 0.48, -0.31), (0.35, 0.0, 0.94),
+         {"elbow_world": (-0.55, -0.44, -0.71), "curl": (40, 70, 35), "thumb_rot": (0, 0, 5, 5)}),
     ],
     "pike": [
         ("R", (0.028, -0.066, 0.004), (0.0, 0.90, -0.43), (-1.0, 0.0, 0.0),

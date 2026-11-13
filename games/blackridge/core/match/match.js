@@ -453,6 +453,8 @@ export function makeMatch(content, emit, opts = {}) {
         team: actor.team,
         squad: ms.roster.squadIdOf(actor.actorId),
         alerted: !first, // mid-match respawns come in ready; first wave calm
+        // class matches: this operator's class kit (null = pistol start)
+        kit: typeof sim.kitForActor === "function" ? sim.kitForActor(actor) : null,
       });
       const body = sim.state.bots.find((b) => b.id === botId);
       bindBody(actor, body);
@@ -472,6 +474,8 @@ export function makeMatch(content, emit, opts = {}) {
       who: actor.who, actorId: actor.actorId, team: actor.team,
       pointId: pick.pointId, pos: pick.pos.slice(), yaw: pick.yaw,
       protectedUntilT: actor.protectedUntilT,
+      // additive field (class matches): the class this life spawned with
+      kit: (() => { const bd = bodyByWho.get(actor.who); return bd && bd.kit ? bd.kit.name : null; })(),
     });
     if (mode.onSpawn) {
       mode.onSpawn(m, {

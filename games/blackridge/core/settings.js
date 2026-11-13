@@ -32,6 +32,22 @@ export const SCHEMA = {
   music:   { kind: "range", min: 0, max: 1, step: 0.05, default: 0.4 },
   sfx:     { kind: "range", min: 0, max: 1, step: 0.05, default: 1.0 },
   ambience:{ kind: "range", min: 0, max: 1, step: 0.05, default: 0.8 },
+  // ---- lane PAD (2026-11): controller, touch aim assist, invert Y --------------
+  // invertY applies to mouse, stick and touch drags alike.
+  invertY:    { kind: "enum", options: ["off", "on"], default: "off" },
+  // Aim assist acts ONLY for gamepad / touch (never the mouse) — core/aim_assist.js.
+  aimAssist:  { kind: "enum", options: ["off", "standard", "focused"], default: "standard" },
+  padSensX:   { kind: "range", min: 0.2, max: 3.0, step: 0.05, default: 1.0 },  // x 195°/s
+  padSensY:   { kind: "range", min: 0.2, max: 3.0, step: 0.05, default: 1.0 },  // x 137°/s
+  padAdsSens: { kind: "range", min: 0.2, max: 2.0, step: 0.01, default: 1.0 },  // on top of zoom-proportional
+  padCurve:   { kind: "enum", options: ["linear", "standard", "dynamic"], default: "standard" },
+  padAccel:   { kind: "range", min: 0, max: 1, step: 0.05, default: 0.5 },     // look ramp at full push
+  padDeadL:   { kind: "range", min: 0, max: 0.4, step: 0.01, default: 0.10 },  // stick drift tolerance
+  padDeadR:   { kind: "range", min: 0, max: 0.4, step: 0.01, default: 0.10 },
+  padTrigger: { kind: "range", min: 0.05, max: 0.9, step: 0.05, default: 0.25 },
+  padSprint:  { kind: "enum", options: ["l3", "auto"], default: "l3" },
+  padCrouch:  { kind: "enum", options: ["toggle", "hold"], default: "toggle" },
+  padRumble:  { kind: "enum", options: ["on", "off"], default: "on" },
 };
 
 // Quality presets are consumed by A6 (rain counts, planar reflection, post

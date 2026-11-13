@@ -199,17 +199,26 @@ function repair(group) {
             name: m.name,
             // vertex colours carry the albedo; this factor is the night treatment (see the
             // gun-metal note below): the vm key + rim over-light dark fabric to a pale card
-            color: isSleeve ? new THREE.Color(0.85, 0.85, 0.85) : new THREE.Color(0.70, 0.70, 0.70),
+            // GLOVE (2026-11-13, measured live on pike hip, vm-camera pass into a float RT):
+            // the glove atlas is dark coyote (linear 0.024/0.020/0.014) but rendered p50
+            // 0.0175 — 2.3x the sleeve (0.0075) and above the receiver metal (0.0097) — and
+            // NEUTRAL-BLUE (0.016,0.018,0.022): the night pool + vm rig deliver per-channel
+            // radiance/albedo of R 0.96 / G 1.30 / B 2.18, which cancels the coyote hue, and the
+            // 0.22 dielectric lobe added 28% (0.0049) of pure grey. Result: "pale grey" hands.
+            // Fix: lower + warm-balance the factor against that cool pool and halve the lobe
+            // (rendered p50 ~0.009, warm (R>G>B)), stitching kept by a stronger normal.
+            color: isSleeve ? new THREE.Color(0.85, 0.85, 0.85) : new THREE.Color(0.50, 0.43, 0.33),
             vertexColors: !!m.vertexColors,
             map: m.map || null,
             normalMap: m.normalMap || null,
-            normalScale: m.normalScale ? m.normalScale.clone() : new THREE.Vector2(1, 1),
+            normalScale: (m.normalScale ? m.normalScale.clone() : new THREE.Vector2(1, 1))
+              .multiplyScalar(isSleeve ? 1.0 : 1.6),
             roughness: Math.min(1, Math.max(0.3, m.roughness == null ? 0.85 : m.roughness)),
             metalness: 0.0,
             // (2026-11-13, measured live) dark cloth (albedo ~0.01) under the ~15-unit
             // night pool is ALL specular: the default 4% dielectric lobe out-shone the
             // diffuse 5:1 and rendered olive sleeves pale blue-grey. Cloth is not glossy.
-            specularIntensity: 0.22,
+            specularIntensity: isSleeve ? 0.22 : 0.12,
             envMapIntensity: 0.15,
             side: THREE.FrontSide,
             // Sheen is ADDED on top of the diffuse term and does not scale with albedo: at
@@ -254,6 +263,30 @@ function repair(group) {
         const authoredOrm = /^br5_/i.test(m.name || "");
         if (m.roughnessMap && !authoredOrm) m.roughness = Math.min(1.8, (m.roughness == null ? 1 : m.roughness) * 1.5);
         else if (!m.roughnessMap && (m.roughness == null || m.roughness > 0.92)) m.roughness = 0.92;
+        // POLYMER GLARE (2026-11-13, measured live in the vm pass): the stock / receiver-top
+        // polymer nearest the eye is seen at grazing incidence, where even a roughness-0.99
+        // dielectric lobe catches the 5.0 moon — 75% of the breaker stock's radiance was
+        // specular (median 0.026, 0.019 of it moon spec) and it read as a pale slab in the
+        // bottom-right corner / under the ghost ring. Physical copy with the dielectric lobe
+        // at 35%: median 0.0135, the form stays from diffuse + key. Built explicitly (see
+        // the fabric note: MeshPhysicalMaterial.copy throws on a Standard source).
+        if (authoredOrm && !/metal|optic/i.test(m.name || "")) {
+          try {
+            const pm = new THREE.MeshPhysicalMaterial({
+              name: m.name, color: m.color.clone(), vertexColors: !!m.vertexColors,
+              map: m.map || null, normalMap: m.normalMap || null,
+              normalScale: m.normalScale ? m.normalScale.clone() : new THREE.Vector2(1, 1),
+              roughness: m.roughness, roughnessMap: m.roughnessMap || null,
+              aoMap: m.aoMap || null, aoMapIntensity: m.aoMapIntensity,
+              metalness: 0.0, envMapIntensity: m.envMapIntensity, side: m.side,
+              specularIntensity: 0.35,
+            });
+            list[i] = pm; fabricOf.set(m, pm); repaired.add(pm); m.dispose();
+            continue;
+          } catch (e) {
+            console.warn("[weapon_meshes] polymer de-glare skipped:", e && e.message);
+          }
+        }
       }
       m.needsUpdate = true;
     }
@@ -404,6 +437,11 @@ export async function loadWeaponGLB(id) {
       const wpnPts = [];
       {
         const pt = new THREE.Vector3();
+        // the hip cant (view.rot, applied about the grip by viewmodel.js) changes which
+        // vertices come near the eye — test the pose as it is actually drawn
+        const hr = (w && w.view && w.view.rot) || null;
+        const hipQ = hr ? new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(hr[0] * DEG, hr[1] * DEG, hr[2] * DEG, "YXZ")) : null;
         group.updateMatrixWorld(true);
         group.traverse((o) => {
           if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
@@ -412,6 +450,7 @@ export async function loadWeaponGLB(id) {
           const stride = Math.max(1, Math.floor(a.count / 4000));
           for (let i = 0; i < a.count; i += stride) {
             pt.set(a.getX(i), a.getY(i), a.getZ(i)).applyMatrix4(o.matrixWorld);
+            if (hipQ) pt.applyQuaternion(hipQ);
             wpnPts.push(pt.x, pt.y, pt.z);
           }
         });

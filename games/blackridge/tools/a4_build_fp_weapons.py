@@ -2973,7 +2973,10 @@ GLOVE_COL = {
     "palm": _srgb_lin((44, 40, 34)),      # suede palm (2026-10-13: lifted — a curled finger shows mostly palm side)
     "cuff": _srgb_lin((20, 20, 21)),      # neoprene wrist cuff
 }
-SLEEVE_COL = {"cloth": _srgb_lin((31, 35, 29)), "band": _srgb_lin((14, 15, 14))}
+# (2026-11-13 hip pass) cloth (31,35,29) -> (44,47,38): at linear 0.014 the sleeve sat at the
+# night ground's own radiance and only its silhouette read (a flat dark wedge); one stop up
+# the key light can model it as a rounded forearm. Still a dark olive.
+SLEEVE_COL = {"cloth": _srgb_lin((44, 47, 38)), "band": _srgb_lin((16, 17, 15))}
 
 # adult male hand, glove thickness included (metres). Right hand, thumb at -X.
 HAND_FINGERS = {
@@ -3994,7 +3997,10 @@ def build_hand(tag, hand, prm):
         col *= (1.0 + 0.08 * _noise(co, 3.0) + 0.05 * np.sin(ax * 40.0))[:, None]
         # fall off into shadow along the forearm: the sleeve leaves frame through the bottom edge, so
         # its visible length should fade to black rather than end on a lit terminator line
-        col *= (1.0 - 0.80 * _ss(0.06, 0.36, ax))[:, None]
+        # (2026-11-13) was 0.80 from 0.06 m: the forearm went black 30 cm up and the lit
+        # remainder read as a flat blade with no end; a gentler fade keeps the rounded
+        # shading all the way to the frame edge
+        col *= (1.0 - 0.45 * _ss(0.10, 0.45, ax))[:, None]
         return np.clip(col, 0, 1)
 
     # atlas glove: the texture carries the whole albedo, the vertex colour is neutral

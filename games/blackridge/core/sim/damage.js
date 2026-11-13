@@ -11,6 +11,8 @@
 // Regen constants now come from sim.tuning (core/pvp/pvp_tuning.js — the C25
 // balance seam; IDENTITY values in wave 1: 100 HP, 4.5 s, 35 HP/s, ×0.7).
 // These remain as the no-tuning fallback so a hand-built sim stub still works.
+import { hasPerk, PERK_FX } from "./classes.js";
+
 const REGEN_DELAY_S = 4.5;
 const REGEN_PER_S = 35;
 const BOT_RETREAT_REGEN_MULT = 0.7;
@@ -162,12 +164,16 @@ export function stepHealth(sim, dt) {
   }
   const botRetreatPerS = regenPerS * (t ? t.botRetreatRegenMult : BOT_RETREAT_REGEN_MULT);
   const p = S.player;
-  if (p.alive && p.hp < maxHp && S.time - (p.lastDamageT ?? -999) >= regenDelayS) {
+  // STIM LACE perk (class matches): regen starts in half the time
+  const pDelay = hasPerk(p, "quickfix") ? regenDelayS * PERK_FX.quickfix.regenDelayMult : regenDelayS;
+  if (p.alive && p.hp < maxHp && S.time - (p.lastDamageT ?? -999) >= pDelay) {
     p.hp = Math.min(maxHp, p.hp + regenPerS * dt);
   }
   for (const b of S.bots) {
     if (b.alive && b.state === "retreat" && b.hp < maxHp) {
-      b.hp = Math.min(maxHp, b.hp + botRetreatPerS * dt);
+      // bots heal only while falling back; STIM LACE makes that 1.5x faster
+      const rate = hasPerk(b, "quickfix") ? botRetreatPerS * PERK_FX.quickfix.botRetreatRegenMult : botRetreatPerS;
+      b.hp = Math.min(maxHp, b.hp + rate * dt);
     }
   }
 }

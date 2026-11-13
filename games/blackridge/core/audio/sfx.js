@@ -37,6 +37,7 @@ import { FIRST_SHOT, RELOAD_MODEL, WEAPONS } from "../weapons/weapon_data.js";
 // automatic weapons are trimmed to the report + its first ~100 ms of decay on
 // purpose: their room tail comes from the zone convolver, so sustained fire no
 // longer drags 0.9 s of recorded slap behind every round.
+const S = (sheet, off, dur) => ({ f: "gun/sn_" + sheet + ".ogg", off, dur });
 const FILES = {
   gun_warden: [{ f: "sfx/shot_ar_1.ogg", off: 0.0, dur: 0.17 }, { f: "sfx/shot_ar_0.ogg", off: 0.262, dur: 0.098 },
                { f: "sfx/shot_ar_2.ogg", off: 0.004, dur: 0.092 }],
@@ -44,14 +45,47 @@ const FILES = {
                { f: "sfx/shot_smg_2.ogg", off: 0.246, dur: 0.104 }],
   gun_corvus: [{ f: "sfx/svd_shot_0.ogg", off: 0.0, dur: 0.2 }, "sfx/shot_sniper_0.ogg", "sfx/shot_sniper_1.ogg", "sfx/shot_sniper_2.ogg"],
   gun_pike: ["sfx/shot_pistol_0.ogg", "sfx/shot_pistol_1.ogg"],
-  // B-12 Breaker: no recorded shotgun exists, so the blast is BUILT (see
-  // shotgunBody()): a pistol report slowed to 0.8x and high-passed is the
-  // punchy transient, the single SVD report slowed to ~0.62x is the boom, a
-  // clean AR report at ~0.72x through a low-pass is the body, under a synth
-  // sub + chest thump and a broadband wad blast.
-  gun_breaker_t: [{ f: "sfx/shot_pistol_0.ogg", off: 0.0, dur: 0.22 }, { f: "sfx/shot_pistol_1.ogg", off: 0.0, dur: 0.22 }],
-  gun_breaker_a: [{ f: "sfx/svd_shot_0.ogg", off: 0.0, dur: 0.2 }],
-  gun_breaker_b: [{ f: "sfx/shot_ar_1.ogg", off: 0.0, dur: 0.17 }],
+  // ---- RECORDED LIBRARY PASS (2026-11-13, Sonniss GDC 2024 slices) ----------
+  // Four mono 44.1 kHz OGG "sheets" under assets/audio/gun/ (sn_*.ogg). Each
+  // sheet is several single, tightly-trimmed takes laid end to end with 80 ms
+  // of silence between them, peak-normalised to −1 dBFS each; the table below
+  // gives every take's {off, dur} inside its sheet, so loadBuffers() slices
+  // them exactly like the burst files above (one fetch + decode per sheet).
+  // Pack / file / source time range of every slice: assets/manifest.a9.json.
+  //
+  // B-12 Breaker: a REAL 12-gauge now (Saiga-12 at 1 m, three shots) — the old
+  // slowed pistol/SVD/AR construction is gone. Its pump is the SPAS-12 pump
+  // action (three back strokes, three forward strokes), its shell insert the
+  // brass click of a cartridge seating (Colt Python loading take).
+  gun_breaker: [S("shotgun", 0.0, 0.23), S("shotgun", 0.31, 0.23), S("shotgun", 0.62, 0.23)],
+  pump_back: [S("shotgun", 0.93, 0.27), S("shotgun", 1.28, 0.29), S("shotgun", 1.65, 0.29)],
+  pump_fwd: [S("shotgun", 2.02, 0.26), S("shotgun", 2.36, 0.28), S("shotgun", 2.72, 0.26)],
+  shell_in: [S("shotgun", 3.06, 0.12), S("shotgun", 3.26, 0.12), S("shotgun", 3.46, 0.12)],
+  // MID perspective (20–65 m takes) and FAR perspective (65–160 m takes), per
+  // distance CLASS (DIST_CLASS below): these replace the high-passed / slowed
+  // + low-passed copies of the close take in the distance model. Tails are cut
+  // at ≈ −40 dB (0.6–0.85 s); the zone convolver + synth tail carry the rest.
+  mid_ar: [S("dist", 0.0, 0.62), S("dist", 0.7, 0.62)],           // Desert Eagle .44 @ 65 m
+  mid_pistol: [S("dist", 1.4, 0.62), S("dist", 0.7, 0.62)],       // Desert Eagle .44 @ 65 m
+  mid_dmr: [S("dist", 2.1, 0.6), S("dist", 2.78, 0.6)],           // SVD Dragunov @ 30 m
+  mid_sg: [S("dist", 3.46, 0.72), S("dist", 4.26, 0.72)],         // SPAS-12 @ 20 m
+  far_ar: [S("dist", 5.06, 0.85), S("dist", 5.99, 0.85)],         // Colt Python @ 160 m
+  far_pistol: [S("dist", 6.92, 0.8), S("dist", 7.8, 0.8)],        // S&W .38 @ 100 m
+  far_dmr: [S("dist", 8.68, 0.85), S("dist", 9.61, 0.85)],        // Lynx .50 @ 65 m behind
+  far_sg: [S("dist", 10.54, 0.85), S("dist", 11.47, 0.85)],       // Dan Wesson .445 @ 100 m
+  // INDOOR (hall / room recordings): the room is IN the take
+  in_ar: [S("indoor", 0.0, 0.9), S("indoor", 0.98, 0.9)],         // AK5 7.62, large hall
+  in_smg: [S("indoor", 1.96, 0.85), S("indoor", 2.89, 0.85)],     // MP5 9 mm, large hall
+  in_pistol: [S("indoor", 3.82, 0.6), S("indoor", 4.5, 0.6)],     // Glock 17, small living room
+  in_sg: [S("indoor", 5.18, 1.0), S("indoor", 6.26, 1.0)],        // Mossberg 12 ga, office corridor
+  // the player's own gun: mechanical foley
+  f_mag_out: [S("foley", 0.0, 0.26), S("foley", 0.34, 0.29)],     // Desert Eagle magazine release
+  f_mag_in: [S("foley", 0.71, 0.25), S("foley", 1.04, 0.2), S("foley", 1.32, 0.24)],
+  f_charge: [S("foley", 1.64, 0.345), S("foley", 2.065, 0.42)],   // Saiga-12 charging handle, back + home
+  f_bolt: [S("foley", 2.565, 0.115), S("foley", 2.76, 0.095)],    // Saiga-12 bolt slamming home
+  f_hammer: [S("foley", 2.935, 0.09), S("foley", 3.105, 0.08), S("foley", 3.265, 0.08)], // Dan Wesson hammer
+  f_brass: [S("foley", 3.425, 0.26), S("foley", 3.765, 0.33), S("foley", 4.175, 0.3)],  // Lynx .50 case drops
+  ric: [S("foley", 4.555, 0.55), S("foley", 5.185, 0.55), S("foley", 5.815, 0.55), S("foley", 6.445, 0.26)], // Steampunk Gadgets ricochets
   // metalClick.ogg holds TWO clicks (onsets 90 and 271 ms): split them so the
   // bolt/slide foley can use "back" and "forward" separately.
   click_a: [{ f: "sfx/metalClick.ogg", off: 0.078, dur: 0.16 }],
@@ -92,6 +126,20 @@ const MECH = {
   pike: { kind: "slide", f: 3500, durMs: 9, gapMs: 25, gain: 0.9 },      // crisp slide
   breaker: { kind: "pump", f: 2600, durMs: 38, gapMs: 0, gain: 1.35 },   // wide blast crack + roar
 };
+
+// weapon class → which recorded MID/FAR pool (mid_*, far_*) and which INDOOR
+// pool (in_*) it uses. The SMG shares the pistol-calibre distance takes (9 mm
+// and a .38 sound alike at 100 m); the DMR shares the AK5 hall take indoors.
+const DIST_CLASS = { ar: "ar", smg: "pistol", pistol: "pistol", dmr: "dmr", shotgun: "sg" };
+const INDOOR_CLASS = { ar: "ar", dmr: "ar", smg: "smg", pistol: "pistol", shotgun: "sg" };
+// Recorded-layer trims (takes are peak-normalised to −1 dBFS; MEASURED against
+// the previous processed layers with the OfflineAudioContext harness — lane report)
+const MID_REC_GAIN = 1.6;
+const FAR_REC_GAIN = 1.9;
+const ROOM_GAIN_OWN = 0.3;     // indoor take under the player's own dry report
+const ROOM_GAIN_ENEMY = 0.45;  // indoor take under a nearby enemy's report
+const SG_CLOSE_GAIN = 2.3;     // the 1 m Saiga take vs the other close bodies (+7.2 dB)
+const SG_RANGE_GAIN = 1.4;     // its mid/far takes (+2.9 dB): a 12-gauge still booms at range
 
 // ---- pump-action timing (B-12 Breaker) -----------------------------------------
 // The slide is racked back PUMP_BACK_S after the blast and forward again
@@ -434,6 +482,9 @@ export function makeSfx(env) {
     const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
     return t * t * (3 - 2 * t);
   }
+  // the recorded far takes hold more energy than the old 420 Hz-filtered copy:
+  // −3 dB more by 250 m so the edge of the world stays clearly further than 150 m
+  function farEdge(d) { return 1 - 0.3 * smooth(170, 300, d); }
   // past GUN_KNEE_M the law steepens by a further (knee/d)^0.5 so 250 m is clearly
   // quieter than 150 m even though the far layer's tail tilt rises with range
   const GUN_KNEE_M = 100;
@@ -493,28 +544,36 @@ export function makeSfx(env) {
     } catch (e) { err(e, "slap"); return null; }
   }
 
-  // Pump-action shotgun, built from what exists (no recorded 12-gauge): a
-  // TRANSIENT (pistol report at 0.8x, high-passed — the punch you feel first),
-  // the BOOM (the single SVD report at ~0.62x), the BODY (a clean AR report at
-  // ~0.72x through a low-pass), a broadband wad BLAST, and a sub + chest thump.
-  // Layer weights follow the same close/mid/far model as every other gun.
-  // Returns the boom source so the shooter-tail send can tap it.
-  function shotgunBody(dst, { own, wC, wM, wF, when, degraded, gain, refl }) {
-    const j = () => 1 + (rng() * 2 - 1) * 0.04;
+  // Pump-action shotgun — RECORDED (2026-11-13 library pass). Same close/mid/far
+  // layer model as every other gun:
+  //   CLOSE  a Saiga-12 report recorded at 1 m (3 takes, ±3% rate);
+  //   MID    the SPAS-12 recorded 20 m in front (or, indoors, the Mossberg in an
+  //          office corridor);
+  //   FAR    the Dan Wesson .445 recorded 100 m off-axis (a big-bore boom — no
+  //          distant 12-gauge take exists in the library), low-passed past 150 m;
+  // under a reduced synth sub + chest thump (the "felt" low end a mic at 1 m
+  // under-reports). The previous slowed pistol/SVD/AR construction is gone; if
+  // the recorded sheet failed to decode the synth boom below stands in.
+  // Returns the loudest recorded source so the shooter-tail send can tap it.
+  function shotgunBody(dst, { own, wC, wM, wF, when, degraded, gain, refl, indoor, dist }) {
+    const j = () => 1 + (rng() * 2 - 1) * 0.03;
     const near = wC + wM * 0.6;
-    const tr = buf("gun_breaker_t") || buf("gun_pike");
-    const a = buf("gun_breaker_a") || buf("gun_corvus");
-    const b2 = buf("gun_breaker_b") || buf("gun_warden");
     let src = null;
     if (!degraded) {
-      if (tr && near > 0.05) voice(tr, dst, { rate: 0.8 * j(), gain: gain * 0.62 * near, when, hp: 650, send: refl });
-      if (a) {
-        src = voice(a, dst, {
-          rate: 0.62 * j(), gain: gain * (1.0 * (wC + wM * 0.85) + 1.5 * wF), when,
-          lp: wF > 0.5 ? 800 : 3400 - 1600 * wM, send: refl,
-        });
+      const c = buf("gun_breaker");
+      if (c && wC > 0.04) src = voice(c, dst, { rate: j(), gain: gain * wC * SG_CLOSE_GAIN, when, shelf: indoor ? 2.5 : 0, send: refl });
+      if (wM > 0.04 || (indoor && wC > 0.04)) {
+        const m = indoor ? (buf("in_sg") || buf("mid_sg")) : buf("mid_sg");
+        const mg = indoor ? (wM + wC * (own ? ROOM_GAIN_OWN : ROOM_GAIN_ENEMY)) : wM;
+        const s = m ? voice(m, dst, { rate: j(), gain: gain * mg * MID_REC_GAIN * SG_RANGE_GAIN, when, lp: 9000 - 4000 * smooth(30, 150, dist), send: indoor ? null : refl }) : null;
+        src = src || s;
       }
-      if (b2 && near > 0.05) voice(b2, dst, { rate: 0.72 * j(), gain: gain * 0.5 * near, when: when + 0.003, lp: 1900 });
+      if (wF > 0.04) {
+        const f = buf("far_sg");
+        const lpF = 6000 * Math.pow(1100 / 6000, smooth(150, 300, dist));
+        const s = f ? voice(f, dst, { rate: 0.94 * j(), gain: gain * wF * FAR_REC_GAIN * SG_RANGE_GAIN * farEdge(dist), when, lp: lpF }) : null;
+        src = src || s;
+      }
     }
     if (!src) {
       // synth fallback: boom + crack, still heavier than any rifle fallback
@@ -522,20 +581,32 @@ export function makeSfx(env) {
       if (wF < 0.5) burst(dst, { f: 1100, q: 0.9, durMs: 70, gain: gain * 0.55, when });
     }
     if (!degraded) {
-      burst(dst, { f: 1400, q: 0.6, durMs: 120, gain: gain * 0.46 * near, when, decayMs: 30 });      // wad blast
-      thump(dst, { f0: 84, f1: 36, durMs: wF > 0.5 ? 320 : 260, gain: gain * (own ? 0.66 : 0.55), when }); // sub
-      if (near > 0.05) thump(dst, { f0: 165, f1: 82, durMs: 95, gain: gain * 0.42 * near, when });        // chest
+      thump(dst, { f0: 84, f1: 36, durMs: wF > 0.5 ? 320 : 240, gain: gain * (own ? 0.4 : 0.32), when }); // sub
+      if (near > 0.05) thump(dst, { f0: 165, f1: 82, durMs: 80, gain: gain * 0.22 * near, when });        // chest
     }
     return src;
   }
 
-  // The pump RACK, two parts: slide BACK (latch + scrape + heavy clack) at `when`,
-  // slide FORWARD (click + seat) PUMP_FWD_GAP_S later. `g` is the overall gain.
-  // Returns the recorded sources so a cancel (reload interrupted) can stop them.
+  // The pump RACK, two parts: slide BACK at `when`, slide FORWARD
+  // PUMP_FWD_GAP_S later — the recorded SPAS-12 strokes (each slice is the
+  // slide's travel ending in its clack). `g` is the overall gain. Returns the
+  // recorded sources so a cancel (reload interrupted) can stop them. The
+  // synthesized latch/scrape/seat version below is the decode-failure fallback.
   function pumpRack(out, { when = 0, g = 0.5, srcs = null } = {}) {
     if (!out) return;
     stats.racks++;
     const t2 = when + PUMP_FWD_GAP_S;
+    const pb = buf("pump_back"), pf = buf("pump_fwd");
+    if (pb && pf) {
+      const jr = () => 1 + (rng() * 2 - 1) * 0.03;
+      // the recorded clack sits 0.10–0.16 s into each slice (measured peaks):
+      // start each stroke 0.11 s early so the BACK clack still lands at `when`
+      // (where casings.js ejects the hull) and the FORWARD clack at t2
+      const s1 = voice(pb, out, { rate: jr(), gain: g * 1.1, when: Math.max(0, when - 0.11) });
+      const s2 = voice(pf, out, { rate: jr(), gain: g * 1.1, when: Math.max(0, t2 - 0.11) });
+      if (srcs) { if (s1) srcs.push(s1); if (s2) srcs.push(s2); }
+      return;
+    }
     const l = buf("latch");
     const s1 = l ? voice(l, out, { rate: 0.82 * (1 + (rng() * 2 - 1) * 0.04), gain: g * 0.9, when }) : null;
     if (!l) burst(out, { f: 1700, q: 3, durMs: 26, gain: g * 0.34, when });
@@ -556,8 +627,30 @@ export function makeSfx(env) {
   let brassN = 0;
   function ownAction(w, out, first) {
     const cls = classOf(w);
-    const ca = buf("click_a"), cb = buf("click_b"), la = buf("latch");
     const jr = () => 1 + (rng() * 2 - 1) * 0.04;
+    const bo = buf("f_bolt"), hm = buf("f_hammer"), br = buf("f_brass");
+    if (bo && cls !== "shotgun") {
+      // RECORDED (2026-11-13): the Saiga bolt slamming home, pitched per class,
+      // and for the pistol the Dan Wesson hammer + a small slide snap
+      if (cls === "ar") voice(bo, out, { rate: 1.35 * jr(), gain: 0.05, when: 0.014, hp: 900 });
+      else if (cls === "smg") voice(bo, out, { rate: 1.2 * jr(), gain: 0.07, when: 0.008 });
+      else if (cls === "dmr") voice(bo, out, { rate: 0.92 * jr(), gain: 0.07, when: 0.03 });
+      else if (cls === "pistol") {
+        if (hm) voice(hm, out, { rate: 1.1 * jr(), gain: 0.04, when: 0.008, hp: 700 });
+        voice(bo, out, { rate: 1.65 * jr(), gain: 0.035, when: 0.036, hp: 900 });
+      }
+      if (br) {
+        brassN++;
+        const auto = cls === "ar" || cls === "smg";
+        if (!auto || (brassN & 1) || first) {
+          // the .50 case drops pitched up into rifle / pistol brass on the ground
+          const rate = (cls === "pistol" || cls === "smg" ? 2.1 : cls === "dmr" ? 1.45 : 1.75) * (0.95 + rng() * 0.1);
+          voice(br, out, { rate, gain: 0.045, when: 0.38 + rng() * 0.25, hp: 1500 });
+        }
+      }
+      return;
+    }
+    const ca = buf("click_a"), cb = buf("click_b"), la = buf("latch");
     if (cls === "ar") {          // bolt carrier slams home, buffer spring twang
       if (ca) voice(ca, out, { rate: 1.55 * jr(), gain: 0.10, when: 0.014, hp: 1200 });
       burst(out, { f: 3900, q: 9, durMs: 30, gain: 0.018, when: 0.02 });
@@ -655,7 +748,8 @@ export function makeSfx(env) {
     if (mechW > 0.08 && !degraded && !suppressed) {
       const m = MECH[w] || MECH.warden;
       let mg = 0.14 * m.gain * (own ? 1.41 : 1) * mechW;      // player's own action +3 dB
-      if (m.kind === "pump") mg *= PUMP_LEVEL;
+      // the recorded 12-gauge has its own snap: the synth one is only a −6 dB sweetener
+      if (m.kind === "pump") mg *= PUMP_LEVEL * (buffers.gun_breaker && buffers.gun_breaker.length ? 0.5 : 1);
       if (first) mg *= Math.pow(10, (FIRST_SHOT.mechLayerDb || 2) / 20);
       const durMul = first ? (FIRST_SHOT.transientLenMult || 1.15) : 1;
       const dur = m.durMs * durMul;
@@ -686,8 +780,16 @@ export function makeSfx(env) {
     const bodyGain = 0.7 * (w === "pike" ? 0.8 : 1) * (1 + (rng() * 2 - 1) * 0.05) * (first ? 1.19 : 1) * (1 - 0.15 * sustained);
     const bodyRate = (1 + (rng() * 2 - 1) * 0.05) * (1 - 0.02 * sustained);
     let tapSrc = null;
+    // recorded perspective pools for this weapon's class (null → old processed path)
+    const cls = classOf(w);
+    const dk = DIST_CLASS[cls] || "ar";
+    const midRec = indoor ? null : buf("mid_" + dk);
+    const farRec = buf("far_" + dk);
+    const roomRec = indoor ? buf("in_" + (INDOOR_CLASS[cls] || "ar")) : null;
+    let farRecUsed = false;
     if (pumpGun) {
-      tapSrc = shotgunBody(dst, { own, wC, wM, wF, when, degraded, gain: bodyGain * PUMP_LEVEL, refl });
+      tapSrc = shotgunBody(dst, { own, wC, wM, wF, when, degraded, gain: bodyGain * PUMP_LEVEL, refl, indoor, dist });
+      farRecUsed = wF > 0.04 && !!buf("far_sg");
     } else if (b && !degraded && suppressed) {
       // SUPPRESSED (the Vesper carries a can on the model and in its data): the
       // can eats the blast, not the gun — a band-limited "thup" (body 320 Hz–
@@ -701,8 +803,19 @@ export function makeSfx(env) {
     } else if (b && !degraded) {
       if (wC > 0.04) {
         tapSrc = voice(b, dst, { rate: bodyRate, gain: bodyGain * wC, when, shelf: indoor ? 3.5 : 0, lp: w === "corvus" ? 8000 : 0, send: reflC || slapC });
+        // INDOORS: the hall/room recording of this class under the dry report —
+        // the real room, not only the synthetic taps (2026-11-13)
+        if (roomRec) voice(roomRec, dst, { rate: bodyRate, gain: bodyGain * wC * (own ? ROOM_GAIN_OWN : ROOM_GAIN_ENEMY), when: when + 0.002 });
       }
-      if (wM > 0.04) {
+      if (wM > 0.04 && (midRec || roomRec)) {
+        // RECORDED mid perspective (a 20–65 m take, or indoors the hall take):
+        // distance colour is in the recording, so only a gentle air roll-off
+        const s = voice(midRec || roomRec, dst, {
+          rate: bodyRate, gain: bodyGain * wM * MID_REC_GAIN, when,
+          hp: 90, lp: 9000 - 4000 * smooth(30, 150, dist), send: indoor ? null : refl,
+        });
+        tapSrc = tapSrc || s;
+      } else if (wM > 0.04) {
         // crack-led: the low body falls away first (450 → 750 Hz high-pass across
         // 30–120 m) and air takes the top (7 → 3.5 kHz)
         const s = voice(b, dst, {
@@ -711,7 +824,15 @@ export function makeSfx(env) {
         });
         tapSrc = tapSrc || s;
       }
-      if (wF > 0.04) {
+      if (wF > 0.04 && farRec) {
+        // RECORDED far perspective (65–160 m takes): its own boom, crack and
+        // natural echo; low-passed further only beyond 150 m, a weaker slap
+        farRecUsed = true;
+        const lpF = 6000 * Math.pow(1000 / 6000, smooth(150, 300, dist));
+        const echo = indoor ? null : slapEcho(dst, 0.2 + rng() * 0.3, 0.2, Math.min(700, lpF));
+        const s = voice(farRec, dst, { rate: bodyRate, gain: bodyGain * wF * FAR_REC_GAIN * farEdge(dist), when, lp: lpF, send: echo });
+        tapSrc = tapSrc || s;
+      } else if (wF > 0.04) {
         // the distant THUMP: slowed ~14% and low-passed 1.3 kHz → 420 Hz across
         // 100–300 m (air absorption is ~24 dB/km at 3 kHz), with a late slap
         // echo off the far side of the street when the shooter is outside
@@ -726,8 +847,9 @@ export function makeSfx(env) {
       if (wF < 0.5) burst(dst, { f: 1300, q: 1.2, durMs: 45, gain: bodyGain * 0.45, when });
     }
     // the far "pop": a short low knock that survives any distance
+    // (halved when the recorded far take carries its own boom)
     if (wF > 0.1 && !degraded) {
-      thump(dst, { f0: 125, f1: 55, durMs: 75, gain: 0.2 * wF, when });
+      thump(dst, { f0: 125, f1: 55, durMs: 75, gain: (farRecUsed ? 0.1 : 0.2) * wF, when });
     }
 
     // tail layer — shooter's-zone convolver (§7.3 shooter-tail rule). Kept from
@@ -740,7 +862,8 @@ export function makeSfx(env) {
     if (conv && tapSrc && !own) {
       try {
         const tg = ac.createGain();
-        tg.gain.value = gclamp(TAIL_SEND * Math.pow(spatialVol, TAIL_SEND_EXP) * (suppressed ? 0.35 : 1));
+        // a hall/room take already carries the room: send 40% less into the zone
+        tg.gain.value = gclamp(TAIL_SEND * Math.pow(spatialVol, TAIL_SEND_EXP) * (suppressed ? 0.35 : 1) * (roomRec ? 0.6 : 1));
         let tsrc = tapSrc;
         if (dist > TAIL_LP_NEAR_M) {
           const k = Math.min(1, (dist - TAIL_LP_NEAR_M) / (TAIL_LP_FAR_M - TAIL_LP_NEAR_M));
@@ -767,7 +890,8 @@ export function makeSfx(env) {
       const tilt = Math.min(TAIL_TILT_MAX, Math.pow(Math.max(1e-4, spatialVol), TAIL_SEND_EXP - 1));
       // base 0.10 → 0.16 (+4 dB): this pass took the gun reports down 4–6 dB for
       // limiter headroom, so +4 dB keeps the 2026-09-16 tail-to-report balance
-      burst(dst, { f: 340, q: 0.7, durMs: dur, decayMs: dur / 5, gain: 0.16 * tilt * wT, when: when + 0.03 });
+      // the recorded far takes carry a real 1 s tail: the synth one drops 6 dB under them
+      burst(dst, { f: 340, q: 0.7, durMs: dur, decayMs: dur / 5, gain: 0.16 * tilt * wT * (farRecUsed ? 0.5 : 1), when: when + 0.03 });
     }
 
     if (own && env.music) env.music.gunDuck();                 // guns own the mix
@@ -787,9 +911,15 @@ export function makeSfx(env) {
         const cl = buf("cloth");
         if (cl) voice(cl, dst, { rate: 1.35, gain: 0.08, when: PUMP_BACK_S - 0.03 });
         const tl = when + PUMP_BACK_S + 0.46;
-        burst(dst, { f: 2600, q: 5, durMs: 12, gain: 0.05, when: tl });
-        burst(dst, { f: 2100, q: 5, durMs: 9, gain: 0.032, when: tl + 0.11 });
-        thump(dst, { f0: 420, f1: 330, durMs: 22, gain: 0.03, when: tl + 0.003, type: "triangle" });
+        const br = buf("f_brass");
+        if (br) {
+          // recorded case drop, pitched down + darkened: a plastic hull, not brass
+          voice(br, dst, { rate: 0.95 + rng() * 0.08, gain: 0.05, when: tl, lp: 2400 });
+        } else {
+          burst(dst, { f: 2600, q: 5, durMs: 12, gain: 0.05, when: tl });
+          burst(dst, { f: 2100, q: 5, durMs: 9, gain: 0.032, when: tl + 0.11 });
+          thump(dst, { f0: 420, f1: 330, durMs: 22, gain: 0.03, when: tl + 0.003, type: "triangle" });
+        }
       }
     }
   }
@@ -814,7 +944,21 @@ export function makeSfx(env) {
       // ring 2.8 kHz (§4.2 imp_metal character)
       thump(out, { f0: 2800, f1: 2740, durMs: 240, gain: 0.05, type: "sine" });
     }
+    // RICOCHET (2026-11-13, recorded): some rounds off steel and stone whine
+    // away. Not on penetration faces, at most one per 120 ms (a shotgun volley
+    // is nine impacts), and only within the 45 m the impact itself carries.
+    if (!(d && d.pen) && (s === "metal" || s === "concrete")) {
+      const now = env.ac.currentTime;
+      if (now - lastRic > 0.12 && rng() < (s === "metal" ? 0.45 : 0.15)) {
+        const rb = buf("ric");
+        if (rb) {
+          lastRic = now;
+          voice(rb, out, { rate: 0.9 + rng() * 0.25, gain: 0.12, when: 0.01, hp: 700 });
+        }
+      }
+    }
   }
+  let lastRic = -10;
 
   // ---- hit feedback (UI bus: post-reverb, never positional — §4.1) ------------
   // Three clearly different cues at low level, none of them harsh:
@@ -942,6 +1086,7 @@ export function makeSfx(env) {
     if (own) {
       out = env.spatial(null);
       gain = 0.12 * (d.sprint ? 1.41 : 1);                     // −10 dB vs bots (§7.4)
+      if (d.quiet) gain *= 0.5;                                // SOFT STEP: you hear it working
       if (d.stance == null) {
         const st = env.ctx.sim() && env.ctx.sim().state;
         crouched = !!(st && st.player && st.player.stance === "crouch");
@@ -953,6 +1098,7 @@ export function makeSfx(env) {
       out = env.spatial(p, 30);
       if (!out) return;
       gain = 0.38 * (d.sprint ? 1.41 : 1);
+      if (d.quiet) gain *= 0.35;                               // SOFT STEP perk (sim flags the step)
       // friend or foe: a teammate behind you must not sound like a flanker
       try {
         const sm = env.ctx.sim();
@@ -1028,12 +1174,21 @@ export function makeSfx(env) {
       // hull taps the magazine tube, the latch snaps shut. Pitch jitters so six
       // shells never sound like one sample.
       const jt = 1 + (rng() * 2 - 1) * 0.07;
-      burst(out, { f: 3300 * jt, q: 6, durMs: 10, gain: g * 0.34 });
-      thump(out, { f0: 520 * jt, f1: 400 * jt, durMs: 28, gain: g * 0.22, when: 0.012, type: "triangle" });
-      const k = buf("clack");
-      if (k) voice(k, out, { rate: (1.45 + rng() * 0.12) * jt, gain: g * 0.5, when: 0.03 });
-      else burst(out, { f: 2100, q: 4, durMs: 14, gain: g * 0.2, when: 0.03 });
-      burst(out, { f: 1500, q: 3, durMs: 14, gain: g * 0.15, when: 0.065 });
+      const si = buf("shell_in");
+      if (si) {
+        // RECORDED: a cartridge seating with its brass click (pitched down a
+        // little — a 12-gauge base is bigger than a .357's), the hull's low tap
+        // into the tube under it
+        voice(si, out, { rate: 0.82 * jt, gain: g * 0.55 });
+        thump(out, { f0: 420 * jt, f1: 330 * jt, durMs: 26, gain: g * 0.12, when: 0.008, type: "triangle" });
+      } else {
+        burst(out, { f: 3300 * jt, q: 6, durMs: 10, gain: g * 0.34 });
+        thump(out, { f0: 520 * jt, f1: 400 * jt, durMs: 28, gain: g * 0.22, when: 0.012, type: "triangle" });
+        const k = buf("clack");
+        if (k) voice(k, out, { rate: (1.45 + rng() * 0.12) * jt, gain: g * 0.5, when: 0.03 });
+        else burst(out, { f: 2100, q: 4, durMs: 14, gain: g * 0.2, when: 0.03 });
+        burst(out, { f: 1500, q: 3, durMs: 14, gain: g * 0.15, when: 0.065 });
+      }
       // last shell in (mag full or reserve spent): the sim now runs its closing
       // pump pause — rack the slide forward over it
       const w = wdef(d.weaponId);
@@ -1073,14 +1228,29 @@ export function makeSfx(env) {
     const srcs = [];
     // stages at the animation's beats (§7.4): out ~18%, in at the 65% commit,
     // rack ~84% on empty (player.js drives the same commitFraction).
-    const magIn = d.weaponId === "corvus" ? (buf("mag_in_corvus") || buf("mag_in")) : buf("mag_in");
-    const s1 = voice(buf("mag_out"), out, { gain: g, when: dur * 0.18, rate: 1 + rng() * 0.06 });
-    const s2 = voice(magIn, out, { gain: g, when: dur * (RELOAD_MODEL.commitFraction || 0.65), rate: 1 + rng() * 0.06 });
-    if (s1) srcs.push(s1); else burst(out, { f: 1900, q: 4, durMs: 30, gain: g * 0.4, when: dur * 0.18 });
-    if (s2) srcs.push(s2); else burst(out, { f: 1500, q: 4, durMs: 35, gain: g * 0.4, when: dur * (RELOAD_MODEL.commitFraction || 0.65) });
+    // RECORDED mag foley (2026-11-13): the Desert Eagle magazine release / seat,
+    // pitched by class (rifle mags are bigger: lower); the Corvus keeps its own
+    // SVD magazine insert; the empty-reload rack is the Saiga charging handle
+    // (back + home), or a slide snap for the pistol. The recorded mag slices put
+    // their latch ~0.1 s in, so they start that much before the beat.
+    const cls = classOf(d.weaponId);
+    const mRate = cls === "pistol" ? 1.06 : cls === "smg" ? 1.0 : cls === "dmr" ? 0.86 : 0.92;
+    const tOut = dur * 0.18, tIn = dur * (RELOAD_MODEL.commitFraction || 0.65), tRack = dur * 0.84;
+    const recOut = buf("f_mag_out"), recIn = buf("f_mag_in");
+    const magIn = d.weaponId === "corvus" ? (buf("mag_in_corvus") || recIn || buf("mag_in")) : (recIn || buf("mag_in"));
+    const inIsRec = magIn === recIn && !!recIn;
+    const s1 = recOut ? voice(recOut, out, { gain: g * 0.75, when: tOut, rate: mRate * (1 + rng() * 0.05) })
+                      : voice(buf("mag_out"), out, { gain: g, when: tOut, rate: 1 + rng() * 0.06 });
+    const s2 = voice(magIn, out, { gain: inIsRec ? g * 0.75 : g, when: inIsRec ? Math.max(0, tIn - 0.1) : tIn, rate: (inIsRec ? mRate : 1) * (1 + rng() * 0.05) });
+    if (s1) srcs.push(s1); else burst(out, { f: 1900, q: 4, durMs: 30, gain: g * 0.4, when: tOut });
+    if (s2) srcs.push(s2); else burst(out, { f: 1500, q: 4, durMs: 35, gain: g * 0.4, when: tIn });
     if (d.empty) {
-      const s3 = voice(buf("rack"), out, { gain: g * 1.1, when: dur * 0.84, rate: 1 + rng() * 0.05 });
-      if (s3) srcs.push(s3); else burst(out, { f: 2400, q: 5, durMs: 25, gain: g * 0.5, when: dur * 0.84 });
+      const ch = buf("f_charge"), bo = buf("f_bolt");
+      let s3 = null;
+      if (cls === "pistol" && bo) s3 = voice(bo, out, { gain: g * 0.6, when: tRack, rate: 1.3 * (1 + rng() * 0.05) });
+      else if (ch) s3 = voice(ch, out, { gain: g * 0.7, when: Math.max(0, tRack - 0.2), rate: (cls === "dmr" ? 0.92 : cls === "smg" ? 1.1 : 1.0) * (1 + rng() * 0.04) });
+      else s3 = voice(buf("rack"), out, { gain: g * 1.1, when: tRack, rate: 1 + rng() * 0.05 });
+      if (s3) srcs.push(s3); else burst(out, { f: 2400, q: 5, durMs: 25, gain: g * 0.5, when: tRack });
     }
     pendingReload.set(key, srcs);
   }
@@ -1111,6 +1281,13 @@ export function makeSfx(env) {
     if (F.pump) {
       // half-rack: the slide is cycled as it comes up (back, then forward)
       const t2 = tSeat + 0.13;
+      const pb = buf("pump_back"), pf = buf("pump_fwd");
+      if (pb && pf) {
+        // recorded SPAS-12 strokes (clack ~0.11 s into each slice)
+        voice(pb, out, { gain: F.g * 0.3, rate: 1.04, when: Math.max(0, t2 - 0.11) });
+        voice(pf, out, { gain: F.g * 0.33, rate: 1.04, when: t2 - 0.01 });
+        return;
+      }
       const l = buf("latch");
       if (l) voice(l, out, { gain: F.g * 0.5, rate: 0.9, when: t2 });
       else burst(out, { f: 1700, q: 3, durMs: 22, gain: F.g * 0.2, when: t2 });
@@ -1522,7 +1699,8 @@ export function makeSfx(env) {
     pendingReload.clear();
     lastBark = -10;
     lastWhiz = -10;
-    lastTail.clear();            // no stale distant-tail slots across missions
+    lastRic = -10;
+    lastTail.clear();           // no stale distant-tail slots across missions
     heatMap.clear();
     cookWasLive = false;
     lastGrenWarn = -10;

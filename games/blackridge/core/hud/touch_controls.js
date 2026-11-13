@@ -213,8 +213,14 @@ export function createTouchControls(ctx) {
     const dx = e.clientX - l.x, dy = e.clientY - l.y;
     l.x = e.clientX; l.y = e.clientY;
     if (!input.enabled) return;
-    const s = (input._lookScale ? input._lookScale() : 0.0022) * LOOK_MUL;
-    input.addLook(-dx * s, -dy * s);
+    // lane PAD: touch gets the same aim assist as a controller — the drag is
+    // scaled by the assist's slowdown near a target (rotational tracking runs
+    // in input.update while a thumb is on the glass or the stick is pushed).
+    if (input.touchLooked) input.touchLooked();
+    const slow = input.assistSlow ? input.assistSlow() : 1;
+    const inv = ctx.settings && ctx.settings.invertY === "on" ? -1 : 1;
+    const s = (input._lookScale ? input._lookScale() : 0.0022) * LOOK_MUL * slow;
+    input.addLook(-dx * s, -dy * s * inv);
   }
   const lookEnd = (e) => { looks.delete(e.pointerId); };
   lookZone.addEventListener("pointerdown", (e) => { goFullscreen(); lookStart(e, lookZone); e.preventDefault(); });

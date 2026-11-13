@@ -120,8 +120,14 @@ export const WEAPONS = {
       // MEASURED from the built GLB (tools/a5_build_guns.py A5BUILD
       // report — single source; posAds.y = -sightY puts the sight line on
       // the vm camera's center ray BY CONSTRUCTION)
+      // view.rot (all long guns): hip-only cant [pitch, yaw, roll] deg about the grip,
+      // blended out by viewmodel.js with adsEase; weapon_meshes' hip standoff tests it.
       glb: "assets/weapons/warden.glb",
-      posHip: [0.14, -0.105, -0.33], posAds: [0, -0.126, -0.27],   // 2026-11-13: closer — the red-dot window should own the centre of the view
+      // 2026-11-13 hip pass: CoD hip framing — gun in the lower-right third, yawed in toward the
+      // centre (rot = [pitch, yaw, roll] deg about the grip, hip only), whole receiver + optic in
+      // frame. The old [0.14, -0.105, -0.33] ran the stock 5.6 cm from the eye and cut the receiver.
+      posHip: [0.115, -0.15, -0.43], rot: [3, 5, -6],
+      posAds: [0, -0.126, -0.27],   // 2026-11-13: closer — the red-dot window should own the centre of the view
       muzzle: [0, 0.062, -0.683], eject: [0.016, 0.061, 0.019], sightY: 0.126,
       scale: 1,
     },
@@ -146,7 +152,7 @@ export const WEAPONS = {
     penetration: { classes: ["soft"], retain: 0.45, maxThickM: 0.15 },
     view: {
       glb: "assets/weapons/vesper.glb",
-      posHip: [0.135, -0.10, -0.30], posAds: [0, -0.0997, -0.25],
+      posHip: [0.11, -0.14, -0.40], rot: [3, 5, -6], posAds: [0, -0.0997, -0.25],
       muzzle: [0, 0.042, -0.609], eject: [0.016, 0.041, 0.01], sightY: 0.0997,
       scale: 1,
       anim: { kind: "gripmag", tilt: [20, 8, -34], lift: [-0.045, 0.09, 0.02], magDrop: 0.10 },
@@ -183,7 +189,7 @@ export const WEAPONS = {
       // world zoom: adsFov 34 -> 21.5 = 3.9x (was 2.2x, which read as barely
       // magnified). Mouse look scales with it automatically (input.js zoom law).
       scope: true,
-      posHip: [0.15, -0.115, -0.36], posAds: [0, -0.139, -0.34],
+      posHip: [0.12, -0.16, -0.46], rot: [3, 5, -6], posAds: [0, -0.139, -0.34],
       muzzle: [0, 0.06, -0.867], eject: [0.017, 0.059, 0.027], sightY: 0.139,
       scale: 1,
       // the scope owns the frame at full ADS, so the gun takes none of the world's zoom
@@ -224,7 +230,10 @@ export const WEAPONS = {
       // A4BUILD report): pump shotgun off wpn_shotgun.glb, ghost-ring + bead sights,
       // `pump` forend node, SOCKET_eject on the receiver window.
       glb: "assets/weapons/breaker.glb",
-      posHip: [0.15, -0.11, -0.34], posAds: [0, -0.1237, -0.25],
+      // 2026-11-13: ADS eye 15 cm behind the grip = cheek on the stock wrist, with the ghost
+      // ring (now at the receiver's rear, a5) ~16 cm out framing the bead; at -0.25 the eye
+      // floated 1 cm behind the buttpad and the stock + receiver top filled the picture.
+      posHip: [0.115, -0.165, -0.47], rot: [3, 5, -7], posAds: [0, -0.1237, -0.15],
       muzzle: [0, 0.088, -0.75], eject: [0.02, 0.083, -0.1], sightY: 0.1237,
       scale: 1,
       // hand animation (viewmodel.js): per-shell loading with the gun canted
