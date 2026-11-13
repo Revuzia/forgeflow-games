@@ -41,6 +41,7 @@ import { PhotoPost } from './camera/photo.ts';
 import { WorldFx, type WorldPlanetRef } from './fx/worlds.ts';
 import { perfmon } from './perfmon.ts';
 import { gpuMem } from './gpumem.ts';
+import { ringTick, setRingGL } from './bufring.ts';
 import { perfList, perfNum, perfSwitch, perfSwitchNote } from './perfswitch.ts';
 // PERF s12 BISECTION switches (owner's M5 is GPU-bound: ~100x per pixel vs Vale). Each turns a heavy pass / feature
 // OFF for an A/B run only (`?msaa=0`, `?clouds=0`, ...); all default ON (the game's look), and the perf report header
@@ -225,6 +226,7 @@ export class Renderer {
     });
     // (PERF s14) the live GPU memory audit from the first allocation on (the perf report's 'gpu mem' lines)
     try { gpuMem.install(this.three.getContext() as WebGL2RenderingContext); } catch { /* unaudited */ }
+    setRingGL(this.three.getContext() as WebGL2RenderingContext);
     gpuMem.cpuProbe = () => cpuRetained(this.scene);
     // (PERF s15) GPU bytes by owner: three's texture lookups name each texture allocation, the scene walk each array
     try { gpuMem.attach(this.three); } catch { /* unattributed */ }
@@ -370,6 +372,7 @@ export class Renderer {
     const q = this.quality;
     this.frameNo++;
     gpuMem.tick();
+    ringTick();
     // ── camera at the origin ──
     const cam = this.camera;
     cam.position.set(0, 0, 0);
