@@ -35,10 +35,13 @@ class Ring {
   readonly bufs: (WebGLBuffer | null)[];
   cur = 0;
   lastFlip = -1;
-  readonly mesh: Mesh;
+  /** the instanced mesh (instanceMatrix / instanceColor) or null; the geometry holding the other attributes / index */
+  readonly mesh: Mesh | null;
+  readonly geo: BufferGeometry;
   readonly name: string;
-  constructor(mesh: Mesh, name: string, first: Attr) {
+  constructor(mesh: Mesh | null, geo: BufferGeometry, name: string, first: Attr) {
     this.mesh = mesh;
+    this.geo = geo;
     this.name = name;
     this.members = [first];
     const Ctor = first.constructor as new (arr: ArrayLike<number>, size: number, norm?: boolean, mpa?: number) => Attr;
@@ -54,7 +57,7 @@ class Ring {
     this.members.forEach((m, i) => {
       m.onUploadCallback = () => {
         // (three calls this right after its bufferData / bufferSubData, the member's buffer still bound)
-        if (!this.bufs[i] && gl) this.bufs[i] = gl.getParameter(gl.ARRAY_BUFFER_BINDING) as WebGLBuffer | null;
+        if (!this.bufs[i] && gl) this.bufs[i] = gl.getParameter(name === 'index' ? gl.ELEMENT_ARRAY_BUFFER_BINDING : gl.ARRAY_BUFFER_BINDING) as WebGLBuffer | null;
         this.dirty[i].length = 0;
       };
     });
@@ -63,13 +66,15 @@ class Ring {
     const n = this.name;
     if (n === 'instanceMatrix') return (this.mesh as InstancedMesh).instanceMatrix;
     if (n === 'instanceColor') return ((this.mesh as InstancedMesh).instanceColor ?? undefined) as Attr | undefined;
-    return this.mesh.geometry.attributes[n] as Attr | undefined;
+    if (n === 'index') return (this.geo.index ?? undefined) as Attr | undefined;
+    return this.geo.attributes[n] as Attr | undefined;
   }
   private install(m: Attr): void {
     const n = this.name;
     if (n === 'instanceMatrix') (this.mesh as InstancedMesh).instanceMatrix = m as InstancedBufferAttribute;
     else if (n === 'instanceColor') (this.mesh as InstancedMesh).instanceColor = m as InstancedBufferAttribute;
-    else (this.mesh.geometry as BufferGeometry).setAttribute(n, m);
+    else if (n === 'index') this.geo.setIndex(m);
+    else this.geo.setAttribute(n, m);
   }
   /** elements [start, start + count) of the shared array were written: upload them through the next member */
   mark(start: number, count: number): void {
@@ -84,9 +89,9 @@ class Ring {
     for (let k = 0; k < d.length; k += 2) m.addUpdateRange(d[k], d[k + 1] - d[k]);
     m.needsUpdate = true;
   }
-  /** the mesh went: free the members three does not know to free (all but the one installed) */
-  free(): void {
-    const at = this.installed();
+  /** the mesh went: free the members three does not know to free (all but the one installed; `all`: every one) */
+  free(all = false): void {
+    const at = all ? null : this.installed();
     for (let i = 0; i < this.members.length; i++) {
       if (this.members[i] === at) continue;
       const b = this.bufs[i];
@@ -127,7 +132,7 @@ export function ringify(mesh: Mesh, names: string[]): void {
   for (const n of names) {
     const a = (n === 'instanceMatrix' ? (mesh as InstancedMesh).instanceMatrix : n === 'instanceColor' ? (mesh as InstancedMesh).instanceColor : mesh.geometry.attributes[n]) as Attr | null | undefined;
     if (!a || RINGS.has(a)) continue;
-    const r = new Ring(mesh, n, a);
+    const r = new Ring(n === 'instanceMatrix' || n === 'instanceColor' ? mesh : null, mesh.geometry as BufferGeometry, n, a);
     for (const m of r.members) RINGS.set(m, r);
     rings.push(r);
   }
@@ -148,4 +153,24 @@ export function ringMark(a: object | null | undefined, start: number, count: num
 export function ringOf(a: object): { members: readonly object[]; cur: number } | null {
   const r = RINGS.get(a);
   return r ? { members: r.members, cur: r.cur } : null;
+}
+
+/**
+ * ring a geometry's attribute (or 'index') in place — putGrowable's buffers, rewritten whole at each rebuild; the
+ * geometry's dispose frees the extra members
+ */
+export function ringGeo(geo: BufferGeometry, name: string): void {
+  if (!BUF_RING) return;
+  const a = (name === 'index' ? geo.index : geo.attributes[name]) as Attr | null | undefined;
+  if (!a || RINGS.has(a) || (a as unknown as { isInterleavedBufferAttribute?: boolean }).isInterleavedBufferAttribute) return;
+  const r = new Ring(null, geo, name, a);
+  for (const m of r.members) RINGS.set(m, r);
+  const free = () => { r.free(); geo.removeEventListener('dispose', free); };
+  geo.addEventListener('dispose', free);
+}
+
+/** the ringed attribute `a` is being replaced by a new one: delete all its members' buffers */
+export function ringDrop(a: object | null | undefined): void {
+  const r = a ? RINGS.get(a) : undefined;
+  if (r) r.free(true);
 }

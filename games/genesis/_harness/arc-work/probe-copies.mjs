@@ -36,8 +36,16 @@ for (const v of views) {
   await page.evaluate((c) => window.__GENESIS__.camera(c), { ...v, hour: 10, blend: 1.5 });
   await page.evaluate((k) => window.__GENESIS__.frames(k), n);
   const fly = await part(n);
+  await page.evaluate(() => { const gm = globalThis.__GENESIS_GPUMEM__; globalThis.__snap = new Map([...gm.live].map(([o, e]) => [o, e.copied ?? 0])); });
   await page.evaluate((k) => window.__GENESIS__.frames(k), rest);
   const still = await part(rest);
+  // who copied during the rest frames (owner: size kB x buffers = MB)
+  const who = await page.evaluate(() => {
+    const gm = globalThis.__GENESIS_GPUMEM__; const own = gm.ownerProbe?.() ?? new Map(); const by = new Map();
+    for (const [o, e] of gm.live) { const d = (e.copied ?? 0) - (globalThis.__snap.get(o) ?? 0); if (d <= 0) continue; const src = e.src?.deref(); const k = `${src ? own.get(src) ?? 'unowned' : 'gone'} ${e.desc} ${Math.round(e.bytes / 1e3)}kB`; const r = by.get(k) ?? [0, 0]; r[0] += d; r[1]++; by.set(k, r); }
+    return [...by].sort((a, b) => b[1][0] - a[1][0]).slice(0, 12).map(([k, r]) => `${k}: ${(r[0] / 1e6).toFixed(2)} MB in ${r[1]} bufs`);
+  });
+  console.log('  rest copies by owner:', who.join(' | '));
   console.log('view', JSON.stringify(v), 'flight/frame', JSON.stringify(fly), 'rest/frame', JSON.stringify(still));
 }
 const out = await page.evaluate(() => {

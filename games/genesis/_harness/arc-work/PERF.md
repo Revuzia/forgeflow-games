@@ -1267,3 +1267,11 @@ long press frame-rate independent. Report after 1-2 verified.
   draws stamped): page writes into pages drawn in the last 3 frames 185 / 3947 = 4.7% (freshland=0: 4190 / 5848 = 72%),
   pages peak 168 vs 146 (+15%). chunkpool / chunksoak / chunkrest / pagenormal / lazypools / gpumem: 20/20 pass.
 - dist33 = HEAD + the above. Browser A/B queued (run-s16b.sh): copies-s16on.log / copies-s16off.log.
+- BROWSER copies-s16on.log (dist33, HIGH 320x180, 3 views x 25 flight + 12 rest frames): vegetation GONE from the copy
+  list; per frame flight 9.6 / 14.8 / 5.8 copies (1.4 / 1.5 / 0.8 MB), rest 4.3 / 25 / 18 (0.6 / 4.0 / 2.4 MB). The rest
+  is 'planet-0/life' 524 / 393 / 262 kB vertex + 131 kB index = road RIBBONS (roads.ts putGrowable, 7 attributes x 2
+  ribbons, rebuilt every ~120 m and as heights stream) + terrain pages (a few) + godfx 288 kB.
+- (2b) putGrowable rings too (upload.ts: ringGeo(geo, name) incl. 'index' via geo.setIndex; ringDrop frees all members
+  when a bigger attribute replaces a ring). Rings: roads ribbons, fx/particles. test (+1, 5/5). dist34.
+  probe-copies.mjs prints 'rest copies by owner' (copied during the rest frames only). run-s16d.sh: copies-s16on2
+  (dist34), then deck new / old (dist32; deck-new's first run was killed after the 540 m stop to free the slot).

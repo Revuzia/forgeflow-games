@@ -13,6 +13,7 @@
 // HDR scene target after the opaque pass and before the water and the atmosphere (renderer.ts), so the haze and the
 // water lie over them as they should.
 
+import { ringify, ringMark } from '../bufring.ts';
 import {
   CustomBlending, DstColorFactor, Group, InstancedBufferAttribute, InstancedBufferGeometry, Float32BufferAttribute, Matrix3,
   Matrix4, Mesh, OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, Vector2, Vector3, ZeroFactor, type Camera, type IUniform, type Texture,
@@ -407,6 +408,8 @@ class DecalGroup {
     this.mesh = new Mesh(this.geo, mat);
     this.mesh.frustumCulled = false;
     this.mesh.matrixAutoUpdate = false;
+    // (PERF s16) rewritten every frame into buffers drawn every frame: a ring of 3 each (bufring.ts)
+    ringify(this.mesh, ['iC', 'iA', 'iCol', 'iP', 'iQ']);
     this.mesh.layers.set(5);
   }
 
@@ -424,7 +427,7 @@ class DecalGroup {
 
   end(): void {
     this.geo.instanceCount = this.n;
-    for (const a of this.attrs) { a.clearUpdateRanges(); a.addUpdateRange(0, this.n * 4); a.needsUpdate = true; }
+    for (const a of this.attrs) { if (ringMark(a, 0, this.n * 4)) continue; a.clearUpdateRanges(); a.addUpdateRange(0, this.n * 4); a.needsUpdate = true; }
     this.mesh.visible = this.n > 0;
   }
 }

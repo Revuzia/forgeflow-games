@@ -4,7 +4,7 @@
 // is never drawn (mesh.count bounds every draw), so the image is identical.
 import { BufferAttribute, InstancedBufferAttribute, Texture } from 'three';
 import type { BufferGeometry, InterleavedBufferAttribute, WebGLRenderer } from 'three';
-import { ringMark } from './bufring.ts';
+import { BUF_RING, ringDrop, ringGeo, ringMark } from './bufring.ts';
 
 type Attr = BufferAttribute | InstancedBufferAttribute;
 
@@ -65,6 +65,8 @@ export function putGrowable(geo: BufferGeometry, name: string, src: Float32Array
   const isIndex = name === 'index';
   let a = (isIndex ? geo.index : geo.getAttribute(name)) as BufferAttribute | null;
   if (!a || a.array.length < src.length || a.array.constructor !== src.constructor || a.itemSize !== itemSize || !!(a as InstancedBufferAttribute).isInstancedBufferAttribute !== instanced) {
+    // (PERF s16) a ringed attribute replaced by a bigger one: its members' buffers go now (three frees only the installed one, at the geometry's dispose)
+    ringDrop(a);
     let cap = (instanced ? 256 : 1024) * itemSize;
     while (cap < src.length) cap *= 2;
     const arr = src instanceof Uint32Array ? new Uint32Array(cap) : new Float32Array(cap);
@@ -72,6 +74,11 @@ export function putGrowable(geo: BufferGeometry, name: string, src: Float32Array
     if (isIndex) geo.setIndex(a); else geo.setAttribute(name, a);
   }
   (a.array as Float32Array | Uint32Array).set(src as never);
+  // (PERF s16) rewritten whole at each rebuild into a buffer drawn every frame: a ring of 3 (bufring.ts)
+  if (BUF_RING && src.length > 0) {
+    ringGeo(geo, name);
+    if (ringMark(a, 0, src.length)) return (isIndex ? geo.index : geo.getAttribute(name)) as BufferAttribute;
+  }
   a.clearUpdateRanges();
   if (src.length > 0) a.addUpdateRange(0, src.length);
   a.needsUpdate = true;

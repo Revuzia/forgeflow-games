@@ -129,3 +129,22 @@ test('PERF s16 FRESH_LAND: at steady flight terrain patches land in pages not dr
   assert.ok(hot <= writes * 0.08, `${hot} of ${writes} page writes went into a page drawn in the last 3 frames`);
   if (process.env.CHUNK_LOG) console.log({ writes, hot, pagesPeak, livePeak });
 });
+
+test('putGrowable rings a rebuilt geometry buffer (and its index): a new member each rebuild frame, the same array', async () => {
+  const { BufferGeometry } = await import('three');
+  const { putGrowable } = await import('../src/render/upload.ts');
+  const geo = new BufferGeometry();
+  ringTick();
+  const a0 = putGrowable(geo, 'position', new Float32Array(30), 3);
+  const i0 = putGrowable(geo, 'index', new Uint32Array(12), 1);
+  ringTick();
+  const a1 = putGrowable(geo, 'position', new Float32Array(33), 3);
+  const i1 = putGrowable(geo, 'index', new Uint32Array(15), 1);
+  assert.notEqual(a1, a0); assert.equal(a1.array, a0.array); assert.equal(geo.getAttribute('position'), a1);
+  assert.notEqual(i1, i0); assert.equal(geo.index, i1);
+  assert.deepEqual(a1.updateRanges.map((r) => [r.start, r.count]), [[0, 33]]);
+  // a bigger rebuild makes a new attribute (its own ring)
+  ringTick();
+  const a2 = putGrowable(geo, 'position', new Float32Array(5000), 3);
+  assert.ok(a2.array.length >= 5000 && ringOf(a2) && !ringOf(a2)!.members.includes(a0));
+});
