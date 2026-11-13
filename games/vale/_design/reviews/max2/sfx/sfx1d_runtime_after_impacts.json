@@ -1,0 +1,127 @@
+{
+ "what": "max2 SFX refix: runtime mix after the voiced impacts (probe_audio_runtime match, rift_coop, 300 s, Chrome fake output, dev server on the current tree after npm run content)",
+ "seats": {
+  "lisvel21": {
+   "pass": true,
+   "gates": {
+    "healPerMinLe6": true,
+    "enemyDownFires": true,
+    "lampSetFires": true,
+    "lampOutFires": null,
+    "announcerPeakOverSfxP99Ge3": true,
+    "masterIntegratedInTokens": true,
+    "fighterKitShareGe50": true
+   },
+   "masterI": -18.33,
+   "sfxI": -22.97,
+   "ambienceI": -23.31,
+   "kitShare": {
+    "fighterPct": 73.05,
+    "libraryPct": 20.15,
+    "wickPct": 2.81,
+    "unitPct": 0,
+    "matchPct": 3.98
+   },
+   "top": [
+    [
+     "f_lisvel_attack_hit",
+     43.48
+    ],
+    [
+     "f_lisvel_attack_swing",
+     22.14
+    ],
+    [
+     "c_proc_item",
+     2.35
+    ],
+    [
+     "c_needle_shot",
+     2.21
+    ],
+    [
+     "c_proc_team",
+     1.64
+    ],
+    [
+     "m_level_up",
+     1.61
+    ],
+    [
+     "c_monster_fall",
+     1.54
+    ],
+    [
+     "f_marund_passive",
+     1.52
+    ]
+   ],
+   "before": {
+    "I": -18.33,
+    "kit": 73.3,
+    "by": "verify1_q"
+   }
+  },
+  "odrum7": {
+   "pass": true,
+   "gates": {
+    "healPerMinLe6": true,
+    "enemyDownFires": true,
+    "lampSetFires": true,
+    "lampOutFires": true,
+    "announcerPeakOverSfxP99Ge3": true,
+    "masterIntegratedInTokens": true,
+    "fighterKitShareGe50": true
+   },
+   "masterI": -17.54,
+   "sfxI": -19.32,
+   "ambienceI": -23.31,
+   "kitShare": {
+    "fighterPct": 86.82,
+    "libraryPct": 10.26,
+    "wickPct": 0.73,
+    "unitPct": 0,
+    "matchPct": 2.2
+   },
+   "top": [
+    [
+     "f_odrum_a1_hit",
+     32.62
+    ],
+    [
+     "f_odrum_attack_hit",
+     22.01
+    ],
+    [
+     "f_odrum_attack_swing",
+     12.04
+    ],
+    [
+     "f_odrum_a1_land",
+     5.08
+    ],
+    [
+     "f_odrum_a1",
+     4.59
+    ],
+    [
+     "f_odrum_passive",
+     2.59
+    ],
+    [
+     "c_proc_item",
+     1.39
+    ],
+    [
+     "c_proc_team",
+     1.22
+    ]
+   ],
+   "before": {
+    "I": -17.75,
+    "kit": 86.8,
+    "by": "verify1_q"
+   }
+  }
+ }
+}
