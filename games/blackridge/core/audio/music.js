@@ -295,36 +295,155 @@ export function makeMusic(env) {
     }
   }
 
-  function missionEnd(won) {
+  // ---- STINGERS (2026-11-13): victory / defeat / draw / lead taken / lead lost /
+  // final kill. All synthesized in the score's own D-minor world, routed to `out`
+  // (past the gun duck, so a stinger is never swallowed by the last shot) and
+  // therefore on the MUSIC bus — the music slider owns them, as in any shooter.
+  // brass(): two detuned saws + a square an octave down through a low-pass whose
+  // cutoff blooms open on the attack and closes over the note (the "blat").
+  function brass(t, f, dur, amp, bloom = 2400, rest = 700) {
+    const ac = env.ac;
+    const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.Q.value = 1.1;
+    lp.frequency.setValueAtTime(rest * 0.6, t);
+    lp.frequency.linearRampToValueAtTime(bloom, t + 0.05);
+    lp.frequency.setTargetAtTime(rest, t + 0.06, Math.max(0.05, dur * 0.35));
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(gclamp(amp), t + 0.025);
+    g.gain.setTargetAtTime(gclamp(amp * 0.7), t + 0.05, 0.12);
+    g.gain.setValueAtTime(gclamp(amp * 0.7), t + Math.max(0.08, dur - 0.12));
+    g.gain.linearRampToValueAtTime(0, t + dur);
+    lp.connect(g); g.connect(out);
+    for (const [type, mul, det, lvl] of [["sawtooth", 1, -6, 0.5], ["sawtooth", 1, 6, 0.5], ["square", 0.5, 0, 0.22]]) {
+      const o = ac.createOscillator(); o.type = type; o.frequency.value = f * mul; o.detune.value = det;
+      const og = ac.createGain(); og.gain.value = lvl;
+      o.connect(og); og.connect(lp);
+      o.start(t); o.stop(t + dur + 0.03);
+      env.voices++;
+    }
+  }
+  function timp(t, f, amp, dur = 0.7) {
+    const ac = env.ac;
+    const o = ac.createOscillator(); o.type = "sine";
+    o.frequency.setValueAtTime(f * 1.5, t);
+    o.frequency.linearRampToValueAtTime(f, t + 0.05);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(gclamp(amp), t + 0.006);
+    g.gain.setTargetAtTime(0, t + 0.02, dur / 4);
+    g.gain.setValueAtTime(0.0001, t + dur);
+    g.gain.linearRampToValueAtTime(0, t + dur + 0.02);
+    o.connect(g); g.connect(out);
+    o.start(t); o.stop(t + dur + 0.05);
+    env.voices++;
+  }
+  function pad(t, freqs, dur, amp) {
+    const ac = env.ac;
+    for (const f of freqs) {
+      const o = ac.createOscillator(); o.type = "triangle"; o.frequency.value = f;
+      const g = ac.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(gclamp(amp), t + Math.min(0.8, dur * 0.3));
+      g.gain.linearRampToValueAtTime(0, t + dur);
+      o.connect(g); g.connect(out);
+      o.start(t); o.stop(t + dur + 0.05);
+      env.voices++;
+    }
+  }
+  const stingLast = {};
+  let stingCount = 0;
+  function stinger(kind) {
+    if (!built) return false;
+    const t = env.ac.currentTime + 0.03;
+    // lead cues are rate-limited (a trade of kills can flip the lead every tick)
+    if ((kind === "leadTaken" || kind === "leadLost") && t - (stingLast.lead || -99) < 4) return false;
+    if (kind === "leadTaken" || kind === "leadLost") stingLast.lead = t;
+    try {
+      if (kind === "victory") {
+        // D major fanfare: D4 A4 → D5 held over F#4/A4, timpani under it
+        timp(t, 73.4, 0.5); brass(t, 293.66, 0.2, 0.15);
+        brass(t + 0.2, 440.0, 0.2, 0.15);
+        timp(t + 0.42, 73.4, 0.55, 1.2);
+        brass(t + 0.42, 587.33, 1.7, 0.16, 2800, 900);
+        brass(t + 0.42, 369.99, 1.7, 0.1, 2000, 700);
+        brass(t + 0.42, 440.0, 1.7, 0.09, 2000, 700);
+        pad(t + 0.4, [146.83, 220.0], 2.8, 0.06);
+      } else if (kind === "defeat") {
+        // D minor, falling: D3 → C3 → B♭2 over a low boom, dark and slow
+        timp(t, 55, 0.55, 1.4);
+        brass(t, 146.83, 0.55, 0.12, 900, 380);
+        brass(t + 0.55, 130.81, 0.55, 0.12, 850, 360);
+        brass(t + 1.1, 116.54, 1.9, 0.13, 800, 320);
+        brass(t + 1.1, 174.61, 1.9, 0.07, 700, 300);                // F3 over it: minor
+        pad(t + 1.0, [58.27, 87.31], 2.6, 0.07);
+      } else if (kind === "draw") {
+        // suspended, unresolved: D-G-A
+        timp(t, 65.4, 0.35, 0.9);
+        brass(t, 293.66, 1.4, 0.1, 1600, 600);
+        brass(t, 392.0, 1.4, 0.08, 1600, 600);
+        brass(t, 440.0, 1.4, 0.07, 1600, 600);
+      } else if (kind === "leadTaken") {
+        // two quick rising hits: A4 → D5
+        brass(t, 440.0, 0.12, 0.11, 2600, 900);
+        brass(t + 0.12, 587.33, 0.38, 0.12, 2800, 900);
+        timp(t + 0.12, 73.4, 0.28, 0.5);
+      } else if (kind === "leadLost") {
+        // two muted falling notes: F4 → D4, low and closed
+        brass(t, 349.23, 0.16, 0.09, 1100, 500);
+        brass(t + 0.16, 293.66, 0.45, 0.09, 900, 420);
+        timp(t + 0.16, 55, 0.25, 0.6);
+      } else if (kind === "finalKill") {
+        // the last kill of the match: a reversed-air rush into one big hit
+        const ac = env.ac;
+        const n = ac.createBufferSource(); n.buffer = env.noiseBuf(); n.loop = true;
+        const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 0.8;
+        bp.frequency.setValueAtTime(300, t);
+        bp.frequency.linearRampToValueAtTime(2600, t + 0.45);
+        const g = ac.createGain();
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.12, t + 0.44);
+        g.gain.linearRampToValueAtTime(0, t + 0.47);
+        n.connect(bp); bp.connect(g); g.connect(out);
+        n.start(t); n.stop(t + 0.5);
+        env.voices++;
+        timp(t + 0.47, 49, 0.7, 1.6);
+        brass(t + 0.47, 146.83, 1.2, 0.14, 1800, 500);
+        brass(t + 0.47, 220.0, 1.2, 0.1, 1800, 500);
+      } else return false;
+      stingCount++;
+      return true;
+    } catch (e) { err(e, "music:sting:" + kind); return false; }
+  }
+
+  // result: true/"won" | false/"lost" | "draw"
+  function missionEnd(won, opts) {
     if (!built) return;
     try {
       const t = env.ac.currentTime;
       combatOn = false;
       combatGain.gain.setTargetAtTime(0, t, 0.6);
       riserGain.gain.setTargetAtTime(0, t, 0.6);
-      if (won) {
-        // 2-note resolve into a soft D-major swell
-        stab(t + 0.1, 146.83, 0.5, 0.6);
-        for (const f of [146.83, 220.0, 370.0]) {              // D3 A3 F#4
-          const o = env.ac.createOscillator(); o.type = "triangle"; o.frequency.value = f;
-          const g = env.ac.createGain();
-          g.gain.setValueAtTime(0, t + 0.5);
-          g.gain.linearRampToValueAtTime(0.09, t + 1.4);
-          g.gain.linearRampToValueAtTime(0, t + 3.4);
-          o.connect(g); g.connect(duckG);
-          o.start(t + 0.5); o.stop(t + 3.5);
-          env.voices++;
-        }
-      } else {
-        playerDeath();
+      const draw = won === "draw";
+      const isWin = won === true || won === "won";
+      const delay = opts && opts.finalKill ? 1.25 : 0;
+      if (opts && opts.finalKill) stinger("finalKill");
+      const play = () => stinger(draw ? "draw" : isWin ? "victory" : "defeat");
+      if (delay > 0) setTimeout(() => { try { play(); } catch (e) { err(e, "music:end2"); } }, delay * 1000);
+      else play();
+      if (!isWin && !draw) {
+        // the defeat also drops the world away (the old death boom path)
+        duckG.gain.cancelScheduledValues(t);
+        duckG.gain.setTargetAtTime(0.25, t, 0.05);
+        duckG.gain.setTargetAtTime(1, t + 2.4, 0.6);
       }
       modeName = "end";
-      bedGain.gain.setTargetAtTime(BED_MENU, t + 2, 1.0);
+      bedGain.gain.setTargetAtTime(BED_MENU, t + 2.5, 1.0);
     } catch (e) { err(e, "music:end"); }
   }
 
   return {
-    start, update, gunDuck, squadWiped, playerDeath, onPhase, missionEnd,
+    start, update, gunDuck, squadWiped, playerDeath, onPhase, missionEnd, stinger,
+    stingCount: () => stingCount,
     setEngagedForTest: (n) => { testEngaged = n == null ? null : (n | 0); },
     mode: () => modeName + (combatOn ? "+combat" : "") + (arpOn ? "+arp" : ""),
   };

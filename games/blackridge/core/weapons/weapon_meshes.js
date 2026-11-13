@@ -164,6 +164,15 @@ function repair(group) {
         list[i] = dm; repaired.add(dm); m.dispose();
         continue;
       }
+      // IRON-SIGHT LUME (generator material br5_lume: pistol 3-dot, shotgun front bead).
+      // Unlit so the dots read in the night pool, but a muted pale green-white (not
+      // tone-mapped, below any bloom threshold) — a sight dot, not a lamp.
+      if (/_lume$/i.test(m.name || "")) {
+        const lm = new THREE.MeshBasicMaterial({ name: m.name, color: new THREE.Color(0.50, 0.62, 0.46),
+          toneMapped: false, fog: false });
+        list[i] = lm; repaired.add(lm); m.dispose();
+        continue;
+      }
       if (/glass|arcoat/i.test(m.name || "")) {
         const rim = /arcoat/i.test(m.name || "");
         m.transparent = true;
@@ -236,8 +245,15 @@ function repair(group) {
         // The roughness map's low end (0.36 on worn steel) is a narrow lobe that turns the muzzle-flash
         // light and the moon into a foil-like glitter on a hand-sized part. The shader clamps the
         // PRODUCT at 1, so a factor of 1.5 lifts the whole map (0.36 -> 0.54) and keeps its variance.
-        if (m.roughnessMap) m.roughness = Math.min(1.8, (m.roughness == null ? 1 : m.roughness) * 1.5);
-        else if (m.roughness == null || m.roughness > 0.92) m.roughness = 0.92;
+        // (2026-11-13) The a5 generator (materials named br5_*) now ships an AUTHORED ORM:
+        // factor x channel already lands the old flat values on average (metal 0.40, polymer
+        // 0.62, grip 0.74) with smudges / scratch lines smoother and dust rougher around it —
+        // the x1.5 lift would erase exactly that (and push metal to 0.60, matte). Its floor is
+        // authored instead (channel >= 0.30, so the narrowest lobe is a 2-px scratch line at
+        // ~0.22, not a whole part). Legacy a4 maps keep the lift.
+        const authoredOrm = /^br5_/i.test(m.name || "");
+        if (m.roughnessMap && !authoredOrm) m.roughness = Math.min(1.8, (m.roughness == null ? 1 : m.roughness) * 1.5);
+        else if (!m.roughnessMap && (m.roughness == null || m.roughness > 0.92)) m.roughness = 0.92;
       }
       m.needsUpdate = true;
     }

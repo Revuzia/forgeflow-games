@@ -335,21 +335,55 @@ export function createSoldiers(ctx) {
     // a corpse does not breathe, sway or scan the street — kill the life
     // layer at the same instant the death clip is committed (actor.js)
     rec.actor.lifeGain = 0;
-    // DIRECTIONAL DEATH (VT §7): the body is knocked AWAY from the shot —
-    // face the shooter so the (backward-falling) Mixamo deaths read as impact
-    // direction, not a canned flop. d.dir is the shot's travel direction.
-    if (d.dir && (d.dir[0] || d.dir[2])) {
-      const simYawFacingShooter = Math.atan2(d.dir[0], d.dir[2]);
-      rec.yawTarget = simYawFacingShooter + Math.PI;
-    }
-    // Variant: honor the sim's latched death_a/death_b semantic (both resolve
-    // to the one proven fall clip — see anim_map.js) and vary the playback
-    // rate deterministically per victim so nearby deaths never read identical.
     const sim = ctx.sim();
     const bot = sim && sim.state.bots.find((b) => b.id === d.victim);
-    const v = (bot && (bot.anim === "death_a" || bot.anim === "death_b")) ? bot.anim : "death_a";
+    let v = (bot && (bot.anim === "death_a" || bot.anim === "death_b")) ? bot.anim : "death_a";
+    // DIRECTIONAL DEATH (VT §7, 2026-11-13 pass). d.dir is victim -> attacker
+    // (damage.js dirFromTo(victim, attacker)). The OLD code turned the body to
+    // atan2(dir) + PI — i.e. AWAY from the shooter — and played the one
+    // backward fall, so every body fell TOWARD the gun. Now the body keeps its
+    // facing (only a <= 45 deg correction, so the fall lines up with the
+    // round) and the clip is picked by where the shot came from, measured off
+    // each clip's own FK (head vs hips at the last frame):
+    //   front: head -> death_front_head (falls back); body -> death_a (falls
+    //          back) or death_front (crumples forward), alternating per victim
+    //   back:  head -> death_back_head; body -> death_back (both fall forward)
+    //   his right -> death_right (falls to his left); his left -> death_left
+    //          (death_right mirrored at load, falls to his right)
+    // THREE yaw of the attacker is atan2(dx, dz) (model faces +Z; +X = his
+    // left), so rel > 0 means the attacker is on his LEFT.
+    let crouched = false;
+    if (d.dir && (d.dir[0] || d.dir[2]) && rec.actor.hasLoco) {
+      const rel = wrapAngle(Math.atan2(d.dir[0], d.dir[2]) - rec.yaw);
+      const a = Math.abs(rel);
+      let card;
+      if (a <= Math.PI / 4) {
+        card = 0;
+        v = d.headshot ? "death_front_head" : ((d.victim + (rec.deaths | 0)) % 2 ? "death_front" : "death_a");
+      } else if (a >= 3 * Math.PI / 4) {
+        card = rel > 0 ? Math.PI : -Math.PI;
+        v = d.headshot ? "death_back_head" : "death_back";
+      } else if (rel > 0) {
+        card = Math.PI / 2; v = "death_left";
+      } else {
+        card = -Math.PI / 2; v = "death_right";
+      }
+      // align the fall with the round (<= 45 deg), plus a small per-victim
+      // jitter so two bodies dropped by one burst do not lie parallel
+      const jitter = (((d.victim * 37) % 9) - 4) * 0.035;
+      rec.yawTarget = rec.yaw + (rel - card) + jitter;
+      crouched = !!(bot && bot.stance === "crouch");
+    } else if (d.dir && (d.dir[0] || d.dir[2])) {
+      // legacy body without the directional clips: the old facing rule
+      rec.yawTarget = Math.atan2(d.dir[0], d.dir[2]) + Math.PI;
+    }
+    rec.deaths = (rec.deaths | 0) + 1;
+    rec.deathClip = v;
+    // rate varies deterministically per victim so nearby deaths never match
     const ts = 0.88 + (d.victim % 4) * 0.08; // 0.88 / 0.96 / 1.04 / 1.12
-    rec.actor.playOnce(v, { fade: 0.09, timeScale: ts });
+    // a crouched victim enters the fall where the hips pass his crouch height
+    // (there is no crouch death clip in the budget) — never stands up to die
+    rec.actor.playOnce(v, { fade: 0.09, timeScale: ts, fromHipsY: crouched ? 0.74 : null });
     // Bodies persist ≥ 20 s (VT §7 / D6 permanence): nothing here removes the
     // actor — it stays until its bot leaves sim.state (checkpoint restore) or
     // mission:start clears the cast.
@@ -402,13 +436,24 @@ export function createSoldiers(ctx) {
         }
         rec.actor.hitImpulse(side, Math.min(1.5, 0.6 + (d.amount || 20) / 45));
       });
+      bridge.register("grenade", (d) => {
+        // GRENADE TOSS (2026-11-13): the sim spawns a bot's grenade at the
+        // release ("out"); the actor plays the toss over its stepping legs.
+        if (!d || d.phase !== "out" || typeof d.who !== "number") return;
+        const rec = actors.get(d.who);
+        if (rec && !rec.deathPlayed) rec.actor.throwGrenade();
+      });
       bridge.register("botstate", (d) => {
         // fallback: a bot can die from test-surface damage with the death
         // event filtered upstream — the state edge still buries it
-        if (d.state === "dead") {
-          const rec = actors.get(d.botId);
-          if (rec && !rec.deathPlayed) onDeath({ victim: d.botId, dir: null });
-        }
+        // 2026-11-13: NO LONGER buries here. damage.js emits `botstate`
+        // BEFORE `death` on the same tick, so burying on the state edge
+        // committed every death with dir:null and the `death` event (which
+        // carries the shot direction + headshot) was then ignored — measured:
+        // every PVP death played the fallback clip. The fallback for a death
+        // with no `death` event is the per-frame `!bot.alive` check in
+        // update(), which runs after the tick's events are dispatched.
+        if (d.state === "dead") return;
       });
       bridge.register("shot", (d) => {
         // fire-anim/kick ONLY on true fire-time events: impactOnly is a
@@ -527,10 +572,49 @@ export function createSoldiers(ctx) {
         // ---- animation selection (sim's bot.anim is authoritative)
         const hs = bot.vel ? Math.hypot(bot.vel[0], bot.vel[2]) : 0;
 
-        // ---- LEG DIRECTION (see actor.legYaw): legs follow the travel direction,
-        // the chest keeps the aim. Back-pedalling turns the legs to the REVERSE of
-        // travel and runs the cycle backward. Hysteresis on the fwd/back switch so a
-        // pure strafe does not flicker between the two.
+        // ---- TRAVEL DIRECTION (8-way locomotion, 2026-11-13). The body faces
+        // its aim; actor.js blends real forward/strafe/back clips by where he
+        // is travelling RELATIVE to that facing. Damped on the circle (a wrap
+        // through +-180 is continuous: both neighbours of 180 weight the back
+        // clip) so a bot that reverses sweeps through the directions instead
+        // of popping, and held while nearly stopped (velocity heading is noise
+        // below ~0.4 m/s; the blend is idle-weighted there anyway).
+        if (actor.hasLoco) {
+          // lambda 20: PVP bots juke (strafe reversals inside 0.25 s); at 12 the
+          // blend lagged the true heading by 20-45 deg mid-juke (measured), which
+          // is slide. Below 0.8 m/s the heading is held (a reversal passes
+          // through zero speed, where the velocity direction is noise).
+          // A REVERSAL (> 100 deg off) snaps instead of sweeping: sweeping L->R
+          // through the forward/back clips for ~0.15 s while the bot is already
+          // accelerating the other way was the largest remaining slide in the
+          // live harness. The snap happens at the bottom of the speed dip, where
+          // the blend is still partly idle (LOCO.move), so it reads as a plant.
+          if (bot.alive && !rec.deathPlayed && hs > 0.5) {
+            const rel = wrapAngle(Math.atan2(bot.vel[0], bot.vel[2]) - rec.yaw);
+            if (Math.abs(wrapAngle(rel - (rec.moveDir || 0))) > 1.75) rec.moveDir = rel;
+            else rec.moveDir = dampAngle(rec.moveDir || 0, rel, 20, dtAnim);
+          }
+          actor.moveDir = wrapAngle(rec.moveDir || 0);
+          // sector solve's leg turn (0 in the linear quadrants; up to ~45-54
+          // deg in fwd+left / right+back, see actor.js SECTOR SOLVE). The root turns
+          // by it and the travel direction the clips see turns back by it.
+          // damped: the target jumps as a bot starts/stops inside a sharp
+          // quadrant (measured 0.49 m one-frame boot jump on an instant 0 ->
+          // 4.1 m/s start with the raw value)
+          const lyWant = (bot.alive && !rec.deathPlayed) ? actor.locoLegYaw(actor.moveDir, hs, dtAnim) : 0;
+          rec.legYaw = dampAngle(rec.legYaw || 0, lyWant, 14, dtAnim);
+          rec.locoDir = 1;
+          actor.legYaw = rec.legYaw; actor.locoDir = 1;
+          // airborne: the sim's own grounded flag, held 0.15 s so a step down a
+          // kerb does not flash the jump pose
+          rec.airT = bot.alive && bot.grounded === false ? (rec.airT || 0) + dtAnim : 0;
+          actor.airborne = rec.airT > 0.15;
+        } else {
+        // ---- LEG DIRECTION (legacy: a body without the directional clips).
+        // Legs follow the travel direction, the chest keeps the aim (actor.legYaw).
+        // Back-pedalling turns the legs to the REVERSE of travel and runs the cycle
+        // backward. Hysteresis on the fwd/back switch so a pure strafe does not
+        // flicker between the two.
         {
           let want = 0, dirWant = rec.locoDir || 1;
           if (bot.alive && !rec.deathPlayed && hs > 0.6) {
@@ -550,9 +634,11 @@ export function createSoldiers(ctx) {
           actor.legYaw = rec.legYaw;
           actor.locoDir = rec.locoDir || 1;
         }
+        }
         actor.root.rotation.y = rec.yaw + (rec.legYaw || 0);
         actor.groundSpeed = hs;
         actor.crouchW = 0;
+        actor.crouched = bot.alive && bot.stance === "crouch";
         // ---- WEAPON READY POSE (iter08) -----------------------------------
         // The sim publishes exactly the state this needs and nobody was
         // reading it: `aim`/`fire` mean the rifle is up and pointed at a
@@ -568,6 +654,21 @@ export function createSoldiers(ctx) {
            bot.state === "combat" || bot.state === "suppress") && hs < 5.0;
         if (!bot.alive) {
           if (!rec.deathPlayed) onDeath({ victim: rec.botId, dir: null });
+        } else if (actor.hasLoco && !rec.forceAnim) {
+          // 8-WAY BASE LAYER (2026-11-13). Locomotion is no longer chosen from
+          // bot.anim: the sim latches "fire"/"aim"/"hit" while a bot is moving
+          // (sim.js deriveBotAnim puts firing ahead of walking), and those used
+          // to resolve to the STANDING idle under a body doing 4 m/s — the
+          // single biggest slide in a PVP fight. The legs now always follow
+          // the measured ground velocity; bot.anim keeps driving what it is
+          // authoritative for: the ready pose and aim (readyWant/aimBlend),
+          // and the stance (crouched, set above).
+          // `hit` stays procedural (actor.hitImpulse) — no rifle hit clip
+          // survived validation (anim_map CLIP_FILES).
+          actor.play(actor.crouched ? (hs > 0.5 ? "crouch_walk" : "crouch_idle") : "idle");
+          // RELOAD as an upper-body layer: the legs keep stepping, so the old
+          // "not while moving > 4.5 m/s" refusal is gone.
+          actor.setReload(!!(bot.weapon && bot.weapon.state === "reloading"));
         } else if (rec.forceAnim) {
           actor.groundSpeed = rec.forceAnim === "run" ? 3.6 : rec.forceAnim === "walk" ? 1.5 : 0;
           actor.play(rec.forceAnim);
@@ -615,6 +716,9 @@ export function createSoldiers(ctx) {
           if (bot.anim === "crouch_walk" || bot.anim === "crouch_idle") actor.crouchW = 1;
           actor.play(bot.anim);
         }
+        // the procedural squat only stands in where the crouch CLIPS are missing
+        if (actor.hasClipCrouch) actor.crouchW = 0;
+        else if (actor.crouched && actor.hasLoco) actor.crouchW = 1;
 
         // ---- 70 ms flinch flash restore (exact, view-clocked)
         const flashing = viewT < rec.flashUntil;
@@ -665,7 +769,8 @@ export function createSoldiers(ctx) {
           if (rec.ik === undefined) rec.ik = createSupportHandIK(actor.root);
           if (rec.ik) {
             rec.ik.solve(rec.wpn,
-              bot.alive && !rec.deathPlayed && rec.wpn && rec.wpn.userData.brOneHand ? 1 : 0,
+              bot.alive && !rec.deathPlayed && !actor.throwing &&
+                rec.wpn && rec.wpn.userData.brOneHand ? 1 : 0,
               rec.skipAcc > 0 ? rec.skipAcc : dtAnim);
           }
           rec.skipAcc = 0;

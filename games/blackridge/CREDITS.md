@@ -63,3 +63,5 @@ imports **split along its UV seams** (wpn_ar: 4,908 verts for 5,943 tris, weldin
 to 2,921 at 0.4 mm), as does `soldier.glb` (214,760 verts, 20,010 boundary
 edges). That is a property of the source, not of the build — the generator now
 welds before it cuts.
+
++ Soldier locomotion, crouch, jump, grenade-toss and death clips (assets/chars/clip_rifle_*, clip_death_*, clip_jump_loop, clip_toss_grenade): Adobe Mixamo animations (Rifle 8-Way Locomotion Pack; Basic Shooter Pack), baked and retargeted; royalty-free for use in games (https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html); only baked clips ship.

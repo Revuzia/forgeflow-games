@@ -10,8 +10,8 @@
   "source": "str"
  },
  "payload_sums_bytes": {
-  "menu": 5887556,
-  "mission": 4332310,
+  "menu": 5947180,
+  "mission": 4940990,
   "menu_budget": 6815744,
   "mission_budget": 5242880
  },
@@ -575,11 +575,65 @@
    "payload": "mission"
   },
   {
+   "path": "assets/chars/clip_death_back.glb",
+   "bytes": 45284,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/death_back.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/death from the back.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_death_back_head.glb",
+   "bytes": 51124,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/death_back_head.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/death from back headshot.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_death_front.glb",
+   "bytes": 44136,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/death_front.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/death from the front.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_death_front_head.glb",
+   "bytes": 45900,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/death_front_head.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/death from front headshot.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_death_right.glb",
+   "bytes": 43716,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/death_right.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/death from right.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
    "path": "assets/chars/clip_hit.glb",
    "bytes": 35644,
    "kind": "imported",
    "license": "Mixamo baked via last-circle flow",
    "source": "games/last-circle/assets/chars/meshy/soldier_hit.glb (resampled)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_jump_loop.glb",
+   "bytes": 17888,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/jump_loop.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/jump loop.fbx)",
    "lane": "A8",
    "payload": "mission"
   },
@@ -593,11 +647,56 @@
    "payload": "mission"
   },
   {
+   "path": "assets/chars/clip_rifle_crouch_back.glb",
+   "bytes": 21240,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_crouch_back.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk crouching backward.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_crouch_g.glb",
+   "bytes": 21260,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_crouch_g.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk crouching forward.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_crouch_left.glb",
+   "bytes": 21708,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_crouch_left.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk crouching left.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_crouch_right.glb",
+   "bytes": 21076,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_crouch_right.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk crouching right.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
    "path": "assets/chars/clip_rifle_idle.glb",
    "bytes": 82128,
    "kind": "imported",
    "license": "Mixamo baked via last-circle flow (never shipped raw)",
    "source": "games/last-circle/assets/chars/meshy/soldier_rifle_idle.glb (resampled)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_idle_g.glb",
+   "bytes": 20732,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_idle_g.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/idle.fbx)",
    "lane": "A8",
    "payload": "mission"
   },
@@ -620,11 +719,101 @@
    "payload": "mission"
   },
   {
+   "path": "assets/chars/clip_rifle_run_back.glb",
+   "bytes": 18748,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_run_back.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/run backward.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_run_g.glb",
+   "bytes": 18968,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_run_g.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/run forward.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_run_left.glb",
+   "bytes": 18644,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_run_left.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/run left.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_run_right.glb",
+   "bytes": 19100,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_run_right.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/run right.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_sprint_g.glb",
+   "bytes": 20092,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_sprint_g.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/sprint forward.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
    "path": "assets/chars/clip_rifle_walk.glb",
    "bytes": 83512,
    "kind": "imported",
    "license": "Mixamo baked via last-circle flow",
    "source": "games/last-circle/assets/chars/meshy/soldier_rifle_walk.glb (resampled)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_walk_back.glb",
+   "bytes": 21184,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_walk_back.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk backward.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_walk_g.glb",
+   "bytes": 21404,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_walk_g.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk forward.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_walk_left.glb",
+   "bytes": 20832,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_walk_left.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk left.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_walk_right.glb",
+   "bytes": 20832,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_walk_right.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk right.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_toss_grenade.glb",
+   "bytes": 45644,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/toss_grenade.glb (byte copy; Mixamo Basic_Shooter_Pack/toss grenade.fbx)",
    "lane": "A8",
    "payload": "mission"
   },
@@ -1226,7 +1415,7 @@
   },
   {
    "path": "assets/weapons/breaker.glb",
-   "bytes": 383772,
+   "bytes": 427828,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_shotgun.glb per games/last-circle/CREDITS.md) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
@@ -1236,7 +1425,7 @@
   },
   {
    "path": "assets/weapons/corvus.glb",
-   "bytes": 583244,
+   "bytes": 583224,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_sniper.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
@@ -1246,7 +1435,7 @@
   },
   {
    "path": "assets/weapons/pike.glb",
-   "bytes": 377008,
+   "bytes": 416256,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_pistol.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
@@ -1256,7 +1445,7 @@
   },
   {
    "path": "assets/weapons/vesper.glb",
-   "bytes": 587900,
+   "bytes": 573032,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_smg.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
@@ -1266,7 +1455,7 @@
   },
   {
    "path": "assets/weapons/warden.glb",
-   "bytes": 504012,
+   "bytes": 524388,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_ar.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",

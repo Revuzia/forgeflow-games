@@ -115,6 +115,13 @@ export function createAudio(ctx) {
   let breathSrc = null, breathGain = null, breathFilt = null, breathNext = 0;
   let lowEpisode = false;         // hp dipped <50 while alive → recovery cue at full
   let lastBreathT = 0;            // diagnostic (debugHp)
+  // 2026-11-13 additions: match lead tracking, final-kill window, grenade cook
+  // poll, bot-landing poll (no sim events for the last two — read-only polls)
+  let lead = 0;                   // player's standing: 1 leading, 0 tied, −1 behind
+  let lastOwnKillT = -100;        // ac time of the player's last kill
+  let cookLive = false, cookNext = 0, cookN = 0;
+  const botAir = new Map();       // botId → peak y while airborne
+  let leadCues = 0;
   const volumes = (ctx.content && ctx.content.reverbZones && ctx.content.reverbZones.volumes) || [];
   const defaultZone =
     (ctx.content && ctx.content.reverbZones && ctx.content.reverbZones.default) || "exterior";
@@ -332,6 +339,16 @@ export function createAudio(ctx) {
     voices: 0, // diagnostic counter (selftest reports it)
   };
 
+  // The SHARED core for audio modules boot creates after this one
+  // (streak_audio.js): one context, one graph, one limiter. Published at
+  // creation; the getters resolve lazily once unlock() has built the graph.
+  ctx.__audioCore = {
+    env,
+    get sfx() { return sfx; },
+    get music() { return music; },
+    unlock: () => unlock(),
+  };
+
   // ---- unlock: build the graph -----------------------------------------------
   function unlock() {
     if (!unlocked) {
@@ -345,18 +362,42 @@ export function createAudio(ctx) {
       const duck = ac.createGain(); duck.gain.value = 1;
       const hpMuffle = ac.createBiquadFilter();
       hpMuffle.type = "lowpass"; hpMuffle.frequency.value = 20000; hpMuffle.Q.value = 0.4;
+      // MASTER DYNAMICS (2026-11-13 mix pass). Before: one brickwall at −6 dBFS
+      // (20:1, 3 ms / 120 ms), and the measured 30-round Warden burst sat ON it
+      // (pre-limiter peak −0.6 dBFS) — every round pulled 5–6 dB of gain
+      // reduction and released inside the next round's gap: the pumping. Now a
+      // gentle GLUE stage (soft knee, 2.5:1, 15 ms attack so transients pass,
+      // 250 ms release so it rides a burst instead of breathing with it) takes
+      // the sustained level down 1–3 dB, and the LIMITER moves to −2 dBFS with a
+      // fast release — a safety net that a single own shot (≈ −6 dBFS after the
+      // gun-level trim in sfx.js) no longer touches. Measured numbers: lane report.
+      const glue = ac.createDynamicsCompressor();
+      glue.threshold.value = -16; glue.knee.value = 10; glue.ratio.value = 2.5;
+      glue.attack.value = 0.015; glue.release.value = 0.25;
       // brickwall so a pellet burst + explosion can never clip in hardware
       const limiter = ac.createDynamicsCompressor();
-      limiter.threshold.value = -6; limiter.knee.value = 0; limiter.ratio.value = 20;
-      limiter.attack.value = 0.003; limiter.release.value = 0.12;
-      master.connect(duck); duck.connect(hpMuffle); hpMuffle.connect(limiter);
+      limiter.threshold.value = -2; limiter.knee.value = 0; limiter.ratio.value = 20;
+      limiter.attack.value = 0.002; limiter.release.value = 0.09;
+      master.connect(duck); duck.connect(hpMuffle); hpMuffle.connect(glue); glue.connect(limiter);
       limiter.connect(ac.destination);
 
       const sfxBus = ac.createGain(); sfxBus.gain.value = gclamp(ctx.settings.sfx);
       const musicBus = ac.createGain(); musicBus.gain.value = gclamp(ctx.settings.music);
       const ambBus = ac.createGain(); ambBus.gain.value = gclamp(ctx.settings.ambience);
-      sfxBus.connect(master); musicBus.connect(master); ambBus.connect(master);
+      // ear-fatigue shelf on the SFX bus: −3 dB above ~7 kHz. Measured, the own
+      // Warden put 16% of its spectral magnitude above 6 kHz (centroid 2.9 kHz)
+      // and a held trigger is exactly where that top end tires the ear; the
+      // crack lives at 2–5 kHz and is untouched.
+      const sfxTone = ac.createBiquadFilter();
+      sfxTone.type = "highshelf"; sfxTone.frequency.value = 7000; sfxTone.gain.value = -3;
+      sfxBus.connect(sfxTone); sfxTone.connect(master);
+      musicBus.connect(master); ambBus.connect(master);
       const sfxDry = ac.createGain(); sfxDry.gain.value = 1; sfxDry.connect(sfxBus);
+      // CUE bus: hit/kill ticks, grenade warning, streak/medal/match UI cues —
+      // straight into the limiter (past duck + muffle + glue) so they stay
+      // legible at low health; follows the SFX slider.
+      const cue = ac.createGain(); cue.gain.value = gclamp(ctx.settings.sfx);
+      cue.connect(limiter);
 
       zones = {};
       for (const name of Object.keys(ZONES)) {
@@ -373,7 +414,7 @@ export function createAudio(ctx) {
       }
       if (zones[cameraZone]) zones[cameraZone].send.gain.value = 1;
 
-      buses = { master, duck, hpMuffle, limiter, sfx: sfxBus, sfxDry, music: musicBus, ambience: ambBus };
+      buses = { master, duck, hpMuffle, glue, limiter, cue, sfx: sfxBus, sfxDry, music: musicBus, ambience: ambBus };
 
       sfx = makeSfx(env);
       ambience = makeAmbience(env);
@@ -443,6 +484,7 @@ export function createAudio(ctx) {
       bridge.register("hurt", safe("hurt", (d) => sfx.onHurt(d)));
       bridge.register("death", safe("death", (d) => {
         sfx.onDeath(d);
+        if (d && d.attacker === "P" && d.victim !== "P") lastOwnKillT = ac.currentTime;
         if (d && d.victim === "P") music.playerDeath();
         else if (d && engaged.delete(d.victim) && engaged.size === 0) music.squadWiped();
       }));
@@ -484,9 +526,20 @@ export function createAudio(ctx) {
       bridge.register("mission:phase", safe("mission:phase", (d) => music.onPhase(d)));
       bridge.register("mission:end", safe("mission:end", (d) => {
         sfx.reset();
-        music.missionEnd(d && d.result === "won");
+        const draw = !!(d && d.match && d.match.result === "draw");
+        const won = !!(d && d.result === "won");
+        // FINAL KILL: the match ended within 2 s of a kill YOU made, and you won
+        const finalKill = won && !!(d && d.match) && ac.currentTime - lastOwnKillT < 2.0;
+        music.missionEnd(draw ? "draw" : won, { finalKill });
         engaged.clear();
+        cookLive = false;
       }));
+      // ---- events that had no sound (2026-11-13) --------------------------------
+      bridge.register("respawn", safe("respawn", (d) => sfx.onRespawn(d)));
+      bridge.register("resupply", safe("resupply", (d) => sfx.onResupply(d)));
+      bridge.register("loot", safe("loot", (d) => sfx.onLoot(d)));
+      bridge.register("match:start", safe("match:start", () => { lead = 0; lastOwnKillT = -100; }));
+      bridge.register("match:score", safe("match:score", () => leadCheck()));
     },
 
     setVolumes(v) {
@@ -588,6 +641,42 @@ export function createAudio(ctx) {
         }
       }
 
+      // GRENADE PIN / COOK (2026-11-13): the sim emits nothing until the throw,
+      // so read the player's cook flag (read-only, like the slide flag above).
+      // Rising edge = the pin; one fuse tick per second while it is held.
+      if (st && st.player) {
+        const m = st.player._m;
+        const cooking = !!(m && m.cooking && st.player.alive);
+        const t = ac.currentTime;
+        if (cooking && !cookLive) { cookLive = true; cookN = 0; cookNext = t + 1.0; sfx.grenadePin(); }
+        else if (!cooking && cookLive) cookLive = false;
+        if (cookLive && t >= cookNext) { cookN++; cookNext = t + 1.0; sfx.cookTick(cookN); }
+      }
+
+      // BOT LANDINGS (2026-11-13): the sim emits `land` for the player only, so a
+      // bot dropping off a ledge behind you was silent. Track each nearby bot's
+      // airborne peak; a touchdown after > 0.6 m of fall plays sfx.onLand for it.
+      if (st && st.bots) {
+        const c = ctx.camera ? ctx.camera.matrixWorld.elements : null;
+        for (let i = 0; i < st.bots.length; i++) {
+          const b = st.bots[i];
+          if (!b || !b.pos) continue;
+          if (!b.alive) { botAir.delete(b.id); continue; }
+          const y = fin(b.pos[1], 0);
+          if (b.grounded === false) {
+            const pk = botAir.get(b.id);
+            botAir.set(b.id, pk == null ? y : Math.max(pk, y));
+          } else if (botAir.has(b.id)) {
+            const fall = botAir.get(b.id) - y;
+            botAir.delete(b.id);
+            if (fall > 0.6 && c && Math.hypot(b.pos[0] - c[12], y - c[13], b.pos[2] - c[14]) < 26) {
+              sfx.onLand({ who: b.id, height: fall });
+            }
+          }
+        }
+        if (botAir.size > 64) botAir.clear();
+      }
+
       // camera-zone backup poll (the sim's `zone` events are primary)
       zonePoll += dt;
       if (zonePoll >= 0.5) {
@@ -638,7 +727,16 @@ export function createAudio(ctx) {
     ui(kind) { if (ac && sfx) { try { sfx.ui(kind); } catch (e) { err(e, "ui"); } } },
     // weapon-voice counters (shot events seen vs volleys voiced, racks, shell
     // inserts, hit/kill ticks) — probes read these to prove one boom per volley.
-    sfxStats() { return sfx ? { ...sfx.stats(), voices: env.voices, ctxState: ac ? ac.state : "none" } : null; },
+    sfxStats() {
+      if (!sfx) return null;
+      const ex = (ctx.__audioExtra || []).map((a) => (a.stats ? a.stats() : null));
+      return { ...sfx.stats(), voices: env.voices, ctxState: ac ? ac.state : "none",
+               stingers: music ? music.stingCount() : 0, leadCues, extra: ex,
+               limiterReductionDb: buses ? buses.limiter.reduction : null,
+               glueReductionDb: buses && buses.glue ? buses.glue.reduction : null };
+    },
+    // match stinger by name (victory|defeat|draw|leadTaken|leadLost|finalKill)
+    stinger(kind) { if (ac && music) { try { return music.stinger(kind); } catch (e) { err(e, "stinger"); } } return false; },
     radioSquelch() { if (ac && sfx) { try { sfx.radioSquelch(); } catch (e) { err(e, "squelch"); } } },
 
     // Scripted burst for the lane gate: exercises gunshot/footstep/reverb/
@@ -741,6 +839,42 @@ export function createAudio(ctx) {
       recoverBreath();
       await wait(300);
 
+      // 2026-11-13 paths: the distance model across every layer boundary, the
+      // suppressed profile, indoor shooters, the events that used to be silent,
+      // the stingers, the UI samples and the folded-in streak cues.
+      for (const dd of [8, 30, 60, 110, 170, 260]) {
+        fire("shot", { shooter: 20 + dd, weaponId: dd % 2 ? "corvus" : "warden", origin: at(dd * 0.3, 0, -dd), dir: [0, 0, 1], hit: null, tracer: false, pellet: 0, firstShot: true });
+      }
+      fire("shot", { shooter: 40, weaponId: "vesper", origin: at(-20, 0, -40), dir: [0, 0, 1], hit: null, tracer: false, pellet: 0 });
+      fire("shot", { shooter: "P", weaponId: "vesper", origin: at(0, 0, 0), dir: [0, 0, -1], hit: null, tracer: false, pellet: 0, firstShot: true });
+      fire("shot", { shooter: "P", weaponId: "pike", origin: at(0, 0, 0), dir: [0, 0, -1], hit: null, tracer: false, pellet: 0, firstShot: true });
+      fire("zone", { reverbZone: "warehouse" });
+      fire("shot", { shooter: "P", weaponId: "warden", origin: at(0, 0, 0), dir: [0, 0, -1], hit: null, tracer: false, pellet: 0, firstShot: true });
+      fire("zone", { reverbZone: "exterior" });
+      fire("respawn", { who: "P", actorId: 0, team: 0, pos: at(0, -1.6, 0) });
+      fire("resupply", { who: "P", mags: 1 });
+      fire("loot", { phase: "spawn", id: 1, kind: "weapon", weapon: "warden", pos: at(3, -1.4, -4) });
+      fire("grenade", { phase: "land", who: 8, pos: at(2, -1.4, -2) });          // → warning tick
+      try { sfx.grenadePin(); sfx.cookTick(1); sfx.cookTick(2); } catch (e) { err(e, "selftest:cook"); }
+      try { sfx.onLand({ who: "P", height: 3 }); } catch (e) { err(e, "selftest:land"); }
+      for (const k of ["click", "back", "confirm", "error", "hover"]) audio.ui(k);
+      for (const k of ["leadTaken", "victory", "defeat", "draw", "finalKill"]) music.stinger(k);
+      music.missionEnd("draw", { finalKill: false });
+      const H2 = {};
+      for (const a of ctx.__audioExtra || []) a.attach({ register: (n, f) => { (H2[n] = H2[n] || []).push(f); } });
+      const fx2 = (n, d, t) => { for (const f of H2[n] || []) f(d, t); };
+      fx2("streak", { phase: "earned", tier: 1, id: "recon", name: "x", count: 3, stock: 1 });
+      fx2("streak", { phase: "call", tier: 2, id: "mortar", target: at(10, -1.6, -30), eta: 2, plan: [{ t: 12.0, pos: at(10, -1.6, -30) }, { t: 12.5, pos: at(14, -1.6, -28) }] }, 10.0);
+      fx2("streak", { phase: "call", tier: 3, id: "airstrike", target: at(0, -1.6, -40), eta: 3, dir: [0, -1], plan: [{ t: 23.0, pos: at(0, -1.6, -40) }] }, 20.0);
+      fx2("streak", { phase: "sweep", contacts: [{ id: 1 }, { id: 2 }] });
+      fx2("medal", { kind: "multi" });
+      fx2("flag", { state: "taken", team: 1 });
+      fx2("match:state", { phase: "live" });
+      fx2("pickup", { who: "P", kind: "ammo" });
+      fx2("pickup", { who: "P", kind: "weapon", weaponId: "vesper" });
+      for (const a of ctx.__audioExtra || []) if (a.cue) a.cue("clock10");
+      await wait(400);
+
       return {
         ok: errors.length === 0,
         ctxState: ac.state,
@@ -749,9 +883,14 @@ export function createAudio(ctx) {
         buffersLoaded: sfx.bufferCount(),
         cameraZone,
         musicMode: music.mode(),
+        stats: audio.sfxStats(),
       };
     },
   };
+
+  // tiny global hook for other lanes: ctx.audio.ui("click"|"back"|"confirm"|
+  // "error"|"hover") — and the rest of the surface (also at __FPS__.audio)
+  if (!ctx.audio) ctx.audio = audio;
 
   // selftest dispatch table — bound to the SAME functions attach() registers
   const testHooks = {
@@ -770,6 +909,9 @@ export function createAudio(ctx) {
     zone: (d) => setCameraZone(d.reverbZone),
     explosion: (d) => { if (sfx) { sfx.onExplosion(d); tinnitusLast = -100; tinnitus(); tinnitusLast = ac.currentTime; } },
     grenade: (d) => sfx && sfx.onGrenade(d),
+    respawn: (d) => sfx && sfx.onRespawn(d),
+    resupply: (d) => sfx && sfx.onResupply(d),
+    loot: (d) => sfx && sfx.onLoot(d),
     "mission:phase": (d) => music && music.onPhase(d),
     "mission:end": (d) => music && music.missionEnd(d.result === "won"),
   };
@@ -783,12 +925,91 @@ export function createAudio(ctx) {
     if (!ac || !buses) return;
     const t = ac.currentTime;
     buses.sfx.gain.setTargetAtTime(gclamp(ctx.settings.sfx), t, 0.03);
+    if (buses.cue) buses.cue.gain.setTargetAtTime(gclamp(ctx.settings.sfx), t, 0.03);
     buses.music.gain.setTargetAtTime(gclamp(ctx.settings.music), t, 0.03);
     buses.ambience.gain.setTargetAtTime(gclamp(ctx.settings.ambience), t, 0.03);
   }
   ctx.onChange("sfx", applyVolumes);
   ctx.onChange("music", applyVolumes);
   ctx.onChange("ambience", applyVolumes);
+
+  // ---- LEAD TAKEN / LOST (match:score) ---------------------------------------
+  // Standing from the frozen match state: 2 teams → my team vs the other; FFA →
+  // my score vs the best other score. Taking the lead (from tied or behind, with
+  // points on the board) and losing it (from leading to tied or behind) play the
+  // music stingers; music.stinger() rate-limits flip-flopping to one per 4 s.
+  function standing() {
+    const s = ctx.sim && ctx.sim();
+    const m = s && s.state && s.state.match;
+    if (!m || !m.actors || (m.phase !== "live" && m.phase !== "overtime")) return null;
+    const me = m.actors.find((a) => a && (a.who === "P" || a.kind === "human"));
+    if (!me) return null;
+    let mine, best = -Infinity;
+    if (m.teams && m.teams.length === 2) {
+      for (const t of m.teams) { if (t.id === me.team) mine = fin(t.score, 0); else best = Math.max(best, fin(t.score, 0)); }
+    } else {
+      mine = fin(me.score, 0);
+      for (const a of m.actors) if (a !== me) best = Math.max(best, fin(a.score, 0));
+    }
+    if (!Number.isFinite(best) || mine == null) return null;
+    return { s: mine > best ? 1 : mine < best ? -1 : 0, total: mine + Math.max(0, best) };
+  }
+  function leadCheck() {
+    const r = standing();
+    if (!r) return;
+    if (r.s === 1 && lead !== 1 && r.total > 0) { if (music.stinger("leadTaken")) leadCues++; }
+    else if (r.s !== 1 && lead === 1) { if (music.stinger("leadLost")) leadCues++; }
+    lead = r.s;
+  }
+
+  // ---- UI SOUNDS for the menu / pause / settings / scoreboard overlays ------------
+  // Those files belong to other lanes, so instead of calls in their click
+  // handlers ONE delegated document listener (capture phase, so a handler that
+  // stops propagation cannot starve it) classifies the button: Back/Cancel/
+  // Resume → "back", Deploy/Start/Confirm/Rematch → "confirm", disabled →
+  // "error", anything else → "click"; a pointer moving onto a new button →
+  // "hover" (quiet). Anyone can also call ctx.audio.ui(kind) /
+  // __FPS__.audio.ui(kind) directly.
+  const UI_SCOPE = "#menu, #pause-overlay, #settings-overlay, #mboard, .a10-overlay";
+  const UI_BACK = /^(back|cancel|resume|close|quit)$/i;
+  const UI_CONFIRM = /^(deploy|startmatch|start|confirm|rematch|play|apply)$/i;
+  let uiHoverEl = null, uiHoverT = 0, uiClickT = 0;
+  function uiTarget(e) {
+    const el = e && e.target && e.target.closest ? e.target.closest("button, [data-a], [data-o], [data-cdiff], [role=button]") : null;
+    if (!el || !el.closest(UI_SCOPE)) return null;
+    return el;
+  }
+  function uiKindOf(el) {
+    if (el.disabled || el.getAttribute("aria-disabled") === "true") return "error";
+    const a = (el.getAttribute("data-a") || "").trim();
+    if (UI_BACK.test(a)) return "back";
+    if (UI_CONFIRM.test(a)) return "confirm";
+    return "click";
+  }
+  if (typeof document !== "undefined" && document.addEventListener) {
+    document.addEventListener("click", (e) => {
+      try {
+        const el = uiTarget(e);
+        if (!el || !ac || !sfx) return;
+        const now = performance.now();
+        if (now - uiClickT < 40) return;                   // one sound per click
+        uiClickT = now;
+        sfx.ui(uiKindOf(el));
+      } catch (er) { err(er, "ui:click"); }
+    }, true);
+    document.addEventListener("pointerover", (e) => {
+      try {
+        if (!ac || !sfx || (e.pointerType && e.pointerType !== "mouse")) return;
+        const el = uiTarget(e);
+        if (!el || el === uiHoverEl) return;
+        uiHoverEl = el;
+        const now = performance.now();
+        if (now - uiHoverT < 60 || el.disabled) return;
+        uiHoverT = now;
+        sfx.ui("hover");
+      } catch (er) { err(er, "ui:hover"); }
+    }, true);
+  }
 
   // §6: explosion ≤ 6 m — 2.2 s tinnitus ring + duck −10 dB (rings through the
   // duck/muffle by feeding the limiter input directly)
