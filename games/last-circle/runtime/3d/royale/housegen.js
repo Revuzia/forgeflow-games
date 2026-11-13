@@ -157,6 +157,7 @@ export const FILLER_CAPS = true;           // a home: <= 1 clock, <= 1 floor lam
 export const CENTRE_GROUPS = true;         // a home's sets: sofa + coffee table + armchairs + TV unit; bed + 2 nightstands + wardrobe / dresser; a dining set by the kitchen
 export const KITCHEN_RUN = true;           // the base units stand as ONE run (touching), upper cabinets over it, a hood over the stove, on a wall with no window when one exists
 export const BATH_SET = true;              // a home's bath: a basin with a mirror over it, a tub or a shower
+export const FREE5_STEP = 0.5;             // (W10 R1A) phase 5's free-standing search lattice, m (housegen.selftest's CPU-per-house bar: was 0.25)
 export const LOOT_KEEP = 1;                // the share of a building's loot points kept on top of LOOT_K (1: all; the homes gate's loot-drop plant halves it)
 // (W10 R1A) bigger homes, more rooms, bigger town parcels: the per-room loot rule (1-3 points a room) would hand out +20-25 % more loot a map. The points a room
 // keeps, by use (the map's loot count stays within +-10 % of the Wave-9 build; homes 1 x 1.0, ruined houses / shops / mid-rises thinned)
@@ -2945,7 +2946,9 @@ export function generate(parcel, opts) {
             } else {
               for (const fq of [fqTo, (fqTo + 1) % 4, (fqTo + 3) % 4]) {
                 const w = fq % 2 ? cat.d : cat.w, d = fq % 2 ? cat.w : cat.d;
-                for (let pu = inner[0] + w / 2; pu <= inner[2] - w / 2 + 1e-6 && !done; pu += 0.25) for (let pv = inner[1] + d / 2; pv <= inner[3] - d / 2 + 1e-6 && !done; pv += 0.25) {
+                // (W10 R1A, CPU: a 0.5 m lattice, was 0.25 - the free spots were ~2/3 of the searches' sight-line checks; the guarantee's outcome per room kind measured
+                // the same over 1,080 houses, ruins 8 short of 4 in 797 rooms vs 4)
+                for (let pu = inner[0] + w / 2; pu <= inner[2] - w / 2 + 1e-6 && !done; pu += FREE5_STEP) for (let pv = inner[1] + d / 2; pv <= inner[3] - d / 2 + 1e-6 && !done; pv += FREE5_STEP) {
                   const u = Math.round(pu * 1000) / 1000, v = Math.round(pv * 1000) / 1000;
                   done = tryPiece(cat, { rect: [u - w / 2, v - d / 2, u + w / 2, v + d / 2], u, v, fq }, 0, want, ei);
                 }
