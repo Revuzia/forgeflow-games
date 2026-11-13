@@ -102,6 +102,10 @@ export function createInput(canvas, settings) {
     switchTo: null, // 'slot1'..'slot5' | 'next' | 'prev' | 'last' | weaponId | null — consumed by buildCmd
     streak: 0,      // 1..4 = activate that killstreak tier (keys 6/7/8/9) — one-shot, consumed by buildCmd
     interact: false,
+    // VIEW-ONLY verb (lane VM, 2026-11): weapon INSPECT (key I). A press COUNTER —
+    // the viewmodel plays one inspect per increment. Deliberately NOT in buildCmd():
+    // the sim never sees it, so it cannot touch determinism or replays.
+    inspect: 0,
     yaw: 0, pitch: 0,
   };
 
@@ -239,6 +243,8 @@ export function createInput(canvas, settings) {
     // ---- touch layer (core/hud/touch_controls.js) — same verbs as the keys ----
     touchPress(k) { press(k); },
     touchRelease(k) { release(k); },
+    // view-only inspect request (key I / touch) — never reaches the sim cmd
+    inspect() { state.inspect = (state.inspect | 0) + 1; },
     designateTier(tier) {
       if (input.canDesignate && !input.canDesignate(tier)) { designate = 0; state.streak = tier; }
       else designate = designate === tier ? 0 : tier;
@@ -264,6 +270,7 @@ export function createInput(canvas, settings) {
       case "KeyR": press("reload"); break;
       case "KeyG": press("grenade"); break;
       case "KeyF": press("interact"); break;
+      case "KeyI": input.inspect(); break;   // view-only (see state.inspect)
       // FIVE fixed weapon slots (weapon_data.js WEAPON_SLOT) + Q = last weapon.
       case "Digit1": state.switchTo = "slot1"; break;
       case "Digit2": state.switchTo = "slot2"; break;

@@ -122,6 +122,127 @@ const RINGS = [
 ];
 
 // ---------------------------------------------------------------- textures
+// ============================================================ §CLOUDS v2 (lane_env, 2026-11-13)
+// The iter09 deck (3 value-noise evaluations per pixel, ALU hashes) rendered
+// as a handful of soft blobs and comma-shaped smears on an otherwise CLEAR
+// blue sky (_shots/lane_env/before_sky.png, before_street.png): value noise at
+// two octaves has no structure below the blob scale, so every cloud is a
+// gaussian lump, and the 0.435..0.620 threshold on a 2-octave field left ~80%
+// of the sky open — not an overcast storm. The fix is at the generator:
+//
+//  * ONE 256x256 RGBA8 tileable noise texture baked in JS at boot (256 KB,
+//    +85 KB mips). Four independent channels, each min/max normalised so the
+//    shader's thresholds mean the same coverage on every channel:
+//      R  6-octave fBm, period 4   — the cloud MASSES
+//      G  5-octave fBm, period 8   — mid structure + domain-warp source
+//      B  billow: 1 - Worley F1 x fBm, period 6 — cauliflower bank edges
+//      A  5-octave fBm, period 16  — erosion detail (wisps at bank edges)
+//    A DataTexture, not a canvas: the iter09 defect (§CLOUDS (1)) lived in a
+//    CanvasTexture BINDING, and a DataTexture with explicit format/type has no
+//    canvas upload path at all.
+//  * The shader replaces 3 vnoise (~20 hashes + 24 lerps) with 5 mip-mapped
+//    texture taps on a 256 KB texture that sits entirely in cache. Texture
+//    taps are the cheap thing on every GPU this game targets; hash ALU is not.
+//  * Coverage raised to a broken OVERCAST (~70% cover), the open breaks show
+//    the dome, and the deck's belly is lit from BELOW by the city (sodium
+//    warm toward the port quadrant, cooler elsewhere) with moonlight reaching
+//    only thin edges and the tops of banks toward the moon — a night storm
+//    deck is lit by the city it hangs over, not by the moon.
+// Determinism (R21) is unchanged: every term is a pure function of uTime.
+// ============================================================================
+function makeCloudNoise(size = 256) {
+  const rng = mulberry32(0x5c1a0d);
+  // periodic value-noise lattice per (channel, octave) — tiles at `size`
+  function lattice(period) {
+    const a = new Float32Array(period * period);
+    for (let i = 0; i < a.length; i++) a[i] = rng();
+    return a;
+  }
+  function sampleLattice(lat, period, x, y) {
+    // x,y in lattice units, wrapped
+    const xi = Math.floor(x), yi = Math.floor(y);
+    let fx = x - xi, fy = y - yi;
+    fx = fx * fx * fx * (fx * (fx * 6 - 15) + 10);
+    fy = fy * fy * fy * (fy * (fy * 6 - 15) + 10);
+    const x0 = ((xi % period) + period) % period, y0 = ((yi % period) + period) % period;
+    const x1 = (x0 + 1) % period, y1 = (y0 + 1) % period;
+    const a = lat[y0 * period + x0], b = lat[y0 * period + x1];
+    const c = lat[y1 * period + x0], d = lat[y1 * period + x1];
+    return (a + (b - a) * fx) + ((c + (d - c) * fx) - (a + (b - a) * fx)) * fy;
+  }
+  function fbmField(base, octaves, gain) {
+    const lats = [];
+    for (let o = 0; o < octaves; o++) lats.push(lattice(base << o));
+    const out = new Float32Array(size * size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        let v = 0, amp = 1, norm = 0;
+        for (let o = 0; o < octaves; o++) {
+          const per = base << o;
+          v += sampleLattice(lats[o], per, (x / size) * per, (y / size) * per) * amp;
+          norm += amp; amp *= gain;
+        }
+        out[y * size + x] = v / norm;
+      }
+    }
+    return out;
+  }
+  function worley(cells) {
+    const pts = new Float32Array(cells * cells * 2);
+    for (let i = 0; i < pts.length; i++) pts[i] = rng();
+    const out = new Float32Array(size * size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const px = (x / size) * cells, py = (y / size) * cells;
+        const cx = Math.floor(px), cy = Math.floor(py);
+        let best = 9;
+        for (let j = -1; j <= 1; j++) {
+          for (let i = -1; i <= 1; i++) {
+            const gx = cx + i, gy = cy + j;
+            const wx = ((gx % cells) + cells) % cells, wy = ((gy % cells) + cells) % cells;
+            const k = (wy * cells + wx) * 2;
+            const dx = gx + pts[k] - px, dy = gy + pts[k + 1] - py;
+            const d = dx * dx + dy * dy;
+            if (d < best) best = d;
+          }
+        }
+        out[y * size + x] = Math.sqrt(best);
+      }
+    }
+    return out;
+  }
+  function normalise(a) {
+    let lo = 1e9, hi = -1e9;
+    for (let i = 0; i < a.length; i++) { if (a[i] < lo) lo = a[i]; if (a[i] > hi) hi = a[i]; }
+    const k = 1 / Math.max(1e-6, hi - lo);
+    for (let i = 0; i < a.length; i++) a[i] = (a[i] - lo) * k;
+    return a;
+  }
+  const R = normalise(fbmField(4, 6, 0.52));
+  const G = normalise(fbmField(8, 5, 0.50));
+  const W = worley(6);
+  const Bf = fbmField(6, 4, 0.5);
+  const B = new Float32Array(size * size);
+  for (let i = 0; i < B.length; i++) B[i] = (1 - Math.min(1, W[i] * 1.25)) * 0.65 + Bf[i] * 0.35;
+  normalise(B);
+  const A = normalise(fbmField(16, 5, 0.55));
+  const data = new Uint8Array(size * size * 4);
+  for (let i = 0; i < size * size; i++) {
+    data[i * 4] = Math.round(R[i] * 255);
+    data[i * 4 + 1] = Math.round(G[i] * 255);
+    data[i * 4 + 2] = Math.round(B[i] * 255);
+    data[i * 4 + 3] = Math.round(A[i] * 255);
+  }
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat, THREE.UnsignedByteType);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.colorSpace = THREE.NoColorSpace; // DATA, not colour
+  tex.needsUpdate = true;
+  return tex;
+}
+
 // makeCloudTexture() DELETED (iter09). It generated the 512x512 canvas that
 // fed the two cloud shells; one of those shells rendered as a bright cream
 // polygon over the whole upper sky in S3 and no readable property of the
@@ -224,8 +345,11 @@ export function createSky(ctx) {
   // D4 hard cap). weather.js FOG.color carries the same new horizon value —
   // the fog and the sky it fades into have to be the same colour.
   const domeUniforms = {
-    uZenith: { value: new THREE.Color(0x080c15) },
-    uMid: { value: new THREE.Color(0x192335) },
+    uZenith: { value: new THREE.Color(0x070a12) },
+    // lane_env: mid/zenith pulled darker and less saturated — under a broken
+    // storm overcast the breaks are deep, not a clear-evening blue. Horizon is
+    // untouched (it must equal weather.js FOG.color).
+    uMid: { value: new THREE.Color(0x151d2c) },
     uHorizon: { value: new THREE.Color(0x2e384d) },
     uSodium: { value: new THREE.Color(0x4c3c28) },
     uMoonGlow: { value: new THREE.Color(0x5d6f90) },
@@ -328,16 +452,47 @@ export function createSky(ctx) {
     uTime: { value: 0 },
     uCamPos: { value: new THREE.Vector3() },
     uMoonDir: { value: domeUniforms.uMoonDir.value },       // SHARED — one source
-    uLit: { value: new THREE.Color(0x6c7a92) },             // moon-struck cloud face (2026-10-14: was 0x9db2d4 — the breaks read as flat white blobs overhead)
-    uDark: { value: new THREE.Color(0x0b0d14) },            // self-shadowed body
-    uUnder: { value: new THREE.Color(0x241f18) },           // sodium city underlight
+    // §CLOUDS v2 palette, LINEAR radiance (set with setRGB so the numbers are
+    // the numbers the shader sees — no sRGB hex round trip):
+    uLit: { value: new THREE.Color().setRGB(0.120, 0.138, 0.178) },   // moon-struck tops / silver edges
+    uDark: { value: new THREE.Color().setRGB(0.0105, 0.0125, 0.0185) }, // unlit body
+    uUnder: { value: new THREE.Color().setRGB(0.036, 0.026, 0.0175) },  // sodium city glow on the belly
+    uUnderCool: { value: new THREE.Color().setRGB(0.019, 0.020, 0.025) }, // belly away from the port
     uHorizonCol: { value: domeUniforms.uHorizon.value },    // SHARED — = FOG.color
     uWind: { value: WIND.clone() },
     uHeight: { value: CLOUD_H },
+    uNoise: { value: null },                                 // baked below (makeCloudNoise)
+    uCover: { value: 0.31 },                                 // shape threshold: lower = more overcast
+    // ---- light in-scatter over SKY pixels (lane_env) -------------------------
+    // weather.js integrates the practicals' in-scatter into every LIT surface's
+    // fog term; the sky shell is unlit, so a lamp seen against the sky had no
+    // halo at all. Same closed-form integral here, fed from the live pool every
+    // frame (world space). Written in update(); never resized.
+    uSPos: { value: Array.from({ length: 8 }, () => new THREE.Vector3(0, -999, 0)) },
+    uSDir: { value: Array.from({ length: 8 }, () => new THREE.Vector3(0, 1, 0)) },
+    uSCol: { value: Array.from({ length: 8 }, () => new THREE.Vector3()) },
+    uSCone: { value: Array.from({ length: 8 }, () => new THREE.Vector2(0.9, 0.95)) },
+    uPPos: { value: Array.from({ length: 3 }, () => new THREE.Vector3(0, -999, 0)) },
+    uPCol: { value: Array.from({ length: 3 }, () => new THREE.Vector3()) },
+    uInsK: { value: 0.0024 },
   };
+  try {
+    const t0 = (typeof performance !== "undefined" ? performance.now() : 0);
+    cloudUniforms.uNoise.value = makeCloudNoise(256);
+    const ms = (typeof performance !== "undefined" ? performance.now() : 0) - t0;
+    console.info(`[sky] cloud noise baked in ${ms.toFixed(1)} ms`);
+  } catch (e) {
+    console.warn("[sky] cloud noise bake failed:", e && e.message);
+  }
   const cloudMat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
+    // premultiplied: see the in-scatter note at the end of the fragment
+    blending: THREE.CustomBlending,
+    blendSrc: THREE.OneFactor,
+    blendDst: THREE.OneMinusSrcAlphaFactor,
+    blendSrcAlpha: THREE.OneFactor,
+    blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
     side: THREE.BackSide,
     fog: false,
     uniforms: cloudUniforms,
@@ -350,147 +505,122 @@ export function createSky(ctx) {
       }`,
     fragmentShader: /* glsl */ `
       uniform float uTime; uniform vec3 uCamPos; uniform vec3 uMoonDir;
-      uniform vec3 uLit; uniform vec3 uDark; uniform vec3 uUnder;
+      uniform vec3 uLit; uniform vec3 uDark; uniform vec3 uUnder; uniform vec3 uUnderCool;
       uniform vec3 uHorizonCol; uniform vec2 uWind; uniform float uHeight;
+      uniform sampler2D uNoise; uniform float uCover;
+      uniform vec3 uSPos[8]; uniform vec3 uSDir[8]; uniform vec3 uSCol[8]; uniform vec2 uSCone[8];
+      uniform vec3 uPPos[3]; uniform vec3 uPCol[3]; uniform float uInsK;
       varying vec3 vWorld;
 
-      // 3D value noise. The THIRD axis is time: advancing it morphs the field
-      // instead of sliding it, which is the half of "not static" that a pure
-      // scroll does not buy (see §CLOUDS (2)).
-      float hash31(vec3 p) {
-        p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
-        p *= 17.0;
-        return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
-      }
-      float vnoise(vec3 x) {
-        vec3 i = floor(x), f = fract(x);
-        f = f * f * (3.0 - 2.0 * f);
-        float n000 = hash31(i + vec3(0.0, 0.0, 0.0));
-        float n100 = hash31(i + vec3(1.0, 0.0, 0.0));
-        float n010 = hash31(i + vec3(0.0, 1.0, 0.0));
-        float n110 = hash31(i + vec3(1.0, 1.0, 0.0));
-        float n001 = hash31(i + vec3(0.0, 0.0, 1.0));
-        float n101 = hash31(i + vec3(1.0, 0.0, 1.0));
-        float n011 = hash31(i + vec3(0.0, 1.0, 1.0));
-        float n111 = hash31(i + vec3(1.0, 1.0, 1.0));
-        return mix(mix(mix(n000, n100, f.x), mix(n010, n110, f.x), f.y),
-                   mix(mix(n001, n101, f.x), mix(n011, n111, f.x), f.y), f.z);
-      }
-
-      // Two-band deck: a slow low-frequency mass plus a smaller, faster band.
-      // VT §4/D8 asks for ">= 2 cloud layers moving at parallax speeds"; the
-      // two bands carry different SCALES and different WIND MULTIPLIERS, which
-      // is the parallax, and doing it inside one program keeps it at one draw.
+      // §CLOUDS v2 — see the note above makeCloudNoise(). NO BACKTICKS in here
+      // (this GLSL lives in a JS template literal).
       //
-      // NOISE BUDGET IS DELIBERATE AND WAS MEASURED, NOT GUESSED. The first
-      // version ran 3 octaves plus a separate breakup layer, and the shading
-      // tap re-ran the whole thing: 8 vnoise (64 hashes) per sky pixel. Priced
-      // by interleaved in-page A/B on the S3 pose with an
-      // EXT_disjoint_timer_query_webgl2 whole-frame query, cloud shell visible
-      // vs hidden alternating 14 times each so contention lands on both arms:
-      // p50 34.202 ms vs 30.363 ms => the shell cost 3.84 ms. Against a 16.7 ms
-      // gate a perf lane is already 2.3x away from, that is not a price a sky
-      // may charge. This form is 3 vnoise: two bands for the density and ONE
-      // coarse tap for the light. The re-measured cost is in the lane report.
-      // 2D value noise — 4 hashes instead of vnoise's 8. Used for the fine
-      // band, which does not need to MORPH (it already drifts, at its own
-      // wind multiplier); the coarse band carries the evolution that makes
-      // the deck change shape rather than only slide.
-      float vnoise2(vec2 x) {
-        vec2 i = floor(x), f = fract(x);
-        f = f * f * (3.0 - 2.0 * f);
-        float n00 = hash31(vec3(i, 0.0));
-        float n10 = hash31(vec3(i + vec2(1.0, 0.0), 0.0));
-        float n01 = hash31(vec3(i + vec2(0.0, 1.0), 0.0));
-        float n11 = hash31(vec3(i + vec2(1.0, 1.0), 0.0));
-        return mix(mix(n00, n10, f.x), mix(n01, n11, f.x), f.y);
-      }
-      float deck2(vec2 p, float ev, out float band) {
-        vec2 pA = p - uWind * uTime;
-        vec2 pB = p * 2.15 - uWind * (uTime * 1.9);
-        float a = vnoise(vec3(pA * 0.00058, ev * 0.09));
-        band = vnoise2(pB * 0.00104);
-        return a * 0.66 + band * 0.34;
-      }
-      // Coarse-only sibling for the light tap: the shading question is "is a
-      // BANK between me and the moon", which is a low-frequency question. The
-      // fine band cannot change that answer enough to be worth doubling the
-      // shader's cost.
-      float deckCoarse(vec2 p, float ev) {
-        vec2 pA = p - uWind * uTime;
-        return vnoise(vec3(pA * 0.00058, ev * 0.09)) * 0.66 + 0.34 * 0.5;
-      }
-
+      // Five taps of one 256 KB mip-mapped noise texture replace the iter09
+      // program's three ALU value-noise evaluations. The layers drift at
+      // DIFFERENT wind multipliers, so their sum MORPHS rather than sliding
+      // rigidly (the §CLOUDS (2) requirement), and the mid layer domain-warps
+      // the others so bank edges curl instead of reading as round blobs.
       void main() {
         vec3 d = normalize(vWorld - uCamPos);
-        // Rays at or below the horizon never meet the deck; clamp instead of
-        // discarding so the last degrees compress into haze rather than
-        // ending on an edge (§CLOUDS (5)).
         float ey = max(d.y, 0.030);
         float t = uHeight / ey;
         vec2 p = uCamPos.xz + d.xz * t;
+        vec2 w = uWind * uTime;
 
-        float br;
-        float m = deck2(p, uTime, br);
-        // Coverage: a BROKEN deck has to have holes. The first pass used a
-        // wide smoothstep(0.40,0.78) which, against an fBm whose mass sits
-        // around 0.5, put partial cover on every pixel — that renders as an
-        // even veil, i.e. exactly the "soft horizontal smear with no form"
-        // critic-c named. A tighter band leaves real gaps of open sky between
-        // real banks, which is what gives the deck an edge to be lit on.
-        float dens = smoothstep(0.435, 0.620, m) * mix(0.48, 1.0, br);
+        vec4 nM = texture2D(uNoise, (p - w * 1.35) / 5200.0 + vec2(0.37, 0.11));
+        vec2 warp = (nM.gb - 0.5) * 0.11;
+        vec2 q1 = (p - w) / 7400.0 + warp;
+        float n1 = texture2D(uNoise, q1).r;
+        float bil = texture2D(uNoise, (p - w * 1.15) / 4300.0 + warp * 0.6 + vec2(0.71, 0.23)).b;
+        float det = texture2D(uNoise, (p - w * 1.8) / 2300.0 + warp * 1.7 + vec2(0.19, 0.53)).a;
 
-        // NO discard HERE, and that is a measured decision rather than an
-        // oversight. Skipping the light tap and the shading on open-sky pixels
-        // looks like a ~50% saving on paper (a broken deck is about half
-        // holes). Priced by the same interleaved A/B: 1.406 ms without it,
-        // 1.482 ms with it AND a cheaper 2D fine band added at the same time —
-        // i.e. the discard paid nothing and plausibly cost. discard disables
-        // early-Z for the whole draw on tiled and Intel parts, which is the
-        // likely reason. The shell's remaining cost is fill and blend, not the
-        // three noise evaluations, so there is nothing further to buy here
-        // without spending the deck's structure.
+        float shape = n1 * 0.56 + nM.g * 0.24 + bil * 0.20;
+        float base = smoothstep(uCover, uCover + 0.24, shape);
+        // erosion: the detail band eats the EDGES of a bank (where base is
+        // partial) and leaves its core alone — wisps and torn edges instead of
+        // a gaussian lump's soft rim.
+        float dens = clamp(base - (1.0 - det) * 0.62 * (1.0 - base * base), 0.0, 1.0);
+        dens = smoothstep(0.02, 0.80, dens);
+        float thick = smoothstep(0.35, 1.0, base) * (0.65 + 0.35 * det);
 
-        // ---- key-consistent shading (§CLOUDS (3)) -------------------------
-        // Re-sample the deck one step ALONG the moon's own horizontal bearing.
-        // More mass between here and the light => this pixel is in the bank's
-        // own shadow. This is the whole reason a cloud reads as a solid body
-        // with a lit face rather than as a grey smear.
+        // ---- key-consistent shading (§CLOUDS (3), kept) --------------------
+        // one coarse tap one step toward the moon: mass between this point and
+        // the light means this face is in its neighbour's shadow.
         vec2 toMoon = normalize(uMoonDir.xz + vec2(1e-4));
-        float mL = deckCoarse(p + toMoon * 300.0, uTime);
-        float occ = smoothstep(0.40, 0.70, mL);
-        // TWO independent darkeners, because a cloud is dark for two reasons
-        // and only doing one of them still reads as a flat silver wisp:
-        //   occ   — a neighbouring bank stands between this point and the moon
-        //   thick — this point's OWN body is deep, so light does not reach the
-        //           face we are looking at. Without this the thick cores came
-        //           out as bright as the edges, which is what made the first
-        //           tuning pass read as fog rather than as an overcast deck.
-        float thick = smoothstep(0.46, 0.82, m);
-        float lit = clamp(1.0 - occ * 1.15 - thick * 0.60, 0.0, 1.0);
-        // Silver lining: where THIS pixel is thin but the sky behind it toward
-        // the moon is open, light comes through the edge. Without this term a
-        // cloud has a lit side and a dark side but no RIM, and the rim is what
-        // a matte painter is actually looking for.
-        float rim = clamp((0.60 - m) * 3.4, 0.0, 1.0) * (1.0 - occ);
-        lit = clamp(lit + rim * 0.60, 0.0, 1.0);
-        // the moon only lights the deck at all while it is up
-        lit *= smoothstep(-0.05, 0.22, uMoonDir.y);
+        float nL = texture2D(uNoise, q1 + toMoon * (520.0 / 7400.0)).r;
+        float occ = smoothstep(uCover - 0.04, uCover + 0.30, nL * 0.70 + nM.g * 0.30);
+        float moonUp = smoothstep(-0.05, 0.22, uMoonDir.y);
+        float md = max(dot(d, uMoonDir), 0.0);
+        // thin edges facing the moon light up (silver lining); forward
+        // scattering brightens everything near the disc — the classic lit
+        // patch of a moon behind broken overcast.
+        float rim = (1.0 - thick) * (1.0 - occ);
+        float fwd = pow(md, 10.0) * 0.85 + pow(md, 60.0) * 1.9;
+        float lit = clamp(rim * 0.55 + (1.0 - occ) * 0.18, 0.0, 1.0) * moonUp;
 
-        vec3 col = mix(uDark, uLit, lit * lit);
-        // sodium city underlight on the deck's belly, strongest low in the sky
-        col += uUnder * (0.35 + 0.65 * (1.0 - lit)) * exp(-max(d.y, 0.0) * 3.4);
+        // ---- city underlight -------------------------------------------------
+        // The belly of a night overcast over a city is lit by the CITY: warm
+        // sodium toward the port quadrant (S/SE, the dome's sodium band),
+        // greyer elsewhere. Thick cloud scatters more of it back down, so the
+        // cores are the brighter, warmer part and the breaks fall to the dark
+        // dome — the opposite of a daylight deck, and the reason the old
+        // moon-lit white blobs read wrong.
+        vec3 h = normalize(vec3(d.x, 0.0, d.z) + vec3(1e-5));
+        float sse = smoothstep(-0.20, 0.85, dot(h, normalize(vec3(0.45, 0.0, 0.89))));
+        float low = exp(-max(d.y, 0.0) * 2.6);
+        vec3 under = mix(uUnderCool, uUnder, sse * 0.75 + low * 0.25);
+        // internal variation: the detail and mid bands modulate the glow so a
+        // bank has darker folds and brighter lobes rather than one flat tone
+        float glow = (0.30 + 0.70 * thick) * (0.55 + 0.45 * low)
+                   * (0.50 + 0.50 * det) * (0.75 + 0.50 * (nM.g - 0.5));
+
+        vec3 col = uDark + under * glow;
+        col += uLit * (lit + fwd * (1.0 - thick * 0.55) * moonUp);
+        // a little self-shadow on the moonward face of the cores keeps the
+        // banks volumetric instead of flat-lit
+        col *= 1.0 - 0.28 * occ * thick;
 
         // aerial perspective: the deck loses to fog as it converges toward the
         // horizon, and the last few degrees hand over to the sky entirely.
-        float far = smoothstep(0.44, 0.030, d.y);
-        col = mix(col, uHorizonCol * 1.06, far * 0.74);
-        float a = dens * (0.96 - 0.34 * far) * smoothstep(0.020, 0.075, d.y);
+        float far = smoothstep(0.40, 0.030, d.y);
+        col = mix(col, uHorizonCol * 1.04, far * 0.66);
+        float a = dens * (0.97 - 0.30 * far) * smoothstep(0.020, 0.075, d.y);
 
         // dither (§CLOUDS (4)) — the deck is the smoothest gradient in frame
         float dth = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
         col += (dth - 0.5) * (1.6 / 255.0);
-        gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
+
+        // ---- practical in-scatter (see uSPos note) — the SAME integral and
+        // constants as weather.js INSCATTER_GLSL, ray length 250 m (sky).
+        vec3 ins = vec3(0.0);
+        if (uInsK > 0.0) {
+        for (int i = 0; i < 8; i++) {
+          if (dot(uSCol[i], vec3(1.0)) < 1e-3) continue;
+          vec3 L = uSPos[i] - uCamPos;
+          float b = dot(L, d);
+          float hh2 = max(dot(L, L) - b * b, 0.0625);
+          if (hh2 > 144.0) continue;
+          float hh = sqrt(hh2);
+          float I = (atan((250.0 - b) / hh) + atan(b / hh)) / hh;
+          vec3 Q = d * clamp(b, 0.0, 250.0);
+          float cc = dot(normalize(L - Q), uSDir[i]);
+          float cone = smoothstep(uSCone[i].x, uSCone[i].y, cc);
+          ins += uSCol[i] * (I * ((0.10 + 0.90 * cone) * exp(-0.14 * hh) + 0.45 * exp(-0.9 * hh)) * smoothstep(12.0, 8.0, hh));
+        }
+        for (int i = 0; i < 3; i++) {
+          if (dot(uPCol[i], vec3(1.0)) < 1e-3) continue;
+          vec3 L = uPPos[i] - uCamPos;
+          float b = dot(L, d);
+          float hh = sqrt(max(dot(L, L) - b * b, 1.0));
+          float I = (atan((250.0 - b) / hh) + atan(b / hh)) / hh;
+          ins += uPCol[i] * (I * 0.55 * exp(-0.10 * hh));
+        }
+        } // uInsK > 0 (off on the 'low' preset)
+        // PREMULTIPLIED output (blend ONE, ONE_MINUS_SRC_ALPHA): the cloud
+        // covers what is behind it by a, and the in-scatter ADDS whether or
+        // not there is cloud on this pixel.
+        float aa = clamp(a, 0.0, 1.0);
+        gl_FragColor = vec4(col * aa + ins * uInsK, aa);
       }`,
   });
   // Radius only has to keep the shell between the rings (500) and the dome
@@ -697,6 +827,29 @@ export function createSky(ctx) {
       // target translate together). Fall back to the old derivation only if an
       // older lighting.js is loaded.
       const L = ctx.lights;
+      // practical in-scatter feed (world space; cheap: 11 lights, no alloc)
+      if (L && L.spots) {
+        const n = Math.min(8, L.spots.length);
+        for (let i = 0; i < n; i++) {
+          const s = L.spots[i];
+          cloudUniforms.uSPos.value[i].copy(s.position);
+          const dv = cloudUniforms.uSDir.value[i];
+          dv.copy(s.position).sub(s.target.position);
+          if (dv.lengthSq() > 1e-8) dv.normalize(); else dv.set(0, 1, 0);
+          cloudUniforms.uSCol.value[i].set(s.color.r, s.color.g, s.color.b).multiplyScalar(s.intensity);
+          cloudUniforms.uSCone.value[i].set(Math.cos(s.angle), Math.cos(s.angle * (1 - s.penumbra)));
+        }
+      }
+      if (L && L.points) {
+        const n = Math.min(3, L.points.length);
+        for (let i = 0; i < n; i++) {
+          const pt = L.points[i];
+          cloudUniforms.uPPos.value[i].copy(pt.position);
+          cloudUniforms.uPCol.value[i].set(pt.color.r, pt.color.g, pt.color.b).multiplyScalar(pt.intensity);
+        }
+      }
+      cloudUniforms.uInsK.value = scene.userData.brInscatter === false ? 0
+        : (scene.fog && scene.fog.density != null ? scene.fog.density : 0.010) * 0.24;
       if (L && L.keyDir) domeUniforms.uMoonDir.value.copy(L.keyDir);
       else if (L && L.moon) domeUniforms.uMoonDir.value.copy(L.moon.position).normalize();
     },

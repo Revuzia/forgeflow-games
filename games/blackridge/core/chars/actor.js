@@ -20,7 +20,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { clone as skeletonClone } from "three/addons/utils/SkeletonUtils.js";
-import { CLIP_FILES, ANIMS } from "./anim_map.js";
+import { CLIP_FILES, CLIP_DERIVED, ANIMS, LOCO } from "./anim_map.js";
 
 // ---------------------------------------------------------------------------
 // Loader (Draco decoder is vendored — a CDN outage must never take the
@@ -176,6 +176,33 @@ function curlSupportHand(clip) {
   }
 }
 
+/**
+ * Mirror a clip across the character's sagittal plane (+X is his left on this
+ * rig): Left<->Right tracks swap, rotations reflect (x, -y, -z, w), the hips
+ * translation reflects (-x, y, z). Exact only when the rig's L/R rests are
+ * mirror images — measured on soldier.glb: legs <= 0.9 deg, arms <= 1.9 deg
+ * (fingers ~17 deg, invisible on a body on the ground). Used to get a
+ * fall-to-the-right death out of death_right without shipping a file.
+ */
+function mirrorClip(clip) {
+  for (const t of clip.tracks) {
+    const dot = t.name.lastIndexOf(".");
+    const node = t.name.slice(0, dot);
+    const swapped = node.replace(/Left|Right/g, (m) => (m === "Left" ? "Right" : "Left"));
+    t.name = swapped + t.name.slice(dot);
+    const v = t.values;
+    if (/\.quaternion$/.test(t.name)) {
+      for (let i = 0; i + 3 < v.length; i += 4) { v[i + 1] = -v[i + 1]; v[i + 2] = -v[i + 2]; }
+    } else if (/\.position$/.test(t.name)) {
+      for (let i = 0; i + 2 < v.length; i += 3) v[i] = -v[i];
+    }
+  }
+}
+
+// Upper-body mask for layered one-shots (reload, grenade toss): spine up,
+// shoulders, arms, hands, fingers. Hips and legs are left to the loco blend.
+const UPPER_TRACK = /(Spine|Neck|Head|Shoulder|Arm|Hand)[^.]*\.quaternion$/;
+
 // ---------------------------------------------------------------------------
 // Material repair + wet-shoulder override
 // ---------------------------------------------------------------------------
@@ -319,6 +346,17 @@ function loadClipSet() {
         const raw = pickClip(g);
         if (raw) clips.push(cleanClip(raw, name));
         else console.error(`[actor] clip GLB ${url} carries no animation`);
+      }
+      // Derived clips (anim_map CLIP_DERIVED): built from a cleaned clip, no
+      // extra bytes on the wire. Curl is already baked into the source.
+      for (const [name, spec] of Object.entries(CLIP_DERIVED || {})) {
+        const src = clips.find((c) => c.name === spec.from);
+        if (!src) { console.error(`[actor] derived clip ${name}: source ${spec.from} missing`); continue; }
+        const c = src.clone();
+        c.name = name;
+        if (spec.mirror) mirrorClip(c);
+        if (spec.mask === "upper") c.tracks = c.tracks.filter((t) => UPPER_TRACK.test(t.name));
+        clips.push(c);
       }
       return clips;
     })();
@@ -577,6 +615,8 @@ export function createActor(proto) {
       root, placeholder: true,
       play() {}, playOnce() {}, update() {}, aimBlend() {},
       setLifeSeed() {}, fireImpulse() {}, hitImpulse() {}, lifeGain: 1,
+      setReload() {}, throwGrenade() { return false; }, throwing: false,
+      hasLoco: false, hasClipCrouch: false, moveDir: 0, crouched: false, airborne: false,
       attachWeapon() { return null; }, setTint() {}, setRim() {}, setFlash() {},
       currentName: null, crouchW: 0, groundSpeed: 0, readyWant: 1,
       dispose() { root.removeFromParent(); geo.dispose(); mat.dispose(); },
@@ -781,10 +821,287 @@ export function createActor(proto) {
   const lowest = lowestSkinnedY(model);
   if (isFinite(lowest)) model.position.y = -lowest;
 
+  // ===========================================================================
+  // 8-WAY LOCOMOTION (2026-11-13) — replaces the LEG DIRECTION workaround
+  // ===========================================================================
+  // The old set had one forward walk and one forward run, so a soldier who
+  // faces his aim and strafes either glided sideways on forward legs or had
+  // his hips twisted 70 deg toward travel (legYaw) with the cycle run
+  // backward to back-pedal. Measured before this pass, live PVP, planted toe
+  // slide: fwd 2.52 m/s, side 3.37 m/s, back 2.18 m/s (the forward clip also
+  // capped at 2.2x its 1.5 m/s nominal while bots move at 4.6).
+  //
+  // Now the base layer is a blend, re-weighted every frame, of the four
+  // cardinal clips of up to three gaits (anim_map LOCO) plus idle, crouch-hold
+  // and the airborne loop. ONE phase per actor drives every loco clip:
+  //   phase += groundSpeed * dt / stride(blend)   — the feet plant
+  //   clip.time = frac(phase + clip.sync) * dur   — every clip puts the LEFT
+  //                                                 foot down together, so a
+  //                                                 diagonal blend or a gait
+  //                                                 change never pops a leg
+  // The loco actions run at timeScale 0 and are positioned by hand; only
+  // their weights move. Weights are explicit (setEffectiveWeight), not THREE
+  // fades, so the blend is exact and resumable; one-shots (deaths) fade the
+  // whole base layer through `loco.gain`.
+  const clipOf = (k) => ANIMS[k] || k;
+  const locoSets = {};
+  for (const g of ["walk", "run", "sprint", "crouch"]) {
+    locoSets[g] = (LOCO[g] || []).map((e) => {
+      const a = actions[clipOf(e.anim)];
+      if (!a) return null;
+      return { a, rad: e.deg * Math.PI / 180, stride: e.stride, sync: e.sync,
+               dur: a.getClip().duration || 1, w: 0 };
+    }).filter(Boolean);
+  }
+  const hasLoco = locoSets.walk.length === 4 && locoSets.run.length === 4;
+  const hasClipCrouch = locoSets.crouch.length === 4;
+  let crouchHoldA = null;
+  if (hasClipCrouch) {
+    // a second instance of the crouch walk, parked on its double-support frame
+    const c = locoSets.crouch[0].a.getClip().clone();
+    c.name = "__crouch_hold";
+    crouchHoldA = mixer.clipAction(c);
+  }
+  const idleA = actions[idleName] || null;
+  const jumpA = actions[clipOf("jump")] || null;
+  const locoActs = [];
+  for (const g of ["walk", "run", "sprint", "crouch"]) for (const e of locoSets[g]) locoActs.push(e.a);
+  if (crouchHoldA) locoActs.push(crouchHoldA);
+  if (jumpA) locoActs.push(jumpA);
+  for (const a of locoActs) {
+    a.setLoop(THREE.LoopRepeat, Infinity);
+    a.clampWhenFinished = false;
+    a.timeScale = 0;
+    a.setEffectiveWeight(0);
+    a.play();
+  }
+  if (jumpA) jumpA.timeScale = 1;
+  const loco = {
+    on: hasLoco,      // base layer is the blend (false: legacy single-clip play)
+    phi: 0,           // shared gait phase, cycles
+    gain: 1, gainWant: 1, gainRate: 1 / 0.14,
+    crouch: 0, air: 0,
+    mv: 0, gRun: 0,   // eased gait weights (see stepLoco)
+    idleW: 1,
+  };
+  // upper-body overlay (reload / grenade toss) — see setReload/throwGrenade
+  const UPPER_W = 12;   // normalized-mix weight vs the loco sum of 1 → ~92%
+  const THROW = { from: 1.50, to: 2.55, rate: 1.25 };  // FK-measured release ~1.85 s
+  const upper = { a: null, w: 0, want: 0, kind: null };
+  const smooth01 = (r, x) => {
+    const u = Math.min(1, Math.max(0, (x - r[0]) / (r[1] - r[0])));
+    return u * u * (3 - 2 * u);
+  };
+  /** Cardinal-direction weights for a 4-clip set (linear between the two
+   *  neighbours of theta; sums to 1). A 1-clip set (sprint) takes it all. */
+  // SECTOR SOLVE. Linear blending between neighbouring cardinals is right for
+  // two of the four quadrants and wrong for the other two — MEASURED with a
+  // standalone actor translated at sim speed (planted-toe slide, 2026-11-13):
+  // fwd+right (-45) 0.75 m/s and left+back (135) 1.1, but fwd+left (45) 2.7
+  // and right+back (-135) 2.6 m/s at run speed (crouch 1.9/1.8, walk 0.8/0.8)
+  // — and a full-cycle sweep of the sync offset did not fix it (best 2.5), so
+  // it is not phase: the Mixamo left strafe and right strafe step differently
+  // (one leads with a crossover), and averaging a crossover with a forward
+  // stride drags the planted foot. In those LOCO.sharp quadrants the
+  // remaining angle is made up by turning the LEGS (root) toward travel —
+  // legYaw, whose spine counter-twist (life layer) keeps chest and rifle on
+  // the aim. Everywhere else the residual is exactly 0.
+  const SHARP = (LOCO.sharp || []).map(([a, b]) => [a * Math.PI / 180, b * Math.PI / 180]);
+  const HALF_PI = Math.PI / 2;
+  // A first version sharpened the blend to a smoothstep band around the
+  // diagonal; the band itself still slid 1.9-3.0 m/s exactly on the diagonal,
+  // and bots DO hold diagonals. So in a sharp quadrant there is no spatial
+  // blend at all: one cardinal is chosen with hysteresis (switch past 60/40%
+  // of the quadrant) and the switch is a 0.22 s TIME cross-fade of two
+  // phase-synced cycles; the legs turn by whatever angle the chosen clip is
+  // short of (<= 54 deg at the hysteresis edge, 45 deg on the diagonal).
+  const SEC_FADE = 0.22;
+  const _sec = { a: 0, u: 0, resid: 0 };
+  const secState = { a: NaN, side: 0, u2: 0 };
+  function sector(theta, dt) {
+    // wrap to [-PI, PI) and bracket between cardinals a and a + 90 deg
+    let t = theta % (2 * Math.PI);
+    if (t >= Math.PI) t -= 2 * Math.PI;
+    if (t < -Math.PI) t += 2 * Math.PI;
+    let a = Math.floor(t / HALF_PI) * HALF_PI;     // -PI, -PI/2, 0, PI/2
+    if (a >= Math.PI) a = -Math.PI;
+    const u = (t - a) / HALF_PI;
+    let u2 = u;
+    let sharp = false;
+    for (const s of SHARP) if (angEq(s[0], a)) { sharp = true; break; }
+    if (sharp) {
+      if (!(secState.a === a)) {            // entered this quadrant
+        secState.a = a;
+        secState.side = u < 0.5 ? 0 : 1;
+        secState.u2 = secState.side;
+      }
+      if (dt > 0) {
+        if (secState.side === 0 && u > 0.6) secState.side = 1;
+        else if (secState.side === 1 && u < 0.4) secState.side = 0;
+        const st = dt / SEC_FADE;
+        secState.u2 = secState.u2 < secState.side
+          ? Math.min(secState.side, secState.u2 + st) : Math.max(secState.side, secState.u2 - st);
+      }
+      u2 = secState.u2;
+    } else {
+      secState.a = NaN;
+    }
+    _sec.a = a; _sec.u = u2; _sec.resid = (u - u2) * HALF_PI;
+    return _sec;
+  }
+  function angEq(x, y) {
+    let d = Math.abs(x - y) % (2 * Math.PI);
+    if (d > Math.PI) d = 2 * Math.PI - d;
+    return d < 1e-3;
+  }
+  function dirWeights(set, theta) {
+    if (set.length === 1) { set[0].w = 1; return; }
+    const s = sector(theta);
+    for (const e of set) {
+      e.w = angEq(e.rad, s.a) ? 1 - s.u : angEq(e.rad, s.a + HALF_PI) ? s.u : 0;
+    }
+  }
+  function strideOf(set) {
+    let s = 0, w = 0;
+    for (const e of set) { s += e.w * e.stride; w += e.w; }
+    return w > 0 ? s / w : 2;
+  }
+  function placeSet(set, total) {
+    for (const e of set) {
+      const w = total * e.w;
+      e.a.setEffectiveWeight(w);
+      if (w > 0) {
+        let u = (loco.phi + e.sync) % 1;
+        if (u < 0) u += 1;
+        e.a.time = u * e.dur;
+      }
+    }
+  }
+  /** Drive the base layer for this frame (called inside update before the
+   *  mixer steps). Inputs are actor.groundSpeed / moveDir / crouched /
+   *  airborne, all written by soldiers.js from sim state. */
+  function stepLoco(dt) {
+    const k = 1 - Math.exp(-10 * dt);
+    loco.crouch += ((actor.crouched && hasClipCrouch ? 1 : 0) - loco.crouch) * k;
+    loco.air += ((actor.airborne && jumpA ? 1 : 0) - loco.air) * k;
+    if (loco.gain !== loco.gainWant) {
+      const st = loco.gainRate * dt;
+      loco.gain = loco.gain < loco.gainWant
+        ? Math.min(loco.gainWant, loco.gain + st) : Math.max(loco.gainWant, loco.gain - st);
+    }
+    const s = Math.max(0, actor.groundSpeed || 0);
+    const th = actor.moveDir || 0;
+    // gait weights are EASED in time, not just mapped from speed: sim bots
+    // accelerate 0 -> 4.6 m/s in ~0.25 s and stop in ~0.13 s, which swept the
+    // idle->run weight in 2-3 frames (measured: 0.36-0.49 m one-frame jump of
+    // a hand/foot on start/stop). ~0.1 s time constant = the old 0.14 s fade.
+    const ke = 1 - Math.exp(-dt / 0.1);
+    loco.mv += (smooth01(LOCO.move, s) - loco.mv) * ke;
+    loco.gRun += (smooth01(LOCO.walkRun, s) - loco.gRun) * ke;
+    const mv = loco.mv;
+    const gRun = loco.gRun;
+    const G = loco.gain, air = loco.air, cr = loco.crouch;
+    const stand = (1 - cr) * (1 - air) * G;
+    const crW = cr * (1 - air) * G;
+    const wWalk = stand * mv * (1 - gRun);
+    const wRun = stand * mv * gRun;
+    const wCr = crW * mv;
+    dirWeights(locoSets.walk, th);
+    dirWeights(locoSets.run, th);
+    if (hasClipCrouch) dirWeights(locoSets.crouch, th);
+    // SPRINT replaces only the FORWARD share of the run blend (sprint is a
+    // forward-only clip): keyed off the run set's own forward weight, so in a
+    // sharp quadrant where the legs have turned onto a strafe clip it never
+    // mixes a forward sprint into a sideways run (measured 6.0 m/s slide at
+    // 45 deg when it was keyed off cos(theta) instead).
+    let wSpr = 0;
+    if (locoSets.sprint.length) {
+      const rf = locoSets.run[0];
+      const gS = smooth01(LOCO.runSprint, s) * rf.w;
+      wSpr = wRun * gS;
+      rf.w -= gS;
+      locoSets.sprint[0].w = 1;
+    }
+    // blended stride over every weighted moving clip — the foot-planting divisor
+    let sw = 0, ss = 0;
+    const acc = (set, tot) => { for (const e of set) { sw += tot * e.w; ss += tot * e.w * e.stride; } };
+    acc(locoSets.walk, wWalk); acc(locoSets.run, wRun);
+    if (wSpr) acc(locoSets.sprint, wSpr);
+    if (wCr) acc(locoSets.crouch, wCr);
+    const stride = sw > 1e-4 ? ss / sw : strideOf(locoSets.walk);
+    loco.phi = (loco.phi + s * dt / Math.max(0.5, stride)) % 1;
+    placeSet(locoSets.walk, wWalk);
+    placeSet(locoSets.run, wRun);
+    if (locoSets.sprint.length) placeSet(locoSets.sprint, wSpr);
+    if (hasClipCrouch) placeSet(locoSets.crouch, wCr);
+    if (crouchHoldA) {
+      crouchHoldA.setEffectiveWeight(crW * (1 - mv));
+      crouchHoldA.time = LOCO.crouchHold * crouchHoldA.getClip().duration;
+    }
+    if (jumpA) jumpA.setEffectiveWeight(air * G);
+    loco.idleW = stand * (1 - mv);
+    if (idleA) {
+      idleA.setEffectiveWeight(loco.idleW);
+      idleA.timeScale = actor._clipRate || 1;
+    }
+  }
+  /** Re-seat the weapon holders on the firing hand after a throw. */
+  function regrip() {
+    for (const h of grips) {
+      if (!h.carry) continue;
+      model.updateMatrixWorld(true);
+      h.bone.attach(h.holder);
+      h.holder.position.copy(h.pos0);
+      h.holder.scale.copy(h.scl0);
+      h.carry = false;
+    }
+  }
+  function stepUpper(dt) {
+    if (!upper.a) return;
+    if (upper.kind === "throw" && upper.want > 0 && upper.a.time >= THROW.to) upper.want = 0;
+    const st = dt / 0.14;
+    upper.w = upper.w < upper.want ? Math.min(upper.want, upper.w + st) : Math.max(upper.want, upper.w - st);
+    // the rifle goes back to the firing hand as soon as the arm returns
+    if (upper.kind === "throw" && upper.want === 0 && upper.w < 0.5) regrip();
+    upper.a.setEffectiveWeight(UPPER_W * upper.w);
+    if (upper.w <= 0 && upper.want <= 0) {
+      upper.a.stop();
+      upper.a = null; upper.kind = null;
+    }
+  }
+  function startUpper(name, kind, t0, rate) {
+    const a = actions[clipOf(name)];
+    if (!a) return false;
+    if (upper.a && upper.a !== a) { upper.a.stop(); regrip(); }
+    a.reset();
+    a.setLoop(THREE.LoopOnce, 1);
+    a.clampWhenFinished = true;
+    a.timeScale = rate;
+    a.time = t0;
+    a.setEffectiveWeight(UPPER_W * upper.w);
+    a.play();
+    upper.a = a; upper.kind = kind; upper.want = 1;
+    return true;
+  }
+  function killUpper() {
+    if (upper.a) upper.a.stop();
+    upper.a = null; upper.kind = null; upper.w = 0; upper.want = 0;
+    regrip();
+  }
+  /** First clip time at which the Hips track drops to `y` (crouched victims
+   *  enter a standing death mid-fall instead of standing up to die). */
+  function timeAtHipsY(clip, y) {
+    const tr = clip.tracks.find((t) => /Hips\.position$/.test(t.name));
+    if (!tr) return 0;
+    for (let i = 0; i < tr.times.length; i++) if (tr.values[i * 3 + 1] <= y) return tr.times[i];
+    return 0;
+  }
+  const LOCO_KEYS = { idle: 1, walk: 1, run: 1, crouch_idle: 1, crouch_walk: 1, aim: 1, fire: 1, hit: 1 };
+
   const actor = {
     root,
     placeholder: false,
-    currentName: idleName,
+    currentName: hasLoco ? "loco" : idleName,
     crouchW: 0,      // soldiers.js drives: 1 while the sim says stance=crouch
     // iter08 — WEAPON READY POSE. 1 = shouldered (aiming/firing), 0 = low
     // ready (patrolling, searching, reloading on the move). soldiers.js drives
@@ -800,18 +1117,94 @@ export function createActor(proto) {
     // (legs) toward the travel direction by legYaw and plays the cycle backward
     // (locoDir -1) when he retreats; update() counter-twists the spine by -legYaw so
     // the chest, arms and rifle stay on the target.
+    // 2026-11-13: superseded by the 8-way blend — soldiers.js now holds both
+    // at 0/1 whenever hasLoco; the counter-twist code below still honours
+    // them for a body without the directional clips.
     legYaw: 0,
     locoDir: 1,
+    // 8-WAY LOCOMOTION inputs (soldiers.js writes them every frame):
+    moveDir: 0,      // travel direction relative to facing, rad (0 fwd, +pi/2 his left)
+    crouched: false, // sim stance === crouch
+    airborne: false, // sim bot.grounded false for a beat
+    hasLoco,
+    hasClipCrouch,
+    _loco: loco,     // debug/harness read-only
     _clipRate: 1,    // per-actor playback rate (setLifeSeed)
     lifeGain: 1,     // soldiers.js drives: 1 alive, 0 dead (see update())
-    _current: actions[idleName] || null,
+    _current: hasLoco ? null : (actions[idleName] || null),
     _onceEnd: null,
 
-    /** Cross-fade to a looping semantic state (resolves through ANIMS). */
+    /** true while the grenade-toss overlay owns the arms (soldiers.js turns
+     *  the pistol support-hand IK off for it). */
+    get throwing() { return upper.kind === "throw" && upper.w > 0.02; },
+
+    /** Leg (root) turn toward travel that the sector solve needs at this
+     *  travel direction + speed (rad, 0 in the linear quadrants and at rest).
+     *  soldiers.js adds it to the root yaw and writes it to actor.legYaw. */
+    locoLegYaw(theta, speed, dt = 0) {
+      if (!hasLoco) return 0;
+      return sector(theta, dt).resid * smooth01(LOCO.move, speed || 0);
+    },
+
+    /** Upper-body reload layered over the stepping legs (any speed — the
+     *  old full-body reload had to be refused above 4.5 m/s or it slid). */
+    setReload(on) {
+      if (on) {
+        if (upper.kind === "reload" && upper.want > 0) return;
+        if (upper.kind === "throw") return;   // the toss finishes first
+        startUpper("reload_upper", "reload", 0, 1);
+      } else if (upper.kind === "reload") {
+        upper.want = 0;
+      }
+    },
+
+    /** One-shot grenade toss (sim `grenade` phase "out"). The clip throws
+     *  with the RIGHT hand while the left carries the rifle, so for its
+     *  duration the weapon holder rides the left hand rigidly (attach keeps
+     *  its world pose), and is re-seated on the firing hand as the arm
+     *  comes back. Played from just before the release to the follow-through
+     *  — the sim spawns the grenade at release, so that is when this runs. */
+    throwGrenade() {
+      if (actor.lifeGain <= 0.001) return false;
+      if (!startUpper("throw", "throw", THROW.from, THROW.rate)) return false;
+      if (bones.lHand) {
+        model.updateMatrixWorld(true);
+        for (const h of grips) {
+          if (h.carry) continue;
+          bones.lHand.attach(h.holder);
+          h.carry = true;
+        }
+      }
+      return true;
+    },
+
+    /** Cross-fade to a looping semantic state (resolves through ANIMS).
+     *  The loco family (idle, walk, run, crouch_idle, crouch_walk, aim, fire, hit) is not a single
+     *  clip any more: it returns the base layer to the 8-way blend, which
+     *  reads groundSpeed/moveDir/crouched. */
     play(logical, { fade = 0.14, timeScale = 1, fromStart = false } = {}) {
+      if (loco.on !== false && hasLoco && LOCO_KEYS[logical]) {
+        if (logical === "crouch_idle" || logical === "crouch_walk") actor.crouched = true;
+        if (actor.currentName !== "loco") {
+          if (actor._current && !locoActs.includes(actor._current) && actor._current !== idleA) {
+            actor._current.fadeOut(fade);
+          }
+          loco.gainWant = 1;
+          loco.gainRate = 1 / Math.max(1e-3, fade);
+          actor._current = null;
+          actor.currentName = "loco";
+          actor._onceEnd = null;
+        }
+        return false;
+      }
       const name = ANIMS[logical] || logical;
       const a = actions[name];
       if (!a) return false;
+      if (hasLoco && actor.currentName === "loco") {
+        loco.gainWant = 0;
+        loco.gainRate = 1 / Math.max(1e-3, fade);
+        actor._current = null;
+      }
       if (name === actor.currentName) {
         if (actor._current) actor._current.timeScale = timeScale;
         return false;
@@ -840,15 +1233,25 @@ export function createActor(proto) {
 
     /** One-shot (hit, deaths). clampWhenFinished holds the final frame — a
      *  dead body stays in its slump (persistence, VT §7 / D6). */
-    playOnce(logical, { fade = 0.10, timeScale = 1, then = null } = {}) {
+    playOnce(logical, { fade = 0.10, timeScale = 1, then = null, fromHipsY = null } = {}) {
       const name = ANIMS[logical] || logical;
       const a = actions[name];
       if (!a) return false;
+      // a one-shot owns the whole body: the overlay goes (and the rifle back
+      // to the firing hand), the base blend fades out under it
+      killUpper();
+      if (hasLoco) {
+        loco.gainWant = 0;
+        loco.gainRate = 1 / Math.max(1e-3, fade);
+        if (fade <= 0) loco.gain = 0;
+      }
       a.reset();
       a.setLoop(THREE.LoopOnce, 1);
       a.clampWhenFinished = true;
       a.timeScale = timeScale;
-      a.fadeIn(fade);
+      if (fromHipsY != null) a.time = timeAtHipsY(a.getClip(), fromHipsY);
+      a.setEffectiveWeight(1);
+      if (fade > 0) a.fadeIn(fade);
       if (actor._current && actor._current !== a) actor._current.fadeOut(fade);
       a.play();
       actor._current = a;
@@ -883,6 +1286,12 @@ export function createActor(proto) {
         actor._current.time = life.phase * (actor._current.getClip().duration || 1);
       }
       actor._clipRate = 0.88 + 0.24 * life.phase;
+      // the gait phase is per-actor too: two bots ordered to move on the same
+      // tick start their stride on different feet. (The loco RATE is not
+      // varied: it is dictated by ground speed — any rate variation there is
+      // foot slide by definition.)
+      loco.phi = life.phase;
+      if (idleA) idleA.time = life.phase * (idleA.getClip().duration || 1);
     },
 
     /** One round left this soldier's barrel — impulse the torso recoil spring
@@ -931,7 +1340,8 @@ export function createActor(proto) {
       // weapon's own geometry by prepWeaponProto (numbers only in userData —
       // Object3D.copy JSON-round-trips it on every clone).
       const hold = (group && group.userData && +group.userData.brHold) || 0;
-      const h = { holder, bone: firing, support, hold };
+      const h = { holder, bone: firing, support, hold, carry: false,
+                  pos0: holder.position.clone(), scl0: holder.scale.clone() };
       grips.push(h);
       // Solve once NOW: the actor is already settled into idle, so the very
       // first rendered frame is correct — never one frame of the bind basis.
@@ -980,12 +1390,12 @@ export function createActor(proto) {
       // precede the performance.now() captured at init, making the first
       // frame delta negative; every death played that frame froze standing).
       dt = Math.max(0, dt);
-      const cn = actor.currentName;
-      if (actor._current && (cn === "rifle_walk" || cn === "rifle_run")) {
-        const nominal = cn === "rifle_run" ? 3.6 : 1.5;
-        actor._current.timeScale = Math.min(2.2, Math.max(0.35, actor.groundSpeed / nominal))
-          * (actor._clipRate || 1) * (actor.locoDir < 0 ? -1 : 1);
-      }
+      // base layer: the 8-way blend positions its clips + weights by hand
+      // (foot planting is the phase advance — see the 8-WAY note above).
+      // The old timeScale-by-groundSpeed (capped at 2.2x a 1.5 m/s walk) is
+      // gone with it.
+      if (hasLoco) stepLoco(dt);
+      stepUpper(dt);
       // ---- LIFE LAYER, phase 1: hand the mixer back a CLEAN pose ----------
       // (see the LIFE note at the top of this file — post-mixer bone writes
       // compound through PropertyMixer's skip-if-unchanged optimisation, so
@@ -1238,7 +1648,14 @@ export function createActor(proto) {
       // Runs on a held frame too (dt === 0) — the battery's frozen pose has to
       // be as correct as a moving one, and holder.quaternion is ASSIGNED (not
       // accumulated), so re-running it on an unchanged pose is a no-op.
-      for (let i = 0; i < grips.length; i++) solveGrip(grips[i]);
+      // During a reload the support hand leaves the handguard for the
+      // magazine, and the two-hand solve then aims the bore at it — measured
+      // in capture: the rifle stood vertical beside the head for the whole
+      // reload. While the reload layer is in, the weapon instead rides the
+      // firing hand rigidly on its last two-hand basis (holder.quaternion is
+      // bone-local, so simply not re-solving holds it).
+      const reloadHold = upper.kind === "reload" && upper.want > 0;
+      if (!reloadHold) for (let i = 0; i < grips.length; i++) if (!grips[i].carry) solveGrip(grips[i]);
     },
 
     dispose() {
