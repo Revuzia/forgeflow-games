@@ -5,7 +5,8 @@
 //
 //   right-click ground      move (an attack-move click when controls.attackMoveOnClick); held and dragged =
 //                           keeps steering toward the cursor (only real pointer motion re-steers: a still mouse
-//                           over a following camera never walks the hero on by itself)
+//                           over a following camera never walks the hero on by itself); held still = the last
+//                           point is re-sent every 500 ms while the hero stands short of it (a give-up retries)
 //   right-click enemy       attack it (chases). Forgiving: enemies only (you and allies in front never steal
 //                           the click), a near miss within PICK_SLOP_PX on an enemy minion or fighter still
 //                           counts (never onto a monster or a structure: a ground click beside a camp or tower stays a move)
@@ -90,6 +91,10 @@ const WHEEL_DEADZONE = 26;
 const HOLD_MOVE_MS = 140;
 /** hold-steer re-issues only after the pointer itself moved this far (CSS px) since the last order */
 const HOLD_MIN_PX = 8;
+/** while the button is held, the last point is re-sent this often (ms) when the hero stands more than HOLD_RETRY_NEAR m
+ *  short of it (a walk that gave up in a packed wave tries again; ruling 37) */
+const HOLD_RETRY_MS = 500;
+const HOLD_RETRY_NEAR = 2;
 /** a click this close (CSS px) to an enemy's hit box still counts as on it: attack clicks and plain right-clicks
  *  alike (ruling 36 supersedes ruling 35's 8 px for plain clicks: genre forgiveness, "hard to target minions") */
 const PICK_SLOP_PX = 14;
@@ -311,6 +316,17 @@ export class InputController {
         this.lastHoldMove = now;
         this.holdPx = { x: this.ptr.x, y: this.ptr.y };
         this.moveTo(g, this.rightHeldAttack, false);
+      }
+    }
+    // a held button keeps its order alive (genre: holding the button keeps re-issuing the move): every HOLD_RETRY_MS the
+    // last point is re-sent while the hero stands more than HOLD_RETRY_NEAR m short of it. The sim ignores the same
+    // point while that order is still being walked and restarts it after the walk gave up (a packed wave, ruling 37).
+    // Always the point last sent, never the cursor's ground under a following camera (ruling 33)
+    if (this.rightHeld && !aim && this.lastMoveTo && now - this.lastHoldMove > HOLD_RETRY_MS) {
+      const b = this.body;
+      if (b && b.alive && Math.hypot(b.x - this.lastMoveTo.x, b.y - this.lastMoveTo.y) > HOLD_RETRY_NEAR) {
+        this.lastHoldMove = now;
+        this.moveTo(this.lastMoveTo, this.rightHeldAttack, false);
       }
     }
     if (this.centring) this.r.camera?.centerOnSelf();

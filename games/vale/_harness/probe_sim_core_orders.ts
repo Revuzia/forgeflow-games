@@ -230,10 +230,13 @@ section('ruling 36: an ally walking the same way ahead is not steered round', ()
   check('…and its move ends near the point (the ally stands on it)', tr[tr.length - 1].order === ORDER_NONE && Math.hypot(h.x - 22, h.y - 52) < h.radius + a.radius + 1.2, [f2(h.x), f2(h.y)]);
 });
 section('ruling 36: boxed in by bodies with no way through, the hero re-plans within ~1 s and stops cleanly (no steering in place)', () => {
-  // a solid line of standing minions from the slab to the east map edge: no route exists for a walker
+  // a solid wall of standing minions (two staggered rows) from the slab to the east map edge: no route exists for a
+  // walker. (Ruling 37: a single row 0.85 m apart is not "no way through": soft separation lets a fighter that presses
+  // straight into it squeeze through in ~1.5 s, which the round-3 steering never did only because it spent that time
+  // swaying 1.5 m side to side in front of the row.)
   const w = makeWorld(cat, [{ fighter: 'fx_slinger', team: 0, x: 45, y: 20 }, { fighter: 'fx_foe', team: 1, x: 10, y: 55 }]);
   const h = fighterEnt(w, 0);
-  for (let x = 32.6; x < 60; x += 0.85) addUnit(w, 'fx_dummy', 0, x, 24);
+  for (let x = 32.6; x < 60; x += 0.85) { addUnit(w, 'fx_dummy', 0, x, 24); addUnit(w, 'fx_dummy', 0, x + 0.425, 24.75); }
   issueMove(w, h, 45, 30, false);
   let replanAt = -1, blockedAt = -1;
   const tr = trace(w, h, 240, (k) => {
@@ -243,8 +246,62 @@ section('ruling 36: boxed in by bodies with no way through, the hero re-plans wi
   const end = tr.findIndex((p) => p.order === ORDER_NONE);
   check('a no-progress window re-plans within ~1.3 s of meeting the line', blockedAt >= 0 && replanAt >= blockedAt && replanAt - blockedAt <= 40, { blockedAt, replanAt });
   check('…and the move ends within ~2.5 s of it', end >= 0 && end - blockedAt <= 75, { blockedAt, end });
-  check('0 drift after it ends', end >= 0 && walk(tr.slice(end)).len < 0.05, end >= 0 ? walk(tr.slice(end)) : null);
+  // (it ends pressed into the wall, overlapping it: the soft separation eases it back out by a few cm, nothing more)
+  check('0 drift after it ends (settling out of the overlap ≤ 0.1 m)', end >= 0 && walk(tr.slice(end)).len < 0.1, end >= 0 ? walk(tr.slice(end)) : null);
+  // ruling 37: pressing into the wall, never swaying along it (r3 swung 1.6 m side to side while it waited)
+  let sway = 0;
+  for (let k = Math.max(0, blockedAt); k < (end >= 0 ? end : tr.length); k++) sway = Math.max(sway, Math.abs(tr[k].x - 45));
+  check('…pressing straight into it (lateral sway ≤ 0.2 m)', sway <= 0.2, f2(sway));
 });
+section('ruling 37: standing bodies flanking the line: one lane, one side, no side flips and no heading reversals', () => {
+  // verifier r4: steerRound flipped sides every 3 ticks between standing allies (the hero vibrated ~0.1 m in place for
+  // a 1 s watchdog window, then again); a lane round them is planned once and walked
+  for (const [label, units] of [
+    ['a symmetric pair astride the line', [[14, 51.3], [14, 52.7]]],
+    ['a gap narrower than the hero between two pairs', [[13.5, 51.2], [13.5, 52.8], [14.4, 51.5], [14.4, 52.5]]],
+    ['a staggered clump', [[13, 52], [13.8, 51.2], [13.8, 52.8], [14.6, 52.1], [15.4, 51.4], [15.4, 52.9]]],
+  ] as const) {
+    for (const team of [0, 1]) {
+      const w = makeWorld(cat, [{ fighter: 'fx_slinger', team: 0, x: 8, y: 52 }, { fighter: 'fx_foe', team: 1, x: 55, y: 20 }]);
+      const h = fighterEnt(w, 0);
+      for (const [x, y] of units) addUnit(w, 'fx_dummy', team, x, y);
+      issueMove(w, h, 20, 52, false);
+      let flips = 0, last = 0;
+      const tr = trace(w, h, 200, () => { if (h.steerSide !== 0 && last !== 0 && h.steerSide !== last) flips++; if (h.steerSide !== 0) last = h.steerSide; });
+      const end = tr.findIndex((p) => p.order === ORDER_NONE);
+      const wk = walk([{ x: 8, y: 52 }, ...tr.slice(0, end < 0 ? tr.length : end + 1)]);
+      check(`${label} (${team ? 'enemy' : 'allied'}): arrives, 0 side flips, 0 heading reversals, walked ≤ 1.15 × the 12 m line`,
+        end >= 0 && Math.hypot(h.x - 20, h.y - 52) < 0.2 && flips === 0 && wk.flips === 0 && wk.len <= 12 * 1.15, { end, flips, wk: { len: f2(wk.len), flips: wk.flips } });
+    }
+  }
+});
+section('ruling 37: a column of bodies marching through the hero never carries it the wrong way', () => {
+  // verifier-style live wave: an allied wave walked through a hero ordered the other way; it planned round where the
+  // bodies stood, walked with them and was carried 13 m off. Lanes now pass beside where moving bodies are going.
+  const w = makeWorld(cat, [{ fighter: 'fx_slinger', team: 0, x: 30, y: 52 }, { fighter: 'fx_foe', team: 1, x: 55, y: 20 }]);
+  const h = fighterEnt(w, 0);
+  const col: Entity[] = [];
+  for (let i = 0; i < 12; i++) col.push(addUnit(w, 'fx_minion', 0, 22 + (i % 4) * 1.0, 51 + Math.floor(i / 4) * 1.0));
+  for (const m of col) issueMove(w, m, m.x + 30, m.y, false);
+  issueMove(w, h, 20, 52, false);
+  let away = 0;
+  const tr = trace(w, h, 240, () => { away = Math.max(away, h.x - 30); });
+  const end = tr.findIndex((p) => p.order === ORDER_NONE);
+  check('it never ends up more than 0.5 m further from its point than it started, and gets there', away <= 0.5 && end >= 0 && Math.hypot(h.x - 20, h.y - 52) < 0.3, { away: f2(away), end, at: [f2(h.x), f2(h.y)] });
+});
+section('ruling 37: the same move re-sent while it is walked changes nothing (a held button, a hold-steer over a still cursor)', () => {
+  const run = (resend: boolean): { x: number; y: number }[] => {
+    const w = makeWorld(cat, [{ fighter: 'fx_slinger', team: 0, x: 20, y: 30 }, { fighter: 'fx_foe', team: 1, x: 55, y: 55 }]);
+    const h = fighterEnt(w, 0);
+    for (let i = 0; i < 6; i++) addUnit(w, 'fx_dummy', 1, 23 + (i % 2) * 0.9, 29.2 + Math.floor(i / 2) * 0.8);
+    issueMove(w, h, 29.6, 36.5, false);   // into the slab's face, past the clump
+    return trace(w, h, 150, (k) => { if (resend && k % 4 === 0) issueMove(w, h, 29.6, 36.5, false); });
+  };
+  const a = run(false), b = run(true);
+  let diff = 0; for (let k = 0; k < a.length; k++) diff = Math.max(diff, Math.hypot(a[k].x - b[k].x, a[k].y - b[k].y));
+  check('re-sending the point every 4 ticks walks exactly the single click\'s path', diff < 1e-9, f2(diff));
+});
+
 section('a plain move never chases after arrival', () => {
   const w = makeWorld(cat, [{ fighter: 'fx_slinger', team: 0, x: 10, y: 55 }, { fighter: 'fx_foe', team: 1, x: 55, y: 20 }]);
   const h = fighterEnt(w, 0);
@@ -557,4 +614,278 @@ async function rift(): Promise<void> {
 }
 
 try { await rift(); } catch (err) { check(`RIFT section threw: ${(err as Error).stack ?? err}`, false); }
+
+// ── ruling 37 (verifier r4 repros), real RIFT and BRIDGE catalogs ──
+async function live37(): Promise<void> {
+  const { buildContent, defaultOptions } = await import('../tools/build_content.ts');
+  const { createSim } = await import('../src/sim/sim.ts');
+  const { pickLoadout } = await import('../src/sim/bots/index.ts');
+  const r = buildContent(defaultOptions({ check: true, allowMissingAssets: true, quiet: true }));
+  if (!r.catalog) { console.log('SKIP ruling 37 section: content build failed'); return; }
+  const rc = r.catalog;
+  const fs = rc.fighters.map((f) => f.id).sort();
+  const fresh = (modeId: string, first: string, seed: number) => {
+    const mode = rc.modes.find((m) => m.id === modeId)!, queue = rc.queues.find((q) => q.mode === modeId)!;
+    const seats = Array.from({ length: 10 }, (_, i) => {
+      const fighter = i === 0 ? first : fs[(i * 3) % fs.length];
+      return { player: i, team: i < 5 ? 0 : 1, name: `p${i}`, fighter, skin: rc.skins.find((s) => s.fighter === fighter)?.id ?? '', controller: 'human' as const,
+        loadout: pickLoadout(rc, fighter, mode.rules.itemPool ?? '', undefined as never), colorIndex: i };
+    });
+    const sim = createSim(rc, { matchId: 'probe_orders_37', seed, queue: queue.id, mode: modeId, map: mode.map, seats, catalogVersion: rc.version } as never, { pregameSeconds: 0 });
+    sim.step();
+    for (const e of sim.world.entities) if (e.kind === 'structure') e.stats.ad = 0;
+    return { sim, me: sim.world.players[0].ent! };
+  };
+  type Sim = ReturnType<typeof fresh>['sim'];
+  const place = (w: World, e: Entity, x: number, y: number): void => { e.x = x; e.y = y; e.path.length = 0; e.pathGoalX = NaN; e.order = ORDER_NONE; w.hashDirty = true; };
+  const bodies = (w: World, me: Entity, x: number, y: number, R: number) => w.entities
+    .filter((o) => o !== me && o.alive && !o.static && (o.kind === 'minion' || o.kind === 'fighter' || o.kind === 'monster') && Math.hypot(o.x - x, o.y - y) < R)
+    .map((o) => ({ x: o.x, y: o.y, r: o.radius }));
+  const crowdAt = (w: World, me: Entity, x: number, y: number) => w.entities
+    .filter((o) => o !== me && o.alive && !o.static && (o.kind === 'minion' || o.kind === 'fighter' || o.kind === 'monster') && Math.hypot(o.x - x, o.y - y) < o.radius + me.radius + 0.6).length;
+  const fines = (w: World): ((x: number, y: number) => boolean) => (x, y) => w.nav.walkable(x, y);
+  const has = (id: string): boolean => fs.includes(id);
+
+  // 1. live lane waves (the verifier's sampler): moves 7–13 m across fighting waves, the hero 3–5 m before a minion
+  //    clump. r4 on the round-3 code: 6 % of moves had ≥ 5 steer side flips inside 1 s (up to one a tick), 12 / 768
+  //    ended 3–10 m short with a lane open, detours up to 2.4 × the lane.
+  for (const modeId of ['rift', 'bridge']) {
+    let n = 0, dither = 0, ditherMax = 0, shortLane = 0, reversals = 0, revMax = 0, clear = 0, over15 = 0, worstClear = 0;
+    const bad: string[] = [];
+    for (const who of fs) {
+      const { sim, me } = fresh(modeId, who, 7);
+      const w = sim.world, nav = w.nav;
+      const main = nav.componentAt(me.x, me.y);
+      let s = 2024;
+      const rnd = (): number => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+      let k = 0;
+      for (let t = 0; t < 30 * 200 && k < 8; t++) {
+        me.hp = me.maxHp; sim.step();
+        if (t < 30 * 40 || t % 45) continue;
+        const ms = w.entities.filter((e) => e.kind === 'minion' && e.alive);
+        if (ms.length < 6) continue;
+        const m = ms[Math.floor(rnd() * ms.length)];
+        if (ms.filter((o) => Math.hypot(o.x - m.x, o.y - m.y) < 4).length < 4) continue;
+        const a = rnd() * Math.PI * 2;
+        const hx = m.x - Math.cos(a) * (3 + rnd() * 2), hy = m.y - Math.sin(a) * (3 + rnd() * 2);
+        const d = 7 + rnd() * 6, gx = hx + Math.cos(a) * d, gy = hy + Math.sin(a) * d;
+        if (!nav.walkable(hx, hy) || !nav.walkable(gx, gy) || nav.componentAt(gx, gy) !== main || nav.componentAt(hx, hy) !== main || !nav.lineOfWalk(hx, hy, gx, gy, 0.225)) continue;
+        place(w, me, hx, hy); sim.step();
+        const x0 = me.x, y0 = me.y, straight = Math.hypot(gx - x0, gy - y0);
+        const lane = refPath(x0, y0, gx, gy, bodies(w, me, x0, y0, 16), me.radius, fines(w));
+        const tr = [{ x: x0, y: y0 }];
+        let last = 0;
+        const flipAt: number[] = [];
+        for (let q = 0; q < 300; q++) {
+          if (q === 0) sim.command(0, { type: 'move', x: gx, y: gy });
+          me.hp = me.maxHp; sim.step(); tr.push({ x: me.x, y: me.y });
+          if (me.steerSide !== 0 && last !== 0 && me.steerSide !== last) flipAt.push(q);
+          if (me.steerSide !== 0) last = me.steerSide;
+          if (q > 1 && me.order === ORDER_NONE) break;
+        }
+        k++; n++;
+        let dith = 0; for (let i = 0; i < flipAt.length; i++) { let c = 0; for (let j = i; j < flipAt.length && flipAt[j] - flipAt[i] <= 30; j++) c++; dith = Math.max(dith, c); }
+        if (dith >= 5) dither++;
+        ditherMax = Math.max(ditherMax, dith);
+        const wk = walk(tr), dEnd = Math.hypot(me.x - gx, me.y - gy);
+        reversals += wk.flips; revMax = Math.max(revMax, wk.flips);
+        const tags: string[] = [];
+        if (dEnd > 0.5 && crowdAt(w, me, gx, gy) === 0 && lane <= straight * 1.3) { shortLane++; tags.push(`short ${f2(dEnd)} (lane ${f2(lane / straight)}×)`); }
+        if (dEnd < 0.1 && lane <= straight * 1.15) { clear++; worstClear = Math.max(worstClear, wk.len / straight); if (wk.len > straight * 1.15) over15++; }
+        if (dith >= 5) tags.push(`dither ${dith}`);
+        if (tags.length && bad.length < 6) bad.push(`${who} t${t} (${f2(x0)},${f2(y0)})→(${f2(gx)},${f2(gy)}) ${tags.join(' ')}`);
+      }
+    }
+    const M = modeId.toUpperCase();
+    check(`${M} ${n} moves through live waves: 0 with ≥ 5 steer side flips inside 1 s (${dither}, max ${ditherMax})`, n >= 40 && dither === 0, bad);
+    check(`${M} …0 ending > 0.5 m short of an open point where a lane ≤ 1.3 × the line existed (${shortLane})`, shortLane === 0, bad);
+    check(`${M} …heading reversals ≤ 4 in any move (${revMax}; ${reversals} in all)`, revMax <= 4, { reversals });
+    check(`${M} …moves with a clear lane (≤ 1.15 × the line, ${clear}): ≤ 10 % walk over 1.15 × the line (${over15}), none over 1.6 × (worst ${f2(worstClear)})`,
+      clear >= 30 && over15 <= clear * 0.1 && worstClear <= 1.6);
+  }
+
+  // 2. packed lane fights after 3:55 (verifier r4 live probe: ~20 allied minions between the hero and an enemy wave; a
+  //    plain move or a held right-click gave up after ~2 s 4–10 m short). A held button re-sends its point every 500 ms
+  //    (input/controller.ts HOLD_RETRY_MS): modelled as the same move every 15 ticks.
+  for (const modeId of ['rift', 'bridge']) {
+    let n = 0, heldShort = 0, clickShortLane = 0;
+    const bad: string[] = [];
+    for (const who of ['ulkro', 'tunlan', 'lisvel'].filter(has)) {
+      for (const hold of [false, true]) {
+        const { sim, me } = fresh(modeId, who, 11);
+        const w = sim.world, nav = w.nav;
+        const main = nav.componentAt(me.x, me.y);
+        let k = 0;
+        for (let t = 0; t < 30 * 330 && k < 3; t++) {
+          me.hp = me.maxHp; sim.step();
+          if (t < 30 * 235 || t % 60 || w.phase !== 'live') continue;
+          const mine = w.entities.filter((e) => e.kind === 'minion' && e.alive && e.team === me.team);
+          const foes = w.entities.filter((e) => e.kind === 'minion' && e.alive && e.team !== me.team);
+          let best: { n: number; cx: number; cy: number; fx: number; fy: number } | null = null;
+          for (const m of mine) {
+            const c = mine.filter((o) => Math.hypot(o.x - m.x, o.y - m.y) < 5);
+            if (c.length < 10) continue;
+            const cx = c.reduce((a, o) => a + o.x, 0) / c.length, cy = c.reduce((a, o) => a + o.y, 0) / c.length;
+            const f = foes.filter((o) => Math.hypot(o.x - cx, o.y - cy) < 8);
+            if (f.length < 4) continue;
+            if (!best || c.length > best.n) best = { n: c.length, cx, cy, fx: f.reduce((a, o) => a + o.x, 0) / f.length, fy: f.reduce((a, o) => a + o.y, 0) / f.length };
+          }
+          if (!best) continue;
+          let ux = best.fx - best.cx, uy = best.fy - best.cy; const l = Math.hypot(ux, uy) || 1; ux /= l; uy /= l;
+          const hx = best.cx - ux * 4, hy = best.cy - uy * 4, gx = best.fx + ux * 3, gy = best.fy + uy * 3;
+          if (!nav.walkable(hx, hy) || !nav.walkable(gx, gy) || nav.componentAt(hx, hy) !== main || nav.componentAt(gx, gy) !== main || !nav.lineOfWalk(hx, hy, gx, gy, 0.225)) continue;
+          place(w, me, hx, hy); sim.step();
+          const x0 = me.x, y0 = me.y, straight = Math.hypot(gx - x0, gy - y0);
+          const lane = refPath(x0, y0, gx, gy, bodies(w, me, x0, y0, 20), me.radius, fines(w));
+          for (let q = 0; q < 300; q++) {
+            if (q === 0 || (hold && q % 15 === 0 && q < 240)) sim.command(0, { type: 'move', x: gx, y: gy });
+            me.hp = me.maxHp; sim.step();
+            if (q > 1 && me.order === ORDER_NONE && (!hold || q >= 240)) break;
+          }
+          k++; n++;
+          const dEnd = Math.hypot(me.x - gx, me.y - gy), crowd = crowdAt(w, me, gx, gy);
+          if (hold && dEnd > 2 && crowd === 0) { heldShort++; bad.push(`held ${who} t${t} ${f2(dEnd)} m short`); }
+          if (!hold && dEnd > 2 && crowd === 0 && lane <= straight * 1.3) { clickShortLane++; bad.push(`click ${who} t${t} ${f2(dEnd)} m short, lane ${f2(lane / straight)}×`); }
+        }
+      }
+    }
+    check(`${modeId.toUpperCase()} ${n} moves through packed lane fights: a held button never ends > 2 m short of an uncrowded point (${heldShort}), a click never where a lane ≤ 1.3 × existed (${clickShortLane})`,
+      n >= 6 && heldShort === 0 && clickShortLane === 0, bad);
+  }
+
+  // 3. deep wall clicks (verifier r4: more than SNAP_REACH 4 m from any open cell, the hero stopped 0.1–0.5 m on its
+  //    own side while an open point 1–2.5 m nearer the click was reachable at ≤ 1.15 ×)
+  if (has('tunlan')) {
+    const { sim, me } = fresh('bridge', 'tunlan', 1);
+    place(sim.world, me, 22.57, 15.87); sim.step();
+    for (let q = 0; q < 240; q++) { if (q === 0) sim.command(0, { type: 'move', x: 19.52, y: 8.46 }); sim.step(); if (q > 2 && me.order === ORDER_NONE) break; }
+    check('BRIDGE tunlan deep wall click (r4: stopped 7.62 m from the click; 3.90 m reachable at 1.11 ×): ends ≤ 4.9 m from it',
+      me.order === ORDER_NONE && Math.hypot(me.x - 19.52, me.y - 8.46) <= 4.9, [f2(me.x), f2(me.y), f2(Math.hypot(me.x - 19.52, me.y - 8.46))]);
+  }
+  {
+    // 120 deep clicks a map: the end is within 1 m of the best open point the walker's own planner reaches at ≤ 1.3 ×
+    // straight + 0.5 m without walking away from the click, nothing longer than 1.6 × net + 1 m, nothing walking away
+    for (const modeId of ['rift', 'bridge']) {
+      const { sim, me } = fresh(modeId, has('lisvel') ? 'lisvel' : fs[0], 1);
+      const w = sim.world, nav = w.nav;
+      const [W, H] = w.mapDef.size;
+      const main = nav.componentAt(me.x, me.y);
+      let s = 4242;
+      const rnd = (): number => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+      const t = { x: 0, y: 0 }, route: number[] = [];
+      let n = 0, far = 0, long = 0, away1 = 0, tries = 0;
+      const bad: string[] = [];
+      while (n < 120 && tries++ < 200000) {
+        const hx = 3 + rnd() * (W - 6), hy = 3 + rnd() * (H - 6);
+        if (!nav.walkable(hx, hy) || nav.componentAt(hx, hy) !== main) continue;
+        const a = rnd() * Math.PI * 2, d = 3 + rnd() * 9, cx = hx + Math.cos(a) * d, cy = hy + Math.sin(a) * d;
+        if (cx < 1 || cy < 1 || cx >= W - 1 || cy >= H - 1 || nav.walkable(cx, cy)) continue;
+        if (nav.nearestWalkable(cx, cy, t, 16) && Math.hypot(t.x - cx, t.y - cy) < 2) continue;   // deep: ≥ 2 m inside
+        if (w.entities.some((e) => e !== me && e.alive && !e.static && e.kind !== 'projectile' && e.kind !== 'zone' && Math.hypot(e.x - hx, e.y - hy) < 14)) continue;
+        place(w, me, hx, hy); sim.step();
+        const x0 = me.x, y0 = me.y, d0 = Math.hypot(x0 - cx, y0 - cy);
+        const tr = [{ x: x0, y: y0 }];
+        for (let q = 0; q < 300; q++) { if (q === 0) sim.command(0, { type: 'move', x: cx, y: cy }); me.hp = me.maxHp; sim.step(); tr.push({ x: me.x, y: me.y }); if (q > 2 && me.order === ORDER_NONE) break; }
+        n++;
+        const wk = walk(tr);
+        nav.raycast(x0, y0, cx, cy, t);
+        let ref = Math.hypot(t.x - cx, t.y - cy);
+        const c = nav.cell, R = Math.min(ref, 16);
+        const cells: [number, number, number][] = [];
+        for (let gy = Math.floor((cy - R) / c); gy <= Math.floor((cy + R) / c); gy++) for (let gx = Math.floor((cx - R) / c); gx <= Math.floor((cx + R) / c); gx++) {
+          const px = (gx + 0.5) * c, py = (gy + 0.5) * c, dd = Math.hypot(px - cx, py - cy);
+          if (dd < ref && nav.walkable(px, py) && nav.componentAt(px, py) === main) cells.push([dd, px, py]);
+        }
+        cells.sort((p, q) => p[0] - q[0]);
+        let tried = 0;
+        for (const [dd, px, py] of cells) {
+          if (tried++ > 40) continue;
+          if (!nav.findPath(x0, y0, px, py, route, me.radius)) continue;
+          let l = 0, qx = x0, qy = y0, aw = 0;
+          for (let i = 0; i < route.length; i += 2) {
+            for (const f of [0.5, 1]) { const ix = qx + (route[i] - qx) * f, iy = qy + (route[i + 1] - qy) * f; aw = Math.max(aw, Math.hypot(ix - cx, iy - cy) - d0); }
+            l += Math.hypot(route[i] - qx, route[i + 1] - qy); qx = route[i]; qy = route[i + 1];
+          }
+          if (Math.hypot(qx - px, qy - py) < 1e-3 && l <= Math.hypot(px - x0, py - y0) * 1.3 + 0.5 && aw <= 0.5) { ref = dd; break; }
+        }
+        const exc = Math.hypot(me.x - cx, me.y - cy) - ref;
+        let away = 0; for (const p of tr) away = Math.max(away, Math.hypot(p.x - cx, p.y - cy) - d0);
+        const tags: string[] = [];
+        if (exc > 1) { far++; tags.push(`far +${f2(exc)}`); }
+        if (wk.len > 1.6 * wk.net + 1) { long++; tags.push('long'); }
+        if (away > 1) { away1++; tags.push('away'); }
+        if (tags.length && bad.length < 6) bad.push(`${tags.join('+')} (${f2(x0)},${f2(y0)})→(${f2(cx)},${f2(cy)}) end (${f2(me.x)},${f2(me.y)}) walked ${f2(wk.len)} net ${f2(wk.net)}`);
+      }
+      check(`${modeId.toUpperCase()} ${n} deep wall clicks (≥ 2 m inside): 0 end > 1 m past the best reachable point (${far}), 0 paths > 1.6 × net + 1 m (${long}), 0 walk > 1 m away from the click (${away1})`,
+        n >= 100 && far === 0 && long === 0 && away1 === 0, bad);
+    }
+  }
+
+  // 4. hold-steer to a fixed cursor re-sent every 4 ticks (verifier r4: BRIDGE ulkro re-planned to a corner node behind
+  //    it, stepped back 0.18 m with 6 heading flips; 2 / 512 held snaps ended 0.3–0.4 m further than one click)
+  if (has('ulkro')) {
+    const end = (resend: boolean) => {
+      const { sim, me } = fresh('bridge', 'ulkro', 1);
+      place(sim.world, me, 136.31, 26.99); sim.step();
+      const d0 = Math.hypot(me.x - 133.53, me.y - 26.34);
+      let back = 0, minD = d0;
+      const tr = [{ x: me.x, y: me.y }];
+      for (let q = 0; q < 120; q++) {
+        if (q === 0 || (resend && q % 4 === 0)) sim.command(0, { type: 'move', x: 133.53, y: 26.34 });
+        me.hp = me.maxHp; sim.step(); tr.push({ x: me.x, y: me.y });
+        const dd = Math.hypot(me.x - 133.53, me.y - 26.34);
+        back = Math.max(back, dd - minD); minD = Math.min(minD, dd);
+      }
+      return { x: me.x, y: me.y, back, flips: walk(tr).flips };
+    };
+    const one = end(false), held = end(true);
+    check('BRIDGE ulkro hold-steer to a fixed point re-sent every 4 ticks: ends where one click does, no step back over 0.1 m, no heading flips',
+      Math.hypot(one.x - held.x, one.y - held.y) < 1e-6 && held.back <= 0.1 && held.flips === 0, { one, held });
+  }
+
+  // 5. hold-steer along a long wall face with the cursor pressing into it and sliding back past the hero (verifier r4:
+  //    ulkro "behind" stepped 0.50 m back off the face and left it by 1.02 m)
+  {
+    const { sim, me } = fresh('rift', has('ulkro') ? 'ulkro' : fs[0], 1);
+    const w = sim.world, nav = w.nav;
+    const [W, H] = w.mapDef.size;
+    const main = nav.componentAt(me.x, me.y);
+    let s = 99;
+    const rnd = (): number => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+    let n = 0, worstLeave = 0, tries = 0;
+    const bad: string[] = [];
+    while (n < 40 && tries++ < 400000) {
+      const hx = 3 + rnd() * (W - 6), hy = 3 + rnd() * (H - 6);
+      if (!nav.walkable(hx, hy) || nav.componentAt(hx, hy) !== main) continue;
+      const k = Math.floor(rnd() * 4), nx = [1, -1, 0, 0][k], ny = [0, 0, 1, -1][k];   // the face's normal (into the wall)
+      let hit = -1; for (let d = 0.05; d < 1.2; d += 0.05) if (!nav.walkable(hx + nx * d, hy + ny * d)) { hit = d; break; }
+      if (hit < 0) continue;
+      // a straight face 6 m each way: open 0.3 m off it, blocked 0.6 m into it
+      const tx = -ny, ty = nx;
+      let ok = true;
+      for (let u = -6; u <= 6 && ok; u += 0.25) {
+        if (!nav.walkable(hx + tx * u + nx * (hit - 0.3), hy + ty * u + ny * (hit - 0.3)) || nav.walkable(hx + tx * u + nx * (hit + 0.6), hy + ty * u + ny * (hit + 0.6))) ok = false;
+      }
+      if (!ok || w.entities.some((e) => e !== me && e.alive && !e.static && e.kind !== 'projectile' && e.kind !== 'zone' && Math.hypot(e.x - hx, e.y - hy) < 12)) continue;
+      const px = hx + nx * (hit - 0.3), py = hy + ny * (hit - 0.3);
+      place(w, me, px, py); sim.step();
+      const off0 = (me.x - px) * nx + (me.y - py) * ny;
+      let leave = 0;
+      for (let q = 0; q < 75; q++) {
+        // the cursor 0.6 m inside the face, starting 1 m ahead along it and sliding back past the hero at ~3.4 m/s
+        const along = 1 - q * 0.11;
+        if (q % 4 === 0) sim.command(0, { type: 'move', x: px + tx * along + nx * 0.9, y: py + ty * along + ny * 0.9 });
+        me.hp = me.maxHp; sim.step();
+        leave = Math.max(leave, off0 - ((me.x - px) * nx + (me.y - py) * ny));
+      }
+      n++;
+      worstLeave = Math.max(worstLeave, leave);
+      if (leave > 0.3 && bad.length < 5) bad.push(`(${f2(px)},${f2(py)}) normal (${nx},${ny}) left the face by ${f2(leave)} m`);
+    }
+    check(`RIFT ${n} hold-steers along a wall face, the cursor pressing into it and sliding back past the hero: never off the face by > 0.3 m (worst ${f2(worstLeave)})`,
+      n >= 30 && worstLeave <= 0.3, bad);
+  }
+}
+try { await live37(); } catch (err) { check(`ruling 37 section threw: ${(err as Error).stack ?? err}`, false); }
+
 finish('probe_sim_core_orders');

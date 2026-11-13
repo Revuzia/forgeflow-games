@@ -55,6 +55,8 @@ import { zoneBlocks } from './zones.ts';
 import { datan2, dcos, dsin } from './dmath.ts';
 import { collectDiscs, discsClear, laneDiscs, laneLen, planLane, RASTER_SLACK } from './bodypath.ts';
 
+/** a move that ended this close (m, |dx| + |dy|) to its snapped goal finished it: the same point re-sent is a no-op */
+const FINISHED_NEAR = 0.5;
 /** goal drift (m) that forces a new path */
 export const REPATH_DIST = 1;
 /** ticks between straight-line re-validation of a direct route */
@@ -76,11 +78,11 @@ const PINNED_PROGRESS = 0.03;
  *  them (ruling 37) */
 const LANE_LOOK = 3;
 /** a lane ends at most this far (m) along the route leg (the walk resumes the route there) */
-const LANE_REACH = 10;
+const LANE_REACH = 14;
 /** ticks between checks that the lane ahead is still clear (a body stepped into it: re-plan) */
 const LANE_RECHECK = 5;
 /** how far (m) ahead along the lane the check looks */
-const LANE_AHEAD = 4;
+const LANE_AHEAD = Number(process.env.LAHEAD ?? 4);
 /** ticks before a failed plan is retried (walk straight and shove meanwhile) */
 const LANE_RETRY = 10;
 /** a lane longer than LANE_DETOUR × the straight line + LANE_DETOUR_M, or leading more than LANE_AWAY m further from its
@@ -110,6 +112,14 @@ const tmp = { x: 0, y: 0 };
 export function issueMove(w: World, e: Entity, x: number, y: number, attackMove: boolean, prefer = -1): void {
   const m = w.mapDef.size;
   x = Math.max(0, Math.min(m[0] - 1e-3, x)); y = Math.max(0, Math.min(m[1] - 1e-3, y));
+  // the same move re-sent while it is still being walked (a held button re-sending its point, a hold-steer over a
+  // still cursor): a no-op, so the walker keeps its snapped goal, route and lane (ruling 37: re-snapping from mid-route
+  // re-planned to a corner node behind it and ended further from the click than a single click)
+  const same = Math.abs(e.orderReqX - x) + Math.abs(e.orderReqY - y) < 0.05;
+  if (same && e.order === (attackMove ? ORDER_ATTACK_MOVE : ORDER_MOVE) && (!attackMove || e.orderTarget === prefer)) return;
+  // … or once it finished there (standing at the point that request snapped to, within FINISHED_NEAR): re-snapping from
+  // the goal itself could only nudge it about. A walk that gave up short of it is not finished: re-sent, it tries again.
+  if (same && e.order === ORDER_NONE && prefer < 0 && Math.abs(e.x - e.orderX) + Math.abs(e.y - e.orderY) < FINISHED_NEAR) return;
   e.orderReqX = x; e.orderReqY = y;
   // the goal the order can actually finish at (never a point inside a wall the walker would slide against)
   if (w.nav.snapGoal(e.x, e.y, x, y, tmp, e.radius)) { x = tmp.x; y = tmp.y; }
@@ -473,8 +483,9 @@ function updateLane(w: World, e: Entity, aimX: number, aimY: number, gx: number,
   collectDiscs(w, e, Math.min(e.x, e.x + ux * L) - 4, Math.min(e.y, e.y + uy * L) - 4, Math.max(e.x, e.x + ux * L) + 4, Math.max(e.y, e.y + uy * L) + 4, ux, uy, gx, gy, ARRIVE_NEAR, e.laneAll);
   let s = L;
   const inDisc = (d: number): boolean => !discsClear(e.x + ux * d, e.y + uy * d, e.x + ux * d, e.y + uy * d, 0);
-  if (s < aD) { while (s < aD && s < L + 4 && inDisc(s)) s = Math.min(aD, s + 0.25); }
-  if (inDisc(s)) { s = L; while (s > look && inDisc(s)) s -= 0.25; }
+  // past the bodies: slide the end on along the leg off any body (never back toward the walker: a lane to a point short
+  // of the bodies would count as a way round when there is none)
+  while (s < aD && inDisc(s)) s = Math.min(aD, s + 0.25);
   const tx = e.x + ux * s, ty = e.y + uy * s;
   if (!inDisc(s) && planLane(w, e, tx, ty, r, e.lane) && laneFair(e, tx, ty)) {
     e.laneIdx = 0; e.laneAimX = aimX; e.laneAimY = aimY; e.laneCheck = LANE_RECHECK; e.lanePlanned = true;
@@ -487,20 +498,15 @@ function updateLane(w: World, e: Entity, aimX: number, aimY: number, gx: number,
 }
 
 /** a lane is taken only when it goes round, not back: at most LANE_DETOUR × the straight line + LANE_DETOUR_M long and
- *  never more than LANE_AWAY m further from its end than the walker starts (a pocket the bodies closed round it is
- *  shoved through instead, and the progress watchdog decides) */
+ *  never more than LANE_AWAY m behind the walker along its line to the lane's end (sidestepping a wave is fine; a lane
+ *  that backs out of a pocket the bodies closed round it is not: that walker shoves, and the progress watchdog decides) */
 function laneFair(e: Entity, tx: number, ty: number): boolean {
   const d0 = Math.sqrt((tx - e.x) * (tx - e.x) + (ty - e.y) * (ty - e.y));
+  if (d0 < 1e-6) return true;
   if (laneLen(e.x, e.y, e.lane, 0) > d0 * LANE_DETOUR + LANE_DETOUR_M) return false;
-  let px = e.x, py = e.y;
-  const lim = (d0 + LANE_AWAY) * (d0 + LANE_AWAY);
+  const ux = (tx - e.x) / d0, uy = (ty - e.y) / d0;
   for (let i = 0; i + 1 < e.lane.length; i += 2) {
-    const qx = e.lane[i], qy = e.lane[i + 1];
-    for (const f of [0.5, 1]) {
-      const x = px + (qx - px) * f, y = py + (qy - py) * f;
-      if ((x - tx) * (x - tx) + (y - ty) * (y - ty) > lim) return false;
-    }
-    px = qx; py = qy;
+    if ((e.lane[i] - e.x) * ux + (e.lane[i + 1] - e.y) * uy < -LANE_AWAY) return false;
   }
   return true;
 }

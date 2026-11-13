@@ -29,7 +29,7 @@ const SHORT_QUERY = 16;
 /** snapGoal (ruling 36): a candidate must be this much (m) nearer the click than the straight walk's stop point */
 const SNAP_MARGIN = 0.25;
 /** … and within this (m) of the click */
-const SNAP_REACH = 4;
+const SNAP_REACH = 16;
 /** … and its route at most SNAP_DETOUR × straight + SNAP_DETOUR_M long (never walk away from the click) */
 const SNAP_DETOUR = 1.3;
 const SNAP_DETOUR_M = 0.5;
@@ -41,7 +41,7 @@ const SNAP_AWAY = 0.5;
 /** route confirmations per snap (the flood prices the rest; candidates in straight line of walk cost one march) */
 const SNAP_SEARCHES = 6;
 /** candidates further (m) than this from the walker are only taken in straight line of walk (bounds the flood) */
-const SNAP_FLOOD_D = 12;
+const SNAP_FLOOD_D = 24;
 /** does the polyline from (sx, sy) through out[] stay within `R` m of (cx, cy)? (vertices and segment midpoints) */
 function routeNear(sx: number, sy: number, out: readonly number[], cx: number, cy: number, R: number): boolean {
   const R2 = R * R;
@@ -466,12 +466,15 @@ export class NavGrid {
         if (D <= SNAP_FLOOD_D && D > far) far = D;
       }
       const cost = this.snapCost; cost.length = 0;
-      this.flood(sx, sy, far * SNAP_DETOUR + SNAP_DETOUR_M + c);
+      const d0 = Math.sqrt((sx - x) * (sx - x) + (sy - y) * (sy - y));
+      // the flood never leaves the disc round the click the walker starts on (+ SNAP_AWAY): a candidate it prices is
+      // reached without walking away from the click; it runs out to the longest bound any candidate may use (octile
+      // steps run up to ~8 % over the string-pulled walk), so a candidate it leaves unpriced is out of reach
+      this.flood(sx, sy, (far * SNAP_FAR + SNAP_FAR_M) * 1.09 + c, x, y, d0 + SNAP_AWAY);
       for (let k = 0; k < cand.length; k++) cost.push(this.closedGen[cand[k]] === this.gen ? this.g[cand[k]] * c : Infinity);
       let searches = 0;
       const route = this.snapRoute;
       const slack = c * 0.75;   // the walker's offset from its cell centre, start and end
-      const d0 = Math.sqrt((sx - x) * (sx - x) + (sy - y) * (sy - y));
       for (let k = 0; k < cand.length; k++) {
         const i = cand[k];
         const px = ((i % this.w) + 0.5) * c, py = (Math.floor(i / this.w) + 0.5) * c;
@@ -483,7 +486,7 @@ export class NavGrid {
         // otherwise the walker's own route decides: within the bound, or (a longer way round, e.g. a distant point
         // in a pit) one that never takes the walker further from the click than it starts
         const capFar = D * SNAP_FAR + SNAP_FAR_M;
-        if (g < Infinity && g > capFar * 1.09 + slack) continue;   // priced by the flood: clearly too long
+        if (g > capFar * 1.09 + slack && D <= SNAP_FLOOD_D) continue;   // the flood priced it too long, or never reached it
         if (searches >= SNAP_SEARCHES) continue;
         searches++;
         route.length = 0;
@@ -491,7 +494,7 @@ export class NavGrid {
         const ex = route[route.length - 2], ey = route[route.length - 1];
         if (Math.abs(ex - px) + Math.abs(ey - py) > 1e-6) continue;
         const L = polyLen(sx, sy, route, 0);
-        if (L > capFar || (L > cap && !routeNear(sx, sy, route, x, y, d0 + SNAP_AWAY))) continue;
+        if (L > capFar || !routeNear(sx, sy, route, x, y, d0 + SNAP_AWAY)) continue;
         gx = px; gy = py;
         break;
       }
@@ -504,11 +507,12 @@ export class NavGrid {
   private snapRoute: number[] = [];
   /** grid Dijkstra from (sx, sy) out to `maxCost` m (octile steps, no corner cutting); leaves cost/cell in g, marked
    *  by closedGen === gen */
-  private flood(sx: number, sy: number, maxCost: number): void {
+  private flood(sx: number, sy: number, maxCost: number, cx = 0, cy = 0, keepR = Infinity): void {
     if (++this.gen >= 0xfffffff0) { this.gen = 1; this.openGen.fill(0); this.closedGen.fill(0); }
     const gen = this.gen, w = this.w, hh = this.h, G = this.g, OG = this.openGen, CG = this.closedGen, B = this.blocked;
     const start = Math.floor(sy / this.cell) * w + Math.floor(sx / this.cell);
     const lim = maxCost / this.cell;
+    const keepR2 = keepR * keepR;
     this.heapSize = 0;
     G[start] = 0; OG[start] = gen;
     this.heapPush(start, 0);
@@ -526,6 +530,7 @@ export class NavGrid {
         if (ddx !== 0 && ddy !== 0) { if (B[ny * w + mx] || B[my * w + nx]) continue; step = SQRT2; }
         const ng = gn + step;
         if (ng > lim) continue;
+        if (keepR < Infinity) { const px = (mx + 0.5) * this.cell - cx, py = (my + 0.5) * this.cell - cy; if (px * px + py * py > keepR2) continue; }
         if (OG[m] !== gen || ng < G[m]) { G[m] = ng; OG[m] = gen; this.heapPush(m, ng); }
       }
     }

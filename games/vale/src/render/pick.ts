@@ -6,10 +6,16 @@
 // at the camera's pitch), and down to the front edge of its selection ring (radius + 0.22 m). The box follows
 // the body as drawn: its centre line is the projected feet → head segment, which perspective leans off the
 // vertical away from the screen centre (ruling 36: a tall fighter's head is up to ~20 px off its feet column, so
-// a box centred on the feet x let a short minion behind it take a click on that head). Overlapping boxes go to
-// the box whose body axis is nearest the cursor; an exact tie goes to the unit nearer the camera, then the lower id. `filter` drops units before they compete (an enemies-only pick never
-// returns you or an ally standing in front of the enemy); `slop` (px) accepts a near miss: with no box under
-// the cursor, the box whose edge is nearest within `slop` wins.
+// a box centred on the feet x let a short minion behind it take a click on that head).
+// A click on a unit's drawn body (half its collision radius either side of that axis, about its shoulders, from the
+// head down to the feet) goes to the front-most such body, as a rendered pick would: the unit nearer the camera
+// covers what stands behind it (ruling 37: a minion touching a fighter 15-45° behind it took clicks on the fighter's
+// shoulders and head).
+// Bodies side by side (feet within FRONT_PX on screen), and clicks off every body but inside boxes, go to the box
+// whose body axis is nearest the cursor; an exact tie goes to the unit nearer the camera, then the lower id.
+// `filter` drops units before they compete (an enemies-only pick never returns you or an ally standing in front of
+// the enemy); `slop` (px) accepts a near miss: with no box under the cursor, the box whose edge is nearest within
+// `slop` wins.
 
 import { type Camera, Vector3 } from 'three';
 import type { EntityId, EntityView } from '../contracts/sim.ts';
@@ -20,12 +26,17 @@ export interface PickOptions { filter?: (v: EntityView) => boolean; slop?: numbe
 export interface Pickable { id: EntityId; x: number; y: number; h: number; artHeight: number; view: EntityView }
 
 const _p = new Vector3();
+/** the drawn body's half-width as a share of the collision radius (shoulders: a body is narrower than its circle) */
+const BODY_W = 0.5;
+/** feet this many px lower on screen = in front (nearer the camera); within it, two bodies stand side by side */
+const FRONT_PX = 3;
 
 export function pickUnit(cam: Camera, cssW: number, cssH: number, units: Iterable<Pickable>, x: number, y: number, opts?: PickOptions): EntityId | null {
   const filter = opts?.filter, slop = Math.max(0, opts?.slop ?? 0);
   const sx = (): number => (_p.x * 0.5 + 0.5) * cssW;
   const sy = (): number => (-_p.y * 0.5 + 0.5) * cssH;
   let best: EntityId | null = null, bestScore = Infinity, bestFy = -Infinity;
+  let front: EntityId | null = null, frontScore = Infinity, frontFy = -Infinity;
   let near: EntityId | null = null, nearGap = Infinity, nearFy = -Infinity;
   for (const a of units) {
     const v = a.view;
@@ -39,6 +50,8 @@ export function pickUnit(cam: Camera, cssW: number, cssH: number, units: Iterabl
     const rr = v.radius + 0.15, ring = v.radius + 0.22;
     _p.set(a.x + rr, a.h, a.y).project(cam);
     const rx = Math.max(16, Math.abs(sx() - fx));
+    _p.set(a.x + v.radius * BODY_W, a.h, a.y).project(cam);
+    const bodyX = Math.abs(sx() - fx);
     _p.set(a.x, a.h, a.y + ring).project(cam);
     const f1 = sy();
     _p.set(a.x, a.h, a.y - ring).project(cam);
@@ -57,6 +70,13 @@ export function pickUnit(cam: Camera, cssW: number, cssH: number, units: Iterabl
       if (score < bestScore - 1e-6 || (Math.abs(score - bestScore) <= 1e-6 && (fy > bestFy || (fy === bestFy && best !== null && a.id < best)))) {
         bestScore = score; best = a.id; bestFy = fy;
       }
+      // on the drawn body itself: the body nearest the camera covers the ones behind it
+      if (dx <= bodyX && y >= hy - 4 && y <= fy) {
+        const ahead = fy > frontFy + FRONT_PX, level = Math.abs(fy - frontFy) <= FRONT_PX;
+        if (ahead || (level && (score < frontScore - 1e-6 || (Math.abs(score - frontScore) <= 1e-6 && front !== null && a.id < front)))) {
+          front = a.id; frontScore = score; frontFy = fy;
+        }
+      }
     } else if (slop > 0 && best === null) {
       const gap = Math.hypot(outX, outY);
       if (gap <= slop && (gap < nearGap - 1e-6 || (Math.abs(gap - nearGap) <= 1e-6 && (fy > nearFy || (fy === nearFy && near !== null && a.id < near))))) {
@@ -64,5 +84,5 @@ export function pickUnit(cam: Camera, cssW: number, cssH: number, units: Iterabl
       }
     }
   }
-  return best ?? near;
+  return front ?? best ?? near;
 }

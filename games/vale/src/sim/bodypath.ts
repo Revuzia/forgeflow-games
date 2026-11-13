@@ -7,14 +7,14 @@
 // (checked a few times a second), never per tick, so it cannot dither between sides. Pure and deterministic: typed
 // scratch arrays allocated once, ties broken by cell index.
 
-import type { Entity } from './entity.ts';
+import { ORDER_ATTACK_MOVE, ORDER_MOVE, type Entity } from './entity.ts';
 import { segPointDist2 } from './math.ts';
 import type { World } from './world.ts';
 
 /** lane grid cell (m) */
 export const LANE_CELL = 0.25;
 /** margin (m) kept between the walker's body and a body it passes */
-const LANE_MARGIN = 0.05;
+const LANE_MARGIN = Number(process.env.LMARGIN ?? -0.1);
 /** discs are rasterised this much (m) smaller than they are (half a cell), and pulled lanes may graze them by it */
 export const RASTER_SLACK = LANE_CELL * 0.5;
 /** the planning box: the walker and the lane's end, padded this much (m) on every side (room to go round a wave) */
@@ -75,7 +75,14 @@ export function inTheWay(e: Entity, o: Entity, ux: number, uy: number, all: bool
   if (all) return true;
   const spd = e.stats.moveSpeed;
   const v2 = o.vx * o.vx + o.vy * o.vy;
-  if (v2 < (0.3 * spd) * (0.3 * spd)) return true;           // standing (or barely moving)
+  if (v2 < (0.3 * spd) * (0.3 * spd)) {
+    // standing — unless it was just ordered to walk the same way (no route yet: its first step not taken)
+    if ((o.order === ORDER_MOVE || o.order === ORDER_ATTACK_MOVE) && Number.isNaN(o.pathGoalX)) {
+      const gx = o.orderX - o.x, gy = o.orderY - o.y, gl = Math.sqrt(gx * gx + gy * gy);
+      if (gl > 1 && (gx * ux + gy * uy) > 0.7 * gl && o.stats.moveSpeed >= 0.75 * spd) return false;
+    }
+    return true;
+  }
   return o.vx * ux + o.vy * uy < -0.3 * spd;                   // oncoming
 }
 
