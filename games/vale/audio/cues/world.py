@@ -18,8 +18,14 @@ Vale's own fiction (_design/WORLD.md):
 Every layer is periodic in the loop's length (frequency-domain noise, circular filtering, modulations with
 whole cycles, scattered events wrapped across the seam), so each file loops sample-exactly (build.py encodes
 loops seamlessly and QA's the seam). Positional emitters are mono (the engine pans them toward their points);
-the beds are wide stereo that sums to mono without combing. Asset loudness (gated integrated): beds -23 LUFS
-(the music beds' level), positional emitters -25; content/audio.json sets the cue gains.
+the beds are wide stereo that sums to mono without combing. Asset loudness (gated integrated): beds BED_LUFS
+(-33: 10 LU under the music beds' -23, ruling 34), positional emitters -25; content/audio.json sets the cue gains.
+
+The beds' standard (ruling 34, the owner's "odd sound, almost like heavy wind blowing"): a map's bed is felt more than
+heard, about 10 dB under the match music as played and far under combat; band-limited (nothing much above 3 kHz, where
+the score leaves the band empty and a bed's hiss is heard as wind); slowly evolving with no periodic swell (a 24 s
+loop whose drift() moves the level by at most BED_SWELL_DB peak to peak, over several coprime cycles, its seam
+nowhere special). Wind gusts are rare, short, quiet accents (m_gorge_gust), never the bed's own shape.
 """
 from __future__ import annotations
 
@@ -38,6 +44,9 @@ from synth.core import SR, TAU, add_at, hz, ns
 from .kit import R, bubble, norm
 
 LOOPK = dict(loop=True, max_gr_db=6.0)
+BED_LUFS = -33.0             # the beds' asset loudness (ruling 34; audio/build.py BED_* gates hold it)
+BED_SWELL_DB = 4.0           # the most a bed's level drifts over its loop, peak to peak
+BED_S = 24.0                 # the wind beds' loop
 SEAM_GUARD_S = 0.03
 
 
@@ -46,14 +55,28 @@ def win(d: float) -> tuple[float, float]:
 
 
 # ── periodic building blocks ─────────────────────────────────────────────────────────────────────
-def wobble(n: int, r: np.random.Generator, cycles=(1, 2, 3, 5), depth: float = 0.5) -> np.ndarray:
-    """A smooth, periodic random envelope in [1 - depth, 1 + depth]: a few sines with whole cycles per loop."""
+def wobble(n: int, r: np.random.Generator, cycles=(1, 2, 3, 5), depth: float = 0.5, seam_lull: bool = True) -> np.ndarray:
+    """A smooth, periodic random envelope in [1 - depth, 1 + depth]: a few sines with whole cycles per loop (the seam
+    in its lull unless seam_lull is False: many layers each lulling at the seam make the whole loop dip there)."""
     t = np.arange(n) / n
     y = np.zeros(n)
     for c in cycles:
         y += r.uniform(0.4, 1.0) / math.sqrt(c) * np.sin(TAU * c * t + r.uniform(0, TAU))
     y /= np.max(np.abs(y)) + 1e-12
+    if not seam_lull:
+        return 1.0 + depth * y
     return np.roll(1.0 + depth * y, -int(np.argmin(y)))      # the loop's seam sits in a lull
+
+
+def drift(n: int, r: np.random.Generator, cycles=(2, 3, 5, 7), pp_db: float = 3.0) -> np.ndarray:
+    """A slow, periodic level drift (linear gain) whose peak-to-peak is pp_db: a few sines with whole, coprime cycles
+    per loop and random phases, so no single cycle stands out and the seam sits wherever it falls (not in a lull)."""
+    t = np.arange(n) / n
+    y = np.zeros(n)
+    for c in cycles:
+        y += r.uniform(0.6, 1.0) / math.sqrt(c) * np.sin(TAU * c * t + r.uniform(0, TAU))
+    y = (y - y.min()) / (np.ptp(y) + 1e-12) - 0.5                      # [-0.5, 0.5]
+    return 10.0 ** (pp_db * y / 20.0)
 
 
 def at_frames(env: np.ndarray, t: np.ndarray) -> np.ndarray:
@@ -120,20 +143,20 @@ def loop_out(x: np.ndarray, hp_hz: float = 30.0, lp_hz: float | None = None) -> 
 
 
 # ── RIFT ─────────────────────────────────────────────────────────────────────────────────────────
-@cue('amb_rift_air', 'loop', ('int', -23.0), win(12.0), **LOOPK)
+@cue('amb_rift_air', 'loop', ('int', BED_LUFS), win(BED_S), **LOOPK)
 def amb_rift_air(v: int):
-    """The valley breeze over the hour-lines: a warm low wind rising and settling in slow gusts, a faint airy
-    top that follows them, wide and soft. No tone (the score owns the key)."""
+    """The valley breeze over the hour-lines: a warm, low, steady breath of air drifting slowly (never a gust), a
+    faint soft top band-limited under 3 kHz, wide and quiet. No tone (the score owns the key). Ruling 34."""
     r = R('amb_rift_air', v=v)
-    D = 12.0
-    n = ns(D)
-    gust = wobble(n, r, (1, 2, 3, 5), 0.55)
-    low = band_noise(n, r, 260.0 * gust ** 1.2, 0.7, slope=-4.5, ch=2)
-    air = band_noise(n, r, 2400.0 * gust ** 0.6, 0.9, slope=-2.0, ch=2)
-    g2 = gust ** 2
-    m = 0.5 * (low[0] + low[1]) * g2 + 0.18 * 0.5 * (air[0] + air[1]) * g2 ** 1.5
-    s = 0.5 * (low[0] - low[1]) * g2 + 0.18 * 0.5 * (air[0] - air[1]) * g2 ** 1.5
-    return loop_out(wide(m, s, 0.8), hp_hz=40, lp_hz=7000)
+    n = ns(BED_S)
+    lvl = drift(n, r, (2, 3, 5, 7), 3.0)
+    low = band_noise(n, r, 240.0 * drift(n, r, (3, 4, 7), 1.5), 0.7, slope=-4.5, ch=2)
+    air = band_noise(n, r, 1300.0 * drift(n, r, (2, 5, 9), 1.5), 0.9, slope=-3.0, ch=2)
+    air = F.apply(air, [F.lowpass(2400, 0.7071)], circular=True)
+    aenv = drift(n, r, (3, 5, 8), 3.0)
+    m = 0.5 * (low[0] + low[1]) * lvl + 0.07 * 0.5 * (air[0] + air[1]) * aenv
+    s = 0.5 * (low[0] - low[1]) * lvl + 0.07 * 0.5 * (air[0] - air[1]) * aenv
+    return loop_out(wide(m, s, 0.8), hp_hz=40, lp_hz=3000)
 
 
 @cue('amb_rift_canopy', 'loop', ('int', -25.0), win(8.0), **LOOPK)
@@ -204,38 +227,36 @@ def amb_rift_insects(v: int):
 
 
 # ── BRIDGE ───────────────────────────────────────────────────────────────────────────────────────
-@cue('amb_bridge_air', 'loop', ('int', -23.0), win(12.0), **LOOPK)
+@cue('amb_bridge_air', 'loop', ('int', BED_LUFS), win(BED_S), **LOOPK)
 def amb_bridge_air(v: int):
-    """High wind over Needlespan: a broad, exposed rush in long gusts, a thin whistle off the shaft's carved
-    edge that bends with them, and the gorge's low breath far underneath. Wide."""
+    """High wind over Needlespan, held soft: a broad, steady rush of exposed air that drifts a little more than the
+    valley's (still no gust), a thin whistle off the shaft's carved edge kept low and constant (it bends slowly, it
+    never swells), and the gorge's low breath far underneath. Wide, band-limited under 3.5 kHz. Ruling 34."""
     r = R('amb_bridge_air', v=v)
-    D = 12.0
-    n = ns(D)
-    gust = wobble(n, r, (1, 2, 3, 4), 0.6)
-    rush = band_noise(n, r, 520.0 * gust ** 1.1, 0.7, slope=-3.5, ch=2)
-    whistle = band_noise(n, r, 780.0 * gust ** 0.35, 14.0, slope=-1.0, order=4)
+    n = ns(BED_S)
+    lvl = drift(n, r, (2, 3, 5, 7, 11), BED_SWELL_DB)
+    rush = band_noise(n, r, 480.0 * drift(n, r, (3, 4, 7), 2.0), 0.7, slope=-3.5, ch=2)
+    whistle = band_noise(n, r, 760.0 * drift(n, r, (2, 5), 0.6), 14.0, slope=-1.0, order=4)
     low = band_noise(n, r, np.full(n, 70.0), 0.8, slope=-6.0, ch=2)
-    g2 = gust ** 2
-    wg = np.clip(gust - 1.0, 0, None) ** 1.5
-    m = 0.5 * (rush[0] + rush[1]) * g2 + 0.5 * norm(whistle) * np.max(np.abs(rush)) * wg + 0.8 * 0.5 * (low[0] + low[1])
-    s = 0.5 * (rush[0] - rush[1]) * g2 + 0.8 * 0.5 * (low[0] - low[1])
-    return loop_out(wide(m, s, 0.85), hp_hz=30, lp_hz=6500)
+    wl = 0.06 * np.max(np.abs(rush)) * drift(n, r, (3, 7), 2.0)
+    m = 0.5 * (rush[0] + rush[1]) * lvl + norm(whistle) * wl + 0.8 * 0.5 * (low[0] + low[1])
+    s = 0.5 * (rush[0] - rush[1]) * lvl + 0.8 * 0.5 * (low[0] - low[1])
+    return loop_out(wide(m, s, 0.85), hp_hz=30, lp_hz=3500)
 
 
 @cue('amb_bridge_updraft', 'loop', ('int', -25.0), win(8.0), **LOOPK)
 def amb_bridge_updraft(v: int):
-    """The gorge breathing up past the deck's edge: two long rising rushes per loop (the band climbs as each
-    one swells) over a steady low pull of air."""
+    """The gorge breathing up past the deck's edge: two slow, shallow rises per loop (the band lifts a little as each
+    one swells, about 5 dB) over a steady low pull of air. Heard only near the deck's edges (engine AMB_RANGE)."""
     r = R('amb_bridge_updraft', v=v)
     D = 8.0
     n = ns(D)
     t = np.arange(n) / n
-    ph = (2 * t + 0.08 * np.sin(TAU * t)) % 1.0                       # two rises, a little uneven
-    rise = np.sin(np.pi * ph) ** 2                                     # each rise swells and settles
-    centre = 300.0 * (5.0 ** (ph ** 1.4)) * (0.6 + 0.4 * rise) + 150.0
-    body = band_noise(n, r, centre, 0.9, slope=-3.0) * (0.06 + rise)
-    pull = band_noise(n, r, np.full(n, 160.0), 0.8, slope=-5.0) * wobble(n, r, (1, 3), 0.3)
-    return loop_out(norm(body) + 0.5 * norm(pull), hp_hz=45, lp_hz=6000)
+    rise = 0.5 - 0.5 * np.cos(TAU * 2 * t + 0.5 * np.sin(TAU * t))     # two rises, a little uneven, smooth
+    centre = 320.0 + 380.0 * rise
+    body = band_noise(n, r, centre, 0.9, slope=-3.5) * (0.55 + 0.45 * rise)
+    pull = band_noise(n, r, np.full(n, 160.0), 0.8, slope=-5.0) * drift(n, r, (1, 3), 1.5)
+    return loop_out(norm(body) + 0.6 * norm(pull), hp_hz=45, lp_hz=3500)
 
 
 @cue('amb_bridge_creak', 'loop', ('int', -25.0), win(10.0), **LOOPK)
@@ -272,7 +293,7 @@ def amb_bridge_creak(v: int):
 
 
 # ── FRAY ─────────────────────────────────────────────────────────────────────────────────────────
-@cue('amb_fray_murmur', 'loop', ('int', -23.0), win(12.0), **LOOPK)
+@cue('amb_fray_murmur', 'loop', ('int', BED_LUFS), win(12.0), **LOOPK)
 def amb_fray_murmur(v: int):
     """The Shadowless Noon fair beyond the rim: a warm, far crowd (many soft voices made of noise through
     shifting vowel bands, never words), small stall bells now and then, carried on a light breeze. Wide,
@@ -290,7 +311,7 @@ def amb_fray_murmur(v: int):
         cyc = max(1, round(syl * D))                                   # whole syllable cycles per loop
         ph = r.uniform(0, TAU)
         sylenv = np.clip(np.sin(TAU * cyc * t / D + ph + 0.6 * np.sin(TAU * t / D * max(1, round(cyc / 7)))), 0, None) ** 1.5
-        talk = np.clip(wobble(n, r, (1, 2, 3), 0.9) - 0.6, 0, None)   # each voice talks, then listens
+        talk = np.clip(wobble(n, r, (1, 2, 3), 0.6, seam_lull=False) - 0.25, 0, None)  # each voice talks, then listens (softly: ruling 34)
         f1 = 500.0 * (1 + 0.35 * np.sin(TAU * max(1, round(cyc / 2)) * t / D + r.uniform(0, TAU)))
         f2 = 1500.0 * (1 + 0.3 * np.sin(TAU * max(1, round(cyc / 3)) * t / D + r.uniform(0, TAU)))
 
@@ -309,8 +330,8 @@ def amb_fray_murmur(v: int):
         note = r.choice(['D6', 'A5', 'F6', 'E6', 'G6'])
         b = I.dawnglass(hz(note), 1.2, 0.6, seed=f'fair{r.integers(0, 99)}', decay_scale=0.5)
         add_at(bells, norm(b[0]) * r.uniform(0.3, 0.7), onset(r, n), wrap=True)
-    breeze = band_noise(n, r, 500.0 * wobble(n, r, (1, 2), 0.4), 0.7, slope=-4.0)
-    m = norm(crowd_m) + 0.12 * norm(bells) + 0.25 * norm(breeze)
+    breeze = band_noise(n, r, 450.0 * drift(n, r, (2, 3), 1.0), 0.7, slope=-4.5) * drift(n, r, (1, 2, 3), 2.0)
+    m = norm(crowd_m) + 0.12 * norm(bells) + 0.08 * norm(breeze)
     s = norm(crowd_s) * 0.7
     return loop_out(wide(m, s, 0.7), hp_hz=80, lp_hz=5000)
 

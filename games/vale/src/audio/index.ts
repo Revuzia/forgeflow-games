@@ -197,7 +197,9 @@
 //               any move of the art. <source> 'bed' is the map-wide bed (not spatial). One voice per emitter,
 //               started at a random point of its loop when the match attaches, faded out when it detaches;
 //               the whole bus is ducked up to AMB_DUCK_DB under a FIGHT (fighter-vs-fighter damage near the
-//               listener or your living fighter; a wave being cleared does not duck the world)
+//               listener or your living fighter; a wave being cleared does not duck the world), and comes back
+//               over AMB_RELEASE_S; the positional emitters (not the bed) take AMB_CALM_LIFT_DB away from a fight.
+//               The bed is the map's floor, felt more than heard: about 10 dB under the match music (ruling 34)
 //   world       the world's own moments, each an engine role content binds (unbound: silent, as before): a
 //               structure's shield (the Dawn Seal setting again on its beat) plays 'shieldStructure' at it, else
 //               'shield'; when a mode's Dawn Seal ends (rules.dawnSeal.until) 'sealBreak' sounds at every standing
@@ -508,12 +510,17 @@ const T3_STATUS = new Set(['stun', 'root', 'slow', 'silence', 'disarm', 'airborn
 const T3_OPS = new Set(['displace', 'dash', 'blink', 'zone']);
 const AMB_INNER_M = 10;      // an ambience emitter's point is at full level within this of the listener …
 const AMB_HEAR_M = 32;       // … and silent past this
-const AMB_CALM_LIFT_DB = 3;  // the emitters away from a fight (below AMB_DUCK_FROM): a quiet seat's floor is the world's; a seat that hardly meets
-                             // a fight read 0.3 LU under the mix's band with the world at 0 dB, and a loud one barely gains (closing r3;
-                             // 2 -> 3 in max2 SFX-1b: a jungle seat read -19.3 / -20.2 LUFS, a brawling one -16.7 on one build) …
+// … except a cue heard only near its points (ruling 34): the BRIDGE updraft's 12 points along the deck edges kept it in
+// earshot in 100 % of a match at 32 m (a second, always-on wind loop over the bed); at 15 m it is the deck edges' own
+const AMB_RANGE: Record<string, [number, number]> = { amb_bridge_updraft: [5, 15] };
 const AMB_DUCK_DB = 6;       // … the ambience bus under a fight: full duck at fight heat AMB_DUCK_FULL …
 const AMB_DUCK_FROM = 0.2;   // … none below this (a lone poke); the heat counts fighter-vs-fighter damage only
 const AMB_DUCK_FULL = 0.6;
+const AMB_RELEASE_S = 3.5;   // the duck's and lift's return after a fight (time constant): the world fades back in, never surges
+// AMB_CALM_LIFT_DB: the POSITIONAL emitters away from a fight (below AMB_DUCK_FROM); the bed takes no lift (ruling 34: the
+// lift on the bed put the map's wind 5-7 LU over the match music). A quiet seat's floor is the world's (closing r3; 2 -> 3
+// in max2 SFX-1b: a jungle seat read -19.3 / -20.2 LUFS, a brawling one -16.7 on one build)
+const AMB_CALM_LIFT_DB = 3;
 // (max2 SFX-1b) mix density: the sfx bus eases FIGHT_SFX_DB at the same fight heat (the threat path, what lands on YOU,
 // is not eased): a brawling seat's sum of every kit ran 2.4 LU over a jungle seat's (-16.7 / -18.3 LUFS, one build),
 // against the master's 3 LU token band; eased, both seats sit inside it with the calm lift above
@@ -713,6 +720,8 @@ class Engine implements ValeAudioPort {
   /** the attached match's map while its emitters wait for the context */
   private ambMap: string | null = null;
   private ambDuck: GainNode | null = null;
+  /** the positional emitters' calm lift (AMB_CALM_LIFT_DB), into ambDuck; the bed joins ambDuck directly */
+  private ambLift: GainNode | null = null;
   /** FIGHT_SFX_DB: the sfx bus under a fight, between the bus and its voice duck */
   private sfxHeat: GainNode | null = null;
   /** the clock watch (see `release` in the header): the last baseline (wall s, ctx s) and whether the clock stands */
@@ -882,6 +891,9 @@ class Engine implements ValeAudioPort {
     // the ambience emitters' combat duck, into the ambience bus
     this.ambDuck = ctx.createGain();
     this.ambDuck.connect(this.bus.get('ambience')!);
+    this.ambLift = ctx.createGain();
+    this.ambLift.gain.value = Math.pow(10, AMB_CALM_LIFT_DB / 20);
+    this.ambLift.connect(this.ambDuck);
     this.applyVolumes();
     // preload the UI set (they must answer the first click)
     for (const c of Object.values(this.cues)) if (c.bus === 'ui') for (const f of c.files) if (!this.callFiles.has(f)) void this.buffer(f);
@@ -2261,7 +2273,7 @@ class Engine implements ValeAudioPort {
     const gain = ctx.createGain(); gain.gain.value = 0;
     const pan = ctx.createStereoPanner();
     const lpf = ctx.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 20000; lpf.Q.value = 0.7071;
-    lpf.connect(pan).connect(gain).connect(this.ambDuck!);
+    lpf.connect(pan).connect(gain).connect(pts.length ? this.ambLift! : this.ambDuck!);
     return { role, cue, def, pts, src: null, gain, pan, lpf, att: 0, panV: 0, lpfV: 0, started: false };
   }
 
@@ -2325,31 +2337,33 @@ class Engine implements ValeAudioPort {
           if (this.log.length < 400) this.log.push(em.cue);
         });
       }
-      const pl = em.pts.length ? this.ambPlace(em.pts) : { att: 1, pan: 0, lpf: 0 };
+      const pl = em.pts.length ? this.ambPlace(em.pts, AMB_RANGE[em.cue]) : { att: 1, pan: 0, lpf: 0 };
       em.att = pl.att; em.panV = pl.pan; em.lpfV = pl.lpf;
       em.gain.gain.setTargetAtTime(em.def.gain * pl.att, t, em.src ? 0.35 : AMB_FADE_S / 3);
       em.pan.pan.setTargetAtTime(pl.pan, t, 0.35);
       em.lpf.frequency.setTargetAtTime(pl.lpf || 20000, t, 0.35);
     }
     const k = Math.max(0, Math.min(1, (this.fight - AMB_DUCK_FROM) / (AMB_DUCK_FULL - AMB_DUCK_FROM)));
-    if (this.ambDuck) this.ambDuck.gain.setTargetAtTime(Math.pow(10, (AMB_CALM_LIFT_DB - (AMB_CALM_LIFT_DB + AMB_DUCK_DB) * k) / 20), t, k > 0 ? 0.4 : 1.5);
+    if (this.ambDuck) this.ambDuck.gain.setTargetAtTime(Math.pow(10, -AMB_DUCK_DB * k / 20), t, k > 0 ? 0.4 : AMB_RELEASE_S);
+    if (this.ambLift) this.ambLift.gain.setTargetAtTime(Math.pow(10, AMB_CALM_LIFT_DB * (1 - k) / 20), t, k > 0 ? 0.4 : AMB_RELEASE_S);
     this.sfxHeat?.gain.setTargetAtTime(Math.pow(10, -FIGHT_SFX_DB * k / 20), t, k > 0 ? 0.4 : 1.5);
   }
 
   /** an emitter's gain / pan / low-pass from all its points (energy sum, capped at full) */
-  private ambPlace(pts: { x: number; y: number }[]): Place {
+  private ambPlace(pts: { x: number; y: number }[], range: [number, number] = [AMB_INNER_M, AMB_HEAR_M]): Place {
+    const [inner, hear] = range;
     const ear = this.ear();
     if (!ear) return { att: 0, pan: 0, lpf: 0 };
     let e2 = 0, panE = 0, near = Infinity;
     for (const p of pts) {
       const dx = p.x - ear.x, d = Math.hypot(dx, p.y - ear.y);
       if (d < near) near = d;
-      if (d >= AMB_HEAR_M) continue;
-      const a = d <= AMB_INNER_M ? 1 : ((AMB_HEAR_M - d) / (AMB_HEAR_M - AMB_INNER_M)) ** 1.5;
+      if (d >= hear) continue;
+      const a = d <= inner ? 1 : ((hear - d) / (hear - inner)) ** 1.5;
       e2 += a * a;
       panE += a * a * Math.max(-PAN_MAX, Math.min(PAN_MAX, dx / PAN_M));
     }
-    const lpf = near <= LPF_FROM_M ? 0 : LPF_HI_HZ * (LPF_LO_HZ / LPF_HI_HZ) ** Math.min(1, (near - LPF_FROM_M) / (AMB_HEAR_M - LPF_FROM_M));
+    const lpf = near <= LPF_FROM_M ? 0 : LPF_HI_HZ * (LPF_LO_HZ / LPF_HI_HZ) ** Math.min(1, (near - LPF_FROM_M) / Math.max(1, hear - LPF_FROM_M));
     return { att: Math.min(1, Math.sqrt(e2)), pan: e2 > 0 ? panE / e2 : 0, lpf };
   }
 

@@ -443,6 +443,15 @@ def band_distance(a: np.ndarray, b: np.ndarray) -> float:
 CONTENT = os.path.normpath(os.path.join(HERE, '..', 'content'))
 PAYOFF_OPS = {'damage', 'status', 'mark', 'consumeMark', 'resource'}
 AMB_MIN, AMB_MAX = 4, 6          # ambience emitters per map (final parity AUD-8)
+# a map's bed (ruling 34, the owner's "heavy wind blowing"): felt more than heard, band-limited, slowly evolving.
+# As played (file integrated + cue gain) it sits >= BED_UNDER_MUSIC_LU under the map's match music (main stem + its
+# gain; both buses share their 0.6 default slider and the bed takes no calm lift); <= BED_HF_MAX of its energy above
+# 2 kHz (the music beds hold about 1 %); its short-term (3 s, circular) loudness moves <= BED_SWELL_LU over the loop
+# (the old 12 s beds swung 12.8 LU in a gust every loop); its loop >= BED_MIN_S
+BED_UNDER_MUSIC_LU = 8.0
+BED_HF_MAX = 0.08
+BED_SWELL_LU = 5.0
+BED_MIN_S = 12.0
 
 
 def _read(rel: str):
@@ -1355,7 +1364,7 @@ def ambience_gate(contract: dict) -> tuple[list[str], dict]:
     """ambience: every map has AMB_MIN..AMB_MAX emitters (audio.ambience.<map> = [{source, cue}]; older content:
     events 'ambient.<map>.<source>'), at most one 'bed' (not spatial), no source twice; every other source names an
     art.ambient group of that map with points (spatial cue); every emitter's cue is a rendered loop on the ambience
-    bus; no entry names an unknown map."""
+    bus; no entry names an unknown map. A map's bed holds the BED_* standard (decoded from audio/out)."""
     import glob
     fails: list[str] = []
     cues, ev = contract['cues'], contract.get('events', {})
@@ -1412,10 +1421,42 @@ def ambience_gate(contract: dict) -> tuple[list[str], dict]:
                     fails.append(f'ambience: {c} sounds from points ({mid}.{src}) but is not spatial')
             if not all(os.path.exists(out_path(f)) for f in d['files']):
                 fails.append(f'ambience: {c} is not rendered')
+            elif src == 'bed':
+                rows[src].update(bed_level(c, d, cues.get(f'mus_match_{mid}')))
+                b = rows[src]
+                if b.get('underMusicLU') is not None and b['underMusicLU'] < BED_UNDER_MUSIC_LU:
+                    fails.append(f"ambience: {mid}'s bed {c} plays {b['underMusicLU']:.1f} LU under the match music "
+                                 f'(want >= {BED_UNDER_MUSIC_LU})')
+                if b['hfShare'] > BED_HF_MAX:
+                    fails.append(f"ambience: {mid}'s bed {c} has {100 * b['hfShare']:.1f} % of its energy above 2 kHz "
+                                 f'(want <= {100 * BED_HF_MAX:.0f} %)')
+                if b['swellLU'] > BED_SWELL_LU:
+                    fails.append(f"ambience: {mid}'s bed {c} swells {b['swellLU']:.1f} LU over its loop (want <= {BED_SWELL_LU})")
+                if b['seconds'] < BED_MIN_S - 0.05:
+                    fails.append(f"ambience: {mid}'s bed {c} loops every {b['seconds']:.1f} s (want >= {BED_MIN_S})")
         rep[mid] = rows
         if not AMB_MIN <= len(ems) <= AMB_MAX:
             fails.append(f'ambience: {mid} has {len(ems)} emitters (want {AMB_MIN}-{AMB_MAX})')
     return fails, rep
+
+
+def bed_level(c: str, d: dict, mus: dict | None) -> dict:
+    """A bed's level as played against its map's match music (see BED_* above), from the shipped .ogg files."""
+    x = decode(out_path(d['files'][0]))
+    i_bed = L.integrated(x, circular=True)
+    m = np.mean(x, axis=0)
+    sp = np.abs(np.fft.rfft(m)) ** 2
+    fr = np.fft.rfftfreq(m.size, 1.0 / SR)
+    st = L.short_term(x, hop_s=0.25, circular=True)
+    st = st[np.isfinite(st)]
+    out = {'lufs': round(i_bed, 2), 'gain': d.get('gain', 1.0), 'hfShare': round(float(sp[fr > 2000].sum() / sp.sum()), 4),
+           'swellLU': round(float(np.max(st) - np.min(st)), 2), 'seconds': round(x.shape[1] / SR, 2), 'underMusicLU': None}
+    heard = i_bed + 20 * math.log10(max(1e-6, d.get('gain', 1.0)))
+    if mus and mus.get('file') and os.path.exists(out_path(mus['file'])):
+        i_mus = L.integrated(decode(out_path(mus['file'])))
+        out['musicLufs'] = round(i_mus, 2)
+        out['underMusicLU'] = round(i_mus + 20 * math.log10(max(1e-6, mus.get('gain', 1.0))) - heard, 2)
+    return out
 
 
 def control_gate(contract: dict) -> tuple[list[str], dict]:
@@ -1591,6 +1632,10 @@ def print_gates(fails: list[str], rep: dict) -> None:
     print(f'ambience gate: {len(am)} maps, {AMB_MIN}-{AMB_MAX} emitters each')
     for mid, rows in am.items():
         print(f"  {mid:11s} " + ', '.join(f"{s}→{x['cue']}({'bed' if x['points'] is None else x['points']})" for s, x in rows.items()))
+        b = rows.get('bed')
+        if b and 'lufs' in b:
+            print(f"  {'':11s} bed {b['lufs']} LUFS x{b['gain']}, {b['underMusicLU']} LU under the music, "
+                  f"{100 * b['hfShare']:.1f} % > 2 kHz, swell {b['swellLU']} LU, {b['seconds']} s loop")
     kr = rep.get('kits', {})
     whole = [f for f, x in kr.get('fighters', {}).items() if not x['missing']]
     print(f"kit gate: {len(whole)}/{len(kr.get('fighters', {}))} fighters with a whole kit ({len(KIT_SLOTS)} slots);"
