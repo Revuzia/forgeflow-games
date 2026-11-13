@@ -66,14 +66,27 @@ def glb_image(path: str, suffix: str) -> np.ndarray:
 RESERVED = {"ally": (200, 225), "harm": (28, 50), "tritanAltRose": (340, 350), "heal": (125, 150)}  # tokens vfx.reservedHuesHSV
 
 
-def reserved_pct(rgb: np.ndarray) -> dict:
+def reserved_pct(rgb: np.ndarray, pil_only: bool = False) -> dict:
     """ruling 32 (tokens art.skins.never): % of the albedo's painted texels above 40 % HSV saturation inside each
-    reserved hue band"""
+    reserved hue band (the larger of PIL's 8-bit HSV and float HSV)"""
     hsv = np.asarray(Image.fromarray(rgb.astype("uint8")).convert("HSV")).astype(np.float32)
     h, sat = hsv[..., 0] / 255 * 360, hsv[..., 1] / 255
     used = rgb.max(-1) > 2
     tot = max(int(used.sum()), 1)
-    return {k: round(100.0 * float(((h >= a) & (h <= b) & (sat > 0.4) & used).sum()) / tot, 2) for k, (a, b) in RESERVED.items()}
+    pil = {k: round(100.0 * float(((h >= a) & (h <= b) & (sat > 0.4) & used).sum()) / tot, 2) for k, (a, b) in RESERVED.items()}
+    if pil_only:     # the unzoned baselines (reserved_baselines.json) were measured this way
+        return pil
+    # max2 r4 (verify_r3_1_q): the same share in float HSV (no 8-bit hue quantisation) can read ~0.5 points higher; the
+    # binding figure is the larger of the two, so a pass never depends on the quantisation
+    f = rgb.astype(np.float32) / 255
+    mx, mn = f.max(-1), f.min(-1)
+    d = mx - mn
+    dd = np.maximum(d, 1e-9)
+    r, g, bb = f[..., 0], f[..., 1], f[..., 2]
+    hf = np.where(d == 0, 0, np.where(mx == r, ((g - bb) / dd) % 6, np.where(mx == g, (bb - r) / dd + 2, (r - g) / dd + 4))) * 60 % 360
+    sf = np.where(mx > 0, d / np.maximum(mx, 1e-9), 0)
+    flt = {k: round(100.0 * float(((hf >= a) & (hf <= b) & (sf > 0.4) & used).sum()) / tot, 2) for k, (a, b) in RESERVED.items()}
+    return {k: max(pil[k], flt[k]) for k in RESERVED}
 
 
 def node() -> str:
@@ -161,7 +174,9 @@ def grade(sid: str, glb: str | None = None, dry: bool = False, fresh: float = 0.
                 shutil.copyfile(glb, trial)
                 r = subprocess.run([node(), GRADE, trial, "--q", str(q), "--reserve-cap", str(aim), "--reserve-margin",
                                     str(margin)] + [x for k, v in rec.get("reserveModes", {}).items() for x in ("--reserve-mode", f"{k}={v}")]
-                               + (["--reserve-sat", str(rec["reserveSat"])] if "reserveSat" in rec else []) + tint, cwd=GAME, capture_output=True, text=True)
+                               + (["--reserve-sat", str(rec["reserveSat"])] if "reserveSat" in rec else [])
+                               + (["--reserve-knee", str(rec["reserveKnee"])] if "reserveKnee" in rec else [])
+                               + (["--reserve-ceil", str(rec["reserveCeil"])] if "reserveCeil" in rec else []) + tint, cwd=GAME, capture_output=True, text=True)
                 if r.returncode:
                     raise SystemExit(r.stderr[-1200:])
                 if os.path.getsize(trial) <= max(min(before + 24 * 1024, 1160 * 1024), before) or q <= 60:
@@ -195,7 +210,7 @@ def baseline_check(sid: str, glb: str | None) -> dict:
     glb = glb or fighter_glb(sid)
     if not glb or not os.path.isfile(glb):
         return {"sid": sid, "skipped": "no recipe, no GLB"}
-    now = reserved_pct(glb_image(glb, "_base"))
+    now = reserved_pct(glb_image(glb, "_base"), pil_only=True)
     base = json.load(open(BASELINES)).get(sid) if os.path.isfile(BASELINES) else None
     if base is None:
         return {"sid": sid, "skipped": "no recipe", "reserved": now, "baseline": None}
@@ -211,7 +226,7 @@ def write_baselines() -> None:
                    "measured on the shipped GLBs (zone_grade.py --baselines). A rebuild may not raise a band above "
                    "max(8, baseline) + 0.5; zoned fighters are held to 8 % outright."}
     for p in sorted(glob.glob(os.path.join(GAME, "art", "out", "fighters", "*", "*.glb"))):
-        out[os.path.basename(p)[:-4]] = reserved_pct(glb_image(p, "_base"))
+        out[os.path.basename(p)[:-4]] = reserved_pct(glb_image(p, "_base"), pil_only=True)
     json.dump(out, open(BASELINES, "w"), indent=1)
     print(f"{BASELINES}: {len(out) - 1} GLBs")
 

@@ -256,9 +256,10 @@ if (args.includes('--reserve-cap')) {
       // saturation and feathered over 6 deg of hue outside the band, so the honey keeps its hue, value and texture
       // (no bone-white patches) and the lossy encode keeps the result (a fixed target re-saturates in the WebP).
       const knee = Number(opt('--reserve-knee', 0.3));
+      const ceil = Number(opt('--reserve-ceil', 0.36));    // where the aim's last texel lands: under 0.4 by the encode's drift
       hit.sort((x, y) => y[1] - x[1]);
       const t = hit[Math.max(0, Math.floor(cap * used) - 1)][1];      // the saturation that may stay over 0.4
-      const k = Math.min(1, (0.4 - knee) / Math.max(1e-3, t - knee)) * 0.995;
+      const k = Math.min(1, (ceil - knee) / Math.max(1e-3, t - knee));
       let moved = 0;
       for (let p = 0; p < W * H; p++) {
         const [h, s, v] = hsv(p);
