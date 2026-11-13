@@ -586,6 +586,14 @@ export class GodFx {
     this.decals.draw(r, scene, cam, post.hdr, post.linDepth.texture, post.w, post.h, vis.uniforms.uBodyToView.value as never, vis.camBody, this.lastReal);
   }
 
+  /** (hdrmerge) fill the decals for this frame; true when the renderer's water pass must draw layer 5 too */
+  prepareDecals(cam: PerspectiveCamera, post: PostPipeline): boolean {
+    if (!SW_DECALS) return false;
+    const vis = this.vis;
+    if (!vis || !this.group.visible) return false;
+    return this.decals.prepare(cam, post.linDepth.texture, post.w, post.h, vis.uniforms.uBodyToView.value as never, vis.camBody, this.lastReal);
+  }
+
   /** the FX over the composited image (after the atmosphere): fog, tints, the eclipse, then the FX layer */
   renderFx(r: WebGLRenderer, scene: Scene, cam: PerspectiveCamera, target: WebGLRenderTarget | null, post: PostPipeline, fsq?: FullscreenQuad): void {
     const vis = this.vis;

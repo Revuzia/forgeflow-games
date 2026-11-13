@@ -25,6 +25,7 @@
 // Without both extensions nothing is touched.
 
 import { ShaderChunk, type WebGLRenderer } from 'three';
+import { perfSwitch } from '../perfswitch.ts';
 
 const DEPTH_CLAMP = 0x864f;
 /** depth units the tangent is lowered by, so float rounding never puts the rasterised depth above the written one
@@ -82,6 +83,27 @@ const PARS_FRAGMENT = /* glsl */ `
 	varying float vIsPerspective;
 #endif
 `;
+
+/**
+ * ROADMAP-60FPS step 7 (`?orthodepth=0` off): the shadow casters' depth twins (terrain, vegetation, people / animals,
+ * buildings / boats / camps, ships) are drawn ONLY by the sun's orthographic cascade cameras (SunShadows.render /
+ * warm, between swap(true) and swap(false)). For an orthographic camera three's log-depth fragment chunk writes
+ * gl_FragDepth = gl_FragCoord.z: the very depth the rasteriser produces, yet a shader that writes depth turns off the
+ * GPU's early depth test / hidden-surface removal (Apple) for the whole depth-only pass. A twin defines
+ * GENESIS_ORTHO_DEPTH and the chunk then writes nothing: same depth values (no polygon offset anywhere), early-Z back.
+ */
+export const ORTHO_DEPTH = perfSwitch('orthodepth', true);
+/** mark a depth twin (never drawn with a perspective camera) */
+export function orthoDepth<T extends { defines?: Record<string, unknown> }>(m: T): T {
+  if (ORTHO_DEPTH) { m.defines ??= {}; m.defines.GENESIS_ORTHO_DEPTH = ''; }
+  return m;
+}
+/** wrap the current log-depth fragment chunks so a GENESIS_ORTHO_DEPTH shader neither declares nor writes gl_FragDepth (call after enableConservativeDepth, before any compile) */
+export function enableOrthoDepth(): void {
+  if (!ORTHO_DEPTH || ShaderChunk.logdepthbuf_fragment.includes('GENESIS_ORTHO_DEPTH')) return;
+  ShaderChunk.logdepthbuf_pars_fragment = `#ifndef GENESIS_ORTHO_DEPTH\n${ShaderChunk.logdepthbuf_pars_fragment}\n#endif\n`;
+  ShaderChunk.logdepthbuf_fragment = `#ifndef GENESIS_ORTHO_DEPTH\n${ShaderChunk.logdepthbuf_fragment}\n#endif\n`;
+}
 
 /** what the renderer ended up with (the dev HUD and probes read it) */
 export const ZCONS = { on: false, why: '' };

@@ -27,6 +27,7 @@ import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
 import { SHADOW_GLSL } from './lights.ts';
 import { TERRAIN_VERT_CORE, TERRAIN_VERT_PARS } from './terrainvert.glsl.ts';
 import { GROUND_FRAG_PARS, GROUND_UNIFORMS, GROUND_VERT_MAIN, GROUND_VERT_PARS } from './groundfloor.ts';
+import { orthoDepth } from '../shaders/zcons.ts';
 
 /** planet kind → palette / behaviour code used by the shaders */
 export function kindCode(kind: string): number {
@@ -1894,7 +1895,7 @@ void main() {
 
 /** shadow-caster material for one LOD level (same displacement + morph) */
 export function makeTerrainDepthMaterial(shared: Record<string, IUniform>, terrain: MeshStandardMaterial): ShaderMaterial {
-  return new ShaderMaterial({
+  return orthoDepth(new ShaderMaterial({
     vertexShader: DEPTH_VERT,
     fragmentShader: DEPTH_FRAG,
     uniforms: {
@@ -1902,7 +1903,7 @@ export function makeTerrainDepthMaterial(shared: Record<string, IUniform>, terra
       uMorph: terrain.userData.uMorph as IUniform<Vector4>,
     },
     colorWrite: false,
-  });
+  }));
 }
 
 export type { Texture };

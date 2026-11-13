@@ -22,6 +22,7 @@ import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
 import { SHADOW_GLSL } from '../planet/lights.ts';
 import { MOON_PARS, moonDirect } from '../shaders/moon.glsl.ts';
 import type { Rig } from '../gen/bodygen.ts';
+import { orthoDepth } from '../shaders/zcons.ts';
 
 /** the skinning + pose GLSL shared by the colour and depth materials (PLAN is a define) */
 export const BODY_ANIM_GLSL = /* glsl */ `
@@ -1120,8 +1121,8 @@ void main() {
 
 /** shadow caster with the same pose */
 export function makeBodyDepthMaterial(animTime: IUniform, opts: BodyMaterialOpts): ShaderMaterial {
-  return new ShaderMaterial({
+  return orthoDepth(new ShaderMaterial({
     vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, defines: { PLAN: opts.plan },
     uniforms: { ...rigUniforms(opts.rig, opts), uAnimTime: animTime }, colorWrite: false, side: DoubleSide,
-  });
+  }));
 }

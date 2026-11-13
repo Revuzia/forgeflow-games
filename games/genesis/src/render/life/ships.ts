@@ -57,6 +57,7 @@ import type { CameraPose } from '../frame.ts';
 import { Avatar, AVATAR_STATE, GOD_WIND, regardColour } from '../camera/avatar.ts';
 import { sunIlluminance } from '../frame.ts';
 import { blackbody } from '../../client/orbits.ts';
+import { orthoDepth } from '../shaders/zcons.ts';
 
 // ───────────────────────────── the ship material ─────────────────────────────
 
@@ -453,10 +454,10 @@ void main() {
 `;
 
 function makeShipDepth(own: Record<string, IUniform>, variant: ShipVariant): ShaderMaterial {
-  return new ShaderMaterial({
+  return orthoDepth(new ShaderMaterial({
     vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, uniforms: { uClothT: own.uClothT, uWind: own.uWind, uShip: own.uShip },
     defines: variant === 'sail' ? { SHIP_SAIL: '' } : {}, side: DoubleSide, colorWrite: false,
-  });
+  }));
 }
 
 // ───────────────────────────── kinds, eras, frames ─────────────────────────────

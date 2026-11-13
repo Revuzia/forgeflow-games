@@ -13,7 +13,7 @@ import { siltLensClear } from './planet/silt.ts';
 import {
   Frustum, Matrix3, Matrix4, MeshBasicMaterial, NoToneMapping, PerspectiveCamera, Quaternion, Scene, Vector2, Vector3, Vector4, WebGLRenderer, type IUniform, type Texture, type WebGLRenderTarget,
 } from 'three';
-import { depthClamp, enableConservativeDepth } from './shaders/zcons.ts';
+import { depthClamp, enableConservativeDepth, enableOrthoDepth } from './shaders/zcons.ts';
 import type { WorldView, PlanetView } from '../client/worldview.ts';
 import { PlanetVisual } from './planet/planetview.ts';
 import { syncPlanetVisuals } from './planet/planetsync.ts';
@@ -35,6 +35,7 @@ import { QUALITY, farViewQuality, type Quality, type QualityName } from './quali
 import { nearestPlanet, sunIlluminance, type CameraPose } from './frame.ts';
 import { blackbody } from '../client/orbits.ts';
 import { GodFx } from './fx/godfx.ts';
+import { HDR_MERGE } from './fx/decals.ts';
 import { ShipLayer, type ShipPlanetRef } from './life/ships.ts';
 import { applyLaunchShake } from './fx/launch.ts';
 import { PhotoPost } from './camera/photo.ts';
@@ -235,6 +236,7 @@ export class Renderer {
     try { gpuMem.attach(this.three); } catch { /* unattributed */ }
     gpuMem.ownerProbe = () => sceneOwners(this.scene);
     enableConservativeDepth(this.three, Z_CONS);
+    enableOrthoDepth();
     { const sp = wantSpanUploads(this.three); perfSwitchNote('span', sp ? '1' : '0'); installSpanUploads(sp); }
     if (PRE_UPLOAD) installTexturePreUpload();
     setCityLightsRenderer(this.three);
@@ -607,7 +609,8 @@ export class Renderer {
     post.copyForWater(r, this.fsq, cam.far, anyWater || this.ships.fx.wantsSceneCopy || !SKIP_COPY);
     // ground decals and FX lights (brush, reticles, the hand's shadow, crater glow, cracks…) under the water and haze
     perfmon.mark('post:decals');
-    this.godfx.renderDecals(r, this.scene, cam, post);
+    // (ROADMAP step 6, `?hdrmerge=0` off) the decals are drawn with the water below: one render into the MSAA hdr
+    const decalsOn = HDR_MERGE ? this.godfx.prepareDecals(cam, post) : (this.godfx.renderDecals(r, this.scene, cam, post), false);
     this.waterScene.tSceneColor.value = post.sceneCopy.texture;
     this.waterScene.tSceneDepth.value = post.linDepth.texture;
     (this.waterScene.uResolution.value as Vector2).set(post.w, post.h);
@@ -616,8 +619,9 @@ export class Renderer {
     (this.waterScene.uProj.value as Matrix4).copy(cam.projectionMatrix);
     this.waterScene.uFrame.value = this.frameNo % 64;
     perfmon.mark('post:water');
-    if (anyWater && SW_WATER) {
-      cam.layers.set(2);
+    const waterOn = anyWater && SW_WATER;
+    if (waterOn || decalsOn) {
+      cam.layers.mask = (waterOn ? 1 << 2 : 0) | (decalsOn ? 1 << 5 : 0);
       r.autoClear = false;
       r.setRenderTarget(post.hdr);
       r.render(this.scene, cam);

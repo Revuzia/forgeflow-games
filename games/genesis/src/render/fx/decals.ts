@@ -20,6 +20,17 @@ import {
   type WebGLRenderer, type WebGLRenderTarget, type Scene,
 } from 'three';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
+import { perfSwitch } from '../perfswitch.ts';
+
+/**
+ * ROADMAP-60FPS step 6 (`?hdrmerge=0` off): the decals (layer 5) and the water (layer 2) go into the MSAA hdr in ONE
+ * r.render: three resolves a multisampled target after every render() into it (a blit: the Metal render pass ends,
+ * the 4x colour + depth are stored), so two renders were a store + resolve + reload more. Order kept: the decals sort
+ * first (renderOrder DECAL_ORDER0.., in the opaque list with the opaque water sheets at 50), exactly as their own pass
+ * ran before the water's.
+ */
+export const HDR_MERGE = perfSwitch('hdrmerge', true);
+export const DECAL_ORDER0 = -1000;
 import { FX_EXPOSURE } from './particles.ts';
 
 export const DECAL = {
@@ -454,15 +465,18 @@ export class DecalPass {
     };
     const mk = (group: number) => new ShaderMaterial({
       vertexShader: VERT, fragmentShader: FRAG, uniforms: { ...this.uniforms, uGroup: { value: group } },
-      transparent: true, depthTest: false, depthWrite: false, blending: CustomBlending,
+      // (hdrmerge: drawn in one pass with the water, whose sheets are opaque: the decals join the opaque list, ordered
+      // first by renderOrder; CustomBlending applies whatever 'transparent' says, the program is the same)
+      transparent: !HDR_MERGE, depthTest: false, depthWrite: false, blending: CustomBlending,
       blendSrc: group === 2 ? DstColorFactor : OneFactor, blendDst: group === 2 ? ZeroFactor : group === 1 ? OneFactor : OneMinusSrcAlphaFactor,
       blendSrcAlpha: group === 2 ? ZeroFactor : OneFactor, blendDstAlpha: OneFactor,
     });
     this.groups = [new DecalGroup(mk(0)), new DecalGroup(mk(2)), new DecalGroup(mk(1))];
     // draw order: tints, then over, then light on top
-    this.groups[1].mesh.renderOrder = 0;
-    this.groups[0].mesh.renderOrder = 1;
-    this.groups[2].mesh.renderOrder = 2;
+    const o = HDR_MERGE ? DECAL_ORDER0 : 0;
+    this.groups[1].mesh.renderOrder = o;
+    this.groups[0].mesh.renderOrder = o + 1;
+    this.groups[2].mesh.renderOrder = o + 2;
     for (const g of this.groups) this.group.add(g.mesh);
   }
 
@@ -475,6 +489,22 @@ export class DecalPass {
    * body → view rotation and `camBody` the camera in its body frame; the group must be a child of that planet.
    */
   draw(r: WebGLRenderer, scene: Scene, camera: Camera & { projectionMatrixInverse: Matrix4 }, target: WebGLRenderTarget | null, depth: Texture, w: number, h: number, bodyToView: Matrix3, camBody: Vector3, time: number): void {
+    if (!this.prepare(camera, depth, w, h, bodyToView, camBody, time)) return;
+    const prevAuto = r.autoClear;
+    const prevMask = camera.layers.mask;
+    r.autoClear = false;
+    r.setRenderTarget(target);
+    camera.layers.set(5);
+    r.render(scene, camera);
+    camera.layers.mask = prevMask;
+    r.autoClear = prevAuto;
+  }
+
+  /**
+   * Fill this frame's decal instances and uniforms; false when there is nothing to draw. (hdrmerge) the renderer then
+   * draws layer 5 together with the water's layer 2 in ONE render into the MSAA hdr: one resolve, one reopen less.
+   */
+  prepare(camera: { projectionMatrixInverse: Matrix4 }, depth: Texture, w: number, h: number, bodyToView: Matrix3, camBody: Vector3, time: number): boolean {
     const [over, mul, add] = this.groups;
     if (this.capture) this.captured = this.list.slice();
     over.begin(); mul.begin(); add.begin();
@@ -487,7 +517,7 @@ export class DecalPass {
     }
     this.list.length = 0;
     over.end(); mul.end(); add.end();
-    if (!over.n && !mul.n && !add.n) return;
+    if (!over.n && !mul.n && !add.n) return false;
     const u = this.uniforms;
     u.tSceneDepth.value = depth;
     (u.uResolution.value as Vector2).set(w, h);
@@ -496,14 +526,7 @@ export class DecalPass {
     (u.uCamBody.value as Vector3).copy(camBody);
     u.uTime.value = time;
     u.uHasExposure.value = FX_EXPOSURE.value ? 1 : 0;
-    const prevAuto = r.autoClear;
-    const prevMask = camera.layers.mask;
-    r.autoClear = false;
-    r.setRenderTarget(target);
-    camera.layers.set(5);
-    r.render(scene, camera);
-    camera.layers.mask = prevMask;
-    r.autoClear = prevAuto;
+    return true;
   }
 
   dispose(): void {

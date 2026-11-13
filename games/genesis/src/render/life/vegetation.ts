@@ -24,6 +24,7 @@
 import { uploadPrefix } from '../upload.ts';
 import { ringify, ringMark, ringOf } from '../bufring.ts';
 import { FREEZE } from '../freeze.ts';
+import { orthoDepth } from '../shaders/zcons.ts';
 import {
   BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, MeshStandardMaterial, ShaderMaterial, Vector3, Vector4,
   type IUniform, type Texture,
@@ -923,7 +924,7 @@ export class Vegetation {
     this.farMat = makeVegMaterial(shared, this.fade, leafTex, { on: this.farOn, layer: true });
     this.leafTex = leafTex;
     const depthUniforms = { uTime: shared.uTime, uWindDir: shared.uWindDir, uLeafTex: leafTex, uCamBody: shared.uCamBody, uBodyToView: shared.uBodyToView, uFade: this.fade, uWindK: WIND_K, uLodBand: LOD_BAND, uGodWind: GOD_WIND, uFarOn: this.farOn, uFarBand: FAR_BAND, uPxPerRad: PX_PER_RAD, uFarHulls: FAR_HULLS };
-    this.farDepth = new ShaderMaterial({ vertexShader: VEG_DEPTH_VERT, fragmentShader: VEG_DEPTH_FRAG, uniforms: depthUniforms, colorWrite: false, side: DoubleSide, defines: { VEG_FAR: '' } });
+    this.farDepth = orthoDepth(new ShaderMaterial({ vertexShader: VEG_DEPTH_VERT, fragmentShader: VEG_DEPTH_FRAG, uniforms: depthUniforms, colorWrite: false, side: DoubleSide, defines: { VEG_FAR: '' } }));
     // the far hulls' table (once per page: the leaf atlas' tile colours are the same for every world)
     farTable ??= farHullTable(KINDS, VARIANTS, (k) => SHRUB_KINDS.includes(k) || k === 'kelp', leafTex.value as Texture | null);
     FAR_HULLS.value = farTable.tex;
@@ -946,7 +947,7 @@ export class Vegetation {
           mesh.count = 0;
           mesh.frustumCulled = false;
           mesh.matrixAutoUpdate = false;
-          const depth = new ShaderMaterial({ vertexShader: VEG_DEPTH_VERT, fragmentShader: VEG_DEPTH_FRAG, uniforms: depthUniforms, colorWrite: false, side: DoubleSide });
+          const depth = orthoDepth(new ShaderMaterial({ vertexShader: VEG_DEPTH_VERT, fragmentShader: VEG_DEPTH_FRAG, uniforms: depthUniforms, colorWrite: false, side: DoubleSide }));
           src.computeBoundingSphere();
           const bs = src.boundingSphere!;
           if (LAZY_POOLS) geo.boundingSphere = bs;

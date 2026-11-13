@@ -1397,3 +1397,20 @@ long press frame-rate independent. Report after 1-2 verified.
   version untouched, callback ran, texture + task in the slot, the old path after the flush.
   Browser A/B queued: run-s17e.sh (dist42, medium 256x144 = 2 cascades): up-s17e-{1,0}-s{0,1}.log, shots
   freeze/up{1,0}-s0-*.png (speed 0 image pair), speed-1 runs for 'uploads inside a pass' by slot.
+- (container restart ~09:15Z killed run-s17e mid-way; relaunched; all source edits had survived/autosynced.)
+- STEP 6 hdrmerge (`?hdrmerge=0` off, default on): three resolves an MSAA target (blitFramebuffer) after EVERY
+  r.render into it, so decals then water = 2 resolves + 1 reopen of the 4x hdr (setRenderTarget itself does not rebind:
+  three's state.bindFramebuffer skips the same framebuffer). fx/decals.ts: draw() split into prepare() (instances +
+  uniforms; false = nothing to draw) + the render; with hdrmerge the decal materials are transparent:false (same
+  CustomBlending; same program) at renderOrder -1000/-999/-998 so they sort FIRST in the opaque list, before the water
+  sheets (renderOrder 50, opaque ocean material) — exactly the old pass order. godfx.prepareDecals(); renderer.ts: one
+  r.render with cam.layers.mask = (water ? 1<<2) | (decals ? 1<<5). Layer 2 holds only chunk water sheets, layer 5
+  only the decal meshes (grep).
+- STEP 7 orthodepth (`?orthodepth=0` off, default on): zcons.ts orthoDepth(mat) defines GENESIS_ORTHO_DEPTH;
+  enableOrthoDepth() (renderer, right after enableConservativeDepth, before any compile) wraps ShaderChunk
+  logdepthbuf_pars_fragment / logdepthbuf_fragment in #ifndef GENESIS_ORTHO_DEPTH. Twins marked: terrain
+  (makeTerrainDepthMaterial), vegetation near + far depth, bodies (makeBodyDepthMaterial), buildings / boats / camps
+  (makeBuildingDepthMaterial), ships (makeShipDepth). All only installed by swapDepth between SunShadows swap(true)
+  and swap(false) (renderer.ts shadows.render / shadows.warm): never a perspective camera. No polygonOffset anywhere
+  (grep), depth clamp off in the shadow pass: gl_FragCoord.z == the rasterised depth, so the atlas is the same.
+  NOTE: the terrain casts with its depth twin (planetview.swapDepth), not the 1900-line terrain shader.

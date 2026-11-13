@@ -24,6 +24,7 @@ import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
 import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
 import { SHADOW_GLSL } from '../planet/lights.ts';
 import { MOON_PARS, moonDirect } from '../shaders/moon.glsl.ts';
+import { orthoDepth } from '../shaders/zcons.ts';
 
 /** instances per row of a batch's instance-data texture (render/life/bldbatch.ts): 3 texels each */
 export const BLD_INST_PER_ROW = 128;
@@ -815,5 +816,5 @@ void main() {
 export function makeBuildingDepthMaterial(shared: Record<string, IUniform>, instData?: IUniform): ShaderMaterial {
   const uniforms: Record<string, IUniform> = { uTime: shared.uTime };
   if (instData) uniforms.uBldInst = instData;
-  return new ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, uniforms, colorWrite: false, side: BackSide });
+  return orthoDepth(new ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, uniforms, colorWrite: false, side: BackSide }));
 }
