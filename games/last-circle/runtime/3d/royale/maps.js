@@ -7191,7 +7191,8 @@ export async function buildMap(W, mapId) {
     for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const k = cKey(i, j); if (!houseHash.has(k)) houseHash.set(k, []); houseHash.get(k).push(hi); }
     // the floor slabs (their walkable tops): [x0, z0, x1, z1, top, surf]
     const sl = [];
-    for (const b of H.boxes) if (b.p === "slab" && b.c) { const pe = H.palette[b.f[2]]; sl.push([b.min[0], b.min[2], b.max[0], b.max[2], b.max[1], HG_SURF[pe && pe.mat] || "concrete"]); }
+    for (const b of H.boxes) if (b.p === "slab" && (b.c ? !b.mergedCol : b.cm)) { const pe = H.palette[b.f[2]];      // (W10 R1A: the drawn slabs - a collision cover box spans rooms of different floors)
+      sl.push([b.min[0], b.min[2], b.max[0], b.max[2], b.max[1], HG_SURF[pe && pe.mat] || "concrete"]); }
     houseFloors.push(sl);
   });
   const _ha = { house: -1, id: "", floor: 0, room: -1, y: 0, surf: "concrete" };

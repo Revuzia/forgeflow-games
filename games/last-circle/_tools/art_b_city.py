@@ -313,6 +313,25 @@ INTERIOR = [
     # storage
     ("cardboardBoxOpen", "furniture", _K / "cardboardBoxOpen.glb", KIT_SCALE, "bbox", ["storage", "shop", "any"], "box", "floor", {}),
     ("pallet", "furniture", _Q / "MwOFAOgOhg.glb", 1.0, "none", ["storage", "shop"], "pallet", "floor", {"palette": "quaternius_atlas", "credit": "Pallet by Quaternius, https://poly.pizza/m/MwOFAOgOhg (CC0 1.0)"}),
+    # (W10 R1A item 8) model variety for the homes (Kenney Furniture Kit 2.0, CC0): the kitchen's wall units, a big hood and fridge, a bath set with a mirror and a
+    # shower, a corner sofa, armchairs, dining chairs, a bunk bed, nightstand / coffee table / TV variants, a stacked washer-dryer, a coat rack and a bench
+    ("hoodLarge", "furniture", _K / "hoodLarge.glb", KIT_SCALE, "footprint", ["kitchen"], "cooker_hood", "wall", {}),
+    ("kitchenCabinetUpperDouble", "furniture", _K / "kitchenCabinetUpperDouble.glb", KIT_SCALE, "bbox", ["kitchen"], "wall_cabinet", "wall", {}),
+    ("kitchenCabinetUpperCorner", "furniture", _K / "kitchenCabinetUpperCorner.glb", KIT_SCALE, "bbox", ["kitchen"], "wall_cabinet_corner", "wall", {}),
+    ("kitchenFridgeLarge", "furniture", _K / "kitchenFridgeLarge.glb", KIT_SCALE, "bbox", ["kitchen"], "fridge", "floor", {}),
+    ("bathroomSink", "furniture", _K / "bathroomSink.glb", KIT_SCALE, "bbox", ["bathroom"], "basin", "floor", {}),
+    ("bathroomMirror", "furniture", _K / "bathroomMirror.glb", KIT_SCALE, "bbox", ["bathroom"], "mirror", "wall", {}),
+    ("showerRound", "furniture", _K / "showerRound.glb", KIT_SCALE, "bbox", ["bathroom"], "shower", "floor", {}),
+    ("loungeDesignSofaCorner", "furniture", _K / "loungeDesignSofaCorner.glb", KIT_SCALE, "footprint", ["living"], "sofa_corner", "floor", {}),
+    ("loungeChairRelax", "furniture", _K / "loungeChairRelax.glb", KIT_SCALE, "bbox", ["living"], "armchair", "floor", {}),
+    ("chairRounded", "furniture", _K / "chairRounded.glb", KIT_SCALE, "bbox", ["dining", "kitchen"], "dining_chair", "floor", {}),
+    ("bedBunk", "furniture", _K / "bedBunk.glb", KIT_SCALE, "bbox", ["bedroom"], "bed", "floor", {}),
+    ("cabinetBedDrawerTable", "furniture", _K / "cabinetBedDrawerTable.glb", KIT_SCALE, "bbox", ["bedroom"], "nightstand", "floor", {}),
+    ("tableCoffeeGlass", "furniture", _K / "tableCoffeeGlass.glb", KIT_SCALE, "bbox", ["living"], "coffee_table", "floor", {}),
+    ("televisionVintage", "furniture", _K / "televisionVintage.glb", KIT_SCALE, "bbox", ["living", "bedroom"], "tv", "surface", {}),
+    ("washerDryerStacked", "furniture", _K / "washerDryerStacked.glb", KIT_SCALE, "bbox", ["bathroom", "kitchen", "storage"], "laundry", "floor", {}),
+    ("coatRack", "furniture", _K / "coatRack.glb", KIT_SCALE, "bbox", ["hall", "bedroom"], "coat_rack", "wall", {}),
+    ("bench", "furniture", _K / "bench.glb", KIT_SCALE, "bbox", ["hall", "living"], "bench", "floor", {}),
     # walls: stairs (one storey) + the cover-rule window wall
     ("stairs", "walls", _K / "stairs.glb", KIT_SCALE, "steps", ["any"], "stairs", "floor", {}),
     ("stairsCorner", "walls", _K / "stairsCorner.glb", KIT_SCALE, "steps", ["any"], "stairs_corner", "floor", {}),
@@ -1240,6 +1259,7 @@ def write_interior_manifest(rows: dict, into_main: bool, merge: bool) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", default=None, help="process only ids containing this substring")
+    ap.add_argument("--ids", default=None, help="process only these exact ids or names (comma-separated); merges like --only")
     ap.add_argument("--scratch", default=str(DEFAULT_SCRATCH))
     ap.add_argument("--no-plots", action="store_true")
     ap.add_argument("--skip-pack", action="store_true", help="reuse the GLBs already on disk (collider / manifest iteration)")
@@ -1271,6 +1291,10 @@ def main() -> int:
     cat = catalogue()
     if args.only:
         cat = [c for c in cat if args.only in c["id"]]
+    if args.ids:                                          # (W10 R1A) exact ids (comma-separated): the rows of an --only run, without a substring's neighbours
+        want = set(args.ids.split(","))
+        cat = [c for c in cat if c["id"] in want or c["name"] in want]
+        args.only = args.only or "ids"                    # (merge into the existing manifests, as an --only run does)
     if args.colliders_only:
         return colliders_only(cat)
     if args.palettes_only:

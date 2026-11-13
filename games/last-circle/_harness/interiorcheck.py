@@ -42,6 +42,7 @@ Rows (each judged over every sampled house; counts are exact; a row that measure
                       pixels darker than 16 / 255 (an outdoor view of the same house is printed beside it; the bar was set on the first
                       measurements, before registration - see LUMA_ABS)
   camwall             Wave 4's camera pull-in inside every sampled house: the lens never inside or behind a wall box; W.noCamWall must violate
+  camwall-lived       (W10 R1A) the same sweep, in lived rooms (living, bedroom, kitchen, dining): the lens never within 0.3 m of a wall box (plant camwall-lived-off)
   errors              0 page errors / console errors / failed requests
   information         per-house draw calls / triangles (the house object, and the frame from inside), the bitmaps' near-edge cells, timing
 
@@ -93,8 +94,11 @@ PLANT_ROWS = {"furniture-in-door": {"furniture-clear"}, "window-solid": {"window
               # Wave 8 fix round (lane K3, on lane K1's request): the control of the grass-indoors pixel correction (match source only)
               "grass-on-floor": {"grass-indoors"},
               # Wave 9 (lane R1A): the control of the drawn-leaf adapter (match source only)
-              "leaf-drawn-shut": {"kit-agree"}}
+              "leaf-drawn-shut": {"kit-agree"},
+              # W10 R1A: the control of camwall-lived (the row judged on the sweep with the camera pull-in off)
+              "camwall-lived-off": {"camwall-lived"}}
 MATCH_PLANTS = {"grass-on-floor", "leaf-drawn-shut"}
+ROW_ONLY_PLANTS = {"camwall-lived-off"}      # (W10 R1A) planted in the row's judgement (the sweep it reads), on every source: nothing is planted into the page or the Node half
 LEAF_LAYER = 31              # the drawn-leaf mesh's layer: no camera / shadow camera enables it (they draw layer 0)
 # (Wave 9, lane R1A) the door leaves as the GPU draws them, for the probe: see "Door leaves" above
 LEAF_JS = r"""
@@ -268,7 +272,7 @@ def node_half(args, v):
                 f.write(data)
         root = tmp
     cmd = ["node", NODE_PROBE, "--root", root, "--source", args.source, "--out", out, "--seeds", args.seeds]
-    if args.plant:
+    if args.plant and args.plant not in ROW_ONLY_PLANTS:
         cmd += ["--plant", args.plant]
     if args.max_houses:
         cmd += ["--max-houses", str(args.max_houses)]
@@ -307,12 +311,12 @@ def browser_half(args, v, shots_dir):
                 s.js(read(HGA))
             s.js(read(PAGE))
             src = "housegen" if args.simulate_records else args.source
-            setup = s.js("(o) => window.__LCINT_PAGE__.setup(o)", {"source": src, "plant": args.plant, "seed": args.seed, "exposeRecords": bool(args.simulate_records)})
+            setup = s.js("(o) => window.__LCINT_PAGE__.setup(o)", {"source": src, "plant": None if args.plant in ROW_ONLY_PLANTS else args.plant, "seed": args.seed, "exposeRecords": bool(args.simulate_records)})
             if setup and setup.get("error"):
                 v.cnj("browser setup [%s]" % map_id, setup["error"])
                 continue
             if args.source == "match":
-                lv = s.js("(o) => (" + LEAF_JS + ")(o)", {"plant": args.plant, "layer": LEAF_LAYER})
+                lv = s.js("(o) => (" + LEAF_JS + ")(o)", {"plant": None if args.plant in ROW_ONLY_PLANTS else args.plant, "layer": LEAF_LAYER})
                 extras.setdefault("leaves", {})[map_id] = lv
                 print("  [%s] door leaves for the probe: %s" % (map_id, lv), flush=True)
             hl = s.js("(o) => window.__LCINT_PAGE__.houses(o)", {"max": args.houses, "seed": args.seed})
@@ -366,7 +370,7 @@ def main(v, args):
         with open(hg, "rb") as f:
             v.data["housegenSha1"] = hashlib.sha1(f.read()).hexdigest()[:12]
         v.data["housegenMtime"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(os.path.getmtime(hg)))
-    if args.plant and args.source == "match" and args.plant not in MATCH_PLANTS:
+    if args.plant and args.source == "match" and args.plant not in MATCH_PLANTS | ROW_ONLY_PLANTS:
         raise C.HarnessError("--plant %s applies to --source fixture / housegen (a planted fault is planted into the house the gate builds)" % args.plant)
     if args.plant in MATCH_PLANTS and args.source != "match":
         raise C.HarnessError("--plant %s applies to --source match only (grass-indoors is information on the injected sources)" % args.plant)
@@ -452,6 +456,19 @@ def main(v, args):
                 [e for _, c in cws for e in c["on"]["examples"]][:3]))
         else:
             rows.check("camwall", None, "no house swept")
+        # (W10 R1A) the lens in LIVED rooms (living, bedroom, kitchen, dining) never within 0.3 m of a wall box (the audit's tiny_f0r1_living case: the camera pushed into the
+        # wall of a 2.5 m room). Plant camwall-lived-off: the row judged on the pull-in-OFF sweep (W.noCamWall) - the lens then sits in / behind walls and the row must FAIL
+        if cws:
+            side = "off" if args.plant == "camwall-lived-off" else "on"
+            lf = sum(c[side]["livedFrames"] for _, c in cws)
+            ln = sum(c[side]["livedNear"] for _, c in cws)
+            lmin = min([c[side]["livedMin"] for _, c in cws if c[side]["livedFrames"]] or [None]) if lf else None
+            hist = [sum(c[side]["livedHist"][k] for _, c in cws) for k in range(5)]
+            rows.check("camwall-lived", None if not lf else ln == 0, "%s sweep: %d of %d lens frames in lived rooms of %d houses within %.1f m of a wall box (nearest %s m); distances [<0.1, <0.2, <0.3, <0.5, >=0.5] %s; %s" % (
+                "pull-in OFF (plant)" if side == "off" else "pull-in on", ln, lf, len(cws), 0.3, None if lmin is None else round(lmin, 3), hist,
+                [e for _, c in cws for e in c[side]["livedEx"]][:4]))
+        else:
+            rows.check("camwall-lived", None, "no house swept")
         cost = [{"house": l, "rooms": h["rooms"], "storeys": h["floors"], "object": x["views"].get("houseObject"),
                  "insideCalls": max([e["calls"] for e in x["views"]["entrances"] + x["views"]["centres"]] or [0]),
                  "insideTris": max([e["tris"] for e in x["views"]["entrances"] + x["views"]["centres"]] or [0])} for l, h, _, x in br]

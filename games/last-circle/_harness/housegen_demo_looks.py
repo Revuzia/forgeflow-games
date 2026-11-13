@@ -29,6 +29,10 @@ Rows (exit 0 pass / 1 fail / 2 could-not-judge):
 Plant (Wave 9, lane R1A; only the designated row counts, exit 1 = the fault was caught):
   --plant eye-only-phase5   housegen.js served (a page route, no file touched) with phase 5 judging on the EYE-ONLY model again (W9's fix undone: model5(false)
                             where it starts) -> view-pixels must FAIL (lodge_tower.f1r1, the Wave-8 storage room whose boxes hide behind the rack from the camera)
+  --plant sparse            (W10 R1A) housegen.js served with the area quota and the centre groups off (the homes furnished as the audit found them) ->
+                            view-lived and view-lived-cover must FAIL
+W10 R1A rows: view-lived (every lived room - living, bedroom, kitchen, dining - of the homes shows >= 5 pieces from its best doorway, the third-person camera) and
+view-lived-cover (>= 20 % of the frame below the horizon is furniture: every piece hidden at once, the changed pixels under the horizon row).
 Screenshots (LOOK at them): per use a contact sheet (street, the front from the third-person camera, stepping in through the front door, the biggest room
 from its doorway), the compound sheet, the storeys cut-away sheet, and every building's every room from its doorway (third person).
 """
@@ -47,9 +51,12 @@ import common as C  # noqa: E402
 
 GATE = "housegen_demo_looks"
 # --plant (Wave 9, lane R1A): the row that must FAIL, and the in-memory edit of the served housegen.js
-PLANTS = {"eye-only-phase5": {"view-pixels"}}
+PLANTS = {"eye-only-phase5": {"view-pixels"},
+          # (W10 R1A) the homes furnished as the audit found them: no area quota, no centre-of-room groups (the VIEW_WANT top-up alone)
+          "sparse": {"view-lived", "view-lived-cover"}}
 HG_REL = "runtime/3d/royale/housegen.js"
 PLANT_EDIT = {"eye-only-phase5": ("        model5(true);\n        if (bestView(R).n >= 3) return;\n        const run5", "        model5(false);\n        if (bestView(R).n >= 3) return;\n        const run5")}
+PLANT_EDIT["sparse"] = [("export const AREA_QUOTA = true;", "export const AREA_QUOTA = false;"), ("export const CENTRE_GROUPS = true;", "export const CENTRE_GROUPS = false;")]
 
 
 class PlantView:
@@ -81,15 +88,20 @@ def install_plant(s, args, plant):
     if b is None:
         raise C.EnvFailure("plant: %s is not in the served tree" % HG_REL)
     src = b.decode("utf-8").replace("\r\n", "\n")
-    old, new = PLANT_EDIT[plant]
-    if src.count(old) != 1:
-        raise C.EnvFailure("plant %s: the phase-5 model switch was not found once in housegen.js (found %d)" % (plant, src.count(old)))
-    body = src.replace(old, new).encode("utf-8")
+    edits = PLANT_EDIT[plant] if isinstance(PLANT_EDIT[plant], list) else [PLANT_EDIT[plant]]
+    for old, new in edits:
+        if src.count(old) != 1:
+            raise C.EnvFailure("plant %s: %r was not found once in housegen.js (found %d)" % (plant, old[:60], src.count(old)))
+        src = src.replace(old, new)
+    body = src.encode("utf-8")
     s.disk.overrides.append((lambda url: urllib.parse.urlparse(url).path.endswith("/" + HG_REL),
                              lambda route: route.fulfill(status=200, body=body, headers={"Content-Type": "text/javascript", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})))
-    return "housegen.js served with phase 5 on the eye-only model (%s)" % plant
+    return "housegen.js served with the planted edit (%s)" % plant
 PX_MIN = 60
 VIEW_MIN = 3
+LIVED = {"living", "bedroom", "kitchen", "dining"}      # (W10 R1A) a home's lived rooms
+LIVED_MIN = 5                                          # pieces the camera sees from the best doorway of a lived room
+COVER_MIN = 0.20                                       # share of the frame below the horizon that is furniture
 
 PROBE = r"""
 () => {
@@ -292,6 +304,14 @@ PROBE = r"""
         const e = entrance(r);
         if (!e) { out.push({ house: q.H.id, room: r.id, kind: r.kind, floor: r.floor, views: 0, inView: 0, own: 0, per: [] }); continue; }
         const t = tp(e.x, e.y, e.z, e.fx, e.fz); const ref = read().slice();
+        // (W10 R1A) how much of the frame below the horizon is furniture: every piece of the house hidden at once, the changed pixels under the horizon row (a point
+        // 1 km ahead at the camera's height, projected) over all pixels under it
+        let fpx = 0, below = 0;
+        { const all = [...ops.values()]; for (const o of all) o.hide(); tp(e.x, e.y, e.z, e.fx, e.fz); const px = read(); for (const o of all) o.show();
+          const V = new THREE.Vector3(sc.cam.position.x + e.fx * 1000, sc.cam.position.y, sc.cam.position.z + e.fz * 1000).project(sc.cam);
+          const hr = Math.max(0, Math.min(h, Math.floor((V.y + 1) / 2 * h)));        // readPixels rows run from the bottom: rows 0 .. hr-1 lie under the horizon
+          for (let k = 0, end = hr * w * 4; k < end; k += 4) { below++; if (Math.abs(px[k] - ref[k]) + Math.abs(px[k + 1] - ref[k + 1]) + Math.abs(px[k + 2] - ref[k + 2]) > 24) fpx++; } }
+        tp(e.x, e.y, e.z, e.fx, e.fz);
         let n = 0, own = 0; const per = [];
         for (const p of q.H.furniture) {
           if (p.floor !== r.floor || p.deco || p.max[1] - p.min[1] < 0.25) continue;
@@ -302,7 +322,8 @@ PROBE = r"""
           let d = 0; for (let k = 0; k < px.length; k += 4) if (Math.abs(px[k] - ref[k]) + Math.abs(px[k + 1] - ref[k + 1]) + Math.abs(px[k + 2] - ref[k + 2]) > 24) d++;
           if (d >= 60) { n++; if (p.room === r.id) own++; per.push((p.room === r.id ? "" : "(next) ") + p.cat + ":" + d); }
         }
-        out.push({ house: q.H.id, room: r.id, kind: r.kind, floor: r.floor, views: r.views.length, model: e.seen, inView: n, own, per, at: [+e.x.toFixed(2), +e.z.toFixed(2)], pulled: t.pulled });
+        out.push({ house: q.H.id, use: q.H.use, room: r.id, kind: r.kind, floor: r.floor, views: r.views.length, model: e.seen, inView: n, own, per, at: [+e.x.toFixed(2), +e.z.toFixed(2)], pulled: t.pulled,
+          furnShare: below ? +(fpx / below).toFixed(3) : 0 });
       }
     }
     sc.sun.castShadow = shadow;
@@ -394,6 +415,16 @@ def main_fn(v, args):
                 k[1] += 1 if r["inView"] >= VIEW_MIN else 0
             v.check(label, vp and not poor, "%d of %d rooms show >= %d furniture pieces (>= %d px each) from the THIRD-PERSON camera at their best entrance; by kind [rooms, ok] %s; short %s" % (
                 len(vp) - len(poor), len(vp), VIEW_MIN, PX_MIN, bykind, [(r["room"], r["kind"], r["inView"], r.get("model"), r.get("per")) for r in poor[:8]]))
+            if flag:
+                # (W10 R1A) a HOME's lived rooms (living, bedroom, kitchen, dining) from their best doorway, the game's camera: >= LIVED_MIN pieces seen and >= COVER_MIN of the
+                # frame below the horizon is furniture (owner: "tiny homes with little furniture")
+                lived = [r for r in vp if r.get("use") == "house" and r["kind"] in LIVED]
+                few = [r for r in lived if r["inView"] < LIVED_MIN]
+                v.check("view-lived", bool(lived) and not few, "%d of %d lived rooms of the homes show >= %d pieces (>= %d px each) from the third-person camera at their best doorway; mean %.1f; short %s" % (
+                    len(lived) - len(few), len(lived), LIVED_MIN, PX_MIN, sum(r["inView"] for r in lived) / max(1, len(lived)), [(r["house"], r["room"], r["kind"], r["inView"]) for r in few[:8]]))
+                bare = [r for r in lived if r.get("furnShare", 0) < COVER_MIN]
+                v.check("view-lived-cover", bool(lived) and not bare, "%d of %d lived rooms: furniture >= %.0f %% of the frame below the horizon; median %.1f %%; short %s" % (
+                    len(lived) - len(bare), len(lived), COVER_MIN * 100, 100 * sorted(r.get("furnShare", 0) for r in lived)[len(lived) // 2] if lived else 0, [(r["house"], r["room"], r["kind"], r.get("furnShare")) for r in bare[:8]]))
             ownp = [r for r in vp if r["own"] < VIEW_MIN]
             v.info(label + "-own", "%d of %d rooms show >= %d of their OWN pieces from that view; mean pieces in view %.1f; %s" % (
                 len(vp) - len(ownp), len(vp), VIEW_MIN, sum(r["inView"] for r in vp) / max(1, len(vp)), [(r["room"], r["kind"], r["own"], r["inView"]) for r in ownp[:12]]))

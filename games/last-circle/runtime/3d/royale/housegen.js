@@ -141,6 +141,7 @@ export const RAIL_H = 1.0, RAIL_T = 0.1;   // the half-wall across a stairwell h
 export const PARAPET = 0.6;                // flat roofs: the parapet above the roof surface
 export const OVERHANG = 0.35;              // stepped (hip) roofs overhang the walls' outer faces
 export const CAPSULE = Object.freeze({ r: 0.45, h: 1.8, step: 0.55 });   // player.js STEP_UP, sim PLAYERK
+const CROUCH_H = 1.54;                                     // (W10 R1A) the crouched capsule (royale.js: 1.36 + 0.18 m) - nothing lower over a floor fits under it
 export const MAX_FLOORS = 3;               // O3
 export const TRI_BUDGET = 4000;            // per furnished storey
 // ---- Wave 10 round 1 (lane R1A, the houses audit): homes (use house, not a ruin) - each switch below is ON in the game; the homes gate (_harness/p23/homes.py) plants turn one off
@@ -261,6 +262,66 @@ const r3 = (v) => Math.round(v * 1000) / 1000;
 function shuffle(r, a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 
 // ── quarter turns (towngen's tables) ────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── (W10 R1A) collider merge: the structure's collision as the exact union of its boxes ────────────────────────────────────────────────
+// A room-by-room plan cuts a storey's slab into one box per room and its walls into one box per run between junctions: a query at a room junction got 3-4
+// slabs and every wall stub (houseload collider-load x1.6-1.9). Boxes of one part kind and one height span are replaced IN THE COLLISION by a rectangle
+// cover of their union (coordinate-compressed grid, the fewer of the x-first and z-first greedy covers): the same solid, so every mover, bullet and support
+// answer is unchanged. The drawn boxes stay as they were (c 0, cm 1); the cover boxes are collision-only (h 63: no face drawn, mergedCol 1). A group whose
+// cover is not smaller is left alone. The footstep surface inside a house is houseAt's (maps.js houseFloors: the DRAWN slabs, per room), never a cover's.
+const MERGE_PARTS = { wall: 1, slab: 1, fill: 1, trim: 1 };
+function coverRects(xs, zs, cov, nx, nz, xFirst, lap) {
+  // (lap: a rectangle grows through cells another rectangle already holds - overlapping covers: a wall cross is 2 boxes, not 3)
+  const used = new Uint8Array(nx * nz), out = [];
+  const A = xFirst ? nx : nz, B = xFirst ? nz : nx;
+  const at = xFirst ? (a, b) => b * nx + a : (a, b) => a * nx + b;
+  const can = (a, b) => cov[at(a, b)] && (lap || !used[at(a, b)]);
+  for (let b = 0; b < B; b++) for (let a = 0; a < A; a++) {
+    if (!cov[at(a, b)] || used[at(a, b)]) continue;
+    let a0 = a, a1 = a; while (a1 + 1 < A && can(a1 + 1, b)) a1++;
+    if (lap) while (a0 > 0 && can(a0 - 1, b)) a0--;
+    const row = (bb) => { for (let k = a0; k <= a1; k++) if (!can(k, bb)) return false; return true; };
+    let b0 = b, b1 = b; while (b1 + 1 < B && row(b1 + 1)) b1++;
+    if (lap) while (b0 > 0 && row(b0 - 1)) b0--;
+    for (let bb = b0; bb <= b1; bb++) for (let k = a0; k <= a1; k++) used[at(k, bb)] = 1;
+    out.push(xFirst ? [xs[a0], zs[b0], xs[a1 + 1], zs[b1 + 1]] : [xs[b0], zs[a0], xs[b1 + 1], zs[a1 + 1]]);
+  }
+  return out;
+}
+/** (W10 R1A) the collision cover of boxes (in place): returns the number of collider boxes saved. Exported for the selftest. */
+export function mergeColliderBoxes(boxes, palette) {
+  const groups = new Map(), n0 = boxes.length;
+  for (let bi = 0; bi < n0; bi++) {
+    const b = boxes[bi];
+    if (!b.c || !MERGE_PARTS[b.p]) continue;
+    const key = b.p + "|" + Math.round(b.min[1] * 1000) + "|" + Math.round(b.max[1] * 1000);
+    let g = groups.get(key); if (!g) groups.set(key, g = []); g.push(bi);
+  }
+  let saved = 0;
+  for (const g of groups.values()) {
+    if (g.length < 2) continue;
+    const xv = [], zv = [];
+    for (const bi of g) { const b = boxes[bi]; xv.push(Math.round(b.min[0] * 1000), Math.round(b.max[0] * 1000)); zv.push(Math.round(b.min[2] * 1000), Math.round(b.max[2] * 1000)); }
+    const xs = [...new Set(xv)].sort((a, b) => a - b), zs = [...new Set(zv)].sort((a, b) => a - b);
+    const nx = xs.length - 1, nz = zs.length - 1;
+    if (nx * nz > 4096) continue;                        // (never on a house: a guard on the grid's size)
+    const xi = new Map(xs.map((v, i) => [v, i])), zi = new Map(zs.map((v, i) => [v, i]));
+    const cov = new Uint8Array(nx * nz);
+    for (const bi of g) {
+      const b = boxes[bi], i0 = xi.get(Math.round(b.min[0] * 1000)), i1 = xi.get(Math.round(b.max[0] * 1000)), j0 = zi.get(Math.round(b.min[2] * 1000)), j1 = zi.get(Math.round(b.max[2] * 1000));
+      for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) cov[j * nx + i] = 1;
+    }
+    let R = null;
+    // (partitions only: overlapping covers are fewer boxes but stack two over one floor - a query there gets both)
+    for (const xf of [true, false]) { const c = coverRects(xs, zs, cov, nx, nz, xf, false); if (!R || c.length < R.length) R = c; }
+    if (R.length >= g.length) continue;
+    const s = boxes[g[0]], y0 = s.min[1], y1 = s.max[1];
+    for (const bi of g) { boxes[bi].c = 0; boxes[bi].cm = 1; }      // (cm: its collision is carried by a cover box - maps.js houseFloors reads the drawn slabs)
+    for (const r of R) boxes.push({ p: s.p, min: [r[0] / 1000, y0, r[1] / 1000], max: [r[2] / 1000, y1, r[3] / 1000], f: s.f.slice(), h: 63, c: 1, fl: s.fl, mergedCol: 1 });
+    saved += g.length - R.length;
+  }
+  return saved;
+}
+
 const COS = [1, 0, -1, 0], SIN = [0, 1, 0, -1];
 export const FACE = [[0, 1], [1, 0], [0, -1], [-1, 0]];        // quarter turn q -> world direction of local +Z
 const turnOfDir = (dx, dz) => (dz > 0.5 ? 0 : dx > 0.5 ? 1 : dz < -0.5 ? 2 : 3);
@@ -301,6 +362,27 @@ export const KIT_BOXES = {
   "furniture/lampRoundFloor": { min: [-0.167, 0, -0.193], max: [0.167, 1.892, 0.193], tris: 76, m: "interior" },
   "furniture/loungeChair": { min: [-0.539, 0, -0.451], max: [0.539, 1.012, 0.451], tris: 124, m: "interior" },
   "furniture/coatRackStanding": { min: [-0.3, 0, -0.3], max: [0.3, 1.694, 0.3], tris: 185, m: "interior" },
+  // (W10 R1A item 8) the 17 Kenney Furniture Kit 2.0 pieces (CC0) copied in for the homes' variety (manifest.json rows; a literal copy as above). Placed as per-house
+  // variants (VARIETY): the double wall unit, the big hood, the drawer nightstand, the glass coffee table, the relax armchair, the rounded dining chair, the pedestal
+  // basin, the vintage TV, the stacked washer-dryer, the bunk bed, the wall coat hooks. Shipped, not placed: the corner sofa (an L: one AABB leaves > 0.25 m empty), the
+  // round shower (2.77 m tall at FURN_K), the large fridge (wider than a kitchen-run unit), the upper corner unit, the mirror (the bath set's mirror is a drawn-only plate), the bench.
+  "furniture/hoodLarge": { min: [-0.473, 0, -0.313], max: [0.473, 0.813, 0.313], tris: 34, m: "interior" },
+  "furniture/kitchenCabinetUpperDouble": { min: [-0.473, 0, -0.242], max: [0.473, 0.858, 0.242], tris: 230, m: "interior" },
+  "furniture/kitchenCabinetUpperCorner": { min: [-0.237, 0, -0.231], max: [0.237, 0.858, 0.231], tris: 204, m: "interior" },
+  "furniture/kitchenFridgeLarge": { min: [-0.572, 0, -0.446], max: [0.572, 2.024, 0.446], tris: 436, m: "interior" },
+  "furniture/bathroomSink": { min: [-0.374, 0, -0.319], max: [0.374, 1.232, 0.319], tris: 312, m: "interior" },
+  "furniture/bathroomMirror": { min: [-0.331, 0, -0.159], max: [0.331, 0.956, 0.159], tris: 69, m: "interior" },
+  "furniture/showerRound": { min: [-0.618, 0, -0.618], max: [0.618, 2.407, 0.618], tris: 958, m: "interior" },
+  "furniture/loungeDesignSofaCorner": { min: [-1.485, 0, -1.485], max: [1.485, 0.88, 1.485], tris: 168, m: "interior" },
+  "furniture/loungeChairRelax": { min: [-0.539, 0, -0.742], max: [0.539, 1.386, 0.742], tris: 184, m: "interior" },
+  "furniture/chairRounded": { min: [-0.22, 0, -0.22], max: [0.22, 1.001, 0.22], tris: 278, m: "interior" },
+  "furniture/bedBunk": { min: [-0.628, 0, -1.204], max: [0.628, 1.87, 1.204], tris: 567, m: "interior" },
+  "furniture/cabinetBedDrawerTable": { min: [-0.293, 0, -0.239], max: [0.293, 0.579, 0.239], tris: 138, m: "interior" },
+  "furniture/tableCoffeeGlass": { min: [-0.727, 0, -0.44], max: [0.727, 0.506, 0.44], tris: 136, m: "interior" },
+  "furniture/televisionVintage": { min: [-0.451, 0, -0.297], max: [0.451, 0.594, 0.297], tris: 280, m: "interior" },
+  "furniture/washerDryerStacked": { min: [-0.429, 0, -0.429], max: [0.429, 2.068, 0.429], tris: 986, m: "interior" },
+  "furniture/coatRack": { min: [-0.493, 0, -0.148], max: [0.493, 0.616, 0.148], tris: 122, m: "interior" },
+  "furniture/bench": { min: [-0.44, 0, -0.22], max: [0.44, 1.034, 0.22], tris: 163, m: "interior" },
   // round 2 (lane H4): the interior types round 1 left unused (kitchen wall cabinets, microwave, a slim TV, sofas, shelving, lamps, laundry, ...).
   // Not taken: hoodModern, deskCorner, loungeSofaCorner / Long, tableRound (their drawn shapes leave > 0.25 m of an AABB collider empty), lampWall /
   // lampSquareCeiling (< 0.25 m, or hung where the camera pulls in), books (decor under 0.25 m).
@@ -505,9 +587,17 @@ function buildCatalog(over, remap) {
     const a = AUTH[id];
     let h = 0;
     for (const p of a.parts) h = Math.max(h, p[4]);
-    // lowTop: the lowest top among its colliders (a toilet's bowl, 0.46, under its 0.8 tank): what a planner may step onto
-    const lowTop = a.cols.length ? Math.min(...a.cols.map((g) => Math.max(...g.map((k) => a.parts[k][4])))) : r3(h);
-    C[id] = { id, auth: id, src: "box", type: "box/" + id, w: a.w, d: a.d, h: r3(h), lowTop: r3(lowTop), tris: authTris(a), surface: a.surface || null, deco: !!a.deco, wall: !!a.wall, mount: a.mountY ? "wall" : a.top ? "top" : "floor", y0: a.mountY || 0 };
+    // (W10 R1A) colKeep: the collider groups a mover can meet. A group that lies wholly under another group of the piece whose underside is lower over the
+    // floor than a crouched mover is tall (a table's legs under its top, a workbench's shelf under its worktop) is met by that top first: it is left out of
+    // the collision (a bullet under the top passes the legs, as in most shooters; the drawn parts are unchanged). Quarter turns keep "wholly under".
+    const gb = a.cols.map((g) => { const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity]; for (const k of g) { const q = a.parts[k]; for (let ax = 0; ax < 3; ax++) { mn[ax] = Math.min(mn[ax], q[ax]); mx[ax] = Math.max(mx[ax], q[ax + 3]); } } return [mn, mx]; });
+    const colKeep = [];
+    gb.forEach((B, i) => { if (!gb.some((Aq, j) => j !== i && Aq[0][0] <= B[0][0] + 1e-4 && Aq[1][0] >= B[1][0] - 1e-4 && Aq[0][2] <= B[0][2] + 1e-4 && Aq[1][2] >= B[1][2] - 1e-4 &&
+      Aq[0][1] >= B[1][1] - 1e-3 && Aq[0][1] + (a.mountY || 0) < CROUCH_H)) colKeep.push(i); });
+    // lowTop: the lowest top among its (reachable) colliders (a toilet's bowl, 0.46, under its 0.8 tank): what a planner may step onto
+    if (typeof process !== "undefined" && process.env.LC_NOKEEP) { colKeep.length = 0; for (let i = 0; i < a.cols.length; i++) colKeep.push(i); }
+    const lowTop = colKeep.length ? Math.min(...colKeep.map((i) => gb[i][1][1])) : r3(h);
+    C[id] = { id, auth: id, src: "box", type: "box/" + id, w: a.w, d: a.d, h: r3(h), lowTop: r3(lowTop), tris: authTris(a), surface: a.surface || null, deco: !!a.deco, wall: !!a.wall, mount: a.mountY ? "wall" : a.top ? "top" : "floor", y0: a.mountY || 0, colKeep: colKeep.length < a.cols.length ? colKeep : null };
   }
   // alt: the piece it replaces (an authored stand-in): the furnisher takes it when the room's / storey's triangle budget cannot take the kit piece
   for (const [id, type, surface, extra] of over || []) { const prev = C[id]; kit(id, type, surface, extra); if (prev) C[id].alt = prev; }
@@ -527,7 +617,12 @@ export const CATALOGS = {
     ["tvSet", "furniture/televisionModern", null, { mount: "top" }], ["sofaDesign", "furniture/loungeDesignSofa"],
     ["coffeeSq", "furniture/tableCoffeeSquare", 0.506], ["bookcaseOpen", "furniture/bookcaseOpen"], ["lampSq", "furniture/lampSquareFloor"], ["lampTable", "furniture/lampSquareTable", null, { mount: "top" }],
     ["nightLow", "furniture/cabinetBed", 0.513], ["bathCab", "furniture/bathroomCabinet", null, { mount: "wall", y0: 1.35 }],
-    ["tableCloth", "furniture/tableCloth", 0.719], ["chairMod", "furniture/chairModernCushion"], ["plantSmall", "furniture/plantSmall1", null, { mount: "top" }]],
+    ["tableCloth", "furniture/tableCloth", 0.719], ["chairMod", "furniture/chairModernCushion"], ["plantSmall", "furniture/plantSmall1", null, { mount: "top" }],
+    // (W10 R1A item 8) the variants (VARIETY)
+    ["upperDbl", "furniture/kitchenCabinetUpperDouble", null, { mount: "wall", y0: 1.62 }], ["hoodKit", "furniture/hoodLarge", null, { mount: "wall", y0: 1.75 }],
+    ["nightTable", "furniture/cabinetBedDrawerTable", 0.579], ["coffeeGlass", "furniture/tableCoffeeGlass", 0.506], ["armRelax", "furniture/loungeChairRelax"],
+    ["chairRound", "furniture/chairRounded"], ["basinPed", "furniture/bathroomSink"], ["tvVintage", "furniture/televisionVintage", null, { mount: "top" }],
+    ["washerStack", "furniture/washerDryerStacked"], ["bedBunk", "furniture/bedBunk"], ["coatHooks", "furniture/coatRack", null, { mount: "wall", y0: 1.45 }]],
   { box: "carton", boxOpen: "cartonOpen", chair: "chairMod", chairDesk: "officeChair", desk: "deskA", stove: "stoveBox", stool: "stoolA", coffee: "coffeeSq", screen: "monitor",
     ottoman: "stoolA", rack: "rackWall", pallet: "palletA", rugRect: "rugLarge", rugRound: "rugLarge", dresser: "dresserA", dryer: "washer", drawerCab: "counter", tableCross: "tableA",
     bookcaseLow: "shelfLow", bookcaseWide: "bookcase", coatRack: "coatRackA" }),
@@ -535,6 +630,10 @@ export const CATALOGS = {
 // the base profile has no round-2 kit types: a recipe asking for one gets the nearest piece the profile has (or nothing)
 const ALIAS = { rack: "shelf", lampSq: "plant", lamp: "plant", bookcaseLow: "shelfLow", bookcaseOpen: "bookcase", bookcaseWide: "bookcase", sofaDesign: "sofa", dresser: "sideTable",
   nightLow: "nightstand", drawerCab: "counter", chairMod: "chair", tableCross: "table", tableCloth: "table", coffeeSq: "coffee", boxOpen: "box", armchair: "chair", coatRack: "plant" };
+// (W10 R1A item 8) per-house model variety: a recipe id (after ALIAS) -> its variant in the catalog. Each house draws, on its own stream (subRng "kitvar": the
+// furnishing stream is untouched), which of these it takes (half of the houses each) - one choice for the whole house (every dining chair of a house alike)
+const VARIETY = [["upper", "upperDbl"], ["hood", "hoodKit"], ["nightstand", "nightTable"], ["nightLow", "nightTable"], ["coffeeSq", "coffeeGlass"], ["armchair", "armRelax"],
+  ["chairMod", "chairRound"], ["basin", "basinPed"], ["tvSet", "tvVintage"], ["washer", "washerStack"], ["bedSingle", "bedBunk"], ["coatRackA", "coatHooks"]];
 // a room's share of its storey's triangle budget is weighted by what it must hold (a kitchen's counter row and dining set cost ~1,400 triangles,
 // a bathroom's set is mostly authored boxes, a hall holds a lamp and a plant)
 const SHAREW = { ruin: 0.8, kitchen: 2.0, living: 1.5, shop: 1.5, lobby: 1.3, bedroom: 1.2, meeting: 1.2, office: 1.0, warehouse: 1.0, barn: 1.0, storage: 0.7, bath: 0.8, hall: 0.5 };
@@ -647,6 +746,9 @@ export function generate(parcel, opts) {
   const kitProfile = opts && CATALOGS[opts.kit] ? opts.kit : DEFAULT_KIT, CATALOG = CATALOGS[kitProfile];
   const rng = subRng(P.seed, P.id, "house");
   const TH = THEMES[P.theme];
+  // (W10 R1A item 8) this house's model variety (VARIETY): its own stream, so every other draw of the house is what it was
+  const VAR = {};
+  { const rv = subRng(P.seed, P.id, "kitvar"); if (!(typeof process !== "undefined" && process.env.LC_NOVAR)) for (const [id, v] of VARIETY) { const x = rv(); if (x < 0.5 && CATALOG[v]) VAR[id] = v; } }
   const rr5 = TH.ruined ? subRng(P.seed, P.id, "ruin") : null;          // (K1) a ruin's wreckage: its own stream (the house's rooms and furniture keep theirs)
   const { nx, nz } = P;
   const W = nx * U, D = nz * U;
@@ -2480,8 +2582,9 @@ export function generate(parcel, opts) {
     for (let ei = 0; ei < V.ents.length && ei < 30; ei++) {
       if (only && !(only & (1 << ei))) continue;
       const e = V.ents[ei];
-      const occE = near(occ, VIS_OCC, e.u, ey, e.v);
-      const o3 = acc ? near(occX || e.occ3, VIS_OCC3, e.cu, e.cy, e.cv) : null, one = acc && occX ? e.body : null;
+      // (lazy: built at the first sample point inside the view cone - most entrances see none of a candidate spot's points)
+      let occE = null, o3 = null;
+      const one = acc && occX ? e.body : null;
       let n = 0;
       for (let pi = 0; pi < 30; pi += 3) {
         const p0 = P[pi], p1 = P[pi + 1], p2 = P[pi + 2];
@@ -2494,6 +2597,7 @@ export function generate(parcel, opts) {
         if (Math.abs(dy) > hz * TAN_V) continue;
         const dist = Math.sqrt(hz * hz + dy * dy);
         if (dist < 0.2 || dist > 30) continue;
+        if (occE === null) occE = near(occ, VIS_OCC, e.u, ey, e.v);
         if (segBlocked(e.u, ey, e.v, p0, p1, p2, occE, 1 - 0.02 / dist, tall, rect, null)) continue;
         // (the accurate model) and from the third-person camera - through the doorway, past the body
         if (acc) { const du3 = p0 - e.cu, dv3 = p2 - e.cv, dy3 = p1 - e.cy, fwd3 = du3 * e.fu + dv3 * e.fv;
@@ -2503,7 +2607,9 @@ export function generate(parcel, opts) {
           const hz3 = Math.sqrt(fwd3 * fwd3 + lat3 * lat3);
           if (Math.abs(dy3) > hz3 * TAN_V3) continue;
           const dist3 = Math.sqrt(hz3 * hz3 + dy3 * dy3);
-          if (dist3 > 30 || segBlocked(e.cu, e.cy, e.cv, p0, p1, p2, o3, 1 - 0.02 / dist3, tall, rect, one)) continue; }
+          if (dist3 > 30) continue;
+          if (o3 === null) o3 = near(occX || e.occ3, VIS_OCC3, e.cu, e.cy, e.cv);
+          if (segBlocked(e.cu, e.cy, e.cv, p0, p1, p2, o3, 1 - 0.02 / dist3, tall, rect, one)) continue; }
         if (++n >= 2) break;
       }
       if (n >= 2) m |= 1 << ei;
@@ -2730,7 +2836,12 @@ export function generate(parcel, opts) {
       if (/pottedPlant/.test(t)) return !placed.some((q) => /pottedPlant/.test(q.cat.type || ""));
       return true;
     };
-    const catOf = (id) => { let c = CATALOG[id] || CATALOG[ALIAS[id]]; while (c && !budgetOK(c) && c.alt) c = c.alt; return capOK(c) ? c : null; };
+    let noVar = false;                                     // (W10 R1A item 8: set while a placement retries without its variant)
+    const catOf = (id) => {
+      const rid = CATALOG[id] ? id : ALIAS[id], vid = !noVar && rid && VAR[rid];          // (W10 R1A item 8) this house's variant of the piece, when the budget takes it
+      if (vid) { const v = CATALOG[vid]; if (v && budgetOK(v) && capOK(v)) return v; }
+      let c = CATALOG[id] || CATALOG[ALIAS[id]]; while (c && !budgetOK(c) && c.alt) c = c.alt; return capOK(c) ? c : null;
+    };
     // which entrance the room is dressed for: the one that already sees the most (ties: the door the room is reached through)
     const target = () => { const V = roomView(R); if (!V.ents.length) return 0; const b = bestView(R); return 1 << (b.ei >= 0 ? b.ei : V.prim); };
     // READ ON ENTRY: the room's entry is the door its spanning tree came through (the front door for the living room / shop, the stair exit upstairs);
@@ -2751,7 +2862,7 @@ export function generate(parcel, opts) {
     };
     // a piece against a wall (opts: tint, runFirst (run -> bool), also (run, g) -> bool, sideways, seen (only where the target entrance sees it),
     // y0 (a wall-hung piece: its bottom above the floor), hTop (the height the window rule tests, for a piece that will carry another))
-    const tryWall = (id, pref, opts) => {
+    const tryWall0 = (id, pref, opts) => {
       opts = opts || {};
       // (W10 R1A) a home's lived room takes its FILLER (lamps, plants, pictures, wall shelves, bins) after the area quota (phase 7): the quota gets the walls and the
       // storey budget first, the dressing what is left
@@ -2795,7 +2906,7 @@ export function generate(parcel, opts) {
       if (!p && R._acc && opts.seen) { R._acc = false; p = scan(cat, false); R._acc = true; if (p) p.vis = null; }
       return p;
     };
-    const tryAt = (id, u, v, fq, tint, touch) => {        // a piece centred at (u, v) facing fq
+    const tryAt0 = (id, u, v, fq, tint, touch) => {        // a piece centred at (u, v) facing fq
       const cat = catOf(id);
       if (!cat || !budgetOK(cat)) return null;
       const w = fq % 2 ? cat.d : cat.w, d = fq % 2 ? cat.w : cat.d;
@@ -2808,7 +2919,7 @@ export function generate(parcel, opts) {
       return p;
     };
     // a piece standing ON another one's top (a lamp on a nightstand, a TV on its cabinet, a microwave on a counter): back to the host's back edge
-    const stackOn = (host, id, opts) => {
+    const stackOn0 = (host, id, opts) => {
       opts = opts || {};
       if (!host || !furn.includes(host) || !host.cat.surface || host.tops || host.cat.h > host.cat.surface + 0.02 || (NOHOST.has(host.cat.id) && !opts.force)) return null;
       const cat = catOf(id);
@@ -2825,6 +2936,10 @@ export function generate(parcel, opts) {
       if (!roomOK()) { unput(p); return null; }
       return p;
     };
+    // (W10 R1A item 8) a house's variant (VARIETY) that finds no spot falls back to the piece it varies: the variety never costs a room a piece
+    const varOf = (id) => { const rid = CATALOG[id] ? id : ALIAS[id]; return rid ? VAR[rid] : null; };
+    const viaVar = (fn, idAt) => (...a) => { const r = fn(...a); if (r || noVar || !varOf(a[idAt])) return r; noVar = true; try { return fn(...a); } finally { noVar = false; } };
+    const tryWall = viaVar(tryWall0, 0), tryAt = viaVar(tryAt0, 0), stackOn = viaVar(stackOn0, 1);
     const hang = (cat, tint) => {
       const order = byView(shuffle(rng, solidRuns.slice()));
       for (const run of order) {
@@ -3935,12 +4050,15 @@ export function generate(parcel, opts) {
           for (const k of g) { const bb = outBoxes[parts[k]]; for (let a = 0; a < 3; a++) { mn[a] = Math.min(mn[a], bb.min[a]); mx[a] = Math.max(mx[a], bb.max[a]); } }
           return { min: mn, max: mx };
         });
+        const keep = cat.colKeep;            // (W10 R1A) the groups a mover can meet (buildCatalog: colKeep)
+        if (keep) rec.cols = keep.map((i) => rec.cols[i]);
       } else rec.cols = [];
     }
     if (cat.deco) { rec.deco = true; rec.cols = []; }
     furniture.push(rec);
   }
   })();
+  mergeColliderBoxes(outBoxes, palette);                    // (W10 R1A) the structure's collision as the union of its boxes (after every index into outBoxes is taken)
   // ramps (world): dir from the local rising direction
   const outRamps = ramps.map((rp) => {
     const wb = wbox(rp.lr[0], rp.lr[1], rp.y0, rp.y1, rp.lr[2], rp.lr[3]);

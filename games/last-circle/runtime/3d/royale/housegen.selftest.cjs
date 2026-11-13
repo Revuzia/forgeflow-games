@@ -53,6 +53,19 @@ const HG = path.join(__dirname, "housegen.js");
 const TG = path.join(__dirname, "towngen.js");
 const MANIFEST = path.join(ROOT, "assets", "props", "city", "manifest.json");
 const MANIFEST_INT = path.join(ROOT, "assets", "props", "city", "manifest_interior.json");     // lane H2 (Wave 8 stage A); merged into manifest.json in stage B
+/** (W10 R1A) X (a {min, max} box) lies inside the union of the boxes S (xz plane; S's height spans must hold X's): coordinate-compressed, 1 mm */
+function insideUnion(X, S) {
+  const r = (v) => Math.round(v * 1000);
+  const xs = new Set([r(X.min[0]), r(X.max[0])]), zs = new Set([r(X.min[2]), r(X.max[2])]);
+  const T = S.filter((b) => b.min[1] <= X.min[1] + 1e-3 && b.max[1] >= X.max[1] - 1e-3 && b.max[0] > X.min[0] && b.min[0] < X.max[0] && b.max[2] > X.min[2] && b.min[2] < X.max[2]);
+  for (const b of T) { for (const v of [r(b.min[0]), r(b.max[0])]) if (v > r(X.min[0]) && v < r(X.max[0])) xs.add(v); for (const v of [r(b.min[2]), r(b.max[2])]) if (v > r(X.min[2]) && v < r(X.max[2])) zs.add(v); }
+  const X1 = [...xs].sort((a, b) => a - b), Z1 = [...zs].sort((a, b) => a - b);
+  for (let i = 0; i + 1 < X1.length; i++) for (let j = 0; j + 1 < Z1.length; j++) {
+    const cx = (X1[i] + X1[i + 1]) / 2, cz = (Z1[j] + Z1[j + 1]) / 2;
+    if (!T.some((b) => r(b.min[0]) <= cx && r(b.max[0]) >= cx && r(b.min[2]) <= cz && r(b.max[2]) >= cz)) return false;
+  }
+  return true;
+}
 function loadManifest() {
   const man = JSON.parse(fs.readFileSync(MANIFEST, "utf8"));
   const types = Object.assign({}, man.types);
@@ -177,7 +190,18 @@ function checkHouse(H, HGmod, MAN) {
       if (!c || Math.abs(c.minX - b.min[0]) > 5e-4 || Math.abs(c.minY - b.min[1]) > 5e-4 || Math.abs(c.minZ - b.min[2]) > 5e-4 || Math.abs(c.maxX - b.max[0]) > 5e-4 || Math.abs(c.maxY - b.max[1]) > 5e-4 || Math.abs(c.maxZ - b.max[2]) > 5e-4) { bad = b.p; break; }
     }
     if (bad || k !== structCols.length) E("vis-col", "a collider with no drawn box (or a box drawn without its collider): " + bad); }
-  for (const b of H.boxes) if (!b.c && (b.p === "wall" || b.p === "slab" || b.p === "roof" || b.p === "rail" || b.p === "shell" || b.p === "leaf")) { E("vis-col", "drawn " + b.p + " box with no collider"); break; }
+  for (const b of H.boxes) if (!b.c && !b.cm && (b.p === "wall" || b.p === "slab" || b.p === "roof" || b.p === "rail" || b.p === "shell" || b.p === "leaf")) { E("vis-col", "drawn " + b.p + " box with no collider"); break; }
+  // (W10 R1A) the collision covers (housegen mergeColliderBoxes): per part kind and height span, the cover boxes (mergedCol, nothing drawn) and the drawn
+  // boxes they replace (cm) are the SAME solid - each inside the union of the other set, to the millimetre - and a cover never draws a face
+  { const grp = new Map(), key = (b) => b.p + "|" + Math.round(b.min[1] * 1000) + "|" + Math.round(b.max[1] * 1000);
+    for (const b of H.boxes) if (b.cm || b.mergedCol) { let g = grp.get(key(b)); if (!g) grp.set(key(b), g = { cm: [], mc: [] }); (b.mergedCol ? g.mc : g.cm).push(b); }
+    let bad = null;
+    for (const [k, g] of grp) {
+      if (g.mc.some((b) => b.h !== 63 || !b.c)) { bad = k + ": a cover box draws a face or does not collide"; break; }
+      if (!g.mc.length || !g.cm.length) { bad = k + ": covers without replaced boxes (or replaced boxes without covers)"; break; }
+      if (g.cm.some((b) => !insideUnion(b, g.mc)) || g.mc.some((b) => !insideUnion(b, g.cm))) { bad = k + ": the covers are not the union of the boxes they replace"; break; }
+    }
+    if (bad) E("vis-col", bad); }
   (() => {                                       // (a section of its own function: smaller units for the optimizing compiler)
   // dressing. A SKIN (trim, shutter, blind window) is drawn only: <= 1.5 cm thick and lying flat on ONE collider face that covers it. A door LEAF is a
   // collider <= 4 cm thick lying flat on a wall collider face (no slot behind it). A GLASS pane is drawn only, <= 2 cm, exactly in a window's aperture.
@@ -191,6 +215,8 @@ function checkHouse(H, HGmod, MAN) {
     const add = (k, c) => { let l = FI.get(k); if (!l) { l = []; FI.set(k, l); } l.push(c); };
     // key: (side * 3 + axis) * 1e9 + plane in mm (side 1 = a max face, facing +)
     for (const c of structCols) { const q = bxOf(c); for (let a = 0; a < 3; a++) { add((3 + a) * 1e9 + Math.round(q[3 + a] * 1000), q); add(a * 1e9 + Math.round(q[a] * 1000), q); } }
+    // (W10 R1A) a drawn box whose collision a cover carries (cm) is solid all through (the cover row below proves it inside the covers' union): its faces hold a skin as before
+    for (const b of H.boxes) if (b.cm) { const q = [b.min[0], b.min[1], b.min[2], b.max[0], b.max[1], b.max[2]]; for (let a = 0; a < 3; a++) { add((3 + a) * 1e9 + Math.round(q[3 + a] * 1000), q); add(a * 1e9 + Math.round(q[a] * 1000), q); } }
     return FI;
   };
   const flatOn = (b, thick) => {
@@ -270,7 +296,7 @@ function checkHouse(H, HGmod, MAN) {
   (() => {                                       // (a section of its own function: smaller units for the optimizing compiler)
   // culled faces: every face a box does not draw is covered from outside by ONE other drawn box (or lies at / under the pad)
   {
-    const sb = H.boxes.filter((b) => b.p !== "furn" && b.p !== "deco");
+    const sb = H.boxes.filter((b) => b.p !== "furn" && b.p !== "deco" && !b.mergedCol);      // (W10 R1A: a collision cover draws nothing - it neither needs nor gives cover)
     const BK = 2.5, bk = new Map();
     // (what may cover a face: a box, never a skin or a pane - a 1.5 cm trim or a see-through pane hides nothing behind it)
     for (const o of sb) { if (o.p === "skin" || o.p === "glass") continue; for (let i = Math.floor(o.min[0] / BK); i <= Math.floor(o.max[0] / BK); i++) for (let j = Math.floor(o.min[2] / BK); j <= Math.floor(o.max[2] / BK); j++) { const k = i * 100003 + j; let l = bk.get(k); if (!l) { l = []; bk.set(k, l); } l.push(o); } }
@@ -336,10 +362,14 @@ function checkHouse(H, HGmod, MAN) {
       for (const bi of p.parts) { const b = H.boxes[bi]; for (let a = 0; a < 3; a++) { mn[a] = Math.min(mn[a], b.min[a]); mx[a] = Math.max(mx[a], b.max[a]); } }
       let cn = [Infinity, Infinity, Infinity], cx = [-Infinity, -Infinity, -Infinity];
       for (const g of p.cols) for (let a = 0; a < 3; a++) { cn[a] = Math.min(cn[a], g.min[a]); cx[a] = Math.max(cx[a], g.max[a]); }
-      for (let a = 0; a < 3; a++) if (Math.abs(mn[a] - cn[a]) > TOL || Math.abs(mx[a] - cx[a]) > TOL) { E("vis-col", p.cat + " parts AABB != collider AABB"); break; }
+      // (W10 R1A) a group wholly under another of the piece, whose underside is lower over the floor than the crouched capsule (1.54 m), is not a
+      // collider (buildCatalog colKeep): the colliders' AABB keeps the parts' footprint and top exactly and may only start higher; a part outside every
+      // collider must lie wholly under (in plan, and below the underside of) one that a crouched mover cannot pass beneath
+      for (let a = 0; a < 3; a++) if ((a === 1 ? Math.abs(mx[a] - cx[a]) > TOL || cn[a] < mn[a] - TOL : Math.abs(mn[a] - cn[a]) > TOL || Math.abs(mx[a] - cx[a]) > TOL)) { E("vis-col", p.cat + " parts AABB != collider AABB"); break; }
       for (const bi of p.parts) {
         const b = H.boxes[bi];
-        if (!p.cols.some((g) => b.min[0] >= g.min[0] - TOL && b.min[1] >= g.min[1] - TOL && b.min[2] >= g.min[2] - TOL && b.max[0] <= g.max[0] + TOL && b.max[1] <= g.max[1] + TOL && b.max[2] <= g.max[2] + TOL)) { E("vis-col", p.cat + " part outside its colliders"); break; }
+        if (p.cols.some((g) => b.min[0] >= g.min[0] - TOL && b.min[1] >= g.min[1] - TOL && b.min[2] >= g.min[2] - TOL && b.max[0] <= g.max[0] + TOL && b.max[1] <= g.max[1] + TOL && b.max[2] <= g.max[2] + TOL)) continue;
+        if (!p.cols.some((g) => b.min[0] >= g.min[0] - TOL && b.min[2] >= g.min[2] - TOL && b.max[0] <= g.max[0] + TOL && b.max[2] <= g.max[2] + TOL && b.max[1] <= g.min[1] + TOL && g.min[1] - fy[p.floor] < 1.54)) { E("vis-col", p.cat + " part outside its colliders"); break; }
       }
     }
   }
@@ -777,14 +807,17 @@ async function runJobs(jobs) {
     const js = j.hashed ? JSON.stringify(H) : null, same = j.twice ? deepSame(H, HGmod.generate(p, j.opts)) : true;
     const errors = checkHouse(H, HGmod, MAN);
     if (!same) errors.push("determinism: two runs differ");
-    const catsOf = new Map(); for (const q of H.furniture) { let l = catsOf.get(q.room); if (!l) { l = []; catsOf.set(q.room, l); } l.push(q.cat); }
+    // (W10 R1A) one pass over the furniture: each room's cats, its pieces (loot hosts) and its substantive / deco counts (was a scan of every piece per room
+    // and per loot item: the homes' rooms and pieces grew, the bookkeeping grew with their product). The same values.
+    const catsOf = new Map(), piecesOf = new Map(), nSub = new Map(), nDeco = new Map();
+    for (const q of H.furniture) { let l = catsOf.get(q.room); if (!l) { l = []; catsOf.set(q.room, l); piecesOf.set(q.room, []); } l.push(q.cat); piecesOf.get(q.room).push(q); const m = q.deco ? nDeco : nSub; m.set(q.room, (m.get(q.room) || 0) + 1); }
     const keyed = new Map(), key = (k) => { let v = keyed.get(k); if (!v) { v = H.rooms.filter((r) => r.kind === k).map((r) => catsOf.get(r.id) || []); keyed.set(k, v); } return v; };
     const viewShort = H.rooms.filter((r) => Math.max(0, ...(r.views || []).map((v) => v.seen)) < 3).length;
     let lootIn = 0;
-    for (const l of H.loot) if (l.on !== "floor") { const p = H.furniture.find((q) => q.room === l.room && q.cat === l.on && l.x > q.min[0] && l.x < q.max[0] && l.z > q.min[2] && l.z < q.max[2]); if (p && l.y < p.max[1] - 0.005) lootIn++; }
+    for (const l of H.loot) if (l.on !== "floor") { const p = (piecesOf.get(l.room) || []).find((q) => q.cat === l.on && l.x > q.min[0] && l.x < q.max[0] && l.z > q.min[2] && l.z < q.max[2]); if (p && l.y < p.max[1] - 0.005) lootIn++; }
     out.push({ key: j.key, hash: j.hashed ? fnv(js) : null, errors, ms, kit: H.kit, viewShort, lootIn, leaves: (H.doorLeaves || []).length, leafDoors: H.doors.filter((d) => d.leaves).map((d) => d.kind), doorKinds: H.doors.map((d) => d.kind), intRefused: H.doors.filter((d) => d.kind === "interior" && HGmod.leafHash(d.id) >= HGmod.LEAF_SHARE).length, hasTop: H.furniture.some((q) => q.mount === "top"), shell: H.shell || 0, fh: H.fh, hasRug: H.furniture.some((q) => q.cat === "rug") && H.furniture.some((q) => q.deco && q.max[1] - q.min[1] > 0.1), bedrooms: key("bedroom").length, bedless: key("bedroom").filter((l) => !l.includes("bed") && !l.includes("bedSingle")).length,
       baths: key("bath").length, toiletless: key("bath").filter((l) => !l.includes("toilet")).length, livings: key("living").length, sofaless: key("living").filter((l) => !l.includes("sofa") && !l.includes("sofaDesign")).length, storeys: H.storeys, asked: H.storeysAsked, plan: H.plan, use: H.use, roof: H.roof, theme: H.theme, facade: H.facade.mat + ":" + H.facade.color, relief: H.boxes.reduce((a, b) => a + (b.p === "trim" ? 1 : 0), 0),
-      dens: H.rooms.map((r) => [r.kind, r.area, H.furniture.reduce((a, q) => a + (q.room === r.id && !q.deco ? 1 : 0), 0), H.furniture.reduce((a, q) => a + (q.room === r.id && q.deco ? 1 : 0), 0)]),
+      dens: H.rooms.map((r) => [r.kind, r.area, nSub.get(r.id) || 0, nDeco.get(r.id) || 0]),
       kitTypes: [...new Set(H.furniture.filter((q) => q.src === "kit").map((q) => q.kit.type))], rooms: H.rooms.length, kinds: H.rooms.map((r) => r.kind),
       furn: H.furniture.length, loot: H.loot.length, chests: H.chests.length, doors: H.doors.length, windows: H.windows.length, tris: H.tris.floors, notes: H.notes, colliders: H.boxes.reduce((a, b) => a + b.c, 0) + H.ramps.length + H.furniture.reduce((a, q) => a + (q.deco ? 0 : q.src === "kit" ? 1 : q.cols.length), 0) });
   }
