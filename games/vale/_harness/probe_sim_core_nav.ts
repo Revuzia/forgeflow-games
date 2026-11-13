@@ -55,7 +55,9 @@ for (const mode of ['corner graph', 'grid A*'] as const) section(`paths: ${mode}
   console.log(`  info: ${mode}: ${ms.toFixed(3)} ms per cross-wall search; grid searches ${nav.gridSearches}, ${(nav.expanded / Math.max(1, nav.gridSearches)).toFixed(0)} expansions avg`);
   if (mode === 'corner graph') {
     check('corner graph: convex wall corners inside the map become nodes', nav.graphNodeCount() === 2, nav.graphNodeCount());
-    check('corner graph answered without grid searches', nav.gridSearches === 0);
+    // ruling 36: a short query (< 16 m) whose corner route is far longer than the line also tries a local grid search,
+    // bounded to ((1.2 × 16 + 1) / cell)² × 1.6 ≈ 2600 expansions
+    check('corner graph answered without unbounded grid searches (only bounded local checks)', nav.expanded <= nav.gridSearches * 2700, { searches: nav.gridSearches, expanded: nav.expanded });
     // a dynamic obstacle on a graph leg gets patched by a grid search
     nav.addObstacle(30, 47, 1.2);
     check('corner graph: leg blocked by a structure is patched', nav.findPath(20, 20, 40, 20, path, 0.5) && nav.gridSearches > 0);

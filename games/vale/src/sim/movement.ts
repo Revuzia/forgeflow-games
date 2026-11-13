@@ -5,9 +5,10 @@
 // abilities.ts start the action once in range); taunt chases the taunter; fear walks away from
 // its source. An attack-move walks to its point and stops for the enemy it attacks; one with a
 // picked enemy (prefer) chases that enemy first, past nearer enemies, while it stays attackable.
-// A move goal is snapped once, when issued, to where the order can finish (nav.snapGoal: a click
-// into a wall, a structure or the border ends at the nearest open point near the click, a
-// pocket the walker cannot reach at the nearest point it can). Arrival: within 5 cm of the
+// A move goal is snapped once, when issued, to where the order can finish (nav.snapGoal, ruling 36: a
+// click into a wall, a structure or the border ends at the open point nearest the click that this
+// walker's body reaches without walking away from the click, else where its straight walk toward the
+// click stops; a pocket the walker cannot reach at the nearest point it can). Arrival: within 5 cm of the
 // point, or ARRIVE_STALL_TICKS of direct approach without real progress near it (a crowd
 // standing on the spot), or ARRIVE_GIVE_UP_TICKS of it anywhere (truly stuck): the order ends
 // instead of shoving or sliding in place forever. Units do not walk while winding up an attack, while casting (unless
@@ -19,6 +20,10 @@
 // walking, waypoints that are already in line of walk are skipped, and a walker that makes no
 // progress for NO_PROGRESS_TICKS (jostled in a crowd, a body parked on a corner node) treats a
 // near waypoint as reached or recomputes its route.
+// Steering (fighters, rulings 35/36): standing, slower or oncoming bodies on the line are passed along
+// their tangents (steerRound). Progress watchdog (fighters, steering included): a ~1 s window that
+// gains under 30 % of a full-speed walk off the route left re-plans and walks the route without
+// steering for a window; a second one in a row ends a move to a point (no steering in place).
 // Separation: overlapping mobile units push each other apart softly (half the overlap per tick,
 // less when idle); structures are hard circles. Walls win: a step into a blocked cell slides
 // along the free axis or stops. Blocking zones act like walls for the units they block.

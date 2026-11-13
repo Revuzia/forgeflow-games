@@ -205,6 +205,16 @@ section('plain right-click: an ally in front never turns an enemy click into a m
   at(c4, toScreen(50, 50, 0.4));
   c4.rightDown(false);
   check('…a click on the monster itself attacks it', last()?.type === 'attack' && (last() as { target: number }).target === 40, last());
+  // live r3 (ruling 36): a ground click by a wall 14 px from an enemy tower walked the hero 30 m into it
+  const c5 = controller();
+  views = [unit(1, 'fighter', 0, 40, 40, 0.5), unit(50, 'structure', 1, 50, 50, 1.2)];
+  const ts = toScreen(50 + 1.2 + 0.15, 50);
+  at(c5, { x: ts.x + 10, y: ts.y });
+  c5.rightDown(false);
+  check('a near miss (10 px) beside an enemy tower stays a move', last()?.type === 'move', last());
+  at(c5, toScreen(50, 50, 2));
+  c5.rightDown(false);
+  check('…a click on the tower itself attacks it', last()?.type === 'attack' && (last() as { target: number }).target === 50, last());
 });
 
 section('fightersOnly (held) picks the enemy fighter over a minion under the cursor', () => {

@@ -552,7 +552,12 @@ export class NavGrid {
         const lg = polyLen(sx, sy, out, base);
         if (lg > straight * 1.2 + 1) {
           const alt = this.alt; alt.length = 0;
-          if (this.gridPath(sx, sy, gx, gy, alt, radius)) {
+          // bounded: only a route under the threshold is worth finding (a wall that truly blocks costs ~nothing)
+          const keep = this.maxExpand, n = (straight * 1.2 + 1) / this.cell;
+          this.maxExpand = Math.min(keep, Math.ceil(n * n * 1.6) + 64);
+          let ok = false;
+          try { ok = this.gridPath(sx, sy, gx, gy, alt, radius); } finally { this.maxExpand = keep; }
+          if (ok) {
             const ax = alt[alt.length - 2], ay = alt[alt.length - 1];
             if (Math.abs(ax - gx) + Math.abs(ay - gy) < 1e-6 && polyLen(sx, sy, alt, 0) < lg) { out.length = base; for (let i = 0; i < alt.length; i++) out.push(alt[i]); }
           }
