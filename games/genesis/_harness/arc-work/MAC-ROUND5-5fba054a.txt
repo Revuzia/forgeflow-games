@@ -1,0 +1,22 @@
+GENESIS Mac ROUND 5, build 5fba054a (headers say "build 5fba054a+dirty built 2026-11-13T02:33Z"), preset Ultra.
+
+A. SETUP (8:42 PM CT): Pressure YELLOW, Swap Used 6.86 of 8.19 GB.
+   Lid CLOSED. External XZ320QU 2560x1440, dpr 1.25 (Round 4 used a Dell 1920x1080).
+   Window resized to match Round 4: 1686x1050, render 1686x873.
+   Could NOT quit Codex or close the other Chrome tabs: they hold the owner's own work. About 59 Chrome renderers running.
+
+B. STATIC RUNS (full texts in the attached file)
+   B1 base         1.7 fps  p50 567  p95 1167  GPU total mean 4967 ms  22.1M tris  alt 33 m  gpu mem 683 MB  angle copies 15.2 MB/frame  84 full GPU waits
+   B2 lazypools=0  2.0 fps  p50 533  p95  984  GPU total mean 3693 ms  24.6M tris  alt 60 m  gpu mem 692 MB  angle copies 18.7 MB/frame  51 waits
+   B3 base         1.8 fps  p50 567  p95 1134  GPU total mean 4380 ms  24.6M tris  alt 60 m  gpu mem 671 MB  angle copies 17.0 MB/frame  47 waits
+   B1 landed at 33 m (first run, right after the hard reload), so B2 vs B3 is the clean pair.
+   B1 main mean 152 ms, mostly shadows bufferSubData 115 ms/frame. B2 35 ms, B3 27 ms.
+
+C. FEEL: slideshow. 1.74 fps measured over 30 s of drag-panning.
+   Slow drag: it PANS, and the powers wheel did not open.
+
+D. FOREST: base (lazypools=1) is only very slightly darker inside the forest: denser dark canopy and a bit more ground shade.
+   The difference is small, about the size of the rain haze (both shots were raining). Not a clearly darker interior.
+
+E. AFTER (8:51 PM CT): Pressure YELLOW, Swap 8.29 of 9.22 GB.
+   GPU Process 3,101 MB, Genesis tab 2,587 MB (Round 4 end: 2,435 / 2,077).

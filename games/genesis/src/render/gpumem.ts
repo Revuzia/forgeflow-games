@@ -73,6 +73,11 @@ export class GpuMemAudit {
   private vaoFrame = new Map<object, number>();
   private bufVaos = new Map<object, Set<object>>();
   private vaoBufs = new Map<object, Set<object>>();
+  /** (PERF s16) each vertex array's CURRENT buffer per attribute slot (-1 = its index buffer): a slot re-pointed to
+   * another buffer (a ring of instance buffers, BufferAttribute swaps) no longer makes the old buffer 'in use' through
+   * the vertex array's later draws; the old buffer keeps the frame it was last drawn through it (bufFrame) */
+  private vaoSlots = new Map<object, Map<number, object>>();
+  private bufFrame = new Map<object, number>();
   /** this frame: bufferSubData calls / data bytes, whole-buffer copies (n / bytes), bufferData bytes, texSubImage bytes */
   private cur = { subN: 0, subB: 0, copyN: 0, copyB: 0, dataB: 0, texB: 0 };
   private hist: { subN: number; subB: number; copyN: number; copyB: number; dataB: number; texB: number }[] = [];
@@ -112,7 +117,7 @@ export class GpuMemAudit {
     wrap('bindBuffer', (a) => {
       self.boundBuf.set(a[0] as number, (a[1] as object) ?? null);
       // (an index buffer bound while a vertex array is bound belongs to that vertex array)
-      if (a[0] === gl.ELEMENT_ARRAY_BUFFER) self.link(a[1] as object);
+      if (a[0] === gl.ELEMENT_ARRAY_BUFFER) self.link(a[1] as object, -1);
     });
     wrap('bindBufferBase', (a) => { self.boundBuf.set(a[0] as number, (a[2] as object) ?? null); });
     wrap('bindRenderbuffer', (a) => { self.rb = (a[1] as object) ?? null; });
@@ -147,13 +152,15 @@ export class GpuMemAudit {
     wrap('texSubImage3D', (a) => { if (a.length >= 11 && typeof a[5] === 'number') texSub((a[5] as number) * (a[6] as number) * (a[7] as number) * bpp(gl, 0, a[8] as number, a[9] as number)); });
     // which buffers each vertex array reads (its attribute pointers and its index buffer), and when it was last drawn
     wrap('bindVertexArray', (a) => { self.vao = (a[0] as object) ?? null; });
-    const vaoUses = (buf: object | null | undefined) => self.link(buf);
-    wrap('vertexAttribPointer', () => { vaoUses(self.boundBuf.get(gl.ARRAY_BUFFER)); });
-    wrap('vertexAttribIPointer', () => { vaoUses(self.boundBuf.get(gl.ARRAY_BUFFER)); });
+    const vaoUses = (buf: object | null | undefined, slot: number) => self.link(buf, slot);
+    wrap('vertexAttribPointer', (a) => { vaoUses(self.boundBuf.get(gl.ARRAY_BUFFER), a[0] as number); });
+    wrap('vertexAttribIPointer', (a) => { vaoUses(self.boundBuf.get(gl.ARRAY_BUFFER), a[0] as number); });
     wrap('deleteVertexArray', (a) => {
       const v = a[0] as object;
+      const f = self.vaoFrame.get(v);
       self.vaoFrame.delete(v);
-      for (const b of self.vaoBufs.get(v) ?? []) self.bufVaos.get(b)?.delete(v);
+      self.vaoSlots.delete(v);
+      for (const b of self.vaoBufs.get(v) ?? []) { self.bufVaos.get(b)?.delete(v); if (f != null && (self.bufFrame.get(b) ?? -1) < f) self.bufFrame.set(b, f); }
       self.vaoBufs.delete(v);
     });
     const drew = () => { if (self.vao) self.vaoFrame.set(self.vao, self.frame); };
@@ -201,7 +208,7 @@ export class GpuMemAudit {
     wrap('renderbufferStorageMultisample', (a) => { const [, s, internal, w, h] = a as number[]; set(self.rb, 'rb', 'r', w * h * bpp(gl, internal) * Math.max(1, s), `${w}x${h} ${fmtName(gl, internal)} msaa${s}`); });
     const drop = (a: unknown[]) => {
       const o = a[0] as object; const e = o ? self.live.get(o) : null; if (e) { self.total -= e.bytes; self.live.delete(o); }
-      if (o) { for (const v of self.bufVaos.get(o) ?? []) self.vaoBufs.get(v)?.delete(o); self.bufVaos.delete(o); }
+      if (o) { for (const v of self.bufVaos.get(o) ?? []) self.vaoBufs.get(v)?.delete(o); self.bufVaos.delete(o); self.bufFrame.delete(o); }
     };
     wrap('deleteBuffer', drop);
     wrap('deleteTexture', drop);
@@ -226,9 +233,21 @@ export class GpuMemAudit {
   }
 
   /** the bound vertex array reads `buf` */
-  private link(buf: object | null | undefined): void {
+  private link(buf: object | null | undefined, slot: number): void {
     const v = this.vao;
     if (!v || !buf) return;
+    let sl = this.vaoSlots.get(v);
+    if (!sl) { sl = new Map(); this.vaoSlots.set(v, sl); }
+    const old = sl.get(slot);
+    sl.set(slot, buf);
+    if (old && old !== buf) {
+      // the old buffer was read through this vertex array until now: it keeps that draw's frame
+      const f = this.vaoFrame.get(v);
+      if (f != null && (this.bufFrame.get(old) ?? -1) < f) this.bufFrame.set(old, f);
+      let still = false;
+      for (const b of sl.values()) if (b === old) { still = true; break; }
+      if (!still) { this.bufVaos.get(old)?.delete(v); this.vaoBufs.get(v)?.delete(old); }
+    }
     let s = this.bufVaos.get(buf);
     if (!s) { s = new Set(); this.bufVaos.set(buf, s); }
     s.add(v);
@@ -243,6 +262,8 @@ export class GpuMemAudit {
 
   /** a buffer some vertex array drawn in the last IN_USE_FRAMES frames reads */
   private inUse(buf: object): boolean {
+    const bf = this.bufFrame.get(buf);
+    if (bf != null && this.frame - bf < IN_USE_FRAMES) return true;
     const s = this.bufVaos.get(buf);
     if (!s) return false;
     for (const v of s) { const f = this.vaoFrame.get(v); if (f != null && this.frame - f < IN_USE_FRAMES) return true; }
