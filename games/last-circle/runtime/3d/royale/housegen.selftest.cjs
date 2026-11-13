@@ -326,7 +326,8 @@ function checkHouse(H, HGmod, MAN) {
       const q = p.kit.rot, c = [1, 0, -1, 0][q], s = [0, 1, 0, -1][q];
       let mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
       for (const X of [t.bbox_min_m[0], t.bbox_max_m[0]]) for (const Y of [t.bbox_min_m[1], t.bbox_max_m[1]]) for (const Z of [t.bbox_min_m[2], t.bbox_max_m[2]]) {
-        const w = [p.kit.x + X * c + Z * s, p.kit.y + Y, p.kit.z - X * s + Z * c];
+        const k = p.kit.scale == null ? 1 : p.kit.scale;            // (W10 R1A: the entry's scale on top of suggested_scale - the size the game draws it)
+        const w = [p.kit.x + k * (X * c + Z * s), p.kit.y + k * Y, p.kit.z + k * (-X * s + Z * c)];
         for (let a = 0; a < 3; a++) { mn[a] = Math.min(mn[a], w[a]); mx[a] = Math.max(mx[a], w[a]); }
       }
       for (let a = 0; a < 3; a++) if (Math.abs(mn[a] - p.min[a]) > TOL || Math.abs(mx[a] - p.max[a]) > TOL) { E("vis-col", "kit " + p.kit.type + " collider != drawn bbox (axis " + a + ")"); break; }

@@ -108,7 +108,7 @@ function homeRows(M) {
         const cx = (h.min[0] + h.max[0]) / 2, cz = (h.min[2] + h.max[2]) / 2;
         return cx >= s.min[0] - 0.15 && cx <= s.max[0] + 0.15 && cz >= s.min[2] - 0.15 && cz <= s.max[2] + 0.15 && h.min[1] > s.max[1];
       }));
-      out.rooms.push({ h: H.id, kind: r.kind, floor: r.floor, area: r.area, nw: nw * 2.5, nl: nl * 2.5, cov: r3(fa / r.area), sub: f.filter((q) => !FILL.test(q.type)).length, all: f.length,
+      out.rooms.push({ h: H.id, kind: r.kind, floor: r.floor, area: r.area, nd: r.doors.length, nwin: H.windows.filter((x) => x.room === r.id).length, nw: nw * 2.5, nl: nl * 2.5, cov: r3(fa / r.area), sub: f.filter((q) => !FILL.test(q.type)).length, all: f.length,
         lamps: f.filter((q) => FLOORLAMP.test(q.type)).length, plants: f.filter((q) => PLANT.test(q.type)).length,
         bed: has(BED) ? 1 : 0, night: has(NIGHT) ? 1 : 0, ward: has(WARD) ? 1 : 0, sofa: has(SOFA) ? 1 : 0, coffee: has(COFFEE) ? 1 : 0, tv: has(TVU) ? 1 : 0,
         dine: r.kind === "kitchen" ? (dining(r.id) || [...(doorRooms.get(r.id) || [])].some(dining) ? 1 : 0) : 0,
