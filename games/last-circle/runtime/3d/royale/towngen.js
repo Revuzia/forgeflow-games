@@ -1013,7 +1013,17 @@ function settleShares(S, L, theme) {
       if ((p.use === "lot" || p.use === "shell") && !p.ident) if (convertToEnterable(S, L, p, theme)) n++;     // (P23: a POI's signature lot is never built over)
     }
   }
+  // (W10 R1A) the TOWN keeps >= TOWN_MIN_ENTERABLE enterable buildings (citycheck town-enterables): the bigger homes (>= 10 x 10 m on >= 12.5 m parcels) left a small
+  // Savanna town 5 on 6 of 200 seeds. Plain lots (parking / park / yard) are built on first, then the biggest shells, then a landmark lot; a POI's signature lot never
+  let nE = L.parcels.filter((p) => p.building && p.building.enterable).length;
+  if (nE < TOWN_MIN_ENTERABLE && L.blocks.length) {
+    const area = (p) => (p.rect[2] - p.rect[0]) * (p.rect[3] - p.rect[1]);
+    const rank = (p) => (p.use === "lot" && !LANDMARK_LOTS.includes(p.lot) ? 0 : p.use === "shell" ? 1 : 2);
+    const cand = L.parcels.filter((p) => (p.use === "lot" || p.use === "shell") && !p.ident).sort((a, b) => rank(a) - rank(b) || area(b) - area(a) || (a.id < b.id ? -1 : 1));
+    for (const p of cand) { if (nE >= TOWN_MIN_ENTERABLE) break; if (convertToEnterable(S, L, p, theme)) nE++; }
+  }
 }
+const TOWN_MIN_ENTERABLE = 6;
 function convertToEnterable(S, L, p, theme) {
   const rng = subRng(L.seed, L.id, p.id + "x");
   const [fx, fz] = p.facing, [fw, fd] = room(p.rect, fx, fz);
