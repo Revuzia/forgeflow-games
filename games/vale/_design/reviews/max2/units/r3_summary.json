@@ -1,0 +1,35 @@
+{
+ "lane": "units, max2 round 3 (implementer, on critic.json gap 'units lane' and verify3_q/r)",
+ "at": "2026-11-13 Central",
+ "method": "Albedo crown zones only (art/tools/zone_grades.json, re-applied by zone_grade.py on the shipped GLBs; no rebuild, no geometry, texture sizes unchanged). Iterated on scratch copies with lineup_qa (game camera, facings 0/180, crownPairs dE76), then the in-game crops: max_units_ab --variants all, seed 43 t 360 RIFT High (the verify3_q seed), picks A tunlan,dunsom,vashil,ervet,marund / B ardit,ilsheta,lisvel,sukri,odrum / C hesmi,burdam,kemdo,nurrow,ulkro (_harness/_shots/maxunits/u3_A|B|C; before = v3q_A/B).",
+ "changes": {
+  "ardit (major, verify3_q)": "helm #33739C L 42 C 38 (CIELAB h 256), pauldrons and tiers same hue L 54 C 26; the signature periwinkle #6D6CF2 moved to the coat (L 42 C 18, mid body). In game (seed 43, hue-cluster mean) Ardit's top reads L 65 C 27 h 269 (was h 276 cluster / 304 by verify3_q's lilac cluster): slate blue, out of the lilac family. lineup_qa crown: L 55 C 40 h 264 (was L 49 C 27 h 285). Crown dE76 to Vashil 34.9 / 28.2 and to Dunsom 27.9 / 32.7 (facing 0 / 180; was 11.6 / 9.1-ish class, verify3_q 8.3 / 8.4 in game); to Ervet 7.9 -> >= 25.",
+  "ervet": "crest, scarf and pauldrons #DF6CF2 -> #E0609F, C +6: the magenta leans redder (it rendered lilac h 297 in the lineup beside Ardit)",
+  "hesmi (cream crown)": "new recipe: the hood (box z >= 1.86 m x cloth roughness, the face wrap and eye band excluded by a notBox) a deep aubergine #5C0EC2 L 20 C 20. In game the hood reads violet at L* ~40-46 (Vashil's hood L* 65), see r3_gamecam_ab.png. Face untouched.",
+  "odrum (cream crown)": "new recipe: the felt cap a deep signature olive #B3A400 L 36 C 22 (mask untouched). Ruling 32 strict as for every zoned fighter: the whole bake's harm band 38.6 % -> 7.93 % with reserveModes harm=sat, reserveSat 0.25 (zone_grade.py gained the reserveSat key): the fewest, least-saturated band texels are desaturated to s 0.25, hue and value kept (mask, hands and pots read a little paler). The ladder needed aim 4 %, WebP q 60.",
+  "burdam (cream crown, model only)": "new zone: the cream cowl round the neck a deep oxblood #B30300 L 30 C 12 (box z 1.62-2.0 x cloth roughness x L* >= 33, the head and mask excluded by a ring r <= 0.15 m: cards lane). No rebuild, so no post-steps; GLB 1159.1 KiB.",
+  "ilsheta (cream crown)": "hood L 46 C 22 -> L 42 C 32 (signature green)"
+ },
+ "lineup_qa (art/renders/lineup/u3_units_post.json; pre r3_units_pre.json)": {
+  "crownPairs failing (dE76 < 25, min over facings 0/180)": "83 -> 73 of 120",
+  "ardit": "pairs failing 9 -> 4 (ilsheta 19.9, lisvel 21.5, burdam 23.7, marund 24.9); Vashil and Dunsom both >= 27.9",
+  "hesmi": "12 -> 8 (facing 0 its crown is the pale honed shards, unchanged: rishal 4.3, vashil 8.9)",
+  "odrum": "9 -> 9 (the 1.5 % cap is small; facing 0 the crown is the honey mask)",
+  "burdam": "7 -> 7 (the crown is his head and raised weapon: cards lane)",
+  "ilsheta": "14 -> 14 (her top is the staff lamp glass, not the hood)",
+  "honest reading": "the every-pair >= 25 gate is NOT met: lineup_qa's crown is the mean of the top 12 % of the silhouette, which mixes faces, masks, weapons and lamps under a bluish sky ambient (crown chroma 5-40), so 16 means cannot all sit 25 apart by recolouring coverings. Ardit vs Vashil/Dunsom (the critic's gate) passes.",
+  "value bands": "ardit top 54.4 / mid 54.5 / bottom 32.4 at facing 0 (r2f 53.9 / 55.5: still not monotone by 0.1; the pavise is in the mid band); hesmi top 53 (was 62); odrum top 60/42"
+ },
+ "ruling 32 (zone_grade reserved_pct, shipped albedo)": {"ardit": "ally 3.8, harm 0.94", "ervet": "harm 1.53", "hesmi": "harm 0.03", "odrum": "harm 7.93 (from 38.6; thin margin)", "burdam": "harm 7.62", "ilsheta": "harm 0.02"},
+ "budgets": "no triangle, texture-size or program change (albedo WebP re-encodes only). GLBs: ardit 1156.5, ervet 1156.2, hesmi 1137.7, odrum 1161.7, burdam 1159.1, ilsheta 1153.9 KiB (<= 1172). perf_1080 --prod --q high,ultra --match-seeds 7,11,23 (fresh npm run build): High 123k / 98 draws / 39 programs, Ultra 126k / 99 / 39; match seed 7 peak 427k / 285 / 40, seed 11 peak 506k / 273 / 40 (actors 361k) -> GATE FAIL by 6k for 1 s, seed 23 461k / 266 / 40. The seed-11 overshoot is not from this round (no geometry changed); the tree also carries another workflow's uncommitted src/sim bodypath/movement edits, which change who stands in the teamfight. Timing not measured (machine busy).",
+ "gates": "npm run -s build OK; npm run content OK (1 warning: catalog version not bumped); npm run -s probe 56 pass / 1 fail: probe_sim_core_orders (lateral offset 0.39 > 0.3, move end), the controls workflow's in-progress src/sim edits, not this lane",
+ "notDone": {
+  "U6 glass": "no change: the chimney/lamp glass is a factor-only material read by reflection in world_material.ts (programs at the 40 cap); a visible version needs a shader change or a lead call to close it",
+  "U1(2) ORM bands": "no change: roughness bands exist in the bake and are invisible at 28.5 m; lead call to re-scope",
+  "U7 head modelling": "not started: crowns are albedo breaks; no fighter .py head change (multi-session; would also stale the cards). Burdam/Dunsom heads are the cards lane's",
+  "seed 11 triangle payback": "not done (no geometry touched); needs an actor LOD/teamfight budget pass",
+  "Vashil vs Dunsom": "still near-identical lilac tops (Dunsom's hat is cards-lane head territory per this round's brief)"
+ },
+ "evidence": ["r3_lineup_ab.png (top: pre, bottom: post, lineup crown row)", "r3_gamecam_ab.png (row 1: ardit before/after, ervet before/after, vashil; row 2: hesmi before, hesmi after x2, odrum, burdam)", "r3_lineup_pre.json", "r3_lineup_post.json"],
+ "cardsNote": "cards render from the cached .blend unless --glb-albedo: ardit, ervet, hesmi, odrum, burdam, ilsheta base cards now show the pre-round-3 crown colours (cards lane)"
+}
