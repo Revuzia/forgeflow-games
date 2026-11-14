@@ -115,8 +115,11 @@ const STYLE_TAB = [
   /* DRING   */ [C_RING,   1.00, 0.85, 2.10, 0.70, 1.0, 0, 0,    0.70, 0],   // FLAT pulse expanding under a downed TEAMMATE ("over here")
   /* RRING   */ [C_RING,   1.00, 0.80, 0.45, 0.50, 1.0, 1, 0,    0.50, 0],   // FLAT ring contracting onto the downed player during a revive
   /* MOTE    */ [2,        1.00, 1.00, 0.40, 0.55, 2.3, 0, 0,    0.50, 0],   // rising light motes (revive channel / revived burst)
+  // ── W10 R2A swim splashes (visuals 10; desktop medium+). Ordinary alpha (water does not glow), FLAT on the water surface.
+  /* WRING   */ [C_RING,   0.05, 0.80, 3.20, 0.95, 1.0, 0, 0,    0.60, 0],   // the expanding ring on entering the water and on each stroke
+  /* WAKE    */ [C_RING,   0.00, 0.60, 1.70, 0.90, 1.0, 0, 0,    0.70, 0],   // the short foam wake left behind a stroke
 ];
-const ST_DRING = 23, ST_RRING = 24, ST_MOTE = 25;
+const ST_DRING = 23, ST_RRING = 24, ST_MOTE = 25, ST_WRING = 26, ST_WAKE = 27;
 const NS = STYLE_TAB.length;
 
 // ── C-GFX: per-tier FX quality ───────────────────────────────────────────────
@@ -1391,6 +1394,29 @@ function dropRevives(a) {
   for (let i = revives.length - 1; i >= 0; i--) if (revives[i].a === a || revives[i].r === a) revives.splice(i, 1);
 }
 /** A flat ring on the ground at an actor's feet (pool quad, level). */
+// ── W10 R2A swim splashes (visuals 10) ─────────────────────────────────────────
+// Desktop medium+ only (low and phones keep the 8 / 4 droplets), within SWIM_FX_R m of the camera, and at most SWIM_CAP of these sprites alive per
+// swimmer (its own list of the pool slots it took; a recycled slot no longer carries its owner, so it stops counting).
+const SWIM_CAP = 12, SWIM_FX_R = 90;
+const swimStats = { rings: 0, wakes: 0, capped: 0, maxLive: 0 };
+function swimFxOn(W, a) {
+  if (!a || !a.pos || (W._gfx && W._gfx.touch) || fxTierOf(W) === "low") return false;
+  const c = W.camera && W.camera.position;
+  return !c || Math.hypot(c.x - a.pos.x, c.z - a.pos.z) < SWIM_FX_R;
+}
+function swimSprite(W, a, x, z, size, life, st) {
+  const L = a._wfx || (a._wfx = []);
+  for (let i = L.length - 1; i >= 0; i--) if (!(L[i].alive && L[i]._own === a)) L.splice(i, 1);
+  if (L.length >= SWIM_CAP) { swimStats.capped++; return null; }
+  const wm = W.map && W.map.water, y = (wm ? wm.position.y : W.map.waterY) + 0.05;   // the live (bobbing) surface
+  const p = spawnRaw(x, y, z, 0, 0, 0, st === ST_WAKE ? 0xeef7f5 : 0xdff1f4, size, life, 0, 0, null, 0, st);
+  setCode(p, C_RING, true);
+  p._own = a; L.push(p);
+  if (st === ST_WAKE) swimStats.wakes++; else swimStats.rings++;
+  if (L.length > swimStats.maxLive) swimStats.maxLive = L.length;
+  return p;
+}
+
 function feetRing(W, x, y, z, color, size, life, st) {
   // on a slope the ring lies IN the ground plane (tilted to the terrain normal): a level ring on a hillside sank
   // half under the grass and read as a stray arc. Indoors / on roofs (feet well above the terrain) floors are level.
@@ -1617,9 +1643,16 @@ function wireEvents(W) {
   W.events.on("swimState", (a, swimming) => {
     if (!swimming) return;
     burst({ x: a.pos.x, y: W.map.waterY + 0.1, z: a.pos.z, n: 8, color: [0xbfe8f5, 0x7fc9e0], speed: 3, up: 2.5, size: 0.1, life: 0.6, gravity: -6, st: ST_SPLASH });
+    if (swimFxOn(W, a)) { swimSprite(W, a, a.pos.x, a.pos.z, 1.0, 1.0, ST_WRING); swimSprite(W, a, a.pos.x, a.pos.z, 1.7, 1.25, ST_WRING); }
   });
   W.events.on("swimStroke", (a) => {
     burst({ x: a.pos.x, y: W.map.waterY + 0.05, z: a.pos.z, n: 4, color: 0xbfe8f5, speed: 2, up: 1.5, size: 0.08, life: 0.4, gravity: -5, st: ST_SPLASH });
+    if (swimFxOn(W, a)) {
+      swimSprite(W, a, a.pos.x, a.pos.z, 0.85, 0.85, ST_WRING);
+      // the wake: two small foam rings behind the swimmer (against its velocity), the older one further back
+      const vx = a.vel ? a.vel.x : 0, vz = a.vel ? a.vel.z : 0, vl = Math.hypot(vx, vz) || 1;
+      for (let k = 1; k <= 2; k++) swimSprite(W, a, a.pos.x - vx / vl * 0.55 * k, a.pos.z - vz / vl * 0.55 * k, 0.55 - 0.1 * k, 0.6, ST_WAKE);
+    }
   });
 
   W.events.on("actorHurt", (victim, info) => {
@@ -1999,6 +2032,7 @@ export function readback(W) {
     dbno: { downedTracked: downedList.length, revivesLive: revives.length, downedFx: dbnoStats.downedFx, revivedFx: dbnoStats.revivedFx,
             reviveQuads: dbnoStats.reviveQuads, dripQuads: dbnoStats.dripQuads, pulseQuads: dbnoStats.pulseQuads },
     fall: { count: dbnoStats.fallFx, last: dbnoStats.lastFall },
+    swim: Object.assign({ cap: SWIM_CAP }, swimStats),
     decals: decalMesh ? { slots: DECAL_ALL, bullet: Math.min(decalCursor, DECAL_N), scorch: Math.min(scorchPlaced, SCORCH_N), group: decalMesh.parent ? decalMesh.parent.name : null } : null,
     camShake: W ? +(W.camShake || 0).toFixed(3) : 0,
     muzzle: _lastFlash.idx >= 0 ? Object.assign({}, _lastFlash) : null,
