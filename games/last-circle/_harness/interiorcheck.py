@@ -464,7 +464,12 @@ def main(v, args):
             ln = sum(c[side]["livedNear"] for _, c in cws)
             lmin = min([c[side]["livedMin"] for _, c in cws if c[side]["livedFrames"]] or [None]) if lf else None
             hist = [sum(c[side]["livedHist"][k] for _, c in cws) for k in range(5)]
-            rows.check("camwall-lived", None if not lf else ln == 0, "%s sweep: %d of %d lens frames in lived rooms of %d houses within %.1f m of a wall box (nearest %s m); distances [<0.1, <0.2, <0.3, <0.5, >=0.5] %s; %s" % (
+            # (pass 3) the gate's reference house (--source fixture) has no lived room at all: nothing to judge there - reported, not a could-not-judge row (the row is
+            # judged on --source match / housegen, where the homes stand; there 0 lived frames stays could-not-judge)
+            if not lf and args.source == "fixture":
+                v.info("camwall-lived", "the fixture house has no lived room (living, bedroom, kitchen, dining): judged on --source match / housegen")
+            else:
+              rows.check("camwall-lived", None if not lf else ln == 0, "%s sweep: %d of %d lens frames in lived rooms of %d houses within %.1f m of a wall box (nearest %s m); distances [<0.1, <0.2, <0.3, <0.5, >=0.5] %s; %s" % (
                 "pull-in OFF (plant)" if side == "off" else "pull-in on", ln, lf, len(cws), 0.3, None if lmin is None else round(lmin, 3), hist,
                 [e for _, c in cws for e in c[side]["livedEx"]][:4]))
         else:
