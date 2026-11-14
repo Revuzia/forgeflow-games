@@ -2515,7 +2515,7 @@ export function generate(parcel, opts) {
   // view until every room shows >= VIEW_WANT pieces from its best entrance (or nothing fits: the floor plan, the doors, the budget).
   const TAN_H = 0.9004, TAN_V = 0.5206, EYE_H = 1.62, VIEW_WANT = 4;      // (round 3: 42 x 27.5 deg half-angles, inside interiorcheck's 44 x 28.5; round 2 used 40 x 26)
   // the third-person camera's view (player.js: vertical 57 deg, 16:9 -> 88 deg across; judged a little inside: 84 x 54) and its boom
-  const TAN_H3 = 0.9004, TAN_V3 = 0.5095, CAM3 = { dist: 4.2, shoulder: 0.7, lift: 0.25, r: 0.28, minD: 0.12 };
+  const TAN_H3 = 0.9004, TAN_V3 = 0.5095, CAM3 = { dist: 4.2, shoulder: 0.7, lift: 0.25, r: 0.32, minD: 0.12 };      // (W10 R1A pass 3: r = player.js CAM_R, 0.28 -> 0.32)
   // camRayHit (player.js) over the structure colliders: the first t in (0, 1] at which the boom o + t d enters a box grown by r
   const camHit = (ox, oy, oz, dx, dy, dz, r) => {
     let best = 1;

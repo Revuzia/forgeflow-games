@@ -393,6 +393,8 @@ GATES = [
     # lane net's live probe, promoted in the fix round (cases mode / mode3 / match; the in-process server with backlog 256; a browser-level wrong-key rejoin)
     ("p23_netlive", "p23/netlive.py", [], 5400, P23_PENDING),
     # INFORMATION (never counted): the live-measure probe on the iGPU profile (a player's first run; perfcheck's own default is the dGPU)
+    # ---- Wave 10 R1B (guns in hand): w10_gunhold - grip, flash-tip, smg-dir, pistol (slide <= 1.1 m/s on EVERY skin), lengths, death, flinch, flash-size, sheen
+    ("w10_gunhold", "p23/gunhold.py", [], 3600, False),
     ("perfcheck_igpu", "perfcheck.py", ["--profile", "default", "--label", "perfcheck_igpu"], 7200, True),
 ]
 # planted faults that MUST make a passing gate fail (the gate's own falsifier)
@@ -711,6 +713,17 @@ NEGATIVE = [
     # (P2/P3 fix round) player_deaths' facing row judges the VISIBLE facing (the torso; toes are information for the sprint-strafe / run clips):
     # every model turned 90 deg inside its actor must still fail it
     ("player_deaths-plant-rig-turned", "new/player_deaths.py", ["--plant", "rig-turned"], 3600),
+    # ---- Wave 10 R1B: each planted fault must FAIL its own w10_gunhold row; the W9 tip 361c5ec3 (no R1B) must FAIL the gate
+    ("w10_gunhold-plant-open-hand", "p23/gunhold.py", ["--skins", "soldier", "--plant", "open-hand", "--parts", "guns"], 1800),
+    ("w10_gunhold-plant-flash-table", "p23/gunhold.py", ["--skins", "soldier", "--plant", "flash-table", "--parts", "flash"], 1800),
+    ("w10_gunhold-plant-smg-back", "p23/gunhold.py", ["--skins", "soldier", "--plant", "smg-back", "--parts", "guns"], 1800),
+    ("w10_gunhold-plant-hip-pistol", "p23/gunhold.py", ["--skins", "soldier,athlete", "--plant", "hip-pistol", "--parts", "pistol"], 1800),
+    ("w10_gunhold-plant-gun-in-dead-hand", "p23/gunhold.py", ["--skins", "soldier", "--plant", "gun-in-dead-hand", "--parts", "death"], 1800),
+    ("w10_gunhold-plant-flinch-speed-gate", "p23/gunhold.py", ["--skins", "soldier", "--plant", "flinch-speed-gate", "--parts", "flinch"], 1800),
+    ("w10_gunhold-plant-short-guns", "p23/gunhold.py", ["--skins", "soldier", "--plant", "short-guns", "--parts", "guns"], 1800),
+    ("w10_gunhold-plant-small-flash", "p23/gunhold.py", ["--skins", "soldier", "--plant", "small-flash", "--parts", "flash"], 1800),
+    ("w10_gunhold-plant-shiny-skin", "p23/gunhold.py", ["--skins", "soldier", "--plant", "shiny-skin", "--parts", "sheen"], 1800),
+    ("w10_gunhold-rev-w9-tip", "p23/gunhold.py", ["--rev", "361c5ec3"], 3600),
 ]
 # the P2 / P3 feature gates' planted faults: they bite only on a tree that HAS the feature (on the base every one of them fails anyway, which proves
 # nothing), so they join the negative controls when the integrator sets P23_PENDING = False

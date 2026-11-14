@@ -35,13 +35,18 @@ import { makeSquad } from "../ai/squad.js";
 import { slotsFromList, grant as grantWeapon } from "./loadout.js";
 import { makeLoot } from "./loot.js";
 import { makeStreaks } from "./streaks.js";
+import { resolveKit, perkMap, opponentClass, DEFAULT_CLASSES } from "./classes.js";
+import { perksOnDeath } from "./perks.js";
+import { weaponForBody } from "./attachments.js"; // [gunsmith] per-body effective weapon tables
+// [equipment lane] tactical + lethal equipment (flash/smoke/stun/tripmine)
+import { stepEquipment, equipOnShot, equipOnDeath, resetStatus as resetEquipStatus } from "./equipment.js";
 
 const DT = 1 / 60;
 
 const NULL_CMD = {
   moveX: 0, moveZ: 0, yaw: 0, pitch: 0, jump: false, crouch: false,
   sprint: false, fire: false, ads: false, reload: false, switchTo: null,
-  interact: false, grenade: false, streak: 0,
+  interact: false, grenade: false, streak: 0, tactical: false, melee: false, // [melee]
 };
 
 export function createSim(opts = {}) {
@@ -82,8 +87,28 @@ export function createSim(opts = {}) {
   const loadoutSlots = (mode && pvpLoadout && pvpLoadout.slots)
     || (content && content.mission && content.mission.loadout && content.mission.loadout.slots)
     || ["warden", "pike"];
-  const primary = loadoutSlots[0];
-  const wTable = weapons[primary] || { mag: 30, reserve: 120 };
+  // LOADOUT CLASSES (core/sim/classes.js). A PVP sim spawns every combatant
+  // from a CLASS kit (primary + secondary + lethal + three perks) when the
+  // match asks for it — opts.classes, else content.pvpClassSelected (the
+  // mode-select screen writes it, same ctx.content channel as the campaign's
+  // difficultySelected). Absent, or {enabled:false} (the PISTOL START
+  // playlist), keeps the pistol-start-and-scavenge rule above byte-for-byte —
+  // every headless selftest and the campaign take that path.
+  const classCfg = mode ? (opts.classes || (content && content.pvpClassSelected) || null) : null;
+  const classesOn = !!(classCfg && classCfg.enabled !== false);
+  const classes = {
+    on: classesOn,
+    seed: (seed >>> 0),
+    playerKit: classesOn
+      ? resolveKit((classCfg && classCfg.player) || DEFAULT_CLASSES[0], { weapons, classId: classCfg && classCfg.classId != null ? classCfg.classId : 0 })
+      : null,
+    pendingKit: null, // takes effect at the next respawn (sim.setPlayerClass)
+  };
+  const kitSlots = classes.playerKit ? [classes.playerKit.primary, classes.playerKit.secondary].filter(Boolean) : null;
+  const primary = kitSlots && kitSlots.length ? kitSlots[0] : loadoutSlots[0];
+  // [gunsmith] the kit's build (extended mag) sizes the starting ammo
+  const kitBody = classes.playerKit ? { kit: classes.playerKit } : null;
+  const wTable = weaponForBody(weapons, kitBody, primary) || { mag: 30, reserve: 120 };
 
   const state = {
     tick: 0,
@@ -104,9 +129,11 @@ export function createSim(opts = {}) {
         id: primary, mag: wTable.mag, reserve: wTable.reserve, state: "idle",
         ads: false, adsT: 0, recoilIndex: 0, stateT: 0,
       },
-      slots: slotsFromList(loadoutSlots),
+      slots: slotsFromList(kitSlots || loadoutSlots),
       speedNorm: 0,
-      grenades: (content && content.mission && content.mission.loadout && content.mission.loadout.grenades) || tun.grenades,
+      grenades: classes.playerKit ? classes.playerKit.lethalCount
+        : (content && content.mission && content.mission.loadout && content.mission.loadout.grenades) || tun.grenades,
+      tactical: classes.playerKit ? classes.playerKit.tacticalCount | 0 : 0, // [equipment lane]
       lastDamageT: -999,
       _slotAmmo: null,
       _m: null,
@@ -114,6 +141,7 @@ export function createSim(opts = {}) {
     bots: [],
     objectives: [],
     match: null, // filled by match.start() in PVP (Part 3.2); null in campaign
+    smokes: [],  // [equipment lane] live smoke volumes {id,pos,radius,density,until} (equipment.js; aim_assist reads)
     counters: {
       shotsFired: 0, shotsHit: 0, kills: 0, headshots: 0,
       damageDealt: 0, damageTaken: 0, deaths: 0,
@@ -123,8 +151,38 @@ export function createSim(opts = {}) {
   state.player._slotAmmo = {};
   for (const id of state.player.slots) {
     if (!id) continue;
-    const wt = weapons[id];
+    const wt = weaponForBody(weapons, kitBody, id); // [gunsmith]
     state.player._slotAmmo[id] = { mag: wt ? wt.mag : 0, reserve: wt ? wt.reserve : 0 };
+  }
+  if (classes.playerKit) {
+    state.player.kit = Object.assign({}, classes.playerKit);
+    state.player.perks = perkMap(classes.playerKit);
+  }
+
+  // Put a resolved kit on a body (player or bot): fixed-slot weapons with full
+  // ammo, the primary in hand, lethal count, perk map.
+  function applyKit(body, kit) {
+    const ids = [kit.primary, kit.secondary].filter((id) => id && weapons[id]);
+    const first = ids[0] || loadoutSlots[0];
+    const kb = { kit }; // [gunsmith] ammo sized by the kit's build
+    const wt = weaponForBody(weapons, kb, first) || { mag: 30, reserve: 120 };
+    body.slots = slotsFromList(ids.length ? ids : [first]);
+    body._lastWeapon = null;
+    body._slotAmmo = {};
+    for (const sId of body.slots) {
+      if (!sId) continue;
+      const t2 = weaponForBody(weapons, kb, sId); // [gunsmith]
+      if (t2) body._slotAmmo[sId] = { mag: t2.mag, reserve: t2.reserve };
+    }
+    const w = body.weapon;
+    w.id = first; w.mag = wt.mag; w.reserve = wt.reserve;
+    w.state = "idle"; w.stateT = 0; w.ads = false; w.adsT = 0;
+    w.recoilIndex = 0; w._shotCount = 0; w._reloadCommitted = false;
+    body.grenades = kit.lethalCount | 0;
+    body.tactical = kit.tacticalCount | 0; // [equipment lane]
+    resetEquipStatus(body);                 // [equipment lane] no flash/stun carried across a life
+    body.kit = Object.assign({}, kit);
+    body.perks = perkMap(kit);
   }
 
   let nextBotId = 1;
@@ -153,12 +211,15 @@ export function createSim(opts = {}) {
     tuning: tun, // C25 balance seam — identity in wave 1; W11 flips the data
     emit: (type, data) => {
       if (type === "shot" && !data.impactOnly && !data.pen) internal.shotsAnyTotal++;
+      if (type === "shot" && data && data.hit && internal.equip) equipOnShot(sim, data); // [equipment lane] shoot a tripmine
       // Deaths feed the world systems BEFORE the event is bridged: loot drops the
       // body's gun where it fell; streaks count the kill (and may emit its medal
       // events, which the HUD reads in the same dispatch).
       if (type === "death" && data) {
         if (sim.loot) sim.loot.onDeath(sim, data);
         if (sim.streaks) sim.streaks.onDeath(sim, data);
+        if (classes.on) perksOnDeath(sim, data); // SALVAGER resupply (class matches only)
+        if (internal.equip) equipOnDeath(sim, data); // [equipment lane] owner's tripmines expire
       }
       emit(type, data);
     },
@@ -191,7 +252,7 @@ export function createSim(opts = {}) {
       // here — between the brains writing cmd and locomotion consuming it.
       if (sim.match && sim.match.botsFrozen && sim.match.botsFrozen()) {
         for (const b of state.bots) {
-          if (b.cmd) { b.cmd.fire = false; b.cmd.moveX = 0; b.cmd.moveZ = 0; b.cmd.sprint = false; b.cmd.grenade = false; }
+          if (b.cmd) { b.cmd.fire = false; b.cmd.moveX = 0; b.cmd.moveZ = 0; b.cmd.sprint = false; b.cmd.grenade = false; b.cmd.melee = false; } // [melee]
         }
       }
 
@@ -230,6 +291,7 @@ export function createSim(opts = {}) {
       // 5. projectiles + grenades + damage resolution + regen
       stepProjectiles(sim, DT);
       stepGrenades(sim, world, DT);
+      stepEquipment(sim, world, DT); // [equipment lane] canisters, smoke volumes, tripmines
       stepHealth(sim, DT);
 
       // 5.5 world systems: ground loot pick-ups + the streak call-ins in flight
@@ -271,9 +333,14 @@ export function createSim(opts = {}) {
       // difficulty setting, it is an unwinnable match. The archetype still
       // drives BEHAVIOUR (rifleman/cqb/marksman positioning) — only the starting
       // gun is equalised, and bots pick up racks by walkover like anyone else.
-      const startWeapon = (mode && pvpLoadout && pvpLoadout.slots && pvpLoadout.slots[0]) || null;
-      const weaponId = startWeapon || (arch ? arch.weapon : (weapons.warden ? "warden" : Object.keys(weapons)[0]));
-      const wt = weapons[weaponId] || { mag: 30, reserve: 90 };
+      // CLASS MATCH: the operator's class kit (sim.kitForActor, passed in by
+      // match.js spawnActor) replaces the pistol start — same symmetry, every
+      // combatant spawns armed from a class.
+      const kit = classes.on && spec.kit ? spec.kit : null;
+      const startWeapon = kit ? null : (mode && pvpLoadout && pvpLoadout.slots && pvpLoadout.slots[0]) || null;
+      const weaponId = (kit && weapons[kit.primary] && kit.primary) || startWeapon ||
+        (arch ? arch.weapon : (weapons.warden ? "warden" : Object.keys(weapons)[0]));
+      const wt = weaponForBody(weapons, kit ? { kit } : null, weaponId) || { mag: 30, reserve: 90 }; // [gunsmith]
       const bot = {
         id,
         archetype: spec.archetype,
@@ -312,6 +379,7 @@ export function createSim(opts = {}) {
         slots: slotsFromList([startWeapon || weaponId]),
         _slotAmmo: { [startWeapon || weaponId]: { mag: wt.mag, reserve: wt.reserve } },
       };
+      if (kit) applyKit(bot, kit);
       state.bots.push(bot);
       sim.emit("spawn", { botId: id, archetype: bot.archetype, pos: bot.pos.slice(), yaw: bot.yaw });
       return id;
@@ -356,6 +424,13 @@ export function createSim(opts = {}) {
      *  weapon does not persist across lives. */
     resetBodyLoadout(body) {
       if (!body) return;
+      if (classes.on && body === state.player) {
+        // a class picked while dead (or mid-life) lands here, on the respawn
+        if (classes.pendingKit) { classes.playerKit = classes.pendingKit; classes.pendingKit = null; }
+        applyKit(body, classes.playerKit);
+        return;
+      }
+      resetEquipStatus(body); // [equipment lane]
       const id = loadoutSlots[0];
       const wt = weapons[id] || { mag: 30, reserve: 120 };
       body.slots = slotsFromList(loadoutSlots);
@@ -370,6 +445,62 @@ export function createSim(opts = {}) {
       w.id = id; w.mag = wt.mag; w.reserve = wt.reserve;
       w.state = "idle"; w.stateT = 0; w.ads = false; w.adsT = 0;
       w.recoilIndex = 0; w._shotCount = 0;
+    },
+
+    // ---- loadout classes (class matches only; inert otherwise)
+    classes,
+    /** [gunsmith] the weapon table `body` actually fires for `id` (its kit's
+     *  build folded in; the shared table itself for every body without one). */
+    weaponOf(body, id) { return weaponForBody(weapons, body, id); },
+    /** Choose the human's class. Takes effect on the NEXT respawn (the CoD
+     *  rule), or right now with {immediate:true} — the match-start picker uses
+     *  that during warm-up, before a shot can be fired. `cls` is a saved class
+     *  ({name, primary, secondary, lethal, perks}); it is validated + resolved
+     *  here, so a malformed one can never put an illegal kit in the sim.
+     *  Returns the resolved kit, or null when this sim is not a class match. */
+    setPlayerClass(cls, o = {}) {
+      if (!classes.on) return null;
+      const kit = resolveKit(cls, { weapons, classId: o.classId != null ? o.classId : null, index: o.classId | 0 });
+      if (o.immediate && state.player.alive) {
+        classes.playerKit = kit; classes.pendingKit = null;
+        applyKit(state.player, kit);
+      } else {
+        classes.pendingKit = kit;
+      }
+      return kit;
+    },
+    /** [lane modes] Weapon-ladder modes (ASCENT): put exactly `id` — with the
+     *  gunsmith attachments `attach` — in `body`'s hands: one slot, full ammo,
+     *  no lethal / tactical, no perks. Same discipline as applyKit (body.kit
+     *  carries the build so weaponForBody / the viewmodel see the attachments).
+     *  knifeOnly: the ladder's last rung — the gun is carried EMPTY and stays
+     *  empty (match.js skips its ammo grants for a `_knifeOnly` body): the
+     *  melee verb is the only way to score. */
+    setLadderWeapon(body, id, attach, knifeOnly) {
+      if (!body || !weapons[id]) return false;
+      const kit = { classId: null, name: null, primary: id, secondary: null, lethal: null, lethalCount: 0,
+        tactical: null, tacticalCount: 0, perks: [], builds: {} };
+      if (attach && attach.length) kit.builds[id] = { attach: attach.slice(), camo: null };
+      const wt = weaponForBody(weapons, { kit }, id) || weapons[id];
+      body.slots = slotsFromList([id]);
+      body._lastWeapon = null;
+      body._slotAmmo = { [id]: { mag: wt.mag, reserve: wt.reserve } };
+      const w = body.weapon;
+      w.id = id; w.mag = wt.mag; w.reserve = wt.reserve;
+      w.state = "idle"; w.stateT = 0; w.ads = false; w.adsT = 0;
+      w.recoilIndex = 0; w._shotCount = 0; w._reloadCommitted = false;
+      body.grenades = 0;
+      body.tactical = 0;
+      body.kit = kit;
+      body.perks = {};
+      if (knifeOnly) { w.mag = 0; w.reserve = 0; body._slotAmmo[id].mag = 0; body._slotAmmo[id].reserve = 0; body._knifeOnly = true; }
+      else if (body._knifeOnly) body._knifeOnly = false;
+      return true;
+    },
+    /** Kit for a non-human roster actor (match.js spawnActor), or null. */
+    kitForActor(actor) {
+      if (!classes.on || !actor) return null;
+      return resolveKit(opponentClass(classes.seed, actor.actorId | 0, actor.archetype), { weapons, classId: "op" });
     },
 
     /**
@@ -431,6 +562,14 @@ export function createSim(opts = {}) {
       spawnDirectorFactory: matchOpts.spawnDirectorFactory,
     });
     sim.mission = sim.match; // ONE object, two names — boot.js/damage.js unchanged
+    // [lane modes] a FORCED-LOADOUT mode (ASCENT, the weapon ladder) owns every
+    // gun in the match: no class kits, no ground loot / racks, no call-ins. The
+    // mode arms each body itself through sim.setLadderWeapon.
+    if (sim.match.mode && sim.match.mode.forcedLoadout) {
+      classes.on = false; classes.playerKit = null; classes.pendingKit = null;
+      delete state.player.kit; delete state.player.perks;
+      internal.forcedLoadout = true; internal.noCallIns = true;
+    }
   } else if (content) {
     sim.mission = makeMission(content, sim.emit);
   }
@@ -438,6 +577,7 @@ export function createSim(opts = {}) {
   // World systems that need the finished sim object (they read sim.state, emit and
   // the weapons table). Built last so every dependency exists.
   sim.loot = makeLoot(sim, content, mode ? (content && content.arena && content.arena.id) || null : "meridian_ward", mode);
+  if (internal.forcedLoadout) { sim.loot = null; state.loot = []; state.lootPads = []; } // [lane modes] no loot in a ladder
   sim.streaks = makeStreaks(sim);
 
   // ---- helpers

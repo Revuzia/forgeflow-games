@@ -916,6 +916,31 @@ float a3coat = uCoat * a3cov;
 
 diffuseColor.rgb *= (1.0 + uMottle * ((g1 - 0.5) * 1.7 + (g2 - 0.5) * 1.2 + (g3 - 0.5) * 0.55));
 diffuseColor.rgb *= (1.0 - a3seam * 0.40 - a3chip * 0.15 - a3base * 0.24);
+// ---- FACADE-SCALE BREAK-UP (lane_env, 2026-11-13) --------------------------
+// Everything above is texel-to-metre scale; at 20-60 m a facade still read as
+// one even plane (before_neon / before_long: walls are a single tone from
+// ground to parapet). Two building-scale terms, both pure ALU on values this
+// shader already has (a3run is the drainage tap fetched above; no new fetch,
+// no new uniform, no program-key change), both gated by uWear so only the
+// weathered exterior sets get them:
+//  (1) STOREY STREAKS — every ledge, sill and string course on a real wet
+//      facade hangs a curtain of soot/water streaks below it, darkest right
+//      under the line and fading down the storey. Storey lines every 3.1 m
+//      (the level's floor module), the streak COLUMNS come from the drainage
+//      tap, so they are irregular in width and spacing.
+//  (2) POUR / PANEL TONE — form-work panels and render patches are not one
+//      colour: a ±7% value shift per 5.7 m x 3.1 m cell, aligned to the
+//      analytic seam grid (2 x 2.85 m) so the tone steps happen AT seams.
+// Faded on a much longer range than a3near: these are the features that read
+// at distance, and at 5.7 m period they cannot alias before ~150 m.
+float a3far2 = 1.0 - smoothstep(60.0, 140.0, distance(vWPos, cameraPosition));
+float a3st = fract(vWPos.y / 3.1 + 0.06);
+float a3streak = uWear * a3wall * a3far2 * smoothstep(0.30, 0.70, a3run)
+               * a3st * a3st * smoothstep(0.35, 1.2, vWPos.y);
+vec2 a3cell = floor(vec2(dot(vWPos.xz, vec2(abs(a3N.z), abs(a3N.x))) / 5.7, vWPos.y / 3.1));
+float a3tone = fract(sin(dot(a3cell, vec2(127.1, 311.7))) * 43758.5453) - 0.5;
+diffuseColor.rgb *= 1.0 - 0.50 * a3streak;
+diffuseColor.rgb *= 1.0 + 0.20 * a3tone * uWear * a3wall * a3far2;
 ${W ? (opts.puddle ? `#ifdef USE_MAP
 if (a3blend > 0.001) {
   diffuseColor.rgb = mix(diffuseColor.rgb, texture2D(map, a3uv2_()).rgb * diffuse, a3blend);
@@ -982,7 +1007,9 @@ roughnessFactor = clamp(
     // is paint. Chips expose smoother broken face, runs and the splash zone
     // are matte. This is what makes the specular response stop being
     // "identical across every square metre".
-    + a3seam * 0.15 + a3runm * 0.26 + a3base * 0.11 - a3chip * 0.19,
+    + a3seam * 0.15 + a3runm * 0.26 + a3base * 0.11 - a3chip * 0.19
+    // storey streaks are WATER tracks: smoother, so they catch the coat lobe
+    - a3streak * 0.22,
   0.03, 1.0);
 // The wet term LAST and multiplicative, so it scales the variance built above
 // rather than replacing it: a wet wall keeps its history and gets a narrower

@@ -11,6 +11,8 @@
 // Regen constants now come from sim.tuning (core/pvp/pvp_tuning.js — the C25
 // balance seam; IDENTITY values in wave 1: 100 HP, 4.5 s, 35 HP/s, ×0.7).
 // These remain as the no-tuning fallback so a hand-built sim stub still works.
+import { hasPerk, PERK_FX } from "./classes.js";
+
 const REGEN_DELAY_S = 4.5;
 const REGEN_PER_S = 35;
 const BOT_RETREAT_REGEN_MULT = 0.7;
@@ -35,7 +37,10 @@ function attackerWeaponId(sim, attacker) {
 }
 
 // who: 'P' | botId. attacker: 'P' | botId | null. part: 'head'|'body'|'limb'.
-export function applyDamage(sim, who, amount, attacker = null, part = "body", src = "shot") {
+// [melee] meta (additive, optional): {weaponId, melee, backstab} — core/sim/melee.js
+// passes {weaponId:"knife", melee:true, backstab}; it rides the hurt/death events
+// and match.onActorDeath's ev. Every death event now also carries weaponId.
+export function applyDamage(sim, who, amount, attacker = null, part = "body", src = "shot", meta = null) {
   const S = sim.state;
   if (!(amount > 0)) return;
 
@@ -76,6 +81,14 @@ export function applyDamage(sim, who, amount, attacker = null, part = "body", sr
   } : null;
 
   if (sim.match) sim.match.onDamage(sim, who, amount, attacker, part, src);
+  // [melee] kill-weapon attribution + melee flags (null meta = the gun in hand)
+  // [polish v149] thrown/planted equipment owns its kill: a tripmine death is
+  // weaponId "claymore" (label TRIPMINE), a frag death "frag" — never the gun
+  // that happened to be in the attacker's hands (feed, killcam, XP, challenges).
+  const _wId = meta && meta.weaponId ? meta.weaponId
+    : src === "claymore" ? "claymore" : src === "grenade" ? "frag"
+    : (attacker != null ? attackerWeaponId(sim, attacker) : null);
+  const _mf = meta && meta.melee ? { melee: true, backstab: !!meta.backstab } : null;
 
   if (who === "P") {
     const p = S.player;
@@ -85,20 +98,20 @@ export function applyDamage(sim, who, amount, attacker = null, part = "body", sr
     S.counters.damageTaken += amount;
     const apos = attacker != null ? attackerPos(sim, attacker) : null;
     const dir = apos ? dirFromTo(p.pos, apos) : [0, 0, 1];
-    sim.emit("hurt", Object.assign({ victim: "P", attacker, amount, hp: p.hp, part, dir }, matchFields));
+    sim.emit("hurt", Object.assign({ victim: "P", attacker, amount, hp: p.hp, part, dir }, matchFields, _mf));
     if (p.hp <= 0) {
       p.alive = false;
       p.hp = 0;
       S.counters.deaths++;
       sim.emit("death", Object.assign({
         victim: "P", attacker, headshot: part === "head",
-        pos: p.pos.slice(), dir,
-      }, matchFields));
+        pos: p.pos.slice(), dir, weaponId: _wId,
+      }, matchFields, _mf));
       if (sim.match) {
         // PVP: roster bookkeeping + respawn queue (match driver, Part 3.3)
         sim.match.onActorDeath(sim, {
           victim: "P", attacker, headshot: part === "head",
-          weaponId: attacker != null ? attackerWeaponId(sim, attacker) : null,
+          weaponId: _wId, melee: !!_mf,
           pos: p.pos.slice(),
         });
       } else if (sim.mission) {
@@ -123,7 +136,7 @@ export function applyDamage(sim, who, amount, attacker = null, part = "body", sr
   }
   const apos = attacker != null ? attackerPos(sim, attacker) : null;
   const dir = apos ? dirFromTo(b.pos, apos) : [0, 0, 1];
-  sim.emit("hurt", Object.assign({ victim: who, attacker, amount, hp: b.hp, part, dir }, matchFields));
+  sim.emit("hurt", Object.assign({ victim: who, attacker, amount, hp: b.hp, part, dir }, matchFields, _mf));
   if (b.hp <= 0) {
     const prev = b.state;
     b.alive = false;
@@ -135,12 +148,12 @@ export function applyDamage(sim, who, amount, attacker = null, part = "body", sr
     sim.emit("botstate", { botId: b.id, state: "dead", prev });
     sim.emit("death", Object.assign({
       victim: who, attacker, headshot: part === "head",
-      pos: b.pos.slice(), dir,
-    }, matchFields));
+      pos: b.pos.slice(), dir, weaponId: _wId,
+    }, matchFields, _mf));
     if (sim.match) {
       sim.match.onActorDeath(sim, {
         victim: who, attacker, headshot: part === "head",
-        weaponId: attacker != null ? attackerWeaponId(sim, attacker) : null,
+        weaponId: _wId, melee: !!_mf,
         pos: b.pos.slice(),
       });
     }
@@ -162,12 +175,16 @@ export function stepHealth(sim, dt) {
   }
   const botRetreatPerS = regenPerS * (t ? t.botRetreatRegenMult : BOT_RETREAT_REGEN_MULT);
   const p = S.player;
-  if (p.alive && p.hp < maxHp && S.time - (p.lastDamageT ?? -999) >= regenDelayS) {
+  // STIM LACE perk (class matches): regen starts in half the time
+  const pDelay = hasPerk(p, "quickfix") ? regenDelayS * PERK_FX.quickfix.regenDelayMult : regenDelayS;
+  if (p.alive && p.hp < maxHp && S.time - (p.lastDamageT ?? -999) >= pDelay) {
     p.hp = Math.min(maxHp, p.hp + regenPerS * dt);
   }
   for (const b of S.bots) {
     if (b.alive && b.state === "retreat" && b.hp < maxHp) {
-      b.hp = Math.min(maxHp, b.hp + botRetreatPerS * dt);
+      // bots heal only while falling back; STIM LACE makes that 1.5x faster
+      const rate = hasPerk(b, "quickfix") ? botRetreatPerS * PERK_FX.quickfix.botRetreatRegenMult : botRetreatPerS;
+      b.hp = Math.min(maxHp, b.hp + rate * dt);
     }
   }
 }

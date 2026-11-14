@@ -128,7 +128,9 @@ async function buildProtos(W) {
   // MESHY AI weapons override everything above when present (owner direction:
   // all assets generated). Prompted as "horizontal side view" → longest axis
   // = barrel axis; rotate barrel to +Z, sights up.
-  const WPN_LEN = { pistol: 0.34, smg: 0.5, ar: 0.62, shotgun: 0.8, sniper: 0.95, glauncher: 0.7 };
+  // (W10 R1B, combat finding 9) rescaled toward real lengths (WPN_TARGET below): the guns were 15-25 % short and the pistol
+  // ~50 % long. The sniper stops at 1.08 m (target 1.15 within its +-10 %): rig_pipeline's attachment audit warns past 1.10 m.
+  const WPN_LEN = { pistol: 0.24, smg: 0.62, ar: 0.80, shotgun: 0.95, sniper: 1.08, glauncher: 0.85 };
   for (const id of Object.keys(WPN_LEN)) {
     try {
       const m = await W.kernel.loadGLTF(base + "meshy_wpn/wpn_" + id + ".glb");
@@ -170,12 +172,17 @@ async function buildProtos(W) {
       // block and the launcher's rear venturi bell both fooled it, so those
       // two shipped stock-forward. Pistol/shotgun verified correct; judge by
       // SCREENSHOT before adding to this table, never by the heuristic.
-      const WPN_FLIP = { ar: true, glauncher: true };
+      // (W10 R1B, combat finding 4) smg: the side views (audit x_smg_side_f1.png, W10 build1 before/after shots) show the thin
+      // orange-tipped barrel BEHIND the shooter - the heuristic picked the stock end, as for the AR and the launcher.
+      const WPN_FLIP = { ar: true, glauncher: true, smg: true };
       if (WPN_FLIP[id]) { m.rotation.y += Math.PI; m.updateMatrixWorld(true); }
       // RETEXTURE (owner: "the pistol looks pink it should be black"): Meshy's
       // pistol texture came out salmon. Multiply the map toward gunmetal —
       // shading detail survives, the hue dies. Applied to the PROTO, so every
       // clone (hands, ground loot, hotbar icon) inherits it.
+      // (W10 R1B, combat finding 9) the AR's lime-green albedo -> a metal / polymer grey (desaturate + darken the texture once,
+      // same material, so no new program; shading detail survives)
+      if (id === "ar") greyTexture(m, 0.88, 0.62);
       if (id === "pistol") {
         m.traverse((o) => {
           if (!o.isMesh || !o.material) return;
@@ -242,21 +249,127 @@ async function buildProtos(W) {
   protos.lmg = protos.ar.clone();
   protos.burst = protos.ar.clone();
   const CC0 = { dmr: "wpn_dmr.glb", lmg: "wpn_lmg.glb", burst: "wpn_burst.glb" };
+  const CC0_LEN = { dmr: 1.05, lmg: 1.0, burst: 0.8 };    // (W10 R1B) real-length targets (were 0.82 / 0.78 / 0.64 as baked)
   await Promise.all(Object.keys(CC0).map(async (id) => {
     try {
       const m = await W.kernel.loadGLTF(base + "wpn_cc0/" + CC0[id]);
-      const g = mergeColoured(m);
+      const g = mergeColoured(m, CC0_LEN[id]);
       if (g) protos[id] = g;
     } catch (e) { console.warn("[weapons] CC0 GLB fail", id, e && e.message); }
   }));
+  // (W10 R1B) every proto carries its MEASURED barrel tip and its support-hand anchor (holder space: grip at the origin, +Z the
+  // barrel, +Y up), read from the geometry once here: the muzzle flash starts at the tip (fire), the support hand grips the anchor
+  // (player.js supportHandIK). This replaced two hand-typed tables that disagreed with the models by 0.25-0.72 m.
+  for (const id of Object.keys(protos)) measureProto(protos[id], id);
   return protos;
+}
+
+// support-hand anchor along the forward run of the gun (fraction of grip -> tip), clamped to what the support arm reaches
+const GUARD_F = { smg: 0.55, ar: 0.5, burst: 0.5, lmg: 0.42, dmr: 0.42, shotgun: 0.5, sniper: 0.4, glauncher: 0.45 };
+const GUARD_ZMIN = 0.16, GUARD_ZMAX = 0.36;
+/** tip + support-hand anchor of a weapon proto (holder space), stored on proto.userData (clones share it). */
+function measureProto(g, id) {
+  g.updateMatrixWorld(true);
+  const pts = [];
+  const v = new THREE.Vector3();
+  g.traverse((o) => {
+    if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+    const pa = o.geometry.attributes.position;
+    const st = Math.max(1, Math.floor(pa.count / 6000));
+    for (let i = 0; i < pa.count; i += st) { v.fromBufferAttribute(pa, i).applyMatrix4(o.matrixWorld); pts.push(v.x, v.y, v.z); }
+  });
+  if (!pts.length) return;
+  let zMax = -1e9, zMin = 1e9;
+  for (let i = 2; i < pts.length; i += 3) { if (pts[i] > zMax) zMax = pts[i]; if (pts[i] < zMin) zMin = pts[i]; }
+  // tip: the centre of the last 2 cm of the barrel
+  let tx = 0, ty = 0, tn = 0;
+  for (let i = 0; i < pts.length; i += 3) if (pts[i + 2] > zMax - 0.02) { tx += pts[i]; ty += pts[i + 1]; tn++; }
+  const tip = new THREE.Vector3(tn ? tx / tn : 0, tn ? ty / tn : 0, zMax);
+  const def = K && K.WEAPONS && K.WEAPONS[id];
+  const pistol = (def && def.cls === "pistol") || id === "pistol";
+  let guard;
+  if (pistol) {
+    // two-hand pistol: the support hand cups the firing hand under / left of the grip
+    guard = new THREE.Vector3(0.035, -0.085, -0.02);
+  } else {
+    const zg = Math.min(GUARD_ZMAX, Math.max(GUARD_ZMIN, (GUARD_F[id] || 0.5) * zMax));
+    // the underside of the handguard at that station (the narrow central band, so a side rail or bipod leg does not count)
+    let yLo = 1e9, cx = 0, cn = 0;
+    for (let i = 0; i < pts.length; i += 3) {
+      // ...and no lower than 10 cm under the bore (a box magazine or a folded bipod under the guard is not the guard)
+      if (Math.abs(pts[i + 2] - zg) > 0.03 || Math.abs(pts[i]) > 0.05 || pts[i + 1] < tip.y - 0.1) continue;
+      if (pts[i + 1] < yLo) yLo = pts[i + 1];
+      cx += pts[i]; cn++;
+    }
+    if (yLo > 1e8) yLo = tip.y - 0.03;
+    // the WRIST sits just under and to the left (+X in holder space) of the guard, a little behind the palm
+    guard = new THREE.Vector3((cn ? cx / cn : 0) + 0.04, yLo - 0.045, zg - 0.03);
+  }
+  g.userData.tip = tip;
+  g.userData.guard = guard;
+  g.userData.len = +(zMax - zMin).toFixed(3);
+}
+
+/** (W10 R1B) desaturate + darken a mesh's albedo texture in place (a canvas copy: same material, same program). */
+function greyTexture(root, desat, gain) {
+  root.traverse((o) => {
+    if (!o.isMesh || !o.material) return;
+    for (const mm of (Array.isArray(o.material) ? o.material : [o.material])) {
+      const t = mm.map;
+      const img = t && t.image;
+      if (!img || !img.width || typeof document === "undefined") continue;
+      try {
+        const cv = document.createElement("canvas");
+        cv.width = img.width; cv.height = img.height;
+        const cx = cv.getContext("2d");
+        cx.drawImage(img, 0, 0);
+        const d = cx.getImageData(0, 0, cv.width, cv.height), px = d.data;
+        for (let i = 0; i < px.length; i += 4) {
+          const r = px[i], gg = px[i + 1], b = px[i + 2];
+          const l = 0.2126 * r + 0.7152 * gg + 0.0722 * b;
+          // grey with a faint cool cast (gunmetal / black polymer), detail kept
+          px[i] = (r + (l * 0.97 - r) * desat) * gain;
+          px[i + 1] = (gg + (l * 0.99 - gg) * desat) * gain;
+          px[i + 2] = (b + (l * 1.04 - b) * desat) * gain;
+        }
+        cx.putImageData(d, 0, 0);
+        const t2 = t.clone();
+        t2.source = new THREE.Source(cv);      // a NEW source: the clone would otherwise share (and rewrite) the GLB's
+        t2.needsUpdate = true;
+        mm.map = t2;
+        mm.needsUpdate = true;
+      } catch (e) { /* tainted / no 2d context: keep the original texture */ }
+    }
+  });
 }
 
 /** ONE vertex-coloured mesh from a static multi-material GLB scene (see the P2-D block above). The flat Poly Pizza
  *  factors are near-black (linear 0.004-0.07) at roughness 1, which renders as a silhouette in this game's light
  *  (the Meshy guns had the same defect, fixed the same way in the Meshy loop): colours get a gunmetal floor, and
  *  one material at roughness 0.55 / metalness 0.35. Non-indexed output (the sources are flat-shaded anyway). */
-function mergeColoured(root) {
+// (W10 R1B, combat finding 9) metal and polymer parts get their own roughness / metalness on the one merged material: a
+// 4x1 texel table (G = roughness, B = metalness, three's metalnessRoughness layout) indexed by a per-vertex uv, so the
+// gun stays ONE draw. Classes from the Poly Pizza material names: blacks / dark metal = steel, greys = polymer, browns =
+// wood furniture, brass / white = bright detail.
+const PART_RM = [[0.38, 0.6], [0.78, 0.08], [0.85, 0.0], [0.42, 0.7]];   // [roughness, metalness]: steel, polymer, wood, brass
+let _partTex = null;
+function partTex() {
+  if (_partTex) return _partTex;
+  const d = new Uint8Array(4 * 4);
+  PART_RM.forEach(([r, m], i) => { d[i * 4] = 255; d[i * 4 + 1] = Math.round(r * 255); d[i * 4 + 2] = Math.round(m * 255); d[i * 4 + 3] = 255; });
+  _partTex = new THREE.DataTexture(d, 4, 1, THREE.RGBAFormat);
+  _partTex.magFilter = THREE.NearestFilter; _partTex.minFilter = THREE.NearestFilter; _partTex.generateMipmaps = false;
+  _partTex.needsUpdate = true;
+  return _partTex;
+}
+function partClass(mat) {
+  const n = String((mat && mat.name) || "").toLowerCase();
+  if (/brass|gold|yellow|white/.test(n)) return 3;
+  if (/brown|wood|chestnut|bole/.test(n)) return 2;
+  if (/grey|gray/.test(n)) return 1;
+  return 0;                                  // black / dark metal / unnamed: steel
+}
+function mergeColoured(root, targetLen) {
   root.updateMatrixWorld(true);
   const parts = [];
   let n = 0;
@@ -268,7 +381,7 @@ function mergeColoured(root) {
     n += geo.attributes.position.count;
   });
   if (!n) return null;
-  const P = new Float32Array(n * 3), N = new Float32Array(n * 3), Cc = new Float32Array(n * 3);
+  const P = new Float32Array(n * 3), N = new Float32Array(n * 3), Cc = new Float32Array(n * 3), UV = new Float32Array(n * 2);
   const v = new THREE.Vector3(), nm = new THREE.Matrix3(), col = new THREE.Color();
   let k = 0;
   for (const { o, geo, mats } of parts) {
@@ -281,7 +394,9 @@ function mergeColoured(root) {
       // gunmetal floor (linear): the blacks read as dark steel, the brass / white details keep their hue
       const lum = 0.2126 * col.r + 0.7152 * col.g + 0.0722 * col.b;
       if (lum < 0.018) { const f = lum > 1e-5 ? 0.018 / lum : 0; if (f) col.multiplyScalar(f); else col.setRGB(0.018, 0.018, 0.019); }
+      const pu = (partClass(mat) + 0.5) / 4;
       for (let i = gr.start; i < gr.start + gr.count && i < pa.count; i++) {
+        UV[k * 2] = pu; UV[k * 2 + 1] = 0.5;
         v.fromBufferAttribute(pa, i).applyMatrix4(o.matrixWorld);
         P[k * 3] = v.x; P[k * 3 + 1] = v.y; P[k * 3 + 2] = v.z;
         if (na) { v.fromBufferAttribute(na, i).applyMatrix3(nm).normalize(); N[k * 3] = v.x; N[k * 3 + 1] = v.y; N[k * 3 + 2] = v.z; }
@@ -294,9 +409,18 @@ function mergeColoured(root) {
   geo.setAttribute("position", new THREE.BufferAttribute(P.subarray(0, k * 3), 3));
   geo.setAttribute("normal", new THREE.BufferAttribute(N.subarray(0, k * 3), 3));
   geo.setAttribute("color", new THREE.BufferAttribute(Cc.subarray(0, k * 3), 3));
+  geo.setAttribute("uv", new THREE.BufferAttribute(UV.subarray(0, k * 2), 2));
   if (!parts[0].geo.attributes.normal) geo.computeVertexNormals();
+  geo.computeBoundingBox();
+  if (targetLen) {
+    // (W10 R1B) real length: uniform scale about the origin (the pistol grip stays on the hand)
+    const sz = geo.boundingBox.getSize(new THREE.Vector3());
+    const L = Math.max(sz.x, sz.y, sz.z);
+    if (L > 1e-3) geo.scale(targetLen / L, targetLen / L, targetLen / L);
+  }
   geo.computeBoundingSphere(); geo.computeBoundingBox();
-  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.35 }));
+  const tx = partTex();
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 1, roughnessMap: tx, metalnessMap: tx }));
   mesh.name = "wpn_cc0";
   const g = new THREE.Group();
   g.add(mesh);
@@ -788,6 +912,7 @@ const VM_KICK = { pistol: 0.7, smg: 0.5, ar: 0.75, shotgun: 1.6, sniper: 1.9, la
 const HUMAN_KICK = { pistol: 0.008, smg: 0.006, ar: 0.011, shotgun: 0.03, sniper: 0.05, glauncher: 0.035, dmr: 0.022, lmg: 0.009, burst: 0.010 };
 const BARREL_LEN = { pistol: 0.5, smg: 0.7, ar: 0.95, shotgun: 0.85, sniper: 1.15, glauncher: 0.8, dmr: 1.15, lmg: 1.08, burst: 0.96 };
 const _eyeFire = { x: 0, y: 0, z: 0 };
+const _tipV = new THREE.Vector3();
 function fire(W, a, def) {
   const eye = eyePos(a, _eyeFire);
   aimDir(a, _d);
@@ -911,8 +1036,21 @@ function fire(W, a, def) {
   // muzzle world position from the held weapon (right-hand bone) so the flash
   // erupts at the BARREL, not the eye/body-centre (the third-person "fire from
   // the face" issue). Physics/aim stay eye-based; only the FX origin moves.
+  // (W10 R1B, combat finding 3) the BARREL TIP measured from the held mesh (measureProto), carried by the holder's world
+  // transform, so the flash starts where the barrel ends; the hand-typed BARREL_LEN table (0.25-0.72 m past the tip) is the
+  // fallback for the one frame a swap has not re-meshed yet (the wid stamp) and for a gun with no geometry.
   let muzzle = null;
-  if (a.hand) {
+  const wm = a.weaponMesh, tip = wm && wm.userData.wid === a.weapon.id ? wm.userData.tip : null;
+  if (a.hand && tip && a._hmW && W.t - a._hmT <= 0.1) {
+    // the holder as drawn last view pass (player.js animate), plus the gun's own kick offset inside the holder
+    // (the kick this shot starts pulls the gun back VM_KICK x 5 cm on the next step: the flash is placed at the kicked tip it is drawn with)
+    _tipV.set(tip.x + wm.position.x, tip.y + wm.position.y, tip.z - (VM_KICK[def.cls] || 1) * 0.05).applyMatrix4(a._hmW);
+    muzzle = { x: _tipV.x, y: _tipV.y, z: _tipV.z };
+  } else if (a.hand && tip) {
+    wm.updateWorldMatrix(true, false);
+    _tipV.set(tip.x, tip.y, tip.z).applyMatrix4(wm.matrixWorld);
+    muzzle = { x: _tipV.x, y: _tipV.y, z: _tipV.z };
+  } else if (a.hand) {
     a.hand.updateWorldMatrix(true, false);
     const m = a.hand.matrixWorld.elements;
     const bl = BARREL_LEN[a.weapon.id] || 0.8;

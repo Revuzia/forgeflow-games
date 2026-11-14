@@ -20,6 +20,7 @@
 // Persistence (modes.md §6.5): localStorage only — matches, W/L/D per mode,
 // best streak. Read by mode_select.js. No server-side writes.
 
+import { teamHex, cbPalette } from "../team_color.js";
 import { shell } from "./hud.js";
 import { BAND_LABEL } from "./match_hud.js";
 
@@ -139,8 +140,14 @@ export function createScoreboard(ctx) {
   function render() {
     const m = M();
     if (!m) { tblEl.innerHTML = ""; return; }
-    const ctf = m.modeId === "ctf", ffa = m.modeId === "ffa";
-    const modeCols = ctf ? `<th>CAP</th><th>RET</th>` : ffa ? `<th>PLACE</th>` : `<th>STREAK</th>`;
+    const ladder = m.modeId === "ladder"; // [lane modes] ASCENT: ten teams of one, ranked by rung
+    const ctf = m.modeId === "ctf", ffa = m.modeId === "ffa" || ladder;
+    const dom = m.modeId === "dom"; // [lane dom] zone captures + defend kills
+    const hill = m.modeId === "hill", tags = m.modeId === "tags"; // [lane modes]
+    const rungOf = (a) => ((m.mode && m.mode.tier && m.mode.tier[a.actorId]) | 0);
+    const nRungs = (m.mode && m.mode.tiers && m.mode.tiers.length) || 8;
+    const modeCols = ctf ? `<th>CAP</th><th>RET</th>` : ladder ? `<th>RUNG</th><th>PLACE</th>` : ffa ? `<th>PLACE</th>` : dom ? `<th>CAP</th><th>DEF</th>`
+      : hill ? `<th>TIME</th><th>OBJ</th>` : tags ? `<th>CONF</th><th>DENY</th>` : `<th>STREAK</th>`;
     const header =
       `<tr><th class="l">NAME</th><th>SCORE</th>` +
       `<th>K</th><th>D</th><th>A</th>${modeCols}</tr>`;
@@ -148,6 +155,10 @@ export function createScoreboard(ctx) {
     const rowsOf = (list, placeOf) => list.map((a) => {
       const mode = ctf
         ? `<td>${a.captures || 0}</td><td>${a.returns || 0}</td>`
+        : dom ? `<td>${a.captures || 0}</td><td>${a.defends || 0}</td>`
+        : hill ? `<td>${Math.floor(a.hillS || 0)}s</td><td>${a.objKills || 0}</td>`
+        : tags ? `<td>${a.confirms || 0}</td><td>${a.denies || 0}</td>`
+        : ladder ? `<td>${rungOf(a) >= nRungs ? "TOP" : (rungOf(a) + 1) + "/" + nRungs}</td><td>${placeOf ? placeOf(a) : ""}</td>`
         : ffa ? `<td>${placeOf ? placeOf(a) : ""}</td>`
           : `<td>${a.bestStreak || 0}</td>`;
       return `<tr class="${a.actorId === 0 ? "me" : ""}${a.alive ? "" : " dead"}">` +
@@ -157,31 +168,33 @@ export function createScoreboard(ctx) {
     }).join("");
 
     if (ffa) {
-      const sorted = m.actors.slice().sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
+      const sorted = m.actors.slice().sort((a, b) => (ladder ? rungOf(b) - rungOf(a) : 0) || b.kills - a.kills || a.deaths - b.deaths);
       const place = new Map();
       sorted.forEach((a, i) => place.set(a.actorId, i + 1));
       const you = place.get(0);
       tblEl.innerHTML =
         `<table>${header}${rowsOf(sorted, (a) => `${place.get(a.actorId)} / ${sorted.length}`)}</table>`;
-      headEl.innerHTML = `FREE-FOR-ALL <span style="opacity:.6">·</span> ` +
+      headEl.innerHTML = `${ladder ? "ASCENT" : "FREE-FOR-ALL"} <span style="opacity:.6">·</span> ` +
         `<span class="${you === 1 ? "win" : ""}">YOU ${you} / ${sorted.length}</span>`;
       return;
     }
 
-    const t0 = m.teams.find((t) => t.id === 0), t1 = m.teams.find((t) => t.id === 1);
+    let t0 = m.teams.find((t) => t.id === 0), t1 = m.teams.find((t) => t.id === 1);
+    // [polish v149] colour-blind palette on: the sides are not amber / slate any more
+    if (cbPalette()) { t0 = Object.assign({}, t0, { name: "YOUR TEAM" }); t1 = Object.assign({}, t1, { name: "ENEMY TEAM" }); }
     const list0 = m.actors.filter((a) => a.team === 0).sort((a, b) => b.score - a.score);
     const list1 = m.actors.filter((a) => a.team === 1).sort((a, b) => b.score - a.score);
     const s0 = ctf ? (t0 ? t0.captures : 0) : (t0 ? t0.score : 0);
     const s1 = ctf ? (t1 ? t1.captures : 0) : (t1 ? t1.score : 0);
     headEl.innerHTML =
-      `<span style="color:${(t0 && t0.tint) || "#d9a441"}">${esc((t0 && t0.name) || "AMBER")} ${s0}</span>` +
+      `<span style="color:${teamHex(0, m.teams)}">${esc((t0 && t0.name) || "AMBER")} ${s0}</span>` +
       `<span style="opacity:.4;margin:0 12px">—</span>` +
-      `<span style="color:${(t1 && t1.tint) || "#7c9fd0"}">${s1} ${esc((t1 && t1.name) || "SLATE")}</span>`;
+      `<span style="color:${teamHex(1, m.teams)}">${s1} ${esc((t1 && t1.name) || "SLATE")}</span>`;
     tblEl.innerHTML =
       `<table>${header}` +
-      `<tr class="teamhdr"><td class="l" colspan="9" style="color:${(t0 && t0.tint) || "#d9a441"}">${esc((t0 && t0.name) || "AMBER")}</td></tr>` +
+      `<tr class="teamhdr"><td class="l" colspan="9" style="color:${teamHex(0, m.teams)}">${esc((t0 && t0.name) || "AMBER")}</td></tr>` +
       rowsOf(list0) +
-      `<tr class="teamhdr"><td class="l" colspan="9" style="color:${(t1 && t1.tint) || "#7c9fd0"}">${esc((t1 && t1.name) || "SLATE")}</td></tr>` +
+      `<tr class="teamhdr"><td class="l" colspan="9" style="color:${teamHex(1, m.teams)}">${esc((t1 && t1.name) || "SLATE")}</td></tr>` +
       rowsOf(list1) +
       `</table>`;
   }
@@ -191,11 +204,11 @@ export function createScoreboard(ctx) {
     if (e.code !== "Tab") return;
     if (!st.live || st.end) return;
     e.preventDefault(); // keep browser focus traversal out of the match
-    if (!st.held) { st.held = true; render(); root.style.display = "block"; }
+    if (!st.held) { st.held = true; render(); root.style.display = "block"; document.body.classList.add("board-open"); }
   }
   function onKeyUp(e) {
     if (e.code !== "Tab") return;
-    if (st.held && !st.end) { st.held = false; root.style.display = "none"; }
+    if (st.held && !st.end) { st.held = false; root.style.display = "none"; document.body.classList.remove("board-open"); }
   }
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
@@ -209,12 +222,14 @@ export function createScoreboard(ctx) {
     st.held = false;
     render();
     root.classList.add("end");
-    root.style.display = "block";
+    root.style.display = "block"; document.body.classList.add("board-open");
     if (shell.matchHud && shell.matchHud.hideResult) shell.matchHud.hideResult();
     // 20 s no-input auto-advance → mode select (modes.md §6.1)
     st.autoAt = Date.now() + 20000;
     if (st.autoIv) clearInterval(st.autoIv);
     st.autoIv = setInterval(() => {
+      // [progression] the after-action report sits over the board: hold the clock
+      if (shell.afterAction && shell.afterAction.open) { st.autoAt = Date.now() + 20000; autoEl.textContent = ""; return; }
       const left = Math.ceil((st.autoAt - Date.now()) / 1000);
       if (left <= 0) { exitTo("modeselect"); return; }
       autoEl.textContent = `MODE SELECT IN ${left}`;
@@ -222,13 +237,16 @@ export function createScoreboard(ctx) {
     const bump = () => { st.autoAt = Date.now() + 20000; };
     root.addEventListener("pointermove", bump);
     root.addEventListener("keydown", bump);
+    // [progression] XP / level / unlock report first; CONTINUE reveals this board
+    if (shell.afterAction && shell.afterAction.showPending) shell.afterAction.showPending(bump);
   }
 
   function closeBoard() {
+    if (shell.afterAction && shell.afterAction.open) shell.afterAction.close(false); // [progression]
     st.end = false;
     st.held = false;
     root.classList.remove("end");
-    root.style.display = "none";
+    root.style.display = "none"; document.body.classList.remove("board-open");
     if (st.autoIv) { clearInterval(st.autoIv); st.autoIv = null; }
     if (st.endTimer) { clearTimeout(st.endTimer); st.endTimer = null; }
   }

@@ -2973,7 +2973,10 @@ GLOVE_COL = {
     "palm": _srgb_lin((44, 40, 34)),      # suede palm (2026-10-13: lifted — a curled finger shows mostly palm side)
     "cuff": _srgb_lin((20, 20, 21)),      # neoprene wrist cuff
 }
-SLEEVE_COL = {"cloth": _srgb_lin((31, 35, 29)), "band": _srgb_lin((14, 15, 14))}
+# (2026-11-13 hip pass) cloth (31,35,29) -> (44,47,38): at linear 0.014 the sleeve sat at the
+# night ground's own radiance and only its silhouette read (a flat dark wedge); one stop up
+# the key light can model it as a rounded forearm. Still a dark olive.
+SLEEVE_COL = {"cloth": _srgb_lin((44, 47, 38)), "band": _srgb_lin((16, 17, 15))}
 
 # adult male hand, glove thickness included (metres). Right hand, thumb at -X.
 HAND_FINGERS = {
@@ -3180,6 +3183,17 @@ def build_real_hand(tag, hand, prm, e):
     scale = PALM_WIDTH_M / (idx - pky).length
     fore_dir = (head("lowerarm_" + side) - wrist).normalized()
     rest_co = [body.matrix_world @ v.co for v in body.data.vertices]
+    # (2026-11-13, glove atlas) REST-pose canonical landmarks + per-vertex rest position and
+    # normal: the glove's panels / seams / pads are designed on the straight rest hand, so
+    # every weapon's curled pose carries the same glove (see _glove_design)
+    canon0 = lambda v: (Minv @ v) * scale
+    rest_chain = {}
+    for nm in ("thumb", "index", "middle", "ring", "pinky"):
+        rest_chain[nm] = [[round(c, 5) for c in canon0(head(f"{nm}_{i:02d}_{side}"))] for i in (1, 2, 3)] + \
+            [[round(c, 5) for c in canon0(head(f"{nm}_04_leaf_{side}"))]]
+    R3 = Minv.to_3x3() @ body.matrix_world.to_3x3()
+    rest_can = [canon0(c) for c in rest_co]
+    rest_nrm = [(R3 @ v.normal).normalized() for v in body.data.vertices]
 
     # ---- pose ---------------------------------------------------------------
     curl = prm.get("curl", GRIP_CURL)
@@ -3238,12 +3252,16 @@ def build_real_hand(tag, hand, prm, e):
     fd_c = (Minv.to_3x3() @ fore_dir).normalized()          # rest forearm axis, canonical
     q = fd_c.rotation_difference(Vector(e).normalized())
     I = Quaternion()
+    rl = [bm.verts.layers.float.new(k) for k in ("g_rx", "g_ry", "g_rz", "g_nx", "g_ny", "g_nz")]
     for v in bm.verts:
         c = canon(v.co)
         w = wfore.get(v.index, 0.0)
         if w > 0.0:
             c = I.slerp(q, w) @ c
         v.co = c
+        rc, rn = rest_can[v.index], rest_nrm[v.index]
+        for L_, val in zip(rl, (rc.x, rc.y, rc.z, rn.x, rn.y, rn.z)):
+            v[L_] = val
     bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.index not in keep], context="VERTS")
     out_me = bpy.data.meshes.new(f"hand_{tag}")
     bm.to_mesh(out_me)
@@ -3263,10 +3281,477 @@ def build_real_hand(tag, hand, prm, e):
     bpy.ops.object.modifier_apply(modifier=sub.name)
     lm["palm"] = [round(c, 4) for c in canon(wrist + (mid - wrist) * 0.55 + palm * 0.012)]
     lm["middle_mcp"] = [round(c, 4) for c in canon(mid)]
+    lm["rest_chain"] = rest_chain
+    # the Quaternius body's own UV sets and colour layers are never used (and were exported
+    # as TEXCOORD_1 / COLOR_1 / COLOR_2 on every arm)
+    while len(og.data.uv_layers):
+        og.data.uv_layers.remove(og.data.uv_layers[0])
+    while len(og.data.color_attributes):
+        og.data.color_attributes.remove(og.data.color_attributes[0])
     print("A4REAL %s: %d verts, scale %.3f, thumb tip x %+.3f (%s expects %s), fore axis %s" % (
         tag, len(og.data.vertices), scale, lm["thumb_tip"][0], hand, "-" if hand == "R" else "+",
         tuple(round(c, 2) for c in fd_c)))
     return og, joints, tips, lm
+
+
+# =============================================================================
+# GLOVE ATLAS (2026-11-13, CoD look pass). The glove used to be four flat vertex-colour
+# zones ("flat tan, no stitching, no panels"). Now each real hand gets its own UV space
+# (smart project, one hand per half of a 2:1 atlas) and an albedo AUTHORED PER TEXEL from
+# the hand's REST-pose position / normal (rasterised through the unwrap): knit back panels
+# with stitched seams, a segmented TPR knuckle guard with flex grooves, PIP pads, leather
+# fingertip caps, a leather palm with a thumb-saddle and heel patch, finger-side
+# fourchettes, a neoprene cuff with a stitched hook-and-loop wrist strap and pull tab, and
+# knit / leather albedo variation. The same design function drives a small vertex
+# displacement so the guard and pads stand proud in silhouette and catch the key light.
+# The weave stays a tileable normal (KHR_texture_transform restores its 4.5 cm tile).
+# =============================================================================
+GLOVE_ATLAS = USE_REAL_HANDS and "--no-glove-atlas" not in ARGS
+GLOVE_PX = 512                 # texels per hand; atlas is (2*GLOVE_PX) x GLOVE_PX
+_GLOVE_HALF = {}               # hand -> {"rgb": PxPx3 linear, "mpu": m per uv, "mpu_s": sleeve}
+_GL = {k: np.array(_srgb_lin(v)) for k, v in {
+    "knit": (54, 47, 36), "side": (45, 40, 32), "palm": (42, 39, 35), "pad": (30, 28, 26),
+    "tpr": (24, 23, 22), "cuff": (21, 21, 22), "strap": (40, 36, 30), "thread": (72, 66, 54)}.items()}
+WEAVE_TILE_M = 0.045           # the fabric normal's tile (was cube_project(cube_size=0.045))
+
+
+def _gl_chain(P, pts):
+    """Distance to a joint polyline + fractional joint index + arc length (m) + total length."""
+    K = len(P)
+    bd = np.full(K, 1e9); bs = np.zeros(K); ba = np.zeros(K)
+    acc = 0.0
+    for i in range(len(pts) - 1):
+        A, B = pts[i], pts[i + 1]
+        AB = B - A
+        L = float(np.linalg.norm(AB))
+        t = np.clip(((P - A) @ AB) / max(L * L, 1e-12), 0.0, 1.0)
+        d = np.linalg.norm(P - (A + t[:, None] * AB), axis=1)
+        m = d < bd
+        bd = np.where(m, d, bd); bs = np.where(m, i + t, bs); ba = np.where(m, acc + t * L, ba)
+        acc += L
+    return bd, bs, ba, acc
+
+
+def _seg2(x, y, a, b):
+    """2D distance to segment a-b and the coordinate along it (m)."""
+    ax, ay = a; bx, by = b
+    dx, dy = bx - ax, by - ay
+    L = math.hypot(dx, dy)
+    t = np.clip(((x - ax) * dx + (y - ay) * dy) / max(L * L, 1e-12), 0, 1)
+    return np.hypot(x - (ax + t * dx), y - (ay + t * dy)), t * L
+
+
+def _glove_design(P, N, CO, CU, chains, e, sx, nz_tex=None, dbg=None):
+    """Glove look at K points. P/N rest canonical position/normal, CO posed canonical
+    position, CU cuff membership (0/1), e forearm axis (canonical), sx +1 right / -1 left
+    (the left hand is mirrored onto the right). nz_tex: optional dict of per-point noise
+    in 0..1 (texels only). Returns (rgb linear (K,3), height m (K,))."""
+    ss = _ss
+    P = np.array(P, np.float64); N = np.array(N, np.float64)
+    P[:, 0] *= sx; N[:, 0] *= sx
+    K = len(P)
+    x, y, nzv = P[:, 0], P[:, 1], N[:, 2]
+    fng = ("index", "middle", "ring", "pinky")
+    ch = {k: np.array(v, np.float64) * np.array([sx, 1.0, 1.0]) for k, v in chains.items()}
+    allk = fng + ("thumb",)
+    Dd = {k: _gl_chain(P, ch[k]) for k in allk}
+    dst = np.stack([Dd[k][0] for k in allk], 1)
+    near = dst.argmin(1)
+    dn = dst.min(1)
+    s_n = np.choose(near, [Dd[k][1] for k in allk])
+    a_n = np.choose(near, [Dd[k][2] for k in allk])
+    thumb = near == 4
+    onf = (dn < 0.0140) & (s_n > np.where(thumb, 1.05, 0.15))
+    # dorsal side: +Z on the rest hand; the thumb's nail faces out to the side
+    ta = ch["thumb"][3] - ch["thumb"][1]
+    ta /= np.linalg.norm(ta)
+    dt = np.array([-0.80, 0.0, 0.60]); dt -= ta * (dt @ ta); dt /= np.linalg.norm(dt)
+    nd = np.where(thumb & onf, N @ dt, nzv)                       # "dorsal-ness" -1..1
+    noise = nz_tex or {}
+    nk = noise.get("knit", np.full(K, 0.5)); nm_ = noise.get("mott", np.full(K, 0.5))
+    ng = noise.get("grain", np.full(K, 0.5)); nsoil = noise.get("soil", np.full(K, 0.5))
+
+    # ---- base panels ----------------------------------------------------------
+    back = ss(-0.06, 0.12, nd)
+    side_f = onf & ~thumb
+    lat = ss(0.42, 0.22, np.abs(nd)) * side_f                       # fourchette band
+    col = _GL["knit"][None] * back[:, None] + _GL["palm"][None] * (1 - back)[:, None]
+    col = col * (1 - lat)[:, None] + _GL["side"][None] * lat[:, None]
+    # knit / leather variation
+    knit_v = 1.0 + 0.10 * (nk - 0.5) * 2 + 0.07 * (nm_ - 0.5) * 2
+    leath_v = 1.0 + 0.08 * (ng - 0.5) * 2 + 0.05 * (nm_ - 0.5) * 2
+    col *= (back * knit_v + (1 - back) * leath_v)[:, None]
+
+    J0 = np.array([ch[f][0] for f in fng]); J1 = np.array([ch[f][1] for f in fng])
+    xs, ys = J0[:, 0], J0[:, 1]
+    yline = np.interp(x, xs, ys)
+    height = np.zeros(K)
+    seams = []                      # (signed distance field m, dash coordinate m, double?)
+
+    # ---- knuckle guard (moulded TPR, segmented) ---------------------------------
+    dsc = np.stack([np.hypot(x - J0[i, 0], y - (J0[i, 1] + 0.002)) - 0.0108 for i in range(4)], 1)
+    kn = dsc.argmin(1)
+    scal = dsc.min(1)
+    rect = np.maximum.reduce([xs[0] - 0.0085 - x, x - (xs[-1] + 0.0080), (yline - 0.0118) - y, y - yline])
+    sd_guard = np.minimum(scal, rect)
+    sd_guard = np.maximum(sd_guard, (0.16 - nd) * 0.008)            # back of the hand only
+    sd_guard = np.where(thumb & onf, 0.01, sd_guard)
+    guard = ss(0.00025, -0.00025, sd_guard)
+    ang_k = np.arctan2(y - J0[kn, 1], x - J0[kn, 0]) * 0.0108 + kn * 0.05
+    seams.append((sd_guard - 0.0011, ang_k, False))
+    groove = np.zeros(K)
+    for i in range(3):
+        xm = 0.5 * (xs[i] + xs[i + 1])
+        groove = np.maximum(groove, ss(0.00075, 0.00035, np.abs(x - xm)))
+    groove *= ss(-0.0006, -0.0012, sd_guard)
+    height += 0.0016 * ss(0.0008, -0.0010, sd_guard)
+
+    # ---- PIP knuckle pads -----------------------------------------------------
+    # 3D distance to the joint CENTRE: the skin is ~8 mm out, so 10.5 mm = a ~7 mm pad
+    dp = np.stack([np.linalg.norm(P - J1[i], axis=1) - 0.0105 for i in range(4)], 1)
+    kp = dp.argmin(1)
+    sd_pip = np.maximum(dp.min(1), (0.25 - nd) * 0.008)
+    sd_pip = np.where(side_f, sd_pip, 0.01)
+    pip = ss(0.00025, -0.00025, sd_pip)
+    seams.append((sd_pip - 0.0009, np.arctan2(y - J1[kp, 1], x - J1[kp, 0]) * 0.007, False))
+    height += 0.0009 * ss(0.0006, -0.0008, sd_pip)
+
+    # ---- fingertip caps (leather, palm side + wrapped over the tip) ------------
+    ld = np.array([np.linalg.norm(ch[k][3] - ch[k][2]) for k in allk])[near]
+    sd_tip = np.maximum((2.30 - s_n) * ld, (nd - 0.30) * 0.008)
+    sd_tip = np.where(s_n > 2.80, (2.30 - s_n) * ld, sd_tip)
+    sd_tip = np.where(onf, sd_tip, 0.01)
+    tip = ss(0.00025, -0.00025, sd_tip)
+    seams.append((sd_tip - 0.0009, np.arctan2(N[:, 0], N[:, 2]) * 0.0085 + a_n * 0.2, False))
+    height += 0.0005 * ss(0.0006, -0.0006, sd_tip)
+
+    # ---- palm patches: thumb saddle + heel (palm side, off the fingers) --------
+    c1 = 0.5 * (ch["thumb"][1][:2] + ch["index"][0][:2]) + np.array([0.003, -0.004])
+    c2 = np.array([xs[2] - 0.002, 0.030])
+    sd_p1 = np.hypot(x - c1[0], (y - c1[1]) * 0.75) - 0.0150
+    sd_p2 = np.hypot((x - c2[0]) * 0.85, y - c2[1]) - 0.0165
+    sd_pp = np.maximum(np.minimum(sd_p1, sd_p2), (nd + 0.10) * 0.008)
+    sd_pp = np.where(onf, 0.01, sd_pp)
+    ppatch = ss(0.00025, -0.00025, sd_pp)
+    which = sd_p1 < sd_p2
+    ang_p = np.where(which, np.arctan2(y - c1[1], x - c1[0]) * 0.016, np.arctan2(y - c2[1], x - c2[0]) * 0.017)
+    seams.append((sd_pp - 0.0010, ang_p, False))
+    height += 0.0004 * ss(0.0006, -0.0006, sd_pp)
+
+    # ---- back panel seams (double stitched), finger sides, wrist ---------------
+    yl_im = np.interp(0.5 * (xs[0] + xs[1]), xs, ys) - 0.0130
+    yl_rp = np.interp(0.5 * (xs[2] + xs[3]), xs, ys) - 0.0130
+    onback = (back > 0.5) & ~onf
+    for a, b in (((0.5 * (xs[0] + xs[1]), yl_im), (0.5 * (xs[0] + xs[1]) + 0.004, 0.013)),
+                 ((0.5 * (xs[2] + xs[3]), yl_rp), (0.5 * (xs[2] + xs[3]) - 0.003, 0.015)),
+                 ((xs[0] - 0.0075, ys[0] - 0.0140), (xs[0] - 0.006, 0.014))):
+        d2, t2 = _seg2(x, y, a, b)
+        seams.append((np.where(onback, d2, 0.01), t2, True))
+    # finger side seams: back/fourchette and palm/fourchette joins
+    for lev in (0.36, -0.36):
+        d_side = np.abs(nd - lev) * 0.0085
+        seams.append((np.where(side_f & (s_n < 2.25), d_side, 0.01), a_n, False))
+    # palm-to-finger crease seam and the hand's outer edge seam (back meets palm)
+    seams.append((np.where(~onf & (back < 0.5), np.abs(y - (yline - 0.002)) + 0.0, 0.01), x, False))
+    seams.append((np.abs(y - 0.010) + np.where(onf, 0.01, 0.0), np.arctan2(P[:, 2], x) * 0.03, False))
+
+    # ---- overlays -------------------------------------------------------------
+    pad_c = _GL["pad"][None] * (0.94 + 0.12 * ng)[:, None]
+    col = col * (1 - ppatch)[:, None] + pad_c * ppatch[:, None]
+    col = col * (1 - tip)[:, None] + pad_c * 0.92 * tip[:, None]
+    tpr = _GL["tpr"][None] * (0.95 + 0.10 * nm_)[:, None]
+    col = col * (1 - guard)[:, None] + tpr * guard[:, None]
+    col = col * (1 - pip)[:, None] + tpr * pip[:, None]
+    col *= (1.0 - 0.55 * groove)[:, None]
+    # handling wear: TPR crowns scuffed paler, palm/tips soiled darker
+    col *= (1.0 + 0.30 * ss(0.62, 0.85, nsoil) * np.maximum(guard * ss(-0.0015, -0.004, sd_guard), pip))[:, None]
+    col *= (1.0 - 0.14 * ss(0.4, 0.9, nsoil) * np.maximum(1 - back, tip))[:, None]
+
+    # ---- stitching ------------------------------------------------------------
+    gro = np.zeros(K); thr = np.zeros(K)
+    for sd, dash, dbl in seams:
+        sd = np.asarray(sd)
+        dash_on = ss(0.30, 0.45, np.abs(((dash / 0.0032) % 1.0) - 0.5) * 2.0) if nz_tex is not None else 0.0
+        gro = np.maximum(gro, ss(0.00042, 0.00012, np.abs(sd)))
+        for off in ((-0.0009, 0.0009) if dbl else (0.0009,)):
+            thr = np.maximum(thr, ss(0.00040, 0.00010, np.abs(np.abs(sd) - abs(off))) * dash_on)
+    if dbg is not None:
+        dbg.update(guard=guard, pip=pip, tip=tip, ppatch=ppatch, thr=thr, gro=gro, back=back, lat=lat)
+    col *= (1.0 - 0.45 * gro)[:, None]
+    col = col * (1 - 0.75 * thr)[:, None] + _GL["thread"][None] * (0.75 * thr)[:, None]
+
+    # ---- cuff: neoprene, hem binding, hook-and-loop strap with a pull tab ------
+    cu = np.asarray(CU) > 0.5
+    if cu.any():
+        ea = np.array(tuple(e), np.float64); ea /= np.linalg.norm(ea)
+        ref = np.array([0, 0, 1.0]) if abs(ea[2]) < 0.9 else np.array([1.0, 0, 0])
+        u = np.cross(ref, ea); u /= np.linalg.norm(u); w = np.cross(ea, u)
+        C = np.asarray(CO, np.float64)
+        ax = C @ ea
+        th = np.arctan2(C @ w, C @ u)
+        th0 = math.atan2(w[2], u[2]) + 0.55 * sx                   # tab on the back, thumb side
+        dth = np.abs((th - th0 + math.pi) % (2 * math.pi) - math.pi)
+        cc = _GL["cuff"][None] * (0.92 + 0.16 * nk)[:, None]
+        hem = ss(0.0160, 0.0150, ax)
+        cc *= (1.0 - 0.25 * hem)[:, None]
+        strap = ss(0.0176, 0.0184, ax) * ss(0.0306, 0.0298, ax)
+        tab = ss(0.34, 0.30, dth) * ss(0.0150, 0.0160, ax) * ss(0.0336, 0.0326, ax)
+        sm = np.maximum(strap, tab)
+        stc = _GL["strap"][None] * (0.90 + 0.20 * ng)[:, None] * (1 + 0.18 * tab)[:, None]
+        cc = cc * (1 - sm)[:, None] + stc * sm[:, None]
+        r = 0.032
+        dash_c = th * r
+        cs = [np.abs(ax - 0.0165), np.abs(ax - 0.0193), np.abs(ax - 0.0289)]
+        tsd = np.maximum(np.abs(dth - 0.30) * r, 0.0) + np.where((ax > 0.0155) & (ax < 0.0331), 0, 0.01)
+        cg = np.zeros(K); ct = np.zeros(K)
+        for d in cs + [tsd]:
+            don = ss(0.30, 0.45, np.abs(((dash_c / 0.0032) % 1.0) - 0.5) * 2.0) if nz_tex is not None else 0.0
+            ct = np.maximum(ct, ss(0.00034, 0.00012, d) * don)
+        cg = np.maximum(ss(0.00045, 0.00015, np.abs(ax - 0.0176)), ss(0.00045, 0.00015, np.abs(ax - 0.0306)))
+        cg = np.maximum(cg, ss(0.00045, 0.00015, np.abs(dth - 0.34) * r) * ss(0.0150, 0.0160, ax) * ss(0.0336, 0.0326, ax))
+        cc *= (1 - 0.5 * cg)[:, None]
+        cc = cc * (1 - 0.8 * ct)[:, None] + _GL["thread"][None] * (0.8 * ct)[:, None]
+        col = np.where(cu[:, None], cc, col)
+        height = np.where(cu, 0.0, height)
+    return np.clip(col, 0.0, 1.0), height
+
+
+def _bm_band(bm, e, a0, a1, r0, r1, r_out=None, seg=32):
+    """Open tube along e from a0 to a1 (radius r0 -> r1); with r_out, a proud band instead:
+    outer wall at r_out plus annular end faces down to r0 / r1 (no hidden discs)."""
+    ax = Vector(e).normalized()
+    ref = Vector((0, 0, 1)) if abs(ax.z) < 0.9 else Vector((1, 0, 0))
+    u = ref.cross(ax).normalized()
+    w = ax.cross(u).normalized()
+
+    def ring(t, r):
+        return [bm.verts.new(ax * t + (u * math.cos(2 * math.pi * j / seg) + w * math.sin(2 * math.pi * j / seg)) * r)
+                for j in range(seg)]
+    if r_out is None:
+        a, b = ring(a0, r0), ring(a1, r1)
+        for j in range(seg):
+            k = (j + 1) % seg
+            bm.faces.new((a[j], a[k], b[k], b[j]))
+        return
+    ia, oa, ob, ib = ring(a0, r0), ring(a0, r_out), ring(a1, r_out), ring(a1, r1)
+    for j in range(seg):
+        k = (j + 1) % seg
+        bm.faces.new((oa[j], oa[k], ob[k], ob[j]))
+        bm.faces.new((ia[j], ia[k], oa[k], oa[j]))
+        bm.faces.new((ob[j], ob[k], ib[k], ib[j]))
+
+
+def _glove_displace(o, chains, e, sx):
+    """Push the guard / pads out along the posed normal (design height, metres)."""
+    me = o.data
+    n = len(me.vertices)
+    def attr(nm):
+        a = me.attributes.get(nm)
+        if a is None:
+            return np.zeros(n)
+        buf = np.zeros(n, np.float32)
+        a.data.foreach_get("value", buf)
+        return buf.astype(np.float64)
+    P = np.stack([attr("g_rx"), attr("g_ry"), attr("g_rz")], 1)
+    Nr = np.stack([attr("g_nx"), attr("g_ny"), attr("g_nz")], 1)
+    CU = attr("g_cuff")
+    co = np.zeros(n * 3, np.float32); me.vertices.foreach_get("co", co); co = co.reshape(n, 3).astype(np.float64)
+    me.calc_normals_split() if hasattr(me, "calc_normals_split") else None
+    nv = np.zeros(n * 3, np.float32); me.vertices.foreach_get("normal", nv); nv = nv.reshape(n, 3)
+    _, h = _glove_design(P, Nr, co, CU, chains, e, sx)
+    h = np.where(CU > 0.5, 0.0, h)
+    co += nv * h[:, None]
+    me.vertices.foreach_set("co", co.astype(np.float32).ravel())
+    me.update()
+    print("A4GLOVE displace %s: %d verts moved, max %.2f mm" % (o.name, int((h > 1e-5).sum()), h.max() * 1000))
+
+
+def _glove_atlas_uv(arm, hand, e, chains):
+    """Unwrap the glove (smart project) into this hand's half of the atlas, rasterise the
+    rest-pose fields through it and author the albedo; the sleeve gets a 1-unit-per-metre
+    cube projection (its weave tile comes back through KHR_texture_transform)."""
+    sx = 1.0 if hand == "R" else -1.0
+    me = arm.data
+    while len(me.uv_layers):
+        me.uv_layers.remove(me.uv_layers[0])
+    me.uv_layers.new(name="UVMap")
+    n = len(me.vertices)
+    co = np.zeros(n * 3, np.float32); me.vertices.foreach_get("co", co); co = co.reshape(n, 3).astype(np.float64)
+    ea = np.array(tuple(e), np.float64); ea /= np.linalg.norm(ea)
+    ax = co @ ea
+
+    def attr(nm):
+        a = me.attributes.get(nm)
+        buf = np.zeros(n, np.float32)
+        if a is not None:
+            a.data.foreach_get("value", buf)
+        return buf.astype(np.float64)
+    CU = attr("g_cuff")
+    mi = np.zeros(len(me.polygons), np.int32); me.polygons.foreach_get("material_index", mi)
+    hidden = np.zeros(len(me.polygons), bool)
+    for p in me.polygons:
+        if mi[p.index] == 0:
+            vs = list(p.vertices)
+            if CU[vs].max() < 0.5 and ax[vs].min() > 0.075:          # forearm deep in the sleeve
+                hidden[p.index] = True
+    glove = (mi == 0) & ~hidden
+    for o2 in bpy.context.selected_objects:
+        o2.select_set(False)
+    bpy.context.view_layer.objects.active = arm
+    arm.select_set(True)
+
+    le = np.zeros(len(me.loops), np.int32); me.loops.foreach_get("edge_index", le)
+    lvx = np.zeros(len(me.loops), np.int32); me.loops.foreach_get("vertex_index", lvx)
+    lpoly = np.repeat(np.arange(len(me.polygons)), [p.loop_total for p in me.polygons])
+
+    def select(mask):
+        bpy.ops.object.mode_set(mode="OBJECT")
+        mask = mask.astype(bool)
+        lsel = mask[lpoly]
+        vs = np.zeros(len(me.vertices), bool); vs[lvx[lsel]] = True
+        es = np.zeros(len(me.edges), bool); es[le[lsel]] = True
+        me.vertices.foreach_set("select", vs)
+        me.edges.foreach_set("select", es)
+        me.polygons.foreach_set("select", mask)
+        me.update()
+        bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_mode(type="FACE")
+    select(glove)
+    bpy.ops.uv.smart_project(angle_limit=math.radians(62), island_margin=0.006, area_weight=0.0,
+                             correct_aspect=True, scale_to_bounds=False)
+    select(mi == 1)
+    bpy.ops.uv.cube_project(cube_size=1.0)
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    nl = len(me.loops)
+    uv = np.zeros(nl * 2, np.float32); me.uv_layers.active.data.foreach_get("uv", uv); uv = uv.reshape(nl, 2).astype(np.float64)
+    lv = np.zeros(nl, np.int32); me.loops.foreach_get("vertex_index", lv)
+    lp = np.zeros(nl, np.int32)
+    for p in me.polygons:
+        lp[p.loop_start:p.loop_start + p.loop_total] = p.index
+
+    # metres per uv unit (glove / sleeve), from summed areas
+    def mpu(mask):
+        a3 = auv = 0.0
+        for p in me.polygons:
+            if not mask[p.index]:
+                continue
+            ls = range(p.loop_start, p.loop_start + p.loop_total)
+            pts = [uv[l] for l in ls]
+            s = 0.0
+            for i in range(1, len(pts) - 1):
+                (x0, y0), (x1, y1), (x2, y2) = pts[0], pts[i], pts[i + 1]
+                s += abs((x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)) * 0.5
+            auv += s
+            a3 += p.area
+        return math.sqrt(a3 / max(auv, 1e-12))
+    m_g, m_s = mpu(glove), mpu(mi == 1)
+
+    # rasterise rest position / normal / posed position / cuff flag through the unwrap
+    S = GLOVE_PX
+    P = np.stack([attr("g_rx"), attr("g_ry"), attr("g_rz")], 1)
+    Nr = np.stack([attr("g_nx"), attr("g_ny"), attr("g_nz")], 1)
+    fields = np.concatenate([P, Nr, co, CU[:, None]], 1)              # (n, 10)
+    me.calc_loop_triangles()
+    tris = [t for t in me.loop_triangles if glove[t.polygon_index]]
+    tl = np.array([tuple(t.loops) for t in tris], np.int64)
+    uvs = uv[tl]                                                        # (T,3,2)
+    vals = fields[lv[tl]]                                               # (T,3,10)
+    buf = np.full((S, S, fields.shape[1]), -1e9)
+    cov = np.zeros((S, S))
+    _raster_fields(buf, cov, uvs, vals)
+    buf = _dilate(buf, cov, iters=6)
+    ok = buf[..., 9] > -1e8
+    flat = buf.reshape(-1, fields.shape[1])
+    noise = {
+        "knit": _n01(_fbm(S, 9101, 2, 150)).ravel(),
+        "mott": _n01(_fbm(S, 9111, 3, 18)).ravel(),
+        "grain": _n01(_fbm(S, 9121, 3, 70)).ravel(),
+        "soil": _n01(_fbm(S, 9131, 3, 9)).ravel(),
+    }
+    Nn = flat[:, 3:6] / np.maximum(np.linalg.norm(flat[:, 3:6], axis=1, keepdims=True), 1e-9)
+    dbg = {} if os.environ.get("A4_GLOVE_DEBUG") else None
+    rgb, _ = _glove_design(flat[:, 0:3], Nn, flat[:, 6:9], flat[:, 9], chains, e, sx, nz_tex=noise, dbg=dbg)
+    if os.environ.get("A4_GLOVE_DEBUG"):
+        np.savez_compressed(os.path.join(os.environ["A4_GLOVE_DEBUG"], "glove_%s.npz" % hand),
+                            P=flat[:, 0:3][ok.ravel()], N=Nn[ok.ravel()], rgb=rgb[ok.ravel()],
+                            cu=flat[:, 9][ok.ravel()], **{k: v[ok.ravel()] for k, v in dbg.items()})
+    rgb = rgb.reshape(S, S, 3)
+    rgb = np.where(ok[..., None], rgb, _GL["knit"][None, None])
+    _GLOVE_HALF[hand] = {"rgb": rgb, "mpu": m_g, "mpu_s": m_s}
+
+    # this hand's half of the 2:1 atlas; faces hidden under the cuff point at a cuff texel
+    off = 0.0 if hand == "R" else 0.5
+    cuff_loops = [l for l in range(nl) if glove[lp[l]] and CU[lv[l]] > 0.5]
+    park = uv[cuff_loops[0]].copy() if cuff_loops else np.array([0.5, 0.5])
+    g_l = glove[lp]
+    uv[g_l, 0] = uv[g_l, 0] * 0.5 + off
+    h_l = hidden[lp]
+    uv[h_l] = (park[0] * 0.5 + off, park[1])
+    me.uv_layers.active.data.foreach_set("uv", uv.astype(np.float32).ravel())
+    me.update()
+    print("A4GLOVE atlas %s: %d glove tris, %d hidden faces, coverage %.1f%%, %.3f m/uv (glove) %.3f (sleeve)" % (
+        hand, len(tris), int(hidden.sum()), 100.0 * cov.mean(), m_g, m_s))
+
+
+def glove_atlas_finish(tag):
+    """Compose both hands into one atlas and wire br_glove / br_sleeve to it. Returns the
+    texture transforms for the exporter patch (or None when no atlas was built)."""
+    if not _GLOVE_HALF:
+        return None
+    S = GLOVE_PX
+    atlas = np.zeros((S, 2 * S, 3)) + _GL["knit"][None, None]
+    for hand, off in (("R", 0), ("L", S)):
+        if hand in _GLOVE_HALF:
+            atlas[:, off:off + S] = _GLOVE_HALF[hand]["rgb"]
+    srgb = np.where(atlas <= 0.0031308, atlas * 12.92, 1.055 * np.power(np.clip(atlas, 0, 1), 1 / 2.4) - 0.055)
+    rgba = np.concatenate([srgb, np.ones((S, 2 * S, 1))], 2)[::-1]       # raster rows are top-down
+    path = _save_img("glove_atlas_" + tag, np.ascontiguousarray(rgba), fmt="PNG")
+    m_g = float(np.mean([h["mpu"] for h in _GLOVE_HALF.values()]))
+    m_s = float(np.mean([h["mpu_s"] for h in _GLOVE_HALF.values()]))
+    tt_g = [2.0 * m_g / WEAVE_TILE_M, m_g / WEAVE_TILE_M]
+    tt_s = [m_s / WEAVE_TILE_M, m_s / WEAVE_TILE_M]
+    nrm = fabric_normal_path()
+    for name, rough, ns, tt, img in (("br_glove", 0.72, 0.18, tt_g, path), ("br_sleeve", 0.90, 0.22, tt_s, None)):
+        m = bpy.data.materials[name]
+        nt = m.node_tree
+        nt.nodes.clear()
+        L = nt.links.new
+        out = nt.nodes.new("ShaderNodeOutputMaterial")
+        b = nt.nodes.new("ShaderNodeBsdfPrincipled")
+        L(b.outputs["BSDF"], out.inputs["Surface"])
+        b.inputs["Roughness"].default_value = rough
+        b.inputs["Metallic"].default_value = 0.0
+        b.inputs["Emission Strength"].default_value = 0.0
+        vc = nt.nodes.new("ShaderNodeVertexColor"); vc.layer_name = "Col"
+        uvn = nt.nodes.new("ShaderNodeUVMap")
+        if img:
+            ti = nt.nodes.new("ShaderNodeTexImage")
+            ti.image = bpy.data.images.load(img, check_existing=True)
+            ti.image.reload()
+            ti.image.colorspace_settings.name = "sRGB"
+            L(uvn.outputs["UV"], ti.inputs["Vector"])
+            mix = nt.nodes.new("ShaderNodeMix"); mix.data_type = "RGBA"; mix.blend_type = "MULTIPLY"
+            mix.inputs[0].default_value = 1.0
+            sock = lambda coll, ident: next(x for x in coll if x.identifier == ident)
+            L(vc.outputs["Color"], sock(mix.inputs, "A_Color")); L(ti.outputs["Color"], sock(mix.inputs, "B_Color"))
+            L(sock(mix.outputs, "Result_Color"), b.inputs["Base Color"])
+        else:
+            L(vc.outputs["Color"], b.inputs["Base Color"])
+        mp = nt.nodes.new("ShaderNodeMapping"); mp.vector_type = "POINT"
+        mp.inputs["Scale"].default_value = (tt[0], tt[1], 1.0)
+        L(uvn.outputs["UV"], mp.inputs["Vector"])
+        tn = nt.nodes.new("ShaderNodeTexImage")
+        tn.image = bpy.data.images.load(nrm, check_existing=True)
+        tn.image.colorspace_settings.name = "Non-Color"
+        L(mp.outputs["Vector"], tn.inputs["Vector"])
+        nm = nt.nodes.new("ShaderNodeNormalMap"); nm.inputs["Strength"].default_value = ns
+        L(tn.outputs["Color"], nm.inputs["Color"]); L(nm.outputs["Normal"], b.inputs["Normal"])
+        m["a4_tt"] = {"normal": [round(tt[0], 4), round(tt[1], 4)], "base": bool(img)}
+    print("A4GLOVE finish %s: atlas %dx%d, weave tt glove %s sleeve %s" % (tag, 2 * S, S, tt_g, tt_s))
+    _GLOVE_HALF.clear()
+    return {"glove": tt_g, "sleeve": tt_s, "path": path}
 
 
 def build_hand(tag, hand, prm):
@@ -3391,6 +3876,7 @@ def build_hand(tag, hand, prm):
         bpy.ops.object.modifier_apply(modifier=fdc.name)
         finger_objs.append(of)
 
+    atlas_ok = False
     if USE_REAL_HANDS:
         # drop the capsule glove; keep only a wrist cuff (rebuilt as its own mesh)
         for o in [og] + finger_objs:
@@ -3400,11 +3886,20 @@ def build_hand(tag, hand, prm):
         lm.update(rlm)
         bc = bmesh.new()
         cr = prm.get("cuff_r", 0.0300)
-        _bm_cone(bc, e * 0.010, e * 0.062, cr, cr * 1.12, seg=24)
-        _bm_cone(bc, e * 0.046, e * 0.054, cr * 1.18, cr * 1.18, seg=24)       # velcro strap, proud
+        # wrist strap, proud. (2026-11-13: was at 0.046-0.054 — INSIDE the sleeve's elastic
+        # band, which starts at 0.036, so nobody ever saw it. Now where the cuff shows.)
+        if GLOVE_ATLAS:
+            # open-ended: the end caps sit inside the hand / sleeve and only cost atlas space
+            _bm_band(bc, e, 0.010, 0.062, cr, cr * 1.12, None, seg=32)
+            _bm_band(bc, e, 0.0176, 0.0306, cr * 1.005, cr * 1.03, cr * 1.08, seg=32)
+        else:
+            _bm_cone(bc, e * 0.010, e * 0.062, cr, cr * 1.12, seg=32)
+            _bm_cone(bc, e * 0.046, e * 0.054, cr * 1.18, cr * 1.18, seg=24)
         me_c = bpy.data.meshes.new(f"cuff_{tag}")
         bc.to_mesh(me_c)
         bc.free()
+        ca_ = me_c.attributes.new("g_cuff", "FLOAT", "POINT")
+        ca_.data.foreach_set("value", np.ones(len(me_c.vertices), np.float32))
         oc = bpy.data.objects.new(f"cuff_{tag}", me_c)
         link(oc)
         for o2 in bpy.context.selected_objects:
@@ -3414,6 +3909,12 @@ def build_hand(tag, hand, prm):
         bpy.context.view_layer.objects.active = real
         bpy.ops.object.join()
         og = bpy.context.view_layer.objects.active
+        if GLOVE_ATLAS:
+            if og.data.attributes.get("g_rx") is None:
+                print("A4GLOVE WARN %s: rest attributes lost (subsurf?) — glove atlas off" % tag)
+            else:
+                atlas_ok = True
+                _glove_displace(og, lm["rest_chain"], e, 1.0 if hand == "R" else -1.0)
 
     # --- sleeve (separate, tapered along the elbow axis) --------------------
     bs = bmesh.new()
@@ -3496,10 +3997,14 @@ def build_hand(tag, hand, prm):
         col *= (1.0 + 0.08 * _noise(co, 3.0) + 0.05 * np.sin(ax * 40.0))[:, None]
         # fall off into shadow along the forearm: the sleeve leaves frame through the bottom edge, so
         # its visible length should fade to black rather than end on a lit terminator line
-        col *= (1.0 - 0.80 * _ss(0.06, 0.36, ax))[:, None]
+        # (2026-11-13) was 0.80 from 0.06 m: the forearm went black 30 cm up and the lit
+        # remainder read as a flat blade with no end; a gentler fade keeps the rounded
+        # shading all the way to the frame edge
+        col *= (1.0 - 0.45 * _ss(0.10, 0.45, ax))[:, None]
         return np.clip(col, 0, 1)
 
-    _vcol(og, paint_glove)
+    # atlas glove: the texture carries the whole albedo, the vertex colour is neutral
+    _vcol(og, (lambda co, no: np.ones((len(co), 3))) if atlas_ok else paint_glove)
     for of in finger_objs:
         _vcol(of, paint_glove)
     _vcol(osl, paint_sleeve)
@@ -3527,6 +4032,11 @@ def build_hand(tag, hand, prm):
     arm = bpy.context.view_layer.objects.active
     arm.name = f"arm_{tag}"
     shade_smooth(arm, 60)
+    if atlas_ok:
+        _glove_atlas_uv(arm, hand, e, lm["rest_chain"])
+        arm["a4_lm"] = json.dumps(lm)
+        print("A4ARM %s: %d tris (glove+sleeve, atlas)" % (tag, sum(len(p.vertices) - 2 for p in arm.data.polygons)))
+        return arm
     # cube-project UVs for the tileable weave (0.07 m per tile)
     try:
         bpy.context.view_layer.objects.active = arm

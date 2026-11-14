@@ -16,6 +16,12 @@
 import { fireShot, dirFromAngles } from "./ballistics.js";
 import { resolveSwitch as resolveSwitchTarget, normalise as normaliseLoadout } from "./loadout.js";
 import { spawnGrenade, detonateAt } from "./grenades.js";
+import { hasPerk, PERK_FX } from "./classes.js";
+import { weaponForBody } from "./attachments.js"; // [gunsmith] per-body effective weapon table
+// [equipment lane] tactical throw verb, tripmine planting, concussion slow
+import { stepPlayerEquipment, plantFromBody, stunLevel, stunMoveMult } from "./equipment.js";
+// [melee] quick knife strike: windup/lunge/strike/recovery (core/sim/melee.js)
+import { tryBeginMelee, stepMelee, meleeBusy, meleeLunging } from "./melee.js";
 
 export const MOVE = {
   WALK: 4.6, STRAFE_MULT: 0.9, BACK_MULT: 0.76,
@@ -108,8 +114,8 @@ export function eyeHeight(stance, sliding) {
 
 function initM(time) {
   return {
-    prev: { jump: false, crouch: false, sprint: false, fire: false, reload: false, interact: false, grenade: false, ads: false },
-    buf: { jump: -9, crouch: -9, fire: -9, reload: -9, switch: -9, grenade: -9 },
+    prev: { jump: false, crouch: false, sprint: false, fire: false, reload: false, interact: false, grenade: false, ads: false, melee: false },
+    buf: { jump: -9, crouch: -9, fire: -9, reload: -9, switch: -9, grenade: -9, melee: -9 },
     bufSwitchTo: null,
     sprintState: "none", tacLeft: MOVE.TAC_MAX_S, lastFwdTapT: -9, sprintExitT: -9, sprintWasTac: false,
     sliding: false, slideT: 0, slideDir: [0, 0], slideV: 0, slideCooldownUntil: -9,
@@ -146,11 +152,12 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
   if (edge("fire")) m.buf.fire = t;
   if (edge("reload")) m.buf.reload = t;
   if (edge("grenade")) m.buf.grenade = t;
+  if (edge("melee")) m.buf.melee = t; // [melee]
   if (cmd.switchTo && cmd.switchTo !== p.weapon.id) { m.buf.switch = t; m.bufSwitchTo = cmd.switchTo; }
   const buffered = (k) => t - m.buf[k] <= MOVE.BUFFER_S;
   const consume = (k) => { m.buf[k] = -9; };
 
-  const weapon = weapons[p.weapon.id];
+  const weapon = weaponForBody(weapons, p, p.weapon.id); // [gunsmith]
 
   // ---- mantle in progress (§1.5) — locked movement, no fire, buffered fire
   if (m.mantle) {
@@ -170,6 +177,7 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
       m.lastGroundedT = t;
     }
     p.speedNorm = 0;
+    stepMelee(sim, "P", p, dt); // [melee] a recovery started before the vault keeps its clock (no lunge)
     stepPlayerWeaponVerbs(state, cmd, world, weapons, dt, sim, /*mantling*/ true);
     snapshotPrev(m, cmd);
     return;
@@ -193,8 +201,9 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
   const fwdArc = cmd.moveZ > 0.01 && Math.abs(cmd.moveX) <= cmd.moveZ + 0.001;
   // fire held/buffered blocks sprint (fire press during sprint drops it and
   // must not re-enter until the trigger is released — §1.8)
-  const wantSprint = !!cmd.sprint && fwdArc && !m.sliding && !cmd.ads &&
-    !cmd.fire && !buffered("fire") &&
+  const stunned = stunLevel(p, t) > 0; // [equipment lane] a concussion kills the sprint
+  const wantSprint = !!cmd.sprint && fwdArc && !m.sliding && !cmd.ads && !stunned &&
+    !cmd.fire && !buffered("fire") && !meleeBusy(p, t) && // [melee] no sprint through a strike
     t >= m.fireToSprintLockUntil && p.weapon.state !== "switching";
   if (m.sprintState === "none") {
     if (wantSprint && p.grounded) {
@@ -219,7 +228,8 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
     if (sprintRepress && m.tacLeft > 0.2) m.sprintState = "tac";
   }
   if (m.sprintState === "tac") {
-    m.tacLeft -= dt;
+    // LONG STRIDE perk: the same 4 s tank drains at half rate (8 s of tac)
+    m.tacLeft -= hasPerk(p, "doubleTime") ? dt / PERK_FX.doubleTime.tacMult : dt;
     if (m.tacLeft <= 0) { m.tacLeft = 0; m.sprintState = "sprint"; }
   } else {
     m.tacLeft = Math.min(MOVE.TAC_MAX_S, m.tacLeft + (MOVE.TAC_MAX_S / MOVE.TAC_RECHARGE_S) * dt);
@@ -256,13 +266,16 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
     let target = null;
     if (m.sprintState === "tac") target = MOVE.TAC;
     else if (m.sprintState === "sprint") target = MOVE.SPRINT;
-    else if (p.stance === "crouch") target = MOVE.CROUCH;
+    else if (p.stance === "crouch") target = hasPerk(p, "doubleTime") ? MOVE.CROUCH * PERK_FX.doubleTime.crouchMult : MOVE.CROUCH;
     else if (p.weapon.ads) target = MOVE.WALK * (weapon && weapon.adsMoveMult != null ? weapon.adsMoveMult : 0.6);
     if (target != null && wl > 0.01) {
       const dirx = m.sprintState !== "none" ? f[0] : wish[0] / wl;
       const dirz = m.sprintState !== "none" ? f[1] : wish[1] / wl;
       wish[0] = dirx * target; wish[1] = dirz * target;
     }
+    // [equipment lane] concussion: every move speed x0.55 at full stun, easing out
+    if (stunned) { const sm = stunMoveMult(p, t); wish[0] *= sm; wish[1] *= sm; }
+    if (weapon && weapon.moveMult) { wish[0] *= weapon.moveMult; wish[1] *= weapon.moveMult; } // [gunsmith] fore grip weight
   }
 
   // ---- slide physics (§1.4) or ground/air accel (§1.2)
@@ -332,7 +345,7 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
 
   // ---- mantle detect (§1.5): buffered/held jump at a wall, or airborne
   // toward the ledge. Same collider set the bullets use (world).
-  if (!m.sliding && !m.mantle && (buffered("jump") || (!p.grounded && cmd.moveZ > 0.3))) {
+  if (!m.sliding && !m.mantle && !meleeLunging(p, t) && (buffered("jump") || (!p.grounded && cmd.moveZ > 0.3))) {
     const probeO = [p.pos[0], p.pos[1] + 0.6, p.pos[2]];
     const fh = [f[0], 0, f[1]];
     const hit = world.raycast(probeO, fh, MOVE.MANTLE_AHEAD + MOVE.CAPSULE_R);
@@ -358,6 +371,20 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
         }
       }
     }
+  }
+
+  // ---- [melee] start (buffered press) + windup LUNGE: the strike resolves on the
+  // tick the windup ends; during the windup the horizontal velocity is the dash
+  // toward the locked target (melee.js). Not while a frag is in hand or a weapon
+  // switch is mid-way (the press stays buffered and lands when legal).
+  if (buffered("melee") && !meleeBusy(p, t) &&
+      tryBeginMelee(sim, "P", p, { blocked: m.cooking || p.weapon.state === "switching" })) {
+    consume("melee");
+    if (m.sprintState !== "none") { m.sprintWasTac = m.sprintState === "tac"; m.sprintState = "none"; m.sprintExitT = t; }
+  }
+  {
+    const lv = stepMelee(sim, "P", p, dt);
+    if (lv) { p.vel[0] = lv[0]; p.vel[2] = lv[1]; }
   }
 
   // ---- gravity + integrate
@@ -412,6 +439,7 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
         speed: hspeed,             // m/s at the moment of the foot-plant
         stride,                    // m of ground this footfall represents
         hz: hspeed / stride,       // instantaneous cadence, footfalls/s
+        quiet: hasPerk(p, "deadsilence"), // SOFT STEP perk — audio may duck the cue
       });
     }
   } else m.stepDist = STRIDE.PRIME_M; // primed so the first step lands quickly
@@ -429,6 +457,7 @@ function snapshotPrev(m, cmd) {
   m.prev.jump = !!cmd.jump; m.prev.crouch = !!cmd.crouch; m.prev.sprint = !!cmd.sprint;
   m.prev.fire = !!cmd.fire; m.prev.reload = !!cmd.reload; m.prev.interact = !!cmd.interact;
   m.prev.grenade = !!cmd.grenade; m.prev.ads = !!cmd.ads; m.prev.moveZ = cmd.moveZ || 0;
+  m.prev.melee = !!cmd.melee; // [melee]
 }
 
 function endSlide(m, t) {
@@ -453,8 +482,17 @@ function stepPlayerWeaponVerbs(state, cmd, world, weapons, dt, sim, mantling) {
   const m = p._m;
   const t = state.time;
 
-  // grenade (R6/§5.9): press = pin (cook starts), release = throw
-  if (m.cooking) {
+  // [equipment lane] tactical verb (cmd.tactical): flash / smoke / concussion throw
+  stepPlayerEquipment(sim, p, cmd, t, mantling || meleeBusy(p, t)); // [melee] hands busy with the knife
+
+  // grenade (R6/§5.9): press = pin (cook starts), release = throw.
+  // [equipment lane] a TRIPMINE lethal plants on the press instead (grounded only).
+  if (p.kit && p.kit.lethal === "claymore") {
+    if (t - m.buf.grenade <= MOVE.BUFFER_S && (p.grenades || 0) > 0 && !mantling && p.grounded) {
+      m.buf.grenade = -9;
+      if (plantFromBody(sim, "P", p, p.yaw)) p.grenades--;
+    }
+  } else if (m.cooking) {
     m.grenFuseLeft -= dt;
     if (m.grenFuseLeft <= 0) {
       m.cooking = false;
@@ -468,7 +506,7 @@ function stepPlayerWeaponVerbs(state, cmd, world, weapons, dt, sim, mantling) {
         m.grenFuseLeft);
       void eyeY;
     }
-  } else if (t - m.buf.grenade <= MOVE.BUFFER_S && (p.grenades || 0) > 0 && !mantling) {
+  } else if (t - m.buf.grenade <= MOVE.BUFFER_S && (p.grenades || 0) > 0 && !mantling && !meleeBusy(p, t)) { // [melee]
     m.buf.grenade = -9;
     m.cooking = true;
     m.grenFuseLeft = MOVE.GRENADE_FUSE_S;
@@ -516,14 +554,24 @@ export function stepActorWeapon(sim, who, vc, dt) {
   if (!actor || (isP ? !actor.alive : !actor.alive)) return;
   const w = actor.weapon;
   const weapons = sim.weapons;
-  const weapon = weapons[w.id];
+  const weapon = weaponForBody(weapons, actor, w.id); // [gunsmith]
   if (!weapon) return;
   const m = isP ? state.player._m : null;
 
-  w.stateT = (w.stateT || 0) + dt;
+  // DEFT HANDS perk: reload (mag and shell-by-shell) and weapon swap run on a
+  // faster clock — every timing below is a stateT threshold, so one scale
+  // covers commit points, shell cadence and the swap together.
+  const fastHands = (w.state === "reloading" || w.state === "switching") && hasPerk(actor, "fastHands");
+  w.stateT = (w.stateT || 0) + (fastHands ? dt / PERK_FX.fastHands.timeMult : dt);
 
+  // [melee] a knife strike (windup + recovery) owns the hands: no ADS, no fire,
+  // no reload start, no switch start — the buffers keep the presses for after
+  const meleeOn = meleeBusy(actor, t);
+  // a bot's trigger pull is authorised for THIS tick only (botfsm window
+  // integrity, §5.7): never let one buffered through a strike fire after it
+  if (meleeOn && !isP && vc.consumeFire) vc.consumeFire();
   // ---- ADS (§2.4): blocked while sprinting / mantling / sliding-lock / reload
-  const adsBlocked = (vc.sprintState && vc.sprintState !== "none") || vc.mantling ||
+  const adsBlocked = meleeOn || (vc.sprintState && vc.sprintState !== "none") || vc.mantling ||
     t < (vc.adsBlockUntil ?? -9) || w.state === "reloading" || w.state === "switching" || vc.sliding;
   const adsDesire = !!vc.ads && !adsBlocked;
   if (adsDesire !== w.ads) {
@@ -541,14 +589,15 @@ export function stepActorWeapon(sim, who, vc, dt) {
       actor._lastWeapon = w.id; // Q = swap back
       w.id = to;
       const na = actor._slotAmmo && actor._slotAmmo[to];
-      w.mag = na ? na.mag : (weapons[to] ? weapons[to].mag : 0);
-      w.reserve = na ? na.reserve : (weapons[to] ? weapons[to].reserve : 0);
+      const wto = weaponForBody(weapons, actor, to); // [gunsmith]
+      w.mag = na ? na.mag : (wto ? wto.mag : 0);
+      w.reserve = na ? na.reserve : (wto ? wto.reserve : 0);
       w.state = "idle";
       w.stateT = 0;
       w.recoilIndex = 0;
       w._shotCount = 0;
     }
-  } else if (vc.switchBufferedT != null && t - vc.switchBufferedT <= MOVE.BUFFER_S && vc.switchTo &&
+  } else if (!meleeOn && vc.switchBufferedT != null && t - vc.switchBufferedT <= MOVE.BUFFER_S && vc.switchTo &&
              resolveSwitch(actor, vc.switchTo) && resolveSwitch(actor, vc.switchTo) !== w.id &&
              (actor.slots || []).indexOf(resolveSwitch(actor, vc.switchTo)) >= 0 &&
              weapons[resolveSwitch(actor, vc.switchTo)]) {
@@ -582,7 +631,7 @@ export function stepActorWeapon(sim, who, vc, dt) {
       w.stateT = 0;
       sim.emit("reload", { who, weaponId: w.id, phase: "done", duration: w._reloadDur });
     }
-  } else if (w.state !== "switching" &&
+  } else if (w.state !== "switching" && !meleeOn &&
              ((vc.reloadBufferedT != null && t - vc.reloadBufferedT <= MOVE.BUFFER_S) ||
               (t >= (isP && m ? m.autoReloadAt : (w._autoReloadAt ?? 1e9)) && w.mag === 0))) {
     if (w.mag < weapon.mag && w.reserve > 0) {
@@ -600,7 +649,8 @@ export function stepActorWeapon(sim, who, vc, dt) {
         w._shellPhase = "load";
         w._reloadDur = weapon.reload.startS + weapon.reload.perShellS * Math.max(1, weapon.mag - w.mag) + weapon.reload.endS;
       }
-      sim.emit("reload", { who, weaponId: w.id, phase: "start", duration: w._reloadDur, empty });
+      sim.emit("reload", { who, weaponId: w.id, phase: "start",
+        duration: hasPerk(actor, "fastHands") ? w._reloadDur * PERK_FX.fastHands.timeMult : w._reloadDur, empty });
     } else if (vc.reloadBufferedT != null && t - vc.reloadBufferedT <= MOVE.BUFFER_S) {
       vc.consumeReload && vc.consumeReload();
     }
@@ -617,12 +667,12 @@ export function stepActorWeapon(sim, who, vc, dt) {
   const interval = 60 / weapon.rpm;
   const sinceShot = t - (w.lastShotT ?? -9);
   const sprintOutRow = SPRINT_OUT_S[weapon.class] || SPRINT_OUT_S.ar;
-  const sprintOut = sprintOutRow[vc.sprintWasTac ? 1 : 0];
+  const sprintOut = sprintOutRow[vc.sprintWasTac ? 1 : 0] * (weapon.sprintOutMult || 1); // [gunsmith] laser
   const sprintReady = (vc.sprintState == null || vc.sprintState === "none") &&
     (vc.sprintExitT == null || t - vc.sprintExitT >= sprintOut);
   const raiseReady = t >= (vc.mantleRaiseUntil ?? -9);
   const shellReloading = w.state === "reloading" && !!(weapon.reload && weapon.reload.mode === "shell");
-  const canFire = !vc.mantling && sprintReady && raiseReady &&
+  const canFire = !vc.mantling && !meleeOn && sprintReady && raiseReady &&
     (w.state !== "reloading" || (shellReloading && w.mag > 0)) && w.state !== "switching" &&
     sinceShot >= interval - 1e-9;
 
@@ -667,7 +717,9 @@ export function stepActorWeapon(sim, who, vc, dt) {
       w.state = "firing";
       w.stateT = 0;
       fireShot(sim, who, weapon, origin, dir, sim.rng.spread);
-      w.lastShotT = t;
+      // [gunsmith] RAPID FIRE carries the sub-tick remainder through a held burst, so
+      // its rpm is the real cadence instead of being rounded up to whole 60 Hz ticks
+      w.lastShotT = weapon.fireCarry && sinceShot < interval + dt ? w.lastShotT + interval : t;
       w.recoilIndex = (w.recoilIndex || 0) + 1;
       if (isP && m) {
         m.fireToSprintLockUntil = t + MOVE.FIRE_SPRINT_LOCK_S;
@@ -769,12 +821,15 @@ export function stepBotLocomotion(sim, bot, dt) {
   const wcap = Math.max(Math.abs(mz) * fwdSpd, Math.abs(mx) * strSpd);
   if (wl > wcap && wl > 0) { wx *= wcap / wl; wz *= wcap / wl; wl = wcap; }
   {
-    const wpn = sim.weapons && bot.weapon ? sim.weapons[bot.weapon.id] : null;
+    const wpn = sim.weapons && bot.weapon ? weaponForBody(sim.weapons, bot, bot.weapon.id) : null; // [gunsmith]
     let tgt = null;
-    if (cmd.crouch) tgt = MOVE.CROUCH;
-    else if (cmd.sprint && mz > 0.5) tgt = MOVE.SPRINT;
+    const stunned = stunLevel(bot, sim.state.time) > 0; // [equipment lane] no sprint while concussed
+    if (cmd.crouch) tgt = hasPerk(bot, "doubleTime") ? MOVE.CROUCH * PERK_FX.doubleTime.crouchMult : MOVE.CROUCH;
+    else if (cmd.sprint && mz > 0.5 && !stunned) tgt = MOVE.SPRINT;
     else if (bot.weapon && bot.weapon.ads) tgt = MOVE.WALK * (wpn && wpn.adsMoveMult != null ? wpn.adsMoveMult : 0.6);
     if (tgt != null && wl > 0.01) { wx = (wx / wl) * tgt; wz = (wz / wl) * tgt; }
+    if (wpn && wpn.moveMult) { wx *= wpn.moveMult; wz *= wpn.moveMult; } // [gunsmith] fore grip weight
+    if (stunned) { const sm = stunMoveMult(bot, sim.state.time); wx *= sm; wz *= sm; } // [equipment lane]
   }
 
   const dvx = wx - bot.vel[0], dvz = wz - bot.vel[2];
@@ -787,6 +842,17 @@ export function stepBotLocomotion(sim, bot, dt) {
     bot.vel[2] += (dvz / dl) * step;
   }
   bot.vel[1] += MOVE.GRAV * dt;
+  // [melee] the same knife verb as the human: edge of cmd.melee, then the windup
+  // lunge replaces the horizontal velocity (melee.js) before the capsule moves
+  {
+    const t = sim.state.time;
+    if (cmd.melee && !bot._prevMelee && !meleeBusy(bot, t)) {
+      tryBeginMelee(sim, bot.id, bot, { blocked: bot.weapon && bot.weapon.state === "switching" });
+    }
+    bot._prevMelee = !!cmd.melee;
+    const lv = stepMelee(sim, bot.id, bot, dt);
+    if (lv) { bot.vel[0] = lv[0]; bot.vel[2] = lv[1]; }
+  }
   const h = bot.stance === "crouch" ? MOVE.CROUCH_H : MOVE.STAND_H;
   const preX = bot.pos[0], preZ = bot.pos[2];
   const res = world.moveCapsule(bot.pos, bot.vel, dt, MOVE.CAPSULE_R, h);
@@ -822,7 +888,7 @@ export function stepBotLocomotion(sim, bot, dt) {
       sim.emit("step", {
         who: bot.id, surface: gHit ? gHit.surface : "concrete", sprint: !!cmd.sprint,
         foot: bot._stepFoot, stance: bot.stance,
-        speed: hspeed, stride, hz: hspeed / stride,
+        speed: hspeed, stride, hz: hspeed / stride, quiet: hasPerk(bot, "deadsilence"),
       });
     }
   } else bot._stepDist = bot._stepPrime; // re-prime keeps this bot's offset

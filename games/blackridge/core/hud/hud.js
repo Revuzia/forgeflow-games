@@ -29,6 +29,7 @@
 // Frozen signature: createHud(ctx) → {attach, update, show, hide} (+private).
 
 import { effectiveSpread, playerSpreadState } from "../sim/ballistics.js";
+import { teamHex } from "../team_color.js";
 
 // ---------------------------------------------------------------------------
 // Shared shell registry — menu.js / pause.js / settings_ui.js import this so
@@ -453,10 +454,483 @@ const GLYPHS = { // per weapon class, tiny original silhouettes for the killfeed
   pistol: "M6 2h14v2h-7l-1 4h-4l1-4H6z",
   // pump shotgun: barrel, magazine tube under it, pump forend, receiver + stock
   shotgun: "M0 2.6h16v1.4H0zM2.5 4.6H16v1.4H2.5zM7 6h6v2H7zM16 2h5l1 1h5v5l-4.5-.5L21 7h-5z",
+  // [polish v149] equipment + melee own their glyphs (never the held gun's)
+  mine: "M6 3.5q7.5-3 15 0V8H6zM8 8h1.4v2H8zM17.6 8H19v2h-1.6zM4 1l3 1.6-.5.8zM23 1l-3 1.6.5.8z", // curved tripmine on legs + cone ticks
+  frag: "M10.5 3.2a4.2 4.2 0 1 0 6 0zM12 0h4v2.6h-4zM16 .6l3.4-.6.3 1.2-3.7.6z",
+  knife: "M2 4.2h15l6-2.2-.8 4.2H17v.6H2zM17 3h1.5v4.6H17z",
 };
 function weaponGlyphSvg(cls) {
   const d = GLYPHS[cls] || GLYPHS.ar;
   return `<svg width="27" height="10" viewBox="0 0 27 10" fill="currentColor" aria-hidden="true"><path d="${d}"/></svg>`;
+}
+
+// ---------------------------------------------------------------------------
+// [lane dom] STRONGHOLD objective HUD — lives INSIDE #hud so the capture
+// harness (testsurface HUD composite: #hud + a10-style) photographs it.
+//   - score line (replaces match_hud's #mh-score while a STRONGHOLD match is
+//     live — body.dom-live, the same scoped-CSS handoff match_hud uses for
+//     the campaign killfeed): team colours, the limit, a pulse near the end
+//   - three zone chips under the clock: owner colour, the capture bar in the
+//     capturing team's colour, CONTESTED blink, the chip you stand in lifts
+//   - world markers: a diamond + letter + metres over each zone, clamped to
+//     the screen edge when off-screen / behind, hidden for the zone you are in
+//   - the capture bar (centre-lower) while you stand in a ring
+//   - announcer lines from the `zonecap` event: "B CAPTURED", "WE LOST A",
+//     "ENEMY CAPTURED C", "A UNDER ATTACK", "C NEUTRALISED"
+// View-only: reads sim.state.match.mode.zones (public board) and writes
+// nothing back. All DOM is pooled at creation; per-frame work is change-gated.
+// ---------------------------------------------------------------------------
+const ZONE_CSS = `
+/* [lane dom] STRONGHOLD */
+body.dom-live #mh-score{display:none;}
+#a10-dom{position:absolute;inset:0;display:none;}
+#a10-dom .dm-score{position:absolute;top:44px;left:50%;transform:translateX(-50%);
+  font-size:20px;letter-spacing:.12em;white-space:nowrap;}
+#a10-dom .dm-score .sep{opacity:.4;margin:0 10px;font-size:13px;letter-spacing:.2em;vertical-align:2px;}
+#a10-dom .dm-score.pulse{animation:a10DomPulse 1.1s ease-in-out infinite;}
+@keyframes a10DomPulse{0%,100%{opacity:1}50%{opacity:.55}}
+#a10-dom .dm-chips{position:absolute;top:96px;left:50%;transform:translateX(-50%);display:flex;gap:10px;}
+#a10-dom .dm-chip{position:relative;width:30px;height:30px;border:2px solid rgba(232,232,228,.55);
+  background:rgba(12,14,16,.45);display:flex;align-items:center;justify-content:center;
+  font-size:16px;letter-spacing:0;line-height:1;transition:transform .12s;}
+#a10-dom .dm-chip .bar{position:absolute;left:0;bottom:0;height:4px;width:0;}
+#a10-dom .dm-chip.here{transform:scale(1.22);}
+#a10-dom .dm-chip.contested{animation:a10DomBlink .5s steps(2,start) infinite;}
+@keyframes a10DomBlink{0%{border-color:#ff4d4d}100%{border-color:#e8e8e4}}
+#a10-dom .dm-mk{position:absolute;transform:translate(-50%,-100%);text-align:center;white-space:nowrap;}
+#a10-dom .dm-mk .dia{width:22px;height:22px;margin:0 auto;transform:rotate(45deg);
+  border:2px solid currentColor;background:rgba(12,14,16,.5);display:flex;align-items:center;justify-content:center;}
+#a10-dom .dm-mk .dia span{transform:rotate(-45deg);font-size:13px;line-height:1;}
+#a10-dom .dm-mk .m{font-size:10px;letter-spacing:.12em;margin-top:5px;opacity:.85;}
+#a10-dom .dm-mk.contested .dia{animation:a10DomBlink .5s steps(2,start) infinite;}
+#a10-dom .dm-cap{position:absolute;left:50%;bottom:31%;transform:translateX(-50%);text-align:center;display:none;}
+#a10-dom .dm-cap .t{font-size:15px;letter-spacing:.26em;margin-bottom:7px;}
+#a10-dom .dm-cap .track{width:280px;height:6px;background:rgba(232,232,228,.18);margin:0 auto;position:relative;}
+#a10-dom .dm-cap .fill{position:absolute;left:0;top:0;bottom:0;width:0;}
+#a10-dom .dm-ann{position:absolute;top:140px;left:50%;transform:translateX(-50%);text-align:center;}
+#a10-dom .dm-ann div{font-size:17px;letter-spacing:.3em;margin-bottom:6px;opacity:0;white-space:nowrap;}
+`;
+
+// [lane settings] live colour-blind team palette (settings.js teamColors via the
+// live-instance handle; null = the authored AMBER / SLATE tints).
+function liveTeamColors() {
+  const h = globalThis.__BR_SETTINGS__;
+  return h && h.teamColors ? h.teamColors() : null;
+}
+
+function createZoneHud(ctx, root) {
+  // CSS rides in the a10-style element (the composite copies its text)
+  {
+    const el = document.getElementById("a10-style");
+    if (el && el.textContent.indexOf("[lane dom] STRONGHOLD") < 0) el.textContent += ZONE_CSS;
+  }
+  const box = document.createElement("div");
+  box.id = "a10-dom";
+  box.innerHTML =
+    `<div class="dm-score"></div><div class="dm-chips"></div>` +
+    `<div class="dm-mks"></div>` +
+    `<div class="dm-cap"><div class="t"></div><div class="track"><div class="fill"></div></div></div>` +
+    `<div class="dm-ann"></div>`;
+  root.appendChild(box);
+  const scoreEl = box.querySelector(".dm-score"), chipsEl = box.querySelector(".dm-chips");
+  const mksEl = box.querySelector(".dm-mks"), capEl = box.querySelector(".dm-cap");
+  const capT = capEl.querySelector(".t"), capFill = capEl.querySelector(".fill");
+  const annEl = box.querySelector(".dm-ann");
+  const chips = [], mks = [], anns = [];
+  for (let i = 0; i < 3; i++) {
+    const c = document.createElement("div");
+    c.className = "dm-chip";
+    c.innerHTML = `<span class="l"></span><div class="bar"></div>`;
+    chipsEl.appendChild(c);
+    chips.push({ el: c, l: c.querySelector(".l"), bar: c.querySelector(".bar"), sig: "" });
+    const k = document.createElement("div");
+    k.className = "dm-mk";
+    k.innerHTML = `<div class="dia"><span></span></div><div class="m"></div>`;
+    k.style.display = "none";
+    mksEl.appendChild(k);
+    mks.push({ el: k, l: k.querySelector("span"), m: k.querySelector(".m"), sig: "", pos: "" });
+    const a = document.createElement("div");
+    annEl.appendChild(a);
+    anns.push({ el: a, t: -99, text: "" });
+  }
+  const st = { on: false, lastScore: "", capSig: "", teams: null, v: null };
+
+  const TINT = ["#d9a441", "#7c9fd0"];
+  const NEUTRAL = "#e8e8e4";
+  const tintOf = (team) => {
+    if (team !== 0 && team !== 1) return NEUTRAL;
+    return teamHex(team, st.teams); // single source (core/team_color.js)
+  };
+  const rgba = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+
+  function announce(text, color, t) {
+    // newest on top; the oldest slot is recycled
+    let slot = anns[0];
+    for (const a of anns) if (a.t < slot.t) slot = a;
+    slot.t = t; slot.text = text;
+    slot.el.textContent = text;
+    slot.el.style.color = color;
+    for (const a of anns.slice().sort((x, y) => y.t - x.t)) annEl.appendChild(a.el);
+  }
+
+  function onZone(d, t) {
+    if (!d || !st.on) return;
+    const us = d.team === 0;
+    if (d.state === "captured") {
+      if (us) announce(`${d.label} CAPTURED`, tintOf(0), t);
+      else announce(`ENEMY CAPTURED ${d.label}`, tintOf(1), t);
+    } else if (d.state === "neutralised") {
+      if (d.prevOwner === 0) announce(`WE LOST ${d.label}`, "#ff4d4d", t);
+      else announce(`${d.label} NEUTRALISED`, tintOf(0), t);
+    } else if (d.state === "capturing" && d.team === 1 && d.owner === 0) {
+      announce(`${d.label} UNDER ATTACK`, "#ff4d4d", t);
+    }
+  }
+
+  function project(pos, out) {
+    const cam = ctx.camera, TH = ctx.THREE;
+    if (!cam || !TH) return false;
+    if (!st.v) st.v = new TH.Vector3();
+    st.v.set(pos[0], pos[1], pos[2]).project(cam);
+    out[0] = st.v.x; out[1] = st.v.y; out[2] = st.v.z;
+    return true;
+  }
+  const scr = [0, 0, 0];
+
+  function update(sim, t) {
+    const M = sim && sim.state.match;
+    const zones = M && M.modeId === "dom" && M.mode && M.mode.zones;
+    const live = !!(zones && zones.length && M.phase !== "ended");
+    if (live !== st.on) {
+      st.on = live;
+      box.style.display = live ? "block" : "none";
+      document.body.classList.toggle("dom-live", live);
+      if (!live) for (const a of anns) { a.t = -99; a.el.style.opacity = "0"; }
+    }
+    if (!live) return;
+    st.teams = M.teams;
+    const p = sim.state.player;
+    // ---- score line
+    const s0 = M.teams[0].score, s1 = M.teams[1].score;
+    const rules = sim.match && sim.match.m ? sim.match.m.rules : null;
+    const lim = rules && rules.scoreLimit ? rules.scoreLimit : 200;
+    const sig = s0 + ":" + s1 + ":" + lim + ":" + tintOf(0); // [lane settings] palette in the sig
+    if (sig !== st.lastScore) {
+      st.lastScore = sig;
+      // [polish v149] a colour-blind palette repaints the sides: "AMBER" in blue
+      // would read wrong, so the line says US / THEM like every other mode then
+      const cbOn = !!liveTeamColors();
+      const n0 = cbOn ? "US" : (M.teams[0].name || "AMBER"), n1 = cbOn ? "THEM" : (M.teams[1].name || "SLATE");
+      scoreEl.innerHTML =
+        `<span style="color:${tintOf(0)}">${n0} ${s0}</span>` +
+        `<span class="sep">/ ${lim}</span>` +
+        `<span style="color:${tintOf(1)}">${s1} ${n1}</span>`;
+      scoreEl.classList.toggle("pulse", Math.max(s0, s1) >= lim - 20);
+    }
+    // ---- which ring are we in?
+    let here = -1;
+    if (p.alive) {
+      for (let i = 0; i < zones.length; i++) {
+        const z = zones[i];
+        if (Math.hypot(p.pos[0] - z.pos[0], p.pos[2] - z.pos[2]) <= z.r &&
+            Math.abs(p.pos[1] - z.pos[1]) <= 2.5) { here = i; break; }
+      }
+    }
+    // ---- chips + markers
+    const vw = window.innerWidth || 1280, vh = window.innerHeight || 720;
+    for (let i = 0; i < 3; i++) {
+      const c = chips[i], k = mks[i], z = zones[i];
+      if (!z) { c.el.style.display = "none"; k.el.style.display = "none"; continue; }
+      const own = tintOf(z.owner);
+      const prog = z.prog > 0 ? Math.round(z.prog * 100) : 0;
+      const csig = z.label + own + prog + (z.capTeam) + (z.contested ? "c" : "") + (here === i ? "h" : "");
+      if (csig !== c.sig) {
+        c.sig = csig;
+        c.el.style.display = "flex";
+        c.l.textContent = z.label;
+        c.el.style.borderColor = own;
+        c.el.style.color = own;
+        c.el.style.background = z.owner >= 0 ? rgba(own, 0.28) : "rgba(12,14,16,.45)";
+        c.bar.style.width = prog + "%";
+        c.bar.style.background = tintOf(z.capTeam);
+        c.el.className = "dm-chip" + (z.contested ? " contested" : "") + (here === i ? " here" : "");
+      }
+      // marker
+      if (here === i || !p.alive) { if (k.el.style.display !== "none") k.el.style.display = "none"; continue; }
+      if (!project([z.pos[0], z.pos[1] + 2.4, z.pos[2]], scr)) { k.el.style.display = "none"; continue; }
+      let x, y;
+      const behind = scr[2] > 1;
+      if (!behind && scr[0] >= -0.95 && scr[0] <= 0.95 && scr[1] >= -0.9 && scr[1] <= 0.9) {
+        x = (scr[0] * 0.5 + 0.5) * vw; y = (-scr[1] * 0.5 + 0.5) * vh;
+      } else {
+        // off-screen: pin to the left/right edge on the bearing side, one
+        // row per zone (A over B over C) so edge markers never stack
+        const rel = relDegTo(sim, z.pos);
+        x = rel >= 0 ? vw - 40 : 40;
+        y = vh * 0.36 + i * 52;
+      }
+      const dist = Math.round(Math.hypot(z.pos[0] - p.pos[0], z.pos[2] - p.pos[2]));
+      const msig = z.label + own + (z.contested ? "c" : "") + dist;
+      if (msig !== k.sig) {
+        k.sig = msig;
+        k.l.textContent = z.label;
+        k.el.style.color = own;
+        k.m.textContent = dist + " m";
+        k.el.className = "dm-mk" + (z.contested ? " contested" : "");
+      }
+      const psig = x.toFixed(0) + "," + y.toFixed(0);
+      if (psig !== k.pos) { k.pos = psig; k.el.style.left = x.toFixed(0) + "px"; k.el.style.top = y.toFixed(0) + "px"; }
+      if (k.el.style.display !== "block") k.el.style.display = "block";
+    }
+    // ---- capture bar
+    let capSig = "";
+    if (here >= 0) {
+      const z = zones[here];
+      let text, color, frac;
+      if (z.contested) { text = "CONTESTED"; color = "#ff4d4d"; frac = z.prog; }
+      else if (z.owner === 0 && z.prog > 0) { text = `DEFENDING ${z.label}`; color = tintOf(1); frac = z.prog; }
+      else if (z.owner === 0) { text = `${z.label} SECURED`; color = tintOf(0); frac = 1; }
+      else if (z.owner === 1) { text = `NEUTRALISING ${z.label}`; color = tintOf(0); frac = z.capTeam === 0 ? z.prog : 0; }
+      else { text = `CAPTURING ${z.label}`; color = tintOf(z.capTeam >= 0 ? z.capTeam : 0); frac = z.prog; }
+      capSig = text + color + Math.round(frac * 200);
+      if (capSig !== st.capSig) {
+        capT.textContent = text;
+        capT.style.color = color;
+        capFill.style.width = (Math.max(0, Math.min(1, frac)) * 100).toFixed(1) + "%";
+        capFill.style.background = color;
+      }
+    }
+    if (capSig !== st.capSig) { st.capSig = capSig; capEl.style.display = capSig ? "block" : "none"; }
+    // ---- announcer TTL (2.6 s, sim time)
+    for (const a of anns) {
+      const age = t - a.t;
+      const op = age >= 0 && age < 2.6 ? (age < 2.1 ? 0.95 : 0.95 * (2.6 - age) / 0.5) : 0;
+      const os = op.toFixed(2);
+      if (a.el.style.opacity !== os) a.el.style.opacity = os;
+    }
+  }
+
+  return { update, onZone, _box: box };
+}
+
+// ---------------------------------------------------------------------------
+// [lane modes] OUTPOST / RECLAIM / ASCENT objective HUD — lives INSIDE #hud
+// (the capture harness photographs it), follows the STRONGHOLD pattern:
+//   OUTPOST — a hill chip under the clock (site number + name + state + the
+//             rotation timer, in the holder's colour, CONTESTED blink),
+//             "NEXT · …" in the preview window, a world marker over the live
+//             hill and a ghost marker over the next one (edge-pinned when
+//             off-screen), the hold bar while you stand in it
+//   RECLAIM — a tally chip (confirms per team) + the nearest tags as small
+//             world markers within 40 m (C = confirm an enemy's, D = deny ours)
+//   ASCENT  — the rung panel (your rung / weapon / attachments, next weapon,
+//             a pip per rung with the leader's rung outlined)
+//   all     — announcer lines from the hill / tag / ladder events
+// View-only (reads sim.state.match.mode). DOM pooled at creation; per-frame
+// work change-gated.
+// ---------------------------------------------------------------------------
+const MODES_CSS = `
+/* [lane modes] OUTPOST / RECLAIM / ASCENT */
+#a10-modes{position:absolute;inset:0;display:none;}
+#a10-modes .md-chip{position:absolute;top:96px;left:50%;transform:translateX(-50%);white-space:nowrap;display:none;
+  border:2px solid rgba(232,232,228,.55);background:rgba(12,14,16,.45);padding:5px 12px;font-size:13px;letter-spacing:.18em;}
+#a10-modes .md-chip .tm{opacity:.8;margin-left:10px;}
+#a10-modes .md-chip.contested{animation:a10DomBlink .5s steps(2,start) infinite;}
+#a10-modes .md-next{position:absolute;top:130px;left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:.24em;opacity:.8;white-space:nowrap;display:none;}
+#a10-modes .md-mk{position:absolute;transform:translate(-50%,-100%);text-align:center;white-space:nowrap;}
+#a10-modes .md-mk .dia{width:22px;height:22px;margin:0 auto;transform:rotate(45deg);border:2px solid currentColor;
+  background:rgba(12,14,16,.5);display:flex;align-items:center;justify-content:center;}
+#a10-modes .md-mk .dia span{transform:rotate(-45deg);font-size:12px;line-height:1;}
+#a10-modes .md-mk .m{font-size:10px;letter-spacing:.12em;margin-top:5px;opacity:.85;}
+#a10-modes .md-mk.ghost{opacity:.55;}
+#a10-modes .md-mk.ghost .dia{border-style:dashed;}
+#a10-modes .md-mk.small .dia{width:14px;height:14px;}
+#a10-modes .md-mk.small .dia span{font-size:9px;}
+#a10-modes .md-mk.contested .dia{animation:a10DomBlink .5s steps(2,start) infinite;}
+#a10-modes .md-cap{position:absolute;left:50%;bottom:31%;transform:translateX(-50%);text-align:center;display:none;}
+#a10-modes .md-cap .t{font-size:15px;letter-spacing:.26em;margin-bottom:7px;}
+#a10-modes .md-cap .track{width:280px;height:6px;background:rgba(232,232,228,.18);margin:0 auto;position:relative;}
+#a10-modes .md-cap .fill{position:absolute;left:0;top:0;bottom:0;width:0;}
+#a10-modes .md-rung{position:absolute;top:96px;left:50%;transform:translateX(-50%);text-align:center;white-space:nowrap;display:none;}
+#a10-modes .md-rung .r{font-size:15px;letter-spacing:.22em;}
+#a10-modes .md-rung .w{font-size:11px;letter-spacing:.18em;opacity:.8;margin-top:4px;}
+#a10-modes .md-rung .pips{margin-top:6px;display:flex;gap:3px;justify-content:center;}
+#a10-modes .md-rung .pips i{display:block;width:14px;height:4px;background:rgba(232,232,228,.22);}
+#a10-modes .md-rung .pips i.on{background:#d9a441;}
+#a10-modes .md-rung .pips i.ld{outline:1px solid #e8e8e4;outline-offset:1px;}
+#a10-modes .md-ann{position:absolute;top:156px;left:50%;transform:translateX(-50%);text-align:center;}
+#a10-modes .md-ann div{font-size:17px;letter-spacing:.3em;margin-bottom:6px;opacity:0;white-space:nowrap;}
+`;
+const ATT_SHORT = { holo: "HOLO", reddot: "DOT", compensator: "COMP", grip: "GRIP", laser: "LASER", rapidfire: "RAPID", suppressor: "SUPP", extmag: "EXT MAG", scope: "SCOPE", irons: "IRONS" };
+
+function createModesHud(ctx, root) {
+  {
+    const el = document.getElementById("a10-style");
+    if (el && el.textContent.indexOf("[lane modes] OUTPOST") < 0) el.textContent += MODES_CSS;
+  }
+  const box = document.createElement("div");
+  box.id = "a10-modes";
+  box.innerHTML = `<div class="md-chip"></div><div class="md-next"></div>` +
+    `<div class="md-rung"><div class="r"></div><div class="w"></div><div class="pips"></div></div>` +
+    `<div class="md-mks"></div><div class="md-cap"></div><div class="md-ann"></div>`;
+  root.appendChild(box);
+  const chip = box.querySelector(".md-chip"), nextEl = box.querySelector(".md-next");
+  const rung = box.querySelector(".md-rung"), rungR = rung.querySelector(".r"), rungW = rung.querySelector(".w"), pipsEl = rung.querySelector(".pips");
+  const mksEl = box.querySelector(".md-mks"), capEl = box.querySelector(".md-cap"), annEl = box.querySelector(".md-ann");
+  const MK_N = 8;
+  const mks = [], anns = [];
+  for (let i = 0; i < MK_N; i++) {
+    const k = document.createElement("div");
+    k.className = "md-mk"; k.style.display = "none";
+    k.innerHTML = `<div class="dia"><span></span></div><div class="m"></div>`;
+    mksEl.appendChild(k);
+    mks.push({ el: k, l: k.querySelector("span"), m: k.querySelector(".m"), sig: "", pos: "" });
+  }
+  for (let i = 0; i < 3; i++) { const a = document.createElement("div"); annEl.appendChild(a); anns.push({ el: a, t: -99 }); }
+  const st = { on: null, sig: { chip: "", next: "", rung: "", cap: "" }, v: null, teams: null };
+  const TINT = ["#d9a441", "#7c9fd0"], NEUTRAL = "#e8e8e4", RED = "#ff4d4d";
+  const tintOf = (team) => {
+    if (team !== 0 && team !== 1) return NEUTRAL;
+    return teamHex(team, st.teams); // single source (core/team_color.js)
+  };
+  const wName = (id) => { const w = ctx.weapons && ctx.weapons[id]; return String((w && w.name) || id || "").toUpperCase(); };
+  const tierName = (tr) => !tr ? "" : tr.knife ? "KNIFE" :
+    wName(tr.weapon) + (tr.attach && tr.attach.length ? " · " + tr.attach.map((a) => ATT_SHORT[a] || String(a).toUpperCase()).join(" / ") : "");
+  const fmt = (s) => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+
+  function announce(text, color, t) {
+    let slot = anns[0];
+    for (const a of anns) if (a.t < slot.t) slot = a;
+    slot.t = t; slot.el.textContent = text; slot.el.style.color = color;
+    for (const a of anns.slice().sort((x, y) => y.t - x.t)) annEl.appendChild(a.el);
+  }
+  function onEvent(type, d, t) {
+    if (!d || !st.on) return;
+    if (type === "hill") {
+      if (d.state === "active") announce(`OUTPOST ${d.label} · ${d.name} IS LIVE`, NEUTRAL, t);
+      else if (d.state === "preview") announce(`OUTPOST MOVING — ${d.nextName}`, NEUTRAL, t);
+      else if (d.state === "held") announce(d.team === 0 ? "WE HOLD THE OUTPOST" : "ENEMY HOLDS THE OUTPOST", d.team === 0 ? tintOf(0) : RED, t);
+      else if (d.state === "contested" && d.prevTeam === 0) announce("OUTPOST CONTESTED", RED, t);
+    } else if (type === "tag") {
+      if (d.state === "confirmed") {
+        if (d.byWho === "P") announce("KILL CONFIRMED  +1", tintOf(0), t);
+        else if (d.byTeam === 1 && d.team === 0) announce("ENEMY CONFIRMED A KILL", RED, t);
+      } else if (d.state === "denied" && d.byWho === "P") announce("KILL DENIED", tintOf(0), t);
+    } else if (type === "ladder") {
+      if (d.who === "P" && d.state === "promoted") announce(`RUNG ${d.tier + 1}`, tintOf(0), t);
+      else if (d.who === "P" && d.state === "demoted") announce("KNIFED — DOWN A RUNG", RED, t);
+      else if (d.by === "P" && d.state === "demoted") announce("SENT THEM DOWN A RUNG", tintOf(0), t);
+      else if (d.state === "lead" && d.who === "P") announce("YOU HAVE THE LEAD", tintOf(0), t);
+    }
+  }
+  function project(pos, out) {
+    const cam = ctx.camera, TH = ctx.THREE;
+    if (!cam || !TH) return false;
+    if (!st.v) st.v = new TH.Vector3();
+    st.v.set(pos[0], pos[1], pos[2]).project(cam);
+    out[0] = st.v.x; out[1] = st.v.y; out[2] = st.v.z;
+    return true;
+  }
+  const scr = [0, 0, 0];
+  function marker(i, sim, pos, label, color, cls, row, pin) {
+    const k = mks[i], p = sim.state.player;
+    if (!project([pos[0], pos[1] + 2.2, pos[2]], scr)) { k.el.style.display = "none"; return; }
+    const vw = window.innerWidth || 1280, vh = window.innerHeight || 720;
+    let x, y;
+    const behind = scr[2] > 1;
+    if (!behind && scr[0] >= -0.95 && scr[0] <= 0.95 && scr[1] >= -0.9 && scr[1] <= 0.9) {
+      x = (scr[0] * 0.5 + 0.5) * vw; y = (-scr[1] * 0.5 + 0.5) * vh;
+    } else if (pin) {
+      const rel = relDegTo(sim, pos);
+      x = rel >= 0 ? vw - 40 : 40; y = vh * 0.36 + row * 52;
+    } else { if (k.el.style.display !== "none") k.el.style.display = "none"; return; }
+    const dist = Math.round(Math.hypot(pos[0] - p.pos[0], pos[2] - p.pos[2]));
+    const sig = label + color + cls + dist;
+    if (sig !== k.sig) { k.sig = sig; k.l.textContent = label; k.el.style.color = color; k.m.textContent = dist + " m"; k.el.className = "md-mk " + cls; }
+    const ps = x.toFixed(0) + "," + y.toFixed(0);
+    if (ps !== k.pos) { k.pos = ps; k.el.style.left = x.toFixed(0) + "px"; k.el.style.top = y.toFixed(0) + "px"; }
+    if (k.el.style.display !== "block") k.el.style.display = "block";
+  }
+  const hideFrom = (i) => { for (; i < MK_N; i++) if (mks[i].el.style.display !== "none") mks[i].el.style.display = "none"; };
+  const setHtml = (key, el, html) => {
+    if (st.sig[key] === html) return;
+    st.sig[key] = html; el.innerHTML = html; el.style.display = html ? "block" : "none";
+  };
+
+  function update(sim, t) {
+    const M = sim && sim.state.match;
+    const id = M && M.phase !== "ended" && (M.modeId === "hill" || M.modeId === "tags" || M.modeId === "ladder") ? M.modeId : null;
+    if (id !== st.on) {
+      st.on = id;
+      box.style.display = id ? "block" : "none";
+      for (const a of anns) { a.t = -99; a.el.style.opacity = "0"; }
+      setHtml("chip", chip, ""); setHtml("next", nextEl, ""); setHtml("cap", capEl, "");
+      st.sig.rung = ""; rung.style.display = "none";
+      hideFrom(0);
+    }
+    if (!id) return;
+    st.teams = M.teams;
+    const MD = M.mode || {}, p = sim.state.player;
+    let used = 0;
+    if (id === "hill" && MD.hill && MD.zones && MD.zones[0]) {
+      const H = MD.hill, z = MD.zones[0];
+      const col = H.contested ? RED : tintOf(H.holder);
+      const state = H.contested ? "CONTESTED" : H.holder === 0 ? "HELD" : H.holder === 1 ? "ENEMY HELD" : "NEUTRAL";
+      setHtml("chip", chip, `<span style="color:${col}">OUTPOST ${H.label} · ${H.name} · ${state}</span><span class="tm">${fmt(H.timeLeftS)}</span>`);
+      chip.style.borderColor = col;
+      chip.className = "md-chip" + (H.contested ? " contested" : "");
+      setHtml("next", nextEl, H.previewOn && MD.zones[1] ? `NEXT · OUTPOST ${MD.zones[1].label} · ${H.nextName} IN ${fmt(H.timeLeftS)}` : "");
+      const inside = p.alive && Math.hypot(p.pos[0] - z.pos[0], p.pos[2] - z.pos[2]) <= z.r && Math.abs(p.pos[1] - z.pos[1]) <= 2.5;
+      if (!inside && p.alive) marker(used++, sim, z.pos, H.label, col, H.contested ? "contested" : "", 0, true);
+      if (MD.zones[1] && p.alive) marker(used++, sim, MD.zones[1].pos, MD.zones[1].label, NEUTRAL, "ghost", 1, true);
+      let cap = "";
+      if (inside) {
+        const text = H.contested ? "CONTESTED" : H.holder === 0 ? "HOLDING THE OUTPOST" : "TAKING THE OUTPOST";
+        const c = H.contested ? RED : tintOf(0);
+        const frac = Math.max(0, Math.min(1, H.timeLeftS / (H.rotateS || 60)));
+        cap = `<div class="t" style="color:${c}">${text}</div><div class="track"><div class="fill" style="width:${(frac * 100).toFixed(0)}%;background:${c}"></div></div>`;
+      }
+      setHtml("cap", capEl, cap);
+    } else if (id === "tags") {
+      const cf = MD.confirms || [0, 0];
+      setHtml("chip", chip, `<span style="color:${tintOf(0)}">CONFIRMED ${cf[0]}</span><span class="tm" style="color:${tintOf(1)}">${cf[1]} THEIRS</span>`);
+      chip.style.borderColor = "rgba(232,232,228,.4)";
+      const tags = MD.tags || [];
+      if (p.alive && tags.length) {
+        const near = [];
+        for (const g of tags) { const d = Math.hypot(g.pos[0] - p.pos[0], g.pos[2] - p.pos[2]); if (d <= 40) near.push([d, g]); }
+        near.sort((a, b) => a[0] - b[0]);
+        for (let i = 0; i < near.length && used < MK_N; i++) {
+          const g = near[i][1];
+          marker(used++, sim, g.pos, g.team === 0 ? "D" : "C", tintOf(g.team), "small", 0, false);
+        }
+      }
+    } else if (id === "ladder" && MD.tiers) {
+      const n = MD.tiers.length, me = Math.min(n - 1, (MD.tier && MD.tier[0]) | 0);
+      const L = MD.leader || {};
+      const nx = MD.tiers[me + 1];
+      let pips = "";
+      for (let i = 0; i < n; i++) pips += `<i class="${i <= me ? "on" : ""}${L.tier === i && L.actorId > 0 ? " ld" : ""}"></i>`;
+      const html = `RUNG ${me + 1} / ${n}|${tierName(MD.tiers[me])}${nx ? " — NEXT " + tierName(nx) : " — LAST RUNG"}|${pips}`;
+      if (st.sig.rung !== html) {
+        st.sig.rung = html;
+        const parts = html.split("|");
+        rungR.textContent = parts[0]; rungW.textContent = parts[1]; pipsEl.innerHTML = parts[2];
+        rung.style.display = "block";
+      }
+    }
+    hideFrom(used);
+    for (const a of anns) {
+      const age = t - a.t;
+      const op = age >= 0 && age < 2.6 ? (age < 2.1 ? 0.95 : 0.95 * (2.6 - age) / 0.5) : 0;
+      const os = op.toFixed(2);
+      if (a.el.style.opacity !== os) a.el.style.opacity = os;
+    }
+  }
+  return { update, onEvent, _box: box };
 }
 
 // ---------------------------------------------------------------------------
@@ -472,6 +946,38 @@ export function createHud(ctx) {
     ((content.archetypes && content.archetypes[a] && content.archetypes[a].label) || a || "HOSTILE");
   const wName = (id) => (W[id] && W[id].name) || id || "";
   const wClass = (id) => (W[id] && W[id].class) || "ar";
+
+  // [lane settings] HUD SIZE + OPACITY (settings.hudScale / hudOpacity).
+  // The CSS `scale` property composes with each block's own `transform`
+  // (translateX(-50%) centring), and the transform-origin is chosen per anchor
+  // so every block stays pinned to the edge it hangs from: centre-translated
+  // blocks scale about (0,0)/(0,100%) — which maps their centre onto itself —
+  // corner blocks about their corner. Opacity rides `filter: opacity()`, which
+  // MULTIPLIES with the inline opacity the fades write instead of fighting it.
+  // World-anchored markers, the crosshair (own settings) and the full-screen
+  // damage / flash layers are deliberately excluded. Selectors for blocks owned
+  // by other lanes (#ld-*, #br-xpfeed, #mm-wrap) are style-only.
+  if (!document.getElementById("br-hudscale-style")) {
+    const hs = document.createElement("style");
+    hs.id = "br-hudscale-style";
+    hs.textContent = `
+#compass,#a10-grenade,#a10-dom .dm-score,#a10-dom .dm-chips,#a10-modes .md-chip,#a10-modes .md-rung,#br-xpfeed,#ld-medal,.ld-medal{scale:var(--br-hud-s,1);transform-origin:0 0;}
+#ammo,#a10-health{scale:var(--br-hud-s,1);transform-origin:100% 100%;}
+#killfeed{scale:var(--br-hud-s,1);transform-origin:100% 0;}
+#objective,#a10-banner,#ld-bar,.ld-bar,#ld-streaks,.ld-streaks{scale:var(--br-hud-s,1);transform-origin:0 100%;}
+#compass,#a10-grenade,#a10-dom .dm-score,#a10-dom .dm-chips,#br-xpfeed,#ammo,#a10-health,#killfeed,#objective,#a10-banner,
+#ld-bar,.ld-bar,#ld-streaks,.ld-streaks,#ld-medal,.ld-medal,#mm-wrap,#mhud{filter:opacity(var(--br-hud-o,1));}
+`;
+    document.head.appendChild(hs);
+  }
+  function applyHudScale() {
+    const S = ctx.settings || {};
+    const de = document.documentElement;
+    de.style.setProperty("--br-hud-s", String(Number(S.hudScale) > 0 ? Number(S.hudScale) : 1));
+    de.style.setProperty("--br-hud-o", String(Number(S.hudOpacity) > 0 ? Number(S.hudOpacity) : 1));
+  }
+  applyHudScale();
+  if (ctx.onChange) { ctx.onChange("hudScale", applyHudScale); ctx.onChange("hudOpacity", applyHudScale); }
 
   // ------------------------------------------------------------------ DOM
   const root = document.createElement("div");
@@ -524,10 +1030,46 @@ export function createHud(ctx) {
   cross.innerHTML =
     `<div class="a10-x a10-xv" data-k="t"></div><div class="a10-x a10-xv" data-k="b"></div>` +
     `<div class="a10-x a10-xh" data-k="l"></div><div class="a10-x a10-xh" data-k="r"></div>` +
-    `<div class="a10-dot"></div>`;
+    `<div class="a10-dot"></div>` +
+    `<div class="a10-xring" style="position:absolute;left:0;top:0;border-radius:50%;box-sizing:border-box;` +
+    `display:none;box-shadow:0 0 0 1px rgba(0,0,0,.45),inset 0 0 0 1px rgba(0,0,0,.45)"></div>`;
   root.appendChild(cross);
   const xT = cross.children[0], xB = cross.children[1], xL = cross.children[2], xR = cross.children[3];
   const xDot = cross.children[4];
+  const xRing = cross.children[5]; // [lane settings] "circle" crosshair style
+
+  // [lane settings] CROSSHAIR OPTIONS (settings.js xhStyle / xhDot / xhColor /
+  // xhSize / xhOpacity) + hit-marker toggle. Applied on change and re-checked
+  // by signature in update() (cheap string compare), so a setting written by
+  // any path — the panel, an import, the harness — lands the same frame.
+  const XH_COLORS = { white: "#e8e8e4", green: "#5dff8a", cyan: "#4fe3ff", yellow: "#ffe14d", magenta: "#ff5cf0" };
+  const xh = { sig: "", arm: 9, thick: 2, style: "cross", col: "#e8e8e4", op: 0.9 };
+  function applyCrosshair() {
+    const S = ctx.settings || {};
+    const sig = [S.xhStyle, S.xhDot, S.xhColor, S.xhSize, S.xhOpacity, S.hitmarker].join("|");
+    if (sig === xh.sig) return;
+    xh.sig = sig;
+    const size = Number(S.xhSize) > 0 ? Number(S.xhSize) : 1;
+    xh.style = S.xhStyle || "cross";
+    xh.arm = Math.max(4, Math.round(9 * size));
+    xh.thick = Math.max(1, Math.round(2 * size * 2) / 2);
+    xh.col = XH_COLORS[S.xhColor] || XH_COLORS.white;
+    xh.op = Number.isFinite(Number(S.xhOpacity)) ? Number(S.xhOpacity) : 0.9;
+    const arms = xh.style === "cross";
+    for (const a of [xT, xB]) { a.style.width = xh.thick + "px"; a.style.height = xh.arm + "px"; a.style.marginLeft = (-xh.thick / 2) + "px"; }
+    for (const a of [xL, xR]) { a.style.height = xh.thick + "px"; a.style.width = xh.arm + "px"; a.style.marginTop = (-xh.thick / 2) + "px"; }
+    for (const a of [xT, xB, xL, xR]) { a.style.display = arms ? "" : "none"; a.style.background = xh.col; }
+    const dotOn = xh.style === "dot" || (xh.style !== "off" && S.xhDot !== "off");
+    const dz = Math.max(2, Math.round(3 * size));
+    xDot.style.display = dotOn ? "" : "none";
+    xDot.style.background = xh.col;
+    xDot.style.width = xDot.style.height = dz + "px";
+    xDot.style.left = xDot.style.top = (-dz / 2) + "px";
+    xRing.style.display = xh.style === "circle" ? "" : "none";
+    xRing.style.border = `${xh.thick}px solid ${xh.col}`;
+    hm.style.display = S.hitmarker === "off" ? "none" : "";
+    st.lastGap = -1; st.lastCrossA = -1; // force the next update to re-place / re-fade
+  }
 
   // reload ring + dry flash ----------------------------------------------
   const RING_R = 7, RING_C = 2 * Math.PI * RING_R;
@@ -600,6 +1142,7 @@ export function createHud(ctx) {
     `<rect x="11" y="8" width="4" height="3"/></svg></span><div class="d">GRENADE</div>`;
   root.appendChild(nadeWarn);
   const nadeRot = nadeWarn.querySelector(".rot");
+  const nadeLbl = nadeWarn.querySelector(".d");
 
   // ammo block ----------------------------------------------------------------
   const ammo = document.createElement("div");
@@ -640,6 +1183,8 @@ export function createHud(ctx) {
   objEl.innerHTML = `<div class="t"></div><div class="l"></div><div class="u"></div>`;
   root.appendChild(objEl);
   const objT = objEl.querySelector(".t"), objL = objEl.querySelector(".l"), objU = objEl.querySelector(".u");
+  const zoneHud = createZoneHud(ctx, root); // [lane dom] STRONGHOLD objective HUD
+  const modesHud = createModesHud(ctx, root); // [lane modes] OUTPOST / RECLAIM / ASCENT objective HUD
   const banner = document.createElement("div");
   banner.id = "a10-banner";
   banner.innerHTML = `<span class="x">⨯</span><span class="n"></span>`;
@@ -652,6 +1197,17 @@ export function createHud(ctx) {
   subEl.innerHTML = `<span class="sp"></span><span class="ln"></span>`;
   root.appendChild(subEl);
   const subSp = subEl.querySelector(".sp"), subLn = subEl.querySelector(".ln");
+  // [lane settings] subtitle size (settings.js subSize): font + strip width.
+  const SUB_SIZE = { small: [13, 480], medium: [15, 560], large: [19, 700] };
+  let subSizeApplied = "";
+  function applySubSize() {
+    const k = (ctx.settings && ctx.settings.subSize) || "medium";
+    if (k === subSizeApplied) return;
+    subSizeApplied = k;
+    const [fs, mw] = SUB_SIZE[k] || SUB_SIZE.medium;
+    subEl.style.fontSize = fs + "px";
+    subEl.style.maxWidth = `min(${mw}px,${k === "large" ? 44 : 30}vw)`;
+  }
 
   // vignette / desat / flash / fade ---------------------------------------------
   const vig = document.createElement("div"); vig.id = "a10-vignette"; root.appendChild(vig);
@@ -871,7 +1427,9 @@ export function createHud(ctx) {
     // fire-time shot within 0.6 s (see onShot), else the weapon in hand, else
     // the last weapon that hit this victim.
     const kName = nameOf(d.attacker), vName = nameOf(d.victim);
-    const wid = d.attacker === "P"
+    // [polish v149] equipment / melee kills: the death event names its own weapon
+    const eqW = d.melee ? "knife" : (d.weaponId === "claymore" || d.weaponId === "frag") ? d.weaponId : null;
+    const wid = eqW ? eqW : d.attacker === "P"
       ? ((hmSt.fireW && t >= hmSt.fireT && t - hmSt.fireT <= 0.6 && hmSt.fireW) ||
          (sim.state.player.weapon && sim.state.player.weapon.id) ||
          st.lastHitWeapon[d.victim])
@@ -884,10 +1442,16 @@ export function createHud(ctx) {
       for (const r of feedRows) if (r.t < slot.t) slot = r;
     }
     slot.live = true; slot.t = t;
+    // names in their team colour (single source: core/team_color.js — follows
+    // the colour-blind palette); FFA / campaign: you in the friend colour.
+    const mt = matchTeams(sim);
+    const nameCol = (who, team) => (mt && (team === 0 || team === 1)) ? teamHex(team, mt)
+      : who === "P" ? teamHex(0) : "";
+    const kc = nameCol(d.attacker, d.attackerTeam), vc = nameCol(d.victim, d.victimTeam);
     slot.el.innerHTML =
-      `<span class="${d.attacker === "P" ? "me" : ""}">${esc(kName)}</span>` +
-      weaponGlyphSvg(wClass(wid)) +
-      `<span class="${d.victim === "P" ? "me" : ""}">${esc(vName)}</span>`;
+      `<span class="${d.attacker === "P" ? "me" : ""}"${kc ? ` style="color:${kc}"` : ""}>${esc(kName)}</span>` +
+      weaponGlyphSvg(eqW === "claymore" ? "mine" : eqW === "frag" ? "frag" : eqW === "knife" ? "knife" : wClass(wid)) +
+      `<span class="${d.victim === "P" ? "me" : ""}"${vc ? ` style="color:${vc}"` : ""}>${esc(vName)}</span>`;
     st.tallies.killfeed++;
     reflowFeed();
   }
@@ -947,6 +1511,34 @@ export function createHud(ctx) {
     } catch (e) { /* campaign */ }
     const b = sim && sim.state.bots.find((b) => b.id === who);
     return b ? archLabel(b.archetype) : "HOSTILE";
+  }
+  // nearest live enemy frag (6 m) / flashbang (10 m) / concussion (8 m)
+  const DANGER = { frag: [6, "GRENADE"], flash: [10, "FLASHBANG"], stun: [8, "CONCUSSION"] };
+  function hostileThrow(sim, who) {
+    if (who === "P" || who == null) return false;
+    try { if (sim.match && sim.match.sameTeam) return !sim.match.sameTeam("P", who); } catch (e) { /* campaign */ }
+    return true;
+  }
+  function nearestDanger(sim, p) {
+    const I = sim && sim.internal;
+    if (!I) return null;
+    let best = null, bestD = Infinity;
+    const consider = (pos, kind, who) => {
+      const R = DANGER[kind];
+      if (!R || !pos || !hostileThrow(sim, who)) return;
+      const d = Math.hypot(pos[0] - p.pos[0], pos[2] - p.pos[2]);
+      if (d <= R[0] && d < bestD) { bestD = d; best = { pos, label: R[1] }; }
+    };
+    for (const g of I.grenades || []) consider(g.pos, "frag", g.who);
+    const cans = I.equip && I.equip.cans;
+    if (cans) for (const c of cans) consider(c.pos, c.kind, c.who);
+    return best;
+  }
+  function matchTeams(sim) {
+    const m = sim && sim.state && sim.state.match;
+    // FFA has no sides: per-actor teams there are not 0/1 sides of a team game
+    if (!m || !m.teams || m.teams.length !== 2) return null;
+    return m.teams;
   }
   function botWeaponId(who) {
     const sim = ctx.sim();
@@ -1064,6 +1656,7 @@ export function createHud(ctx) {
   }
 
   // ------------------------------------------------------------------ update
+  let hintRef = null;
   function update(dt) {
     const sim = ctx.sim();
     // debrief lives outside show/hide (mission over ⇒ hud may be hidden)
@@ -1073,9 +1666,16 @@ export function createHud(ctx) {
     const S = sim.state, p = S.player;
     const t = S.time;
     const vh = window.innerHeight || 1080;
+    // [polish v149] the page's controls hint belongs to the menus: boot re-shows
+    // it after hud.show() ran, and over a live HUD it wrapped into the streak
+    // tray and the subtitle line. Once play is running it stays hidden.
+    if (S.phase !== "menu") {
+      const hint = hintRef || (hintRef = document.getElementById("hint"));
+      if (hint && hint.classList.contains("show")) { hint.classList.remove("show"); st.hintWasShown = true; }
+    }
 
     // ---- crosshair: THE live effectiveSpread (§2.5 shared model, §4.6 px map)
-    const weapon = W[p.weapon.id];
+    const weapon = (sim && typeof sim.weaponOf === "function" && sim.weaponOf(p, p.weapon.id)) || W[p.weapon.id]; // [integration v147]
     let crossAlpha = 0.9;
     // WAVE-10 AIM-TRUTH: the reticle is anchored to the AIM RAY, not to the
     // centre pixel. viewmodel.js adds a RENDER-ONLY fire-response offset to
@@ -1093,6 +1693,7 @@ export function createHud(ctx) {
     // readable and compensable. Projection is exact (full YXZ basis incl.
     // roll), costs one transform per frame, and needs no THREE import.
     reticleOffset(p);
+    applyCrosshair(); // [lane settings] no-op unless a crosshair setting changed
     if (weapon) {
       const spread = effectiveSpread(weapon, playerSpreadState(sim));
       const fovRad = (ctx.camera ? ctx.camera.fov : 74) * Math.PI / 180;
@@ -1103,14 +1704,20 @@ export function createHud(ctx) {
         const g = gap.toFixed(1);
         // 9 = the arm's own length (a10-xv height / a10-xh width) — the inner
         // end of each tick lands exactly `gap` px from centre.
-        xT.style.transform = `translate(0,${-(+g + 9)}px)`;
+        // [lane settings] arm length follows the crosshair-size setting (was 9)
+        xT.style.transform = `translate(0,${-(+g + xh.arm)}px)`;
         xB.style.transform = `translate(0,${g}px)`;
-        xL.style.transform = `translate(${-(+g + 9)}px,0)`;
+        xL.style.transform = `translate(${-(+g + xh.arm)}px,0)`;
         xR.style.transform = `translate(${g}px,0)`;
+        if (xh.style === "circle") {
+          const r = Math.max(6, +g + xh.arm * 0.5);
+          xRing.style.width = xRing.style.height = (2 * r).toFixed(1) + "px";
+          xRing.style.transform = `translate(${-r}px,${-r}px)`;
+        }
       }
     }
     // ADS: crosshair fades out entirely (§4.6); hidden while dead too
-    crossAlpha = 0.9 * (1 - (p.weapon.adsT || 0));
+    crossAlpha = xh.op * (1 - (p.weapon.adsT || 0)); // [lane settings] opacity setting (default 0.9)
     if (!p.alive) crossAlpha = 0;
     if (Math.abs(crossAlpha - st.lastCrossA) > 0.02) {
       st.lastCrossA = crossAlpha;
@@ -1173,38 +1780,47 @@ export function createHud(ctx) {
       if (ts !== a.lastTr) { a.lastTr = ts; a.el.style.transform = ts; }
     }
 
-    // ---- grenade warning (§5.9: icon + direction arrow within 6 m)
-    if (st.nade) {
-      const d = Math.hypot(st.nade.pos[0] - p.pos[0], st.nade.pos[2] - p.pos[2]);
-      if (d <= 6) {
+    // ---- grenade warning (§5.9: icon + direction arrow within 6 m).
+    // [polish v149] reads the LIVE projectiles (view-only) so the arrow tracks
+    // a rolling grenade, covers flash + concussion canisters too, and ignores
+    // teammates' throws (friendly fire is off: they are no danger to you).
+    {
+      const danger = nearestDanger(sim, p);
+      if (danger) {
         nadeWarn.style.opacity = "0.95";
-        nadeRot.style.transform = `rotate(${relDegTo(sim, st.nade.pos).toFixed(1)}deg)`;
-      } else nadeWarn.style.opacity = "0";
-    } else if (nadeWarn.style.opacity !== "0") nadeWarn.style.opacity = "0";
+        nadeRot.style.transform = `rotate(${relDegTo(sim, danger.pos).toFixed(1)}deg)`;
+        if (nadeLbl.textContent !== danger.label) nadeLbl.textContent = danger.label;
+      } else if (nadeWarn.style.opacity !== "0") nadeWarn.style.opacity = "0";
+    }
 
     // ---- ammo block
     const mag = p.weapon.mag, res = p.weapon.reserve;
     const wid = p.weapon.id;
-    if (wid + (weapon ? "" : "?") !== st.lastWname) {
-      st.lastWname = wid + (weapon ? "" : "?");
-      amName.textContent = wName(wid);
-      amMode.textContent = weapon ? (weapon.class === "shotgun" ? "PUMP" : weapon.auto ? "AUTO" : "SEMI") : "";
+    const knifeRung = !!p._knifeOnly; // [lane modes] ASCENT's last rung: the knife is the weapon
+    if (wid + (weapon ? "" : "?") + (knifeRung ? "k" : "") !== st.lastWname) {
+      st.lastWname = wid + (weapon ? "" : "?") + (knifeRung ? "k" : "");
+      amName.textContent = knifeRung ? "KNIFE — MELEE ONLY" : wName(wid);
+      amMode.textContent = knifeRung ? "" : weapon ? (weapon.class === "shotgun" ? "PUMP" : weapon.auto ? "AUTO" : "SEMI") : "";
+      st.lastMag = null;
     }
     if (mag !== st.lastMag) {
       st.lastMag = mag;
+      if (knifeRung) { amMag.textContent = "—"; amMag.className = "a10-mag"; amLow.style.visibility = "hidden"; } else {
       amMag.textContent = String(mag);
       const magSize = weapon ? weapon.mag : 30;
       const frac = magSize ? mag / magSize : 1;
       amMag.className = "a10-mag" + (frac <= 0.10 ? " crit" : frac <= 0.25 ? " low" : "");
       amLow.style.visibility = frac < 0.25 ? "visible" : "hidden";
+      }
     }
-    if (res !== st.lastRes) { st.lastRes = res; amRes.textContent = "/ " + res; }
+    if (res !== st.lastRes || knifeRung !== st.lastKnife) { st.lastRes = res; st.lastKnife = knifeRung; amRes.textContent = knifeRung ? "" : "/ " + res; }
     const nades = p.grenades | 0;
-    if (nades !== st.lastNades) {
-      st.lastNades = nades;
+    const lethalId = (p.kit && p.kit.lethal) || "frag";           // [integration v146]
+    if (nades !== st.lastNades || lethalId !== st.lastLethal) {
+      st.lastNades = nades; st.lastLethal = lethalId;
       amNades.className = "a10-nades" + (nades < 1 ? " empty" : "");
       amNades.innerHTML =
-        `<span>FRAG</span>` +
+        `<span>${lethalId === "claymore" ? "MINE" : "FRAG"}</span>` +
         `<svg class="g" width="10" height="13" viewBox="0 0 10 13" fill="currentColor">` +
         `<rect x="3.4" y="0" width="3.2" height="1.6"/>` +
         `<rect x="5" y="1.1" width="4" height="1.1" rx="0.4" transform="rotate(-22 5 1.1)"/>` +
@@ -1296,6 +1912,10 @@ export function createHud(ctx) {
       w.el.style.opacity = (0.8 * (1 - age / 4)).toFixed(2);
     }
 
+    // ---- [lane dom] STRONGHOLD zones (no-op outside a STRONGHOLD match)
+    zoneHud.update(sim, t);
+    modesHud.update(sim, t); // [lane modes]
+
     // ---- objective toast (amber underline sweep, never a blocking banner)
     const oAge = t - st.objToastT;
     if (oAge >= 0 && oAge < 3.2) {
@@ -1317,11 +1937,19 @@ export function createHud(ctx) {
 
     // ---- subtitles (mission radio — private drains until the A0 amendment)
     drainRadioInto(sim);
+    // [lane settings] subtitles OFF: the queue drains silently (radio squelch
+    // audio still plays — drainRadioInto) and the strip stays hidden.
+    if (ctx.settings && ctx.settings.subtitles === "off") {
+      st.subQ.length = 0;
+      if (st.subShown) { st.subShown = false; subEl.style.opacity = "0"; }
+    }
+    applySubSize();
     if (st.subQ.length && t >= st.subUntil) {
       const s = st.subQ.shift();
       subSp.textContent = s.speaker ? s.speaker + ":" : "";
       subLn.textContent = s.line || "";
-      st.subUntil = t + Math.min(5.5, Math.max(2.4, (s.line || "").length * 0.055));
+      st.subUntil = t + (s.dur > 0 ? Math.min(12, s.dur)
+        : Math.min(5.5, Math.max(2.4, (s.line || "").length * 0.055)));
       st.subShown = true;
       subEl.style.opacity = "0.95";
     } else if (st.subShown && t >= st.subUntil && !st.subQ.length) {
@@ -1446,6 +2074,8 @@ export function createHud(ctx) {
       bridge.register("hurt", onHurt);
       bridge.register("death", onDeath);
       bridge.register("objective", onObjective);
+      bridge.register("zonecap", (d) => zoneHud.onZone(d, simNow())); // [lane dom]
+      for (const ev of ["hill", "tag", "ladder"]) bridge.register(ev, (d) => modesHud.onEvent(ev, d, simNow())); // [lane modes]
       bridge.register("reload", onReload);
       bridge.register("empty", onEmpty);
       bridge.register("grenade", onGrenade);
@@ -1454,6 +2084,20 @@ export function createHud(ctx) {
       bridge.register("mission:end", onMissionEnd);
     },
     update,
+    // [lane settings] SUBTITLE HOOK for text callouts (e.g. the barks lane):
+    //   hud.subtitle("Contact left!", { speaker: "RAVEN 2-2", dur: 2.5 })
+    // Same strip and queue as the mission radio lines; respects the Subtitles
+    // on/off + size settings. `priority:true` jumps the queue. Returns false
+    // when subtitles are off (nothing queued). Never throws.
+    subtitle(text, opts = {}) {
+      if (!text) return false;
+      if (ctx.settings && ctx.settings.subtitles === "off") return false;
+      const item = { speaker: opts.speaker ? String(opts.speaker) : "", line: String(text),
+        dur: Number(opts.dur) > 0 ? Number(opts.dur) : 0 };
+      if (opts.priority) { st.subQ.unshift(item); st.subUntil = -9; }
+      else { if (st.subQ.length >= 6) st.subQ.shift(); st.subQ.push(item); }
+      return true;
+    },
     show() {
       root.style.display = "block";
       // the page controls hint reads as clutter over a live mission HUD;

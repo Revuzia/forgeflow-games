@@ -25,7 +25,7 @@
 // Nothing in 1–9 allocates per tick after start() on the hot paths.
 
 import { areEnemies, makeRoster, bindBody } from "./roster.js";
-import { validateMatchContent, hasPvpContent } from "./contract.js";
+import { validateMatchContent, hasPvpContent, pointSetOf } from "./contract.js";
 import { resolveDifficulty } from "../pvp/pvp_tuning.js";
 
 const DT = 1 / 60;
@@ -42,7 +42,7 @@ const OOB_GRACE_S = 5.0;       // C18 backstop — a probe asserts it never kill
 // registerMode() (boot.js imports each landed modes/<id>.js and registers
 // it), so a mode lane that has not landed yet is a REPORTED content error at
 // makeMatch, never a page-fatal import crash.
-export const MODE_IDS = ["tdm", "ctf", "ffa"];
+export const MODE_IDS = ["tdm", "ctf", "ffa", "dom", "hill", "tags", "ladder"]; // [lane dom] + STRONGHOLD; [lane modes] + OUTPOST / RECLAIM / ASCENT
 export const MODES = {}; // id → createMode(ctx)
 
 export function registerMode(id, createMode) {
@@ -56,6 +56,10 @@ const DRIVER_DEFAULTS = {
   tdm: { scoreLimit: 50, timeLimitS: 480, respawnS: 4.0, protectS: 1.5 },
   ctf: { captureLimit: 3, timeLimitS: 720, respawnS: 5.0, respawnPressureS: 8.0, protectS: 1.5 },
   ffa: { scoreLimit: 25, timeLimitS: 480, respawnS: 3.0, protectS: 2.0 },
+  dom: { scoreLimit: 200, timeLimitS: 600, respawnS: 4.0, protectS: 1.5 }, // [lane dom]
+  hill: { scoreLimit: 250, timeLimitS: 600, respawnS: 4.0, protectS: 1.5 },   // [lane modes] OUTPOST
+  tags: { scoreLimit: 40, timeLimitS: 600, respawnS: 4.0, protectS: 1.5 },    // [lane modes] RECLAIM
+  ladder: { scoreLimit: 8, timeLimitS: 480, respawnS: 2.5, protectS: 2.0 },   // [lane modes] ASCENT
 };
 
 // ------------------------------------------------------- [P2] kill resupply
@@ -139,6 +143,7 @@ function applyKillResupply(m, actor, magsPerKill) {
   if (!(magsPerKill > 0) || !actor) return false;
   const body = m.bodyOf(actor);
   if (!body || !body.weapon) return false; // body already reaped — no grant
+  if (body._knifeOnly) return false;        // [lane modes] ASCENT knife rung: the gun stays empty
   const weapons = (m.sim && m.sim.weapons) || {};
   let granted = false;
   const w = body.weapon;
@@ -352,7 +357,7 @@ export function makeMatch(content, emit, opts = {}) {
   function eligiblePoints(actor) {
     const pts = [];
     for (const p of arena.spawnPoints) {
-      if (p.modes && !p.modes.includes(modeId)) continue;
+      if (p.modes && !p.modes.includes(pointSetOf(modeId))) continue; // [lane dom] borrowed sets
       if (mode.teamCount === 2 && p.team != null && p.team !== actor.team) continue;
       const cl = arena.clusters[p.cluster];
       if (cl && cl.team != null && mode.teamCount === 2 && cl.team !== actor.team) continue;
@@ -453,6 +458,8 @@ export function makeMatch(content, emit, opts = {}) {
         team: actor.team,
         squad: ms.roster.squadIdOf(actor.actorId),
         alerted: !first, // mid-match respawns come in ready; first wave calm
+        // class matches: this operator's class kit (null = pistol start)
+        kit: typeof sim.kitForActor === "function" ? sim.kitForActor(actor) : null,
       });
       const body = sim.state.bots.find((b) => b.id === botId);
       bindBody(actor, body);
@@ -472,6 +479,8 @@ export function makeMatch(content, emit, opts = {}) {
       who: actor.who, actorId: actor.actorId, team: actor.team,
       pointId: pick.pointId, pos: pick.pos.slice(), yaw: pick.yaw,
       protectedUntilT: actor.protectedUntilT,
+      // additive field (class matches): the class this life spawned with
+      kit: (() => { const bd = bodyByWho.get(actor.who); return bd && bd.kit ? bd.kit.name : null; })(),
     });
     if (mode.onSpawn) {
       mode.onSpawn(m, {
@@ -651,7 +660,9 @@ export function makeMatch(content, emit, opts = {}) {
         modeId,
         phase: "warmup",
         clock: 0, elapsed: 0,
-        timeLeft: rules.timeLimitS || 0,
+        // [polish v149] the warm-up count, not the match clock, until the first
+        // tick refreshes it (the HUD showed 10:00 / "600" for the first frame)
+        timeLeft: WARMUP_S,
         teams: ms.roster.teams,
         actors: ms.roster.actors,
         flags: [],
@@ -671,6 +682,12 @@ export function makeMatch(content, emit, opts = {}) {
       emit("mission:start", { missionId: `match:${modeId}`, epoch: sim.epoch || 0 });
 
       setMatchPhase(sim, "warmup");
+
+      // [lane dom] opt-in: a mode whose spawn hooks (spawnVeto/spawnBias) must
+      // already apply to the INITIAL wave publishes itself on the facade here,
+      // before the wave (ctf wires the same seam itself in mode.start, which is
+      // after it). Modes without the flag are untouched.
+      if (mode.facadeBeforeSpawn && !m.mode) m.mode = mode;
 
       // spawn all 10 (first spawn: 0 s delay — C12)
       for (const a of ms.roster.actors) spawnActor(sim, a, { first: true });
@@ -752,6 +769,7 @@ export function makeMatch(content, emit, opts = {}) {
           if (!a.alive) { ms.drySince[aid] = -1; continue; }
           const b = bodyByWho.get(a.who);
           const w = b && b.weapon;
+          if (b && b._knifeOnly) { ms.drySince[aid] = -1; continue; } // [lane modes] knife rung
           if (!w || typeof w.mag !== "number" || typeof w.reserve !== "number") {
             ms.drySince[aid] = -1; continue;
           }

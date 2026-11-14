@@ -46,6 +46,7 @@
 // activation tick — no shared rng stream is consumed.
 
 import { detonateAt } from "./grenades.js";
+import { hasPerk, streakAt } from "./classes.js";
 
 export const STREAK_TIERS = [
   { id: "recon", tier: 1, at: 3, key: 6, name: "SIGNAL SWEEP",
@@ -130,6 +131,7 @@ export function makeStreaks(sim) {
     const pt = S.player.team | 0;
     for (const b of S.bots) {
       if (!b || !b.alive) continue;
+      if (hasPerk(b, "ghost")) continue; // COLD SIGNAL perk: the drone cannot see them
       if (sim.match && sim.match.sameTeam) { if (sim.match.sameTeam("P", b.id)) continue; }
       else if ((b.team | 0) === pt) continue;
       out.push({ id: b.id, pos: [b.pos[0], b.pos[1], b.pos[2]] });
@@ -197,14 +199,16 @@ export function makeStreaks(sim) {
         sim.emit("score", { points: bonus, why: MULTI_NAMES[n] || "MULTI KILL", headshot: false });
       }
 
-      // ---- the streak itself
+      // ---- the streak itself ([lane modes] none in a weapon-ladder match)
+      if (sim.internal.noCallIns) return;
       st.count++;
       if (st.count > st.best) st.best = st.count;
       sim.emit("streak", { phase: "count", count: st.count });
       for (const def of STREAK_TIERS) {
-        if (st.count === def.at) {
+        const at = streakAt(def.at, S.player); // PRIORITY LINE perk: one kill sooner
+        if (st.count === at) {
           earn(def.tier, st.count);
-          medal(def.at + " KILL STREAK", def.name + " READY  [" + def.key + "]", "streak");
+          medal(at + " KILL STREAK", def.name + " READY  [" + def.key + "]", "streak");
         }
       }
     },

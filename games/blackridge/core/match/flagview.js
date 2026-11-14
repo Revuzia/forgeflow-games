@@ -17,6 +17,8 @@
 // meshes join the scene at creation time (parked out of view) so any compile
 // happens at boot, never during a firefight.
 
+import { teamHex, teamColorGen } from "../team_color.js";
+
 const BACK_OFFSET = 0.35;   // m behind the carrier's spine
 const CARRY_H = 1.55;       // cloth top height while carried
 const STAND_H = 2.5;        // pole height at a stand (content flags standH)
@@ -72,11 +74,11 @@ export function createFlagView(ctx) {
       const fd = list[i];
       if (!fd) { fv.root.visible = false; continue; }
       // tint once per team assignment (teams carry their authored tints)
-      if (!fv.tinted) {
-        const team = m.teams && m.teams.find((tm) => tm.id === fd.team);
-        const tint = (team && team.tint) || (fd.team === 0 ? "#d9a441" : "#7c9fd0");
-        fv.mat.color.set(tint);
-        fv.tinted = true;
+      // [polish v149] colour from core/team_color.js; re-tints on a palette change
+      const gen = teamColorGen();
+      if (fv.tinted !== gen + 1) {
+        fv.mat.color.set(teamHex(fd.team, m.teams));
+        fv.tinted = gen + 1;
       }
       const state = String(fd.state || "AT_STAND").toUpperCase();
       const pos = fd.pos || fd.home;

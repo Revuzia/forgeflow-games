@@ -70,14 +70,44 @@
 //       0.05-5.00 in 0.01, a separate ADS multiplier, and settings_ui prints
 //       the px-per-360° the number actually buys.
 //
-// DELIBERATELY NOT DONE: no input smoothing, no interpolation, no acceleration
-// curve, no aim assist. For a shooter RAW and 1:1 is correct — smoothing buys
-// prettiness with latency and reads as floaty. Look is applied to input.state
-// the instant the event lands (zero added latency) and the render camera reads
-// input.state directly the same frame.
+// DELIBERATELY NOT DONE FOR THE MOUSE: no input smoothing, no interpolation,
+// no acceleration curve, no aim assist. For a mouse RAW and 1:1 is correct —
+// smoothing buys prettiness with latency and reads as floaty. Look is applied
+// to input.state the instant the event lands (zero added latency) and the
+// render camera reads input.state directly the same frame.
+//
+// LANE PAD (2026-11): a thumbstick is a RATE device, not a distance device, and
+// the genre answer for it is a response curve, a dead zone, a look ramp and aim
+// assist. Those live in core/input_gamepad.js (pad + gamepad menu focus) and
+// core/aim_assist.js (slowdown / rotational / ADS snap) and are folded in by
+// input.update(dt), called once per rendered frame from boot's viewUpdates.
+// Aim assist is an INPUT FILTER: it only adjusts input.state.yaw/pitch before
+// buildCmd() snapshots them, reads the sim read-only, and is active ONLY while
+// the last-used device is a gamepad or touch — never the mouse.
 // ---------------------------------------------------------------------------
 
 import { WEAPONS } from "./weapons/weapon_data.js";
+import { createGamepad, GLYPHS } from "./input_gamepad.js";
+import { createAimAssist } from "./aim_assist.js";
+
+// ---- keyboard rebinding (lane PAD). Actions -> default e.code. Persisted
+// separately from settings.js (a map, not a scalar) under KEYBIND_KEY. Weapon
+// digits 1-9, Esc and Tab stay fixed; Ctrl stays a fixed second crouch key.
+export const KEY_ACTIONS = [
+  ["forward", "KeyW", "Move forward"], ["back", "KeyS", "Move back"],
+  ["left", "KeyA", "Strafe left"], ["right", "KeyD", "Strafe right"],
+  ["jump", "Space", "Jump / mantle"], ["crouch", "KeyC", "Crouch / slide"],
+  ["sprint", "ShiftLeft", "Sprint"], ["reload", "KeyR", "Reload"],
+  ["grenade", "KeyG", "Frag"], ["interact", "KeyF", "Interact"],
+  ["last", "KeyQ", "Last weapon"], ["inspect", "KeyI", "Inspect weapon"],
+  // [equipment lane] tactical (flash / smoke / concussion). Q is "last weapon"
+  // and 4 is weapon slot 4, so the free key next to them: E.
+  ["tactical", "KeyE", "Tactical"],
+  // [melee] quick knife strike. V: the genre's melee key, free on this map.
+  ["melee", "KeyV", "Melee"],
+];
+const KEYBIND_KEY = "blackridge.keybinds.v1";
+const RESERVED_CODES = /^(Digit[0-9]|Escape|Tab)$/;
 
 const PITCH_LIMIT = 1.55; // rad, just short of straight up/down
 const LOOK_SCALE = 0.0022; // rad per px at sens 1.0
@@ -99,9 +129,15 @@ export function createInput(canvas, settings) {
     jump: false, crouch: false, sprint: false,
     fire: false, ads: false, reload: false,
     grenade: false,
+    tactical: false, // [equipment lane] tactical throw (edge verb, latched like grenade)
+    melee: false,    // [melee] quick knife strike (edge verb, latched — a tap is one strike)
     switchTo: null, // 'slot1'..'slot5' | 'next' | 'prev' | 'last' | weaponId | null — consumed by buildCmd
     streak: 0,      // 1..4 = activate that killstreak tier (keys 6/7/8/9) — one-shot, consumed by buildCmd
     interact: false,
+    // VIEW-ONLY verb (lane VM, 2026-11): weapon INSPECT (key I). A press COUNTER —
+    // the viewmodel plays one inspect per increment. Deliberately NOT in buildCmd():
+    // the sim never sees it, so it cannot touch determinism or replays.
+    inspect: 0,
     yaw: 0, pitch: 0,
   };
 
@@ -113,7 +149,7 @@ export function createInput(canvas, settings) {
   // is a different bug. `switchTo` is already one-shot by construction.
   // `grenade` IS latched: combat_spec §5.9 is press=pin / release=throw, so a
   // one-tick true followed by false is exactly "quick tap = uncooked throw".
-  const latch = { fire: false, jump: false, reload: false, grenade: false, interact: false };
+  const latch = { fire: false, jump: false, reload: false, grenade: false, interact: false, tactical: false, melee: false };
   const LATCHED = Object.keys(latch);
 
   function press(k) {
@@ -148,20 +184,54 @@ export function createInput(canvas, settings) {
     return null;
   }
 
-  function aimZoomScale() {
+  // `userKey` picks WHICH player multiplier rides the ADS ease: the mouse's
+  // adsSens, or the controller's padAdsSens (lane PAD) — separate sliders,
+  // because a stick and a mouse want different ADS feel.
+  function aimZoomScale(userKey = "adsSens") {
     const wp = simWeapon();
     if (!wp) return 1;
     const e = smoothstep(wp.adsT || 0);
     if (e <= 0) return 1;
-    const w = WEAPONS[wp.id];
+    const w = ((globalThis.__BR_GUNSMITH__ && globalThis.__BR_GUNSMITH__.weapon(wp.id)) || WEAPONS[wp.id]); // [gunsmith] optic zoom (scope / holo)
     if (!w || !(w.adsFov > 0)) return 1;
     const base = (settings && settings.fov > 0) ? settings.fov : FOV_DEFAULT;
     const aimFov = base + (w.adsFov - base) * e;
     const zoom = aimFov / base; // MDC 1.0
     // The player's own ADS multiplier rides the SAME ease, so it is inert at
     // the hip and fully applied at full ADS — no discontinuity on the ramp.
-    const user = (settings && Number.isFinite(settings.adsSens)) ? settings.adsSens : 1;
+    const user = (settings && Number.isFinite(settings[userKey])) ? settings[userKey] : 1;
     return zoom * (1 + (user - 1) * e);
+  }
+  const invY = () => (settings && settings.invertY === "on" ? -1 : 1);
+
+  // ---------------------------------------------------------- keyboard binds
+  const binds = {};
+  for (const [a, def] of KEY_ACTIONS) binds[a] = def;
+  try {
+    const raw = typeof localStorage !== "undefined" && localStorage.getItem(KEYBIND_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      for (const [a] of KEY_ACTIONS) {
+        if (typeof saved[a] === "string" && !RESERVED_CODES.test(saved[a])) binds[a] = saved[a];
+      }
+    }
+  } catch (e) { /* defaults stand */ }
+  let rev = new Map(); // physical code -> canonical (default) code
+  let shadowed = new Set(); // default codes whose action moved elsewhere
+  function rebuildBinds() {
+    rev = new Map(); shadowed = new Set();
+    for (const [a, def] of KEY_ACTIONS) {
+      if (binds[a] !== def) { rev.set(binds[a], def); shadowed.add(def); }
+    }
+  }
+  rebuildBinds();
+  // Physical e.code -> the canonical code the switch statements below speak.
+  function canon(code) {
+    if (rev.has(code)) return rev.get(code);
+    if (code === "ShiftRight" && !shadowed.has("ShiftLeft")) return "ShiftLeft";
+    if (shadowed.has(code)) return "__unbound";
+    if (code === "ShiftRight" || code === "ShiftLeft") return shadowed.has("ShiftLeft") ? "__unbound" : code;
+    return code;
   }
 
   const input = {
@@ -187,6 +257,8 @@ export function createInput(canvas, settings) {
         ads: on ? state.ads : false,
         reload: on ? (state.reload || latch.reload) : false,
         grenade: on ? (state.grenade || latch.grenade) : false,
+        tactical: on ? (state.tactical || latch.tactical) : false,
+        melee: on ? (state.melee || latch.melee) : false, // [melee]
         switchTo: on ? state.switchTo : null,
         streak: on ? state.streak : 0,
         interact: on ? (state.interact || latch.interact) : false,
@@ -229,7 +301,12 @@ export function createInput(canvas, settings) {
     // ---- private extras (probes read these; not the frozen surface) --------
     // The live look scale, so a probe can assert the zoom law instead of
     // inferring it from two camera projections.
-    _lookScale() { return LOOK_SCALE * (settings ? settings.sens : 1) * aimZoomScale(); },
+    _lookScale() { return LOOK_SCALE * (settings ? settings.sens : 1) * aimZoomScale() * input.lookMult; },
+    // [equipment lane] concussion turn-rate multiplier for the HUMAN's look
+    // (mouse, stick, touch, assist). Written each frame by core/fx/equipment_fx.js
+    // from equipment.stunTurnMult(player) - view-side because the sim takes the
+    // human's yaw from cmd. 1 = unaffected. Recoil (recoil.js) is NOT scaled.
+    lookMult: 1,
     _zoom() { return aimZoomScale(); },
     get _latch() { return { ...latch }; },
     // killstreak designate mode: 0 none, 2..4 = the tier being aimed (see keydown)
@@ -239,13 +316,179 @@ export function createInput(canvas, settings) {
     // ---- touch layer (core/hud/touch_controls.js) — same verbs as the keys ----
     touchPress(k) { press(k); },
     touchRelease(k) { release(k); },
+    // view-only inspect request (key I / touch) — never reaches the sim cmd
+    inspect() { state.inspect = (state.inspect | 0) + 1; },
     designateTier(tier) {
       if (input.canDesignate && !input.canDesignate(tier)) { designate = 0; state.streak = tier; }
       else designate = designate === tier ? 0 : tier;
     },
     confirmDesignate() { if (designate) { state.streak = designate; designate = 0; } },
     _keysHeld() { return !!(keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD); },
+
+    // ---- lane PAD: device, glyphs, gamepad, aim assist, rebinding ------------
+    // Last-used device: "kbm" | "pad" | "touch". Changes fire
+    // window "br:inputdevice" {detail:{device, layout}} and onDeviceChange cbs.
+    lastDevice: "kbm",
+    get padLayout() { return pad.layout; },
+    get padConnected() { return pad.connected; },
+    onDeviceChange(fn) { if (typeof fn === "function") deviceCbs.push(fn); },
+    /** Prompt label for a verb on the current device ("fire" -> "RT"/"R2"/"LMB"/"FIRE"). */
+    glyph(verb) {
+      const set = input.lastDevice === "pad" ? GLYPHS[pad.layout] : input.lastDevice === "touch" ? GLYPHS.touch : GLYPHS.kbm;
+      if (input.lastDevice === "kbm" && KEY_GLYPH_VERB[verb]) return keyLabel(binds[KEY_GLYPH_VERB[verb]]);
+      return (set && set[verb]) || verb;
+    },
+    noteDevice(d) { setDevice(d); },
+    /** Controller glyph for a verb on the connected (or default Xbox) layout. */
+    padGlyph(verb) { const G = GLYPHS[pad.layout] || GLYPHS.xbox; return G[verb] || verb; },
+    /** Look-rate multiplier the assist wants this frame (touch layer scales its drags by it). */
+    assistSlow() { return assistOn() ? assistOut.slow : 1; },
+    get assist() { return assistOut; },
+    /** Once per rendered frame (boot viewUpdates). Gamepad poll, assist, pad look. */
+    update(dt) {
+      dt = Math.min(Math.max(Number(dt) || 0, 0), 0.1);
+      const f = pad.update(dt);
+      const adsStart = !!state.ads && !prevAds;
+      prevAds = !!state.ads;
+      if (assistOn()) {
+        const F = simRef();
+        const wp = simWeapon();
+        const touchLooking = input.lastDevice === "touch" && (performance.now() - touchLookAt) < 120;
+        const touchMoving = input.lastDevice === "touch" && Math.hypot(state.moveX, state.moveZ) > 0.2;
+        assistOut = assist.update(dt, {
+          sim: F, yaw: state.yaw, pitch: state.pitch, ads: !!state.ads, adsStart,
+          moving: input.lastDevice === "pad" ? pad.moving : touchMoving,
+          looking: input.lastDevice === "pad" ? pad.looking : touchLooking,
+          strength: (settings && settings.aimAssist) || "standard",
+          weapon: wp ? ((globalThis.__BR_GUNSMITH__ && globalThis.__BR_GUNSMITH__.weapon(wp.id)) || WEAPONS[wp.id]) : null, // [gunsmith]
+        });
+      } else {
+        assist.reset();
+        assistOut = IDLE_ASSIST;
+      }
+      if (f.active) {
+        const look = pad.applyLook(dt, aimZoomScale("padAdsSens") * input.lookMult, assistOut.slow); // [equipment lane]
+        lastPadLook = look;
+      } else lastPadLook = null;
+      if (assistOut.dYaw || assistOut.dPitch) input.addLook(assistOut.dYaw * input.lookMult, assistOut.dPitch * input.lookMult);
+    },
+    /** Rumble taps on the sim->view bridge (boot attachAll). */
+    attach(bridge) {
+      bridge.register("shot", (d) => {
+        if (d && d.shooter === "P" && !d.impactOnly && !d.pen && !(d.pellet > 0)) rumble(0.25, 0.55, 70);
+      });
+      bridge.register("hurt", (d) => {
+        if (!d) return;
+        if (d.victim === "P") rumble(0.75, 0.45, 160);
+        else if (d.attacker === "P") rumble(0.0, 0.35, 45); // hit confirm
+      });
+      bridge.register("explosion", (d) => {
+        const P = simRef() && simRef().state.player;
+        if (!d || !d.pos || !P) return;
+        const dist = Math.hypot(d.pos[0] - P.pos[0], d.pos[1] - P.pos[1], d.pos[2] - P.pos[2]);
+        const k = Math.max(0, 1 - dist / 30);
+        if (k > 0.05) rumble(k, k * 0.7, 120 + 260 * k);
+      });
+    },
+    // keyboard rebinding (settings_ui)
+    keyActions: KEY_ACTIONS,
+    getBind(a) { return binds[a]; },
+    keyLabel(code) { return keyLabel(code); },
+    rebind(a, code) {
+      if (!(a in binds) || !code || RESERVED_CODES.test(code)) return false;
+      const other = Object.keys(binds).find((k) => k !== a && binds[k] === code);
+      if (other) binds[other] = binds[a]; // swap — never two actions on one key
+      binds[a] = code;
+      rebuildBinds(); clearKeys();
+      try { localStorage.setItem(KEYBIND_KEY, JSON.stringify(binds)); } catch (e) { /* best effort */ }
+      return true;
+    },
+    resetBinds() {
+      for (const [a, def] of KEY_ACTIONS) binds[a] = def;
+      rebuildBinds(); clearKeys();
+      try { localStorage.removeItem(KEYBIND_KEY); } catch (e) { /* best effort */ }
+    },
+    /** Next keydown goes to fn(code) instead of the game (Escape cancels -> fn(null)). */
+    captureNextKey(fn) {
+      rebindCapture = (e) => {
+        rebindCapture = null;
+        e.preventDefault(); e.stopImmediatePropagation();
+        fn(e.code === "Escape" ? null : e.code);
+      };
+    },
+    _pad: null, // set below (probes)
+    _lastPadLook() { return lastPadLook; },
   };
+
+  // ---------------------------------------------------------------- lane PAD
+  const KEY_GLYPH_VERB = { jump: "jump", crouch: "crouch", sprint: "sprint", reload: "reload", grenade: "grenade",
+    interact: "interact", swap: "last", inspect: "inspect", tactical: "tactical", melee: "melee" };
+  function keyLabel(code) {
+    if (!code) return "—";
+    return String(code).replace(/^Key/, "").replace(/^Digit/, "").replace(/Left$|Right$/, "")
+      .replace(/^Arrow/, "").replace(/^Numpad/, "NUM ").replace("Control", "CTRL").toUpperCase();
+  }
+  let rebindCapture = null;
+  const deviceCbs = [];
+  const IDLE_ASSIST = Object.freeze({ slow: 1, dYaw: 0, dPitch: 0, target: null, weight: 0, theta: 0, dist: 0 });
+  let assistOut = IDLE_ASSIST;
+  let prevAds = false, lastPadLook = null, touchLookAt = -1e9;
+  const assist = createAimAssist();
+  function simRef() {
+    try {
+      const F = typeof window !== "undefined" && (window.__FPS__ || window.__FFG3D__);
+      return (F && F.sim) || null;
+    } catch (e) { return null; }
+  }
+  function assistOn() {
+    const d = input.lastDevice;
+    return input.enabled && (d === "pad" || d === "touch") &&
+      ((settings && settings.aimAssist) || "standard") !== "off";
+  }
+  function clearKeys() {
+    for (const k of Object.keys(keys)) keys[k] = false;
+    refreshMove();
+  }
+  const hintEl = typeof document !== "undefined" ? document.getElementById("hint") : null;
+  // [polish v149] the page's keyboard hint (index.html) predates the knife,
+  // tactical, class and map keys: name them too
+  const hintKbm = hintEl ? ["wasd move", "mouse look", "lmb fire", "rmb ads", "r reload", "shift sprint", "ctrl crouch",
+    "space jump", "1-5 weapons", "q last", "v knife", "g lethal", "e tactical", "f interact", "6-9 streaks", "l class",
+    "m map", "tab scoreboard", "esc pause"].join(" &nbsp;·&nbsp; ") : "";
+  if (hintEl) hintEl.innerHTML = hintKbm;
+  function padHint() {
+    const G = GLYPHS[pad.layout] || GLYPHS.xbox;
+    const sep = " &nbsp;·&nbsp; ";
+    return [`${G.move} move`, `${G.look} look`, `${G.fire} fire`, `${G.ads} ads`, `${G.reload} reload · hold ${G.reload} interact`,
+      `${G.jump} jump`, `${G.crouch} crouch`, `${G.sprint} sprint`, `${G.swap} swap`, `${G.grenade} grenade`, `${G.tactical} tactical`,
+      `${G.melee} melee`, `${G.inspect} inspect`,
+      `${G.streak} streaks`, `${G.score} scoreboard`, `${G.pause} pause`].join(sep).toLowerCase();
+  }
+  function setDevice(d) {
+    if (input.lastDevice === d) return;
+    input.lastDevice = d;
+    if (d === "kbm" && pad.nav) pad.nav.clear();
+    try {
+      if (hintEl) hintEl.innerHTML = d === "pad" ? padHint() : hintKbm;
+      if (typeof document !== "undefined" && document.body) {
+        document.body.classList.toggle("br-pad", d === "pad");
+      }
+      window.dispatchEvent(new CustomEvent("br:inputdevice", { detail: { device: d, layout: pad.layout } }));
+    } catch (e) { /* non-DOM host */ }
+    for (const fn of deviceCbs) { try { fn(d, pad.layout); } catch (e) { /* listener's problem */ } }
+  }
+  function rumble(strong, weak, ms) {
+    if (input.lastDevice !== "pad" || (settings && settings.padRumble === "off")) return false;
+    return pad.rumble(strong, weak, ms);
+  }
+  const pad = createGamepad({
+    input, state, settings,
+    press, release, refreshMove: () => refreshMove(),
+    setDevice,
+    key: (code, type) => window.dispatchEvent(new KeyboardEvent(type, { code, key: code, bubbles: true })),
+  });
+  input._pad = pad;
+  input.touchLooked = () => { touchLookAt = performance.now(); if (input.lastDevice !== "touch") setDevice("touch"); };
 
   function refreshMove() {
     state.moveX = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
@@ -255,15 +498,21 @@ export function createInput(canvas, settings) {
   let designate = 0; // killstreak designate mode (see the Digit7-9 keys)
   window.addEventListener("keydown", (e) => {
     if (e.repeat) return;
-    keys[e.code] = true;
-    switch (e.code) {
+    if (rebindCapture) { rebindCapture(e); return; } // settings "press a key"
+    if (e.isTrusted) setDevice("kbm");
+    const code = canon(e.code);
+    keys[code] = true;
+    switch (code) {
       case "KeyW": case "KeyA": case "KeyS": case "KeyD": refreshMove(); break;
       case "Space": press("jump"); e.preventDefault(); break;
       case "ControlLeft": case "ControlRight": case "KeyC": state.crouch = true; break;
       case "ShiftLeft": case "ShiftRight": state.sprint = true; break;
       case "KeyR": press("reload"); break;
       case "KeyG": press("grenade"); break;
+      case "KeyE": press("tactical"); break; // [equipment lane]
+      case "KeyV": press("melee"); break;    // [melee]
       case "KeyF": press("interact"); break;
+      case "KeyI": input.inspect(); break;   // view-only (see state.inspect)
       // FIVE fixed weapon slots (weapon_data.js WEAPON_SLOT) + Q = last weapon.
       case "Digit1": state.switchTo = "slot1"; break;
       case "Digit2": state.switchTo = "slot2"; break;
@@ -278,7 +527,7 @@ export function createInput(canvas, settings) {
       // answers with its own "no call-in" denial.
       case "Digit6": designate = 0; state.streak = 1; break;
       case "Digit7": case "Digit8": case "Digit9": {
-        const tier = e.code === "Digit7" ? 2 : e.code === "Digit8" ? 3 : 4;
+        const tier = code === "Digit7" ? 2 : code === "Digit8" ? 3 : 4;
         if (designate === tier) designate = 0;
         else if (input.canDesignate && !input.canDesignate(tier)) { designate = 0; state.streak = tier; }
         else designate = tier;
@@ -286,23 +535,27 @@ export function createInput(canvas, settings) {
       }
       case "Escape": designate = 0; break;
     }
-    if (designate && /^(Digit[1-5]|KeyQ|KeyG|KeyR)$/.test(e.code)) designate = 0; // switching hands cancels
+    if (designate && /^(Digit[1-5]|KeyQ|KeyG|KeyR|KeyE|KeyV)$/.test(code)) designate = 0; // switching hands cancels
   });
 
   window.addEventListener("keyup", (e) => {
-    keys[e.code] = false;
-    switch (e.code) {
+    const code = canon(e.code);
+    keys[code] = false;
+    switch (code) {
       case "KeyW": case "KeyA": case "KeyS": case "KeyD": refreshMove(); break;
       case "Space": release("jump"); break;
       case "ControlLeft": case "ControlRight": case "KeyC": state.crouch = false; break;
       case "ShiftLeft": case "ShiftRight": state.sprint = false; break;
       case "KeyR": release("reload"); break;
       case "KeyG": release("grenade"); break;
+      case "KeyE": release("tactical"); break; // [equipment lane]
+      case "KeyV": release("melee"); break;    // [melee]
       case "KeyF": release("interact"); break;
     }
   });
 
   canvas.addEventListener("mousedown", (e) => {
+    if (e.isTrusted && input.lastDevice === "pad") setDevice("kbm");
     if (designate) {
       // designate mode owns the mouse: LMB confirms the call-in, RMB cancels
       if (e.button === 0) { state.streak = designate; designate = 0; }
@@ -349,10 +602,19 @@ export function createInput(canvas, settings) {
     // frame and 300 px spread over 30 frames produce IDENTICAL yaw.
     // Yaw/pitch land in input.state immediately (zero look latency) and enter
     // the sim via the next cmd. Sim-stored aim is authoritative for ballistics.
+    // lane PAD: a deliberate mouse move hands the device back to the mouse
+    // (assist off, keyboard glyphs). 3 px floor ignores a nudged desk.
+    if (input.lastDevice !== "kbm" && (Math.abs(e.movementX) + Math.abs(e.movementY) > 3) && e.isTrusted) setDevice("kbm");
     if (!input.enabled || !input.pointerLocked) return;
-    const s = LOOK_SCALE * (settings ? settings.sens : 1.0) * aimZoomScale();
-    input.addLook(-e.movementX * s, -e.movementY * s);
+    const s = LOOK_SCALE * (settings ? settings.sens : 1.0) * aimZoomScale() * input.lookMult; // [equipment lane] concussion
+    input.addLook(-e.movementX * s, -e.movementY * s * invY());
   });
+
+  // touch vs mouse pointer — the device switch for the touch layer and menus
+  window.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "touch") setDevice("touch");
+    else if (e.pointerType === "mouse" && e.isTrusted) setDevice("kbm");
+  }, true);
 
   document.addEventListener("pointerlockchange", () => {
     input.pointerLocked = document.pointerLockElement === canvas;
@@ -363,7 +625,7 @@ export function createInput(canvas, settings) {
     for (const k of Object.keys(keys)) keys[k] = false;
     refreshMove();
     state.jump = state.crouch = state.sprint = false;
-    state.fire = state.ads = state.reload = state.grenade = state.interact = false;
+    state.fire = state.ads = state.reload = state.grenade = state.interact = state.tactical = state.melee = false;
     for (let i = 0; i < LATCHED.length; i++) latch[LATCHED[i]] = false;
   });
 

@@ -10,7 +10,11 @@
 //               while shooting (the standard mobile-shooter grip).
 //   buttons     AIM (toggle) · JUMP · CROUCH (toggle; while sprinting = slide)
 //               · RELOAD · GRENADE (hold = cook, release = throw) · SWAP (next
-//               weapon) · USE · SCORE (hold, matches) · PAUSE.
+//               weapon) · USE · TAC (tactical: flash / smoke / concussion, shown
+//               only while the class carries one, with the count) · SCORE
+//               (hold, matches) · PAUSE · MELEE ([melee]: a small knife button
+//               tucked under FIRE, between it and CROUCH — the thumb rolls down
+//               off the trigger onto it, and nothing else lives in that gap).
 //   streaks     the killstreak tray tiles become buttons: tap a READY tile.
 //               Sweep launches at once; mortar/airstrike/orbital enter the
 //               designate mode (FIRE confirms on the preview ring, AIM cancels).
@@ -74,6 +78,12 @@ function css() {
 #tc-reload{width:50px;height:50px;right:calc(104px + env(safe-area-inset-right));bottom:calc(194px + env(safe-area-inset-bottom));}
 #tc-nade{width:50px;height:50px;right:calc(200px + env(safe-area-inset-right));bottom:calc(70px + env(safe-area-inset-bottom));}
 #tc-swap{width:50px;height:50px;right:calc(200px + env(safe-area-inset-right));bottom:calc(140px + env(safe-area-inset-bottom));}
+#tc-tac{width:46px;height:46px;right:calc(258px + env(safe-area-inset-right));bottom:calc(104px + env(safe-area-inset-bottom));font-size:9px;
+  flex-direction:column;line-height:1.1;}
+#tc-tac.hide{display:none;}
+#tc-tac b{font-weight:400;font-size:12px;color:#d9a441;}
+/* [polish v149] was right 54 / bottom 14: under the page's corner controls (fullscreen / sound / pause) */
+#tc-melee{width:44px;height:44px;right:calc(206px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));}
 #tc-use{width:46px;height:46px;right:calc(204px + env(safe-area-inset-right));bottom:calc(210px + env(safe-area-inset-bottom));font-size:10px;}
 #tc-pause{width:40px;height:40px;left:calc(12px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));border-radius:8px;}
 #tc-score{width:40px;height:40px;left:calc(60px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));border-radius:8px;font-size:9px;}
@@ -109,6 +119,8 @@ const ICON = {
   crouch: `<svg viewBox="0 0 24 24"><path d="M5 9l7 7 7-7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/></svg>`,
   reload: `<svg viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2.05-4.95" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M19 4v4h-4" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>`,
   nade: `<svg viewBox="0 0 24 24"><ellipse cx="12" cy="14" rx="6" ry="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 6h4v2h-4zM14 6l3-2" stroke="currentColor" stroke-width="1.8" fill="none"/></svg>`,
+  // [melee] a fixed-blade knife, point up-right
+  melee: `<svg viewBox="0 0 24 24"><path d="M19.5 3.5 9.2 13.8l1.6 1.6L21 5.2z" fill="currentColor"/><path d="M8.2 13.2l3.2 3.2M6.9 15.6l1.6 1.6-3.3 3.3-1.6-1.6z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>`,
   swap: `<svg viewBox="0 0 24 24"><path d="M4 8h14l-3-3M20 16H6l3 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>`,
   pause: `<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" stroke="currentColor" stroke-width="3"/></svg>`,
   rotate: `<svg viewBox="0 0 64 64"><rect x="20" y="8" width="24" height="44" rx="4" fill="none" stroke="#d9a441" stroke-width="3"/><circle cx="32" cy="46" r="2" fill="#d9a441"/></svg>`,
@@ -139,6 +151,8 @@ export function createTouchControls(ctx) {
     nade: mk("div", "tc-nade", "tc-btn", ICON.nade),
     swap: mk("div", "tc-swap", "tc-btn", ICON.swap),
     use: mk("div", "tc-use", "tc-btn", "USE"),
+    melee: mk("div", "tc-melee", "tc-btn", ICON.melee), // [melee]
+    tac: mk("div", "tc-tac", "tc-btn hide", "TAC<b>0</b>"), // [equipment lane]
     pause: mk("div", "tc-pause", "tc-btn", ICON.pause),
     score: mk("div", "tc-score", "tc-btn", "SCORE"),
   };
@@ -177,8 +191,24 @@ export function createTouchControls(ctx) {
     input.state.sprint = sprint;
     stick.classList.toggle("sprint", sprint);
   }
+  // [polish v149] FULL MAP on touch: the minimap sits under the move zone, so a
+  // tap that lands on it opens the full map; while the map is open any tap on
+  // the move / look zones closes it (minimap.js publishes __BR_FULLMAP__)
+  function mapTap(e) {
+    const FM = globalThis.__BR_FULLMAP__;
+    if (!FM) return false;
+    if (FM.isOpen()) { FM.toggle(); e.preventDefault(); return true; }
+    const mm = document.getElementById("mm-wrap");
+    if (!mm || getComputedStyle(mm).display === "none") return false;
+    const r = mm.getBoundingClientRect();
+    if (r.width > 0 && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
+      FM.toggle(); e.preventDefault(); return true;
+    }
+    return false;
+  }
   moveZone.addEventListener("pointerdown", (e) => {
     goFullscreen();
+    if (!mv && mapTap(e)) return;
     if (mv) return;
     mv = { id: e.pointerId, x0: e.clientX, y0: e.clientY };
     try { moveZone.setPointerCapture(e.pointerId); } catch (er) { /* synthetic */ }
@@ -213,11 +243,22 @@ export function createTouchControls(ctx) {
     const dx = e.clientX - l.x, dy = e.clientY - l.y;
     l.x = e.clientX; l.y = e.clientY;
     if (!input.enabled) return;
-    const s = (input._lookScale ? input._lookScale() : 0.0022) * LOOK_MUL;
-    input.addLook(-dx * s, -dy * s);
+    // lane PAD: touch gets the same aim assist as a controller — the drag is
+    // scaled by the assist's slowdown near a target (rotational tracking runs
+    // in input.update while a thumb is on the glass or the stick is pushed).
+    if (input.touchLooked) input.touchLooked();
+    const slow = input.assistSlow ? input.assistSlow() : 1;
+    const inv = ctx.settings && ctx.settings.invertY === "on" ? -1 : 1;
+    const s = (input._lookScale ? input._lookScale() : 0.0022) * LOOK_MUL * slow;
+    input.addLook(-dx * s, -dy * s * inv);
   }
   const lookEnd = (e) => { looks.delete(e.pointerId); };
-  lookZone.addEventListener("pointerdown", (e) => { goFullscreen(); lookStart(e, lookZone); e.preventDefault(); });
+  lookZone.addEventListener("pointerdown", (e) => {
+    goFullscreen();
+    const FM = globalThis.__BR_FULLMAP__;
+    if (FM && FM.isOpen()) { FM.toggle(); e.preventDefault(); return; }
+    lookStart(e, lookZone); e.preventDefault();
+  });
   lookZone.addEventListener("pointermove", lookMove);
   lookZone.addEventListener("pointerup", lookEnd);
   lookZone.addEventListener("pointercancel", lookEnd);
@@ -249,8 +290,19 @@ export function createTouchControls(ctx) {
   hold(B.crouch, () => { input.state.crouch = !input.state.crouch; });
   hold(B.reload, () => input.touchPress("reload"), () => input.touchRelease("reload"));
   hold(B.nade, () => input.touchPress("grenade"), () => input.touchRelease("grenade"));
-  hold(B.swap, () => { input.state.switchTo = "next"; });
+  // [polish v149] SWAP: tap = next weapon, hold = inspect (the controller's Y split)
+  let swapT = null, swapInspected = false;
+  hold(B.swap, () => {
+    swapInspected = false;
+    if (swapT) clearTimeout(swapT);
+    swapT = setTimeout(() => { swapT = null; swapInspected = true; if (input.inspect) input.inspect(); }, 350);
+  }, () => {
+    if (swapT) { clearTimeout(swapT); swapT = null; }
+    if (!swapInspected) input.state.switchTo = "next";
+  });
   hold(B.use, () => input.touchPress("interact"), () => input.touchRelease("interact"));
+  hold(B.melee, () => input.touchPress("melee"), () => input.touchRelease("melee")); // [melee]
+  hold(B.tac, () => input.touchPress("tactical"), () => input.touchRelease("tactical")); // [equipment lane]
   hold(B.pause, () => { key("Escape", "keydown"); key("Escape", "keyup"); });
   hold(B.score, () => key("Tab", "keydown"), () => key("Tab", "keyup"));
 
@@ -272,7 +324,8 @@ export function createTouchControls(ctx) {
     looks.clear();
     for (const k of Object.keys(B)) B[k].classList.remove("down");
     input.touchRelease("fire"); input.touchRelease("jump"); input.touchRelease("reload");
-    input.touchRelease("grenade"); input.touchRelease("interact");
+    input.touchRelease("grenade"); input.touchRelease("interact"); input.touchRelease("tactical");
+    input.touchRelease("melee"); // [melee]
     input.state.moveX = 0; input.state.moveZ = 0; input.state.sprint = false;
   }
 
@@ -298,6 +351,11 @@ export function createTouchControls(ctx) {
       B.crouch.classList.toggle("on", !!input.state.crouch);
       B.fire.classList.toggle("designate", !!input.designate);
       B.score.classList.toggle("hide", !s.match);
+      { // [equipment lane] tactical button: only with a tactical in the kit; shows the count
+        const pl = s.state.player, has = !!(pl.kit && pl.kit.tactical), n = pl.tactical | 0;
+        B.tac.classList.toggle("hide", !has);
+        if (has && B.tac._n !== n) { B.tac._n = n; B.tac.lastChild.textContent = String(n); B.tac.style.opacity = n > 0 ? "" : ".45"; }
+      }
       // an emptied stick must not leave the player creeping
       if (!mv && (input.state.moveX || input.state.moveZ) && !input._keysHeld()) { input.state.moveX = 0; input.state.moveZ = 0; }
     },

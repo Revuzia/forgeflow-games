@@ -30,6 +30,12 @@ import { spawnGrenade, GRENADE } from "../sim/grenades.js";
 import { objectiveStep } from "./objective.js"; // W7 slot 3a (bot_ai §2.4)
 import * as STEER from "./steer.js";               // BOT-AI PASS: planning + path following
 import { tierOf, owns } from "../sim/loadout.js";    // BOT-AI PASS: weapon tiers for swap / loot decisions
+// [equipment lane] flash / smoke / concussion / tripmine use + reactions
+import * as EQAI from "./equip_ai.js";
+import { equipAimMult, stunTurnMult } from "../sim/equipment.js";
+// [identity lane] per-callsign personality + hidden operator tier (PVP only)
+import { applyPersonality, personaOfBot } from "./personality.js";
+import { applyTier } from "./adaptive.js";
 
 const DEG = Math.PI / 180;
 
@@ -184,10 +190,26 @@ function skillOf(sim, bot) {
   let src = BANDS[name];
   const ov = cfg && cfg.bandOverrides && cfg.bandOverrides[name];
   if (ov) src = Object.assign({}, src, ov);
-  if (reactScale === 1 && jitterScale === 1) return Object.assign({ name }, src);
-  return Object.assign({ name }, src, {
-    reactMin: src.reactMin * reactScale, reactMax: src.reactMax * reactScale, jitter: src.jitter * jitterScale,
-  });
+  const out = (reactScale === 1 && jitterScale === 1) ? Object.assign({ name }, src)
+    : Object.assign({ name }, src, {
+      reactMin: src.reactMin * reactScale, reactMax: src.reactMax * reactScale, jitter: src.jitter * jitterScale,
+    });
+  return identityOf(sim, bot, out);
+}
+// [identity lane] PVP operators: the match's hidden tier (adaptive.js) for
+// EVERY combatant, then the callsign's personality (personality.js) inside it.
+// sim.identity is set only by runtime/boot.js at match start — headless
+// selftests and the campaign never have it, so their profiles are unchanged.
+function identityOf(sim, bot, k) {
+  const id = sim.identity;
+  if (!id || !sim.match) return k;
+  // tierByTeam: harness-only override (band-strength probes pit tiers against
+  // each other); real matches seat both teams at id.tier
+  const tb = id.tierByTeam && bot.team != null ? id.tierByTeam[bot.team] : null;
+  let o = applyTier(k, tb != null ? tb : id.tier);
+  const pers = personaOfBot(sim, bot);
+  if (pers) o = applyPersonality(o, pers);
+  return o;
 }
 // the brain caches its skill; re-derive if the body's band was rewritten
 // (scenario harnesses retag bands after spawn)
@@ -254,7 +276,10 @@ function burstRange(bot, weapon) {
 function prefBand(bot, weapon, pushOn) {
   const cls = weapon ? weapon.class : "ar";
   const native = BAND_BY_ARCH[bot.archetype] && (!weapon || NATIVE_CLASS[bot.archetype] === cls);
-  const b = (native ? BAND_BY_ARCH[bot.archetype] : null) || BAND_BY_CLASS[cls] || BAND_BY_ARCH[bot.archetype] || [15, 35];
+  let b = (native ? BAND_BY_ARCH[bot.archetype] : null) || BAND_BY_CLASS[cls] || BAND_BY_ARCH[bot.archetype] || [15, 35];
+  // [identity lane] personality: an aggressive operator fights inside its gun's book range
+  const rm = bot._brain && bot._brain.k && bot._brain.k.rangeMul;
+  if (rm && rm !== 1) b = [b[0] * rm, b[1] * rm];
   return pushOn ? [b[0] * 0.5, b[1] * 0.5] : b; // §5.3: at 75 s ranges halve
 }
 
@@ -311,7 +336,7 @@ function mkBrain(bot, t) {
     // retreat
     retreatRolled: false, retreatGo: false, retreatIdleFrom: -9,
     // grenade
-    gPlanned: false, gReleaseT: -9, gPitch: 0, gTarget: null,
+    gPlanned: false, gReleaseT: -9, gPitch: 0, gTarget: null, gKind: null, // gKind: null/"frag" = frag, else a tactical [equipment lane]
     // referee hooks (squad.js writes)
     forceFlank: false, forceDisengage: false,
     flankUntil: -9, flankSide: null,
@@ -466,6 +491,7 @@ function think(sim, nav, squad, bot, t) {
 
   perceive(bot, sim, sim.world, dtT, rng);
   const P = bot.percept;
+  EQAI.noticeEquipment(sim, bot, brain, t, rng, band); // [equipment lane] spot enemy tripmines
 
   // W3: mirror the current target's reaction latch into brain.* (a target
   // switch NEVER re-rolls a latched reaction — the latch travels with the
@@ -529,6 +555,7 @@ function think(sim, nav, squad, bot, t) {
       // BOT-AI PASS: an under-armed bot detours to a rack / drop (PVP) before
       // resuming its orders; a running detour owns the goal until it ends
       if (considerLoot(sim, nav, squad, bot, brain, band, t)) break;
+      EQAI.planMine(sim, bot, brain, t, rng, band); // [equipment lane] idle at an anchor: tripmine a flank
       // W3 H4: the objective layer's anchor owns the idle anchor outright
       const obj = bot._obj;
       if (obj && obj.anchor) {
@@ -549,7 +576,10 @@ function think(sim, nav, squad, bot, t) {
       // of standing still (goal-following for this lives in act())
       if (!bot.patrol && brain.floorAnchor && brain.arrived && t >= brain.wanderAt) {
         brain.wanderAt = t + 6 + rng() * 6;
-        const p2 = nav ? nav.randomPoint(brain.anchor, 12, rng, 2) : null; // minClr 2: not in a doorway
+        // brain.anchor can be cleared by a role change while floorAnchor survives
+        // (2026-11-13: threw "reading '0' of null" in nav.randomPoint and froze the sim)
+        const wa = brain.anchor || brain.floorAnchor || bot.pos;
+        const p2 = nav ? nav.randomPoint(wa, 12, rng, 2) : null; // minClr 2: not in a doorway
         if (p2) setGoal(nav, sim, brain, bot, p2, band.loudP > 0 && rng() < band.loudP);
       }
       // BOT-AI PASS: an idle bot parked IN a doorway / against a wall (wall-
@@ -729,6 +759,7 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
     if (brain.retreatGo && !lastStand) {
       const threatRef = P.lastKnown || (squad.squadLastKnown(bot.id, who) || {}).pos || null;
       if (threatRef) {
+        EQAI.retreatSmoke(sim, bot, brain, t, rng, band, threatRef, solveArcPitch); // [equipment lane]
         setState(sim, bot, brain, "retreat");
         squad.release(bot.id);
         const dest = pickRetreatCover(sim, nav, bot, brain, threatRef, rng);
@@ -872,6 +903,8 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
     staticFor = rec.staticRef ? t - rec.staticSinceT : 0;
   }
   if (hasFire && !brain.gPlanned && !(obj && obj.noGrenade) &&
+      (bot.grenades == null || bot.grenades > 0) && // class kit lethal count (class matches only)
+      EQAI.lethalIsFrag(bot) && // [equipment lane] a tripmine kit throws no frags
       t >= brain.grenBlockUntil &&
       squad.grenadeReady(bot.id, t) &&
       sim.internal.grenades.length === 0 &&
@@ -887,13 +920,24 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
         brain.grenBlockUntil = t + 15; // decided against it (recruits almost never commit)
       } else if (pitch != null) {
         brain.gPlanned = true;
+        brain.gKind = "frag";
         brain.gReleaseT = t + 1.2; // §5.9 telegraph: bark 1.2 s BEFORE release
         brain.gPitch = pitch;
         brain.gTarget = target;
-        squad.requestBark(bot.id, "grenade");
+        squad.requestBark(bot.id, "grenade", { gear: "frag" }); // [identity lane] own throw (vs squad's warning)
       }
     }
   }
+
+  // [equipment lane] tactical use (flash/concussion before a push, smoke to
+  // cross or screen) + a tripmine while holding cover with no contact
+  if (!brain.gPlanned) {
+    EQAI.planTactical(sim, bot, brain, t, rng, band, {
+      threat, seenNow, lostS, staticFor, objDrive, obj, pushOn, lastStand, solveArcPitch,
+      setGoal: (pos, sprint) => setGoal(nav, sim, brain, bot, pos, sprint),
+    });
+  }
+  if (!seenNow && lostS > 4 && brain.arrived && !brain.gPlanned) EQAI.planMine(sim, bot, brain, t, rng, band);
 }
 
 function enterFlank(sim, nav, squad, bot, brain, t, rng) {
@@ -1363,6 +1407,10 @@ function act(sim, nav, squad, bot, dt, t) {
   c.interact = false; c.grenade = false;
   brain.mvActive = false; // steer.js re-arms it when a path is followed this tick
 
+  // [equipment lane] blinded / looking away from a flash / clearing a noticed
+  // tripmine own the tick (equip_ai.react)
+  if (EQAI.react(sim, bot, brain, c, dt, t, rng, band, { squad, P })) { brain.wasFiring = c.fire; return; }
+
   // ---- live-grenade dodge (any live frag within 6.5 m → sprint away)
   const gl = sim.internal.grenades;
   for (let i = 0; i < gl.length; i++) {
@@ -1384,7 +1432,9 @@ function act(sim, nav, squad, bot, dt, t) {
     c.yaw = brain.curYaw; c.pitch = 0.3;
     if (t >= brain.gReleaseT) {
       brain.gPlanned = false;
-      if (sim.internal.grenades.length === 0) {
+      if (brain.gKind && brain.gKind !== "frag") {
+        EQAI.releaseTactical(sim, bot, brain); // [equipment lane] flash / smoke / concussion
+      } else if (sim.internal.grenades.length === 0) {
         const eye = eyeOf(bot);
         const org = [eye[0], eye[1] - 0.15, eye[2]];
         const yaw = yawTo(org, brain.gTarget);
@@ -1392,6 +1442,7 @@ function act(sim, nav, squad, bot, dt, t) {
         const v = GRENADE.BOT_THROW_V;
         const vel = [-Math.sin(yaw) * cp * v, sp * v, -Math.cos(yaw) * cp * v];
         spawnGrenade(sim, bot.id, org, vel); // 3.8 s fuse from release
+        if (bot.grenades != null) bot.grenades = Math.max(0, bot.grenades - 1); // class kit count
         squad.noteGrenade(bot.id, t, band.grenCdS);
       }
     }
@@ -1745,7 +1796,7 @@ function act(sim, nav, squad, bot, dt, t) {
     }
     if (turnRate < 5.0) turnRate = 5.0;
   }
-  if (!c.fire) brain.curYaw = approachYaw(brain.curYaw, desYaw, turnRate * dt);
+  if (!c.fire) brain.curYaw = approachYaw(brain.curYaw, desYaw, turnRate * stunTurnMult(bot, t) * dt); // [equipment lane] concussion
   c.yaw = brain.curYaw;
   c.pitch = desPitch;
   // BOT-AI PASS: the feet follow steer.js's WORLD-SPACE heading expressed in
@@ -1757,6 +1808,35 @@ function act(sim, nav, squad, bot, dt, t) {
     const rel = angDiff(brain.moveYaw, brain.curYaw);
     c.moveZ = Math.cos(rel);
     c.moveX = -Math.sin(rel);
+  }
+  // ---- [melee lane] KNIFE — one small block. Strike when a SEEN enemy (W3: the
+  // percept target only) is inside 2.2 m, inside the ~28 deg lunge cone this bot
+  // already faces, and the knife beats the gun: standing BEHIND him (lethal),
+  // dry / mid-reload at point-blank, or finishing a man the strike kills from the
+  // front. The verb is the human's (core/sim/melee.js); the §5.7 human-victim
+  // attacker cap and the objective fire policy gate it like a trigger pull.
+  // Toggled (edge-triggered in the sim) so a held decision re-strikes.
+  {
+    let knife = false;
+    // (the V9 noTarget freeze lever stands the knife down, as it does the commander)
+    if (tb && P && P.seesTarget && t - P.lastSeenT <= 0.3 && !bot._melee && !(sim.flags && sim.flags.noTarget) &&
+        (st === "combat" || st === "suppress" || st === "flank") &&
+        !(obj && obj.firePolicy === "hold") && bot.weapon.state !== "switching") {
+      const dx = tb.pos[0] - bot.pos[0], dz = tb.pos[2] - bot.pos[2];
+      const d = Math.hypot(dx, dz);
+      if (d <= 2.2 && Math.abs(tb.pos[1] - bot.pos[1]) <= 1.2) {
+        const facing = d < 0.25 || (dx * -Math.sin(brain.curYaw) + dz * -Math.cos(brain.curYaw)) / d >= 0.88;
+        const behind = d >= 0.25 && (-dx * -Math.sin(tb.yaw || 0) - dz * -Math.cos(tb.yaw || 0)) / d <= -0.43;
+        const dry = mag === 0 || reloading;
+        const finisher = d <= 1.6 && (tb.hp || 0) <= (sim.tuning ? sim.tuning.maxHp : 100) * 0.55;
+        if (facing && (behind || dry || finisher) && squad.fireAuthOk(bot.id, t, P.target)) {
+          knife = !brain.prevMelee;
+          if (knife) { squad.noteFireAuth(bot.id, t, P.target); c.fire = false; }
+        }
+      }
+    }
+    c.melee = knife;
+    brain.prevMelee = knife;
   }
   brain.wasFiring = c.fire;
 
@@ -1803,7 +1883,7 @@ function rollJitter(sim, bot, brain, band, rng, t) {
   const evasive = fresh && ((tb.grounded === false) || (pm && pm.sliding)) ? 1.5 : 1;
   const botMoving = Math.hypot(bot.vel[0], bot.vel[2]) > 0.5 ? 1.5 : 1;
   const flinch = (bot.flinchUntil || -9) > t ? (bot.flinchStacks || 1) * FLINCH_SIGMA_PER_STACK : 0;
-  const sigma = band.jitter * acquire * evasive * botMoving + flinch;
+  const sigma = (band.jitter * acquire * evasive * botMoving + flinch) * equipAimMult(bot, t); // [equipment lane] flash/stun
   brain.jitterY = gauss(rng) * sigma;
   brain.jitterP = gauss(rng) * sigma;
   brain.lastSigma = sigma;

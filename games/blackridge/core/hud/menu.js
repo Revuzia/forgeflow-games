@@ -81,6 +81,46 @@ const CONTROLS = [
 export function createMenu(ctx, cb) {
   ensureShellStyle();
 
+  // [lane settings] DEVICE-AWARE CONTROLS LIST. The briefing used to print the
+  // fixed keyboard CONTROLS table whatever the player held. Now: keyboard rows
+  // read the LIVE bindings through input.glyph() (a rebound key shows its new
+  // label), a controller gets its own layout (Xbox or PlayStation glyphs), and
+  // touch gets the on-screen button names. Re-rendered on br:inputdevice.
+  function controlRows() {
+    const inp = ctx.input;
+    const dev = inp && inp.lastDevice;
+    if (!inp || !inp.glyph || !dev) return CONTROLS;
+    const g = (v) => inp.glyph(v);
+    if (dev === "pad" || dev === "touch") {
+      const pad = dev === "pad";
+      return [
+        [g("move"), "move"], [g("look"), "look"], [g("fire"), "fire"], [g("ads"), "aim"],
+        [g("sprint"), pad ? "sprint (stopping or aiming ends it)" : "sprint"],
+        [g("jump"), "jump / mantle"], [g("crouch"), "crouch · slide while sprinting"],
+        [g("reload"), "reload"], [g("interact"), "interact"],
+        [g("grenade"), "frag (hold to cook)"], [g("tactical"), "tactical"],
+        [g("swap"), "swap weapon"],
+        [g("streak"), pad ? "killstreaks: ↓ sweep · ↑ mortar · → airstrike · ← orbital" : "killstreaks"],
+        ["WALK OVER", "weapons & ammo to loot them — enemies drop their guns"],
+        [g("score"), "scoreboard (hold, in match)"], [g("pause"), "pause"],
+      ];
+    }
+    const crouch = g("crouch");
+    return [
+      ["WASD", "move"], ["MOUSE", "look"], ["LMB", "fire"], ["RMB", "aim"],
+      [g("sprint"), "sprint (double-tap: tac sprint)"], [g("jump"), "jump / mantle"],
+      [crouch === "C" ? "C / CTRL" : `${crouch} / CTRL`, "crouch · slide while sprinting"], [g("reload"), "reload"],
+      [g("grenade"), "frag (hold to cook)"], [g("tactical"), "tactical"], [g("interact"), "interact"],
+      ["1 - 5", `weapons · wheel cycles · ${g("swap")} = last weapon`],
+      ["6 / 7 / 8 / 9", "killstreaks: signal sweep (3) · mortar (5) · airstrike (7) · orbital (10)"],
+      ["WALK OVER", "weapons & ammo to loot them — enemies drop their guns"],
+      ["TAB", "scoreboard (hold, in match)"], ["ESC", "pause"],
+    ];
+  }
+  if (ctx.input && ctx.input.onDeviceChange) {
+    ctx.input.onDeviceChange(() => { if (menu._screen === "briefing" && !deploying) render("briefing"); });
+  }
+
   const fiction = (ctx.content && ctx.content.mission && ctx.content.mission.fiction) || {};
   const opName = fiction.operation || "BLACKRIDGE";
   const tagline = ((fiction.district || "meridian ward") + " · " + (fiction.city || "zarov")).toLowerCase();
@@ -200,7 +240,7 @@ export function createMenu(ctx, cb) {
       modeSelect.render(panel);
     } else if (screen === "briefing") {
       campaignDiff = loadDifficulty(); // H2: stay in sync with the PVP row's persisted choice
-      const rows = CONTROLS.map(([k, v]) =>
+      const rows = controlRows().map(([k, v]) =>
         `<div class="a10-row"><span class="lbl">${k}</span><span class="val" style="min-width:0;font-size:11.5px;letter-spacing:.08em;opacity:.75">${v}</span></div>`).join("");
       // H2: same CASUAL/STANDARD/HARD row as mode_select (its w6-diff style is
       // registered by createModeSelect above), persisted in the same profile.

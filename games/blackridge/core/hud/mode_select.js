@@ -19,6 +19,7 @@
 
 import { MODES } from "../match/match.js";
 import { loadStats } from "./scoreboard.js";
+import { getLoadoutUI } from "./loadout_ui.js";
 
 const esc = (s) => String(s).replace(/[&<>"]/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -34,12 +35,26 @@ const FALLBACK_RULES = {
   tdm: { displayName: "SKIRMISH", scoreLimit: 50, timeLimitS: 480, respawnS: 4 },
   ctf: { displayName: "CAPTURE THE FLAG", captureLimit: 3, timeLimitS: 720, respawnS: 5 },
   ffa: { displayName: "FREE-FOR-ALL", scoreLimit: 25, timeLimitS: 480, respawnS: 3 },
+  // [lane dom] STRONGHOLD — defaults-only (no content.modes block needed);
+  // the numbers mirror core/match/modes/dom.js DOM_DEFAULTS
+  dom: { displayName: "STRONGHOLD", scoreLimit: 200, timeLimitS: 600, respawnS: 4, scoreTickS: 2.5, captureS: 10, neutraliseS: 5 },
+  // [lane modes] defaults-only borrowers; numbers mirror core/match/modes/{hill,tags,ladder}.js
+  hill: { displayName: "OUTPOST", scoreLimit: 250, timeLimitS: 600, respawnS: 4, rotateS: 60, previewS: 10 },
+  tags: { displayName: "RECLAIM", scoreLimit: 40, timeLimitS: 600, respawnS: 4, tagTtlS: 30 },
+  ladder: { displayName: "ASCENT", timeLimitS: 480, respawnS: 2.5 },
 };
+// the card order on the grid (4 columns x 2 rows; the pitch line folds away on a
+// short screen, the panel scrolls; every card is a pad-focusable role=button)
+export const MODE_ORDER = ["tdm", "ctf", "ffa", "dom", "hill", "tags", "ladder"]; // [lane modes]
 
 const PITCH = {
   tdm: "5 v 5 · first team to the kill limit",
   ctf: "5 v 5 · take theirs, get it home",
   ffa: "10 players · everyone is hostile",
+  dom: "5 v 5 · take the zones, hold them, bleed their score", // [lane dom]
+  hill: "5 v 5 · one outpost at a time, and it keeps moving", // [lane modes]
+  tags: "5 v 5 · a kill only counts when you grab the tag", // [lane modes]
+  ladder: "10 players · every kill, a new gun · first to the top", // [lane modes]
 };
 
 const DIFFICULTIES = ["casual", "standard", "hard"];
@@ -102,9 +117,14 @@ function ensureCardStyle() {
   const el = document.createElement("style");
   el.id = "w6-cards-style";
   el.textContent = `
-.w6-cards{display:flex;flex-wrap:wrap;gap:14px;margin:6px 0 18px;}
-.w6-card{flex:1 1 0;border:1px solid rgba(232,232,228,.18);padding:14px 16px;
-  cursor:pointer;transition:border-color .15s ease;min-width:150px;}
+.w6-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:6px 0 16px;padding:3px;}
+.w6-card{border:1px solid rgba(232,232,228,.18);padding:9px 11px;
+  cursor:pointer;transition:border-color .15s ease;min-width:0;}
+.w6-cards .w6-card .nm{font-size:13px;letter-spacing:.12em;overflow-wrap:break-word;}
+.w6-card:focus-visible{outline:2px solid var(--a10-amber,#d9a441);outline-offset:2px;}
+@media (max-width:560px){.w6-cards{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media (max-height:460px){.w6-cards{gap:6px;margin-bottom:10px;}
+  .w6-card{padding:6px 8px;}.w6-card .pt{display:none;}.w6-card .nm{margin-bottom:0;font-size:12px;letter-spacing:.14em;}}
 .w6-card:hover{border-color:rgba(232,232,228,.45);}
 .w6-card.on{border-color:var(--a10-amber,#d9a441);}
 .w6-card.offline{opacity:.45;cursor:default;}
@@ -123,12 +143,19 @@ function ensureCardStyle() {
 .w6-stats{font-size:10px;letter-spacing:.18em;opacity:.45;margin:10px 0 0;}
 .w6-err{display:none;color:var(--a10-red,#ff4d4d);font-size:12px;
   letter-spacing:.08em;margin-top:12px;}
+.w6-cls{flex-wrap:wrap;}
+.w6-cls button.edit{border-style:dashed;}
+.w6-kit{font-size:10.5px;letter-spacing:.1em;line-height:1.7;opacity:.7;margin:4px 0 12px;}
 `;
   document.head.appendChild(el);
 }
 
 export function createModeSelect(ctx, cb) {
   ensureCardStyle();
+  // LOADOUT CLASSES: the class store + editor/picker (core/hud/loadout_ui.js).
+  // A failure there must never take the mode-select screen down with it.
+  let lo = null;
+  try { lo = getLoadoutUI(ctx); } catch (e) { console.warn("[mode_select] loadout UI unavailable:", e && e.message); }
 
   const state = {
     mode: "tdm",
@@ -164,6 +191,30 @@ export function createModeSelect(ctx, cb) {
       `Carriers: no tac-sprint, no grenades, no regen · 8s carry reveals you`,
       `A dropped flag returns in 30s — instantly if a defender touches it`,
     ];
+    if (id === "hill") return [ // [lane modes] OUTPOST
+      `One outpost live at a time · hold it alone: +1 a second · first to ${r.scoreLimit} wins · ${fmtMin(r.timeLimitS)}`,
+      `Both teams inside = contested, nobody scores · it moves every ${r.rotateS}s, the next shown ${r.previewS}s early`,
+      `Respawn in ${r.respawnS}s, never on top of the outpost`,
+      `Tie → overtime: no respawns, the next point wins it`,
+    ];
+    if (id === "tags") return [ // [lane modes] RECLAIM
+      `A fallen operator drops a tag · grab an enemy's to confirm (+1) · first to ${r.scoreLimit} wins · ${fmtMin(r.timeLimitS)}`,
+      `Grab a teammate's tag to deny it · kills alone don't score · tags vanish after ${r.tagTtlS}s`,
+      `Respawn in ${r.respawnS}s`,
+      `Tie → overtime: no respawns, the next confirm wins it`,
+    ];
+    if (id === "ladder") return [ // [lane modes] ASCENT
+      `Everyone on the same weapon · every kill moves you up a rung · the kill on the last rung wins · ${fmtMin(r.timeLimitS)}`,
+      `Five weapons and three variants, then the knife · a knife kill sends the victim down a rung`,
+      `No classes, no pickups, no call-ins · respawn in ${r.respawnS}s`,
+      `Tie at the horn → overtime: the tied leaders' first kill wins it`,
+    ];
+    if (id === "dom") return [ // [lane dom]
+      `Three zones · +1 per zone you hold every ${r.scoreTickS}s · first to ${r.scoreLimit} wins · ${fmtMin(r.timeLimitS)}`,
+      `Stand in a ring to capture it (${r.captureS}s alone, faster together) · enemies inside freeze it`,
+      `An enemy zone must be neutralised first (${r.neutraliseS}s) · respawn in ${r.respawnS}s near the zones you hold`,
+      `Tie → overtime: no respawns, the next point wins it`,
+    ];
     return [
       `First to ${r.scoreLimit} kills wins · ${fmtMin(r.timeLimitS)} · everyone is hostile`,
       `Respawn in ${r.respawnS}s`,
@@ -183,11 +234,11 @@ export function createModeSelect(ctx, cb) {
     if (panel) state.map = loadMap(ctx.content && ctx.content.arenas); // same, for the arena row
     state.panel = panel || state.panel;
     if (!state.panel) return;
-    const cards = ["tdm", "ctf", "ffa"].map((id) => {
+    const cards = MODE_ORDER.map((id) => { // [lane dom] + STRONGHOLD; [lane modes] + OUTPOST / RECLAIM / ASCENT
       const r = contentRules(id);
       const on = state.mode === id;
       const ok = available(id);
-      return `<div class="w6-card${on ? " on" : ""}${ok ? "" : " offline"}" data-mode="${id}">` +
+      return `<div class="w6-card${on ? " on" : ""}${ok ? "" : " offline"}" data-mode="${id}" role="button" tabindex="0">` +
         `<div class="nm">${esc(r.displayName || id.toUpperCase())}</div>` +
         `<div class="pt">${esc(PITCH[id] || "")}</div>` +
         (ok ? "" : `<div class="off">COMING ONLINE</div>`) +
@@ -201,6 +252,33 @@ export function createModeSelect(ctx, cb) {
     const maps = ids.map((id) =>
       `<button data-map="${esc(id)}" class="${state.map === id ? "on" : ""}">${esc(mapLabel(id))}</button>`).join("");
 
+    // LOADOUT row: playlist (CLASSES / PISTOL START), the five saved classes,
+    // EDIT CLASSES. Same `.w6-diff` chrome as the map row.
+    let loadoutRow = "";
+    if (lo) {
+      lo.publishSpec(); // progression may have moved since the last render
+      const st = lo.store;
+      const pistol = st.playlist() === "pistol";
+      const play = `<button data-play="classes" class="${pistol ? "" : "on"}">Classes</button>` +
+        `<button data-play="pistol" class="${pistol ? "on" : ""}">Pistol start</button>`;
+      let cls = "", kit = "";
+      if (!pistol) {
+        cls = st.classes().map((c, i) =>
+          `<button data-cls="${i}" class="${st.selected() === i ? "on" : ""}">${esc(c.name)}</button>`).join("") +
+          `<button data-cls="edit" class="edit">Edit classes</button>`;
+        const sm = lo.classSummary(st.selected());
+        kit = `${esc(sm.weapons)}<br>${esc(sm.perks)}`;
+      } else {
+        kit = "Everyone deploys with the GS-9 Pike and a frag · rifles are won from the map racks";
+      }
+      if (state.mode === "ladder") kit = "ASCENT ignores loadouts: everyone climbs the same weapon ladder"; // [lane modes]
+      loadoutRow =
+        `<div style="font-size:10px;letter-spacing:.24em;opacity:.5;margin:14px 0 6px">LOADOUT</div>` +
+        `<div class="w6-diff w6-play" style="margin-bottom:6px">${play}</div>` +
+        (cls ? `<div class="w6-diff w6-cls" style="margin-bottom:4px">${cls}</div>` : "") +
+        `<div class="w6-kit">${kit}</div>`;
+    }
+
     state.panel.innerHTML =
       `<h2>Mode select</h2>` +
       `<div class="body">` +
@@ -208,11 +286,17 @@ export function createModeSelect(ctx, cb) {
       `<div class="w6-rules">${rulesLines(state.mode).map(esc).join("<br>")}</div>` +
       `<div style="font-size:10px;letter-spacing:.24em;opacity:.5;margin-bottom:6px">MAP</div>` +
       `<div class="w6-diff w6-map" style="margin-bottom:6px">${maps}</div>` +
+      loadoutRow +
       `<div class="w6-stats">${esc(statsLine(state.mode))}</div>` +
       `<div class="w6-err"></div>` +
       `</div>`;
 
+    {
+      const sel = state.panel.querySelector(".w6-card.on");
+      if (sel && sel.scrollIntoView) { try { sel.scrollIntoView({ block: "nearest" }); } catch (e) { /* old engines */ } }
+    }
     state.panel.querySelectorAll(".w6-card").forEach((c) => {
+      c.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); c.click(); } });
       c.addEventListener("click", () => {
         state.mode = c.getAttribute("data-mode");
         render();
@@ -226,6 +310,18 @@ export function createModeSelect(ctx, cb) {
         render();
       });
     });
+    if (lo) {
+      state.panel.querySelectorAll(".w6-play button[data-play]").forEach((b) => {
+        b.addEventListener("click", () => { lo.store.setPlaylist(b.getAttribute("data-play")); render(); });
+      });
+      state.panel.querySelectorAll(".w6-cls button[data-cls]").forEach((b) => {
+        b.addEventListener("click", () => {
+          const v = b.getAttribute("data-cls");
+          if (v === "edit") lo.openEditor(() => render());
+          else { lo.store.select(+v); render(); }
+        });
+      });
+    }
   }
 
   return {

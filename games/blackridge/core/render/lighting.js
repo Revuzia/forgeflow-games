@@ -1352,6 +1352,15 @@ export function createLights(ctx) {
 
     tickBlackout(dt);
 
+    // [lane settings] lamp atmosphere toggle (god-ray cones + sodium fog discs)
+    // — visibility only, re-asserted per tick (5 cones + 1 instanced mesh), so
+    // decor built after the toggle (bindStatic on a map swap) obeys it too.
+    {
+      const atmos = !(ctx.settings && ctx.settings.lampAtmos === "off");
+      for (const c of decor.cones) if (c.mesh.visible !== atmos) c.mesh.visible = atmos;
+      if (decor.discMesh && decor.discMesh.visible !== atmos) decor.discMesh.visible = atmos;
+    }
+
     // god-ray density flicker ±5% (LD §3.5)
     for (const c of decor.cones) {
       c.mat.uniforms.uFlick.value = 1.0 + 0.05 * Math.sin(t * 2.1 + c.phase) * Math.sin(t * 5.7 + c.phase * 1.3);
@@ -1440,6 +1449,25 @@ export function createLights(ctx) {
       return (key + amb) / Math.max(1e-6, amb);
     },
   };
+
+  // [lane settings] SHADOW QUALITY: off / low (512 map) / high (1024, the
+  // doctrine cap and the shipped default). The moon is the sole caster, so this
+  // is the whole shadow cost. A map-size change disposes the old map (three
+  // re-allocates on the next shadow pass); off clears castShadow, which three
+  // folds into its program key, so lit materials recompile once on the switch.
+  function applyShadows() {
+    const q = (ctx.settings && ctx.settings.shadows) || "high";
+    const want = q === "off" ? 0 : q === "low" ? 512 : 1024;
+    moon.castShadow = want > 0;
+    if (want > 0 && moon.shadow.mapSize.x !== want) {
+      moon.shadow.mapSize.set(want, want);
+      if (moon.shadow.map) { moon.shadow.map.dispose(); moon.shadow.map = null; }
+    }
+    // re-render the map next frame even if a pass left autoUpdate off
+    if (ctx.renderer && ctx.renderer.shadowMap) ctx.renderer.shadowMap.needsUpdate = true;
+  }
+  applyShadows();
+  if (ctx.onChange) ctx.onChange("shadows", applyShadows);
 
   ctx.lights = api; // A6-internal seam: weather.update drives _tick
   return api;
