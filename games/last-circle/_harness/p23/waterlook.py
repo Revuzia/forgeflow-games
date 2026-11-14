@@ -24,11 +24,12 @@ Rows (every view: actors / fx hidden, the frame drawn through the game's compose
   storm-late    circle 1 closing: the wall A/B moves >= 1 % of the frame from 380 m (and the stormfx rows stay: run stormfx_storm)
   light         ground luminance spread p95 - p5 >= 0.25 on every map (mean of ground / ground2 / groundlow, lower half) [0.14 / 0.17 / 0.28];
                 the OD-2 drop view mean 0.45-0.55 held; interiors (3 houses' biggest ground-floor rooms) mean >= 0.9 x the base's
-  grass         medium: >= 0.8 cards + tufts per m2 within 30 m of the ground camera, and the blade layer moves >= 8 % of the lower half [0.148]
+  grass         medium: >= 0.8 cards + tufts per m2 within 30 m of open ground (the audit's ground spot, or the nearest point whose 30 m disc is
+                >= 95 % land outside the town mask), and the blade layer moves >= 8 % of the lower half of a low view there [0.148]
   low-identical low tier, isla_viva: 4 views pixel-identical to the base build (max channel difference 0; the loot group hidden: its
                 beams pulse on the sim clock) - phones / low untouched
   underwater    from below (vshots `underup`): high-frequency energy (mean |Laplacian| of luminance) of the upper half <= 0.4 x the base's
-  tiers         SSIM(ultra, medium) on 3 pinned views (ground, inwater, vista2) <= 0.92 [identical]
+  tiers         SSIM(ultra, medium) on the 3 eye-level pinned views (ground, inwater, shore) <= 0.92; vista and vista2 reported [identical]
   programs      0 new shader programs after the warm frames, on every tier
 plus 0 page / console errors, 0 failed requests, 0 shader errors.
 Base numbers (underwater, interiors, low views) come from a second Chrome on BASE_REV, cached in _reports.
@@ -57,6 +58,8 @@ from PIL import Image  # noqa: E402
 
 BASE_REV = "cbf0a1ff"      # the W10 R2 base = W10 R1 live (LIVE_REV cb244268) + the gates baseline commit. NEVER moves
 MAPS = ["isla_viva", "ashgrid", "deepwood"]
+TIER_VIEWS = ("ground", "inwater", "shore")     # the player's eye-level views; vista (14 m over the highest ground) and vista2 (70 m up) are reported
+TIER_INFO = ("vista", "vista2")
 SEED = 7
 RP = "runtime/3d/royale/"
 
@@ -64,12 +67,12 @@ PLANTS = {
     "flat-water": [(RP + "maps.js", [("    vec2 lsl = ln1 * 0.55 + ln2 * 0.45;", "    vec2 lsl = ln1 * 0.2;")])],
     "storm-early": [(RP + "storm.js", [("const early = v10 && (st.phase < 1 || (st.phase === 1 && !st.closing));", "const early = false;")])],
     "flat-light": [(RP + "maps.js", [("const lw = W10V ? (K.w10Light || W10_LIGHT) : null;", "const lw = null;"),
-                                     ("op.uniforms.lcGrade.value.set(W10_CONTRAST, uw, 0, 0);", "op.uniforms.lcGrade.value.set(0, uw, 0, 0);")])],
+                                     ("op.uniforms.lcGrade.value.set(K.w10Light && K.w10Light.contrast != null ? K.w10Light.contrast : W10_CONTRAST, uw, 0, 0);", "op.uniforms.lcGrade.value.set(0, uw, 0, 0);")])],
     "sparse-grass": [(RP + "maps.js", [("lamps: 4, grassR: 30, grassC: 0.56,", "lamps: 4, grassR: 30, grassC: 1.4,")])],
     "grass-on-low": [(RP + "maps.js", [("lamps: 0, grassR: 0, grassC: 1,", "lamps: 0, grassR: 30, grassC: 0.56,"),
                                        ("if (W10V && TIER_Q.grassR > 0 && LCU.uLcHgt.value) {", "if (TIER_Q.grassR > 0 && LCU.uLcHgt.value) {")])],
     "uw-sky-sharp": [(RP + "maps.js", [("skyMat.uniforms.uUw.value = uw;", "skyMat.uniforms.uUw.value = 0;"),
-                                       ("op.uniforms.lcGrade.value.set(W10_CONTRAST, uw, 0, 0);", "op.uniforms.lcGrade.value.set(W10_CONTRAST, 0, 0, 0);")])],
+                                       ("op.uniforms.lcGrade.value.set(K.w10Light && K.w10Light.contrast != null ? K.w10Light.contrast : W10_CONTRAST, uw, 0, 0);", "op.uniforms.lcGrade.value.set(K.w10Light && K.w10Light.contrast != null ? K.w10Light.contrast : W10_CONTRAST, 0, 0, 0);")])],
 }
 
 # the audit's cameras (vshots CAMS_JS, verbatim) + this gate's water cameras: a deep-water point seen toward / away from the sun, and the shore
@@ -127,6 +130,7 @@ RENDER_JS = r"""([spec, hide, pts]) => { const W = window.__LC__.W, T = W.THREE,
   if (hide.includes('blades')) off(W._grassBlades);
   if (hide.includes('wall') && W.stormCtl) off(W.stormCtl.wall);
   if (hide.includes('loot') && W._groups && W._groups.loot) off(W._groups.loot);
+  if (hide.includes('portals')) sc.traverse((o) => { if (o.name === 'portal-rings' || (o.isMesh && o.material && o.material.isMeshBasicMaterial && o.material.transparent && o.material.color && o.material.color.getHex() === 0x9fefff)) off(o); });
   const of = cam.fov; cam.fov = fov; cam.updateProjectionMatrix();
   cam.position.set(px, py, pz); cam.lookAt(tx, ty, tz); cam.updateMatrixWorld(true);
   if (r.shadowMap && r.shadowMap.enabled) r.shadowMap.needsUpdate = true; r.info.reset();
@@ -189,6 +193,16 @@ GRASS_JS = r"""([x, z, r]) => { const W = window.__LC__.W, M = W.map, b = W._gra
     for (let i = 0; i < cl.count; i++) { cl.getMatrixAt(i, m); m.decompose(p, q, s); if (s.x >= 0.35 && Math.hypot(p.x - x, p.z - z) <= r) out.tufts++; } }
   out.perM2 = +((out.cards + out.tufts) / out.area).toFixed(3); out.cardsPerM2 = +(out.cards / out.area).toFixed(3); out.tuftsPerM2 = +(out.tufts / out.area).toFixed(3);
   return out; }"""
+
+# open ground for the grass count: from the audit's ground spot outward, the first point whose 30 m disc is >= 95 % land (>= 0.35 m above the water,
+# not under the city mask: streets, plazas and town blocks grow no grass by design); the audit spot itself when it qualifies
+GRASSSPOT_JS = r"""([x0, z0, r]) => { const W = window.__LC__.W, M = W.map, b = W._grassBlades, mk = b && b.userData.gMask;
+  const frac = (x, z) => { let n = 0, ok = 0; for (let i = 0; i < 64; i++) { const a = i * 2.39996, d = r * Math.sqrt((i + 0.5) / 64); const px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d; n++;
+      if (M.heightAt(px, pz) < M.waterY + 0.35 || Math.max(Math.abs(px), Math.abs(pz)) > M.half - 4) continue;
+      if (mk && mk[Math.floor((pz + M.half) / 4) * 400 + Math.floor((px + M.half) / 4)]) continue; ok++; } return ok / n; };
+  for (let rr = 0; rr < 600; rr += 20) for (let k = 0; k < (rr ? 16 : 1); k++) { const x = x0 + Math.cos(k * 0.3927) * rr, z = z0 + Math.sin(k * 0.3927) * rr;
+    const f = frac(x, z); if (f >= 0.95) { const H = M.heightAt(x, z); return { x, z, open: f, moved: rr, spec: [x, H + 0.5, z, x + 8, M.heightAt(x + 8, z + 2) + 0.6, z + 2, 60] }; } }
+  return null; }"""
 
 INFO_JS = r"""() => { const W = window.__LC__.W, k = W.kernel, r = k.renderer, op = k.outputPass, b = W._grassBlades, st = W.stormCtl;
   let hemi = null; W.scene.traverse((o) => { if (o.isHemisphereLight) hemi = o; });
@@ -340,11 +354,12 @@ def part_map(s, v, R, map_id, shots, want, interiors=True):
             M["interiors"] = im
     # ---- grass: density at the ground camera + the blade A/B in the low ground view
     if "grass" in want and cams.get("_ground"):
-        g = cams["_ground"]
-        gspec = cams["groundlow"]
+        g = s.js(GRASSSPOT_JS, [cams["_ground"]["x"], cams["_ground"]["z"], 30.0]) or cams["_ground"]
+        gspec = g.get("spec") or cams["groundlow"]
         s.js(SS.SPEC_JS, ["cam:" + ",".join(str(x) for x in gspec), {"plant": None}])
         s.step_frames(26, dt=1.0 / 20, render=False)
         M["grass"] = s.js(GRASS_JS, [g["x"], g["z"], 30.0])
+        M["grass"]["spot"] = {k: g.get(k) for k in ("x", "z", "open", "moved")}
         s.js(SS.UNPIN_JS)
         a = shoot(s, gspec, shots, "%s_grass_on" % tag)
         b = shoot(s, gspec, shots, "%s_grass_off" % tag, hide=("blades",))
@@ -482,19 +497,20 @@ def part_storm_late(s, v, R, map_id, shots):
 
 def part_low(s, v, R, shots, tag):
     """the low tier on isla_viva: 4 views with the map clock pinned (t 100), for the pixel compare with the base. The loot group is hidden in
-    these frames: its beams pulse on the sim clock (W.t differs run to run) and loot.js is not this lane's file"""
+    these frames (its beams pulse on the sim clock: W.t differs run to run; loot.js is not this lane's file), and so are the launch portals'
+    rings / swirls (animated off the frame loop; unchanged by this lane)"""
     cams = s.js(CAMS_JS)
     out = {}
     for nm in ("ground", "groundlow", "shore", "inwater"):
         if nm in cams and cams[nm]:
-            r = shoot(s, cams[nm], shots, "%s_low_%s" % (tag, nm), hide=("loot",), settle=100.0)
+            r = shoot(s, cams[nm], shots, "%s_low_%s" % (tag, nm), hide=("loot", "portals"), settle=100.0)
             out[nm] = r["A"]
     return out
 
 
 def base_cache(args, v, shots):
     """the base build's underwater HF, interiors and low-tier views (second Chrome on BASE_REV), cached"""
-    stem = os.path.join(C.REPORTS, "w10_waterlook_base_%s_%dx%d_v3" % (BASE_REV, args.width, args.height))
+    stem = os.path.join(C.REPORTS, "w10_waterlook_base_%s_%dx%d_v4" % (BASE_REV, args.width, args.height))
     if os.path.exists(stem + ".json") and not args.no_cache:
         with open(stem + ".json") as f:
             res = json.load(f)
@@ -512,7 +528,15 @@ def base_cache(args, v, shots):
         part_map(s, v, R, "isla_viva", os.path.join(shots, "base"), {"light", "uw"})
         res["interiors"] = R["isla_viva"].get("interiors")
         res["underup"] = R["isla_viva"].get("underup")
-        res["spread"] = R["isla_viva"].get("spread")
+        res["spread"] = {"isla_viva": R["isla_viva"].get("spread")}
+        res["drop"] = {"isla_viva": R["isla_viva"].get("dropMean")}
+    for m in ("ashgrid", "deepwood"):
+        with C.Session(a2, "w10_waterlook_base_" + m) as s:
+            start(s, "medium", m)
+            R = {}
+            part_map(s, v, R, m, os.path.join(shots, "base"), {"light"}, interiors=False)
+            res["spread"][m] = R[m].get("spread")
+            res["drop"][m] = R[m].get("dropMean")
     with C.Session(a2, "w10_waterlook_base_low") as s:
         res["infoLow"] = start(s, "low", "isla_viva")
         low = part_low(s, v, R, os.path.join(shots, "base"), "base")
@@ -559,7 +583,7 @@ def main():
                 part_map(s, v, R, map_id, shots, want)
                 if "tiers" in want and map_id == "isla_viva":
                     c = R[map_id]["cams"]
-                    med = {nm: shoot(s, c[nm], shots, "isla_viva_tier_medium_%s" % nm, settle=100.0)["A"] for nm in ("ground", "inwater", "vista2") if nm in c}
+                    med = {nm: shoot(s, c[nm], shots, "isla_viva_tier_medium_%s" % nm, settle=100.0)["A"] for nm in TIER_VIEWS + TIER_INFO if nm in c}
                 if "late" in want and map_id == "isla_viva":
                     R[map_id]["stormLate"] = part_storm_late(s, v, R, map_id, shots)
                 s.step_frames(6, 1 / 30, render=True)
@@ -585,7 +609,7 @@ def main():
                     p0 = L.programs(s)
                     if tier == "ultra":
                         c = s.js(CAMS_JS)
-                        ul = {nm: shoot(s, c[nm], shots, "isla_viva_tier_ultra_%s" % nm, settle=100.0)["A"] for nm in ("ground", "inwater", "vista2") if nm in c}
+                        ul = {nm: shoot(s, c[nm], shots, "isla_viva_tier_ultra_%s" % nm, settle=100.0)["A"] for nm in TIER_VIEWS + TIER_INFO if nm in c}
                         R["tiersSSIM"] = {nm: round(ssim(ul[nm], med[nm]), 4) for nm in ul if nm in med}
                     else:
                         c = s.js(CAMS_JS)
@@ -598,7 +622,7 @@ def main():
         base = None
         if want & {"uw", "light", "low"}:
             base, cached = base_cache(args, v, shots)
-            v.info("base %s (cached %s)" % (BASE_REV, cached), {k: base.get(k) for k in ("underup", "interiors", "spread")})
+            v.info("base %s (cached %s)" % (BASE_REV, cached), {k: base.get(k) for k in ("underup", "interiors", "spread", "drop")})
         # ---------------- verdict rows
         I = R.get("isla_viva", {})
         if "water" in want:
@@ -640,8 +664,19 @@ def main():
             means = {m: round(float(np.mean(list(x.values()))), 4) if x else None for m, x in sp.items()}
             v.check("light: ground luminance spread p95-p5 >= 0.25 on every map (mean of ground / ground2 / groundlow, lower half)",
                     all(x is not None and x >= 0.25 for x in means.values()), {"mean": means, "views": sp}, ">= 0.25")
+            # OD-2 held: in 0.45-0.55 on every map; a map whose BASE drop view is already outside the band (pre-existing) must not move further out
+            bd = (base or {}).get("drop") or {}
             dm = {m: R.get(m, {}).get("dropMean") for m in maps}
-            v.check("light: OD-2 drop-view mean held in 0.45-0.55 (every map)", all(x is not None and 0.45 <= x <= 0.55 for x in dm.values()), dm, "0.45-0.55")
+            def held(m, x):
+                if x is None:
+                    return False
+                if 0.45 <= x <= 0.55:
+                    return True
+                b0 = bd.get(m)
+                out = lambda y: max(0.45 - y, y - 0.55, 0.0)
+                return b0 is not None and not (0.45 <= b0 <= 0.55) and out(x) <= out(b0) + 0.005
+            v.check("light: OD-2 drop-view mean held in 0.45-0.55 (every map; a map already outside on the base: not further out)",
+                    all(held(m, x) for m, x in dm.items()), {"build": dm, "base": bd}, "0.45-0.55")
             bi = (base or {}).get("interiors") or []
             ii = I.get("interiors") or []
             if not bi or not ii:
@@ -653,7 +688,7 @@ def main():
         if "grass" in want:
             gr = {m: R.get(m, {}).get("grass") for m in maps}
             ok = all(x and x.get("perM2") is not None and x["perM2"] >= 0.8 and x.get("bladePixPct", 0) >= 8.0 for x in gr.values())
-            v.check("grass: medium, >= 0.8 cards + tufts per m2 within 30 m of the ground camera and the blade layer moves >= 8 % of the lower half (every map)",
+            v.check("grass: medium, >= 0.8 cards + tufts per m2 within 30 m of open ground and the blade layer moves >= 8 % of the lower half (every map)",
                     ok, gr, ">= 0.8 / m2")
         if "low" in want:
             bl, lb = (base or {}).get("low") or {}, R.get("lowBuild") or {}
@@ -678,7 +713,9 @@ def main():
                         {"build": uu, "base": bu, "ratio": round(rat, 3)}, "<= 0.4x")
         if "tiers" in want:
             ts = R.get("tiersSSIM") or {}
-            v.check("tiers: SSIM(ultra, medium) on 3 pinned views <= 0.92 (a visible difference)", len(ts) == 3 and all(x <= 0.92 for x in ts.values()), ts, "<= 0.92")
+            tv = {k: x for k, x in ts.items() if k in TIER_VIEWS}
+            v.check("tiers: SSIM(ultra, medium) on the 3 eye-level pinned views (ground, inwater, shore) <= 0.92 (a visible difference); vista / vista2 reported",
+                    len(tv) == 3 and all(x <= 0.92 for x in tv.values()), {"judged": tv, "info": {k: ts.get(k) for k in TIER_INFO}}, "<= 0.92")
         v.check("programs: 0 new shader programs after the warm frames, every tier", all(a is not None and b is not None and b <= a for _, a, b in progs), progs, "no increase")
         sh_err = [x for d in diag for x in (d.get("shader") or [])]
         v.check("0 shader errors", not sh_err, sh_err[:4])

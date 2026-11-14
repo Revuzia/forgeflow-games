@@ -51,15 +51,17 @@ export const MAPS = {
     grade: { exposure: 0.72, ground: 0.6, water: 0.6 } },
   ashgrid:   { name: "Savanna", theme: "savanna", sky: "#e5cf9f", zenith: "#6585ab", cloud: 0.54, fog: 0.0019, themeColor: "#e0854a", water: false,
     sun: { pos: [-120, 105, 45], color: 0xffe6b4, intensity: 2.25 }, hemi: { sky: 0xf0e3c4, ground: 0xb59a63, intensity: 1.15 },
-    grade: { exposure: 0.80, ground: 0.6, water: 0.6 } },
+    grade: { exposure: 0.80, ground: 0.6, water: 0.6 }, w10Light: { hemi: 0.6, sun: 1.18, contrast: 0.7 }, w10Grass: 1.7 },   // (W10 R2A: the flattest map - its open ground got the least of the hemisphere cut)
   deepwood:  { name: "Deepwood", theme: "forest", sky: "#acc5dc", zenith: "#506e9b", cloud: 0.72, fog: 0.0020, themeColor: "#7fb069", water: true,
     sun: { pos: [-60, 150, -80], color: 0xfff6e6, intensity: 1.95 }, hemi: { sky: 0xd2e7ff, ground: 0x63705a, intensity: 1.35 },
     grade: { exposure: 1.14, ground: 0.6, water: 0.6 } },
 };
-// W10 R2A (visuals 5): the desktop medium+ light balance - hemisphere fill x0.75, sun x1.10 (a map may override with its own `w10Light`) - and the
+// W10 R2A (visuals 5): the desktop medium+ light balance - hemisphere fill x0.72, sun x1.12 (a map may override with its own `w10Light`) - and the
 // gentle contrast S-curve the output pass lays over it (lcGrade.x; 0 = off = bit-identical). Low and touch keep the W10 R1 numbers exactly.
-const W10_LIGHT = { hemi: 0.75, sun: 1.10 };
-const W10_CONTRAST = 0.3;
+const W10_LIGHT = { hemi: 0.72, sun: 1.12 };
+const W10_CONTRAST = 0.4;
+const W10_CLOUD_SHADOW = 0.62;          // (was 0.5: a cloud's shadow takes this share of the sun - with more sun it reads as a patch of shade again)
+const W10_INDOOR = 1.22;                // the furnished rooms' albedo lift (HG_INDOOR x this) against the lower fill
 // LC-04 / owner decision OD-2 (2026-10-20, grade "G2 Balanced" from the P1-G A/B sheets): the drop view was 2-2.5x the reference's luminance (0.67-0.81 vs
 // 0.32). G2 darkens the GROUND and the WATER (terrain, city ground and tufts x `ground`, water x `water`) and cuts the exposure a little, leaving the sun, the
 // sky fill and the environment as they were, so a room keeps its light (the other grades took Isla Viva's interiors to 0.07-0.08). Target: the drop view's
@@ -490,6 +492,9 @@ uniform sampler2D uLcFoam;
 #ifdef LC_WET
 uniform vec4 uLcWetK;
 #endif
+#if defined( LC_WET_HI ) && !defined( LC_WATER2 )
+uniform vec3 uLcSkyH; uniform vec3 uLcSkyZ;
+#endif
 #ifdef LC_WATER2
 uniform sampler2D uLcWN; uniform vec4 uLcWaterK; uniform vec3 uLcSun; uniform vec3 uLcSkyH; uniform vec3 uLcSkyZ;
 vec3 lcWN = vec3( 0.0, 1.0, 0.0 ); float lcFoamA = 0.0;
@@ -538,7 +543,7 @@ const LC_FRAG_ALBEDO = `
     vec2 ln2 = texture2D( uLcWN, mat2( 0.8, -0.6, 0.6, 0.8 ) * lp * 0.041 - lt * vec2( 0.007, 0.013 ) ).rg * 2.0 - 1.0;
     vec2 lsl = ln1 * 0.55 + ln2 * 0.45;
 #ifdef LC_WATER_HI
-    lsl = lsl * 0.8 + ( texture2D( uLcWN, mat2( 0.6, 0.8, -0.8, 0.6 ) * lp * 0.29 + lt * vec2( -0.031, 0.024 ) ).rg * 2.0 - 1.0 ) * 0.3;
+    lsl = lsl * 0.8 + ( texture2D( uLcWN, mat2( 0.6, 0.8, -0.8, 0.6 ) * lp * 0.29 + lt * vec2( -0.031, 0.024 ) ).rg * 2.0 - 1.0 ) * 0.45;
 #endif
     lsl *= uLcWaterK.x * mix( 1.0, 0.45, smoothstep( 30.0, 500.0, ldc ) ) * ( cameraPosition.y < vLcW.y ? 0.35 : 1.0 );   // (from below: a calmer ceiling)
     lcWN = normalize( vec3( lsl.x, 1.0, -lsl.y ) );
@@ -552,10 +557,14 @@ const LC_FRAG_ALBEDO = `
     float lsw = lsd + 0.4 * sin( lt * 0.85 + dot( lp, vec2( 0.11, 0.07 ) ) );
     float lpat = texture2D( uLcFoam, lp * 0.19 + lt * vec2( 0.011, -0.008 ) ).r;
     float lcore = ( 1.0 - smoothstep( 0.6, 1.6, lsw ) ) * step( 0.0, ldep );
-    float lfo = lcore * smoothstep( 0.12, 0.5, lpat + lcore * 0.3 ) * ( 0.75 + 0.25 * lcore );
+    float lfo = max( ( 1.0 - smoothstep( 0.3, 0.75, lsw ) ) * step( 0.0, ldep ), lcore * smoothstep( 0.12, 0.5, lpat + lcore * 0.3 ) * ( 0.75 + 0.25 * lcore ) );   // a solid lip at the waterline, broken foam beyond
     float lph = ldep * 11.0 - lt * 1.6;
     float law = clamp( fwidth( lph ) - 0.6, 0.0, 1.0 );
+#ifdef LC_WATER_HI
+    float lline = ( 1.0 - smoothstep( 0.0, 1.4, ldep ) ) * mix( 0.5 + 0.5 * sin( lph ), 0.5, law ) * smoothstep( 0.25, 0.7, lpat ) * 0.7;   // (high / ultra: surf further out)
+#else
     float lline = ( 1.0 - smoothstep( 0.0, 0.7, ldep ) ) * mix( 0.5 + 0.5 * sin( lph ), 0.5, law ) * smoothstep( 0.3, 0.75, lpat ) * 0.55;
+#endif
     lcFoamA = clamp( max( lfo, lline ) * uLcWaterK.y, 0.0, 1.0 );
     diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.93, 0.95, 0.94 ), lcFoamA );
     diffuseColor.a = max( mix( 0.62, diffuseColor.a, smoothstep( 0.0, 2.5, ldep ) ), lcFoamA );
@@ -630,6 +639,18 @@ if ( lcWB > 0.0 ) {
   outgoingLight = lx / uLcWear.z;
 }
 #endif
+#ifdef LC_WET_HI
+{
+  // W10 R2A high / ultra: the wet band (within ~1 m above the waterline) is glossy - it reflects the sky at grazing angles
+  float lhw = vLcW.y - uLcWater.x;
+  float lwet = ( 1.0 - smoothstep( 0.3, 1.1, lhw ) ) * step( -0.05, lhw );
+  if ( lwet > 0.0 ) {
+    vec3 lv = normalize( cameraPosition - vLcW );
+    float lfr = 0.04 + 0.96 * pow( 1.0 - clamp( lv.y, 0.0, 1.0 ), 5.0 );
+    outgoingLight = mix( outgoingLight, mix( uLcSkyH, uLcSkyZ, 0.25 ), clamp( lfr * lwet * 1.2, 0.0, 0.85 ) );
+  }
+}
+#endif
 #ifdef LC_WATER2
 {
   // W10 R2A water seen from above: a fresnel mix toward the sky the wave normal reflects (the dome's own horizon -> zenith ramp; high / ultra add the cloud
@@ -645,7 +666,7 @@ if ( lcWB > 0.0 ) {
       vec2 luv = lr.xz / ( lr.y + 0.12 ) * 0.5 + uLcSkyCl.xy;
       float lcn = texture2D( uLcCloud, luv ).r;
       float lcm = smoothstep( uLcSkyCl.z, uLcSkyCl.z + 0.4, lcn ) * smoothstep( 0.0, 0.1, lr.y );
-      lsky = mix( lsky, mix( uLcSkyH, vec3( 1.0 ), 0.8 ), lcm * uLcSkyCl.w );
+      lsky = mix( lsky, mix( uLcSkyH, vec3( 1.0 ), 0.9 ) * 1.1, lcm * uLcSkyCl.w );
     }
 #endif
     outgoingLight = mix( outgoingLight, lsky, lfr );
@@ -657,7 +678,7 @@ if ( lcWB > 0.0 ) {
 #endif`;
 const LC_UNIFORMS = { LC_WIND: ["uLcT", "uLcWind"], LC_CLOUD: ["uLcCloud", "uLcCloudK", "uLcCloudOff"], LC_HGT: ["uLcHgt", "uLcHgtK"], LC_AO: ["uLcAO", "uLcAOK"],
   LC_GRIME: ["uLcGrime", "uLcGrimeK"], LC_WEAR: ["uLcWear"], LC_WATER: ["uLcWater", "uLcShallow", "uLcDeep"],
-  LC_WATER2: ["uLcWN", "uLcFoam", "uLcWaterK", "uLcSun", "uLcSkyH", "uLcSkyZ"], LC_WATER_HI: ["uLcCloud", "uLcSkyCl"], LC_WET: ["uLcWater", "uLcFoam", "uLcWetK"] };
+  LC_WATER2: ["uLcWN", "uLcFoam", "uLcWaterK", "uLcSun", "uLcSkyH", "uLcSkyZ"], LC_WATER_HI: ["uLcCloud", "uLcSkyCl"], LC_WET: ["uLcWater", "uLcFoam", "uLcWetK"], LC_WET_HI: ["uLcSkyH", "uLcSkyZ"] };
 /** Patch a MeshStandardMaterial (or a MeshDepthMaterial for the wind) with the world-shader layer. `defs` = { LC_CLOUD: "", LC_WEAR: "", LC_WIND_H: "6.5", ... }
  *  (LC_WEAR and LC_WATER need LC_HGT, which is added). Chains any onBeforeCompile the material already had (the terrain photo, the struct mix); the program
  *  cache key carries the previous key and the define set, so every match reuses the same programs. Idempotent per material. */
@@ -1621,7 +1642,7 @@ export async function buildMap(W, mapId) {
   }
   function buildTerrain() {
     if (photo && terrMat.map) patchTerrainPhoto(terrMat, photo); else photo = null;     // the splat attribute only exists with the patched program
-    if (LCFX) lcPatch(terrMat, Object.assign({ LC_CLOUD: "", LC_AO: "" }, W10V && K.water ? { LC_WET: "" } : {}));   // LC-74 cloud shadows + LC-41 contact AO (medium and up); W10 R2A: wet sand + seabed caustics (desktop)
+    if (LCFX) lcPatch(terrMat, Object.assign({ LC_CLOUD: "", LC_AO: "" }, W10V && K.water ? Object.assign({ LC_WET: "" }, TIER_Q.waterHi ? { LC_WET_HI: "" } : {}) : {}));   // LC-74 cloud shadows + LC-41 contact AO (medium and up); W10 R2A: wet sand + seabed caustics (desktop)
     terrain = new THREE.Group();
     terrain.name = "terrain";
     const tChunks = [];
@@ -1708,7 +1729,7 @@ export async function buildMap(W, mapId) {
       const spw = (K.sun || MAPS.isla_viva.sun).pos;
       LCU.uLcSun.value.set(spw[0], spw[1], spw[2]).normalize();
       LCU.uLcSkyH.value.set(K.sky); LCU.uLcSkyZ.value.set(K.zenith || MAPS.isla_viva.zenith);
-      LCU.uLcSkyCl.value.set(0, 0, 1 - (K.cloud != null ? K.cloud : 0.45), TIER_Q.waterHi ? 0.85 : 0);
+      LCU.uLcSkyCl.value.set(0, 0, 1 - (K.cloud != null ? K.cloud : 0.45), TIER_Q.waterHi ? 1.0 : 0);
       LCU.uLcWaterK.value.set(0, 1, 6, 1.5);                          // (flat until the normal map is in: set when it loads, below)
     }
     const water = new THREE.Mesh(wgeo, wmat);
@@ -1857,7 +1878,7 @@ export async function buildMap(W, mapId) {
       const wr = W.SIM.mulberry32(seed ^ 0x77d1a5), wa = wr() * Math.PI * 2;
       LCU.uLcWind.value.set(Math.cos(wa), Math.sin(wa), LCFX ? 1 : 0, 0);
       LCU.uLcCloud.value = skyMat.uniforms.tNoise.value;
-      LCU.uLcCloudK.value.set(sunDir.x / Math.max(0.2, sunDir.y), sunDir.z / Math.max(0.2, sunDir.y), 1.02 - (K.cloud != null ? K.cloud : 0.5) * 0.62, LCFX ? 0.5 : 0);
+      LCU.uLcCloudK.value.set(sunDir.x / Math.max(0.2, sunDir.y), sunDir.z / Math.max(0.2, sunDir.y), 1.02 - (K.cloud != null ? K.cloud : 0.5) * 0.62, LCFX ? (W10V ? W10_CLOUD_SHADOW : 0.5) : 0);   // (W10 R2A desktop: a cloud takes 62 % of the sun)
       LCU.uLcCloudOff.value.copy(cloudOff);
     }
     const sky = new THREE.Mesh(skyGeo, skyMat);
@@ -1910,7 +1931,7 @@ export async function buildMap(W, mapId) {
         const uw = W._uw > 0.001 && W.phase !== "menu" ? Math.min(1, W._uw) : 0;
         skyMat.uniforms.uUw.value = uw;
         const op = W.kernel && W.kernel.outputPass;
-        if (op && op.uniforms && op.uniforms.lcGrade) op.uniforms.lcGrade.value.set(W10_CONTRAST, uw, 0, 0);
+        if (op && op.uniforms && op.uniforms.lcGrade) op.uniforms.lcGrade.value.set(K.w10Light && K.w10Light.contrast != null ? K.w10Light.contrast : W10_CONTRAST, uw, 0, 0);
       }
       LCU.uLcT.value = t; LCU.uLcWater.value.y = t;
       LCU.uLcCloudOff.value.set(cloudOff.x + t * 0.0072 * LCU.uLcWind.value.x, cloudOff.y + t * 0.0072 * LCU.uLcWind.value.y);   // ~7 m/s of drift
@@ -4308,7 +4329,8 @@ export async function buildMap(W, mapId) {
     plaster: "stucco", stucco: "stucco", fabric: "stucco", ceramic: "stucco", plank: "plank", plank_in: "plank", floor_wood: "plank", wood: "plank" };
   // the indoor ambient term: interior faces and furniture take this share of their colour (lamp panels keep theirs). Deepwood's forest light is darker than the
   // other maps' and its lodges are timber inside: at 0.8 a third of a lodge room's pixels read near-black from its doorway (interiorcheck light: dark share 0.31-0.36)
-  const HG_INDOOR = mapId === "deepwood" ? 0.95 : 0.8;
+  // W10 R2A (desktop medium+): the hemisphere fill is x0.75 outside, and indoors that fill is most of the light - the rooms are lifted back (gate: interiors >= 0.9x)
+  const HG_INDOOR = (mapId === "deepwood" ? 0.95 : 0.8) * (W10V ? W10_INDOOR : 1);
   const HG_TKI = { s: 0, plank: 1, stucco: 2 };   // dualStructMaterial's texture index per struct kind (furniture wears the near-flat stucco grain unless it is wood)
   const HG_FURN_CELL = 32, HG_FURN_DIST = TIER_Q.furnD;    // (60 m; high 70, ULTRA 95)
   const _hgc = new THREE.Color(), hgColCache = new Map();
@@ -6098,7 +6120,8 @@ export async function buildMap(W, mapId) {
     // W10 R2A: the water textures (desktop medium+), in before the first frame; a failed load = flat water, no foam pattern, no caustics
     const wt = await waterTexPromise;
     LCU.uLcWN.value = wt ? wt.normal : null; LCU.uLcFoam.value = wt ? wt.foam : null;
-    if (W10V) { LCU.uLcWaterK.value.x = wt ? 0.55 : 0; LCU.uLcWaterK.value.y = 1; LCU.uLcWetK.value.y = wt ? 1.1 : 0; }
+    if (W10V) { LCU.uLcWaterK.value.x = wt ? (TIER_Q.waterHi ? 0.7 : 0.55) : 0;   // (high / ultra: a choppier, more sparkling sea)
+                LCU.uLcWaterK.value.y = 1; LCU.uLcWaterK.value.w = TIER_Q.waterHi ? 2.2 : 1.5; LCU.uLcWetK.value.y = wt ? 1.1 : 0; }   // (w: high / ultra reflect the sky more mirror-like)
   }
   buildTerrain();
   emitRoads();
@@ -7206,7 +7229,7 @@ export async function buildMap(W, mapId) {
     const maskTex = lcOwn(new THREE.DataTexture(mpx, MN, MN, THREE.RedFormat, THREE.UnsignedByteType));
     maskTex.magFilter = THREE.NearestFilter; maskTex.minFilter = THREE.NearestFilter; maskTex.needsUpdate = true;
     const GU = { uGrCam: { value: new THREE.Vector2() }, uGrEye: { value: new THREE.Vector3() }, uGrK: { value: new THREE.Vector4(GR, GC, waterY + 0.35, HALF - 4) },
-      uGrTint: { value: tintTex }, uGrMask: { value: maskTex } };
+      uGrTint: { value: tintTex }, uGrMask: { value: maskTex }, uGrH: { value: K.w10Grass || 1 } };   // (uGrH: the map's blade height - Savanna's dry grass stands taller)
     const gMat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0, side: THREE.DoubleSide });
     gMat.name = "grass-blades";
     gMat.customProgramCacheKey = () => "lc-grass-v1";
@@ -7214,7 +7237,7 @@ export async function buildMap(W, mapId) {
       Object.assign(sh.uniforms, GU, { uLcHgt: LCU.uLcHgt, uLcHgtK: LCU.uLcHgtK, uGrT: LCU.uLcT, uGrWind: LCU.uLcWind });
       sh.vertexShader = sh.vertexShader.replace("#include <common>", `#include <common>
 attribute vec2 aCell;
-uniform vec2 uGrCam; uniform vec3 uGrEye; uniform vec4 uGrK; uniform sampler2D uGrTint; uniform sampler2D uGrMask;
+uniform vec2 uGrCam; uniform vec3 uGrEye; uniform vec4 uGrK; uniform sampler2D uGrTint; uniform sampler2D uGrMask; uniform float uGrH;
 uniform sampler2D uLcHgt; uniform vec4 uLcHgtK; uniform float uGrT; uniform vec4 uGrWind;
 varying vec3 vGrC;
 float grH( vec2 p ) { vec3 p3 = fract( vec3( p.xyx ) * 0.1031 ); p3 += dot( p3, p3.yzx + 33.33 ); return fract( ( p3.x + p3.y ) * p3.z ); }`)
@@ -7226,10 +7249,10 @@ vec2 guv = ( wp + ${HALF.toFixed(1)} ) / ${SIZE.toFixed(1)};
 float gs = ( 1.0 - smoothstep( uGrK.x * 0.72, uGrK.x, length( wp - uGrEye.xz ) ) ) * step( uGrK.z, gy ) * step( texture2D( uGrMask, guv ).r, 0.5 )
          * step( max( abs( wp.x ), abs( wp.y ) ), uGrK.w ) * ( 0.6 + 0.7 * gh3 );
 float gca = cos( gh4 * 6.2832 ), gsa = sin( gh4 * 6.2832 ), gtip = position.y;
-vec3 transformed = vec3( position.x * gca - position.z * gsa, position.y, position.x * gsa + position.z * gca ) * gs;
+vec3 transformed = vec3( position.x * gca - position.z * gsa, position.y * uGrH, position.x * gsa + position.z * gca ) * gs;
 transformed.xz += uGrWind.xy * uGrWind.z * ( 0.6 * sin( uGrT * 1.7 + dot( wp, vec2( 0.31, 0.23 ) ) ) + 0.45 ) * gtip * gtip * 0.6 * gs;
 transformed += vec3( wp.x, gy, wp.y );
-vGrC = texture2D( uGrTint, guv ).rgb * mix( 0.78, 1.12, clamp( gtip / 0.4, 0.0, 1.0 ) ) * ( 0.88 + 0.24 * gh2 );`);
+vGrC = texture2D( uGrTint, guv ).rgb * mix( 0.36, 1.36, clamp( gtip / 0.4, 0.0, 1.0 ) ) * ( 0.8 + 0.4 * gh2 ) * mix( vec3( 1.0 ), vec3( 1.12, 1.08, 0.82 ), step( 0.78, gh1 ) );   // shaded root, sunlit tip; every 5th blade drier`);
       sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vGrC;")
         .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= vGrC;")
         // both faces lit as the ground under them (a DoubleSide back face flips its normal down: it read as a black spike)
