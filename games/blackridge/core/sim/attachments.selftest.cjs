@@ -225,6 +225,14 @@ async function main() {
     }
   }
   {
+    // [polish v149] RAPID FIRE's REAL gain (delivered rounds, 60 Hz) is +8-12% on every gun
+    for (const w of ["warden", "vesper", "breaker", "corvus", "pike"]) {
+      const c0 = A.cadenceRpm(WEAPONS[w]), c1 = A.cadenceRpm(A.effectiveWeapon(WEAPONS[w], w, ["rapidfire"]));
+      const g = c1 / c0 - 1;
+      ok(g >= 0.08 && g <= 0.12, `RAPID FIRE ${w}: delivered ${c0.toFixed(1)} -> ${c1.toFixed(1)} rpm (+${(g * 100).toFixed(1)}%, band 8-12%)`);
+    }
+  }
+  {
     // recoil: the sim owns the climb headless (simRecoil) -> measure the bullet's pitch drift over a burst
     // full ADS (warden ads spread 0): each bullet leaves along aim + its pattern step
     const climb = (a) => { const g = gunSim("warden", a); g.p.weapon.mag = 999; run(g.sim, 40, cmd({ ads: true }));

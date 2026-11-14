@@ -48,11 +48,18 @@ export function createSkillRecord(opts = {}) {
     cache = r;
     try { if (store) store.setItem(SKILL_KEY, JSON.stringify(r)); } catch (_) { /* private window: play on */ }
   }
+  // another tab folded a match: forget the cached record
+  if (typeof window !== "undefined" && window.addEventListener && store === defaultStorage()) {
+    window.addEventListener("storage", (e) => { if (e && e.key === SKILL_KEY) cache = undefined; });
+  }
   const api = {
     record: () => load(),
     startTier: () => tierFromRecord(load()),
     fold(stats) {
       if (!stats) return load();
+      // [polish v149] fold onto what storage holds NOW (another tab may have
+      // folded a match since this one loaded): drop the cache, re-read, fold.
+      cache = undefined;
       const r = foldMatch(load(), stats);
       save(r);
       return r;

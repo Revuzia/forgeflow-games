@@ -82,7 +82,8 @@ function css() {
   flex-direction:column;line-height:1.1;}
 #tc-tac.hide{display:none;}
 #tc-tac b{font-weight:400;font-size:12px;color:#d9a441;}
-#tc-melee{width:44px;height:44px;right:calc(54px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));}
+/* [polish v149] was right 54 / bottom 14: under the page's corner controls (fullscreen / sound / pause) */
+#tc-melee{width:44px;height:44px;right:calc(206px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));}
 #tc-use{width:46px;height:46px;right:calc(204px + env(safe-area-inset-right));bottom:calc(210px + env(safe-area-inset-bottom));font-size:10px;}
 #tc-pause{width:40px;height:40px;left:calc(12px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));border-radius:8px;}
 #tc-score{width:40px;height:40px;left:calc(60px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));border-radius:8px;font-size:9px;}
@@ -190,8 +191,24 @@ export function createTouchControls(ctx) {
     input.state.sprint = sprint;
     stick.classList.toggle("sprint", sprint);
   }
+  // [polish v149] FULL MAP on touch: the minimap sits under the move zone, so a
+  // tap that lands on it opens the full map; while the map is open any tap on
+  // the move / look zones closes it (minimap.js publishes __BR_FULLMAP__)
+  function mapTap(e) {
+    const FM = globalThis.__BR_FULLMAP__;
+    if (!FM) return false;
+    if (FM.isOpen()) { FM.toggle(); e.preventDefault(); return true; }
+    const mm = document.getElementById("mm-wrap");
+    if (!mm || getComputedStyle(mm).display === "none") return false;
+    const r = mm.getBoundingClientRect();
+    if (r.width > 0 && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
+      FM.toggle(); e.preventDefault(); return true;
+    }
+    return false;
+  }
   moveZone.addEventListener("pointerdown", (e) => {
     goFullscreen();
+    if (!mv && mapTap(e)) return;
     if (mv) return;
     mv = { id: e.pointerId, x0: e.clientX, y0: e.clientY };
     try { moveZone.setPointerCapture(e.pointerId); } catch (er) { /* synthetic */ }
@@ -236,7 +253,12 @@ export function createTouchControls(ctx) {
     input.addLook(-dx * s, -dy * s * inv);
   }
   const lookEnd = (e) => { looks.delete(e.pointerId); };
-  lookZone.addEventListener("pointerdown", (e) => { goFullscreen(); lookStart(e, lookZone); e.preventDefault(); });
+  lookZone.addEventListener("pointerdown", (e) => {
+    goFullscreen();
+    const FM = globalThis.__BR_FULLMAP__;
+    if (FM && FM.isOpen()) { FM.toggle(); e.preventDefault(); return; }
+    lookStart(e, lookZone); e.preventDefault();
+  });
   lookZone.addEventListener("pointermove", lookMove);
   lookZone.addEventListener("pointerup", lookEnd);
   lookZone.addEventListener("pointercancel", lookEnd);
@@ -268,7 +290,16 @@ export function createTouchControls(ctx) {
   hold(B.crouch, () => { input.state.crouch = !input.state.crouch; });
   hold(B.reload, () => input.touchPress("reload"), () => input.touchRelease("reload"));
   hold(B.nade, () => input.touchPress("grenade"), () => input.touchRelease("grenade"));
-  hold(B.swap, () => { input.state.switchTo = "next"; });
+  // [polish v149] SWAP: tap = next weapon, hold = inspect (the controller's Y split)
+  let swapT = null, swapInspected = false;
+  hold(B.swap, () => {
+    swapInspected = false;
+    if (swapT) clearTimeout(swapT);
+    swapT = setTimeout(() => { swapT = null; swapInspected = true; if (input.inspect) input.inspect(); }, 350);
+  }, () => {
+    if (swapT) { clearTimeout(swapT); swapT = null; }
+    if (!swapInspected) input.state.switchTo = "next";
+  });
   hold(B.use, () => input.touchPress("interact"), () => input.touchRelease("interact"));
   hold(B.melee, () => input.touchPress("melee"), () => input.touchRelease("melee")); // [melee]
   hold(B.tac, () => input.touchPress("tactical"), () => input.touchRelease("tactical")); // [equipment lane]

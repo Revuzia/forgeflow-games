@@ -29,6 +29,7 @@
 // Frozen signature: createHud(ctx) → {attach, update, show, hide} (+private).
 
 import { effectiveSpread, playerSpreadState } from "../sim/ballistics.js";
+import { teamHex } from "../team_color.js";
 
 // ---------------------------------------------------------------------------
 // Shared shell registry — menu.js / pause.js / settings_ui.js import this so
@@ -453,6 +454,10 @@ const GLYPHS = { // per weapon class, tiny original silhouettes for the killfeed
   pistol: "M6 2h14v2h-7l-1 4h-4l1-4H6z",
   // pump shotgun: barrel, magazine tube under it, pump forend, receiver + stock
   shotgun: "M0 2.6h16v1.4H0zM2.5 4.6H16v1.4H2.5zM7 6h6v2H7zM16 2h5l1 1h5v5l-4.5-.5L21 7h-5z",
+  // [polish v149] equipment + melee own their glyphs (never the held gun's)
+  mine: "M6 3.5q7.5-3 15 0V8H6zM8 8h1.4v2H8zM17.6 8H19v2h-1.6zM4 1l3 1.6-.5.8zM23 1l-3 1.6.5.8z", // curved tripmine on legs + cone ticks
+  frag: "M10.5 3.2a4.2 4.2 0 1 0 6 0zM12 0h4v2.6h-4zM16 .6l3.4-.6.3 1.2-3.7.6z",
+  knife: "M2 4.2h15l6-2.2-.8 4.2H17v.6H2zM17 3h1.5v4.6H17z",
 };
 function weaponGlyphSvg(cls) {
   const d = GLYPHS[cls] || GLYPHS.ar;
@@ -554,11 +559,7 @@ function createZoneHud(ctx, root) {
   const NEUTRAL = "#e8e8e4";
   const tintOf = (team) => {
     if (team !== 0 && team !== 1) return NEUTRAL;
-    // [lane settings] colour-blind palette (team 0 = the player's side)
-    const cb = liveTeamColors();
-    if (cb) return team === 0 ? cb.friend : cb.enemy;
-    const t = st.teams && st.teams[team];
-    return (t && t.tint) || TINT[team];
+    return teamHex(team, st.teams); // single source (core/team_color.js)
   };
   const rgba = (hex, a) => {
     const n = parseInt(hex.slice(1), 16);
@@ -619,7 +620,10 @@ function createZoneHud(ctx, root) {
     const sig = s0 + ":" + s1 + ":" + lim + ":" + tintOf(0); // [lane settings] palette in the sig
     if (sig !== st.lastScore) {
       st.lastScore = sig;
-      const n0 = (M.teams[0].name || "AMBER"), n1 = (M.teams[1].name || "SLATE");
+      // [polish v149] a colour-blind palette repaints the sides: "AMBER" in blue
+      // would read wrong, so the line says US / THEM like every other mode then
+      const cbOn = !!liveTeamColors();
+      const n0 = cbOn ? "US" : (M.teams[0].name || "AMBER"), n1 = cbOn ? "THEM" : (M.teams[1].name || "SLATE");
       scoreEl.innerHTML =
         `<span style="color:${tintOf(0)}">${n0} ${s0}</span>` +
         `<span class="sep">/ ${lim}</span>` +
@@ -790,10 +794,7 @@ function createModesHud(ctx, root) {
   const TINT = ["#d9a441", "#7c9fd0"], NEUTRAL = "#e8e8e4", RED = "#ff4d4d";
   const tintOf = (team) => {
     if (team !== 0 && team !== 1) return NEUTRAL;
-    const cb = liveTeamColors();
-    if (cb) return team === 0 ? cb.friend : cb.enemy;
-    const t = st.teams && st.teams[team];
-    return (t && t.tint) || TINT[team];
+    return teamHex(team, st.teams); // single source (core/team_color.js)
   };
   const wName = (id) => { const w = ctx.weapons && ctx.weapons[id]; return String((w && w.name) || id || "").toUpperCase(); };
   const tierName = (tr) => !tr ? "" : tr.knife ? "KNIFE" :
@@ -1141,6 +1142,7 @@ export function createHud(ctx) {
     `<rect x="11" y="8" width="4" height="3"/></svg></span><div class="d">GRENADE</div>`;
   root.appendChild(nadeWarn);
   const nadeRot = nadeWarn.querySelector(".rot");
+  const nadeLbl = nadeWarn.querySelector(".d");
 
   // ammo block ----------------------------------------------------------------
   const ammo = document.createElement("div");
@@ -1425,7 +1427,9 @@ export function createHud(ctx) {
     // fire-time shot within 0.6 s (see onShot), else the weapon in hand, else
     // the last weapon that hit this victim.
     const kName = nameOf(d.attacker), vName = nameOf(d.victim);
-    const wid = d.attacker === "P"
+    // [polish v149] equipment / melee kills: the death event names its own weapon
+    const eqW = d.melee ? "knife" : (d.weaponId === "claymore" || d.weaponId === "frag") ? d.weaponId : null;
+    const wid = eqW ? eqW : d.attacker === "P"
       ? ((hmSt.fireW && t >= hmSt.fireT && t - hmSt.fireT <= 0.6 && hmSt.fireW) ||
          (sim.state.player.weapon && sim.state.player.weapon.id) ||
          st.lastHitWeapon[d.victim])
@@ -1438,10 +1442,16 @@ export function createHud(ctx) {
       for (const r of feedRows) if (r.t < slot.t) slot = r;
     }
     slot.live = true; slot.t = t;
+    // names in their team colour (single source: core/team_color.js — follows
+    // the colour-blind palette); FFA / campaign: you in the friend colour.
+    const mt = matchTeams(sim);
+    const nameCol = (who, team) => (mt && (team === 0 || team === 1)) ? teamHex(team, mt)
+      : who === "P" ? teamHex(0) : "";
+    const kc = nameCol(d.attacker, d.attackerTeam), vc = nameCol(d.victim, d.victimTeam);
     slot.el.innerHTML =
-      `<span class="${d.attacker === "P" ? "me" : ""}">${esc(kName)}</span>` +
-      weaponGlyphSvg(wClass(wid)) +
-      `<span class="${d.victim === "P" ? "me" : ""}">${esc(vName)}</span>`;
+      `<span class="${d.attacker === "P" ? "me" : ""}"${kc ? ` style="color:${kc}"` : ""}>${esc(kName)}</span>` +
+      weaponGlyphSvg(eqW === "claymore" ? "mine" : eqW === "frag" ? "frag" : eqW === "knife" ? "knife" : wClass(wid)) +
+      `<span class="${d.victim === "P" ? "me" : ""}"${vc ? ` style="color:${vc}"` : ""}>${esc(vName)}</span>`;
     st.tallies.killfeed++;
     reflowFeed();
   }
@@ -1501,6 +1511,34 @@ export function createHud(ctx) {
     } catch (e) { /* campaign */ }
     const b = sim && sim.state.bots.find((b) => b.id === who);
     return b ? archLabel(b.archetype) : "HOSTILE";
+  }
+  // nearest live enemy frag (6 m) / flashbang (10 m) / concussion (8 m)
+  const DANGER = { frag: [6, "GRENADE"], flash: [10, "FLASHBANG"], stun: [8, "CONCUSSION"] };
+  function hostileThrow(sim, who) {
+    if (who === "P" || who == null) return false;
+    try { if (sim.match && sim.match.sameTeam) return !sim.match.sameTeam("P", who); } catch (e) { /* campaign */ }
+    return true;
+  }
+  function nearestDanger(sim, p) {
+    const I = sim && sim.internal;
+    if (!I) return null;
+    let best = null, bestD = Infinity;
+    const consider = (pos, kind, who) => {
+      const R = DANGER[kind];
+      if (!R || !pos || !hostileThrow(sim, who)) return;
+      const d = Math.hypot(pos[0] - p.pos[0], pos[2] - p.pos[2]);
+      if (d <= R[0] && d < bestD) { bestD = d; best = { pos, label: R[1] }; }
+    };
+    for (const g of I.grenades || []) consider(g.pos, "frag", g.who);
+    const cans = I.equip && I.equip.cans;
+    if (cans) for (const c of cans) consider(c.pos, c.kind, c.who);
+    return best;
+  }
+  function matchTeams(sim) {
+    const m = sim && sim.state && sim.state.match;
+    // FFA has no sides: per-actor teams there are not 0/1 sides of a team game
+    if (!m || !m.teams || m.teams.length !== 2) return null;
+    return m.teams;
   }
   function botWeaponId(who) {
     const sim = ctx.sim();
@@ -1618,6 +1656,7 @@ export function createHud(ctx) {
   }
 
   // ------------------------------------------------------------------ update
+  let hintRef = null;
   function update(dt) {
     const sim = ctx.sim();
     // debrief lives outside show/hide (mission over ⇒ hud may be hidden)
@@ -1627,6 +1666,13 @@ export function createHud(ctx) {
     const S = sim.state, p = S.player;
     const t = S.time;
     const vh = window.innerHeight || 1080;
+    // [polish v149] the page's controls hint belongs to the menus: boot re-shows
+    // it after hud.show() ran, and over a live HUD it wrapped into the streak
+    // tray and the subtitle line. Once play is running it stays hidden.
+    if (S.phase !== "menu") {
+      const hint = hintRef || (hintRef = document.getElementById("hint"));
+      if (hint && hint.classList.contains("show")) { hint.classList.remove("show"); st.hintWasShown = true; }
+    }
 
     // ---- crosshair: THE live effectiveSpread (§2.5 shared model, §4.6 px map)
     const weapon = (sim && typeof sim.weaponOf === "function" && sim.weaponOf(p, p.weapon.id)) || W[p.weapon.id]; // [integration v147]
@@ -1734,14 +1780,18 @@ export function createHud(ctx) {
       if (ts !== a.lastTr) { a.lastTr = ts; a.el.style.transform = ts; }
     }
 
-    // ---- grenade warning (§5.9: icon + direction arrow within 6 m)
-    if (st.nade) {
-      const d = Math.hypot(st.nade.pos[0] - p.pos[0], st.nade.pos[2] - p.pos[2]);
-      if (d <= 6) {
+    // ---- grenade warning (§5.9: icon + direction arrow within 6 m).
+    // [polish v149] reads the LIVE projectiles (view-only) so the arrow tracks
+    // a rolling grenade, covers flash + concussion canisters too, and ignores
+    // teammates' throws (friendly fire is off: they are no danger to you).
+    {
+      const danger = nearestDanger(sim, p);
+      if (danger) {
         nadeWarn.style.opacity = "0.95";
-        nadeRot.style.transform = `rotate(${relDegTo(sim, st.nade.pos).toFixed(1)}deg)`;
-      } else nadeWarn.style.opacity = "0";
-    } else if (nadeWarn.style.opacity !== "0") nadeWarn.style.opacity = "0";
+        nadeRot.style.transform = `rotate(${relDegTo(sim, danger.pos).toFixed(1)}deg)`;
+        if (nadeLbl.textContent !== danger.label) nadeLbl.textContent = danger.label;
+      } else if (nadeWarn.style.opacity !== "0") nadeWarn.style.opacity = "0";
+    }
 
     // ---- ammo block
     const mag = p.weapon.mag, res = p.weapon.reserve;

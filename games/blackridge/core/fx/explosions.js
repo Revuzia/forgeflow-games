@@ -50,6 +50,19 @@ const VARIANTS = {
     column: 10,
     puffFire: 9, puffSmoke: 12, fireLife: 0.7, arc: 0,
   },
+  // [polish v149] TRIPMINE: a shaped charge, not a frag — a tight pop, a low
+  // forward FAN of fire/smoke along the mine's facing and a hot pellet spray
+  // inside its 60° kill cone (same pools; `dir` = the mine's facing, yaw).
+  claymore: {
+    flash: [3.0, 2.3, 1.4], flashScaleR: 0.42,
+    light: 0xffc07a, peak: 48, lightR: 16,
+    ring: [1.6, 1.1, 0.6],
+    smoke: 4, smokeC: [0.14, 0.135, 0.13],
+    debris: 6, embers: 6, emberC: [2.6, 1.4, 0.5],
+    fireballs: 1,
+    puffFire: 5, puffSmoke: 5, fireLife: 0.30, arc: 0,
+    directional: { spray: 26, fanDeg: 30, spMin: 9, spMax: 17 },
+  },
   transformer: {
     flash: [2.0, 2.8, 3.2], flashScaleR: 0.85,
     light: 0x7fe8ff, peak: 50, lightR: 18,
@@ -107,6 +120,7 @@ const _c = new THREE.Color();
 const _X = new THREE.Vector3(1, 0, 0);
 const _ZAXIS = new THREE.Vector3(0, 0, 1);
 const _UP = [0, 1, 0];
+const _dirScratch = [0, 0, 1];
 
 function makeBillboardPool(env, n, tex, renderOrder, name) {
   const geo = new THREE.PlaneGeometry(1, 1);
@@ -411,8 +425,11 @@ export function makeExplosions(env, pools, decals) {
 
   return {
     // pos:[3], radius (m, sim's damage radius), source per R13
-    spawn(pos, radius, source) {
+    spawn(pos, radius, source, yaw) {
       const v = VARIANTS[source] || VARIANTS.grenade;
+      // directional variants (tripmine): forward = [-sin yaw, -cos yaw] (sim convention)
+      const D = v.directional && typeof yaw === "number" ? v.directional : null;
+      const fwx = D ? -Math.sin(yaw) : 0, fwz = D ? -Math.cos(yaw) : 0;
       const x = pos[0], y = pos[1], z = pos[2];
       const gy = env.groundY(x, z);
       const nearGround = y - gy < 2.0;
@@ -450,7 +467,9 @@ export function makeExplosions(env, pools, decals) {
         const base = nearGround ? gy : y;
         const R = Math.max(2.5, radius);
         for (let i = 0; i < (v.puffFire || 0); i++) {
-          const a = rnd() * Math.PI * 2, out = 1.2 + rnd() * 2.8;
+          // directional: the fan spreads ±fanDeg about the facing and runs further
+          const a = D ? Math.atan2(fwz, fwx) + (rnd() * 2 - 1) * D.fanDeg * Math.PI / 180 : rnd() * Math.PI * 2;
+          const out = D ? 3.5 + rnd() * 4.0 : 1.2 + rnd() * 2.8;
           const s0 = R * (0.22 + rnd() * 0.10);
           puffs.spawn(
             x + Math.cos(a) * R * 0.08, base + s0 * 0.55 + rnd() * 0.5, z + Math.sin(a) * R * 0.08,
@@ -459,7 +478,8 @@ export function makeExplosions(env, pools, decals) {
             v.fireLife * (0.75 + rnd() * 0.5), v.puffShade || 1.0, v.arc || 0, 0.80, rnd(), rnd() * 0.04);
         }
         for (let i = 0; i < (v.puffSmoke || 0); i++) {
-          const a = rnd() * Math.PI * 2, rr = rnd() * R * 0.35;
+          const a = D ? Math.atan2(fwz, fwx) + (rnd() * 2 - 1) * D.fanDeg * Math.PI / 180 : rnd() * Math.PI * 2;
+          const rr = D ? R * (0.15 + rnd() * 0.45) : rnd() * R * 0.35;
           const s0 = R * (0.30 + rnd() * 0.12);
           puffs.spawn(
             x + Math.cos(a) * rr, base + s0 * 0.5 + 0.3 + rnd() * 1.0, z + Math.sin(a) * rr,
@@ -509,6 +529,20 @@ export function makeExplosions(env, pools, decals) {
         if (v.fireballs > 0) {
           env.impacts.burstAt(pools.spark, pos, _UP, v.fireballs, 0.6, 1.6, 0.6,
             v.fbLife || 0.22, 0.08, 0.5, v.fbSize || 1.1, 2.4, 1.1, 0.35, 0.2, 0.9, 1.5, 0, 1.0);
+        }
+        // directional pellet spray: fast hot streaks fanned along the facing,
+        // slightly lofted, low gravity — reads as the 60° kill cone
+        if (D) {
+          const n = 5;
+          for (let k = 0; k < n; k++) {
+            const a = Math.atan2(fwz, fwx) + ((k + 0.5) / n * 2 - 1) * D.fanDeg * Math.PI / 180;
+            _dirScratch[0] = Math.cos(a); _dirScratch[1] = 0.08; _dirScratch[2] = Math.sin(a);
+            env.impacts.burstAt(pools.spark, pos, _dirScratch, Math.ceil(D.spray / n), D.spMin, D.spMax, 1.1,
+              0.22, 0.08, 0.012, 0.022, 3.0, 1.9, 0.8, 0.2, 1.0, -3, 0.2, 0.2);
+          }
+          _dirScratch[0] = fwx; _dirScratch[1] = 0.25; _dirScratch[2] = fwz;
+          env.impacts.burstAt(pools.dust, pos, _dirScratch, 6, 4.0, 8.0, 1.6,
+            0.9, 0.3, 0.04, 0.07, 0.15, 0.14, 0.13, 0.3, 0.95, -12, 0.3, 0.3);
         }
       }
 

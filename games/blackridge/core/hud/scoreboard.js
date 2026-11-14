@@ -20,6 +20,7 @@
 // Persistence (modes.md §6.5): localStorage only — matches, W/L/D per mode,
 // best streak. Read by mode_select.js. No server-side writes.
 
+import { teamHex, cbPalette } from "../team_color.js";
 import { shell } from "./hud.js";
 import { BAND_LABEL } from "./match_hud.js";
 
@@ -178,20 +179,22 @@ export function createScoreboard(ctx) {
       return;
     }
 
-    const t0 = m.teams.find((t) => t.id === 0), t1 = m.teams.find((t) => t.id === 1);
+    let t0 = m.teams.find((t) => t.id === 0), t1 = m.teams.find((t) => t.id === 1);
+    // [polish v149] colour-blind palette on: the sides are not amber / slate any more
+    if (cbPalette()) { t0 = Object.assign({}, t0, { name: "YOUR TEAM" }); t1 = Object.assign({}, t1, { name: "ENEMY TEAM" }); }
     const list0 = m.actors.filter((a) => a.team === 0).sort((a, b) => b.score - a.score);
     const list1 = m.actors.filter((a) => a.team === 1).sort((a, b) => b.score - a.score);
     const s0 = ctf ? (t0 ? t0.captures : 0) : (t0 ? t0.score : 0);
     const s1 = ctf ? (t1 ? t1.captures : 0) : (t1 ? t1.score : 0);
     headEl.innerHTML =
-      `<span style="color:${(t0 && t0.tint) || "#d9a441"}">${esc((t0 && t0.name) || "AMBER")} ${s0}</span>` +
+      `<span style="color:${teamHex(0, m.teams)}">${esc((t0 && t0.name) || "AMBER")} ${s0}</span>` +
       `<span style="opacity:.4;margin:0 12px">—</span>` +
-      `<span style="color:${(t1 && t1.tint) || "#7c9fd0"}">${s1} ${esc((t1 && t1.name) || "SLATE")}</span>`;
+      `<span style="color:${teamHex(1, m.teams)}">${s1} ${esc((t1 && t1.name) || "SLATE")}</span>`;
     tblEl.innerHTML =
       `<table>${header}` +
-      `<tr class="teamhdr"><td class="l" colspan="9" style="color:${(t0 && t0.tint) || "#d9a441"}">${esc((t0 && t0.name) || "AMBER")}</td></tr>` +
+      `<tr class="teamhdr"><td class="l" colspan="9" style="color:${teamHex(0, m.teams)}">${esc((t0 && t0.name) || "AMBER")}</td></tr>` +
       rowsOf(list0) +
-      `<tr class="teamhdr"><td class="l" colspan="9" style="color:${(t1 && t1.tint) || "#7c9fd0"}">${esc((t1 && t1.name) || "SLATE")}</td></tr>` +
+      `<tr class="teamhdr"><td class="l" colspan="9" style="color:${teamHex(1, m.teams)}">${esc((t1 && t1.name) || "SLATE")}</td></tr>` +
       rowsOf(list1) +
       `</table>`;
   }
@@ -201,11 +204,11 @@ export function createScoreboard(ctx) {
     if (e.code !== "Tab") return;
     if (!st.live || st.end) return;
     e.preventDefault(); // keep browser focus traversal out of the match
-    if (!st.held) { st.held = true; render(); root.style.display = "block"; }
+    if (!st.held) { st.held = true; render(); root.style.display = "block"; document.body.classList.add("board-open"); }
   }
   function onKeyUp(e) {
     if (e.code !== "Tab") return;
-    if (st.held && !st.end) { st.held = false; root.style.display = "none"; }
+    if (st.held && !st.end) { st.held = false; root.style.display = "none"; document.body.classList.remove("board-open"); }
   }
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
@@ -219,7 +222,7 @@ export function createScoreboard(ctx) {
     st.held = false;
     render();
     root.classList.add("end");
-    root.style.display = "block";
+    root.style.display = "block"; document.body.classList.add("board-open");
     if (shell.matchHud && shell.matchHud.hideResult) shell.matchHud.hideResult();
     // 20 s no-input auto-advance → mode select (modes.md §6.1)
     st.autoAt = Date.now() + 20000;
@@ -243,7 +246,7 @@ export function createScoreboard(ctx) {
     st.end = false;
     st.held = false;
     root.classList.remove("end");
-    root.style.display = "none";
+    root.style.display = "none"; document.body.classList.remove("board-open");
     if (st.autoIv) { clearInterval(st.autoIv); st.autoIv = null; }
     if (st.endTimer) { clearTimeout(st.endTimer); st.endTimer = null; }
   }

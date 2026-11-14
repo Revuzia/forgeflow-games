@@ -139,11 +139,13 @@ function css() {
 #ld-medal.show{animation:ldmedal 2.4s cubic-bezier(.2,.9,.2,1) forwards;}
 @keyframes ldmedal{0%{opacity:0;transform:translate(-50%,10px) scale(1.5);}9%{opacity:1;transform:translate(-50%,0) scale(1);}78%{opacity:1;}100%{opacity:0;transform:translate(-50%,-8px) scale(.98);}}
 /* ---- score popups ---- */
-#ld-score{position:absolute;left:calc(50% + 46px);top:calc(50% + 6px);}
-#ld-score .p{position:absolute;left:0;top:0;white-space:nowrap;font-size:17px;letter-spacing:.08em;opacity:0;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9);animation:ldscore 1.3s ease-out forwards;}
+/* [polish v149] a stacked column right of the reticle (never over it): newest
+   on top, older rows step down, at most 4 — no more rows piled on one spot */
+#ld-score{position:absolute;left:calc(50% + 52px);top:calc(50% - 30px);display:flex;flex-direction:column;gap:1px;}
+#ld-score .p{position:relative;white-space:nowrap;font-size:15px;letter-spacing:.08em;opacity:0;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9);animation:ldscore 1.3s ease-out forwards;}
 #ld-score .p.hs{color:var(--a10-amber,#d9a441);}
 #ld-score .p small{font-size:11px;opacity:.75;margin-left:5px;letter-spacing:.12em;}
-@keyframes ldscore{0%{opacity:0;transform:translateY(8px);}12%{opacity:1;}100%{opacity:0;transform:translateY(-34px);}}
+@keyframes ldscore{0%{opacity:0;transform:translateX(-6px);}12%{opacity:1;transform:none;}75%{opacity:1;}100%{opacity:0;}}
 `;
 }
 
@@ -281,9 +283,14 @@ export function createLoadoutHud(ctx) {
   function onMedal(d) { if (d) medalQueue.push(d); }
   function onScore(d) {
     if (!d) return;
+    // [polish v149] ONE feed: when the XP feed (after_action.js #br-xpfeed) is
+    // live it already lists the kill, headshot and medal rows — a second set of
+    // score popups on the reticle only piled up on top of it
+    if (document.getElementById("br-xpfeed")) return;
     const p = el("div", null, "p" + (d.headshot ? " hs" : ""), `+${d.points}<small>${d.why}</small>`);
-    p.style.left = (scoreN++ % 3) * 6 + "px";
-    score.appendChild(p);
+    scoreN++;
+    score.insertBefore(p, score.firstChild);
+    while (score.children.length > 4) score.lastChild.remove();
     setTimeout(() => p.remove(), 1400);
   }
   function onStreak(d) {

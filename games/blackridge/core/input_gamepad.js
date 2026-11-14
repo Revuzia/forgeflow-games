@@ -115,7 +115,7 @@ export const GLYPHS = {
     grenade: "G", tactical: "E", streak: "6-9", inspect: "I", melee: "V", pause: "ESC", score: "TAB", sprint: "SHIFT",
     move: "WASD", look: "MOUSE", confirm: "ENTER", back: "ESC", designateOk: "LMB", designateCancel: "RMB" },
   touch: { fire: "FIRE", ads: "AIM", jump: "JUMP", crouch: "CROUCH", reload: "RELOAD", interact: "USE", swap: "SWAP",
-    grenade: "GRENADE", tactical: "TAC", streak: "TRAY", inspect: "—", melee: "MELEE", pause: "II", score: "SCORE", sprint: "PUSH STICK",
+    grenade: "GRENADE", tactical: "TAC", streak: "TRAY", inspect: "HOLD SWAP", melee: "MELEE", pause: "II", score: "SCORE", sprint: "PUSH STICK",
     move: "LEFT THUMB", look: "RIGHT THUMB", confirm: "TAP", back: "II", designateOk: "FIRE", designateCancel: "AIM" },
 };
 
@@ -254,6 +254,7 @@ export function createGamepad(hooks) {
   let sprintLatch = false;
   let xHeld = -1, interactOn = false;
   let yHeld = -1; // [melee] Y tap = swap (on release) / hold = inspect
+  let backHeld = -1, backTab = false; // [polish v149] VIEW tap = full map, hold = scoreboard
   let fullHeld = 0;
   let navRepeat = { dir: "", t: 0 };
   let refocusT = 0;
@@ -301,6 +302,16 @@ export function createGamepad(hooks) {
   const up = (i) => !cur[i] && prev[i];
 
   function gameplay(g, dt) {
+    // [polish v149] the class picker (loadout_ui.js) while it is open: D-pad
+    // left/right move the focus, A picks, B closes — those buttons do nothing else
+    const CP = globalThis.__BR_CLASSPICK__;
+    const pickOpen = !!(CP && CP.isOpen && CP.isOpen());
+    if (pickOpen) {
+      if (edge(BTN.LEFT)) CP.step(-1);
+      if (edge(BTN.RIGHT)) CP.step(1);
+      if (edge(BTN.A)) CP.confirm();
+      if (edge(BTN.B)) CP.close();
+    }
     const dl = S("padDeadL", 0.1);
     const mv = radialDeadzone(g.axes[0] || 0, g.axes[1] || 0, dl);
     frame.move = mv;
@@ -328,7 +339,7 @@ export function createGamepad(hooks) {
     } else {
       if (edge(BTN.RT)) { hooks.press("fire"); driving.fire = true; }
       if (edge(BTN.LT)) { state.ads = true; driving.ads = true; }
-      if (edge(BTN.B)) {
+      if (edge(BTN.B) && !pickOpen) {
         if (S("padCrouch", "toggle") === "hold") state.crouch = true;
         else state.crouch = !state.crouch;
         driving.crouch = true;
@@ -339,7 +350,7 @@ export function createGamepad(hooks) {
     if (up(BTN.B) && S("padCrouch", "toggle") === "hold" && driving.crouch) { state.crouch = false; driving.crouch = false; }
 
     // ---- face buttons / bumpers
-    if (edge(BTN.A)) hooks.press("jump");
+    if (edge(BTN.A) && !pickOpen) hooks.press("jump");
     if (up(BTN.A)) hooks.release("jump");
     if (edge(BTN.X)) { hooks.press("reload"); xHeld = 0; }
     if (cur[BTN.X] && xHeld >= 0) {
@@ -353,20 +364,38 @@ export function createGamepad(hooks) {
       yHeld += dt;
       if (yHeld >= HOLD_INTERACT_S) { input.inspect(); yHeld = -1; }
     }
-    if (up(BTN.Y)) { if (yHeld >= 0) state.switchTo = "next"; yHeld = -1; }
+    if (up(BTN.Y)) {
+      if (yHeld >= 0) {
+        // [polish v149] while you are down (or the picker is open) Y is CHANGE CLASS
+        if (CP && CP.available && CP.available() && (pickOpen || (CP.down && CP.down()))) CP.toggle();
+        else state.switchTo = "next";
+      }
+      yHeld = -1;
+    }
     if (edge(BTN.RB)) hooks.press("grenade");
     if (up(BTN.RB)) hooks.release("grenade");
     if (edge(BTN.LB)) hooks.press("tactical");           // [equipment lane]
     if (up(BTN.LB)) hooks.release("tactical");
     if (edge(BTN.DOWN)) { input.cancelDesignate(); state.streak = 1; } // signal sweep
-    if (edge(BTN.UP)) input.designateTier(2);
-    if (edge(BTN.RIGHT)) input.designateTier(3);
-    if (edge(BTN.LEFT)) input.designateTier(4);
+    if (!pickOpen) {
+      if (edge(BTN.UP)) input.designateTier(2);
+      if (edge(BTN.RIGHT)) input.designateTier(3);
+      if (edge(BTN.LEFT)) input.designateTier(4);
+    }
     if (edge(BTN.R3)) hooks.press("melee");   // [melee]
     if (up(BTN.R3)) hooks.release("melee");
     if (edge(BTN.START)) { hooks.key("Escape", "keydown"); hooks.key("Escape", "keyup"); }
-    if (edge(BTN.BACK)) hooks.key("Tab", "keydown");
-    if (up(BTN.BACK)) hooks.key("Tab", "keyup");
+    // [polish v149] VIEW: hold = scoreboard (after HOLD_INTERACT_S), tap = full map
+    if (edge(BTN.BACK)) { backHeld = 0; backTab = false; }
+    if (cur[BTN.BACK] && backHeld >= 0) {
+      backHeld += dt;
+      if (!backTab && backHeld >= HOLD_INTERACT_S) { hooks.key("Tab", "keydown"); backTab = true; }
+    }
+    if (up(BTN.BACK)) {
+      if (backTab) hooks.key("Tab", "keyup");
+      else if (backHeld >= 0) { const FM = globalThis.__BR_FULLMAP__; if (FM && FM.toggle) FM.toggle(); }
+      backHeld = -1; backTab = false;
+    }
 
     // ---- look stick (applied by input.update after the assist has run)
     const dr = S("padDeadR", 0.1);

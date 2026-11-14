@@ -29,6 +29,82 @@ import {
   WPN_GLB, WPN_KIND, WPN_KINDS, prepWeaponProto, createSupportHandIK,
 } from "../weapons/world_weapon.js";
 
+import { CAMOS } from "../sim/attachments.js";
+
+// ---------------------------------------------------------------------------
+// [polish v149] OTHER operators' builds on their 3P guns, the cheap read: a
+// suppressor can silhouette at the muzzle and the camo's base colour as a tint.
+// Muzzle point measured ONCE per gun kind from the proto's own vertices (barrel
+// along -Z: the farthest -Z band, its mean height = the bore). Camo tints are a
+// cached material clone per (material, camo) — no per-bot material churn.
+// ---------------------------------------------------------------------------
+const _muzzleOf = new Map();       // kind -> {x, y, z} in the gun's local frame
+const _camoMat = new Map();        // material.uuid|camo -> tinted clone
+let _supGeo = null, _supMat = null;
+function muzzleOf(kind, wpn) {
+  if (_muzzleOf.has(kind)) return _muzzleOf.get(kind);
+  wpn.updateMatrixWorld(true);
+  const inv = wpn.matrixWorld.clone().invert(); // points in the GUN's local frame
+  let minZ = Infinity;
+  const v = new THREE.Vector3();
+  const pts = [];
+  wpn.traverse((o) => {
+    if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+    const pa = o.geometry.attributes.position;
+    const step = Math.max(1, Math.floor(pa.count / 4000));
+    for (let i = 0; i < pa.count; i += step) {
+      v.fromBufferAttribute(pa, i).applyMatrix4(o.matrixWorld).applyMatrix4(inv);
+      pts.push(v.x, v.y, v.z);
+      if (v.z < minZ) minZ = v.z;
+    }
+  });
+  if (!pts.length) return null;
+  let sx = 0, sy = 0, n = 0;
+  for (let i = 0; i < pts.length; i += 3) if (pts[i + 2] < minZ + 0.03) { sx += pts[i]; sy += pts[i + 1]; n++; }
+  const m = n ? { x: sx / n, y: sy / n, z: minZ } : null;
+  _muzzleOf.set(kind, m);
+  return m;
+}
+function dressWorldWeapon(wpn, kind, weaponId, build) {
+  if (!wpn || !build) return;
+  const camo = build.camo && CAMOS[build.camo];
+  if (camo) {
+    const tint = new THREE.Color(camo.colors[0]);
+    wpn.traverse((o) => {
+      if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
+      const key = o.material.uuid + "|" + camo.id;
+      let m = _camoMat.get(key);
+      if (!m) {
+        m = o.material.clone();
+        if (m.color) m.color = m.color.clone().lerp(tint, 0.6);
+        _camoMat.set(key, m);
+      }
+      o.material = m;
+    });
+  }
+  // the Vesper ships integrally suppressed: nothing to add
+  if (weaponId !== "vesper" && Array.isArray(build.attach) && build.attach.indexOf("suppressor") >= 0) {
+    const mz = muzzleOf(kind, wpn);
+    if (mz) {
+      if (!_supGeo) {
+        _supGeo = new THREE.CylinderGeometry(0.019, 0.019, 0.17, 10, 1);
+        _supGeo.rotateX(Math.PI / 2);
+        _supMat = new THREE.MeshStandardMaterial({ color: 0x1b1d20, roughness: 0.55, metalness: 0.5 });
+      }
+      const can = new THREE.Mesh(_supGeo, _supMat);
+      can.name = "__3p_suppressor__";
+      can.position.set(mz.x, mz.y, mz.z - 0.075);
+      can.castShadow = true;
+      wpn.add(can);
+    }
+  }
+}
+function bodyBuild(bot) {
+  const id = bot && bot.weapon && bot.weapon.id;
+  const b = id && bot.kit && bot.kit.builds ? bot.kit.builds[id] : null;
+  return b || null;
+}
+
 // ---------------------------------------------------------------------------
 // createSoldiers
 // ---------------------------------------------------------------------------
@@ -288,6 +364,7 @@ export function createSoldiers(ctx) {
     let wpn = null;
     if (wpnProtos[kind]) {
       wpn = wpnProtos[kind].clone(true); // shares geometry+materials — cheap
+      if (heldId) dressWorldWeapon(wpn, kind, heldId, bodyBuild(liveBot)); // [polish v149]
       actor.attachWeapon(wpn, "R");
       actor._wpnKind = kind;
     }
@@ -567,6 +644,7 @@ export function createSoldiers(ctx) {
             // below drives rec.wpn.position.z.
             if (rec.wpn && rec.wpn.parent) rec.wpn.parent.removeFromParent();
             const nw = wpnProtos[want].clone(true);
+            dressWorldWeapon(nw, want, bot.weapon.id, bodyBuild(bot)); // [polish v149]
             actor.attachWeapon(nw, "R");
             actor._wpnKind = want;
             rec.wpn = nw;

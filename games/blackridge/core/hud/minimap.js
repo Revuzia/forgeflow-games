@@ -233,7 +233,10 @@ body.kc-on #mm-wrap,body.kc-on #mm-full{visibility:hidden;}  /* kill cam (also c
   padding-top:64px;background:rgba(6,8,10,.62);pointer-events:none;}
 #mm-full .mm-t{font-size:12px;letter-spacing:.32em;opacity:.8;margin-bottom:8px;}
 #mm-full .mm-k{font-size:10px;letter-spacing:.24em;opacity:.55;margin-top:8px;}
-body.br-touch #mm-wrap{left:calc(12px + env(safe-area-inset-left));top:calc(60px + env(safe-area-inset-top));}
+body.br-touch #mm-wrap{left:calc(12px + env(safe-area-inset-left));top:calc(60px + env(safe-area-inset-top));pointer-events:auto;cursor:pointer;}
+/* [polish v149] touch: tap the minimap for the full map, tap the full map to close it */
+body.br-touch #mm-full{pointer-events:auto;padding-top:0;}
+body.br-touch #mm-full .mm-t{display:none;}
 body.br-touch.mm-on #objective{left:calc(124px + env(safe-area-inset-left));}
 body.br-touch.mm-on #a10-banner{left:calc(124px + env(safe-area-inset-left));}
 `;
@@ -457,10 +460,21 @@ export function createMinimap(ctx, opts = {}) {
     if (keyBoundElsewhere("KeyM")) return;
     toggleFull();
   });
+  // [polish v149] touch + controller access to the full map (input_gamepad.js
+  // taps VIEW; touch taps the minimap / the open map)
+  function canToggle() { return (st.shown || st.fullOpen) && !!(ctx.input && ctx.input.enabled); }
+  globalThis.__BR_FULLMAP__ = { toggle: () => { if (canToggle()) toggleFull(); }, isOpen: () => st.fullOpen };
+  wrap.addEventListener("pointerdown", (e) => { if (!document.body.classList.contains("br-touch")) return; e.preventDefault(); e.stopPropagation(); if (canToggle()) toggleFull(true); });
+  full.addEventListener("pointerdown", (e) => { if (!document.body.classList.contains("br-touch")) return; e.preventDefault(); e.stopPropagation(); toggleFull(false); });
   function toggleFull(on) {
     const want = on === undefined ? !st.fullOpen : !!on;
     if (want === st.fullOpen) return;
     st.fullOpen = want;
+    if (want) { // [polish v149] the close prompt for the device in hand
+      const k = full.querySelector(".mm-k");
+      const dev = document.body.classList.contains("br-touch") ? "touch" : ctx.input && ctx.input.lastDevice;
+      if (k) k.textContent = dev === "touch" ? "TAP TO CLOSE" : dev === "pad" ? "VIEW  CLOSE" : "M  CLOSE";
+    }
     full.style.display = want ? "flex" : "none";
     wrap.style.display = want || !st.shown ? "none" : "block";
     st.acc = 1;

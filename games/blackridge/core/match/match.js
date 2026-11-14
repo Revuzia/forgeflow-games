@@ -660,7 +660,9 @@ export function makeMatch(content, emit, opts = {}) {
         modeId,
         phase: "warmup",
         clock: 0, elapsed: 0,
-        timeLeft: rules.timeLimitS || 0,
+        // [polish v149] the warm-up count, not the match clock, until the first
+        // tick refreshes it (the HUD showed 10:00 / "600" for the first frame)
+        timeLeft: WARMUP_S,
         teams: ms.roster.teams,
         actors: ms.roster.actors,
         flags: [],

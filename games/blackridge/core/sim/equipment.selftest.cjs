@@ -267,6 +267,10 @@ async function main() {
     ok(!!boom, "it detonates (explosion source:claymore)");
     const fb = sim.state.bots.find((b) => b.id === foe);
     ok(!fb.alive, `the enemy in front dies (hp ${hpBefore} -> ${fb.hp})`);
+    // [polish v149] the kill is credited to the TRIPMINE, never the gun in hand
+    const dth = events.find((e) => e.type === "death" && e.data.victim === foe);
+    ok(!!dth && dth.data.weaponId === "claymore" && dth.data.attacker === "P",
+      `the death event names the tripmine (weaponId ${dth && dth.data.weaponId}), not the held ${p.weapon.id}`);
     ok(sim.internal.equip.mines.length === 0, "the mine is gone");
     ok(p.alive && p.hp === sim.tuning.maxHp, "the owner 2.5 m behind it is unhurt (back blast only inside 1.3 m)");
   }

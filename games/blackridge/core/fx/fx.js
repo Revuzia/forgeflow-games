@@ -380,7 +380,7 @@ export function createFx(ctx) {
 
   function onExplosion(d) {
     if (!d || !d.pos) return;
-    explosions.spawn(d.pos, d.radius || 5.5, d.source || "grenade");
+    explosions.spawn(d.pos, d.radius || 5.5, d.source || "grenade", d.yaw);
     counters.explosions++;
   }
 

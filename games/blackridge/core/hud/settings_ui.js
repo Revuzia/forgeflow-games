@@ -177,15 +177,18 @@ const ROWS = [
   { tab: "interface", key: "killcam", label: "Kill cam", kind: "seg", options: ["on", "off"],
     desc: "Replay of how you were taken out while you wait to respawn." },
   { tab: "interface", key: "subtitles", label: "Subtitles", kind: "seg", options: ["on", "off"],
-    desc: "Text for radio lines and callouts, bottom left." },
+    desc: "Text for radio lines, bottom left (and teammate callouts, if set to subtitles below)." },
   { tab: "interface", key: "subSize", label: "Subtitle size", kind: "seg", options: ["small", "medium", "large"], desc: "Subtitle text size." },
+  { tab: "interface", key: "teamChat", label: "Teammate callouts", kind: "seg", options: ["strip", "subtitles"],
+    fmt: (o) => o === "strip" ? "chat strip" : "subtitles",
+    desc: "Show teammates' callouts in the team chat strip, or as subtitles (larger, follows Subtitle size)." },
 
   // -------------------------------------------------------- ACCESSIBILITY
   { tab: "access", key: "colorblind", label: "Colour-blind mode", kind: "seg",
     options: ["off", "protanopia", "deuteranopia", "tritanopia"], fmt: (o) => o === "off" ? "off" : o.slice(0, 6) + ".",
     hint: (v) => v === "off" ? "amber teammates · slate enemies"
       : v === "tritanopia" ? "cyan teammates · coral enemies" : "blue teammates · yellow enemies",
-    desc: "Recolours teammate and enemy outlines, score lines and zone markers into a pair that stays distinct for that colour vision." },
+    desc: "Recolours teammates and enemies everywhere — outlines, name tags, score lines, scoreboard, kill feed, callouts, minimap, flags, zones and tags — into a pair that stays distinct for that colour vision." },
   { tab: "access", kind: "swatch", label: "Team colours", desc: "Preview of the current teammate and enemy colours." },
   { tab: "access", key: "shake", label: "Camera shake", kind: "range", min: 0, max: 1, step: 0.05, fmt: PCT,
     desc: "View shake from explosions and taking damage. 0% removes it." },

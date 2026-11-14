@@ -21,6 +21,14 @@
 
 import { DEFAULT_CLASSES, CLASS_COUNT, validateClass, resolveKit } from "../sim/classes.js";
 import { validateBuild } from "../sim/attachments.js"; // [gunsmith]
+import { mergedStore, onOtherTabWrite } from "./store_merge.js";
+
+// [polish v149] two tabs: a class edit in one tab must survive an unrelated
+// edit in the other. Settings-like data, so every leaf is last-writer-wins
+// against the base this tab last saw; whole arrays (perks, attachments) move
+// together so a merge can never stitch an illegal build. The merged record is
+// re-validated by parseRecord.
+const loadoutMergeRule = (path) => /(^|\.)(perks|attach)$/.test(path) ? "lwwWhole" : null;
 
 // deep-enough copy of a class (perks + gunsmith builds are the nested parts)
 function copyClass(c) {
@@ -71,21 +79,38 @@ export function createLoadouts(opts) {
   const listeners = [];
   let rec;
 
+  const ms = mergedStore({
+    storage, key: STORE_KEY, ruleOf: loadoutMergeRule,
+    parse: (raw) => { try { return parseRecord(raw).rec; } catch (e) { return null; } },
+  });
   function read() {
     let raw = null;
     try { raw = storage ? storage.getItem(STORE_KEY) : null; } catch (e) { raw = null; }
     const r = parseRecord(raw);
     rec = r.rec;
+    ms.adopt(rec, raw);
     if (r.dirty) write();
   }
   function write() {
-    try { if (storage) storage.setItem(STORE_KEY, JSON.stringify(rec)); } catch (e) { /* best-effort */ }
+    try {
+      if (!storage) return;
+      const merged = ms.save(rec).rec;
+      const v = parseRecord(JSON.stringify(merged)); // re-validate the merge
+      rec = v.rec;
+      if (v.dirty) { storage.setItem(STORE_KEY, JSON.stringify(rec)); ms.adopt(rec, JSON.stringify(rec)); }
+    } catch (e) { /* best-effort */ }
   }
   function changed() {
     write();
     for (const fn of listeners.slice()) { try { fn(api); } catch (e) { /* listener fault */ } }
   }
   read();
+  // another tab edited its classes: adopt them (this store writes on every
+  // change, so there are no unsaved local edits to keep)
+  onOtherTabWrite(STORE_KEY, (raw) => {
+    rec = parseRecord(raw).rec; ms.adopt(rec, raw);
+    for (const fn of listeners.slice()) { try { fn(api); } catch (e) { /* listener fault */ } }
+  });
 
   const api = {
     classes() { return rec.classes.map(copyClass); },
