@@ -19,17 +19,77 @@ import { FIRST_SHOT, RELOAD_MODEL, WEAPONS } from "../weapons/weapon_data.js";
 // FFSL/Kenney slices via games/last-circle (CC0); svd_* sliced from Sonniss
 // GDC 2024 "Dramatic Cat - SVD Dragunov"; expl_* from "DavidDumais -
 // Explosion SFX Pack". Provenance + licenses: assets/manifest.a9.json.
+// SLICES (2026-11-13 audio pass). Measured onsets (|x| > 25% of peak, 40 ms
+// hold-off) of the raw takes showed that FIVE of the gun files are not single
+// shots at all — they are bursts with the extra rounds baked in:
+//   shot_ar_0  reports at 269 369 460 553 647 739 828 ms   (7 rounds)
+//   shot_ar_2  reports at  10 103 194 285 ms                (4 rounds)
+//   shot_smg_1 reports at 291 394 494 643 ms                (4 rounds)
+//   shot_smg_2 reports at 253 357 456 558 660 759 862 ms   (7 rounds)
+//   svd_shot_0 reports at   1 210 325 ms                    (3 rounds)
+// so one trigger pull of the Warden/Vesper played a whole burst one time in
+// three, the Corvus played three reports one time in four, and the Breaker
+// (whose boom is the SVD slowed to 0.55x) carried two extra booms at 380 and
+// 590 ms on EVERY pull. That baked-in burst is a large part of the "mush".
+// Each entry may now be {f, off, dur}: loadBuffers() copies that window out
+// of the decoded take into its own AudioBuffer with a cosine fade-out, so
+// every downstream user (rate changes, tail taps) sees one clean report. The
+// automatic weapons are trimmed to the report + its first ~100 ms of decay on
+// purpose: their room tail comes from the zone convolver, so sustained fire no
+// longer drags 0.9 s of recorded slap behind every round.
+const S = (sheet, off, dur) => ({ f: "gun/sn_" + sheet + ".ogg", off, dur });
 const FILES = {
-  gun_warden: ["sfx/shot_ar_0.ogg", "sfx/shot_ar_1.ogg", "sfx/shot_ar_2.ogg"],
-  gun_vesper: ["sfx/shot_smg_0.ogg", "sfx/shot_smg_1.ogg", "sfx/shot_smg_2.ogg"],
-  gun_corvus: ["sfx/svd_shot_0.ogg", "sfx/shot_sniper_0.ogg", "sfx/shot_sniper_1.ogg", "sfx/shot_sniper_2.ogg"],
+  gun_warden: [{ f: "sfx/shot_ar_1.ogg", off: 0.0, dur: 0.17 }, { f: "sfx/shot_ar_0.ogg", off: 0.262, dur: 0.098 },
+               { f: "sfx/shot_ar_2.ogg", off: 0.004, dur: 0.092 }],
+  gun_vesper: [{ f: "sfx/shot_smg_0.ogg", off: 0.0, dur: 0.15 }, { f: "sfx/shot_smg_1.ogg", off: 0.284, dur: 0.104 },
+               { f: "sfx/shot_smg_2.ogg", off: 0.246, dur: 0.104 }],
+  gun_corvus: [{ f: "sfx/svd_shot_0.ogg", off: 0.0, dur: 0.2 }, "sfx/shot_sniper_0.ogg", "sfx/shot_sniper_1.ogg", "sfx/shot_sniper_2.ogg"],
   gun_pike: ["sfx/shot_pistol_0.ogg", "sfx/shot_pistol_1.ogg"],
-  // B-12 Breaker: no recorded shotgun exists, so the boom is BUILT from the
-  // recorded bodies — the SVD report dropped to ~0.55x (the heavy chest hit)
-  // layered with the AR report at ~0.7x through a low-pass (the body), under a
-  // synth sub thump and a broadband blast burst (see shotgunBody()).
-  gun_breaker_a: ["sfx/svd_shot_0.ogg"],
-  gun_breaker_b: ["sfx/shot_ar_0.ogg", "sfx/shot_ar_1.ogg", "sfx/shot_ar_2.ogg"],
+  // ---- RECORDED LIBRARY PASS (2026-11-13, Sonniss GDC 2024 slices) ----------
+  // Four mono 44.1 kHz OGG "sheets" under assets/audio/gun/ (sn_*.ogg). Each
+  // sheet is several single, tightly-trimmed takes laid end to end with 80 ms
+  // of silence between them, peak-normalised to −1 dBFS each; the table below
+  // gives every take's {off, dur} inside its sheet, so loadBuffers() slices
+  // them exactly like the burst files above (one fetch + decode per sheet).
+  // Pack / file / source time range of every slice: assets/manifest.a9.json.
+  //
+  // B-12 Breaker: a REAL 12-gauge now (Saiga-12 at 1 m, three shots) — the old
+  // slowed pistol/SVD/AR construction is gone. Its pump is the SPAS-12 pump
+  // action (three back strokes, three forward strokes), its shell insert the
+  // brass click of a cartridge seating (Colt Python loading take).
+  gun_breaker: [S("shotgun", 0.0, 0.23), S("shotgun", 0.31, 0.23), S("shotgun", 0.62, 0.23)],
+  pump_back: [S("shotgun", 0.93, 0.27), S("shotgun", 1.28, 0.29), S("shotgun", 1.65, 0.29)],
+  pump_fwd: [S("shotgun", 2.02, 0.26), S("shotgun", 2.36, 0.28), S("shotgun", 2.72, 0.26)],
+  shell_in: [S("shotgun", 3.06, 0.12), S("shotgun", 3.26, 0.12), S("shotgun", 3.46, 0.12)],
+  // MID perspective (20–65 m takes) and FAR perspective (65–160 m takes), per
+  // distance CLASS (DIST_CLASS below): these replace the high-passed / slowed
+  // + low-passed copies of the close take in the distance model. Tails are cut
+  // at ≈ −40 dB (0.6–0.85 s); the zone convolver + synth tail carry the rest.
+  mid_ar: [S("dist", 0.0, 0.62), S("dist", 0.7, 0.62)],           // Desert Eagle .44 @ 65 m
+  mid_pistol: [S("dist", 1.4, 0.62), S("dist", 0.7, 0.62)],       // Desert Eagle .44 @ 65 m
+  mid_dmr: [S("dist", 2.1, 0.6), S("dist", 2.78, 0.6)],           // SVD Dragunov @ 30 m
+  mid_sg: [S("dist", 3.46, 0.72), S("dist", 4.26, 0.72)],         // SPAS-12 @ 20 m
+  far_ar: [S("dist", 5.06, 0.85), S("dist", 5.99, 0.85)],         // Colt Python @ 160 m
+  far_pistol: [S("dist", 6.92, 0.8), S("dist", 7.8, 0.8)],        // S&W .38 @ 100 m
+  far_dmr: [S("dist", 8.68, 0.85), S("dist", 9.61, 0.85)],        // Lynx .50 @ 65 m behind
+  far_sg: [S("dist", 10.54, 0.85), S("dist", 11.47, 0.85)],       // Dan Wesson .445 @ 100 m
+  // INDOOR (hall / room recordings): the room is IN the take
+  in_ar: [S("indoor", 0.0, 0.9), S("indoor", 0.98, 0.9)],         // AK5 7.62, large hall
+  in_smg: [S("indoor", 1.96, 0.85), S("indoor", 2.89, 0.85)],     // MP5 9 mm, large hall
+  in_pistol: [S("indoor", 3.82, 0.6), S("indoor", 4.5, 0.6)],     // Glock 17, small living room
+  in_sg: [S("indoor", 5.18, 1.0), S("indoor", 6.26, 1.0)],        // Mossberg 12 ga, office corridor
+  // the player's own gun: mechanical foley
+  f_mag_out: [S("foley", 0.0, 0.26), S("foley", 0.34, 0.29)],     // Desert Eagle magazine release
+  f_mag_in: [S("foley", 0.71, 0.25), S("foley", 1.04, 0.2), S("foley", 1.32, 0.24)],
+  f_charge: [S("foley", 1.64, 0.345), S("foley", 2.065, 0.42)],   // Saiga-12 charging handle, back + home
+  f_bolt: [S("foley", 2.565, 0.115), S("foley", 2.76, 0.095)],    // Saiga-12 bolt slamming home
+  f_hammer: [S("foley", 2.935, 0.09), S("foley", 3.105, 0.08), S("foley", 3.265, 0.08)], // Dan Wesson hammer
+  f_brass: [S("foley", 3.425, 0.26), S("foley", 3.765, 0.33), S("foley", 4.175, 0.3)],  // Lynx .50 case drops
+  ric: [S("foley", 4.555, 0.55), S("foley", 5.185, 0.55), S("foley", 5.815, 0.55), S("foley", 6.445, 0.26)], // Steampunk Gadgets ricochets
+  // metalClick.ogg holds TWO clicks (onsets 90 and 271 ms): split them so the
+  // bolt/slide foley can use "back" and "forward" separately.
+  click_a: [{ f: "sfx/metalClick.ogg", off: 0.078, dur: 0.16 }],
+  click_b: [{ f: "sfx/metalClick.ogg", off: 0.258, dur: 0.17 }],
   step_concrete: ["sfx/step_concrete_000.ogg", "sfx/step_concrete_001.ogg", "sfx/step_concrete_002.ogg", "sfx/step_concrete_003.ogg"],
   step_dirt: ["sfx/step_grass_000.ogg", "sfx/step_grass_001.ogg", "sfx/step_grass_002.ogg", "sfx/step_grass_003.ogg"],
   step_wood: ["sfx/step_wood_000.ogg", "sfx/step_wood_001.ogg", "sfx/step_wood_002.ogg", "sfx/step_wood_003.ogg"],
@@ -43,10 +103,12 @@ const FILES = {
   mag_out: ["sfx/beltHandle1.ogg", "sfx/dropLeather.ogg"],
   mag_in: ["sfx/beltHandle2.ogg"],
   mag_in_corvus: ["sfx/svd_mag.ogg"],
-  rack: ["sfx/metalLatch.ogg", "sfx/metalClick.ogg"],
+  rack: ["sfx/metalLatch.ogg", { f: "sfx/metalClick.ogg", off: 0.078, dur: 0.16 }],
   latch: ["sfx/metalLatch.ogg"],   // pump rack: slide BACK
-  clack: ["sfx/metalClick.ogg"],   // pump rack: slide FORWARD / shell + port clicks
-  click: ["sfx/metalClick.ogg"],
+  // pump rack: slide FORWARD / shell + port clicks — ONE click (the whole file
+  // is two clicks 181 ms apart, which made every "clack" a double)
+  clack: [{ f: "sfx/metalClick.ogg", off: 0.078, dur: 0.16 }],
+  click: [{ f: "sfx/metalClick.ogg", off: 0.258, dur: 0.17 }],
   cloth: ["sfx/cloth1.ogg", "sfx/cloth2.ogg"],
   expl_frag: ["oneshots/expl_frag.ogg"],
   expl_large: ["oneshots/expl_large.ogg"],
@@ -64,6 +126,20 @@ const MECH = {
   pike: { kind: "slide", f: 3500, durMs: 9, gapMs: 25, gain: 0.9 },      // crisp slide
   breaker: { kind: "pump", f: 2600, durMs: 38, gapMs: 0, gain: 1.35 },   // wide blast crack + roar
 };
+
+// weapon class → which recorded MID/FAR pool (mid_*, far_*) and which INDOOR
+// pool (in_*) it uses. The SMG shares the pistol-calibre distance takes (9 mm
+// and a .38 sound alike at 100 m); the DMR shares the AK5 hall take indoors.
+const DIST_CLASS = { ar: "ar", smg: "pistol", pistol: "pistol", dmr: "dmr", shotgun: "sg" };
+const INDOOR_CLASS = { ar: "ar", dmr: "ar", smg: "smg", pistol: "pistol", shotgun: "sg" };
+// Recorded-layer trims (takes are peak-normalised to −1 dBFS; MEASURED against
+// the previous processed layers with the OfflineAudioContext harness — lane report)
+const MID_REC_GAIN = 1.6;
+const FAR_REC_GAIN = 1.9;
+const ROOM_GAIN_OWN = 0.3;     // indoor take under the player's own dry report
+const ROOM_GAIN_ENEMY = 0.45;  // indoor take under a nearby enemy's report
+const SG_CLOSE_GAIN = 2.3;     // the 1 m Saiga take vs the other close bodies (+7.2 dB)
+const SG_RANGE_GAIN = 1.4;     // its mid/far takes (+2.9 dB): a 12-gauge still booms at range
 
 // ---- pump-action timing (B-12 Breaker) -----------------------------------------
 // The slide is racked back PUMP_BACK_S after the blast and forward again
@@ -149,7 +225,9 @@ export function makeSfx(env) {
   };
   const fb = { t: -9, kind: 0, hits: 0 }; // last player hit tick: 1 body, 2 head; pellets landed so far
   const stats = { bangs: 0, racks: 0, shellInserts: 0, hitTicks: 0, headTicks: 0, killTicks: 0,
-                  switches: 0, dryFires: 0, shellReloadStarts: 0 };
+                  switches: 0, dryFires: 0, shellReloadStarts: 0,
+                  grenadeWarnings: 0, grenadePins: 0, respawns: 0, resupplies: 0, lootDrops: 0,
+                  botLandings: 0, ui: 0 };
 
   function wdef(id) { return WEAPONS[id] || null; }
   function pelletsOf(id) { const w = wdef(id); return (w && w.pellets) | 0; }
@@ -195,21 +273,54 @@ export function makeSfx(env) {
     if (loading || !env.ac) return;
     loading = true;
     const base = typeof document !== "undefined" ? document.baseURI : "";
+    // one fetch + decode per FILE (several slices can share one take)
+    const decodes = new Map();
     for (const name of Object.keys(FILES)) {
       buffers[name] = [];
-      for (const rel of FILES[name]) {
-        const url = new URL("assets/audio/" + rel, base).href;
-        fetch(url)
-          .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status + " " + rel); return r.arrayBuffer(); })
-          .then((ab) => env.ac.decodeAudioData(ab))
-          .then((b) => { buffers[name].push(b); decoded++; })
+      for (const spec of FILES[name]) {
+        const rel = typeof spec === "string" ? spec : spec.f;
+        let p = decodes.get(rel);
+        if (!p) {
+          const url = new URL("assets/audio/" + rel, base).href;
+          p = fetch(url)
+            .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status + " " + rel); return r.arrayBuffer(); })
+            .then((ab) => env.ac.decodeAudioData(ab));
+          decodes.set(rel, p);
+        }
+        p.then((b) => { buffers[name].push(typeof spec === "string" ? b : slice(b, spec)); decoded++; })
           .catch((e) => err(e, "decode:" + rel)); // synth fallback stands
       }
     }
   }
 
+  // copy [off, off+dur) out of a decoded take: 1.5 ms fade-in (no click if the
+  // window starts mid-wave), cosine fade-out over the last 30% (≤ 30 ms).
+  function slice(b, spec) {
+    try {
+      const sr = b.sampleRate;
+      const i0 = Math.max(0, Math.floor(fin(spec.off, 0) * sr));
+      const n = Math.max(16, Math.min(b.length - i0, Math.floor(fin(spec.dur, 0.1) * sr)));
+      const out = env.ac.createBuffer(b.numberOfChannels, n, sr);
+      const fi = Math.max(1, Math.floor(0.0015 * sr));
+      const fo = Math.max(1, Math.floor(Math.min(0.03, (n / sr) * 0.3) * sr));
+      for (let c = 0; c < b.numberOfChannels; c++) {
+        const src = b.getChannelData(c), dst = out.getChannelData(c);
+        for (let i = 0; i < n; i++) {
+          let g = 1;
+          if (i < fi && i0 > 0) g = i / fi;
+          const r = n - 1 - i;
+          if (r < fo) g *= 0.5 - 0.5 * Math.cos(Math.PI * (r / fo));
+          dst[i] = src[i0 + i] * g;
+        }
+      }
+      return out;
+    } catch (e) { err(e, "slice"); return b; }
+  }
+
   // ---- tiny voice builders ---------------------------------------------------
-  function voice(buffer, out, { rate = 1, gain = 1, when = 0, lp = 0, hp = 0 } = {}) {
+  // `shelf` = dB of low-shelf at 200 Hz (indoor room boom); `send` = an extra
+  // destination fed post-gain (the per-shot early-reflection network).
+  function voice(buffer, out, { rate = 1, gain = 1, when = 0, lp = 0, hp = 0, shelf = 0, send = null } = {}) {
     const ac = env.ac;
     if (!buffer || !out) return null;
     try {
@@ -221,7 +332,9 @@ export function makeSfx(env) {
       let head = src;
       if (lp) { const f = ac.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = fin(lp, 20000); head.connect(f); head = f; }
       if (hp) { const f = ac.createBiquadFilter(); f.type = "highpass"; f.frequency.value = fin(hp, 20); head.connect(f); head = f; }
+      if (shelf) { const f = ac.createBiquadFilter(); f.type = "lowshelf"; f.frequency.value = 200; f.gain.value = Math.max(-12, Math.min(12, fin(shelf, 0))); head.connect(f); head = f; }
       head.connect(g); g.connect(out);
+      if (send) g.connect(send);
       liveVoices++; env.voices++;
       src.onended = () => { liveVoices = Math.max(0, liveVoices - 1); };
       src.start(Math.max(ac.currentTime, ac.currentTime + fin(when, 0)));
@@ -335,50 +448,165 @@ export function makeSfx(env) {
     return true;
   }
 
-  // Pump-action shotgun: the heavy boom, built from recorded bodies (see FILES) +
-  // a broadband blast burst + a sub thump. Returns the main body source so the
-  // shooter-tail send can tap it like any other gun's body.
-  function shotgunBody(dst, { own, ring, when, degraded, gain }) {
-    const j = () => 1 + (rng() * 2 - 1) * 0.05;
-    const a = buf("gun_breaker_a") || buf("gun_corvus");
-    const b2 = buf("gun_breaker_b") || buf("gun_warden");
+  // ---- the distance model (2026-11-13 audio pass) --------------------------------
+  // The old model was three hard rings (0–30 / 30–90 / 90–300 m) on top of the
+  // shared spatial curve (1 − d/320)^1.4, which is nearly LINEAR in metres: a
+  // shot at 150 m measured −9.4 dBFS pre-limiter against −8.7 at 45 m, so range
+  // was carried by EQ alone and the ring edges jumped. Now:
+  //   * level: inverse-distance from GUN_REF_M with a softened exponent
+  //     (−4.8 dB per doubling instead of the free-field −6, so a firefight 200 m
+  //     off is still a firefight): 10 m −1.8 dB, 30 m −5.6, 60 m −8.0,
+  //     120 m −10.4, 250 m −13.0 relative to the 6 m reference, on top of the
+  //     per-layer EQ below, which removes far more energy at range;
+  //   * timbre: three CROSSFADED layers of the same take, weighted by smooth
+  //     steps of distance — CLOSE (full-range body + crack + mech), MID
+  //     (high-passed, crack-led, early reflections), FAR (slowed + low-passed
+  //     thump, a synth "pop", a long low tail and an exterior slap echo). No
+  //     edge anywhere: a shooter walking away changes colour continuously;
+  //   * delay: everything is scheduled at dist / 343 s (§7.2), so the far crack
+  //     of a 250 m shot arrives 0.73 s after the muzzle flash.
+  const GUN_REF_M = 6;
+  const GUN_ROLLOFF = 0.8;
+  const CLOSE_A = 14, CLOSE_B = 45;   // close layer fades out across 14 → 45 m
+  const FAR_A = 85, FAR_B = 170;      // far layer fades in across 85 → 170 m
+  const SUP_MAX_M = 80;               // a suppressed report stops carrying here
+  // Mix levels (MEASURED: see the lane report; pre-limiter peaks, own gun):
+  // the player's gun leaves ≈6 dB of headroom so a 30-round burst does not
+  // sit on the limiter; enemies are 3 dB under your own gun at the same range.
+  const OWN_GUN_LEVEL = 0.5;
+  const ENEMY_GUN_LEVEL = 0.5 * 0.9;
+  const MID_GAIN = 1.25;              // the high-pass sheds energy; give some back
+  const FAR_GAIN = 1.4;               // the low-pass sheds even more
+
+  function smooth(a, b, x) {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  }
+  // the recorded far takes hold more energy than the old 420 Hz-filtered copy:
+  // −3 dB more by 250 m so the edge of the world stays clearly further than 150 m
+  function farEdge(d) { return 1 - 0.3 * smooth(170, 300, d); }
+  // past GUN_KNEE_M the law steepens by a further (knee/d)^0.5 so 250 m is clearly
+  // quieter than 150 m even though the far layer's tail tilt rises with range
+  const GUN_KNEE_M = 100;
+  function gunDistGain(d) {
+    if (d <= GUN_REF_M) return 1;
+    const g = Math.pow(GUN_REF_M / d, GUN_ROLLOFF);
+    return d <= GUN_KNEE_M ? g : g * Math.pow(GUN_KNEE_M / d, 0.5);
+  }
+
+  // FIRST SHOT vs SUSTAINED FIRE: a per-shooter "heat" (rounds, decaying with
+  // τ 0.35 s). The first round of a string is fuller (+1.5 dB body, the sub pop,
+  // the long mech transient); from ~4 rounds in the body sheds up to 1.4 dB and
+  // ~2% pitch and the own-gun sub stops — the rattle of a held trigger instead of
+  // thirty first shots in a row, and far less low end for the limiter to chew.
+  const heatMap = new Map();
+  function heatOf(shooter) {
+    const t = env.ac.currentTime;
+    const s = heatMap.get(shooter) || { h: 0, t };
+    s.h = s.h * Math.exp(-Math.max(0, t - s.t) / 0.35) + 1;
+    s.t = t;
+    heatMap.set(shooter, s);
+    if (heatMap.size > 48) for (const [k, v] of heatMap) if (t - v.t > 4) heatMap.delete(k);
+    return s.h;
+  }
+
+  // EARLY REFLECTIONS: a tiny per-shot tap network fed by the close/mid layers.
+  // Indoors (the SHOOTER's zone is not exterior) it is three dense, short taps —
+  // the "boxy" crack of a room; outdoors only the MID layer feeds it, with two
+  // later taps (façades 5–20 m away). The zone convolver still supplies the
+  // diffuse tail; this is the part a listener uses to tell inside from outside.
+  function reflections(dst, indoor, level) {
+    const ac = env.ac;
+    const inp = ac.createGain(); inp.gain.value = gclamp(level);
+    const taps = indoor
+      ? [[0.006 + rng() * 0.004, 0.50, 3600], [0.015 + rng() * 0.007, 0.34, 2600], [0.027 + rng() * 0.010, 0.22, 1800]]
+      : [[0.028 + rng() * 0.018, 0.34, 3200], [0.070 + rng() * 0.040, 0.22, 2000]];
+    try {
+      for (const [dt, g, lp] of taps) {
+        const dl = ac.createDelay(0.2); dl.delayTime.value = dt;
+        const f = ac.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = lp;
+        const tg = ac.createGain(); tg.gain.value = g;
+        inp.connect(dl); dl.connect(f); f.connect(tg); tg.connect(dst);
+      }
+    } catch (e) { err(e, "refl"); }
+    return inp;
+  }
+  // the distant "rolling" echo off the far side of the street: one low, late
+  // copy of the far layer (exterior only)
+  function slapEcho(dst, delayS, gain, lp) {
+    const ac = env.ac;
+    try {
+      const inp = ac.createGain(); inp.gain.value = gclamp(gain);
+      const dl = ac.createDelay(1.0); dl.delayTime.value = Math.min(0.95, Math.max(0.05, fin(delayS, 0.3)));
+      const f = ac.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = fin(lp, 600);
+      inp.connect(dl); dl.connect(f); f.connect(dst);
+      return inp;
+    } catch (e) { err(e, "slap"); return null; }
+  }
+
+  // Pump-action shotgun — RECORDED (2026-11-13 library pass). Same close/mid/far
+  // layer model as every other gun:
+  //   CLOSE  a Saiga-12 report recorded at 1 m (3 takes, ±3% rate);
+  //   MID    the SPAS-12 recorded 20 m in front (or, indoors, the Mossberg in an
+  //          office corridor);
+  //   FAR    the Dan Wesson .445 recorded 100 m off-axis (a big-bore boom — no
+  //          distant 12-gauge take exists in the library), low-passed past 150 m;
+  // under a reduced synth sub + chest thump (the "felt" low end a mic at 1 m
+  // under-reports). The previous slowed pistol/SVD/AR construction is gone; if
+  // the recorded sheet failed to decode the synth boom below stands in.
+  // Returns the loudest recorded source so the shooter-tail send can tap it.
+  function shotgunBody(dst, { own, wC, wM, wF, when, degraded, gain, refl, indoor, dist }) {
+    const j = () => 1 + (rng() * 2 - 1) * 0.03;
+    const near = wC + wM * 0.6;
     let src = null;
-    if (a && !degraded) {
-      // the SVD report at ~0.55x: a long, low, chesty report
-      src = voice(a, dst, {
-        rate: 0.55 * j(), gain: gain * 1.05, when,
-        lp: ring === 2 ? 1300 : 0,
-        hp: ring === 1 ? 300 : 0,                  // keeps the boom at 30–90 m, drops only the rumble
-      });
-    }
-    if (b2 && !degraded) {
-      // the AR report at ~0.7x, low-passed: body and the 'punch' of the blast
-      voice(b2, dst, {
-        rate: 0.70 * j(), gain: gain * 0.62, when: when + 0.004,
-        lp: ring === 2 ? 1000 : 1900,
-        hp: ring === 1 ? 300 : 0,
-      });
+    if (!degraded) {
+      const c = buf("gun_breaker");
+      if (c && wC > 0.04) src = voice(c, dst, { rate: j(), gain: gain * wC * SG_CLOSE_GAIN, when, shelf: indoor ? 2.5 : 0, send: refl });
+      if (wM > 0.04 || (indoor && wC > 0.04)) {
+        const m = indoor ? (buf("in_sg") || buf("mid_sg")) : buf("mid_sg");
+        const mg = indoor ? (wM + wC * (own ? ROOM_GAIN_OWN : ROOM_GAIN_ENEMY)) : wM;
+        const s = m ? voice(m, dst, { rate: j(), gain: gain * mg * MID_REC_GAIN * SG_RANGE_GAIN, when, lp: 9000 - 4000 * smooth(30, 150, dist), send: indoor ? null : refl }) : null;
+        src = src || s;
+      }
+      if (wF > 0.04) {
+        const f = buf("far_sg");
+        const lpF = 6000 * Math.pow(1100 / 6000, smooth(150, 300, dist));
+        const s = f ? voice(f, dst, { rate: 0.94 * j(), gain: gain * wF * FAR_REC_GAIN * SG_RANGE_GAIN * farEdge(dist), when, lp: lpF }) : null;
+        src = src || s;
+      }
     }
     if (!src) {
       // synth fallback: boom + crack, still heavier than any rifle fallback
-      thump(dst, { f0: 150, f1: 48, durMs: ring === 2 ? 220 : 170, gain: gain * 0.7, when });
-      if (ring < 2) burst(dst, { f: 1100, q: 0.9, durMs: 70, gain: gain * 0.55, when });
+      thump(dst, { f0: 150, f1: 48, durMs: wF > 0.5 ? 220 : 170, gain: gain * 0.7, when });
+      if (wF < 0.5) burst(dst, { f: 1100, q: 0.9, durMs: 70, gain: gain * 0.55, when });
     }
-    // broadband blast burst (the gas wad) + the sub under it
     if (!degraded) {
-      burst(dst, { f: 1500, q: 0.6, durMs: ring === 2 ? 130 : 105, gain: gain * 0.5, when, decayMs: 42 });
-      thump(dst, { f0: 96, f1: 36, durMs: ring === 2 ? 300 : 230, gain: gain * 0.62, when });
+      thump(dst, { f0: 84, f1: 36, durMs: wF > 0.5 ? 320 : 240, gain: gain * (own ? 0.4 : 0.32), when }); // sub
+      if (near > 0.05) thump(dst, { f0: 165, f1: 82, durMs: 80, gain: gain * 0.22 * near, when });        // chest
     }
     return src;
   }
 
-  // The pump RACK, two parts: slide BACK (latch + scrape + heavy clack) at `when`,
-  // slide FORWARD (click + seat) PUMP_FWD_GAP_S later. `g` is the overall gain.
-  // Returns the recorded sources so a cancel (reload interrupted) can stop them.
+  // The pump RACK, two parts: slide BACK at `when`, slide FORWARD
+  // PUMP_FWD_GAP_S later — the recorded SPAS-12 strokes (each slice is the
+  // slide's travel ending in its clack). `g` is the overall gain. Returns the
+  // recorded sources so a cancel (reload interrupted) can stop them. The
+  // synthesized latch/scrape/seat version below is the decode-failure fallback.
   function pumpRack(out, { when = 0, g = 0.5, srcs = null } = {}) {
     if (!out) return;
     stats.racks++;
     const t2 = when + PUMP_FWD_GAP_S;
+    const pb = buf("pump_back"), pf = buf("pump_fwd");
+    if (pb && pf) {
+      const jr = () => 1 + (rng() * 2 - 1) * 0.03;
+      // the recorded clack sits 0.10–0.16 s into each slice (measured peaks):
+      // start each stroke 0.11 s early so the BACK clack still lands at `when`
+      // (where casings.js ejects the hull) and the FORWARD clack at t2
+      const s1 = voice(pb, out, { rate: jr(), gain: g * 1.1, when: Math.max(0, when - 0.11) });
+      const s2 = voice(pf, out, { rate: jr(), gain: g * 1.1, when: Math.max(0, t2 - 0.11) });
+      if (srcs) { if (s1) srcs.push(s1); if (s2) srcs.push(s2); }
+      return;
+    }
     const l = buf("latch");
     const s1 = l ? voice(l, out, { rate: 0.82 * (1 + (rng() * 2 - 1) * 0.04), gain: g * 0.9, when }) : null;
     if (!l) burst(out, { f: 1700, q: 3, durMs: 26, gain: g * 0.34, when });
@@ -392,10 +620,69 @@ export function makeSfx(env) {
     if (srcs) { if (s1) srcs.push(s1); if (s2) srcs.push(s2); }
   }
 
+  // MECHANICAL LAYER the player hears on their OWN gun, after the report: the
+  // bolt carrier / slide cycling (split clicks of the recorded metal take, pitched
+  // per class) and the brass hitting the ground. Quiet on purpose — it lives
+  // under the report and reads as "a machine in your hands", not as a click track.
+  let brassN = 0;
+  function ownAction(w, out, first) {
+    const cls = classOf(w);
+    const jr = () => 1 + (rng() * 2 - 1) * 0.04;
+    const bo = buf("f_bolt"), hm = buf("f_hammer"), br = buf("f_brass");
+    if (bo && cls !== "shotgun") {
+      // RECORDED (2026-11-13): the Saiga bolt slamming home, pitched per class,
+      // and for the pistol the Dan Wesson hammer + a small slide snap
+      if (cls === "ar") voice(bo, out, { rate: 1.35 * jr(), gain: 0.05, when: 0.014, hp: 900 });
+      else if (cls === "smg") voice(bo, out, { rate: 1.2 * jr(), gain: 0.07, when: 0.008 });
+      else if (cls === "dmr") voice(bo, out, { rate: 0.92 * jr(), gain: 0.07, when: 0.03 });
+      else if (cls === "pistol") {
+        if (hm) voice(hm, out, { rate: 1.1 * jr(), gain: 0.04, when: 0.008, hp: 700 });
+        voice(bo, out, { rate: 1.65 * jr(), gain: 0.035, when: 0.036, hp: 900 });
+      }
+      if (br) {
+        brassN++;
+        const auto = cls === "ar" || cls === "smg";
+        if (!auto || (brassN & 1) || first) {
+          // the .50 case drops pitched up into rifle / pistol brass on the ground
+          const rate = (cls === "pistol" || cls === "smg" ? 2.1 : cls === "dmr" ? 1.45 : 1.75) * (0.95 + rng() * 0.1);
+          voice(br, out, { rate, gain: 0.045, when: 0.38 + rng() * 0.25, hp: 1500 });
+        }
+      }
+      return;
+    }
+    const ca = buf("click_a"), cb = buf("click_b"), la = buf("latch");
+    if (cls === "ar") {          // bolt carrier slams home, buffer spring twang
+      if (ca) voice(ca, out, { rate: 1.55 * jr(), gain: 0.10, when: 0.014, hp: 1200 });
+      burst(out, { f: 3900, q: 9, durMs: 30, gain: 0.018, when: 0.02 });
+    } else if (cls === "smg") {  // open-bolt slam: the loudest part of a suppressed SMG
+      if (ca) voice(ca, out, { rate: 1.3 * jr(), gain: 0.15, when: 0.008 });
+      thump(out, { f0: 310, f1: 210, durMs: 24, gain: 0.05, when: 0.01, type: "triangle" });
+    } else if (cls === "dmr") {  // heavy carrier: back, then home
+      if (la) voice(la, out, { rate: 1.25 * jr(), gain: 0.11, when: 0.02, hp: 600 });
+      if (cb) voice(cb, out, { rate: 1.1 * jr(), gain: 0.09, when: 0.06 });
+    } else if (cls === "pistol") { // slide back / forward
+      if (ca) voice(ca, out, { rate: 1.9 * jr(), gain: 0.075, when: 0.008, hp: 900 });
+      if (cb) voice(cb, out, { rate: 1.7 * jr(), gain: 0.06, when: 0.04, hp: 900 });
+    }
+    // brass: every round for semi-autos, every other round on full-auto
+    if (cls !== "shotgun") {
+      brassN++;
+      const auto = cls === "ar" || cls === "smg";
+      if (!auto || (brassN & 1) || first) {
+        const tl = 0.38 + rng() * 0.25;
+        const p = 0.92 + rng() * 0.16;
+        thump(out, { f0: 2350 * p, f1: 2330 * p, durMs: 60, gain: 0.010, when: tl });
+        thump(out, { f0: 3480 * p, f1: 3470 * p, durMs: 40, gain: 0.006, when: tl });
+        thump(out, { f0: 2500 * p, f1: 2480 * p, durMs: 35, gain: 0.005, when: tl + 0.07 + rng() * 0.05 });
+      }
+    }
+  }
+
   function bang(d, V) {
     const ac = env.ac;
     stats.bangs++;
     const own = d.shooter === "P";
+    const w = d.weaponId;
     const origin = d.origin || camPos();
     let dist = 0;
     if (!own) {
@@ -403,23 +690,23 @@ export function makeSfx(env) {
       dist = Math.hypot(origin[0] - c[0], (origin[1] || 0) - c[1], origin[2] - c[2]);
       if (!Number.isFinite(dist) || dist > 300) return;
     }
-    const ring = own || dist < 30 ? 0 : dist < 90 ? 1 : 2;
-    // voice budget: under load distant fire degrades to crack-only, never player —
-    // and never a shooter close enough to matter (2026-10-14: a gun 5 m away was
-    // as droppable as one at 250 m)
+    const suppressed = !!d.suppressed; // [gunsmith] sim shot-event flag (Vesper's can, or a fitted suppressor)
+    if (suppressed && !own && dist > SUP_MAX_M) return;
+    // voice budget: under load distant fire is dropped first, never the player's
+    // and never a shooter close enough to matter
     if (!own && liveVoices > 40 && dist > 35) return;
     const degraded = !own && liveVoices > 24;
 
     const when = own ? 0 : dist / 343;              // audible flight delay (§7.2)
     const out = env.spatial(own ? null : origin, 320);
     if (!out) return;
-    // The honest distance gain, captured BEFORE the ring-2 mix boost below: the
-    // tail send and the tail duck are keyed off physics, not off a mix decision.
-    const spatialVol = Math.max(0, fin(out.gain.value, 1));
-    if (ring === 2) out.gain.value = gclamp(out.gain.value * 1.26); // night-quiet +2 dB
+    // the honest distance gain (keys the tail send + tail duck)
+    const spatialVol = own ? 1 : gunDistGain(dist);
+    out.gain.value = gclamp(spatialVol * (own ? OWN_GUN_LEVEL : ENEMY_GUN_LEVEL));
 
     // zones-differ + no-LOS muffle (§7.3): boom through the door
     const shooterZone = env.zoneOf(origin[0], (origin[1] || 0), origin[2]);
+    const indoor = shooterZone !== "exterior";
     let dst = out;
     if (!own && shooterZone !== env.cameraZone && env.losBlocked(origin, camPos())) {
       const f = ac.createBiquadFilter();
@@ -427,26 +714,43 @@ export function makeSfx(env) {
       f.connect(out); dst = f;
     }
 
-    // SUPPRESSED Vesper (it carries a can on the model and in its data): darker,
-    // quieter report that stops carrying past ~120 m
-    if (d.weaponId === "vesper") {
-      if (!own && dist > 120) return;
-      const lp = ac.createBiquadFilter();
-      lp.type = "lowpass"; lp.frequency.value = 2400; lp.Q.value = 0.5;
-      const sg = ac.createGain(); sg.gain.value = 0.55;
-      lp.connect(sg); sg.connect(dst); dst = lp;
-    }
-    const pumpGun = d.weaponId === "breaker";
+    // layer weights (see the distance-model block above)
+    const wC = own ? 1 : 1 - smooth(CLOSE_A, CLOSE_B, dist);
+    const wF = own || suppressed ? 0 : smooth(FAR_A, FAR_B, dist);
+    const wM = Math.max(0, 1 - wC - wF);
+
+    const pumpGun = w === "breaker";
+    const H = heatOf(d.shooter);
     // a pump gun's pull interval (0.77 s) exceeds the 0.5 s burst gap, so EVERY
     // pull is flagged firstShot — the §2.8 bump would just be its normal sound
-    const first = !!d.firstShot && !pumpGun;
-    // mechanical layer — synth, per-weapon character; rings 0-1 only
-    if (ring < 2 && !degraded) {
-      const m = MECH[d.weaponId] || MECH.warden;
-      let mg = 0.14 * m.gain * (own ? 1.41 : 1);              // player's own action +3 dB
-      if (m.kind === "pump") mg *= PUMP_LEVEL;
+    const first = !pumpGun && (!!d.firstShot || H < 1.5);
+    const sustained = Math.min(1, Math.max(0, (H - 2.5) / 4));
+
+    // early reflections (indoor: close + mid layers; outdoor: mid layer only)
+    let refl = null;
+    if (!degraded && !suppressed) {
+      if (indoor && wC + wM > 0.1) refl = reflections(dst, true, own ? 0.55 : 0.6);
+      else if (!indoor && wM > 0.12) refl = reflections(dst, false, 0.7 * wM);
+    }
+    const reflC = indoor ? refl : null;              // outdoors the close layer stays dry
+    // OUTDOOR SLAP: the report coming back off the buildings across the street —
+    // one late, darker copy of the close/mid layers (120–320 ms). The trimmed
+    // automatic takes no longer carry their recorded slap, and this is what makes
+    // an outdoor shot read as OUTDOORS after its dry crack.
+    let slapC = null;
+    if (!indoor && !degraded && !suppressed && wC + wM > 0.1) {
+      slapC = slapEcho(dst, 0.12 + rng() * 0.2, (own ? 0.16 : 0.22) * (0.5 * wC + wM), 1500);
+      if (refl && slapC) refl.connect(slapC);
+    }
+
+    // mechanical/crack layer — synth, per-weapon character; close + mid only
+    const mechW = wC + 0.25 * wM;
+    if (mechW > 0.08 && !degraded && !suppressed) {
+      const m = MECH[w] || MECH.warden;
+      let mg = 0.14 * m.gain * (own ? 1.41 : 1) * mechW;      // player's own action +3 dB
+      // the recorded 12-gauge has its own snap: the synth one is only a −6 dB sweetener
+      if (m.kind === "pump") mg *= PUMP_LEVEL * (buffers.gun_breaker && buffers.gun_breaker.length ? 0.5 : 1);
       if (first) mg *= Math.pow(10, (FIRST_SHOT.mechLayerDb || 2) / 20);
-      if (ring === 1) mg *= 0.25;                              // −12 dB at 30–90 m
       const durMul = first ? (FIRST_SHOT.transientLenMult || 1.15) : 1;
       const dur = m.durMs * durMul;
       if (m.kind === "double") {
@@ -460,155 +764,162 @@ export function makeSfx(env) {
         burst(dst, { f: m.f, q: 5, durMs: dur, gain: mg, when });
         burst(dst, { f: 5200, q: 7, durMs: 7, gain: mg * 0.5, when: when + m.gapMs / 1000 });
       } else if (m.kind === "pump") {
-        // wide, hard blast crack + the roar under it (the sub is in shotgunBody)
-        burst(dst, { f: m.f, q: 0.7, durMs: dur, gain: mg * 0.95, when, decayMs: 14 });
-        burst(dst, { f: 5200, q: 2.2, durMs: 14, gain: mg * 0.32, when });                  // the wad's top-end snap
-        burst(dst, { f: 700, q: 0.8, durMs: 120, gain: mg * 1.05, when, decayMs: 48 });      // blast body
-        burst(dst, { f: 230, q: 0.9, durMs: 170, gain: mg * 0.8, when: when + 0.004, decayMs: 66 }); // low roar
+        // the wad's hard snap + the roar under it (boom/sub live in shotgunBody)
+        burst(dst, { f: m.f, q: 0.7, durMs: dur, gain: mg * 0.8, when, decayMs: 12 });
+        burst(dst, { f: 230, q: 0.9, durMs: 170, gain: mg * 0.7, when: when + 0.004, decayMs: 60 });
       } else {
         burst(dst, { f: m.f, q: 5, durMs: dur, gain: mg, when });
       }
-      // spring rattle tail on autos
-      if (d.weaponId === "warden" || d.weaponId === "vesper") {
-        burst(dst, { f: 5600, q: 3, durMs: 22, gain: mg * 0.25, when: when + 0.006 });
-      }
+      if (w === "warden") burst(dst, { f: 5600, q: 3, durMs: 22, gain: mg * 0.2, when: when + 0.006 }); // spring
     }
 
-    // body layer — recorded take ±6% rate/gain jitter (§7.1 decorrelation)
-    const b = pumpGun ? null : (buf("gun_" + d.weaponId) || buf("gun_warden"));
-    const bodyGain = (own ? 0.7 : 0.6) * (1 + (rng() * 2 - 1) * 0.06);
-    const bodyRate = 1 + (rng() * 2 - 1) * 0.06;
-    let bodySrc = null;
+    // body layers — recorded take, ±5% rate/gain jitter (§7.1 decorrelation)
+    const b = pumpGun ? null : (buf("gun_" + w) || buf("gun_warden"));
+    // per-take trim: the pistol takes peak at 1.3 (over full scale) — measured −2.5
+    // dBFS own vs −4…−5 for the rifles; −2 dB puts it with them
+    const bodyGain = 0.7 * (w === "pike" ? 0.8 : 1) * (1 + (rng() * 2 - 1) * 0.05) * (first ? 1.19 : 1) * (1 - 0.15 * sustained);
+    const bodyRate = (1 + (rng() * 2 - 1) * 0.05) * (1 - 0.02 * sustained);
+    let tapSrc = null;
+    // recorded perspective pools for this weapon's class (null → old processed path)
+    const cls = classOf(w);
+    const dk = DIST_CLASS[cls] || "ar";
+    const midRec = indoor ? null : buf("mid_" + dk);
+    const farRec = buf("far_" + dk);
+    const roomRec = indoor ? buf("in_" + (INDOOR_CLASS[cls] || "ar")) : null;
+    let farRecUsed = false;
     if (pumpGun) {
-      bodySrc = shotgunBody(dst, { own, ring, when, degraded, gain: bodyGain * PUMP_LEVEL });
+      tapSrc = shotgunBody(dst, { own, wC, wM, wF, when, degraded, gain: bodyGain * PUMP_LEVEL, refl, indoor, dist });
+      farRecUsed = wF > 0.04 && !!buf("far_sg");
+    } else if (b && !degraded && suppressed) {
+      // SUPPRESSED (the Vesper carries a can on the model and in its data): the
+      // can eats the blast, not the gun — a band-limited "thup" (body 320 Hz–
+      // 1.7 kHz at −8 dB), a short gas "pfft", and the bolt slamming, which on
+      // a real suppressed SMG is the loudest thing you hear. No sub, no crack.
+      tapSrc = voice(b, dst, { rate: bodyRate * 0.94, gain: bodyGain * 0.48 * (wC + 0.6 * wM), when, hp: 320, lp: 1700 });
+      burst(dst, { f: 950, q: 0.7, durMs: 45, decayMs: 12, gain: 0.10 * (wC + 0.5 * wM), when });          // gas pfft
+      burst(dst, { f: 2600, q: 1.2, durMs: 20, gain: 0.035 * wC, when: when + 0.002 });                   // can ring
+      const ca = buf("click_a");
+      if (!own && ca && wC > 0.2) voice(ca, dst, { rate: 1.3, gain: 0.09 * wC, when: when + 0.008 });  // their bolt
     } else if (b && !degraded) {
-      bodySrc = voice(b, dst, {
-        rate: bodyRate, gain: bodyGain, when,
-        lp: ring === 2 ? 1400 : 0,                             // body-only ring
-        hp: ring === 1 ? 700 : 0,                              // crack-dominant ring
-      });
+      if (wC > 0.04) {
+        tapSrc = voice(b, dst, { rate: bodyRate, gain: bodyGain * wC, when, shelf: indoor ? 3.5 : 0, lp: w === "corvus" ? 8000 : 0, send: reflC || slapC });
+        // INDOORS: the hall/room recording of this class under the dry report —
+        // the real room, not only the synthetic taps (2026-11-13)
+        if (roomRec) voice(roomRec, dst, { rate: bodyRate, gain: bodyGain * wC * (own ? ROOM_GAIN_OWN : ROOM_GAIN_ENEMY), when: when + 0.002 });
+      }
+      if (wM > 0.04 && (midRec || roomRec)) {
+        // RECORDED mid perspective (a 20–65 m take, or indoors the hall take):
+        // distance colour is in the recording, so only a gentle air roll-off
+        const s = voice(midRec || roomRec, dst, {
+          rate: bodyRate, gain: bodyGain * wM * MID_REC_GAIN, when,
+          hp: 90, lp: 9000 - 4000 * smooth(30, 150, dist), send: indoor ? null : refl,
+        });
+        tapSrc = tapSrc || s;
+      } else if (wM > 0.04) {
+        // crack-led: the low body falls away first (450 → 750 Hz high-pass across
+        // 30–120 m) and air takes the top (7 → 3.5 kHz)
+        const s = voice(b, dst, {
+          rate: bodyRate, gain: bodyGain * wM * MID_GAIN, when,
+          hp: 450 + 300 * smooth(30, 120, dist), lp: 7000 - 3500 * smooth(30, 150, dist), send: refl,
+        });
+        tapSrc = tapSrc || s;
+      }
+      if (wF > 0.04 && farRec) {
+        // RECORDED far perspective (65–160 m takes): its own boom, crack and
+        // natural echo; low-passed further only beyond 150 m, a weaker slap
+        farRecUsed = true;
+        const lpF = 6000 * Math.pow(1000 / 6000, smooth(150, 300, dist));
+        const echo = indoor ? null : slapEcho(dst, 0.2 + rng() * 0.3, 0.2, Math.min(700, lpF));
+        const s = voice(farRec, dst, { rate: bodyRate, gain: bodyGain * wF * FAR_REC_GAIN * farEdge(dist), when, lp: lpF, send: echo });
+        tapSrc = tapSrc || s;
+      } else if (wF > 0.04) {
+        // the distant THUMP: slowed ~14% and low-passed 1.3 kHz → 420 Hz across
+        // 100–300 m (air absorption is ~24 dB/km at 3 kHz), with a late slap
+        // echo off the far side of the street when the shooter is outside
+        const lpF = 1300 * Math.pow(420 / 1300, smooth(100, 300, dist));
+        const echo = indoor ? null : slapEcho(dst, 0.16 + rng() * 0.3, 0.42, Math.min(700, lpF));
+        const s = voice(b, dst, { rate: bodyRate * 0.86, gain: bodyGain * wF * FAR_GAIN, when, lp: lpF, send: echo });
+        tapSrc = tapSrc || s;
+      }
     } else {
       // synth fallback: boom + crack
-      thump(dst, { f0: 170, f1: 62, durMs: ring === 2 ? 160 : 110, gain: bodyGain * 0.5, when });
-      if (ring < 2) burst(dst, { f: 1300, q: 1.2, durMs: 45, gain: bodyGain * 0.45, when });
+      thump(dst, { f0: 170, f1: 62, durMs: wF > 0.5 ? 160 : 110, gain: bodyGain * 0.5, when });
+      if (wF < 0.5) burst(dst, { f: 1300, q: 1.2, durMs: 45, gain: bodyGain * 0.45, when });
+    }
+    // the far "pop": a short low knock that survives any distance
+    // (halved when the recorded far take carries its own boom)
+    if (wF > 0.1 && !degraded) {
+      thump(dst, { f0: 125, f1: 55, durMs: 75, gain: (farRecUsed ? 0.1 : 0.2) * wF, when });
     }
 
-    // tail layer — shooter's-zone convolver (§7.3 shooter-tail rule).
-    //
-    // RETUNE 2026-09-16 — owner: "the ECHO of the weapon firing AFTER the fact is
-    // TOO loud." Four defects, every one of them measured through
-    // _harness/tailprobe.html against the live graph:
-    //
-    // (a) DOUBLE-FEED on your own weapon. audio.js already wires the WHOLE dry
-    //     bus into the CAMERA zone's convolver (`sfxDry.connect(send);
-    //     send.connect(conv)` with send = 1 for the camera zone). You ARE the
-    //     camera, so your own shot's body reaches the exterior convolver at full
-    //     level through the listener bed before this line runs; the explicit tap
-    //     then added 0.40 more on top of a 0.70 body — 1.10 of a signal whose
-    //     whole is 0.70. That is the one knob the complaint is actually about.
-    //     OLD own send (ring 0) 0.5 × 0.8 = 0.40 → NEW 0. The listener bed IS the
-    //     own-weapon tail; nothing is added to it. −3.9 dB of convolver drive on
-    //     every shot the player fires, at zero cost to anyone else's tail.
-    //     Deliberately KEPT for other shooters: their explicit send is the
-    //     distance-independent reverberant-field term and it is the only reason a
-    //     firefight at range reads as "mostly tail". Deleting it there would
-    //     flatten the spatial cue, which is the opposite of the brief.
-    //
-    // (b) NO DISTANCE SCALING AT ALL. Measured on the isolated tail branch
-    //     (warden bot, exterior, 4 pulls, peak dBFS): 5 m −40.3, 30 m −37.4,
-    //     60 m −37.4, 120 m −39.7, 200 m −39.8, 295 m −39.8 — flat within 3 dB
-    //     while the direct report fell 27 dB across the same span. A shot at
-    //     295 m drove the convolver exactly as hard as one at 5 m. The fix is
-    //     NOT a constant: outdoors the tail must fall SLOWER than the direct,
-    //     not not-at-all, so the send takes the shot's own distance gain raised
-    //     to TAIL_SEND_EXP (0.6) against a direct that falls as vol^1.4. Net
-    //     tail-to-direct still RISES with range — about +0.5 dB at 30 m, +6.8 dB
-    //     at 250 m — but bounded instead of running away to −9 dB under an
-    //     almost inaudible report at 295 m.
-    //
-    // (c) RING STEPS. OLD 0.5 / 0.7 / 0.5 by ring put a +2.9 dB tail jump at the
-    //     30 m boundary and a −2.9 dB drop at 90 m: a bot walking one metre
-    //     changed its own echo. The continuous curve replaces the ladder, so both
-    //     boundaries are now smooth. TAIL_SEND 0.55 sits between the old 0.5 and
-    //     0.7; after the distance term the send lands at 0.54 @5 m (was 0.50),
-    //     0.51 @30 m (was 0.70), 0.46 @60 m (was 0.70), 0.42 @90 m (was 0.50),
-    //     0.32 @150 m, 0.16 @250 m, 0.06 @295 m.
-    //
-    // (d) THE TAP IS PRE-FILTER. `bodySrc` is the raw BufferSource — upstream of
-    //     the ring-2 lp 1400, the ring-1 hp 700 and the no-LOS 900 Hz muffle — so
-    //     the tail carried full 3–6 kHz content at any range. Brightness is the
-    //     fastest "this is fake" tell there is: air absorption is ~5 dB/km at
-    //     1 kHz but ~24 dB/km at 3 kHz, so a distant tail is physically a low
-    //     thump. The send therefore gets its own lowpass, 6 kHz at 30 m → 900 Hz
-    //     at 250 m, log-interpolated, inserted only past 30 m so close shots pay
-    //     no node cost.
+    // tail layer — shooter's-zone convolver (§7.3 shooter-tail rule). Kept from
+    // the 2026-09-16 retune: NO explicit send for the player's own gun (the
+    // listener bed already feeds the camera zone's convolver — a send here was
+    // a measured double-feed), a continuous distance law (send ∝ vol^0.6, so the
+    // tail falls SLOWER than the direct), and a low-pass on the send past 30 m
+    // (the tap is pre-filter). Suppressed fire sends a third as much.
     const conv = env.tailIn(shooterZone);
-    if (conv && bodySrc && !own) {
+    if (conv && tapSrc && !own) {
       try {
         const tg = ac.createGain();
-        tg.gain.value = gclamp(TAIL_SEND * Math.pow(spatialVol, TAIL_SEND_EXP));
-        let tsrc = bodySrc;
+        // a hall/room take already carries the room: send 40% less into the zone
+        tg.gain.value = gclamp(TAIL_SEND * Math.pow(spatialVol, TAIL_SEND_EXP) * (suppressed ? 0.35 : 1) * (roomRec ? 0.6 : 1));
+        let tsrc = tapSrc;
         if (dist > TAIL_LP_NEAR_M) {
           const k = Math.min(1, (dist - TAIL_LP_NEAR_M) / (TAIL_LP_FAR_M - TAIL_LP_NEAR_M));
           const f = ac.createBiquadFilter();
           f.type = "lowpass";
           f.frequency.value = fin(TAIL_LP_NEAR_HZ * Math.pow(TAIL_LP_FAR_HZ / TAIL_LP_NEAR_HZ, k), TAIL_LP_NEAR_HZ);
-          bodySrc.connect(f); tsrc = f;
+          tapSrc.connect(f); tsrc = f;
         }
         tsrc.connect(tg); tg.connect(conv);
       } catch (e) { err(e, "tail"); }
     }
-    // Reverb-RETURN ducking, keyed off the shot that causes it (Web Audio has no
-    // side-chain). Stops sustained fire from stacking its own tails into mush
-    // without making a single shot any drier — see tailDuck() in audio.js for the
-    // measured +25.5 dB build-up this exists to stop.
+    // Reverb-RETURN ducking keyed off the shot (audio.js tailDuck): stops a held
+    // trigger stacking its own tails into mush without drying out one shot.
     if (env.tailDuck) env.tailDuck(shooterZone, when, own ? 1 : spatialVol);
-    if (ring === 2 && tailSlot(d.shooter, when)) {
-      // distant tail — the convolver zones are short; synthesize it. Three
-      // measured faults fixed here, all on a clean single-shot take (pike, whose
-      // two takes are the only gun bodies with no extra reports baked in):
-      //  * LENGTH. Measured audible tail (t60) was 1432 ms at 120 m and 1273 ms
-      //    at 200 m. A night street canyon is 400–900 ms; 1.3–1.7 s is open
-      //    terrain or a mountain valley. OLD durMs 1300 + rng()×400 (1.3–1.7 s)
-      //    → NEW 550 + rng()×300 (0.55–0.85 s).
-      //  * ENVELOPE — the bigger error. burst()'s default release is LINEAR,
-      //    which is −6 dB only at the half-way point (650–850 ms on the old
-      //    length) and quits with energy still present. Perceptually that is a
-      //    flat hiss ending on a corner, equivalent to an exponential RT60 of
-      //    several seconds. NEW decayMs = dur/5 makes it a true exponential:
-      //    −6 dB at ~140 ms, −43 dB by the end, no corner.
-      //  * TIMBRE. OLD f 420 Hz → NEW 340 Hz. Distance strips highs; the tail
-      //    has to sit below the body it belongs to, not beside it.
-      // BASE PEAK GAIN IS DELIBERATELY UNCHANGED at 0.10. The brief is to keep
-      // the distant tail — it is what makes a firefight read spatially — and the
-      // length/envelope fix already removes ~8 dB of tail ENERGY on its own.
-      // TAIL_TILT is the distance law, not a level change: without it the
-      // measured tail-to-direct ratio came out dead flat at −24 dB from 5 m to
-      // 295 m, i.e. the tail tracked the report exactly and carried no distance
-      // information at all. With it the ratio rises with range the way a real
-      // reverberant field does, bounded at +6 dB.
+    // the long tail fades in from 40 m (it used to start at a hard 90 m edge,
+    // leaving a 60–90 m shot with no tail at all past its reflections)
+    const wT = suppressed ? 0 : smooth(40, 150, dist);
+    if (wT > 0.15 && tailSlot(d.shooter, when)) {
+      // the long distant tail (0.55–0.85 s, true exponential, 340 Hz — see the
+      // 2026-09-16 notes in the lane history): pooled to one per shooter per
+      // TAIL_SLOT_S so one bot on full auto cannot build a bed out of its own
+      // tails. TAIL_TILT makes tail-to-direct RISE with range, bounded +6 dB.
       const dur = 550 + rng() * 300;
       const tilt = Math.min(TAIL_TILT_MAX, Math.pow(Math.max(1e-4, spatialVol), TAIL_SEND_EXP - 1));
-      burst(dst, { f: 340, q: 0.7, durMs: dur, decayMs: dur / 5, gain: 0.10 * tilt, when: when + 0.03 });
+      // base 0.10 → 0.16 (+4 dB): this pass took the gun reports down 4–6 dB for
+      // limiter headroom, so +4 dB keeps the 2026-09-16 tail-to-report balance
+      // the recorded far takes carry a real 1 s tail: the synth one drops 6 dB under them
+      burst(dst, { f: 340, q: 0.7, durMs: dur, decayMs: dur / 5, gain: 0.16 * tilt * wT * (farRecUsed ? 0.5 : 1), when: when + 0.03 });
     }
 
     if (own && env.music) env.music.gunDuck();                 // guns own the mix
-    if (first && own && ring === 0) {
-      // first-shot pop: tiny sub emphasis under the mech pop (§2.8). Not for a
-      // pump gun: every pull of it is a "first shot" and it carries its own sub.
-      thump(dst, { f0: 95, f1: 55, durMs: 70, gain: 0.18, when });
+    if (own && !suppressed && !pumpGun && sustained < 0.6) {
+      // first-shot pop (§2.8): a small sub under the transient; it fades out as
+      // the trigger is held, so sustained fire does not pump the limiter
+      thump(dst, { f0: 95, f1: 55, durMs: 70, gain: (first ? 0.18 : 0.07) * (1 - sustained), when });
     }
-    if (pumpGun && ring < 2 && !degraded) {
+    if (own && !degraded) ownAction(w, dst, first);
+    if (pumpGun && wF < 0.6 && !degraded) {
       // PUMP RACK: slide back PUMP_BACK_S after the blast (casings.js ejects the
-      // hull at the same instant), forward PUMP_FWD_GAP_S later. Own: full; a bot
-      // within 90 m: quieter, still through the shot's own spatial node.
-      pumpRack(dst, { when: when + PUMP_BACK_S, g: own ? 0.5 : ring === 0 ? 0.3 : 0.12 });
+      // hull at the same instant), forward PUMP_FWD_GAP_S later. Own: full; a
+      // shooter nearby: quieter, through the shot's own spatial node.
+      pumpRack(dst, { when: when + PUMP_BACK_S, g: own ? 0.3 : 0.32 * (wC + 0.4 * wM) });
       if (own) {
-        // the hull dropping on the ground: two soft plastic ticks
+        // a hand on the forend (cloth) and the hull dropping on the ground
+        const cl = buf("cloth");
+        if (cl) voice(cl, dst, { rate: 1.35, gain: 0.08, when: PUMP_BACK_S - 0.03 });
         const tl = when + PUMP_BACK_S + 0.46;
-        burst(dst, { f: 2600, q: 5, durMs: 12, gain: 0.05, when: tl });
-        burst(dst, { f: 2100, q: 5, durMs: 9, gain: 0.032, when: tl + 0.11 });
-        thump(dst, { f0: 420, f1: 330, durMs: 22, gain: 0.03, when: tl + 0.003, type: "triangle" });
+        const br = buf("f_brass");
+        if (br) {
+          // recorded case drop, pitched down + darkened: a plastic hull, not brass
+          voice(br, dst, { rate: 0.95 + rng() * 0.08, gain: 0.05, when: tl, lp: 2400 });
+        } else {
+          burst(dst, { f: 2600, q: 5, durMs: 12, gain: 0.05, when: tl });
+          burst(dst, { f: 2100, q: 5, durMs: 9, gain: 0.032, when: tl + 0.11 });
+          thump(dst, { f0: 420, f1: 330, durMs: 22, gain: 0.03, when: tl + 0.003, type: "triangle" });
+        }
       }
     }
   }
@@ -633,7 +944,21 @@ export function makeSfx(env) {
       // ring 2.8 kHz (§4.2 imp_metal character)
       thump(out, { f0: 2800, f1: 2740, durMs: 240, gain: 0.05, type: "sine" });
     }
+    // RICOCHET (2026-11-13, recorded): some rounds off steel and stone whine
+    // away. Not on penetration faces, at most one per 120 ms (a shotgun volley
+    // is nine impacts), and only within the 45 m the impact itself carries.
+    if (!(d && d.pen) && (s === "metal" || s === "concrete")) {
+      const now = env.ac.currentTime;
+      if (now - lastRic > 0.12 && rng() < (s === "metal" ? 0.45 : 0.15)) {
+        const rb = buf("ric");
+        if (rb) {
+          lastRic = now;
+          voice(rb, out, { rate: 0.9 + rng() * 0.25, gain: 0.12, when: 0.01, hp: 700 });
+        }
+      }
+    }
   }
+  let lastRic = -10;
 
   // ---- hit feedback (UI bus: post-reverb, never positional — §4.1) ------------
   // Three clearly different cues at low level, none of them harsh:
@@ -646,12 +971,20 @@ export function makeSfx(env) {
   //              + a 2.6 kHz ping and a 4 kHz snap).
   // A shotgun volley produces ONE of these per pull (+ one extra low thump if
   // three or more pellets landed): FEEDBACK_WINDOW_S gates the nine pellets.
+  // cue bus = limiter input, scaled by the SFX slider (audio.js buses.cue): the
+  // hit/kill ticks, warnings and stingers that must stay legible under the
+  // low-health muffle, the suppression low-pass and the explosion duck.
   function feedbackOut(gain) {
     const ac = env.ac;
     const g = ac.createGain();
-    const vol = fin(env.ctx.settings && env.ctx.settings.sfx, 1);
-    g.gain.value = gclamp(gain * vol);
-    g.connect(env.buses.limiter || env.buses.sfx);
+    if (env.buses.cue) {
+      g.gain.value = gclamp(gain);
+      g.connect(env.buses.cue);
+    } else {
+      const vol = fin(env.ctx.settings && env.ctx.settings.sfx, 1);
+      g.gain.value = gclamp(gain * vol);
+      g.connect(env.buses.limiter || env.buses.sfx);
+    }
     return g;
   }
   function hitTick(head) {
@@ -670,7 +1003,7 @@ export function makeSfx(env) {
     }
   }
   function killThock(head) {
-    const o = feedbackOut(1);
+    const o = feedbackOut(0.6);              // −4.4 dB: was −4.6 dBFS, over the guns
     stats.killTicks++;
     thump(o, { f0: 190, f1: 105, durMs: 120, gain: 0.26 });
     thump(o, { f0: 700, f1: 600, durMs: 70, gain: 0.22 });
@@ -729,6 +1062,13 @@ export function makeSfx(env) {
   // 2. At 10 bots × 3.5 Hz the step path can now out-allocate the gun path, so
   //    remote steps take the same liveVoices budget gate onShot() uses.
   const STEP_CADENCE_TRIM = 0.85;
+  // MIX (2026-11-13): the gun levels came down 4–6 dB in this pass (headroom for
+  // the limiter), which left an enemy footstep at 5 m (−6.9 dBFS peak, sprint
+  // −3.5) LOUDER than an enemy rifle at 10 m (−7.8). Steps are a competitive cue,
+  // so they stay clearly audible, but under the guns: ×0.6 (−4.4 dB) on every
+  // step, own and remote alike, so every §7.4 relative (own −10 dB, sprint +3,
+  // crouch −8) is untouched. Measured after: lane report.
+  const STEP_MIX = 0.6;
 
   function onStep(d) {
     if (!d) return;
@@ -746,6 +1086,7 @@ export function makeSfx(env) {
     if (own) {
       out = env.spatial(null);
       gain = 0.12 * (d.sprint ? 1.41 : 1);                     // −10 dB vs bots (§7.4)
+      if (d.quiet) gain *= 0.5;                                // SOFT STEP: you hear it working
       if (d.stance == null) {
         const st = env.ctx.sim() && env.ctx.sim().state;
         crouched = !!(st && st.player && st.player.stance === "crouch");
@@ -757,6 +1098,7 @@ export function makeSfx(env) {
       out = env.spatial(p, 30);
       if (!out) return;
       gain = 0.38 * (d.sprint ? 1.41 : 1);
+      if (d.quiet) gain *= 0.35;                               // SOFT STEP perk (sim flags the step)
       // friend or foe: a teammate behind you must not sound like a flanker
       try {
         const sm = env.ctx.sim();
@@ -776,7 +1118,7 @@ export function makeSfx(env) {
       // gait-feel one. Left alone on purpose — see the lane report.
     }
     if (!out) return;
-    gain *= STEP_CADENCE_TRIM;
+    gain *= STEP_CADENCE_TRIM * STEP_MIX;
     // left and right foot do not sound identical on a real body, and at 3.3 Hz
     // an unbiased take pool reads as one repeated sample. A fixed ±2.8% pitch
     // bias by foot rides UNDER the existing ±8% take jitter — the two feet
@@ -832,12 +1174,21 @@ export function makeSfx(env) {
       // hull taps the magazine tube, the latch snaps shut. Pitch jitters so six
       // shells never sound like one sample.
       const jt = 1 + (rng() * 2 - 1) * 0.07;
-      burst(out, { f: 3300 * jt, q: 6, durMs: 10, gain: g * 0.34 });
-      thump(out, { f0: 520 * jt, f1: 400 * jt, durMs: 28, gain: g * 0.22, when: 0.012, type: "triangle" });
-      const k = buf("clack");
-      if (k) voice(k, out, { rate: (1.45 + rng() * 0.12) * jt, gain: g * 0.5, when: 0.03 });
-      else burst(out, { f: 2100, q: 4, durMs: 14, gain: g * 0.2, when: 0.03 });
-      burst(out, { f: 1500, q: 3, durMs: 14, gain: g * 0.15, when: 0.065 });
+      const si = buf("shell_in");
+      if (si) {
+        // RECORDED: a cartridge seating with its brass click (pitched down a
+        // little — a 12-gauge base is bigger than a .357's), the hull's low tap
+        // into the tube under it
+        voice(si, out, { rate: 0.82 * jt, gain: g * 0.55 });
+        thump(out, { f0: 420 * jt, f1: 330 * jt, durMs: 26, gain: g * 0.12, when: 0.008, type: "triangle" });
+      } else {
+        burst(out, { f: 3300 * jt, q: 6, durMs: 10, gain: g * 0.34 });
+        thump(out, { f0: 520 * jt, f1: 400 * jt, durMs: 28, gain: g * 0.22, when: 0.012, type: "triangle" });
+        const k = buf("clack");
+        if (k) voice(k, out, { rate: (1.45 + rng() * 0.12) * jt, gain: g * 0.5, when: 0.03 });
+        else burst(out, { f: 2100, q: 4, durMs: 14, gain: g * 0.2, when: 0.03 });
+        burst(out, { f: 1500, q: 3, durMs: 14, gain: g * 0.15, when: 0.065 });
+      }
       // last shell in (mag full or reserve spent): the sim now runs its closing
       // pump pause — rack the slide forward over it
       const w = wdef(d.weaponId);
@@ -877,14 +1228,29 @@ export function makeSfx(env) {
     const srcs = [];
     // stages at the animation's beats (§7.4): out ~18%, in at the 65% commit,
     // rack ~84% on empty (player.js drives the same commitFraction).
-    const magIn = d.weaponId === "corvus" ? (buf("mag_in_corvus") || buf("mag_in")) : buf("mag_in");
-    const s1 = voice(buf("mag_out"), out, { gain: g, when: dur * 0.18, rate: 1 + rng() * 0.06 });
-    const s2 = voice(magIn, out, { gain: g, when: dur * (RELOAD_MODEL.commitFraction || 0.65), rate: 1 + rng() * 0.06 });
-    if (s1) srcs.push(s1); else burst(out, { f: 1900, q: 4, durMs: 30, gain: g * 0.4, when: dur * 0.18 });
-    if (s2) srcs.push(s2); else burst(out, { f: 1500, q: 4, durMs: 35, gain: g * 0.4, when: dur * (RELOAD_MODEL.commitFraction || 0.65) });
+    // RECORDED mag foley (2026-11-13): the Desert Eagle magazine release / seat,
+    // pitched by class (rifle mags are bigger: lower); the Corvus keeps its own
+    // SVD magazine insert; the empty-reload rack is the Saiga charging handle
+    // (back + home), or a slide snap for the pistol. The recorded mag slices put
+    // their latch ~0.1 s in, so they start that much before the beat.
+    const cls = classOf(d.weaponId);
+    const mRate = cls === "pistol" ? 1.06 : cls === "smg" ? 1.0 : cls === "dmr" ? 0.86 : 0.92;
+    const tOut = dur * 0.18, tIn = dur * (RELOAD_MODEL.commitFraction || 0.65), tRack = dur * 0.84;
+    const recOut = buf("f_mag_out"), recIn = buf("f_mag_in");
+    const magIn = d.weaponId === "corvus" ? (buf("mag_in_corvus") || recIn || buf("mag_in")) : (recIn || buf("mag_in"));
+    const inIsRec = magIn === recIn && !!recIn;
+    const s1 = recOut ? voice(recOut, out, { gain: g * 0.75, when: tOut, rate: mRate * (1 + rng() * 0.05) })
+                      : voice(buf("mag_out"), out, { gain: g, when: tOut, rate: 1 + rng() * 0.06 });
+    const s2 = voice(magIn, out, { gain: inIsRec ? g * 0.75 : g, when: inIsRec ? Math.max(0, tIn - 0.1) : tIn, rate: (inIsRec ? mRate : 1) * (1 + rng() * 0.05) });
+    if (s1) srcs.push(s1); else burst(out, { f: 1900, q: 4, durMs: 30, gain: g * 0.4, when: tOut });
+    if (s2) srcs.push(s2); else burst(out, { f: 1500, q: 4, durMs: 35, gain: g * 0.4, when: tIn });
     if (d.empty) {
-      const s3 = voice(buf("rack"), out, { gain: g * 1.1, when: dur * 0.84, rate: 1 + rng() * 0.05 });
-      if (s3) srcs.push(s3); else burst(out, { f: 2400, q: 5, durMs: 25, gain: g * 0.5, when: dur * 0.84 });
+      const ch = buf("f_charge"), bo = buf("f_bolt");
+      let s3 = null;
+      if (cls === "pistol" && bo) s3 = voice(bo, out, { gain: g * 0.6, when: tRack, rate: 1.3 * (1 + rng() * 0.05) });
+      else if (ch) s3 = voice(ch, out, { gain: g * 0.7, when: Math.max(0, tRack - 0.2), rate: (cls === "dmr" ? 0.92 : cls === "smg" ? 1.1 : 1.0) * (1 + rng() * 0.04) });
+      else s3 = voice(buf("rack"), out, { gain: g * 1.1, when: tRack, rate: 1 + rng() * 0.05 });
+      if (s3) srcs.push(s3); else burst(out, { f: 2400, q: 5, durMs: 25, gain: g * 0.5, when: tRack });
     }
     pendingReload.set(key, srcs);
   }
@@ -915,6 +1281,13 @@ export function makeSfx(env) {
     if (F.pump) {
       // half-rack: the slide is cycled as it comes up (back, then forward)
       const t2 = tSeat + 0.13;
+      const pb = buf("pump_back"), pf = buf("pump_fwd");
+      if (pb && pf) {
+        // recorded SPAS-12 strokes (clack ~0.11 s into each slice)
+        voice(pb, out, { gain: F.g * 0.3, rate: 1.04, when: Math.max(0, t2 - 0.11) });
+        voice(pf, out, { gain: F.g * 0.33, rate: 1.04, when: t2 - 0.01 });
+        return;
+      }
       const l = buf("latch");
       if (l) voice(l, out, { gain: F.g * 0.5, rate: 0.9, when: t2 });
       else burst(out, { f: 1700, q: 3, durMs: 22, gain: F.g * 0.2, when: t2 });
@@ -980,6 +1353,7 @@ export function makeSfx(env) {
       out = p ? env.spatial(p, 24) : null;
     }
     if (!out) return;
+    if (!own) stats.botLandings++;                             // audio.js polls bot landings (no sim event)
     const k = Math.min(1, h / 4);                              // §1.7: 4 m = the big thud
     thump(out, { f0: 110, f1: 55, durMs: 90 + 60 * k, gain: 0.12 + 0.3 * k });
     const c = buf("cloth");
@@ -992,10 +1366,28 @@ export function makeSfx(env) {
     if (!out) return;
     thump(out, { f0: 95, f1: 60, durMs: 100, gain: 0.2 });
     burst(out, { f: 380, q: 0.8, durMs: 70, gain: 0.1 });
+    // DIRECTION (2026-11-13): the hit also snaps from the side it came from — d.dir is
+    // victim -> attacker, so a source 2 m along it pans/attenuates like the shooter
+    if (d.dir) {
+      const c = camPos();
+      const o2 = env.spatial([c[0] + d.dir[0] * 2, c[1] + (d.dir[1] || 0) * 2, c[2] + d.dir[2] * 2], 12);
+      if (o2) {
+        burst(o2, { f: 2400, sweepTo: 900, q: 1.4, durMs: 55, gain: 0.22 });
+        thump(o2, { f0: 180, f1: 90, durMs: 60, gain: 0.16 });
+      }
+    }
+    env.ctx.suppress = Math.min(1, (env.ctx.suppress || 0) + 0.3);
   }
 
   function onDeath(d) {
     if (!d) return;
+    if (d.victim === "P") {
+      // your own death: the body hits, the world drops away (it used to be silent)
+      const o = feedbackOut(1);
+      thump(o, { f0: 120, f1: 38, durMs: 420, gain: 0.34 });
+      thump(o, { f0: 440, f1: 110, durMs: 900, gain: 0.07, when: 0.05, type: "triangle" });
+      burst(o, { f: 900, sweepTo: 200, q: 0.7, durMs: 500, gain: 0.10, when: 0.03 });
+    }
     if (d.attacker === "P" && d.victim !== "P") {
       // kill thock (§4.1): heavier than the hit tick — see killThock()
       killThock(!!d.headshot);
@@ -1010,25 +1402,97 @@ export function makeSfx(env) {
     }
   }
 
+  // RADIO CHATTER (2026-11-13). There is still no recorded VO, but a callout no
+  // longer reads as plain noise: a synthesized "voice-shaped" babble — a
+  // sawtooth glottal source with a wandering pitch contour through two formant
+  // band-passes that jump between vowel targets every 60–150 ms (syllables),
+  // with occasional gaps — squeezed through a radio band (400 Hz – 2.8 kHz) and
+  // a soft-clip. It is unintelligible by design: it carries URGENCY (faster,
+  // higher, shorter when urgent) and the radio texture, never words, so it can
+  // never misname anyone (§5.10 honesty rule; the subtitle carries the text).
+  const VOWELS = [[730, 1090], [270, 2290], [530, 1840], [570, 840], [440, 1020], [300, 870], [660, 1720], [490, 1350]];
+  let shaperCurve = null;
+  function chatter(out, { dur = 0.6, urgent = false, gain = 0.2, when = 0 } = {}) {
+    const ac = env.ac;
+    if (!out) return;
+    try {
+      const t0 = ac.currentTime + Math.max(0, fin(when, 0));
+      const end = t0 + Math.max(0.15, fin(dur, 0.6));
+      const src = ac.createOscillator(); src.type = "sawtooth";
+      const p0 = (urgent ? 165 : 128) * (0.9 + rng() * 0.2);
+      src.frequency.setValueAtTime(p0, t0);
+      const f1 = ac.createBiquadFilter(); f1.type = "bandpass"; f1.Q.value = 5;
+      const f2 = ac.createBiquadFilter(); f2.type = "bandpass"; f2.Q.value = 7;
+      const g2 = ac.createGain(); g2.gain.value = 0.7;
+      const mix = ac.createGain(); mix.gain.value = 3.0;     // the band-passes shed ~14 dB
+      const amp = ac.createGain(); amp.gain.setValueAtTime(0, t0);
+      let t = t0 + 0.01;
+      while (t < end - 0.06) {
+        const syl = (urgent ? 0.055 : 0.07) + rng() * (urgent ? 0.06 : 0.08);
+        const v = VOWELS[(rng() * VOWELS.length) | 0];
+        f1.frequency.setTargetAtTime(v[0], t, 0.012);
+        f2.frequency.setTargetAtTime(v[1], t, 0.012);
+        src.frequency.setTargetAtTime(p0 * (0.85 + rng() * 0.35), t, 0.03);
+        const pk = rng() < 0.14 ? 0.08 : 0.6 + rng() * 0.4;
+        amp.gain.setTargetAtTime(pk, t, 0.01);
+        amp.gain.setTargetAtTime(pk * 0.2, t + syl * 0.72, 0.015);
+        t += syl;
+      }
+      amp.gain.setTargetAtTime(0, end - 0.05, 0.012);
+      const hp = ac.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 400;
+      const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 2800;
+      if (!shaperCurve) {
+        shaperCurve = new Float32Array(1024);
+        for (let i = 0; i < 1024; i++) { const x = (i / 1023) * 2 - 1; shaperCurve[i] = Math.tanh(2.5 * x) / Math.tanh(2.5); }
+      }
+      const sh = ac.createWaveShaper(); sh.curve = shaperCurve;
+      const g = ac.createGain(); g.gain.value = gclamp(gain);
+      src.connect(f1); src.connect(f2); f1.connect(mix); f2.connect(g2); g2.connect(mix);
+      mix.connect(amp); amp.connect(hp); hp.connect(lp); lp.connect(sh); sh.connect(g); g.connect(out);
+      src.start(t0); src.stop(end + 0.05);
+      env.voices++;
+      // radio hiss under the voice
+      burst(out, { f: 2200, q: 0.8, durMs: (end - t0) * 1000, gain: gain * 0.12, when: Math.max(0, fin(when, 0)) });
+    } catch (e) { err(e, "chatter"); }
+  }
+
   function squelchInto(out, urgent, gain) {
-    // §5.10 v1 voice: radio click + synthesized squelch burst (+ subtitle by
-    // A10) — honest about no recorded VO.
+    // §5.10 voice: radio key click + squelch + voice-shaped chatter + off click
+    // + squelch tail (+ subtitle by A10) — still honest: no recorded VO.
+    const dur = urgent ? 0.42 + rng() * 0.2 : 0.55 + rng() * 0.35;
     burst(out, { f: 3200, q: 9, durMs: 6, gain: gain * 0.8 });                 // key click
-    burst(out, { f: 1700, q: 2.6, durMs: urgent ? 160 : 240, gain, when: 0.02 });
-    if (urgent) burst(out, { f: 1900, q: 2.6, durMs: 130, gain: gain * 0.85, when: 0.22 });
-    burst(out, { f: 2900, q: 9, durMs: 6, gain: gain * 0.6, when: urgent ? 0.38 : 0.29 }); // off click
+    burst(out, { f: 1700, q: 2.6, durMs: 45, gain: gain * 0.7, when: 0.006 });  // open squelch
+    chatter(out, { dur, urgent, gain: gain * 1.1, when: 0.04 });
+    burst(out, { f: 2900, q: 9, durMs: 6, gain: gain * 0.6, when: 0.05 + dur });  // off click
+    burst(out, { f: 1600, q: 2.2, durMs: 90, gain: gain * 0.55, when: 0.055 + dur, decayMs: 25 }); // squelch tail
   }
 
   function onBark(d) {
     if (!d || !env.ac) return;
+    // [identity lane] a TEAMMATE's radio line is keyed by core/hud/callouts.js
+    // at the moment its text lands (coSkip marks the raw event it took over);
+    // a line dropped by the rate limiter is simply not keyed
+    if (d.coSkip) return;
     const t = env.ac.currentTime;
     if (t - lastBark < 0.15) return;                           // same-tick stack guard
     lastBark = t;
     const p = env.botPos(d.botId);
     const out = p ? env.spatial(p, 45) : env.spatial(null);
     if (!out) return;
-    const urgent = d.kind === "grenade" || d.kind === "down" || d.kind === "push" || d.kind === "lastman";
-    squelchInto(out, urgent, 0.26);
+    const urgent = d.urgent === true || d.kind === "grenade" || d.kind === "down" || d.kind === "push" || d.kind === "lastman";
+    if (d.text) {
+      // [identity lane] synced with a text callout: the chatter runs as long as
+      // the line reads (≈ 0.07 s a character, 0.35-1.3 s), same voice chain
+      const dur = Math.max(0.35, Math.min(1.3, String(d.text).length * 0.07));
+      const g = 0.11;
+      burst(out, { f: 3200, q: 9, durMs: 6, gain: g * 0.8 });
+      burst(out, { f: 1700, q: 2.6, durMs: 45, gain: g * 0.7, when: 0.006 });
+      chatter(out, { dur, urgent, gain: g * 1.1, when: 0.04 });
+      burst(out, { f: 2900, q: 9, durMs: 6, gain: g * 0.6, when: 0.05 + dur });
+      burst(out, { f: 1600, q: 2.2, durMs: 90, gain: g * 0.55, when: 0.055 + dur, decayMs: 25 });
+      return;
+    }
+    squelchInto(out, urgent, 0.11);
   }
 
   function radioSquelch() {
@@ -1049,6 +1513,90 @@ export function makeSfx(env) {
     }
   }
 
+  // [lane dom] STRONGHOLD zone cues — synthesized (no audio files), on the
+  // UI bus, team-aware from the LISTENER's side (team 0 = the player's team):
+  //   ours captured  → rising major triad (the "got it" sting)
+  //   theirs captured / we lost one → falling minor pair (the "lost it" sting)
+  //   neutralised (by us) → two-step up; enemy starts on a zone we hold → a
+  //   short low alarm pulse (rate-limited 2.5 s per zone)
+  // Other zone states (contested, defended) stay silent — the HUD covers them.
+  const zoneAlarmT = {};
+  function onZone(d) {
+    if (!d || !env.ac) return;
+    const o = uiOut(1);
+    const us = d.team === 0;
+    if (d.state === "captured") {
+      if (us) {
+        thump(o, { f0: 523.3, f1: 523.3, durMs: 110, gain: 0.09, type: "triangle" });
+        thump(o, { f0: 659.3, f1: 659.3, durMs: 110, gain: 0.09, type: "triangle", when: 0.1 });
+        thump(o, { f0: 784.0, f1: 784.0, durMs: 260, gain: 0.1, type: "triangle", when: 0.2 });
+      } else {
+        thump(o, { f0: 392.0, f1: 392.0, durMs: 170, gain: 0.08, type: "sawtooth" });
+        thump(o, { f0: 311.1, f1: 300.0, durMs: 380, gain: 0.08, type: "sawtooth", when: 0.17 });
+      }
+    } else if (d.state === "neutralised") {
+      if (us) {
+        thump(o, { f0: 587.3, f1: 587.3, durMs: 90, gain: 0.08, type: "triangle" });
+        thump(o, { f0: 880.0, f1: 880.0, durMs: 160, gain: 0.08, type: "triangle", when: 0.09 });
+      } else {
+        thump(o, { f0: 466.2, f1: 466.2, durMs: 140, gain: 0.08, type: "square" });
+        thump(o, { f0: 349.2, f1: 340.0, durMs: 320, gain: 0.07, type: "square", when: 0.15 });
+      }
+    } else if (d.state === "capturing" && !us && d.owner === 0) {
+      const t = env.ac.currentTime;
+      if (t - (zoneAlarmT[d.zone] || -9) < 2.5) return;
+      zoneAlarmT[d.zone] = t;
+      for (let i = 0; i < 2; i++) {
+        thump(o, { f0: 440, f1: 440, durMs: 90, gain: 0.07, type: "square", when: i * 0.2 });
+        thump(o, { f0: 370, f1: 370, durMs: 90, gain: 0.07, type: "square", when: i * 0.2 + 0.1 });
+      }
+    }
+  }
+
+  // [lane modes] OUTPOST / RECLAIM / ASCENT cues — synthesized, UI bus, from
+  // the LISTENER's side (team 0 = the player's team; "P" = the player):
+  //   hill active → two-note chime; we take it → rising pair; they take it →
+  //   falling pair; tag confirmed by you → bright double blip, denied by you →
+  //   soft single blip, our tag confirmed by them → low thud; ladder: your
+  //   promotion → quick rising triad, demotion → falling sawtooth, finish → fanfare
+  function onModeEvent(type, d) {
+    if (!d || !env.ac) return;
+    const o = uiOut(1);
+    if (type === "hill") {
+      if (d.state === "active") {
+        thump(o, { f0: 659.3, f1: 659.3, durMs: 120, gain: 0.07, type: "triangle" });
+        thump(o, { f0: 987.8, f1: 987.8, durMs: 220, gain: 0.07, type: "triangle", when: 0.13 });
+      } else if (d.state === "held") {
+        if (d.team === 0) {
+          thump(o, { f0: 523.3, f1: 523.3, durMs: 100, gain: 0.08, type: "triangle" });
+          thump(o, { f0: 784.0, f1: 784.0, durMs: 200, gain: 0.08, type: "triangle", when: 0.1 });
+        } else {
+          thump(o, { f0: 392.0, f1: 392.0, durMs: 140, gain: 0.07, type: "sawtooth" });
+          thump(o, { f0: 293.7, f1: 290.0, durMs: 300, gain: 0.07, type: "sawtooth", when: 0.14 });
+        }
+      }
+    } else if (type === "tag") {
+      if (d.state === "confirmed" && d.byWho === "P") {
+        thump(o, { f0: 1046.5, f1: 1046.5, durMs: 60, gain: 0.08, type: "square" });
+        thump(o, { f0: 1568.0, f1: 1568.0, durMs: 110, gain: 0.07, type: "triangle", when: 0.07 });
+      } else if (d.state === "denied" && d.byWho === "P") {
+        thump(o, { f0: 880.0, f1: 880.0, durMs: 90, gain: 0.06, type: "triangle" });
+      } else if (d.state === "confirmed" && d.byTeam === 1 && d.team === 0) {
+        thump(o, { f0: 220.0, f1: 180.0, durMs: 160, gain: 0.06, type: "sine" });
+      }
+    } else if (type === "ladder") {
+      if (d.who === "P" && d.state === "promoted") {
+        thump(o, { f0: 587.3, f1: 587.3, durMs: 70, gain: 0.07, type: "triangle" });
+        thump(o, { f0: 740.0, f1: 740.0, durMs: 70, gain: 0.07, type: "triangle", when: 0.07 });
+        thump(o, { f0: 880.0, f1: 880.0, durMs: 160, gain: 0.08, type: "triangle", when: 0.14 });
+      } else if (d.who === "P" && d.state === "demoted") {
+        thump(o, { f0: 440.0, f1: 220.0, durMs: 380, gain: 0.08, type: "sawtooth" });
+      } else if (d.who === "P" && d.state === "finished") {
+        for (let i = 0; i < 4; i++) thump(o, { f0: [523.3, 659.3, 784.0, 1046.5][i], f1: [523.3, 659.3, 784.0, 1046.5][i], durMs: i === 3 ? 420 : 110, gain: 0.09, type: "triangle", when: i * 0.11 });
+      }
+    }
+  }
+
   function onWhiz(d) {
     if (!d || !d.pos) return;
     // a shotgun volley sends several pellets past you in the same tick — one
@@ -1061,8 +1609,17 @@ export function makeSfx(env) {
     if (!out) return;
     const near = 1 - Math.min(1, fin(d.dist, 1.5) / 3);
     burst(out, { f: 3800, sweepTo: 2200, q: 1.8, durMs: 90, gain: 0.16 + 0.2 * near });
+    // the round's passing hiss after the crack, and SUPPRESSION: every near miss
+    // adds to env.ctx.suppress (audio.js muffles the mix with it, post.js closes
+    // the vignette) — being shot at should feel like being shot at (2026-11-13)
+    burst(out, { f: 6500, sweepTo: 1800, q: 0.9, durMs: 160, gain: 0.05 + 0.06 * near, when: 0.02 });
+    env.ctx.suppress = Math.min(1, (env.ctx.suppress || 0) + 0.16 + 0.22 * near);
   }
 
+  // MIX (2026-11-13): a frag at 15 m measured 0.0 dBFS pre-limiter at the old 0.9
+  // — the loudest thing in the game by 4 dB and straight into the brickwall.
+  // 0.62 (−3.2 dB) keeps it the loudest event without flattening the limiter.
+  const EXPL_GAIN = 0.62;
   function onExplosion(d) {
     if (!d || !d.pos) return;
     const ac = env.ac;
@@ -1075,12 +1632,12 @@ export function makeSfx(env) {
     const big = d.source === "drum" || d.source === "transformer" || d.source === "streak";
     const b = buf(big ? "expl_large" : "expl_frag");
     let src = null;
-    if (b) src = voice(b, out, { gain: 0.9, rate: 1 + (rng() * 2 - 1) * 0.05, when });
+    if (b) src = voice(b, out, { gain: EXPL_GAIN, rate: 1 + (rng() * 2 - 1) * 0.05, when });
     else {
       thump(out, { f0: 120, f1: 30, durMs: 500, gain: 0.8, when });
       burst(out, { f: 900, q: 0.5, durMs: 350, gain: 0.5, when });
     }
-    thump(out, { f0: 48, f1: 26, durMs: 480, gain: 0.5, when });          // sub layer
+    thump(out, { f0: 48, f1: 26, durMs: 480, gain: 0.4, when });          // sub layer
     // debris clatter
     for (let i = 0; i < 3; i++) {
       const ib = buf("imp_concrete");
@@ -1094,6 +1651,30 @@ export function makeSfx(env) {
     if (env.music) env.music.gunDuck();
   }
 
+  // is this grenade a threat to the player? (own: no; PVP teammate: no)
+  function hostileThrower(who) {
+    if (who === "P" || who == null) return false;
+    try {
+      const sm = env.ctx.sim();
+      if (sm && sm.match && sm.match.sameTeam) return !sm.match.sameTeam("P", who);
+    } catch (e) { /* campaign */ }
+    return true;
+  }
+  const GREN_WARN_M = 9;
+  let lastGrenWarn = -10;
+  function grenadeWarning() {
+    // two quick rising ticks on the cue bus: audible under the muffle, short,
+    // and nothing like a hit tick (lower, rounder, a minor-third apart)
+    const t = env.ac.currentTime;
+    if (t - lastGrenWarn < 1.2) return;
+    lastGrenWarn = t;
+    stats.grenadeWarnings++;
+    const o = feedbackOut(1);
+    thump(o, { f0: 1480, f1: 1480, durMs: 55, gain: 0.07 });
+    thump(o, { f0: 1760, f1: 1760, durMs: 70, gain: 0.07, when: 0.085 });
+    burst(o, { f: 1600, q: 6, durMs: 10, gain: 0.05 });
+  }
+
   function onGrenade(d) {
     if (!d || !d.pos) return;
     const out = env.spatial(d.pos, 30);
@@ -1102,18 +1683,281 @@ export function makeSfx(env) {
       const b = buf("click");
       if (b) voice(b, out, { gain: 0.3, rate: 1.55 + rng() * 0.15 });
       else burst(out, { f: 3400, q: 6, durMs: 14, gain: 0.18 });
+      thump(out, { f0: 520, f1: 380, durMs: 30, gain: 0.08, type: "triangle" });   // body knock
     } else if (d.phase === "land") {
       thump(out, { f0: 240, f1: 130, durMs: 45, gain: 0.16 });
+      const b = buf("click");
+      if (b) voice(b, out, { gain: 0.16, rate: 1.25 + rng() * 0.1, when: 0.01 });  // metal on ground
     } else if (d.phase === "out") {
       burst(out, { f: 900, sweepTo: 500, q: 0.7, durMs: 220, gain: 0.08 }); // throw whoosh
+      if (d.who === "P") {
+        // the spoon flies off as it leaves the hand (a cooked one already lost it)
+        if (!cookWasLive) { const b = buf("click_b"); if (b) voice(b, env.spatial(null), { rate: 1.8, gain: 0.07, when: 0.03 }); }
+        cookWasLive = false;
+      }
+    }
+    // a live grenade landing NEAR you: the warning tick (CoD's grenade indicator
+    // has a sound; ours had none)
+    if ((d.phase === "land" || d.phase === "bounce") && hostileThrower(d.who)) {
+      const c = camPos();
+      const dd = Math.hypot(d.pos[0] - c[0], (d.pos[1] || 0) - (c[1] - 1.4), d.pos[2] - c[2]);
+      if (Number.isFinite(dd) && dd <= GREN_WARN_M) grenadeWarning();
     }
   }
 
+  // GRENADE PIN / COOK (audio.js polls the player's cooking flag: the sim has no
+  // pin event). Pin: the ring pulled through the pin (a short scrape + the split
+  // metal click high), the spoon pinging off as the cook starts. Cook: one soft
+  // fuse tick per second while held.
+  let cookWasLive = false;
+  function grenadePin() {
+    const out = env.spatial(null);
+    if (!out) return;
+    stats.grenadePins++;
+    cookWasLive = true;
+    burst(out, { f: 3600, sweepTo: 2600, q: 4, durMs: 40, gain: 0.08 });           // ring scrape
+    const a = buf("click_a");
+    if (a) voice(a, out, { rate: 1.9, gain: 0.24, when: 0.03 });
+    else burst(out, { f: 3200, q: 7, durMs: 10, gain: 0.08, when: 0.03 });
+    const b = buf("click_b");
+    if (b) voice(b, out, { rate: 2.1, gain: 0.15, when: 0.2 });                     // spoon
+    thump(out, { f0: 2900, f1: 2700, durMs: 120, gain: 0.012, when: 0.2 });         // spoon ping
+    const c = buf("cloth");
+    if (c) voice(c, out, { rate: 1.3, gain: 0.08 });
+  }
+  function cookTick(n) {
+    const o = feedbackOut(1);
+    thump(o, { f0: 980, f1: 980, durMs: 30, gain: 0.035 + 0.01 * Math.min(3, n | 0) });
+    burst(o, { f: 2400, q: 8, durMs: 6, gain: 0.03 });
+  }
+
+  // ---- [equipment lane] FLASHBANG / SMOKE / CONCUSSION / TRIPMINE ----------------
+  // All synthesized or built from samples already shipped (click, click_a/_b,
+  // cloth, imp_metal, expl_frag) — no new audio files (the payload gate).
+  // The bridge registration lives in core/fx/equipment_fx.js (audio.js is not
+  // this lane's file); it calls sfx.onEquip(d) through __FPS__.audio.sfx.
+  let eqRing = null;
+  function eqStopRing() {
+    if (!eqRing) return;
+    const r = eqRing; eqRing = null;
+    try { const t = env.ac.currentTime; r.g.gain.cancelScheduledValues(t); r.g.gain.setTargetAtTime(0, t, 0.05); r.o.stop(t + 0.4); if (r.o2) r.o2.stop(t + 0.4); } catch (e) { /* already stopped */ }
+  }
+  function onEquip(d) {
+    if (!d || !env.ac || !env.buses) return;
+    const ph = d.phase;
+    if (ph === "flashed" || ph === "stunned") { if (d.who === "P") ownStatus(d); return; }
+    if (!d.pos) return;
+    if (ph === "out") {
+      const out = env.spatial(d.pos, 30);
+      if (!out) return;
+      burst(out, { f: 900, sweepTo: 520, q: 0.7, durMs: 200, gain: 0.07 });           // throw whoosh
+      if (d.who === "P") {
+        const a = buf("click_a"); if (a) voice(a, env.spatial(null), { rate: 1.7, gain: 0.16 });   // pin
+        const b = buf("click_b"); if (b) voice(b, env.spatial(null), { rate: 1.9, gain: 0.08, when: 0.05 });
+      }
+    } else if (ph === "bounce") {
+      const out = env.spatial(d.pos, 30);
+      if (!out) return;
+      const b = buf("click");
+      if (b) voice(b, out, { gain: 0.26, rate: (d.kind === "smoke" ? 1.15 : 1.4) + rng() * 0.12 });
+      else burst(out, { f: 3000, q: 6, durMs: 14, gain: 0.16 });
+      thump(out, { f0: d.kind === "smoke" ? 420 : 640, f1: 300, durMs: 34, gain: 0.07, type: "triangle" }); // can body
+    } else if (ph === "pop") {
+      const c = camPos();
+      const dist = Math.hypot(d.pos[0] - c[0], (d.pos[1] || 0) - c[1], d.pos[2] - c[2]);
+      const when = Number.isFinite(dist) ? dist / 343 : 0;
+      if (d.kind === "flash") {
+        const out = env.spatial(d.pos, 160);
+        if (!out) return;
+        // a hard bright CRACK, not a frag's boom: broadband snap + short high body
+        burst(out, { f: 3200, q: 0.5, durMs: 110, gain: 0.6, when, decayMs: 40 });
+        burst(out, { f: 7000, q: 0.8, durMs: 60, gain: 0.35, when });
+        thump(out, { f0: 210, f1: 70, durMs: 150, gain: 0.45, when });
+        const b = buf("expl_frag"); if (b) voice(b, out, { gain: 0.22, rate: 1.9, when, hp: 900 });
+        const conv = env.tailIn(env.zoneOf(d.pos[0], d.pos[1] || 0, d.pos[2]));
+        if (conv) burst(conv, { f: 2500, q: 0.6, durMs: 300, gain: 0.25, when, decayMs: 120 });
+      } else if (d.kind === "stun") {
+        const out = env.spatial(d.pos, 140);
+        if (!out) return;
+        // a deep concussive THUD with a rattle in it
+        thump(out, { f0: 95, f1: 28, durMs: 650, gain: 0.75, when });
+        thump(out, { f0: 48, f1: 30, durMs: 800, gain: 0.45, when });
+        burst(out, { f: 380, q: 0.5, durMs: 320, gain: 0.32, when, decayMs: 110 });
+        const b = buf("expl_frag"); if (b) voice(b, out, { gain: 0.3, rate: 0.75, when, lp: 1400 });
+      } else {
+        const out = env.spatial(d.pos, 45);
+        if (!out) return;
+        // smoke: the fuse pop and a long hiss as the can vents
+        thump(out, { f0: 320, f1: 140, durMs: 45, gain: 0.18, when });
+        burst(out, { f: 2600, q: 0.45, durMs: 4200, gain: 0.085, when: when + 0.03, decayMs: 1800 });
+        burst(out, { f: 900, q: 0.6, durMs: 2600, gain: 0.05, when: when + 0.05, decayMs: 1200 });
+      }
+    } else if (ph === "plant") {
+      const out = env.spatial(d.pos, 18);
+      if (!out) return;
+      const cl = buf("cloth"); if (cl) voice(cl, out, { rate: 1.05, gain: 0.14 });
+      thump(out, { f0: 170, f1: 95, durMs: 55, gain: 0.12, when: 0.12 });              // set down
+      const a = buf("click_a"); if (a) voice(a, out, { rate: 0.85, gain: 0.2, when: 0.28 }); // arm switch
+      thump(out, { f0: 2350, f1: 2350, durMs: 40, gain: 0.025, when: 0.5 });            // armed chirp
+    } else if (ph === "trip") {
+      const out = env.spatial(d.pos, 30);
+      if (!out) return;
+      thump(out, { f0: 2600, f1: 2600, durMs: 45, gain: 0.09 });                        // trip chirp
+      thump(out, { f0: 3100, f1: 3100, durMs: 45, gain: 0.09, when: 0.07 });
+    } else if (ph === "destroy") {
+      const out = env.spatial(d.pos, 40);
+      if (!out) return;
+      const b = buf("imp_metal"); if (b) voice(b, out, { rate: 1.2, gain: 0.3 });
+      burst(out, { f: 4200, q: 1.5, durMs: 70, gain: 0.22 });                           // sparks
+      thump(out, { f0: 260, f1: 90, durMs: 90, gain: 0.2 });
+    }
+  }
+  // the player's own state: a flash RINGS (high tone, the world ducked to a
+  // murmur, recovering with the whiteout); a concussion THROBS (world ducked,
+  // a low pulsing wub). Both feed the limiter like the existing tinnitus.
+  function ownStatus(d) {
+    const ac = env.ac, B = env.buses;
+    if (!B || !B.duck || !B.limiter) return;
+    const t = ac.currentTime;
+    const dur = Math.max(0.5, Math.min(6, fin(d.dur, 2)));
+    const amt = Math.max(0.1, Math.min(1, fin(d.amt, 0.5)));
+    eqStopRing();
+    try {
+      B.duck.gain.cancelScheduledValues(t);
+      if (d.phase === "flashed") {
+        B.duck.gain.setTargetAtTime(0.12 + 0.3 * (1 - amt), t, 0.02);
+        B.duck.gain.setTargetAtTime(1, t + dur * 0.5, dur * 0.22);
+        const o = ac.createOscillator(), o2 = ac.createOscillator(), g = ac.createGain();
+        o.type = "sine"; o.frequency.value = 3150;
+        o2.type = "sine"; o2.frequency.value = 3167;            // a slow beat: the ear's ring wavers
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.075 * amt, t + 0.02);
+        g.gain.setTargetAtTime(0, t + dur * 0.45, dur * 0.25);
+        o.connect(g); o2.connect(g); g.connect(B.limiter);
+        o.start(t); o2.start(t); o.stop(t + dur + 1.2); o2.stop(t + dur + 1.2);
+        env.voices += 2;
+        eqRing = { o, o2, g };
+      } else {
+        B.duck.gain.setTargetAtTime(0.4, t, 0.04);
+        B.duck.gain.setTargetAtTime(1, t + dur * 0.7, dur * 0.15);
+        const o = ac.createOscillator(), g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
+        o.type = "sine"; o.frequency.value = 62;
+        lfo.type = "sine"; lfo.frequency.value = 4.2;
+        lg.gain.value = 0.05 * amt;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.06 * amt, t + 0.05);
+        g.gain.setTargetAtTime(0, t + dur * 0.6, dur * 0.18);
+        lfo.connect(lg); lg.connect(g.gain);
+        o.connect(g); g.connect(B.limiter);
+        o.start(t); lfo.start(t); o.stop(t + dur + 1); lfo.stop(t + dur + 1);
+        env.voices += 2;
+        eqRing = { o, o2: lfo, g };
+      }
+    } catch (e) { err(e, "equip:own"); }
+  }
+
+  // ---- [melee] QUICK KNIFE: swing whoosh, flesh hit, distinct miss ----------------
+  // Synthesized + samples already shipped (cloth, imp_*) — no audio files. The
+  // bridge registration lives in core/fx/fx.js (the blood lane), which calls
+  // sfx.onMelee(d) through ctx.__audioCore like boot's zone cue.
+  function onMelee(d) {
+    if (!d || !env.ac || !env.buses) return;
+    const own = d.who === "P";
+    let out;
+    if (own) out = env.spatial(null);
+    else { const p = env.botPos(d.who) || d.pos; out = p ? env.spatial(p, 22) : null; }
+    if (!out) return;
+    if (d.phase === "swing") {
+      // the draw (cloth + a light steel tick off the sheath) and the fast air cut
+      const c = buf("cloth");
+      if (c) voice(c, out, { rate: 1.35, gain: own ? 0.22 : 0.16 });
+      burst(out, { f: 5200, q: 6, durMs: 9, gain: 0.05, when: 0.01 });
+      burst(out, { f: 900, sweepTo: 3600, q: 1.1, durMs: 120, gain: own ? 0.16 : 0.11, when: 0.05, decayMs: 50 });
+    } else if (d.phase === "hit") {
+      const ho = own ? env.spatial(null) : (d.pos ? env.spatial(d.pos, 22) : out);
+      if (!ho) return;
+      // a heavy body thud + the wet bite of the blade; a back-stab lands deeper
+      const k = d.backstab ? 1.25 : 1;
+      thump(ho, { f0: 120, f1: 55, durMs: 110, gain: 0.32 * k });
+      burst(ho, { f: 520, sweepTo: 240, q: 0.9, durMs: 90, gain: 0.20 * k, when: 0.005, decayMs: 40 });
+      burst(ho, { f: 2600, q: 2.2, durMs: 28, gain: 0.07, when: 0.004 });
+      const c = buf("cloth");
+      if (c) voice(c, ho, { rate: 0.72, gain: 0.26 * k, when: 0.01 });
+      if (d.victim === "P") env.ctx.suppress = Math.min(1, (env.ctx.suppress || 0) + 0.35);
+    } else if (d.phase === "miss") {
+      if (d.surface) {
+        // the blade glances off the wall: a bright scrape, not a thud
+        const p = d.pos ? env.spatial(d.pos, 18) : out;
+        const b = buf(d.surface === "metal" ? "imp_metal" : "imp_concrete");
+        if (b && p) voice(b, p, { rate: 1.6, gain: 0.16 });
+        if (p) burst(p, { f: 4200, sweepTo: 2600, q: 3, durMs: 70, gain: 0.07 });
+      } else {
+        // a whiff: the follow-through whoosh tails off, nothing lands
+        burst(out, { f: 2400, sweepTo: 700, q: 0.9, durMs: 140, gain: own ? 0.09 : 0.06, decayMs: 70 });
+      }
+    }
+  }
+
+  // ---- match / loadout events with no sound before this pass ----------------------
+  function onRespawn(d) {
+    if (!d || !(d.who === "P" || d.actorId === 0)) return;
+    const out = env.spatial(null);
+    if (!out) return;
+    stats.respawns++;
+    // boots down, kit settles, weapon comes up: cloth + low knock + the raise click
+    const c = buf("cloth");
+    if (c) { voice(c, out, { rate: 0.95, gain: 0.2 }); voice(c, out, { rate: 1.15, gain: 0.12, when: 0.18 }); }
+    thump(out, { f0: 120, f1: 70, durMs: 80, gain: 0.12, when: 0.02 });
+    const k = buf("click_a");
+    if (k) voice(k, out, { rate: 1.05, gain: 0.18, when: 0.32 });
+    burst(out, { f: 700, sweepTo: 1600, q: 0.7, durMs: 260, gain: 0.03 });           // air swell
+  }
+  function onResupply(d) {
+    if (!d || d.who !== "P") return;
+    stats.resupplies++;
+    ammoRattle(0.9);
+  }
+  // mags + rounds into the kit: two mag slaps, a rattle of loose rounds, cloth
+  function ammoRattle(g) {
+    const out = env.spatial(null);
+    if (!out) return;
+    const m = buf("mag_in");
+    if (m) voice(m, out, { rate: 1.12, gain: 0.22 * g });
+    else burst(out, { f: 1500, q: 4, durMs: 30, gain: 0.08 * g });
+    const a = buf("click_a");
+    if (a) voice(a, out, { rate: 1.35, gain: 0.12 * g, when: 0.09 });
+    for (let i = 0; i < 4; i++) {
+      const p = 0.9 + rng() * 0.2;
+      thump(out, { f0: 2100 * p, f1: 2050 * p, durMs: 30, gain: 0.012 * g, when: 0.13 + i * 0.035 + rng() * 0.02 });
+    }
+    const c = buf("cloth");
+    if (c) voice(c, out, { rate: 1.1, gain: 0.12 * g, when: 0.05 });
+  }
+  let lastLoot = -10;
+  function onLoot(d) {
+    if (!d || d.phase !== "spawn" || !d.pos) return;
+    const t = env.ac.currentTime;
+    if (t - lastLoot < 0.12) return;                           // a death drops several items
+    lastLoot = t;
+    const out = env.spatial(d.pos, 25);
+    if (!out) return;
+    stats.lootDrops++;
+    // a weapon/box hitting the ground: knock + metal clatter
+    thump(out, { f0: 200, f1: 110, durMs: 60, gain: 0.14 });
+    const b = buf(d.kind === "weapon" || d.weapon ? "imp_metal" : "imp_wood");
+    if (b) voice(b, out, { rate: 0.85 + rng() * 0.1, gain: 0.14, when: 0.01 });
+    const k = buf("click_a");
+    if (k) voice(k, out, { rate: 0.9 + rng() * 0.1, gain: 0.1, when: 0.09 });
+  }
+
+  // UI (menus) — samples wired at last (they were loaded and never called).
+  // "hover" is the quiet click at a higher pitch.
   function ui(kind) {
-    const map = { click: "ui_click", back: "ui_back", confirm: "ui_confirm", error: "ui_error" };
+    const map = { click: "ui_click", back: "ui_back", confirm: "ui_confirm", error: "ui_error", hover: "ui_click" };
     const b = buf(map[kind] || "ui_click");
-    const o = uiOut(0.5);
-    if (b) voice(b, o, { gain: 1 });
+    const o = uiOut(kind === "hover" ? 0.06 : kind === "confirm" ? 0.2 : 0.22);
+    stats.ui++;
+    if (b) voice(b, o, { gain: 1, rate: kind === "hover" ? 1.35 : 1 });
     else burst(o, { f: 2200, q: 6, durMs: 20, gain: 0.3 });
   }
 
@@ -1122,7 +1966,13 @@ export function makeSfx(env) {
     pendingReload.clear();
     lastBark = -10;
     lastWhiz = -10;
-    lastTail.clear();            // no stale distant-tail slots across missions
+    lastRic = -10;
+    lastTail.clear();           // no stale distant-tail slots across missions
+    heatMap.clear();
+    cookWasLive = false;
+    lastGrenWarn = -10;
+    lastLoot = -10;
+    eqStopRing(); // [equipment lane]
     volley.volleys = 0; volley.n = 0; volley.skipped = 0; volley.shooter = null;
     volley.lastPellet = -1; volley.t = -9;
     fb.t = -9; fb.kind = 0; fb.hits = 0;
@@ -1133,9 +1983,14 @@ export function makeSfx(env) {
     bufferCount: () => decoded,
     // counters for probes: volleys vs events seen proves one-voice-per-volley
     stats: () => ({ ...stats, shotEvents: volley.n, volleys: volley.volleys,
-                    volleyEventsSkipped: volley.skipped }),
+                    volleyEventsSkipped: volley.skipped, buffersLoaded: decoded }),
     reset, ui, radioSquelch,
     onShot, onHurt, onDeath, onReload, onSwitch, onAds, onStep, onLand, onJump,
     onEmpty, onBark, onObjective, onWhiz, onExplosion, onGrenade,
+    onZone, // [lane dom]
+    onModeEvent, // [lane modes]
+    onRespawn, onResupply, onLoot, grenadePin, cookTick, ammoRattle,
+    onEquip, // [equipment lane]
+    onMelee, // [melee]
   };
 }

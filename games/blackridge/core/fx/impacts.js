@@ -419,6 +419,13 @@ export function makeImpacts(env, pools, decals) {
       burstAt(pools.dust, p, UP, 3, 0.4, 0.8, 0.5, 0.4, 0.1, 0.06, 0.14,
         0.45, 0.42, 0.38, 0.15, 0.28, -0.5, 0, 1.5);
     },
+    // Post-burst barrel wisp (lane_env — muzzle.js BARREL HEAT): a thin,
+    // faint, slow riser off a hot muzzle. Tiny and low-alpha on purpose: it
+    // spawns ~1 m from the eye, where a dust point is large on screen.
+    muzzleWisp(p) {
+      burstAt(pools.dust, p, UP, 1, 0.04, 0.12, 0.25, 1.15, 0.45, 0.018, 0.10,
+        0.52, 0.51, 0.50, 0.08, 0.075, 0.55, 0, 1.3);
+    },
     // Muzzle smoke (iter06, D6 — called by muzzle.js on every fire-time shot).
     // Two soft grey puffs that grow 0.07 -> 0.22 m over 0.6-0.95 s and drift
     // gently up and down-range. Deliberately LOW alpha: this must read as

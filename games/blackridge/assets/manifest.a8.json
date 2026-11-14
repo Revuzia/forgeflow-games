@@ -1,7 +1,7 @@
 {
   "lane": "A8",
-  "updated": "2026-08-19",
-  "note": "Soldier bodies + shared clip set + 3P carried weapons. Bodies are Draco+WebP repacks of last-circle's Meshy cast (simplify 0.10/0.065 -> ~41k tris; 512 WebP). Clip GLBs are animation-only and retarget to both bodies (same mixamorig skeleton). clip_death_b/c REMOVED 2026-08-19: their source lineage (soldier_death2/3, Blender re-export) has different bone rests + cm/Z-up hips space -> only the hips animated on this body (standing corpse, measured); death variety ships as timescale + fall direction on the one proven death clip until 2 variants are re-baked via the Mixamo flow (clip-gap RESERVE, BUILD_PLAN Part 4). Mission-gate payload sum: 1460216 bytes.",
+  "updated": "2026-11-13",
+  "note": "Soldier bodies + shared clip set + 3P carried weapons. Bodies are Draco+WebP repacks of last-circle's Meshy cast (simplify 0.10/0.065 -> ~41k tris; 512 WebP). Clip GLBs are animation-only and retarget to both bodies (same mixamorig skeleton). clip_death_b/c REMOVED 2026-08-19: their source lineage (soldier_death2/3, Blender re-export) has different bone rests + cm/Z-up hips space -> only the hips animated on this body (standing corpse, measured); death variety ships as timescale + fall direction on the one proven death clip until 2 variants are re-baked via the Mixamo flow (clip-gap RESERVE, BUILD_PLAN Part 4). Mission-gate payload sum: 1460216 bytes. 2026-11-13 8-way pass: +21 clip GLBs (579512 bytes) for directional walk/run/crouch, sprint, real crouch, 5 directional deaths (+death_left mirrored at load), jump loop, grenade toss; clip_rifle_idle/walk/run/crouch.glb and clip_hit.glb stay on disk but are no longer loaded (hips-flattened bake / rejected hit) — runtime clip payload loaded at mission gate 540992 -> 756456 bytes.",
   "entries": [
     {
       "path": "assets/chars/soldier.glb",
@@ -100,6 +100,153 @@
       "kind": "imported",
       "license": "Meshy generated (FFG owned, last-circle provenance)",
       "source": "games/last-circle/assets/props/meshy_wpn/wpn_shotgun.glb (via core/weapons/world_weapon.js prep)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_idle_g.glb",
+      "bytes": 20732,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/rifle_idle_g.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/idle.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_walk_g.glb",
+      "bytes": 21404,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/rifle_walk_g.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk forward.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_walk_left.glb",
+      "bytes": 20832,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/rifle_walk_left.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk left.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_walk_right.glb",
+      "bytes": 20832,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/rifle_walk_right.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk right.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_walk_back.glb",
+      "bytes": 21184,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/rifle_walk_back.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk backward.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_run_g.glb",
+      "bytes": 18968,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/rifle_run_g.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/run forward.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_run_left.glb",
+      "bytes": 18644,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/rifle_run_left.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/run left.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_run_right.glb",
+      "bytes": 19100,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/rifle_run_right.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/run right.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_run_back.glb",
+      "bytes": 18748,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/rifle_run_back.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/run backward.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_sprint_g.glb",
+      "bytes": 20092,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/rifle_sprint_g.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/sprint forward.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_crouch_g.glb",
+      "bytes": 21260,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/rifle_crouch_g.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk crouching forward.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_crouch_left.glb",
+      "bytes": 21708,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/rifle_crouch_left.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk crouching left.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_crouch_right.glb",
+      "bytes": 21076,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/rifle_crouch_right.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk crouching right.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_crouch_back.glb",
+      "bytes": 21240,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/rifle_crouch_back.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk crouching backward.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_jump_loop.glb",
+      "bytes": 17888,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/jump_loop.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/jump loop.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_death_front.glb",
+      "bytes": 44136,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/death_front.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/death from the front.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_death_back.glb",
+      "bytes": 45284,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/death_back.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/death from the back.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_death_right.glb",
+      "bytes": 43716,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/death_right.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/death from right.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_death_front_head.glb",
+      "bytes": 45900,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/death_front_head.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/death from front headshot.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_death_back_head.glb",
+      "bytes": 51124,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/death_back_head.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/death from back headshot.fbx)"
+    },
+    {
+      "path": "assets/chars/clip_toss_grenade.glb",
+      "bytes": 45644,
+      "kind": "imported",
+      "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+      "source": "games/last-circle/assets/chars/clips/toss_grenade.glb (byte copy; Mixamo Basic_Shooter_Pack/toss grenade.fbx)"
     }
   ]
 }

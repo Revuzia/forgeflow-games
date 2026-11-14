@@ -1101,4 +1101,38 @@ export const ARENA_SPEC = {
   gates: { balconyAreaM2: 235 },
 };
 
+// ===========================================================================
+// STRONGHOLD ZONES [lane dom] — DATA ONLY, consumed at runtime by
+// core/match/modes/dom.js (the zone-control mode). Three capture zones: A on
+// the AMBER (team 0, west) side, B the contested centre, C on the SLATE
+// (team 1, east) side. Placement was MEASURED on this map's baked nav
+// (bakeNav cell 0.75, flood from each CTF stand): every centre is a walkable
+// ground node, 100% of the r-disk is on nav, no collider box within 1.5 m at
+// body height, >= 5 m from every spawn point, and the A/C pair is symmetric
+// in nav distance to the two stands (asymmetry <= 2 m). No geometry, collider
+// or nav change was made for these.
+// ===========================================================================
+export const STRONGHOLD_ZONES = [
+  { id: "A", pos: [-23.0, 0, -16.5], r: 4.0 }, // west dock lane (AMBER side) — nav 35.0 m from the AMBER stand, 86.4 m from SLATE's
+  { id: "B", pos: [-5.0, 0, -2.0], r: 4.0 },   // the hall (contested centre) — 52.7 / 54.2 m
+  { id: "C", pos: [14.5, 0, 15.0], r: 4.0 },   // east dock lane (SLATE side) — 86 / 36 m
+];
+
 export default { buildLayout, ARENA_SPEC };
+
+// ===========================================================================
+// OUTPOST HILLS [lane modes] — DATA ONLY, consumed at runtime by
+// core/match/modes/hill.js (OUTPOST, the rotating-hill mode). One hill is live
+// at a time and rotation runs through this list in order. MEASURED on this
+// map's baked nav (bakeNav cell 0.75, scratch hill_probe): every centre is a
+// walkable ground node, 100% of the r-disk is on nav, reachable from both CTF
+// stands, >= 5 m from every spawn point. d0/d1 = nav metres from the AMBER /
+// SLATE stand. No geometry, collider or nav change was made for these.
+// ===========================================================================
+export const OUTPOST_HILLS = [
+  { id: "1", name: "THE HALL", pos: [-5.0, 0, -2.0], r: 4.0 }, // the hall (STRONGHOLD B) — d 52.1 / 53.1, spawn >= 6.0 m
+  { id: "2", name: "HALL EAST", pos: [11.0, 0, -15.5], r: 4.0 }, // east of the hall — d 67.8 / 59.8, spawn >= 6.3 m
+  { id: "3", name: "WEST DOCK", pos: [-23.0, 0, -16.5], r: 4.0 }, // west dock lane (STRONGHOLD A, AMBER side) — d 33.2 / 86.0, spawn >= 6.7 m
+  { id: "4", name: "EAST DOCK", pos: [14.5, 0, 15.0], r: 4.0 }, // east dock lane (STRONGHOLD C, SLATE side) — d 86.1 / 33.7, spawn >= 6.8 m
+  { id: "5", name: "NORTH BAND", pos: [-4.0, 0, -35.0], r: 4.0 }, // north band — d 87.2 / 79.3, spawn >= 7.8 m
+];

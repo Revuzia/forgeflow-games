@@ -34,6 +34,7 @@
 // (W7). A fact the bots use that the human cannot see must be impossible to
 // write: if it is not in this constant, it is not Tier W.
 // ---------------------------------------------------------------------------
+import { teamHex, cbPalette } from "../team_color.js";
 export const PUBLIC_FACTS = Object.freeze({
   // facts published in every mode
   shared: Object.freeze([
@@ -123,6 +124,7 @@ body.mh-dead #a10-fade{opacity:.34 !important;}
    while .match-live) */
 #mh-feed{position:absolute;right:34px;top:64px;text-align:right;font-size:12.5px;
   letter-spacing:.06em;}
+body.mh-warm #a10-dom .dm-mks,body.mh-warm #a10-modes .md-mks{visibility:hidden;}
 #mh-feed .kr{margin-bottom:5px;opacity:0;white-space:nowrap;transition:opacity .2s;}
 #mh-feed .kr .me{color:var(--a10-amber,#d9a441);}
 #mh-feed .kr .med{color:var(--a10-red,#ff4d4d);}
@@ -190,6 +192,13 @@ function fmtClock(s) {
 // tiny original weapon glyph (killfeed) — one shared silhouette
 const GLYPH_SVG =
   `<svg width="22" height="8" viewBox="0 0 22 8"><path d="M0 3h13l1-2h2v2h6v2h-4l-1 2h-3l-1-2H0z" fill="currentColor"/></svg>`;
+// [polish v149] equipment / knife kills read as what did them (the death event
+// names the weapon: "claymore" = TRIPMINE, "frag", "knife")
+const EQ_GLYPH = {
+  claymore: `<svg width="22" height="8" viewBox="0 0 27 10" aria-label="tripmine"><path d="M6 3.5q7.5-3 15 0V8H6zM8 8h1.4v2H8zM17.6 8H19v2h-1.6zM4 1l3 1.6-.5.8zM23 1l-3 1.6.5.8z" fill="currentColor"/></svg>`,
+  frag: `<svg width="22" height="8" viewBox="0 0 27 10" aria-label="frag"><path d="M10.5 3.2a4.2 4.2 0 1 0 6 0zM12 0h4v2.6h-4zM16 .6l3.4-.6.3 1.2-3.7.6z" fill="currentColor"/></svg>`,
+  knife: `<svg width="22" height="8" viewBox="0 0 27 10" aria-label="knife"><path d="M2 4.2h15l6-2.2-.8 4.2H17v.6H2zM17 3h1.5v4.6H17z" fill="currentColor"/></svg>`,
+};
 
 // ---------------------------------------------------------------------------
 export function createMatchHud(ctx) {
@@ -273,6 +282,19 @@ export function createMatchHud(ctx) {
   function renderScore() {
     const m = M();
     if (!m) return;
+    if (m.modeId === "ladder") { // [lane modes] ASCENT: rungs, not kills
+      const tr = (m.mode && m.mode.tier) || [];
+      const n = (m.mode && m.mode.tiers && m.mode.tiers.length) || 8;
+      let li = 0;
+      for (let i = 1; i < tr.length; i++) if ((tr[i] | 0) > (tr[li] | 0)) li = i;
+      const lead = m.actors[li];
+      scoreEl.innerHTML =
+        `<span class="us">YOU ${Math.min(n, (tr[0] | 0) + 1)}/${n}</span><span class="sep">·</span>` +
+        `<span style="opacity:.85">LEADER ${Math.min(n, (tr[li] | 0) + 1)}/${n}` +
+        `${li === 0 ? " (YOU)" : lead ? " (" + esc(lead.name) + ")" : ""}</span>`;
+      scoreEl.classList.toggle("pulse", (tr[li] | 0) >= n - 1);
+      return;
+    }
     if (m.modeId === "ffa") {
       // YOU 12 · LEADER 17 (KESTREL) — modes.md §7.4
       let lead = null;
@@ -290,8 +312,7 @@ export function createMatchHud(ctx) {
     if (!t0 || !t1) return;
     const ctf = m.modeId === "ctf";
     const s0 = ctf ? t0.captures : t0.score, s1 = ctf ? t1.captures : t1.score;
-    const tint0 = (st.teams && st.teams[0] && st.teams[0].tint) || "#d9a441";
-    const tint1 = (st.teams && st.teams[1] && st.teams[1].tint) || "#7c9fd0";
+    const tint0 = teamHex(0, st.teams), tint1 = teamHex(1, st.teams); // core/team_color.js
     scoreEl.innerHTML =
       `<span class="us" style="color:${tint0}">US ${s0}</span>` +
       `<span class="sep">—</span>` +
@@ -342,7 +363,7 @@ export function createMatchHud(ctx) {
     let html = "";
     for (const f of m.flags) {
       const mine = f.team === 0;
-      const tint = (st.teams && st.teams[f.team] && st.teams[f.team].tint) || (mine ? "#d9a441" : "#7c9fd0");
+      const tint = teamHex(f.team, st.teams); // core/team_color.js (colour-blind aware)
       const state = String(f.state || "AT_STAND").toUpperCase();
       let text = "HOME", cls = "";
       if (state === "CARRIED") {
@@ -362,7 +383,7 @@ export function createMatchHud(ctx) {
         text = `DROPPED${d != null ? " — " + Math.round(d) + " m" : ""}${cd != null ? " (" + cd + ")" : ""}`;
       }
       html += `<span class="fl ${cls}"><span class="g" style="background:${tint}"></span>` +
-        `<span style="color:${tint}">${esc((st.teams && st.teams[f.team] && st.teams[f.team].name) || (mine ? "AMBER" : "SLATE"))}</span> ` +
+        `<span style="color:${tint}">${esc(cbPalette() ? (mine ? "OURS" : "THEIRS") : ((st.teams && st.teams[f.team] && st.teams[f.team].name) || (mine ? "AMBER" : "SLATE")))}</span> ` +
         `<span style="opacity:.8">${text}</span></span>`;
     }
     flagsEl.innerHTML = html;
@@ -379,12 +400,18 @@ export function createMatchHud(ctx) {
     const kA = d.attackerActor, vA = d.victimActor;
     const kBot = actorIsBot(kA), vBot = actorIsBot(vA);
     const kMe = kA === 0, vMe = vA === 0;
+    // names in their side's colour in two-team modes (core/team_color.js — the
+    // colour-blind palette follows); FFA keeps you amber / your death red
+    const m2 = M();
+    const two = !!(m2 && m2.teams && m2.teams.length === 2);
+    const col = (team) => two && (team === 0 || team === 1) ? ` style="color:${teamHex(team, m2.teams)}"` : "";
     const kHtml = kA == null
       ? `<span style="opacity:.5">—</span>`
-      : `<span class="${kMe ? "me" : ""}">${esc(actorName(kA))}</span>`;
+      : `<span class="${kMe ? "me" : ""}"${col(d.attackerTeam)}>${esc(actorName(kA))}</span>`;
     const vHtml =
-      `<span class="${vMe ? "med" : ""}">${esc(actorName(vA))}</span>`;
-    slot.el.innerHTML = kHtml + GLYPH_SVG + vHtml;
+      `<span class="${vMe ? "med" : ""}"${vMe ? "" : col(d.victimTeam)}>${esc(actorName(vA))}</span>`;
+    const g = d.melee ? EQ_GLYPH.knife : EQ_GLYPH[d.weaponId] || GLYPH_SVG;
+    slot.el.innerHTML = kHtml + g + vHtml;
     // remember our own killer for the kill-cam nameplate. kA === vA (or null)
     // means a suicide / zone death: the cam orbits the death spot and the
     // nameplate stays hidden rather than reading "KILLED BY YOU".
@@ -494,6 +521,32 @@ export function createMatchHud(ctx) {
       `After 8 seconds of carrying, the enemy sees roughly where you are.`,
       `A dropped flag returns in 30 seconds — instantly if a defender touches it.`,
     ],
+    // [lane dom] STRONGHOLD (zone control)
+    dom: (r) => [
+      `Hold the zones: +1 for every zone you hold every ${r.scoreTickS || 2.5} seconds. First to ${r.scoreLimit} wins. ${fmtClock(r.timeLimitS)}.`,
+      `Stand in a ring to take it. More of you, faster. Enemies inside freeze it.`,
+      `An enemy zone must be neutralised before you can capture it.`,
+      `A tie goes to overtime: no respawns — the next point wins it.`,
+    ],
+    // [lane modes] OUTPOST / RECLAIM / ASCENT
+    hill: (r) => [
+      `One outpost is live at a time. Hold it alone: +1 every second. First to ${r.scoreLimit} wins. ${fmtClock(r.timeLimitS)}.`,
+      `Both teams inside = contested, nobody scores.`,
+      `It moves every ${r.rotateS || 60} seconds — the next one shows ${r.previewS || 10} seconds early.`,
+      `A tie goes to overtime: no respawns — the next point wins it.`,
+    ],
+    tags: (r) => [
+      `Every fallen operator drops a tag. Grab an enemy's to confirm it: +1. First to ${r.scoreLimit} wins. ${fmtClock(r.timeLimitS)}.`,
+      `Grab a teammate's tag to deny it. Kills alone don't score.`,
+      `Tags vanish after ${r.tagTtlS || 30} seconds.`,
+      `A tie goes to overtime: no respawns — the next confirm wins it.`,
+    ],
+    ladder: (r) => [
+      `Everyone starts on the same weapon. Every kill moves you up a rung.`,
+      `The kill on the last rung wins. ${fmtClock(r.timeLimitS)}. Everyone is hostile.`,
+      `No classes, no pickups, no call-ins.`,
+      `The last rung is the knife — and a knife kill sends the victim down a rung.`,
+    ],
     ffa: (r) => [
       `First to ${r.scoreLimit} kills wins. ${fmtClock(r.timeLimitS)}. Everyone is hostile.`,
       `Respawn in ${r.respawnS} seconds.`,
@@ -502,13 +555,16 @@ export function createMatchHud(ctx) {
   };
   function renderWarmup() {
     const m = M();
-    if (!m || m.phase !== "warmup") { warmEl.style.display = "none"; return; }
+    // [polish v149] body.mh-warm: world markers step back while the rules card is up
+    if (!m || m.phase !== "warmup") { warmEl.style.display = "none"; document.body.classList.remove("mh-warm"); return; }
     warmEl.style.display = "block";
-    const name = { tdm: "SKIRMISH", ctf: "CAPTURE THE FLAG", ffa: "FREE-FOR-ALL" }[m.modeId] || m.modeId;
+    document.body.classList.add("mh-warm");
+    const name = { tdm: "SKIRMISH", ctf: "CAPTURE THE FLAG", ffa: "FREE-FOR-ALL", dom: "STRONGHOLD", hill: "OUTPOST", tags: "RECLAIM", ladder: "ASCENT" }[m.modeId] || m.modeId; // [lane dom] [lane modes]
     warmEl.querySelector(".mode").textContent = name;
     const s = sim();
     const rules = s && s.match && s.match.m ? s.match.m.rules : { scoreLimit: 50, timeLimitS: 480, respawnS: 4, captureLimit: 3 };
-    const lines = (RULE_LINES[m.modeId] || RULE_LINES.tdm)(rules);
+    let lines = (RULE_LINES[m.modeId] || RULE_LINES.tdm)(rules);
+    if (m.modeId === "ladder" && m.mode && !m.mode.melee) lines = lines.slice(0, 3).concat([`The last rung is the pistol.`]); // [lane modes]
     warmEl.querySelector(".rules").innerHTML = lines.map(esc).join("<br>");
     warmEl.querySelector(".count").textContent = String(Math.max(1, Math.ceil(m.timeLeft)));
   }
@@ -545,7 +601,7 @@ export function createMatchHud(ctx) {
   function renderPips() {
     const m = M();
     const s = sim();
-    if (!m || !s || m.modeId === "ffa" || m.phase === "ended") { // §7.4: no pips in FFA
+    if (!m || !s || m.modeId === "ffa" || m.modeId === "ladder" || m.phase === "ended") { // §7.4: no pips in FFA (or ASCENT)
       for (const p of pips) p.style.display = "none";
       return;
     }
@@ -590,8 +646,11 @@ export function createMatchHud(ctx) {
     if (!st.active) return;
     if (d && d.phase === "overtime") {
       const m = M();
-      setBanner("OVERTIME", m && m.modeId === "ffa"
-        ? "NO RESPAWNS — LAST LEADER STANDING" : "NO RESPAWNS — FIRST DEATH LOSES", 4.0);
+      setBanner("OVERTIME", m && (m.modeId === "ffa" || m.modeId === "ladder") // [lane modes] ASCENT = the FFA rule
+        ? "NO RESPAWNS — LAST LEADER STANDING"
+        : m && (m.modeId === "dom" || m.modeId === "hill") ? "NO RESPAWNS — NEXT POINT WINS" // [lane dom] [lane modes]
+        : m && m.modeId === "tags" ? "NO RESPAWNS — NEXT CONFIRM WINS" // [lane modes]
+          : "NO RESPAWNS — FIRST DEATH LOSES", 4.0);
     }
     refresh();
   }

@@ -10,8 +10,8 @@
   "source": "str"
  },
  "payload_sums_bytes": {
-  "menu": 5870636,
-  "mission": 4319022,
+  "menu": 6322360,
+  "mission": 5217379,
   "menu_budget": 6815744,
   "mission_budget": 5242880
  },
@@ -40,6 +40,374 @@
    "kind": "imported",
    "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
    "source": "pipeline/assets/sonniss-gdc2024/Bolt - Backyard Rain & Thunder/RAIN_Rain at Night Slow Crescendo (180-202s, seamless xfade loop 20s)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/gun/sn_dist.ogg",
+   "bytes": 64415,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "Sonniss GDC 2024 slices - mid- and far-distance gunfire perspectives (q0); packs: Dramatic Cat - SVD Dragunov; Pole Position - Colt Python .357 Magnum; Pole Position - Dan Wesson .445 SuperMag; Pole Position - Desert Eagle .44; Pole Position - Franchi SPAS-12 Combat Shotgun; Pole Position - Lynx 50 Cal Sniper Rifle; Pole Position - Smith & Wesson .38 Chiefs Special Model 60. Sheet of single takes, 80 ms silence between, each high-passed (25-60 Hz), 1.5 ms fade-in, cosine fade-out, peak-normalised to -1 dBFS; 44.1 kHz mono OGG Vorbis via ffmpeg (never raw WAVs). Offsets = sfx.js FILES S(sheet, off, dur).",
+   "slices": [
+    {
+     "name": "mid_ar_0",
+     "off": 0.0,
+     "dur": 0.62,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Desert Eagle .44/Desert Eagle - FIRING - Take 2 - 65m Right - H3VR .wav (0.2061-0.8261s, channel 0)"
+    },
+    {
+     "name": "mid_ar_1",
+     "off": 0.7,
+     "dur": 0.62,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Desert Eagle .44/Desert Eagle - FIRING - Take 2 - 65m Right - H3VR .wav (60.2066-60.8266s, channel 0)"
+    },
+    {
+     "name": "mid_pistol_0",
+     "off": 1.4,
+     "dur": 0.62,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Desert Eagle .44/Desert Eagle - FIRING - Take 2 - 65m Right - H3VR .wav (20.2066-20.8266s, channel 0)"
+    },
+    {
+     "name": "mid_dmr_0",
+     "off": 2.1,
+     "dur": 0.6,
+     "source": "pipeline/assets/sonniss-gdc2024/Dramatic Cat - SVD Dragunov/GUNRif_SVD Dragunov 7.62\u00d754R SOURCE Single Shots 30m Front MikroUsi_DRCA_DRAG_AB.wav (0.3424-0.9424s, channel 0)"
+    },
+    {
+     "name": "mid_dmr_1",
+     "off": 2.78,
+     "dur": 0.6,
+     "source": "pipeline/assets/sonniss-gdc2024/Dramatic Cat - SVD Dragunov/GUNRif_SVD Dragunov 7.62\u00d754R SOURCE Single Shots 30m Front MikroUsi_DRCA_DRAG_AB.wav (30.3406-30.9406s, channel 0)"
+    },
+    {
+     "name": "mid_sg_0",
+     "off": 3.46,
+     "dur": 0.72,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Franchi SPAS-12 Combat Shotgun/SPAS-12 - FIRING - Pump Action - Take 1 - 20m In Front - AB - MKH8020.wav (0.1824-0.9024s, channel 0)"
+    },
+    {
+     "name": "mid_sg_1",
+     "off": 4.26,
+     "dur": 0.72,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Franchi SPAS-12 Combat Shotgun/SPAS-12 - FIRING - Pump Action - Take 1 - 20m In Front - AB - MKH8020.wav (48.7587-49.4787s, channel 0)"
+    },
+    {
+     "name": "far_ar_0",
+     "off": 5.06,
+     "dur": 0.85,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Colt Python .357 Magnum/Colt Python 357 Magnum - FIRING - Take 3 - 160m Behind - ORTF - CM4.wav (0.4736-1.3236s, channel 0)"
+    },
+    {
+     "name": "far_ar_1",
+     "off": 5.99,
+     "dur": 0.85,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Colt Python .357 Magnum/Colt Python 357 Magnum - FIRING - Take 3 - 160m Behind - ORTF - CM4.wav (35.0572-35.9072s, channel 0)"
+    },
+    {
+     "name": "far_pistol_0",
+     "off": 6.92,
+     "dur": 0.8,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Smith & Wesson .38 Chiefs Special Model 60/Smith & Wesson 60 - FIRING - Take 1 - 100m In Front Off Axis - ORTF - MKH8040.wav (0.6169-1.4169s, channel 0)"
+    },
+    {
+     "name": "far_pistol_1",
+     "off": 7.8,
+     "dur": 0.8,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Smith & Wesson .38 Chiefs Special Model 60/Smith & Wesson 60 - FIRING - Take 1 - 100m In Front Off Axis - ORTF - MKH8040.wav (9.7783-10.5783s, channel 0)"
+    },
+    {
+     "name": "far_dmr_0",
+     "off": 8.68,
+     "dur": 0.85,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Lynx 50 Cal Sniper Rifle/Lynx 50 - FIRING - Take 1 - 65m Behind - ORTF - CM3.wav (0.2765-1.1265s, channel 0)"
+    },
+    {
+     "name": "far_dmr_1",
+     "off": 9.61,
+     "dur": 0.85,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Lynx 50 Cal Sniper Rifle/Lynx 50 - FIRING - Take 1 - 65m Behind - ORTF - CM3.wav (9.1909-10.0409s, channel 0)"
+    },
+    {
+     "name": "far_sg_0",
+     "off": 10.54,
+     "dur": 0.85,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Dan Wesson .445 SuperMag/Dan Wesson 445 - FIRING - Take 1 - 100m In Front Off Axis - ORTF - MKH8040.wav (0.2679-1.1179s, channel 0)"
+    },
+    {
+     "name": "far_sg_1",
+     "off": 11.47,
+     "dur": 0.85,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Dan Wesson .445 SuperMag/Dan Wesson 445 - FIRING - Take 1 - 100m In Front Off Axis - ORTF - MKH8040.wav (16.2665-17.1165s, channel 0)"
+    }
+   ],
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/gun/sn_foley.ogg",
+   "bytes": 51133,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "Sonniss GDC 2024 slices - own-gun mechanical foley (mags, charging handle, bolt, hammer, brass) + ricochets (q1); packs: Dramatic Cat - Saiga-12; Justsoundeffects - Steampunk Gadgets; Pole Position - Dan Wesson .445 SuperMag; Pole Position - Desert Eagle .44; Pole Position - Lynx 50 Cal Sniper Rifle. Sheet of single takes, 80 ms silence between, each high-passed (25-60 Hz), 1.5 ms fade-in, cosine fade-out, peak-normalised to -1 dBFS; 44.1 kHz mono OGG Vorbis via ffmpeg (never raw WAVs). Offsets = sfx.js FILES S(sheet, off, dur).",
+   "slices": [
+    {
+     "name": "mag_out_0",
+     "off": 0.0,
+     "dur": 0.26,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Desert Eagle .44/Desert Eagle - VAR SFX - Magazine In and Out - Take 3 - MKH8060.wav (12.86-13.12s, mono downmix)"
+    },
+    {
+     "name": "mag_out_1",
+     "off": 0.34,
+     "dur": 0.29,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Desert Eagle .44/Desert Eagle - VAR SFX - Magazine In and Out - Take 3 - MKH8060.wav (1.29-1.58s, mono downmix)"
+    },
+    {
+     "name": "mag_in_0",
+     "off": 0.71,
+     "dur": 0.25,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Desert Eagle .44/Desert Eagle - VAR SFX - Magazine In and Out - Take 3 - MKH8060.wav (4.89-5.14s, mono downmix)"
+    },
+    {
+     "name": "mag_in_1",
+     "off": 1.04,
+     "dur": 0.2,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Desert Eagle .44/Desert Eagle - VAR SFX - Magazine In and Out - Take 3 - MKH8060.wav (14.38-14.58s, mono downmix)"
+    },
+    {
+     "name": "mag_in_2",
+     "off": 1.32,
+     "dur": 0.24,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Desert Eagle .44/Desert Eagle - VAR SFX - Magazine In and Out - Take 3 - MKH8060.wav (24.1-24.34s, mono downmix)"
+    },
+    {
+     "name": "charge_0",
+     "off": 1.64,
+     "dur": 0.345,
+     "source": "pipeline/assets/sonniss-gdc2024/Dramatic Cat - Saiga-12/GUNMech_Saiga 12 Cal.12 SOURCE Chamber Eject Bullet_DRCA_SG12_MKH416.wav (0.275-0.62s, mono downmix)"
+    },
+    {
+     "name": "charge_1",
+     "off": 2.065,
+     "dur": 0.42,
+     "source": "pipeline/assets/sonniss-gdc2024/Dramatic Cat - Saiga-12/GUNMech_Saiga 12 Cal.12 SOURCE Chamber Eject Bullet_DRCA_SG12_MKH416.wav (2.275-2.695s, mono downmix)"
+    },
+    {
+     "name": "bolt_0",
+     "off": 2.565,
+     "dur": 0.115,
+     "source": "pipeline/assets/sonniss-gdc2024/Dramatic Cat - Saiga-12/GUNMech_Saiga 12 Cal.12 SOURCE Chamber Eject Bullet_DRCA_SG12_MKH416.wav (0.465-0.58s, mono downmix)"
+    },
+    {
+     "name": "bolt_1",
+     "off": 2.76,
+     "dur": 0.095,
+     "source": "pipeline/assets/sonniss-gdc2024/Dramatic Cat - Saiga-12/GUNMech_Saiga 12 Cal.12 SOURCE Chamber Eject Bullet_DRCA_SG12_MKH416.wav (2.505-2.6s, mono downmix)"
+    },
+    {
+     "name": "hammer_0",
+     "off": 2.935,
+     "dur": 0.09,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Dan Wesson .445 SuperMag/Dan Wesson 445 - VAR SFX - Cock Uncock Hammer - MS Decoded - MKH418s.wav (0.545-0.635s, mono downmix)"
+    },
+    {
+     "name": "hammer_1",
+     "off": 3.105,
+     "dur": 0.08,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Dan Wesson .445 SuperMag/Dan Wesson 445 - VAR SFX - Cock Uncock Hammer - MS Decoded - MKH418s.wav (2.195-2.275s, mono downmix)"
+    },
+    {
+     "name": "hammer_2",
+     "off": 3.265,
+     "dur": 0.08,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Dan Wesson .445 SuperMag/Dan Wesson 445 - VAR SFX - Cock Uncock Hammer - MS Decoded - MKH418s.wav (4.455-4.535s, mono downmix)"
+    },
+    {
+     "name": "brass_0",
+     "off": 3.425,
+     "dur": 0.26,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Lynx 50 Cal Sniper Rifle/Lynx 50 - VAR SFX - Shell Ejections - Take 2 - CO100k.wav (2.465-2.725s, mono downmix)"
+    },
+    {
+     "name": "brass_1",
+     "off": 3.765,
+     "dur": 0.33,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Lynx 50 Cal Sniper Rifle/Lynx 50 - VAR SFX - Shell Ejections - Take 2 - CO100k.wav (9.475-9.805s, mono downmix)"
+    },
+    {
+     "name": "brass_2",
+     "off": 4.175,
+     "dur": 0.3,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Lynx 50 Cal Sniper Rifle/Lynx 50 - VAR SFX - Shell Ejections - Take 2 - CO100k.wav (25.41-25.71s, mono downmix)"
+    },
+    {
+     "name": "ric_0",
+     "off": 4.555,
+     "dur": 0.55,
+     "source": "pipeline/assets/sonniss-gdc2024/Justsoundeffects - Steampunk Gadgets/MECHMisc_Ricochet Hits 01_JSE_SG.wav (0.005-0.555s, mono downmix)"
+    },
+    {
+     "name": "ric_1",
+     "off": 5.185,
+     "dur": 0.55,
+     "source": "pipeline/assets/sonniss-gdc2024/Justsoundeffects - Steampunk Gadgets/MECHMisc_Ricochet Hits 01_JSE_SG.wav (4.8-5.35s, mono downmix)"
+    },
+    {
+     "name": "ric_2",
+     "off": 5.815,
+     "dur": 0.55,
+     "source": "pipeline/assets/sonniss-gdc2024/Justsoundeffects - Steampunk Gadgets/MECHMisc_Ricochet Hits 01_JSE_SG.wav (7.205-7.755s, mono downmix)"
+    },
+    {
+     "name": "ric_3",
+     "off": 6.445,
+     "dur": 0.26,
+     "source": "pipeline/assets/sonniss-gdc2024/Justsoundeffects - Steampunk Gadgets/MECHMisc_Ricochet Hits 01_JSE_SG.wav (8.205-8.465s, mono downmix)"
+    }
+   ],
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/gun/sn_indoor.ogg",
+   "bytes": 39844,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "Sonniss GDC 2024 slices - indoor hall/room gunfire (q0); packs: Pole Position - The Indoor Gun Acoustics 2 Library. Sheet of single takes, 80 ms silence between, each high-passed (25-60 Hz), 1.5 ms fade-in, cosine fade-out, peak-normalised to -1 dBFS; 44.1 kHz mono OGG Vorbis via ffmpeg (never raw WAVs). Offsets = sfx.js FILES S(sheet, off, dur).",
+   "slices": [
+    {
+     "name": "in_ar_0",
+     "off": 0.0,
+     "dur": 0.9,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - The Indoor Gun Acoustics 2 Library/AK5 7,62mm - FIRING - Large Hall - Long Bursts - 3m Behind Left - MS Decoded - MKH418S.wav (0.993-1.893s, mono downmix)"
+    },
+    {
+     "name": "in_ar_1",
+     "off": 0.98,
+     "dur": 0.9,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - The Indoor Gun Acoustics 2 Library/AK5 7,62mm - FIRING - Large Hall - Long Bursts - 3m Behind Left - MS Decoded - MKH418S.wav (5.255-6.155s, mono downmix)"
+    },
+    {
+     "name": "in_smg_0",
+     "off": 1.96,
+     "dur": 0.85,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - The Indoor Gun Acoustics 2 Library/MP5 9mm - FIRING - Large Hall - Bursts - 1m Side - MKH8060.wav (0.366-1.216s, mono downmix)"
+    },
+    {
+     "name": "in_smg_1",
+     "off": 2.89,
+     "dur": 0.85,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - The Indoor Gun Acoustics 2 Library/MP5 9mm - FIRING - Large Hall - Bursts - 1m Side - MKH8060.wav (4.861-5.711s, mono downmix)"
+    },
+    {
+     "name": "in_pistol_0",
+     "off": 3.82,
+     "dur": 0.6,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - The Indoor Gun Acoustics 2 Library/Glock 17 9mm - FIRING - Small Living Room - Single Shots - 5m In Front - MS - RSM191.wav (6.8037-7.4037s, channel 0)"
+    },
+    {
+     "name": "in_pistol_1",
+     "off": 4.5,
+     "dur": 0.6,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - The Indoor Gun Acoustics 2 Library/Glock 17 9mm - FIRING - Small Living Room - Single Shots - 5m In Front - MS - RSM191.wav (13.6058-14.2058s, channel 0)"
+    },
+    {
+     "name": "in_sg_0",
+     "off": 5.18,
+     "dur": 1.0,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - The Indoor Gun Acoustics 2 Library/Mossberg 12-Gauge - FIRING - Office Corridor - Single Shots - 20m Adjacent Room - M10.wav (3.7084-4.7084s, mono downmix)"
+    },
+    {
+     "name": "in_sg_1",
+     "off": 6.26,
+     "dur": 1.0,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - The Indoor Gun Acoustics 2 Library/Mossberg 12-Gauge - FIRING - Office Corridor - Single Shots - 20m Adjacent Room - M10.wav (11.1101-12.1101s, mono downmix)"
+    }
+   ],
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/gun/sn_shotgun.ogg",
+   "bytes": 28009,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "Sonniss GDC 2024 slices - B-12 Breaker close reports, pump strokes, shell inserts (q1); packs: Dramatic Cat - Saiga-12; Pole Position - Colt Python .357 Magnum; Pole Position - Franchi SPAS-12 Combat Shotgun. Sheet of single takes, 80 ms silence between, each high-passed (25-60 Hz), 1.5 ms fade-in, cosine fade-out, peak-normalised to -1 dBFS; 44.1 kHz mono OGG Vorbis via ffmpeg (never raw WAVs). Offsets = sfx.js FILES S(sheet, off, dur).",
+   "slices": [
+    {
+     "name": "sg_close_0",
+     "off": 0.0,
+     "dur": 0.23,
+     "source": "pipeline/assets/sonniss-gdc2024/Dramatic Cat - Saiga-12/GUNShotg_Saiga 12 Cal.12 SOURCE Single Shots 1m Side MKH8040_DRCA_SG12_MONO.wav (0.3483-0.5783s, mono downmix)"
+    },
+    {
+     "name": "sg_close_1",
+     "off": 0.31,
+     "dur": 0.23,
+     "source": "pipeline/assets/sonniss-gdc2024/Dramatic Cat - Saiga-12/GUNShotg_Saiga 12 Cal.12 SOURCE Single Shots 1m Side MKH8040_DRCA_SG12_MONO.wav (10.354-10.584s, mono downmix)"
+    },
+    {
+     "name": "sg_close_2",
+     "off": 0.62,
+     "dur": 0.23,
+     "source": "pipeline/assets/sonniss-gdc2024/Dramatic Cat - Saiga-12/GUNShotg_Saiga 12 Cal.12 SOURCE Single Shots 1m Side MKH8040_DRCA_SG12_MONO.wav (30.3543-30.5843s, mono downmix)"
+    },
+    {
+     "name": "pump_back_0",
+     "off": 0.93,
+     "dur": 0.27,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Franchi SPAS-12 Combat Shotgun/SPAS-12 - VAR SFX - Pump Action Fast - Close - MS - MKH418s.wav (0.16-0.43s, channel 0)"
+    },
+    {
+     "name": "pump_back_1",
+     "off": 1.28,
+     "dur": 0.29,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Franchi SPAS-12 Combat Shotgun/SPAS-12 - VAR SFX - Pump Action Fast - Close - MS - MKH418s.wav (2.04-2.33s, channel 0)"
+    },
+    {
+     "name": "pump_back_2",
+     "off": 1.65,
+     "dur": 0.29,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Franchi SPAS-12 Combat Shotgun/SPAS-12 - VAR SFX - Pump Action Fast - Close - MS - MKH418s.wav (4.11-4.4s, channel 0)"
+    },
+    {
+     "name": "pump_fwd_0",
+     "off": 2.02,
+     "dur": 0.26,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Franchi SPAS-12 Combat Shotgun/SPAS-12 - VAR SFX - Pump Action Fast - Close - MS - MKH418s.wav (0.72-0.98s, channel 0)"
+    },
+    {
+     "name": "pump_fwd_1",
+     "off": 2.36,
+     "dur": 0.28,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Franchi SPAS-12 Combat Shotgun/SPAS-12 - VAR SFX - Pump Action Fast - Close - MS - MKH418s.wav (2.42-2.7s, channel 0)"
+    },
+    {
+     "name": "pump_fwd_2",
+     "off": 2.72,
+     "dur": 0.26,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Franchi SPAS-12 Combat Shotgun/SPAS-12 - VAR SFX - Pump Action Fast - Close - MS - MKH418s.wav (4.6-4.86s, channel 0)"
+    },
+    {
+     "name": "shell_0",
+     "off": 3.06,
+     "dur": 0.12,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Colt Python .357 Magnum/Colt Python 357 Magnum - VAR SFX - Loading Gun - CO100K.wav (3.9542-4.0742s, mono downmix)"
+    },
+    {
+     "name": "shell_1",
+     "off": 3.26,
+     "dur": 0.12,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Colt Python .357 Magnum/Colt Python 357 Magnum - VAR SFX - Loading Gun - CO100K.wav (13.5859-13.7059s, mono downmix)"
+    },
+    {
+     "name": "shell_2",
+     "off": 3.46,
+     "dur": 0.12,
+     "source": "pipeline/assets/sonniss-gdc2024/Pole Position - Colt Python .357 Magnum/Colt Python 357 Magnum - VAR SFX - Loading Gun - CO100K.wav (15.8154-15.9354s, mono downmix)"
+    }
+   ],
    "lane": "A9-audio",
    "payload": "mission"
   },
@@ -575,11 +943,65 @@
    "payload": "mission"
   },
   {
+   "path": "assets/chars/clip_death_back.glb",
+   "bytes": 45284,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/death_back.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/death from the back.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_death_back_head.glb",
+   "bytes": 51124,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/death_back_head.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/death from back headshot.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_death_front.glb",
+   "bytes": 44136,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/death_front.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/death from the front.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_death_front_head.glb",
+   "bytes": 45900,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/death_front_head.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/death from front headshot.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_death_right.glb",
+   "bytes": 43716,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/death_right.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/death from right.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
    "path": "assets/chars/clip_hit.glb",
    "bytes": 35644,
    "kind": "imported",
    "license": "Mixamo baked via last-circle flow",
    "source": "games/last-circle/assets/chars/meshy/soldier_hit.glb (resampled)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_jump_loop.glb",
+   "bytes": 17888,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/jump_loop.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/jump loop.fbx)",
    "lane": "A8",
    "payload": "mission"
   },
@@ -593,11 +1015,56 @@
    "payload": "mission"
   },
   {
+   "path": "assets/chars/clip_rifle_crouch_back.glb",
+   "bytes": 21240,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_crouch_back.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk crouching backward.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_crouch_g.glb",
+   "bytes": 21260,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_crouch_g.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk crouching forward.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_crouch_left.glb",
+   "bytes": 21708,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_crouch_left.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk crouching left.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_crouch_right.glb",
+   "bytes": 21076,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_crouch_right.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk crouching right.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
    "path": "assets/chars/clip_rifle_idle.glb",
    "bytes": 82128,
    "kind": "imported",
    "license": "Mixamo baked via last-circle flow (never shipped raw)",
    "source": "games/last-circle/assets/chars/meshy/soldier_rifle_idle.glb (resampled)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_idle_g.glb",
+   "bytes": 20732,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_idle_g.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/idle.fbx)",
    "lane": "A8",
    "payload": "mission"
   },
@@ -620,11 +1087,101 @@
    "payload": "mission"
   },
   {
+   "path": "assets/chars/clip_rifle_run_back.glb",
+   "bytes": 18748,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_run_back.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/run backward.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_run_g.glb",
+   "bytes": 18968,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_run_g.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/run forward.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_run_left.glb",
+   "bytes": 18644,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_run_left.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/run left.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_run_right.glb",
+   "bytes": 19100,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_run_right.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/run right.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_sprint_g.glb",
+   "bytes": 20092,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_sprint_g.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/sprint forward.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
    "path": "assets/chars/clip_rifle_walk.glb",
    "bytes": 83512,
    "kind": "imported",
    "license": "Mixamo baked via last-circle flow",
    "source": "games/last-circle/assets/chars/meshy/soldier_rifle_walk.glb (resampled)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_walk_back.glb",
+   "bytes": 21184,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_walk_back.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk backward.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_walk_g.glb",
+   "bytes": 21404,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_walk_g.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk forward.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_walk_left.glb",
+   "bytes": 20832,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_walk_left.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk left.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_walk_right.glb",
+   "bytes": 20832,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/rifle_walk_right.glb (byte copy; Mixamo Rifle_8-Way_Locomotion_Pack/walk right.fbx)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_toss_grenade.glb",
+   "bytes": 45644,
+   "kind": "imported",
+   "license": "Mixamo (Adobe) royalty-free for use in games; baked clip only (last-circle flow)",
+   "source": "games/last-circle/assets/chars/clips/toss_grenade.glb (byte copy; Mixamo Basic_Shooter_Pack/toss grenade.fbx)",
    "lane": "A8",
    "payload": "mission"
   },
@@ -1225,8 +1782,17 @@
    "payload": "menu"
   },
   {
+   "path": "assets/weapons/attachments.glb",
+   "bytes": 351644,
+   "kind": "generated",
+   "license": "Original (authored procedural hard-surface parts)",
+   "source": "tools/a5_build_guns.py -- attachments (gunsmith: optics, muzzle devices, grips, lasers, tube extension; geometry only, materials bound to the host gun at runtime; loaded on demand in class matches)",
+   "lane": "A4",
+   "payload": "menu"
+  },
+  {
    "path": "assets/weapons/breaker.glb",
-   "bytes": 383896,
+   "bytes": 513208,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_shotgun.glb per games/last-circle/CREDITS.md) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
@@ -1236,7 +1802,7 @@
   },
   {
    "path": "assets/weapons/corvus.glb",
-   "bytes": 586412,
+   "bytes": 587744,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_sniper.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
@@ -1245,8 +1811,17 @@
    "payload": "mission"
   },
   {
+   "path": "assets/weapons/knife.glb",
+   "bytes": 17136,
+   "kind": "generated",
+   "license": "Original (authored procedural hard-surface knife)",
+   "source": "tools/a5_build_guns.py -- knife ([melee] quick knife strike: first-person knife, geometry only, materials bound to the gun-in-hand at runtime; menu path, loaded by the viewmodel at boot)",
+   "lane": "A4",
+   "payload": "menu"
+  },
+  {
    "path": "assets/weapons/pike.glb",
-   "bytes": 377872,
+   "bytes": 418124,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_pistol.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
@@ -1256,7 +1831,7 @@
   },
   {
    "path": "assets/weapons/vesper.glb",
-   "bytes": 571320,
+   "bytes": 576120,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_smg.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
@@ -1266,7 +1841,7 @@
   },
   {
    "path": "assets/weapons/warden.glb",
-   "bytes": 486228,
+   "bytes": 528920,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_ar.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",

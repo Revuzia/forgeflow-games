@@ -53,6 +53,11 @@ const CompositeShader = {
     uCABoost: { value: 1 },       // ×3 for 150 ms on explosions (hook)
     // (uSharpen moved to the FXAA pass — see FXAA_SHARPEN)
     uSat: { value: 0.95 },
+    // ADS peripheral blur (lane_env). NOT the banned DoF: no depth read, no
+    // CoC, no gather — four extra taps of the HDR buffer on the outer ring of
+    // the frame, ONLY while aiming down sights (uniform branch: zero cost at
+    // hip). Ramps with adsT so it eases in with the sight picture.
+    uAdsBlur: { value: 0 },
     uTier: { value: 2 },          // 0 = tonemap only, 1/2 = full film stages
     // ---- grade shaping (iter02 D2 fix — see the grade block in the shader)
     uBlack: { value: 0.0022 },    // soft toe: where the frame reaches black
@@ -63,7 +68,12 @@ const CompositeShader = {
     // MULTIPLICATIVE, so it can never lift the black floor into a colour film
     // — the iter02 failure mode. Shadows drift steel-blue, highlights (which
     // at night are sodium/fluorescent practicals and the muzzle) drift warm.
-    uShadowTint: { value: new THREE.Color(0.845, 0.945, 1.20) },
+    // lane_env: (0.845, 0.945, 1.20) -> (0.885, 0.960, 1.12). The before
+    // battery (_shots/lane_env/before_*.png) read as one blue wash: every
+    // shadow, the sky breaks AND the moonlit walls all landed on the same
+    // saturated blue, so the warm sodium islands had nothing neutral to sit
+    // against. Still cold, no longer monochrome.
+    uShadowTint: { value: new THREE.Color(0.885, 0.960, 1.12) },
     uHighTint: { value: new THREE.Color(1.070, 1.005, 0.915) },
   },
   vertexShader: /* glsl */ `
@@ -77,7 +87,7 @@ const CompositeShader = {
     uniform sampler2D tDiffuse;
     uniform float uTime;
     uniform vec2 uRes;
-    uniform float uVignette, uVigBoost, uGrain, uCA, uCABoost, uSat;
+    uniform float uVignette, uVigBoost, uGrain, uCA, uCABoost, uSat, uAdsBlur;
     uniform float uBlack, uPivot, uContrast, uCrush;
     uniform vec3 uShadowTint, uHighTint;
     uniform int uTier;
@@ -108,6 +118,19 @@ const CompositeShader = {
         hdr.r = texture2D(tDiffuse, uv + caOff).r;
         hdr.g = texture2D(tDiffuse, uv).g;
         hdr.b = texture2D(tDiffuse, uv - caOff).b;
+
+        // ---- ADS peripheral blur (uniform-gated; see uAdsBlur) -----------
+        if (uAdsBlur > 0.001) {
+          float bw = uAdsBlur * smoothstep(0.06, 0.30, r2);
+          if (bw > 0.002) {
+            // rotated 4-tap box, radius up to ~5 px at the corners
+            vec2 o1 = vec2(1.0, 0.45) * px * (1.5 + 3.5 * bw);
+            vec2 o2 = vec2(-0.45, 1.0) * px * (1.5 + 3.5 * bw);
+            vec3 bl = texture2D(tDiffuse, uv + o1).rgb + texture2D(tDiffuse, uv - o1).rgb
+                    + texture2D(tDiffuse, uv + o2).rgb + texture2D(tDiffuse, uv - o2).rgb;
+            hdr = mix(hdr, bl * 0.25, clamp(bw, 0.0, 1.0) * 0.85);
+          }
+        }
 
         // THE CONTRAST-ADAPTIVE SHARPEN USED TO LIVE HERE AND HAS MOVED INTO
         // THE FXAA PASS (perf wave 2, 2026-08-20). It cost four extra taps of
@@ -546,6 +569,17 @@ export function createPost(ctx) {
                         Math.max(2, Math.floor((h * pr) / bloomDiv))),
       0.32, 0.58, 1.0,
     );
+    // HALATION (lane_env): film's red-orange skirt around hot sources, done
+    // for free by tinting the WIDE bloom mips warm and leaving the tight ones
+    // neutral. Same five texture reads the pass already makes; only the
+    // composite's constant tints change. The tight core of a neon tube stays
+    // its own colour, its far glow leans warm — which is also what keeps cyan
+    // and violet neon from blooming into a cold film over the whole frame.
+    if (bloomPass.bloomTintColors) {
+      const tints = [[1.0, 1.0, 1.0], [1.0, 0.98, 0.95], [1.06, 0.93, 0.84],
+                     [1.12, 0.86, 0.72], [1.18, 0.80, 0.64]];
+      bloomPass.bloomTintColors.forEach((v, i) => v.set(...tints[i]));
+    }
     bloomPass.enabled = quality !== "low";
     composer.addPass(bloomPass);
 
@@ -569,16 +603,27 @@ export function createPost(ctx) {
     applyQuality(quality);
   }
 
+  // [lane settings] The preset still picks the tier, but each film stage is now
+  // its own player toggle (settings.js bloom/grain/vignette/adsBlur/chromAb;
+  // picking a preset writes them, so low/med/high frames are bit-identical to
+  // the pre-toggle build). Off = the stage's strength uniform at 0. Tier 0
+  // (tonemap only, no grade) is kept for the "low" preset with every film
+  // stage off — the old low frame; turning any film stage on under low lifts
+  // to tier 1 so the toggle can actually be seen.
+  const gfx = { grain: true, vignette: true, adsBlur: true, chromAb: true };
   function applyQuality(q) {
     quality = q;
+    const S = ctx.settings || {};
+    gfx.grain = S.grain !== "off"; gfx.vignette = S.vignette !== "off";
+    gfx.adsBlur = S.adsBlur !== "off"; gfx.chromAb = S.chromAb !== "off";
     if (!compositePass) return;
-    if (q === "low") {
-      if (bloomPass) bloomPass.enabled = false;
-      compositePass.uniforms.uTier.value = 0; // tonemap only (ARCH §3.13)
-    } else {
-      if (bloomPass) bloomPass.enabled = true;
-      compositePass.uniforms.uTier.value = q === "high" ? 2 : 1;
-    }
+    const anyFilm = gfx.grain || gfx.vignette || gfx.adsBlur || gfx.chromAb;
+    if (bloomPass) bloomPass.enabled = S.bloom != null ? S.bloom !== "off" : q !== "low";
+    compositePass.uniforms.uTier.value = (q === "low" && !anyFilm) ? 0 : (q === "high" ? 2 : 1);
+    const u = compositePass.uniforms;
+    u.uGrain.value = gfx.grain ? CompositeShader.uniforms.uGrain.value : 0;
+    u.uVignette.value = gfx.vignette ? CompositeShader.uniforms.uVignette.value : 0;
+    u.uCA.value = gfx.chromAb ? CompositeShader.uniforms.uCA.value : 0;
   }
 
   const api = {
@@ -607,13 +652,19 @@ export function createPost(ctx) {
 
       // vignette breathing: deepens during ADS + at critical hp (VT §2/§6)
       let boost = 0;
+      let ads = 0;
       const sim = ctx.sim && ctx.sim();
       if (sim && sim.state && sim.state.player) {
         const p = sim.state.player;
-        if (p.weapon && typeof p.weapon.adsT === "number") boost += 0.05 * p.weapon.adsT;
+        if (gfx.vignette && p.weapon && typeof p.weapon.adsT === "number") boost += 0.05 * p.weapon.adsT;
+        ads = (p.weapon && typeof p.weapon.adsT === "number") ? p.weapon.adsT : 0;
         if (typeof p.hp === "number" && p.hp < 35) boost += 0.04 * (1 - p.hp / 35);
       }
+      // suppression: near misses close the vignette in (audio.js decays ctx.suppress)
+      if (ctx.suppress > 0.02) boost += 0.11 * Math.min(1, ctx.suppress);
       u.uVigBoost.value = boost;
+      // ADS edge blur rides adsT; off on 'low' (tier 0 skips the film block)
+      u.uAdsBlur.value = !gfx.adsBlur ? 0 : Math.max(0, Math.min(1, ads)) * 0.9; // [lane settings] toggle, was quality==="low"
 
       // CA kick decay (×3 for ~150 ms — explosions hook via api.caKick())
       if (caBoostT > 0) {
@@ -673,6 +724,10 @@ export function createPost(ctx) {
   };
 
   ctx.onChange("quality", (q) => applyQuality(q));
+  // [lane settings] per-stage graphics toggles
+  for (const k of ["bloom", "grain", "vignette", "adsBlur", "chromAb"]) {
+    ctx.onChange(k, () => applyQuality(ctx.settings.quality || quality));
+  }
   ctx.post = api; // A11's capture() resize fallback reads ctx.post
   globalThis.__BR_POST__ = api; // profiler seam — perfprobe ablation reads it
   return api;

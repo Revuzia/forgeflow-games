@@ -139,11 +139,13 @@ function css() {
 #ld-medal.show{animation:ldmedal 2.4s cubic-bezier(.2,.9,.2,1) forwards;}
 @keyframes ldmedal{0%{opacity:0;transform:translate(-50%,10px) scale(1.5);}9%{opacity:1;transform:translate(-50%,0) scale(1);}78%{opacity:1;}100%{opacity:0;transform:translate(-50%,-8px) scale(.98);}}
 /* ---- score popups ---- */
-#ld-score{position:absolute;left:calc(50% + 46px);top:calc(50% + 6px);}
-#ld-score .p{position:absolute;left:0;top:0;white-space:nowrap;font-size:17px;letter-spacing:.08em;opacity:0;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9);animation:ldscore 1.3s ease-out forwards;}
+/* [polish v149] a stacked column right of the reticle (never over it): newest
+   on top, older rows step down, at most 4 — no more rows piled on one spot */
+#ld-score{position:absolute;left:calc(50% + 52px);top:calc(50% - 30px);display:flex;flex-direction:column;gap:1px;}
+#ld-score .p{position:relative;white-space:nowrap;font-size:15px;letter-spacing:.08em;opacity:0;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9);animation:ldscore 1.3s ease-out forwards;}
 #ld-score .p.hs{color:var(--a10-amber,#d9a441);}
 #ld-score .p small{font-size:11px;opacity:.75;margin-left:5px;letter-spacing:.12em;}
-@keyframes ldscore{0%{opacity:0;transform:translateY(8px);}12%{opacity:1;}100%{opacity:0;transform:translateY(-34px);}}
+@keyframes ldscore{0%{opacity:0;transform:translateX(-6px);}12%{opacity:1;transform:none;}75%{opacity:1;}100%{opacity:0;}}
 `;
 }
 
@@ -253,6 +255,16 @@ export function createLoadoutHud(ctx) {
     return [(proj.x * 0.5 + 0.5) * window.innerWidth, (-proj.y * 0.5 + 0.5) * window.innerHeight];
   }
 
+  // [lane settings] "how do I switch to it" on the device in hand: a number key
+  // on keyboard, the swap button on a controller, the SWAP button on touch.
+  function switchHint(slot) {
+    const inp = ctx.input;
+    const dev = inp && inp.lastDevice;
+    if (dev === "pad" && inp.glyph) return `${inp.glyph("swap")} to switch`;
+    if (dev === "touch") return "tap SWAP to switch";
+    return `press ${slot} to switch`;
+  }
+
   // ----------------------------------------------------------------- events
   function onPickup(d) {
     if (!d || d.who !== "P") return;
@@ -261,7 +273,7 @@ export function createLoadoutHud(ctx) {
     } else {
       const slot = d.slot >= 0 ? d.slot + 1 : "";
       showToast(`PICKED UP  <b>${FULL_NAMES[d.weaponId] || d.name}</b>  [${slot}]` +
-        (d.equipped ? "" : `<small>press ${slot} to switch</small>`));
+        (d.equipped ? "" : `<small>${switchHint(slot)}</small>`)); // [lane settings] device-aware
       if (d.slot >= 0 && slotEls[d.slot]) {
         const s = slotEls[d.slot].s;
         s.classList.remove("flash"); void s.offsetWidth; s.classList.add("flash");
@@ -271,9 +283,14 @@ export function createLoadoutHud(ctx) {
   function onMedal(d) { if (d) medalQueue.push(d); }
   function onScore(d) {
     if (!d) return;
+    // [polish v149] ONE feed: when the XP feed (after_action.js #br-xpfeed) is
+    // live it already lists the kill, headshot and medal rows — a second set of
+    // score popups on the reticle only piled up on top of it
+    if (document.getElementById("br-xpfeed")) return;
     const p = el("div", null, "p" + (d.headshot ? " hs" : ""), `+${d.points}<small>${d.why}</small>`);
-    p.style.left = (scoreN++ % 3) * 6 + "px";
-    score.appendChild(p);
+    scoreN++;
+    score.insertBefore(p, score.firstChild);
+    while (score.children.length > 4) score.lastChild.remove();
     setTimeout(() => p.remove(), 1400);
   }
   function onStreak(d) {
@@ -442,7 +459,11 @@ export function createLoadoutHud(ctx) {
     if (des) {
       const def = TIERS[des - 1];
       call.classList.add("on");
-      const html = `${def ? def.name : "STRIKE"} — MARK TARGET<b>[LMB] CONFIRM  ·  [RMB] CANCEL</b>`;
+      // [lane settings] device-aware glyphs (RT/LT · R2/L2 · LMB/RMB · FIRE/AIM);
+      // rebuilt every frame through the dataset.h compare, so a device switch
+      // mid-designate updates the prompt on the next frame.
+      const g = (v, dflt) => (ctx.input && ctx.input.glyph ? ctx.input.glyph(v) : dflt);
+      const html = `${def ? def.name : "STRIKE"} — MARK TARGET<b>[${g("designateOk", "LMB")}] CONFIRM  ·  [${g("designateCancel", "RMB")}] CANCEL</b>`;
       if (call.dataset.h !== html) { call.innerHTML = html; call.dataset.h = html; }
     } else if (soonest) {
       const left = Math.max(0, soonest.endT - s.state.time);

@@ -151,6 +151,7 @@ function shotEvent(sim, proj, hit, impactOnly, extra) {
     hit, tracer: proj.tracer, pellet: proj.pellet,
   };
   if (impactOnly) ev.impactOnly = true;
+  ev.suppressed = !!(proj.weapon && proj.weapon.suppressed); // [gunsmith] always boolean: a Vesper with a compensator is LOUD
   if (extra) Object.assign(ev, extra);
   sim.emit("shot", ev);
 }
@@ -345,7 +346,8 @@ export function fireShot(sim, shooter, weapon, origin, aimDir, rng) {
     const te = weapon.tracerEvery | 0;
     const firstOfBurst = (w.recoilIndex || 0) === 0;
     // §2.8 first-shot signature: one full tracer even on non-tracer rounds
-    const tracer = firstOfBurst || (te > 0 && shotIdx % te === 0);
+    // [gunsmith] a SUPPRESSOR attachment (noTracer) leaves no tracer at all
+    const tracer = !weapon.noTracer && (firstOfBurst || (te > 0 && shotIdx % te === 0));
     const proj = {
       who: shooter, weaponId, weapon,
       pos: origin.slice(), origin: origin.slice(),

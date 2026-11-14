@@ -323,6 +323,8 @@ const _fwd = new THREE.Vector3();
 const _to = new THREE.Vector3();
 const _vmMuzzle = new THREE.Vector3();
 const _ZAXIS = new THREE.Vector3(0, 0, 1);
+const _qi = new THREE.Quaternion();
+const _dv = new THREE.Vector3();
 
 // One instanced sprite pool (world- or vm-layer). Per-sprite: position,
 // size, roll, birth, life, HDR brightness, atlas frame A→B swap.
@@ -604,6 +606,21 @@ export function makeMuzzle(env) {
   const PLAYER_SMOKE_STANDOFF = 1.4;
   const BOT_SMOKE_STANDOFF = 0.7;
 
+  // ---- BARREL HEAT -> POST-BURST WISPS (lane_env) ----------------------------
+  // A held burst leaves the barrel smoking: thin wisps curling up off the
+  // muzzle for a second or two AFTER the trigger is released, scaled by how
+  // long the burst was. Per-shot puffs (above) already exist; what was missing
+  // is the AFTERMATH, which is the part of sustained fire a still frame sees.
+  // Player only (bots' muzzles are metres away and already carry their puffs).
+  // Zero cost when idle: one compare per update.
+  let heat = 0;          // ~shots, decays
+  let lastShotT = -1e9;  // fx clock of the player's last round
+  let wispAcc = 0;       // emission accumulator
+  let wispT = 0;         // clock at the last wisp tick
+  let lastHeatT = 0;
+  const HEAT_DECAY = 1.6;   // per second
+  const WISP_MIN_HEAT = 3.5; // ~4 rounds before a barrel visibly smokes
+
   return {
     // d = the fire-time shot event (never impactOnly/pen — fx.js gates that)
     spawn(d) {
@@ -614,7 +631,9 @@ export function makeMuzzle(env) {
       const S = beginShot(env, d);
       if (!S.leader) return;
       resolveMuzzle(d, _mz);
-      const P = PROFILE[d.weaponId] || PROFILE_DEFAULT;
+      // [gunsmith] the shot event says whether THIS gun is suppressed (a fitted can on any
+      // gun -> the soft profile; a Vesper whose can was swapped for a compensator -> a bare flash)
+      const P = (d.suppressed ? PROFILE.vesper : d.weaponId === "vesper" ? PROFILE_DEFAULT : PROFILE[d.weaponId]) || PROFILE_DEFAULT;
       const first = !!d.firstShot && !P.ignoreFirst;
       const isPlayer = d.shooter === "P";
       const base = P.size
@@ -642,6 +661,24 @@ export function makeMuzzle(env) {
                    base * 0.55, 1.3 * hb, P.cells, 1, NaN,
                    P.life[0], P.life[1], P.tint[0], P.tint[1], P.grow);
       }
+      // ---- FORWARD JET for bots (lane_env): seen from the SIDE a muzzle
+      // flash is a flame thrown along the bore, not a round star. The crown
+      // sprites above are camera-facing and round, so a bot firing across the
+      // player's view read as a dot. A stretched sprite rolled to the shot
+      // direction's SCREEN angle and pushed half its length down-range gives it
+      // a direction; skipped when the bore points at or away from the camera
+      // (there the round crown IS the correct silhouette).
+      if (!isPlayer && !scoped) {
+        _qi.copy(env.cam.quaternion).invert();
+        _dv.set(dir[0], dir[1], dir[2]).applyQuaternion(_qi);
+        const side = Math.hypot(_dv.x, _dv.y);
+        if (side > 0.45) {
+          const len = base * (1.5 + rnd() * 0.6);
+          pool.spawn(_mz[0] + dir[0] * len * 0.42, _mz[1] + dir[1] * len * 0.42, _mz[2] + dir[2] * len * 0.42,
+                     len * 0.5, 1.15 * hb * Math.min(1, side), P.cells, 2.3, Math.atan2(_dv.y, _dv.x),
+                     P.life[0] * 0.8, P.life[1], P.tint[0], P.tint[1] * 0.92, P.grow * 0.6);
+        }
+      }
       // side spray (DMR muzzle-brake blast / shotgun fan): a screen-horizontal
       // wide sprite, near-fixed roll so it stays a horizontal flare
       if (P.side && !scoped) {
@@ -650,6 +687,12 @@ export function makeMuzzle(env) {
                    P.life[0] * 0.85, P.life[1], P.tint[0], P.tint[1], P.grow * 0.7);
       }
       flashCount++;
+      if (isPlayer) {
+        const tnow = env.now();
+        heat = Math.max(0, heat - (tnow - lastHeatT) * HEAT_DECAY) + 1;
+        lastHeatT = tnow;
+        lastShotT = tnow;
+      }
       // ---- LINGERING MUZZLE SMOKE (iter06, D6) ---------------------------
       // The flash itself is ~50 ms; the smoke it leaves is the part of a
       // firing frame that is still there when the shutter falls between two
@@ -697,6 +740,41 @@ export function makeMuzzle(env) {
       const now = env.now();
       poolWorld.update(now);
       poolVm.update(now);
+      // post-burst wisps (see BARREL HEAT above)
+      if (heat > 0.05) {
+        const h = Math.max(0, heat - (now - lastHeatT) * HEAT_DECAY);
+        const since = now - lastShotT;
+        if (h <= 0.05) heat = 0;
+        else if (h > WISP_MIN_HEAT * 0.5 && since > 0.12 && since < 2.6 && env.impacts && env.impacts.puff) {
+          // rate rises with heat, fades as the barrel cools
+          wispAcc += Math.min(0.1, Math.max(0, now - (wispT || now))) * Math.min(14, h * 1.6);
+          wispT = now;
+          if (wispAcc >= 1) {
+            wispAcc = 0;
+            const F = typeof window !== "undefined" ? window.__FPS__ : null;
+            const vm = F && F.vm;
+            const sim = F && F.sim;
+            const p = sim && sim.state && sim.state.player;
+            let ok = false;
+            if (vm && typeof vm.muzzleWorld === "function") {
+              try {
+                const v = vm.muzzleWorld(_vmMuzzle.set(0, 0, 0));
+                if (v && isFinite(v.x) && v.lengthSq() > 1e-6) {
+                  _smoke[0] = v.x; _smoke[1] = v.y + 0.02; _smoke[2] = v.z; ok = true;
+                }
+              } catch (e) { /* no socket: skip this wisp */ }
+            }
+            // never on the lens: the socket must be at least 0.45 m out
+            if (ok && p) {
+              const ex = _smoke[0] - env.cam.position.x, ey = _smoke[1] - env.cam.position.y,
+                ez = _smoke[2] - env.cam.position.z;
+              if (ex * ex + ey * ey + ez * ez > 0.2) env.impacts.puff(_smoke, "muzzleWisp");
+            }
+          }
+        } else {
+          wispT = now;
+        }
+      }
       // Light pulse: fast attack to peak, then exponential decay over 90 ms.
       // A lease is never released before it has been APPLIED at least once —
       // otherwise a rAF frame that advances the sim 5 ticks retires the light
@@ -726,6 +804,7 @@ export function makeMuzzle(env) {
       poolVm.clear();
       for (let i = 0; i < leases.length; i++) releaseLease(leases[i]);
       env.shot = null; // a fresh mission starts with no volley in flight
+      heat = 0; wispAcc = 0;
     },
     prewarmables() { return [poolWorld.mesh, poolVm.mesh]; },
     stats: () => ({ activeSprites: poolWorld.activeCount() + poolVm.activeCount(),

@@ -60,7 +60,7 @@
 
 import * as THREE from "three";
 import { WEAPONS, SWAY, VIEWMODEL, FEEL, SLOT_ORDER } from "./weapon_data.js";
-import { loadWeaponGLB, loadedPrototypes, loadAllWeapons, invalidateWeapon } from "./weapon_meshes.js";
+import { loadWeaponGLB, loadedPrototypes, loadAllWeapons, invalidateWeapon, applyGunsmith, loadKnifeGLB } from "./weapon_meshes.js";
 // The SAME stride model the footsteps run on (player.js §1.6).
 import { strideLength } from "../sim/player.js";
 
@@ -130,6 +130,93 @@ const KICK = {
   altRollMult: -0.55,   // every other round rolls the other way, weaker
 };
 
+// ===== HANDLING FEEL (2026-11 lane VM) =======================================
+// A SECOND family of under-damped springs for the non-fire motion: reload beats
+// (magazine out, seat slap, charging-handle release, shell push), ADS settle, the
+// dry click, jump, landing and slide entry. Same integrator and sub-stepping as
+// KICK but a separate set, so the MEASURED fire-response gains above are untouched.
+// Impulses are rad/s and m/s (velocity kicks); the spring turns each into a short
+// overshooting move that reads as the weight of the gun.
+const MOVE_SPRING = {
+  omega: 15.0, zeta: 0.42,
+  maxPosX: 0.030, maxPosY: 0.045, maxPosZ: 0.040, maxRotX: 0.16, maxRotY: 0.08, maxRotZ: 0.16,
+};
+// Turn sway is a spring too (it was a first-order lag): the gun trails a flick and
+// OVERSHOOTS a little when the look stops, instead of gliding back to centre.
+const TURN = { omega: 15.0, zeta: 0.58, rollShare: 0.45, slideM: 0.05 };
+// Strafe tilt: the gun rolls INTO the direction of lateral travel and pitches a
+// hair with forward travel. Normalised by speedRef (m/s), kept at adsKeep down
+// the sights so the picture stays readable.
+const STRAFE = { rollDeg: 5.0, yawDeg: 1.6, fwdPitchDeg: 1.2, fwdBack: 0.007, speedRef: 5.0, tau: 0.13, adsKeep: 0.15 };
+// ADS travel: the gun arcs (rolls + dips) on the way in/out; zero at both ends.
+const ADS_TRAVEL = { rollDeg: 7.0, dropM: 0.010, outMult: -0.7 };
+// Sprint swing (figure-eight across the chest), on top of the bob.
+const SPRINT_SWING = { x: 0.012, y: 0.006, rzDeg: 4.5, ryDeg: 3.0, rxDeg: 2.0 };
+// INSPECT (key I, view-only): one-shot gun showcase. Keys: [t, px, py, pz, rx, ry, rz]
+// (metres / degrees) — smoothstep between keys, zero at both ends so a full play
+// blends out with no step; any cancel fades the weight out in ~0.1 s.
+const INSPECT_S = 2.6;
+const INSPECT_KEYS = [
+  [0.00, 0.000, 0.000, 0.000, 0, 0, 0],
+  [0.17, -0.070, 0.035, 0.045, 10, 40, -16],
+  [0.40, -0.078, 0.040, 0.050, 13, 46, -21],
+  [0.55, -0.050, 0.050, 0.025, 18, -14, 42],
+  [0.78, -0.045, 0.055, 0.025, 15, -19, 47],
+  [0.90, -0.008, 0.008, 0.004, 2, 2, 3],
+  [1.00, 0.000, 0.000, 0.000, 0, 0, 0],
+];
+// GRENADE (sim: player._m.cooking = pin pulled, released = thrown). The support hand
+// leaves the gun, holds the frag low-left, winds back and sweeps it forward. Poses in
+// the BUILD frame (x right, y muzzle, z up) like every hand key; gun dips right.
+// The sim spawns the frag the instant the key is released, so the throw is FAST: a
+// short draw-back (0-0.05 s), the sweep (0.05-0.17 s), and the in-hand frag is gone by
+// releaseAt — it must not be seen twice. Fingers always point UP-ish so the rigid
+// forearm trails DOWN out of frame (fingers-down poses swing the sleeve across the lens).
+const NADE = {
+  throwS: 0.60, releaseAt: 0.06, backT: 0.05, fwdT: 0.17,
+  gun: { pos: [0.035, -0.05, 0.025], rot: [-12, -8, 16] },
+  // palm centre, FOREARM direction (wrist -> elbow) and a palm-facing hint, build frame.
+  // The rigid arm meshes are baked differently per weapon (the pike's forearm leaves the
+  // wrist along the hand's -x, the long guns' along the back of the hand), so these are
+  // solved per weapon against the MEASURED arm axis (armSolve), not authored as fingers.
+  hold: { palm: [-0.22, 0.14, 0.06], arm: [-0.35, -0.45, -0.82], face: [1, 0.2, 0.3] },
+  back: { palm: [-0.25, 0.06, 0.11], arm: [-0.30, -0.35, -0.89], face: [0.5, 0.8, 0.1] },
+  fwd: { palm: [-0.11, 0.36, 0.11], arm: [-0.20, -0.80, -0.56], face: [0.1, 0.3, -1] },
+};
+// [melee] QUICK KNIFE (sim: body._melee - windup 0.12 s, strike, recovery 0.60 s;
+// core/sim/melee.js). The support hand leaves the gun, draws the knife low-left,
+// cocks it up by the shoulder and drives it across and forward to the screen centre
+// on the strike beat, follows through, then returns to the handguard while the gun
+// (dropped right and rolled out of the way) comes back up. Same armSolve scheme as
+// the frag: palm centre + FOREARM direction + palm-facing hint, build frame, solved
+// per weapon against the measured arm axis. Keys are [t (s), pose]; the strike
+// lands at t = 0.12 (the sim's strike tick).
+const MELEE_VM = {
+  totalS: 0.72, showFrom: 0.025, showTo: 0.60,
+  keys: [
+    // t      palm                        forearm (wrist->elbow)       palm faces
+    [0.055, { palm: [-0.20, 0.05, 0.03], arm: [-0.35, -0.45, -0.82], face: [1.0, 0.2, 0.3] }],    // draw: low-left
+    [0.105, { palm: [-0.26, 0.07, 0.17], arm: [-0.45, -0.30, -0.84], face: [0.9, 0.4, -0.1] }],    // cocked by the shoulder
+    [0.150, { palm: [-0.12, 0.40, 0.17], arm: [-0.30, -0.88, -0.36], face: [0.3, 0.2, -1.0] }],    // STRIKE: across + out
+    // [polish v149] follow-through held further left (x -0.05 -> -0.11): the lowered
+    // gun on the right covered the knife hand and blade here
+    [0.300, { palm: [-0.11, 0.35, 0.10], arm: [-0.26, -0.84, -0.47], face: [0.25, 0.2, -1.0] }],    // follow-through
+  ],
+  backS: 0.36, restS: 0.62,   // leaves the follow-through at backS, on the handguard by restS
+  gun: { pos: [0.05, -0.05, 0.03], rot: [-12, -6, 18] },         // gun drops right, out of the stroke
+                              // (the hand rides the gun's frame: a deeper drop takes the knife off-screen)
+};
+
+// Empty-reload rack phase: the gun rolls the other way to show the charging side.
+const RACK_TILT = { mag: [4, 5, -7], gripmag: [9, -3, 7] };
+// Optional moving action part (cycles on every shot when the GLB has one).
+const ACTION_NAMES = ["bolt", "slide", "bolt_carrier", "charging_handle", "charge"];
+
+function easeOutBack(t, s) {
+  t = clamp01(t) - 1;
+  return 1 + (s + 1) * t * t * t + s * t * t;
+}
+
 // Semi-implicit Euler on { x, v }. Sub-stepped by the caller so a frame hitch
 // cannot make the integrator explode.
 function springStep(s, omega, zeta, dt, cap) {
@@ -146,6 +233,9 @@ function clamp01(t) { return t < 0 ? 0 : t > 1 ? 1 : t; }
 function smoothstep(t) { t = clamp01(t); return t * t * (3 - 2 * t); }
 // eased 0..1 ramp of p across [a,b]
 function ramp(p, a, b) { return smoothstep((p - a) / Math.max(1e-6, b - a)); }
+function clampS(v, m) { return v < -m ? -m : v > m ? m : v; }
+// 0 -> 1 -> 0 sine pulse across [a,b]
+function bell(p, a, b) { return p <= a || p >= b ? 0 : Math.sin(Math.PI * (p - a) / (b - a)); }
 function lerp(a, b, t) { return a + (b - a) * t; }
 
 // ---- WRIST RIG ------------------------------------------------------------
@@ -237,7 +327,10 @@ export function createViewmodel(ctx) {
   //   rim   — cool directional from behind-right: separates the dark gun/arms from
   //           the dark night scene with a silhouette edge (the readability fix).
   //   point — the old over-the-shoulder point, kept low (muzzle flash adds its own).
-  const vmFill = new THREE.HemisphereLight(0xa9bfdc, 0x2e2a26, 1.8);
+  // 2026-11-13 retune (measured on captures): the key came from near the camera axis,
+  // so every face pointing at the player was lit flat and pale. It now rakes down from
+  // upper-left; fill lowered and rim raised so form comes from shading, not from wash.
+  const vmFill = new THREE.HemisphereLight(0xa9bfdc, 0x2e2a26, 1.1);
   vmFill.name = "__vm_fill__";
   vmFill.layers.set(VM_LAYER);        // NOT enableAll — vm pass only
   ctx.scene.add(vmFill);              // scene-parented: hemi axis stays world-up
@@ -253,8 +346,15 @@ export function createViewmodel(ctx) {
     l.target = t;
     return l;
   };
-  const vmKeyDir = mkDir("__vm_key_dir__", 0xe8eef8, 2.2, [-0.5, 0.9, 0.7], [0.0, -0.1, -1.0]);
-  const vmRim = mkDir("__vm_rim__", 0x86a8ff, 1.5, [0.8, 0.5, -0.9], [0.0, 0.0, 0.0]);
+  const vmKeyDir = mkDir("__vm_key_dir__", 0xe8eef8, 1.7, [-0.7, 1.3, 0.15], [0.0, -0.1, -1.0]);
+  // 2026-11-13 hip pass (measured, vm pass into a float RT): from [0.8, 0.5, -0.9] the rim
+  // came down at ~22 deg in front of the eye — exactly the mirror angle of the upward faces
+  // that sit close under the camera (shotgun stock / receiver top). Polymer p90 radiance was
+  // 0.092 with the rim on, 0.029 off: the "pale grey slab" (warden FDE stock p90 0.142).
+  // Swung round to the right side (from ahead-right to right, ~13 deg up) it still edges the
+  // receiver silhouette (warden metal p99 0.096, unchanged) while the stock glare falls to
+  // p90 0.056 (warden) / 0.029 (breaker).
+  const vmRim = mkDir("__vm_rim__", 0x86a8ff, 1.9, [1.0, 0.25, -0.3], [0.0, 0.0, 0.0]);
   const VM_KEY_D = 0.42, VM_KEY_E = 0.45;
   const vmKey = new THREE.PointLight(0xc8d6ea, VM_KEY_E * VM_KEY_D * VM_KEY_D, 3.5, 2);
   vmKey.name = "__vm_key__";
@@ -262,6 +362,198 @@ export function createViewmodel(ctx) {
   vmKey.layers.set(VM_LAYER);
   camera.add(vmKey);
   void vmKeyDir; void vmRim;
+
+  // ---- VM FRAG (the grenade in the support hand while cooking / throwing) -------
+  // Built once, parented to the mount (weapon space), VM_LAYER only. Compiled by the
+  // staged warm below (warmOne shows it for that one draw) so the first cook never
+  // hitches on a shader compile.
+  const nade = new THREE.Group();
+  nade.name = "__vm_nade__";
+  {
+    // dark olive: the VM key + rim rig is bright (it has to lift a near-black gun), so a
+    // mid olive read as pale teal on captures (lane_vm/nadeW_02)
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1c2116, roughness: 0.78, metalness: 0.05 });
+    const metalMat = new THREE.MeshStandardMaterial({ color: 0x8c9094, roughness: 0.36, metalness: 0.85 });
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.029, 18, 14), bodyMat);
+    body.scale.set(1, 1.18, 1);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.013, 0.018, 14), metalMat);
+    cap.position.y = 0.039;
+    const spoon = new THREE.Mesh(new THREE.BoxGeometry(0.009, 0.056, 0.004), metalMat);
+    spoon.position.set(0.017, 0.018, 0.0);
+    spoon.rotation.z = -0.22;
+    nade.add(body, cap, spoon);
+    nade.traverse((o) => { o.layers.set(VM_LAYER); if (o.isMesh) o.frustumCulled = false; });
+  }
+  nade.visible = false;
+  mount.add(nade);
+  const NADE_FIX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+  // Per-prototype grenade hand keys (WeakMap: a re-exported GLB is a new group). The
+  // arm's own axis is measured ONCE per prototype — the farthest arm vertex from the
+  // wrist, in the node's local frame — and each pose's rotation maps that axis onto the
+  // pose's forearm direction, rolled so the palm normal (local -y) best faces `face`.
+  const _nadeCache = new WeakMap();
+  function nadeKeysFor(group, armL) {
+    let c = _nadeCache.get(group);
+    if (c) return c;
+    const node = armL.node;
+    // measure at the REST transform (the node may be mid-animation right now)
+    const sp = node.position.clone(), sq = node.quaternion.clone();
+    node.position.copy(armL.restP); node.quaternion.copy(armL.restQ);
+    node.updateMatrixWorld(true);
+    const inv = new THREE.Matrix4().copy(node.matrixWorld).invert();
+    const v = new THREE.Vector3(), m = new THREE.Matrix4();
+    const a = new THREE.Vector3(0, 0, 1);
+    let best = 0;
+    node.traverse((o) => {
+      if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+      const pos = o.geometry.attributes.position;
+      m.copy(o.matrixWorld).premultiply(inv);
+      for (let i = 0; i < pos.count; i += 3) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(m);
+        const d = v.lengthSq();
+        if (d > best) { best = d; a.copy(v); }
+      }
+    });
+    node.position.copy(sp); node.quaternion.copy(sq);
+    a.normalize();
+    // local frame: a, palm normal n=(0,-1,0) made orthogonal to a
+    const n = new THREE.Vector3(0, -1, 0);
+    n.addScaledVector(a, -n.dot(a)).normalize();
+    const loc = new THREE.Matrix4().makeBasis(a, n, new THREE.Vector3().crossVectors(a, n));
+    const locInv = loc.clone().invert();
+    c = {};
+    for (const k of ["hold", "back", "fwd"]) {
+      const P = NADE[k];
+      const F = bfv(P.arm, new THREE.Vector3()).normalize();
+      const H = bfv(P.face, new THREE.Vector3());
+      H.addScaledVector(F, -H.dot(F)).normalize();
+      const tgt = new THREE.Matrix4().makeBasis(F, H, new THREE.Vector3().crossVectors(F, H));
+      const q = new THREE.Quaternion().setFromRotationMatrix(tgt.multiply(locInv));
+      const p = bfv(P.palm, new THREE.Vector3()).sub(PALM_LOCAL.clone().applyQuaternion(q));
+      c[k] = { p, q };
+    }
+    _nadeCache.set(group, c);
+    return c;
+  }
+
+  // ---- [melee] VM KNIFE --------------------------------------------------------
+  // knife.glb is geometry only; each mesh is bound to the GUN IN HAND's material of
+  // the same generator name (br5_metal / br5_polymer_grip), so the blade wears the
+  // same detail-mapped finish and is drawn by an already-compiled program.
+  const knife = new THREE.Group();
+  knife.name = "__vm_knife__";
+  knife.visible = false;
+  mount.add(knife);
+  const knifeMeshes = [];
+  let knifeHost = null;
+  loadKnifeGLB().then((scene) => {
+    if (!scene) return;
+    const src = scene.getObjectByName("knife") || scene;
+    const k = src.clone(true);
+    k.position.set(0, 0, 0); k.quaternion.identity();
+    k.traverse((o) => {
+      o.layers.set(VM_LAYER);
+      if (o.isMesh) {
+        o.frustumCulled = false; o.castShadow = false; o.receiveShadow = true;
+        o.userData.knifeMat = (o.material && o.material.name) || "br5_metal";
+        knifeMeshes.push(o);
+      }
+    });
+    knife.add(k);
+  });
+  const KNIFE_MAT_FALLBACK = { br5_polymer_grip: ["br5_polymer_grip", "br5_polymer", "br5_rubber", "br5_metal"], br5_metal: ["br5_metal"] };
+  function bindKnife(group) {
+    if (knifeHost === group || !knifeMeshes.length) return;
+    const host = new Map();
+    group.traverse((o) => {
+      if (!o.isMesh || o.userData.isArm || o.userData.gsPart) return;
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m && m.name && !host.has(m.name)) host.set(m.name, m);
+    });
+    for (const o of knifeMeshes) {
+      let m = null;
+      for (const n of KNIFE_MAT_FALLBACK[o.userData.knifeMat] || [o.userData.knifeMat, "br5_metal"]) if (!m && host.get(n)) m = host.get(n);
+      if (m) o.material = knifeMatOf(m);
+    }
+    knifeHost = group;
+  }
+  // [polish v149] the knife is its own steel / black, never the gun's camo: a
+  // clone of the host material with its OWN camo uniforms held off. The camo
+  // hook and program cache key are shared, so it is still the already-compiled
+  // program (the uniforms are the only difference).
+  const _knifeMats = new WeakMap();
+  function knifeMatOf(m) {
+    let k = _knifeMats.get(m);
+    if (k) return k;
+    k = m.clone();
+    if (m.userData && m.userData.gsCamo) {
+      k.userData.gsCamo = {
+        uCamoOn: { value: 0 }, uCamoKind: { value: 0 },
+        uCamoA: { value: new THREE.Color() }, uCamoB: { value: new THREE.Color() }, uCamoC: { value: new THREE.Color() },
+      };
+      k.onBeforeCompile = m.onBeforeCompile;
+      k.customProgramCacheKey = m.customProgramCacheKey;
+    }
+    _knifeMats.set(m, k);
+    return k;
+  }
+  // Per-prototype knife hand keys + the knife's orientation IN the hand node's frame,
+  // solved like nadeKeysFor (measured arm axis a, palm normal n = local -y). The
+  // handle runs across the fist (a x n), the blade out of the thumb side.
+  const _meleeCache = new WeakMap();
+  // knife seat in the fist (tuned on captures): sign = which side the point leaves
+  // the fist, spin = roll about the blade, along = metres the handle slides along its
+  // own axis (toward the little finger is negative), out = into the palm (m)
+  let knifeAxes = { sign: 1, spin: 0, along: -0.05, out: 0.030 };
+  function meleeKeysFor(group, armL) {
+    let c = _meleeCache.get(group);
+    if (c) return c;
+    const node = armL.node;
+    const sp = node.position.clone(), sq = node.quaternion.clone();
+    node.position.copy(armL.restP); node.quaternion.copy(armL.restQ);
+    node.updateMatrixWorld(true);
+    const inv = new THREE.Matrix4().copy(node.matrixWorld).invert();
+    const v = new THREE.Vector3(), m = new THREE.Matrix4();
+    const a = new THREE.Vector3(0, 0, 1);
+    let best = 0;
+    node.traverse((o) => {
+      if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+      const pos = o.geometry.attributes.position;
+      m.copy(o.matrixWorld).premultiply(inv);
+      for (let i = 0; i < pos.count; i += 3) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(m);
+        const d = v.lengthSq();
+        if (d > best) { best = d; a.copy(v); }
+      }
+    });
+    node.position.copy(sp); node.quaternion.copy(sq);
+    a.normalize();
+    const n = new THREE.Vector3(0, -1, 0);
+    n.addScaledVector(a, -n.dot(a)).normalize();
+    const cx = new THREE.Vector3().crossVectors(a, n);
+    const loc = new THREE.Matrix4().makeBasis(a, n, cx);
+    const locInv = loc.clone().invert();
+    c = { keys: [] };
+    for (const [t, P] of MELEE_VM.keys) {
+      const F = bfv(P.arm, new THREE.Vector3()).normalize();
+      const H = bfv(P.face, new THREE.Vector3());
+      H.addScaledVector(F, -H.dot(F)).normalize();
+      const tgt = new THREE.Matrix4().makeBasis(F, H, new THREE.Vector3().crossVectors(F, H));
+      const q = new THREE.Quaternion().setFromRotationMatrix(tgt.multiply(locInv));
+      const p = bfv(P.palm, new THREE.Vector3()).sub(PALM_LOCAL.clone().applyQuaternion(q));
+      c.keys.push({ t, p, q });
+    }
+    // knife axes in the hand node frame: the point (glTF -Z) along sign*(a x n); the
+    // spine (glTF +Y) toward the wrist (+a), spun about the blade by `spin` rad
+    const point = cx.clone().multiplyScalar(knifeAxes.sign);
+    const spine = a.clone().addScaledVector(point, -a.dot(point)).normalize();
+    if (knifeAxes.spin) spine.applyAxisAngle(point, knifeAxes.spin);
+    const back = point.clone().negate();                 // glTF +Z
+    const kx = new THREE.Vector3().crossVectors(spine, back);
+    c.knifeQ = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(kx, spine, back));
+    c.point = point;
+    _meleeCache.set(group, c);
+    return c;
+  }
 
   // ---- state ---------------------------------------------------------------
   let visible = true;
@@ -311,6 +603,31 @@ export function createViewmodel(ctx) {
   let kickSide = 1;          // alternates per round (roll/yaw shimmy)
   let lastShotsFired = null; // dedup vs impactOnly replays (see recoil.js note)
 
+  // handling-feel springs (see MOVE_SPRING) — reload beats, ADS settle, jump/land
+  const MS = {
+    posX: { x: 0, v: 0 }, posY: { x: 0, v: 0 }, posZ: { x: 0, v: 0 },
+    rotX: { x: 0, v: 0 }, rotY: { x: 0, v: 0 }, rotZ: { x: 0, v: 0 },
+  };
+  let swayYawV = 0, swayPitchV = 0;     // turn-sway spring velocities
+  let strafeR = 0, strafeF = 0;         // damped lateral / forward travel (-1..1)
+  let airLift = 0;                      // gun float in the air (-1..1)
+  let adsDirS = 1;                      // ADS travel arc sign, smoothed (in 1, out -0.7)
+  let prevAdsWant = false, prevAdsT = 0;
+  let prevSliding = false;
+  let prevBeatP = -1;                   // reload progress last frame (beat crossings)
+  let prevShellTr = -1;                 // shell reload clock last frame
+  let prevLastShotT = null, prevShotsSeen = null; // dry-click detector
+  let landSide = 1;
+  // inspect
+  let inspectT = -1, inspectW = 0, inspectQ = 0, lastInspectReq = null;
+  // grenade
+  let cookW = 0, throwT = -1, cookAtRelease = 0, prevCooking = false, nadeHandW = 0;
+  // [melee] knife strike clock (s since the sim's press tick; -1 = none)
+  let meleeT = -1, meleeT0 = null, meleeImpact = false, meleeResult = null;
+  // optional action part (bolt / slide) cycle
+  let actionT = 9, rackStroke = 0;
+  const _actionCache = new WeakMap();
+
   // breath / sway (§2.6)
   let breathMeter = SWAY.breath.meterS;
   let winded = false;
@@ -329,7 +646,8 @@ export function createViewmodel(ctx) {
   let zoomShareOverride = null;
   let standoffOverride = null;   // metres added to the ADS standoff (same seam)
   // dev: freeze the reload pose at progress p (screenshots) — see _dbg()
-  const dbg = { reloadP: null, kind: null, empty: false, lower: null, pump: null, sprint: null, handL: null };
+  const dbg = { reloadP: null, kind: null, empty: false, lower: null, pump: null, sprint: null, handL: null,
+    inspect: null, nade: null, melee: null };
 
   const _v = new THREE.Vector3();
   const _q = new THREE.Quaternion();
@@ -368,7 +686,11 @@ export function createViewmodel(ctx) {
       vmCamera.aspect = ctx.camera.aspect;
       vmCamera.updateProjectionMatrix();
     }
-    renderer.clearDepth();                 // R8: viewmodel never clips
+    // R8: viewmodel never clips. The depth MASK must be on for the clear to do anything:
+    // gl.clear honours glDepthMask, and three leaves it at the last-drawn material's
+    // depthWrite (the sentinel below has to write depth for exactly this reason).
+    renderer.state.buffers.depth.setMask(true);
+    renderer.clearDepth();
     renderer.render(ctx.scene, vmCamera);
     renderer.shadowMap.autoUpdate = sm;
     inPass = false;
@@ -379,10 +701,17 @@ export function createViewmodel(ctx) {
   // Interim auto-pass sentinel: fires at the end of any DEFAULT-framebuffer
   // scene render until a post chain claims the pass. colorWrite=false,
   // 1 degenerate triangle — costs one no-op draw call.
+  // 2026-11-13 (measured, warden hip): as an OPAQUE depthWrite:false object it fired in the
+  // middle of the frame with glDepthMask OFF, so the vm pass's clearDepth() was a no-op and
+  // the gun/arms were depth-tested against the WORLD's depth (a different projection):
+  // every vm pixel farther than ~0.4 m lost to the ground behind it — the support sleeve
+  // was cut to a 5 cm stub (the "flat blade" wedge) and rifle magazines vanished. Now it is
+  // TRANSPARENT (renderOrder 1e9 = last of the transparent list, after rain / decals / fog,
+  // so clearing depth cannot let those draw over the world) and writes depth (mask on).
   const sentinel = new THREE.Mesh(
     new THREE.BufferGeometry().setAttribute("position",
       new THREE.BufferAttribute(new Float32Array(9), 3)),
-    new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, depthTest: false }),
+    new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true, depthTest: false, transparent: true }),
   );
   sentinel.name = "__vm_autopass__";
   sentinel.frustumCulled = false;
@@ -422,6 +751,8 @@ export function createViewmodel(ctx) {
       mount.add(proto);
       const wasVisible = rig.visible;
       rig.visible = true;
+      const nadeWas = nade.visible;
+      nade.visible = true;                // compile the frag's materials in the same draw
       const sm = r.shadowMap.autoUpdate;
       r.shadowMap.autoUpdate = false;
       const prevRT = r.getRenderTarget();
@@ -430,6 +761,7 @@ export function createViewmodel(ctx) {
       r.setRenderTarget(prevRT);
       r.shadowMap.autoUpdate = sm;
       rig.visible = wasVisible;
+      nade.visible = nadeWas;
       mount.remove(proto);
       if (prevParent && prevParent !== mount) prevParent.add(proto);
     } catch (e) {
@@ -451,6 +783,76 @@ export function createViewmodel(ctx) {
   }
   warmAllWhenReady();
 
+  // ---- [polish v149] LASER DOT ------------------------------------------------------
+  // The laser module drew a beam but no dot on what it points at. A small additive
+  // dot on the first world surface along the view axis (the shot's centre line),
+  // in the MAIN scene so walls, crates and fog hold it; read-only world raycast.
+  const laserDot = new THREE.Mesh(new THREE.CircleGeometry(1, 12), new THREE.MeshBasicMaterial({
+    name: "gs_laser_dot", color: new THREE.Color(1.0, 0.08, 0.05).multiplyScalar(5.0), transparent: true,
+    opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false,
+    polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
+  }));
+  laserDot.name = "__laser_dot__";
+  laserDot.visible = false;
+  laserDot.frustumCulled = false;
+  laserDot.renderOrder = 6;
+  ctx.scene.add(laserDot);
+  const _ldO = [0, 0, 0], _ldD = [0, 0, -1], _ldV = new THREE.Vector3(), _ldN = new THREE.Vector3();
+  function laserDotUpdate(sim, on) {
+    if (!on || !sim || !sim.world || typeof sim.world.raycast !== "function") { if (laserDot.visible) laserDot.visible = false; return; }
+    camera.getWorldPosition(_ldV); _ldO[0] = _ldV.x; _ldO[1] = _ldV.y; _ldO[2] = _ldV.z;
+    camera.getWorldDirection(_ldV); _ldD[0] = _ldV.x; _ldD[1] = _ldV.y; _ldD[2] = _ldV.z;
+    const hit = sim.world.raycast(_ldO, _ldD, 60);
+    if (!hit) { laserDot.visible = false; return; }
+    _ldN.set(hit.normal[0], hit.normal[1], hit.normal[2]);
+    laserDot.position.set(hit.pos[0], hit.pos[1], hit.pos[2]).addScaledVector(_ldN, 0.012);
+    laserDot.lookAt(_ldV.set(hit.pos[0], hit.pos[1], hit.pos[2]).add(_ldN));
+    // ~3 px at 4 m, a constant ~4-5 px further out (reads beside the crosshair dot)
+    laserDot.scale.setScalar(Math.min(0.12, 0.022 + hit.dist * 0.0032));
+    laserDot.visible = true;
+  }
+
+  // ---- gunsmith ---------------------------------------------------------------
+  // The player's class build for the gun on screen: geometry + camo on the shared
+  // prototype (weapon_meshes.applyGunsmith) and `current.w` = the EFFECTIVE table the
+  // sim fires (sim.weaponOf: adsTime, adsFov, recoil, scope flag) with the ADS pose
+  // re-aimed at the fitted optic's sight line (posAds.y = -sightY, the same
+  // by-construction alignment rule every factory sight uses). Re-fitted when the
+  // weapon, the prototype or the kit object changes (a respawn re-kits = new object);
+  // a body without a build gets the factory gun back (prototypes are shared).
+  let gsKit, gsGroup = null, gsId = null;
+  function gsSync(sim, p) {
+    const kit = (p && p.kit) || null;
+    if (kit === gsKit && current.group === gsGroup && current.id === gsId) return;
+    const id = current.id;
+    const b = kit && kit.builds ? kit.builds[id] || null : null;
+    const info = applyGunsmith(current.group, id, b);
+    if (!info) return;                  // attachments.glb still streaming: try next frame
+    gsKit = kit; gsGroup = current.group; gsId = id;
+    const eff = (sim && sim.weaponOf && p ? sim.weaponOf(p, id) : null) || WEAPONS[id] || null;
+    if (eff && info.sightY != null && eff.view && eff.view.posAds) {
+      const v = Object.assign({}, eff.view, { sightY: info.sightY,
+        posAds: [eff.view.posAds[0], -info.sightY, eff.view.posAds[2]] });
+      current.w = Object.assign({}, eff, { view: v });
+    } else {
+      current.w = eff;
+    }
+    current.gs = info;
+  }
+  // one live viewmodel per page: input.js / recoil.js read the fitted table through
+  // this global (a bare module import would instantiate a second copy — see recoil.js)
+  try {
+    globalThis.__BR_GUNSMITH__ = {
+      weapon(id) {
+        if (current && current.id === id && current.w) return current.w;
+        const sim = ctx.sim && ctx.sim();
+        const p = sim && sim.state && sim.state.player;
+        return sim && sim.weaponOf && p ? sim.weaponOf(p, id) : null;
+      },
+      get fitted() { return current ? { id: current.id, gs: current.gs || null, w: current.w } : null; },
+    };
+  } catch (e) { /* headless */ }
+
   // ---- equip ----------------------------------------------------------------
   function installProto(weaponId, proto) {
     if (current && current.group && current.group.parent === mount) {
@@ -459,6 +861,7 @@ export function createViewmodel(ctx) {
     setLayersDeep(proto);
     mount.add(proto);
     current = { id: weaponId, w: WEAPONS[weaponId] || null, group: proto };
+    gsKit = undefined; // [gunsmith] re-fit the build on the next update
     // arms/parts back to their authored rest (a cached prototype may have been
     // left mid-animation by the previous equip)
     resetParts(proto);
@@ -508,7 +911,7 @@ export function createViewmodel(ctx) {
   }
 
   function kick(weaponId) {
-    const w = WEAPONS[weaponId];
+    const w = (current && current.id === weaponId && current.w) || WEAPONS[weaponId]; // [gunsmith] fitted build
     if (!w || !w.recoil) return;
     let n = 1;
     // Dedup impactOnly/pen replays AND multi-pellet volleys via the fire-time-only
@@ -535,14 +938,35 @@ export function createViewmodel(ctx) {
     const adsEase = smoothstep(wp ? (wp.adsT || 0) : 0);
     for (let i = 0; i < n; i++) impulse(w, adsEase);
     sinceShot = 0;
+    actionT = 0;          // cycle the bolt / slide (when the GLB has one)
+    inspectT = -1;        // firing cancels an inspect
   }
 
   // ---- hand / part poses -----------------------------------------------------
   // Keyframe lookup helpers read the weapon's view.anim block (weapon_data.js) over
   // ANIM_DEFAULT. Poses are in the BUILD frame and resolved to glTF per frame.
+  const _animCache = new WeakMap();
+  const _animNone = Object.assign({}, ANIM_DEFAULT);
   function animOf(w) {
-    const a = (w && w.view && w.view.anim) || {};
-    return Object.assign({}, ANIM_DEFAULT, a);
+    if (!w) return _animNone;
+    let c = _animCache.get(w);   // cached: update() must not allocate per frame
+    if (!c) { c = Object.assign({}, ANIM_DEFAULT, (w.view && w.view.anim) || {}); _animCache.set(w, c); }
+    return c;
+  }
+  function msImpulse(px, py, pz, rx, ry, rz) {
+    MS.posX.v += px; MS.posY.v += py; MS.posZ.v += pz;
+    MS.rotX.v += rx; MS.rotY.v += ry; MS.rotZ.v += rz;
+  }
+  function actionPart(group) {
+    let a = _actionCache.get(group);
+    if (a !== undefined) return a;
+    a = null;
+    for (const nm of ACTION_NAMES) {
+      const n = group.getObjectByName(nm);
+      if (n) { a = { node: n, restP: n.position.clone(), stroke: nm === "slide" ? 0.030 : 0.024 }; break; }
+    }
+    _actionCache.set(group, a);
+    return a;
   }
 
   // Compose the support-hand + part animation for this frame. Returns the gun-level
@@ -554,7 +978,8 @@ export function createViewmodel(ctx) {
     const parts = group.userData.parts || {};
     const armL = parts.armL, mag = parts.mag, pump = parts.pump;
     out.px = out.py = out.pz = out.rx = out.ry = out.rz = 0;
-    if (!armL) return;
+    rackStroke = 0;
+    if (!armL) { nade.visible = false; return; }
 
     // -- weights --------------------------------------------------------------
     // reload: derived from the sim state machine
@@ -566,6 +991,7 @@ export function createViewmodel(ctx) {
       p = clamp01((wp.stateT || 0) / dur);
       reloadEmpty = (wp._preReloadMag === 0);
     }
+    const live = reloading;                 // a real (not dbg-pinned) reload
     if (dbg.reloadP != null) { reloading = true; p = dbg.reloadP; reloadEmpty = !!dbg.empty; dur = dbg.dur || 2.4; }
     const kind = (dbg.kind || anim.kind);
     reloadKind = kind;
@@ -573,11 +999,31 @@ export function createViewmodel(ctx) {
     reloadW = damp(reloadW, reloading ? 1 : 0, reloading ? 0.07 : 0.10, dt);
     if (reloadW < 0.002 && !reloading) reloadW = 0;
 
+    // -- reload BEATS: velocity kicks into the handling springs as the timeline
+    // crosses each beat (the weight of the gun: magazine out, seat slap, charging
+    // handle released). Only on a live reload — a pinned dbg progress has no motion.
+    if (live && dbg.reloadP == null && kind !== "shell") {
+      if (p < prevBeatP) prevBeatP = -1;           // a new reload started
+      const q0 = prevBeatP;
+      if (reloadEmpty) {
+        if (q0 < 0.18 && p >= 0.18) msImpulse(0, 0.06, 0, 0.55, 0.05, -0.25);    // released: the gun lightens
+        if (q0 < 0.645 && p >= 0.645) msImpulse(0, 0.24, 0.02, 1.5, 0, -0.7);   // slapped home
+        // rifle: the catch is struck at 0.875; pistol/SMG: the slide is let go at 0.89
+        if (kind === "gripmag") {
+          if (q0 < 0.84 && p >= 0.84) msImpulse(0, 0.08, -0.22, 1.6, -0.2, 0.8);  // slide dropped: flick
+        } else if (q0 < 0.875 && p >= 0.875) msImpulse(0, -0.05, -0.30, -1.0, 0.1, 0.55); // catch struck: bolt slams
+      } else {
+        if (q0 < 0.18 && p >= 0.18) msImpulse(0, -0.10, 0, -0.6, 0, 0.3);       // tugged out: the gun dips
+        if (q0 < 0.655 && p >= 0.655) msImpulse(0, 0.22, 0.02, 1.4, 0, -0.6);   // seated + palm slap
+      }
+      prevBeatP = p;
+    } else if (!reloading) prevBeatP = -1;
+
     // -- rest transforms --------------------------------------------------------
     // start every part at rest; the sections below override what they animate
     armL.node.position.copy(armL.restP);
     armL.node.quaternion.copy(armL.restQ);
-    if (mag) { mag.node.position.copy(mag.restP); mag.node.scale.copy(mag.restS); mag.node.visible = true; }
+    if (mag) { mag.node.position.copy(mag.restP); mag.node.quaternion.copy(mag.restQ); mag.node.scale.copy(mag.restS); mag.node.visible = true; }
     if (pump) pump.node.position.copy(pump.restP);
 
     // -- pump (shotgun): forend + support hand rack after every blast ---------------
@@ -599,7 +1045,97 @@ export function createViewmodel(ctx) {
       const pp = reloading ? p : lastReloadP;
       const rw = reloadW;
       if (kind === "shell") reloadShell(group, w, anim, parts, pp, rw, wp, dt);
-      else reloadMag(group, w, anim, parts, pp, rw, kind);
+      else reloadMag(group, w, anim, parts, pp, rw, kind, dur);
+    }
+
+    // -- INSPECT: magazine check (mag weapons) — the support hand drops to the
+    // magazine, tugs it a centimetre and seats it again while the gun is rolled over
+    if (inspectW > 0.001 && kind !== "shell" && mag) {
+      const q = inspectQ;
+      const hw = ramp(q, 0.55, 0.63) * (1 - ramp(q, 0.80, 0.88)) * inspectW * (1 - reloadW);
+      if (hw > 0.001) {
+        const C = handKeys(group, anim, kind);
+        const tug = bell(q, 0.64, 0.76) * 0.012;
+        _hp.copy(C.mag.p); _hq.copy(C.mag.q);
+        _hp.y -= tug;                                  // glTF +y = up
+        armL.node.position.lerp(_hp, hw);
+        armL.node.quaternion.slerp(_hq, hw);
+        mag.node.position.y -= tug * hw;
+      }
+    }
+
+    // -- GRENADE: the support hand leaves the gun (cook = hold low-left, release =
+    // wind back + sweep forward), the frag rides the palm until the release beat
+    nade.visible = false;
+    if (nadeHandW > 0.001) {
+      const nadeKeys = nadeKeysFor(group, armL);
+      if (throwT >= 0) {
+        const t = throwT;
+        // key 0: wherever the hold had got to when the pin was released (quick tap = 0)
+        _p0.copy(armL.node.position).lerp(nadeKeys.hold.p, cookAtRelease);
+        _q0.copy(armL.node.quaternion).slerp(nadeKeys.hold.q, cookAtRelease);
+        const tb = NADE.backT, tf = NADE.fwdT;
+        if (t < tb) {
+          const s = smoothstep(t / tb);
+          _hp.copy(_p0).lerp(nadeKeys.back.p, s); _hq.copy(_q0).slerp(nadeKeys.back.q, s);
+        } else if (t < tf) {
+          const s = smoothstep((t - tb) / (tf - tb));
+          _hp.copy(nadeKeys.back.p).lerp(nadeKeys.fwd.p, s); _hq.copy(nadeKeys.back.q).slerp(nadeKeys.fwd.q, s);
+        } else {
+          const s = smoothstep((t - tf) / (NADE.throwS - tf));
+          _hp.copy(nadeKeys.fwd.p).lerp(armL.restP, s); _hq.copy(nadeKeys.fwd.q).slerp(armL.restQ, s);
+        }
+        armL.node.position.copy(_hp); armL.node.quaternion.copy(_hq);
+      } else {
+        armL.node.position.lerp(nadeKeys.hold.p, nadeHandW);
+        armL.node.quaternion.slerp(nadeKeys.hold.q, nadeHandW);
+      }
+      const showNade = throwT >= 0 ? (throwT < NADE.releaseAt && cookAtRelease + throwT > 0.05) : nadeHandW > 0.35;
+      if (showNade) {
+        // frag centre = palm centre + 3.2 cm along the palm normal (node-local -y), in
+        // group space, then into mount space through the group's own transform
+        palmOf(armL.node.position, armL.node.quaternion, _palm);
+        _v.set(0, -0.032, 0).applyQuaternion(armL.node.quaternion);
+        _palm.add(_v);
+        group.updateMatrix();
+        nade.position.copy(_palm).applyMatrix4(group.matrix);
+        nade.quaternion.copy(group.quaternion).multiply(armL.node.quaternion).multiply(NADE_FIX);
+        nade.visible = true;
+      }
+    }
+
+    // -- [melee] KNIFE: the support hand leaves the gun, draws, cocks, strikes, returns
+    knife.visible = false;
+    if (meleeT >= 0 && nadeHandW < 0.01) {
+      const C = meleeKeysFor(group, armL);
+      const K0 = C.keys, t = meleeT;
+      if (t <= K0[0].t) {
+        const s = smoothstep(t / K0[0].t);
+        _hp.copy(armL.restP).lerp(K0[0].p, s); _hq.copy(armL.restQ).slerp(K0[0].q, s);
+      } else if (t >= K0[K0.length - 1].t) {
+        const L = K0[K0.length - 1];
+        const s = ramp(t, MELEE_VM.backS, MELEE_VM.restS);
+        _hp.copy(L.p).lerp(armL.restP, s); _hq.copy(L.q).slerp(armL.restQ, s);
+      } else {
+        let i = 0;
+        while (i < K0.length - 2 && t > K0[i + 1].t) i++;
+        const A = K0[i], B = K0[i + 1];
+        // the strike segment is FAST and front-loaded (cubic ease-out), the rest smooth
+        const u = clamp01((t - A.t) / (B.t - A.t));
+        const s = i === 1 ? 1 - (1 - u) * (1 - u) * (1 - u) : smoothstep(u);
+        _hp.copy(A.p).lerp(B.p, s); _hq.copy(A.q).slerp(B.q, s);
+      }
+      armL.node.position.copy(_hp); armL.node.quaternion.copy(_hq);
+      if (t >= MELEE_VM.showFrom && t <= MELEE_VM.showTo && knifeMeshes.length) {
+        bindKnife(group);
+        palmOf(armL.node.position, armL.node.quaternion, _palm);
+        _v.set(0, -knifeAxes.out, 0).addScaledVector(C.point, knifeAxes.along).applyQuaternion(armL.node.quaternion);
+        _palm.add(_v);
+        group.updateMatrix();
+        knife.position.copy(_palm).applyMatrix4(group.matrix);
+        knife.quaternion.copy(group.quaternion).multiply(armL.node.quaternion).multiply(C.knifeQ);
+        knife.visible = true;
+      }
     }
 
     if (dbg.handL) {      // dev: pin the support hand to an authored pose (tuning screenshots)
@@ -608,7 +1144,7 @@ export function createViewmodel(ctx) {
     }
 
     // pump rides on top of everything (it can follow the final reload rack too)
-    if (pump && pumpOff > 0) {
+    if (pump && pumpOff > 0 && nadeHandW < 0.5) {
       const d = 0.085 * pumpOff;
       pump.node.position.z = pump.restP.z + d;
       armL.node.position.z += d;
@@ -616,10 +1152,10 @@ export function createViewmodel(ctx) {
   }
 
   // --- keyframe evaluator ------------------------------------------------------
-  // keys: [{ t, P:Vector3, Q:Quaternion }] sorted by t; smoothstep between keys.
-  function evalKeys(keys, t, outP, outQ) {
+  // keys[0..n): [{ t, P:Vector3, Q:Quaternion }] sorted by t; smoothstep between keys.
+  function evalKeys(keys, n, t, outP, outQ) {
     if (t <= keys[0].t) { outP.copy(keys[0].P); outQ.copy(keys[0].Q); return; }
-    for (let i = 0; i < keys.length - 1; i++) {
+    for (let i = 0; i < n - 1; i++) {
       const a = keys[i], b = keys[i + 1];
       if (t <= b.t) {
         const s = smoothstep((t - a.t) / Math.max(1e-6, b.t - a.t));
@@ -628,7 +1164,7 @@ export function createViewmodel(ctx) {
         return;
       }
     }
-    const l = keys[keys.length - 1];
+    const l = keys[n - 1];
     outP.copy(l.P); outQ.copy(l.Q);
   }
   const keyPool = [];
@@ -647,7 +1183,7 @@ export function createViewmodel(ctx) {
     const id = group.userData.weaponId;
     const ck = id + ":" + kind;
     let c = _handCache.get(ck);
-    if (c) return c;
+    if (c && c.group === group) return c;
     const parts = group.userData.parts || {};
     const H = anim.hand || {};
     const mag = parts.mag;
@@ -676,9 +1212,12 @@ export function createViewmodel(ctx) {
                             fingers: [0.3, 0.4, 1], dir: [1, 0, 0.3] },
         rack: H.rack || { palm: [0.0, -0.06, boreZ + 0.075], fingers: [0.6, 1, 0], dir: [0, 0, -1] },
         port: H.port || { palm: [mc[0] - 0.02, mc[1], mc[2] - 0.02], fingers: [0.5, 1, 0.1], dir: [0.2, 0, 1] },
+        // bolt catch: flat palm on the left of the receiver just above the magazine well
+        catch: H.catch || { palm: [mc[0] - (ms[0] / 2 + 0.034), mc[1] - 0.012, mc[2] + ms[2] / 2 + 0.012],
+                            fingers: [0.05, 0.75, 0.65], dir: [1, 0, 0] },
       };
     }
-    c = {};
+    c = { group };
     for (const k of Object.keys(defs)) {
       c[k] = mk(defs[k]);
       handPose(defs[k], c[k].p, c[k].q);
@@ -693,10 +1232,28 @@ export function createViewmodel(ctx) {
     below.palm[2] -= slide * 0.75;
     c.magBelow = mk(below);
     handPose(below, c.magBelow.p, c.magBelow.q);
+    // the palm SLAP: a centimetre past seated (the gun takes the blow, see the beats)
+    const slap = JSON.parse(JSON.stringify(defs.mag));
+    slap.palm[2] += 0.012;
+    c.slap = mk(slap);
+    handPose(slap, c.slap.p, c.slap.q);
+    // charging handle / slide pulled to the rear (empty reload)
+    const rb = JSON.parse(JSON.stringify(defs.rack));
+    rb.palm[1] -= 0.075;                       // build -y = toward the stock
+    c.rackBack = mk(rb);
+    handPose(rb, c.rackBack.p, c.rackBack.q);
+    if (defs.catch) {
+      // ...and the STRIKE: the palm 1.6 cm further in, driving the catch
+      const ch = JSON.parse(JSON.stringify(defs.catch));
+      ch.palm[0] += 0.016;
+      c.catchHit = mk(ch);
+      handPose(ch, c.catchHit.p, c.catchHit.q);
+    }
     // where the magazine's centre sits relative to the palm while it is held
     c.holdOff = new THREE.Vector3(mag ? mag.center.x : 0, mag ? mag.center.y : -0.07, mag ? mag.center.z : -0.12);
     const pm = palmOf(c.mag.p, c.mag.q, new THREE.Vector3());
     c.holdOff.sub(pm);
+    c.magQInv = c.mag.q.clone().invert();
     c.drop = slide;
     _handCache.set(ck, c);
     return c;
@@ -704,135 +1261,223 @@ export function createViewmodel(ctx) {
   function dropHandCache(id) { for (const k of [..._handCache.keys()]) if (k.startsWith(id + ":")) _handCache.delete(k); }
 
   // --- magazine reload (rifles, DMR, and the in-grip magazines of pistol/SMG) -------
+  // TWO DISTINCT CHOREOGRAPHIES, both locked to the sim + sfx beats (mag_out at 18%,
+  // ammo commit + mag_in at 65%, rack at 84% on empty — sfx.js onReload):
+  //   TACTICAL (rounds left) — retention: thumb the release, tug the magazine out,
+  //     carry it down to the pouch, bring the fresh one up, push it in and SLAP it
+  //     home; the gun takes the slap. No rack (a round is chambered).
+  //   EMPTY — speed reload: the gun cants harder, the spent magazine is released and
+  //     FALLS FREE under gravity (tumbling) while the hand goes straight to the pouch,
+  //     fresh magazine in + slap, then the gun rolls the other way and the hand pulls
+  //     the charging handle / slide to the rear and lets it slam forward.
   const _palm = new THREE.Vector3();
-  function reloadMag(group, w, anim, parts, p, rw, kind) {
+  const _magR = new THREE.Quaternion();
+  const _tumble = new THREE.Quaternion();
+  const _xAxis = new THREE.Vector3(1, 0, 0);
+  const _magKeys = [];
+  function reloadMag(group, w, anim, parts, p, rw, kind, dur) {
     const armL = parts.armL, mag = parts.mag;
     const C = handKeys(group, anim, kind);
     const empty = reloadEmpty;
     const rest = armL.restP, restQ = armL.restQ;
-    // timeline (fractions of the sim's reload time; the sim commits at 0.65)
-    //   0.00-0.16 hand to the magazine   0.16-0.28 pull it out   0.28-0.44 to the pouch
-    //   0.44-0.58 new magazine up        0.58-0.66 push home     (empty) 0.68-0.92 rack
-    const ks = [];
+    const ks = _magKeys;
     let n = 0;
-    ks[n] = key(n, 0.00, rest, restQ); n++;
-    ks[n] = key(n, 0.16, C.mag.p, C.mag.q); n++;
-    ks[n] = key(n, 0.28, C.magOut.p, C.magOut.q); n++;
-    ks[n] = key(n, 0.44, C.pouch.p, C.pouch.q); n++;
-    ks[n] = key(n, 0.58, C.magBelow.p, C.magBelow.q); n++;
-    ks[n] = key(n, 0.65, C.mag.p, C.mag.q); n++;
-    if (empty) {
+    if (!empty) {
+      ks[n] = key(n, 0.00, rest, restQ); n++;
+      ks[n] = key(n, 0.12, C.mag.p, C.mag.q); n++;
+      ks[n] = key(n, 0.18, C.mag.p, C.mag.q); n++;          // thumb on the release
+      ks[n] = key(n, 0.27, C.magOut.p, C.magOut.q); n++;    // tugged out
+      ks[n] = key(n, 0.40, C.pouch.p, C.pouch.q); n++;      // retained, to the pouch
+      ks[n] = key(n, 0.54, C.magBelow.p, C.magBelow.q); n++;
+      ks[n] = key(n, 0.62, C.mag.p, C.mag.q); n++;          // pushed in
+      ks[n] = key(n, 0.655, C.slap.p, C.slap.q); n++;       // slap
       ks[n] = key(n, 0.70, C.mag.p, C.mag.q); n++;
-      ks[n] = key(n, 0.78, C.rack.p, C.rack.q); n++;
-      _p2.copy(C.rack.p); _p2.z += 0.075;            // racking stroke toward the stock
-      ks[n] = key(n, 0.85, _p2, C.rack.q); n++;
-      ks[n] = key(n, 0.91, C.rack.p, C.rack.q); n++;
+      ks[n] = key(n, 0.88, rest, restQ); n++;
       ks[n] = key(n, 1.00, rest, restQ); n++;
     } else {
-      ks[n] = key(n, 0.72, C.mag.p, C.mag.q); n++;
-      ks[n] = key(n, 0.90, rest, restQ); n++;
-      ks[n] = key(n, 1.00, rest, restQ); n++;
+      ks[n] = key(n, 0.00, rest, restQ); n++;
+      ks[n] = key(n, 0.10, C.mag.p, C.mag.q); n++;
+      ks[n] = key(n, 0.18, C.mag.p, C.mag.q); n++;          // release pressed — it drops
+      ks[n] = key(n, 0.34, C.pouch.p, C.pouch.q); n++;      // straight to the pouch
+      ks[n] = key(n, 0.50, C.magBelow.p, C.magBelow.q); n++;
+      ks[n] = key(n, 0.60, C.mag.p, C.mag.q); n++;
+      ks[n] = key(n, 0.645, C.slap.p, C.slap.q); n++;
+      ks[n] = key(n, 0.68, C.mag.p, C.mag.q); n++;
+      if (C.catchHit) {
+        // RIFLE: up the left of the receiver and SLAP the bolt catch — the bolt (locked
+        // back since the last round) slams home on the strike. The hand never crosses
+        // the lens (a rigid forearm over the top fills a third of the frame).
+        ks[n] = key(n, 0.78, C.catch.p, C.catch.q); n++;
+        ks[n] = key(n, 0.85, C.catch.p, C.catch.q); n++;
+        ks[n] = key(n, 0.875, C.catchHit.p, C.catchHit.q); n++; // strike
+        ks[n] = key(n, 0.90, C.catch.p, C.catch.q); n++;
+        ks[n] = key(n, 1.00, rest, restQ); n++;
+        rackStroke = p < 0.875 ? 1 : 1 - ramp(p, 0.875, 0.89);
+      } else {
+        // PISTOL / SMG: the support hand goes back to the grip and the shooting thumb
+        // drops the slide — a sharp flick of the whole gun on the 84% rack sound. (An
+        // overhand rack was tried: with a rigid forearm and the eye 30 cm behind the
+        // gun, the sleeve covered half the frame — lane_vm/vesE filmstrip.)
+        ks[n] = key(n, 0.80, rest, restQ); n++;
+        ks[n] = key(n, 1.00, rest, restQ); n++;
+        rackStroke = p < 0.84 ? 1 : 1 - ramp(p, 0.84, 0.855);
+      }
+      rackStroke *= rw;
     }
-    keyPool.length = Math.max(keyPool.length, n);
-    const keys = ks.slice(0, n);
-    evalKeys(keys, p, _hp, _hq);
+    evalKeys(ks, n, p, _hp, _hq);
     armL.node.position.lerp(_hp, rw);
     armL.node.quaternion.slerp(_hq, rw);
 
-    // gun cant + lift while the hands work
-    const cant = ramp(p, 0.0, 0.16) * (1 - ramp(p, empty ? 0.90 : 0.84, 1.0));
-    out.rx += anim.tilt[0] * DEG * cant * rw;
-    out.ry += anim.tilt[1] * DEG * cant * rw;
-    out.rz += anim.tilt[2] * DEG * cant * rw;
-    out.px += anim.lift[0] * cant * rw;
-    out.py += anim.lift[1] * cant * rw;
-    out.pz += (anim.lift[2] + 0.02) * cant * rw;
-    // seat jolt as the magazine goes home
-    if (p > 0.62 && p < 0.70) {
-      const j = Math.sin(Math.PI * (p - 0.62) / 0.08);
-      out.py -= 0.010 * j * rw; out.rx -= 2.4 * DEG * j * rw;
+    // gun cant + lift while the hands work; empty cants harder and, for the rack,
+    // rolls the other way to show the charging side
+    const cIn = ramp(p, 0.0, empty ? 0.10 : 0.12);
+    const cOut = empty ? ramp(p, 0.68, 0.78) : ramp(p, 0.72, 0.92);
+    const cant = cIn * (1 - cOut) * (empty ? 1.15 : 1.0) * rw;
+    out.rx += anim.tilt[0] * DEG * cant;
+    out.ry += anim.tilt[1] * DEG * cant;
+    out.rz += anim.tilt[2] * DEG * cant;
+    out.px += anim.lift[0] * cant;
+    out.py += anim.lift[1] * cant;
+    out.pz += (anim.lift[2] + 0.02) * cant;
+    if (empty) {
+      const RT = anim.rackTilt || RACK_TILT[kind] || RACK_TILT.mag;
+      const rk = ramp(p, 0.68, 0.78) * (1 - ramp(p, 0.90, 1.0)) * rw;
+      out.rx += RT[0] * DEG * rk; out.ry += RT[1] * DEG * rk; out.rz += RT[2] * DEG * rk;
+      out.px += -0.02 * rk; out.py += 0.035 * rk;
     }
 
     // ---- the magazine node ------------------------------------------------------
     if (mag) {
       const mp = mag.node.position;
       mp.copy(mag.restP);
+      mag.node.quaternion.copy(mag.restQ);
       mag.node.visible = true;
-      const held = (p >= 0.16 && p < 0.30) || (p >= 0.44 && p < 0.66);
+      const held = empty ? (p >= 0.34 && p < 0.60) : (p >= 0.18 && p < 0.62);
       if (held) {
-        // carried by the hand: centre = palm + holdOff, relative to rest
-        palmOf(_hp, _hq, _palm).add(C.holdOff);
-        mp.copy(mag.restP).add(_v.copy(_palm).sub(mag.center));
+        // carried by the hand: rotate WITH the hand about the palm. R = hand · grip⁻¹
+        // takes the seated grip to this frame's grip; the node origin rides along.
+        _magR.copy(_hq).multiply(C.magQInv);
+        palmOf(_hp, _hq, _palm);
+        _v.copy(C.holdOff).applyQuaternion(_magR).add(_palm);          // new centre
+        _v2.copy(mag.center).sub(mag.restP).applyQuaternion(_magR);     // centre - origin
+        mp.copy(_v).sub(_v2);
+        mag.node.quaternion.copy(_magR).multiply(mag.restQ);
         // hands are blended with weight rw; keep the magazine on the same blend
         mp.lerp(mag.restP, 1 - rw);
-      } else if (p >= 0.30 && p < 0.44) {
-        // released: falls away under gravity, then is gone
-        const tf = (p - 0.30) / 0.14;
-        const tt = tf * 0.5;  // seconds-ish
-        palmOf(C.magOut.p, C.magOut.q, _palm).add(C.holdOff);
-        mp.copy(mag.restP).add(_v.copy(_palm).sub(mag.center));
-        mp.x += -0.06 * tf; mp.y += -4.0 * tt * tt * 2.0; mp.z += 0.04 * tf;
-        mag.node.visible = tf < 0.62;
+        mag.node.quaternion.slerp(mag.restQ, 1 - rw);
+      } else if (empty && p >= 0.18 && p < 0.34) {
+        // released: falls free from the well under real gravity, drifting out and
+        // tumbling; hidden once it is well out of frame
+        const tf = (p - 0.18) * dur;                  // seconds since release
+        mp.x += -0.10 * tf;
+        mp.y += -0.5 * 9.8 * tf * tf - 0.05 * tf;     // glTF +y = up
+        mp.z += 0.12 * tf;
+        _tumble.setFromAxisAngle(_xAxis, -3.2 * tf);
+        mag.node.quaternion.copy(_tumble).multiply(mag.restQ);
+        mag.node.visible = tf < 0.36;
       }
     }
   }
 
   // --- shell-by-shell reload (pump shotgun) --------------------------------------
+  // CLOCK (2026-11 fix): the sim ends a shell reload at ITS `_shellEndAt` (last shell +
+  // endS), which is earlier than `_reloadDur - endS` whenever fewer shells go in than the
+  // estimate — the closing pump used to be keyed to the latter and was never seen. The
+  // end phase now starts at the sim's own last insert, and the closing stroke is centred
+  // on sfx.js's rack (back at +0.10 s, forward at +0.25 s after the last shell). While the
+  // weight fades after the sim goes idle, the clock is FROZEN at its last live value
+  // (it used to read the idle stateT and swing the hand back toward the port).
+  let shellTrLast = 0, shellEndAtLast = 1e9, shellDurLast = 3.4;
   function reloadShell(group, w, anim, parts, p, rw, wp, dt) {
     const armL = parts.armL, pump = parts.pump;
     const rl = (w && w.reload) || { startS: 0.55, perShellS: 0.42, endS: 0.35 };
-    const dur = (wp && wp._reloadDur) || (w && w.reloadS) || 3.4;
-    const tr = (dbg.reloadP != null ? p * dur : (wp && wp.stateT) || p * dur);
+    const liveR = !!(wp && wp.state === "reloading") && dbg.reloadP == null;
+    let dur, tr, endAt;
+    if (dbg.reloadP != null) {
+      dur = (wp && wp._reloadDur) || (w && w.reloadS) || 3.4;
+      tr = p * dur;
+      endAt = Math.max(rl.startS + 0.1, dur - rl.endS);
+    } else if (liveR) {
+      tr = wp.stateT || 0;
+      if (wp._shellPhase === "end" && wp._shellEndAt != null) {
+        endAt = wp._shellEndAt - rl.endS;
+        dur = wp._shellEndAt;
+      } else {
+        endAt = 1e9;                    // still loading: the end is not known yet
+        dur = (wp._reloadDur || (w && w.reloadS) || 3.4);
+      }
+      shellTrLast = tr; shellEndAtLast = endAt; shellDurLast = dur;
+    } else {
+      tr = shellTrLast; endAt = shellEndAtLast; dur = shellDurLast;
+    }
     // Re-sync the per-shell cycle to the sim's own inserts: every time the magazine count rises by
     // exactly one while reloading, that is a shell going in — put the cycle at its 'push' beat
     // (0.70) right then, so hand and ammo counter agree whatever the sim's pacing is.
-    if (wp && dbg.reloadP == null) {
-      if (prevMag != null && wp.mag === prevMag + 1) { shellT0 = tr - 0.70 * rl.perShellS; }
+    if (liveR) {
+      if (prevMag != null && wp.mag === prevMag + 1) {
+        shellT0 = tr - 0.70 * rl.perShellS;
+        // the thumb drives the shell home: a small upward shove through the gun
+        msImpulse(0, 0.07, -0.03, 0.45, 0, -0.15);
+      }
       prevMag = wp.mag;
       if (tr < 0.05) shellT0 = null;
-    }
+      // closing pump: the gun is jerked back by the stroke, then shoved forward
+      if (prevShellTr < endAt + 0.10 && tr >= endAt + 0.10) msImpulse(0, -0.03, 0.12, -0.35, 0, 0.2);
+      if (prevShellTr < endAt + 0.25 && tr >= endAt + 0.25) msImpulse(0, 0.04, -0.18, 0.55, 0, -0.25);
+      prevShellTr = tr < prevShellTr ? -1 : tr;
+    } else if (wp && wp.state !== "reloading") prevMag = wp.mag;
     const t = tr - (shellT0 != null ? shellT0 : rl.startS);
-    const endAt = Math.max(rl.startS + 0.1, dur - rl.endS);
+    // an EMPTY gun is loaded rolled further over (the port faces the camera)
+    const emptyMult = reloadEmpty ? 1.25 : 1.0;
     const C = handKeys(group, anim, "shell");
     const rest = armL.restP, restQ = armL.restQ;
 
-    const tIn = ramp(tr, 0.0, rl.startS);                  // tilt in + hand to the port
-    const tOutEnd = ramp(tr, endAt, dur);                  // hand back to the forend
+    const te = tr - endAt;                                  // time into the end phase
+    const tIn = ramp(tr, 0.0, rl.startS);                   // tilt in + hand to the port
+    const handBack = te > 0 ? ramp(te, 0, 0.09) : 0;        // hand to the forend for the rack
+    const tiltOut = te > 0 ? ramp(te, 0.0, 0.30) : 0;       // gun levels through the rack
     let towardBand = 0, push = 0;
-    if (t > 0 && tr < endAt) {
+    if (t > 0 && te < 0) {
       const c = (t % rl.perShellS) / rl.perShellS;
       // 0..0.30 at the bandolier -> 0.30..0.62 up to the port -> push 0.62..0.80 -> settle
       towardBand = c < 0.30 ? 1 : 1 - ramp(c, 0.30, 0.62);
       push = c > 0.62 && c < 0.82 ? Math.sin(Math.PI * (c - 0.62) / 0.20) : 0;
     }
-    const gunTilt = tIn * (1 - tOutEnd);
+    const gunTilt = tIn * (1 - tiltOut);
     out.rx += anim.tilt[0] * DEG * gunTilt * rw;
     out.ry += anim.tilt[1] * DEG * gunTilt * rw;
-    out.rz += anim.tilt[2] * DEG * gunTilt * rw;
+    out.rz += anim.tilt[2] * DEG * gunTilt * rw * emptyMult;
     out.px += anim.lift[0] * gunTilt * rw;
     out.py += anim.lift[1] * gunTilt * rw;
     out.pz += (anim.lift[2] + 0.025) * gunTilt * rw;
 
     _hp.copy(rest); _hq.copy(restQ);
     _hp.lerp(C.port.p, tIn); _hq.slerp(C.port.q, tIn);
-    if (t > 0 && tr < endAt) {
+    if (t > 0 && te < 0) {
       _hp.copy(C.port.p).lerp(C.pouch.p, towardBand);
       _hq.copy(C.port.q).slerp(C.pouch.q, towardBand);
       _hp.y += 0.006 * push;           // glTF y = up
       _hp.z -= 0.016 * push;           // glTF -z = toward the muzzle
     }
-    if (tOutEnd > 0) { _hp.lerp(rest, tOutEnd); _hq.slerp(restQ, tOutEnd); }
+    if (handBack > 0) { _hp.lerp(rest, handBack); _hq.slerp(restQ, handBack); }
     armL.node.position.lerp(_hp, rw);
     armL.node.quaternion.slerp(_hq, rw);
 
-    // closing rack: forend + hand stroke back and forward during the end phase
-    if (pump && tr > endAt) {
-      const re = (tr - endAt) / Math.max(1e-3, dur - endAt);
-      const stroke = re < 0.5 ? ramp(re, 0, 0.5) : 1 - ramp(re, 0.5, 1.0);
+    // closing rack: forend + hand stroke back (0.03-0.11 s) and forward (0.19-0.28 s)
+    if (pump && te > 0) {
+      const stroke = te < 0.03 ? 0 : te < 0.11 ? ramp(te, 0.03, 0.11) : te < 0.19 ? 1 : 1 - ramp(te, 0.19, 0.28);
       pump.node.position.z = pump.restP.z + 0.085 * stroke * rw;
       armL.node.position.z += 0.085 * stroke * rw;
     }
-    void dt;
+    void dt; void dur;
+  }
+
+  // the slide's lean side, same convention as the §1.4 camera roll (+1 / -1)
+  function slideRollTargetSign(m, input) {
+    if (!m.slideDir) return 1;
+    const fy = input.state.yaw;
+    const side = m.slideDir[0] * Math.cos(fy) + m.slideDir[1] * -Math.sin(fy);
+    return side >= 0 ? -1 : 1;
   }
 
   // ---- update ---------------------------------------------------------------
@@ -872,11 +1517,13 @@ export function createViewmodel(ctx) {
         equip(wantId).then(() => { swapPending = null; });
       }
     }
+    if (current) gsSync(sim, p); // [gunsmith] fit the player's build (attachments, camo) to the gun on screen
     const w = current && current.w;
     const wp = wp0;
 
     const driving = visible && !ctx.cameraDetached && p && p.alive &&
       st && LIVE_PHASES.has(st.phase);
+    laserDotUpdate(sim, driving && current && current.gs && current.gs.laser && !(p.weapon && p.weapon.id === "knife"));
 
     // -- fire-response springs: integrated EVERY frame, before anything reads
     // them, and before the `!rig.visible` early-out below.
@@ -894,6 +1541,13 @@ export function createViewmodel(ctx) {
         springStep(K.camR, KICK.camOmega, KICK.camZeta, h, KICK.maxCamRoll);
         springStep(K.camY, KICK.camOmega, KICK.camZeta, h, KICK.maxCamYaw);
         springStep(K.fov,  KICK.camOmega, KICK.camZeta, h, KICK.maxFov);
+        const mo = MOVE_SPRING.omega, mz = MOVE_SPRING.zeta;
+        springStep(MS.posX, mo, mz, h, MOVE_SPRING.maxPosX);
+        springStep(MS.posY, mo, mz, h, MOVE_SPRING.maxPosY);
+        springStep(MS.posZ, mo, mz, h, MOVE_SPRING.maxPosZ);
+        springStep(MS.rotX, mo, mz, h, MOVE_SPRING.maxRotX);
+        springStep(MS.rotY, mo, mz, h, MOVE_SPRING.maxRotY);
+        springStep(MS.rotZ, mo, mz, h, MOVE_SPRING.maxRotZ);
       }
       scopeS.kick *= Math.exp(-dt / 0.18);
     }
@@ -907,6 +1561,88 @@ export function createViewmodel(ctx) {
     const adsT = wp ? (wp.adsT || 0) : 0;
     const adsEase = smoothstep(adsT);
     const isScoped = !!(w && w.view && w.view.scope);
+
+    // ================= HANDLING STATE (view-only, polled off the sim) =========
+    // Nothing here writes the sim or input.state; it reads them and drives the
+    // MS springs and the inspect / grenade clocks.
+    if (driving && wp) {
+      // ADS: a roll as the gun starts to travel, and a settle overshoot when it
+      // arrives (in) or comes to rest at the hip (out)
+      if (wp.ads && !prevAdsWant) msImpulse(0, 0, 0, 0, 0, 0.35);
+      if (!wp.ads && prevAdsWant) msImpulse(0, -0.03, 0, 0, 0, -0.45);
+      if (adsT >= 0.999 && prevAdsT < 0.999) msImpulse(0, -0.05, 0.03, -0.22, 0, 0);
+      if (adsT <= 0.001 && prevAdsT > 0.001) msImpulse(0, -0.07, 0, -0.35, 0, 0.15);
+      prevAdsWant = !!wp.ads; prevAdsT = adsT;
+
+      // DRY CLICK: the sim stamps lastShotT on an empty trigger pull without firing
+      const c = st.counters;
+      const sf = c ? c.shotsFired : 0;
+      if (prevLastShotT != null && wp.lastShotT !== prevLastShotT && sf === prevShotsSeen && wp.mag === 0) {
+        msImpulse(0, 0.012, 0.022, 0.30, 0, 0.08);
+      }
+      prevLastShotT = wp.lastShotT; prevShotsSeen = sf;
+
+      // GRENADE: player._m.cooking is the pin-pulled hold; its falling edge is the throw
+      const cooking = !!m.cooking || (dbg.nade != null && dbg.nade.cook === true);
+      if (prevCooking && !cooking) { throwT = 0; cookAtRelease = cookW; }
+      prevCooking = cooking;
+      cookW = damp(cookW, cooking ? 1 : 0, cooking ? 0.07 : 0.05, dt);
+      if (dbg.nade != null && dbg.nade.throwT != null) { throwT = dbg.nade.throwT; cookAtRelease = 1; }
+      else if (throwT >= 0) { throwT += dt; if (throwT > NADE.throwS) throwT = -1; }
+      nadeHandW = throwT >= 0 ? 1 : cookW;
+
+      // [melee] KNIFE clock off the sim's body._melee (press tick t0); the strike beat
+      // (s.struck) kicks the camera through the trauma model + the handling springs
+      {
+        const ms = p._melee;
+        if (ms && ms.t0 !== meleeT0) { meleeT0 = ms.t0; meleeImpact = false; meleeResult = null; inspectT = -1; }
+        if (dbg.melee != null) meleeT = dbg.melee;
+        else if (meleeT0 != null) {
+          meleeT = st.time + (alpha - 1) / 60 - meleeT0;
+          if (meleeT > MELEE_VM.totalS) { meleeT = -1; if (!ms) meleeT0 = null; }
+          else if (meleeT < 0) meleeT = 0;
+        } else meleeT = -1;
+        if (ms && ms.struck && !meleeImpact && dbg.melee == null) {
+          meleeImpact = true; meleeResult = ms.result;
+          if (ms.result === "hit") {
+            trauma = Math.min(1, trauma + 0.42);
+            K.camP.v += -0.9; K.camY.v += 0.55; K.camR.v += -0.9;        // the blade bites: the view jolts
+            msImpulse(0.01, -0.05, 0.05, -0.5, 0.2, 0.6);
+          } else {
+            trauma = Math.min(1, trauma + 0.14);
+            K.camY.v += 0.35; K.camR.v += -0.45;                          // a whiff carries through
+            msImpulse(-0.02, -0.02, -0.03, -0.2, 0.3, 0.4);
+          }
+        }
+      }
+
+      // INSPECT (key I — input.state.inspect is a press COUNTER, never in the cmd)
+      const req = input.state.inspect | 0;
+      if (lastInspectReq == null) lastInspectReq = req;
+      if (req !== lastInspectReq) {
+        lastInspectReq = req;
+        const busy = wp.ads || adsT > 0.05 || sprintState !== "none" || sliding || cooking || meleeT >= 0 ||
+          throwT >= 0 || wp.state === "reloading" || wp.state === "switching" || switchProg >= 0;
+        if (!busy) inspectT = (inspectT >= 0 ? -1 : 0);   // a second press puts it away
+      }
+      if (inspectT >= 0) {
+        if (input.state.fire || wp.ads || sprintState !== "none" || sliding || cooking ||
+            wp.state === "reloading" || wp.state === "switching" || sinceShot < 0.05) inspectT = -1;
+        else { inspectT += dt; if (inspectT >= INSPECT_S) inspectT = -1; }
+      }
+    } else {
+      inspectT = -1; throwT = -1; cookW = 0; nadeHandW = 0; prevCooking = false;
+      meleeT = -1; meleeT0 = null; // [melee]
+      // a press in a menu / while dead is dropped, never replayed on respawn
+      lastInspectReq = input && input.state ? (input.state.inspect | 0) : lastInspectReq;
+    }
+    if (dbg.inspect != null) { inspectQ = dbg.inspect; inspectW = 1; }
+    else {
+      if (inspectT >= 0) inspectQ = inspectT / INSPECT_S;
+      inspectW = damp(inspectW, inspectT >= 0 ? 1 : 0, inspectT >= 0 ? 0.06 : 0.07, dt);
+      if (inspectW < 0.002 && inspectT < 0) inspectW = 0;
+    }
+    actionT += dt;
 
     if (driving) {
       // eye height (§1.3 140 ms crouch lerp; §1.4 slide 0.90 over 110 ms)
@@ -947,7 +1683,20 @@ export function createViewmodel(ctx) {
         const fallH = (airVy < 0) ? (airVy * airVy) / (2 * 20) : 0;
         if (fallH >= 4.0) { dipAmp = 0.09; dipDur = 0.12; dipRec = 0.32; dipTimer = 0; }
         else if (fallH >= 1.5) { dipAmp = 0.04; dipDur = 0.09; dipRec = 0.22; dipTimer = 0; }
+        // the gun's weight on touchdown: it keeps falling for a beat, muzzle dips,
+        // then springs back up past rest (under-damped). Every landing, scaled by
+        // impact speed — the camera dip above only fires on real drops.
+        const s = Math.min(1, Math.max(0, (-airVy - 1.5) / 9));
+        if (s > 0) {
+          landSide = -landSide;
+          msImpulse(0.02 * s * landSide, -0.10 - 0.30 * s, 0.02 * s, -0.5 - 1.5 * s, 0, (0.25 + 0.5 * s) * landSide);
+        }
       }
+      // take-off: the body goes up first, the gun lags down and the muzzle dips
+      if (!p.grounded && prevGrounded && p.vel[1] > 1.0) msImpulse(0, -0.16, 0.01, -0.85, 0, 0.18);
+      // slide entry: the gun is thrown over toward the lean side
+      if (sliding && !prevSliding) msImpulse(-0.03, -0.12, 0.03, -0.4, 0.2, slideRollTargetSign(m, input) * 1.3);
+      prevSliding = sliding;
       prevGrounded = !!p.grounded;
       dipY = 0;
       if (dipTimer >= 0) {
@@ -981,6 +1730,9 @@ export function createViewmodel(ctx) {
       if (adsFull && w) {
         const id = current.id;
         let amp = (SWAY.adsAmpDeg[id] != null ? SWAY.adsAmpDeg[id] : 0.03) * DEG;
+        // [gunsmith] sway belongs to the OPTIC: a magnified scope on any gun fights the
+        // scope wobble, a 1x dot on the DMR holds like a rifle (factory guns unchanged)
+        amp = isScoped ? Math.max(amp, 0.12 * DEG) : Math.min(amp, 0.035 * DEG);
         const movingMult = isScoped ? (SWAY.scopedMovingMult || SWAY.corvusMovingMult) : SWAY.movingMult;
         if (speedNorm > 0.03) amp *= movingMult;
         // settle: ×2 → ×1 over FEEL.adsSettleS after ADS completes
@@ -1049,7 +1801,7 @@ export function createViewmodel(ctx) {
       // camera shake (see SHAKE): sum-of-sines noise, three incommensurate rates
       trauma = Math.max(0, trauma - SHAKE.decay * dt);
       shakeT += dt;
-      const tt = trauma * trauma;
+      const tt = trauma * trauma * (S && S.shake != null ? S.shake : 1); // [lane settings] camera-shake scale
       let shP = 0, shY = 0, shR = 0;
       if (tt > 1e-5) {
         const w = shakeT * SHAKE.hz;
@@ -1096,7 +1848,7 @@ export function createViewmodel(ctx) {
       const halfAim = Math.tan(0.5 * DEG * Math.max(1, fovAim));
       const magWorld = Math.max(1e-3, halfBase / Math.max(1e-6, halfAim));
       const magVm = share === 0 ? 1 : Math.pow(magWorld, share);
-      const vmFov = 2 * Math.atan(Math.tan(0.5 * DEG * VIEWMODEL.fovDeg) / magVm) / DEG;
+      const vmFov = 2 * Math.atan(Math.tan(0.5 * DEG * (VIEWMODEL.fovDeg + ((S && S.vmFovAdj) || 0))) / magVm) / DEG; // [lane settings] weapon FOV adj
       if (Math.abs(vmCamera.fov - vmFov) > 0.01) {
         vmCamera.fov = vmFov;
         vmCamera.updateProjectionMatrix();
@@ -1151,8 +1903,23 @@ export function createViewmodel(ctx) {
       const dPitch = pitchNow - prevPitch;
       const maxR = VIEWMODEL.rotLagMaxDeg * DEG;
       const gain = VIEWMODEL.rotLagTau; // rad per (rad/s) — lag ≈ look vel × τ
-      swayYaw = damp(swayYaw, Math.max(-maxR, Math.min(maxR, -(dYaw / dt) * gain)), VIEWMODEL.rotLagTau, dt);
-      swayPitch = damp(swayPitch, Math.max(-maxR, Math.min(maxR, -(dPitch / dt) * gain)), VIEWMODEL.rotLagTau, dt);
+      const tY = Math.max(-maxR, Math.min(maxR, -(dYaw / dt) * gain));
+      const tP = Math.max(-maxR, Math.min(maxR, -(dPitch / dt) * gain));
+      // under-damped spring toward the lag target (TURN): the gun trails a flick and
+      // swings a little PAST centre when the look stops — weight, not a glide.
+      // Sub-stepped like the kick springs; hard-clamped so a teleport cannot fling it.
+      const o = TURN.omega, z2 = 2 * TURN.zeta * TURN.omega, cap = maxR * 1.3;
+      let rem = Math.min(dt, 0.25);
+      while (rem > 1e-6) {
+        const h = Math.min(rem, 1 / 120);
+        rem -= h;
+        swayYawV += (o * o * (tY - swayYaw) - z2 * swayYawV) * h;
+        swayYaw += swayYawV * h;
+        swayPitchV += (o * o * (tP - swayPitch) - z2 * swayPitchV) * h;
+        swayPitch += swayPitchV * h;
+      }
+      if (swayYaw > cap) { swayYaw = cap; swayYawV = 0; } else if (swayYaw < -cap) { swayYaw = -cap; swayYawV = 0; }
+      if (swayPitch > cap) { swayPitch = cap; swayPitchV = 0; } else if (swayPitch < -cap) { swayPitch = -cap; swayPitchV = 0; }
     }
     prevYaw = yawNow; prevPitch = pitchNow;
     scopeS.lagX = swayYaw; scopeS.lagY = swayPitch;
@@ -1164,8 +1931,11 @@ export function createViewmodel(ctx) {
 
     // sprint / slide / mantle weights ease in and out — they used to step
     const sprintTarget = sprintState === "tac" ? 1 : sprintState === "sprint" ? 0.8 : 0;
+    // sprint-to-fire: a trigger pull while sprinting snaps the gun up faster (the sim's
+    // sprint-out is 0.2 s per class — the muzzle has to be on target by then)
+    const sprintOutTau = input.state.fire ? 0.055 : 0.09;
     sprintBlend = damp(sprintBlend, dbg.sprint != null ? dbg.sprint : sprintTarget,
-      (dbg.sprint != null ? dbg.sprint : sprintTarget) > sprintBlend ? 0.11 : 0.09, dt);
+      (dbg.sprint != null ? dbg.sprint : sprintTarget) > sprintBlend ? 0.11 : sprintOutTau, dt);
     slideBlend = damp(slideBlend, sliding ? 1 : 0, sliding ? 0.08 : 0.14, dt);
     mantleBlend = damp(mantleBlend, m.mantle ? 1 : 0, m.mantle ? 0.06 : 0.14, dt);
     const sb = sprintBlend * (1 - adsEase);
@@ -1193,6 +1963,13 @@ export function createViewmodel(ctx) {
       if (so) pz -= so * adsEase;
     }
     let rx = 0, ry = 0, rz = 0;
+    // HIP CANT (view.rot, deg [pitch, yaw, roll], YXZ about the grip): the CoD hip pose —
+    // muzzle yawed in toward the screen centre, a touch of roll so the receiver side
+    // shows. Blended out with adsEase, so the sight picture is untouched.
+    if (view.rot) {
+      const k = (1 - adsEase) * DEG;
+      rx += view.rot[0] * k; ry += view.rot[1] * k; rz += view.rot[2] * k;
+    }
 
     if (sb > 0.001) {
       // §1.1/VT §5: sprint = gun across the chest, muzzle up-left, low (CoD "high port"): the
@@ -1205,10 +1982,113 @@ export function createViewmodel(ctx) {
       rx += SP.rot[0] * DEG * sb;
       ry += SP.rot[1] * DEG * sb;
       rz += SP.rot[2] * DEG * sb;
+      // the swing of a carried rifle: a figure-eight locked to the stride phase
+      const s1 = Math.sin(bobPhase * 0.5), s2 = Math.sin(bobPhase);
+      const sw = sb * Math.min(1, speedNorm * 1.2);
+      px += SPRINT_SWING.x * s1 * sw;
+      py += SPRINT_SWING.y * s2 * sw;
+      rz += SPRINT_SWING.rzDeg * DEG * s1 * sw;
+      ry += SPRINT_SWING.ryDeg * DEG * s1 * sw;
+      rx += SPRINT_SWING.rxDeg * DEG * s2 * sw;
     }
     if (slideBlend > 0.001) {
       px += -0.02 * slideBlend; py += -0.05 * slideBlend; pz += 0.03 * slideBlend;
       rx += -8 * DEG * slideBlend; ry += 12 * DEG * slideBlend; rz += 14 * DEG * slideBlend;
+      rz += slideRoll * 2.5 * slideBlend;   // and leans with the camera's slide roll
+    }
+
+    // STRAFE TILT + travel pitch: the gun rolls INTO lateral travel (moving right =
+    // clockwise) and dips/pulls back a hair with forward travel; damped, and kept to
+    // STRAFE.adsKeep down the sights so the sight picture stays readable.
+    if (p) {
+      const fy = input.state.yaw, cy = Math.cos(fy), sy = Math.sin(fy);
+      const vR = p.vel[0] * cy - p.vel[2] * sy;
+      const vF = -p.vel[0] * sy - p.vel[2] * cy;
+      const g = p.grounded ? 1 : 0.5;
+      strafeR = damp(strafeR, clampS(vR / STRAFE.speedRef, 1) * g, STRAFE.tau, dt);
+      strafeF = damp(strafeF, clampS(vF / STRAFE.speedRef, 1) * g, STRAFE.tau, dt);
+      airLift = damp(airLift, p.grounded ? 0 : clampS(-p.vel[1] / 10, 1), 0.12, dt);
+    }
+    {
+      const keep = 1 - (1 - STRAFE.adsKeep) * adsEase;
+      const ns = 1 - sb * 0.6;                    // the sprint pose owns the gun when sprinting
+      rz += -STRAFE.rollDeg * DEG * strafeR * keep * ns;
+      ry += STRAFE.yawDeg * DEG * strafeR * keep * ns;
+      rx += -STRAFE.fwdPitchDeg * DEG * strafeF * keep * ns;
+      pz += STRAFE.fwdBack * Math.max(0, strafeF) * keep * ns;
+      // airborne: low on the way up, floats up as you fall
+      py += 0.012 * airLift * (1 - 0.7 * adsEase);
+      rx += 3 * DEG * airLift * (1 - 0.7 * adsEase);
+    }
+
+    // ADS TRAVEL ARC: the gun rolls and dips on its way to the eye and back; zero at
+    // both ends (sin(pi*adsT)), so the hip pose and the sight picture are untouched
+    {
+      adsDirS = damp(adsDirS, (wp && wp.ads) ? 1 : ADS_TRAVEL.outMult, 0.06, dt);
+      const arc = Math.sin(Math.PI * clamp01(adsT));
+      rz += ADS_TRAVEL.rollDeg * DEG * arc * adsDirS;
+      py += -ADS_TRAVEL.dropM * arc;
+    }
+
+    // INSPECT pose (see INSPECT_KEYS), weighted so a cancel fades it out
+    if (inspectW > 0.001) {
+      const q = inspectQ;
+      let i = 0;
+      while (i < INSPECT_KEYS.length - 2 && q > INSPECT_KEYS[i + 1][0]) i++;
+      const a = INSPECT_KEYS[i], b = INSPECT_KEYS[i + 1];
+      const s = smoothstep((q - a[0]) / Math.max(1e-6, b[0] - a[0]));
+      // a slow drift on top so the held beats are never dead still
+      const drift = Math.sin(q * Math.PI * 5.0) * bell(q, 0.12, 0.88);
+      const wI = inspectW;
+      px += lerp(a[1], b[1], s) * wI;
+      py += (lerp(a[2], b[2], s) + 0.003 * drift) * wI;
+      pz += lerp(a[3], b[3], s) * wI;
+      rx += (lerp(a[4], b[4], s) + 1.5 * drift) * DEG * wI;
+      ry += lerp(a[5], b[5], s) * DEG * wI;
+      rz += (lerp(a[6], b[6], s) + 2.0 * drift) * DEG * wI;
+    }
+
+    // GRENADE: the gun drops right while the support hand is off it
+    if (nadeHandW > 0.001) {
+      const gW = throwT >= 0 ? (1 - ramp(throwT, 0.32, NADE.throwS)) * Math.max(0.6, cookAtRelease) : cookW;
+      const swing = throwT >= 0 ? bell(throwT, 0.03, 0.24) : 0;   // the body turns into the throw
+      px += NADE.gun.pos[0] * gW + 0.015 * swing;
+      py += NADE.gun.pos[1] * gW - 0.012 * swing;
+      pz += NADE.gun.pos[2] * gW;
+      rx += NADE.gun.rot[0] * DEG * gW;
+      ry += NADE.gun.rot[1] * DEG * gW - 6 * DEG * swing;
+      rz += NADE.gun.rot[2] * DEG * gW + 6 * DEG * swing;
+    }
+
+    // [melee] the gun drops right and rolls away while the knife hand works
+    if (meleeT >= 0) {
+      const gW = ramp(meleeT, 0.0, 0.07) * (1 - ramp(meleeT, MELEE_VM.backS, MELEE_VM.totalS));
+      const sw = bell(meleeT, 0.10, 0.30);                       // the shoulders turn into the stab
+      px += MELEE_VM.gun.pos[0] * gW + 0.02 * sw;
+      py += MELEE_VM.gun.pos[1] * gW - 0.015 * sw;
+      pz += MELEE_VM.gun.pos[2] * gW;
+      rx += MELEE_VM.gun.rot[0] * DEG * gW;
+      ry += MELEE_VM.gun.rot[1] * DEG * gW - 8 * DEG * sw;
+      rz += MELEE_VM.gun.rot[2] * DEG * gW + 8 * DEG * sw;
+    }
+
+    // handling springs (reload beats, ADS settle, jump/land/slide, dry click)
+    px += MS.posX.x; py += MS.posY.x; pz += MS.posZ.x;
+    rx += MS.rotX.x; ry += MS.rotY.x; rz += MS.rotZ.x;
+
+    // ACTION CYCLE: a bolt / slide node (if the GLB has one) snaps back on every
+    // shot and returns; a slide locks open on an empty magazine; the empty-reload
+    // rack drives it too. Absent part = no-op.
+    {
+      const ap = actionPart(current.group);
+      if (ap) {
+        let d = actionT < 0.016 ? actionT / 0.016 : actionT < 0.075 ? 1 - smoothstep((actionT - 0.016) / 0.059) : 0;
+        // last round fired: the bolt / slide holds open until the empty reload releases it
+        if (wp && wp.mag === 0 && wp.state !== "reloading") d = 1;
+        d = Math.max(d, rackStroke);
+        ap.node.position.copy(ap.restP);
+        ap.node.position.z += ap.stroke * d;      // glTF +z = toward the stock
+      }
     }
     // mantle: weapon lowered hard (§1.5)
     if (mantleBlend > 0.001) {
@@ -1224,15 +2104,17 @@ export function createViewmodel(ctx) {
     {
       let lowerAmt = 0;
       if (switchProg >= 0) {
+        // the raise half eases out with a slight OVERSHOOT (the gun comes up a hair
+        // past its rest and settles) — reads as a deliberate draw, not a lift
         lowerAmt = switchProg < SWITCH_SWAP
           ? smoothstep(switchProg / SWITCH_SWAP)
-          : 1 - smoothstep((switchProg - SWITCH_SWAP) / (1 - SWITCH_SWAP));
+          : 1 - easeOutBack((switchProg - SWITCH_SWAP) / (1 - SWITCH_SWAP), 1.25);
       } else if (raiseClock < raiseDur) {
         raiseClock += dt;
-        lowerAmt = 1 - smoothstep(Math.min(1, raiseClock / raiseDur));
+        lowerAmt = 1 - easeOutBack(Math.min(1, raiseClock / raiseDur), 1.25);
       }
       if (lowered) lowerAmt = Math.max(lowerAmt, 1);
-      if (lowerAmt > 0.001) {
+      if (Math.abs(lowerAmt) > 0.001) {
         py += -0.17 * lowerAmt; px += 0.05 * lowerAmt; pz += 0.05 * lowerAmt;
         rx += -42 * DEG * lowerAmt; ry += -10 * DEG * lowerAmt; rz += 16 * DEG * lowerAmt;
       }
@@ -1251,15 +2133,17 @@ export function createViewmodel(ctx) {
     const breatheRx = 0.0035 * Math.sin(swayT * 2 * Math.PI * 0.32 + 0.4) * (1 - 0.8 * adsEase);
 
     // fire response, viewmodel share (springs integrated at the top of update)
+    // turn sway: rotation + a little sideways drift + roll into the turn
+    const swayKeep = 1 - 0.7 * adsEase;
     mount.position.set(
-      px + lagX + vmBobX,
-      py + lagY + vmBobY + breatheY + dipY * 0.6 + K.posY.x,
+      px + lagX + vmBobX + swayYaw * TURN.slideM * swayKeep,
+      py + lagY + vmBobY + breatheY + dipY * 0.6 + K.posY.x - swayPitch * TURN.slideM * 0.5 * swayKeep,
       pz + lagZ + K.posZ.x,
     );
     mount.rotation.set(
-      rx + vmBobRx + breatheRx + swayPitch * (1 - 0.7 * adsEase) + K.rotX.x,
-      ry + swayYaw * (1 - 0.7 * adsEase) + K.rotY.x,
-      rz + vmBobRz + swayYaw * 0.35 * (1 - adsEase) + K.rotZ.x,
+      rx + vmBobRx + breatheRx + swayPitch * swayKeep + K.rotX.x,
+      ry + swayYaw * swayKeep + K.rotY.x,
+      rz + vmBobRz + swayYaw * TURN.rollShare * (1 - adsEase) + K.rotZ.x,
       "YXZ",
     );
 
@@ -1267,10 +2151,9 @@ export function createViewmodel(ctx) {
     {
       const parts = current.group.userData.parts;
       if (parts) {
-        const cl = (v) => Math.max(-ARM.maxRad, Math.min(ARM.maxRad, v));
-        armRoll = damp(armRoll, cl(-K.rotZ.x * ARM.kickRoll), ARM.tau, dt);
-        armPitch = damp(armPitch, cl(-K.rotX.x * ARM.kickPitch), ARM.tau, dt);
-        armLead = damp(armLead, cl(-swayYaw * ARM.swayLead), ARM.tau, dt);
+        armRoll = damp(armRoll, clampS(-K.rotZ.x * ARM.kickRoll, ARM.maxRad), ARM.tau, dt);
+        armPitch = damp(armPitch, clampS(-K.rotX.x * ARM.kickPitch, ARM.maxRad), ARM.tau, dt);
+        armLead = damp(armLead, clampS(-swayYaw * ARM.swayLead, ARM.maxRad), ARM.tau, dt);
         _armE.set(armPitch, armLead, armRoll, "YXZ");
         _armQ.setFromEuler(_armE);
         // post-multiply: the wrist flexes in its own local frame, on top of whatever
@@ -1362,7 +2245,17 @@ export function createViewmodel(ctx) {
     get mount() { return mount; },
     // dev: pin an animation at a fixed progress for screenshots. reload: {p, kind, empty}
     _dbg(o) {
-      if (o == null) { dbg.reloadP = null; dbg.kind = null; dbg.lower = null; dbg.pump = null; dbg.sprint = null; dbg.handL = null; return; }
+      if (o == null) {
+        dbg.reloadP = null; dbg.kind = null; dbg.lower = null; dbg.pump = null; dbg.sprint = null; dbg.handL = null;
+        dbg.inspect = null; dbg.nade = null; dbg.melee = null; return;
+      }
+      // inspect: pin the inspect pose at progress 0..1. nade: {cook:true} holds the
+      // cook pose, {throwT:s} pins the throw at s seconds.
+      if ("inspect" in o) dbg.inspect = o.inspect;
+      if ("nade" in o) dbg.nade = o.nade;
+      if ("melee" in o) dbg.melee = o.melee;                   // [melee] pin the strike at t s
+      if ("meleeTune" in o) { Object.assign(MELEE_VM, o.meleeTune); if (current) _meleeCache.delete(current.group); } // tuning
+      if ("knifeAxes" in o) { knifeAxes = Object.assign({}, knifeAxes, o.knifeAxes); if (current) _meleeCache.delete(current.group); }
       if ("handL" in o) dbg.handL = o.handL;
       if ("reloadP" in o) dbg.reloadP = o.reloadP;
       if ("kind" in o) dbg.kind = o.kind;
@@ -1381,6 +2274,16 @@ export function createViewmodel(ctx) {
       const proto = await loadWeaponGLB(id);
       installProto(id, proto);
       return id;
+    },
+    // handling-feel state (lane VM probes; never frozen surface)
+    get _handling() {
+      return {
+        inspectT, inspectW, inspectQ, cookW, throwT, nadeVisible: nade.visible,
+        meleeT, meleeResult, knifeVisible: knife.visible, knifeLoaded: knifeMeshes.length > 0, // [melee]
+        strafeR, strafeF, airLift, swayYaw, swayPitch, reloadW, reloadEmpty, rackStroke,
+        ms: { px: MS.posX.x, py: MS.posY.x, pz: MS.posZ.x, rx: MS.rotX.x, ry: MS.rotY.x, rz: MS.rotZ.x },
+        action: !!(current && current.group && actionPart(current.group)),
+      };
     },
     // fire-response spring state — the D10 probe reads this to assert the
     // burst is displaced at the ticks C1 photographs (never frozen surface)

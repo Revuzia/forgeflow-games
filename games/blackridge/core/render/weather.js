@@ -66,7 +66,93 @@ export function fogTransmittance(dist, camY = 1.7, targetY = 1.5) {
   return Math.exp(-FOG.density * att * dist);
 }
 
-function installHeightFog(THREE_, scene) {
+// ------------------------------------------------- analytic light in-scatter
+// lane_env (2026-11-13). The practicals lit SURFACES but not the AIR: in the
+// before captures (_shots/lane_env/before_long.png) a sodium lamp in driving
+// rain is a hard orange box with a pool under it and nothing around it — the
+// single strongest "this is a game, not a photograph" cue in a night-rain
+// frame. Real rain-laden air scatters a lamp into a halo and a visible cone.
+//
+// This integrates single scattering from every light ALREADY in the fixed pool
+// along the eye ray, in closed form, inside the shared fog chunk:
+//     ∫0..D dt / ((t - b)^2 + h^2) = ( atan((D - b)/h) + atan(b/h) ) / h
+// (b = projection of the light on the ray, h = its distance from the ray,
+// D = the depth of the fragment the ray hits — so a lamp BEHIND a wall does
+// not glow over that wall). The spot cone is evaluated at the ray's closest
+// point to the light, which turns the same integral into a visible SHAFT under
+// a lamp, with a small floor so the fixture itself keeps a halo. The three
+// dynamic point slots (muzzle grants + explosion) run through the same
+// integral, so a muzzle flash lights the rain-filled air and a blast glows
+// in its own smoke instead of only on the walls.
+//
+// DOCTRINE: no light is created, no count changes, no new program. The chunk
+// reads three's own spotLights[] / pointLights[] uniforms (view space), so it
+// only compiles into materials that HAVE lights — guarded by RE_Direct, which
+// three defines exactly in the lit material families. Unlit / basic / sprite
+// materials compile byte-identical to before this edit. The scale rides
+// fogDensity, so scene.fog.density (dev tools, a future quality knob) moves
+// the in-scatter with the fog it physically belongs to.
+// COST (measured, 1280x720 med, EXT_disjoint_timer_query_webgl2, interleaved
+// in-page A/B by recompiling every material with and without this block): see
+// the lane_env report; the unrolled form below is the one that shipped.
+const INSCATTER_GLSL = /* glsl */ `
+  #if defined( RE_Direct ) && ( NUM_SPOT_LIGHTS > 0 || NUM_POINT_LIGHTS > 0 )
+    {
+      vec3 brVP = - vViewPosition;
+      float brLen = length( brVP );
+      vec3 brDir = brVP / max( brLen, 1e-4 );
+      vec3 brIns = vec3( 0.0 );
+      // UNROLLED (three's unroll_loop pragma): constant uniform indices, and
+      // no continue/break, so the compiler can schedule every light freely.
+      // Measured: the rolled loop with continue cost 0.41-0.43 ms at 1280x720.
+      #if NUM_SPOT_LIGHTS > 0
+      #pragma unroll_loop_start
+      for ( int i = 0; i < NUM_SPOT_LIGHTS; i ++ ) {
+        {
+          vec3 brL = spotLights[ i ].position;
+          float brB = dot( brL, brDir );
+          float brH2 = max( dot( brL, brL ) - brB * brB, 0.0625 );
+          // past 10 m from the ray the term is < 0.005 linear: skip (spatially
+          // coherent, so warps take one side; faded 10 -> 7 m, no seam). A
+          // parked / blacked-out practical (colour 0) skips on the same test.
+          if ( brH2 < 100.0 && dot( spotLights[ i ].color, vec3( 1.0 ) ) > 1e-3 ) {
+            float brH = sqrt( brH2 );
+            float brI = ( atan( ( brLen - brB ) / brH ) + atan( brB / brH ) ) / brH;
+            vec3 brQ = brDir * clamp( brB, 0.0, brLen );
+            float brC = dot( normalize( brL - brQ ), spotLights[ i ].direction );
+            float brCone = smoothstep( spotLights[ i ].coneCos, spotLights[ i ].penumbraCos, brC );
+            // shaft (cone-gated, slow falloff) + halo (round, tight, cone-free:
+            // the fixture's own glare in wet air)
+            brIns += spotLights[ i ].color * ( brI * ( ( 0.10 + 0.90 * brCone ) * exp( - 0.14 * brH ) + 0.45 * exp( - 0.9 * brH ) ) * smoothstep( 10.0, 7.0, brH ) );
+          }
+        }
+      }
+      #pragma unroll_loop_end
+      #endif
+      #if NUM_POINT_LIGHTS > 0
+      #pragma unroll_loop_start
+      for ( int i = 0; i < NUM_POINT_LIGHTS; i ++ ) {
+        {
+          // the three dynamic slots are parked at intensity 0 almost all the
+          // time — uniform branch, so they cost nothing until a flash fires
+          if ( dot( pointLights[ i ].color, vec3( 1.0 ) ) > 1e-3 ) {
+            vec3 brL = pointLights[ i ].position;
+            float brB = dot( brL, brDir );
+            // h floored at 1 m: a muzzle grant sits ~0.6 m from the eye, and an
+            // unfloored 1/h would white out the frame for its 110 ms
+            float brH = sqrt( max( dot( brL, brL ) - brB * brB, 1.0 ) );
+            float brI = ( atan( ( brLen - brB ) / brH ) + atan( brB / brH ) ) / brH;
+            brIns += pointLights[ i ].color * ( brI * 0.55 * exp( - 0.10 * brH ) );
+          }
+        }
+      }
+      #pragma unroll_loop_end
+      #endif
+      gl_FragColor.rgb += brIns * ( fogDensity * ${(0.24).toFixed(3)} );
+    }
+  #endif`;
+
+function installHeightFog(THREE_, scene, withInscatter = true) {
   scene.fog = new THREE.FogExp2(FOG.color, FOG.density);
 
   THREE_.ShaderChunk.fog_pars_vertex = /* glsl */ `
@@ -125,6 +211,7 @@ function installHeightFog(THREE_, scene) {
       brFogCol *= 1.0 + 0.18 * brNW;
       gl_FragColor.rgb = mix( gl_FragColor.rgb, brFogCol, brFog );
     }
+    ${withInscatter ? INSCATTER_GLSL : ""}
   #else
     float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
     gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );
@@ -168,7 +255,14 @@ const BOX = [24, 16, 24]; // camera-following rain box (LD §5.3)
 
 export function createWeather(ctx) {
   const { scene, camera } = ctx;
-  installHeightFog(THREE, scene);
+  // In-scatter is a BOOT-TIME choice (it lives in the shared fog chunk, and
+  // every program is compiled + prewarmed at boot): measured 0.2-0.45 ms at
+  // 1280x720 on med, so the 'low' preset — whose whole contract is "tonemap
+  // only, no film stages" — boots without it. Switching preset live keeps the
+  // boot choice until the next load (same as the planar-reflection RT).
+  const inscatter = (ctx.settings && ctx.settings.quality) !== "low";
+  installHeightFog(THREE, scene, inscatter);
+  scene.userData.brInscatter = inscatter; // sky.js reads this for its shell
 
   // The frozen LD §5.2 readability check, computed from the shipped formula:
   const t78 = fogTransmittance(78, 1.7, 1.5);
@@ -300,12 +394,17 @@ export function createWeather(ctx) {
   function respawnSplash(i, posAttr) {
     let x, z, tries = 0;
     do {
-      if (splashBias.length && rng() < 0.75) {
+      // lane_env: 0.75 -> 0.40 toward the authored puddles/drips. At 0.75 only
+      // ~55 of 220 splashes ever landed near the PLAYER, so outside the hero
+      // puddles the street at your feet showed no rain hitting it at all.
+      // Near-camera ring tightened (1.2..9 m) — splashes are 10-20 cm events
+      // and are invisible past ~10 m anyway.
+      if (splashBias.length && rng() < 0.40) {
         const b = splashBias[(rng() * splashBias.length) | 0];
         const a = rng() * Math.PI * 2, r = Math.sqrt(rng()) * b[2];
         x = b[0] + Math.cos(a) * r; z = b[1] + Math.sin(a) * r;
       } else {
-        const a = rng() * Math.PI * 2, r = 2 + Math.sqrt(rng()) * 10;
+        const a = rng() * Math.PI * 2, r = 1.2 + Math.sqrt(rng()) * 7.8;
         x = camera.position.x + Math.cos(a) * r;
         z = camera.position.z + Math.sin(a) * r;
       }
@@ -373,6 +472,68 @@ export function createWeather(ctx) {
     return mesh;
   }
   splash = buildSplash();
+
+  // ------------------------------------------------------------ splash crowns
+  // lane_env. The ring above is a FLAT disturbance; what the eye actually
+  // catches of a raindrop hitting a wet street at night is the crown — a tiny
+  // vertical jet of droplets that catches the light for ~0.1 s. Same instances
+  // as the rings (the aPos/aAge attributes are SHARED objects, so the CPU
+  // cycling above drives both and there is no second bookkeeping loop), drawn
+  // as a camera-facing vertical streak in the first 45% of each splash's life.
+  // One extra draw call; instance count follows the ring's.
+  const crown = (() => {
+    const geo = new THREE.InstancedBufferGeometry();
+    const quad = new THREE.PlaneGeometry(1, 1);
+    geo.index = quad.index;
+    geo.attributes.position = quad.attributes.position;
+    geo.attributes.uv = quad.attributes.uv;
+    geo.setAttribute("aPos", splash.geometry.getAttribute("aPos"));
+    geo.setAttribute("aAge", splash.geometry.getAttribute("aAge"));
+    geo.instanceCount = splash.geometry.instanceCount;
+    const mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false,
+      uniforms: { uPract: { value: practPos }, uPractCol: { value: practCol } },
+      vertexShader: /* glsl */ `
+        attribute vec3 aPos; attribute float aAge;
+        uniform vec4 uPract[8]; uniform vec3 uPractCol[8];
+        varying vec2 vUv; varying float vA; varying vec3 vCol;
+        void main() {
+          vUv = uv;
+          float u = aAge / 0.45;
+          // dead outside the crown phase, or too far to resolve (> 9 m)
+          float far = distance(aPos, cameraPosition);
+          if (u > 1.0 || far > 9.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+          float h = 0.075 * sin(u * 3.14159);
+          vA = (1.0 - u) * smoothstep(9.0, 5.0, far);
+          vec3 toCam = cameraPosition - aPos;
+          vec3 side = normalize(cross(vec3(0.0, 1.0, 0.0), toCam) + vec3(1e-5));
+          vec3 vert = aPos + vec3(0.0, uv.y * h, 0.0) + side * (uv.x - 0.5) * (0.018 + 0.03 * u);
+          // lit by the nearby practicals, like the rain streaks
+          vec3 boost = vec3(0.0);
+          for (int i = 0; i < 8; i++) {
+            vec4 pr = uPract[i];
+            float d2 = dot(aPos - pr.xyz, aPos - pr.xyz);
+            boost += uPractCol[i] * (pr.w / (1.0 + d2 * 0.06));
+          }
+          vCol = vec3(0.07, 0.078, 0.095) + boost * 0.10;
+          gl_Position = projectionMatrix * viewMatrix * vec4(vert, 1.0);
+        }`,
+      fragmentShader: /* glsl */ `
+        varying vec2 vUv; varying float vA; varying vec3 vCol;
+        void main() {
+          // a few droplets up the jet, not a solid bar
+          float x = 1.0 - abs(vUv.x - 0.5) * 2.0;
+          float beads = 0.55 + 0.45 * sin(vUv.y * 18.0);
+          float a = x * x * beads * (1.0 - vUv.y * 0.6) * vA * 0.55;
+          gl_FragColor = vec4(vCol, a);
+        }`,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 19;
+    group.add(mesh);
+    return mesh;
+  })();
 
   // ------------------------------------------------------------ drip columns
   function buildDrips() {
@@ -469,11 +630,15 @@ export function createWeather(ctx) {
   // ------------------------------------------------------------ quality tier
   function applyQuality(q) {
     const preset = QUALITY_PRESETS[q] || QUALITY_PRESETS.med;
-    rain.geometry.instanceCount = Math.min(RAIN_MAX, preset.rainCount);
-    splash.geometry.instanceCount = Math.min(SPLASH_MAX, preset.splashCount);
+    // [lane settings] rain density slider: × the preset's counts (1 = preset)
+    const dens = Math.max(0, Math.min(1, Number(ctx.settings.rainDensity ?? 1)));
+    rain.geometry.instanceCount = Math.round(Math.min(RAIN_MAX, preset.rainCount) * dens);
+    splash.geometry.instanceCount = Math.round(Math.min(SPLASH_MAX, preset.splashCount) * dens);
+    crown.geometry.instanceCount = splash.geometry.instanceCount;
   }
   applyQuality(ctx.settings.quality);
   ctx.onChange("quality", (q) => applyQuality(q));
+  ctx.onChange("rainDensity", () => applyQuality(ctx.settings.quality)); // [lane settings]
 
   // ------------------------------------------------------------------ update
   let t = 0;

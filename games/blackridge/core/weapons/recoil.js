@@ -131,7 +131,7 @@ export function createRecoil(input) {
 
   return {
     kick(weaponId) {
-      const w = WEAPONS[weaponId];
+      const w = ((globalThis.__BR_GUNSMITH__ && globalThis.__BR_GUNSMITH__.weapon(weaponId)) || WEAPONS[weaponId]); // [gunsmith] fitted build (grip/comp/rapid fire)
       if (!w) return;
       const c = simCounters();
       if (c) {
