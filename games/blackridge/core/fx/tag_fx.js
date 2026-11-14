@@ -8,7 +8,10 @@
 // (unlit, readable at night, no new light permutation). A tag in its last 5 s
 // blinks. View-only: reads sim.state.match.mode.tags, writes nothing back.
 
-const TEAM = [0xd9a441, 0x7c9fd0];
+import { teamNum, teamColorGen } from "../team_color.js";
+
+// [polish v149] live team colours (core/team_color.js, colour-blind aware)
+const TEAM = { get 0() { return teamNum(0); }, get 1() { return teamNum(1); } };
 const POOL = 24;
 
 export function createTagFx(ctx) {
@@ -54,8 +57,9 @@ export function createTagFx(ctx) {
         v.id = g.id;
         v.root.position.set(g.pos[0], g.pos[1], g.pos[2]);
       }
-      if (v.team !== g.team) {
-        v.team = g.team;
+      const tg = g.team + ":" + teamColorGen();
+      if (v.team !== tg) {
+        v.team = tg;
         const c = TEAM[g.team] != null ? TEAM[g.team] : 0xe8e8e4;
         v.mat.color.setHex(c); v.ringMat.color.setHex(c);
       }

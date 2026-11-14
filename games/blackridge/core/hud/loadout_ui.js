@@ -115,7 +115,21 @@ function ensureStyle() {
 .lo-card .p{font-size:9px;letter-spacing:.1em;opacity:.55;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .lo-card.on{border-color:var(--a10-amber,#d9a441);color:var(--a10-ink,#e8e8e4);}
 .lo-card.next{border-style:dashed;border-color:var(--a10-amber,#d9a441);}
-.lo-chip{position:fixed;left:12px;top:12px;z-index:57;cursor:pointer;font-family:var(--a10-ui-font,system-ui);
+.lo-card .p b.lk{font-weight:400;color:var(--a10-amber,#d9a441);opacity:1;}
+.lo-card.focus{outline:2px solid var(--a10-amber,#d9a441);outline-offset:2px;}
+/* [polish v149] the warm-up / death picker sits where the Stronghold zone chips
+   and the Reclaim / Outpost / Ascent chip live: while it is open they step aside */
+body.lo-pick-open #a10-modes .md-chip,body.lo-pick-open #a10-modes .md-next,body.lo-pick-open #a10-modes .md-rung,
+body.lo-pick-open #a10-dom .dm-chips{visibility:hidden;}
+/* [polish v149] death / kill-cam hint: how to change class for the coming respawn */
+.lo-hint{position:fixed;left:50%;bottom:24%;transform:translateX(-50%);z-index:61;display:none;
+  font-family:var(--a10-ui-font,system-ui);font-size:11px;letter-spacing:.24em;text-transform:uppercase;
+  padding:7px 14px;background:rgba(6,8,12,.62);border:1px solid rgba(232,232,228,.22);color:rgba(232,232,228,.9);
+  cursor:pointer;pointer-events:auto;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.8);}
+.lo-hint kbd{font:inherit;color:var(--a10-amber,#d9a441);border:1px solid rgba(217,164,65,.55);padding:1px 6px;margin-right:8px;letter-spacing:.1em;}
+.lo-hint b{font-weight:400;color:var(--a10-amber,#d9a441);}
+body.br-touch .lo-hint{bottom:auto;top:41%;padding:10px 16px;}   /* touch: clear of the bottom-centre ammo block */
+.lo-chip{position:fixed;left:calc(108px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));z-index:57;cursor:pointer;font-family:var(--a10-ui-font,system-ui);
   font-size:10.5px;letter-spacing:.24em;padding:8px 12px;background:rgba(6,8,12,.6);
   border:1px solid rgba(232,232,228,.25);color:rgba(232,232,228,.85);}
 /* [gunsmith] */
@@ -171,8 +185,14 @@ function ensureStyle() {
   .lo-opt{min-width:0;flex:1 1 40%;}
 }
 @media (max-height:520px){
-  .lo-pick{top:56px;}
+  .lo-pick{top:72px;}
   .lo-card .p{display:none;}
+  /* [polish v149] phone landscape: the picker and the warm-up rules card cannot
+     share 375 px — while the picker is up only the count stays, below it */
+  body.lo-pick-open #mh-warmup .mode,body.lo-pick-open #mh-warmup .rules{display:none;}
+  body.lo-pick-open #mh-warmup{top:64%;}
+  body.lo-pick-open #mh-warmup .count{margin-top:0;}
+  .lo-pick .hd .sub:nth-child(2){display:none;}   /* ran into the match clock */
 }
 `;
   document.head.appendChild(el);
@@ -241,8 +261,17 @@ export function createLoadoutUI(ctx) {
         (k.lethal ? " · " + (EQUIPMENT_NAMES[k.lethal] || k.lethal.toUpperCase()) : "") +
         (k.tactical ? " · " + (EQUIPMENT_NAMES[k.tactical] || k.tactical.toUpperCase()) : ""),
       perks: perks.length ? perks.join(" · ") : "NO PERKS UNLOCKED",
+      // [polish v149] a fresh profile saw five identical cards (locked primaries
+      // fall back to the Warden): name what this class becomes, and when
+      lock: lockedPrimaryNote(i, k),
       kit: k,
     };
+  }
+  function lockedPrimaryNote(i, k) {
+    const c = store.get(i);
+    if (!c || !c.primary || c.primary === k.primary) return "";
+    const lv = unlockLv("weapon:" + c.primary);
+    return (WNAME[c.primary] || c.primary.toUpperCase()) + (lv ? " AT LEVEL " + lv : " LOCKED");
   }
 
   // ======================================================== the CLASS EDITOR
@@ -553,6 +582,7 @@ export function createLoadoutUI(ctx) {
 
   // ======================================================== the CLASS PICKER
   let pkRoot = null, pkMode = null, chip = null;
+  let pkFocus = -1; // [polish v149] controller focus inside the picker
 
   function classMatch() {
     const s = sim();
@@ -573,16 +603,20 @@ export function createLoadoutUI(ctx) {
     for (let i = 0; i < CLASS_COUNT; i++) {
       const sm = classSummary(i);
       const on = pend ? pend.classId === i : curName === i;
-      cards.push(`<button class="lo-card${on ? (pend ? " next" : " on") : ""}" data-pick="${i}">` +
+      cards.push(`<button class="lo-card${on ? (pend ? " next" : " on") : ""}${pkFocus === i ? " focus" : ""}" data-pick="${i}">` +
         `<div class="k">${i + 1}${i === sel ? " · SAVED" : ""}</div><div class="n">${esc(sm.name)}</div>` +
-        `<div class="w">${esc(sm.weapons)}</div><div class="p">${esc(sm.perks)}</div></button>`);
+        `<div class="w">${esc(sm.weapons)}</div><div class="p">${sm.lock ? `<b class="lk">${esc(sm.lock)}</b>` : esc(sm.perks)}</div></button>`);
     }
     const sub = pkMode === "start"
       ? "warm-up · <b>your pick deploys now</b>"
       : pend ? `next life: <b>${esc(pend.name)}</b>` : "applies when you redeploy";
+    const dev = (ctx && ctx.input && ctx.input.lastDevice) === "pad" ? "pad"
+      : (typeof document !== "undefined" && document.body.classList.contains("br-touch")) ? "touch"
+      : ctx && ctx.input && ctx.input.lastDevice;
+    const keysHint = dev === "pad" ? "◀ ▶ choose · A select · B close" : dev === "touch" ? "tap a class" : "1-5 choose · L close";
     pkRoot.innerHTML =
       `<div class="hd"><span class="ti">SELECT CLASS</span><span class="sub">${sub}</span>` +
-      `<span class="sub" style="margin-left:auto">1-5 choose · L close</span></div>` +
+      `<span class="sub" style="margin-left:auto">${keysHint}</span></div>` +
       `<div class="lo-cards">${cards.join("")}</div>`;
   }
 
@@ -600,11 +634,72 @@ export function createLoadoutUI(ctx) {
       document.body.appendChild(pkRoot);
     }
     pkRoot.style.display = "block";
+    if (typeof document !== "undefined") document.body.classList.add("lo-pick-open");
+    if (pkFocus < 0) pkFocus = store.selected();
     renderPicker();
+    syncHint();
     return true;
   }
-  function closePicker() { if (pkRoot) pkRoot.style.display = "none"; pkMode = null; }
+  function closePicker() {
+    if (pkRoot) pkRoot.style.display = "none"; pkMode = null; pkFocus = -1;
+    if (typeof document !== "undefined") document.body.classList.remove("lo-pick-open");
+    syncHint();
+  }
   const pickerOpen = () => !!(pkRoot && pkRoot.style.display !== "none");
+
+  // [polish v149] the kill cam now runs right up to the respawn, so the picker
+  // that used to open after it was only reachable by skipping the replay. While
+  // you are down, a hint names the key / button for the device in hand (a
+  // tappable button on touch); the pick becomes the coming respawn's class.
+  let hintEl = null, hintSig = "";
+  function playerDown() {
+    const s = sim();
+    return !!(s && s.state && s.state.player && !s.state.player.alive);
+  }
+  function syncHint() {
+    if (typeof document === "undefined") return;
+    const ph = matchPhase();
+    const show = classMatch() && playerDown() && !pickerOpen() && (ph === "live" || ph === "overtime");
+    if (!show) { if (hintEl && hintEl.style.display !== "none") hintEl.style.display = "none"; return; }
+    if (!hintEl) {
+      hintEl = document.createElement("button");
+      hintEl.className = "lo-hint";
+      hintEl.type = "button";
+      hintEl.addEventListener("click", (e) => { e.preventDefault(); openPicker("respawn"); });
+      document.body.appendChild(hintEl);
+    }
+    const s = sim();
+    const pend = s && s.classes ? s.classes.pendingKit : null;
+    const inp = ctx && ctx.input;
+    const dev = inp && inp.lastDevice === "pad" ? "pad" : document.body.classList.contains("br-touch") ? "touch" : inp && inp.lastDevice;
+    const key = dev === "pad" ? (inp.glyph ? inp.glyph("swap") : "Y") : dev === "touch" ? "" : "L";
+    const sig = dev + "|" + key + "|" + (pend ? pend.name : "");
+    if (sig !== hintSig) {
+      hintSig = sig;
+      hintEl.innerHTML = (key ? `<kbd>${esc(key)}</kbd>` : "") +
+        (dev === "touch" ? "TAP — CHANGE CLASS" : "CHANGE CLASS") +
+        (pend ? ` · next life <b>${esc(pend.name)}</b>` : "");
+    }
+    hintEl.style.display = "block";
+  }
+  if (typeof setInterval === "function") setInterval(syncHint, 200); // wall clock: rAF may be paused
+
+  // controller access (input_gamepad.js): Y while down toggles the picker;
+  // while it is open the D-pad moves the focus, A picks, B closes
+  function stepFocus(d) {
+    if (!pickerOpen()) return;
+    pkFocus = ((pkFocus < 0 ? store.selected() : pkFocus) + d + CLASS_COUNT) % CLASS_COUNT;
+    renderPicker();
+  }
+  globalThis.__BR_CLASSPICK__ = {
+    available: () => classMatch() && matchPhase() !== "ended",
+    down: playerDown,
+    isOpen: pickerOpen,
+    toggle() { if (pickerOpen()) closePicker(); else openPicker(); },
+    step: stepFocus,
+    confirm() { if (pickerOpen()) pick(pkFocus < 0 ? store.selected() : pkFocus); },
+    close: closePicker,
+  };
 
   function pick(i) {
     if (!(i >= 0 && i < CLASS_COUNT)) return null;
@@ -622,7 +717,9 @@ export function createLoadoutUI(ctx) {
 
   function syncChip() {
     const touch = !!(ctx && ctx.touch) || (typeof matchMedia === "function" && matchMedia("(pointer:coarse)").matches);
-    const show = touch && classMatch() && matchPhase() !== "ended";
+    // [polish v149] warm-up only: while you are down the CHANGE CLASS hint is the
+    // tap target, and mid-fight the top-left belongs to pause / score / call-ins
+    const show = touch && classMatch() && matchPhase() === "warmup";
     if (show && !chip) {
       chip = document.createElement("button");
       chip.className = "lo-chip";

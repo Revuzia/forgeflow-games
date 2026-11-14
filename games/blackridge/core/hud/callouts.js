@@ -20,6 +20,7 @@
 // bearingDeg, bearingWord, landmarkName, buildLandmarks, phrase, isClean.
 // View: createCallouts(ctx, {hud}) → {attach(bridge), update(dt), log, stats()}
 
+import { teamHex } from "../team_color.js";
 import { personalityOf } from "../ai/personality.js";
 
 /** roster actor for a combatant id ('P' or a bot id) — via the match facade (sim.match.m) */
@@ -363,14 +364,13 @@ body.kc-on #co-strip{visibility:hidden}
 @media (max-width:700px){#co-strip{bottom:38%;font-size:12px;left:10px;}}
 `;
 
+function teamChatMode() {
+  try { const h = globalThis.__BR_SETTINGS__; return (h && h.S && h.S.teamChat) || "strip"; } catch (_) { return "strip"; }
+}
+
 function friendColor(sim) {
-  try {
-    const pal = globalThis.__BR_SETTINGS__ && globalThis.__BR_SETTINGS__.teamColors ? globalThis.__BR_SETTINGS__.teamColors() : null;
-    if (pal && pal.friend) return pal.friend;
-  } catch (_) { /* default below */ }
   const m = sim && sim.state && sim.state.match;
-  const t0 = m && m.teams && m.teams[0];
-  return (t0 && t0.tint) || "#d9a441";
+  return teamHex(0, m && m.teams); // single source: core/team_color.js
 }
 
 export function createCallouts(ctx, deps = {}) {
@@ -522,8 +522,15 @@ export function createCallouts(ctx, deps = {}) {
     stats.shown++;
     log.push({ t: sim.state.time, speaker: name, kind, text, style: p.style, bearing: v._bearing, from: v._from, to: v._to });
     if (log.length > 400) log.shift();
+    // ONE presentation per line (settings.teamChat): the team-chat strip by
+    // default, the subtitle line as the accessibility option — never both.
+    // (subtitles chosen but switched off → the strip, so no call is ever lost)
+    let viaSubs = false;
+    if (teamChatMode() === "subtitles") {
+      try { viaSubs = !!(hud && hud.subtitle && hud.subtitle(text, { speaker: name, dur: 2.4, priority: it.pri >= 4 })); } catch (_) { viaSubs = false; }
+    }
     // text strip
-    if (strip) {
+    if (strip && !viaSubs) {
       const el = document.createElement("div");
       el.className = "co-l";
       const col = friendColor(sim);
@@ -537,7 +544,6 @@ export function createCallouts(ctx, deps = {}) {
       while (lines.length > CALLOUT.STRIP_LINES) lines.shift().el.remove();
     }
     // subtitle strip (honours Subtitles on/off + size)
-    try { if (hud && hud.subtitle) hud.subtitle(text, { speaker: name, dur: 2.4, priority: it.pri >= 4 }); } catch (_) { /* HUD optional */ }
     // the radio babble, keyed now — sized to the line
     try {
       const core = ctx.__audioCore;

@@ -24,6 +24,8 @@
 // PVP wording rule: nothing player-facing here may name opponents as anything but
 // operators/players (no bots/AI/NPC/difficulty).
 
+import { mergedStore, onOtherTabWrite } from "./store_merge.js";
+
 // ===========================================================================
 // DATA — unlock table, XP table, curve, rank names. Plain objects on purpose.
 // ===========================================================================
@@ -96,8 +98,9 @@ export const WEAPON_NAMES = {
 export const UNLOCK_NAMES = {
   "weapon:warden": "M-72 Warden", "weapon:pike": "GS-9 Pike", "weapon:vesper": "KS-23 Vesper",
   "weapon:breaker": "B-12 Breaker", "weapon:corvus": "LR-1 Corvus",
-  "equip:frag": "Frag grenade", "equip:flash": "Flash grenade", "equip:smoke": "Smoke grenade",
-  "equip:stun": "Stun grenade", "equip:claymore": "Claymore",
+  // [polish v149] the names the class editor and HUD use (TRIPMINE, CONCUSSION, FLASHBANG)
+  "equip:frag": "Frag grenade", "equip:flash": "Flashbang", "equip:smoke": "Smoke grenade",
+  "equip:stun": "Concussion grenade", "equip:claymore": "Tripmine",
   "perk:scavenger": "Salvager", "perk:quickfix": "Stim Lace", "perk:fastHands": "Deft Hands",
   "perk:doubleTime": "Long Stride", "perk:flak": "Blast Weave", "perk:hardline": "Priority Line",
   "perk:deadsilence": "Soft Step", "perk:ghost": "Cold Signal",
@@ -303,6 +306,16 @@ export function parseRecord(raw) {
   return { rec: sanitize(obj), status: migrated ? "migrated" : "ok" };
 }
 
+// Two-tab merge rules (core/meta/store_merge.js): XP and every counter add
+// each tab's deltas exactly once; bestStreak / updated are high-water marks;
+// the "seen" unlock list is a set union.
+export function progressMergeRule(path) {
+  if (path === "seen") return "union";
+  if (path === "updated" || path === "v" || path === "life.bestStreak") return "max";
+  if (path === "xp" || /^weapons\.[^.]+\.(xp|kills|heads)$/.test(path) || /^life\.[a-z]+$/i.test(path)) return "sum";
+  return null;
+}
+
 // ===========================================================================
 // The progression instance
 // ===========================================================================
@@ -316,9 +329,17 @@ export function createProgression(ctx, opts) {
   const LEGACY_KEYS = [SAVE_KEY]; // un-versioned key a v0 record would live under
 
   let rec = blankRecord();
+  let cur = null;      // live session (the per-match ledger, below)
+  let lastReport = null;
   let loadStatus = "fresh";
   let readOnly = false;   // a record from a NEWER build: never overwrite it
   let saveFailed = false;
+  // [polish v149] merge-on-write: another tab's progress is re-read and folded
+  // in before every save, and absorbed live from the `storage` event.
+  const ms = mergedStore({
+    storage, key: KEY, ruleOf: progressMergeRule,
+    parse: (raw) => { const r = parseRecord(raw); return r.status === "ok" || r.status === "migrated" ? r.rec : null; },
+  });
 
   function load() {
     let raw = null, fromKey = KEY;
@@ -332,6 +353,7 @@ export function createProgression(ctx, opts) {
     rec = res.rec;
     loadStatus = res.status;
     readOnly = res.status === "future";
+    ms.adopt(rec, fromKey === KEY ? raw : null);
     if (res.status === "corrupt") {
       // keep the bad bytes for diagnosis, then start clean
       try { storage && storage.setItem(KEY + ".corrupt", String(raw).slice(0, 20000)); } catch (e) { /* quota */ }
@@ -342,11 +364,24 @@ export function createProgression(ctx, opts) {
     }
   }
 
+  // another tab's XP folded in must not show up in THIS match's after-action
+  // gain: shift the live session's baselines by exactly what was absorbed.
+  function rebased(merged) {
+    const out = sanitize(merged);
+    if (cur && !cur.ended) {
+      cur.startXp += Math.max(0, out.xp - rec.xp);
+      for (const w of Object.keys(out.weapons)) {
+        const was = rec.weapons[w] ? rec.weapons[w].xp : 0;
+        if (out.weapons[w].xp > was) cur.startWeapons[w] = (cur.startWeapons[w] || 0) + (out.weapons[w].xp - was);
+      }
+    }
+    return out;
+  }
   function save() {
     if (readOnly || !storage) return false;
     rec.updated = Date.now();
     try {
-      storage.setItem(KEY, JSON.stringify(rec));
+      rec = rebased(ms.save(rec).rec);
       saveFailed = false;
       return true;
     } catch (e) {
@@ -354,7 +389,7 @@ export function createProgression(ctx, opts) {
       try {
         rec.seen = rec.seen.slice(-60);
         try { storage.removeItem(KEY + ".corrupt"); } catch (_) { /* no-op */ }
-        storage.setItem(KEY, JSON.stringify(rec));
+        rec = rebased(ms.save(rec).rec);
         saveFailed = false;
         return true;
       } catch (e2) {
@@ -365,6 +400,13 @@ export function createProgression(ctx, opts) {
   }
 
   load();
+  // another tab saved: fold its progress into ours now (no write)
+  const unlistenTabs = onOtherTabWrite(KEY, (raw) => {
+    if (readOnly) return;
+    rec = rebased(ms.absorb(raw, rec));
+    notifyChange();
+  });
+  void unlistenTabs;
 
   // ---- listeners -----------------------------------------------------------
   const changeFns = new Set();
@@ -400,8 +442,7 @@ export function createProgression(ctx, opts) {
   }
 
   // ---- the per-match ledger -------------------------------------------------
-  let cur = null;      // live session
-  let lastReport = null;
+  // (cur / lastReport are declared beside `rec` — save() during load() reads cur)
 
   function beginSession(kind, info) {
     cur = {
@@ -518,12 +559,16 @@ export function createProgression(ctx, opts) {
       s.hl.kills++; rec.life.kills++;
       s.hl.streak++; if (s.hl.streak > s.hl.bestStreak) s.hl.bestStreak = s.hl.streak;
       if (s.hl.bestStreak > rec.life.bestStreak) rec.life.bestStreak = s.hl.bestStreak;
+      // [polish v149] equipment kills name themselves on the death event
+      const eqKill = d.weaponId === "claymore" || d.weaponId === "frag";
       if (d.melee) award("kill", XP.meleeKill, "Melee kill"); // [melee] knife: no gun gets weapon XP
+      else if (d.weaponId === "claymore") award("kill", XP.kill, "Tripmine kill");
+      else if (d.weaponId === "frag") award("kill", XP.kill, "Frag kill");
       else award("kill", XP.kill, "Kill");
       if (d.headshot) { s.hl.heads++; rec.life.heads++; award("headshot", XP.headshot, "Headshot"); }
       // the weapon: the player's last fire-time shot within a second (call-in and
       // grenade kills without a recent shot earn no weapon XP)
-      const w = !d.melee && lastShotW && now() - lastShotT <= 1.0 ? lastShotW : null; // [melee]
+      const w = !d.melee && !eqKill && lastShotW && now() - lastShotT <= 1.0 ? lastShotW : null; // [melee]
       if (w) {
         const rw = rec.weapons[w] || (rec.weapons[w] = { xp: 0, kills: 0, heads: 0 });
         rw.kills++; if (d.headshot) rw.heads++;
@@ -730,7 +775,14 @@ export function createProgression(ctx, opts) {
     save,
     // test seams
     get state() { return JSON.parse(JSON.stringify(rec)); },
-    _reset() { rec = blankRecord(); cur = null; lastReport = null; save(); notifyChange(); },
+    _reset() {
+      rec = blankRecord(); cur = null; lastReport = null;
+      // a reset is a deliberate overwrite: clear the key first so the merge
+      // has no disk record to add the old totals back from
+      ms.adopt(rec, null);
+      if (storage) { try { storage.removeItem(KEY); } catch (_) { /* no-op */ } }
+      save(); notifyChange();
+    },
     _reload() { load(); notifyChange(); },
   };
   return api;

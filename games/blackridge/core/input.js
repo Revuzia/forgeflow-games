@@ -450,7 +450,12 @@ export function createInput(canvas, settings) {
     refreshMove();
   }
   const hintEl = typeof document !== "undefined" ? document.getElementById("hint") : null;
-  const hintKbm = hintEl ? hintEl.innerHTML : "";
+  // [polish v149] the page's keyboard hint (index.html) predates the knife,
+  // tactical, class and map keys: name them too
+  const hintKbm = hintEl ? ["wasd move", "mouse look", "lmb fire", "rmb ads", "r reload", "shift sprint", "ctrl crouch",
+    "space jump", "1-5 weapons", "q last", "v knife", "g lethal", "e tactical", "f interact", "6-9 streaks", "l class",
+    "m map", "tab scoreboard", "esc pause"].join(" &nbsp;·&nbsp; ") : "";
+  if (hintEl) hintEl.innerHTML = hintKbm;
   function padHint() {
     const G = GLYPHS[pad.layout] || GLYPHS.xbox;
     const sep = " &nbsp;·&nbsp; ";

@@ -22,6 +22,8 @@
 // THREE-free and DOM-free: core/meta/challenges.selftest.cjs runs it in node.
 // PVP wording rule: opponents are operators — no bots / AI / NPC / difficulty.
 
+import { mergedStore, onOtherTabWrite, merge3, cloneRecord } from "./store_merge.js";
+
 // ===========================================================================
 // DATA — catalogue
 // ===========================================================================
@@ -354,6 +356,43 @@ export function parseRecord(raw) {
   return { rec: sanitize(obj), status: migrated ? "migrated" : "ok" };
 }
 
+// Two-tab merge rules (core/meta/store_merge.js). A daily/weekly slot merges
+// only when both tabs hold the SAME period and set: progress adds each tab's
+// delta once (capped at the target by sanitize), done is sticky. A tab on a
+// newer period wins the slot; a re-rolled set (ids differ) is last-writer.
+function mergeSlot(base, cur, disk) {
+  if (!disk) return cloneRecord(cur);
+  if (!cur) return cloneRecord(disk);
+  if (cur.n !== disk.n) return cloneRecord(cur.n > disk.n ? cur : disk);
+  const sameIds = JSON.stringify(cur.ids) === JSON.stringify(disk.ids);
+  if (!sameIds) {
+    const curChanged = !base || JSON.stringify(base.ids) !== JSON.stringify(cur.ids);
+    return cloneRecord(curChanged ? cur : disk);
+  }
+  const b = base && base.n === cur.n ? base : null;
+  const out = cloneRecord(disk);
+  for (const id of cur.ids) {
+    const cp = (cur.prog && cur.prog[id]) || { p: 0, done: false };
+    const dp = (disk.prog && disk.prog[id]) || { p: 0, done: false };
+    const bp = (b && b.prog && b.prog[id]) || { p: 0, done: false };
+    out.prog[id] = { p: Math.max(0, dp.p + Math.max(0, cp.p - bp.p)), done: !!(cp.done || dp.done) };
+  }
+  if ("swapped" in cur || "swapped" in disk) out.swapped = !!(cur.swapped || disk.swapped);
+  if (Array.isArray(cur.out) || Array.isArray(disk.out)) {
+    out.out = (disk.out || []).slice();
+    for (const x of cur.out || []) if (out.out.indexOf(x) < 0) out.out.push(x);
+  }
+  return out;
+}
+export function challengesMergeRule(path) {
+  if (path === "day" || path === "week") return mergeSlot;
+  if (path === "maxDay" || path === "updated" || path === "v" || path === "career.c.bestStreak" || /^career\.tier\./.test(path)) return "max";
+  if (path === "seeded") return "or";
+  if (/^career\.c\./.test(path) || /^totals\./.test(path)) return "sum";
+  return null;
+}
+export { merge3 as _merge3 };
+
 // a clock wound back by more than this many days is treated as a clock
 // CORRECTION (adopt the real date); a smaller step back keeps the current set
 export const CLOCK_BACK_TOLERANCE_DAYS = 2;
@@ -376,6 +415,11 @@ export function createChallenges(ctx, progression, opts) {
   let loadStatus = "fresh";
   let readOnly = false;
   let saveFailed = false;
+  // [polish v149] merge-on-write + live absorb of other tabs' writes
+  const ms = mergedStore({
+    storage, key: KEY, ruleOf: challengesMergeRule,
+    parse: (raw) => { const r = parseRecord(raw); return r.status === "ok" || r.status === "migrated" ? r.rec : null; },
+  });
 
   function load() {
     let raw = null, fromKey = KEY;
@@ -389,6 +433,7 @@ export function createChallenges(ctx, progression, opts) {
     rec = res.rec;
     loadStatus = res.status;
     readOnly = res.status === "future";
+    ms.adopt(rec, fromKey === KEY ? raw : null);
     if (res.status === "corrupt") {
       try { storage && storage.setItem(KEY + ".corrupt", String(raw).slice(0, 20000)); } catch (e) { /* quota */ }
     }
@@ -397,9 +442,9 @@ export function createChallenges(ctx, progression, opts) {
   function save() {
     if (readOnly || !storage) return false;
     rec.updated = nowMs();
-    try { storage.setItem(KEY, JSON.stringify(rec)); saveFailed = false; return true; }
+    try { rec = sanitize(ms.save(rec).rec); saveFailed = false; return true; }
     catch (e) {
-      try { storage.removeItem(KEY + ".corrupt"); storage.setItem(KEY, JSON.stringify(rec)); saveFailed = false; return true; }
+      try { storage.removeItem(KEY + ".corrupt"); rec = sanitize(ms.save(rec).rec); saveFailed = false; return true; }
       catch (e2) { saveFailed = true; return false; }
     }
   }
@@ -643,6 +688,9 @@ export function createChallenges(ctx, progression, opts) {
       const t = simTime();
       let via = null, weapon = null;
       if (d.melee) via = "melee"; // [melee] the knife (weapon stays null: no gun gets the credit)
+      // [polish v149] the death event names equipment kills itself
+      else if (d.weaponId === "claymore") via = "claymore";
+      else if (d.weaponId === "frag") via = "frag";
       else if (blast && blast.who === "P" && Math.abs(t - blast.t) < 1e-6) {
         via = blast.source === "claymore" ? "claymore" : blast.source === "streak" ? "streak" : "frag";
       } else if (lastShotW && t - lastShotT <= 1.0) { via = "gun"; weapon = lastShotW; }
@@ -733,6 +781,7 @@ export function createChallenges(ctx, progression, opts) {
 
   // ---- public ------------------------------------------------------------------
   load();
+  onOtherTabWrite(KEY, (raw) => { if (readOnly) return; rec = sanitize(ms.absorb(raw, rec)); notifyChange(); });
   seedCareer();
   if (loadStatus === "corrupt" || loadStatus === "migrated" || loadStatus === "fresh") save();
   refresh();

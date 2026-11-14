@@ -327,7 +327,10 @@ export function createKillCam(ctx) {
     const s = sim();
     if (!matchOf(s) || s !== recSim) return;
     ring.pushEvent(t != null ? t : s.state.time, EK.EXPLOSION, -1, -1, d.pos[0], d.pos[1] || 0, d.pos[2],
-      d.radius || 5.5, 0, d.source === "streak" ? 2 : 1);
+      // [polish v149] aux 3 = tripmine; its facing rides the (unused for
+      // explosions) head slot so the replay draws the same directional blast
+      d.radius || 5.5, d.source === "claymore" && typeof d.yaw === "number" ? d.yaw : 0,
+      d.source === "streak" ? 2 : d.source === "claymore" ? 3 : 1);
   }
 
   // ================================================================ death event
@@ -344,7 +347,10 @@ export function createKillCam(ctx) {
       if (a >= 0) {
         const aa = m.actors[a];
         const body = aa ? (aa.kind === "human" ? s.state.player : m.bodyOf(aa)) : null;
-        wpn = wIdx(d.melee ? "knife" : (body && body.weapon ? body.weapon.id : null)); // [melee] label "KNIFE"
+        // [melee] label "KNIFE"; [polish v149] equipment kills (tripmine "claymore",
+        // frag) carry their own weaponId on the death event — never the held gun
+        const eq = d.weaponId === "claymore" || d.weaponId === "frag" ? d.weaponId : null;
+        wpn = wIdx(d.melee ? "knife" : eq || (body && body.weapon ? body.weapon.id : null));
       }
       ring.pushEvent(tk, EK.DEATH, a, v, d.pos ? d.pos[0] : 0, d.pos ? d.pos[1] : 0, d.pos ? d.pos[2] : 0,
         0, d.headshot ? 1 : 0, wpn);
@@ -571,10 +577,24 @@ export function createKillCam(ctx) {
       if (a[o + E.KIND] !== EK.EXPLOSION || !mini) return;
       mini.emit("explosion", {
         pos: [a[o + E.X], a[o + E.Y], a[o + E.Z]], radius: a[o + E.R],
-        source: a[o + E.AUX] === 2 ? "streak" : "grenade", replay: true,
+        source: a[o + E.AUX] === 2 ? "streak" : a[o + E.AUX] === 3 ? "claymore" : "grenade",
+        yaw: a[o + E.AUX] === 3 ? a[o + E.HEAD] : undefined, replay: true,
       }, liveT);
     });
+    // [polish v149] a knife kill: the attacker's ghost throws the same procedural
+    // thrust the live soldier did (actor.meleeStrike), started MELEE_LEAD before
+    // the recorded death so the blade lands on it (the sim's windup is ~0.12 s)
+    if (soldiersRef && soldiersRef._actors) {
+      buf.forEvents(t0 + MELEE_LEAD, t1 + MELEE_LEAD, (a, o) => {
+        if (a[o + E.KIND] !== EK.DEATH || intern.str(a[o + E.AUX]) !== "knife") return;
+        const slot = a[o + E.A] | 0;
+        if (slot < 0 || slot >= SLOTS || !ghosts[slot]) return;
+        const rec = soldiersRef._actors.get(ghosts[slot].id);
+        if (rec && rec.actor && rec.actor.meleeStrike) rec.actor.meleeStrike();
+      });
+    }
   }
+  const MELEE_LEAD = 0.15;
   // a recorded bot entity id → the ghost of the roster actor that owned it
   function ghostIdForLive(botId) {
     const m = matchOf(sim());
@@ -782,8 +802,10 @@ body.kc-on #mh-killcam,body.kc-on #ld-root,body.kc-on #hud > *{visibility:hidden
     if (!a) return "—";
     return a.kind === "human" ? "YOU" : (a.name || "—");
   }
+  const EQUIP_LABEL = { claymore: "TRIPMINE", frag: "FRAG GRENADE", knife: "KNIFE" };
   function weaponName(idx) {
     const id = intern.str(idx);
+    if (EQUIP_LABEL[id]) return EQUIP_LABEL[id];
     const w = id && ctx.weapons ? ctx.weapons[id] : null;
     return (w && w.name ? w.name : id || "").toUpperCase();
   }

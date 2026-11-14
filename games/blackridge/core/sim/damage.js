@@ -82,7 +82,12 @@ export function applyDamage(sim, who, amount, attacker = null, part = "body", sr
 
   if (sim.match) sim.match.onDamage(sim, who, amount, attacker, part, src);
   // [melee] kill-weapon attribution + melee flags (null meta = the gun in hand)
-  const _wId = meta && meta.weaponId ? meta.weaponId : (attacker != null ? attackerWeaponId(sim, attacker) : null);
+  // [polish v149] thrown/planted equipment owns its kill: a tripmine death is
+  // weaponId "claymore" (label TRIPMINE), a frag death "frag" — never the gun
+  // that happened to be in the attacker's hands (feed, killcam, XP, challenges).
+  const _wId = meta && meta.weaponId ? meta.weaponId
+    : src === "claymore" ? "claymore" : src === "grenade" ? "frag"
+    : (attacker != null ? attackerWeaponId(sim, attacker) : null);
   const _mf = meta && meta.melee ? { melee: true, backstab: !!meta.backstab } : null;
 
   if (who === "P") {

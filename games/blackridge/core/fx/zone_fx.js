@@ -25,8 +25,12 @@
 // tabs / stepFrames included) and snapped on the `zonecap` / `match:start`
 // events.
 
+import { teamNum, teamColorGen } from "../team_color.js";
+
 const NEUTRAL = 0xe8e8e4;
-const TEAM = [0xd9a441, 0x7c9fd0];
+// [polish v149] team colours come from core/team_color.js (colour-blind aware);
+// the per-zone signature carries teamColorGen() so a palette change re-tints.
+const TEAM = { get 0() { return teamNum(0); }, get 1() { return teamNum(1); } };
 const RED = 0xff4d4d;
 const POLE_H = 3.4;
 
@@ -106,7 +110,7 @@ export function createZoneFx(ctx) {
         v.flat.scale.set(z.r, z.r, 1);
       }
       const own = z.owner === 0 || z.owner === 1 ? TEAM[z.owner] : NEUTRAL;
-      const sig = own + ":" + z.capTeam + ":" + (z.contested ? 1 : 0) + (z.preview ? "p" : "");
+      const sig = own + ":" + z.capTeam + ":" + (z.contested ? 1 : 0) + (z.preview ? "p" : "") + ":" + teamColorGen();
       if (sig !== v.sig) {
         v.sig = sig;
         v.ringMat.color.setHex(own);

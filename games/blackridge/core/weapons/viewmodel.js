@@ -198,7 +198,9 @@ const MELEE_VM = {
     [0.055, { palm: [-0.20, 0.05, 0.03], arm: [-0.35, -0.45, -0.82], face: [1.0, 0.2, 0.3] }],    // draw: low-left
     [0.105, { palm: [-0.26, 0.07, 0.17], arm: [-0.45, -0.30, -0.84], face: [0.9, 0.4, -0.1] }],    // cocked by the shoulder
     [0.150, { palm: [-0.12, 0.40, 0.17], arm: [-0.30, -0.88, -0.36], face: [0.3, 0.2, -1.0] }],    // STRIKE: across + out
-    [0.300, { palm: [-0.05, 0.34, 0.09], arm: [-0.20, -0.84, -0.50], face: [0.2, 0.2, -1.0] }],    // follow-through
+    // [polish v149] follow-through held further left (x -0.05 -> -0.11): the lowered
+    // gun on the right covered the knife hand and blade here
+    [0.300, { palm: [-0.11, 0.35, 0.10], arm: [-0.26, -0.84, -0.47], face: [0.25, 0.2, -1.0] }],    // follow-through
   ],
   backS: 0.36, restS: 0.62,   // leaves the follow-through at backS, on the handguard by restS
   gun: { pos: [0.05, -0.05, 0.03], rot: [-12, -6, 18] },         // gun drops right, out of the stroke
@@ -470,9 +472,29 @@ export function createViewmodel(ctx) {
     for (const o of knifeMeshes) {
       let m = null;
       for (const n of KNIFE_MAT_FALLBACK[o.userData.knifeMat] || [o.userData.knifeMat, "br5_metal"]) if (!m && host.get(n)) m = host.get(n);
-      if (m) o.material = m;
+      if (m) o.material = knifeMatOf(m);
     }
     knifeHost = group;
+  }
+  // [polish v149] the knife is its own steel / black, never the gun's camo: a
+  // clone of the host material with its OWN camo uniforms held off. The camo
+  // hook and program cache key are shared, so it is still the already-compiled
+  // program (the uniforms are the only difference).
+  const _knifeMats = new WeakMap();
+  function knifeMatOf(m) {
+    let k = _knifeMats.get(m);
+    if (k) return k;
+    k = m.clone();
+    if (m.userData && m.userData.gsCamo) {
+      k.userData.gsCamo = {
+        uCamoOn: { value: 0 }, uCamoKind: { value: 0 },
+        uCamoA: { value: new THREE.Color() }, uCamoB: { value: new THREE.Color() }, uCamoC: { value: new THREE.Color() },
+      };
+      k.onBeforeCompile = m.onBeforeCompile;
+      k.customProgramCacheKey = m.customProgramCacheKey;
+    }
+    _knifeMats.set(m, k);
+    return k;
   }
   // Per-prototype knife hand keys + the knife's orientation IN the hand node's frame,
   // solved like nadeKeysFor (measured arm axis a, palm normal n = local -y). The
@@ -760,6 +782,35 @@ export function createViewmodel(ctx) {
     }).catch((e) => console.warn("[vm] preload failed:", e && e.message));
   }
   warmAllWhenReady();
+
+  // ---- [polish v149] LASER DOT ------------------------------------------------------
+  // The laser module drew a beam but no dot on what it points at. A small additive
+  // dot on the first world surface along the view axis (the shot's centre line),
+  // in the MAIN scene so walls, crates and fog hold it; read-only world raycast.
+  const laserDot = new THREE.Mesh(new THREE.CircleGeometry(1, 12), new THREE.MeshBasicMaterial({
+    name: "gs_laser_dot", color: new THREE.Color(1.0, 0.08, 0.05).multiplyScalar(5.0), transparent: true,
+    opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false,
+    polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
+  }));
+  laserDot.name = "__laser_dot__";
+  laserDot.visible = false;
+  laserDot.frustumCulled = false;
+  laserDot.renderOrder = 6;
+  ctx.scene.add(laserDot);
+  const _ldO = [0, 0, 0], _ldD = [0, 0, -1], _ldV = new THREE.Vector3(), _ldN = new THREE.Vector3();
+  function laserDotUpdate(sim, on) {
+    if (!on || !sim || !sim.world || typeof sim.world.raycast !== "function") { if (laserDot.visible) laserDot.visible = false; return; }
+    camera.getWorldPosition(_ldV); _ldO[0] = _ldV.x; _ldO[1] = _ldV.y; _ldO[2] = _ldV.z;
+    camera.getWorldDirection(_ldV); _ldD[0] = _ldV.x; _ldD[1] = _ldV.y; _ldD[2] = _ldV.z;
+    const hit = sim.world.raycast(_ldO, _ldD, 60);
+    if (!hit) { laserDot.visible = false; return; }
+    _ldN.set(hit.normal[0], hit.normal[1], hit.normal[2]);
+    laserDot.position.set(hit.pos[0], hit.pos[1], hit.pos[2]).addScaledVector(_ldN, 0.012);
+    laserDot.lookAt(_ldV.set(hit.pos[0], hit.pos[1], hit.pos[2]).add(_ldN));
+    // ~3 px at 4 m, a constant ~4-5 px further out (reads beside the crosshair dot)
+    laserDot.scale.setScalar(Math.min(0.12, 0.022 + hit.dist * 0.0032));
+    laserDot.visible = true;
+  }
 
   // ---- gunsmith ---------------------------------------------------------------
   // The player's class build for the gun on screen: geometry + camo on the shared
@@ -1472,6 +1523,7 @@ export function createViewmodel(ctx) {
 
     const driving = visible && !ctx.cameraDetached && p && p.alive &&
       st && LIVE_PHASES.has(st.phase);
+    laserDotUpdate(sim, driving && current && current.gs && current.gs.laser && !(p.weapon && p.weapon.id === "knife"));
 
     // -- fire-response springs: integrated EVERY frame, before anything reads
     // them, and before the `!rig.visible` early-out below.

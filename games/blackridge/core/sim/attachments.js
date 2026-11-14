@@ -72,7 +72,10 @@ export const GUNSMITH = {
     // ---- receiver
     rapidfire: { slot: "receiver", name: "RAPID FIRE", short: "RAPID",
       blurb: "Lightened bolt and a crisper trigger: faster cycling, harder to hold on target.",
-      mods: { rpm: 1.12, recoilV: 1.15, recoilH: 1.15 } },
+      // [polish v149] rpm is applied to the cadence the 60 Hz sim DELIVERS (see
+      // effectiveWeapon): +10% real on every gun. 1.12 x the nominal rpm with the
+      // carried remainder gave +17% on the Warden, +20% Corvus, +18% Pike.
+      mods: { rpm: 1.10, recoilV: 1.15, recoilH: 1.15 } },
   },
 
   // Per weapon: what fits, what ships on it, and the per-weapon numbers.
@@ -332,7 +335,10 @@ function buildEffective(base, weaponId, attach) {
       t.reloadEmptyS = t.reloadS;
     }
   }
-  if (rpm !== 1) { t.rpm = r4(base.rpm * rpm); t.fireCarry = true; }
+  // fire rate multiplies the DELIVERED stock cadence (whole 60 Hz ticks), and the
+  // build then carries the sub-tick remainder (player.js) — so the gain the
+  // player feels is exactly the multiplier, not multiplier + the stock rounding
+  if (rpm !== 1) { t.rpm = r4(cadenceRpm(base) * rpm); t.fireCarry = true; }
   // optic: world zoom + lens behaviour (view fields; the sim never reads them)
   const o = optic && spec.optics[optic];
   if (o && optic !== spec.factory.optic) {

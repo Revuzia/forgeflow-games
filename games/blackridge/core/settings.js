@@ -103,6 +103,9 @@ export const SCHEMA = {
   killcam:    { kind: "enum", options: ONOFF, default: "on" },   // read by render/killcam.js (hook)
   subtitles:  { kind: "enum", options: ONOFF, default: "on" },
   subSize:    { kind: "enum", options: ["small", "medium", "large"], default: "medium" },
+  // [polish v149] where teammates' callouts appear: the team-chat strip
+  // (default) OR the subtitle line (accessibility) — never both at once
+  teamChat:   { kind: "enum", options: ["strip", "subtitles"], default: "strip" },
 
   // ---- [lane settings] ACCESSIBILITY --------------------------------------------
   colorblind: { kind: "enum", options: ["off", "protanopia", "deuteranopia", "tritanopia"], default: "off" },

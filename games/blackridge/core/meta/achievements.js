@@ -16,7 +16,11 @@
 // (the server ignores repeats), so a player who earned something while signed
 // out still gets it the next time they play signed in.
 
+import { mergedStore, onOtherTabWrite } from "./store_merge.js";
+
 const KEY = "blackridge.achv.v1";
+// [polish v149] two tabs: counters add each tab's deltas once, the lists are sets
+const achvMergeRule = (path) => (path === "kills" || path === "heads") ? "sum" : path ? "union" : null;
 
 // slug -> short note on what fires it (read by the selftest; keep in sync with JSON)
 export const DETECTORS = {
@@ -57,11 +61,18 @@ function blank() {
 
 export function createAchievements(ctx) {
   let st = blank();
+  let storage = null;
+  try { storage = typeof localStorage !== "undefined" ? localStorage : null; } catch (e) { storage = null; }
+  const parse = (raw) => { try { const o = JSON.parse(raw); return o && typeof o === "object" ? Object.assign(blank(), o) : null; } catch (e) { return null; } };
+  const ms = mergedStore({ storage, key: KEY, ruleOf: achvMergeRule, parse });
+  let raw0 = null;
   try {
-    const raw = typeof localStorage !== "undefined" && localStorage.getItem(KEY);
-    if (raw) st = Object.assign(blank(), JSON.parse(raw));
+    raw0 = storage && storage.getItem(KEY);
+    if (raw0) st = parse(raw0) || blank();
   } catch (e) { /* private mode: session-only */ }
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* best effort */ } };
+  ms.adopt(st, raw0 || null);
+  const save = () => { try { st = ms.save(st).rec; } catch (e) { /* best effort */ } };
+  onOtherTabWrite(KEY, (raw) => { st = ms.absorb(raw, st); });
 
   // names for the in-game toast (optional: the toast just shows the slug if this fails)
   let names = {};
@@ -98,9 +109,11 @@ export function createAchievements(ctx) {
     if (!toastEl) {
       toastEl = document.createElement("div");
       toastEl.id = "br-achv";
-      toastEl.style.cssText = "position:fixed;left:50%;top:30%;transform:translate(-50%,-50%);z-index:36;pointer-events:none;" +
+      // [polish v149] the left toast column (under the level-up and challenge
+      // toasts): centre-top collided with the medal banner on a first headshot
+      toastEl.style.cssText = "position:fixed;left:max(16px,3vw);top:calc(30% + 172px);z-index:36;pointer-events:none;text-align:left;" +
         "padding:10px 18px 11px;border:1px solid rgba(217,164,65,.55);background:rgba(10,12,16,.82);color:#e8e8e4;" +
-        "font:12px/1.35 'Oswald','Arial Narrow',system-ui,sans-serif;letter-spacing:.16em;text-align:center;" +
+        "font:12px/1.35 'Oswald','Arial Narrow',system-ui,sans-serif;letter-spacing:.16em;" +
         "opacity:0;transition:opacity .25s ease;box-shadow:0 4px 18px rgba(0,0,0,.5);";
       document.body.appendChild(toastEl);
     }

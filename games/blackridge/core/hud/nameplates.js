@@ -14,6 +14,7 @@
 //   FFA        no teammates; the enemy rule only
 // Pure helpers (plateAlpha, onCrosshair) are exported for the selftest.
 
+import { teamHex } from "../team_color.js";
 import { actorOfWho } from "./callouts.js";
 
 export const NP = {
@@ -47,18 +48,13 @@ const CSS = `
   text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 3px rgba(0,0,0,.7);white-space:nowrap;}
 #np-layer .np-p{margin-top:3px;width:28px;height:3px;background:rgba(0,0,0,.55);border-radius:1px;overflow:hidden;}
 #np-layer .np-p i{display:block;height:100%;width:100%;background:currentColor;transform-origin:0 50%;}
-body.kc-on #np-layer{visibility:hidden}
+body.kc-on #np-layer,body.board-open #np-layer{visibility:hidden}
 `;
 
 function palette(sim) {
-  let pal = null;
-  try { pal = globalThis.__BR_SETTINGS__ && globalThis.__BR_SETTINGS__.teamColors ? globalThis.__BR_SETTINGS__.teamColors() : null; } catch (_) { pal = null; }
   const m = sim && sim.state && sim.state.match;
-  const t0 = m && m.teams && m.teams[0], t1 = m && m.teams && m.teams[1];
-  return {
-    friend: (pal && pal.friend) || (t0 && t0.tint) || "#d9a441",
-    enemy: (pal && pal.enemy) || (t1 && t1.tint) || "#7c9fd0",
-  };
+  const teams = m && m.teams;
+  return { friend: teamHex(0, teams), enemy: teamHex(1, teams) }; // core/team_color.js
 }
 
 export function createNameplates(ctx, deps = {}) {
