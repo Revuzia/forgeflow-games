@@ -259,7 +259,8 @@ export function createPause(ctx, cb) {
     wasLocked = locked;
     // Browser-forced unlock mid-mission (ESC while locked, or OS steal) =
     // auto-pause. Transition-gated: never fires for the never-locking harness.
-    if (lost && !active && isMissionLive(ctx) && ctx.input.enabled &&
+    const inMatch = (() => { try { const s = ctx.sim && ctx.sim(); return !!(s && s.state && s.state.match); } catch (e) { return false; } })();
+    if (lost && !active && !inMatch && isMissionLive(ctx) && ctx.input.enabled &&
         !(shell.hud && shell.hud.debriefOpen)) {
       pauseCtl.pause();
     }

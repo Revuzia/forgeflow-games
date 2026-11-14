@@ -10,8 +10,8 @@
   "source": "str"
  },
  "payload_sums_bytes": {
-  "menu": 5951344,
-  "mission": 5209399,
+  "menu": 6305224,
+  "mission": 5217379,
   "menu_budget": 6815744,
   "mission_budget": 5242880
  },
@@ -1782,8 +1782,17 @@
    "payload": "menu"
   },
   {
+   "path": "assets/weapons/attachments.glb",
+   "bytes": 351644,
+   "kind": "generated",
+   "license": "Original (authored procedural hard-surface parts)",
+   "source": "tools/a5_build_guns.py -- attachments (gunsmith: optics, muzzle devices, grips, lasers, tube extension; geometry only, materials bound to the host gun at runtime; loaded on demand in class matches)",
+   "lane": "A4",
+   "payload": "menu"
+  },
+  {
    "path": "assets/weapons/breaker.glb",
-   "bytes": 511320,
+   "bytes": 513208,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_shotgun.glb per games/last-circle/CREDITS.md) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
@@ -1793,7 +1802,7 @@
   },
   {
    "path": "assets/weapons/corvus.glb",
-   "bytes": 583368,
+   "bytes": 587744,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_sniper.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
@@ -1813,7 +1822,7 @@
   },
   {
    "path": "assets/weapons/vesper.glb",
-   "bytes": 574404,
+   "bytes": 576120,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_smg.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",
@@ -1823,7 +1832,7 @@
   },
   {
    "path": "assets/weapons/warden.glb",
-   "bytes": 526684,
+   "bytes": 528920,
    "kind": "generated",
    "license": "Original (Meshy, owner account; base wpn_ar.glb ) + authored dressing",
    "source": "tools/a4_build_fp_weapons.py",

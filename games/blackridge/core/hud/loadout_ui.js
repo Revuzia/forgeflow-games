@@ -20,6 +20,16 @@ import {
   PERKS, PERKS_BY_TIER, CLASS_COUNT, NAME_MAX,
 } from "../sim/classes.js";
 import { createLoadouts, STORE_KEY } from "../meta/loadouts.js";
+// [gunsmith] attachments + camos (data, stat lines, trade-off text: core/sim/attachments.js)
+import {
+  SLOTS, SLOT_NAMES, MAX_ATTACH, ATTACHMENTS, CAMOS, CAMO_IDS, slotOptions, factoryPart, attachKey,
+  camoKey, attachName, effectiveWeapon, statLine, STAT_KEYS, STAT_NAMES, describeAttachment, attachInSlot,
+  gateBuild,
+} from "../sim/attachments.js";
+import { WEAPONS } from "../weapons/weapon_data.js";
+import { applyTuning, getTuning } from "../pvp/pvp_tuning.js";
+// the PVP-tuned table: the stat bars show the numbers a match actually fires
+const PVP_WEAPONS = applyTuning(WEAPONS, getTuning("pvp"));
 
 const WNAME = {
   warden: "M-72 WARDEN", vesper: "KS-23 VESPER", breaker: "B-12 BREAKER",
@@ -108,6 +118,50 @@ function ensureStyle() {
 .lo-chip{position:fixed;left:12px;top:12px;z-index:57;cursor:pointer;font-family:var(--a10-ui-font,system-ui);
   font-size:10.5px;letter-spacing:.24em;padding:8px 12px;background:rgba(6,8,12,.6);
   border:1px solid rgba(232,232,228,.25);color:rgba(232,232,228,.85);}
+/* [gunsmith] */
+.lo-gsl{display:flex;align-items:center;gap:10px;margin-top:6px;cursor:pointer;text-align:left;font-family:inherit;
+  background:rgba(232,232,228,.03);border:1px dashed rgba(232,232,228,.22);color:rgba(232,232,228,.78);
+  padding:6px 10px;font-size:10.5px;letter-spacing:.14em;width:100%;box-sizing:border-box;}
+.lo-gsl b{font-weight:400;color:var(--a10-amber,#d9a441);letter-spacing:.24em;}
+.lo-gsl:focus-visible{outline:2px solid var(--a10-amber,#d9a441);outline-offset:1px;}
+.lo-gs{display:flex;gap:22px;align-items:flex-start;}
+.lo-gs .col1{flex:1 1 auto;min-width:0;}
+.lo-gs .col2{flex:0 0 268px;}
+.lo-gs .hd{display:flex;align-items:baseline;gap:12px;margin-bottom:4px;}
+.lo-gs .hd .ti{font-family:var(--a10-hud-font,system-ui);font-size:19px;letter-spacing:.24em;}
+.lo-gs .hd .cnt{font-size:10px;letter-spacing:.2em;opacity:.65;margin-left:auto;}
+.lo-gs .row{display:flex;align-items:stretch;gap:6px;margin-top:6px;}
+.lo-gs .row .sl{flex:0 0 96px;font-size:9.5px;letter-spacing:.22em;opacity:.55;padding-top:9px;}
+.lo-gs .row .lo-opt{min-width:0;flex:0 1 auto;padding:6px 10px;}
+.lo-gs .row .lo-opt.lock{padding-right:10px;}
+.lo-gs .row .lo-opt .lv{position:static;display:block;margin-top:2px;}
+.lo-gs .lo-opt .t{font-size:10.5px;}
+.lo-sw{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.lo-sw .lo-opt{min-width:0;width:84px;padding:5px 6px 6px;}
+.lo-sw .lo-opt.lock{padding-right:6px;}
+.lo-sw .lo-opt .lv{position:static;display:block;margin-top:2px;}
+.lo-sw .chip{display:block;height:20px;margin-bottom:4px;border:1px solid rgba(0,0,0,.5);}
+.lo-st{margin-top:2px;}
+.lo-st .lo-sr{display:grid;grid-template-columns:78px 1fr;gap:3px 8px;align-items:center;margin-top:7px;line-height:1.2;}
+.lo-st .lo-sn{font-size:9.5px;letter-spacing:.2em;opacity:.6;}
+.lo-st .lo-sb{position:relative;height:6px;background:rgba(232,232,228,.10);}
+.lo-st .lo-sb i{position:absolute;top:0;bottom:0;left:0;background:rgba(232,232,228,.72);}
+.lo-st .lo-sb i.up{background:#6fd08a;}
+.lo-st .lo-sb i.dn{background:#e0644f;}
+.lo-st .lo-sv{grid-column:2;font-size:9.5px;letter-spacing:.08em;opacity:.7;}
+.lo-st .lo-sv .up{color:#6fd08a;}
+.lo-st .lo-sv .dn{color:#e0644f;}
+.lo-gsd{font-size:11px;line-height:1.55;margin-top:14px;min-height:96px;opacity:.85;}
+.lo-gsd .nm{font-family:var(--a10-hud-font,system-ui);letter-spacing:.2em;font-size:12px;}
+.lo-gsd .bl{opacity:.75;margin:3px 0 5px;}
+.lo-gsd .pro{color:#6fd08a;}
+.lo-gsd .con{color:#e0644f;}
+@media (max-width:720px){
+  .lo-gs{flex-direction:column;}
+  .lo-gs .col2{flex:1 1 auto;width:100%;}
+  .lo-gs .row{flex-wrap:wrap;}
+  .lo-gs .row .sl{flex:1 1 100%;padding-top:2px;}
+}
 @media (max-width:720px){
   .lo-ed{flex-direction:column;gap:14px;padding:14px 16px;}
   .lo-list{flex:0 0 auto;flex-direction:row;flex-wrap:wrap;}
@@ -180,9 +234,10 @@ export function createLoadoutUI(ctx) {
   function classSummary(i) {
     const k = store.kitFor(i, prog());
     const perks = k.perks.filter(Boolean).map((id) => PERKS[id].name);
+    const nAtt = (w) => (k.builds && k.builds[w] ? k.builds[w].attach.length : 0); // [gunsmith]
     return {
       name: k.name,
-      weapons: [k.primary, k.secondary].filter(Boolean).map((w) => WNAME[w] || w.toUpperCase()).join(" · ") +
+      weapons: [k.primary, k.secondary].filter(Boolean).map((w) => (WNAME[w] || w.toUpperCase()) + (nAtt(w) ? " +" + nAtt(w) : "")).join(" · ") +
         (k.lethal ? " · " + (EQUIPMENT_NAMES[k.lethal] || k.lethal.toUpperCase()) : "") +
         (k.tactical ? " · " + (EQUIPMENT_NAMES[k.tactical] || k.tactical.toUpperCase()) : ""),
       perks: perks.length ? perks.join(" · ") : "NO PERKS UNLOCKED",
@@ -192,6 +247,9 @@ export function createLoadoutUI(ctx) {
 
   // ======================================================== the CLASS EDITOR
   let edRoot = null, edIdx = 0, edOnClose = null, edDesc = "";
+  let edGs = null;          // [gunsmith] weapon id while the gunsmith panel is open
+  let gsFocus = null;       // [gunsmith] attachment / camo id the description panel shows
+  let gsNote = "";          // [gunsmith] one-line refusal ("4 max", "unlocks at ...")
 
   function lockBadge(key) {
     if (unlocked(key)) return "";
@@ -207,11 +265,166 @@ export function createLoadoutUI(ctx) {
       badge + `<div class="t">${esc(title)}</div>` + (desc ? `<div class="d">${esc(desc)}</div>` : "") + `</button>`;
   }
 
+  // ---------------------------------------------------------------- gunsmith
+  const buildOf = (c, w) => (c.builds && c.builds[w]) || { attach: [], camo: null };
+  // unlock badge: attachment + weapon-camo keys ride the WEAPON's level
+  function gsBadge(key) {
+    if (!key || unlocked(key)) return "";
+    const lv = unlockLv(key);
+    const wpn = /^attach:|^camo:[a-z]+:/.test(key);
+    return `<span class="lv">${lv != null ? (wpn ? "WPN LV " : "LV ") + lv : "LOCKED"}</span>`;
+  }
+  function gsLine(c, w) {
+    const b = buildOf(c, w);
+    const parts = b.attach.map((id) => ATTACHMENTS[id] ? ATTACHMENTS[id].short : id);
+    const camo = b.camo && CAMOS[b.camo] ? CAMOS[b.camo].name : null;
+    return `<button class="lo-gsl" data-gs="${esc(w)}"><b>GUNSMITH</b><span>${esc(WNAME[w] || w)}</span>` +
+      `<span style="opacity:.75">${esc(parts.length ? parts.join(" · ") : "FACTORY")}${camo ? " · " + esc(camo) : ""}</span>` +
+      `<span style="margin-left:auto;opacity:.5">${parts.length}/${MAX_ATTACH}</span></button>`;
+  }
+  function gsDescHTML(w, id) {
+    if (id && ATTACHMENTS[id]) {
+      const a = ATTACHMENTS[id];
+      const lines = describeAttachment(w, id, PVP_WEAPONS[w]);
+      const key = attachKey(w, id);
+      const lock = key && !unlocked(key) ? `<div class="con">Unlocks at ${esc(WNAME[w])} level ${unlockLv(key)}</div>` : "";
+      return `<div class="nm">${esc(a.name)}</div><div class="bl">${esc(a.blurb)}</div>` +
+        lines.map((l) => `<div class="${l.neutral ? "" : l.good ? "pro" : "con"}">${l.neutral ? "· " : l.good ? "+ " : "- "}${esc(l.text)}</div>`).join("") + lock;
+    }
+    if (id && id.indexOf("camo:") === 0) {
+      const cid = id.slice(5), cm = CAMOS[cid];
+      if (!cm) return "";
+      const key = camoKey(w, cid);
+      const how = cm.scope === "weapon" ? `${WNAME[w]} level ${unlockLv(key)}` : `player level ${unlockLv(key)}`;
+      return `<div class="nm">${esc(cm.name)} CAMO</div><div class="bl">${cm.scope === "weapon" ? "Weapon mastery finish." : "Career finish, any weapon."}</div>` +
+        (unlocked(key) ? `<div class="pro">Unlocked</div>` : `<div class="con">Unlocks at ${esc(how)}</div>`);
+    }
+    if (id && id.indexOf("stock:") === 0) {
+      const f = id.slice(6);
+      return f ? `<div class="nm">${esc(attachName(f))}</div><div class="bl">The part this weapon ships with. Always available, never counts toward the ${MAX_ATTACH}.</div>`
+        : `<div class="nm">EMPTY</div><div class="bl">Nothing mounted in this slot.</div>`;
+    }
+    return `<div class="nm">${esc(WNAME[w])}</div><div class="bl">${esc(WROLE[w])}. Up to ${MAX_ATTACH} attachments; factory parts are free. ` +
+      `Every attachment trades something away: the bars show what changes.</div>`;
+  }
+  function gsStatsHTML(w, b) {
+    const base = PVP_WEAPONS[w];
+    // the bars show what DEPLOYS: a saved-but-locked part is not on the gun in a match
+    const eff = effectiveWeapon(base, w, gateBuild(w, b, unlocked).attach);
+    const sb = statLine(base), se = statLine(eff);
+    return STAT_KEYS.map((k) => {
+      const bv = sb[k].v, ev = se[k].v;
+      const lo = Math.min(bv, ev) * 100, hi = Math.max(bv, ev) * 100;
+      const dir = ev > bv + 1e-4 ? "up" : ev < bv - 1e-4 ? "dn" : "";
+      const was = dir && sb[k].label !== se[k].label ? ` <span class="${dir}">(${esc(sb[k].label)})</span>` : "";
+      return `<div class="lo-sr"><span class="lo-sn">${STAT_NAMES[k]}</span><span class="lo-sb"><i style="width:${lo.toFixed(1)}%"></i>` +
+        (dir ? `<i class="${dir}" style="left:${lo.toFixed(1)}%;width:${(hi - lo).toFixed(1)}%"></i>` : "") +
+        `</span><span class="lo-sv">${esc(se[k].label)}${was}</span></div>`;
+    }).join("") + `<div class="lo-sr"><span class="lo-sn">FIRE RATE</span><span class="lo-sv" style="grid-column:2">${esc(se.rpm.label)}` +
+      (se.rpm.raw !== sb.rpm.raw ? ` <span class="up">(${esc(sb.rpm.label)})</span>` : "") + `</span></div>`;
+  }
+  function renderGunsmith(c) {
+    const w = edGs;
+    const b = buildOf(c, w);
+    const rows = SLOTS.map((slot) => {
+      const opts = slotOptions(w, slot);
+      const f = factoryPart(w, slot);
+      const cur = attachInSlot(b, slot);
+      if (!opts.length) {
+        return `<div class="row"><div class="sl">${SLOT_NAMES[slot]}</div><button class="lo-opt soon" data-k="gsnone" data-id="" aria-disabled="true"><div class="t">NO MOUNT</div></button></div>`;
+      }
+      const btns = [];
+      btns.push(`<button class="lo-opt${!cur ? " on" : ""}" data-k="gsslot" data-id="${slot}:" data-f="stock:${esc(f || "")}">` +
+        `<div class="t">${esc(f ? attachName(f) : "NONE")}</div>${f ? `<div class="d">FACTORY</div>` : ""}</button>`);
+      for (const id of opts) {
+        if (id === f) continue;
+        const key = attachKey(w, id);
+        const lock = key && !unlocked(key);
+        btns.push(`<button class="lo-opt${cur === id ? " on" : ""}${lock ? " lock" : ""}" data-k="gsslot" data-id="${slot}:${id}" data-f="${id}"${lock ? ' aria-disabled="true"' : ""}>` +
+          gsBadge(key) + `<div class="t">${esc(ATTACHMENTS[id].name)}</div></button>`);
+      }
+      return `<div class="row"><div class="sl">${SLOT_NAMES[slot]}</div>${btns.join("")}</div>`;
+    }).join("");
+    const sw = [`<button class="lo-opt${!b.camo ? " on" : ""}" data-k="gscamo" data-id="" data-f="">` +
+      `<span class="chip" style="background:linear-gradient(135deg,#2a2c2f,#151618)"></span><div class="t">FACTORY</div></button>`];
+    for (const cid of CAMO_IDS) {
+      const cm = CAMOS[cid], key = camoKey(w, cid), lock = !unlocked(key);
+      const g = `linear-gradient(135deg,${cm.colors[0]} 0 38%,${cm.colors[1]} 38% 68%,${cm.colors[2]} 68%)`;
+      sw.push(`<button class="lo-opt${b.camo === cid ? " on" : ""}${lock ? " lock" : ""}" data-k="gscamo" data-id="${cid}" data-f="camo:${cid}"${lock ? ' aria-disabled="true"' : ""}>` +
+        `<span class="chip" style="background:${g}"></span><div class="t">${esc(cm.name)}</div>${gsBadge(key)}</button>`);
+    }
+    edRoot.querySelector(".lo-ed").innerHTML =
+      `<div class="lo-det"><div class="lo-gs"><div class="col1">` +
+      `<div class="hd"><span class="ti">${esc(WNAME[w])}</span><span class="cnt">${esc(c.name)} · ${b.attach.length}/${MAX_ATTACH} ATTACHMENTS</span></div>` +
+      rows +
+      `<div class="lo-sec">Camo</div><div class="lo-sw">${sw.join("")}</div>` +
+      (gsNote ? `<div class="lo-warn">${esc(gsNote)}</div>` : "") +
+      `</div><div class="col2"><div class="lo-sec" style="margin-top:4px">Stats</div><div class="lo-st">${gsStatsHTML(w, b)}</div>` +
+      `<div class="lo-gsd">${gsDescHTML(w, gsFocus)}</div></div></div>` +
+      `<div class="lo-foot"><button class="lo-btn pri" data-act="gsback">Back to class</button>` +
+      `<button class="lo-btn" data-act="gsclear">Strip to factory</button>` +
+      `<span class="lo-hint">Tab / arrows · Enter fit · Esc back</span></div></div>`;
+  }
+  function gsSetDesc(id) {
+    if (!edRoot || !edGs) return;
+    gsFocus = id || null;
+    const d = edRoot.querySelector(".lo-gsd");
+    if (d) d.innerHTML = gsDescHTML(edGs, gsFocus);
+  }
+  function gsClick(t) {
+    const c = store.get(edIdx);
+    const w = edGs;
+    const b = buildOf(c, w);
+    const k = t.getAttribute("data-k"), id = t.getAttribute("data-id") || "";
+    gsNote = "";
+    if (k === "gsslot") {
+      const [slot, att] = id.split(":");
+      if (att) {
+        const key = attachKey(w, att);
+        gsFocus = att;
+        if (key && !unlocked(key)) { gsNote = `${ATTACHMENTS[att].name} unlocks at ${WNAME[w]} level ${unlockLv(key)}`; renderEditor(); return; }
+      } else gsFocus = t.getAttribute("data-f") || null;
+      const next = b.attach.filter((x) => !(ATTACHMENTS[x] && ATTACHMENTS[x].slot === slot));
+      if (att) next.push(att);
+      if (next.length > MAX_ATTACH) { gsNote = `${MAX_ATTACH} attachments max: clear a slot first`; renderEditor(); return; }
+      store.update(edIdx, { build: { weapon: w, attach: next } });
+    } else if (k === "gscamo") {
+      gsFocus = id ? "camo:" + id : null;
+      if (id && !unlocked(camoKey(w, id))) { gsNote = `${CAMOS[id].name} is locked`; renderEditor(); return; }
+      store.update(edIdx, { build: { weapon: w, camo: id || null } });
+    }
+    renderEditor();
+  }
+  // arrow keys walk the gunsmith grid (rows = slots / camo strip); the pad's spatial
+  // focus walks the same buttons
+  function gsArrow(code) {
+    const all = Array.from(edRoot.querySelectorAll(".lo-gs button, .lo-foot button"));
+    const cur = document.activeElement && all.indexOf(document.activeElement) >= 0 ? document.activeElement : null;
+    if (!cur) { const f = edRoot.querySelector(".lo-gs .lo-opt.on") || all[0]; if (f) f.focus(); return; }
+    const r0 = cur.getBoundingClientRect();
+    const cx = r0.left + r0.width / 2, cy = r0.top + r0.height / 2;
+    let best = null, bd = Infinity;
+    for (const el of all) {
+      if (el === cur) continue;
+      const r = el.getBoundingClientRect();
+      const x = r.left + r.width / 2, y = r.top + r.height / 2;
+      const dx = x - cx, dy = y - cy;
+      const ok = code === "ArrowRight" ? dx > 4 && Math.abs(dy) < r0.height : code === "ArrowLeft" ? dx < -4 && Math.abs(dy) < r0.height
+        : code === "ArrowDown" ? dy > 4 : dy < -4;
+      if (!ok) continue;
+      const d = code === "ArrowDown" || code === "ArrowUp" ? Math.abs(dy) + Math.abs(dx) * 0.35 : Math.abs(dx) + Math.abs(dy) * 3;
+      if (d < bd) { bd = d; best = el; }
+    }
+    if (best) { best.focus(); if (best.scrollIntoView) best.scrollIntoView({ block: "nearest" }); }
+  }
+
   function renderEditor() {
     if (!edRoot) return;
     const classes = store.classes();
     const sel = store.selected();
     const c = classes[edIdx];
+    if (edGs && c.primary !== edGs && c.secondary !== edGs) edGs = null;
+    if (edGs) { renderGunsmith(c); return; }
     const tabs = classes.map((x, i) => {
       const s = classSummary(i);
       return `<button class="lo-tab${i === edIdx ? " on" : ""}" data-tab="${i}">` +
@@ -234,13 +447,19 @@ export function createLoadoutUI(ctx) {
     c.perks.forEach((p, ti) => { if (p && kit.perks[ti] !== p) lockedOut.push(PERKS[p].name + " → " + (kit.perks[ti] ? PERKS[kit.perks[ti]].name : "empty")); });
     if (c.lethal && kit.lethal !== c.lethal) lockedOut.push((EQUIPMENT_NAMES[c.lethal] || c.lethal) + " → none");
     if (c.tactical && kit.tactical !== c.tactical) lockedOut.push((EQUIPMENT_NAMES[c.tactical] || c.tactical) + " → none");
+    for (const w of [kit.primary, kit.secondary]) {          // [gunsmith] locked parts deploy without them
+      if (!w) continue;
+      const want = buildOf(c, w), got = (kit.builds && kit.builds[w]) || { attach: [], camo: null };
+      for (const id of want.attach) if (got.attach.indexOf(id) < 0) lockedOut.push(attachName(id) + " → removed");
+      if (want.camo && got.camo !== want.camo) lockedOut.push(CAMOS[want.camo].name + " camo → factory");
+    }
 
     edRoot.querySelector(".lo-ed").innerHTML =
       `<div class="lo-list"><h2>Classes</h2>${tabs}</div>` +
       `<div class="lo-det">` +
       `<input class="lo-name" maxlength="${NAME_MAX}" value="${esc(c.name)}" aria-label="Class name" spellcheck="false">` +
-      `<div class="lo-sec">Primary</div><div class="lo-opts">${prim}</div>` +
-      `<div class="lo-sec">Secondary</div><div class="lo-opts">${sec}</div>` +
+      `<div class="lo-sec">Primary</div><div class="lo-opts">${prim}</div>${gsLine(c, c.primary)}` +
+      `<div class="lo-sec">Secondary</div><div class="lo-opts">${sec}</div>${gsLine(c, c.secondary)}` +
       `<div class="lo-sec">Lethal</div><div class="lo-opts">${leth}</div>` +
       `<div class="lo-sec">Tactical</div><div class="lo-opts">${tact}</div>` +
       perkRows +
@@ -262,6 +481,11 @@ export function createLoadoutUI(ctx) {
     if (!t || !edRoot.contains(t)) return;
     if (t.hasAttribute("data-tab")) { edIdx = +t.getAttribute("data-tab"); edDesc = ""; renderEditor(); return; }
     const act = t.getAttribute("data-act");
+    // [gunsmith]
+    if (t.hasAttribute("data-gs")) { edGs = t.getAttribute("data-gs"); gsFocus = null; gsNote = ""; renderEditor(); focusGs(); return; }
+    if (act === "gsback") { gsBack(); return; }
+    if (act === "gsclear") { store.update(edIdx, { build: { weapon: edGs, attach: [], camo: null } }); gsFocus = null; gsNote = ""; renderEditor(); return; }
+    if (edGs && /^gs/.test(t.getAttribute("data-k") || "")) { gsClick(t); focusGs(t.getAttribute("data-k"), t.getAttribute("data-id")); return; }
     if (act === "use") { store.select(edIdx); renderEditor(); return; }
     if (act === "reset") { store.reset(edIdx); edDesc = ""; renderEditor(); return; }
     if (act === "done") { closeEditor(); return; }
@@ -284,16 +508,34 @@ export function createLoadoutUI(ctx) {
     renderEditor();
   }
 
+  function focusGs(k, id) {
+    const el = (k && edRoot.querySelector(`[data-k="${k}"][data-id="${id}"]`)) || edRoot.querySelector(".lo-gs .lo-opt.on") || edRoot.querySelector(".lo-gs .lo-opt");
+    if (el && el.focus) el.focus();
+  }
+  function gsBack() {
+    const w = edGs; edGs = null; renderEditor();
+    const b = edRoot.querySelector(`[data-gs="${w}"]`);
+    if (b && b.focus) b.focus();
+  }
+  function onEditorHover(e) {
+    if (!edGs) return;
+    const t = e.target && e.target.closest ? e.target.closest("[data-f]") : null;
+    if (t && edRoot.contains(t)) gsSetDesc(t.getAttribute("data-f"));
+  }
+
   function openEditor(onClose) {
     edOnClose = onClose || null;
     edIdx = store.selected();
     edDesc = "";
+    edGs = null;
     if (!edRoot) {
       edRoot = document.createElement("div");
       edRoot.className = "lo-ov";
       edRoot.id = "lo-editor";
       edRoot.innerHTML = `<div class="lo-wash"></div><div class="lo-ed" role="dialog" aria-label="Class editor"></div>`;
       edRoot.addEventListener("click", onEditorClick);
+      edRoot.addEventListener("mouseover", onEditorHover);   // [gunsmith] description follows the pointer
+      edRoot.addEventListener("focusin", onEditorHover);     // ... and keyboard / pad focus
       document.body.appendChild(edRoot);
     }
     edRoot.style.display = "block";
@@ -399,8 +641,10 @@ export function createLoadoutUI(ctx) {
       if (tgt && (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA")) return;
       const digit = /^Digit([1-5])$/.exec(e.code);
       if (editorOpen()) {
-        if (digit) { edIdx = +digit[1] - 1; edDesc = ""; renderEditor(); e.preventDefault(); e.stopPropagation(); }
+        if (digit) { edIdx = +digit[1] - 1; edDesc = ""; edGs = null; renderEditor(); e.preventDefault(); e.stopPropagation(); }
+        else if (e.code === "Escape" && edGs) { gsBack(); e.preventDefault(); e.stopPropagation(); }   // [gunsmith] back first
         else if (e.code === "Escape") { closeEditor(); e.preventDefault(); e.stopPropagation(); }
+        else if (edGs && /^Arrow(Up|Down|Left|Right)$/.test(e.code)) { gsArrow(e.code); e.preventDefault(); e.stopPropagation(); }
         return;
       }
       if (e.code === "KeyL" && classMatch() && matchPhase() !== "ended") {
@@ -453,5 +697,10 @@ export function createLoadoutUI(ctx) {
   return {
     store, openEditor, closeEditor, editorOpen, openPicker, closePicker, pickerOpen, pick,
     classSummary, publishSpec,
+    // [gunsmith] open the editor straight on a weapon's gunsmith panel (tests / deep links)
+    openGunsmith(weaponId, classIdx) {
+      openEditor(); if (classIdx != null) edIdx = classIdx | 0;
+      edGs = weaponId; gsFocus = null; gsNote = ""; renderEditor(); focusGs();
+    },
   };
 }

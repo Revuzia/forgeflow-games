@@ -246,6 +246,11 @@ export function createAfterAction(ctx, progression) {
   document.body.appendChild(root);
 
   const aar = { open: false, report: null, onDone: null, anim: null, shownFor: null };
+  // [challenges] addSection(fn): fn(report) -> HTML string inserted above the footer
+  const sections = [];
+  function sectionsHtml(r) {
+    return sections.map((fn) => { try { return fn(r) || ""; } catch (e) { return ""; } }).join("");
+  }
 
   function headline(r) {
     if (r.kind === "campaign") return r.result === "won" ? ["OPERATION COMPLETE", "won"] : ["OPERATION FAILED", "lost"];
@@ -288,6 +293,7 @@ export function createAfterAction(ctx, progression) {
       `<div class="row tot"><span>Total</span><span class="x">+${fmt(r.total)}</span></div>` +
       `<h3 style="margin-top:18px">Unlocks</h3>${unlocks}</div>` +
       `<div><h3>Highlights</h3><div class="hl">${tiles}</div><h3>Weapons</h3>${weapons}</div></div>` +
+      sectionsHtml(r) + // [challenges] extra sections mounted by other modules (addSection)
       (r.saved ? "" : `<div class="warn">Progress could not be saved on this device (storage unavailable).</div>`) +
       `<div class="foot"><button data-a="continue" type="button">Continue</button><span class="hint">Enter · Space · Esc</span></div>` +
       `</div>`;
@@ -431,6 +437,7 @@ export function createAfterAction(ctx, progression) {
   const api = {
     attach(bridge) { void bridge; mountFeed(); },
     show, showPending, close, finish,
+    addSection(fn) { if (typeof fn === "function") sections.push(fn); }, // [challenges]
     get open() { return aar.open; },
     _root: root, _feed: feed, _strip: strip,
   };

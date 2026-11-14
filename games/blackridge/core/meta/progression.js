@@ -130,6 +130,11 @@ export const XP = {
     "QUAD KILL": 150,
     "MULTI KILL": 200,   // 5+ ("MULTI KILL x5"...)
   },
+  // [challenges] per-match ceiling on MEDAL XP. A test match paid 6,450 of 13,550 XP
+  // from chained multi-kill medals; ordinary matches earn ~300-1,200 in medals, so
+  // 1,500 never touches normal play and stops a chain from dominating the total.
+  // Medals past the cap still count (report, highlights) — they just pay 0 XP.
+  medalMatchCap: 1500,
   streak: { recon: 100, mortar: 200, airstrike: 300, orbital: 500 },
   matchComplete: 500,
   matchWin: 500,
@@ -144,7 +149,7 @@ export const XP = {
 export const CATEGORY_LABELS = {
   kill: "Eliminations", headshot: "Headshots", assist: "Assists", objective: "Objectives",
   medal: "Medals", streak: "Call-ins earned", completion: "Match completion", win: "Victory bonus",
-  campaign: "Operation",
+  campaign: "Operation", challenge: "Challenges", // [challenges]
 };
 
 export const MAX_LEVEL = 55;
@@ -357,6 +362,7 @@ export function createProgression(ctx, opts) {
   // ---- listeners -----------------------------------------------------------
   const changeFns = new Set();
   const eventFns = new Set();
+  const endFns = new Set(); // [challenges] onSessionEnd listeners
   function notifyChange() { for (const fn of changeFns) { try { fn(api); } catch (e) { /* listener */ } } }
   function notify(ev) { for (const fn of eventFns) { try { fn(ev); } catch (e) { /* listener */ } } }
 
@@ -404,6 +410,7 @@ export function createProgression(ctx, opts) {
       levelUps: [],
       hl: { kills: 0, heads: 0, assists: 0, bestStreak: 0, streak: 0, medals: [], longshots: 0, caps: 0, calls: 0 },
       assistsSeen: 0,
+      medalXp: 0,                         // [challenges] medal XP paid this session (cap)
       ended: false,
     };
     for (const w of Object.keys(rec.weapons)) cur.startWeapons[w] = rec.weapons[w].xp;
@@ -527,7 +534,9 @@ export function createProgression(ctx, opts) {
       const t = String(d.text).toUpperCase();
       s.hl.medals.push(t);
       if (t === "LONGSHOT") s.hl.longshots++;
-      award("medal", xp, titleCase(t));
+      // [challenges] per-match medal XP cap
+      const payXp = Math.min(xp, Math.max(0, XP.medalMatchCap - (s.medalXp || 0)));
+      if (payXp > 0) { s.medalXp = (s.medalXp || 0) + payXp; award("medal", payXp, titleCase(t)); }
       touch();
     },
     streak(d) {
@@ -587,6 +596,9 @@ export function createProgression(ctx, opts) {
         if (won && diff === "hard") award("campaign", XP.missionHard, "Hard clear");
         rec.life.missions++;
       }
+      // [challenges] pre-report hook: challenge XP earned by this ending lands in
+      // THIS session's ledger (listeners may call api.award)
+      for (const fn of endFns) { try { fn(d, result); } catch (e) { /* listener */ } }
       s.ended = true;
       lastReport = buildReport(s, result);
       save();
@@ -602,7 +614,7 @@ export function createProgression(ctx, opts) {
 
   function buildReport(s, result) {
     const cats = Object.keys(s.cats).map((k) => ({ cat: k, label: CATEGORY_LABELS[k] || k, xp: s.cats[k].xp, n: s.cats[k].n }));
-    const order = ["kill", "headshot", "assist", "objective", "medal", "streak", "campaign", "completion", "win"];
+    const order = ["kill", "headshot", "assist", "objective", "medal", "streak", "challenge", "campaign", "completion", "win"];
     cats.sort((a, b) => order.indexOf(a.cat) - order.indexOf(b.cat));
     const weapons = Object.keys(s.weapons).map((id) => {
       const fromXp = s.startWeapons[id] || 0;
@@ -665,6 +677,9 @@ export function createProgression(ctx, opts) {
       return best ? { key: best, level: UNLOCKS[best] } : null;
     },
     onEvent(fn) { if (typeof fn === "function") eventFns.add(fn); return () => eventFns.delete(fn); },
+    // [challenges] fn(missionEndData, result) runs inside mission:end, BEFORE the report is built
+    onSessionEnd(fn) { if (typeof fn === "function") endFns.add(fn); return () => endFns.delete(fn); },
+    get medalXpThisMatch() { return cur ? cur.medalXp || 0 : 0; }, // [challenges]
     get lastReport() { return lastReport; },
     get lifetime() { return JSON.parse(JSON.stringify(rec.life)); },
     get status() { return { load: loadStatus, readOnly, saveFailed }; },

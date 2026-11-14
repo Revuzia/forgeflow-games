@@ -189,7 +189,7 @@ export function createInput(canvas, settings) {
     if (!wp) return 1;
     const e = smoothstep(wp.adsT || 0);
     if (e <= 0) return 1;
-    const w = WEAPONS[wp.id];
+    const w = ((globalThis.__BR_GUNSMITH__ && globalThis.__BR_GUNSMITH__.weapon(wp.id)) || WEAPONS[wp.id]); // [gunsmith] optic zoom (scope / holo)
     if (!w || !(w.adsFov > 0)) return 1;
     const base = (settings && settings.fov > 0) ? settings.fov : FOV_DEFAULT;
     const aimFov = base + (w.adsFov - base) * e;
@@ -356,7 +356,7 @@ export function createInput(canvas, settings) {
           moving: input.lastDevice === "pad" ? pad.moving : touchMoving,
           looking: input.lastDevice === "pad" ? pad.looking : touchLooking,
           strength: (settings && settings.aimAssist) || "standard",
-          weapon: wp ? WEAPONS[wp.id] : null,
+          weapon: wp ? ((globalThis.__BR_GUNSMITH__ && globalThis.__BR_GUNSMITH__.weapon(wp.id)) || WEAPONS[wp.id]) : null, // [gunsmith]
         });
       } else {
         assist.reset();

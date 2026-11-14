@@ -123,8 +123,15 @@ const settingsLive = () => globalThis.__BR_SETTINGS__ || null;
 const WINDOW = 120;
 const CHECK_EVERY = 30;
 const UP_STREAK = 300;
-const DOWN_P95_MS = 20;
-const UP_MS = 13;
+// [lane settings] the two frame-time thresholds are now `let`: with the
+// player's "Dynamic resolution" ON they are derived from the chosen target fps
+// (see applyUserScale); OFF they are ARCH §3.13's verbatim 20 / 13 ms.
+let DOWN_P95_MS = 20;
+let UP_MS = 13;
+// [lane settings] dynamic-resolution floor when the player turns it ON. 0.6 is
+// the render-scale slider's own minimum (settings.js), the 1152x648 point of
+// the measured table above (~0.42 of the native frame cost).
+const DYN_FLOOR = 0.6;
 const STEP = 0.1;
 // The one constant that decides whether this game can hold 60 fps on Intel
 // integrated. 1.0 = never soften (current, deliberate — see the header).
@@ -134,7 +141,7 @@ const FLOOR = 1.0;
 // Panic path: enough samples to be a measurement rather than one bad frame,
 // and a cost so far over budget that waiting cannot be the right answer.
 const PANIC_MIN_SAMPLES = 20;
-const PANIC_P95_MS = DOWN_P95_MS * 2;
+let PANIC_P95_MS = DOWN_P95_MS * 2;
 const PANIC_COOLDOWN = 30;
 
 export function createDynres(renderer, perf) {
@@ -197,13 +204,29 @@ export function createDynres(renderer, perf) {
     const u = userScale();
     ceiling = Math.min(hwCeiling, u);
     floorNow = Math.min(FLOOR, u);
+    // [lane settings] Dynamic resolution ON: the controller may work between
+    // DYN_FLOOR and the slider (now a ceiling), defending the target fps —
+    // step down when p95 > 1.2x the target frame, up after 300 frames < 0.75x.
+    const st = settingsLive();
+    const dyn = st && st.S.dynRes === "on";
+    if (dyn) {
+      floorNow = Math.min(u, DYN_FLOOR);
+      const tgtMs = 1000 / (Number(st.S.dynResTarget) || 60);
+      DOWN_P95_MS = tgtMs * 1.2; UP_MS = tgtMs * 0.75;
+    } else { DOWN_P95_MS = 20; UP_MS = 13; }
+    PANIC_P95_MS = DOWN_P95_MS * 2;
+    api.dynamic = !!dyn;
     api.ceiling = ceiling;
     head = 0; filled = 0; sinceCheck = 0; upStreak = 0; cooldown = WINDOW;
     setDpr(u);
   }
   {
     const st = settingsLive();
-    if (st) st.onChange("renderScale", applyUserScale);
+    if (st) {
+      st.onChange("renderScale", applyUserScale);
+      st.onChange("dynRes", applyUserScale);       // [lane settings]
+      st.onChange("dynResTarget", applyUserScale); // [lane settings]
+    }
     else console.warn("[dynres] no __BR_SETTINGS__ handle — render scale slider inert");
   }
 
@@ -266,7 +289,8 @@ export function createDynres(renderer, perf) {
     // run that held its DPR, and the verdict must be able to tell them apart.
     report() {
       return { dpr: renderer.getPixelRatio(), ceiling, floor: floorNow,
-               hwCeiling, userScale: userScale(),
+               hwCeiling, userScale: userScale(), dynamic: !!api.dynamic,
+               downMs: +DOWN_P95_MS.toFixed(2), upMs: +UP_MS.toFixed(2),
                samples: filled, p95: +p95().toFixed(2),
                atFloor: api.atFloor(), steps: { ...steps } };
     },
@@ -279,7 +303,7 @@ export function createDynres(renderer, perf) {
   // A render scale the player chose in a previous session is persisted by
   // settings.js and must be live from the first frame, not from the first
   // slider move. No-op at the 1.00 default.
-  if (userScale() < 0.999) applyUserScale();
+  if (userScale() < 0.999 || (settingsLive() && settingsLive().S.dynRes === "on")) applyUserScale();
 
   return api;
 }

@@ -631,7 +631,9 @@ export function makeMuzzle(env) {
       const S = beginShot(env, d);
       if (!S.leader) return;
       resolveMuzzle(d, _mz);
-      const P = PROFILE[d.weaponId] || PROFILE_DEFAULT;
+      // [gunsmith] the shot event says whether THIS gun is suppressed (a fitted can on any
+      // gun -> the soft profile; a Vesper whose can was swapped for a compensator -> a bare flash)
+      const P = (d.suppressed ? PROFILE.vesper : d.weaponId === "vesper" ? PROFILE_DEFAULT : PROFILE[d.weaponId]) || PROFILE_DEFAULT;
       const first = !!d.firstShot && !P.ignoreFirst;
       const isPlayer = d.shooter === "P";
       const base = P.size

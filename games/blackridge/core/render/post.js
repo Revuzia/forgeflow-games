@@ -603,16 +603,27 @@ export function createPost(ctx) {
     applyQuality(quality);
   }
 
+  // [lane settings] The preset still picks the tier, but each film stage is now
+  // its own player toggle (settings.js bloom/grain/vignette/adsBlur/chromAb;
+  // picking a preset writes them, so low/med/high frames are bit-identical to
+  // the pre-toggle build). Off = the stage's strength uniform at 0. Tier 0
+  // (tonemap only, no grade) is kept for the "low" preset with every film
+  // stage off — the old low frame; turning any film stage on under low lifts
+  // to tier 1 so the toggle can actually be seen.
+  const gfx = { grain: true, vignette: true, adsBlur: true, chromAb: true };
   function applyQuality(q) {
     quality = q;
+    const S = ctx.settings || {};
+    gfx.grain = S.grain !== "off"; gfx.vignette = S.vignette !== "off";
+    gfx.adsBlur = S.adsBlur !== "off"; gfx.chromAb = S.chromAb !== "off";
     if (!compositePass) return;
-    if (q === "low") {
-      if (bloomPass) bloomPass.enabled = false;
-      compositePass.uniforms.uTier.value = 0; // tonemap only (ARCH §3.13)
-    } else {
-      if (bloomPass) bloomPass.enabled = true;
-      compositePass.uniforms.uTier.value = q === "high" ? 2 : 1;
-    }
+    const anyFilm = gfx.grain || gfx.vignette || gfx.adsBlur || gfx.chromAb;
+    if (bloomPass) bloomPass.enabled = S.bloom != null ? S.bloom !== "off" : q !== "low";
+    compositePass.uniforms.uTier.value = (q === "low" && !anyFilm) ? 0 : (q === "high" ? 2 : 1);
+    const u = compositePass.uniforms;
+    u.uGrain.value = gfx.grain ? CompositeShader.uniforms.uGrain.value : 0;
+    u.uVignette.value = gfx.vignette ? CompositeShader.uniforms.uVignette.value : 0;
+    u.uCA.value = gfx.chromAb ? CompositeShader.uniforms.uCA.value : 0;
   }
 
   const api = {
@@ -645,7 +656,7 @@ export function createPost(ctx) {
       const sim = ctx.sim && ctx.sim();
       if (sim && sim.state && sim.state.player) {
         const p = sim.state.player;
-        if (p.weapon && typeof p.weapon.adsT === "number") boost += 0.05 * p.weapon.adsT;
+        if (gfx.vignette && p.weapon && typeof p.weapon.adsT === "number") boost += 0.05 * p.weapon.adsT;
         ads = (p.weapon && typeof p.weapon.adsT === "number") ? p.weapon.adsT : 0;
         if (typeof p.hp === "number" && p.hp < 35) boost += 0.04 * (1 - p.hp / 35);
       }
@@ -653,7 +664,7 @@ export function createPost(ctx) {
       if (ctx.suppress > 0.02) boost += 0.11 * Math.min(1, ctx.suppress);
       u.uVigBoost.value = boost;
       // ADS edge blur rides adsT; off on 'low' (tier 0 skips the film block)
-      u.uAdsBlur.value = quality === "low" ? 0 : Math.max(0, Math.min(1, ads)) * 0.9;
+      u.uAdsBlur.value = !gfx.adsBlur ? 0 : Math.max(0, Math.min(1, ads)) * 0.9; // [lane settings] toggle, was quality==="low"
 
       // CA kick decay (×3 for ~150 ms — explosions hook via api.caKick())
       if (caBoostT > 0) {
@@ -713,6 +724,10 @@ export function createPost(ctx) {
   };
 
   ctx.onChange("quality", (q) => applyQuality(q));
+  // [lane settings] per-stage graphics toggles
+  for (const k of ["bloom", "grain", "vignette", "adsBlur", "chromAb"]) {
+    ctx.onChange(k, () => applyQuality(ctx.settings.quality || quality));
+  }
   ctx.post = api; // A11's capture() resize fallback reads ctx.post
   globalThis.__BR_POST__ = api; // profiler seam — perfprobe ablation reads it
   return api;

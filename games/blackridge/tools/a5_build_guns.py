@@ -704,7 +704,7 @@ def mlok_handguard(y0, y1, cz, r_flat, col, name="handguard", n=8, slot_rows=(2,
     part(name, b, col, "metal", "base", bevel=0.0012, seg=2, angle=20, cut=cut)
 
 
-def flash_hider(y0, y1, z, r):
+def flash_hider(y0, y1, z, r, node="muzzle"):
     def b(bm):
         cyl_y(bm, 0.0, z, y0, y1, r, r * 0.96, seg=24)
 
@@ -723,7 +723,7 @@ def flash_hider(y0, y1, z, r):
             for f in [(0, 2, 6, 4), (1, 5, 7, 3), (0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6)]:
                 bm.faces.new([v[k] for k in f])
         cyl_y(bm, 0.0, z, y1 - 0.012, y1 + 0.002, r * 0.55, seg=20)          # bore counter-sink
-    part("flash_hider", b, COL["steel"], "metal", "dressing", bevel=0.0008, seg=2, cut=cut)
+    part("flash_hider", b, COL["steel"], "metal", node, bevel=0.0008, seg=2, cut=cut)
 
 
 def scope(y_ocular, y_objective, z, tube_r=0.0127, obj_r=0.0215, ocu_r=0.0195, rail_top=None,
@@ -884,7 +884,7 @@ def gun_ar(spec):
                 yy = by1 + 0.010 + k * 0.016
                 rbox(bm, -0.020, 0.020, yy, yy + 0.008, bz - 0.006, bz + 0.0125)
             cyl_y(bm, 0, bz, my1 - 0.010, my1 + 0.003, 0.0055)
-        part("muzzle_brake", brake, COL["anod"], "metal", "dressing", bevel=0.0010, cut=bcut)
+        part("muzzle_brake", brake, COL["anod"], "metal", "muzzle", bevel=0.0010, cut=bcut)
     elif md == "can":
         def can(bm):
             cyl_y(bm, 0, bz, by1 - 0.002, by1 + 0.012, br * 1.3, spec["can_r"], seg=32)
@@ -896,7 +896,7 @@ def gun_ar(spec):
             for k in range(10):                   # wrench flats / grip rings
                 yy = by1 + 0.030 + k * 0.012
                 tube_ring_y(bm, 0, bz, yy, yy + 0.0025, spec["can_r"] - 0.0008, spec["can_r"] + 0.004, seg=32)
-        part("suppressor", can, COL["anod"], "metal", "dressing", bevel=0.0010, cut=ccut)
+        part("suppressor", can, COL["anod"], "metal", "muzzle", bevel=0.0010, cut=ccut)
 
     # buffer tube + stock
     st = spec["stock"]
@@ -973,15 +973,18 @@ def gun_ar(spec):
     # sights
     sz = spec["sight_z"]
     if spec.get("optic") == "scope":
-        scope(spec["scope_y"][0], spec["scope_y"][1], sz, rail_top=rail_top)
+        scope(spec["scope_y"][0], spec["scope_y"][1], sz, rail_top=rail_top, node="optic")
     elif spec.get("optic") == "reddot":
-        reddot(spec["optic_y"], rail_top, sz, half_w=spec.get("optic_w", 0.0165), win_h=spec.get("optic_h", 0.0125))
+        reddot(spec["optic_y"], rail_top, sz, half_w=spec.get("optic_w", 0.0165), win_h=spec.get("optic_h", 0.0125),
+               node="optic")
     else:
         iron_rear(spec["rear_y"], rail_top, sz)
         iron_front(spec["front_y"], rail_top, sz)
 
     return {"bore_z": bz, "sight_z": sz, "muzzle_y": my1,
-            "eject": (hw + 0.004, ry0 + 0.085, bz - 0.001), "focus": ((mw0 + mw1) * 0.5 - 0.02, lz1 - 0.018)}
+            "eject": (hw + 0.004, ry0 + 0.085, bz - 0.001), "focus": ((mw0 + mw1) * 0.5 - 0.02, lz1 - 0.018),
+            # gunsmith mounts (build_attachments): rail top, handguard, bare barrel end
+            "rail_top": rail_top, "ry0": ry0, "hg1": hg1, "hg_r": hr, "by1": by1, "br": br}
 
 
 def gun_breaker():
@@ -1046,7 +1049,8 @@ def gun_breaker():
         tube_ring_y(bm, 0, SZ, RY - 0.0016, RY + 0.0019, 0.0062, 0.0080, seg=40)
         prism_x(bm, [(RY - 0.0026, 0.112), (RY + 0.0026, 0.112), (RY + 0.0016, SZ - 0.0072),
                      (RY - 0.0016, SZ - 0.0072)], -0.0018, 0.0018)
-    part("rear_sight", rear, COL["anod"], "metal", "dressing", bevel=0.0004, seg=1)
+    # (gunsmith) its own node: a receiver optic hides the ghost ring (weapon_meshes.js)
+    part("rear_sight", rear, COL["anod"], "metal", "irons", bevel=0.0004, seg=1)
 
     # SIGHT RIB (2026-11-13 ADS pass). At ADS the receiver's flat top sat 1.2 cm under the eye
     # line, 7-26 cm away: bare anodized metal at grazing incidence mirrors the sky fill and the
@@ -1112,7 +1116,8 @@ def gun_breaker():
         rbox(bm, -0.0210, 0.0210, -0.252, -0.238, -0.076, 0.054)
     part("buttpad", pad, COL["rubber"], "rubber", bevel=0.0030, seg=2)
     return {"bore_z": bz, "sight_z": SZ, "muzzle_y": 0.750, "eject": (0.020, 0.100, 0.083),
-            "focus": (0.090, 0.075)}
+            "focus": (0.090, 0.075),
+            "rail_top": 0.1150, "by1": 0.750, "br": 0.0118}
 
 
 def gun_pike():
@@ -1189,7 +1194,8 @@ def gun_pike():
         rbox(bm, -0.0128, 0.0128, -0.034, 0.012, -0.088, -0.078)      # baseplate
     part("mag", mag, COL["poly"], "poly", "mag", bevel=0.0015, seg=2)
     return {"bore_z": bz, "sight_z": sz, "muzzle_y": 0.186, "eject": (0.014, 0.040, 0.066),
-            "focus": (0.080, 0.050)}
+            "focus": (0.080, 0.050),
+            "rail_top": 0.0735, "by1": 0.186, "br": 0.0074}
 
 
 SPECS = {
@@ -1484,6 +1490,325 @@ def studio(wid, joined, arms, focus=None):
     sc.camera = old_cam
 
 
+# ===========================================================================
+# GUNSMITH ATTACHMENTS (2026-11-13) -> assets/weapons/attachments.glb
+# ===========================================================================
+# One shared GEOMETRY-ONLY GLB holding every weapon's optional parts, authored in
+# that weapon's own build frame so they sit exactly on its rail / barrel / handguard:
+#   node  <wid>__<att>                 (one mesh per attachment, per weapon)
+#   empty <wid>__<att>__SIGHT          optics: a point ON the sight line (y = sightY)
+#   empty <wid>__<att>__MUZZLE         muzzle devices: the new muzzle (flash origin)
+#   empty <wid>__<att>__BEAM           laser: the emitter
+# Materials are exported WITHOUT textures: weapon_meshes.js binds each mesh to the
+# host gun's own (detail-mapped, camo-patched) material of the same name at load, so
+# the parts cost geometry bytes only and wear the gun's finish and camo.
+# The guns' factory optic / muzzle device / ghost ring are their own GLB nodes
+# ("optic", "muzzle", "irons") so the viewmodel can swap them for these.
+# Ids mirror core/sim/attachments.js GUNSMITH.weapons[*].slots.
+# usage: blender ... --python tools/a5_build_guns.py -- attachments
+ATT_EYE = {"warden": 0.27, "vesper": 0.25, "corvus": 0.34, "breaker": 0.15, "pike": 0.34}  # eye->grip at ADS (posAds.z)
+ATT = {}          # node -> {"sight": z|None, "muzzle": (y, z)|None, "beam": (x, y, z)|None}
+
+
+def _att(wid, att, **kw):
+    ATT[f"{wid}__{att}"] = kw
+    return f"{wid}__{att}"
+
+
+def att_holo(wid, y, rail_top, sight_z, node):
+    """Wide-window holographic sight: clamp, battery body, a squared hood around a big
+    window, and the dot + ring reticle (unlit red, generator material br5_dot) floating
+    in the window on the sight line. Ring sized to ~65 MOA at this weapon's eye relief."""
+    z0 = rail_top + 0.006
+    hw, wh = 0.0185, 0.0125                 # outer half-width, window half-height
+    top = sight_z + wh + 0.0045
+
+    def body(bm):
+        rbox(bm, -0.0125, 0.0125, y - 0.030, y + 0.030, rail_top - 0.004, z0)                   # clamp base
+        cyl_x(bm, y - 0.018, rail_top - 0.0005, 0.0125, 0.0185, 0.0048, seg=14)                  # cross bolts
+        cyl_x(bm, y + 0.018, rail_top - 0.0005, 0.0125, 0.0185, 0.0048, seg=14)
+        rbox(bm, -hw, hw, y - 0.006, y + 0.034, z0 - 0.001, sight_z - wh - 0.0005)              # battery body
+        prism_y(bm, [(-hw, z0 - 0.001), (hw, z0 - 0.001), (hw, top - 0.005), (hw - 0.005, top),
+                     (-hw + 0.005, top), (-hw, top - 0.005)], y - 0.028, y + 0.012)              # hood
+        for sx in (-1, 1):                                                                       # buttons
+            rbox(bm, sx * hw - 0.0015, sx * hw + 0.0015, y + 0.016, y + 0.026, sight_z - wh - 0.008, sight_z - wh - 0.003)
+
+    def cut(bm):
+        iw = hw - 0.0032
+        prism_y(bm, [(-iw, sight_z - wh), (iw, sight_z - wh), (iw, sight_z + wh - 0.003), (iw - 0.003, sight_z + wh),
+                     (-iw + 0.003, sight_z + wh), (-iw, sight_z + wh - 0.003)], y - 0.050, y + 0.050)
+    part(node + "_body", body, COL["optic"], "optic", node, bevel=0.0009, seg=2, angle=25, cut=cut)
+    yr = y - 0.006                                   # reticle plane (front third of the hood)
+    dist = ATT_EYE[wid] + yr
+    r_ring = dist * math.tan(math.radians(65 / 60.0 * 0.5))
+    w_ring = max(0.00028, dist * 0.0012)
+
+    def ret(bm):
+        cyl_y(bm, 0.0, sight_z, yr, yr + 0.0004, max(0.00075, dist * 0.0033), seg=12)             # centre dot
+        tube_ring_y(bm, 0.0, sight_z, yr, yr + 0.0004, r_ring - w_ring, r_ring, seg=40)          # ring
+    part(node + "_reticle", ret, (1.0, 0.05, 0.03), "dot", node, bevel=0)
+
+
+def att_minidot(y0, y1, rail_top, sight_z, half_w, win_h, node):
+    """Pistol / shotgun mini reflex sight: a low body with a sloped hood and one red
+    dot on the sight line."""
+    z0 = rail_top
+    top = sight_z + win_h + 0.003
+
+    def body(bm):
+        rbox(bm, -half_w, half_w, y0, y1, z0 - 0.0015, sight_z - win_h - 0.0005)                 # base
+        prism_x(bm, [(y0, sight_z - win_h - 0.001), (y0 + 0.010, top), (y1 - 0.004, top), (y1, sight_z - win_h - 0.001)],
+                -half_w, half_w)                                                                  # hood
+
+    def cut(bm):
+        iw = half_w - 0.0024
+        prism_y(bm, [(-iw, sight_z - win_h), (iw, sight_z - win_h), (iw, sight_z + win_h - 0.002),
+                     (iw - 0.002, sight_z + win_h), (-iw + 0.002, sight_z + win_h), (-iw, sight_z + win_h - 0.002)],
+                y0 - 0.02, y1 + 0.02)
+    part(node + "_body", body, COL["optic"], "optic", node, bevel=0.0008, seg=2, angle=25, cut=cut)
+
+    def dot(bm):
+        yy = y0 + (y1 - y0) * 0.55
+        cyl_y(bm, 0.0, sight_z, yy, yy + 0.0004, 0.00090, seg=12)
+    part(node + "_dot", dot, (1.0, 0.05, 0.03), "dot", node, bevel=0)
+
+
+def att_can(y0, L, z, R, r_neck, node):
+    """Screw-on suppressor. Grip rings are RAISED bands, not boolean grooves: the
+    grooved version cost ~14k vertices per can for the same read at arm's length."""
+    def can(bm):
+        cyl_y(bm, 0, z, y0, y0 + 0.012, r_neck, R, seg=28)
+        cyl_y(bm, 0, z, y0 + 0.012, y0 + L - 0.006, R, R, seg=28)
+        cyl_y(bm, 0, z, y0 + L - 0.006, y0 + L, R, R * 0.88, seg=28)
+        for k in range(3):
+            yy = y0 + 0.020 + k * 0.010
+            tube_ring_y(bm, 0, z, yy, yy + 0.004, R - 0.001, R + 0.0012, seg=28)
+
+    def ccut(bm):
+        cyl_y(bm, 0, z, y0 + L - 0.004, y0 + L + 0.003, 0.0048, seg=16)
+    part(node + "_can", can, COL["anod"], "metal", node, bevel=0.0008, seg=1, cut=ccut)
+
+
+def att_comp(y0, L, z, r, node):
+    def b(bm):
+        cyl_y(bm, 0, z, y0, y0 + L, r, r * 0.97, seg=8)                  # octagonal body
+
+    def cut(bm):
+        for k in range(3):                                                # top ports push the muzzle down
+            yy = y0 + 0.012 + k * 0.012
+            rbox(bm, -r * 0.45, r * 0.45, yy, yy + 0.006, z + r * 0.15, z + r * 1.5)
+        for k in range(2):                                                # side ports
+            yy = y0 + 0.016 + k * 0.014
+            rbox(bm, -r * 1.5, r * 1.5, yy, yy + 0.005, z - r * 0.35, z + r * 0.10)
+        cyl_y(bm, 0, z, y0 + L - 0.010, y0 + L + 0.003, r * 0.45, seg=16)
+    part(node + "_comp", b, COL["anod"], "metal", node, bevel=0.0008, seg=2, angle=25, cut=cut)
+
+
+def att_grip(y, z_bot, node):
+    """Vertical fore grip clamped to the handguard's bottom flat."""
+    def b(bm):
+        rbox(bm, -0.0110, 0.0110, y - 0.018, y + 0.018, z_bot - 0.008, z_bot + 0.002)             # clamp
+        cyl_z(bm, 0.0, y, z_bot - 0.082, z_bot - 0.006, 0.0118, 0.0128, seg=24)                  # body
+        cyl_z(bm, 0.0, y, z_bot - 0.090, z_bot - 0.080, 0.0132, 0.0120, seg=24)                  # end cap
+    part(node + "_grip", b, COL["poly"], "grip", node, bevel=0.0018, seg=2, angle=28)
+
+
+def att_laser(x, y, z, node, length=0.050):
+    """Box laser module on a side / under rail: housing, pressure switch, lens."""
+    def b(bm):
+        rbox(bm, x - 0.0105, x + 0.0105, y - length * 0.5, y + length * 0.5, z - 0.011, z + 0.011)
+        rbox(bm, x - 0.012, x + 0.012, y - length * 0.5 + 0.006, y - length * 0.5 + 0.016, z - 0.0125, z + 0.0125)
+        cyl_y(bm, x + 0.004, z + 0.004, y + length * 0.5, y + length * 0.5 + 0.004, 0.0042, seg=18)    # lens bezel
+    part(node + "_body", b, COL["anod"], "metal", node, bevel=0.0012, seg=2, angle=25)
+
+    def lens(bm):
+        cyl_y(bm, x + 0.004, z + 0.004, y + length * 0.5 + 0.0040, y + length * 0.5 + 0.0044, 0.0026, seg=16)
+    part(node + "_lens", lens, (1.0, 0.05, 0.03), "dot", node, bevel=0)
+    return (x + 0.004, y + length * 0.5 + 0.0045, z + 0.004)
+
+
+def att_tube_ext(node):
+    """Breaker magazine-tube extension (+2 shells) with a second barrel clamp."""
+    def b(bm):
+        cyl_y(bm, 0, 0.060, 0.700, 0.742, 0.0115, seg=28)
+        cyl_y(bm, 0, 0.060, 0.742, 0.748, 0.0122, 0.0108, seg=28)          # cap
+        rbox(bm, -0.0105, 0.0105, 0.722, 0.736, 0.054, 0.094)                # clamp
+        cyl_x(bm, 0.729, 0.074, -0.013, 0.013, 0.0030, seg=12)
+    part(node + "_tube", b, COL["anod"], "metal", node, bevel=0.0010)
+
+
+def att_pike_comp(n, bz):
+    def b(bm):
+        rbox(bm, -0.0115, 0.0115, 0.184, 0.218, 0.034, 0.0735)
+
+    def cut(bm):
+        for k in range(3):
+            yy = 0.192 + k * 0.008
+            rbox(bm, -0.004, 0.004, yy, yy + 0.004, 0.060, 0.080)
+        cyl_y(bm, 0, bz, 0.205, 0.222, 0.0050, seg=18)
+    part(n + "_comp", b, COL["anod"], "metal", n, bevel=0.0012, seg=2, cut=cut)
+
+
+def build_attachments():
+    """Build every weapon's attachments into ONE glb (see the block comment above)."""
+    infos = {}
+    for wid in ("warden", "vesper", "corvus", "breaker", "pike"):
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        PARTS.clear()
+        _TEX.clear()
+        materials()
+        infos[wid] = gun_ar(SPECS[wid]) if wid in SPECS else (gun_breaker() if wid == "breaker" else gun_pike())
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    PARTS.clear()
+    _TEX.clear()
+    ATT.clear()
+    # plain, texture-free materials carrying only the NAME contract (runtime rebinds)
+    M = {}
+    for key, name, col in (("metal", "br5_metal", (0.3, 0.3, 0.3)), ("poly", "br5_polymer", (0.2, 0.2, 0.2)),
+                           ("grip", "br5_polymer_grip", (0.2, 0.2, 0.2)), ("optic", "br5_optic", (0.3, 0.3, 0.3)),
+                           ("dot", "br5_dot", (1.0, 0.05, 0.03)), ("lume", "br5_lume", (0.6, 0.8, 0.6)),
+                           ("glass", "br5_glass", (0.02, 0.05, 0.06))):
+        m = bpy.data.materials.new(name)
+        m.use_nodes = True
+        b = next(n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+        b.inputs["Base Color"].default_value = (*col, 1)
+        M[key] = m
+
+    for wid, I in infos.items():
+        bz, rt = I["bore_z"], I["rail_top"]
+        if wid in SPECS:                                   # AR platform: warden / vesper / corvus
+            ry0, hg1, hr, by1, br = I["ry0"], I["hg1"], I["hg_r"], I["by1"], I["br"]
+            hand_y = A5_POSE[wid][1][1][1]
+            if wid in ("warden", "vesper"):                # folding irons on the rail
+                n = _att(wid, "irons", sight=rt + 0.020)
+                iron_rear(ry0 + 0.020, rt, rt + 0.020, node=n)
+                iron_front(hg1 - 0.020, rt, rt + 0.020, node=n)
+                # polymer folding sights (MBUS lines), matte: a flat anodized tower face square
+                # to the eye mirrored the sky as a pale slab in the ADS picture (in-game capture)
+                for o, nd in PARTS:
+                    if nd == n:
+                        o["a5_mat"] = "grip"
+                        o["a5_col"] = list(COL["poly"])
+            hz = rt + 0.0335
+            n = _att(wid, "holo", sight=hz)
+            att_holo(wid, -0.020 if wid != "corvus" else 0.010, rt, hz, n)
+            if wid == "corvus":
+                dz = rt + 0.0325
+                n = _att(wid, "reddot", sight=dz)
+                reddot(0.000, rt, dz, node=n)
+            if wid == "warden":
+                sz = rt + 0.034
+                n = _att(wid, "scope", sight=sz)
+                scope(-0.100, 0.150, sz, rail_top=rt, node=n)
+            if wid in ("warden", "corvus"):                # (the vesper's can is factory)
+                L, R = (0.160, 0.0190) if wid == "warden" else (0.185, 0.0215)
+                n = _att(wid, "suppressor", muzzle=(by1 - 0.002 + L, bz))
+                att_can(by1 - 0.002, L, bz, R, br * 1.3, n)
+            Lc = 0.050
+            n = _att(wid, "compensator", muzzle=(by1 - 0.002 + Lc, bz))
+            att_comp(by1 - 0.002, Lc, bz, br * 1.55, n)
+            n = _att(wid, "grip")                          # ahead of the support hand
+            att_grip(min(hand_y + 0.080, hg1 - 0.030), bz - hr, n)
+            n = _att(wid, "laser")                         # right-side rail, up front
+            ATT[n]["beam"] = att_laser(hr + 0.0105, hg1 - 0.040, bz, n)
+        elif wid == "breaker":
+            n = _att(wid, "reddot", sight=rt + 0.0215)
+            att_minidot(0.060, 0.104, rt, rt + 0.0215, 0.0135, 0.0098, n)
+            n = _att(wid, "holo", sight=rt + 0.0335)
+            att_holo(wid, 0.090, rt, rt + 0.0335, n)
+            L = 0.150
+            n = _att(wid, "suppressor", muzzle=(0.748 + L, bz))
+            att_can(0.748, L, bz, 0.0235, 0.0135, n)
+            n = _att(wid, "laser")                         # clamped beside the magazine tube
+            ATT[n]["beam"] = att_laser(0.0225, 0.640, 0.060, n)
+            n = _att(wid, "extmag")
+            att_tube_ext(n)
+        else:                                               # pike
+            n = _att(wid, "reddot", sight=rt + 0.0170)
+            att_minidot(-0.024, 0.010, rt, rt + 0.0170, 0.0110, 0.0075, n)
+            L = 0.130
+            n = _att(wid, "suppressor", muzzle=(0.186 + L, bz))
+            att_can(0.184, L + 0.002, bz, 0.0165, 0.0080, n)
+            n = _att(wid, "compensator", muzzle=(0.218, bz))
+            att_pike_comp(n, bz)
+            n = _att(wid, "laser")                         # under the dust-cover rail
+            ATT[n]["beam"] = att_laser(0.0, 0.140, 0.004, n, length=0.044)
+
+    # paint, plain material, join by node
+    nodes = {}
+    for o, node in PARTS:
+        if not o.data.vertices:
+            continue
+        paint(o)
+        o.data.materials.clear()
+        o.data.materials.append(M.get(o["a5_mat"], M["metal"]))
+        bpy.context.view_layer.objects.active = o
+        for so in bpy.context.selected_objects:
+            so.select_set(False)
+        o.select_set(True)
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.uv.cube_project(cube_size=0.05)
+        bpy.ops.object.mode_set(mode="OBJECT")
+        shade_smooth(o, 34)
+        nodes.setdefault(node, []).append(o)
+    joined = []
+    for node, objs in nodes.items():
+        for so in bpy.context.selected_objects:
+            so.select_set(False)
+        for o in objs:
+            o.select_set(True)
+        bpy.context.view_layer.objects.active = objs[0]
+        if len(objs) > 1:
+            bpy.ops.object.join()
+        j = bpy.context.view_layer.objects.active
+        j.name = node
+        j.data.name = node
+        joined.append(j)
+    empties = []
+    for node, d in ATT.items():
+        if d.get("sight") is not None:
+            e = bpy.data.objects.new(node + "__SIGHT", None); e.location = (0, 0, d["sight"]); link(e); empties.append(e)
+        if d.get("muzzle") is not None:
+            e = bpy.data.objects.new(node + "__MUZZLE", None); e.location = (0, d["muzzle"][0], d["muzzle"][1]); link(e); empties.append(e)
+        if d.get("beam") is not None:
+            e = bpy.data.objects.new(node + "__BEAM", None); e.location = d["beam"]; link(e); empties.append(e)
+    tris = 0
+    for o in joined:
+        for so in bpy.context.selected_objects:
+            so.select_set(False)
+        o.select_set(True)
+        bpy.context.view_layer.objects.active = o
+        mod = o.modifiers.new("tri", "TRIANGULATE")
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+        tris += len(o.data.polygons)
+    for o in bpy.context.scene.objects:
+        o.select_set(o in joined or o in empties)
+    out = os.path.join(OUT_DIR, "attachments.glb")
+    bpy.ops.export_scene.gltf(
+        filepath=out, export_format="GLB", use_selection=True,
+        export_animations=False, export_skins=False, export_morph=False,
+        export_apply=True, export_yup=True, export_tangents=False,
+        export_vertex_color="NAME", export_vertex_color_name="Col", export_all_vertex_colors=False)
+    import shutil, subprocess
+    gt = shutil.which("gltf-transform")
+    before = os.path.getsize(out)
+    if gt:
+        for attempt in range(3):
+            # colour at 8 bits: the vertex paint is a dark base + wear, 8 bits is plenty
+            r = subprocess.run([gt, "draco", out, out, "--quantize-position", "15",
+                                "--quantize-normal", "9", "--quantize-texcoord", "10",
+                                "--quantize-color", "8", "--encode-speed", "0"],
+                               capture_output=True, text=True, shell=(os.name == "nt"))
+            if r.returncode == 0:
+                break
+    rep = {"weapon": "attachments", "nodes": sorted(nodes.keys()), "tris": tris,
+           "sights": {k: round(v["sight"], 4) for k, v in ATT.items() if v.get("sight") is not None},
+           "bytes_raw": before, "bytes": os.path.getsize(out)}
+    print("A5ATT " + json.dumps(rep))
+    return rep
+
+
 ids = ONLY or ["warden", "vesper", "corvus", "breaker", "pike"]
-reports = [build(w) for w in ids]
+reports = [build_attachments() if w == "attachments" else build(w) for w in ids]
 print("A5DONE " + json.dumps(reports))

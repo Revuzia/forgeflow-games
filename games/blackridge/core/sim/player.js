@@ -17,6 +17,7 @@ import { fireShot, dirFromAngles } from "./ballistics.js";
 import { resolveSwitch as resolveSwitchTarget, normalise as normaliseLoadout } from "./loadout.js";
 import { spawnGrenade, detonateAt } from "./grenades.js";
 import { hasPerk, PERK_FX } from "./classes.js";
+import { weaponForBody } from "./attachments.js"; // [gunsmith] per-body effective weapon table
 // [equipment lane] tactical throw verb, tripmine planting, concussion slow
 import { stepPlayerEquipment, plantFromBody, stunLevel, stunMoveMult } from "./equipment.js";
 
@@ -153,7 +154,7 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
   const buffered = (k) => t - m.buf[k] <= MOVE.BUFFER_S;
   const consume = (k) => { m.buf[k] = -9; };
 
-  const weapon = weapons[p.weapon.id];
+  const weapon = weaponForBody(weapons, p, p.weapon.id); // [gunsmith]
 
   // ---- mantle in progress (§1.5) — locked movement, no fire, buffered fire
   if (m.mantle) {
@@ -270,6 +271,7 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
     }
     // [equipment lane] concussion: every move speed x0.55 at full stun, easing out
     if (stunned) { const sm = stunMoveMult(p, t); wish[0] *= sm; wish[1] *= sm; }
+    if (weapon && weapon.moveMult) { wish[0] *= weapon.moveMult; wish[1] *= weapon.moveMult; } // [gunsmith] fore grip weight
   }
 
   // ---- slide physics (§1.4) or ground/air accel (§1.2)
@@ -533,7 +535,7 @@ export function stepActorWeapon(sim, who, vc, dt) {
   if (!actor || (isP ? !actor.alive : !actor.alive)) return;
   const w = actor.weapon;
   const weapons = sim.weapons;
-  const weapon = weapons[w.id];
+  const weapon = weaponForBody(weapons, actor, w.id); // [gunsmith]
   if (!weapon) return;
   const m = isP ? state.player._m : null;
 
@@ -562,8 +564,9 @@ export function stepActorWeapon(sim, who, vc, dt) {
       actor._lastWeapon = w.id; // Q = swap back
       w.id = to;
       const na = actor._slotAmmo && actor._slotAmmo[to];
-      w.mag = na ? na.mag : (weapons[to] ? weapons[to].mag : 0);
-      w.reserve = na ? na.reserve : (weapons[to] ? weapons[to].reserve : 0);
+      const wto = weaponForBody(weapons, actor, to); // [gunsmith]
+      w.mag = na ? na.mag : (wto ? wto.mag : 0);
+      w.reserve = na ? na.reserve : (wto ? wto.reserve : 0);
       w.state = "idle";
       w.stateT = 0;
       w.recoilIndex = 0;
@@ -639,7 +642,7 @@ export function stepActorWeapon(sim, who, vc, dt) {
   const interval = 60 / weapon.rpm;
   const sinceShot = t - (w.lastShotT ?? -9);
   const sprintOutRow = SPRINT_OUT_S[weapon.class] || SPRINT_OUT_S.ar;
-  const sprintOut = sprintOutRow[vc.sprintWasTac ? 1 : 0];
+  const sprintOut = sprintOutRow[vc.sprintWasTac ? 1 : 0] * (weapon.sprintOutMult || 1); // [gunsmith] laser
   const sprintReady = (vc.sprintState == null || vc.sprintState === "none") &&
     (vc.sprintExitT == null || t - vc.sprintExitT >= sprintOut);
   const raiseReady = t >= (vc.mantleRaiseUntil ?? -9);
@@ -689,7 +692,9 @@ export function stepActorWeapon(sim, who, vc, dt) {
       w.state = "firing";
       w.stateT = 0;
       fireShot(sim, who, weapon, origin, dir, sim.rng.spread);
-      w.lastShotT = t;
+      // [gunsmith] RAPID FIRE carries the sub-tick remainder through a held burst, so
+      // its rpm is the real cadence instead of being rounded up to whole 60 Hz ticks
+      w.lastShotT = weapon.fireCarry && sinceShot < interval + dt ? w.lastShotT + interval : t;
       w.recoilIndex = (w.recoilIndex || 0) + 1;
       if (isP && m) {
         m.fireToSprintLockUntil = t + MOVE.FIRE_SPRINT_LOCK_S;
@@ -791,13 +796,14 @@ export function stepBotLocomotion(sim, bot, dt) {
   const wcap = Math.max(Math.abs(mz) * fwdSpd, Math.abs(mx) * strSpd);
   if (wl > wcap && wl > 0) { wx *= wcap / wl; wz *= wcap / wl; wl = wcap; }
   {
-    const wpn = sim.weapons && bot.weapon ? sim.weapons[bot.weapon.id] : null;
+    const wpn = sim.weapons && bot.weapon ? weaponForBody(sim.weapons, bot, bot.weapon.id) : null; // [gunsmith]
     let tgt = null;
     const stunned = stunLevel(bot, sim.state.time) > 0; // [equipment lane] no sprint while concussed
     if (cmd.crouch) tgt = hasPerk(bot, "doubleTime") ? MOVE.CROUCH * PERK_FX.doubleTime.crouchMult : MOVE.CROUCH;
     else if (cmd.sprint && mz > 0.5 && !stunned) tgt = MOVE.SPRINT;
     else if (bot.weapon && bot.weapon.ads) tgt = MOVE.WALK * (wpn && wpn.adsMoveMult != null ? wpn.adsMoveMult : 0.6);
     if (tgt != null && wl > 0.01) { wx = (wx / wl) * tgt; wz = (wz / wl) * tgt; }
+    if (wpn && wpn.moveMult) { wx *= wpn.moveMult; wz *= wpn.moveMult; } // [gunsmith] fore grip weight
     if (stunned) { const sm = stunMoveMult(bot, sim.state.time); wx *= sm; wz *= sm; } // [equipment lane]
   }
 
