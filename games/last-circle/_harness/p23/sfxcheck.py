@@ -9,6 +9,8 @@ Web Audio context, every game event fired against the fully decoded pack) plus f
     python _harness/p23/sfxcheck.py --disk --plant hot-step         # one footstep take +7 dB in the loudness table          - MUST FAIL loudness
     python _harness/p23/sfxcheck.py --disk --plant no-amb           # the Savanna loses its recorded ambience layers         - MUST FAIL amb-layers
     python _harness/p23/sfxcheck.py --disk --plant no-licence-row   # one new file's AUDIO_SOURCES.md row is dropped         - MUST FAIL licence
+    python _harness/p23/sfxcheck.py --disk --plant pcm-lossy        # the smoke vent (90 % of its energy > 7 kHz) held at 16 kHz - MUST FAIL pcm-rate
+    python _harness/p23/sfxcheck.py --disk --plant amb-leak         # a map change no longer frees the other maps' ambience    - MUST FAIL pcm-bounded
 
 Rows (PLAN.md Lane R2B acceptance bars):
   synth-count     synthesised one-shot cues <= 8, every one a KEPT tonal cue (hit marker, kill / knock confirm, ping, countdown, UI, team
@@ -22,6 +24,11 @@ Rows (PLAN.md Lane R2B acceptance bars):
   reload-classes  >= 4 distinct reload sets, mapped by weapon class (the census: reloadStart of every gun in SIM.WEAPONS, the cues it starts)
   amb-layers      >= 2 RECORDED layers per map theme (AMB_REC), each file present; the census starts them on every map and retires the synth bed
                   (the in-game level / spectrum rows are p23_audiotap's amb-* rows)
+  pcm-rate        every PCM_HZ entry (a file held decoded at 16 / 24 kHz) loses <= 0.1 % of its energy (the band above 0.45 x rate,
+                  ffmpeg + FFT), the census decodes it at that rate, and nothing else is held below 48 kHz
+  pcm-bounded     the census changes map 3 times: after each change only that map's ambience layers (+ the underwater bed) are decoded
+  pcm-budget      decoded PCM the added files put in one session (eager pack at its census rates + underwater bed + the largest map's
+                  resident ambience) <= 10.0 MB (PLAN R2B Budget "+6-10 MB")
   bytes           sfx added since the W10 base <= 2.0 MB; total assets/audio/sfx <= 3.5 MB
   licence         every sfx file added since the W10 base has an AUDIO_SOURCES.md row with a source and a licence
 """
@@ -61,6 +68,8 @@ LOUD_TOL = 2.0
 SWAP_PEAK_MIN = -6.0
 RELOAD_SETS_MIN = 4
 ADDED_MAX, TOTAL_MAX = 2.0e6, 3.5e6
+PCM_SHARE = 0.001               # a file held below 48 kHz may lose at most 0.1 % (-30 dB) of its energy (the band above 0.45 x its rate)
+PCM_BUDGET = 10.0e6             # PLAN R2B Budget: decoded memory "+6-10 MB" (the top of the estimate)
 
 PLANTS = {
     "synth-loot": ("audio", [(r'if (!sample("pickup", own ? null : a.pos, own ? 0.24 : 0.14, 16, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY))',
@@ -69,6 +78,8 @@ PLANTS = {
     "hot-step": ("audio", [("// LOUD-TABLE-END", 'CLIP_DB["step_grass_001"] = (CLIP_DB["step_grass_001"] || 0) + 7;\n// LOUD-TABLE-END')]),
     "no-amb": ("audio", [('savanna:  [["amb_savanna_bed", 0.5], ["amb_savanna_wind", 0.5]],', 'savanna:  [],')]),
     "no-licence-row": ("sources", None),
+    "pcm-lossy": ("audio", [("// PCM-TABLE-END", 'PCM_HZ["smoke_hiss_0"] = 16000;\n// PCM-TABLE-END')]),
+    "amb-leak": ("audio", [("function ambEvict(th) {\n  if (_ambTheme === th) return;", "function ambEvict(th) {\n  return;")]),
 }
 
 CENSUS_JS = r"""
@@ -101,15 +112,18 @@ class FakeCtx {
   decodeAudioData(ab) { const d = new Float32Array(4800); return Promise.resolve({ __file: ab.__file, numberOfChannels: 1, length: 4800, sampleRate: 48000, duration: 1, getChannelData: () => d }); }
   resume() { return Promise.resolve(); } suspend() { return Promise.resolve(); }
 }
+// the W10 R2B store-rate decoders (PCM_HZ): a buffer decoded here carries the decoder's rate, which the pcm rows read back
+class FakeOff { constructor(ch, len, sr) { this.sampleRate = sr; }
+  decodeAudioData(ab) { const d = new Float32Array(16); return Promise.resolve({ __file: ab.__file, numberOfChannels: 1, length: 16, sampleRate: this.sampleRate, duration: 1, getChannelData: () => d }); } }
 const winL = {};
-globalThis.window = { AudioContext: FakeCtx, addEventListener: (n, f) => { (winL[n] = winL[n] || []).push(f); }, removeEventListener() {} };
+globalThis.window = { AudioContext: FakeCtx, OfflineAudioContext: FakeOff, addEventListener: (n, f) => { (winL[n] = winL[n] || []).push(f); }, removeEventListener() {} };
 globalThis.document = { addEventListener() {}, visibilityState: "visible", querySelectorAll: () => [] };
 globalThis.requestAnimationFrame = () => 1; globalThis.cancelAnimationFrame = () => {};
 globalThis.Audio = class { constructor() { this.paused = true; this.volume = 1; } play() { return Promise.resolve(); } pause() {} addEventListener() {} };
 const fetched = [];
 globalThis.fetch = async (url) => { const m = /assets\/audio\/sfx\/([^/?]+)\.ogg/.exec(String(url)); if (!m) return { ok: false };
   const p = path.join(SFXD, m[1] + ".ogg"); if (!fs.existsSync(p)) return { ok: false }; fetched.push(m[1]);
-  return { ok: true, arrayBuffer: async () => ({ __file: m[1] }), blob: async () => ({}) }; };
+  return { ok: true, arrayBuffer: async () => ({ __file: m[1], slice() { return { __file: m[1] }; } }), blob: async () => ({}) }; };
 globalThis.URL.createObjectURL = () => "blob:x";
 const realST = setTimeout, realSI = setInterval;
 // during a fired event the game's timers go to a queue that is drained in time order right after it (each run a new voice-pool frame:
@@ -138,6 +152,7 @@ const T = A.sfxTable(); const want = new Set(); for (const k in T.SFX) for (cons
 for (let i = 0; i < 200 && A.readback(W).sfxDecoded < [...want].filter((n) => fs.existsSync(path.join(SFXD, n + ".ogg"))).length; i++) await new Promise((r) => realST(r, 10));
 const ctx = globalThis.window.__AUDIO_CTX__;
 const decoded = A.readback(W).sfxDecoded;
+const decRate = A.pcmCensus ? A.pcmCensus().sfx : {};
 // ── the census ────────────────────────────────────────────────────────────────
 const cases = [];
 function fire(label, ev, ...a) {
@@ -195,17 +210,20 @@ fire("roundBounce", "roundBounce", { x: 5, y: 0.2, z: 0 }, "glauncher", 6);
 fire("teamEliminated own", "teamEliminated", "T1"); fire("teamEliminated other", "teamEliminated", "T2");
 fire("dummyPopped", "dummyPopped", E);
 // ── the ambience, per map theme ──────────────────────────────────────────────
-const amb = {};
+const amb = {}, ambRate = {};
 for (const th of Object.keys(T.AMB_REC).concat(["forest", "tropical", "savanna"].filter((x) => !T.AMB_REC[x]))) {
   W.phase = "menu"; A.update(W, 0.02); W.map.K.theme = th; W.phase = "match";
   REC.starts = []; REC.on = true; let rb = null;
   for (let i = 0; i < 60; i++) { ctx.currentTime += 0.1; A.update(W, 0.02); rb = A.readback(W).ambience; if (rb && rb.recorded) break; await new Promise((r) => realST(r, 5)); }
   REC.on = false;
-  amb[th] = { readback: rb, loops: REC.starts.filter((s) => s.loop && s.file).map((s) => s.file), synthLoops: REC.starts.filter((s) => s.synth).length };
+  const lb = REC.starts.filter((s) => s.loop && s.file).map((s) => s.file);
+  if (A.pcmCensus) Object.assign(ambRate, A.pcmCensus().amb);
+  amb[th] = { readback: rb, loops: lb, synthLoops: REC.starts.filter((s) => s.synth).length, resident: (rb && rb.resident) || [] };
 }
 W.phase = "menu"; A.update(W, 0.02);
-fs.writeFileSync(args.out, JSON.stringify({ listeners: Object.keys(H), cases, reloads, amb, decoded, want: want.size, fetched: fetched.length,
-  table: { SFX: T.SFX, CLIP_DB: T.CLIP_DB, LOUD_GROUP: T.LOUD_GROUP, AMB_REC: T.AMB_REC, RELOAD_SETS: T.RELOAD_SETS || null, RELOAD_SET_OF: T.RELOAD_SET_OF || null } }));
+const ambAfter = (A.readback(W).ambience || {}).resident || [];
+fs.writeFileSync(args.out, JSON.stringify({ listeners: Object.keys(H), cases, reloads, amb, ambAfter, ambRate, decRate, decoded, want: want.size, fetched: fetched.length,
+  table: { SFX: T.SFX, CLIP_DB: T.CLIP_DB, LOUD_GROUP: T.LOUD_GROUP, AMB_REC: T.AMB_REC, UW_BED: T.UW_BED || null, PCM_HZ: T.PCM_HZ || {}, RELOAD_SETS: T.RELOAD_SETS || null, RELOAD_SET_OF: T.RELOAD_SET_OF || null } }));
 process.exit(0);
 """
 
@@ -376,6 +394,55 @@ def main():
             per[th] = {"layers": len(layers), "filesPresent": len(files), "loopsStarted": a.get("loops"), "synthBedLeft": (a.get("readback") or {}).get("synthBed")}
         ok = all(p["layers"] >= 2 and p["filesPresent"] >= 2 and len(p["loopsStarted"] or []) >= 2 and not p["synthBedLeft"] for p in per.values())
         v.check("amb-layers (>= 2 recorded layers per map, started in place of the synth bed)", ok, per, ">= 2 recorded loops on every map")
+        # ── pcm-rate / pcm-bounded / pcm-budget (W10 R2B repair: the decoded-memory budget, PLAN R2B "Budget") ──
+        _dur = {}
+        def dur(f):
+            if f not in _dur:
+                pth = os.path.join(sfxd, f + ".ogg")
+                _dur[f] = len(ffdecode(pth)) / 48000.0 if os.path.exists(pth) else 0.0
+            return _dur[f]
+        hz = T.get("PCM_HZ") or {}; dec = res.get("decRate") or {}; arate = res.get("ambRate") or {}; uwn = T.get("UW_BED")
+        bad, unseen = [], []
+        for f, r in sorted(hz.items()):
+            pth = os.path.join(sfxd, f + ".ogg")
+            if not os.path.exists(pth):
+                bad.append({"file": f, "why": "listed, no file"}); continue
+            x = ffdecode(pth).astype(np.float64); S = np.abs(np.fft.rfft(x)) ** 2; fr = np.fft.rfftfreq(len(x), 1 / 48000.0)
+            share = float(S[fr >= 0.45 * r].sum() / max(S.sum(), 1e-30))
+            got = dec.get(f, arate.get(f))
+            if share > PCM_SHARE:
+                bad.append({"file": f, "hz": r, "lostShare": round(share, 5)})
+            if got is None:
+                unseen.append(f)
+            elif got != r:
+                bad.append({"file": f, "hz": r, "censusHz": got})
+        stray = sorted(f for f, g in list(dec.items()) + list(arate.items()) if g < 48000 and f not in hz)
+        unseen_bad = [f for f in unseen if f != uwn]
+        v.check("pcm-rate (a file held below 48 kHz loses <= %.1f %% of its energy, and the runtime decodes it at its table rate)" % (PCM_SHARE * 100),
+                not bad and not stray and not unseen_bad,
+                {"listed": len(hz), "at16k": sum(1 for r in hz.values() if r == 16000), "at24k": sum(1 for r in hz.values() if r == 24000),
+                 "bad": bad[:10], "notInTable": stray[:10], "notDecodedInCensus": unseen}, "0 bad (share above 0.45 x rate <= %.3f)" % PCM_SHARE)
+        layers = {th: [l[0] for l in (ar.get(th) or [])] for th in ar}
+        visits, leak = [], []
+        for th, a in amb.items():
+            resd = sorted(a.get("resident") or [])
+            extra = [f for f in resd if f not in layers.get(th, []) and f != uwn]
+            miss = [f for f in layers.get(th, []) if f not in resd]
+            visits.append({"theme": th, "resident": resd})
+            if extra or miss:
+                leak.append({"theme": th, "otherThemesHeld": extra, "ownMissing": miss})
+        v.check("pcm-bounded (after each map change only that map's ambience layers stay decoded)", bool(layers) and len(visits) >= 3 and not leak,
+                {"visits": visits, "leaks": leak, "afterAll": res.get("ambAfter")}, "0 leaks over %d map changes" % len(visits))
+        pack = set(n for ks in T["SFX"].values() for n in ks)
+        added = set(f[:-4] for f in new_files)
+        eager = sum(dur(n) * dec.get(n, 48000) * 4 for n in added if n in pack)
+        uwb = dur(uwn) * hz.get(uwn, 48000) * 4 if uwn and uwn in added else 0.0
+        perv = {a2["theme"]: sum(dur(f) * arate.get(f, hz.get(f, 48000)) * 4 for f in a2["resident"] if f != uwn) for a2 in visits}
+        worst = eager + uwb + (max(perv.values()) if perv else 0.0)
+        v.check("pcm-budget (decoded PCM the R2B files add to one session <= %.1f MB: the pack + the underwater bed + the largest map's ambience)" % (PCM_BUDGET / 1e6),
+                bool(perv) and worst <= PCM_BUDGET,
+                {"MB": round(worst / 1e6, 2), "eagerPackMB": round(eager / 1e6, 2), "underwaterBedMB": round(uwb / 1e6, 2),
+                 "ambienceMBPerMap": {k: round(x / 1e6, 2) for k, x in perv.items()}}, "<= %.1f MB" % (PCM_BUDGET / 1e6))
         # ── bytes ──
         allb = sum(os.path.getsize(os.path.join(sfxd, f)) for f in os.listdir(sfxd) if f.endswith(".ogg"))
         addb = sum(os.path.getsize(os.path.join(sfxd, f)) for f in new_files)
