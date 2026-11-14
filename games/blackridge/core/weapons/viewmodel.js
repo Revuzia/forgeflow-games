@@ -60,7 +60,7 @@
 
 import * as THREE from "three";
 import { WEAPONS, SWAY, VIEWMODEL, FEEL, SLOT_ORDER } from "./weapon_data.js";
-import { loadWeaponGLB, loadedPrototypes, loadAllWeapons, invalidateWeapon, applyGunsmith } from "./weapon_meshes.js";
+import { loadWeaponGLB, loadedPrototypes, loadAllWeapons, invalidateWeapon, applyGunsmith, loadKnifeGLB } from "./weapon_meshes.js";
 // The SAME stride model the footsteps run on (player.js §1.6).
 import { strideLength } from "../sim/player.js";
 
@@ -183,6 +183,28 @@ const NADE = {
   back: { palm: [-0.25, 0.06, 0.11], arm: [-0.30, -0.35, -0.89], face: [0.5, 0.8, 0.1] },
   fwd: { palm: [-0.11, 0.36, 0.11], arm: [-0.20, -0.80, -0.56], face: [0.1, 0.3, -1] },
 };
+// [melee] QUICK KNIFE (sim: body._melee - windup 0.12 s, strike, recovery 0.60 s;
+// core/sim/melee.js). The support hand leaves the gun, draws the knife low-left,
+// cocks it up by the shoulder and drives it across and forward to the screen centre
+// on the strike beat, follows through, then returns to the handguard while the gun
+// (dropped right and rolled out of the way) comes back up. Same armSolve scheme as
+// the frag: palm centre + FOREARM direction + palm-facing hint, build frame, solved
+// per weapon against the measured arm axis. Keys are [t (s), pose]; the strike
+// lands at t = 0.12 (the sim's strike tick).
+const MELEE_VM = {
+  totalS: 0.72, showFrom: 0.025, showTo: 0.60,
+  keys: [
+    // t      palm                        forearm (wrist->elbow)       palm faces
+    [0.055, { palm: [-0.20, 0.05, 0.03], arm: [-0.35, -0.45, -0.82], face: [1.0, 0.2, 0.3] }],    // draw: low-left
+    [0.105, { palm: [-0.26, 0.07, 0.17], arm: [-0.45, -0.30, -0.84], face: [0.9, 0.4, -0.1] }],    // cocked by the shoulder
+    [0.150, { palm: [-0.12, 0.40, 0.17], arm: [-0.30, -0.88, -0.36], face: [0.3, 0.2, -1.0] }],    // STRIKE: across + out
+    [0.300, { palm: [-0.05, 0.34, 0.09], arm: [-0.20, -0.84, -0.50], face: [0.2, 0.2, -1.0] }],    // follow-through
+  ],
+  backS: 0.36, restS: 0.62,   // leaves the follow-through at backS, on the handguard by restS
+  gun: { pos: [0.05, -0.05, 0.03], rot: [-12, -6, 18] },         // gun drops right, out of the stroke
+                              // (the hand rides the gun's frame: a deeper drop takes the knife off-screen)
+};
+
 // Empty-reload rack phase: the gun rolls the other way to show the charging side.
 const RACK_TILT = { mag: [4, 5, -7], gripmag: [9, -3, 7] };
 // Optional moving action part (cycles on every shot when the GLB has one).
@@ -412,6 +434,105 @@ export function createViewmodel(ctx) {
     return c;
   }
 
+  // ---- [melee] VM KNIFE --------------------------------------------------------
+  // knife.glb is geometry only; each mesh is bound to the GUN IN HAND's material of
+  // the same generator name (br5_metal / br5_polymer_grip), so the blade wears the
+  // same detail-mapped finish and is drawn by an already-compiled program.
+  const knife = new THREE.Group();
+  knife.name = "__vm_knife__";
+  knife.visible = false;
+  mount.add(knife);
+  const knifeMeshes = [];
+  let knifeHost = null;
+  loadKnifeGLB().then((scene) => {
+    if (!scene) return;
+    const src = scene.getObjectByName("knife") || scene;
+    const k = src.clone(true);
+    k.position.set(0, 0, 0); k.quaternion.identity();
+    k.traverse((o) => {
+      o.layers.set(VM_LAYER);
+      if (o.isMesh) {
+        o.frustumCulled = false; o.castShadow = false; o.receiveShadow = true;
+        o.userData.knifeMat = (o.material && o.material.name) || "br5_metal";
+        knifeMeshes.push(o);
+      }
+    });
+    knife.add(k);
+  });
+  const KNIFE_MAT_FALLBACK = { br5_polymer_grip: ["br5_polymer_grip", "br5_polymer", "br5_rubber", "br5_metal"], br5_metal: ["br5_metal"] };
+  function bindKnife(group) {
+    if (knifeHost === group || !knifeMeshes.length) return;
+    const host = new Map();
+    group.traverse((o) => {
+      if (!o.isMesh || o.userData.isArm || o.userData.gsPart) return;
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m && m.name && !host.has(m.name)) host.set(m.name, m);
+    });
+    for (const o of knifeMeshes) {
+      let m = null;
+      for (const n of KNIFE_MAT_FALLBACK[o.userData.knifeMat] || [o.userData.knifeMat, "br5_metal"]) if (!m && host.get(n)) m = host.get(n);
+      if (m) o.material = m;
+    }
+    knifeHost = group;
+  }
+  // Per-prototype knife hand keys + the knife's orientation IN the hand node's frame,
+  // solved like nadeKeysFor (measured arm axis a, palm normal n = local -y). The
+  // handle runs across the fist (a x n), the blade out of the thumb side.
+  const _meleeCache = new WeakMap();
+  // knife seat in the fist (tuned on captures): sign = which side the point leaves
+  // the fist, spin = roll about the blade, along = metres the handle slides along its
+  // own axis (toward the little finger is negative), out = into the palm (m)
+  let knifeAxes = { sign: 1, spin: 0, along: -0.05, out: 0.030 };
+  function meleeKeysFor(group, armL) {
+    let c = _meleeCache.get(group);
+    if (c) return c;
+    const node = armL.node;
+    const sp = node.position.clone(), sq = node.quaternion.clone();
+    node.position.copy(armL.restP); node.quaternion.copy(armL.restQ);
+    node.updateMatrixWorld(true);
+    const inv = new THREE.Matrix4().copy(node.matrixWorld).invert();
+    const v = new THREE.Vector3(), m = new THREE.Matrix4();
+    const a = new THREE.Vector3(0, 0, 1);
+    let best = 0;
+    node.traverse((o) => {
+      if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+      const pos = o.geometry.attributes.position;
+      m.copy(o.matrixWorld).premultiply(inv);
+      for (let i = 0; i < pos.count; i += 3) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(m);
+        const d = v.lengthSq();
+        if (d > best) { best = d; a.copy(v); }
+      }
+    });
+    node.position.copy(sp); node.quaternion.copy(sq);
+    a.normalize();
+    const n = new THREE.Vector3(0, -1, 0);
+    n.addScaledVector(a, -n.dot(a)).normalize();
+    const cx = new THREE.Vector3().crossVectors(a, n);
+    const loc = new THREE.Matrix4().makeBasis(a, n, cx);
+    const locInv = loc.clone().invert();
+    c = { keys: [] };
+    for (const [t, P] of MELEE_VM.keys) {
+      const F = bfv(P.arm, new THREE.Vector3()).normalize();
+      const H = bfv(P.face, new THREE.Vector3());
+      H.addScaledVector(F, -H.dot(F)).normalize();
+      const tgt = new THREE.Matrix4().makeBasis(F, H, new THREE.Vector3().crossVectors(F, H));
+      const q = new THREE.Quaternion().setFromRotationMatrix(tgt.multiply(locInv));
+      const p = bfv(P.palm, new THREE.Vector3()).sub(PALM_LOCAL.clone().applyQuaternion(q));
+      c.keys.push({ t, p, q });
+    }
+    // knife axes in the hand node frame: the point (glTF -Z) along sign*(a x n); the
+    // spine (glTF +Y) toward the wrist (+a), spun about the blade by `spin` rad
+    const point = cx.clone().multiplyScalar(knifeAxes.sign);
+    const spine = a.clone().addScaledVector(point, -a.dot(point)).normalize();
+    if (knifeAxes.spin) spine.applyAxisAngle(point, knifeAxes.spin);
+    const back = point.clone().negate();                 // glTF +Z
+    const kx = new THREE.Vector3().crossVectors(spine, back);
+    c.knifeQ = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(kx, spine, back));
+    c.point = point;
+    _meleeCache.set(group, c);
+    return c;
+  }
+
   // ---- state ---------------------------------------------------------------
   let visible = true;
   let lowered = false;       // setLowered(): test seam — weapon held down
@@ -479,6 +600,8 @@ export function createViewmodel(ctx) {
   let inspectT = -1, inspectW = 0, inspectQ = 0, lastInspectReq = null;
   // grenade
   let cookW = 0, throwT = -1, cookAtRelease = 0, prevCooking = false, nadeHandW = 0;
+  // [melee] knife strike clock (s since the sim's press tick; -1 = none)
+  let meleeT = -1, meleeT0 = null, meleeImpact = false, meleeResult = null;
   // optional action part (bolt / slide) cycle
   let actionT = 9, rackStroke = 0;
   const _actionCache = new WeakMap();
@@ -502,7 +625,7 @@ export function createViewmodel(ctx) {
   let standoffOverride = null;   // metres added to the ADS standoff (same seam)
   // dev: freeze the reload pose at progress p (screenshots) — see _dbg()
   const dbg = { reloadP: null, kind: null, empty: false, lower: null, pump: null, sprint: null, handL: null,
-    inspect: null, nade: null };
+    inspect: null, nade: null, melee: null };
 
   const _v = new THREE.Vector3();
   const _q = new THREE.Quaternion();
@@ -927,6 +1050,40 @@ export function createViewmodel(ctx) {
         nade.position.copy(_palm).applyMatrix4(group.matrix);
         nade.quaternion.copy(group.quaternion).multiply(armL.node.quaternion).multiply(NADE_FIX);
         nade.visible = true;
+      }
+    }
+
+    // -- [melee] KNIFE: the support hand leaves the gun, draws, cocks, strikes, returns
+    knife.visible = false;
+    if (meleeT >= 0 && nadeHandW < 0.01) {
+      const C = meleeKeysFor(group, armL);
+      const K0 = C.keys, t = meleeT;
+      if (t <= K0[0].t) {
+        const s = smoothstep(t / K0[0].t);
+        _hp.copy(armL.restP).lerp(K0[0].p, s); _hq.copy(armL.restQ).slerp(K0[0].q, s);
+      } else if (t >= K0[K0.length - 1].t) {
+        const L = K0[K0.length - 1];
+        const s = ramp(t, MELEE_VM.backS, MELEE_VM.restS);
+        _hp.copy(L.p).lerp(armL.restP, s); _hq.copy(L.q).slerp(armL.restQ, s);
+      } else {
+        let i = 0;
+        while (i < K0.length - 2 && t > K0[i + 1].t) i++;
+        const A = K0[i], B = K0[i + 1];
+        // the strike segment is FAST and front-loaded (cubic ease-out), the rest smooth
+        const u = clamp01((t - A.t) / (B.t - A.t));
+        const s = i === 1 ? 1 - (1 - u) * (1 - u) * (1 - u) : smoothstep(u);
+        _hp.copy(A.p).lerp(B.p, s); _hq.copy(A.q).slerp(B.q, s);
+      }
+      armL.node.position.copy(_hp); armL.node.quaternion.copy(_hq);
+      if (t >= MELEE_VM.showFrom && t <= MELEE_VM.showTo && knifeMeshes.length) {
+        bindKnife(group);
+        palmOf(armL.node.position, armL.node.quaternion, _palm);
+        _v.set(0, -knifeAxes.out, 0).addScaledVector(C.point, knifeAxes.along).applyQuaternion(armL.node.quaternion);
+        _palm.add(_v);
+        group.updateMatrix();
+        knife.position.copy(_palm).applyMatrix4(group.matrix);
+        knife.quaternion.copy(group.quaternion).multiply(armL.node.quaternion).multiply(C.knifeQ);
+        knife.visible = true;
       }
     }
 
@@ -1382,12 +1539,37 @@ export function createViewmodel(ctx) {
       else if (throwT >= 0) { throwT += dt; if (throwT > NADE.throwS) throwT = -1; }
       nadeHandW = throwT >= 0 ? 1 : cookW;
 
+      // [melee] KNIFE clock off the sim's body._melee (press tick t0); the strike beat
+      // (s.struck) kicks the camera through the trauma model + the handling springs
+      {
+        const ms = p._melee;
+        if (ms && ms.t0 !== meleeT0) { meleeT0 = ms.t0; meleeImpact = false; meleeResult = null; inspectT = -1; }
+        if (dbg.melee != null) meleeT = dbg.melee;
+        else if (meleeT0 != null) {
+          meleeT = st.time + (alpha - 1) / 60 - meleeT0;
+          if (meleeT > MELEE_VM.totalS) { meleeT = -1; if (!ms) meleeT0 = null; }
+          else if (meleeT < 0) meleeT = 0;
+        } else meleeT = -1;
+        if (ms && ms.struck && !meleeImpact && dbg.melee == null) {
+          meleeImpact = true; meleeResult = ms.result;
+          if (ms.result === "hit") {
+            trauma = Math.min(1, trauma + 0.42);
+            K.camP.v += -0.9; K.camY.v += 0.55; K.camR.v += -0.9;        // the blade bites: the view jolts
+            msImpulse(0.01, -0.05, 0.05, -0.5, 0.2, 0.6);
+          } else {
+            trauma = Math.min(1, trauma + 0.14);
+            K.camY.v += 0.35; K.camR.v += -0.45;                          // a whiff carries through
+            msImpulse(-0.02, -0.02, -0.03, -0.2, 0.3, 0.4);
+          }
+        }
+      }
+
       // INSPECT (key I — input.state.inspect is a press COUNTER, never in the cmd)
       const req = input.state.inspect | 0;
       if (lastInspectReq == null) lastInspectReq = req;
       if (req !== lastInspectReq) {
         lastInspectReq = req;
-        const busy = wp.ads || adsT > 0.05 || sprintState !== "none" || sliding || cooking ||
+        const busy = wp.ads || adsT > 0.05 || sprintState !== "none" || sliding || cooking || meleeT >= 0 ||
           throwT >= 0 || wp.state === "reloading" || wp.state === "switching" || switchProg >= 0;
         if (!busy) inspectT = (inspectT >= 0 ? -1 : 0);   // a second press puts it away
       }
@@ -1398,6 +1580,7 @@ export function createViewmodel(ctx) {
       }
     } else {
       inspectT = -1; throwT = -1; cookW = 0; nadeHandW = 0; prevCooking = false;
+      meleeT = -1; meleeT0 = null; // [melee]
       // a press in a menu / while dead is dropped, never replayed on respawn
       lastInspectReq = input && input.state ? (input.state.inspect | 0) : lastInspectReq;
     }
@@ -1825,6 +2008,18 @@ export function createViewmodel(ctx) {
       rz += NADE.gun.rot[2] * DEG * gW + 6 * DEG * swing;
     }
 
+    // [melee] the gun drops right and rolls away while the knife hand works
+    if (meleeT >= 0) {
+      const gW = ramp(meleeT, 0.0, 0.07) * (1 - ramp(meleeT, MELEE_VM.backS, MELEE_VM.totalS));
+      const sw = bell(meleeT, 0.10, 0.30);                       // the shoulders turn into the stab
+      px += MELEE_VM.gun.pos[0] * gW + 0.02 * sw;
+      py += MELEE_VM.gun.pos[1] * gW - 0.015 * sw;
+      pz += MELEE_VM.gun.pos[2] * gW;
+      rx += MELEE_VM.gun.rot[0] * DEG * gW;
+      ry += MELEE_VM.gun.rot[1] * DEG * gW - 8 * DEG * sw;
+      rz += MELEE_VM.gun.rot[2] * DEG * gW + 8 * DEG * sw;
+    }
+
     // handling springs (reload beats, ADS settle, jump/land/slide, dry click)
     px += MS.posX.x; py += MS.posY.x; pz += MS.posZ.x;
     rx += MS.rotX.x; ry += MS.rotY.x; rz += MS.rotZ.x;
@@ -2000,12 +2195,15 @@ export function createViewmodel(ctx) {
     _dbg(o) {
       if (o == null) {
         dbg.reloadP = null; dbg.kind = null; dbg.lower = null; dbg.pump = null; dbg.sprint = null; dbg.handL = null;
-        dbg.inspect = null; dbg.nade = null; return;
+        dbg.inspect = null; dbg.nade = null; dbg.melee = null; return;
       }
       // inspect: pin the inspect pose at progress 0..1. nade: {cook:true} holds the
       // cook pose, {throwT:s} pins the throw at s seconds.
       if ("inspect" in o) dbg.inspect = o.inspect;
       if ("nade" in o) dbg.nade = o.nade;
+      if ("melee" in o) dbg.melee = o.melee;                   // [melee] pin the strike at t s
+      if ("meleeTune" in o) { Object.assign(MELEE_VM, o.meleeTune); if (current) _meleeCache.delete(current.group); } // tuning
+      if ("knifeAxes" in o) { knifeAxes = Object.assign({}, knifeAxes, o.knifeAxes); if (current) _meleeCache.delete(current.group); }
       if ("handL" in o) dbg.handL = o.handL;
       if ("reloadP" in o) dbg.reloadP = o.reloadP;
       if ("kind" in o) dbg.kind = o.kind;
@@ -2029,6 +2227,7 @@ export function createViewmodel(ctx) {
     get _handling() {
       return {
         inspectT, inspectW, inspectQ, cookW, throwT, nadeVisible: nade.visible,
+        meleeT, meleeResult, knifeVisible: knife.visible, knifeLoaded: knifeMeshes.length > 0, // [melee]
         strafeR, strafeF, airLift, swayYaw, swayPitch, reloadW, reloadEmpty, rackStroke,
         ms: { px: MS.posX.x, py: MS.posY.x, pz: MS.posZ.x, rx: MS.rotX.x, ry: MS.rotY.x, rz: MS.rotZ.x },
         action: !!(current && current.group && actionPart(current.group)),

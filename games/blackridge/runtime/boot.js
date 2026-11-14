@@ -163,7 +163,7 @@ try {
       return null;
     }
   }
-  for (const id of ["tdm", "ctf", "ffa", "dom"]) { // [lane dom] + STRONGHOLD
+  for (const id of ["tdm", "ctf", "ffa", "dom", "hill", "tags", "ladder"]) { // [lane dom] + STRONGHOLD; [lane modes] + OUTPOST / RECLAIM / ASCENT
     const mm = await importIfPresent(`./core/match/modes/${id}.js`, `../core/match/modes/${id}.js`);
     if (mm && mm.createMode) matchMod.registerMode(id, mm.createMode);
     else console.warn(`[boot] mode '${id}' not landed yet — its lane registers it via core/match/modes/${id}.js`);
@@ -293,6 +293,7 @@ try {
   const { createStreakAudio } = await import(`../core/audio/streak_audio.js${V}`);
   const { createGrenadeFx } = await import(`../core/fx/grenadefx.js${V}`);
   const { createZoneFx } = await import(`../core/fx/zone_fx.js${V}`); // [lane dom] STRONGHOLD zone visuals
+  const { createTagFx } = await import(`../core/fx/tag_fx.js${V}`); // [lane modes] RECLAIM tag pickups
   const { createEquipmentFx } = await import(`../core/fx/equipment_fx.js${V}`); // [equipment lane]
   const { createMinimap } = await import(`../core/hud/minimap.js${V}`); // [minimap lane]
   const { createAchievements } = await import(`../core/meta/achievements.js${V}`);
@@ -300,6 +301,11 @@ try {
   const { createAfterAction } = await import(`../core/hud/after_action.js${V}`);   // [progression] feed + after-action
   const { createChallenges } = await import(`../core/meta/challenges.js${V}`);     // [challenges] daily/weekly/career
   const { createChallengesUI } = await import(`../core/hud/challenges_ui.js${V}`); // [challenges] panel + toasts + AAR section
+  // [identity lane] team-chat callouts, nameplates, per-callsign operators, saved match record
+  const { createCallouts } = await import(`../core/hud/callouts.js${V}`);
+  const { createNameplates } = await import(`../core/hud/nameplates.js${V}`);
+  const { identityEmit, installIdentity } = await import(`../core/ai/identity.js${V}`);
+  const { createSkillRecord } = await import(`../core/meta/skill.js${V}`);
   // World (third-person) weapon models for ground loot. Imported WITHOUT the ?v=
   // suffix on purpose: soldiers.js imports this module query-less, so this resolves
   // to the SAME instance — one GLB prototype cache for the bots' guns AND the loot.
@@ -339,6 +345,7 @@ try {
   const streakAudio = createStreakAudio(ctx);
   const grenadeFx = createGrenadeFx(ctx);
   const zoneFx = createZoneFx(ctx); // [lane dom]
+  const tagFx = createTagFx(ctx); // [lane modes]
   const equipFx = createEquipmentFx(ctx, { audio, input }); // [equipment lane] flash/smoke/stun/tripmine view + overlays
   const minimap = createMinimap(ctx, { hud }); // [minimap lane] top-left minimap + M full map (mounted in the HUD root)
   const touch = isTouch ? touchMod.createTouchControls(ctx) : null;
@@ -347,6 +354,9 @@ try {
   const afterAction = createAfterAction(ctx, progression);        // [progression]
   const challenges = ctx.challenges = createChallenges(ctx, progression); // [challenges]
   const challengesUI = createChallengesUI(ctx, challenges);                // [challenges]
+  const callouts = createCallouts(ctx, { hud });     // [identity lane]
+  const nameplates = createNameplates(ctx, { hud }); // [identity lane]
+  const skillRec = createSkillRecord();              // [identity lane]
   killcam.bind({ fx, audio, soldiers });   // [killcam replay] re-emit recorded shots + drive ghost actors
   ctx.touch = touch;
   ctx.cue = (n) => streakAudio.cue(n);   // match_hud clock warnings
@@ -444,6 +454,8 @@ try {
   ctx.mission = () => mission; // v2.2 (A10 radio subtitles; A11 scenario hold)
 
   function attachAll() {
+    callouts.attach(bridge); // [identity lane] FIRST: marks teammate barks before audio keys the babble
+    skillRec.attach(bridge, () => sim); // [identity lane]
     input.attach(bridge); // [lane PAD] controller rumble on shot / hurt / explosion
     fx.attach(bridge);
     soldiers.attach(bridge);
@@ -461,6 +473,17 @@ try {
         try { sx.onZone(d); } catch (e) { /* audio never breaks the frame */ }
       }
     });
+    // [lane modes] OUTPOST / RECLAIM / ASCENT: tag visuals + synthesized cues (sfx.onModeEvent)
+    tagFx.attach(bridge);
+    for (const ev of ["hill", "tag", "ladder"]) {
+      bridge.register(ev, (d) => {
+        const core = ctx.__audioCore;
+        const sx = core && core.sfx;
+        if (sx && sx.onModeEvent && core.env && core.env.ac && core.env.ac.state === "running") {
+          try { sx.onModeEvent(ev, d); } catch (e) { /* audio never breaks the frame */ }
+        }
+      });
+    }
     equipFx.attach(bridge); // [equipment lane]
     minimap.attach(bridge); // [minimap lane]
     achievements.attach(bridge);
@@ -588,7 +611,7 @@ try {
       await setWorldMap(arenaId);
       const newSim = createSim({
         content, colliders, nav, weapons: WEAPONS,
-        seed: opts.seed ?? seedParam, emit: bus.emit,
+        seed: opts.seed ?? seedParam, emit: identityEmit(() => sim, bus.emit), // [identity lane]
         mode: modeId,
         tuning: "pvp", // C25 seam — identity delta set until wave 5
         matchOpts: {
@@ -599,6 +622,7 @@ try {
           spawnDirectorFactory: spawnsMod && spawnsMod.makeSpawns ? spawnsMod.makeSpawns : null,
         },
       });
+      installIdentity(newSim, { seed: opts.seed ?? seedParam, tier: skillRec.startTier(), weapons: WEAPONS }); // [identity lane]
       epoch++;
       bus.resetCounters();
       sim = newSim;
@@ -760,8 +784,10 @@ try {
     streakFx.update(dt);
     grenadeFx.update(dt);
     zoneFx.update(); // [lane dom]
+    tagFx.update(); // [lane modes]
     equipFx.update(dt); // [equipment lane]
     minimap.update(dt); // [minimap lane] self-throttled to <= 20 Hz
+    callouts.update(dt); nameplates.update(dt); // [identity lane]
     if (touch) touch.update(dt);
     achievements.update(dt);
     audio.update(dt);
@@ -921,6 +947,7 @@ try {
     progression, afterAction, // [progression]
     challenges, challengesUI, // [challenges]
     minimap, // [minimap lane] stats() / toggleFull() for checks
+    callouts, nameplates, // [identity lane] log / stats() for checks
     killcam, // [killcam replay] state()/skip() for checks
     settings: S,
     version: `v${VN}`, // MUST equal the boot.js?v number

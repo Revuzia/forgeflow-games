@@ -103,6 +103,8 @@ export const KEY_ACTIONS = [
   // [equipment lane] tactical (flash / smoke / concussion). Q is "last weapon"
   // and 4 is weapon slot 4, so the free key next to them: E.
   ["tactical", "KeyE", "Tactical"],
+  // [melee] quick knife strike. V: the genre's melee key, free on this map.
+  ["melee", "KeyV", "Melee"],
 ];
 const KEYBIND_KEY = "blackridge.keybinds.v1";
 const RESERVED_CODES = /^(Digit[0-9]|Escape|Tab)$/;
@@ -128,6 +130,7 @@ export function createInput(canvas, settings) {
     fire: false, ads: false, reload: false,
     grenade: false,
     tactical: false, // [equipment lane] tactical throw (edge verb, latched like grenade)
+    melee: false,    // [melee] quick knife strike (edge verb, latched — a tap is one strike)
     switchTo: null, // 'slot1'..'slot5' | 'next' | 'prev' | 'last' | weaponId | null — consumed by buildCmd
     streak: 0,      // 1..4 = activate that killstreak tier (keys 6/7/8/9) — one-shot, consumed by buildCmd
     interact: false,
@@ -146,7 +149,7 @@ export function createInput(canvas, settings) {
   // is a different bug. `switchTo` is already one-shot by construction.
   // `grenade` IS latched: combat_spec §5.9 is press=pin / release=throw, so a
   // one-tick true followed by false is exactly "quick tap = uncooked throw".
-  const latch = { fire: false, jump: false, reload: false, grenade: false, interact: false, tactical: false };
+  const latch = { fire: false, jump: false, reload: false, grenade: false, interact: false, tactical: false, melee: false };
   const LATCHED = Object.keys(latch);
 
   function press(k) {
@@ -255,6 +258,7 @@ export function createInput(canvas, settings) {
         reload: on ? (state.reload || latch.reload) : false,
         grenade: on ? (state.grenade || latch.grenade) : false,
         tactical: on ? (state.tactical || latch.tactical) : false,
+        melee: on ? (state.melee || latch.melee) : false, // [melee]
         switchTo: on ? state.switchTo : null,
         streak: on ? state.streak : 0,
         interact: on ? (state.interact || latch.interact) : false,
@@ -418,7 +422,7 @@ export function createInput(canvas, settings) {
 
   // ---------------------------------------------------------------- lane PAD
   const KEY_GLYPH_VERB = { jump: "jump", crouch: "crouch", sprint: "sprint", reload: "reload", grenade: "grenade",
-    interact: "interact", swap: "last", inspect: "inspect", tactical: "tactical" };
+    interact: "interact", swap: "last", inspect: "inspect", tactical: "tactical", melee: "melee" };
   function keyLabel(code) {
     if (!code) return "—";
     return String(code).replace(/^Key/, "").replace(/^Digit/, "").replace(/Left$|Right$/, "")
@@ -452,6 +456,7 @@ export function createInput(canvas, settings) {
     const sep = " &nbsp;·&nbsp; ";
     return [`${G.move} move`, `${G.look} look`, `${G.fire} fire`, `${G.ads} ads`, `${G.reload} reload · hold ${G.reload} interact`,
       `${G.jump} jump`, `${G.crouch} crouch`, `${G.sprint} sprint`, `${G.swap} swap`, `${G.grenade} grenade`, `${G.tactical} tactical`,
+      `${G.melee} melee`, `${G.inspect} inspect`,
       `${G.streak} streaks`, `${G.score} scoreboard`, `${G.pause} pause`].join(sep).toLowerCase();
   }
   function setDevice(d) {
@@ -500,6 +505,7 @@ export function createInput(canvas, settings) {
       case "KeyR": press("reload"); break;
       case "KeyG": press("grenade"); break;
       case "KeyE": press("tactical"); break; // [equipment lane]
+      case "KeyV": press("melee"); break;    // [melee]
       case "KeyF": press("interact"); break;
       case "KeyI": input.inspect(); break;   // view-only (see state.inspect)
       // FIVE fixed weapon slots (weapon_data.js WEAPON_SLOT) + Q = last weapon.
@@ -524,7 +530,7 @@ export function createInput(canvas, settings) {
       }
       case "Escape": designate = 0; break;
     }
-    if (designate && /^(Digit[1-5]|KeyQ|KeyG|KeyR|KeyE)$/.test(code)) designate = 0; // switching hands cancels
+    if (designate && /^(Digit[1-5]|KeyQ|KeyG|KeyR|KeyE|KeyV)$/.test(code)) designate = 0; // switching hands cancels
   });
 
   window.addEventListener("keyup", (e) => {
@@ -538,6 +544,7 @@ export function createInput(canvas, settings) {
       case "KeyR": release("reload"); break;
       case "KeyG": release("grenade"); break;
       case "KeyE": release("tactical"); break; // [equipment lane]
+      case "KeyV": release("melee"); break;    // [melee]
       case "KeyF": release("interact"); break;
     }
   });
@@ -613,7 +620,7 @@ export function createInput(canvas, settings) {
     for (const k of Object.keys(keys)) keys[k] = false;
     refreshMove();
     state.jump = state.crouch = state.sprint = false;
-    state.fire = state.ads = state.reload = state.grenade = state.interact = state.tactical = false;
+    state.fire = state.ads = state.reload = state.grenade = state.interact = state.tactical = state.melee = false;
     for (let i = 0; i < LATCHED.length; i++) latch[LATCHED[i]] = false;
   });
 

@@ -33,6 +33,9 @@ import { tierOf, owns } from "../sim/loadout.js";    // BOT-AI PASS: weapon tier
 // [equipment lane] flash / smoke / concussion / tripmine use + reactions
 import * as EQAI from "./equip_ai.js";
 import { equipAimMult, stunTurnMult } from "../sim/equipment.js";
+// [identity lane] per-callsign personality + hidden operator tier (PVP only)
+import { applyPersonality, personaOfBot } from "./personality.js";
+import { applyTier } from "./adaptive.js";
 
 const DEG = Math.PI / 180;
 
@@ -187,10 +190,26 @@ function skillOf(sim, bot) {
   let src = BANDS[name];
   const ov = cfg && cfg.bandOverrides && cfg.bandOverrides[name];
   if (ov) src = Object.assign({}, src, ov);
-  if (reactScale === 1 && jitterScale === 1) return Object.assign({ name }, src);
-  return Object.assign({ name }, src, {
-    reactMin: src.reactMin * reactScale, reactMax: src.reactMax * reactScale, jitter: src.jitter * jitterScale,
-  });
+  const out = (reactScale === 1 && jitterScale === 1) ? Object.assign({ name }, src)
+    : Object.assign({ name }, src, {
+      reactMin: src.reactMin * reactScale, reactMax: src.reactMax * reactScale, jitter: src.jitter * jitterScale,
+    });
+  return identityOf(sim, bot, out);
+}
+// [identity lane] PVP operators: the match's hidden tier (adaptive.js) for
+// EVERY combatant, then the callsign's personality (personality.js) inside it.
+// sim.identity is set only by runtime/boot.js at match start — headless
+// selftests and the campaign never have it, so their profiles are unchanged.
+function identityOf(sim, bot, k) {
+  const id = sim.identity;
+  if (!id || !sim.match) return k;
+  // tierByTeam: harness-only override (band-strength probes pit tiers against
+  // each other); real matches seat both teams at id.tier
+  const tb = id.tierByTeam && bot.team != null ? id.tierByTeam[bot.team] : null;
+  let o = applyTier(k, tb != null ? tb : id.tier);
+  const pers = personaOfBot(sim, bot);
+  if (pers) o = applyPersonality(o, pers);
+  return o;
 }
 // the brain caches its skill; re-derive if the body's band was rewritten
 // (scenario harnesses retag bands after spawn)
@@ -257,7 +276,10 @@ function burstRange(bot, weapon) {
 function prefBand(bot, weapon, pushOn) {
   const cls = weapon ? weapon.class : "ar";
   const native = BAND_BY_ARCH[bot.archetype] && (!weapon || NATIVE_CLASS[bot.archetype] === cls);
-  const b = (native ? BAND_BY_ARCH[bot.archetype] : null) || BAND_BY_CLASS[cls] || BAND_BY_ARCH[bot.archetype] || [15, 35];
+  let b = (native ? BAND_BY_ARCH[bot.archetype] : null) || BAND_BY_CLASS[cls] || BAND_BY_ARCH[bot.archetype] || [15, 35];
+  // [identity lane] personality: an aggressive operator fights inside its gun's book range
+  const rm = bot._brain && bot._brain.k && bot._brain.k.rangeMul;
+  if (rm && rm !== 1) b = [b[0] * rm, b[1] * rm];
   return pushOn ? [b[0] * 0.5, b[1] * 0.5] : b; // §5.3: at 75 s ranges halve
 }
 
@@ -902,7 +924,7 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
         brain.gReleaseT = t + 1.2; // §5.9 telegraph: bark 1.2 s BEFORE release
         brain.gPitch = pitch;
         brain.gTarget = target;
-        squad.requestBark(bot.id, "grenade");
+        squad.requestBark(bot.id, "grenade", { gear: "frag" }); // [identity lane] own throw (vs squad's warning)
       }
     }
   }
@@ -1786,6 +1808,35 @@ function act(sim, nav, squad, bot, dt, t) {
     const rel = angDiff(brain.moveYaw, brain.curYaw);
     c.moveZ = Math.cos(rel);
     c.moveX = -Math.sin(rel);
+  }
+  // ---- [melee lane] KNIFE — one small block. Strike when a SEEN enemy (W3: the
+  // percept target only) is inside 2.2 m, inside the ~28 deg lunge cone this bot
+  // already faces, and the knife beats the gun: standing BEHIND him (lethal),
+  // dry / mid-reload at point-blank, or finishing a man the strike kills from the
+  // front. The verb is the human's (core/sim/melee.js); the §5.7 human-victim
+  // attacker cap and the objective fire policy gate it like a trigger pull.
+  // Toggled (edge-triggered in the sim) so a held decision re-strikes.
+  {
+    let knife = false;
+    // (the V9 noTarget freeze lever stands the knife down, as it does the commander)
+    if (tb && P && P.seesTarget && t - P.lastSeenT <= 0.3 && !bot._melee && !(sim.flags && sim.flags.noTarget) &&
+        (st === "combat" || st === "suppress" || st === "flank") &&
+        !(obj && obj.firePolicy === "hold") && bot.weapon.state !== "switching") {
+      const dx = tb.pos[0] - bot.pos[0], dz = tb.pos[2] - bot.pos[2];
+      const d = Math.hypot(dx, dz);
+      if (d <= 2.2 && Math.abs(tb.pos[1] - bot.pos[1]) <= 1.2) {
+        const facing = d < 0.25 || (dx * -Math.sin(brain.curYaw) + dz * -Math.cos(brain.curYaw)) / d >= 0.88;
+        const behind = d >= 0.25 && (-dx * -Math.sin(tb.yaw || 0) - dz * -Math.cos(tb.yaw || 0)) / d <= -0.43;
+        const dry = mag === 0 || reloading;
+        const finisher = d <= 1.6 && (tb.hp || 0) <= (sim.tuning ? sim.tuning.maxHp : 100) * 0.55;
+        if (facing && (behind || dry || finisher) && squad.fireAuthOk(bot.id, t, P.target)) {
+          knife = !brain.prevMelee;
+          if (knife) { squad.noteFireAuth(bot.id, t, P.target); c.fire = false; }
+        }
+      }
+    }
+    c.melee = knife;
+    brain.prevMelee = knife;
   }
   brain.wasFiring = c.fire;
 

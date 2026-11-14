@@ -454,6 +454,13 @@ export function createSoldiers(ctx) {
         }
         rec.actor.hitImpulse(side, Math.min(1.5, 0.6 + (d.amount || 20) / 45));
       });
+      // [melee] a soldier's knife strike: procedural thrust over the stepping legs
+      // (actor.meleeStrike). The victim reacts through the hurt flinch above.
+      bridge.register("melee", (d) => {
+        if (!d || d.phase !== "swing" || typeof d.who !== "number") return;
+        const rec = actors.get(d.who);
+        if (rec && !rec.deathPlayed) rec.actor.meleeStrike();
+      });
       bridge.register("grenade", (d) => {
         // GRENADE TOSS (2026-11-13): the sim spawns a bot's grenade at the
         // release ("out"); the actor plays the toss over its stepping legs.

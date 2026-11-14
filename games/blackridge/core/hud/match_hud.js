@@ -273,6 +273,19 @@ export function createMatchHud(ctx) {
   function renderScore() {
     const m = M();
     if (!m) return;
+    if (m.modeId === "ladder") { // [lane modes] ASCENT: rungs, not kills
+      const tr = (m.mode && m.mode.tier) || [];
+      const n = (m.mode && m.mode.tiers && m.mode.tiers.length) || 8;
+      let li = 0;
+      for (let i = 1; i < tr.length; i++) if ((tr[i] | 0) > (tr[li] | 0)) li = i;
+      const lead = m.actors[li];
+      scoreEl.innerHTML =
+        `<span class="us">YOU ${Math.min(n, (tr[0] | 0) + 1)}/${n}</span><span class="sep">·</span>` +
+        `<span style="opacity:.85">LEADER ${Math.min(n, (tr[li] | 0) + 1)}/${n}` +
+        `${li === 0 ? " (YOU)" : lead ? " (" + esc(lead.name) + ")" : ""}</span>`;
+      scoreEl.classList.toggle("pulse", (tr[li] | 0) >= n - 1);
+      return;
+    }
     if (m.modeId === "ffa") {
       // YOU 12 · LEADER 17 (KESTREL) — modes.md §7.4
       let lead = null;
@@ -501,6 +514,25 @@ export function createMatchHud(ctx) {
       `An enemy zone must be neutralised before you can capture it.`,
       `A tie goes to overtime: no respawns — the next point wins it.`,
     ],
+    // [lane modes] OUTPOST / RECLAIM / ASCENT
+    hill: (r) => [
+      `One outpost is live at a time. Hold it alone: +1 every second. First to ${r.scoreLimit} wins. ${fmtClock(r.timeLimitS)}.`,
+      `Both teams inside = contested, nobody scores.`,
+      `It moves every ${r.rotateS || 60} seconds — the next one shows ${r.previewS || 10} seconds early.`,
+      `A tie goes to overtime: no respawns — the next point wins it.`,
+    ],
+    tags: (r) => [
+      `Every fallen operator drops a tag. Grab an enemy's to confirm it: +1. First to ${r.scoreLimit} wins. ${fmtClock(r.timeLimitS)}.`,
+      `Grab a teammate's tag to deny it. Kills alone don't score.`,
+      `Tags vanish after ${r.tagTtlS || 30} seconds.`,
+      `A tie goes to overtime: no respawns — the next confirm wins it.`,
+    ],
+    ladder: (r) => [
+      `Everyone starts on the same weapon. Every kill moves you up a rung.`,
+      `The kill on the last rung wins. ${fmtClock(r.timeLimitS)}. Everyone is hostile.`,
+      `No classes, no pickups, no call-ins.`,
+      `The last rung is the knife — and a knife kill sends the victim down a rung.`,
+    ],
     ffa: (r) => [
       `First to ${r.scoreLimit} kills wins. ${fmtClock(r.timeLimitS)}. Everyone is hostile.`,
       `Respawn in ${r.respawnS} seconds.`,
@@ -511,11 +543,12 @@ export function createMatchHud(ctx) {
     const m = M();
     if (!m || m.phase !== "warmup") { warmEl.style.display = "none"; return; }
     warmEl.style.display = "block";
-    const name = { tdm: "SKIRMISH", ctf: "CAPTURE THE FLAG", ffa: "FREE-FOR-ALL", dom: "STRONGHOLD" }[m.modeId] || m.modeId; // [lane dom]
+    const name = { tdm: "SKIRMISH", ctf: "CAPTURE THE FLAG", ffa: "FREE-FOR-ALL", dom: "STRONGHOLD", hill: "OUTPOST", tags: "RECLAIM", ladder: "ASCENT" }[m.modeId] || m.modeId; // [lane dom] [lane modes]
     warmEl.querySelector(".mode").textContent = name;
     const s = sim();
     const rules = s && s.match && s.match.m ? s.match.m.rules : { scoreLimit: 50, timeLimitS: 480, respawnS: 4, captureLimit: 3 };
-    const lines = (RULE_LINES[m.modeId] || RULE_LINES.tdm)(rules);
+    let lines = (RULE_LINES[m.modeId] || RULE_LINES.tdm)(rules);
+    if (m.modeId === "ladder" && m.mode && !m.mode.melee) lines = lines.slice(0, 3).concat([`The last rung is the pistol.`]); // [lane modes]
     warmEl.querySelector(".rules").innerHTML = lines.map(esc).join("<br>");
     warmEl.querySelector(".count").textContent = String(Math.max(1, Math.ceil(m.timeLeft)));
   }
@@ -552,7 +585,7 @@ export function createMatchHud(ctx) {
   function renderPips() {
     const m = M();
     const s = sim();
-    if (!m || !s || m.modeId === "ffa" || m.phase === "ended") { // §7.4: no pips in FFA
+    if (!m || !s || m.modeId === "ffa" || m.modeId === "ladder" || m.phase === "ended") { // §7.4: no pips in FFA (or ASCENT)
       for (const p of pips) p.style.display = "none";
       return;
     }
@@ -597,9 +630,10 @@ export function createMatchHud(ctx) {
     if (!st.active) return;
     if (d && d.phase === "overtime") {
       const m = M();
-      setBanner("OVERTIME", m && m.modeId === "ffa"
+      setBanner("OVERTIME", m && (m.modeId === "ffa" || m.modeId === "ladder") // [lane modes] ASCENT = the FFA rule
         ? "NO RESPAWNS — LAST LEADER STANDING"
-        : m && m.modeId === "dom" ? "NO RESPAWNS — NEXT POINT WINS" // [lane dom]
+        : m && (m.modeId === "dom" || m.modeId === "hill") ? "NO RESPAWNS — NEXT POINT WINS" // [lane dom] [lane modes]
+        : m && m.modeId === "tags" ? "NO RESPAWNS — NEXT CONFIRM WINS" // [lane modes]
           : "NO RESPAWNS — FIRST DEATH LOSES", 4.0);
     }
     refresh();

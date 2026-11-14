@@ -571,6 +571,21 @@ export function loadAttachmentsGLB() {
 }
 export function attachmentsReady() { return !!_attScene; }
 
+// [melee] the knife (assets/weapons/knife.glb, tools/a5_build_guns.py `-- knife`):
+// geometry-only like attachments.glb; the viewmodel binds its br5_* materials to
+// the gun in hand. Same loader (Draco) and ?v= cache key. Resolves to the scene or null.
+let _knifePromise = null;
+export function loadKnifeGLB() {
+  if (_knifePromise) return _knifePromise;
+  const bv = globalThis.__BR_V__ || new URL(import.meta.url).searchParams.get("v");
+  const url = new URL("knife.glb", GLB_BASE).href + (bv ? `?v=${bv}` : "");
+  _knifePromise = loader().loadAsync(url).then((gltf) => gltf.scene || null).catch((err) => {
+    pushFallback(`MELEE: knife.glb failed to load (${err && err.message}) — the strike plays empty-handed, ship blocked`);
+    return null;
+  });
+  return _knifePromise;
+}
+
 // ---- shared view-only materials ------------------------------------------------
 let _dotMat = null, _glassMat = null, _beamMat = null;
 function dotMat() {

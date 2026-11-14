@@ -42,7 +42,7 @@ const OOB_GRACE_S = 5.0;       // C18 backstop — a probe asserts it never kill
 // registerMode() (boot.js imports each landed modes/<id>.js and registers
 // it), so a mode lane that has not landed yet is a REPORTED content error at
 // makeMatch, never a page-fatal import crash.
-export const MODE_IDS = ["tdm", "ctf", "ffa", "dom"]; // [lane dom] + STRONGHOLD (zone control)
+export const MODE_IDS = ["tdm", "ctf", "ffa", "dom", "hill", "tags", "ladder"]; // [lane dom] + STRONGHOLD; [lane modes] + OUTPOST / RECLAIM / ASCENT
 export const MODES = {}; // id → createMode(ctx)
 
 export function registerMode(id, createMode) {
@@ -57,6 +57,9 @@ const DRIVER_DEFAULTS = {
   ctf: { captureLimit: 3, timeLimitS: 720, respawnS: 5.0, respawnPressureS: 8.0, protectS: 1.5 },
   ffa: { scoreLimit: 25, timeLimitS: 480, respawnS: 3.0, protectS: 2.0 },
   dom: { scoreLimit: 200, timeLimitS: 600, respawnS: 4.0, protectS: 1.5 }, // [lane dom]
+  hill: { scoreLimit: 250, timeLimitS: 600, respawnS: 4.0, protectS: 1.5 },   // [lane modes] OUTPOST
+  tags: { scoreLimit: 40, timeLimitS: 600, respawnS: 4.0, protectS: 1.5 },    // [lane modes] RECLAIM
+  ladder: { scoreLimit: 8, timeLimitS: 480, respawnS: 2.5, protectS: 2.0 },   // [lane modes] ASCENT
 };
 
 // ------------------------------------------------------- [P2] kill resupply
@@ -140,6 +143,7 @@ function applyKillResupply(m, actor, magsPerKill) {
   if (!(magsPerKill > 0) || !actor) return false;
   const body = m.bodyOf(actor);
   if (!body || !body.weapon) return false; // body already reaped — no grant
+  if (body._knifeOnly) return false;        // [lane modes] ASCENT knife rung: the gun stays empty
   const weapons = (m.sim && m.sim.weapons) || {};
   let granted = false;
   const w = body.weapon;
@@ -763,6 +767,7 @@ export function makeMatch(content, emit, opts = {}) {
           if (!a.alive) { ms.drySince[aid] = -1; continue; }
           const b = bodyByWho.get(a.who);
           const w = b && b.weapon;
+          if (b && b._knifeOnly) { ms.drySince[aid] = -1; continue; } // [lane modes] knife rung
           if (!w || typeof w.mag !== "number" || typeof w.reserve !== "number") {
             ms.drySince[aid] = -1; continue;
           }

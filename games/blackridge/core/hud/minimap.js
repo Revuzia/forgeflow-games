@@ -541,7 +541,7 @@ export function createMinimap(ctx, opts = {}) {
       G.globalAlpha = 1;
     }
     // ---- STRONGHOLD zones (in-map part)
-    const zones = M && M.modeId === "dom" && M.mode && M.mode.zones;
+    const zones = M && (M.modeId === "dom" || M.modeId === "hill") && M.mode && M.mode.zones; // [lane modes] + the OUTPOST hill
     if (zones) {
       for (let i = 0; i < zones.length; i++) {
         const z = zones[i];
@@ -549,7 +549,8 @@ export function createMinimap(ctx, opts = {}) {
         const x = v.cx + tmp[0], y = v.cy + tmp[1];
         const rr = Math.max(7, (z.r || 4) * v.k);
         const own = tint(z.owner);
-        G.globalAlpha = z.owner >= 0 ? 0.32 : 0.14;
+        if (z.preview) G.setLineDash([3, 3]); // [lane modes] the next hill: dashed ghost
+        G.globalAlpha = z.preview ? 0.06 : z.owner >= 0 ? 0.32 : 0.14;
         G.fillStyle = own;
         G.beginPath(); G.arc(x, y, rr, 0, Math.PI * 2); G.fill();
         G.globalAlpha = z.contested ? (Math.floor(t * 4) % 2 ? 1 : 0.35) : 0.9;
@@ -562,7 +563,23 @@ export function createMinimap(ctx, opts = {}) {
         G.globalAlpha = 1;
         G.fillStyle = COL.dark; G.fillText(z.label, x + 1, y + 1);
         G.fillStyle = own === COL.neutral ? COL.ink : own; G.fillText(z.label, x, y);
+        if (z.preview) G.setLineDash([]);
       }
+    }
+    // ---- [lane modes] RECLAIM tags: small diamonds in the victim's colour
+    const tagsL = M && M.modeId === "tags" && M.mode && M.mode.tags;
+    if (tagsL && tagsL.length) {
+      for (let i = 0; i < tagsL.length; i++) {
+        const g = tagsL[i];
+        worldToMap(v.px, v.pz, v.theta, g.pos[0], g.pos[2], v.k, tmp);
+        if (offMap(v, tmp)) continue;
+        const x = v.cx + tmp[0], y = v.cy + tmp[1];
+        G.globalAlpha = g.expiresT - t < 5 ? (Math.floor(t * 4) % 2 ? 1 : 0.4) : 0.95;
+        G.fillStyle = tint(g.team);
+        G.beginPath(); G.moveTo(x, y - 4); G.lineTo(x + 3, y); G.lineTo(x, y + 4); G.lineTo(x - 3, y); G.closePath(); G.fill();
+        G.strokeStyle = COL.dark; G.lineWidth = 1; G.stroke();
+      }
+      G.globalAlpha = 1;
     }
     // ---- CTF stands + flags
     const flags = M && M.flags;

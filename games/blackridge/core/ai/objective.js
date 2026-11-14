@@ -40,6 +40,12 @@ import { assign as assignTdm } from "./roles/tdm.js";
 import { assign as assignCtf } from "./roles/ctf.js";
 import { assign as assignFfa } from "./roles/ffa.js";
 import { assign as assignDom } from "./roles/dom.js"; // [lane dom] STRONGHOLD
+import { assign as assignHill } from "./roles/hill.js"; // [lane modes] OUTPOST
+import { assign as assignTags } from "./roles/tags.js"; // [lane modes] RECLAIM
+import { assign as assignLadder } from "./roles/ladder.js"; // [lane modes] ASCENT
+// [lane modes] solo (team-of-one) modes run the FFA pass shape: no radio, one pass
+const SOLO_MODES = ["ffa", "ladder"];
+function isSolo(modeId) { return SOLO_MODES.indexOf(modeId) >= 0; }
 
 // ---------------------------------------------------------------- constants
 export const OBJ_PERF = { calls: 0, totalMs: 0, avgMs: 0, lastMs: 0, maxMs: 0 };
@@ -67,6 +73,9 @@ export const REASONS = Object.freeze({
   ZONE_CAPTURE: "ZONE_CAPTURE", ZONE_NEUTRALISE: "ZONE_NEUTRALISE",
   ZONE_DEFEND: "ZONE_DEFEND", ZONE_RESPOND: "ZONE_RESPOND",
   ZONE_SUPPORT: "ZONE_SUPPORT", ZONE_ROAM: "ZONE_ROAM",
+  // [lane modes] OUTPOST (rotating hill) / RECLAIM (tags) / ASCENT (ladder)
+  HILL_CAPTURE: "HILL_CAPTURE", HILL_HOLD: "HILL_HOLD", HILL_ROTATE: "HILL_ROTATE", HILL_ANCHOR: "HILL_ANCHOR",
+  TAG_CONFIRM: "TAG_CONFIRM", TAG_DENY: "TAG_DENY", LADDER_CLOSE: "LADDER_CLOSE",
 });
 
 // Tier W, named once (Part 3.8 / AC-35): the facts this layer may read from
@@ -75,6 +84,7 @@ export const PUBLIC_FACTS = Object.freeze([
   "score", "clock", "phase", "killfeed", "flagState", "flagDroppedPos",
   "carrierBeacon3s6m", "leaderMark", "collapseRing", "ownTeamState",
   "zoneState", // [lane dom] owner / capture team / bar / CONTESTED — the HUD's zone chips
+  "hillState", "tagState", "ladderRung", // [lane modes] the live/next hill + holder; every live tag; each operator's rung
 ]);
 
 const PASS_PERIOD_TICKS = 30;      // 2 Hz commander cadence (bot_ai §2.4)
@@ -373,7 +383,7 @@ function situationOf(m, team, modeId) {
   const rules = m.rules || {};
   const limit = modeId === "ctf" ? (rules.captureLimit || 3) : (rules.scoreLimit || 50);
   let us = 0, them = 0;
-  if (modeId === "ffa") {
+  if (isSolo(modeId)) {
     // per-actor: `team` is the actor's own team id; `them` = best other
     for (const tt of M.teams) {
       if (tt.id === team) us = tt.score;
@@ -391,7 +401,7 @@ function situationOf(m, team, modeId) {
   const urgency = Math.max(progress, timeFrac);
   // [lane dom] STRONGHOLD scores ~1 point per held zone per tick — a lead of
   // 30 is what 8 kills is in TDM
-  const K = modeId === "ctf" ? 1 : (modeId === "ffa" ? 6 : (modeId === "dom" ? 30 : 8));
+  const K = modeId === "ctf" ? 1 : (modeId === "ffa" ? 6 : (modeId === "dom" || modeId === "hill" ? 30 : modeId === "ladder" ? 3 : modeId === "tags" ? 5 : 8));
   const pressure = Math.max(-1, Math.min(1, -(us - them) / K)) * urgency;
   return { us, them, limit, elapsed, timeLimit, timeFrac, urgency, pressure };
 }
@@ -467,6 +477,9 @@ function flagSig(m) {
   if (zones && zones.length) {
     for (const z of zones) s += z.id + ":" + z.owner + ":" + z.capTeam + ":" + (z.contested ? 1 : 0) + "|";
   }
+  // [lane modes] RECLAIM: a tag dropping or leaving the floor is a Tier-W event
+  const tags = m.state.mode && m.state.mode.tags;
+  if (tags && tags.length) { s += "T"; for (const g of tags) s += g.id + ","; }
   return s;
 }
 
@@ -588,7 +601,7 @@ export function objectiveStep(sim, nav, squad, dt) {
       tr.eventDueT = -1;
     }
   };
-  if (modeId === "ffa") wantPass("ffa", 0);
+  if (isSolo(modeId)) wantPass("ffa", 0);
   else { wantPass(0, 0); wantPass(1, 15); }
 
   // ---- beacons (Tier W) — refreshed at the 3 s cadence, before any pass
@@ -625,10 +638,10 @@ function runPass(sim, st, m, modeId, pass, t, preempt, squad) {
   // living team bots with bodies, actorId order (deterministic)
   const bots = [];
   let human = null;
-  const teamKey = modeId === "ffa" ? null : pass;
+  const teamKey = isSolo(modeId) ? null : pass;
   for (const a of m.actors) {
     if (!a.alive) continue;
-    if (modeId !== "ffa" && a.team !== teamKey) continue;
+    if (!isSolo(modeId) && a.team !== teamKey) continue;
     if (a.kind === "human") { human = { actor: a, body: null }; continue; }
     const body = m.bodyOf(a);
     if (!body || !body.alive) continue;
@@ -636,12 +649,12 @@ function runPass(sim, st, m, modeId, pass, t, preempt, squad) {
   }
   if (!bots.length) return;
 
-  const gid = modeId === "ffa" ? null : "t" + teamKey;
+  const gid = isSolo(modeId) ? null : "t" + teamKey;
 
   // Tier P → Tier R harvest (team modes only; FFA groups are solitary)
   if (gid) harvestContacts(st, gid, bots, t);
 
-  const sit = modeId === "ffa" ? null : situationOf(m, teamKey, modeId);
+  const sit = isSolo(modeId) ? null : situationOf(m, teamKey, modeId);
   let posture = "balanced";
   const tr = teamRec(st, pass);
   if (sit) {
@@ -692,5 +705,8 @@ function runPass(sim, st, m, modeId, pass, t, preempt, squad) {
   if (modeId === "ctf") assignCtf(ctx);
   else if (modeId === "ffa") assignFfa(ctx);
   else if (modeId === "dom") assignDom(ctx); // [lane dom]
+  else if (modeId === "hill") assignHill(ctx); // [lane modes]
+  else if (modeId === "tags") assignTags(ctx); // [lane modes]
+  else if (modeId === "ladder") assignLadder(ctx); // [lane modes]
   else assignTdm(ctx);
 }

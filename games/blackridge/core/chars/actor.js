@@ -615,7 +615,7 @@ export function createActor(proto) {
       root, placeholder: true,
       play() {}, playOnce() {}, update() {}, aimBlend() {},
       setLifeSeed() {}, fireImpulse() {}, hitImpulse() {}, lifeGain: 1,
-      setReload() {}, throwGrenade() { return false; }, throwing: false,
+      setReload() {}, throwGrenade() { return false; }, meleeStrike() {}, throwing: false,
       hasLoco: false, hasClipCrouch: false, moveDir: 0, crouched: false, airborne: false,
       attachWeapon() { return null; }, setTint() {}, setRim() {}, setFlash() {},
       currentName: null, crouchW: 0, groundSpeed: 0, readyWant: 1,
@@ -796,7 +796,24 @@ export function createActor(proto) {
     flinchR: { x: 0, v: 0 },   // lateral jolt (roll), signed by the shot
     readyW: 1,                 // eased 0..1 toward actor.readyWant
     crouchEase: 0,             // eased 0..1 toward actor.crouchW
+    meleeT: -1,                // [melee] seconds into a knife strike, -1 = none
   };
+
+  // [melee] PROCEDURAL KNIFE THRUST (no clip bytes): the sim's 0.12 s windup draws
+  // the torso back a touch, then the chest drives forward and both arms punch the
+  // weapon out ahead of the body (a jab that reads at 60 px tall), held through the
+  // contact beat and eased home over the 0.6 s recovery. Same timeline as
+  // core/sim/melee.js. Returns [lean (rad, +forward), arm (rad, +raise forward)].
+  const _meleeOut = [0, 0];
+  function meleeCurve(t) {
+    if (t < 0 || t > 0.75) { _meleeOut[0] = 0; _meleeOut[1] = 0; return _meleeOut; }
+    const ss = (a, b, x) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+    const draw = ss(0.0, 0.10, t) * (1 - ss(0.10, 0.16, t));          // wind back
+    const thrust = ss(0.09, 0.17, t) * (1 - ss(0.32, 0.72, t));       // drive + hold + recover
+    _meleeOut[0] = -0.10 * draw + 0.34 * thrust;
+    _meleeOut[1] = -0.20 * draw + 0.78 * thrust;
+    return _meleeOut;
+  }
 
   // Mixer + actions. Clips arrive pre-cleaned + renamed from loadClipSet().
   const mixer = new THREE.AnimationMixer(model);
@@ -1307,6 +1324,9 @@ export function createActor(proto) {
     /** This soldier took a round. `side` is the signed lateral component of the
      *  shot direction in the actor's own frame (-1..1) so the jolt goes the way
      *  the bullet was travelling, not a canned flop. */
+    /** [melee] this soldier's knife strike started (soldiers.js, melee swing event). */
+    meleeStrike() { life.meleeT = 0; },
+
     hitImpulse(side = 0, mult = 1) {
       life.flinchP.v += LIFE.flinchPerHit * mult;
       life.flinchR.v += LIFE.flinchPerHit * 0.55 * mult * (side || (life.phase > 0.5 ? 1 : -1));
@@ -1471,6 +1491,10 @@ export function createActor(proto) {
           life.crouchEase += (actor.crouchW - life.crouchEase) * k;
         }
 
+        // [melee] knife thrust envelope
+        if (life.meleeT >= 0) { life.meleeT += dt; if (life.meleeT > 0.75) life.meleeT = -1; }
+        const mc = meleeCurve(life.meleeT);
+        const meleeLean = mc[0] * actor.lifeGain, meleeArm = mc[1] * actor.lifeGain;
         const breath = Math.sin((life.t * LIFE.breathHz + ph) * TAU);
         const sway1 = Math.sin((life.t * LIFE.swayHz1 + ph * 1.7) * TAU);
         const sway2 = Math.sin((life.t * LIFE.swayHz2 + ph * 3.1) * TAU + 1.1);
@@ -1554,7 +1578,8 @@ export function createActor(proto) {
           + LIFE.engPitch * engP                            // sight-picture hunt
           - life.fireK.x * 0.55                             // recoil rides UP
           + life.flinchP.x * 0.85                           // hit folds forward
-          + LIFE.crouchLean * cw;                           // squat brings the chest over the knees
+          + LIFE.crouchLean * cw                            // squat brings the chest over the knees
+          + meleeLean;                                      // [melee] the strike drives the chest in
         const yawSpine = life.aimYaw * 0.5 * aimK
           + LIFE.swaySpineYaw * sway1 * still
           + LIFE.engYaw * engY;
@@ -1593,7 +1618,8 @@ export function createActor(proto) {
         // header): +rotation about the actor's RIGHT axis lowers the hands.
         const armPitch = LIFE.readyDrop * (1 - life.readyW)
           - life.armK.x * 0.85
-          + engA;
+          + engA
+          - meleeArm;                                       // [melee] arms punch out (− = raise forward)
         if (armPitch && (bones.lArm || bones.rArm)) {
           _v1.set(rx, 0, rz);
           _q1.setFromAxisAngle(_v1, armPitch);

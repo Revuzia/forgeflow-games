@@ -44,6 +44,13 @@
       "kind": "generated",
       "license": "Original (authored procedural hard-surface parts)",
       "source": "tools/a5_build_guns.py -- attachments (gunsmith: optics, muzzle devices, grips, lasers, tube extension; geometry only, materials bound to the host gun at runtime; loaded on demand in class matches)"
+    },
+    {
+      "path": "assets/weapons/knife.glb",
+      "bytes": 17136,
+      "kind": "generated",
+      "license": "Original (authored procedural hard-surface knife)",
+      "source": "tools/a5_build_guns.py -- knife ([melee] quick knife strike: first-person knife, geometry only, materials bound to the gun-in-hand at runtime; menu path, loaded by the viewmodel at boot)"
     }
   ]
 }

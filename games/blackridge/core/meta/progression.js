@@ -112,6 +112,7 @@ export const UNLOCK_NAMES = {
 // XP per event. Categories are what the after-action screen breaks down.
 export const XP = {
   kill: 100,
+  meleeKill: 125,        // [melee] a knife kill pays THIS instead of the plain kill row (+25 for the risk)
   headshot: 50,          // on top of the kill
   assist: 25,
   flagCapture: 300,
@@ -120,6 +121,12 @@ export const XP = {
   zoneCapture: 150,      // [lane dom] STRONGHOLD — you were in the ring when it flipped to you
   zoneNeutralise: 50,    // [lane dom] an enemy zone drained to neutral with you in it
   zoneDefend: 50,        // [lane dom] a kill at a zone your team holds (on top of the kill)
+  hillHold: 25,          // [lane modes] OUTPOST — every 5 s of an unbroken hold with you on the hill
+  hillKill: 50,          // [lane modes] a kill on / at the live outpost (on top of the kill)
+  tagConfirm: 75,        // [lane modes] RECLAIM — you collected an enemy tag
+  tagDeny: 50,           // [lane modes] you collected a teammate's tag
+  ladderRung: 25,        // [lane modes] ASCENT — each rung climbed (on top of the kill)
+  ladderFinish: 300,     // [lane modes] the kill on the last rung
   objective: 250,        // campaign beat (objective done)
   medal: {               // medal text -> XP (HEADSHOT and "N KILL STREAK" medals are
     "FIRST BLOOD": 100,  // covered by the headshot / streak awards — not double-paid)
@@ -511,11 +518,12 @@ export function createProgression(ctx, opts) {
       s.hl.kills++; rec.life.kills++;
       s.hl.streak++; if (s.hl.streak > s.hl.bestStreak) s.hl.bestStreak = s.hl.streak;
       if (s.hl.bestStreak > rec.life.bestStreak) rec.life.bestStreak = s.hl.bestStreak;
-      award("kill", XP.kill, "Kill");
+      if (d.melee) award("kill", XP.meleeKill, "Melee kill"); // [melee] knife: no gun gets weapon XP
+      else award("kill", XP.kill, "Kill");
       if (d.headshot) { s.hl.heads++; rec.life.heads++; award("headshot", XP.headshot, "Headshot"); }
       // the weapon: the player's last fire-time shot within a second (call-in and
       // grenade kills without a recent shot earn no weapon XP)
-      const w = lastShotW && now() - lastShotT <= 1.0 ? lastShotW : null;
+      const w = !d.melee && lastShotW && now() - lastShotT <= 1.0 ? lastShotW : null; // [melee]
       if (w) {
         const rw = rec.weapons[w] || (rec.weapons[w] = { xp: 0, kills: 0, heads: 0 });
         rw.kills++; if (d.headshot) rw.heads++;
@@ -561,6 +569,28 @@ export function createProgression(ctx, opts) {
       if (d.state === "captured") { ensureSession().hl.caps++; rec.life.caps++; award("objective", XP.zoneCapture, "Zone " + d.label + " captured"); }
       else if (d.state === "neutralised") award("objective", XP.zoneNeutralise, "Zone " + d.label + " neutralised");
       else if (d.state === "defended") award("objective", XP.zoneDefend, "Zone " + d.label + " defended");
+      else return;
+      touch();
+    },
+    // [lane modes] OUTPOST / RECLAIM / ASCENT events
+    hill(d) {
+      if (!d || !Array.isArray(d.byWho) || d.byWho.indexOf("P") < 0) return;
+      if (d.state === "hold") award("objective", XP.hillHold, "Outpost held");
+      else if (d.state === "objkill") award("objective", XP.hillKill, "Outpost kill");
+      else return;
+      touch();
+    },
+    tag(d) {
+      if (!d || d.byWho !== "P") return;
+      if (d.state === "confirmed") { ensureSession().hl.caps++; rec.life.caps++; award("objective", XP.tagConfirm, "Kill confirmed"); }
+      else if (d.state === "denied") award("objective", XP.tagDeny, "Kill denied");
+      else return;
+      touch();
+    },
+    ladder(d) {
+      if (!d || d.who !== "P") return;
+      if (d.state === "promoted") award("objective", XP.ladderRung, "Rung " + (d.tier + 1));
+      else if (d.state === "finished") award("objective", XP.ladderFinish, "Ladder complete");
       else return;
       touch();
     },

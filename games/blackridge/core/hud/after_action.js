@@ -22,7 +22,7 @@ import { shell } from "./hud.js";
 // pure curve functions only (no state is shared through this import)
 import * as curve from "../meta/progression.js";
 
-const MODE_NAMES = { tdm: "Skirmish", ctf: "Capture the Flag", ffa: "Free-for-All", dom: "Stronghold", campaign: "Operation" }; // [lane dom] + dom
+const MODE_NAMES = { tdm: "Skirmish", ctf: "Capture the Flag", ffa: "Free-for-All", dom: "Stronghold", hill: "Outpost", tags: "Reclaim", ladder: "Ascent", campaign: "Operation" }; // [lane dom] + dom; [lane modes] + hill / tags / ladder
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const fmt = (n) => Math.round(n).toLocaleString("en-US");
 const titleCase = (s) => String(s || "").replace(/[_-]+/g, " ").replace(/\b[a-z]/g, (c) => c.toUpperCase());

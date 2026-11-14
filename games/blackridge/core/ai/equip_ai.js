@@ -192,6 +192,8 @@ export function noticeEquipment(sim, bot, brain, t, rng, band) {
     const c = [m.pos[0], m.pos[1] + 0.15, m.pos[2]];
     if (sim.world.losBlocked(eye, c)) continue;
     brain.mineSeen[m.id] = rng() < pOf(NOTICE_P, band);
+    // [identity lane] "tripmine" call on the team channel (view event only)
+    if (brain.mineSeen[m.id]) sim.emit("bark", { botId: bot.id, kind: "mine", pos: [m.pos[0], m.pos[1], m.pos[2]] });
   }
 }
 
@@ -207,6 +209,9 @@ export function react(sim, bot, brain, c, dt, t, rng, band, ctx) {
       const P = ctx.P;
       const hadTarget = P && P.lastKnown && t - P.lastSeenT < 1.5 && (bot.state === "combat" || bot.state === "suppress");
       brain.blindFire = !!(hadTarget && rng() < pOf(BLINDFIRE_P, band)) ? { at: P.lastKnown.slice(), until: t + 0.9 } : null;
+      // [identity lane] personality mistake "flashLost": this operator loses
+      // the fight line when flashed — no blind burst, a wider stagger
+      if (band && band.flashLost) brain.blindFire = null;
       brain.blindYaw = brain.curYaw;
     }
     const bf = brain.blindFire;
@@ -226,7 +231,7 @@ export function react(sim, bot, brain, c, dt, t, rng, band, ctx) {
       }
     } else {
       // stagger: the head swings off the line, slowly
-      brain.blindYaw = brain.blindYaw == null ? brain.curYaw : brain.blindYaw + Math.sin(t * 3.1 + bot.id) * 0.9 * dt;
+      brain.blindYaw = brain.blindYaw == null ? brain.curYaw : brain.blindYaw + Math.sin(t * 3.1 + bot.id) * (band && band.flashLost ? 1.6 : 0.9) * dt;
       brain.curYaw = approachYaw(brain.curYaw, brain.blindYaw, 2 * dt);
       c.pitch = -0.15;
     }

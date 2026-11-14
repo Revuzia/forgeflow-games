@@ -1469,13 +1469,29 @@ export function makeSfx(env) {
 
   function onBark(d) {
     if (!d || !env.ac) return;
+    // [identity lane] a TEAMMATE's radio line is keyed by core/hud/callouts.js
+    // at the moment its text lands (coSkip marks the raw event it took over);
+    // a line dropped by the rate limiter is simply not keyed
+    if (d.coSkip) return;
     const t = env.ac.currentTime;
     if (t - lastBark < 0.15) return;                           // same-tick stack guard
     lastBark = t;
     const p = env.botPos(d.botId);
     const out = p ? env.spatial(p, 45) : env.spatial(null);
     if (!out) return;
-    const urgent = d.kind === "grenade" || d.kind === "down" || d.kind === "push" || d.kind === "lastman";
+    const urgent = d.urgent === true || d.kind === "grenade" || d.kind === "down" || d.kind === "push" || d.kind === "lastman";
+    if (d.text) {
+      // [identity lane] synced with a text callout: the chatter runs as long as
+      // the line reads (≈ 0.07 s a character, 0.35-1.3 s), same voice chain
+      const dur = Math.max(0.35, Math.min(1.3, String(d.text).length * 0.07));
+      const g = 0.11;
+      burst(out, { f: 3200, q: 9, durMs: 6, gain: g * 0.8 });
+      burst(out, { f: 1700, q: 2.6, durMs: 45, gain: g * 0.7, when: 0.006 });
+      chatter(out, { dur, urgent, gain: g * 1.1, when: 0.04 });
+      burst(out, { f: 2900, q: 9, durMs: 6, gain: g * 0.6, when: 0.05 + dur });
+      burst(out, { f: 1600, q: 2.2, durMs: 90, gain: g * 0.55, when: 0.055 + dur, decayMs: 25 });
+      return;
+    }
     squelchInto(out, urgent, 0.11);
   }
 
@@ -1533,6 +1549,50 @@ export function makeSfx(env) {
       for (let i = 0; i < 2; i++) {
         thump(o, { f0: 440, f1: 440, durMs: 90, gain: 0.07, type: "square", when: i * 0.2 });
         thump(o, { f0: 370, f1: 370, durMs: 90, gain: 0.07, type: "square", when: i * 0.2 + 0.1 });
+      }
+    }
+  }
+
+  // [lane modes] OUTPOST / RECLAIM / ASCENT cues — synthesized, UI bus, from
+  // the LISTENER's side (team 0 = the player's team; "P" = the player):
+  //   hill active → two-note chime; we take it → rising pair; they take it →
+  //   falling pair; tag confirmed by you → bright double blip, denied by you →
+  //   soft single blip, our tag confirmed by them → low thud; ladder: your
+  //   promotion → quick rising triad, demotion → falling sawtooth, finish → fanfare
+  function onModeEvent(type, d) {
+    if (!d || !env.ac) return;
+    const o = uiOut(1);
+    if (type === "hill") {
+      if (d.state === "active") {
+        thump(o, { f0: 659.3, f1: 659.3, durMs: 120, gain: 0.07, type: "triangle" });
+        thump(o, { f0: 987.8, f1: 987.8, durMs: 220, gain: 0.07, type: "triangle", when: 0.13 });
+      } else if (d.state === "held") {
+        if (d.team === 0) {
+          thump(o, { f0: 523.3, f1: 523.3, durMs: 100, gain: 0.08, type: "triangle" });
+          thump(o, { f0: 784.0, f1: 784.0, durMs: 200, gain: 0.08, type: "triangle", when: 0.1 });
+        } else {
+          thump(o, { f0: 392.0, f1: 392.0, durMs: 140, gain: 0.07, type: "sawtooth" });
+          thump(o, { f0: 293.7, f1: 290.0, durMs: 300, gain: 0.07, type: "sawtooth", when: 0.14 });
+        }
+      }
+    } else if (type === "tag") {
+      if (d.state === "confirmed" && d.byWho === "P") {
+        thump(o, { f0: 1046.5, f1: 1046.5, durMs: 60, gain: 0.08, type: "square" });
+        thump(o, { f0: 1568.0, f1: 1568.0, durMs: 110, gain: 0.07, type: "triangle", when: 0.07 });
+      } else if (d.state === "denied" && d.byWho === "P") {
+        thump(o, { f0: 880.0, f1: 880.0, durMs: 90, gain: 0.06, type: "triangle" });
+      } else if (d.state === "confirmed" && d.byTeam === 1 && d.team === 0) {
+        thump(o, { f0: 220.0, f1: 180.0, durMs: 160, gain: 0.06, type: "sine" });
+      }
+    } else if (type === "ladder") {
+      if (d.who === "P" && d.state === "promoted") {
+        thump(o, { f0: 587.3, f1: 587.3, durMs: 70, gain: 0.07, type: "triangle" });
+        thump(o, { f0: 740.0, f1: 740.0, durMs: 70, gain: 0.07, type: "triangle", when: 0.07 });
+        thump(o, { f0: 880.0, f1: 880.0, durMs: 160, gain: 0.08, type: "triangle", when: 0.14 });
+      } else if (d.who === "P" && d.state === "demoted") {
+        thump(o, { f0: 440.0, f1: 220.0, durMs: 380, gain: 0.08, type: "sawtooth" });
+      } else if (d.who === "P" && d.state === "finished") {
+        for (let i = 0; i < 4; i++) thump(o, { f0: [523.3, 659.3, 784.0, 1046.5][i], f1: [523.3, 659.3, 784.0, 1046.5][i], durMs: i === 3 ? 420 : 110, gain: 0.09, type: "triangle", when: i * 0.11 });
       }
     }
   }
@@ -1796,6 +1856,48 @@ export function makeSfx(env) {
     } catch (e) { err(e, "equip:own"); }
   }
 
+  // ---- [melee] QUICK KNIFE: swing whoosh, flesh hit, distinct miss ----------------
+  // Synthesized + samples already shipped (cloth, imp_*) — no audio files. The
+  // bridge registration lives in core/fx/fx.js (the blood lane), which calls
+  // sfx.onMelee(d) through ctx.__audioCore like boot's zone cue.
+  function onMelee(d) {
+    if (!d || !env.ac || !env.buses) return;
+    const own = d.who === "P";
+    let out;
+    if (own) out = env.spatial(null);
+    else { const p = env.botPos(d.who) || d.pos; out = p ? env.spatial(p, 22) : null; }
+    if (!out) return;
+    if (d.phase === "swing") {
+      // the draw (cloth + a light steel tick off the sheath) and the fast air cut
+      const c = buf("cloth");
+      if (c) voice(c, out, { rate: 1.35, gain: own ? 0.22 : 0.16 });
+      burst(out, { f: 5200, q: 6, durMs: 9, gain: 0.05, when: 0.01 });
+      burst(out, { f: 900, sweepTo: 3600, q: 1.1, durMs: 120, gain: own ? 0.16 : 0.11, when: 0.05, decayMs: 50 });
+    } else if (d.phase === "hit") {
+      const ho = own ? env.spatial(null) : (d.pos ? env.spatial(d.pos, 22) : out);
+      if (!ho) return;
+      // a heavy body thud + the wet bite of the blade; a back-stab lands deeper
+      const k = d.backstab ? 1.25 : 1;
+      thump(ho, { f0: 120, f1: 55, durMs: 110, gain: 0.32 * k });
+      burst(ho, { f: 520, sweepTo: 240, q: 0.9, durMs: 90, gain: 0.20 * k, when: 0.005, decayMs: 40 });
+      burst(ho, { f: 2600, q: 2.2, durMs: 28, gain: 0.07, when: 0.004 });
+      const c = buf("cloth");
+      if (c) voice(c, ho, { rate: 0.72, gain: 0.26 * k, when: 0.01 });
+      if (d.victim === "P") env.ctx.suppress = Math.min(1, (env.ctx.suppress || 0) + 0.35);
+    } else if (d.phase === "miss") {
+      if (d.surface) {
+        // the blade glances off the wall: a bright scrape, not a thud
+        const p = d.pos ? env.spatial(d.pos, 18) : out;
+        const b = buf(d.surface === "metal" ? "imp_metal" : "imp_concrete");
+        if (b && p) voice(b, p, { rate: 1.6, gain: 0.16 });
+        if (p) burst(p, { f: 4200, sweepTo: 2600, q: 3, durMs: 70, gain: 0.07 });
+      } else {
+        // a whiff: the follow-through whoosh tails off, nothing lands
+        burst(out, { f: 2400, sweepTo: 700, q: 0.9, durMs: 140, gain: own ? 0.09 : 0.06, decayMs: 70 });
+      }
+    }
+  }
+
   // ---- match / loadout events with no sound before this pass ----------------------
   function onRespawn(d) {
     if (!d || !(d.who === "P" || d.actorId === 0)) return;
@@ -1886,7 +1988,9 @@ export function makeSfx(env) {
     onShot, onHurt, onDeath, onReload, onSwitch, onAds, onStep, onLand, onJump,
     onEmpty, onBark, onObjective, onWhiz, onExplosion, onGrenade,
     onZone, // [lane dom]
+    onModeEvent, // [lane modes]
     onRespawn, onResupply, onLoot, grenadePin, cookTick, ammoRattle,
     onEquip, // [equipment lane]
+    onMelee, // [melee]
   };
 }

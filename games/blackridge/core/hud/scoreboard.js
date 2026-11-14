@@ -139,9 +139,14 @@ export function createScoreboard(ctx) {
   function render() {
     const m = M();
     if (!m) { tblEl.innerHTML = ""; return; }
-    const ctf = m.modeId === "ctf", ffa = m.modeId === "ffa";
+    const ladder = m.modeId === "ladder"; // [lane modes] ASCENT: ten teams of one, ranked by rung
+    const ctf = m.modeId === "ctf", ffa = m.modeId === "ffa" || ladder;
     const dom = m.modeId === "dom"; // [lane dom] zone captures + defend kills
-    const modeCols = ctf ? `<th>CAP</th><th>RET</th>` : ffa ? `<th>PLACE</th>` : dom ? `<th>CAP</th><th>DEF</th>` : `<th>STREAK</th>`;
+    const hill = m.modeId === "hill", tags = m.modeId === "tags"; // [lane modes]
+    const rungOf = (a) => ((m.mode && m.mode.tier && m.mode.tier[a.actorId]) | 0);
+    const nRungs = (m.mode && m.mode.tiers && m.mode.tiers.length) || 8;
+    const modeCols = ctf ? `<th>CAP</th><th>RET</th>` : ladder ? `<th>RUNG</th><th>PLACE</th>` : ffa ? `<th>PLACE</th>` : dom ? `<th>CAP</th><th>DEF</th>`
+      : hill ? `<th>TIME</th><th>OBJ</th>` : tags ? `<th>CONF</th><th>DENY</th>` : `<th>STREAK</th>`;
     const header =
       `<tr><th class="l">NAME</th><th>SCORE</th>` +
       `<th>K</th><th>D</th><th>A</th>${modeCols}</tr>`;
@@ -150,6 +155,9 @@ export function createScoreboard(ctx) {
       const mode = ctf
         ? `<td>${a.captures || 0}</td><td>${a.returns || 0}</td>`
         : dom ? `<td>${a.captures || 0}</td><td>${a.defends || 0}</td>`
+        : hill ? `<td>${Math.floor(a.hillS || 0)}s</td><td>${a.objKills || 0}</td>`
+        : tags ? `<td>${a.confirms || 0}</td><td>${a.denies || 0}</td>`
+        : ladder ? `<td>${rungOf(a) >= nRungs ? "TOP" : (rungOf(a) + 1) + "/" + nRungs}</td><td>${placeOf ? placeOf(a) : ""}</td>`
         : ffa ? `<td>${placeOf ? placeOf(a) : ""}</td>`
           : `<td>${a.bestStreak || 0}</td>`;
       return `<tr class="${a.actorId === 0 ? "me" : ""}${a.alive ? "" : " dead"}">` +
@@ -159,13 +167,13 @@ export function createScoreboard(ctx) {
     }).join("");
 
     if (ffa) {
-      const sorted = m.actors.slice().sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
+      const sorted = m.actors.slice().sort((a, b) => (ladder ? rungOf(b) - rungOf(a) : 0) || b.kills - a.kills || a.deaths - b.deaths);
       const place = new Map();
       sorted.forEach((a, i) => place.set(a.actorId, i + 1));
       const you = place.get(0);
       tblEl.innerHTML =
         `<table>${header}${rowsOf(sorted, (a) => `${place.get(a.actorId)} / ${sorted.length}`)}</table>`;
-      headEl.innerHTML = `FREE-FOR-ALL <span style="opacity:.6">·</span> ` +
+      headEl.innerHTML = `${ladder ? "ASCENT" : "FREE-FOR-ALL"} <span style="opacity:.6">·</span> ` +
         `<span class="${you === 1 ? "win" : ""}">YOU ${you} / ${sorted.length}</span>`;
       return;
     }

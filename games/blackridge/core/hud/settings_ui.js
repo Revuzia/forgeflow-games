@@ -391,7 +391,8 @@ export function createSettingsUI(ctx) {
   const PAD_ROWS = [["fire", "fire"], ["ads", "aim down sights"], ["jump", "jump"], ["crouch", "crouch · slide"],
     ["reload", "reload (hold: interact)"], ["swap", "swap weapon"], ["grenade", "lethal (hold to cook)"],
     ["tactical", "tactical"],
-    ["sprint", "sprint"], ["streak", "call-ins (↓ sweep · ↑ mortar · → airstrike · ← orbital)"], ["inspect", "inspect"],
+    ["sprint", "sprint"], ["melee", "melee"], // [melee]
+    ["streak", "call-ins (↓ sweep · ↑ mortar · → airstrike · ← orbital)"], ["inspect", "inspect"],
     ["score", "scoreboard"], ["pause", "pause"]];
   function syncPadMap() {
     const inp = ctx.input;
