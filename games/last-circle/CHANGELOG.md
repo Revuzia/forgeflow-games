@@ -3,7 +3,7 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
-## 2026-11-13 — Wave 10 round 1: guns in hand (integration branch w10, not deployed)
+## 2026-11-13 — Wave 10 round 1: guns in hand (LIVE ?v=1794658791)
 
 Round 1 of Wave 10 (plan `F:/lc_p23/w10/PLAN.md`). This release carries lane R1B (guns in hand) only; lane R1A (homes) continues on
 its branch and is not merged. Wave 9 rounds 2-6 were not built, so W10 builds on the W9 round-1 tip 361c5ec3. No world change:
