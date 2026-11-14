@@ -1,0 +1,496 @@
+{
+ "startOfRun": {
+  "charAtBoot": null,
+  "gradeAtOrigin": 0.976,
+  "gradeAtAuthored": 0.913,
+  "originToShrine0": 7.43,
+  "playRadius": 620
+ },
+ "cold": {
+  "shrines": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5,
+    "grade": 0.913,
+    "monoX": 5,
+    "monoZ": 5.5,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "grade": 0.018,
+    "monoX": 315,
+    "monoZ": -18.5,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.61,
+    "grade": 0.013,
+    "monoX": 172,
+    "monoZ": 276.609,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.61,
+    "grade": 0.028,
+    "monoX": -170,
+    "monoZ": 340.609,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "grade": 0.032,
+    "monoX": -337,
+    "monoZ": 13.5,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.61,
+    "grade": 0.025,
+    "monoX": -138,
+    "monoZ": -329.609,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.61,
+    "grade": 0.056,
+    "monoX": 148,
+    "monoZ": -313.609,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   }
+  ],
+  "gradeDist": {
+   "n": 2629,
+   "p10": 0.107,
+   "p25": 0.176,
+   "p50": 0.27,
+   "p75": 0.383,
+   "p90": 0.489,
+   "p95": 0.559,
+   "p99": 0.705,
+   "max": 0.976,
+   "mean": 0.287
+  },
+  "spawnGradePct": 0.999,
+  "respawn_spawn": {
+   "requested": "cold_spawn",
+   "resolvedId": "cold_spawn",
+   "sameAsBefore": true,
+   "shrine": {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5
+   },
+   "monoRad": 0.34,
+   "monoH": 3.6,
+   "minInradius": 0.212,
+   "samples": [
+    {
+     "tag": "t+0.0s",
+     "x": 5,
+     "z": 5.5,
+     "y": -1.354,
+     "aboveGround": 0,
+     "distToMonoAxis": 0,
+     "speed": 0
+    },
+    {
+     "tag": "t+3.0s",
+     "x": 5,
+     "z": 5.5,
+     "y": -1.354,
+     "aboveGround": 0,
+     "distToMonoAxis": 0,
+     "speed": 0
+    }
+   ],
+   "deaths": 1
+  },
+  "respawn_ring": {
+   "requested": "shrine_e",
+   "resolvedId": "shrine_e",
+   "sameAsBefore": true,
+   "shrine": {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5
+   },
+   "monoRad": 0.34,
+   "monoH": 3.6,
+   "minInradius": 0.212,
+   "samples": [
+    {
+     "tag": "t+0.0s",
+     "x": 315,
+     "z": -18.5,
+     "y": 0.34,
+     "aboveGround": 0,
+     "distToMonoAxis": 0,
+     "speed": 0
+    },
+    {
+     "tag": "t+3.0s",
+     "x": 315,
+     "z": -18.5,
+     "y": 0.34,
+     "aboveGround": 0,
+     "distToMonoAxis": 0,
+     "speed": 0
+    }
+   ],
+   "deaths": 2
+  }
+ },
+ "sand": {
+  "shrines": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5,
+    "grade": 0.717,
+    "monoX": 5,
+    "monoZ": 5.5,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "grade": 0.203,
+    "monoX": 315,
+    "monoZ": -18.5,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.61,
+    "grade": 0.072,
+    "monoX": 172,
+    "monoZ": 276.609,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.61,
+    "grade": 0.421,
+    "monoX": -170,
+    "monoZ": 340.609,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "grade": 0.33,
+    "monoX": -337,
+    "monoZ": 13.5,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.61,
+    "grade": 0.361,
+    "monoX": -138,
+    "monoZ": -329.609,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.61,
+    "grade": 0.274,
+    "monoX": 148,
+    "monoZ": -313.609,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   }
+  ],
+  "gradeDist": {
+   "n": 2629,
+   "p10": 0.086,
+   "p25": 0.142,
+   "p50": 0.246,
+   "p75": 0.411,
+   "p90": 0.611,
+   "p95": 0.746,
+   "p99": 1.018,
+   "max": 1.4,
+   "mean": 0.305
+  },
+  "spawnGradePct": 0.939,
+  "respawn_spawn": {
+   "requested": "cold_spawn",
+   "resolvedId": "cold_spawn",
+   "sameAsBefore": true,
+   "shrine": {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5
+   },
+   "monoRad": 0.34,
+   "monoH": 3.6,
+   "minInradius": 0.212,
+   "samples": [
+    {
+     "tag": "t+0.0s",
+     "x": 5,
+     "z": 5.5,
+     "y": -4.138,
+     "aboveGround": 0,
+     "distToMonoAxis": 0,
+     "speed": 0
+    },
+    {
+     "tag": "t+3.0s",
+     "x": 5,
+     "z": 5.5,
+     "y": -4.138,
+     "aboveGround": 0,
+     "distToMonoAxis": 0,
+     "speed": 0
+    }
+   ],
+   "deaths": 3
+  },
+  "respawn_ring": {
+   "requested": "shrine_e",
+   "resolvedId": "shrine_e",
+   "sameAsBefore": true,
+   "shrine": {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5
+   },
+   "monoRad": 0.34,
+   "monoH": 3.6,
+   "minInradius": 0.212,
+   "samples": [
+    {
+     "tag": "t+0.0s",
+     "x": 315,
+     "z": -18.5,
+     "y": 3.353,
+     "aboveGround": 0,
+     "distToMonoAxis": 0,
+     "speed": 0
+    },
+    {
+     "tag": "t+3.0s",
+     "x": 315,
+     "z": -18.5,
+     "y": 3.353,
+     "aboveGround": 0,
+     "distToMonoAxis": 0,
+     "speed": 0
+    }
+   ],
+   "deaths": 4
+  }
+ },
+ "ash": {
+  "shrines": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5,
+    "grade": 0.286,
+    "monoX": 5,
+    "monoZ": 5.5,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "grade": 0.188,
+    "monoX": 315,
+    "monoZ": -18.5,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.61,
+    "grade": 0.069,
+    "monoX": 172,
+    "monoZ": 276.609,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.61,
+    "grade": 0.47,
+    "monoX": -170,
+    "monoZ": 340.609,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "grade": 0.136,
+    "monoX": -337,
+    "monoZ": 13.5,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.61,
+    "grade": 0.102,
+    "monoX": -138,
+    "monoZ": -329.609,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.61,
+    "grade": 0.053,
+    "monoX": 148,
+    "monoZ": -313.609,
+    "monoRad": 0.34,
+    "monoH": 3.6,
+    "monoOffFromShrine": 0
+   }
+  ],
+  "gradeDist": {
+   "n": 2629,
+   "p10": 0.032,
+   "p25": 0.055,
+   "p50": 0.092,
+   "p75": 0.164,
+   "p90": 0.284,
+   "p95": 0.447,
+   "p99": 0.826,
+   "max": 1.961,
+   "mean": 0.143
+  },
+  "spawnGradePct": 0.901,
+  "respawn_spawn": {
+   "requested": "cold_spawn",
+   "resolvedId": "cold_spawn",
+   "sameAsBefore": true,
+   "shrine": {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5
+   },
+   "monoRad": 0.34,
+   "monoH": 3.6,
+   "minInradius": 0.212,
+   "samples": [
+    {
+     "tag": "t+0.0s",
+     "x": 5,
+     "z": 5.5,
+     "y": -0.479,
+     "aboveGround": 0,
+     "distToMonoAxis": 0,
+     "speed": 0
+    },
+    {
+     "tag": "t+3.0s",
+     "x": 5,
+     "z": 5.5,
+     "y": -0.479,
+     "aboveGround": 0,
+     "distToMonoAxis": 0,
+     "speed": 0
+    }
+   ],
+   "deaths": 5
+  },
+  "respawn_ring": {
+   "requested": "shrine_e",
+   "resolvedId": "shrine_e",
+   "sameAsBefore": true,
+   "shrine": {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5
+   },
+   "monoRad": 0.34,
+   "monoH": 3.6,
+   "minInradius": 0.212,
+   "samples": [
+    {
+     "tag": "t+0.0s",
+     "x": 315,
+     "z": -18.5,
+     "y": 2.541,
+     "aboveGround": 0,
+     "distToMonoAxis": 0,
+     "speed": 0
+    },
+    {
+     "tag": "t+3.0s",
+     "x": 315,
+     "z": -18.5,
+     "y": 2.541,
+     "aboveGround": 0,
+     "distToMonoAxis": 0,
+     "speed": 0
+    }
+   ],
+   "deaths": 6
+  }
+ },
+ "pageerrors": []
+}

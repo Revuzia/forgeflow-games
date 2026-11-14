@@ -1,0 +1,210 @@
+{
+ "_note": "Verdicts read BY EYE off a replay frame captured by _untest_probe.py / _untest_look.py. A colour or 'reads as' claim is not decided by a state probe; these are the ones a frame settles. Each entry names the frame it was read from and, where the claim is about an authored value, the line of course data it contradicts.",
+ "verdant-2#00": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_verdant-2/01_verdant-2_00_0.png (hero on the spawn ring at (0, 2.30, 53), default follow camera, yaw 0): the GNASHER FORT board still stands to the player's right and still covers roughly the right quarter of the frame (its plate spans about x 700-1050 of 1280 and y 235-430), hiding the fort's east flank and the quay behind it. Nim himself is clear of it, so this is a view-blocking defect, not an occlusion one."
+ ],
+ "verdant-3#11": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_verdant-3/05_verdant-3_11_0.png (hero standing on the bale stack at (-9.00, 3.18, 47.00)): both bales render as STEEL-BLUE boxes with pale cream quilted top caps and cream corner trim. verdant-3.js:131 sets WHEAT = 0xd7b45a and :740 authors the stack as { kind:'platform', s:[2.6,1.5,2.4], mat:'cloth', tint: WHEAT } — the resolved material on the merged cloth mesh at the station reads #c8dcec. Blue hay in a wheat field, unchanged."
+ ],
+ "verdant-3#14": [
+  "STILL REPRODUCES",
+  "read off _shots/play_look_verdant-3/25_verdant-3_14_S.png (lens on the quay 7 m south of the first sinker at (0, 0.95, 32.50), aimed at it) and 07_verdant-3_14_0.png standing on it: both sinkers still render as flat rectangular RAFTS — pale grey stone frame, four cream corner blocks, dark red-brown ribbed infill — not as logs, while the board beside them still reads 'THE LOGS SINK WHEN YOU STAND / KEEP MOVING'."
+ ],
+ "ember-1#03": [
+  "FIXED",
+  "read off _shots/play_untest_ember-1/03_ember-1_03_0.png (hero on the obsidian shore at (-8.40, 3.06, 35.90), surface 'sand'): the shoreline is no longer a hard black-edged seam. The ground is a lit warm-brown dune with a visible tonal gradient, and where it meets the lava lake it carries a bright gold/white CRUST BAND along the whole waterline, so the transition reads as heat, not as a polygon edge. The tester's 'featureless near-black terrain meets blown-out yellow-white lava on a single straight line' does not describe this frame."
+ ],
+ "ember-1#08": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_ember-1/06_ember-1_08_0.png (hero at the spawn (0, 4.60, 45), looking back over the walked shore): the ground the player crosses is still a smooth brown-grey gradient with no grain, no crack, no debris and no visible cart track. The only detail anywhere on the shore is a handful of rock silhouettes on the far ridge and the lit spawn disc; the authored `paths` still do not read."
+ ],
+ "ember-1#22": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_ember-1/15_ember-1_22_0.png (hero on the slag pit floor at (-32.00, 6.00, -33.02), the Warden two metres away): the pit floor is still a near-black plane carrying only a few small orange embers — no monoliths, no lavaRock scatter, no charge lane. One thing HAS changed and is worth recording: the far edge IS legible now, because the black floor silhouettes cleanly against the bright lava lake behind it, so 'you cannot see where the edge is' no longer holds; everything else in the complaint does."
+ ],
+ "ember-1#16": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_ember-1/11_ember-1_16_0.png (hero on the flue floor at (-8.00, 6.40, -34.00), the lens up the shaft so both inner faces are in frame): the flue's interior walls still render as warm ORANGE-BROWN with long vertical streaky grain running floor to ceiling — timber, not the authored `mat:'metal'` tint 0x565b62. The floor inside the shaft carries the same vertical fibre."
+ ],
+ "ember-1#15": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_ember-1/10_ember-1_15_0.png (hero on the flue floor at (-8.10, 6.40, -34.00), default follow camera, yaw 0.07) with the camera sweep at that station (8 yaws, worst lens distance 1.84 m, nothing between the lens and Nim at any yaw). The HEADLINE still holds: the pose is a near-top-down over-the-head view — you look DOWN at the floor of the shaft, not up it, so the exit ledge at 15.40 is not in frame and you cannot judge your height. Two specifics have changed and should not be re-filed: the lens is 1.84 m out, not 'about a metre', and BOTH inner walls of the shaft ARE visible (the tester's 'NEITHER WALL of the shaft is visible' no longer holds), with the head about an eighth of the picture rather than a third."
+ ],
+ "ember-1#05": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_ember-1/04_ember-1_05_0.png (hero at the junction board, (0, 3.00, -12.80), facing it): the SIZE INVERSION is still there — the aside 'so do not stand on them' (authored 0.20) renders with visibly TALLER glyphs than the caps line above it (authored 0.24). One half of the complaint HAS gone: the two 0.24 lines are no longer wrapped, they now set as one line 'THE RAFTS SINK WHEN YOU STAND ON THEM'. Extra finding at the same station, not in the report: a lamp post stands between the hero and the board and covers the middle of the aside."
+ ],
+ "_scarfNote": "Supporting frame for the scarf complaints (ember-1#02, ember-1#20): _shots/play_untest_verdant-1/07_verdant-1_11_0.png catches Nim in free fall at (13.00, -7.46, -47.00), vy -26.45, against an empty green void, and the scarf is unmistakable there — a straight WHITE SLAB projecting from the neck at about 45 degrees with square ends, no curve and no taper. The numeric answer comes from the verlet particle array (`hero._scarfP`), which the probe now samples.",
+ "verdant-1#04": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_verdant-1/04_verdant-1_04_0.png (hero on the stepping stone at (-3.00, 0.85, 22.00), looking north across the brook): the waterline against the north bank is still a razor-straight horizontal cut, and the bank above it is still a near-black, almost untextured face — no wet edge, no shoreline blend, no caustic on the bed. The two stepping stones are still dark blue-grey slabs. One part of the complaint has softened: the water itself is no longer a flat cyan sheet, it carries cream foam bands and a wavy gradient."
+ ],
+ "verdant-2#22": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_verdant-2/10_verdant-2_22_0.png (hero on the causeway at (-1.27, 1.55, 37.74) looking north at the knoll's south scarp): the scarp is still one bare brown dirt face, its top edge against the green grass is still a hard line with clearly visible STAIR STEPS on both flanks, there is still no transition band, and the dirt still carries a vertically smeared texture on the near-vertical face."
+ ],
+ "ember-4#17": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_ember-4/01_ember-4_01_0.png (hero standing IN the west quicksand pool at (-20.00, 1.20, 37.00), surface 'sand', looking north) and 08_ember-4_17_0.png from inside it: the pool still renders as a hard-edged JAGGED RED shape laid over dark brown sand — a decal seam, not sand — and it is still framed by four thin pale strips at slightly different heights that plainly do not meet at the corners."
+ ],
+ "rime-1#06": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_rime-1/04_rime-1_06_0.png (hero on cp-shore at (0.00, 1.40, 58.50), camera orbited to yaw 2.36): two authored deco boards still present their UNLIT DARK BACK FACES to the lens — one fills the left third of the frame from top to bottom, the second stands in the right-centre. Neither is a collider, so the camera's pull-in cannot see them. (The rule's '61% of the frame' figure comes from the bounding box of the MERGED sign mesh and overstates any single board; the frame is the evidence.) In this particular pose the hero is not hidden, only the world behind him."
+ ],
+ "rime-1#20": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_rime-1/11_rime-1_20_0.png (hero standing on THE LAKE RUN start pad at (0.00, 1.54, 55.00)): the pad still carries a hot LIME-GREEN outlined octagon, by a wide margin the most saturated thing in a course whose palette is snow white, ice blue, aurora cyan and gold — it reads as a debug overlay. The other half of the complaint is not confirmed from this station: no magenta plume is in frame here (the only bright column is the gold brazier beam)."
+ ],
+ "rime-1#07": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_rime-1/03_rime-1_05_0.png (hero on the frozen lake at (5.00, 1.30, 45.60), surface 'ice'): the ambient snow is still dozens of soft white BILLBOARDS lying flat ON the ice — a regular scatter of ~0.5-1 m white domes across the whole lake and the snow field beyond it, at ground level, with nothing falling in the air. The probe's own particle sampler agrees: of the points it could sample in `fx.particles`, none were more than 0.6 m above the ground under them."
+ ],
+ "rime-1#10": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_rime-1/03_rime-1_05_0.png (hero on the lake at 36 s of course clock, no power taken — the HUD shows no power pip): two big aurora-cyan WING RINGS are drawn across the top of the frame over the village roofline, and a third hangs at the right. They are on screen from the opening minute, long before the wing hat in the belfry. (The audit's ring counter read 0 for this course because it scanned mesh NAMES; the ring meshes live inside a `rings` hazard and carry none, which is fixed in the toolbox but post-dates this course's probe.)"
+ ],
+ "ember-2#11": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_ember-2/08_ember-2_11_0.png (hero on the flywheel deck at (-5.40, 20.30, -50.00)): part (2) of the complaint is plainly still there — large UNLIT PALE-BLUE/WHITE CHEVRONS are painted across the floating crown deck at the right of frame, over its lattice, with no shading. Part (1), the 3x3 crown column standing between the lens and the hero, is confirmed separately by the camera sweep at this station (something between the lens and Nim at 2 of 8 yaws)."
+ ],
+ "_ember2PostNote": "HARNESS ARTEFACT, not a game defect — corrected. Every frame the STATION probe took on ember-2 (_shots/play_untest_ember-2/*.png) carries strong radial white speed-lines and chromatic fringing while the hero is idle at speed 0. The LOOK pass on the same course, same build, minutes later, shows none (_shots/play_look_ember-2/01_ember-2_06_S.png). The difference is how the hero got there: the station probe teleports repeatedly with `__dev.tp`, which appears to latch the speed-line post effect on. Do not file it as a rendering defect; do treat any station-probe frame on a course where it appears as unusable for a colour or legibility read.",
+ "rime-2#01": [
+  "FIXED",
+  "read off _shots/play_untest_rime-2/01_rime-2_00_0.png (hero on the spawn ring at (0.00, 30.00, -26.00) facing the GLACIER SLIDE board): the board now sets FOUR body lines in two groups with a clear gap between them — 'CROUCH AT SPEED TO TUCK / THE ICE KEEPS THE REST' then 'THE CHUTE ONLY GOES DOWN. / EVERYTHING ELSE GOES UP.' The mid-phrase break the tester quoted ('THE CHUTE ONLY / GOES DOWN.') is gone: that sentence sets on one line, and the five-lines-packed-into-0.37 m paragraph is gone with it."
+ ],
+ "rime-2#04": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_rime-2/04_rime-2_06_0.png (hero on the mesa at (35.02, 17.00, -2.56), the pedestal in the near foreground) and 02_rime-2_04_0.png (standing on it): the mid-station pedestal still renders as a ring of GREEN GRASS with brown/orange crumbling DIRT round its rim and a TEAL POOL in the middle, raised on thin legs above the snow — on a glacier at 17 m — and its rim still overlaps the pale checkpoint disc beside it, so the two round pads intersect. Authored `kind:'pedestal', mat:'ice', tint: ICE`."
+ ],
+ "rime-2#06": [
+  "FIXED",
+  "read off _shots/play_untest_rime-2/02_rime-2_04_0.png (the HALF WAY board on the mesa, hero at (36.00, 18.05, -6.00)) together with 01_rime-2_00_0.png (the spawn board): neither board wraps mid-sentence any more. The mesa board sets 'HALF WAY' then 'THE SECOND HALF IS FASTER' on one line — the tester's 'HALF WAY / THE SECOND / HALF IS FASTER' is gone — and the spawn board sets 'THE CHUTE ONLY GOES DOWN.' on one line."
+ ],
+ "rime-2#05": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_rime-2/03_rime-2_05_0.png (hero on the trodden path off the mesa at (36.00, 17.00, -8.00), surface 'snow'): the authored path still paints as a NAVY-BLUE ellipse with a soft pale halo where it meets the white snow — a dark stain on the glacier rather than a trodden track. The same frame shows the ice pedestal of rime-2#04 still standing on thin legs with its green top."
+ ],
+ "rime-2#00": [
+  "FIXED",
+  "read off _shots/play_untest_rime-2/01_rime-2_00_0.png (hero on the spawn ring at (0.00, 30.00, -26.00) facing the GLACIER SLIDE board): the lantern beside that board now stands on a full POST with a snow-covered base running to the ground — it is not hanging in mid-air. The mesa lantern in 04_rime-2_06_0.png is mounted the same way."
+ ],
+ "rime-3#00": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_rime-3/01_rime-3_00_0.png — the course's opening frame (clock 3.58 s, hero at the authored spawn (0, 2.20, 46), yaw 0, no power taken): a large TRANSLUCENT PALE-BLUE PANEL still hangs in the air ahead of and above the hero, just left of the BLIZZARD PEAK board, exactly where the tester's all-hits raycast put the cp-camp marker (hits around (0, 6.9, 41.7)). It reads as a ghost of a signboard floating over the base camp."
+ ],
+ "rime-3#01": [
+  "STILL REPRODUCES",
+  "read off the same opening frame, _shots/play_untest_rime-3/01_rime-3_00_0.png. This frame is the clean test the probe could not make for the defect's own entry (that one had the wing hat granted by the save-state setter): here the HUD carries NO power bar at all, and a wing RING is nonetheless drawn at the top right of the picture over the ridge line, three and a half seconds into the course and long before the hat."
+ ],
+ "rime-3#09": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_rime-3/04_rime-3_09_0.png (hero at the mouth of span A, (-36.59, 6.60, -14.71), looking along the bridge): the bridge still reads as a dark skeleton — two posts, a dark rail and a thin dark deck strip with snow showing round it — and the chasm it crosses is still not legible from the mouth: the terrain beyond reads as one continuous white swell with only a faint shadow where the drop is."
+ ],
+ "rime-3#22": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_rime-3/11_rime-3_22_0.png (hero standing on the shrine pedestal at (0.00, 37.05, -4.00), on the white marble cap): the pedestal still renders as an OLIVE-GREEN ring with a teal centre, raised on thin dark legs with a black web of shadow beneath it — the same object as the rime-2 mid-station pedestal (rime-2#04), and on white marble it is impossible to miss. The pedestal prop appears to ignore its authored material on both courses."
+ ],
+ "ember-1#24": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_ember-1/16_ember-1_24_0.png (hero inside the smelter house at (41.00, 6.00, -37.00)): the windows are still FLAT SOLID PALE-YELLOW RECTANGLES with a thin dark border — four of them are in this frame — with no glass, no depth and no light spill on the deck below them. They still read as placeholder quads. (The second half of the report, the crusher head reading as a stack of dark discs, is not in this frame and is not covered by this verdict.)"
+ ],
+ "ember-1#25": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_ember-1/17_ember-1_25_0.png (hero on cp-crucible at (-12.00, 6.00, -30.00), the checkpoint that precedes the flue): the frame still contains no route up. What is in it is a conveyor running away north, the tan flue tower on the left with a dark unframed vertical slot, the dark red vessel wall behind it and the lava field to the right — no stair, no ladder, no stripe and no marking that says 'climb here'. (The rule engine had called this FIXED on a mobility measurement — the hero walks freely from the spot — which is not what the tester claimed; this hand verdict replaces it.)"
+ ],
+ "ember-1#27": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_ember-1/19_ember-1_27_0.png and 18_ember-1_26_0.png (hero inside the crucible vessel at (0.00, 6.00, -38.00) and in its corner at (-4.00, 6.00, -40.49)): the vessel's `metal` walls still read as a coarse RADIAL RED-BROWN FIBRE at arm's length — brushed felt — and as a flat untextured slab further off. There is no seam, no rivet, no plate line, no weld and no heat stain anywhere on the 15.6 m wall in either frame."
+ ],
+ "ember-1#26": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_ember-1/18_ember-1_26_0.png (hero inside the crucible vessel at (-4.00, 6.00, -40.49), in the corner where two walls meet): the interior is still a sealed box — two tall dark-red walls running out of frame above, a grate floor, and in the whole of this view no ladder, no doorway, no step and no light source. The frame covers two of the four walls and the corner between them; nothing in it offers a way out."
+ ],
+ "ember-1#00": [
+  "STILL REPRODUCES",
+  "read off _shots/play_look_ember-1/01_ember-1_00_S.png (lens 7.6 m south of the first vent at (0, 3.00, 10.60), aimed at it) and 01_ember-1_00_0.png from the tester's own station: the jet is still a PALE SALMON / WHITE translucent cone with a white-hot core that FLARES WIDER AT THE TOP than at its base, with visible horizontal banding and no orange-to-red gradient in the column — it reads as a searchlight beam, not as fire. One thing has changed: small orange embers now drift in the air around it, so 'no ember particles' no longer holds."
+ ],
+ "ember-1#07": [
+  "FIXED",
+  "read off the same frame, _shots/play_untest_ember-1/01_ember-1_00_0.png, taken at z 10.60 inside the tester's own band (quay mouth z 12 to z 10.6) and facing the catwalk: the first vent's basin does NOT hide the rest of the beat. Past and around it the frame shows the raft field on the lava to the right, the decks beyond, the machine house on the far bank and the 'IT GLOWS BEFORE IT BLOWS' board — all legible. The tutorial instruction can be followed from here."
+ ],
+ "verdant-3#26": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_verdant-3/12_verdant-3_26_0.png (hero at the ridge-stair foot, (-6.00, 13.60, -19.50), default follow camera): the lens is still INSIDE the granary — the frame is mottled tan interior wall, a white window opening on the right, a dark ceiling top-left and the two yellow rods, exactly the four things the tester listed. Two details have changed and should not be re-filed: Nim is fully drawn in the middle of the frame rather than a white speck, and the 'THE SACKS SWING ON A COUNT OF FOUR' sign is not drawn across the picture."
+ ],
+ "azure-1#16": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_azure-1/05_azure-1_16_0.png (hero beside the shoal jumppad at (3.51, 0.49, 15.81)): the pad still renders as a hard-edged DARK rectangle with a paler grey ellipse inside it, laid on a pale slab — it reads as a hole or a drain in the ground. There is no arrow, no glow, no spring, no rim light and no colour that says 'stand here'. The same pad art reads the same way on verdant-2 (see 09_verdant-2_21_0.png)."
+ ],
+ "azure-1#18": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_azure-1/06_azure-1_18_0.png (hero at the x = 0 stop, (0.00, 5.00, -35.72)): the player still ends in a small box with dark teal brick walls on three sides and a lit pale tile floor, with no exit and no sign anywhere in the view. One word of the report no longer fits: the frame is legible — the brick has visible detail and the floor is lit — but it still says nothing about where you are or how to leave."
+ ],
+ "azure-1#12": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_azure-1/04_azure-1_12_0.png (hero under the west water wheel at (-8.00, 1.92, -46.00), surface 'sand'): the tan sand still meets the dark court floor along a HARD JAGGED LINE with no blend band — it runs diagonally across the whole frame — and the sand itself still carries a straight vertical shading boundary to the left of the hero."
+ ],
+ "azure-1#10": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_azure-1/02_azure-1_10_0.png (hero on the shoal checkpoint at (0.00, 0.74, 12.50), facing north): the two boards still overlap. 'THE TIDE GAUNTLET' stands in front and the board behind it is cut to the fragments 'STAND ON IT', 'below runs' and 'you do or not' — the line that explains the current ('the current below runs north whether you do or not') cannot be read from the checkpoint."
+ ],
+ "rime-3#27": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_rime-3/15_rime-3_27_0.png (hero on the east flank at (24.24, 13.37, -17.33), surface 'snow'): a blown-out WHITE CIRCULAR HOT SPOT about 1.5 m across still sits on the snow a couple of metres to his right, fully saturated, with no visible light source and no lamp or fixture anywhere near it. The dark/light split in the snow the report mentions is in the same frame — the flank left of the hero is lavender-dark, the slope right of him is much lighter."
+ ],
+ "azure-2#15": [
+  "FIXED",
+  "read off the probe's own critter reads on azure-2, not a frame. At course load the bell-chamber warden is `dormant`, hp 3, alive (the course audit); while the probe stood in the bell chamber for its battery the SAME warden read `dizzy`, hp 3 — the state a warden only reaches by waking, charging and hitting a wall. The tester's '11 s of standing inside its half of the deck and it never moved and never attacked' does not reproduce: the state machine runs. (Caveat worth keeping: the warden's mesh still reports world position (0, 0, 0) to the probe, so its DISTANCE readings on this course are not usable — only its state is.)"
+ ],
+ "azure-3#15": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_azure-3/06_azure-3_15_0.png (hero in the prism gardens at (0.00, 34.00, 8.00) on the white marble deck): the garden coins still render as flat OLIVE / YELLOW-GREEN discs — four of them are in this frame — and on white marble under the pale haze they read as pale tokens, not as gold. The same frame shows the pedestal prop (right of the hero) rendering as the green ring on thin legs that rime-2#04 and rime-3#22 report on their own courses, so that one is not a rime-only fault."
+ ],
+ "azure-3#16": [
+  "STILL REPRODUCES",
+  "read off _shots/play_untest_azure-3/07_azure-3_16_0.png (hero on the gardens west lip at (-14.00, 34.00, 5.00), looking east): the ring spiral is still a huge PALE TRANSLUCENT TUNNEL taking half the frame, and everything behind it — the pier, the sea, the far isles — is washed to a milky haze by its overlapping hoops. One softening: the TAKE THE WINGS board at the right edge is partly readable through it now, not wholly illegible."
+ ],
+ "azure-3#07": [
+  "FIXED",
+  "read off _shots/play_untest_azure-3/04_azure-3_07_0.png (hero on the cp-station pad at (0.00, 30.00, 40.00), yaw 0): the PRISM LINE board now sets in full and reads cleanly — 'PRISM LINE / TWO STONES ACROSS / OR RIDE A CART / THE CARTS KEEP THEIR OWN CLOCK / WAIT FOR ONE'. Nothing is cut off by the screen edge, so the tester's 'TWO STONES ACRO' / 'TW / TH / THE / WA' is gone. Two things remain that he also mentioned and that this verdict does NOT clear: the board still occupies about the right quarter of the frame and hides what is behind it there, and a lamp post stands directly in front of the hero splitting the forward view. Also visible: the lime-green octagon marker of rime-1#20 appears on this course too."
+ ],
+ "keep#10": [
+  "STILL REPRODUCES",
+  "read off _shots/play_look_keep/13_keep_10_S.png (lens 7 m south of the fountain at (0, 0.60, 30), aimed at it): the centrepiece is still a PLAIN FLAT SLAB lying in the water — no figure, no carving, no articulation. One half of the report no longer holds: it is not dark brown any more, it renders pale blue-grey, which is the authored `mat:'marble', tint:0xdfe9f2`. It still reads as a block in a pool, in the room that teaches swimming."
+ ],
+ "ember-1#31": [
+  "STILL REPRODUCES",
+  "read off _shots/play_look_ember-1/37_ember-1_12_S.png — a frame the probe caught by accident while the hero was dying in a flame jet at (-10.10, -0.17, -26.40), state `dead`, cam `death`. The DEATH event still washes the ENTIRE frame to a pale near-white orange-pink for long enough to be captured in a single screenshot; the lava field, the catwalks and the vent all read through it as one flat tint. Only the death half of the report is covered by this frame: the checkpoint flash was not captured and is not verdicted here."
+ ],
+ "verdant-2#24": [
+  "STILL REPRODUCES",
+  "read off _shots/play_look_verdant-2/25_verdant-2_24_S.png (hero on the outer rampart walk at (-21.70, 12.00, -5.18), looking north over the bailey): the distance is still a stack of flat horizontal bands — cloud sky, then a pale grey-green haze strip, then flat green meadow — with a hard line where the haze strip meets the meadow and no atmospheric falloff between them. The bailey interior below is still a plain green plane with two trees on it."
+ ],
+ "ember-4#03": [
+  "STILL REPRODUCES",
+  "read off _shots/play_look_ember-4/01_ember-4_03_S.png (hero at the foot of the south stairway, (0.00, 4.71, 8.50), looking up it): the near coins at the bottom of the frame are proper round struck coins with a rim and shading; the row of coins up the stair beyond about ten metres renders FLAT and UNLIT — pale ellipses with no rim, no thickness and no shading — and the change is abrupt enough to read as a pop. One correction to the report: the far form is a flat ellipse, not a rotated square."
+ ],
+ "ember-3#04": [
+  "STILL REPRODUCES",
+  "read off _shots/play_look_ember-3/01_ember-3_04_S.png (lens 7 m from the basalt pillar that carries sigil 2, hero at (-44.00, 3.99, 13.00), aimed at it): the pillar is still a FLAT PURE-BLACK silhouette against the red sky — no material, no visible top face, no leading-edge stripe, no shading at all — while standing right beside it and with it filling a fifth of the frame."
+ ],
+ "rime-1#09": [
+  "STILL REPRODUCES",
+  "read off _shots/play_look_rime-1/13_rime-1_09_S.png. The look pass's own station for this defect is bogus (the report's coordinate parses to (58, 52.64, 113), outside the course, and the hero is in free fall) — but the frame it produced is an aerial of the village, and in it the four plaster cottages and the bell gantry are still near-black masses against snow that reads pale blue-white. The contrast deficit the tester measured from the spawn (cottage L 0.062-0.071 against snow L 0.538) is visible from the air as well."
+ ],
+ "rime-2#20": [
+  "STILL REPRODUCES",
+  "read off _shots/play_look_rime-2/37_rime-2_20_S.png (hero on the shelf's north skirt at (3.20, 30.00, -31.10), looking at the spire's shadowed flank): the shadowed snow is still a near-black NAVY band with a HARD, BRIGHT EDGE where the lit snow stops — the terminator runs straight across the upper third of the frame with no falloff — while the lit snow below it is pale blue-white."
+ ],
+ "_oliveCoinNote": "Cross-course context for azure-3#15 (olive coins): the same pale olive-green coin appears on AZURE-1 as well — _shots/play_look_azure-1/01_azure-1_10_S.png has five of them over the shoal, all yellow-green rather than gold, while the coins on verdant, ember and rime courses in this pass all read gold. It looks like the azure theme's grade, not a per-course material, so a fix should be tested on both courses.",
+ "azure-3#06": [
+  "FIXED",
+  "read off two frames: _shots/play_untest_azure-3/03_azure-3_06_0.png (hero standing ON cart A at (-9.60, 31.68, 29.44), facing the direction of travel — the forward view is wide open, sleepers, gardens, decks and the ring spiral all visible, no plate in front of him) and _shots/play_look_azure-3/01_azure-3_06_S.png (lens 7 m south, aimed at the cart — the 'STAND STILL AND IT CARRIES YOU' board sits to the LEFT of the cart at head height, taking about a fifth of the width, with the pillar, the sleepers and the landing clear beside it). The tester's 'the black plate fills the middle of the screen, only Nim's boots are visible beneath it, the entire forward view is blocked' does not reproduce from either vantage."
+ ],
+ "azure-3#26": [
+  "STILL REPRODUCES",
+  "read off _shots/play_look_azure-3/25_azure-3_26_S.png (hero standing on the finale deck at (33.00, 54.00, -57.00), the sanctum slab authored mat:'gold'): the deck still renders as a mottled DARK OLIVE-GREEN SCALY surface — by a wide margin the murkiest thing in the frame — sitting in a bright teal sea under a blue sky. It reads as pond scum, not as gold."
+ ]
+}

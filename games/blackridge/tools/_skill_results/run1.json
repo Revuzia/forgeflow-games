@@ -1,0 +1,1332 @@
+{
+ "out": {
+  "casual": {
+   "win": 0,
+   "kd": 0.2606019151846785,
+   "kills": 381,
+   "deaths": 1462,
+   "acc": 32.194983704123565,
+   "ttk": 1.0359142607174099,
+   "flank": 0.008169044766365322,
+   "react": 0.9037665427485411
+  },
+  "standard": {
+   "win": 50,
+   "kd": 1.1281767955801105,
+   "kills": 1021,
+   "deaths": 905,
+   "acc": 45.0436661564779,
+   "ttk": 1.0335292197192276,
+   "flank": 0.3185927458882476,
+   "react": 0.572904467627432
+  },
+  "hard": {
+   "win": 100,
+   "kd": 2.9774590163934427,
+   "kills": 1453,
+   "deaths": 488,
+   "acc": 45.53694040098874,
+   "ttk": 0.931119522826337,
+   "flank": 0.7433830737392444,
+   "react": 0.29651991613788364
+  }
+ },
+ "rows": [
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "casual",
+    "standard"
+   ],
+   "kills": [
+    7,
+    26
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "standard",
+    "casual"
+   ],
+   "kills": [
+    30,
+    11
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "casual",
+    "hard"
+   ],
+   "kills": [
+    4,
+    22
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "hard",
+    "casual"
+   ],
+   "kills": [
+    26,
+    10
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "standard",
+    "hard"
+   ],
+   "kills": [
+    13,
+    25
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "hard",
+    "standard"
+   ],
+   "kills": [
+    20,
+    13
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "casual",
+    "standard"
+   ],
+   "kills": [
+    4,
+    28
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "standard",
+    "casual"
+   ],
+   "kills": [
+    30,
+    6
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "casual",
+    "hard"
+   ],
+   "kills": [
+    2,
+    26
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "hard",
+    "casual"
+   ],
+   "kills": [
+    25,
+    11
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "standard",
+    "hard"
+   ],
+   "kills": [
+    10,
+    22
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "hard",
+    "standard"
+   ],
+   "kills": [
+    23,
+    17
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "casual",
+    "standard"
+   ],
+   "kills": [
+    7,
+    22
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "standard",
+    "casual"
+   ],
+   "kills": [
+    22,
+    13
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "casual",
+    "hard"
+   ],
+   "kills": [
+    5,
+    29
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "hard",
+    "casual"
+   ],
+   "kills": [
+    30,
+    7
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "standard",
+    "hard"
+   ],
+   "kills": [
+    13,
+    20
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "hard",
+    "standard"
+   ],
+   "kills": [
+    26,
+    14
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "casual",
+    "standard"
+   ],
+   "kills": [
+    6,
+    25
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "standard",
+    "casual"
+   ],
+   "kills": [
+    26,
+    12
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "casual",
+    "hard"
+   ],
+   "kills": [
+    2,
+    26
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "hard",
+    "casual"
+   ],
+   "kills": [
+    33,
+    5
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "standard",
+    "hard"
+   ],
+   "kills": [
+    10,
+    26
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "lanternwalk",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "hard",
+    "standard"
+   ],
+   "kills": [
+    19,
+    18
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "casual",
+    "standard"
+   ],
+   "kills": [
+    8,
+    29
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "standard",
+    "casual"
+   ],
+   "kills": [
+    26,
+    16
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "casual",
+    "hard"
+   ],
+   "kills": [
+    4,
+    37
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "hard",
+    "casual"
+   ],
+   "kills": [
+    39,
+    10
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "standard",
+    "hard"
+   ],
+   "kills": [
+    6,
+    31
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "hard",
+    "standard"
+   ],
+   "kills": [
+    24,
+    18
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "casual",
+    "standard"
+   ],
+   "kills": [
+    6,
+    27
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "standard",
+    "casual"
+   ],
+   "kills": [
+    24,
+    15
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "casual",
+    "hard"
+   ],
+   "kills": [
+    6,
+    33
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "hard",
+    "casual"
+   ],
+   "kills": [
+    34,
+    11
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "standard",
+    "hard"
+   ],
+   "kills": [
+    16,
+    27
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "hard",
+    "standard"
+   ],
+   "kills": [
+    32,
+    17
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "casual",
+    "standard"
+   ],
+   "kills": [
+    7,
+    28
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "standard",
+    "casual"
+   ],
+   "kills": [
+    29,
+    11
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "casual",
+    "hard"
+   ],
+   "kills": [
+    4,
+    26
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "hard",
+    "casual"
+   ],
+   "kills": [
+    35,
+    12
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "standard",
+    "hard"
+   ],
+   "kills": [
+    13,
+    29
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "hard",
+    "standard"
+   ],
+   "kills": [
+    32,
+    15
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "casual",
+    "standard"
+   ],
+   "kills": [
+    13,
+    21
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "standard",
+    "casual"
+   ],
+   "kills": [
+    31,
+    12
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "casual",
+    "hard"
+   ],
+   "kills": [
+    5,
+    32
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "hard",
+    "casual"
+   ],
+   "kills": [
+    37,
+    8
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "standard",
+    "hard"
+   ],
+   "kills": [
+    14,
+    28
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "switchyard",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "hard",
+    "standard"
+   ],
+   "kills": [
+    31,
+    13
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "casual",
+    "standard"
+   ],
+   "kills": [
+    6,
+    34
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "standard",
+    "casual"
+   ],
+   "kills": [
+    31,
+    15
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "casual",
+    "hard"
+   ],
+   "kills": [
+    2,
+    37
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "hard",
+    "casual"
+   ],
+   "kills": [
+    40,
+    9
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "standard",
+    "hard"
+   ],
+   "kills": [
+    13,
+    34
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 1,
+   "side": [
+    "hard",
+    "standard"
+   ],
+   "kills": [
+    29,
+    23
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "casual",
+    "standard"
+   ],
+   "kills": [
+    7,
+    29
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "standard",
+    "casual"
+   ],
+   "kills": [
+    35,
+    8
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "casual",
+    "hard"
+   ],
+   "kills": [
+    5,
+    27
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "hard",
+    "casual"
+   ],
+   "kills": [
+    38,
+    8
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "standard",
+    "hard"
+   ],
+   "kills": [
+    16,
+    29
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 2,
+   "side": [
+    "hard",
+    "standard"
+   ],
+   "kills": [
+    36,
+    15
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "casual",
+    "standard"
+   ],
+   "kills": [
+    9,
+    29
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "standard",
+    "casual"
+   ],
+   "kills": [
+    36,
+    12
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "casual",
+    "hard"
+   ],
+   "kills": [
+    4,
+    36
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "hard",
+    "casual"
+   ],
+   "kills": [
+    41,
+    7
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "standard",
+    "hard"
+   ],
+   "kills": [
+    12,
+    27
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 3,
+   "side": [
+    "hard",
+    "standard"
+   ],
+   "kills": [
+    38,
+    13
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "casual",
+    "standard"
+   ],
+   "kills": [
+    7,
+    32
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "standard",
+    "casual"
+   ],
+   "kills": [
+    32,
+    14
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "casual",
+    "hard"
+   ],
+   "kills": [
+    0,
+    34
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "hard",
+    "casual"
+   ],
+   "kills": [
+    37,
+    8
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "standard",
+    "hard"
+   ],
+   "kills": [
+    14,
+    32
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 1
+  },
+  {
+   "mapId": "saltmarket",
+   "mode": "tdm",
+   "seed": 4,
+   "side": [
+    "hard",
+    "standard"
+   ],
+   "kills": [
+    33,
+    13
+   ],
+   "caps": [
+    0,
+    0
+   ],
+   "winTeam": 0
+  }
+ ]
+}

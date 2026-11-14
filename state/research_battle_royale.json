@@ -1,0 +1,177 @@
+{
+  "meta": {
+    "title": "Battle Royale design research — Fortnite / Final Drop / PUBG / Apex Legends",
+    "date": "2026-07-03",
+    "purpose": "Implementable spec for Last Circle (games/last-circle) — 50-player Three.js BR with building",
+    "sources": [
+      "https://www.crazygames.com/game/final-drop",
+      "https://fortnite.fandom.com/wiki/The_Storm",
+      "https://fortnite.fandom.com/wiki/Building",
+      "https://fortnite.fandom.com/wiki/Materials_(Battle_Royale)",
+      "https://fortnite.fandom.com/wiki/Bots",
+      "https://gaming-tools.com/fortnite/the-storm/",
+      "training-data: PUBG ballistics/loot, Apex Legends movement/shields/hit-feedback"
+    ]
+  },
+  "what_we_took_from_each": {
+    "fortnite": "Building system (10 mats/piece, wall/floor/ramp/stair, free edits, material HP tiers), storm phase escalation, rarity tiers, harvest-from-world, boxed-up fighting, supply drops",
+    "final_drop_crazygames": "Proof of the in-browser formula: vibrant low-poly island + loot + build walls/floors/ramps mid-combat + big lobby. Confirms art direction (bright, saturated, low-poly) and that browser BR needs instant no-install rounds and bot backfill",
+    "pubg": "Bullet travel time + damage falloff by class, POI risk/reward loot density, positional audio as core information (gunshot direction, footsteps), circle pressure forcing rotations",
+    "apex_legends": "Separate shield bar with consumable tiers, damage numbers + shield-crack hit feedback, fluid movement (sprint/slide momentum, no hard stops), death box loot piles, kill feed + placement screen"
+  },
+  "anti_goals_from_fortnite_bots": {
+    "why": "Epic's bots are the known failure mode: rarely build (single wall/ramp at most), no edits, no rotation strategy, laser detection but terrible aim, search chests then don't take ammo. Players clock them instantly.",
+    "our_bar": "NPCs must loot coherently (weapon>ammo>shield priority), farm mats, rotate EARLY on storm ticks, use cover, box up when shot, ramp-push when advantaged, edit-through their own walls, disengage to heal, and vary by personality+skill tier so no two feel identical"
+  },
+  "match_pacing": {
+    "standard": {
+      "players": 50, "target_minutes": "10-15",
+      "drop": "glider spawn line across map edge, player picks drop point on map, NPCs spread weighted to POIs",
+      "storm_phases": [
+        {"phase": 1, "wait_s": 50, "shrink_s": 60, "radius_frac": 0.62, "dps": 1},
+        {"phase": 2, "wait_s": 40, "shrink_s": 50, "radius_frac": 0.44, "dps": 2},
+        {"phase": 3, "wait_s": 35, "shrink_s": 45, "radius_frac": 0.30, "dps": 3},
+        {"phase": 4, "wait_s": 30, "shrink_s": 40, "radius_frac": 0.18, "dps": 5},
+        {"phase": 5, "wait_s": 25, "shrink_s": 35, "radius_frac": 0.10, "dps": 8},
+        {"phase": 6, "wait_s": 20, "shrink_s": 30, "radius_frac": 0.045, "dps": 10},
+        {"phase": 7, "wait_s": 15, "shrink_s": 40, "radius_frac": 0.0, "dps": 12}
+      ],
+      "notes": "~8.5 min of storm + ~1 min drop/loot grace = typical 10-13 min match; center drifts randomly up to 25% of prior radius per phase"
+    },
+    "quick": {
+      "players": 50, "target_minutes": 5,
+      "storm_phases": [
+        {"phase": 1, "wait_s": 25, "shrink_s": 30, "radius_frac": 0.45, "dps": 2},
+        {"phase": 2, "wait_s": 20, "shrink_s": 25, "radius_frac": 0.28, "dps": 4},
+        {"phase": 3, "wait_s": 15, "shrink_s": 22, "radius_frac": 0.15, "dps": 6},
+        {"phase": 4, "wait_s": 12, "shrink_s": 20, "radius_frac": 0.06, "dps": 10},
+        {"phase": 5, "wait_s": 10, "shrink_s": 25, "radius_frac": 0.0, "dps": 14}
+      ],
+      "loot_density_mult": 1.8, "start_radius_frac": 0.75, "spawn": "already-landed hot start, mats head-start 100 wood"
+    },
+    "practice": {
+      "storm": "none", "features": ["shooting range with distance-marked target dummies + moving targets", "free-build zone, 9999 mats, all pieces unlocked", "movement course with timer", "optional bot fights: spawn 1-10 bots at chosen skill tier"]
+    }
+  },
+  "weapons": {
+    "grid_note": "damage = body hit; head_mult applies; rarity tiers common/uncommon/rare/epic/legendary give +8% dmg per tier and -10% spread/recoil per tier",
+    "table": [
+      {"id": "pickaxe",  "class": "melee",   "damage": 20,  "head_mult": 1.0,  "rpm": 67,  "mag": 0,  "reload_s": 0,   "projectile": "none", "notes": "also harvest tool: 8 mats/hit, 12 on weak-point crit circle"},
+      {"id": "pistol",   "class": "pistol",  "damage": 24,  "head_mult": 1.5,  "rpm": 400, "mag": 16, "reload_s": 1.3, "projectile": "hitscan-fast", "falloff_m": [25, 50]},
+      {"id": "smg",      "class": "smg",     "damage": 17,  "head_mult": 1.5,  "rpm": 720, "mag": 30, "reload_s": 2.0, "projectile": "hitscan-fast", "falloff_m": [18, 40], "notes": "shreds builds: 1.6x vs structures"},
+      {"id": "ar",       "class": "ar",      "damage": 30,  "head_mult": 1.5,  "rpm": 330, "mag": 30, "reload_s": 2.4, "projectile": "travel 300m/s", "falloff_m": [60, 120], "notes": "first-shot accuracy when standing still + ADS"},
+      {"id": "shotgun",  "class": "shotgun", "damage": 90,  "head_mult": 1.75, "rpm": 70,  "mag": 5,  "reload_s": 4.0, "projectile": "9 pellets x10", "falloff_m": [8, 20], "notes": "pellet spread cone 4deg; the boxfight weapon"},
+      {"id": "sniper",   "class": "sniper",  "damage": 105, "head_mult": 2.5,  "rpm": 35,  "mag": 1,  "reload_s": 3.0, "projectile": "travel 500m/s + gravity drop", "falloff_m": [200, 400], "notes": "scope ADS, glint visible to targets"},
+      {"id": "rocket",   "class": "launcher","damage": 110, "head_mult": 1.0,  "rpm": 45,  "mag": 1,  "reload_s": 3.6, "projectile": "travel 40m/s visible rocket", "splash_r_m": 4, "notes": "destroys any structure in splash instantly"},
+      {"id": "grenade",  "class": "throwable","damage": 100, "head_mult": 1.0, "rpm": 60,  "mag": 0,  "reload_s": 0,   "projectile": "arc, 2.5s fuse, bounces", "splash_r_m": 3.5, "stack": 6}
+    ],
+    "ammo_types": {"light": ["pistol", "smg"], "medium": ["ar"], "shells": ["shotgun"], "heavy": ["sniper"], "rockets": ["rocket"]},
+    "recoil": "per-class vertical+random-horizontal pattern, recovers over 300ms; ADS halves spread, crouch -25%, moving +40%, jumping +100%",
+    "hit_feedback": "damage numbers float off target (white=body, gold=head, blue=shield), hitmarker cross on crosshair, shield-crack sound at shield break (Apex), kill confirm banner + feed entry"
+  },
+  "health_shield": {
+    "hp": 100, "shield": 100,
+    "consumables": [
+      {"id": "bandage", "heals": "hp+15 (cap 75)", "use_s": 3, "stack": 15},
+      {"id": "medkit", "heals": "hp to 100", "use_s": 8, "stack": 3},
+      {"id": "mini_shield", "heals": "shield+25 (cap 50)", "use_s": 2, "stack": 6},
+      {"id": "big_shield", "heals": "shield+50", "use_s": 4, "stack": 3}
+    ],
+    "storm_ticks_hp_only_through_shield": false
+  },
+  "building": {
+    "grid_m": 4, "cost_per_piece": 10, "edit_cost": 0,
+    "pieces": ["wall", "floor", "ramp", "stair(reverse-ramp treated as rotated ramp)", "roof(cone, optional)"],
+    "materials": [
+      {"id": "wood",  "hp_start": 90,  "hp_full": 150, "build_to_full_s": 4,  "harvest_from": "trees, palms, wooden props/furniture"},
+      {"id": "brick", "hp_start": 100, "hp_full": 300, "build_to_full_s": 11, "harvest_from": "rocks, brick/concrete walls, ruins"},
+      {"id": "metal", "hp_start": 110, "hp_full": 500, "build_to_full_s": 22, "harvest_from": "cars, containers, fences, girders"}
+    ],
+    "cap_per_material": 500,
+    "placement": "ghost preview snapped to grid facing camera; hotkeys Z/X/C/V (wall/floor/ramp/stair) + Q toggles last, mouse wheel or F edits; instant place, HP ramps up",
+    "edit_patterns": ["wall: door(bottom-mid out), window(mid), half-wall(top row out), diagonal", "ramp: half-ramp/corner", "floor: hatch corner"],
+    "support_rule": "piece needs terrain contact or connected chain to terrain; break support = cascade destroy (with debris particles)",
+    "turbo_build": "hold to place repeatedly at 150ms interval"
+  },
+  "loot": {
+    "rarity_weights_floor": {"common": 40, "uncommon": 30, "rare": 18, "epic": 9, "legendary": 3},
+    "rarity_weights_chest": {"common": 15, "uncommon": 30, "rare": 30, "epic": 18, "legendary": 7},
+    "chest": "golden glow + ambient shimmer audio within 12m, 3-item burst: weapon + ammo + (consumable|mats)",
+    "floor_spawn": "weapon OR ammo box OR consumable at ~55% of designated spawn points",
+    "supply_drop": "1 per mid-game phase, balloon crate drifting down at visible map point, legendary weapon + big shield + 100 mats",
+    "death_drop": "everything the player/NPC carried spills as a loot pile",
+    "poi_density": "named POIs 2.0x spawn density (high risk high reward, PUBG model); roadside/wilderness 0.4x",
+    "inventory": "5 weapon/consumable slots + reserve ammo per type + 3 material counts; auto-pickup ammo/mats, E to pick items"
+  },
+  "movement": {
+    "walk_ms": 4.2, "sprint_ms": 6.5, "crouch_ms": 2.2, "ads_ms": 2.8,
+    "jump_v": 7.2, "gravity": -22, "air_control": 0.35,
+    "feel": "Apex-style: momentum-preserving acceleration (t_accel ~0.18s), no hard stop on direction change, slight camera lag on sprint start, FOV +6 while sprinting",
+    "third_person": "camera 4.2m back, 1.6m up, shoulder offset 0.7m; ADS zooms to 2.2m + tighter shoulder; sniper ADS = scope overlay"
+  },
+  "maps": {
+    "size_m": 1600,
+    "list": [
+      {"id": "isla_viva", "name": "Isla Viva (Vibrant Tropical Island)", "theme": "final-drop-style saturated tropics: white beaches, turquoise shallows, palm clusters, volcano center, beach shacks, jungle village, shipwreck cove, cliff temples", "verticality": "volcano + cliff temples = high ground; beaches low", "water": "ocean ring + lagoons (slow wade, no build on deep water)"},
+      {"id": "ashgrid", "name": "Ashgrid (Urban City Ruins)", "theme": "collapsed downtown: cracked towers (enterable, stair-cored), rubble streets, overpass segments, metro entrances, plaza, crane high-point", "verticality": "tower floors + crane; metal-rich harvest", "water": "none; storm drains cosmetic"},
+      {"id": "deepwood", "name": "Deepwood (Dense Forest Wilderness)", "theme": "tall conifer + birch forest, ranger towers, logging camp, lake cabin hamlet, hunting blinds, river cut, rock outcrops", "verticality": "ranger towers + outcrops; wood-rich harvest", "water": "river + lake (wade)"},
+      {"id": "practice_range", "name": "Proving Grounds", "theme": "flat range + build lot + parkour course, used by Practice mode only"}
+    ],
+    "per_map": "8-10 named POIs, each with loot table multiplier, chest count, structure set; heightmap = seeded simplex octaves + POI flattening; NPC drop weights per POI"
+  },
+  "ai_npcs": {
+    "count": 49, "priority": "HIGHEST — must feel like real players",
+    "architecture": "utility-scored state machine over a blackboard (per-bot memory of last-seen enemies, heard shots, known loot), ticked staggered (each bot decides every 150-400ms, near-player bots more often); movement/aim run every frame for bots in player bubble, simplified integrator beyond",
+    "skill_tiers": [
+      {"tier": 1, "reaction_ms": 600, "aim_err_deg": 6.0, "builds": "wall only", "edits": false},
+      {"tier": 2, "reaction_ms": 450, "aim_err_deg": 4.0, "builds": "wall+ramp", "edits": false},
+      {"tier": 3, "reaction_ms": 350, "aim_err_deg": 2.6, "builds": "1x1 box, ramp-push", "edits": "simple door"},
+      {"tier": 4, "reaction_ms": 280, "aim_err_deg": 1.7, "builds": "box + double-ramp push + high-ground", "edits": true},
+      {"tier": 5, "reaction_ms": 220, "aim_err_deg": 1.0, "builds": "full: retakes, tunnels", "edits": "edit-plays"}
+    ],
+    "tier_mix_standard": [8, 12, 14, 10, 5],
+    "personalities": [
+      {"id": "rusher", "traits": "pushes on any shot heard <120m, loots fast+sloppy, prefers shotgun/smg"},
+      {"id": "builder", "traits": "farms mats to 300+ early, fights vertical, boxes on damage"},
+      {"id": "camper", "traits": "edge-of-zone rotations, bushes/buildings, snipes, avoids pushes unless target weak"},
+      {"id": "loot_goblin", "traits": "max loot route, avoids fights until forced, opens every chest"},
+      {"id": "rotator", "traits": "moves on phase-start immediately, center-zone control, third-parties fights it hears"},
+      {"id": "sniper", "traits": "high-ground hold, relocates after 2 shots, keeps 150m+ engagement range"}
+    ],
+    "behaviors_required": [
+      "drop: pick POI by personality (rusher=hot, goblin=edge), glide there, loot nearest weapon FIRST",
+      "loot: prioritize weapon > shield > ammo > mats > upgrade rarity; take from own kills' death piles",
+      "farm: harvest trees/rocks/cars between fights to personality-target mats",
+      "rotate: on phase start, path toward next circle biased through cover; sprint if storm closing on them; NEVER die dumb in storm (unless tier 1, rarely)",
+      "engage: LOS + range gate by weapon; strafe-fire; crouch at range; lead moving targets with travel-time weapons",
+      "take_cover: on taking damage, move to nearest cover OR place wall (tier 2+) within reaction time",
+      "box_up: tier 3+ at <40 HP builds 1x1 + heals inside; tier 4+ edits window to peek",
+      "ramp_push: tier 3+ with HP+mats advantage ramps toward enemy, wall-behind (tier 4+)",
+      "disengage: low HP + no mats/heals = smoke-break LOS and run; heal when safe",
+      "third_party: hearing a fight within 150m -> rotator/rusher move to it, arrive late, hit weakened winners",
+      "endgame: <10 alive = mats matter most; tier 4-5 build to high ground, tier 1-2 hide in storm edge; final 1v1 aggression ramps",
+      "humanizers: overshoot flick then correct, miss more while both moving, occasional reload at bad time (tier<=2), look-around idle head turns, varied name pool + kill-feed presence all match"
+    ],
+    "perception": "vision cone 110deg to 200m (fog/foliage cuts it), hearing: gunshot 250m w/ direction, footsteps 18m; memory decays 8s after LOS lost -> searches last-known-pos",
+    "fairness": "bots obey identical rules: same weapons, ammo, mats, build costs, storm damage; no wallhacks — target selection only from perception"
+  },
+  "multiplayer": {
+    "transport": "Supabase Realtime Broadcast+Presence (existing ffg_netplay.js), room code lobby + quick match",
+    "authority": "lowest-peer-id = host: runs storm, loot seed, NPC sim; broadcasts snapshots 10Hz, clients interpolate 100ms behind; client sends own input/state 15Hz",
+    "join_replace": "joiner takes over the highest-skill living NPC slot (or reserves a slot in lobby); NPC brain detaches, human input attaches; on disconnect the brain reattaches seamlessly",
+    "scale_note": "50 real players via broadcast relay is out of scope; design = 1-8 humans + NPC fill, which matches the goal (friends join, NPCs fill)"
+  },
+  "ui": {
+    "screens": ["main menu (logo, PLAY, mode+map select cards, settings, practice)", "lobby (50 slots filling with names, map vote shown, countdown)", "HUD (hp/shield bars bottom-left, weapon slots bottom-right, mats+build piece top-right, minimap top-left w/ storm ring + player dot + pings, storm timer + alive count top-center, kill feed right)", "pause (resume/settings/exit-match)", "settings (master/music/sfx volume, graphics low-med-high, mouse sensitivity, ADS sensitivity, keybind remap)", "death -> spectate killer + placement card", "post-match stats (placement, kills, damage dealt, accuracy, mats farmed, time survived)", "victory royale banner + confetti"],
+    "style": "clean slightly-rounded panels, saturated accent per map theme, big readable numbers; Final Drop/Fortnite bright not mil-sim gray"
+  },
+  "audio": {
+    "sfx_needed": ["per-class gunshots (distant + close variants)", "reload per class", "hit body/shield/headshot", "shield break", "build place/edit/destroy per material", "harvest hits", "chest open + shimmer loop", "pickup", "footsteps grass/sand/concrete/wood/metal", "storm hum + closing warning siren", "glider", "heal/shield consume", "explosion", "victory sting", "ui clicks"],
+    "sources": "pipeline/assets impact-sounds/interface-sounds/rpg-audio (~350 stock), positional via Web Audio PannerNode",
+    "music": "menu theme + match ambient beds per map + endgame intensity layer; from F:\\Music catalog (no duplicate across games rule) or procedural fallback"
+  },
+  "performance_50_actors": {
+    "budget": "60fps desktop @DPR<=1.5; draw calls <600",
+    "techniques": ["InstancedMesh for foliage/rocks/structures (per material-piece type)", "one skinned character model shared, NPCs>60m switch to no-anim capsule-billboard LOD", "AI decision stagger (49 bots / 8 per frame max)", "spatial hash grid 16m cells for perception/bullet queries", "projectile+particle pools", "no per-frame allocations in hot loops", "shadow map 1024, only sun light + hemisphere, strip GLB lights on load", "far-sim: bots outside 250m of any human simulate at 2Hz waypoint level (fights between far bots resolved statistically but fed to kill feed — keeps world alive at low cost)"]
+  }
+}

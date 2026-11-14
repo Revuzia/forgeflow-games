@@ -1,0 +1,989 @@
+{
+ "url": "http://127.0.0.1:8913/games/crestbound/index.html",
+ "steps": {
+  "card_run2": {
+   "open": true,
+   "tiles": [
+    {
+     "n": 1,
+     "name": "CREST ON THE RAMPARTS",
+     "sel": true,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 2,
+     "name": "EIGHT SIGILS OF THE MEADOW",
+     "sel": false,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 3,
+     "name": "A HUNDRED COINS",
+     "sel": false,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 4,
+     "name": "WHAT THE GNASHER GUARDS",
+     "sel": false,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 5,
+     "name": "THE WARDEN OF THE RIDGE",
+     "sel": false,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 6,
+     "name": "MEADOW DASH",
+     "sel": false,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 7,
+     "name": "THE LONG WAY ROUND",
+     "sel": false,
+     "got": false,
+     "shown": true
+    }
+   ],
+   "k": "MISSION 1 OF 7  \u00b7  A CLIMB",
+   "name": "CREST ON THE RAMPARTS",
+   "sub": "NOT YET CLAIMED",
+   "btns": [
+    "ENTER [focus]",
+    "BACK"
+   ],
+   "cardMission": null
+  },
+  "open_live": {
+   "state": "playing",
+   "courseId": "verdant-1",
+   "mission": {
+    "id": "open",
+    "index": 0,
+    "name": "CREST ON THE RAMPARTS",
+    "present": [
+     "open",
+     "sigils",
+     "coins",
+     "secret",
+     "wing"
+    ],
+    "absent": [
+     "boss",
+     "race"
+    ],
+    "routes": {
+     "north-door": false
+    },
+    "at": null,
+    "counts": {
+     "added": 7,
+     "removed": 1,
+     "moved": 0,
+     "set": 0
+    }
+   },
+   "critters": [
+    {
+     "kind": "gnasher",
+     "tag": null,
+     "pos": [
+      -8,
+      7.41,
+      -2
+     ]
+    },
+    {
+     "kind": "bumbler",
+     "tag": null,
+     "pos": [
+      -7.9,
+      2.55,
+      35.98
+     ]
+    },
+    {
+     "kind": "bumbler",
+     "tag": "yard-bumbler",
+     "pos": [
+      -4.88,
+      9.39,
+      -19
+     ]
+    },
+    {
+     "kind": "bumbler",
+     "tag": null,
+     "pos": [
+      20.09,
+      7.7,
+      10.98
+     ]
+    },
+    {
+     "kind": "skitter",
+     "tag": null,
+     "pos": [
+      -30.12,
+      5.25,
+      -2.24
+     ]
+    },
+    {
+     "kind": "skitter",
+     "tag": null,
+     "pos": [
+      30.3,
+      17.33,
+      -2.03
+     ]
+    },
+    {
+     "kind": "bumbler",
+     "tag": "garrison",
+     "pos": [
+      -4.91,
+      9.39,
+      -31
+     ]
+    },
+    {
+     "kind": "bumbler",
+     "tag": "garrison",
+     "pos": [
+      6.92,
+      9.39,
+      -26.5
+     ]
+    }
+   ],
+   "crests": [
+    {
+     "id": "open",
+     "present": true,
+     "home": [
+      9.2,
+      19.3,
+      -32.8
+     ],
+     "race": false
+    },
+    {
+     "id": "sigils",
+     "present": false,
+     "home": [
+      0,
+      10.45,
+      -24
+     ],
+     "race": false
+    },
+    {
+     "id": "coins",
+     "present": false,
+     "home": [
+      -5,
+      3.45,
+      41
+     ],
+     "race": false
+    },
+    {
+     "id": "secret",
+     "present": false,
+     "home": [
+      -12,
+      7.95,
+      -6
+     ],
+     "race": false
+    },
+    {
+     "id": "wing",
+     "present": true,
+     "home": [
+      4.2,
+      31.8,
+      -22
+     ],
+     "race": false
+    }
+   ],
+   "crestDefs": 7,
+   "millPeriod": 11,
+   "northDoorHit": 3.83,
+   "raceMs": -1,
+   "runstatsOff": true,
+   "timersDisplay": "none",
+   "deathsDisplay": "none",
+   "player": [
+    0,
+    2,
+    40
+   ]
+  },
+  "open_v1": {
+   "state": "playing",
+   "courseId": "verdant-1",
+   "mission": {
+    "id": "open",
+    "index": 0,
+    "name": "CREST ON THE RAMPARTS",
+    "present": [
+     "open",
+     "sigils",
+     "coins",
+     "secret",
+     "wing"
+    ],
+    "absent": [
+     "boss",
+     "race"
+    ],
+    "routes": {
+     "north-door": false
+    },
+    "at": null,
+    "counts": {
+     "added": 7,
+     "removed": 1,
+     "moved": 0,
+     "set": 0
+    }
+   },
+   "critters": [
+    {
+     "kind": "gnasher",
+     "tag": null,
+     "pos": [
+      -8,
+      7.4,
+      -2
+     ]
+    },
+    {
+     "kind": "bumbler",
+     "tag": null,
+     "pos": [
+      -5.7,
+      2.53,
+      35.51
+     ]
+    },
+    {
+     "kind": "bumbler",
+     "tag": "yard-bumbler",
+     "pos": [
+      -2.33,
+      9.39,
+      -19
+     ]
+    },
+    {
+     "kind": "bumbler",
+     "tag": null,
+     "pos": [
+      22.05,
+      8.27,
+      10.49
+     ]
+    },
+    {
+     "kind": "skitter",
+     "tag": null,
+     "pos": [
+      -33.61,
+      5.13,
+      -6.07
+     ]
+    },
+    {
+     "kind": "skitter",
+     "tag": null,
+     "pos": [
+      35.59,
+      17.55,
+      -4.33
+     ]
+    },
+    {
+     "kind": "bumbler",
+     "tag": "garrison",
+     "pos": [
+      -2.96,
+      9.39,
+      -31
+     ]
+    },
+    {
+     "kind": "bumbler",
+     "tag": "garrison",
+     "pos": [
+      5.27,
+      9.39,
+      -26.5
+     ]
+    }
+   ],
+   "crests": [
+    {
+     "id": "open",
+     "present": true,
+     "home": [
+      9.2,
+      19.3,
+      -32.8
+     ],
+     "race": false
+    },
+    {
+     "id": "sigils",
+     "present": false,
+     "home": [
+      0,
+      10.45,
+      -24
+     ],
+     "race": false
+    },
+    {
+     "id": "coins",
+     "present": false,
+     "home": [
+      -5,
+      3.45,
+      41
+     ],
+     "race": false
+    },
+    {
+     "id": "secret",
+     "present": false,
+     "home": [
+      -12,
+      7.95,
+      -6
+     ],
+     "race": false
+    },
+    {
+     "id": "wing",
+     "present": true,
+     "home": [
+      4.2,
+      31.8,
+      -22
+     ],
+     "race": false
+    }
+   ],
+   "crestDefs": 7,
+   "millPeriod": 11,
+   "northDoorHit": 3.83,
+   "raceMs": -1,
+   "runstatsOff": true,
+   "timersDisplay": "none",
+   "deathsDisplay": "none",
+   "player": [
+    0,
+    9.08,
+    -18
+   ]
+  },
+  "open_v2": {
+   "state": "playing",
+   "courseId": "verdant-1",
+   "mission": {
+    "id": "open",
+    "index": 0,
+    "name": "CREST ON THE RAMPARTS",
+    "present": [
+     "open",
+     "sigils",
+     "coins",
+     "secret",
+     "wing"
+    ],
+    "absent": [
+     "boss",
+     "race"
+    ],
+    "routes": {
+     "north-door": false
+    },
+    "at": null,
+    "counts": {
+     "added": 7,
+     "removed": 1,
+     "moved": 0,
+     "set": 0
+    }
+   },
+   "critters": [
+    {
+     "kind": "gnasher",
+     "tag": null,
+     "pos": [
+      -7.69,
+      7.41,
+      -2.71
+     ]
+    },
+    {
+     "kind": "bumbler",
+     "tag": null,
+     "pos": [
+      -3.5,
+      2.52,
+      35.04
+     ]
+    },
+    {
+     "kind": "bumbler",
+     "tag": "yard-bumbler",
+     "pos": [
+      0.22,
+      9.39,
+      -19
+     ]
+    },
+    {
+     "kind": "bumbler",
+     "tag": null,
+     "pos": [
+      24.01,
+      8.84,
+      10
+     ]
+    },
+    {
+     "kind": "skitter",
+     "tag": null,
+     "pos": [
+      -38.97,
+      5.99,
+      -7.39
+     ]
+    },
+    {
+     "kind": "skitter",
+     "tag": null,
+     "pos": [
+      38.62,
+      19,
+      -9.8
+     ]
+    },
+    {
+     "kind": "bumbler",
+     "tag": "garrison",
+     "pos": [
+      -1.01,
+      9.39,
+      -31
+     ]
+    },
+    {
+     "kind": "bumbler",
+     "tag": "garrison",
+     "pos": [
+      3.62,
+      9.39,
+      -26.5
+     ]
+    }
+   ],
+   "crests": [
+    {
+     "id": "open",
+     "present": true,
+     "home": [
+      9.2,
+      19.3,
+      -32.8
+     ],
+     "race": false
+    },
+    {
+     "id": "sigils",
+     "present": false,
+     "home": [
+      0,
+      10.45,
+      -24
+     ],
+     "race": false
+    },
+    {
+     "id": "coins",
+     "present": false,
+     "home": [
+      -5,
+      3.45,
+      41
+     ],
+     "race": false
+    },
+    {
+     "id": "secret",
+     "present": false,
+     "home": [
+      -12,
+      7.95,
+      -6
+     ],
+     "race": false
+    },
+    {
+     "id": "wing",
+     "present": true,
+     "home": [
+      4.2,
+      31.8,
+      -22
+     ],
+     "race": false
+    }
+   ],
+   "crestDefs": 7,
+   "millPeriod": 11,
+   "northDoorHit": 3.83,
+   "raceMs": -1,
+   "runstatsOff": true,
+   "timersDisplay": "none",
+   "deathsDisplay": "none",
+   "player": [
+    -14.54,
+    16.38,
+    -54.03
+   ]
+  },
+  "climb": {
+   "frames": 142,
+   "jumps": 3,
+   "log": [
+    {
+     "i": 0,
+     "st": "run",
+     "p": [
+      10,
+      14.48,
+      -24.61
+     ],
+     "g": true
+    },
+    {
+     "i": 14,
+     "ev": "jump",
+     "z": -25.24,
+     "y": 14.48,
+     "toward": 15.7
+    },
+    {
+     "i": 20,
+     "st": "jump1",
+     "p": [
+      10,
+      15.58,
+      -25.61
+     ],
+     "g": false
+    },
+    {
+     "i": 40,
+     "st": "fall",
+     "p": [
+      10,
+      15.83,
+      -26.68
+     ],
+     "g": false
+    },
+    {
+     "i": 46,
+     "ev": "jump",
+     "z": -26.92,
+     "y": 15.7,
+     "toward": 17
+    },
+    {
+     "i": 60,
+     "st": "jump2",
+     "p": [
+      10,
+      17.96,
+      -27.72
+     ],
+     "g": false
+    },
+    {
+     "i": 79,
+     "ev": "jump",
+     "z": -28.68,
+     "y": 17,
+     "toward": 18.15
+    },
+    {
+     "i": 80,
+     "st": "jump1",
+     "p": [
+      10,
+      17.36,
+      -28.78
+     ],
+     "g": false
+    },
+    {
+     "i": 100,
+     "st": "fall",
+     "p": [
+      10,
+      18.76,
+      -29.47
+     ],
+     "g": false
+    },
+    {
+     "i": 120,
+     "st": "run",
+     "p": [
+      10,
+      18.15,
+      -30.51
+     ],
+     "g": true
+    },
+    {
+     "i": 140,
+     "st": "run",
+     "p": [
+      10,
+      18.15,
+      -31.58
+     ],
+     "g": true
+    },
+    {
+     "i": 142,
+     "ev": "CREST",
+     "state": "clear",
+     "p": [
+      10,
+      18.15,
+      -31.69
+     ]
+    }
+   ],
+   "state": "clear"
+  },
+  "clear_panel_buttons": null,
+  "save_after": {
+   "id": "verdant-1",
+   "crests": [
+    "open"
+   ],
+   "coinsBest": 0,
+   "cleared": true,
+   "deaths": 0,
+   "bestMs": {
+    "open": 6629
+   },
+   "clears": 1,
+   "playMs": 0,
+   "lastPlayed": 1790823563559,
+   "firstClearDate": "2026-10-01T02:59:23.557Z",
+   "missions": {
+    "open": {
+     "runs": 1,
+     "got": [
+      "open"
+     ]
+    }
+   },
+   "lastMission": "open"
+  },
+  "save_at_panel": {
+   "id": "verdant-1",
+   "crests": [
+    "open"
+   ],
+   "coinsBest": 0,
+   "cleared": true,
+   "deaths": 0,
+   "bestMs": {
+    "open": 6629
+   },
+   "clears": 1,
+   "playMs": 0,
+   "lastPlayed": 1790823563559,
+   "firstClearDate": "2026-10-01T02:59:23.557Z",
+   "missions": {
+    "open": {
+     "runs": 1,
+     "got": [
+      "open"
+     ]
+    }
+   },
+   "lastMission": "open"
+  },
+  "card_run3": {
+   "open": true,
+   "tiles": [
+    {
+     "n": 1,
+     "name": "CREST ON THE RAMPARTS",
+     "sel": false,
+     "got": true,
+     "shown": true
+    },
+    {
+     "n": 2,
+     "name": "EIGHT SIGILS OF THE MEADOW",
+     "sel": true,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 3,
+     "name": "A HUNDRED COINS",
+     "sel": false,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 4,
+     "name": "WHAT THE GNASHER GUARDS",
+     "sel": false,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 5,
+     "name": "THE WARDEN OF THE RIDGE",
+     "sel": false,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 6,
+     "name": "MEADOW DASH",
+     "sel": false,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 7,
+     "name": "THE LONG WAY ROUND",
+     "sel": false,
+     "got": false,
+     "shown": true
+    }
+   ],
+   "k": "MISSION 2 OF 7  \u00b7  EIGHT SIGILS",
+   "name": "EIGHT SIGILS OF THE MEADOW",
+   "sub": "NOT YET CLAIMED",
+   "btns": [
+    "RE-ENTER [focus]",
+    "BACK"
+   ],
+   "cardMission": null
+  },
+  "card_held_d": {
+   "open": true,
+   "tiles": [
+    {
+     "n": 1,
+     "name": "CREST ON THE RAMPARTS",
+     "sel": false,
+     "got": true,
+     "shown": true
+    },
+    {
+     "n": 2,
+     "name": "EIGHT SIGILS OF THE MEADOW",
+     "sel": false,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 3,
+     "name": "A HUNDRED COINS",
+     "sel": true,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 4,
+     "name": "WHAT THE GNASHER GUARDS",
+     "sel": false,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 5,
+     "name": "THE WARDEN OF THE RIDGE",
+     "sel": false,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 6,
+     "name": "MEADOW DASH",
+     "sel": false,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 7,
+     "name": "THE LONG WAY ROUND",
+     "sel": false,
+     "got": false,
+     "shown": true
+    }
+   ],
+   "k": "MISSION 3 OF 7  \u00b7  ONE HUNDRED COINS",
+   "name": "A HUNDRED COINS",
+   "sub": "NOT YET CLAIMED",
+   "btns": [
+    "RE-ENTER [focus]",
+    "BACK"
+   ],
+   "cardMission": null
+  },
+  "card_digit6": {
+   "open": true,
+   "tiles": [
+    {
+     "n": 1,
+     "name": "CREST ON THE RAMPARTS",
+     "sel": false,
+     "got": true,
+     "shown": true
+    },
+    {
+     "n": 2,
+     "name": "EIGHT SIGILS OF THE MEADOW",
+     "sel": false,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 3,
+     "name": "A HUNDRED COINS",
+     "sel": false,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 4,
+     "name": "WHAT THE GNASHER GUARDS",
+     "sel": false,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 5,
+     "name": "THE WARDEN OF THE RIDGE",
+     "sel": false,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 6,
+     "name": "MEADOW DASH",
+     "sel": true,
+     "got": false,
+     "shown": true
+    },
+    {
+     "n": 7,
+     "name": "THE LONG WAY ROUND",
+     "sel": false,
+     "got": false,
+     "shown": true
+    }
+   ],
+   "k": "MISSION 6 OF 7  \u00b7  A RACE",
+   "name": "MEADOW DASH",
+   "sub": "BEAT 0:55.000",
+   "btns": [
+    "RE-ENTER [focus]",
+    "BACK"
+   ],
+   "cardMission": null
+  },
+  "race_walk_onto_pad": {
+   "before": -1,
+   "startedAtFrame": 14,
+   "frames": 104,
+   "raceMs": 1516.6666666666679,
+   "runstatsOff": false,
+   "timersDisplay": "flex",
+   "deathsDisplay": "flex",
+   "pos": [
+    0.57,
+    7.82,
+    -3.29
+   ]
+  }
+ },
+ "errors": [],
+ "log": [
+  "goto http://127.0.0.1:8913/games/crestbound/index.html?dev=1&quality=low&autoscale=0",
+  "title after 94 s True",
+  "NEW GAME button at [264.390625, 382.671875]",
+  "in the Keep: True {'state': 'keep', 'course': 'keep', 'loading': False}",
+  "RUN 1 skipped (--skip-run1)",
+  "[run2] placed at the Bailey gate stand-out spot {'yaw': 1.571, 'exit': [-18.1, 0.05, -6], 'locked': False}",
+  "[run2] hand-stepped walk (real KeyW held): {\"frames\": 11, \"state\": \"card\", \"pos\": [-18.62, -0.0, -6], \"near\": 0, \"dwell\": 0}",
+  "[run2] card raised by the walk-in: True",
+  "  card run2: MISSION 1 OF 7  \u00b7  A CLIMB | CREST ON THE RAMPARTS",
+  "  frame _spec\\audit_2026_09_29\\frames\\missions\\05_card_mission1.png",
+  "[run2] course loaded: True {'state': 'cinematic', 'course': 'verdant-1', 'loading': False}",
+  "  RUN 2 mission: {\"id\": \"open\", \"index\": 0, \"name\": \"CREST ON THE RAMPARTS\", \"present\": [\"open\", \"sigils\", \"coins\", \"secret\", \"wing\"], \"absent\": [\"boss\", \"race\"], \"routes\": {\"north-door\": false}, \"at\": null, \"counts\": {\"added\": 7, \"removed\": 1, \"moved\": 0, \"set\": 0}}",
+  "  critters: [{\"kind\": \"gnasher\", \"tag\": null, \"pos\": [-8, 7.41, -2]}, {\"kind\": \"bumbler\", \"tag\": null, \"pos\": [-7.9, 2.55, 35.98]}, {\"kind\": \"bumbler\", \"tag\": \"yard-bumbler\", \"pos\": [-4.88, 9.39, -19]}, {\"kind\": \"bumbler\", \"tag\": null, \"pos\": [20.09, 7.7, 10.98]}, {\"kind\": \"skitter\", \"tag\": null, \"pos\": [-30.12, 5.25, -2.24]}, {\"kind\": \"skitter\", \"tag\": null, \"pos\": [30.3, 17.33, -2.03]}, {\"kind\": \"bumbler\", \"tag\": \"garrison\", \"pos\": [-4.91, 9.39, -31]}, {\"kind\": \"bumbler\", \"tag\": \"garrison\", \"pos\": [6.92, 9.39, -26.5]}]",
+  "  crests built: [{\"id\": \"open\", \"present\": true, \"home\": [9.2, 19.3, -32.8], \"race\": false}, {\"id\": \"sigils\", \"present\": false, \"home\": [0, 10.45, -24], \"race\": false}, {\"id\": \"coins\", \"present\": false, \"home\": [-5, 3.45, 41], \"race\": false}, {\"id\": \"secret\", \"present\": false, \"home\": [-12, 7.95, -6], \"race\": false}, {\"id\": \"wing\", \"present\": true, \"home\": [4.2, 31.8, -22], \"race\": false}]",
+  "  mill period 11 | north door ray hit 3.83 | runstatsOff True none none",
+  "  frame _spec\\audit_2026_09_29\\frames\\missions\\06_open_v1_courtyard.png",
+  "  frame _spec\\audit_2026_09_29\\frames\\missions\\06_open_v2_ring.png",
+  "  frame _spec\\audit_2026_09_29\\frames\\missions\\06_open_v3_tower.png",
+  "  frame _spec\\audit_2026_09_29\\frames\\missions\\06_open_v4_overview.png",
+  "  frame _spec\\audit_2026_09_29\\frames\\missions\\07_climb_start.png",
+  "  climb: 142 frames, 3 jumps, state clear",
+  "     {\"i\": 14, \"ev\": \"jump\", \"z\": -25.24, \"y\": 14.48, \"toward\": 15.7}",
+  "     {\"i\": 46, \"ev\": \"jump\", \"z\": -26.92, \"y\": 15.7, \"toward\": 17}",
+  "     {\"i\": 79, \"ev\": \"jump\", \"z\": -28.68, \"y\": 17, \"toward\": 18.15}",
+  "     {\"i\": 142, \"ev\": \"CREST\", \"state\": \"clear\", \"p\": [10, 18.15, -31.69]}",
+  "  frame _spec\\audit_2026_09_29\\frames\\missions\\08_crest_taken.png",
+  "  frame _spec\\audit_2026_09_29\\frames\\missions\\09_celebration.png",
+  "  clear panel visible buttons: None",
+  "  frame _spec\\audit_2026_09_29\\frames\\missions\\10_clear_panel.png",
+  "  Enter on the clear panel -> the Keep: True",
+  "  frame _spec\\audit_2026_09_29\\frames\\missions\\11_back_in_keep.png",
+  "  SAVE verdant-1: {\"id\": \"verdant-1\", \"crests\": [\"open\"], \"coinsBest\": 0, \"cleared\": true, \"deaths\": 0, \"bestMs\": {\"open\": 6629}, \"clears\": 1, \"playMs\": 0, \"lastPlayed\": 1790823563559, \"firstClearDate\": \"2026-10-01T02:59:23.557Z\", \"missions\": {\"open\": {\"runs\": 1, \"got\": [\"open\"]}}, \"lastMission\": \"open\"}",
+  "  Save.crestTotal(): 1",
+  "[run3] placed at the Bailey gate stand-out spot {'yaw': 1.571, 'exit': [-18.1, 0.05, -6], 'locked': False}",
+  "[run3] hand-stepped walk (real KeyW held): {\"frames\": 11, \"state\": \"card\", \"pos\": [-18.65, -0.0, -6], \"near\": 0, \"dwell\": 0}",
+  "[run3] card raised by the walk-in: True",
+  "  card run3 (after the crest): MISSION 2 OF 7  \u00b7  EIGHT SIGILS | EIGHT SIGILS OF THE MEADOW | got [1]",
+  "  frame FAILED (attempt 1) 12_card_after_crest [Errno 28] No space left on device",
+  "  frame _spec\\audit_2026_09_29\\frames\\missions\\12_card_after_crest.png",
+  "  held D (1 press + 2 repeats): sel [2] -> [3]",
+  "  Digit6 -> MISSION 6 OF 7  \u00b7  A RACE | MEADOW DASH",
+  "[run3] course loaded: True {'state': 'playing', 'course': 'verdant-1', 'loading': False}",
+  "  RUN 3 mission: race | race crest built: ['race'] | runstatsOff True",
+  "  mission 6, walked onto the start pad: {\"before\": -1, \"startedAtFrame\": 14, \"frames\": 104, \"raceMs\": 1516.6666666666679, \"runstatsOff\": false, \"timersDisplay\": \"flex\", \"deathsDisplay\": \"flex\", \"pos\": [0.57, 7.82, -3.29]}",
+  "  frame _spec\\audit_2026_09_29\\frames\\missions\\13_race_running.png",
+  "page errors: 0"
+ ]
+}

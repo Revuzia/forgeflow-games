@@ -1,0 +1,21 @@
+{
+  "title": "Dungeon Forge",
+  "slug": "dungeon-forge",
+  "genre": "builder",
+  "renderer": "three",
+  "tagline": "Build it. Lock it. Escape it.",
+  "seed": 20260707,
+  "view": { "background": "#0b0910" },
+  "setup": {
+    "themes": ["fantasy", "scifi"],
+    "gridSize": 64,
+    "maxFloors": 5
+  },
+  "credits": {
+    "kits": ["Kenney Modular Dungeon Kit + Modular Space Kit, Graveyard/Pirate/Platformer kits (CC0, kenney.nl)"],
+    "creatures": ["Quaternius Ultimate Monsters (CC0)", "Poly Pizza community GLBs (CC0/CC-BY — see CREDITS.md)"],
+    "characters": ["Quaternius Universal Base Characters (CC0)"],
+    "props": ["BitGem Cube World assets (Unity Asset Store license)"],
+    "audio": ["Kenney RPG/Impact/Interface SFX (CC0)", "OpenGameArt/Jamendo music (CC)", "procedural WebAudio"]
+  }
+}

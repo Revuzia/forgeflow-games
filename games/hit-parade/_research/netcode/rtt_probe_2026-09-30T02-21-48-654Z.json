@@ -1,0 +1,438 @@
+{
+  "tool": "hit-parade/tools/research/net_rtt_probe.mjs",
+  "started": "2026-09-30T02:21:48.654Z",
+  "finished": "2026-09-30T02:24:14.061Z",
+  "quick": false,
+  "realtime_js": "2.103.2",
+  "node": "v22.20.0",
+  "topic": "ffg:hit-parade-nettest:SU9JCCTU",
+  "endpoint": "wss://wugoxdewcdxzfppgzohy.supabase.co/realtime/v1/websocket?apikey=<anon>&eventsPerSecond=1&vsn=2.0.0",
+  "plan": {
+    "baselineHz": 2,
+    "baselineSec": 60,
+    "burstHz": 60,
+    "burstN": 200,
+    "gapHz": 1,
+    "gapSec": 65,
+    "graceMs": 3000
+  },
+  "declared_params": {
+    "A": {
+      "eventsPerSecond": 1
+    },
+    "B": {}
+  },
+  "connect": {
+    "a_subscribed_ms": 613,
+    "b_subscribed_ms": 405,
+    "presence": {
+      "a_sees_both_ms_after_track": 1943,
+      "b_sees_both_ms_after_track": 1180
+    }
+  },
+  "heartbeat_rtt_ms": {
+    "A": {
+      "n": 28,
+      "min": 42,
+      "median": 63,
+      "p90": 101,
+      "p99": 125,
+      "max": 125,
+      "mean": 70.79,
+      "stddev": 22.58,
+      "jitter_mean_abs_delta": 19.19
+    },
+    "B": {
+      "n": 28,
+      "min": 39,
+      "median": 46,
+      "p90": 64,
+      "p99": 165,
+      "max": 165,
+      "mean": 53.32,
+      "stddev": 24.72,
+      "jitter_mean_abs_delta": 18.07
+    }
+  },
+  "phases": [
+    {
+      "phase": "baseline",
+      "kind": "json",
+      "target_hz": 2,
+      "sent": 120,
+      "achieved_send_hz": 2,
+      "send_interval_ms": {
+        "n": 119,
+        "min": 488.95,
+        "median": 497.26,
+        "p90": 509.93,
+        "p99": 513.56,
+        "max": 513.92,
+        "mean": 500.02,
+        "stddev": 6.96,
+        "jitter_mean_abs_delta": 10.54
+      },
+      "rtt_ms": {
+        "n": 120,
+        "min": 80.42,
+        "median": 107.33,
+        "p90": 157.12,
+        "p99": 244.57,
+        "max": 246.39,
+        "mean": 116.35,
+        "stddev": 31.76,
+        "jitter_mean_abs_delta": 19.74
+      },
+      "one_way_a_to_b_ms": {
+        "n": 120,
+        "min": 41.16,
+        "median": 47.87,
+        "p90": 78.16,
+        "p99": 107.64,
+        "max": 118.83,
+        "mean": 55.06,
+        "stddev": 15.81,
+        "jitter_mean_abs_delta": 9.33
+      },
+      "one_way_b_to_a_ms": {
+        "n": 120,
+        "min": 38.77,
+        "median": 51.68,
+        "p90": 89.91,
+        "p99": 127.55,
+        "max": 162.44,
+        "mean": 61.29,
+        "stddev": 21.93,
+        "jitter_mean_abs_delta": 14.48
+      },
+      "lost_a_to_b": 0,
+      "lost_b_to_a": 0,
+      "loss_pct": 0,
+      "out_of_order_at_b": 0,
+      "out_of_order_at_a": 0,
+      "duplicates_at_b": 0,
+      "duplicates_at_a": 0,
+      "out_of_order_detail_b": [],
+      "out_of_order_detail_a": [],
+      "window": [
+        3329,
+        62832
+      ]
+    },
+    {
+      "phase": "burst_json",
+      "kind": "json",
+      "target_hz": 60,
+      "sent": 200,
+      "achieved_send_hz": 60,
+      "send_interval_ms": {
+        "n": 199,
+        "min": 0.23,
+        "median": 15.76,
+        "p90": 23.45,
+        "p99": 32.41,
+        "max": 53.12,
+        "mean": 16.67,
+        "stddev": 5.97,
+        "jitter_mean_abs_delta": 6.48
+      },
+      "rtt_ms": {
+        "n": 200,
+        "min": 87.15,
+        "median": 131.27,
+        "p90": 176.63,
+        "p99": 232.4,
+        "max": 246.85,
+        "mean": 138.33,
+        "stddev": 31.47,
+        "jitter_mean_abs_delta": 17.3
+      },
+      "one_way_a_to_b_ms": {
+        "n": 200,
+        "min": 42.3,
+        "median": 65.09,
+        "p90": 100.6,
+        "p99": 126.88,
+        "max": 155.1,
+        "mean": 69.99,
+        "stddev": 20.8,
+        "jitter_mean_abs_delta": 12.8
+      },
+      "one_way_b_to_a_ms": {
+        "n": 200,
+        "min": 38.99,
+        "median": 62.84,
+        "p90": 101.56,
+        "p99": 138.45,
+        "max": 140.26,
+        "mean": 68.34,
+        "stddev": 21.4,
+        "jitter_mean_abs_delta": 9.87
+      },
+      "lost_a_to_b": 0,
+      "lost_b_to_a": 0,
+      "loss_pct": 0,
+      "out_of_order_at_b": 2,
+      "out_of_order_at_a": 4,
+      "duplicates_at_b": 0,
+      "duplicates_at_a": 0,
+      "out_of_order_detail_b": [
+        [
+          22,
+          23
+        ],
+        [
+          106,
+          107
+        ]
+      ],
+      "out_of_order_detail_a": [
+        [
+          22,
+          23
+        ],
+        [
+          56,
+          57
+        ],
+        [
+          106,
+          107
+        ],
+        [
+          148,
+          149
+        ]
+      ],
+      "window": [
+        65841,
+        69157
+      ],
+      "wire": {
+        "a_tx_frame_bytes": {
+          "n": 201,
+          "min": 37,
+          "median": 125,
+          "p90": 127,
+          "p99": 127,
+          "max": 127,
+          "mean": 125.44,
+          "stddev": 6.37,
+          "jitter_mean_abs_delta": 0.91
+        },
+        "b_rx_frame_bytes": {
+          "n": 201,
+          "min": 64,
+          "median": 119,
+          "p90": 121,
+          "p99": 121,
+          "max": 121,
+          "mean": 119.61,
+          "stddev": 4.12,
+          "jitter_mean_abs_delta": 0.57
+        }
+      }
+    },
+    {
+      "phase": "gap",
+      "kind": "json",
+      "target_hz": 1,
+      "sent": 65,
+      "achieved_send_hz": 1,
+      "send_interval_ms": {
+        "n": 64,
+        "min": 989.19,
+        "median": 999.46,
+        "p90": 1009.1,
+        "p99": 1011.45,
+        "max": 1011.45,
+        "mean": 1000.18,
+        "stddev": 5.77,
+        "jitter_mean_abs_delta": 8.42
+      },
+      "rtt_ms": {
+        "n": 65,
+        "min": 82.74,
+        "median": 124.16,
+        "p90": 171.22,
+        "p99": 443.65,
+        "max": 443.65,
+        "mean": 131.95,
+        "stddev": 48.43,
+        "jitter_mean_abs_delta": 40.4
+      },
+      "one_way_a_to_b_ms": {
+        "n": 65,
+        "min": 42.19,
+        "median": 53.33,
+        "p90": 80.12,
+        "p99": 111.46,
+        "max": 111.46,
+        "mean": 58.9,
+        "stddev": 15.64,
+        "jitter_mean_abs_delta": 15.67
+      },
+      "one_way_b_to_a_ms": {
+        "n": 65,
+        "min": 38.96,
+        "median": 62.41,
+        "p90": 100.2,
+        "p99": 387.66,
+        "max": 387.66,
+        "mean": 73.05,
+        "stddev": 44.82,
+        "jitter_mean_abs_delta": 29.77
+      },
+      "lost_a_to_b": 0,
+      "lost_b_to_a": 0,
+      "loss_pct": 0,
+      "out_of_order_at_b": 0,
+      "out_of_order_at_a": 0,
+      "duplicates_at_b": 0,
+      "duplicates_at_a": 0,
+      "out_of_order_detail_b": [],
+      "out_of_order_detail_a": [],
+      "window": [
+        72168,
+        136180
+      ]
+    },
+    {
+      "phase": "burst_bin",
+      "kind": "binary",
+      "target_hz": 60,
+      "sent": 200,
+      "achieved_send_hz": 59.76,
+      "send_interval_ms": {
+        "n": 199,
+        "min": 2.29,
+        "median": 16.36,
+        "p90": 22.4,
+        "p99": 29.35,
+        "max": 29.84,
+        "mean": 16.73,
+        "stddev": 4.43,
+        "jitter_mean_abs_delta": 5.51
+      },
+      "rtt_ms": {
+        "n": 200,
+        "min": 89.09,
+        "median": 131.7,
+        "p90": 150.52,
+        "p99": 174.59,
+        "max": 212.59,
+        "mean": 131.1,
+        "stddev": 18.99,
+        "jitter_mean_abs_delta": 10.92
+      },
+      "one_way_a_to_b_ms": {
+        "n": 200,
+        "min": 40.83,
+        "median": 46.92,
+        "p90": 61.34,
+        "p99": 81.08,
+        "max": 86.74,
+        "mean": 50.18,
+        "stddev": 9.1,
+        "jitter_mean_abs_delta": 6.93
+      },
+      "one_way_b_to_a_ms": {
+        "n": 200,
+        "min": 43.95,
+        "median": 81.85,
+        "p90": 99,
+        "p99": 130.29,
+        "max": 169.87,
+        "mean": 80.92,
+        "stddev": 17.61,
+        "jitter_mean_abs_delta": 7.71
+      },
+      "lost_a_to_b": 0,
+      "lost_b_to_a": 0,
+      "loss_pct": 0,
+      "out_of_order_at_b": 0,
+      "out_of_order_at_a": 5,
+      "duplicates_at_b": 0,
+      "duplicates_at_a": 0,
+      "out_of_order_detail_b": [],
+      "out_of_order_detail_a": [
+        [
+          32,
+          33
+        ],
+        [
+          87,
+          88
+        ],
+        [
+          101,
+          102
+        ],
+        [
+          106,
+          108
+        ],
+        [
+          141,
+          142
+        ]
+      ],
+      "window": [
+        139196,
+        142526
+      ],
+      "wire": {
+        "a_tx_frame_bytes": {
+          "n": 200,
+          "min": 69,
+          "median": 69,
+          "p90": 69,
+          "p99": 69,
+          "max": 69,
+          "mean": 69,
+          "stddev": 0,
+          "jitter_mean_abs_delta": 0
+        },
+        "b_rx_frame_bytes": {
+          "n": 201,
+          "min": 63,
+          "median": 63,
+          "p90": 63,
+          "p99": 63,
+          "max": 64,
+          "mean": 63,
+          "stddev": 0.07,
+          "jitter_mean_abs_delta": 0.01
+        },
+        "b_rx_binary_frames": 200,
+        "non_arraybuffer_payloads_at_b": 0,
+        "non_arraybuffer_payloads_at_a": 0
+      }
+    }
+  ],
+  "status_events": {
+    "A": [
+      [
+        869.3557,
+        "SUBSCRIBED"
+      ],
+      [
+        145659.9607,
+        "CLOSED"
+      ]
+    ],
+    "B": [
+      [
+        761.2098,
+        "SUBSCRIBED"
+      ],
+      [
+        145660.7883,
+        "CLOSED"
+      ]
+    ]
+  },
+  "cleanup_started_ms": 145544,
+  "throttle_signals": [],
+  "tenant_events_spent_est": 2340
+}

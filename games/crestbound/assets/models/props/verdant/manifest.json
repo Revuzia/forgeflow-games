@@ -1,0 +1,1084 @@
+{
+ "kit": "props",
+ "realm": "verdant",
+ "generated": "2026-09-08T12:59:38",
+ "blender": "5.1.2",
+ "units": "metres, +Y up (glTF), origin at the base unless pivot says otherwise",
+ "atlas": {
+  "albedo_px": 2048,
+  "small_px": 1024,
+  "emissive_strength": 2.0,
+  "maps": "albedo(RGBA sRGB) normal(tangent, OpenGL +Y) orm(R=AO G=rough B=metal) emissive(sRGB)"
+ },
+ "materials": {
+  "opaque": "verdant_atlas",
+  "cutout": "verdant_atlas_cutout (alphaMode MASK 0.5, doubleSided)"
+ },
+ "turntable_layout": "<realm>_<prop>_turntable.png = 2048x1024 sheet, 8 yaw angles at 512 px (a0..a3 top row, a4..a7 bottom row, 45 deg steps from 30 deg, 18 deg elevation); <realm>_<prop>_close.png = 1024 px close-up (3/4 view, upper 2/3); <realm>_<prop>_lod1.png = 1024x512 LOD1 at two angles. Eevee, AgX, neutral 3-point rig.",
+ "textures": [
+  {
+   "file": "verdant/textures/verdant_albedo.png",
+   "px": [
+    2048,
+    2048
+   ],
+   "bytes": 2782023
+  },
+  {
+   "file": "verdant/textures/verdant_emissive.png",
+   "px": [
+    1024,
+    1024
+   ],
+   "bytes": 13995
+  },
+  {
+   "file": "verdant/textures/verdant_normal.png",
+   "px": [
+    1024,
+    1024
+   ],
+   "bytes": 1050130
+  },
+  {
+   "file": "verdant/textures/verdant_orm.png",
+   "px": [
+    1024,
+    1024
+   ],
+   "bytes": 613260
+  }
+ ],
+ "textures_bytes": 4459408,
+ "props": [
+  {
+   "name": "oak_trunk",
+   "file": "verdant/oak_trunk.gltf",
+   "lod1": "verdant/oak_trunk_lod1.gltf",
+   "tris": 692,
+   "tris_gltf": 692,
+   "tris_lod1": 276,
+   "verts": 366,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -1.6086,
+     -0.0938,
+     -1.5504
+    ],
+    "max": [
+     1.5533,
+     7.0216,
+     1.5784
+    ],
+    "size": [
+     3.1618,
+     7.1154,
+     3.1289
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 29279,
+   "bytes_lod1": 15442,
+   "runtime": {
+    "kind": "tree",
+    "h": 7.6,
+    "part": "trunk"
+   },
+   "notes": "oak bole + root buttresses + 4 boughs; pair with oak_canopy at the same origin",
+   "turntable": [
+    "_turntable/verdant_oak_trunk_turntable.webp",
+    "_turntable/verdant_oak_trunk_close.webp",
+    "_turntable/verdant_oak_trunk_lod1.webp"
+   ]
+  },
+  {
+   "name": "oak_trunk_climb",
+   "file": "verdant/oak_trunk_climb.gltf",
+   "lod1": "verdant/oak_trunk_climb_lod1.gltf",
+   "tris": 1168,
+   "tris_gltf": 1168,
+   "tris_lod1": 466,
+   "verts": 628,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -1.6086,
+     -0.0938,
+     -1.5504
+    ],
+    "max": [
+     1.5533,
+     7.0216,
+     1.5784
+    ],
+    "size": [
+     3.1618,
+     7.1154,
+     3.1289
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 55168,
+   "bytes_lod1": 28250,
+   "runtime": {
+    "kind": "tree",
+    "h": 7.6,
+    "climbable": true,
+    "part": "trunk"
+   },
+   "notes": "CLIMBABLE variant: hand-hold stubs + a mossy vine spiral read as a ladder",
+   "turntable": [
+    "_turntable/verdant_oak_trunk_climb_turntable.webp",
+    "_turntable/verdant_oak_trunk_climb_close.webp",
+    "_turntable/verdant_oak_trunk_climb_lod1.webp"
+   ]
+  },
+  {
+   "name": "oak_canopy",
+   "file": "verdant/oak_canopy.gltf",
+   "lod1": "verdant/oak_canopy_lod1.gltf",
+   "tris": 148,
+   "tris_gltf": 148,
+   "tris_lod1": 51,
+   "verts": 212,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -3.8802,
+     3.8603,
+     -4.5528
+    ],
+    "max": [
+     3.8317,
+     10.4404,
+     3.9412
+    ],
+    "size": [
+     7.7119,
+     6.5801,
+     8.494
+    ]
+   },
+   "pivot": "tree base (y=0) \u2014 the canopy floats at y 4.5..9.5; place at the trunk origin",
+   "material": "verdant_atlas_cutout",
+   "cutout": true,
+   "bytes": 11624,
+   "bytes_lod1": 5653,
+   "runtime": {
+    "kind": "tree",
+    "part": "canopy"
+   },
+   "notes": "leaf-card cluster (alpha MASK, double-sided) over an inner leaf mass",
+   "turntable": [
+    "_turntable/verdant_oak_canopy_turntable.webp",
+    "_turntable/verdant_oak_canopy_close.webp",
+    "_turntable/verdant_oak_canopy_lod1.webp"
+   ]
+  },
+  {
+   "name": "pine_trunk",
+   "file": "verdant/pine_trunk.gltf",
+   "lod1": "verdant/pine_trunk_lod1.gltf",
+   "tris": 520,
+   "tris_gltf": 520,
+   "tris_lod1": 208,
+   "verts": 294,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.6701,
+     -0.0733,
+     -0.7152
+    ],
+    "max": [
+     0.7523,
+     9.2,
+     0.7179
+    ],
+    "size": [
+     1.4224,
+     9.2733,
+     1.4331
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 27932,
+   "bytes_lod1": 15230,
+   "runtime": {
+    "kind": "tree",
+    "h": 9.2,
+    "part": "trunk"
+   },
+   "notes": "tall straight pine bole with branch whorls",
+   "turntable": [
+    "_turntable/verdant_pine_trunk_turntable.webp",
+    "_turntable/verdant_pine_trunk_close.webp",
+    "_turntable/verdant_pine_trunk_lod1.webp"
+   ]
+  },
+  {
+   "name": "pine_canopy",
+   "file": "verdant/pine_canopy.gltf",
+   "lod1": "verdant/pine_canopy_lod1.gltf",
+   "tris": 336,
+   "tris_gltf": 336,
+   "tris_lod1": 134,
+   "verts": 180,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -2.0722,
+     2.4166,
+     -2.2423
+    ],
+    "max": [
+     2.3,
+     9.9,
+     2.2423
+    ],
+    "size": [
+     4.3722,
+     7.4834,
+     4.4847
+    ]
+   },
+   "pivot": "tree base (y=0) \u2014 tiers from y 2.6 to 9.9",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 20458,
+   "bytes_lod1": 12317,
+   "runtime": {
+    "kind": "tree",
+    "part": "canopy"
+   },
+   "notes": "six scalloped needle tiers",
+   "turntable": [
+    "_turntable/verdant_pine_canopy_turntable.webp",
+    "_turntable/verdant_pine_canopy_close.webp",
+    "_turntable/verdant_pine_canopy_lod1.webp"
+   ]
+  },
+  {
+   "name": "rock_a",
+   "file": "verdant/rock_a.gltf",
+   "lod1": "verdant/rock_a_lod1.gltf",
+   "tris": 120,
+   "tris_gltf": 120,
+   "tris_lod1": 48,
+   "verts": 66,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.7521,
+     -0.0075,
+     -0.6815
+    ],
+    "max": [
+     0.6995,
+     0.6111,
+     0.5339
+    ],
+    "size": [
+     1.4516,
+     0.6185,
+     1.2154
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 13744,
+   "bytes_lod1": 6832,
+   "runtime": {
+    "id": "rock",
+    "fit": "max"
+   },
+   "notes": "faceted boulder + chips",
+   "turntable": [
+    "_turntable/verdant_rock_a_turntable.webp",
+    "_turntable/verdant_rock_a_close.webp",
+    "_turntable/verdant_rock_a_lod1.webp"
+   ]
+  },
+  {
+   "name": "rock_b",
+   "file": "verdant/rock_b.gltf",
+   "lod1": "verdant/rock_b_lod1.gltf",
+   "tris": 120,
+   "tris_gltf": 120,
+   "tris_lod1": 48,
+   "verts": 66,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.8537,
+     -0.0135,
+     -0.9801
+    ],
+    "max": [
+     0.9064,
+     0.9088,
+     0.9306
+    ],
+    "size": [
+     1.7601,
+     0.9223,
+     1.9107
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 13744,
+   "bytes_lod1": 6833,
+   "runtime": {
+    "id": "rock",
+    "fit": "max"
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/verdant_rock_b_turntable.webp",
+    "_turntable/verdant_rock_b_close.webp",
+    "_turntable/verdant_rock_b_lod1.webp"
+   ]
+  },
+  {
+   "name": "rock_c",
+   "file": "verdant/rock_c.gltf",
+   "lod1": "verdant/rock_c_lod1.gltf",
+   "tris": 140,
+   "tris_gltf": 140,
+   "tris_lod1": 56,
+   "verts": 78,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.653,
+     -0.0066,
+     -0.5715
+    ],
+    "max": [
+     0.6945,
+     0.3379,
+     0.495
+    ],
+    "size": [
+     1.3475,
+     0.3445,
+     1.0665
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 15849,
+   "bytes_lod1": 7648,
+   "runtime": {
+    "id": "rock",
+    "fit": "max"
+   },
+   "notes": "low slab",
+   "turntable": [
+    "_turntable/verdant_rock_c_turntable.webp",
+    "_turntable/verdant_rock_c_close.webp",
+    "_turntable/verdant_rock_c_lod1.webp"
+   ]
+  },
+  {
+   "name": "bush",
+   "file": "verdant/bush.gltf",
+   "lod1": "verdant/bush_lod1.gltf",
+   "tris": 580,
+   "tris_gltf": 580,
+   "tris_lod1": 224,
+   "verts": 318,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.4184,
+     0.0,
+     -0.4199
+    ],
+    "max": [
+     0.3856,
+     0.803,
+     0.4519
+    ],
+    "size": [
+     0.8039,
+     0.803,
+     0.8718
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 27426,
+   "bytes_lod1": 12560,
+   "runtime": {
+    "id": "bush",
+    "h": 0.8
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/verdant_bush_turntable.webp",
+    "_turntable/verdant_bush_close.webp",
+    "_turntable/verdant_bush_lod1.webp"
+   ]
+  },
+  {
+   "name": "bush_small",
+   "file": "verdant/bush_small.gltf",
+   "lod1": "verdant/bush_small_lod1.gltf",
+   "tris": 260,
+   "tris_gltf": 260,
+   "tris_lod1": 104,
+   "verts": 138,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.253,
+     0.0,
+     -0.3364
+    ],
+    "max": [
+     0.2281,
+     0.4515,
+     0.2893
+    ],
+    "size": [
+     0.4811,
+     0.4515,
+     0.6257
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 11827,
+   "bytes_lod1": 6993,
+   "runtime": {
+    "id": "bush_small",
+    "h": 0.48
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/verdant_bush_small_turntable.webp",
+    "_turntable/verdant_bush_small_close.webp",
+    "_turntable/verdant_bush_small_lod1.webp"
+   ]
+  },
+  {
+   "name": "mushroom",
+   "file": "verdant/mushroom.gltf",
+   "lod1": "verdant/mushroom_lod1.gltf",
+   "tris": 1454,
+   "tris_gltf": 1454,
+   "tris_lod1": 580,
+   "verts": 751,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.369,
+     0.0,
+     -0.306
+    ],
+    "max": [
+     0.306,
+     0.534,
+     0.3964
+    ],
+    "size": [
+     0.675,
+     0.534,
+     0.7024
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 56340,
+   "bytes_lod1": 27090,
+   "runtime": {
+    "id": "mushroom",
+    "h": 0.55
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/verdant_mushroom_turntable.webp",
+    "_turntable/verdant_mushroom_close.webp",
+    "_turntable/verdant_mushroom_lod1.webp"
+   ]
+  },
+  {
+   "name": "mushroom_ring",
+   "file": "verdant/mushroom_ring.gltf",
+   "lod1": "verdant/mushroom_ring_lod1.gltf",
+   "tris": 1500,
+   "tris_gltf": 1500,
+   "tris_lod1": 600,
+   "verts": 790,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.336,
+     0.0001,
+     -0.455
+    ],
+    "max": [
+     0.4681,
+     0.3771,
+     0.4441
+    ],
+    "size": [
+     0.8041,
+     0.377,
+     0.8991
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 65680,
+   "bytes_lod1": 33025,
+   "runtime": {
+    "id": "mushroom_ring",
+    "fit": "max"
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/verdant_mushroom_ring_turntable.webp",
+    "_turntable/verdant_mushroom_ring_close.webp",
+    "_turntable/verdant_mushroom_ring_lod1.webp"
+   ]
+  },
+  {
+   "name": "flowerbed",
+   "file": "verdant/flowerbed.gltf",
+   "lod1": "verdant/flowerbed_lod1.gltf",
+   "tris": 1454,
+   "tris_gltf": 1454,
+   "tris_lod1": 581,
+   "verts": 908,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.554,
+     -0.0108,
+     -0.5226
+    ],
+    "max": [
+     0.5253,
+     0.3731,
+     0.4738
+    ],
+    "size": [
+     1.0793,
+     0.3839,
+     0.9963
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 75948,
+   "bytes_lod1": 43015,
+   "runtime": {
+    "id": "flowerbed",
+    "fit": "max"
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/verdant_flowerbed_turntable.webp",
+    "_turntable/verdant_flowerbed_close.webp",
+    "_turntable/verdant_flowerbed_lod1.webp"
+   ]
+  },
+  {
+   "name": "stump",
+   "file": "verdant/stump.gltf",
+   "lod1": "verdant/stump_lod1.gltf",
+   "tris": 256,
+   "tris_gltf": 256,
+   "tris_lod1": 101,
+   "verts": 158,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.9009,
+     0.0,
+     -1.1228
+    ],
+    "max": [
+     0.9103,
+     0.6128,
+     0.8794
+    ],
+    "size": [
+     1.8112,
+     0.6128,
+     2.0021
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 16010,
+   "bytes_lod1": 8460,
+   "runtime": {
+    "id": "stump",
+    "h": 0.6
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/verdant_stump_turntable.webp",
+    "_turntable/verdant_stump_close.webp",
+    "_turntable/verdant_stump_lod1.webp"
+   ]
+  },
+  {
+   "name": "fence_bay",
+   "file": "verdant/fence_bay.gltf",
+   "lod1": "verdant/fence_bay_lod1.gltf",
+   "tris": 568,
+   "tris_gltf": 568,
+   "tris_lod1": 226,
+   "verts": 308,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.105,
+     0.0,
+     -2.2
+    ],
+    "max": [
+     0.15,
+     1.35,
+     0.1
+    ],
+    "size": [
+     0.255,
+     1.35,
+     2.3
+    ]
+   },
+   "pivot": "post base; the bay runs +Z (glTF) 2.2 m \u2014 tile it",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 28361,
+   "bytes_lod1": 15562,
+   "runtime": {
+    "kind": "fence",
+    "bay": 2.2
+   },
+   "notes": "post + 2 rails + 4 pickets",
+   "turntable": [
+    "_turntable/verdant_fence_bay_turntable.webp",
+    "_turntable/verdant_fence_bay_close.webp",
+    "_turntable/verdant_fence_bay_lod1.webp"
+   ]
+  },
+  {
+   "name": "fence_post",
+   "file": "verdant/fence_post.gltf",
+   "lod1": "verdant/fence_post_lod1.gltf",
+   "tris": 224,
+   "tris_gltf": 224,
+   "tris_lod1": 88,
+   "verts": 116,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.105,
+     0.0,
+     -0.1
+    ],
+    "max": [
+     0.105,
+     1.35,
+     0.1
+    ],
+    "size": [
+     0.21,
+     1.35,
+     0.2
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 11706,
+   "bytes_lod1": 6704,
+   "runtime": {
+    "kind": "fence",
+    "part": "end post"
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/verdant_fence_post_turntable.webp",
+    "_turntable/verdant_fence_post_close.webp",
+    "_turntable/verdant_fence_post_lod1.webp"
+   ]
+  },
+  {
+   "name": "signpost",
+   "file": "verdant/signpost.gltf",
+   "lod1": "verdant/signpost_lod1.gltf",
+   "tris": 232,
+   "tris_gltf": 232,
+   "tris_lod1": 90,
+   "verts": 134,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.7041,
+     0.0,
+     -0.2461
+    ],
+    "max": [
+     0.95,
+     2.35,
+     0.4195
+    ],
+    "size": [
+     1.6541,
+     2.35,
+     0.6656
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 16580,
+   "bytes_lod1": 9461,
+   "runtime": {
+    "id": "signpost",
+    "h": 2.3
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/verdant_signpost_turntable.webp",
+    "_turntable/verdant_signpost_close.webp",
+    "_turntable/verdant_signpost_lod1.webp"
+   ]
+  },
+  {
+   "name": "bridge_plank",
+   "file": "verdant/bridge_plank.gltf",
+   "lod1": "verdant/bridge_plank_lod1.gltf",
+   "tris": 564,
+   "tris_gltf": 564,
+   "tris_lod1": 224,
+   "verts": 288,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -1.0,
+     -0.0195,
+     -0.15
+    ],
+    "max": [
+     1.0,
+     0.109,
+     0.186
+    ],
+    "size": [
+     2.0,
+     0.1285,
+     0.336
+    ]
+   },
+   "pivot": "plank centre-bottom; 2.0 wide (X) x 0.30 deep (Z)",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 27565,
+   "bytes_lod1": 14535,
+   "runtime": {
+    "kind": "bridge",
+    "w": 2.0
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/verdant_bridge_plank_turntable.webp",
+    "_turntable/verdant_bridge_plank_close.webp",
+    "_turntable/verdant_bridge_plank_lod1.webp"
+   ]
+  },
+  {
+   "name": "bridge_post",
+   "file": "verdant/bridge_post.gltf",
+   "lod1": "verdant/bridge_post_lod1.gltf",
+   "tris": 720,
+   "tris_gltf": 720,
+   "tris_lod1": 288,
+   "verts": 366,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.135,
+     0.0,
+     -0.1316
+    ],
+    "max": [
+     0.6154,
+     1.03,
+     0.1316
+    ],
+    "size": [
+     0.7504,
+     1.03,
+     0.2632
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 34370,
+   "bytes_lod1": 17188,
+   "runtime": {
+    "kind": "bridge",
+    "part": "rope post"
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/verdant_bridge_post_turntable.webp",
+    "_turntable/verdant_bridge_post_close.webp",
+    "_turntable/verdant_bridge_post_lod1.webp"
+   ]
+  },
+  {
+   "name": "windmill_sails",
+   "file": "verdant/windmill_sails.gltf",
+   "lod1": "verdant/windmill_sails_lod1.gltf",
+   "tris": 1136,
+   "tris_gltf": 1136,
+   "tris_lod1": 454,
+   "verts": 666,
+   "bones": 0,
+   "clips": [
+    {
+     "name": "spin",
+     "seconds": 12.0,
+     "frames": 288,
+     "axis": "Z"
+    }
+   ],
+   "bounds": {
+    "min": [
+     -7.0,
+     -7.0,
+     -0.42
+    ],
+    "max": [
+     7.0,
+     7.0,
+     0.3
+    ],
+    "size": [
+     14.0,
+     14.0,
+     0.72
+    ]
+   },
+   "pivot": "AXLE centre; rotor in the XY plane, spins about glTF +Z (clip \"spin\", 12 s loop)",
+   "material": "verdant_atlas",
+   "cutout": false,
+   "bytes": 70285,
+   "bytes_lod1": 29414,
+   "runtime": {
+    "kind": "mill",
+    "len": 7.0,
+    "arms": 4
+   },
+   "notes": "4 lattice sails with cloth over the outer 2/3; hub + iron bands",
+   "turntable": [
+    "_turntable/verdant_windmill_sails_turntable.webp",
+    "_turntable/verdant_windmill_sails_close.webp",
+    "_turntable/verdant_windmill_sails_lod1.webp"
+   ]
+  },
+  {
+   "name": "oak_tree",
+   "file": "verdant/oak_tree.gltf",
+   "lod1": "verdant/oak_tree_lod1.gltf",
+   "tris": 840,
+   "tris_gltf": 840,
+   "tris_lod1": 327,
+   "verts": 578,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -3.8802,
+     -0.0938,
+     -4.5528
+    ],
+    "max": [
+     3.8317,
+     10.4404,
+     3.9412
+    ],
+    "size": [
+     7.7119,
+     10.5342,
+     8.494
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": [
+    "verdant_atlas",
+    "verdant_atlas_cutout"
+   ],
+   "cutout": "mixed",
+   "bytes": 40272,
+   "bytes_lod1": 20464,
+   "compose": [
+    "oak_trunk",
+    "oak_canopy"
+   ],
+   "runtime": {
+    "kind": "tree",
+    "h": 9.6
+   },
+   "notes": "trunk + canopy in one file",
+   "turntable": [
+    "_turntable/verdant_oak_tree_turntable.webp",
+    "_turntable/verdant_oak_tree_close.webp",
+    "_turntable/verdant_oak_tree_lod1.webp"
+   ]
+  },
+  {
+   "name": "oak_tree_climb",
+   "file": "verdant/oak_tree_climb.gltf",
+   "lod1": "verdant/oak_tree_climb_lod1.gltf",
+   "tris": 1316,
+   "tris_gltf": 1316,
+   "tris_lod1": 517,
+   "verts": 840,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -3.8802,
+     -0.0938,
+     -4.5528
+    ],
+    "max": [
+     3.8317,
+     10.4404,
+     3.9412
+    ],
+    "size": [
+     7.7119,
+     10.5342,
+     8.494
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": [
+    "verdant_atlas_cutout",
+    "verdant_atlas"
+   ],
+   "cutout": "mixed",
+   "bytes": 66163,
+   "bytes_lod1": 33275,
+   "compose": [
+    "oak_trunk_climb",
+    "oak_canopy"
+   ],
+   "runtime": {
+    "kind": "tree",
+    "h": 9.6,
+    "climbable": true
+   },
+   "notes": "climbable trunk + canopy",
+   "turntable": [
+    "_turntable/verdant_oak_tree_climb_turntable.webp",
+    "_turntable/verdant_oak_tree_climb_close.webp",
+    "_turntable/verdant_oak_tree_climb_lod1.webp"
+   ]
+  },
+  {
+   "name": "pine_tree",
+   "file": "verdant/pine_tree.gltf",
+   "lod1": "verdant/pine_tree_lod1.gltf",
+   "tris": 856,
+   "tris_gltf": 856,
+   "tris_lod1": 342,
+   "verts": 474,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -2.0722,
+     -0.0733,
+     -2.2423
+    ],
+    "max": [
+     2.3,
+     9.9,
+     2.2423
+    ],
+    "size": [
+     4.3722,
+     9.9733,
+     4.4846
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": [
+    "verdant_atlas"
+   ],
+   "cutout": "mixed",
+   "bytes": 47294,
+   "bytes_lod1": 26452,
+   "compose": [
+    "pine_trunk",
+    "pine_canopy"
+   ],
+   "runtime": {
+    "kind": "tree",
+    "h": 9.9
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/verdant_pine_tree_turntable.webp",
+    "_turntable/verdant_pine_tree_close.webp",
+    "_turntable/verdant_pine_tree_lod1.webp"
+   ]
+  }
+ ],
+ "budgets": {
+  "prop_tris_max": 1500,
+  "architecture_tris_max": 3000,
+  "atlas_px_max": 2048
+ },
+ "over_budget": [],
+ "build_seconds": 329.4
+}

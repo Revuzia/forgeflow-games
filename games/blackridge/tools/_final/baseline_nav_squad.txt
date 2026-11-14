@@ -1,0 +1,5 @@
+nav_probe  pairs=150 seed=1 cell=0.75 mode=squad driver=brain-poke(baseline)
+meridian_ward  squads=30 bots arrived 150/150 (100.00%)  spread mean=3.57s p95=15.32s  overlap(<0.45m) samples=850
+lanternwalk    squads=30 bots arrived 140/150 (93.33%)  spread mean=3.77s p95=14.83s  overlap(<0.45m) samples=1379
+switchyard     squads=30 bots arrived 150/150 (100.00%)  spread mean=5.21s p95=17.85s  overlap(<0.45m) samples=571
+saltmarket     squads=30 bots arrived 149/150 (99.33%)  spread mean=3.69s p95=16.52s  overlap(<0.45m) samples=798

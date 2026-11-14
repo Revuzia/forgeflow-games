@@ -1,0 +1,18 @@
+fresh cold: {"fogDensity": 0.0072, "fogHeightFalloff": 0.045, "fogStart": 24, "aerialStrength": 1, "exposure": 0.105, "contrast": 1.14, "bloomStrength": 0.22}
+  -> sand  realm=sand  heap=128.17 types=20 insts=7 scene=501
+  -> ash   realm=ash   heap=149.7 types=30 insts=9 scene=575
+  -> cold  realm=cold  heap=147.33 types=30 insts=11 scene=657
+  -> sand  realm=sand  heap=150.7 types=30 insts=12 scene=726
+  -> ash   realm=ash   heap=148.93 types=30 insts=13 scene=763
+  -> cold  realm=cold  heap=156.13 types=30 insts=13 scene=763
+
+---- DIFF fresh-cold vs returned-cold ----
+  /heapMB                                  118.55 -> 153.63
+  /geo                                     25 -> 32
+  /tex                                     45 -> 63
+  /types                                   10 -> 30
+  /insts                                   5 -> 14
+  /sceneObjs                               387 -> 800
+
+console warnings/errors: 0
+wrote C:\Users\TestRun\Claude Claw\forgeflow-games\games\driftwake\_harness\qa_soak_griddrift_8894.out.json

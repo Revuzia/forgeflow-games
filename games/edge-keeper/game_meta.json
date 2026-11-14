@@ -1,0 +1,25 @@
+{
+  "title": "Edge Keeper",
+  "slug": "edge-keeper",
+  "status": "published",
+  "short_description": "Hold your wall. Last edge standing. Polygon paddle survival — solo, couch 2P, or online with a room code.",
+  "description": "Edge Keeper is a browser arcade where every player owns one wall of a living polygon. Two lives. Miss the ball and your edge shatters — the arena closes into a tighter shape around whoever is left. Last wall standing wins. Eliminated players stay in the match as saboteurs, dropping bumpers, warps, and spinners into the court. Classic octagon (8) or Arena ring (20) with a spinning core of prizes and traps. Play solo against bots, local 2P, or online: host a room, share the code, find a match, or join from a link.",
+  "genre": "arcade",
+  "sub_genre": "paddle-survival",
+  "difficulty": "medium",
+  "controls_keyboard": "Mouse / A D / arrows slide your paddle · Q E local player 2 · 1 2 3 bumper / warp / spinner when out · click to place · M mute · Esc menu",
+  "controls_gamepad": "Not required — keyboard, mouse, and touch.",
+  "has_mobile_support": true,
+  "tags": [
+    "arcade",
+    "paddle",
+    "survival",
+    "multiplayer",
+    "online",
+    "polygon",
+    "party"
+  ],
+  "art_direction": "Phosphor CRT arcade energy rendered with real three-dimensional depth. Low three-quarter angle looking ACROSS the arena floor, never straight down: the paddle walls tower like lit monoliths receding into the frame, and EACH WALL IS A DIFFERENT SATURATED NEON COLOUR so the ring reads as a spectrum of rival players. The ball screams toward camera trailing a long incandescent comet streak. Glass shards from a freshly shattered wall tumble through the foreground. Volumetric haze, heavy bloom, scanline glow, very high contrast against deep black.",
+  "version": "1.0.0",
+  "previewPort": 5195
+}

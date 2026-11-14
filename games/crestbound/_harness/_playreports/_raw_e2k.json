@@ -1,0 +1,252 @@
+{
+ "log": [
+  "boot state: keep",
+  "goto ember-2 cp=None -> playing ember-2 [0, 6, 47]",
+  "  try 1: board failed ([-5.83, 20.3, -50])",
+  "  try 2: board failed ([-3.84, 20.3, -50])",
+  "  fly ride 3: boarded=True jump-at=None -> [0, 10, -44] ps=idle ON CROWN=False deaths=1",
+  "  try 4: board failed ([0, 10, -44])",
+  "pre-pound: [-9, 13.12, 3] ps=fall gnd=False",
+  "AIRBORNE POUND on the belt crate: coins 1 -> 4 ; hero [-3.55, 6.6, 3] ps=idle",
+  "   breakables: [{\"p\": [-14.2, 8.2, 29], \"broken\": false, \"cols\": 1, \"active\": true}, {\"p\": [-23.5, 13.4, 29], \"broken\": false, \"cols\": 1, \"active\": true}, {\"p\": [-9, 7.5, 3], \"broken\": false, \"cols\": 1, \"active\": false}, {\"p\": [8, 7.5, -1], \"broken\": false, \"cols\": 1, \"active\": true}, {\"p\": [0, 7.5, -6], \"broken\": false, \"cols\": 1, \"active\": true}, {\"p\": [-24, 1.8, -14], \"broken\": false, \"cols\": 1, \"active\": true}]",
+  "SEVENTH WALL pound: {\"broken\": false, \"cols\": 1, \"active\": true} ; hero [0, 6, 8.5] ps=idle",
+  "BELT z=-1 clean carry: x 1.46 -> 1.46 in 1.6 s = 0.00 m/s (authored 5.0) surf='normal' vel=[0, -17.44, 0]"
+ ],
+ "res": {
+  "fly_apex": [
+   {
+    "try": 3,
+    "jump_at": null,
+    "end": [
+     0,
+     10,
+     -44
+    ],
+    "ps": "idle",
+    "on_crown": false,
+    "deaths": 1
+   }
+  ],
+  "pound_airborne": {
+   "c0": 1,
+   "c1": 4,
+   "end": [
+    -3.55,
+    6.6,
+    3
+   ],
+   "ps": "idle",
+   "after": [
+    {
+     "p": [
+      -14.2,
+      8.2,
+      29
+     ],
+     "broken": false,
+     "cols": 1,
+     "active": true
+    },
+    {
+     "p": [
+      -23.5,
+      13.4,
+      29
+     ],
+     "broken": false,
+     "cols": 1,
+     "active": true
+    },
+    {
+     "p": [
+      -9,
+      7.5,
+      3
+     ],
+     "broken": false,
+     "cols": 1,
+     "active": false
+    },
+    {
+     "p": [
+      8,
+      7.5,
+      -1
+     ],
+     "broken": false,
+     "cols": 1,
+     "active": true
+    },
+    {
+     "p": [
+      0,
+      7.5,
+      -6
+     ],
+     "broken": false,
+     "cols": 1,
+     "active": true
+    },
+    {
+     "p": [
+      -24,
+      1.8,
+      -14
+     ],
+     "broken": false,
+     "cols": 1,
+     "active": true
+    }
+   ]
+  },
+  "seventh_wall": {
+   "wall": {
+    "broken": false,
+    "cols": 1,
+    "active": true
+   },
+   "end": [
+    0,
+    6,
+    8.5
+   ],
+   "ps": "idle"
+  },
+  "belt_clean": {
+   "a": [
+    1.46,
+    6.6,
+    -3.57
+   ],
+   "b": [
+    1.46,
+    3.29,
+    -8.74
+   ],
+   "mps": 0.0,
+   "surf": "normal",
+   "vel": [
+    0,
+    -17.44,
+    0
+   ],
+   "path": [
+    [
+     16.15,
+     [
+      1.46,
+      6.6,
+      -4.17
+     ],
+     [
+      0,
+      -0.19,
+      0
+     ],
+     "conveyor"
+    ],
+    [
+     16.24,
+     [
+      1.46,
+      6.6,
+      -4.53
+     ],
+     [
+      0,
+      -0.19,
+      0
+     ],
+     "conveyor"
+    ],
+    [
+     16.39,
+     [
+      1.46,
+      6.6,
+      -5.13
+     ],
+     [
+      0,
+      -0.19,
+      0
+     ],
+     "conveyor"
+    ],
+    [
+     16.54,
+     [
+      1.46,
+      6.6,
+      -5.73
+     ],
+     [
+      0,
+      -0.19,
+      0
+     ],
+     "conveyor"
+    ],
+    [
+     17.14,
+     [
+      1.46,
+      6.6,
+      -8.13
+     ],
+     [
+      0,
+      -0.19,
+      0
+     ],
+     "conveyor"
+    ],
+    [
+     17.29,
+     [
+      1.46,
+      6.42,
+      -8.57
+     ],
+     [
+      0,
+      -4.02,
+      0
+     ],
+     "normal"
+    ],
+    [
+     17.43,
+     [
+      1.46,
+      5.39,
+      -8.73
+     ],
+     [
+      0,
+      -10.54,
+      0
+     ],
+     "normal"
+    ],
+    [
+     17.58,
+     [
+      1.46,
+      3.29,
+      -8.74
+     ],
+     [
+      0,
+      -17.44,
+      0
+     ],
+     "normal"
+    ]
+   ]
+  }
+ },
+ "console": [
+  "warning: [Course ember-2] props.js had no entry for: girders, pipes, slabs, antennae, fins"
+ ]
+}

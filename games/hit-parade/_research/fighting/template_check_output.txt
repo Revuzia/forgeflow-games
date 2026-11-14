@@ -1,0 +1,22 @@
+| Class | Startup | Active | Recovery | Total | Hitstun | Blockstun | On hit | On block | On PC hit | Damage | Hitstop | Guard | Super gain (hit/block) | Reach | SF6 roster median (for reference) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| stand light | 5 | 3 | 9 | 16 | 15 | 10 | +3 | -2 | +7 | 300 | 9 | H/L | 300 / 150 | 0.85 m | 5/3/10 +3/-2 hs16 bs10 |
+| crouch light (low) | 5 | 3 | 9 | 16 | 15 | 10 | +3 | -2 | +7 | 250 | 9 | L | 300 / 150 | 0.81 m | 5/3/9 +4/-2 hs15 bs10 |
+| stand medium | 8 | 3 | 16 | 26 | 22 | 16 | +3 | -3 | +7 | 600 | 11 | H/L | 500 / 250 | 1.11 m | 8/3/16 +3/-3 hs23 bs17 |
+| crouch medium (low poke) | 8 | 3 | 15 | 25 | 22 | 16 | +4 | -2 | +8 | 600 | 11 | L | 500 / 250 | 1.09 m | 8/3/16 +4/-2 hs22 bs16 |
+| stand heavy | 12 | 3 | 20 | 34 | 25 | 20 | +2 | -3 | +6 | 800 | 13 | H/L | 1000 / 500 | 1.33 m | 12/3/20 +2/-3 hs26 bs20 |
+| crouch heavy (anti-air) | 9 | 4 | 21 | 33 | 27 | 19 | +2 | -6 | +6 | 800 | 13 | H/L | 1000 / 500 | 0.90 m | 9/4/21 +2/-6 hs27 bs20 |
+| sweep (low, KD) | 10 | 3 | 24 | 36 | - | 16 | KD | -11 | KD | 900 | 13 | L | 1000 / 500 | 1.38 m | 10/3/24 KD+33 -11 bs18 |
+| overhead (6+button) | 18 | 3 | 17 | 37 | 22 | 16 | +2 | -4 | +6 | 600 | 11 | H | 500 / 250 | 1.10 m | cmd normals 16/3/20 +3/-3 |
+
+Links on normal hit / punish-counter hit (on-hit >= next startup):
+  stand light                hit +3 -> none (cancel only) | PC +7 -> ['stand light', 'crouch light (low)']
+  crouch light (low)         hit +3 -> none (cancel only) | PC +7 -> ['stand light', 'crouch light (low)']
+  stand medium               hit +3 -> none (cancel only) | PC +7 -> ['stand light', 'crouch light (low)']
+  crouch medium (low poke)   hit +4 -> none (cancel only) | PC +8 -> ['stand light', 'crouch light (low)', 'stand medium', 'crouch medium (low poke)']
+  stand heavy                hit +2 -> none (cancel only) | PC +6 -> ['stand light', 'crouch light (low)']
+  crouch heavy (anti-air)    hit +2 -> none (cancel only) | PC +6 -> ['stand light', 'crouch light (low)']
+  overhead (6+button)        hit +2 -> none (cancel only) | PC +6 -> ['stand light', 'crouch light (low)']
+
+blockstun - hitstun per class: stand light -5, crouch light -5, stand medium -6, crouch medium -6, stand heavy -5, crouch heavy -8, overhead -6
+ALL CHECKS OK

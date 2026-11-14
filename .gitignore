@@ -1,0 +1,109 @@
+node_modules/
+dist/
+.env
+*.local
+.DS_Store
+
+# 2026-05-11 — Downloaded asset cache (re-downloadable per pipeline/assets/_downloaded/TASKS.md)
+# Previously committed; 8.3 GB working tree + 1.15 GB mocap zip in pack history
+# caused GitHub HTTP 500 on push. History purged via git filter-repo.
+pipeline/assets/_downloaded/
+
+# Wrangler local-dev state (per-machine, not portable)
+.wrangler/state/
+
+.secrets/
+
+# XCOM autopipe runtime artifacts
+pipeline/engine/_match_*.png
+pipeline/engine/xcom_match_report.json
+pipeline/engine/xcom_autopipe_log.jsonl
+
+# 2026-06-02 — Bulk CC0/CC-BY creature library (~820 MB, 1,500+ models from Quaternius /
+# Poly Pizza / Kenney / OpenGameArt). Kept OUT of git: the 2026-05-11 large-asset push
+# already hit GitHub HTTP 500 + needed a history purge — don't repeat it. Binaries are
+# local + re-downloadable (per-model source_url in CREATURES_INDEX.json, which IS tracked).
+pipeline/assets/3d-models/polypizza/
+pipeline/assets/3d-models/quaternius/
+pipeline/assets/3d-models/kenney-creatures/
+pipeline/assets/3d-models/opengameart-creatures/
+
+# 2026-06-08 — ForgeFlow-Engine game builds (Phase-A wiring, pipeline/engine/engine_game_build.py).
+# Each bundles a copy of the engine runtime + scene.json; reproducible from content.json + the engine
+# repo, and deployed to R2. Keep OUT of git (don't duplicate the engine / bloat history).
+games/_engine/
+
+# 2026-06-10 — Unity Asset Store haul (owner-licensed, NOT redistributable; regenerated nightly
+# from F:\games cache by scripts/unity_ingest_and_wire.py — committing would repeat the 8.3GB
+# push incident above AND violate the Asset Store license)
+pipeline/assets/3d-models/unity/
+pipeline/assets/3d-models/UNITY_MODELS_INDEX.json
+pipeline/assets/UNITY_ASSETS_INDEX.json
+
+# 2026-06-10 audit Q3 — runtime/test artifacts in pipeline/engine never belong in git
+pipeline/engine/__pycache__/
+pipeline/engine/gates/__pycache__/
+pipeline/engine/_wip/
+pipeline/engine/_captest.py
+pipeline/engine/_capfix_test.png
+pipeline/engine/*.png.lit
+
+asset_gen/
+.claude/worktrees/
+.wrangler/
+
+# 2026-07-16 — Neon Veil local rebuild project (games/neon-veil): buildable Vite/TS
+# project that recompiles the restored sources in src-restored/src. node_modules is
+# already ignored above; keep the separate rebuild output out of git too. The live
+# bundle (games/neon-veil/assets/index-*.js/.css) IS tracked and must stay.
+games/neon-veil/node_modules/
+games/neon-veil/dist-rebuild/
+
+# 2026-09-22 — BLOCKTOOTH (games/blocktooth): Vite/TS source game. node_modules + dist are
+# covered above; keep screenshots, scratch output and harness reports out of git.
+games/blocktooth/_shots/
+games/blocktooth/_harness/_reports/
+games/blocktooth/_harness/__pycache__/
+games/blocktooth/_harness/scratch/**/*.png
+games/blocktooth/_harness/scratch/**/*.txt
+games/blocktooth/_harness/scratch/**/__pycache__/
+games/blocktooth/_harness/scratch/**/*.log
+
+# 2026-09-24 — DYEFIELD (games/dyefield): Vite/TS source game + Blender-authored art (art/gltf GLBs
+# ARE tracked). node_modules, dist, shots, reports, python caches and scratch are not.
+games/dyefield/node_modules/
+games/dyefield/dist/
+games/dyefield/_shots/
+games/dyefield/_harness/_reports/
+games/dyefield/_harness/__pycache__/
+games/dyefield/_harness/scratch/
+games/dyefield/art/__pycache__/
+games/dyefield/art/blender/__pycache__/
+games/dyefield/art/renders/_wip/
+games/dyefield/art/renders/*.png
+
+# 2026-09-29 — HIT PARADE (games/hit-parade): Vite/TS versus fighter + Blender-baked fighter GLBs
+# (art/gltf GLBs ARE tracked). Research evidence is kept as text only; renders/GLBs/scratch are not.
+games/hit-parade/node_modules/
+games/hit-parade/dist/
+games/hit-parade/_shots/
+games/hit-parade/_harness/_reports/
+games/hit-parade/_harness/__pycache__/
+games/hit-parade/_harness/scratch/
+games/hit-parade/art/renders/
+games/hit-parade/art/blender/__pycache__/
+games/hit-parade/tools/__pycache__/
+games/hit-parade/tools/research/__pycache__/
+games/hit-parade/_research/**/*.glb
+games/hit-parade/_research/**/*.png
+games/hit-parade/_research/**/*.jpg
+games/hit-parade/_research/**/*.wav
+games/hit-parade/_research/**/*.ogg
+games/hit-parade/_research/**/_work/
+games/hit-parade/_research/**/_batches/
+games/hit-parade/_research/**/renders/
+games/hit-parade/_research/audio/_*.txt
+games/hit-parade/_research/audio/_*.log
+games/hit-parade/_research/environment/unitypackage_listings/
+games/hit-parade/_research/environment/texlists/
+games/hit-parade/runtime/lab/assets/

@@ -1,0 +1,80 @@
+{
+ "collectibles": {
+  "total": 50,
+  "fixed": 12,
+  "stillReproduces": 14,
+  "couldNotTest": 24
+ },
+ "water/swim": {
+  "total": 27,
+  "fixed": 7,
+  "stillReproduces": 5,
+  "couldNotTest": 15
+ },
+ "signs/HUD": {
+  "total": 26,
+  "fixed": 6,
+  "stillReproduces": 1,
+  "couldNotTest": 19
+ },
+ "clock/reset": {
+  "total": 22,
+  "fixed": 6,
+  "stillReproduces": 4,
+  "couldNotTest": 12
+ },
+ "geometry": {
+  "total": 37,
+  "fixed": 6,
+  "stillReproduces": 9,
+  "couldNotTest": 22
+ },
+ "pads/belts/currents": {
+  "total": 34,
+  "fixed": 15,
+  "stillReproduces": 4,
+  "couldNotTest": 15
+ },
+ "camera": {
+  "total": 32,
+  "fixed": 9,
+  "stillReproduces": 4,
+  "couldNotTest": 19
+ },
+ "cannon/interact": {
+  "total": 19,
+  "fixed": 7,
+  "stillReproduces": 8,
+  "couldNotTest": 4
+ },
+ "idle-crush": {
+  "total": 13,
+  "fixed": 6,
+  "stillReproduces": 1,
+  "couldNotTest": 6
+ },
+ "key conflict": {
+  "total": 3,
+  "fixed": 1,
+  "stillReproduces": 2,
+  "couldNotTest": 0
+ },
+ "long-jump gaps": {
+  "total": 12,
+  "fixed": 0,
+  "stillReproduces": 1,
+  "couldNotTest": 11
+ },
+ "pound": {
+  "total": 10,
+  "fixed": 4,
+  "stillReproduces": 5,
+  "couldNotTest": 1
+ },
+ "stairs": {
+  "total": 30,
+  "fixed": 13,
+  "stillReproduces": 3,
+  "couldNotTest": 14
+ }
+}

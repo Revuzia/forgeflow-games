@@ -1,0 +1,60 @@
+{
+  "gathering": [
+    {
+      "stun": "stun:stun.l.google.com:19302",
+      "gather_ms": 6084,
+      "host_n": 2,
+      "srflx_n": 1,
+      "first_host_ms": 82,
+      "first_srflx_ms": 107
+    },
+    {
+      "stun": "stun:stun1.l.google.com:19302",
+      "gather_ms": 6011,
+      "host_n": 2,
+      "srflx_n": 1,
+      "first_host_ms": 4,
+      "first_srflx_ms": 17
+    },
+    {
+      "stun": "stun:stun.cloudflare.com:3478",
+      "gather_ms": 6010,
+      "host_n": 2,
+      "srflx_n": 1,
+      "first_host_ms": 4,
+      "first_srflx_ms": 80
+    }
+  ],
+  "mapping": {
+    "srflx_udp": 1,
+    "groups": [
+      {
+        "base_port": 0,
+        "n": 1,
+        "mapped_ports": [
+          55593
+        ],
+        "servers": [
+          "stun:stun.l.google.com:19302"
+        ]
+      }
+    ],
+    "endpoint_independent": true,
+    "groups_with_multiple_servers": 0
+  },
+  "loopback": {
+    "open_ms": 44,
+    "sent": 200,
+    "received": 200,
+    "rtt_ms": {
+      "median": 1.3,
+      "p90": 37,
+      "p99": 788.8,
+      "max": 820.3
+    }
+  },
+  "wall_s": 30.8,
+  "browser": "145.0.7632.6",
+  "started": "2026-09-30T02:31:34.409617+00:00",
+  "tool": "hit-parade/tools/research/net_webrtc_probe.py"
+}

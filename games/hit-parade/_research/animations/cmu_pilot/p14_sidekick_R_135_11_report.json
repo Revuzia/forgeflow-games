@@ -1,0 +1,149 @@
+{
+ "clip": {
+  "name": "p14_sidekick_R_135_11",
+  "take": "135_11",
+  "start": 577,
+  "contact": 608,
+  "end": 682,
+  "kind": "foot",
+  "limb": "R_foot",
+  "fist": 80
+ },
+ "info": {
+  "frames_src": [
+   577,
+   579,
+   581,
+   583,
+   585,
+   587,
+   589,
+   591,
+   593,
+   595,
+   597,
+   599,
+   601,
+   603,
+   605,
+   607,
+   609,
+   611,
+   613,
+   615,
+   617,
+   619,
+   621,
+   623,
+   625,
+   627,
+   629,
+   631,
+   633,
+   635,
+   637,
+   639,
+   641,
+   643,
+   645,
+   647,
+   649,
+   651,
+   653,
+   655,
+   657,
+   659,
+   661,
+   663,
+   665,
+   667,
+   669,
+   671,
+   673,
+   675,
+   677,
+   679,
+   681,
+   682
+  ],
+  "mirror": false,
+  "fist_deg": 80,
+  "ratio_leg": 1.0707610688818283,
+  "floor_src": 0.011072173560134756,
+  "ank_src": 0.06116649843706796,
+  "ank_tgt": 0.08729419619379541,
+  "fwd_src": [
+   0.22689258196474443,
+   -0.9739197894320019,
+   0.0
+  ],
+  "step": 2
+ },
+ "frames": [
+  {
+   "max_dir_err_deg": 0.0,
+   "worst_bone": "Spine",
+   "min_foot_z": 0.042,
+   "min_foot_pt": "RightToe_End.head",
+   "hips_z": 0.934,
+   "hips_xy": [
+    0.028,
+    0.003
+   ],
+   "hips_fwd_yaw_deg": -29.2,
+   "src_frame": 577,
+   "out_frame": 1
+  },
+  {
+   "max_dir_err_deg": 0.0,
+   "worst_bone": "Spine",
+   "min_foot_z": 0.052,
+   "min_foot_pt": "LeftToe_End.head",
+   "hips_z": 1.027,
+   "hips_xy": [
+    0.012,
+    -0.141
+   ],
+   "hips_fwd_yaw_deg": -26.0,
+   "src_frame": 592,
+   "out_frame": 8
+  },
+  {
+   "max_dir_err_deg": 0.0,
+   "worst_bone": "Spine",
+   "min_foot_z": 0.069,
+   "min_foot_pt": "LeftToe_End.head",
+   "hips_z": 1.134,
+   "hips_xy": [
+    0.015,
+    -0.251
+   ],
+   "hips_fwd_yaw_deg": 1.7,
+   "src_frame": 608,
+   "out_frame": 16
+  },
+  {
+   "max_dir_err_deg": 0.0,
+   "worst_bone": "Spine",
+   "min_foot_z": 0.038,
+   "min_foot_pt": "RightToe_End.head",
+   "hips_z": 0.853,
+   "hips_xy": [
+    -0.104,
+    -0.576
+   ],
+   "hips_fwd_yaw_deg": -17.8,
+   "src_frame": 682,
+   "out_frame": 54
+  }
+ ],
+ "max_dir_err_all_frames_deg": 0.0,
+ "min_foot_z_all_frames_m": 0.037,
+ "min_foot_at": {
+  "out_frame": 6,
+  "src_frame": 587,
+  "point": "LeftToe_End.head"
+ },
+ "frames_foot_below_3cm": 0,
+ "frames_total": 54
+}

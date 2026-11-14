@@ -1,0 +1,330 @@
+{
+  "agent": "researcher",
+  "task": "shmup_progression_balance_research_for_starlance",
+  "ts": "2026-06-02T23:10:00Z",
+  "summary": "Classic-shmup progression/balance research + concrete 6-world spec for Starlance. Root cause found in games/starlance/content.json: weapon maxes (maxWeapon=4) by mid-world-1 because dropChance=0.17 on 12-22 enemy waves yields the cap almost immediately, while boss HP scales only 3.3x (170->560) and enemy HP barely moves (1->3) across 6 worlds. A maxed gun + flat enemy HP = trivial. Fixes: gate upgrades hard (sparse, scripted drops not random spam), add a death/hit power penalty, make upgrades add UTILITY not raw DPS, scale enemy HP and bullet density steeply per world, give each world its OWN themed enemy set + distinct boss, and lengthen stages (many more waves).",
+
+  "sources": [
+    {"topic": "Gradius power meter / Options cap 4 / death reset", "url": "https://shmups.wiki/library/Gradius"},
+    {"topic": "Gradius Power Meter mechanics", "url": "https://gradius.fandom.com/wiki/Power_Meter"},
+    {"topic": "Gradius Power Capsule (death strips to base shot)", "url": "https://gradius.fandom.com/wiki/Power_Capsule"},
+    {"topic": "Gradius design / rank / loop suicide bullets", "url": "https://tvtropes.org/pmwiki/pmwiki.php/VideoGame/Gradius"},
+    {"topic": "R-Type Wave Cannon charge + Force pod 3 levels + death drops Force", "url": "https://shmups.wiki/library/R-Type"},
+    {"topic": "R-Type Wave Cannon charge mechanic", "url": "https://rtype.fandom.com/wiki/Wave_Cannon"},
+    {"topic": "Raiden Vulcan/Laser level-ups, tiers, death drops levels", "url": "https://shmups.wiki/library/Raiden"},
+    {"topic": "Raiden II Vulcan sets of 2/3/4, Laser to thick beam", "url": "https://shmups.wiki/library/Raiden_II"},
+    {"topic": "Raiden V level-10 weapon tiers", "url": "https://raiden.fandom.com/wiki/Raiden_V"},
+    {"topic": "Touhou Mountain of Faith power, 4 options, power-bomb, deathbomb 8 frames", "url": "https://en.touhouwiki.net/wiki/Mountain_of_Faith/Gameplay"},
+    {"topic": "Touhou EoSD power breakpoints 8/16/32/48/64/80/96/128 MAX", "url": "https://en.touhouwiki.net/wiki/Embodiment_of_Scarlet_Devil/Gameplay"},
+    {"topic": "Ikaruga polarity + chain scoring + stage-as-mechanic-teacher", "url": "https://shmups.wiki/library/Ikaruga"},
+    {"topic": "Darius branching zones, distinct boss per zone, sea-life enemies", "url": "https://shmups.wiki/library/Darius"},
+    {"topic": "Darius series branching path overview", "url": "https://en.wikipedia.org/wiki/Darius_(series)"},
+    {"topic": "Boghog bullet-hell shmup 101 (HP tuning, pattern-over-stats, x1.1 power deception)", "url": "https://shmups.wiki/library/Boghog's_bullet_hell_shmup_101"},
+    {"topic": "Boghog difficulty design (what makes a pattern hard)", "url": "https://cohost.org/boghog/post/5119567-difficulty-design"},
+    {"topic": "SLYNYRD Pixelblog 31 shmup sprite/enemy design (per-stage themed enemies, archetypes)", "url": "https://www.slynyrd.com/blog/2020/12/14/pixelblog-31-shmup-sprite-design"},
+    {"topic": "Gamasutra/GameDeveloper boss design for shmups (proportional fight length, varied attacks, split HP bar)", "url": "https://www.gamedeveloper.com/design/video-game-boss-design-for-shmups"},
+    {"topic": "Giest118 guide to bullet-hell bosses (stage-1 boss 40-50s, mid ~90s, final <150s, ~25min game, attack 5-10s each)", "url": "https://shmups.system11.org/viewtopic.php?f=9&t=44816"},
+    {"topic": "Balancing the sh#& out of our shmup (bosses drop most currency, work-backward to maxed by end, level-design gating)", "url": "https://www.gamedeveloper.com/design/balancing-the-sh-out-of-our-shmup"},
+    {"topic": "Getting/Making music that fits - sci-fi shmup (allegro 4/4, minor key w/ relative major, synth bass + e-piano + metal guitar + techno drums, arpeggios)", "url": "https://www.gamedeveloper.com/audio/getting-making-game-music-that-fits---classic-genre-series---scifi-shmup-"},
+    {"topic": "SHMUP Creator docs - enemies and waves", "url": "https://www.shmupcreator.com/doc/?docs=shmupcreator%2Fobjects-and-entities%2Fenemies-and-waves"}
+  ],
+
+  "power_curve_principles": {
+    "headline": "Across every classic, runaway player power is prevented by FOUR levers working together: (a) a hard cap on raw firepower, (b) a death/hit penalty that resets or drops that power, (c) a SLOW, gated drip of upgrades (you cannot max early), and (d) upgrades that mostly add UTILITY/coverage rather than multiplying single-target DPS. Boghog states outright that a 'level 10 shot cannot be 10 times more powerful than the default without something breaking' - real power-ups fake strength via width/density/extra emitters with only ~x1.1 numeric bumps.",
+    "levers": [
+      {"lever": "HARD CAP on raw DPS", "detail": "Gradius Options cap at 4 (2 in some ports); Touhou caps at 4 options even though power reads up to 5.00 (the 5th only buys a free bomb); R-Type Force has exactly 3 levels. The ceiling is low and fixed so the gun can never outrun late enemies.", "sources": ["https://shmups.wiki/library/Gradius", "https://en.touhouwiki.net/wiki/Mountain_of_Faith/Gameplay", "https://rtype.fandom.com/wiki/Wave_Cannon"]},
+      {"lever": "DEATH / HIT PENALTY resets or drops power", "detail": "Gradius: on death you revert to ONLY the basic horizontal shot - everything (speed, missiles, double, laser, options, shield) is gone and must be re-earned capsule by capsule, which is what keeps mid/late stages honest for a skilled player. R-Type: death throws you back to a checkpoint with NO weapons, Force, Bits or speed-ups. Raiden: death drops your weapon level. Touhou: a bomb/death costs power levels (power-bomb in MoF/SA literally spends 1 power level per bomb). This penalty is the single biggest anti-snowball mechanic - it means the better you play (fewer deaths) the more power you keep, but it also means power is never free or permanent.", "sources": ["https://gradius.fandom.com/wiki/Power_Capsule", "https://shmups.wiki/library/R-Type", "https://en.touhouwiki.net/wiki/Mountain_of_Faith/Gameplay"]},
+      {"lever": "SLOW / GATED upgrade drip", "detail": "Gradius makes you spend N capsules to even reach a desired slot (the cursor walks Speed->Missile->Double->Laser->Option->Shield), and spending resets the cursor; you choose ONE thing at a time. R-Type gates the Wave Cannon's destructive power behind a charge you must hold (you cannot fire normal shots while charging) and gates Force level behind collecting additional crystals. Touhou gates shot-pattern changes behind discrete power breakpoints (EoSD: 8/16/32/48/64/80/96/128-MAX) so coverage only widens at fixed thresholds, not continuously.", "sources": ["https://gradius.fandom.com/wiki/Power_Meter", "https://rtype.fandom.com/wiki/Wave_Cannon", "https://en.touhouwiki.net/wiki/Embodiment_of_Scarlet_Devil/Gameplay"]},
+      {"lever": "UTILITY over raw DPS", "detail": "Most upgrades add COVERAGE, options, shields, pierce, or charge - not a single-target damage multiplier. Gradius Options duplicate your fire (more screen coverage, helps with swarms) and Shield/Force Field buys survivability; Speed-Up is positioning, not damage. R-Type Force is a movable indestructible shield AND a detachable weapon, i.e. survival + flexibility. Raiden Vulcan widens spread (2->3->4 streams) for swarm coverage while Laser concentrates for single targets - a choice, not a pure power climb. Because upgrades buy WIDTH/SURVIVAL, a fully-powered player handles MORE enemies at once but does not one-shot tanky enemies or melt bosses.", "sources": ["https://shmups.wiki/library/Raiden_II", "https://shmups.wiki/library/R-Type", "https://gradius.fandom.com/wiki/Power_Meter"]},
+      {"lever": "ENEMY DURABILITY + DENSITY outpace the gun", "detail": "Boghog: difficulty should escalate via NEW bullet patterns and overlapping waves (so the player cannot linger safely) rather than only inflating stats; and player coverage is intentionally generous so fairness comes from design, not from starving the player of power. The net effect is that even maxed, the player is pressured by quantity, overlap, and pattern complexity - not by a damage race.", "sources": ["https://shmups.wiki/library/Boghog's_bullet_hell_shmup_101", "https://cohost.org/boghog/post/5119567-difficulty-design"]}
+    ],
+    "per_game": {
+      "gradius": "Power meter cursor: Speed-Up -> Missile -> Double -> Laser -> Option(Multiple) -> Shield(Force Field), loops. You collect red capsules to MOVE the cursor, then press fire to BUY the highlighted slot (which resets the cursor). Options cap at 4 (2 in some ports). DEATH = revert to bare horizontal shot, lose everything; Gradius III Beginner peels upgrades right-to-left instead. The death-reset is the difficulty equalizer: a no-death run snowballs, but any death dumps you back to near-zero firepower against full-strength enemies, so the game stays threatening exactly when you are weakest. Loops add 50%/100% suicide bullets to raise late difficulty without changing the gun.",
+      "rtype": "Force pod = indestructible orb that attaches front/back as shield+weapon or detaches as a roaming gun; 3 levels, upgraded by collecting laser crystals. Wave Cannon = chargeable beam: hold fire to charge (you CANNOT fire normal Vulcan/Force shots while charging, only missiles continue), bigger charge = pierces/larger; once started the charge commits. Death = back to checkpoint with nothing (no weapons, Force, Bits, speed). Power is thus heavily gated by item collection + the opportunity-cost of charging, and is brutally reset on death.",
+      "raiden": "Two main weapons by color: red Vulcan (spreads to 2->3->4 streams, wide swarm coverage) vs blue Laser (individual shots -> thick concentrated beam). Level up by collecting same-color pickups; tiers are capped. Death drops your weapon level (you fall back down the tier ladder), so dying makes the next section harder rather than letting you coast. Vulcan-vs-Laser is a utility CHOICE (area vs single-target), not a pure power climb.",
+      "touhou": "Discrete Power levels with breakpoints that change the SHOT pattern and add options, e.g. EoSD upgrades at 8/16/32/48/64/80/96 and 128 (MAX, which also clears the screen to items). Integer power = number of options; max 4 options even when the gauge reads up to 5.00 in Mountain of Faith (the extra only grants a free bomb). Bombs/deaths cost power (MoF/SA power-bomb spends 1 level per bomb; bomb penalty scaled by difficulty, -50% Hard/-75% Lunatic). Deathbomb window is a tight 8 frames (~0.133s). So coverage widens only at fixed thresholds and is actively spent down by survival resources.",
+      "ikaruga": "Not an upgrade game at all - power is FIXED. Progression/pressure comes from the polarity mechanic (absorb same-color bullets to charge a homing super) and the chain system (3 same-polarity kills chain, scoring doubles 100->200->400... up to 25600 at the 9th+ chain). Stages teach the mechanic (e.g. stage 5 floods one polarity to drill rapid meter use for the final boss). Lesson for Starlance: you can create depth WITHOUT a damage ladder by adding a risk/skill mechanic on top of a flat gun.",
+      "darius": "Branching zones (fork after each boss; Darius/ Darius II/ Gaiden ~28 zones across 7 columns) where EACH zone has its own boss (the famous mechanical-sea-life bosses) and its own enemy theme. Power is a modest Shot/Bomb/Arm(shield) upgrade via colored orbs - again utility (shield) and width, kept shallow. The branching means difficulty is chosen by route, and the distinct-boss-per-zone convention is the strongest precedent for 'every world its own boss + enemy set'."
+    }
+  },
+
+  "enemy_scaling": {
+    "headline": "Later stages keep a powered player under pressure by raising (1) enemy HP, (2) spawn DENSITY and wave OVERLAP, (3) bullet count/speed, and (4) FORMATION/pattern complexity - with pattern/quantity escalation doing more work than raw HP. Boghog: increase bullet speed proportionally to fire frequency or the pattern thins out and gets easier; and prefer adding NEW patterns over just speeding old ones.",
+    "rules_of_thumb": [
+      {"rule": "Popcorn stays cheap", "detail": "Popcorn/grunt enemies should have only as much HP as their role needs (often 1-2 hits) at ALL stages - they are obstacles/filler, not damage sponges. Do not fix difficulty by bloating popcorn HP.", "source": "https://shmups.wiki/library/Boghog's_bullet_hell_shmup_101"},
+      {"rule": "Bulky enemies carry the HP growth", "detail": "Tanky/turret/carrier enemies are where per-stage HP multipliers belong - they block your shots and demand attention. But killing them must stay worthwhile vs letting them leave (don't make safe kills disproportionately dangerous).", "source": "https://shmups.wiki/library/Boghog's_bullet_hell_shmup_101"},
+      {"rule": "Speed scales WITH frequency", "detail": "When you add bullets, raise bullet speed proportionally or density drops and the screen gets easier; the goal is to keep the same fraction of the screen threatened.", "source": "https://cohost.org/boghog/post/5119567-difficulty-design"},
+      {"rule": "New patterns > bigger numbers", "detail": "Most classics escalate by introducing entirely new bullet patterns and overlapping waves rather than only inflating stats. Overlap forces constant repositioning regardless of player power.", "source": "https://shmups.wiki/library/Boghog's_bullet_hell_shmup_101"},
+      {"rule": "Vary across 5 axes", "detail": "SLYNYRD: vary enemies by Speed, HP (isolated high-HP vs grouped low-HP), Size, Movement path (lines, zig-zags, loops), and Color so each stage reads as a distinct roster.", "source": "https://www.slynyrd.com/blog/2020/12/14/pixelblog-31-shmup-sprite-design"}
+    ],
+    "no_canonical_formula_caveat": "No source provides an exact, universal HP-per-stage multiplier or bullet-density formula. The Gamasutra balance retrospective says balance was done by FEEL + heatmaps + a year of playtesting, working backward from 'maxed by the end', not from a closed-form curve. The multipliers in world_table below are therefore ENGINEERING RECOMMENDATIONS calibrated to Starlance's existing content.json (where the gun caps at maxWeapon=4 and the world-1 boss is 170 HP), NOT numbers lifted from a classic. They are a starting point to playtest, consistent with the qualitative rules above.",
+    "recommended_density_growth_for_starlance": {
+      "enemies_per_wave": "World 1 ~10-12 per wave -> World 6 ~22-30 per wave (current content.json already trends 12->22; push the top end).",
+      "wave_gap_seconds": "Tighten inter-spawn 'gap' from ~0.5s (W1) to ~0.18-0.22s (W6) AND overlap waves (start wave N+1 before wave N clears) from World 3 on, so the player cannot safely empty the screen.",
+      "bullet_speed": "enemyBulletSpeed 230 (current) -> ramp to ~300-340 by World 6, increasing alongside fire frequency, per the speed-with-frequency rule.",
+      "enemy_hp": "See per-world multipliers in world_table; tanky archetypes carry the growth, popcorn stays 1-2 hits."
+    }
+  },
+
+  "upgrade_cadence": {
+    "headline": "Real new weapons/upgrades should be SPARSE - roughly one meaningful capability step per 1-2 worlds, not per wave. The Gamasutra team explicitly cut drop rates (halved enemy crystal drops and sell-back) after testing showed players got resources too fast, and made BOSSES drop the bulk of currency so power gains land as end-of-world climaxes, not constant trickle.",
+    "principles": [
+      "Bosses (and rare mid-stage carriers) gate upgrades, not random popcorn drops. Make the genuine power step a scripted reward for clearing a world, so the player is NEVER maxed by stage 2.",
+      "Between upgrades, escalate enemies (HP, density, patterns, new enemy types, a new boss) so a world without a new weapon still feels harder.",
+      "Prefer utility/coverage upgrades (extra option, wider spread, pierce, charge, shield) over raw damage multipliers - this widens what the player can handle without trivializing single targets.",
+      "Keep a hard ceiling and a hit/death penalty so even the final upgrade tier can be lost and must be defended."
+    ],
+    "starlance_diagnosis": {
+      "problem": "content.json has dropChance=0.17 on waves of 12-22 enemies, so a player collects ~2 capsules in wave 1 alone and hits maxWeapon=4 well before the World-1 boss. Combined with boss HP rising only 170->560 (3.3x) over 6 worlds and enemy HP rising only 1->3, the maxed gun trivializes everything by World 2.",
+      "fixes": [
+        "Drop dropChance to ~0.04-0.06 and/or make capsules SCRIPTED (guaranteed drop from specific mini-carrier enemies + the boss) instead of a flat random roll on every kill.",
+        "Add a HIT/DEATH power penalty: on losing a life, drop weapon level by 1-2 (Gradius/Raiden-style); optionally drop one tier on any hit at higher difficulty. This is the missing anti-snowball lever.",
+        "Stretch the cap: keep raw-DPS tiers few (e.g. maxWeapon 4) but make each tier mostly add coverage/utility; introduce the real damage-relevant unlocks once per world per the schedule below.",
+        "Raise enemy + boss HP per world steeply (see world_table) so even a maxed gun yields the target fight lengths."
+      ]
+    }
+  },
+
+  "boss_design": {
+    "headline": "Convention: EVERY stage/world has its OWN distinct boss with a unique silhouette, theme, and a set of attack patterns; HP and pattern count escalate per world. Fight length should be PROPORTIONAL to stage length and bounded so it stays punchy.",
+    "fight_length_targets": {
+      "stage_1_boss": "~40-50 seconds (do not exceed).",
+      "mid_late_bosses": "up to ~90 seconds.",
+      "final_boss": "more wiggle room but the most fun ones stay under ~150 seconds (2.5 min).",
+      "whole_game_reference": "~25 minutes total is a commonly cited 'good length' for a shmup; size individual fights against that budget.",
+      "source": "https://shmups.system11.org/viewtopic.php?f=9&t=44816"
+    },
+    "attack_pattern_rules": [
+      {"rule": "Switch attacks frequently", "detail": "Keep the player alert by changing pattern often - Cave's DoDonPachi stage-1 boss holds any single attack no more than ~5-10 seconds before switching.", "source": "https://shmups.system11.org/viewtopic.php?f=9&t=44816"},
+      {"rule": "More varied attacks = better", "detail": "Many shmups SPLIT the boss health bar into segments so each segment = one attack pattern; the bar visibly telegraphs when the current pattern ends and the next begins (and often a new phase).", "source": "https://www.gamedeveloper.com/design/video-game-boss-design-for-shmups"},
+      {"rule": "Evolve the stage's trials", "detail": "Boss attacks should feel like an escalation of what the stage already taught (a stage with homing rockets -> a boss with homing lasers), distinct but not disconnected.", "source": "https://www.gamedeveloper.com/design/video-game-boss-design-for-shmups"},
+      {"rule": "Length proportional to stage", "detail": "Time-to-kill should scale with how long the level took; longer/later worlds justify longer, multi-phase bosses.", "source": "https://www.gamedeveloper.com/design/video-game-boss-design-for-shmups"}
+    ],
+    "hp_vs_dps_method": "No source gives a boss-HP formula; the practical method (Gamasutra) is to work BACKWARD from a target fight length: boss_HP approx = player_effective_DPS_at_that_world x target_seconds. So size each boss's HP from the player's EXPECTED DPS when they reach that world (which depends on how many upgrades you have GATED to that point - the whole reason to keep upgrades sparse). The world_table expresses boss HP as a multiple of the World-1 boss so you can re-derive absolute numbers once you measure real DPS-per-tier in the engine, then verify the fights land in the 40-50s / up-to-90s / sub-150s windows.",
+    "starlance_diagnosis": "Current bosses share one pattern vocabulary (fan/ring/spiral/spray/cross) and one 'WARDEN/CORE/DREADNOUGHT' family with HP 170->560. Recommendation: give each world a thematically distinct boss (own name + silhouette + a signature pattern unique to that world's gimmick), split the HP bar into one segment per pattern, hold each attack ~6-9s, and scale HP via the multipliers below so fights hit the target windows against a sparsely-upgraded gun."
+  },
+
+  "enemy_variety": {
+    "headline": "Strong convention (Gradius, R-Type, Darius especially): each stage/world has its OWN enemy roster themed to that biome - not the same enemies recolored. SLYNYRD advises introducing units that 'better fit the theme of the specific stage' and varying speed/HP/size/movement/color so each world reads as a fresh set.",
+    "evidence": [
+      "Darius: sea-life-inspired enemies and a DIFFERENT boss per zone are the series' signature - the clearest precedent for per-world rosters + per-world bosses.",
+      "R-Type / Gradius: organic-vs-mechanical biome stages (e.g. living-tissue/bio levels vs mechanical fortress levels) each bring their own enemy archetypes and hazards.",
+      "SLYNYRD: archetype ROLES (popcorn, fast darters, turrets/area-denial, tanky high-HP, carriers, mini-bosses) recur, but their SKIN, theme, and behavior should be re-themed per stage; 'familiar types can evolve with subtle iterations to keep things fresh.'"
+    ],
+    "sources": ["https://shmups.wiki/library/Darius", "https://www.slynyrd.com/blog/2020/12/14/pixelblog-31-shmup-sprite-design", "https://shmups.wiki/library/R-Type"],
+    "starlance_diagnosis": "Current content.json reuses exactly 4 kinds (grunt/darter/weaver/tank) in every world, only re-counted/re-HP'd. Recommendation: keep ~4 ROLES (swarm, darter, weaver/area, tank/turret, + a per-world special) but give each world its own named, themed variants with a behavior twist tied to the biome (see world_table). This is the single biggest 'feel' upgrade for the same engine."
+  },
+
+  "music_feel": {
+    "headline": "Per-stage music is a convention: each world gets its own track, and the energy/intensity escalates with the worlds. For space-shmup stage music the established vibe is DRIVING, allegro 4/4, minor key with frequent relative-major lifts (forward momentum), synth-led with arpeggios.",
+    "conventions": [
+      {"item": "Tempo / meter", "detail": "Allegro, 4/4, heavy accent on every beat to push the player 'into the danger zone'. (No single canonical BPM in the source; 'allegro' ~120-168 BPM. A driving ~140-160 BPM arpeggio-forward track is squarely in genre.)", "source": "https://www.gamedeveloper.com/audio/getting-making-game-music-that-fits---classic-genre-series---scifi-shmup-"},
+      {"item": "Key", "detail": "Start in a MINOR key, visit the relative MAJOR often for forward drive so the melody doesn't sit.", "source": "https://www.gamedeveloper.com/audio/getting-making-game-music-that-fits---classic-genre-series---scifi-shmup-"},
+      {"item": "Instrumentation", "detail": "Synth bass foundation + electric piano + metal guitar strums + a 'vicious' techno drum kit; synth strings occasionally for polish; electric guitar or synth brass for leads. Resonance/filter sweeps on buzzy synths; keep a subtle buzz on fade-outs.", "source": "https://www.gamedeveloper.com/audio/getting-making-game-music-that-fits---classic-genre-series---scifi-shmup-"},
+      {"item": "Rhythmic hooks", "detail": "Fast 1-beat triplets (four in a row across a measure) into slower notes; cap phrases with quick sixteenth-note runs into the next motif; classic 8-bit-style rapid arpeggios for retro flavor.", "source": "https://www.gamedeveloper.com/audio/getting-making-game-music-that-fits---classic-genre-series---scifi-shmup-"},
+      {"item": "Genre palette", "detail": "Sci-fi arcade shooters draw on techno/metal/electronica; retro flavor from chiptune + lo-fi samples and arpeggios.", "source": "https://www.gamedeveloper.com/audio/getting-making-game-music-that-fits---classic-genre-series---scifi-shmup-"}
+    ],
+    "starlance_procedural_brief": "For an ORIGINAL Web Audio track per world: 4/4, minor scale with occasional relative-major chord, target ~140-160 BPM, driving 8th/16th synth-bass pulse + a fast arpeggiator (saw/square through a resonant low-pass with a slow filter sweep), four-on-the-floor or busy techno kit, sparse lead motif. Escalate per world: raise BPM slightly (W1 ~140 -> W6 ~158-162), add an arpeggio layer / brighter lead / more drum fills each world, and shift mode darker for the final world (e.g. Phrygian/harmonic-minor color) to signal the core. Boss sub-theme: same key, +driving toms/double-time hat, a held tension drone."
+  },
+
+  "world_table": [
+    {
+      "world": 1,
+      "name": "ASTEROID FRINGE",
+      "theme": "Mined-out asteroid belt at the system's edge: drifting rock, derelict mining rigs, slow tumbling debris. Calm tutorial-grade biome - sparse, readable, teaches movement and basic dodging.",
+      "enemies": [
+        {"name": "Chip Drone", "role": "popcorn/swarm", "hp": 1, "behavior": "Drifts down in lazy sine columns, fires a single slow aimed shot. Pure filler/coverage practice."},
+        {"name": "Ore Skiff", "role": "darter", "hp": 2, "behavior": "Dives in fast zig-zag from a screen edge, one straight shot, leaves quickly - teaches lead-aim."},
+        {"name": "Rubble Lobber", "role": "area", "hp": 2, "behavior": "Hangs at top, lobs a slow 3-shot spread; harmless alone, annoying in pairs."},
+        {"name": "Pylon Turret", "role": "mini-tank/turret", "hp": 4, "behavior": "Tanky stationary rig on a slow march-down, aimed fast single shots; blocks your fire so it demands attention."}
+      ],
+      "boss": {
+        "name": "WARDEN MK-I (Belt Sentinel)",
+        "hp_x_world1": 1.0,
+        "suggested_abs_hp_ref": "baseline (content.json currently 170) - tune so the fight is ~40-50s vs the STARTING gun, not a maxed one",
+        "phases": 2,
+        "patterns": [
+          "Aimed 3-fan volleys (telegraphed, wide gaps) - the 'learn to read a boss' pattern",
+          "Slow rotating 8-ring that you weave through",
+          "Brief sweep-spray as a phase-2 pressure beat"
+        ]
+      },
+      "weapon_upgrade": "STARTING WEAPON ONLY (single forward Pulse, level 1). No real upgrade this world beyond at most reaching Pulse Lv2 (slightly wider) from ONE scripted capsule near the boss. Player should clear World 1 NOT maxed.",
+      "enemy_hp_mult_vs_world1": 1.0,
+      "target_player_power": "Lowest. Pulse Lv1-2 only. World should feel learnable but the Pylon Turret + boss already force real dodging.",
+      "waves_before_boss": 12
+    },
+    {
+      "world": 2,
+      "name": "DRIFT CORRIDOR",
+      "theme": "Abandoned shipping lane: derelict freighters, blinking buoys, slow-rotating cargo rings forming lane-narrowing hazards. Introduces tighter spaces and crossfire.",
+      "enemies": [
+        {"name": "Buoy Wisp", "role": "popcorn/swarm", "hp": 1, "behavior": "Streams in V-formation swoops; straight shots, high count - first real swarm coverage test."},
+        {"name": "Lane Weaver", "role": "area", "hp": 2, "behavior": "Slow sine drift while emitting a 3-shot spread on a timer; in numbers it lays a bullet curtain."},
+        {"name": "Cutter Skiff", "role": "darter", "hp": 2, "behavior": "Fast zig-zag dive with aimed-fast shots; crosses the screen to flank from both sides."},
+        {"name": "Freight Bastion", "role": "tank/turret", "hp": 5, "behavior": "High-HP hull section, marches down slowly, aimed-fast shots; the world's damage sponge that a non-maxed gun must commit to."}
+      ],
+      "boss": {
+        "name": "GRINDER MK-II (Cargo Reaver)",
+        "hp_x_world1": 1.5,
+        "phases": 3,
+        "patterns": [
+          "5-fan aimed volleys (denser than W1's 3-fan)",
+          "Rotating 8-ring + a second offset ring on phase 2 (overlap)",
+          "Lane-sweep spray that walks across the corridor, forcing horizontal repositioning"
+        ]
+      },
+      "weapon_upgrade": "FIRST REAL UPGRADE - choose a fire MODE: SPREAD (Vulcan-style, +1 stream / wider) for swarms, OR LANCE (concentrated piercing beam) for tanks. Granted as a scripted boss drop. This is a UTILITY choice (Raiden-style), not a flat DPS bump - sets the player's identity without trivializing the next world.",
+      "enemy_hp_mult_vs_world1": 1.4,
+      "target_player_power": "Low-mid. Pulse + one mode-tier. Freight Bastion + denser swarms should keep pressure; player is clearly NOT maxed.",
+      "waves_before_boss": 16
+    },
+    {
+      "world": 3,
+      "name": "NEBULA REACH",
+      "theme": "Glowing ion nebula: drifting gas curtains that partially obscure sightlines, charged particle pockets, bioluminescent micro-fauna. First world where the BACKGROUND itself adds pressure (reduced readability) - bump bullet contrast.",
+      "enemies": [
+        {"name": "Gloom Mite", "role": "popcorn/swarm", "hp": 2, "behavior": "Dense sine swarms, now 2-HP; aimed-slow shots - first time popcorn takes two hits, so a Lance build feels the tradeoff."},
+        {"name": "Ion Weaver", "role": "area", "hp": 2, "behavior": "Sine drift firing 3-spread that drifts WITH the nebula; overlapping weavers build a real curtain."},
+        {"name": "Spark Darter", "role": "darter", "hp": 2, "behavior": "Very fast zig-zag, aimed-fast; darts out of the gas with little telegraph."},
+        {"name": "Charge Node", "role": "tank/special", "hp": 5, "behavior": "Stationary, slowly CHARGES then releases a short radial burst (telegraphed glow) - area-denial that punishes camping."}
+      ],
+      "boss": {
+        "name": "SIEGE-CORE (Nebula Heart)",
+        "hp_x_world1": 2.0,
+        "phases": 4,
+        "patterns": [
+          "5-fan + ring combo",
+          "Rotating spiral arms (new pattern: continuous spiral you orbit)",
+          "Radial spray bursts synced to a charge tell",
+          "Phase-4 overlap of spiral + aimed fan"
+        ]
+      },
+      "weapon_upgrade": "OPTION/DRONE #1 - a single trailing Option (Gradius-style) that mirrors your fire for +coverage. Utility, not raw single-target DPS. Hard-cap announced here: max 2 Options total across the game. Scripted boss drop.",
+      "enemy_hp_mult_vs_world1": 1.8,
+      "target_player_power": "Mid. Pulse + mode + 1 Option. Reduced visibility + charge bursts + 2-HP popcorn keep a non-maxed gun honest.",
+      "waves_before_boss": 18
+    },
+    {
+      "world": 4,
+      "name": "ION STORM",
+      "theme": "Violent plasma storm front: lightning sheets, EMP arcs, fast-scrolling charged clouds. High-energy, high-tempo world - the pace and bullet speed jump noticeably.",
+      "enemies": [
+        {"name": "Storm Wasp", "role": "darter/swarm hybrid", "hp": 2, "behavior": "Fast zig-zag in packs, aimed-fast; the swarm and darter roles merge - constant flanking pressure."},
+        {"name": "Arc Weaver", "role": "area", "hp": 2, "behavior": "Sine drift firing 3-spread on a fast timer; pairs lay overlapping arcs of bullets."},
+        {"name": "Tempest Hulk", "role": "tank", "hp": 5, "behavior": "Marches down with aimed-fast shots and soaks damage; appears in 2s now to split the player's fire."},
+        {"name": "EMP Lash", "role": "special/hazard", "hp": 3, "behavior": "Sweeps horizontally trailing a short lightning whip (a moving wall segment) - forces vertical dodging, not just horizontal."}
+      ],
+      "boss": {
+        "name": "STORMBRINGER (Tempest Engine)",
+        "hp_x_world1": 2.6,
+        "phases": 4,
+        "patterns": [
+          "Dense 5-fan into a 12-ring (ring count steps up here)",
+          "Spiral + cross overlap",
+          "Walking spray that tracks the player",
+          "Phase-4 'storm': fast aimed bursts at elevated bullet speed"
+        ]
+      },
+      "weapon_upgrade": "CHARGE SHOT (R-Type Wave-Cannon-style) - hold fire to charge a piercing burst; while charging your normal fire is reduced (opportunity cost), and it commits once started. Adds a high-skill burst-DPS tool for tanks/bosses WITHOUT raising sustained DPS. Scripted boss drop.",
+      "enemy_hp_mult_vs_world1": 2.4,
+      "target_player_power": "Mid-high. Pulse + mode + 1 Option + Charge. Faster bullets + EMP walls + paired tanks mean even a good build is worked hard.",
+      "waves_before_boss": 20
+    },
+    {
+      "world": 5,
+      "name": "GRAVE TIDE",
+      "theme": "Ship graveyard around a dead star / collapsing wreck-field: hulking derelicts, gravitational eddies that drag bullets, eerie low-light. Dense, claustrophobic, attrition-focused world.",
+      "enemies": [
+        {"name": "Wraith Mote", "role": "swarm", "hp": 2, "behavior": "Huge sine swarms (highest counts so far), aimed-fast; pure overlap pressure."},
+        {"name": "Salvage Weaver", "role": "area", "hp": 3, "behavior": "Now 3-HP; 3-to-5 spread on a tight timer - curtains are thicker and survive a glancing Spread build."},
+        {"name": "Tomb Hulk", "role": "tank", "hp": 6, "behavior": "Very high HP, marches in 3s with 5-spread fire; the world's wall - Charge/Lance builds shine, Spread struggles to clear in time."},
+        {"name": "Gravewell Turret", "role": "special/area-denial", "hp": 5, "behavior": "Stationary, fires slow-but-curving (gravity-dragged) shots that bend toward the player - dodging requires reading curvature."}
+      ],
+      "boss": {
+        "name": "VOID HIEROPHANT (Tidewalker)",
+        "hp_x_world1": 3.2,
+        "phases": 5,
+        "patterns": [
+          "5-fan + 12-ring opener",
+          "Twin counter-rotating spirals",
+          "7-spread walking spray (denser spray tier)",
+          "Cross-pattern lattice you thread",
+          "Phase-5 desperation: all-axis bursts with gravity-curved bullets"
+        ]
+      },
+      "weapon_upgrade": "OPTION/DRONE #2 (final Option, hits the 2-Option cap) AND a SHIELD/FORCE-FIELD charge that absorbs ~1-2 hits before breaking (Gradius shield / R-Type Force-style survival). Survival utility, NOT damage - this is the last big 'kit' addition. Scripted boss drop.",
+      "enemy_hp_mult_vs_world1": 3.2,
+      "target_player_power": "High. Pulse + mode + 2 Options + Charge + Shield. Near full kit but enemy HP/density has scaled to match - attrition keeps it threatening.",
+      "waves_before_boss": 22
+    },
+    {
+      "world": 6,
+      "name": "STARLANCE CORE",
+      "theme": "The enemy's planetoid-scale superweapon interior: glowing reactor veins, mechanical-organic corridors, the 'Starlance' beam spine. Maximum density, maximum tempo, darkest palette - the finale.",
+      "enemies": [
+        {"name": "Core Sentry", "role": "swarm", "hp": 3, "behavior": "Relentless swoop+sine swarms at 3-HP and the tightest spawn gaps; spread fire - overlapping waves never let the screen empty."},
+        {"name": "Reactor Weaver", "role": "area", "hp": 3, "behavior": "5-spread on a fast timer in big numbers; the densest curtains in the game."},
+        {"name": "Bulwark Hulk", "role": "tank", "hp": 7, "behavior": "Highest HP; marches in groups with 5-spread; demands Charge/Lance commitment while swarms harass."},
+        {"name": "Lance Acolyte", "role": "elite/mini-boss-add", "hp": 5, "behavior": "Fast aimed-fast elite that periodically fires a short straight BEAM segment (telegraphed) - a mini-Starlance hazard that previews the boss."}
+      ],
+      "boss": {
+        "name": "OMEGA DREADNOUGHT (Starlance Prime)",
+        "hp_x_world1": 4.0,
+        "suggested_note": "Final boss - allow a longer multi-phase fight but keep it under ~150s of actual DPS time per the genre guideline; use the segmented HP bar so each phase reads clearly.",
+        "phases": 5,
+        "patterns": [
+          "Full 5-fan + 12-ring opening salvo",
+          "Charging STARLANCE BEAM sweep (signature finale attack: a wide telegraphed beam that walks across the arena - dodge by lane, not by nudge)",
+          "Twin spirals + cross lattice overlap",
+          "7-spray walking curtains",
+          "Phase-5 'core meltdown': every prior pattern layered at peak bullet speed; screen-clear vulnerability windows between salvos"
+        ]
+      },
+      "weapon_upgrade": "NO NEW WEAPON - the finale tests mastery of the full kit. At most a single MAX-tier polish (e.g. Charge fully charged clears popcorn / brief overdrive after a flawless segment), Touhou/Ikaruga-style: depth from the MECHANIC and the boss, not another damage step.",
+      "enemy_hp_mult_vs_world1": 4.0,
+      "target_player_power": "Maximum kit but HARD-PRESSED. Full build (Pulse + mode + 2 Options + Charge + Shield) is exactly enough to survive if played well; enemy HP (4x), density, bullet speed and the Starlance beam keep it from ever feeling trivial. The hit/death penalty (drop a tier) makes any mistake bite.",
+      "waves_before_boss": 26
+    }
+  ],
+
+  "weapon_schedule": {
+    "design_intent": "Sparse, utility-first, hard-capped, with a death/hit penalty so the player is NEVER maxed early and every world still threatens. One genuine capability step per world (Worlds 2-5), with Worlds 1 and 6 as bookends (learn / master). All real steps are SCRIPTED boss drops, not random popcorn drops.",
+    "starting_weapon": "PULSE Lv1 - single forward shot, modest fire rate (engine fireCooldown ~0.135). Lv2 (slightly wider/faster) reachable from ONE scripted capsule in World 1; that is the ONLY power gain in World 1.",
+    "unlock_sequence": [
+      {"world": 1, "unlock": "Pulse Lv1 (start) -> Pulse Lv2 (one scripted capsule). No mode, no options.", "type": "base"},
+      {"world": 2, "unlock": "FIRE MODE choice: SPREAD (wide, +stream, anti-swarm) vs LANCE (piercing concentrated, anti-tank). Utility identity, not flat DPS.", "type": "utility-choice"},
+      {"world": 3, "unlock": "OPTION/DRONE #1 (trailing mirror of your fire, +coverage). Cap announced: max 2 Options.", "type": "coverage"},
+      {"world": 4, "unlock": "CHARGE SHOT (hold-to-charge piercing burst; reduces normal fire while charging; commits once started). Burst DPS, not sustained.", "type": "skill-burst"},
+      {"world": 5, "unlock": "OPTION/DRONE #2 (final option, hits 2-cap) + SHIELD/FORCE-FIELD charge (absorbs ~1-2 hits). Survival utility.", "type": "coverage+survival"},
+      {"world": 6, "unlock": "No new weapon - mastery test; at most a MAX-tier polish (charged-shot popcorn clear / brief flawless-segment overdrive).", "type": "mastery"}
+    ],
+    "hard_caps": {
+      "raw_dps_tiers": "Keep few (Pulse Lv1->Lv2 only as pure damage; everything else is coverage/burst/survival). Mirrors Boghog's 'a level-10 shot can't be 10x level-1'.",
+      "options": "Max 2 total (vs Gradius 4 / Touhou 4 - tighter because Starlance gun is already broad). Mirror fire, do not multiply single-target DPS arbitrarily.",
+      "charge": "Single charge tier; charging costs normal-fire uptime (opportunity cost, R-Type-style).",
+      "shield": "Absorbs a small fixed number of hits then must recharge/re-earn; never permanent invulnerability."
+    },
+    "penalty_rule": {
+      "headline": "THE missing anti-snowball lever for Starlance.",
+      "on_death": "Drop weapon by 1-2 steps (lose Pulse tier and/or one Option; lose Shield charge; Charge stays but normal fire is weakened) - Gradius/Raiden/R-Type precedent. The player must re-earn it from the next scripted capsules.",
+      "on_hit_optional_higher_difficulty": "Optionally drop ONE tier (e.g. lose an Option) on any non-shielded hit, scaled by difficulty like Touhou's bomb penalty (full on Hard, reduced on Normal). Keeps skilled play rewarded and trivialization impossible.",
+      "why": "Without this, ANY upgrade schedule eventually snowballs once the player stops dying. The penalty is what makes the per-world HP/density scaling actually bite."
+    },
+    "tuning_checklist_for_engine": [
+      "Lower content.json dropChance from 0.17 to ~0.04-0.06 (or replace random drops with scripted mini-carrier + boss drops) so the player cannot hit maxWeapon=4 in World 1.",
+      "Re-derive boss HP from MEASURED player DPS per tier x target seconds (W1 boss 40-50s vs STARTING gun; later bosses up to ~90s; final < ~150s). The hp_x_world1 multiples (1.0 / 1.5 / 2.0 / 2.6 / 3.2 / 4.0) are the relative shape; set absolutes after measuring DPS.",
+      "Apply enemy_hp_mult_vs_world1 (1.0 / 1.4 / 1.8 / 2.4 / 3.2 / 4.0) mostly to tank/special archetypes; keep popcorn at 1-3 HP max.",
+      "Tighten wave 'gap' and OVERLAP waves from World 3 on; raise enemyBulletSpeed ~230 -> ~300-340 by World 6 in step with fire frequency.",
+      "Lengthen stages: waves_before_boss 12 / 16 / 18 / 20 / 22 / 26 (current content.json is only 3-5 wave-entries per world - expand to these counts).",
+      "Give each world its own NAMED themed enemy set (above) instead of recoloring grunt/darter/weaver/tank.",
+      "Add the death/hit penalty in game logic - this is the single highest-impact fix for 'too strong too fast'."
+    ]
+  },
+
+  "caveats": [
+    "All EXACT numbers attributed to a classic (Gradius Options=4, Touhou EoSD breakpoints 8/16/32/48/64/80/96/128, Touhou 4-option/5.00-power, MoF power-bomb cost, deathbomb 8 frames, R-Type Force 3 levels, Raiden Vulcan 2/3/4 streams, boss fight 40-50s/~90s/<150s, ~25min game, attack 5-10s, Ikaruga chain 100->25600) are sourced from the URLs listed and were taken from search snippets / fetched wiki pages. Two fan wikis (touhou.fandom, rtype.fandom) and the system11 forum returned 403/418 to direct WebFetch; their specific figures here come from the search-engine extractions of those same pages and corroborating wiki text - flagged as such, not invented.",
+    "No source provides a universal closed-form HP-per-stage or bullet-density formula; the Gamasutra balance retrospective explicitly describes balancing by FEEL, heatmaps, and ~a year of playtesting. Therefore ALL Starlance multipliers, wave counts, HP figures, BPM targets, and the upgrade schedule are ENGINEERING RECOMMENDATIONS calibrated to Starlance's existing content.json and the qualitative rules from the sources - they are starting points to PLAYTEST, not numbers lifted from a specific classic.",
+    "Boss-design article (gamedeveloper.com) on direct fetch turned out to be a philosophy piece WITHOUT the second-precision numbers; the concrete 40-50s / 90s / 150s / 25-min / 5-10s figures come specifically from the Giest118 bullet-hell-boss guide as surfaced in search (system11 forum thread t=44816, which 403'd on direct fetch). Treated as well-attributed community guidance, not a hard standard."
+  ]
+}

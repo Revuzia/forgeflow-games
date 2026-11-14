@@ -1,0 +1,221 @@
+{
+ "clip": "F:/games/forgeflow-games-assets/_downloaded/mixamo/animations/Creature_Pack/mutant punch.fbx",
+ "body": "F:/games/forgeflow-games-assets/_downloaded/mixamo/characters/Ch44_nonPBR.fbx",
+ "frames": [
+  5,
+  11,
+  19
+ ],
+ "ratio": 0.9829920239855412,
+ "hidden": [],
+ "identity_test": {
+  "ok": true,
+  "worst": 6.258487701416016e-07,
+  "bone": "mixamorig:RightHandThumb3"
+ },
+ "metrics": {
+  "xbot": {
+   "5": {
+    "lowest_vertex_z_m": -0.003,
+    "striker_rel_hips_over_hipheight": [
+     -0.389,
+     0.062,
+     0.003
+    ],
+    "hips_z_m": 0.8406
+   },
+   "11": {
+    "lowest_vertex_z_m": -0.002,
+    "striker_rel_hips_over_hipheight": [
+     0.563,
+     -0.291,
+     0.21
+    ],
+    "hips_z_m": 0.7907
+   },
+   "19": {
+    "lowest_vertex_z_m": -0.0033,
+    "striker_rel_hips_over_hipheight": [
+     0.575,
+     -0.086,
+     0.186
+    ],
+    "hips_z_m": 0.7767
+   }
+  },
+  "naive_blender": {
+   "5": {
+    "lowest_vertex_z_m": 0.0037,
+    "striker_rel_hips_over_hipheight": [
+     -0.421,
+     -0.131,
+     0.091
+    ],
+    "hips_z_m": 0.8302
+   },
+   "11": {
+    "lowest_vertex_z_m": -0.044,
+    "striker_rel_hips_over_hipheight": [
+     0.594,
+     -0.375,
+     0.435
+    ],
+    "hips_z_m": 0.7811
+   },
+   "19": {
+    "lowest_vertex_z_m": -0.0469,
+    "striker_rel_hips_over_hipheight": [
+     0.633,
+     -0.1,
+     0.36
+    ],
+    "hips_z_m": 0.7688
+   }
+  },
+  "naive_three_raw": {
+   "5": {
+    "lowest_vertex_z_m": -0.0184,
+    "striker_rel_hips_over_hipheight": [
+     -0.41,
+     -0.01,
+     0.113
+    ],
+    "hips_z_m": 0.8406
+   },
+   "11": {
+    "lowest_vertex_z_m": -0.0111,
+    "striker_rel_hips_over_hipheight": [
+     0.538,
+     -0.33,
+     0.329
+    ],
+    "hips_z_m": 0.7907
+   },
+   "19": {
+    "lowest_vertex_z_m": -0.0113,
+    "striker_rel_hips_over_hipheight": [
+     0.58,
+     -0.104,
+     0.29
+    ],
+    "hips_z_m": 0.7767
+   }
+  },
+  "naive_three": {
+   "5": {
+    "lowest_vertex_z_m": -0.0388,
+    "striker_rel_hips_over_hipheight": [
+     -0.442,
+     -0.028,
+     0.144
+    ],
+    "hips_z_m": 0.8263
+   },
+   "11": {
+    "lowest_vertex_z_m": -0.0355,
+    "striker_rel_hips_over_hipheight": [
+     0.549,
+     -0.363,
+     0.361
+    ],
+    "hips_z_m": 0.7772
+   },
+   "19": {
+    "lowest_vertex_z_m": -0.039,
+    "striker_rel_hips_over_hipheight": [
+     0.606,
+     -0.129,
+     0.321
+    ],
+    "hips_z_m": 0.7635
+   }
+  },
+  "retarget_dw": {
+   "5": {
+    "lowest_vertex_z_m": 0.2045,
+    "striker_rel_hips_over_hipheight": [
+     -0.409,
+     -0.063,
+     0.091
+    ],
+    "hips_z_m": 1.0369
+   },
+   "11": {
+    "lowest_vertex_z_m": 0.1918,
+    "striker_rel_hips_over_hipheight": [
+     0.566,
+     -0.333,
+     0.31
+    ],
+    "hips_z_m": 0.9878
+   },
+   "19": {
+    "lowest_vertex_z_m": 0.1892,
+    "striker_rel_hips_over_hipheight": [
+     0.585,
+     -0.095,
+     0.269
+    ],
+    "hips_z_m": 0.9741
+   }
+  },
+  "retarget": {
+   "5": {
+    "lowest_vertex_z_m": -0.0061,
+    "striker_rel_hips_over_hipheight": [
+     -0.409,
+     -0.063,
+     0.091
+    ],
+    "hips_z_m": 0.8263
+   },
+   "11": {
+    "lowest_vertex_z_m": -0.0188,
+    "striker_rel_hips_over_hipheight": [
+     0.566,
+     -0.333,
+     0.31
+    ],
+    "hips_z_m": 0.7772
+   },
+   "19": {
+    "lowest_vertex_z_m": -0.0214,
+    "striker_rel_hips_over_hipheight": [
+     0.585,
+     -0.095,
+     0.269
+    ],
+    "hips_z_m": 0.7635
+   }
+  },
+  "hybrid": {
+   "5": {
+    "lowest_vertex_z_m": -0.0061,
+    "striker_rel_hips_over_hipheight": [
+     -0.409,
+     -0.063,
+     0.091
+    ],
+    "hips_z_m": 0.8263
+   },
+   "11": {
+    "lowest_vertex_z_m": -0.0188,
+    "striker_rel_hips_over_hipheight": [
+     0.566,
+     -0.333,
+     0.31
+    ],
+    "hips_z_m": 0.7772
+   },
+   "19": {
+    "lowest_vertex_z_m": -0.0214,
+    "striker_rel_hips_over_hipheight": [
+     0.585,
+     -0.095,
+     0.269
+    ],
+    "hips_z_m": 0.7635
+   }
+  }
+ }
+}

@@ -1,0 +1,80 @@
+{
+ "name": "torch_sconce",
+ "file": "torch_sconce.glb",
+ "kind": "prop",
+ "bytes": 112380,
+ "tris": 696,
+ "tris_budget": 3000,
+ "tris_ok": true,
+ "bones": 0,
+ "clips": [],
+ "bounds": {
+  "min": [
+   -0.12,
+   -0.058,
+   -0.0
+  ],
+  "max": [
+   0.12,
+   0.92,
+   0.331
+  ],
+  "size": [
+   0.24,
+   0.978,
+   0.331
+  ]
+ },
+ "pivot": "the wall plate: origin on the wall plane at the plate base; the torch head is 0.26 m out (glTF +Z) at 0.9 m",
+ "front": "+Z (glTF) \u2014 the face that looks into the room",
+ "materials": [
+  "torch_sconce",
+  "torch_sconce_ember"
+ ],
+ "nodes": [
+  "torch_sconce"
+ ],
+ "textures": {
+  "atlas": 512,
+  "maps": [
+   "albedo (sRGB, webp)",
+   "normal (tangent, OpenGL +Y, webp)",
+   "orm (R=occlusion G=roughness B=metallic, webp)"
+  ]
+ },
+ "notes": [
+  "shield back plate, forged arm, twin ring holder, oak torch with a crimson wrap and an ember core (torch_sconce_ember slot)",
+  "keep.js torches are 1.0 m tall decos at 2.5-3.5 m: hang this with its plate base at (torch centre - 0.5)"
+ ],
+ "reimport": {
+  "meshes": [
+   "torch_sconce"
+  ],
+  "tris": 696,
+  "bones": 0,
+  "clips": [],
+  "images": [
+   [
+    "torch_sconce_albedo",
+    512,
+    512
+   ],
+   [
+    "torch_sconce_normal",
+    512,
+    512
+   ],
+   [
+    "torch_sconce_orm",
+    512,
+    512
+   ]
+  ],
+  "materials": [
+   "torch_sconce",
+   "torch_sconce_ember"
+  ]
+ },
+ "reimport_ok": true,
+ "seconds": 38.3
+}

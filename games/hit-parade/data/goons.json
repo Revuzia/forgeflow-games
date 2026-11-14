@@ -1,0 +1,736 @@
+{
+ "version": 2,
+ "generated_by": "tools/goons_data.py (lane ASSETS) - do not hand-edit",
+ "_doc": [
+  "BRAWL BREAK goons (CONTRACT 32). ids = system.json brawl.kinds order = the goon GLB stems in art/gltf/fighters/ and the data/clips/<id>.clips.json stems. Each goon carries the 34 shared system clips (CONTRACT 6.2) + goon_shove, goon_haymaker, goon_kick, goon_taunt.",
+  "moves.<name> = CONTRACT 5.2 Move objects: system.json brawl.moves frame data + THAT goon's measured geometry (anim.warp startup -> clip contact, one box at the measured effector, move = root travel, rangeM = start range). weights = relative AI pick odds when a token is granted. taunt = the clip a goon may play between tokens (not driven by the sim yet).",
+  "hp / walk are copies of system.json brawl.kinds (the sim reads those).",
+  "units: frames 60 Hz, metres fighter-local (x forward, y up), damage in HP points."
+ ],
+ "ids": [
+  "goon_hardhat",
+  "goon_security",
+  "goon_medic"
+ ],
+ "moveNames": [
+  "shove",
+  "haymaker",
+  "kick"
+ ],
+ "goons": {
+  "goon_hardhat": {
+   "name": "HARDHAT",
+   "role": "stagehand bruiser (hard hat, hi-vis vest)",
+   "body": "Ch17_nonPBR",
+   "glb": "art/gltf/fighters/goon_hardhat.glb",
+   "clips": "data/clips/goon_hardhat.clips.json",
+   "heightM": 1.95,
+   "hp": 2400,
+   "walk": 1.5,
+   "weights": {
+    "shove": 2,
+    "haymaker": 3,
+    "kick": 1
+   },
+   "taunt": "goon_taunt",
+   "tauntDur": 2.5333,
+   "moves": {
+    "shove": {
+     "kind": "normal",
+     "input": "5M",
+     "strength": "M",
+     "startup": 32,
+     "active": 4,
+     "recovery": 30,
+     "damage": 350,
+     "hitstop": 11,
+     "hitstun": 18,
+     "blockstun": 14,
+     "guard": "HL",
+     "pushback": {
+      "hit": 0.9,
+      "block": 0.7
+     },
+     "name": "Two-Hand Shove",
+     "boxes": [
+      {
+       "f": [
+        32,
+        35
+       ],
+       "x": 0.71,
+       "y": 1.477,
+       "w": 0.92,
+       "h": 0.3
+      }
+     ],
+     "move": [
+      [
+       0,
+       0.0
+      ],
+      [
+       32,
+       0.112
+      ],
+      [
+       66,
+       0.084
+      ]
+     ],
+     "anim": {
+      "clip": "goon_shove",
+      "warp": [
+       [
+        0,
+        0.0
+       ],
+       [
+        32,
+        0.5
+       ],
+       [
+        66,
+        1.1333
+       ]
+      ]
+     },
+     "rangeM": 1.13,
+     "effector": {
+      "bone": "RightHand",
+      "at": [
+       0.9697,
+       1.4774
+      ]
+     },
+     "_clip": {
+      "dur": 1.1333,
+      "contact": 0.5
+     }
+    },
+    "haymaker": {
+     "kind": "normal",
+     "input": "5H",
+     "strength": "H",
+     "startup": 45,
+     "active": 5,
+     "recovery": 40,
+     "damage": 600,
+     "hitstop": 13,
+     "hitstun": 24,
+     "blockstun": 16,
+     "guard": "HL",
+     "pushback": {
+      "hit": 0.45,
+      "block": 0.5
+     },
+     "name": "Haymaker",
+     "boxes": [
+      {
+       "f": [
+        45,
+        49
+       ],
+       "x": 0.687,
+       "y": 1.256,
+       "w": 0.874,
+       "h": 0.35
+      }
+     ],
+     "move": [
+      [
+       0,
+       0.0
+      ],
+      [
+       45,
+       0.099
+      ],
+      [
+       90,
+       0.074
+      ]
+     ],
+     "anim": {
+      "clip": "goon_haymaker",
+      "warp": [
+       [
+        0,
+        0.0
+       ],
+       [
+        45,
+        0.4333
+       ],
+       [
+        90,
+        1.2
+       ]
+      ]
+     },
+     "rangeM": 1.07,
+     "effector": {
+      "bone": "RightHand",
+      "at": [
+       0.8744,
+       1.2565
+      ]
+     },
+     "_clip": {
+      "dur": 1.2,
+      "contact": 0.4333
+     }
+    },
+    "kick": {
+     "kind": "normal",
+     "input": "6M",
+     "strength": "M",
+     "startup": 36,
+     "active": 5,
+     "recovery": 40,
+     "damage": 500,
+     "hitstop": 11,
+     "hitstun": 20,
+     "blockstun": 14,
+     "guard": "HL",
+     "pushback": {
+      "hit": 0.6,
+      "block": 0.55
+     },
+     "name": "Push Kick",
+     "boxes": [
+      {
+       "f": [
+        36,
+        40
+       ],
+       "x": 0.706,
+       "y": 1.187,
+       "w": 0.913,
+       "h": 0.3
+      }
+     ],
+     "move": [
+      [
+       0,
+       0.0
+      ],
+      [
+       36,
+       0.339
+      ],
+      [
+       81,
+       -0.003
+      ]
+     ],
+     "anim": {
+      "clip": "goon_kick",
+      "warp": [
+       [
+        0,
+        0.0
+       ],
+       [
+        36,
+        0.4667
+       ],
+       [
+        81,
+        1.0667
+       ]
+      ]
+     },
+     "rangeM": 1.35,
+     "effector": {
+      "bone": "RightFoot",
+      "at": [
+       0.9628,
+       1.1874
+      ]
+     },
+     "_clip": {
+      "dur": 1.0667,
+      "contact": 0.4667
+     }
+    }
+   }
+  },
+  "goon_security": {
+   "name": "SECURITY",
+   "role": "show security (helmet, gas mask, K13 SECURITY vest)",
+   "body": "Ch35_nonPBR",
+   "glb": "art/gltf/fighters/goon_security.glb",
+   "clips": "data/clips/goon_security.clips.json",
+   "heightM": 1.85,
+   "hp": 3000,
+   "walk": 1.3,
+   "weights": {
+    "shove": 3,
+    "haymaker": 1,
+    "kick": 2
+   },
+   "taunt": "goon_taunt",
+   "tauntDur": 2.8333,
+   "moves": {
+    "shove": {
+     "kind": "normal",
+     "input": "5M",
+     "strength": "M",
+     "startup": 32,
+     "active": 4,
+     "recovery": 30,
+     "damage": 350,
+     "hitstop": 11,
+     "hitstun": 18,
+     "blockstun": 14,
+     "guard": "HL",
+     "pushback": {
+      "hit": 0.9,
+      "block": 0.7
+     },
+     "name": "Two-Hand Shove",
+     "boxes": [
+      {
+       "f": [
+        32,
+        35
+       ],
+       "x": 0.704,
+       "y": 1.223,
+       "w": 0.908,
+       "h": 0.3
+      }
+     ],
+     "move": [
+      [
+       0,
+       0.0
+      ],
+      [
+       32,
+       0.114
+      ],
+      [
+       66,
+       0.085
+      ]
+     ],
+     "anim": {
+      "clip": "goon_shove",
+      "warp": [
+       [
+        0,
+        0.0
+       ],
+       [
+        32,
+        0.5
+       ],
+       [
+        66,
+        1.1333
+       ]
+      ]
+     },
+     "rangeM": 1.12,
+     "effector": {
+      "bone": "LeftHand",
+      "at": [
+       0.9577,
+       1.2227
+      ]
+     },
+     "_clip": {
+      "dur": 1.1333,
+      "contact": 0.5
+     }
+    },
+    "haymaker": {
+     "kind": "normal",
+     "input": "5H",
+     "strength": "H",
+     "startup": 45,
+     "active": 5,
+     "recovery": 40,
+     "damage": 600,
+     "hitstop": 13,
+     "hitstun": 24,
+     "blockstun": 16,
+     "guard": "HL",
+     "pushback": {
+      "hit": 0.45,
+      "block": 0.5
+     },
+     "name": "Haymaker",
+     "boxes": [
+      {
+       "f": [
+        45,
+        49
+       ],
+       "x": 0.667,
+       "y": 1.178,
+       "w": 0.834,
+       "h": 0.35
+      }
+     ],
+     "move": [
+      [
+       0,
+       0.0
+      ],
+      [
+       45,
+       0.1
+      ],
+      [
+       90,
+       0.075
+      ]
+     ],
+     "anim": {
+      "clip": "goon_haymaker",
+      "warp": [
+       [
+        0,
+        0.0
+       ],
+       [
+        45,
+        0.4333
+       ],
+       [
+        90,
+        1.2
+       ]
+      ]
+     },
+     "rangeM": 1.03,
+     "effector": {
+      "bone": "RightHand",
+      "at": [
+       0.8342,
+       1.1776
+      ]
+     },
+     "_clip": {
+      "dur": 1.2,
+      "contact": 0.4333
+     }
+    },
+    "kick": {
+     "kind": "normal",
+     "input": "6M",
+     "strength": "M",
+     "startup": 36,
+     "active": 5,
+     "recovery": 40,
+     "damage": 500,
+     "hitstop": 11,
+     "hitstun": 20,
+     "blockstun": 14,
+     "guard": "HL",
+     "pushback": {
+      "hit": 0.6,
+      "block": 0.55
+     },
+     "name": "Push Kick",
+     "boxes": [
+      {
+       "f": [
+        36,
+        40
+       ],
+       "x": 0.727,
+       "y": 1.171,
+       "w": 0.953,
+       "h": 0.3
+      }
+     ],
+     "move": [
+      [
+       0,
+       0.0
+      ],
+      [
+       36,
+       0.343
+      ],
+      [
+       81,
+       -0.003
+      ]
+     ],
+     "anim": {
+      "clip": "goon_kick",
+      "warp": [
+       [
+        0,
+        0.0
+       ],
+       [
+        36,
+        0.4667
+       ],
+       [
+        81,
+        1.0667
+       ]
+      ]
+     },
+     "rangeM": 1.4,
+     "effector": {
+      "bone": "RightFoot",
+      "at": [
+       1.0034,
+       1.1711
+      ]
+     },
+     "_clip": {
+      "dur": 1.0667,
+      "contact": 0.4667
+     }
+    }
+   }
+  },
+  "goon_medic": {
+   "name": "MEDIC",
+   "role": "show medic (scrubs, cap, mask)",
+   "body": "Ch16_nonPBR",
+   "glb": "art/gltf/fighters/goon_medic.glb",
+   "clips": "data/clips/goon_medic.clips.json",
+   "heightM": 1.78,
+   "hp": 1800,
+   "walk": 1.8,
+   "weights": {
+    "shove": 1,
+    "haymaker": 1,
+    "kick": 3
+   },
+   "taunt": "goon_taunt",
+   "tauntDur": 2.1667,
+   "moves": {
+    "shove": {
+     "kind": "normal",
+     "input": "5M",
+     "strength": "M",
+     "startup": 32,
+     "active": 4,
+     "recovery": 30,
+     "damage": 350,
+     "hitstop": 11,
+     "hitstun": 18,
+     "blockstun": 14,
+     "guard": "HL",
+     "pushback": {
+      "hit": 0.9,
+      "block": 0.7
+     },
+     "name": "Two-Hand Shove",
+     "boxes": [
+      {
+       "f": [
+        32,
+        35
+       ],
+       "x": 0.68,
+       "y": 1.352,
+       "w": 0.859,
+       "h": 0.3
+      }
+     ],
+     "move": [
+      [
+       0,
+       0.0
+      ],
+      [
+       32,
+       0.103
+      ],
+      [
+       66,
+       0.077
+      ]
+     ],
+     "anim": {
+      "clip": "goon_shove",
+      "warp": [
+       [
+        0,
+        0.0
+       ],
+       [
+        32,
+        0.5
+       ],
+       [
+        66,
+        1.1333
+       ]
+      ]
+     },
+     "rangeM": 1.06,
+     "effector": {
+      "bone": "RightHand",
+      "at": [
+       0.9091,
+       1.3524
+      ]
+     },
+     "_clip": {
+      "dur": 1.1333,
+      "contact": 0.5
+     }
+    },
+    "haymaker": {
+     "kind": "normal",
+     "input": "5H",
+     "strength": "H",
+     "startup": 45,
+     "active": 5,
+     "recovery": 40,
+     "damage": 600,
+     "hitstop": 13,
+     "hitstun": 24,
+     "blockstun": 16,
+     "guard": "HL",
+     "pushback": {
+      "hit": 0.45,
+      "block": 0.5
+     },
+     "name": "Haymaker",
+     "boxes": [
+      {
+       "f": [
+        45,
+        49
+       ],
+       "x": 0.654,
+       "y": 1.155,
+       "w": 0.808,
+       "h": 0.35
+      }
+     ],
+     "move": [
+      [
+       0,
+       0.0
+      ],
+      [
+       45,
+       0.091
+      ],
+      [
+       90,
+       0.068
+      ]
+     ],
+     "anim": {
+      "clip": "goon_haymaker",
+      "warp": [
+       [
+        0,
+        0.0
+       ],
+       [
+        45,
+        0.4333
+       ],
+       [
+        90,
+        1.2
+       ]
+      ]
+     },
+     "rangeM": 1.0,
+     "effector": {
+      "bone": "RightHand",
+      "at": [
+       0.8079,
+       1.1547
+      ]
+     },
+     "_clip": {
+      "dur": 1.2,
+      "contact": 0.4333
+     }
+    },
+    "kick": {
+     "kind": "normal",
+     "input": "6M",
+     "strength": "M",
+     "startup": 36,
+     "active": 5,
+     "recovery": 40,
+     "damage": 500,
+     "hitstop": 11,
+     "hitstun": 20,
+     "blockstun": 14,
+     "guard": "HL",
+     "pushback": {
+      "hit": 0.6,
+      "block": 0.55
+     },
+     "name": "Push Kick",
+     "boxes": [
+      {
+       "f": [
+        36,
+        40
+       ],
+       "x": 0.664,
+       "y": 1.102,
+       "w": 0.828,
+       "h": 0.3
+      }
+     ],
+     "move": [
+      [
+       0,
+       0.0
+      ],
+      [
+       36,
+       0.31
+      ],
+      [
+       81,
+       -0.003
+      ]
+     ],
+     "anim": {
+      "clip": "goon_kick",
+      "warp": [
+       [
+        0,
+        0.0
+       ],
+       [
+        36,
+        0.4667
+       ],
+       [
+        81,
+        1.0667
+       ]
+      ]
+     },
+     "rangeM": 1.24,
+     "effector": {
+      "bone": "RightFoot",
+      "at": [
+       0.8777,
+       1.1019
+      ]
+     },
+     "_clip": {
+      "dur": 1.0667,
+      "contact": 0.4667
+     }
+    }
+   }
+  }
+ }
+}

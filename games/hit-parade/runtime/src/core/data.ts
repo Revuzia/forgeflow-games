@@ -1,0 +1,1008 @@
+/// <reference types="vite/client" />
+// HIT PARADE — game data loader (CONTRACT §5, §16, §17 rule 2, §19.9). THREE-free, DOM-free.
+//
+// loadGameData():
+//   * in Vite (dev + build): `import.meta.glob` over data/**/*.json, bundled eagerly;
+//   * in Node (probes of every lane): the same files read through fs obtained with
+//     process.getBuiltinModule (no top-level node imports, so the browser bundle stays clean).
+// buildGameData(raw) validates everything (throws ONE readable error listing every problem),
+// derives anim.warp and hit boxes from clips.json when a move omits them (§5.2), and builds the
+// §17 per-fighter anim tables. Non-fatal findings (a clips file not generated yet, a fallback box)
+// go to GameData.warnings, which probe_data prints.
+
+import type {
+  AnimRef, BodyExt, BoxDef, ClassicEntry, ClipInfo, ClipsFile, FighterDef, GameData, GoonMoveDef, Move, SimpleMap, System, Vec2,
+} from './types.ts';
+import { hashString } from './sim/hash.ts';
+
+/** §6.2 shared system clips, in the exact §17 rule 2 order (anim ids 0..33). */
+export const SHARED_CLIPS: readonly string[] = [
+  'idle', 'walk_f', 'walk_b', 'crouch', 'crouch_idle', 'jump_up', 'jump_f', 'jump_b', 'land', 'dash_f',
+  'dash_b', 'block_high', 'block_low', 'hit_high_s', 'hit_high_l', 'hit_body', 'hit_low', 'hit_air', 'crumple',
+  'kd_fall_b', 'kd_fall_f', 'kd_ground_b', 'kd_ground_f', 'wake_b', 'wake_f', 'wall_splat', 'thrown_f',
+  'thrown_b', 'dizzy', 'ko_fall', 'timeover_lose', 'parry', 'impact_windup', 'shove',
+];
+const LOOPING_SHARED = new Set(['idle', 'walk_f', 'walk_b', 'crouch_idle', 'dizzy', 'kd_ground_b', 'kd_ground_f']);
+
+/**
+ * CHANGED(SIM3D) (CONTRACT §35.5): the 3D-ring step clips every body gets (lane ASSETS bakes them). They are NOT in
+ * SHARED_CLIPS (that would renumber every move anim id, §17 rule 2): each fighter's anim table APPENDS them after the
+ * stance entries, in this order (animStepId). A GLB without the clip renders idle (§17 rule 7).
+ */
+export const STEP_CLIPS: readonly string[] = ['sidestep_l', 'sidestep_r', 'sidewalk_l', 'sidewalk_r'];
+const LOOPING_STEP = new Set(['sidewalk_l', 'sidewalk_r']);
+
+export const MOVE_KINDS: readonly string[] = [
+  'normal', 'command', 'special', 'ex', 'super1', 'super3', 'throw', 'cmdgrab', 'projectile', 'system',
+];
+export const MOTIONS: readonly string[] = [
+  '236', '214', '623', '421', '41236', '63214', '360', '236236', '214214', '[4]6', '[2]8', '22',
+];
+const SIMPLE_KEYS = ['5S', '6S', '2S', '4S', 'S+H', 'S+H+2', 'A5S', 'A6S', 'A2S', 'A4S', 'jS'];
+
+export interface RawData {
+  system: unknown;
+  fighters: Record<string, unknown>;
+  clips: Record<string, unknown>;
+  stages?: unknown;
+  ladder?: unknown;
+  cpu?: unknown;
+  strings?: unknown;
+  /** CHANGED(SIM) P2: data/bodies.json (measured hurtbox extents, CONTRACT §28.5c) */
+  bodies?: unknown;
+  /** CHANGED(ASSETS) P2: data/goons.json (per-goon measured kit, CONTRACT §32; tools/goons_data.py) */
+  goons?: unknown;
+}
+
+/**
+ * CHANGED(ASSETS) P2 (CONTRACT §32): a BRAWL BREAK goon kind once data/goons.json is applied (applyGoons). system.json
+ * `brawl.kinds[]` carries id / hp / walk; the optional fields are that goon's own kit: `moves` = system.json `brawl.moves`
+ * (same order, ids and frame data) with the goon's measured `boxes` / `move`, `weights` = AI pick odds per move (integers
+ * >= 0, sum > 0), `rangeM` = start range per move (m, goon centre -> the player's near hurt edge).
+ */
+export interface GoonKindDef {
+  id: string;
+  hp: number;
+  walk: number;
+  moves?: GoonMoveDef[];
+  weights?: number[];
+  rangeM?: number[];
+}
+
+// ------------------------------------------------------------------ file collection
+type FileMap = Record<string, unknown>;
+
+function globFiles(): FileMap | null {
+  try {
+    const mods = import.meta.glob('../../../data/**/*.json', { eager: true, import: 'default' }) as Record<string, unknown>;
+    const out: FileMap = {};
+    for (const k of Object.keys(mods)) {
+      const i = k.lastIndexOf('/data/');
+      out[i >= 0 ? k.slice(i + 6) : k] = mods[k];
+    }
+    return out;
+  } catch {
+    return null; // not running under Vite
+  }
+}
+
+interface NodeFs {
+  readdirSync(p: string): string[];
+  readFileSync(p: string, enc: 'utf8'): string;
+  existsSync(p: string): boolean;
+  statSync(p: string): { isDirectory(): boolean };
+}
+
+function nodeFiles(): FileMap | null {
+  const proc = (globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } }).process;
+  if (!proc || typeof proc.getBuiltinModule !== 'function') return null;
+  const fs = proc.getBuiltinModule('node:fs') as NodeFs;
+  const url = proc.getBuiltinModule('node:url') as { fileURLToPath(u: URL): string };
+  const rel = '../../../data/';
+  const dir = url.fileURLToPath(new URL(rel, import.meta.url));
+  return readDataDir(fs, dir);
+}
+
+/** Reads data/*.json, data/fighters/*.json, data/clips/*.clips.json from `dir` (Node harness use). */
+export function readDataDir(fs: NodeFs, dir: string): FileMap {
+  const out: FileMap = {};
+  const base = dir.endsWith('/') || dir.endsWith('\\') ? dir : dir + '/';
+  const walk = (sub: string): void => {
+    const d = base + sub;
+    if (!fs.existsSync(d)) return;
+    for (const name of fs.readdirSync(d).sort()) {
+      const p = d + name;
+      if (fs.statSync(p).isDirectory()) {
+        if (sub === '') walk(name + '/');
+        continue;
+      }
+      if (!name.endsWith('.json')) continue;
+      try {
+        out[sub + name] = JSON.parse(fs.readFileSync(p, 'utf8').replace(/^﻿/, ''));
+      } catch (e) {
+        throw new Error(`HIT PARADE data: ${sub + name} is not valid JSON: ${(e as Error).message}`);
+      }
+    }
+  };
+  walk('');
+  return out;
+}
+
+/** Groups a data/-relative file map into RawData. */
+export function rawFromFiles(files: FileMap): RawData {
+  const raw: RawData = { system: files['system.json'], fighters: {}, clips: {} };
+  for (const k of Object.keys(files).sort()) {
+    let m = /^fighters\/([^/]+)\.json$/.exec(k);
+    if (m) {
+      raw.fighters[m[1]] = files[k];
+      continue;
+    }
+    m = /^clips\/([^/]+)\.clips\.json$/.exec(k);
+    if (m) {
+      raw.clips[m[1]] = files[k];
+      continue;
+    }
+  }
+  raw.stages = files['stages.json'];
+  raw.ladder = files['ladder.json'];
+  raw.cpu = files['cpu.json'];
+  raw.strings = files['strings.json'];
+  raw.bodies = files['bodies.json'];
+  raw.goons = files['goons.json'];
+  return raw;
+}
+
+let cached: GameData | null = null;
+
+/** §16: loads + validates all JSON (bundled in Vite, fs in Node). Cached after the first call. */
+export function loadGameData(): GameData {
+  if (cached) return cached;
+  const files = globFiles() ?? nodeFiles();
+  if (!files) throw new Error('loadGameData: neither import.meta.glob (Vite) nor Node fs is available; use buildGameData(raw)');
+  cached = buildGameData(rawFromFiles(files));
+  return cached;
+}
+
+// ------------------------------------------------------------------ validation helpers
+function isObj(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+function isNum(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+function isInt(v: unknown): v is number {
+  return typeof v === 'number' && Number.isInteger(v);
+}
+function isVec2(v: unknown): v is Vec2 {
+  return Array.isArray(v) && v.length === 2 && isNum(v[0]) && isNum(v[1]);
+}
+function isRange(v: unknown): v is [number, number] {
+  return Array.isArray(v) && v.length === 2 && isInt(v[0]) && isInt(v[1]) && v[0] >= 1 && v[1] >= v[0];
+}
+/** A frame range, or [0, 0] = "none" (how the fighter JSON spells an unused range). */
+function isRangeOrNone(v: unknown): boolean {
+  return isRange(v) || (Array.isArray(v) && v.length === 2 && v[0] === 0 && v[1] === 0);
+}
+function clone<T>(v: T): T {
+  return JSON.parse(JSON.stringify(v)) as T;
+}
+
+// ------------------------------------------------------------------ strength inference (shared with compile)
+/** 'L' | 'M' | 'H' strength of a move: explicit field > input button > id suffix > kind default. */
+export function moveStrength(id: string, mv: Move): 'L' | 'M' | 'H' {
+  if (mv.strength === 'L' || mv.strength === 'M' || mv.strength === 'H') return mv.strength;
+  const inp = (mv.input ?? '').split('>').pop() ?? '';
+  const last = inp.charAt(inp.length - 1);
+  if (mv.kind === 'normal' || mv.kind === 'command') {
+    if (last === 'L' || last === 'M' || last === 'H') return last;
+  }
+  const suf = /_(l|m|h|ex)$/i.exec(id);
+  if (suf) {
+    const s = suf[1].toLowerCase();
+    return s === 'l' ? 'L' : s === 'm' ? 'M' : 'H';
+  }
+  if (last === 'L' || last === 'M' || last === 'H') return last;
+  if (mv.kind === 'super1' || mv.kind === 'super3' || mv.kind === 'system') return 'H';
+  return 'M';
+}
+
+// ------------------------------------------------------------------ clips normalisation
+function normaliseClips(id: string, raw: unknown, errs: string[]): ClipsFile | null {
+  if (!isObj(raw)) {
+    errs.push(`clips/${id}.clips.json: not an object`);
+    return null;
+  }
+  const out: ClipsFile = { clips: {} };
+  const src = isObj(raw.clips) ? raw.clips : raw;
+  for (const k of Object.keys(raw)) {
+    const v = raw[k];
+    if (isNum(v) && (k === 'heightM' || k === 'hipsM' || k === 'handReachM' || k === 'footReachM')) out[k] = v;
+  }
+  if (isObj(raw.body)) {
+    for (const k of ['heightM', 'hipsM', 'handReachM', 'footReachM'] as const) {
+      const v = raw.body[k];
+      if (isNum(v)) out[k] = v;
+    }
+  }
+  for (const k of Object.keys(src)) {
+    const c = src[k];
+    if (!isObj(c) || !isNum(c.dur)) continue;
+    const eff = isObj(c.effector) && isVec2(c.effector.at) ? { bone: String(c.effector.bone ?? ''), at: c.effector.at as Vec2 } : null;
+    out.clips[k] = {
+      dur: c.dur,
+      frames: isNum(c.frames) ? c.frames : Math.round(c.dur * 30),
+      contact: isNum(c.contact) ? c.contact : null,
+      effector: eff,
+      root: Array.isArray(c.root) ? (c.root.filter(isVec2) as Vec2[]) : [],
+      apexY: isNum(c.apexY) ? c.apexY : null,
+      loop: c.loop === true,
+      // CHANGED(SIM) P2: marks (throw slam sync read them; they were dropped here) + per-hit effector points (§6.3)
+      ...(isObj(c.marks) ? { marks: numRecord(c.marks) } : {}),
+      ...(isObj(c.marksAt) ? { marksAt: marksAtOf(c.marksAt) } : {}),
+    } satisfies ClipInfo;
+  }
+  return out;
+}
+
+function numRecord(o: Record<string, unknown>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const k of Object.keys(o)) if (isNum(o[k])) out[k] = o[k] as number;
+  return out;
+}
+function marksAtOf(o: Record<string, unknown>): Record<string, { bone: string; at: Vec2 }> {
+  const out: Record<string, { bone: string; at: Vec2 }> = {};
+  for (const k of Object.keys(o)) {
+    const v = o[k];
+    if (isObj(v) && isVec2(v.at)) out[k] = { bone: String(v.bone ?? ''), at: v.at as Vec2 };
+    else if (isVec2(v)) out[k] = { bone: '', at: v as Vec2 };
+  }
+  return out;
+}
+
+// ------------------------------------------------------------------ system validation
+const SYSTEM_SECTIONS = [
+  'hp', 'round', 'stage', 'movement', 'jump', 'buffer', 'motion', 'hitstop', 'hitstun', 'counter', 'scaling',
+  'simple', 'grey', 'showtime', 'nerve', 'stageFright', 'parry', 'rush', 'impact', 'shove', 'throw', 'kd',
+  'juggle', 'wallSplat', 'groundBounce', 'crumple', 'pushback', 'cancel', 'super', 'cinematic', 'projectile',
+  'boxes', 'anim', 'training',
+];
+
+function validateSystem(raw: unknown, errs: string[]): System | null {
+  if (!isObj(raw)) {
+    errs.push('system.json: missing or not an object');
+    return null;
+  }
+  for (const k of SYSTEM_SECTIONS) if (!isObj(raw[k])) errs.push(`system.json: missing section "${k}"`);
+  const sc = raw.scaling;
+  if (isObj(sc)) {
+    for (const t of ['general', 'light']) {
+      const a = sc[t];
+      if (!Array.isArray(a) || a.length !== 10 || !a.every(isInt)) errs.push(`system.json scaling.${t}: need 10 integers`);
+    }
+  }
+  return raw as System;
+}
+
+// ------------------------------------------------------------------ fighter validation
+function validateBoxes(where: string, v: unknown, errs: string[]): void {
+  if (v === undefined) return;
+  if (!Array.isArray(v)) {
+    errs.push(`${where}: must be an array of {f,x,y,w,h}`);
+    return;
+  }
+  v.forEach((b, i) => {
+    if (!isObj(b) || !isRange(b.f) || !isNum(b.x) || !isNum(b.y) || !isNum(b.w) || !isNum(b.h) || b.w <= 0 || b.h <= 0) {
+      errs.push(`${where}[${i}]: need {f:[a,b] (1 <= a <= b), x, y, w > 0, h > 0}`);
+    }
+  });
+}
+
+function validateMove(where: string, id: string, mv: unknown, moves: Record<string, unknown>, errs: string[], warns: string[]): void {
+  if (!isObj(mv)) {
+    errs.push(`${where}: not an object`);
+    return;
+  }
+  if (typeof mv.kind !== 'string' || !MOVE_KINDS.includes(mv.kind)) errs.push(`${where}.kind: "${String(mv.kind)}" not one of ${MOVE_KINDS.join('|')}`);
+  if (!isInt(mv.startup) || mv.startup < 1) errs.push(`${where}.startup: integer >= 1 required`);
+  if (!isInt(mv.active) || mv.active < 1) errs.push(`${where}.active: integer >= 1 required`);
+  if (!isInt(mv.recovery) || mv.recovery < 0) errs.push(`${where}.recovery: integer >= 0 required`);
+  for (const k of ['damage', 'hitstop', 'hitstun', 'blockstun', 'multi']) {
+    if (mv[k] !== undefined && (!isInt(mv[k]) || (mv[k] as number) < 0)) errs.push(`${where}.${k}: integer >= 0 required`);
+  }
+  if (mv.chipPct !== undefined && !isNum(mv.chipPct)) errs.push(`${where}.chipPct: number required`);
+  if (mv.guard !== undefined && !['HL', 'H', 'L', 'U'].includes(String(mv.guard))) errs.push(`${where}.guard: HL|H|L|U`);
+  if (mv.input !== undefined && typeof mv.input !== 'string') errs.push(`${where}.input: string required`);
+  if ((mv.kind === 'normal' || mv.kind === 'command' || mv.kind === 'throw') && typeof mv.input !== 'string') {
+    errs.push(`${where}.input: required for kind ${String(mv.kind)} (routing, CONTRACT §19.1)`);
+  }
+  validateBoxes(`${where}.boxes`, mv.boxes, errs);
+  validateBoxes(`${where}.hurtExt`, mv.hurtExt, errs);
+  if (mv.move !== undefined && (!Array.isArray(mv.move) || !mv.move.every(isVec2))) errs.push(`${where}.move: [[frame, metres], ...] required`);
+  if (mv.cancel !== undefined) {
+    if (!Array.isArray(mv.cancel)) errs.push(`${where}.cancel: array of strings required`);
+    else {
+      for (const c of mv.cancel) {
+        if (typeof c !== 'string') {
+          errs.push(`${where}.cancel: non-string entry`);
+          continue;
+        }
+        if (c.startsWith('chain:')) {
+          const t = c.slice(6);
+          if (!(t in moves)) errs.push(`${where}.cancel "${c}": no move "${t}"`);
+        } else if (!['special', 'super', 'whiff', 'ex'].includes(c)) warns.push(`${where}.cancel "${c}": unknown token (ignored)`);
+      }
+    }
+  }
+  if (isObj(mv.onHit)) {
+    const oh = mv.onHit;
+    if (oh.kd !== undefined && !['none', 'soft', 'hard'].includes(String(oh.kd))) errs.push(`${where}.onHit.kd: none|soft|hard`);
+    if (oh.launch !== undefined && !isVec2(oh.launch)) errs.push(`${where}.onHit.launch: [vx, vy] m/s`);
+  }
+  if (isObj(mv.invuln)) {
+    for (const k of ['strike', 'throw', 'air', 'proj']) {
+      if (mv.invuln[k] !== undefined && !isRangeOrNone(mv.invuln[k])) errs.push(`${where}.invuln.${k}: [a, b] frames (or [0, 0] = none)`);
+    }
+  }
+  if (mv.armor !== undefined) {
+    const ar = mv.armor;
+    if (!isObj(ar) || !isInt(ar.hits) || ar.hits < 0 || (ar.hits > 0 ? !isRange(ar.f) : ar.f !== undefined && !isRangeOrNone(ar.f))) {
+      errs.push(`${where}.armor: {hits >= 0, f:[a,b]} (hits 0 = none)`);
+    }
+  }
+  if (mv.projectile !== undefined) {
+    const p = mv.projectile;
+    if (!isObj(p) || !isNum(p.speed) || !isInt(p.life) || !isVec2(p.box) || !isNum(p.y)) errs.push(`${where}.projectile: {speed, life, box:[w,h], y} required`);
+  }
+  if (mv.cinematic !== undefined) {
+    const c = mv.cinematic;
+    if (!isObj(c) || !isInt(c.frames) || c.frames < 1 || !Array.isArray(c.hits) || !c.hits.every(isVec2)) {
+      errs.push(`${where}.cinematic: {frames, cue, hits:[[frame, dmg]...]} required`);
+    } else {
+      for (const h of c.hits as Vec2[]) if (!isInt(h[0]) || h[0] < 0 || h[0] >= c.frames || !isInt(h[1])) errs.push(`${where}.cinematic.hits: frame in [0, frames) and integer damage`);
+    }
+    if (mv.kind !== 'super3') warns.push(`${where}: cinematic on a non-super3 move`);
+  }
+  if (mv.anim !== undefined) {
+    if (!isObj(mv.anim) || typeof mv.anim.clip !== 'string') errs.push(`${where}.anim: {clip, warp?} required`);
+    else if (mv.anim.warp !== undefined && (!Array.isArray(mv.anim.warp) || !mv.anim.warp.every(isVec2))) errs.push(`${where}.anim.warp: [[frame, seconds]...]`);
+  } else {
+    warns.push(`${where}: no anim.clip`);
+  }
+  if (mv.sfx !== undefined && (!Array.isArray(mv.sfx) || !mv.sfx.every((e) => Array.isArray(e) && isInt(e[0]) && typeof e[1] === 'string'))) {
+    errs.push(`${where}.sfx: [[frame, "name"], ...]`);
+  }
+  // §20.2 (lane FIGHTERS) optional fields
+  if (mv.hits !== undefined) {
+    if (!Array.isArray(mv.hits) || mv.hits.length === 0) errs.push(`${where}.hits: non-empty array of {f, damage, hitstop?}`);
+    else mv.hits.forEach((h, i) => {
+      if (!isObj(h) || !isRange(h.f) || !isInt(h.damage) || (h.hitstop !== undefined && !isInt(h.hitstop))) errs.push(`${where}.hits[${i}]: {f:[a,b], damage, hitstop?}`);
+    });
+  }
+  if (mv.moveY !== undefined && (!Array.isArray(mv.moveY) || !mv.moveY.every(isVec2))) errs.push(`${where}.moveY: [[frame, metres], ...]`);
+  if (mv.airVel !== undefined && !isVec2(mv.airVel)) errs.push(`${where}.airVel: [vx, vy] m/s`);
+  if (mv.hurtOverride !== undefined) {
+    if (!Array.isArray(mv.hurtOverride)) errs.push(`${where}.hurtOverride: array of {f, w, h, y?}`);
+    else mv.hurtOverride.forEach((h, i) => {
+      if (!isObj(h) || !isRange(h.f) || !isNum(h.w) || !isNum(h.h) || h.w <= 0 || h.h <= 0 || (h.y !== undefined && !isNum(h.y))) errs.push(`${where}.hurtOverride[${i}]: {f:[a,b], w > 0, h > 0, y?}`);
+    });
+  }
+  if (mv.grab !== undefined) {
+    const g = mv.grab;
+    if (!isObj(g) || !isInt(g.frames) || g.frames < 1 || !isInt(g.adv) || !isInt(g.hitF) || g.hitF < 1 || (g.rangeM !== undefined && !isNum(g.rangeM))) {
+      errs.push(`${where}.grab: {frames >= 1, adv, hitF >= 1, rangeM?, swap?, air?, techable?, clip?}`);
+    } else if (g.hitF > g.frames) errs.push(`${where}.grab.hitF ${g.hitF} > frames ${g.frames}`);
+    // CHANGED(fixer) D3: grab.victim = [[lockFrame, sharedClip, fromS?, toS?], ...]
+    if (isObj(g) && g.victim !== undefined) {
+      if (!Array.isArray(g.victim) || g.victim.length === 0) errs.push(`${where}.grab.victim: non-empty [[lockFrame, sharedClip, fromS?, toS?], ...]`);
+      else g.victim.forEach((v, i) => {
+        if (!Array.isArray(v) || !isInt(v[0]) || typeof v[1] !== 'string' || !SHARED_CLIPS.includes(v[1]) || (v[2] !== undefined && !isNum(v[2])) || (v[3] !== undefined && !isNum(v[3]))) {
+          errs.push(`${where}.grab.victim[${i}]: [lockFrame, sharedClip (one of the shared clips), fromS?, toS?]`);
+        }
+      });
+    }
+  }
+  if (mv.pushExt !== undefined && (!Array.isArray(mv.pushExt) || !mv.pushExt.every(isVec2))) errs.push(`${where}.pushExt: [[frame, metres], ...]`);
+  if (mv.trigger !== undefined) {
+    const tr = mv.trigger;
+    if (!isObj(tr)) errs.push(`${where}.trigger: {classic?: {motion, btn}, simple?}`);
+    else {
+      if (tr.classic !== undefined && (!isObj(tr.classic) || typeof tr.classic.motion !== 'string' || typeof tr.classic.btn !== 'string' || (tr.classic.motion !== '' && !MOTIONS.includes(tr.classic.motion)))) {
+        errs.push(`${where}.trigger.classic: {motion: '' | ${MOTIONS.join('|')}, btn}`);
+      }
+      if (tr.simple !== undefined && (typeof tr.simple !== 'string' || !/^([1-9]?S|[LMH]+)$/.test(tr.simple))) errs.push(`${where}.trigger.simple: "6S"-style key or buttons "LMH"`);
+    }
+  }
+  if (mv.projectile !== undefined && isObj(mv.projectile)) {
+    const p = mv.projectile;
+    if ((p.vy !== undefined && !isNum(p.vy)) || (p.g !== undefined && !isNum(p.g))) errs.push(`${where}.projectile: vy / g must be numbers`);
+  }
+  if (isObj(mv.cinematic)) {
+    const c = mv.cinematic;
+    if ((c.endAdv !== undefined && !isInt(c.endAdv)) || (c.endGapM !== undefined && !isNum(c.endGapM))) errs.push(`${where}.cinematic: endAdv integer, endGapM metres`);
+  }
+  // CHANGED(SIM) P2: unique move blocks (CONTRACT §20.2, §28.2)
+  const total = isInt(mv.startup) && isInt(mv.active) && isInt(mv.recovery) ? mv.startup + mv.active + mv.recovery - 1 : 0;
+  if (mv.counter !== undefined) {
+    const c = mv.counter;
+    if (!isObj(c) || !isRange(c.catch) || !Array.isArray(c.vs) || !c.vs.every((v) => v === 'strike' || v === 'proj') || typeof c.follow !== 'string') {
+      errs.push(`${where}.counter: {catch: [a, b], vs: ["strike"(, "proj")], follow: moveId}`);
+    } else {
+      if (!(c.follow in moves)) errs.push(`${where}.counter.follow: no move "${c.follow}"`);
+      if (total > 0 && (c.catch as number[])[1] > total) errs.push(`${where}.counter.catch ends after the move (${total} frames)`);
+    }
+  }
+  if (mv.teleport !== undefined) {
+    const tp = mv.teleport;
+    if (!isObj(tp) || !isInt(tp.f) || tp.f < 1 || (total > 0 && tp.f > total) || !['behind', 'front', 'home'].includes(String(tp.to)) || !isNum(tp.gapM) || tp.gapM < 0) {
+      errs.push(`${where}.teleport: {f: 1..total, to: behind|front|home, gapM >= 0}`);
+    }
+  }
+  if (mv.stance !== undefined && !['enter', 'follow', 'exit'].includes(String(mv.stance))) errs.push(`${where}.stance: enter|follow|exit`);
+  if (mv.ball !== undefined && (!isObj(mv.ball) || !['shoot', 'hover', 'summon'].includes(String(mv.ball.act)))) errs.push(`${where}.ball: {act: shoot|hover|summon}`);
+  if (mv.ball !== undefined && isObj(mv.ball) && (mv.ball.act === 'shoot' || mv.ball.act === 'hover') && mv.projectile === undefined) errs.push(`${where}.ball: a ${String(mv.ball.act)} move needs its projectile block (ball launch numbers)`);
+  if (mv.phase !== undefined && mv.phase !== 1 && mv.phase !== 2) errs.push(`${where}.phase: 1 | 2`);
+  if (mv.install !== undefined) {
+    const ins = mv.install;
+    if (!isObj(ins) || !isInt(ins.frames) || ins.frames < 1 || (ins.damagePct !== undefined && !isNum(ins.damagePct)) || (ins.walkPct !== undefined && !isNum(ins.walkPct))) {
+      errs.push(`${where}.install: {frames >= 1, damagePct?, walkPct?}`);
+    }
+  }
+  if (mv.role !== undefined && !Array.isArray(mv.role) && typeof mv.role !== 'string') errs.push(`${where}.role: array of tags`);
+  // CHANGED(SIM3D) (CONTRACT §35.4): tracking / lateral depth (all optional)
+  if (mv.track !== undefined) {
+    const tr = mv.track;
+    if (!isObj(tr) || (tr.until !== undefined && !isInt(tr.until)) || (tr.rate !== undefined && (!isNum(tr.rate) || tr.rate < 0))) {
+      errs.push(`${where}.track: {until?: frame (integer), rate?: deg per frame >= 0 (0 = full)}`);
+    }
+  }
+  for (const k of ['homing', 'linear']) if (mv[k] !== undefined && typeof mv[k] !== 'boolean') errs.push(`${where}.${k}: boolean`);
+  if (mv.homing === true && mv.linear === true) warns.push(`${where}: homing and linear both set (homing wins)`);
+  if (mv.lateralM !== undefined && (!isNum(mv.lateralM) || mv.lateralM < 0 || mv.lateralM > 3)) errs.push(`${where}.lateralM: metres in [0, 3]`);
+  if (isObj(mv.projectile)) {
+    const p = mv.projectile;
+    if (p.aimed !== undefined && typeof p.aimed !== 'boolean') errs.push(`${where}.projectile.aimed: boolean`);
+    if (p.lateralM !== undefined && (!isNum(p.lateralM) || p.lateralM <= 0)) errs.push(`${where}.projectile.lateralM: metres > 0`);
+  }
+  void id;
+}
+
+/** CHANGED(SIM) P2 (CONTRACT §20.3, §28.2): the fighter's `unique` block - kinds and the move ids they name. */
+function validateUnique(w: string, u: unknown, moves: Record<string, unknown>, errs: string[]): void {
+  if (u === undefined) return;
+  if (!isObj(u) || typeof u.kind !== 'string') {
+    errs.push(`${w}.unique: {kind, ...}`);
+    return;
+  }
+  const kinds = ['none', 'stance', 'charge', 'ball', 'counter', 'armorStep', 'teleport', 'phases'];
+  if (!kinds.includes(u.kind)) {
+    errs.push(`${w}.unique.kind "${u.kind}": one of ${kinds.join('|')}`);
+    return;
+  }
+  const ids = (v: unknown, field: string): void => {
+    if (v === undefined) return;
+    if (!Array.isArray(v)) {
+      errs.push(`${w}.unique.${field}: array of move ids`);
+      return;
+    }
+    for (const x of v) if (typeof x !== 'string' || !(x in moves)) errs.push(`${w}.unique.${field}: no move "${String(x)}"`);
+  };
+  const one = (v: unknown, field: string): void => {
+    if (v !== undefined && (typeof v !== 'string' || !(v in moves))) errs.push(`${w}.unique.${field}: no move "${String(v)}"`);
+  };
+  switch (u.kind) {
+    case 'stance': {
+      ids(u.enter, 'enter');
+      if (!Array.isArray(u.enter) || u.enter.length === 0) errs.push(`${w}.unique.enter: at least one enter move`);
+      const fu = u.followups;
+      if (!isObj(fu)) errs.push(`${w}.unique.followups: {L, M, H}`);
+      else for (const b of ['L', 'M', 'H']) one(fu[b], `followups.${b}`);
+      const ex = u.exit;
+      if (!isObj(ex)) errs.push(`${w}.unique.exit: {"2", timeout}`);
+      else {
+        one(ex['2'], 'exit.2');
+        one(ex.timeout, 'exit.timeout');
+      }
+      if (u.maxF !== undefined && (!isInt(u.maxF) || u.maxF < 1)) errs.push(`${w}.unique.maxF: integer >= 1`);
+      if (u.blockExitF !== undefined && (!isInt(u.blockExitF) || u.blockExitF < 1)) errs.push(`${w}.unique.blockExitF: integer >= 1`);
+      if (u.walk !== undefined && (!isObj(u.walk) || !isNum(u.walk.fwd) || !isNum(u.walk.back))) errs.push(`${w}.unique.walk: {fwd, back} m/s`);
+      break;
+    }
+    case 'charge':
+      for (const k of ['chargeF', 'keepF']) if (u[k] !== undefined && (!isInt(u[k]) || (u[k] as number) < 0)) errs.push(`${w}.unique.${k}: integer >= 0`);
+      if (u.standBlockNervePct !== undefined && !isNum(u.standBlockNervePct)) errs.push(`${w}.unique.standBlockNervePct: number`);
+      break;
+    case 'ball':
+      for (const k of ['respawnF', 'restF', 'bounces']) if (u[k] !== undefined && (!isInt(u[k]) || (u[k] as number) < 0)) errs.push(`${w}.unique.${k}: integer >= 0`);
+      if (u.pickupM !== undefined && !isNum(u.pickupM)) errs.push(`${w}.unique.pickupM: metres`);
+      break;
+    case 'counter':
+      ids(u.moves, 'moves');
+      break;
+    case 'armorStep':
+      ids(u.steps, 'steps');
+      ids(u.armored, 'armored');
+      break;
+    case 'teleport':
+      ids(u.moves, 'moves');
+      break;
+    case 'phases':
+      ids(u.moves, 'moves');
+      one(u.lv3, 'lv3');
+      if (u.thresholdPct !== undefined && (!isNum(u.thresholdPct) || u.thresholdPct <= 0 || u.thresholdPct >= 100)) errs.push(`${w}.unique.thresholdPct: 0 < pct < 100`);
+      if (u.lockF !== undefined && (!isInt(u.lockF) || u.lockF < 0)) errs.push(`${w}.unique.lockF: integer >= 0`);
+      if (u.simple !== undefined) {
+        if (!isObj(u.simple)) errs.push(`${w}.unique.simple: {"6S": moveId, ...}`);
+        else for (const k of Object.keys(u.simple)) one(u.simple[k], `simple.${k}`);
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+/** Resolves a classic entry's move id for a button ('L'|'M'|'H'|'S'). */
+export function classicMoveId(entry: ClassicEntry, btn: 'L' | 'M' | 'H' | 'S'): string {
+  const s = btn === 'L' ? 'l' : btn === 'M' ? 'm' : btn === 'H' ? 'h' : 'ex';
+  return entry.move.includes('{s}') ? entry.move.split('{s}').join(s) : entry.move;
+}
+
+/** SIMPLE EX id for a routed special id: trailing _l|_m|_h -> _ex. */
+export function exIdFor(id: string): string {
+  return /_(l|m|h)$/i.test(id) ? id.replace(/_(l|m|h)$/i, '_ex') : id + '_ex';
+}
+
+function validateFighter(fid: string, raw: unknown, errs: string[], warns: string[]): FighterDef | null {
+  const w = `fighters/${fid}.json`;
+  if (!isObj(raw)) {
+    errs.push(`${w}: not an object`);
+    return null;
+  }
+  const n0 = errs.length;
+  if (typeof raw.id !== 'string') errs.push(`${w}.id: string required`);
+  else if (raw.id !== fid) warns.push(`${w}.id "${raw.id}" differs from the file name (file name wins)`);
+  if (typeof raw.name !== 'string') errs.push(`${w}.name: string required`);
+  if (!isNum(raw.heightM) || raw.heightM <= 0) errs.push(`${w}.heightM: number > 0 required`);
+  if (!isInt(raw.hp) || raw.hp <= 0) errs.push(`${w}.hp: integer > 0 required`);
+  if (!isObj(raw.walk) || !isNum(raw.walk.fwd) || !isNum(raw.walk.back)) errs.push(`${w}.walk: {fwd, back} m/s required`);
+  if (!isObj(raw.dash) || !isNum(raw.dash.fwd) || !isNum(raw.dash.back) || !isInt(raw.dash.fwdFrames) || !isInt(raw.dash.backFrames)) {
+    errs.push(`${w}.dash: {fwd, back, fwdFrames, backFrames} required`);
+  }
+  const j = raw.jump;
+  if (!isObj(j) || !isInt(j.prejump) || !isInt(j.air) || j.air < 4 || !isInt(j.landing) || !isNum(j.apexM) || !isNum(j.fwdM)) {
+    errs.push(`${w}.jump: {prejump, air >= 4, landing, apexM, fwdM} required`);
+  }
+  if (!isNum(raw.throwRangeM) || raw.throwRangeM <= 0) errs.push(`${w}.throwRangeM: number > 0 required`);
+  if (!isObj(raw.hurt) || !isVec2(raw.hurt.stand) || !isVec2(raw.hurt.crouch) || !isVec2(raw.hurt.air)) errs.push(`${w}.hurt: {stand, crouch, air} as [w, h] required`);
+  if (!isVec2(raw.pushbox)) errs.push(`${w}.pushbox: [w, h] required`);
+  // CHANGED(fixer) D2: measured push extents (optional)
+  if (raw.push !== undefined) {
+    const pu = raw.push as Record<string, unknown>;
+    if (!isObj(pu) || !isNum(pu.front) || !isNum(pu.back) || (pu.front as number) <= 0 || (pu.back as number) < 0 ||
+      (pu.crouchFront !== undefined && !isNum(pu.crouchFront)) || (pu.crouchBack !== undefined && !isNum(pu.crouchBack))) {
+      errs.push(`${w}.push: {front > 0, back >= 0, crouchFront?, crouchBack?} (metres)`);
+    }
+  }
+  // CHANGED(fix_core) D1 (CONTRACT §35.20): per-fighter sidestep arc length (optional; the sim clamps to 0.5..2.5 m)
+  if (raw.step !== undefined) {
+    const sp = raw.step as Record<string, unknown>;
+    if (!isObj(sp) || (sp.distM !== undefined && (!isNum(sp.distM) || (sp.distM as number) < 0.5 || (sp.distM as number) > 2.5))) {
+      errs.push(`${w}.step: {distM?: 0.5..2.5} (metres)`);
+    }
+  }
+  if (!isObj(raw.moves) || Object.keys(raw.moves).length === 0) {
+    errs.push(`${w}.moves: non-empty object required`);
+    return null;
+  }
+  const moves = raw.moves;
+  for (const id of Object.keys(moves)) validateMove(`${w} moves.${id}`, id, moves[id], moves, errs, warns);
+  // simple
+  if (!isObj(raw.simple)) errs.push(`${w}.simple: object required`);
+  else {
+    const sm = raw.simple;
+    for (const k of Object.keys(sm)) {
+      if (k === 'assist') {
+        const a = sm.assist;
+        if (!Array.isArray(a) || !a.every((x) => typeof x === 'string')) errs.push(`${w}.simple.assist: array of move ids`);
+        else for (const x of a) if (!(x in moves)) errs.push(`${w}.simple.assist: no move "${x}"`);
+      } else if (SIMPLE_KEYS.includes(k)) {
+        const v = sm[k];
+        if (typeof v !== 'string' || !(v in moves)) errs.push(`${w}.simple["${k}"]: no move "${String(v)}"`);
+      } else warns.push(`${w}.simple: unknown key "${k}" (ignored)`);
+    }
+  }
+  // classic
+  if (!Array.isArray(raw.classic)) errs.push(`${w}.classic: array required`);
+  else {
+    raw.classic.forEach((e, i) => {
+      if (!isObj(e) || typeof e.motion !== 'string' || typeof e.btn !== 'string' || typeof e.move !== 'string') {
+        errs.push(`${w}.classic[${i}]: {motion, btn, move} required`);
+        return;
+      }
+      if (!MOTIONS.includes(e.motion)) errs.push(`${w}.classic[${i}].motion "${e.motion}": not one of ${MOTIONS.join(' ')}`);
+      if (!/^[LMHS]+$/.test(e.btn)) errs.push(`${w}.classic[${i}].btn "${e.btn}": letters from LMHS`);
+      const ent = e as unknown as ClassicEntry;
+      const found = (['L', 'M', 'H', 'S'] as const).filter((b) => classicMoveId(ent, b) in moves);
+      if (found.length === 0) errs.push(`${w}.classic[${i}].move "${e.move}": resolves to no existing move`);
+      for (const b of e.btn.split('') as ('L' | 'M' | 'H' | 'S')[]) {
+        if (!(classicMoveId(ent, b) in moves)) warns.push(`${w}.classic[${i}]: button ${b} -> "${classicMoveId(ent, b)}" missing`);
+      }
+    });
+  }
+  for (const k of ['intro', 'taunt']) if (raw[k] !== undefined && typeof raw[k] !== 'string') errs.push(`${w}.${k}: clip name string`);
+  if (raw.win !== undefined && (!Array.isArray(raw.win) || !raw.win.every((x) => typeof x === 'string'))) errs.push(`${w}.win: array of clip names`);
+  validateUnique(w, raw.unique, moves, errs); // CHANGED(SIM) P2
+  if (errs.length !== n0) return null;
+  const def = clone(raw) as unknown as FighterDef;
+  def.id = fid;
+  // CHANGED(SIM) P2: `role` is a tag list (§20.2); a lone string becomes [string]
+  for (const k of Object.keys(def.moves)) {
+    const r = def.moves[k].role as unknown;
+    if (typeof r === 'string') def.moves[k].role = [r];
+  }
+  return def;
+}
+
+// ------------------------------------------------------------------ derivation (§5.2)
+function isStrikeKind(mv: Move): boolean {
+  if (mv.kind === 'throw' || mv.kind === 'cmdgrab' || mv.grab) return false;
+  if (mv.projectile) return false;
+  if (mv.cinematic) return true;
+  return (mv.damage ?? 0) > 0 || (mv.hits ?? []).some((h) => h.damage > 0);
+}
+
+const DEFAULT_REACH: Record<'L' | 'M' | 'H', Vec2> = { L: [0.7, 1.25], M: [0.88, 1.2], H: [1.05, 1.2] };
+
+function rolesOf(mv: Move): string[] {
+  const r = mv.role as unknown;
+  return Array.isArray(r) ? r.map(String) : typeof r === 'string' ? [r] : [];
+}
+
+/** FIGHTING_DESIGN 2h reach-floor class of a ground normal ('' = none: air, command, anti-air, specials). */
+function reachClass(mv: Move, roles: string[]): string {
+  if (mv.kind !== 'normal' && mv.kind !== 'command') return '';
+  const inp = (mv.input ?? '').trim();
+  if (inp.startsWith('j.') || inp.includes('>')) return '';
+  if (roles.includes('antiair')) return '';
+  if (roles.includes('sweep')) return 'sweep';
+  return inp === '5L' || inp === '2L' || inp === '5M' || inp === '2M' || inp === '5H' ? inp : '';
+}
+
+/**
+ * CHANGED(SIM) P2 derive rule v2 (CONTRACT §28.5b, replaces "one box centred on the effector"): per hit window a box that
+ * spans from the body (push front - nearPad) to the effector + half the class width, and vertically from the limb's root
+ * (shoulder for hands / head, hips for feet / knees) to the effector +- half the class height; grounded non-anti-air
+ * strikes reach the crouch line; the FIGHTING_DESIGN 2h ground-normal classes reach at least their template reach scaled
+ * by height. Returns null when the move has no clip effector (the caller falls back to the default reach).
+ */
+export function deriveBoxesV2(def: FighterDef, id: string, mv: Move, clip: ClipInfo | undefined, clips: ClipsFile | null, sys: System): BoxDef[] | null {
+  if (!clip || !clip.effector) return null;
+  const bx = sys.boxes as System['boxes'] & {
+    nearPadM?: number; shoulderPct?: number; hipsPct?: number; crouchLineM?: number; crouchMarginM?: number; reversalDropMaxM?: number;
+    reachFloorM?: Record<string, number>;
+  };
+  const st = mv.kind === 'super1' || mv.kind === 'super3' ? 'H' : moveStrength(id, mv);
+  const [cw, ch] = bx[st];
+  const H = def.heightM;
+  const pushFront = def.push ? def.push.front : def.pushbox[0] / 2;
+  const nearPad = bx.nearPadM ?? 0.1;
+  const shoulderY = H * (bx.shoulderPct ?? 0.8);
+  const hipsY = clips && clips.hipsM !== undefined ? clips.hipsM : H * (bx.hipsPct ?? 0.53);
+  const roles = rolesOf(mv);
+  const inp = (mv.input ?? '').trim();
+  const air = inp.startsWith('j.') || mv.air === true;
+  const antiair = roles.includes('antiair');
+  const reversal = roles.includes('reversal');
+  const high = roles.includes('high');
+  const crouchLine = (bx.crouchLineM ?? 1.1) - (bx.crouchMarginM ?? 0.02);
+  const rc = reachClass(mv, roles);
+  const floorM = rc && bx.reachFloorM && bx.reachFloorM[rc] !== undefined ? (bx.reachFloorM[rc] * H) / (bx.reachFloorM.refHeightM ?? 1.8) : 0;
+  const ranges: [number, number][] = mv.hits && mv.hits.length > 0 ? mv.hits.map((h) => [h.f[0], h.f[1]] as [number, number]) : [[mv.startup, mv.startup + mv.active - 1]];
+  const out: BoxDef[] = [];
+  ranges.forEach((f, k) => {
+    const mk = clip.marksAt ? clip.marksAt[`hit${k + 1}`] : undefined;
+    const at = mk ? mk.at : clip.effector!.at;
+    const bone = (mk && mk.bone) || clip.effector!.bone || '';
+    const rootY = /Foot|Toe|Knee|Leg/.test(bone) ? hipsY : shoulderY;
+    const near = Math.min(at[0] - cw / 2, pushFront - nearPad);
+    let far = at[0] + cw / 2;
+    if (floorM > far) far = floorM;
+    let y0 = Math.min(at[1], rootY) - ch / 2;
+    const y1 = Math.max(at[1], rootY) + ch / 2;
+    if (!air && !antiair && !high) y0 = Math.min(y0, crouchLine);
+    else if (!air && antiair && reversal && k === 0) y0 = Math.min(y0, Math.max(y0 - (bx.reversalDropMaxM ?? 0.6), crouchLine));
+    if (y0 < 0) y0 = 0;
+    const r4 = (v: number): number => Math.round(v * 10000) / 10000;
+    out.push({ f, x: r4((near + far) / 2), y: r4((y0 + y1) / 2), w: r4(far - near), h: r4(y1 - y0) });
+  });
+  return out;
+}
+
+function derive(def: FighterDef, clips: ClipsFile | null, sys: System, warns: string[]): void {
+  const w = `fighters/${def.id}.json`;
+  for (const id of Object.keys(def.moves)) {
+    const mv = def.moves[id];
+    const clip = mv.anim && clips ? clips.clips[mv.anim.clip] : undefined;
+    if (mv.anim && clips && !clip) warns.push(`${w} moves.${id}: clip "${mv.anim.clip}" not in clips/${def.id}.clips.json`);
+    const total1 = mv.startup + mv.active + mv.recovery; // frame after the last move frame
+    if (mv.anim && !mv.anim.warp) {
+      if (clip) {
+        const dur = Math.max(clip.dur, 1 / 30);
+        if (clip.contact !== null && clip.contact > 0 && clip.contact < dur) {
+          mv.anim.warp = [[0, 0], [mv.startup, clip.contact], [total1, dur]];
+        } else {
+          mv.anim.warp = [[0, 0], [total1, dur]];
+        }
+      }
+    }
+    // CHANGED(SIM) P2: `boxSrc: "hitVolume"` boxes are FIGHTERS' copy of the v1 derived box (widened) -> re-derived (v2)
+    const rederive = mv.boxSrc === 'hitVolume' && isStrikeKind(mv);
+    if ((!mv.boxes || rederive) && isStrikeKind(mv)) {
+      const v2 = deriveBoxesV2(def, id, mv, clip, clips, sys);
+      if (v2) {
+        mv.boxes = v2;
+      } else if (!mv.boxes) {
+        const st = mv.kind === 'super1' || mv.kind === 'super3' ? 'H' : moveStrength(id, mv);
+        const size = sys.boxes[st];
+        const at = DEFAULT_REACH[st];
+        warns.push(`${w} moves.${id}: no boxes and no clip effector -> default ${st} box at ${at[0]} m`);
+        const ranges: [number, number][] = mv.hits && mv.hits.length > 0 ? mv.hits.map((h) => [h.f[0], h.f[1]] as [number, number]) : [[mv.startup, mv.startup + mv.active - 1]];
+        mv.boxes = ranges.map((f) => ({ f, x: at[0], y: at[1], w: size[0], h: size[1] }) satisfies BoxDef);
+      }
+    }
+  }
+}
+
+function buildAnims(def: FighterDef, clips: ClipsFile | null): AnimRef[] {
+  const out: AnimRef[] = [];
+  const loopOf = (c: string, dflt: boolean): boolean => {
+    const ci = clips?.clips[c];
+    return ci ? ci.loop : dflt;
+  };
+  for (const c of SHARED_CLIPS) out.push({ clip: c, warp: null, loop: loopOf(c, LOOPING_SHARED.has(c)), moveId: -1 });
+  const ids = Object.keys(def.moves);
+  ids.forEach((id, k) => {
+    const mv = def.moves[id];
+    out.push({ clip: mv.anim?.clip ?? '', warp: mv.anim?.warp ? (mv.anim.warp.map((p) => [p[0], p[1]]) as [number, number][]) : null, loop: false, moveId: k });
+  });
+  out.push({ clip: def.intro ?? '', warp: null, loop: false, moveId: -1 });
+  for (const wn of def.win ?? []) out.push({ clip: wn, warp: null, loop: loopOf(wn, false), moveId: -1 });
+  out.push({ clip: def.taunt ?? '', warp: null, loop: false, moveId: -1 });
+  // §19.10: then one entry per move with a grab block (move order): the connect clip, time-scaled
+  // over the lock (`frames`)
+  ids.forEach((id, k) => {
+    const g = def.moves[id].grab;
+    if (!g) return;
+    const clip = g.clip ?? def.moves[id].anim?.clip ?? '';
+    const ci = clips?.clips[clip];
+    const dur = ci ? ci.dur : g.frames / 60;
+    out.push({ clip, warp: [[0, 0], [g.frames, dur]], loop: false, moveId: k });
+  });
+  // CHANGED(SIM) P2 (CONTRACT §28.2): stance clips (idle, walk_f, walk_b) after the grab entries
+  for (const c of stanceClipNames(def)) out.push({ clip: c, warp: null, loop: loopOf(c, true), moveId: -1 });
+  // CHANGED(SIM3D) (CONTRACT §35.5): the step clips (sidestep_l/_r one-shot ~15 f, sidewalk_l/_r loops), appended
+  for (const c of STEP_CLIPS) out.push({ clip: c, warp: null, loop: loopOf(c, LOOPING_STEP.has(c)), moveId: -1 });
+  return out;
+}
+
+/** CHANGED(SIM3D): anim id of step clip k (0 sidestep_l, 1 sidestep_r, 2 sidewalk_l, 3 sidewalk_r) = after the stance entries. */
+export function animStepId(def: FighterDef, k: number): number {
+  let grabs = 0;
+  for (const id of Object.keys(def.moves)) if (def.moves[id].grab) grabs++;
+  return animTauntId(def) + 1 + grabs + stanceClipNames(def).length + k;
+}
+
+/** CHANGED(SIM) P2: a stance fighter's `unique.clips` in anim-table order (idle, walk_f, walk_b); [] otherwise. */
+export function stanceClipNames(def: FighterDef): string[] {
+  const u = def.unique as { kind?: string; clips?: Record<string, unknown> } | undefined;
+  if (!u || u.kind !== 'stance' || !isObj(u.clips)) return [];
+  const c = u.clips;
+  const name = (k: string): string => (typeof c[k] === 'string' ? (c[k] as string) : '');
+  return [name('idle'), name('walk_f'), name('walk_b')];
+}
+
+/** CHANGED(SIM) P2: anim id of stance clip k (0 idle, 1 walk_f, 2 walk_b) = after taunt + grab entries; -1 = none. */
+export function animStanceId(def: FighterDef, k: number): number {
+  if (stanceClipNames(def).length === 0) return -1;
+  let grabs = 0;
+  for (const id of Object.keys(def.moves)) if (def.moves[id].grab) grabs++;
+  return animTauntId(def) + 1 + grabs + k;
+}
+
+/**
+ * CHANGED(SIM) P2 (CONTRACT §28.4): goon anim table (§17 rule 2 layout on the goon's own clips): 34 shared clips, then
+ * the `brawl.moves` in order (warp = [0,0] [startup, contact] [total, dur] from data/clips/<goonId>.clips.json when it
+ * exists, else linear over the move at 1 clip-s per 60 f).
+ */
+function buildGoonAnims(sys: System, clipsAll: Record<string, ClipsFile>): Record<string, AnimRef[]> {
+  const out: Record<string, AnimRef[]> = {};
+  const br = sys.brawl;
+  if (!br || !Array.isArray(br.kinds) || !Array.isArray(br.moves)) return out;
+  for (const kind of br.kinds as GoonKindDef[]) {
+    const cf = clipsAll[kind.id] ?? null;
+    const tab: AnimRef[] = [];
+    for (const c of SHARED_CLIPS) tab.push({ clip: c, warp: null, loop: cf?.clips[c]?.loop ?? LOOPING_SHARED.has(c), moveId: -1 });
+    // CHANGED(ASSETS) P2: the goon's own kit when data/goons.json applied one (same ids / frame data / clips)
+    const kit = kind.moves && kind.moves.length === br.moves.length ? kind.moves : br.moves;
+    kit.forEach((mv, k) => {
+      const clip = mv.anim?.clip ?? '';
+      const ci = cf?.clips[clip];
+      const total1 = mv.startup + mv.active + mv.recovery;
+      let warp: [number, number][] | null = null;
+      if (ci && ci.dur > 0) {
+        warp = ci.contact !== null && ci.contact > 0 && ci.contact < ci.dur ? [[0, 0], [mv.startup, ci.contact], [total1, ci.dur]] : [[0, 0], [total1, ci.dur]];
+      }
+      tab.push({ clip, warp, loop: false, moveId: k });
+    });
+    out[kind.id] = tab;
+  }
+  return out;
+}
+
+function isBoxDef(v: unknown): v is BoxDef {
+  return isObj(v) && isVec2(v.f) && isInt(v.f[0]) && isInt(v.f[1]) && isNum(v.x) && isNum(v.y) && isNum(v.w) && isNum(v.h) && v.w > 0 && v.h > 0;
+}
+
+/**
+ * CHANGED(ASSETS) P2 (CONTRACT §32): merges data/goons.json into a COPY of `system.brawl` (the raw JSON is never mutated;
+ * the merged kinds live in data.system, so dataHash covers them). Per kind, every system.json move needs a goons.json
+ * entry with the same startup / active / recovery plus a valid box list and move curve - else that kind keeps the shared
+ * rows (warning). Frame data, damage, stun, pushback and the clip always come from system.json; goons.json adds the
+ * goon's measured `boxes` / `move`, its start ranges (`rangeM`) and AI pick `weights`.
+ */
+function applyGoons(system: System, raw: unknown, warns: string[]): System {
+  const br = system.brawl;
+  if (raw === undefined || !br || !Array.isArray(br.kinds) || !Array.isArray(br.moves)) return system;
+  const gs = isObj(raw) && isObj(raw.goons) ? raw.goons : null;
+  if (!gs) {
+    warns.push('goons.json: no "goons" object (every goon uses the shared system.json brawl.moves)');
+    return system;
+  }
+  const kinds: GoonKindDef[] = br.kinds.map((kind): GoonKindDef => {
+    const base: GoonKindDef = { id: kind.id, hp: kind.hp, walk: kind.walk };
+    const g = gs[kind.id];
+    if (!isObj(g) || !isObj(g.moves)) {
+      warns.push(`goons.json: no kit for ${kind.id} (it uses the shared system.json brawl.moves)`);
+      return base;
+    }
+    const wt = isObj(g.weights) ? g.weights : {};
+    const moves: GoonMoveDef[] = [];
+    const weights: number[] = [];
+    const rangeM: number[] = [];
+    for (let k = 0; k < br.moves.length; k++) {
+      const mv = br.moves[k];
+      const e = g.moves[mv.id];
+      if (!isObj(e) || e.startup !== mv.startup || e.active !== mv.active || e.recovery !== mv.recovery ||
+        !Array.isArray(e.boxes) || e.boxes.length === 0 || !e.boxes.every(isBoxDef) || !Array.isArray(e.move) || !e.move.every(isVec2)) {
+        warns.push(`goons.json ${kind.id}.moves.${mv.id}: missing or stale vs system.json brawl.moves (re-run tools/goons_data.py); ${kind.id} uses the shared kit`);
+        return base;
+      }
+      const boxes = (e.boxes as BoxDef[]).map((b): BoxDef => ({ f: [b.f[0], b.f[1]], x: b.x, y: b.y, w: b.w, h: b.h }));
+      moves.push({ ...mv, boxes, move: (e.move as Vec2[]).map((p): Vec2 => [p[0], p[1]]) });
+      const w = wt[mv.id];
+      weights.push(isInt(w) && w >= 0 ? w : 1);
+      rangeM.push(isNum(e.rangeM) && e.rangeM > 0 ? e.rangeM : (br.moveRangeM[k] ?? 1.0));
+    }
+    if (!weights.some((w) => w > 0)) weights.fill(1);
+    return { ...base, moves, weights, rangeM };
+  });
+  for (const id of Object.keys(gs).sort()) if (!br.kinds.some((k) => k.id === id)) warns.push(`goons.json: ${id} is not in system.json brawl.kinds (ignored)`);
+  return { ...system, brawl: { ...br, kinds } };
+}
+
+function parseBodies(raw: unknown, warns: string[]): Record<string, BodyExt> {
+  const out: Record<string, BodyExt> = {};
+  if (raw === undefined) return out;
+  const src = isObj(raw) && isObj(raw.fighters) ? raw.fighters : null;
+  if (!src) {
+    warns.push('bodies.json: no "fighters" object (hurtboxes stay centred)');
+    return out;
+  }
+  for (const id of Object.keys(src)) {
+    const b = parseBodyExt(src[id]);
+    if (b) out[id] = b;
+    else warns.push(`bodies.json fighters.${id}: need {stand, crouch, air} as [front, back] metres`);
+  }
+  return out;
+}
+
+function parseBodyExt(v: unknown): BodyExt | null {
+  if (!isObj(v)) return null;
+  const ok = (p: unknown): p is Vec2 => isVec2(p) && p[0] >= 0 && p[1] >= 0;
+  if (!ok(v.stand) || !ok(v.crouch) || !ok(v.air)) return null;
+  // CHANGED(wf6_fixer_core) D1: the optional face-down fall extents
+  return ok(v.down) ? { stand: v.stand, crouch: v.crouch, air: v.air, down: v.down } : { stand: v.stand, crouch: v.crouch, air: v.air };
+}
+
+/** Anim id of the grab (connect) clip of move `moveKey` (§19.10), or -1. */
+export function animGrabId(def: FighterDef, moveKey: string): number {
+  let id = animTauntId(def) + 1;
+  for (const k of Object.keys(def.moves)) {
+    if (!def.moves[k].grab) continue;
+    if (k === moveKey) return id;
+    id++;
+  }
+  return -1;
+}
+
+/** Anim id helpers (§17 rule 2). */
+export function animIntroId(def: FighterDef): number {
+  return SHARED_CLIPS.length + Object.keys(def.moves).length;
+}
+export function animWinId(def: FighterDef, k: number): number {
+  const n = (def.win ?? []).length;
+  return n > 0 ? animIntroId(def) + 1 + Math.min(k, n - 1) : 0;
+}
+export function animTauntId(def: FighterDef): number {
+  return animIntroId(def) + 1 + (def.win ?? []).length;
+}
+
+// ------------------------------------------------------------------ build
+export function buildGameData(raw: RawData): GameData {
+  const errs: string[] = [];
+  const warns: string[] = [];
+  const sys0 = validateSystem(raw.system, errs);
+  // CHANGED(ASSETS) P2: the per-goon BRAWL BREAK kit from data/goons.json (CONTRACT §32)
+  const system = sys0 ? applyGoons(sys0, raw.goons, warns) : null;
+  const clips: Record<string, ClipsFile> = {};
+  for (const id of Object.keys(raw.clips).sort()) {
+    const c = normaliseClips(id, raw.clips[id], errs);
+    if (c) clips[id] = c;
+  }
+  const fighters: Record<string, FighterDef> = {};
+  for (const fid of Object.keys(raw.fighters).sort()) {
+    const def = validateFighter(fid, raw.fighters[fid], errs, warns);
+    if (def) fighters[fid] = def;
+  }
+  if (errs.length > 0 || !system) {
+    throw new Error(`HIT PARADE data invalid (${errs.length} problem${errs.length === 1 ? '' : 's'}):\n  - ${errs.join('\n  - ')}`);
+  }
+  const anims: Record<string, AnimRef[]> = {};
+  for (const fid of Object.keys(fighters)) {
+    const def = fighters[fid];
+    const cf = clips[fid] ?? null;
+    if (!cf) warns.push(`fighters/${fid}.json: clips/${fid}.clips.json not generated yet (warps/boxes not derived from clips)`);
+    derive(def, cf, system, warns);
+    anims[fid] = buildAnims(def, cf);
+  }
+  const strings: Record<string, string> = {};
+  if (isObj(raw.strings)) for (const k of Object.keys(raw.strings)) if (typeof raw.strings[k] === 'string') strings[k] = raw.strings[k] as string;
+  // CHANGED(SIM) P2: measured hurtbox extents (fighter JSON `hurtBody` wins over data/bodies.json), goon anim tables
+  const bodies = parseBodies(raw.bodies, warns);
+  for (const fid of Object.keys(fighters)) {
+    const hb = fighters[fid].hurtBody;
+    if (hb !== undefined) {
+      const b = parseBodyExt(hb);
+      if (b) bodies[fid] = b;
+      else warns.push(`fighters/${fid}.json hurtBody: need {stand, crouch, air} as [front, back] metres (ignored)`);
+    }
+  }
+  return {
+    system,
+    fighters,
+    clips,
+    stages: isObj(raw.stages) ? raw.stages : Array.isArray(raw.stages) ? { list: raw.stages } : {},
+    ladder: isObj(raw.ladder) ? raw.ladder : {},
+    cpu: isObj(raw.cpu) ? raw.cpu : {},
+    strings,
+    anims,
+    warnings: warns,
+    bodies,
+    goonAnims: buildGoonAnims(system, clips),
+  };
+}
+
+/** uint32 identity of everything that decides gameplay (system + derived fighters + the stage rings), for NET HELLO. */
+export function dataHash(data: GameData): number {
+  const ids = Object.keys(data.fighters).sort();
+  // CHANGED(SIM3D): the ring / spawn / camera-side fields of every stage decide gameplay too (CONTRACT §35.11)
+  const list = (data.stages as { stages?: unknown }).stages;
+  const rings = Array.isArray(list)
+    ? list.map((st) => {
+      const o = (st ?? {}) as Record<string, unknown>;
+      return [o.id ?? null, o.ring ?? null, o.spawnAxisDeg ?? null, o.cameraSideDeg ?? null];
+    })
+    : [];
+  return hashString(JSON.stringify([data.system, ids.map((id) => data.fighters[id]), rings]));
+}
+
+export type { SimpleMap };

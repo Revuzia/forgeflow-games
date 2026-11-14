@@ -1,0 +1,25 @@
+{
+  "title": "Neon Veil",
+  "slug": "neon-veil",
+  "short_description": "Neon sky dogfighter — thread cyberpunk skylines, lock rockets, grab weapon crates, and hunt outlaws across outlaw sectors.",
+  "description": "Neon Veil is a neon sky combat flight game for the browser. Dogfight modes: thread cyberpunk skylines, lock heat-seeking rockets, grab weapon crates, and fly portal rings between sectors. Pure neon. Zero voice.",
+  "genre": "action",
+  "sub_genre": "3d-dogfighter",
+  "difficulty": "medium",
+  "controls_keyboard": "WASD fly · Mouse aim · LMB fire · RMB afterburner · F shield · 1-6 weapons · Esc pause · M mute",
+  "controls_gamepad": "Not required - full mouse + keyboard.",
+  "has_mobile_support": false,
+  "tags": [
+    "action",
+    "arcade",
+    "3d",
+    "dogfight",
+    "neon",
+    "cyberpunk",
+    "flight",
+    "shooter",
+    "threejs",
+    "singleplayer"
+  ],
+  "art_direction": "Synthwave neon cockpit dogfighter over a magenta cyberpunk skyline at sunset, cyan HUD, premium browser-game key art."
+}

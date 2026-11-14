@@ -1,0 +1,58 @@
+Scale K = 0.752 m per SF6 unit (assumption: 1.13 u light reach = 0.85 m)
+SF6 median                               SF6 HIT PARADE
+throw range                          0.80 u     0.60 m
+standing light reach (atkRange)      1.13 u     0.85 m
+crouching light reach                1.08 u     0.81 m
+standing medium reach                1.47 u     1.11 m
+crouching medium reach               1.45 u     1.09 m
+standing heavy reach                 1.77 u     1.33 m
+sweep reach                          1.84 u     1.38 m
+drive impact reach                   2.52 u     1.90 m
+forward dash distance                1.41 u     1.06 m
+back dash distance                   0.90 u     0.68 m
+forward jump distance                1.90 u     1.43 m
+jump apex                            2.12 u     1.59 m
+forward walk speed                  0.047 u/f   2.12 m/s
+back walk speed                     0.032 u/f   1.44 m/s
+light pushback on block              0.36 u     0.27 m
+
+Side-on camera distance (m) to frame separation s; fighter fill %% of frame height
+aspect 16:9
+  s(m) | vFOV30 d / fill | vFOV35 d / fill | vFOV40 d / fill
+   0.8 |  5.13 /  65% |  4.36 /  65% |  3.78 /  65%
+   1.2 |  5.13 /  65% |  4.36 /  65% |  3.78 /  65%
+   1.8 |  5.13 /  65% |  4.36 /  65% |  3.78 /  65%
+   2.5 |  5.25 /  64% |  4.46 /  64% |  3.86 /  64%
+   3.0 |  5.77 /  58% |  4.91 /  58% |  4.25 /  58%
+   4.0 |  6.82 /  49% |  5.80 /  49% |  5.02 /  49%
+   5.0 |  7.87 /  43% |  6.69 /  43% |  5.80 /  43%
+   6.0 |  8.92 /  38% |  7.58 /  38% |  6.57 /  38%
+aspect 19.5:9 phone
+  s(m) | vFOV30 d / fill | vFOV35 d / fill | vFOV40 d / fill
+   0.8 |  5.13 /  65% |  4.36 /  65% |  3.78 /  65%
+   1.2 |  5.13 /  65% |  4.36 /  65% |  3.78 /  65%
+   1.8 |  5.13 /  65% |  4.36 /  65% |  3.78 /  65%
+   2.5 |  5.13 /  65% |  4.36 /  65% |  3.78 /  65%
+   3.0 |  5.13 /  65% |  4.36 /  65% |  3.78 /  65%
+   4.0 |  5.60 /  60% |  4.76 /  60% |  4.12 /  60%
+   5.0 |  6.46 /  52% |  5.49 /  52% |  4.76 /  52%
+   6.0 |  7.32 /  46% |  6.22 /  46% |  5.39 /  46%
+aspect 4:3
+  s(m) | vFOV30 d / fill | vFOV35 d / fill | vFOV40 d / fill
+   0.8 |  5.13 /  65% |  4.36 /  65% |  3.78 /  65%
+   1.2 |  5.18 /  65% |  4.40 /  65% |  3.81 /  65%
+   1.8 |  6.02 /  56% |  5.11 /  56% |  4.43 /  56%
+   2.5 |  7.00 /  48% |  5.95 /  48% |  5.15 /  48%
+   3.0 |  7.70 /  44% |  6.54 /  44% |  5.67 /  44%
+   4.0 |  9.10 /  37% |  7.73 /  37% |  6.70 /  37%
+   5.0 | 10.50 /  32% |  8.92 /  32% |  7.73 /  32%
+   6.0 | 11.90 /  28% | 10.11 /  28% |  8.76 /  28%
+
+vFOV 30: vertical floor distance 5.13 m (fill 65%)
+vFOV 35: vertical floor distance 4.36 m (fill 65%)
+vFOV 40: vertical floor distance 3.78 m (fill 65%)
+
+vFOV 30 at s=3.0 m: camera 5.77 m; an object 0.5 m nearer the camera looks 9% bigger
+vFOV 35 at s=3.0 m: camera 4.91 m; an object 0.5 m nearer the camera looks 11% bigger
+vFOV 40 at s=3.0 m: camera 4.25 m; an object 0.5 m nearer the camera looks 13% bigger
+vFOV 55 at s=3.0 m: camera 2.97 m; an object 0.5 m nearer the camera looks 20% bigger

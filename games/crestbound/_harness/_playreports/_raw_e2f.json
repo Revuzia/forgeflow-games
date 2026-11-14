@@ -1,0 +1,1281 @@
+{
+ "log": [
+  "boot state: keep",
+  "goto ember-2 cp=None -> playing ember-2 [0, 6, 47]",
+  "  run_to [20, 46] east flank -> [19, 6.01, 46.12] d=1.01 ARRIVED deaths+0",
+  "  run_to [20, 30] along the flank -> [20.02, 6.01, 29.69] d=0.31 ARRIVED deaths+0",
+  "  run_to [18.5, 24.0] stair foot -> [18.96, 6.7, 25.71] d=1.77 ARRIVED deaths+0",
+  "  run_to [18.5, 16.0] climb flight 1 -> [18.49, 12.3, 19.38] d=3.38 NOT-ARRIVED STUCK deaths+0",
+  "after flight 1: [18.49, 12.3, 19.38] idle",
+  "  run_to [23.0, 26.0] landing -> flight 2 -> [22.1, 6.89, 24.67] d=1.61 ARRIVED deaths+0",
+  "after flight 2: [22.34, 5.96, 25.03] land",
+  "cp-gantry: {\"t\": 26.55, \"st\": \"playing\", \"p\": [19.5, 20.3, 26], \"v\": [0, -0.19, 0], \"ps\": \"idle\", \"gnd\": true, \"jc\": 0, \"sp\": 0, \"surf\": \"normal\", \"water\": false, \"sub\": false, \"deaths\": 0, \"cp\": 2, \"crests\": 0, \"coins\": 5, \"sig\": 0, \"cam\": [-3.14, 0.22, 6.25]}",
+  "beams: [{\"a\": [-15, 21.3, 34], \"b\": [15, 21.3, 34], \"cyc\": {\"on\": 1.2, \"off\": 2.4, \"warn\": 0.7, \"phase\": 0}, \"on\": null, \"kills\": 1}, {\"a\": [-15, 21.3, 26], \"b\": [15, 21.3, 26], \"cyc\": {\"on\": 1.2, \"off\": 2.4, \"warn\": 0.7, \"phase\": 0.9}, \"on\": null, \"kills\": 1}, {\"a\": [-15, 21.3, 18], \"b\": [15, 21.3, 18], \"cyc\": {\"on\": 1.2, \"off\": 2.4, \"warn\": 0.7, \"phase\": 1.8}, \"on\": null, \"kills\": 1}, {\"a\": [-15, 21.3, 14], \"b\": [15, 21.3, 14], \"cyc\": {\"on\": 1.2, \"off\": 2.4, \"warn\": 0.7, \"phase\": 2.7}, \"on\": null, \"kills\": 1}]",
+  "  run_to [0, 11.0] roof deck through the beams (try 1) -> [19.5, 20.3, 26] d=24.60 NOT-ARRIVED deaths+1",
+  "  beams run 1: deaths +1 end [19.5, 20.3, 26]",
+  "  run_to [0, 11.0] roof deck through the beams (try 2) -> [19.5, 20.3, 26] d=24.60 NOT-ARRIVED deaths+1",
+  "  beams run 2: deaths +1 end [19.5, 20.3, 26]",
+  "  run_to [0, 11.0] roof deck through the beams (try 3) -> [19.5, 20.3, 26] d=24.60 NOT-ARRIVED deaths+1",
+  "  beams run 3: deaths +1 end [19.5, 20.3, 26]",
+  "beam state samples: [{\"t\": 27.17, \"o\": [[null, null, null], [null, null, null], [null, null, null], [null, null, null]]}, {\"t\": 27.32, \"o\": [[null, null, null], [null, null, null], [null, null, null], [null, null, null]]}, {\"t\": 27.41, \"o\": [[null, null, null], [null, null, null], [null, null, null], [null, null, null]]}, {\"t\": 27.56, \"o\": [[null, null, null], [null, null, null], [null, null, null], [null, null, null]]}, {\"t\": 27.66, \"o\": [[null, null, null], [null, null, null], [null, null, null], [null, null, null]]}, {\"t\": 27.76, \"o\": [[null, null, null], [null, null, null], [null, null, null], [null, null, null]]}, {\"t\": 27.81, \"o\": [[null, null, null], [null, null, null], [null, null, null], [null, null, null]]}, {\"t\": 28.01, \"o\": [[null, null, null], [null, null, null], [null, null, null], [null, null, null]]}]",
+  "trolley: [{\"p\": [0, 20.5, 9], \"motion\": {\"type\": \"oscillate\", \"axis\": [1, 0, 0], \"amp\": 9, \"period\": 9, \"ease\": \"sine\"}, \"cur\": [7.24, 20.5, 9], \"top\": 20.75}]",
+  "  watch riding the trolley -> [10.73, 6.04, 9] idle",
+  "TROLLEY ride: start [7.24, 20.3, 9] end [10.73, 6.04, 9]  x range 7.24..10.73  states ['fall', 'idle']"
+ ],
+ "res": {
+  "route_b_walk": [
+   {
+    "tag": "east flank",
+    "end": [
+     19,
+     6.01,
+     46.12
+    ],
+    "arrived": true,
+    "stuck": false
+   },
+   {
+    "tag": "along the flank",
+    "end": [
+     20.02,
+     6.01,
+     29.69
+    ],
+    "arrived": true,
+    "stuck": false
+   },
+   {
+    "tag": "stair foot",
+    "end": [
+     18.96,
+     6.7,
+     25.71
+    ],
+    "arrived": true,
+    "stuck": false
+   }
+  ],
+  "flight1": {
+   "end": [
+    18.49,
+    12.3,
+    19.38
+   ],
+   "arrived": false,
+   "stuck": true
+  },
+  "flight2": {
+   "end": [
+    22.34,
+    5.96,
+    25.03
+   ],
+   "arrived": true,
+   "stuck": false
+  },
+  "beams": [
+   {
+    "a": [
+     -15,
+     21.3,
+     34
+    ],
+    "b": [
+     15,
+     21.3,
+     34
+    ],
+    "cyc": {
+     "on": 1.2,
+     "off": 2.4,
+     "warn": 0.7,
+     "phase": 0
+    },
+    "on": null,
+    "kills": 1
+   },
+   {
+    "a": [
+     -15,
+     21.3,
+     26
+    ],
+    "b": [
+     15,
+     21.3,
+     26
+    ],
+    "cyc": {
+     "on": 1.2,
+     "off": 2.4,
+     "warn": 0.7,
+     "phase": 0.9
+    },
+    "on": null,
+    "kills": 1
+   },
+   {
+    "a": [
+     -15,
+     21.3,
+     18
+    ],
+    "b": [
+     15,
+     21.3,
+     18
+    ],
+    "cyc": {
+     "on": 1.2,
+     "off": 2.4,
+     "warn": 0.7,
+     "phase": 1.8
+    },
+    "on": null,
+    "kills": 1
+   },
+   {
+    "a": [
+     -15,
+     21.3,
+     14
+    ],
+    "b": [
+     15,
+     21.3,
+     14
+    ],
+    "cyc": {
+     "on": 1.2,
+     "off": 2.4,
+     "warn": 0.7,
+     "phase": 2.7
+    },
+    "on": null,
+    "kills": 1
+   }
+  ],
+  "beam_runs": [
+   {
+    "try": 1,
+    "deaths": 1,
+    "end": [
+     19.5,
+     20.3,
+     26
+    ],
+    "arrived": false,
+    "stuck": false,
+    "trace": [
+     [
+      27.46,
+      [
+       0,
+       20.3,
+       37.94
+      ],
+      "run",
+      0
+     ],
+     [
+      27.58,
+      [
+       0,
+       20.3,
+       37.33
+      ],
+      "run",
+      0
+     ],
+     [
+      27.82,
+      [
+       0,
+       20.3,
+       35.18
+      ],
+      "run",
+      0
+     ],
+     [
+      28.12,
+      [
+       0,
+       20.3,
+       32.48
+      ],
+      "run",
+      0
+     ],
+     [
+      28.22,
+      [
+       0,
+       20.3,
+       31.58
+      ],
+      "run",
+      0
+     ],
+     [
+      28.32,
+      [
+       0,
+       20.3,
+       30.68
+      ],
+      "run",
+      0
+     ],
+     [
+      28.37,
+      [
+       0,
+       20.3,
+       30.23
+      ],
+      "run",
+      0
+     ],
+     [
+      28.52,
+      [
+       0,
+       20.3,
+       28.88
+      ],
+      "run",
+      0
+     ],
+     [
+      28.62,
+      [
+       0,
+       20.3,
+       27.98
+      ],
+      "run",
+      0
+     ],
+     [
+      26.1,
+      [
+       19.5,
+       20.3,
+       26
+      ],
+      "idle",
+      1
+     ]
+    ]
+   },
+   {
+    "try": 2,
+    "deaths": 1,
+    "end": [
+     19.5,
+     20.3,
+     26
+    ],
+    "arrived": false,
+    "stuck": false,
+    "trace": [
+     [
+      27.02,
+      [
+       0,
+       20.3,
+       37.77
+      ],
+      "run",
+      1
+     ],
+     [
+      27.48,
+      [
+       0,
+       20.3,
+       33.9
+      ],
+      "run",
+      1
+     ],
+     [
+      27.78,
+      [
+       0,
+       20.3,
+       31.2
+      ],
+      "run",
+      1
+     ],
+     [
+      27.96,
+      [
+       0,
+       20.3,
+       29.55
+      ],
+      "run",
+      1
+     ],
+     [
+      28.11,
+      [
+       0,
+       20.3,
+       28.2
+      ],
+      "run",
+      1
+     ],
+     [
+      28.16,
+      [
+       0,
+       20.3,
+       27.75
+      ],
+      "run",
+      1
+     ]
+    ]
+   },
+   {
+    "try": 3,
+    "deaths": 1,
+    "end": [
+     19.5,
+     20.3,
+     26
+    ],
+    "arrived": false,
+    "stuck": false,
+    "trace": [
+     [
+      29.39,
+      [
+       0,
+       20.3,
+       28.13
+      ],
+      "run",
+      2
+     ],
+     [
+      29.69,
+      [
+       0,
+       20.3,
+       25.43
+      ],
+      "run",
+      2
+     ],
+     [
+      29.74,
+      [
+       0,
+       20.3,
+       24.98
+      ],
+      "run",
+      2
+     ],
+     [
+      29.88,
+      [
+       0,
+       20.3,
+       23.7
+      ],
+      "run",
+      2
+     ],
+     [
+      30.12,
+      [
+       0,
+       20.3,
+       21.53
+      ],
+      "run",
+      2
+     ],
+     [
+      30.57,
+      [
+       0,
+       20.3,
+       17.48
+      ],
+      "run",
+      2
+     ],
+     [
+      30.72,
+      [
+       0,
+       20.3,
+       16.2
+      ],
+      "run",
+      2
+     ],
+     [
+      30.77,
+      [
+       0,
+       20.3,
+       15.75
+      ],
+      "run",
+      2
+     ],
+     [
+      30.82,
+      [
+       0,
+       20.3,
+       15.3
+      ],
+      "run",
+      2
+     ],
+     [
+      26.05,
+      [
+       19.5,
+       20.3,
+       26
+      ],
+      "fall",
+      3
+     ]
+    ]
+   }
+  ],
+  "beam_states": [
+   {
+    "t": 27.17,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 27.32,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 27.41,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 27.56,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 27.66,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 27.76,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 27.81,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 28.01,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 28.16,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 28.31,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 28.41,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 28.51,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 28.61,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 28.71,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 29.2,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 29.65,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 29.75,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 29.96,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 30.06,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   },
+   {
+    "t": 30.11,
+    "o": [
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ],
+     [
+      null,
+      null,
+      null
+     ]
+    ]
+   }
+  ],
+  "trolley": [
+   {
+    "p": [
+     0,
+     20.5,
+     9
+    ],
+    "motion": {
+     "type": "oscillate",
+     "axis": [
+      1,
+      0,
+      0
+     ],
+     "amp": 9,
+     "period": 9,
+     "ease": "sine"
+    },
+    "cur": [
+     7.24,
+     20.5,
+     9
+    ],
+    "top": 20.75
+   }
+  ],
+  "trolley_ride": {
+   "start": [
+    7.24,
+    20.3,
+    9
+   ],
+   "end": [
+    10.73,
+    6.04,
+    9
+   ],
+   "xmin": 7.24,
+   "xmax": 10.73,
+   "states": [
+    "fall",
+    "idle"
+   ],
+   "path": [
+    [
+     27.26,
+     [
+      7.24,
+      20.3,
+      9
+     ],
+     "idle"
+    ],
+    [
+     27.36,
+     [
+      7.24,
+      20.3,
+      9
+     ],
+     "idle"
+    ],
+    [
+     27.46,
+     [
+      7.24,
+      20.3,
+      9
+     ],
+     "idle"
+    ],
+    [
+     28.09,
+     [
+      7.87,
+      20.3,
+      9
+     ],
+     "idle"
+    ],
+    [
+     28.34,
+     [
+      8.94,
+      20.3,
+      9
+     ],
+     "idle"
+    ],
+    [
+     28.44,
+     [
+      9.32,
+      20.3,
+      9
+     ],
+     "idle"
+    ],
+    [
+     28.54,
+     [
+      9.65,
+      20.3,
+      9
+     ],
+     "idle"
+    ],
+    [
+     28.64,
+     [
+      9.95,
+      20.3,
+      9
+     ],
+     "idle"
+    ],
+    [
+     28.69,
+     [
+      10.08,
+      20.3,
+      9
+     ],
+     "idle"
+    ],
+    [
+     28.89,
+     [
+      10.52,
+      19.96,
+      9
+     ],
+     "fall"
+    ],
+    [
+     29.32,
+     [
+      10.73,
+      13.45,
+      9
+     ],
+     "fall"
+    ],
+    [
+     29.52,
+     [
+      10.73,
+      7.51,
+      9
+     ],
+     "fall"
+    ],
+    [
+     29.81,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ],
+    [
+     29.92,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ],
+    [
+     30.07,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ],
+    [
+     30.17,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ],
+    [
+     30.27,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ],
+    [
+     30.47,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ],
+    [
+     30.52,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ],
+    [
+     30.72,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ],
+    [
+     30.77,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ],
+    [
+     30.88,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ],
+    [
+     30.98,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ],
+    [
+     31.08,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ],
+    [
+     31.18,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ],
+    [
+     31.28,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ],
+    [
+     31.53,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ],
+    [
+     31.66,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ],
+    [
+     31.99,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ],
+    [
+     32.29,
+     [
+      10.73,
+      6.04,
+      9
+     ],
+     "idle"
+    ]
+   ]
+  }
+ },
+ "console": [
+  "warning: [Course ember-2] props.js had no entry for: girders, pipes, slabs, antennae, fins"
+ ]
+}

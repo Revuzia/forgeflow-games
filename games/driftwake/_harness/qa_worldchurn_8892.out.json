@@ -1,0 +1,1107 @@
+[
+ {
+  "tag": "boot",
+  "realm": {
+   "shrine": "cold",
+   "landmarks": "cold",
+   "enc": "cold"
+  },
+  "bakes": 1,
+  "char": {
+   "y": -0.022,
+   "h": -0.022,
+   "d": 0
+  },
+  "shrines": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5,
+    "dy": 0,
+    "grade": 0.913
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "dy": 0,
+    "grade": 0.018
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "dy": 0,
+    "grade": 0.013
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "dy": 0,
+    "grade": 0.028
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "dy": 0,
+    "grade": 0.032
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "dy": 0,
+    "grade": 0.025
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "dy": 0,
+    "grade": 0.056
+   }
+  ],
+  "shrinePrismMaxErr": -0.0,
+  "shrinePrismWorst": 57,
+  "lmLive": 105,
+  "lmInstances": 15,
+  "lmTypes": [
+   "rimeCircle",
+   "frozenCrest",
+   "glacierGate"
+  ],
+  "lmSettled": false,
+  "lmPrismMaxErr": -0.0,
+  "lmRelMin": -1.99,
+  "lmRelMax": 24.44,
+  "lmInstMaxErr": -0.005,
+  "gpu": {
+   "geo": 24,
+   "tex": 41,
+   "prog": 59,
+   "calls": 0
+  }
+ },
+ {
+  "tag": "01:sand",
+  "realm": {
+   "shrine": "sand",
+   "landmarks": "sand",
+   "enc": "sand"
+  },
+  "bakes": 2,
+  "char": {
+   "y": 3.96,
+   "h": 3.96,
+   "d": 0
+  },
+  "shrines": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5,
+    "dy": 0,
+    "grade": 0.717
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "dy": 0,
+    "grade": 0.203
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "dy": 0,
+    "grade": 0.072
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "dy": 0,
+    "grade": 0.421
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "dy": 0,
+    "grade": 0.33
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "dy": 0,
+    "grade": 0.361
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "dy": 0,
+    "grade": 0.274
+   }
+  ],
+  "shrinePrismMaxErr": 0,
+  "shrinePrismWorst": 61,
+  "lmLive": 90,
+  "lmInstances": 15,
+  "lmTypes": [
+   "sunkenColonnade",
+   "bleachedRibs",
+   "watchSpire"
+  ],
+  "lmSettled": false,
+  "lmPrismMaxErr": -0.0,
+  "lmRelMin": -1.79,
+  "lmRelMax": -0.03,
+  "lmInstMaxErr": -0.008,
+  "gpu": {
+   "geo": 24,
+   "tex": 43,
+   "prog": 61,
+   "calls": 0
+  }
+ },
+ {
+  "tag": "02:cold",
+  "realm": {
+   "shrine": "cold",
+   "landmarks": "cold",
+   "enc": "cold"
+  },
+  "bakes": 3,
+  "char": {
+   "y": -0.022,
+   "h": -0.022,
+   "d": 0
+  },
+  "shrines": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5,
+    "dy": 0,
+    "grade": 0.913
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "dy": 0,
+    "grade": 0.018
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "dy": 0,
+    "grade": 0.013
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "dy": 0,
+    "grade": 0.028
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "dy": 0,
+    "grade": 0.032
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "dy": 0,
+    "grade": 0.025
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "dy": 0,
+    "grade": 0.056
+   }
+  ],
+  "shrinePrismMaxErr": -0.0,
+  "shrinePrismWorst": 43,
+  "lmLive": 105,
+  "lmInstances": 15,
+  "lmTypes": [
+   "rimeCircle",
+   "frozenCrest",
+   "glacierGate"
+  ],
+  "lmSettled": false,
+  "lmPrismMaxErr": -0.0,
+  "lmRelMin": -1.99,
+  "lmRelMax": 24.44,
+  "lmInstMaxErr": -0.005,
+  "gpu": {
+   "geo": 24,
+   "tex": 43,
+   "prog": 61,
+   "calls": 0
+  }
+ },
+ {
+  "tag": "03:ash",
+  "realm": {
+   "shrine": "ash",
+   "landmarks": "ash",
+   "enc": "ash"
+  },
+  "bakes": 4,
+  "char": {
+   "y": 1.572,
+   "h": 1.572,
+   "d": 0
+  },
+  "shrines": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5,
+    "dy": 0,
+    "grade": 0.286
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "dy": 0,
+    "grade": 0.188
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "dy": 0,
+    "grade": 0.069
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "dy": 0,
+    "grade": 0.47
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "dy": 0,
+    "grade": 0.136
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "dy": 0,
+    "grade": 0.102
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "dy": 0,
+    "grade": 0.053
+   }
+  ],
+  "shrinePrismMaxErr": -0.0,
+  "shrinePrismWorst": 47,
+  "lmLive": 135,
+  "lmInstances": 15,
+  "lmTypes": [
+   "basaltColonnade",
+   "calderaRim",
+   "emberVent"
+  ],
+  "lmSettled": false,
+  "lmPrismMaxErr": -0.0,
+  "lmRelMin": -1.37,
+  "lmRelMax": -0.03,
+  "lmInstMaxErr": -0.005,
+  "gpu": {
+   "geo": 24,
+   "tex": 43,
+   "prog": 61,
+   "calls": 0
+  }
+ },
+ {
+  "tag": "04:cold",
+  "realm": {
+   "shrine": "cold",
+   "landmarks": "cold",
+   "enc": "cold"
+  },
+  "bakes": 5,
+  "char": {
+   "y": -0.022,
+   "h": -0.022,
+   "d": 0
+  },
+  "shrines": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5,
+    "dy": 0,
+    "grade": 0.913
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "dy": 0,
+    "grade": 0.018
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "dy": 0,
+    "grade": 0.013
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "dy": 0,
+    "grade": 0.028
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "dy": 0,
+    "grade": 0.032
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "dy": 0,
+    "grade": 0.025
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "dy": 0,
+    "grade": 0.056
+   }
+  ],
+  "shrinePrismMaxErr": -0.0,
+  "shrinePrismWorst": 43,
+  "lmLive": 105,
+  "lmInstances": 15,
+  "lmTypes": [
+   "rimeCircle",
+   "frozenCrest",
+   "glacierGate"
+  ],
+  "lmSettled": false,
+  "lmPrismMaxErr": -0.0,
+  "lmRelMin": -1.99,
+  "lmRelMax": 24.44,
+  "lmInstMaxErr": -0.005,
+  "gpu": {
+   "geo": 24,
+   "tex": 43,
+   "prog": 61,
+   "calls": 0
+  }
+ },
+ {
+  "tag": "05:sand",
+  "realm": {
+   "shrine": "sand",
+   "landmarks": "sand",
+   "enc": "sand"
+  },
+  "bakes": 6,
+  "char": {
+   "y": 3.96,
+   "h": 3.96,
+   "d": 0
+  },
+  "shrines": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5,
+    "dy": 0,
+    "grade": 0.717
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "dy": 0,
+    "grade": 0.203
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "dy": 0,
+    "grade": 0.072
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "dy": 0,
+    "grade": 0.421
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "dy": 0,
+    "grade": 0.33
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "dy": 0,
+    "grade": 0.361
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "dy": 0,
+    "grade": 0.274
+   }
+  ],
+  "shrinePrismMaxErr": 0,
+  "shrinePrismWorst": 61,
+  "lmLive": 90,
+  "lmInstances": 15,
+  "lmTypes": [
+   "sunkenColonnade",
+   "bleachedRibs",
+   "watchSpire"
+  ],
+  "lmSettled": false,
+  "lmPrismMaxErr": -0.0,
+  "lmRelMin": -1.79,
+  "lmRelMax": -0.03,
+  "lmInstMaxErr": -0.008,
+  "gpu": {
+   "geo": 24,
+   "tex": 43,
+   "prog": 61,
+   "calls": 0
+  }
+ },
+ {
+  "tag": "06:ash",
+  "realm": {
+   "shrine": "ash",
+   "landmarks": "ash",
+   "enc": "ash"
+  },
+  "bakes": 7,
+  "char": {
+   "y": 1.572,
+   "h": 1.572,
+   "d": 0
+  },
+  "shrines": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5,
+    "dy": 0,
+    "grade": 0.286
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "dy": 0,
+    "grade": 0.188
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "dy": 0,
+    "grade": 0.069
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "dy": 0,
+    "grade": 0.47
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "dy": 0,
+    "grade": 0.136
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "dy": 0,
+    "grade": 0.102
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "dy": 0,
+    "grade": 0.053
+   }
+  ],
+  "shrinePrismMaxErr": -0.0,
+  "shrinePrismWorst": 47,
+  "lmLive": 135,
+  "lmInstances": 15,
+  "lmTypes": [
+   "basaltColonnade",
+   "calderaRim",
+   "emberVent"
+  ],
+  "lmSettled": false,
+  "lmPrismMaxErr": -0.0,
+  "lmRelMin": -1.37,
+  "lmRelMax": -0.03,
+  "lmInstMaxErr": -0.005,
+  "gpu": {
+   "geo": 24,
+   "tex": 43,
+   "prog": 61,
+   "calls": 0
+  }
+ },
+ {
+  "tag": "07:cold",
+  "realm": {
+   "shrine": "cold",
+   "landmarks": "cold",
+   "enc": "cold"
+  },
+  "bakes": 8,
+  "char": {
+   "y": -0.022,
+   "h": -0.022,
+   "d": 0
+  },
+  "shrines": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5,
+    "dy": 0,
+    "grade": 0.913
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "dy": 0,
+    "grade": 0.018
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "dy": 0,
+    "grade": 0.013
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "dy": 0,
+    "grade": 0.028
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "dy": 0,
+    "grade": 0.032
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "dy": 0,
+    "grade": 0.025
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "dy": 0,
+    "grade": 0.056
+   }
+  ],
+  "shrinePrismMaxErr": -0.0,
+  "shrinePrismWorst": 43,
+  "lmLive": 105,
+  "lmInstances": 15,
+  "lmTypes": [
+   "rimeCircle",
+   "frozenCrest",
+   "glacierGate"
+  ],
+  "lmSettled": false,
+  "lmPrismMaxErr": -0.0,
+  "lmRelMin": -1.99,
+  "lmRelMax": 24.44,
+  "lmInstMaxErr": -0.005,
+  "gpu": {
+   "geo": 24,
+   "tex": 43,
+   "prog": 61,
+   "calls": 0
+  }
+ },
+ {
+  "tag": "08:sand",
+  "realm": {
+   "shrine": "sand",
+   "landmarks": "sand",
+   "enc": "sand"
+  },
+  "bakes": 9,
+  "char": {
+   "y": 3.96,
+   "h": 3.96,
+   "d": 0
+  },
+  "shrines": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5,
+    "dy": 0,
+    "grade": 0.717
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "dy": 0,
+    "grade": 0.203
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "dy": 0,
+    "grade": 0.072
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "dy": 0,
+    "grade": 0.421
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "dy": 0,
+    "grade": 0.33
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "dy": 0,
+    "grade": 0.361
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "dy": 0,
+    "grade": 0.274
+   }
+  ],
+  "shrinePrismMaxErr": 0,
+  "shrinePrismWorst": 61,
+  "lmLive": 90,
+  "lmInstances": 15,
+  "lmTypes": [
+   "sunkenColonnade",
+   "bleachedRibs",
+   "watchSpire"
+  ],
+  "lmSettled": false,
+  "lmPrismMaxErr": -0.0,
+  "lmRelMin": -1.79,
+  "lmRelMax": -0.03,
+  "lmInstMaxErr": -0.008,
+  "gpu": {
+   "geo": 24,
+   "tex": 43,
+   "prog": 61,
+   "calls": 0
+  }
+ },
+ {
+  "tag": "09:cold",
+  "realm": {
+   "shrine": "cold",
+   "landmarks": "cold",
+   "enc": "cold"
+  },
+  "bakes": 10,
+  "char": {
+   "y": -0.022,
+   "h": -0.022,
+   "d": 0
+  },
+  "shrines": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5,
+    "dy": 0,
+    "grade": 0.913
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "dy": 0,
+    "grade": 0.018
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "dy": 0,
+    "grade": 0.013
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "dy": 0,
+    "grade": 0.028
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "dy": 0,
+    "grade": 0.032
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "dy": 0,
+    "grade": 0.025
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "dy": 0,
+    "grade": 0.056
+   }
+  ],
+  "shrinePrismMaxErr": -0.0,
+  "shrinePrismWorst": 43,
+  "lmLive": 105,
+  "lmInstances": 15,
+  "lmTypes": [
+   "rimeCircle",
+   "frozenCrest",
+   "glacierGate"
+  ],
+  "lmSettled": false,
+  "lmPrismMaxErr": -0.0,
+  "lmRelMin": -1.99,
+  "lmRelMax": 24.44,
+  "lmInstMaxErr": -0.005,
+  "gpu": {
+   "geo": 24,
+   "tex": 43,
+   "prog": 61,
+   "calls": 0
+  }
+ },
+ {
+  "tag": "10:ash",
+  "realm": {
+   "shrine": "ash",
+   "landmarks": "ash",
+   "enc": "ash"
+  },
+  "bakes": 11,
+  "char": {
+   "y": 1.572,
+   "h": 1.572,
+   "d": 0
+  },
+  "shrines": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5,
+    "dy": 0,
+    "grade": 0.286
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "dy": 0,
+    "grade": 0.188
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "dy": 0,
+    "grade": 0.069
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "dy": 0,
+    "grade": 0.47
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "dy": 0,
+    "grade": 0.136
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "dy": 0,
+    "grade": 0.102
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "dy": 0,
+    "grade": 0.053
+   }
+  ],
+  "shrinePrismMaxErr": -0.0,
+  "shrinePrismWorst": 47,
+  "lmLive": 135,
+  "lmInstances": 15,
+  "lmTypes": [
+   "basaltColonnade",
+   "calderaRim",
+   "emberVent"
+  ],
+  "lmSettled": false,
+  "lmPrismMaxErr": -0.0,
+  "lmRelMin": -1.37,
+  "lmRelMax": -0.03,
+  "lmInstMaxErr": -0.005,
+  "gpu": {
+   "geo": 24,
+   "tex": 43,
+   "prog": 61,
+   "calls": 0
+  }
+ },
+ {
+  "tag": "11:sand",
+  "realm": {
+   "shrine": "sand",
+   "landmarks": "sand",
+   "enc": "sand"
+  },
+  "bakes": 12,
+  "char": {
+   "y": 3.96,
+   "h": 3.96,
+   "d": 0
+  },
+  "shrines": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5,
+    "dy": 0,
+    "grade": 0.717
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "dy": 0,
+    "grade": 0.203
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "dy": 0,
+    "grade": 0.072
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "dy": 0,
+    "grade": 0.421
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "dy": 0,
+    "grade": 0.33
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "dy": 0,
+    "grade": 0.361
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "dy": 0,
+    "grade": 0.274
+   }
+  ],
+  "shrinePrismMaxErr": 0,
+  "shrinePrismWorst": 61,
+  "lmLive": 90,
+  "lmInstances": 15,
+  "lmTypes": [
+   "sunkenColonnade",
+   "bleachedRibs",
+   "watchSpire"
+  ],
+  "lmSettled": false,
+  "lmPrismMaxErr": -0.0,
+  "lmRelMin": -1.79,
+  "lmRelMax": -0.03,
+  "lmInstMaxErr": -0.008,
+  "gpu": {
+   "geo": 24,
+   "tex": 43,
+   "prog": 61,
+   "calls": 0
+  }
+ },
+ {
+  "tag": "12:cold",
+  "realm": {
+   "shrine": "cold",
+   "landmarks": "cold",
+   "enc": "cold"
+  },
+  "bakes": 13,
+  "char": {
+   "y": -0.022,
+   "h": -0.022,
+   "d": 0
+  },
+  "shrines": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5,
+    "dy": 0,
+    "grade": 0.913
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "dy": 0,
+    "grade": 0.018
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "dy": 0,
+    "grade": 0.013
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "dy": 0,
+    "grade": 0.028
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "dy": 0,
+    "grade": 0.032
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "dy": 0,
+    "grade": 0.025
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "dy": 0,
+    "grade": 0.056
+   }
+  ],
+  "shrinePrismMaxErr": -0.0,
+  "shrinePrismWorst": 43,
+  "lmLive": 105,
+  "lmInstances": 15,
+  "lmTypes": [
+   "rimeCircle",
+   "frozenCrest",
+   "glacierGate"
+  ],
+  "lmSettled": false,
+  "lmPrismMaxErr": -0.0,
+  "lmRelMin": -1.99,
+  "lmRelMax": 24.44,
+  "lmInstMaxErr": -0.005,
+  "gpu": {
+   "geo": 24,
+   "tex": 43,
+   "prog": 61,
+   "calls": 0
+  }
+ }
+]

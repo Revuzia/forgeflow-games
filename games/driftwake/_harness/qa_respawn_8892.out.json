@@ -1,0 +1,617 @@
+{
+ "rows": [
+  {
+   "tag": "ring:shrine_e",
+   "realm": "cold",
+   "from": {
+    "x": 321,
+    "z": -12.5
+   },
+   "nearestShrine": "shrine_e",
+   "nearestDist": 8.5,
+   "landedOn": {
+    "x": 5,
+    "z": 5.5
+   },
+   "landedShrine": "cold_spawn",
+   "landedDist": 0,
+   "lastShrineId": "cold_spawn",
+   "groundErr": 0,
+   "deadSeen": true,
+   "deathsDelta": 1,
+   "deathsMid": 1,
+   "hp": 1,
+   "mp": 1,
+   "dead": false,
+   "grace": 0.8,
+   "invuln": true,
+   "airborne": false,
+   "vertVel": 0,
+   "speed": 0,
+   "hurtLow": false,
+   "vigOpacity": "",
+   "saveLastShrine": "cold_spawn",
+   "saveDeaths": 1,
+   "savePos": {
+    "x": 5,
+    "z": 5.5,
+    "realm": "cold"
+   },
+   "saveBossType": "object"
+  },
+  {
+   "tag": "ring:shrine_ne",
+   "realm": "cold",
+   "from": {
+    "x": 178,
+    "z": 282.6
+   },
+   "nearestShrine": "shrine_ne",
+   "nearestDist": 8.5,
+   "landedOn": {
+    "x": 5,
+    "z": 5.5
+   },
+   "landedShrine": "cold_spawn",
+   "landedDist": 0,
+   "lastShrineId": "cold_spawn",
+   "groundErr": 0,
+   "deadSeen": true,
+   "deathsDelta": 1,
+   "deathsMid": 1,
+   "hp": 1,
+   "mp": 1,
+   "dead": false,
+   "grace": 0.77,
+   "invuln": true,
+   "airborne": false,
+   "vertVel": 0,
+   "speed": 0,
+   "hurtLow": false,
+   "vigOpacity": "",
+   "saveLastShrine": "cold_spawn",
+   "saveDeaths": 2,
+   "savePos": {
+    "x": 5,
+    "z": 5.5,
+    "realm": "cold"
+   },
+   "saveBossType": "object"
+  },
+  {
+   "tag": "ring:shrine_nw",
+   "realm": "cold",
+   "from": {
+    "x": -164,
+    "z": 346.6
+   },
+   "nearestShrine": "shrine_nw",
+   "nearestDist": 8.5,
+   "landedOn": {
+    "x": 5,
+    "z": 5.5
+   },
+   "landedShrine": "cold_spawn",
+   "landedDist": 0,
+   "lastShrineId": "cold_spawn",
+   "groundErr": 0,
+   "deadSeen": true,
+   "deathsDelta": 1,
+   "deathsMid": 1,
+   "hp": 1,
+   "mp": 1,
+   "dead": false,
+   "grace": 0.7,
+   "invuln": true,
+   "airborne": false,
+   "vertVel": 0,
+   "speed": 0,
+   "hurtLow": false,
+   "vigOpacity": "",
+   "saveLastShrine": "cold_spawn",
+   "saveDeaths": 3,
+   "savePos": {
+    "x": 5,
+    "z": 5.5,
+    "realm": "cold"
+   },
+   "saveBossType": "object"
+  },
+  {
+   "tag": "ring:shrine_w",
+   "realm": "cold",
+   "from": {
+    "x": -331,
+    "z": 19.5
+   },
+   "nearestShrine": "shrine_w",
+   "nearestDist": 8.5,
+   "landedOn": {
+    "x": 5,
+    "z": 5.5
+   },
+   "landedShrine": "cold_spawn",
+   "landedDist": 0,
+   "lastShrineId": "cold_spawn",
+   "groundErr": 0,
+   "deadSeen": true,
+   "deathsDelta": 1,
+   "deathsMid": 1,
+   "hp": 1,
+   "mp": 1,
+   "dead": false,
+   "grace": 0.7,
+   "invuln": true,
+   "airborne": false,
+   "vertVel": 0,
+   "speed": 0,
+   "hurtLow": false,
+   "vigOpacity": "",
+   "saveLastShrine": "cold_spawn",
+   "saveDeaths": 4,
+   "savePos": {
+    "x": 5,
+    "z": 5.5,
+    "realm": "cold"
+   },
+   "saveBossType": "object"
+  },
+  {
+   "tag": "ring:shrine_sw",
+   "realm": "cold",
+   "from": {
+    "x": -132,
+    "z": -323.6
+   },
+   "nearestShrine": "shrine_sw",
+   "nearestDist": 8.5,
+   "landedOn": {
+    "x": 5,
+    "z": 5.5
+   },
+   "landedShrine": "cold_spawn",
+   "landedDist": 0,
+   "lastShrineId": "cold_spawn",
+   "groundErr": 0,
+   "deadSeen": true,
+   "deathsDelta": 1,
+   "deathsMid": 1,
+   "hp": 1,
+   "mp": 1,
+   "dead": false,
+   "grace": 0.8,
+   "invuln": true,
+   "airborne": false,
+   "vertVel": 0,
+   "speed": 0,
+   "hurtLow": false,
+   "vigOpacity": "",
+   "saveLastShrine": "cold_spawn",
+   "saveDeaths": 5,
+   "savePos": {
+    "x": 5,
+    "z": 5.5,
+    "realm": "cold"
+   },
+   "saveBossType": "object"
+  },
+  {
+   "tag": "ring:shrine_se",
+   "realm": "cold",
+   "from": {
+    "x": 154,
+    "z": -307.6
+   },
+   "nearestShrine": "shrine_se",
+   "nearestDist": 8.5,
+   "landedOn": {
+    "x": 5,
+    "z": 5.5
+   },
+   "landedShrine": "cold_spawn",
+   "landedDist": 0,
+   "lastShrineId": "cold_spawn",
+   "groundErr": 0,
+   "deadSeen": true,
+   "deathsDelta": 1,
+   "deathsMid": 1,
+   "hp": 1,
+   "mp": 1,
+   "dead": false,
+   "grace": 0.8,
+   "invuln": true,
+   "airborne": false,
+   "vertVel": 0,
+   "speed": 0,
+   "hurtLow": false,
+   "vigOpacity": "",
+   "saveLastShrine": "cold_spawn",
+   "saveDeaths": 6,
+   "savePos": {
+    "x": 5,
+    "z": 5.5,
+    "realm": "cold"
+   },
+   "saveBossType": "object"
+  },
+  {
+   "tag": "storm-edge",
+   "realm": "cold",
+   "from": {
+    "x": 0,
+    "z": 600
+   },
+   "nearestShrine": "shrine_nw",
+   "nearestDist": 310.1,
+   "landedOn": {
+    "x": 5,
+    "z": 5.5
+   },
+   "landedShrine": "cold_spawn",
+   "landedDist": 0,
+   "lastShrineId": "cold_spawn",
+   "groundErr": 0,
+   "deadSeen": true,
+   "deathsDelta": 1,
+   "deathsMid": 1,
+   "hp": 1,
+   "mp": 1,
+   "dead": false,
+   "grace": 0.8,
+   "invuln": true,
+   "airborne": false,
+   "vertVel": 0,
+   "speed": 0,
+   "hurtLow": false,
+   "vigOpacity": "",
+   "saveLastShrine": "cold_spawn",
+   "saveDeaths": 7,
+   "savePos": {
+    "x": 5,
+    "z": 5.5,
+    "realm": "cold"
+   },
+   "saveBossType": "object"
+  },
+  {
+   "tag": "mid-air",
+   "realm": "cold",
+   "from": {
+    "x": 120,
+    "z": 120
+   },
+   "nearestShrine": "cold_spawn",
+   "nearestDist": 162.3,
+   "landedOn": {
+    "x": 5,
+    "z": 5.5
+   },
+   "landedShrine": "cold_spawn",
+   "landedDist": 0,
+   "lastShrineId": "cold_spawn",
+   "groundErr": 0,
+   "deadSeen": true,
+   "deathsDelta": 1,
+   "deathsMid": 1,
+   "hp": 1,
+   "mp": 1,
+   "dead": false,
+   "grace": 0.8,
+   "invuln": true,
+   "airborne": false,
+   "vertVel": 0,
+   "speed": 0,
+   "hurtLow": false,
+   "vigOpacity": "",
+   "saveLastShrine": "cold_spawn",
+   "saveDeaths": 8,
+   "savePos": {
+    "x": 5,
+    "z": 5.5,
+    "realm": "cold"
+   },
+   "saveBossType": "object"
+  },
+  {
+   "tag": "ash-basin",
+   "realm": "ash",
+   "from": {
+    "x": 46,
+    "z": 38.6
+   },
+   "nearestShrine": "cold_spawn",
+   "nearestDist": 52.7,
+   "landedOn": {
+    "x": 5,
+    "z": 5.5
+   },
+   "landedShrine": "cold_spawn",
+   "landedDist": 0,
+   "lastShrineId": "cold_spawn",
+   "groundErr": 0,
+   "deadSeen": true,
+   "deathsDelta": 1,
+   "deathsMid": 1,
+   "hp": 1,
+   "mp": 1,
+   "dead": false,
+   "grace": 0.8,
+   "invuln": true,
+   "airborne": false,
+   "vertVel": 0,
+   "speed": 0,
+   "hurtLow": false,
+   "vigOpacity": "",
+   "saveLastShrine": "cold_spawn",
+   "saveDeaths": 9,
+   "savePos": {
+    "x": 5,
+    "z": 5.5,
+    "realm": "ash"
+   },
+   "saveBossType": "object"
+  },
+  {
+   "tag": "boss-live",
+   "realm": "ash",
+   "from": {
+    "x": 70.3,
+    "z": -33.2
+   },
+   "nearestShrine": "cold_spawn",
+   "nearestDist": 75.9,
+   "landedOn": {
+    "x": 5,
+    "z": 5.5
+   },
+   "landedShrine": "cold_spawn",
+   "landedDist": 0,
+   "lastShrineId": "cold_spawn",
+   "groundErr": 0,
+   "deadSeen": true,
+   "deathsDelta": 1,
+   "deathsMid": 1,
+   "hp": 1,
+   "mp": 1,
+   "dead": false,
+   "grace": 0.8,
+   "invuln": true,
+   "airborne": false,
+   "vertVel": 0,
+   "speed": 0,
+   "hurtLow": false,
+   "vigOpacity": "",
+   "saveLastShrine": "cold_spawn",
+   "saveDeaths": 10,
+   "savePos": {
+    "x": 5,
+    "z": 5.5,
+    "realm": "ash"
+   },
+   "saveBossType": "object"
+  },
+  {
+   "tag": "motes-in-flight",
+   "realm": "ash",
+   "from": {
+    "x": 5,
+    "z": 5.5
+   },
+   "nearestShrine": "cold_spawn",
+   "nearestDist": 0,
+   "landedOn": {
+    "x": 5,
+    "z": 5.5
+   },
+   "landedShrine": "cold_spawn",
+   "landedDist": 0,
+   "lastShrineId": "cold_spawn",
+   "groundErr": 0,
+   "deadSeen": true,
+   "deathsDelta": 1,
+   "deathsMid": 1,
+   "hp": 1,
+   "mp": 1,
+   "dead": false,
+   "grace": 0.78,
+   "invuln": true,
+   "airborne": false,
+   "vertVel": 0,
+   "speed": 0,
+   "hurtLow": false,
+   "vigOpacity": "",
+   "saveLastShrine": "cold_spawn",
+   "saveDeaths": 11,
+   "savePos": {
+    "x": 5,
+    "z": 5.5,
+    "realm": "ash"
+   },
+   "saveBossType": "object",
+   "motesBefore": {
+    "active": 8,
+    "spawned": 9,
+    "picked": 0,
+    "healed": 0
+   },
+   "motesAfter": {
+    "active": 6,
+    "spawned": 9,
+    "picked": 2,
+    "healed": 0
+   }
+  }
+ ],
+ "extra": {
+  "saveKey": "driftwake_save",
+  "shrines": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6
+   }
+  ],
+  "ashBasin": [
+   46,
+   38.6,
+   -8.75
+  ],
+  "boss": {
+   "spawned": "true",
+   "stats": {
+    "state": "live",
+    "kind": "mini",
+    "key": "furnaceGuardian",
+    "name": "Furnace Guardian",
+    "id": 31,
+    "slot": 3,
+    "level": 20,
+    "hp": 5706.2333984375,
+    "hpMax": 5706.2333984375,
+    "hpFrac": 1,
+    "poiseMax": 260,
+    "tier": 5,
+    "registryKind": "boss",
+    "barName": "Furnace Guardian",
+    "phase": 1,
+    "phase2Pct": 0.6,
+    "phase2At": 0,
+    "arenaX": 70.27115025361448,
+    "arenaZ": -33.21588899884478,
+    "arenaGrade": 0.097990574926032,
+    "arenaDist": 1.5721249240349502e-06,
+    "leashM": 30,
+    "leashReturns": 0,
+    "regenTicks": 0,
+    "lastRegenFrac": 0,
+    "speedBase": 2,
+    "speedNow": 2,
+    "patternP1": 1,
+    "patternAll": 2,
+    "patternOpened": 0,
+    "patternNow": 1,
+    "eventsFired": 1,
+    "kills": 0,
+    "killed": {},
+    "refusal": null,
+    "portalOpen": false,
+    "nextRealm": "cold",
+    "level6": 6,
+    "level8": 8
+   }
+  },
+  "bossAfterDeath": {
+   "state": "live",
+   "kind": "mini",
+   "key": "furnaceGuardian",
+   "name": "Furnace Guardian",
+   "id": 31,
+   "slot": 2,
+   "level": 20,
+   "hp": 5706.2333984375,
+   "hpMax": 5706.2333984375,
+   "hpFrac": 1,
+   "poiseMax": 260,
+   "tier": 5,
+   "registryKind": "boss",
+   "barName": "Furnace Guardian",
+   "phase": 1,
+   "phase2Pct": 0.6,
+   "phase2At": 0,
+   "arenaX": 70.27115025361448,
+   "arenaZ": -33.21588899884478,
+   "arenaGrade": 0.097990574926032,
+   "arenaDist": 2.3999626853867184,
+   "leashM": 30,
+   "leashReturns": 0,
+   "regenTicks": 0,
+   "lastRegenFrac": 0,
+   "speedBase": 2,
+   "speedNow": 2,
+   "patternP1": 1,
+   "patternAll": 2,
+   "patternOpened": 0,
+   "patternNow": 1,
+   "eventsFired": 1,
+   "kills": 0,
+   "killed": {},
+   "refusal": null,
+   "portalOpen": false,
+   "nextRealm": "cold",
+   "level6": 6,
+   "level8": 8
+  },
+  "deathLoop": [
+   {
+    "hp": 1,
+    "deaths": 1,
+    "x": 5,
+    "z": 5.5,
+    "dead": false
+   },
+   {
+    "hp": 1,
+    "deaths": 2,
+    "x": 5,
+    "z": 5.5,
+    "dead": false
+   },
+   {
+    "hp": 1,
+    "deaths": 3,
+    "x": 5,
+    "z": 5.5,
+    "dead": false
+   },
+   {
+    "afterStand": true,
+    "hp": 1,
+    "deaths": 3,
+    "dead": false
+   }
+  ],
+  "bossFlagProbe": {
+   "before": {
+    "isArray": false,
+    "keys": []
+   },
+   "after": {
+    "isArray": true
+   },
+   "liveAfterSet": "[]",
+   "serialised": "[]",
+   "afterReload": "[]",
+   "flagSurvives": false
+  }
+ }
+}

@@ -1,0 +1,10 @@
+{
+  "summary": "Geometry Wars: Retro Evolved is a twin-stick arena shooter (PS3/Xbox 360 era).",
+  "key_mechanics": [
+    "twin-stick controls",
+    "wave-based enemy swarms",
+    "multiplier system",
+    "bombs"
+  ],
+  "art_direction": "neon vector graphics, bloom, particle effects"
+}

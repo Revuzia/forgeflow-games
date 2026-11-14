@@ -1,0 +1,4 @@
+.wrangler/
+node_modules/
+test/_reports/
+worker-configuration.d.ts

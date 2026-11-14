@@ -1,0 +1,29 @@
+{
+ "tag": "before_molo",
+ "titan": "molo",
+ "biome": "whitestacks",
+ "rank": 2,
+ "n": 176,
+ "seconds": 20,
+ "music_mean_rms": 0.0538,
+ "sfx_mean_rms": 0.0688,
+ "music_energy_rms": 0.0587,
+ "sfx_energy_rms": 0.0718,
+ "music_dbfs": -24.6,
+ "sfx_dbfs": -22.9,
+ "sfx_over_music_energy": 1.22,
+ "music_over_sfx_median": 0.812,
+ "frac_sfx_5x_music": 0.051,
+ "music_p10_p90": [
+  0.019,
+  0.0795
+ ],
+ "sfx_p10_p90": [
+  0.0452,
+  0.0952
+ ],
+ "music_predk_mean": 0.0556,
+ "sfx_preglue_mean": 0.1086,
+ "master_mean": 0.0578,
+ "diag_errors": []
+}

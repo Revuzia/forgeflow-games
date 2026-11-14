@@ -1,0 +1,20 @@
+{
+  "title": "Mahjong Solitaire",
+  "slug": "mahjong",
+  "genre": "mahjong3d",
+  "tagline": "Clear the turtle. Match the free pairs. Empty the board.",
+  "view": { "width": 960, "height": 600, "background": "#1d232b" },
+  "audio": {
+    "music": "assets/audio/music.ogg",
+    "menu_music": "assets/audio/menu_music.ogg"
+  },
+  "sfx": {
+    "click": "assets/audio/click.ogg",
+    "select": "assets/audio/select.ogg",
+    "confirm": "assets/audio/confirm.ogg",
+    "hit": "assets/audio/hit.ogg",
+    "victory": "assets/audio/victory.ogg",
+    "defeat": "assets/audio/defeat.ogg"
+  },
+  "assets": {}
+}
