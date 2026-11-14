@@ -14,7 +14,8 @@ seed 7), turned into bar rows (PLAN.md "Lane R2A" acceptance bars; the audit val
 
 Rows (every view: actors / fx hidden, the frame drawn through the game's composer at the pinned camera after 26 stepped frames there):
   water-detail  in-water view (vshots `inwater`), luminance p95 - p5 over the lower half >= 0.15 [0.06]
-  glint         a sun-facing view over deep water (>= 2.5 m under every sampled point): >= 0.3 % of the water pixels (water A/B mask) at display
+  glint         a sun-facing view over deep water (>= 2.5 m under every sampled point): >= 0.5 % (the plan's 0.3 % RAISED: the base build reads
+                0.298 % and the W9-surface plant 0.309 %, so 0.3 % did not separate them) of the water pixels (water A/B mask) at display
                 luminance >= 0.9; the same view turned away from the sun: 0 % [none]
   fresnel       away from the sun: mean water luminance in the band just under the horizon / looking straight down >= 1.3 [~1]
   shore         top-down over the vshots shore point, 9 transects across the waterline: the white foam run that starts at the waterline is
@@ -26,8 +27,9 @@ Rows (every view: actors / fx hidden, the frame drawn through the game's compose
                 the OD-2 drop view mean 0.45-0.55 held; interiors (3 houses' biggest ground-floor rooms) mean >= 0.9 x the base's
   grass         medium: >= 0.8 cards + tufts per m2 within 30 m of open ground (the audit's ground spot, or the nearest point whose 30 m disc is
                 >= 95 % land outside the town mask), and the blade layer moves >= 8 % of the lower half of a low view there [0.148]
-  low-identical low tier, isla_viva: 4 views pixel-identical to the base build (max channel difference 0; the loot group hidden: its
-                beams pulse on the sim clock) - phones / low untouched
+  low-identical low tier, isla_viva: 4 views identical to the base build (<= 0.001 % of the pixels differ - the base's own run-to-run
+                noise is 1 pixel, control --rev cbf0a1ff; loot, launch portals and door leaves hidden: they animate on the sim
+                clock / bot traffic) - phones / low untouched
   underwater    from below (vshots `underup`): high-frequency energy (mean |Laplacian| of luminance) of the upper half <= 0.4 x the base's
   tiers         SSIM(ultra, medium) on the 3 eye-level pinned views (ground, inwater, shore) <= 0.92; vista and vista2 reported [identical]
   programs      0 new shader programs after the warm frames, on every tier
@@ -136,6 +138,7 @@ RENDER_JS = r"""([spec, hide, pts]) => { const W = window.__LC__.W, T = W.THREE,
   if (hide.includes('blades')) off(W._grassBlades);
   if (hide.includes('wall') && W.stormCtl) off(W.stormCtl.wall);
   if (hide.includes('loot') && W._groups && W._groups.loot) off(W._groups.loot);
+  if (hide.includes('doors')) sc.traverse((o) => { if (o.name === 'houses:doors@all') off(o); });
   if (hide.includes('portals')) sc.traverse((o) => { if (o.name === 'portal-rings' || (o.isMesh && o.material && o.material.isMeshBasicMaterial && o.material.transparent && o.material.color && o.material.color.getHex() === 0x9fefff)) off(o); });
   const of = cam.fov; cam.fov = fov; cam.updateProjectionMatrix();
   cam.position.set(px, py, pz); cam.lookAt(tx, ty, tz); cam.updateMatrixWorld(true);
@@ -338,8 +341,8 @@ def part_map(s, v, R, map_id, shots, want, interiors=True):
         early = st is not None and st["phase"] <= 1 and not st["closing"]
         for nm in ("vista", "vista2", "ground", "ground2", "shore"):
             if nm in cams and cams[nm]:
-                r = shoot(s, cams[nm], shots, "%s_%s" % (tag, nm))
-                r2 = view(s, cams[nm], ("wall",))
+                r = shoot(s, cams[nm], shots, "%s_%s" % (tag, nm), settle=100.0)
+                r2 = s.js(RENDER_JS, [cams[nm], ["wall"], None])          # the same frame, the wall alone hidden (no frame stepped between)
                 sh, row = lilac_share(r["A"], r["horizon"], decode(r2["png"]))
                 pre[nm] = {"lilacPct": round(sh * 100, 4), "horizonRow": row}
         M["stormEarly"] = {"views": pre, "early": early, "state": st}
@@ -509,19 +512,19 @@ def part_storm_late(s, v, R, map_id, shots):
 def part_low(s, v, R, shots, tag):
     """the low tier on isla_viva: 4 views with the map clock pinned (t 100), for the pixel compare with the base. The loot group is hidden in
     these frames (its beams pulse on the sim clock: W.t differs run to run; loot.js is not this lane's file), and so are the launch portals'
-    rings / swirls (animated off the frame loop; unchanged by this lane)"""
+    rings / swirls (animated off the frame loop) and the door leaves (bots open them): none of them changed by this lane"""
     cams = s.js(CAMS_JS)
     out = {}
     for nm in ("ground", "groundlow", "shore", "inwater"):
         if nm in cams and cams[nm]:
-            r = shoot(s, cams[nm], shots, "%s_low_%s" % (tag, nm), hide=("loot", "portals"), settle=100.0)
+            r = shoot(s, cams[nm], shots, "%s_low_%s" % (tag, nm), hide=("loot", "portals", "doors"), settle=100.0)
             out[nm] = r["A"]
     return out
 
 
 def base_cache(args, v, shots):
     """the base build's underwater HF, interiors and low-tier views (second Chrome on BASE_REV), cached"""
-    stem = os.path.join(C.REPORTS, "w10_waterlook_base_%s_%dx%d_v4" % (BASE_REV, args.width, args.height))
+    stem = os.path.join(C.REPORTS, "w10_waterlook_base_%s_%dx%d_v5" % (BASE_REV, args.width, args.height))
     if os.path.exists(stem + ".json") and not args.no_cache:
         with open(stem + ".json") as f:
             res = json.load(f)
@@ -645,8 +648,8 @@ def main():
                 v.check("water-detail: in-water view, luminance p95-p5 of the lower half >= 0.15 (every map with a shore view)",
                         bool(det) and all(x >= 0.15 for x in det.values()), det, ">= 0.15")
                 gl = {m: {"sunward": w.get("sunward"), "sunaway": w.get("sunaway")} for m, w in ws.items() if w.get("sunward")}
-                ok = bool(gl) and all(x["sunward"]["waterPx"] > 5000 and x["sunward"]["brightPct"] >= 0.3 and x["sunaway"]["waterPx"] > 5000 and x["sunaway"]["brightPct"] == 0.0 for x in gl.values())
-                v.check("glint: sun-facing deep-water view >= 0.3 % of water pixels at luminance >= 0.9; facing away 0 %", ok, gl, ">= 0.3 % / 0 %")
+                ok = bool(gl) and all(x["sunward"]["waterPx"] > 5000 and x["sunward"]["brightPct"] >= 0.5 and x["sunaway"]["waterPx"] > 5000 and x["sunaway"]["brightPct"] == 0.0 for x in gl.values())
+                v.check("glint: sun-facing deep-water view >= 0.5 % of water pixels at luminance >= 0.9 (plan 0.3 %, raised: the base reads 0.298 %); facing away 0 %", ok, gl, ">= 0.5 % / 0 %")
                 fr = {m: w.get("fresnel") for m, w in ws.items() if w.get("fresnel")}
                 v.check("fresnel: water luminance just under the horizon / looking down >= 1.3 (away from the sun)",
                         bool(fr) and all(x.get("ratio") is not None and x["ratio"] >= 1.3 for x in fr.values()), fr, ">= 1.3")
@@ -710,8 +713,10 @@ def main():
                     res[nm] = {"maxDiff": float(d.max()), "pctDiff": round(float((d > 0).mean() * 100), 4)}
                 else:
                     res[nm] = {"missingOrSize": [nm in bl, nm in lb]}
-            v.check("low-identical: low tier, isla_viva, the views pixel-identical to the base build (max channel difference 0)",
-                    bool(res) and len(res) >= 3 and all(x.get("maxDiff") == 0.0 for x in res.values()), res, "0")
+            # identical up to the sim's own noise: the base build against its own cache (control --rev cbf0a1ff) differs in ONE pixel of one view
+            # (0.0001 %: a far object the sim moves between runs); <= 0.001 % (9 px at 1280 x 720) per view - the grass-on-low plant moves 0.2-12 %
+            v.check("low-identical: low tier, isla_viva, the views identical to the base build (<= 0.001 % of the pixels differ per view: the base's own run-to-run noise is 1 px)",
+                    bool(res) and len(res) >= 3 and all(x.get("pctDiff") is not None and x["pctDiff"] <= 0.001 for x in res.values()), res, "<= 0.001 %")
             for nm in lb:
                 Image.fromarray(np.clip(np.abs(lb[nm] - bl.get(nm, lb[nm])) * 8, 0, 255).astype(np.uint8)).save(os.path.join(shots, "lowdiff_x8_%s.png" % nm))
         if "uw" in want:

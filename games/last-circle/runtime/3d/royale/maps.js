@@ -6275,12 +6275,12 @@ export async function buildMap(W, mapId) {
       const P = geo.attributes.position, N = geo.attributes.normal, col = new Float32Array(P.count * 3);
       for (let v = 0; v < P.count; v++) {
         const ny = N.getY(v) * (flip ? -1 : 1), y = flip ? -P.getY(v) : P.getY(v), dd = Math.min(1, Math.max(0, (topY - y) / H));
-        const k = (0.46 + 0.54 * (0.5 + 0.5 * Math.max(-1, Math.min(1, ny * 1.3)))) * (1 - 0.32 * dd) * (0.9 + 0.1 * Math.sin(y * 2.3 + P.getX(v) * 0.37));
+        const k = (0.62 + 0.38 * (0.5 + 0.5 * Math.max(-1, Math.min(1, ny * 1.3)))) * (1 - 0.25 * dd) * (0.9 + 0.1 * Math.sin(y * 2.3 + P.getX(v) * 0.37));
         col[v * 3] = k; col[v * 3 + 1] = k * 0.98; col[v * 3 + 2] = k * 0.95;
       }
       geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
     };
-    const rockC2 = islPhoto ? "#c9c0b2" : rockC;
+    const rockC2 = islPhoto ? "#ddd4c6" : rockC;
     const islScaleUV = (geo, span) => { if (!_islTex) return; const uv = geo.attributes.uv; if (uv) { for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * span, uv.getY(i) * span); uv.needsUpdate = true; } };
     for (let i = 0; i < nIsl; i++) {
       const ang = rng() * Math.PI * 2;
