@@ -1,0 +1,221 @@
+{
+ "clip": "F:/games/forgeflow-games-assets/_downloaded/mixamo/animations/Soccer_Game_Pack/kneeing soccerball.fbx",
+ "body": "F:/games/forgeflow-games-assets/_downloaded/mixamo/characters/Prisoner B Styperek.fbx",
+ "frames": [
+  7,
+  13,
+  21
+ ],
+ "ratio": 1.0434224548804623,
+ "hidden": [],
+ "identity_test": {
+  "ok": true,
+  "worst": 6.407499313354492e-07,
+  "bone": "mixamorig:LeftHandPinky3"
+ },
+ "metrics": {
+  "xbot": {
+   "7": {
+    "lowest_vertex_z_m": -0.0054,
+    "striker_rel_hips_over_hipheight": [
+     0.136,
+     -0.098,
+     -0.454
+    ],
+    "hips_z_m": 1.009
+   },
+   "13": {
+    "lowest_vertex_z_m": -0.0002,
+    "striker_rel_hips_over_hipheight": [
+     0.136,
+     -0.365,
+     -0.228
+    ],
+    "hips_z_m": 0.9802
+   },
+   "21": {
+    "lowest_vertex_z_m": -0.0003,
+    "striker_rel_hips_over_hipheight": [
+     0.142,
+     -0.366,
+     -0.228
+    ],
+    "hips_z_m": 1.0044
+   }
+  },
+  "naive_blender": {
+   "7": {
+    "lowest_vertex_z_m": -0.0041,
+    "striker_rel_hips_over_hipheight": [
+     0.151,
+     -0.131,
+     -0.432
+    ],
+    "hips_z_m": 1.0538
+   },
+   "13": {
+    "lowest_vertex_z_m": 0.003,
+    "striker_rel_hips_over_hipheight": [
+     0.15,
+     -0.401,
+     -0.188
+    ],
+    "hips_z_m": 1.0251
+   },
+   "21": {
+    "lowest_vertex_z_m": -0.0015,
+    "striker_rel_hips_over_hipheight": [
+     0.156,
+     -0.403,
+     -0.187
+    ],
+    "hips_z_m": 1.0496
+   }
+  },
+  "naive_three_raw": {
+   "7": {
+    "lowest_vertex_z_m": -0.0903,
+    "striker_rel_hips_over_hipheight": [
+     0.136,
+     -0.107,
+     -0.474
+    ],
+    "hips_z_m": 1.009
+   },
+   "13": {
+    "lowest_vertex_z_m": -0.0863,
+    "striker_rel_hips_over_hipheight": [
+     0.136,
+     -0.387,
+     -0.235
+    ],
+    "hips_z_m": 0.9802
+   },
+   "21": {
+    "lowest_vertex_z_m": -0.0889,
+    "striker_rel_hips_over_hipheight": [
+     0.142,
+     -0.388,
+     -0.235
+    ],
+    "hips_z_m": 1.0044
+   }
+  },
+  "naive_three": {
+   "7": {
+    "lowest_vertex_z_m": -0.006,
+    "striker_rel_hips_over_hipheight": [
+     0.151,
+     -0.127,
+     -0.433
+    ],
+    "hips_z_m": 1.0528
+   },
+   "13": {
+    "lowest_vertex_z_m": -0.0005,
+    "striker_rel_hips_over_hipheight": [
+     0.15,
+     -0.399,
+     -0.191
+    ],
+    "hips_z_m": 1.0228
+   },
+   "21": {
+    "lowest_vertex_z_m": -0.0021,
+    "striker_rel_hips_over_hipheight": [
+     0.156,
+     -0.401,
+     -0.191
+    ],
+    "hips_z_m": 1.048
+   }
+  },
+  "retarget_dw": {
+   "7": {
+    "lowest_vertex_z_m": 0.0364,
+    "striker_rel_hips_over_hipheight": [
+     0.151,
+     -0.131,
+     -0.431
+    ],
+    "hips_z_m": 1.0929
+   },
+   "13": {
+    "lowest_vertex_z_m": 0.0428,
+    "striker_rel_hips_over_hipheight": [
+     0.15,
+     -0.401,
+     -0.187
+    ],
+    "hips_z_m": 1.0629
+   },
+   "21": {
+    "lowest_vertex_z_m": 0.0404,
+    "striker_rel_hips_over_hipheight": [
+     0.156,
+     -0.403,
+     -0.187
+    ],
+    "hips_z_m": 1.0881
+   }
+  },
+  "retarget": {
+   "7": {
+    "lowest_vertex_z_m": -0.0038,
+    "striker_rel_hips_over_hipheight": [
+     0.151,
+     -0.131,
+     -0.431
+    ],
+    "hips_z_m": 1.0528
+   },
+   "13": {
+    "lowest_vertex_z_m": 0.0027,
+    "striker_rel_hips_over_hipheight": [
+     0.15,
+     -0.401,
+     -0.187
+    ],
+    "hips_z_m": 1.0228
+   },
+   "21": {
+    "lowest_vertex_z_m": 0.0003,
+    "striker_rel_hips_over_hipheight": [
+     0.156,
+     -0.403,
+     -0.187
+    ],
+    "hips_z_m": 1.048
+   }
+  },
+  "hybrid": {
+   "7": {
+    "lowest_vertex_z_m": -0.0038,
+    "striker_rel_hips_over_hipheight": [
+     0.151,
+     -0.131,
+     -0.431
+    ],
+    "hips_z_m": 1.0528
+   },
+   "13": {
+    "lowest_vertex_z_m": 0.0027,
+    "striker_rel_hips_over_hipheight": [
+     0.15,
+     -0.401,
+     -0.187
+    ],
+    "hips_z_m": 1.0228
+   },
+   "21": {
+    "lowest_vertex_z_m": 0.0003,
+    "striker_rel_hips_over_hipheight": [
+     0.156,
+     -0.403,
+     -0.187
+    ],
+    "hips_z_m": 1.048
+   }
+  }
+ }
+}

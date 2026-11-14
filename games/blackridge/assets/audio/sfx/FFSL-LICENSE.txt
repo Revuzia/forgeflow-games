@@ -1,0 +1,9 @@
+shot_*.ogg — weapon reports sliced from The Free Firearm Sound Library.
+Source: https://github.com/buddingmonkey/FreeFirearmsSFXLibrary
+        (licence authority: https://opengameart.org/content/the-free-firearm-sound-library)
+License: CC0 1.0 Universal (public domain dedication) — no attribution required.
+Courtesy note: recorded by Ben Jaszczak, Brian Nelson, Kevin Heras, Matthew Nanney.
+Files used (near-distance "Prepared SFX" takes): 1911 A_42P; Carl Gustav M45
+G_31P/G_33P/G_35P; AK-47 C_27P/C_28P/C_29P; Mossberg N_30P; Mosin Nagant M_21P.
+Processing: onset-sliced to 0.9 s single shots, peak-normalised to -1 dBFS,
+mono 44.1 kHz Ogg Vorbis q3.

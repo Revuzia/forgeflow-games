@@ -1,0 +1,11 @@
+{
+  "size": 64,
+  "animations": {
+    "breathing-idle": {
+      "frames": 4
+    },
+    "walk": {
+      "frames": 6
+    }
+  }
+}

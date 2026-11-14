@@ -1,0 +1,99 @@
+  rig-ok 01_cold_rime_imp bones=46 clips=9/9 missing=[]
+  rig-ok 02_cold_glacier_brute bones=52 clips=9/9 missing=[]
+  rig-ok 03_cold_frost_stalker bones=28 clips=8/8 missing=[]
+  rig-ok 31_v2_cold_rime_imp bones=52 clips=9/9 missing=[]
+  rig-ok 32_v2_cold_glacier_brute bones=28 clips=9/9 missing=[]
+  rig-ok 34_v2_cold_ice_cultist bones=34 clips=8/8 missing=[]
+  rig-ok 39_v2_cold_blizzard_assassin bones=34 clips=9/9 missing=[]
+  rig-ok 61_v3_cold_frost_golem bones=34 clips=8/8 missing=[]
+  rig-ok 65_v3_cold_rime_skier_raider bones=34 clips=8/8 missing=[]
+  rig-ok 68_v3_cold_hail_plate_guard bones=46 clips=8/8 missing=[]
+PASS cold:rimeImp [01_cold_rime_imp] chase(d 13->0.8 loc 1 spd 1 sub 0) atk(flash 0.96 lunge 1 bolt False hp 45.29706001281738->36.594120025634766) dmg(9.2->3.2) death(dis 0.98 w 1 t0 0.04 freed True)
+PASS cold:glacierBrute [02_cold_glacier_brute] chase(d 13->0.8 loc 1 spd 1 sub 0) atk(flash 0.97 lunge 1 bolt False hp 26.80331254005432->14.836770057678223) dmg(219.5->213.5) death(dis 1 w 1 t0 0.04 freed True)
+PASS cold:frostStalker [03_cold_frost_stalker] chase(d 13->1.43 loc 1 spd 1 sub 1) atk(flash 0 lunge 0 bolt False hp 18.02169756889343->18.02169756889343) dmg(20.2->14.2) death(dis 0.98 w 1 t0 0 freed True)
+PASS cold:rimeImp [01_cold_rime_imp] chase(d 13->0.8 loc 1 spd 1 sub 0) atk(flash 0.97 lunge 1 bolt False hp 9.318757581710813->0.6158175945281954) dmg(9.2->3.2) death(dis 0.97 w 1 t0 0.04 freed True)
+PASS cold:glacierBrute [02_cold_glacier_brute] chase(d 13->0.8 loc 1 spd 1 sub 0) atk(flash 0.99 lunge 1 bolt False hp 54->42.0334575176239) dmg(219.5->213.5) death(dis 0.96 w 1 t0 0.04 freed True)
+PASS cold:rimeboundCultist [34_v2_cold_ice_cultist] chase(d 13->13 loc 1 spd 0.8 sub 0) atk(flash 1 lunge 1 bolt True hp 44.13051753044128->39.77904753684997) dmg(22.3->16.3) death(dis 0.98 w 1 t0 0.04 freed True)
+PASS cold:blizzardAssassin [39_v2_cold_blizzard_assassin] chase(d 13->10.6 loc 1 spd 1 sub 0) atk(flash 0.98 lunge 1 bolt False hp 39.77904753684997->22.37316756248474) dmg(19.4->13.4) death(dis 0.98 w 1 t0 0.07 freed True)
+PASS cold:packIceGolem [61_v3_cold_frost_golem] chase(d 13->2.94 loc 1 spd 1 sub 0) atk(flash 0.98 lunge 1 bolt False hp 22.37316756248474->11.494492578506467) dmg(126.2->120.2) death(dis 0.97 w 1 t0 0.04 freed True)
+PASS cold:rimeSkierRaider [65_v3_cold_rime_skier_raider] chase(d 13->0.8 loc 1 spd 1 sub 0) atk(flash 0.94 lunge 1 bolt False hp 50.38492751121521->42.76985502243042) dmg(28.7->22.7) death(dis 1 w 1 t0 0.08 freed True)
+PASS cold:hailPlateGuard [68_v3_cold_hail_plate_guard] chase(d 13->4.16 loc 1 spd 1 sub 0) atk(flash 0.99 lunge 1 bolt False hp 42.76985502243042->32.979047536849976) dmg(126.2->120.2) death(dis 0.97 w 1 t0 0.04 freed True)
+PASS cold:hoarfrostSprite [34_v2_cold_ice_cultist] chase(d 13->13 loc 1 spd 1 sub 0) atk(flash 1 lunge 1 bolt True hp 41.85937867164611->36.4200409412384) dmg(10.9->4.9) death(dis 0.97 w 1 t0 0.04 freed True)
+PASS cold:moraineColossus [32_v2_cold_glacier_brute] chase(d 13->0.8 loc 1 spd 1 sub 0) atk(flash 0.98 lunge 1 bolt False hp 24.4534984588623->10.311220979690546) dmg(270.4->264.4) death(dis 1 w 1 t0 0.04 freed True)
+PASS cold:glassRevenant [39_v2_cold_blizzard_assassin] chase(d 13->8.64 loc 1 spd 1 sub 0) atk(flash 0.94 lunge 1 bolt False hp 10.311220979690546->1.6082809925079289) dmg(18.1->12.1) death(dis 0.99 w 1 t0 0.04 freed True)
+PASS cold:scourScout [65_v3_cold_rime_skier_raider] chase(d 13->5.62 loc 1 spd 1 sub 0) atk(flash 0.91 lunge 1 bolt False hp 58->49.29706001281738) dmg(39.3->33.3) death(dis 0.97 w 1 t0 0.04 freed True)
+  rig-ok 01_cold_rime_imp bones=46 clips=9/9 missing=[]
+  rig-ok 02_cold_glacier_brute bones=52 clips=9/9 missing=[]
+  rig-ok 03_cold_frost_stalker bones=28 clips=8/8 missing=[]
+  rig-ok 31_v2_cold_rime_imp bones=52 clips=9/9 missing=[]
+  rig-ok 32_v2_cold_glacier_brute bones=28 clips=9/9 missing=[]
+  rig-ok 34_v2_cold_ice_cultist bones=34 clips=8/8 missing=[]
+  rig-ok 39_v2_cold_blizzard_assassin bones=34 clips=9/9 missing=[]
+  rig-ok 61_v3_cold_frost_golem bones=34 clips=8/8 missing=[]
+  rig-ok 65_v3_cold_rime_skier_raider bones=34 clips=8/8 missing=[]
+  rig-ok 68_v3_cold_hail_plate_guard bones=46 clips=8/8 missing=[]
+  rig-ok 11_sand_dune_imp bones=52 clips=9/9 missing=[]
+  rig-ok 12_sand_dune_brute bones=34 clips=9/9 missing=[]
+  rig-ok 13_sand_dust_stalker bones=34 clips=8/8 missing=[]
+  rig-ok 16_sand_dust_mage bones=34 clips=8/8 missing=[]
+  rig-ok 43_v2_sand_dust_stalker bones=28 clips=8/8 missing=[]
+  rig-ok 48_v2_sand_dune_sentinel bones=34 clips=9/9 missing=[]
+  rig-ok 50_v2_sand_dune_warden bones=28 clips=7/8 missing=[]
+  rig-ok 73_v3_sand_mummy bones=34 clips=9/9 missing=[]
+  rig-ok 75_v3_sand_bleached_bone_knight bones=34 clips=8/8 missing=[]
+  rig-ok 77_v3_sand_windscour_bandit bones=52 clips=8/8 missing=[]
+PASS sand:duneImp [11_sand_dune_imp] chase(d 13->0.8 loc 1 spd 1 sub 0) atk(flash 0.91 lunge 1 bolt False hp 38.501724410057065->29.76733725070953) dmg(23.8->17.8) death(dis 0.96 w 1 t0 0.04 freed True)
+PASS sand:duneBrute [12_sand_dune_brute] chase(d 13->0.8 loc 1 spd 1 sub 0) atk(flash 1 lunge 1 bolt False hp 8.804808068275449->58) dmg(561->555) death(dis 0.99 w 1 t0 0.04 freed True)
+PASS sand:dustStalker [13_sand_dust_stalker] chase(d 13->1.85 loc 1 spd 1 sub 1) atk(flash 0 lunge 0 bolt False hp 42.27810311317444->42.27810311317444) dmg(44.5->38.5) death(dis 0.99 w 1 t0 0.08 freed True)
+PASS sand:dustMage [16_sand_dust_mage] chase(d 13->13 loc 1 spd 0.8 sub 0) atk(flash 1 lunge 1 bolt True hp 26.556205987930298->18.695257425308228) dmg(48.6->42.6) death(dis 0.99 w 1 t0 0.04 freed True)
+PASS sand:dustStalker [13_sand_dust_stalker] chase(d 13->1.48 loc 1 spd 1 sub 1) atk(flash 0 lunge 0 bolt False hp 2.973360538482666->2.973360538482666) dmg(44.5->38.5) death(dis 0.98 w 1 t0 0.08 freed True)
+PASS sand:duneSentinel [48_v2_sand_dune_sentinel] chase(d 13->12.2 loc 1 spd 0.5 sub 0) atk(flash 0.98 lunge 1 bolt False hp 2.973360538482666->58) dmg(313->307) death(dis 0.98 w 1 t0 0.04 freed True)
+PASS sand:duneWarden [50_v2_sand_dune_warden] chase(d 13->2.9 loc 1 spd 1 sub 0) atk(flash 0.92 lunge 1 bolt False hp 26.55620574951172->0) dmg(1982.5->1976.5) death(dis 0.99 w 1 t0 0.04 freed True)
+PASS sand:sandMummy [73_v3_sand_mummy] chase(d 13->13 loc 0 spd 0 sub 1) atk(flash 1 lunge 1 bolt True hp 62->62) dmg(89.9->83.9) death(dis 0.98 w 1 t0 0.04 freed True)
+PASS sand:boneKnight [75_v3_sand_bleached_bone_knight] chase(d 13->3.82 loc 1 spd 1 sub 0) atk(flash 0.98 lunge 1 bolt False hp 46.27810287475586->25.315573692321777) dmg(263.5->257.5) death(dis 0.99 w 1 t0 0.04 freed True)
+PASS sand:windscourBandit [77_v3_sand_windscour_bandit] chase(d 13->1.72 loc 1 spd 1 sub 0) atk(flash 0.98 lunge 1 bolt False hp 17.277107739448546->62) dmg(73.4->67.4) death(dis 0.99 w 1 t0 0.04 freed True)
+PASS sand:hourglassAutomaton [75_v3_sand_bleached_bone_knight] chase(d 13->2.87 loc 1 spd 1 sub 0) atk(flash 0.97 lunge 1 bolt False hp 44.53122568130493->27.062451362609863) dmg(346.1->340.1) death(dis 0.99 w 1 t0 0.03 freed True)
+PASS sand:scorpionHusk [73_v3_sand_mummy] chase(d 13->1.78 loc 1 spd 1 sub 1) atk(flash 1 lunge 1 bolt False hp 28.981186771392828->8.018657588958746) dmg(40.3->34.3) death(dis 0.99 w 1 t0 0.04 freed True)
+  rig-ok 01_cold_rime_imp bones=46 clips=9/9 missing=[]
+  rig-ok 02_cold_glacier_brute bones=52 clips=9/9 missing=[]
+  rig-ok 03_cold_frost_stalker bones=28 clips=8/8 missing=[]
+  rig-ok 31_v2_cold_rime_imp bones=52 clips=9/9 missing=[]
+  rig-ok 32_v2_cold_glacier_brute bones=28 clips=9/9 missing=[]
+  rig-ok 34_v2_cold_ice_cultist bones=34 clips=8/8 missing=[]
+  rig-ok 39_v2_cold_blizzard_assassin bones=34 clips=9/9 missing=[]
+  rig-ok 61_v3_cold_frost_golem bones=34 clips=8/8 missing=[]
+  rig-ok 65_v3_cold_rime_skier_raider bones=34 clips=8/8 missing=[]
+  rig-ok 68_v3_cold_hail_plate_guard bones=46 clips=8/8 missing=[]
+  rig-ok 11_sand_dune_imp bones=52 clips=9/9 missing=[]
+  rig-ok 12_sand_dune_brute bones=34 clips=9/9 missing=[]
+  rig-ok 13_sand_dust_stalker bones=34 clips=8/8 missing=[]
+  rig-ok 16_sand_dust_mage bones=34 clips=8/8 missing=[]
+  rig-ok 43_v2_sand_dust_stalker bones=28 clips=8/8 missing=[]
+  rig-ok 48_v2_sand_dune_sentinel bones=34 clips=9/9 missing=[]
+  rig-ok 50_v2_sand_dune_warden bones=28 clips=7/8 missing=[]
+  rig-ok 73_v3_sand_mummy bones=34 clips=9/9 missing=[]
+  rig-ok 75_v3_sand_bleached_bone_knight bones=34 clips=8/8 missing=[]
+  rig-ok 77_v3_sand_windscour_bandit bones=52 clips=8/8 missing=[]
+  rig-ok 21_ash_cinder_imp bones=34 clips=9/9 missing=[]
+  rig-ok 22_ash_slag_brute bones=34 clips=9/9 missing=[]
+  rig-ok 25_ash_scorch_raider bones=28 clips=8/8 missing=[]
+  rig-ok 26_ash_smoke_mage bones=34 clips=8/8 missing=[]
+  rig-ok 28_ash_cinder_sentinel bones=34 clips=9/9 missing=[]
+  rig-ok 29_ash_soot_assassin bones=28 clips=9/9 missing=[]
+  rig-ok 53_v2_ash_soot_stalker bones=34 clips=8/8 missing=[]
+  rig-ok 60_v2_ash_scorch_warden bones=52 clips=8/8 missing=[]
+  rig-ok 86_v3_ash_volcanic_plate_knight bones=34 clips=7/8 missing=[]
+  rig-ok 88_v3_ash_furnace_guardian bones=34 clips=8/8 missing=[]
+PASS ash:cinderImp [21_ash_cinder_imp] chase(d 13->0.8 loc 1 spd 1 sub 0) atk(flash 0.97 lunge 1 bolt False hp 62->44.81813859939575) dmg(71.9->65.9) death(dis 0.98 w 1 t0 0.04 freed True)
+PASS ash:slagBrute [22_ash_slag_brute] chase(d 13->0.8 loc 1 spd 1 sub 0) atk(flash 0.99 lunge 1 bolt False hp 0.14529895782470703->0) dmg(1199.4->1193.4) death(dis 0.97 w 1 t0 0.04 freed True)
+PASS ash:scorchRaider [25_ash_scorch_raider] chase(d 13->11.47 loc 1 spd 1 sub 0) atk(flash 0.92 lunge 1 bolt False hp 48.2545108795166->12.17260193824768) dmg(159.8->153.8) death(dis 0.96 w 1 t0 0.06 freed True)
+PASS ash:smokeMage [26_ash_smoke_mage] chase(d 13->12.05 loc 1 spd 0.8 sub 0) atk(flash 1 lunge 1 bolt True hp 62->41.38176727294922) dmg(138.3->132.3) death(dis 0.97 w 1 t0 0.03 freed True)
+PASS ash:cinderSentinel [28_ash_cinder_sentinel] chase(d 13->11.55 loc 1 spd 0.5 sub 0) atk(flash 0.97 lunge 1 bolt False hp 20.763534545898438->62) dmg(556.3->550.3) death(dis 0.96 w 1 t0 0.04 freed True)
+PASS ash:sootAssassin [29_ash_soot_assassin] chase(d 13->8.59 loc 1 spd 1 sub 0) atk(flash 0.93 lunge 1 bolt False hp 62->20.763532638549805) dmg(84.7->78.7) death(dis 0.98 w 1 t0 0.08 freed True)
+PASS ash:sootStalker [53_v2_ash_soot_stalker] chase(d 13->1.52 loc 1 spd 1 sub 1) atk(flash 0 lunge 0 bolt False hp 62->62) dmg(149.1->143.1) death(dis 0.99 w 1 t0 0 freed True)
+PASS ash:scorchWarden [60_v2_ash_scorch_warden] chase(d 13->2.53 loc 1 spd 1 sub 0) atk(flash 0.97 lunge 1 bolt False hp 22.327160358428955->0) dmg(1027.9->1021.9) death(dis 0.97 w 1 t0 0.04 freed True)
+PASS ash:volcanicPlateKnight [86_v3_ash_volcanic_plate_knight] chase(d 13->3.42 loc 1 spd 1 sub 0) atk(flash 0.99 lunge 1 bolt False hp 67->53.2545108795166) dmg(6429.8->6423.8) death(dis 0.97 w 1 t0 0.04 freed True)
+PASS ash:furnaceGuardian [88_v3_ash_furnace_guardian] chase(d 13->4.69 loc 1 spd 1 sub 0) atk(flash 0.97 lunge 1 bolt False hp 25.763532638549805->15.454415798187256) dmg(4714.9->4708.9) death(dis 0.96 w 1 t0 0.03 freed True)
+
+36/36 units PASS
+RESULT: OK

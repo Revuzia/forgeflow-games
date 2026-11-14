@@ -1,0 +1,13 @@
+{
+  "lane": "A10",
+  "note": "hud-shell asset fragment. A0 merges into assets/manifest.json (single-writer rule). Oswald subset verified this session via fontTools: full ASCII + digits + ×/• coverage (the file order in pipeline/assets/_downloaded/fonts/Oswald does NOT match its CSS block order — Oswald_02.woff2 is the latin subset).",
+  "entries": [
+    {
+      "path": "assets/fonts/oswald-400-latin.woff2",
+      "bytes": 12248,
+      "kind": "imported",
+      "license": "SIL OFL 1.1",
+      "source": "Google Fonts 'Oswald' v57 latin subset (pipeline/assets/_downloaded/fonts/Oswald/Oswald_02.woff2)"
+    }
+  ]
+}

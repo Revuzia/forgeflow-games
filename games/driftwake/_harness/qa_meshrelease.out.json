@@ -1,0 +1,2488 @@
+{
+ "samples": [
+  {
+   "tag": "A0:cold(base):idle",
+   "realm": "cold",
+   "instances": 5,
+   "types": 10,
+   "insts": 5,
+   "instLive": 5,
+   "instPooled": 0,
+   "mats": 10,
+   "sceneKids": 58,
+   "geo": 26,
+   "tex": 46,
+   "shProxy": [
+    "5/13",
+    "0/8",
+    "0/1"
+   ],
+   "shEntries": [
+    13,
+    8,
+    1
+   ],
+   "dpProxy": "5/11",
+   "dpEntries": 11,
+   "heapMB": 104.3
+  },
+  {
+   "tag": "A0:cold(base):spawned",
+   "realm": "cold",
+   "instances": 20,
+   "types": 10,
+   "insts": 20,
+   "instLive": 20,
+   "instPooled": 0,
+   "mats": 10,
+   "sceneKids": 73,
+   "geo": 30,
+   "tex": 65,
+   "shProxy": [
+    "20/28",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    28,
+    9,
+    1
+   ],
+   "dpProxy": "20/26",
+   "dpEntries": 26,
+   "heapMB": 106.4
+  },
+  {
+   "tag": "A0:cold(base)",
+   "realm": "cold",
+   "instances": 20,
+   "types": 10,
+   "insts": 20,
+   "instLive": 7,
+   "instPooled": 13,
+   "mats": 10,
+   "sceneKids": 73,
+   "geo": 30,
+   "tex": 65,
+   "shProxy": [
+    "20/28",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    28,
+    9,
+    1
+   ],
+   "dpProxy": "20/26",
+   "dpEntries": 26,
+   "heapMB": 106.4
+  },
+  {
+   "tag": "A1:sand:idle",
+   "realm": "sand",
+   "instances": 20,
+   "types": 20,
+   "insts": 20,
+   "instLive": 0,
+   "instPooled": 20,
+   "mats": 20,
+   "sceneKids": 73,
+   "geo": 30,
+   "tex": 67,
+   "shProxy": [
+    "20/28",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    28,
+    9,
+    1
+   ],
+   "dpProxy": "20/26",
+   "dpEntries": 26,
+   "heapMB": 127
+  },
+  {
+   "tag": "A1:sand:spawned",
+   "realm": "sand",
+   "instances": 30,
+   "types": 20,
+   "insts": 30,
+   "instLive": 14,
+   "instPooled": 16,
+   "mats": 20,
+   "sceneKids": 83,
+   "geo": 39,
+   "tex": 86,
+   "shProxy": [
+    "30/38",
+    "2/10",
+    "0/1"
+   ],
+   "shEntries": [
+    38,
+    10,
+    1
+   ],
+   "dpProxy": "30/36",
+   "dpEntries": 36,
+   "heapMB": 128.1
+  },
+  {
+   "tag": "A1:sand",
+   "realm": "sand",
+   "instances": 30,
+   "types": 20,
+   "insts": 30,
+   "instLive": 0,
+   "instPooled": 30,
+   "mats": 20,
+   "sceneKids": 83,
+   "geo": 39,
+   "tex": 86,
+   "shProxy": [
+    "30/38",
+    "2/10",
+    "0/1"
+   ],
+   "shEntries": [
+    38,
+    10,
+    1
+   ],
+   "dpProxy": "30/36",
+   "dpEntries": 36,
+   "heapMB": 128.1
+  },
+  {
+   "tag": "A2:ash:idle",
+   "realm": "ash",
+   "instances": 30,
+   "types": 30,
+   "insts": 30,
+   "instLive": 0,
+   "instPooled": 30,
+   "mats": 30,
+   "sceneKids": 83,
+   "geo": 39,
+   "tex": 86,
+   "shProxy": [
+    "30/38",
+    "2/10",
+    "0/1"
+   ],
+   "shEntries": [
+    38,
+    10,
+    1
+   ],
+   "dpProxy": "30/36",
+   "dpEntries": 36,
+   "heapMB": 149
+  },
+  {
+   "tag": "A2:ash:spawned",
+   "realm": "ash",
+   "instances": 40,
+   "types": 30,
+   "insts": 40,
+   "instLive": 14,
+   "instPooled": 26,
+   "mats": 30,
+   "sceneKids": 93,
+   "geo": 49,
+   "tex": 106,
+   "shProxy": [
+    "40/48",
+    "3/11",
+    "0/1"
+   ],
+   "shEntries": [
+    48,
+    11,
+    1
+   ],
+   "dpProxy": "40/46",
+   "dpEntries": 46,
+   "heapMB": 150.1
+  },
+  {
+   "tag": "A2:ash",
+   "realm": "ash",
+   "instances": 40,
+   "types": 30,
+   "insts": 40,
+   "instLive": 0,
+   "instPooled": 40,
+   "mats": 30,
+   "sceneKids": 93,
+   "geo": 49,
+   "tex": 106,
+   "shProxy": [
+    "40/48",
+    "3/11",
+    "0/1"
+   ],
+   "shEntries": [
+    48,
+    11,
+    1
+   ],
+   "dpProxy": "40/46",
+   "dpEntries": 46,
+   "heapMB": 150.1
+  },
+  {
+   "tag": "A3:cold:idle",
+   "realm": "cold",
+   "instances": 40,
+   "types": 30,
+   "insts": 40,
+   "instLive": 0,
+   "instPooled": 40,
+   "mats": 30,
+   "sceneKids": 93,
+   "geo": 49,
+   "tex": 106,
+   "shProxy": [
+    "40/48",
+    "3/11",
+    "0/1"
+   ],
+   "shEntries": [
+    48,
+    11,
+    1
+   ],
+   "dpProxy": "40/46",
+   "dpEntries": 46,
+   "heapMB": 150.2
+  },
+  {
+   "tag": "A3:cold:spawned",
+   "realm": "cold",
+   "instances": 40,
+   "types": 30,
+   "insts": 40,
+   "instLive": 14,
+   "instPooled": 26,
+   "mats": 30,
+   "sceneKids": 93,
+   "geo": 49,
+   "tex": 106,
+   "shProxy": [
+    "40/48",
+    "3/11",
+    "0/1"
+   ],
+   "shEntries": [
+    48,
+    11,
+    1
+   ],
+   "dpProxy": "40/46",
+   "dpEntries": 46,
+   "heapMB": 150.2
+  },
+  {
+   "tag": "A3:cold",
+   "realm": "cold",
+   "instances": 40,
+   "types": 30,
+   "insts": 40,
+   "instLive": 0,
+   "instPooled": 40,
+   "mats": 30,
+   "sceneKids": 93,
+   "geo": 49,
+   "tex": 106,
+   "shProxy": [
+    "40/48",
+    "3/11",
+    "0/1"
+   ],
+   "shEntries": [
+    48,
+    11,
+    1
+   ],
+   "dpProxy": "40/46",
+   "dpEntries": 46,
+   "heapMB": 150.2
+  },
+  {
+   "tag": "A4:sand:idle",
+   "realm": "sand",
+   "instances": 40,
+   "types": 30,
+   "insts": 40,
+   "instLive": 0,
+   "instPooled": 40,
+   "mats": 30,
+   "sceneKids": 93,
+   "geo": 49,
+   "tex": 106,
+   "shProxy": [
+    "40/48",
+    "3/11",
+    "0/1"
+   ],
+   "shEntries": [
+    48,
+    11,
+    1
+   ],
+   "dpProxy": "40/46",
+   "dpEntries": 46,
+   "heapMB": 150.2
+  },
+  {
+   "tag": "A4:sand:spawned",
+   "realm": "sand",
+   "instances": 40,
+   "types": 30,
+   "insts": 40,
+   "instLive": 14,
+   "instPooled": 26,
+   "mats": 30,
+   "sceneKids": 93,
+   "geo": 49,
+   "tex": 106,
+   "shProxy": [
+    "40/48",
+    "3/11",
+    "0/1"
+   ],
+   "shEntries": [
+    48,
+    11,
+    1
+   ],
+   "dpProxy": "40/46",
+   "dpEntries": 46,
+   "heapMB": 150.3
+  },
+  {
+   "tag": "A4:sand",
+   "realm": "sand",
+   "instances": 40,
+   "types": 30,
+   "insts": 40,
+   "instLive": 0,
+   "instPooled": 40,
+   "mats": 30,
+   "sceneKids": 93,
+   "geo": 49,
+   "tex": 106,
+   "shProxy": [
+    "40/48",
+    "3/11",
+    "0/1"
+   ],
+   "shEntries": [
+    48,
+    11,
+    1
+   ],
+   "dpProxy": "40/46",
+   "dpEntries": 46,
+   "heapMB": 150.3
+  },
+  {
+   "tag": "A5:ash:idle",
+   "realm": "ash",
+   "instances": 40,
+   "types": 30,
+   "insts": 40,
+   "instLive": 0,
+   "instPooled": 40,
+   "mats": 30,
+   "sceneKids": 93,
+   "geo": 49,
+   "tex": 106,
+   "shProxy": [
+    "40/48",
+    "3/11",
+    "0/1"
+   ],
+   "shEntries": [
+    48,
+    11,
+    1
+   ],
+   "dpProxy": "40/46",
+   "dpEntries": 46,
+   "heapMB": 150.3
+  },
+  {
+   "tag": "A5:ash:spawned",
+   "realm": "ash",
+   "instances": 40,
+   "types": 30,
+   "insts": 40,
+   "instLive": 14,
+   "instPooled": 26,
+   "mats": 30,
+   "sceneKids": 93,
+   "geo": 49,
+   "tex": 106,
+   "shProxy": [
+    "40/48",
+    "3/11",
+    "0/1"
+   ],
+   "shEntries": [
+    48,
+    11,
+    1
+   ],
+   "dpProxy": "40/46",
+   "dpEntries": 46,
+   "heapMB": 150.3
+  },
+  {
+   "tag": "A5:ash",
+   "realm": "ash",
+   "instances": 40,
+   "types": 30,
+   "insts": 40,
+   "instLive": 0,
+   "instPooled": 40,
+   "mats": 30,
+   "sceneKids": 93,
+   "geo": 49,
+   "tex": 106,
+   "shProxy": [
+    "40/48",
+    "3/11",
+    "0/1"
+   ],
+   "shEntries": [
+    48,
+    11,
+    1
+   ],
+   "dpProxy": "40/46",
+   "dpEntries": 46,
+   "heapMB": 150.3
+  },
+  {
+   "tag": "A6:cold:idle",
+   "realm": "cold",
+   "instances": 40,
+   "types": 30,
+   "insts": 40,
+   "instLive": 0,
+   "instPooled": 40,
+   "mats": 30,
+   "sceneKids": 93,
+   "geo": 49,
+   "tex": 106,
+   "shProxy": [
+    "40/48",
+    "3/11",
+    "0/1"
+   ],
+   "shEntries": [
+    48,
+    11,
+    1
+   ],
+   "dpProxy": "40/46",
+   "dpEntries": 46,
+   "heapMB": 150.3
+  },
+  {
+   "tag": "A6:cold:spawned",
+   "realm": "cold",
+   "instances": 40,
+   "types": 30,
+   "insts": 40,
+   "instLive": 14,
+   "instPooled": 26,
+   "mats": 30,
+   "sceneKids": 93,
+   "geo": 49,
+   "tex": 106,
+   "shProxy": [
+    "40/48",
+    "3/11",
+    "0/1"
+   ],
+   "shEntries": [
+    48,
+    11,
+    1
+   ],
+   "dpProxy": "40/46",
+   "dpEntries": 46,
+   "heapMB": 150.3
+  },
+  {
+   "tag": "A6:cold",
+   "realm": "cold",
+   "instances": 40,
+   "types": 30,
+   "insts": 40,
+   "instLive": 0,
+   "instPooled": 40,
+   "mats": 30,
+   "sceneKids": 93,
+   "geo": 49,
+   "tex": 106,
+   "shProxy": [
+    "40/48",
+    "3/11",
+    "0/1"
+   ],
+   "shEntries": [
+    48,
+    11,
+    1
+   ],
+   "dpProxy": "40/46",
+   "dpEntries": 46,
+   "heapMB": 150.3
+  },
+  {
+   "tag": "B1:sand:idle",
+   "realm": "sand",
+   "instances": 10,
+   "types": 10,
+   "insts": 10,
+   "instLive": 0,
+   "instPooled": 10,
+   "mats": 10,
+   "sceneKids": 63,
+   "geo": 31,
+   "tex": 58,
+   "shProxy": [
+    "10/18",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    18,
+    9,
+    1
+   ],
+   "dpProxy": "10/16",
+   "dpEntries": 16,
+   "heapMB": 104.8
+  },
+  {
+   "tag": "B1:sand:spawned",
+   "realm": "sand",
+   "instances": 14,
+   "types": 10,
+   "insts": 14,
+   "instLive": 14,
+   "instPooled": 0,
+   "mats": 10,
+   "sceneKids": 67,
+   "geo": 31,
+   "tex": 62,
+   "shProxy": [
+    "14/22",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    22,
+    9,
+    1
+   ],
+   "dpProxy": "14/20",
+   "dpEntries": 20,
+   "heapMB": 105.3
+  },
+  {
+   "tag": "B1:sand",
+   "realm": "sand",
+   "instances": 14,
+   "types": 10,
+   "insts": 14,
+   "instLive": 0,
+   "instPooled": 14,
+   "mats": 10,
+   "sceneKids": 67,
+   "geo": 31,
+   "tex": 62,
+   "shProxy": [
+    "14/22",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    22,
+    9,
+    1
+   ],
+   "dpProxy": "14/20",
+   "dpEntries": 20,
+   "heapMB": 105.3
+  },
+  {
+   "tag": "B2:ash:idle",
+   "realm": "ash",
+   "instances": 0,
+   "types": 10,
+   "insts": 0,
+   "instLive": 0,
+   "instPooled": 0,
+   "mats": 10,
+   "sceneKids": 53,
+   "geo": 22,
+   "tex": 39,
+   "shProxy": [
+    "0/8",
+    "0/8",
+    "0/1"
+   ],
+   "shEntries": [
+    8,
+    8,
+    1
+   ],
+   "dpProxy": "0/6",
+   "dpEntries": 6,
+   "heapMB": 104.1
+  },
+  {
+   "tag": "B2:ash:spawned",
+   "realm": "ash",
+   "instances": 14,
+   "types": 10,
+   "insts": 14,
+   "instLive": 14,
+   "instPooled": 0,
+   "mats": 10,
+   "sceneKids": 67,
+   "geo": 32,
+   "tex": 63,
+   "shProxy": [
+    "14/22",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    22,
+    9,
+    1
+   ],
+   "dpProxy": "14/20",
+   "dpEntries": 20,
+   "heapMB": 105.7
+  },
+  {
+   "tag": "B2:ash",
+   "realm": "ash",
+   "instances": 14,
+   "types": 10,
+   "insts": 14,
+   "instLive": 0,
+   "instPooled": 14,
+   "mats": 10,
+   "sceneKids": 67,
+   "geo": 32,
+   "tex": 63,
+   "shProxy": [
+    "14/22",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    22,
+    9,
+    1
+   ],
+   "dpProxy": "14/20",
+   "dpEntries": 20,
+   "heapMB": 105.7
+  },
+  {
+   "tag": "B3:cold:idle",
+   "realm": "cold",
+   "instances": 0,
+   "types": 10,
+   "insts": 0,
+   "instLive": 0,
+   "instPooled": 0,
+   "mats": 10,
+   "sceneKids": 53,
+   "geo": 22,
+   "tex": 39,
+   "shProxy": [
+    "0/8",
+    "0/8",
+    "0/1"
+   ],
+   "shEntries": [
+    8,
+    8,
+    1
+   ],
+   "dpProxy": "0/6",
+   "dpEntries": 6,
+   "heapMB": 104.6
+  },
+  {
+   "tag": "B3:cold:spawned",
+   "realm": "cold",
+   "instances": 14,
+   "types": 10,
+   "insts": 14,
+   "instLive": 14,
+   "instPooled": 0,
+   "mats": 10,
+   "sceneKids": 67,
+   "geo": 30,
+   "tex": 61,
+   "shProxy": [
+    "14/22",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    22,
+    9,
+    1
+   ],
+   "dpProxy": "14/20",
+   "dpEntries": 20,
+   "heapMB": 106.4
+  },
+  {
+   "tag": "B3:cold",
+   "realm": "cold",
+   "instances": 14,
+   "types": 10,
+   "insts": 14,
+   "instLive": 0,
+   "instPooled": 14,
+   "mats": 10,
+   "sceneKids": 67,
+   "geo": 30,
+   "tex": 61,
+   "shProxy": [
+    "14/22",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    22,
+    9,
+    1
+   ],
+   "dpProxy": "14/20",
+   "dpEntries": 20,
+   "heapMB": 106.4
+  },
+  {
+   "tag": "B4:sand:idle",
+   "realm": "sand",
+   "instances": 0,
+   "types": 10,
+   "insts": 0,
+   "instLive": 0,
+   "instPooled": 0,
+   "mats": 10,
+   "sceneKids": 53,
+   "geo": 22,
+   "tex": 39,
+   "shProxy": [
+    "0/8",
+    "0/8",
+    "0/1"
+   ],
+   "shEntries": [
+    8,
+    8,
+    1
+   ],
+   "dpProxy": "0/6",
+   "dpEntries": 6,
+   "heapMB": 103.8
+  },
+  {
+   "tag": "B4:sand:spawned",
+   "realm": "sand",
+   "instances": 14,
+   "types": 10,
+   "insts": 14,
+   "instLive": 14,
+   "instPooled": 0,
+   "mats": 10,
+   "sceneKids": 67,
+   "geo": 31,
+   "tex": 62,
+   "shProxy": [
+    "14/22",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    22,
+    9,
+    1
+   ],
+   "dpProxy": "14/20",
+   "dpEntries": 20,
+   "heapMB": 105.4
+  },
+  {
+   "tag": "B4:sand",
+   "realm": "sand",
+   "instances": 14,
+   "types": 10,
+   "insts": 14,
+   "instLive": 0,
+   "instPooled": 14,
+   "mats": 10,
+   "sceneKids": 67,
+   "geo": 31,
+   "tex": 62,
+   "shProxy": [
+    "14/22",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    22,
+    9,
+    1
+   ],
+   "dpProxy": "14/20",
+   "dpEntries": 20,
+   "heapMB": 105.4
+  },
+  {
+   "tag": "B5:ash:idle",
+   "realm": "ash",
+   "instances": 0,
+   "types": 10,
+   "insts": 0,
+   "instLive": 0,
+   "instPooled": 0,
+   "mats": 10,
+   "sceneKids": 53,
+   "geo": 22,
+   "tex": 39,
+   "shProxy": [
+    "0/8",
+    "0/8",
+    "0/1"
+   ],
+   "shEntries": [
+    8,
+    8,
+    1
+   ],
+   "dpProxy": "0/6",
+   "dpEntries": 6,
+   "heapMB": 104.4
+  },
+  {
+   "tag": "B5:ash:spawned",
+   "realm": "ash",
+   "instances": 14,
+   "types": 10,
+   "insts": 14,
+   "instLive": 14,
+   "instPooled": 0,
+   "mats": 10,
+   "sceneKids": 67,
+   "geo": 32,
+   "tex": 63,
+   "shProxy": [
+    "14/22",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    22,
+    9,
+    1
+   ],
+   "dpProxy": "14/20",
+   "dpEntries": 20,
+   "heapMB": 105.9
+  },
+  {
+   "tag": "B5:ash",
+   "realm": "ash",
+   "instances": 14,
+   "types": 10,
+   "insts": 14,
+   "instLive": 0,
+   "instPooled": 14,
+   "mats": 10,
+   "sceneKids": 67,
+   "geo": 32,
+   "tex": 63,
+   "shProxy": [
+    "14/22",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    22,
+    9,
+    1
+   ],
+   "dpProxy": "14/20",
+   "dpEntries": 20,
+   "heapMB": 105.9
+  },
+  {
+   "tag": "B6:cold:idle",
+   "realm": "cold",
+   "instances": 0,
+   "types": 10,
+   "insts": 0,
+   "instLive": 0,
+   "instPooled": 0,
+   "mats": 10,
+   "sceneKids": 53,
+   "geo": 22,
+   "tex": 39,
+   "shProxy": [
+    "0/8",
+    "0/8",
+    "0/1"
+   ],
+   "shEntries": [
+    8,
+    8,
+    1
+   ],
+   "dpProxy": "0/6",
+   "dpEntries": 6,
+   "heapMB": 104.8
+  },
+  {
+   "tag": "B6:cold:spawned",
+   "realm": "cold",
+   "instances": 14,
+   "types": 10,
+   "insts": 14,
+   "instLive": 14,
+   "instPooled": 0,
+   "mats": 10,
+   "sceneKids": 67,
+   "geo": 30,
+   "tex": 61,
+   "shProxy": [
+    "14/22",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    22,
+    9,
+    1
+   ],
+   "dpProxy": "14/20",
+   "dpEntries": 20,
+   "heapMB": 106.6
+  },
+  {
+   "tag": "B6:cold",
+   "realm": "cold",
+   "instances": 14,
+   "types": 10,
+   "insts": 14,
+   "instLive": 0,
+   "instPooled": 14,
+   "mats": 10,
+   "sceneKids": 67,
+   "geo": 30,
+   "tex": 61,
+   "shProxy": [
+    "14/22",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    22,
+    9,
+    1
+   ],
+   "dpProxy": "14/20",
+   "dpEntries": 20,
+   "heapMB": 106.6
+  }
+ ],
+ "binds": [
+  {
+   "tag": "A0:cold(base)",
+   "rows": [
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "glacierBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "frostStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "glacierBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeboundCultist",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "blizzardAssassin",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "packIceGolem",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 3
+    },
+    {
+     "key": "rimeSkierRaider",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "hailPlateGuard",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "glacierBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "frostStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    }
+   ]
+  },
+  {
+   "tag": "A1:sand",
+   "rows": [
+    {
+     "key": "duneImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustMage",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneSentinel",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneWarden",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 3
+    },
+    {
+     "key": "sandMummy",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "boneKnight",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "windscourBandit",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "glacierBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "frostStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    }
+   ]
+  },
+  {
+   "tag": "A2:ash",
+   "rows": [
+    {
+     "key": "cinderImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "slagBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "scorchRaider",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "smokeMage",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "cinderSentinel",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "sootAssassin",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "sootStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "scorchWarden",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "volcanicPlateKnight",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 3
+    },
+    {
+     "key": "furnaceGuardian",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "glacierBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "frostStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    }
+   ]
+  },
+  {
+   "tag": "A3:cold",
+   "rows": [
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "glacierBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "frostStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "glacierBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeboundCultist",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "blizzardAssassin",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "packIceGolem",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 3
+    },
+    {
+     "key": "rimeSkierRaider",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "hailPlateGuard",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustMage",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    }
+   ]
+  },
+  {
+   "tag": "A4:sand",
+   "rows": [
+    {
+     "key": "duneImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustMage",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneSentinel",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneWarden",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 3
+    },
+    {
+     "key": "sandMummy",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "boneKnight",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "windscourBandit",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "glacierBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "frostStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    }
+   ]
+  },
+  {
+   "tag": "A5:ash",
+   "rows": [
+    {
+     "key": "cinderImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "slagBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "scorchRaider",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "smokeMage",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "cinderSentinel",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "sootAssassin",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "sootStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "scorchWarden",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "volcanicPlateKnight",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 3
+    },
+    {
+     "key": "furnaceGuardian",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "glacierBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "frostStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    }
+   ]
+  },
+  {
+   "tag": "A6:cold",
+   "rows": [
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "glacierBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "frostStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "glacierBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeboundCultist",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "blizzardAssassin",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "packIceGolem",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 3
+    },
+    {
+     "key": "rimeSkierRaider",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "hailPlateGuard",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustMage",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    }
+   ]
+  },
+  {
+   "tag": "B1:sand",
+   "rows": [
+    {
+     "key": "duneImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustMage",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneSentinel",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneWarden",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 3
+    },
+    {
+     "key": "sandMummy",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "boneKnight",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "windscourBandit",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustMage",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    }
+   ]
+  },
+  {
+   "tag": "B2:ash",
+   "rows": [
+    {
+     "key": "cinderImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "slagBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "scorchRaider",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "smokeMage",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "cinderSentinel",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "sootAssassin",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "sootStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "scorchWarden",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "volcanicPlateKnight",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 3
+    },
+    {
+     "key": "furnaceGuardian",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "cinderImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "slagBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "scorchRaider",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "smokeMage",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    }
+   ]
+  },
+  {
+   "tag": "B3:cold",
+   "rows": [
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "glacierBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "frostStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "glacierBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeboundCultist",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "blizzardAssassin",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "packIceGolem",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 3
+    },
+    {
+     "key": "rimeSkierRaider",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "hailPlateGuard",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "glacierBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "frostStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    }
+   ]
+  },
+  {
+   "tag": "B4:sand",
+   "rows": [
+    {
+     "key": "duneImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustMage",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneSentinel",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneWarden",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 3
+    },
+    {
+     "key": "sandMummy",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "boneKnight",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "windscourBandit",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "duneBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "dustMage",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    }
+   ]
+  },
+  {
+   "tag": "B5:ash",
+   "rows": [
+    {
+     "key": "cinderImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "slagBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "scorchRaider",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "smokeMage",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "cinderSentinel",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "sootAssassin",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "sootStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "scorchWarden",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "volcanicPlateKnight",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 3
+    },
+    {
+     "key": "furnaceGuardian",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "cinderImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "slagBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "scorchRaider",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "smokeMage",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    }
+   ]
+  },
+  {
+   "tag": "B6:cold",
+   "rows": [
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "glacierBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "frostStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "glacierBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeboundCultist",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "blizzardAssassin",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "packIceGolem",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 3
+    },
+    {
+     "key": "rimeSkierRaider",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "hailPlateGuard",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "glacierBrute",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "frostStalker",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    },
+    {
+     "key": "rimeImp",
+     "bound": true,
+     "visible": true,
+     "inScene": true,
+     "proxies": 2
+    }
+   ]
+  }
+ ],
+ "final": {
+  "rows": [
+   {
+    "key": "rimeImp",
+    "bound": true,
+    "visible": true,
+    "inScene": true,
+    "proxies": 2
+   },
+   {
+    "key": "glacierBrute",
+    "bound": true,
+    "visible": true,
+    "inScene": true,
+    "proxies": 2
+   },
+   {
+    "key": "frostStalker",
+    "bound": true,
+    "visible": true,
+    "inScene": true,
+    "proxies": 2
+   },
+   {
+    "key": "rimeImp",
+    "bound": true,
+    "visible": true,
+    "inScene": true,
+    "proxies": 2
+   },
+   {
+    "key": "glacierBrute",
+    "bound": true,
+    "visible": true,
+    "inScene": true,
+    "proxies": 2
+   },
+   {
+    "key": "rimeboundCultist",
+    "bound": true,
+    "visible": true,
+    "inScene": true,
+    "proxies": 2
+   }
+  ],
+  "snap": {
+   "tag": "final:spawned",
+   "realm": "cold",
+   "instances": 14,
+   "types": 10,
+   "insts": 14,
+   "instLive": 6,
+   "instPooled": 8,
+   "mats": 10,
+   "sceneKids": 67,
+   "geo": 30,
+   "tex": 61,
+   "shProxy": [
+    "14/22",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    22,
+    9,
+    1
+   ],
+   "dpProxy": "14/20",
+   "dpEntries": 20,
+   "heapMB": 106.6
+  }
+ },
+ "dispose": {
+  "threw": null,
+  "before": {
+   "tag": "dispose:before",
+   "realm": "cold",
+   "instances": 14,
+   "types": 10,
+   "insts": 14,
+   "instLive": 0,
+   "instPooled": 14,
+   "mats": 10,
+   "sceneKids": 67,
+   "geo": 30,
+   "tex": 61,
+   "shProxy": [
+    "14/22",
+    "1/9",
+    "0/1"
+   ],
+   "shEntries": [
+    22,
+    9,
+    1
+   ],
+   "dpProxy": "14/20",
+   "dpEntries": 20,
+   "heapMB": 106.7
+  },
+  "after": {
+   "tag": "dispose:after",
+   "realm": "cold",
+   "instances": 0,
+   "types": 0,
+   "insts": 0,
+   "instLive": 0,
+   "instPooled": 0,
+   "mats": 0,
+   "sceneKids": 21,
+   "geo": 22,
+   "tex": 39,
+   "shProxy": [
+    "0/8",
+    "0/8",
+    "0/1"
+   ],
+   "shEntries": [
+    8,
+    8,
+    1
+   ],
+   "dpProxy": "0/6",
+   "dpEntries": 6,
+   "heapMB": 83.6
+  }
+ },
+ "instanceMaxWarnings": [],
+ "consoleErrors": []
+}

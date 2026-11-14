@@ -1,0 +1,13 @@
+  ..    fps 20
+  PASS  checkpoint flash raises real animations to photograph   12 animations frozen at 300 ms
+  shot  fx_checkpoint_flash.png      0.6 s
+  PASS  crest ribbon raises real animations to photograph   27 animations frozen at 420 ms
+  shot  fx_crest_ribbon.png          0.4 s
+  shot  fx_death_word.png            0.3 s
+  PASS  Nim is running when the kill lands   {"speed": 6.3, "state": "run", "pos": [0, 2, 39.5]}
+  PASS  replay strip covers the sequence (>= 10 frames carrying a death clock)   28 of 28 saved frames carry a death clock (100 screencast frames captured)
+  PASS  the rewind ghost walks BACK along the path Nim ran (>=10 frames, monotonic, ends clear of the death spot)   {"frames": 38, "pathLen": 0.499, "awayFromDeathPos": 0.5, "monotonicSteps": 37, "steps": 37}
+  PASS  the iris is FULLY closed across the world swap (nothing pops through)   min veil opacity in dT 415..470 = 1.000 over 9 samples (peak 1.000)
+  PASS  no console / page errors in this run   []
+
+UI DEATH: 7/7 checks passed

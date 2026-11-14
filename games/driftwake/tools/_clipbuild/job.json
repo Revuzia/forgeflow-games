@@ -1,0 +1,2091 @@
+{
+ "bodies": [
+  {
+   "slug": "29_ash_soot_assassin",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\29_ash_soot_assassin.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\29_ash_soot_assassin_anims.glb",
+   "sig": "b96ded33cfc2c2ce",
+   "animRole": "assassin",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "stealth",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_crouch.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.1333
+    },
+    {
+     "slot": "dash_slash",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_slash1.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.5
+    },
+    {
+     "slot": "backstab",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_finisher.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.8333
+    },
+    {
+     "slot": "vanish",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_dodge.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.4583
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "stealth",
+    "dash_slash",
+    "backstab",
+    "vanish"
+   ]
+  },
+  {
+   "slug": "39_v2_cold_blizzard_assassin",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\39_v2_cold_blizzard_assassin.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\39_v2_cold_blizzard_assassin_anims.glb",
+   "sig": "443cce82d5d4c876",
+   "animRole": "assassin",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "stealth",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_crouch.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.1333
+    },
+    {
+     "slot": "dash_slash",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_slash1.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.5
+    },
+    {
+     "slot": "backstab",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_finisher.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.8333
+    },
+    {
+     "slot": "vanish",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_dodge.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.4583
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "stealth",
+    "dash_slash",
+    "backstab",
+    "vanish"
+   ]
+  },
+  {
+   "slug": "77_v3_sand_windscour_bandit",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\77_v3_sand_windscour_bandit.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\77_v3_sand_windscour_bandit_anims.glb",
+   "sig": "fe81767f6fc2fa83",
+   "animRole": "bandit",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "slash",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_slash1.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.5
+    },
+    {
+     "slot": "kick",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Pro_Melee_Axe_Pack\\standing melee attack kick ver. 1.fbx",
+     "kind": "fbx",
+     "srcDurationS": 1.8667
+    },
+    {
+     "slot": "throw",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Basic_Shooter_Pack\\toss grenade.fbx",
+     "kind": "fbx",
+     "srcDurationS": 3.2
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "slash",
+    "kick",
+    "throw"
+   ]
+  },
+  {
+   "slug": "50_v2_sand_dune_warden",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\50_v2_sand_dune_warden.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\50_v2_sand_dune_warden_anims.glb",
+   "sig": "776c10895880caf9",
+   "animRole": "boss",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Great_Sword_Pack\\two handed sword death.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.4
+    },
+    {
+     "slot": "heavy_combo",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Great_Sword_Pack\\great sword slash.fbx",
+     "kind": "fbx",
+     "srcDurationS": 1.2667
+    },
+    {
+     "slot": "ranged",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_cast2.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.1667
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "heavy_combo",
+    "ranged"
+   ]
+  },
+  {
+   "slug": "86_v3_ash_volcanic_plate_knight",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\86_v3_ash_volcanic_plate_knight.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\86_v3_ash_volcanic_plate_knight_anims.glb",
+   "sig": "e530da3e3fd29fa7",
+   "animRole": "boss",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Great_Sword_Pack\\two handed sword death.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.4
+    },
+    {
+     "slot": "heavy_combo",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Great_Sword_Pack\\great sword slash.fbx",
+     "kind": "fbx",
+     "srcDurationS": 1.2667
+    },
+    {
+     "slot": "ranged",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_cast2.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.1667
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "heavy_combo",
+    "ranged"
+   ]
+  },
+  {
+   "slug": "02_cold_glacier_brute",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\02_cold_glacier_brute.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\02_cold_glacier_brute_anims.glb",
+   "sig": "e2baf7c896ceeddf",
+   "animRole": "brute",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "overhead_smash",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Pro_Melee_Axe_Pack\\standing melee attack downward.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.2667
+    },
+    {
+     "slot": "sweep",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Pro_Melee_Axe_Pack\\standing melee attack horizontal.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.4
+    },
+    {
+     "slot": "charge",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Great_Sword_Pack\\great sword run.fbx",
+     "kind": "fbx",
+     "srcDurationS": 0.7333
+    },
+    {
+     "slot": "finisher",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_finisher.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.8333
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "overhead_smash",
+    "sweep",
+    "charge",
+    "finisher"
+   ]
+  },
+  {
+   "slug": "12_sand_dune_brute",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\12_sand_dune_brute.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\12_sand_dune_brute_anims.glb",
+   "sig": "4bde23f8e17fea02",
+   "animRole": "brute",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "overhead_smash",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Pro_Melee_Axe_Pack\\standing melee attack downward.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.2667
+    },
+    {
+     "slot": "sweep",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Pro_Melee_Axe_Pack\\standing melee attack horizontal.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.4
+    },
+    {
+     "slot": "charge",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Great_Sword_Pack\\great sword run.fbx",
+     "kind": "fbx",
+     "srcDurationS": 0.7333
+    },
+    {
+     "slot": "finisher",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_finisher.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.8333
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "overhead_smash",
+    "sweep",
+    "charge",
+    "finisher"
+   ]
+  },
+  {
+   "slug": "22_ash_slag_brute",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\22_ash_slag_brute.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\22_ash_slag_brute_anims.glb",
+   "sig": "a261b43747772f3f",
+   "animRole": "brute",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "overhead_smash",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Pro_Melee_Axe_Pack\\standing melee attack downward.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.2667
+    },
+    {
+     "slot": "sweep",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Pro_Melee_Axe_Pack\\standing melee attack horizontal.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.4
+    },
+    {
+     "slot": "charge",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Great_Sword_Pack\\great sword run.fbx",
+     "kind": "fbx",
+     "srcDurationS": 0.7333
+    },
+    {
+     "slot": "finisher",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_finisher.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.8333
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "overhead_smash",
+    "sweep",
+    "charge",
+    "finisher"
+   ]
+  },
+  {
+   "slug": "32_v2_cold_glacier_brute",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\32_v2_cold_glacier_brute.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\32_v2_cold_glacier_brute_anims.glb",
+   "sig": "7d490e89a0cebb47",
+   "animRole": "brute",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "overhead_smash",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Pro_Melee_Axe_Pack\\standing melee attack downward.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.2667
+    },
+    {
+     "slot": "sweep",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Pro_Melee_Axe_Pack\\standing melee attack horizontal.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.4
+    },
+    {
+     "slot": "charge",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Great_Sword_Pack\\great sword run.fbx",
+     "kind": "fbx",
+     "srcDurationS": 0.7333
+    },
+    {
+     "slot": "finisher",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_finisher.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.8333
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "overhead_smash",
+    "sweep",
+    "charge",
+    "finisher"
+   ]
+  },
+  {
+   "slug": "34_v2_cold_ice_cultist",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\34_v2_cold_ice_cultist.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\34_v2_cold_ice_cultist_anims.glb",
+   "sig": "461e8f79463a3f1a",
+   "animRole": "cultist",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "cast_bolt",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_cast1.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.25
+    },
+    {
+     "slot": "cast_snare",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_cast2.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.1667
+    },
+    {
+     "slot": "channel",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Magic_Spell_Pack\\Standing 2H Cast Spell 01.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.1667
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "cast_bolt",
+    "cast_snare",
+    "channel"
+   ]
+  },
+  {
+   "slug": "61_v3_cold_frost_golem",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\61_v3_cold_frost_golem.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\61_v3_cold_frost_golem_anims.glb",
+   "sig": "1fa6b1ad18645001",
+   "animRole": "golem",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "punch",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Creature_Pack\\mutant punch.fbx",
+     "kind": "fbx",
+     "srcDurationS": 1.1
+    },
+    {
+     "slot": "pound",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Creature_Pack\\mutant jump attack.fbx",
+     "kind": "fbx",
+     "srcDurationS": 3.7
+    },
+    {
+     "slot": "swat",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Creature_Pack\\mutant swiping.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.4
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "punch",
+    "pound",
+    "swat"
+   ]
+  },
+  {
+   "slug": "88_v3_ash_furnace_guardian",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\88_v3_ash_furnace_guardian.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\88_v3_ash_furnace_guardian_anims.glb",
+   "sig": "5c26da1216e36e1b",
+   "animRole": "guardian",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "smash",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Pro_Melee_Axe_Pack\\standing melee combo attack ver. 1.fbx",
+     "kind": "fbx",
+     "srcDurationS": 4.6667
+    },
+    {
+     "slot": "breath_cast",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_cast2.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.1667
+    },
+    {
+     "slot": "grapple",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Pro_Melee_Axe_Pack\\standing melee attack backhand.fbx",
+     "kind": "fbx",
+     "srcDurationS": 3.1667
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "smash",
+    "breath_cast",
+    "grapple"
+   ]
+  },
+  {
+   "slug": "68_v3_cold_hail_plate_guard",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\68_v3_cold_hail_plate_guard.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\68_v3_cold_hail_plate_guard_anims.glb",
+   "sig": "513875cc2b856688",
+   "animRole": "knight",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "slash_combo",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Sword_and_Shield_Pack\\sword and shield slash.fbx",
+     "kind": "fbx",
+     "srcDurationS": 1.5
+    },
+    {
+     "slot": "shield_slam",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Sword_and_Shield_Pack\\sword and shield attack.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.3333
+    },
+    {
+     "slot": "guard",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_block.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.5417
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "slash_combo",
+    "shield_slam",
+    "guard"
+   ]
+  },
+  {
+   "slug": "75_v3_sand_bleached_bone_knight",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\75_v3_sand_bleached_bone_knight.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\75_v3_sand_bleached_bone_knight_anims.glb",
+   "sig": "cd3d5587a4b9e9dc",
+   "animRole": "knight",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "slash_combo",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Sword_and_Shield_Pack\\sword and shield slash.fbx",
+     "kind": "fbx",
+     "srcDurationS": 1.5
+    },
+    {
+     "slot": "shield_slam",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Sword_and_Shield_Pack\\sword and shield attack.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.3333
+    },
+    {
+     "slot": "guard",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_block.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.5417
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "slash_combo",
+    "shield_slam",
+    "guard"
+   ]
+  },
+  {
+   "slug": "16_sand_dust_mage",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\16_sand_dust_mage.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\16_sand_dust_mage_anims.glb",
+   "sig": "add8b35b6e965001",
+   "animRole": "mage",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "cast_bolt",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_cast1.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.25
+    },
+    {
+     "slot": "cast_zone",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_cast2.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.1667
+    },
+    {
+     "slot": "heavy_lance",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Magic_Spell_Pack\\Standing 2H Magic Attack 01.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.6667
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "cast_bolt",
+    "cast_zone",
+    "heavy_lance"
+   ]
+  },
+  {
+   "slug": "26_ash_smoke_mage",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\26_ash_smoke_mage.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\26_ash_smoke_mage_anims.glb",
+   "sig": "75d4a5b14126dba5",
+   "animRole": "mage",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "cast_bolt",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_cast1.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.25
+    },
+    {
+     "slot": "cast_zone",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_cast2.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.1667
+    },
+    {
+     "slot": "heavy_lance",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Magic_Spell_Pack\\Standing 2H Magic Attack 01.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.6667
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "cast_bolt",
+    "cast_zone",
+    "heavy_lance"
+   ]
+  },
+  {
+   "slug": "73_v3_sand_mummy",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\73_v3_sand_mummy.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\73_v3_sand_mummy_anims.glb",
+   "sig": "85c4a490815cd470",
+   "animRole": "mummy",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "grab_wrap",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Scary_Zombie_Pack\\zombie biting.fbx",
+     "kind": "fbx",
+     "srcDurationS": 6.6
+    },
+    {
+     "slot": "curse_cast",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_cast1.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.25
+    },
+    {
+     "slot": "spit",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Scary_Zombie_Pack\\zombie attack.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.5
+    },
+    {
+     "slot": "shambling",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Scary_Zombie_Pack\\zombie walk.fbx",
+     "kind": "fbx",
+     "srcDurationS": 4.0333
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "grab_wrap",
+    "curse_cast",
+    "spit",
+    "shambling"
+   ]
+  },
+  {
+   "slug": "25_ash_scorch_raider",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\25_ash_scorch_raider.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\25_ash_scorch_raider_anims.glb",
+   "sig": "c63819c19d9f7867",
+   "animRole": "raider",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "combo",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Pro_Melee_Axe_Pack\\standing melee combo attack ver. 1.fbx",
+     "kind": "fbx",
+     "srcDurationS": 4.6667
+    },
+    {
+     "slot": "lunge",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_slash1.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.5
+    },
+    {
+     "slot": "throw",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Basic_Shooter_Pack\\toss grenade.fbx",
+     "kind": "fbx",
+     "srcDurationS": 3.2
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "combo",
+    "lunge",
+    "throw"
+   ]
+  },
+  {
+   "slug": "65_v3_cold_rime_skier_raider",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\65_v3_cold_rime_skier_raider.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\65_v3_cold_rime_skier_raider_anims.glb",
+   "sig": "f62a118f974fe546",
+   "animRole": "raider",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "combo",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Pro_Melee_Axe_Pack\\standing melee combo attack ver. 1.fbx",
+     "kind": "fbx",
+     "srcDurationS": 4.6667
+    },
+    {
+     "slot": "lunge",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_slash1.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.5
+    },
+    {
+     "slot": "throw",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Basic_Shooter_Pack\\toss grenade.fbx",
+     "kind": "fbx",
+     "srcDurationS": 3.2
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "combo",
+    "lunge",
+    "throw"
+   ]
+  },
+  {
+   "slug": "28_ash_cinder_sentinel",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\28_ash_cinder_sentinel.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\28_ash_cinder_sentinel_anims.glb",
+   "sig": "57ed7652c8bbed74",
+   "animRole": "sentinel",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "block",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_block.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.5417
+    },
+    {
+     "slot": "thrust",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Sword_and_Shield_Pack\\sword and shield attack.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.3333
+    },
+    {
+     "slot": "slash",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_slash1.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.5
+    },
+    {
+     "slot": "bash",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Sword_and_Shield_Pack\\sword and shield kick.fbx",
+     "kind": "fbx",
+     "srcDurationS": 1.2
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "block",
+    "thrust",
+    "slash",
+    "bash"
+   ]
+  },
+  {
+   "slug": "48_v2_sand_dune_sentinel",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\48_v2_sand_dune_sentinel.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\48_v2_sand_dune_sentinel_anims.glb",
+   "sig": "d8ee2f0f1f201486",
+   "animRole": "sentinel",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "block",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_block.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.5417
+    },
+    {
+     "slot": "thrust",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Sword_and_Shield_Pack\\sword and shield attack.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.3333
+    },
+    {
+     "slot": "slash",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_slash1.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.5
+    },
+    {
+     "slot": "bash",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Sword_and_Shield_Pack\\sword and shield kick.fbx",
+     "kind": "fbx",
+     "srcDurationS": 1.2
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "block",
+    "thrust",
+    "slash",
+    "bash"
+   ]
+  },
+  {
+   "slug": "03_cold_frost_stalker",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\03_cold_frost_stalker.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\03_cold_frost_stalker_anims.glb",
+   "sig": "c5de096f1422999b",
+   "animRole": "stalker",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "crouch",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_crouch.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.1333
+    },
+    {
+     "slot": "leap",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Creature_Pack\\mutant jump attack.fbx",
+     "kind": "fbx",
+     "srcDurationS": 3.7
+    },
+    {
+     "slot": "rake",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_slash1.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.5
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "crouch",
+    "leap",
+    "rake"
+   ]
+  },
+  {
+   "slug": "13_sand_dust_stalker",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\13_sand_dust_stalker.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\13_sand_dust_stalker_anims.glb",
+   "sig": "4a352a2fb94fa40c",
+   "animRole": "stalker",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "crouch",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_crouch.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.1333
+    },
+    {
+     "slot": "leap",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Creature_Pack\\mutant jump attack.fbx",
+     "kind": "fbx",
+     "srcDurationS": 3.7
+    },
+    {
+     "slot": "rake",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_slash1.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.5
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "crouch",
+    "leap",
+    "rake"
+   ]
+  },
+  {
+   "slug": "43_v2_sand_dust_stalker",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\43_v2_sand_dust_stalker.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\43_v2_sand_dust_stalker_anims.glb",
+   "sig": "d2ee1396de468680",
+   "animRole": "stalker",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "crouch",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_crouch.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.1333
+    },
+    {
+     "slot": "leap",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Creature_Pack\\mutant jump attack.fbx",
+     "kind": "fbx",
+     "srcDurationS": 3.7
+    },
+    {
+     "slot": "rake",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_slash1.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.5
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "crouch",
+    "leap",
+    "rake"
+   ]
+  },
+  {
+   "slug": "53_v2_ash_soot_stalker",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\53_v2_ash_soot_stalker.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\53_v2_ash_soot_stalker_anims.glb",
+   "sig": "00dd98ddf5108b9e",
+   "animRole": "stalker",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "crouch",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_crouch.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.1333
+    },
+    {
+     "slot": "leap",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Creature_Pack\\mutant jump attack.fbx",
+     "kind": "fbx",
+     "srcDurationS": 3.7
+    },
+    {
+     "slot": "rake",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_slash1.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.5
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "crouch",
+    "leap",
+    "rake"
+   ]
+  },
+  {
+   "slug": "01_cold_rime_imp",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\01_cold_rime_imp.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\01_cold_rime_imp_anims.glb",
+   "sig": "e3500efe8600d055",
+   "animRole": "swarm",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "rake_flurry",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_slash1.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.5
+    },
+    {
+     "slot": "pounce",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Creature_Pack\\mutant jump attack.fbx",
+     "kind": "fbx",
+     "srcDurationS": 3.7
+    },
+    {
+     "slot": "spit",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Magic_Spell_Pack\\Standing 1H Magic Attack 01.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.3
+    },
+    {
+     "slot": "roar",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Creature_Pack\\mutant roaring.fbx",
+     "kind": "fbx",
+     "srcDurationS": 5.3667
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "rake_flurry",
+    "pounce",
+    "spit",
+    "roar"
+   ]
+  },
+  {
+   "slug": "11_sand_dune_imp",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\11_sand_dune_imp.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\11_sand_dune_imp_anims.glb",
+   "sig": "05c0c141797af119",
+   "animRole": "swarm",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "rake_flurry",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_slash1.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.5
+    },
+    {
+     "slot": "pounce",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Creature_Pack\\mutant jump attack.fbx",
+     "kind": "fbx",
+     "srcDurationS": 3.7
+    },
+    {
+     "slot": "spit",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Magic_Spell_Pack\\Standing 1H Magic Attack 01.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.3
+    },
+    {
+     "slot": "roar",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Creature_Pack\\mutant roaring.fbx",
+     "kind": "fbx",
+     "srcDurationS": 5.3667
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "rake_flurry",
+    "pounce",
+    "spit",
+    "roar"
+   ]
+  },
+  {
+   "slug": "21_ash_cinder_imp",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\21_ash_cinder_imp.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\21_ash_cinder_imp_anims.glb",
+   "sig": "72210e874afa88c2",
+   "animRole": "swarm",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "rake_flurry",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_slash1.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.5
+    },
+    {
+     "slot": "pounce",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Creature_Pack\\mutant jump attack.fbx",
+     "kind": "fbx",
+     "srcDurationS": 3.7
+    },
+    {
+     "slot": "spit",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Magic_Spell_Pack\\Standing 1H Magic Attack 01.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.3
+    },
+    {
+     "slot": "roar",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Creature_Pack\\mutant roaring.fbx",
+     "kind": "fbx",
+     "srcDurationS": 5.3667
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "rake_flurry",
+    "pounce",
+    "spit",
+    "roar"
+   ]
+  },
+  {
+   "slug": "31_v2_cold_rime_imp",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\31_v2_cold_rime_imp.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\31_v2_cold_rime_imp_anims.glb",
+   "sig": "4919964a09a8ac87",
+   "animRole": "swarm",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "rake_flurry",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_slash1.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.5
+    },
+    {
+     "slot": "pounce",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Creature_Pack\\mutant jump attack.fbx",
+     "kind": "fbx",
+     "srcDurationS": 3.7
+    },
+    {
+     "slot": "spit",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Magic_Spell_Pack\\Standing 1H Magic Attack 01.fbx",
+     "kind": "fbx",
+     "srcDurationS": 2.3
+    },
+    {
+     "slot": "roar",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Creature_Pack\\mutant roaring.fbx",
+     "kind": "fbx",
+     "srcDurationS": 5.3667
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "rake_flurry",
+    "pounce",
+    "spit",
+    "roar"
+   ]
+  },
+  {
+   "slug": "60_v2_ash_scorch_warden",
+   "mesh": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\60_v2_ash_scorch_warden.glb",
+   "out": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\assets\\enemies\\60_v2_ash_scorch_warden_anims.glb",
+   "sig": "c3bcd8cbab67ebe9",
+   "animRole": "warden",
+   "clips": [
+    {
+     "slot": "idle",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_idle.glb",
+     "kind": "webglb",
+     "srcDurationS": 8.2917
+    },
+    {
+     "slot": "walk",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_walk.glb",
+     "kind": "webglb",
+     "srcDurationS": 1.0
+    },
+    {
+     "slot": "run",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_run.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.7083
+    },
+    {
+     "slot": "hit",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_hit.glb",
+     "kind": "webglb",
+     "srcDurationS": 0.6667
+    },
+    {
+     "slot": "death",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_death.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.375
+    },
+    {
+     "slot": "sweep",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Great_Sword_Pack\\great sword slash.fbx",
+     "kind": "fbx",
+     "srcDurationS": 1.2667
+    },
+    {
+     "slot": "slam",
+     "path": "F:\\games\\forgeflow-games-assets\\_downloaded\\mixamo\\animations\\Great_Sword_Pack\\great sword attack.fbx",
+     "kind": "fbx",
+     "srcDurationS": 1.2
+    },
+    {
+     "slot": "aura_cast",
+     "path": "F:\\assets\\meshy-characters\\_web_mixamo_pack\\anims\\anim_cast2.glb",
+     "kind": "webglb",
+     "srcDurationS": 2.1667
+    }
+   ],
+   "slots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "sweep",
+    "slam",
+    "aura_cast"
+   ]
+  }
+ ]
+}

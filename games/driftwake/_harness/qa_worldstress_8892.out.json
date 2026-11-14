@@ -1,0 +1,692 @@
+{
+ "formations": {
+  "cold": [
+   {
+    "id": "cold_spawn",
+    "grade": 0.913,
+    "spread": 4.57,
+    "monoRel": {
+     "below": 2.04,
+     "above": 2.53
+    },
+    "prof3m": [
+     1.62,
+     -0.01,
+     -1.92,
+     -2.69,
+     -1.79,
+     0.07,
+     2.04,
+     2.63
+    ]
+   },
+   {
+    "id": "shrine_e",
+    "grade": 0.018,
+    "spread": 0.39,
+    "monoRel": {
+     "below": 0.03,
+     "above": 0.36
+    },
+    "prof3m": [
+     0.25,
+     0.13,
+     0.45,
+     0.98,
+     0.44,
+     0.26,
+     -0.09,
+     0.4
+    ]
+   },
+   {
+    "id": "shrine_ne",
+    "grade": 0.013,
+    "spread": 0.72,
+    "monoRel": {
+     "below": 0,
+     "above": 0.72
+    },
+    "prof3m": [
+     0.23,
+     0.26,
+     0.67,
+     0.86,
+     0.38,
+     0.38,
+     0.75,
+     0.59
+    ]
+   },
+   {
+    "id": "shrine_nw",
+    "grade": 0.028,
+    "spread": 0.6,
+    "monoRel": {
+     "below": 0.35,
+     "above": 0.25
+    },
+    "prof3m": [
+     0.31,
+     0.25,
+     -0.32,
+     -0.62,
+     -0.14,
+     0.21,
+     0.08,
+     0.15
+    ]
+   },
+   {
+    "id": "shrine_w",
+    "grade": 0.032,
+    "spread": 0.73,
+    "monoRel": {
+     "below": 0.69,
+     "above": 0.04
+    },
+    "prof3m": [
+     -0.5,
+     -0.32,
+     -0.3,
+     -0.31,
+     -0.41,
+     -0.21,
+     -0.4,
+     -0.78
+    ]
+   },
+   {
+    "id": "shrine_sw",
+    "grade": 0.025,
+    "spread": 0.79,
+    "monoRel": {
+     "below": 0.71,
+     "above": 0.08
+    },
+    "prof3m": [
+     -0.02,
+     -0.46,
+     -0.54,
+     -0.64,
+     -0.37,
+     -0.09,
+     -0.73,
+     -0.58
+    ]
+   },
+   {
+    "id": "shrine_se",
+    "grade": 0.056,
+    "spread": 0.61,
+    "monoRel": {
+     "below": 0.52,
+     "above": 0.09
+    },
+    "prof3m": [
+     -0.22,
+     -0.39,
+     -0.74,
+     -1.01,
+     -0.42,
+     -0.12,
+     -0.04,
+     -0.11
+    ]
+   }
+  ],
+  "sand": [
+   {
+    "id": "cold_spawn",
+    "grade": 0.717,
+    "spread": 3.34,
+    "monoRel": {
+     "below": 1.26,
+     "above": 2.09
+    },
+    "prof3m": [
+     -1.25,
+     -1.82,
+     -1.2,
+     0.21,
+     1.94,
+     2.51,
+     1.19,
+     -0.27
+    ]
+   },
+   {
+    "id": "shrine_e",
+    "grade": 0.203,
+    "spread": 0.93,
+    "monoRel": {
+     "below": 0.69,
+     "above": 0.24
+    },
+    "prof3m": [
+     0.27,
+     0.24,
+     0.05,
+     -0.22,
+     -0.7,
+     -0.74,
+     -0.41,
+     0.08
+    ]
+   },
+   {
+    "id": "shrine_ne",
+    "grade": 0.072,
+    "spread": 0.44,
+    "monoRel": {
+     "below": 0.43,
+     "above": 0.01
+    },
+    "prof3m": [
+     -0.28,
+     -0.65,
+     -0.56,
+     -0.14,
+     -0.05,
+     -0.05,
+     -0.06,
+     -0.05
+    ]
+   },
+   {
+    "id": "shrine_nw",
+    "grade": 0.421,
+    "spread": 1.44,
+    "monoRel": {
+     "below": 0.46,
+     "above": 0.98
+    },
+    "prof3m": [
+     1.29,
+     0.97,
+     0.28,
+     -1.01,
+     -0.86,
+     -0.12,
+     0.64,
+     0.91
+    ]
+   },
+   {
+    "id": "shrine_w",
+    "grade": 0.33,
+    "spread": 1.78,
+    "monoRel": {
+     "below": 0.66,
+     "above": 1.11
+    },
+    "prof3m": [
+     -0.62,
+     -1.02,
+     -0.59,
+     0.05,
+     0.81,
+     1.43,
+     0.99,
+     0.31
+    ]
+   },
+   {
+    "id": "shrine_sw",
+    "grade": 0.361,
+    "spread": 1.47,
+    "monoRel": {
+     "below": 0.68,
+     "above": 0.79
+    },
+    "prof3m": [
+     -0.79,
+     -0.83,
+     -0.71,
+     -0.34,
+     0.5,
+     1.02,
+     0.87,
+     0
+    ]
+   },
+   {
+    "id": "shrine_se",
+    "grade": 0.274,
+    "spread": 1.29,
+    "monoRel": {
+     "below": 0.47,
+     "above": 0.82
+    },
+    "prof3m": [
+     -0.01,
+     -0.53,
+     -0.67,
+     -0.5,
+     0.32,
+     0.94,
+     1.04,
+     0.59
+    ]
+   }
+  ],
+  "ash": [
+   {
+    "id": "cold_spawn",
+    "grade": 0.286,
+    "spread": 1.37,
+    "monoRel": {
+     "below": 0.5,
+     "above": 0.87
+    },
+    "prof3m": [
+     -0.6,
+     -0.56,
+     -0.08,
+     0.67,
+     1.09,
+     0.83,
+     0.1,
+     -0.36
+    ]
+   },
+   {
+    "id": "shrine_e",
+    "grade": 0.188,
+    "spread": 1.12,
+    "monoRel": {
+     "below": 0.42,
+     "above": 0.7
+    },
+    "prof3m": [
+     0.68,
+     0.13,
+     -0.05,
+     -0.04,
+     -0.4,
+     -0.39,
+     0.38,
+     0.83
+    ]
+   },
+   {
+    "id": "shrine_ne",
+    "grade": 0.069,
+    "spread": 0.31,
+    "monoRel": {
+     "below": 0.24,
+     "above": 0.08
+    },
+    "prof3m": [
+     0.09,
+     0.07,
+     -0.06,
+     -0.18,
+     -0.29,
+     -0.23,
+     -0.06,
+     0.1
+    ]
+   },
+   {
+    "id": "shrine_nw",
+    "grade": 0.47,
+    "spread": 2.5,
+    "monoRel": {
+     "below": 0.43,
+     "above": 2.07
+    },
+    "prof3m": [
+     0.15,
+     -0.24,
+     -0.77,
+     -0.01,
+     2.25,
+     1.93,
+     0.37,
+     0.22
+    ]
+   },
+   {
+    "id": "shrine_w",
+    "grade": 0.136,
+    "spread": 0.44,
+    "monoRel": {
+     "below": 0.29,
+     "above": 0.15
+    },
+    "prof3m": [
+     0.13,
+     0.16,
+     0.19,
+     -0.26,
+     -0.32,
+     -0.3,
+     -0.29,
+     -0.07
+    ]
+   },
+   {
+    "id": "shrine_sw",
+    "grade": 0.102,
+    "spread": 0.48,
+    "monoRel": {
+     "below": 0.17,
+     "above": 0.31
+    },
+    "prof3m": [
+     -0.23,
+     -0.16,
+     -0.05,
+     0.14,
+     0.34,
+     0.32,
+     0.09,
+     -0.13
+    ]
+   },
+   {
+    "id": "shrine_se",
+    "grade": 0.053,
+    "spread": 0.24,
+    "monoRel": {
+     "below": 0.17,
+     "above": 0.07
+    },
+    "prof3m": [
+     -0.28,
+     0.14,
+     0.16,
+     0.05,
+     -0.1,
+     -0.18,
+     -0.16,
+     -0.26
+    ]
+   }
+  ]
+ },
+ "geometry": {
+  "cold": {
+   "realm": "cold",
+   "n": 15,
+   "minLmLm": 154.5,
+   "minLmShrine": 126.7,
+   "minLmSpawn": 209.4,
+   "ungrounded": []
+  },
+  "sand": {
+   "realm": "sand",
+   "n": 15,
+   "minLmLm": 169.4,
+   "minLmShrine": 121,
+   "minLmSpawn": 209.7,
+   "ungrounded": []
+  },
+  "ash": {
+   "realm": "ash",
+   "n": 15,
+   "minLmLm": 161.9,
+   "minLmShrine": 125.3,
+   "minLmSpawn": 174.4,
+   "ungrounded": []
+  }
+ },
+ "rapid": [
+  {
+   "tag": "rapid-t0",
+   "realmS": "cold",
+   "realmL": "cold",
+   "bakes": 5,
+   "charD": 0,
+   "shrinePrismMaxErr": -0.0,
+   "lmLive": 105,
+   "lmInst": 15,
+   "deaths": 0,
+   "geo": 22,
+   "tex": 39,
+   "prog": 59
+  },
+  {
+   "tag": "rapid-t2s",
+   "realmS": "cold",
+   "realmL": "cold",
+   "bakes": 5,
+   "charD": 0,
+   "shrinePrismMaxErr": -0.0,
+   "lmLive": 105,
+   "lmInst": 15,
+   "deaths": 0,
+   "geo": 26,
+   "tex": 53,
+   "prog": 61
+  }
+ ],
+ "dieThenSwitch": {
+  "tag": "dead-swap",
+  "realmS": "ash",
+  "realmL": "ash",
+  "bakes": 6,
+  "charD": 0,
+  "shrinePrismMaxErr": -0.0,
+  "lmLive": 135,
+  "lmInst": 15,
+  "deaths": 1,
+  "geo": 26,
+  "tex": 53,
+  "prog": 61,
+  "pos": {
+   "x": 5,
+   "z": 5.5,
+   "y": -0.48
+  },
+  "groundHere": -0.48,
+  "hp": 1,
+  "dead": false
+ },
+ "dieThenSwitchTight": {
+  "worstGroundErr": 1.208,
+  "worstAtFrame": 1,
+  "respawnFrame": 18,
+  "frames": 47,
+  "realm": "sand",
+  "end": {
+   "tag": "tight",
+   "realmS": "sand",
+   "realmL": "sand",
+   "bakes": 8,
+   "charD": 0,
+   "shrinePrismMaxErr": 0,
+   "lmLive": 90,
+   "lmInst": 15,
+   "deaths": 2,
+   "geo": 26,
+   "tex": 53,
+   "prog": 61
+  }
+ },
+ "airborneSwitch": {
+  "before": {
+   "y": 2.19,
+   "air": true,
+   "vv": 2.27
+  },
+  "after": {
+   "y": 0.32,
+   "air": false,
+   "vv": 0,
+   "ground": 0.32,
+   "d": 0
+  }
+ },
+ "churnDeath": [
+  {
+   "tag": "01:sand",
+   "realmS": "sand",
+   "realmL": "sand",
+   "bakes": 11,
+   "charD": 0,
+   "shrinePrismMaxErr": 0,
+   "lmLive": 90,
+   "lmInst": 15,
+   "deaths": 3,
+   "geo": 27,
+   "tex": 56,
+   "prog": 61
+  },
+  {
+   "tag": "02:cold",
+   "realmS": "cold",
+   "realmL": "cold",
+   "bakes": 12,
+   "charD": 0,
+   "shrinePrismMaxErr": -0.0,
+   "lmLive": 105,
+   "lmInst": 15,
+   "deaths": 4,
+   "geo": 28,
+   "tex": 58,
+   "prog": 61
+  },
+  {
+   "tag": "03:ash",
+   "realmS": "ash",
+   "realmL": "ash",
+   "bakes": 13,
+   "charD": 0,
+   "shrinePrismMaxErr": -0.0,
+   "lmLive": 135,
+   "lmInst": 15,
+   "deaths": 5,
+   "geo": 29,
+   "tex": 61,
+   "prog": 61
+  },
+  {
+   "tag": "04:sand",
+   "realmS": "sand",
+   "realmL": "sand",
+   "bakes": 14,
+   "charD": 0,
+   "shrinePrismMaxErr": 0,
+   "lmLive": 90,
+   "lmInst": 15,
+   "deaths": 6,
+   "geo": 31,
+   "tex": 67,
+   "prog": 61
+  },
+  {
+   "tag": "05:cold",
+   "realmS": "cold",
+   "realmL": "cold",
+   "bakes": 15,
+   "charD": 0,
+   "shrinePrismMaxErr": -0.0,
+   "lmLive": 105,
+   "lmInst": 15,
+   "deaths": 7,
+   "geo": 31,
+   "tex": 67,
+   "prog": 61
+  },
+  {
+   "tag": "06:ash",
+   "realmS": "ash",
+   "realmL": "ash",
+   "bakes": 16,
+   "charD": 0,
+   "shrinePrismMaxErr": -0.0,
+   "lmLive": 135,
+   "lmInst": 15,
+   "deaths": 8,
+   "geo": 31,
+   "tex": 67,
+   "prog": 61
+  },
+  {
+   "tag": "07:sand",
+   "realmS": "sand",
+   "realmL": "sand",
+   "bakes": 17,
+   "charD": 0,
+   "shrinePrismMaxErr": 0,
+   "lmLive": 90,
+   "lmInst": 15,
+   "deaths": 9,
+   "geo": 33,
+   "tex": 71,
+   "prog": 61
+  },
+  {
+   "tag": "08:cold",
+   "realmS": "cold",
+   "realmL": "cold",
+   "bakes": 18,
+   "charD": 0,
+   "shrinePrismMaxErr": -0.0,
+   "lmLive": 105,
+   "lmInst": 15,
+   "deaths": 10,
+   "geo": 33,
+   "tex": 71,
+   "prog": 61
+  },
+  {
+   "tag": "09:ash",
+   "realmS": "ash",
+   "realmL": "ash",
+   "bakes": 19,
+   "charD": 0,
+   "shrinePrismMaxErr": -0.0,
+   "lmLive": 135,
+   "lmInst": 15,
+   "deaths": 11,
+   "geo": 33,
+   "tex": 71,
+   "prog": 61
+  },
+  {
+   "tag": "10:sand",
+   "realmS": "sand",
+   "realmL": "sand",
+   "bakes": 20,
+   "charD": 0,
+   "shrinePrismMaxErr": 0,
+   "lmLive": 90,
+   "lmInst": 15,
+   "deaths": 12,
+   "geo": 33,
+   "tex": 71,
+   "prog": 61
+  },
+  {
+   "tag": "11:cold",
+   "realmS": "cold",
+   "realmL": "cold",
+   "bakes": 21,
+   "charD": 0,
+   "shrinePrismMaxErr": -0.0,
+   "lmLive": 105,
+   "lmInst": 15,
+   "deaths": 13,
+   "geo": 33,
+   "tex": 71,
+   "prog": 61
+  },
+  {
+   "tag": "12:ash",
+   "realmS": "ash",
+   "realmL": "ash",
+   "bakes": 22,
+   "charD": 0,
+   "shrinePrismMaxErr": -0.0,
+   "lmLive": 135,
+   "lmInst": 15,
+   "deaths": 14,
+   "geo": 33,
+   "tex": 71,
+   "prog": 61
+  }
+ ]
+}

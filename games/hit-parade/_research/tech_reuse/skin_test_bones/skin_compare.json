@@ -1,0 +1,77 @@
+{
+  "port": 52229,
+  "clip": "clip",
+  "times": [
+    1.0
+  ],
+  "files": {
+    "gt_src": {
+      "t1.00": {
+        "ok": true,
+        "loadMs": 207,
+        "skinnedMeshes": 3,
+        "maxBones": 69,
+        "skeletons": 1,
+        "bonesShared": true,
+        "clips": [
+          "Armature|mixamo.com|Layer0:207:0.067",
+          "clip:207:2.033"
+        ],
+        "box": {
+          "min": [
+            -0.3962,
+            -0.0494,
+            0.1484
+          ],
+          "max": [
+            0.368,
+            0.8278,
+            1.08
+          ]
+        },
+        "programs": 1,
+        "pageErrors": [
+          "console.error: Failed to load resource: the server responded with a status of 404 (File not found)"
+        ]
+      }
+    },
+    "gt_C_resize_webp_meshopt": {
+      "t1.00": {
+        "ok": true,
+        "loadMs": 123,
+        "skinnedMeshes": 3,
+        "maxBones": 69,
+        "skeletons": 2,
+        "bonesShared": true,
+        "clips": [
+          "Armature|mixamo.com|Layer0:207:0.067",
+          "clip:207:2.033"
+        ],
+        "box": {
+          "min": [
+            -0.3962,
+            -0.0493,
+            0.1486
+          ],
+          "max": [
+            0.368,
+            0.8277,
+            1.0799
+          ]
+        },
+        "programs": 1,
+        "pageErrors": []
+      }
+    }
+  },
+  "diff": {
+    "gt_C_resize_webp_meshopt_vs_gt_src_t1.00": {
+      "silhouette_iou": 0.99959,
+      "silhouette_px_src": 61209,
+      "silhouette_px_var": 61210,
+      "silhouette_xor_px": 25,
+      "rgb_mean_absdiff_inside": 3.1,
+      "rgb_px_over32_inside_pct": 0.049
+    }
+  }
+}

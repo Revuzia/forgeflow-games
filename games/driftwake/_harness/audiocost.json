@@ -1,0 +1,134 @@
+{
+ "off": [
+  {
+   "label": "audio OFF (?autoplay=1)",
+   "n": 115,
+   "median_ms": 87.1,
+   "p95_ms": 118.9,
+   "mean_ms": 87.92,
+   "fps": 11.5,
+   "gpu_ms": 78.73,
+   "draws": 24,
+   "tris": 1732340,
+   "audio": {
+    "ctx": null,
+    "samples": "fetching 9",
+    "music": null
+   },
+   "rep": 0
+  },
+  {
+   "label": "audio OFF (?autoplay=1)",
+   "n": 116,
+   "median_ms": 88.05,
+   "p95_ms": 114.5,
+   "mean_ms": 86.34,
+   "fps": 11.4,
+   "gpu_ms": 76.66,
+   "draws": 24,
+   "tris": 1732340,
+   "audio": {
+    "ctx": null,
+    "samples": "fetching 9",
+    "music": null
+   },
+   "rep": 1
+  },
+  {
+   "label": "audio OFF (?autoplay=1)",
+   "n": 115,
+   "median_ms": 89.1,
+   "p95_ms": 109.6,
+   "mean_ms": 86.53,
+   "fps": 11.2,
+   "gpu_ms": 78.65,
+   "draws": 25,
+   "tris": 1732341,
+   "audio": {
+    "ctx": null,
+    "samples": "fetching 9",
+    "music": null
+   },
+   "rep": 2
+  }
+ ],
+ "on": [
+  {
+   "label": "audio ON  (?menu=1 + PLAY)",
+   "n": 112,
+   "median_ms": 89.75,
+   "p95_ms": 117.8,
+   "mean_ms": 89.72,
+   "fps": 11.1,
+   "gpu_ms": 77.09,
+   "draws": 24,
+   "tris": 1732340,
+   "audio": {
+    "ctx": "running",
+    "samples": "9/9 loaded",
+    "voices": null,
+    "music": {
+     "paused": false,
+     "readyState": 4,
+     "currentTime": 5.535801,
+     "loop": true,
+     "volume": 0.3,
+     "muted": false
+    }
+   },
+   "rep": 0
+  },
+  {
+   "label": "audio ON  (?menu=1 + PLAY)",
+   "n": 112,
+   "median_ms": 92.7,
+   "p95_ms": 118.2,
+   "mean_ms": 89.84,
+   "fps": 10.8,
+   "gpu_ms": 76.5,
+   "draws": 24,
+   "tris": 1732340,
+   "audio": {
+    "ctx": "running",
+    "samples": "9/9 loaded",
+    "voices": null,
+    "music": {
+     "paused": false,
+     "readyState": 4,
+     "currentTime": 5.40357,
+     "loop": true,
+     "volume": 0.3,
+     "muted": false
+    }
+   },
+   "rep": 1
+  },
+  {
+   "label": "audio ON  (?menu=1 + PLAY)",
+   "n": 117,
+   "median_ms": 85.6,
+   "p95_ms": 109.4,
+   "mean_ms": 85.18,
+   "fps": 11.7,
+   "gpu_ms": 71.85,
+   "draws": 25,
+   "tris": 1732341,
+   "audio": {
+    "ctx": "running",
+    "samples": "9/9 loaded",
+    "voices": null,
+    "music": {
+     "paused": false,
+     "readyState": 4,
+     "currentTime": 5.541198,
+     "loop": true,
+     "volume": 0.3,
+     "muted": false
+    }
+   },
+   "rep": 2
+  }
+ ],
+ "delta_ms": 1.7000000000000028,
+ "noise_ms": 7.1000000000000085
+}

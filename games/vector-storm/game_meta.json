@@ -1,0 +1,19 @@
+{
+  "title": "Vector Storm",
+  "short_description": "Vector Storm: a neon twin-stick arena shooter. Survive the geometry \u2014 kite escalating swarms of vector shapes, chain multipliers, and outlast the storm.",
+  "description": "Vector Storm drops your ship into a pulsing neon arena where the geometry itself hunts you. Kite escalating swarms of vector shapes with twin-stick movement and independent mouse aim, chain score multipliers, grab power-ups, and outlast wave after wave of the storm. Survive the geometry. Outlast the swarm.",
+  "genre": "action",
+  "sub_genre": "twin-stick-arena-shooter",
+  "difficulty": "medium",
+  "controls_keyboard": "WASD / left stick \u2014 move \u00b7 Mouse / right stick \u2014 aim \u00b7 LMB \u2014 fire \u00b7 twin-stick arena survival",
+  "tags": [
+    "action",
+    "arcade",
+    "twin-stick",
+    "shooter",
+    "neon",
+    "wave-survival",
+    "singleplayer"
+  ],
+  "status": "published"
+}

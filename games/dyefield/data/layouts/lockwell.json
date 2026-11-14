@@ -1,0 +1,140 @@
+{
+  "id": "lockwell",
+  "_doc": "LOCKWELL WORKS layout (CONTRACT_ART_P6_8 §15). Built by art/blender/map_lockwell.py through the shared pipeline art/blender/build_map.py. Runtime/glTF coordinates (Y-up, metres); SUNCREW (A) at -Z. Brushes with \"mirror\": true get their rot180 partner (x,y,z)->(-x,y,-z). Floors: PRESS HALL y 0 (docks +1.0), MEZZANINE y 4.5, CRANE-WALK y 9.0. Map-specific kinds (read by map_lockwell.py): press, conveyor, office, catwalk (grate_ deck), rail (points polyline, height), column, canopy, pallet, light (light_ empty + fixture). 'nose' lists the deck edges (authored frame) that get a hazard nosing strip; 'top'/'side' override the box material of up-facing / other faces; 'rails' on stairs lists the open sides that get a handrail.",
+  "meta": {
+    "symmetry": "rot180",
+    "bounds": { "min": [-22, -0.5, -32], "max": [22, 13, 32] },
+    "killY": -2.0,
+    "waterY": -3.0,
+    "paint": { "texelsPerMeter": 10, "atlasMax": 2048 },
+    "scoring": { "wallWeight": 0.35, "floorMinNy": 0.45 },
+    "minimap": { "min": [-24, -34], "max": [24, 34] },
+    "spawns": {
+      "A": { "pos": [0, 1.0, -28.5], "yaw": 0 },
+      "B": { "pos": [0, 1.0, 28.5], "yaw": 180 }
+    },
+    "courtLines": null,
+    "lighting": {
+      "default": "works",
+      "presets": {
+        "works": {
+          "kind": "interior",
+          "ambient": "#3C4A63", "ambientIntensity": 0.62,
+          "keyDir": [0.25, -1.0, 0.35], "keyColor": "#D2DEEF", "keyIntensity": 1.2,
+          "fogColor": "#2A3346", "fogDensity": 0.011,
+          "skyVisible": false, "windowGlow": "#9DB6CF",
+          "stripColor": "#E4F2FF", "sodiumColor": "#FFB35C",
+          "exposure": 1.0,
+          "sunElevationDeg": 66.7, "sunAzimuthDeg": 215.5, "sunColor": "#D2DEEF", "sunIntensity": 1.2,
+          "hemiSky": "#8FA7C4", "hemiGround": "#4A3F3A", "hemiIntensity": 0.8,
+          "skyZenith": "#2A3346", "skyHorizon": "#3C4A63",
+          "waterDeep": "#1C2433", "waterShallow": "#2A3346"
+        },
+        "overtime": {
+          "kind": "interior",
+          "ambient": "#2E3550", "ambientIntensity": 0.4,
+          "keyDir": [-0.2, -1.0, -0.3], "keyColor": "#9FB3D6", "keyIntensity": 0.7,
+          "fogColor": "#1D2233", "fogDensity": 0.014,
+          "skyVisible": false, "windowGlow": "#4E6690",
+          "stripColor": "#DCEBFF", "sodiumColor": "#FFA447",
+          "exposure": 1.05,
+          "sunElevationDeg": 68.5, "sunAzimuthDeg": 33.7, "sunColor": "#9FB3D6", "sunIntensity": 0.7,
+          "hemiSky": "#6F82A8", "hemiGround": "#4A3A30", "hemiIntensity": 0.65,
+          "skyZenith": "#1D2233", "skyHorizon": "#2E3550",
+          "waterDeep": "#141A26", "waterShallow": "#1D2233"
+        }
+      }
+    }
+  },
+  "brushes": [
+    { "kind": "box", "id": "floor", "min": [-22, -0.5, -32], "max": [22, 0, 32], "mat": "concrete", "mirror": false, "overlapOk": true },
+
+    { "kind": "box", "id": "dock", "min": [-22, 0, -32], "max": [22, 1.0, -25], "top": "dock", "side": "concrete", "nose": ["+z"], "mirror": true },
+    { "kind": "ramp", "id": "dock_ramp_w", "min": [-6.5, 0, -25], "max": [-3.0, 1.0, -21], "rise": "-z", "mat": "dock", "mirror": true },
+    { "kind": "ramp", "id": "dock_ramp_e", "min": [3.0, 0, -25], "max": [6.5, 1.0, -21], "rise": "-z", "mat": "dock", "mirror": true },
+    { "kind": "spawnpad", "id": "pad", "center": [0, 1.0, -28.5], "radius": 2.2, "team": "A", "mirror": true },
+    { "kind": "canopy", "id": "canopy", "min": [-7.5, 5.6, -32], "max": [7.5, 5.9, -23.0], "team": "A", "points": [[-7.2, 1.0, -25.45], [7.2, 1.0, -25.45]], "mirror": true },
+
+    { "kind": "box", "id": "gallery", "min": [13, 0, -25], "max": [22, 4.5, 25], "top": "steel", "side": "concrete", "nose": ["-x", "-z", "+z"], "mirror": true },
+    { "kind": "stairs", "id": "stair_se", "min": [13.4, 1.0, -28.8], "max": [19.2, 4.5, -25.0], "rise": "+x", "steps": 14, "mat": "steel", "rails": ["-z"], "mirror": true },
+    { "kind": "box", "id": "landing_se", "min": [19.2, 1.0, -28.8], "max": [22, 4.5, -25.0], "top": "steel", "side": "concrete", "mirror": true },
+    { "kind": "stairs", "id": "stair_sw", "min": [-19.2, 1.0, -28.8], "max": [-13.4, 4.5, -25.0], "rise": "-x", "steps": 14, "mat": "steel", "rails": ["-z"], "mirror": true },
+    { "kind": "box", "id": "landing_sw", "min": [-22, 1.0, -28.8], "max": [-19.2, 4.5, -25.0], "top": "steel", "side": "concrete", "mirror": true },
+
+    { "kind": "conveyor", "id": "conveyor", "min": [9.5, 0, -24.0], "max": [13, 4.5, -10.0], "rise": "+z", "speed": 2.2, "team": "A", "mirror": true },
+    { "kind": "box", "id": "bridge", "min": [-13, 3.9, -10.0], "max": [13, 4.5, -7.0], "top": "steel", "side": "steel", "nose": ["-z", "+z"], "mirror": true },
+    { "kind": "column", "id": "bridge_col_w", "pos": [-8.75, 0, -8.5], "height": 3.9, "size": 0.5, "mirror": true },
+    { "kind": "column", "id": "bridge_col_e", "pos": [8.75, 0, -8.5], "height": 3.9, "size": 0.5, "mirror": true },
+
+    { "kind": "press", "id": "press", "min": [-8.0, 0, -3.5], "max": [-3.5, 3.5, 3.5], "mat": "press", "nose": ["-x", "+x", "-z", "+z"], "mirror": true },
+    { "kind": "stairs", "id": "press_stair", "min": [-7.2, 0, -8.4], "max": [-5.2, 3.5, -3.5], "rise": "+z", "steps": 14, "mat": "steel", "rails": ["-x", "+x"], "mirror": true },
+
+    { "kind": "stairs", "id": "ustair", "min": [19.2, 4.5, -16.0], "max": [22, 9.0, -8.8], "rise": "-z", "steps": 18, "mat": "steel", "rails": ["-x"], "mirror": true },
+    { "kind": "box", "id": "winch", "min": [17, 4.5, -20.0], "max": [22, 9.0, -16.0], "top": "steel", "side": "concrete", "nose": ["-x", "-z"], "mirror": true },
+    { "kind": "office", "id": "office", "min": [17, 4.5, -5.0], "max": [22, 9.0, 5.0], "mirror": true },
+
+    { "kind": "box", "id": "nest", "min": [-3.2, 8.6, -3.2], "max": [3.2, 9.0, 3.2], "top": "steel", "side": "steel", "mirror": false },
+    { "kind": "box", "id": "parapet_s1", "min": [-3.2, 9.0, -3.2], "max": [-1.1, 10.0, -2.9], "mat": "press", "mirror": true },
+    { "kind": "box", "id": "parapet_s2", "min": [1.1, 9.0, -3.2], "max": [3.2, 10.0, -2.9], "mat": "press", "mirror": true },
+    { "kind": "box", "id": "parapet_w1", "min": [-3.2, 9.0, -2.9], "max": [-2.9, 10.0, -1.1], "mat": "press", "mirror": true },
+    { "kind": "box", "id": "parapet_e1", "min": [2.9, 9.0, -2.9], "max": [3.2, 10.0, -1.1], "mat": "press", "mirror": true },
+
+    { "kind": "catwalk", "id": "cw_spine", "min": [-1.1, 8.88, -16.9], "max": [1.1, 9.0, -3.2], "mirror": true },
+    { "kind": "catwalk", "id": "cw_cross", "min": [-1.1, 8.88, -19.1], "max": [17.0, 9.0, -16.9], "mirror": true },
+    { "kind": "catwalk", "id": "cw_office", "min": [3.2, 8.88, -1.1], "max": [17.0, 9.0, 1.1], "mirror": true },
+
+    { "kind": "rail", "id": "rail_spine_w", "points": [[-1.04, 9.0, -16.9], [-1.04, 9.0, -3.2]], "mirror": true },
+    { "kind": "rail", "id": "rail_spine_e", "points": [[1.04, 9.0, -16.9], [1.04, 9.0, -3.2]], "mirror": true },
+    { "kind": "rail", "id": "rail_cross_s", "points": [[-1.04, 9.0, -16.96], [-1.04, 9.0, -19.04], [17.0, 9.0, -19.04]], "mirror": true },
+    { "kind": "rail", "id": "rail_cross_n", "points": [[1.1, 9.0, -16.96], [17.0, 9.0, -16.96]], "mirror": true },
+    { "kind": "rail", "id": "rail_office_s", "points": [[3.2, 9.0, -1.04], [17.0, 9.0, -1.04]], "mirror": true },
+    { "kind": "rail", "id": "rail_office_n", "points": [[3.2, 9.0, 1.04], [17.0, 9.0, 1.04]], "mirror": true },
+    { "kind": "rail", "id": "rail_bridge_s", "points": [[-13.0, 4.5, -9.9], [9.5, 4.5, -9.9]], "mirror": true },
+    { "kind": "rail", "id": "rail_bridge_n", "points": [[-13.0, 4.5, -7.1], [13.0, 4.5, -7.1]], "mirror": true },
+
+    { "kind": "crate", "id": "crate_h1", "center": [-10.8, 0, -21.4], "size": 1.2, "mirror": true },
+    { "kind": "crate", "id": "crate_h1b", "center": [-10.8, 1.2, -21.4], "size": 1.0, "yaw": 11, "mirror": true },
+    { "kind": "crate", "id": "crate_h2", "center": [-9.4, 0, -20.3], "size": 1.0, "yaw": -8, "mirror": true },
+    { "kind": "crate", "id": "crate_h3", "center": [-4.6, 0, -15.6], "size": 1.1, "yaw": 12, "mirror": true },
+    { "kind": "crate", "id": "crate_h4", "center": [2.2, 0, -13.2], "size": 1.0, "yaw": -5, "mirror": true },
+    { "kind": "crate", "id": "crate_h5", "center": [6.9, 0, -17.2], "size": 1.2, "mirror": true },
+    { "kind": "crate", "id": "crate_h5b", "center": [6.9, 1.2, -17.2], "size": 1.0, "yaw": -15, "mirror": true },
+    { "kind": "crate", "id": "crate_h6", "center": [-11.0, 0, -5.6], "size": 1.1, "yaw": 6, "mirror": true },
+    { "kind": "crate", "id": "crate_h7", "center": [11.3, 0, -3.8], "size": 1.0, "yaw": 20, "mirror": true },
+    { "kind": "crate", "id": "crate_h8", "center": [-1.7, 0, -6.4], "size": 1.0, "yaw": 4, "mirror": true },
+    { "kind": "crate", "id": "crate_p1", "center": [-11.4, 0.14, -13.0], "size": 1.1, "yaw": 3, "mirror": true },
+    { "kind": "crate", "id": "crate_p2", "center": [7.9, 0.14, -12.9], "size": 1.0, "yaw": -6, "mirror": true },
+    { "kind": "crate", "id": "crate_d1", "center": [-10.4, 1.0, -30.3], "size": 1.2, "mirror": true },
+    { "kind": "crate", "id": "crate_d1b", "center": [-10.4, 2.2, -30.3], "size": 1.0, "yaw": -9, "mirror": true },
+    { "kind": "crate", "id": "crate_d2", "center": [9.8, 1.0, -29.6], "size": 1.1, "yaw": 14, "mirror": true },
+    { "kind": "crate", "id": "crate_a1", "center": [15.2, 1.0, -30.6], "size": 1.2, "mirror": true },
+    { "kind": "crate", "id": "crate_a2", "center": [16.5, 1.0, -30.9], "size": 1.0, "yaw": 10, "mirror": true },
+    { "kind": "crate", "id": "crate_a3", "center": [-15.6, 1.0, -30.5], "size": 1.1, "yaw": -7, "mirror": true },
+    { "kind": "crate", "id": "crate_g1", "center": [14.9, 4.5, -21.6], "size": 1.1, "yaw": 6, "mirror": true },
+    { "kind": "crate", "id": "crate_g2", "center": [15.4, 4.5, 8.2], "size": 1.2, "mirror": true },
+    { "kind": "crate", "id": "crate_g2b", "center": [15.4, 5.7, 8.2], "size": 1.0, "yaw": 13, "mirror": true },
+    { "kind": "crate", "id": "crate_g3", "center": [-15.0, 4.5, -17.8], "size": 1.0, "yaw": -4, "mirror": true },
+    { "kind": "crate", "id": "crate_t1", "center": [-5.9, 3.5, 1.6], "size": 1.0, "yaw": 9, "mirror": true },
+
+    { "kind": "pallet", "id": "pallet_1", "center": [-11.4, 0, -13.0], "yaw": 3, "mirror": true },
+    { "kind": "pallet", "id": "pallet_2", "center": [7.9, 0, -12.9], "yaw": -6, "mirror": true },
+    { "kind": "pallet", "id": "pallet_3", "center": [-8.6, 0, -23.6], "yaw": 84, "mirror": true },
+    { "kind": "pallet", "id": "pallet_4", "center": [13.8, 4.5, -12.2], "yaw": 2, "mirror": true },
+
+    { "kind": "light", "id": "lt_dock_w", "pos": [-10.5, 6.8, -28.5], "color": "sodium", "intensity": 3.0, "range": 14.0, "fixture": "pendant", "mirror": true },
+    { "kind": "light", "id": "lt_dock_e", "pos": [10.5, 6.8, -28.5], "color": "sodium", "intensity": 3.0, "range": 14.0, "fixture": "pendant", "mirror": true },
+    { "kind": "light", "id": "lt_canopy", "pos": [0, 5.3, -27.6], "color": "sodium", "intensity": 2.0, "range": 9.0, "fixture": "canopy", "mirror": true },
+    { "kind": "light", "id": "lt_gallery_s", "pos": [16.0, 8.1, -12.4], "color": "sodium", "intensity": 2.6, "range": 12.0, "fixture": "pendant", "mirror": true },
+    { "kind": "light", "id": "lt_gallery_n", "pos": [15.5, 8.1, 13.0], "color": "sodium", "intensity": 2.6, "range": 12.0, "fixture": "pendant", "mirror": true },
+    { "kind": "light", "id": "lt_press", "pos": [-5.75, 8.3, 0.0], "color": "sodium", "intensity": 2.8, "range": 12.0, "fixture": "hang", "mirror": true }
+  ],
+  "props": {
+    "strips": { "rows_x": [-10.5, -3.5, 3.5, 10.5], "gallery_x": [17.5, -17.5], "y": 11.3, "gallery_y": 11.9, "z0": -28.0, "z1": 28.0, "step": 4.0, "length": 2.4 },
+    "skylights": { "x": [[-8.6, -3.4], [3.4, 8.6]], "z0": -28.4, "z1": 28.4, "depth": 0.9 },
+    "clerestory": { "y0": 10.1, "y1": 12.3, "z": [-24, -16, -8, 0, 8, 16, 24], "width": 5.0 },
+    "trusses": { "z": [-28, -20, -12, -4, 4, 12, 20, 28], "y0": 11.85, "y1": 13.0 },
+    "crane": { "beam_y": [12.25, 12.95], "cab_roof_y": 11.55, "hook_y": 8.3 },
+    "doors": { "x": [-11.0, 0.0, 11.0], "width": 3.6, "height": 4.0 },
+    "signs": { "A": "TIDE CO.", "B": "HARBOR CUP", "y": 8.4, "width": 13.0, "height": 2.2 }
+  }
+}

@@ -1,0 +1,5 @@
+state after boot: keep
+  [keep] measurement pass (no screenshots)
+  keep       frames=453 shots=0 pullIns>1.5m=3 ndcMax=(7.44,33.31) inSolid=0 wallFill=0 worstOcc=2.49s
+  [keep] screenshot pass
+wrote C:\Users\TestRun\Claude Claw\forgeflow-games\games\crestbound\_shots\cam\camshots.json

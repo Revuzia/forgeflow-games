@@ -1,0 +1,627 @@
+{
+ "states": {
+  "cold": {
+   "programs": 48,
+   "draws": 23,
+   "tris": 1805264,
+   "cam": [
+    -4.78,
+    2.43,
+    -3.96
+   ],
+   "realm": "cold"
+  },
+  "sand": {
+   "programs": 49,
+   "draws": 29,
+   "tris": 1876577,
+   "cam": [
+    -4.78,
+    2.43,
+    -3.96
+   ],
+   "realm": "sand"
+  },
+  "ash": {
+   "programs": 49,
+   "draws": 29,
+   "tris": 1876577,
+   "cam": [
+    -4.78,
+    2.43,
+    -3.96
+   ],
+   "realm": "ash"
+  },
+  "back_cold": {
+   "programs": 49,
+   "draws": 29,
+   "tris": 1876577,
+   "cam": [
+    -4.78,
+    2.43,
+    -3.96
+   ],
+   "realm": "cold"
+  },
+  "resand": {
+   "programs": 49,
+   "draws": 29,
+   "tris": 1876577,
+   "cam": [
+    -4.78,
+    2.43,
+    -3.96
+   ],
+   "realm": "sand"
+  }
+ },
+ "verdict": {
+  "LMB:sand": {
+   "dAdd": 28.1,
+   "iou": 0.168,
+   "dCentroid": 68.4
+  },
+  "LMB:ash": {
+   "dAdd": 15.4,
+   "iou": 0.127,
+   "dCentroid": 32.2
+  },
+  "Digit1:sand": {
+   "dAdd": 11.4,
+   "iou": 0.052,
+   "dCentroid": 56.8
+  },
+  "Digit1:ash": {
+   "dAdd": 34.6,
+   "iou": 0.18,
+   "dCentroid": 125.6
+  },
+  "Digit2:sand": {
+   "dAdd": 63.9,
+   "iou": 0.15,
+   "dCentroid": 46.9
+  },
+  "Digit2:ash": {
+   "dAdd": 59.1,
+   "iou": 0.118,
+   "dCentroid": 34.1
+  },
+  "Digit3:sand": {
+   "dAdd": 10.8,
+   "iou": 0.385,
+   "dCentroid": 6.4
+  },
+  "Digit3:ash": {
+   "dAdd": 25.2,
+   "iou": 0.315,
+   "dCentroid": 28.8
+  },
+  "Digit4:sand": {
+   "dAdd": 15.3,
+   "iou": 0.27,
+   "dCentroid": 39.1
+  },
+  "Digit4:ash": {
+   "dAdd": 60.6,
+   "iou": 0.144,
+   "dCentroid": 101.1
+  },
+  "Digit5:sand": {
+   "dAdd": 35.2,
+   "iou": 0.182,
+   "dCentroid": 159.5
+  },
+  "Digit5:ash": {
+   "dAdd": 68.7,
+   "iou": 0.198,
+   "dCentroid": 118.3
+  }
+ },
+ "rows": [
+  {
+   "realm": "cold",
+   "key": "LMB",
+   "label": "LMB bolt",
+   "fired": true,
+   "n": 4836,
+   "raw": 6490,
+   "ambient": 12283,
+   "shot": "_shots/srt_cold_LMB_c1.png",
+   "add": [
+    1.3,
+    -3.0,
+    -8.9
+   ],
+   "abs": [
+    91.2,
+    92.0,
+    88.1
+   ],
+   "cx": 556,
+   "cy": 457,
+   "bbox": [
+    3,
+    227,
+    1177,
+    719
+   ]
+  },
+  {
+   "realm": "cold",
+   "key": "Digit1",
+   "label": "1 stream",
+   "fired": true,
+   "n": 12404,
+   "raw": 13912,
+   "ambient": 5977,
+   "shot": "_shots/srt_cold_Digit1_c2.png",
+   "add": [
+    6.0,
+    13.7,
+    11.2
+   ],
+   "abs": [
+    148.1,
+    156.9,
+    149.5
+   ],
+   "cx": 460,
+   "cy": 372,
+   "bbox": [
+    0,
+    179,
+    1264,
+    719
+   ]
+  },
+  {
+   "realm": "cold",
+   "key": "Digit2",
+   "label": "2 wave",
+   "fired": true,
+   "n": 26277,
+   "raw": 29774,
+   "ambient": 11467,
+   "shot": "_shots/srt_cold_Digit2_c1.png",
+   "add": [
+    -0.4,
+    2.1,
+    3.4
+   ],
+   "abs": [
+    113.4,
+    121.1,
+    123.2
+   ],
+   "cx": 586,
+   "cy": 433,
+   "bbox": [
+    198,
+    275,
+    790,
+    719
+   ]
+  },
+  {
+   "realm": "cold",
+   "key": "Digit3",
+   "label": "3 bloom",
+   "fired": true,
+   "n": 21607,
+   "raw": 23873,
+   "ambient": 6739,
+   "shot": "_shots/srt_cold_Digit3_c1.png",
+   "add": [
+    45.5,
+    47.7,
+    42.6
+   ],
+   "abs": [
+    141.6,
+    153.1,
+    154.5
+   ],
+   "cx": 637,
+   "cy": 409,
+   "bbox": [
+    8,
+    197,
+    795,
+    719
+   ]
+  },
+  {
+   "realm": "cold",
+   "key": "Digit4",
+   "label": "4 spikes",
+   "fired": true,
+   "n": 26126,
+   "raw": 28457,
+   "ambient": 8713,
+   "shot": "_shots/srt_cold_Digit4_c3.png",
+   "add": [
+    -6.1,
+    0.1,
+    2.8
+   ],
+   "abs": [
+    90.7,
+    103.5,
+    109.7
+   ],
+   "cx": 681,
+   "cy": 559,
+   "bbox": [
+    443,
+    292,
+    884,
+    719
+   ]
+  },
+  {
+   "realm": "cold",
+   "key": "Digit5",
+   "label": "5 vortex",
+   "fired": true,
+   "n": 88234,
+   "raw": 94151,
+   "ambient": 32906,
+   "shot": "_shots/srt_cold_Digit5_c2.png",
+   "add": [
+    1.7,
+    3.8,
+    5.5
+   ],
+   "abs": [
+    127.1,
+    132.8,
+    132.3
+   ],
+   "cx": 577,
+   "cy": 427,
+   "bbox": [
+    125,
+    0,
+    826,
+    719
+   ]
+  },
+  {
+   "realm": "sand",
+   "key": "LMB",
+   "label": "LMB bolt",
+   "fired": true,
+   "n": 3228,
+   "raw": 4641,
+   "ambient": 3678,
+   "shot": "_shots/srt_sand_LMB_c3.png",
+   "add": [
+    -21.0,
+    -19.2,
+    -14.5
+   ],
+   "abs": [
+    106.5,
+    86.9,
+    54.4
+   ],
+   "cx": 527,
+   "cy": 395,
+   "bbox": [
+    131,
+    276,
+    755,
+    706
+   ]
+  },
+  {
+   "realm": "sand",
+   "key": "Digit1",
+   "label": "1 stream",
+   "fired": true,
+   "n": 17361,
+   "raw": 19854,
+   "ambient": 5490,
+   "shot": "_shots/srt_sand_Digit1_c4.png",
+   "add": [
+    14.9,
+    10.8,
+    4.7
+   ],
+   "abs": [
+    179.7,
+    157.2,
+    113.1
+   ],
+   "cx": 511,
+   "cy": 397,
+   "bbox": [
+    0,
+    151,
+    1075,
+    719
+   ]
+  },
+  {
+   "realm": "sand",
+   "key": "Digit2",
+   "label": "2 wave",
+   "fired": true,
+   "n": 16865,
+   "raw": 21163,
+   "ambient": 6413,
+   "shot": "_shots/srt_sand_Digit2_c0.png",
+   "add": [
+    38.5,
+    40.7,
+    36.3
+   ],
+   "abs": [
+    163.0,
+    140.2,
+    96.2
+   ],
+   "cx": 540,
+   "cy": 442,
+   "bbox": [
+    0,
+    151,
+    1066,
+    718
+   ]
+  },
+  {
+   "realm": "sand",
+   "key": "Digit3",
+   "label": "3 bloom",
+   "fired": true,
+   "n": 13804,
+   "raw": 14815,
+   "ambient": 3243,
+   "shot": "_shots/srt_sand_Digit3_c1.png",
+   "add": [
+    53.1,
+    54.2,
+    46.7
+   ],
+   "abs": [
+    188.2,
+    166.1,
+    121.5
+   ],
+   "cx": 632,
+   "cy": 413,
+   "bbox": [
+    68,
+    200,
+    784,
+    719
+   ]
+  },
+  {
+   "realm": "sand",
+   "key": "Digit4",
+   "label": "4 spikes",
+   "fired": true,
+   "n": 32618,
+   "raw": 34982,
+   "ambient": 10732,
+   "shot": "_shots/srt_sand_Digit4_c4.png",
+   "add": [
+    -4.4,
+    7.4,
+    16.1
+   ],
+   "abs": [
+    133.3,
+    118.4,
+    83.8
+   ],
+   "cx": 660,
+   "cy": 526,
+   "bbox": [
+    0,
+    153,
+    1068,
+    719
+   ]
+  },
+  {
+   "realm": "sand",
+   "key": "Digit5",
+   "label": "5 vortex",
+   "fired": true,
+   "n": 107713,
+   "raw": 109734,
+   "ambient": 3556,
+   "shot": "_shots/srt_sand_Digit5_c2.png",
+   "add": [
+    25.5,
+    24.8,
+    20.8
+   ],
+   "abs": [
+    170.0,
+    145.0,
+    100.4
+   ],
+   "cx": 420,
+   "cy": 455,
+   "bbox": [
+    69,
+    0,
+    1072,
+    719
+   ]
+  },
+  {
+   "realm": "ash",
+   "key": "LMB",
+   "label": "LMB bolt",
+   "fired": true,
+   "n": 11598,
+   "raw": 22503,
+   "ambient": 61617,
+   "shot": "_shots/srt_ash_LMB_c1.png",
+   "add": [
+    -12.3,
+    -8.9,
+    -4.6
+   ],
+   "abs": [
+    57.6,
+    26.1,
+    6.0
+   ],
+   "cx": 528,
+   "cy": 441,
+   "bbox": [
+    1,
+    155,
+    1277,
+    719
+   ]
+  },
+  {
+   "realm": "ash",
+   "key": "Digit1",
+   "label": "1 stream",
+   "fired": true,
+   "n": 30629,
+   "raw": 34953,
+   "ambient": 15250,
+   "shot": "_shots/srt_ash_Digit1_c4.png",
+   "add": [
+    35.7,
+    7.7,
+    -5.6
+   ],
+   "abs": [
+    127.8,
+    66.3,
+    23.3
+   ],
+   "cx": 584,
+   "cy": 352,
+   "bbox": [
+    25,
+    156,
+    1265,
+    719
+   ]
+  },
+  {
+   "realm": "ash",
+   "key": "Digit2",
+   "label": "2 wave",
+   "fired": true,
+   "n": 15740,
+   "raw": 23063,
+   "ambient": 39171,
+   "shot": "_shots/srt_ash_Digit2_c0.png",
+   "add": [
+    47.7,
+    32.4,
+    19.4
+   ],
+   "abs": [
+    113.1,
+    64.7,
+    28.5
+   ],
+   "cx": 552,
+   "cy": 431,
+   "bbox": [
+    0,
+    154,
+    1279,
+    718
+   ]
+  },
+  {
+   "realm": "ash",
+   "key": "Digit3",
+   "label": "3 bloom",
+   "fired": true,
+   "n": 41449,
+   "raw": 42842,
+   "ambient": 4268,
+   "shot": "_shots/srt_ash_Digit3_c1.png",
+   "add": [
+    51.3,
+    35.4,
+    21.4
+   ],
+   "abs": [
+    121.7,
+    72.3,
+    35.1
+   ],
+   "cx": 613,
+   "cy": 425,
+   "bbox": [
+    0,
+    38,
+    1279,
+    719
+   ]
+  },
+  {
+   "realm": "ash",
+   "key": "Digit4",
+   "label": "4 spikes",
+   "fired": true,
+   "n": 11033,
+   "raw": 12991,
+   "ambient": 11435,
+   "shot": "_shots/srt_ash_Digit4_c1.png",
+   "add": [
+    39.7,
+    35.4,
+    20.9
+   ],
+   "abs": [
+    81.0,
+    51.6,
+    24.1
+   ],
+   "cx": 635,
+   "cy": 469,
+   "bbox": [
+    25,
+    157,
+    1243,
+    719
+   ]
+  },
+  {
+   "realm": "ash",
+   "key": "Digit5",
+   "label": "5 vortex",
+   "fired": true,
+   "n": 108822,
+   "raw": 122121,
+   "ambient": 35019,
+   "shot": "_shots/srt_ash_Digit5_c2.png",
+   "add": [
+    61.2,
+    36.4,
+    16.2
+   ],
+   "abs": [
+    127.9,
+    76.2,
+    35.8
+   ],
+   "cx": 498,
+   "cy": 339,
+   "bbox": [
+    0,
+    0,
+    1278,
+    719
+   ]
+  }
+ ]
+}

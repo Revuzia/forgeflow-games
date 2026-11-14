@@ -1,0 +1,166 @@
+{
+ "rig": "F:/games/forgeflow-games-assets/_downloaded/mixamo/animations/Pro_Magic_Pack/X Bot.fbx",
+ "out_dir": "C:/Users/TestRun/Claude Claw/forgeflow-games/games/hit-parade/_research/animations/cmu_pilot",
+ "fps_out": 60,
+ "clips": [
+  {
+   "name": "p00_tpose_check_13_17",
+   "take": "13_17",
+   "start": 0,
+   "contact": 0,
+   "end": 0,
+   "kind": "tpose",
+   "limb": "body",
+   "no_glb": true
+  },
+  {
+   "name": "p01_jab_L_mirrored_14_02",
+   "take": "14_02",
+   "start": 4937,
+   "contact": 4953,
+   "end": 5004,
+   "kind": "hand",
+   "limb": "L_hand",
+   "mirror": true,
+   "fist": 80
+  },
+  {
+   "name": "p02_jab_L_mirrored_13_18",
+   "take": "13_18",
+   "start": 1427,
+   "contact": 1445,
+   "end": 1495,
+   "kind": "hand",
+   "limb": "L_hand",
+   "mirror": true,
+   "fist": 80
+  },
+  {
+   "name": "p03_cross_R_13_17",
+   "take": "13_17",
+   "start": 222,
+   "contact": 239,
+   "end": 300,
+   "kind": "hand",
+   "limb": "R_hand",
+   "fist": 80
+  },
+  {
+   "name": "p04_hook_R_14_03",
+   "take": "14_03",
+   "start": 4060,
+   "contact": 4078,
+   "end": 4148,
+   "kind": "hand",
+   "limb": "R_hand",
+   "fist": 80
+  },
+  {
+   "name": "p05_uppercut_R_mirrored_14_02",
+   "take": "14_02",
+   "start": 1704,
+   "contact": 1759,
+   "end": 1831,
+   "kind": "hand",
+   "limb": "R_hand",
+   "mirror": true,
+   "fist": 80
+  },
+  {
+   "name": "p06_bodyblow_R_14_03",
+   "take": "14_03",
+   "start": 3232,
+   "contact": 3245,
+   "end": 3270,
+   "kind": "hand",
+   "limb": "R_hand",
+   "fist": 80
+  },
+  {
+   "name": "p07_frontkick_R_144_05",
+   "take": "144_05",
+   "start": 310,
+   "contact": 360,
+   "end": 428,
+   "kind": "foot",
+   "limb": "R_foot",
+   "fist": 80
+  },
+  {
+   "name": "p08_roundhouse_R_135_07",
+   "take": "135_07",
+   "start": 70,
+   "contact": 118,
+   "end": 173,
+   "kind": "foot",
+   "limb": "R_foot",
+   "fist": 80
+  },
+  {
+   "name": "p09_knee_R_86_06",
+   "take": "86_06",
+   "start": 6218,
+   "contact": 6272,
+   "end": 6368,
+   "kind": "knee",
+   "limb": "R_knee",
+   "fist": 80
+  },
+  {
+   "name": "p10_getup_back_140_08",
+   "take": "140_08",
+   "start": 174,
+   "contact": 534,
+   "end": 651,
+   "kind": "getup",
+   "limb": "body"
+  },
+  {
+   "name": "p11_getup_front_139_16",
+   "take": "139_16",
+   "start": 164,
+   "contact": 234,
+   "end": 484,
+   "kind": "getup",
+   "limb": "body"
+  },
+  {
+   "name": "p12_fall_forward_90_16",
+   "take": "90_16",
+   "start": 375,
+   "contact": 447,
+   "end": 500,
+   "kind": "fall",
+   "limb": "body"
+  },
+  {
+   "name": "p13_hook_R_79_08",
+   "take": "79_08",
+   "start": 256,
+   "contact": 314,
+   "end": 332,
+   "kind": "hand",
+   "limb": "R_hand",
+   "fist": 80
+  },
+  {
+   "name": "p14_sidekick_R_135_11",
+   "take": "135_11",
+   "start": 577,
+   "contact": 608,
+   "end": 682,
+   "kind": "foot",
+   "limb": "R_foot",
+   "fist": 80
+  },
+  {
+   "name": "p15_fall_backward_90_18",
+   "take": "90_18",
+   "start": 38,
+   "contact": 116,
+   "end": 198,
+   "kind": "fall",
+   "limb": "body"
+  }
+ ]
+}

@@ -1,0 +1,42 @@
+driver: started
+  (pose screenshot: fresh)
+  [  12s] rows=0 last=
+  [  22s] rows=1 last=BASELINE-cold
+  [  32s] rows=1 last=BASELINE-cold
+  [  42s] rows=1 last=BASELINE-cold
+  [  52s] rows=2 last=cold-after-fight-0
+  [  62s] rows=2 last=cold-after-fight-0
+  [  72s] rows=3 last=enter:sand-c0
+  [  82s] rows=3 last=enter:sand-c0
+  [  92s] rows=3 last=enter:sand-c0
+  [ 102s] rows=4 last=fought:sand-c0
+  [ 112s] rows=5 last=enter:ash-c0
+  [ 122s] rows=5 last=enter:ash-c0
+  [ 132s] rows=5 last=enter:ash-c0
+  [ 142s] rows=6 last=fought:ash-c0
+  [ 152s] rows=7 last=enter:cold-c0
+  [ 162s] rows=7 last=enter:cold-c0
+  [ 172s] rows=7 last=enter:cold-c0
+  [ 182s] rows=7 last=enter:cold-c0
+  [ 192s] rows=8 last=fought:cold-c0
+  [ 202s] rows=9 last=enter:sand-c1
+  [ 212s] rows=9 last=enter:sand-c1
+  [ 222s] rows=9 last=enter:sand-c1
+  [ 232s] rows=10 last=fought:sand-c1
+  [ 242s] rows=11 last=enter:ash-c1
+  [ 252s] rows=11 last=enter:ash-c1
+  [ 262s] rows=11 last=enter:ash-c1
+  [ 272s] rows=11 last=enter:ash-c1
+  [ 282s] rows=12 last=fought:ash-c1
+  [ 292s] rows=13 last=enter:cold-c1
+  [ 302s] rows=13 last=enter:cold-c1
+  [ 312s] rows=13 last=enter:cold-c1
+  [ 322s] rows=14 last=fought:cold-c1
+  [ 332s] rows=14 last=fought:cold-c1
+  [ 342s] rows=14 last=fought:cold-c1
+  [ 352s] rows=14 last=fought:cold-c1
+  [ 362s] rows=14 last=fought:cold-c1
+  (pose screenshot: after)
+  [ 373s] rows=14 last=fought:cold-c1
+  [ 383s] rows=15 last=FINAL-cold-quiescent
+wrote C:\Users\TestRun\Claude Claw\forgeflow-games\games\driftwake\_harness\qa_soak_realmcycle_8894.out.json

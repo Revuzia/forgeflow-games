@@ -1,0 +1,2288 @@
+{
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Jake Fielding - Circus Ambiences/AMBCnst_Hammering, Tools, Tent, Reverb_JF_Circus.wav": {
+  "duration_s": 119.4,
+  "median_db": -27.5,
+  "p75_db": -26.1,
+  "p95_db": -24.2,
+  "max_db": -21.3,
+  "bursts": [
+   {
+    "start_s": 82.0,
+    "end_s": 85.0,
+    "level_db": -23.5,
+    "over_median_db": 4.0,
+    "centroid_hz": 2257,
+    "flatness": 0.4327
+   },
+   {
+    "start_s": 14.5,
+    "end_s": 17.5,
+    "level_db": -24.1,
+    "over_median_db": 3.4,
+    "centroid_hz": 1965,
+    "flatness": 0.3857
+   },
+   {
+    "start_s": 3.0,
+    "end_s": 6.0,
+    "level_db": -24.3,
+    "over_median_db": 3.2,
+    "centroid_hz": 2892,
+    "flatness": 0.5002
+   },
+   {
+    "start_s": 18.0,
+    "end_s": 21.0,
+    "level_db": -24.8,
+    "over_median_db": 2.7,
+    "centroid_hz": 2123,
+    "flatness": 0.4025
+   },
+   {
+    "start_s": 0.0,
+    "end_s": 3.0,
+    "level_db": -25.3,
+    "over_median_db": 2.2,
+    "centroid_hz": 2666,
+    "flatness": 0.5105
+   },
+   {
+    "start_s": 79.0,
+    "end_s": 82.0,
+    "level_db": -25.6,
+    "over_median_db": 1.9,
+    "centroid_hz": 2481,
+    "flatness": 0.4658
+   },
+   {
+    "start_s": 75.0,
+    "end_s": 78.0,
+    "level_db": -25.7,
+    "over_median_db": 1.8,
+    "centroid_hz": 2770,
+    "flatness": 0.5283
+   },
+   {
+    "start_s": 36.5,
+    "end_s": 39.5,
+    "level_db": -25.8,
+    "over_median_db": 1.6,
+    "centroid_hz": 2245,
+    "flatness": 0.44
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 26.0,
+    "end_s": 46.0,
+    "level_db": -27.3,
+    "spread_db": 3.0,
+    "centroid_hz": 2399,
+    "flatness": 0.4923,
+    "seam_db": 1.3
+   },
+   {
+    "start_s": 0.0,
+    "end_s": 20.0,
+    "level_db": -25.2,
+    "spread_db": 3.5,
+    "centroid_hz": 2480,
+    "flatness": 0.5243,
+    "seam_db": 2.9
+   },
+   {
+    "start_s": 72.0,
+    "end_s": 92.0,
+    "level_db": -26.1,
+    "spread_db": 4.1,
+    "centroid_hz": 2541,
+    "flatness": 0.4942,
+    "seam_db": 1.3
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 97.5,
+    "drop_db": 6.7
+   },
+   {
+    "at_s": 59.0,
+    "drop_db": 5.8
+   },
+   {
+    "at_s": 47.5,
+    "drop_db": 4.9
+   },
+   {
+    "at_s": 113.5,
+    "drop_db": 4.5
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Jake Fielding - Circus Ambiences/MACHFan_Generator, Air Conditioning, Motor, Hum_JF_Circus_02.wav": {
+  "duration_s": 59.7,
+  "median_db": -15.3,
+  "p75_db": -14.9,
+  "p95_db": -14.4,
+  "max_db": -13.8,
+  "bursts": [
+   {
+    "start_s": 0.0,
+    "end_s": 3.0,
+    "level_db": -14.2,
+    "over_median_db": 1.1,
+    "centroid_hz": 242,
+    "flatness": 0.0081
+   },
+   {
+    "start_s": 10.5,
+    "end_s": 13.5,
+    "level_db": -14.6,
+    "over_median_db": 0.7,
+    "centroid_hz": 247,
+    "flatness": 0.0071
+   },
+   {
+    "start_s": 7.5,
+    "end_s": 10.5,
+    "level_db": -14.9,
+    "over_median_db": 0.4,
+    "centroid_hz": 256,
+    "flatness": 0.0087
+   },
+   {
+    "start_s": 19.5,
+    "end_s": 22.5,
+    "level_db": -14.9,
+    "over_median_db": 0.4,
+    "centroid_hz": 252,
+    "flatness": 0.0072
+   },
+   {
+    "start_s": 38.5,
+    "end_s": 41.5,
+    "level_db": -15.0,
+    "over_median_db": 0.3,
+    "centroid_hz": 251,
+    "flatness": 0.0075
+   },
+   {
+    "start_s": 45.5,
+    "end_s": 48.5,
+    "level_db": -15.0,
+    "over_median_db": 0.3,
+    "centroid_hz": 251,
+    "flatness": 0.0074
+   },
+   {
+    "start_s": 3.5,
+    "end_s": 6.5,
+    "level_db": -15.1,
+    "over_median_db": 0.2,
+    "centroid_hz": 254,
+    "flatness": 0.0094
+   },
+   {
+    "start_s": 49.5,
+    "end_s": 52.5,
+    "level_db": -15.3,
+    "over_median_db": 0.0,
+    "centroid_hz": 262,
+    "flatness": 0.008
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 34.0,
+    "end_s": 54.0,
+    "level_db": -15.3,
+    "spread_db": 0.8,
+    "centroid_hz": 255,
+    "flatness": 0.0078,
+    "seam_db": 0.3
+   },
+   {
+    "start_s": 14.0,
+    "end_s": 34.0,
+    "level_db": -15.4,
+    "spread_db": 1.0,
+    "centroid_hz": 258,
+    "flatness": 0.0079,
+    "seam_db": 0.3
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 41.5,
+    "drop_db": 0.9
+   },
+   {
+    "at_s": 13.5,
+    "drop_db": 0.8
+   },
+   {
+    "at_s": 5.5,
+    "drop_db": 0.8
+   },
+   {
+    "at_s": 34.5,
+    "drop_db": 0.5
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Jake Fielding - Circus Ambiences/VOXFem_Accouncement Wet, Ringmaster, Performer, Dialogue_JF_Circus_01.wav": {
+  "duration_s": 19.4,
+  "median_db": -28.9,
+  "p75_db": -27.2,
+  "p95_db": -25.3,
+  "max_db": -24.3,
+  "bursts": [
+   {
+    "start_s": 8.0,
+    "end_s": 11.0,
+    "level_db": -27.2,
+    "over_median_db": 1.7,
+    "centroid_hz": 1262,
+    "flatness": 0.0134
+   },
+   {
+    "start_s": 13.5,
+    "end_s": 16.5,
+    "level_db": -27.8,
+    "over_median_db": 1.1,
+    "centroid_hz": 1416,
+    "flatness": 0.021
+   },
+   {
+    "start_s": 0.0,
+    "end_s": 3.0,
+    "level_db": -27.8,
+    "over_median_db": 1.1,
+    "centroid_hz": 1319,
+    "flatness": 0.0136
+   },
+   {
+    "start_s": 4.5,
+    "end_s": 7.5,
+    "level_db": -28.0,
+    "over_median_db": 0.8,
+    "centroid_hz": 1438,
+    "flatness": 0.025
+   }
+  ],
+  "beds": [],
+  "dips": [
+   {
+    "at_s": 17.0,
+    "drop_db": 15.0
+   },
+   {
+    "at_s": 3.0,
+    "drop_db": 5.4
+   },
+   {
+    "at_s": 13.0,
+    "drop_db": 5.3
+   },
+   {
+    "at_s": 7.0,
+    "drop_db": 0.1
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Jake Fielding - Neutral Interior Walla/CRWDWalla_Neutral Interior Walla, Hushed Voices, Reverberant,_Jake Fielding_INT WALLA_03.wav": {
+  "duration_s": 94.0,
+  "median_db": -23.8,
+  "p75_db": -23.0,
+  "p95_db": -21.7,
+  "max_db": -20.3,
+  "bursts": [
+   {
+    "start_s": 30.5,
+    "end_s": 33.5,
+    "level_db": -21.4,
+    "over_median_db": 2.4,
+    "centroid_hz": 753,
+    "flatness": 0.054
+   },
+   {
+    "start_s": 40.0,
+    "end_s": 43.0,
+    "level_db": -22.0,
+    "over_median_db": 1.8,
+    "centroid_hz": 715,
+    "flatness": 0.0547
+   },
+   {
+    "start_s": 52.0,
+    "end_s": 55.0,
+    "level_db": -22.0,
+    "over_median_db": 1.8,
+    "centroid_hz": 666,
+    "flatness": 0.0457
+   },
+   {
+    "start_s": 34.0,
+    "end_s": 37.0,
+    "level_db": -22.2,
+    "over_median_db": 1.6,
+    "centroid_hz": 783,
+    "flatness": 0.0609
+   },
+   {
+    "start_s": 45.0,
+    "end_s": 48.0,
+    "level_db": -22.7,
+    "over_median_db": 1.1,
+    "centroid_hz": 693,
+    "flatness": 0.0516
+   },
+   {
+    "start_s": 49.0,
+    "end_s": 52.0,
+    "level_db": -22.8,
+    "over_median_db": 1.0,
+    "centroid_hz": 629,
+    "flatness": 0.0439
+   },
+   {
+    "start_s": 74.0,
+    "end_s": 77.0,
+    "level_db": -23.1,
+    "over_median_db": 0.7,
+    "centroid_hz": 655,
+    "flatness": 0.0451
+   },
+   {
+    "start_s": 56.0,
+    "end_s": 59.0,
+    "level_db": -23.1,
+    "over_median_db": 0.7,
+    "centroid_hz": 673,
+    "flatness": 0.0574
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 42.0,
+    "end_s": 62.0,
+    "level_db": -22.8,
+    "spread_db": 1.5,
+    "centroid_hz": 660,
+    "flatness": 0.0492,
+    "seam_db": 2.1
+   },
+   {
+    "start_s": 62.0,
+    "end_s": 82.0,
+    "level_db": -23.7,
+    "spread_db": 1.8,
+    "centroid_hz": 660,
+    "flatness": 0.0505,
+    "seam_db": 0.4
+   },
+   {
+    "start_s": 8.0,
+    "end_s": 28.0,
+    "level_db": -24.5,
+    "spread_db": 1.8,
+    "centroid_hz": 674,
+    "flatness": 0.0589,
+    "seam_db": 1.9
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 36.5,
+    "drop_db": 2.0
+   },
+   {
+    "at_s": 43.5,
+    "drop_db": 1.6
+   },
+   {
+    "at_s": 55.5,
+    "drop_db": 1.6
+   },
+   {
+    "at_s": 88.5,
+    "drop_db": 1.6
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Jake Fielding - Neutral Interior Walla/CRWDWalla_Neutral Interior Walla, Hushed Voices, Reverberant,_Jake Fielding_INT WALLA_05.wav": {
+  "duration_s": 45.7,
+  "median_db": -26.0,
+  "p75_db": -25.1,
+  "p95_db": -23.4,
+  "max_db": -21.1,
+  "bursts": [
+   {
+    "start_s": 37.5,
+    "end_s": 40.5,
+    "level_db": -22.8,
+    "over_median_db": 3.3,
+    "centroid_hz": 706,
+    "flatness": 0.0625
+   },
+   {
+    "start_s": 41.5,
+    "end_s": 44.5,
+    "level_db": -24.1,
+    "over_median_db": 1.9,
+    "centroid_hz": 715,
+    "flatness": 0.0736
+   },
+   {
+    "start_s": 33.0,
+    "end_s": 36.0,
+    "level_db": -25.0,
+    "over_median_db": 1.1,
+    "centroid_hz": 785,
+    "flatness": 0.0715
+   },
+   {
+    "start_s": 22.0,
+    "end_s": 25.0,
+    "level_db": -25.1,
+    "over_median_db": 0.9,
+    "centroid_hz": 596,
+    "flatness": 0.0463
+   },
+   {
+    "start_s": 28.5,
+    "end_s": 31.5,
+    "level_db": -25.4,
+    "over_median_db": 0.6,
+    "centroid_hz": 655,
+    "flatness": 0.0565
+   },
+   {
+    "start_s": 4.5,
+    "end_s": 7.5,
+    "level_db": -25.5,
+    "over_median_db": 0.5,
+    "centroid_hz": 633,
+    "flatness": 0.0351
+   },
+   {
+    "start_s": 18.0,
+    "end_s": 21.0,
+    "level_db": -25.5,
+    "over_median_db": 0.5,
+    "centroid_hz": 581,
+    "flatness": 0.0514
+   },
+   {
+    "start_s": 10.5,
+    "end_s": 13.5,
+    "level_db": -25.8,
+    "over_median_db": 0.2,
+    "centroid_hz": 685,
+    "flatness": 0.0507
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 4.0,
+    "end_s": 24.0,
+    "level_db": -26.1,
+    "spread_db": 2.1,
+    "centroid_hz": 618,
+    "flatness": 0.0489,
+    "seam_db": 0.9
+   },
+   {
+    "start_s": 24.0,
+    "end_s": 44.0,
+    "level_db": -24.9,
+    "spread_db": 3.9,
+    "centroid_hz": 676,
+    "flatness": 0.0674,
+    "seam_db": 0.3
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 40.5,
+    "drop_db": 3.8
+   },
+   {
+    "at_s": 36.0,
+    "drop_db": 2.9
+   },
+   {
+    "at_s": 31.0,
+    "drop_db": 2.3
+   },
+   {
+    "at_s": 16.0,
+    "drop_db": 2.2
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - Subway Station/Crowd - Stockholm - Subway Station - Tunnel - Busy 1 - MS - RSM 191.wav": {
+  "duration_s": 32.5,
+  "median_db": -49.0,
+  "p75_db": -47.4,
+  "p95_db": -44.6,
+  "max_db": -41.1,
+  "bursts": [
+   {
+    "start_s": 12.0,
+    "end_s": 15.0,
+    "level_db": -44.4,
+    "over_median_db": 4.6,
+    "centroid_hz": 318,
+    "flatness": 0.0215
+   },
+   {
+    "start_s": 7.5,
+    "end_s": 10.5,
+    "level_db": -45.2,
+    "over_median_db": 3.8,
+    "centroid_hz": 398,
+    "flatness": 0.0286
+   },
+   {
+    "start_s": 1.5,
+    "end_s": 4.5,
+    "level_db": -47.5,
+    "over_median_db": 1.4,
+    "centroid_hz": 384,
+    "flatness": 0.0351
+   },
+   {
+    "start_s": 15.5,
+    "end_s": 18.5,
+    "level_db": -47.8,
+    "over_median_db": 1.2,
+    "centroid_hz": 453,
+    "flatness": 0.0491
+   },
+   {
+    "start_s": 19.0,
+    "end_s": 22.0,
+    "level_db": -48.6,
+    "over_median_db": 0.3,
+    "centroid_hz": 350,
+    "flatness": 0.0278
+   },
+   {
+    "start_s": 29.0,
+    "end_s": 32.0,
+    "level_db": -50.5,
+    "over_median_db": -1.5,
+    "centroid_hz": 370,
+    "flatness": 0.0325
+   },
+   {
+    "start_s": 22.5,
+    "end_s": 25.5,
+    "level_db": -51.3,
+    "over_median_db": -2.3,
+    "centroid_hz": 376,
+    "flatness": 0.0448
+   },
+   {
+    "start_s": 26.0,
+    "end_s": 29.0,
+    "level_db": -52.0,
+    "over_median_db": -3.0,
+    "centroid_hz": 339,
+    "flatness": 0.0293
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 2.0,
+    "end_s": 22.0,
+    "level_db": -46.9,
+    "spread_db": 4.5,
+    "centroid_hz": 358,
+    "flatness": 0.03,
+    "seam_db": 2.0
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 9.5,
+    "drop_db": 3.0
+   },
+   {
+    "at_s": 16.0,
+    "drop_db": 2.2
+   },
+   {
+    "at_s": 21.5,
+    "drop_db": 1.9
+   },
+   {
+    "at_s": 2.5,
+    "drop_db": 1.5
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - Subway Station/Crowd - Stockholm - Subway Station - Tunnel - Busy with Luggage By - LS5.wav": {
+  "duration_s": 136.6,
+  "median_db": -25.8,
+  "p75_db": -24.7,
+  "p95_db": -23.4,
+  "max_db": -19.4,
+  "bursts": [
+   {
+    "start_s": 96.5,
+    "end_s": 99.5,
+    "level_db": -22.3,
+    "over_median_db": 3.5,
+    "centroid_hz": 534,
+    "flatness": 0.0419
+   },
+   {
+    "start_s": 110.5,
+    "end_s": 113.5,
+    "level_db": -22.8,
+    "over_median_db": 3.0,
+    "centroid_hz": 635,
+    "flatness": 0.0716
+   },
+   {
+    "start_s": 104.5,
+    "end_s": 107.5,
+    "level_db": -23.4,
+    "over_median_db": 2.4,
+    "centroid_hz": 521,
+    "flatness": 0.0454
+   },
+   {
+    "start_s": 21.0,
+    "end_s": 24.0,
+    "level_db": -24.1,
+    "over_median_db": 1.7,
+    "centroid_hz": 493,
+    "flatness": 0.0311
+   },
+   {
+    "start_s": 4.5,
+    "end_s": 7.5,
+    "level_db": -24.2,
+    "over_median_db": 1.6,
+    "centroid_hz": 460,
+    "flatness": 0.0293
+   },
+   {
+    "start_s": 101.5,
+    "end_s": 104.5,
+    "level_db": -24.3,
+    "over_median_db": 1.5,
+    "centroid_hz": 475,
+    "flatness": 0.0425
+   },
+   {
+    "start_s": 24.5,
+    "end_s": 27.5,
+    "level_db": -24.4,
+    "over_median_db": 1.4,
+    "centroid_hz": 452,
+    "flatness": 0.0253
+   },
+   {
+    "start_s": 0.5,
+    "end_s": 3.5,
+    "level_db": -24.4,
+    "over_median_db": 1.4,
+    "centroid_hz": 513,
+    "flatness": 0.0355
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 114.0,
+    "end_s": 134.0,
+    "level_db": -25.3,
+    "spread_db": 1.4,
+    "centroid_hz": 453,
+    "flatness": 0.0544,
+    "seam_db": 0.8
+   },
+   {
+    "start_s": 32.0,
+    "end_s": 52.0,
+    "level_db": -27.2,
+    "spread_db": 1.6,
+    "centroid_hz": 445,
+    "flatness": 0.0421,
+    "seam_db": 2.9
+   },
+   {
+    "start_s": 54.0,
+    "end_s": 74.0,
+    "level_db": -27.2,
+    "spread_db": 1.8,
+    "centroid_hz": 420,
+    "flatness": 0.0343,
+    "seam_db": 2.1
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 113.5,
+    "drop_db": 2.4
+   },
+   {
+    "at_s": 98.0,
+    "drop_db": 1.9
+   },
+   {
+    "at_s": 12.5,
+    "drop_db": 1.6
+   },
+   {
+    "at_s": 105.0,
+    "drop_db": 1.6
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Sculptunes - Rome - Urban City Surround/AMBRest_Rome_Indoor-PubCrowd-InteriorCrowd.wav": {
+  "duration_s": 310.0,
+  "median_db": -18.9,
+  "p75_db": -17.6,
+  "p95_db": -15.5,
+  "max_db": -12.3,
+  "bursts": [
+   {
+    "start_s": 21.5,
+    "end_s": 24.5,
+    "level_db": -14.9,
+    "over_median_db": 3.9,
+    "centroid_hz": 611,
+    "flatness": 0.0345
+   },
+   {
+    "start_s": 253.0,
+    "end_s": 256.0,
+    "level_db": -15.4,
+    "over_median_db": 3.4,
+    "centroid_hz": 541,
+    "flatness": 0.0202
+   },
+   {
+    "start_s": 200.5,
+    "end_s": 203.5,
+    "level_db": -15.5,
+    "over_median_db": 3.4,
+    "centroid_hz": 564,
+    "flatness": 0.0201
+   },
+   {
+    "start_s": 164.5,
+    "end_s": 167.5,
+    "level_db": -15.8,
+    "over_median_db": 3.0,
+    "centroid_hz": 622,
+    "flatness": 0.0241
+   },
+   {
+    "start_s": 34.0,
+    "end_s": 37.0,
+    "level_db": -15.9,
+    "over_median_db": 2.9,
+    "centroid_hz": 559,
+    "flatness": 0.0204
+   },
+   {
+    "start_s": 155.0,
+    "end_s": 158.0,
+    "level_db": -16.0,
+    "over_median_db": 2.9,
+    "centroid_hz": 479,
+    "flatness": 0.0151
+   },
+   {
+    "start_s": 204.5,
+    "end_s": 207.5,
+    "level_db": -16.2,
+    "over_median_db": 2.7,
+    "centroid_hz": 538,
+    "flatness": 0.0222
+   },
+   {
+    "start_s": 292.5,
+    "end_s": 295.5,
+    "level_db": -16.2,
+    "over_median_db": 2.7,
+    "centroid_hz": 654,
+    "flatness": 0.0308
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 110.0,
+    "end_s": 130.0,
+    "level_db": -17.9,
+    "spread_db": 2.6,
+    "centroid_hz": 434,
+    "flatness": 0.0257,
+    "seam_db": 1.5
+   },
+   {
+    "start_s": 130.0,
+    "end_s": 150.0,
+    "level_db": -18.8,
+    "spread_db": 2.7,
+    "centroid_hz": 473,
+    "flatness": 0.0317,
+    "seam_db": 1.9
+   },
+   {
+    "start_s": 78.0,
+    "end_s": 98.0,
+    "level_db": -20.5,
+    "spread_db": 3.0,
+    "centroid_hz": 412,
+    "flatness": 0.025,
+    "seam_db": 0.7
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 36.5,
+    "drop_db": 5.9
+   },
+   {
+    "at_s": 32.0,
+    "drop_db": 4.2
+   },
+   {
+    "at_s": 280.5,
+    "drop_db": 4.1
+   },
+   {
+    "at_s": 46.0,
+    "drop_db": 3.8
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Sonic Bat - Basketball Match Ambience/SBbma_Feminine League Match 010.wav": {
+  "duration_s": 163.8,
+  "median_db": -31.1,
+  "p75_db": -27.6,
+  "p95_db": -17.7,
+  "max_db": -11.7,
+  "bursts": [
+   {
+    "start_s": 152.5,
+    "end_s": 155.5,
+    "level_db": -12.7,
+    "over_median_db": 18.4,
+    "centroid_hz": 554,
+    "flatness": 0.0235
+   },
+   {
+    "start_s": 159.5,
+    "end_s": 162.5,
+    "level_db": -16.7,
+    "over_median_db": 14.4,
+    "centroid_hz": 601,
+    "flatness": 0.0229
+   },
+   {
+    "start_s": 156.0,
+    "end_s": 159.0,
+    "level_db": -16.9,
+    "over_median_db": 14.2,
+    "centroid_hz": 538,
+    "flatness": 0.0143
+   },
+   {
+    "start_s": 116.0,
+    "end_s": 119.0,
+    "level_db": -20.8,
+    "over_median_db": 10.3,
+    "centroid_hz": 1067,
+    "flatness": 0.0475
+   },
+   {
+    "start_s": 135.0,
+    "end_s": 138.0,
+    "level_db": -21.0,
+    "over_median_db": 10.1,
+    "centroid_hz": 1478,
+    "flatness": 0.0768
+   },
+   {
+    "start_s": 149.5,
+    "end_s": 152.5,
+    "level_db": -21.0,
+    "over_median_db": 10.1,
+    "centroid_hz": 438,
+    "flatness": 0.0118
+   },
+   {
+    "start_s": 63.0,
+    "end_s": 66.0,
+    "level_db": -21.2,
+    "over_median_db": 9.9,
+    "centroid_hz": 1268,
+    "flatness": 0.0468
+   },
+   {
+    "start_s": 110.5,
+    "end_s": 113.5,
+    "level_db": -21.7,
+    "over_median_db": 9.4,
+    "centroid_hz": 1218,
+    "flatness": 0.0535
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 42.0,
+    "end_s": 62.0,
+    "level_db": -29.9,
+    "spread_db": 4.9,
+    "centroid_hz": 1299,
+    "flatness": 0.1634,
+    "seam_db": 5.9
+   },
+   {
+    "start_s": 72.0,
+    "end_s": 92.0,
+    "level_db": -31.6,
+    "spread_db": 9.4,
+    "centroid_hz": 1009,
+    "flatness": 0.04,
+    "seam_db": 0.6
+   },
+   {
+    "start_s": 10.0,
+    "end_s": 30.0,
+    "level_db": -28.4,
+    "spread_db": 10.5,
+    "centroid_hz": 1161,
+    "flatness": 0.0965,
+    "seam_db": 1.2
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 92.0,
+    "drop_db": 15.1
+   },
+   {
+    "at_s": 35.5,
+    "drop_db": 14.5
+   },
+   {
+    "at_s": 85.0,
+    "drop_db": 9.9
+   },
+   {
+    "at_s": 121.5,
+    "drop_db": 9.7
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Sonic Bat - Basketball Match Ambience/SBbma_Masculine U-18 Match 004.wav": {
+  "duration_s": 606.8,
+  "median_db": -30.2,
+  "p75_db": -25.7,
+  "p95_db": -20.5,
+  "max_db": -10.5,
+  "bursts": [
+   {
+    "start_s": 215.0,
+    "end_s": 218.0,
+    "level_db": -14.3,
+    "over_median_db": 15.9,
+    "centroid_hz": 905,
+    "flatness": 0.0439
+   },
+   {
+    "start_s": 236.0,
+    "end_s": 239.0,
+    "level_db": -17.3,
+    "over_median_db": 13.0,
+    "centroid_hz": 956,
+    "flatness": 0.0262
+   },
+   {
+    "start_s": 291.0,
+    "end_s": 294.0,
+    "level_db": -17.6,
+    "over_median_db": 12.6,
+    "centroid_hz": 833,
+    "flatness": 0.0483
+   },
+   {
+    "start_s": 379.5,
+    "end_s": 382.5,
+    "level_db": -18.2,
+    "over_median_db": 12.0,
+    "centroid_hz": 847,
+    "flatness": 0.0636
+   },
+   {
+    "start_s": 69.0,
+    "end_s": 72.0,
+    "level_db": -18.5,
+    "over_median_db": 11.8,
+    "centroid_hz": 879,
+    "flatness": 0.0417
+   },
+   {
+    "start_s": 339.0,
+    "end_s": 342.0,
+    "level_db": -19.0,
+    "over_median_db": 11.2,
+    "centroid_hz": 907,
+    "flatness": 0.0285
+   },
+   {
+    "start_s": 64.5,
+    "end_s": 67.5,
+    "level_db": -19.4,
+    "over_median_db": 10.8,
+    "centroid_hz": 838,
+    "flatness": 0.0441
+   },
+   {
+    "start_s": 58.0,
+    "end_s": 61.0,
+    "level_db": -20.1,
+    "over_median_db": 10.1,
+    "centroid_hz": 1019,
+    "flatness": 0.1145
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 106.0,
+    "end_s": 126.0,
+    "level_db": -25.0,
+    "spread_db": 7.0,
+    "centroid_hz": 916,
+    "flatness": 0.0389,
+    "seam_db": 7.3
+   },
+   {
+    "start_s": 378.0,
+    "end_s": 398.0,
+    "level_db": -22.5,
+    "spread_db": 8.1,
+    "centroid_hz": 837,
+    "flatness": 0.0606,
+    "seam_db": 1.4
+   },
+   {
+    "start_s": 420.0,
+    "end_s": 440.0,
+    "level_db": -31.0,
+    "spread_db": 8.1,
+    "centroid_hz": 715,
+    "flatness": 0.069,
+    "seam_db": 2.7
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 19.5,
+    "drop_db": 14.4
+   },
+   {
+    "at_s": 2.5,
+    "drop_db": 12.0
+   },
+   {
+    "at_s": 505.0,
+    "drop_db": 11.7
+   },
+   {
+    "at_s": 535.5,
+    "drop_db": 11.6
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Sonic Bat - Futsal Match Ambience/SBfma_Feminine League Match 004.wav": {
+  "duration_s": 230.9,
+  "median_db": -34.9,
+  "p75_db": -30.6,
+  "p95_db": -24.1,
+  "max_db": -16.1,
+  "bursts": [
+   {
+    "start_s": 139.5,
+    "end_s": 142.5,
+    "level_db": -19.8,
+    "over_median_db": 15.2,
+    "centroid_hz": 1066,
+    "flatness": 0.094
+   },
+   {
+    "start_s": 148.5,
+    "end_s": 151.5,
+    "level_db": -20.2,
+    "over_median_db": 14.7,
+    "centroid_hz": 1094,
+    "flatness": 0.0425
+   },
+   {
+    "start_s": 221.0,
+    "end_s": 224.0,
+    "level_db": -22.6,
+    "over_median_db": 12.3,
+    "centroid_hz": 2731,
+    "flatness": 0.0977
+   },
+   {
+    "start_s": 205.5,
+    "end_s": 208.5,
+    "level_db": -25.1,
+    "over_median_db": 9.9,
+    "centroid_hz": 1093,
+    "flatness": 0.0647
+   },
+   {
+    "start_s": 63.0,
+    "end_s": 66.0,
+    "level_db": -25.5,
+    "over_median_db": 9.4,
+    "centroid_hz": 946,
+    "flatness": 0.0535
+   },
+   {
+    "start_s": 209.5,
+    "end_s": 212.5,
+    "level_db": -25.9,
+    "over_median_db": 9.1,
+    "centroid_hz": 1187,
+    "flatness": 0.0317
+   },
+   {
+    "start_s": 218.0,
+    "end_s": 221.0,
+    "level_db": -26.0,
+    "over_median_db": 9.0,
+    "centroid_hz": 3211,
+    "flatness": 0.0513
+   },
+   {
+    "start_s": 68.5,
+    "end_s": 71.5,
+    "level_db": -26.0,
+    "over_median_db": 8.9,
+    "centroid_hz": 1001,
+    "flatness": 0.0463
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 94.0,
+    "end_s": 114.0,
+    "level_db": -35.0,
+    "spread_db": 5.8,
+    "centroid_hz": 862,
+    "flatness": 0.0705,
+    "seam_db": 10.4
+   },
+   {
+    "start_s": 14.0,
+    "end_s": 34.0,
+    "level_db": -36.2,
+    "spread_db": 6.5,
+    "centroid_hz": 944,
+    "flatness": 0.0911,
+    "seam_db": 10.6
+   },
+   {
+    "start_s": 42.0,
+    "end_s": 62.0,
+    "level_db": -33.6,
+    "spread_db": 8.4,
+    "centroid_hz": 911,
+    "flatness": 0.0785,
+    "seam_db": 0.8
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 151.5,
+    "drop_db": 17.2
+   },
+   {
+    "at_s": 143.5,
+    "drop_db": 10.0
+   },
+   {
+    "at_s": 93.0,
+    "drop_db": 10.0
+   },
+   {
+    "at_s": 119.0,
+    "drop_db": 9.1
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Sonic Bat - Futsal Match Ambience/SBfma_Masculine League Match 001.wav": {
+  "duration_s": 654.8,
+  "median_db": -36.3,
+  "p75_db": -33.2,
+  "p95_db": -27.8,
+  "max_db": -21.8,
+  "bursts": [
+   {
+    "start_s": 500.5,
+    "end_s": 503.5,
+    "level_db": -25.2,
+    "over_median_db": 11.0,
+    "centroid_hz": 935,
+    "flatness": 0.0326
+   },
+   {
+    "start_s": 602.0,
+    "end_s": 605.0,
+    "level_db": -25.4,
+    "over_median_db": 10.9,
+    "centroid_hz": 875,
+    "flatness": 0.0631
+   },
+   {
+    "start_s": 84.5,
+    "end_s": 87.5,
+    "level_db": -25.7,
+    "over_median_db": 10.6,
+    "centroid_hz": 1121,
+    "flatness": 0.1128
+   },
+   {
+    "start_s": 155.0,
+    "end_s": 158.0,
+    "level_db": -25.8,
+    "over_median_db": 10.5,
+    "centroid_hz": 1146,
+    "flatness": 0.1359
+   },
+   {
+    "start_s": 245.0,
+    "end_s": 248.0,
+    "level_db": -26.3,
+    "over_median_db": 9.9,
+    "centroid_hz": 871,
+    "flatness": 0.0435
+   },
+   {
+    "start_s": 13.5,
+    "end_s": 16.5,
+    "level_db": -26.5,
+    "over_median_db": 9.8,
+    "centroid_hz": 1073,
+    "flatness": 0.0709
+   },
+   {
+    "start_s": 505.0,
+    "end_s": 508.0,
+    "level_db": -26.6,
+    "over_median_db": 9.6,
+    "centroid_hz": 881,
+    "flatness": 0.0383
+   },
+   {
+    "start_s": 404.0,
+    "end_s": 407.0,
+    "level_db": -27.3,
+    "over_median_db": 8.9,
+    "centroid_hz": 1002,
+    "flatness": 0.1078
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 188.0,
+    "end_s": 208.0,
+    "level_db": -36.6,
+    "spread_db": 4.6,
+    "centroid_hz": 973,
+    "flatness": 0.1581,
+    "seam_db": 7.2
+   },
+   {
+    "start_s": 470.0,
+    "end_s": 490.0,
+    "level_db": -36.4,
+    "spread_db": 5.5,
+    "centroid_hz": 871,
+    "flatness": 0.1244,
+    "seam_db": 2.8
+   },
+   {
+    "start_s": 572.0,
+    "end_s": 592.0,
+    "level_db": -36.1,
+    "spread_db": 5.8,
+    "centroid_hz": 1241,
+    "flatness": 0.1124,
+    "seam_db": 1.6
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 17.5,
+    "drop_db": 12.5
+   },
+   {
+    "at_s": 343.5,
+    "drop_db": 12.3
+   },
+   {
+    "at_s": 3.0,
+    "drop_db": 10.5
+   },
+   {
+    "at_s": 282.0,
+    "drop_db": 10.2
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Sonic Bat - Handball Match Ambience/SBhma_Feminine EHF European Cup Match 002.wav": {
+  "duration_s": 137.0,
+  "median_db": -30.7,
+  "p75_db": -24.9,
+  "p95_db": -20.5,
+  "max_db": -18.6,
+  "bursts": [
+   {
+    "start_s": 95.0,
+    "end_s": 98.0,
+    "level_db": -19.8,
+    "over_median_db": 10.9,
+    "centroid_hz": 1258,
+    "flatness": 0.0428
+   },
+   {
+    "start_s": 99.5,
+    "end_s": 102.5,
+    "level_db": -21.2,
+    "over_median_db": 9.4,
+    "centroid_hz": 871,
+    "flatness": 0.0321
+   },
+   {
+    "start_s": 92.0,
+    "end_s": 95.0,
+    "level_db": -21.7,
+    "over_median_db": 9.0,
+    "centroid_hz": 2839,
+    "flatness": 0.0494
+   },
+   {
+    "start_s": 112.0,
+    "end_s": 115.0,
+    "level_db": -22.0,
+    "over_median_db": 8.7,
+    "centroid_hz": 703,
+    "flatness": 0.0143
+   },
+   {
+    "start_s": 122.0,
+    "end_s": 125.0,
+    "level_db": -22.1,
+    "over_median_db": 8.5,
+    "centroid_hz": 685,
+    "flatness": 0.0285
+   },
+   {
+    "start_s": 115.5,
+    "end_s": 118.5,
+    "level_db": -22.3,
+    "over_median_db": 8.4,
+    "centroid_hz": 1245,
+    "flatness": 0.0388
+   },
+   {
+    "start_s": 107.5,
+    "end_s": 110.5,
+    "level_db": -22.7,
+    "over_median_db": 8.0,
+    "centroid_hz": 666,
+    "flatness": 0.0167
+   },
+   {
+    "start_s": 53.0,
+    "end_s": 56.0,
+    "level_db": -22.9,
+    "over_median_db": 7.8,
+    "centroid_hz": 1184,
+    "flatness": 0.0923
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 108.0,
+    "end_s": 128.0,
+    "level_db": -23.0,
+    "spread_db": 4.4,
+    "centroid_hz": 752,
+    "flatness": 0.0333,
+    "seam_db": 0.7
+   },
+   {
+    "start_s": 12.0,
+    "end_s": 32.0,
+    "level_db": -30.1,
+    "spread_db": 11.1,
+    "centroid_hz": 1580,
+    "flatness": 0.1013,
+    "seam_db": 1.1
+   },
+   {
+    "start_s": 88.0,
+    "end_s": 108.0,
+    "level_db": -22.8,
+    "spread_db": 11.4,
+    "centroid_hz": 1287,
+    "flatness": 0.0705,
+    "seam_db": 12.0
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 62.0,
+    "drop_db": 10.3
+   },
+   {
+    "at_s": 24.5,
+    "drop_db": 8.6
+   },
+   {
+    "at_s": 51.5,
+    "drop_db": 8.4
+   },
+   {
+    "at_s": 38.0,
+    "drop_db": 7.3
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Sonic Bat - Handball Match Ambience/SBhma_Masculine League Match 002.wav": {
+  "duration_s": 478.8,
+  "median_db": -33.7,
+  "p75_db": -29.1,
+  "p95_db": -18.5,
+  "max_db": -11.1,
+  "bursts": [
+   {
+    "start_s": 460.0,
+    "end_s": 463.0,
+    "level_db": -13.0,
+    "over_median_db": 20.7,
+    "centroid_hz": 695,
+    "flatness": 0.0411
+   },
+   {
+    "start_s": 250.0,
+    "end_s": 253.0,
+    "level_db": -13.8,
+    "over_median_db": 19.9,
+    "centroid_hz": 665,
+    "flatness": 0.013
+   },
+   {
+    "start_s": 386.5,
+    "end_s": 389.5,
+    "level_db": -14.5,
+    "over_median_db": 19.2,
+    "centroid_hz": 705,
+    "flatness": 0.0298
+   },
+   {
+    "start_s": 440.0,
+    "end_s": 443.0,
+    "level_db": -15.1,
+    "over_median_db": 18.7,
+    "centroid_hz": 784,
+    "flatness": 0.0546
+   },
+   {
+    "start_s": 246.5,
+    "end_s": 249.5,
+    "level_db": -15.1,
+    "over_median_db": 18.6,
+    "centroid_hz": 689,
+    "flatness": 0.0309
+   },
+   {
+    "start_s": 84.0,
+    "end_s": 87.0,
+    "level_db": -15.8,
+    "over_median_db": 17.9,
+    "centroid_hz": 754,
+    "flatness": 0.0413
+   },
+   {
+    "start_s": 465.5,
+    "end_s": 468.5,
+    "level_db": -16.6,
+    "over_median_db": 17.1,
+    "centroid_hz": 825,
+    "flatness": 0.0567
+   },
+   {
+    "start_s": 390.0,
+    "end_s": 393.0,
+    "level_db": -18.1,
+    "over_median_db": 15.6,
+    "centroid_hz": 458,
+    "flatness": 0.0378
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 286.0,
+    "end_s": 306.0,
+    "level_db": -31.7,
+    "spread_db": 5.7,
+    "centroid_hz": 1080,
+    "flatness": 0.1282,
+    "seam_db": 5.3
+   },
+   {
+    "start_s": 62.0,
+    "end_s": 82.0,
+    "level_db": -34.6,
+    "spread_db": 6.2,
+    "centroid_hz": 1085,
+    "flatness": 0.0809,
+    "seam_db": 6.7
+   },
+   {
+    "start_s": 192.0,
+    "end_s": 212.0,
+    "level_db": -33.8,
+    "spread_db": 6.7,
+    "centroid_hz": 2298,
+    "flatness": 0.1038,
+    "seam_db": 8.7
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 95.0,
+    "drop_db": 15.0
+   },
+   {
+    "at_s": 47.5,
+    "drop_db": 13.8
+   },
+   {
+    "at_s": 394.0,
+    "drop_db": 12.9
+   },
+   {
+    "at_s": 445.5,
+    "drop_db": 12.2
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Sonic Bat - Roller Hockey Match Ambience/SBrhma_Feminine League Match 004.wav": {
+  "duration_s": 556.3,
+  "median_db": -33.9,
+  "p75_db": -31.1,
+  "p95_db": -23.9,
+  "max_db": -14.6,
+  "bursts": [
+   {
+    "start_s": 439.5,
+    "end_s": 442.5,
+    "level_db": -17.7,
+    "over_median_db": 16.2,
+    "centroid_hz": 569,
+    "flatness": 0.0408
+   },
+   {
+    "start_s": 200.0,
+    "end_s": 203.0,
+    "level_db": -18.4,
+    "over_median_db": 15.5,
+    "centroid_hz": 685,
+    "flatness": 0.0701
+   },
+   {
+    "start_s": 213.0,
+    "end_s": 216.0,
+    "level_db": -18.4,
+    "over_median_db": 15.5,
+    "centroid_hz": 497,
+    "flatness": 0.0224
+   },
+   {
+    "start_s": 453.5,
+    "end_s": 456.5,
+    "level_db": -18.9,
+    "over_median_db": 15.0,
+    "centroid_hz": 495,
+    "flatness": 0.0248
+   },
+   {
+    "start_s": 436.5,
+    "end_s": 439.5,
+    "level_db": -20.1,
+    "over_median_db": 13.8,
+    "centroid_hz": 1009,
+    "flatness": 0.096
+   },
+   {
+    "start_s": 216.5,
+    "end_s": 219.5,
+    "level_db": -20.3,
+    "over_median_db": 13.6,
+    "centroid_hz": 857,
+    "flatness": 0.0637
+   },
+   {
+    "start_s": 457.5,
+    "end_s": 460.5,
+    "level_db": -20.8,
+    "over_median_db": 13.1,
+    "centroid_hz": 672,
+    "flatness": 0.0368
+   },
+   {
+    "start_s": 197.0,
+    "end_s": 200.0,
+    "level_db": -21.4,
+    "over_median_db": 12.5,
+    "centroid_hz": 1085,
+    "flatness": 0.1253
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 2.0,
+    "end_s": 22.0,
+    "level_db": -32.8,
+    "spread_db": 2.9,
+    "centroid_hz": 1005,
+    "flatness": 0.1966,
+    "seam_db": 0.2
+   },
+   {
+    "start_s": 34.0,
+    "end_s": 54.0,
+    "level_db": -32.2,
+    "spread_db": 4.2,
+    "centroid_hz": 886,
+    "flatness": 0.0976,
+    "seam_db": 0.2
+   },
+   {
+    "start_s": 82.0,
+    "end_s": 102.0,
+    "level_db": -34.7,
+    "spread_db": 5.4,
+    "centroid_hz": 856,
+    "flatness": 0.1223,
+    "seam_db": 2.1
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 221.5,
+    "drop_db": 11.3
+   },
+   {
+    "at_s": 188.5,
+    "drop_db": 11.3
+   },
+   {
+    "at_s": 378.0,
+    "drop_db": 10.8
+   },
+   {
+    "at_s": 231.0,
+    "drop_db": 9.7
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Sonic Bat - Roller Hockey Match Ambience/SBrhma_Masculine League Match 007.wav": {
+  "duration_s": 180.4,
+  "median_db": -34.4,
+  "p75_db": -30.6,
+  "p95_db": -26.8,
+  "max_db": -18.6,
+  "bursts": [
+   {
+    "start_s": 68.5,
+    "end_s": 71.5,
+    "level_db": -24.6,
+    "over_median_db": 9.8,
+    "centroid_hz": 928,
+    "flatness": 0.0583
+   },
+   {
+    "start_s": 106.5,
+    "end_s": 109.5,
+    "level_db": -25.5,
+    "over_median_db": 8.9,
+    "centroid_hz": 960,
+    "flatness": 0.0669
+   },
+   {
+    "start_s": 167.5,
+    "end_s": 170.5,
+    "level_db": -27.2,
+    "over_median_db": 7.2,
+    "centroid_hz": 900,
+    "flatness": 0.1061
+   },
+   {
+    "start_s": 120.5,
+    "end_s": 123.5,
+    "level_db": -27.9,
+    "over_median_db": 6.6,
+    "centroid_hz": 939,
+    "flatness": 0.0682
+   },
+   {
+    "start_s": 101.0,
+    "end_s": 104.0,
+    "level_db": -27.9,
+    "over_median_db": 6.5,
+    "centroid_hz": 847,
+    "flatness": 0.0506
+   },
+   {
+    "start_s": 45.5,
+    "end_s": 48.5,
+    "level_db": -28.3,
+    "over_median_db": 6.1,
+    "centroid_hz": 904,
+    "flatness": 0.1267
+   },
+   {
+    "start_s": 73.0,
+    "end_s": 76.0,
+    "level_db": -28.8,
+    "over_median_db": 5.6,
+    "centroid_hz": 899,
+    "flatness": 0.0736
+   },
+   {
+    "start_s": 24.5,
+    "end_s": 27.5,
+    "level_db": -28.8,
+    "over_median_db": 5.6,
+    "centroid_hz": 444,
+    "flatness": 0.0342
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 102.0,
+    "end_s": 122.0,
+    "level_db": -28.6,
+    "spread_db": 5.3,
+    "centroid_hz": 1001,
+    "flatness": 0.1273,
+    "seam_db": 1.4
+   },
+   {
+    "start_s": 36.0,
+    "end_s": 56.0,
+    "level_db": -32.5,
+    "spread_db": 7.6,
+    "centroid_hz": 858,
+    "flatness": 0.0975,
+    "seam_db": 2.5
+   },
+   {
+    "start_s": 4.0,
+    "end_s": 24.0,
+    "level_db": -36.0,
+    "spread_db": 7.9,
+    "centroid_hz": 781,
+    "flatness": 0.0858,
+    "seam_db": 3.8
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 133.5,
+    "drop_db": 16.1
+   },
+   {
+    "at_s": 91.0,
+    "drop_db": 11.3
+   },
+   {
+    "at_s": 12.5,
+    "drop_db": 9.7
+   },
+   {
+    "at_s": 71.5,
+    "drop_db": 9.6
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/TheWorkRoom Audio Post - South African Ambiences - Protests/SAPST01.wav": {
+  "duration_s": 240.0,
+  "median_db": -16.7,
+  "p75_db": -14.4,
+  "p95_db": -12.0,
+  "max_db": -9.0,
+  "bursts": [
+   {
+    "start_s": 195.5,
+    "end_s": 198.5,
+    "level_db": -10.7,
+    "over_median_db": 6.0,
+    "centroid_hz": 864,
+    "flatness": 0.0362
+   },
+   {
+    "start_s": 212.0,
+    "end_s": 215.0,
+    "level_db": -11.4,
+    "over_median_db": 5.3,
+    "centroid_hz": 768,
+    "flatness": 0.0443
+   },
+   {
+    "start_s": 42.0,
+    "end_s": 45.0,
+    "level_db": -11.6,
+    "over_median_db": 5.1,
+    "centroid_hz": 805,
+    "flatness": 0.0382
+   },
+   {
+    "start_s": 70.0,
+    "end_s": 73.0,
+    "level_db": -12.0,
+    "over_median_db": 4.7,
+    "centroid_hz": 918,
+    "flatness": 0.0316
+   },
+   {
+    "start_s": 39.0,
+    "end_s": 42.0,
+    "level_db": -12.4,
+    "over_median_db": 4.3,
+    "centroid_hz": 764,
+    "flatness": 0.0395
+   },
+   {
+    "start_s": 215.5,
+    "end_s": 218.5,
+    "level_db": -12.5,
+    "over_median_db": 4.2,
+    "centroid_hz": 743,
+    "flatness": 0.046
+   },
+   {
+    "start_s": 117.0,
+    "end_s": 120.0,
+    "level_db": -13.0,
+    "over_median_db": 3.7,
+    "centroid_hz": 956,
+    "flatness": 0.0674
+   },
+   {
+    "start_s": 22.0,
+    "end_s": 25.0,
+    "level_db": -13.0,
+    "over_median_db": 3.7,
+    "centroid_hz": 753,
+    "flatness": 0.038
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 20.0,
+    "end_s": 40.0,
+    "level_db": -14.2,
+    "spread_db": 2.5,
+    "centroid_hz": 684,
+    "flatness": 0.0401,
+    "seam_db": 0.3
+   },
+   {
+    "start_s": 48.0,
+    "end_s": 68.0,
+    "level_db": -14.7,
+    "spread_db": 2.6,
+    "centroid_hz": 843,
+    "flatness": 0.0644,
+    "seam_db": 0.5
+   },
+   {
+    "start_s": 152.0,
+    "end_s": 172.0,
+    "level_db": -16.5,
+    "spread_db": 3.2,
+    "centroid_hz": 915,
+    "flatness": 0.0635,
+    "seam_db": 1.7
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 238.0,
+    "drop_db": 6.5
+   },
+   {
+    "at_s": 73.5,
+    "drop_db": 5.1
+   },
+   {
+    "at_s": 177.5,
+    "drop_db": 4.8
+   },
+   {
+    "at_s": 99.5,
+    "drop_db": 4.6
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/UberDuo - The School Audio Playset/School, Cafeteria, Ambience.wav": {
+  "duration_s": 55.9,
+  "median_db": -22.3,
+  "p75_db": -21.5,
+  "p95_db": -20.4,
+  "max_db": -17.9,
+  "bursts": [
+   {
+    "start_s": 0.0,
+    "end_s": 3.0,
+    "level_db": -20.1,
+    "over_median_db": 2.2,
+    "centroid_hz": 61,
+    "flatness": 0.0038
+   },
+   {
+    "start_s": 17.5,
+    "end_s": 20.5,
+    "level_db": -20.8,
+    "over_median_db": 1.6,
+    "centroid_hz": 58,
+    "flatness": 0.0031
+   },
+   {
+    "start_s": 25.0,
+    "end_s": 28.0,
+    "level_db": -21.0,
+    "over_median_db": 1.3,
+    "centroid_hz": 58,
+    "flatness": 0.0035
+   },
+   {
+    "start_s": 51.5,
+    "end_s": 54.5,
+    "level_db": -21.4,
+    "over_median_db": 1.0,
+    "centroid_hz": 69,
+    "flatness": 0.0044
+   },
+   {
+    "start_s": 37.0,
+    "end_s": 40.0,
+    "level_db": -21.5,
+    "over_median_db": 0.8,
+    "centroid_hz": 62,
+    "flatness": 0.0036
+   },
+   {
+    "start_s": 3.5,
+    "end_s": 6.5,
+    "level_db": -21.9,
+    "over_median_db": 0.4,
+    "centroid_hz": 71,
+    "flatness": 0.0048
+   },
+   {
+    "start_s": 21.0,
+    "end_s": 24.0,
+    "level_db": -22.0,
+    "over_median_db": 0.3,
+    "centroid_hz": 67,
+    "flatness": 0.0044
+   },
+   {
+    "start_s": 14.5,
+    "end_s": 17.5,
+    "level_db": -22.2,
+    "over_median_db": 0.1,
+    "centroid_hz": 76,
+    "flatness": 0.005
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 28.0,
+    "end_s": 48.0,
+    "level_db": -22.8,
+    "spread_db": 2.3,
+    "centroid_hz": 79,
+    "flatness": 0.0053,
+    "seam_db": 2.0
+   },
+   {
+    "start_s": 2.0,
+    "end_s": 22.0,
+    "level_db": -22.0,
+    "spread_db": 2.8,
+    "centroid_hz": 69,
+    "flatness": 0.0043,
+    "seam_db": 1.1
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 2.0,
+    "drop_db": 3.0
+   },
+   {
+    "at_s": 29.0,
+    "drop_db": 1.8
+   },
+   {
+    "at_s": 22.0,
+    "drop_db": 1.7
+   },
+   {
+    "at_s": 39.5,
+    "drop_db": 1.4
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/UberDuo - The Supermarket Audio Play Set/AMBMrkt_Checkout, Supermarket, Light Conversation_UberDuo_MRKT.wav": {
+  "duration_s": 52.8,
+  "median_db": -42.5,
+  "p75_db": -39.3,
+  "p95_db": -35.3,
+  "max_db": -32.1,
+  "bursts": [
+   {
+    "start_s": 26.0,
+    "end_s": 29.0,
+    "level_db": -36.6,
+    "over_median_db": 6.0,
+    "centroid_hz": 869,
+    "flatness": 0.0889
+   },
+   {
+    "start_s": 13.0,
+    "end_s": 16.0,
+    "level_db": -37.3,
+    "over_median_db": 5.2,
+    "centroid_hz": 2348,
+    "flatness": 0.3217
+   },
+   {
+    "start_s": 1.5,
+    "end_s": 4.5,
+    "level_db": -37.4,
+    "over_median_db": 5.1,
+    "centroid_hz": 1143,
+    "flatness": 0.2008
+   },
+   {
+    "start_s": 5.0,
+    "end_s": 8.0,
+    "level_db": -38.2,
+    "over_median_db": 4.4,
+    "centroid_hz": 1327,
+    "flatness": 0.2476
+   },
+   {
+    "start_s": 29.5,
+    "end_s": 32.5,
+    "level_db": -38.5,
+    "over_median_db": 4.0,
+    "centroid_hz": 937,
+    "flatness": 0.1437
+   },
+   {
+    "start_s": 47.0,
+    "end_s": 50.0,
+    "level_db": -38.7,
+    "over_median_db": 3.8,
+    "centroid_hz": 777,
+    "flatness": 0.0241
+   },
+   {
+    "start_s": 17.0,
+    "end_s": 20.0,
+    "level_db": -41.1,
+    "over_median_db": 1.5,
+    "centroid_hz": 1673,
+    "flatness": 0.4487
+   },
+   {
+    "start_s": 22.0,
+    "end_s": 25.0,
+    "level_db": -41.5,
+    "over_median_db": 1.0,
+    "centroid_hz": 1548,
+    "flatness": 0.3692
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 32.0,
+    "end_s": 52.0,
+    "level_db": -43.3,
+    "spread_db": 6.9,
+    "centroid_hz": 1090,
+    "flatness": 0.2147,
+    "seam_db": 7.1
+   },
+   {
+    "start_s": 8.0,
+    "end_s": 28.0,
+    "level_db": -40.0,
+    "spread_db": 7.5,
+    "centroid_hz": 2283,
+    "flatness": 0.1521,
+    "seam_db": 3.0
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 48.5,
+    "drop_db": 10.0
+   },
+   {
+    "at_s": 5.5,
+    "drop_db": 5.4
+   },
+   {
+    "at_s": 33.0,
+    "drop_db": 4.7
+   },
+   {
+    "at_s": 16.0,
+    "drop_db": 4.7
+   }
+  ]
+ },
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/UberDuo - The Supermarket Audio Play Set/AMBMrkt_Crowd, Supermarket, Aisle, Grocery, Shopping_UberDuo_MRKT_01.wav": {
+  "duration_s": 74.5,
+  "median_db": -39.0,
+  "p75_db": -38.3,
+  "p95_db": -37.7,
+  "max_db": -37.1,
+  "bursts": [
+   {
+    "start_s": 25.5,
+    "end_s": 28.5,
+    "level_db": -37.7,
+    "over_median_db": 1.3,
+    "centroid_hz": 206,
+    "flatness": 0.0096
+   },
+   {
+    "start_s": 31.5,
+    "end_s": 34.5,
+    "level_db": -37.9,
+    "over_median_db": 1.1,
+    "centroid_hz": 218,
+    "flatness": 0.0124
+   },
+   {
+    "start_s": 45.5,
+    "end_s": 48.5,
+    "level_db": -38.0,
+    "over_median_db": 0.9,
+    "centroid_hz": 267,
+    "flatness": 0.0188
+   },
+   {
+    "start_s": 16.0,
+    "end_s": 19.0,
+    "level_db": -38.1,
+    "over_median_db": 0.8,
+    "centroid_hz": 281,
+    "flatness": 0.0156
+   },
+   {
+    "start_s": 21.0,
+    "end_s": 24.0,
+    "level_db": -38.4,
+    "over_median_db": 0.5,
+    "centroid_hz": 231,
+    "flatness": 0.011
+   },
+   {
+    "start_s": 66.5,
+    "end_s": 69.5,
+    "level_db": -38.5,
+    "over_median_db": 0.4,
+    "centroid_hz": 338,
+    "flatness": 0.0277
+   },
+   {
+    "start_s": 70.0,
+    "end_s": 73.0,
+    "level_db": -38.6,
+    "over_median_db": 0.4,
+    "centroid_hz": 272,
+    "flatness": 0.0217
+   },
+   {
+    "start_s": 2.0,
+    "end_s": 5.0,
+    "level_db": -38.7,
+    "over_median_db": 0.3,
+    "centroid_hz": 283,
+    "flatness": 0.026
+   }
+  ],
+  "beds": [
+   {
+    "start_s": 50.0,
+    "end_s": 70.0,
+    "level_db": -39.1,
+    "spread_db": 1.4,
+    "centroid_hz": 236,
+    "flatness": 0.0142,
+    "seam_db": 1.5
+   },
+   {
+    "start_s": 6.0,
+    "end_s": 26.0,
+    "level_db": -38.9,
+    "spread_db": 1.7,
+    "centroid_hz": 256,
+    "flatness": 0.0221,
+    "seam_db": 1.2
+   },
+   {
+    "start_s": 30.0,
+    "end_s": 50.0,
+    "level_db": -38.7,
+    "spread_db": 2.0,
+    "centroid_hz": 264,
+    "flatness": 0.0223,
+    "seam_db": 0.6
+   }
+  ],
+  "dips": [
+   {
+    "at_s": 28.5,
+    "drop_db": 1.5
+   },
+   {
+    "at_s": 48.0,
+    "drop_db": 1.3
+   },
+   {
+    "at_s": 4.0,
+    "drop_db": 1.2
+   },
+   {
+    "at_s": 37.0,
+    "drop_db": 1.2
+   }
+  ]
+ }
+}

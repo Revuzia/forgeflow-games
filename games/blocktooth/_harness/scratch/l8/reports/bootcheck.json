@@ -1,0 +1,334 @@
+{
+  "url": "http://localhost:5258/?autostart=1&dev=1&titan=briarwick&biome=lockwater&seed=1",
+  "headless": false,
+  "titan": "briarwick",
+  "biome": "lockwater",
+  "seed": 1,
+  "bootS": 9.90563702583313,
+  "stateSlate": {
+    "screen": "slate",
+    "frozen": true,
+    "testFrozen": false,
+    "ending": false,
+    "fps": 14.5,
+    "draws": 136,
+    "tris": 700012,
+    "programs": 146,
+    "renderScale": 1,
+    "dynres": {
+      "intervalMs": 19.8,
+      "lastMissPct": -1,
+      "down": 0,
+      "up": 0
+    },
+    "v2": {
+      "ult": {
+        "charge": 0,
+        "phase": "idle",
+        "fired": 0,
+        "ready": false,
+        "r": 0,
+        "invulnT": 0
+      },
+      "objectives": [],
+      "powerups": [],
+      "power": {
+        "redLightT": 0,
+        "rushHourT": 0
+      },
+      "endless": null,
+      "tally": {
+        "ults": 0,
+        "objectives": {
+          "overloadSite": 0,
+          "reliefDepot": 0,
+          "recordsAnnex": 0
+        },
+        "powerups": {
+          "cleanup": 0,
+          "demolition": 0,
+          "redLight": 0,
+          "rushHour": 0,
+          "backPay": 0
+        },
+        "evolutions": 0,
+        "banishes": 0,
+        "locks": 0,
+        "rerolls": 0
+      },
+      "map": {
+        "overloadsDone": 0,
+        "reliefsDone": 0,
+        "annexesDone": 0
+      },
+      "meta": {
+        "unlocked": [],
+        "perk": null,
+        "palette": 0,
+        "reviveUsed": false
+      },
+      "cine": null,
+      "draft": {
+        "banishLeft": 2,
+        "lockLeft": 2,
+        "locked": null,
+        "banished": []
+      },
+      "profile": {
+        "done": [],
+        "newUnlocks": []
+      }
+    },
+    "v2dom": {
+      "barSlots": 0,
+      "barBadges": [],
+      "activeCdText": "",
+      "meterPct": 0,
+      "trackerRows": 0,
+      "markers": 0,
+      "toasts": 0
+    },
+    "titan": "briarwick",
+    "biome": "lockwater",
+    "seed": 1,
+    "t": 0,
+    "tick": 0,
+    "rank": 0,
+    "height": 1.2,
+    "level": 1,
+    "xp": 0,
+    "hp": 120,
+    "maxHp": 120,
+    "mass": 0,
+    "x": 135,
+    "z": 0,
+    "heading": 0,
+    "alive": true,
+    "abilityCd": 0,
+    "dashCharges": 1,
+    "enemies": 0,
+    "pickups": 0,
+    "floorsEaten": 0,
+    "buildingsLeveled": 0,
+    "propsEaten": 0,
+    "kills": 0,
+    "crushed": 0,
+    "drafts": {
+      "pending": 0,
+      "levelUps": 0,
+      "chests": 0,
+      "rerolls": 1,
+      "offer": null
+    },
+    "owned": {},
+    "boss": null,
+    "run": {
+      "phase": "intro",
+      "endT": -1,
+      "result": null,
+      "tonnage": 0,
+      "blocksLeveled": 0,
+      "peakRank": 0
+    }
+  },
+  "statePlay": {
+    "screen": "play",
+    "frozen": false,
+    "testFrozen": false,
+    "ending": false,
+    "fps": 47.4,
+    "draws": 153,
+    "tris": 730908,
+    "programs": 146,
+    "renderScale": 0.6,
+    "dynres": {
+      "intervalMs": 19.6,
+      "lastMissPct": 4.1,
+      "down": 2,
+      "up": 0
+    },
+    "v2": {
+      "ult": {
+        "charge": 12.638095238095213,
+        "phase": "idle",
+        "fired": 0,
+        "ready": false,
+        "r": 0,
+        "invulnT": 0
+      },
+      "objectives": [],
+      "powerups": [],
+      "power": {
+        "redLightT": 0,
+        "rushHourT": 0
+      },
+      "endless": null,
+      "tally": {
+        "ults": 0,
+        "objectives": {
+          "overloadSite": 0,
+          "reliefDepot": 0,
+          "recordsAnnex": 0
+        },
+        "powerups": {
+          "cleanup": 0,
+          "demolition": 0,
+          "redLight": 0,
+          "rushHour": 0,
+          "backPay": 0
+        },
+        "evolutions": 0,
+        "banishes": 0,
+        "locks": 0,
+        "rerolls": 0
+      },
+      "map": {
+        "overloadsDone": 0,
+        "reliefsDone": 0,
+        "annexesDone": 0
+      },
+      "meta": {
+        "unlocked": [],
+        "perk": null,
+        "palette": 0,
+        "reviveUsed": false
+      },
+      "cine": null,
+      "draft": {
+        "banishLeft": 2,
+        "lockLeft": 2,
+        "locked": null,
+        "banished": []
+      },
+      "profile": {
+        "done": [],
+        "newUnlocks": []
+      }
+    },
+    "v2dom": {
+      "barSlots": 0,
+      "barBadges": [],
+      "activeCdText": "READY",
+      "meterPct": 13,
+      "trackerRows": 0,
+      "markers": 0,
+      "toasts": 0
+    },
+    "titan": "briarwick",
+    "biome": "lockwater",
+    "seed": 1,
+    "t": 9.066666666666645,
+    "tick": 272,
+    "rank": 0,
+    "height": 1.2,
+    "level": 1,
+    "xp": 0,
+    "hp": 105.7142857142857,
+    "maxHp": 120,
+    "mass": 0,
+    "x": 135,
+    "z": 0,
+    "heading": 0,
+    "alive": true,
+    "abilityCd": 0,
+    "dashCharges": 1,
+    "enemies": 6,
+    "pickups": 0,
+    "floorsEaten": 0,
+    "buildingsLeveled": 0,
+    "propsEaten": 0,
+    "kills": 0,
+    "crushed": 0,
+    "drafts": {
+      "pending": 0,
+      "levelUps": 0,
+      "chests": 0,
+      "rerolls": 1,
+      "offer": null
+    },
+    "owned": {},
+    "boss": null,
+    "run": {
+      "phase": "waves",
+      "endT": -1,
+      "result": null,
+      "tonnage": 0,
+      "blocksLeveled": 0,
+      "peakRank": 0
+    }
+  },
+  "crosswalk": {
+    "ok": true,
+    "count": 724,
+    "source": "__BT__.world",
+    "titan": {
+      "x": 135,
+      "z": 0,
+      "heading": 0,
+      "height": 1.2,
+      "radius": 0.504
+    },
+    "spawn": {
+      "x": 135,
+      "z": 0,
+      "heading": 0
+    },
+    "nearest": {
+      "i": 183,
+      "x": 135,
+      "z": 0,
+      "axis": "z",
+      "len": 14,
+      "width": 4,
+      "primary": true,
+      "swapped": true,
+      "dist": 0
+    },
+    "headingAlongCrossing": 1,
+    "foodWithin8m": {
+      "car": 1,
+      "van": 1,
+      "kiosk": 1,
+      "hydrant": 1
+    }
+  },
+  "reachedPlay": true,
+  "framesAdvancing": true,
+  "simAdvancing": true,
+  "render": {
+    "fps": 47.4,
+    "draws": 153,
+    "tris": 730908,
+    "programs": 146,
+    "perf": {
+      "fps": 47.43083003952571,
+      "p50": 20,
+      "p99": 40.20000000000073,
+      "max": 140.09999999999854,
+      "simMs": 0.3925000000745058,
+      "simTickMs": 0.6280000001192093,
+      "samples": 240
+    },
+    "canvas": [
+      768,
+      432,
+      1280,
+      720
+    ],
+    "gpu": "ANGLE (Intel, Intel(R) UHD Graphics (0x00009A60) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "dpr": 1.0000000149011612
+  },
+  "diagnostics": {
+    "consoleErrors": [],
+    "shader": [],
+    "warnings": [],
+    "pageErrors": [],
+    "screenshotErrors": [],
+    "windowErrors": [],
+    "failedRequests": []
+  },
+  "fatal": null,
+  "overlays": {},
+  "verdict": "BOOTS CLEAN",
+  "problems": []
+}

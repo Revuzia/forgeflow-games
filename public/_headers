@@ -1,0 +1,5 @@
+# The in-game SDK (loaded from each game's own origin) fetches this file, so it
+# must be readable cross-origin.
+/ads-config.json
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=300

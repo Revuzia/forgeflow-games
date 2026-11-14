@@ -1,0 +1,210 @@
+{
+  "titan": "voltkite",
+  "biome": "whitestacks",
+  "seed": 4,
+  "url": "http://localhost:5258/?dev=1&seed=4",
+  "seconds": 120.0,
+  "menus": {
+    "steps": [
+      "title\u2192select",
+      "titan confirmed",
+      "biome confirmed (DROP IN)"
+    ],
+    "firstScreen": "title",
+    "titanNav": "detected (1 key presses)",
+    "biomeNav": "detected (1 key presses)",
+    "afterDrop": "slate",
+    "titan": "voltkite",
+    "biome": "whitestacks"
+  },
+  "eventPolls": 1366,
+  "finalState": {
+    "screen": "play",
+    "titan": "voltkite",
+    "biome": "whitestacks",
+    "seed": 761526964,
+    "t": 119.233,
+    "tick": 3577,
+    "rank": 0,
+    "height": 2.664,
+    "level": 6,
+    "xp": 58.604,
+    "hp": 90,
+    "maxHp": 90,
+    "mass": 88.868,
+    "x": -244.843,
+    "z": -6.448,
+    "heading": 13.352,
+    "enemies": 11,
+    "pickups": 0,
+    "floorsEaten": 2,
+    "buildingsLeveled": 2,
+    "propsEaten": 103,
+    "kills": 40,
+    "crushed": 0,
+    "drafts": {
+      "pending": 0,
+      "levelUps": 0,
+      "chests": 0,
+      "rerolls": 1,
+      "offer": null
+    },
+    "owned": {
+      "wrecking_permit": 1,
+      "vk_extra_outlet": 1,
+      "vk_fuse_box": 1,
+      "night_shift_nurse": 1,
+      "jaywalkers_rhythm": 1
+    },
+    "boss": null,
+    "run": {
+      "phase": "waves",
+      "endT": -1,
+      "result": null,
+      "tonnage": 384,
+      "blocksLeveled": 0,
+      "peakRank": 0
+    },
+    "fps": 40,
+    "draws": 188,
+    "tris": 918113,
+    "programs": 144
+  },
+  "pass": true,
+  "fatal": null,
+  "zoom": {
+    "ok": true,
+    "detail": "wheel out \u00d76: zoom 2.00 (D 67.9 / auto 33.9) \u00b7 '=' held: zoom 0.55 \u00b7 Z: zoom 1.000 target 1.000"
+  },
+  "metrics": {
+    "moved": 832.118615516805,
+    "propsEaten0": 1,
+    "floorsEaten0": 0,
+    "props": 102,
+    "floors": 2,
+    "level": 6,
+    "rank": 0,
+    "draftsTaken": 5,
+    "draftsFailed": 0,
+    "spacePresses": 71,
+    "shiftPresses": 24,
+    "hookConfirmedByCd": 71,
+    "dashConfirmedByCharges": 24,
+    "hpLost": 26.816666666666677,
+    "pauses": 0,
+    "end": null,
+    "stuckDetours": 2,
+    "worldExposed": true,
+    "maxEnemies": 17
+  },
+  "events": {
+    "waveStart": 17,
+    "enemySpawn": 51,
+    "alert": 3,
+    "propDestroyed": 103,
+    "arc": 106,
+    "titanAttack": 106,
+    "ability": 71,
+    "explosion": 47,
+    "dash": 24,
+    "enemyFire": 56,
+    "footstep": 488,
+    "pickup": 193,
+    "wireDetonate": 24,
+    "enemyHit": 43,
+    "enemyKilled": 40,
+    "titanHurt": 10,
+    "projectileHit": 16,
+    "levelUp": 5,
+    "smash": 11,
+    "objectiveSpawn": 3,
+    "bump": 8,
+    "objectiveDone": 1,
+    "powerupSpawn": 1,
+    "powerup": 1,
+    "ultCharged": 1,
+    "objectiveExpire": 2,
+    "floorBreak": 2,
+    "buildingCollapse": 2,
+    "titanHeal": 2,
+    "upgradeProc": 5
+  },
+  "checks": [
+    [
+      "menus navigated by keys to voltkite + whitestacks",
+      true
+    ],
+    [
+      "slate dismissed by a real key",
+      true
+    ],
+    [
+      "moved > 20 m (832.1 m)",
+      true
+    ],
+    [
+      "ate props/floors \u2265 3 (props 102, floors 2)",
+      true
+    ],
+    [
+      "levelled up (LV 6)",
+      true
+    ],
+    [
+      "draft taken with 1/2/3, owned grew (5 taken, 0 failed)",
+      true
+    ],
+    [
+      "Space \u2192 hook effect (71 hook events, 71 cd-confirmed, 71 presses)",
+      true
+    ],
+    [
+      "Shift \u2192 dash effect (24 dash events, 24 charge-confirmed, 24 presses)",
+      true
+    ],
+    [
+      "0 console/page/window errors, 0 shader diagnostics, 0 failed requests",
+      true
+    ],
+    [
+      "camera zoom by real wheel / '=' / Z (wheel out \u00d76: zoom 2.00 (D 67.9 / auto 33.9) \u00b7 '=' held: zoom 0.55 \u00b7 Z: zoom 1.000 target 1.000)",
+      true
+    ]
+  ],
+  "shots": [
+    "_harness/scratch/l8/play\\playtest\\voltkite_whitestacks_title.png",
+    "_harness/scratch/l8/play\\playtest\\voltkite_whitestacks_select_titan.png",
+    "_harness/scratch/l8/play\\playtest\\voltkite_whitestacks_select_biome.png",
+    "_harness/scratch/l8/play\\playtest\\voltkite_whitestacks_slate.png",
+    "_harness/scratch/l8/play\\playtest\\voltkite_whitestacks_00.png",
+    "_harness/scratch/l8/play\\playtest\\voltkite_whitestacks_01.png",
+    "_harness/scratch/l8/play\\playtest\\voltkite_whitestacks_02.png",
+    "_harness/scratch/l8/play\\playtest\\voltkite_whitestacks_03.png",
+    "_harness/scratch/l8/play\\playtest\\voltkite_whitestacks_04.png",
+    "_harness/scratch/l8/play\\playtest\\voltkite_whitestacks_05.png",
+    "_harness/scratch/l8/play\\playtest\\voltkite_whitestacks_06.png",
+    "_harness/scratch/l8/play\\playtest\\voltkite_whitestacks_07.png"
+  ],
+  "diagnostics": {
+    "consoleErrors": [],
+    "shader": [],
+    "warnings": [],
+    "pageErrors": [],
+    "screenshotErrors": [],
+    "windowErrors": [],
+    "failedRequests": []
+  },
+  "log": [
+    "[voltkite/whitestacks] open http://localhost:5258/?dev=1&seed=4",
+    "[voltkite/whitestacks]     ArrowRight \u2192 focus VOLT-KITE",
+    "[voltkite/whitestacks]     ArrowRight \u2192 focus WHITE STACKS",
+    "[voltkite/whitestacks] menus: OK {\"steps\": [\"title\\u2192select\", \"titan confirmed\", \"biome confirmed (DROP IN)\"], \"firstScreen\": \"title\", \"titanNav\": \"detected (1 key presses)\", \"biomeNav\": \"detected (1 key presses)\", \"afterDrop\": \"slate\", \"titan\": \"voltkite\", \"biome\": \"whitestacks\"}",
+    "[voltkite/whitestacks] slate dismissed by Enter: True (screen=play)",
+    "[voltkite/whitestacks] zoom check: wheel out \u00d76: zoom 2.00 (D 67.9 / auto 33.9) \u00b7 '=' held: zoom 0.55 \u00b7 Z: zoom 1.000 target 1.000 \u2192 OK",
+    "[voltkite/whitestacks] draft #1: pressed Digit1 on offer ['wrecking_permit', 'vk_fuse_box', 'vk_jumper_cables'] \u2192 owned 0\u21921 (screen play)",
+    "[voltkite/whitestacks] draft #2: pressed Digit2 on offer ['substation_hum', 'vk_extra_outlet', 'storm_cellar'] \u2192 owned 1\u21922 (screen play)",
+    "[voltkite/whitestacks] draft #3: pressed Digit3 on offer ['pothole_report', 'noise_ordinance', 'vk_fuse_box'] \u2192 owned 2\u21923 (screen play)",
+    "[voltkite/whitestacks] draft #4: pressed Digit1 on offer ['night_shift_nurse', 'long_crosswalk', 'peak_commute'] \u2192 owned 3\u21924 (screen play)",
+    "[voltkite/whitestacks] draft #5: pressed Digit2 on offer ['emergency_exit_plan', 'jaywalkers_rhythm', 'glass_ceiling'] \u2192 owned 4\u21925 (screen play)"
+  ]
+}

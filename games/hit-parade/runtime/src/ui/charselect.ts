@@ -1,0 +1,747 @@
+// HIT PARADE - CHARACTER SELECT (lane UI; CONTRACT section 8).
+//
+// Grid: RANDOM (first column, both rows) + the playable roster in two rows + the bosses (THE FREAK over RICKY MARQUEE) in
+// the last column. Bosses are LOCKED until a Season clear (save.unlocks); a locked slot can be hovered, never picked.
+// Centre: the 3D Showcase region (VIEW's Showcase draws the hovered fighter there; showcaseRect() reports the CSS rect).
+// Sides: P1 / P2 cards - name, persona, archetype, difficulty stars, HP, colour swatches, SIMPLE / CLASSIC pick.
+//
+// Each player steps FIGHTER -> COLOR -> CONTROLS -> READY (a CPU or training dummy skips CONTROLS). ESC / pad B steps back;
+// on the first step it leaves the screen. Picking is sequential (P1, then P2 / the CPU pick / the dummy pick) with the
+// keyboard or one pad; with two pads in a 2P versus both pick at once (pad 0 = P1, pad 1 = P2). Mirror matches bump the
+// second pick's colour. Online is blind: the opponent's side shows nothing until the net layer reports both locked.
+//
+// CHANGED(wf7 touch) VO-D1 (verifier: a touch-only player was stuck at PICK A COLOR - the swatches were spans with no
+// handler, a tap on the picked slot re-opened the fighter pick, and COLOR -> CONTROLS -> READY advanced only on a key /
+// pad 'confirm'): the whole flow is completable by taps / clicks alone, every target >= 44 px in touch mode.
+//   * slot: FIGHTER step -> pick it; COLOR / CONTROLS step -> a tap on the PICKED fighter's slot confirms the step, a tap on
+//     another unlocked slot re-picks (a locked slot only flashes its note and keeps the pick);
+//   * colour swatches are buttons: a tap selects that colour, a tap on the selected one confirms it;
+//   * SIMPLE / CLASSIC: a tap selects, a tap on the selected one locks in;
+//   * the active card's action row: BACK (one step back for that player - from the CPU / P2 FIGHTER step back into P1's
+//     last step) + NEXT / LOCK IN (= the 'confirm' act of the step); hidden once every pick is in (and online once locked);
+//   * the header BACK steps back like Esc / pad B (Menus passes it to back()); on P1's FIGHTER step it leaves the screen.
+// done() fires only if every pick is still in after the 380 ms sting (a BACK inside it cancels the start).
+// CHANGED(ui) (CONTRACT §36.3 / §36.4 + the OWNER CLARIFICATION): the CONTROLS step offers EASY (recommended, the keyboard
+// default) / SIMPLE / CLASSIC with a one-line explanation each (`hpm-cs-scheme-p<n>-<2|0|1>`; left / right cycle EASY ->
+// SIMPLE -> CLASSIC), and every human player's card carries a MOVES panel for the highlighted fighter: the fighter's plan
+// line, then - EASY on a keyboard - the attack hand drawn as keys (J K L + U I O P + H Y, labelled with the fighter's own
+// move names), SIMPLE / CLASSIC - the specials + supers as rows of the player's keys + directions, touch - the PAD's discs;
+// the unique mechanic's plain note last. Keys come from hooks.labels / hooks.keys (the live settings).
+// CHANGED(wf8 fix) FT-08 (owner: "special moves notes ... per character ... when choosing them"): under the keys a SPOTLIGHT
+// line names one move at a time - its key, full name and plain note (`hpm-cs-spot-p<n>`, the matching key lit on the map) -
+// stepping through SPECIAL 1-4, SUPER and PRIME TIME every 2.6 s; pointing at (or tapping) a key on the map spotlights that
+// move at once. Before, the panel showed key + name only ("O KICK" for BICYCLE KICK; "uppercut" nowhere for ENCORE).
+// FT-09: on the COLOR / CONTROLS / LOCKED IN steps the plan line steps aside so the swatches / scheme row never clip the keys,
+// and the READY! stamp sits on the card's header instead of the keys.
+
+import type { Rect, Scheme, UiGameData, UiSave } from './types.ts';
+import type { KeyBindings } from '../input.ts';
+import { btn, div, el, svg, ICON, setText, pulse, touchModeOn } from './dom.ts';
+import { fighterKit, type Labels, type SchemeN } from './controls.ts';
+import { drawKeyboard, moveRows } from './keymap.ts';
+import { archetypeLabel, colorsOf, difficulty, fighter, fighterIds, fillPortrait, hasAssets, isBoss, isUnlocked, BOSSES } from './data.ts';
+import { t } from './strings.ts';
+
+export type CsMode = 'season' | 'versus' | 'training' | 'online';
+export type CsOpponent = 'human' | 'cpu' | 'dummy' | 'none';
+export type CsAct = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back';
+type Step = 'fighter' | 'color' | 'scheme' | 'ready' | 'wait';
+
+export interface CsPick { fighter: string; color: number; scheme: Scheme }
+/** CHANGED(wf8 fix) FT-08: one spotlight entry - the action (its key on the map), the key cap, full name, plain note */
+interface SpotItem { action: string; cap: string; name: string; note: string }
+const SPOT_MS = 2600;
+export interface CsResult { p1: CsPick; p2: CsPick | null }
+
+interface Slot { id: string; col: number; row: number; span: number; el: HTMLButtonElement; locked: boolean }
+interface PState {
+  kind: 'human' | 'cpu' | 'dummy' | 'none';
+  cursor: number; step: Step; fighter: string | null; color: number; scheme: Scheme;
+}
+interface SideEl {
+  root: HTMLElement; tag: HTMLElement; step: HTMLElement; name: HTMLElement; persona: HTMLElement; arch: HTMLElement;
+  stars: HTMLElement; hp: HTMLElement; colors: HTMLElement; schemeBox: HTMLElement; schemeBtns: Map<Scheme, HTMLButtonElement>;
+  /** CHANGED(ui): the MOVES panel (plan, keys / rows, unique note) + its rebuild key */
+  moves: HTMLElement; movesKey: string;
+  /** CHANGED(wf8 fix) FT-08: the spotlight line, its moves, the one shown, hover hold-until (ms) */
+  spot: HTMLElement | null; spotItems: SpotItem[]; spotIdx: number; spotHold: number;
+  portrait: HTMLElement; ready: HTMLElement;
+  /** CHANGED(wf7 touch) VO-D1: swatch buttons (rebuilt only when the fighter / colour count changes), the name chip, the action row */
+  swatches: HTMLButtonElement[]; swKey: string; swName: HTMLElement;
+  acts: HTMLElement; undo: HTMLButtonElement; ok: HTMLButtonElement;
+}
+
+export interface CsHooks {
+  done(r: CsResult): void;
+  back(): void;
+  /** the fighter the showcase should show changed (active picker's cursor or pick) */
+  show(fighterId: string | null, color: number, pose: 'idle' | 'intro' | 'win'): void;
+  sound(cue: 'move' | 'select' | 'back' | 'error' | 'start'): void;
+  /** the scheme a human player last used (settings.controls[p].scheme) */
+  defaultScheme(p: 0 | 1): Scheme;
+  /** CHANGED(ui): a player's live key caps / key map (the MOVES panel); absent = the panel shows names only */
+  labels?(p: 0 | 1): Labels;
+  keys?(p: 0 | 1): KeyBindings;
+}
+/** CHANGED(ui): the CONTROLS step's order (left / right cycle) */
+const SCHEMES: readonly Scheme[] = [2, 0, 1];
+const SCHEME_NAME: Readonly<Record<number, string>> = { 2: 'easy', 0: 'simple', 1: 'classic' };
+
+export class CharSelect {
+  readonly root: HTMLElement;
+  private readonly data: UiGameData;
+  private readonly hooks: CsHooks;
+  private readonly grid: HTMLElement;
+  private readonly stage: HTMLElement;
+  private readonly stageName: HTMLElement;
+  private readonly banner: HTMLElement;
+  private readonly note: HTMLElement;
+  private readonly sides: [SideEl, SideEl];
+  private slots: Slot[] = [];
+  private cells = new Map<string, number>();
+  private p: [PState, PState] = [this.blank('human'), this.blank('none')];
+  private mode: CsMode = 'versus';
+  private simultaneous = false;
+  private blindReveal = false;
+  private save: UiSave = {};
+  private lastShown = '';
+  private online = { opponent: '', locked: false, secondsLeft: 0 };
+
+  constructor(screen: HTMLElement, data: UiGameData, hooks: CsHooks) {
+    this.data = data;
+    this.hooks = hooks;
+    this.root = div('hpm-cs', screen);
+    this.banner = div('hpm-cs-banner', this.root, '');
+    const mid = div('hpm-cs-mid', this.root);
+    const s1 = this.mkSide(0);
+    this.stage = div('hpm-cs-stage', mid);
+    this.stage.id = 'hpm-showcase';
+    this.stage.setAttribute('aria-hidden', 'true');
+    this.stageName = div('hpm-cs-stagename', this.stage, '');
+    const s2 = this.mkSide(1);
+    mid.prepend(s1.root);
+    mid.append(s2.root);
+    this.sides = [s1, s2];
+    this.grid = div('hpm-cs-grid', this.root);
+    this.grid.setAttribute('role', 'listbox');
+    this.note = div('hpm-cs-note', this.root, '');
+    this.note.setAttribute('role', 'status');
+    // CHANGED(wf8 fix) FT-08: the MOVES spotlight steps through the moves while the screen shows
+    window.setInterval(() => this.spotTick(), SPOT_MS);
+  }
+
+  /** CHANGED(wf8 fix) FT-08: next spotlight entry on every shown card (a pointed-at key holds its entry a while) */
+  private spotTick(): void {
+    if (!this.root.isConnected || this.root.offsetParent === null) return;
+    const now = performance.now();
+    for (const S of this.sides) {
+      if (!S.spot || S.spotItems.length < 2 || now < S.spotHold || S.root.hidden || S.moves.hidden) continue;
+      this.paintSpot(S, (S.spotIdx + 1) % S.spotItems.length);
+    }
+  }
+
+  private paintSpot(S: SideEl, k: number): void {
+    const box = S.spot;
+    const it = S.spotItems[k];
+    if (!box || !it) return;
+    S.spotIdx = k;
+    box.replaceChildren();
+    if (it.cap) box.append(el('kbd', 'hpk-cap k-special', it.cap));
+    box.append(el('b', '', it.name), document.createTextNode(it.note));
+    box.dataset.action = it.action;
+    for (const kk of S.moves.querySelectorAll<HTMLElement>('.hpk-key.spotlit')) kk.classList.remove('spotlit');
+    for (const kk of S.moves.querySelectorAll<HTMLElement>('.hpk-key[data-actions]')) if ((kk.dataset.actions ?? '').split(' ').includes(it.action)) kk.classList.add('spotlit');
+  }
+
+  private blank(kind: PState['kind']): PState { return { kind, cursor: 0, step: 'fighter', fighter: null, color: 0, scheme: 2 }; }
+
+  private mkSide(i: 0 | 1): SideEl {
+    const root = el('div', `hpm-cs-side p${i + 1}`);
+    const head = div('hpm-cs-head', root);
+    const tag = el('span', 'tag', i === 0 ? t('cs.p1') : t('cs.p2'));
+    const step = el('span', 'step', '');
+    head.append(tag, step);
+    const portrait = div('hp-portrait hpm-cs-portrait', root);
+    const name = div('hpm-cs-name', root, '');
+    const persona = div('hpm-cs-persona', root, '');
+    const facts = div('hpm-cs-facts', root);
+    const arch = el('span', 'arch', '');
+    const stars = el('span', 'stars');
+    const hp = el('span', 'hp', '');
+    facts.append(arch, stars, hp);
+    // CHANGED(ui) (CONTRACT §36.3): the MOVES panel for the highlighted fighter
+    const moves = div('hpm-cs-moves', root);
+    moves.id = `hpm-cs-moves-p${i + 1}`;
+    // CHANGED(wf8 fix) FT-08: pointing at a key on the map (or tapping it) spotlights its move at once, held 6 s
+    const pick = (e: Event): void => {
+      const S = this.sides?.[i];
+      const key = (e.target as HTMLElement | null)?.closest<HTMLElement>('.hpk-key[data-actions]');
+      if (!S || !key) return;
+      const acts = (key.dataset.actions ?? '').split(' ');
+      const k = S.spotItems.findIndex((x) => acts.includes(x.action));
+      if (k < 0) return;
+      S.spotHold = performance.now() + 6000;
+      if (k !== S.spotIdx) this.paintSpot(S, k);
+    };
+    moves.addEventListener('pointerover', pick);
+    moves.addEventListener('click', pick);
+    const colors = div('hpm-cs-colors', root);
+    const swName = el('span', 'swname', '');
+    const schemeBox = div('hpm-cs-scheme hpm-schemes', root);
+    const schemeBtns = new Map<Scheme, HTMLButtonElement>();
+    for (const s of SCHEMES) {
+      const b = btn('hpm-segbtn', '', false);
+      b.id = `hpm-cs-scheme-p${i + 1}-${s}`;
+      // CHANGED(ui): EASY / SIMPLE / CLASSIC, each with its one-line explanation (EASY first: the recommended default)
+      b.append(el('b', '', t(`cs.${SCHEME_NAME[s]}`)), el('small', '', t(`cs.${SCHEME_NAME[s]}.sub`)));
+      // CHANGED(wf7 touch) VO-D1: a tap selects; a tap on the selected scheme locks in (READY was key / pad only)
+      b.addEventListener('click', () => this.tapScheme(i, s));
+      schemeBox.append(b);
+      schemeBtns.set(s, b);
+    }
+    // CHANGED(wf7 touch) VO-D1: the card's action row - BACK one step / NEXT or LOCK IN (= the step's confirm)
+    const acts = div('hpm-cs-acts', root);
+    const undo = btn('hpm-small hpm-cs-undo', '', false);
+    undo.id = `hpm-cs-back-p${i + 1}`;
+    undo.append(svg(ICON.back), el('span', '', t('cs.stepBack')));
+    // the tapped button keeps :focus (the yellow focus look) after its label changes - drop it (no keyboard nav here)
+    undo.addEventListener('click', () => { undo.blur(); this.tapAct(i, 'back'); });
+    const ok = btn('hpm-small hot hpm-cs-ok', '', false);
+    ok.id = `hpm-cs-ok-p${i + 1}`;
+    ok.addEventListener('click', () => { ok.blur(); this.tapAct(i, 'confirm'); });
+    acts.append(undo, ok);
+    const ready = div('hpm-cs-ready', root, t('cs.ready'));
+    return { root, tag, step, name, persona, arch, stars, hp, colors, schemeBox, schemeBtns, moves, movesKey: '', spot: null, spotItems: [], spotIdx: 0, spotHold: 0, portrait, ready, swatches: [], swKey: '', swName, acts, undo, ok };
+  }
+
+  /** CHANGED(wf7 touch) VO-D1: may player i be driven by its card's buttons right now? (the active picker; both with two pads) */
+  private canDrive(i: 0 | 1): boolean {
+    const st = this.p[i];
+    if (st.kind === 'none' || st.step === 'wait') return false;
+    if (this.mode === 'online' && i === 1) return false;
+    return this.simultaneous || this.activePlayer() === i;
+  }
+
+  private allIn(): boolean { return this.p.every((p) => p.kind === 'none' || p.step === 'ready'); }
+
+  /** CHANGED(wf7 touch) VO-D1: the action row (BACK / NEXT / LOCK IN) of player i's card */
+  private tapAct(i: 0 | 1, act: 'back' | 'confirm'): void {
+    if (!this.canDrive(i) || this.allIn()) return;
+    if (act === 'confirm' && this.p[i].step === 'fighter') return;          // a fighter is picked by tapping its slot
+    this.input(i, act);
+  }
+
+  /** CHANGED(wf7 touch) VO-D1: a colour swatch on player i's card: select it; the selected one again = confirm the colour */
+  private tapSwatch(i: 0 | 1, k: number): void {
+    const st = this.p[i];
+    if (!this.canDrive(i) || (st.step !== 'color' && st.step !== 'scheme')) return;
+    if (st.step === 'color' && k === st.color) { this.input(i, 'confirm'); return; }
+    if (k === st.color) return;
+    st.color = k;
+    this.hooks.sound('move');
+    this.render();
+    this.showActive();
+  }
+
+  /** CHANGED(wf7 touch) VO-D1: SIMPLE / CLASSIC on player i's card: select it; the selected one again = lock in */
+  private tapScheme(i: 0 | 1, s: Scheme): void {
+    const st = this.p[i];
+    if (!this.canDrive(i) || st.step !== 'scheme') return;
+    if (s === st.scheme) { this.input(i, 'confirm'); return; }
+    st.scheme = s;
+    this.hooks.sound('move');
+    this.render();
+  }
+
+  // ─────────────────────────── setup ───────────────────────────
+  open(mode: CsMode, opponent: CsOpponent, save: UiSave, o: { pads?: number; preset?: Partial<CsResult> } = {}): void {
+    this.mode = mode;
+    this.save = save;
+    this.blindReveal = false;
+    if (mode !== 'online') this.online = { opponent: '', locked: false, secondsLeft: 0 };
+    else this.online.locked = false;
+    this.buildGrid();
+    const p2kind: PState['kind'] = mode === 'season' || mode === 'online' ? 'none' : opponent === 'human' ? 'human' : opponent === 'dummy' ? 'dummy' : 'cpu';
+    this.p = [this.blank('human'), this.blank(p2kind)];
+    this.p[0].scheme = this.hooks.defaultScheme(0);
+    this.p[1].scheme = this.hooks.defaultScheme(1);
+    const first = this.slots.findIndex((s) => s.id !== 'random');
+    this.p[0].cursor = Math.max(0, first);
+    this.p[1].cursor = Math.max(0, this.slots.findIndex((s, k) => k > first && s.id !== 'random' && !isBoss(s.id)));
+    if (o.preset?.p1) this.applyPreset(0, o.preset.p1);
+    if (o.preset?.p2) this.applyPreset(1, o.preset.p2);
+    this.simultaneous = p2kind === 'human' && (o.pads ?? 0) >= 2;
+    if (p2kind !== 'none' && !this.simultaneous) this.p[1].step = 'wait';
+    this.root.dataset.mode = mode;
+    this.root.dataset.p2 = p2kind;
+    setText(this.banner, mode === 'online' ? t('cs.blind') : '');
+    this.banner.hidden = mode !== 'online';
+    this.flashNote('');
+    this.render();
+    this.showActive();
+  }
+
+  private applyPreset(i: 0 | 1, pk: CsPick): void {
+    const k = this.slots.findIndex((s) => s.id === pk.fighter);
+    if (k >= 0) this.p[i].cursor = k;
+    this.p[i].color = pk.color;
+    this.p[i].scheme = pk.scheme;
+  }
+
+  private buildGrid(): void {
+    const ids = fighterIds(this.data);
+    const regular = ids.filter((id) => !isBoss(id));
+    const bosses = ids.filter((id) => isBoss(id)).sort((a, b) => (BOSSES[a] === 'miniboss' ? -1 : 1) - (BOSSES[b] === 'miniboss' ? -1 : 1));
+    const perRow = Math.max(1, Math.ceil(regular.length / 2));
+    this.slots = [];
+    this.cells.clear();
+    this.grid.replaceChildren();
+    const add = (id: string, col: number, row: number, span: number): void => {
+      const soon = id !== 'random' && !hasAssets(this.data, id);              // CHANGED(integrator): no baked assets yet
+      const locked = soon || (id !== 'random' && !isUnlocked(this.save, id));
+      const b = btn('hpm-slot', '', false);
+      b.dataset.id = id;
+      b.id = `hpm-slot-${id}`;
+      b.setAttribute('role', 'option');
+      b.style.gridColumn = String(col + 1);
+      b.style.gridRow = span > 1 ? `${row + 1} / span ${span}` : String(row + 1);
+      const pic = div('hp-portrait', b);
+      fillPortrait(pic, this.data, id);
+      const nm = el('span', 'nm', id === 'random' ? t('cs.random') : (fighter(this.data, id)?.name ?? id.toUpperCase()));
+      b.append(nm);
+      if (isBoss(id)) b.append(el('span', 'boss', BOSSES[id] === 'boss' ? t('cs.boss') : t('cs.miniboss')));
+      if (soon) { b.classList.add('locked', 'soon'); b.append(el('span', 'soon', t('cs.soon'))); b.title = t('cs.soonHint'); }
+      else if (locked) { b.classList.add('locked'); b.append(svg(ICON.lock, 'lock')); b.title = t('cs.lockedHint'); }
+      b.append(el('i', 'cur c1', t('cs.p1')), el('i', 'cur c2', t('cs.p2')));
+      const idx = this.slots.length;
+      b.addEventListener('click', () => this.onClick(idx));
+      b.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') this.onHover(idx); });
+      this.grid.append(b);
+      this.slots.push({ id, col, row, span, el: b, locked });
+      for (let r = row; r < row + span; r++) this.cells.set(`${col},${r}`, idx);
+    };
+    add('random', 0, 0, 2);
+    regular.forEach((id, k) => add(id, 1 + (k % perRow), Math.floor(k / perRow), 1));
+    bosses.slice(0, 2).forEach((id, k) => add(id, 1 + perRow, k, 1));
+    this.grid.style.setProperty('--cols', String(2 + perRow));
+  }
+
+  // ─────────────────────────── input ───────────────────────────
+  /** the player the keyboard (or a single pad) drives right now */
+  activePlayer(): 0 | 1 {
+    if (this.simultaneous) return 0;
+    const p1 = this.p[0];
+    if (p1.step !== 'ready') return 0;
+    return this.p[1].kind === 'none' ? 0 : 1;
+  }
+
+  input(who: 0 | 1 | 'active', act: CsAct): void {
+    const i: 0 | 1 = who === 'active' ? this.activePlayer() : who;
+    const st = this.p[i];
+    if (st.kind === 'none' || st.step === 'wait') return;
+    switch (st.step) {
+      case 'fighter':
+        if (act === 'confirm') this.pickFighter(i);
+        else if (act === 'back') this.backFrom(i);
+        else this.moveCursor(i, act);
+        break;
+      case 'color': {
+        const n = colorsOf(fighter(this.data, st.fighter ?? '')).length;
+        if (act === 'left' || act === 'up') { st.color = (st.color + n - 1) % n; this.hooks.sound('move'); }
+        else if (act === 'right' || act === 'down') { st.color = (st.color + 1) % n; this.hooks.sound('move'); }
+        else if (act === 'confirm') { st.step = st.kind === 'human' ? 'scheme' : 'ready'; this.hooks.sound('select'); if (st.step === 'ready') this.onReady(i); }
+        else if (act === 'back') { st.step = 'fighter'; st.fighter = null; this.hooks.sound('back'); }
+        break;
+      }
+      case 'scheme':
+        // CHANGED(ui): EASY -> SIMPLE -> CLASSIC (right / down), the other way left / up
+        if (act === 'left' || act === 'right' || act === 'up' || act === 'down') {
+          const k = SCHEMES.indexOf(st.scheme);
+          st.scheme = SCHEMES[(Math.max(0, k) + (act === 'right' || act === 'down' ? 1 : SCHEMES.length - 1)) % SCHEMES.length];
+          this.hooks.sound('move');
+        }
+        else if (act === 'confirm') { st.step = 'ready'; this.hooks.sound('select'); this.onReady(i); }
+        else if (act === 'back') { st.step = 'color'; this.hooks.sound('back'); }
+        break;
+      case 'ready':
+        if (act === 'back') { st.step = st.kind === 'human' ? 'scheme' : 'color'; this.hooks.sound('back'); if (!this.simultaneous && i === 0 && this.p[1].kind !== 'none') this.p[1].step = 'wait'; }
+        break;
+      default: break;
+    }
+    this.render();
+    this.showActive();
+  }
+
+  private backFrom(i: 0 | 1): void {
+    if (i === 1 && !this.simultaneous) {
+      // the second pick steps back into P1's last step
+      this.p[1].step = 'wait';
+      this.p[0].step = this.p[0].kind === 'human' ? 'scheme' : 'color';
+      this.hooks.sound('back');
+      return;
+    }
+    this.hooks.sound('back');
+    this.hooks.back();
+  }
+
+  private moveCursor(i: 0 | 1, act: CsAct): void {
+    const st = this.p[i];
+    const s = this.slots[st.cursor];
+    if (!s) return;
+    let col = s.col, row = s.row;
+    const cols = Math.max(...this.slots.map((x) => x.col)) + 1;
+    if (act === 'left') col = (col - 1 + cols) % cols;
+    else if (act === 'right') col = (col + 1) % cols;
+    else if (act === 'up') row = row === 0 ? 1 : 0;
+    else if (act === 'down') row = row === 1 ? 0 : 1;
+    let k = this.cells.get(`${col},${row}`);
+    if (k === undefined) k = this.cells.get(`${col},0`);
+    if (k === undefined || k === st.cursor) {
+      if (act === 'up' || act === 'down') return;
+      // a hole in the grid: keep going the same way
+      for (let step = 0; step < cols && k === undefined; step++) {
+        col = act === 'left' ? (col - 1 + cols) % cols : (col + 1) % cols;
+        k = this.cells.get(`${col},${row}`) ?? this.cells.get(`${col},0`);
+      }
+      if (k === undefined) return;
+    }
+    st.cursor = k;
+    this.hooks.sound('move');
+  }
+
+  private pickFighter(i: 0 | 1): void {
+    const st = this.p[i];
+    const s = this.slots[st.cursor];
+    if (!s) return;
+    if (s.locked) { this.hooks.sound('error'); this.flashNote(t(s.el.classList.contains('soon') ? 'cs.soonHint' : 'cs.lockedHint')); pulse(s.el, [{ transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' }, { transform: 'none' }], 180); return; }
+    let id = s.id;
+    if (id === 'random') {
+      const pool = this.slots.filter((x) => x.id !== 'random' && !x.locked && !isBoss(x.id)).map((x) => x.id);
+      id = pool[Math.floor(Math.random() * pool.length)] ?? pool[0];
+    }
+    st.fighter = id;
+    const other = this.p[1 - i];
+    const n = colorsOf(fighter(this.data, id)).length;
+    st.color = 0;
+    if (other.fighter === id && other.color === 0 && n > 1) st.color = 1;          // mirror match: never the same colours
+    st.step = 'color';
+    this.hooks.sound('select');
+  }
+
+  private onReady(i: 0 | 1): void {
+    const st = this.p[i];
+    this.hooks.show(st.fighter, st.color, 'win');
+    if (!this.simultaneous && i === 0 && this.p[1].kind !== 'none' && this.p[1].step === 'wait') {
+      this.p[1].step = 'fighter';
+      if (this.p[1].kind === 'cpu') this.flashNote(t('cs.pickCpu'));
+      else if (this.p[1].kind === 'dummy') this.flashNote(t('cs.pickDummy'));
+    }
+    const allReady = this.allIn();
+    if (allReady) {
+      this.hooks.sound('start');
+      const pick = (p: PState): CsPick => ({ fighter: p.fighter ?? 'johnny', color: p.color, scheme: p.scheme });
+      const r: CsResult = { p1: pick(this.p[0]), p2: this.p[1].kind === 'none' ? null : pick(this.p[1]) };
+      const gen = this.p;
+      // CHANGED(wf7 touch) VO-D1: only if every pick is still in (a BACK tap inside the sting, or a re-open, cancels it)
+      window.setTimeout(() => { if (this.p === gen && this.allIn()) this.hooks.done(r); }, 380);
+    }
+  }
+
+  private onClick(idx: number): void {
+    const i = this.activePlayer();
+    const st = this.p[i];
+    if (st.kind === 'none' || st.step === 'wait' || this.allIn()) return;
+    const slot = this.slots[idx];
+    if (!slot) return;
+    if (st.step !== 'fighter') {
+      if (st.step !== 'color' && st.step !== 'scheme') return;
+      // CHANGED(wf7 touch) VO-D1: a tap on the PICKED fighter's slot confirms the colour / controls step (it re-opened the
+      // fighter pick -> 'color' again, a loop a touch player could never leave); another slot re-picks (RANDOM re-rolls),
+      // a locked one only flashes its note and keeps the pick
+      if (slot.id === st.fighter) { this.input(i, 'confirm'); return; }
+      if (slot.locked) {
+        const keep = st.cursor;
+        st.cursor = idx;
+        this.pickFighter(i);
+        st.cursor = keep;
+        return;
+      }
+      st.step = 'fighter';
+      st.fighter = null;
+    }
+    st.cursor = idx;
+    this.pickFighter(i);
+    this.render();
+    this.showActive();
+  }
+
+  private onHover(idx: number): void {
+    const i = this.activePlayer();
+    const st = this.p[i];
+    if (st.step !== 'fighter' || st.cursor === idx) return;
+    st.cursor = idx;
+    this.hooks.sound('move');
+    this.render();
+    this.showActive();
+  }
+
+  /** the net layer revealed the opponent's pick (online blind select) */
+  reveal(p2: CsPick): void {
+    this.blindReveal = true;
+    this.p[1] = { kind: 'human', cursor: Math.max(0, this.slots.findIndex((s) => s.id === p2.fighter)), step: 'ready', fighter: p2.fighter, color: p2.color, scheme: p2.scheme };
+    this.render();
+  }
+
+  private flashNote(s: string): void { setText(this.note, s); this.note.classList.toggle('on', !!s); }
+
+  private showActive(): void {
+    const i = this.activePlayer();
+    const st = this.p[i];
+    const id = st.fighter ?? this.slots[st.cursor]?.id ?? null;
+    const shown = id === 'random' ? null : id;
+    const key = `${shown}|${st.color}|${st.step}`;
+    if (key === this.lastShown) return;
+    this.lastShown = key;
+    setText(this.stageName, shown ? (fighter(this.data, shown)?.name ?? '') : t('cs.random'));
+    this.hooks.show(shown, st.color, st.step === 'ready' ? 'win' : 'idle');
+  }
+
+  // ─────────────────────────── render ───────────────────────────
+  private render(): void {
+    const active = this.activePlayer();
+    this.slots.forEach((s, k) => {
+      // a cursor sits on its slot while picking; once a fighter is picked (RANDOM included) it marks that fighter
+      const on = (p: PState): boolean => (p.step === 'fighter' ? p.cursor === k : p.fighter === s.id);
+      const c1 = this.p[0].kind !== 'none' && on(this.p[0]);
+      const c2 = this.p[1].kind !== 'none' && this.p[1].step !== 'wait' && (this.mode !== 'online' || this.blindReveal) && on(this.p[1]);
+      s.el.classList.toggle('c1', c1);
+      s.el.classList.toggle('c2', c2);
+      s.el.classList.toggle('picked', this.p.some((p) => p.fighter === s.id && p.step !== 'fighter'));
+      s.el.setAttribute('aria-selected', String(c1 || c2));
+    });
+    for (let i = 0 as 0 | 1; i < 2; i = (i + 1) as 0 | 1) this.renderSide(i, i === active);
+  }
+
+  private renderSide(i: 0 | 1, active: boolean): void {
+    const S = this.sides[i];
+    const st = this.p[i];
+    if (this.mode === 'online' && i === 1 && !this.blindReveal) { this.renderBlind(S); return; }
+    S.root.classList.remove('blind', 'locked');
+    setText(S.ready, t('cs.ready'));
+    S.root.hidden = st.kind === 'none';
+    if (st.kind === 'none') { S.acts.hidden = true; return; }
+    S.root.classList.toggle('active', active && st.step !== 'ready');
+    const hidden = this.mode === 'online' && i === 1 && !this.blindReveal;
+    setText(S.tag, st.kind === 'cpu' ? t('cs.cpu') : st.kind === 'dummy' ? t('cs.dummy') : i === 0 ? t('cs.p1') : this.mode === 'online' && this.online.opponent ? this.online.opponent : t('cs.p2'));
+    const stepKey = st.step === 'wait' ? 'cs.step.wait' : `cs.step.${st.step}`;
+    setText(S.step, t(stepKey));
+    const id = hidden ? null : (st.fighter ?? this.slots[st.cursor]?.id ?? null);
+    const f = id && id !== 'random' ? fighter(this.data, id) : null;
+    const colors = colorsOf(f);
+    const col = colors[Math.min(st.color, colors.length - 1)];
+    fillPortrait(S.portrait, this.data, id, st.step === 'fighter' ? null : (col?.tint ?? null));
+    setText(S.name, hidden ? t('ladder.mystery') : id === 'random' ? t('cs.random') : (f?.name ?? ''));
+    setText(S.persona, f?.persona ?? '');
+    setText(S.arch, archetypeLabel(f));
+    S.stars.replaceChildren();
+    if (f) {
+      const d = difficulty(f);
+      S.stars.title = `${t('cs.difficulty')} ${d}/3`;
+      for (let k = 0; k < 3; k++) S.stars.append(svg(ICON.star, k < d ? 'star on' : 'star'));
+    }
+    setText(S.hp, f?.hp ? `${t('cs.hp')} ${f.hp.toLocaleString('en-US')}` : '');
+    // colour swatches (visible from the COLOR step on)
+    // CHANGED(wf7 touch) VO-D1: buttons (tap = select, the selected one again = confirm), kept across renders while the
+    // fighter is the same (an online clock tick re-renders every second: a rebuilt swatch would swallow a tap in flight)
+    S.colors.hidden = !f || st.step === 'fighter' || st.step === 'wait';
+    const swKey = f ? `${id}|${colors.map((c) => c.tint ?? '').join(',')}` : '';
+    if (swKey !== S.swKey) {
+      S.swKey = swKey;
+      S.swatches = colors.map((c, k) => {
+        const sw = btn('sw', '', false);
+        sw.id = `hpm-cs-sw-p${i + 1}-${k}`;
+        sw.dataset.color = String(k);
+        sw.style.setProperty('--c', c.tint ?? '#ffd21a');
+        sw.title = c.name;
+        sw.setAttribute('aria-label', c.name);
+        if (!c.tint) sw.classList.add('orig');
+        sw.append(el('i', 'dot'));
+        sw.addEventListener('click', () => this.tapSwatch(i, k));
+        return sw;
+      });
+      S.colors.replaceChildren(...S.swatches, S.swName);
+    }
+    const swLive = st.step === 'color' || st.step === 'scheme';
+    S.swatches.forEach((sw, k) => { const on = k === st.color; sw.classList.toggle('on', on); sw.setAttribute('aria-pressed', String(on)); sw.disabled = !swLive; });
+    setText(S.swName, col?.name ?? '');
+    S.schemeBox.hidden = st.kind !== 'human' || (st.step !== 'scheme' && st.step !== 'ready');
+    S.schemeBtns.forEach((b, k) => { const on = k === st.scheme; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); b.disabled = st.step !== 'scheme'; });
+    this.renderMoves(i, S, st, f ? (id as string) : null);
+    this.fitMoves(S, st);                                                     // CHANGED(wf8 fix) FT-08
+    S.ready.hidden = st.step !== 'ready';
+    S.root.dataset.step = st.step;
+    // CHANGED(wf7 touch) VO-D1: the action row on the card being picked (BACK from P2 / CPU / dummy FIGHTER = into P1's last step)
+    const drive = this.canDrive(i) && !this.allIn();
+    const canBack = st.step === 'color' || st.step === 'scheme' || (st.step === 'ready' && this.simultaneous) || (st.step === 'fighter' && i === 1 && !this.simultaneous);
+    const canOk = st.step === 'color' || st.step === 'scheme';
+    S.acts.hidden = !drive || (!canBack && !canOk);
+    S.undo.hidden = !canBack;
+    S.ok.hidden = !canOk;
+    setText(S.ok, st.step === 'color' && st.kind === 'human' ? t('cs.next') : t('cs.lockIn'));
+  }
+
+  /**
+   * CHANGED(ui) (CONTRACT §36.3): the MOVES panel of player i's card for fighter `fid` (the cursor or the pick). Humans: the
+   * plan line, the keys (EASY keyboard: the attack hand drawn as keys; SIMPLE / CLASSIC: rows; touch: the PAD's discs) and
+   * the unique note; a CPU / dummy card: the plan line only. Rebuilt only when fighter / scheme / keys / mode change.
+   */
+  private renderMoves(i: 0 | 1, S: SideEl, st: PState, fid: string | null): void {
+    const f = fid ? fighter(this.data, fid) : null;
+    const kit = fighterKit(f);
+    const touch = touchModeOn();
+    const human = st.kind === 'human';
+    const keys = human && this.hooks.keys ? this.hooks.keys(i) : null;
+    const key = kit ? `${fid}|${st.scheme}|${human}|${touch}|${keys ? JSON.stringify(keys) : ''}` : '';
+    S.moves.hidden = !kit;
+    if (key === S.movesKey) return;
+    S.movesKey = key;
+    S.moves.replaceChildren();
+    if (!kit) return;
+    S.moves.dataset.fighter = kit.id;
+    S.moves.dataset.scheme = String(st.scheme);
+    if (kit.plan) S.moves.append(el('p', 'plan', kit.plan));
+    if (!human) return;
+    const hd = div('hd', S.moves);
+    hd.append(el('b', '', t('cs.moves')), el('span', '', touch ? t('sheet.title') : t('cs.movesKeys', { scheme: t(`cs.${SCHEME_NAME[st.scheme] ?? 'easy'}`) })));
+    // the attack hand drawn as keys when every SPECIAL key is bound (P2's numpad map has none by default: rows instead)
+    if (!touch && st.scheme === 2 && keys && (['sp1', 'sp2', 'sp3', 'sp4'] as const).every((a) => (keys[a] ?? []).length > 0)) {
+      drawKeyboard(S.moves, { keys, scheme: 2, kit, onlyActions: ['l', 'm', 'h', 'sp1', 'sp2', 'sp3', 'sp4', 'super1', 'super3'], cls: 'small' });
+    } else {
+      const rows = div('hpk-rows', S.moves);
+      for (const r of moveRows(kit, st.scheme as SchemeN, this.hooks.labels ? this.hooks.labels(i) : null, touch)) {
+        const row = div('hpk-row', rows);
+        row.dataset.kind = r.kind;
+        const nm = el('span', 'nm');
+        nm.append(el('span', 'full', r.name), el('span', 'short', r.short));
+        nm.title = r.name;
+        row.append(r.keys, nm);
+      }
+    }
+    // CHANGED(wf8 fix) FT-08: the spotlight - one move at a time: key, full name, plain note (+ how its key changes it)
+    const labels = this.hooks.labels ? this.hooks.labels(i) : null;
+    const items: SpotItem[] = [];
+    for (const km of [...kit.specials, kit.super1, kit.super3]) {
+      if (!km || !km.note || items.some((x) => x.action === km.action)) continue;
+      const cap = touch ? '' : (labels?.[km.action]?.keys?.[0] ?? '');
+      items.push({ action: km.action, cap, name: km.name, note: km.tip ? `${km.note} ${km.tip}` : km.note });
+    }
+    S.spotItems = items;
+    S.spotIdx = 0;
+    S.spot = null;
+    if (items.length) {
+      const sp = el('p', 'spot');
+      sp.id = `hpm-cs-spot-p${i + 1}`;
+      sp.setAttribute('aria-live', 'off');
+      S.moves.append(sp);
+      S.spot = sp;
+      this.paintSpot(S, 0);
+    }
+    if (kit.unique?.note) {
+      const uq = el('p', 'uq');
+      uq.append(el('b', '', kit.unique.title), document.createTextNode(kit.unique.note));
+      S.moves.append(uq);
+    }
+    this.fitMoves(S, st);
+  }
+
+  /**
+   * CHANGED(wf8 fix) FT-08: a short card (1280 x 720) cannot hold the plan, the keys, the spotlight AND the unique note: the
+   * unique note then joins the spotlight's rotation (its title + note) instead of being clipped. Re-checked on the FIGHTER
+   * step only (later steps hide both lines).
+   */
+  private fitMoves(S: SideEl, st: PState): void {
+    if (st.step !== 'fighter' || !S.spot || S.moves.hidden) return;
+    const uq = S.moves.querySelector<HTMLElement>('p.uq');
+    if (!uq || uq.hidden) return;
+    if (S.moves.scrollHeight <= S.moves.clientHeight + 1) return;
+    uq.hidden = true;
+    const b = uq.querySelector('b')?.textContent ?? '';
+    S.spotItems.push({ action: 'unique', cap: '', name: b, note: (uq.textContent ?? '').slice(b.length) });
+  }
+
+  /**
+   * CHANGED(UI) P2 (CONTRACT 27.2): the opponent's card during an online blind pick - their display name, PICKING / LOCKED
+   * IN, never their fighter (the net layer reveals both picks at once: reveal()).
+   */
+  private renderBlind(S: SideEl): void {
+    S.root.hidden = false;
+    S.root.classList.add('blind');
+    S.root.classList.toggle('locked', this.online.locked);
+    S.root.classList.remove('active');
+    setText(S.tag, this.online.opponent || t('cs.opponent'));
+    setText(S.step, this.online.locked ? t('cs.step.locked') : t('cs.step.picking'));
+    fillPortrait(S.portrait, this.data, 'random');
+    setText(S.name, t('ladder.mystery'));
+    setText(S.persona, this.online.locked ? t('cs.lockedIn') : t('cs.blindNote'));
+    setText(S.arch, '');
+    S.stars.replaceChildren();
+    setText(S.hp, '');
+    S.colors.hidden = true;
+    S.schemeBox.hidden = true;
+    S.moves.hidden = true;                                                   // CHANGED(ui)
+    S.movesKey = '';
+    S.acts.hidden = true;                                                    // CHANGED(wf7 touch) VO-D1
+    S.ready.hidden = !this.online.locked;
+    setText(S.ready, t('cs.locked'));
+    S.root.dataset.step = this.online.locked ? 'locked' : 'picking';
+  }
+
+  /** CHANGED(UI) P2: online blind-pick facts from the menus (opponent display name, locked, seconds left) */
+  setOnline(o: { opponent: string; locked: boolean; secondsLeft: number }): void {
+    this.online = { ...o };
+    if (this.mode !== 'online') return;
+    const secs = o.secondsLeft > 0 ? t('cs.blindClock', { n: o.secondsLeft }) : '';
+    setText(this.banner, [t('cs.blind'), secs].filter(Boolean).join('  -  '));
+    this.render();
+  }
+
+  opponentLocked(): void { this.online.locked = true; if (this.mode === 'online') this.render(); }
+
+  /** the pick clock ran out: lock P1's cursor fighter (colour / controls as they stand); the normal done() path emits it */
+  forcePick(): null {
+    const st = this.p[0];
+    if (this.mode !== 'online' || st.step === 'ready' || st.kind !== 'human') return null;
+    if (st.step === 'fighter') {
+      this.pickFighter(0);
+      if (st.step === 'fighter') {
+        const k = this.slots.findIndex((s) => s.id !== 'random' && !s.locked);
+        if (k >= 0) { st.cursor = k; this.pickFighter(0); }
+      }
+      if (st.step === 'fighter') return null;
+    }
+    st.step = 'ready';
+    this.render();
+    this.onReady(0);
+    return null;
+  }
+
+  /** portraits arrived (setPortraits): re-fill every slot and the side cards */
+  refreshPortraits(): void {
+    for (const s of this.slots) { const pic = s.el.querySelector<HTMLElement>('.hp-portrait'); if (pic) fillPortrait(pic, this.data, s.id); }
+    this.render();
+  }
+
+  showcaseRect(): Rect | null {
+    const r = this.stage.getBoundingClientRect();
+    if (r.width < 8 || r.height < 8) return null;
+    return { x: r.left, y: r.top, w: r.width, h: r.height };
+  }
+
+  readback(): Record<string, unknown> {
+    return {
+      mode: this.mode, simultaneous: this.simultaneous, active: this.activePlayer(),
+      p: this.p.map((s) => ({ kind: s.kind, step: s.step, cursor: this.slots[s.cursor]?.id ?? null, fighter: s.fighter, color: s.color, scheme: s.scheme })),
+      locked: this.slots.filter((s) => s.locked).map((s) => s.id), slots: this.slots.map((s) => s.id),
+    };
+  }
+}

@@ -1,0 +1,708 @@
+== TITLE (shipping build) ==
+   [diag] wrap: wrapped
+
+== TITLE (?dev=1) ==
+   [diag] wrap: wrapped
+   [diag] wrap: wrapped
+
+== UNLOCK-ALL HATCH ==
+
+== GATE PLACEMENT ==
+  FAIL  ember-2: there is floor to stand on in front of it  dropped at the authored stand-out spot [-4.5, -7.95, -9.1] and ended [-4.5, -7.87, -9.1] (grounded=False)
+   [diag] ev {"type": "state", "from": "title", "to": "keep", "t": 19450}
+  FAIL  ember-3: there is floor to stand on in front of it  dropped at the authored stand-out spot [4.5, -7.95, -9.1] and ended [4.5, -7.41, -9.1] (grounded=False)
+   [diag] ev {"type": "state", "from": "title", "to": "keep", "t": 19450}
+  FAIL  ember-4: there is floor to stand on in front of it  dropped at the authored stand-out spot [12, -7.95, -9.1] and ended [12, -7.41, -9.1] (grounded=False)
+   [diag] ev {"type": "state", "from": "title", "to": "keep", "t": 19450}
+  FAIL  rime-1: there is floor to stand on in front of it  dropped at the authored stand-out spot [-10.1, 6.35, -20] and ended [-10.1, 6.43, -20] (grounded=False)
+   [diag] ev {"type": "state", "from": "title", "to": "keep", "t": 19450}
+  FAIL  azure-2: there is floor to stand on in front of it  dropped at the authored stand-out spot [-22.1, 0.05, 22] and ended [-22.1, 0.42, 22] (grounded=False)
+   [diag] ev {"type": "state", "from": "title", "to": "keep", "t": 19450}
+
+== GATE-OPENS CINEMATIC ==
+
+-- verdant-1  (requires 0 crests, painting)
+
+-- verdant-2  (requires 1 crest, painting)
+
+-- verdant-3  (requires 3 crests, painting)
+
+-- ember-1  (requires 5 crests, painting)
+  FAIL  ember-1: walk-in (offset -1.0 m) raises the course card  state=keep pos=[-12.89, -8, -9.43] prompt='EMAGMA WORKSEMBER FOUNDRY   CRESTS 0 / 7' {"idx": 3, "near": 3, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 3.27}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 86898}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 87604, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 88043}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 88165, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 88445, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 88446, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 88448, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 88503}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 90052, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 90498}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 90509, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 90743, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 90743, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 90744, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 90799}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 92206, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 92585}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 92637, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 92880, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 92880, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 92881, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 92936}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 94814, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 98237, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 99196, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 103252, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 104269, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 107754, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 108322}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 108524, "stack": "at eval (eval at evaluate (:290:30), <anonymous>:3:82) | at UtilityScript.evaluate (<anonymous>:297:18) | at UtilityScript.<anonymous> (<anonymous>:1:44)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 108528}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 109268, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 110097}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 110117, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 110373, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 110374, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 110374, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 110431}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 111910, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 115602, "state": "keep"}
+  FAIL  ember-1: walk-in (offset +1.0 m) raises the course card  state=keep pos=[-11.07, -8, -9.31] prompt='EMAGMA WORKSEMBER FOUNDRY   CRESTS 0 / 7' {"idx": 3, "near": 3, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 3.7}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 88043}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 88165, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 88445, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 88446, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 88448, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 88503}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 90052, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 90498}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 90509, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 90743, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 90743, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 90744, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 90799}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 92206, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 92585}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 92637, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 92880, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 92880, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 92881, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 92936}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 94814, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 98237, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 99196, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 103252, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 104269, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 107754, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 108322}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 108524, "stack": "at eval (eval at evaluate (:290:30), <anonymous>:3:82) | at UtilityScript.evaluate (<anonymous>:297:18) | at UtilityScript.<anonymous> (<anonymous>:1:44)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 108528}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 109268, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 110097}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 110117, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 110373, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 110374, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 110374, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 110431}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 111910, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 115602, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 117873, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 121283, "state": "keep"}
+
+-- ember-2  (requires 8 crests, painting)
+
+-- ember-3  (requires 12 crests, painting)
+
+-- ember-4  (requires 15 crests, painting)
+  FAIL  ember-4: walk-in (offset +0.0 m) raises the course card  state=keep pos=[12, -8, -9.16] prompt='ESUNSCAR NECROPOLISEMBER FOUNDRY   CRESTS 0 / 7' {"idx": 6, "near": 6, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 3.38}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 145684, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 145698}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 147743, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 151211, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 152248, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 155785, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 156769, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 160177, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 160635}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 160970, "stack": "at eval (eval at evaluate (:290:30), <anonymous>:3:82) | at UtilityScript.evaluate (<anonymous>:297:18) | at UtilityScript.<anonymous> (<anonymous>:1:44)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 160998}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 161687, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 162181}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 162272, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 162536, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 162536, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 162537, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 162614}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 164033, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 164571}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 164613, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 164869, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 164869, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 164869, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 164925}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 166339, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 166953}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 167036, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 167286, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 167286, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 167286, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 167342}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 169296, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 172707, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 173717, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 177270, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 178345, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 181774, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 183451, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 186907, "state": "keep"}
+  FAIL  ember-4: walk-in (offset +1.0 m) raises the course card  state=keep pos=[12.93, -8, -9.32] prompt='ESUNSCAR NECROPOLISEMBER FOUNDRY   CRESTS 0 / 7' {"idx": 6, "near": 6, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 3.7}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 160970, "stack": "at eval (eval at evaluate (:290:30), <anonymous>:3:82) | at UtilityScript.evaluate (<anonymous>:297:18) | at UtilityScript.<anonymous> (<anonymous>:1:44)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 160998}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 161687, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 162181}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 162272, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 162536, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 162536, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 162537, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 162614}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 164033, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 164571}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 164613, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 164869, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 164869, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 164869, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 164925}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 166339, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 166953}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 167036, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 167286, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 167286, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 167286, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 167342}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 169296, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 172707, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 173717, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 177270, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 178345, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 181774, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 183451, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 186907, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 187912, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 189955}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 189972, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 190247, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 190247, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 190247, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 190306}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 192001, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 195455, "state": "keep"}
+
+-- rime-1  (requires 18 crests, painting)
+
+-- rime-2  (requires 22 crests, painting)
+  FAIL  rime-2: walk-in (offset +0.0 m) raises the course card  state=keep pos=[-10.16, 6.3, -28] prompt='EGLACIER SLIDERIME SPIRE   CRESTS 0 / 7' {"idx": 8, "near": 8, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 3.38}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 190247, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 190247, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 190306}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 192001, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 195455, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 197800, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 201414, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 202800, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 206391, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 208938, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 212507, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 214220, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 216541}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 216624, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 216867, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 216868, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 216868, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 216933}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 218392, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 219048}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 219125, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 219375, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 219375, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 219375, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 219427}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 220849, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 221317}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 221353, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 221608, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 221608, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 221609, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 221671}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 223605, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 227204, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 228284, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 231839, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 232970, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 236450, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 238163, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 241591, "state": "keep"}
+
+-- rime-3  (requires 26 crests, painting)
+
+-- azure-1  (requires 30 crests, glass)
+  FAIL  azure-1: walk-in (offset +0.0 m) raises the course card  state=keep pos=[24.33, 0, 30] prompt='ETIDEWELL TEMPLEAZURE SANCTUM   CRESTS 0 / 7' {"idx": 10, "near": 10, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 2.8}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 246723, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 246753}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 248990, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 252566, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 253658, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 257128, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 258194, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 261644, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 262156}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 262510, "stack": "at eval (eval at evaluate (:290:30), <anonymous>:3:82) | at UtilityScript.evaluate (<anonymous>:297:18) | at UtilityScript.<anonymous> (<anonymous>:1:44)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 262518}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 263225, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 263662}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 263667, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 263934, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 263934, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 263935, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 263991}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 265399, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 265892}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 265989, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 266249, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 266249, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 266249, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 266310}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 267758, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 268278}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 268363, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 268614, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 268614, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 268614, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 268664}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 270812, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 274511, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 275530, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 278961, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 280197, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 283725, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 285620, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 289081, "state": "keep"}
+
+-- azure-2  (requires 35 crests, glass)
+  FAIL  azure-2: cancelling the card (offset +1.0 m) returns control  state='paused'
+   [diag] PAUSE during 'azure-2: cancelling the card (offset +1.0 m) returns control': {"reason": "input", "from": "keep", "cardOn": false, "cardOpenFlag": false, "t": 322644, "stack": "at G.pause (eval at evaluate (:290:30), <anonymous>:12:21) | at Game._readInputActions (http://127.0.0.1:8913/games/crestbound/runtime/game.js:2949:19) | at Game._update (http://127.0.0.1:8913/games/crestbound/runtime/game.js:2872:10) | at Game.update (http://127.0.0.1:8913/games/crestbound/runtime/game.js:2818:12) | at Engine._loopFn (http://127.0.0.1:8913/games/crestbound/runtime/game.js:626:36) | at tick (http://127.0.0.1:8913/games/crestbound/runtime/core/engine.js:1543:16)"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 292146, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 292440, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 292440, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 292441, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 292506}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 293955, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 297573}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 297587, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 297883, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 297883, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 297883, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 297943}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 299962, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 303558, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 304607, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 308057, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 309678, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 313209, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 314316}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 314652, "stack": "at eval (eval at evaluate (:290:30), <anonymous>:3:82) | at UtilityScript.evaluate (<anonymous>:297:18) | at UtilityScript.<anonymous> (<anonymous>:1:44)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 314658}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 315611, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 315948}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 316121, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 316386, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 316386, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 316386, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 316450}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 318108, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 318738}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 318858, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 319542, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 319542, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 319543, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 319609}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 321631, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 321772, "state": "keep"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 322079, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"ph": "win-bubble", "type": "keydown", "t": 322082, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"type": "state", "from": "keep", "to": "paused", "t": 322745}
+
+-- azure-3  (requires 40 crests, door)
+  FAIL  azure-3: sealed walk-in (offset +0.0 m) refuses  state=paused cardOpen=False
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 292440, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 292441, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 292506}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 293955, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 297573}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 297587, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 297883, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 297883, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 297883, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 297943}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 299962, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 303558, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 304607, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 308057, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 309678, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 313209, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 314316}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 314652, "stack": "at eval (eval at evaluate (:290:30), <anonymous>:3:82) | at UtilityScript.evaluate (<anonymous>:297:18) | at UtilityScript.<anonymous> (<anonymous>:1:44)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 314658}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 315611, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 315948}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 316121, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 316386, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 316386, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 316386, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 316450}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 318108, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 318738}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 318858, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 319542, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 319542, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 319543, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 319609}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 321631, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 321772, "state": "keep"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 322079, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"ph": "win-bubble", "type": "keydown", "t": 322082, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"type": "state", "from": "keep", "to": "paused", "t": 322745}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 324445, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 327962, "state": "paused"}
+  FAIL  azure-3: sealed walk-in (offset +0.0 m) says what it needs  nothing readable named 40 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 292440, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 292441, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 292506}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 293955, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 297573}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 297587, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 297883, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 297883, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 297883, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 297943}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 299962, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 303558, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 304607, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 308057, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 309678, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 313209, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 314316}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 314652, "stack": "at eval (eval at evaluate (:290:30), <anonymous>:3:82) | at UtilityScript.evaluate (<anonymous>:297:18) | at UtilityScript.<anonymous> (<anonymous>:1:44)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 314658}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 315611, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 315948}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 316121, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 316386, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 316386, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 316386, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 316450}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 318108, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 318738}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 318858, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 319542, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 319542, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 319543, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 319609}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 321631, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 321772, "state": "keep"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 322079, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"ph": "win-bubble", "type": "keydown", "t": 322082, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"type": "state", "from": "keep", "to": "paused", "t": 322745}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 324445, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 327962, "state": "paused"}
+  FAIL  azure-3: sealed walk-in (offset -0.6 m) refuses  state=paused cardOpen=False
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 292506}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 293955, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 297573}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 297587, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 297883, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 297883, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 297883, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 297943}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 299962, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 303558, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 304607, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 308057, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 309678, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 313209, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 314316}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 314652, "stack": "at eval (eval at evaluate (:290:30), <anonymous>:3:82) | at UtilityScript.evaluate (<anonymous>:297:18) | at UtilityScript.<anonymous> (<anonymous>:1:44)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 314658}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 315611, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 315948}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 316121, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 316386, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 316386, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 316386, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 316450}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 318108, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 318738}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 318858, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 319542, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 319542, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 319543, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 319609}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 321631, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 321772, "state": "keep"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 322079, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"ph": "win-bubble", "type": "keydown", "t": 322082, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"type": "state", "from": "keep", "to": "paused", "t": 322745}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 324445, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 327962, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 329040, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 332454, "state": "paused"}
+  FAIL  azure-3: sealed walk-in (offset -0.6 m) says what it needs  nothing readable named 40 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 292506}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 293955, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 297573}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 297587, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 297883, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 297883, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 297883, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 297943}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 299962, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 303558, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 304607, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 308057, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 309678, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 313209, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 314316}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 314652, "stack": "at eval (eval at evaluate (:290:30), <anonymous>:3:82) | at UtilityScript.evaluate (<anonymous>:297:18) | at UtilityScript.<anonymous> (<anonymous>:1:44)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 314658}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 315611, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 315948}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 316121, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 316386, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 316386, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 316386, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 316450}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 318108, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 318738}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 318858, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 319542, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 319542, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 319543, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 319609}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 321631, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 321772, "state": "keep"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 322079, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"ph": "win-bubble", "type": "keydown", "t": 322082, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"type": "state", "from": "keep", "to": "paused", "t": 322745}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 324445, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 327962, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 329040, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 332454, "state": "paused"}
+  FAIL  azure-3: sealed walk-in (offset +0.6 m) refuses  state=paused cardOpen=False
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 297573}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 297587, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 297883, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 297883, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 297883, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 297943}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 299962, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 303558, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 304607, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 308057, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 309678, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 313209, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 314316}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 314652, "stack": "at eval (eval at evaluate (:290:30), <anonymous>:3:82) | at UtilityScript.evaluate (<anonymous>:297:18) | at UtilityScript.<anonymous> (<anonymous>:1:44)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 314658}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 315611, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 315948}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 316121, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 316386, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 316386, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 316386, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 316450}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 318108, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 318738}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 318858, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 319542, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 319542, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 319543, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 319609}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 321631, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 321772, "state": "keep"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 322079, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"ph": "win-bubble", "type": "keydown", "t": 322082, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"type": "state", "from": "keep", "to": "paused", "t": 322745}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 324445, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 327962, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 329040, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 332454, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 333489, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 337034, "state": "paused"}
+  FAIL  azure-3: sealed walk-in (offset +0.6 m) says what it needs  nothing readable named 40 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 297573}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 297587, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 297883, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 297883, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 297883, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 297943}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 299962, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 303558, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 304607, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 308057, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 309678, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 313209, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 314316}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 314652, "stack": "at eval (eval at evaluate (:290:30), <anonymous>:3:82) | at UtilityScript.evaluate (<anonymous>:297:18) | at UtilityScript.<anonymous> (<anonymous>:1:44)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 314658}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 315611, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 315948}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 316121, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 316386, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 316386, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 316386, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 316450}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 318108, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 318738}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 318858, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 319542, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 319542, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 319543, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 319609}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 321631, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 321772, "state": "keep"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 322079, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"ph": "win-bubble", "type": "keydown", "t": 322082, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"type": "state", "from": "keep", "to": "paused", "t": 322745}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 324445, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 327962, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 329040, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 332454, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 333489, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 337034, "state": "paused"}
+  FAIL  azure-3: walk-in (offset +0.0 m) raises the course card  state=paused pos=[-17, 12.77, 36.5] prompt='' {"idx": 12, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 3.61}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 297883, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 297883, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 297883, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 297943}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 299962, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 303558, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 304607, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 308057, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 309678, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 313209, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 314316}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 314652, "stack": "at eval (eval at evaluate (:290:30), <anonymous>:3:82) | at UtilityScript.evaluate (<anonymous>:297:18) | at UtilityScript.<anonymous> (<anonymous>:1:44)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 314658}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 315611, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 315948}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 316121, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 316386, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 316386, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 316386, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 316450}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 318108, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 318738}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 318858, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 319542, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 319542, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 319543, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 319609}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 321631, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 321772, "state": "keep"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 322079, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"ph": "win-bubble", "type": "keydown", "t": 322082, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"type": "state", "from": "keep", "to": "paused", "t": 322745}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 324445, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 327962, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 329040, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 332454, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 333489, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 337034, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 338675, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 342223, "state": "paused"}
+  FAIL  azure-3: walk-in (offset -0.6 m) raises the course card  state=paused pos=[-16.4, 12.77, 36.5] prompt='' {"idx": 12, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 3.97}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 297883, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 297943}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 299962, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 303558, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 304607, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 308057, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 309678, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 313209, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 314316}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 314652, "stack": "at eval (eval at evaluate (:290:30), <anonymous>:3:82) | at UtilityScript.evaluate (<anonymous>:297:18) | at UtilityScript.<anonymous> (<anonymous>:1:44)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 314658}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 315611, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 315948}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 316121, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 316386, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 316386, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 316386, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 316450}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 318108, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 318738}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 318858, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 319542, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 319542, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 319543, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 319609}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 321631, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 321772, "state": "keep"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 322079, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"ph": "win-bubble", "type": "keydown", "t": 322082, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"type": "state", "from": "keep", "to": "paused", "t": 322745}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 324445, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 327962, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 329040, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 332454, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 333489, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 337034, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 338675, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 342223, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 343821, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 347271, "state": "paused"}
+  FAIL  azure-3: walk-in (offset +0.6 m) raises the course card  state=paused pos=[-17.6, 12.77, 36.5] prompt='' {"idx": 12, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 3.97}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 299962, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 303558, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 304607, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 308057, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 309678, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 313209, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 314316}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 314652, "stack": "at eval (eval at evaluate (:290:30), <anonymous>:3:82) | at UtilityScript.evaluate (<anonymous>:297:18) | at UtilityScript.<anonymous> (<anonymous>:1:44)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 314658}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 315611, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 315948}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 316121, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 316386, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 316386, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 316386, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 316450}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 318108, "state": "keep"}
+   [diag] ev {"type": "state", "from": "keep", "to": "card", "t": 318738}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 318858, "state": "card"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 319542, "state": "card", "cardOpen": true, "stopped": false}
+   [diag] ev {"type": "card._choose", "which": "cancel", "t": 319542, "stack": "at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "card.close", "choice": "cancel", "open": true, "state": "card", "t": 319543, "stack": "at CourseCard._choose (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:539:10) | at C._choose (eval at evaluate (:290:30), <anonymous>:24:125) | at CourseCard._onKey (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:619:12) | at _keyHandler (http://127.0.0.1:8913/games/crestbound/runtime/ui/coursecard.js:507:36)"}
+   [diag] ev {"type": "state", "from": "card", "to": "keep", "t": 319609}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 321631, "state": "keep"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 321772, "state": "keep"}
+   [diag] ev {"ph": "win-capture-first", "type": "keydown", "t": 322079, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"ph": "win-bubble", "type": "keydown", "t": 322082, "state": "keep", "cardOpen": false, "stopped": false}
+   [diag] ev {"type": "state", "from": "keep", "to": "paused", "t": 322745}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 324445, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 327962, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 329040, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 332454, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 333489, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 337034, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 338675, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 342223, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 343821, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 347271, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keydown", "code": "KeyW", "repeat": false, "t": 348279, "state": "paused"}
+   [diag] ev {"ph": "any-capture", "type": "keyup", "code": "KeyW", "repeat": false, "t": 351755, "state": "paused"}
+
+GATECHECK FAILED  299 passed, 21 failed  (436s)
+exit 1

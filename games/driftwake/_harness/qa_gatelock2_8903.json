@@ -1,0 +1,273 @@
+{
+ "q3_kill": {
+  "ok": true,
+  "tries": 1,
+  "killedId": 5,
+  "snap": {
+   "realm": "cold",
+   "state": "idle",
+   "kind": null,
+   "bossId": -1,
+   "eligible": "mini",
+   "killed": {
+    "cold:realm": true
+   },
+   "saved": {
+    "cold:realm": true,
+    "Shrinebreaker": true
+   },
+   "realmsUnlocked": [
+    "cold"
+   ],
+   "level": 1,
+   "portal": {
+    "open": true,
+    "token": "sand",
+    "entered": false,
+    "x": -36.08371860268881,
+    "z": -58.710096503649055,
+    "y": 1.3541504295077786,
+    "grow": 0.9559406249928287,
+    "tintAmt": 0.4657402056424535,
+    "tint": [
+     1.4364805213241307,
+     0.746969871088548,
+     0.14364805213241308
+    ],
+    "enterM": 2.5,
+    "prisms": 12
+   },
+   "gameTime": 4.524704999991508
+  }
+ },
+ "q3_after": {
+  "realm": "cold",
+  "state": "idle",
+  "kind": null,
+  "bossId": -1,
+  "eligible": "mini",
+  "killed": {},
+  "saved": {
+   "cold:realm": true,
+   "Shrinebreaker": true
+  },
+  "realmsUnlocked": [
+   "cold"
+  ],
+  "level": 1,
+  "portal": {
+   "open": false,
+   "token": null,
+   "entered": false,
+   "x": 0,
+   "z": 0,
+   "y": 0,
+   "grow": 0,
+   "tintAmt": 0.55,
+   "tint": [
+    1,
+    1,
+    1
+   ],
+   "enterM": 2.5,
+   "prisms": 12
+  },
+  "gameTime": 0.6637999999821186
+ },
+ "q3_watch": {
+  "realm": "cold",
+  "state": "pending",
+  "kind": "mini",
+  "bossId": -1,
+  "eligible": "mini",
+  "killed": {},
+  "saved": {
+   "cold:realm": true,
+   "Shrinebreaker": true
+  },
+  "realmsUnlocked": [
+   "cold"
+  ],
+  "level": 1,
+  "portal": {
+   "open": false,
+   "token": null,
+   "entered": false,
+   "x": 0,
+   "z": 0,
+   "y": 0,
+   "grow": 0,
+   "tintAmt": 0.55,
+   "tint": [
+    1,
+    1,
+    1
+   ],
+   "enterM": 2.5,
+   "prisms": 12
+  },
+  "gameTime": 41.34700000002996,
+  "sawGateDuringWatch": false,
+  "watchedGameS": 40.08320000004784
+ },
+ "q2b_cold": {
+  "realm": "cold",
+  "state": "idle",
+  "kind": null,
+  "bossId": -1,
+  "eligible": null,
+  "killed": {
+   "cold:mini": true,
+   "cold:realm": true,
+   "sand:mini": true,
+   "sand:realm": true,
+   "ash:mini": true,
+   "ash:realm": true
+  },
+  "saved": {
+   "cold:realm": true,
+   "Shrinebreaker": true,
+   "cold:mini": true,
+   "The Icewall": true,
+   "sand:mini": true,
+   "Gatekeeper of Brass": true,
+   "sand:realm": true,
+   "Warden of the Sundered Gate": true,
+   "ash:mini": true,
+   "Furnace Guardian": true,
+   "ash:realm": true,
+   "Volcanic Plate Knight": true
+  },
+  "realmsUnlocked": [
+   "cold"
+  ],
+  "level": 2,
+  "portal": {
+   "open": false,
+   "token": null,
+   "entered": false,
+   "x": 22.828291507861994,
+   "z": -69.61513933390275,
+   "y": 1.9843503853543587,
+   "grow": 0.9690000000223518,
+   "tintAmt": 0.4589823978229217,
+   "tint": [
+    0.2053430255241381,
+    1.0780508840017249,
+    2.566787819051726
+   ],
+   "enterM": 2.5,
+   "prisms": 12
+  },
+  "gameTime": 98.13990902129049,
+  "sawGateDuringWatch": false,
+  "watchedGameS": 40.034699999912405
+ },
+ "q2b_sand": {
+  "realm": "sand",
+  "state": "idle",
+  "kind": null,
+  "bossId": -1,
+  "eligible": null,
+  "killed": {
+   "cold:mini": true,
+   "cold:realm": true,
+   "sand:mini": true,
+   "sand:realm": true,
+   "ash:mini": true,
+   "ash:realm": true
+  },
+  "saved": {
+   "cold:realm": true,
+   "Shrinebreaker": true,
+   "cold:mini": true,
+   "The Icewall": true,
+   "sand:mini": true,
+   "Gatekeeper of Brass": true,
+   "sand:realm": true,
+   "Warden of the Sundered Gate": true,
+   "ash:mini": true,
+   "Furnace Guardian": true,
+   "ash:realm": true,
+   "Volcanic Plate Knight": true
+  },
+  "realmsUnlocked": [
+   "cold"
+  ],
+  "level": 2,
+  "portal": {
+   "open": false,
+   "token": null,
+   "entered": false,
+   "x": 22.828291507861994,
+   "z": -69.61513933390275,
+   "y": 1.9843503853543587,
+   "grow": 0.9690000000223518,
+   "tintAmt": 0.4589823978229217,
+   "tint": [
+    0.2053430255241381,
+    1.0780508840017249,
+    2.566787819051726
+   ],
+   "enterM": 2.5,
+   "prisms": 12
+  },
+  "gameTime": 140.13150902123832,
+  "sawGateDuringWatch": false,
+  "watchedGameS": 40.001899999959775
+ },
+ "q2b_ash": {
+  "realm": "ash",
+  "state": "idle",
+  "kind": null,
+  "bossId": -1,
+  "eligible": null,
+  "killed": {
+   "cold:mini": true,
+   "cold:realm": true,
+   "sand:mini": true,
+   "sand:realm": true,
+   "ash:mini": true,
+   "ash:realm": true
+  },
+  "saved": {
+   "cold:realm": true,
+   "Shrinebreaker": true,
+   "cold:mini": true,
+   "The Icewall": true,
+   "sand:mini": true,
+   "Gatekeeper of Brass": true,
+   "sand:realm": true,
+   "Warden of the Sundered Gate": true,
+   "ash:mini": true,
+   "Furnace Guardian": true,
+   "ash:realm": true,
+   "Volcanic Plate Knight": true
+  },
+  "realmsUnlocked": [
+   "cold"
+  ],
+  "level": 2,
+  "portal": {
+   "open": false,
+   "token": null,
+   "entered": false,
+   "x": 22.828291507861994,
+   "z": -69.61513933390275,
+   "y": 1.9843503853543587,
+   "grow": 0.9690000000223518,
+   "tintAmt": 0.4589823978229217,
+   "tint": [
+    0.2053430255241381,
+    1.0780508840017249,
+    2.566787819051726
+   ],
+   "enterM": 2.5,
+   "prisms": 12
+  },
+  "gameTime": 182.08240902119903,
+  "sawGateDuringWatch": false,
+  "watchedGameS": 40.01559999997869
+ },
+ "errors": []
+}

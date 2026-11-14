@@ -1,0 +1,29 @@
+{
+ "tag": "after_hb_lw",
+ "titan": "hearthback",
+ "biome": "lockwater",
+ "rank": 2,
+ "n": 232,
+ "seconds": 20,
+ "music_mean_rms": 0.0491,
+ "sfx_mean_rms": 0.0663,
+ "music_energy_rms": 0.0574,
+ "sfx_energy_rms": 0.0717,
+ "music_dbfs": -24.8,
+ "sfx_dbfs": -22.9,
+ "sfx_over_music_energy": 1.25,
+ "music_over_sfx_median": 0.601,
+ "frac_sfx_5x_music": 0.043,
+ "music_p10_p90": [
+  0.0207,
+  0.1062
+ ],
+ "sfx_p10_p90": [
+  0.0284,
+  0.0994
+ ],
+ "music_predk_mean": 0.0503,
+ "sfx_preglue_mean": 0.1056,
+ "master_mean": 0.0551,
+ "diag_errors": []
+}

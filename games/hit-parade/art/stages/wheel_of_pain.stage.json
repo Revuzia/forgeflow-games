@@ -1,0 +1,789 @@
+{
+  "id": "wheel_of_pain",
+  "name": "WHEEL OF PAIN",
+  "status": "built",
+  "glb": "wheel_of_pain.glb",
+  "source": "art/stages/wheel_of_pain.py",
+  "home": [
+    "zambini",
+    "lotus"
+  ],
+  "look": "game-show studio in the round: glossy black circular stage floor with LED light rings and two hazard-striped trapdoor plates inside a 1 m neon-panel bumper with a chrome bulb rail; the GIANT prize wheel (16 comic prizes, gold bulb rim) on a lit deck before a curved LED starburst wall, truss towers and contestant podiums on one side; raked LED-nosed audience risers with gold end panels all the way round the rest; truss rig overhead",
+  "floor": {
+    "y": 0.0,
+    "surface": "gloss_black",
+    "fightStrip": {
+      "x": [
+        -8.0,
+        8.0
+      ],
+      "z": [
+        -1.5,
+        1.5
+      ]
+    },
+    "extent": {
+      "x": [
+        -19.0,
+        19.0
+      ],
+      "z": [
+        -19.0,
+        19.0
+      ]
+    },
+    "trapdoors": [
+      {
+        "x": -4.7,
+        "z": 0.0,
+        "sizeM": 1.5
+      },
+      {
+        "x": 4.7,
+        "z": 0.0,
+        "sizeM": 1.5
+      }
+    ],
+    "note": "trapdoors are flush dressing (texture + frame + hinges in the static set) inside the ring; a sim trapdoor move (zambini / ricky) can use these spots. fightStrip = legacy 2.5D (CONTRACT 35.11.7)"
+  },
+  "walls": {
+    "x": [
+      -8.0,
+      8.0
+    ],
+    "splat": [
+      {
+        "id": 0,
+        "x": -8.0,
+        "normal": [
+          1,
+          0,
+          0
+        ],
+        "z": [
+          -3.4,
+          2.8
+        ],
+        "heightM": 4.3,
+        "surface": "neon_panel",
+        "dustColor": "#ff7ad9"
+      },
+      {
+        "id": 1,
+        "x": 8.0,
+        "normal": [
+          -1,
+          0,
+          0
+        ],
+        "z": [
+          -3.4,
+          2.8
+        ],
+        "heightM": 4.3,
+        "surface": "neon_panel",
+        "dustColor": "#7ae4ff"
+      }
+    ],
+    "note": "LEGACY 2.5D (CONTRACT 35.11.7): kept until the sim / view stop reading walls.x; the 3D boundary is `ring`."
+  },
+  "ring": {
+    "shape": "circle",
+    "radiusM": 5.8,
+    "sides": 16,
+    "rotDeg": 0.0,
+    "wallHeightM": 1.0,
+    "thicknessM": 0.45,
+    "surface": "neon_panel",
+    "dustColor": "#ff7ad9",
+    "note": "CONTRACT 35.11: radiusM = centre -> inner face (poly: apothem); poly side k normal at rotDeg + k*360/sides; circle: 16 WALL_SPLAT sectors centred on rotDeg + k*22.5"
+  },
+  "spawnAxisDeg": 90.0,
+  "cameraSideDeg": 0.0,
+  "cameraMaxM": 9.5,
+  "spawn": {
+    "distanceM": 2.4,
+    "p1": [
+      -1.2,
+      0.0,
+      -0.0
+    ],
+    "p2": [
+      1.2,
+      0.0,
+      0.0
+    ]
+  },
+  "camera": {
+    "vFovDeg": 35.0,
+    "heightM": 1.35,
+    "lookAtY": 1.0,
+    "distanceM": [
+      4.4,
+      9.5
+    ],
+    "pitchDeg": [
+      -4.0,
+      -4.0
+    ],
+    "orbit": true,
+    "wallClampX": 8.0,
+    "note": "CONTRACT 35.7 orbit camera (eye y 1.35, look-at y 1.0, dist 4.4..9.5 from the pair midpoint). wallClampX = legacy 2.5D. Proof renders: _harness/_reports/stages/wheel_of_pain_<shot>.png, orbit sheet wheel_of_pain_orbit_sheet.png",
+    "proofShots": [
+      {
+        "id": "near_center",
+        "pos": [
+          0.0,
+          1.35,
+          4.4
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "far_center",
+        "pos": [
+          0.0,
+          1.35,
+          8.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "far_center_phone",
+        "pos": [
+          0.0,
+          1.35,
+          6.6
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "aspect": 2.1667
+      },
+      {
+        "id": "orbit_000_n",
+        "pos": [
+          0.0,
+          1.35,
+          4.4
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_000_f",
+        "pos": [
+          0.0,
+          1.35,
+          8.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_045_n",
+        "pos": [
+          3.111,
+          1.35,
+          3.111
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_045_f",
+        "pos": [
+          5.657,
+          1.35,
+          5.657
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_090_n",
+        "pos": [
+          4.4,
+          1.35,
+          0.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_090_f",
+        "pos": [
+          8.0,
+          1.35,
+          0.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_135_n",
+        "pos": [
+          3.111,
+          1.35,
+          -3.111
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_135_f",
+        "pos": [
+          5.657,
+          1.35,
+          -5.657
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_180_n",
+        "pos": [
+          0.0,
+          1.35,
+          -4.4
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_180_f",
+        "pos": [
+          0.0,
+          1.35,
+          -8.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_225_n",
+        "pos": [
+          -3.111,
+          1.35,
+          -3.111
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_225_f",
+        "pos": [
+          -5.657,
+          1.35,
+          -5.657
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_270_n",
+        "pos": [
+          -4.4,
+          1.35,
+          -0.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_270_f",
+        "pos": [
+          -8.0,
+          1.35,
+          -0.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_315_n",
+        "pos": [
+          -3.111,
+          1.35,
+          3.111
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_315_f",
+        "pos": [
+          -5.657,
+          1.35,
+          5.657
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      }
+    ]
+  },
+  "exposure": 1.0,
+  "toneMapping": "neutral",
+  "fog": {
+    "color": "#140b1f",
+    "near": 18.0,
+    "far": 60.0
+  },
+  "environment": {
+    "hdr": "wheel_of_pain_env.hdr",
+    "intensity": 0.3,
+    "background": false,
+    "src": "Poly Haven adams_place_bridge_2k.hdr (CC0), downsampled to 512x256",
+    "backgroundColor": "#0a0610"
+  },
+  "lights": [
+    {
+      "id": "key",
+      "type": "directional",
+      "color": "#f6ecff",
+      "intensity": 2.1,
+      "position": [
+        -3.078,
+        14.0,
+        -8.457
+      ],
+      "target": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "castShadow": true,
+      "shadow": {
+        "mapSize": 1024,
+        "bias": -0.0004,
+        "normalBias": 0.03,
+        "camera": {
+          "left": -9.0,
+          "right": 9.0,
+          "top": 9.0,
+          "bottom": -9.0,
+          "near": 1.0,
+          "far": 40.0
+        }
+      }
+    },
+    {
+      "id": "rim",
+      "type": "directional",
+      "color": "#62dcff",
+      "intensity": 1.3,
+      "position": [
+        2.394,
+        9.5,
+        6.578
+      ],
+      "target": [
+        0.0,
+        1.2,
+        0.0
+      ],
+      "castShadow": false
+    },
+    {
+      "id": "fill",
+      "type": "hemisphere",
+      "sky": "#9a88ff",
+      "ground": "#2b1233",
+      "intensity": 0.85
+    },
+    {
+      "id": "wheel_spot",
+      "type": "spot",
+      "color": "#fff3e0",
+      "intensity": 150.0,
+      "distance": 30.0,
+      "decay": 2,
+      "position": [
+        0.0,
+        9.0,
+        -8.0
+      ],
+      "target": [
+        0.0,
+        3.0,
+        -14.0
+      ],
+      "angleDeg": 20.0,
+      "penumbra": 0.45
+    },
+    {
+      "id": "spot_45",
+      "type": "spot",
+      "color": "#ffe6c8",
+      "intensity": 105.0,
+      "distance": 24.0,
+      "decay": 2,
+      "position": [
+        5.515,
+        9.0,
+        5.515
+      ],
+      "target": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "angleDeg": 27.0,
+      "penumbra": 0.55
+    },
+    {
+      "id": "spot_135",
+      "type": "spot",
+      "color": "#ffc8ee",
+      "intensity": 95.0,
+      "distance": 24.0,
+      "decay": 2,
+      "position": [
+        5.515,
+        9.0,
+        -5.515
+      ],
+      "target": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "angleDeg": 27.0,
+      "penumbra": 0.55
+    },
+    {
+      "id": "spot_225",
+      "type": "spot",
+      "color": "#cdefff",
+      "intensity": 95.0,
+      "distance": 24.0,
+      "decay": 2,
+      "position": [
+        -5.515,
+        9.0,
+        -5.515
+      ],
+      "target": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "angleDeg": 27.0,
+      "penumbra": 0.55
+    },
+    {
+      "id": "spot_315",
+      "type": "spot",
+      "color": "#ffe6c8",
+      "intensity": 105.0,
+      "distance": 24.0,
+      "decay": 2,
+      "position": [
+        -5.515,
+        9.0,
+        5.515
+      ],
+      "target": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "angleDeg": 27.0,
+      "penumbra": 0.55
+    }
+  ],
+  "lightsNote": "FIXED pool (8): created once at stage load, never added/removed (shader programs stay warm). No lights in the GLB. 360 rig (CONTRACT 35.6): high key from the wheel side + cool rim from the opposite side + hemisphere fill + wheel spot + four tower spots (45/135/225/315 deg) aimed at the ring centre, so the pair is front-lit from whichever side the orbit camera sits.",
+  "crowd": {
+    "atlas": "crowd_atlas.webp",
+    "meta": "crowd_atlas.json",
+    "cols": 12,
+    "rows": 6,
+    "count": 72,
+    "cardHeightM": 2.4,
+    "cardWidthM": 1.2,
+    "anchor": [
+      0.5,
+      0.97917
+    ],
+    "tint": "#dccfe8",
+    "brightness": 0.56,
+    "moods": {
+      "idle": [
+        "watch"
+      ],
+      "cheer": [
+        "cheer",
+        "hype"
+      ],
+      "jeer": [
+        "jeer"
+      ]
+    },
+    "nodes": "GLB empties crowd_<bay>_<row>_<i>: position = feet point, +Z = card facing (the ring centre), uniform scale = card height; extras {bay,row,i,rand,angle}. Generated from the ARC bays below (CONTRACT 35.11.6: rows along circles r about the ring centre, spacing along the arc, jitter = [tangential, radial] half-ranges from mulberry32(seed)).",
+    "bays": [
+      {
+        "id": "bay_a",
+        "arcDeg": [
+          218.0,
+          266.0
+        ],
+        "spacing": 0.62,
+        "jitter": [
+          0.12,
+          0.08
+        ],
+        "seed": 3301,
+        "rows": [
+          {
+            "r": 10.3,
+            "y": 0.3
+          },
+          {
+            "r": 11.1,
+            "y": 0.7
+          },
+          {
+            "r": 11.9,
+            "y": 1.1
+          },
+          {
+            "r": 12.7,
+            "y": 1.5
+          },
+          {
+            "r": 13.5,
+            "y": 1.9
+          },
+          {
+            "r": 14.3,
+            "y": 2.3
+          }
+        ]
+      },
+      {
+        "id": "bay_b",
+        "arcDeg": [
+          274.0,
+          356.0
+        ],
+        "spacing": 0.62,
+        "jitter": [
+          0.12,
+          0.08
+        ],
+        "seed": 3302,
+        "rows": [
+          {
+            "r": 10.3,
+            "y": 0.3
+          },
+          {
+            "r": 11.1,
+            "y": 0.7
+          },
+          {
+            "r": 11.9,
+            "y": 1.1
+          },
+          {
+            "r": 12.7,
+            "y": 1.5
+          },
+          {
+            "r": 13.5,
+            "y": 1.9
+          },
+          {
+            "r": 14.3,
+            "y": 2.3
+          }
+        ]
+      },
+      {
+        "id": "bay_c",
+        "arcDeg": [
+          4.0,
+          86.0
+        ],
+        "spacing": 0.62,
+        "jitter": [
+          0.12,
+          0.08
+        ],
+        "seed": 3303,
+        "rows": [
+          {
+            "r": 10.3,
+            "y": 0.3
+          },
+          {
+            "r": 11.1,
+            "y": 0.7
+          },
+          {
+            "r": 11.9,
+            "y": 1.1
+          },
+          {
+            "r": 12.7,
+            "y": 1.5
+          },
+          {
+            "r": 13.5,
+            "y": 1.9
+          },
+          {
+            "r": 14.3,
+            "y": 2.3
+          }
+        ]
+      },
+      {
+        "id": "bay_d",
+        "arcDeg": [
+          94.0,
+          142.0
+        ],
+        "spacing": 0.62,
+        "jitter": [
+          0.12,
+          0.08
+        ],
+        "seed": 3304,
+        "rows": [
+          {
+            "r": 10.3,
+            "y": 0.3
+          },
+          {
+            "r": 11.1,
+            "y": 0.7
+          },
+          {
+            "r": 11.9,
+            "y": 1.1
+          },
+          {
+            "r": 12.7,
+            "y": 1.5
+          },
+          {
+            "r": 13.5,
+            "y": 1.9
+          },
+          {
+            "r": 14.3,
+            "y": 2.3
+          }
+        ]
+      }
+    ]
+  },
+  "music": "music_stage_wheel_of_pain",
+  "musicHint": "AUDIO lane maps the id (router: music_stage_<stageId> -> cue <stageId>)",
+  "ambient": "amb_wheel_of_pain",
+  "ambientHint": "AUDIO 9.2 item 2 loop (neon buzz + wheel ticks: 16 pegs x 0.8 rad/s = ~2 clicks/s) under the crowd bed; applause-sign stingers",
+  "dressing": {
+    "animated": [
+      {
+        "what": "giant prize wheel",
+        "nodes": "anim_spin_wheel",
+        "how": "view stage hook anim_spin_*: rotation.y += dt * 0.8 about the node's local +Y = the axle (glTF +Z, toward the ring centre); pivot on the axle"
+      },
+      {
+        "what": "marquee bulbs",
+        "nodes": "marquee_bulbs",
+        "how": "optional chase pattern on emissive intensity"
+      },
+      {
+        "what": "crowd",
+        "how": "instanced cards, vertex bob/sway, pose swaps by ratings mood"
+      }
+    ],
+    "splatWallDust": "#ff7ad9"
+  },
+  "build": {
+    "bytes": 2119824,
+    "draws": 23,
+    "triangles": 82642,
+    "materials": 18,
+    "textures": 30,
+    "crowdNodes": 540,
+    "lights": 0,
+    "extensions": [
+      "EXT_meshopt_compression",
+      "EXT_texture_webp",
+      "KHR_materials_emissive_strength",
+      "KHR_mesh_quantization"
+    ],
+    "envBytes": 402107,
+    "clearance": {
+      "bandY": [
+        1.3,
+        3.0
+      ],
+      "minRadiusM": 9.707,
+      "nearest": "truss_ring_v_135_chord_3",
+      "cameraMaxM": 9.5,
+      "ok": true
+    }
+  }
+}

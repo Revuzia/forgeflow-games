@@ -1,0 +1,154 @@
+{
+ "lion": {
+  "uid": "66be3258e2d64f32af2b73b2ecd47637",
+  "bytes": 7626648,
+  "anims": 1,
+  "clips": [
+   "Animation"
+  ]
+ },
+ "lioness": {
+  "uid": "9edc71ac48984ca2b220c1c5c024d02c",
+  "bytes": 2669748,
+  "anims": 1,
+  "clips": [
+   "Lioness|A_Frighten2RunFast_BR180"
+  ]
+ },
+ "tiger": {
+  "uid": "9dd099d283e54f99b7cbd40b531b1a29",
+  "bytes": 9824876,
+  "anims": 1,
+  "clips": [
+   "Idle"
+  ]
+ },
+ "cheetah": {
+  "uid": "32e5feb88ecf48f6b6dfb95f9c622fe4",
+  "bytes": 2543676,
+  "anims": 1,
+  "clips": [
+   "Take 001"
+  ]
+ },
+ "leopard": {
+  "uid": "5a36868106f843d4a24d87334f1550fe",
+  "bytes": 951172,
+  "anims": 1,
+  "clips": [
+   "CINEMA_4D_Principal"
+  ]
+ },
+ "jaguar": {
+  "uid": "91c61c329d2a4668816f81f08dfcd492",
+  "bytes": 7198456,
+  "anims": 1,
+  "clips": [
+   "skeleton #1|skeleton #1|skeleton #1|All Animations_skeleton #1"
+  ]
+ },
+ "panther": {
+  "uid": "7fca11c89cca4362a525c891a8345112",
+  "bytes": 6887388,
+  "anims": 1,
+  "clips": [
+   "Animation"
+  ]
+ },
+ "gorilla": {
+  "uid": "6c1513599d2345d19b11fa1da18bf4c3",
+  "bytes": 1109940,
+  "anims": 3,
+  "clips": [
+   "Gorilla_Rig|Idle",
+   "Gorilla_Rig|Attack",
+   "Gorilla_Rig|Death"
+  ]
+ },
+ "chimp": {
+  "uid": "567d0866b9eb477f9dc03827c47e8566",
+  "bytes": 2096500,
+  "anims": 1,
+  "clips": [
+   "Idle"
+  ]
+ },
+ "bear": {
+  "uid": "bffc3c87d2d148ff8533e1cc8a11c9f1",
+  "bytes": 13962624,
+  "anims": 81,
+  "clips": [
+   "Stand_Eating_01",
+   "Stand_Breathing_01",
+   "Stand_Idle_01",
+   "Stand_Idle_02"
+  ]
+ },
+ "penguin": {
+  "uid": "db8a037d135b41b08752ce4c57f43525",
+  "bytes": 1209432,
+  "anims": 6,
+  "clips": [
+   "afk_01",
+   "afk_02",
+   "IDLE_01",
+   "jojing"
+  ]
+ },
+ "crocodile": {
+  "uid": "0dc0283f0a7047f6b49044cce2fd648b",
+  "bytes": 3104648,
+  "anims": 2,
+  "clips": [
+   "Action",
+   "Crocodile_BoneAction"
+  ]
+ },
+ "elephant": {
+  "uid": "1ab2e4eae4f248ae8d6b45e8a12737b0",
+  "bytes": 14110516,
+  "anims": 1,
+  "clips": [
+   "GltfAnimation 0"
+  ]
+ },
+ "giraffe": {
+  "uid": "9b83f5e5841241f68ce1d85525b0a2bd",
+  "bytes": 1926268,
+  "anims": 1,
+  "clips": [
+   "Giraffe_armature|Action"
+  ]
+ },
+ "rhino": {
+  "uid": "58a619ff7e704feaaa89517ba00ddf92",
+  "bytes": 5875496,
+  "anims": 32,
+  "clips": [
+   "IdleBreathe",
+   "Attack1",
+   "Attack1Forward",
+   "Attack1Forward_RM"
+  ]
+ },
+ "camel": {
+  "uid": "99af7daa5baf450ea7b809937937e6d5",
+  "bytes": 9863288,
+  "anims": 3
+ },
+ "bison": {
+  "uid": "be2dcd97db1c4b9c91a7728d9bc89925",
+  "bytes": 5449996,
+  "anims": 1
+ },
+ "moose": {
+  "uid": "260231e7109c4bcf95f8a7dd8e7a8d8d",
+  "bytes": 626120,
+  "anims": 6
+ },
+ "gazelle": {
+  "uid": "b2c70a0821ef4c6ca0c096e33bc97593",
+  "bytes": 3511752,
+  "anims": 1
+ }
+}

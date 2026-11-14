@@ -1,0 +1,117 @@
+{
+ "L boss bar": {
+  "wasLocked": false,
+  "idle": {
+   "container": "show",
+   "containerShown": true,
+   "on": false,
+   "name": "",
+   "hpScale": ""
+  },
+  "live": {
+   "container": "show",
+   "containerShown": true,
+   "on": true,
+   "name": "The Icewall",
+   "hpScale": "scaleX(1)"
+  },
+  "registryName": "The Icewall",
+  "justDead": {
+   "container": "show",
+   "containerShown": true,
+   "on": true,
+   "name": "The Icewall",
+   "hpScale": "scaleX(0)"
+  },
+  "afterDissolve": {
+   "container": "show",
+   "containerShown": true,
+   "on": false,
+   "name": "The Icewall",
+   "hpScale": "scaleX(0)"
+  },
+  "live2": {
+   "container": "show",
+   "containerShown": true,
+   "on": true,
+   "name": "Shrinebreaker",
+   "hpScale": "scaleX(1)"
+  },
+  "afterClear": {
+   "container": "show",
+   "containerShown": true,
+   "on": false,
+   "name": "Shrinebreaker",
+   "hpScale": "scaleX(1)"
+  },
+  "live3": {
+   "container": "show",
+   "containerShown": true,
+   "on": true,
+   "name": "The Icewall",
+   "hpScale": "scaleX(1)"
+  },
+  "afterRealm": {
+   "container": "show",
+   "containerShown": true,
+   "on": false,
+   "name": "The Icewall",
+   "hpScale": "scaleX(1)"
+  }
+ },
+ "M kill while leashing": {
+  "EVAL_ERROR": "Page.evaluate: TypeError: Cannot read properties of undefined (reading 'toFixed')\n    at eval (eval at evaluate (:290:30), <anonymous>:20:48)\n    at async <anonymous>:316:30"
+ },
+ "N portal after realm change": {
+  "gateUp": {
+   "open": true,
+   "token": "sand",
+   "killed": {
+    "cold:realm": true
+   }
+  },
+  "inSand": {
+   "open": false,
+   "token": null,
+   "realm": "sand"
+  },
+  "backInCold": {
+   "open": false,
+   "token": null,
+   "realm": "cold",
+   "state": "pending",
+   "kind": "mini",
+   "killed": {
+    "cold:realm": true
+   },
+   "eligible": "mini",
+   "refusal": null,
+   "realmsUnlocked": [
+    "cold"
+   ]
+  }
+ },
+ "O pool-full emergence": {
+  "poolSpawned": 24,
+  "afterForce": {
+   "ok": false,
+   "state": "pending",
+   "id": -1,
+   "refusal": "enemy pool or registry full",
+   "emerge": 1
+  },
+  "spin": {
+   "emergeCalls": 1,
+   "gameSeconds": 5,
+   "state": "pending",
+   "id": -1,
+   "refusal": "enemy pool or registry full"
+  },
+  "recovered": {
+   "state": "pending",
+   "id": -1,
+   "refusal": "enemy pool or registry full",
+   "emerge": 1
+  }
+ }
+}

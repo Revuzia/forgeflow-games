@@ -1,0 +1,77 @@
+
+--- PHASE A   release build (no ?dev=1) ---
+  PASS  release build reaches the title screen   state=title
+  PASS  Rajdhani webfont loaded (a serif fallback would be a fail)   check700=True wRaj=658.8 wFallback=762.7 wSerif=762.7
+  PASS  dev overlay hidden and __dev absent without ?dev=1   __dev=undefined  #cb-dev display=none
+  PASS  a FRESH profile offers NEW GAME without an erase-my-progress confirm   hasProgress=False totals={"crests": 0, "deaths": 0, "timeMs": 0, "coins": 0, "coursesCleared": 0, "coursesPlayed": 0, "bestSumMs": 0, "sessions": 1} savedBlob=True
+  shot  title.png                      0.6 s
+  PASS  title: no clipped text, nothing off-viewport, no occluded control   []
+  PASS  title menu navigates by keyboard   'NEW GAME' -> 'CONTROLS'
+  shot  title_nav.png                  0.7 s
+  PASS  SETTINGS opens the settings page   fired='SETTINGS'
+  shot  settings.png                   0.6 s
+  PASS  settings: no clipped text, nothing off-viewport, no occluded control   []
+  PASS  CONTROLS opens the controls page   fired='CONTROLS'
+  shot  controls.png                   0.5 s
+  PASS  controls page shows gamepad glyphs AND keyboard keys   pad=90 kbd=51  pad sample=['LS/D-PAD', 'LS', 'D-PAD', 'LS/D-PAD', 'LS', 'D-PAD', 'LS/D-PAD', 'LS', 'D-PAD', 'LS/D-PAD', 'LS', 'D-PAD']
+  PASS  controls: no clipped text, nothing off-viewport, no occluded control   []
+  shot  controls_bottom.png            0.4 s
+  shot  credits.png                    0.6 s
+  PASS  credits: no clipped text, nothing off-viewport, no occluded control   []
+  PASS  bottom-right affordances clear the page control cluster (title)   {"bar": [1496, 858, 1592, 892], "items": [{"name": "rewind badge", "sel": ".ct-rewind .rw-glyph", "rect": [757, 828, 842, 844], "w": 84, "h": 16, "overlap": false}, {"name": "cinematic skip hint", "sel": "#cb-cine .cb-ci
+
+--- PHASE B   ?dev=1   keep -> card -> course -> death ---
+  ..    phase B lost its browser (attempt 1/3) -> retry
+  PASS  NEW GAME lands in the Keep   state=keep
+  shot  keep_hud.png                   0.7 s
+  PASS  keep HUD: no clipped text, nothing off-viewport, no occluded control   []
+  PASS  bottom-right affordances clear the page control cluster (keep)   {"bar": [1496, 858, 1592, 892], "items": [{"name": "rewind badge", "sel": ".ct-rewind .rw-glyph", "rect": [757, 828, 842, 844], "w": 84, "h": 16, "overlap": false}, {"name": "cinematic skip hint", "sel": "#cb-cine .cb-ci
+  PASS  verdant-1 painting gate exists and is unlocked   label='BAILEY MEADOW' sub='VERDANT BAILEY   CRESTS 0 / 7'  (13 gates)
+  ..    floor probe: [{"side": -1, "d": 2.6, "x": -17.4, "z": -6, "floorY": 0}, {"side": -1, "d": 3.3, "x": -16.7, "z": -6, "floorY": 0}, {"side": -1, "d": 4.2, "x": -15.8, "z": -6, "floorY": 0}, {"side": 1, "d": 2.6, "x": -22.6, "z": -6, "floorY": null}, {"side": 1, "d": 3.3, "x": -23.3, "z": -6, "floorY": null}, {"side": 1, "d": 4.2, "x": -24.2, "z": -6, "floorY": null}]
+  ..    side -1 @4.2 m -> [-15.8, 0, -6] grounded=True gateNear=0 state=keep
+  PASS  Nim stands on the floor in front of the painting, prompt armed   {"side": -1, "d": 4.2, "at": [-15.8, 0, -6], "grounded": true, "near": 0, "state": "keep"}
+  shot  keep_painting_prompt.png       0.7 s
+  PASS  standing at the painting raises the walk-in prompt   {"cls": "cb-prompt show", "text": "EBAILEY MEADOWVERDANT BAILEY   CRESTS 0 / 7"}
+  PASS  WALKING into the painting raises the course card   state=card  via=walked in
+  shot  course_card.png                0.6 s
+  PASS  course card carries the crest tally   E | BAILEY MEADOW | VERDANT BAILEY CRESTS 0 / 7 | PRESS JUMP TO SKIP | REWIND | VERDANT BAILEY | BAILEY MEADOW | OPEN HILLS AND A FORT WITH A HOLE IN IT | DIFFICULTY | SOMEWHERE | EIGHT SIGILS | ONE H
+  PASS  course card carries best times   E | BAILEY MEADOW | VERDANT BAILEY CRESTS 0 / 7 | PRESS JUMP TO SKIP | REWIND | VERDANT BAILEY | BAILEY MEADOW | OPEN HILLS AND A FORT WITH A HOLE IN IT | DIFFICULTY | SOMEWHERE | EIGHT SIGILS | ONE H
+  PASS  course card paints a real painting canvas (a frame, not a flat panel)   [{'w': 1280, 'h': 380}]
+  PASS  course card: no clipped text, nothing off-viewport, no occluded control   []
+  shot  intro_00.png                   0.7 s
+  shot  intro_01.png                   0.6 s
+  shot  intro_02.png                   0.5 s
+  PASS  entering the painting plays a course INTRO CINEMATIC   states: ['cinematic', 'loading']
+  PASS  the intro hands control back to play   state=playing
+  shot  crest_ribbon_00.png            0.9 s
+  PASS  crest ribbon appears on collect   [{"cls": "cb-crestpip is-got", "text": ""}, {"cls": "cb-crestpip", "text": ""}, {"cls": "cb-crestpip", "text": ""}, {"cls": "cb-crestpip", "text": ""}, {"cls": "cb-crestpip", "text": ""}, {"cls": "cb-crestpip", "text": "
+  shot  crest_ribbon_01.png            0.6 s
+  shot  course_clear.png               0.6 s
+  PASS  course-clear panel offers STAY / RETURN TO KEEP   ["STAY", "RETURN TO KEEP"]
+  PASS  clear panel: no clipped text, nothing off-viewport, no occluded control   []
+  shot  hud_play.png                   0.8 s
+  PASS  in-play HUD shows 2 crests and 37 coins   VERDANT BAILEY | BAILEY MEADOW | 2 / 7 | CREST ON THE RAMPARTS | EIGHT SIGILS OF THE MEADOW | · · · | · · · | · · · | · · · | · · · | 0:01 | .172 | SESSION0:03 | 0 | 3 | 7 | / 100 | CHECKPOINT | 1 / 4 | CARRY ON | 2 / 7 
+  PASS  in-play HUD: no clipped text, nothing off-viewport, no occluded control   []
+  PASS  checkpoint gives visible HUD feedback   [{"cls": "ch-toast k-info", "text": "CARRY ON2 / 7 CRESTS"}, {"cls": "ch-toast k-info", "text": "CHECKPOINT 1 / 40:01.172"}]
+  shot  checkpoint_00.png              0.7 s
+  shot  checkpoint_01.png              0.5 s
+  shot  pause.png                      0.6 s
+  PASS  Escape opens the pause menu   state=paused
+  PASS  coin count agrees across HUD chip and pause header (live run, one denominator)   hud='37 / 100' pause='37 / 100' live=37 goal=100
+  PASS  pause menu navigates by keyboard   'RESUME' -> 'RESTART COURSEBAILEY MEADOW'
+  PASS  pause menu: no clipped text, nothing off-viewport, no occluded control   []
+  PASS  Nim is running when the kill lands (so the rewind has motion to replay)   speed=6.30 state=run historyN=24 span=0.50 m
+  strip 10 frames, cadence [201, 221, 263, 196, 303, 292, 220, 260, 164] ms
+  FAIL  death strip captured across the whole sequence (>= 6 frames inside 800 ms)   4 frames <= 800 ms of 10 total
+  FAIL  death rewind ghost really moves backwards (>=3 frames, path > 0.4 m, ends away from the death spot)   {"frames": 1, "pathLen": 0.0, "awayFromDeathPos": 0.5}
+  PASS  the iris actually closes over the swap (veil reaches full cover)   peak veil opacity 1.000
+  PASS  respawn (kill -> controls restored) <= 700 ms   lastRespawnMs=453.6000000089407  timeline={"hit": 90, "rewind": 220, "swap": 453.6000000089407, "total": 716.7999999970198}
+  shot  death_after.png                0.8 s
+  PASS  clean respawn: alive, back in play, veil clear, hazards rewound   {"state": "playing", "deaths": 1, "cpIndex": 1, "dead": false, "pos": [0, 4.4, 9], "speed": 0, "clock": 1.5, "veil": 0}
+  PASS  after respawn: no clipped text, nothing off-viewport, no occluded control   []
+  FAIL  no console / page errors across the whole UI walk   [{"type": "pageerror", "text": "Unexpected identifier 'domeUv'"}]
+
+UI SHOTS: 41/44 checks passed, 30 images -> C:\Users\TestRun\Claude Claw\forgeflow-games\games\crestbound\_shots\ui
+  FAILING: death strip captured across the whole sequence (>= 6 frames inside 800 ms)   4 frames <= 800 ms of 10 total
+  FAILING: death rewind ghost really moves backwards (>=3 frames, path > 0.4 m, ends away from the death spot)   {"frames": 1, "pathLen": 0.0, "awayFromDeathPos": 0.5}
+  FAILING: no console / page errors across the whole UI walk   [{"type": "pageerror", "text": "Unexpected identifier 'domeUv'"}]

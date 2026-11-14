@@ -1,0 +1,22 @@
+{
+  "title": "Checkers",
+  "slug": "checkers",
+  "genre": "checkers3d",
+  "tagline": "A calm, classic game of draughts in 3D.",
+  "playerSide": "r",
+  "aiDepth": 3,
+  "view": { "width": 960, "height": 600, "background": "#20262e" },
+  "audio": {
+    "music": "assets/audio/music.ogg",
+    "menu_music": "assets/audio/menu_music.ogg"
+  },
+  "sfx": {
+    "click": "assets/audio/click.ogg",
+    "select": "assets/audio/select.ogg",
+    "confirm": "assets/audio/confirm.ogg",
+    "hit": "assets/audio/hit.ogg",
+    "victory": "assets/audio/victory.ogg",
+    "defeat": "assets/audio/defeat.ogg"
+  },
+  "assets": {}
+}

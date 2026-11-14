@@ -1,0 +1,361 @@
+{
+  "area": "verdant-3 WINDMILL HEIGHTS",
+  "status": "complete - beats 1-8 played across 4 driver runs, screenshots read",
+  "defects": [
+    {
+      "id": "V3-01",
+      "sev": "BLOCKER",
+      "where": "verdant-3, cp-northbank [0, 2.60, 20.4] - the checkpoint the course puts you on after the log crossing - facing the north bank, the REQUIRED route to the wheat terraces and everything after them.",
+      "did": "Stood on the checkpoint and held W north along the cart track (the one the trail coins at [0,19],[0,13],[0,6],[0,2] mark) for 12 s, then another 8 s. Then four more attempts: run-and-jump up it (slope.recoverJumpV 10.5); and hold W north from z=21 at x = -16, -8, +8 and +16; and finally walk DOWN from the wheat field and back up.",
+      "happened": "The hero got 1.3 m off the jetty to z=19.1, dropped into state slopeSlide and stayed there. 20 'slide' events on the first attempt, 48 on the second; final position [-0.25, 2.60, 19.22] after 20 s of held forward. He never passed z=19.2. The screenshot shows why: the north bank is a near-vertical wall of dark brown dirt filling the whole frame, with the cart-track coins hanging in front of it and the lowest one buried inside it. MEASURED OFF THE LIVE HEIGHTFIELD (Broadphase.heightfields[].heightAt(0, z), 0.5 m steps): the required cart track at x=0 climbs z 22.0 -> 16.5 at 40.7-48.7 DEGREES for eleven consecutive bands (worst 48.7 deg at z 21.5 -> 20.0, y -0.02 -> 1.69), with two more 40.0 deg bands at z 11.0 -> 10.0. The wheat field only goes flat at z = 7.5 (y 10.20). TUNE.slope.slideDeg is 38, so the whole climb is 3 to 11 degrees over the slide threshold. EVERY line failed the same way. Held W: the hero oscillates run / slopeSlide / pivot between z 18.8 and 19.5 for 8 s and finishes at z 19.17 (29 'slide' events). Jumping up it: the slope-recovery jumps fling him sideways and he ends IN THE RIVER at [-12.27, -0.27, 33.86], swimming. x = -16 / -8 / +8 / +16 all ended swimming as well ([0.62,-1.06,23.43], [14.16,-2.59,26.5], [29.66,-0.04,22.19], [39.68,0.06,22.57]) - four for four, across a 32 m width. The face IS walkable higher up: from [9.97, 6.14, 15.24] a held W climbed back to the wheat field at y 10.05 with one slide event. So it is only the bottom 5.5 m out of the jetty that is impassable - and that is exactly where the checkpoint puts you.",
+      "should": "The course header states 'the bank -> the terraces 24.8 deg' and 'TUNE.slope.slideDeg is 38, so nothing required slides'. The heightfield the game builds says 40.7-48.7 deg. A player who reaches checkpoint 2 cannot advance past it and cannot go back - the crossing behind him is water. Beats 3 through 8 of the course are unreachable in normal play; everything else in this report was reached by teleport.",
+      "png": "_shots/play_wm_b/06_bank_climb.png"
+    },
+    {
+      "id": "V3-02",
+      "sev": "major (observed once, not reproduced)",
+      "where": "verdant-3, inside the granary cellar after pounding the breakable mezzanine (breakable at [-8, 17.20, -16]; cellar floor GRANARY_Y 13.60). Player ends at [-7.98, 15.08, -15.98].",
+      "did": "Stood on the mezzanine at [-8, 18.2, -16], jumped, held C to ground-pound through the floor, collected the secret crest, then held W toward the south door. RE-VERIFY RUN: repeated the same sequence on a fresh boot.",
+      "happened": "The pound worked and the SECRET CREST collected (crests 0 -> 1). Then the hero froze: position [-7.98, 15.08, -15.98] identical across every sample, state 'fall', grounded false, speed 0, vy running away to -14.76 m/s. Holding W for 14 s moved him 0.00 m. He is inside the geometry at 15.08 - 1.5 m above the 13.60 cellar floor and 2.1 m below the broken 17.20 mezzanine - permanently falling and unable to walk. ON THE RE-VERIFY THE POUND DID NOT FIRE AT ALL - same key sequence, events were only ['land:7.86','jump:single','land:12.87'], the floor stayed intact, crests stayed 0 and the hero stayed on the mezzanine at [-8, 17.45, -16]. So the stuck state could not be re-entered and I am reporting the cellar freeze as observed ONCE with a full sample trace rather than as reproduced. The pound failing to fire is itself logged separately as V3-24.",
+      "should": "After breaking the floor you should land on the cellar floor at 13.60 and be able to walk out through the south door. As it stands the secret-crest route ends with the player stuck in the world and needing T (to checkpoint) or a death to escape.",
+      "png": "_shots/play_wm_b/ (25_interior_00, and the pound sequence)"
+    },
+    {
+      "id": "V3-03",
+      "sev": "BLOCKER",
+      "where": "verdant-3, in the river against sinker log A's south face. Player pos [-0.02, 0.11, 34.68]; log A spans z 30.7..34.3, deck top 1.20, water surface ~0.35.",
+      "did": "Ran off the quay into the river, held W north into log A and tapped Space (the surface stroke) repeatedly - twice, ~1.7 s each.",
+      "happened": "The player FROZE. pos [-0.02, 0.11, 34.68] and vel [0,0,0] identical on all 10 samples over 1.7 s, speed 0.00 on the overlay, state swimIdle. 'jump:surface' then 'splash:true' fired each time - he breached and dropped back into exactly the same spot. Even the 3.4 m/s current did not move him. Second attempt identical ([0,-0.35,34.68] unchanged over 6 samples).",
+      "should": "swim.surfaceJumpV is 9.0 (~1.2 m of apex against an 0.85 m lip), so a player pressed against a floating log should climb onto it or at least slide along it. Missing the log jump currently pins you with zero velocity.",
+      "png": "_shots/play_wm_a/09_log_a_landing.png"
+    },
+    {
+      "id": "V3-04",
+      "sev": "BLOCKER",
+      "where": "verdant-3, the granary terrace between the sigils pedestal [5, 13.60, -21.5] and the sack stair's first ledge [-0.4, 15.20, -19.6]. The player slide-locks around [-2..-4, 14.1-14.3, -20.9].",
+      "did": "Walked to the sigils pedestal (arrived fine), then teleported to the sack-stair foot [-0.4, 14.3, -22.0] and ran-and-jumped at ledge 1; then held W toward the granary roof.",
+      "happened": "Both times the hero ended in slopeSlide around [-2..-4, 14.1, -20.9] and slid, with 20 then 12 'slide' events, never gaining the first ledge. The terrain flat {p:[-2,-16], r:11, h:13.60} puts this spot dead level at 13.60 inside its 0.55 core, yet the player stands at 14.1-14.3 and slides - so he is standing on something else (the scattered stump/plant/rock decor from the seeded scatters covers exactly this box). A collider query over the granary terrace (Broadphase.query on the box [-12,10,-30]..[10,40,-12]) returned no rock- or boulder-shaped collider - the biggest things there are threshing deck B [half 10,0.5,4 at (6,11.8,-8)], the granary roof [6.4,0.17,4.9 at (-8,21.4,-16)], the breakable [5.2,0.25,3.7 at (-8,17.2,-16)], the cart ramp and the granary's own walls. So whatever the hero is standing on at 14.1 and sliding off is not a collider that query found.",
+      "should": "The granary terrace is a flat. The sack stair is the non-riding route to sigil 4 and the granary roof, and it is unreachable from the pedestal side.",
+      "png": "_shots/play_wm_b/22_sackstair_miss1.png, _shots/play_wm_b/24_granary_roof.png"
+    },
+    {
+      "id": "V3-05",
+      "sev": "major",
+      "where": "verdant-3, the lower hay belt {kind:'conveyor', p:[7, 11.15, -2], s:[5,0.3,8.4], dir:[0,0,1], power:5.0}, standing on its deck at [7, 11.31, 1.72].",
+      "did": "Landed on the belt and held W due north (against the belt) for 4.8 s - the thing the sign 'THE BELTS RUN DOWNHILL / RUN THROUGH THEM' tells you to do.",
+      "happened": "He went the WRONG WAY. z went 1.72 -> 2.05 -> 3.19 -> 4.45 -> 7.06 -> 8.63: swept south off the belt's south end and down the hillside, never sustaining a 'run', finishing with three 'bonk' events at [8.0, 9.05, 9.0]. The state trace is land / land / land / land / run / fall / land / run / bonk / bonk / bonk.",
+      "should": "The course header computes 'A full run is 9.0 m/s, so you make 4.0 and 3.5 m/s up the belt: enough to cross'. Net travel measured negative. The twelve coins on the belts and the belt line to sigil 3 cannot be taken by running the belt.",
+      "png": "_shots/play_wm_b/10_belt_against.png"
+    },
+    {
+      "id": "V3-06",
+      "sev": "major",
+      "where": "verdant-3, the terrace stair {kind:'stairs', p:[-3, 11.00, -6.2], n:9, rise 0.30} approached northward across threshing deck A. Player stops dead at [-3.00, 11.00, -3.62].",
+      "did": "Stood on deck A at [-3, 11.8, -3.2] and held W north toward the stair for 3.5 s.",
+      "happened": "The hero entered the 'bonk' state and stayed in it for all 10 samples - position [-3.00, 11.00, -3.62] to the centimetre, speed 0.00, grounded true. The screenshot shows the stair plainly visible two metres ahead and a low grey kerb between him and it.",
+      "should": "The stair is the authored way from deck A up to deck B; it is visible and it is walled off from the deck you stand on. Same class as the owner's 'the images have odd stairs but i cant reach the main stairs'.",
+      "png": "_shots/play_wm_b/14_stair_top.png"
+    },
+    {
+      "id": "V3-07",
+      "sev": "minor",
+      "where": "verdant-3, riding mill 1's gondola at [-18, ~16 -> ~24, -18.2 -> -22.5] (4 arms, period 10.5)",
+      "did": "Stood on mill 1's lowest gondola and waited 7.2 s with no input - the ride the sign 'RIDE A SAIL / STEP OFF AT THE TOP OF THE SWING' teaches.",
+      "happened": "The ride WORKS: the hero stayed grounded and idle and was carried y 15.85 -> 22.96 and z -18.23 -> -22.46 over 7.2 s, then went to 'fall' past the top of the sweep, which is what the sign says. The only fault is jitter: the event log shows 'land:0.575' firing five times in a row while he simply stood on the moving deck, i.e. he is being re-landed every frame instead of carried cleanly.",
+      "should": "A carried platform should not re-fire 'land' every frame (CONTRACT \u00a710: 'carry by mover motion', seam-jitter-free). RETRACTION: an earlier reading of this run said the mill was frozen and did not carry - that was my harness placing the hero at a gondola position the turning mill had already left, which pinned him. All four mills were then verified turning (lowest decks moved 3.2-6.1 m in 0.89 s of course clock).",
+      "png": "_shots/play_wm_bank/ (mill1_ride)"
+    },
+    {
+      "id": "V3-08",
+      "sev": "major",
+      "where": "verdant-3, the keyboard camera orbit, measured at the spawn checkpoint [0, 1.90, 42] with the hero at rest. ACTIONS orbitUp is KeyR, orbitDown is KeyV.",
+      "did": "Recentred with Z, then held R (orbitUp) for 0.9 s; recentred; then held V (orbitDown) for 0.9 s. Read the camera's WORLD position each time.",
+      "happened": "INVERTED. At rest the camera sat at world y 4.8 (pitch 0.22). Holding R - 'orbit UP' - dropped it to world y 4.0 (pitch 0.10). Holding V - 'orbit DOWN' - raised it to world y 9.0 (pitch 0.95, the pitchMax clamp).",
+      "should": "orbitUp should raise the camera and orbitDown lower it. This is the owner's P1 sign error surviving on the KEYBOARD orbit path, which is a separate path from the mouse look the input lane fixed. Related: DEFAULT_BINDINGS puts KeyR on both orbitUp and restart, and KeyE on both orbitRight and interact - a player looking around with E is also pressing the interact key.",
+      "png": "_shots/play_wm_b/01_cam_rest.png, 02_cam_R_up.png, 03_cam_V_down.png"
+    },
+    {
+      "id": "V3-09",
+      "sev": "major",
+      "where": "verdant-3, the whole river (channel z~27; current {p:[0,-1.6,27], s:[136,3.4,12], dir:[1,0,0], power:3.4})",
+      "did": "Fell in at [0, 0.2, 29] and held W toward the north jetty [0, 2.60, 21]; then released everything for 9.6 s; then swam for the nearest bank; then held W and tapped Space for 8 s.",
+      "happened": "Swimming north reached z=21.13 but the current had carried the hero to x=15.84, 15.8 m east of the jetty (which spans x -4.5..4.5) - so he missed it. With no input he was swept x 18.7 -> 37.3 in 9.6 s, still in open water. Swimming for the bank put him at x=46.99 in state slopeSlide (grounded true, surface grass, inWater still true) - too steep to stand on. He only got fully out at x=24 after 8 s of continuous stroking. The screenshot of the north bank shows a vertical cracked-mud cliff rising straight out of the water.",
+      "should": "The course header promises 'the current carries you EAST ... until the channel shallows and you walk out - a lesson, not a death'. There is no shallow exit near the crossing, the jetty cannot be swum to (4.5 m/s swim vs a 3.4 m/s cross-current over an 8 m leg), and the bank you reach is a slide face.",
+      "png": "_shots/play_wm_a/12_swim_out_north.png"
+    },
+    {
+      "id": "V3-10",
+      "sev": "major",
+      "where": "verdant-3, sigil 1 on the riverbed at [-14.0, -3.30, 28.0] (bed -4.89) plus the 10-coin ring at [-14, -3.60, 28] r 4.2",
+      "did": "Floated exactly above the sigil at [-14.11, -0.06, 28.06] and held C to sink for 3 s, then C+W for 2.5 s - the line the quay sign teaches ('crouch under water to sink').",
+      "happened": "Sinking took him y -0.06 -> -1.86 in 3 s and -> -3.70 in another 2.5 s, but the current dragged him x -14.11 -> -8.76 -> -1.43: 12.7 m east of the sigil by the time he was deep enough. Sigil count stayed 0.",
+      "should": "swim.sink is 1.2 m/s against a 3.4 m/s current, so reaching -3.30 costs ~3 s and ~10 m of drift. Nothing on the riverbed under the current can be reached by sinking onto it.",
+      "png": "_shots/play_wm_a/16_riverbed_sigil.png"
+    },
+    {
+      "id": "V3-11",
+      "sev": "major",
+      "where": "verdant-3, the river surface, seen from the water at [26.85, -0.69, 26.38] and [4.36, -1.76, 26.71], from the west bank at [-28.16, 2.09, 41.09], and from under it at [-1.27, -3.71, 28.10]",
+      "did": "Swam it, stood on the bank looking at it, and sank to the bed and looked up.",
+      "happened": "The river renders as a blinding cream/white sheet with hard-edged blobs rimmed in gold, in mid-channel as well as at the shore; from the west bank the whole channel is a white ribbon that reads as milk or ice. From water level the screen is a blown-out white field with Nim a faint ghost inside it. From just under the surface the water sheet is drawn OVER the hero so you cannot see your own character. And there is NO underwater treatment at all when submerged: no tint, no murk, no wobble - the hero is lit in full daylight, the bed is bright green grass, the sun casts his shadow on the bed, and the sky is visible; the surface from below is opaque cream blobs with concentric rings. Coins underwater lose their gold and render as faint grey discs. A flat, razor-edged dark-brown plane (the bank's cut face) hangs across the channel with no thickness.",
+      "should": "Translucent water you can see the hero and the bed through, foam at the shoreline only, and post.setUnderwater(v01) applied when submerged as CONTRACT \u00a77 requires. This is the owner's P8 as it lands on this course.",
+      "png": "_shots/play_wm_a/06_bale_hop.png, _shots/play_wm_a/16_riverbed_sigil.png, _shots/play_windmill/13_12_log_sinking.png"
+    },
+    {
+      "id": "V3-12",
+      "sev": "minor",
+      "where": "verdant-3, the meadow bale stack at [-9, 2.75, 47] and [-9.2, 45.15, 44.6] (kind platform, mat 'cloth', tint WHEAT 0xd7b45a / 0xc9a44e)",
+      "did": "Walked up to them and stood alongside.",
+      "happened": "Both hay bales render STEEL BLUE with pale quilted caps. Blue hay bales in a wheat field, in the first ten seconds of the course, and they stay blue at 40 m.",
+      "should": "The 'cloth' material must honour the authored tint. The hay-belt conveyor treads use the same material and tint family and render dark grey with green chevrons instead of hay.",
+      "png": "_shots/play_wm_b/04_bales_closeup.png"
+    },
+    {
+      "id": "V3-13",
+      "sev": "minor",
+      "where": "verdant-3, the granary interior, on the breakable mezzanine at [-7.98, 17.45, -15.91]",
+      "did": "Stood inside the granary and orbited the camera.",
+      "happened": "The mezzanine floor is strewn with a dozen long thin BRIGHT YELLOW RODS lying at random angles, some leaning up the walls, some floating clear of the floor. Nothing in the room's def is a rod - the only decor authored there is four 1 m WHEAT-tinted 'crate' sacks.",
+      "should": "Grain sacks, not scattered yellow sticks. This is the owner's 'extra objects' as it lands on this course.",
+      "png": "_shots/play_wm_b/26_interior_orbit0.png"
+    },
+    {
+      "id": "V3-14",
+      "sev": "minor",
+      "where": "verdant-3, the north bank of the river seen from the spawn checkpoint [0, 1.90, 42] - the first frame of the course - and from the jetty at [0, 2.76, 19.03]",
+      "did": "Stood on each checkpoint and looked straight ahead.",
+      "happened": "The grass ends at a RAZOR-STRAIGHT horizontal terminator running the full width of the frame, below which a near-black stippled brown band fills a third of the screen. No gradient. Close up from the water the same face shows a large polygonal cracked-mud pattern. The dirt is darker than the water it meets, so the north bank reads as a void.",
+      "should": "The terrain's grass-to-dirt slope blend should be a gradient and should not go darker than the water. This is the owner's P7 on this course, and it is the same face as blocker V3-01.",
+      "png": "_shots/play_windmill/z_horizon.png, _shots/play_wm_a/12_swim_out_north.png, _shots/play_wm_b/06_bank_climb.png"
+    },
+    {
+      "id": "V3-15",
+      "sev": "minor",
+      "where": "verdant-3, the two sinker 'logs' on the required line at [0, 0.95, 32.5] and [0, 0.95, 25.8] (def mat 'wood', tint TIMBER 0x8a6033)",
+      "did": "Landed on and swam up to log A and looked at it from 2 m.",
+      "happened": "They are not logs. Each renders as a flat rectangular raft with a light-grey stone frame, four cream corner blocks and a dark red-brown ribbed infill that reads as terracotta tiles in a stone tray. The quay sign a player has just read says 'THE LOGS SINK WHEN YOU STAND'.",
+      "should": "The object the sign names should look like that object.",
+      "png": "_shots/play_wm_a/09_log_a_landing.png"
+    },
+    {
+      "id": "V3-16",
+      "sev": "minor",
+      "where": "verdant-3, walking north from the riverbank flat onto the south quay deck (ground 1.90 -> quay top 2.30, a 0.40 m lip; TUNE.stepUp = 0.45), and on open flat grass near [-12, 2.16, 49.7]",
+      "did": "Held W from [0, 2.6, 44] north onto the quay, once; and walked to the paddock coin ring.",
+      "happened": "The event log for that single quay walk was ['bonk','slide','bonk','bonk','bonk',...] - the hero played the bonk recoil three or four times crossing a lip he is meant to step over. Two more bonks fired on open flat grass at the paddock, and three more approaching the gnasher post on the flat granary terrace.",
+      "should": "A 0.40 m lip is inside stepUp 0.45 and should be a silent step. Bonk is for a wall that will not move; on this course it fires on ordinary ground.",
+      "png": "_shots/play_wm_a/07_cp_riverbank.png"
+    },
+    {
+      "id": "V3-17",
+      "sev": "minor",
+      "where": "verdant-3, threshing deck B / the jump-pad landing line around [-8.8, 12.48, -8.2], 1.1 m below and 2.3 m from the gnasher's post at [-7, 13.60, -9.6]",
+      "did": "Ran north off the lower deck's jump pad [-9, 11.14, -3].",
+      "happened": "'death:gnasher' fired at [-8.7, 12.6, -8.7] while running along the deck a metre below the gnasher's terrace, with no telegraph the player could act on from that height, and respawned him at cp-northbank - the checkpoint under the unclimbable bank (V3-01). So one gnasher hit on the terraces ends the run.",
+      "should": "The course text is careful that 'the sack stair starts at x = -0.4, which is 6.6 m from the post: OUTSIDE the disc, so the climb is a choice and not a gauntlet' - but the jump pad's own landing line runs straight through the disc, one storey down.",
+      "png": "_shots/play_wm_b/12_jumppad_after.png"
+    },
+    {
+      "id": "V3-18",
+      "sev": "major",
+      "where": "verdant-3, the sack stair on the granary's east gable - five 2.8 x 0.7 x 2.8 m ledges at [-0.4, 15.20/16.80/18.40/20.00, ...] and [-1.6, 21.60, -12.0], seen from cp-granary [2.16, 13.60, -12.99]",
+      "did": "Stood on the granary checkpoint pad and looked at the stair.",
+      "happened": "The five ledges hang UNSUPPORTED in mid-air beside a blank grey wall, the highest of them 8 m above the terrace, with nothing under or behind them - no posts, no brackets, no sack hoist. The granary wall they float against is a featureless grey panel with two small white rectangles for windows.",
+      "should": "A 'sack stair' should be carried by something a player can read - hoist beams, brackets, a stack. This is the owner's P9 pattern (things bolted flat to a wall face) applied to platforms, on the course's own required-alternative route.",
+      "png": "_shots/play_wm_b/17_gnasher_edge.png"
+    },
+    {
+      "id": "V3-19",
+      "sev": "minor",
+      "where": "verdant-3, the west field hedge fenceRun([[-24,12],[-14,9],[-6,8.4]]) where it crosses the lip of the river valley, seen from [-6.21, 10.05, 6.09]",
+      "did": "Walked back up onto the wheat field and looked west.",
+      "happened": "The hedge runs straight off the edge of the terrain: the last post and a detached rail hang in mid-air over the river valley with nothing under them.",
+      "should": "A fence should stop at the ground it stands on.",
+      "png": "_shots/play_wm_bank/09_bank_backup.png"
+    },
+    {
+      "id": "V3-20",
+      "sev": "minor",
+      "where": "verdant-3, the hay belts on both threshing decks (conveyors at [7,11.15,-2], [10,12.45,-8], [-6,11.15,-2]; def mat 'cloth', tint WHEAT 0xd7b45a / 0xc9a44e), and the pendulum sacks at [-6, 22.60, -21.4] (mat 'cloth', tint WHEAT), and the meadow bales",
+      "did": "Stood on and beside each of them.",
+      "happened": "Every 'cloth' object on the course comes out the wrong colour. The belts are near-black ribbed metal with giant lime-green chevrons - industrial factory conveyors, not hay. The pendulum sack is a dark blue-grey ball that reads as an iron cauldron. The meadow bales are steel blue. All three are authored WHEAT gold.",
+      "should": "One material - 'cloth' - is ignoring its tint across the whole course, so the wheat-farm read is gone from the wheat farm. Worth checking whether the mill sails (sailTint CANVAS 0xe8dfc6) are affected too; a bright blue rod was visible on mill 1's structure.",
+      "png": "_shots/play_wm_b/08_belt_on.png, _shots/play_wm_b/24_granary_roof.png, _shots/play_wm_b/04_bales_closeup.png"
+    },
+    {
+      "id": "V3-21",
+      "sev": "minor",
+      "where": "verdant-3, west of the threshing decks, roughly 20-25 m from [7.00, 12.30, -4.50] with the camera looking south (yaw 3.13)",
+      "did": "Stood at the north end of threshing deck B and looked around.",
+      "happened": "A cluster of objects hangs in the air over open grass with nothing beneath them: a brown plank, a small dark ball with the numeral 3 painted on it, and a red spiral disc about 2 m across (it reads as a millstone). Two more large brown planks hover over the grass on the other side of frame.",
+      "should": "Nothing should float. I could not identify these from the data at play time - flagging position and appearance for the fix lane.",
+      "png": "_shots/play_wm_b/08_belt_on.png"
+    },
+    {
+      "id": "V3-22",
+      "sev": "minor",
+      "where": "verdant-3, cp-granary pad at [2.16, 13.60, -12.99] and the other stone pads",
+      "did": "Stood on the checkpoint pads.",
+      "happened": "Instanced grass blades grow up THROUGH the stone checkpoint disc, in front of and inside the pad ring.",
+      "should": "Grass should be masked out under a platform footprint.",
+      "png": "_shots/play_wm_b/17_gnasher_edge.png"
+    },
+    {
+      "id": "V3-23",
+      "sev": "minor",
+      "where": "verdant-3, at the foot of the sack stair, [-0.05, 13.86, -21.38], beside the large dark mass on the granary terrace",
+      "did": "Walked to the sack-stair foot and let the camera settle.",
+      "happened": "The camera collapsed onto the top of Nim's head - the frame is his scalp and his shadow, with no view of the stair he is about to climb. This is the owner's P10 (camera goes bad near structures) on this course.",
+      "should": "The camera should tilt over the obstruction rather than pull through the hero (CONTRACT \u00a712: a blocked shaft is answered by TILTING, not by pulling in through the hero).",
+      "png": "_shots/play_wm_b/21_sackstair_foot.png"
+    },
+    {
+      "id": "V3-24",
+      "sev": "major",
+      "where": "verdant-3, the granary mezzanine at [-8, 17.45, -16] - and by extension every crouch-combo move on this course",
+      "did": "Ran the identical key sequence twice on two fresh boots: tap Space (150 ms), wait 300 ms, hold C for 1100 ms - the ground pound the sign 'POUND THE FLOOR' asks for.",
+      "happened": "Different results. Run 1 fired ['backflip','jump:backflip','pound'] and broke the floor. Run 2 fired only ['land:7.86','jump:single','land:12.87'] - no pound, no backflip, floor intact, crests still 0, hero still standing on the mezzanine. Neither run produced a clean pound: run 1 got a backflip first.",
+      "should": "A pound is jump-then-crouch-in-air. From a keyboard the crouch either lands too early (grounded -> backflip) or too late (already landed -> nothing). This is the owner's P3 complaint ('LONG JUMP and BACKFLIP do not fire with C') showing up on the pound, and the pound is what gates this course's secret crest and its bell.",
+      "png": "_shots/play_wm_c/01_cellar_after_pound.png"
+    },
+    {
+      "id": "V3-25",
+      "sev": "BLOCKER",
+      "where": "verdant-3, the RIDGE STAIR {kind:'stairs', p:[-6, 13.60, -22.6], w:3.2, rise:0.32, run:0.36, n:17, rail:true} - the required climb from the granary terrace (13.60) to the ridge path (19.20), the course's own 'steepest required walk'. Player stops at [-6.00, 14.24, -19.62].",
+      "did": "Stood at the stair foot [-6, 13.92, -19.5] and held W north up the flight for 6.8 s. Then did it again on a second run.",
+      "happened": "The hero climbed exactly one 0.32 m tread and then entered 'bonk' and stayed there: position [-6.00, 14.24, -19.62] to the centimetre on all 18 samples, speed 0.00, grounded true. The second run reproduced it exactly - same position, same bonk. TUNE.stepUp is 0.45 and the risers are 0.32.",
+      "should": "A seventeen-riser stone flight is the authored way up to the ridge path, the bell, the vanish staircase and the mills. It cannot be climbed. This is the second impassable required link on the course (with V3-01), and it is the owner's P6 word for word: 'the images have odd stairs but i cant reach the main stairs'.",
+      "png": "_shots/play_wm_c/05_ridgestair_foot.png"
+    },
+    {
+      "id": "V3-26",
+      "sev": "major",
+      "where": "verdant-3, the CART RAMP at [9.0, 16.50, -23.0] - the second authored way from the granary terrace up to the ridge (13.90 -> 19.10 over 9 m = 30 deg, against a 38 deg slide angle)",
+      "did": "Started at [8.99, 14.89, -19.15] and held W up the ramp for 5.6 s.",
+      "happened": "Two bonks at the foot, then he climbed to y 16.25 and slid back down to 15.19, ending in 'skid' at [16.96, 15.19, -28.46]. Five 'slide' events. He never reached 19.10.",
+      "should": "With the ridge stair also impassable (V3-25), BOTH authored routes from the granary terrace to the ridge path fail, so beats 6, 7 and 8 are cut off from beat 5 even for a player who somehow got past the north bank.",
+      "png": "_shots/play_wm_c/ (cart_ramp)"
+    },
+    {
+      "id": "V3-27",
+      "sev": "major",
+      "where": "verdant-3, standing at the ridge-stair foot [-6.00, 13.92, -19.50], camera at dist 6.2 behind him (south), which puts the lens inside the granary (granary spans x -14..-2, z -20.5..-11.5)",
+      "did": "Walked to the stair foot and let the camera settle - the ordinary approach to beat 5.",
+      "happened": "The camera went INSIDE the granary and the frame filled with the building's interior - mottled walls, white windows, a dark ceiling and the yellow rods of V3-13 - with the sign 'THE SACKS SWING ON A COUNT OF FOUR' drawn unoccluded across the middle of the screen at roughly 4 m wide. Nim is a white speck behind it. You can see neither the hero, the stair, nor the sacks the sign is telling you to count.",
+      "should": "CONTRACT \u00a712 requires the camera to raycast to the desired position and pull in, and to answer a fully blocked pose by TILTING rather than pushing through. Here it sits inside a building. Owner P10 on this course.",
+      "png": "_shots/play_wm_c/05_ridgestair_foot.png"
+    },
+    {
+      "id": "V3-28",
+      "sev": "minor",
+      "where": "verdant-3, the SACK GULLY crag hops: crag 1 [9.6, 17.70, -22] -> crag 2 [16, 19.10, -26] (SIGIL 5 at [16, 20.50, -26]) -> crag 3 [22, 20.30, -29.4]",
+      "did": "Stood on crag 1 and did a normal run-and-jump at crag 2 (400 ms of run, 250 ms held Space), then the same at crag 3.",
+      "happened": "Both hops OVERSHOOT. Hop 1 landed at [17.42, 13.92, -25.61] - on the gully grass 3.8 m BELOW crag 2, with a 'land:18.97' hard landing. Hop 2 landed at [20.39, 15.34, -26.88], again on grass, not on crag 3. Sigil 5 not collected.",
+      "should": "Same family as the quay-to-log jump, which also overshot the 3.6 m log and put me in the river: at full run the single jump carries further than these 3.4-3.6 m pads are deep, so the honest input (run at it and jump) misses.",
+      "png": "_shots/play_wm_c/ (crag_gully)"
+    },
+    {
+      "id": "V3-29",
+      "sev": "minor",
+      "where": "verdant-3, the granary terrace at [1.95, 13.93, -21.66] and generally wherever terrain is in shadow",
+      "did": "Stood on the terrace in the granary's shadow.",
+      "happened": "Shadowed grass goes to near-black - most of the terrace, and the rising ground east of it, is an unreadable dark mass. In the same frame the sigils pedestal's gold beam renders as a hard-edged tapering SPIKE about 10 m long stabbing down out of the sky and through the ground, and the pedestal bowl reads as a flat gold canoe lying in the grass.",
+      "should": "CONTRACT \u00a715 READABILITY LAW: the walked surface must hold contrast. A shadow that takes grass to near-black hides the ground you are about to run on, and the crest pedestal beam should read as a column of light, not a solid blade.",
+      "png": "_shots/play_wm_c/04_terrace_blackmass.png"
+    },
+    {
+      "id": "V3-30",
+      "sev": "minor",
+      "where": "verdant-3, the millrace long-jump runways at [18, 12.30, 0] / [18, 12.30, -10] and their siblings at [26, 15.40, -20]/[26, 15.40, -30] and [12, 22.40, -36]/[12, 22.40, -46], seen from [11.49, 12.44, -1.60]",
+      "did": "Walked the upper wheat terrace and looked around.",
+      "happened": "Large brown timber slabs (3.6 x 8.0 m) hang unsupported in the air over the terraces with nothing under them - no piers, no trestles. Three are visible from one standing position.",
+      "should": "Six floating timber decks over farmland is the biggest single contributor to this course looking over-dressed (owner's flag for this course). Either put legs under them or sit them on the ground the millrace already follows.",
+      "png": "_shots/play_wm_b/15_sigil3.png"
+    },
+    {
+      "id": "V3-31",
+      "sev": "BLOCKER",
+      "where": "verdant-3, THE CHAFF CANNON at [14, 23.10, -40] (ROUTE C to the sky platform), approached from [14, 24.0, -37]",
+      "did": "Stood 3 m south of the cannon and held W into it for 9 s, then pressed E (interact), then pressed Space.",
+      "happened": "The hero did not move at all - position [14, 24, -37] unchanged for the whole 9 s of held W (the walk was marked STUCK at d=3.00). E produced no event whatsoever - no cannonEnter, empty event list. Space just made him jump and land 1.7 m lower at [14.53, 22.30, -36.75].",
+      "should": "The sign two metres away says THE CHAFF CANNON / CLIMB IN, and launch.js is meant to solve the launch onto the sky platform. Route C does not exist in play: you cannot walk to the cannon and you cannot enter it.",
+      "png": "_shots/play_wm_c/33_cannon_approach.png, _shots/play_wm_c/34_cannon_in.png"
+    },
+    {
+      "id": "V3-32",
+      "sev": "major",
+      "where": "verdant-3, the ridge path walking west from cp-ridge [-4, 19.20, -30] toward mill 3's jump pad [-30, 20.14, -44], past rotor gate 2 at [-24.5, 22.30, -37.6]",
+      "did": "Held W west along the ridge path.",
+      "happened": "death:void at [-27.8, -20.1, -40]. The hero fell out of the world (killY is -20) on that walk and respawned at cp-ridge. Ground at (-27.8, -40) should be about 22 m by the course's own heightfield recipe.",
+      "should": "The ridge path is the spine of beat 6 - the rotor gates, mills 2 and 3, the wing nest. Walking it west drops you through the world.",
+      "png": "_shots/play_wm_c/16_mill3_pad_launch.png"
+    },
+    {
+      "id": "V3-33",
+      "sev": "major",
+      "where": "verdant-3, the BELL STAIR: five vanish flagstones at x 9.4 / 14.8 / 20.2 / 25.6 / 31.0, y 21.30 to 27.70, z -30 (cycle on 20 / off 12 / warn 2.5, phase 0), read at course clock 17-19 s, inside the on-window",
+      "did": "Pounded at the bell, then ran east for flagstone 1 and jumped at each stone in turn.",
+      "happened": "Two things. (a) Every flagstone reported its collider ACTIVE (solid true) while its mesh was NOT visible - all five, inside the on-window - and nothing was visible in the frame where the stair should be. (b) The ground east of the bell is a slide face: the hero went to slopeSlide at [8.92, 18.04, -29.36], slid to [10.66, 16.38, -28.48], wall-slid, and finished at [14.02, 13.02, -22.63] in the sack gully 8 m below the stair. Flagstone 1's top is 21.60 against a bell path at 19.2-19.3, so the first step is +2.3 m - over the single jump's 1.91 m apex - and you slide off before you reach it.",
+      "should": "The sign says POUND THE BELL / THE STAIR ANSWERS FOR TWENTY SECONDS. Nothing answers, and the ground you would run along is a slide. The BELL STAIR race crest is unreachable.",
+      "png": "_shots/play_wm_c/21_bell_stair.png"
+    },
+    {
+      "id": "V3-34",
+      "sev": "minor",
+      "where": "verdant-3, THE BELL (kind breakable, p [4.0, 20.60, -30.0], s [1.7, 2.0, 1.7], mat metal, tint 0xc9a24a) and the pendulum sacks (mode ball, mat cloth, tint WHEAT)",
+      "did": "Walked up to the bell and looked at it and at the sacks over the ridge.",
+      "happened": "The bell renders as a plain grey steel crate with a yellow X painted on it - a generic breakable box, not a bell - and the brass tint is not applied. The nearby grain sacks render as black spiked balls on chains hanging from rusty brackets; they read as wrecking balls or naval mines.",
+      "should": "A sign that says POUND THE BELL needs a bell. Wheat-tinted cloth sacks should not be black spiked spheres. Same cloth-tint failure as V3-20.",
+      "png": "_shots/play_wm_c/19_bell_approach.png"
+    },
+    {
+      "id": "V3-35",
+      "sev": "major",
+      "where": "verdant-3, ROUTE A THE SCAFFOLD, ledge 1 [17, 24.60, -44.2] to ledge 2 [17, 26.00, -39.4] - 1.8 m of air at +1.40, and the route the reach gate walks",
+      "did": "Stood on ledge 1 (3.4 x 3.0 m) and did a run-and-jump at ledge 2: 330 ms of run, then a 250 ms held Space.",
+      "happened": "He landed 0.4 m short of ledge 2's south lip, at [18.21, 23.82, -41.29], on the yard grass 2.2 m below. MISS. The ledge is only 3.0 m deep, so there is no run-up on it to take.",
+      "should": "The scaffold is the STATIC route to the open crest and the reason that crest is not gated on mill timing. Its first step needs a run-up its own ledge cannot give.",
+      "png": "_shots/play_wm_c/24_scaffold_miss2.png"
+    },
+    {
+      "id": "V3-36",
+      "sev": "minor",
+      "where": "verdant-3, rotor gate 1 at [-11, 20.35, -32.6] (style bar, 3 arms, period 7, no kill)",
+      "did": "Walked into the gate's sweep and then stood perfectly still for 8 s.",
+      "happened": "The bar shoved the stationary hero 2.4 m sideways and 1.4 m uphill (from [-9.88, 19.39, -32.78] to [-11.56, 20.77, -34.31]) and then wedged him there - position unchanged for the last 13 samples. No death, no damage.",
+      "should": "A rideable bar you time is fine; ending pinned against the terrain after standing still is not.",
+      "png": "_shots/play_wm_c/14_rotor1_still.png"
+    }
+  ],
+  "worked": [
+    "Entering verdant-3 with __dev.goto works and boots into cp-riverbank; the HUD is storybook glass, not a debug overlay - coins x/100, eight sigil pips, CHECKPOINT n/4.",
+    "Every checkpoint I reached fired on walk-through and updated the HUD: cp-riverbank (0), cp-northbank (1), cp-granary (2).",
+    "Q / E camera orbit works on the yaw axis (camYaw 0 -> 2.453 -> -2.97) and Z recentres exactly onto the hero's facing.",
+    "Held W runs at the authored speed: max 9.12 m/s measured on open grass against TUNE.speedRun 9.0.",
+    "Signage is genuinely good: the two quay signs, the WINDMILL HEIGHTS board and the hay-belt sign are all crisp, correctly wrapped and readable from where a player stands.",
+    "Coins collect on contact and the counter rolls up; the underwater ring paid 11 coins.",
+    "SIGIL 3 on the upper hay deck collects on contact ([12, 13.65, -4], reached from the north field rather than up the belt).",
+    "The GROUND POUND breaks the granary mezzanine and the SECRET CREST spawns and collects - crests 0 -> 1. That whole puzzle works right up to the point where the player gets stuck (V3-02).",
+    "The GNASHER has a real bounded disc: 6 s standing still at 6.6 m from its post produced no attack, and it does kill inside the 5.5 m chain. Its silhouette (black body, white teeth) reads clearly at 20 m.",
+    "The BUMBLER never hurt a stationary player - 6 s standing beside one, 0 deaths, kills:0 as CONTRACT \u00a723 requires.",
+    "The hay belts read well: dark ribbed treads with big green direction chevrons, unmistakable at a glance.",
+    "Falling in the river never kills or drowns you - 0 deaths across every water test. Respawn measured 141-650 ms.",
+    "The meadow, the paddock fence, the checkpoint pads, the crest pedestals with their gold beams and the hero model itself all look good.",
+    "ALL FOUR MILLS TURN and mill 1's gondola genuinely CARRIES the player: grounded and idle from y 15.85 to 22.96 over 7.2 s, then released past the top of the sweep. Mill colliders moved 3.2-6.1 m in 0.89 s of course clock on every mill.",
+    "The north bank IS walkable above z~15 - from [9.97, 6.14, 15.24] a held W climbed back to the wheat field at y 10.05. Only the bottom 5.5 m out of the jetty (z 22 -> 16.5) is over the slide angle.",
+    "THE OPEN CREST WORKS END TO END: walking from [41, 35.90, -48] to [46.82, 35.90, -48.02] on the sky platform collected CREST ABOVE THE SAILS (crests 0 -> 1) plus a coin, and the game moved to state 'clear' - the course-clear card fired.",
+    "All five checkpoints fired on walk-through and the HUD tracked them: cp-riverbank(0), cp-northbank(1), cp-granary(2), cp-ridge(3), cp-yard(4).",
+    "SIGIL 7 up at mill 3 collects (sigils 0 -> 1 on the balcony), as does SIGIL 3 on the upper hay deck.",
+    "The pendulum sacks are fair: 5.6 s standing directly under sack 1 at the ridge-stair foot, no hit, no death - there they pass 1.3 m over a standing player's head.",
+    "Respawn is fast and clean everywhere it fired: 141 / 158 / 388 / 599 / 650 ms measured against the 700 ms median target.",
+    "Draw calls and triangles are inside budget at every station I stood at: mill yard 165 draws / 284,972 tris, sky platform 91 / 141,870, ridge path 209 / 375,954, granary terrace 155 / 295,502, spawn 96 / 168,842. The worst single frame seen was the very first spawn frame at 227 / 440,704. Budget is 260 draws / 450k tris."
+  ],
+  "blocked": [
+    "THE COURSE AS A COURSE. V3-01 (the north bank) makes everything past checkpoint 2 unreachable on foot, so every beat from 3 to 8 in this report was entered with __dev.tp. I never played verdant-3 as one continuous run and neither can a player.",
+    "ROUTE B, THE GREAT MILL SAIL RIDE. I could not board it: dropping onto the lowest gondola's reported position landed me on the yard at [31.1, 23.6, -48] instead, because the mill (period 9.0, the fastest on the course) had turned between the probe read and the teleport. I did NOT test the honest route - stand on the boarding plinth at [22, 24.80, -48] and wait for a gondola - so I cannot say whether route B works. Mill 1's identical gondola DID carry me cleanly, so the mechanism itself is sound.",
+    "THE MILLRACE crest (race, 65 s, start [0, 10.20, 2.0] to finish [23, 23.60, -56.5]) and THE BELL STAIR crest (race, 20 s): never started. The millrace start pad is past the impassable north bank; the bell stair is V3-33.",
+    "THE WING POWER and the TEN RINGS: I reached mill 3's balcony but overshot the nest at [-34, 26.60, -44] and never had the hat, so the ring run and the POWER crest are untested.",
+    "SIGILS 2, 4, 5, 6 and 8, and the HUNDRED COINS crest: sigil 2 is on a downstream log across the current (V3-03 wedge), 4 is on the granary roof (V3-04 slide-lock), 5 is on gully crag 2 (V3-28 overshoot), 6 is on mill 2's gallery and 8 on the great mill's gallery (V3-35 scaffold miss, plus a bonk at [27.73, 30.2, -44.9]). I finished the whole playtest on 12 coins of the 100 needed.",
+    "FRAME RATE. Every figure I saw was 20-28 fps headless, but the box had about 88 of the owner's own Chrome processes running throughout (HARNESS_NOTES: a perf run is only evidence if the GPU engine was idle). Treat the fps numbers here as not-evidence; the draw and triangle counts are fine to use."
+  ]
+}

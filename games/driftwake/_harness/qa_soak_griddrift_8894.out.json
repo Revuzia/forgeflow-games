@@ -1,0 +1,789 @@
+{
+ "cold_fresh": {
+  "realm": "cold",
+  "grade": {
+   "fogDensity": 0.0072,
+   "fogHeightFalloff": 0.045,
+   "fogStart": 24,
+   "aerialStrength": 1,
+   "exposure": 0.105,
+   "contrast": 1.14,
+   "bloomStrength": 0.22
+  },
+  "sun": {
+   "az": 118,
+   "el": 13,
+   "wind": 42,
+   "intensity": 4.2,
+   "ambient": 1
+  },
+  "skyDerived": {
+   "sunScaleMul": 1,
+   "ambientMul": 1,
+   "ridgeMul": 1,
+   "beamExt": 1,
+   "groundAlbedo": [
+    0.83,
+    0.86,
+    0.91
+   ],
+   "realmName": "cold",
+   "gradeActive": false
+  },
+  "weather": {
+   "fallSpeed": 1.6,
+   "riseSpeed": 0,
+   "risingFrac": 0,
+   "windGain": 1,
+   "gustAmp": 0.45,
+   "box": [
+    140,
+    46,
+    140
+   ],
+   "radii": [
+    0.012,
+    0.028,
+    0.02
+   ],
+   "alpha": [
+    0.3,
+    0.42,
+    0
+   ],
+   "coarseFrac": 0.28,
+   "glowFrac": 0,
+   "tint": [
+    0.94,
+    0.96,
+    1
+   ],
+   "glowTint": [
+    1,
+    1,
+    1
+   ],
+   "glowEmit": 0,
+   "stretch": 6,
+   "fogBoost": [
+    1.9,
+    1
+   ],
+   "devils": 0,
+   "wrap": 0.75,
+   "mieG": 0.55,
+   "mieGain": 0.85
+  },
+  "terrainRealm": "cold",
+  "shrineY": [
+   -1.354,
+   0.34,
+   -5.164,
+   -5.582,
+   1.517,
+   2.076,
+   3.742
+  ],
+  "landmarkRealm": "cold",
+  "portalToken": null,
+  "heapMB": 118.55,
+  "geo": 25,
+  "tex": 45,
+  "types": 10,
+  "insts": 5,
+  "sceneObjs": 387
+ },
+ "steps": [
+  {
+   "realm": "sand",
+   "grade": {
+    "fogDensity": 0.0115,
+    "fogHeightFalloff": 0.07,
+    "fogStart": 18,
+    "aerialStrength": 1.15,
+    "exposure": 0.17,
+    "contrast": 1.1,
+    "bloomStrength": 0.18
+   },
+   "sun": {
+    "az": 206,
+    "el": 22,
+    "wind": 130,
+    "intensity": 4.2,
+    "ambient": 1
+   },
+   "skyDerived": {
+    "sunScaleMul": 1.2034285714285715,
+    "ambientMul": 1.15,
+    "ridgeMul": 0.813953488372093,
+    "beamExt": 0.936,
+    "groundAlbedo": [
+     0.55,
+     0.45,
+     0.31
+    ],
+    "realmName": "sand",
+    "gradeActive": true
+   },
+   "weather": {
+    "fallSpeed": 0.35,
+    "riseSpeed": 0,
+    "risingFrac": 0,
+    "windGain": 2.6,
+    "gustAmp": 0.7,
+    "box": [
+     150,
+     40,
+     150
+    ],
+    "radii": [
+     0.008,
+     0.02,
+     0.016
+    ],
+    "alpha": [
+     0.26,
+     0.38,
+     0
+    ],
+    "coarseFrac": 0.32,
+    "glowFrac": 0,
+    "tint": [
+     0.74,
+     0.63,
+     0.44
+    ],
+    "glowTint": [
+     1,
+     1,
+     1
+    ],
+    "glowEmit": 0,
+    "stretch": 6,
+    "fogBoost": [
+     2.4,
+     1
+    ],
+    "devils": 3,
+    "wrap": 0.55,
+    "mieG": 0.68,
+    "mieGain": 1.1
+   },
+   "terrainRealm": "sand",
+   "shrineY": [
+    -4.138,
+    3.353,
+    9.853,
+    3.905,
+    4.557,
+    12.354,
+    -0.113
+   ],
+   "landmarkRealm": "sand",
+   "portalToken": null,
+   "heapMB": 128.17,
+   "geo": 27,
+   "tex": 51,
+   "types": 20,
+   "insts": 7,
+   "sceneObjs": 501
+  },
+  {
+   "realm": "ash",
+   "grade": {
+    "fogDensity": 0.02,
+    "fogHeightFalloff": 0.026,
+    "fogStart": 8,
+    "aerialStrength": 1.45,
+    "exposure": 0.95,
+    "contrast": 1,
+    "bloomStrength": 0.34
+   },
+   "sun": {
+    "az": 74,
+    "el": 11,
+    "wind": 150,
+    "intensity": 4.2,
+    "ambient": 1
+   },
+   "skyDerived": {
+    "sunScaleMul": 0.24266666666666664,
+    "ambientMul": 2.45,
+    "ridgeMul": 0,
+    "beamExt": 0.182,
+    "groundAlbedo": [
+     0.094,
+     0.088,
+     0.085
+    ],
+    "realmName": "ash",
+    "gradeActive": true
+   },
+   "weather": {
+    "fallSpeed": 0.9,
+    "riseSpeed": 0.45,
+    "risingFrac": 0.4,
+    "windGain": 0.55,
+    "gustAmp": 0.3,
+    "box": [
+     120,
+     60,
+     120
+    ],
+    "radii": [
+     0.014,
+     0.032,
+     0.02
+    ],
+    "alpha": [
+     0.22,
+     0.34,
+     0.85
+    ],
+    "coarseFrac": 0.26,
+    "glowFrac": 0.18,
+    "tint": [
+     0.3,
+     0.28,
+     0.27
+    ],
+    "glowTint": [
+     1,
+     0.4,
+     0.1
+    ],
+    "glowEmit": 2.8,
+    "stretch": 3.5,
+    "fogBoost": [
+     1.35,
+     1
+    ],
+    "devils": 0,
+    "wrap": 0.35,
+    "mieG": 0.45,
+    "mieGain": 0.3
+   },
+   "terrainRealm": "ash",
+   "shrineY": [
+    -0.479,
+    2.541,
+    1.36,
+    -4.385,
+    -0.298,
+    0.675,
+    1.232
+   ],
+   "landmarkRealm": "ash",
+   "portalToken": null,
+   "heapMB": 149.7,
+   "geo": 28,
+   "tex": 54,
+   "types": 30,
+   "insts": 9,
+   "sceneObjs": 575
+  },
+  {
+   "realm": "cold",
+   "grade": {
+    "fogDensity": 0.0072,
+    "fogHeightFalloff": 0.045,
+    "fogStart": 24,
+    "aerialStrength": 1,
+    "exposure": 0.105,
+    "contrast": 1.14,
+    "bloomStrength": 0.22
+   },
+   "sun": {
+    "az": 118,
+    "el": 13,
+    "wind": 42,
+    "intensity": 4.2,
+    "ambient": 1
+   },
+   "skyDerived": {
+    "sunScaleMul": 1,
+    "ambientMul": 1,
+    "ridgeMul": 1,
+    "beamExt": 1,
+    "groundAlbedo": [
+     0.83,
+     0.86,
+     0.91
+    ],
+    "realmName": "cold",
+    "gradeActive": false
+   },
+   "weather": {
+    "fallSpeed": 1.6,
+    "riseSpeed": 0,
+    "risingFrac": 0,
+    "windGain": 1,
+    "gustAmp": 0.45,
+    "box": [
+     140,
+     46,
+     140
+    ],
+    "radii": [
+     0.012,
+     0.028,
+     0.02
+    ],
+    "alpha": [
+     0.3,
+     0.42,
+     0
+    ],
+    "coarseFrac": 0.28,
+    "glowFrac": 0,
+    "tint": [
+     0.94,
+     0.96,
+     1
+    ],
+    "glowTint": [
+     1,
+     1,
+     1
+    ],
+    "glowEmit": 0,
+    "stretch": 6,
+    "fogBoost": [
+     1.9,
+     1
+    ],
+    "devils": 0,
+    "wrap": 0.75,
+    "mieG": 0.55,
+    "mieGain": 0.85
+   },
+   "terrainRealm": "cold",
+   "shrineY": [
+    -1.354,
+    0.34,
+    -5.164,
+    -5.582,
+    1.517,
+    2.076,
+    3.742
+   ],
+   "landmarkRealm": "cold",
+   "portalToken": null,
+   "heapMB": 147.33,
+   "geo": 30,
+   "tex": 58,
+   "types": 30,
+   "insts": 11,
+   "sceneObjs": 657
+  },
+  {
+   "realm": "sand",
+   "grade": {
+    "fogDensity": 0.0115,
+    "fogHeightFalloff": 0.07,
+    "fogStart": 18,
+    "aerialStrength": 1.15,
+    "exposure": 0.17,
+    "contrast": 1.1,
+    "bloomStrength": 0.18
+   },
+   "sun": {
+    "az": 206,
+    "el": 22,
+    "wind": 130,
+    "intensity": 4.2,
+    "ambient": 1
+   },
+   "skyDerived": {
+    "sunScaleMul": 1.2034285714285715,
+    "ambientMul": 1.15,
+    "ridgeMul": 0.813953488372093,
+    "beamExt": 0.936,
+    "groundAlbedo": [
+     0.55,
+     0.45,
+     0.31
+    ],
+    "realmName": "sand",
+    "gradeActive": true
+   },
+   "weather": {
+    "fallSpeed": 0.35,
+    "riseSpeed": 0,
+    "risingFrac": 0,
+    "windGain": 2.6,
+    "gustAmp": 0.7,
+    "box": [
+     150,
+     40,
+     150
+    ],
+    "radii": [
+     0.008,
+     0.02,
+     0.016
+    ],
+    "alpha": [
+     0.26,
+     0.38,
+     0
+    ],
+    "coarseFrac": 0.32,
+    "glowFrac": 0,
+    "tint": [
+     0.74,
+     0.63,
+     0.44
+    ],
+    "glowTint": [
+     1,
+     1,
+     1
+    ],
+    "glowEmit": 0,
+    "stretch": 6,
+    "fogBoost": [
+     2.4,
+     1
+    ],
+    "devils": 3,
+    "wrap": 0.55,
+    "mieG": 0.68,
+    "mieGain": 1.1
+   },
+   "terrainRealm": "sand",
+   "shrineY": [
+    -4.138,
+    3.353,
+    9.853,
+    3.905,
+    4.557,
+    12.354,
+    -0.113
+   ],
+   "landmarkRealm": "sand",
+   "portalToken": null,
+   "heapMB": 150.7,
+   "geo": 31,
+   "tex": 60,
+   "types": 30,
+   "insts": 12,
+   "sceneObjs": 726
+  },
+  {
+   "realm": "ash",
+   "grade": {
+    "fogDensity": 0.02,
+    "fogHeightFalloff": 0.026,
+    "fogStart": 8,
+    "aerialStrength": 1.45,
+    "exposure": 0.95,
+    "contrast": 1,
+    "bloomStrength": 0.34
+   },
+   "sun": {
+    "az": 74,
+    "el": 11,
+    "wind": 150,
+    "intensity": 4.2,
+    "ambient": 1
+   },
+   "skyDerived": {
+    "sunScaleMul": 0.24266666666666664,
+    "ambientMul": 2.45,
+    "ridgeMul": 0,
+    "beamExt": 0.182,
+    "groundAlbedo": [
+     0.094,
+     0.088,
+     0.085
+    ],
+    "realmName": "ash",
+    "gradeActive": true
+   },
+   "weather": {
+    "fallSpeed": 0.9,
+    "riseSpeed": 0.45,
+    "risingFrac": 0.4,
+    "windGain": 0.55,
+    "gustAmp": 0.3,
+    "box": [
+     120,
+     60,
+     120
+    ],
+    "radii": [
+     0.014,
+     0.032,
+     0.02
+    ],
+    "alpha": [
+     0.22,
+     0.34,
+     0.85
+    ],
+    "coarseFrac": 0.26,
+    "glowFrac": 0.18,
+    "tint": [
+     0.3,
+     0.28,
+     0.27
+    ],
+    "glowTint": [
+     1,
+     0.4,
+     0.1
+    ],
+    "glowEmit": 2.8,
+    "stretch": 3.5,
+    "fogBoost": [
+     1.35,
+     1
+    ],
+    "devils": 0,
+    "wrap": 0.35,
+    "mieG": 0.45,
+    "mieGain": 0.3
+   },
+   "terrainRealm": "ash",
+   "shrineY": [
+    -0.479,
+    2.541,
+    1.36,
+    -4.385,
+    -0.298,
+    0.675,
+    1.232
+   ],
+   "landmarkRealm": "ash",
+   "portalToken": null,
+   "heapMB": 148.93,
+   "geo": 31,
+   "tex": 61,
+   "types": 30,
+   "insts": 13,
+   "sceneObjs": 763
+  },
+  {
+   "realm": "cold",
+   "grade": {
+    "fogDensity": 0.0072,
+    "fogHeightFalloff": 0.045,
+    "fogStart": 24,
+    "aerialStrength": 1,
+    "exposure": 0.105,
+    "contrast": 1.14,
+    "bloomStrength": 0.22
+   },
+   "sun": {
+    "az": 118,
+    "el": 13,
+    "wind": 42,
+    "intensity": 4.2,
+    "ambient": 1
+   },
+   "skyDerived": {
+    "sunScaleMul": 1,
+    "ambientMul": 1,
+    "ridgeMul": 1,
+    "beamExt": 1,
+    "groundAlbedo": [
+     0.83,
+     0.86,
+     0.91
+    ],
+    "realmName": "cold",
+    "gradeActive": false
+   },
+   "weather": {
+    "fallSpeed": 1.6,
+    "riseSpeed": 0,
+    "risingFrac": 0,
+    "windGain": 1,
+    "gustAmp": 0.45,
+    "box": [
+     140,
+     46,
+     140
+    ],
+    "radii": [
+     0.012,
+     0.028,
+     0.02
+    ],
+    "alpha": [
+     0.3,
+     0.42,
+     0
+    ],
+    "coarseFrac": 0.28,
+    "glowFrac": 0,
+    "tint": [
+     0.94,
+     0.96,
+     1
+    ],
+    "glowTint": [
+     1,
+     1,
+     1
+    ],
+    "glowEmit": 0,
+    "stretch": 6,
+    "fogBoost": [
+     1.9,
+     1
+    ],
+    "devils": 0,
+    "wrap": 0.75,
+    "mieG": 0.55,
+    "mieGain": 0.85
+   },
+   "terrainRealm": "cold",
+   "shrineY": [
+    -1.354,
+    0.34,
+    -5.164,
+    -5.582,
+    1.517,
+    2.076,
+    3.742
+   ],
+   "landmarkRealm": "cold",
+   "portalToken": null,
+   "heapMB": 156.13,
+   "geo": 31,
+   "tex": 61,
+   "types": 30,
+   "insts": 13,
+   "sceneObjs": 763
+  }
+ ],
+ "cold_returned": {
+  "realm": "cold",
+  "grade": {
+   "fogDensity": 0.0072,
+   "fogHeightFalloff": 0.045,
+   "fogStart": 24,
+   "aerialStrength": 1,
+   "exposure": 0.105,
+   "contrast": 1.14,
+   "bloomStrength": 0.22
+  },
+  "sun": {
+   "az": 118,
+   "el": 13,
+   "wind": 42,
+   "intensity": 4.2,
+   "ambient": 1
+  },
+  "skyDerived": {
+   "sunScaleMul": 1,
+   "ambientMul": 1,
+   "ridgeMul": 1,
+   "beamExt": 1,
+   "groundAlbedo": [
+    0.83,
+    0.86,
+    0.91
+   ],
+   "realmName": "cold",
+   "gradeActive": false
+  },
+  "weather": {
+   "fallSpeed": 1.6,
+   "riseSpeed": 0,
+   "risingFrac": 0,
+   "windGain": 1,
+   "gustAmp": 0.45,
+   "box": [
+    140,
+    46,
+    140
+   ],
+   "radii": [
+    0.012,
+    0.028,
+    0.02
+   ],
+   "alpha": [
+    0.3,
+    0.42,
+    0
+   ],
+   "coarseFrac": 0.28,
+   "glowFrac": 0,
+   "tint": [
+    0.94,
+    0.96,
+    1
+   ],
+   "glowTint": [
+    1,
+    1,
+    1
+   ],
+   "glowEmit": 0,
+   "stretch": 6,
+   "fogBoost": [
+    1.9,
+    1
+   ],
+   "devils": 0,
+   "wrap": 0.75,
+   "mieG": 0.55,
+   "mieGain": 0.85
+  },
+  "terrainRealm": "cold",
+  "shrineY": [
+   -1.354,
+   0.34,
+   -5.164,
+   -5.582,
+   1.517,
+   2.076,
+   3.742
+  ],
+  "landmarkRealm": "cold",
+  "portalToken": null,
+  "heapMB": 153.63,
+  "geo": 32,
+  "tex": 63,
+  "types": 30,
+  "insts": 14,
+  "sceneObjs": 800
+ },
+ "warns": [],
+ "diff": [
+  {
+   "path": "/heapMB",
+   "fresh": 118.55,
+   "returned": 153.63
+  },
+  {
+   "path": "/geo",
+   "fresh": 25,
+   "returned": 32
+  },
+  {
+   "path": "/tex",
+   "fresh": 45,
+   "returned": 63
+  },
+  {
+   "path": "/types",
+   "fresh": 10,
+   "returned": 30
+  },
+  {
+   "path": "/insts",
+   "fresh": 5,
+   "returned": 14
+  },
+  {
+   "path": "/sceneObjs",
+   "fresh": 387,
+   "returned": 800
+  }
+ ]
+}

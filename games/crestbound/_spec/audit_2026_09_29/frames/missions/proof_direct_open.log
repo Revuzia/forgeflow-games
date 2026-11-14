@@ -1,0 +1,14 @@
+goto http://127.0.0.1:8913/games/crestbound/index.html?dev=1&course=verdant-1&mission=open&quality=low&autoscale=0
+booted into verdant-1: True
+  run mission record: {"id": "open", "name": "CREST ON THE RAMPARTS", "present": ["open", "sigils", "coins", "secret", "wing"], "absent": ["boss", "race"], "routes": {"north-door": false}}
+  station: {"wasRunning": true, "pos": [10, 14.48, -24.6]}
+  frame _spec\audit_2026_09_29\frames\missions\14_direct_open_crest_lens.png
+  crests built: [{"id": "open", "present": true}, {"id": "sigils", "present": false}, {"id": "coins", "present": false}, {"id": "secret", "present": false}, {"id": "wing", "present": true}]
+  climb: 142 frames, 3 jumps, state clear
+  celebration hand-stepped: {"frames": 3, "cardUp": true, "state": "clear"}
+  clear panel: {"buttons": ["RETURN TO KEEP [focus]"], "kicker": null} (visible: True )
+  frame _spec\audit_2026_09_29\frames\missions\14_direct_open_clear_panel.png
+  real Enter on the panel -> the Keep: True
+  SAVE verdant-1: {"id": "verdant-1", "crests": ["open"], "coinsBest": 0, "cleared": true, "deaths": 0, "bestMs": {"open": 3450}, "clears": 1, "playMs": 0, "lastPlayed": 1790826914848, "firstClearDate": "2026-10-01T03:55:14.847Z", "missions": {"open": {"runs": 1, "got": ["open"]}}, "lastMission": "open"}
+page errors: 0
+exit 0

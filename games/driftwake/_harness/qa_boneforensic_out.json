@@ -1,0 +1,5810 @@
+{
+ "hailPlateGuard": {
+  "key": "hailPlateGuard",
+  "slot": 23,
+  "groundY": 2.66,
+  "rootY": 3.488,
+  "footLift": 0.831,
+  "bindMode": "attached",
+  "bindMatrixIsIdentity": true,
+  "vertexCount": 29129,
+  "sampled": 4162,
+  "nanVerts": 0,
+  "skinnedBBoxY": [
+   3.44,
+   4.77
+  ],
+  "skinnedBBoxX": [
+   -1.02,
+   0.93
+  ],
+  "bones": [
+   {
+    "i": 0,
+    "name": "mixamorigHips",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.0,
+     3.617,
+     -6.001
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0,
+     3.63,
+     -5.91
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 1,
+    "name": "mixamorigSpine",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.002,
+     3.759,
+     -5.979
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -0.01,
+     3.63,
+     -5.92
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 2,
+    "name": "mixamorigSpine1",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.004,
+     3.92,
+     -5.934
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -0.0,
+     3.63,
+     -5.93
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 3,
+    "name": "mixamorigLeftUpLeg",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.192,
+     3.541,
+     -6.008
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -0.01,
+     3.42,
+     -6.04
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 4,
+    "name": "mixamorigRightUpLeg",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.189,
+     3.534,
+     -5.999
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0,
+     3.4,
+     -5.99
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 5,
+    "name": "mixamorigSpine2",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.002,
+     4.102,
+     -5.876
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.01,
+     3.63,
+     -5.95
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 6,
+    "name": "mixamorigRightArm",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.165,
+     4.48,
+     -5.836
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.02,
+     4.52,
+     -6.42
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 7,
+    "name": "mixamorigLeftShoulder",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.095,
+     4.252,
+     -5.804
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.2,
+     4.48,
+     -6.4
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 8,
+    "name": "mixamorigLeftArm",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.14,
+     4.482,
+     -5.785
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.26,
+     4.51,
+     -6.39
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 9,
+    "name": "mixamorigRightShoulder",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.11,
+     4.252,
+     -5.836
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.01,
+     4.48,
+     -6.43
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 10,
+    "name": "mixamorigRightLeg",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.178,
+     3.772,
+     -6.205
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.02,
+     3.36,
+     -6.3
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 11,
+    "name": "mixamorigRightFoot",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.175,
+     4.025,
+     -6.089
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.08,
+     3.35,
+     -6.14
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 12,
+    "name": "mixamorigRightToeBase",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.165,
+     4.141,
+     -6.318
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.06,
+     3.38,
+     -6.02
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 13,
+    "name": "mixamorigLeftToeBase",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.198,
+     4.226,
+     -6.106
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.03,
+     3.39,
+     -6.09
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 14,
+    "name": "mixamorigLeftLeg",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.188,
+     3.843,
+     -6.102
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -0.02,
+     3.48,
+     -6.31
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 15,
+    "name": "mixamorigLeftFoot",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.189,
+     4.053,
+     -5.918
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.03,
+     3.4,
+     -6.18
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 16,
+    "name": "mixamorigLeftForeArm",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.416,
+     4.656,
+     -5.748
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.25,
+     4.24,
+     -6.26
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 17,
+    "name": "mixamorigLeftHand",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.678,
+     4.625,
+     -5.58
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.34,
+     4.21,
+     -6.28
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 18,
+    "name": "mixamorigRightForeArm",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.437,
+     4.637,
+     -5.934
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -0.01,
+     4.35,
+     -6.38
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 19,
+    "name": "mixamorigRightHand",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.748,
+     4.611,
+     -5.953
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -0.13,
+     4.41,
+     -6.56
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 20,
+    "name": "mixamorigNeck",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.01,
+     4.305,
+     -5.805
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0,
+     3.62,
+     -5.94
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 21,
+    "name": "mixamorigRightHandRing1",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.911,
+     4.646,
+     -5.958
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -0.23,
+     4.98,
+     -6.63
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 22,
+    "name": "mixamorigRightHandRing2",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.955,
+     4.628,
+     -5.955
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -0.9,
+     5.6,
+     -6.36
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 23,
+    "name": "mixamorigRightHandRing3",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.978,
+     4.592,
+     -5.969
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -1.32,
+     5.61,
+     -6.07
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 24,
+    "name": "mixamorigLeftHandRing1",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.833,
+     4.665,
+     -5.534
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.49,
+     4.76,
+     -6.48
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 25,
+    "name": "mixamorigLeftHandRing2",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.869,
+     4.654,
+     -5.507
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.76,
+     5.24,
+     -6.37
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 26,
+    "name": "mixamorigLeftHandRing3",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.902,
+     4.628,
+     -5.496
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.99,
+     5.5,
+     -6.12
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 27,
+    "name": "mixamorigRightHandMiddle1",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.925,
+     4.578,
+     -5.935
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -0.23,
+     4.9,
+     -6.62
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 28,
+    "name": "mixamorigLeftHandThumb1",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.713,
+     4.554,
+     -5.555
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -0.03,
+     4.37,
+     -6.01
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 29,
+    "name": "mixamorigLeftHandMiddle1",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.829,
+     4.612,
+     -5.486
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.5,
+     4.73,
+     -6.44
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 30,
+    "name": "mixamorigRightHandThumb1",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.784,
+     4.538,
+     -5.965
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.07,
+     4.57,
+     -6.23
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 31,
+    "name": "mixamorigLeftHandMiddle2",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.866,
+     4.593,
+     -5.451
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.71,
+     5.09,
+     -6.38
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 32,
+    "name": "mixamorigLeftHandIndex1",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.791,
+     4.537,
+     -5.479
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.46,
+     4.53,
+     -6.4
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 33,
+    "name": "mixamorigRightHandIndex1",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.896,
+     4.496,
+     -5.928
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -0.25,
+     4.83,
+     -6.61
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 34,
+    "name": "mixamorigRightHandMiddle2",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.968,
+     4.55,
+     -5.923
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -0.75,
+     5.45,
+     -6.45
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 35,
+    "name": "mixamorigLeftHandThumb2",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.725,
+     4.491,
+     -5.536
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -0.04,
+     4.26,
+     -5.94
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 36,
+    "name": "mixamorigRightHandThumb2",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.793,
+     4.473,
+     -5.976
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.05,
+     4.31,
+     -6.26
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 37,
+    "name": "mixamorigRightHandMiddle3",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.992,
+     4.507,
+     -5.941
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -1.18,
+     5.57,
+     -6.18
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 38,
+    "name": "mixamorigLeftHandMiddle3",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.903,
+     4.56,
+     -5.437
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.91,
+     5.33,
+     -6.23
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 39,
+    "name": "mixamorigLeftHandIndex2",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.824,
+     4.506,
+     -5.428
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.74,
+     4.94,
+     -6.37
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 40,
+    "name": "mixamorigRightHandThumb3",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.823,
+     4.419,
+     -5.999
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.07,
+     4.2,
+     -6.04
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 41,
+    "name": "mixamorigRightHandIndex2",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.936,
+     4.455,
+     -5.911
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -0.63,
+     5.24,
+     -6.53
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 42,
+    "name": "mixamorigLeftHandThumb3",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.751,
+     4.432,
+     -5.523
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -0.01,
+     4.05,
+     -5.85
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 43,
+    "name": "mixamorigLeftHandIndex3",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     0.845,
+     4.457,
+     -5.405
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     0.95,
+     5.17,
+     -6.22
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 44,
+    "name": "mixamorigRightHandIndex3",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.954,
+     4.404,
+     -5.919
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -0.87,
+     5.37,
+     -6.42
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 45,
+    "name": "mixamorigHead",
+    "mw": [
+     1.195,
+     1.195,
+     1.195
+    ],
+    "mwT": [
+     -0.039,
+     4.349,
+     -5.545
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     119.49,
+     119.49,
+     119.49
+    ],
+    "compT": [
+     -0.07,
+     3.59,
+     -5.86
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   }
+  ],
+  "verts": [
+   {
+    "bone": "mixamorigHips",
+    "verts": 357,
+    "nan": 0,
+    "meanY": 3.62,
+    "minY": 3.44,
+    "maxY": 3.84
+   },
+   {
+    "bone": "mixamorigSpine",
+    "verts": 321,
+    "nan": 0,
+    "meanY": 3.78,
+    "minY": 3.68,
+    "maxY": 4.23
+   },
+   {
+    "bone": "mixamorigSpine1",
+    "verts": 200,
+    "nan": 0,
+    "meanY": 4.03,
+    "minY": 3.83,
+    "maxY": 4.35
+   },
+   {
+    "bone": "mixamorigLeftUpLeg",
+    "verts": 262,
+    "nan": 0,
+    "meanY": 3.73,
+    "minY": 3.52,
+    "maxY": 3.92
+   },
+   {
+    "bone": "mixamorigRightUpLeg",
+    "verts": 216,
+    "nan": 0,
+    "meanY": 3.65,
+    "minY": 3.46,
+    "maxY": 3.8
+   },
+   {
+    "bone": "mixamorigSpine2",
+    "verts": 360,
+    "nan": 0,
+    "meanY": 4.15,
+    "minY": 3.96,
+    "maxY": 4.34
+   },
+   {
+    "bone": "mixamorigRightArm",
+    "verts": 296,
+    "nan": 0,
+    "meanY": 4.52,
+    "minY": 4.2,
+    "maxY": 4.76
+   },
+   {
+    "bone": "mixamorigLeftShoulder",
+    "verts": 70,
+    "nan": 0,
+    "meanY": 4.31,
+    "minY": 4.19,
+    "maxY": 4.57
+   },
+   {
+    "bone": "mixamorigLeftArm",
+    "verts": 257,
+    "nan": 0,
+    "meanY": 4.54,
+    "minY": 4.26,
+    "maxY": 4.75
+   },
+   {
+    "bone": "mixamorigRightShoulder",
+    "verts": 58,
+    "nan": 0,
+    "meanY": 4.3,
+    "minY": 4.17,
+    "maxY": 4.47
+   },
+   {
+    "bone": "mixamorigRightLeg",
+    "verts": 134,
+    "nan": 0,
+    "meanY": 3.85,
+    "minY": 3.79,
+    "maxY": 3.99
+   },
+   {
+    "bone": "mixamorigRightFoot",
+    "verts": 120,
+    "nan": 0,
+    "meanY": 4.07,
+    "minY": 3.98,
+    "maxY": 4.17
+   },
+   {
+    "bone": "mixamorigRightToeBase",
+    "verts": 29,
+    "nan": 0,
+    "meanY": 4.09,
+    "minY": 4.04,
+    "maxY": 4.14
+   },
+   {
+    "bone": "mixamorigLeftToeBase",
+    "verts": 36,
+    "nan": 0,
+    "meanY": 4.19,
+    "minY": 4.12,
+    "maxY": 4.24
+   },
+   {
+    "bone": "mixamorigLeftLeg",
+    "verts": 116,
+    "nan": 0,
+    "meanY": 3.91,
+    "minY": 3.82,
+    "maxY": 4.01
+   },
+   {
+    "bone": "mixamorigLeftFoot",
+    "verts": 117,
+    "nan": 0,
+    "meanY": 4.11,
+    "minY": 3.99,
+    "maxY": 4.22
+   },
+   {
+    "bone": "mixamorigLeftForeArm",
+    "verts": 148,
+    "nan": 0,
+    "meanY": 4.65,
+    "minY": 4.52,
+    "maxY": 4.77
+   },
+   {
+    "bone": "mixamorigLeftHand",
+    "verts": 69,
+    "nan": 0,
+    "meanY": 4.63,
+    "minY": 4.52,
+    "maxY": 4.73
+   },
+   {
+    "bone": "mixamorigRightForeArm",
+    "verts": 147,
+    "nan": 0,
+    "meanY": 4.64,
+    "minY": 4.5,
+    "maxY": 4.77
+   },
+   {
+    "bone": "mixamorigRightHand",
+    "verts": 71,
+    "nan": 0,
+    "meanY": 4.6,
+    "minY": 4.49,
+    "maxY": 4.72
+   },
+   {
+    "bone": "mixamorigNeck",
+    "verts": 494,
+    "nan": 0,
+    "meanY": 4.28,
+    "minY": 3.96,
+    "maxY": 4.4
+   },
+   {
+    "bone": "mixamorigRightHandRing1",
+    "verts": 19,
+    "nan": 0,
+    "meanY": 4.65,
+    "minY": 4.61,
+    "maxY": 4.68
+   },
+   {
+    "bone": "mixamorigRightHandRing2",
+    "verts": 11,
+    "nan": 0,
+    "meanY": 4.6,
+    "minY": 4.58,
+    "maxY": 4.63
+   },
+   {
+    "bone": "mixamorigRightHandRing3",
+    "verts": 5,
+    "nan": 0,
+    "meanY": 4.58,
+    "minY": 4.56,
+    "maxY": 4.59
+   },
+   {
+    "bone": "mixamorigLeftHandRing1",
+    "verts": 16,
+    "nan": 0,
+    "meanY": 4.66,
+    "minY": 4.63,
+    "maxY": 4.7
+   },
+   {
+    "bone": "mixamorigLeftHandRing2",
+    "verts": 9,
+    "nan": 0,
+    "meanY": 4.65,
+    "minY": 4.62,
+    "maxY": 4.68
+   },
+   {
+    "bone": "mixamorigLeftHandRing3",
+    "verts": 8,
+    "nan": 0,
+    "meanY": 4.61,
+    "minY": 4.6,
+    "maxY": 4.63
+   },
+   {
+    "bone": "mixamorigRightHandMiddle1",
+    "verts": 19,
+    "nan": 0,
+    "meanY": 4.58,
+    "minY": 4.54,
+    "maxY": 4.61
+   },
+   {
+    "bone": "mixamorigLeftHandThumb1",
+    "verts": 13,
+    "nan": 0,
+    "meanY": 4.53,
+    "minY": 4.49,
+    "maxY": 4.56
+   },
+   {
+    "bone": "mixamorigLeftHandMiddle1",
+    "verts": 16,
+    "nan": 0,
+    "meanY": 4.6,
+    "minY": 4.57,
+    "maxY": 4.64
+   },
+   {
+    "bone": "mixamorigRightHandThumb1",
+    "verts": 7,
+    "nan": 0,
+    "meanY": 4.5,
+    "minY": 4.48,
+    "maxY": 4.52
+   },
+   {
+    "bone": "mixamorigLeftHandMiddle2",
+    "verts": 10,
+    "nan": 0,
+    "meanY": 4.56,
+    "minY": 4.54,
+    "maxY": 4.58
+   },
+   {
+    "bone": "mixamorigLeftHandIndex1",
+    "verts": 15,
+    "nan": 0,
+    "meanY": 4.53,
+    "minY": 4.49,
+    "maxY": 4.57
+   },
+   {
+    "bone": "mixamorigRightHandIndex1",
+    "verts": 16,
+    "nan": 0,
+    "meanY": 4.48,
+    "minY": 4.45,
+    "maxY": 4.52
+   },
+   {
+    "bone": "mixamorigRightHandMiddle2",
+    "verts": 12,
+    "nan": 0,
+    "meanY": 4.52,
+    "minY": 4.5,
+    "maxY": 4.55
+   },
+   {
+    "bone": "mixamorigLeftHandThumb2",
+    "verts": 19,
+    "nan": 0,
+    "meanY": 4.46,
+    "minY": 4.41,
+    "maxY": 4.51
+   },
+   {
+    "bone": "mixamorigRightHandThumb2",
+    "verts": 13,
+    "nan": 0,
+    "meanY": 4.45,
+    "minY": 4.41,
+    "maxY": 4.49
+   },
+   {
+    "bone": "mixamorigRightHandMiddle3",
+    "verts": 7,
+    "nan": 0,
+    "meanY": 4.48,
+    "minY": 4.47,
+    "maxY": 4.51
+   },
+   {
+    "bone": "mixamorigLeftHandMiddle3",
+    "verts": 8,
+    "nan": 0,
+    "meanY": 4.54,
+    "minY": 4.52,
+    "maxY": 4.55
+   },
+   {
+    "bone": "mixamorigLeftHandIndex2",
+    "verts": 14,
+    "nan": 0,
+    "meanY": 4.47,
+    "minY": 4.45,
+    "maxY": 4.51
+   },
+   {
+    "bone": "mixamorigRightHandThumb3",
+    "verts": 9,
+    "nan": 0,
+    "meanY": 4.39,
+    "minY": 4.37,
+    "maxY": 4.41
+   },
+   {
+    "bone": "mixamorigRightHandIndex2",
+    "verts": 14,
+    "nan": 0,
+    "meanY": 4.42,
+    "minY": 4.4,
+    "maxY": 4.45
+   },
+   {
+    "bone": "mixamorigLeftHandThumb3",
+    "verts": 7,
+    "nan": 0,
+    "meanY": 4.4,
+    "minY": 4.39,
+    "maxY": 4.42
+   },
+   {
+    "bone": "mixamorigLeftHandIndex3",
+    "verts": 8,
+    "nan": 0,
+    "meanY": 4.43,
+    "minY": 4.41,
+    "maxY": 4.44
+   },
+   {
+    "bone": "mixamorigRightHandIndex3",
+    "verts": 9,
+    "nan": 0,
+    "meanY": 4.38,
+    "minY": 4.36,
+    "maxY": 4.39
+   }
+  ]
+ },
+ "glacierBrute": {
+  "key": "glacierBrute",
+  "slot": 23,
+  "groundY": 2.66,
+  "rootY": 3.943,
+  "footLift": 1.286,
+  "bindMode": "attached",
+  "bindMatrixIsIdentity": true,
+  "vertexCount": 28650,
+  "sampled": 4093,
+  "nanVerts": 0,
+  "skinnedBBoxY": [
+   4,
+   5.61
+  ],
+  "skinnedBBoxX": [
+   -1.15,
+   1.07
+  ],
+  "bones": [
+   {
+    "i": 0,
+    "name": "mixamorigHips",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -0.0,
+     4.167,
+     -6
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.01,
+     4.1,
+     -5.98
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 1,
+    "name": "mixamorigSpine",
+    "mw": [
+     1.503,
+     1.503,
+     1.503
+    ],
+    "mwT": [
+     0.001,
+     4.346,
+     -5.994
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0,
+     4.1,
+     -6.01
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 2,
+    "name": "mixamorigSpine1",
+    "mw": [
+     1.502,
+     1.503,
+     1.502
+    ],
+    "mwT": [
+     0.005,
+     4.553,
+     -5.961
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.01,
+     4.1,
+     -6.03
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 3,
+    "name": "mixamorigSpine2",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     0.006,
+     4.788,
+     -5.915
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.03,
+     4.11,
+     -6.05
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 4,
+    "name": "mixamorigRightArm",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -0.16,
+     5.236,
+     -5.911
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -0.07,
+     5.28,
+     -6.73
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 5,
+    "name": "mixamorigLeftArm",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     0.17,
+     5.233,
+     -5.868
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.34,
+     5.34,
+     -6.66
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 6,
+    "name": "mixamorigLeftShoulder",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     0.114,
+     4.982,
+     -5.858
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.22,
+     5.33,
+     -6.68
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 7,
+    "name": "mixamorigRightShoulder",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -0.109,
+     4.985,
+     -5.887
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.01,
+     5.32,
+     -6.72
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 8,
+    "name": "mixamorigLeftLeg",
+    "mw": [
+     1.503,
+     1.503,
+     1.503
+    ],
+    "mwT": [
+     0.211,
+     4.587,
+     -6.17
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0,
+     4.08,
+     -6.44
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 9,
+    "name": "mixamorigLeftFoot",
+    "mw": [
+     1.503,
+     1.502,
+     1.503
+    ],
+    "mwT": [
+     0.241,
+     4.968,
+     -5.829
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.07,
+     3.95,
+     -6.22
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 10,
+    "name": "mixamorigLeftToeBase",
+    "mw": [
+     1.503,
+     1.503,
+     1.502
+    ],
+    "mwT": [
+     0.222,
+     5.201,
+     -6.028
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.06,
+     3.94,
+     -6.09
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 11,
+    "name": "mixamorigLeftUpLeg",
+    "mw": [
+     1.503,
+     1.503,
+     1.503
+    ],
+    "mwT": [
+     0.176,
+     4.067,
+     -6.015
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.01,
+     4.03,
+     -6.01
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 12,
+    "name": "mixamorigRightFoot",
+    "mw": [
+     1.503,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -0.221,
+     4.911,
+     -5.987
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.16,
+     3.91,
+     -6.27
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 13,
+    "name": "mixamorigRightLeg",
+    "mw": [
+     1.503,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -0.157,
+     4.522,
+     -6.311
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.09,
+     4,
+     -6.55
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 14,
+    "name": "mixamorigRightToeBase",
+    "mw": [
+     1.503,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -0.184,
+     5.137,
+     -6.179
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.13,
+     3.9,
+     -6.09
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 15,
+    "name": "mixamorigRightUpLeg",
+    "mw": [
+     1.503,
+     1.503,
+     1.503
+    ],
+    "mwT": [
+     -0.177,
+     4.069,
+     -6.013
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.01,
+     4.02,
+     -5.99
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 16,
+    "name": "mixamorigRightForeArm",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -0.521,
+     5.344,
+     -5.934
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -0.14,
+     4.99,
+     -6.69
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 17,
+    "name": "mixamorigLeftForeArm",
+    "mw": [
+     1.503,
+     1.502,
+     1.503
+    ],
+    "mwT": [
+     0.515,
+     5.357,
+     -5.775
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.4,
+     4.92,
+     -6.56
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 18,
+    "name": "mixamorigRightHand",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -0.838,
+     5.456,
+     -5.811
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -0.36,
+     4.96,
+     -6.82
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 19,
+    "name": "mixamorigLeftHand",
+    "mw": [
+     1.503,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     0.778,
+     5.459,
+     -5.557
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.53,
+     4.97,
+     -6.62
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 20,
+    "name": "mixamorigRightHandPinky2",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -1.038,
+     5.556,
+     -5.75
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -1.02,
+     6.44,
+     -6.83
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 21,
+    "name": "mixamorigRightHandPinky3",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -1.069,
+     5.523,
+     -5.737
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -1.51,
+     6.66,
+     -6.49
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 22,
+    "name": "mixamorigLeftHandPinky1",
+    "mw": [
+     1.503,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     0.927,
+     5.566,
+     -5.49
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.7,
+     5.8,
+     -6.79
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 23,
+    "name": "mixamorigLeftHandPinky2",
+    "mw": [
+     1.503,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     0.969,
+     5.559,
+     -5.443
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.99,
+     6.29,
+     -6.63
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 24,
+    "name": "mixamorigLeftHandPinky3",
+    "mw": [
+     1.502,
+     1.503,
+     1.502
+    ],
+    "mwT": [
+     1.007,
+     5.531,
+     -5.422
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     1.28,
+     6.58,
+     -6.36
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 25,
+    "name": "mixamorigRightHandPinky1",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -0.988,
+     5.564,
+     -5.779
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -0.49,
+     5.77,
+     -7.02
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 26,
+    "name": "mixamorigHead",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -0.004,
+     5.164,
+     -5.783
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -0.04,
+     4.08,
+     -5.92
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 27,
+    "name": "mixamorigNeck",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     0.001,
+     5.05,
+     -5.855
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.02,
+     4.1,
+     -6.04
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 28,
+    "name": "mixamorigRightHandMiddle1",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -1.072,
+     5.487,
+     -5.677
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -0.46,
+     5.58,
+     -6.98
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 29,
+    "name": "mixamorigLeftHandRing1",
+    "mw": [
+     1.503,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     0.999,
+     5.539,
+     -5.404
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.7,
+     5.78,
+     -6.78
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 30,
+    "name": "mixamorigRightHandRing2",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -1.1,
+     5.523,
+     -5.705
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -1.29,
+     6.58,
+     -6.68
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 31,
+    "name": "mixamorigRightHandRing3",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -1.109,
+     5.5,
+     -5.692
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -1.81,
+     6.66,
+     -6.27
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 32,
+    "name": "mixamorigRightHandRing1",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -1.072,
+     5.526,
+     -5.715
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -0.47,
+     5.7,
+     -7
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 33,
+    "name": "mixamorigLeftHandRing2",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     1.029,
+     5.533,
+     -5.39
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     1.06,
+     6.38,
+     -6.56
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 34,
+    "name": "mixamorigLeftHandMiddle1",
+    "mw": [
+     1.503,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     0.993,
+     5.501,
+     -5.371
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.69,
+     5.72,
+     -6.76
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 35,
+    "name": "mixamorigLeftHandRing3",
+    "mw": [
+     1.502,
+     1.503,
+     1.502
+    ],
+    "mwT": [
+     1.043,
+     5.517,
+     -5.373
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     1.4,
+     6.67,
+     -6.22
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 36,
+    "name": "mixamorigRightHandIndex1",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -1.016,
+     5.421,
+     -5.696
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -0.45,
+     5.46,
+     -6.95
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 37,
+    "name": "mixamorigLeftHandIndex1",
+    "mw": [
+     1.502,
+     1.502,
+     1.503
+    ],
+    "mwT": [
+     0.942,
+     5.431,
+     -5.398
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.62,
+     5.39,
+     -6.73
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 38,
+    "name": "mixamorigLeftHandThumb1",
+    "mw": [
+     1.502,
+     1.503,
+     1.502
+    ],
+    "mwT": [
+     0.83,
+     5.393,
+     -5.517
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -0.06,
+     5,
+     -6.25
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 39,
+    "name": "mixamorigRightHandThumb1",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -0.888,
+     5.388,
+     -5.786
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.09,
+     5.14,
+     -6.49
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 40,
+    "name": "mixamorigRightHandIndex2",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -1.052,
+     5.397,
+     -5.66
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -0.88,
+     6.04,
+     -6.92
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 41,
+    "name": "mixamorigRightHandMiddle2",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -1.113,
+     5.468,
+     -5.667
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -1.08,
+     6.37,
+     -6.83
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 42,
+    "name": "mixamorigLeftHandMiddle2",
+    "mw": [
+     1.502,
+     1.503,
+     1.502
+    ],
+    "mwT": [
+     1.03,
+     5.476,
+     -5.351
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.97,
+     6.18,
+     -6.64
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 43,
+    "name": "mixamorigRightHandMiddle3",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -1.126,
+     5.434,
+     -5.65
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -1.61,
+     6.6,
+     -6.47
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 44,
+    "name": "mixamorigLeftHandMiddle3",
+    "mw": [
+     1.502,
+     1.503,
+     1.503
+    ],
+    "mwT": [
+     1.046,
+     5.447,
+     -5.33
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     1.24,
+     6.47,
+     -6.42
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 45,
+    "name": "mixamorigRightHandThumb2",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -0.915,
+     5.325,
+     -5.775
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -0.01,
+     4.9,
+     -6.53
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 46,
+    "name": "mixamorigLeftHandIndex2",
+    "mw": [
+     1.502,
+     1.503,
+     1.502
+    ],
+    "mwT": [
+     0.971,
+     5.411,
+     -5.355
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.97,
+     5.93,
+     -6.68
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 47,
+    "name": "mixamorigLeftHandThumb2",
+    "mw": [
+     1.502,
+     1.503,
+     1.502
+    ],
+    "mwT": [
+     0.867,
+     5.332,
+     -5.495
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -0.01,
+     4.89,
+     -6.26
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 48,
+    "name": "mixamorigLeftHandThumb3",
+    "mw": [
+     1.502,
+     1.502,
+     1.503
+    ],
+    "mwT": [
+     0.92,
+     5.278,
+     -5.489
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.09,
+     4.53,
+     -6.09
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 49,
+    "name": "mixamorigRightHandIndex3",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -1.075,
+     5.348,
+     -5.646
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     -1.16,
+     6.25,
+     -6.8
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 50,
+    "name": "mixamorigLeftHandIndex3",
+    "mw": [
+     1.502,
+     1.503,
+     1.502
+    ],
+    "mwT": [
+     0.995,
+     5.365,
+     -5.332
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     1.25,
+     6.22,
+     -6.49
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 51,
+    "name": "mixamorigRightHandThumb3",
+    "mw": [
+     1.502,
+     1.502,
+     1.502
+    ],
+    "mwT": [
+     -0.971,
+     5.274,
+     -5.781
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     150.25,
+     150.25,
+     150.25
+    ],
+    "compT": [
+     0.09,
+     4.7,
+     -6.19
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   }
+  ],
+  "verts": [
+   {
+    "bone": "mixamorigHips",
+    "verts": 392,
+    "nan": 0,
+    "meanY": 4.18,
+    "minY": 4,
+    "maxY": 4.35
+   },
+   {
+    "bone": "mixamorigSpine",
+    "verts": 253,
+    "nan": 0,
+    "meanY": 4.41,
+    "minY": 4.31,
+    "maxY": 5
+   },
+   {
+    "bone": "mixamorigSpine1",
+    "verts": 33,
+    "nan": 0,
+    "meanY": 4.63,
+    "minY": 4.46,
+    "maxY": 5.04
+   },
+   {
+    "bone": "mixamorigSpine2",
+    "verts": 496,
+    "nan": 0,
+    "meanY": 4.92,
+    "minY": 4.61,
+    "maxY": 5.13
+   },
+   {
+    "bone": "mixamorigRightArm",
+    "verts": 493,
+    "nan": 0,
+    "meanY": 5.28,
+    "minY": 5.03,
+    "maxY": 5.48
+   },
+   {
+    "bone": "mixamorigLeftArm",
+    "verts": 507,
+    "nan": 0,
+    "meanY": 5.3,
+    "minY": 4.95,
+    "maxY": 5.49
+   },
+   {
+    "bone": "mixamorigLeftShoulder",
+    "verts": 61,
+    "nan": 0,
+    "meanY": 5.07,
+    "minY": 4.87,
+    "maxY": 5.27
+   },
+   {
+    "bone": "mixamorigRightShoulder",
+    "verts": 32,
+    "nan": 0,
+    "meanY": 5.09,
+    "minY": 4.99,
+    "maxY": 5.28
+   },
+   {
+    "bone": "mixamorigLeftLeg",
+    "verts": 143,
+    "nan": 0,
+    "meanY": 4.68,
+    "minY": 4.57,
+    "maxY": 4.93
+   },
+   {
+    "bone": "mixamorigLeftFoot",
+    "verts": 77,
+    "nan": 0,
+    "meanY": 5.07,
+    "minY": 4.91,
+    "maxY": 5.22
+   },
+   {
+    "bone": "mixamorigLeftToeBase",
+    "verts": 27,
+    "nan": 0,
+    "meanY": 5.17,
+    "minY": 5.09,
+    "maxY": 5.23
+   },
+   {
+    "bone": "mixamorigLeftUpLeg",
+    "verts": 269,
+    "nan": 0,
+    "meanY": 4.36,
+    "minY": 4.03,
+    "maxY": 4.62
+   },
+   {
+    "bone": "mixamorigRightFoot",
+    "verts": 74,
+    "nan": 0,
+    "meanY": 5,
+    "minY": 4.86,
+    "maxY": 5.16
+   },
+   {
+    "bone": "mixamorigRightLeg",
+    "verts": 141,
+    "nan": 0,
+    "meanY": 4.61,
+    "minY": 4.51,
+    "maxY": 4.86
+   },
+   {
+    "bone": "mixamorigRightToeBase",
+    "verts": 31,
+    "nan": 0,
+    "meanY": 5.1,
+    "minY": 5.02,
+    "maxY": 5.16
+   },
+   {
+    "bone": "mixamorigRightUpLeg",
+    "verts": 201,
+    "nan": 0,
+    "meanY": 4.35,
+    "minY": 4,
+    "maxY": 4.56
+   },
+   {
+    "bone": "mixamorigRightForeArm",
+    "verts": 88,
+    "nan": 0,
+    "meanY": 5.38,
+    "minY": 5.23,
+    "maxY": 5.55
+   },
+   {
+    "bone": "mixamorigLeftForeArm",
+    "verts": 90,
+    "nan": 0,
+    "meanY": 5.39,
+    "minY": 5.24,
+    "maxY": 5.55
+   },
+   {
+    "bone": "mixamorigRightHand",
+    "verts": 122,
+    "nan": 0,
+    "meanY": 5.48,
+    "minY": 5.36,
+    "maxY": 5.61
+   },
+   {
+    "bone": "mixamorigLeftHand",
+    "verts": 114,
+    "nan": 0,
+    "meanY": 5.48,
+    "minY": 5.36,
+    "maxY": 5.6
+   },
+   {
+    "bone": "mixamorigRightHandPinky2",
+    "verts": 10,
+    "nan": 0,
+    "meanY": 5.54,
+    "minY": 5.51,
+    "maxY": 5.57
+   },
+   {
+    "bone": "mixamorigRightHandPinky3",
+    "verts": 4,
+    "nan": 0,
+    "meanY": 5.5,
+    "minY": 5.49,
+    "maxY": 5.52
+   },
+   {
+    "bone": "mixamorigLeftHandPinky1",
+    "verts": 24,
+    "nan": 0,
+    "meanY": 5.56,
+    "minY": 5.54,
+    "maxY": 5.61
+   },
+   {
+    "bone": "mixamorigLeftHandPinky2",
+    "verts": 8,
+    "nan": 0,
+    "meanY": 5.55,
+    "minY": 5.52,
+    "maxY": 5.59
+   },
+   {
+    "bone": "mixamorigLeftHandPinky3",
+    "verts": 5,
+    "nan": 0,
+    "meanY": 5.52,
+    "minY": 5.5,
+    "maxY": 5.53
+   },
+   {
+    "bone": "mixamorigRightHandPinky1",
+    "verts": 13,
+    "nan": 0,
+    "meanY": 5.56,
+    "minY": 5.53,
+    "maxY": 5.59
+   },
+   {
+    "bone": "mixamorigHead",
+    "verts": 125,
+    "nan": 0,
+    "meanY": 5.22,
+    "minY": 5.11,
+    "maxY": 5.39
+   },
+   {
+    "bone": "mixamorigNeck",
+    "verts": 37,
+    "nan": 0,
+    "meanY": 5.06,
+    "minY": 5.01,
+    "maxY": 5.16
+   },
+   {
+    "bone": "mixamorigRightHandMiddle1",
+    "verts": 6,
+    "nan": 0,
+    "meanY": 5.48,
+    "minY": 5.46,
+    "maxY": 5.51
+   },
+   {
+    "bone": "mixamorigLeftHandRing1",
+    "verts": 17,
+    "nan": 0,
+    "meanY": 5.53,
+    "minY": 5.5,
+    "maxY": 5.57
+   },
+   {
+    "bone": "mixamorigRightHandRing2",
+    "verts": 5,
+    "nan": 0,
+    "meanY": 5.5,
+    "minY": 5.49,
+    "maxY": 5.54
+   },
+   {
+    "bone": "mixamorigRightHandRing3",
+    "verts": 2,
+    "nan": 0,
+    "meanY": 5.48,
+    "minY": 5.48,
+    "maxY": 5.48
+   },
+   {
+    "bone": "mixamorigRightHandRing1",
+    "verts": 18,
+    "nan": 0,
+    "meanY": 5.52,
+    "minY": 5.5,
+    "maxY": 5.56
+   },
+   {
+    "bone": "mixamorigLeftHandRing2",
+    "verts": 7,
+    "nan": 0,
+    "meanY": 5.51,
+    "minY": 5.5,
+    "maxY": 5.53
+   },
+   {
+    "bone": "mixamorigLeftHandMiddle1",
+    "verts": 8,
+    "nan": 0,
+    "meanY": 5.48,
+    "minY": 5.47,
+    "maxY": 5.52
+   },
+   {
+    "bone": "mixamorigRightHandIndex1",
+    "verts": 10,
+    "nan": 0,
+    "meanY": 5.42,
+    "minY": 5.4,
+    "maxY": 5.44
+   },
+   {
+    "bone": "mixamorigLeftHandIndex1",
+    "verts": 14,
+    "nan": 0,
+    "meanY": 5.43,
+    "minY": 5.39,
+    "maxY": 5.46
+   },
+   {
+    "bone": "mixamorigLeftHandThumb1",
+    "verts": 14,
+    "nan": 0,
+    "meanY": 5.34,
+    "minY": 5.31,
+    "maxY": 5.39
+   },
+   {
+    "bone": "mixamorigRightHandThumb1",
+    "verts": 8,
+    "nan": 0,
+    "meanY": 5.35,
+    "minY": 5.32,
+    "maxY": 5.38
+   },
+   {
+    "bone": "mixamorigRightHandIndex2",
+    "verts": 8,
+    "nan": 0,
+    "meanY": 5.36,
+    "minY": 5.34,
+    "maxY": 5.39
+   },
+   {
+    "bone": "mixamorigRightHandMiddle2",
+    "verts": 6,
+    "nan": 0,
+    "meanY": 5.46,
+    "minY": 5.43,
+    "maxY": 5.48
+   },
+   {
+    "bone": "mixamorigLeftHandMiddle2",
+    "verts": 9,
+    "nan": 0,
+    "meanY": 5.45,
+    "minY": 5.43,
+    "maxY": 5.48
+   },
+   {
+    "bone": "mixamorigRightHandMiddle3",
+    "verts": 6,
+    "nan": 0,
+    "meanY": 5.41,
+    "minY": 5.41,
+    "maxY": 5.42
+   },
+   {
+    "bone": "mixamorigLeftHandMiddle3",
+    "verts": 3,
+    "nan": 0,
+    "meanY": 5.42,
+    "minY": 5.42,
+    "maxY": 5.43
+   },
+   {
+    "bone": "mixamorigRightHandThumb2",
+    "verts": 20,
+    "nan": 0,
+    "meanY": 5.3,
+    "minY": 5.26,
+    "maxY": 5.34
+   },
+   {
+    "bone": "mixamorigLeftHandIndex2",
+    "verts": 11,
+    "nan": 0,
+    "meanY": 5.37,
+    "minY": 5.35,
+    "maxY": 5.4
+   },
+   {
+    "bone": "mixamorigLeftHandThumb2",
+    "verts": 13,
+    "nan": 0,
+    "meanY": 5.29,
+    "minY": 5.25,
+    "maxY": 5.34
+   },
+   {
+    "bone": "mixamorigLeftHandThumb3",
+    "verts": 14,
+    "nan": 0,
+    "meanY": 5.26,
+    "minY": 5.23,
+    "maxY": 5.3
+   },
+   {
+    "bone": "mixamorigRightHandIndex3",
+    "verts": 6,
+    "nan": 0,
+    "meanY": 5.32,
+    "minY": 5.31,
+    "maxY": 5.33
+   },
+   {
+    "bone": "mixamorigLeftHandIndex3",
+    "verts": 5,
+    "nan": 0,
+    "meanY": 5.34,
+    "minY": 5.33,
+    "maxY": 5.35
+   },
+   {
+    "bone": "mixamorigRightHandThumb3",
+    "verts": 13,
+    "nan": 0,
+    "meanY": 5.25,
+    "minY": 5.22,
+    "maxY": 5.29
+   }
+  ]
+ },
+ "rimeImp": {
+  "key": "rimeImp",
+  "slot": 23,
+  "groundY": 2.66,
+  "rootY": 3.846,
+  "footLift": 1.188,
+  "bindMode": "attached",
+  "bindMatrixIsIdentity": true,
+  "vertexCount": 28461,
+  "sampled": 4066,
+  "nanVerts": 0,
+  "skinnedBBoxY": [
+   3.82,
+   5.34
+  ],
+  "skinnedBBoxX": [
+   -1.01,
+   0.97
+  ],
+  "bones": [
+   {
+    "i": 0,
+    "name": "mixamorigHips",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.0,
+     3.959,
+     -6.001
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.01,
+     4.17,
+     -5.92
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 1,
+    "name": "mixamorigLeftUpLeg",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.164,
+     3.888,
+     -6.006
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.01,
+     3.6,
+     -5.98
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 2,
+    "name": "mixamorigRightUpLeg",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.167,
+     3.895,
+     -5.998
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.03,
+     3.62,
+     -5.87
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 3,
+    "name": "mixamorigSpine2",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.007,
+     4.388,
+     -5.987
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.0,
+     4.15,
+     -5.92
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 4,
+    "name": "mixamorigSpine",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.003,
+     4.082,
+     -6.009
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0,
+     4.16,
+     -5.91
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 5,
+    "name": "mixamorigSpine1",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.006,
+     4.225,
+     -6.001
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.0,
+     4.15,
+     -5.91
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 6,
+    "name": "mixamorigRightShoulder",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.094,
+     4.539,
+     -5.988
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.16,
+     4.6,
+     -6.38
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 7,
+    "name": "mixamorigRightArm",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.152,
+     4.744,
+     -5.953
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.02,
+     4.59,
+     -6.36
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 8,
+    "name": "mixamorigLeftShoulder",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.108,
+     4.537,
+     -5.961
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.27,
+     4.6,
+     -6.32
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 9,
+    "name": "mixamorigLeftArm",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.158,
+     4.742,
+     -5.914
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.12,
+     4.61,
+     -6.34
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 10,
+    "name": "mixamorigRightForeArm",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.424,
+     4.837,
+     -5.923
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.01,
+     4.5,
+     -6.28
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 11,
+    "name": "mixamorigHead",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.005,
+     4.628,
+     -5.938
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.01,
+     4.16,
+     -5.86
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 12,
+    "name": "mixamorigLeftForeArm",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.417,
+     4.83,
+     -5.82
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.08,
+     4.48,
+     -6.24
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 13,
+    "name": "mixamorigRightHand",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.722,
+     4.927,
+     -5.809
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.11,
+     4.53,
+     -6.43
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 14,
+    "name": "mixamorigLeftHand",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.682,
+     4.907,
+     -5.638
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.15,
+     4.52,
+     -6.33
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 15,
+    "name": "mixamorigRightHandMiddle1",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.88,
+     4.934,
+     -5.705
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.15,
+     5.05,
+     -6.56
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 16,
+    "name": "mixamorigRightHandRing1",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.88,
+     5.007,
+     -5.745
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.15,
+     5.16,
+     -6.59
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 17,
+    "name": "mixamorigLeftHandRing1",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.83,
+     4.984,
+     -5.557
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.24,
+     5.17,
+     -6.5
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 18,
+    "name": "mixamorigLeftHandRing2",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.885,
+     4.977,
+     -5.494
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.53,
+     5.73,
+     -6.37
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 19,
+    "name": "mixamorigLeftHandRing3",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.93,
+     4.932,
+     -5.456
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.84,
+     6.03,
+     -6.1
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 20,
+    "name": "mixamorigRightHandRing2",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.944,
+     5.002,
+     -5.693
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.78,
+     6,
+     -6.36
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 21,
+    "name": "mixamorigRightHandRing3",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.976,
+     4.94,
+     -5.669
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -1.24,
+     6.15,
+     -6
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 22,
+    "name": "mixamorigLeftLeg",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.158,
+     4.258,
+     -6.116
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.02,
+     3.71,
+     -6.5
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 23,
+    "name": "mixamorigLeftFoot",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.172,
+     4.478,
+     -5.845
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.05,
+     3.58,
+     -6.33
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 24,
+    "name": "mixamorigLeftToeBase",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.122,
+     4.742,
+     -6.127
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.04,
+     3.57,
+     -6.21
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 25,
+    "name": "mixamorigRightLeg",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.121,
+     4.215,
+     -6.21
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.08,
+     3.66,
+     -6.57
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 26,
+    "name": "mixamorigRightFoot",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.165,
+     4.44,
+     -5.951
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.15,
+     3.55,
+     -6.34
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 27,
+    "name": "mixamorigRightToeBase",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.063,
+     4.703,
+     -6.225
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.12,
+     3.54,
+     -6.19
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 28,
+    "name": "mixamorigLeftHandMiddle1",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.821,
+     4.917,
+     -5.516
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.25,
+     5.13,
+     -6.46
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 29,
+    "name": "mixamorigNeck",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.006,
+     4.57,
+     -5.966
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.0,
+     4.15,
+     -5.91
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 30,
+    "name": "mixamorigLeftHandThumb1",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.727,
+     4.842,
+     -5.603
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.18,
+     4.63,
+     -5.89
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 31,
+    "name": "mixamorigRightHandIndex1",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.861,
+     4.861,
+     -5.674
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.17,
+     4.98,
+     -6.53
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 32,
+    "name": "mixamorigLeftHandMiddle2",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.874,
+     4.887,
+     -5.454
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.47,
+     5.55,
+     -6.38
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 33,
+    "name": "mixamorigRightHandThumb1",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.772,
+     4.861,
+     -5.779
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.15,
+     4.73,
+     -6.08
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 34,
+    "name": "mixamorigLeftHandIndex1",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.802,
+     4.84,
+     -5.486
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.22,
+     4.91,
+     -6.43
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 35,
+    "name": "mixamorigRightHandMiddle2",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.942,
+     4.913,
+     -5.648
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.64,
+     5.78,
+     -6.44
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 36,
+    "name": "mixamorigRightHandMiddle3",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.974,
+     4.844,
+     -5.621
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -1.1,
+     6.02,
+     -6.14
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 37,
+    "name": "mixamorigLeftHandMiddle3",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.916,
+     4.83,
+     -5.415
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.72,
+     5.81,
+     -6.21
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 38,
+    "name": "mixamorigRightHandThumb2",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.803,
+     4.8,
+     -5.764
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.06,
+     4.42,
+     -6.12
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 39,
+    "name": "mixamorigLeftHandThumb2",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.76,
+     4.786,
+     -5.583
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.13,
+     4.45,
+     -5.9
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 40,
+    "name": "mixamorigLeftHandThumb3",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.816,
+     4.71,
+     -5.569
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.07,
+     4.24,
+     -5.82
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 41,
+    "name": "mixamorigRightHandThumb3",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.867,
+     4.732,
+     -5.762
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.09,
+     4.32,
+     -5.84
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 42,
+    "name": "mixamorigLeftHandIndex2",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.841,
+     4.804,
+     -5.417
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.51,
+     5.39,
+     -6.4
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 43,
+    "name": "mixamorigRightHandIndex2",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.907,
+     4.818,
+     -5.613
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.52,
+     5.52,
+     -6.5
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 44,
+    "name": "mixamorigRightHandIndex3",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     -0.929,
+     4.745,
+     -5.589
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     -0.76,
+     5.71,
+     -6.38
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   },
+   {
+    "i": 45,
+    "name": "mixamorigLeftHandIndex3",
+    "mw": [
+     1.41,
+     1.41,
+     1.41
+    ],
+    "mwT": [
+     0.864,
+     4.737,
+     -5.384
+    ],
+    "inv": [
+     100,
+     100,
+     100
+    ],
+    "comp": [
+     141.01,
+     141.01,
+     141.01
+    ],
+    "compT": [
+     0.77,
+     5.65,
+     -6.24
+    ],
+    "mwOK": true,
+    "invOK": true,
+    "compOK": true
+   }
+  ],
+  "verts": [
+   {
+    "bone": "mixamorigHips",
+    "verts": 262,
+    "nan": 0,
+    "meanY": 3.96,
+    "minY": 3.82,
+    "maxY": 4.14
+   },
+   {
+    "bone": "mixamorigLeftUpLeg",
+    "verts": 370,
+    "nan": 0,
+    "meanY": 4.07,
+    "minY": 3.86,
+    "maxY": 4.35
+   },
+   {
+    "bone": "mixamorigRightUpLeg",
+    "verts": 360,
+    "nan": 0,
+    "meanY": 4.06,
+    "minY": 3.84,
+    "maxY": 4.28
+   },
+   {
+    "bone": "mixamorigSpine2",
+    "verts": 371,
+    "nan": 0,
+    "meanY": 4.5,
+    "minY": 4.22,
+    "maxY": 4.63
+   },
+   {
+    "bone": "mixamorigSpine",
+    "verts": 103,
+    "nan": 0,
+    "meanY": 4.16,
+    "minY": 4.09,
+    "maxY": 4.24
+   },
+   {
+    "bone": "mixamorigSpine1",
+    "verts": 17,
+    "nan": 0,
+    "meanY": 4.24,
+    "minY": 4.19,
+    "maxY": 4.29
+   },
+   {
+    "bone": "mixamorigRightShoulder",
+    "verts": 157,
+    "nan": 0,
+    "meanY": 4.65,
+    "minY": 4.52,
+    "maxY": 4.82
+   },
+   {
+    "bone": "mixamorigRightArm",
+    "verts": 194,
+    "nan": 0,
+    "meanY": 4.78,
+    "minY": 4.62,
+    "maxY": 4.96
+   },
+   {
+    "bone": "mixamorigLeftShoulder",
+    "verts": 167,
+    "nan": 0,
+    "meanY": 4.64,
+    "minY": 4.48,
+    "maxY": 4.83
+   },
+   {
+    "bone": "mixamorigLeftArm",
+    "verts": 210,
+    "nan": 0,
+    "meanY": 4.78,
+    "minY": 4.62,
+    "maxY": 4.96
+   },
+   {
+    "bone": "mixamorigRightForeArm",
+    "verts": 118,
+    "nan": 0,
+    "meanY": 4.89,
+    "minY": 4.74,
+    "maxY": 5.03
+   },
+   {
+    "bone": "mixamorigHead",
+    "verts": 825,
+    "nan": 0,
+    "meanY": 4.95,
+    "minY": 4.55,
+    "maxY": 5.34
+   },
+   {
+    "bone": "mixamorigLeftForeArm",
+    "verts": 117,
+    "nan": 0,
+    "meanY": 4.89,
+    "minY": 4.73,
+    "maxY": 5.02
+   },
+   {
+    "bone": "mixamorigRightHand",
+    "verts": 54,
+    "nan": 0,
+    "meanY": 4.92,
+    "minY": 4.82,
+    "maxY": 5.04
+   },
+   {
+    "bone": "mixamorigLeftHand",
+    "verts": 47,
+    "nan": 0,
+    "meanY": 4.91,
+    "minY": 4.81,
+    "maxY": 5.02
+   },
+   {
+    "bone": "mixamorigRightHandMiddle1",
+    "verts": 14,
+    "nan": 0,
+    "meanY": 4.92,
+    "minY": 4.88,
+    "maxY": 4.97
+   },
+   {
+    "bone": "mixamorigRightHandRing1",
+    "verts": 9,
+    "nan": 0,
+    "meanY": 5,
+    "minY": 4.97,
+    "maxY": 5.03
+   },
+   {
+    "bone": "mixamorigLeftHandRing1",
+    "verts": 9,
+    "nan": 0,
+    "meanY": 4.97,
+    "minY": 4.94,
+    "maxY": 5.01
+   },
+   {
+    "bone": "mixamorigLeftHandRing2",
+    "verts": 10,
+    "nan": 0,
+    "meanY": 4.95,
+    "minY": 4.91,
+    "maxY": 5
+   },
+   {
+    "bone": "mixamorigLeftHandRing3",
+    "verts": 6,
+    "nan": 0,
+    "meanY": 4.89,
+    "minY": 4.87,
+    "maxY": 4.9
+   },
+   {
+    "bone": "mixamorigRightHandRing2",
+    "verts": 8,
+    "nan": 0,
+    "meanY": 4.96,
+    "minY": 4.94,
+    "maxY": 5.02
+   },
+   {
+    "bone": "mixamorigRightHandRing3",
+    "verts": 5,
+    "nan": 0,
+    "meanY": 4.9,
+    "minY": 4.88,
+    "maxY": 4.93
+   },
+   {
+    "bone": "mixamorigLeftLeg",
+    "verts": 60,
+    "nan": 0,
+    "meanY": 4.32,
+    "minY": 4.24,
+    "maxY": 4.43
+   },
+   {
+    "bone": "mixamorigLeftFoot",
+    "verts": 97,
+    "nan": 0,
+    "meanY": 4.55,
+    "minY": 4.41,
+    "maxY": 4.74
+   },
+   {
+    "bone": "mixamorigLeftToeBase",
+    "verts": 83,
+    "nan": 0,
+    "meanY": 4.71,
+    "minY": 4.65,
+    "maxY": 4.77
+   },
+   {
+    "bone": "mixamorigRightLeg",
+    "verts": 69,
+    "nan": 0,
+    "meanY": 4.28,
+    "minY": 4.2,
+    "maxY": 4.42
+   },
+   {
+    "bone": "mixamorigRightFoot",
+    "verts": 94,
+    "nan": 0,
+    "meanY": 4.52,
+    "minY": 4.37,
+    "maxY": 4.7
+   },
+   {
+    "bone": "mixamorigRightToeBase",
+    "verts": 89,
+    "nan": 0,
+    "meanY": 4.67,
+    "minY": 4.6,
+    "maxY": 4.73
+   },
+   {
+    "bone": "mixamorigLeftHandMiddle1",
+    "verts": 8,
+    "nan": 0,
+    "meanY": 4.9,
+    "minY": 4.86,
+    "maxY": 4.94
+   },
+   {
+    "bone": "mixamorigLeftHandThumb1",
+    "verts": 4,
+    "nan": 0,
+    "meanY": 4.78,
+    "minY": 4.76,
+    "maxY": 4.8
+   },
+   {
+    "bone": "mixamorigRightHandIndex1",
+    "verts": 8,
+    "nan": 0,
+    "meanY": 4.85,
+    "minY": 4.82,
+    "maxY": 4.88
+   },
+   {
+    "bone": "mixamorigLeftHandMiddle2",
+    "verts": 12,
+    "nan": 0,
+    "meanY": 4.85,
+    "minY": 4.81,
+    "maxY": 4.9
+   },
+   {
+    "bone": "mixamorigRightHandThumb1",
+    "verts": 4,
+    "nan": 0,
+    "meanY": 4.83,
+    "minY": 4.8,
+    "maxY": 4.83
+   },
+   {
+    "bone": "mixamorigLeftHandIndex1",
+    "verts": 9,
+    "nan": 0,
+    "meanY": 4.84,
+    "minY": 4.8,
+    "maxY": 4.86
+   },
+   {
+    "bone": "mixamorigRightHandMiddle2",
+    "verts": 8,
+    "nan": 0,
+    "meanY": 4.86,
+    "minY": 4.84,
+    "maxY": 4.93
+   },
+   {
+    "bone": "mixamorigRightHandMiddle3",
+    "verts": 7,
+    "nan": 0,
+    "meanY": 4.81,
+    "minY": 4.77,
+    "maxY": 4.84
+   },
+   {
+    "bone": "mixamorigLeftHandMiddle3",
+    "verts": 7,
+    "nan": 0,
+    "meanY": 4.8,
+    "minY": 4.76,
+    "maxY": 4.82
+   },
+   {
+    "bone": "mixamorigRightHandThumb2",
+    "verts": 10,
+    "nan": 0,
+    "meanY": 4.77,
+    "minY": 4.7,
+    "maxY": 4.82
+   },
+   {
+    "bone": "mixamorigLeftHandThumb2",
+    "verts": 12,
+    "nan": 0,
+    "meanY": 4.74,
+    "minY": 4.69,
+    "maxY": 4.8
+   },
+   {
+    "bone": "mixamorigLeftHandThumb3",
+    "verts": 8,
+    "nan": 0,
+    "meanY": 4.69,
+    "minY": 4.67,
+    "maxY": 4.74
+   },
+   {
+    "bone": "mixamorigRightHandThumb3",
+    "verts": 11,
+    "nan": 0,
+    "meanY": 4.71,
+    "minY": 4.69,
+    "maxY": 4.76
+   },
+   {
+    "bone": "mixamorigLeftHandIndex2",
+    "verts": 13,
+    "nan": 0,
+    "meanY": 4.75,
+    "minY": 4.71,
+    "maxY": 4.82
+   },
+   {
+    "bone": "mixamorigRightHandIndex2",
+    "verts": 9,
+    "nan": 0,
+    "meanY": 4.78,
+    "minY": 4.75,
+    "maxY": 4.8
+   },
+   {
+    "bone": "mixamorigRightHandIndex3",
+    "verts": 6,
+    "nan": 0,
+    "meanY": 4.7,
+    "minY": 4.67,
+    "maxY": 4.73
+   },
+   {
+    "bone": "mixamorigLeftHandIndex3",
+    "verts": 5,
+    "nan": 0,
+    "meanY": 4.68,
+    "minY": 4.66,
+    "maxY": 4.69
+   }
+  ]
+ }
+}

@@ -1,0 +1,21 @@
+{
+  "title": "Rummikub",
+  "slug": "rummikub",
+  "genre": "rummikub3d",
+  "tagline": "Runs, groups, and a calm race to an empty rack.",
+  "aiLevel": "casual",
+  "view": { "width": 960, "height": 600, "background": "#1d2a24" },
+  "audio": {
+    "music": "assets/audio/music.ogg",
+    "menu_music": "assets/audio/menu_music.ogg"
+  },
+  "sfx": {
+    "click": "assets/audio/click.ogg",
+    "select": "assets/audio/select.ogg",
+    "confirm": "assets/audio/confirm.ogg",
+    "hit": "assets/audio/hit.ogg",
+    "victory": "assets/audio/victory.ogg",
+    "defeat": "assets/audio/defeat.ogg"
+  },
+  "assets": {}
+}

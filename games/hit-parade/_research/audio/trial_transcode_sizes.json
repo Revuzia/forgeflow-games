@@ -1,0 +1,1059 @@
+{
+ "files": [
+  {
+   "role": "punch_light",
+   "path": "F:/games/forgeflow-games-assets/impact-sounds/Audio/impactPunch_medium_000.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 2334,
+   "error": null,
+   "aac_bytes": 4708
+  },
+  {
+   "role": "punch_light",
+   "path": "F:/games/forgeflow-games-assets/impact-sounds/Audio/impactPunch_medium_001.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 2208,
+   "error": null,
+   "aac_bytes": 4336
+  },
+  {
+   "role": "punch_light",
+   "path": "F:/games/forgeflow-games-assets/impact-sounds/Audio/impactPunch_medium_003.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 2555,
+   "error": null,
+   "aac_bytes": 5002
+  },
+  {
+   "role": "punch_light",
+   "path": "F:/games/forgeflow-games-assets/impact-sounds/Audio/impactPunch_medium_004.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 2915,
+   "error": null,
+   "aac_bytes": 5668
+  },
+  {
+   "role": "punch_light",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rogue Waves - Anime Studio/FGHTImpt_Fight Combo x4_RogueWaves_AnimeStudio.wav",
+   "profile": "sfx_mono",
+   "start_ms": 40,
+   "end_ms": 240,
+   "opus_bytes": 1455,
+   "error": null,
+   "aac_bytes": 2737
+  },
+  {
+   "role": "punch_light",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rogue Waves - Anime Studio/FGHTImpt_Fight Combo x4_RogueWaves_AnimeStudio.wav",
+   "profile": "sfx_mono",
+   "start_ms": 240,
+   "end_ms": 440,
+   "opus_bytes": 1469,
+   "error": null,
+   "aac_bytes": 2784
+  },
+  {
+   "role": "punch_heavy",
+   "path": "F:/games/forgeflow-games-assets/impact-sounds/Audio/impactPunch_heavy_000.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 4140,
+   "error": null,
+   "aac_bytes": 6468
+  },
+  {
+   "role": "punch_heavy",
+   "path": "F:/games/forgeflow-games-assets/impact-sounds/Audio/impactPunch_heavy_002.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 2746,
+   "error": null,
+   "aac_bytes": 4925
+  },
+  {
+   "role": "punch_heavy",
+   "path": "F:/games/forgeflow-games-assets/impact-sounds/Audio/impactPunch_heavy_003.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 2806,
+   "error": null,
+   "aac_bytes": 5150
+  },
+  {
+   "role": "punch_heavy",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Melee Weapons/WEAPAxe_Long Two-Handed Axe Flesh Hit_JSE_MW.wav",
+   "profile": "sfx_mono",
+   "start_ms": 2420,
+   "end_ms": 3150,
+   "opus_bytes": 4659,
+   "error": null,
+   "aac_bytes": 7163
+  },
+  {
+   "role": "punch_heavy",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Melee Weapons/WEAPAxe_Long Two-Handed Axe Flesh Hit_JSE_MW.wav",
+   "profile": "sfx_mono",
+   "start_ms": 7230,
+   "end_ms": 7800,
+   "opus_bytes": 3722,
+   "error": null,
+   "aac_bytes": 6022
+  },
+  {
+   "role": "punch_heavy",
+   "path": "F:/games/unity-assets/Evil Mind__Medieval Fantasy Audio Bundle Music Ambience Effects/Assets/Medieval Fantasy Audio Bundle/FX/Impact Flesh 3.mp3",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 4347,
+   "error": null,
+   "aac_bytes": 6009
+  },
+  {
+   "role": "kick",
+   "path": "F:/games/forgeflow-games-assets/impact-sounds/Audio/impactSoft_heavy_001.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 4203,
+   "error": null,
+   "aac_bytes": 6044
+  },
+  {
+   "role": "kick",
+   "path": "F:/games/forgeflow-games-assets/impact-sounds/Audio/impactSoft_heavy_003.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 3281,
+   "error": null,
+   "aac_bytes": 5454
+  },
+  {
+   "role": "kick",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Melee Weapons/WEAPArmr_Metal Shield Block Hits_JSE_MW.wav",
+   "profile": "sfx_mono",
+   "start_ms": 2410,
+   "end_ms": 3200,
+   "opus_bytes": 5566,
+   "error": null,
+   "aac_bytes": 7580
+  },
+  {
+   "role": "body_blow_thud",
+   "path": "F:/games/forgeflow-games-assets/impact-sounds/Audio/impactSoft_heavy_000.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 3338,
+   "error": null,
+   "aac_bytes": 5330
+  },
+  {
+   "role": "body_blow_thud",
+   "path": "F:/games/forgeflow-games-assets/impact-sounds/Audio/impactSoft_heavy_004.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 3638,
+   "error": null,
+   "aac_bytes": 5239
+  },
+  {
+   "role": "body_blow_thud",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Mechanical Wave - Cardboard and Paper/OBJPack_Big Cardboard Box Impact_ 02_MWSFX_CDAP.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 4553,
+   "error": null,
+   "aac_bytes": 6740
+  },
+  {
+   "role": "bone_crunch",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Gore Mini Pack/GOREBone_Bone Breaks Celery 01_JSE_GMP.wav",
+   "profile": "sfx_mono",
+   "start_ms": 0,
+   "end_ms": 1600,
+   "opus_bytes": 13992,
+   "error": null,
+   "aac_bytes": 14663
+  },
+  {
+   "role": "bone_crunch",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Gore Mini Pack/GOREBone_Bone Breaks Celery 01_JSE_GMP.wav",
+   "profile": "sfx_mono",
+   "start_ms": 5130,
+   "end_ms": 6300,
+   "opus_bytes": 9612,
+   "error": null,
+   "aac_bytes": 11294
+  },
+  {
+   "role": "bone_crunch",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Gore Mini Pack/GOREBone_Bone Breaks Celery 01_JSE_GMP.wav",
+   "profile": "sfx_mono",
+   "start_ms": 11290,
+   "end_ms": 12300,
+   "opus_bytes": 8274,
+   "error": null,
+   "aac_bytes": 9645
+  },
+  {
+   "role": "bone_crunch",
+   "path": "F:/games/unity-assets/Evil Mind__Medieval Fantasy Audio Bundle Music Ambience Effects/Assets/Medieval Fantasy Audio Bundle/FX/Impact Bonebreak.mp3",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 2353,
+   "error": null,
+   "aac_bytes": 3981
+  },
+  {
+   "role": "slap",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rogue Waves - Kawaii UI/UIClick_Hand Pop UI Diminished 1_RogueWaves_KawaiiUI.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 1182,
+   "error": null,
+   "aac_bytes": 3035
+  },
+  {
+   "role": "slap",
+   "path": "F:/games/forgeflow-games-assets/impact-sounds/Audio/impactGeneric_light_004.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 944,
+   "error": null,
+   "aac_bytes": 2222
+  },
+  {
+   "role": "whoosh_light",
+   "path": "F:/games/unity-assets/Evil Mind__Halloween Audio Kit Music Ambience Effects/Assets/Halloween Audio Kit/FX/Slash.mp3",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 4122,
+   "error": null,
+   "aac_bytes": 6975
+  },
+  {
+   "role": "whoosh_light",
+   "path": "F:/games/forgeflow-games-assets/rpg-audio/Audio/knifeSlice2.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 3707,
+   "error": null,
+   "aac_bytes": 5923
+  },
+  {
+   "role": "whoosh_light",
+   "path": "F:/games/forgeflow-games-assets/rpg-audio/Audio/knifeSlice.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 3793,
+   "error": null,
+   "aac_bytes": 6152
+  },
+  {
+   "role": "whoosh_heavy",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rescopic Sound - Distinct Whooshes/WHSH_Airy-Whoosh Wind Gust 11_RSCPC_DW.wav",
+   "profile": "sfx_mono",
+   "start_ms": 300,
+   "end_ms": 1500,
+   "opus_bytes": 8102,
+   "error": null,
+   "aac_bytes": 10947
+  },
+  {
+   "role": "whoosh_heavy",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rescopic Sound - Distinct Whooshes/WHSH_Deviant-Whoosh Flabby Slow 09_RSCPC_DW.wav",
+   "profile": "sfx_mono",
+   "start_ms": 900,
+   "end_ms": 2300,
+   "opus_bytes": 8391,
+   "error": null,
+   "aac_bytes": 12564
+  },
+  {
+   "role": "grab_cloth",
+   "path": "F:/games/forgeflow-games-assets/rpg-audio/Audio/cloth1.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 4223,
+   "error": null,
+   "aac_bytes": 6787
+  },
+  {
+   "role": "grab_cloth",
+   "path": "F:/games/forgeflow-games-assets/rpg-audio/Audio/cloth3.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 3120,
+   "error": null,
+   "aac_bytes": 5183
+  },
+  {
+   "role": "grab_cloth",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/TheWorkRoom Audio Post - Neoprene - Dry - Wetsuit/NEO008.wav",
+   "profile": "sfx_mono",
+   "start_ms": 5260,
+   "end_ms": 5600,
+   "opus_bytes": 2255,
+   "error": null,
+   "aac_bytes": 4045
+  },
+  {
+   "role": "grab_cloth",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/InMotionAudio - Torn T-Shirt/CLOTHRip_CottonRips92_InMotionAudio_TornTShirt.wav",
+   "profile": "sfx_mono",
+   "start_ms": 50,
+   "end_ms": 230,
+   "opus_bytes": 1304,
+   "error": null,
+   "aac_bytes": 2666
+  },
+  {
+   "role": "body_fall",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Gore Mini Pack/GOREFlsh_Flesh Drops on Floor 03_JSE_GMP.wav",
+   "profile": "sfx_mono",
+   "start_ms": 2230,
+   "end_ms": 2800,
+   "opus_bytes": 5081,
+   "error": null,
+   "aac_bytes": 8372
+  },
+  {
+   "role": "body_fall",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Gore Mini Pack/GOREFlsh_Flesh Drops on Floor 03_JSE_GMP.wav",
+   "profile": "sfx_mono",
+   "start_ms": 4590,
+   "end_ms": 5150,
+   "opus_bytes": 4805,
+   "error": null,
+   "aac_bytes": 5900
+  },
+  {
+   "role": "body_fall",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Gore Mini Pack/GOREFlsh_Flesh Drops on Floor 03_JSE_GMP.wav",
+   "profile": "sfx_mono",
+   "start_ms": 13700,
+   "end_ms": 14200,
+   "opus_bytes": 3303,
+   "error": null,
+   "aac_bytes": 5344
+  },
+  {
+   "role": "wall_slam",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rogue Waves - Creaking Door/DOORCreak_Wooden Door, Door Slams, Impacts, 3_RogueWaves_CreakingDoor.wav",
+   "profile": "sfx_mono",
+   "start_ms": 0,
+   "end_ms": 700,
+   "opus_bytes": 3991,
+   "error": null,
+   "aac_bytes": 6850
+  },
+  {
+   "role": "wall_slam",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rogue Waves - Creaking Door/DOORCreak_Wooden Door, Door Slams, Impacts, 3_RogueWaves_CreakingDoor.wav",
+   "profile": "sfx_mono",
+   "start_ms": 2250,
+   "end_ms": 3050,
+   "opus_bytes": 4700,
+   "error": null,
+   "aac_bytes": 8471
+  },
+  {
+   "role": "wall_slam",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rogue Waves - Creaking Door/DOORCreak_Wooden Door, Door Slams, Impacts, 3_RogueWaves_CreakingDoor.wav",
+   "profile": "sfx_mono",
+   "start_ms": 8500,
+   "end_ms": 9350,
+   "opus_bytes": 4845,
+   "error": null,
+   "aac_bytes": 8805
+  },
+  {
+   "role": "wet_splat",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Gore Mini Pack/GORESplt_Gore Splatter 01_JSE_GMP.wav",
+   "profile": "sfx_mono",
+   "start_ms": 0,
+   "end_ms": 1350,
+   "opus_bytes": 8446,
+   "error": null,
+   "aac_bytes": 12413
+  },
+  {
+   "role": "wet_splat",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Gore Mini Pack/GORESplt_Gore Splatter 01_JSE_GMP.wav",
+   "profile": "sfx_mono",
+   "start_ms": 4800,
+   "end_ms": 5450,
+   "opus_bytes": 4112,
+   "error": null,
+   "aac_bytes": 6409
+  },
+  {
+   "role": "wet_splat",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Gore Mini Pack/GORESplt_Gore Splatter 01_JSE_GMP.wav",
+   "profile": "sfx_mono",
+   "start_ms": 7200,
+   "end_ms": 8100,
+   "opus_bytes": 7561,
+   "error": null,
+   "aac_bytes": 8670
+  },
+  {
+   "role": "glass_break",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Mechanical Wave - Glass/GLASBrk_Glass Break Hit_04_MWSFX_GL.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 8906,
+   "error": null,
+   "aac_bytes": 10850
+  },
+  {
+   "role": "glass_break",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/BluezoneCorp - Alien Tripod/Bluezone_BC0292_alien_tripod_debris_glass_falling_003.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 9401,
+   "error": null,
+   "aac_bytes": 13417
+  },
+  {
+   "role": "metal_pipe_clang",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - The Metal Hit Sweeteners Library/Iron - Thick - HIT - Hammer.wav",
+   "profile": "sfx_mono",
+   "start_ms": 0,
+   "end_ms": 1700,
+   "opus_bytes": 6920,
+   "error": null,
+   "aac_bytes": 7431
+  },
+  {
+   "role": "metal_pipe_clang",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - The Metal Hit Sweeteners Library/Iron - Thick - HIT - Hammer.wav",
+   "profile": "sfx_mono",
+   "start_ms": 3570,
+   "end_ms": 5250,
+   "opus_bytes": 4371,
+   "error": null,
+   "aac_bytes": 7606
+  },
+  {
+   "role": "metal_pipe_clang",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Mechanical Wave - Torturing Metal/METLImpt_Metal Impact-03_MWSFX_TM.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 9000,
+   "error": null,
+   "aac_bytes": 12810
+  },
+  {
+   "role": "wooden_bat_crack",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/InMotionAudio - Wood/WOODBrk_Snap09_InMotionAudio_Wood.wav",
+   "profile": "sfx_mono",
+   "start_ms": 540,
+   "end_ms": 900,
+   "opus_bytes": 2202,
+   "error": null,
+   "aac_bytes": 4274
+  },
+  {
+   "role": "wooden_bat_crack",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/InMotionAudio - Wood/WOODImpt_Drops20_InMotionAudio_Wood.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 4247,
+   "error": null,
+   "aac_bytes": 6108
+  },
+  {
+   "role": "wooden_bat_crack",
+   "path": "F:/games/unity-assets/Evil Mind__Medieval Fantasy Audio Bundle Music Ambience Effects/Assets/Medieval Fantasy Audio Bundle/FX/Stick 1.mp3",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 4073,
+   "error": null,
+   "aac_bytes": 6582
+  },
+  {
+   "role": "electric_zap",
+   "path": "F:/games/unity-assets/Evil Mind__Medieval Fantasy Audio Bundle Music Ambience Effects/Assets/Medieval Fantasy Audio Bundle/FX/Spell - Electric Shock 2.mp3",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 5424,
+   "error": null,
+   "aac_bytes": 6638
+  },
+  {
+   "role": "electric_zap",
+   "path": "F:/games/unity-assets/Evil Mind__Medieval Fantasy Audio Bundle Music Ambience Effects/Assets/Medieval Fantasy Audio Bundle/FX/Spell - Electric Shock 1.mp3",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 10292,
+   "error": null,
+   "aac_bytes": 10749
+  },
+  {
+   "role": "electric_zap",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rescopic Sound - Parallax/SCIMisc_Zap Short 14_RSCPC_PX.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 12339,
+   "error": null,
+   "aac_bytes": 18334
+  },
+  {
+   "role": "fire_whoosh",
+   "path": "F:/games/unity-assets/Evil Mind__Medieval Fantasy Audio Bundle Music Ambience Effects/Assets/Medieval Fantasy Audio Bundle/FX/Spell - Fireball 2.mp3",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 6802,
+   "error": null,
+   "aac_bytes": 10990
+  },
+  {
+   "role": "fire_whoosh",
+   "path": "F:/games/unity-assets/Evil Mind__Medieval Fantasy Audio Bundle Music Ambience Effects/Assets/Medieval Fantasy Audio Bundle/FX/Spell - Fireball 1.mp3",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 5161,
+   "error": null,
+   "aac_bytes": 8485
+  },
+  {
+   "role": "explosion",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/DavidDumais - Explosion SFX Pack/EXPLReal_Medium Realistic Explosion 15_DDUMAIS_NONE.wav",
+   "profile": "sfx_stereo",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 15357,
+   "error": null,
+   "aac_bytes": 29398
+  },
+  {
+   "role": "explosion",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/BluezoneCorp - Steampunk Weapon And Textures/Bluezone_BC0296_steampunk_weapon_flare_shot_explosion_003.wav",
+   "profile": "sfx_stereo",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 16365,
+   "error": null,
+   "aac_bytes": 29128
+  },
+  {
+   "role": "air_horn",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - The Vehicle Doors and More Library/Man Lions Coach - VAR SFX - Horn Various - Mono - RSM191.wav",
+   "profile": "sfx_mono",
+   "start_ms": 59900,
+   "end_ms": 60900,
+   "opus_bytes": 8733,
+   "error": null,
+   "aac_bytes": 9521
+  },
+  {
+   "role": "air_horn",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - The Vehicle Doors and More Library/Man Lions Coach - VAR SFX - Horn Various - Mono - RSM191.wav",
+   "profile": "sfx_mono",
+   "start_ms": 89900,
+   "end_ms": 93000,
+   "opus_bytes": 32979,
+   "error": null,
+   "aac_bytes": 26572
+  },
+  {
+   "role": "bell_ding",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Mechanical Wave - Sound Effects Collection/BELLHand_Metallic Bell_ 22_MWSFX_SEC.wav",
+   "profile": "sfx_mono",
+   "start_ms": 0,
+   "end_ms": 1450,
+   "opus_bytes": 12769,
+   "error": null,
+   "aac_bytes": 13106
+  },
+  {
+   "role": "bell_ding",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Orbital Emitter - Cinematic Transitions for Editors Volume 2/80,TheGong.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 32767,
+   "error": null,
+   "aac_bytes": 52740
+  },
+  {
+   "role": "cash_register",
+   "path": "F:/games/unity-assets/Evil Mind__Medieval Fantasy Audio Bundle Music Ambience Effects/Assets/Medieval Fantasy Audio Bundle/Update 1.3/Coins and Inventory/Coins Bag 2.mp3",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 6822,
+   "error": null,
+   "aac_bytes": 7371
+  },
+  {
+   "role": "buzzer",
+   "path": "F:/games/forgeflow-games-assets/interface-sounds/Audio/error_006.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 3319,
+   "error": null,
+   "aac_bytes": 4634
+  },
+  {
+   "role": "buzzer",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - Beechcraft Baron 58 1969/Beechcraft Baron 58 - t12 - VAR SFX - Stall Warning - MS Decoded - RSM191.wav",
+   "profile": "sfx_mono",
+   "start_ms": 11570,
+   "end_ms": 13070,
+   "opus_bytes": 13937,
+   "error": null,
+   "aac_bytes": 13461
+  },
+  {
+   "role": "jingle_sting",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rogue Waves - Metal Tensions/MUSCStngr_Pick Scrape Down, Short, Overdriven_RogueWaves_MetalTensions.wav",
+   "profile": "jingle",
+   "start_ms": 0,
+   "end_ms": 1150,
+   "opus_bytes": 10677,
+   "error": null,
+   "aac_bytes": 19827
+  },
+  {
+   "role": "jingle_sting",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rogue Waves - Metal Tensions/MUSCStngr_Pick Scrape Down, Short, Overdriven_RogueWaves_MetalTensions.wav",
+   "profile": "jingle",
+   "start_ms": 3990,
+   "end_ms": 5200,
+   "opus_bytes": 10915,
+   "error": null,
+   "aac_bytes": 20733
+  },
+  {
+   "role": "jingle_sting",
+   "path": "F:/games/unity-assets/Corentin Guezenoc__8-bit Platformer Vertical Slice Kit/Assets/8-bit Platformer Music Pack/STINGER_Battle_Starts.wav",
+   "profile": "jingle",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 16260,
+   "error": null,
+   "aac_bytes": 19802
+  },
+  {
+   "role": "jingle_sting",
+   "path": "F:/games/unity-assets/Chris Kohler__8-Bit RPG Adventure Music Pack/Assets/8-Bit RPG Adventure Music Pack v1.1/Tracks WAV/Jingles+SFX/02_Jingle_ Level Clear 2.wav",
+   "profile": "jingle",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 59159,
+   "error": null,
+   "aac_bytes": 63221
+  },
+  {
+   "role": "jingle_sting",
+   "path": "F:/games/unity-assets/Evil Mind__Halloween Audio Kit Music Ambience Effects/Assets/Halloween Audio Kit/FX/Puntuation Sound.mp3",
+   "profile": "jingle",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 5180,
+   "error": null,
+   "aac_bytes": 4125
+  },
+  {
+   "role": "commercial_break_sting",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Used Bin Loops - Lo-Tech Premium Degraded Tape FX/UBL_Lo-Tech_70_one_shot_key_Amin.wav",
+   "profile": "jingle",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 81209,
+   "error": null,
+   "aac_bytes": 111510
+  },
+  {
+   "role": "commercial_break_sting",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Jake Fielding - Circus Ambiences/VOXFem_Accouncement Wet, Ringmaster, Performer, Dialogue_JF_Circus_01.wav",
+   "profile": "jingle",
+   "start_ms": 1800,
+   "end_ms": 4300,
+   "opus_bytes": 36209,
+   "error": null,
+   "aac_bytes": 42934
+  },
+  {
+   "role": "ui_move",
+   "path": "F:/games/forgeflow-games-assets/interface-sounds/Audio/tick_002.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 347,
+   "error": null,
+   "aac_bytes": 1298
+  },
+  {
+   "role": "ui_move",
+   "path": "F:/games/forgeflow-games-assets/_downloaded/ui-audio/Audio/rollover2.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 567,
+   "error": null,
+   "aac_bytes": 1558
+  },
+  {
+   "role": "ui_select",
+   "path": "F:/games/forgeflow-games-assets/interface-sounds/Audio/select_003.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 3560,
+   "error": null,
+   "aac_bytes": 4148
+  },
+  {
+   "role": "ui_select",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rescopic Sound - User Interaction/UIClick_Select Middle 29_RSCPC_USIN.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 4857,
+   "error": null,
+   "aac_bytes": 4657
+  },
+  {
+   "role": "ui_confirm",
+   "path": "F:/games/forgeflow-games-assets/interface-sounds/Audio/confirmation_002.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 3491,
+   "error": null,
+   "aac_bytes": 5723
+  },
+  {
+   "role": "ui_confirm",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rescopic Sound - User Interaction/UIAlert_Confirm Middle 12_RSCPC_USIN.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 6114,
+   "error": null,
+   "aac_bytes": 9705
+  },
+  {
+   "role": "ui_back",
+   "path": "F:/games/forgeflow-games-assets/interface-sounds/Audio/back_001.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 514,
+   "error": null,
+   "aac_bytes": 1704
+  },
+  {
+   "role": "ui_error",
+   "path": "F:/games/forgeflow-games-assets/interface-sounds/Audio/error_003.ogg",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 3077,
+   "error": null,
+   "aac_bytes": 5554
+  },
+  {
+   "role": "music_menu",
+   "path": "F:/games/unity-assets/Evil Mind__Halloween Audio Kit Music Ambience Effects/Assets/Halloween Audio Kit/Update 1.1/Music/Hey Ho Jack-O.mp3",
+   "profile": "music",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 622908,
+   "error": null,
+   "aac_bytes": 816263
+  },
+  {
+   "role": "music_stage",
+   "path": "F:/games/unity-assets/Evil Mind__Halloween Audio Kit Music Ambience Effects/Assets/Halloween Audio Kit/Music/Halloween Rocks.mp3",
+   "profile": "music",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 649777,
+   "error": null,
+   "aac_bytes": 855444
+  },
+  {
+   "role": "music_stage",
+   "path": "F:/games/unity-assets/Evil Mind__Halloween Audio Kit Music Ambience Effects/Assets/Halloween Audio Kit/Update 1.4/Music/Freak Invasion.mp3",
+   "profile": "music",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 806363,
+   "error": null,
+   "aac_bytes": 1056899
+  },
+  {
+   "role": "music_stage",
+   "path": "F:/games/unity-assets/Evil Mind__Halloween Audio Kit Music Ambience Effects/Assets/Halloween Audio Kit/Update 1.4/Music/Spooky Lands.mp3",
+   "profile": "music",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 774837,
+   "error": null,
+   "aac_bytes": 1052632
+  },
+  {
+   "role": "music_stage",
+   "path": "F:/games/unity-assets/Evil Mind__Medieval Fantasy Audio Bundle Music Ambience Effects/Assets/Medieval Fantasy Audio Bundle/Music/Bloody Battlefield.mp3",
+   "profile": "music",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 590003,
+   "error": null,
+   "aac_bytes": 809500
+  },
+  {
+   "role": "music_stage",
+   "path": "F:/games/unity-assets/Evil Mind__Medieval Fantasy Audio Bundle Music Ambience Effects/Assets/Medieval Fantasy Audio Bundle/Music/The Evil Emperor.mp3",
+   "profile": "music",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 741338,
+   "error": null,
+   "aac_bytes": 1077026
+  },
+  {
+   "role": "music_boss",
+   "path": "F:/games/unity-assets/Evil Mind__Halloween Audio Kit Music Ambience Effects/Assets/Halloween Audio Kit/Update 1.5/Music/Face Your Doom (A Halloween Final Boss) - Metal.mp3",
+   "profile": "music",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 940766,
+   "error": null,
+   "aac_bytes": 1174742
+  },
+  {
+   "role": "music_results_jingle",
+   "path": "F:/games/unity-assets/Chris Kohler__8-Bit RPG Adventure Music Pack/Assets/8-Bit RPG Adventure Music Pack v1.1/Tracks WAV/Jingles+SFX/01_Jingle_ Level Clear 1.wav",
+   "profile": "jingle",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 181738,
+   "error": null,
+   "aac_bytes": 199328
+  },
+  {
+   "role": "music_results_jingle",
+   "path": "F:/games/unity-assets/Chris Kohler__8-Bit RPG Adventure Music Pack/Assets/8-Bit RPG Adventure Music Pack v1.1/Tracks WAV/Jingles+SFX/03_Jingle_ Game Over.wav",
+   "profile": "jingle",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 160302,
+   "error": null,
+   "aac_bytes": 179975
+  },
+  {
+   "role": "voice_host_lines",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Jake Fielding - Circus Ambiences/VOXFem_Accouncement Wet, Ringmaster, Performer, Dialogue_JF_Circus_01.wav",
+   "profile": "sfx_mono",
+   "start_ms": 0,
+   "end_ms": 1750,
+   "opus_bytes": 11047,
+   "error": null,
+   "aac_bytes": 15532
+  },
+  {
+   "role": "voice_host_lines",
+   "path": "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/CriticalHit/Male_CriticalHit_03_Jamaal5.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 5895,
+   "error": null,
+   "aac_bytes": 8754
+  },
+  {
+   "role": "voice_fighter_barks",
+   "path": "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Patrick/Cocky/Male_BattleStart_01_Patrick2.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 7679,
+   "error": null,
+   "aac_bytes": 9891
+  },
+  {
+   "role": "voice_fighter_barks",
+   "path": "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Patrick/Cocky/Male_BattleWon_02_Patrick2.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 9692,
+   "error": null,
+   "aac_bytes": 13683
+  },
+  {
+   "role": "voice_fighter_barks",
+   "path": "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Patrick/Cocky/Male_CriticalHit_02_Patrick2.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 8591,
+   "error": null,
+   "aac_bytes": 12238
+  },
+  {
+   "role": "voice_fighter_barks",
+   "path": "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/BattleStart/Male_BattleStart_07_Jamaal5.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 5945,
+   "error": null,
+   "aac_bytes": 8523
+  },
+  {
+   "role": "voice_fighter_barks",
+   "path": "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/CriticalHit/Male_CriticalHit_02_Jamaal5.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 5592,
+   "error": null,
+   "aac_bytes": 8320
+  },
+  {
+   "role": "voice_efforts",
+   "path": "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/AA_GenericBattleSounds/Male_Attack_01_Jamaal5.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 1302,
+   "error": null,
+   "aac_bytes": 2561
+  },
+  {
+   "role": "voice_efforts",
+   "path": "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/AA_GenericBattleSounds/Male_Attack_02_Jamaal5.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 3235,
+   "error": null,
+   "aac_bytes": 5074
+  },
+  {
+   "role": "voice_efforts",
+   "path": "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/AA_GenericBattleSounds/Male_Hurt_01_Jamaal5.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 3417,
+   "error": null,
+   "aac_bytes": 5234
+  },
+  {
+   "role": "voice_efforts",
+   "path": "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/AA_GenericBattleSounds/Male_Hurt_02_Jamaal5.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 3159,
+   "error": null,
+   "aac_bytes": 4976
+  },
+  {
+   "role": "voice_efforts",
+   "path": "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files/Jamaal/Stout/AA_GenericBattleSounds/Male_Death_01_Jamaal5.wav",
+   "profile": "sfx_mono",
+   "start_ms": null,
+   "end_ms": null,
+   "opus_bytes": 6752,
+   "error": null,
+   "aac_bytes": 9957
+  },
+  {
+   "role": "crowd_cheer_loop",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Sonic Bat - Handball Match Ambience/SBhma_Feminine EHF European Cup Match 002.wav",
+   "profile": "bed_stereo",
+   "start_ms": 108000,
+   "end_ms": 128000,
+   "opus_bytes": 167581,
+   "error": null,
+   "aac_bytes": 244527
+  },
+  {
+   "role": "crowd_cheer_loop",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Sonic Bat - Roller Hockey Match Ambience/SBrhma_Feminine League Match 004.wav",
+   "profile": "bed_stereo",
+   "start_ms": 2000,
+   "end_ms": 22000,
+   "opus_bytes": 148113,
+   "error": null,
+   "aac_bytes": 245151
+  },
+  {
+   "role": "crowd_cheer_burst",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Sonic Bat - Handball Match Ambience/SBhma_Masculine League Match 002.wav",
+   "profile": "sfx_stereo",
+   "start_ms": 459500,
+   "end_ms": 464500,
+   "opus_bytes": 47115,
+   "error": null,
+   "aac_bytes": 61758
+  },
+  {
+   "role": "crowd_cheer_burst",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Sonic Bat - Basketball Match Ambience/SBbma_Feminine League Match 010.wav",
+   "profile": "sfx_stereo",
+   "start_ms": 152000,
+   "end_ms": 157000,
+   "opus_bytes": 40339,
+   "error": null,
+   "aac_bytes": 61614
+  },
+  {
+   "role": "crowd_cheer_burst",
+   "path": "F:/games/forgeflow-games-assets/sonniss-gdc2024/Sonic Bat - Basketball Match Ambience/SBbma_Masculine U-18 Match 004.wav",
+   "profile": "sfx_stereo",
+   "start_ms": 214500,
+   "end_ms": 219500,
+   "opus_bytes": 41545,
+   "error": null,
+   "aac_bytes": 61737
+  }
+ ],
+ "sprite_sfx_mono": {
+  "items": 82,
+  "seconds": 80.08,
+  "opus_bytes": 553072
+ }
+}

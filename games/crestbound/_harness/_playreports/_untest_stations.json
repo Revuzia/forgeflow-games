@@ -1,0 +1,18 @@
+{
+ "_note": "Stations for defects whose report names a PLACE but no machine-readable coordinate. Each one is resolved from the course's own data file (the object the tester names), not guessed. `p` is the station the probe drives to; `p2` is the far end of a crossing when the defect names one.",
+ "azure-2#05": { "p": [0.0, 0.5, -5.0], "why": "azure-2.js:506 the pendulum well's breakable iron grate, deck(0, 0.10, -5, [6,0.4,6]) - the tester's 'grate re-arms after death'" },
+ "azure-3#03": { "p": [7.0, 30.0, 44.0], "p2": [7.0, 21.0, 62.0], "why": "azure-3.js:231 STATION_Y 30.0, the x 7 lane on the station deck; azure-3.js:232 SECRET_Y 21.0, the sunken isle 6.00 m out on a -9.00 m drop" },
+ "azure-3#21": { "p": [-27.0, 50.0, -62.0], "p2": [-25.0, 53.0, -62.0], "why": "azure-3.js:286 the gauntlet start deck x -47..-27 at y 50.0; the mid deck's own lip x -25 at 53.0, z from the tester's z -67..-57 band (defect azure-3#14)" },
+ "ember-1#07": { "p": [0.0, 3.0, 10.6], "why": "ember-1 BEAT 2's flame catwalk; the same station the tester used in ember-1#00 (0, 3.00, 10.60)" },
+ "ember-1#14": { "p": [-8.0, 6.4, -34.0], "p2": [-8.0, 15.4, -34.0], "why": "ember-1.js:395/398/421 FLUE_FLOOR 6.40, FLUE_LEDGE 15.40, clear interior x -9.50..-6.50 z -35.50..-32.50 -> centre (-8, -34)" },
+ "ember-1#16": { "p": [-8.0, 6.4, -34.0], "why": "same flue interior; the claim is about its walls" },
+ "ember-1#20": { "p": [-8.0, 6.4, -34.0], "why": "the tester read the scarf at the flue floor" },
+ "ember-1#27": { "p": [0.0, 6.0, -38.0], "why": "ember-1 BEAT 8, the crucible vessel interior: grate floor 6.00 inside x -5.2..5.2, z -32.8..-43.2 (defect ember-1#26)" },
+ "ember-2#07": { "p": [0.0, 6.0, 28.0], "why": "ember-2.js:315 HALL_Y 6.00; the piston hall's centre lane x 0, mid-hall z 28 (the tester walked x -7/0/+7 from z 41 to 15)" },
+ "keep#11": { "p": [17.0, 6.35, -21.0], "why": "keep.js:1529 the fen NPC at [17.0, GAL+0.05, -21.0], GAL = 6.30 (keep.js:265)" },
+ "rime-2#20": { "p": [3.2, 30.7, -38.1], "why": "the spire's north skirt, the station the tester used in rime-2#19" },
+ "rime-3#15": { "p": [15.2, 19.75, -2.0], "why": "rime-3.js:399 TERRACE_Y 19.60 and :558 the chimney floor station at [15.2, TERRACE_Y+1.60, -2.0]" },
+ "verdant-1#08": { "p": [-7.6, 9.3, -19.46], "why": "verdant-1.js:813 the fort staircase foot, p [-7.6, FORT_Y, -19.46]; the tester's disc stands beside it" },
+ "verdant-2#22": { "p": [0.0, 0.0, 38.0], "needsGround": true, "why": "verdant-2, the knoll's south scarp, the tester's own z 30-46 band at the course centre line" },
+ "verdant-3#06": { "p": [-18.0, 16.0, -18.2], "why": "verdant-3 mill 1's gondola boarding height, the tester's own [-18, ~16, -18.2]" }
+}

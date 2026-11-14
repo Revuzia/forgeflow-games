@@ -1,0 +1,21 @@
+{
+  "title": "Ember Sanctum",
+  "short_description": "Ember Sanctum: isometric arena wave-survival across five sealed realms. Three champions, five named Wardens with signature attacks and pre-fight confrontations, plus a PVP Arena — Duel of Champions, Ember Rush, and Last Sanctum vs a rival champion.",
+  "description": "Ember Sanctum is a five-realm story told in fire. Fight escalating waves across the volcanic Ember Crucible, the frozen Frostveil Circle, the lightning-inlaid Stormspire Board, the void-cracked Umbral Fen and the white-gold Solar Bastion — each realm ruled by a named Warden who stops to speak before trying to kill you. Cinder Colossus hurls meteor rings and lava bursts, the Icebound Matron locks you in glacial ice, the Volt Sovereign dives on chains of thunder, the Void Herald blinks behind your back, and the Solar Archon ends the path with beams of judgment — fifteen telegraphed signature attacks in all. Choose the Crucible Knight (swap two-handed and sword-&-shield stances mid-fight), the Storm Adept, or the Umbral Ranger. Then take your champion to the PVP Arena: Duel of Champions (best-of-3 1v1), Ember Rush (a 120-second kill-score race), and Last Sanctum (endless waves, last champion standing) against a full-kit rival.",
+  "genre": "action",
+  "sub_genre": "arena-survival",
+  "difficulty": "medium",
+  "controls_keyboard": "WASD move · LMB attack · 1 2 3 skills · Shift dodge · V stance (Knight) · RMB look · Scroll zoom · Space/Click advances boss dialogue · Touch: joystick + ability buttons",
+  "tags": [
+    "action",
+    "arena",
+    "wave-survival",
+    "3d",
+    "boss-fights",
+    "story",
+    "pvp",
+    "hack-and-slash",
+    "mobile-friendly"
+  ],
+  "status": "published"
+}

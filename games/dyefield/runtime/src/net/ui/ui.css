@@ -1,0 +1,360 @@
+/* DYEFIELD — the PLAY ONLINE screens (screens.ts) and the in-match online overlays (onlinehud.ts). LOBBY-UI,
+   CONTRACT_ONLINE §O4 / §O10 / §O12.3. Loaded with the lazy net/ui chunk. The root carries .dfm, so the menus' tokens
+   (--gl / --gr / --top / --gb / --crew) and their shared pieces (.dfm-head, .dfm-back, .dfm-card, .dfm-cap, .dfm-segbtn,
+   .dfm-small, .df-btn, .chip, the focus / touch / phone rules in ui/menus.css) apply unchanged; everything else here is
+   .dfo-*. Focus looks are for keyboard / pad / mouse only (CONTRACT_MOBILE M5): :where(html:not(.df-touch)). */
+
+.dfo { z-index: 41; --sea-ink: #04313f; }
+.dfo-screen { position: absolute; inset: 0; pointer-events: auto; }
+.dfo-g { display: inline-grid; place-items: center; flex: none; width: 20px; height: 20px; }
+.dfo-g svg { display: block; width: 100%; height: 100%; }
+.dfo-body { position: absolute; left: var(--gl); right: var(--gr); top: calc(var(--top) + clamp(88px, 12.4vh, 110px));
+  bottom: calc(clamp(56px, 8.6vh, 78px) + var(--gb)); min-height: 0; }
+.dfo .dfm-head .dfm-head-t { min-width: 0; }
+.dfo .dfm-head h2 { white-space: nowrap; }
+
+/* ───────── PLAY ONLINE (home) ───────── */
+.dfo-homebody { display: flex; flex-direction: column; gap: clamp(12px, 2.2vh, 22px); }
+.dfo-setup { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.dfo-pillbox { flex: none; display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 18px; border-radius: 999px;
+  background: var(--cream); border: 4px solid var(--ink); box-shadow: 0 6px 0 var(--ink); }
+.dfo-pillbox .dfm-cap { margin: 0; }
+.dfo-seg { display: flex; flex-wrap: nowrap; gap: 6px; }
+.dfo-seg .dfm-segbtn { white-space: nowrap; }
+.dfo-rulenote { margin: 0; font: 900 clamp(13px, 1.05vw, 16px)/1.2 var(--body); letter-spacing: .02em; color: var(--cream); white-space: nowrap;
+  text-shadow: 0 2px 0 rgba(10,20,44,.9); }
+.dfo[data-rule="washout"] .dfo-rulenote { color: var(--warn); }
+.dfo-doors { flex: 1 1 auto; min-height: 0; max-height: 380px; display: grid; grid-template-columns: 1.22fr 1fr 1fr; gap: clamp(12px, 1.6vw, 26px); }
+.dfo-door { position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-height: 0; padding: 10px 10px 14px; border-radius: 24px;
+  border: 4px solid var(--ink); background: var(--cream); color: var(--ink); box-shadow: 0 8px 0 var(--ink); cursor: pointer; text-align: left;
+  transition: transform .14s cubic-bezier(.2,1.5,.4,1), box-shadow .12s ease, background-color .12s ease; }
+.dfo-door .art { position: relative; flex: 1 1 auto; min-height: 64px; display: grid; place-items: center; overflow: hidden; border-radius: 16px; border: 3px solid var(--ink); }
+.dfo-door .art::before { content: ''; position: absolute; inset: 0; opacity: .5; pointer-events: none;
+  background: radial-gradient(circle at 18% 78%, rgba(255,248,236,.85) 0 9%, transparent 10%), radial-gradient(circle at 84% 22%, rgba(255,248,236,.7) 0 6%, transparent 7%),
+    radial-gradient(circle at 72% 84%, rgba(255,248,236,.55) 0 4%, transparent 5%); }
+.dfo-door-qm .art { background: linear-gradient(180deg, #ffc27a, var(--sun)); color: var(--sun-dye); }
+.dfo-door-create .art { background: linear-gradient(180deg, #8fe6f1, var(--sea)); color: var(--sea-deep); }
+.dfo-door-join .art { background: linear-gradient(180deg, #c9c2ff, var(--gulf)); color: var(--gulf-dye); }
+.dfo-doorg { position: relative; width: clamp(60px, 40%, 150px); height: auto; aspect-ratio: 1; max-height: 86%; filter: drop-shadow(0 5px 0 rgba(20,32,58,.35)); }
+.dfo-doorg svg { display: block; width: 100%; height: 100%; }
+.dfo-door .name { font: 400 clamp(22px, 2.05vw, 32px)/1 var(--display); letter-spacing: .03em; margin-top: 4px; padding: 0 4px; }
+.dfo-door-qm .name { font-size: clamp(26px, 2.5vw, 38px); }
+.dfo-door .line { font: 800 13.5px/1.3 var(--body); color: var(--ink2); padding: 0 4px; }
+.dfo-door .chips { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 4px; min-height: 18px; }
+.dfo-door-qm { background: linear-gradient(180deg, #fff8ec 60%, #ffe7cc); }
+:where(html:not(.df-touch)) .dfo-door:focus { outline: none; transform: translateY(-6px) rotate(-.8deg); box-shadow: 0 14px 0 var(--ink), 0 0 0 4px var(--cream); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfo-door:hover { outline: none; transform: translateY(-6px) rotate(-.8deg); box-shadow: 0 14px 0 var(--ink), 0 0 0 4px var(--cream); } }
+.dfo-door:active { transform: translateY(4px); box-shadow: 0 4px 0 var(--ink); }
+.dfo-you { flex: none; align-self: flex-start; display: inline-flex; align-items: center; gap: 10px; max-width: 100%; padding: 6px 18px 6px 6px; border-radius: 999px;
+  background: var(--cream); border: 4px solid var(--ink); box-shadow: 0 6px 0 var(--ink); }
+.dfo-you .mk, .dfo-person .mk, .dfo-seat .mk { display: grid; place-items: center; flex: none; border-radius: 50%; font-style: normal; color: var(--cream);
+  border: 3px solid var(--ink); text-shadow: 0 1px 0 var(--ink); background: #9aa3b8; font-family: var(--display); line-height: 1; }
+.dfo-you .mk { width: 40px; height: 40px; font-size: 22px; }
+.dfo-you .txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.dfo-you b { font: 400 20px/1 var(--display); letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dfo-you .txt span { font: 900 11px/1 var(--body); letter-spacing: .12em; color: var(--ink2); white-space: nowrap; }
+.dfo-you img { flex: none; height: 40px; aspect-ratio: 256 / 176; object-fit: contain; }
+.dfo-you .hint { font: 700 12.5px/1.25 var(--body); color: var(--ink2); padding-left: 10px; border-left: 2px dashed rgba(20,32,58,.25); }
+
+/* ───────── JOIN ROOM ───────── */
+.dfo-joinbody { display: flex; align-items: flex-start; justify-content: center; gap: clamp(16px, 2.4vw, 36px); }
+.dfo-codecard { flex: 0 1 470px; min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 16px 22px 20px; }
+.dfo-codefield { position: relative; display: block; cursor: text; }
+.dfo-codeboxes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.dfo-codeboxes .box { position: relative; height: clamp(76px, 13vh, 108px); display: grid; place-items: center; border-radius: 18px; border: 4px solid var(--ink);
+  background: #fff; box-shadow: inset 0 -6px 0 rgba(20,32,58,.1), 0 5px 0 var(--ink); font: 400 clamp(46px, 7vh, 68px)/1 var(--display); color: var(--ink); }
+.dfo-codeboxes .box.filled { background: linear-gradient(180deg, #fff, var(--paper)); }
+.dfo-codefield:focus-within .box.cur { box-shadow: inset 0 -6px 0 rgba(20,32,58,.1), 0 5px 0 var(--ink), 0 0 0 4px var(--crew); }
+.dfo-codefield:focus-within .box.cur:not(.filled)::after { content: ''; position: absolute; left: 50%; top: 22%; bottom: 22%; width: 4px; margin-left: -2px; border-radius: 2px;
+  background: var(--ink); animation: dfoCaret 1s steps(1) infinite; }
+@keyframes dfoCaret { 50% { opacity: 0; } }
+/* the real field sits over the boxes: a tap opens the phone keyboard, typing lands in it; it draws nothing itself */
+.dfo-code { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; outline: none; background: transparent; color: transparent;
+  caret-color: transparent; font-size: 16px; opacity: 0; cursor: text; -webkit-user-select: text; user-select: text; }
+.dfo-code::selection { background: transparent; }
+.dfo-codefield:has(.dfo-code.shake) .dfo-codeboxes { animation: dfoShake .32s ease; }
+@keyframes dfoShake { 20% { transform: translateX(-8px); } 50% { transform: translateX(7px); } 80% { transform: translateX(-4px); } }
+.dfo-codenote { margin: 0; font: 800 13px/1.35 var(--body); color: var(--ink2); }
+.dfo-joinrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; }
+.dfo-del { display: inline-flex; align-items: center; gap: 7px; align-self: auto; }
+.dfo-del .dfo-g { width: 20px; height: 20px; }
+.dfo-joinbtn { font-size: 30px !important; padding: 13px 44px 12px !important; }
+.df-btn:disabled { filter: grayscale(.85); opacity: .62; cursor: not-allowed; transform: none !important; box-shadow: 0 5px 0 var(--ink) !important; }
+.dfo-keypad { flex: none; padding: 14px; }
+.dfo-keypad .grid { display: grid; grid-template-columns: repeat(8, clamp(44px, 4.1vw, 58px)); gap: 6px; }
+.dfo-key { height: clamp(44px, 6.6vh, 58px); padding: 0; border-radius: 12px; border: 3px solid var(--ink); background: #fff; color: var(--ink); box-shadow: 0 3px 0 var(--ink);
+  font: 400 clamp(20px, 2.8vh, 27px)/1 var(--display) !important; cursor: pointer; transition: transform .08s ease; }
+:where(html:not(.df-touch)) .dfo-key:focus { outline: none; background: var(--crew); transform: translateY(-2px); box-shadow: 0 5px 0 var(--ink), 0 0 0 3px var(--cream); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfo-key:hover { outline: none; background: var(--crew); transform: translateY(-2px); box-shadow: 0 5px 0 var(--ink), 0 0 0 3px var(--cream); } }
+.dfo-key:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+
+/* ───────── waiting cards (search) + notices ───────── */
+.dfo-s-search:not([hidden]), .dfo-s-notice:not([hidden]) { display: grid; place-items: center; padding: var(--top) var(--gr) calc(var(--gb) + 8px) var(--gl); }
+.dfo-searchcard, .dfo-noticecard { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(580px, 100%);
+  max-height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 22px 30px 24px; text-align: center; }
+.dfo-drops { display: flex; align-items: flex-end; gap: 10px; height: 36px; }
+.dfo-drops i { width: 24px; height: 24px; border-radius: 50% 50% 50% 50% / 58% 58% 42% 42%; border: 3px solid var(--ink); animation: dfoHop 1.05s ease-in-out infinite; }
+.dfo-drops .a { background: var(--sun-dye); }
+.dfo-drops .b { background: var(--sea); animation-delay: .15s; }
+.dfo-drops .c { background: var(--gulf-dye); animation-delay: .3s; }
+@keyframes dfoHop { 0%, 100% { transform: translateY(0) scale(1, 1); } 35% { transform: translateY(-13px) scale(.92, 1.08); } 60% { transform: translateY(0) scale(1.1, .9); } }
+.dfo-searchcard[data-state="solo"] .dfo-drops i, .dfo-searchcard[data-state="found"] .dfo-drops i { animation-duration: 2.2s; }
+.dfo-stitle, .dfo-ntitle { margin: 0; font: 400 clamp(32px, 3.4vw, 48px)/1.02 var(--display); letter-spacing: .03em; color: var(--ink); text-shadow: 0 4px 0 var(--crew); }
+.dfo-searchcard[data-state="found"] .dfo-stitle { color: var(--ink); text-shadow: 0 4px 0 var(--ok); }
+.dfo-schips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.dfo-schips .chip { font-size: 12px; padding: 4px 11px; }
+.dfo-sstats { display: flex; justify-content: center; gap: 28px; }
+.dfo-sstats .stat { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.dfo-sstats .stat b { font: 400 42px/1 var(--display); font-variant-numeric: tabular-nums; }
+.dfo-sstats .stat span { font: 900 11px/1 var(--body); letter-spacing: .14em; color: var(--ink2); text-transform: uppercase; }
+.dfo-sline, .dfo-ntext { margin: 0; max-width: 46ch; font: 700 15px/1.42 var(--body); color: var(--ink2); }
+.dfo-people { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 100%; }
+.dfo-person { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 12px 3px 3px; border-radius: 999px; background: var(--ink); color: var(--cream); }
+.dfo-person .mk { width: 26px; height: 26px; font-size: 14px; border-width: 2px; border-color: var(--cream); }
+.dfo-person b { font: 400 16px/1 var(--display); letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dfo-person .dev { width: 18px; height: 18px; color: #b9c6e4; }
+.dfo-person.you { background: var(--crew-dye); color: var(--cream); box-shadow: 0 0 0 2px var(--ink); }
+.dfo-actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px; margin-top: 4px; }
+.dfo-cancel.dfm-small { align-self: auto; }
+.dfo-nicon { display: grid; place-items: center; width: 84px; height: 84px; border-radius: 50%; background: var(--ink); border: 4px solid var(--ink); box-shadow: 0 5px 0 rgba(20,32,58,.3); }
+.dfo-nicon .dfo-g { width: 66%; height: 66%; }
+.dfo-noticecard[data-tone="warn"] .dfo-nicon { background: #2a3b66; }
+.dfo-noticecard[data-tone="bad"] .dfo-nicon { background: #3a2140; }
+.dfo-noticecard[data-tone="bad"] .dfo-ntitle { text-shadow: 0 4px 0 var(--bad); }
+.dfo-noticecard[data-tone="warn"] .dfo-ntitle { text-shadow: 0 4px 0 var(--warn); }
+.dfo-ndetail { margin: 0; font: 700 12px/1.3 Consolas, 'Courier New', monospace; color: #7d879d; }
+
+/* ───────── ROOM ───────── */
+.dfo-roombody { display: grid; grid-template-columns: minmax(230px, .8fr) minmax(0, 1.28fr) minmax(0, 1.22fr); grid-template-rows: minmax(0, 1fr);
+  gap: clamp(14px, 1.8vw, 26px); align-items: start; }
+.dfo-roombody > .dfm-card { min-height: 0; max-height: 100%; }
+.dfo-codebox { display: flex; flex-direction: column; gap: 10px; }
+.dfo-bigcode { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.dfo-bigcode span { display: grid; place-items: center; height: clamp(62px, 10vh, 92px); border-radius: 14px; border: 4px solid var(--ink); background: var(--ink); color: var(--cream);
+  font: 400 clamp(38px, 5.6vh, 58px)/1 var(--display); box-shadow: 0 5px 0 var(--crew-dye); user-select: text; -webkit-user-select: text; }
+.dfo-share { margin: 0; font: 700 13.5px/1.4 var(--body); color: var(--ink2); }
+.dfo-coderow { display: flex; flex-wrap: wrap; gap: 8px; }
+.dfo-copy { display: inline-flex; align-items: center; gap: 7px; align-self: auto; }
+.dfo-copy .dfo-g { width: 18px; height: 18px; }
+.dfo-seats { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; overscroll-behavior: contain; }
+.dfo-seats-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.dfo-seats-h .dfm-cap { margin: 0; }
+.dfo-count { font: 400 19px/1 var(--display); letter-spacing: .04em; }
+.dfo-seatlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.dfo-seat { display: grid; grid-template-columns: 18px 30px minmax(0, 1fr) 44px 22px 54px auto; align-items: center; gap: 8px; min-height: 42px; padding: 3px 8px;
+  border-radius: 14px; background: rgba(20,32,58,.06); }
+.dfo-seat .n { font: 400 14px/1 var(--display); color: var(--ink2); text-align: right; }
+.dfo-seat .mk { width: 30px; height: 30px; font-size: 16px; border-width: 2px; }
+.dfo-seat .mk .dfo-g { width: 18px; height: 18px; color: var(--cream); }
+.dfo-seat .who { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.dfo-seat .nm { min-width: 0; font: 400 17px/1.1 var(--display); letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dfo-seat .badges { display: flex; flex: none; gap: 4px; }
+.dfo .bdg { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 999px; background: var(--ink); color: var(--cream);
+  font: 900 10.5px/1.3 var(--body); letter-spacing: .1em; white-space: nowrap; }
+.dfo .bdg .dfo-g { width: 13px; height: 13px; }
+.dfo .bdg.own { background: var(--warn); color: var(--ink); }
+.dfo .bdg.own .dfo-g { color: var(--warn); }
+.dfo .bdg.off { background: var(--bad); }
+.dfo-seat .kiticon { width: 44px; height: 30px; object-fit: contain; }
+.dfo-seat .dev .dfo-g { width: 22px; height: 22px; color: var(--ink2); }
+.dfo-seat .ping { font: 800 12.5px/1 var(--body); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.dfo .ping.good { color: #16733a; }
+.dfo .ping.ok { color: #8a6100; }
+.dfo .ping.bad { color: #b3261e; }
+.dfo .ping.na { color: #8e97ab; }
+.dfo-seat.bot { background: transparent; box-shadow: inset 0 0 0 2px rgba(20,32,58,.16); }
+.dfo-seat.bot .nm { color: #8e97ab; }
+.dfo-seat.bot .mk { background: #c6cddc; border-color: #8e97ab; }
+.dfo-seat.you { background: var(--ink); color: var(--cream); }
+.dfo-seat.you .n, .dfo-seat.you .dev .dfo-g { color: #b9c6e4; }
+.dfo-seat.you .ping.good { color: #7ff0a8; }
+.dfo-seat.you .ping.ok { color: var(--warn); }
+.dfo-seat.you .ping.bad { color: #ff9c9c; }
+.dfo-seat.you .bdg.you { background: var(--cream); color: var(--ink); }
+.dfo-seat.off { opacity: .6; }
+.dfo-kick { height: 30px; padding: 0 11px; border-radius: 999px; border: 3px solid var(--ink); background: var(--cream); color: var(--ink); box-shadow: 0 2px 0 var(--ink);
+  font: 400 13px/1 var(--display) !important; letter-spacing: .06em; cursor: pointer; white-space: nowrap; }
+.dfo-kick.armed { background: var(--bad); color: var(--cream); }
+:where(html:not(.df-touch)) .dfo-kick:focus { outline: none; box-shadow: 0 2px 0 var(--ink), 0 0 0 3px var(--crew); transform: translateY(-1px); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfo-kick:hover { outline: none; box-shadow: 0 2px 0 var(--ink), 0 0 0 3px var(--crew); transform: translateY(-1px); } }
+.dfo-roomsetup { display: flex; flex-direction: column; gap: 10px; }
+.dfo-optscroll { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; overscroll-behavior: contain; margin: -4px; padding: 4px; }
+.dfo-opt .dfm-cap { margin-bottom: 6px; }
+.dfo-opt .dfo-seg { flex-wrap: wrap; }
+.dfo-maps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.dfo-mapchip { display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0; padding: 4px 4px 5px; border-radius: 12px; border: 3px solid var(--ink);
+  background: #fff; color: var(--ink); box-shadow: 0 3px 0 var(--ink); cursor: pointer; transition: transform .1s ease; }
+.dfo-mapchip .th { display: block; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; border: 2px solid var(--ink); background: #0f7ea3; }
+.dfo-mapchip .th img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.dfo-mapchip .th.random { background: repeating-conic-gradient(from 45deg, var(--sun-dye) 0 25%, var(--gulf-dye) 0 50%) 50% / 22px 22px; }
+.dfo-mapchip .nm { font: 400 12.5px/1.1 var(--display); letter-spacing: .03em; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dfo-mapchip.on { background: var(--ink); color: var(--cream); }
+:where(html:not(.df-touch)) .dfo-mapchip:focus { outline: none; transform: translateY(-2px); box-shadow: 0 5px 0 var(--ink), 0 0 0 3px var(--crew); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfo-mapchip:hover { outline: none; transform: translateY(-2px); box-shadow: 0 5px 0 var(--ink), 0 0 0 3px var(--crew); } }
+.dfo-val { display: inline-flex; align-items: center; min-height: 34px; padding: 5px 14px; border-radius: 999px; background: var(--ink); color: var(--cream);
+  font: 400 16px/1.15 var(--display); letter-spacing: .05em; }
+.dfo-light { background: var(--ink2); }
+.dfo-startrow { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 2px; padding-top: 10px; border-top: 3px dashed rgba(20,32,58,.2); }
+.dfo-startnote { margin: 0; font: 800 13.5px/1.35 var(--body); color: var(--ink2); }
+.dfo-start { flex: none; font-size: 32px !important; padding: 12px 36px 11px !important; }
+.dfo[data-owner="true"] .dfo-start:not(:disabled) { animation: dfBob 1.8s ease-in-out infinite; }
+
+/* ───────── toasts + hints ───────── */
+.dfo-toasts { position: absolute; right: var(--gr); top: calc(var(--top) + 4px); z-index: 3; display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+  max-width: min(380px, 42vw); pointer-events: none; }
+.dfo-toast { max-width: 100%; padding: 8px 16px; border-radius: 999px; background: var(--cream); color: var(--ink); border: 3px solid var(--ink); box-shadow: 0 4px 0 var(--ink);
+  font: 900 14px/1.25 var(--body); animation: dfoToastIn .3s cubic-bezier(.2,1.6,.4,1); transition: opacity .3s ease, transform .3s ease; }
+.dfo-toast.out { opacity: 0; transform: translateY(-6px); }
+@keyframes dfoToastIn { from { opacity: 0; transform: translateY(-10px) scale(.92); } }
+
+/* REDUCE MOTION: the SETTINGS toggle (.dfo.rm, set from the SettingsStore) or the OS preference */
+@media (prefers-reduced-motion: reduce) {
+  .dfo-drops i, .dfo-codefield:focus-within .box.cur:not(.filled)::after, .dfo[data-owner="true"] .dfo-start:not(:disabled) { animation: none; }
+  .dfo-door, .dfo-key, .dfo-mapchip { transition: none; }
+}
+.dfo.rm .dfo-drops i, .dfo.rm .dfo-codefield:focus-within .box.cur:not(.filled)::after, .dfo.rm .dfo-start, .dfo.rm .dfo-toast, .dfo.rm .dfo-banner,
+.dfo.rm .dfo-feeditem, .dfo.rm .dfo-codeboxes { animation: none !important; }
+.dfo.rm .dfo-door, .dfo.rm .dfo-key, .dfo.rm .dfo-mapchip, .dfo.rm .dfo-toast, .dfo.rm .dfo-post, .dfo.rm .dfo-feeditem { transition: none !important; }
+
+/* ── a tablet / narrow desktop: the room's code column folds above the seats (two columns), the doors keep a row */
+@media (max-width: 1100px) and (min-height: 501px) {
+  .dfo-roombody { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .dfo-codebox { grid-column: 1; grid-row: 1; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'cap cap' 'code row' 'share share'; gap: 8px 12px; align-items: center; }
+  .dfo-codebox > .dfm-cap { grid-area: cap; margin: 0; }
+  .dfo-codebox .dfo-bigcode { grid-area: code; grid-template-columns: repeat(4, 54px); }
+  .dfo-codebox .dfo-bigcode span { height: 62px; font-size: 38px; }
+  .dfo-codebox .dfo-coderow { grid-area: row; flex-direction: column; align-items: stretch; }
+  .dfo-codebox .dfo-share { grid-area: share; }
+  .dfo-seats { grid-column: 1; grid-row: 2; max-height: 100%; }
+  .dfo-roomsetup { grid-column: 2; grid-row: 1 / span 2; max-height: 100%; }
+  .dfo-roombody { align-items: stretch; }
+  .dfo-you .hint { display: none; }
+}
+/* a narrow, tall window: one column that scrolls inside the screen */
+@media (max-width: 700px) and (min-height: 501px) {
+  .dfo-screen:not([hidden]):not(.dfo-s-search):not(.dfo-s-notice) { display: flex; flex-direction: column; gap: 14px; padding: var(--top) var(--gr) calc(12px + var(--gb)) var(--gl);
+    overflow-y: auto; overscroll-behavior: contain; }
+  .dfo-screen :is(.dfo-head, .dfo-body) { position: relative; inset: auto; left: auto; right: auto; top: auto; bottom: auto; }
+  .dfo-body { flex: none; }
+  .dfo-doors { grid-template-columns: minmax(0, 1fr); max-height: none; }
+  .dfo-door .art { min-height: 90px; }
+  .dfo-joinbody, .dfo-roombody { display: flex; flex-direction: column; align-items: stretch; }
+  .dfo-keypad .grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  .dfo-codebox { display: flex; }
+  .dfo-hints { display: none; }
+}
+
+/* ═════ phone landscape (every M0 phone, 667 × 375 … 915 × 412; kbm windows that short take it too) ═════ */
+@media (max-height: 500px) {
+  .dfo-screen:not([hidden]):not(.dfo-s-search):not(.dfo-s-notice) { display: flex; flex-direction: column; gap: 6px;
+    padding: var(--top) var(--gr) calc(8px + var(--gb)) var(--gl); overflow-y: auto; overscroll-behavior: contain; }
+  .dfo-screen :is(.dfo-head, .dfo-body) { position: relative; inset: auto; left: auto; right: auto; top: auto; bottom: auto; }
+  .dfo-head { flex: none; gap: 12px; min-height: 46px; }
+  .dfo .dfm-head h2 { font-size: 30px; }
+  .dfo-body { flex: 1 1 auto; min-height: 0; }
+  .dfo-hints { display: none; }
+  .dfo .dfm-card { padding: 9px 12px 11px; }
+
+  /* home: the pills in one row, the three doors, the plate */
+  .dfo-homebody { gap: 8px; }
+  .dfo-setup { gap: 6px 8px; }
+  .dfo-pillbox { padding: 3px 4px; gap: 8px; border-width: 3px; box-shadow: 0 4px 0 var(--ink); }
+  .dfo-pillbox .dfm-cap { display: none; }
+  .dfo-seg { gap: 5px; }
+  .dfo-rulenote { font-size: 12.5px; }
+  .dfo-doors { max-height: none; gap: 10px; }
+  .dfo-door { gap: 3px; padding: 6px 6px 8px; border-width: 3px; border-radius: 18px; box-shadow: 0 5px 0 var(--ink); }
+  :where(html:not(.df-touch)) .dfo-door:focus { transform: translateY(-3px) rotate(-.6deg); box-shadow: 0 8px 0 var(--ink), 0 0 0 3px var(--cream); }
+  .dfo-door .art { min-height: 40px; border-width: 2px; border-radius: 12px; }
+  .dfo-doorg { width: clamp(36px, 12vh, 54px); height: clamp(36px, 12vh, 54px); }
+  .dfo-door .name, .dfo-door-qm .name { font-size: 19px; margin-top: 2px; }
+  .dfo-door .line { font-size: 12px; line-height: 1.2; }
+  .dfo-door .chips { display: none; }
+  .dfo-you { gap: 8px; padding: 3px 14px 3px 3px; border-width: 3px; box-shadow: 0 4px 0 var(--ink); }
+  .dfo-you .mk { width: 32px; height: 32px; font-size: 17px; border-width: 2px; }
+  .dfo-you b { font-size: 16px; }
+  .dfo-you .txt span { font-size: 12px; letter-spacing: .06em; }
+  .dfo-you img { height: 30px; }
+  .dfo-you .hint { font-size: 12px; }
+
+  /* join: the code card beside the keypad */
+  .dfo-joinbody { align-items: flex-start; gap: 10px; }
+  .dfo-codecard { flex: 1 1 0; gap: 6px; }
+  .dfo-codeboxes { gap: 6px; }
+  .dfo-codeboxes .box { height: 54px; border-width: 3px; border-radius: 12px; font-size: 34px; box-shadow: inset 0 -4px 0 rgba(20,32,58,.1), 0 3px 0 var(--ink); }
+  .dfo-codenote { font-size: 12px; }
+  .dfo-joinbtn { font-size: 24px !important; padding: 10px 26px 9px !important; }
+  .dfo-del { width: 48px; justify-content: center; padding: 0; }
+  .dfo-del > span:not(.dfo-g) { display: none; }
+  .dfo-keypad { padding: 8px; }
+  .dfo-keypad .grid { grid-template-columns: repeat(8, 44px); gap: 4px; }
+  .dfo-key { height: 44px; font-size: 20px !important; border-radius: 10px; }
+  /* the phone keyboard is up (the field has focus in touch mode): only the code and JOIN, at the top */
+  .dfo-s-join.kb .dfo-keypad, .dfo-s-join.kb .dfo-codenote, .dfo-s-join.kb .dfm-hint { display: none; }
+  .dfo-s-join.kb .dfo-joinbody { justify-content: flex-start; }
+
+  /* waiting + notice cards */
+  .dfo-searchcard, .dfo-noticecard { gap: 6px; padding: 12px 20px 14px; border-width: 3px; }
+  .dfo-drops { height: 26px; gap: 8px; }
+  .dfo-drops i { width: 18px; height: 18px; border-width: 2px; }
+  .dfo-stitle, .dfo-ntitle { font-size: 28px; text-shadow: 0 3px 0 var(--crew); }
+  .dfo-sstats .stat b { font-size: 30px; }
+  .dfo-sstats .stat span { font-size: 12px; }
+  .dfo-sline, .dfo-ntext { font-size: 13px; line-height: 1.35; }
+  .dfo-nicon { width: 54px; height: 54px; border-width: 3px; }
+  .dfo-actions { gap: 10px; margin-top: 2px; }
+  .dfo-actions .df-btn { font-size: 20px; padding: 10px 24px 9px; }
+
+  /* room: code + seats on the left, the setup on the right; each scrolls inside itself */
+  .dfo-roombody { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 8px 10px; align-items: stretch; }
+  .dfo-codebox { grid-column: 1; grid-row: 1; display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+  .dfo-codebox > .dfm-cap, .dfo-codebox .dfo-share { display: none; }
+  .dfo-bigcode { grid-template-columns: repeat(4, 34px); gap: 4px; }
+  .dfo-bigcode span { height: 44px; font-size: 26px; border-width: 3px; border-radius: 10px; box-shadow: 0 3px 0 var(--crew-dye); }
+  .dfo-coderow { flex: 1 1 0; min-width: 0; gap: 6px; }
+  .dfo-copy { padding: 0 12px; }
+  .dfo-seats { grid-column: 1; grid-row: 2; gap: 4px; }
+  .dfo-seat { grid-template-columns: 14px 26px minmax(0, 1fr) 20px 46px auto; gap: 5px; min-height: 44px; padding: 2px 6px; }
+  .dfo-seat .kiticon { display: none; }
+  .dfo-seat .mk { width: 26px; height: 26px; font-size: 14px; }
+  .dfo-seat .nm { font-size: 15px; }
+  .dfo-seat .badges .bdg:not(.you) span:not(.dfo-g) { display: none; }
+  .dfo-seat .ping { font-size: 12px; }
+  .dfo-roomsetup { grid-column: 2; grid-row: 1 / span 2; gap: 6px; }
+  .dfo-optscroll { gap: 6px; }
+  .dfo-maps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+  .dfo-mapchip { flex-direction: row; align-items: center; gap: 6px; padding: 3px 8px 3px 3px; }
+  .dfo-mapchip .th { flex: none; width: 44px; border-radius: 6px; }
+  .dfo-mapchip .nm { text-align: left; }
+  .dfo-copy { width: 48px; justify-content: center; padding: 0; }
+  .dfo-copy .tx { display: none; }
+  .dfo-copy .dfo-g { width: 22px; height: 22px; }
+  .dfo-opt .dfm-cap { font-size: 12px; margin-bottom: 3px; }
+  .dfo-mapchip .nm { font-size: 12px; }
+  .dfo-start { font-size: 24px !important; padding: 9px 24px 8px !important; }
+  .dfo-startrow { padding-top: 6px; gap: 8px; }
+  .dfo-startnote { font-size: 12px; }
+  .dfo-toasts { max-width: min(320px, 48vw); }
+  .dfo-toast { padding: 6px 12px; font-size: 13px; }
+}
+/* the phone keyboard on a layout-resizing browser leaves very little height: the join card alone, in one row */
+@media (max-height: 280px) {
+  .dfo-s-join .dfo-keypad, .dfo-s-join .dfo-codenote, .dfo-s-join .dfm-hint, .dfo-s-join .dfo-codecard > .dfm-cap { display: none; }
+  .dfo-s-join .dfo-codecard { flex-direction: row; align-items: center; }
+  .dfo-s-join .dfo-codefield { flex: 1 1 auto; }
+  .dfo-s-join .dfo-joinrow { margin: 0; }
+}
+@media (max-height: 500px) and (max-width: 700px) {
+  .dfo .dfm-head h2 { font-size: 26px; }
+  .dfo-door .line { display: none; }
+  .dfo-you .hint { display: none; }
+}
+
+/* ── touch mode (any size): targets >= 44 px, text >= 12 px (CONTRACT_MOBILE M6) ── */
+html.df-touch .dfo-kick { height: 44px; padding: 0 12px; font-size: 14px !important; }
+html.df-touch .dfo-key { min-height: 44px; }
+html.df-touch .dfo-mapchip { min-height: 44px; }
+html.df-touch .dfo-mapchip .nm { font-size: 14px; }
+html.df-touch .dfo .bdg, html.df-touch .dfo-you .txt span, html.df-touch .dfo-sstats .stat span { font-size: 12px; }
+html.df-touch .dfo-copy, html.df-touch .dfo-del { height: 48px; }
+html.df-touch .dfo-door:active, html.df-touch .dfo-key:active, html.df-touch .dfo-mapchip:active, html.df-touch .dfo-kick:active { filter: brightness(.93); }

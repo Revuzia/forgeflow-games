@@ -1,0 +1,1273 @@
+[
+ {
+  "id": "et01",
+  "name": "Cinderwake Eel",
+  "realms": [
+   "ember",
+   "tide"
+  ],
+  "type": "creature",
+  "cost": 2,
+  "atk": 2,
+  "hp": 2,
+  "rarity": "common",
+  "keywords": [],
+  "tribe": "Elemental",
+  "rulesText": "Rally: Deal 1 damage to an enemy creature and freeze it.",
+  "engineImpl": "creature C(et01,'Cinderwake Eel',2,2,2,common,'Elemental',{ rally:[ damage{amount:1,target:chosen}, freeze{target:chosen} ], target:{kind:'enemy-creature'} }). Both rally ops resolve on the single chosen enemy creature: 1 burn then freeze. On-curve tempo enabler (small premium body, strong 2-mana effect).",
+  "flavor": "It boils the shallows and ices them over in the same heartbeat.",
+  "artPrompt": "A serpentine eel-elemental writhing through a churning tide, its front half wreathed in molten orange fire and trailing steam, its tail sheathed in cracking blue-white frost, water freezing solid in its wake while embers hiss, dramatic fantasy card art, dynamic motion, no text no border",
+  "meshy": false
+ },
+ {
+  "id": "et02",
+  "name": "Scaldshock",
+  "realms": [
+   "ember",
+   "tide"
+  ],
+  "type": "spell",
+  "cost": 1,
+  "atk": null,
+  "hp": null,
+  "rarity": "common",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Deal 2 damage to any target.",
+  "engineImpl": "spell S(et02,'Scaldshock',1,common,{ fx:[ damage{amount:2,target:chosen} ], target:{kind:'any'} }). Cheap reach removal that can go face — the Overcharge fuel that also counts toward spell-dense turns. Shock-tier costing.",
+  "flavor": "Superheated brine hits like a slap from the sea and the forge at once.",
+  "artPrompt": "A lashing bolt of steam and scalding water erupting forward, half searing red plasma and half pressurized blue jet, droplets flashing to vapor mid-air, kinetic energy strike, fantasy spell illustration, no text no border",
+  "meshy": false
+ },
+ {
+  "id": "et03",
+  "name": "Galvanic Tidecaller",
+  "realms": [
+   "ember",
+   "tide"
+  ],
+  "type": "creature",
+  "cost": 3,
+  "atk": 2,
+  "hp": 3,
+  "rarity": "uncommon",
+  "keywords": [],
+  "tribe": "Elemental",
+  "rulesText": "Overcharge — Whenever you cast a spell, deal 1 damage to the enemy hero.",
+  "engineImpl": "creature C(et03,'Galvanic Tidecaller',3,2,3,uncommon,'Elemental',{ aura:{ trigger:'spell-played', fx:[ damage{amount:1,target:enemy-hero} ] } }). Signpost payoff (Guttersnipe pattern) that names the Overcharge archetype: each spell cast pings the enemy hero for 1. Reach engine, not card-advantage runaway.",
+  "flavor": "Every spell you sling, she grounds through the enemy's crown.",
+  "artPrompt": "A robed water-mage channeling with both hands raised, arcing lightning and steam swirling around her, one arm sleeved in living flame and the other in flowing tide, glowing runes crackling above her palms, storm-lit fantasy portrait, no text no border",
+  "meshy": false
+ },
+ {
+  "id": "et04",
+  "name": "Maelstrom Bolt",
+  "realms": [
+   "ember",
+   "tide"
+  ],
+  "type": "spell",
+  "cost": 4,
+  "atk": null,
+  "hp": null,
+  "rarity": "rare",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Deal 4 damage to any target. Draw a card.",
+  "engineImpl": "spell S(et04,'Maelstrom Bolt',4,rare,{ fx:[ damage{amount:4,target:chosen}, draw{count:1,who:'self'} ], target:{kind:'any'} }). Reach finisher that refuels the spell chain — burst removal or face burn that keeps the Overcharge engine going. Slightly premium dual rate justified by the cantrip.",
+  "flavor": "The whirlpool spins up a thunderhead; the thunderhead answers.",
+  "artPrompt": "A colossal spiraling maelstrom of seawater with a lightning-forged fireball plunging down its throat, spray and sparks exploding outward in a vortex, epic elemental cataclysm, cinematic fantasy spell art, no text no border",
+  "meshy": false
+ },
+ {
+  "id": "et05",
+  "name": "Riptide Counter",
+  "realms": [
+   "ember",
+   "tide"
+  ],
+  "type": "trap",
+  "cost": 3,
+  "atk": null,
+  "hp": null,
+  "rarity": "rare",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Trap — When the enemy casts a spell, negate it and deal 2 damage to the enemy hero.",
+  "engineImpl": "trap T(et05,'Riptide Counter',3,rare,{ trap:{ on:'enemy-spell', fx:[ negate-spell, damage{amount:2,target:enemy-hero} ] } }). Fuses tide counter with ember burn — a counterspell that bites back. Set face-down, triggers on the enemy's turn when they cast.",
+  "flavor": "The tide swallows the incantation whole, then spits back cinders.",
+  "artPrompt": "A rising wall of dark water frozen mid-crash, an enemy's glowing spell-sigil dissolving inside it while jets of flame lance back outward through the wave, defensive counter-magic, tense fantasy trap illustration, no text no border",
+  "meshy": false
+ },
+ {
+  "id": "et06",
+  "name": "Stormcrown Leviathan",
+  "realms": [
+   "ember",
+   "tide"
+  ],
+  "type": "creature",
+  "cost": 7,
+  "atk": 6,
+  "hp": 6,
+  "rarity": "legendary",
+  "keywords": [
+   "flying"
+  ],
+  "tribe": "Dragon",
+  "rulesText": "Flying. Overcharge — Whenever you cast a spell, deal 2 damage to a random enemy creature and draw a card.",
+  "engineImpl": "creature C(et06,'Stormcrown Leviathan',7,6,6,legendary,'Dragon',{ keywords:['flying'], aura:{ trigger:'spell-played', fx:[ damage{amount:2,target:random-enemy-creature}, draw{count:1,who:'self'} ] } }). The spell-density payoff: every spell in a dense turn both clears a creature and refuels, snowballing hard — but it costs 7 and dies to removal, so it rewards setup rather than being oppressive. Marquee legendary.",
+  "flavor": "Where fire meets frost, the sky itself grows a crown of thunder.",
+  "artPrompt": "A titanic storm-dragon leviathan breaching from a raging sea into a lightning-laced sky, one half of its serpentine body blazing with volcanic fire and the other sheathed in glacial ice, a crackling crown of thunderclouds around its horned head, wings of steam and spray, awe-inspiring epic fantasy creature, no text no border",
+  "meshy": true
+ },
+ {
+  "id": "eg01",
+  "name": "Cinderbark Grazer",
+  "realms": [
+   "ember",
+   "grove"
+  ],
+  "type": "creature",
+  "cost": 2,
+  "atk": 2,
+  "hp": 3,
+  "rarity": "common",
+  "keywords": [],
+  "tribe": "beast",
+  "rulesText": "Rally: Gain 1 extra mana this turn (ramp 1).",
+  "engineImpl": "creature C(eg01) cost2 2/3 beast. rally:[ramp{amount:1}]. No other triggers — a bark-hided ramp beast with a real body so it isn't a dead mana dork later.",
+  "flavor": "It chews the ash-fed ferns that only grow where the wildfire has already passed.",
+  "artPrompt": "A bark-hided grazing beast wreathed in smoldering embers, glowing cinders and living moss layered across its hide, standing in a scorched-yet-verdant glade, volcanic ash drifting over bright green ferns, warm firelight, fantasy trading-card creature art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "eg02",
+  "name": "Ashmane Charger",
+  "realms": [
+   "ember",
+   "grove"
+  ],
+  "type": "creature",
+  "cost": 3,
+  "atk": 4,
+  "hp": 2,
+  "rarity": "common",
+  "keywords": [
+   "swift"
+  ],
+  "tribe": "beast",
+  "rulesText": "Swift.",
+  "engineImpl": "creature C(eg03->eg02) cost3 4/2 beast keywords:['swift']. No triggers. Aggressive on-curve Ember swift beast that ramp can drop a turn early.",
+  "flavor": "A mane of living flame, hooves that leave the grass burning behind it.",
+  "artPrompt": "A lean four-legged charger with a mane of living fire and antlers of burning wood, mid-gallop through a wildfire-lit forest, sparks and embers trailing from its hooves, green undergrowth catching light, dynamic motion, fantasy trading-card creature art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "eg03",
+  "name": "Trailblaze",
+  "realms": [
+   "ember",
+   "grove"
+  ],
+  "type": "spell",
+  "cost": 2,
+  "atk": null,
+  "hp": null,
+  "rarity": "common",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Give a friendly creature +2/+1 and Piercing this turn.",
+  "engineImpl": "spell S(eg03) cost2. fx:[buff{atk:2,hp:1,kw:['piercing'],target:chosen}]. target:{kind:'friendly-creature'}. Combat trick that lets a rammed fatty punch excess damage into the enemy hero.",
+  "flavor": "Vines erupt into flame along the beast's path — nothing that stands in the way stays standing.",
+  "artPrompt": "A surging trail of green vines bursting into orange flame along a charging beast's path, forest floor cracking open with molten roots, motion-blurred energy sweeping forward, ember sparks and leaf debris, fantasy trading-card spell art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "eg04",
+  "name": "Emberhoof Vanguard",
+  "realms": [
+   "ember",
+   "grove"
+  ],
+  "type": "creature",
+  "cost": 3,
+  "atk": 3,
+  "hp": 3,
+  "rarity": "uncommon",
+  "keywords": [
+   "swift"
+  ],
+  "tribe": "beast",
+  "rulesText": "Swift. Rally: Gain 1 extra mana this turn (ramp 1). Ramp into the horde.",
+  "engineImpl": "creature C(eg04) cost3 3/3 beast keywords:['swift']. rally:[ramp{amount:1}]. Signpost: it IS a swift beast AND ramps, so it attacks now and pays for the fatty next — the archetype's thesis on one card.",
+  "flavor": "Where its hooves land, the fire and the herd both follow.",
+  "artPrompt": "A vanguard war-beast, part stag part smoldering bull with horns of burning ironwood, leading a stampede through a burning grove, banners of scorched leaf and flame behind it, embers rising, epic heroic angle, fantasy trading-card creature art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "eg05",
+  "name": "Warhorn Emberbull",
+  "realms": [
+   "ember",
+   "grove"
+  ],
+  "type": "creature",
+  "cost": 4,
+  "atk": 3,
+  "hp": 5,
+  "rarity": "rare",
+  "keywords": [],
+  "tribe": "beast",
+  "rulesText": "Your other Beast and Dragon creatures have +1 Attack and Piercing.",
+  "engineImpl": "creature C(eg05) cost4 3/5 beast. aura={scope:'all-other-creatures', filter:{tribe:['beast','dragon'], side:'friendly'}, buff:{atk:1}, grant:['piercing']} — static while in play; recomputed on any board change. The Rampage lord that turns the whole herd into trample threats.",
+  "flavor": "One bellow, and every beast on the field remembers it is bigger than what blocks it.",
+  "artPrompt": "A massive emberbull with horns like burning oak and a hide of cracked molten bark, roaring, rallying a stampede of flaming beasts across a scorched plain under an ashen sky, glowing runes of fire and root along its flanks, fantasy trading-card creature art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "eg06",
+  "name": "Vorrgax, the Wildfire Titan",
+  "realms": [
+   "ember",
+   "grove"
+  ],
+  "type": "creature",
+  "cost": 7,
+  "atk": 7,
+  "hp": 7,
+  "rarity": "epic",
+  "keywords": [
+   "swift",
+   "piercing",
+   "frenzy"
+  ],
+  "tribe": "dragon",
+  "rulesText": "Swift, Piercing. Frenzy +3 (+3 Attack while damaged). Last Rites: deal 2 damage to all enemies.",
+  "engineImpl": "creature C(eg06) cost7 7/7 dragon keywords:['swift','piercing','frenzy']; frenzy amount=3 (+3 atk while hp<max). rites:[aoe{amount:2,side:'enemy'}]. Top-curve stompy that hits the turn it lands, snowballs the moment it survives damage (10 atk while wounded), tramples through, and erupts on death. Marquee 3D body.",
+  "flavor": "The Pact's first seam still burns in its chest — wound it, and the whole wildfire answers.",
+  "artPrompt": "A colossal dragon-beast titan of living wildfire and ironwood, molten cracks glowing along its bark-plated body, wings of ember and burning leaf spread wide, towering over a blazing forest at dusk, embodiment of the fused fire-and-nature pact, awe-inspiring scale, cinematic fantasy trading-card creature art, no text, no border",
+  "meshy": true
+ },
+ {
+  "id": "ed01",
+  "name": "Emberlight Recruit",
+  "realms": [
+   "ember",
+   "dawn"
+  ],
+  "type": "creature",
+  "cost": 1,
+  "atk": 2,
+  "hp": 1,
+  "rarity": "common",
+  "keywords": [
+   "swift"
+  ],
+  "tribe": "Soldier",
+  "rulesText": "Swift.",
+  "engineImpl": "Plain creature with keyword swift (attacks the turn it is summoned). No trigger. Stats 2/1 at cost 1 — a curve-one Valor attacker that starts the go-wide clock.",
+  "flavor": "She lit her blade from the dawn and did not wait for orders.",
+  "artPrompt": "A young armored footsoldier charging forward, her sword and shield rimmed with molten orange fire that dissolves upward into radiant golden dawn-light, holy sunbeams and ember sparks trailing behind her boots, dynamic low angle, epic fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "ed02",
+  "name": "Muster the Faithful",
+  "realms": [
+   "ember",
+   "dawn"
+  ],
+  "type": "spell",
+  "cost": 2,
+  "atk": null,
+  "hp": null,
+  "rarity": "common",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Summon two 1/1 Sunspark Soldiers.",
+  "engineImpl": "spell S with fx:[summon{token:'sunspark_soldier',count:2,who:'owner'}]; token = 1/1 Soldier creature. No target. Fuels the wide board that Valor payoffs reward.",
+  "flavor": "Two sparks from one altar; two shields for one dawn.",
+  "artPrompt": "Two glowing footsoldiers rising from a cracked stone altar, their bodies forming out of swirling fire that cools into shining white-gold armor, holy sunlight pouring down through a broken cathedral roof onto ember cinders, epic fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "ed03",
+  "name": "Vanguard Banneret",
+  "realms": [
+   "ember",
+   "dawn"
+  ],
+  "type": "creature",
+  "cost": 3,
+  "atk": 2,
+  "hp": 3,
+  "rarity": "uncommon",
+  "keywords": [],
+  "tribe": "Paladin",
+  "rulesText": "Valor — Rally: give all friendly creatures +1/+1.",
+  "engineImpl": "creature C 2/3 with rally:[buff{atk:1,hp:1,target:'all-friendly-creatures'}]. Signpost card — buffs the whole board (itself included) on play, the pair's core payoff that names the Valor archetype.",
+  "flavor": "Raise the banner and every soldier stands a hand taller.",
+  "artPrompt": "A radiant paladin standard-bearer planting a burning banner into the earth, the flag woven of living flame and golden dawn-rays, a shockwave of warm light rippling out toward unseen allies, ash and sun-motes swirling, heroic fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "ed04",
+  "name": "Sunhallowed Reaver",
+  "realms": [
+   "ember",
+   "dawn"
+  ],
+  "type": "creature",
+  "cost": 4,
+  "atk": 4,
+  "hp": 3,
+  "rarity": "uncommon",
+  "keywords": [
+   "swift",
+   "lifesteal"
+  ],
+  "tribe": "Paladin",
+  "rulesText": "Swift, Lifesteal.",
+  "engineImpl": "creature C 4/3 with keywords swift + lifesteal. No trigger. A premium dual attacker: charges in immediately and heals your hero, rewarding an aggressive full-board turn.",
+  "flavor": "Every wound she deals is a prayer answered on her own behalf.",
+  "artPrompt": "A veteran holy warrior mid-strike, her greatsword wreathed in orange flame that flares into blinding gold at the edge, wisps of golden life-light streaming back into her chest from the blade, sacred flames haloing her armor, dramatic motion, epic fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "ed05",
+  "name": "Blazing Crusade",
+  "realms": [
+   "ember",
+   "dawn"
+  ],
+  "type": "spell",
+  "cost": 3,
+  "atk": null,
+  "hp": null,
+  "rarity": "rare",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Give all friendly creatures +2/+1 and Swift this turn.",
+  "engineImpl": "spell S with fx:[buff{atk:2,hp:1,kw:['swift'],target:'all-friendly-creatures'}]. The go-wide alpha-strike finisher: pumps the entire board and grants swift so freshly-summoned tokens can swing immediately.",
+  "flavor": "Dawn breaks, the horn sounds, and the whole line surges as one.",
+  "artPrompt": "A wide phalanx of glowing soldiers charging in unison across a battlefield at sunrise, a tidal wave of fire and golden light sweeping over them from behind, banners streaming, sky split between flame-orange and holy white, sweeping epic fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "ed06",
+  "name": "Aurelian, the Dawnbanner",
+  "realms": [
+   "ember",
+   "dawn"
+  ],
+  "type": "creature",
+  "cost": 6,
+  "atk": 5,
+  "hp": 6,
+  "rarity": "epic",
+  "keywords": [
+   "guard"
+  ],
+  "tribe": "Paladin",
+  "rulesText": "Guard. Anthem — while Aurelian is in play, your other creatures have +2/+1.",
+  "engineImpl": "creature C 5/6 with keyword guard and aura:{buff:{atk:2,hp:1,target:'all-friendly-creatures'}} applied statically to other friendly creatures while in play (aura, not a one-time rally — buff ends if Aurelian leaves). Signature anthem body that turns 1/1 tokens into 3/2 threats.",
+  "flavor": "Where his banner burns, no soldier is small.",
+  "artPrompt": "A towering archon-paladin champion clad in sun-forged plate, one hand raising an enormous banner that is half roaring flame and half radiant dawn, golden light and embers cascading down over a host of smaller soldiers who glow brighter in his presence, majestic full-body hero pose, epic fantasy card art, no text, no border",
+  "meshy": true
+ },
+ {
+  "id": "ev01",
+  "name": "Ashborn Whelp",
+  "realms": [
+   "ember",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 1,
+  "atk": 2,
+  "hp": 1,
+  "rarity": "common",
+  "tribe": "Undead",
+  "keywords": [
+   "Immolate"
+  ],
+  "rulesText": "Immolate 1 — Last Rites: deal 1 damage to the enemy hero.",
+  "engineImpl": "creature C(ev01,'Ashborn Whelp',1,2,1,common,'Undead',{ rites:[ damage{amount:1,target:'enemy-hero'} ] }). Immolate = flavor keyword for the rites-pings-face pattern; implemented purely as the rites trigger.",
+  "flavor": "It was hatched dead, and dies burning — the cult prefers it that way.",
+  "artPrompt": "A tiny skeletal dragon whelp wreathed in guttering orange flame, cracked bone wings glowing molten at the edges, embers pouring from empty eye sockets as ash flakes off its ribs, dark crypt-fire smoke curling around it, dramatic fantasy trading-card creature art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "ev02",
+  "name": "Graveflame Cultist",
+  "realms": [
+   "ember",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 2,
+  "atk": 3,
+  "hp": 2,
+  "rarity": "common",
+  "tribe": "Cultist",
+  "keywords": [
+   "Immolate"
+  ],
+  "rulesText": "Immolate 1 — Last Rites: deal 1 damage to all enemy creatures.",
+  "engineImpl": "creature C(ev02,'Graveflame Cultist',2,3,2,common,'Cultist',{ rites:[ aoe{amount:1,side:'enemy'} ] }). On death fires aoe against all-enemy-creatures.",
+  "flavor": "When a cultist falls, the pyre they carry does not.",
+  "artPrompt": "A hooded fanatic in charred crimson robes clutching a censer of green graveflame that erupts into orange fire, skull mask cracking as embers leak through, bone amulets smoldering, a battlefield of ash behind, dark ember-and-necrotic fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "ev03",
+  "name": "Feed the Pyre",
+  "realms": [
+   "ember",
+   "grave"
+  ],
+  "type": "spell",
+  "cost": 2,
+  "atk": null,
+  "hp": null,
+  "rarity": "common",
+  "tribe": null,
+  "keywords": [],
+  "rulesText": "Destroy a friendly creature. Deal 2 damage to the enemy hero and draw a card.",
+  "engineImpl": "spell S(ev03,'Feed the Pyre',2,common,{ target:{kind:'friendly-creature'}, fx:[ destroy{target:'chosen'}, damage{amount:2,target:'enemy-hero'}, draw{count:1,who:'self'} ] }). Sacrifice outlet: choose your own creature, kill it (which also fires ITS rites), then burn face and refill.",
+  "flavor": "Every soul the cult spends is a soul the enemy pays for.",
+  "artPrompt": "A robed figure hurling a screaming undead thrall into a towering bonfire of black-and-orange flame, the fire lashing outward toward a distant foe, sparks and ghostly wisps spiraling upward, altar of bones in the foreground, ominous ember-grave fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "ev04",
+  "name": "Pyreheart Zealot",
+  "realms": [
+   "ember",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 3,
+  "atk": 3,
+  "hp": 3,
+  "rarity": "uncommon",
+  "tribe": "Cultist",
+  "keywords": [
+   "Immolate"
+  ],
+  "rulesText": "Whenever another friendly creature dies, deal 1 damage to a random enemy creature. Immolate 1 — Last Rites: deal 1 damage to the enemy hero.",
+  "engineImpl": "creature C(ev04,'Pyreheart Zealot',3,3,3,uncommon,'Cultist',{ aura:{ trigger:'friendly-creature-dies', fx:[ damage{amount:1,target:'random-enemy-creature'} ] }, rites:[ damage{amount:1,target:'enemy-hero'} ] }). SIGNPOST: the aura death-hook names the Immolate payoff (every friendly death pings), and its own rites reinforce it.",
+  "flavor": "\"Do not mourn the fallen. Aim them.\"",
+  "artPrompt": "A zealous priestess raising both arms as spectral fire leaps from a dying ally toward enemy shapes, her heart visibly glowing like a coal through her chest, green soul-smoke braided with orange flame swirling around her, altar-lit crypt, epic ember-and-death fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "ev05",
+  "name": "Cataclysm Immolation",
+  "realms": [
+   "ember",
+   "grave"
+  ],
+  "type": "spell",
+  "cost": 5,
+  "atk": null,
+  "hp": null,
+  "rarity": "rare",
+  "tribe": null,
+  "keywords": [],
+  "rulesText": "Deal 3 damage to ALL creatures, then deal 2 damage to the enemy hero.",
+  "engineImpl": "spell S(ev05,'Cataclysm Immolation',5,rare,{ fx:[ aoe{amount:3,side:'all'}, damage{amount:2,target:'enemy-hero'} ] }). Symmetric wipe: hits your own board too — in the Cinder Cult deck that self-damage detonates every friendly Immolate rites for a face-damage finish, so the 'downside' is the engine.",
+  "flavor": "The cult does not clear the field. It offers the whole field to the fire.",
+  "artPrompt": "A cataclysmic firestorm sweeping an entire battlefield, warriors of both armies dissolving into orange flame and green death-light simultaneously, a rising column of skulls and embers at the center reaching toward the sky, apocalyptic ember-grave fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "ev06",
+  "name": "Malgroth, the Cinder Tyrant",
+  "realms": [
+   "ember",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 6,
+  "atk": 6,
+  "hp": 6,
+  "rarity": "legendary",
+  "tribe": "Demon",
+  "keywords": [
+   "swift",
+   "Immolate"
+  ],
+  "rulesText": "Swift. Rally: deal 2 damage to the enemy hero. Whenever a friendly creature dies, deal 1 damage to the enemy hero.",
+  "engineImpl": "creature C(ev06,'Malgroth, the Cinder Tyrant',6,6,6,legendary,'Demon',{ keywords:['swift'], rally:[ damage{amount:2,target:'enemy-hero'} ], aura:{ trigger:'friendly-creature-dies', fx:[ damage{amount:1,target:'enemy-hero'} ] } }). Leader payoff: the death-hook aura converts every dying friendly creature into burst face damage; swift + rally give immediate reach on the turn he lands.",
+  "flavor": "\"Bring me your dead. I will send them ahead of you.\"",
+  "artPrompt": "A colossal demon lord of blackened bone and living magma, cracks across his armored body glowing molten orange, a crown of skulls burning with green soul-fire, dragging a cloak of drifting embers and ghostly flames, standing over a pyre of the fallen while spectral fire streams from them into his outstretched claw, towering legendary ember-and-grave fantasy card art, cinematic lighting, no text, no border",
+  "meshy": true
+ },
+ {
+  "id": "tg01",
+  "name": "Mirefen Sproutling",
+  "realms": [
+   "tide",
+   "grove"
+  ],
+  "type": "creature",
+  "cost": 2,
+  "atk": 2,
+  "hp": 2,
+  "rarity": "common",
+  "keywords": [
+   "regenerate 1"
+  ],
+  "tribe": "Beast",
+  "rulesText": "Regenerate 1. Battlecry: Gain +1 mana this turn.",
+  "engineImpl": "creature C(tg01,'Mirefen Sproutling',2,2,2,'common','Beast',{ keywords:['regenerate 1'], rally:[ ramp{amount:1} ] }). Keyword 'regenerate 1' restores 1 hp at start of your turn (the Bloom resilience). rally fires ramp{amount:1} on play from hand.",
+  "flavor": "It roots in the tideline where salt-water meets sweet-water, and drinks both.",
+  "artPrompt": "A tiny newt-like beast sprouting living kelp and river-moss from its barnacled back, half-submerged in a glassy tidal pool ringed by frost-rimed reeds, bioluminescent green sap glowing along its spine, droplets catching cold blue light, painterly fantasy creature card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "tg02",
+  "name": "Kelpweave Blessing",
+  "realms": [
+   "tide",
+   "grove"
+  ],
+  "type": "spell",
+  "cost": 1,
+  "atk": null,
+  "hp": null,
+  "rarity": "common",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Bloom: give a friendly creature +1/+2.",
+  "engineImpl": "spell S(tg02,'Kelpweave Blessing',1,'common',{ fx:[ buff{atk:1,hp:2,target:chosen} ], target:{kind:'friendly-creature'}, text:..., flavor:... }). A single bloom counter (permanent buff{atk,hp}) on the chosen friendly creature.",
+  "flavor": "Woven kelp tightens over old wounds, and the vine remembers to grow.",
+  "artPrompt": "Strands of glowing green kelp and coral vines weaving themselves around a beast's foreleg like a living bandage, seawater and sap braided together, cold teal spray and warm chlorophyll light mingling, close fantasy spell illustration, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "tg03",
+  "name": "Synod Cultivator",
+  "realms": [
+   "tide",
+   "grove"
+  ],
+  "type": "creature",
+  "cost": 3,
+  "atk": 2,
+  "hp": 3,
+  "rarity": "uncommon",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Battlecry: Bloom a friendly creature (+2/+2), then gain +1 mana this turn.",
+  "engineImpl": "creature C(tg03,'Synod Cultivator',3,2,3,'uncommon',null,{ rally:[ buff{atk:2,hp:2,target:chosen}, ramp{amount:1} ], target:{kind:'friendly-creature'} }). Signpost: the rally applies a bloom counter (buff) to a chosen friendly creature AND ramps in the same trigger — the archetype's buff+ramp thesis.",
+  "flavor": "The Synod's first law: feed the water, and the water feeds the grove.",
+  "artPrompt": "A robed amphibian sage-druid, skin like wet river-stone flecked with frost, cupping a swirling orb of seawater from which sprouts a burst of new green shoots, tide and forest fused in the priest's hands, temple of coral pillars and hanging moss behind, luminous fantasy character card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "tg04",
+  "name": "Springtide Surge",
+  "realms": [
+   "tide",
+   "grove"
+  ],
+  "type": "spell",
+  "cost": 4,
+  "atk": null,
+  "hp": null,
+  "rarity": "rare",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Gain +1 mana this turn, then Bloom your whole board: give all friendly creatures +1/+1.",
+  "engineImpl": "spell S(tg04,'Springtide Surge',4,'rare',{ fx:[ ramp{amount:1}, buff{atk:1,hp:1,target:'all-friendly-creatures'} ], text:..., flavor:... }). No target-choose; ramp then board-wide bloom counters.",
+  "flavor": "The thaw broke all at once, and every root drank the rising sea.",
+  "artPrompt": "A cresting emerald-and-turquoise tidal wave laced with blooming water-lilies and unfurling ferns surging across a battlefield, spray freezing into crystal spray at its crest while flowers open in its trough, epic fantasy spell splash art, cold and verdant light, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "tg05",
+  "name": "Deeproot Behemoth",
+  "realms": [
+   "tide",
+   "grove"
+  ],
+  "type": "creature",
+  "cost": 5,
+  "atk": 4,
+  "hp": 6,
+  "rarity": "rare",
+  "keywords": [
+   "guard",
+   "regenerate 2"
+  ],
+  "tribe": "Beast",
+  "rulesText": "Guard. Regenerate 2. Battlecry: Freeze an enemy creature.",
+  "engineImpl": "creature C(tg05,'Deeproot Behemoth',5,4,6,'rare','Beast',{ keywords:['guard','regenerate 2'], rally:[ freeze{target:chosen} ], target:{kind:'enemy-creature'} }). Tide freeze on rally + grove resilient regenerating guard body.",
+  "flavor": "It walks the seabed as slowly as a forest grows — and stops just as little.",
+  "artPrompt": "A colossal moss-and-barnacle-armored turtle-beast, shell overgrown with a miniature frozen forest, wading up from the deep with rime forming on its ancient bark-plated legs, kelp beard trailing, monumental fantasy creature card art, cold blue depths and green canopy, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "tg06",
+  "name": "Thalassa, the Everbloom",
+  "realms": [
+   "tide",
+   "grove"
+  ],
+  "type": "creature",
+  "cost": 7,
+  "atk": 6,
+  "hp": 7,
+  "rarity": "epic",
+  "keywords": [
+   "ward",
+   "regenerate 3"
+  ],
+  "tribe": "Beast",
+  "rulesText": "Ward. Regenerate 3. Battlecry: Bloom all friendly creatures (+2/+2) and gain +2 mana this turn.",
+  "engineImpl": "creature C(tg06,'Thalassa, the Everbloom',7,6,7,'epic','Beast',{ keywords:['ward','regenerate 3'], rally:[ buff{atk:2,hp:2,target:'all-friendly-creatures'}, ramp{amount:2} ] }). Signature finisher: ward + regenerate 3 = the resilient regenerate-and-grow body; rally seeds board-wide bloom counters and ramps. 'Ever-growing' is expressed as regenerate 3 (recovers/blooms each turn) plus the permanent buff it distributes.",
+  "flavor": "Where her roots meet the tide, the season never ends.",
+  "artPrompt": "A towering primordial sea-goddess leviathan, body a fusion of a coral-reef and an ancient blossoming tree, torrents of glowing seawater cascading through her mossy boughs, coral antlers dripping frost, lotus and anemone blooming across her hide, tide and grove made one living titan, awe-inspiring fantasy legendary card art, luminous teal and verdant palette, cinematic, no text, no border",
+  "meshy": true
+ },
+ {
+  "id": "td01",
+  "name": "Frostlight Sentinel",
+  "realms": [
+   "tide",
+   "dawn"
+  ],
+  "type": "creature",
+  "cost": 2,
+  "atk": 2,
+  "hp": 4,
+  "rarity": "common",
+  "keywords": [
+   "guard",
+   "regenerate 1"
+  ],
+  "tribe": "Guardian",
+  "rulesText": "Guard. Regenerate 1 (restore 1 HP at the start of your turn).",
+  "engineImpl": "creature C(td01,'Frostlight Sentinel',2,2,4,'common','Guardian',{keywords:['guard','regenerate 1']}). No triggers — guard forces it to be attacked first (dawn wall), regenerate 1 heals it 1 HP at start of your turn (dawn sustain). The frost sheen is flavor only.",
+  "flavor": "Where the tide meets the dawn, it freezes into a shield.",
+  "artPrompt": "A towering armored sentinel carved from translucent blue-white glacial ice, its plate armor glowing with warm golden holy light from within the frost, standing as a living wall, radiant dawn rays refracting through icy crystal, cold mist pooling at its feet, fantasy trading card art, dramatic lighting, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "td02",
+  "name": "Rimebound Blessing",
+  "realms": [
+   "tide",
+   "dawn"
+  ],
+  "type": "spell",
+  "cost": 2,
+  "atk": null,
+  "hp": null,
+  "rarity": "common",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Freeze an enemy creature and restore 3 HP to your hero.",
+  "engineImpl": "spell S(td02,'Rimebound Blessing',2,'common',{target:{kind:'enemy-creature'},fx:[freeze{target:'chosen'},heal{amount:3,target:'self-hero'}]}). Choose one enemy creature: freeze it (tide) and heal your hero 3 (dawn) — cheap tempo-plus-stall.",
+  "flavor": "Hold still, child. This will only sting until spring.",
+  "artPrompt": "A radiant priestess in white and gold robes extending a glowing hand, a ribbon of frost and warm light spiraling out to encase a snarling enemy in a block of glowing ice, soft golden healing motes drifting back toward the caster, holy-frost magic, fantasy card art, luminous, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "td03",
+  "name": "Tidewarden of the Aegis",
+  "realms": [
+   "tide",
+   "dawn"
+  ],
+  "type": "creature",
+  "cost": 3,
+  "atk": 2,
+  "hp": 5,
+  "rarity": "uncommon",
+  "keywords": [
+   "guard"
+  ],
+  "tribe": "Paladin",
+  "rulesText": "Guard. Rally: Freeze an enemy creature.",
+  "engineImpl": "creature C(td03,'Tidewarden of the Aegis',3,2,5,'uncommon','Paladin',{keywords:['guard'],target:{kind:'enemy-creature'},rally:[freeze{target:'chosen'}]}). SIGNPOST for the Lockdown archetype: a durable guard body (dawn) that on being played from hand freezes a chosen enemy creature (tide). Buys two turns of tempo — one from freeze, one from the wall.",
+  "flavor": "The Aegis Court does not defeat you. It simply refuses to let you move.",
+  "artPrompt": "A stoic paladin in silver-blue plate emblazoned with a sunburst crest, planting a great frost-rimed tower shield into the ground, a wave of freezing light spreading forward to lock an enemy in ice, dawn halo behind the helm, frozen breath, heroic fantasy card art, cinematic, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "td04",
+  "name": "Sanctified Rebuff",
+  "realms": [
+   "tide",
+   "dawn"
+  ],
+  "type": "trap",
+  "cost": 2,
+  "atk": null,
+  "hp": null,
+  "rarity": "uncommon",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Trap. When the enemy casts a spell, negate it and restore 2 HP to your hero.",
+  "engineImpl": "trap T(td04,'Sanctified Rebuff',2,'uncommon',{trap:{on:'enemy-spell',fx:[negate-spell,heal{amount:2,target:'self-hero'}]}}). Set face-down; on the enemy's turn when they cast a spell it triggers: negate-spell counters it (tide counter) and heal 2 to your hero (dawn). The Court's negate-wall against combo and removal.",
+  "flavor": "Your incantation shatters on the frozen glass of a prayer.",
+  "artPrompt": "A shimmering barrier of stained-glass ice materializing to intercept an incoming bolt of enemy magic, the spell splintering into frost shards against panes of golden holy light, defensive ward flaring, sacred geometry glowing cyan and gold, fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "td05",
+  "name": "Glacial Sanctuary",
+  "realms": [
+   "tide",
+   "dawn"
+  ],
+  "type": "spell",
+  "cost": 5,
+  "atk": null,
+  "hp": null,
+  "rarity": "rare",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Freeze all enemy creatures and restore 5 HP to your hero.",
+  "engineImpl": "spell S(td05,'Glacial Sanctuary',5,'rare',{fx:[freeze{target:'all-enemy-creatures'},heal{amount:5,target:'self-hero'}]}). The archetype's big stall button: freeze the entire enemy board (tide mass-lock) and heal your hero 5 (dawn), turning off an aggro turn while you stabilize toward the late game.",
+  "flavor": "Within these walls, the war simply pauses — and waits for you to lose your nerve.",
+  "artPrompt": "A vast cathedral of blue ice pillars flooded with warm dawn light through frozen rose windows, an entire enemy army frozen mid-charge into statues of glowing ice on the floor, a golden protective dome shimmering overhead, epic scale, holy-frost sanctuary, fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "td06",
+  "name": "Sariel, the Frozen Dawn",
+  "realms": [
+   "tide",
+   "dawn"
+  ],
+  "type": "creature",
+  "cost": 7,
+  "atk": 6,
+  "hp": 8,
+  "rarity": "legendary",
+  "keywords": [
+   "guard",
+   "ward"
+  ],
+  "tribe": "Paladin",
+  "rulesText": "Guard, Ward. Rally: Freeze all enemy creatures, then draw 2 cards.",
+  "engineImpl": "creature C(td06,'Sariel, the Frozen Dawn',7,6,8,'legendary','Paladin',{keywords:['guard','ward'],rally:[freeze{target:'all-enemy-creatures'},draw{count:2,who:'self'}]}). The control payoff leader: on play, freeze the whole enemy board (tide lock) and draw 2 (grind card advantage), then remains as a 6/8 guard that must be attacked first and whose ward negates the first targeted spell/effect (dawn protection). Locks the board while you out-card the opponent — warping but not oppressive: the freeze is temporary and the body is beatable through.",
+  "flavor": "She raised no sword. She raised the temperature to nothing, and named it peace.",
+  "artPrompt": "A radiant archangel-paladin queen in crystalline blue-and-gold armor with vast frost-feathered wings edged in dawn fire, hovering above a frozen battlefield, one hand raised commanding a sweeping wall of freezing light that locks an entire army in ice, halo of cold sun, majestic legendary presence, full-body, fantasy card art, cinematic god-rays, no text, no border",
+  "meshy": true
+ },
+ {
+  "id": "tv01",
+  "name": "Silt Veilling",
+  "realms": [
+   "tide",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 2,
+  "atk": 2,
+  "hp": 2,
+  "rarity": "common",
+  "keywords": [
+   "stealth"
+  ],
+  "tribe": "undead",
+  "rulesText": "Stealth. Last Rites: Draw a card.",
+  "engineImpl": "C(id,name,2,2,2,'common','undead',{ keywords:['stealth'], rites:[ draw{count:1,who:'self'} ] }). Stealth keyword makes it untargetable until it attacks; rites fires on death.",
+  "flavor": "It carries whispers the drowned were never meant to keep.",
+  "artPrompt": "A translucent drowned spirit-child woven from silt and black brine, half-dissolved into frigid current, faint ghost-light in hollow eyes, shadow tendrils trailing like grave-shrouds, cold teal and abyssal violet, fantasy card art, no text",
+  "meshy": false
+ },
+ {
+  "id": "tv02",
+  "name": "Undertow Recall",
+  "realms": [
+   "tide",
+   "grave"
+  ],
+  "type": "spell",
+  "cost": 3,
+  "atk": null,
+  "hp": null,
+  "rarity": "common",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Return a creature to its owner's hand. Draw a card.",
+  "engineImpl": "S(id,name,3,'common',{ target:{kind:'creature'}, fx:[ bounce{target:'chosen'}, draw{count:1,who:'self'} ], text, flavor }). Bounce the chosen creature (enemy for tempo, or your own to re-trigger a rally); then self-draw.",
+  "flavor": "The tide gives nothing back without taking a secret in trade.",
+  "artPrompt": "A spectral hand of black water rising from a frozen tide-pool, dragging a struggling figure down into a swirling vortex of ghost-lit foam, drowned skulls circling in the eddy, frost mist and shadow, fantasy card art, no text",
+  "meshy": false
+ },
+ {
+  "id": "tv03",
+  "name": "Drowned Ambush",
+  "realms": [
+   "tide",
+   "grave"
+  ],
+  "type": "trap",
+  "cost": 2,
+  "atk": null,
+  "hp": null,
+  "rarity": "common",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Trap. When your hero is attacked, deal 3 damage to the attacker and draw a card.",
+  "engineImpl": "T(id,name,2,'common',{ trap:{ on:'hero-attacked', fx:[ damage{amount:3,target:'trigger-attacker'}, draw{count:1,who:'self'} ] }, text, flavor }). Face-down; fires on enemy turn when hero is attacked, punishing the attacker and drawing.",
+  "flavor": "They followed the current in. The current did not let them leave.",
+  "artPrompt": "An attacker lunging over a shallow black lagoon as skeletal hands of ice and rot erupt from beneath the surface, dragging it under in a burst of frozen spray, moonlit death-glow, fantasy card art, no text",
+  "meshy": false
+ },
+ {
+  "id": "tv04",
+  "name": "Veilspun Infiltrator",
+  "realms": [
+   "tide",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 3,
+  "atk": 3,
+  "hp": 3,
+  "rarity": "uncommon",
+  "keywords": [
+   "stealth"
+  ],
+  "tribe": "undead",
+  "rulesText": "Stealth. Rally: Draw a card. (Stays hidden until it strikes.)",
+  "engineImpl": "C(id,name,3,3,3,'uncommon','undead',{ keywords:['stealth'], rally:[ draw{count:1,who:'self'} ] }). Signpost: enters hidden (stealth = untargetable until it attacks) and its rally refills your hand — the pair's stealth+draw payoff.",
+  "flavor": "You will not see the Hand until it has already closed.",
+  "artPrompt": "A cloaked assassin-wraith of woven mist and grave-shadow gliding across an icy canal at night, dagger of black frost drawn, body fading in and out of the water's reflection, secrets glowing on spectral scrolls at its belt, teal and deep purple, fantasy card art, no text",
+  "meshy": false
+ },
+ {
+  "id": "tv05",
+  "name": "Gravetide Reclaimer",
+  "realms": [
+   "tide",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 4,
+  "atk": 3,
+  "hp": 4,
+  "rarity": "rare",
+  "keywords": [
+   "ward"
+  ],
+  "tribe": "undead",
+  "rulesText": "Ward. Rally: Steal a corpse — revive a creature that has died and put it into play under your control.",
+  "engineImpl": "C(id,name,4,3,4,'rare','undead',{ keywords:['ward'], rally:[ steal-corpse{} ] }). Ward negates the first targeted effect against it; rally uses steal-corpse to resurrect a dead creature (from either graveyard) onto your side — the grave payoff.",
+  "flavor": "The sea keeps every drowned soul on a very short leash.",
+  "artPrompt": "A towering drowned necromancer robed in kelp and frost, raising a reanimated corpse from a churning grave-tide, chains of black water binding the revived body, glowing rune-secrets swirling in the whirlpool below, eerie cyan necrotic light, fantasy card art, no text",
+  "meshy": false
+ },
+ {
+  "id": "tv06",
+  "name": "Maelstrom Chronicler",
+  "realms": [
+   "tide",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 5,
+  "atk": 4,
+  "hp": 5,
+  "rarity": "epic",
+  "keywords": [
+   "ward"
+  ],
+  "tribe": "undead",
+  "rulesText": "Ward. Rally: Draw 2 cards. Last Rites: Revive a friendly creature that has died.",
+  "engineImpl": "C(id,name,5,4,5,'epic','undead',{ keywords:['ward'], rally:[ draw{count:2,who:'self'} ], rites:[ resurrect{ target:'friendly-dead' } ] }). Signature value engine: rally refills hand (draw 2) and rites reanimates from your grave — hand-and-grave advantage both entering and dying. Ward protects the engine.",
+  "flavor": "Every secret the deep swallowed, it wrote down. In ice. In bone.",
+  "artPrompt": "A colossal lich-scribe of frozen bone enthroned in the eye of a black maelstrom, quill of glacial shard inscribing endless glowing runes onto ribbons of drowned parchment, spectral drowned faces spiraling in the vortex, abyssal teal and violet radiance, ornate and grand, fantasy card art, no text",
+  "meshy": true
+ },
+ {
+  "id": "gd01",
+  "name": "Sapling Shepherd",
+  "realms": [
+   "grove",
+   "dawn"
+  ],
+  "type": "creature",
+  "cost": 3,
+  "atk": 2,
+  "hp": 3,
+  "rarity": "common",
+  "keywords": [],
+  "tribe": "Beast",
+  "rulesText": "Rally: Summon a 1/1 Sunbloom Sapling.",
+  "engineImpl": "creature C(gd01,'Sapling Shepherd',3,2,3,'common','Beast',{ rally:[ summon{token:'Sunbloom Sapling', count:1, who:'owner'} ] }). Token Sunbloom Sapling = 1/1 Sapling creature, no keywords.",
+  "flavor": "Every seedling she tends is blessed under the first light of the seam.",
+  "artPrompt": "A gentle druidess in sun-gilded leaf armor kneeling in a glowing meadow, cupping a sprouting golden sapling that radiates holy light, dawn rays breaking through emerald canopy, luminous pollen motes, warm green-and-gold fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "gd02",
+  "name": "Gild the Grove",
+  "realms": [
+   "grove",
+   "dawn"
+  ],
+  "type": "spell",
+  "cost": 2,
+  "atk": null,
+  "hp": null,
+  "rarity": "common",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Give all your creatures +1/+1.",
+  "engineImpl": "spell S(gd02,'Gild the Grove',2,'common',{ fx:[ buff{atk:1, hp:1, kw:[], target:'all-friendly-creatures'} ], text:'Give all your creatures +1/+1.' }). No target chosen; board-wide friendly anthem.",
+  "flavor": "Where light drips onto leaf, the whole grove stands a little taller.",
+  "artPrompt": "A sweeping meadow of ferns and wildflowers flushing with golden radiance as a wave of dawn light rolls across them, plants visibly surging and brightening, sunbeams and drifting spores, vibrant green-and-gold fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "gd03",
+  "name": "Verdant Evangelist",
+  "realms": [
+   "grove",
+   "dawn"
+  ],
+  "type": "creature",
+  "cost": 3,
+  "atk": 2,
+  "hp": 2,
+  "rarity": "uncommon",
+  "keywords": [],
+  "tribe": "Paladin",
+  "rulesText": "Flourish. Rally: Summon two 1/1 Sunbloom Saplings.",
+  "engineImpl": "creature C(gd03,'Verdant Evangelist',3,2,2,'uncommon','Paladin',{ rally:[ summon{token:'Sunbloom Sapling', count:2, who:'owner'} ] }). Signpost for the Flourish go-wide archetype: two tokens on play. Token Sunbloom Sapling = 1/1.",
+  "flavor": "\"Two more voices for the Choir. The song is never finished.\"",
+  "artPrompt": "A radiant preacher in ivy-wrapped white-and-gold vestments raising a blooming staff, two tiny sapling spirits sprouting from the earth at his feet in shafts of holy sunlight, forest cathedral of living trees, green-and-gold fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "gd04",
+  "name": "Dawnwreath Warden",
+  "realms": [
+   "grove",
+   "dawn"
+  ],
+  "type": "creature",
+  "cost": 5,
+  "atk": 4,
+  "hp": 5,
+  "rarity": "rare",
+  "keywords": [
+   "guard"
+  ],
+  "tribe": "Paladin",
+  "rulesText": "Guard. Rally: Give all your other creatures +1/+1 and Guard.",
+  "engineImpl": "creature C(gd04,'Dawnwreath Warden',5,4,5,'rare','Paladin',{ keywords:['guard'], rally:[ buff{atk:1, hp:1, kw:['guard'], target:'all-friendly-creatures'} ] }). Anthem-plus-Guard-grant that protects the swarm; buff target all-friendly-creatures.",
+  "flavor": "Beneath her wreath of morninglight, every sapling becomes a shield.",
+  "artPrompt": "A towering armored guardian woman crowned with a wreath of golden dawn-blossoms, radiant shield of woven light and vines, standing protectively before a field of small glowing saplings, sunrise piercing an ancient grove, majestic green-and-gold fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "gd05",
+  "name": "Flourishing Hymn",
+  "realms": [
+   "grove",
+   "dawn"
+  ],
+  "type": "spell",
+  "cost": 5,
+  "atk": null,
+  "hp": null,
+  "rarity": "rare",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Summon two 1/1 Sunbloom Saplings, then give all your creatures +1/+1.",
+  "engineImpl": "spell S(gd05,'Flourishing Hymn',5,'rare',{ fx:[ summon{token:'Sunbloom Sapling', count:2, who:'owner'}, buff{atk:1, hp:1, kw:[], target:'all-friendly-creatures'} ], text:'Summon two 1/1 Sunbloom Saplings, then give all your creatures +1/+1.' }). Ops resolve in order so the new tokens are on board when the buff applies.",
+  "flavor": "The seam sings, and the grove answers in a chorus of green and gold.",
+  "artPrompt": "A choir of radiant tree-spirits erupting from a sunlit forest floor as a golden hymn of light sweeps outward, new saplings bursting up mid-verse while the whole meadow glows brighter, ecstatic dawn-in-the-grove fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "gd06",
+  "name": "Elarion, Voice of the Verdant Choir",
+  "realms": [
+   "grove",
+   "dawn"
+  ],
+  "type": "creature",
+  "cost": 7,
+  "atk": 6,
+  "hp": 6,
+  "rarity": "legendary",
+  "keywords": [
+   "guard"
+  ],
+  "tribe": "Ancient",
+  "rulesText": "Guard. Rally: Summon three 1/1 Sunbloom Saplings, then give all your creatures +2/+2 and Guard.",
+  "engineImpl": "creature C(gd06,'Elarion, Voice of the Verdant Choir',7,6,6,'legendary','Ancient',{ keywords:['guard'], rally:[ summon{token:'Sunbloom Sapling', count:3, who:'owner'}, buff{atk:2, hp:2, kw:['guard'], target:'all-friendly-creatures'} ] }). Legendary leader that floods (3 tokens) AND anthems (+2/+2 + Guard board-wide) in one turn; summon op precedes buff op so the tokens receive the buff.",
+  "flavor": "\"Where two elements touched, they did not war. They sang. And I am that song.\"",
+  "artPrompt": "A colossal luminous treant-archon fused with radiant dawn energy, bark of living gold and emerald, a crown of sunrise leaves and a choir of glowing sapling-spirits swirling around its roots, vast overgrown cathedral of light-drenched trees, epic legendary green-and-gold fantasy card art, no text, no border",
+  "meshy": true
+ },
+ {
+  "id": "gv01",
+  "name": "Thornshell Grub",
+  "realms": [
+   "grove",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 1,
+  "atk": 1,
+  "hp": 2,
+  "rarity": "common",
+  "keywords": [],
+  "tribe": "Beast",
+  "rulesText": "Undergrowth. Last Rites: summon a 1/1 Rotsprout.",
+  "engineImpl": "creature C('gv01',...,1,1,2,'common','Beast',{rites:[summon{token:'Rotsprout',count:1,who:'owner'}]}). Rotsprout is a 1/1 Plant token.",
+  "flavor": "It dies feeding the loam, and the loam answers.",
+  "artPrompt": "A fat armored grub with a bark-and-fungus carapace curled in rotting leaf litter, luminous green spores rising from cracks in its shell, half-verdant half-decayed forest floor, dark fantasy card art, no text no border",
+  "meshy": false
+ },
+ {
+  "id": "gv02",
+  "name": "Mirefang Viper",
+  "realms": [
+   "grove",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 2,
+  "atk": 2,
+  "hp": 2,
+  "rarity": "common",
+  "keywords": [
+   "venomous"
+  ],
+  "tribe": "Beast",
+  "rulesText": "Venomous. (Any creature it damages is destroyed.)",
+  "engineImpl": "creature C('gv02',...,2,2,2,'common','Beast',{}) with keyword venomous. No triggers; keyword handles the poison trade.",
+  "flavor": "In the Rotwood, every bite is a burial.",
+  "artPrompt": "A sleek serpent with mottled moss-green scales dripping black venom, fanged jaws open, coiled around a rotting root wreathed in pale fungus, bioluminescent poison sacs glowing, dark nature fantasy card art, no text no border",
+  "meshy": false
+ },
+ {
+  "id": "gv03",
+  "name": "Blightbloom Spores",
+  "realms": [
+   "grove",
+   "grave"
+  ],
+  "type": "spell",
+  "cost": 2,
+  "atk": null,
+  "hp": null,
+  "rarity": "common",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Give a friendly creature +1/+1 and Venomous.",
+  "engineImpl": "spell S('gv03',...,2,'common',{fx:[buff{atk:1,hp:1,kw:['venomous'],target:chosen}], target:{kind:'friendly-creature'}}).",
+  "flavor": "Feed it the dead, and watch what blooms.",
+  "artPrompt": "A burst of glowing spores erupting from a flowering corpse-vine, sickly green pollen cloud settling over a snarling beast whose claws blacken with rot, verdant decay, dark fantasy card art, no text no border",
+  "meshy": false
+ },
+ {
+  "id": "gv04",
+  "name": "Rotwood Broodmother",
+  "realms": [
+   "grove",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 4,
+  "atk": 3,
+  "hp": 4,
+  "rarity": "uncommon",
+  "keywords": [],
+  "tribe": "Beast",
+  "rulesText": "Undergrowth signpost. Last Rites: summon two 2/2 Fungalhounds.",
+  "engineImpl": "creature C('gv04',...,4,3,4,'uncommon','Beast',{rites:[summon{token:'Fungalhound',count:2,who:'owner'}]}). Fungalhound = 2/2 Beast token. This is the pair's rites payoff signpost — trading her forward always leaves a board.",
+  "flavor": "Her death is not an ending. It is a litter.",
+  "artPrompt": "A massive maternal beast fused with bracket fungus and antlered vines, swollen with glowing egg-sacs of spores, two spectral fungal wolves forming from the decay at her flanks, gloomy overgrown grove, dark fantasy card art, no text no border",
+  "meshy": false
+ },
+ {
+  "id": "gv05",
+  "name": "Corpsegorge Bramble",
+  "realms": [
+   "grove",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 5,
+  "atk": 4,
+  "hp": 5,
+  "rarity": "rare",
+  "keywords": [
+   "regenerate 2"
+  ],
+  "tribe": "Plant",
+  "rulesText": "Rally: steal-corpse — revive a creature from the enemy graveyard under your control. Regenerate 2.",
+  "engineImpl": "creature C('gv05',...,5,4,5,'rare','Plant',{keywords:['regenerate 2'], rally:[steal-corpse{who:'owner'}], target:{kind:'enemy-creature'} selecting a fallen enemy creature to reanimate on your side}).",
+  "flavor": "The bramble does not bury the fallen. It wears them.",
+  "artPrompt": "A towering thorned bramble-colossus with skeletal beasts and bones woven into its living vines, green new growth sprouting from decayed skulls, dripping sap and grave-soil, ominous overgrown ruin, dark fantasy card art, no text no border",
+  "meshy": false
+ },
+ {
+  "id": "gv06",
+  "name": "Sythrala, Matriarch of the Rotwood",
+  "realms": [
+   "grove",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 7,
+  "atk": 6,
+  "hp": 7,
+  "rarity": "legendary",
+  "keywords": [
+   "guard",
+   "lifesteal"
+  ],
+  "tribe": "Beast",
+  "rulesText": "Guard, Lifesteal. Rally: resurrect your two fallen creatures (cost 6 or less). Aura: your other creatures have +1/+1.",
+  "engineImpl": "creature C('gv06',...,7,6,7,'legendary','Beast',{keywords:['guard','lifesteal'], rally:[resurrect{maxCost:6,count:2,who:'owner'}], aura:{buff:{atk:1,hp:1,target:all-friendly-creatures}}}). Rally reanimates your two highest-cost dead creatures; static aura anthems the board for the inevitable grind.",
+  "flavor": "Every child of the wood returns to her. So does every corpse.",
+  "artPrompt": "A colossal antlered matriarch-beast draped in living moss, glowing fungal crown, roots and skeletal remains rising from the earth to reform into beasts at her call, radiant green necromantic light, half-forest half-graveyard throne, epic dark fantasy card art, no text no border",
+  "meshy": true
+ },
+ {
+  "id": "dv01",
+  "name": "Almsgiver Acolyte",
+  "realms": [
+   "dawn",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 2,
+  "atk": 2,
+  "hp": 2,
+  "rarity": "common",
+  "keywords": [
+   "lifesteal"
+  ],
+  "tribe": "Cleric",
+  "rulesText": "Lifesteal. Last Rites: Summon a 1/1 Spirit.",
+  "engineImpl": "C('dv01','Almsgiver Acolyte',2,2,2,'common','Cleric',{ kw:['lifesteal'], rites:[ summon{token:'spirit', count:1, who:'owner'} ] })",
+  "flavor": "Her tithe is paid in blood, and repaid in ghosts.",
+  "artPrompt": "A hooded acolyte in gold-trimmed white funeral vestments kneeling at a bone altar, one hand glowing with warm holy light while a translucent blue spirit drifts up from her other palm, shafts of dawn light cutting through crypt mist, gilded skulls and dripping candles, fantasy trading card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "dv02",
+  "name": "Tithe of Blood",
+  "realms": [
+   "dawn",
+   "grave"
+  ],
+  "type": "spell",
+  "cost": 2,
+  "atk": null,
+  "hp": null,
+  "rarity": "common",
+  "keywords": [],
+  "tribe": null,
+  "rulesText": "Deal 2 damage to any target. Restore 2 health to your hero.",
+  "engineImpl": "S('dv02','Tithe of Blood',2,'common',{ target:{kind:'any'}, fx:[ damage{amount:2, target:'chosen'}, heal{amount:2, target:'self-hero'} ], text:'Deal 2 damage to any target. Restore 2 health to your hero.' })",
+  "flavor": "What the shadow takes, the light collects.",
+  "artPrompt": "A ribbon of crimson lifeblood arcing from a shadowed dying figure into a radiant golden chalice held by a haloed hand, half the scene drowned in grave-black, half bathed in dawn gold, sacred geometry glowing in the blood-stream, dramatic fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "dv03",
+  "name": "Pale Almswarden",
+  "realms": [
+   "dawn",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 3,
+  "atk": 3,
+  "hp": 3,
+  "rarity": "uncommon",
+  "keywords": [
+   "lifesteal"
+  ],
+  "tribe": "Cleric",
+  "rulesText": "Lifesteal. Rally: Deal 2 damage to an enemy and restore 2 health to your hero.",
+  "engineImpl": "C('dv03','Pale Almswarden',3,3,3,'uncommon','Cleric',{ kw:['lifesteal'], rally:[ damage{amount:2, target:'chosen'}, heal{amount:2, target:'self-hero'} ], target:{kind:'enemy-creature'} })",
+  "flavor": "The Ministry's collector arrives; the ledger of the living grows short.",
+  "artPrompt": "A gaunt regal warden in a mask that is half gilded sun, half grinning skull, draped in white-and-black robes, siphoning a thread of glowing life from a wounded foe into a halo above his own head, cathedral of bone bathed in cold dawn light, fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "dv04",
+  "name": "Sepulcher Confessor",
+  "realms": [
+   "dawn",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 4,
+  "atk": 3,
+  "hp": 5,
+  "rarity": "uncommon",
+  "keywords": [
+   "guard"
+  ],
+  "tribe": "Cleric",
+  "rulesText": "Guard. Last Rites: Summon two 1/1 Spirits.",
+  "engineImpl": "C('dv04','Sepulcher Confessor',4,3,5,'uncommon','Cleric',{ kw:['guard'], rites:[ summon{token:'spirit', count:2, who:'owner'} ] })",
+  "flavor": "Break the wall and two more rise to take confession.",
+  "artPrompt": "A towering armored confessor-priest with a tower shield forged of fused bone and radiant gold, standing before a crypt gate, two ghostly spirits already peeling away from his cloak, holy light and grave shadow braided across the armor, epic fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "dv05",
+  "name": "Reliquary of the Pale Choir",
+  "realms": [
+   "dawn",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 5,
+  "atk": 3,
+  "hp": 6,
+  "rarity": "rare",
+  "keywords": [
+   "guard"
+  ],
+  "tribe": "Construct",
+  "rulesText": "Guard. Your other creatures have Lifesteal.",
+  "engineImpl": "C('dv05','Reliquary of the Pale Choir',5,3,6,'rare','Construct',{ kw:['guard'], aura:{ scope:'all-friendly-creatures', excludeSelf:true, grantKw:['lifesteal'] } })",
+  "flavor": "Every blade the choir raises drinks, and the choir never thirsts.",
+  "artPrompt": "A colossal floating reliquary of gilded bone and stained-glass, ringed by singing translucent spirit-choristers, warm dawn light pouring from its cracked seams into a shadowed ossuary, threads of life connecting it to distant soldiers, grand fantasy card art, no text, no border",
+  "meshy": false
+ },
+ {
+  "id": "dv06",
+  "name": "Vael, the Pale Tithe",
+  "realms": [
+   "dawn",
+   "grave"
+  ],
+  "type": "creature",
+  "cost": 6,
+  "atk": 5,
+  "hp": 6,
+  "rarity": "epic",
+  "keywords": [
+   "lifesteal"
+  ],
+  "tribe": "Archon",
+  "rulesText": "Lifesteal. Rally: Deal 3 damage to all enemy creatures and restore 3 health to your hero.",
+  "engineImpl": "C('dv06','Vael, the Pale Tithe',6,5,6,'epic','Archon',{ kw:['lifesteal'], rally:[ aoe{amount:3, side:'enemy'}, heal{amount:3, target:'self-hero'} ] })",
+  "flavor": "\"The living owe. I have come to collect in full.\"",
+  "artPrompt": "A towering winged archon judge, one wing of blazing golden dawn-feathers and one of tattered grave-shadow, robes of white funerary silk and black bone, unleashing a sweeping wave of pale luminous death across a battlefield as enemy soldiers wither and a golden halo of restored life blooms behind it, cinematic fantasy card art, dramatic light-and-shadow, no text, no border",
+  "meshy": true
+ }
+]

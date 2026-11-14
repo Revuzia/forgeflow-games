@@ -1,0 +1,228 @@
+{
+  "phase1_fresh": {
+    "level": 1,
+    "xp": 0,
+    "xpNeed": 50,
+    "healthMax": 54,
+    "health": 54,
+    "manaMax": 64,
+    "mana": 64,
+    "unlocked": [
+      1,
+      2
+    ],
+    "deaths": 0,
+    "saveBlob": null,
+    "meshState": 0
+  },
+  "phase1_cast4_locked_test": {
+    "stateBefore": 0,
+    "statesSeen": [
+      0,
+      8
+    ],
+    "enteredCast": true,
+    "manaBefore": 64,
+    "manaAfter": 50.0693251773278,
+    "cooldownFracAfterCall": 1,
+    "cooldownFracNow": 0.9099999999999999
+  },
+  "phase2_kill": {
+    "spawnId": 5,
+    "slotInfo": {
+      "tier": 0,
+      "level": 1,
+      "hp": 10.178342819213867,
+      "name": "Rime Imp"
+    },
+    "dealt": 999999,
+    "xpBefore": 0,
+    "xpAfter": 3,
+    "xpGained": 3,
+    "lastXP": 3,
+    "lastXPWhy": "kill",
+    "levelBefore": 1,
+    "levelAfter": 1
+  },
+  "phase3_ding": {
+    "before": {
+      "level": 1,
+      "xp": 3,
+      "xpNeed": 50,
+      "healthMax": 54,
+      "health": 27,
+      "mana": 32,
+      "unlocked": [
+        1,
+        2
+      ]
+    },
+    "steps": [
+      {
+        "level": 2,
+        "healthMax": 58,
+        "health": 58,
+        "manaMax": 68,
+        "mana": 68,
+        "unlockedBefore": [
+          1,
+          2
+        ],
+        "unlockedAfter": [
+          1,
+          2,
+          3
+        ],
+        "dingCount": 1
+      },
+      {
+        "level": 3,
+        "healthMax": 62,
+        "health": 62,
+        "manaMax": 71,
+        "mana": 71,
+        "unlockedBefore": [
+          1,
+          2,
+          3
+        ],
+        "unlockedAfter": [
+          1,
+          2,
+          3
+        ],
+        "dingCount": 2
+      },
+      {
+        "level": 4,
+        "healthMax": 67,
+        "health": 67,
+        "manaMax": 75,
+        "mana": 75,
+        "unlockedBefore": [
+          1,
+          2,
+          3
+        ],
+        "unlockedAfter": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "dingCount": 3
+      },
+      {
+        "level": 5,
+        "healthMax": 71,
+        "health": 71,
+        "manaMax": 78,
+        "mana": 78,
+        "unlockedBefore": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "unlockedAfter": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "dingCount": 4
+      },
+      {
+        "level": 6,
+        "healthMax": 76,
+        "health": 76,
+        "manaMax": 82,
+        "mana": 82,
+        "unlockedBefore": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "unlockedAfter": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "dingCount": 5
+      }
+    ]
+  },
+  "phase4_save": {
+    "rawLen": 232,
+    "blob": {
+      "schemaVer": 2,
+      "level": 6,
+      "xp": 0,
+      "driftmarks": 0,
+      "spellsUnlocked": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "boons": [],
+      "realmsUnlocked": [
+        "cold"
+      ],
+      "bossesKilled": {},
+      "lastShrineId": "cold_spawn",
+      "restedBank": 0,
+      "lastSeenTs": 1785994924978,
+      "objectiveState": {},
+      "deaths": 0
+    },
+    "liveLevel": 6
+  },
+  "phase4_restore": {
+    "level": 6,
+    "xp": 0,
+    "deaths": 0,
+    "healthMax": 76,
+    "health": 76,
+    "unlocked": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "driftmarks": 0
+  },
+  "phase5_death": {
+    "before": {
+      "level": 6,
+      "deaths": 0,
+      "pos": {
+        "x": 0,
+        "z": 0
+      }
+    },
+    "deadFlag": false,
+    "deaths": 1,
+    "level": 6,
+    "health": 76,
+    "healthMax": 76,
+    "mana": 82,
+    "manaMax": 82,
+    "pos": {
+      "x": 0,
+      "z": 0
+    },
+    "lastShrineId": "cold_spawn",
+    "shrine": {
+      "x": 0,
+      "z": 0
+    },
+    "invulnerable": true,
+    "savedBlobDeaths": 1
+  }
+}

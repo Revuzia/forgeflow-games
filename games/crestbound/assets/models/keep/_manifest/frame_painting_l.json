@@ -1,0 +1,82 @@
+{
+ "name": "frame_painting_l",
+ "file": "frame_painting_l.glb",
+ "kind": "prop",
+ "bytes": 220260,
+ "tris": 2084,
+ "tris_budget": 3000,
+ "tris_ok": true,
+ "bones": 0,
+ "clips": [],
+ "bounds": {
+  "min": [
+   -2.443,
+   -2.543,
+   -0.02
+  ],
+  "max": [
+   2.443,
+   2.84,
+   0.305
+  ],
+  "size": [
+   4.885,
+   5.383,
+   0.325
+  ]
+ },
+ "pivot": "centre of the canvas ON the wall plane (buildPainting p); canvas 4.04 x 4.24 m, frame 4.68 x 4.88 m",
+ "front": "+Z (glTF) \u2014 the face that looks into the room",
+ "materials": [
+  "frame_painting_l",
+  "frame_painting_l_canvas"
+ ],
+ "nodes": [
+  "frame_painting_l",
+  "canvas"
+ ],
+ "textures": {
+  "atlas": 1024,
+  "maps": [
+   "albedo (sRGB, webp)",
+   "normal (tangent, OpenGL +Y, webp)",
+   "orm (R=occlusion G=roughness B=metallic, webp)"
+  ]
+ },
+ "notes": [
+  "opening 4.2 x 4.4 m (keep.js size), gilt moulded rails, corner rosettes, crest pediment",
+  "node `canvas` is a separate mesh with UVs 0..1 and its own plain material: swap its map for the course plate"
+ ],
+ "reimport": {
+  "meshes": [
+   "canvas",
+   "frame_painting_l"
+  ],
+  "tris": 2084,
+  "bones": 0,
+  "clips": [],
+  "images": [
+   [
+    "frame_painting_l_albedo",
+    1024,
+    1024
+   ],
+   [
+    "frame_painting_l_normal",
+    1024,
+    1024
+   ],
+   [
+    "frame_painting_l_orm",
+    1024,
+    1024
+   ]
+  ],
+  "materials": [
+   "frame_painting_l",
+   "frame_painting_l_canvas"
+  ]
+ },
+ "reimport_ok": true,
+ "seconds": 31.3
+}

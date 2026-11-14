@@ -1,0 +1,36 @@
+{
+  "dispatched": {
+    "FRAME (one query)": 120.84987331578948,
+    "shadow cascade 0": 4.099832315789473,
+    "shadow cascade 1": 18.32430868421052,
+    "shadow cascade 2": 8.322702526315789,
+    "depth prepass (full)": 5.430939842105263,
+    "beauty (full)": 61.1174364736842,
+    "post taa (full)": 1.9681656315789475,
+    "post shafts (1/4)": 0.171436,
+    "post bloomA (1/4)": 0.382091,
+    "post bloomB (1/16)": 0.01875778947368421,
+    "post bloomC (1/16)": 0.010835578947368424,
+    "post dof (full)": 1.421389315789474,
+    "post composite (full)": 0.9925297894736844,
+    "post sharpen (full)": 0.3561135555555555,
+    "post ssr (full)": 0.9098294736842106
+  },
+  "bypassed": {
+    "FRAME (one query)": 168.3299137142857,
+    "shadow cascade 0": 4.012529357142858,
+    "shadow cascade 1": 11.102949714285714,
+    "shadow cascade 2": 2.3723395714285718,
+    "depth prepass (full)": 2.294419142857143,
+    "beauty (full)": 101.849713,
+    "post taa (full)": 1.980591,
+    "post shafts (1/4)": 0.17125692857142857,
+    "post bloomA (1/4)": 0.37118628571428575,
+    "post bloomB (1/16)": 0.018957928571428573,
+    "post bloomC (1/16)": 0.012302357142857143,
+    "post dof (full)": 1.3927339285714286,
+    "post composite (full)": 1.0188203571428571,
+    "post sharpen (full)": 0.30688935714285714
+  },
+  "delta_ms": -0.958
+}

@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>stage orbit check (STAGES3D-B)</title>
+<!-- Lane STAGES3D-B: loads ONE stage GLB (meshopt + webp, exactly as the game: three 0.186 from this game's node_modules,
+     GLTFLoader + MeshoptDecoder) with its StageDef fragment (fixed light pool, fog, IBL env HDR, exposure, neutral tone
+     mapping, PCF shadows), the shared crowd atlas on the GLB's crowd_* empties (one InstancedMesh, unlit, alpha-tested,
+     billboarded toward the camera like view/crowd.ts), optionally a real fighter GLB pair at the spawn, and renders the
+     CONTRACT 35.7 orbit camera at 8 angles x near/far (the pair turns with the camera). Per shot: draw calls + triangles
+     (renderer.info) + a PNG. Query: ?glb=<url>&frag=<url>&stagesDir=<url of art/gltf/stages/>&fighter=<url>&w=960&h=540
+     Result: window.__RESULT__ = { ok, shots: [{id, calls, triangles, png}], nodes, crowd, lightsInGlb, ... }. ASCII only. -->
+<style>html,body{margin:0;background:#000}canvas{display:block}</style>
+<script type="importmap">
+{ "imports": {
+  "three": "/hit-parade/node_modules/three/build/three.module.js",
+  "three/addons/": "/hit-parade/node_modules/three/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+
+window.__RESULT__ = null;
+const q = new URLSearchParams(location.search);
+const W = Number(q.get('w') ?? 960), H = Number(q.get('h') ?? 540);
+const res = { ok: false, shots: [], errors: [] };
+
+async function main() {
+  const frag = await (await fetch(q.get('frag'))).json();
+  const glbUrl = q.get('glb');
+  const stagesDir = q.get('stagesDir');
+  const envDir = q.get('envDir') ?? stagesDir;
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(W, H, false);
+  document.body.appendChild(renderer.domElement);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.NeutralToneMapping;
+  renderer.toneMappingExposure = frag.exposure ?? 1;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.info.autoReset = false;
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(frag.environment?.backgroundColor ?? '#000000');
+  if (frag.fog) scene.fog = new THREE.Fog(new THREE.Color(frag.fog.color), frag.fog.near, frag.fog.far);
+
+  const loader = new GLTFLoader();
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  const t0 = performance.now();
+  const buf = await (await fetch(glbUrl)).arrayBuffer();
+  const gltf = await loader.parseAsync(buf, glbUrl.slice(0, glbUrl.lastIndexOf('/') + 1));
+  res.loadMs = Math.round(performance.now() - t0);
+  res.glbBytes = buf.byteLength;
+  scene.add(gltf.scene);
+  const crowdNodes = [];
+  const named = [];
+  let lights = 0, meshes = 0;
+  const mats = new Set();
+  gltf.scene.traverse((o) => {
+    if (/^crowd_/i.test(o.name) && !o.isMesh) crowdNodes.push(o);
+    if (o.isLight) lights++;
+    if (o.isMesh) {
+      meshes++;
+      o.receiveShadow = true; o.castShadow = false;
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) mats.add(m.name);
+    }
+    if (o.name && !/^crowd_/.test(o.name) && (o.isMesh || o.children.some((c) => c.isMesh))) named.push(o.name);
+  });
+  gltf.scene.updateMatrixWorld(true);
+  res.lightsInGlb = lights; res.meshes = meshes; res.materials = mats.size; res.namedNodes = [...new Set(named)];
+  res.crowdNodes = crowdNodes.length;
+
+  // env (IBL only)
+  if (frag.environment?.hdr) {
+    const hr = await fetch(envDir + frag.environment.hdr);
+    if (!hr.ok) throw new Error('env HTTP ' + hr.status);
+    const tex = new HDRLoader().parse(await hr.arrayBuffer());
+    const dt = new THREE.DataTexture(tex.data, tex.width, tex.height, THREE.RGBAFormat, tex.type);
+    dt.mapping = THREE.EquirectangularReflectionMapping;
+    dt.colorSpace = THREE.LinearSRGBColorSpace;
+    dt.needsUpdate = true;
+    const pm = new THREE.PMREMGenerator(renderer);
+    scene.environment = pm.fromEquirectangular(dt).texture;
+    scene.environmentIntensity = frag.environment.intensity;
+  }
+  // the FIXED light pool
+  for (const L of frag.lights ?? []) {
+    let light;
+    if (L.type === 'directional') {
+      light = new THREE.DirectionalLight(new THREE.Color(L.color), L.intensity);
+      light.position.fromArray(L.position); light.target.position.fromArray(L.target); scene.add(light.target);
+      if (L.castShadow && L.shadow) {
+        light.castShadow = true;
+        light.shadow.mapSize.set(L.shadow.mapSize, L.shadow.mapSize);
+        light.shadow.bias = L.shadow.bias; light.shadow.normalBias = L.shadow.normalBias;
+        Object.assign(light.shadow.camera, L.shadow.camera); light.shadow.camera.updateProjectionMatrix();
+      }
+    } else if (L.type === 'hemisphere') {
+      light = new THREE.HemisphereLight(new THREE.Color(L.sky), new THREE.Color(L.ground), L.intensity);
+    } else if (L.type === 'point') {
+      light = new THREE.PointLight(new THREE.Color(L.color), L.intensity, L.distance ?? 0, L.decay ?? 2);
+      light.position.fromArray(L.position);
+    } else {
+      light = new THREE.SpotLight(new THREE.Color(L.color), L.intensity, L.distance ?? 0, THREE.MathUtils.degToRad(L.angleDeg ?? 30), L.penumbra ?? 0, L.decay ?? 2);
+      light.position.fromArray(L.position); light.target.position.fromArray(L.target); scene.add(light.target);
+    }
+    scene.add(light);
+  }
+  // crowd: one InstancedMesh, billboarded about Y toward the camera in the vertex shader (view/crowd.ts behaviour)
+  if (frag.crowd && crowdNodes.length) {
+    const meta = await (await fetch(stagesDir + frag.crowd.meta)).json();
+    const atlas = await new THREE.TextureLoader().loadAsync(stagesDir + frag.crowd.atlas);
+    atlas.colorSpace = THREE.SRGBColorSpace; atlas.anisotropy = 4;
+    const cw = frag.crowd.cardWidthM, ch = frag.crowd.cardHeightM, ay = frag.crowd.anchor[1];
+    const geo = new THREE.PlaneGeometry(cw, ch);
+    geo.translate(0, ch / 2 - (1 - ay) * ch, 0);
+    const cells = new Map(meta.cells.map((c) => [`${c.body}|${c.pose}|${c.angle}`, c]));
+    const bodies = Object.keys(meta.bodies);
+    const poses = ['cheer', 'cheer', 'hype', 'jeer', 'watch', 'cheer', 'hype', 'jeer'];
+    const cellAttr = new Float32Array(crowdNodes.length * 4);
+    const mat = new THREE.MeshBasicMaterial({ map: atlas, alphaTest: 0.5, toneMapped: false, fog: true,
+      color: new THREE.Color(frag.crowd.tint).multiplyScalar(frag.crowd.brightness) });
+    mat.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute vec4 aCell;')
+        .replace('#include <uv_vertex>', '#include <uv_vertex>\nvMapUv = mix(aCell.xy, aCell.zw, uv);')
+        .replace('#include <project_vertex>', `
+          vec4 base = instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+          vec3 wp = (modelMatrix * base).xyz;
+          vec3 toCam = cameraPosition - wp; toCam.y = 0.0;
+          vec3 fwd = normalize(toCam + vec3(1e-5, 0.0, 0.0));
+          vec3 right = vec3(fwd.z, 0.0, -fwd.x);
+          vec3 wpos = wp + right * transformed.x + vec3(0.0, transformed.y, 0.0);
+          vec4 mvPosition = viewMatrix * vec4(wpos, 1.0);
+          gl_Position = projectionMatrix * mvPosition;`);
+    };
+    const im = new THREE.InstancedMesh(geo, mat, crowdNodes.length);
+    const m4 = new THREE.Matrix4(), p = new THREE.Vector3(), qq = new THREE.Quaternion(), s = new THREE.Vector3();
+    crowdNodes.forEach((n, i) => {
+      n.matrixWorld.decompose(p, qq, s);
+      m4.compose(p, qq, new THREE.Vector3(1, 1, 1));
+      im.setMatrixAt(i, m4);
+      const r = Number(n.userData.rand ?? 0.5);
+      const ang = String(n.userData.angle ?? 'front');
+      const c = cells.get(`${bodies[Math.floor(r * 997) % bodies.length]}|${poses[Math.floor(r * 7919) % poses.length]}|${ang}`) ?? meta.cells[0];
+      const mirror = ang === 'front' && Math.floor(r * 104729) % 2 === 1;
+      const [u0, v0, u1, v1] = c.uv;
+      cellAttr.set(mirror ? [u1, v0, u0, v1] : [u0, v0, u1, v1], i * 4);
+    });
+    geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(cellAttr, 4));
+    im.frustumCulled = false;
+    scene.add(im);
+  }
+  // optional fighter pair at the spawn (turns with the orbit camera)
+  const pair = new THREE.Group();
+  scene.add(pair);
+  if (q.get('fighter')) {
+    try {
+      const fr = await loader.loadAsync(q.get('fighter'));
+      const idle = fr.animations.find((a) => a.name === 'idle') ?? fr.animations[0];
+      const sp = [frag.spawn?.p1 ?? [-1.2, 0, 0], frag.spawn?.p2 ?? [1.2, 0, 0]];
+      for (let i = 0; i < 2; i++) {
+        const o = i === 0 ? fr.scene : SkeletonUtils.clone(fr.scene);
+        o.position.fromArray(sp[i]);
+        o.rotation.y = i === 0 ? Math.PI / 2 : -Math.PI / 2;
+        o.traverse((x) => { if (x.isMesh) { x.castShadow = true; x.frustumCulled = false; } });
+        pair.add(o);
+        if (idle) { const mx = new THREE.AnimationMixer(o); mx.clipAction(idle).play(); mx.setTime(0.5); }
+      }
+      res.fighter = q.get('fighter');
+    } catch (e) { res.errors.push('fighter: ' + String(e)); }
+  }
+  // CONTRACT 35.7 / 35.11.7 orbit set: position = centre + dir(a) * d + up * 1.35, look-at (0, 1.0, 0)
+  const cam = new THREE.PerspectiveCamera(frag.camera?.vFovDeg ?? 35, W / H, 0.1, 120);
+  const degs = [0, 45, 90, 135, 180, 225, 270, 315];
+  const side = Number(frag.cameraSideDeg ?? 0);
+  for (const a0 of degs) {
+    for (const [tag, d] of [['n', 4.4], ['f', 8.0]]) {
+      const a = (a0 + side) % 360;
+      const r = a * Math.PI / 180;
+      cam.position.set(Math.sin(r) * d, 1.35, Math.cos(r) * d);
+      cam.lookAt(0, 1.0, 0);
+      pair.rotation.y = r;
+      pair.updateMatrixWorld(true);
+      renderer.info.reset();
+      renderer.render(scene, cam);
+      const id = `orbit_${String(a0).padStart(3, '0')}_${tag}`;
+      res.shots.push({ id, deg: a0, dist: d, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles,
+        png: renderer.domElement.toDataURL('image/png') });
+    }
+  }
+  res.programs = renderer.info.programs?.length ?? 0;
+  res.textures = renderer.info.memory.textures;
+  res.ok = true;
+}
+main().then(() => { window.__RESULT__ = res; }).catch((e) => { res.errors.push(String(e && e.stack || e)); window.__RESULT__ = res; });
+</script>
+</body>
+</html>
