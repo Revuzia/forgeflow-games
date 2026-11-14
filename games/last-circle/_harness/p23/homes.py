@@ -32,7 +32,7 @@ Rows (any FAIL -> exit 1; the census not running -> exit 2):
   loot-density  homes' loot points (+ chests) per m2 of room, per map (4 seeds pooled), within +-15 % of the W9 tip (the plan's loot row, second half)
   determinism   the first map x seed built twice gives the same census hash
 Plants (a scratch copy of runtime/ + assets/props with ONE source edit; each must exit 1 on its rows):
-  tiny-homes (7.5 x 7.5 back in towngen ARCH house_s, one floor) -> home-size, storeys     sparse (the area quota off: VIEW_WANT top-up only) -> density
+  tiny-homes (7.5 x 7.5 back in towngen ARCH house_s, one floor) -> home-size, storeys     sparse (plan item 5 undone: VIEW_WANT top-up, no groups, budget 4000) -> coverage, density
   bare (the quota and the centre groups off, furniture x1: the audit's furnishing) -> coverage, density
   clock-spam (the clock / lamp / plant caps off) -> filler      gap-kitchen (base units spaced, not run) -> kitchen-run     strip-rooms (1-cell minimum width) -> narrow
   scale-draw-only (kit drawn at k, colliders at 1) -> scale     no-programme (the minimum programme off) -> programme       shed-flood (shed weights x20) -> sheds
@@ -74,10 +74,13 @@ PLANTS = {
                                  (TG, r'cabin: \{ use: "house", gen: "house", dims: \[[^\n]*?\], floors: \[[^\]]*\]', 'cabin: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10], [10, 12.5]], floors: [1]')]),
     "tiny-homes": ({"home-size", "storeys"}, [(TG, r'house_s: \{ use: "house", gen: "house", dims: \[[^\n]*?\], floors: \[[^\]]*\]',
                                                  'house_s: { use: "house", gen: "house", dims: [[7.5, 7.5], [10, 7.5]], floors: [1]')]),
-    # (pass 2) the plan's control: the audit's furnishing back (the VIEW_WANT top-up alone: no area quota, no centre-of-room groups) -> density. It cannot fail
-    # coverage on this build: the x1.15 furniture alone holds the median at 27.6 % (8.4 % of rooms under 15 %; measured 2026-11-13) - coverage's control is 'bare'
-    "sparse": ({"density"}, [(HG, r"export const AREA_QUOTA = true;", "export const AREA_QUOTA = false;"),
-                                         (HG, r"export const CENTRE_GROUPS = true;", "export const CENTRE_GROUPS = false;")]),
+    # (pass 3) the plan's control "VIEW_WANT = 4 top-up back": plan item 5 undone as the unit it is - the VIEW_WANT top-up instead of the area quota, no
+    # centre-of-room groups, the home storey's triangle budget back at 4000 - -> coverage AND density (measured 2026-11-14: median coverage 22.9 %, 14.1 %
+    # under 15 %; density median 1.60 per 10 m2 = the audit's 1.6). Pass 2's sparse (quota + groups only) held coverage at 27.6 %: the 6000 budget let the
+    # top-up's pieces stand. 'bare' (furniture x1 as well) stays as a second coverage control.
+    "sparse": ({"coverage", "density"}, [(HG, r"export const AREA_QUOTA = true;", "export const AREA_QUOTA = false;"),
+                                         (HG, r"export const CENTRE_GROUPS = true;", "export const CENTRE_GROUPS = false;"),
+                                         (HG, r"export const TRI_BUDGET_HOME = 6000;", "export const TRI_BUDGET_HOME = 4000;")]),
     # (the quota alone off leaves coverage at ~28 %: the centre groups and the x1.15 furniture carry it - coverage's own plant is the audit's furnishing back)
     "bare": ({"coverage", "density"}, [(HG, r"export const AREA_QUOTA = true;", "export const AREA_QUOTA = false;"),
                                        (HG, r"export const CENTRE_GROUPS = true;", "export const CENTRE_GROUPS = false;"),

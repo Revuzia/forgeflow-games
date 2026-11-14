@@ -29,7 +29,7 @@ Rows (exit 0 pass / 1 fail / 2 could-not-judge):
 Plant (Wave 9, lane R1A; only the designated row counts, exit 1 = the fault was caught):
   --plant eye-only-phase5   housegen.js served (a page route, no file touched) with phase 5 judging on the EYE-ONLY model again (W9's fix undone: model5(false)
                             where it starts) -> view-pixels must FAIL (lodge_tower.f1r1, the Wave-8 storage room whose boxes hide behind the rack from the camera)
-  --plant sparse            (W10 R1A) housegen.js served with the area quota and the centre groups off (the homes furnished as the audit found them) ->
+  --plant sparse            (W10 R1A) housegen.js served with plan item 5 undone (VIEW_WANT top-up, no centre groups, home budget 4000: the audit's furnishing) ->
                             view-lived and view-lived-cover must FAIL
 W10 R1A rows: view-lived (every lived room - living, bedroom, kitchen, dining - of the homes shows >= 5 of its own substantive (non-filler) pieces from its best doorway, the third-person camera) and
 view-lived-cover (>= 20 % of the frame below the horizon is furniture: every piece hidden at once, the changed pixels under the horizon row).
@@ -56,7 +56,8 @@ PLANTS = {"eye-only-phase5": {"view-pixels"},
           "sparse": {"view-lived", "view-lived-cover"}}
 HG_REL = "runtime/3d/royale/housegen.js"
 PLANT_EDIT = {"eye-only-phase5": ("        model5(true);\n        if (bestView(R).n >= 3) return;\n        const run5", "        model5(false);\n        if (bestView(R).n >= 3) return;\n        const run5")}
-PLANT_EDIT["sparse"] = [("export const AREA_QUOTA = true;", "export const AREA_QUOTA = false;"), ("export const CENTRE_GROUPS = true;", "export const CENTRE_GROUPS = false;")]
+PLANT_EDIT["sparse"] = [("export const AREA_QUOTA = true;", "export const AREA_QUOTA = false;"), ("export const CENTRE_GROUPS = true;", "export const CENTRE_GROUPS = false;"),
+                        ("export const TRI_BUDGET_HOME = 6000;", "export const TRI_BUDGET_HOME = 4000;")]      # (pass 3: plan item 5 undone as a unit, homes.py's sparse)
 
 
 class PlantView:
