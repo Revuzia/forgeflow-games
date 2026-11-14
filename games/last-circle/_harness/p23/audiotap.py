@@ -185,6 +185,9 @@ def amb_rows(v, s, spot, plant):
         c["readback"] = rb
         amb[th] = c
     R["ambience"] = amb
+    # W10 R2B repair: the decoded PCM the real browser holds after the 3 map changes (whole pack + resident ambience; the budget row is sfxcheck pcm-budget)
+    pcm = s.safe_js("() => { const r = window.__AM__.readback(window.__LC__.W); return { bytes: r.pcmBytes, resident: (r.ambience || {}).resident }; }", default=None)
+    v.info("pcm held in the browser after 3 map changes (whole pack + ambience)", pcm)
     lv = {th: a.get("rmsDb") for th, a in amb.items()}
     rec = {th: (a.get("readback") or {}).get("recorded") for th, a in amb.items()}
     v.check("amb-level (between fights every theme's ambience >= -45 dBFS RMS, recorded layers up)",
