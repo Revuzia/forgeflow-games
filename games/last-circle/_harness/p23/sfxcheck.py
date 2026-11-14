@@ -9,7 +9,7 @@ Web Audio context, every game event fired against the fully decoded pack) plus f
     python _harness/p23/sfxcheck.py --disk --plant hot-step         # one footstep take +7 dB in the loudness table          - MUST FAIL loudness
     python _harness/p23/sfxcheck.py --disk --plant no-amb           # the Savanna loses its recorded ambience layers         - MUST FAIL amb-layers
     python _harness/p23/sfxcheck.py --disk --plant no-licence-row   # one new file's AUDIO_SOURCES.md row is dropped         - MUST FAIL licence
-    python _harness/p23/sfxcheck.py --disk --plant pcm-lossy        # the smoke vent (90 % of its energy > 7 kHz) held at 16 kHz - MUST FAIL pcm-rate
+    python _harness/p23/sfxcheck.py --disk --plant pcm-lossy        # the smoke vent (a high-passed fizz) held at 16 kHz       - MUST FAIL pcm-rate
     python _harness/p23/sfxcheck.py --disk --plant amb-leak         # a map change no longer frees the other maps' ambience    - MUST FAIL pcm-bounded
 
 Rows (PLAN.md Lane R2B acceptance bars):
@@ -24,8 +24,9 @@ Rows (PLAN.md Lane R2B acceptance bars):
   reload-classes  >= 4 distinct reload sets, mapped by weapon class (the census: reloadStart of every gun in SIM.WEAPONS, the cues it starts)
   amb-layers      >= 2 RECORDED layers per map theme (AMB_REC), each file present; the census starts them on every map and retires the synth bed
                   (the in-game level / spectrum rows are p23_audiotap's amb-* rows)
-  pcm-rate        every PCM_HZ entry (a file held decoded at 16 / 24 kHz) loses <= 0.1 % of its energy (the band above 0.45 x rate,
-                  ffmpeg + FFT), the census decodes it at that rate, and nothing else is held below 48 kHz
+  pcm-rate        every PCM_HZ entry (a file held decoded at 16 / 24 kHz) plays back within -30 dB error energy of its 48 kHz decode (the
+                  chain: ffmpeg decode at the rate, then LINEAR interpolation to 48 kHz as Chromium's buffer source does), the census decodes
+                  it at that rate, and nothing else is held below 48 kHz
   pcm-bounded     the census changes map 3 times: after each change only that map's ambience layers (+ the underwater bed) are decoded
   pcm-budget      decoded PCM the added files put in one session (eager pack at its census rates + underwater bed + the largest map's
                   resident ambience) <= 10.0 MB (PLAN R2B Budget "+6-10 MB")
@@ -68,7 +69,7 @@ LOUD_TOL = 2.0
 SWAP_PEAK_MIN = -6.0
 RELOAD_SETS_MIN = 4
 ADDED_MAX, TOTAL_MAX = 2.0e6, 3.5e6
-PCM_SHARE = 0.001               # a file held below 48 kHz may lose at most 0.1 % (-30 dB) of its energy (the band above 0.45 x its rate)
+PCM_SHARE = 0.001               # a file held below 48 kHz: decoded at its rate + linear-interpolated playback at 48 kHz within -30 dB error energy
 PCM_BUDGET = 10.0e6             # PLAN R2B Budget: decoded memory "+6-10 MB" (the top of the estimate)
 
 PLANTS = {
@@ -234,8 +235,8 @@ export function synthTag() { return null; }
 """
 
 
-def ffdecode(path):
-    p = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-f", "f32le", "-ac", "1", "-ar", "48000", "-"], capture_output=True)
+def ffdecode(path, rate=48000):
+    p = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-f", "f32le", "-ac", "1", "-ar", str(rate), "-"], capture_output=True)
     if p.returncode:
         raise C.EnvFailure("ffmpeg could not decode %s: %s" % (path, p.stderr.decode("utf-8", "replace")[:200]))
     return np.frombuffer(p.stdout, dtype=np.float32)
@@ -407,8 +408,10 @@ def main():
             pth = os.path.join(sfxd, f + ".ogg")
             if not os.path.exists(pth):
                 bad.append({"file": f, "why": "listed, no file"}); continue
-            x = ffdecode(pth).astype(np.float64); S = np.abs(np.fft.rfft(x)) ** 2; fr = np.fft.rfftfreq(len(x), 1 / 48000.0)
-            share = float(S[fr >= 0.45 * r].sum() / max(S.sum(), 1e-30))
+            # the playback chain: decoded at r, then read by a 48 kHz buffer source with LINEAR interpolation (Chromium), vs the 48 kHz decode
+            x = ffdecode(pth).astype(np.float64); y = ffdecode(pth, r).astype(np.float64)
+            z = np.interp(np.arange(len(x)) * r / 48000.0, np.arange(len(y)), y)
+            share = float(np.sum((x - z) ** 2) / max(np.sum(x ** 2), 1e-30))
             got = dec.get(f, arate.get(f))
             if share > PCM_SHARE:
                 bad.append({"file": f, "hz": r, "lostShare": round(share, 5)})
@@ -418,10 +421,10 @@ def main():
                 bad.append({"file": f, "hz": r, "censusHz": got})
         stray = sorted(f for f, g in list(dec.items()) + list(arate.items()) if g < 48000 and f not in hz)
         unseen_bad = [f for f in unseen if f != uwn]
-        v.check("pcm-rate (a file held below 48 kHz loses <= %.1f %% of its energy, and the runtime decodes it at its table rate)" % (PCM_SHARE * 100),
+        v.check("pcm-rate (a file held below 48 kHz plays back within %.1f %% (-30 dB) error energy of its 48 kHz decode, and the runtime decodes it at its table rate)" % (PCM_SHARE * 100),
                 not bad and not stray and not unseen_bad,
                 {"listed": len(hz), "at16k": sum(1 for r in hz.values() if r == 16000), "at24k": sum(1 for r in hz.values() if r == 24000),
-                 "bad": bad[:10], "notInTable": stray[:10], "notDecodedInCensus": unseen}, "0 bad (share above 0.45 x rate <= %.3f)" % PCM_SHARE)
+                 "bad": bad[:10], "notInTable": stray[:10], "notDecodedInCensus": unseen}, "0 bad (chain error energy <= %.3f)" % PCM_SHARE)
         layers = {th: [l[0] for l in (ar.get(th) or [])] for th in ar}
         visits, leak = [], []
         for th, a in amb.items():
