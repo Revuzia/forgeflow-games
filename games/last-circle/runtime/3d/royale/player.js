@@ -4040,7 +4040,9 @@ const _shakeOff = new THREE.Vector3();
 // corners squared off: conservative, never optimistic). ONE queryColliders per frame
 // (budget 150/frame for the whole game, framecheck counts them), no allocation: the
 // result array is this module's own and the slab test is inline.
-const CAM_R = 0.28;              // lens sphere radius (m): near plane 0.1 + margin so a wall face never clips the view
+// (W10 R1A) 0.28 -> 0.32: in the furnished homes' lived rooms the lens settled 0.286 m from a wall box (interiorcheck camwall-lived: the lens never within
+// 0.3 m of a wall) - a wall's plaster then filled the frame edge. 0.32 keeps 2 cm over that bar; the eye (actor radius 0.45) stays outside every grown box.
+const CAM_R = 0.32;              // lens sphere radius (m): near plane 0.1 + margin so a wall face never clips the view
 const CAM_EASE_RATE = 2.2;       // 1/s release rate once the view is free (slow on purpose)
 const CAM_HIDE_IN = 0.75, CAM_HIDE_OUT = 0.95;   // the body is hidden when the lens is this close to the eye (hysteresis)
 const CAM_MIN_D = 0.12;          // the lens never comes closer than this to the eye
