@@ -326,6 +326,43 @@ export function mergeColliderBoxes(boxes, palette) {
   return saved;
 }
 
+/** (W10 R1A) furniture collider boxes [minX, maxX, minY, maxY, minZ, maxZ] -> the same solid with fewer boxes: per exact vertical span, a rectangle partition of the
+ *  union (coverRects, the fewer of x-first / z-first) where it is smaller than the group; every other box as it was, in its order. Exported for the selftest. */
+export let FURN_MERGE = true;
+export function setFurnMerge(on) { FURN_MERGE = !!on; }
+export function mergeFurnBoxes(fb) {
+  const groups = new Map();
+  for (let i = 0; i < fb.length; i++) { const b = fb[i], key = Math.round(b[2] * 1000) + "|" + Math.round(b[3] * 1000); let g = groups.get(key); if (!g) groups.set(key, g = []); g.push(i); }
+  const drop = new Uint8Array(fb.length), add = [];
+  for (const g of groups.values()) {
+    if (g.length < 2) continue;
+    // only boxes that touch another of the span can merge: split the span into touching clusters first (most pieces stand alone)
+    const par = g.map((_, k) => k), find = (k) => { while (par[k] !== k) k = par[k] = par[par[k]]; return k; };
+    for (let a = 0; a < g.length; a++) { const A = fb[g[a]]; for (let b = a + 1; b < g.length; b++) { const B = fb[g[b]];
+      if (A[0] <= B[1] + 1e-4 && B[0] <= A[1] + 1e-4 && A[4] <= B[5] + 1e-4 && B[4] <= A[5] + 1e-4) par[find(a)] = find(b); } }
+    const cl = new Map(); g.forEach((bi, k) => { const r = find(k); let c = cl.get(r); if (!c) cl.set(r, c = []); c.push(bi); });
+    for (const c of cl.values()) {
+      if (c.length < 2) continue;
+      const xv = [], zv = [];
+      for (const bi of c) { const b = fb[bi]; xv.push(Math.round(b[0] * 1000), Math.round(b[1] * 1000)); zv.push(Math.round(b[4] * 1000), Math.round(b[5] * 1000)); }
+      const xs = [...new Set(xv)].sort((a, b) => a - b), zs = [...new Set(zv)].sort((a, b) => a - b), nx = xs.length - 1, nz = zs.length - 1;
+      if (nx * nz > 4096) continue;
+      const xi = new Map(xs.map((v, i) => [v, i])), zi = new Map(zs.map((v, i) => [v, i])), cov = new Uint8Array(nx * nz);
+      for (const bi of c) { const b = fb[bi], i0 = xi.get(Math.round(b[0] * 1000)), i1 = xi.get(Math.round(b[1] * 1000)), j0 = zi.get(Math.round(b[4] * 1000)), j1 = zi.get(Math.round(b[5] * 1000));
+        for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) cov[j * nx + i] = 1; }
+      let R = null;
+      for (const xf of [true, false]) { const q = coverRects(xs, zs, cov, nx, nz, xf, false); if (!R || q.length < R.length) R = q; }
+      if (R.length >= c.length) continue;
+      const y0 = fb[c[0]][2], y1 = fb[c[0]][3];
+      for (const bi of c) drop[bi] = 1;
+      for (const r of R) add.push([r[0] / 1000, r[2] / 1000, y0, y1, r[1] / 1000, r[3] / 1000]);
+    }
+  }
+  if (!add.length) return fb;
+  const out = []; for (let i = 0; i < fb.length; i++) if (!drop[i]) out.push(fb[i]);
+  return out.concat(add);
+}
+
 const COS = [1, 0, -1, 0], SIN = [0, 1, 0, -1];
 export const FACE = [[0, 1], [1, 0], [0, -1], [-1, 0]];        // quarter turn q -> world direction of local +Z
 const turnOfDir = (dx, dz) => (dz > 0.5 ? 0 : dx > 0.5 ? 1 : dz < -0.5 ? 2 : 3);
@@ -4450,11 +4487,15 @@ export function collidersOf(H, mk, opts) {
   const out = [];
   for (const b of H.boxes) if (b.c) out.push(mk("box", b.min[0], b.max[0], b.min[1], b.max[1], b.min[2], b.max[2], -1, null, -1, 0));
   for (const r of H.ramps) out.push(mk("ramp", r.min[0], r.max[0], r.min[1], r.max[1], r.min[2], r.max[2], r.dir, null, -1, 0));
+  // furniture: (W10 R1A) the exact union per vertical span - pieces of one span that touch (a kitchen's base run, a row of upper cabinets, a shop's shelf
+  // row) answer as a rectangle partition of their union (the same solid: houseload collider-load counts what a query hands back)
+  const fb = [];
   for (const p of H.furniture) {
     if (p.deco) continue;
-    if (p.src === "kit") out.push(mk("box", p.min[0], p.max[0], p.min[1], p.max[1], p.min[2], p.max[2], -1, null, -1, 0));
-    else for (const g of p.cols) out.push(mk("box", g.min[0], g.max[0], g.min[1], g.max[1], g.min[2], g.max[2], -1, null, -1, 0));
+    if (p.src === "kit") fb.push([p.min[0], p.max[0], p.min[1], p.max[1], p.min[2], p.max[2]]);
+    else for (const g of p.cols) fb.push([g.min[0], g.max[0], g.min[1], g.max[1], g.min[2], g.max[2]]);
   }
+  for (const b of (FURN_MERGE ? mergeFurnBoxes(fb) : fb)) out.push(mk("box", b[0], b[1], b[2], b[3], b[4], b[5], -1, null, -1, 0));
   if (!(opts && opts.doors === false)) {
     let di = -1, last = null;
     for (const L of H.doorLeaves || []) {

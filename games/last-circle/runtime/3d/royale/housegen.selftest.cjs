@@ -65,6 +65,22 @@ function sameUnion(A, B) {
   for (let k = 0; k < ca.length; k++) if (ca[k] !== cb[k]) return false;
   return true;
 }
+/** (W10 R1A) the furniture part of collidersOf (housegen mergeFurnBoxes) is the SAME solid as the pieces' own collider boxes (kit: its box; authored: its
+ *  kept groups; deco: none), per vertical span to the millimetre, and never more boxes than the pieces hold: null, or the error */
+function furnColErr(H, HGmod, allCols) {
+  const s0 = H.boxes.reduce((n, b) => n + (b.c ? 1 : 0), 0) + H.ramps.length, s1 = allCols.length - HGmod.leafColliderCount(H);
+  const want = new Map(), got = new Map(), key = (y0, y1) => Math.round(y0 * 1000) + "|" + Math.round(y1 * 1000);
+  const add = (M, y0, y1, b) => { const k = key(y0, y1); let l = M.get(k); if (!l) M.set(k, l = []); l.push(b); };
+  let nWant = 0;
+  for (const p of H.furniture) {
+    if (p.deco) continue;
+    for (const g of p.src === "kit" ? [p] : p.cols) { add(want, g.min[1], g.max[1], { min: g.min, max: g.max }); nWant++; }
+  }
+  for (let i = s0; i < s1; i++) { const c = allCols[i]; add(got, c.minY, c.maxY, { min: [c.minX, c.minY, c.minZ], max: [c.maxX, c.maxY, c.maxZ] }); }
+  if (s1 - s0 > nWant) return "the furniture collision holds " + (s1 - s0) + " boxes for " + nWant + " piece boxes";
+  for (const k of new Set([...want.keys(), ...got.keys()])) if (!sameUnion(want.get(k) || [], got.get(k) || [])) return "span " + k + ": the furniture collision is not the union of the pieces' boxes";
+  return null;
+}
 function loadManifest() {
   const man = JSON.parse(fs.readFileSync(MANIFEST, "utf8"));
   const types = Object.assign({}, man.types);
@@ -161,6 +177,7 @@ function checkHouse(H, HGmod, MAN) {
   const boxes = cols.filter((c) => c.kind === "box"), ramps = cols.filter((c) => c.kind === "ramp");
   checkLeaves(H, HGmod, allCols, E);
   checkLeafSee(H, E);
+  { const fe = furnColErr(H, HGmod, allCols); if (fe) E("vis-col", fe); }
   // a 2 m grid over the colliders (box colliders only): near(x0, z0, x1, z1) -> every box whose footprint may meet that rectangle (each once)
   const GI = new Map(), GS = 2;
   boxes.forEach((c, i) => { for (let gx = Math.floor(c.minX / GS); gx <= Math.floor(c.maxX / GS); gx++) for (let gz = Math.floor(c.minZ / GS); gz <= Math.floor(c.maxZ / GS); gz++) { const k = gx * 65536 + gz; let l = GI.get(k); if (!l) { l = []; GI.set(k, l); } l.push(i); } });
@@ -1423,6 +1440,20 @@ else if (require.main === module) (async () => {
       let errs = ["no collision cover in the house"];
       if (c) { c.max[0] -= 0.1; try { errs = checkHouse(H, HGmod, MAN); } catch (e) { errs = ["threw: " + e.message]; } }
       ok(errs.some((e) => e.includes("the covers are not the union")), "negative control [vis-col]: a collision cover 10 cm short of the boxes it replaces is caught", errs.slice(0, 2).join(" | ") || "no error raised"); }
+    // (W10 R1A) the control of the furniture collision's union check: one merged furniture box (a kitchen run's) 10 cm short
+    { let H = null, cols = null, s0 = 0, s1 = 0;
+      const pieceN = (h) => h.furniture.reduce((n, p) => n + (p.deco ? 0 : p.src === "kit" ? 1 : p.cols.length), 0);
+      for (let i = 0; i < Math.min(PS.length, 60) && !H; i++) {      // (the first selftest parcel whose furniture merges: a run of cabinets or shelves)
+        const h = HGmod.generate(PS[i]), cs = HGmod.collidersOf(h), a = h.boxes.reduce((n, b) => n + (b.c ? 1 : 0), 0) + h.ramps.length, b = cs.length - HGmod.leafColliderCount(h);
+        if (b - a < pieceN(h)) { H = h; cols = cs; s0 = a; s1 = b; }
+      }
+      if (!H) { H = JSON.parse(JSON.stringify(g0)); cols = HGmod.collidersOf(H); s0 = H.boxes.reduce((n, b) => n + (b.c ? 1 : 0), 0) + H.ramps.length; s1 = cols.length - HGmod.leafColliderCount(H); }
+      let c = null; for (let i = s0; i < s1 && !c; i++) if (cols[i].maxX - cols[i].minX > 1.2 || cols[i].maxZ - cols[i].minZ > 1.2) c = cols[i];
+      if (c && !(furnColErr(H, HGmod, cols) === null)) c = null;     // (the house is clean before the plant)
+      const nPiece = pieceN(H);
+      let msg = "no wide furniture box in the house";
+      if (c) { c.maxX -= 0.1; msg = furnColErr(H, HGmod, cols) || "no error raised"; }
+      ok(c && /not the union/.test(msg) && s1 - s0 < nPiece, "negative control [vis-col]: a merged furniture collider 10 cm short of the pieces it covers is caught (the house's " + nPiece + " piece boxes collide as " + (s1 - s0) + ")", msg); }
     const p2 = Object.assign({}, PS[0], { theme: "city", storeys: 2 });
     ok(fnv(JSON.stringify(HGmod.generate(p2))) !== fnv(JSON.stringify(HGmod.generate(Object.assign({}, p2, { seed: (p2.seed + 1) >>> 0 })))), "negative control [determinism]: a different seed gives a different house (the hash compare bites)");
   }
