@@ -3,6 +3,29 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-11-13 — Wave 10 round 1: guns in hand (LIVE ?v=1794658791)
+
+Round 1 of Wave 10 (plan `F:/lc_p23/w10/PLAN.md`). This release carries lane R1B (guns in hand) only; lane R1A (homes) continues on
+its branch and is not merged. Wave 9 rounds 2-6 were not built, so W10 builds on the W9 round-1 tip 361c5ec3. No world change:
+`MAP_GEN_VERSION` stays 8 (genversion --identical-maps).
+
+- Last Circle W10 R1B: the support hand grips the handguard on every long gun, with the palm turned around the guard and the fingers curled on skins that have finger bones. This is desktop medium and up only. Desktop Low and touch keep the W9 hands exactly.
+- Last Circle W10 R1B: the muzzle flash now starts at the measured barrel tip on all 9 guns. The core grows from 0.14 to 0.21 m and stays 75 ms, with a one-frame glow on desktop medium and up.
+- Last Circle W10 R1B: the SMG now points forward. Guns are rescaled to real lengths (AR 0.80, sniper 1.15, shotgun 0.95 m, the others in proportion). The lime AR is now metal/polymer grey, with separate roughness for metal and polymer parts.
+- Last Circle W10 R1B: the pistol is a two-hand chest hold, 0.24 m long, on the rifle leg clips. Planted-foot slide at a 6 m/s run: soldier 2.825 -> 1.033 m/s, athlete 2.617 -> 0.547 m/s (athlete rifle_run_g stride gain 1.2).
+- Last Circle W10 R1B: skin and cloth roughness come from albedo (skin specular peak 0.33-0.42x the W9 tip). There is still one body program; its key is now lcZoneTintRim1Dith1Exp1Rgh1. The far rim is raised on desktop.
+- Last Circle W10 R1B: on death the held gun hides on the frame the loot gun spawns. The body holds 7 s, then fades with a dither instead of sinking from 3 s. A hit jolts the torso at any speed.
+- Last Circle W10 R1B: new gate w10_gunhold, 12 rows, with 9 planted faults that each FAIL their row. It FAILS on the W9 tip 361c5ec3 (3 pass, 9 fail).
+- gate.py registers w10_gunhold and its 10 negative controls (9 planted faults + the W9-tip run).
+- Phones exception (recorded by the integrator, for the owner to confirm): the R1B bug and correctness fixes are not tiered, so desktop Low
+  and touch render them too - gun lengths, the SMG flip, the AR grey, the flash at the barrel tip (FLASH_LEAD 0.03 m), the pistol chest hold
+  on the rifle legs, the 7 s death hold with dither and the hidden dead-hand gun, the hit jolt, and the athlete stride gain. The visual
+  upgrades (sheen, far rim, flash size and glow, W10 support-hand IK, palm and fingers) are desktop medium and up only. mobile 48/48 and
+  perf_district --phone 27/27 stay green.
+- Known, not fixed here: framecheck "SMG cadence 720 +-6 rpm" reads 54 rpm in the first (165 Hz) probe run, identical on 361c5ec3;
+  per-actor IK on medium+ is above the plan's ~15 bone rotations (measured animate cost +0.03 ms/frame); skins without finger bones
+  (athlete) hold the guard with a flat palm.
+
 ## 2026-11-02 — Wave 9 round 1: doors on houses, bot fall guard + revive fixes, terminal velocity (LIVE ?v=1793664196)
 
 Round 1 of Wave 9 (brief `F:/lc_p23/w9/BRIEF.md`, lanes R1A doors geometry and R1B bots / fall). Every map's buildings changed, so
