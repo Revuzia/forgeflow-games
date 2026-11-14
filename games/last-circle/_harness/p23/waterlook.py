@@ -4,8 +4,8 @@ pinned views (F:/lc_p23/w10/audit/visuals/vshots.py: the same camera searches - 
 seed 7), turned into bar rows (PLAN.md "Lane R2A" acceptance bars; the audit value each replaces in brackets).
 
     python _harness/p23/waterlook.py --disk                          # every part: 3 maps medium + isla_viva low / high / ultra
-    python _harness/p23/waterlook.py --disk --plant flat-water       # one weak normal layer (the W9 ripple)        - MUST FAIL water-detail, glint
-    python _harness/p23/waterlook.py --disk --plant storm-early      # the wall drawn before circle 1 closes        - MUST FAIL storm-early
+    python _harness/p23/waterlook.py --disk --plant flat-water       # the W9 surface: one weak layer, no fresnel/glint - MUST FAIL water-detail, glint
+    python _harness/p23/waterlook.py --disk --plant storm-early      # the W9 wall: drawn pre-close, no distance fade - MUST FAIL storm-early
     python _harness/p23/waterlook.py --disk --plant flat-light       # the W9 hemisphere / sun, no contrast curve   - MUST FAIL light
     python _harness/p23/waterlook.py --disk --plant sparse-grass     # the blade cell 0.56 -> 1.4 m                 - MUST FAIL grass
     python _harness/p23/waterlook.py --disk --plant grass-on-low     # the blade layer built on low too             - MUST FAIL low-identical
@@ -19,8 +19,8 @@ Rows (every view: actors / fx hidden, the frame drawn through the game's compose
   fresnel       away from the sun: mean water luminance in the band just under the horizon / looking straight down >= 1.3 [~1]
   shore         top-down over the vshots shore point, 9 transects across the waterline: the white foam run that starts at the waterline is
                 0.5-2.0 m wide (median), and the ground 0.05-0.9 m above the water is darker than 1.2-2.0 m above (ratio <= 0.85) [faint]
-  storm-early   pre-close views (circle 1 waiting, "no damage yet"): lilac pixels (hue 250-320 deg, sat >= 0.10) of the wall (its A/B) above
-                the horizon <= 0.1 % [every view]
+  storm-early   pre-close views (circle 1 waiting, "no damage yet"): pixels the wall tints lilac (its A/B, the change leaning violet) above
+                the horizon band (+3 % of the frame) <= 0.1 % of the frame [every view]
   storm-late    circle 1 closing: the wall A/B moves >= 1 % of the frame from 380 m (and the stormfx rows stay: run stormfx_storm)
   light         ground luminance spread p95 - p5 >= 0.25 on every map (mean of ground / ground2 / groundlow, lower half) [0.14 / 0.17 / 0.28];
                 the OD-2 drop view mean 0.45-0.55 held; interiors (3 houses' biggest ground-floor rooms) mean >= 0.9 x the base's
@@ -64,12 +64,18 @@ SEED = 7
 RP = "runtime/3d/royale/"
 
 PLANTS = {
-    "flat-water": [(RP + "maps.js", [("    vec2 lsl = ln1 * 0.55 + ln2 * 0.45;", "    vec2 lsl = ln1 * 0.2;")])],
-    "storm-early": [(RP + "storm.js", [("const early = v10 && (st.phase < 1 || (st.phase === 1 && !st.closing));", "const early = false;")])],
+    # flat-water = item 1 not delivered: the W9 surface - ONE weak ripple layer (0.2 ~ its 0.35 normalScale x our 0.55) and no fresnel sky / sun glint
+    "flat-water": [(RP + "maps.js", [("    vec2 lsl = ln1 * 0.55 + ln2 * 0.45;", "    vec2 lsl = ln1 * 0.2;"),
+                                     ("  vec3 lv = normalize( cameraPosition - vLcW );\n  if ( lv.y > 0.0 ) {\n    float lfr", "  vec3 lv = normalize( cameraPosition - vLcW );\n  if ( lv.y > 2.0 ) {\n    float lfr")])],
+    # storm-early = item 3 not delivered: the wall drawn before circle 1 closes and not faded with distance (the W9 wall)
+    "storm-early": [(RP + "storm.js", [("const early = v10 && (st.phase < 1 || (st.phase === 1 && !st.closing));", "const early = false;"),
+                                       ("if (v10) vu.set(WALL_FAR[0], WALL_FAR[1], Math.min(1, ctl.visT / WALL_FADE_IN_S)); else vu.set(1e9, 2e9, 1);", "vu.set(1e9, 2e9, 1);")])],
     "flat-light": [(RP + "maps.js", [("const lw = W10V ? (K.w10Light || W10_LIGHT) : null;", "const lw = null;"),
                                      ("op.uniforms.lcGrade.value.set(K.w10Light && K.w10Light.contrast != null ? K.w10Light.contrast : W10_CONTRAST, uw, 0, 0);", "op.uniforms.lcGrade.value.set(0, uw, 0, 0);")])],
     "sparse-grass": [(RP + "maps.js", [("lamps: 4, grassR: 30, grassC: 0.56,", "lamps: 4, grassR: 30, grassC: 1.4,")])],
+    # grass-on-low = the blade layer (and the ground lattice texture it stands on) built on the low tier too
     "grass-on-low": [(RP + "maps.js", [("lamps: 0, grassR: 0, grassC: 1,", "lamps: 0, grassR: 30, grassC: 0.56,"),
+                                       ("  if (LCFX) {\n    const L = field.lat, hp", "  if (true) {\n    const L = field.lat, hp"),
                                        ("if (W10V && TIER_Q.grassR > 0 && LCU.uLcHgt.value) {", "if (TIER_Q.grassR > 0 && LCU.uLcHgt.value) {")])],
     "uw-sky-sharp": [(RP + "maps.js", [("skyMat.uniforms.uUw.value = uw;", "skyMat.uniforms.uUw.value = 0;"),
                                        ("op.uniforms.lcGrade.value.set(K.w10Light && K.w10Light.contrast != null ? K.w10Light.contrast : W10_CONTRAST, uw, 0, 0);", "op.uniforms.lcGrade.value.set(K.w10Light && K.w10Light.contrast != null ? K.w10Light.contrast : W10_CONTRAST, 0, 0, 0);")])],
@@ -239,12 +245,17 @@ def water_mask(A, B):
 
 
 def lilac_share(A, hz, Bw=None):
-    """the share of the pixels above the horizon that are lilac (hue 250-320 deg, sat >= 0.10) AND are the storm wall's (they change when the wall
-    alone is hidden: Bw = the same frame without it) - a purple facade or a cloud is not the storm band"""
+    """the share of the frame's pixels above the horizon band (the eye-height horizon + 3 % of the frame: the far wall sits ON the horizon) that the
+    storm wall tints lilac: they change when the wall alone is hidden (Bw = that frame) and the change leans violet (red + blue up against green,
+    by > 2 / 255) - a purple facade or a cloud is not the storm band. Without Bw: lilac hue 250-320 deg, sat >= 0.10 (reported only)"""
     h = A.shape[0]
-    row = int(max(0, min(h, round(hz * h))))
+    row = int(max(0, min(h, round(hz * h + 0.03 * h))))
     if row <= 2:
         return 0.0, 0
+    if Bw is not None:
+        D = A[:row] - Bw[:row]
+        tint = (np.abs(D).max(axis=2) > 4.0) & ((D[..., 0] + D[..., 2]) * 0.5 - D[..., 1] > 2.0)
+        return float(tint.sum()) / float(A.shape[0] * A.shape[1]), row
     X = A[:row] / 255.0
     mx, mn = X.max(axis=2), X.min(axis=2)
     sat = (mx - mn) / np.maximum(mx, 1e-4)
@@ -268,7 +279,7 @@ def hf_energy(A, part="upper"):
 def ssim(A, B, size=(640, 360)):
     def g(X):
         im = Image.fromarray(np.clip(X, 0, 255).astype(np.uint8)).resize(size, Image.BILINEAR)
-        return lum(np.asarray(im).astype(np.float32))
+        return lum(np.asarray(im).astype(np.float64))
     a, b = g(A), g(B)
     k = 7
     def box(X):

@@ -514,7 +514,9 @@ export function update(W, dt) {
   // view and read as a rendering fault. Then it fades in over WALL_FADE_IN_S and fades out with the camera's distance (WALL_FAR). Low / touch: as before.
   const v10 = W.gfxTier !== "low" && !(W._gfx && W._gfx.touch);
   const early = v10 && (st.phase < 1 || (st.phase === 1 && !st.closing));
-  if (v10 && !early) ctl.visT += dt; else if (early) ctl.visT = 0;
+  // the fade-in runs on the STORM's clock (seconds since circle 1 began to close), not on accumulated frames: a seek / fast-forward lands on the same wall
+  const tl0 = ctl.storm.timeline && ctl.storm.timeline[0];
+  ctl.visT = early ? 0 : (tl0 ? Math.max(0, W.t - tl0.shrinkStart) : WALL_FADE_IN_S);
   const vu = ctl.wallMat.uniforms.uVis.value;
   if (v10) vu.set(WALL_FAR[0], WALL_FAR[1], Math.min(1, ctl.visT / WALL_FADE_IN_S)); else vu.set(1e9, 2e9, 1);
   if (!early && st.radius > 0.5 && st.radius < W.map.half * 1.02) {
