@@ -146,7 +146,7 @@ Legend — **Verified?** ✅ = I read the licence on the source page **this sess
 | TinyWorlds Forest Ambience (OGA) | CC0 | 🟡 | Yes | None |
 | OGA "Beach Ocean Waves" (jasinski) | CC0 on OGA; **upstream Freesound file 18363 never checked** | ❌ upstream | Probably | None |
 | JC Sounds Nature Ambient Pack Vol 1 | CC-BY 4.0 | 🟡 | Yes, with credit | ⚠️ no author-specified string |
-| Sonniss GDC Bundle | Proprietary royalty-free | 🟡 | Yes-but | No CC licence; redistribution restricted |
+| Sonniss GDC Bundle | Proprietary royalty-free (GDC 2024 terms on disk) | ✅ (W10 R2B) | **Yes - in use since W10 R2B** | No CC licence. Use as cut / mixed takes inside the game is allowed (restriction b); raw pack files are never shipped. See the W10 R2B section. |
 | PixelLoops Ultimate Ambient (itch, paid) | **Marketing phrases only** | ❌ | Unknown | Unknown |
 | OGA "CC0 Sounds Library" / "Ambient Sounds" collections | **No licence field — curator assertion** | ❌ | **Per-item only** | Per-item |
 
@@ -162,7 +162,7 @@ Legend — **Verified?** ✅ = I read the licence on the source page **this sess
 | **Graywavstudio — AK-47 Noises base pack** | Zero licence information anywhere; default is all-rights-reserved. Also contains **no gunshots at all**, only mechanical foley, despite ranking on "gunsounds" tags. |
 | **SoundBiterSFX's packs on OpenGameArt** | **CC-BY-SA 4.0** — share-alike fails your bar. Same author's same material is plain CC-BY 4.0 on Freesound. Take the Freesound URL, never the OGA one. |
 | **OGA "CC0 Sounds Library" (ETTiNGRiNDER) / "Ambient Sounds" (OwlishMedia)** https://opengameart.org/content/cc0-sounds-library | These are **collections**, not submissions. No licence field on the page — the "CC0" in the title is one curator's assertion about *other people's* uploads. This is precisely the failure mode the brief warns about. Usable as a discovery index only. |
-| **Sonniss GDC Game Audio Bundle** | Not a Creative Commons licence, so it fails the stated bar. Its terms prohibit redistribution *"as standalone files"* — and a browser game serves its `.ogg` assets as separately-fetchable static files over HTTP. That is close enough to the prohibited case to need a lawyer's read, which isn't worth it when CC0 covers the need. |
+| **Sonniss GDC Game Audio Bundle** - **SUPERSEDED 2026-11-14 (W10 R2B): no longer rejected, see the W10 R2B section.** Wave 10 PLAN R2B sanctions it as a free-licence source, and the GDC 2024 licence on disk (`F:/games/forgeflow-games-assets/sonniss-gdc2024/LICENSE.txt`, restriction b) says the sounds *"may be sold as incorporated into licensee project"*; every shipped file is a cut or mix, never a pack file as it comes. The original (pre-W10) reasoning follows, kept for the record: | Not a Creative Commons licence, so it fails the stated bar. Its terms prohibit redistribution *"as standalone files"* — and a browser game serves its `.ogg` assets as separately-fetchable static files over HTTP. That is close enough to the prohibited case to need a lawyer's read, which isn't worth it when CC0 covers the need. |
 | **PixelLoops "Ultimate Game Ambient Sound Effects Pack"** (paid, $3.59) | Terms are two marketing phrases on a storefront ("Royalty Free", "Commercial Use Allowed"), no licence text, no CC identifier. You cannot establish the actual terms without buying it first. Content fit is excellent, so if you want it: **get the licence text in writing from the seller before purchase.** Also — this is a >$0 spend and needs the approval gate regardless. |
 
 ### Conditional — CC-BY, acceptable only if you accept the obligation
@@ -345,7 +345,7 @@ games to reference its itch.io page - a request, not a licence term); Kenney.
 `F:/lc_p23/w10/r2/R2B/build1/tools/build_w10_sfx.py` (dev-only, never shipped) from free packs already on F: - no spend. Two licences:
 
 - **Kenney CC0 1.0** (rpg-audio, impact-sounds, interface-sounds; `F:/games/forgeflow-games-assets/<pack>/License.txt`): public domain, no attribution needed (credited anyway).
-- **Sonniss GDC 2024 Game Audio Bundle** (`F:/games/forgeflow-games-assets/sonniss-gdc2024/LICENSE.txt`): royalty-free, commercial use, may ship embedded in a game, no attribution required; NOT CC0 - the raw library may not be redistributed or used for AI training. Each file below is a cut / mix inside the game build, never a raw pack file. Credited in CREDITS.md anyway.
+- **Sonniss GDC 2024 Game Audio Bundle** (`F:/games/forgeflow-games-assets/sonniss-gdc2024/LICENSE.txt`): royalty-free, commercial use, may ship embedded in a game, no attribution required; NOT CC0 - the raw library may not be redistributed or used for AI training. Each file below is a cut / mix inside the game build, never a raw pack file. Credited in CREDITS.md anyway - that CREDITS.md line is PENDING: the Wave 10 round 2 integrator adds it at merge (lane R2B does not edit CREDITS.md). This supersedes the pre-W10 Sonniss reject in section 3 and the licence-ledger row in section 2.
 
 Selection note: the takes were chosen from measured structure (onset lists, loudness windows, spectral centroid), not by ear - no listening test was possible in the build lane.
 The per-clip loudness trims live in `runtime/3d/royale/audio.js` CLIP_DB (generated by `tools/loudtable.py`). Checked by `_harness/p23/sfxcheck.py` (licence row).
