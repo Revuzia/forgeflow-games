@@ -98,3 +98,6 @@ Buildings, street props, cars, furniture and wall modules are repacked offline (
 - Written for this game after published methods (no code copied): the folded FXAA in `runtime/3d/lc_output_pass.js` (Lottes, NVIDIA FXAA white paper); the colour-blind correction (simulation matrices from Machado, Oliveira & Fernandes 2009, error redistribution after Fidaner, Lin & Ozguven 2005)
 ### No asset (code only)
 - Team modes, knock-and-revive, pings, the frag mesh, smoke-cloud shader, decals, supply-drop logic, death piles, the container liveries, the Old Mall, the woodyards, the rotation cover, the road smoothing and the wall wear are built in code. Nothing was bought; nothing was re-rolled in Meshy.
+
+## Wave 10 round 1 (2026-11) — lane R1B guns in hand
+- No new assets, clips or downloads in R1B. It uses the existing CC0 gun models already on disk (their metal/polymer roughness maps are derived in code) and the existing Mixamo clips (rifle leg clips reused for the pistol, with no new clip fetched).
