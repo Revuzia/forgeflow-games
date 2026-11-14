@@ -1026,7 +1026,10 @@ export function generate(parcel, opts) {
       // (the front door's room is the root every other room hangs off: never a <= 2-cell room when a bigger one also fronts the street - a tiny
       // root collects three doorways and has no wall left that a doorway sees)
       const regSize = (i) => { const r = F.region[cIdx(i, nz - 1)]; return r >= 0 ? F.regs[r].cells.length : 0; };
-      if (regSize(fi) <= 2) { const big = cols.filter((i) => regSize(i) > 2); if (big.length) fi = big.slice().sort((a, b) => Math.abs(a - fi) - Math.abs(b - fi) || a - b)[0]; }
+      // (W10 R1A pass 4: a HOME's front room is its living room, and a lived room is >= 4 cells - a 3-cell front room became a store-room vestibule between the
+      // street door and the living room, a strip whose door zones left no spot a doorway sees: interiorcheck --source housegen s7h2.f0r4 showed 2 pieces)
+      const tiny = home ? 3 : 2;
+      if (regSize(fi) <= tiny) { const big = cols.filter((i) => regSize(i) > tiny); if (big.length) fi = big.slice().sort((a, b) => Math.abs(a - fi) - Math.abs(b - fi) || a - b)[0]; }
       F.frontCol = fi;
       root = F.region[cIdx(fi, nz - 1)];
     } else {
