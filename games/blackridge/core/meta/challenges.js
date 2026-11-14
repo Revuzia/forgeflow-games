@@ -56,6 +56,9 @@ export const DAILY = [
   t("d_revenge", "combat", "Payback", "Earn 3 Revenge medals", "medal", { medalAny: ["REVENGE"] }, 3, 1250),
   t("d_streak5", "combat", "Unbroken", "Reach a 5-elimination streak in one life", "lifeStreak", {}, 5, 1500, { mode: "best" }),
   t("d_survivor", "combat", "Steady Hand", "Finish a match with 8+ eliminations and 3 or fewer deaths", "matchEnd", { completed: true, minKills: 8, maxDeaths: 3 }, 1, 2000),
+  // ---- [melee] the knife
+  t("d_knife", "combat", "Cold Steel", "Get 3 melee eliminations", "kill", { via: "melee" }, 3, 1500),
+  t("d_knife_low", "movement", "Quiet Blade", "Get 2 melee eliminations while crouched", "kill", { via: "melee", stance: "crouch" }, 2, 2000),
   t("d_assist", "team", "Covering Fire", "Earn 5 assists", "assist", {}, 5, 1000),
   // ---- weapons (gated by the unlock table)
   t("d_warden", "weapon", "Warden Drill", "Get 10 eliminations with the Warden", "kill", { weapon: "warden" }, 10, 1250, { req: "weapon:warden" }),
@@ -102,6 +105,7 @@ export const WEEKLY = [
   t("w_streak10", "combat", "Unshaken", "Reach a 10-elimination streak in one life", "lifeStreak", {}, 10, 9000, { mode: "best" }),
   t("w_domwins", "match", "Stronghold Week", "Win 5 Stronghold matches", "matchEnd", { won: true, mode: "dom" }, 5, 8000),
   t("w_trip", "gear", "Trapper", "Get 10 tripmine eliminations", "kill", { via: "claymore" }, 10, 8000, { req: "equip:claymore" }),
+  t("w_knife", "combat", "Edge Work", "Get 20 melee eliminations", "kill", { via: "melee" }, 20, 7000), // [melee]
   t("w_campaign", "match", "Operation Ready", "Complete 2 operations", "opEnd", { won: true }, 2, 6000),
 ];
 
@@ -638,7 +642,8 @@ export function createChallenges(ctx, progression, opts) {
       if (d.attacker !== "P" || d.victim == null || !isEnemy(d.victim)) return;
       const t = simTime();
       let via = null, weapon = null;
-      if (blast && blast.who === "P" && Math.abs(t - blast.t) < 1e-6) {
+      if (d.melee) via = "melee"; // [melee] the knife (weapon stays null: no gun gets the credit)
+      else if (blast && blast.who === "P" && Math.abs(t - blast.t) < 1e-6) {
         via = blast.source === "claymore" ? "claymore" : blast.source === "streak" ? "streak" : "frag";
       } else if (lastShotW && t - lastShotT <= 1.0) { via = "gun"; weapon = lastShotW; }
       const im = impaired[d.victim];

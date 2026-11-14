@@ -64,6 +64,7 @@ export function makeSquad() {
   const fireWindow = new Map(); // botId → last fire-auth time
   const barkBot = new Map(); // botId → last bark t
   let barkGlobalT = -9;
+  const barkGlobalByTeam = new Map(); // [identity lane] team channel → last bark t
 
   const referee = {
     active: false, startT: 0, lastEventT: 0,
@@ -181,7 +182,7 @@ export function makeSquad() {
 
     reset() {
       squads.clear(); fireWindow.clear(); barkBot.clear();
-      barkGlobalT = -9;
+      barkGlobalT = -9; barkGlobalByTeam.clear();
       referee.active = false; referee.flankDone = false; referee.pushOn = false;
       referee.log.length = 0;
       dmgTakenRing.length = 0;
@@ -255,19 +256,29 @@ export function makeSquad() {
     pushActive() { return referee.pushOn; },
     playerStaticFor(t) { return playerStatic.init ? t - playerStatic.sinceT : 0; },
 
-    requestBark(botId, kind) {
+    // [identity lane] optional `info` rides on the event (e.g. {gear:"frag"} for
+    // a bot's own throw vs {warn:true} for the incoming-grenade call) — view
+    // data only; the HUD's team-chat callouts read it.
+    requestBark(botId, kind, info) {
       if (!sim) return false;
       const t = sim.state.time;
       const pri = BARK_PRI[kind] != null ? BARK_PRI[kind] : 1;
       const mandatory = !!BARK_MANDATORY[kind] || pri >= 3;
+      // [identity lane] the 2 s global gap is per TEAM CHANNEL: an enemy's
+      // radio line must not eat your teammate's call (audio/text only — no
+      // sim state reads barks)
+      const bb = botById(botId);
+      const ch = bb && bb.team != null ? bb.team : -1;
+      const gT = barkGlobalByTeam.has(ch) ? barkGlobalByTeam.get(ch) : -9;
       if (!mandatory) {
         const bt = barkBot.get(botId);
         if (bt != null && t - bt < 4.0) return false; // per-bot 4 s
-        if (t - barkGlobalT < 2.0) return false;      // global 2 s
+        if (t - gT < 2.0) return false;               // per-channel 2 s
       }
       barkBot.set(botId, t);
       barkGlobalT = t;
-      sim.emit("bark", { botId, kind });
+      barkGlobalByTeam.set(ch, t);
+      sim.emit("bark", info ? Object.assign({ botId, kind }, info) : { botId, kind });
       return true;
     },
 
@@ -498,7 +509,7 @@ export function makeSquad() {
           }
           if (nearest) {
             warnedGrenades.add(g);
-            squad.requestBark(nearest.id, "grenade");
+            squad.requestBark(nearest.id, "grenade", { warn: true }); // [identity lane]
           }
         }
       }

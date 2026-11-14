@@ -344,7 +344,7 @@ export function createKillCam(ctx) {
       if (a >= 0) {
         const aa = m.actors[a];
         const body = aa ? (aa.kind === "human" ? s.state.player : m.bodyOf(aa)) : null;
-        wpn = wIdx(body && body.weapon ? body.weapon.id : null);
+        wpn = wIdx(d.melee ? "knife" : (body && body.weapon ? body.weapon.id : null)); // [melee] label "KNIFE"
       }
       ring.pushEvent(tk, EK.DEATH, a, v, d.pos ? d.pos[0] : 0, d.pos ? d.pos[1] : 0, d.pos ? d.pos[2] : 0,
         0, d.headshot ? 1 : 0, wpn);

@@ -12,7 +12,9 @@
 //               · RELOAD · GRENADE (hold = cook, release = throw) · SWAP (next
 //               weapon) · USE · TAC (tactical: flash / smoke / concussion, shown
 //               only while the class carries one, with the count) · SCORE
-//               (hold, matches) · PAUSE.
+//               (hold, matches) · PAUSE · MELEE ([melee]: a small knife button
+//               tucked under FIRE, between it and CROUCH — the thumb rolls down
+//               off the trigger onto it, and nothing else lives in that gap).
 //   streaks     the killstreak tray tiles become buttons: tap a READY tile.
 //               Sweep launches at once; mortar/airstrike/orbital enter the
 //               designate mode (FIRE confirms on the preview ring, AIM cancels).
@@ -80,6 +82,7 @@ function css() {
   flex-direction:column;line-height:1.1;}
 #tc-tac.hide{display:none;}
 #tc-tac b{font-weight:400;font-size:12px;color:#d9a441;}
+#tc-melee{width:44px;height:44px;right:calc(54px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));}
 #tc-use{width:46px;height:46px;right:calc(204px + env(safe-area-inset-right));bottom:calc(210px + env(safe-area-inset-bottom));font-size:10px;}
 #tc-pause{width:40px;height:40px;left:calc(12px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));border-radius:8px;}
 #tc-score{width:40px;height:40px;left:calc(60px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));border-radius:8px;font-size:9px;}
@@ -115,6 +118,8 @@ const ICON = {
   crouch: `<svg viewBox="0 0 24 24"><path d="M5 9l7 7 7-7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/></svg>`,
   reload: `<svg viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2.05-4.95" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M19 4v4h-4" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>`,
   nade: `<svg viewBox="0 0 24 24"><ellipse cx="12" cy="14" rx="6" ry="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 6h4v2h-4zM14 6l3-2" stroke="currentColor" stroke-width="1.8" fill="none"/></svg>`,
+  // [melee] a fixed-blade knife, point up-right
+  melee: `<svg viewBox="0 0 24 24"><path d="M19.5 3.5 9.2 13.8l1.6 1.6L21 5.2z" fill="currentColor"/><path d="M8.2 13.2l3.2 3.2M6.9 15.6l1.6 1.6-3.3 3.3-1.6-1.6z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>`,
   swap: `<svg viewBox="0 0 24 24"><path d="M4 8h14l-3-3M20 16H6l3 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>`,
   pause: `<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" stroke="currentColor" stroke-width="3"/></svg>`,
   rotate: `<svg viewBox="0 0 64 64"><rect x="20" y="8" width="24" height="44" rx="4" fill="none" stroke="#d9a441" stroke-width="3"/><circle cx="32" cy="46" r="2" fill="#d9a441"/></svg>`,
@@ -145,6 +150,7 @@ export function createTouchControls(ctx) {
     nade: mk("div", "tc-nade", "tc-btn", ICON.nade),
     swap: mk("div", "tc-swap", "tc-btn", ICON.swap),
     use: mk("div", "tc-use", "tc-btn", "USE"),
+    melee: mk("div", "tc-melee", "tc-btn", ICON.melee), // [melee]
     tac: mk("div", "tc-tac", "tc-btn hide", "TAC<b>0</b>"), // [equipment lane]
     pause: mk("div", "tc-pause", "tc-btn", ICON.pause),
     score: mk("div", "tc-score", "tc-btn", "SCORE"),
@@ -264,6 +270,7 @@ export function createTouchControls(ctx) {
   hold(B.nade, () => input.touchPress("grenade"), () => input.touchRelease("grenade"));
   hold(B.swap, () => { input.state.switchTo = "next"; });
   hold(B.use, () => input.touchPress("interact"), () => input.touchRelease("interact"));
+  hold(B.melee, () => input.touchPress("melee"), () => input.touchRelease("melee")); // [melee]
   hold(B.tac, () => input.touchPress("tactical"), () => input.touchRelease("tactical")); // [equipment lane]
   hold(B.pause, () => { key("Escape", "keydown"); key("Escape", "keyup"); });
   hold(B.score, () => key("Tab", "keydown"), () => key("Tab", "keyup"));
@@ -287,6 +294,7 @@ export function createTouchControls(ctx) {
     for (const k of Object.keys(B)) B[k].classList.remove("down");
     input.touchRelease("fire"); input.touchRelease("jump"); input.touchRelease("reload");
     input.touchRelease("grenade"); input.touchRelease("interact"); input.touchRelease("tactical");
+    input.touchRelease("melee"); // [melee]
     input.state.moveX = 0; input.state.moveZ = 0; input.state.sprint = false;
   }
 

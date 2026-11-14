@@ -46,7 +46,7 @@ const DT = 1 / 60;
 const NULL_CMD = {
   moveX: 0, moveZ: 0, yaw: 0, pitch: 0, jump: false, crouch: false,
   sprint: false, fire: false, ads: false, reload: false, switchTo: null,
-  interact: false, grenade: false, streak: 0, tactical: false,
+  interact: false, grenade: false, streak: 0, tactical: false, melee: false, // [melee]
 };
 
 export function createSim(opts = {}) {
@@ -252,7 +252,7 @@ export function createSim(opts = {}) {
       // here — between the brains writing cmd and locomotion consuming it.
       if (sim.match && sim.match.botsFrozen && sim.match.botsFrozen()) {
         for (const b of state.bots) {
-          if (b.cmd) { b.cmd.fire = false; b.cmd.moveX = 0; b.cmd.moveZ = 0; b.cmd.sprint = false; b.cmd.grenade = false; }
+          if (b.cmd) { b.cmd.fire = false; b.cmd.moveX = 0; b.cmd.moveZ = 0; b.cmd.sprint = false; b.cmd.grenade = false; b.cmd.melee = false; } // [melee]
         }
       }
 
@@ -469,6 +469,34 @@ export function createSim(opts = {}) {
       }
       return kit;
     },
+    /** [lane modes] Weapon-ladder modes (ASCENT): put exactly `id` — with the
+     *  gunsmith attachments `attach` — in `body`'s hands: one slot, full ammo,
+     *  no lethal / tactical, no perks. Same discipline as applyKit (body.kit
+     *  carries the build so weaponForBody / the viewmodel see the attachments).
+     *  knifeOnly: the ladder's last rung — the gun is carried EMPTY and stays
+     *  empty (match.js skips its ammo grants for a `_knifeOnly` body): the
+     *  melee verb is the only way to score. */
+    setLadderWeapon(body, id, attach, knifeOnly) {
+      if (!body || !weapons[id]) return false;
+      const kit = { classId: null, name: null, primary: id, secondary: null, lethal: null, lethalCount: 0,
+        tactical: null, tacticalCount: 0, perks: [], builds: {} };
+      if (attach && attach.length) kit.builds[id] = { attach: attach.slice(), camo: null };
+      const wt = weaponForBody(weapons, { kit }, id) || weapons[id];
+      body.slots = slotsFromList([id]);
+      body._lastWeapon = null;
+      body._slotAmmo = { [id]: { mag: wt.mag, reserve: wt.reserve } };
+      const w = body.weapon;
+      w.id = id; w.mag = wt.mag; w.reserve = wt.reserve;
+      w.state = "idle"; w.stateT = 0; w.ads = false; w.adsT = 0;
+      w.recoilIndex = 0; w._shotCount = 0; w._reloadCommitted = false;
+      body.grenades = 0;
+      body.tactical = 0;
+      body.kit = kit;
+      body.perks = {};
+      if (knifeOnly) { w.mag = 0; w.reserve = 0; body._slotAmmo[id].mag = 0; body._slotAmmo[id].reserve = 0; body._knifeOnly = true; }
+      else if (body._knifeOnly) body._knifeOnly = false;
+      return true;
+    },
     /** Kit for a non-human roster actor (match.js spawnActor), or null. */
     kitForActor(actor) {
       if (!classes.on || !actor) return null;
@@ -534,6 +562,14 @@ export function createSim(opts = {}) {
       spawnDirectorFactory: matchOpts.spawnDirectorFactory,
     });
     sim.mission = sim.match; // ONE object, two names — boot.js/damage.js unchanged
+    // [lane modes] a FORCED-LOADOUT mode (ASCENT, the weapon ladder) owns every
+    // gun in the match: no class kits, no ground loot / racks, no call-ins. The
+    // mode arms each body itself through sim.setLadderWeapon.
+    if (sim.match.mode && sim.match.mode.forcedLoadout) {
+      classes.on = false; classes.playerKit = null; classes.pendingKit = null;
+      delete state.player.kit; delete state.player.perks;
+      internal.forcedLoadout = true; internal.noCallIns = true;
+    }
   } else if (content) {
     sim.mission = makeMission(content, sim.emit);
   }
@@ -541,6 +577,7 @@ export function createSim(opts = {}) {
   // World systems that need the finished sim object (they read sim.state, emit and
   // the weapons table). Built last so every dependency exists.
   sim.loot = makeLoot(sim, content, mode ? (content && content.arena && content.arena.id) || null : "meridian_ward", mode);
+  if (internal.forcedLoadout) { sim.loot = null; state.loot = []; state.lootPads = []; } // [lane modes] no loot in a ladder
   sim.streaks = makeStreaks(sim);
 
   // ---- helpers

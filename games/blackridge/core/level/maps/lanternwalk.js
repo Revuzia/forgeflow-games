@@ -969,3 +969,19 @@ export const STRONGHOLD_ZONES = [
   { id: "B", pos: [-8.0, 0, -1.5], r: 4.0 },   // the plaza (contested centre) — 36.1 / 34.4 m
   { id: "C", pos: [11.0, 0, -7.0], r: 4.0 },   // Kirov boulevard mouth (SLATE side) — 55.5 / 25.4 m
 ];
+
+// ===========================================================================
+// OUTPOST HILLS [lane modes] — DATA ONLY, consumed at runtime by
+// core/match/modes/hill.js (OUTPOST, the rotating-hill mode). One hill is live
+// at a time and rotation runs through this list in order. MEASURED on this
+// map's baked nav (bakeNav cell 0.75, scratch hill_probe): every centre is a
+// walkable ground node, 100% of the r-disk is on nav, reachable from both CTF
+// stands, >= 5 m from every spawn point. d0/d1 = nav metres from the AMBER /
+// SLATE stand. No geometry, collider or nav change was made for these.
+// ===========================================================================
+export const OUTPOST_HILLS = [
+  { id: "1", name: "PLAZA", pos: [-8.0, 0, -1.5], r: 4.0 }, // the plaza (STRONGHOLD B) — d 36.7 / 35.5, spawn >= 6.0 m
+  { id: "2", name: "LANTERN YARD", pos: [-11.0, 0, 19.0], r: 4.0 }, // Lantern yard mouth (STRONGHOLD A, AMBER side) — d 25.6 / 55.6, spawn >= 5.2 m
+  { id: "3", name: "GALLERY SOUTH", pos: [11.0, 0, 12.5], r: 4.0 }, // below the gallery, off-axis — d 46.6 / 46.7 (symmetric), spawn >= 8.1 m
+  { id: "4", name: "KIROV MOUTH", pos: [11.0, 0, -7.0], r: 4.0 }, // Kirov boulevard mouth (STRONGHOLD C, SLATE side) — d 54.6 / 26.3, spawn >= 6.4 m
+];

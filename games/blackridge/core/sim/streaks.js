@@ -199,7 +199,8 @@ export function makeStreaks(sim) {
         sim.emit("score", { points: bonus, why: MULTI_NAMES[n] || "MULTI KILL", headshot: false });
       }
 
-      // ---- the streak itself
+      // ---- the streak itself ([lane modes] none in a weapon-ladder match)
+      if (sim.internal.noCallIns) return;
       st.count++;
       if (st.count > st.best) st.best = st.count;
       sim.emit("streak", { phase: "count", count: st.count });

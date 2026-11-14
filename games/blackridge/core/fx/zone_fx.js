@@ -72,7 +72,7 @@ export function createZoneFx(ctx) {
     for (const o of [ring, disc, arc, pole, cloth]) { o.frustumCulled = true; o.renderOrder = 2; }
     root.position.set(0, -200, 0); // parked for the prewarm compile
     group.add(root);
-    views.push({ root, flat, ring, disc, arc, arcGeo, ringMat, discMat, arcMat, clothMat, cloth,
+    views.push({ root, flat, ring, disc, arc, arcGeo, ringMat, discMat, arcMat, clothMat, cloth, pole,
       sig: "", posSig: "", arcN: -1 });
   }
   ctx.scene.add(group);
@@ -90,7 +90,8 @@ export function createZoneFx(ctx) {
   function update() {
     const s = sim();
     const M = s && s.state && s.state.match;
-    const zones = M && M.modeId === "dom" && M.mode && M.mode.zones;
+    // [lane modes] OUTPOST publishes its live hill (+ the previewed next one) on the same board
+    const zones = M && (M.modeId === "dom" || M.modeId === "hill") && M.mode && M.mode.zones;
     if (!zones || !zones.length) { setShown(false); return; }
     setShown(true);
     const t = s.state.time;
@@ -105,7 +106,7 @@ export function createZoneFx(ctx) {
         v.flat.scale.set(z.r, z.r, 1);
       }
       const own = z.owner === 0 || z.owner === 1 ? TEAM[z.owner] : NEUTRAL;
-      const sig = own + ":" + z.capTeam + ":" + (z.contested ? 1 : 0);
+      const sig = own + ":" + z.capTeam + ":" + (z.contested ? 1 : 0) + (z.preview ? "p" : "");
       if (sig !== v.sig) {
         v.sig = sig;
         v.ringMat.color.setHex(own);
@@ -113,6 +114,8 @@ export function createZoneFx(ctx) {
         v.discMat.opacity = z.owner >= 0 ? 0.08 : 0.05;
         v.clothMat.color.setHex(own);
         v.arcMat.color.setHex(z.capTeam === 0 || z.capTeam === 1 ? TEAM[z.capTeam] : NEUTRAL);
+        v.ringMat.opacity = z.preview ? 0.32 : 0.8; // [lane modes] the next hill reads as a ghost
+        v.cloth.visible = !z.preview; v.pole.visible = !z.preview;
       }
       if (z.contested) {
         // contested: the ring breathes between red and the owner colour
@@ -130,6 +133,7 @@ export function createZoneFx(ctx) {
   return {
     attach(bridge) {
       bridge.register("zonecap", update);
+      bridge.register("hill", update); // [lane modes]
       bridge.register("match:start", () => { for (const v of views) { v.sig = ""; v.posSig = ""; v.arcN = -1; } update(); });
     },
     update,

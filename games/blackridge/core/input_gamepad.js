@@ -9,18 +9,20 @@
 // same indices — only the printed glyphs differ):
 //
 //   L stick  move            L3   sprint (or auto-sprint at full forward push)
-//   R stick  look            R3   reserved: melee (no melee verb in the sim yet)
+//   R stick  look            R3   MELEE (quick knife strike — the genre's R3)
 //   RT       fire            LT   aim down sights
 //   A / X    jump            B/O  crouch · slide while sprinting (toggle or hold)
 //   X / []   reload — HOLD = interact
-//   Y / /\   swap weapon     RB   frag (hold = cook, release = throw)
+//   Y / /\   swap weapon (tap) — HOLD = inspect   RB   frag (hold = cook, release = throw)
 //   LB       TACTICAL: flash / smoke / concussion ([equipment lane]; the CoD
 //            bumper pair - LB tactical, RB lethal; a tripmine kit plants on RB).
 //            The signal sweep that lived here moved to D-pad DOWN, so all four
 //            call-ins share the D-pad.
 //   D-pad    down signal sweep · up mortar · right airstrike · left orbital
 //            (designate: RT confirm, LT / B cancel)
-//   R3       inspect weapon (moved off D-pad down; melee has no sim verb yet)
+//   R3       melee ([melee] 2026-11-13). Inspect moved to HOLD Y: the D-pad is all
+//            four call-ins, and Y's tap (swap) now fires on RELEASE under
+//            HOLD_INTERACT_S — the same tap/hold split X uses for reload/interact.
 //   Start    pause           Back/View  scoreboard (hold)
 //
 // MENUS: whenever input is gated (title, PVP menu, pause, settings, debrief),
@@ -104,16 +106,16 @@ export function padLayout(id) {
 
 export const GLYPHS = {
   xbox: { fire: "RT", ads: "LT", jump: "A", crouch: "B", reload: "X", interact: "HOLD X", swap: "Y",
-    grenade: "RB", tactical: "LB", streak: "D-PAD", inspect: "R3", pause: "MENU", score: "VIEW", sprint: "L3",
+    grenade: "RB", tactical: "LB", streak: "D-PAD", inspect: "HOLD Y", melee: "R3", pause: "MENU", score: "VIEW", sprint: "L3",
     move: "L-STICK", look: "R-STICK", confirm: "A", back: "B", designateOk: "RT", designateCancel: "LT" },
   ps: { fire: "R2", ads: "L2", jump: "✕", crouch: "○", reload: "□", interact: "HOLD □", swap: "△",
-    grenade: "R1", tactical: "L1", streak: "D-PAD", inspect: "R3", pause: "OPTIONS", score: "TOUCHPAD", sprint: "L3",
+    grenade: "R1", tactical: "L1", streak: "D-PAD", inspect: "HOLD △", melee: "R3", pause: "OPTIONS", score: "TOUCHPAD", sprint: "L3",
     move: "L-STICK", look: "R-STICK", confirm: "✕", back: "○", designateOk: "R2", designateCancel: "L2" },
   kbm: { fire: "LMB", ads: "RMB", jump: "SPACE", crouch: "C", reload: "R", interact: "F", swap: "Q",
-    grenade: "G", tactical: "E", streak: "6-9", inspect: "I", pause: "ESC", score: "TAB", sprint: "SHIFT",
+    grenade: "G", tactical: "E", streak: "6-9", inspect: "I", melee: "V", pause: "ESC", score: "TAB", sprint: "SHIFT",
     move: "WASD", look: "MOUSE", confirm: "ENTER", back: "ESC", designateOk: "LMB", designateCancel: "RMB" },
   touch: { fire: "FIRE", ads: "AIM", jump: "JUMP", crouch: "CROUCH", reload: "RELOAD", interact: "USE", swap: "SWAP",
-    grenade: "GRENADE", tactical: "TAC", streak: "TRAY", inspect: "—", pause: "II", score: "SCORE", sprint: "PUSH STICK",
+    grenade: "GRENADE", tactical: "TAC", streak: "TRAY", inspect: "—", melee: "MELEE", pause: "II", score: "SCORE", sprint: "PUSH STICK",
     move: "LEFT THUMB", look: "RIGHT THUMB", confirm: "TAP", back: "II", designateOk: "FIRE", designateCancel: "AIM" },
 };
 
@@ -251,6 +253,7 @@ export function createGamepad(hooks) {
   let driving = { move: false, sprint: false, ads: false, crouch: false, fire: false };
   let sprintLatch = false;
   let xHeld = -1, interactOn = false;
+  let yHeld = -1; // [melee] Y tap = swap (on release) / hold = inspect
   let fullHeld = 0;
   let navRepeat = { dir: "", t: 0 };
   let refocusT = 0;
@@ -283,8 +286,9 @@ export function createGamepad(hooks) {
   function releaseGameplay() {
     if (driving.fire) hooks.release("fire");
     hooks.release("jump"); hooks.release("reload"); hooks.release("grenade"); hooks.release("tactical");
+    hooks.release("melee"); // [melee]
     if (interactOn) hooks.release("interact");
-    interactOn = false; xHeld = -1;
+    interactOn = false; xHeld = -1; yHeld = -1;
     if (driving.move) { state.moveX = 0; state.moveZ = 0; hooks.refreshMove(); }
     if (driving.sprint) state.sprint = false;
     if (driving.ads) state.ads = false;
@@ -343,7 +347,13 @@ export function createGamepad(hooks) {
       if (!interactOn && xHeld >= HOLD_INTERACT_S) { hooks.press("interact"); interactOn = true; }
     }
     if (up(BTN.X)) { hooks.release("reload"); if (interactOn) hooks.release("interact"); interactOn = false; xHeld = -1; }
-    if (edge(BTN.Y)) state.switchTo = "next";
+    // [melee] Y: tap = swap (on release), hold = inspect — R3 is melee now
+    if (edge(BTN.Y)) yHeld = 0;
+    if (cur[BTN.Y] && yHeld >= 0) {
+      yHeld += dt;
+      if (yHeld >= HOLD_INTERACT_S) { input.inspect(); yHeld = -1; }
+    }
+    if (up(BTN.Y)) { if (yHeld >= 0) state.switchTo = "next"; yHeld = -1; }
     if (edge(BTN.RB)) hooks.press("grenade");
     if (up(BTN.RB)) hooks.release("grenade");
     if (edge(BTN.LB)) hooks.press("tactical");           // [equipment lane]
@@ -352,7 +362,8 @@ export function createGamepad(hooks) {
     if (edge(BTN.UP)) input.designateTier(2);
     if (edge(BTN.RIGHT)) input.designateTier(3);
     if (edge(BTN.LEFT)) input.designateTier(4);
-    if (edge(BTN.R3)) input.inspect();
+    if (edge(BTN.R3)) hooks.press("melee");   // [melee]
+    if (up(BTN.R3)) hooks.release("melee");
     if (edge(BTN.START)) { hooks.key("Escape", "keydown"); hooks.key("Escape", "keyup"); }
     if (edge(BTN.BACK)) hooks.key("Tab", "keydown");
     if (up(BTN.BACK)) hooks.key("Tab", "keyup");

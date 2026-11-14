@@ -1809,6 +1809,190 @@ def build_attachments():
     return rep
 
 
+# ===========================================================================
+# [melee] KNIFE (2026-11-13) -> assets/weapons/knife.glb
+# ===========================================================================
+# An original fixed-blade knife: clip-point blade with a flat grind and a honed
+# bevel (real lofted cross-sections: spine, grind line, edge), spine jimping, a
+# short double guard, a polymer handle with finger/palm swells and rubber grip
+# bands, a steel pommel with a lanyard pin. Geometry-only like attachments.glb:
+# materials carry only the generator NAME contract (br5_metal / br5_polymer_grip)
+# and core/weapons/viewmodel.js binds each mesh to the gun-in-hand's own
+# detail-mapped material of that name — same finish as the guns, geometry bytes
+# only (menu payload). Build frame like every gun: +Y toward the point, +Z = spine
+# up, +X right; origin = centre of the handle (the palm). Node "knife".
+# usage: blender ... --python tools/a5_build_guns.py -- knife
+KNIFE = {"y_guard": 0.058, "blade_len": 0.168, "grip_half": 0.056}
+
+
+def knife_blade_sections(n=22):
+    """Cross-sections along the blade: (y, t_half, z_spine, z_grind, z_edge)."""
+    y0, L = KNIFE["y_guard"] + 0.0065, KNIFE["blade_len"]
+    out = []
+    for i in range(n + 1):
+        u = i / n
+        y = y0 + L * u
+        zs = 0.0105 if u < 0.60 else 0.0105 - 0.0100 * ((u - 0.60) / 0.40) ** 1.25     # clip drop
+        ze = -0.0150 if u < 0.52 else -0.0150 + 0.0142 * ((u - 0.52) / 0.48) ** 1.7    # belly sweep
+        if u < 0.06:
+            ze = -0.0128 - 0.0022 * (u / 0.06)                                          # ricasso
+        zg = max(min(ze + 0.0095, zs - 0.0022), ze + 0.35 * (zs - ze))                  # grind line
+        t = 0.00215 * (1.0 - 0.55 * u * u)
+        out.append((y, t, zs, zg, ze))
+    return out
+
+
+def knife_loft(bm, secs, pick):
+    """Loft a closed section [(x, z)...] = pick(t, zs, zg, ze) through secs; the last
+    section collapses to one point (the tip)."""
+    rings, tip = [], None
+    for k, (y, t, zs, zg, ze) in enumerate(secs):
+        if k == len(secs) - 1:
+            tip = bm.verts.new((0.0, y + 0.0015, (zs + ze) * 0.5))
+            break
+        rings.append([bm.verts.new((x, y, z)) for x, z in pick(t, zs, zg, ze)])
+    m = len(rings[0])
+    bm.faces.new(list(reversed(rings[0])))
+    for k in range(len(rings)):
+        a = rings[k]
+        b = rings[k + 1] if k + 1 < len(rings) else None
+        for i in range(m):
+            j = (i + 1) % m
+            if b is None:
+                bm.faces.new((a[i], a[j], tip))
+            else:
+                bm.faces.new((a[i], a[j], b[j], b[i]))
+
+
+def build_knife():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    PARTS.clear()
+    _TEX.clear()
+    M = {}
+    for key, name, col in (("metal", "br5_metal", (0.3, 0.3, 0.3)), ("grip", "br5_polymer_grip", (0.2, 0.2, 0.2))):
+        m = bpy.data.materials.new(name)
+        m.use_nodes = True
+        b = next(n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+        b.inputs["Base Color"].default_value = (*col, 1)
+        M[key] = m
+    secs = knife_blade_sections()
+    part("blade", lambda bm: knife_loft(bm, secs, lambda t, zs, zg, ze: [
+        (-t, zg), (t, zg), (t, zs - 0.0006), (t * 0.6, zs), (-t * 0.6, zs), (-t, zs - 0.0006)]),
+        lin((44, 45, 47)), "metal", "knife", bevel=0.0, wear=0.6)
+    part("edge", lambda bm: knife_loft(bm, secs, lambda t, zs, zg, ze: [(-t, zg), (0.0, ze), (t, zg)]),
+         lin((150, 152, 156)), "metal", "knife", bevel=0.0, wear=0.0)
+    yg, h = KNIFE["y_guard"], KNIFE["grip_half"]
+
+    def guard(bm):
+        prism_x(bm, [(yg, -0.0255), (yg + 0.0065, -0.0235), (yg + 0.0065, 0.0165), (yg, 0.0180)], -0.0085, 0.0085)
+    part("guard", guard, COL["anod"], "metal", "knife", bevel=0.0009, seg=2, angle=25)
+
+    def jimping(bm):
+        for k in range(6):
+            y = yg + 0.012 + k * 0.0042
+            rbox(bm, -0.0016, 0.0016, y, y + 0.0019, 0.0099, 0.0116)
+    part("jimping", jimping, lin((44, 45, 47)), "metal", "knife", bevel=0.0, wear=0.8)
+
+    def handle(bm):
+        n = 14
+        rings = []
+        for i in range(n + 1):
+            u = i / n
+            y = -h + 2 * h * u
+            sw = 1.0 + 0.10 * math.sin(math.pi * min(1.0, u / 0.55)) - 0.07 * math.exp(-((u - 0.82) / 0.07) ** 2)
+            wx, wz, r = 0.0118 * sw, 0.0158 * sw, 0.0055
+            pts = []
+            for q, (cx, cz) in enumerate(((wx - r, wz - r), (-(wx - r), wz - r), (-(wx - r), -(wz - r)), (wx - r, -(wz - r)))):
+                for s2 in range(4):
+                    a = q * math.pi / 2 + s2 * (math.pi / 2) / 3
+                    pts.append((cx + r * math.cos(a), cz + r * math.sin(a)))
+            rings.append([bm.verts.new((x, y, z - 0.0035 * (1 - u))) for x, z in pts])
+        m = len(rings[0])
+        bm.faces.new(list(reversed(rings[0])))
+        bm.faces.new(rings[-1])
+        for k in range(n):
+            a, b = rings[k], rings[k + 1]
+            for i in range(m):
+                j = (i + 1) % m
+                bm.faces.new((a[i], a[j], b[j], b[i]))
+    part("handle", handle, COL["odg"], "grip", "knife", bevel=0.0, wear=0.5)
+
+    def bands(bm):
+        for k in range(4):
+            y = -h + 0.020 + k * 0.016
+            tube_ring_y(bm, 0.0, -0.0022, y, y + 0.0035, 0.0128, 0.0150, seg=20)
+    part("bands", bands, COL["rubber"], "grip", "knife", bevel=0.0)
+
+    def pommel(bm):
+        cyl_y(bm, 0.0, -0.0035, -h - 0.0105, -h + 0.002, 0.0118, 0.0130, seg=20)
+        cyl_x(bm, -h - 0.0055, -0.0035, -0.0128, 0.0128, 0.0030, seg=12)
+    part("pommel", pommel, COL["anod"], "metal", "knife", bevel=0.0008, seg=2, angle=30)
+
+    objs = []
+    for o, node in PARTS:
+        if not o.data.vertices:
+            continue
+        paint(o)
+        o.data.materials.clear()
+        o.data.materials.append(M["grip"] if o["a5_mat"] == "grip" else M["metal"])
+        bpy.context.view_layer.objects.active = o
+        for so in bpy.context.selected_objects:
+            so.select_set(False)
+        o.select_set(True)
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.uv.cube_project(cube_size=0.05)
+        bpy.ops.object.mode_set(mode="OBJECT")
+        shade_smooth(o, 30)
+        objs.append(o)
+    for so in bpy.context.selected_objects:
+        so.select_set(False)
+    for o in objs:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = objs[0]
+    bpy.ops.object.join()
+    j = bpy.context.view_layer.objects.active
+    j.name = "knife"
+    j.data.name = "knife"
+    mod = j.modifiers.new("tri", "TRIANGULATE")
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+    tris = len(j.data.polygons)
+    if not NO_PREVIEW:
+        sun = bpy.data.objects.new("ksun", bpy.data.lights.new("ksun", "SUN"))
+        sun.data.energy = 4.0
+        sun.rotation_euler = (D(50), D(10), D(-60))
+        link(sun)
+        cam = _g["cam_at"]((-0.42, 0.055, 0.0), (90, 0, -90), 30)
+        _g["render"](os.path.join(PREV_DIR, "knife_studio_side.png"), 1600, 900)
+        cam.location = (-0.24, -0.16, 0.12)
+        cam.rotation_euler = (D(66), 0, D(-48))
+        _g["render"](os.path.join(PREV_DIR, "knife_studio_q3.png"), 1600, 900)
+    for o in bpy.context.scene.objects:
+        o.select_set(o is j)
+    out = os.path.join(OUT_DIR, "knife.glb")
+    bpy.ops.export_scene.gltf(
+        filepath=out, export_format="GLB", use_selection=True,
+        export_animations=False, export_skins=False, export_morph=False,
+        export_apply=True, export_yup=True, export_tangents=False,
+        export_vertex_color="NAME", export_vertex_color_name="Col", export_all_vertex_colors=False)
+    import shutil, subprocess
+    gt = shutil.which("gltf-transform")
+    before = os.path.getsize(out)
+    r = None
+    if gt:
+        for attempt in range(3):
+            r = subprocess.run([gt, "draco", out, out, "--quantize-position", "15",
+                                "--quantize-normal", "9", "--quantize-texcoord", "10",
+                                "--quantize-color", "8", "--encode-speed", "0"],
+                               capture_output=True, text=True, shell=(os.name == "nt"))
+            if r.returncode == 0:
+                break
+    rep = {"weapon": "knife", "tris": tris, "bytes_raw": before, "bytes": os.path.getsize(out),
+           "draco": bool(r is not None and r.returncode == 0)}
+    print("A5KNIFE " + json.dumps(rep))
+    return rep
+
+
 ids = ONLY or ["warden", "vesper", "corvus", "breaker", "pike"]
-reports = [build_attachments() if w == "attachments" else build(w) for w in ids]
+reports = [build_attachments() if w == "attachments" else build_knife() if w == "knife" else build(w) for w in ids]
 print("A5DONE " + json.dumps(reports))

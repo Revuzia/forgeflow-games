@@ -23,7 +23,7 @@
 // when present. The gate therefore skips the registry-needs-a-block clause
 // and the >=6-per-cluster clause for a borrower (the lender's clause already
 // covers the exact same points). STRONGHOLD (dom) spawns on the tdm set.
-export const BORROWED_POINT_SETS = Object.freeze({ dom: "tdm" });
+export const BORROWED_POINT_SETS = Object.freeze({ dom: "tdm", hill: "tdm", tags: "tdm", ladder: "ffa" }); // [lane modes] + OUTPOST / RECLAIM on tdm, ASCENT on ffa
 export function pointSetOf(modeId) { return BORROWED_POINT_SETS[modeId] || modeId; }
 
 export function hasPvpContent(content) {

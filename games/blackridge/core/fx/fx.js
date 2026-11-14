@@ -394,6 +394,27 @@ export function createFx(ctx) {
 
   const _puffPos = [0, 0, 0];
 
+  // [melee] knife strike: blood through the EXISTING blood system (flesh puff +
+  // exit spray + KIND_BLOOD spatter behind the victim, same gates as a bullet), a
+  // dust tick where the blade meets a wall; and the strike's sound (sfx.onMelee —
+  // audio.js is not this lane's file, so it is reached like boot's zone cue).
+  const MELEE_PROF = { power: 0.85, size: 0.0 };
+  function onMelee(d) {
+    if (!d) return;
+    try {
+      const core = ctx.__audioCore;
+      const sx = core && core.sfx;
+      if (sx && sx.onMelee && core.env && core.env.ac && core.env.ac.state === "running") sx.onMelee(d);
+    } catch (e) { /* audio never breaks the frame */ }
+    if (d.phase === "hit" && d.pos && d.victim !== "P") {   // never blood at the camera (see handleHit)
+      const key = d.victim == null ? "?" : d.victim;
+      if (fleshGate(key)) impacts.puff(d.pos, "flesh");
+      if (d.dir && bloodGate(key)) bloodBehind(d.pos, d.dir, MELEE_PROF);
+    } else if (d.phase === "miss" && d.surface && d.pos) {
+      impacts.puff(d.pos, "dustSmall");
+    }
+  }
+
   function clearAll() {
     pools.clear();
     decals.clear();
@@ -438,6 +459,7 @@ export function createFx(ctx) {
       bridge.register("land", guard(onLand));
       bridge.register("explosion", guard(onExplosion));
       bridge.register("grenade", guard(onGrenade));
+      bridge.register("melee", guard(onMelee)); // [melee]
     },
 
     update(dtWall) {

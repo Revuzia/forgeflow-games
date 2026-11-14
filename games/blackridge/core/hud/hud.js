@@ -713,6 +713,226 @@ function createZoneHud(ctx, root) {
 }
 
 // ---------------------------------------------------------------------------
+// [lane modes] OUTPOST / RECLAIM / ASCENT objective HUD — lives INSIDE #hud
+// (the capture harness photographs it), follows the STRONGHOLD pattern:
+//   OUTPOST — a hill chip under the clock (site number + name + state + the
+//             rotation timer, in the holder's colour, CONTESTED blink),
+//             "NEXT · …" in the preview window, a world marker over the live
+//             hill and a ghost marker over the next one (edge-pinned when
+//             off-screen), the hold bar while you stand in it
+//   RECLAIM — a tally chip (confirms per team) + the nearest tags as small
+//             world markers within 40 m (C = confirm an enemy's, D = deny ours)
+//   ASCENT  — the rung panel (your rung / weapon / attachments, next weapon,
+//             a pip per rung with the leader's rung outlined)
+//   all     — announcer lines from the hill / tag / ladder events
+// View-only (reads sim.state.match.mode). DOM pooled at creation; per-frame
+// work change-gated.
+// ---------------------------------------------------------------------------
+const MODES_CSS = `
+/* [lane modes] OUTPOST / RECLAIM / ASCENT */
+#a10-modes{position:absolute;inset:0;display:none;}
+#a10-modes .md-chip{position:absolute;top:96px;left:50%;transform:translateX(-50%);white-space:nowrap;display:none;
+  border:2px solid rgba(232,232,228,.55);background:rgba(12,14,16,.45);padding:5px 12px;font-size:13px;letter-spacing:.18em;}
+#a10-modes .md-chip .tm{opacity:.8;margin-left:10px;}
+#a10-modes .md-chip.contested{animation:a10DomBlink .5s steps(2,start) infinite;}
+#a10-modes .md-next{position:absolute;top:130px;left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:.24em;opacity:.8;white-space:nowrap;display:none;}
+#a10-modes .md-mk{position:absolute;transform:translate(-50%,-100%);text-align:center;white-space:nowrap;}
+#a10-modes .md-mk .dia{width:22px;height:22px;margin:0 auto;transform:rotate(45deg);border:2px solid currentColor;
+  background:rgba(12,14,16,.5);display:flex;align-items:center;justify-content:center;}
+#a10-modes .md-mk .dia span{transform:rotate(-45deg);font-size:12px;line-height:1;}
+#a10-modes .md-mk .m{font-size:10px;letter-spacing:.12em;margin-top:5px;opacity:.85;}
+#a10-modes .md-mk.ghost{opacity:.55;}
+#a10-modes .md-mk.ghost .dia{border-style:dashed;}
+#a10-modes .md-mk.small .dia{width:14px;height:14px;}
+#a10-modes .md-mk.small .dia span{font-size:9px;}
+#a10-modes .md-mk.contested .dia{animation:a10DomBlink .5s steps(2,start) infinite;}
+#a10-modes .md-cap{position:absolute;left:50%;bottom:31%;transform:translateX(-50%);text-align:center;display:none;}
+#a10-modes .md-cap .t{font-size:15px;letter-spacing:.26em;margin-bottom:7px;}
+#a10-modes .md-cap .track{width:280px;height:6px;background:rgba(232,232,228,.18);margin:0 auto;position:relative;}
+#a10-modes .md-cap .fill{position:absolute;left:0;top:0;bottom:0;width:0;}
+#a10-modes .md-rung{position:absolute;top:96px;left:50%;transform:translateX(-50%);text-align:center;white-space:nowrap;display:none;}
+#a10-modes .md-rung .r{font-size:15px;letter-spacing:.22em;}
+#a10-modes .md-rung .w{font-size:11px;letter-spacing:.18em;opacity:.8;margin-top:4px;}
+#a10-modes .md-rung .pips{margin-top:6px;display:flex;gap:3px;justify-content:center;}
+#a10-modes .md-rung .pips i{display:block;width:14px;height:4px;background:rgba(232,232,228,.22);}
+#a10-modes .md-rung .pips i.on{background:#d9a441;}
+#a10-modes .md-rung .pips i.ld{outline:1px solid #e8e8e4;outline-offset:1px;}
+#a10-modes .md-ann{position:absolute;top:156px;left:50%;transform:translateX(-50%);text-align:center;}
+#a10-modes .md-ann div{font-size:17px;letter-spacing:.3em;margin-bottom:6px;opacity:0;white-space:nowrap;}
+`;
+const ATT_SHORT = { holo: "HOLO", reddot: "DOT", compensator: "COMP", grip: "GRIP", laser: "LASER", rapidfire: "RAPID", suppressor: "SUPP", extmag: "EXT MAG", scope: "SCOPE", irons: "IRONS" };
+
+function createModesHud(ctx, root) {
+  {
+    const el = document.getElementById("a10-style");
+    if (el && el.textContent.indexOf("[lane modes] OUTPOST") < 0) el.textContent += MODES_CSS;
+  }
+  const box = document.createElement("div");
+  box.id = "a10-modes";
+  box.innerHTML = `<div class="md-chip"></div><div class="md-next"></div>` +
+    `<div class="md-rung"><div class="r"></div><div class="w"></div><div class="pips"></div></div>` +
+    `<div class="md-mks"></div><div class="md-cap"></div><div class="md-ann"></div>`;
+  root.appendChild(box);
+  const chip = box.querySelector(".md-chip"), nextEl = box.querySelector(".md-next");
+  const rung = box.querySelector(".md-rung"), rungR = rung.querySelector(".r"), rungW = rung.querySelector(".w"), pipsEl = rung.querySelector(".pips");
+  const mksEl = box.querySelector(".md-mks"), capEl = box.querySelector(".md-cap"), annEl = box.querySelector(".md-ann");
+  const MK_N = 8;
+  const mks = [], anns = [];
+  for (let i = 0; i < MK_N; i++) {
+    const k = document.createElement("div");
+    k.className = "md-mk"; k.style.display = "none";
+    k.innerHTML = `<div class="dia"><span></span></div><div class="m"></div>`;
+    mksEl.appendChild(k);
+    mks.push({ el: k, l: k.querySelector("span"), m: k.querySelector(".m"), sig: "", pos: "" });
+  }
+  for (let i = 0; i < 3; i++) { const a = document.createElement("div"); annEl.appendChild(a); anns.push({ el: a, t: -99 }); }
+  const st = { on: null, sig: { chip: "", next: "", rung: "", cap: "" }, v: null, teams: null };
+  const TINT = ["#d9a441", "#7c9fd0"], NEUTRAL = "#e8e8e4", RED = "#ff4d4d";
+  const tintOf = (team) => {
+    if (team !== 0 && team !== 1) return NEUTRAL;
+    const cb = liveTeamColors();
+    if (cb) return team === 0 ? cb.friend : cb.enemy;
+    const t = st.teams && st.teams[team];
+    return (t && t.tint) || TINT[team];
+  };
+  const wName = (id) => { const w = ctx.weapons && ctx.weapons[id]; return String((w && w.name) || id || "").toUpperCase(); };
+  const tierName = (tr) => !tr ? "" : tr.knife ? "KNIFE" :
+    wName(tr.weapon) + (tr.attach && tr.attach.length ? " · " + tr.attach.map((a) => ATT_SHORT[a] || String(a).toUpperCase()).join(" / ") : "");
+  const fmt = (s) => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+
+  function announce(text, color, t) {
+    let slot = anns[0];
+    for (const a of anns) if (a.t < slot.t) slot = a;
+    slot.t = t; slot.el.textContent = text; slot.el.style.color = color;
+    for (const a of anns.slice().sort((x, y) => y.t - x.t)) annEl.appendChild(a.el);
+  }
+  function onEvent(type, d, t) {
+    if (!d || !st.on) return;
+    if (type === "hill") {
+      if (d.state === "active") announce(`OUTPOST ${d.label} · ${d.name} IS LIVE`, NEUTRAL, t);
+      else if (d.state === "preview") announce(`OUTPOST MOVING — ${d.nextName}`, NEUTRAL, t);
+      else if (d.state === "held") announce(d.team === 0 ? "WE HOLD THE OUTPOST" : "ENEMY HOLDS THE OUTPOST", d.team === 0 ? tintOf(0) : RED, t);
+      else if (d.state === "contested" && d.prevTeam === 0) announce("OUTPOST CONTESTED", RED, t);
+    } else if (type === "tag") {
+      if (d.state === "confirmed") {
+        if (d.byWho === "P") announce("KILL CONFIRMED  +1", tintOf(0), t);
+        else if (d.byTeam === 1 && d.team === 0) announce("ENEMY CONFIRMED A KILL", RED, t);
+      } else if (d.state === "denied" && d.byWho === "P") announce("KILL DENIED", tintOf(0), t);
+    } else if (type === "ladder") {
+      if (d.who === "P" && d.state === "promoted") announce(`RUNG ${d.tier + 1}`, tintOf(0), t);
+      else if (d.who === "P" && d.state === "demoted") announce("KNIFED — DOWN A RUNG", RED, t);
+      else if (d.by === "P" && d.state === "demoted") announce("SENT THEM DOWN A RUNG", tintOf(0), t);
+      else if (d.state === "lead" && d.who === "P") announce("YOU HAVE THE LEAD", tintOf(0), t);
+    }
+  }
+  function project(pos, out) {
+    const cam = ctx.camera, TH = ctx.THREE;
+    if (!cam || !TH) return false;
+    if (!st.v) st.v = new TH.Vector3();
+    st.v.set(pos[0], pos[1], pos[2]).project(cam);
+    out[0] = st.v.x; out[1] = st.v.y; out[2] = st.v.z;
+    return true;
+  }
+  const scr = [0, 0, 0];
+  function marker(i, sim, pos, label, color, cls, row, pin) {
+    const k = mks[i], p = sim.state.player;
+    if (!project([pos[0], pos[1] + 2.2, pos[2]], scr)) { k.el.style.display = "none"; return; }
+    const vw = window.innerWidth || 1280, vh = window.innerHeight || 720;
+    let x, y;
+    const behind = scr[2] > 1;
+    if (!behind && scr[0] >= -0.95 && scr[0] <= 0.95 && scr[1] >= -0.9 && scr[1] <= 0.9) {
+      x = (scr[0] * 0.5 + 0.5) * vw; y = (-scr[1] * 0.5 + 0.5) * vh;
+    } else if (pin) {
+      const rel = relDegTo(sim, pos);
+      x = rel >= 0 ? vw - 40 : 40; y = vh * 0.36 + row * 52;
+    } else { if (k.el.style.display !== "none") k.el.style.display = "none"; return; }
+    const dist = Math.round(Math.hypot(pos[0] - p.pos[0], pos[2] - p.pos[2]));
+    const sig = label + color + cls + dist;
+    if (sig !== k.sig) { k.sig = sig; k.l.textContent = label; k.el.style.color = color; k.m.textContent = dist + " m"; k.el.className = "md-mk " + cls; }
+    const ps = x.toFixed(0) + "," + y.toFixed(0);
+    if (ps !== k.pos) { k.pos = ps; k.el.style.left = x.toFixed(0) + "px"; k.el.style.top = y.toFixed(0) + "px"; }
+    if (k.el.style.display !== "block") k.el.style.display = "block";
+  }
+  const hideFrom = (i) => { for (; i < MK_N; i++) if (mks[i].el.style.display !== "none") mks[i].el.style.display = "none"; };
+  const setHtml = (key, el, html) => {
+    if (st.sig[key] === html) return;
+    st.sig[key] = html; el.innerHTML = html; el.style.display = html ? "block" : "none";
+  };
+
+  function update(sim, t) {
+    const M = sim && sim.state.match;
+    const id = M && M.phase !== "ended" && (M.modeId === "hill" || M.modeId === "tags" || M.modeId === "ladder") ? M.modeId : null;
+    if (id !== st.on) {
+      st.on = id;
+      box.style.display = id ? "block" : "none";
+      for (const a of anns) { a.t = -99; a.el.style.opacity = "0"; }
+      setHtml("chip", chip, ""); setHtml("next", nextEl, ""); setHtml("cap", capEl, "");
+      st.sig.rung = ""; rung.style.display = "none";
+      hideFrom(0);
+    }
+    if (!id) return;
+    st.teams = M.teams;
+    const MD = M.mode || {}, p = sim.state.player;
+    let used = 0;
+    if (id === "hill" && MD.hill && MD.zones && MD.zones[0]) {
+      const H = MD.hill, z = MD.zones[0];
+      const col = H.contested ? RED : tintOf(H.holder);
+      const state = H.contested ? "CONTESTED" : H.holder === 0 ? "HELD" : H.holder === 1 ? "ENEMY HELD" : "NEUTRAL";
+      setHtml("chip", chip, `<span style="color:${col}">OUTPOST ${H.label} · ${H.name} · ${state}</span><span class="tm">${fmt(H.timeLeftS)}</span>`);
+      chip.style.borderColor = col;
+      chip.className = "md-chip" + (H.contested ? " contested" : "");
+      setHtml("next", nextEl, H.previewOn && MD.zones[1] ? `NEXT · OUTPOST ${MD.zones[1].label} · ${H.nextName} IN ${fmt(H.timeLeftS)}` : "");
+      const inside = p.alive && Math.hypot(p.pos[0] - z.pos[0], p.pos[2] - z.pos[2]) <= z.r && Math.abs(p.pos[1] - z.pos[1]) <= 2.5;
+      if (!inside && p.alive) marker(used++, sim, z.pos, H.label, col, H.contested ? "contested" : "", 0, true);
+      if (MD.zones[1] && p.alive) marker(used++, sim, MD.zones[1].pos, MD.zones[1].label, NEUTRAL, "ghost", 1, true);
+      let cap = "";
+      if (inside) {
+        const text = H.contested ? "CONTESTED" : H.holder === 0 ? "HOLDING THE OUTPOST" : "TAKING THE OUTPOST";
+        const c = H.contested ? RED : tintOf(0);
+        const frac = Math.max(0, Math.min(1, H.timeLeftS / (H.rotateS || 60)));
+        cap = `<div class="t" style="color:${c}">${text}</div><div class="track"><div class="fill" style="width:${(frac * 100).toFixed(0)}%;background:${c}"></div></div>`;
+      }
+      setHtml("cap", capEl, cap);
+    } else if (id === "tags") {
+      const cf = MD.confirms || [0, 0];
+      setHtml("chip", chip, `<span style="color:${tintOf(0)}">CONFIRMED ${cf[0]}</span><span class="tm" style="color:${tintOf(1)}">${cf[1]} THEIRS</span>`);
+      chip.style.borderColor = "rgba(232,232,228,.4)";
+      const tags = MD.tags || [];
+      if (p.alive && tags.length) {
+        const near = [];
+        for (const g of tags) { const d = Math.hypot(g.pos[0] - p.pos[0], g.pos[2] - p.pos[2]); if (d <= 40) near.push([d, g]); }
+        near.sort((a, b) => a[0] - b[0]);
+        for (let i = 0; i < near.length && used < MK_N; i++) {
+          const g = near[i][1];
+          marker(used++, sim, g.pos, g.team === 0 ? "D" : "C", tintOf(g.team), "small", 0, false);
+        }
+      }
+    } else if (id === "ladder" && MD.tiers) {
+      const n = MD.tiers.length, me = Math.min(n - 1, (MD.tier && MD.tier[0]) | 0);
+      const L = MD.leader || {};
+      const nx = MD.tiers[me + 1];
+      let pips = "";
+      for (let i = 0; i < n; i++) pips += `<i class="${i <= me ? "on" : ""}${L.tier === i && L.actorId > 0 ? " ld" : ""}"></i>`;
+      const html = `RUNG ${me + 1} / ${n}|${tierName(MD.tiers[me])}${nx ? " — NEXT " + tierName(nx) : " — LAST RUNG"}|${pips}`;
+      if (st.sig.rung !== html) {
+        st.sig.rung = html;
+        const parts = html.split("|");
+        rungR.textContent = parts[0]; rungW.textContent = parts[1]; pipsEl.innerHTML = parts[2];
+        rung.style.display = "block";
+      }
+    }
+    hideFrom(used);
+    for (const a of anns) {
+      const age = t - a.t;
+      const op = age >= 0 && age < 2.6 ? (age < 2.1 ? 0.95 : 0.95 * (2.6 - age) / 0.5) : 0;
+      const os = op.toFixed(2);
+      if (a.el.style.opacity !== os) a.el.style.opacity = os;
+    }
+  }
+  return { update, onEvent, _box: box };
+}
+
+// ---------------------------------------------------------------------------
 // createHud
 // ---------------------------------------------------------------------------
 export function createHud(ctx) {
@@ -740,7 +960,7 @@ export function createHud(ctx) {
     const hs = document.createElement("style");
     hs.id = "br-hudscale-style";
     hs.textContent = `
-#compass,#a10-grenade,#a10-dom .dm-score,#a10-dom .dm-chips,#br-xpfeed,#ld-medal,.ld-medal{scale:var(--br-hud-s,1);transform-origin:0 0;}
+#compass,#a10-grenade,#a10-dom .dm-score,#a10-dom .dm-chips,#a10-modes .md-chip,#a10-modes .md-rung,#br-xpfeed,#ld-medal,.ld-medal{scale:var(--br-hud-s,1);transform-origin:0 0;}
 #ammo,#a10-health{scale:var(--br-hud-s,1);transform-origin:100% 100%;}
 #killfeed{scale:var(--br-hud-s,1);transform-origin:100% 0;}
 #objective,#a10-banner,#ld-bar,.ld-bar,#ld-streaks,.ld-streaks{scale:var(--br-hud-s,1);transform-origin:0 100%;}
@@ -962,6 +1182,7 @@ export function createHud(ctx) {
   root.appendChild(objEl);
   const objT = objEl.querySelector(".t"), objL = objEl.querySelector(".l"), objU = objEl.querySelector(".u");
   const zoneHud = createZoneHud(ctx, root); // [lane dom] STRONGHOLD objective HUD
+  const modesHud = createModesHud(ctx, root); // [lane modes] OUTPOST / RECLAIM / ASCENT objective HUD
   const banner = document.createElement("div");
   banner.id = "a10-banner";
   banner.innerHTML = `<span class="x">⨯</span><span class="n"></span>`;
@@ -1525,20 +1746,24 @@ export function createHud(ctx) {
     // ---- ammo block
     const mag = p.weapon.mag, res = p.weapon.reserve;
     const wid = p.weapon.id;
-    if (wid + (weapon ? "" : "?") !== st.lastWname) {
-      st.lastWname = wid + (weapon ? "" : "?");
-      amName.textContent = wName(wid);
-      amMode.textContent = weapon ? (weapon.class === "shotgun" ? "PUMP" : weapon.auto ? "AUTO" : "SEMI") : "";
+    const knifeRung = !!p._knifeOnly; // [lane modes] ASCENT's last rung: the knife is the weapon
+    if (wid + (weapon ? "" : "?") + (knifeRung ? "k" : "") !== st.lastWname) {
+      st.lastWname = wid + (weapon ? "" : "?") + (knifeRung ? "k" : "");
+      amName.textContent = knifeRung ? "KNIFE — MELEE ONLY" : wName(wid);
+      amMode.textContent = knifeRung ? "" : weapon ? (weapon.class === "shotgun" ? "PUMP" : weapon.auto ? "AUTO" : "SEMI") : "";
+      st.lastMag = null;
     }
     if (mag !== st.lastMag) {
       st.lastMag = mag;
+      if (knifeRung) { amMag.textContent = "—"; amMag.className = "a10-mag"; amLow.style.visibility = "hidden"; } else {
       amMag.textContent = String(mag);
       const magSize = weapon ? weapon.mag : 30;
       const frac = magSize ? mag / magSize : 1;
       amMag.className = "a10-mag" + (frac <= 0.10 ? " crit" : frac <= 0.25 ? " low" : "");
       amLow.style.visibility = frac < 0.25 ? "visible" : "hidden";
+      }
     }
-    if (res !== st.lastRes) { st.lastRes = res; amRes.textContent = "/ " + res; }
+    if (res !== st.lastRes || knifeRung !== st.lastKnife) { st.lastRes = res; st.lastKnife = knifeRung; amRes.textContent = knifeRung ? "" : "/ " + res; }
     const nades = p.grenades | 0;
     const lethalId = (p.kit && p.kit.lethal) || "frag";           // [integration v146]
     if (nades !== st.lastNades || lethalId !== st.lastLethal) {
@@ -1639,6 +1864,7 @@ export function createHud(ctx) {
 
     // ---- [lane dom] STRONGHOLD zones (no-op outside a STRONGHOLD match)
     zoneHud.update(sim, t);
+    modesHud.update(sim, t); // [lane modes]
 
     // ---- objective toast (amber underline sweep, never a blocking banner)
     const oAge = t - st.objToastT;
@@ -1799,6 +2025,7 @@ export function createHud(ctx) {
       bridge.register("death", onDeath);
       bridge.register("objective", onObjective);
       bridge.register("zonecap", (d) => zoneHud.onZone(d, simNow())); // [lane dom]
+      for (const ev of ["hill", "tag", "ladder"]) bridge.register(ev, (d) => modesHud.onEvent(ev, d, simNow())); // [lane modes]
       bridge.register("reload", onReload);
       bridge.register("empty", onEmpty);
       bridge.register("grenade", onGrenade);

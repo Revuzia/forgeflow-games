@@ -1102,3 +1102,20 @@ export const STRONGHOLD_ZONES = [
 ];
 
 export default { buildLayout, ARENA_SPEC };
+
+// ===========================================================================
+// OUTPOST HILLS [lane modes] — DATA ONLY, consumed at runtime by
+// core/match/modes/hill.js (OUTPOST, the rotating-hill mode). One hill is live
+// at a time and rotation runs through this list in order. MEASURED on this
+// map's baked nav (bakeNav cell 0.75, scratch hill_probe): every centre is a
+// walkable ground node, 100% of the r-disk is on nav, reachable from both CTF
+// stands, >= 5 m from every spawn point. d0/d1 = nav metres from the AMBER /
+// SLATE stand. No geometry, collider or nav change was made for these.
+// ===========================================================================
+export const OUTPOST_HILLS = [
+  { id: "1", name: "SHED YARD", pos: [-4.5, 0, 1.0], r: 4.0 }, // the shed yard (STRONGHOLD B) — d 34.3 / 37.6, spawn >= 5.4 m
+  { id: "2", name: "SHED NORTH", pos: [-11.0, 0, -15.0], r: 4.0 }, // north of the shed — d 38.2 / 38.8 (symmetric), spawn >= 6.1 m
+  { id: "3", name: "SOUTH ROAD", pos: [-8.5, 0, 24.5], r: 4.0 }, // south road (STRONGHOLD A, AMBER side) — d 28.1 / 59.0, spawn >= 6.0 m
+  { id: "4", name: "FAR YARD", pos: [13.0, 0, 34.5], r: 4.0 }, // south-east yard — d 53.5 / 58.1, spawn >= 6.0 m
+  { id: "5", name: "NORTH ROAD", pos: [-2.0, 0, -28.5], r: 4.0 }, // north road (STRONGHOLD C, SLATE side) — d 56.5 / 28.5, spawn >= 6.4 m
+];

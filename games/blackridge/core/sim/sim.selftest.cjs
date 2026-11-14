@@ -836,6 +836,9 @@ async function main() {
       // type, phased (out|bounce|pop|flashed|stunned|plant|trip|destroy|remove|
       // smokeEnd); see core/sim/equipment.js header + equipment.selftest.cjs
       "equip",
+      // [melee lane] additive: the quick knife strike — ONE type, phased
+      // (swing|hit|miss); see core/sim/melee.js header + melee.selftest.cjs
+      "melee",
     ]);
     const seen = new Set();
     const sim = S.createSim({
@@ -845,7 +848,8 @@ async function main() {
     sim.mission.start(sim);
     sim.spawnBot("rifleman", -30, 46, {});
     for (let i = 0; i < 600; i++) {
-      const c = cmd({ moveZ: 1, sprint: i % 200 > 100, fire: i % 100 > 90, jump: i % 150 === 0, grenade: i > 300 && i < 304 });
+      const c = cmd({ moveZ: 1, sprint: i % 200 > 100, fire: i % 100 > 90, jump: i % 150 === 0, grenade: i > 300 && i < 304,
+        melee: i === 20 }); // [melee lane] exercise the knife verb too
       sim.step(c);
     }
     sim.damage("P", 30);

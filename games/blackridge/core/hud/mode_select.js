@@ -38,13 +38,23 @@ const FALLBACK_RULES = {
   // [lane dom] STRONGHOLD — defaults-only (no content.modes block needed);
   // the numbers mirror core/match/modes/dom.js DOM_DEFAULTS
   dom: { displayName: "STRONGHOLD", scoreLimit: 200, timeLimitS: 600, respawnS: 4, scoreTickS: 2.5, captureS: 10, neutraliseS: 5 },
+  // [lane modes] defaults-only borrowers; numbers mirror core/match/modes/{hill,tags,ladder}.js
+  hill: { displayName: "OUTPOST", scoreLimit: 250, timeLimitS: 600, respawnS: 4, rotateS: 60, previewS: 10 },
+  tags: { displayName: "RECLAIM", scoreLimit: 40, timeLimitS: 600, respawnS: 4, tagTtlS: 30 },
+  ladder: { displayName: "ASCENT", timeLimitS: 480, respawnS: 2.5 },
 };
+// the card order on the grid (4 columns x 2 rows; the pitch line folds away on a
+// short screen, the panel scrolls; every card is a pad-focusable role=button)
+export const MODE_ORDER = ["tdm", "ctf", "ffa", "dom", "hill", "tags", "ladder"]; // [lane modes]
 
 const PITCH = {
   tdm: "5 v 5 · first team to the kill limit",
   ctf: "5 v 5 · take theirs, get it home",
   ffa: "10 players · everyone is hostile",
   dom: "5 v 5 · take the zones, hold them, bleed their score", // [lane dom]
+  hill: "5 v 5 · one outpost at a time, and it keeps moving", // [lane modes]
+  tags: "5 v 5 · a kill only counts when you grab the tag", // [lane modes]
+  ladder: "10 players · every kill, a new gun · first to the top", // [lane modes]
 };
 
 const DIFFICULTIES = ["casual", "standard", "hard"];
@@ -107,9 +117,14 @@ function ensureCardStyle() {
   const el = document.createElement("style");
   el.id = "w6-cards-style";
   el.textContent = `
-.w6-cards{display:flex;flex-wrap:wrap;gap:14px;margin:6px 0 18px;}
-.w6-card{flex:1 1 0;border:1px solid rgba(232,232,228,.18);padding:14px 16px;
-  cursor:pointer;transition:border-color .15s ease;min-width:150px;}
+.w6-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:6px 0 16px;padding:3px;}
+.w6-card{border:1px solid rgba(232,232,228,.18);padding:9px 11px;
+  cursor:pointer;transition:border-color .15s ease;min-width:0;}
+.w6-cards .w6-card .nm{font-size:13px;letter-spacing:.12em;overflow-wrap:break-word;}
+.w6-card:focus-visible{outline:2px solid var(--a10-amber,#d9a441);outline-offset:2px;}
+@media (max-width:560px){.w6-cards{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media (max-height:460px){.w6-cards{gap:6px;margin-bottom:10px;}
+  .w6-card{padding:6px 8px;}.w6-card .pt{display:none;}.w6-card .nm{margin-bottom:0;font-size:12px;letter-spacing:.14em;}}
 .w6-card:hover{border-color:rgba(232,232,228,.45);}
 .w6-card.on{border-color:var(--a10-amber,#d9a441);}
 .w6-card.offline{opacity:.45;cursor:default;}
@@ -176,6 +191,24 @@ export function createModeSelect(ctx, cb) {
       `Carriers: no tac-sprint, no grenades, no regen · 8s carry reveals you`,
       `A dropped flag returns in 30s — instantly if a defender touches it`,
     ];
+    if (id === "hill") return [ // [lane modes] OUTPOST
+      `One outpost live at a time · hold it alone: +1 a second · first to ${r.scoreLimit} wins · ${fmtMin(r.timeLimitS)}`,
+      `Both teams inside = contested, nobody scores · it moves every ${r.rotateS}s, the next shown ${r.previewS}s early`,
+      `Respawn in ${r.respawnS}s, never on top of the outpost`,
+      `Tie → overtime: no respawns, the next point wins it`,
+    ];
+    if (id === "tags") return [ // [lane modes] RECLAIM
+      `A fallen operator drops a tag · grab an enemy's to confirm (+1) · first to ${r.scoreLimit} wins · ${fmtMin(r.timeLimitS)}`,
+      `Grab a teammate's tag to deny it · kills alone don't score · tags vanish after ${r.tagTtlS}s`,
+      `Respawn in ${r.respawnS}s`,
+      `Tie → overtime: no respawns, the next confirm wins it`,
+    ];
+    if (id === "ladder") return [ // [lane modes] ASCENT
+      `Everyone on the same weapon · every kill moves you up a rung · the kill on the last rung wins · ${fmtMin(r.timeLimitS)}`,
+      `Five weapons and three variants, then the knife · a knife kill sends the victim down a rung`,
+      `No classes, no pickups, no call-ins · respawn in ${r.respawnS}s`,
+      `Tie at the horn → overtime: the tied leaders' first kill wins it`,
+    ];
     if (id === "dom") return [ // [lane dom]
       `Three zones · +1 per zone you hold every ${r.scoreTickS}s · first to ${r.scoreLimit} wins · ${fmtMin(r.timeLimitS)}`,
       `Stand in a ring to capture it (${r.captureS}s alone, faster together) · enemies inside freeze it`,
@@ -201,11 +234,11 @@ export function createModeSelect(ctx, cb) {
     if (panel) state.map = loadMap(ctx.content && ctx.content.arenas); // same, for the arena row
     state.panel = panel || state.panel;
     if (!state.panel) return;
-    const cards = ["tdm", "ctf", "ffa", "dom"].map((id) => { // [lane dom] + STRONGHOLD
+    const cards = MODE_ORDER.map((id) => { // [lane dom] + STRONGHOLD; [lane modes] + OUTPOST / RECLAIM / ASCENT
       const r = contentRules(id);
       const on = state.mode === id;
       const ok = available(id);
-      return `<div class="w6-card${on ? " on" : ""}${ok ? "" : " offline"}" data-mode="${id}">` +
+      return `<div class="w6-card${on ? " on" : ""}${ok ? "" : " offline"}" data-mode="${id}" role="button" tabindex="0">` +
         `<div class="nm">${esc(r.displayName || id.toUpperCase())}</div>` +
         `<div class="pt">${esc(PITCH[id] || "")}</div>` +
         (ok ? "" : `<div class="off">COMING ONLINE</div>`) +
@@ -238,6 +271,7 @@ export function createModeSelect(ctx, cb) {
       } else {
         kit = "Everyone deploys with the GS-9 Pike and a frag · rifles are won from the map racks";
       }
+      if (state.mode === "ladder") kit = "ASCENT ignores loadouts: everyone climbs the same weapon ladder"; // [lane modes]
       loadoutRow =
         `<div style="font-size:10px;letter-spacing:.24em;opacity:.5;margin:14px 0 6px">LOADOUT</div>` +
         `<div class="w6-diff w6-play" style="margin-bottom:6px">${play}</div>` +
@@ -257,7 +291,12 @@ export function createModeSelect(ctx, cb) {
       `<div class="w6-err"></div>` +
       `</div>`;
 
+    {
+      const sel = state.panel.querySelector(".w6-card.on");
+      if (sel && sel.scrollIntoView) { try { sel.scrollIntoView({ block: "nearest" }); } catch (e) { /* old engines */ } }
+    }
     state.panel.querySelectorAll(".w6-card").forEach((c) => {
+      c.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); c.click(); } });
       c.addEventListener("click", () => {
         state.mode = c.getAttribute("data-mode");
         render();
