@@ -1,0 +1,131 @@
+{
+ "verifier": "orch1 adversarial verifier, SIM / PROBE lens (headless deterministic sim, real src/sim movement + bodypath + nav, real src/render/pick.ts; no browser)",
+ "target": "clicks and pathing fix round 4, commit 098ac7436, ruling 38",
+ "owner_complaint": "path finding issues as far as clicking. it starts to run around on its own almost. also its hard to target specific minions/targets.",
+ "at": "2026-11-15T07:12:00-06:00",
+ "build": "HEAD b888b6fd6; src/sim, src/input and src/render/pick.ts are unchanged since 098ac7436 (git diff 098ac7436 HEAD -- src/sim src/input src/render/pick.ts is empty). No src edits by this verifier.",
+ "harness": "_harness/verify_controls_sim_orch.ts <walls|waves|hold|held|pick|det> <out.json> (env: HELD_T0 start second, HELD_BOTS=1 bot seats, DIAG / WDIAG per-move traces). Every run went through art/blender/common/heavy.py.",
+ "pass": false,
+ "score": 6.8,
+ "verdict": "Most of ruling 38 holds under a fresh sweep. Wall clicks are clean on both maps for every collision radius. There is no per-tick side dither. Determinism holds. Every movement-sensitive soak gate passes. The fix is still not proven in the sim, and it fails on the owner's 'runs around on its own' / 'stops short' half wherever the hero is among its OWN standing wave. Ruling 38 claims 0 moves ended > 0.5 m short of an uncrowded point (and 0 held moves > 2 m short in packed fights). This sweep found a single click on BRIDGE that ended 7.28 m short of an open, uncrowded point with a 1.17x lane: the hero was inside a standing ally wave, no lane was ever planned, and the move gave up after 2 s. It also found a held button boxed in by an ally wave sieging a BRIDGE tower that stood the hero motionless for the full 9 s, 9.19 m short. Give-up then retry ran every ~2 s, so a player holding the button sees a frozen hero. After 8:00 with live enemy fighters, 3 BRIDGE held moves of 384 reversed 3-5 times (>= 0.5 m legs, the live HOLD-DITHER signature). The worst walked 1.2 m away from its point for 1.5 s on a relaxed 'stuck' lane before coming round. The repo's own new probe_sim_hold_tower.ts (ruling 39, written against the live repro) fails its 'allies' case on the real RIFT map: the hero cannot walk through its own standing Wicks (5.57 s, 15.3 m path), and passing Wicks shove it 2.90 m. That corroborates the ally-wave class independently. Picking is much better but not the '0 wrong' ruling 38 states: 216 of 3.21 M occlusion-sweep clicks (0.0067 %) and 15 of 217 k clump clicks went to the wrong body, all near silhouette edges toward the screen corners. Combined with the live lens's open HOLD-DITHER blocker (verify_controls_live.json), pass = false.",
+ "blockers": [],
+ "majors": [
+  {
+   "id": "ALLY-WAVE-SHORT",
+   "severity": "major",
+   "map": "BRIDGE",
+   "scenario": "waves sampler, single right-click (no hold), vashil seed 3 tick 2035 (~1:08 after the 35 s warm-up)",
+   "intended": { "from": [91.9, 20.83], "to": [98.26, 26.22], "straight_m": 8.34, "reference_lane_m": 9.75, "lane_ratio": 1.17 },
+   "actual": { "endDist_m": 7.28, "goal_crowd": 0, "lane_planned": false, "ended_after_s": 2.0 },
+   "observed": "The hero started inside a standing ALLY wave (11 team-0 Wicks within 1.5 m). No lane was planned at any tick (lane 0, lanePlanned false). When the wave started marching the same way (v 3.25), those Wicks no longer counted as 'in the way', but they still body-blocked. Two no-progress windows ended the move cleanly 7.3 m short. Ruling 38 claims 0 such moves on this sampler shape (14 / 19 before, 0 / 0 after).",
+   "caveat": "The sampler teleports the hero 1.5-5.5 m behind a random minion, so the start slightly overlaps a Wick. A player can walk into the same pocket, and probe_sim_hold_tower 'allies' reproduces the class on the real map without teleporting."
+  },
+  {
+   "id": "ALLY-SIEGE-PIN-HELD",
+   "severity": "major",
+   "map": "BRIDGE",
+   "scenario": "held-button sweep (the same point re-sent every 15 ticks while > 2 m short, 9 s), ardit seed 7 move 7, t 289 s, 7.5 m from a tower",
+   "intended": { "from": [109.17, 20.29], "to": [108.77, 30.04], "straight_m": 9.76 },
+   "actual": { "endDist_m": 9.19, "goal_crowd": 0, "moved_m": 0.3, "held_s": 9 },
+   "observed": "Ten ally Wicks were standing (v 0) round the hero while they sieged the tower. The hero did not move for 255 ticks. The watchdog behaved per spec: two windows with no lane, the move ended, and the held re-send restarted it about every 2 s. Without the re-send, the move ends at ~2.6 s. Ally Wicks that are attacking never yield to their own hero, so a held button gives a frozen hero for as long as the wave stands. To a player this reads as 'the click does nothing'."
+  },
+  {
+   "id": "LATE-HELD-REVERSALS",
+   "severity": "major",
+   "map": "BRIDGE",
+   "scenario": "held-button sweep after 8:00 with bot fighters in every other seat (HELD_BOTS=1 HELD_T0=480), 384 moves",
+   "actual": { "reversals_ge3": 3, "reversals_ge5": 1, "revMax": 5, "regress_over_1m": 22, "worstRegress_m": 4.0, "ended_short_uncrowded": 0 },
+   "observed": "hesmi s19 k9 (t 551 s): an enemy fighter's dash knocked the hero back (cc 64). After a no-progress window, the relaxed stuck lane (up to 2 m back) walked it 1.2 m AWAY from its point for ~1.5 s (d 6.6 -> 7.8 m). It then re-planned to the other side (side -1 -> +1) and arrived at 5.6 s. The move did arrive, but the back-and-forth is the shape the owner calls 'runs around on its own'. RIFT, same run: 0 reversals >= 3, 0 short.",
+   "caveat": "Part of the reversal count is enemy displacement (expected). The 1.5 s walk away from the point is movement code."
+  }
+ ],
+ "minors": [
+  "PICK: 216 / 3,211,006 occlusion clicks wrong (fighter 142 / 1,653,616, minion 74 / 1,557,390) at 1920x1080 and 1280x720, zoom 24.5 / 31 / 36. All are at silhouette edges (lat 0.7 of the half-body), mostly toward the top screen corners (u 0.1 / 0.9, v 0.12). Example: dunsom + greatwick at 135 deg (Wick in front-right), click on the fighter's visible shoulder at h 0.4 picks the Wick, because the screen box (+4 px over the head, body half-width at the ground scale) is wider than its true perspective silhouette. Ruling 38 states 0; the rate is negligible for players.",
+  "PICK clumps (5-8 touching Wicks, click the visible part of each): 15 / 217,370 wrong (0.007 %), same edge class.",
+  "RIFT waves: 3 / 816 moves ended > 2 m short of an uncrowded point (their reference lane was > 1.3x or unreachable, so outside ruling 38's strict claim). 2 arrived over the reference lane x 1.3 + 1 m (lisvel 11.47 vs 6.60 m, dunsom 10.94 vs 7.52 m). BRIDGE: 1 such detour (rishal 9.15 vs 6.23 m).",
+  "Hold-steer into BRIDGE faces / corners: 1 face and 3 corners backed 0.10-0.17 m (ruling 36 states 0.00), and one face kept sliding 0.44 m in the last 1.5 s. RIFT is 0 everywhere.",
+  "Early held sweep (4:00-5:30, idle seats, tower damage off): 11 RIFT and 10 BRIDGE moves regressed > 1 m from their best distance (worst 2.94 m) before arriving."
+ ],
+ "measured": {
+  "wall_clicks": {
+   "note": "320 shallow + 120 deep a radius a map; the 5 distinct fighter collision radii 0.68 (ardit), 0.62 (burdam), 0.60 (ervet), 0.55 (dunsom), 0.50 (ilsheta); 2,200 clicks a map. Reference: the open point nearest the click that the planner reaches at <= 1.3x + 0.5 m, never > 0.5 m further from the click.",
+   "rift": { "clicks": 2200, "ended_over_1m_past_best": 0, "paths_over_1.6x_net_plus_1m": 0, "walked_over_1m_away_from_click": 0, "left_open": 0, "worstFar_m": 1.0, "worstAway_m": 0.54 },
+   "bridge": { "clicks": 2200, "ended_over_1m_past_best": 0, "paths_over_1.6x_net_plus_1m": 0, "walked_over_1m_away_from_click": 0, "left_open": 0, "worstFar_m": 0.77, "worstAway_m": 0.79 },
+   "verdict": "PASS"
+  },
+  "waves": {
+   "note": "3 seeds x 16 fighters x 17 moves = 816 a map. The hero is placed behind a 3+ Wick clump in a live lane (35 s-7:00) and given one right-click 5-15 m past it. The independent reference lane is a 0.1 m 16-neighbour Dijkstra round body discs.",
+   "rift": { "n": 816, "dither_5_flips_in_1s": 0, "ditherMax": 3, "short_of_open_goal_with_lane_le_1.3x": 0, "ended_over_2m_short_uncrowded": 3, "reversals_total": 36, "revMax": 2, "walked_over_1m_away_from_goal": 0, "orderRestartedAfterEnd": 0, "clear_lane_over_1.15x_pct": 4.76, "ratio_p50": 1.07, "ratio_p95": 1.31, "vsLane_p95": 1.07 },
+   "bridge": { "n": 816, "dither_5_flips_in_1s": 0, "ditherMax": 2, "short_of_open_goal_with_lane_le_1.3x": 1, "ended_over_2m_short_uncrowded": 1, "reversals_total": 48, "revMax": 3, "walked_over_1m_away_from_goal": 0, "orderRestartedAfterEnd": 0, "clear_lane_over_1.15x_pct": 2.11, "ratio_p50": 1.07, "ratio_p95": 1.32, "vsLane_p95": 1.06 },
+   "verdict": "FAIL (1 BRIDGE move 7.28 m short with a 1.17x lane; dither fixed)"
+  },
+  "held_packed_fights": {
+   "early_idle_seats_4m_5m30": {
+    "rift": { "n": 384, "reversals_ge3": 0, "ended_over_2m_short_uncrowded": 0, "arrive_p50_s": 2.8, "arrive_p95_s": 4.6 },
+    "bridge": { "n": 384, "reversals_ge3": 0, "ended_over_2m_short_uncrowded": 1, "worst_short_m": 9.19, "arrive_p50_s": 2.8, "arrive_p95_s": 4.7 }
+   },
+   "late_bot_seats_after_8m": {
+    "rift": { "n": 384, "reversals_ge3": 0, "ended_over_2m_short_uncrowded": 0, "regress_over_1m": 10, "arrive_p50_s": 2.77, "arrive_p95_s": 4.57 },
+    "bridge": { "n": 384, "reversals_ge3": 3, "reversals_ge5": 1, "ended_over_2m_short_uncrowded": 0, "regress_over_1m": 22, "arrive_p50_s": 3.0, "arrive_p95_s": 5.93 }
+   },
+   "verdict": "FAIL (BRIDGE ally-siege pin; 3 late moves with live-style reversals)"
+  },
+  "hold_steer": {
+   "note": "40 faces + 40 concave corners a fighter a map, re-sent every 4 ticks for 4 s; ulkro, ardit, sukri, lisvel",
+   "rift": { "faceBack": 0, "cornerBack": 0, "tailJitter": 0, "worstBack_m": 0.01 },
+   "bridge": { "faceBack": 1, "cornerBack": 2, "tailJitter": 1, "worstBack_m": 0.17 },
+   "verdict": "PASS (sub-0.2 m)"
+  },
+  "pick": {
+   "note": "Real pickUnit with slop 14 px against an independent truth: the first ray hit on body cylinders of half the collision radius, ground to art height. Clear cases only (ray-hit gap >= 0.08 m). 16 fighters x the minion types x 16 bearings x 25 click samples per body, at 11 screen positions, 2 resolutions and 3 zooms.",
+   "pairs": { "clicks": 3211006, "wrong": 216, "fighter_clicks": 1653616, "fighter_wrong": 142, "minion_clicks": 1557390, "minion_wrong": 74 },
+   "clumps": { "clicks": 217370, "wrong": 15 },
+   "verdict": "PASS with a minor (0.0067 % at silhouette edges)"
+  },
+  "determinism": {
+   "note": "the same command stream twice (new clicks anywhere 15 % of the time, a held re-send every 15 ticks, attack-moves), 10-seat bot match, 7 min",
+   "rift": { "digest": "ffcec4e8", "events": "42df7eb1", "same": true },
+   "bridge": { "digest": "eedd4f4a", "events": "873fe812", "same": true },
+   "probe_sim_determinism": "PASS",
+   "verdict": "PASS"
+  },
+  "probe_suite": {
+   "result": "59 PASS / 3 FAIL of 62 (node _harness/run_probes.ts)",
+   "ruling_38_probes": { "probe_sim_core_orders": "PASS", "probe_input_clicks": "PASS", "probe_sim_core_nav": "PASS", "probe_sim_determinism": "PASS" },
+   "failing": {
+    "probe_input_shoot.ts": "test-first probe for an unimplemented Shift + left-click attack-in-place bind (another lane, wip sync 2c1bfe862); not ruling 38",
+    "probe_sim_attack_at.ts": "test-first probe for an unimplemented attackAt command (same lane); not ruling 38",
+    "probe_sim_hold_tower.ts": "ruling 39 probe built on the live HOLD-DITHER repro: dither and crawl pass for ulkro / ardit / burdam, but 'allies' FAILS: the hero cannot walk through its own Wicks (end 0.00 m but 5.57 s, path 15.34 m), 6 of 9 Wicks got past, the hero was shoved 2.90 m. Corroborates ALLY-WAVE-SHORT and ALLY-SIEGE-PIN-HELD"
+   }
+  },
+  "bot_soak": {
+   "command": "probe_sim_bot_soak.ts --full --lineup shuffle --seed0 1 / 21 (labels orch1vsim_s1 / orch1vsim_s21), 360 matches each, 0 bot faults",
+   "laners_in_lane": { "s1": "adept 68.4 % / veteran 66.4 %", "s21": "adept 69.5 % / veteran 67.1 %", "target": ">= 65 %", "verdict": "PASS" },
+   "veteran_beats_novice": { "s1": "36/40", "s21": "36/40", "pooled": "72/80 (90 %)", "target": ">= 85 %", "verdict": "PASS" },
+   "veteran_beats_adept": { "s1": "31/40", "s21": "33/40", "target": ">= 65 %", "verdict": "PASS" },
+   "bridge_sudden_death": { "s1": "3/40", "s21": "7/40", "target": "<= 25 %", "verdict": "PASS" },
+   "fail_gates": [
+    "FRAY mean placement: ulkro 3.27 / 3.29, nurrow 3.48 (s1), target 3.5-7.5 (kit balance, failed before ruling 38)",
+    "RIFT veteran median longest stretch without a death from 3:00: 3.4 min (s1; s21 2.9), target <= 3 min (watch item)"
+   ],
+   "note": "Identical to the numbers ruling 38 records, as a deterministic sim should give. Every movement-sensitive gate passes.",
+   "reports": "_harness/_reports/fw_W4_soak_orch1vsim_s1.txt, _harness/_reports/fw_W4_soak_orch1vsim_s21.txt"
+  }
+ },
+ "requested_bar_check": {
+  "wall_clicks_RIFT_BRIDGE_all_radii_0_over_1m_0_long_paths": "MET (4,400 clicks)",
+  "768_plus_wave_moves_dither_short_detour": "NOT MET: 1,632 moves; 0 dither, but 1 BRIDGE move 7.28 m short of an open goal with a 1.17x lane; detour p95 1.07x of the reference lane",
+  "hold_steer_faces_corners": "MET within 0.17 m",
+  "pick_occlusion_2_res_3_zooms": "NEAR: 0.0067 % wrong, not 0",
+  "determinism": "MET",
+  "probe_suite": "Ruling-38 probes all pass; 3 other-lane test-first probes fail, one of which (hold_tower allies) is the same ally-wave class found here",
+  "full_bot_soak_gates": "Movement gates all pass; the 2 known non-movement gates still fail"
+ },
+ "fix_direction": "Treat the hero's own Wicks as passable or yielding. Either the hero walks through allied Wicks the way the ruling 39 probe expects, or a standing or attacking ally Wick in a walking hero's lane steps aside (a soft yield like the idle one). Bound the stuck lane's backing to a short, visible sidestep, not a 1.2 m walk away. Make the pick box's top 4 px and its body half-width follow the true perspective silhouette near the screen corners.",
+ "evidence_files": [
+  "_harness/verify_controls_sim_orch.ts",
+  "_harness/_reports/fw_W4_soak_orch1vsim_s1.txt",
+  "_harness/_reports/fw_W4_soak_orch1vsim_s21.txt",
+  "_harness/_reports/probes.json"
+ ]
+}
