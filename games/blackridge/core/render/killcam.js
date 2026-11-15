@@ -330,7 +330,7 @@ export function createKillCam(ctx) {
       // [polish v149] aux 3 = tripmine; its facing rides the (unused for
       // explosions) head slot so the replay draws the same directional blast
       d.radius || 5.5, d.source === "claymore" && typeof d.yaw === "number" ? d.yaw : 0,
-      d.source === "streak" ? 2 : d.source === "claymore" ? 3 : 1);
+      d.source === "streak" ? 2 : d.source === "claymore" ? 3 : d.source === "rocket" ? 4 : 1); // [v151] aux 4 = rocket
   }
 
   // ================================================================ death event
@@ -577,7 +577,7 @@ export function createKillCam(ctx) {
       if (a[o + E.KIND] !== EK.EXPLOSION || !mini) return;
       mini.emit("explosion", {
         pos: [a[o + E.X], a[o + E.Y], a[o + E.Z]], radius: a[o + E.R],
-        source: a[o + E.AUX] === 2 ? "streak" : a[o + E.AUX] === 3 ? "claymore" : "grenade",
+        source: a[o + E.AUX] === 2 ? "streak" : a[o + E.AUX] === 3 ? "claymore" : a[o + E.AUX] === 4 ? "rocket" : "grenade",
         yaw: a[o + E.AUX] === 3 ? a[o + E.HEAD] : undefined, replay: true,
       }, liveT);
     });
