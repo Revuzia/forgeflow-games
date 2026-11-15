@@ -9,12 +9,12 @@
    "time_s": 114.3,
    "time": "01:54",
    "kind": "minion_clash",
-   "what": "mid-lane minion clash (17 Wicks within 6 m, 2 fighters within 14 m), frame 1 of 3 half a second apart",
+   "what": "mid-lane minion clash (16 Wicks within 6 m, 2 fighters within 14 m), frame 1 of 3 half a second apart",
    "map": "rift",
    "quality": "high",
    "world": [
-    93,
-    54.8
+    77.1,
+    54.9
    ]
   },
   {
@@ -25,12 +25,12 @@
    "time_s": 115.03,
    "time": "01:55",
    "kind": "minion_clash",
-   "what": "mid-lane minion clash (17 Wicks within 6 m, 2 fighters within 14 m), frame 2 of 3 half a second apart",
+   "what": "mid-lane minion clash (16 Wicks within 6 m, 2 fighters within 14 m), frame 2 of 3 half a second apart",
    "map": "rift",
    "quality": "high",
    "world": [
-    93,
-    54.8
+    77.1,
+    54.9
    ]
   },
   {
@@ -41,12 +41,12 @@
    "time_s": 115.77,
    "time": "01:55",
    "kind": "minion_clash",
-   "what": "mid-lane minion clash (17 Wicks within 6 m, 2 fighters within 14 m), frame 3 of 3 half a second apart",
+   "what": "mid-lane minion clash (16 Wicks within 6 m, 2 fighters within 14 m), frame 3 of 3 half a second apart",
    "map": "rift",
    "quality": "high",
    "world": [
-    93,
-    54.8
+    77.1,
+    54.9
    ]
   },
   {

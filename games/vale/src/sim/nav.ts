@@ -45,7 +45,7 @@ const SNAP_AWAY = 0.5;
  *  obstacle, e.g. beside a tower with the wall behind it), a click must still do something (orch1 r2: a click on the
  *  wall 0.94 m from an open point stood the hero still): the open point within SNAP_STUCK_R of the click whose route
  *  is at most SNAP_STUCK × straight + SNAP_STUCK_M, even if the way round first steps away from the click */
-const SNAP_STUCK_GAIN = 1;
+const SNAP_STUCK_GAIN = typeof process !== 'undefined' && process.env?.VALE_AB_NOSTUCK === '1' ? -1 : 1;   // TEMP A/B
 const SNAP_STUCK_R = 3;
 const SNAP_STUCK = 2;
 const SNAP_STUCK_M = 2;
