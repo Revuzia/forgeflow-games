@@ -1,0 +1,31 @@
+{
+ "ok": false,
+ "waitedS": 2,
+ "at": "2026-11-15T22:56:14.270Z",
+ "load1": 4.6,
+ "outsideChromeGpu": [
+  {
+   "pid": 1680,
+   "cpu": 0
+  },
+  {
+   "pid": 20868,
+   "cpu": 0
+  },
+  {
+   "pid": 70761,
+   "cpu": 0
+  }
+ ],
+ "outsideChromeGpuCpu": 0,
+ "heavyOthers": [
+  "slot0: run:node _harness/probe_audio_runtime.mjs match --queue bridge_standard --seed 11 --out _",
+  "slot1: run:node _harness/probe_audio_runtime.mjs match --queue fray_standard --seed 3 --out _har",
+  "slot2: run:node _harness/probe_sim_bot_soak.ts --full --lineup shuffle --seed0 1 --label ai40h_s"
+ ],
+ "quiet": false,
+ "reasons": [
+  "load1 4.6 >= 2.5",
+  "heavy slot held: slot0: run:node _harness/probe_audio_runtime.mjs match --queue bridge_standard --seed 11 --out _; slot1: run:node _harness/probe_audio_runtime.mjs match --queue fray_standard --seed 3 --out _har; slot2: run:node _harness/probe_sim_bot_soak.ts --full --lineup shuffle --seed0 1 --label ai40h_s"
+ ]
+}
