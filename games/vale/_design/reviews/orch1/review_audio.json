@@ -1,0 +1,175 @@
+{
+ "lane": "orch1-audio",
+ "reviewer": "audio lead (fresh eyes)",
+ "date": "2026-11-15",
+ "head": "5e7ce6b76",
+ "score": 6.8,
+ "summary": "A deep, carefully gated procedural audio system. Its RIFT co-op mix is close to par, but the 5v5 modes are not: BRIDGE plays 4.7 LU over the loudness token, FRAY 1.5 LU over, heal chimes run at 4x their cap, and the announcer is masked in BRIDGE. Autos on six fighters lack contact crack, and six kit hits swell instead of landing. The bell language cannot tell own from foe for first blood, multikills or shutdowns. There is no feedback for refused casts, ult ready or low health. Music is one 160 s piece per map with no rest. Voice is out of scope by ruling 9 and not counted.",
+ "strengths": [
+  "Every looping ambience-bus cue is bound and gated (rulings 34/37). Live, the ambience sits 10.5-16.8 LU under the music in all three modes, so the owner's 'heavy wind' is closed by measurement.",
+  "Fog-gated, team-relative event audio: you hear only what your team sees; pings and surrender votes stay team-private; deaths are self/ally/enemy-specific; the AWARE pass keeps threats to your living fighter audible wherever the camera is.",
+  "Strong kit identity system: each fighter has its own kit (243 f_* cues), 32 per-ability impacts at 8 dB or more third-octave distance, and 3 or more variants for any cue that can fire more than once a second, all enforced in audio/build.py.",
+  "A real adaptive score: phase and urgency layers in draft, bar-quantised combat layer, horizontal act structure, objective-pit layer by listener distance, and a muffled world while dead.",
+  "Mature runtime mix engineering: priority voice stealing (32 voices), repeat-attenuation and gain variation, convolution room per map, soft clip, an announcer queue with TTL/preempt, and a background-tab alert path for queue pop.",
+  "Usable audio settings: 6 buses, Mono, 'Soften loud sounds' (night mode) and mute in background, all with plain-language descriptions.",
+  "The measurement harness is unusually thorough (probe_audio_runtime match/pits/dead, announcer, kits, procs), so every claim here can be re-proven."
+ ],
+ "improvements": [
+  {
+   "id": "AUD-O1",
+   "impact": "blocker",
+   "effort": "L",
+   "model": "opus",
+   "modelWhy": "Mix architecture (a density-aware leveller that must not flatten threats or your own kit) needs design judgement and careful engineering.",
+   "what": "BRIDGE and FRAY 5v5 masters are far out of the loudness token: add a density-aware sfx-bus leveller and a per-mode trim",
+   "why": "Measured (_harness/_reports/r37b_match_bridge_standard_seed3.json, r37b_match_fray_standard_seed3.json): BRIDGE master -11.84 LUFS integrated (token -18 +/-1.5, so 4.7 LU over the top), sfx bus -13.25; FRAY -15.0 (sfx -16.76). RIFT co-op on the same build reads -16.9 to -19.3. A player who sets volume in RIFT gets a mix about 7 LU (more than twice as loud) in BRIDGE. MIX_TRIM_DB (src/audio/index.ts:396) is one constant for every mode, and ruling 37 records that no single trim satisfies both RIFT and BRIDGE. Within RIFT the seat also swings 2.35 LU (seed 3 Lisvel -16.92, seed 21 Ardit -19.27).",
+   "how": "In src/audio/index.ts add an HDR-style leveller between the sfx bus and its duck. Estimate the sfx bus's short-term (3 s) K-weighted loudness with an AnalyserNode RMS after a K-weight biquad pair. Glide a gain toward target (-19 LUFS sfx, cut only, at most 8 dB, attack 0.8 s, release 3 s). Exempt the threat path (AWARE), what lands on you, and OWN_KIT voices by routing them to a parallel 'priority' sfx sub-bus after the leveller. Add an optional per-mode audio.mixTrimDb in content/modes.json, validated by the zod catalog. Gate it with probe_audio_runtime match on rift_coop 3/7/11/21 plus bridge_standard and fray_standard 3/7/11: every master inside -18 +/-1.5, and kit share at least 50 %.",
+   "risk": "Pumping in dense fights if the release is too short, and own autos losing punch if the priority bus is mis-routed; listen-test a BRIDGE teamfight."
+  },
+  {
+   "id": "AUD-O2",
+   "impact": "high",
+   "effort": "S",
+   "model": "sonnet",
+   "modelWhy": "Well-specified gate tuning and re-measurement once O1 lands.",
+   "what": "Announcer lines fail to sit over the combat mix in BRIDGE and on RIFT seed 3",
+   "why": "announcerPeakOverSfxP99Ge3 fails in BRIDGE (peak over sfx p99 0.29 dB; median over the teamfight p99 -1.46 dB) and RIFT seed 3 (2.29 dB), r37b reports. A takedown or structure bell in a 5v5 fight is masked by the hits it is announcing.",
+   "how": "After O1, re-measure first. If it still fails, raise SFX_DUCK_NEWS_DB 6 -> 8 for band 1-3 lines only, and route the leveller's priority sub-bus under the news duck too (src/audio/index.ts:409-413). Keep ANN_LIFT_DB at 8 so lines do not clip the soft clip (CLIP_KNEE 0.7). Re-run the same 7 runtime seeds.",
+   "risk": "Over-ducking makes threats vanish under a line; keep the AWARE exemption."
+  },
+  {
+   "id": "AUD-O3",
+   "impact": "high",
+   "effort": "S",
+   "model": "sonnet",
+   "modelWhy": "A mechanical rate budget with an existing probe gate.",
+   "what": "Heal chimes spam the 5v5 mix: 25.75 per minute in BRIDGE against the gate of 6",
+   "why": "r37b_match_bridge_standard_seed3.json cueLog heal 181 in 7 min (healPerMinLe6 false). c_heal plays 1.48 % of the heard sfx energy and makes a constant glassy chatter that hides the hits. The HEAL_MIN_FRAC / HEAL_CHAIN_S rules (src/audio/index.ts:384-385) were tuned on RIFT co-op (3.0 per minute).",
+   "how": "Chime only for heals on YOUR fighter, plus ally heals of at least 10 % max HP inside LISTEN_INNER_M. Add a token bucket of 6 per minute (burst 2) for every non-self heal, and merge one team's heals within 1 s into one chime. Gate with probe_audio_runtime bridge_standard 3/7/11: healPerMinLe6 true.",
+   "risk": "A big burst heal could be swallowed by the bucket; let any heal of at least 25 % max HP bypass it."
+  },
+  {
+   "id": "AUD-O4",
+   "impact": "high",
+   "effort": "M",
+   "model": "opus",
+   "modelWhy": "Extending a non-verbal bell language so it reads own vs foe needs sound-design and UX judgement.",
+   "what": "The bell announcer does not say whose side won first blood, a multikill or a shutdown, and shutdown fires at a 2-kill streak",
+   "why": "src/audio/index.ts:2799-2802 plays announce.first, announce.multi.<n> and announce.shutdown with no own/foe split, although wipe, structure and objective lines have one. With no spoken words (ruling 9) the bell must carry the side. Shutdown fires whenever a victim had a streak of 2 or more (src/sim/economy.ts:78-82, 152). In FRAY seed 3 that gave 7 shutdown bells in 7 minutes against 4 enemy downs, so the rarest news sound became the commonest line.",
+   "how": "Add content keys announce.first.<own|foe>, announce.multi.<2-5>.<own|foe> and announce.shutdown.<own|foe>, falling back to the current keys. Render the foe variants in audio/build.py as the same toll in the minor or lower register (rising for own, falling for foe, as m_enemy_down and m_ally_down already do). In the engine, pick the variant by the killer's team. Gate the shutdown line in the audio layer on params.gold >= 2 x streakStep (a streak of 3 or more); smaller shutdowns keep only the HUD toast. Extend the build.py identity gate: each own/foe pair at least 8 dB third-octave distance. probe_audio_announcer: line counts per match.",
+   "risk": "Too many bell variants dilute the language; keep one timbre per event and use only register and direction for side."
+  },
+  {
+   "id": "AUD-O5",
+   "impact": "high",
+   "effort": "M",
+   "model": "opus",
+   "modelWhy": "Re-voicing cues under a tight identity-distance constraint (move the neighbours, keep 8 dB) is sound-design work.",
+   "what": "Six fighters' auto-attack hits are dull thumps with no contact crack",
+   "why": "My decode of take 1 (power-spectrum centroid, share of energy above 6 kHz): f_ulkro_attack_hit 201 Hz / 0.0 %, f_dunsom 274 / 0.0 %, f_lisvel 364 / 0.0 %, f_odrum 433 / 0.3 %, f_ilsheta 454 / 0.3 %, f_hesmi 461 / 0.0 %. The critic list was 4 fighters (Dunsom/Ulkro/Hesmi/Tunlan, the Tunlan one being f_tunlan_hit 553 Hz). By this measure Lisvel, Odrum and Ilsheta are as dark. Autos are the most-heard sound of a fighter (Lisvel's attack hit is 8.1 % of FRAY's heard sfx), and on laptop speakers these drop under the mix (verify3_q problem 1).",
+   "how": "Follow verify3_q's fix: move the NEIGHBOUR cue in the identity matrix, then add a 1-3 ms contact layer in each fighter's own material (2-6 kHz, 10-14 dB under the body) to the dark autos. Target: auto centroid at least 700 Hz and at least 1.5 % above 6 kHz on every take, identity distance still at least 8.15 dB. Add both floors to build.py's kit gate for attack_hit, then re-run the 4-seed runtime match and the 32-cue impact identity check.",
+   "risk": "Brightening 6 autos raises the mix's presence band; recheck seed 3's 0.48 LU top-bound margin (after O1 this matters less)."
+  },
+  {
+   "id": "AUD-O6",
+   "impact": "medium",
+   "effort": "M",
+   "model": "opus",
+   "modelWhy": "The blow-first re-voicing was left 'identity-limited' twice; it needs a designer to trade off neighbours.",
+   "what": "Slow kit hits still swell in instead of landing, and the impact gate is still relaxed",
+   "why": "10-90 % 2 ms-RMS rise by my decode: f_ulkro_hit 50.6 ms, f_burdam_attack_hit 39.9 ms, f_burdam_hit 20.7 ms, f_marund_hit 11.7 ms, f_ardit_hit 10.0 ms, f_ardit_attack_hit 6.6 ms. A 20-50 ms rise reads as a whoosh, not a hit, so the hit lands late against the VFX frame. audio/build.py:595 RMS_RISE_MAX_MS is still 4.0 (brief 3.0), and every shipped impact passes at 3.0 today (verify3_q).",
+   "how": "Set RMS_RISE_MAX_MS = 3.0 now (free). Extend the rise gate from the 32 per-ability impacts to the 32 shared kit hits (f_*_hit, f_*_attack_hit). Give the six cues above the blow-first pass (audio/blow_search.py), re-spacing neighbours as in O5 so identity holds.",
+   "risk": "Burdam/Odrum hit pair is already close (8.04 -> 7.64 independent metric, verify3_r); add margin there."
+  },
+  {
+   "id": "AUD-O7",
+   "impact": "medium",
+   "effort": "S",
+   "model": "sonnet",
+   "modelWhy": "A measured EQ and gain change with a clear numeric gate.",
+   "what": "Minion hits are the brightest frequent sound in a fight and own the presence band that fighter autos should own",
+   "why": "w_glimwick_hit takes 1-4: centroid 3.3-4.0 kHz with 10-16 % of energy above 6 kHz. It plays 1092-1147 times a match (BRIDGE/RIFT cueTop), while most fighter autos sit at 200-700 Hz (O5). WICK_HIT_GAIN 0.32 cuts its level, but a bright cue cuts through masking by spectrum, so in a lane fight the tick of Wicks reads over the fighters. The genre norm is champion contact on top and minion clatter underneath.",
+   "how": "In audio/build.py, re-render the w_glimwick_hit takes with a high shelf of -4 dB above 3.5 kHz and centroid at most 2.5 kHz. Add a gate: as played (file x cue gain), every fighter attack_hit's 2-6 kHz band energy is at least that of any w_* hit. Confirm in probe_audio_kits.",
+   "risk": "Too dull and the ranged-minion last-hit loses its feedback; keep the onset crisp."
+  },
+  {
+   "id": "AUD-O8",
+   "impact": "medium",
+   "effort": "M",
+   "model": "opus",
+   "modelWhy": "New gameplay-feedback sounds must fit the instrument palette and not compete with combat; needs design judgement.",
+   "what": "No audio feedback for an ability that cannot be cast, an ultimate coming up, or your own low health",
+   "why": "src/input/controller.ts plays no sound at all. The only refusal sound is the shop's error (src/ui/hud/shop.tsx:117). content/audio.json has no ready, denied (apart from shop) or low-health cue among its 427. HUD ult-ready exists only as an ally tooltip (src/ui/hud/side.tsx:51). A shipped MOBA confirms a refused key press (on cooldown, no resource, out of range), marks the ultimate coming off cooldown, and gives a soft low-health warning. Without them, players mash keys and miss their ult window when looking at the map.",
+   "how": "Add ui roles cast_denied (your key press refused; rate-limited to 1 per 0.5 s; one cue with three short variants, a muted escapement tick), ult_ready (your fighter, once per ready, a soft dial-harp chime at -26 LUFS-M), low_hp (own fighter below 25 % max HP, one heartbeat-free low bell swell, re-armed above 40 %, no loop) and optionally skill_up. Bind them in content/audio.json ui. Wire them from the client's own refusal and HP state (presentation only, no sim change). Gate in build.py: in-key, UI momentary token -24..-20 LUFS. Add a probe check that each fires once in a scripted practice run.",
+   "risk": "Over-signalling; keep low_hp single-shot and silent while dead."
+  },
+  {
+   "id": "AUD-O9",
+   "impact": "medium",
+   "effort": "L",
+   "model": "opus",
+   "modelWhy": "Composition and adaptive-score design.",
+   "what": "Match music repeats one 160 s composition per map with no rest and no endgame state",
+   "why": "audio/synth/music_match.py: every map bed is 120 BPM and 160 s, with the same S1-S5 skeleton and the same piece cuts (0/16/48/112 s). MUSIC_ACTS (src/audio/index.ts:430) only reorders those 5 sections, so the same 32 s sections cycle about 45 times in a 25-minute match. The only states are combat, objective (RIFT only) and dead. There is no siege or last-structure state, no sudden-death cue in the score, and no silence window. Long-session music fatigue is the common complaint the genre answers with rests and state-driven layers.",
+   "how": "(a) Rest windows: after 90-150 s with no act change, objective or combat, the main stem fades out over 8 s to stems only or silence, and comes back on the next downbeat after an event. (b) An 'endgame' layer per map (a tension bed for your base's last structures, or the mode's sudden death), driven by the structures-down share already read by ACT_LOST. (c) A second take of S2 and S3 per map, so the mid act has 2 variants. Keep the beds' -23 LUFS master and ambience at least 8 LU under (ruling 37). Gate with build_music.py joints QA.",
+   "risk": "Adds decoded memory (about 74 MB per whole bed noted in the header); stream the new sections through the existing window path."
+  },
+  {
+   "id": "AUD-O10",
+   "impact": "medium",
+   "effort": "S",
+   "model": "opus",
+   "modelWhy": "Deciding which sound to tame and how far needs critical listening and design judgement.",
+   "what": "Kemdo's auto hit is a harsh outlier: 63 % of its energy is above 6 kHz",
+   "why": "f_kemdo_attack_hit take 1: centroid 7445 Hz, 63 % above 6 kHz, the only cue like it among the 16 autos (the next brightest is Ervet at 21 %). In BRIDGE seed 3 the Kemdo seat's f_kemdo_hit alone was 9.46 % of the heard sfx (308 plays). A piercing high top played hundreds of times a match is a fatigue and harshness risk on headphones.",
+   "how": "Rebalance in audio/build.py: add a 600-1500 Hz body, and cap the share above 6 kHz at 30 % and the 8-12 kHz band at 6 dB over the 2-4 kHz band. Keep identity at least 8 dB. Add a per-cue HF ceiling gate for attack_hit.",
+   "risk": "Loses the needle-thin identity if overdone; the identity gate guards it."
+  },
+  {
+   "id": "AUD-O11",
+   "impact": "low",
+   "effort": "S",
+   "model": "sonnet",
+   "modelWhy": "A one-line copy fix.",
+   "what": "The Effects slider promises footsteps the game does not have",
+   "why": "content/strings.en.json:1456 'Hits, abilities, structures and footsteps.' (seen on settings audio tab, evidence ux/1920x1080/menus_065_settings_tab_audio.png). None of the 427 cues in content/audio.json is a footstep.",
+   "how": "Change the string to 'Hits, abilities, structures and creatures.' (or similar). Do not add footsteps; a top-down camera at 28 m does not need them.",
+   "risk": "none"
+  },
+  {
+   "id": "AUD-O12",
+   "impact": "low",
+   "effort": "M",
+   "model": "opus",
+   "modelWhy": "Spatial design choice with readability trade-offs.",
+   "what": "Off-screen threats carry no direction beyond left/right",
+   "why": "Spatial voices use only a StereoPannerNode (src/audio/index.ts:291, 1286, 2273) at most +/-0.6 by world x (PAN_MAX). An enemy ult wind-up just below or above the screen sounds the same as one at screen centre. The AWARE pass keeps it loud (AWARE_GAIN 0.8), but it gives no cue to look up or down.",
+   "how": "For aware-pass threats outside the view, add a gentle 'off-screen' treatment: a high shelf -3 dB plus a small pre-delay for sources behind the camera (screen-bottom), and none for screen-top. Pair it with the HUD's edge indicator if one exists. Keep mono-safe (the Mono setting).",
+   "risk": "Subtle cues can be missed; A/B with players before keeping it."
+  },
+  {
+   "id": "AUD-O13",
+   "impact": "high",
+   "effort": "S",
+   "model": "sonnet",
+   "modelWhy": "Measurement work: queue runs on an idle machine and report numbers.",
+   "what": "No idle, post-ruling-37 runtime proof of the whole audio mix across all three modes",
+   "why": "The last full runtime set (r37b_*) shows pass=false on RIFT seed 3 (announcer), BRIDGE (master, heals, announcer) and FRAY (master). Idle-gate audio_match passed only under load. Any O1-O7 change moves loudness, and seed 3's top margin was 0.48 LU.",
+   "how": "After O1-O7, run through the heavy queue: node _harness/probe_audio_runtime.mjs match for rift_coop 3/7/11/21 and bridge_standard/fray_standard 3/7/11, plus pits 3/7/21 and probe_audio_announcer/kits, with load < 3. Write one summary JSON under _design/reviews/orch1/. Every gate must pass with at least 0.5 LU margin.",
+   "risk": "Machine load invalidates frame-sync parts; check load before every run."
+  }
+ ],
+ "evidenceRead": [
+  "src/audio/index.ts (constants, announcer, music, listener)",
+  "content/audio.json (427 cues, 124 events)",
+  "audio/build.py:595",
+  "audio/synth/music_match.py",
+  "_harness/_reports/r37b_match_*.json",
+  "_design/reviews/max2/critic.json",
+  "_design/reviews/max2/sfx/verify3_q.json, verify3_r.json",
+  "_design/reviews/fixwaves/owner_rulings.md 9, 34, 37",
+  "orch1/evidence/ux 1920x1080/menus_065_settings_tab_audio.png",
+  "own decode of audio/out/*.ogg take 1 (centroid, >6 kHz share, 10-90 % 2 ms-RMS rise)"
+ ],
+ "notMeasured": "No new runtime match was run (heavy queue; the r37b reports are the latest). Spectral numbers are my own decode of take 1 per cue, with a different rise metric (10-90 %) from build.py's (-40 dB to peak), so absolute ms differ from the critic's numbers; the ranking agrees."
+}
