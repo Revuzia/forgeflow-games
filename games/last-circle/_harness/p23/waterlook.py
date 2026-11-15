@@ -423,12 +423,15 @@ def part_map(s, v, R, map_id, shots, want, interiors=True):
                 # water does not cover in the live frame - the term also darkens the seabed under the water, which is not this row's): the share of the
                 # drop view it darkens by > 0.02
                 Bw = decode(s.js(RENDER_JS, [dspec, ["water"], None])["png"])
-                wk = s.js("() => { const u = window.__LC__.W._lcU.uLcWetK.value; const x = u.x; u.x = 0; return x; }")
-                Cw = decode(s.js(RENDER_JS, [dspec, ["water"], None])["png"])
-                s.js("(x) => { window.__LC__.W._lcU.uLcWetK.value.x = x; return 1; }", wk)
+                wk = s.js("() => { const U = window.__LC__.W._lcU; if (!U || !U.uLcWetK) return null; const u = U.uLcWetK.value; const x = u.x; u.x = 0; return x; }")
+                if wk is None:                           # (a build without the wet-sand term: the base - nothing to judge)
+                    Cw = Bw
+                else:
+                    Cw = decode(s.js(RENDER_JS, [dspec, ["water"], None])["png"])
+                    s.js("(x) => { window.__LC__.W._lcU.uLcWetK.value.x = x; return 1; }", wk)
                 land = ~water_mask(r["A"], Bw)
                 d = lum(Cw) - lum(Bw)
-                M["wetDrop"] = {"wetK": wk, "landPct": round(float(land.mean() * 100), 2), "darkenedPct": round(float(((d > 0.02) & land).mean() * 100), 3),
+                M["wetDrop"] = None if wk is None else {"wetK": wk, "landPct": round(float(land.mean() * 100), 2), "darkenedPct": round(float(((d > 0.02) & land).mean() * 100), 3),
                                 "ofLandPct": round(float(((d > 0.02) & land).sum() / max(1, land.sum()) * 100), 2)}
         if interiors:
             rooms = s.js(ROOMS_JS, [SS.DEF_DROP[map_id]])
@@ -834,7 +837,10 @@ def main():
             v.check("light: OD-2 drop-view mean held in 0.45-0.55 (every map; a map already outside on the base: not further out)",
                     all(held(m, x) for m, x in dm.items()), {"build": dm, "base": bd}, "0.45-0.55")
             wd = {m: R.get(m, {}).get("wetDrop") for m in maps if (R.get(m, {}).get("wetDrop") or {}).get("wetK")}
-            if wd:
+            wmiss = [m for m in maps if R.get(m, {}).get("seaEdge") is not None and not (R.get(m, {}).get("wetDrop") or {}).get("wetK")]
+            if wmiss:
+                v.cnj("light: wet sand from the air", "no wet-sand term to toggle on %s (a build without it)" % wmiss)
+            elif wd:
                 v.check("light: wet sand from the air - the wet-sand term darkens <= 18 % of the dry land in the drop view (a swash band, not whole low islets; by height alone: 28.5 %)",
                         all(x["ofLandPct"] <= 18.0 for x in wd.values()), wd, "<= 18 % of the land")
             se = {m: R.get(m, {}).get("seaEdge") for m in maps if (R.get(m, {}).get("seaEdge") or {}).get("n", 0) >= 8}
