@@ -60,6 +60,9 @@ function heavyOthers(t) {
   return out;
 }
 
+/** heavy-slot holders other than this run's own chain (the heavy.py wrapper is an ancestor); shared with perf_1080 and probe_match_memory */
+export const otherHeavySlots = () => heavyOthers(procTable());
+
 /** one reading. quiet = all three conditions hold. Always carries load1 for the report. */
 export function quietState() {
   const t = procTable();

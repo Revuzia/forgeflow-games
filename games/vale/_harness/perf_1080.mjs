@@ -74,9 +74,10 @@
 // its verdict could not be measured (a busy machine): that is not a pass. --prod's other timing halves stay "hard checks at
 // any load" and are named under GATE PASS as "timing not measured".
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { loadavg } from 'node:os';
+import { otherHeavySlots, requireQuietFromArgs } from './require_quiet.mjs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -122,6 +123,14 @@ const MATCH_ONLY = args.includes('--match-only');
 const MATCH = (PROD && !MEM_ONLY && !args.includes('--gpubound-only') && !args.includes('--calibrate-only') && !args.includes('--mem-maps-only') && !args.includes('--no-match')) || MATCH_ONLY;
 const MATCH_SCALE = Number(opt('match-scale', 4)), MATCH_MAX_S = Number(opt('match-min', 30)) * 60;
 const MATCH_SEEDS = opt('match-seeds', '').split(',').filter(Boolean).map(Number);
+// orch1 TECH-04: --match-modes rift,bridge,fray --match-q high,ultra [--match-seeds 3,21]: the match peak for every mode x tier at --seed,
+// plus RIFT/High at each extra seed in --match-seeds. Per-case peaks go to out.matchMatrix and into idle_gates.json (--idle-gates <path>,
+// default _design/reviews/orch1/idle_gates.json, key matchMatrix; --no-idle-gates skips it). The existing hard budgets decide pass/fail;
+// the wave-2 bars (programs <= 36, triangles <= 470k, draws <= 450, 0 programs first seen after 1:00) are measured as `w2` per case.
+const MATCH_MODES = opt('match-modes', '').split(',').filter(Boolean), MATCH_TIERS = opt('match-q', '').split(',').filter(Boolean);
+const MATRIX = MATCH_MODES.length > 0 || MATCH_TIERS.length > 0;
+const W2_BAR = { programs: 36, tris: 470000, draws: 450, lateAfter60s: 0 };
+const IDLE_GATES = resolve(ROOT, opt('idle-gates', '_design/reviews/orch1/idle_gates.json'));
 const RT_SHARE = 0.99, RT_FPS = 58, RT_FLOOR = 45;
 const GPU_ONLY = args.includes('--gpubound-only');
 const CALIB_ONLY = args.includes('--calibrate-only'), CALIB_RUNS = Math.max(1, Number(opt('calib-runs', 3)));
@@ -140,7 +149,7 @@ function heavyOthers() {
   } catch (e) { return [`heavy status failed: ${e.message}`]; }
 }
 function machine() {
-  const load = +loadavg()[0].toFixed(2), heavy = heavyOthers();
+  const load = +loadavg()[0].toFixed(2), heavy = otherHeavySlots();   // own chain (the heavy.py wrapper owns the slot) excluded
   return { load, heavy, idle: load < 3 && heavy.length === 0 };
 }
 
@@ -186,7 +195,10 @@ const stat = (xs) => {
   return { mean: r.length ? +(r.reduce((s, x) => s + x, 0) / r.length).toFixed(2) : 0, p50: +p(0.5).toFixed(2), p95: +p(0.95).toFixed(2), p99: +p(0.99).toFixed(2) };
 };
 const sumGroup = (g) => ({ calls: g.calls + g.shadowCalls, tris: g.tris + g.shadowTris, main: { calls: g.calls, tris: g.tris }, shadow: { calls: g.shadowCalls, tris: g.shadowTris } });
+const QUIET_RUN = await requireQuietFromArgs(args);
+if (QUIET_RUN && !QUIET_RUN.ok) { console.log(`REFUSED (--require-quiet): ${QUIET_RUN.state.reasons.join(' | ')}`); process.exit(2); }
 const out = {
+  quiet: QUIET_RUN ? QUIET_RUN.state : null, load1: +loadavg()[0].toFixed(2),
   gpu: null, build: PROD ? 'prod' : 'dev', viewport: '1920x1080', dpr: 1, mode: 'rift', seed: SEED, matchTime: T, seconds: SEC,
   at: new Date().toISOString(), budgets: { ...BUDGET, targets: TARGET }, presets: {}, pass: true,
 };
@@ -617,8 +629,8 @@ async function memory() {
 }
 
 /** perf PERF-m5: a whole RIFT match at High, per-second peaks of triangles / draws / programs (see the header) */
-async function matchPeak(seed = SEED, rot = 0) {
-  const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=rift&q=high&t=0&seed=${seed}&rot=${rot}&dev=1&hud=0&manual=1`, { wait: false, hmr: false });
+async function matchPeak(seed = SEED, rot = 0, mode = 'rift', tier = 'high') {
+  const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=${mode}&q=${tier}&t=0&seed=${seed}&rot=${rot}&dev=1&hud=0&manual=1`, { wait: false, hmr: false });
   try {
     await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 300000 });
     const err = await page.evaluate(() => window.__VALE_BENCH__?.error ?? null);
@@ -723,7 +735,7 @@ async function matchPeak(seed = SEED, rot = 0) {
     const firstT = secs.length ? secs[0].t : 0;
     const after = machine();
     const res = {
-      seed, rot, scale: MATCH_SCALE, endT: +S.endT.toFixed(1), ended: S.ended, seconds: secs.length,
+      mode, tier, seed, rot, scale: MATCH_SCALE, endT: +S.endT.toFixed(1), ended: S.ended, seconds: secs.length,
       peakFrames: { t: S.peakFramesT, tris: S.peakTris, frames: S.peakFrames, legend: '[triangles, governor hard, crowd, crowd estimate]' }, framesOverBudget: secs.reduce((n, x) => n + (x.framesOver ?? 0), 0),
       peak: { tris: pt.tris, trisAt: pt.t, draws: pc.calls, drawsAt: pc.t, programs: pp.programs, programsAt: pp.t },
       overBudget: { tris: over('tris', BUDGET.tris), draws: over('calls', BUDGET.draws), programs: over('programs', BUDGET.programs) },
@@ -737,7 +749,7 @@ async function matchPeak(seed = SEED, rot = 0) {
     if (pt.tris > BUDGET.tris) misses.push(`peak triangles ${pt.tris} > ${BUDGET.tris} at ${pt.t} s (${res.overBudget.tris.length} s over)`);
     if (pc.calls > BUDGET.draws) misses.push(`peak draws ${pc.calls} > ${BUDGET.draws} at ${pc.t} s`);
     if (pp.programs > BUDGET.programs) misses.push(`peak programs ${pp.programs} > ${BUDGET.programs} at ${pp.t} s`);
-    if (MATCH_SEEDS.length && res.lateProgramsAfter60s.length) misses.push(`${res.lateProgramsAfter60s.length} programs first seen after loading (${res.lateProgramsAfter60s.slice(0, 4).map((x) => `${x.t} s ${x.name || x.type}`).join(', ')})`);
+    if ((MATCH_SEEDS.length || MATRIX) && res.lateProgramsAfter60s.length) misses.push(`${res.lateProgramsAfter60s.length} programs first seen after loading (${res.lateProgramsAfter60s.slice(0, 4).map((x) => `${x.t} s ${x.name || x.type}`).join(', ')})`);
     if (MATCH_SCALE === 1) {
       // critic b4-realtime: the wall-seconds a player sees (the first 5 s are the page settling and are left out)
       const rs = secs.slice(5);
@@ -811,7 +823,34 @@ try {
     out.memMaps = await memMaps();
     if (!out.memMaps.pass) out.pass = false;
   }
-  if (MATCH && MATCH_SEEDS.length) {
+  if (MATCH && MATRIX) {
+    const modes = MATCH_MODES.length ? MATCH_MODES : ['rift'], tiers = MATCH_TIERS.length ? MATCH_TIERS : ['high'];
+    const cases = [];
+    for (const m of modes) for (const t of tiers) cases.push({ mode: m, tier: t, seed: SEED, rot: 0 });
+    MATCH_SEEDS.filter((x) => x !== SEED).forEach((x, i) => cases.push({ mode: 'rift', tier: 'high', seed: x, rot: (i + 1) * 5 }));
+    out.matchMatrix = [];
+    for (const c of cases) {
+      console.log(`matrix  ${c.mode} ${c.tier} seed ${c.seed} rot ${c.rot}`);
+      const r = await matchPeak(c.seed, c.rot, c.mode, c.tier);
+      r.w2 = { bar: W2_BAR, tris: r.peak.tris <= W2_BAR.tris, draws: r.peak.draws <= W2_BAR.draws, programs: r.peak.programs <= W2_BAR.programs, late: r.lateProgramsAfter60s.length <= W2_BAR.lateAfter60s };
+      r.w2.pass = r.w2.tris && r.w2.draws && r.w2.programs && r.w2.late;
+      out.matchMatrix.push(r);
+      if (!r.pass) out.pass = false;
+    }
+    out.match = out.matchMatrix[0];
+    out.matchMatrixSummary = {
+      at: new Date().toISOString(), head: (() => { try { return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(); } catch { return null; } })(),
+      load1: { start: out.load1, end: +loadavg()[0].toFixed(2) }, quiet: out.quiet?.quiet ?? null, scale: MATCH_SCALE, bars: { hard: BUDGET, w2: W2_BAR },
+      cases: out.matchMatrix.map((r) => ({ mode: r.mode, tier: r.tier, seed: r.seed, endT: r.endT, ended: r.ended, peakTris: r.peak.tris, peakTrisAt: r.peak.trisAt, peakDraws: r.peak.draws, peakPrograms: r.peak.programs, lateProgramsAfter60s: r.lateProgramsAfter60s.length, hardPass: r.pass, w2: r.w2 })),
+      maxAcrossCases: { tris: Math.max(...out.matchMatrix.map((r) => r.peak.tris)), draws: Math.max(...out.matchMatrix.map((r) => r.peak.draws)), programs: Math.max(...out.matchMatrix.map((r) => r.peak.programs)) },
+    };
+    if (!args.includes('--no-idle-gates')) {
+      let ig = {}; try { ig = JSON.parse(readFileSync(IDLE_GATES, 'utf8')); } catch { /* new file */ }
+      ig.matchMatrix = out.matchMatrixSummary;
+      mkdirSync(dirname(IDLE_GATES), { recursive: true }); writeFileSync(IDLE_GATES, JSON.stringify(ig, null, 1));
+      console.log(`matrix  per-mode/tier peaks -> ${IDLE_GATES}`);
+    }
+  } else if (MATCH && MATCH_SEEDS.length) {
     out.matchSeeds = [];
     for (let i = 0; i < MATCH_SEEDS.length; i++) {
       // --match-rot <n>: the first seed's rotation (a targeted re-run of one seed of the sweep: seed 11 is rot 5 there)

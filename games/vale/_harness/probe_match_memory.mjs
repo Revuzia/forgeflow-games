@@ -22,6 +22,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { loadavg } from 'node:os';
+import { otherHeavySlots, requireQuietFromArgs } from './require_quiet.mjs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -52,12 +53,7 @@ const PROD_DIR = join(HERE, '_prod', 'client', 'dist');
 
 /** a slot whose owner died holds no load (heavy.py reaps it only when someone next queues), so it does not make the machine busy */
 const pidAlive = (l) => { const m = /pid (\d+)/.exec(l); if (!m) return true; try { process.kill(Number(m[1]), 0); return true; } catch (e) { return e.code !== 'ESRCH'; } };
-function heavyOthers() {
-  try {
-    const s = execFileSync('python3', [join(ROOT, 'art/blender/common/heavy.py'), 'status'], { encoding: 'utf8', timeout: 15000 });
-    return s.split('\n').map((l) => l.trim()).filter((l) => /^slot\d+:/.test(l) && !new RegExp(`pid ${process.pid}\\b`).test(l) && pidAlive(l)).map((l) => l.replace(/ for \d+s/, ''));
-  } catch (e) { return [`heavy status failed: ${e.message}`]; }
-}
+const heavyOthers = () => otherHeavySlots();   // own chain (the heavy.py wrapper owns the slot) excluded
 const machine = () => { const load = +loadavg()[0].toFixed(2), heavy = heavyOthers(); return { load, heavy, idle: load < LOAD_MAX && heavy.length === 0 }; };
 function footprintMb(pid) {
   try {
@@ -75,7 +71,9 @@ async function freePort() {
 const t0 = Date.now();
 const log = (s) => console.log(`${((Date.now() - t0) / 1000).toFixed(0).padStart(5)} s  ${s}`);
 
-const report = { probe: 'probe_match_memory', at: new Date().toISOString(), build: 'prod client', sec: SEC, bars: { matchMb: MATCH_MB, homeMb: HOME_MB, loadBelow: LOAD_MAX }, matches: [], homes: [], homesAfterPressure: [], machine: { samples: [] }, errors: [] };
+const QUIET_RUN = await requireQuietFromArgs(args, log);
+if (QUIET_RUN && !QUIET_RUN.ok) { console.log(`REFUSED (--require-quiet): ${QUIET_RUN.state.reasons.join(' | ')}`); process.exit(2); }
+const report = { probe: 'probe_match_memory', quiet: QUIET_RUN ? QUIET_RUN.state : null, load1: +loadavg()[0].toFixed(2), at: new Date().toISOString(), build: 'prod client', sec: SEC, bars: { matchMb: MATCH_MB, homeMb: HOME_MB, loadBelow: LOAD_MAX }, matches: [], homes: [], homesAfterPressure: [], machine: { samples: [] }, errors: [] };
 const vite = await import('vite');
 const configFile = join(ROOT, 'vite.config.ts');
 if (!args.includes('--no-build')) {
