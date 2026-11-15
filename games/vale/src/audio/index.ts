@@ -27,7 +27,9 @@
 //               mode's trim, and solves the one gain on the background and threat paths that brings the whole sfx to
 //               LEVEL_TARGET_LUFS: cut only, at most LEVEL_MAX_CUT_DB, gliding down over LEVEL_ATTACK_S and back over
 //               LEVEL_RELEASE_S (slow both ways: a density ride, never a pumping compressor). The priority sub-bus is
-//               never cut, so your own autos and what threatens you stay forward when the fight around you thickens.
+//               never cut, so your own autos and what threatens you stay forward when the fight around you thickens;
+//               nor does it alone push the background below LEVEL_BG_ROOM_LU under the target (your own burst of casts
+//               does not empty the world around it).
 //               Per mode a static sfx trim (content audio.mix.modes.<mode>.sfxTrimDb) sets the mode's base level on
 //               all three paths (the 5v5 maps are denser by design, not only in their peaks)
 //   ducking     voice > sfx > music (CONTRACT §11): while an announcer line plays, music and ambience sit
@@ -142,7 +144,9 @@
 //               small item sustain (an on-kill or on-hit heal) is silent. Since orch1 AUD-O3 only YOUR fighter's heals
 //               and an ally's big heal (HEAL_ALLY_FRAC) within LISTEN_INNER_M of you chime, from one token bucket
 //               (HEAL_PER_MIN, burst HEAL_BURST) with one chime per HEAL_TEAM_MERGE_S; a heal of HEAL_BIG_FRAC or more
-//               bypasses both (a 5v5 chimed 25.75 a minute, a glassy chatter over the hits); an item active's cast plays its
+//               bypasses both (a 5v5 chimed 25.75 a minute, a glassy chatter over the hits); a heal cast that voices the
+//               heal chime (a flask's drink) is held to the same rules (yours always, an ally's near you from the bucket, a
+//               foe's never, its ticks merged into it); any other item active's cast plays its
 //               present.sfx (the flask's one drink). A fighter's death is heard team-relative: yours
 //               ('selfDown'), an ally's ('allyDown'), an enemy fighter's ('enemyDown', a rising answer; AUD-C6).
 //               Vision (AUD-C9): an ability or item active that summons a ward unit plays 'wardSet' on its cast
@@ -430,8 +434,9 @@ const MIX_TRIM_DB = 5.0;     // the engine's mix makeup after the master volume,
 const OWN_KIT_DB = 1.0;
 const CAMP_DB = -3;
 // the sfx leveller (orch1 AUD-O1, see `leveller` in the header). The target is on the probes' sfx scale (the three sfx
-// paths at the default 0.8 slider, before the fight and voice ducks): -19 LUFS short-term puts a dense 5v5 master
-// near the -18 token, where a RIFT co-op lane (-21 to -24 sfx short-term p50) is never touched
+// paths at the default 0.8 slider, before the fight and voice ducks): -20 LUFS short-term puts a dense 5v5 master
+// near the -18 token (the sfx heard reaches the master about 3 dB up, the master slider and the makeup less the
+// ducks), where a RIFT co-op lane (-24 to -25 sfx short-term p50) is never touched
 const LEVEL_TARGET_LUFS = -20;
 const LEVEL_MAX_CUT_DB = 8;
 const LEVEL_ATTACK_S = 0.8;     // time constants of the gain's glide: down …
