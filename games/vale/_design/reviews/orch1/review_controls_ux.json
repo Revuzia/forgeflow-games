@@ -1,0 +1,212 @@
+{
+  "dimension": "controls_ux (input feel, targeting, cast modes, camera, rebinding, HUD hierarchy at 1080p and 1366x768, shop, scoreboard, minimap, pings, tooltips, settings, menus, first run, load, error states)",
+  "reviewer": "orch1 controls_ux lead (fresh-eyes review)",
+  "at": "2026-11-15 Central",
+  "head": "5e7ce6b76 (no src changes since the live controls verify at 3ec4d0c19; `git log --since 03:00 -- src/` is empty)",
+  "read": [
+    "src/input/controller.ts, keymap.ts, abilities.ts",
+    "src/session/settings.ts (defaults, binds)",
+    "src/ui/hud/index.tsx, dialbar.tsx, shop.tsx, minimap.tsx, panels.tsx; src/ui/screens/settings.tsx; src/ui/styles/hud.css",
+    "src/sim/abilities.ts (tryCast/gate), src/sim/core.ts:51, src/sim/bots (ping use)",
+    "_design/reviews/orch1/verify_controls_live.json, idle_gates.json; max2/critic.json; fixwaves/owner_rulings.md 29-38; fixwaves/agent_rules.md",
+    "evidence/ux notes.md + index; images viewed: hud_056 fight 1080, hud_059 midgame 1366, hud_010/019 shop, hud_060 scoreboard, hud_dead_015/016/018 recap, hud_042 ping wheel, hud_026 tooltip, hud_fray_024, cold1366_022 first frame, menus_003 play, menus_067 controls, draft_036, post_rift_022, contact sheet menus_1920_1; crops of dial bar and minimap"
+  ],
+  "score": 6.5,
+  "par": false,
+  "verdict": "The HUD, the settings and the menus are close to shipped quality. Input feel is not. The live verifier's HOLD-DITHER blocker is still open: a held move through a packed lane fight ping-pongs and gives up 8 m short. Three standard input features are also missing. A cast pressed during another windup or a dash is dropped. There is no quick-cast-with-indicator mode. There is no attack-range display. First run is seven timed text hints, with no guided start. The death recap runs off the bottom of the screen at both target resolutions. Fixing the blocker and the first five items below should put this dimension at about 7.5.",
+  "strengths": [
+    "Targeting is verified good live (orch1 verify_controls_live): plain right-click centre 24/24, near-miss 93/96 (the 3 misses were rule-consistent harness latency), Shift+right-click cluster 31/31, A+left-click 32/32, Z fighters-only 32/32, wall clicks 64/64, and 0 m of uncommanded movement over ~62k frames.",
+    "Full key rebinding of all 22 actions (keyboard or mouse), layout-independent codes, a conflict that moves the other bind and says so in a toast, per-key default marks, Reset all keys, Reset this tab (settings.tsx:204-248, menus_067).",
+    "Settings cover a shipped game's set: a quality preset plus every ladder value, dynamic resolution, an fps cap, 6 audio buses with mono, soften loud sounds and mute in background, deutan/protan/tritan palettes, FRAY seat-colour modes with a preview, UI/HUD/minimap scale, reduce motion, a screen-shake slider, loss-of-control and hit edges, and subtitles.",
+    "The ability tooltip is LoL-grade: cooldown, cost, range, scaling inline (70 (+50% Power, +3% bonus Health)), keyword highlight, a Shift-for-every-rank hint and a 'put your next skill point here' nudge (hud_026).",
+    "The dial bar is dense and coherent. Cooldowns use Mono seconds, cost goes HARM when you cannot pay, there is a lock state under CC, level-up '+' chips, HP ticks every 100/1000, a damage trail and regen readouts (dial1920 crop, cold1366_022).",
+    "The minimap is well built. It has a painted map with fog, fighter portraits in relationship rings, an enemy heading wedge, the camera trapezoid, objective timers, left-drag to scout, right-click to move and Alt/ping-held to ping (minimap.tsx:1-12, mm1366 crop).",
+    "The shop has search that also matches stat lines, 13 tag filters, builds-from/builds-into, price after owned parts, a reason when buying is refused, right-click to buy or sell, Undo purchase and the P key (hud_010, shop.tsx:205-270).",
+    "The in-match scoreboard has spells, level, T/F/A, Wicks, Gleam (own team), damage, items, team takedowns and structures, a respawn timer on dead rows and the Gleam lead (hud_060).",
+    "The death recap has per-source damage with ability names and timings, a physical/magic/piercing split, time held under CC and one line of advice (hud_dead_015).",
+    "Clean runtime: 0 console warnings or errors across 11 capture phases. Cold Home at 268-302 ms and LCP 432-620 ms on the prod build. The match runs at 60 fps avg over the first 32-46 s (ux notes).",
+    "The draft screen is clear: phase timer, team columns with role and pick state, role and class filters, search, ally hover shown, kit preview with keys (draft_036)."
+  ],
+  "improvements": [
+    {
+      "id": "CUX-1",
+      "what": "Close HOLD-DITHER and HOLD-PINNED-CRAWL: a held right button through a packed lane fight must make progress, not ping-pong",
+      "why": "This is the owner's own complaint ('runs around on its own') and it still reproduces live. Dunsom at 8:15 oscillated x 61.66<->63.20 with 5 reversals in 4 s and gave up 8.4 m short. A second hold crawled at ~0.25 m/s against a wall for 4 s and stopped 2.7 m short (verify_controls_live.json blockers/majors). No src commit since. This is an open blocker for this dimension.",
+      "how": "Follow the verifier's fix_direction in src/sim/bodypath.ts and movement.ts. Commit to a chosen escape lane for its full length or for at least 2 watchdog windows. Forbid a lane whose first leg reverses the previous window's leg. Treat standing allies at a structure as pass-around bodies. When pinned by an enemy clump, slide along the wall tangent before re-planning. Add a sim probe that fails on >= 3 reversals of 0.5 m legs in any 4 s of a held move, over the wave sampler's 896 moves per map. Then re-run _harness/verify_controls_orch.mjs for dunsom, tunlan, lisvel and ulkro through heavy.py, plus a seed loop. Keep it deterministic and record it as ruling 38 round 2.",
+      "impact": "blocker",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "This is deterministic sim pathing with 4 rounds of regressions behind it, and it needs hard engineering plus adversarial live verification.",
+      "risk": "Bot soak gates (rulings 36/38 note pre-existing gate failures). Re-run the full soak on seeds 1-40 and compare against the baseline."
+    },
+    {
+      "id": "CUX-2",
+      "what": "Add a short cast buffer: a cast pressed during a windup, a dash or an attack windup should fire when the hero is free, not be dropped",
+      "why": "gate() returns 'busy' whenever e.cast or e.dash is set (src/sim/abilities.ts:215), and core.ts:51 discards the result. A Q pressed 100 ms before a W windup ends, or during Ardit's Lancing Run dash, silently does nothing. The client gives no deny feedback either, because 'busy' is not a DenyReason (controller.ts DenyReason). Players read this as an eaten input, the most common 'unresponsive' complaint in the genre. Shipped MOBAs queue the next spell during windups and dashes.",
+      "how": "Sim side, deterministic: when tryCast would return 'busy', store a single pending cast {slot, x, y, target, expiresTick = now + 0.4 s} on the entity (overwrite on a newer press, clear on a move or stop command, on CC, and on death). In castSystem/dash end, pop it through tryCast on the first free tick. Mirror it in PlayerView so the HUD can light the queued slot (a thin chalk outline) and so the client stops treating the press as lost. Add a sim unit test (press during windup -> cast lands at windup end, same tick across 2 runs) and a live probe (key pressed 150 ms before dash end -> cast within 2 ticks of dash end).",
+      "impact": "high",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "This touches sim command semantics and determinism. The buffer window and its cancel rules are input-feel judgement calls.",
+      "risk": "Bots use tryCast too (units/common.ts:274, bots/micro.ts). Gate the buffer to player commands, or soak-verify bot behaviour."
+    },
+    {
+      "id": "CUX-3",
+      "what": "Per-slot cast modes: Normal, Quick and Quick with indicator (the indicator shows while the key is held and the cast fires on release)",
+      "why": "controls.quickCast is one global boolean (settings.ts:68; controller.ts quickCast branch). The genre's most-used setting is missing: quick cast with indicator, plus a per-ability choice. Today a player who wants to see a skillshot's line before it fires must use normal cast (press, then left-click), which is slower and adds a click. A competitive player expects to set each slot separately (for example quick-cast Q and E, indicator on R).",
+      "how": "Change Settings.controls to castMode: Record<a1|a2|a3|ult|spell1|spell2|items, 'normal'|'quick'|'quickIndicator'> (normalizeSettings migrates quickCast=true to all 'quick'). In the controller, on keydown in quickIndicator mode, startAim. On keyup of the same code, confirmAim at the cursor. Right-click or Esc while held cancels. A unit-targeted ability with no valid unit under the cursor on release keeps aiming, as quick does today. In the Controls tab, add a 3-way Segmented per row next to the bind, and a 'Set all' row. Add a live probe: hold Q 300 ms -> the aim indicator is visible, release -> the cast is sent on the release frame.",
+      "impact": "high",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "The interaction with held keys, repeat, the self-cast modifier, level-up Ctrl and the aim lifecycle needs careful input-feel design and edge-case handling.",
+      "risk": "Settings migration of existing profiles; the copy_lint and string keys for the new labels."
+    },
+    {
+      "id": "CUX-4",
+      "what": "Death recap: keep it on screen at 1366x768 and 1080p, and stop it covering the dial bar",
+      "why": "At 1366x768 the recap runs past the bottom edge in both the first frame and the settled 'dead_later' frame. The physical/magic/piercing split, 'Held for 1.8 s' and the advice line are all off screen, and the panel covers the D/F slots of the dial bar (hud_dead_016, hud_dead_018). At 1080p the advice line is clipped at the bottom edge and the type pills' labels overlap their own bars ('Piercing 90' printed inside the pill) (hud_dead_015). The DOM scan reported 0 findings for hud_dead, so the layout gate misses this.",
+      "how": "In hud.css .recap (line 498), cap the height to viewport minus top strip minus dial bar: max-height calc(100vh - (dialbar top + 132px) - 96px). Anchor top at about 18vh instead of 50%/-50%. Make .recap__rows scroll and show the top 3 sources by default with a '+2 more' toggle. Lay out .recap__types as label-above-bar rows. Add an 'outside-viewport for fixed/absolute plates' check to the ux DOM scan so the gate catches it.",
+      "impact": "high",
+      "effort": "S",
+      "model": "sonnet",
+      "modelWhy": "This is a well-specified CSS and layout fix plus a harness check.",
+      "risk": "minimal; re-shoot hud_dead at both viewports"
+    },
+    {
+      "id": "CUX-5",
+      "what": "A guided first match (an onboarding practice) and event-driven hints instead of seven timed captions",
+      "why": "First run is a timed caption every 7 s in the bottom-left (hud/index.tsx:39-49, HINT_GAP_MS 7000). hint.attack is a 3-sentence paragraph with three mechanics at once. The shop hint fires on the timer, not when you are in base with Gleam, and 'Use Q, W, E and R' was still showing at 10:43 in FRAY (hud_fray_024) while the player sat on 1,468 Gleam with 0 items. tutorialsSeen exists in the profile (contracts/session.ts:91) but nothing scripts a tutorial. A new player is dropped from Home into a live match with no move, last-hit, cast, shop or recall practice. Every shipped MOBA has a short guided start.",
+      "how": "Build on the Practice queue and its practice panel (already scripted: training targets, structures toggle, starting level). (1) A 5-step 'First Lantern' onboarding (about 4 min): move to a marker, attack a target, last-hit 3 Wicks, rank Q and hit a dummy with it, open the shop and buy the starter and potion, recall. Each step completes on a sim event and shows one short line plus key chips. Offer it on first launch from Home, skippable, with tutorialsSeen gating. (2) Turn the in-match HINTS into triggers: the move hint at match start, the shop hint when canShop and gold >= cheapest starter, the skill-point hint when skillPoints > 0 for 5 s, the recall hint when gold > 1,200 away from base. Each shows once. (3) Split hint.attack into two hints.",
+      "impact": "high",
+      "effort": "L",
+      "model": "opus",
+      "modelWhy": "Onboarding flow and pacing are design judgement, and the step scripting crosses the practice mode, the HUD and the profile.",
+      "risk": "Strings must pass copy_lint. Keep it out of the sim except as practice-mode setup."
+    },
+    {
+      "id": "CUX-6",
+      "what": "Add an attack-range display: a hold key, plus an optional ring while attack-move is armed",
+      "why": "There is no way to see your own basic-attack range. Grep finds a structure attack-range ring only (renderer.ts:978) and no own-range action in keymap.ts. For the marksmen (Lisvel 5.9 m, Odrum, Ulkro) and for spacing against towers this is a core control. Every shipped MOBA ships a range-indicator key and shows the ring during attack-move.",
+      "how": "Add Action 'showRange' (default unbound or KeyC, rebindable). While it is held, or while attack-move is armed or Shift is held, call a new renderer setRangeRing(radius = stats.range + body radius), drawn with the existing dashed range-ring telegraph style. Add a Gameplay toggle 'Show attack range during attack-move' (default on).",
+      "impact": "medium",
+      "effort": "S",
+      "model": "sonnet",
+      "modelWhy": "Well specified, and it reuses the existing telegraph drawing.",
+      "risk": "One draw call. Stays within the program budget if it reuses the telegraph material (programs are at 40/40)."
+    },
+    {
+      "id": "CUX-7",
+      "what": "Show the resource as a number and make the bar readable",
+      "why": "The resource bar is 6 px high with no value. The current/max shows only in a hover tooltip (hud.css:354, dialbar.tsx:368-381). In the dial crops the Light/Heat bar is a 3-4 px sliver under HP at both 1080p and 1366 (dial1920 crop, hud_059). Players decide whether they can afford a combo by that number. HP shows '1,200 / 1,310'; the resource shows nothing.",
+      "how": "Raise .resbar to 11-12 px at 1080p (scaled by --px). Print 'cur / max' centred in Mono 11/600 as HP does (put() per tick via useWriter, no re-render). Move the regen readout inside the right end. Hide it for resbar--none fighters. Check that the dial frame layout (frame_layout.ts F.res) still fits the 132 px bar.",
+      "impact": "medium",
+      "effort": "S",
+      "model": "sonnet",
+      "modelWhy": "This is a mechanical layout change with a clear spec.",
+      "risk": "low"
+    },
+    {
+      "id": "CUX-8",
+      "what": "Keep floating damage numbers off nameplates and health bars",
+      "why": "In a lane fight at 1080p, '124' sits on noor_lampwright's name and HP bar and '170' sits on the player's own plate (hud_056). Across a teamfight the numbers stack over the plates you most need to read. Shipped games spawn numbers above or beside the plate and stack them.",
+      "how": "In the world-text layer (hud/world.tsx or the renderer text pass), spawn numbers at plateTop + 8 px and drift them up and outward, alternating left and right. Run a 1-D vertical stack per target so new numbers push older ones up. Merge hits under 120 ms on the same target into one number, and cap visible numbers at 4 per target. Drop alpha to 60% while a number overlaps any HP-bar rect. Verify with a hud_fight re-shoot at both viewports.",
+      "impact": "medium",
+      "effort": "M",
+      "model": "sonnet",
+      "modelWhy": "The placement rules are fully specified here, so the work is implementation plus screenshots.",
+      "risk": "Keep it to per-frame writes, with no per-number DOM churn (r12 B4 rule)."
+    },
+    {
+      "id": "CUX-9",
+      "what": "Authored recommended builds and a quick-buy for the next item",
+      "why": "'Suggested' is a tag heuristic: STYLE_TAGS by ai.style, the first 6 items by tier and cost (shop.tsx:34-37, 108-111). It is not a build. Ardit (frontline) is shown Reading Lens, a 1,500 item and a 1,650 item with no order, no boots timing and no situational picks (hud_010). The HUD gives no way to buy without opening the full shop. New players stall: the FRAY player at 10:43 had 1,468 Gleam and 0 items (hud_fray_024).",
+      "how": "Content: add an optional per-fighter 'build' block (UI-only data in fighters/*.json, zod in contracts/catalog): starter[], boots, core[3] in order, situational[{item, when: tag}]. Author all 16 against the item pool. Shop: a 'Recommended' row showing the path with a 'next' marker. The next component is the cheapest unowned part of the next core item. HUD: a small next-item tile beside the Gleam button that lights when canShop and affordable. Click, or a new bindable 'buyNext' action, sends the buy. Bots keep their own economy (sim/bots/economy.ts).",
+      "impact": "medium",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "Authoring 16 coherent builds against VALE's item pool is design judgement. The UI part is then straightforward.",
+      "risk": "UI data only. It must never touch stats (cosmetic/UI separation). Run npm run content after."
+    },
+    {
+      "id": "CUX-10",
+      "what": "Let bot teammates act on pings, so pings are a real command and not decoration",
+      "why": "Teammates are bots in every queue ('Open seats are filled with bots'). Nothing in src/sim/bots reads pings: PingKind appears only in world.ts. The 9-option wheel (Assist, On my way, Retreat, Objective, Push) is visible to the player but changes nothing. In a bot-filled game, pings are the player's only lever on team play.",
+      "how": "In the bot think step, read the team's recent pings from the deterministic world event buffer (pings are already commands). For the nearest one or two eligible allies, map them as follows. assist/onMyWay: rotate to the point when no own-lane danger and the point is under 40 s away. retreat/danger: raise retreat weight near that point for 6 s. objective: join if the team's objective rule allows. push: bias the lane. missing: raise lane caution. Each acknowledges with an existing 'onMyWay' ping or a feed line. Rate-limit to the PING_LIMIT already enforced. Soak-verify: no regression in the bot gates, and a probe that a Retreat ping pulls the pinged-area allies back inside 3 s.",
+      "impact": "medium",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "This is bot decision design inside a deterministic sim with soak gates.",
+      "risk": "Bot gates already fail on some seeds (ruling 36 note). Measure against the same baseline."
+    },
+    {
+      "id": "CUX-11",
+      "what": "Add the missing bindable actions: level-up modifier, ally camera hold keys, select/centre self",
+      "why": "Level-up is hard-coded to Ctrl (controller.ts:390, the e.ctrlKey pass-through), so it cannot be rebound. On macOS, Ctrl+click is also right-click. There are no hold-to-view-ally keys (only middle-drag, edge pan and minimap drag), so checking an ally lane in a bot-filled team takes a mouse trip. Shipped key maps include both.",
+      "how": "keymap.ts: add 'levelUpMod' (default ControlLeft, modifier capture like selfCastMod) and 'viewAlly1'..'viewAlly4' (hold, default unbound). Holding one focuses the camera on that ally (camera.focusOn per frame) and releasing restores the previous mode, the same way centerCamera does. Add them to the Controls tab groups and normalizeSettings.",
+      "impact": "low",
+      "effort": "S",
+      "model": "sonnet",
+      "modelWhy": "This is mechanical keymap and settings plumbing following the existing patterns.",
+      "risk": "low"
+    },
+    {
+      "id": "CUX-12",
+      "what": "Ability rank pips that read at 1366x768",
+      "why": "The rank 'hour-ticks' under each slot are about 6x2 px white dashes that merge with the slot frame at 1080p and are near invisible at 1366 (dial1920 crop; hud_059). You cannot see at a glance whether Q is rank 2 or rank 3 mid-fight.",
+      "how": "Increase the ticks to 7x3 px at 1080p with a 1 px ink keyline, filled Noonwhite for owned ranks and 25% for unowned, spaced under the slot's bottom edge, not on it. Add a 1366 screenshot check in the ux capture.",
+      "impact": "low",
+      "effort": "S",
+      "model": "sonnet",
+      "modelWhy": "A spec'd CSS change.",
+      "risk": "low"
+    },
+    {
+      "id": "CUX-13",
+      "what": "Player identity: ask for a name on first run and use one label everywhere",
+      "why": "A new profile plays as 'Player 2909' among bots with crafted names. That label shows on the overhead plate (hud_026, hud_042), the in-match scoreboard (hud_060) and the top bar, while the postgame scoreboard and the kill feed say 'You' (post_rift_022, hud_dead_015). Renaming exists only in Profile > Change name.",
+      "how": "On first launch, after calibration, open the existing RenameForm (profile.tsx:47-70) as a one-time welcome step, skippable and tracked in tutorialsSeen. In the in-match scoreboard, mark your own row with the name plus a 'You' chip, the same as postgame.",
+      "impact": "low",
+      "effort": "S",
+      "model": "sonnet",
+      "modelWhy": "This reuses the existing form and flag.",
+      "risk": "low"
+    },
+    {
+      "id": "CUX-14",
+      "what": "Layout gaps at 1366x768: truncated names, the postgame enemy table below the fold, clipped helper text in draft",
+      "why": "FRAY hour board and draft names are ellipsis-truncated at 1366 ('noor_lamp...', 'belle_of_n...', 'candlewic...'), and in the draft column at 1080p too (ux notes layout facts; hud_fray_024). The postgame Scoreboard tab at 1366 shows only your team, and the other team needs a scroll (post_rift_022). The draft helper 'What you hover is shown to your te...' is cut off by the filter row (draft_036). The shop's 'Gorgewalk Longbow' name truncates at 1366.",
+      "how": "Hour board: widen the name column to fit 16 characters at the HUD scale, or drop the colour bars to a 6 px chip. Postgame: compact rows (40 px) at heights <= 800 so both teams fit, or show a side-by-side layout. Draft: give the helper line its own row. Add those strings to the capture's truncation allow/deny list so regressions fail the gate.",
+      "impact": "low",
+      "effort": "S",
+      "model": "sonnet",
+      "modelWhy": "Mechanical layout fixes, verified by re-shooting.",
+      "risk": "low"
+    },
+    {
+      "id": "CUX-15",
+      "what": "Ping wheel legibility",
+      "why": "The wheel shows 9 thin outline glyphs with no labels except the hovered one ('LOOK HERE'), on a translucent disc over the hero and foliage. Several glyphs (the retreat chevrons, the objective bracket) are low-contrast against grass (hud_042). New players cannot tell Push from On my way without hovering each one.",
+      "how": "Darken the wheel backing to ink-1 at 85%. Draw 2 px glyphs. Show short labels on every wedge after a 200 ms hold (the hover label stays as the large one). Keep the 26 px deadzone. Re-shoot hud_ping_wheel at both viewports.",
+      "impact": "low",
+      "effort": "S",
+      "model": "sonnet",
+      "modelWhy": "Spec'd visual tweak.",
+      "risk": "low"
+    },
+    {
+      "id": "CUX-16",
+      "what": "Measure input-to-response latency and the idle real-time gate",
+      "why": "Nothing measures click or key to first visible response: move marker, slot press flash, aim indicator, hero starting to move. The 'responsiveness' claim is unverified. The orch1 idle gates also left real-time and High frame timing unmeasured (57.6% of wall-seconds at 58+ fps under the owner's Chrome at 27-29% CPU; idle_gates.json). Input feel cannot be signed off on a build whose frame pacing is unproven.",
+      "how": "Add _harness/latency_probe.mjs. Use CDP Input.dispatchMouseEvent and dispatchKeyEvent with rAF timestamps and a canvas readback: frames from input to marker drawn, slot flash, aim drawn, and hero position changed. Targets: UI feedback <= 2 frames at 60 fps, movement start <= 1 sim tick plus interpolation (<= 50 ms). Run it through heavy.py on RIFT High at 1080p with the owner's Chrome closed and load < 3, together with the real-time match and memory gates.",
+      "impact": "medium",
+      "effort": "M",
+      "model": "sonnet",
+      "modelWhy": "Measurement and harness work with clear targets.",
+      "risk": "It needs an idle machine. Label runs with load1 as the ux capture does."
+    }
+  ],
+  "notVerifiedHere": [
+    "Shop 'Return to a shop to buy.' shown at 0:07 and 0:36 (hud_010, hud_019): the hero may have been walked out of base by the harness, so this is not filed as a defect.",
+    "Play screen 'YOUR ROLES' shows a header with no chips above the fixed Find Match bar at 1080p with Lantern Drill selected (menus_003). This may be by design for co-op; not filed."
+  ]
+}
