@@ -1,0 +1,224 @@
+{
+  "lane": "orch1 review: FIGHTERS, UNITS AND ANIMATION (fresh-eyes fighters lead)",
+  "at": "2026-11-15 06:40 CST",
+  "head": "98cb298e7",
+  "score": 5.5,
+  "par": 7.5,
+  "verdict": "Under par. The fighters move better than they look. All 16 have their own clips, and a procedural life layer sits on top. The roster's colour identity has regressed in each of the last three units rounds. The splashes and portraits are 3D clay renders with a regrade, not key art. Every hard-CC state plays the same stagger. In the orch1 teamfight peak frame, VFX hide every fighter body.",
+  "read": [
+    "_design/reviews/max2/critic.json (units and cards gaps, cardsFail 40/96)",
+    "_design/reviews/max2/units/{summary,r3_summary,verify_r3_1_q,verify_r3_1_r}.json and verify_r3_1_q_seed61_all16.png",
+    "_design/reviews/cards/verify_r2_bd2.json (broken hand skinning)",
+    "_design/reviews/fixwaves/agent_rules.md",
+    "orch1/evidence/visual: index.json, contact_fighters_game/close.png, fighter_*_close_crop.png, teamfight_rift_lead/peak.png, clash_mid_lane_2.png, life_death_*/recall/respawn, map_rift_t0154_jungle_a_resinback.png",
+    "art/out/fighters/*/splash.png (hesmi, rishal, ulkro, sukri, ervet, burdam), art/renders/fighters/burdam/three_clips_burdam.png",
+    "art/blender/common/anim.py (standard_clips, gen_*), art/blender/fighters/*.py clip_overrides (all 16 bespoke)",
+    "src/render/actors.ts (header, CLIP_CHAIN, LIFE, victim reaction, role mapping ~1197), stride.ts, turn.ts, lod.ts, src/sim/movement.ts:712-714"
+  ],
+  "verifiedFacts": [
+    "No fighter GLB or zone_grades.json has changed since ad333d298 (11-13 04:00). Every verify_r3_1 problem is still open: Hesmi's purple hood, Vashil and Dunsom both lilac, the Odrum bone-ivory mask, Ardit's helm in the HSV ally band, and 73 of 120 crown pairs failing.",
+    "Ruling 32 is still over the cap on Dunsom (16.46 %) and Ulkro (12.77 %) in the harm band (verify_r3_1_r).",
+    "src/sim/movement.ts:712-714: a displacement (knockback, pull or airborne arc) sets anim 'stunned', and every hard CC sets state and anim to 'stunned'. actors.ts:1197-1198 then plays the one stunned clip, so sleep, fear, taunt and airborne all look the same.",
+    "actors.ts header: crossfades are 100 ms (60 ms into an attack), and there is one run clip scaled by moveSpeed/runRef with no walk or haste blend. Hit reaction is procedural only (flash, flinch, recoil whip). Hit-stop is off by rule (r12 M6), so this review does not ask for it.",
+    "orch1 visual fighter evidence is mislabeled or empty. The ilsheta, kemdo, lisvel, tunlan, ulkro and vashil frames have no fighter in them. ardit and marund share t 31.77, and ervet and hesmi show the same pair. The jungle frames at t 154 show empty camps, so the pack has no monster evidence.",
+    "teamfight_rift_peak.png: each fighter's body is completely covered by a white or pink additive sphere or burst. teamfight_rift_lead.png, 1.5 s earlier, shows rings and nameplates with no bodies at all. This anomaly needs verifying."
+  ],
+  "strengths": [
+    "All 16 fighters ship bespoke clip sets (clip_overrides in every art/blender/fighters/*.py: own idle, run, attacks, casts, ult, recall and death on most). The shared VALE_BIPED_1 rig lets skins reuse the base clips with no duplication.",
+    "A real procedural life layer (actors.ts LIFE): breath, weight shift with planted feet, gaze drift, per-actor phase offsets, a chain follow-through on cloth and hung props, a hit recoil whip, and a stillness watch that keeps held poses from freezing.",
+    "Foot sliding is handled by measurement: stride.ts derives runRef from the clip's own planted foot. turn.ts eases 180-degree reversals to about 0.1 s.",
+    "Attack and cast clips are time-warped so the authored impact (40 %) lands on the sim release. Timing matches gameplay at any attack speed.",
+    "Readability scaffolding is in place: a damage-type victim flash, a 1 px ink outline hull, an occluded x-ray silhouette, a hover rim, and veils for invisible or untargetable units.",
+    "Sensitivity cleanup has landed on many faces (Dunsom's mask rebuilt with calm lidded eyes; Sukri, Tunlan, Ulkro and Odrum portraits repainted with pupils and lids). verify_r3_1_q saw no banned face read in game.",
+    "Budget headroom on draws (280-295 of 450). The fighter body LOD1 is face-locked. Ardit's lilac collision is fixed and verified on two seeds."
+  ],
+  "improvements": [
+    {
+      "id": "FU-1",
+      "what": "Break the purple family for good: one fighter per hue family at the game camera",
+      "why": "Players read a fighter's identity from the colour of its top before its shape. In game, Vashil's hood is h 312, Dunsom's hat h 315 and Hesmi's new hood h 313-317; Vashil and Dunsom are dE 6.3 apart (verify_r3_1_q/r). Ardit's coat is periwinkle h 264. The seed-61 lineup sheet (max2/units/verify_r3_1_q_seed61_all16.png) shows 4 of the first 8 cells purple-led. The previous gate passed Hesmi on value alone, because dE76 hides a shared hue.",
+      "how": "Write a roster hue wheel in _design/tokens.json (art.roster.topHue): 16 owners, each top cluster at least 30 degrees of CIELAB h from every other top at C >= 15, outside the ally, enemy and harm reserved bands. Keep Vashil lilac (the caster that owns it). Move Dunsom's hat and coat to a deep slate-indigo or warm ochre that nobody else uses, and Hesmi's hood to deep teal-ink, both through zone_grades.json. Re-bake the old cream crease lines out of Hesmi's hood. Gate with FU-4 and run a fresh q/r verify pair.",
+      "impact": "high",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "This is roster-wide colour art direction under the sensitivity and reserved-band rules, and three rounds of mechanical regrades have each made a new collision.",
+      "risk": "Ruling 32 harm cap; Dunsom is already at 16.46 % harm, so do this together with FU-3."
+    },
+    {
+      "id": "FU-2",
+      "what": "Odrum: restore the honey mask and hands (a sensitivity risk now on the live tree)",
+      "why": "The round-3 harm-band desaturation to s 0.25 turned Odrum's honey-gold mask bone-ivory: 35 % of the albedo texels changed, including the face UV island (verify_r3_1_r). A pale bone mask with dark slit eyes moves toward the banned skull or blank-face read. He also lost his signature honey, and the 'olive' cap reads as light khaki (L 58, h 90) beside Sukri (h 98) and Ilsheta (h 102).",
+      "how": "In zone_grade.py, exclude texels skinned >= 0.5 to `head` and the mask island from reserveModes. Bring the cap down to the cap by hue-shifting the band (honey toward ochre, HSV h < 28 or > 50) instead of desaturating. Make the cap a real deep olive (L* <= 40 at the game camera). Then have an adversarial reviewer A/B the mask at the game camera, card size and 64 px for the sensitivity read.",
+      "impact": "blocker",
+      "effort": "S",
+      "model": "sonnet",
+      "modelWhy": "The recipe change is fully specified. Hand the face sensitivity sign-off to an opus verifier.",
+      "risk": "Odrum's harm share sits at 7.93 % (PIL) and 8.45 % (float HSV), so margin is needed. Make zone_grade.reserved_pct the only binding measure, or keep 1 point of headroom."
+    },
+    {
+      "id": "FU-3",
+      "what": "Ardit's helm out of the ally band, and the ruling 32 cap met roster-wide (Dunsom, Ulkro)",
+      "why": "Ardit's rendered helm is sRGB (116,163,194), HSV h 204, inside the reserved ally band 200-225. On the enemy team he is led by an ally-blue top (verify_r3_1_r). Helm and coat also read as one blue mass with no crown break (sigPct 18.6 -> 9.75 %). Dunsom (16.46 %) and Ulkro (12.77 %) are over the 8 % harm cap.",
+      "how": "Move the helm to a steel-teal (HSV h 180-190) or a cool slate with brass tier trims, and keep the coat periwinkle a value step darker so the crown breaks. Zone Dunsom and Ulkro under ruling 32 with hue shifts, excluding the head island (the lesson from FU-2).",
+      "impact": "high",
+      "effort": "S",
+      "model": "opus",
+      "modelWhy": "Picking a hue that clears both the ally band and the roster wheel is art direction; the zoning itself then applies mechanically.",
+      "risk": "Ardit's helm must stay at least 25 dE from Lisvel's cyan wrap (now 21)."
+    },
+    {
+      "id": "FU-4",
+      "what": "A rendered-pixel gate for roster colour: in-game hue angle, reserved bands and value, not albedo dE76",
+      "why": "Each units round passed its own albedo/lineup gate and then failed in game. Ardit was lilac, then ally blue. Hesmi joined the purple family on a value-only dE. Ilsheta's albedo chroma went from 22 to 32, but the screen read stayed C 15.7. The gates measure the wrong thing.",
+      "how": "Extend max_units_ab and lineup_qa into one `units_gate`. Use 3 seeds x 3 seatings so all 16 fighters are seen, plus the facing-0/180 lineup. Per fighter, take the top-cluster CIELAB median and the rendered sRGB HSV. FAIL when any pair is under 30 degrees of hue at C >= 15 with dE < 25, when a top lands in the ally, enemy or harm HSV band, when the top value falls outside the bible band, or when there is no crown break. Write JSON plus a contact sheet. Make it a required check before any units commit.",
+      "impact": "high",
+      "effort": "M",
+      "model": "sonnet",
+      "modelWhy": "Well-specified harness and measurement work on existing scripts.",
+      "risk": "Lighting-dependent reads (Odrum-Sukri dE 6.5 in shade): take the minimum over seeds, not the median."
+    },
+    {
+      "id": "FU-5",
+      "what": "Fix the albedo-to-screen chroma loss on fighters (a character light and grade response)",
+      "why": "Fighters read as chalk and cream figurines at the game camera (contact_fighters_game.png: Ardit, Dunsom, Nurrow and Odrum nearly white). Albedo chroma does not survive the pipeline: Ilsheta C 32 albedo shows as C 15.7 on screen, and Odrum's 'deep olive' shows as L 58 (verify_r3_1_q). In shipped MOBAs the champions are the most saturated, highest-contrast things on screen; here the floor often out-chromas them.",
+      "how": "Measure the transfer for each fighter: albedo zone CIELAB against in-game CIELAB at the same zone, through AO, tonemap, grade, fog and the CharLight path. Then add a fighter-only fix in the character material path (no new program; reuse the CharLight define). Options: hold AO at a lower weight on fighter bodies, add a small chroma-preserving lift in the actor shading, and add a soft rim from the key light so fighters separate from the floor by value. Keep the world grade unchanged. Gate with FU-4: on-screen C at least 70 % of albedo C on signature zones.",
+      "impact": "high",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "Rendering engineering with an art-direction judgement, under a program count already at the 40 cap.",
+      "risk": "Programs at 40/40, so only define reuse or uniforms. Check team rings and harm hues stay dominant."
+    },
+    {
+      "id": "FU-6",
+      "what": "Keep fighter bodies readable under teamfight VFX",
+      "why": "teamfight_rift_peak.png (13:55, 543 particles, 70 VFX actors): every fighter is a white or pink sphere or burst, with no body, weapon or pose visible. A player cannot see who is casting or who is dying, which is the core MOBA read.",
+      "how": "Add a body-priority pass. Additive and soft VFX that overlap a fighter's screen-space hull fade to at most about 35 % over the body (use the hull already drawn for the x-ray, as a stencil or depth tag). Shield and bubble statuses render as a rim or fresnel shell instead of a filled sphere. The occluded x-ray silhouette also draws through VFX. First, verify teamfight_rift_lead.png, where no bodies are drawn even with nameplates present: is it a render bug, a veil, or harness timing?",
+      "impact": "high",
+      "effort": "L",
+      "model": "opus",
+      "modelWhy": "This is cross-lane render engineering (VFX x units) with readability judgement, and it needs adversarial verification at peak load.",
+      "risk": "Draw and program budgets; the VFX lane owns the defs, so coordinate the bubble restyle."
+    },
+    {
+      "id": "FU-7",
+      "what": "Give each CC its own body state: airborne arc, sleep, fear, taunt and pull",
+      "why": "Every hard CC and every displacement plays the same stunned stagger (movement.ts:712-714, actors.ts:1197). A knock-up flies the body along its arc in a standing stagger, a sleeping fighter sways upright, and a feared one staggers while it runs away. Shipped MOBAs make CC legible on the body first and the plate second.",
+      "how": "In the sim view, expose the dominant CC kind (presentation only; the sim already knows ccMask, statuses and dash.displace). In the renderer, map airborne/displace to a generic `airborne` clip (a tuck and tumble on the rise, a limb splay at the top, a land crouch fitted to the dash duration like the dash clip). Map sleep to a slumped loop, fear to a cower run (the run legs with an arms-up and head-turned upper body via additive layer), and taunt to a forced stride. Author them once in anim.py on VALE_BIPED_1 so all 16 fighters and skins get them, with optional per-fighter overrides. Add them to CLIP_CHAIN with stunned as the fallback.",
+      "impact": "high",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "Animation authoring judgement plus a sim/presentation boundary change that must stay deterministic.",
+      "risk": "GLB size budgets (Burdam is at 1157 of 1172 KiB). Bake the new clips at a reduced key rate, or share them through a common clip GLB."
+    },
+    {
+      "id": "FU-8",
+      "what": "An animation polish pass on attack and cast clips: line of action, anticipation and follow-through",
+      "why": "The clip sheets (art/renders/fighters/burdam/three_clips_burdam.png) show torsos that stay upright and square through most attacks and casts. Arcs are small, the weapon tip barely leaves the body silhouette, and anticipation is a short lift rather than a counter-twist. At a 28 m camera the swing reads as a twitch. A shipped champion's auto and spells show big, readable arcs at that distance.",
+      "how": "Add a clip_probe metric for every attack, cast and ult: spine and chest yaw range, hips dip, weapon-tip arc length and peak speed at impact, and anticipation and recovery share. Set roster targets (for example spine counter-twist of at least 20 degrees before impact, a weapon-tip arc of at least 1.2 m on melee autos, an impact pose held 2-3 frames). Re-key the worst 30 % clips per fighter, starting with ults and the most-cast ability. Keep the impact at 40 % so sim timing is unchanged. Review at the game camera, not in close turntables.",
+      "impact": "high",
+      "effort": "L",
+      "model": "opus",
+      "modelWhy": "Animation craft and judgement. The metric harness part can go to sonnet.",
+      "risk": "Wider arcs can hide faces in card poses; recheck card staging that reads clip frames."
+    },
+    {
+      "id": "FU-9",
+      "what": "Locomotion blend: walk below run speed and a lean when hasted",
+      "why": "There is one run clip scaled by moveSpeed/runRef (actors.ts header). Under a heavy slow the fighter plays the run in slow motion. Under haste the cadence races. Both look wrong in exactly the moments a player is reading a slow or a speed-up.",
+      "how": "Add a generic gen_walk in anim.py. Phase-sync it with run by foot contact (stride.ts already measures contacts), and blend walk/run by speed ratio under about 0.65 runRef. Over about 1.3 runRef, add a forward chest lean and longer stride by an additive layer, not by timeScale alone. The same stride matching keeps feet planted.",
+      "impact": "medium",
+      "effort": "M",
+      "model": "sonnet",
+      "modelWhy": "Well-specified blend engineering on existing stride and clip infrastructure.",
+      "risk": "Crowd Wicks use the BakedMixer, so either keep them on the old path or bake both clips."
+    },
+    {
+      "id": "FU-10",
+      "what": "Repair hand skinning (Burdam carry fist, Dunsom hero poses) and add a hand-integrity probe",
+      "why": "verify_r2_bd2: in the Burdam Stillwater carry pose, the fist is a crumpled lump with torn shards and no fingers. All three Dunsom hero splashes show hands that stretch into spikes or crumple. These cards fail on it, and the same weights drive the in-game carry and lobby poses.",
+      "how": "Find the bad weights in the hand, finger and prop.R chain. Expected causes: more than 4 influences dropped at export, weights normalized across the gauntlet chains, and the prop bone pulling fist verts. Fix the weights in the fighter .py rig step. Add a clip_probe check that samples every clip at 30 frames and flags any hand triangle whose edge stretches over 1.6x or under 0.4x of rest. Run it on all 16 fighters and their skins.",
+      "impact": "high",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "Rig and skinning debugging across procedural meshes; hard engineering.",
+      "risk": "Burdam rebuilds need the decimate/ORM/zero-metal post steps (agent_rules), and the heads belong to the cards lane."
+    },
+    {
+      "id": "FU-11",
+      "what": "Rebuild the card pipeline as key art, not a regraded 3D render (40 of 96 fail; no fighter at par)",
+      "why": "The splashes are the 3D finish on a painted plate. Figures are one hue (Burdam all orange, Ulkro and Hesmi all tan), stand in near-idle poses, and some are tiny in frame (rishal_splash). The 'painted' portraits differ from the render by only 2.7-9.2 of 255 (bd2). The critic scores the sets 2.5-6.0. Cards are the first thing a player sees in select and store.",
+      "how": "For each fighter, write a one-page key-art brief: a pose thumbnail from a strong cast frame, a 3-value plan, warm key and cool rim with coloured bounce, the figure at least 2 stops off the background, and the face taking 8-12 % of a splash. Render a hero lighting rig in Blender with a material value ladder (skin, primary, secondary, metal, accent at least 15 L* apart). Then run the paint-over through tools/imagegen/run_xai.py with structural constraints (silhouette mask, face lock), and accept it only when it moves form and light, not just grade. Fix the 40 failing cards first, by fighter, then re-shoot passing ones whose fighter set is under 6.",
+      "impact": "high",
+      "effort": "XL",
+      "model": "opus",
+      "modelWhy": "Key-art direction and an adversarial card verify. Batch re-renders after the briefs can go to sonnet.",
+      "risk": "Sensitivity on faces at card size (the blank, hollow and streak tripwires); every card needs card_qa and a by-eye verifier."
+    },
+    {
+      "id": "FU-12",
+      "what": "A per-fighter material value ladder so bodies stop reading as one hue",
+      "why": "The close crops and splashes show most fighters in one value and hue mass: Burdam brick top to toe, Ulkro, Sukri and Hesmi tan, Odrum cream. This leaves no internal read of armour versus cloth versus skin at game distance. Hesmi, Odrum, Burdam and Ilsheta led with cream tops through rounds 1-3.",
+      "how": "In zone_grades.json, define 4-5 zones per fighter (head and skin, primary cloth, secondary, metal or prop, signature accent) with at least 15 L* between adjacent large zones, and give the weapon or prop the strongest local contrast. Apply with zone_grade.py and check with FU-4 for value bands and crown breaks.",
+      "impact": "medium",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "Per-fighter value design is art direction; application is mechanical.",
+      "risk": "Ruling 32 caps, and keeping the head and mask islands untouched (FU-2)."
+    },
+    {
+      "id": "FU-13",
+      "what": "Separate fighters from Wicks at a glance",
+      "why": "clash_mid_lane_2.png: the orange team's Wicks are the same brown and cream as the warm-palette fighters beside them. The fighter is only about 1.3x a Wick's height, and in a lane brawl the fighter does not pop from the wave.",
+      "how": "Push the Wicks a step down in value and chroma with a stronger team-colour stripe share (the crowd LOD already locks accent parts). Give fighters the FU-5 rim, and if needed a 1.1-1.15x presentation scale on fighters (collision radius unchanged). Gate the fighter-versus-Wick contrast in units_gate (FU-4).",
+      "impact": "medium",
+      "effort": "S",
+      "model": "opus",
+      "modelWhy": "This is a readability hierarchy call across units.",
+      "risk": "Scale changes affect card and lobby framing and the bar anchors; keep presentation only."
+    },
+    {
+      "id": "FU-14",
+      "what": "Break the 'short body plus disc hat' silhouette family",
+      "why": "From the game camera, the seed-61 sheet shows at least four fighters whose top-down read is a wide disc or dome hat over a short body (the lilac disc, the wide purple disc, the pink straw disc, the green dome). Shape is the read that survives colour-blind modes and fog, and the colour fixes do not address it.",
+      "how": "Add a top-down silhouette IoU to units_gate (value_probe already computes maxIoU for monsters). Rasterise each fighter's game-camera mask at 3 facings, and flag pairs over 0.75 IoU. For the worst pair, change the hat or prop silhouette (brim shape, a crest, a prop that breaks the circle), within the hood rules (no tall, pointed or conical hoods).",
+      "impact": "medium",
+      "effort": "L",
+      "model": "opus",
+      "modelWhy": "Silhouette redesign is art direction under the sensitivity rules.",
+      "risk": "The triangle budget (seed 23 at 483k of 500k) needs FU-15 first; the cards for changed fighters must be re-shot."
+    },
+    {
+      "id": "FU-15",
+      "what": "Buy triangle headroom on actors before any shape work",
+      "why": "perf_1080 seed 23 peaked at 483k of 500k, with actors at 250k on the peak frame (orch1 idle gates). FU-7, FU-14 and the cards' head work all add geometry or clips, and the margin is 17k.",
+      "how": "Add a body LOD2 for fighters (0.2 ratio, face-locked as in lod.ts body) beyond about 22 m from the camera centre or past 6 fighters on screen. Also trim chain bones and verts on cloth that the life layer animates anyway. Measure with perf_1080 --prod --match-seeds 7,11,23 on an idle machine through the heavy queue.",
+      "impact": "medium",
+      "effort": "M",
+      "model": "sonnet",
+      "modelWhy": "Well-specified perf engineering on the existing LOD recipe, plus measurement.",
+      "risk": "LOD pops at the far edge; the face lock must hold."
+    },
+    {
+      "id": "FU-16",
+      "what": "Fix the orch1 visual evidence for units: all 16 fighters, the right labels, and monsters",
+      "why": "In orch1/evidence/visual, 6 of 16 fighter frames are empty (ilsheta, kemdo, lisvel, tunlan, ulkro, vashil). ardit and marund share one frame at t 31.77, and ervet and hesmi show the same pair. The jungle frames show empty camps, so no monster evidence exists. Every units verdict stands on this pack.",
+      "how": "In _harness/orch1_visual_pack.mjs, seat each fighter on the viewer team across 2 matches (8 + 8). Wait for ModelLibrary.pending == 0 and the entity in view. Crop on the entity's projected position, and assert its id in the frame metadata. Capture each monster camp at spawn, at mid-fight and on its death tick. Add idle, run, auto, each cast, CC and death strips at the game camera for 4 representative fighters.",
+      "impact": "medium",
+      "effort": "S",
+      "model": "sonnet",
+      "modelWhy": "Mechanical harness work.",
+      "risk": "Heavy queue only; no Chrome runs outside it."
+    },
+    {
+      "id": "FU-17",
+      "what": "Burdam's head reads as a pale egg at game and card size",
+      "why": "bd2: at 128 and 64 px the bald dome is about half the head and reads as a pale egg. The clip sheets show the same pale head over a brown body in every frame. It is the brightest part of the figure and pulls focus off his weapon.",
+      "how": "In the cards-lane head work, warm the skin a value step down to the body's range, add a strong brow and beard or cowl mass that breaks the dome, and keep the calm lidded eyes. Re-shoot his 3 failing splashes after FU-10.",
+      "impact": "medium",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "Face and head design under sensitivity rules; owned by the cards lane.",
+      "risk": "Burdam GLB budget, 1157 of 1172 KiB."
+    }
+  ]
+}
