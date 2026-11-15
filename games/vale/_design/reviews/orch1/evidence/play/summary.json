@@ -3244,5 +3244,20 @@
     "hi": 0.47828915519350657
    }
   ]
+ },
+ "notes": {
+  "command": "node _harness/probe_sim_bot_soak.ts --full --lineup shuffle --seeds 100 --label orch1_play (680 matches in 1033 s; rift 100 adept + 100 veteran, bridge 100+100, fray 100+100, mirror 4x20). Full raw report: _harness/_reports/fw_W4_soak_orch1_play.json/.txt (gitignored or large; not copied).",
+  "ability_usage_caveat": "ability_damage_usage counts damage dealt by source id only. Zero damage means a utility/CC/shield ability or one that never dealt damage; the soak does not log cast counts, so never-cast cannot be separated from non-damaging. Ults with zero damage in all games: ilsheta, sukri, ardit, ulkro (all show firstUlt times, so they are cast). Passives with damage: rishal, hesmi, ulkro, ervet only.",
+  "gold_curve": "goldGraph is team0 minus team1 gold per minute; normalised to winner perspective in gold_diff_curve_winner_perspective.",
+  "value_probe": "NOT RUN: _harness/value_probe.mjs is a graphics environment-value probe, queued behind 3 other heavy jobs and stopped by the collector; no balance data in it.",
+  "red": [
+   "FAIL [fray] FRAY: every fighter mean placement adept+veteran pooled (16/16 fighters, >=100 games): best ulkro 3.27, worst dunsom 7.16; outside 3.5-7.5: ulkro 3.27, nurrow 3.48 (probe exits 1: 1 enforced gate)"
+  ],
+  "amber_not_gated": [
+   "RIFT same-tier win rates (200 decided games, n 82-140 per fighter): odrum 65.6, dunsom 64.7, ervet 61.5, marund 60.0 ... burdam 39.7; wholly outside 45-55 band: odrum, dunsom; none wholly outside 40-60 (gate passes)",
+   "BRIDGE first blood median 0.56 min and 66.6 kills/game (4.1/min) vs RIFT 30.5 (1.3/min); BRIDGE leader at 10 min wins 74.4% vs RIFT 57.0%",
+   "RIFT 468 of 6265 fighter deaths flagged lowStay; 6185 of 6265 fighter deaths happen in mode retreat",
+   "Veteran vs adept mirror 31/40 (77.5%), veteran vs novice 36/40 (90%)"
+  ]
  }
 }
