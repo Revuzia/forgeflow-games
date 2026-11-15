@@ -38,6 +38,7 @@ import { defaultLens, blurOf, apertureOf } from './ui/photo.ts';
 import { ModLibrary, bootPacks, validatePacks, type BootProblem } from './ui/mods.ts';
 import { customScenarioPack, decodeWorlds, type CustomSpec } from './ui/newworld.ts';
 import { SaveStore, readSaveHeader, neededPacks, type LoadOutcome, type SaveRecord, type PackRef } from './ui/saves.ts';
+import { installPersistGuardOnPage } from './persist/guard.ts';
 import { BASE_PACK } from './data/index.ts';
 import type { StarDef, PlanetKindDef } from './sim/content.ts';
 import { PowerBook, oreRows, contentPlants } from './ui/powers.ts';
@@ -337,6 +338,7 @@ export class App implements UiHost {
         u.w = -1.6 * f;
       },
     });
+    void installPersistGuardOnPage(this.ui.saves.store as never); // persist() after the first save; "saves unavailable" in private windows
     this.hoverEl = document.createElement('div');
     this.hoverEl.className = 'gn-hoverring';
     this.hoverEl.hidden = true;

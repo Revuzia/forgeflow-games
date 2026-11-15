@@ -1,144 +1,40 @@
-# ARC — state of the live tree (assessor, 2026-11-07, after the ~00:40Z container restart)
+# ARC — state of the tree (rewritten 2026-11-15 from the code, not from old ledgers)
 
-Method: `git log --since="2026-11-06 15:00" --stat -- src tests _spec` (last src commit 91877281 00:10Z; ARC.md 22d011d3
-00:30Z), `git status` (clean for src/tests/_spec: nothing uncommitted was lost from src/tests; only git-ignored
-_harness/scratch/** is gone), grep for every §6 contract name, existence checks of every §9.1 file, focused tests and
-typecheck. Read-only for src/** and tests/**.
+Method: file existence and line counts, grep for the §6 contract names, and focused test runs on 2026-11-15
+(`node --test tests/arc-*.test.ts tests/scripture_lint.test.ts tests/flood-warning.test.ts tests/ui-arc-*.test.ts
+tests/render-arc-*.test.ts tests/audio-arc.test.ts`: 134 tests, 134 pass). The full gate result is at the bottom.
 
-## Headline
-- **§10 (river's warning before a flood): landed in sim, ui, render; tests green. Its measured acceptance (8 seeds x 25
-  y, >= 80 % evacuated, deaths vs baseline) and the looked-at screenshot have NO surviving record** (scratch erased; no
-  `_harness/probes/arc.ts`, no flood shot spec in `_harness/specs/`). Must be re-run.
-- **§1-§5: essentially absent.** No sim state, views, commands, events, queries, files or tests of §6 exist. The only
-  arc-proper work in the tree is render's heart poses (§1.3/§6.9) built ahead on a stub field the sim never fills.
-- Typecheck: `npx tsc --noEmit -p .` (tsc 7.0.2) exit 0, no diagnostics.
-- Focused tests: `node --test tests/flood-warning.test.ts tests/render-hearts.test.ts tests/render-silt.test.ts
-  tests/ui-flood-warning.test.ts tests/ui-flood-headline.test.ts` -> 21 tests, 21 pass, 0 fail (9.1 s).
-- Full `npm run check` not run by the assessor (not required; nobody had a slot in use at 00:5xZ).
+Reading the columns:
+- **Built**: the code exists in `src/` (named files) and a test file exercises it.
+- **Verified today**: a test I ran today passes. That proves the unit behaviour, nothing more.
+- **Unverified**: the spec's measured acceptance (multi-seed probe numbers, looked-at shots, perf) has no run in this
+  session. Older ledgers claim some of it (`A-sim*.md`, `A-ui*.md`, `A-render*.md`); those claims were not re-run and are
+  not repeated here as fact. The probe scripts that made them are in `_harness/probes/arc.ts`, `arc-book.ts` and
+  `_harness/arc-work/`.
 
-## §9.1 files
-| file | state |
-|---|---|
-| src/sim/god/arc.ts, tower.ts, story.ts, legends.ts | ABSENT |
-| src/data/scripture.json | ABSENT |
-| _harness/probes/arc.ts (and _harness/probes/ dir) | ABSENT |
-| src/ui/decision.ts | ABSENT |
-| src/render/life/tower.ts, src/render/signs/defiance.ts | ABSENT |
-| core/migrate15.ts | exists at src/sim/core/migrate15.ts (spec path is shorthand); has NO `arc` HeaderStep (grep "arc": no hit) |
-| tests arc-hearts/pride/tower/defiance/covenant/ages/story/save/freeform/determinism/legends, scripture_lint, ui-arc*, render-arc* | ALL ABSENT |
-| tests present for the arc | flood-warning, render-hearts, render-silt, ui-flood-warning, ui-flood-headline |
+| ARC section | Built (where) | Verified today | Unverified |
+|---|---|---|---|
+| §1 Visible moods | `src/sim/god/arc.ts` (hearts, dusk, pride), `src/ui/hearts.ts`, render poses `src/render/life/crowds.ts` + `bodymat.ts`; SFX cues `crowd.jeer`, `crowd.hymn` | `arc-hearts`, `ui-arc-hearts`, `render-hearts`, `render-arc-live` pass | M1-M3 multi-seed numbers (view on 100 % of towns, noise, harsh and kind runs); M4 fearful-village shot at 888x500 and the HUD glyph legibility; M5 Hearts-layer colour distance (ΔE) |
+| §2 Pride and the Tower | `src/sim/god/tower.ts` (pride gate, labour, omens, five commands), `src/ui/decision.ts`, `src/render/life/tower.ts`; `babel` scenario ("One speech", `src/data/scenarios.json`) | `arc-tower`, `arc-tower-r1`, `arc-babel`, `ui-arc-towercard`, `ui-arc-decision`, `render-arc-tower` pass | T2 pacing over 8 seeds x 60 y (the attended-pacing target was dropped by owner ruling; unattended target never re-measured today); T3-T9 numbers and the 25/50/75/100 % shots; Decision card timing in a real session; the "One speech" picker card (`ui-newworld-babel.test.ts` is new, owned by the ui agent) |
+| §3 Open defiance | `src/sim/god/defiance.ts`, `src/render/signs/defiance.ts` (hurl arcs), idol building, answer classification (`defiance.answer`) | `arc-defiance`, `ui-arc-defiance`, `render-arc-defiance` pass | D1-D5 multi-seed numbers; D3 storm shot; the 25-year paired-seed memory test (D5) |
+| §4 Covenant | `src/sim/god/covenant.ts` (offers, vow, scheduled rainbow weather, keep and break, refusal), `src/render/fx/rainbow.ts`, UI confirm dialog | `arc-covenant`, `ui-arc-covenant` pass | C1-C4 thresholds on real flood runs; the rainbow at sun elevation 5-40 degrees on 100 % of towns; the owner question on flood content against "No Great Flood" (`scripture.json` epithet) is open |
+| §5 The Book of Ages | `src/sim/god/story.ts` (ages, `query('story')`), `src/sim/god/legends.ts`, `src/ui/book.ts`, `src/data/scripture.json` | `arc-ages`, `arc-legends`, `ui-arc-book`, `scripture_lint` pass | B1-B4 on the scripted 60-year run; story under 20 ms at 1 500 agents; HUD age line and title card as shots; export MD content |
+| §6 Contracts | state (`god/state.ts`), views (`sim/types.ts`), events, commands, queries, free text (`freeform-signs.ts`), test surface `window.__GENESIS__.arc` (`testsurface.ts`) all present | `arc-freeform`, `ui-arc-stub`, `audio-arc` (every §6.3 event mapped), and from today `audio-events` (every sim event mapped or listed silent) | an exhaustive contract-name grep was not repeated for every §6.1 field |
+| §7 Save migration | `src/sim/core/migrate15.ts` `arc` HeaderStep: a no-op step with a documented default-on-load scheme (new state defaults in `emptyRel()`), version stays 1.5; story adds one `making` age to an old world | `living-migration` (fixtures `save-1.4-*`, `save-1.5a-kin`) passes; the arc state defaults are exercised in `arc-ages` | there is no frozen fixture of a save that already holds arc state (towers, covenants, ages) loaded by a later build; no test file named `arc-save` exists |
+| §8.0 test list | present: `arc-hearts`, `arc-tower`, `arc-defiance`, `arc-covenant`, `arc-ages`, `arc-freeform`, `arc-legends`, `scripture_lint`, `ui-arc*`, `render-arc*`, `audio-arc` | all pass | the spec names `arc-pride`, `arc-story`, `arc-save`, `arc-determinism` as separate files; none exists (pride is covered inside `arc-hearts` and `arc-tower`, story inside `arc-ages`; a determinism test with the arc scenario is not present as a named file, `determinism.test.ts` predates the arc) |
+| §9 Lanes and files | all §9.1 files exist: `arc.ts`, `tower.ts`, `story.ts`, `legends.ts`, `covenant.ts`, `defiance.ts`, `scripture.json`, `decision.ts`, `render/life/tower.ts`, `render/signs/defiance.ts`, `_harness/probes/arc.ts` | n/a | n/a |
+| §10 River's warning before a flood | `src/sim/god/precursors.ts`, `disasters.ts` (warning hours, evacuation), `src/sim/people/shelter.ts`, toasts, `eventmap` `warning`/`evacuate`, silt in render | `flood-warning`, `ui-flood-warning`, `ui-flood-headline`, `render-silt` pass | the 8 seeds x 25 y measurement (>= 80 % evacuated, deaths vs baseline, other disasters unmoved) has no record that I re-ran; the river shot was looked at by the render lane per its own ledger, not re-looked today |
+| §8.6 gates | n/a | `npm run check` and `npm run build` on today's tree: see "Gate" below | old-save-with-arc-state load, CDN smoke (`_harness/cdn.mjs`), perf on the Mac (see `MAC-TEST-PROTOCOL.md`), Safari ogg decoding |
+| §8.7 owner rules | no creature, no scripted Great Flood, approved music files untouched in this stint (only SFX cues added) | audio and creature tests pass | the owner question on flood wording in `scripture.json` |
 
-## §6 contract grep (src/**)
-- §6.1 state (`HeartKind`, `DefyKind`, `Vow`, `Memory`, `pride`, `prideWhy`, `defiance`, `defied`, `answer`, `hearts`,
-  `memory`, `memEvents`, `dusk`, `told`, `lastHarm`, `harmLoad`, `idol`, `legends`, `towers`, `covenants`, `offers`,
-  `ages`, `annals`, `godActs`, `arcEvents`, `TowerState`, `CovenantOffer`, `Covenant`, `AgeRecord`, `ArcEvent`,
-  `Legend`): **none** in src/sim/god/state.ts. `ActCtx.ruined`: absent (regard.ts). `TASK.defy = 59`: absent.
-  `GATHER_KIND covenant`: absent. Buildings `great-tower`, `idol`: absent from buildings.json.
-- §6.2 views: `AnimState` 40-43, `HeartSign`, `MoverBlock.heart`, `SettlementView.heart/defiant/covenant`, `TowerView`,
-  `PlanetSnap.towers/covenant/covenantOffer/age/epithet`: **none** in src/sim/types.ts. (Render mirrors the ids locally,
-  see §1.)
-- §6.3 events (`heart`, `heart.proud`, `tower.*`, `defy*`, `covenant.*`, `chronicle.age`, `legend.retold`): none emitted,
-  none in src/audio/eventmap.ts.
-- §6.4 commands (`tower.confuse/strike/warn/let/begin`, `defiance.answer/set`, `covenant.make/decline/offer`,
-  `pride.set`, `arc.age`, `covenant` param on WRATHFUL, `CommandResult.refusal`): none.
-- §6.5 free text (freeform-signs.ts intentSigns): none of the arc phrases.
-- §6.6 queries (`hearts`, `towers`, `defiance`, `covenants`, `ages`, `story`; agent `heart`): none.
-- §6.7 test surface `window.__GENESIS__.arc` (hearts/towers/story/stub): absent from src/testsurface.ts.
-- §6.8 `babel` scenario: absent from src/data/scenarios.json.
-- §6.9 render: poses 40-43 present in render (crowds.ts:118-138, bodymat.ts:50); tower.ts, defiance.ts, `great-tower`
-  skip: absent.
+## Audio coverage (changed 2026-11-15)
+Every event the sim emits now has a cue or an entry in `SILENT_EVENTS` (`src/audio/eventmap.ts`, with a reason); the
+new test `tests/audio-events.test.ts` scans `src/sim/**` and fails on any unmapped event. New cues this stint:
+`tower.lost`, `secession`; `collapsed` plays a small `landslide`.
 
-## Per section
-### §1 Visible moods — PARTIAL (render only; sim and UI absent)
-- Landed (render, ahead on stubs): `HEART_ANIM = { lookUp: 40, fist: 41, hurl: 42, curse: 43 }` and `heartAnim()`
-  (src/render/life/crowds.ts:118-138; stone/spear held for hurl crowds.ts:228-229); crowds reads an optional
-  `(A as { heart?: Uint8Array }).heart` (crowds.ts:368-369); joint poses in src/render/life/bodymat.ts:50+.
-  tests/render-hearts.test.ts (4 tests, pass).
-- Missing: sim `heartsDaily`, per-person heart, settlement heart, `relSnapPlanet` per-agent `HeartSign`, `MoverBlock.heart`
-  (so the poses never show in the game), dusk; §1.4 UI (HUD chip glyphs, Hearts layer, inspector); §1.5 chronicle lines;
-  §1.6 SFX cues; `arc-hearts` test; testsurface stub.
-### §2 Pride and the Tower — ABSENT
-No pride, `towerYearly`, tower record/labour/omens, four answers, Decision card (ui/decision.ts), tower render, chronicle,
-commands, `babel`.
-### §3 Open defiance — ABSENT
-No defiance, `TASK.defy`, acts, idol, answer classification, `defiance.answer`, memory, hurl arcs.
-### §4 Covenant — ABSENT
-No `ruined` in ActCtx/harm.ts, great-destruction thresholds, offers, vows, rainbow, keep/break, refusal, confirm dialog.
-### §5 Book of Ages — ABSENT
-No annals/godActs/arcEvents, ages, `query('story')`, epithets for the player god (only rival-god epithets exist,
-rivals.ts:32-41), Book UI, legends.
-### §7 Save migration — ABSENT (no `arc` HeaderStep in src/sim/core/migrate15.ts; no new state to migrate yet).
+## Known facts that old STATE.md got wrong
+- It said §1-§5 were absent and §9.1 files missing; all of them exist now.
+- It listed "no `arc` HeaderStep"; there is one (a documented no-op, see §7).
 
-### §10 River's warning before a flood — LANDED (code + tests); measurements/shot UNRECORDED
-- 10.1 natural floods: warning 6-12 h hashed on id `naturalFloodWarning` (src/sim/god/precursors.ts:60), set as `d.st.Wn`
-  (src/sim/god/disasters.ts:176-177); `warningStart` emits `warning {kind:'flood', id}` and evacuates
-  (precursors.ts:86-89); evacuation record `kind` (precursors.ts:118, state.ts:276); `params.warning`
-  (disasters.ts:388), `params.rise`/`silt` (precursors.ts:157-159); upstream pinned rain in `st.wU`
-  (precursors.ts:161,186-189); `FLOOD_RISE = 0.4` channel rise (precursors.ts:162-169); wet shelter path to highest
-  dry ground (src/sim/people/shelter.ts:119-122,160); fishers row in (shelter.ts:200); chronicle `warning.flood`,
-  `flood.home`, `evacuate` (src/data/events.json:209,213,214; told at precursors.ts:120,259); 'Flood on X.' waits for
-  the water `st.Ch` (disasters.ts:193-195,264); mission evacuation r2 #5 (`missionEvacuation` precursors.ts:228,
-  `godHooks.missionEvacuate` relationship.ts:105,261-271, people/hooks.ts, people/decide.ts).
-- 10.2 god floods: `warningTicks` flood case (precursors.ts:35); `WARNED` deliberately lacks flood (precursors.ts:83);
-  `water.flood` cast flood with `st.Cf`, `CAST_FLOOD_AFTER = 360` (disasters.ts:100-106,162; commands.ts:35-36,362-366);
-  `warning` param on water.flood (relationship.ts:84); foretold in regard.ts:261-262; `riverFlood` on non-wet worlds,
-  `RIVER_FLOOD_DAY = 0.25` (disasters.ts:1136-1156).
-- UI: warning toast is the headline, flood words (src/ui/toasts.ts:47,269,514-526,643-646); audio event map `warning`
-  (src/audio/eventmap.ts:267-269); flood-warning SFX (src/audio/sfx.ts:836).
-- Render: silt zones `uSilt[4]` (src/render/planet/silt.ts; ocean.ts:200,454-463,596-602; terrainmat.ts:77,1162-1172;
-  planetview.ts:20,90-115); render/fx/disasters.ts touched.
-- 10.3 acceptance: (a) tests/flood-warning.test.ts 9/9 pass (incl. Wn in [360,720], kind flood, evacuation, no harm before
-  water, warning 0 none) — MET. (b) 8 seeds x 25 y deaths vs baseline, >= 80 % evacuated, other disasters unmoved —
-  **NO RECORD** (probe and results lived in erased scratch). (c) screenshot looked at — **NO RECORD** (no spec in
-  _harness/specs/, shots erased); render-silt tests (4) pass as a proxy only.
-
-## §8 acceptance lines
-| line | verdict |
-|---|---|
-| 8.0 tests | absent: none of the arc-* tests, scripture_lint, audio extension, ui-arc*, render-arc*. Only §10 tests + render-hearts exist |
-| M1 heart view on all towns | absent (no SettlementView.heart) |
-| M2 noise / heart.nobow | absent |
-| M3 harsh/kind runs | absent |
-| M4 shot fearful village poses | partial: poses exist in render (crowds.ts:118-138) but sim never sets MoverBlock.heart; no HUD glyph; no shot |
-| M5 Hearts layer ΔE | absent (no layer) |
-| T1-T10 | absent (no pride, tower, commands, Decision card) |
-| D1-D5 | absent |
-| C1-C4 | absent |
-| B1-B4 | absent |
-| 8.6 gates | partial: tsc clean; focused tests green; full check/build/cdn/determinism/perf/old-save-with-arc-state not verified this stint; no arc state to migrate |
-| 8.7 owner rules | not violated by what exists: approved music untouched in the commits (sfx.ts gained a new cue only); no quality.ts change in the window; no Great Flood built; no creature work |
-
-## Next (for the orchestrator)
-1. §10: recreate the 8-seed x 25-year flood measurement probe in _harness/arc-work/ (tracked) and the river-warning shot
-   spec, run both through slot.sh, record numbers and the looked-at verdict here.
-2. Stage A proper, sim first: §6.1/§6.2 state and views (types.ts, state.ts, migrate15 `arc` HeaderStep), then hearts,
-   dusk, pride, tower; UI and render can build on `__GENESIS__.arc.stub` once the UI lane adds it.
-
-- render lane (A-render stint 3, 07:4xZ): §10.3(c) screenshot LOOKED AT and MET (river higher + browner during the warning; _shots/arc-river-before.png vs arc-river-warning.png; terrainmat shallows silt fix). Gate 798/798 green at 06:2xZ.
-
-- UI lane (A-ui stint 4, 09:2xZ): M4 LIVE (no stub) via _harness/arc-work/specs/ui-m4b.json: harsh recipe -> fearful in 7
-  days; 120 m frame _shots/arc-m4b-120.png has 17 fear-signed people on screen (>= 5); HUD chip glyph live at region
-  (arc-m4-region.png); Hearts layer on the real heart LOOKED (arc-m4b-layer.png). UI side of §1/§2/§10 complete; pose
-  legibility at 888x500 is the render lane's verdict.
-
-- sim lane (A-sim stint 6, 10:4xZ): §8.2 T2 unattended PASS (3/8, median y17.9, <= 2 attempts, none < y10); T4 PASS
-  (half <= 4.25 y, >= 2 omens, on-site 95-99 % after TOWER.shift 600); T7 PASS 8/8 (dead 1-4, <= 50 % of on site);
-  T8 refusal-strike provoked (test). Open: attended pacing T2 (owner/spec call). Gate check5 808/808; check6 809/809 (11:03Z).
-
-- sim lane (A-sim stint 7, 11:3xZ): gate check7 810/810 on the final tree. T7 50-year form PASS (remains stand 50 y,
-  dead 2 of 6 on site). Attended pacing T2 measured and NOT met as specified (leader pride 0.48-0.59 at y10, roll
-  chance <= 0.075/yr in years 10-14; towerMinYear 10 cuts 7-9): owner/spec decision, options in contract-changes.md
-  stint 7. Everything else of §1, §2, §10 sim side is done and verified.
-
-- render lane (A-render stint 3b, 15:2xZ): §1/§2/§10 render side DONE and LOOKED AT: all tower stages + confusion ring
-  (_shots/arc-tower-*.png incl. struck2, confuse3-near), struck mound v2, confuseHue s 0.7. Perf (CPU work/frame,
-  before -> rising tower): low 14.7 -> 15.1 ms, medium 38.7 -> 34.9, high 33.9 -> 33.9 (shadows +0.7 ms); no preset
-  lowered. Gate check3 810/810 (13:58Z). Hurl arcs / idol / covenant ring wait for stage B sim.
-
-## SIM-LANE NOTE from PERF (2026-11-12, render lane; not acted on by render)
-- Babel scenario seed 307987276, "Rubolhin by the Lake": several houses on the lake's edge stand IN the water (their
-  bases under the lake sheet) — shots _shots/pe3-e120-y60.png / -y90.png / -y120.png (day, orbit dist 120 tilt 70 on
-  settlement 1). Looks like building placement vs the lake level (or a lake level that rose after placement). Sim lane to
-  check placement / the lake level at those cells.
-- For the record: the tree-covered water cells east / south-east of the town are sea shallows with species
-  'mangrove' (habitat shore, water 0-2 m): sim-correct. Render now stands them in their water (PERF.md session 13).
+## Gate
+See the end of this file (filled after the full run).

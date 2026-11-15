@@ -129,7 +129,48 @@ export class Settings {
             String(v.game.autosaveMinutes), (x) => { P.set('game.autosaveMinutes', Number(x)); P.set('game.autosaveChosen', true); })),
           field('Pause when hidden', select([{ value: 'auto', label: isEmbedded() ? 'Auto (on: playing inside the site)' : 'Auto (off: on its own page)' }, { value: 'on', label: 'On' }, { value: 'off', label: 'Off' }],
             v.game.pauseHidden, (x) => P.set('game.pauseHidden', x)), 'time stands still while you look at another tab, and runs again when you come back'),
-          field('Slow down for great moments', toggle(this.host.prefs.value.game.slowGreat !== false, set('game.slowGreat'), 'Slow down for great moments'), 'when a great choice comes, time eases to 10x until you answer'));
+          field('Slow down for great moments', toggle(this.host.prefs.value.game.slowGreat !== false, set('game.slowGreat'), 'Slow down for great moments'), 'when a great choice comes, time eases to 10x until you answer'),
+          field('Edge pan', toggle(this.host.prefs.value.game.edgePan, set('game.edgePan'), 'Edge pan'), 'the camera pans when the cursor reaches the edge'),
+          h('div', { class: 'gn-set-note', text: 'Every other law of the world — gravity, the length of the day, the air, the star, how fast fire spreads — is in the laws of the world (U, or the inspector on a world).' }),
+          h('button', { class: 'gn-btn gn-set-reset', text: 'Open the laws of this world', on: { click: () => { this.close(); this.host.action('ui.laws'); } } }));
+        const ready = (on: boolean) => { natTg.disabled = false; natTg.title = ''; natTg.classList.toggle('gn-on', on); natTg.setAttribute('aria-checked', String(on)); };
+        void this.host.query('laws').then((d) => {
+          const nat = (d as { laws?: Record<string, number> } | null)?.laws?.['disasters.natural'];
+          ready(typeof nat === 'number' ? nat > 0 : true); // (no answer: the law's own default, on)
+        }, () => ready(true));
+        break;
+      }
+    }
+  }
+
+  // ───────────────────────────── controls ─────────────────────────────
+
+  private controls(): void {
+    const kb = this.host.keybinds;
+    const conflicts = kb.conflicts();
+    const pad = this.host.prefs.value.pad;
+    const set = (path: string) => (x: unknown) => this.host.prefs.set(path, x);
+    if (conflicts.length) {
+      this.content.append(h('div', { class: 'gn-set-warn' }, h('span', { html: icon('help') }),
+        `${conflicts.length} key${conflicts.length === 1 ? ' is' : 's are'} bound to more than one action (the key is marked in red; hover it to see where else). The first action listed wins.`));
+    }
+    const table = h('div', { class: 'gn-binds' });
+    table.append(h('div', { class: 'gn-binds-h' }, h('span', { text: 'Action' }), h('span', { text: 'Key' }), h('span', { text: 'Second key' }), h('span', { text: 'Gamepad' }), h('span')));
+    let group = '';
+    for (const a of ACTIONS) {
+      if (a.group !== group) { group = a.group; table.append(h('div', { class: 'gn-binds-g', text: group })); }
+      table.append(this.bindRow(a));
+    }
+    this.content.append(table,
+      h('div', { class: 'gn-set-row' },
+        h('button', { class: 'gn-btn gn-set-reset', text: 'Reset every binding', on: { click: () => kb.resetAll() } }),
+        h('span', { class: 'gn-set-note', text: 'Click a key to change it: press the new key (Esc cancels, Backspace clears).' })),
+      h('div', { class: 'gn-set-h', text: 'Gamepad' }),
+      field('Gamepad', toggle(pad.enabled, set('pad.enabled'), 'Gamepad')),
+      field('Stick dead zone', slider({ min: 0.05, max: 0.45, step: 0.01, value: pad.deadzone, fmt: (x) => x.toFixed(2), on: set('pad.deadzone') })),
+      field('Cursor speed', slider({ min: 300, max: 2400, step: 50, value: pad.cursorSpeed, fmt: (x) => `${fmtNum(x)} px/s`, on: set('pad.cursorSpeed') })),
+      field('Camera speed', slider({ min: 0.3, max: 3, step: 0.05, value: pad.lookSpeed, fmt: (x) => `${x.toFixed(2)}×`, on: set('pad.lookSpeed') })),
+      field('Invert camera tilt', toggle(pad.invertY, set('pad.invertY'), 'Invert camera tilt')));
   }
 
   private bindRow(a: ActionDef): HTMLDivElement {

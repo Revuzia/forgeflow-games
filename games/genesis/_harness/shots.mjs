@@ -85,7 +85,7 @@ async function startServer() {
   if (await serverUp()) return null;
   const vite = resolve(ROOT, 'node_modules/.bin/vite');
   const child = spawn(vite, ['--port', String(PORT), '--strictPort'], {
-    cwd: ROOT, env: { ...process.env, GENESIS_FROZEN: '1', BROWSER: 'none' }, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: ROOT, env: { ...process.env, GENESIS_FROZEN: '1', GENESIS_SHOTS: '1', BROWSER: 'none' }, stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '';
   child.stdout.on('data', (d) => { log += d; });

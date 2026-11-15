@@ -40,7 +40,7 @@ async function serverUp() {
 async function startServer() {
   if (await serverUp()) return null;
   const child = spawn(resolve(ROOT, 'node_modules/.bin/vite'), ['--port', String(PORT), '--strictPort'], {
-    cwd: ROOT, env: { ...process.env, GENESIS_FROZEN: '1', BROWSER: 'none' }, stdio: 'ignore',
+    cwd: ROOT, env: { ...process.env, GENESIS_FROZEN: '1', GENESIS_SHOTS: '1', BROWSER: 'none' }, stdio: 'ignore',
   });
   for (let i = 0; i < 120; i++) { if (await serverUp()) return child; await new Promise((r) => setTimeout(r, 500)); }
   child.kill();

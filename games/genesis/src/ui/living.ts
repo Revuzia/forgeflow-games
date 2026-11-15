@@ -256,7 +256,7 @@ export function regardGauge(r: number): HTMLDivElement {
   pop.id = `gn-regard-pop-${++regardUid}`;
   const info = h('button', { class: 'gn-regard-info', text: '?', aria: { label: 'What this gauge means', describedby: pop.id, expanded: 'false' } });
   const show = (on: boolean) => { pop.hidden = !on; info.setAttribute('aria-expanded', String(on)); };
-  info.addEventListener('click', () => show(pop.hidden));
+  info.addEventListener('click', () => show(!!pop.hidden));
   info.addEventListener('focus', () => show(true));
   info.addEventListener('blur', () => show(false));
   info.addEventListener('mouseenter', () => show(true));

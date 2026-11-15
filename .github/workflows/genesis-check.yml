@@ -1,0 +1,34 @@
+# GENESIS (games/genesis): the same gate the harness runs by hand — npm ci, then `npm run check`
+# (determinism ban, typecheck, the whole test suite). There was no .github directory before this file, so there are no
+# repo conventions to follow beyond: pin the runner, the Node major and the action majors, and scope by path.
+name: genesis-check
+
+on:
+  push:
+    paths: ['games/genesis/**', '.github/workflows/genesis-check.yml']
+  pull_request:
+    paths: ['games/genesis/**', '.github/workflows/genesis-check.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: genesis-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: games/genesis
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: games/genesis/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      # the release gate's pure parts (meta, sizes, stamp) are part of `check`; building is the slow part, so it runs once here
+      - run: npm run build

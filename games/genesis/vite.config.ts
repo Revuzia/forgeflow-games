@@ -3,7 +3,8 @@
 //   * dev server http://localhost:5190 (strictPort: the harness hard-codes it), no-store headers.
 //   * base './' so the built dist/ can be hosted from any sub-path (portal / CDN folder).
 //   * POST /__shot/<name> (PNG data URL or image bytes) -> _shots/<name>.png, used by the Playwright harness
-//     and window.__GENESIS__.shot().
+//     and window.__GENESIS__.shot(). Only when GENESIS_SHOTS=1 (the harness sets it): a plain `npm run dev` or
+//     `vite preview` serves no file-writing endpoint.
 //   * the sim runs in a module Web Worker (src/sim/worker.ts) bundled by Vite (worker.format = 'es').
 //   * css.postcss is inline + empty on purpose: isolates the game from the portal's Tailwind PostCSS config.
 
@@ -69,7 +70,7 @@ export default defineConfig({
   root: ROOT,
   base: './',
   clearScreen: false,
-  plugins: [shotEndpoint()],
+  plugins: process.env.GENESIS_SHOTS === '1' ? [shotEndpoint()] : [],
   define: { __GENESIS_BUILD__: JSON.stringify(buildStamp()) },
   css: { postcss: { plugins: [] } },
   server: {
