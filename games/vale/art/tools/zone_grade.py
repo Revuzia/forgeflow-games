@@ -169,14 +169,31 @@ def grade(sid: str, glb: str | None = None, dry: bool = False, fresh: float = 0.
         # decoded texture is the same 2048^2)
         trial = os.path.join(tmp, "trial.glb")
         pre = reserved_pct(base)
-        for aim, margin in LADDER:
+        # orch1 W1-B (FU-2, the Odrum bone-mask lesson): reserveProtect names texels the reserve cap may only trim to
+        # protectSat (hue and value kept): parts / boxes / cyls as a zone, plus "joints" ["head:0.5"] (the texels skinned
+        # >= 0.5 to that joint: faces, masks, hoods). reserveGutterFirst: the UV gutter pays the cap before any painted
+        # texel. capMax: this fighter's binding cap (ruling 32's 8 % less a margin), checked on both PIL and float HSV.
+        prot = []
+        rp = rec.get("reserveProtect")
+        if rp:
+            if any(k in rp for k in ("parts", "boxes", "cyls")):
+                prot += ["--reserve-protect", zone_mask(sid, glb, {k: v for k, v in rp.items() if k != "joints"},
+                                                        (W, H), tmp, 99)]
+            for j in rp.get("joints", []):
+                prot += ["--joint", j]
+        if rec.get("reserveGutterFirst"):
+            prot += ["--reserve-gutter-first"]
+        if "protectSat" in rec:
+            prot += ["--protect-sat", str(rec["protectSat"])]
+        cap = float(rec.get("capMax", CAP))
+        for aim, margin in [(min(a, cap - 1.0), m) for a, m in LADDER]:
             for q in range(84, 59, -4):
                 shutil.copyfile(glb, trial)
                 r = subprocess.run([node(), GRADE, trial, "--q", str(q), "--reserve-cap", str(aim), "--reserve-margin",
                                     str(margin)] + [x for k, v in rec.get("reserveModes", {}).items() for x in ("--reserve-mode", f"{k}={v}")]
                                + (["--reserve-sat", str(rec["reserveSat"])] if "reserveSat" in rec else [])
                                + (["--reserve-knee", str(rec["reserveKnee"])] if "reserveKnee" in rec else [])
-                               + (["--reserve-ceil", str(rec["reserveCeil"])] if "reserveCeil" in rec else []) + tint, cwd=GAME, capture_output=True, text=True)
+                               + (["--reserve-ceil", str(rec["reserveCeil"])] if "reserveCeil" in rec else []) + prot + tint, cwd=GAME, capture_output=True, text=True)
                 if r.returncode:
                     raise SystemExit(r.stderr[-1200:])
                 if os.path.getsize(trial) <= max(min(before + 24 * 1024, 1160 * 1024), before) or q <= 60:
@@ -185,11 +202,11 @@ def grade(sid: str, glb: str | None = None, dry: bool = False, fresh: float = 0.
             # <= 8 %, whatever its bake held (the grade's --reserve-cap brings a bake over the cap under it); a grade
             # that misses it on every step of the ladder is not applied and the build fails
             post = reserved_pct(glb_image(trial, "_base"))
-            bad = {k: (pre[k], post[k]) for k in RESERVED if post[k] > CAP}
+            bad = {k: (pre[k], post[k]) for k in RESERVED if post[k] > cap}
             if not bad:
                 break
         if bad:
-            raise SystemExit(f"{sid}: zone grade breaks the reserved-hue cap (ruling 32, before -> after %): {bad}")
+            raise SystemExit(f"{sid}: zone grade breaks the reserved-hue cap {cap} % (ruling 32, before -> after %): {bad}")
         shutil.copyfile(trial, glb)
         print(r.stdout.strip().replace(trial, glb))
         print(f"{sid}: reserved hues (ruling 32) % before {pre} after {post}")

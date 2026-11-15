@@ -1,6 +1,6 @@
 // VALE — assemble the deploy folder (CONTRACT §3.1): deploy/ = dist/ + dist-catalog/ as deploy/catalog/.
 //
-//   node tools/package_deploy.ts [--dist <dir>] [--catalog <dir>] [--out <dir>]
+//   node tools/package_deploy.ts [--dist <dir>] [--catalog <dir>] [--out <dir>] [--override "<reason>"]
 //   (npm run build && npm run content first)
 //
 // deploy/ is what the existing R2 uploader ships. The client finds its catalog at
@@ -20,25 +20,31 @@
 // assets those catalogs refer to; every other file in dist-catalog/assets (leftovers of older content
 // builds: names are content-addressed) stays behind and is counted. `npm run content -- --prune` deletes
 // them from dist-catalog itself.
+// TECH-12 gate: it refuses to stage unless `npm run check:browser` left a green _harness/_reports/gate_<HEAD>.json for this
+// HEAD and these shipped sources (tools/gate_fingerprint.ts). --override "<reason>" stages anyway and appends the reason,
+// the HEAD and the gate problem to _harness/_reports/deploy_overrides.log.
 // Exit 0 ok · 1 verification failed · 2 usage or unsafe --out.
 
 import { createHash } from 'node:crypto';
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { appendFileSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { dirname, join, parse, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CatalogManifest } from '../src/contracts/manifest.ts';
+import { gateProblem, headSha, REPORTS } from './gate_fingerprint.ts';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-interface Opts { dist: string; catalog: string; out: string }
+interface Opts { dist: string; catalog: string; out: string; override?: string }
 
 function parseArgs(argv: string[]): Opts | string {
   const o: Opts = { dist: join(ROOT, 'dist'), catalog: join(ROOT, 'dist-catalog'), out: join(ROOT, 'deploy') };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const v = argv[i + 1];
-    if ((a === '--dist' || a === '--catalog' || a === '--out') && v) { o[a.slice(2) as keyof Opts] = resolve(v); i++; }
-    else if (a === '-h' || a === '--help') return 'usage: node tools/package_deploy.ts [--dist <dir>] [--catalog <dir>] [--out <dir>]';
+    if ((a === '--dist' || a === '--catalog' || a === '--out') && v) { o[a.slice(2) as 'dist' | 'catalog' | 'out'] = resolve(v); i++; }
+    else if (a === '--override' && v && v.trim().length >= 8) { o.override = v.trim(); i++; }
+    else if (a === '--override') return '--override needs a reason of at least 8 characters';
+    else if (a === '-h' || a === '--help') return 'usage: node tools/package_deploy.ts [--dist <dir>] [--catalog <dir>] [--out <dir>] [--override "<reason>"]';
     else return `unknown or incomplete argument "${a}"`;
   }
   return o;
@@ -132,6 +138,14 @@ function unsafeOut(o: Opts): string | null {
 function main(argv: string[]): number {
   const o = parseArgs(argv);
   if (typeof o === 'string') { console.error(o); return o.startsWith('usage') ? 0 : 2; }
+  const gate = gateProblem();
+  if (gate) {
+    if (!o.override) { console.error(`error browser gate: ${gate}\n  (a deliberate exception: --override "<reason>", logged)\n\nFAILED: deploy/ not assembled`); return 1; }
+    let head = 'unknown'; try { head = headSha(); } catch { /* logged as unknown */ }
+    const line = `${new Date().toISOString()} HEAD ${head} override: ${o.override} | gate: ${gate}\n`;
+    try { mkdirSync(REPORTS, { recursive: true }); appendFileSync(join(REPORTS, 'deploy_overrides.log'), line); } catch (e) { console.error(`error cannot log the override (${(e as Error).message}); refusing\n\nFAILED: deploy/ not assembled`); return 1; }
+    console.warn(`warn browser gate overridden (${o.override}): ${gate}`);
+  }
   const bad = unsafeOut(o);
   if (bad) { console.error(`error --out ${show(resolve(o.out))} ${bad}; refusing to delete it\n\nFAILED: deploy/ not assembled`); return 2; }
   const { errs, files: staged } = verify(o);

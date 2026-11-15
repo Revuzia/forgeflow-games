@@ -30,7 +30,9 @@
 // further from the point than it began (carried off by a wave), re-plans with every body counted and a longer lane
 // allowed; a second such window in a row with no lane found ends a move to a point (boxed in: it stops cleanly), as do
 // WATCH_MAX in a row or WATCH_TOTAL in all. A tiny step back against the last heading (pinned, jostled) is not taken.
-// Separation: overlapping mobile units push each other apart softly (half the overlap per tick,
+// Separation: a fighter and the Wicks of its own side pass through each other (ruling 39: its own wave never body-blocks
+// it in a tower's neck, and Wicks walking the road never queue behind or shove a fighter standing in it). Otherwise
+// overlapping mobile units push each other apart softly (half the overlap per tick,
 // less when idle); structures are hard circles. Walls win: a step into a blocked cell slides
 // along the free axis or stops. Blocking zones act like walls for the units they block.
 //
@@ -43,12 +45,12 @@
 // stop at walls, and are ignored by unstoppable targets and structures.
 
 import { TICK_DT } from '../contracts/sim.ts';
-import type { ActionState } from '../contracts/sim.ts';
-import { attackable, inAttackRange } from './attack.ts';
+import type { ActionState, EntityId } from '../contracts/sim.ts';
+import { attackAtMeans, attackable, inAttackRange } from './attack.ts';
 import { castInRange, interruptCast } from './abilities.ts';
 import { matchesFilter, onEffectHit, runEffects, withHit } from './effects.ts';
 import {
-  CC_FEAR, CC_HARD, CC_ROOT, CC_TAUNT, ORDER_ATTACK, ORDER_ATTACK_MOVE, ORDER_CAST, ORDER_MOVE, ORDER_NONE, ST_UNSTOPPABLE,
+  CC_FEAR, CC_HARD, CC_ROOT, CC_TAUNT, ORDER_ATTACK, ORDER_ATTACK_AT, ORDER_ATTACK_MOVE, ORDER_CAST, ORDER_MOVE, ORDER_NONE, ST_UNSTOPPABLE,
   type DashState, type EffOf, type EffectCtx, type Entity,
 } from './entity.ts';
 import { segPointDist2, segmentCircleT } from './math.ts';
@@ -58,7 +60,7 @@ import { noteMoved } from './triggers.ts';
 import type { World } from './world.ts';
 import { zoneBlocks } from './zones.ts';
 import { datan2, dcos, dsin } from './dmath.ts';
-import { collectDiscs, discsClear, laneDiscs, laneLen, planLane, RASTER_SLACK } from './bodypath.ts';
+import { collectDiscs, discsClear, ghosts, laneDiscs, laneLen, planLane, RASTER_SLACK } from './bodypath.ts';
 
 /** a move that ended this close (m, |dx| + |dy|) to its snapped goal finished it: the same point re-sent is a no-op */
 const FINISHED_NEAR = 0.5;
@@ -98,7 +100,8 @@ const LANE_AWAY = 0.5;
 /** … after a no-progress window (pinned in a wave): up to this long */
 const LANE_DETOUR_STUCK = 2.2;
 const LANE_DETOUR_STUCK_M = 2;
-const LANE_AWAY_STUCK = 2;
+/** (ruling 39: 2 m walked a knocked-back hero 1.2 m away from its point for 1.5 s; a sidestep, not a walk away) */
+const LANE_AWAY_STUCK = 0.75;
 /** progress watchdog window (ticks, ~1 s) and the share of a full-speed walk it must gain off the route left */
 const WATCH_TICKS = 30;
 const WATCH_PROGRESS = 0.3;
@@ -152,6 +155,36 @@ export function issueAttack(w: World, e: Entity, t: Entity): void {
   e.order = ORDER_ATTACK; e.orderTarget = t.id; e.pendingSlot = -1;
   e.path.length = 0; e.pathGoalX = NaN;
   resetWatch(e);
+}
+/** an attackAt order lapses this long (s) after its cooldown would have let it attack, when it still could not (ruling 39) */
+const ATTACK_AT_GRACE = 0.5;
+/**
+ * Attack in place toward (x, y) (Shift + left-click, ruling 39): the walker stops where it stands (path, lane and any walk
+ * dropped, never a step taken for it) and faces the point; attack.ts throws the attack. The order owes one attack; the
+ * same order re-sent (a held button) re-aims it and owes one more, so a held button attacks at attack speed. A windup
+ * already under way finishes when the new aim still means its target, else it is dropped (its cooldown still runs, as a
+ * move's). The order lapses ATTACK_AT_GRACE s after its cooldown ends if no attack could start (disarmed, stunned).
+ */
+export function issueAttackAt(w: World, e: Entity, x: number, y: number, target: EntityId, fighters: boolean): void {
+  const m = w.mapDef.size;
+  x = Math.max(0, Math.min(m[0] - 1e-3, x)); y = Math.max(0, Math.min(m[1] - 1e-3, y));
+  if (e.atkWindup >= 0 && e.order !== ORDER_ATTACK_AT) {
+    const t = e.atkAimed ? null : w.live(e.atkTarget);
+    if (!t || !attackAtMeans(e, t, x, y)) { e.atkWindup = -1; e.atkAnim = 0; }
+  }
+  e.order = ORDER_ATTACK_AT;
+  e.orderX = x; e.orderY = y; e.orderTarget = target; e.pendingSlot = -1;
+  e.orderReqX = NaN; e.orderReqY = NaN;
+  e.atkAtLeft = 1; e.atkAtFighters = fighters;
+  e.atkAtUntil = w.tick + Math.ceil((Math.max(0, e.atkCd) + ATTACK_AT_GRACE) / TICK_DT);
+  e.path.length = 0; e.pathGoalX = NaN;
+  e.arriveStall = 0; e.arrivePinned = 0;
+  resetWatch(e);
+  // face the point now (no turn rate in the sim: a started attack snaps the same way), unless busy with another swing
+  if (e.atkWindup < 0 && !e.cast && !e.dash) {
+    const dx = x - e.x, dy = y - e.y;
+    if (dx * dx + dy * dy > 1e-6) e.facing = datan2(dy, dx);
+  }
 }
 export function issueStop(w: World, e: Entity): void {
   e.order = ORDER_NONE; e.orderTarget = -1; e.pendingSlot = -1;
@@ -372,6 +405,8 @@ function goalOf(w: World, e: Entity): boolean {
   }
   switch (e.order) {
     case ORDER_MOVE: tmp.x = e.orderX; tmp.y = e.orderY; return true;
+    // attack in place (ruling 39): never a step, whatever it aims at
+    case ORDER_ATTACK_AT: return false;
     case ORDER_ATTACK_MOVE: {
       // a picked enemy is chased first (attack.ts desiredAttackTarget drops it once it is lost)
       const picked = e.orderTarget >= 0 ? w.live(e.orderTarget) : null;
@@ -407,7 +442,7 @@ function separate(w: World, e: Entity, x: number, y: number, factor: number): vo
   let ox = 0, oy = 0;
   for (let i = 0; i < n; i++) {
     const o = near[i];
-    if (o === e || !o.alive || o.dash || o.kind === 'ward' || o.kind === 'pickup') continue;
+    if (o === e || !o.alive || o.dash || o.kind === 'ward' || o.kind === 'pickup' || ghosts(e, o)) continue;
     let dx = x - o.x, dy = y - o.y;
     const rr = e.radius + o.radius;
     let d2 = dx * dx + dy * dy;

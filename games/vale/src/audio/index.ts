@@ -17,6 +17,19 @@
 //               back what the compression does not, so the average holds (_harness/probe_audio_soften.mjs measures
 //               it in real Chrome over a match-like program: integrated within 0.1 LU, peaks -2.9 dB, the
 //               short-term range 13.2 -> 7.6 LU)
+//   leveller    (orch1 AUD-O1) a density-aware sfx leveller, HDR-style: the same game at the same slider must not be
+//               7 LU louder in a 5v5 than in RIFT co-op (BRIDGE read -11.8 LUFS, FRAY -15.0, RIFT -17 to -19). The sfx
+//               reaches the mix by three paths: the BACKGROUND (the sfx bus: everyone else's fight, waves, camps), the
+//               THREAT path (an enemy's action aimed your way but out of your awareness radius) and the PRIORITY
+//               sub-bus (anything YOUR fighter makes, anything landing on you, and every awareness threat within
+//               AWARE_M of your living fighter). A feed-forward detector reads the K-weighted short-term
+//               (LEVEL_WINDOW_S) loudness of all three, referred to the default sfx slider (LEVEL_REF_SFX) and the
+//               mode's trim, and solves the one gain on the background and threat paths that brings the whole sfx to
+//               LEVEL_TARGET_LUFS: cut only, at most LEVEL_MAX_CUT_DB, gliding down over LEVEL_ATTACK_S and back over
+//               LEVEL_RELEASE_S (slow both ways: a density ride, never a pumping compressor). The priority sub-bus is
+//               never cut, so your own autos and what threatens you stay forward when the fight around you thickens.
+//               Per mode a static sfx trim (content audio.mix.modes.<mode>.sfxTrimDb) sets the mode's base level on
+//               all three paths (the 5v5 maps are denser by design, not only in their peaks)
 //   ducking     voice > sfx > music (CONTRACT §11): while an announcer line plays, music and ambience sit
 //               VOICE_DUCK_DB lower and the sfx bus SFX_DUCK_DB lower, except threats to your fighter (the
 //               awareness pass below), which are never ducked (r07 §2.2.7). A news line (bands 1-3: a wipe,
@@ -126,7 +139,10 @@
 //               one target's heals within HEAL_MERGE_S are one chime. Only a fighter's heal chimes, and only a
 //               heal of at least HEAL_MIN_FRAC of its max HP that does not follow another heal on it within
 //               HEAL_CHAIN_S (closing AUD-C5): a repeat chain (a flask, a regen zone) chimes on its first tick and
-//               small item sustain (an on-kill or on-hit heal) is silent; an item active's cast plays its
+//               small item sustain (an on-kill or on-hit heal) is silent. Since orch1 AUD-O3 only YOUR fighter's heals
+//               and an ally's big heal (HEAL_ALLY_FRAC) within LISTEN_INNER_M of you chime, from one token bucket
+//               (HEAL_PER_MIN, burst HEAL_BURST) with one chime per HEAL_TEAM_MERGE_S; a heal of HEAL_BIG_FRAC or more
+//               bypasses both (a 5v5 chimed 25.75 a minute, a glassy chatter over the hits); an item active's cast plays its
 //               present.sfx (the flask's one drink). A fighter's death is heard team-relative: yours
 //               ('selfDown'), an ally's ('allyDown'), an enemy fighter's ('enemyDown', a rising answer; AUD-C6).
 //               Vision (AUD-C9): an ability or item active that summons a ward unit plays 'wardSet' on its cast
@@ -270,7 +286,9 @@ interface AmbientLike {
 }
 interface CatalogLike {
   audio: { cues: Record<string, CueDef>; music: Record<string, MusicDefT>; events?: Record<string, string>;
-    ambience?: Record<string, { source: string; cue: string }[]>; ui?: Record<string, string>; m4a?: Record<string, string> };
+    ambience?: Record<string, { source: string; cue: string }[]>; ui?: Record<string, string>; m4a?: Record<string, string>;
+    /** (AUD-O1) the mix per mode: mode id → its static sfx trim (see `leveller` in the header) */
+    mix?: { modes?: Record<string, { sfxTrimDb?: number }> } };
   fighters: { id: string; attack?: { present?: PresentLike };
     kit: Record<string, (AbilityLike & { forms?: Record<string, { kit?: Record<string, AbilityLike | undefined> }> }) | undefined> }[];
   units?: { id: string; kind?: string; attack?: { present?: PresentLike }; passive?: PassiveLike; abilities?: { id: string }[] }[];
@@ -339,6 +357,8 @@ interface CueOpts { aware?: boolean; lift?: number; onVoice?: (v: Voice, buf: Au
   you?: boolean;
   /** (max2 SFX-1b) the source is a camp monster (not an epic unit): its cues play CAMP_DB under (see `mix focus`) */
   camp?: boolean;
+  /** (AUD-O1) the event lands on your fighter: the priority sub-bus (see `leveller`) */
+  onYou?: boolean;
   /** a playback-rate multiplier over the cue's own pitchVar (the gold ladder's step-up) */
   rate?: number }
 
@@ -383,6 +403,15 @@ const LEAD_SKIP_S = 0.004;   // a one-shot starts this far into its file: audio/
 const LEAD_RAMP_S = 0.001;   // fade-in brings the hit 4 ms closer to its frame (closing critic 'audio-runtime')
 const HEAL_MIN_FRAC = 0.05;  // a heal tick chimes only at this share of the target's max HP or more (closing AUD-C5) …
 const HEAL_CHAIN_S = 1.2;    // … and not when the same target was healed this recently (a repeat chain: its first tick)
+// (orch1 AUD-O3) a 5v5 chimed 25.75 heals a minute (gate 6): a chime is for YOUR fighter's heals (HEAL_MIN_FRAC) and an
+// ally's big heal (HEAL_ALLY_FRAC of its max HP) within LISTEN_INNER_M of you; every chime draws on one token bucket
+// (HEAL_PER_MIN, burst HEAL_BURST), one team's heals within HEAL_TEAM_MERGE_S are one chime, and a heal of
+// HEAL_BIG_FRAC or more bypasses both (a burst heal is news)
+const HEAL_ALLY_FRAC = 0.10;
+const HEAL_BIG_FRAC = 0.25;
+const HEAL_PER_MIN = 6;
+const HEAL_BURST = 2;
+const HEAL_TEAM_MERGE_S = 1.0;
 // the mixer (see `buses` / `ducking` in the header)
 // (max2 SFX-1b: 3.0 -> 3.5) round 1's live captures put the master at -19.6 to -20.2 LUFS on 3 of 5 (tokens -18 +/- 1.5):
 // in a quiet stretch the master is mostly the ambience bed and the music, so an sfx-only lift moved it 0.4 dB for 2.4 dB
@@ -400,6 +429,16 @@ const MIX_TRIM_DB = 5.0;     // the engine's mix makeup after the master volume,
 // never an epic unit's kit) CAMP_DB under
 const OWN_KIT_DB = 1.0;
 const CAMP_DB = -3;
+// the sfx leveller (orch1 AUD-O1, see `leveller` in the header). The target is on the probes' sfx scale (the three sfx
+// paths at the default 0.8 slider, before the fight and voice ducks): -19 LUFS short-term puts a dense 5v5 master
+// near the -18 token, where a RIFT co-op lane (-21 to -24 sfx short-term p50) is never touched
+const LEVEL_TARGET_LUFS = -19;
+const LEVEL_MAX_CUT_DB = 8;
+const LEVEL_ATTACK_S = 0.8;     // time constants of the gain's glide: down …
+const LEVEL_RELEASE_S = 3;      // … and back up
+const LEVEL_WINDOW_S = 3;       // the detector's short-term window (BS.1770 short-term)
+const LEVEL_POLL_MS = 100;      // one 4096-sample read per path per poll (85 ms at 48 kHz)
+const LEVEL_REF_SFX = 0.8;      // the default sfx slider: the detector is referred to it, so the slider still sets the level
 const OWN_KIT_GAIN = Math.pow(10, OWN_KIT_DB / 20);
 const CAMP_GAIN = Math.pow(10, CAMP_DB / 20);
 const CLIP_KNEE = 0.7;       // the soft clip is linear up to −3.1 dBFS …
@@ -596,8 +635,27 @@ class Engine implements ValeAudioPort {
   private readonly bus = new Map<Bus, GainNode>();
   /** the voice-bus duck after a bus (music, ambience, sfx; see `ducking` in the header) */
   private readonly vduck = new Map<Bus, GainNode>();
-  /** threats to your fighter: the sfx bus's volume, past its duck */
+  /** threats to your fighter out of your awareness radius: the sfx bus's volume, past its duck (see `leveller`) */
   private threat!: GainNode;
+  /** (AUD-O1) the priority sub-bus: your own fighter's sounds, what lands on you, awareness threats near you; the sfx
+   *  volume, then the mode trim (prioTrim), never the leveller's cut */
+  private prio!: GainNode;
+  private prioTrim!: GainNode;
+  /** (AUD-O1) the leveller's gain stages: the sfx bus (after the volume, before the fight duck) and the threat path;
+   *  each carries the mode trim x the leveller's gain */
+  private levSfx!: GainNode;
+  private levThreat!: GainNode;
+  /** the leveller's detector: [background + threat, priority] x [L, R] analysers (K-weighted, see `leveller`) */
+  private levDet: AnalyserNode[] = [];
+  private levBuf: Float32Array<ArrayBuffer> | null = null;
+  private levWin: { t: number; n: number; p: number }[] = [];
+  private levTimer: ReturnType<typeof setInterval> | undefined;
+  /** the leveller's last solved gain, and its dev / probe stats (polls, cut time, the deepest cut) */
+  private levGain = 1;
+  private sfxTrimDb = 0;
+  readonly levStats = { polls: 0, cutPolls: 0, cut3Polls: 0, maxCutDb: 0, sumCutDb: 0, prioShareSum: 0, prioSharePolls: 0 };
+  /** content audio.mix.modes: mode id → its sfx trim (dB) */
+  private readonly modeTrim: Record<string, number> = {};
   /** the alert path, one gain per bus, straight into the limiter (see `alert path` in the header) */
   private readonly alertBus = new Map<Bus, GainNode>();
   /** the cue ids content binds to the gate roles */
@@ -653,6 +711,10 @@ class Engine implements ValeAudioPort {
   private readonly knocked = new Map<number, number>();
   /** heal target entity → ctx time of its last voiced heal */
   private readonly healLast = new Map<number, number>();
+  /** (AUD-O3) the heal chimes' token bucket (HEAL_PER_MIN, burst HEAL_BURST), its last refill, and your team's last chime */
+  private healTokens = HEAL_BURST;
+  private healRefill = 0;
+  private healTeamLast = -1e9;
   /** this tick's ability blows the Ringshade muffled ('src:dst:ability' of a `shaded` damage event): the 'hit' that
    *  comes before its damage in the same batch plays its kit hit at SHADED_GAIN */
   private readonly shadedHits = new Set<string>();
@@ -806,6 +868,7 @@ class Engine implements ValeAudioPort {
     for (const u of cat.units ?? []) own(u.passive, 'unit');
     for (const m of cat.maps ?? []) this.maps.set(m.id, m.art?.ambient);
     for (const m of cat.modes ?? []) if (m.rules?.dawnSeal) this.seals.set(m.id, m.rules.dawnSeal);
+    for (const [id, m] of Object.entries(cat.audio.mix?.modes ?? {})) if (Number.isFinite(m?.sfxTrimDb)) this.modeTrim[id] = m.sfxTrimDb as number;
     for (const m of cat.modes ?? []) {
       const clock = m.rules?.suddenDeathAt ?? m.rules?.end?.timeLimit;
       if (clock) this.modeClock.set(m.id, clock);
@@ -867,13 +930,21 @@ class Engine implements ValeAudioPort {
           this.deadLpf = lpf; this.deadGain = dg;
           g.connect(this.duckGain).connect(lpf).connect(dg).connect(d);
         } else if (b === 'sfx') {
+          // the background path: the volume (bus) → the mode trim x the leveller → the fight duck → the voice duck
           this.sfxHeat = ctx.createGain();
-          g.connect(this.sfxHeat).connect(d);
+          this.levSfx = ctx.createGain();
+          g.connect(this.levSfx).connect(this.sfxHeat).connect(d);
         } else g.connect(d);
       } else g.connect(this.mix);
     }
+    // the threat path (past the sfx ducks) through the leveller; the priority sub-bus past the leveller (see `leveller`)
     this.threat = ctx.createGain();
-    this.threat.connect(this.mix);
+    this.levThreat = ctx.createGain();
+    this.threat.connect(this.levThreat).connect(this.mix);
+    this.prio = ctx.createGain();
+    this.prioTrim = ctx.createGain();
+    this.prio.connect(this.prioTrim).connect(this.mix);
+    this.levelSetup(ctx);
     // the alert path joins after the master (the background mute), at the trim before the limiter
     for (const b of BUSES) {
       const g = ctx.createGain();
@@ -1040,6 +1111,7 @@ class Engine implements ValeAudioPort {
       else { ag.cancelScheduledValues(t); ag.setValueAtTime(0, t); }
     }
     glide(this.threat.gain, this.vol.sfx, t);
+    glide(this.prio.gain, this.vol.sfx, t);
     // accessibility (see `buses`): mono sums to one channel the speakers up-mix; soften re-wires its compressor in
     this.out.channelCount = this.vol.mono ? 1 : 2;
     const soften = !!this.vol.softenLoud;
@@ -1048,6 +1120,92 @@ class Engine implements ValeAudioPort {
       this.mix.disconnect();
       this.mix.connect(soften ? this.soft : this.master);
     }
+  }
+
+  // ── the sfx leveller (see `leveller` in the header) ───────────────────────────────────────────────
+  /** the detector: the background + threat paths and the priority sub-bus, each after its volume and before any trim,
+   *  K-weighted (BS.1770's shelf and RLB high-pass, as the probes meter) and split L / R into analysers read by a poll */
+  private levelSetup(ctx: AudioContext): void {
+    if (typeof ctx.createAnalyser !== 'function') return;
+    const kw = (inputs: AudioNode[]): AnalyserNode[] => {
+      const sum = ctx.createGain();
+      sum.channelCount = 2; sum.channelCountMode = 'explicit'; sum.channelInterpretation = 'speakers';
+      for (const n of inputs) n.connect(sum);
+      const hs = ctx.createBiquadFilter(); hs.type = 'highshelf'; hs.frequency.value = 1681.974; hs.gain.value = 3.9998;
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 38.135; hp.Q.value = -6.015;   // Q in dB: 0.5
+      for (const f of [hs, hp]) { f.channelCount = 2; f.channelCountMode = 'explicit'; f.channelInterpretation = 'speakers'; }
+      const sp = ctx.createChannelSplitter(2);
+      sum.connect(hs).connect(hp).connect(sp);
+      return [0, 1].map((ch) => {
+        const a = ctx.createAnalyser();
+        a.fftSize = 4096;
+        sp.connect(a, ch);
+        return a;
+      });
+    };
+    this.levDet = [...kw([this.bus.get('sfx')!, this.threat]), ...kw([this.prio])];
+    this.levBuf = new Float32Array(4096);
+    this.levelTrim(this.sfxTrimDb, true);
+    clearInterval(this.levTimer);
+    this.levTimer = setInterval(() => this.levelPoll(), LEVEL_POLL_MS);
+  }
+
+  /** the mode's static sfx trim on all three paths (the leveller's stages carry it times its gain) */
+  private levelTrim(db: number, now = false): void {
+    this.sfxTrimDb = db;
+    const ctx = this.ctx;
+    if (!ctx || !this.levSfx) return;
+    const t = ctx.currentTime, k = Math.pow(10, db / 20);
+    for (const [p, v] of [[this.levSfx.gain, k * this.levGain], [this.levThreat.gain, k * this.levGain], [this.prioTrim.gain, k]] as const) {
+      if (now) { p.cancelScheduledValues(t); p.setValueAtTime(v, t); } else glide(p, v, t, 0.3);
+    }
+  }
+
+  private levelPoll(): void {
+    const ctx = this.ctx, buf = this.levBuf;
+    if (!ctx || !buf || this.levDet.length < 4 || ctx.state !== 'running') return;
+    const ms = (a: AnalyserNode): number => {
+      a.getFloatTimeDomainData(buf);
+      let s = 0;
+      for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
+      return s / buf.length;
+    };
+    const now = ctx.currentTime;
+    const n = ms(this.levDet[0]) + ms(this.levDet[1]), p = ms(this.levDet[2]) + ms(this.levDet[3]);
+    this.levWin.push({ t: now, n, p });
+    while (this.levWin.length && this.levWin[0].t < now - LEVEL_WINDOW_S) this.levWin.shift();
+    let sn = 0, sp = 0;
+    for (const w of this.levWin) { sn += w.n; sp += w.p; }
+    const k = this.levWin.length || 1;
+    // referred to the default slider and the mode's trim: the probes' sfx scale
+    const vol = this.vol.sfx;
+    if (!(vol > 0)) return;
+    const ref = (LEVEL_REF_SFX / vol) ** 2 * Math.pow(10, this.sfxTrimDb / 10);
+    const N = (sn / k) * ref, P = (sp / k) * ref;
+    const T = Math.pow(10, (LEVEL_TARGET_LUFS + 0.691) / 10);
+    const floor = Math.pow(10, -LEVEL_MAX_CUT_DB / 20);
+    // the one gain on the background that brings background + priority to the target: g^2 N + P = T
+    let g = 1;
+    if (N > 0 && N + P > T) g = T - P <= 0 ? floor : Math.max(floor, Math.min(1, Math.sqrt((T - P) / N)));
+    const st = this.levStats;
+    st.polls++;
+    if (N + P > 1e-9) { st.prioShareSum += P / (N + P); st.prioSharePolls++; }
+    const cut = -20 * Math.log10(g);
+    if (cut > 0.1) st.cutPolls++;
+    if (cut > 3) st.cut3Polls++;
+    st.maxCutDb = Math.max(st.maxCutDb, cut);
+    st.sumCutDb += cut;
+    const tau = g < this.levGain ? LEVEL_ATTACK_S : LEVEL_RELEASE_S;
+    if (Math.abs(g - this.levGain) < 1e-4) return;
+    this.levGain = g;
+    const tk = Math.pow(10, this.sfxTrimDb / 20) * g;
+    for (const prm of [this.levSfx.gain, this.levThreat.gain]) { prm.cancelScheduledValues(now); prm.setTargetAtTime(tk, now, tau); }
+  }
+
+  /** dev / probes: the leveller as it stands (its gain in dB, the mode trim) and the three sfx paths' post-leveller
+   *  nodes the probes meter as the sfx heard before the ducks */
+  get leveller(): { gainDb: number; trimDb: number; taps: AudioNode[]; stats: Engine['levStats'] } | null {
+    return this.ctx ? { gainDb: 20 * Math.log10(this.levGain), trimDb: this.sfxTrimDb, taps: [this.levSfx, this.levThreat, this.prioTrim], stats: this.levStats } : null;
   }
 
   /** dev / harness: the accessibility state as wired (mono channels, soften in the chain) */
@@ -1255,8 +1413,11 @@ class Engine implements ValeAudioPort {
     const level = c.gain * att * gainMul;            // the placement level (the voice's own gain node) …
     const humanise = Math.pow(10, vdb / 20);          // … and the per-play variation, a stage of its own after it
     const late = varies && repeat ? Math.random() * REPEAT_JITTER_S : 0;
-    // where it joins the mix: the gate cues' alert path; a threat to your fighter past the sfx duck; else its bus
-    const into = alert ? this.alertBus.get(c.bus)! : c.bus === 'sfx' && o.aware ? this.threat : this.bus.get(c.bus)!;
+    // where it joins the mix: the gate cues' alert path; the priority sub-bus (your fighter's own sounds, what lands on
+    // you, an awareness threat within AWARE_M of you: past the leveller, see `leveller`); a farther threat to your fighter
+    // past the sfx duck; else its bus
+    const toPrio = c.bus === 'sfx' && !alert && (!!o.you || !!o.onYou || (!!o.aware && this.nearMe(pos)));
+    const into = alert ? this.alertBus.get(c.bus)! : toPrio ? this.prio : c.bus === 'sfx' && o.aware ? this.threat : this.bus.get(c.bus)!;
     const file = c.files[this.take(cueId, c.files.length)];
     // the slot is held from now (a burst of cues decoding at once must not overrun the budget)
     const v: Voice = { src: null, gain: null, cue: cueId, bus: c.bus, priority: prio, rank, pooled: !alert, started: now };
@@ -2211,6 +2372,7 @@ class Engine implements ValeAudioPort {
     this.procLast.clear();
     this.ults.clear();
     this.dealt.clear(); this.healLast.clear(); this.healAny.clear(); this.wiped.clear();
+    this.healTokens = HEAL_BURST; this.healRefill = this.ctx?.currentTime ?? 0; this.healTeamLast = -1e9;
     this.hurtLast.clear(); this.objAlive.clear();
     for (const o of client?.view.objectives ?? []) this.objAlive.set(o.id, o.alive);
     this.annQ = [];
@@ -2218,6 +2380,9 @@ class Engine implements ValeAudioPort {
     this.stopAmbience();
     this.evictCues();
     this.ambMap = client?.setup?.map ?? null;
+    // the mode's static sfx trim (see `leveller`); out of a match none, and the leveller's window starts over
+    this.levWin = [];
+    this.levelTrim(client ? this.modeTrim[client.view.mode] ?? 0 : 0);
     if (client) {
       this.prewarm(client);
       this.off = client.onEvents((evs: SimEvent[]) => {
@@ -2420,6 +2585,19 @@ class Engine implements ValeAudioPort {
     return e && e.alive !== false ? { x: e.x, y: e.y } : null;
   }
 
+  /** (AUD-O3) a heal chime may sound now: the team merge window has passed and the bucket (refilled here) holds a token */
+  private healToken(now: number): boolean {
+    this.healTokens = Math.min(HEAL_BURST, this.healTokens + Math.max(0, now - this.healRefill) * HEAL_PER_MIN / 60);
+    this.healRefill = now;
+    return now - this.healTeamLast >= HEAL_TEAM_MERGE_S && this.healTokens >= 1;
+  }
+
+  /** within AWARE_M of your living fighter (a cue with no place is not) */
+  private nearMe(pos: { x: number; y: number } | null): boolean {
+    const me = pos ? this.aliveAt() : null;
+    return !!me && !!pos && Math.hypot(pos.x - me.x, pos.y - me.y) <= AWARE_M;
+  }
+
   /** a spatial cue's gain / pan / low-pass around the listener (see `listener` in the header) */
   private place(pos: { x: number; y: number }, aware: boolean): Place {
     const ear = this.ear();
@@ -2549,7 +2727,7 @@ class Engine implements ValeAudioPort {
     const onYou = youId !== undefined && (e.dst === youId || e.target === youId);
     // priority: an enemy (or a monster) aiming at you, or anything landing on you, +1; an ally's own action −1
     const lift = src ? (src.team !== mine ? (onYou ? 1 : 0) : src.id !== youId && !onYou ? -1 : 0) : onYou ? 1 : 0;
-    const aw: CueOpts = { aware: (!!src && src.team !== mine && src.kind !== 'minion') || onYou, lift,
+    const aw: CueOpts = { aware: (!!src && src.team !== mine && src.kind !== 'minion') || onYou, lift, onYou,
       you: !!src && youId !== undefined && src.id === youId, camp: src?.kind === 'monster' && !this.uk(src) };
     if (this.ults.size) this.release(kind, e, src, aw);
     switch (kind) {
@@ -2656,7 +2834,7 @@ class Engine implements ValeAudioPort {
           const now = this.ctx?.currentTime ?? 0;
           if (now - (this.shieldBroke.get(dst.id) ?? -1e9) > SHIELD_BREAK_GAP_S) {
             this.shieldBroke.set(dst.id, now);
-            this.cue(this.ev('shieldBreak'), p, 1, 0, dst.id === youId ? { aware: true, lift: 1 } : aw);
+            this.cue(this.ev('shieldBreak'), p, 1, 0, dst.id === youId ? { aware: true, lift: 1, onYou: true } : aw);
           }
         }
         // ability hits voice through `hit`; a passive's damage with no delivery through the `proc` that follows it
@@ -2679,9 +2857,22 @@ class Engine implements ValeAudioPort {
         if (!dst || dst.kind !== 'fighter') break;
         const chained = now - (this.healAny.get(dst.id) ?? -1e9) < HEAL_CHAIN_S;
         this.healAny.set(dst.id, now);
-        if (chained || (dst.maxHp ?? 0) <= 0 || (e.amount as number) < HEAL_MIN_FRAC * (dst.maxHp as number)) break;
+        const maxHp = dst.maxHp ?? 0, amt = (e.amount as number) || 0;
+        if (chained || maxHp <= 0) break;
+        // (AUD-O3) yours at HEAL_MIN_FRAC, an ally's at HEAL_ALLY_FRAC within LISTEN_INNER_M of you (your fighter, else
+        // the ear); a foe's heal is not chimed
+        const self = dst.id === youId;
+        if (self ? amt < HEAL_MIN_FRAC * maxHp : dst.team !== mine || amt < HEAL_ALLY_FRAC * maxHp) break;
+        const near0 = me ?? ear;
+        if (!self && (!near0 || Math.hypot(dst.x - near0.x, dst.y - near0.y) > LISTEN_INNER_M)) break;
         if (now - (this.healLast.get(dst.id) ?? -1e9) < HEAL_MERGE_S) break;
-        if (this.cue(this.ev('heal'), at(dst), 0.7, 0, aw) === 'played' && dst) this.healLast.set(dst.id, now);
+        const big = amt >= HEAL_BIG_FRAC * maxHp;
+        if (!big && !this.healToken(now)) break;
+        if (this.cue(this.ev('heal'), at(dst), 0.7, 0, aw) === 'played') {
+          this.healLast.set(dst.id, now);
+          this.healTeamLast = now;
+          if (!big) this.healTokens -= 1;
+        }
         break;
       }
       // a structure's shield is the Dawn Seal setting again (the role 'shieldStructure'), not a fighter's ward

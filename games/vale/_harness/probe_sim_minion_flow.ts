@@ -19,7 +19,9 @@
 // every road of both maps (all six seeds, both scenarios).
 // A Wick is IDLE (what a viewer reads as stuck, fighting or not) when for 6 s it neither swings nor gains 0.5 m along its
 // road nor covers 1 m of ground, away from its road's end and not held by CC: a melee Wick waiting behind the front row
-// for a target it never reaches (ruling 39 steps it out to an open attack spot). Gate: 0 idle Wicks as well.
+// for a target it never reaches (ruling 39 steps it out to an open attack spot). Gate: 0 idle Wicks as well. A Wick at
+// the back of its own wave's blob (an enemy within aggro, 3+ allied Wicks pressed on it) creeps with the crowd: counted
+// as queued, not idle.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,6 +48,8 @@ const MAPS = opt('maps', 'rift,bridge').split(',');
 const SCENS = opt('scen', 'player,idle').split(',');
 const OUT = opt('out', join(HERE, '_reports', 'minion_flow.json'));
 const SAMPLE = 10;
+/** --trace map,scen,seed,id,from,to: print one Wick's state every 0.5 s (diagnosis) */
+const TRACE = ((t) => t ? { map: t[0], scen: t[1], seed: Number(t[2]), id: Number(t[3]), from: Number(t[4]), to: Number(t[5]) } : null)(opt('trace', '') ? opt('trace', '').split(',') : null);
 const STUCK_TICKS = 180;
 const STUCK_GAIN = 0.5;
 const END_NEAR = 8;
@@ -109,6 +113,18 @@ function free(w: World, e: Entity): boolean {
   for (let i = 0; i < n; i++) { const o = near[i]; if (o !== e && attackable(w, e, o)) return false; }
   return true;
 }
+
+/** queued in its own wave's crowd: an enemy within aggro and >= QUEUE_TOUCH allied Wicks pressed against it (the back of a
+ *  blob pushing into a base: it creeps with the crowd; not a stuck Wick) */
+const QUEUE_TOUCH = 3;
+function queued(w: World, e: Entity): boolean {
+  if (free(w, e)) return false;
+  const n = w.query(e.x, e.y, e.radius + 1.2, near);
+  let k = 0;
+  for (let i = 0; i < n; i++) { const o = near[i]; if (o !== e && o.alive && o.kind === 'minion' && o.team === e.team && Math.hypot(o.x - e.x, o.y - e.y) < e.radius + o.radius + 0.3) k++; }
+  return k >= QUEUE_TOUCH;
+}
+let queuedN = 0;
 
 interface Stuck { map: string; scen: string; seed: number; t: string; id: number; team: number; at: string; s: string; road: string; struct: string; bodies: number; fighterD: string; order: number; path: number; np: number; ot?: string }
 interface Track { since: number; s0: number; g: LaneG; road: string; idle: number; ix: number; iy: number; is0: number }
@@ -196,6 +212,15 @@ function runOne(modeId: string, scen: string, seed: number): { stuck: Stuck[]; i
       for (const s of structuresOf(w)) if (s.ent.alive && s.ent.team === sc.team && (s.def.lane ?? '') === sc.road && sc.tier.test(s.def.unit)) { killEntity(w, s.ent, null); break; }
     }
     if (scen === 'player' && w.time > 75) player(w, me, first(), myRoad, base, (c) => sim.command(0, c), pst);
+    if (TRACE && TRACE.map === modeId && TRACE.scen === scen && TRACE.seed === seed && w.time >= TRACE.from && w.time <= TRACE.to && w.tick % 15 === 0) {
+      const e = w.entity(TRACE.id);
+      if (e && e.alive) {
+        const ot = w.entity(e.orderTarget);
+        const m = minionState(e)!;
+        const nb = w.entities.filter((o) => o !== e && o.alive && o.kind !== 'projectile' && o.kind !== 'zone' && Math.hypot(o.x - e.x, o.y - e.y) < 2.2).map((o) => `${o.kind[0]}${o.team}${o.static ? 'S' : ''}@${f1(o.x)},${f1(o.y)}`);
+        console.log(`  trace t${f1(w.time)} (${f1(e.x)},${f1(e.y)}) ord${e.order} to(${f1(e.orderX)},${f1(e.orderY)}) ot:${ot ? `${ot.kind}${ot.alive ? '' : '+dead'}@${f1(ot.x)},${f1(ot.y)} vis${(ot.visibleMask >> e.team) & 1}` : '-'} path${e.path.length >> 1}/${e.pathIdx} np${e.noProgress} as${e.arriveStall} wd${f1(e.atkWindup)} an${f1(e.atkAnim)} fl${m.flankUntil - w.tick} cT${m.chaseT} near[${nb.join(' ')}]`);
+      }
+    }
     if (w.tick % SAMPLE !== 0) continue;
     for (const e of w.entities) {
       if (e.kind !== 'minion' || !e.alive) continue;
@@ -209,6 +234,9 @@ function runOne(modeId: string, scen: string, seed: number): { stuck: Stuck[]; i
       // IDLE (what a viewer reads as stuck, fight or no fight): 6 s with no swing, under 0.5 m along the road and under
       // 1 m of ground, away from the road's end and not held by CC
       if (g.len - s < END_NEAR || e.atkWindup >= 0 || e.atkAnim > 0 || e.cast || (e.ccMask & (CC_HARD | CC_ROOT)) !== 0 || s - tr.is0 >= STUCK_GAIN || Math.hypot(e.x - tr.ix, e.y - tr.iy) >= 1) {
+        tr.idle = w.tick; tr.ix = e.x; tr.iy = e.y; tr.is0 = s;
+      } else if (w.tick - tr.idle >= STUCK_TICKS && queued(w, e)) {
+        queuedN++;
         tr.idle = w.tick; tr.ix = e.x; tr.iy = e.y; tr.is0 = s;
       } else if (w.tick - tr.idle >= STUCK_TICKS) {
         idle.push({ map: modeId, scen, seed, t: `${Math.floor(w.time / 60)}:${String(Math.floor(w.time % 60)).padStart(2, '0')}`, id: e.id, team: e.team,
@@ -247,10 +275,10 @@ for (const map of MAPS) for (const scen of SCENS) for (let seed = SEED0; seed < 
   for (const s of r.idle.slice(0, 4)) console.log(`   idle ${JSON.stringify(s)}`);
   for (const s of r.stuck.slice(0, 6)) console.log(`   stuck ${JSON.stringify(s)}`);
 }
-try { mkdirSync(dirname(OUT), { recursive: true }); writeFileSync(OUT, JSON.stringify({ at: new Date().toISOString(), gate: '0 stuck', stuck: all.length, idle: idleAll.length, runs, episodes: all, idleEpisodes: idleAll }, null, 1) + '\n'); } catch { /* report only */ }
+try { mkdirSync(dirname(OUT), { recursive: true }); writeFileSync(OUT, JSON.stringify({ at: new Date().toISOString(), gate: '0 stuck', stuck: all.length, idle: idleAll.length, queued: queuedN, runs, episodes: all, idleEpisodes: idleAll }, null, 1) + '\n'); } catch { /* report only */ }
 const byRoad = new Map<string, number>();
 for (const s of all) byRoad.set(`${s.map}/${s.road}`, (byRoad.get(`${s.map}/${s.road}`) ?? 0) + 1);
 console.log(`stuck Wicks: ${all.length} ${JSON.stringify(Object.fromEntries(byRoad))}`);
-console.log(`idle Wicks: ${idleAll.length}`);
+console.log(`idle Wicks: ${idleAll.length} (queued in their own wave's crowd, not counted: ${queuedN})`);
 if (all.length > 0 || idleAll.length > 0) { console.log(`FAIL ${all.length} stuck and ${idleAll.length} idle Wick episode(s) (gate 0 and 0)`); process.exit(1); }
 console.log('PASS 0 stuck and 0 idle Wicks on every road of every map');

@@ -39,7 +39,7 @@ import '../styles/hud.css';
 /** first-match hints, one every few seconds once the match is live (once per device) */
 const HINTS: { key: string; params: Action[] }[] = [
   { key: 'hint.move', params: [] },
-  { key: 'hint.attack', params: ['fightersOnly'] },
+  { key: 'hint.attack', params: ['fightersOnly', 'attackInPlace'] },
   { key: 'hint.abilities', params: ['a1', 'a2', 'a3', 'ult'] },
   { key: 'hint.shop', params: [] },
   { key: 'hint.ping', params: ['ping'] },

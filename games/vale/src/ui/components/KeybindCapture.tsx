@@ -12,8 +12,9 @@ const MODIFIERS = new Set(['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRig
 /** never an action key: Enter confirms, the modifiers are chords (Ctrl levels up, Alt self-casts) */
 const RESERVED = new Set(['Enter', 'NumpadEnter', ...MODIFIERS]);
 
-/** `modifier`: this bind takes a modifier key only (the self-cast key) */
-export function KeybindCapture(p: { code: string; onChange: (code: string) => void; label: string; conflict?: string; isDefault?: boolean; modifier?: boolean }): JSX.Element {
+/** `modifier`: this bind takes a modifier key only (the self-cast key); `anyKey`: a modifier is fine too (a held key
+ *  used with a click: attack in place) */
+export function KeybindCapture(p: { code: string; onChange: (code: string) => void; label: string; conflict?: string; isDefault?: boolean; modifier?: boolean; anyKey?: boolean }): JSX.Element {
   const { sound } = useApp();
   const [armed, setArmed] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
@@ -25,7 +26,7 @@ export function KeybindCapture(p: { code: string; onChange: (code: string) => vo
       if (e.code === 'Tab') { setArmed(false); return; }
       e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
       if (e.code === 'Escape') { setArmed(false); sound.play('back'); return; }
-      if (p.modifier ? !MODIFIERS.has(e.code) : RESERVED.has(e.code)) return;   // not bindable here: stay armed
+      if (p.modifier ? !MODIFIERS.has(e.code) : p.anyKey ? e.code === 'Enter' || e.code === 'NumpadEnter' : RESERVED.has(e.code)) return;   // not bindable here: stay armed
       setArmed(false);
       sound.play('confirm');
       p.onChange(e.code);

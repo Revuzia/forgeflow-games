@@ -13,6 +13,12 @@
 //   Shift + right-click     attack-move click (ruling 33): the enemy under the cursor, else the enemy nearest
 //   A then left-click       the click point within CLICK_RADIUS_M, is attacked (chased, like right-click on it);
 //                           on open ground: walk there, stop for the first enemy in range, never chase
+//   Shift + left-click      attack in place (ruling 39; the attackInPlace bind, default Shift): the hero stops, faces the
+//                           click and attacks the enemy the click means if it is in range (the same pick as attack-move),
+//                           else throws its attack toward the click (a ranged shot along the aim line, a melee swing);
+//                           it never walks. Held, it keeps attacking toward the cursor at attack speed (re-aimed every
+//                           SHOOT_RESEND_MS); letting go of the button or the modifier stops it. While the modifier is
+//                           held an aim line the attack's reach long (and its range ring) follows the cursor
 //   fightersOnly (hold)     every click and attack-move above considers enemy fighters only (wider radius)
 //   left-click              confirm an aimed ability, finish A attack-move, otherwise select a unit to inspect
 //   S stop · B recall · P shop · Tab scoreboard (hold)
@@ -106,6 +112,10 @@ const CLICK_RADIUS_M = 2;
 /** … with fightersOnly held (fighters only, so the radius can be wider) */
 const FIGHTER_CLICK_RADIUS_M = 3;
 const HOVER_MS = 50;
+/** a held attack-in-place re-sends at the cursor this often (ms): the sim attacks at attack speed, re-aimed each swing */
+const SHOOT_RESEND_MS = 100;
+/** width (m) of the attack-in-place aim line */
+const SHOOT_LINE_W = 0.25;
 /** the pointer's cached hit-test target is trusted this long before the browser hit-tests again */
 const HUD_RETEST_MS = 250;
 
@@ -124,7 +134,7 @@ export class InputController {
   readonly attackMove = signal(false);
   readonly wheel = signal<WheelState | null>(null);
   /** what the cursor is over: drives the CSS cursor */
-  readonly cursor = signal<'default' | 'attack' | 'ally' | 'aim' | 'attackMove'>('default');
+  readonly cursor = signal<'default' | 'attack' | 'ally' | 'aim' | 'attackMove' | 'shoot'>('default');
   readonly held = new Set<string>();
 
   private client: MatchClient;
@@ -135,6 +145,11 @@ export class InputController {
   private ptr = { x: -1, y: -1, inside: false };
   private rightHeld = false;
   private rightHeldAttack = false;
+  /** the left button is held after an attack-in-place click (re-sent while the modifier stays held) */
+  private leftShoot = false;
+  private lastShoot = 0;
+  /** the attack-in-place aim line is drawn (setAim is ours to clear) */
+  private shootAim = false;
   private lastHoldMove = 0;
   private lastMoveTo: { x: number; y: number } | null = null;
   /** pointer position (CSS px) when the held right button last issued an order */
@@ -189,6 +204,13 @@ export class InputController {
     return !!c && this.held.has(c);
   }
   private shiftHeld(): boolean { return this.ptrShift || this.held.has('ShiftLeft') || this.held.has('ShiftRight'); }
+  /** is the attack-in-place modifier held (default Shift; a Shift bind also reads the pointer event's shiftKey) */
+  private inPlaceHeld(): boolean {
+    const c = this.keymap.code('attackInPlace');
+    if (!c) return false;
+    if (/^Shift(Left|Right)$/.test(c) && this.ptrShift) return true;
+    return this.keymap.isHeld('attackInPlace', this.held);
+  }
   /** an enemy this click may attack (fighters only while fightersOnly is held) */
   private foe(e: EntityView | null): boolean { return this.enemy(e) && (e!.kind === 'fighter' || !this.fightersOnly()); }
   /** the enemy under the cursor for an attack click: enemies only, near misses forgiven */
@@ -266,6 +288,7 @@ export class InputController {
   private releaseAll(): void {
     this.held.clear();
     this.rightHeld = false;
+    this.leftShoot = false;
     this.ptrShift = false;
     this.buttons = 0;
     if (this.middle?.scouting) this.r.camera?.scout(false);
@@ -287,6 +310,14 @@ export class InputController {
         this.r.setAim?.(aimSpec(aim.def, body, g, valid));
       }
     }
+    // attack in place: the aim line follows the cursor while the modifier is held; a held left button keeps attacking
+    const shooting = !aim && !!body && body.alive && this.inPlaceHeld() && !this.attackMove.value;
+    if (shooting && this.ptr.inside && this.ptr.x >= 0) {
+      const g = this.ground();
+      if (g) { this.r.setAim?.(this.shootSpec(body!, g)); this.shootAim = true; }
+    } else if (this.shootAim) { this.shootAim = false; if (!aim) this.r.setAim?.(null); }
+    if (this.leftShoot && (!shooting || (this.buttons & 1) === 0)) this.leftShoot = false;
+    if (this.leftShoot && now - this.lastShoot >= SHOOT_RESEND_MS) { this.lastShoot = now; this.shoot(false); }
     if (now - this.hoverAt > HOVER_MS && this.ptr.inside) {
       this.hoverAt = now;
       const over = this.ptr.x >= 0 && !this.overHud(now);
@@ -294,7 +325,7 @@ export class InputController {
       // is armed), else any other unit but you (left-click selects it); enemies and neutrals in HARM, allies in their colour
       const armed = this.attackMove.value || this.shiftHeld();
       let id: EntityId | null = null;
-      let cur: 'default' | 'attack' | 'ally' | 'aim' | 'attackMove';
+      let cur: 'default' | 'attack' | 'ally' | 'aim' | 'attackMove' | 'shoot';
       if (aim) {
         const e = over ? this.aimUnitAt(aim.def, body) ?? this.entityAt() : null;
         id = e && e.id !== body?.id ? e.id : null;
@@ -303,7 +334,7 @@ export class InputController {
         const foe = over ? (armed || this.settings.controls.attackMoveOnClick ? this.attackMoveTarget(this.ground()) : this.moveClickEnemy()) : null;
         const e = foe ?? (over ? this.entityAt() : null);
         id = e && e.id !== body?.id ? e.id : null;
-        cur = armed ? 'attackMove' : foe ? 'attack' : e && e.team === this.team && e.id !== body?.id ? 'ally' : 'default';
+        cur = armed ? 'attackMove' : shooting ? 'shoot' : foe ? 'attack' : e && e.team === this.team && e.id !== body?.id ? 'ally' : 'default';
       }
       if (id !== this.hoverId) { this.hoverId = id; this.r.setHover?.(id); }
       this.cursor.value = cur;
@@ -535,6 +566,7 @@ export class InputController {
       const prev = this.buttons;
       this.buttons = e.buttons;
       if (this.rightHeld && (e.buttons & 2) === 0) this.releaseRight();
+      if ((e.buttons & 1) === 0) this.leftShoot = false;
       const pressed = e.buttons & ~prev;
       if (pressed & 3) {
         const onSurface = e.target === this.surface || (typeof Node !== 'undefined' && e.target instanceof Node && this.surface.contains(e.target));
@@ -583,6 +615,7 @@ export class InputController {
   private onUp(e: PointerEvent): void {
     this.ptr.x = e.clientX; this.ptr.y = e.clientY;
     this.buttons = e.buttons;
+    if (e.button === 0) this.leftShoot = false;
     if (e.button === 2) this.releaseRight();
     else if (this.rightHeld && (e.buttons & 2) === 0) this.rightHeld = false;   // right went up first (chorded)
     if (e.button === 1) { if (this.middle?.scouting) this.r.camera?.scout(false); this.middle = null; }
@@ -632,8 +665,33 @@ export class InputController {
       return;
     }
     if (e.altKey && g) { this.sendPing('alert', g.x, g.y, this.entityAt()?.id); return; }
+    if (this.inPlaceHeld()) {
+      const b = this.body;
+      if (b && b.alive && this.shoot(true)) { this.leftShoot = true; this.lastShoot = performance.now(); }
+      return;
+    }
     const t = this.entityAt();
     this.r.setTarget?.(t ? t.id : null);
+  }
+
+  /**
+   * attack in place toward the cursor (ruling 39): the enemy the click means (attackMoveTarget: under the cursor, else
+   * nearest the click point) rides along as `target`; the sim attacks it if it is in range, else the meant enemy in
+   * range nearest the point, else throws the attack toward the point. Never a move. `marker`: the first click of a hold
+   */
+  private shoot(marker: boolean): boolean {
+    if (this.hooks.blocked()) return false;
+    const g = this.ground();
+    if (!g) return false;
+    const t = this.attackMoveTarget(g);
+    this.client.send({ type: 'attackAt', x: g.x, y: g.y, ...(t ? { target: t.id } : {}), ...(this.fightersOnly() ? { fighters: true } : {}) });
+    if (marker && t) this.hooks.marker({ x: t.x, y: t.y, kind: 'attack', target: t.id });
+    return true;
+  }
+  /** the attack-in-place aim line: from the hero toward the cursor, its attack reach (range + body) long, the reach ring */
+  private shootSpec(b: EntityView, g: { x: number; y: number }): AimSpecLike {
+    const reach = Math.max(0.5, (this.me?.stats?.range ?? 0) + b.radius);
+    return { shape: 'line', x: b.x, y: b.y, dir: Math.atan2(g.y - b.y, g.x - b.x), length: reach, width: SHOOT_LINE_W, range: reach, casterX: b.x, casterY: b.y };
   }
 
   private rightDown(shift: boolean): void {

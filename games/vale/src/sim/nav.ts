@@ -19,10 +19,12 @@
 
 import type { MapDefT } from '../contracts/catalog.ts';
 import { pointInPolygon, polygonAabb, polygonEdgeDist2, type Poly, type V2 } from './math.ts';
-import { dhypot } from './dmath.ts';
+import { dcos, dhypot, dsin } from './dmath.ts';
 
 /** extra metres around wall polygons that count as blocked for unit centres */
 export const WALL_CLEARANCE = 0.25;
+/** an obstacle seals a strip narrower than this (m, for unit centres) between itself and a wall (ruling 39) */
+const SEAL_GAP = 1;
 const SQRT2 = Math.SQRT2;
 /** straight distance (m) under which a corner-graph route clearly longer than the line is checked against grid A* */
 const SHORT_QUERY = 16;
@@ -173,19 +175,47 @@ export class NavGrid {
       if (px * px + py * py <= r * r) fn(cy * this.w + cx);
     }
   }
-  /** the discs currently placed (raycast needs their centres to tell "leaving" from "entering") */
-  private obstacles: { x: number; y: number; r: number }[] = [];
-  /** block a disc for unit centres (structures: radius + clearance); remove with the same numbers */
+  /** the discs currently placed (raycast needs their centres to tell "leaving" from "entering"); `seal`: the strip cells
+   *  it closed off against a wall */
+  private obstacles: { x: number; y: number; r: number; seal: number[] }[] = [];
+  /**
+   * block a disc for unit centres (structures: radius + clearance); remove with the same numbers. A strip narrower than
+   * SEAL_GAP between the disc and a wall is blocked with it (ruling 39): only the grid's thin walker fits there, never a
+   * body, so a route through it pinned Wicks behind their own tower (the strip behind RIFT's road towers is 0.2-0.5 m)
+   */
   addObstacle(x: number, y: number, r: number): void {
     this.disc(x, y, r, (i) => { this.dyn[i]++; this.blocked[i] = 1; });
-    this.obstacles.push({ x, y, r });
+    const seal = this.sealStrip(x, y, r);
+    for (const i of seal) { this.dyn[i]++; this.blocked[i] = 1; }
+    this.obstacles.push({ x, y, r, seal });
     this.compDirty = true;
   }
   removeObstacle(x: number, y: number, r: number): void {
     this.disc(x, y, r, (i) => { if (this.dyn[i] > 0) this.dyn[i]--; this.blocked[i] = this.wall[i] || this.dyn[i] > 0 ? 1 : 0; });
     const k = this.obstacles.findIndex((o) => o.x === x && o.y === y && o.r === r);
-    if (k >= 0) this.obstacles.splice(k, 1);
+    if (k >= 0) {
+      for (const i of this.obstacles[k].seal) { if (this.dyn[i] > 0) this.dyn[i]--; this.blocked[i] = this.wall[i] || this.dyn[i] > 0 ? 1 : 0; }
+      this.obstacles.splice(k, 1);
+    }
     this.compDirty = true;
+  }
+  /** the open cells between a disc (x, y, r) and a wall closer than SEAL_GAP along the same ray (72 rays) */
+  private sealStrip(x: number, y: number, r: number): number[] {
+    const c = this.cell, step = c * 0.25, out = new Set<number>();
+    for (let k = 0; k < 72; k++) {
+      const a = (k / 72) * Math.PI * 2, dx = dcos(a), dy = dsin(a);
+      let hit = -1;
+      for (let t = r; t <= r + SEAL_GAP; t += step) {
+        const cx = Math.floor((x + dx * t) / c), cy = Math.floor((y + dy * t) / c);
+        if (cx < 0 || cy < 0 || cx >= this.w || cy >= this.h || this.wall[cy * this.w + cx]) { hit = t; break; }
+      }
+      if (hit < 0) continue;
+      for (let t = r; t < hit; t += step) {
+        const cx = Math.floor((x + dx * t) / c), cy = Math.floor((y + dy * t) / c);
+        out.add(cy * this.w + cx);
+      }
+    }
+    return [...out].sort((p, q) => p - q);
   }
 
   // ── connectivity ──────────────────────────────────────────────────────────────────────────

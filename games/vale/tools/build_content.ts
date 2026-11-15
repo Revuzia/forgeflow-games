@@ -437,6 +437,8 @@ function semanticChecks(c: CatalogT, opts: BuildOptions, dg: Diagnostics): void 
   const music = new Set(Object.keys(c.audio.music));
   if (c.audio.m4a !== undefined) dg.err(['audio', 'm4a'], 'audio.m4a is written by the content build (each .ogg\'s .m4a sibling, CONTRACT §11); remove it from content');
   for (const [role, cue] of Object.entries(c.audio.events)) if (!cues.has(cue)) dg.err(['audio', 'events', role], unknownRef('audio cue', cue, cues));
+  // the mix per mode (orch1 AUD-O1): keyed by a mode that exists
+  for (const mode of Object.keys(c.audio.mix.modes)) if (!modes.has(mode)) dg.err(['audio', 'mix', 'modes', mode], unknownRef('mode id', mode, modes));
   // each map's ambience emitters (audio.ambience, systems-10): keyed by a map that exists, playing cues that exist
   for (const [map, list] of Object.entries(c.audio.ambience)) {
     if (!maps.has(map)) dg.err(['audio', 'ambience', map], unknownRef('map id', map, maps));

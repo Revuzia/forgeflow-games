@@ -23,17 +23,17 @@ const fs = rc.fighters.map((f) => f.id).sort();
 const WICK = rc.modes.find((m) => m.id === 'rift')!.rules.minionWaves!.composition[0].unit;
 const f2 = (n: number): string => n.toFixed(2);
 
-function fresh(who: string): { w: World; sim: ReturnType<typeof createSim>; me: Entity } {
-  const mode = rc.modes.find((m) => m.id === 'rift')!, q = rc.queues.find((x) => x.mode === 'rift')!;
-  const seats = Array.from({ length: 10 }, (_, i) => {
+function fresh(who: string, modeId = 'rift'): { w: World; sim: ReturnType<typeof createSim>; me: Entity } {
+  const mode = rc.modes.find((m) => m.id === modeId)!, q = rc.queues.find((x) => x.mode === modeId)!;
+  const seats = Array.from({ length: mode.teams * mode.perTeam }, (_, i) => {
     const fighter = i === 0 ? who : fs[(i * 3) % fs.length];
-    return { player: i, team: i < 5 ? 0 : 1, name: `p${i}`, fighter, skin: rc.skins.find((s) => s.fighter === fighter)!.id, controller: 'human', loadout: pickLoadout(rc, fighter, mode.rules.itemPool ?? '', undefined as never), colorIndex: i };
+    return { player: i, team: Math.floor(i / mode.perTeam), name: `p${i}`, fighter, skin: rc.skins.find((s) => s.fighter === fighter)!.id, controller: 'human', loadout: pickLoadout(rc, fighter, mode.rules.itemPool ?? '', undefined as never), colorIndex: i };
   });
-  const sim = createSim(rc, { matchId: 'hold_tower', seed: 5, queue: q.id, mode: 'rift', map: mode.map, seats, catalogVersion: rc.version, practice: { waves: false } } as never, { pregameSeconds: 0 });
+  const sim = createSim(rc, { matchId: 'hold_tower', seed: 5, queue: q.id, mode: modeId, map: mode.map, seats, catalogVersion: rc.version, practice: { waves: false } } as never, { pregameSeconds: 0 });
   sim.step();
   const w = sim.world;
   for (const e of w.entities) if (e.kind === 'structure') e.stats.ad = 0;
-  for (const p of w.players) if (p.ent && p.ent !== w.players[0].ent) { p.ent.x = p.team === 0 ? 10 : 160; p.ent.y = 55; }
+  for (const p of w.players) if (p.ent && p.ent !== w.players[0].ent) { const b = w.mapDef.bases.find((q) => q.team === p.team); if (b) { p.ent.x = b.spawn[0]; p.ent.y = b.spawn[1]; } }
   const me = w.players[0].ent!;
   w.hashDirty = true;
   return { w, sim, me };
@@ -111,6 +111,24 @@ section('allies: Wicks walking the road pass a hero standing in the tower\'s nec
   check('every Wick got past the hero', past === wicks.length, { past, of: wicks.length, xs: wicks.map((u) => f2(u.x)) });
   check('the hero was not shoved (<= 0.05 m)', shove <= 0.05, f2(shove));
   void minionState;
+});
+
+section('BRIDGE (verifier ALLY-WAVE-SHORT): one click from inside a standing allied wave reaches its open point', () => {
+  const { w, sim, me } = fresh(fs[2], 'bridge');
+  place(w, me, 91.9, 20.83);
+  const ring: Entity[] = [];
+  for (let i = 0; i < 11; i++) { const a = (i / 11) * Math.PI * 2; ring.push(stand(w, 0, 91.9 + Math.cos(a) * (0.9 + (i % 2) * 0.5), 20.83 + Math.sin(a) * (0.9 + (i % 2) * 0.5))); }
+  sim.command(0, { type: 'move', x: 98.26, y: 26.22 });
+  let end = -1;
+  for (let q = 0; q < 30 * 6 && end < 0; q++) { sim.step(); if (me.order === ORDER_NONE) end = q; }
+  check('it gets there (was 7.28 m short after 2 s)', Math.hypot(me.x - 98.26, me.y - 26.22) < 0.6, { at: [f2(me.x), f2(me.y)], end });
+});
+section('BRIDGE (verifier ALLY-SIEGE-PIN-HELD): a held move out of an allied wave sieging a tower is never frozen', () => {
+  const { w, sim, me } = fresh(fs[3], 'bridge');
+  place(w, me, 109.17, 20.29);
+  for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; stand(w, 0, 109.17 + Math.cos(a) * (0.95 + (i % 3) * 0.45), 20.29 + Math.sin(a) * (0.95 + (i % 3) * 0.45)); }
+  const h = holdTo(sim, me, 108.77, 30.04, 30 * 9);
+  check('it reaches the held point (was motionless 9 s, 9.19 m short)', h.end < 1, { end: f2(h.end), secs: f2(h.secs), path: f2(h.path) });
 });
 
 finish('probe_sim_hold_tower');

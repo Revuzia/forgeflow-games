@@ -15,25 +15,37 @@
 //     path segment nearest to it, never one behind the last reached (so a minion pulled off the
 //     lane rejoins it ahead, not behind); past the last waypoint it holds the lane end and
 //     attacks what comes in range (the enemy core sits there).
+//   * a chase that has not closed in for CHASE_STALL_TICKS (a melee Wick behind the front row, a tower ringed by its
+//     wave: owner 2026-11-15 "minions get stuck ... at the first tower", ruling 39) steps out to an open attack spot on
+//     the target's ring (FLANK_ANGLES, the side nearest first, alternating by id) as an attack-move, fighting whatever
+//     comes in range on the way, and re-thinks after FLANK_TICKS; with no open spot it keeps pressing.
 // Structures are targeted only by priority ('structure' token) and only when targetable, so
 // protected structures are walked past/held at rather than hit. Unit abilities are cast at the
 // target when ready.
 
 import { practiceWaves } from '../modes/practice.ts';
-import { attackable } from '../attack.ts';
+import { attackable, attackRange, inAttackRange } from '../attack.ts';
 import { ORDER_ATTACK, ORDER_ATTACK_MOVE, type Entity } from '../entity.ts';
 import { segPointDist2 } from '../math.ts';
 import { issueAttack, issueMove } from '../movement.ts';
 import { spawnUnit } from '../spawn.ts';
 import type { World } from '../world.ts';
 import { behaviorOf, bestTargetNear, dist2, getExt, setExt, shouldSwitch, useUnitAbilities } from './common.ts';
-import { datan2 } from '../dmath.ts';
+import { datan2, dcos, dsin } from '../dmath.ts';
 
 export const MINION_THINK_TICKS = 6;
 /** metres from a waypoint that count as reaching it */
 export const WAYPOINT_REACH = 2.5;
 /** spacing of a wave's rows / columns at spawn */
 const ROW_GAP = 1.3, COL_GAP = 1.1;
+/** a chase that has not closed in by CHASE_GAIN m for this long (ticks) is blocked: step out to an open attack spot */
+const CHASE_STALL_TICKS = 60;
+const CHASE_GAIN = 0.3;
+/** ticks the step-out (an attack-move) runs before the Wick re-thinks */
+const FLANK_TICKS = 60;
+/** the attack spots tried round the target, off the line it came in on (radians, nearer first) */
+const FLANK_ANGLES = [0.7, 1.4, 2.1];
+const flankNear: Entity[] = [];
 
 type V2T = readonly [number, number];
 interface MinionState {
@@ -42,6 +54,8 @@ interface MinionState {
   chasing: boolean;
   cx: number; cy: number;
   lastWpX: number; lastWpY: number;
+  /** blocked-chase watch: the target, its best gap so far, the tick that gap was last improved; step-out end tick */
+  chaseT: number; chaseGap: number; chaseAt: number; flankUntil: number;
 }
 interface WaveState { n: number; nextAt: number; paths: V2T[][][] }
 const KEY = 'waves';
@@ -98,7 +112,7 @@ function spawnWave(w: World, st: WaveState, n: number, at: number): void {
         const row = Math.floor(i / 3), col = (i % 3) - 1;
         const x = sx - dx * row * ROW_GAP - dy * col * COL_GAP, y = sy - dy * row * ROW_GAP + dx * col * COL_GAP;
         const e = spawnUnit(w, units[i], team, x, y, { level, facing });
-        setExt<MinionState>(e, MKEY, { path, wp: path.length > 1 ? 1 : 0, chasing: false, cx: e.x, cy: e.y, lastWpX: NaN, lastWpY: NaN });
+        setExt<MinionState>(e, MKEY, { path, wp: path.length > 1 ? 1 : 0, chasing: false, cx: e.x, cy: e.y, lastWpX: NaN, lastWpY: NaN, chaseT: -1, chaseGap: Infinity, chaseAt: 0, flankUntil: -1 });
         followLane(w, e, minionState(e)!);
       }
     }
@@ -125,6 +139,62 @@ function followLane(w: World, e: Entity, m: MinionState): void {
   issueMove(w, e, tx, ty, true);
 }
 
+/** the whole body (radius r) fits at (x, y): its centre and eight rim points are open, clear of walls and structures */
+function roomFor(w: World, x: number, y: number, r: number): boolean {
+  if (!w.nav.walkable(x, y)) return false;
+  for (let k = 0; k < 8; k++) if (!w.nav.walkable(x + dcos(k * 0.7853982) * r, y + dsin(k * 0.7853982) * r)) return false;
+  return true;
+}
+
+/** an open spot to attack `t` from, off the crowded line: on its ring at reach, the side nearest first; null: none */
+function flankSpot(w: World, e: Entity, t: Entity): { x: number; y: number } | null {
+  const R = t.radius + e.radius + Math.max(0.2, attackRange(e) * 0.7);
+  const base = datan2(e.y - t.y, e.x - t.x);
+  const side = e.id % 2 === 0 ? 1 : -1;
+  for (const a of FLANK_ANGLES) for (const s of [side, -side]) {
+    const x = t.x + dcos(base + a * s) * R, y = t.y + dsin(base + a * s) * R;
+    // room for the whole body there and on the way (the strip behind a tower is open to the nav's thin walker only)
+    if (!roomFor(w, x, y, e.radius) || !w.nav.lineOfWalk(e.x, e.y, x, y, e.radius)) continue;
+    const n = w.query(x, y, e.radius + 1.5, flankNear);
+    let free = true;
+    for (let i = 0; i < n; i++) {
+      const o = flankNear[i];
+      if (o === e || !o.alive || o.kind === 'projectile' || o.kind === 'zone' || o.kind === 'pickup' || o.kind === 'ward') continue;
+      const rr = o.radius + e.radius - 0.05;
+      if ((o.x - x) * (o.x - x) + (o.y - y) * (o.y - y) < rr * rr) { free = false; break; }
+    }
+    if (free) return { x, y };
+  }
+  return null;
+}
+
+/** a chase that stopped closing in: step out to an open attack spot (true: it did) */
+function unblockChase(w: World, e: Entity, m: MinionState, t: Entity): boolean {
+  const gap = Math.sqrt(dist2(t, e.x, e.y)) - t.radius - e.radius - attackRange(e);
+  if (gap <= 0) { m.chaseT = -1; return false; }
+  if (m.chaseT !== t.id || gap < m.chaseGap - CHASE_GAIN) { m.chaseT = t.id; m.chaseGap = gap; m.chaseAt = w.tick; return false; }
+  if (w.tick - m.chaseAt < CHASE_STALL_TICKS) return false;
+  m.chaseT = -1;
+  let p = flankSpot(w, e, t);
+  if (!p) {
+    // no open spot round it: the nearest other enemy within aggro that is in reach already, or has one
+    const n = w.query(e.x, e.y, behaviorOf(e.unit!).aggroRange, flankNear);
+    const cand: Entity[] = [];
+    for (let i = 0; i < n; i++) { const o = flankNear[i]; if (o !== t && attackable(w, e, o) && o.kind !== 'structure') cand.push(o); }
+    cand.sort((a, b) => dist2(a, e.x, e.y) - dist2(b, e.x, e.y) || a.id - b.id);
+    for (const o of cand) {
+      if (inAttackRange(e, o)) { m.lastWpX = NaN; issueAttack(w, e, o); return true; }
+      p = flankSpot(w, e, o);
+      if (p) break;
+    }
+    if (!p) return false;
+  }
+  m.flankUntil = w.tick + FLANK_TICKS;
+  m.lastWpX = NaN;
+  issueMove(w, e, p.x, p.y, true);
+  return true;
+}
+
 /** 'ai' phase */
 export function minionSystem(w: World): void {
   const list = w.entities;
@@ -142,8 +212,11 @@ export function minionSystem(w: World): void {
       if (curOk) useUnitAbilities(w, e, cur!);
       continue;
     }
+    // stepping out to an attack spot: the attack-move fights what comes in range; re-think when it is over
+    if (w.tick < m.flankUntil && e.order === ORDER_ATTACK_MOVE) continue;
     const best = bestTargetNear(w, e, b.aggroRange, b.priority, b.callForHelpRange, m.chasing ? m.cx : e.x, m.chasing ? m.cy : e.y, chase2);
     if (curOk && (!best || !shouldSwitch(w, e, cur!, best, b.priority, b.callForHelpRange))) {
+      if (unblockChase(w, e, m, cur!)) continue;
       useUnitAbilities(w, e, cur!);
       continue;
     }

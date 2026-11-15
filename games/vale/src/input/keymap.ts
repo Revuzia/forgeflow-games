@@ -3,7 +3,8 @@
 // src/session/settings.ts. This module inverts that table for the controller and gives the HUD its key
 // labels. Action vocabulary (code, not content): a1 a2 a3 ult spell1 spell2 item1..item6 recall shop
 // scoreboard ping attackMove stop cameraLock centerCamera selfCastMod fightersOnly (held: clicks and
-// attack-moves consider enemy fighters only).
+// attack-moves consider enemy fighters only) attackInPlace (held: a left-click attacks in place toward the cursor,
+// never walking; default Shift, ruling 39).
 
 import type { SlotT } from '../contracts/catalog.ts';
 import type { Settings } from '../contracts/session.ts';
@@ -11,7 +12,7 @@ import type { Settings } from '../contracts/session.ts';
 export type Action =
   | 'a1' | 'a2' | 'a3' | 'ult' | 'spell1' | 'spell2'
   | 'item1' | 'item2' | 'item3' | 'item4' | 'item5' | 'item6'
-  | 'recall' | 'shop' | 'scoreboard' | 'ping' | 'attackMove' | 'stop' | 'cameraLock' | 'centerCamera' | 'selfCastMod' | 'fightersOnly';
+  | 'recall' | 'shop' | 'scoreboard' | 'ping' | 'attackMove' | 'stop' | 'cameraLock' | 'centerCamera' | 'selfCastMod' | 'fightersOnly' | 'attackInPlace';
 
 export const CAST_ACTIONS: readonly Action[] = ['a1', 'a2', 'a3', 'ult', 'spell1', 'spell2', 'item1', 'item2', 'item3', 'item4', 'item5', 'item6'];
 export const LEVEL_SLOTS = ['a1', 'a2', 'a3', 'ult'] as const;
@@ -22,6 +23,14 @@ export const slotOfAction = (a: Action): SlotT | null => (CAST_ACTIONS.includes(
 
 const MOUSE = ['Mouse0', 'Mouse1', 'Mouse2', 'Mouse3', 'Mouse4'];
 export const mouseCode = (button: number): string => MOUSE[button] ?? `Mouse${button}`;
+
+const MODIFIER_PAIR = /^(Shift|Control|Alt|Meta)(Left|Right)$/;
+/** `code` held, or — for a modifier key — either side of its pair */
+function heldPair(code: string, held: ReadonlySet<string>): boolean {
+  if (held.has(code)) return true;
+  const m = MODIFIER_PAIR.exec(code);
+  return !!m && (held.has(`${m[1]}Left`) || held.has(`${m[1]}Right`));
+}
 
 export class Keymap {
   private byCode = new Map<string, Action[]>();
@@ -46,10 +55,7 @@ export class Keymap {
   actions(code: string): readonly Action[] { return this.byCode.get(code) ?? []; }
   code(action: Action): string | undefined { return this.binds[action]; }
   /** is the self-cast modifier held (either side of a modifier pair counts) */
-  selfCastHeld(held: ReadonlySet<string>): boolean {
-    const c = this.selfCast;
-    if (held.has(c)) return true;
-    const pair = c.replace(/(Left|Right)$/, '');
-    return pair !== c && (held.has(`${pair}Left`) || held.has(`${pair}Right`));
-  }
+  selfCastHeld(held: ReadonlySet<string>): boolean { return heldPair(this.selfCast, held); }
+  /** is an action's key held (a modifier bind: either side of the pair counts) */
+  isHeld(action: Action, held: ReadonlySet<string>): boolean { const c = this.binds[action]; return !!c && heldPair(c, held); }
 }

@@ -10,7 +10,8 @@
 // A click on a unit's drawn body (half its collision radius either side of that axis, about its shoulders, from the
 // head down to the feet) goes to the front-most such body, as a rendered pick would: the unit nearer the camera
 // covers what stands behind it (ruling 38: a minion touching a fighter 15-45° behind it took clicks on the fighter's
-// shoulders and head).
+// shoulders and head). The drawn body starts at the projected head itself (ruling 39: 4 px of box above it overhung the
+// true silhouette toward the screen corners and gave 0.007 % of clicks to the body behind).
 // Bodies side by side (feet within FRONT_PX on screen), and clicks off every body but inside boxes, go to the box
 // whose body axis is nearest the cursor; an exact tie goes to the unit nearer the camera, then the lower id.
 // `filter` drops units before they compete (an enemies-only pick never returns you or an ally standing in front of
@@ -71,7 +72,7 @@ export function pickUnit(cam: Camera, cssW: number, cssH: number, units: Iterabl
         bestScore = score; best = a.id; bestFy = fy;
       }
       // on the drawn body itself: the body nearest the camera covers the ones behind it
-      if (dx <= bodyX && y >= hy - 4 && y <= fy) {
+      if (dx <= bodyX && y >= hy && y <= fy) {
         const ahead = fy > frontFy + FRONT_PX, level = Math.abs(fy - frontFy) <= FRONT_PX;
         if (ahead || (level && (score < frontScore - 1e-6 || (Math.abs(score - frontScore) <= 1e-6 && front !== null && a.id < front)))) {
           front = a.id; frontScore = score; frontFy = fy;

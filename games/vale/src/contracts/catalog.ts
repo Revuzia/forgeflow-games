@@ -748,6 +748,9 @@ export const AudioDef = z.object({ cues: z.record(Id, AudioCue), music: z.record
   ui: z.record(z.string(), Id).default({}),
   screens: z.record(z.string(), Id).default({}),
   stings: z.record(z.string(), Id).default({}),
+  /** orch1 AUD-O1, additive: the mix per mode, mode id → its static sfx trim in dB (src/audio `leveller`: the denser
+   *  5v5 maps sit lower at the same slider; the density leveller rides on top) */
+  mix: z.object({ modes: z.record(Id, z.object({ sfxTrimDb: z.number().min(-12).max(6) }).strict()).default({}) }).strict().default({ modes: {} }),
   /** WRITTEN BY THE CONTENT BUILD, never by content (CONTRACT §11 format fallback): each shipped .ogg ref → the
    *  ref of its AAC .m4a sibling (audio/out/<x>.m4a), for browsers that cannot decode Ogg Opus */
   m4a: z.record(AssetRef, AssetRef).optional() }).strict();

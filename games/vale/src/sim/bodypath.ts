@@ -72,7 +72,13 @@ const discPool: Disc[] = [];
  * walked round. (Leaving crossing bodies out let a column marching across the line shoulder the walker along with it.)
  * `all`: every body counts (the progress watchdog's re-plan: allies walking with it have not cleared the way).
  */
+/** a fighter and the Wicks of its own side pass through each other (ruling 39): neither body-blocks nor shoves the other */
+export function ghosts(a: Entity, b: Entity): boolean {
+  return a.team === b.team && ((a.kind === 'fighter' && b.kind === 'minion') || (a.kind === 'minion' && b.kind === 'fighter'));
+}
+
 export function inTheWay(e: Entity, o: Entity, ux: number, uy: number, all: boolean): boolean {
+  if (ghosts(e, o)) return false;
   if (o === e || !o.alive || o.dash || o.static || o.kind === 'ward' || o.kind === 'pickup' || o.kind === 'projectile' || o.kind === 'zone') return false;
   if (o.id === e.orderTarget || o.id === e.atkTarget) return false;
   if (all) return true;

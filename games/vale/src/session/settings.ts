@@ -23,7 +23,7 @@
 // The renderer reads video.dynamicResolution; the audio engine reads mono / softenLoud through AudioPort.settings.
 //
 // KEYBINDS: action → KeyboardEvent.code (layout-independent). Actions: a1 a2 a3 ult spell1 spell2
-// item1..item6 recall shop scoreboard ping attackMove stop cameraLock centerCamera selfCastMod.
+// item1..item6 recall shop scoreboard ping attackMove stop cameraLock centerCamera selfCastMod fightersOnly attackInPlace.
 // There is no chat bind in this slice. Mouse buttons are 'Mouse0'..'Mouse4'.
 
 import type { Settings } from '../contracts/session.ts';
@@ -52,7 +52,7 @@ export const DEFAULT_BINDS: Readonly<Record<string, string>> = {
   item1: 'Digit1', item2: 'Digit2', item3: 'Digit3', item4: 'Digit4', item5: 'Digit5', item6: 'Digit6',
   recall: 'KeyB', shop: 'KeyP', scoreboard: 'Tab', ping: 'KeyG',
   attackMove: 'KeyA', stop: 'KeyS', cameraLock: 'KeyY', centerCamera: 'Space', selfCastMod: 'AltLeft',
-  fightersOnly: 'KeyZ',
+  fightersOnly: 'KeyZ', attackInPlace: 'ShiftLeft',
 };
 
 /** the defaults, in the canonical key order normalizeSettings produces (stable JSON) */

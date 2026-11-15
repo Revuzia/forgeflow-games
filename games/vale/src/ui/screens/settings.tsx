@@ -185,9 +185,12 @@ function Audio(p: { s: Settings; set: SetFn }): JSX.Element {
 const ACTION_GROUPS: { key: string; actions: string[] }[] = [
   { key: 'abilities', actions: ['a1', 'a2', 'a3', 'ult', 'spell1', 'spell2'] },
   { key: 'items', actions: ['item1', 'item2', 'item3', 'item4', 'item5', 'item6'] },
-  { key: 'commands', actions: ['attackMove', 'fightersOnly', 'stop', 'recall', 'shop', 'ping', 'scoreboard'] },
+  { key: 'commands', actions: ['attackMove', 'attackInPlace', 'fightersOnly', 'stop', 'recall', 'shop', 'ping', 'scoreboard'] },
   { key: 'camera', actions: ['cameraLock', 'centerCamera'] },
 ];
+
+/** binds that may take a modifier key too (a held modifier with a click: attack in place, default Shift) */
+const ANY_KEY: ReadonlySet<string> = new Set(['attackInPlace']);
 
 function Controls(p: { s: Settings; set: SetFn }): JSX.Element {
   const { cv, state } = useApp();
@@ -223,7 +226,7 @@ function Controls(p: { s: Settings; set: SetFn }): JSX.Element {
             {g.actions.map((a) => (
               <div class="bindrow">
                 <span class="t-body-s">{name(a)}</span>
-                <KeybindCapture label={name(a)} code={c.binds[a] ?? ''} onChange={(code) => bind(a, code)} isDefault={c.binds[a] === defaults[a]} />
+                <KeybindCapture label={name(a)} code={c.binds[a] ?? ''} onChange={(code) => bind(a, code)} isDefault={c.binds[a] === defaults[a]} anyKey={ANY_KEY.has(a)} />
               </div>
             ))}
           </div>

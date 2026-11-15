@@ -299,8 +299,12 @@ async function runSyncOnce() {
 // ── match capture ─────────────────────────────────────────────────────────────────────────────────
 const TAP = () => {
   const a = window.__valeAudio, g = a.graph, ctx = g.ctx;
-  // final out, music, sfx bus, the threat path (sfx aimed at you, past the sfx duck), ui, voice, ambience
-  const stems = [g.out, g.bus.music, g.bus.sfx, a.threat, g.bus.ui, g.bus.voice, g.bus.ambience];
+  // final out, music, sfx bus, the threat path (sfx aimed at you, past the sfx duck), ui, voice, ambience, and (orch1
+  // AUD-O1) the priority sub-bus. With the leveller the three sfx paths are metered AFTER it and the mode trim (what
+  // the player hears of the sfx, before the fight and voice ducks); an engine without one meters the bus and threat
+  const lv = a.leveller;
+  const stems = lv ? [g.out, g.bus.music, lv.taps[0], lv.taps[1], g.bus.ui, g.bus.voice, g.bus.ambience, lv.taps[2]]
+    : [g.out, g.bus.music, g.bus.sfx, a.threat, g.bus.ui, g.bus.voice, g.bus.ambience];
   const N = stems.length * 2;
   const merger = ctx.createChannelMerger(N);
   stems.forEach((node, i) => {
@@ -320,6 +324,8 @@ const TAP = () => {
       for (let c = 0; c < 2; c++) { const d = ib.getChannelData(2 * s + c); for (let i = 0; i < n; i++) ss += d[i] * d[i]; }
       row.push(ss / n);
     }
+    if (stems.length < 8) row.push(0);
+    row.push(lv ? a.leveller.gainDb : 0);
     st.blocks.push(row);
   };
   const z = ctx.createGain(); z.gain.value = 0;
@@ -465,9 +471,16 @@ async function runMatch() {
     await page.evaluate(() => { try { window.__vale.state.match.value?.leave(); } catch { /* */ } });
     // ── analysis ──
     const col = (i) => blocks.map((r) => r[i]);
-    const names = ['out', 'music', 'sfxBus', 'threat', 'ui', 'voice', 'ambience'];
+    const names = ['out', 'music', 'sfxBus', 'threat', 'ui', 'voice', 'ambience', 'prio'];
     const ms = Object.fromEntries(names.map((n, i) => [n, col(i + 1)]));
-    ms.sfx = ms.sfxBus.map((x, i) => x + ms.threat[i]);       // the sfx the player hears: bus + threat path
+    ms.sfx = ms.sfxBus.map((x, i) => x + ms.threat[i] + ms.prio[i]);       // the sfx the player hears: bus + threat path + priority sub-bus
+    // (orch1 AUD-O1) the leveller over the capture: its gain per block, the priority sub-bus's share of the sfx heard
+    { const gdb = col(9), sum = (a) => a.reduce((x, y) => x + y, 0), sfxE = sum(ms.sfx) || 1;
+      rep.leveller = { stats: await page.evaluate(() => window.__valeAudio.leveller?.stats ?? null).catch(() => null),
+        trimDb: await page.evaluate(() => window.__valeAudio.leveller?.trimDb ?? null).catch(() => null),
+        gainDbP50: r2(pct(gdb, 50)), gainDbP10: r2(pct(gdb, 10)), gainDbMin: r2(Math.min(...gdb)),
+        cutOver1dBPct: r2(100 * gdb.filter((x) => x < -1).length / Math.max(1, gdb.length)),
+        prioSharePct: r2(100 * sum(ms.prio) / sfxE), threatSharePct: r2(100 * sum(ms.threat) / sfxE) }; }
     const blk = 4096 / rep.rate;
     const loud = {};
     for (const n of ['out', 'music', 'sfx', 'voice', 'ambience']) {

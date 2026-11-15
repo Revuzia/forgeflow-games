@@ -8,7 +8,7 @@
 
 import { render, type ComponentType, type JSX } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { effect, signal } from '@preact/signals';
+import { batch, effect, signal } from '@preact/signals';
 import type { CatalogT } from '../contracts/catalog.ts';
 import type { MatchClient, OnlineInfo, Session } from '../contracts/session.ts';
 import { AppContext, handleEsc, Overlay, useApp, type AppCtx } from './app_ctx.ts';
@@ -29,6 +29,8 @@ import { ToastStack } from './components/Toast.tsx';
 import { TooltipLayer } from './components/Tooltip.tsx';
 import { arrowNav } from './components/arrownav.ts';
 import { NET_RETRY_EVENT } from '../session/online_link.ts';
+import { FrameGuard, parseFault } from '../boot/frame_guard.ts';
+import { SHIP_TEXT } from '../boot/device.ts';
 import { applyPreset, detectPreset } from '../session/settings.ts';
 import './styles/tokens.css';
 import './styles/base.css';
@@ -202,20 +204,66 @@ function firstRunCalibrate(ctx: AppCtx, r: RendererPort | null): void {
 }
 
 // ── frame loop: pump the live match (LocalMatchHost needs real elapsed time) and draw ──────────────
+// W1-E TECH-09: a frame that throws is counted (boot/frame_guard.ts), not just logged. 30 pump failures in a row end
+// the match as interrupted (Session.interrupt: no result, no rating change, profile saved) and send the player Home
+// with a notice; 30 draw failures raise the lost-picture plate and re-run the renderer's setup once.
 function startFrameLoop(state: AppState, o: MountOptions): () => void {
   let raf = 0, last = performance.now(), stopped = false;
   const pump = o.pumpMatch !== false;
+  const guard = new FrameGuard<MatchClient>({
+    fault: parseFault(location.search, !!o.dev),
+    onPumpDead: (m, err) => interruptMatch(state, m, err),
+    onRenderDead: (attempt, err) => {
+      console.error(`[vale] render failed on ${attempt === 1 ? 'every' : 'the next'} 30 frames`, err);
+      lostPlate(state, true);
+      if (attempt === 1) { try { const m = state.match.peek(); o.renderer?.setScene?.(m ?? 'menu'); o.renderer?.resize?.(); } catch (e) { console.error('[vale] render setup retry', e); } }
+    },
+    onRenderOk: () => lostPlate(state, false),
+  });
   const tick = (now: number): void => {
     if (stopped) return;
     const dt = Math.min(0.25, Math.max(0, (now - last) / 1000));
     last = now;
     const m: MatchClient | null = state.match.value;
-    if (pump && m) { try { m.pump(dt); } catch (e) { console.error('[vale] match pump', e); } }
-    if (o.renderer?.render) { try { o.renderer.render(dt); } catch (e) { console.error('[vale] render', e); } }
+    if (pump && m) guard.pump(m, m.view.time, () => { m.pump(dt); });
+    if (o.renderer?.render) guard.draw(now, () => { o.renderer!.render!(dt); });
     raf = requestAnimationFrame(tick);
   };
   raf = requestAnimationFrame(tick);
-  return () => { stopped = true; cancelAnimationFrame(raf); };
+  return () => { stopped = true; cancelAnimationFrame(raf); lostPlate(state, false); };
+}
+
+/** a match whose sim cannot run: end it without a result, back to Home, one notice. A session that cannot interrupt
+ *  (not the shipped one) only stops being pumped: Esc → Leave still works. */
+function interruptMatch(state: AppState, m: MatchClient, err: unknown): void {
+  console.error('[vale] match interrupted after 30 failed frames', err);
+  const s = state.session as unknown as { interrupt?: () => boolean };
+  let ended = false;
+  try { ended = s.interrupt?.() === true; } catch (e) { console.error('[vale] interrupt', e); }
+  const text = state.cv.t('ship.match.interrupted', SHIP_TEXT['ship.match.interrupted']);
+  if (!ended || state.match.peek() !== m) { state.toast(text, 'error', undefined, 12000); return; }
+  batch(() => { state.match.value = null; state.loading.value = null; state.queue.value = null; state.draft.value = null; state.ending.value = false; });
+  state.sound.duck(false);
+  try { state.renderer?.setScene?.('menu'); } catch (e) { console.error('[vale] renderer menu', e); }
+  state.router.reset('home', {}, 'wipe');
+  state.toast(text, 'warn', undefined, 12000);
+}
+
+/** the lost-picture plate over a renderer that stopped drawing (same classes as the HUD's view plate) */
+function lostPlate(state: AppState, on: boolean): void {
+  const id = 'vale-lost-plate';
+  const have = document.getElementById(id);
+  if (!on) { have?.remove(); return; }
+  if (have) return;
+  const el = document.createElement('div');
+  el.id = id;
+  el.className = 'viewplate is-lost';
+  el.setAttribute('role', 'status');
+  el.style.position = 'fixed';
+  const title = document.createElement('span'); title.className = 'viewplate__title t-h3'; title.textContent = state.cv.t('ship.view.lost', SHIP_TEXT['ship.view.lost']);
+  const sub = document.createElement('span'); sub.className = 'viewplate__sub t-body-s'; sub.textContent = state.cv.t('ship.view.lost_sub', SHIP_TEXT['ship.view.lost_sub']);
+  el.append(title, sub);
+  document.body.append(el);
 }
 
 // ── the app ────────────────────────────────────────────────────────────────────────────────────

@@ -5,6 +5,10 @@
 // falls back to an in-memory copy for the rest of the page's life. MemoryProfileStore is the Node /
 // probe store (it still round-trips through JSON, exactly like the real one). A blob that is not
 // JSON is copied to '<key>.corrupt' before a fresh profile replaces it.
+// TWO TABS (W1-E TECH-08): every saved blob carries a monotonic `rev`. A save is refused (the store goes `stale`, the
+// blob in storage is left alone) when storage holds a newer rev than this store last loaded or wrote, so a second tab
+// can never overwrite the wallet, skins or history the first one saved. `onStatus` tells the UI: 'degraded' when
+// storage is missing or throws (progress will not survive a reload), 'stale' when another tab got ahead.
 // LOGIN SEAM: a RemoteProfileStore implements the same ProfileStore over HTTPS (identity.ts).
 //
 // MIGRATIONS: `schema` is PROFILE_SCHEMA (contracts/session.ts). migrateProfile() walks MIGRATIONS
@@ -227,6 +231,13 @@ export class MemoryProfileStore implements RawProfileStore {
 
 interface StorageLike { getItem(k: string): string | null; setItem(k: string, v: string): void; removeItem(k: string): void }
 
+/** what a store tells the UI: storage is unusable (progress is memory only), or another tab saved newer data */
+export type StoreStatus = 'degraded' | 'stale';
+const revOf = (text: string | null): number => {
+  if (!text) return 0;
+  try { const r = (JSON.parse(text) as { rev?: unknown } | null)?.rev; return typeof r === 'number' && Number.isInteger(r) && r > 0 ? r : 0; } catch { return 0; }
+};
+
 /** localStorage['vale.profile.v1'] with try/catch everywhere and an in-memory fallback */
 export class LocalProfileStore implements RawProfileStore {
   readonly key: string;
@@ -235,6 +246,11 @@ export class LocalProfileStore implements RawProfileStore {
   private readonly ctx: ProfileContext | undefined;
   /** true once storage failed and the store runs from memory */
   degraded = false;
+  /** true once another tab saved a newer profile: this store's saves are refused until the page reloads */
+  stale = false;
+  /** the rev of the stored blob this store last loaded or wrote (0 = none yet) */
+  private rev = 0;
+  private readonly watchers = new Set<(s: StoreStatus) => void>();
 
   constructor(ctx?: ProfileContext, key = PROFILE_KEY, storage?: StorageLike | null) {
     this.ctx = ctx;
@@ -244,6 +260,24 @@ export class LocalProfileStore implements RawProfileStore {
       try { this.storage = (globalThis as { localStorage?: StorageLike }).localStorage ?? null; } catch { this.storage = null; }
     }
     if (!this.storage) this.degraded = true;
+    // the real page: another tab's save arrives as a storage event, before any save of ours is refused
+    if (storage === undefined && this.storage && typeof (globalThis as { addEventListener?: unknown }).addEventListener === 'function') {
+      (globalThis as unknown as { addEventListener(t: 'storage', f: (e: { key: string | null; newValue: string | null; storageArea?: unknown }) => void): void })
+        .addEventListener('storage', (e) => { if (e.storageArea === undefined || e.storageArea === this.storage) this.onStorageEvent(e.key, e.newValue); });
+    }
+  }
+  /** listen for status changes; a status that already holds is delivered at once. Returns the unsubscribe */
+  onStatus(cb: (s: StoreStatus) => void): () => void {
+    this.watchers.add(cb);
+    if (this.degraded) { try { cb('degraded'); } catch { /* a listener's failure is its own */ } }
+    if (this.stale) { try { cb('stale'); } catch { /* a listener's failure is its own */ } }
+    return () => { this.watchers.delete(cb); };
+  }
+  private tell(s: StoreStatus): void { for (const w of [...this.watchers]) { try { w(s); } catch { /* a listener's failure is its own */ } } }
+  /** a `storage` event for this key (another tab wrote it) */
+  onStorageEvent(key: string | null, newValue: string | null): void {
+    if (key !== this.key || this.stale) return;
+    if (revOf(newValue) > this.rev) { this.stale = true; this.tell('stale'); }
   }
   private read(): string | null {
     if (this.storage) {
@@ -251,9 +285,13 @@ export class LocalProfileStore implements RawProfileStore {
     }
     return this.memory;
   }
-  private fallback(): void { this.storage = null; this.degraded = true; }
+  private fallback(): void {
+    this.storage = null;
+    if (!this.degraded) { this.degraded = true; this.tell('degraded'); }
+  }
   loadRaw(): unknown {
     const text = this.read();
+    this.rev = revOf(text);
     const r = parse(text);
     if (r.ok) return r.value;
     if (this.storage) { try { this.storage.setItem(`${this.key}.corrupt`, text ?? ''); } catch { /* best effort */ } }
@@ -261,17 +299,23 @@ export class LocalProfileStore implements RawProfileStore {
   }
   load(): Profile | null { return loadVia(this.loadRaw(), this.ctx); }
   save(p: Profile): void {
-    const text = JSON.stringify(p);
+    if (this.stale) return;                                  // another tab is ahead: this tab never overwrites it
+    let onDisk = 0;
+    if (this.storage) { try { onDisk = revOf(this.storage.getItem(this.key)); } catch { this.fallback(); } }
+    if (onDisk > this.rev) { this.stale = true; this.tell('stale'); return; }
+    const rev = Math.max(onDisk, this.rev) + 1;
+    const text = JSON.stringify({ ...p, rev });
     this.memory = text;
     if (this.storage) {
-      try { this.storage.setItem(this.key, text); } catch { this.fallback(); }
-    }
+      try { this.storage.setItem(this.key, text); this.rev = rev; } catch { this.fallback(); }
+    } else this.rev = rev;
   }
   reset(): void {
+    if (this.stale) return;
     this.memory = null;
     if (this.storage) {
-      try { this.storage.removeItem(this.key); } catch { this.fallback(); }
-    }
+      try { this.storage.removeItem(this.key); this.rev = 0; } catch { this.fallback(); }
+    } else this.rev = 0;
   }
 }
 

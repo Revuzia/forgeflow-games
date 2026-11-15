@@ -64,7 +64,8 @@ void (async () => {
   // every other game: byte-identical to the worker before the change
   let same = 0, diff: string[] = [];
   for (const k of keys.filter((x) => !x.startsWith('vale/'))) {
-    for (const h of [{}, { 'accept-encoding': 'gzip, br' }, { 'if-none-match': FILES[k].httpEtag }]) {
+    const hs: Record<string, string>[] = [{}, { 'accept-encoding': 'gzip, br' }, { 'if-none-match': FILES[k].httpEtag }];
+    for (const h of hs) {
       const a = await call(baseline, k, h), b = await call(worker, k, h);
       if (dump(a) === dump(b) && (await a.text()) === (await b.text())) same++; else diff.push(`${k} ${JSON.stringify(h)}`);
     }

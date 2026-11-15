@@ -56,6 +56,43 @@ const W = info.width;
 const H = info.height;
 const C = info.channels;
 
+// orch1 W1-B: rasterise every triangle of the primitives using this texture into texel space; `fn(p, w0, w1, w2, a, b, c,
+// prim)` gets each covered texel with its barycentrics and corner indices (the island mask and the joint-weight mask)
+const rasterUV = (fn) => {
+  for (const node of root.listNodes()) {
+    const mesh = node.getMesh();
+    if (!mesh) continue;
+    for (const prim of mesh.listPrimitives()) {
+      if (prim.getMaterial()?.getBaseColorTexture() !== tex) continue;
+      const uv = prim.getAttribute('TEXCOORD_0');
+      const idx = prim.getIndices();
+      const T = [];
+      for (let i = 0; i < uv.getCount(); i++) { const t = uv.getElement(i, [0, 0]); T.push([t[0] * W, t[1] * H]); }
+      const n = idx ? idx.getCount() : uv.getCount();
+      for (let i = 0; i + 2 < n; i += 3) {
+        const [a, b, c] = idx ? [idx.getScalar(i), idx.getScalar(i + 1), idx.getScalar(i + 2)] : [i, i + 1, i + 2];
+        const [ta, tb, tc] = [T[a], T[b], T[c]];
+        const den = (tb[1] - tc[1]) * (ta[0] - tc[0]) + (tc[0] - tb[0]) * (ta[1] - tc[1]);
+        if (Math.abs(den) < 1e-9) continue;
+        const x0 = Math.max(0, Math.floor(Math.min(ta[0], tb[0], tc[0])));
+        const x1 = Math.min(W - 1, Math.ceil(Math.max(ta[0], tb[0], tc[0])));
+        const y0 = Math.max(0, Math.floor(Math.min(ta[1], tb[1], tc[1])));
+        const y1 = Math.min(H - 1, Math.ceil(Math.max(ta[1], tb[1], tc[1])));
+        for (let y = y0; y <= y1; y++) {
+          for (let x = x0; x <= x1; x++) {
+            const gx = x + 0.5, gy = y + 0.5;
+            const w0 = ((tb[1] - tc[1]) * (gx - tc[0]) + (tc[0] - tb[0]) * (gy - tc[1])) / den;
+            const w1 = ((tc[1] - ta[1]) * (gx - tc[0]) + (ta[0] - tc[0]) * (gy - tc[1])) / den;
+            const w2 = 1 - w0 - w1;
+            if (w0 < -0.002 || w1 < -0.002 || w2 < -0.002) continue;
+            fn(y * W + x, w0, w1, w2, a, b, c, prim);
+          }
+        }
+      }
+    }
+  }
+};
+
 // the mask: rasterise each triangle of the primitives using this texture, testing its rest position
 let mask = null;
 if (boxes.length || cyls.length) {
@@ -121,8 +158,45 @@ if (boxes.length || cyls.length) {
     }
   }
 }
+// orch1 W1-B (FU-2): --joint name:w (repeatable) texels whose interpolated skin weight to that joint is >= w (the head
+// island: a face, mask or hood skinned to `head`); used for --mask-out and as a --reserve-cap protection
+const jointSpecs = args.flatMap((a, i) => (a === '--joint' ? [args[i + 1].split(':')] : []));
+let jointMask = null;
+if (jointSpecs.length) {
+  jointMask = new Uint8Array(W * H);
+  const skin = root.listSkins()[0];
+  const names = skin ? skin.listJoints().map((j) => j.getName()) : [];
+  const want = jointSpecs.map(([n, w]) => {
+    const ji = names.indexOf(n);
+    if (ji < 0) throw new Error(`--joint ${n}: not a joint (${names.join(', ')})`);
+    return [ji, Number(w)];
+  });
+  const cache = new Map();
+  const weightsOf = (prim) => {
+    if (cache.has(prim)) return cache.get(prim);
+    const J = prim.getAttribute('JOINTS_0'), Wt = prim.getAttribute('WEIGHTS_0');
+    const out = want.map(() => new Float32Array(J ? J.getCount() : 0));
+    if (J && Wt) {
+      for (let v = 0; v < J.getCount(); v++) {
+        const j = J.getElement(v, [0, 0, 0, 0]), w = Wt.getElement(v, [0, 0, 0, 0]);
+        want.forEach(([ji], k) => { for (let q = 0; q < 4; q++) if (j[q] === ji) out[k][v] += w[q]; });
+      }
+    }
+    cache.set(prim, out);
+    return out;
+  };
+  rasterUV((p, w0, w1, w2, a, b, c, prim) => {
+    const ws = weightsOf(prim);
+    if (want.some(([, t], k) => w0 * ws[k][a] + w1 * ws[k][b] + w2 * ws[k][c] >= t)) jointMask[p] = 1;
+  });
+}
 if (args.includes('--mask-out')) {
-  if (!mask) throw new Error('--mask-out needs --box or --cyl');
+  if (jointMask) {
+    if (!mask) mask = jointMask;
+    else if (args.includes('--joint-and')) for (let p = 0; p < W * H; p++) mask[p] = mask[p] && jointMask[p] ? 1 : 0;
+    else for (let p = 0; p < W * H; p++) mask[p] = mask[p] || jointMask[p] ? 1 : 0;
+  }
+  if (!mask) throw new Error('--mask-out needs --box, --cyl or --joint');
   const g = new Uint8Array(W * H);
   for (let p = 0; p < W * H; p++) g[p] = mask[p] ? 255 : 0;
   await sharp(g, { raw: { width: W, height: H, channels: 1 } }).png().toFile(opt('--mask-out'));
@@ -240,6 +314,26 @@ if (args.includes('--reserve-cap')) {
   };
   let used = 0;
   for (let p = 0; p < W * H; p++) if (Math.max(data[p * C], data[p * C + 1], data[p * C + 2]) > 2) used++;
+  // --reserve-protect mask.png (repeatable): texels a zone recipe protects (zone_grade.py reserveProtect)
+  let protect = null;
+  for (const path of args.flatMap((x, i) => (x === '--reserve-protect' ? [args[i + 1]] : []))) {
+    const m = await sharp(path).resize(W, H, { kernel: 'nearest' }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    protect ??= new Uint8Array(W * H);
+    for (let p = 0; p < W * H; p++) if (m.data[p * m.info.channels] >= 128) protect[p] = 1;
+  }
+  // --reserve-gutter-first: the UV islands, so the invisible gutter pays the cap before any painted texel
+  let island = null;
+  if (args.includes('--reserve-gutter-first')) {
+    island = new Uint8Array(W * H);
+    rasterUV((p) => { island[p] = 1; });
+    // a texel the bilinear / mip filter reads from an island's edge counts as island (1 texel dilation)
+    const grow = island.slice();
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+      const p = y * W + x;
+      if (!island[p] && (island[p - 1] || island[p + 1] || island[p - W] || island[p + W])) grow[p] = 1;
+    }
+    island = grow;
+  }
   for (const [name, [a, b]] of Object.entries(bands)) {
     const how = modes[name] ?? 'edge';
     const hit = [];
@@ -276,9 +370,27 @@ if (args.includes('--reserve-cap')) {
       console.log(`reserve-cap ${name}: ${(100 * hit.length / used).toFixed(2)} % -> knee ${knee} slope ${k.toFixed(3)} (${moved} texels, knee)`);
       continue;
     }
-    hit.sort((x, y) => x[1] - y[1]);
+    // orch1 W1-B (FU-2, the Odrum bone-mask lesson): texels move in tiers, cheapest (nearest the 0.4 line) first within
+    // each: 0 the UV gutter (no triangle covers it: invisible padding), 1 the painted islands, 2 the protected texels
+    // (--joint head islands and --reserve-protect masks: faces, masks, hands). Tiers 0-1 take the band's mode; a
+    // protected texel is only ever trimmed to --protect-sat (default 0.375: hue and value kept, the honey stays honey)
+    // and only when tiers 0-1 cannot meet the aim on their own.
+    const tier = new Uint8Array(W * H);
+    if (protect || jointMask || island) {
+      for (let p = 0; p < W * H; p++) tier[p] = (protect && protect[p]) || (jointMask && jointMask[p]) ? 2 : island && !island[p] ? 0 : 1;
+    } else tier.fill(1);
+    hit.sort((x, y) => tier[x[0]] - tier[y[0]] || x[1] - y[1]);
+    const protSat = Number(opt('--protect-sat', 0.375));
+    const tally = [0, 0, 0];
     for (const [p] of hit.slice(0, excess)) {
       const [h, s, v] = hsv(p);
+      tally[tier[p]]++;
+      if (tier[p] === 2) {
+        const c = v * protSat, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = v - c;
+        const [r1, g1, b1] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+        data[p * C] = Math.round(r1 + m); data[p * C + 1] = Math.round(g1 + m); data[p * C + 2] = Math.round(b1 + m);
+        continue;
+      }
       const ns = how === 'sat' ? Number(opt('--reserve-sat', 0.3)) : s;
       const nh = how === 'sat' ? h : how === 'lo' ? (a - margin + 360) % 360 : how === 'hi' ? b + margin : (h < (a + b) / 2 ? a - margin + 360 : b + margin) % 360;
       // HSV -> RGB at the new hue / saturation, the value kept
@@ -286,7 +398,7 @@ if (args.includes('--reserve-cap')) {
       const [r1, g1, b1] = nh < 60 ? [c, x, 0] : nh < 120 ? [x, c, 0] : nh < 180 ? [0, c, x] : nh < 240 ? [0, x, c] : nh < 300 ? [x, 0, c] : [c, 0, x];
       data[p * C] = Math.round(r1 + m); data[p * C + 1] = Math.round(g1 + m); data[p * C + 2] = Math.round(b1 + m);
     }
-    console.log(`reserve-cap ${name}: ${(100 * hit.length / used).toFixed(2)} % -> ${(100 * (hit.length - excess) / used).toFixed(2)} % (${excess} texels, ${how})`);
+    console.log(`reserve-cap ${name}: ${(100 * hit.length / used).toFixed(2)} % -> ${(100 * (hit.length - excess) / used).toFixed(2)} % (${excess} texels, ${how}; gutter ${tally[0]}, islands ${tally[1]}, protected trimmed ${tally[2]})`);
   }
 }
 const old = tex.getImage().byteLength;

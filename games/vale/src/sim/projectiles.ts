@@ -13,12 +13,15 @@
 // Homing projectiles (`homing` with toward 'target', and every ranged basic attack) chase their
 // target and hit only it; if it dies or turns untargetable they fly to its last position and end
 // there without a hit.
+// A basic attack thrown at the ground (ruling 39, attack.ts) is a skillshot with the attack as its payload: it flies its
+// reach along the aim line, stops at walls, passes allies and units its team cannot see, and hits the first enemy it
+// meets (attackable), else ends as a plain miss.
 // `onHit` runs with hit = the unit and end = the contact point; `onEnd` with end = the final
 // position (also after a stopping hit).
 
 import type { EffectT } from '../contracts/catalog.ts';
 import { TICK_DT } from '../contracts/sim.ts';
-import { applyAttackHit } from './attack.ts';
+import { applyAttackHit, attackable } from './attack.ts';
 import { anchorPoint, matchesFilter, onEffectHit, runEffects } from './effects.ts';
 import type { EffOf, EffectCtx, Entity, ProjData } from './entity.ts';
 import { DEG, segmentCircleT } from './math.ts';
@@ -99,6 +102,22 @@ export function spawnAttackProjectile(w: World, src: Entity, target: Entity, cri
   w.emit({ e: 'projectile', t: w.time, id: p.id, src: src.id, ability: 'attack', vfx: ad.present?.vfx });
 }
 
+/** a ranged basic attack thrown at the ground (ruling 39): along (dx, dy) for `reach` m, the attack on the first enemy hit */
+export function spawnAttackShot(w: World, src: Entity, dx: number, dy: number, reach: number, crit: boolean, dtype: 'phys' | 'magic' | 'true',
+  empower: readonly EffectT[] | null, empCtx: EffectCtx | null): void {
+  const ad = src.attackDef!;
+  const p = newProjectile(w, src, src.def, src.x, src.y, 0.3, ad.present?.vfx);
+  const speed = ad.projectileSpeed ?? 20;
+  p.facing = datan2(dy, dx);
+  p.vx = dx * speed; p.vy = dy * speed;
+  p.proj = {
+    attack: true, eff: null, ctx: empCtx, src, target: -1, targetLife: 0, homing: false, speed, range: Math.max(0, reach), traveled: 0, width: 0.3,
+    pierceLeft: 0, hits: [], returning: false, stopAtWalls: true, dirX: dx, dirY: dy, tx: src.x + dx * reach, ty: src.y + dy * reach,
+    crit, dtype, empower: empower ? empower.slice() : null, empowerSrc: '',
+  };
+  w.emit({ e: 'projectile', t: w.time, id: p.id, src: src.id, ability: 'attack', vfx: ad.present?.vfx });
+}
+
 function endProjectile(w: World, p: Entity, pd: ProjData): void {
   p.vx = 0; p.vy = 0;
   w.remove(p);
@@ -172,8 +191,8 @@ export function projectileSystem(w: World): void {
       ex = tmp.x; ey = tmp.y; wallStop = true;
     }
 
-    // swept collision
-    const eff = pd.eff!;
+    // swept collision (an attack shot: the attack's own targets, ruling 39)
+    const eff = pd.eff;
     const half = pd.width * 0.5;
     const mx = (sx + ex) * 0.5, my = (sy + ey) * 0.5;
     const segHalf = Math.sqrt((ex - sx) * (ex - sx) + (ey - sy) * (ey - sy)) * 0.5;
@@ -182,7 +201,7 @@ export function projectileSystem(w: World): void {
     for (let k = 0; k < cn; k++) {
       const u = scratch[k];
       if (pd.hits.includes(u.id)) continue;
-      if (!matchesFilter(w, pd.src, u, eff.filter)) continue;
+      if (eff ? !matchesFilter(w, pd.src, u, eff.filter) : !attackable(w, pd.src, u)) continue;
       const th = segmentCircleT(sx, sy, ex, ey, u.x, u.y, u.radius + half);
       if (th < 0) continue;
       // insertion by (t, id)
@@ -210,7 +229,7 @@ export function projectileSystem(w: World): void {
     pd.traveled += adv;
     if (wallStop) { endProjectile(w, p, pd); continue; }
     if (adv >= remaining - 1e-9) {
-      if (eff.returns && !pd.returning) { pd.returning = true; pd.hits.length = 0; }
+      if (eff?.returns && !pd.returning) { pd.returning = true; pd.hits.length = 0; }
       else endProjectile(w, p, pd);
     }
   }

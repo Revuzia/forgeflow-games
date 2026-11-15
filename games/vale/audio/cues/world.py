@@ -66,6 +66,7 @@ FAIR_S = 36.0                # the fair's bed: long enough that no stall bell re
 RIFT_AIR_HP_HZ = 170.0       # the valley bed's low cut (ruling 37 round 2: its 125 Hz region read as a low roar)
 BRIDGE_AIR_HP_HZ = 120.0     # the bridge bed's (the same gate: audio/build.py BED_LOW_*)
 SEAM_GUARD_S = 0.03
+SEAM_TEXTURE_S = 0.002       # a grain texture's guard (Hann-windowed grains have no transient to step on the seam)
 
 
 def win(d: float) -> tuple[float, float]:
@@ -115,26 +116,29 @@ def band_noise(n: int, r: np.random.Generator, centre: np.ndarray, q: float, slo
     return F.stft_filter(x, gains, frame=2048, circular=True)
 
 
-def scatter(n: int, r: np.random.Generator, rate: float, make, gate: np.ndarray | None = None) -> np.ndarray:
+def scatter(n: int, r: np.random.Generator, rate: float, make, gate: np.ndarray | None = None,
+            guard: float = SEAM_GUARD_S) -> np.ndarray:
     """Poisson events over the loop (rate per second; `gate` thins them by a 0..1 envelope), each wrapped across
-    the seam. make(r) returns a mono grain."""
+    the seam. make(r) returns a mono grain. `guard` keeps onsets that far off the seam: a soft-windowed grain texture
+    passes SEAM_TEXTURE_S (orch1: the canopy's and the lantern's 30 ms guards each side, under 6-30 ms grains, left a
+    run of digital silence at every loop seam, 110 / 70 ms)."""
     y = np.zeros(n)
     count = int(r.poisson(rate * n / SR))
     for _ in range(count):
-        s = onset(r, n)
+        s = onset(r, n, guard=guard)
         if gate is not None and r.uniform() > gate[s]:
             continue
         add_at(y, make(r), s, wrap=True)
     return y
 
 
-def onset(r: np.random.Generator, n: int, lo: float = 0.0, hi: float | None = None) -> int:
-    """A random event onset in [lo, hi) s, never within SEAM_GUARD_S of the loop's seam (an event may ring across
-    the wrap, but its transient never lands on it: build.py's seam check, and the codec, would hear a step)."""
+def onset(r: np.random.Generator, n: int, lo: float = 0.0, hi: float | None = None, guard: float = SEAM_GUARD_S) -> int:
+    """A random event onset in [lo, hi) s, never within `guard` (SEAM_GUARD_S) of the loop's seam (an event may ring
+    across the wrap, but its transient never lands on it: build.py's seam check, and the codec, would hear a step)."""
     hi_s = n / SR if hi is None else hi
     while True:
         s = int(r.uniform(lo, hi_s) * SR) % n
-        if ns(SEAM_GUARD_S) <= s <= n - ns(SEAM_GUARD_S):
+        if ns(guard) <= s <= n - ns(guard):
             return s
 
 
@@ -191,8 +195,9 @@ def amb_rift_canopy(v: int):
     n = ns(D)
     dens = drift(n, r, (2, 3, 5), 2.5)
     gate = np.clip(dens / dens.max(), 0, 1)
-    ticks = scatter(n, r, 70.0, lambda rr: grain(rr, 500, 2000, (6.0, 22.0), 1.6), gate)
-    rustle = scatter(n, r, 9.0, lambda rr: F.apply(leaf_rustle(rr), [F.bandpass(rr.uniform(700, 1600), 0.9)]), gate)
+    ticks = scatter(n, r, 70.0, lambda rr: grain(rr, 500, 2000, (6.0, 22.0), 1.6), gate, guard=SEAM_TEXTURE_S)
+    rustle = scatter(n, r, 9.0, lambda rr: F.apply(leaf_rustle(rr), [F.bandpass(rr.uniform(700, 1600), 0.9)]), gate,
+                     guard=SEAM_TEXTURE_S)
     out = norm(ticks) * 0.75 + norm(rustle) * 0.6
     return loop_out(out, hp_hz=250, lp_hz=2800)
 

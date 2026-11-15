@@ -188,7 +188,8 @@ export interface PassiveInst {
 }
 
 // ── actions ─────────────────────────────────────────────────────────────────────────────────────
-export const ORDER_NONE = 0, ORDER_MOVE = 1, ORDER_ATTACK_MOVE = 2, ORDER_ATTACK = 3, ORDER_CAST = 4;
+/** ORDER_ATTACK_AT (ruling 39): attack in place toward orderX/Y, never walking (attack.ts attackAtStep) */
+export const ORDER_NONE = 0, ORDER_MOVE = 1, ORDER_ATTACK_MOVE = 2, ORDER_ATTACK = 3, ORDER_CAST = 4, ORDER_ATTACK_AT = 5;
 
 export interface CastState {
   slot: AbilitySlot | null;
@@ -374,6 +375,14 @@ export class Entity implements EntityView {
   /** seconds of attack animation left (backswing) */
   atkAnim = 0;
   atkAlt = false;
+  /** ORDER_ATTACK_AT (ruling 39): attacks the order still owes (a re-sent order owes one more), the tick it lapses when
+   *  none could start (disarmed, stunned), fighters only */
+  atkAtLeft = 0;
+  atkAtUntil = 0;
+  atkAtFighters = false;
+  /** the attack winding up is thrown at the ground toward (atkAimX, atkAimY), not at atkTarget */
+  atkAimed = false;
+  atkAimX = 0; atkAimY = 0;
   /** idle auto-acquire (fighters, towers, summons); unit AI may turn it off */
   autoAttack = true;
   // motion
