@@ -23,15 +23,16 @@
 //               THREAT path (an enemy's action aimed your way but out of your awareness radius) and the PRIORITY
 //               sub-bus (anything YOUR fighter makes, anything landing on you, and every awareness threat within
 //               AWARE_M of your living fighter). A feed-forward detector reads the K-weighted short-term
-//               (LEVEL_WINDOW_S) loudness of all three, referred to the default sfx slider (LEVEL_REF_SFX) and the
-//               mode's trim, and solves the one gain on the background and threat paths that brings the whole sfx to
-//               LEVEL_TARGET_LUFS: cut only, at most LEVEL_MAX_CUT_DB, gliding down over LEVEL_ATTACK_S and back over
-//               LEVEL_RELEASE_S (slow both ways: a density ride, never a pumping compressor). The priority sub-bus is
-//               never cut, so your own autos and what threatens you stay forward when the fight around you thickens;
-//               nor does it alone push the background below LEVEL_BG_ROOM_LU under the target (your own burst of casts
-//               does not empty the world around it).
-//               Per mode a static sfx trim (content audio.mix.modes.<mode>.sfxTrimDb) sets the mode's base level on
-//               all three paths (the 5v5 maps are denser by design, not only in their peaks)
+//               (LEVEL_WINDOW_S) loudness of all three, referred to the default sfx slider (LEVEL_REF_SFX),
+//               and solves the gain on the background and threat paths that brings the whole sfx to LEVEL_TARGET_LUFS:
+//               cut only, at most LEVEL_MAX_CUT_DB, gliding down over LEVEL_ATTACK_S and back over LEVEL_RELEASE_S (slow
+//               both ways: a density ride, never a pumping compressor). The background takes the cut first, so your own
+//               autos and what threatens you stay forward when the fight around you thickens, but the priority sub-bus
+//               alone never pushes it below LEVEL_BG_ROOM_LU under the target (your own burst of casts does not empty
+//               the world around it); what is still over the target then comes down on all three paths together, at
+//               most LEVEL_PRIO_MAX_CUT_DB (a loud brawler's own kit ran a RIFT seat 2 LU over a quiet one's).
+//               Per mode a static sfx trim (content audio.mix.modes.<mode>.sfxTrimDb), after the leveller, sets the
+//               mode's level on all three paths (the leveller rides the density, the trim the mode's base)
 //   ducking     voice > sfx > music (CONTRACT §11): while an announcer line plays, music and ambience sit
 //               VOICE_DUCK_DB lower and the sfx bus SFX_DUCK_DB lower, except threats to your fighter (the
 //               awareness pass below), which are never ducked (r07 §2.2.7). A news line (bands 1-3: a wipe,
@@ -443,6 +444,7 @@ const LEVEL_ATTACK_S = 0.8;     // time constants of the gain's glide: down …
 const LEVEL_RELEASE_S = 3;      // … and back up
 const LEVEL_WINDOW_S = 3;       // the detector's short-term window (BS.1770 short-term)
 const LEVEL_POLL_MS = 100;      // one 4096-sample read per path per poll (85 ms at 48 kHz)
+const LEVEL_PRIO_MAX_CUT_DB = 4; // the whole sfx's cut (the priority sub-bus included) when it alone is over the target
 const LEVEL_BG_ROOM_LU = 6;     // the background is never cut below this under the target (see levelPoll)
 const LEVEL_REF_SFX = 0.8;      // the default sfx slider: the detector is referred to it, so the slider still sets the level
 const OWN_KIT_GAIN = Math.pow(10, OWN_KIT_DB / 20);
@@ -658,8 +660,10 @@ class Engine implements ValeAudioPort {
   private levTimer: ReturnType<typeof setInterval> | undefined;
   /** the leveller's last solved gain, and its dev / probe stats (polls, cut time, the deepest cut) */
   private levGain = 1;
+  /** (AUD-O1) the leveller's stage-2 gain on the priority sub-bus (see levelPoll) */
+  private levPrio = 1;
   private sfxTrimDb = 0;
-  readonly levStats = { polls: 0, cutPolls: 0, cut3Polls: 0, maxCutDb: 0, sumCutDb: 0, prioShareSum: 0, prioSharePolls: 0 };
+  readonly levStats = { polls: 0, cutPolls: 0, cut3Polls: 0, maxCutDb: 0, sumCutDb: 0, prioShareSum: 0, prioSharePolls: 0, prioCutPolls: 0, sumPrioCutDb: 0 };
   /** content audio.mix.modes: mode id → its sfx trim (dB) */
   private readonly modeTrim: Record<string, number> = {};
   /** the alert path, one gain per bus, straight into the limiter (see `alert path` in the header) */
@@ -1162,7 +1166,7 @@ class Engine implements ValeAudioPort {
     const ctx = this.ctx;
     if (!ctx || !this.levSfx) return;
     const t = ctx.currentTime, k = Math.pow(10, db / 20);
-    for (const [p, v] of [[this.levSfx.gain, k * this.levGain], [this.levThreat.gain, k * this.levGain], [this.prioTrim.gain, k]] as const) {
+    for (const [p, v] of [[this.levSfx.gain, k * this.levGain], [this.levThreat.gain, k * this.levGain], [this.prioTrim.gain, k * this.levPrio]] as const) {
       if (now) { p.cancelScheduledValues(t); p.setValueAtTime(v, t); } else glide(p, v, t, 0.3);
     }
   }
@@ -1183,19 +1187,26 @@ class Engine implements ValeAudioPort {
     let sn = 0, sp = 0;
     for (const w of this.levWin) { sn += w.n; sp += w.p; }
     const k = this.levWin.length || 1;
-    // referred to the default slider and the mode's trim: the probes' sfx scale
+    // referred to the default slider (the probes' sfx scale); the mode's trim sits after the leveller (it sets the
+    // mode's level, the leveller its density)
     const vol = this.vol.sfx;
     if (!(vol > 0)) return;
-    const ref = (LEVEL_REF_SFX / vol) ** 2 * Math.pow(10, this.sfxTrimDb / 10);
+    const ref = (LEVEL_REF_SFX / vol) ** 2;
     const N = (sn / k) * ref, P = (sp / k) * ref;
     const T = Math.pow(10, (LEVEL_TARGET_LUFS + 0.691) / 10);
     const floor = Math.pow(10, -LEVEL_MAX_CUT_DB / 20);
-    // the one gain on the background that brings background + priority to the target: g^2 N + P = T, but the background
-    // keeps at least LEVEL_BG_ROOM_LU under the target whatever the priority sub-bus does (your own burst of casts must
-    // not crush the world around it: RIFT seed 3 sat at the full 8 dB cut 10 % of the match on its own kit alone)
+    // stage 1, the background: the one gain that brings background + priority to the target, g^2 N + P = T, but the
+    // background keeps at least LEVEL_BG_ROOM_LU under the target whatever the priority sub-bus does (your own burst
+    // of casts must not crush the world around it: RIFT seed 3 sat at the full 8 dB cut 10 % of the match on its own kit)
     let g = 1;
     const room = T * Math.pow(10, -LEVEL_BG_ROOM_LU / 10);
     if (N > 0 && N + P > T) g = Math.max(floor, Math.min(1, Math.sqrt(Math.max(T - P, room) / N)));
+    // stage 2, the whole sfx: what is still over the target (the priority sub-bus alone: your kit and what hits you,
+    // 56-76 % of the sfx heard) comes down on all three paths together, at most LEVEL_PRIO_MAX_CUT_DB, so the priority
+    // voices keep their lead over the background (it is never cut less than they are)
+    const rest = g * g * N + P;
+    const gp = rest > T ? Math.max(Math.pow(10, -LEVEL_PRIO_MAX_CUT_DB / 20), Math.sqrt(T / rest)) : 1;
+    g = Math.max(floor, g * gp);
     const st = this.levStats;
     st.polls++;
     if (N + P > 1e-9) { st.prioShareSum += P / (N + P); st.prioSharePolls++; }
@@ -1204,17 +1215,21 @@ class Engine implements ValeAudioPort {
     if (cut > 3) st.cut3Polls++;
     st.maxCutDb = Math.max(st.maxCutDb, cut);
     st.sumCutDb += cut;
-    const tau = g < this.levGain ? LEVEL_ATTACK_S : LEVEL_RELEASE_S;
-    if (Math.abs(g - this.levGain) < 1e-4) return;
-    this.levGain = g;
-    const tk = Math.pow(10, this.sfxTrimDb / 20) * g;
-    for (const prm of [this.levSfx.gain, this.levThreat.gain]) { prm.cancelScheduledValues(now); prm.setTargetAtTime(tk, now, tau); }
+    const pcut = -20 * Math.log10(gp);
+    if (pcut > 0.1) st.prioCutPolls++;
+    st.sumPrioCutDb += pcut;
+    if (Math.abs(g - this.levGain) < 1e-4 && Math.abs(gp - this.levPrio) < 1e-4) return;
+    const tk = Math.pow(10, this.sfxTrimDb / 20);
+    const tau = (to: number, from: number): number => (to < from ? LEVEL_ATTACK_S : LEVEL_RELEASE_S);
+    for (const prm of [this.levSfx.gain, this.levThreat.gain]) { prm.cancelScheduledValues(now); prm.setTargetAtTime(tk * g, now, tau(g, this.levGain)); }
+    this.prioTrim.gain.cancelScheduledValues(now); this.prioTrim.gain.setTargetAtTime(tk * gp, now, tau(gp, this.levPrio));
+    this.levGain = g; this.levPrio = gp;
   }
 
   /** dev / probes: the leveller as it stands (its gain in dB, the mode trim) and the three sfx paths' post-leveller
    *  nodes the probes meter as the sfx heard before the ducks */
-  get leveller(): { gainDb: number; trimDb: number; taps: AudioNode[]; stats: Engine['levStats'] } | null {
-    return this.ctx ? { gainDb: 20 * Math.log10(this.levGain), trimDb: this.sfxTrimDb, taps: [this.levSfx, this.levThreat, this.prioTrim], stats: this.levStats } : null;
+  get leveller(): { gainDb: number; prioDb: number; trimDb: number; taps: AudioNode[]; stats: Engine['levStats'] } | null {
+    return this.ctx ? { gainDb: 20 * Math.log10(this.levGain), prioDb: 20 * Math.log10(this.levPrio), trimDb: this.sfxTrimDb, taps: [this.levSfx, this.levThreat, this.prioTrim], stats: this.levStats } : null;
   }
 
   /** dev / harness: the accessibility state as wired (mono channels, soften in the chain) */
