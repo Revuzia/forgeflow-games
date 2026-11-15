@@ -1,0 +1,6960 @@
+{
+ "pack": "orch1 visual evidence",
+ "collector": "EVIDENCE COLLECTOR (visual): collects and measures, does not judge",
+ "head": "e7858d1f5",
+ "build": "working tree of the branch at collection time, served by vite dev (catalog 2026.11.5), render bench _harness/web/render_bench.html",
+ "camera": "real game camera (map camera distance, free mode centred on the subject); canvas drawing buffer 1920x1080 at device scale 1; preset High unless the file says otherwise; dynamic resolution off",
+ "seed": 7,
+ "driver": "_harness/orch1_visual_pack.mjs (+ _harness/orch1_visual_post.py for crops, sheets, size cap)",
+ "size_cap": "1400000 bytes per PNG; over the cap a file is re-encoded as an adaptive palette PNG (field \"encode\"), never resized except contact/side-by-side sheets",
+ "files": [
+  {
+   "file": "map_bridge_t0062_span_centre.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 64.8,
+   "time": "01:04",
+   "kind": "map",
+   "what": "span centre (snap point)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    78,
+    22
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1086918
+  },
+  {
+   "file": "map_bridge_t0062_span_east.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 65.6,
+   "time": "01:05",
+   "kind": "map",
+   "what": "span east quarter",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    116,
+    22
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1142764
+  },
+  {
+   "file": "map_bridge_t0062_span_east_base.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 66.4,
+   "time": "01:06",
+   "kind": "map",
+   "what": "east base (team 1)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143,
+    22
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1294382
+  },
+  {
+   "file": "map_bridge_t0062_span_west.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 64,
+   "time": "01:04",
+   "kind": "map",
+   "what": "span west quarter",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    40,
+    22
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1049880
+  },
+  {
+   "file": "map_bridge_t0062_span_west_base.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 63.2,
+   "time": "01:03",
+   "kind": "map",
+   "what": "west base (team 0)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    13,
+    22
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1235518
+  },
+  {
+   "file": "map_bridge_t0304_span_centre.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 306.13,
+   "time": "05:06",
+   "kind": "map",
+   "what": "span centre (snap point)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    78,
+    22
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1037141
+  },
+  {
+   "file": "map_bridge_t0304_span_east.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 306.93,
+   "time": "05:06",
+   "kind": "map",
+   "what": "span east quarter",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    116,
+    22
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1113852
+  },
+  {
+   "file": "map_bridge_t0304_span_east_base.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 307.73,
+   "time": "05:07",
+   "kind": "map",
+   "what": "east base (team 1)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143,
+    22
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1293750
+  },
+  {
+   "file": "map_bridge_t0304_span_west.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 305.33,
+   "time": "05:05",
+   "kind": "map",
+   "what": "span west quarter",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    40,
+    22
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1050283
+  },
+  {
+   "file": "map_bridge_t0304_span_west_base.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 304.53,
+   "time": "05:04",
+   "kind": "map",
+   "what": "west base (team 0)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    13,
+    22
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1232896
+  },
+  {
+   "file": "map_bridge_t0725_span_centre.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 727.47,
+   "time": "12:07",
+   "kind": "map",
+   "what": "span centre (snap point)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    78,
+    22
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1126191
+  },
+  {
+   "file": "map_bridge_t0725_span_east.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 728.27,
+   "time": "12:08",
+   "kind": "map",
+   "what": "span east quarter",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    116,
+    22
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1135889
+  },
+  {
+   "file": "map_bridge_t0725_span_east_base.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 729.07,
+   "time": "12:09",
+   "kind": "map",
+   "what": "east base (team 1)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143,
+    22
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1288833
+  },
+  {
+   "file": "map_bridge_t0725_span_west.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 726.67,
+   "time": "12:06",
+   "kind": "map",
+   "what": "span west quarter",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    40,
+    22
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 817001
+  },
+  {
+   "file": "map_bridge_t0725_span_west_base.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 725.87,
+   "time": "12:05",
+   "kind": "map",
+   "what": "west base (team 0)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    13,
+    22
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1216113
+  },
+  {
+   "file": "map_fray_t0022_plate_centre.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 23.2,
+   "time": "00:23",
+   "kind": "map",
+   "what": "Noonplate centre",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    32,
+    32
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1187159
+  },
+  {
+   "file": "map_fray_t0022_plate_nw.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 24,
+   "time": "00:24",
+   "kind": "map",
+   "what": "Noonplate north-west quadrant",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    20,
+    20
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1051642
+  },
+  {
+   "file": "map_fray_t0022_plate_rim_w.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 25.6,
+   "time": "00:25",
+   "kind": "map",
+   "what": "Noonplate west rim",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    8,
+    32
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1067237
+  },
+  {
+   "file": "map_fray_t0022_plate_se.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 24.8,
+   "time": "00:24",
+   "kind": "map",
+   "what": "Noonplate south-east quadrant",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    44,
+    44
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1169763
+  },
+  {
+   "file": "map_fray_t0123_plate_centre.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 123.73,
+   "time": "02:03",
+   "kind": "map",
+   "what": "Noonplate centre",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    32,
+    32
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 935306
+  },
+  {
+   "file": "map_fray_t0123_plate_nw.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 124.53,
+   "time": "02:04",
+   "kind": "map",
+   "what": "Noonplate north-west quadrant",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    20,
+    20
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1081278
+  },
+  {
+   "file": "map_fray_t0123_plate_rim_w.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 126.13,
+   "time": "02:06",
+   "kind": "map",
+   "what": "Noonplate west rim",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    8,
+    32
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1059963
+  },
+  {
+   "file": "map_fray_t0123_plate_se.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 125.33,
+   "time": "02:05",
+   "kind": "map",
+   "what": "Noonplate south-east quadrant",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    44,
+    44
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1078336
+  },
+  {
+   "file": "map_fray_t0363_plate_centre.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 364.27,
+   "time": "06:04",
+   "kind": "map",
+   "what": "Noonplate centre",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    32,
+    32
+   ],
+   "ended": false,
+   "encode": "lossless",
+   "bytes": 1029022
+  },
+  {
+   "file": "map_fray_t0363_plate_nw.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 365.07,
+   "time": "06:05",
+   "kind": "map",
+   "what": "Noonplate north-west quadrant",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    20,
+    20
+   ],
+   "ended": false,
+   "encode": "lossless",
+   "bytes": 986717
+  },
+  {
+   "file": "map_fray_t0363_plate_rim_w.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 366.67,
+   "time": "06:06",
+   "kind": "map",
+   "what": "Noonplate west rim",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    8,
+    32
+   ],
+   "ended": false,
+   "encode": "lossless",
+   "bytes": 827181
+  },
+  {
+   "file": "map_fray_t0363_plate_se.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 365.87,
+   "time": "06:05",
+   "kind": "map",
+   "what": "Noonplate south-east quadrant",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    44,
+    44
+   ],
+   "ended": false,
+   "encode": "lossless",
+   "bytes": 951411
+  },
+  {
+   "file": "map_rift_t0154_base_aubade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 156.8,
+   "time": "02:36",
+   "kind": "map",
+   "what": "west base (team 0) fountain side",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    14.5,
+    55
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1220685
+  },
+  {
+   "file": "map_rift_t0154_base_serenade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 157.6,
+   "time": "02:37",
+   "kind": "map",
+   "what": "east base (team 1) fountain side",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    155.5,
+    55
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1323133
+  },
+  {
+   "file": "map_rift_t0154_jungle_a_glasshorn.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 158.4,
+   "time": "02:38",
+   "kind": "map",
+   "what": "jungle clearing a_glasshorn",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    61.6,
+    41.5
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1073557
+  },
+  {
+   "file": "map_rift_t0154_jungle_a_resinback.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 159.2,
+   "time": "02:39",
+   "kind": "map",
+   "what": "jungle clearing a_resinback",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    64.3,
+    85.1
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1089431
+  },
+  {
+   "file": "map_rift_t0154_jungle_s_gloamoths.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 160.8,
+   "time": "02:40",
+   "kind": "map",
+   "what": "jungle clearing s_gloamoths",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    105.7,
+    24.9
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1173852
+  },
+  {
+   "file": "map_rift_t0154_jungle_s_stilltusks.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 160,
+   "time": "02:40",
+   "kind": "map",
+   "what": "jungle clearing s_stilltusks",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    108.4,
+    68.5
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1192444
+  },
+  {
+   "file": "map_rift_t0154_lane_high.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 154.4,
+   "time": "02:34",
+   "kind": "map",
+   "what": "North Road (road_high) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    57.6,
+    13.5
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1072704
+  },
+  {
+   "file": "map_rift_t0154_lane_low.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 156,
+   "time": "02:36",
+   "kind": "map",
+   "what": "South Road (road_low) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    57.6,
+    96.5
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1062488
+  },
+  {
+   "file": "map_rift_t0154_lane_seat.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 155.2,
+   "time": "02:35",
+   "kind": "map",
+   "what": "Mid Road (road_seat) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    55,
+    55
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1062130
+  },
+  {
+   "file": "map_rift_t0154_pit_longshade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 163.2,
+   "time": "02:43",
+   "kind": "map",
+   "what": "objective pit longshade",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    31
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1247050
+  },
+  {
+   "file": "map_rift_t0154_pit_sunsplinter.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 164,
+   "time": "02:44",
+   "kind": "map",
+   "what": "objective pit sunsplinter",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    80
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1114726
+  },
+  {
+   "file": "map_rift_t0154_river_north.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 161.6,
+   "time": "02:41",
+   "kind": "map",
+   "what": "river (Noonline) north of mid",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    43
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 967208
+  },
+  {
+   "file": "map_rift_t0154_river_south.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 162.4,
+   "time": "02:42",
+   "kind": "map",
+   "what": "river (Noonline) south of mid",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    67
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 859884
+  },
+  {
+   "file": "map_rift_t0481_base_aubade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 484.53,
+   "time": "08:04",
+   "kind": "map",
+   "what": "west base (team 0) fountain side",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    14.5,
+    55
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1223887
+  },
+  {
+   "file": "map_rift_t0481_base_serenade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 485.33,
+   "time": "08:05",
+   "kind": "map",
+   "what": "east base (team 1) fountain side",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    155.5,
+    55
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1315053
+  },
+  {
+   "file": "map_rift_t0481_jungle_a_glasshorn.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 486.13,
+   "time": "08:06",
+   "kind": "map",
+   "what": "jungle clearing a_glasshorn",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    61.6,
+    41.5
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1061516
+  },
+  {
+   "file": "map_rift_t0481_jungle_a_resinback.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 486.93,
+   "time": "08:06",
+   "kind": "map",
+   "what": "jungle clearing a_resinback",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    64.3,
+    85.1
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1123786
+  },
+  {
+   "file": "map_rift_t0481_jungle_s_gloamoths.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 488.53,
+   "time": "08:08",
+   "kind": "map",
+   "what": "jungle clearing s_gloamoths",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    105.7,
+    24.9
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1209032
+  },
+  {
+   "file": "map_rift_t0481_jungle_s_stilltusks.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 487.73,
+   "time": "08:07",
+   "kind": "map",
+   "what": "jungle clearing s_stilltusks",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    108.4,
+    68.5
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1160503
+  },
+  {
+   "file": "map_rift_t0481_lane_high.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 482.13,
+   "time": "08:02",
+   "kind": "map",
+   "what": "North Road (road_high) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    57.6,
+    13.5
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1074807
+  },
+  {
+   "file": "map_rift_t0481_lane_low.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 483.73,
+   "time": "08:03",
+   "kind": "map",
+   "what": "South Road (road_low) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    57.6,
+    96.5
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1058788
+  },
+  {
+   "file": "map_rift_t0481_lane_seat.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 482.93,
+   "time": "08:02",
+   "kind": "map",
+   "what": "Mid Road (road_seat) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    55,
+    55
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1027137
+  },
+  {
+   "file": "map_rift_t0481_pit_longshade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 490.93,
+   "time": "08:10",
+   "kind": "map",
+   "what": "objective pit longshade",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    31
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1252689
+  },
+  {
+   "file": "map_rift_t0481_pit_sunsplinter.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 491.73,
+   "time": "08:11",
+   "kind": "map",
+   "what": "objective pit sunsplinter",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    80
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 931733
+  },
+  {
+   "file": "map_rift_t0481_river_north.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 489.33,
+   "time": "08:09",
+   "kind": "map",
+   "what": "river (Noonline) north of mid",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    43
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 947510
+  },
+  {
+   "file": "map_rift_t0481_river_south.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 490.13,
+   "time": "08:10",
+   "kind": "map",
+   "what": "river (Noonline) south of mid",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    67
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 830279
+  },
+  {
+   "file": "map_rift_t0965_base_aubade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 968.27,
+   "time": "16:08",
+   "kind": "map",
+   "what": "west base (team 0) fountain side",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    14.5,
+    55
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1223374
+  },
+  {
+   "file": "map_rift_t0965_base_serenade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 969.07,
+   "time": "16:09",
+   "kind": "map",
+   "what": "east base (team 1) fountain side",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    155.5,
+    55
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1315330
+  },
+  {
+   "file": "map_rift_t0965_jungle_a_glasshorn.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 969.87,
+   "time": "16:09",
+   "kind": "map",
+   "what": "jungle clearing a_glasshorn",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    61.6,
+    41.5
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1056588
+  },
+  {
+   "file": "map_rift_t0965_jungle_a_resinback.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 970.67,
+   "time": "16:10",
+   "kind": "map",
+   "what": "jungle clearing a_resinback",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    64.3,
+    85.1
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1203266
+  },
+  {
+   "file": "map_rift_t0965_jungle_s_gloamoths.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 972.27,
+   "time": "16:12",
+   "kind": "map",
+   "what": "jungle clearing s_gloamoths",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    105.7,
+    24.9
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1152755
+  },
+  {
+   "file": "map_rift_t0965_jungle_s_stilltusks.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 971.47,
+   "time": "16:11",
+   "kind": "map",
+   "what": "jungle clearing s_stilltusks",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    108.4,
+    68.5
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1181135
+  },
+  {
+   "file": "map_rift_t0965_lane_high.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 965.87,
+   "time": "16:05",
+   "kind": "map",
+   "what": "North Road (road_high) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    57.6,
+    13.5
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1095602
+  },
+  {
+   "file": "map_rift_t0965_lane_low.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 967.47,
+   "time": "16:07",
+   "kind": "map",
+   "what": "South Road (road_low) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    57.6,
+    96.5
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1024155
+  },
+  {
+   "file": "map_rift_t0965_lane_seat.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 966.67,
+   "time": "16:06",
+   "kind": "map",
+   "what": "Mid Road (road_seat) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    55,
+    55
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1044427
+  },
+  {
+   "file": "map_rift_t0965_pit_longshade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 974.67,
+   "time": "16:14",
+   "kind": "map",
+   "what": "objective pit longshade",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    31
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1250003
+  },
+  {
+   "file": "map_rift_t0965_pit_sunsplinter.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 975.47,
+   "time": "16:15",
+   "kind": "map",
+   "what": "objective pit sunsplinter",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    80
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 1110884
+  },
+  {
+   "file": "map_rift_t0965_river_north.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 973.07,
+   "time": "16:13",
+   "kind": "map",
+   "what": "river (Noonline) north of mid",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    43
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 962658
+  },
+  {
+   "file": "map_rift_t0965_river_south.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 973.87,
+   "time": "16:13",
+   "kind": "map",
+   "what": "river (Noonline) south of mid",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    67
+   ],
+   "ended": false,
+   "encode": "palette256",
+   "bytes": 834354
+  },
+  {
+   "file": "clash_mid_lane_1.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 114.3,
+   "time": "01:54",
+   "kind": "minion_clash",
+   "what": "mid-lane minion clash (17 Wicks within 6 m, 2 fighters within 14 m), frame 1 of 3 half a second apart",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    93,
+    54.8
+   ],
+   "encode": "palette256",
+   "bytes": 1041010
+  },
+  {
+   "file": "clash_mid_lane_2.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 115.03,
+   "time": "01:55",
+   "kind": "minion_clash",
+   "what": "mid-lane minion clash (17 Wicks within 6 m, 2 fighters within 14 m), frame 2 of 3 half a second apart",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    93,
+    54.8
+   ],
+   "encode": "palette256",
+   "bytes": 1062851
+  },
+  {
+   "file": "clash_mid_lane_3.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 115.77,
+   "time": "01:55",
+   "kind": "minion_clash",
+   "what": "mid-lane minion clash (17 Wicks within 6 m, 2 fighters within 14 m), frame 3 of 3 half a second apart",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    93,
+    54.8
+   ],
+   "encode": "palette256",
+   "bytes": 1061287
+  },
+  {
+   "file": "quality_teamfight_high.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 835.17,
+   "time": "13:55",
+   "kind": "teamfight",
+   "map": "rift",
+   "world": [
+    87.7,
+    98.1
+   ],
+   "fighters_team0": 2,
+   "fighters_team1": 2,
+   "vfx_actors": 70,
+   "particles": 543,
+   "telegraphs": 1,
+   "what": "the same teamfight peak frame on the high preset",
+   "quality": "high",
+   "stats": {
+    "calls": 188,
+    "triangles": 311749,
+    "scale": 1,
+    "w": 1920,
+    "h": 1080
+   },
+   "encode": "palette256",
+   "bytes": 873547
+  },
+  {
+   "file": "quality_teamfight_low.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 835.17,
+   "time": "13:55",
+   "kind": "teamfight",
+   "map": "rift",
+   "world": [
+    87.7,
+    98.1
+   ],
+   "fighters_team0": 2,
+   "fighters_team1": 2,
+   "vfx_actors": 70,
+   "particles": 543,
+   "telegraphs": 1,
+   "what": "the same teamfight peak frame on the low preset",
+   "quality": "low",
+   "stats": {
+    "calls": 152,
+    "triangles": 233068,
+    "scale": 0.75,
+    "w": 1440,
+    "h": 810
+   },
+   "encode": "palette256",
+   "bytes": 524861
+  },
+  {
+   "file": "quality_teamfight_ultra.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 835.17,
+   "time": "13:55",
+   "kind": "teamfight",
+   "map": "rift",
+   "world": [
+    87.7,
+    98.1
+   ],
+   "fighters_team0": 2,
+   "fighters_team1": 2,
+   "vfx_actors": 70,
+   "particles": 543,
+   "telegraphs": 1,
+   "what": "the same teamfight peak frame on the ultra preset",
+   "quality": "ultra",
+   "stats": {
+    "calls": 188,
+    "triangles": 317763,
+    "scale": 1,
+    "w": 1920,
+    "h": 1080
+   },
+   "encode": "palette256",
+   "bytes": 872790
+  },
+  {
+   "file": "teamfight_rift_after.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 836.67,
+   "time": "13:56",
+   "kind": "teamfight",
+   "map": "rift",
+   "world": [
+    87.7,
+    98.1
+   ],
+   "fighters_team0": 2,
+   "fighters_team1": 2,
+   "vfx_actors": 70,
+   "particles": 543,
+   "telegraphs": 1,
+   "what": "5v5 teamfight, one and a half seconds after the peak",
+   "quality": "high",
+   "encode": "palette256",
+   "bytes": 541584
+  },
+  {
+   "file": "teamfight_rift_lead.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 833.67,
+   "time": "13:53",
+   "kind": "teamfight",
+   "map": "rift",
+   "world": [
+    87.7,
+    98.1
+   ],
+   "fighters_team0": 2,
+   "fighters_team1": 2,
+   "vfx_actors": 70,
+   "particles": 543,
+   "telegraphs": 1,
+   "what": "5v5 teamfight, one and a half seconds before the peak",
+   "quality": "high",
+   "encode": "palette256",
+   "bytes": 613178
+  },
+  {
+   "file": "teamfight_rift_peak.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 835.17,
+   "time": "13:55",
+   "kind": "teamfight",
+   "map": "rift",
+   "world": [
+    87.7,
+    98.1
+   ],
+   "fighters_team0": 2,
+   "fighters_team1": 2,
+   "vfx_actors": 70,
+   "particles": 543,
+   "telegraphs": 1,
+   "what": "5v5 teamfight, peak ability/VFX frame",
+   "quality": "high",
+   "encode": "palette256",
+   "bytes": 493884
+  },
+  {
+   "file": "quality_base_aubade_high.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 838.5,
+   "time": "13:58",
+   "kind": "quality",
+   "what": "base_aubade at the game camera on the high preset (a still taken 20 frames after the camera moved)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    14.5,
+    55
+   ],
+   "stats": {
+    "calls": 158,
+    "triangles": 124894,
+    "scale": 1
+   },
+   "encode": "palette256",
+   "bytes": 1214995
+  },
+  {
+   "file": "quality_base_aubade_low.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 837.83,
+   "time": "13:57",
+   "kind": "quality",
+   "what": "base_aubade at the game camera on the low preset (a still taken 20 frames after the camera moved)",
+   "map": "rift",
+   "quality": "low",
+   "world": [
+    14.5,
+    55
+   ],
+   "stats": {
+    "calls": 126,
+    "triangles": 107808,
+    "scale": 0.75
+   },
+   "encode": "palette256",
+   "bytes": 649623
+  },
+  {
+   "file": "quality_base_aubade_ultra.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 839.17,
+   "time": "13:59",
+   "kind": "quality",
+   "what": "base_aubade at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
+   "map": "rift",
+   "quality": "ultra",
+   "world": [
+    14.5,
+    55
+   ],
+   "stats": {
+    "calls": 158,
+    "triangles": 124450,
+    "scale": 1
+   },
+   "encode": "palette256",
+   "bytes": 1219374
+  },
+  {
+   "file": "quality_jungle_glasshorn_high.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 840.5,
+   "time": "14:00",
+   "kind": "quality",
+   "what": "jungle_glasshorn at the game camera on the high preset (a still taken 20 frames after the camera moved)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    61.6,
+    41.5
+   ],
+   "stats": {
+    "calls": 133,
+    "triangles": 185021,
+    "scale": 1
+   },
+   "encode": "palette256",
+   "bytes": 1063990
+  },
+  {
+   "file": "quality_jungle_glasshorn_low.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 839.83,
+   "time": "13:59",
+   "kind": "quality",
+   "what": "jungle_glasshorn at the game camera on the low preset (a still taken 20 frames after the camera moved)",
+   "map": "rift",
+   "quality": "low",
+   "world": [
+    61.6,
+    41.5
+   ],
+   "stats": {
+    "calls": 100,
+    "triangles": 97374,
+    "scale": 0.75
+   },
+   "encode": "palette256",
+   "bytes": 647826
+  },
+  {
+   "file": "quality_jungle_glasshorn_ultra.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 841.17,
+   "time": "14:01",
+   "kind": "quality",
+   "what": "jungle_glasshorn at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
+   "map": "rift",
+   "quality": "ultra",
+   "world": [
+    61.6,
+    41.5
+   ],
+   "stats": {
+    "calls": 133,
+    "triangles": 185601,
+    "scale": 1
+   },
+   "encode": "palette256",
+   "bytes": 1062072
+  },
+  {
+   "file": "quality_river_mid_high.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 836.5,
+   "time": "13:56",
+   "kind": "quality",
+   "what": "river_mid at the game camera on the high preset (a still taken 20 frames after the camera moved)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    55
+   ],
+   "stats": {
+    "calls": 190,
+    "triangles": 281141,
+    "scale": 1
+   },
+   "encode": "palette256",
+   "bytes": 1066781
+  },
+  {
+   "file": "quality_river_mid_low.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 835.83,
+   "time": "13:55",
+   "kind": "quality",
+   "what": "river_mid at the game camera on the low preset (a still taken 20 frames after the camera moved)",
+   "map": "rift",
+   "quality": "low",
+   "world": [
+    85,
+    55
+   ],
+   "stats": {
+    "calls": 142,
+    "triangles": 195709,
+    "scale": 0.75
+   },
+   "encode": "palette256",
+   "bytes": 597053
+  },
+  {
+   "file": "quality_river_mid_ultra.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 837.17,
+   "time": "13:57",
+   "kind": "quality",
+   "what": "river_mid at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
+   "map": "rift",
+   "quality": "ultra",
+   "world": [
+    85,
+    55
+   ],
+   "stats": {
+    "calls": 188,
+    "triangles": 278137,
+    "scale": 1
+   },
+   "encode": "palette256",
+   "bytes": 1072107
+  },
+  {
+   "file": "colorblind_teamfight_deutan_peak.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 835.17,
+   "time": "13:55",
+   "kind": "colorblind",
+   "what": "the teamfight peak frame with the deutan colour-blind mode (identical sim frame as teamfight_rift_peak.png)",
+   "map": "rift",
+   "quality": "high",
+   "colorblind": "deutan",
+   "world": [
+    87.7,
+    98.1
+   ],
+   "encode": "palette256",
+   "bytes": 500750
+  },
+  {
+   "file": "colorblind_teamfight_protan_peak.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 835.17,
+   "time": "13:55",
+   "kind": "colorblind",
+   "what": "the teamfight peak frame with the protan colour-blind mode (identical sim frame as teamfight_rift_peak.png)",
+   "map": "rift",
+   "quality": "high",
+   "colorblind": "protan",
+   "world": [
+    87.7,
+    98.1
+   ],
+   "encode": "palette256",
+   "bytes": 503130
+  },
+  {
+   "file": "colorblind_teamfight_tritan_peak.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 835.17,
+   "time": "13:55",
+   "kind": "colorblind",
+   "what": "the teamfight peak frame with the tritan colour-blind mode (identical sim frame as teamfight_rift_peak.png)",
+   "map": "rift",
+   "quality": "high",
+   "colorblind": "tritan",
+   "world": [
+    87.7,
+    98.1
+   ],
+   "encode": "palette256",
+   "bytes": 495980
+  },
+  {
+   "file": "fighter_ardit_game_frame.png",
+   "what": "ardit base skin in a real match at the game camera, full frame",
+   "kind": "fighter_frame",
+   "fighter": "ardit",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 31.77,
+   "time": "00:31",
+   "quality": "high",
+   "width": 1920,
+   "height": 1080,
+   "encode": "palette256",
+   "bytes": 1025418
+  },
+  {
+   "file": "fighter_burdam_game_frame.png",
+   "what": "burdam base skin in a real match at the game camera, full frame",
+   "kind": "fighter_frame",
+   "fighter": "burdam",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 33.17,
+   "time": "00:33",
+   "quality": "high",
+   "width": 1920,
+   "height": 1080,
+   "encode": "palette256",
+   "bytes": 1144195
+  },
+  {
+   "file": "fighter_dunsom_game_frame.png",
+   "what": "dunsom base skin in a real match at the game camera, full frame",
+   "kind": "fighter_frame",
+   "fighter": "dunsom",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 34.57,
+   "time": "00:34",
+   "quality": "high",
+   "width": 1920,
+   "height": 1080,
+   "encode": "palette256",
+   "bytes": 1065908
+  },
+  {
+   "file": "fighter_ervet_game_frame.png",
+   "what": "ervet base skin in a real match at the game camera, full frame",
+   "kind": "fighter_frame",
+   "fighter": "ervet",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 35.97,
+   "time": "00:35",
+   "quality": "high",
+   "width": 1920,
+   "height": 1080,
+   "encode": "palette256",
+   "bytes": 1134285
+  },
+  {
+   "file": "fighter_hesmi_game_frame.png",
+   "what": "hesmi base skin in a real match at the game camera, full frame",
+   "kind": "fighter_frame",
+   "fighter": "hesmi",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 37.37,
+   "time": "00:37",
+   "quality": "high",
+   "width": 1920,
+   "height": 1080,
+   "encode": "palette256",
+   "bytes": 1134297
+  },
+  {
+   "file": "fighter_ilsheta_game_frame.png",
+   "what": "ilsheta base skin in a real match at the game camera, full frame",
+   "kind": "fighter_frame",
+   "fighter": "ilsheta",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 38.77,
+   "time": "00:38",
+   "quality": "high",
+   "width": 1920,
+   "height": 1080,
+   "encode": "palette256",
+   "bytes": 1220675
+  },
+  {
+   "file": "fighter_kemdo_game_frame.png",
+   "what": "kemdo base skin in a real match at the game camera, full frame",
+   "kind": "fighter_frame",
+   "fighter": "kemdo",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 40.17,
+   "time": "00:40",
+   "quality": "high",
+   "width": 1920,
+   "height": 1080,
+   "encode": "palette256",
+   "bytes": 1275544
+  },
+  {
+   "file": "fighter_lisvel_game_frame.png",
+   "what": "lisvel base skin in a real match at the game camera, full frame",
+   "kind": "fighter_frame",
+   "fighter": "lisvel",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 41.57,
+   "time": "00:41",
+   "quality": "high",
+   "width": 1920,
+   "height": 1080,
+   "encode": "palette256",
+   "bytes": 1136243
+  },
+  {
+   "file": "fighter_marund_game_frame.png",
+   "what": "marund base skin in a real match at the game camera, full frame",
+   "kind": "fighter_frame",
+   "fighter": "marund",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 31.77,
+   "time": "00:31",
+   "quality": "high",
+   "width": 1920,
+   "height": 1080,
+   "encode": "palette256",
+   "bytes": 1035984
+  },
+  {
+   "file": "fighter_nurrow_game_frame.png",
+   "what": "nurrow base skin in a real match at the game camera, full frame",
+   "kind": "fighter_frame",
+   "fighter": "nurrow",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 33.17,
+   "time": "00:33",
+   "quality": "high",
+   "width": 1920,
+   "height": 1080,
+   "encode": "palette256",
+   "bytes": 1150702
+  },
+  {
+   "file": "fighter_odrum_game_frame.png",
+   "what": "odrum base skin in a real match at the game camera, full frame",
+   "kind": "fighter_frame",
+   "fighter": "odrum",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 34.57,
+   "time": "00:34",
+   "quality": "high",
+   "width": 1920,
+   "height": 1080,
+   "encode": "palette256",
+   "bytes": 1071496
+  },
+  {
+   "file": "fighter_rishal_game_frame.png",
+   "what": "rishal base skin in a real match at the game camera, full frame",
+   "kind": "fighter_frame",
+   "fighter": "rishal",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 35.97,
+   "time": "00:35",
+   "quality": "high",
+   "width": 1920,
+   "height": 1080,
+   "encode": "palette256",
+   "bytes": 1131443
+  },
+  {
+   "file": "fighter_sukri_game_frame.png",
+   "what": "sukri base skin in a real match at the game camera, full frame",
+   "kind": "fighter_frame",
+   "fighter": "sukri",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 37.37,
+   "time": "00:37",
+   "quality": "high",
+   "width": 1920,
+   "height": 1080,
+   "encode": "palette256",
+   "bytes": 1148231
+  },
+  {
+   "file": "fighter_tunlan_game_frame.png",
+   "what": "tunlan base skin in a real match at the game camera, full frame",
+   "kind": "fighter_frame",
+   "fighter": "tunlan",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 38.77,
+   "time": "00:38",
+   "quality": "high",
+   "width": 1920,
+   "height": 1080,
+   "encode": "palette256",
+   "bytes": 1223706
+  },
+  {
+   "file": "fighter_ulkro_game_frame.png",
+   "what": "ulkro base skin in a real match at the game camera, full frame",
+   "kind": "fighter_frame",
+   "fighter": "ulkro",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 40.17,
+   "time": "00:40",
+   "quality": "high",
+   "width": 1920,
+   "height": 1080,
+   "encode": "palette256",
+   "bytes": 1267930
+  },
+  {
+   "file": "fighter_vashil_game_frame.png",
+   "what": "vashil base skin in a real match at the game camera, full frame",
+   "kind": "fighter_frame",
+   "fighter": "vashil",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 41.57,
+   "time": "00:41",
+   "quality": "high",
+   "width": 1920,
+   "height": 1080,
+   "encode": "palette256",
+   "bytes": 1138674
+  },
+  {
+   "file": "fighter_ardit_close_crop.png",
+   "what": "ardit base skin, closest game camera, native-pixel 900x900 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "ardit",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 32.47,
+   "time": "00:32",
+   "quality": "high",
+   "width": 900,
+   "height": 900,
+   "crop_origin": [
+    499,
+    30
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 1047968
+  },
+  {
+   "file": "fighter_ardit_game_crop.png",
+   "what": "ardit base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "ardit",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 31.77,
+   "time": "00:31",
+   "quality": "high",
+   "width": 520,
+   "height": 520,
+   "crop_origin": [
+    693,
+    237
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 401652
+  },
+  {
+   "file": "fighter_burdam_close_crop.png",
+   "what": "burdam base skin, closest game camera, native-pixel 900x900 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "burdam",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 33.87,
+   "time": "00:33",
+   "quality": "high",
+   "width": 900,
+   "height": 900,
+   "crop_origin": [
+    509,
+    29
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 970071
+  },
+  {
+   "file": "fighter_burdam_game_crop.png",
+   "what": "burdam base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "burdam",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 33.17,
+   "time": "00:33",
+   "quality": "high",
+   "width": 520,
+   "height": 520,
+   "crop_origin": [
+    699,
+    232
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 339394
+  },
+  {
+   "file": "fighter_dunsom_close_crop.png",
+   "what": "dunsom base skin, closest game camera, native-pixel 900x900 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "dunsom",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 35.27,
+   "time": "00:35",
+   "quality": "high",
+   "width": 900,
+   "height": 900,
+   "crop_origin": [
+    498,
+    29
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 1034059
+  },
+  {
+   "file": "fighter_dunsom_game_crop.png",
+   "what": "dunsom base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "dunsom",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 34.57,
+   "time": "00:34",
+   "quality": "high",
+   "width": 520,
+   "height": 520,
+   "crop_origin": [
+    691,
+    232
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 362186
+  },
+  {
+   "file": "fighter_ervet_close_crop.png",
+   "what": "ervet base skin, closest game camera, native-pixel 900x900 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "ervet",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 36.67,
+   "time": "00:36",
+   "quality": "high",
+   "width": 900,
+   "height": 900,
+   "crop_origin": [
+    498,
+    27
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 1018415
+  },
+  {
+   "file": "fighter_ervet_game_crop.png",
+   "what": "ervet base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "ervet",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 35.97,
+   "time": "00:35",
+   "quality": "high",
+   "width": 520,
+   "height": 520,
+   "crop_origin": [
+    691,
+    230
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 372142
+  },
+  {
+   "file": "fighter_hesmi_close_crop.png",
+   "what": "hesmi base skin, closest game camera, native-pixel 900x900 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "hesmi",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 38.07,
+   "time": "00:38",
+   "quality": "high",
+   "width": 900,
+   "height": 900,
+   "crop_origin": [
+    499,
+    26
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 1044591
+  },
+  {
+   "file": "fighter_hesmi_game_crop.png",
+   "what": "hesmi base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "hesmi",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 37.37,
+   "time": "00:37",
+   "quality": "high",
+   "width": 520,
+   "height": 520,
+   "crop_origin": [
+    691,
+    230
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 380709
+  },
+  {
+   "file": "fighter_ilsheta_close_crop.png",
+   "what": "ilsheta base skin, closest game camera, native-pixel 900x900 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "ilsheta",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 39.47,
+   "time": "00:39",
+   "quality": "high",
+   "width": 900,
+   "height": 900,
+   "crop_origin": [
+    520,
+    31
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 794696
+  },
+  {
+   "file": "fighter_ilsheta_game_crop.png",
+   "what": "ilsheta base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "ilsheta",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 38.77,
+   "time": "00:38",
+   "quality": "high",
+   "width": 520,
+   "height": 520,
+   "crop_origin": [
+    708,
+    234
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 262448
+  },
+  {
+   "file": "fighter_kemdo_close_crop.png",
+   "what": "kemdo base skin, closest game camera, native-pixel 900x900 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "kemdo",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 40.87,
+   "time": "00:40",
+   "quality": "high",
+   "width": 900,
+   "height": 900,
+   "crop_origin": [
+    509,
+    29
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 734816
+  },
+  {
+   "file": "fighter_kemdo_game_crop.png",
+   "what": "kemdo base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "kemdo",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 40.17,
+   "time": "00:40",
+   "quality": "high",
+   "width": 520,
+   "height": 520,
+   "crop_origin": [
+    699,
+    232
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 255135
+  },
+  {
+   "file": "fighter_lisvel_close_crop.png",
+   "what": "lisvel base skin, closest game camera, native-pixel 900x900 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "lisvel",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 42.27,
+   "time": "00:42",
+   "quality": "high",
+   "width": 900,
+   "height": 900,
+   "crop_origin": [
+    498,
+    29
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 771286
+  },
+  {
+   "file": "fighter_lisvel_game_crop.png",
+   "what": "lisvel base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "lisvel",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 41.57,
+   "time": "00:41",
+   "quality": "high",
+   "width": 520,
+   "height": 520,
+   "crop_origin": [
+    691,
+    232
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 245331
+  },
+  {
+   "file": "fighter_marund_close_crop.png",
+   "what": "marund base skin, closest game camera, native-pixel 900x900 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "marund",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 32.47,
+   "time": "00:32",
+   "quality": "high",
+   "width": 900,
+   "height": 900,
+   "crop_origin": [
+    499,
+    30
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 1044391
+  },
+  {
+   "file": "fighter_marund_game_crop.png",
+   "what": "marund base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "marund",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 31.77,
+   "time": "00:31",
+   "quality": "high",
+   "width": 520,
+   "height": 520,
+   "crop_origin": [
+    693,
+    237
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 402030
+  },
+  {
+   "file": "fighter_nurrow_close_crop.png",
+   "what": "nurrow base skin, closest game camera, native-pixel 900x900 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "nurrow",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 33.87,
+   "time": "00:33",
+   "quality": "high",
+   "width": 900,
+   "height": 900,
+   "crop_origin": [
+    509,
+    29
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 966264
+  },
+  {
+   "file": "fighter_nurrow_game_crop.png",
+   "what": "nurrow base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "nurrow",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 33.17,
+   "time": "00:33",
+   "quality": "high",
+   "width": 520,
+   "height": 520,
+   "crop_origin": [
+    699,
+    232
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 336371
+  },
+  {
+   "file": "fighter_odrum_close_crop.png",
+   "what": "odrum base skin, closest game camera, native-pixel 900x900 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "odrum",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 35.27,
+   "time": "00:35",
+   "quality": "high",
+   "width": 900,
+   "height": 900,
+   "crop_origin": [
+    498,
+    29
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 1026327
+  },
+  {
+   "file": "fighter_odrum_game_crop.png",
+   "what": "odrum base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "odrum",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 34.57,
+   "time": "00:34",
+   "quality": "high",
+   "width": 520,
+   "height": 520,
+   "crop_origin": [
+    691,
+    232
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 365416
+  },
+  {
+   "file": "fighter_rishal_close_crop.png",
+   "what": "rishal base skin, closest game camera, native-pixel 900x900 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "rishal",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 36.67,
+   "time": "00:36",
+   "quality": "high",
+   "width": 900,
+   "height": 900,
+   "crop_origin": [
+    498,
+    27
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 1010195
+  },
+  {
+   "file": "fighter_rishal_game_crop.png",
+   "what": "rishal base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "rishal",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 35.97,
+   "time": "00:35",
+   "quality": "high",
+   "width": 520,
+   "height": 520,
+   "crop_origin": [
+    691,
+    230
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 362659
+  },
+  {
+   "file": "fighter_sukri_close_crop.png",
+   "what": "sukri base skin, closest game camera, native-pixel 900x900 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "sukri",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 38.07,
+   "time": "00:38",
+   "quality": "high",
+   "width": 900,
+   "height": 900,
+   "crop_origin": [
+    499,
+    26
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 1035928
+  },
+  {
+   "file": "fighter_sukri_game_crop.png",
+   "what": "sukri base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "sukri",
+   "team": 0,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 37.37,
+   "time": "00:37",
+   "quality": "high",
+   "width": 520,
+   "height": 520,
+   "crop_origin": [
+    691,
+    230
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 384277
+  },
+  {
+   "file": "fighter_tunlan_close_crop.png",
+   "what": "tunlan base skin, closest game camera, native-pixel 900x900 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "tunlan",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 39.47,
+   "time": "00:39",
+   "quality": "high",
+   "width": 900,
+   "height": 900,
+   "crop_origin": [
+    520,
+    31
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 792444
+  },
+  {
+   "file": "fighter_tunlan_game_crop.png",
+   "what": "tunlan base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "tunlan",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 38.77,
+   "time": "00:38",
+   "quality": "high",
+   "width": 520,
+   "height": 520,
+   "crop_origin": [
+    708,
+    234
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 263050
+  },
+  {
+   "file": "fighter_ulkro_close_crop.png",
+   "what": "ulkro base skin, closest game camera, native-pixel 900x900 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "ulkro",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 40.87,
+   "time": "00:40",
+   "quality": "high",
+   "width": 900,
+   "height": 900,
+   "crop_origin": [
+    510,
+    29
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 732370
+  },
+  {
+   "file": "fighter_ulkro_game_crop.png",
+   "what": "ulkro base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "ulkro",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 40.17,
+   "time": "00:40",
+   "quality": "high",
+   "width": 520,
+   "height": 520,
+   "crop_origin": [
+    700,
+    232
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 255750
+  },
+  {
+   "file": "fighter_vashil_close_crop.png",
+   "what": "vashil base skin, closest game camera, native-pixel 900x900 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "vashil",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 42.27,
+   "time": "00:42",
+   "quality": "high",
+   "width": 900,
+   "height": 900,
+   "crop_origin": [
+    498,
+    29
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 781152
+  },
+  {
+   "file": "fighter_vashil_game_crop.png",
+   "what": "vashil base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
+   "kind": "fighter_crop",
+   "fighter": "vashil",
+   "team": 1,
+   "map": "rift",
+   "seed": 7,
+   "time_s": 41.57,
+   "time": "00:41",
+   "quality": "high",
+   "width": 520,
+   "height": 520,
+   "crop_origin": [
+    691,
+    232
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 248663
+  },
+  {
+   "file": "contact_fighters_close.png",
+   "what": "contact sheet of all 16 fighters, base skin, closest camera, 4x4 grid of 480px cells (crops downscaled to 480px), labelled with the fighter id (sheet downscaled to 75% to fit the size cap)",
+   "kind": "contact_sheet",
+   "fighters": [
+    "ardit",
+    "burdam",
+    "dunsom",
+    "ervet",
+    "hesmi",
+    "ilsheta",
+    "kemdo",
+    "lisvel",
+    "marund",
+    "nurrow",
+    "odrum",
+    "rishal",
+    "sukri",
+    "tunlan",
+    "ulkro",
+    "vashil"
+   ],
+   "map": "rift",
+   "quality": "high",
+   "width": 1440,
+   "height": 1524,
+   "encode": "resized to 75%, palette192",
+   "bytes": 1338622
+  },
+  {
+   "file": "contact_fighters_game.png",
+   "what": "contact sheet of all 16 fighters, base skin, game camera, 4x4 grid of 480px cells (crops downscaled to 480px), labelled with the fighter id (sheet downscaled to 75% to fit the size cap)",
+   "kind": "contact_sheet",
+   "fighters": [
+    "ardit",
+    "burdam",
+    "dunsom",
+    "ervet",
+    "hesmi",
+    "ilsheta",
+    "kemdo",
+    "lisvel",
+    "marund",
+    "nurrow",
+    "odrum",
+    "rishal",
+    "sukri",
+    "tunlan",
+    "ulkro",
+    "vashil"
+   ],
+   "map": "rift",
+   "quality": "high",
+   "width": 1440,
+   "height": 1524,
+   "encode": "resized to 75%, palette256",
+   "bytes": 1378062
+  },
+  {
+   "file": "structure_bridge_hourbell_team0_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 15,
+   "team": 0,
+   "stage": "collapse_037",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    12.5,
+    22
+   ],
+   "what": "hourbell team 0 0.37 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 539329
+  },
+  {
+   "file": "structure_bridge_hourbell_team0_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 15,
+   "team": 0,
+   "stage": "collapse_107",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    12.5,
+    22
+   ],
+   "what": "hourbell team 0 1.07 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 529796
+  },
+  {
+   "file": "structure_bridge_hourbell_team0_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 15,
+   "team": 0,
+   "stage": "collapse_240",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    12.5,
+    22
+   ],
+   "what": "hourbell team 0 2.40 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 489271
+  },
+  {
+   "file": "structure_bridge_hourbell_team0_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 16.57,
+   "time": "00:16",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 15,
+   "team": 0,
+   "stage": "hp100",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    12.5,
+    22
+   ],
+   "hp_fraction": 1,
+   "what": "hourbell team 0 at 100 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 689685
+  },
+  {
+   "file": "structure_bridge_hourbell_team0_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 16.57,
+   "time": "00:16",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 15,
+   "team": 0,
+   "stage": "hp30",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    12.5,
+    22
+   ],
+   "hp_fraction": 0.3,
+   "what": "hourbell team 0 at 30 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 688302
+  },
+  {
+   "file": "structure_bridge_hourbell_team0_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 16.57,
+   "time": "00:16",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 15,
+   "team": 0,
+   "stage": "hp60",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    12.5,
+    22
+   ],
+   "hp_fraction": 0.6,
+   "what": "hourbell team 0 at 60 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 689361
+  },
+  {
+   "file": "structure_bridge_hourbell_team0_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 15,
+   "team": 0,
+   "stage": "ruin",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    12.5,
+    22
+   ],
+   "what": "hourbell team 0 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 489010
+  },
+  {
+   "file": "structure_bridge_hourbell_team1_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 20,
+   "team": 1,
+   "stage": "collapse_037",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143.5,
+    22
+   ],
+   "what": "hourbell team 1 0.37 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 485280
+  },
+  {
+   "file": "structure_bridge_hourbell_team1_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 20,
+   "team": 1,
+   "stage": "collapse_107",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143.5,
+    22
+   ],
+   "what": "hourbell team 1 1.07 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 477937
+  },
+  {
+   "file": "structure_bridge_hourbell_team1_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 20,
+   "team": 1,
+   "stage": "collapse_240",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143.5,
+    22
+   ],
+   "what": "hourbell team 1 2.40 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 472735
+  },
+  {
+   "file": "structure_bridge_hourbell_team1_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 20.07,
+   "time": "00:20",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 20,
+   "team": 1,
+   "stage": "hp100",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143.5,
+    22
+   ],
+   "hp_fraction": 1,
+   "what": "hourbell team 1 at 100 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 555791
+  },
+  {
+   "file": "structure_bridge_hourbell_team1_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 20.07,
+   "time": "00:20",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 20,
+   "team": 1,
+   "stage": "hp30",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143.5,
+    22
+   ],
+   "hp_fraction": 0.3,
+   "what": "hourbell team 1 at 30 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 545274
+  },
+  {
+   "file": "structure_bridge_hourbell_team1_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 20.07,
+   "time": "00:20",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 20,
+   "team": 1,
+   "stage": "hp60",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143.5,
+    22
+   ],
+   "hp_fraction": 0.6,
+   "what": "hourbell team 1 at 60 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 548748
+  },
+  {
+   "file": "structure_bridge_hourbell_team1_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 20,
+   "team": 1,
+   "stage": "ruin",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143.5,
+    22
+   ],
+   "what": "hourbell team 1 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 476996
+  },
+  {
+   "file": "structure_bridge_lantern_team0_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 31.33,
+   "time": "00:31",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 13,
+   "team": 0,
+   "stage": "collapse_037",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    29,
+    19
+   ],
+   "what": "lantern team 0 0.37 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 505317
+  },
+  {
+   "file": "structure_bridge_lantern_team0_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 32.03,
+   "time": "00:32",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 13,
+   "team": 0,
+   "stage": "collapse_107",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    29,
+    19
+   ],
+   "what": "lantern team 0 1.07 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 511921
+  },
+  {
+   "file": "structure_bridge_lantern_team0_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 33.37,
+   "time": "00:33",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 13,
+   "team": 0,
+   "stage": "collapse_240",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    29,
+    19
+   ],
+   "what": "lantern team 0 2.40 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 470661
+  },
+  {
+   "file": "structure_bridge_lantern_team0_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 15.17,
+   "time": "00:15",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 13,
+   "team": 0,
+   "stage": "hp100",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    29,
+    19
+   ],
+   "hp_fraction": 1,
+   "what": "lantern team 0 at 100 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 534987
+  },
+  {
+   "file": "structure_bridge_lantern_team0_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 15.17,
+   "time": "00:15",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 13,
+   "team": 0,
+   "stage": "hp30",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    29,
+    19
+   ],
+   "hp_fraction": 0.3,
+   "what": "lantern team 0 at 30 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 535750
+  },
+  {
+   "file": "structure_bridge_lantern_team0_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 15.17,
+   "time": "00:15",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 13,
+   "team": 0,
+   "stage": "hp60",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    29,
+    19
+   ],
+   "hp_fraction": 0.6,
+   "what": "lantern team 0 at 60 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 536824
+  },
+  {
+   "file": "structure_bridge_lantern_team0_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 35.37,
+   "time": "00:35",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 13,
+   "team": 0,
+   "stage": "ruin",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    29,
+    19
+   ],
+   "what": "lantern team 0 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 481555
+  },
+  {
+   "file": "structure_bridge_lantern_team1_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 18,
+   "team": 1,
+   "stage": "collapse_037",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    127,
+    19
+   ],
+   "what": "lantern team 1 0.37 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 395809
+  },
+  {
+   "file": "structure_bridge_lantern_team1_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 18,
+   "team": 1,
+   "stage": "collapse_107",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    127,
+    19
+   ],
+   "what": "lantern team 1 1.07 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 388523
+  },
+  {
+   "file": "structure_bridge_lantern_team1_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 18,
+   "team": 1,
+   "stage": "collapse_240",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    127,
+    19
+   ],
+   "what": "lantern team 1 2.40 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 388867
+  },
+  {
+   "file": "structure_bridge_lantern_team1_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 18.67,
+   "time": "00:18",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 18,
+   "team": 1,
+   "stage": "hp100",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    127,
+    19
+   ],
+   "hp_fraction": 1,
+   "what": "lantern team 1 at 100 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 441184
+  },
+  {
+   "file": "structure_bridge_lantern_team1_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 18.67,
+   "time": "00:18",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 18,
+   "team": 1,
+   "stage": "hp30",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    127,
+    19
+   ],
+   "hp_fraction": 0.3,
+   "what": "lantern team 1 at 30 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 442808
+  },
+  {
+   "file": "structure_bridge_lantern_team1_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 18.67,
+   "time": "00:18",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 18,
+   "team": 1,
+   "stage": "hp60",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    127,
+    19
+   ],
+   "hp_fraction": 0.6,
+   "what": "lantern team 1 at 60 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 438780
+  },
+  {
+   "file": "structure_bridge_lantern_team1_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 18,
+   "team": 1,
+   "stage": "ruin",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    127,
+    19
+   ],
+   "what": "lantern team 1 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 384554
+  },
+  {
+   "file": "structure_bridge_needle_bell_team0_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 36.43,
+   "time": "00:36",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 14,
+   "team": 0,
+   "stage": "collapse_037",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    21.5,
+    25.4
+   ],
+   "what": "needle_bell team 0 0.37 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 642054
+  },
+  {
+   "file": "structure_bridge_needle_bell_team0_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 37.13,
+   "time": "00:37",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 14,
+   "team": 0,
+   "stage": "collapse_107",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    21.5,
+    25.4
+   ],
+   "what": "needle_bell team 0 1.07 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 628142
+  },
+  {
+   "file": "structure_bridge_needle_bell_team0_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 38.47,
+   "time": "00:38",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 14,
+   "team": 0,
+   "stage": "collapse_240",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    21.5,
+    25.4
+   ],
+   "what": "needle_bell team 0 2.40 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 613617
+  },
+  {
+   "file": "structure_bridge_needle_bell_team0_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 15.87,
+   "time": "00:15",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 14,
+   "team": 0,
+   "stage": "hp100",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    21.5,
+    25.4
+   ],
+   "hp_fraction": 1,
+   "what": "needle_bell team 0 at 100 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 659839
+  },
+  {
+   "file": "structure_bridge_needle_bell_team0_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 15.87,
+   "time": "00:15",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 14,
+   "team": 0,
+   "stage": "hp30",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    21.5,
+    25.4
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_bell team 0 at 30 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 659556
+  },
+  {
+   "file": "structure_bridge_needle_bell_team0_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 15.87,
+   "time": "00:15",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 14,
+   "team": 0,
+   "stage": "hp60",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    21.5,
+    25.4
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_bell team 0 at 60 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 659495
+  },
+  {
+   "file": "structure_bridge_needle_bell_team0_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 40.47,
+   "time": "00:40",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 14,
+   "team": 0,
+   "stage": "ruin",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    21.5,
+    25.4
+   ],
+   "what": "needle_bell team 0 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 632994
+  },
+  {
+   "file": "structure_bridge_needle_bell_team1_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 19,
+   "team": 1,
+   "stage": "collapse_037",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    134.5,
+    25.4
+   ],
+   "what": "needle_bell team 1 0.37 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 475943
+  },
+  {
+   "file": "structure_bridge_needle_bell_team1_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 19,
+   "team": 1,
+   "stage": "collapse_107",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    134.5,
+    25.4
+   ],
+   "what": "needle_bell team 1 1.07 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 466122
+  },
+  {
+   "file": "structure_bridge_needle_bell_team1_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 19,
+   "team": 1,
+   "stage": "collapse_240",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    134.5,
+    25.4
+   ],
+   "what": "needle_bell team 1 2.40 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 461317
+  },
+  {
+   "file": "structure_bridge_needle_bell_team1_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 19.37,
+   "time": "00:19",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 19,
+   "team": 1,
+   "stage": "hp100",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    134.5,
+    25.4
+   ],
+   "hp_fraction": 1,
+   "what": "needle_bell team 1 at 100 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 525257
+  },
+  {
+   "file": "structure_bridge_needle_bell_team1_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 19.37,
+   "time": "00:19",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 19,
+   "team": 1,
+   "stage": "hp30",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    134.5,
+    25.4
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_bell team 1 at 30 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 523635
+  },
+  {
+   "file": "structure_bridge_needle_bell_team1_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 19.37,
+   "time": "00:19",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 19,
+   "team": 1,
+   "stage": "hp60",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    134.5,
+    25.4
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_bell team 1 at 60 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 523876
+  },
+  {
+   "file": "structure_bridge_needle_bell_team1_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 19,
+   "team": 1,
+   "stage": "ruin",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    134.5,
+    25.4
+   ],
+   "what": "needle_bell team 1 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 464151
+  },
+  {
+   "file": "structure_bridge_needle_inner_team0_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 26.23,
+   "time": "00:26",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 12,
+   "team": 0,
+   "stage": "collapse_037",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    41,
+    25
+   ],
+   "what": "needle_inner team 0 0.37 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 619628
+  },
+  {
+   "file": "structure_bridge_needle_inner_team0_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 26.93,
+   "time": "00:26",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 12,
+   "team": 0,
+   "stage": "collapse_107",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    41,
+    25
+   ],
+   "what": "needle_inner team 0 1.07 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 608195
+  },
+  {
+   "file": "structure_bridge_needle_inner_team0_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 28.27,
+   "time": "00:28",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 12,
+   "team": 0,
+   "stage": "collapse_240",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    41,
+    25
+   ],
+   "what": "needle_inner team 0 2.40 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 597788
+  },
+  {
+   "file": "structure_bridge_needle_inner_team0_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 14.47,
+   "time": "00:14",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 12,
+   "team": 0,
+   "stage": "hp100",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    41,
+    25
+   ],
+   "hp_fraction": 1,
+   "what": "needle_inner team 0 at 100 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 667390
+  },
+  {
+   "file": "structure_bridge_needle_inner_team0_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 14.47,
+   "time": "00:14",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 12,
+   "team": 0,
+   "stage": "hp30",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    41,
+    25
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_inner team 0 at 30 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 667336
+  },
+  {
+   "file": "structure_bridge_needle_inner_team0_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 14.47,
+   "time": "00:14",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 12,
+   "team": 0,
+   "stage": "hp60",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    41,
+    25
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_inner team 0 at 60 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 666152
+  },
+  {
+   "file": "structure_bridge_needle_inner_team0_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 30.27,
+   "time": "00:30",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 12,
+   "team": 0,
+   "stage": "ruin",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    41,
+    25
+   ],
+   "what": "needle_inner team 0 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 575010
+  },
+  {
+   "file": "structure_bridge_needle_inner_team1_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 17,
+   "team": 1,
+   "stage": "collapse_037",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    115,
+    25
+   ],
+   "what": "needle_inner team 1 0.37 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 439807
+  },
+  {
+   "file": "structure_bridge_needle_inner_team1_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 17,
+   "team": 1,
+   "stage": "collapse_107",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    115,
+    25
+   ],
+   "what": "needle_inner team 1 1.07 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 434584
+  },
+  {
+   "file": "structure_bridge_needle_inner_team1_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 17,
+   "team": 1,
+   "stage": "collapse_240",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    115,
+    25
+   ],
+   "what": "needle_inner team 1 2.40 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 431442
+  },
+  {
+   "file": "structure_bridge_needle_inner_team1_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 17.97,
+   "time": "00:17",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 17,
+   "team": 1,
+   "stage": "hp100",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    115,
+    25
+   ],
+   "hp_fraction": 1,
+   "what": "needle_inner team 1 at 100 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 482808
+  },
+  {
+   "file": "structure_bridge_needle_inner_team1_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 17.97,
+   "time": "00:17",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 17,
+   "team": 1,
+   "stage": "hp30",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    115,
+    25
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_inner team 1 at 30 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 483951
+  },
+  {
+   "file": "structure_bridge_needle_inner_team1_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 17.97,
+   "time": "00:17",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 17,
+   "team": 1,
+   "stage": "hp60",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    115,
+    25
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_inner team 1 at 60 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 483223
+  },
+  {
+   "file": "structure_bridge_needle_inner_team1_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 17,
+   "team": 1,
+   "stage": "ruin",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    115,
+    25
+   ],
+   "what": "needle_inner team 1 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 429939
+  },
+  {
+   "file": "structure_bridge_needle_outer_team0_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 21.13,
+   "time": "00:21",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 11,
+   "team": 0,
+   "stage": "collapse_037",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    57,
+    19
+   ],
+   "what": "needle_outer team 0 0.37 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 508916
+  },
+  {
+   "file": "structure_bridge_needle_outer_team0_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 21.83,
+   "time": "00:21",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 11,
+   "team": 0,
+   "stage": "collapse_107",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    57,
+    19
+   ],
+   "what": "needle_outer team 0 1.07 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 488253
+  },
+  {
+   "file": "structure_bridge_needle_outer_team0_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 23.17,
+   "time": "00:23",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 11,
+   "team": 0,
+   "stage": "collapse_240",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    57,
+    19
+   ],
+   "what": "needle_outer team 0 2.40 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 462595
+  },
+  {
+   "file": "structure_bridge_needle_outer_team0_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 13.77,
+   "time": "00:13",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 11,
+   "team": 0,
+   "stage": "hp100",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    57,
+    19
+   ],
+   "hp_fraction": 1,
+   "what": "needle_outer team 0 at 100 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 514624
+  },
+  {
+   "file": "structure_bridge_needle_outer_team0_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 13.77,
+   "time": "00:13",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 11,
+   "team": 0,
+   "stage": "hp30",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    57,
+    19
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_outer team 0 at 30 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 519866
+  },
+  {
+   "file": "structure_bridge_needle_outer_team0_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 13.77,
+   "time": "00:13",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 11,
+   "team": 0,
+   "stage": "hp60",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    57,
+    19
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_outer team 0 at 60 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 516015
+  },
+  {
+   "file": "structure_bridge_needle_outer_team0_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 25.17,
+   "time": "00:25",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 11,
+   "team": 0,
+   "stage": "ruin",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    57,
+    19
+   ],
+   "what": "needle_outer team 0 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 464349
+  },
+  {
+   "file": "structure_bridge_needle_outer_team1_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 16,
+   "team": 1,
+   "stage": "collapse_037",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    99,
+    19
+   ],
+   "what": "needle_outer team 1 0.37 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 395885
+  },
+  {
+   "file": "structure_bridge_needle_outer_team1_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 16,
+   "team": 1,
+   "stage": "collapse_107",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    99,
+    19
+   ],
+   "what": "needle_outer team 1 1.07 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 390275
+  },
+  {
+   "file": "structure_bridge_needle_outer_team1_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 16,
+   "team": 1,
+   "stage": "collapse_240",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    99,
+    19
+   ],
+   "what": "needle_outer team 1 2.40 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 384896
+  },
+  {
+   "file": "structure_bridge_needle_outer_team1_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 17.27,
+   "time": "00:17",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 16,
+   "team": 1,
+   "stage": "hp100",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    99,
+    19
+   ],
+   "hp_fraction": 1,
+   "what": "needle_outer team 1 at 100 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 418150
+  },
+  {
+   "file": "structure_bridge_needle_outer_team1_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 17.27,
+   "time": "00:17",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 16,
+   "team": 1,
+   "stage": "hp30",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    99,
+    19
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_outer team 1 at 30 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 427987
+  },
+  {
+   "file": "structure_bridge_needle_outer_team1_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 17.27,
+   "time": "00:17",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 16,
+   "team": 1,
+   "stage": "hp60",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    99,
+    19
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_outer team 1 at 60 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 425872
+  },
+  {
+   "file": "structure_bridge_needle_outer_team1_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 16,
+   "team": 1,
+   "stage": "ruin",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    99,
+    19
+   ],
+   "what": "needle_outer team 1 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 386895
+  },
+  {
+   "file": "structure_rift_hourbell_team0_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 22,
+   "team": 0,
+   "stage": "collapse_037",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    15,
+    55
+   ],
+   "what": "hourbell team 0 0.37 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 552549
+  },
+  {
+   "file": "structure_rift_hourbell_team0_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 22,
+   "team": 0,
+   "stage": "collapse_107",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    15,
+    55
+   ],
+   "what": "hourbell team 0 1.07 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 556155
+  },
+  {
+   "file": "structure_rift_hourbell_team0_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 22,
+   "team": 0,
+   "stage": "collapse_240",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    15,
+    55
+   ],
+   "what": "hourbell team 0 2.40 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 499261
+  },
+  {
+   "file": "structure_rift_hourbell_team0_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 21.47,
+   "time": "00:21",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 22,
+   "team": 0,
+   "stage": "hp100",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    15,
+    55
+   ],
+   "hp_fraction": 1,
+   "what": "hourbell team 0 at 100 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 718379
+  },
+  {
+   "file": "structure_rift_hourbell_team0_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 21.47,
+   "time": "00:21",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 22,
+   "team": 0,
+   "stage": "hp30",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    15,
+    55
+   ],
+   "hp_fraction": 0.3,
+   "what": "hourbell team 0 at 30 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 714893
+  },
+  {
+   "file": "structure_rift_hourbell_team0_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 21.47,
+   "time": "00:21",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 22,
+   "team": 0,
+   "stage": "hp60",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    15,
+    55
+   ],
+   "hp_fraction": 0.6,
+   "what": "hourbell team 0 at 60 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 715879
+  },
+  {
+   "file": "structure_rift_hourbell_team0_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 22,
+   "team": 0,
+   "stage": "ruin",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    15,
+    55
+   ],
+   "what": "hourbell team 0 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 505222
+  },
+  {
+   "file": "structure_rift_hourbell_team1_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 34,
+   "team": 1,
+   "stage": "collapse_037",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    155,
+    55
+   ],
+   "what": "hourbell team 1 0.37 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 493876
+  },
+  {
+   "file": "structure_rift_hourbell_team1_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 34,
+   "team": 1,
+   "stage": "collapse_107",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    155,
+    55
+   ],
+   "what": "hourbell team 1 1.07 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 484880
+  },
+  {
+   "file": "structure_rift_hourbell_team1_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 34,
+   "team": 1,
+   "stage": "collapse_240",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    155,
+    55
+   ],
+   "what": "hourbell team 1 2.40 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 486321
+  },
+  {
+   "file": "structure_rift_hourbell_team1_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 29.87,
+   "time": "00:29",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 34,
+   "team": 1,
+   "stage": "hp100",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    155,
+    55
+   ],
+   "hp_fraction": 1,
+   "what": "hourbell team 1 at 100 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 592265
+  },
+  {
+   "file": "structure_rift_hourbell_team1_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 29.87,
+   "time": "00:29",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 34,
+   "team": 1,
+   "stage": "hp30",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    155,
+    55
+   ],
+   "hp_fraction": 0.3,
+   "what": "hourbell team 1 at 30 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 582787
+  },
+  {
+   "file": "structure_rift_hourbell_team1_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 29.87,
+   "time": "00:29",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 34,
+   "team": 1,
+   "stage": "hp60",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    155,
+    55
+   ],
+   "hp_fraction": 0.6,
+   "what": "hourbell team 1 at 60 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 585076
+  },
+  {
+   "file": "structure_rift_hourbell_team1_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "hourbell",
+   "structure_id": 34,
+   "team": 1,
+   "stage": "ruin",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    155,
+    55
+   ],
+   "what": "hourbell team 1 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 485041
+  },
+  {
+   "file": "structure_rift_lantern_team0_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 71.73,
+   "time": "01:11",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 19,
+   "team": 0,
+   "stage": "collapse_037",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    26.9,
+    74.2
+   ],
+   "what": "lantern team 0 0.37 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 572621
+  },
+  {
+   "file": "structure_rift_lantern_team0_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 72.43,
+   "time": "01:12",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 19,
+   "team": 0,
+   "stage": "collapse_107",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    26.9,
+    74.2
+   ],
+   "what": "lantern team 0 1.07 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 560714
+  },
+  {
+   "file": "structure_rift_lantern_team0_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 73.77,
+   "time": "01:13",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 19,
+   "team": 0,
+   "stage": "collapse_240",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    26.9,
+    74.2
+   ],
+   "what": "lantern team 0 2.40 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 550978
+  },
+  {
+   "file": "structure_rift_lantern_team0_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 19.37,
+   "time": "00:19",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 19,
+   "team": 0,
+   "stage": "hp100",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    26.9,
+    74.2
+   ],
+   "hp_fraction": 1,
+   "what": "lantern team 0 at 100 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 686010
+  },
+  {
+   "file": "structure_rift_lantern_team0_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 19.37,
+   "time": "00:19",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 19,
+   "team": 0,
+   "stage": "hp30",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    26.9,
+    74.2
+   ],
+   "hp_fraction": 0.3,
+   "what": "lantern team 0 at 30 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 688039
+  },
+  {
+   "file": "structure_rift_lantern_team0_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 19.37,
+   "time": "00:19",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 19,
+   "team": 0,
+   "stage": "hp60",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    26.9,
+    74.2
+   ],
+   "hp_fraction": 0.6,
+   "what": "lantern team 0 at 60 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 688251
+  },
+  {
+   "file": "structure_rift_lantern_team0_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 75.77,
+   "time": "01:15",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 19,
+   "team": 0,
+   "stage": "ruin",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    26.9,
+    74.2
+   ],
+   "what": "lantern team 0 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 552585
+  },
+  {
+   "file": "structure_rift_lantern_team1_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 31,
+   "team": 1,
+   "stage": "collapse_037",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    143.1,
+    74.2
+   ],
+   "what": "lantern team 1 0.37 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 505102
+  },
+  {
+   "file": "structure_rift_lantern_team1_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 31,
+   "team": 1,
+   "stage": "collapse_107",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    143.1,
+    74.2
+   ],
+   "what": "lantern team 1 1.07 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 499413
+  },
+  {
+   "file": "structure_rift_lantern_team1_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 31,
+   "team": 1,
+   "stage": "collapse_240",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    143.1,
+    74.2
+   ],
+   "what": "lantern team 1 2.40 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 498926
+  },
+  {
+   "file": "structure_rift_lantern_team1_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 27.77,
+   "time": "00:27",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 31,
+   "team": 1,
+   "stage": "hp100",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    143.1,
+    74.2
+   ],
+   "hp_fraction": 1,
+   "what": "lantern team 1 at 100 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 533237
+  },
+  {
+   "file": "structure_rift_lantern_team1_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 27.77,
+   "time": "00:27",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 31,
+   "team": 1,
+   "stage": "hp30",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    143.1,
+    74.2
+   ],
+   "hp_fraction": 0.3,
+   "what": "lantern team 1 at 30 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 539620
+  },
+  {
+   "file": "structure_rift_lantern_team1_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 27.77,
+   "time": "00:27",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 31,
+   "team": 1,
+   "stage": "hp60",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    143.1,
+    74.2
+   ],
+   "hp_fraction": 0.6,
+   "what": "lantern team 1 at 60 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 534634
+  },
+  {
+   "file": "structure_rift_lantern_team1_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "lantern",
+   "structure_id": 31,
+   "team": 1,
+   "stage": "ruin",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    143.1,
+    74.2
+   ],
+   "what": "lantern team 1 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 495300
+  },
+  {
+   "file": "structure_rift_needle_bell_team0_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 81.93,
+   "time": "01:21",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 21,
+   "team": 0,
+   "stage": "collapse_037",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    21.5,
+    58.8
+   ],
+   "what": "needle_bell team 0 0.37 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 717442
+  },
+  {
+   "file": "structure_rift_needle_bell_team0_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 82.63,
+   "time": "01:22",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 21,
+   "team": 0,
+   "stage": "collapse_107",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    21.5,
+    58.8
+   ],
+   "what": "needle_bell team 0 1.07 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 704573
+  },
+  {
+   "file": "structure_rift_needle_bell_team0_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 83.97,
+   "time": "01:23",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 21,
+   "team": 0,
+   "stage": "collapse_240",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    21.5,
+    58.8
+   ],
+   "what": "needle_bell team 0 2.40 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 678644
+  },
+  {
+   "file": "structure_rift_needle_bell_team0_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 20.77,
+   "time": "00:20",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 21,
+   "team": 0,
+   "stage": "hp100",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    21.5,
+    58.8
+   ],
+   "hp_fraction": 1,
+   "what": "needle_bell team 0 at 100 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 721205
+  },
+  {
+   "file": "structure_rift_needle_bell_team0_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 20.77,
+   "time": "00:20",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 21,
+   "team": 0,
+   "stage": "hp30",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    21.5,
+    58.8
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_bell team 0 at 30 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 719851
+  },
+  {
+   "file": "structure_rift_needle_bell_team0_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 20.77,
+   "time": "00:20",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 21,
+   "team": 0,
+   "stage": "hp60",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    21.5,
+    58.8
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_bell team 0 at 60 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 720399
+  },
+  {
+   "file": "structure_rift_needle_bell_team0_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 85.97,
+   "time": "01:25",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 21,
+   "team": 0,
+   "stage": "ruin",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    21.5,
+    58.8
+   ],
+   "what": "needle_bell team 0 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 689356
+  },
+  {
+   "file": "structure_rift_needle_bell_team1_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 33,
+   "team": 1,
+   "stage": "collapse_037",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    148.5,
+    58.8
+   ],
+   "what": "needle_bell team 1 0.37 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 547249
+  },
+  {
+   "file": "structure_rift_needle_bell_team1_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 33,
+   "team": 1,
+   "stage": "collapse_107",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    148.5,
+    58.8
+   ],
+   "what": "needle_bell team 1 1.07 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 521522
+  },
+  {
+   "file": "structure_rift_needle_bell_team1_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 33,
+   "team": 1,
+   "stage": "collapse_240",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    148.5,
+    58.8
+   ],
+   "what": "needle_bell team 1 2.40 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 519114
+  },
+  {
+   "file": "structure_rift_needle_bell_team1_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 29.17,
+   "time": "00:29",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 33,
+   "team": 1,
+   "stage": "hp100",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    148.5,
+    58.8
+   ],
+   "hp_fraction": 1,
+   "what": "needle_bell team 1 at 100 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 593156
+  },
+  {
+   "file": "structure_rift_needle_bell_team1_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 29.17,
+   "time": "00:29",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 33,
+   "team": 1,
+   "stage": "hp30",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    148.5,
+    58.8
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_bell team 1 at 30 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 592043
+  },
+  {
+   "file": "structure_rift_needle_bell_team1_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 29.17,
+   "time": "00:29",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 33,
+   "team": 1,
+   "stage": "hp60",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    148.5,
+    58.8
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_bell team 1 at 60 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 591987
+  },
+  {
+   "file": "structure_rift_needle_bell_team1_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "needle_bell",
+   "structure_id": 33,
+   "team": 1,
+   "stage": "ruin",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    148.5,
+    58.8
+   ],
+   "what": "needle_bell team 1 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 518632
+  },
+  {
+   "file": "structure_rift_needle_inner_team0_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 66.63,
+   "time": "01:06",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 18,
+   "team": 0,
+   "stage": "collapse_037",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    35,
+    91.6
+   ],
+   "what": "needle_inner team 0 0.37 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 624468
+  },
+  {
+   "file": "structure_rift_needle_inner_team0_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 67.33,
+   "time": "01:07",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 18,
+   "team": 0,
+   "stage": "collapse_107",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    35,
+    91.6
+   ],
+   "what": "needle_inner team 0 1.07 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 631321
+  },
+  {
+   "file": "structure_rift_needle_inner_team0_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 68.67,
+   "time": "01:08",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 18,
+   "team": 0,
+   "stage": "collapse_240",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    35,
+    91.6
+   ],
+   "what": "needle_inner team 0 2.40 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 694341
+  },
+  {
+   "file": "structure_rift_needle_inner_team0_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 18.67,
+   "time": "00:18",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 18,
+   "team": 0,
+   "stage": "hp100",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    35,
+    91.6
+   ],
+   "hp_fraction": 1,
+   "what": "needle_inner team 0 at 100 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 714570
+  },
+  {
+   "file": "structure_rift_needle_inner_team0_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 18.67,
+   "time": "00:18",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 18,
+   "team": 0,
+   "stage": "hp30",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    35,
+    91.6
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_inner team 0 at 30 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 712115
+  },
+  {
+   "file": "structure_rift_needle_inner_team0_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 18.67,
+   "time": "00:18",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 18,
+   "team": 0,
+   "stage": "hp60",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    35,
+    91.6
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_inner team 0 at 60 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 712709
+  },
+  {
+   "file": "structure_rift_needle_inner_team0_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 70.67,
+   "time": "01:10",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 18,
+   "team": 0,
+   "stage": "ruin",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    35,
+    91.6
+   ],
+   "what": "needle_inner team 0 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 714871
+  },
+  {
+   "file": "structure_rift_needle_inner_team1_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 30,
+   "team": 1,
+   "stage": "collapse_037",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    135,
+    91.6
+   ],
+   "what": "needle_inner team 1 0.37 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 534098
+  },
+  {
+   "file": "structure_rift_needle_inner_team1_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 30,
+   "team": 1,
+   "stage": "collapse_107",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    135,
+    91.6
+   ],
+   "what": "needle_inner team 1 1.07 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 526221
+  },
+  {
+   "file": "structure_rift_needle_inner_team1_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 30,
+   "team": 1,
+   "stage": "collapse_240",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    135,
+    91.6
+   ],
+   "what": "needle_inner team 1 2.40 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 526081
+  },
+  {
+   "file": "structure_rift_needle_inner_team1_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 27.07,
+   "time": "00:27",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 30,
+   "team": 1,
+   "stage": "hp100",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    135,
+    91.6
+   ],
+   "hp_fraction": 1,
+   "what": "needle_inner team 1 at 100 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 567270
+  },
+  {
+   "file": "structure_rift_needle_inner_team1_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 27.07,
+   "time": "00:27",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 30,
+   "team": 1,
+   "stage": "hp30",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    135,
+    91.6
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_inner team 1 at 30 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 567043
+  },
+  {
+   "file": "structure_rift_needle_inner_team1_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 27.07,
+   "time": "00:27",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 30,
+   "team": 1,
+   "stage": "hp60",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    135,
+    91.6
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_inner team 1 at 60 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 567341
+  },
+  {
+   "file": "structure_rift_needle_inner_team1_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "needle_inner",
+   "structure_id": 30,
+   "team": 1,
+   "stage": "ruin",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    135,
+    91.6
+   ],
+   "what": "needle_inner team 1 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 526527
+  },
+  {
+   "file": "structure_rift_needle_outer_team0_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 61.53,
+   "time": "01:01",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 17,
+   "team": 0,
+   "stage": "collapse_037",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    59.5,
+    93.9
+   ],
+   "what": "needle_outer team 0 0.37 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 594318
+  },
+  {
+   "file": "structure_rift_needle_outer_team0_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 62.23,
+   "time": "01:02",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 17,
+   "team": 0,
+   "stage": "collapse_107",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    59.5,
+    93.9
+   ],
+   "what": "needle_outer team 0 1.07 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 579711
+  },
+  {
+   "file": "structure_rift_needle_outer_team0_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 63.57,
+   "time": "01:03",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 17,
+   "team": 0,
+   "stage": "collapse_240",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    59.5,
+    93.9
+   ],
+   "what": "needle_outer team 0 2.40 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 565530
+  },
+  {
+   "file": "structure_rift_needle_outer_team0_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 17.97,
+   "time": "00:17",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 17,
+   "team": 0,
+   "stage": "hp100",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    59.5,
+    93.9
+   ],
+   "hp_fraction": 1,
+   "what": "needle_outer team 0 at 100 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 743553
+  },
+  {
+   "file": "structure_rift_needle_outer_team0_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 17.97,
+   "time": "00:17",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 17,
+   "team": 0,
+   "stage": "hp30",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    59.5,
+    93.9
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_outer team 0 at 30 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 743065
+  },
+  {
+   "file": "structure_rift_needle_outer_team0_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 17.97,
+   "time": "00:17",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 17,
+   "team": 0,
+   "stage": "hp60",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    59.5,
+    93.9
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_outer team 0 at 60 % hp",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 741171
+  },
+  {
+   "file": "structure_rift_needle_outer_team0_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 65.57,
+   "time": "01:05",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 17,
+   "team": 0,
+   "stage": "ruin",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    59.5,
+    93.9
+   ],
+   "what": "needle_outer team 0 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    479,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 575231
+  },
+  {
+   "file": "structure_rift_needle_outer_team1_collapse_037.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 29,
+   "team": 1,
+   "stage": "collapse_037",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    110.5,
+    93.9
+   ],
+   "what": "needle_outer team 1 0.37 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 569925
+  },
+  {
+   "file": "structure_rift_needle_outer_team1_collapse_107.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 29,
+   "team": 1,
+   "stage": "collapse_107",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    110.5,
+    93.9
+   ],
+   "what": "needle_outer team 1 1.07 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 564922
+  },
+  {
+   "file": "structure_rift_needle_outer_team1_collapse_240.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 29,
+   "team": 1,
+   "stage": "collapse_240",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    110.5,
+    93.9
+   ],
+   "what": "needle_outer team 1 2.40 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 557489
+  },
+  {
+   "file": "structure_rift_needle_outer_team1_hp100.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 26.37,
+   "time": "00:26",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 29,
+   "team": 1,
+   "stage": "hp100",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    110.5,
+    93.9
+   ],
+   "hp_fraction": 1,
+   "what": "needle_outer team 1 at 100 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 586209
+  },
+  {
+   "file": "structure_rift_needle_outer_team1_hp30.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 26.37,
+   "time": "00:26",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 29,
+   "team": 1,
+   "stage": "hp30",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    110.5,
+    93.9
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_outer team 1 at 30 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 588459
+  },
+  {
+   "file": "structure_rift_needle_outer_team1_hp60.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 26.37,
+   "time": "00:26",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 29,
+   "team": 1,
+   "stage": "hp60",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    110.5,
+    93.9
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_outer team 1 at 60 % hp",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 587946
+  },
+  {
+   "file": "structure_rift_needle_outer_team1_ruin.png",
+   "width": 960,
+   "height": 540,
+   "seed": 7,
+   "time_s": 86.7,
+   "time": "01:26",
+   "kind": "structure_stage",
+   "structure": "needle_outer",
+   "structure_id": 29,
+   "team": 1,
+   "stage": "ruin",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    110.5,
+    93.9
+   ],
+   "what": "needle_outer team 1 ruin, 4.4 s after it was killed",
+   "crop_origin": [
+    480,
+    119
+   ],
+   "source_frame": 1920,
+   "encode": "lossless",
+   "bytes": 563156
+  },
+  {
+   "file": "life_recall_00_before.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 202.2,
+   "time": "03:22",
+   "kind": "recall",
+   "what": "ervet standing in mid lane before the recall",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "idle",
+    "alive": true,
+    "hp": 1185,
+    "x": 44,
+    "y": 55
+   },
+   "encode": "palette256",
+   "bytes": 958924
+  },
+  {
+   "file": "life_recall_05_channel.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 202.73,
+   "time": "03:22",
+   "kind": "recall",
+   "what": "recall channel 0.5 s in (the channel is 7 s)",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "recall",
+    "alive": true,
+    "hp": 1185,
+    "x": 44,
+    "y": 55
+   },
+   "encode": "palette256",
+   "bytes": 961251
+  },
+  {
+   "file": "life_recall_20_channel.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 204.27,
+   "time": "03:24",
+   "kind": "recall",
+   "what": "recall channel 2 s in (the channel is 7 s)",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "recall",
+    "alive": true,
+    "hp": 1185,
+    "x": 44,
+    "y": 55
+   },
+   "encode": "palette256",
+   "bytes": 959458
+  },
+  {
+   "file": "life_recall_40_channel.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 206.3,
+   "time": "03:26",
+   "kind": "recall",
+   "what": "recall channel 4 s in (the channel is 7 s)",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "recall",
+    "alive": true,
+    "hp": 1185,
+    "x": 44,
+    "y": 55
+   },
+   "encode": "palette256",
+   "bytes": 953648
+  },
+  {
+   "file": "life_recall_65_channel.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 208.83,
+   "time": "03:28",
+   "kind": "recall",
+   "what": "recall channel 6.5 s in (the channel is 7 s)",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "recall",
+    "alive": true,
+    "hp": 1185,
+    "x": 44,
+    "y": 55
+   },
+   "encode": "palette256",
+   "bytes": 954441
+  },
+  {
+   "file": "life_recall_72_departure.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 209.57,
+   "time": "03:29",
+   "kind": "recall",
+   "what": "7.2 s after the recall command (departure)",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "idle",
+    "alive": true,
+    "hp": 1185,
+    "x": 4.5,
+    "y": 55
+   },
+   "encode": "palette256",
+   "bytes": 980029
+  },
+  {
+   "file": "life_recall_80_departure.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 210.4,
+   "time": "03:30",
+   "kind": "recall",
+   "what": "8 s after the recall command (departure)",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "idle",
+    "alive": true,
+    "hp": 1185,
+    "x": 4.5,
+    "y": 55
+   },
+   "encode": "palette256",
+   "bytes": 987786
+  },
+  {
+   "file": "life_recall_99_base.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 211.93,
+   "time": "03:31",
+   "kind": "recall",
+   "what": "after the recall, back at the fountain",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "idle",
+    "alive": true,
+    "hp": 1185,
+    "x": 4.5,
+    "y": 55
+   },
+   "encode": "palette256",
+   "bytes": 987196
+  },
+  {
+   "file": "life_death_01.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 213.2,
+   "time": "03:33",
+   "kind": "death",
+   "what": "0.1 s after the fighter died",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "dead",
+    "alive": false,
+    "hp": 0,
+    "x": 44,
+    "y": 55
+   },
+   "encode": "palette256",
+   "bytes": 1032473
+  },
+  {
+   "file": "life_death_05.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 213.63,
+   "time": "03:33",
+   "kind": "death",
+   "what": "0.5 s after the fighter died",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "dead",
+    "alive": false,
+    "hp": 0,
+    "x": 44,
+    "y": 55
+   },
+   "encode": "palette256",
+   "bytes": 1201341
+  },
+  {
+   "file": "life_death_12.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 214.37,
+   "time": "03:34",
+   "kind": "death",
+   "what": "1.2 s after the fighter died",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "dead",
+    "alive": false,
+    "hp": 0,
+    "x": 44,
+    "y": 55
+   },
+   "encode": "palette256",
+   "bytes": 1201133
+  },
+  {
+   "file": "life_death_30.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 216.2,
+   "time": "03:36",
+   "kind": "death",
+   "what": "3 s after the fighter died",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "dead",
+    "alive": false,
+    "hp": 0,
+    "x": 44,
+    "y": 55
+   },
+   "encode": "palette256",
+   "bytes": 1202633
+  },
+  {
+   "file": "life_respawn_00.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 228.7,
+   "time": "03:48",
+   "kind": "respawn",
+   "what": "the fighter respawns (about 12.4 s after death)",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "idle",
+    "alive": true,
+    "hp": 1185,
+    "x": 10.1,
+    "y": 55
+   },
+   "encode": "palette192",
+   "bytes": 1360242
+  },
+  {
+   "file": "life_respawn_05.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 229.23,
+   "time": "03:49",
+   "kind": "respawn",
+   "what": "0.5 s after the respawn",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "idle",
+    "alive": true,
+    "hp": 1185,
+    "x": 10.1,
+    "y": 55
+   },
+   "encode": "palette256",
+   "bytes": 1186747
+  },
+  {
+   "file": "life_respawn_15.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 229.77,
+   "time": "03:49",
+   "kind": "respawn",
+   "what": "1.5 s after the respawn",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "idle",
+    "alive": true,
+    "hp": 1185,
+    "x": 10.1,
+    "y": 55
+   },
+   "encode": "palette256",
+   "bytes": 1181562
+  },
+  {
+   "file": "sheet_colorblind_teamfight.png",
+   "what": "the same teamfight peak frame, default and the three colour-blind modes (each downscaled to 960x540, 2 across is not used: 4 across)",
+   "kind": "sheet",
+   "map": "rift",
+   "width": 3840,
+   "height": 564,
+   "encode": "palette256",
+   "sources": [
+    "teamfight_rift_peak.png",
+    "colorblind_teamfight_deutan_peak.png",
+    "colorblind_teamfight_protan_peak.png",
+    "colorblind_teamfight_tritan_peak.png"
+   ],
+   "bytes": 645523
+  },
+  {
+   "file": "sheet_quality_base_aubade.png",
+   "what": "side by side (each downscaled to 960x540): base_aubade on Low, High and Ultra",
+   "kind": "sheet",
+   "map": "rift",
+   "width": 2880,
+   "height": 564,
+   "encode": "palette256",
+   "sources": [
+    "quality_base_aubade_low.png",
+    "quality_base_aubade_high.png",
+    "quality_base_aubade_ultra.png"
+   ],
+   "bytes": 1018817
+  },
+  {
+   "file": "sheet_quality_jungle_glasshorn.png",
+   "what": "side by side (each downscaled to 960x540): jungle_glasshorn on Low, High and Ultra",
+   "kind": "sheet",
+   "map": "rift",
+   "width": 2880,
+   "height": 564,
+   "encode": "palette256",
+   "sources": [
+    "quality_jungle_glasshorn_low.png",
+    "quality_jungle_glasshorn_high.png",
+    "quality_jungle_glasshorn_ultra.png"
+   ],
+   "bytes": 996249
+  },
+  {
+   "file": "sheet_quality_river_mid.png",
+   "what": "side by side (each downscaled to 960x540): river_mid on Low, High and Ultra",
+   "kind": "sheet",
+   "map": "rift",
+   "width": 2880,
+   "height": 564,
+   "encode": "palette256",
+   "sources": [
+    "quality_river_mid_low.png",
+    "quality_river_mid_high.png",
+    "quality_river_mid_ultra.png"
+   ],
+   "bytes": 935275
+  },
+  {
+   "file": "sheet_quality_teamfight.png",
+   "what": "side by side (each downscaled to 960x540): the same teamfight peak frame on Low, High and Ultra",
+   "kind": "sheet",
+   "map": "rift",
+   "width": 2880,
+   "height": 564,
+   "encode": "palette256",
+   "sources": [
+    "quality_teamfight_low.png",
+    "quality_teamfight_high.png",
+    "quality_teamfight_ultra.png"
+   ],
+   "bytes": 779157
+  }
+ ]
+}
