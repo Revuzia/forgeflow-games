@@ -29,7 +29,9 @@ import { perfSwitch } from '../perfswitch.ts';
  * first (renderOrder DECAL_ORDER0.., in the opaque list with the opaque water sheets at 50), exactly as their own pass
  * ran before the water's.
  */
-export const HDR_MERGE = perfSwitch('hdrmerge', true);
+// OFF by default (lead, 2026-11-15): the injected-decal A/B (freeze/dc1 vs dc0) differs across the whole image (17.96/255),
+// so the merged decal+water render is not proven equal yet. `?hdrmerge=1` turns it on for testing.
+export const HDR_MERGE = perfSwitch('hdrmerge', false);
 export const DECAL_ORDER0 = -1000;
 import { FX_EXPOSURE } from './particles.ts';
 
