@@ -343,6 +343,78 @@ if (args.includes('--reserve-cap')) {
     }
     const excess = hit.length - Math.floor(cap * used);
     if (excess <= 0) { console.log(`reserve-cap ${name}: ${(100 * hit.length / used).toFixed(2)} % (aim ${(100 * cap).toFixed(1)} %) kept`); continue; }
+    if (how === 'tierknee') {
+      // orch1 W1-B (FU-2, the r3 bone mask and the lime/salmon hue-shift trial): no hue moves at all. Saturation only,
+      // hue and value kept, in three tiers so the face pays last:
+      //   0 the UV gutter (--reserve-gutter-first): every near-band texel clamped to s <= --gutter-sat (0.30), so the
+      //     WebP's 2x2 chroma blocks have no saturated neighbour to pull a moved island texel back
+      //   1 the unprotected islands: a smooth soft-clip (tanh) above --reserve-knee (0.30) so that only the aim share
+      //     left after the protected texels stays over 0.4 (tan cloth, straps, pots lose a little chroma, never hue)
+      //   2 the protected texels (faces, masks, hands): a linear knee (--protect-knee 0.30, --protect-ceil 0.385) only for
+      //     what tiers 0-1 could not pay. Feathered over 6 deg of hue outside the band.
+      const kn1 = Number(opt('--reserve-knee', 0.3)), ce1 = Number(opt('--reserve-ceil', 0.36));
+      const gs = Number(opt('--gutter-sat', 0.3));
+      const tier = new Uint8Array(W * H).fill(1);
+      for (let p = 0; p < W * H; p++) {
+        if ((protect && protect[p]) || (jointMask && jointMask[p])) tier[p] = 2;
+        else if (island && !island[p]) tier[p] = 0;
+      }
+      const allow = Math.floor(cap * used);
+      const s2 = hit.filter(([p]) => tier[p] === 2).map(([, s]) => s).sort((x, y) => y - x);
+      const s1 = hit.filter(([p]) => tier[p] === 1).map(([, s]) => s).sort((x, y) => y - x);
+      const pmS = Number(opt('--protect-max-s', 0)), knS = Number(opt('--protect-knee', 0.3));
+      const ceilOf = (s) => (pmS > knS && s > knS ? knS + (pmS - knS) * Math.tanh((s - knS) / (pmS - knS)) : s);
+      const n2over = s2.filter((s) => ceilOf(s) > 0.4).length;
+      const keep1 = Math.max(0, allow - n2over);
+      const setS = (p, h, v, ns) => {
+        const c = v * ns, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = v - c;
+        const [r1, g1, b1] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+        data[p * C] = Math.round(r1 + m); data[p * C + 1] = Math.round(g1 + m); data[p * C + 2] = Math.round(b1 + m);
+      };
+      // tier 1 curve: linear knee through (t, 0.4 - eps) when some may stay, else a tanh soft clip under ce1
+      const t1 = keep1 > 0 && keep1 <= s1.length ? s1[keep1 - 1] : null;
+      const k1 = t1 !== null ? Math.min(1, (ce1 - kn1) / Math.max(1e-3, t1 - kn1)) : 0;
+      const f1 = (s) => (keep1 >= s1.length ? s : t1 !== null ? kn1 + (s - kn1) * k1 : kn1 + (ce1 - kn1) * Math.tanh((s - kn1) / (ce1 - kn1)));
+      const keep2 = Math.max(0, allow - Math.min(keep1, s1.length));
+      // the keep2-th protected texel lands just over 0.4 (0.41), so exactly the aim's share stays over the line
+      const kn2 = Number(opt('--protect-knee', 0.3)), ce2 = Number(opt('--tier-protect-ceil', 0.41));
+      const t2 = keep2 > 0 && keep2 < s2.length ? s2[keep2 - 1] : null;
+      const k2 = t2 !== null ? Math.min(1, (ce2 - kn2) / Math.max(1e-3, t2 - kn2)) : 0;
+      const f2 = (s) => (keep2 >= n2over ? s : t2 !== null ? kn2 + (s - kn2) * k2 : kn2 + (ce2 - kn2) * Math.tanh((s - kn2) / (ce2 - kn2)));
+      // --protect-max-s M (orch1 FU-2, units_gate P2): a soft ceiling on the protected texels' saturation (tanh above
+      // the protect knee towards M), so a honey face reads honey (hue, value kept) and the rendered top stays under S 0.40
+      const pm = Number(opt('--protect-max-s', 0));
+      const f2c = (s) => (pm > kn2 && s > kn2 ? Math.min(f2(s), kn2 + (pm - kn2) * Math.tanh((s - kn2) / (pm - kn2))) : f2(s));
+      const tally = [0, 0, 0];
+      // dark guard (--dark-guard V, 0-255, default 0 = off): unprotected dark browns (value < V) from 10 deg under the
+      // band's low edge to 14 deg into it turn to 10 deg under it (hue only; at that value the shift is invisible), so the
+      // encode's drift cannot speckle leathers and boots into the band and eat the face's share
+      const dg = Number(opt('--dark-guard', 0));
+      let dark = 0;
+      for (let p = 0; p < W * H; p++) {
+        const [h, s, v] = hsv(p);
+        if (v <= 2) continue;
+        const t = tier[p];
+        if (dg && t < 2 && v < dg && s > 0.25 && h >= a - 10 && h <= a + 14) {
+          setS(p, (a - 10 + 360) % 360, v, s);
+          dark++;
+          continue;
+        }
+        const kn = t === 0 ? gs : t === 1 ? kn1 : kn2;
+        if (s <= kn) continue;
+        const out = h < a ? a - h : h > b ? h - b : 0;
+        const w = out >= 6 ? 0 : out <= 0 ? 1 : 1 - out / 6;
+        if (!w) continue;
+        const target = t === 0 ? gs : t === 1 ? f1(s) : f2c(s);
+        if (target >= s) continue;
+        setS(p, h, v, s + w * (target - s));
+        tally[t]++;
+      }
+      console.log(`reserve-cap ${name}: ${(100 * hit.length / used).toFixed(2)} % -> aim ${(100 * cap).toFixed(1)} % (tierknee; allow ${allow}, ` +
+        `in band: islands ${s1.length}, protected ${s2.length}; dark guard ${dark}; moved gutter ${tally[0]}, islands ${tally[1]} (${t1 !== null ? `slope ${k1.toFixed(3)}` : keep1 >= s1.length ? 'kept' : 'soft clip'}), ` +
+        `protected ${tally[2]} (${keep2 >= n2over ? `ceiling only, ${n2over} over 0.4` : t2 !== null ? `slope ${k2.toFixed(3)}` : 'soft clip'}))`);
+      continue;
+    }
     if (how === 'knee') {
       // max2 r4 (Odrum's honey mask): a soft-knee saturation compressor over the whole band instead of moving the
       // cheapest texels to one fixed saturation. Below the knee (--reserve-knee, default 0.30) nothing changes; above it

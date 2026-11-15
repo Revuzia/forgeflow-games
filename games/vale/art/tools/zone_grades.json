@@ -560,21 +560,21 @@
  "odrum": {
   "zones": [
    {
-    "why": "orch1 FU-2: the felt cap a real deep olive (in game L* <= 40; r3's L 36 albedo read L 58 khaki in game beside Sukri and Ilsheta); the mask and hands are never zoned",
+    "why": "orch1 FU-2: the felt cap a real deep olive (CIELAB h ~112, HSV h ~65: out of the harm band; in game L* <= 40; r3's #B3A400 L 36 read L 58 khaki at HSV h 49 in game beside Sukri and Ilsheta); the mask and hands are never zoned",
     "parts": [
      "cap"
     ],
-    "hex": "#B3A400",
-    "L": 22,
-    "C": 20,
+    "hex": "#494D2D",
+    "L": 20,
+    "C": 18,
     "k": 0.6
    }
   ],
   "reserveModes": {
-   "harm": "hi"
+   "harm": "tierknee"
   },
   "reserveProtect": {
-   "why": "orch1 FU-2 blocker: the honey mask, face and hands keep their hue and value (r3's harm=sat at s 0.25 turned the mask bone-ivory); only a trim to s 0.375 on the fewest texels if the gutter and the pots cannot pay the cap",
+   "why": "orch1 FU-2 blocker: the honey mask, face and hands keep their hue and value (r3's harm=sat at s 0.25 turned the mask bone-ivory, and a hue-shift trial turned the pots lime and the gutter salmon); the cap is paid by saturation only: the UV gutter first, then the unprotected islands (soft clip), and the protected texels last by a gentle knee",
    "parts": [
     "mask",
     "hand_L",
@@ -586,6 +586,8 @@
   },
   "reserveGutterFirst": true,
   "protectSat": 0.375,
-  "capMax": 7.0
+  "capMax": 7.0,
+  "darkGuard": 90,
+  "protectMaxS": 0.41
  }
 }

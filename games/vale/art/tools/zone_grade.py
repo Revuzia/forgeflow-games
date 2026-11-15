@@ -193,7 +193,10 @@ def grade(sid: str, glb: str | None = None, dry: bool = False, fresh: float = 0.
                                     str(margin)] + [x for k, v in rec.get("reserveModes", {}).items() for x in ("--reserve-mode", f"{k}={v}")]
                                + (["--reserve-sat", str(rec["reserveSat"])] if "reserveSat" in rec else [])
                                + (["--reserve-knee", str(rec["reserveKnee"])] if "reserveKnee" in rec else [])
-                               + (["--reserve-ceil", str(rec["reserveCeil"])] if "reserveCeil" in rec else []) + prot + tint, cwd=GAME, capture_output=True, text=True)
+                               + (["--reserve-ceil", str(rec["reserveCeil"])] if "reserveCeil" in rec else [])
+                               + (["--dark-guard", str(rec["darkGuard"])] if "darkGuard" in rec else [])
+                               + (["--gutter-sat", str(rec["gutterSat"])] if "gutterSat" in rec else [])
+                               + (["--protect-max-s", str(rec["protectMaxS"])] if "protectMaxS" in rec else []) + prot + tint, cwd=GAME, capture_output=True, text=True)
                 if r.returncode:
                     raise SystemExit(r.stderr[-1200:])
                 if os.path.getsize(trial) <= max(min(before + 24 * 1024, 1160 * 1024), before) or q <= 60:

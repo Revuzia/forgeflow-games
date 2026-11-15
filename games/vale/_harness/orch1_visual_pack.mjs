@@ -222,7 +222,7 @@ async function fightSession() {
   }
   // same peak frame at Low / High / Ultra (frozen sim, render(0))
   await replayTo(best); await spectate();
-  for (const q of ['low', 'high', 'ultra']) {
+  for (const q of ['low', 'medium', 'high', 'ultra']) {
     await B(page, (b, q) => b.setQuality(q), q);
     await B(page, (b, p) => { b.focus(p.x, p.y); for (let i = 0; i < 8; i++) b.renderer.render(0); }, best);
     await still(6);
@@ -234,7 +234,7 @@ async function fightSession() {
   // same on a quiet scene: mid lane at the river crossing, base west, jungle
   for (const [name, x, y] of [['river_mid', 85, 55], ['base_aubade', 14.5, 55], ['jungle_glasshorn', 61.6, 41.5]]) {
     await B(page, (b) => b.setQuality('high'));
-    for (const q of ['low', 'high', 'ultra']) {
+    for (const q of ['low', 'medium', 'high', 'ultra']) {
       await B(page, (b, p) => { b.setQuality(p.q); b.focus(p.x, p.y); b.frames(20, 1 / 30); for (let i = 0; i < 6; i++) b.renderer.render(0); }, { q, x, y });
       const st = await B(page, (b) => { const s = b.stats(); return { calls: s.calls, triangles: s.triangles, scale: s.renderScale }; });
       await cap(`quality_${name}_${q}.png`, { kind: 'quality', what: `${name} at the game camera on the ${q} preset (a still taken 20 frames after the camera moved)`, map: 'rift', quality: q, world: [x, y], stats: st });
@@ -322,7 +322,7 @@ async function campsSession() {
   await B(page, (b) => b.host.drivers.delete(0));
   const m = map('rift');
   const me = await B(page, (b) => { const v = b.host.view; const id = v.players.find((p) => p.player === 0).entity; return { id, def: v.entity(id).def, team: v.entity(id).team }; });
-  const place = (x, y) => B(page, (b, p) => { const e = b.host.view.entity(p.id); e.x = p.x; e.y = p.y; e.vx = 0; e.vy = 0; e.hp = e.maxHp; b.host.view.hashDirty = true; b.host.sim.command(0, { type: 'stop' }); b.frames(2, 1 / 30); }, { id: me.id, x, y });
+  const place = (x, y) => page.evaluate(async (p) => { const b = window.__VALE_BENCH__, e = b.host.view.entity(p.id); if (!e.alive) { const { respawnFighter } = await import('/src/sim/spawn.ts'); respawnFighter(b.host.view, e, p.x, p.y); } e.x = p.x; e.y = p.y; e.vx = 0; e.vy = 0; e.hp = e.maxHp; b.host.view.hashDirty = true; b.host.sim.command(0, { type: 'stop' }); b.frames(3, 1 / 30); }, { id: me.id, x, y });
   const monstersAt = (x, y) => B(page, (b, p) => b.host.view.entities.filter((e) => e.kind === 'monster' && e.alive && Math.hypot(e.x - p.x, e.y - p.y) < 7).map((e) => ({ id: e.id, def: e.def, hp: Math.round(e.hp), maxHp: Math.round(e.maxHp), state: e.state, x: +e.x.toFixed(1), y: +e.y.toFixed(1) })), { x, y });
   const view = (x, y) => B(page, (b, p) => { b.zoom(b.catalog.maps.find((q) => q.id === b.host.setup.map).camera.distance); b.focus(p.x, p.y); b.frames(6, 1 / 30); b.focus(p.x, p.y); b.frames(1, 1 / 30); }, { x, y });
   const hitIds = (ids, frac, kill = false) => page.evaluate(async (p) => {
@@ -330,7 +330,12 @@ async function campsSession() {
     const k = w.entity(p.me);
     for (const id of p.ids) { const e = w.entity(id); if (!e || !e.alive) continue; for (let i = 0; i < (p.kill ? 12 : 1) && e.alive; i++) c.dealDamage(w, k, e, p.kill ? (e.hp + 50) * 4 : e.hp * p.frac, 'true'); }
   }, { me: me.id, ids, frac, kill });
-  for (const id of ['a_glasshorn', 'a_resinback', 's_stilltusks', 's_gloamoths', 'a_strays_north', 'longshade', 'sunsplinter']) {
+  for (const id of ['a_glasshorn', 'a_resinback', 'a_stilltusks', 's_gloamoths', 'a_strays_north', 'sunsplinter', 'longshade']) {
+    // the Pits spawn late (sunsplinter 360 s, longshade 960 s): fast-forward just past each spawn, jungle camps are shot from 100 s
+    if (id === 'sunsplinter' || id === 'longshade') {
+      const to = id === 'sunsplinter' ? 366 : 966;
+      await B(page, (b, t) => { const d = t - b.time(); if (d > 0) b.ff(d); b.host.drivers.delete(0); b.frames(10, 1 / 30); }, to);
+    }
     const camp = m.camps.find((c) => c.id === id);
     const [x, y] = camp.units[0].at;
     const ms = await monstersAt(x, y);
@@ -360,7 +365,7 @@ async function momentsSession() {
   const log = [];
   for (const tier of ['high', 'low']) {
     for (const mode of ['rift', 'fray']) {
-      await open({ mode, t: mode === 'rift' ? 330 : 40, q: tier });
+      await open({ mode, t: mode === 'rift' ? 368 : 40, q: tier });
       await B(page, (b) => b.host.drivers.delete(0));
       await spectate(); ASSERT = false;
       await B(page, (b) => {                                   // the fired-def log: every id the director fires, with the match time
@@ -386,7 +391,7 @@ async function momentsSession() {
         log.push({ moment: name, tier, mode, world: [x, y], fired });
         console.log(`moment ${name} ${tier}: fired ${[...new Set(fired.map((f) => `${f.id}${f.has ? '' : '(missing def)'}`))].join(', ') || 'nothing'}`);
       };
-      const place = (x, y) => B(page, (b, p) => { const e = b.host.view.entity(p.id); e.x = p.x; e.y = p.y; e.vx = 0; e.vy = 0; e.hp = e.maxHp; b.host.view.hashDirty = true; b.host.sim.command(0, { type: 'stop' }); b.frames(3, 1 / 30); }, { id: me.id, x, y });
+      const place = (x, y) => B(page, (b, p) => { const e = b.host.view.entity(p.id); e.x = p.x; e.y = p.y; e.vx = 0; e.vy = 0; e.hp = e.maxHp; b.host.view.hashDirty = true; b.host.sim.command(0, { type: 'stop' }); b.frames(2, 1 / 30); }, { id: me.id, x, y });
       const kill = (victimId) => page.evaluate(async (p) => {
         const b = window.__VALE_BENCH__, c = await import('/src/sim/combat.ts'), w = b.host.view;
         const k = w.entity(p.me), e = w.entity(p.victim);
@@ -394,7 +399,7 @@ async function momentsSession() {
       }, { me: me.id, victim: victimId });
       if (mode === 'rift') {
         // Pit last hit (the objective monster of the map), seat 0 lands the kill
-        const camp = m.camps.find((c) => c.id === 'longshade'); const [x, y] = camp.units[0].at;
+        const camp = m.camps.find((c) => c.id === 'sunsplinter'); const [x, y] = camp.units[0].at;
         const ms = await B(page, (b, p) => b.host.view.entities.filter((e) => e.kind === 'monster' && e.alive && Math.hypot(e.x - p.x, e.y - p.y) < 7).map((e) => e.id), { x, y });
         await place(x - 5, y + 2);
         await shoot('pit_last_hit', `Pit monster falls to seat 0's last hit (${ms.length} monster(s))`, x, y, async () => { for (const id of ms) await kill(id); });

@@ -108,9 +108,9 @@ def sbs(names, labels, out, what, kind):
     m = save_capped(sheet, os.path.join(OUT, out))
     final.append({'file': out, 'what': what, 'kind': kind, 'map': 'rift', 'width': sheet.width, 'height': sheet.height, 'encode': m, 'sources': names})
 
-sbs([f'quality_teamfight_{q}.png' for q in ('low', 'high', 'ultra')], ['LOW', 'HIGH', 'ULTRA'], 'sheet_quality_teamfight.png', 'side by side (each downscaled to 960x540): the same teamfight peak frame on Low, High and Ultra', 'sheet')
+sbs([f'quality_teamfight_{q}.png' for q in ('low', 'medium', 'high', 'ultra')], ['LOW', 'MEDIUM', 'HIGH', 'ULTRA'], 'sheet_quality_teamfight.png', 'side by side (each downscaled to 960x540): the same teamfight peak frame on Low, Medium, High and Ultra', 'sheet')
 for nm in ('river_mid', 'base_aubade', 'jungle_glasshorn'):
-    sbs([f'quality_{nm}_{q}.png' for q in ('low', 'high', 'ultra')], ['LOW', 'HIGH', 'ULTRA'], f'sheet_quality_{nm}.png', f'side by side (each downscaled to 960x540): {nm} on Low, High and Ultra', 'sheet')
+    sbs([f'quality_{nm}_{q}.png' for q in ('low', 'medium', 'high', 'ultra')], ['LOW', 'MEDIUM', 'HIGH', 'ULTRA'], f'sheet_quality_{nm}.png', f'side by side (each downscaled to 960x540): {nm} on Low, Medium, High and Ultra', 'sheet')
 sbs(['teamfight_rift_peak.png'] + [f'colorblind_teamfight_{c}_peak.png' for c in ('deutan', 'protan', 'tritan')], ['DEFAULT', 'DEUTAN', 'PROTAN', 'TRITAN'], 'sheet_colorblind_teamfight.png', 'the same teamfight peak frame, default and the three colour-blind modes (each downscaled to 960x540, 2 across is not used: 4 across)', 'sheet')
 
 order = {k: i for i, k in enumerate(['map', 'minion_clash', 'teamfight', 'quality', 'colorblind', 'fighter_frame', 'fighter_crop', 'contact_sheet', 'structure_stage', 'camp', 'moment', 'recall', 'death', 'respawn', 'sheet'])}
