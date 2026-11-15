@@ -6,19 +6,19 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 496.67,
-   "time": "08:16",
+   "time_s": 833.67,
+   "time": "13:53",
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    76.9,
-    81.2
+    87.7,
+    98.1
    ],
-   "fighters_team0": 3,
-   "fighters_team1": 3,
-   "vfx_actors": 57,
-   "particles": 350,
-   "telegraphs": 0,
+   "fighters_team0": 2,
+   "fighters_team1": 2,
+   "vfx_actors": 70,
+   "particles": 543,
+   "telegraphs": 1,
    "what": "5v5 teamfight, one and a half seconds before the peak",
    "quality": "high"
   },
@@ -27,19 +27,19 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 498.17,
-   "time": "08:18",
+   "time_s": 835.17,
+   "time": "13:55",
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    76.9,
-    81.2
+    87.7,
+    98.1
    ],
-   "fighters_team0": 3,
-   "fighters_team1": 3,
-   "vfx_actors": 57,
-   "particles": 350,
-   "telegraphs": 0,
+   "fighters_team0": 2,
+   "fighters_team1": 2,
+   "vfx_actors": 70,
+   "particles": 543,
+   "telegraphs": 1,
    "what": "5v5 teamfight, peak ability/VFX frame",
    "quality": "high"
   },
@@ -48,19 +48,19 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 499.67,
-   "time": "08:19",
+   "time_s": 836.67,
+   "time": "13:56",
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    76.9,
-    81.2
+    87.7,
+    98.1
    ],
-   "fighters_team0": 3,
-   "fighters_team1": 3,
-   "vfx_actors": 57,
-   "particles": 350,
-   "telegraphs": 0,
+   "fighters_team0": 2,
+   "fighters_team1": 2,
+   "vfx_actors": 70,
+   "particles": 543,
+   "telegraphs": 1,
    "what": "5v5 teamfight, one and a half seconds after the peak",
    "quality": "high"
   },
@@ -69,24 +69,24 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 498.17,
-   "time": "08:18",
+   "time_s": 835.17,
+   "time": "13:55",
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    76.9,
-    81.2
+    87.7,
+    98.1
    ],
-   "fighters_team0": 3,
-   "fighters_team1": 3,
-   "vfx_actors": 57,
-   "particles": 350,
-   "telegraphs": 0,
+   "fighters_team0": 2,
+   "fighters_team1": 2,
+   "vfx_actors": 70,
+   "particles": 543,
+   "telegraphs": 1,
    "what": "the same teamfight peak frame on the low preset",
    "quality": "low",
    "stats": {
-    "calls": 140,
-    "triangles": 233719,
+    "calls": 152,
+    "triangles": 233068,
     "scale": 0.75,
     "w": 1440,
     "h": 810
@@ -97,24 +97,24 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 498.17,
-   "time": "08:18",
+   "time_s": 835.17,
+   "time": "13:55",
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    76.9,
-    81.2
+    87.7,
+    98.1
    ],
-   "fighters_team0": 3,
-   "fighters_team1": 3,
-   "vfx_actors": 57,
-   "particles": 350,
-   "telegraphs": 0,
+   "fighters_team0": 2,
+   "fighters_team1": 2,
+   "vfx_actors": 70,
+   "particles": 543,
+   "telegraphs": 1,
    "what": "the same teamfight peak frame on the high preset",
    "quality": "high",
    "stats": {
-    "calls": 176,
-    "triangles": 304061,
+    "calls": 188,
+    "triangles": 311749,
     "scale": 1,
     "w": 1920,
     "h": 1080
@@ -125,24 +125,24 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 498.17,
-   "time": "08:18",
+   "time_s": 835.17,
+   "time": "13:55",
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    76.9,
-    81.2
+    87.7,
+    98.1
    ],
-   "fighters_team0": 3,
-   "fighters_team1": 3,
-   "vfx_actors": 57,
-   "particles": 350,
-   "telegraphs": 0,
+   "fighters_team0": 2,
+   "fighters_team1": 2,
+   "vfx_actors": 70,
+   "particles": 543,
+   "telegraphs": 1,
    "what": "the same teamfight peak frame on the ultra preset",
    "quality": "ultra",
    "stats": {
-    "calls": 176,
-    "triangles": 309369,
+    "calls": 188,
+    "triangles": 317763,
     "scale": 1,
     "w": 1920,
     "h": 1080
@@ -153,8 +153,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 498.83,
-   "time": "08:18",
+   "time_s": 835.83,
+   "time": "13:55",
    "kind": "quality",
    "what": "river_mid at the game camera on the low preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -164,8 +164,8 @@
     55
    ],
    "stats": {
-    "calls": 118,
-    "triangles": 136046,
+    "calls": 142,
+    "triangles": 195709,
     "scale": 0.75
    }
   },
@@ -174,8 +174,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 499.5,
-   "time": "08:19",
+   "time_s": 836.5,
+   "time": "13:56",
    "kind": "quality",
    "what": "river_mid at the game camera on the high preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -185,8 +185,8 @@
     55
    ],
    "stats": {
-    "calls": 162,
-    "triangles": 228786,
+    "calls": 190,
+    "triangles": 281141,
     "scale": 1
    }
   },
@@ -195,8 +195,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 500.17,
-   "time": "08:20",
+   "time_s": 837.17,
+   "time": "13:57",
    "kind": "quality",
    "what": "river_mid at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -206,8 +206,8 @@
     55
    ],
    "stats": {
-    "calls": 161,
-    "triangles": 224647,
+    "calls": 188,
+    "triangles": 278137,
     "scale": 1
    }
   },
@@ -216,8 +216,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 500.83,
-   "time": "08:20",
+   "time_s": 837.83,
+   "time": "13:57",
    "kind": "quality",
    "what": "base_aubade at the game camera on the low preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -227,8 +227,8 @@
     55
    ],
    "stats": {
-    "calls": 123,
-    "triangles": 102526,
+    "calls": 126,
+    "triangles": 107808,
     "scale": 0.75
    }
   },
@@ -237,8 +237,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 501.5,
-   "time": "08:21",
+   "time_s": 838.5,
+   "time": "13:58",
    "kind": "quality",
    "what": "base_aubade at the game camera on the high preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -248,8 +248,8 @@
     55
    ],
    "stats": {
-    "calls": 155,
-    "triangles": 117748,
+    "calls": 158,
+    "triangles": 124894,
     "scale": 1
    }
   },
@@ -258,8 +258,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 502.17,
-   "time": "08:22",
+   "time_s": 839.17,
+   "time": "13:59",
    "kind": "quality",
    "what": "base_aubade at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -269,8 +269,8 @@
     55
    ],
    "stats": {
-    "calls": 159,
-    "triangles": 124018,
+    "calls": 158,
+    "triangles": 124450,
     "scale": 1
    }
   },
@@ -279,8 +279,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 502.83,
-   "time": "08:22",
+   "time_s": 839.83,
+   "time": "13:59",
    "kind": "quality",
    "what": "jungle_glasshorn at the game camera on the low preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -290,8 +290,8 @@
     41.5
    ],
    "stats": {
-    "calls": 99,
-    "triangles": 93466,
+    "calls": 100,
+    "triangles": 97374,
     "scale": 0.75
    }
   },
@@ -300,8 +300,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 503.5,
-   "time": "08:23",
+   "time_s": 840.5,
+   "time": "14:00",
    "kind": "quality",
    "what": "jungle_glasshorn at the game camera on the high preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -311,8 +311,8 @@
     41.5
    ],
    "stats": {
-    "calls": 132,
-    "triangles": 183045,
+    "calls": 133,
+    "triangles": 185021,
     "scale": 1
    }
   },
@@ -321,8 +321,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 504.17,
-   "time": "08:24",
+   "time_s": 841.17,
+   "time": "14:01",
    "kind": "quality",
    "what": "jungle_glasshorn at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -332,8 +332,8 @@
     41.5
    ],
    "stats": {
-    "calls": 132,
-    "triangles": 182467,
+    "calls": 133,
+    "triangles": 185601,
     "scale": 1
    }
   }

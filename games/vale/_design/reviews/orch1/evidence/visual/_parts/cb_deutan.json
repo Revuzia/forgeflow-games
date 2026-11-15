@@ -6,16 +6,16 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 498.17,
-   "time": "08:18",
+   "time_s": 835.17,
+   "time": "13:55",
    "kind": "colorblind",
    "what": "the teamfight peak frame with the deutan colour-blind mode (identical sim frame as teamfight_rift_peak.png)",
    "map": "rift",
    "quality": "high",
    "colorblind": "deutan",
    "world": [
-    76.9,
-    81.2
+    87.7,
+    98.1
    ]
   }
  ]
