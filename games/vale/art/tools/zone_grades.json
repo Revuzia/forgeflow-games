@@ -455,7 +455,7 @@
      "helm"
     ],
     "hex": "#2C6A80",
-    "L": 16,
+    "L": 12,
     "C": 30
    },
    {
@@ -467,7 +467,7 @@
      "tier_L"
     ],
     "hex": "#2F6F78",
-    "L": 40,
+    "L": 32,
     "C": 6
    },
    {
@@ -573,8 +573,8 @@
      0.79
     ],
     "hex": "#2E6650",
-    "L": 72,
-    "C": 10,
+    "L": 80,
+    "C": 7,
     "k": 1.0
    },
    {
@@ -594,7 +594,7 @@
      0.79
     ],
     "hex": "#2E6650",
-    "L": 38,
+    "L": 26,
     "C": 16,
     "k": 1.0
    }
@@ -613,14 +613,24 @@
     "k": 0.6
    },
    {
+    "why": "orch1 W1-B fix 1: the mask a deep honey (albedo HSV ~44, L* 54): hue kept inside 28-50 in game (FU-2), value one step under the pale honey tops of Nurrow, Tunlan and Sukri (units_gate P1), yellower than Burdam's oxblood-brown",
+    "parts": [
+     "mask"
+    ],
+    "hex": "#A8862A",
+    "L": 54,
+    "C": 22,
+    "k": 1.0
+   },
+   {
     "why": "orch1 FU-2 / units_gate P2: the pale linen shirt (coat texels L* >= 50) a cool olive-grey, so the warm sun no longer reads the whole top as honey in the harm band; the honey stays on the mask, hands and pots",
     "parts": [
      "coat"
     ],
     "minL": 50,
     "hex": "#6B6E5C",
-    "L": 66,
-    "C": 5
+    "L": 52,
+    "C": 6
    }
   ],
   "reserveModes": {
@@ -650,9 +660,9 @@
     "parts": [
      "hat"
     ],
-    "hex": "#2F4A80",
-    "L": 16,
-    "C": 22,
+    "hex": "#3A3F8C",
+    "L": 14,
+    "C": 26,
     "k": 0.7
    },
    {
@@ -694,9 +704,9 @@
     "parts": [
      "hood"
     ],
-    "hex": "#4A6B35",
-    "L": 48,
-    "C": 20,
+    "hex": "#3F7A4A",
+    "L": 36,
+    "C": 22,
     "k": 0.8,
     "boxes": [
      [
@@ -715,8 +725,8 @@
      "hood",
      "hood_tail"
     ],
-    "hex": "#4A6B35",
-    "L": 26,
+    "hex": "#3F7A4A",
+    "L": 22,
     "C": 18,
     "k": 0.8,
     "boxes": [
@@ -729,6 +739,17 @@
       1.7
      ]
     ]
+   },
+   {
+    "why": "orch1 W1-B fix 1: the cowl and sleeves a pale undyed linen (low chroma), so the bible's top value band holds under the deep green hood and the dome breaks from the shoulders by value",
+    "parts": [
+     "cowl",
+     "sleeves"
+    ],
+    "hex": "#8A7B5C",
+    "L": 68,
+    "C": 7,
+    "k": 0.8
    }
   ],
   "reserveModes": {
