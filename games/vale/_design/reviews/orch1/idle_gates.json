@@ -1,32 +1,308 @@
 {
-  "lane": "orch1 idle hard gates on current HEAD (no game code changed)",
-  "date": "2026-11-15 about 01:37 to 02:49 Central (machine clock)",
-  "head": "3633bdf90 (claude/youthful-ramanujan-gdud5w)",
-  "machine": "Apple M5, ANGLE Metal. No Blender/probe/harness job was running at the start; heavy slot0 held a stale owner record (dead pid, reclaimed automatically). Strays found: three idle vite dev servers (ports 5191, 5197, 5198; 0 % CPU, 1.8-2 days old) and the owner's own Google Chrome 157.0.8103.78 (started during the run) whose GPU helper and renderer used 27-29 % CPU while the gates ran. wip_sync.sh loop was running (no commit landed during the gates).",
-  "load_start": "1.53 1.43 1.28",
-  "load_end": "1.48 1.31 1.61",
-  "load_during": "2.0-3.7 (1-min), caused by the owner's Chrome plus the harness itself",
-  "summary": "build and probe pass. Match memory would pass (RIFT 2792, BRIDGE 2460, Home 1304 MB) but is not a valid idle measurement (load max 3.54). Real-time match gate is NOT measured: 57.6 % of wall-seconds at 58+ fps, worst second 32 frames, a stall at game 993-1024 s with render 6-12 ms and pump about 1 ms, tagged 'machine', while the owner's Chrome used the GPU. perf_1080 prod: every pass/fail line passes, GATE PASS; its per-tier frame timing is flagged not measured (load 2.0-2.6) and High read 57.1 fps with 29 dropped, which cannot be called a regression or a pass. Triangle peaks 455k / 445k / 483k (bar 500k), draws <= 295, programs 40 (bar 40).",
-  "gates": [
-    {"id": "build", "cmd": "npm run -s build", "status": "pass", "measured": "exit 0 (vite build, warnings only about non-module config.js/game_controls.js script tags)", "bar": "exit 0", "load_before": "1.53 1.43 1.28"},
-    {"id": "probe", "cmd": "npm run -s probe", "status": "pass", "measured": "57 passed, 0 skipped, 0 failed (181.5 s)", "bar": "0 failed, 0 skipped", "failing_probes": [], "load_before": "about 2.4", "load_after": "3.74 2.37 1.68 at end"},
-    {"id": "realtime_match", "cmd": "node _harness/perf_1080.mjs --prod --no-build --match-only --match-scale 1 --match-min 26", "status": "not_measured", "exit": 2, "load_before": "2.81 2.26 1.66", "load_after": "2.13 2.01 1.85",
-      "measured": "57.6 % of wall-seconds at 58+ fps over 1534 s; worst second 32 frames. Worst seconds 999.2 s 32f, 1000.2 s 34f, 1017.5 s 37f, 996.2 s 38f, 998.2 s 38f (pump 0.8-1.4 ms, render 6.3-12.3 ms, tagged machine). Game time kept pace until about 990 s, then stalled for about 25 s. Match peak 423k triangles, 40 programs.",
-      "bar": ">= 99 % of seconds at 58+, no second < 45, load < 3, no heavy slot held",
-      "why_invalid": "Harness refused it: machine busy (load 2.67/2.73/2.13). The owner's Chrome 157.0.8103.78 was running at 27-29 % CPU (GPU helper) during the run, which stalls the shared Metal GPU. Same pattern as max2 runs 1-3. Needs a run with the owner's Chrome closed."},
-    {"id": "match_memory", "cmd": "node _harness/probe_match_memory.mjs --fake-audio", "status": "not_measured_would_pass", "exit": 2, "load_before": "2.09 2.01 1.85", "load_after": "1.89 2.39 2.21",
-      "measured": "BRIDGE 2460 MB (peak at 287 s), RIFT 2792 MB (peak at 2 s), Homes 682 / 739 / 1223 / 1304 MB; margins BRIDGE 540, RIFT 208. Gate said: needs idle machine (load max 3.54, 56 of 56 readings busy); would pass.",
-      "bar": "RIFT and BRIDGE <= 3000 MB, Home <= 2500 MB", "note": "RIFT 2792 is 208 MB under the bar; round 1 was 2865, max2 2677-2784."},
-    {"id": "perf_1080_prod_counts", "cmd": "node _harness/perf_1080.mjs --prod --match-seeds 7,11,23", "status": "pass_counts_timing_not_measured", "exit": 0, "load_before": "2.05 2.41 2.22", "load_after": "1.48 1.31 1.61",
-      "measured": "GATE PASS. Match peaks (seed order 7, 11, 23): 455k / 445k / 483k triangles; draws 295 / 280 / 281 at peak; programs 40 / 40 / 40, 0 programs first seen after 1:00. Menu tiers: High 136k tris, 105 draws, 39 programs; Low 65k, 68 draws, 27 programs; Ultra 139k, 107 draws, 39 programs. Frame timing: Low 60 fps 0 dropped; Ultra 60.1 fps 0 dropped; High 57.1 fps, p95 33.2, 29 dropped (flagged not measured, load 2.58). gpubound last 8 s 59.1 fps. calibration high x3. dynres menu 1, match 1. mem growth menu_2 to menu_5 -0.8 %. Home peak 1118 MB (bar 2500). memmaps peak match renderer+GPU 2140 MB.",
-      "bar": "<= 500k tris, <= 450 draws, <= 40 programs; High/Ultra avg >= 59.4, p95 <= 17.2, <= 1 % dropped; Home <= 2500 MB",
-      "watch": "Seed 23 peaked at 483k of 500k (max2 459k; seed 11 was the 497k closest then, now 445k). Triangle margin is 17k on seed 23: vfx 40k and actors 250k at the peak frame."}
+ "lane": "orch1 idle hard gates on current HEAD (no game code changed)",
+ "date": "2026-11-15 about 01:37 to 02:49 Central (machine clock)",
+ "head": "3633bdf90 (claude/youthful-ramanujan-gdud5w)",
+ "machine": "Apple M5, ANGLE Metal. No Blender/probe/harness job was running at the start; heavy slot0 held a stale owner record (dead pid, reclaimed automatically). Strays found: three idle vite dev servers (ports 5191, 5197, 5198; 0 % CPU, 1.8-2 days old) and the owner's own Google Chrome 157.0.8103.78 (started during the run) whose GPU helper and renderer used 27-29 % CPU while the gates ran. wip_sync.sh loop was running (no commit landed during the gates).",
+ "load_start": "1.53 1.43 1.28",
+ "load_end": "1.48 1.31 1.61",
+ "load_during": "2.0-3.7 (1-min), caused by the owner's Chrome plus the harness itself",
+ "summary": "build and probe pass. Match memory would pass (RIFT 2792, BRIDGE 2460, Home 1304 MB) but is not a valid idle measurement (load max 3.54). Real-time match gate is NOT measured: 57.6 % of wall-seconds at 58+ fps, worst second 32 frames, a stall at game 993-1024 s with render 6-12 ms and pump about 1 ms, tagged 'machine', while the owner's Chrome used the GPU. perf_1080 prod: every pass/fail line passes, GATE PASS; its per-tier frame timing is flagged not measured (load 2.0-2.6) and High read 57.1 fps with 29 dropped, which cannot be called a regression or a pass. Triangle peaks 455k / 445k / 483k (bar 500k), draws <= 295, programs 40 (bar 40).",
+ "gates": [
+  {
+   "id": "build",
+   "cmd": "npm run -s build",
+   "status": "pass",
+   "measured": "exit 0 (vite build, warnings only about non-module config.js/game_controls.js script tags)",
+   "bar": "exit 0",
+   "load_before": "1.53 1.43 1.28"
+  },
+  {
+   "id": "probe",
+   "cmd": "npm run -s probe",
+   "status": "pass",
+   "measured": "57 passed, 0 skipped, 0 failed (181.5 s)",
+   "bar": "0 failed, 0 skipped",
+   "failing_probes": [],
+   "load_before": "about 2.4",
+   "load_after": "3.74 2.37 1.68 at end"
+  },
+  {
+   "id": "realtime_match",
+   "cmd": "node _harness/perf_1080.mjs --prod --no-build --match-only --match-scale 1 --match-min 26",
+   "status": "not_measured",
+   "exit": 2,
+   "load_before": "2.81 2.26 1.66",
+   "load_after": "2.13 2.01 1.85",
+   "measured": "57.6 % of wall-seconds at 58+ fps over 1534 s; worst second 32 frames. Worst seconds 999.2 s 32f, 1000.2 s 34f, 1017.5 s 37f, 996.2 s 38f, 998.2 s 38f (pump 0.8-1.4 ms, render 6.3-12.3 ms, tagged machine). Game time kept pace until about 990 s, then stalled for about 25 s. Match peak 423k triangles, 40 programs.",
+   "bar": ">= 99 % of seconds at 58+, no second < 45, load < 3, no heavy slot held",
+   "why_invalid": "Harness refused it: machine busy (load 2.67/2.73/2.13). The owner's Chrome 157.0.8103.78 was running at 27-29 % CPU (GPU helper) during the run, which stalls the shared Metal GPU. Same pattern as max2 runs 1-3. Needs a run with the owner's Chrome closed."
+  },
+  {
+   "id": "match_memory",
+   "cmd": "node _harness/probe_match_memory.mjs --fake-audio",
+   "status": "not_measured_would_pass",
+   "exit": 2,
+   "load_before": "2.09 2.01 1.85",
+   "load_after": "1.89 2.39 2.21",
+   "measured": "BRIDGE 2460 MB (peak at 287 s), RIFT 2792 MB (peak at 2 s), Homes 682 / 739 / 1223 / 1304 MB; margins BRIDGE 540, RIFT 208. Gate said: needs idle machine (load max 3.54, 56 of 56 readings busy); would pass.",
+   "bar": "RIFT and BRIDGE <= 3000 MB, Home <= 2500 MB",
+   "note": "RIFT 2792 is 208 MB under the bar; round 1 was 2865, max2 2677-2784."
+  },
+  {
+   "id": "perf_1080_prod_counts",
+   "cmd": "node _harness/perf_1080.mjs --prod --match-seeds 7,11,23",
+   "status": "pass_counts_timing_not_measured",
+   "exit": 0,
+   "load_before": "2.05 2.41 2.22",
+   "load_after": "1.48 1.31 1.61",
+   "measured": "GATE PASS. Match peaks (seed order 7, 11, 23): 455k / 445k / 483k triangles; draws 295 / 280 / 281 at peak; programs 40 / 40 / 40, 0 programs first seen after 1:00. Menu tiers: High 136k tris, 105 draws, 39 programs; Low 65k, 68 draws, 27 programs; Ultra 139k, 107 draws, 39 programs. Frame timing: Low 60 fps 0 dropped; Ultra 60.1 fps 0 dropped; High 57.1 fps, p95 33.2, 29 dropped (flagged not measured, load 2.58). gpubound last 8 s 59.1 fps. calibration high x3. dynres menu 1, match 1. mem growth menu_2 to menu_5 -0.8 %. Home peak 1118 MB (bar 2500). memmaps peak match renderer+GPU 2140 MB.",
+   "bar": "<= 500k tris, <= 450 draws, <= 40 programs; High/Ultra avg >= 59.4, p95 <= 17.2, <= 1 % dropped; Home <= 2500 MB",
+   "watch": "Seed 23 peaked at 483k of 500k (max2 459k; seed 11 was the 497k closest then, now 445k). Triangle margin is 17k on seed 23: vfx 40k and actors 250k at the peak frame."
+  }
+ ],
+ "open": [
+  "realtime_match needs one valid run with the owner's Chrome closed and load < 3 (it was spoiled again by outside GPU use).",
+  "match_memory and High frame timing need the same quiet window to count as idle evidence.",
+  "Seed 23 triangle peak 483k of 500k.",
+  "Three idle vite dev servers (ports 5191, 5197, 5198) left running by older sessions; not killed by this lane."
+ ],
+ "fixes": [],
+ "matchMatrix": {
+  "at": "2026-11-15T19:50:55.961Z",
+  "head": "f3afb0b38",
+  "load1": {
+   "start": 6.34,
+   "end": 5.77
+  },
+  "quiet": null,
+  "scale": 4,
+  "bars": {
+   "hard": {
+    "tris": 500000,
+    "draws": 450,
+    "programs": 40
+   },
+   "w2": {
+    "programs": 36,
+    "tris": 470000,
+    "draws": 450,
+    "lateAfter60s": 0
+   }
+  },
+  "cases": [
+   {
+    "mode": "rift",
+    "tier": "high",
+    "seed": 7,
+    "endT": 600,
+    "ended": false,
+    "peakTris": 313123,
+    "peakTrisAt": 503.6,
+    "peakDraws": 201,
+    "peakPrograms": 40,
+    "lateProgramsAfter60s": 0,
+    "hardPass": true,
+    "w2": {
+     "bar": {
+      "programs": 36,
+      "tris": 470000,
+      "draws": 450,
+      "lateAfter60s": 0
+     },
+     "tris": true,
+     "draws": true,
+     "programs": false,
+     "late": true,
+     "pass": false
+    }
+   },
+   {
+    "mode": "rift",
+    "tier": "ultra",
+    "seed": 7,
+    "endT": 600,
+    "ended": false,
+    "peakTris": 312309,
+    "peakTrisAt": 507.4,
+    "peakDraws": 201,
+    "peakPrograms": 40,
+    "lateProgramsAfter60s": 0,
+    "hardPass": true,
+    "w2": {
+     "bar": {
+      "programs": 36,
+      "tris": 470000,
+      "draws": 450,
+      "lateAfter60s": 0
+     },
+     "tris": true,
+     "draws": true,
+     "programs": false,
+     "late": true,
+     "pass": false
+    }
+   },
+   {
+    "mode": "bridge",
+    "tier": "high",
+    "seed": 7,
+    "endT": 600,
+    "ended": false,
+    "peakTris": 443347,
+    "peakTrisAt": 314.5,
+    "peakDraws": 276,
+    "peakPrograms": 38,
+    "lateProgramsAfter60s": 0,
+    "hardPass": true,
+    "w2": {
+     "bar": {
+      "programs": 36,
+      "tris": 470000,
+      "draws": 450,
+      "lateAfter60s": 0
+     },
+     "tris": true,
+     "draws": true,
+     "programs": false,
+     "late": true,
+     "pass": false
+    }
+   },
+   {
+    "mode": "bridge",
+    "tier": "ultra",
+    "seed": 7,
+    "endT": 600,
+    "ended": false,
+    "peakTris": 443537,
+    "peakTrisAt": 311.4,
+    "peakDraws": 276,
+    "peakPrograms": 38,
+    "lateProgramsAfter60s": 0,
+    "hardPass": true,
+    "w2": {
+     "bar": {
+      "programs": 36,
+      "tris": 470000,
+      "draws": 450,
+      "lateAfter60s": 0
+     },
+     "tris": true,
+     "draws": true,
+     "programs": false,
+     "late": true,
+     "pass": false
+    }
+   },
+   {
+    "mode": "fray",
+    "tier": "high",
+    "seed": 7,
+    "endT": 530.6,
+    "ended": true,
+    "peakTris": 210632,
+    "peakTrisAt": 157,
+    "peakDraws": 144,
+    "peakPrograms": 30,
+    "lateProgramsAfter60s": 0,
+    "hardPass": true,
+    "w2": {
+     "bar": {
+      "programs": 36,
+      "tris": 470000,
+      "draws": 450,
+      "lateAfter60s": 0
+     },
+     "tris": true,
+     "draws": true,
+     "programs": true,
+     "late": true,
+     "pass": true
+    }
+   },
+   {
+    "mode": "fray",
+    "tier": "ultra",
+    "seed": 7,
+    "endT": 530.6,
+    "ended": true,
+    "peakTris": 210225,
+    "peakTrisAt": 156.1,
+    "peakDraws": 144,
+    "peakPrograms": 30,
+    "lateProgramsAfter60s": 0,
+    "hardPass": true,
+    "w2": {
+     "bar": {
+      "programs": 36,
+      "tris": 470000,
+      "draws": 450,
+      "lateAfter60s": 0
+     },
+     "tris": true,
+     "draws": true,
+     "programs": true,
+     "late": true,
+     "pass": true
+    }
+   },
+   {
+    "mode": "rift",
+    "tier": "high",
+    "seed": 3,
+    "endT": 600,
+    "ended": false,
+    "peakTris": 343356,
+    "peakTrisAt": 564.6,
+    "peakDraws": 223,
+    "peakPrograms": 40,
+    "lateProgramsAfter60s": 0,
+    "hardPass": true,
+    "w2": {
+     "bar": {
+      "programs": 36,
+      "tris": 470000,
+      "draws": 450,
+      "lateAfter60s": 0
+     },
+     "tris": true,
+     "draws": true,
+     "programs": false,
+     "late": true,
+     "pass": false
+    }
+   },
+   {
+    "mode": "rift",
+    "tier": "high",
+    "seed": 21,
+    "endT": 600,
+    "ended": false,
+    "peakTris": 326184,
+    "peakTrisAt": 293.6,
+    "peakDraws": 203,
+    "peakPrograms": 40,
+    "lateProgramsAfter60s": 0,
+    "hardPass": true,
+    "w2": {
+     "bar": {
+      "programs": 36,
+      "tris": 470000,
+      "draws": 450,
+      "lateAfter60s": 0
+     },
+     "tris": true,
+     "draws": true,
+     "programs": false,
+     "late": true,
+     "pass": false
+    }
+   }
   ],
-  "open": [
-    "realtime_match needs one valid run with the owner's Chrome closed and load < 3 (it was spoiled again by outside GPU use).",
-    "match_memory and High frame timing need the same quiet window to count as idle evidence.",
-    "Seed 23 triangle peak 483k of 500k.",
-    "Three idle vite dev servers (ports 5191, 5197, 5198) left running by older sessions; not killed by this lane."
-  ],
-  "fixes": []
+  "maxAcrossCases": {
+   "tris": 443537,
+   "draws": 276,
+   "programs": 40
+  }
+ }
 }
