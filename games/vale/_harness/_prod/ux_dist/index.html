@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0B0D11" />
+    <title>VALE</title>
+    <!-- runtime config (catalog URL); public/config.js, editable after deploy -->
+    <script src="./config.js"></script>
+    <!-- the Forgeflow portal's control bar (mute, fullscreen, pause, report a bug); public/game_controls.js is the
+         shared portal copy, unmodified. VALE binds F (Hour spell 2), so the bar's F hotkey is off. -->
+    <script>window.GAME_CONFIG = { fs_hotkey: false };</script>
+    <script src="./game_controls.js"></script>
+    <style>html,body{color:#ede6d6;background:#0b0d11;height:100%;margin:0;overflow:hidden}#view{width:100%;height:100%;display:block;position:fixed;inset:0}#ui{position:fixed;inset:0}#__ff_controls__{left:8px!important;right:auto!important}body:has(.app.is-match) #__ff_controls__{display:none!important}</style>
+    <script type="module" crossorigin src="./assets/index-F4AWHnNK.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/vendor-preact-qP9d8xWa.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-D45X5QY1.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%227%22%20fill%3D%22%230B0D11%22%2F%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%2211.5%22%20fill%3D%22none%22%20stroke%3D%22%23A99BFF%22%20stroke-width%3D%222.4%22%2F%3E%3Cpath%20d%3D%22M10.2%2010.6%2016%2022.4%2021.8%2010.6%22%20fill%3D%22none%22%20stroke%3D%22%23EDE6D6%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%227.4%22%20r%3D%221.6%22%20fill%3D%22%23EDE6D6%22%2F%3E%3C%2Fsvg%3E">
+  </head>
+  <body>
+    <canvas id="view" aria-hidden="true"></canvas>
+    <div id="ui"></div>
+  </body>
+</html>

@@ -1,0 +1,74 @@
+[
+ {
+  "name": "@fontsource-variable/instrument-sans",
+  "version": "5.3.0",
+  "license": "OFL-1.1",
+  "homepage": "https://fontsource.org/fonts/instrument-sans"
+ },
+ {
+  "name": "@fontsource/atkinson-hyperlegible-mono",
+  "version": "5.3.0",
+  "license": "OFL-1.1",
+  "homepage": "https://fontsource.org/fonts/atkinson-hyperlegible-mono"
+ },
+ {
+  "name": "@fontsource/atkinson-hyperlegible-next",
+  "version": "5.3.0",
+  "license": "OFL-1.1",
+  "homepage": "https://fontsource.org/fonts/atkinson-hyperlegible-next"
+ },
+ {
+  "name": "@fontsource/gloock",
+  "version": "5.3.0",
+  "license": "OFL-1.1",
+  "homepage": "https://fontsource.org/fonts/gloock"
+ },
+ {
+  "name": "@preact/signals",
+  "version": "2.11.3",
+  "license": "MIT",
+  "homepage": "https://preactjs.com"
+ },
+ {
+  "name": "@preact/signals-core",
+  "version": "1.14.4",
+  "license": "MIT",
+  "homepage": "https://preactjs.com"
+ },
+ {
+  "name": "meshoptimizer",
+  "version": "1.3.0",
+  "license": "MIT",
+  "homepage": "https://github.com/zeux/meshoptimizer"
+ },
+ {
+  "name": "n8ao",
+  "version": "2.0.1",
+  "license": "CC0-1.0; its package.json says ISC",
+  "homepage": "https://github.com/N8python/n8ao#readme"
+ },
+ {
+  "name": "postprocessing",
+  "version": "6.39.5",
+  "license": "Zlib",
+  "homepage": "https://github.com/pmndrs/postprocessing"
+ },
+ {
+  "name": "preact",
+  "version": "11.0.0",
+  "license": "MIT",
+  "homepage": "https://preactjs.com"
+ },
+ {
+  "name": "three",
+  "version": "0.186.1",
+  "license": "MIT",
+  "homepage": "https://threejs.org/"
+ },
+ {
+  "name": "zod",
+  "version": "4.6.5",
+  "license": "MIT",
+  "homepage": "https://zod.dev"
+ }
+]
