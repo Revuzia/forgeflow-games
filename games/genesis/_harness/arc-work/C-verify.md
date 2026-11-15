@@ -14,7 +14,7 @@ run the loaded copy to the end; hashes and the act log must match.
   in two runs (it moved between runs, and the tree was being edited by others). Not reproduced in-process in: 4->8 years
   (no script), 10->22 years with the script (144 days compared), 40->52 years with the script and a real break (144 days
   compared, every day hashed). So no field-level save/load loss was found up to year 52. Root cause of the year 47-80
-  divergence NOT found; see the ARC_LONG result at the bottom of this file if it finished.
+  divergence: FOUND (below).
 - Scripts used: `_harness/probes/arc-diverge-diag.ts` (lockstep a/b per day, dumps header diff and array diffs at the first
   differing day).
 - Stage-C sim pieces: all exist (covenant, story/ages/epithet, legends, tower, defiance); nothing stubbed on the sim side.
@@ -67,3 +67,16 @@ comes by itself; it needs pride seeded or a god act.
 
 ## Other findings
 - detban clean (152 files). Frozen trace/diagnostics under `_harness/scratch/arc/C-verify/`.
+
+## ROOT CAUSE of the save/load divergence (found and fixed)
+- Long form (save y40, end y80) differed from day 200 after the reload (year ~56.7). Header diff at that day: two chronicle
+  entries of the same tick swapped places ("The water fell back from Ashuk ..." / "The river at Rabavor ... went back"), refs ids 2 vs 18.
+- Cause: `evacuationsHourly` (src/sim/god/precursors.ts) looped `Object.entries(R.st)`. A saved game stores R.st with sorted keys
+  (state.ts relJson), a live world has insertion order, so when two towns' flood evacuations ended in the same hour the
+  `flood.home` lines were told in different orders after a load. Not a missing field: no state was lost.
+- Fix (mechanical, no balance change): iterate `Object.keys(R.st).sort()`, as `missionEvacuation` already does. Only one other
+  unsorted R.st loop existed (none left). Focused test `tests/arc-evac-order.test.ts` (fails without the fix, passes with it).
+- Verified: the 40 -> 58 year comparison (216 days, hash every day, with the full script and a real break) now shows no difference.
+  The full 40 -> 80 form (ARC_LONG=1) was not re-run after the fix (about 50 min); the first-differing day was 200 in it, and
+  that day is now clean.
+- The default test is now the short form (~60-75 s on a loaded box; save y5, end y8).

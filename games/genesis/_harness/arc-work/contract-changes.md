@@ -203,3 +203,13 @@
 ## Owner ruling 2026-11-15
 - Powers should reveal as faith develops: the god grows stronger and can perform bigger miracles the more people believe (owner cites Black & White for this ONE mechanic; the earlier "nothing Black & White-like" ruling otherwise stands: no creature, no hand-slapping, no good/evil alignment). Purpose: keep players pushing through. Spec first (_spec/POWERS-GROWTH.md), owner approves before build.
 - GitHub: genesis-check must not e-mail on WIP checkpoints (now main / PR / manual only).
+
+## Owner rulings 2026-11-15 (second set) — POWERS-GROWTH
+- "all recommended" on _spec/POWERS-GROWTH.md §10 (1 yes: new games bound, old saves unbound + setting; 2 yes: powers can fall out of reach;
+  3 yes: free clay; 4 see below; 5 accept) and on IMPROVEMENT-PLAN.md §5 questions 1-6 (flood wording renamed, lower preset only as a
+  visible offer, hints + auto-ease approved with owner-approved text, tower pacing unchanged, write ARC §11 spec now, four music pieces for launch + verify Safari).
+- Keep the Hand powers `slap` and `stroke`.
+- TWO ROADS to the powers (verbatim): "there should be two ways to attain those powers i think - belief and worship or whatever it is we
+  use, or fear and benevolence. both technically show g-d's existence."
+- A SPENDABLE RESOURCE (verbatim): "i like the idea of GATHERING BELIEF or FEAR as the game goes on and the npcs connect, this way you
+  cannot infinitely cast/use skills, you can run out and need to regain adding a challenge. like you said 'spend worship'."
