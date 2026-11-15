@@ -1,0 +1,141 @@
+{
+ "wrong_or_overstated": [
+  {
+   "area": "gameplay",
+   "title": "'babel' (One speech) is hidden from players: WRONG as stated",
+   "why": "src/data/index.ts:44 puts scenarios.json into BASE_PACK, and src/ui/newworld.ts:223 offered() merges BASE_PACK scenarios; cards() (:233-238) appends every scenario not in CARDS except 'lookdev'. So 'One speech' is listed, last, with the 'mods' icon and its JSON description. The real defect is smaller: the arc showcase looks like a mod pack, has no premise line, and no test covers the picker (no test references newworld). Not run in a browser; read from code only. Still S/sonnet, but it is a re-card, not an un-hide."
+  },
+  {
+   "area": "gameplay + ui-ux",
+   "title": "'The powers wheel did not open' on the Mac is misread as a failure",
+   "why": "MAC-ROUND5 section C reads 'Slow drag: it PANS, and the powers wheel did not open'. That is the PASS for the round-4 bug (a drag wrongly opened the radial; see the comment at src/ui/handinput.ts:186-188). Gameplay finding 14 and UI finding 2 both cite it as the wheel failing. No owner evidence says long-press fails. What remains true: the long press is polled in frame() and needs two consecutive frames past 620 ms, so at 2 fps it fires roughly 1-1.5 s late. Impact is medium, not high, and it disappears as PERF recovers. A setTimeout rewrite must keep the heldFor()/downSeen guard (:204) or it re-introduces the round-4 bug."
+  },
+  {
+   "area": "world-sim",
+   "title": "'No arc HeaderStep / no forward-compat for arc state': WRONG (stale STATE.md)",
+   "why": "src/sim/core/migrate15.ts:76-78 defines `const arc: HeaderStep` and includes it in LIVING_MIGRATIONS; :64-72 document the lazy defaults for stages A, B and C. tests/living-migration.test.ts exists and the C-sim ledger lists save-continue green. The only valid remainder is frozen save fixtures per stage, which is low/S."
+  },
+  {
+   "area": "world-sim + code-health + ui-ux",
+   "title": "'Stage C sim is on stubs / needs a contract / UI needs pending states': STALE",
+   "why": "The arc auditor is right and these three are wrong. covenant.ts, story.ts and legends.ts are in the live tree with focused tests green (C-sim.md 'ON HOLD' section: arc-covenant 7/7, ui-arc-covenant/book 61/61). The hold is on the full gate and live verification, not on missing code. arcstub.ts is an override that is null unless a stub is set (src/client/simclient.ts:368, 380), so players do not get stub data. Drop world-sim 9, code-health 7 and ui-ux 6 (hide docs, 'stageC' flag); keep arc 1, 2, 7, 8 and gameplay 6. STATE.md's headline is indeed stale (it still lists arc.ts, tower.ts, decision.ts as ABSENT)."
+  },
+  {
+   "area": "release",
+   "title": "'Pause and visibility integration not confirmed': WRONG",
+   "why": "The auditor grepped only src/app.ts. src/ui/embed.ts:49 exposes window.__PAUSE__ {toggle, pause, resume, paused} and :55 handles visibilitychange; prefs has game.pauseHidden. Only the mute path is left to verify."
+  },
+  {
+   "area": "gameplay",
+   "title": "'No until-something-happens control' is overstated, and the fix conflicts with determinism",
+   "why": "The HUD already has 'Step an hour' and a 'Step by...' menu (src/ui/hud.ts:246-252), and slowGreat eases to 10x on Decision cards (prefs.ts:42). The gap is narrower: no auto-ease on prayers, defiance or age turns. Gameplay 8's 'stretch prayer windows by the player's real seconds' cannot be done inside a deterministic, rewindable sim; windows must stay in sim ticks, and the UI should ease speed instead."
+  },
+  {
+   "area": "world-sim",
+   "title": "Founding-band protection window is unevidenced",
+   "why": "No probe or ledger shows founding bands dying to disease or predators. The 'wrath survivable' ruling is about the god's wrath, not natural mortality. Hidden plot armour contradicts the realistic-sim ruling. Measure first (the 20-seed probe is fine); do not build the scaling until a failure is shown. Impact is unknown, not high."
+  },
+  {
+   "area": "ui-ux",
+   "title": "Reduce-motion finding is slightly overstated",
+   "why": "styles.css does honour the OS setting in three places (:215, :702, :1373 for the age card). True remainder: prefs.reduceMotion (prefs.ts:51) is not seeded from matchMedia, and no camera, cinematic or opening code reads it."
+  },
+  {
+   "area": "audio",
+   "title": "'Story screens have no sound' is partly overstated",
+   "why": "Confirmed that book.ts, chronicle.ts and decision.ts contain no sound calls. But the Decision card and covenant moments are already voiced through sim events ('tower.choice', 'covenant.kept' in eventmap.ts ARC_CUES). The gap is only open/close/page-turn/commit clicks: low-medium, S."
+  },
+  {
+   "area": "release",
+   "title": "Crash beacon described as 'opt-in-free'",
+   "why": "Sending diagnostics without consent contradicts the same auditor's privacy finding and code-health 8 (opt-in only). Ship 'Copy diagnostics' first; any upload needs disclosure and the owner's decision."
+  },
+  {
+   "area": "cross-area",
+   "title": "Houses in the lake is reported three times with three different tiers",
+   "why": "Graphics 2 (sonnet), arc 12 (opus) and world-sim 1 (opus) are one bug. Code confirms both halves: sim tests only cell water > 0.15 (src/sim/people/buildings.ts:314, 356, 396) and ruins only at > 1.5 m (settlement.ts:1622); render uses `wet` only for dock/shipyard (src/render/life/buildings.ts:744). Schedule once: sim fix is opus (determinism, save compatibility), render safety net and regression test are sonnet. World-sim 3 (graduated wet state) depends on it."
+  },
+  {
+   "area": "spot-check summary",
+   "title": "Confirmed as stated",
+   "why": "Verified in code: no WebGL context-loss handling (only the quality probe's own loseContext at src/main.ts:47); no touch input code beyond the gate (main.ts:95); trustGainScale has no caller (covenant.ts:527); 'tower.lost' (tower.ts:415) and 'secession' (politics.ts:456) are emitted and absent from src/audio; restraint off by default (belief.ts:8, settings.ts:122); no navigator.storage.persist; no .github directory at repo root; game_meta.json uses \"mobile_support\": \"none\"; settings.ts:89 shows the 'still being tuned' note only when audio is not ready. Not checked: the Mac-only graphics findings (water sheet, cloud bands), which rest on MAC-ROUND texts I did not re-read beyond round 5."
+  }
+ ],
+ "missed": [
+  {
+   "title": "An epithet 'the One Who Drowned the World' ships in the real data, and the covenant line is flood-shaped",
+   "evidence": "src/data/scripture.json:233 (not only the stub; it is the title shown in _shots/c-book-full.png). C-sim.md:36 describes the scripted trigger as 'as if a great flood', followed by rainbow and a no-flood vow. The 'flood' power and disaster exist (powers.json:990, disasters.json:555).",
+   "proposal": "Put the owner's 'No Great Flood feature' ruling against this explicitly: list every flood-themed epithet, age title, vow and scripted trigger, and ask the owner which stay. Likely outcome: keep local river floods and the warning, rename or remove world-drowning wording, and make the covenant trigger any great destruction.",
+   "impact": "high",
+   "effort": "S",
+   "tier": "opus"
+  },
+  {
+   "title": "The store listing never mentions the game's purpose",
+   "evidence": "public/game_meta.json: grep finds 'chronicle' once and no 'Book', 'Tower', 'covenant' or 'age' in the description; short_description sells prayers, fear and trust only. Release auditor checked schema, not message.",
+   "proposal": "Rewrite short_description and description around the Book of Ages (the story a world tells about its god, no score), once stage C is gated. Trim controls_keyboard at the same time.",
+   "impact": "medium",
+   "effort": "S",
+   "tier": "sonnet"
+  },
+  {
+   "title": "Eleven eras share four music pieces",
+   "evidence": "src/sim/content.ts:209 lists 11 eras; src/audio/authored.ts:168-170 maps bronze, iron and classical to 'era-bronze' and steam, electric and space to 'era-engines'. Only stone, bronze, medieval and engines stems exist in src/audio/assets.",
+   "proposal": "Do not touch the approved pieces. Report the coverage to the owner as a decision: commission more era pieces, or accept. Meanwhile the ambience work (settlement character by era) carries the sense of history changing.",
+   "impact": "medium",
+   "effort": "S",
+   "tier": "sonnet"
+  },
+  {
+   "title": "English only, including the 'say it in words' power input",
+   "evidence": "No i18n or navigator.language use in src (grep); sim/god/freeform.ts is a 3,724-line English phrase parser; scripture.json prose is English.",
+   "proposal": "State 'English only' in the listing now. Separately, check what the player sees when free text is not understood (I found no readable refusal string in src/ui; unverified) and make that a clear, in-voice reply with two suggestions.",
+   "impact": "medium",
+   "effort": "M",
+   "tier": "sonnet"
+  },
+  {
+   "title": "Memory footprint is a release risk of its own",
+   "evidence": "MAC-ROUND5 section E: Genesis tab 2,587 MB plus GPU process 3,101 MB, swap rising from 6.86 to 8.29 GB in nine minutes. No auditor listed memory; release only discussed fps.",
+   "proposal": "Cross-impact note for the PERF lane, not a re-audit: ask it to publish a memory budget per preset, and add tab and GPU memory to the minimum-spec statement and the diagnostics text.",
+   "impact": "high",
+   "effort": "S",
+   "tier": "sonnet"
+  },
+  {
+   "title": "Toast stack covers the middle of the world and its headings look wrong",
+   "evidence": "_shots/c-book-full.png: four stacked toasts sit over the planet's centre; one headed 'THE TOWER \u00b7 ASHUK BY THE LAKE' carries a harvest-to-shrine line, another is headed 'CUSTOM \u00b7 GAIA'. This shot used stubs, so the headings may be stub artefacts (unverified live).",
+   "proposal": "Check on a live babel world: toast kind-to-heading mapping (src/ui/toasts.ts ~:748-762), a default label for unknown kinds instead of 'CUSTOM', and a cap of two visible toasts with the rest folded into the ticker.",
+   "impact": "medium",
+   "effort": "S",
+   "tier": "sonnet"
+  },
+  {
+   "title": "No test covers the new-world picker",
+   "evidence": "grep for newworld/NewWorld in tests/ returns nothing; the babel card's appearance depends on an untested filter (src/ui/newworld.ts:233-238).",
+   "proposal": "Add a DOM test: base scenarios listed, lookdev hidden unless dev, babel present with its own icon and premise, save metadata resolves the scenario name.",
+   "impact": "low",
+   "effort": "S",
+   "tier": "sonnet"
+  },
+  {
+   "title": "Auditor reports need de-duplication before any agent is assigned",
+   "evidence": "Stage C appears in five reports with contradictory facts; lake houses in three; context loss in three; first-run guidance in two; bundle size in two; Open Rebellion in two.",
+   "proposal": "Merge to one work item each, with one owner lane and one tier, and sequence render items that touch ocean.ts, terrainmat.ts and clouds.ts behind the PERF lane.",
+   "impact": "medium",
+   "effort": "S",
+   "tier": "sonnet"
+  }
+ ],
+ "ruling_violations": [
+  "NEVER lower visual quality: release 1 (frame-time governor that offers 'Switch to High?'), release 5 ('default touch devices to Low'), release 13 ('judging what Low can cut') and ui-ux 10 (a 'Lower quality' button on the failure card) all propose stepping quality down. Even user-confirmed, this needs the owner's explicit yes; the proposals should not be built on an agent's reading of the ruling.",
+  "NEVER lower visual quality (mild): graphics 11 suggests replacing distant animal bodies with a billboard crossfade. Only acceptable if judged at least as good by eye.",
+  "No Great Flood feature: not a proposal but existing content nobody flagged. scripture.json:233 'the One Who Drowned the World' and the flood-then-rainbow-then-no-flood-vow covenant line. Arc 2 proposes shooting and polishing exactly this path; get the owner's call first.",
+  "The god is JUST, not kind or unkind: gameplay 5 promotes 'Forgive / Be Patient / Make a vow' to the front of the wheel on the grounds that these are 'the verbs the Book rewards'. That frames mercy as the favoured play. Adding the verbs is fine; ordering and wording must stay neutral, and the Book must not reward.",
+  "The god is JUST / no score: gameplay 4 names a constrained mode 'Just' (no hand-of-god kills), which redefines the ruling as an optional difficulty. Gameplay 13 says 'unlock a final epithet line', which reads as an achievement. Rename and drop the unlock framing.",
+  "Nothing Black & White-like: gameplay 2 and ui-ux 9 (a 'second movement' of whispers, first-time nudges) are at risk of becoming an advisor voice. Both auditors noted it; keep them to one-time, dismissible, non-judging lines and have the owner approve the text.",
+  "Slow realistic pacing: gameplay 3's 'let time pass until something is asked of me' is a skip-ahead control. Auto-easing down for moments fits the ruling; an auto-advance needs the owner's call. Gameplay 8's real-seconds prayer windows also break sim determinism.",
+  "Realistic sim (pacing ruling's spirit): world-sim 10's hidden founding-band mortality scaling is unevidenced plot armour; measure before proposing.",
+  "The approved music stays untouched: release 7 suggests shipping m4a fallbacks if Safari cannot decode ogg, which means re-encoding the approved score, and release 6 suggests lazy-loading era music. Neither changes the composition, but both touch the assets or their playback; flag to the owner. authored.ts already falls back to the procedural score on decode failure. Audio 8's new covenant 'sound family in the game's key' must stay sound design, not new score."
+ ]
+}
