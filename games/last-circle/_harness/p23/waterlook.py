@@ -9,22 +9,28 @@ seed 7), turned into bar rows (PLAN.md "Lane R2A" acceptance bars; the audit val
     python _harness/p23/waterlook.py --disk --plant flat-light       # the W9 hemisphere / sun, no contrast curve   - MUST FAIL light
     python _harness/p23/waterlook.py --disk --plant sparse-grass     # the blade cell 0.56 -> 1.4 m                 - MUST FAIL grass
     python _harness/p23/waterlook.py --disk --plant grass-on-low     # the blade layer built on low too             - MUST FAIL low-identical
+    python _harness/p23/waterlook.py --disk --plant grass-on-sand    # the blades without the grass-ness mask (on beaches) - MUST FAIL grass-sand
     python _harness/p23/waterlook.py --disk --plant uw-sky-sharp     # no dome fog, no output-pass murk under water - MUST FAIL underwater
     python _harness/p23/waterlook.py --rev cbf0a1ff                  # the R2 base (W10 R1 live): every bar row MUST FAIL
 
-Rows (every view: actors / fx hidden, the frame drawn through the game's composer at the pinned camera after 26 stepped frames there):
-  water-detail  in-water view (vshots `inwater`), luminance p95 - p5 over the lower half >= 0.15 [0.06]
+Rows (every view: actors / fx hidden, the frame drawn through the game's composer at the pinned camera after 26 stepped frames there, the map
+clock then pinned - SHORE_T for the shore / in-water views, VIEW_T for the rest - so every view is the same frame run to run):
+  water-detail  in-water view (vshots `inwater`), luminance p95 - p5 over the lower half >= 0.15, the worst of 3 map clocks (bob crest / level /
+                trough) [0.06]
   glint         a sun-facing view over deep water (>= 2.5 m under every sampled point): >= 0.5 % (the plan's 0.3 % RAISED: the base build reads
                 0.298 % and the W9-surface plant 0.309 %, so 0.3 % did not separate them) of the water pixels (water A/B mask) at display
                 luminance >= 0.9; the same view turned away from the sun: 0 % [none]
   fresnel       away from the sun: mean water luminance in the band just under the horizon / looking straight down >= 1.3 [~1]
-  shore         top-down over the vshots shore point, 9 transects across the waterline: the white foam run that starts at the waterline is
+  shore         at EACH of 3 map clocks (the bob's crest, level, trough; the transects' waterline is the surface at that clock),
+                top-down over the vshots shore point, 9 transects across the waterline: the white foam run that starts at the waterline is
                 0.5-2.0 m wide (median), and the ground 0.05-0.9 m above the water is darker than 1.2-2.0 m above (ratio <= 0.85) [faint]
   storm-early   pre-close views (circle 1 waiting, "no damage yet"): pixels the wall tints lilac (its A/B, the change leaning violet) above
                 the horizon band (+3 % of the frame) <= 0.1 % of the frame [every view]
   storm-late    circle 1 closing: the wall A/B moves >= 1 % of the frame from 380 m (and the stormfx rows stay: run stormfx_storm)
   light         ground luminance spread p95 - p5 >= 0.25 on every map (mean of ground / ground2 / groundlow, lower half) [0.14 / 0.17 / 0.28];
                 the OD-2 drop view mean 0.45-0.55 held; interiors (3 houses' biggest ground-floor rooms) mean >= 0.9 x the base's
+  grass-sand    medium, the shore view (eye level on the beach): <= 2 % of the non-grass ground points 2-30 m out (the blade layer's grass-ness
+                bake < 0.15: beach, dry wash, mud) change when the blades are hidden [build 1: the beach under blades]
   grass         medium: >= 0.8 cards + tufts per m2 within 30 m of open ground (the audit's ground spot, or the nearest point whose 30 m disc is
                 >= 95 % land outside the town mask), and the blade layer moves >= 8 % of the lower half of a low view there [0.148]
   low-identical low tier, isla_viva: 4 views identical to the base build (<= 0.001 % of the pixels differ - the base's own run-to-run
@@ -63,6 +69,11 @@ MAPS = ["isla_viva", "ashgrid", "deepwood"]
 TIER_VIEWS = ("ground", "inwater", "shore")     # the player's eye-level views; vista (14 m over the highest ground) and vista2 (70 m up) are reported
 TIER_INFO = ("vista", "vista2")
 SEED = 7
+# map clocks the water views are pinned to (every view settled: the water's bob, foam wash and wave scroll are a function of this clock alone).
+# The bob is sin(0.7 t) * 0.12 m: SHORE_T = crest (+0.12), still water level, trough (-0.12) - the shore and water-detail rows are judged at
+# EVERY one of them (a foam band that only meets the bar at one phase of the bob is a fail); VIEW_T for the other views (as the storm / tier views)
+SHORE_T = (2.244, 4.488, 6.732)
+VIEW_T = 100.0
 RP = "runtime/3d/royale/"
 
 PLANTS = {
@@ -79,6 +90,8 @@ PLANTS = {
     "grass-on-low": [(RP + "maps.js", [("lamps: 0, grassR: 0, grassC: 1,", "lamps: 0, grassR: 30, grassC: 0.56,"),
                                        ("  if (LCFX) {\n    const L = field.lat, hp", "  if (true) {\n    const L = field.lat, hp"),
                                        ("if (W10V && TIER_Q.grassR > 0 && LCU.uLcHgt.value) {", "if (TIER_Q.grassR > 0 && LCU.uLcHgt.value) {")])],
+    # grass-on-sand = the blade layer without its grass-ness mask (the W10 R2A build-1 field: blades over beaches, washes, mud and snow)
+    "grass-on-sand": [(RP + "maps.js", [("         * step( gh3 * 0.9 + 0.05, gt.a );", "         * 1.0;")])],
     "uw-sky-sharp": [(RP + "maps.js", [("skyMat.uniforms.uUw.value = uw;", "skyMat.uniforms.uUw.value = 0;"),
                                        ("op.uniforms.lcGrade.value.set(K.w10Light && K.w10Light.contrast != null ? K.w10Light.contrast : W10_CONTRAST, uw, 0, 0);", "op.uniforms.lcGrade.value.set(K.w10Light && K.w10Light.contrast != null ? K.w10Light.contrast : W10_CONTRAST, 0, 0, 0);")])],
 }
@@ -157,7 +170,7 @@ SETTLE_JS = r"""(t) => { const W = window.__LC__.W; for (const fn of (W._mapUpda
 # shore transects across the waterline: points every 0.1 m from 20 m inland to 6 m out, 9 transects 3 m apart; [x, y, z, t (m seaward), above (m)]
 TRANSECT_JS = r"""([sx, sz, dx, dz]) => { const W = window.__LC__.W, M = W.map, wy = M.waterY, wl = M.water ? M.water.position.y : wy; const px = -dz, pz = dx; const out = [];
   for (let k = -4; k <= 4; k++) { const row = []; for (let i = -200; i <= 60; i++) { const t = i * 0.1, x = sx + px * k * 3 + dx * t, z = sz + pz * k * 3 + dz * t; const g = M.heightAt(x, z);
-    row.push([x, Math.max(g, wl), z, t, g - wy]); } out.push(row); }
+    row.push([x, Math.max(g, wl), z, t, g - wl]); } out.push(row); }   // (above: metres over the LIVE surface - the drawn waterline at this clock)
   return out; }"""
 
 STORM_JS = r"""() => { const W = window.__LC__.W, c = W.stormCtl; if (!c || !c.storm || !c.storm.phases.length) return null; const st = c.storm.stateAt(W.t);
@@ -186,17 +199,26 @@ ROOMS_JS = r"""([poi]) => { const W = window.__LC__.W, M = W.map; const P = M.po
 # the blade layer's placement in JS (the vertex shader's: world cell grid, hash jitter, ground lattice, mask): cards within r m of (x, z) whose
 # scale is >= 0.35 (the ring's fade counted honestly), and the tufts (the clutter instances with a real scale) within r
 GRASS_JS = r"""([x, z, r]) => { const W = window.__LC__.W, M = W.map, b = W._grassBlades; const out = { built: !!b, cards: 0, tufts: 0, area: Math.PI * r * r };
+  const GA = (x, z) => { const t = b && b.userData.gTint; if (!t) return 1; const n = t.n, u = (x + M.half) / (2 * M.half) * n - 0.5, v = (z + M.half) / (2 * M.half) * n - 0.5;
+    const i0 = Math.max(0, Math.min(n - 1, Math.floor(u))), j0 = Math.max(0, Math.min(n - 1, Math.floor(v))), i1 = Math.min(n - 1, i0 + 1), j1 = Math.min(n - 1, j0 + 1);
+    const fu = Math.max(0, Math.min(1, u - Math.floor(u))), fv = Math.max(0, Math.min(1, v - Math.floor(v))), a = (i, j) => t.px[(j * n + i) * 4 + 3] / 255;
+    return (a(i0, j0) * (1 - fu) + a(i1, j0) * fu) * (1 - fv) + (a(i0, j1) * (1 - fu) + a(i1, j1) * fu) * fv; };
   if (b) { const u = b.material.userData; const gd = b.userData.grass, GR = gd.R, GC = gd.C, N = gd.N; const f = Math.fround;
     const fr = (v) => v - Math.floor(v);
     const grH = (px, py) => { let a = fr(px * 0.1031), bb = fr(py * 0.1031), c = fr(px * 0.1031); const d = a * (bb + 33.33) + bb * (c + 33.33) + c * (a + 33.33); a += d; bb += d; c += d; return fr((a + bb) * c); };
     const cx = Math.floor(x / GC), cz = Math.floor(z / GC), h0 = N >> 1;
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const gx = cx + i - h0, gz = cz + j - h0;
       const h1 = grH(gx, gz), h2 = grH(gx + 17.3, gz + 17.3), h3 = grH(gx - 41.7, gz - 41.7);
-      const wx = (gx + 0.5 + (h1 - 0.5) * 0.9) * GC, wz = (gz + 0.5 + (h2 - 0.5) * 0.9) * GC; const d = Math.hypot(wx - x, wz - z); if (d > r) continue;
+      let wx = (gx + 0.5 + (h1 - 0.5) * 0.9) * GC, wz = (gz + 0.5 + (h2 - 0.5) * 0.9) * GC;
+      const kx = Math.floor(wx / 2.4), kz = Math.floor(wz / 2.4), kcx = (kx + 0.5 + (grH(kx + 211, kz + 211) - 0.5) * 0.7) * 2.4, kcz = (kz + 0.5 + (grH(kx + 307, kz + 307) - 0.5) * 0.7) * 2.4;
+      const kt = Math.min(1, Math.max(0, Math.hypot(wx - kcx, wz - kcz) / 1.7)), gcl = 1.25 + (0.4 - 1.25) * kt;
+      wx += (kcx - wx) * 0.3; wz += (kcz - wz) * 0.3;
+      const d = Math.hypot(wx - x, wz - z); if (d > r) continue;
       const e0 = GR * 0.72, tt = Math.min(1, Math.max(0, (d - e0) / (GR - e0))); const fade = 1 - tt * tt * (3 - 2 * tt);
       const g = M.heightAt(wx, wz); if (g < M.waterY + 0.35 || Math.max(Math.abs(wx), Math.abs(wz)) > M.half - 4) continue;
       const mk = b.userData.gMask; if (mk && mk[Math.floor((wz + M.half) / 4) * 400 + Math.floor((wx + M.half) / 4)]) continue;
-      if (fade * (0.6 + 0.7 * h3) >= 0.35) out.cards++; } }
+      if (b.userData.gTint && h3 * 0.9 + 0.05 > GA(wx, wz)) continue;
+      if (fade * (0.6 + 0.7 * h3) * gcl >= 0.35) out.cards++; } }
   let cl = null; W.scene.traverse((o) => { if (o.name === 'clutter') cl = o; });
   if (cl) { const m = new W.THREE.Matrix4(), p = new W.THREE.Vector3(), q = new W.THREE.Quaternion(), s = new W.THREE.Vector3();
     for (let i = 0; i < cl.count; i++) { cl.getMatrixAt(i, m); m.decompose(p, q, s); if (s.x >= 0.35 && Math.hypot(p.x - x, p.z - z) <= r) out.tufts++; } }
@@ -206,12 +228,28 @@ GRASS_JS = r"""([x, z, r]) => { const W = window.__LC__.W, M = W.map, b = W._gra
 # open ground for the grass count: from the audit's ground spot outward, the first point whose 30 m disc is >= 95 % land (>= 0.35 m above the water,
 # not under the city mask: streets, plazas and town blocks grow no grass by design); the audit spot itself when it qualifies
 GRASSSPOT_JS = r"""([x0, z0, r]) => { const W = window.__LC__.W, M = W.map, b = W._grassBlades, mk = b && b.userData.gMask;
+  const GA = (x, z) => { const t = b && b.userData.gTint; if (!t) return 1; const n = t.n, u = (x + M.half) / (2 * M.half) * n - 0.5, v = (z + M.half) / (2 * M.half) * n - 0.5;
+    const i0 = Math.max(0, Math.min(n - 1, Math.floor(u))), j0 = Math.max(0, Math.min(n - 1, Math.floor(v))), i1 = Math.min(n - 1, i0 + 1), j1 = Math.min(n - 1, j0 + 1);
+    const fu = Math.max(0, Math.min(1, u - Math.floor(u))), fv = Math.max(0, Math.min(1, v - Math.floor(v))), a = (i, j) => t.px[(j * n + i) * 4 + 3] / 255;
+    return (a(i0, j0) * (1 - fu) + a(i1, j0) * fu) * (1 - fv) + (a(i0, j1) * (1 - fu) + a(i1, j1) * fu) * fv; };
   const frac = (x, z) => { let n = 0, ok = 0; for (let i = 0; i < 64; i++) { const a = i * 2.39996, d = r * Math.sqrt((i + 0.5) / 64); const px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d; n++;
       if (M.heightAt(px, pz) < M.waterY + 0.35 || Math.max(Math.abs(px), Math.abs(pz)) > M.half - 4) continue;
-      if (mk && mk[Math.floor((pz + M.half) / 4) * 400 + Math.floor((px + M.half) / 4)]) continue; ok++; } return ok / n; };
+      if (mk && mk[Math.floor((pz + M.half) / 4) * 400 + Math.floor((px + M.half) / 4)]) continue; if (GA(px, pz) < 0.5) continue; ok++; } return ok / n; };
   for (let rr = 0; rr < 600; rr += 20) for (let k = 0; k < (rr ? 16 : 1); k++) { const x = x0 + Math.cos(k * 0.3927) * rr, z = z0 + Math.sin(k * 0.3927) * rr;
     const f = frac(x, z); if (f >= 0.95) { const H = M.heightAt(x, z); return { x, z, open: f, moved: rr, spec: [x, H + 0.5, z, x + 8, M.heightAt(x + 8, z + 2) + 0.6, z + 2, 60] }; } }
   return null; }"""
+
+# the grass-sand row's ground points: a 0.5 m grid 2-30 m in front of the camera, kept where the ground is NOT grass (the blade layer's own grass-ness
+# bake < 0.15: beach, dry wash, mud, snow, rock) and dry (>= 0.35 m over the water) - [x, y, z]; empty when the build has no grass-ness bake
+SANDPTS_JS = r"""([spec]) => { const W = window.__LC__.W, M = W.map, b = W._grassBlades; if (!b || !b.userData.gTint) return [];
+  const GA = (x, z) => { const t = b && b.userData.gTint; if (!t) return 1; const n = t.n, u = (x + M.half) / (2 * M.half) * n - 0.5, v = (z + M.half) / (2 * M.half) * n - 0.5;
+    const i0 = Math.max(0, Math.min(n - 1, Math.floor(u))), j0 = Math.max(0, Math.min(n - 1, Math.floor(v))), i1 = Math.min(n - 1, i0 + 1), j1 = Math.min(n - 1, j0 + 1);
+    const fu = Math.max(0, Math.min(1, u - Math.floor(u))), fv = Math.max(0, Math.min(1, v - Math.floor(v))), a = (i, j) => t.px[(j * n + i) * 4 + 3] / 255;
+    return (a(i0, j0) * (1 - fu) + a(i1, j0) * fu) * (1 - fv) + (a(i0, j1) * (1 - fu) + a(i1, j1) * fu) * fv; };
+  const [px, py, pz, tx, ty, tz] = spec; let fx = tx - px, fz = tz - pz; const fl = Math.hypot(fx, fz) || 1; fx /= fl; fz /= fl; const out = [];
+  for (let d = 2; d <= 30; d += 0.5) for (let w = -d; w <= d; w += 0.5) { const x = px + fx * d - fz * w, z = pz + fz * d + fx * w; const g = M.heightAt(x, z);
+    if (g < M.waterY + 0.35 || GA(x, z) >= 0.15) continue; out.push([x, g + 0.02, z]); }
+  return out; }"""
 
 INFO_JS = r"""() => { const W = window.__LC__.W, k = W.kernel, r = k.renderer, op = k.outputPass, b = W._grassBlades, st = W.stormCtl;
   let hemi = null; W.scene.traverse((o) => { if (o.isHemisphereLight) hemi = o; });
@@ -351,19 +389,19 @@ def part_map(s, v, R, map_id, shots, want, interiors=True):
         sp = {}
         for nm in ("ground", "ground2", "groundlow"):
             if nm in cams and cams[nm]:
-                r = shoot(s, cams[nm], shots, "%s_%s_l" % (tag, nm))
+                r = shoot(s, cams[nm], shots, "%s_%s_l" % (tag, nm), settle=VIEW_T)
                 sp[nm] = round(spread(r["A"]), 4)
         M["spread"] = sp
         dspec = s.js(SS.SPEC_JS, ["drop", {"dropAt": SS.DEF_DROP[map_id], "streetAt": SS.DEF_STREET[map_id], "plant": None}])
         s.js(SS.UNPIN_JS)
         if dspec:
-            r = shoot(s, dspec, shots, "%s_drop" % tag)
+            r = shoot(s, dspec, shots, "%s_drop" % tag, settle=VIEW_T)
             M["dropMean"] = round(float(lum(r["A"]).mean()), 4)
         if interiors:
             rooms = s.js(ROOMS_JS, [SS.DEF_DROP[map_id]])
             im = []
             for i, rm in enumerate(rooms):
-                r = shoot(s, rm["spec"], shots, "%s_room%d" % (tag, i))
+                r = shoot(s, rm["spec"], shots, "%s_room%d" % (tag, i), settle=VIEW_T)
                 im.append({"house": rm["id"], "mean": round(float(lum(r["A"]).mean()), 4)})
             M["interiors"] = im
     # ---- grass: density at the ground camera + the blade A/B in the low ground view
@@ -375,27 +413,43 @@ def part_map(s, v, R, map_id, shots, want, interiors=True):
         M["grass"] = s.js(GRASS_JS, [g["x"], g["z"], 30.0])
         M["grass"]["spot"] = {k: g.get(k) for k in ("x", "z", "open", "moved")}
         s.js(SS.UNPIN_JS)
-        a = shoot(s, gspec, shots, "%s_grass_on" % tag)
-        b = shoot(s, gspec, shots, "%s_grass_off" % tag, hide=("blades",))
+        a = shoot(s, gspec, shots, "%s_grass_on" % tag, settle=VIEW_T)
+        b = shoot(s, gspec, shots, "%s_grass_off" % tag, hide=("blades",), settle=VIEW_T)
         h = a["A"].shape[0]
         M["grass"]["bladePixPct"] = round(float((np.abs(a["A"] - b["A"]).max(axis=2)[h // 2:] > 6).mean() * 100), 2)
         M["grass"]["groundSpreadNoBlades"] = round(spread(b["A"]), 4)
+    # ---- grass-sand: the blade layer stands on grass only - in the shore view (eye level on the beach), the non-grass ground points the blades A/B moves
+    if "grass" in want and cams.get("shore"):
+        sp = s.js(SANDPTS_JS, [cams["shore"]])
+        if sp:
+            a = shoot(s, cams["shore"], shots, "%s_sand_on" % tag, pts=sp, settle=VIEW_T)
+            b = shoot(s, cams["shore"], shots, "%s_sand_off" % tag, hide=("blades",), pts=sp, settle=VIEW_T)
+            d = np.abs(a["A"] - b["A"]).max(axis=2)
+            Hh, Ww = d.shape
+            hit = [bool(d[int(q[1] * Hh), int(q[0] * Ww)] > 6) for q in a["proj"] if 0 <= q[0] < 1 and 0 <= q[1] < 1 and 0 < q[2] < 1]
+            M["grassSand"] = {"pts": len(hit), "bladePct": round(100.0 * sum(hit) / len(hit), 3) if hit else None}
+        else:
+            M["grassSand"] = {"pts": 0, "bladePct": None}
     # ---- water
     if "water" in want and cams.get("_shore"):
         W_ = M.setdefault("water", {})
-        r = shoot(s, cams["inwater"], shots, "%s_inwater" % tag)
-        W_["inwaterSpread"] = round(spread(r["A"]), 4)
+        per = {}
+        for t in SHORE_T:
+            r = shoot(s, cams["inwater"], shots, "%s_inwater_t%.3f" % (tag, t), settle=t)
+            per["%.3f" % t] = round(spread(r["A"]), 4)
+        W_["inwaterSpreadByClock"] = per
+        W_["inwaterSpread"] = min(per.values())                      # (judged at the worst phase of the bob)
     if "water" in want and cams.get("_deep"):
         W_ = M.setdefault("water", {})
         for nm in ("sunward", "sunaway"):
-            a = shoot(s, cams[nm], shots, "%s_%s" % (tag, nm))
-            b = shoot(s, cams[nm], shots, "%s_%s_nowater" % (tag, nm), hide=("water",))
+            a = shoot(s, cams[nm], shots, "%s_%s" % (tag, nm), settle=VIEW_T)
+            b = shoot(s, cams[nm], shots, "%s_%s_nowater" % (tag, nm), hide=("water",), settle=VIEW_T)
             m = water_mask(a["A"], b["A"])
             Lm = lum(a["A"])
             n = int(m.sum())
             W_[nm] = {"waterPx": n, "brightPct": round(float((Lm[m] >= 0.9).mean() * 100) if n else 0.0, 4), "p99": round(float(np.percentile(Lm[m], 99)), 3) if n else None}
-        a = shoot(s, cams["horizon"], shots, "%s_fresnel_horizon" % tag)
-        b = shoot(s, cams["horizon"], shots, "%s_fresnel_horizon_nowater" % tag, hide=("water",))
+        a = shoot(s, cams["horizon"], shots, "%s_fresnel_horizon" % tag, settle=VIEW_T)
+        b = shoot(s, cams["horizon"], shots, "%s_fresnel_horizon_nowater" % tag, hide=("water",), settle=VIEW_T)
         m = water_mask(a["A"], b["A"])
         hh = a["A"].shape[0]
         row = int(round(a["horizon"] * hh))
@@ -403,8 +457,8 @@ def part_map(s, v, R, map_id, shots, want, interiors=True):
         band[min(hh, row + int(0.02 * hh)): min(hh, row + int(0.12 * hh))] = True
         Lm = lum(a["A"])
         hv = float(Lm[m & band].mean()) if (m & band).sum() > 200 else None
-        a2 = shoot(s, cams["down"], shots, "%s_fresnel_down" % tag)
-        b2 = shoot(s, cams["down"], shots, "%s_fresnel_down_nowater" % tag, hide=("water",))
+        a2 = shoot(s, cams["down"], shots, "%s_fresnel_down" % tag, settle=VIEW_T)
+        b2 = shoot(s, cams["down"], shots, "%s_fresnel_down_nowater" % tag, hide=("water",), settle=VIEW_T)
         m2 = water_mask(a2["A"], b2["A"])
         c = np.zeros_like(m2)
         H2, W2 = c.shape
@@ -415,14 +469,18 @@ def part_map(s, v, R, map_id, shots, want, interiors=True):
     if "water" in want and cams.get("_shore"):
         W_ = M.setdefault("water", {})
         sh = cams["_shore"]
-        tr = s.js(TRANSECT_JS, [sh["x"], sh["z"], sh["dx"], sh["dz"]])
-        pts = [p[:3] for row in tr for p in row]
-        a = shoot(s, cams["shoretop"], shots, "%s_shoretop" % tag, pts=pts)
-        b = shoot(s, cams["shoretop"], shots, "%s_shoretop_nowater" % tag, hide=("water",), pts=pts)
-        W_["shore"] = shore_measure(a, b, tr)
+        byc = {}
+        for t in SHORE_T:
+            s.js(SETTLE_JS, t)                                          # (the transect's waterline is the surface at THIS clock)
+            tr = s.js(TRANSECT_JS, [sh["x"], sh["z"], sh["dx"], sh["dz"]])
+            pts = [p[:3] for row in tr for p in row]
+            a = shoot(s, cams["shoretop"], shots, "%s_shoretop_t%.3f" % (tag, t), pts=pts, settle=t)
+            b = shoot(s, cams["shoretop"], shots, "%s_shoretop_nowater_t%.3f" % (tag, t), hide=("water",), pts=pts, settle=t)
+            byc["%.3f" % t] = shore_measure(a, b, tr)
+        W_["shore"] = byc
     # ---- underwater (from below)
     if "uw" in want and cams.get("underup"):
-        r = shoot(s, cams["underup"], shots, "%s_underup" % tag)
+        r = shoot(s, cams["underup"], shots, "%s_underup" % tag, settle=VIEW_T)
         M["underup"] = {"hf": round(hf_energy(r["A"]), 5), "uw": s.safe_js("() => window.__LC__.W._uw", default=None)}
     return M
 
@@ -645,8 +703,8 @@ def main():
                 v.cnj("water", "no shore / deep-water camera on isla_viva")
             else:
                 det = {m: w.get("inwaterSpread") for m, w in ws.items() if w.get("inwaterSpread") is not None}
-                v.check("water-detail: in-water view, luminance p95-p5 of the lower half >= 0.15 (every map with a shore view)",
-                        bool(det) and all(x >= 0.15 for x in det.values()), det, ">= 0.15")
+                v.check("water-detail: in-water view, luminance p95-p5 of the lower half >= 0.15 (every map with a shore view; the worst of the bob's crest / level / trough clocks)",
+                        bool(det) and all(x >= 0.15 for x in det.values()), {m: ws[m].get("inwaterSpreadByClock") for m in det}, ">= 0.15")
                 gl = {m: {"sunward": w.get("sunward"), "sunaway": w.get("sunaway")} for m, w in ws.items() if w.get("sunward")}
                 ok = bool(gl) and all(x["sunward"]["waterPx"] > 5000 and x["sunward"]["brightPct"] >= 0.5 and x["sunaway"]["waterPx"] > 5000 and x["sunaway"]["brightPct"] == 0.0 for x in gl.values())
                 v.check("glint: sun-facing deep-water view >= 0.5 % of water pixels at luminance >= 0.9 (plan 0.3 %, raised: the base reads 0.298 %); facing away 0 %", ok, gl, ">= 0.5 % / 0 %")
@@ -654,9 +712,11 @@ def main():
                 v.check("fresnel: water luminance just under the horizon / looking down >= 1.3 (away from the sun)",
                         bool(fr) and all(x.get("ratio") is not None and x["ratio"] >= 1.3 for x in fr.values()), fr, ">= 1.3")
                 sh = {m: w.get("shore") for m, w in ws.items() if w.get("shore")}
-                ok = bool(sh) and all(x.get("foamMedian") is not None and 0.5 <= x["foamMedian"] <= 2.0 and x.get("wetMedian") is not None and x["wetMedian"] <= 0.85 for x in sh.values())
-                v.check("shore: foam band from the waterline 0.5-2.0 m wide (median of 9 transects); wet band (0.05-0.9 m above the water / 1.2-2.0 m) <= 0.85",
-                        ok, sh, "0.5-2.0 m; <= 0.85")
+                ok = bool(sh) and all(len(x) == len(SHORE_T) and all(c.get("foamMedian") is not None and 0.5 <= c["foamMedian"] <= 2.0 and c.get("wetMedian") is not None
+                                                                     and c["wetMedian"] <= 0.85 for c in x.values()) for x in sh.values())
+                v.check("shore: at the bob's crest, still level AND trough (map clock %s): foam band from the waterline 0.5-2.0 m wide (median of 9 transects); wet band (0.05-0.9 m above the water / 1.2-2.0 m) <= 0.85"
+                        % ", ".join("%.3f" % t for t in SHORE_T), ok,
+                        {m: {t: {k: c.get(k) for k in ("foamMedian", "wetMedian", "foamWidths", "deepRef")} for t, c in x.items()} for m, x in sh.items()}, "0.5-2.0 m; <= 0.85, every clock")
         if "storm" in want:
             se = {m: R.get(m, {}).get("stormEarly") for m in maps}
             if not all(x and x["early"] for x in se.values()):
@@ -704,6 +764,14 @@ def main():
             ok = all(x and x.get("perM2") is not None and x["perM2"] >= 0.8 and x.get("bladePixPct", 0) >= 8.0 for x in gr.values())
             v.check("grass: medium, >= 0.8 cards + tufts per m2 within 30 m of open ground and the blade layer moves >= 8 % of the lower half (every map)",
                     ok, gr, ">= 0.8 / m2")
+        if "grass" in want:
+            gs_ = {m: R.get(m, {}).get("grassSand") for m in maps}
+            judged = {m: x for m, x in gs_.items() if x and x.get("pts", 0) >= 50}
+            if not judged:
+                v.cnj("grass-sand", "no map's shore view has >= 50 non-grass ground points: %s" % gs_)
+            else:
+                v.check("grass-sand: the blade layer grows on grass only - in the shore view, <= 2 % of the non-grass ground points (beach / wash / mud, 2-30 m out) change with the blades hidden (every map with >= 50 points)",
+                        all(x["bladePct"] is not None and x["bladePct"] <= 2.0 for x in judged.values()), gs_, "<= 2 %")
         if "low" in want:
             bl, lb = (base or {}).get("low") or {}, R.get("lowBuild") or {}
             res = {}
