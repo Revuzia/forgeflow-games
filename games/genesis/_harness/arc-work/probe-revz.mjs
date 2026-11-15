@@ -42,7 +42,7 @@ const hour = Number(opts.hour ?? 10);
 const CAM = {
   region: { mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 1400, tilt: 40, hour, blend: 0 },
   town: { mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 90, tilt: 60, hour, blend: 0 },
-  towndecal: { mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 150, tilt: 52, hour, blend: 0 },
+  towndecal: { mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 90, tilt: 60, hour, blend: 0 },
   ridge: { mode: 'orbit', poi: 'peak', dist: 1800, tilt: 30, hour: 17.6, blend: 0 },
   orbit: { mode: 'orbit', lat: 12, lon: -30, dist: 7600, hour, blend: 0 },
   night: { mode: 'orbit', lat: 12, lon: -30, dist: 7600, hour: 0.5, blend: 0 },
@@ -78,6 +78,8 @@ const injectDecals = () => page.evaluate(() => {
     return orig(...a);
   };
 });
+// --hand=1: the god's pointer ring shown in every shot (hand.force), the pointer at the screen centre
+if (opts.hand) { await page.mouse.move(vw / 2, vh / 2); await page.evaluate(() => { globalThis.__GENESIS_FX__.fx.hand.force = true; }); }
 const views = String(opts.views ?? 'region,town,towndecal,ridge,orbit,night,coast,shore,forest').split(',');
 const settle = Number(opts.settle ?? 40);
 for (const v of views) {

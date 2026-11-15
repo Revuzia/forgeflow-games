@@ -1,3 +1,4 @@
+import { epithetOf } from '../../src/sim/god/story.ts';
 import { Sim } from '../../src/sim/sim.ts';
 import { planetArrays } from '../../src/sim/world/planet.ts';
 interface Run { sim: Sim; log: string[]; stage: number; defTown: number; broke: number }
@@ -53,11 +54,12 @@ const fresh = (): Run => ({ sim: new Sim({ seed: 1, scenario: 'babel', overrides
 const a = fresh(); const yr = 17280;
 drive(a, 40*yr);
 const b: Run = { ...a, sim: Sim.load(a.sim.save()), log: [...a.log] };
+a.sim.hash(); b.sim.hash();
 const day = 1440;
 const hdr = (r: Run) => JSON.stringify((r.sim as any).header(false), (k,v)=> (k==='stamp'||k==='fieldVer')?undefined:v);
 for (let d = 0; d < 100; d++) {
   const prev = JSON.stringify([a.stage,b.stage]);
-  drive(a, 40*yr + (d+1)*day); drive(b, 40*yr + (d+1)*day);
+  drive(a, 40*yr + (d+1)*day); epithetOf(a.sim.u, 0); drive(b, 40*yr + (d+1)*day);
   if (a.sim.hash() !== b.sim.hash()) {
     console.log('DIVERGE day', d, 'tick', a.sim.u.tick, 'stages', a.stage, b.stage);
     const ha = JSON.parse(hdr(a)), hb = JSON.parse(hdr(b));
