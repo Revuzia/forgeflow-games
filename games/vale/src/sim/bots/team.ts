@@ -109,6 +109,7 @@ export function assignLanes(k: Knowledge, team: number): Map<PlayerId, LaneAssig
   return out;
 }
 
+const JG_CLS = typeof process !== 'undefined' && process.env?.VALE_AB_JG ? Number(process.env.VALE_AB_JG) : 2;   // TEMP A/B
 export class TeamBrain {
   readonly team: number;
   readonly k: Knowledge;
@@ -349,7 +350,7 @@ export class TeamBrain {
           const e = p.ent;
           if (!e || !e.alive || e.hp < e.maxHp * 0.35) continue;
           // (the laning phase's grovehunter keeps its clear and its ganks: only the base itself calls it home)
-          if (laning && cls < 2 && this.assign.get(p.player)?.jungle) continue;
+          if (laning && cls < JG_CLS && this.assign.get(p.player)?.jungle) continue;
           const ms = Math.max(1, e.stats.moveSpeed);
           const dist = dhypot(e.x - st.x, e.y - st.y);
           const walk = dist < 14 ? 0 : dist * 1.25 / ms;

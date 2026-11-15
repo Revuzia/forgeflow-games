@@ -42,8 +42,10 @@ const ROW_GAP = 1.3, COL_GAP = 1.1;
 const CHASE_STALL_TICKS = 60;
 const CHASE_GAIN = 0.3;
 /** … or one creeping with the back of its own blob (orch1 r2: 0.2 m/s behind a siege, never swinging): no swing and under
- *  CREEP_GAIN m closed for CREEP_TICKS */
-const CREEP_TICKS = typeof process !== 'undefined' && process.env?.VALE_AB_NOCREEP === '1' ? 1e9 : 120;   // TEMP A/B
+ *  CREEP_GAIN m of ground covered for CREEP_TICKS while it holds a chase, whatever it chases (orch1 r2 round 2: the
+ *  front row kills target after target, so a watch keyed to one target restarted every few seconds and the back of the
+ *  blob stood 6+ s without a swing) */
+const CREEP_TICKS = 120;
 const CREEP_GAIN = 1.2;
 /** ticks the step-out (an attack-move) runs before the Wick re-thinks */
 const FLANK_TICKS = 60;
@@ -60,8 +62,8 @@ interface MinionState {
   lastWpX: number; lastWpY: number;
   /** blocked-chase watch: the target, its best gap so far, the tick that gap was last improved; step-out end tick */
   chaseT: number; chaseGap: number; chaseAt: number; flankUntil: number;
-  /** creep watch: the Wick's actionSeq at the window start, the gap then, the window's start tick */
-  creepSeq: number; creepGap: number; creepAt: number;
+  /** creep watch: the Wick's actionSeq at the window start, where it stood then, the window's start tick */
+  creepSeq: number; creepX: number; creepY: number; creepAt: number;
 }
 interface WaveState { n: number; nextAt: number; paths: V2T[][][] }
 const KEY = 'waves';
@@ -118,7 +120,7 @@ function spawnWave(w: World, st: WaveState, n: number, at: number): void {
         const row = Math.floor(i / 3), col = (i % 3) - 1;
         const x = sx - dx * row * ROW_GAP - dy * col * COL_GAP, y = sy - dy * row * ROW_GAP + dx * col * COL_GAP;
         const e = spawnUnit(w, units[i], team, x, y, { level, facing });
-        setExt<MinionState>(e, MKEY, { path, wp: path.length > 1 ? 1 : 0, chasing: false, cx: e.x, cy: e.y, lastWpX: NaN, lastWpY: NaN, chaseT: -1, chaseGap: Infinity, chaseAt: 0, flankUntil: -1, creepSeq: -1, creepGap: Infinity, creepAt: 0 });
+        setExt<MinionState>(e, MKEY, { path, wp: path.length > 1 ? 1 : 0, chasing: false, cx: e.x, cy: e.y, lastWpX: NaN, lastWpY: NaN, chaseT: -1, chaseGap: Infinity, chaseAt: 0, flankUntil: -1, creepSeq: -1, creepX: e.x, creepY: e.y, creepAt: 0 });
         followLane(w, e, minionState(e)!);
       }
     }
@@ -163,8 +165,9 @@ function segDist2(px: number, py: number, ax: number, ay: number, bx: number, by
   const qx = ax + dx * t - px, qy = ay + dy * t - py;
   return qx * qx + qy * qy;
 }
-/** an open spot to attack `t` from, off the crowded line: on its ring at reach, the side nearest first; null: none */
-function flankSpot(w: World, e: Entity, t: Entity): { x: number; y: number } | null {
+/** an open spot to attack `t` from, off the crowded line: on its ring at reach, the side nearest first; null: none
+ *  (exported for probe_sim_minion_flow: a Wick with no such spot, boxed in by its own wave, is queued, not frozen) */
+export function flankSpot(w: World, e: Entity, t: Entity): { x: number; y: number } | null {
   const R = t.radius + e.radius + Math.max(0.2, attackRange(e) * 0.7);
   const base = datan2(e.y - t.y, e.x - t.x);
   const side = e.id % 2 === 0 ? 1 : -1;
@@ -188,16 +191,22 @@ function flankSpot(w: World, e: Entity, t: Entity): { x: number; y: number } | n
   return null;
 }
 
+/** the creep watch starts over (a swing, ground covered, or a step-out begun); a target lost and the next one taken
+ *  does not restart it (the back of a blob loses its target whenever the front row kills it) */
+function creepReset(w: World, e: Entity, m: MinionState): void {
+  m.creepSeq = e.actionSeq; m.creepX = e.x; m.creepY = e.y; m.creepAt = w.tick;
+}
+
 /** a chase that stopped closing in: step out to an open attack spot (true: it did) */
 function unblockChase(w: World, e: Entity, m: MinionState, t: Entity): boolean {
   const gap = Math.sqrt(dist2(t, e.x, e.y)) - t.radius - e.radius - attackRange(e);
   if (gap <= 0) { m.chaseT = -1; return false; }
-  if (m.chaseT !== t.id) { m.creepSeq = e.actionSeq; m.creepGap = gap; m.creepAt = w.tick; }
-  else if (e.actionSeq !== m.creepSeq || gap < m.creepGap - CREEP_GAIN) { m.creepSeq = e.actionSeq; m.creepGap = gap; m.creepAt = w.tick; }
-  const creeping = m.chaseT === t.id && w.tick - m.creepAt >= CREEP_TICKS;
+  if (e.actionSeq !== m.creepSeq || dist2(e, m.creepX, m.creepY) >= CREEP_GAIN * CREEP_GAIN) creepReset(w, e, m);
+  const creeping = w.tick - m.creepAt >= CREEP_TICKS;
   if (!creeping && (m.chaseT !== t.id || gap < m.chaseGap - CHASE_GAIN)) { m.chaseT = t.id; m.chaseGap = gap; m.chaseAt = w.tick; return false; }
   if (!creeping && w.tick - m.chaseAt < CHASE_STALL_TICKS) return false;
   m.chaseT = -1;
+  creepReset(w, e, m);
   let p = flankSpot(w, e, t);
   if (!p) {
     // no open spot round it: the nearest other enemy within aggro that is in reach already, or has one

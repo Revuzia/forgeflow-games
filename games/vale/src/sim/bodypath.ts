@@ -73,9 +73,7 @@ const discPool: Disc[] = [];
  * `all`: every body counts (the progress watchdog's re-plan: allies walking with it have not cleared the way).
  */
 /** a fighter and the Wicks of its own side pass through each other (ruling 39): neither body-blocks nor shoves the other */
-const AB_NOGHOST = typeof process !== 'undefined' && process.env?.VALE_AB_NOGHOST === '1';   // TEMP A/B
 export function ghosts(a: Entity, b: Entity): boolean {
-  if (AB_NOGHOST) return false;
   return a.team === b.team && ((a.kind === 'fighter' && b.kind === 'minion') || (a.kind === 'minion' && b.kind === 'fighter'));
 }
 

@@ -1,6 +1,6 @@
 {
  "probe": "orch1 W1-C AUD-O13 audio runtime proof",
- "head": "466f61a61",
+ "head": "2ef93bd19",
  "machine": "shared (other lanes held heavy slots; load1 per run below). Loudness and cue gates are block-metered on the output and do not depend on frame timing; the A/V sync mode was not part of this set.",
  "tokens": {
   "masterLUFS": "-18 +/- 1.5",
@@ -29,12 +29,84 @@
   {
    "queue": "rift_coop",
    "seed": 3,
-   "missing": true
+   "fighter": "lisvel",
+   "pass": true,
+   "gates": {
+    "healPerMinLe6": true,
+    "enemyDownFires": true,
+    "lampSetFires": true,
+    "lampOutFires": true,
+    "announcerPeakOverSfxP99Ge3": true,
+    "masterIntegratedInTokens": true,
+    "fighterKitShareGe50": true,
+    "ambienceUnderMusic": true,
+    "ambienceQuietUnderMusic": true
+   },
+   "notMeasured": [],
+   "masterLUFS": -17.02,
+   "marginLU": 0.52,
+   "sfxLUFS": -19.16,
+   "musicLUFS": -28.95,
+   "ambienceLUFS": -41.28,
+   "kitSharePct": 70.04,
+   "announcerPeakOverSfxP99": 4.82,
+   "announcerMedianOverTeamfightP99": 3.79,
+   "healPerMin": 1,
+   "leveller": {
+    "trimDb": 1.2,
+    "gainDbP50": 0,
+    "gainDbP10": -7.31,
+    "gainDbMin": -8,
+    "cutOver1dBPct": 29.09,
+    "prioSharePct": 62.94,
+    "threatSharePct": 10.69
+   },
+   "machine": {
+    "load1Max": 6.46,
+    "load1Mean": 5.43
+   },
+   "report": "_harness/_reports/w1c/i_rift_coop_3.json"
   },
   {
    "queue": "rift_coop",
    "seed": 7,
-   "missing": true
+   "fighter": "kemdo",
+   "pass": true,
+   "gates": {
+    "healPerMinLe6": true,
+    "enemyDownFires": true,
+    "lampSetFires": true,
+    "lampOutFires": true,
+    "announcerPeakOverSfxP99Ge3": true,
+    "masterIntegratedInTokens": true,
+    "fighterKitShareGe50": true,
+    "ambienceUnderMusic": true,
+    "ambienceQuietUnderMusic": true
+   },
+   "notMeasured": [],
+   "masterLUFS": -18.69,
+   "marginLU": 0.81,
+   "sfxLUFS": -20.38,
+   "musicLUFS": -30,
+   "ambienceLUFS": -40.82,
+   "kitSharePct": 73.95,
+   "announcerPeakOverSfxP99": 4.63,
+   "announcerMedianOverTeamfightP99": 2.24,
+   "healPerMin": 0.57,
+   "leveller": {
+    "trimDb": 1.2,
+    "gainDbP50": 0,
+    "gainDbP10": 0,
+    "gainDbMin": -8,
+    "cutOver1dBPct": 7.97,
+    "prioSharePct": 63.74,
+    "threatSharePct": 6.73
+   },
+   "machine": {
+    "load1Max": 5.22,
+    "load1Mean": 4.08
+   },
+   "report": "_harness/_reports/w1c/i_rift_coop_7.json"
   },
   {
    "queue": "rift_coop",
@@ -82,7 +154,43 @@
   {
    "queue": "rift_coop",
    "seed": 21,
-   "missing": true
+   "fighter": "ardit",
+   "pass": true,
+   "gates": {
+    "healPerMinLe6": true,
+    "enemyDownFires": true,
+    "lampSetFires": true,
+    "lampOutFires": true,
+    "announcerPeakOverSfxP99Ge3": true,
+    "masterIntegratedInTokens": true,
+    "fighterKitShareGe50": true,
+    "ambienceUnderMusic": true,
+    "ambienceQuietUnderMusic": true
+   },
+   "notMeasured": [],
+   "masterLUFS": -19.49,
+   "marginLU": 0.01,
+   "sfxLUFS": -20.92,
+   "musicLUFS": -30.14,
+   "ambienceLUFS": -40.65,
+   "kitSharePct": 71.99,
+   "announcerPeakOverSfxP99": 6.26,
+   "announcerMedianOverTeamfightP99": 4.67,
+   "healPerMin": 0.29,
+   "leveller": {
+    "trimDb": 1.2,
+    "gainDbP50": 0,
+    "gainDbP10": 0,
+    "gainDbMin": -7.93,
+    "cutOver1dBPct": 4.11,
+    "prioSharePct": 70.87,
+    "threatSharePct": 7.46
+   },
+   "machine": {
+    "load1Max": 3.54,
+    "load1Mean": 2.51
+   },
+   "report": "_harness/_reports/w1c/i_rift_coop_21.json"
   },
   {
    "queue": "bridge_standard",
@@ -131,41 +239,232 @@
   {
    "queue": "bridge_standard",
    "seed": 7,
-   "missing": true
+   "fighter": "ulkro",
+   "pass": true,
+   "gates": {
+    "healPerMinLe6": true,
+    "enemyDownFires": true,
+    "lampSetFires": true,
+    "lampOutFires": true,
+    "announcerPeakOverSfxP99Ge3": true,
+    "masterIntegratedInTokens": true,
+    "fighterKitShareGe50": true,
+    "ambienceUnderMusic": true,
+    "ambienceQuietUnderMusic": true
+   },
+   "notMeasured": [],
+   "masterLUFS": -18.18,
+   "marginLU": 1.32,
+   "sfxLUFS": -22.57,
+   "musicLUFS": -28.57,
+   "ambienceLUFS": -44.47,
+   "kitSharePct": 77.98,
+   "announcerPeakOverSfxP99": 7.84,
+   "announcerMedianOverTeamfightP99": 4.63,
+   "healPerMin": 4.27,
+   "leveller": {
+    "trimDb": -4.5,
+    "gainDbP50": -6.52,
+    "gainDbP10": -8,
+    "gainDbMin": -8,
+    "cutOver1dBPct": 70.6,
+    "prioSharePct": 44.22,
+    "threatSharePct": 16.95
+   },
+   "machine": {
+    "load1Max": 3.54,
+    "load1Mean": 2.5
+   },
+   "report": "_harness/_reports/w1c/i_bridge_standard_7.json"
   },
   {
    "queue": "bridge_standard",
    "seed": 11,
-   "missing": true
+   "fighter": "ervet",
+   "pass": true,
+   "gates": {
+    "healPerMinLe6": true,
+    "enemyDownFires": true,
+    "lampSetFires": true,
+    "lampOutFires": null,
+    "announcerPeakOverSfxP99Ge3": true,
+    "masterIntegratedInTokens": true,
+    "fighterKitShareGe50": true,
+    "ambienceUnderMusic": true,
+    "ambienceQuietUnderMusic": true
+   },
+   "notMeasured": [
+    "lampOutFires"
+   ],
+   "masterLUFS": -18.3,
+   "marginLU": 1.2,
+   "sfxLUFS": -22.86,
+   "musicLUFS": -28.39,
+   "ambienceLUFS": -44.95,
+   "kitSharePct": 80.16,
+   "announcerPeakOverSfxP99": 8.13,
+   "announcerMedianOverTeamfightP99": 4.31,
+   "healPerMin": 4.27,
+   "leveller": {
+    "trimDb": -4.5,
+    "gainDbP50": -8,
+    "gainDbP10": -8,
+    "gainDbMin": -8,
+    "cutOver1dBPct": 77.15,
+    "prioSharePct": 54.17,
+    "threatSharePct": 11.35
+   },
+   "machine": {
+    "load1Max": 6.7,
+    "load1Mean": 3.05
+   },
+   "report": "_harness/_reports/w1c/i_bridge_standard_11.json"
   },
   {
    "queue": "fray_standard",
    "seed": 3,
-   "missing": true
+   "fighter": "lisvel",
+   "pass": true,
+   "gates": {
+    "healPerMinLe6": true,
+    "enemyDownFires": true,
+    "lampSetFires": null,
+    "lampOutFires": null,
+    "announcerPeakOverSfxP99Ge3": true,
+    "masterIntegratedInTokens": true,
+    "fighterKitShareGe50": true,
+    "ambienceUnderMusic": true,
+    "ambienceQuietUnderMusic": true
+   },
+   "notMeasured": [
+    "lampSetFires",
+    "lampOutFires"
+   ],
+   "masterLUFS": -17.83,
+   "marginLU": 1.33,
+   "sfxLUFS": -21.94,
+   "musicLUFS": -28.64,
+   "ambienceLUFS": -43.21,
+   "kitSharePct": 78.71,
+   "announcerPeakOverSfxP99": 8.47,
+   "announcerMedianOverTeamfightP99": 7.17,
+   "healPerMin": 1.85,
+   "leveller": {
+    "trimDb": -3,
+    "gainDbP50": -1.8,
+    "gainDbP10": -7.8,
+    "gainDbMin": -8,
+    "cutOver1dBPct": 55.53,
+    "prioSharePct": 83.29,
+    "threatSharePct": 8.88
+   },
+   "machine": {
+    "load1Max": 6.7,
+    "load1Mean": 3.34
+   },
+   "report": "_harness/_reports/w1c/i_fray_standard_3.json"
   },
   {
    "queue": "fray_standard",
    "seed": 7,
-   "missing": true
+   "fighter": "tunlan",
+   "pass": true,
+   "gates": {
+    "healPerMinLe6": true,
+    "enemyDownFires": true,
+    "lampSetFires": null,
+    "lampOutFires": null,
+    "announcerPeakOverSfxP99Ge3": true,
+    "masterIntegratedInTokens": true,
+    "fighterKitShareGe50": true,
+    "ambienceUnderMusic": true,
+    "ambienceQuietUnderMusic": true
+   },
+   "notMeasured": [
+    "lampSetFires",
+    "lampOutFires"
+   ],
+   "masterLUFS": -18.79,
+   "marginLU": 0.71,
+   "sfxLUFS": -21.76,
+   "musicLUFS": -29.17,
+   "ambienceLUFS": -41.45,
+   "kitSharePct": 80.57,
+   "announcerPeakOverSfxP99": 8.61,
+   "announcerMedianOverTeamfightP99": 6.24,
+   "healPerMin": 1.51,
+   "leveller": {
+    "trimDb": -3,
+    "gainDbP50": 0,
+    "gainDbP10": -5.68,
+    "gainDbMin": -8,
+    "cutOver1dBPct": 37.2,
+    "prioSharePct": 78.6,
+    "threatSharePct": 12.57
+   },
+   "machine": {
+    "load1Max": 6.25,
+    "load1Mean": 5.34
+   },
+   "report": "_harness/_reports/w1c/i_fray_standard_7.json"
   },
   {
    "queue": "fray_standard",
    "seed": 11,
-   "missing": true
+   "fighter": "hesmi",
+   "pass": true,
+   "gates": {
+    "healPerMinLe6": true,
+    "enemyDownFires": true,
+    "lampSetFires": null,
+    "lampOutFires": null,
+    "announcerPeakOverSfxP99Ge3": true,
+    "masterIntegratedInTokens": true,
+    "fighterKitShareGe50": true,
+    "ambienceUnderMusic": true,
+    "ambienceQuietUnderMusic": true
+   },
+   "notMeasured": [
+    "lampSetFires",
+    "lampOutFires"
+   ],
+   "masterLUFS": -17.81,
+   "marginLU": 1.31,
+   "sfxLUFS": -21.88,
+   "musicLUFS": -28.53,
+   "ambienceLUFS": -43.32,
+   "kitSharePct": 83.65,
+   "announcerPeakOverSfxP99": 8.66,
+   "announcerMedianOverTeamfightP99": 7.63,
+   "healPerMin": 2.42,
+   "leveller": {
+    "trimDb": -3,
+    "gainDbP50": -1.36,
+    "gainDbP10": -8,
+    "gainDbMin": -8,
+    "cutOver1dBPct": 53.6,
+    "prioSharePct": 85.7,
+    "threatSharePct": 8.27
+   },
+   "machine": {
+    "load1Max": 5.22,
+    "load1Mean": 4.08
+   },
+   "report": "_harness/_reports/w1c/i_fray_standard_11.json"
   }
  ],
  "summary": {
   "runs": 10,
-  "passed": 2,
-  "missing": 8,
+  "passed": 10,
+  "missing": 0,
   "masterRangeLUFS": [
-   -18.42,
-   -17.77
+   -19.49,
+   -17.02
   ],
-  "minMarginLU": 1.08,
+  "minMarginLU": 0.01,
   "minKitSharePct": 69.68,
-  "minAnnouncerPeakOverSfxP99": 5.03,
-  "maxHealPerMinBridge": 3.98
+  "minAnnouncerPeakOverSfxP99": 4.63,
+  "maxHealPerMinBridge": 4.27
  },
  "spots": {
   "rift_coop": {
