@@ -87,6 +87,14 @@ export interface ShellDevApi {
   pieceGaps(at?: { x: number; y: number; z: number } | null): Array<{ frac: number; chunk: boolean; x: number; y: number; z: number; r: number; gap: number | null; top: number; near: number }>;
   /** where the eyes sit on the play body (cut.ts faceAnchor, world space): the Cut tool keeps the face on the side that holds it */
   faceAnchor(): { x: number; y: number; z: number };
+  /** SHELL-4 X04: remember the play body's REST shape (restLocal), genome, radius and mesh size now (before a cut) */
+  restSnapshot(): { genomeCode: string; n: number; restRadius: number };
+  /** SHELL-4 X04: the play body now against the snapshot: the same genome, mesh and radius, the RMS of the rest positions' difference over the
+   *  snapshot's radius, its share of the whole and whether it is a piece build (null without a snapshot) */
+  restCompare(): { sameGenome: boolean; n: [number, number]; radiusRatio: number; rmsR0: number; frac: number; piece: boolean } | null;
+  /** SHELL-4 X07: every piece of the play squishy (the face piece first) on the real mat: the lowest particle above the table (m), its highest, every
+   *  coordinate finite, and how many ordered pairs have one piece's centre inside another's skin (a tunnel) */
+  pieceHealth(): { pieces: number; lowest: number[]; top: number[]; finite: boolean; centreInside: number };
 }
 
 export type ShellDebugHook = DebugHook & { shell: ShellDevApi };
@@ -107,6 +115,7 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
   const { audio } = game;
   let labHold: { handle: ReturnType<typeof audio.squishStart>; t0: number } | null = null;
   let labEndAt = -1;
+  let restSnap: { code: string; rest: Float64Array; n: number; r: number } | null = null;   // restSnapshot / restCompare (X04)
 
   game.onStep((_dt, t) => {
     if (labHold) {
@@ -349,6 +358,42 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
       return vs ? { total: vs.length, faces: vs.filter((v) => !v.chunk).length, chunks: vs.filter((v) => !!v.chunk).length } : null;
     },
     faceAnchor: () => faceAnchor(game.bodies.body),
+    restSnapshot() {
+      const b = game.bodies.body;
+      restSnap = { code: encodeGenome(game.genome), rest: Float64Array.from(b.restLocal), n: b.vertexCount, r: b.restRadius };
+      return { genomeCode: restSnap.code, n: restSnap.n, restRadius: restSnap.r };
+    },
+    restCompare() {
+      if (!restSnap) return null;
+      const b = game.bodies.body, R = b.restLocal, S = restSnap.rest;
+      let s = 0;
+      const m = Math.min(R.length, S.length);
+      for (let i = 0; i < m; i++) s += (R[i] - S[i]) ** 2;
+      const rms = R.length === S.length ? Math.sqrt(s / Math.max(1, m / 3)) / restSnap.r : Infinity;
+      return { sameGenome: encodeGenome(game.genome) === restSnap.code, n: [restSnap.n, b.vertexCount], radiusRatio: b.restRadius / restSnap.r, rmsR0: rms, frac: b.frac ?? 1, piece: game.cut.isPiece(b) || (b.frac ?? 1) < 1 };
+    },
+    pieceHealth() {
+      const all = [game.bodies.body, ...game.bodies.extras.filter((x) => x.piece).map((x) => x.body)];
+      let finite = true, inside = 0;
+      const lowest: number[] = [], top: number[] = [];
+      for (const b of all) {
+        let lo = Infinity, hi = -Infinity;
+        for (let i = 0; i < b.vertexCount * 3; i++) if (!Number.isFinite(b.positions[i])) finite = false;
+        for (let i = 0; i < b.vertexCount; i++) { const y = b.positions[i * 3 + 1]; if (y < lo) lo = y; if (y > hi) hi = y; }
+        lowest.push(lo); top.push(hi);
+      }
+      for (const a of all) for (const o of all) {
+        if (a === o) continue;
+        const dx = a.center.x - o.center.x, dy = a.center.y - o.center.y, dz = a.center.z - o.center.z, d = Math.hypot(dx, dy, dz);
+        if (d < 1e-9) { inside++; continue; }
+        // a's centre is inside o when o's skin reaches past it along the line from o's centre to a's
+        const ux = dx / d, uy = dy / d, uz = dz / d;
+        let reach = -Infinity;
+        for (let i = 0; i < o.vertexCount; i++) reach = Math.max(reach, (o.positions[i * 3] - o.center.x) * ux + (o.positions[i * 3 + 1] - o.center.y) * uy + (o.positions[i * 3 + 2] - o.center.z) * uz);
+        if (reach > d) inside++;
+      }
+      return { pieces: all.length, lowest, top, finite, centreInside: inside };
+    },
     pieceGaps(at) {
       const face = game.bodies.body;
       const all = [face, ...game.bodies.extras.filter((x) => x.piece).map((x) => x.body)];

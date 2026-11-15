@@ -1040,7 +1040,8 @@ async function main() {
       });
       // a squeeze held for `frames` sim frames at the middle of the squishy, deterministic (sim paused and stepped through the hook, like the stretch below); the
       // pending-arc length is sampled 4 times while it is held; the finger is let go after, and the sim stays paused (the caller resumes it)
-      const squeezeHold = (b, frames) => page.evaluate(async (b, frames) => {
+      // (page.evaluate takes ONE argument: the pair goes in an array; the first version passed two and the section threw "Too many arguments")
+      const squeezeHold = (b, frames) => page.evaluate(async ([b, frames]) => {
         const wh = window.__WH__; wh.pause();
         const read = () => { const p = document.querySelector('.meter-pending'); return parseFloat((p.getAttribute('stroke-dasharray') || '0').split(/[ ,]+/)[0]); };
         const yieldTask = () => new Promise((r) => setTimeout(r, 0));
@@ -1052,7 +1053,12 @@ async function main() {
         wh.pointerUp();
         for (let i = 0; i < 4; i++) { wh.step(1 / 60, 3); await yieldTask(); }
         return held;
-      }, b, frames);
+      }, [b, frames]);
+      // the ring's data-bank marker is TRANSIENT: bankPending(true) sets 'paid' and a 900 ms wall-clock timer clears it (meterRing.ts). A SwiftShader frame at 1280x800
+      // takes ~0.3 s, so the 4 stepped slices after the let-go outlast it and a read afterwards finds nothing (the first run: "bank null" with the fill +9.8 %).
+      // A MutationObserver logs every value the marker takes, so the row reads what the ring did, not what is left of it after a slow machine's frames.
+      await page.evaluate(() => { window.__bankLog = []; new MutationObserver(() => { const v = document.querySelector('.meter').dataset.bank; if (v) window.__bankLog.push(v); }).observe(document.querySelector('.meter'), { attributes: true, attributeFilter: ['data-bank'] }); });
+      const bankLog = () => page.evaluate(() => { const l = window.__bankLog.slice(); window.__bankLog.length = 0; return l; });
       // 1. a quick TAP, real mouse: it pays nothing (the poke lands, audio.poke plays), so there are no sparks, no glow, no pending arc and the ring stays put
       const r0 = await ring();
       const B = await body(page); const vp = page.viewportSize();
@@ -1086,8 +1092,11 @@ async function main() {
       check('XP: holding a stretch for 3 s shows a lighter pending arc on the ring that grows while it is held',
         st.grabbed && st.pendOn === 'true' && grows, `pending arc ${sm.map((v) => (100 * v / C).toFixed(1) + '%').join(' -> ')} of the ring (grabbed ${st.grabbed})`);
       const fill1 = (await ring()).fill;
+      await bankLog();
       await page.evaluate(async () => { const wh = window.__WH__; wh.pointerUp(); for (let i = 0; i < 4; i++) { wh.step(1 / 60, 3); await new Promise((r) => setTimeout(r, 0)); } });
       const rb = await ring();
+      rb.bankSeen = await bankLog();
+      rb.bank = rb.bank ?? (rb.bankSeen.length ? rb.bankSeen.join('>') : null);
       await sleep(600);
       await page.screenshot({ path: resolve(SHOTS, 'xp_stretch_banked_desktop.png'), timeout: 240000, caret: 'hide' });
       await sleep(1400);
@@ -1769,8 +1778,14 @@ async function main() {
       const Bc = await body(page);
       await page.evaluate((b2) => window.__WH__.shell.cutSwipe(b2.x + 0.04, b2.y - 0.3, b2.x + 0.05, b2.y + 0.3), Bc);
       await cutIdle(page, 1.5);
-      // Split in two up to 4, then 6; a 7th is refused
-      for (let i = 0; i < 2; i++) { await pclick(page, '.cutbar [data-key="split"]'); await cutIdle(page, 1.5); }
+      // Split in two up to 4, then 6; a 7th is refused. (SHELL-4 step 4) The cut that makes the 4th piece is filmed: mid-neck (0.16 s in) and right after the parting (one frame after
+      // the swap), for the screenshot review
+      await pclick(page, '.cutbar [data-key="split"]'); await cutIdle(page, 1.5);
+      await pclick(page, '.cutbar [data-key="split"]');
+      await stepSim(page, 0.16);
+      await shot(page, 'cut4_neck_desktop');
+      await cutIdle(page, 1.5); await stepSim(page, 1 / 30);
+      await shot(page, 'cut4_parted_desktop');
       await stepSim(page, 1);
       const t4 = await tools(page);
       await shot(page, 'cut4_desktop');
@@ -1871,6 +1886,16 @@ async function main() {
       await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null && !wh.shell.ceremony().pending`, 8, 0.1);
       check('leaving: a capsule ceremony starts whole (pieces reconnected first, the tool back to the Hand)', k3.pieces === 2 && tc.pieces === 1 && tc.extras === 0 && tc.tool === 'hand', JSON.stringify({ k3, tc: { p: tc.pieces, x: tc.extras, tool: tc.tool } }));
       await settle(page);
+      // (step 3: CUT.md X05 names "starting a merge"; no row drove it) a merge ceremony started while the squishy is in pieces (the dev merge entry: the real
+      // game.playMerge -> ceremonies.playMerge path the merge pad uses) starts whole too
+      const k3m = await cutTwo();
+      await page.evaluate(() => { window.__WH__.pause(); window.__mergeCutP = window.__WH__.shell.merge({}); });
+      await stepUntil(page, `(wh) => wh.shell.ceremony().kind === 'merge'`, 2, 1 / 60);
+      const tm = await tools(page);
+      await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null && !wh.shell.ceremony().pending`, 10, 0.1);
+      await page.evaluate(() => Promise.race([window.__mergeCutP, new Promise((ok) => setTimeout(ok, 5000))]));
+      check('leaving: a merge ceremony starts whole too (pieces reconnected first, nothing left on the mat, the tool back to the Hand)', k3m.pieces === 2 && tm.pieces === 1 && tm.extras === 0 && tm.tool === 'hand', JSON.stringify({ k3m, tm: { p: tm.pieces, x: tm.extras, tool: tm.tool } }));
+      await settle(page);
       const k4 = await cutTwo();
       await page.reload({ waitUntil: 'load', timeout: 180000 });
       await page.waitForFunction(() => window.__WH__ && window.__WH__.state().phase === 'title', null, { timeout: 180000 });
@@ -1956,6 +1981,7 @@ async function main() {
       };
       await hclick(page, '.toys-btn'); await sleep(150); await hclick(page, '.toy[data-tool="cut"]'); await settle(page);
       await page.evaluate(() => window.__WH__.pause());
+      const snap0 = await page.evaluate(() => window.__WH__.shell.restSnapshot());   // X04: the whole squishy's rest shape before any cut
       const m0 = await meter(page);
       const id0 = await page.evaluate(() => window.__WH__.shell.identity());
       const items0 = (await hstate(page)).items.length;
@@ -1978,6 +2004,12 @@ async function main() {
       for (let k = 2; k < 6; k++) { const p = await peel(); pk.push(p.r); }
       const t6 = await tools(page), v6 = await views(), g6 = await gaps(anchor0);
       await shot(page, 'cut6_swipes_desktop');
+      // ---- X07 at the level of the whole app (the probe_softbody limits per piece are probe_cut's): the six pieces on the REAL mat, 1.2 s after the last cut: every
+      // coordinate finite, no piece hopping (its lowest particle within 1 mm of the table, the probe's settle limit), no piece's centre inside another's skin (no tunnel)
+      await stepSim(page, 1.2);
+      const ph = await page.evaluate(() => window.__WH__.shell.pieceHealth());
+      check('X07 real: six pieces on the real mat, settled: every coordinate finite, each one resting on the table (lowest particle <= 1 mm up: no hop), no piece\'s centre inside another\'s skin (no tunnel)',
+        ph.pieces === 6 && ph.finite && ph.centreInside === 0 && ph.lowest.every((y) => y >= -1e-6 && y <= 0.001), JSON.stringify({ pieces: ph.pieces, finite: ph.finite, centreInside: ph.centreInside, lowestMm: ph.lowest.map((y) => +(1000 * y).toFixed(2)), top: ph.top.map((y) => +y.toFixed(3)) }));
       check('X01 real: five REAL swipes make 6 pieces (quality high), shares sum to 1, none under 1/8; X03: still ONE face and five chunks (the face goes with the side that holds the eyes of the piece being cut: after several cuts it is no longer the piece nearest the ORIGINAL anchor)',
         t6.pieces === 6 && pk.every((r) => r === 'cut') && Math.abs(t6.fracs.reduce((s, f) => s + f, 0) - 1) < 0.005 && t6.fracs.every((f) => f >= 0.125 - 1e-6) && v6.faces === 1 && v6.chunks === 5,
         JSON.stringify({ pieces: t6.pieces, results: pk, fracs: t6.fracs.map((f) => +f.toFixed(3)), v6 }));
@@ -2014,6 +2046,9 @@ async function main() {
       await cutIdle(page, 4); await stepSim(page, 1); await sleep(450);
       const tw = await tools(page), vw = await views();
       check('X04 real: Reconnect all from 6 pieces ends whole: one body at the full share, no piece on the mat, one stage view; "Whole again."', tw.pieces === 1 && tw.extras === 0 && tw.body.frac === 1 && vw.total === 1 && vw.faces === 1 && /Whole again\./.test(await sayNow()), JSON.stringify({ pieces: tw.pieces, extras: tw.extras, frac: tw.body.frac, views: vw }));
+      const rc4 = await page.evaluate(() => window.__WH__.shell.restCompare());
+      check('X04 real: whole again is the ORIGINAL: the same genome, the same mesh and radius, and its rest shape equals the one before the first cut (RMS under 0.002 R0); not a piece build',
+        !!rc4 && rc4.sameGenome && rc4.n[0] === rc4.n[1] && Math.abs(rc4.radiusRatio - 1) < 1e-9 && rc4.rmsR0 < 0.002 && rc4.frac === 1 && !rc4.piece, JSON.stringify({ before: snap0, ...rc4 }));
       check(`Reconnect all keeps the glowing bridge in view: some chunk's skin stays more than 2 % of the radius clear of the face piece for at least 0.3 s (measured ${tAny.toFixed(2)} s; every chunk ${tAll.toFixed(2)} s; the whole join ${(series.length * 2 / 60).toFixed(2)} s)`, tAny >= 0.3 && series.length * 2 / 60 <= 1.45, JSON.stringify(series.filter((_, i) => i % 3 === 0).map((s) => [+s[0].toFixed(2), +s[1].toFixed(3), +s[2].toFixed(3)])));
       const m7 = await meter(page);
       check('X06 real: Reconnect all paid nothing either', m7.fill === m0.fill, `${m0.fill} -> ${m7.fill}`);
@@ -2051,11 +2086,15 @@ async function main() {
         wh.pointerDown(f.x / vw, f.y / vh, 0); wh.step(1 / 60, 8);
         let time = 0, touch0 = -1, join0 = -1;
         const look = () => { const g = wh.shell.pieceGaps(); if (touch0 < 0 && g.length > 1 && g[1].gap < 0.03) touch0 = +time.toFixed(2); if (join0 < 0 && wh.shell.tools().busy) join0 = +time.toFixed(2); };
-        for (let i = 1; i <= 36; i++) { const k = i / 36; wh.pointerMove((f.x + (t.x - f.x) * k) / vw, (f.y + (t.y - f.y) * k) / vh, 0); wh.step(1 / 60, 2); time += 2 / 60; look(); }
-        for (let i = 0; i < 90 && join0 < 0; i++) { wh.step(1 / 60, 2); time += 2 / 60; look(); }
+        // sampled EVERY frame (the cutter checks the skins every sim step): the first run sampled every second frame and missed the frame the skins first touched (the
+        // cutter then keeps a running contact while the skins stay within TOUCH_KEEP_GAP), so it read "touch0 -1" while the join had started 0.4 s after a touch it never saw
+        for (let i = 1; i <= 36; i++) { const k = i / 36; wh.pointerMove((f.x + (t.x - f.x) * k) / vw, (f.y + (t.y - f.y) * k) / vh, 0); for (let s = 0; s < 2; s++) { wh.step(1 / 60, 1); time += 1 / 60; look(); } }
+        for (let i = 0; i < 180 && join0 < 0; i++) { wh.step(1 / 60, 1); time += 1 / 60; look(); }
         return { touch0, join0, drag: +(36 * 2 / 60).toFixed(2) };
       }, [{ x: chunkA.x - dirA * 0.62 * chunkA.r, y: chunkA.y - 0.1 * chunkA.r }, { x: faceA.x + dirA * -0.15 * faceA.r, y: chunkA.y - 0.1 * chunkA.r }, vp.width, vp.height]);
       const startedAt = held.join0 >= 0 ? held : null;   // { touch0: first time the skins touched, join0: when the join began, both from the press; drag: the drag lasted this long }
+      // (SHELL-4 step 4) a still of the drag-to-reconnect bridge: 0.25 s into the join the giver is held at its small gap and the glowing neck is drawn
+      if (startedAt) { await stepSim(page, 0.25); await shot(page, 'drag_reconnect_bridge_desktop'); }
       await page.evaluate(() => window.__WH__.pointerUp(0));
       await cutIdle(page, 3); await stepSim(page, 1.5);
       const tA = await tools(page);
@@ -2209,6 +2248,68 @@ async function main() {
     });
 
     // ------------------------------------------------------------------------------------------------
+    // SHELL-4 step 3, CUT.md X09 through the REAL shell (src/shell/cut.ts driving the real SoftBody and the real stage; the render harness proves it on its own replica
+    // of the shell's call order): 10 rapid cuts (Split in two, the next one the moment the last has parted; at 6 pieces a Reconnect all makes room) and a final
+    // Reconnect all. The canvas's mean relative luminance (linear light, the render harness's method) is read after every rendered frame at 1/30 s: no more than 3
+    // transitions of 0.04 or more in any 1 s window, and the stage's full-screen light is never on (no screen flash). The same at Calm effects.
+    // ------------------------------------------------------------------------------------------------
+    await section('cut-flash', async () => {
+      const zz = (L, thr = 0.04) => {
+        const idx = []; let dir = 0, pivot = L[0];
+        for (let k = 1; k < L.length; k++) {
+          const v = L[k];
+          if (dir === 0) { if (v - pivot >= thr) { dir = 1; pivot = v; idx.push(k); } else if (pivot - v >= thr) { dir = -1; pivot = v; idx.push(k); } }
+          else if (dir === 1) { if (v > pivot) pivot = v; else if (pivot - v >= thr) { dir = -1; pivot = v; idx.push(k); } }
+          else { if (v < pivot) pivot = v; else if (v - pivot >= thr) { dir = 1; pivot = v; idx.push(k); } }
+        }
+        return idx;
+      };
+      const ww = (idx, dt) => { let n = 0; for (let i = 0; i < idx.length; i++) { let c = 0; for (let j = i; j < idx.length && idx[j] - idx[i] < 1 / dt; j++) c++; n = Math.max(n, c); } return n; };
+      for (const calm of [false, true]) {
+        const { page, context, w } = await open({ query: '?dev=1&quality=high', ctx: SMALL });
+        mainWatches.push([`cut-flash${calm ? '-calm' : ''}`, w]);
+        await wake(page);
+        await page.evaluate((c) => { const wh = window.__WH__; wh.setSetting('skipAnimations', false); wh.setSetting('calm', c); wh.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); wh.pause(); wh.step(1 / 60, 90); }, calm);
+        await hclick(page, '.toys-btn'); await sleep(150); await hclick(page, '.toy[data-tool="cut"]'); await settle(page);
+        const r = await page.evaluate(async () => {
+          const wh = window.__WH__; wh.pause();
+          const LUT = new Float32Array(256).map((_, i) => { const c = i / 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); });
+          const lc = document.createElement('canvas'); lc.width = 64; lc.height = 48;
+          const lx = lc.getContext('2d', { willReadFrequently: true });
+          const cv = document.getElementById('stage');
+          const luma = () => { lx.drawImage(cv, 0, 0, 64, 48); const d = lx.getImageData(0, 0, 64, 48).data; let s = 0; for (let i = 0; i < d.length; i += 4) s += 0.2126 * LUT[d[i]] + 0.7152 * LUT[d[i + 1]] + 0.0722 * LUT[d[i + 2]]; return s / (d.length / 4); };
+          const lumas = [], light = [], marks = [];
+          let maxPieces = 1, n = 0;
+          // one frame of 1/30 s (two sim steps, ONE render at the end: the luminance is read in the same task, before the drawing buffer is cleared)
+          const frame = async () => { wh.step(1 / 60, 2); lumas.push(luma()); const i = wh.shell.stageInfo(); light.push(i && typeof i.screenLight === 'number' ? i.screenLight : 0); maxPieces = Math.max(maxPieces, wh.shell.tools().pieces); if (++n % 6 === 0) await new Promise((res) => setTimeout(res, 0)); };
+          const idle = async (max) => { for (let g = 0; g < max && wh.shell.tools().busy; g++) await frame(); };
+          const btn = (k) => document.querySelector(`.cutbar [data-key="${k}"]`);
+          let cuts = 0, refused = 0, joins = 0;
+          for (let k = 0; k < 10; k++) {
+            await idle(60);
+            if (wh.shell.tools().pieces >= 6) { btn('join').click(); joins++; marks.push(`join@${lumas.length}`); await frame(); await idle(120); await frame(); }
+            const p0 = wh.shell.tools().pieces;
+            btn('split').click();
+            await frame();
+            if (wh.shell.tools().busy || wh.shell.tools().pieces > p0) { cuts++; marks.push(`cut@${lumas.length}`); } else { refused++; marks.push(`refused@${lumas.length}`); }
+          }
+          await idle(60);
+          btn('join').click(); joins++; marks.push(`join@${lumas.length}`);
+          for (let g = 0; g < 150 && (wh.shell.tools().busy || wh.shell.tools().pieces > 1); g++) await frame();
+          for (let g = 0; g < 15; g++) await frame();
+          const t = wh.shell.tools();
+          return { lumas, light, cuts, refused, joins, maxPieces, piecesAtEnd: t.pieces, frac: t.body.frac, views: wh.shell.stageViews(), marks };
+        });
+        const DT = 1 / 30, wN = ww(zz(r.lumas), DT), w02 = ww(zz(r.lumas, 0.02), DT), lo = Math.min(...r.lumas), hi = Math.max(...r.lumas), maxLight = Math.max(0, ...r.light);
+        await shot(page, `cut_flash_end${calm ? '_calm' : ''}`);
+        check(`X09 real shell${calm ? ' (Calm effects)' : ''}: 10 rapid cuts and a Reconnect all through src/shell/cut.ts: <= 3 luminance transitions (0.04) in any 1 s, the screen light never on, never more than 6 pieces, whole again with one view and one face`,
+          wN <= 3 && maxLight === 0 && r.cuts === 10 && r.maxPieces <= 6 && r.piecesAtEnd === 1 && r.frac === 1 && r.views && r.views.total === 1 && r.views.faces === 1,
+          `worst 1 s window ${wN} transitions (${w02} at 0.02), luma ${lo.toFixed(3)}..${hi.toFixed(3)} over ${r.lumas.length} frames, screen light ${maxLight}, cuts ${r.cuts} (refused ${r.refused}), joins ${r.joins}, pieces <= ${r.maxPieces}, end ${r.piecesAtEnd} piece(s) ${JSON.stringify(r.views)}`);
+        await context.close();
+      }
+    });
+
+    // ------------------------------------------------------------------------------------------------
     // SHELL-4 step 4: lift, toss and bump reach the REAL audio engine's lift / toss / bump and the REAL haptics wrapper (navigator.vibrate on a touch
     // device), driven by the REAL physics' own events and metrics: call-through spies are wrapped round the live engine's methods (dev hook spyStart:
     // every call still goes through to the engine), navigator.vibrate is logged. Three kinds of body: the play body, a squishy brought out onto the
@@ -2252,6 +2353,11 @@ async function main() {
       await bringOut(page, cand[0].species);
       await page.evaluate(() => window.__WH__.resume()); await stepSim(page, 2.5);
       const m2 = await page.evaluate(() => window.__WH__.shell.matInfo());
+      // X08 (step 3): the physics cost per frame of the shell's own bodies.step (contact included) with these 2 whole squishies; the 6-piece figure is taken at the end of
+      // the section in this same page (best of 5 batches of 30 frames each; physics only, no render, so the software GL does not weigh in)
+      const costOf = () => page.evaluate(() => { const wh = window.__WH__; wh.pause(); const r = []; for (let k = 0; k < 5; k++) r.push(wh.shell.matStepCost(30)); return { bodies: r[0].bodies, contact: wh.shell.tools().extras, best: +Math.min(...r.map((q) => q.msPerFrame)).toFixed(3), all: r.map((q) => +q.msPerFrame.toFixed(3)) }; });
+      const cost2 = await costOf();
+      await stepSim(page, 0.5);
       const playB = m2.bodies[0], extraB = m2.bodies[1];
       const outward = Math.sign(extraB.x - playB.x) || 1;
       const bumpRun = await page.evaluate(([f, t, vw, vh, rr]) => {
@@ -2312,6 +2418,14 @@ async function main() {
       }, [{ x: chunk.x + dirq * -0.62 * chunk.r, y: chunk.y - 0.1 * chunk.r }, { x: face.x - dirq * 0.1 * face.r, y: face.y - 0.7 * face.r }, vp.width, vp.height]);
       await page.evaluate(() => window.__WH__.pointerUp(0));
       check('cut piece, REAL physics: a chunk carried into the face piece -> the physics\' bump events -> audio.bump and a light tick', bumpPiece.carried && !!bumpPiece.spy.audio.bump && bumpPiece.spy.audio.bump.n >= 1 && (bumpPiece.spy.haptics.pop ?? 0) >= 1, summary({ ...bumpPiece, kinds: [] }));
+      // X08 at the level of the whole app: Split in two up to 6 pieces, then the same physics-cost readout as the 2 whole squishies above (same page, same machine)
+      await cutIdle(page, 3); await stepSim(page, 1);
+      if ((await tools(page)).tool !== 'cut') { await page.evaluate(() => document.querySelector('#wh-play')?.focus()); await page.keyboard.press('c'); }
+      for (let i = 0; i < 7 && (await tools(page)).pieces < 6; i++) { await pclick(page, '.cutbar [data-key="split"]'); await cutIdle(page, 2); await stepSim(page, 0.2); }
+      await stepSim(page, 1);
+      const cost6 = await costOf();
+      check(`X08 real (the shell's own bodies.step, contact on, physics only): 6 pieces cost no more per frame than the 2 whole squishies on the mat earlier in this page (best of 5 x 30 frames: ${cost6.best} vs ${cost2.best} ms, x${(cost6.best / cost2.best).toFixed(2)})`,
+        cost2.bodies === 2 && cost6.bodies === 6 && cost6.best <= cost2.best, JSON.stringify({ cost2, cost6 }));
       await page.evaluate(() => window.__WH__.resume());
       await context.close();
     });
