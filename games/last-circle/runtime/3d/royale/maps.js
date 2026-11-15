@@ -591,8 +591,14 @@ const LC_FRAG_ALBEDO = `
 #ifdef LC_WET
 {
   // W10 R2A shore: the ground within ~1 m above the waterline is wet (darker), from the ground's own height (the baked surface IS the drawn one)
+  // fix3: AND within ~3-7 m of slope distance from the live waterline (screen derivatives, as the foam band: no texture read) - a swash band, so a low
+  // flat islet 0.3-1 m over the sea stays dry sand from the air (it was darkened whole: a muddy brown islet in the drop view)
   float lhw = vLcW.y - uLcWater.x;
-  diffuseColor.rgb *= 1.0 - uLcWetK.x * ( 1.0 - smoothstep( 0.3, 1.1, lhw ) ) * step( -8.0, lhw );
+  vec2 lgx = vec2( dFdx( vLcW.x ), dFdx( vLcW.z ) ), lgy = vec2( dFdy( vLcW.x ), dFdy( vLcW.z ) );
+  float ldx = dFdx( lhw ), ldy = dFdy( lhw ), ldet = lgx.x * lgy.y - lgx.y * lgy.x;
+  vec2 lgr = abs( ldet ) > 1e-7 ? vec2( lgy.y * ldx - lgx.y * ldy, -lgy.x * ldx + lgx.x * ldy ) / ldet : vec2( 0.0 );
+  float lwd = max( lhw, 0.0 ) / clamp( length( lgr ), 0.02, 2.0 );   // metres of slope from the waterline
+  diffuseColor.rgb *= 1.0 - uLcWetK.x * ( 1.0 - smoothstep( 0.3, 1.1, lhw ) ) * ( 1.0 - smoothstep( 3.0, 7.0, lwd ) ) * step( -8.0, lhw );
 }
 #endif`;
 // W10 R2A: the water's shading normal is the two-layer wave normal (after three's normal chunk; faceDirection keeps the plane lit from below)
