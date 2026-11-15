@@ -7,6 +7,10 @@ seed 7), turned into bar rows (PLAN.md "Lane R2A" acceptance bars; the audit val
     python _harness/p23/waterlook.py --disk --plant flat-water       # the W9 surface: one weak layer, no fresnel/glint - MUST FAIL water-detail, glint
     python _harness/p23/waterlook.py --disk --plant storm-early      # the W9 wall: drawn pre-close, no distance fade - MUST FAIL storm-early
     python _harness/p23/waterlook.py --disk --plant flat-light       # the W9 hemisphere / sun, no contrast curve   - MUST FAIL light
+    python _harness/p23/waterlook.py --disk --plant dim-rooms        # the rooms without the W10 indoor lift       - MUST FAIL light: interiors
+    python _harness/p23/waterlook.py --disk --plant sea-edge         # the sea translucent past the map edge        - MUST FAIL light: far-sea edge
+    python _harness/p23/waterlook.py --disk --plant lip-static       # foam on the static level, not the bobbing one - MUST FAIL shore lip
+    python _harness/p23/waterlook.py --disk --plant wet-flat         # wet sand by height alone (whole islets)     - MUST FAIL wet sand from the air
     python _harness/p23/waterlook.py --disk --plant sparse-grass     # the blade cell 0.56 -> 1.4 m                 - MUST FAIL grass
     python _harness/p23/waterlook.py --disk --plant grass-on-low     # the blade layer built on low too             - MUST FAIL low-identical
     python _harness/p23/waterlook.py --disk --plant grass-on-sand    # the blades without the grass-ness mask (on beaches) - MUST FAIL grass-sand
@@ -28,7 +32,8 @@ clock then pinned - SHORE_T for the shore / in-water views, VIEW_T for the rest 
                 the horizon band (+3 % of the frame) <= 0.1 % of the frame [every view]
   storm-late    circle 1 closing: the wall A/B moves >= 1 % of the frame from 380 m (and the stormfx rows stay: run stormfx_storm)
   light         ground luminance spread p95 - p5 >= 0.25 on every map (mean of ground / ground2 / groundlow, lower half) [0.14 / 0.17 / 0.28];
-                the OD-2 drop view mean 0.45-0.55 held; interiors (3 houses' biggest ground-floor rooms) mean >= 0.9 x the base's
+                the OD-2 drop view mean 0.45-0.55 held; far sea: no colour step along the map edge in the drop view
+                (p90 <= 0.02); interiors (3 houses' biggest ground-floor rooms) mean >= 0.9 x the base's ON EVERY MAP
   grass-sand    medium, a low view (0.5 m) over dry non-grass ground (the nearest 30 m disc - the blade ring - that is >= 95 % sand band, dunes,
                 dry wash, mud, snow or rock by the blade layer's own grass-ness bake): the blades A/B moves <= 0.5 % of the lower half
                 [build 1: the sand under blades]
@@ -86,6 +91,14 @@ PLANTS = {
                                        ("if (v10) vu.set(WALL_FAR[0], WALL_FAR[1], Math.min(1, ctl.visT / WALL_FADE_IN_S)); else vu.set(1e9, 2e9, 1);", "vu.set(1e9, 2e9, 1);")])],
     "flat-light": [(RP + "maps.js", [("const lw = W10V ? (K.w10Light || W10_LIGHT) : null;", "const lw = null;"),
                                      ("op.uniforms.lcGrade.value.set(K.w10Light && K.w10Light.contrast != null ? K.w10Light.contrast : W10_CONTRAST, uw, 0, 0);", "op.uniforms.lcGrade.value.set(0, uw, 0, 0);")])],
+    # dim-rooms = the furnished rooms without the W10 indoor lift (the W10 R1 HG_INDOOR against the W10 lower fill): MUST FAIL light: interiors
+    "dim-rooms": [(RP + "maps.js", [("const HG_INDOOR = (mapId === \"deepwood\" ? 0.95 : 0.8) * (W10V ? (K.w10Indoor || W10_INDOOR) : 1);", "const HG_INDOOR = (mapId === \"deepwood\" ? 0.95 : 0.8);")])],
+    # sea-edge = the sea plane translucent past the map edge (no opaque fade): the sky dome shows through, a hard straight step - MUST FAIL far-sea edge
+    "sea-edge": [(RP + "maps.js", [("    diffuseColor.a = mix( diffuseColor.a, 1.0, smoothstep( -240.0, -20.0, lout ) );", "")])],
+    # lip-static = the foam / depth terms on the STATIC water level (the bobbing mesh not followed): the lip slides off the shore - MUST FAIL shore lip
+    "lip-static": [(RP + "maps.js", [("if (W10V && LCFX) LCU.uLcWater.value.x = water.position.y;", "")])],
+    # wet-flat = the wet-sand term by height alone (no slope-distance cap): whole low islets darkened from the air - MUST FAIL wet sand from the air
+    "wet-flat": [(RP + "maps.js", [(" * ( 1.0 - smoothstep( 3.0, 7.0, lwd ) ) * step( -8.0, lhw );", " * step( -8.0, lhw );")])],
     "sparse-grass": [(RP + "maps.js", [("lamps: 4, grassR: 30, grassC: 0.56,", "lamps: 4, grassR: 30, grassC: 1.4,")])],
     # grass-on-low = the blade layer (and the ground lattice texture it stands on) built on the low tier too
     "grass-on-low": [(RP + "maps.js", [("lamps: 0, grassR: 0, grassC: 1,", "lamps: 0, grassR: 30, grassC: 0.56,"),
@@ -168,9 +181,10 @@ RENDER_JS = r"""([spec, hide, pts]) => { const W = window.__LC__.W, T = W.THREE,
 # the map's clock pinned for a deterministic frame (water bob, cloud drift, wind): every map updater run once at t
 SETTLE_JS = r"""(t) => { const W = window.__LC__.W; for (const fn of (W._mapUpdaters || [])) { try { fn(0.6, t); } catch (e) {} } return (W._mapUpdaters || []).length; }"""
 
-# shore transects across the waterline: points every 0.1 m from 20 m inland to 6 m out, 9 transects 3 m apart; [x, y, z, t (m seaward), above (m)]
+# shore transects across the waterline: points every 0.1 m from 20 m inland to 14 m out (was 6 m: at the bob's trough the waterline of a flat beach
+# moves ~6 m seaward and left 3 transects with no waterline at all - read as '0 m of foam'), 9 transects 3 m apart; [x, y, z, t (m seaward), above (m)]
 TRANSECT_JS = r"""([sx, sz, dx, dz]) => { const W = window.__LC__.W, M = W.map, wy = M.waterY, wl = M.water ? M.water.position.y : wy; const px = -dz, pz = dx; const out = [];
-  for (let k = -4; k <= 4; k++) { const row = []; for (let i = -200; i <= 60; i++) { const t = i * 0.1, x = sx + px * k * 3 + dx * t, z = sz + pz * k * 3 + dz * t; const g = M.heightAt(x, z);
+  for (let k = -4; k <= 4; k++) { const row = []; for (let i = -200; i <= 140; i++) { const t = i * 0.1, x = sx + px * k * 3 + dx * t, z = sz + pz * k * 3 + dz * t; const g = M.heightAt(x, z);
     row.push([x, Math.max(g, wl), z, t, g - wl]); } out.push(row); }   // (above: metres over the LIVE surface - the drawn waterline at this clock)
   return out; }"""
 
@@ -212,8 +226,8 @@ GRASS_JS = r"""([x, z, r]) => { const W = window.__LC__.W, M = W.map, b = W._gra
       const h1 = grH(gx, gz), h2 = grH(gx + 17.3, gz + 17.3), h3 = grH(gx - 41.7, gz - 41.7);
       let wx = (gx + 0.5 + (h1 - 0.5) * 0.9) * GC, wz = (gz + 0.5 + (h2 - 0.5) * 0.9) * GC;
       const kx = Math.floor(wx / 2.4), kz = Math.floor(wz / 2.4), kcx = (kx + 0.5 + (grH(kx + 211, kz + 211) - 0.5) * 0.7) * 2.4, kcz = (kz + 0.5 + (grH(kx + 307, kz + 307) - 0.5) * 0.7) * 2.4;
-      const kt = Math.min(1, Math.max(0, Math.hypot(wx - kcx, wz - kcz) / 1.7)), gcl = 1.25 + (0.4 - 1.25) * kt;
-      wx += (kcx - wx) * 0.3; wz += (kcz - wz) * 0.3;
+      const kt = Math.min(1, Math.max(0, Math.hypot(wx - kcx, wz - kcz) / 1.7)), gcl = 1.5 + (0.4 - 1.5) * kt;
+      wx += (kcx - wx) * 0.5; wz += (kcz - wz) * 0.5;
       const d = Math.hypot(wx - x, wz - z); if (d > r) continue;
       const e0 = GR * 0.72, tt = Math.min(1, Math.max(0, (d - e0) / (GR - e0))); const fade = 1 - tt * tt * (3 - 2 * tt);
       const g = M.heightAt(wx, wz); if (g < M.waterY + 0.35 || Math.max(Math.abs(wx), Math.abs(wz)) > M.half - 4) continue;
@@ -399,8 +413,23 @@ def part_map(s, v, R, map_id, shots, want, interiors=True):
         dspec = s.js(SS.SPEC_JS, ["drop", {"dropAt": SS.DEF_DROP[map_id], "streetAt": SS.DEF_STREET[map_id], "plant": None}])
         s.js(SS.UNPIN_JS)
         if dspec:
-            r = shoot(s, dspec, shots, "%s_drop" % tag, settle=VIEW_T)
+            ed = s.js(EDGE_JS, [list(EDGE_OFF)])
+            epts = edge_pts(ed[0], ed[1]) if ed[1] > -900 else None
+            r = shoot(s, dspec, shots, "%s_drop" % tag, pts=epts, settle=VIEW_T)
             M["dropMean"] = round(float(lum(r["A"]).mean()), 4)
+            if epts:
+                M["seaEdge"] = edge_step(r, ed[2])
+                # wet sand from the air: the same frame, water hidden, with the wet term on / off (uLcWetK.x = 0); judged on the DRY LAND only (pixels the
+                # water does not cover in the live frame - the term also darkens the seabed under the water, which is not this row's): the share of the
+                # drop view it darkens by > 0.02
+                Bw = decode(s.js(RENDER_JS, [dspec, ["water"], None])["png"])
+                wk = s.js("() => { const u = window.__LC__.W._lcU.uLcWetK.value; const x = u.x; u.x = 0; return x; }")
+                Cw = decode(s.js(RENDER_JS, [dspec, ["water"], None])["png"])
+                s.js("(x) => { window.__LC__.W._lcU.uLcWetK.value.x = x; return 1; }", wk)
+                land = ~water_mask(r["A"], Bw)
+                d = lum(Cw) - lum(Bw)
+                M["wetDrop"] = {"wetK": wk, "landPct": round(float(land.mean() * 100), 2), "darkenedPct": round(float(((d > 0.02) & land).mean() * 100), 3),
+                                "ofLandPct": round(float(((d > 0.02) & land).sum() / max(1, land.sum()) * 100), 2)}
         if interiors:
             rooms = s.js(ROOMS_JS, [SS.DEF_DROP[map_id]])
             im = []
@@ -488,6 +517,49 @@ def part_map(s, v, R, map_id, shots, want, interiors=True):
     return M
 
 
+# far sea: the sea plane is 3.5x the map, the ground (seabed) under it only 1x. Points on the water along the four map edges at -100 / -60 / -20 / +20 m
+# across the edge (41 per edge): the step across the edge |L(+20) - L(-20)| against the same 40 m step well inside |L(-60) - L(-100)|
+EDGE_OFF = (-100, -60, -20, 20)
+
+
+# per (sample, side): True when the ground at the three inside points is open sea (>= 1 m under the water): a land edge (Deepwood) is not judged
+EDGE_JS = r"""([off]) => { const M = window.__LC__.W.map, half = M.half, wy = (typeof M.waterY === 'number') ? M.waterY : -999, ok = [];
+  for (let i = 0; i < 41; i++) { const t = -0.95 + 1.9 * i / 40;
+    const P = [(o) => [half + o, t * half], (o) => [-half - o, t * half], (o) => [t * half, half + o], (o) => [t * half, -half - o]];
+    for (const f of P) ok.push(off.filter((o) => o < 0).every((o) => { const q = f(o); return M.heightAt(q[0], q[1]) < wy - 1; })); }
+  return [half, wy, ok]; }"""
+
+
+def edge_pts(half, wy):
+    pts = []
+    for i in range(41):
+        t = -0.95 + 1.9 * i / 40
+        for o in EDGE_OFF:
+            pts += [[half + o, wy, t * half], [-half - o, wy, t * half], [t * half, wy, half + o], [t * half, wy, -half - o]]
+    return pts
+
+
+def edge_step(r, sea):
+    Lm = lum(r["A"])
+    Hh, Ww = Lm.shape
+    P = r["proj"]
+
+    def at(q):
+        if q[2] >= 1 or not (0 <= q[0] < 1 and 0 <= q[1] < 1):
+            return None
+        return float(Lm[int(q[1] * Hh), int(q[0] * Ww)])
+    steps, ctrl = [], []
+    for i in range(41):
+        for side in range(4):
+            v = [at(P[(i * len(EDGE_OFF) + o) * 4 + side]) for o in range(len(EDGE_OFF))]
+            if None in v or not sea[i * 4 + side]:
+                continue
+            steps.append(abs(v[3] - v[2]))
+            ctrl.append(abs(v[1] - v[0]))
+    return {"n": len(steps), "stepP90": round(float(np.percentile(steps, 90)), 4) if steps else None,
+            "insideP90": round(float(np.percentile(ctrl, 90)), 4) if ctrl else None}
+
+
 def shore_measure(a, b, tr):
     A, B = a["A"], b["A"]
     Hh, Ww = A.shape[:2]
@@ -542,8 +614,10 @@ def shore_measure(a, b, tr):
                 elif r[0] - tw > 0.25:
                     break
             n = (tw - first + 0.1) if first is not None else 0.0
-        widths.append(round(n, 2))
-    return {"deepRef": round(ref, 4) if ref is not None else None, "foamWidths": widths, "foamMedian": float(np.median(widths)) if widths else None,
+        else:
+            n = None                                     # no waterline on this transect (in frame): never a pass of the lip row
+        widths.append(round(n, 2) if n is not None else None)
+    return {"deepRef": round(ref, 4) if ref is not None else None, "foamWidths": widths, "foamMedian": float(np.median([w for w in widths if w is not None])) if any(w is not None for w in widths) else None,
             "wetRatios": [round(x, 3) for x in wets], "wetMedian": float(np.median(wets)) if wets else None}
 
 
@@ -585,7 +659,7 @@ def part_low(s, v, R, shots, tag):
 
 def base_cache(args, v, shots):
     """the base build's underwater HF, interiors and low-tier views (second Chrome on BASE_REV), cached"""
-    stem = os.path.join(C.REPORTS, "w10_waterlook_base_%s_%dx%d_v6" % (BASE_REV, args.width, args.height))
+    stem = os.path.join(C.REPORTS, "w10_waterlook_base_%s_%dx%d_v7" % (BASE_REV, args.width, args.height))
     if os.path.exists(stem + ".json") and not args.no_cache:
         with open(stem + ".json") as f:
             res = json.load(f)
@@ -601,7 +675,7 @@ def base_cache(args, v, shots):
         res["info"] = start(s, "medium", "isla_viva")
         R = {}
         part_map(s, v, R, "isla_viva", os.path.join(shots, "base"), {"light", "uw"})
-        res["interiors"] = R["isla_viva"].get("interiors")
+        res["interiors"] = {"isla_viva": R["isla_viva"].get("interiors")}   # (v7: interiors on all 3 maps; v6 had isla_viva only)
         res["underup"] = R["isla_viva"].get("underup")
         res["spread"] = {"isla_viva": R["isla_viva"].get("spread")}
         res["drop"] = {"isla_viva": R["isla_viva"].get("dropMean")}
@@ -609,7 +683,8 @@ def base_cache(args, v, shots):
         with C.Session(a2, "w10_waterlook_base_" + m) as s:
             start(s, "medium", m)
             R = {}
-            part_map(s, v, R, m, os.path.join(shots, "base"), {"light"}, interiors=False)
+            part_map(s, v, R, m, os.path.join(shots, "base"), {"light"})
+            res["interiors"][m] = R[m].get("interiors")
             res["spread"][m] = R[m].get("spread")
             res["drop"][m] = R[m].get("dropMean")
     with C.Session(a2, "w10_waterlook_base_low") as s:
@@ -720,6 +795,10 @@ def main():
                 v.check("shore: at the bob's crest, still level AND trough (map clock %s): foam band from the waterline 0.5-2.0 m wide (median of 9 transects); wet band (0.05-0.9 m above the water / 1.2-2.0 m) <= 0.85"
                         % ", ".join("%.3f" % t for t in SHORE_T), ok,
                         {m: {t: {k: c.get(k) for k in ("foamMedian", "wetMedian", "foamWidths", "deepRef")} for t, c in x.items()} for m, x in sh.items()}, "0.5-2.0 m; <= 0.85, every clock")
+                # the lip on EVERY transect (not the median): a shore that loses its lip on part of the beach for part of every bob is a fail
+                ok = bool(sh) and all(len(x) == len(SHORE_T) and all(len(c.get("foamWidths") or []) == 9 and all(w is not None and w >= 0.3 for w in c["foamWidths"]) for c in x.values()) for x in sh.values())
+                v.check("shore lip: every one of the 9 transects has a foam run >= 0.3 m from the waterline at the bob's crest, still level AND trough", ok,
+                        {m: {t: c.get("foamWidths") for t, c in x.items()} for m, x in sh.items()}, ">= 0.3 m, 9 of 9, every clock")
         if "storm" in want:
             se = {m: R.get(m, {}).get("stormEarly") for m in maps}
             if not all(x and x["early"] for x in se.values()):
@@ -754,14 +833,32 @@ def main():
                 return b0 is not None and not (0.45 <= b0 <= 0.55) and out(x) <= out(b0) + 0.005
             v.check("light: OD-2 drop-view mean held in 0.45-0.55 (every map; a map already outside on the base: not further out)",
                     all(held(m, x) for m, x in dm.items()), {"build": dm, "base": bd}, "0.45-0.55")
-            bi = (base or {}).get("interiors") or []
-            ii = I.get("interiors") or []
-            if not bi or not ii:
-                v.cnj("light: interiors", "no interior views (build %d, base %d)" % (len(ii), len(bi)))
+            wd = {m: R.get(m, {}).get("wetDrop") for m in maps if (R.get(m, {}).get("wetDrop") or {}).get("wetK")}
+            if wd:
+                v.check("light: wet sand from the air - the wet-sand term darkens <= 18 % of the dry land in the drop view (a swash band, not whole low islets; by height alone: 28.5 %)",
+                        all(x["ofLandPct"] <= 18.0 for x in wd.values()), wd, "<= 18 % of the land")
+            se = {m: R.get(m, {}).get("seaEdge") for m in maps if (R.get(m, {}).get("seaEdge") or {}).get("n", 0) >= 8}
+            if not se:
+                v.cnj("light: far-sea edge", "no drop view shows >= 8 points of the map edge over water: %s" % {m: R.get(m, {}).get("seaEdge") for m in maps})
             else:
+                v.check("light: far sea - no colour step along the map edge in the drop view (p90 |L(+20 m) - L(-20 m)| across the edge <= 0.02; well inside the map it reads ~0.01)",
+                        all(x["stepP90"] <= 0.02 for x in se.values()), se, "<= 0.02")
+            bia = (base or {}).get("interiors") or {}
+            if isinstance(bia, list):
+                bia = {"isla_viva": bia}                 # (a v6 cache: isla_viva only - never judged as all maps)
+            rows, miss = {}, []
+            for m in maps:
+                bi, ii = bia.get(m) or [], R.get(m, {}).get("interiors") or []
+                if not bi or not ii:
+                    miss.append("%s (build %d, base %d)" % (m, len(ii), len(bi)))
+                    continue
                 bm, im = float(np.mean([x["mean"] for x in bi])), float(np.mean([x["mean"] for x in ii]))
-                v.check("light: interiors (isla_viva, 3 houses) mean luminance >= 0.9 x the base's", im >= 0.9 * bm,
-                        {"build": ii, "base": bi, "ratio": round(im / max(1e-4, bm), 3)}, ">= 0.9x")
+                rows[m] = {"build": ii, "base": bi, "ratio": round(im / max(1e-4, bm), 3)}
+            if miss:
+                v.cnj("light: interiors", "no interior views on %s" % ", ".join(miss))
+            else:
+                v.check("light: interiors (every map, 3 houses each) mean luminance >= 0.9 x the base's", all(x["ratio"] >= 0.9 for x in rows.values()),
+                        rows, ">= 0.9x every map")
         if "grass" in want:
             gr = {m: R.get(m, {}).get("grass") for m in maps}
             ok = all(x and x.get("perM2") is not None and x["perM2"] >= 0.8 and x.get("bladePixPct", 0) >= 8.0 for x in gr.values())

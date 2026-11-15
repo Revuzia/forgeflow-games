@@ -48,10 +48,10 @@ const _V = (() => { try { return new URL(import.meta.url).search || ""; } catch 
 export const MAPS = {
   isla_viva: { name: "Isla Viva", theme: "tropical", sky: "#9ed0e3", zenith: "#5c8dc1", cloud: 0.66, fog: 0.0018, themeColor: "#22d3a0", water: true,
     sun: { pos: [90, 130, 60], color: 0xfff4e0, intensity: 2.05 }, hemi: { sky: 0xdcefff, ground: 0x86a06a, intensity: 1.25 },
-    grade: { exposure: 0.72, ground: 0.6, water: 0.6 } },
+    grade: { exposure: 0.72, ground: 0.6, water: 0.6 }, w10Indoor: 1.32 },
   ashgrid:   { name: "Savanna", theme: "savanna", sky: "#e5cf9f", zenith: "#6585ab", cloud: 0.54, fog: 0.0019, themeColor: "#e0854a", water: false,
     sun: { pos: [-120, 105, 45], color: 0xffe6b4, intensity: 2.25 }, hemi: { sky: 0xf0e3c4, ground: 0xb59a63, intensity: 1.15 },
-    grade: { exposure: 0.80, ground: 0.6, water: 0.6 }, w10Light: { hemi: 0.6, sun: 1.18, contrast: 1.0 }, w10Grass: 1.7 },   // (W10 R2A: the flattest map - its open ground got the least of the hemisphere cut and the full contrast curve)
+    grade: { exposure: 0.80, ground: 0.6, water: 0.6 }, w10Light: { hemi: 0.6, sun: 1.18, contrast: 1.0 }, w10Indoor: 1.8, w10Grass: 1.7 },   // (W10 R2A: the flattest map - its open ground got the least of the hemisphere cut and the full contrast curve)
   deepwood:  { name: "Deepwood", theme: "forest", sky: "#acc5dc", zenith: "#506e9b", cloud: 0.72, fog: 0.0020, themeColor: "#7fb069", water: true,
     sun: { pos: [-60, 150, -80], color: 0xfff6e6, intensity: 1.95 }, hemi: { sky: 0xd2e7ff, ground: 0x63705a, intensity: 1.35 },
     grade: { exposure: 1.14, ground: 0.6, water: 0.6 } },
@@ -62,6 +62,8 @@ const W10_LIGHT = { hemi: 0.72, sun: 1.12 };
 const W10_CONTRAST = 0.4;
 const W10_CLOUD_SHADOW = 0.62;          // (was 0.5: a cloud's shadow takes this share of the sun - with more sun it reads as a patch of shade again)
 const W10_INDOOR = 1.22;                // the furnished rooms' albedo lift (HG_INDOOR x this) against the lower fill
+                                        // (per map K.w10Indoor: Isla Viva 1.32, Savanna 1.8 - its fill is cut most (x0.6) and its contrast curve is the full one, so its rooms
+                                        //  lost the most: 0.68x the W10 R1 rooms at 1.22; gate w10_waterlook interiors, every map >= 0.9x)
 // LC-04 / owner decision OD-2 (2026-10-20, grade "G2 Balanced" from the P1-G A/B sheets): the drop view was 2-2.5x the reference's luminance (0.67-0.81 vs
 // 0.32). G2 darkens the GROUND and the WATER (terrain, city ground and tufts x `ground`, water x `water`) and cuts the exposure a little, leaving the sun, the
 // sky fill and the environment as they were, so a room keeps its light (the other grades took Isla Viva's interiors to 0.07-0.08). Target: the drop view's
@@ -359,7 +361,7 @@ const LCU = {
   uLcShallow: { value: new THREE.Color() }, uLcDeep: { value: new THREE.Color() },
   // W10 R2A water / shore (desktop medium and up only: LC_WATER2, LC_WATER_HI, LC_WET). The two textures are SHARED (_texCache), never per match.
   uLcWN: { value: null },                                               // the water normal map (three.js examples waternormals.jpg, MIT; 512 px)
-  uLcFoam: { value: null },                                             // the foam pattern (lettier 3d-game-shaders-for-beginners, BSD-3; 512 px, grey)
+  uLcFoam: { value: null },                                             // the foam pattern (in house, CC0: _harness/p23/make_water_foam.py; 512 px, grey)
   uLcWaterK: { value: new THREE.Vector4(0.55, 1, 6, 1.5) },              // x = wave normal strength, y = foam gain, z = sun glint gain, w = sky fresnel gain
   uLcSun: { value: new THREE.Vector3(0, 1, 0) },                       // the sun's direction (the glint)
   uLcSkyH: { value: new THREE.Color() }, uLcSkyZ: { value: new THREE.Color() },   // the dome's horizon / zenith colours (what the water reflects)
@@ -568,6 +570,11 @@ const LC_FRAG_ALBEDO = `
     lcFoamA = clamp( max( lfo, lline ) * uLcWaterK.y, 0.0, 1.0 );
     diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.93, 0.95, 0.94 ), lcFoamA );
     diffuseColor.a = max( mix( 0.62, diffuseColor.a, smoothstep( 0.0, 2.5, ldep ) ), lcFoamA );
+    // FAR SEA: the sea plane is 3.5x the map, the ground (seabed) only 1x - past the map edge the translucent water had only the sky dome under it,
+    // a hard straight colour step along the edge in every wide view. The water turns opaque over the last 240 m before the edge
+    vec2 lmu = abs( vLcW.xz * uLcHgtK.x + uLcHgtK.y - 0.5 );
+    float lout = ( max( lmu.x, lmu.y ) - 0.5 ) / uLcHgtK.x;        // metres past the drawn ground's edge (< 0 inside the map)
+    diffuseColor.a = mix( diffuseColor.a, 1.0, smoothstep( -240.0, -20.0, lout ) );
   }
 #else
   // surf lines follow the depth contours (so they run along the shore and roll in), broken into ~12 m patches; once a band is under ~2 px (the drop
@@ -584,8 +591,14 @@ const LC_FRAG_ALBEDO = `
 #ifdef LC_WET
 {
   // W10 R2A shore: the ground within ~1 m above the waterline is wet (darker), from the ground's own height (the baked surface IS the drawn one)
+  // fix3: AND within ~3-7 m of slope distance from the live waterline (screen derivatives, as the foam band: no texture read) - a swash band, so a low
+  // flat islet 0.3-1 m over the sea stays dry sand from the air (it was darkened whole: a muddy brown islet in the drop view)
   float lhw = vLcW.y - uLcWater.x;
-  diffuseColor.rgb *= 1.0 - uLcWetK.x * ( 1.0 - smoothstep( 0.3, 1.1, lhw ) ) * step( -8.0, lhw );
+  vec2 lgx = vec2( dFdx( vLcW.x ), dFdx( vLcW.z ) ), lgy = vec2( dFdy( vLcW.x ), dFdy( vLcW.z ) );
+  float ldx = dFdx( lhw ), ldy = dFdy( lhw ), ldet = lgx.x * lgy.y - lgx.y * lgy.x;
+  vec2 lgr = abs( ldet ) > 1e-7 ? vec2( lgy.y * ldx - lgx.y * ldy, -lgy.x * ldx + lgx.x * ldy ) / ldet : vec2( 0.0 );
+  float lwd = max( lhw, 0.0 ) / clamp( length( lgr ), 0.02, 2.0 );   // metres of slope from the waterline
+  diffuseColor.rgb *= 1.0 - uLcWetK.x * ( 1.0 - smoothstep( 0.3, 1.1, lhw ) ) * ( 1.0 - smoothstep( 3.0, 7.0, lwd ) ) * step( -8.0, lhw );
 }
 #endif`;
 // W10 R2A: the water's shading normal is the two-layer wave normal (after three's normal chunk; faceDirection keeps the plane lit from below)
@@ -4348,7 +4361,7 @@ export async function buildMap(W, mapId) {
   // the indoor ambient term: interior faces and furniture take this share of their colour (lamp panels keep theirs). Deepwood's forest light is darker than the
   // other maps' and its lodges are timber inside: at 0.8 a third of a lodge room's pixels read near-black from its doorway (interiorcheck light: dark share 0.31-0.36)
   // W10 R2A (desktop medium+): the hemisphere fill is x0.75 outside, and indoors that fill is most of the light - the rooms are lifted back (gate: interiors >= 0.9x)
-  const HG_INDOOR = (mapId === "deepwood" ? 0.95 : 0.8) * (W10V ? W10_INDOOR : 1);
+  const HG_INDOOR = (mapId === "deepwood" ? 0.95 : 0.8) * (W10V ? (K.w10Indoor || W10_INDOOR) : 1);   // (per map: K.w10Indoor)
   const HG_TKI = { s: 0, plank: 1, stucco: 2 };   // dualStructMaterial's texture index per struct kind (furniture wears the near-flat stucco grain unless it is wood)
   const HG_FURN_CELL = 32, HG_FURN_DIST = TIER_Q.furnD;    // (60 m; high 70, ULTRA 95)
   const _hgc = new THREE.Color(), hgColCache = new Map();
@@ -7252,7 +7265,7 @@ export async function buildMap(W, mapId) {
       uGrTint: { value: tintTex }, uGrMask: { value: maskTex }, uGrH: { value: K.w10Grass || 1 } };   // (uGrH: the map's blade height - Savanna's dry grass stands taller)
     const gMat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0, side: THREE.DoubleSide });
     gMat.name = "grass-blades";
-    gMat.customProgramCacheKey = () => "lc-grass-v2";
+    gMat.customProgramCacheKey = () => "lc-grass-v3";
     gMat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, GU, { uLcHgt: LCU.uLcHgt, uLcHgtK: LCU.uLcHgtK, uGrT: LCU.uLcT, uGrWind: LCU.uLcWind });
       sh.vertexShader = sh.vertexShader.replace("#include <common>", `#include <common>
@@ -7264,12 +7277,12 @@ float grH( vec2 p ) { vec3 p3 = fract( vec3( p.xyx ) * 0.1031 ); p3 += dot( p3, 
         .replace("#include <begin_vertex>", `vec2 gc = uGrCam + aCell;
 float gh1 = grH( gc ), gh2 = grH( gc + 17.3 ), gh3 = grH( gc - 41.7 ), gh4 = grH( gc + 93.1 );
 vec2 wp = ( gc + 0.5 + ( vec2( gh1, gh2 ) - 0.5 ) * 0.9 ) * uGrK.y;
-// clumps (W10 R2A repair): ~2.4 m world cells, each with a jittered centre; a card is pulled 30 % toward its clump's centre and stands tallest there,
+// clumps (W10 R2A repair; fix3 tighter): ~2.4 m world cells, each with a jittered centre; a card is pulled 50 % toward its clump's centre and stands tallest there,
 // shortest at the clump's rim - tufts with gaps between them, not an even field of spikes
 vec2 gk = floor( wp / 2.4 );
 vec2 gkc = ( gk + 0.5 + ( vec2( grH( gk + 211.0 ), grH( gk + 307.0 ) ) - 0.5 ) * 0.7 ) * 2.4;
-float gcl = mix( 1.25, 0.4, clamp( length( wp - gkc ) / 1.7, 0.0, 1.0 ) );
-wp = mix( wp, gkc, 0.3 );
+float gcl = mix( 1.5, 0.4, clamp( length( wp - gkc ) / 1.7, 0.0, 1.0 ) );
+wp = mix( wp, gkc, 0.5 );
 float gy = texture2D( uLcHgt, wp * uLcHgtK.x + uLcHgtK.y ).r;
 vec2 guv = ( wp + ${HALF.toFixed(1)} ) / ${SIZE.toFixed(1)};
 vec4 gt = texture2D( uGrTint, guv );
@@ -7277,7 +7290,10 @@ float gs = ( 1.0 - smoothstep( uGrK.x * 0.72, uGrK.x, length( wp - uGrEye.xz ) )
          * step( max( abs( wp.x ), abs( wp.y ) ), uGrK.w ) * ( 0.6 + 0.7 * gh3 ) * gcl
          * step( gh3 * 0.9 + 0.05, gt.a );   // (grass ground only: the tint's alpha is grassAt - a lawn's edge thins out, small cards last)
 float gca = cos( gh4 * 6.2832 ), gsa = sin( gh4 * 6.2832 ), gtip = position.y;
-vec3 transformed = vec3( position.x * gca - position.z * gsa, position.y * uGrH, position.x * gsa + position.z * gca ) * gs;
+// fix3: a blade near the eye is thin (roots x0.75 within ~1 m, full width from ~6 m - the width that keeps a far lawn covered): close up it reads as
+// a blade, not a wide spike; the two roots of a card close up together into a tuft
+vec3 gpo = position; gpo.xz *= gtip < 0.001 ? mix( 0.75, 1.0, smoothstep( 1.0, 6.0, length( wp - uGrEye.xz ) ) ) : 1.0;
+vec3 transformed = vec3( gpo.x * gca - gpo.z * gsa, gpo.y * uGrH, gpo.x * gsa + gpo.z * gca ) * gs;
 transformed.xz += uGrWind.xy * uGrWind.z * ( 0.6 * sin( uGrT * 1.7 + dot( wp, vec2( 0.31, 0.23 ) ) ) + 0.45 ) * gtip * gtip * 0.6 * gs;
 transformed += vec3( wp.x, gy, wp.y );
 vGrC = gt.rgb * mix( 0.36, 1.36, clamp( gtip / 0.4, 0.0, 1.0 ) ) * ( 0.8 + 0.4 * gh2 ) * mix( vec3( 1.0 ), vec3( 1.12, 1.08, 0.82 ), step( 0.78, gh1 ) );   // shaded root, sunlit tip; every 5th blade drier`);
