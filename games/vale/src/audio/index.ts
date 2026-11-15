@@ -441,6 +441,12 @@ const CAMP_DB = -3;
 // near the -18 token (the sfx heard reaches the master about 3 dB up, the master slider and the makeup less the
 // ducks), where a RIFT co-op lane (-24 to -25 sfx short-term p50) is never touched
 const LEVEL_TARGET_LUFS = -20;
+// (AUD-O13) per mode, the leveller's target offset (dB) under LEVEL_TARGET_LUFS, made up by that mode's content
+// sfxTrimDb: RIFT co-op's seats spread 2.5 LU in master (seed 3 Lisvel -17.0, seed 21 Ardit -19.5) because a 4-fighter
+// lane only touches -20 in its loudest blocks; a lower target with the trim raised by about as much rides every seat's
+// fights to one level (the 5v5 maps already sit on the leveller most of the match). TODO(lead): move to content
+// audio.mix.modes.<mode>.levelTargetDb once src/contracts/catalog.ts allows the key
+const LEVEL_TARGET_MODE_DB: Readonly<Record<string, number>> = { rift: -3 };
 const LEVEL_MAX_CUT_DB = 8;
 const LEVEL_ATTACK_S = 0.8;     // time constants of the gain's glide: down …
 const LEVEL_RELEASE_S = 3;      // … and back up
@@ -665,6 +671,8 @@ class Engine implements ValeAudioPort {
   /** (AUD-O1) the leveller's stage-2 gain on the priority sub-bus (see levelPoll) */
   private levPrio = 1;
   private sfxTrimDb = 0;
+  /** the leveller's target in this match (LEVEL_TARGET_LUFS + the mode's LEVEL_TARGET_MODE_DB) */
+  private levTarget = LEVEL_TARGET_LUFS;
   readonly levStats = { polls: 0, cutPolls: 0, cut3Polls: 0, maxCutDb: 0, sumCutDb: 0, prioShareSum: 0, prioSharePolls: 0, prioCutPolls: 0, sumPrioCutDb: 0 };
   /** content audio.mix.modes: mode id → its sfx trim (dB) */
   private readonly modeTrim: Record<string, number> = {};
@@ -1195,7 +1203,7 @@ class Engine implements ValeAudioPort {
     if (!(vol > 0)) return;
     const ref = (LEVEL_REF_SFX / vol) ** 2;
     const N = (sn / k) * ref, P = (sp / k) * ref;
-    const T = Math.pow(10, (LEVEL_TARGET_LUFS + 0.691) / 10);
+    const T = Math.pow(10, (this.levTarget + 0.691) / 10);
     const floor = Math.pow(10, -LEVEL_MAX_CUT_DB / 20);
     // stage 1, the background: the one gain that brings background + priority to the target, g^2 N + P = T, but the
     // background keeps at least LEVEL_BG_ROOM_LU under the target whatever the priority sub-bus does (your own burst
@@ -1230,8 +1238,8 @@ class Engine implements ValeAudioPort {
 
   /** dev / probes: the leveller as it stands (its gain in dB, the mode trim) and the three sfx paths' post-leveller
    *  nodes the probes meter as the sfx heard before the ducks */
-  get leveller(): { gainDb: number; prioDb: number; trimDb: number; taps: AudioNode[]; stats: Engine['levStats'] } | null {
-    return this.ctx ? { gainDb: 20 * Math.log10(this.levGain), prioDb: 20 * Math.log10(this.levPrio), trimDb: this.sfxTrimDb, taps: [this.levSfx, this.levThreat, this.prioTrim], stats: this.levStats } : null;
+  get leveller(): { gainDb: number; prioDb: number; trimDb: number; targetLUFS: number; taps: AudioNode[]; stats: Engine['levStats'] } | null {
+    return this.ctx ? { gainDb: 20 * Math.log10(this.levGain), prioDb: 20 * Math.log10(this.levPrio), trimDb: this.sfxTrimDb, targetLUFS: this.levTarget, taps: [this.levSfx, this.levThreat, this.prioTrim], stats: this.levStats } : null;
   }
 
   /** dev / harness: the accessibility state as wired (mono channels, soften in the chain) */
@@ -2408,6 +2416,7 @@ class Engine implements ValeAudioPort {
     this.ambMap = client?.setup?.map ?? null;
     // the mode's static sfx trim (see `leveller`); out of a match none, and the leveller's window starts over
     this.levWin = [];
+    this.levTarget = LEVEL_TARGET_LUFS + (client ? LEVEL_TARGET_MODE_DB[client.view.mode] ?? 0 : 0);
     this.levelTrim(client ? this.modeTrim[client.view.mode] ?? 0 : 0);
     if (client) {
       this.prewarm(client);

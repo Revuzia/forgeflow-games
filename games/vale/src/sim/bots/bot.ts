@@ -1480,6 +1480,12 @@ export class Bot extends BotBase implements BotController {
       const reach = this.strikeReach() + 3;
       if (seen && (d2 <= reach * reach || ((t.hp < t.maxHp * 0.6 || holdLeft(t) > 0 || this.fightOn()) && d2 <= 14 * 14))) this.roamPhase = 'strike';
     }
+    if (this.roamPhase === 'approach' && this.spottedOnApproach()) {
+      // (spotted on the way in — an enemy I can see has me in its sight, or a lamp I know of does: a seen gank is no
+      // surprise; go now if the target is close, else give it up, the genre's call)
+      if (seen && d2 <= 14 * 14) this.roamPhase = 'strike';
+      else { this.roamBlockUntil = now + 12; this.roamTarget = -1; this.execLaneOrPush(); return; }
+    }
     if (this.roamPhase === 'approach') {
       this.pMove = true; this.pMoveX = this.roamX; this.pMoveY = this.roamY; this.pAggro = 0;
       this.selfDefense();
@@ -1497,6 +1503,16 @@ export class Bot extends BotBase implements BotController {
     this.pMove = true; this.pMoveX = t.x; this.pMoveY = t.y;
     this.pAggro = 0.8;
     if (seen && d2 < 9 * 9) { this.pFight = t; this.pAggro = 1; }
+  }
+
+  /** fog-honest: an enemy fighter, Wick or tower I can see stands with me inside its sight, or a lamp I know of covers me */
+  private spottedOnApproach(): boolean {
+    const e = this.e, p = this.perc;
+    for (const l of [p.enemyFighters, p.enemyUnits, p.enemyStructs]) {
+      for (const o of l) { if (o.alive && o.sight > 0 && sq(o.x - e.x) + sq(o.y - e.y) <= sq(o.sight)) return true; }
+    }
+    for (const wd of p.enemyWards) if (wd.alive && sq(wd.x - e.x) + sq(wd.y - e.y) <= sq(Math.max(6, wd.sight))) return true;
+    return false;
   }
 
   private execHunt(): void {
