@@ -1,0 +1,214 @@
+{
+ "probe": "orch1 W1-C AUD-O13 audio runtime proof",
+ "head": "466f61a61",
+ "machine": "shared (other lanes held heavy slots; load1 per run below). Loudness and cue gates are block-metered on the output and do not depend on frame timing; the A/V sync mode was not part of this set.",
+ "tokens": {
+  "masterLUFS": "-18 +/- 1.5",
+  "marginWantLU": 0.5
+ },
+ "mix": {
+  "levellerTargetSfxLUFS": -20,
+  "maxCutDb": 8,
+  "attackS": 0.8,
+  "releaseS": 3,
+  "prioMaxCutDb": 4,
+  "bgRoomLU": 6,
+  "modeTrimsDb": {
+   "rift": {
+    "sfxTrimDb": 1.2
+   },
+   "bridge": {
+    "sfxTrimDb": -4.5
+   },
+   "fray": {
+    "sfxTrimDb": -3
+   }
+  }
+ },
+ "runs": [
+  {
+   "queue": "rift_coop",
+   "seed": 3,
+   "missing": true
+  },
+  {
+   "queue": "rift_coop",
+   "seed": 7,
+   "missing": true
+  },
+  {
+   "queue": "rift_coop",
+   "seed": 11,
+   "fighter": "ervet",
+   "pass": true,
+   "gates": {
+    "healPerMinLe6": true,
+    "enemyDownFires": true,
+    "lampSetFires": null,
+    "lampOutFires": true,
+    "announcerPeakOverSfxP99Ge3": true,
+    "masterIntegratedInTokens": true,
+    "fighterKitShareGe50": true,
+    "ambienceUnderMusic": true,
+    "ambienceQuietUnderMusic": true
+   },
+   "notMeasured": [
+    "lampSetFires"
+   ],
+   "masterLUFS": -18.42,
+   "marginLU": 1.08,
+   "sfxLUFS": -21.07,
+   "musicLUFS": -28.87,
+   "ambienceLUFS": -41.69,
+   "kitSharePct": 69.68,
+   "announcerPeakOverSfxP99": 5.03,
+   "announcerMedianOverTeamfightP99": 4.03,
+   "healPerMin": 0.86,
+   "leveller": {
+    "trimDb": 1.2,
+    "gainDbP50": 0,
+    "gainDbP10": -0.29,
+    "gainDbMin": -8,
+    "cutOver1dBPct": 7.56,
+    "prioSharePct": 79.69,
+    "threatSharePct": 3.79
+   },
+   "machine": {
+    "load1Max": 2.9,
+    "load1Mean": 1.93
+   },
+   "report": "_harness/_reports/w1c/i_rift_coop_11.json"
+  },
+  {
+   "queue": "rift_coop",
+   "seed": 21,
+   "missing": true
+  },
+  {
+   "queue": "bridge_standard",
+   "seed": 3,
+   "fighter": "kemdo",
+   "pass": true,
+   "gates": {
+    "healPerMinLe6": true,
+    "enemyDownFires": true,
+    "lampSetFires": null,
+    "lampOutFires": null,
+    "announcerPeakOverSfxP99Ge3": true,
+    "masterIntegratedInTokens": true,
+    "fighterKitShareGe50": true,
+    "ambienceUnderMusic": true,
+    "ambienceQuietUnderMusic": true
+   },
+   "notMeasured": [
+    "lampSetFires",
+    "lampOutFires"
+   ],
+   "masterLUFS": -17.77,
+   "marginLU": 1.27,
+   "sfxLUFS": -22.26,
+   "musicLUFS": -28.42,
+   "ambienceLUFS": -44.58,
+   "kitSharePct": 79.1,
+   "announcerPeakOverSfxP99": 8.89,
+   "announcerMedianOverTeamfightP99": 5.13,
+   "healPerMin": 3.98,
+   "leveller": {
+    "trimDb": -4.5,
+    "gainDbP50": -8,
+    "gainDbP10": -8,
+    "gainDbMin": -8,
+    "cutOver1dBPct": 76.25,
+    "prioSharePct": 59.22,
+    "threatSharePct": 8.03
+   },
+   "machine": {
+    "load1Max": 2.9,
+    "load1Mean": 1.94
+   },
+   "report": "_harness/_reports/w1c/i_bridge_standard_3.json"
+  },
+  {
+   "queue": "bridge_standard",
+   "seed": 7,
+   "missing": true
+  },
+  {
+   "queue": "bridge_standard",
+   "seed": 11,
+   "missing": true
+  },
+  {
+   "queue": "fray_standard",
+   "seed": 3,
+   "missing": true
+  },
+  {
+   "queue": "fray_standard",
+   "seed": 7,
+   "missing": true
+  },
+  {
+   "queue": "fray_standard",
+   "seed": 11,
+   "missing": true
+  }
+ ],
+ "summary": {
+  "runs": 10,
+  "passed": 2,
+  "missing": 8,
+  "masterRangeLUFS": [
+   -18.42,
+   -17.77
+  ],
+  "minMarginLU": 1.08,
+  "minKitSharePct": 69.68,
+  "minAnnouncerPeakOverSfxP99": 5.03,
+  "maxHealPerMinBridge": 3.98
+ },
+ "spots": {
+  "rift_coop": {
+   "missing": true,
+   "report": "_harness/_reports/w1c/i_spots_rift_coop_3.json"
+  },
+  "bridge_standard": {
+   "missing": true,
+   "report": "_harness/_reports/w1c/i_spots_bridge_standard_3.json"
+  },
+  "fray_standard": {
+   "missing": true,
+   "report": "_harness/_reports/w1c/i_spots_fray_standard_3.json"
+  }
+ },
+ "pits": {
+  "3": {
+   "missing": true,
+   "report": "_harness/_reports/w1c/i_pits_3.json"
+  },
+  "7": {
+   "missing": true,
+   "report": "_harness/_reports/w1c/i_pits_7.json"
+  },
+  "21": {
+   "missing": true,
+   "report": "_harness/_reports/w1c/i_pits_21.json"
+  }
+ },
+ "announcer": {
+  "missing": true,
+  "report": "_harness/_reports/w1c/i_announcer.json"
+ },
+ "kits": {
+  "missing": true,
+  "report": "_harness/_reports/w1c/i_kits.json"
+ },
+ "buildGates": {
+  "cmd": "audio/build.py --gates",
+  "exit": 0,
+  "log": "_harness/_reports/w1c/i_gates.log",
+  "seamHoleMsMax": 0.0,
+  "note": "every continuous ambience loop (.ogg and .m4a) 0.0 ms digital silence at its seam; sparse loops exempt"
+ },
+ "pass": false
+}
