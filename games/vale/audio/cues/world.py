@@ -66,9 +66,12 @@ FAIR_S = 36.0                # the fair's bed: long enough that no stall bell re
 RIFT_AIR_HP_HZ = 170.0       # the valley bed's low cut (ruling 37 round 2: its 125 Hz region read as a low roar)
 BRIDGE_AIR_HP_HZ = 120.0     # the bridge bed's (the same gate: audio/build.py BED_LOW_*)
 SEAM_GUARD_S = 0.03
-CANOPY_FLOOR = 10 ** (-24 / 20)   # the canopy's leaf-air floor, RMS under the patter's (orch1 seam fix)
-LANTERN_FLOOR = 10 ** (-24 / 20)  # the lantern's paper-air floor, the same way
+CANOPY_FLOOR = 10 ** (-12 / 20)   # the canopy's leaf-air floor, RMS under the patter's (orch1 seam fix; -24 left the
+                                  # 250 Hz - 2 kHz band at 4.51 dB, over AMB_BAND_SWELL_DB: -12 holds it at 4.1)
+LANTERN_FLOOR = 10 ** (-10 / 20)  # the lantern's paper-air floor, the same way (it carries the seam, see below)
 LANTERN_PAPER_RATE = 70.0         # the lantern's paper grains per second (was 220: a continuous hiss)
+LANTERN_CHIME_W = 0.15            # the chimes' weight over the paper (0.45 made the band swing 9.3 dB under the wash gate)
+LANTERN_CHIMES = (12, 16)         # chimes a loop: more and softer, so they shimmer rather than spike
 SEAM_TEXTURE_S = 0.002       # a grain texture's guard (Hann-windowed grains have no transient to step on the seam)
 
 
@@ -428,15 +431,16 @@ def amb_fray_lantern(v: int):
     r = R('amb_fray_lantern', v=v)
     D = 8.0
     n = ns(D)
-    gust = wobble(n, r, (1, 2), 0.25, seam_lull=False)                 # the breeze leans, never gusts (ruling 37)
+    gust = wobble(n, r, (1, 2), 0.1, seam_lull=False)                  # the breeze leans, never gusts (ruling 37)
     # (orch1, verify_ambience minors) the paper was a continuous 900 Hz - 4 kHz rustle at 220 grains/s (59 % of its
     # energy above 2 kHz, a hiss with no gate): now a thinner, warmer paper turning (LANTERN_PAPER_RATE grains/s,
-    # 500 Hz - 1.9 kHz) over a faint paper-air floor, held to the wash gates (audio/build.py AMB_WASH), and its
-    # grains reach the seam (no 70 ms hole every 8 s)
-    paper = scatter(n, r, LANTERN_PAPER_RATE, lambda rr: grain(rr, 500, 1900, (8.0, 30.0), 0.9),
-                    np.clip(gust / gust.max(), 0, 1) ** 2, guard=SEAM_TEXTURE_S)
+    # 500 Hz - 1.5 kHz, rolled off at 3.5 kHz) over a faint paper-air floor, held to the wash gates (audio/build.py
+    # AMB_WASH: 19 % above 2 kHz, band 3.5 dB); the floor runs through the seam (no 70 ms hole every 8 s) and the
+    # grains keep SEAM_GUARD_S off it (a grain on the wrap read as a 50x >6 kHz seam burst over the sparse loop's median)
+    paper = scatter(n, r, LANTERN_PAPER_RATE, lambda rr: grain(rr, 500, 1500, (8.0, 30.0), 0.9),
+                    np.clip(gust / gust.max(), 0, 1) ** 2, guard=SEAM_GUARD_S)
     chimes = np.zeros(n)
-    for _ in range(int(r.integers(5, 9))):
+    for _ in range(int(r.integers(*LANTERN_CHIMES))):
         note = r.choice(['D6', 'E6', 'F6', 'A5', 'C6'])
         k = ns(1.2)
         tt = np.arange(k) / SR
@@ -447,7 +451,7 @@ def amb_fray_lantern(v: int):
     floor = band_noise(n, R('amb_fray_lantern_floor', v=v), np.full(n, 1000.0), 0.8, slope=-3.0) * gust
     paper = norm(paper)
     paper = paper + LANTERN_FLOOR * np.sqrt(np.mean(paper ** 2)) / (np.sqrt(np.mean(floor ** 2)) + 1e-12) * floor
-    return loop_out(paper * 0.7 + norm(chimes) * 0.45, hp_hz=300, lp_hz=5000)
+    return loop_out(paper * 0.7 + norm(chimes) * LANTERN_CHIME_W, hp_hz=300, lp_hz=3500)
 
 
 # ── shared ───────────────────────────────────────────────────────────────────────────────────────
