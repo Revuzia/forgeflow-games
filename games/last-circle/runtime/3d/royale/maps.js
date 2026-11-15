@@ -557,7 +557,7 @@ const LC_FRAG_ALBEDO = `
     float lsw = lsd + 0.4 * sin( lt * 0.85 + dot( lp, vec2( 0.11, 0.07 ) ) );
     float lpat = texture2D( uLcFoam, lp * 0.19 + lt * vec2( 0.011, -0.008 ) ).r;
     float lcore = ( 1.0 - smoothstep( 0.6, 1.6, lsw ) ) * step( 0.0, ldep );
-    float lfo = max( ( 1.0 - smoothstep( 0.3, 0.75, lsw ) ) * step( 0.0, ldep ), lcore * smoothstep( 0.12, 0.5, lpat + lcore * 0.3 ) * ( 0.75 + 0.25 * lcore ) );   // a solid lip at the waterline, broken foam beyond
+    float lfo = max( ( 1.0 - smoothstep( 0.4, 0.85, lsw ) ) * step( 0.0, ldep ), lcore * smoothstep( 0.12, 0.5, lpat + lcore * 0.3 ) * ( 0.75 + 0.25 * lcore ) );   // a solid lip at the waterline, broken foam beyond
     float lph = ldep * 11.0 - lt * 1.6;
     float law = clamp( fwidth( lph ) - 0.6, 0.0, 1.0 );
 #ifdef LC_WATER_HI
@@ -1220,6 +1220,21 @@ function colorAt(mapId, h, x, z, seed, out) {
   return rgb(o, 0.5 + n * 0.1, 0.62, 0.42);
 }
 function rgb(o, r, g, b) { o[0] = r; o[1] = g; o[2] = b; return o; }
+// W10 R2A repair: how much of the ground at (x, z) is GRASS (0..1) - the dense blade layer grows only here, never on a beach, a dry wash, desert sand,
+// river mud, snow or bare rock (colorAt's own bands and zones, ramped over ~0.8 m of height so the edge of a lawn thins out instead of stopping)
+function grassAt(mapId, h, x, z, seed) {
+  const sm = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+  if (mapId === "isla_viva") return sm(2.2, 3.0, h) * (1 - sm(32.5, 34, h));                     // (sand < 2.2 m, volcano rock > 34 m)
+  if (mapId === "ashgrid") {
+    const edge = fbm(x / 260, z / 260, seed + 61, 2, 2, 0.5) * 120, desert = Math.max(0, Math.min(1, (x - 40 + edge) / 320));
+    return sm(0.5, 1.3, h) * (1 - sm(26.5, 28, h)) * (1 - sm(0.3, 0.7, desert));                // (dry wash < 0.5 m, bluffs > 28 m, the desert east)
+  }
+  if (mapId === "deepwood") {
+    const edge = fbm(x / 240, z / 240, seed + 91, 2, 2, 0.5) * 90, snow = Math.max(0, Math.min(1, (-z - 100 + edge) / 260));
+    return sm(0.6, 1.4, h) * (1 - sm(42.5, 44, h)) * (1 - sm(0.02, 0.25, snow));                // (river mud < 0.6 m, rocky tops > 44 m, the snow north)
+  }
+  return 1;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 /** Release the GPU resources the LAST map allocated.
@@ -1739,6 +1754,9 @@ export async function buildMap(W, mapId) {
     mapWater = water;
     trackUpdater((dt, t) => {
       water.position.y = waterY + Math.sin(t * 0.7) * 0.12;
+      // W10 R2A repair: the depth / foam / wet-sand terms follow the LIVE (bobbing) surface, so the foam lip stays on the drawn waterline at crest and
+      // trough (was the static level: +-0.12 m of bob slid the lip off the shore for part of every ~9 s cycle). Desktop medium+ only: low / touch keep it static
+      if (W10V && LCFX) LCU.uLcWater.value.x = water.position.y;
       if (wN) { wN.offset.x = t * 0.015; wN.offset.y = t * 0.011; }   // drifting ripples
     });
   }
@@ -7207,9 +7225,10 @@ export async function buildMap(W, mapId) {
   if (W10V && TIER_Q.grassR > 0 && LCU.uLcHgt.value) {
     const GR = TIER_Q.grassR, GC = TIER_Q.grassC, GN = Math.ceil((2 * GR) / GC), NI = GN * GN;
     const gGeo = new THREE.InstancedBufferGeometry();
-    // two blades crossing at ~70 deg, each one triangle: 0.09 m at the root, ~0.45 m tall (x 0.7-1.3 per cell), the tip leaning a little
-    const bl = (ang, lean, off) => { const c = Math.cos(ang), s = Math.sin(ang); return [-0.03 * c + off, 0, -0.03 * s, 0.03 * c + off, 0, 0.03 * s, lean * -s + off, 0.4, lean * c]; };
-    const gp = new Float32Array([...bl(0, 0.12, -0.05), ...bl(1.22, -0.1, 0.05)]);
+    // two blades crossing at ~70 deg, each one triangle: 4.8 cm at the root (was 6: a blade, not a spike), 0.40 / 0.31 m tall (x the cell and clump
+    // scales), the tips leaning apart
+    const bl = (ang, lean, off, ht) => { const c = Math.cos(ang), s = Math.sin(ang); return [-0.024 * c + off, 0, -0.024 * s, 0.024 * c + off, 0, 0.024 * s, lean * -s + off, ht, lean * c]; };
+    const gp = new Float32Array([...bl(0, 0.13, -0.04, 0.4), ...bl(1.22, -0.11, 0.04, 0.31)]);
     gGeo.setAttribute("position", new THREE.BufferAttribute(gp, 3));
     gGeo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(18).fill(0).map((v, i) => (i % 3 === 1 ? 1 : 0)), 3));   // lit like the ground under them
     const cells = new Float32Array(NI * 2);
@@ -7219,8 +7238,9 @@ export async function buildMap(W, mapId) {
     // the ground tint (linear, x the tufts' grade) and the no-grass mask (streets, sidewalks, plazas, under buildings), map-wide
     const TN = 200, tcs = SIZE / TN, tpx = new Uint8Array(TN * TN * 4), _gc = [0, 0, 0], GK = 0.82 * GRADE.ground;
     for (let j = 0; j < TN; j++) for (let i = 0; i < TN; i++) {
-      const x = -HALF + (i + 0.5) * tcs, z = -HALF + (j + 0.5) * tcs, c = colorAt(mapId, heightAt0(x, z), x, z, seed, _gc), o = (j * TN + i) * 4;
-      tpx[o] = Math.min(255, Math.round(c[0] * GK * 255)); tpx[o + 1] = Math.min(255, Math.round(c[1] * GK * 255)); tpx[o + 2] = Math.min(255, Math.round(c[2] * GK * 255)); tpx[o + 3] = 255;
+      const x = -HALF + (i + 0.5) * tcs, z = -HALF + (j + 0.5) * tcs, h0 = heightAt0(x, z), c = colorAt(mapId, h0, x, z, seed, _gc), o = (j * TN + i) * 4;
+      tpx[o] = Math.min(255, Math.round(c[0] * GK * 255)); tpx[o + 1] = Math.min(255, Math.round(c[1] * GK * 255)); tpx[o + 2] = Math.min(255, Math.round(c[2] * GK * 255));
+      tpx[o + 3] = Math.round(grassAt(mapId, h0, x, z, seed) * 255);   // (alpha: grass-ness - sand, mud, snow and rock grow no blades)
     }
     const tintTex = lcOwn(new THREE.DataTexture(tpx, TN, TN, THREE.RGBAFormat, THREE.UnsignedByteType));
     tintTex.magFilter = THREE.LinearFilter; tintTex.minFilter = THREE.LinearFilter; tintTex.needsUpdate = true;
@@ -7232,7 +7252,7 @@ export async function buildMap(W, mapId) {
       uGrTint: { value: tintTex }, uGrMask: { value: maskTex }, uGrH: { value: K.w10Grass || 1 } };   // (uGrH: the map's blade height - Savanna's dry grass stands taller)
     const gMat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0, side: THREE.DoubleSide });
     gMat.name = "grass-blades";
-    gMat.customProgramCacheKey = () => "lc-grass-v1";
+    gMat.customProgramCacheKey = () => "lc-grass-v2";
     gMat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, GU, { uLcHgt: LCU.uLcHgt, uLcHgtK: LCU.uLcHgtK, uGrT: LCU.uLcT, uGrWind: LCU.uLcWind });
       sh.vertexShader = sh.vertexShader.replace("#include <common>", `#include <common>
@@ -7244,15 +7264,23 @@ float grH( vec2 p ) { vec3 p3 = fract( vec3( p.xyx ) * 0.1031 ); p3 += dot( p3, 
         .replace("#include <begin_vertex>", `vec2 gc = uGrCam + aCell;
 float gh1 = grH( gc ), gh2 = grH( gc + 17.3 ), gh3 = grH( gc - 41.7 ), gh4 = grH( gc + 93.1 );
 vec2 wp = ( gc + 0.5 + ( vec2( gh1, gh2 ) - 0.5 ) * 0.9 ) * uGrK.y;
+// clumps (W10 R2A repair): ~2.4 m world cells, each with a jittered centre; a card is pulled 30 % toward its clump's centre and stands tallest there,
+// shortest at the clump's rim - tufts with gaps between them, not an even field of spikes
+vec2 gk = floor( wp / 2.4 );
+vec2 gkc = ( gk + 0.5 + ( vec2( grH( gk + 211.0 ), grH( gk + 307.0 ) ) - 0.5 ) * 0.7 ) * 2.4;
+float gcl = mix( 1.25, 0.4, clamp( length( wp - gkc ) / 1.7, 0.0, 1.0 ) );
+wp = mix( wp, gkc, 0.3 );
 float gy = texture2D( uLcHgt, wp * uLcHgtK.x + uLcHgtK.y ).r;
 vec2 guv = ( wp + ${HALF.toFixed(1)} ) / ${SIZE.toFixed(1)};
+vec4 gt = texture2D( uGrTint, guv );
 float gs = ( 1.0 - smoothstep( uGrK.x * 0.72, uGrK.x, length( wp - uGrEye.xz ) ) ) * step( uGrK.z, gy ) * step( texture2D( uGrMask, guv ).r, 0.5 )
-         * step( max( abs( wp.x ), abs( wp.y ) ), uGrK.w ) * ( 0.6 + 0.7 * gh3 );
+         * step( max( abs( wp.x ), abs( wp.y ) ), uGrK.w ) * ( 0.6 + 0.7 * gh3 ) * gcl
+         * step( gh3 * 0.9 + 0.05, gt.a );   // (grass ground only: the tint's alpha is grassAt - a lawn's edge thins out, small cards last)
 float gca = cos( gh4 * 6.2832 ), gsa = sin( gh4 * 6.2832 ), gtip = position.y;
 vec3 transformed = vec3( position.x * gca - position.z * gsa, position.y * uGrH, position.x * gsa + position.z * gca ) * gs;
 transformed.xz += uGrWind.xy * uGrWind.z * ( 0.6 * sin( uGrT * 1.7 + dot( wp, vec2( 0.31, 0.23 ) ) ) + 0.45 ) * gtip * gtip * 0.6 * gs;
 transformed += vec3( wp.x, gy, wp.y );
-vGrC = texture2D( uGrTint, guv ).rgb * mix( 0.36, 1.36, clamp( gtip / 0.4, 0.0, 1.0 ) ) * ( 0.8 + 0.4 * gh2 ) * mix( vec3( 1.0 ), vec3( 1.12, 1.08, 0.82 ), step( 0.78, gh1 ) );   // shaded root, sunlit tip; every 5th blade drier`);
+vGrC = gt.rgb * mix( 0.36, 1.36, clamp( gtip / 0.4, 0.0, 1.0 ) ) * ( 0.8 + 0.4 * gh2 ) * mix( vec3( 1.0 ), vec3( 1.12, 1.08, 0.82 ), step( 0.78, gh1 ) );   // shaded root, sunlit tip; every 5th blade drier`);
       sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vGrC;")
         .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= vGrC;")
         // both faces lit as the ground under them (a DoubleSide back face flips its normal down: it read as a black spike)
@@ -7263,12 +7291,15 @@ vGrC = texture2D( uGrTint, guv ).rgb * mix( 0.36, 1.36, clamp( gtip / 0.4, 0.0, 
     blades.name = "grass-blades"; blades.frustumCulled = false; blades.castShadow = false; blades.receiveShadow = false;
     blades.userData.grass = { R: GR, C: GC, N: GN, instances: NI };
     blades.userData.gMask = mpx;                                        // (the gate's density count reads the same mask the shader samples)
+    blades.userData.gTint = { px: tpx, n: TN };                         // (and the same grass-ness alpha)
+    // the ring follows the camera that DRAWS it (set just before the draw: a camera moved after the frame's updaters - a cut, a spectate switch, the
+    // gate's pinned views - never draws blades around a stale point)
+    blades.onBeforeRender = (r, sc, cam) => { const p = cam.position; GU.uGrCam.value.set(Math.floor(p.x / GC), Math.floor(p.z / GC)); GU.uGrEye.value.copy(p); };
     g.add(blades);
     W._grassBlades = blades;
     trackUpdater(() => {
       const cam = W.camera; if (!cam) return;
       const p = cam.position;
-      GU.uGrCam.value.set(Math.floor(p.x / GC), Math.floor(p.z / GC)); GU.uGrEye.value.copy(p);
       blades.visible = p.y - Math.max(heightAt0(p.x, p.z), waterY) < 80;          // (the drop / glide: a 30 m ring under a camera 300 m up is invisible)
     });
   }
