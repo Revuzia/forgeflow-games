@@ -220,7 +220,7 @@ for (let i = 0; i < FIGHTERS.length; i++) for (let j = i + 1; j < FIGHTERS.lengt
   for (const a of A) for (const b of Bq) {
     const e = dE(a.top.lab, b.top.lab), h = hdiff(a.top.h, b.top.h);
     minE = Math.min(minE, e); minH = Math.min(minH, h);
-    if (e < 25 && h < 30 && a.top.C >= 15 && b.top.C >= 15 && !hit) hit = { dE: +e.toFixed(1), dHue: +h.toFixed(1), a: `${a.seed}/${a.seating}`, b: `${b.seed}/${b.seating}` };
+    if (e < 25 && h < 30 && a.top.C >= 15 && b.top.C >= 15 && !hit) hit = { dE: +e.toFixed(1), dHue: +h.toFixed(1), runA: `${a.seed}/${a.seating}`, runB: `${b.seed}/${b.seating}` };
   }
   const mA = per[FIGHTERS[i]], mB = per[FIGHTERS[j]];
   const medE = dE(mA.topLab, mB.topLab), medH = hdiff(mA.topH, mB.topH);
