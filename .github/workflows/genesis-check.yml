@@ -3,8 +3,11 @@
 # repo conventions to follow beyond: pin the runner, the Node major and the action majors, and scope by path.
 name: genesis-check
 
+# Not on every push: the working branch gets a WIP auto-checkpoint every 20 minutes, often mid-edit, and each red run
+# e-mails the owner. Runs on pushes to main, on pull requests, and by hand (Actions > genesis-check > Run workflow).
 on:
   push:
+    branches: [main]
     paths: ['games/genesis/**', '.github/workflows/genesis-check.yml']
   pull_request:
     paths: ['games/genesis/**', '.github/workflows/genesis-check.yml']

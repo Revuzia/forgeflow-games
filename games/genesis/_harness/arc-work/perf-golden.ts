@@ -1,7 +1,7 @@
 import { Group, MeshBasicMaterial } from 'three';
-import { ChunkLOD, Patch } from '/home/user/forgeflow-games/games/genesis/src/render/planet/chunks.ts';
-import { getGrid } from '/home/user/forgeflow-games/games/genesis/src/sim/grid/icogrid.ts';
-import { Noise3 } from '/home/user/forgeflow-games/games/genesis/src/sim/grid/noise.ts';
+import { ChunkLOD, Patch } from '../../src/render/planet/chunks.ts';
+import { getGrid } from '../../src/sim/grid/icogrid.ts';
+import { Noise3 } from '../../src/sim/grid/noise.ts';
 const grid = getGrid(48); const n = grid.count;
 const lod = new ChunkLOD(grid, new Noise3(1234), 3000, new Group(), { terrain: () => new MeshBasicMaterial(), water: () => new MeshBasicMaterial() },
   { surface: new Float32Array(n), grad: null, waterLevel: new Float32Array(n).fill(-1000), waterDepth: new Float32Array(n), geomVersion: 0 });
