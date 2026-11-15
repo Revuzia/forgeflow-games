@@ -1,0 +1,1793 @@
+{
+ "verifier": "orch1 adversarial verifier, ambience / wind fix round 2 (commit 8d4f82445, rulings 34 and 37)",
+ "date": "2026-11-15",
+ "pass": true,
+ "score": 8.0,
+ "verdict": "The owner's 'heavy wind' is gone. No looping ambience-bus cue reads as heavy wind or a repeating whoosh as heard: the beds are steady, band-limited air (swell 1.4-2.4 LU, 250 Hz-2 kHz band moving 2.9-4.2 dB, no gust, no band sweep, below the quiet music in every third-octave), the BRIDGE updraft is a steady fixed-band rush heard only at the deck edges 17.8-25 LU under the music, and the pit presences are still low drones 19.3-21.3 LU under the music. Every level bar holds live on every map and spot measured, and each map keeps a sense of place in calm (the bed 11.3-16.8 LU under the music, a positional detail at each landmark). Two minor loop-seam holes and one ungated high-band rustle remain; none of them is wind and none is a blocker.",
+ "method": [
+  "audio/build.py --gates over the shipped files (through heavy.py): PASS, every ambience gate inside its bar (log: scratchpad gates.log).",
+  "probe_audio_runtime.mjs match on rift_coop seeds 3/7/11/21, bridge_standard and fray_standard seed 3 (420 s each, through heavy.py, dev server localhost:5190 on HEAD).",
+  "probe_audio_runtime.mjs pits on rift_coop seeds 3/7/11/21 (the new mode).",
+  "A spot probe of my own (scratchpad, modeled on pits mode, nothing in the repo edited) put the engine listener on named spots for 14-26 s with every objective spawned early: RIFT lanes top/mid/bottom, two jungle canopy points, two river shallows points, 10 m east and north of each objective pit, and the busiest emitter point; BRIDGE deck middle, deck quarter, two deck edges on updraft points, the busiest point; FRAY centre, edge, lantern, bunting and busiest point. I metered the music, ambience and sfx buses and every emitter's gain node, K-weighted, and recorded the raw ambience bus (L/R) at 6 spots to decode.",
+  "Decoded every ambience-bus cue in audio/out (.ogg, cross-checked against .m4a at the seams): BS.1770 integrated level as played (gain), 3 s short-term swell over the loop, 250 Hz-2 kHz 0.5 s band envelope range and circular autocorrelation from 2 s to half the loop, the spectral centroid track and its correlation with level (the whoosh signature), share of energy above 2 and 4 kHz and below 200 Hz, spectral flatness at 200 Hz-4 kHz, 80-160 Hz third-octaves against the map music's quietest stretch, 22 third-octaves against the four quietest 3 s frames of each map's music, holes at the loop seam, L/R correlation and mono-sum loss."
+ ],
+ "liveMatches": {
+  "rift_coop_seed3": {
+   "pass_": false,
+   "failedGates": [
+    "announcerPeakOverSfxP99Ge3"
+   ],
+   "ambienceUnderMusicLU": 12.22,
+   "quietUnderMusicLU": 10.62,
+   "masterLUFS": -16.97,
+   "musicLUFS": -29.1,
+   "ambienceLUFS": -41.32,
+   "ambienceMomentaryMax": -38.2
+  },
+  "rift_coop_seed7": {
+   "pass_": true,
+   "failedGates": [],
+   "ambienceUnderMusicLU": 10.78,
+   "quietUnderMusicLU": 10.83,
+   "masterLUFS": -18.91,
+   "musicLUFS": -30.26,
+   "ambienceLUFS": -41.04,
+   "ambienceMomentaryMax": -37.33
+  },
+  "rift_coop_seed11": {
+   "pass_": true,
+   "failedGates": [],
+   "ambienceUnderMusicLU": 12.71,
+   "quietUnderMusicLU": 11.27,
+   "masterLUFS": -18.93,
+   "musicLUFS": -28.86,
+   "ambienceLUFS": -41.57,
+   "ambienceMomentaryMax": -38.16
+  },
+  "rift_coop_seed21": {
+   "pass_": true,
+   "failedGates": [],
+   "ambienceUnderMusicLU": 10.78,
+   "quietUnderMusicLU": 10.44,
+   "masterLUFS": -19.28,
+   "musicLUFS": -30.25,
+   "ambienceLUFS": -41.03,
+   "ambienceMomentaryMax": -37.52
+  },
+  "bridge_standard_seed3": {
+   "pass_": false,
+   "failedGates": [
+    "healPerMinLe6",
+    "announcerPeakOverSfxP99Ge3",
+    "masterIntegratedInTokens"
+   ],
+   "ambienceUnderMusicLU": 16.77,
+   "quietUnderMusicLU": 13.39,
+   "masterLUFS": -11.84,
+   "musicLUFS": -28.42,
+   "ambienceLUFS": -45.19,
+   "ambienceMomentaryMax": -37.86
+  },
+  "fray_standard_seed3": {
+   "pass_": false,
+   "failedGates": [
+    "announcerPeakOverSfxP99Ge3",
+    "masterIntegratedInTokens"
+   ],
+   "ambienceUnderMusicLU": 13.24,
+   "quietUnderMusicLU": 11.85,
+   "masterLUFS": -15.05,
+   "musicLUFS": -29.23,
+   "ambienceLUFS": -42.47,
+   "ambienceMomentaryMax": -37.45
+  }
+ },
+ "liveMatchNotes": "RIFT whole-match ambience sits 10.8-12.7 LU under the music (quiet stretches 10.4-11.3) against the >= 8 bar. BRIDGE is 16.8 (13.4) and FRAY 13.2 (11.9). These match the fixer's ruling-37 figures to 0.05 LU. Every ambience gate passes. Failed gates, none of them ambience: rift seed 3 announcerPeakOverSfxP99Ge3; bridge healPerMinLe6, announcer, master -11.8 LUFS; fray announcer, master -15.05 LUFS. These are open in ruling 37 and belong to the combat sfx lane.",
+ "pitsMode": {
+  "seed3": {
+   "pass_": true,
+   "pits": [
+    {
+     "unit": "sunsplinter",
+     "presenceUnderMusicLU": 19.81,
+     "busAtPitUnderMusicLU": 10.97,
+     "busWithoutPresenceUnderMusicLU": 11.27,
+     "presenceSwellLU": 0.86
+    },
+    {
+     "unit": "longshade",
+     "presenceUnderMusicLU": 21.31,
+     "busAtPitUnderMusicLU": 13.28,
+     "busWithoutPresenceUnderMusicLU": 12.83,
+     "presenceSwellLU": 0.32
+    }
+   ]
+  },
+  "seed7": {
+   "pass_": true,
+   "pits": [
+    {
+     "unit": "sunsplinter",
+     "presenceUnderMusicLU": 19.83,
+     "busAtPitUnderMusicLU": 10.96,
+     "busWithoutPresenceUnderMusicLU": 10.95,
+     "presenceSwellLU": 0.86
+    },
+    {
+     "unit": "longshade",
+     "presenceUnderMusicLU": 19.3,
+     "busAtPitUnderMusicLU": 11.28,
+     "busWithoutPresenceUnderMusicLU": 12.59,
+     "presenceSwellLU": 0.96
+    }
+   ]
+  },
+  "seed11": {
+   "pass_": true,
+   "pits": [
+    {
+     "unit": "sunsplinter",
+     "presenceUnderMusicLU": 19.81,
+     "busAtPitUnderMusicLU": 10.94,
+     "busWithoutPresenceUnderMusicLU": 11.12,
+     "presenceSwellLU": 0.85
+    },
+    {
+     "unit": "longshade",
+     "presenceUnderMusicLU": 20.87,
+     "busAtPitUnderMusicLU": 12.9,
+     "busWithoutPresenceUnderMusicLU": 14.32,
+     "presenceSwellLU": 1
+    }
+   ]
+  },
+  "seed21": {
+   "pass_": true,
+   "pits": [
+    {
+     "unit": "sunsplinter",
+     "presenceUnderMusicLU": 19.78,
+     "busAtPitUnderMusicLU": 10.96,
+     "busWithoutPresenceUnderMusicLU": 10.9,
+     "presenceSwellLU": 0.85
+    },
+    {
+     "unit": "longshade",
+     "presenceUnderMusicLU": 19.35,
+     "busAtPitUnderMusicLU": 11.33,
+     "busWithoutPresenceUnderMusicLU": 12.61,
+     "presenceSwellLU": 0.98
+    }
+   ]
+  }
+ },
+ "spots": {
+  "rift_coop": [
+   {
+    "spot": "lane_mid (road_seat 85,55)",
+    "x": 85,
+    "y": 55,
+    "cleanBlocks": 164,
+    "blocks": 164,
+    "musicLUFS": -30,
+    "ambLUFS": -39.9,
+    "ambUnderMusicLU": 9.9,
+    "emitterUnderMusicLU": {
+     "ambient.map_rift.bed": 12.6,
+     "ambient.map_rift.amb_rift_canopy_motes": 27.6,
+     "ambient.map_rift.amb_rift_shallows_glint": 16.7,
+     "ambient.map_rift.amb_rift_shallows_insects": 18.3,
+     "ambient.map_rift.dialwren": 21,
+     "objective.sunsplinter": 33.4,
+     "objective.longshade": 31.7
+    }
+   },
+   {
+    "spot": "lane_top (road_high 48.7,15.5)",
+    "x": 48.7,
+    "y": 15.5,
+    "cleanBlocks": 164,
+    "blocks": 164,
+    "musicLUFS": -30.5,
+    "ambLUFS": -42.3,
+    "ambUnderMusicLU": 11.8,
+    "emitterUnderMusicLU": {
+     "ambient.map_rift.bed": 12,
+     "ambient.map_rift.amb_rift_shallows_insects": 28.8,
+     "ambient.map_rift.dialwren": 29.9
+    }
+   },
+   {
+    "spot": "lane_bot (road_low 48.7,94.5)",
+    "x": 48.7,
+    "y": 94.5,
+    "cleanBlocks": 124,
+    "blocks": 164,
+    "musicLUFS": -31.1,
+    "ambLUFS": -40.8,
+    "ambUnderMusicLU": 9.7,
+    "emitterUnderMusicLU": {
+     "ambient.map_rift.bed": 11.3,
+     "ambient.map_rift.amb_rift_canopy_motes": 19.5,
+     "ambient.map_rift.amb_rift_shallows_insects": 17,
+     "ambient.map_rift.dialwren": 28.6
+    }
+   },
+   {
+    "spot": "jungle canopy point",
+    "x": 52.5,
+    "y": 40.5,
+    "cleanBlocks": 13,
+    "blocks": 164,
+    "musicLUFS": -29.4,
+    "ambLUFS": -43.5,
+    "ambUnderMusicLU": 14.1,
+    "emitterUnderMusicLU": {
+     "ambient.map_rift.bed": 16.8,
+     "ambient.map_rift.amb_rift_canopy_motes": 21,
+     "ambient.map_rift.amb_rift_shallows_insects": 22.9,
+     "ambient.map_rift.amb_rift_resin_flame": 46.7,
+     "ambient.map_rift.dialwren": 26.5
+    }
+   },
+   {
+    "spot": "jungle canopy point 2",
+    "x": 147.5,
+    "y": 14.5,
+    "cleanBlocks": 280,
+    "blocks": 305,
+    "musicLUFS": -29.3,
+    "ambLUFS": -41.3,
+    "ambUnderMusicLU": 12,
+    "emitterUnderMusicLU": {
+     "ambient.map_rift.bed": 13.5,
+     "ambient.map_rift.amb_rift_canopy_motes": 17.6,
+     "ambient.map_rift.amb_rift_resin_flame": 36.8
+    }
+   },
+   {
+    "spot": "river shallows (nearest mid)",
+    "x": 82.2,
+    "y": 63.2,
+    "cleanBlocks": 101,
+    "blocks": 164,
+    "musicLUFS": -29.8,
+    "ambLUFS": -39.8,
+    "ambUnderMusicLU": 10.1,
+    "emitterUnderMusicLU": {
+     "ambient.map_rift.bed": 12.9,
+     "ambient.map_rift.amb_rift_shallows_glint": 16.7,
+     "ambient.map_rift.amb_rift_shallows_insects": 18.7,
+     "ambient.map_rift.dialwren": 20.8,
+     "objective.sunsplinter": 24
+    }
+   },
+   {
+    "spot": "river shallows pt0",
+    "x": 81.6,
+    "y": 65.5,
+    "cleanBlocks": 0,
+    "blocks": 164,
+    "musicLUFS": -28.1,
+    "ambLUFS": -44.1,
+    "ambUnderMusicLU": 16,
+    "emitterUnderMusicLU": {
+     "ambient.map_rift.bed": 18.8,
+     "ambient.map_rift.amb_rift_shallows_glint": 22.8,
+     "ambient.map_rift.amb_rift_shallows_insects": 24.1,
+     "ambient.map_rift.dialwren": 28.6,
+     "objective.sunsplinter": 27.9
+    }
+   },
+   {
+    "spot": "pit sunsplinter +10m east",
+    "x": 95,
+    "y": 80,
+    "cleanBlocks": 164,
+    "blocks": 164,
+    "musicLUFS": -29.4,
+    "ambLUFS": -39.7,
+    "ambUnderMusicLU": 10.3,
+    "emitterUnderMusicLU": {
+     "ambient.map_rift.bed": 13.1,
+     "ambient.map_rift.amb_rift_canopy_motes": 22.1,
+     "ambient.map_rift.amb_rift_shallows_glint": 20.3,
+     "ambient.map_rift.amb_rift_shallows_insects": 19.1,
+     "ambient.map_rift.dialwren": 22.9,
+     "objective.sunsplinter": 19.1
+    }
+   },
+   {
+    "spot": "pit sunsplinter +10m north",
+    "x": 85,
+    "y": 70,
+    "cleanBlocks": 164,
+    "blocks": 164,
+    "musicLUFS": -29.1,
+    "ambLUFS": -39.6,
+    "ambUnderMusicLU": 10.5,
+    "emitterUnderMusicLU": {
+     "ambient.map_rift.bed": 13.6,
+     "ambient.map_rift.amb_rift_shallows_glint": 17.6,
+     "ambient.map_rift.amb_rift_shallows_insects": 19.2,
+     "ambient.map_rift.dialwren": 23.2,
+     "objective.sunsplinter": 19.5
+    }
+   },
+   {
+    "spot": "pit longshade +10m east",
+    "x": 95,
+    "y": 31,
+    "cleanBlocks": 0,
+    "blocks": 164,
+    "musicLUFS": -26.8,
+    "ambLUFS": -45.1,
+    "ambUnderMusicLU": 18.3,
+    "emitterUnderMusicLU": {
+     "ambient.map_rift.bed": 21.5,
+     "ambient.map_rift.amb_rift_canopy_motes": 36.5,
+     "ambient.map_rift.amb_rift_shallows_insects": 28.5,
+     "ambient.map_rift.amb_rift_resin_flame": 43.7,
+     "ambient.map_rift.dialwren": 29.8,
+     "objective.longshade": 27.5
+    }
+   },
+   {
+    "spot": "pit longshade +10m north",
+    "x": 85,
+    "y": 21,
+    "cleanBlocks": 164,
+    "blocks": 164,
+    "musicLUFS": -26.5,
+    "ambLUFS": -40.5,
+    "ambUnderMusicLU": 14,
+    "emitterUnderMusicLU": {
+     "ambient.map_rift.bed": 16.1,
+     "ambient.map_rift.amb_rift_shallows_insects": 30.3,
+     "ambient.map_rift.amb_rift_resin_flame": 22,
+     "ambient.map_rift.dialwren": 27.3,
+     "objective.longshade": 22
+    }
+   },
+   {
+    "spot": "busiest (score 0.144, amb_rift_insects)",
+    "x": 81.8,
+    "y": 44.5,
+    "cleanBlocks": 187,
+    "blocks": 304,
+    "musicLUFS": -27.6,
+    "ambLUFS": -40.1,
+    "ambUnderMusicLU": 12.5,
+    "emitterUnderMusicLU": {
+     "ambient.map_rift.bed": 15.1,
+     "ambient.map_rift.amb_rift_canopy_motes": 20.9,
+     "ambient.map_rift.amb_rift_shallows_glint": 39.6,
+     "ambient.map_rift.amb_rift_shallows_insects": 20.7,
+     "ambient.map_rift.dialwren": 24,
+     "objective.longshade": 23.5
+    }
+   }
+  ],
+  "bridge_standard": [
+   {
+    "spot": "deck middle (78,22)",
+    "x": 78,
+    "y": 22,
+    "cleanBlocks": 0,
+    "blocks": 164,
+    "musicLUFS": -27.7,
+    "ambLUFS": -48.1,
+    "ambUnderMusicLU": 20.3,
+    "emitterUnderMusicLU": {
+     "ambient.map_bridge.bed": 20.9,
+     "ambient.map_bridge.amb_bridge_chalk_dust": 30.5,
+     "ambient.map_bridge.dialwren": 35.5
+    }
+   },
+   {
+    "spot": "deck edge (updraft pt nearest mid, north)",
+    "x": 70,
+    "y": 4.5,
+    "cleanBlocks": 0,
+    "blocks": 305,
+    "musicLUFS": -27.8,
+    "ambLUFS": -46.5,
+    "ambUnderMusicLU": 18.7,
+    "emitterUnderMusicLU": {
+     "ambient.map_bridge.bed": 21,
+     "ambient.map_bridge.amb_bridge_updraft": 25.4,
+     "ambient.map_bridge.amb_bridge_chalk_dust": 28.8,
+     "ambient.map_bridge.dialwren": 30
+    }
+   },
+   {
+    "spot": "deck edge (updraft pt, south-west)",
+    "x": 46,
+    "y": 39.5,
+    "cleanBlocks": 0,
+    "blocks": 164,
+    "musicLUFS": -28.6,
+    "ambLUFS": -46.7,
+    "ambUnderMusicLU": 18,
+    "emitterUnderMusicLU": {
+     "ambient.map_bridge.bed": 20,
+     "ambient.map_bridge.amb_bridge_updraft": 24.4,
+     "ambient.map_bridge.amb_bridge_chalk_dust": 30.3,
+     "ambient.map_bridge.dialwren": 29.4
+    }
+   },
+   {
+    "spot": "deck quarter (45,22)",
+    "x": 45,
+    "y": 22,
+    "cleanBlocks": 0,
+    "blocks": 164,
+    "musicLUFS": -28.7,
+    "ambLUFS": -47.5,
+    "ambUnderMusicLU": 18.8,
+    "emitterUnderMusicLU": {
+     "ambient.map_bridge.bed": 20.2,
+     "ambient.map_bridge.amb_bridge_chalk_dust": 27,
+     "ambient.map_bridge.dialwren": 33.1
+    }
+   },
+   {
+    "spot": "busiest (score 0.102, amb_bridge_updraft)",
+    "x": 22,
+    "y": 39.5,
+    "cleanBlocks": 251,
+    "blocks": 305,
+    "musicLUFS": -29.4,
+    "ambLUFS": -39.9,
+    "ambUnderMusicLU": 10.5,
+    "emitterUnderMusicLU": {
+     "ambient.map_bridge.bed": 13.2,
+     "ambient.map_bridge.amb_bridge_updraft": 17.8,
+     "ambient.map_bridge.amb_bridge_chalk_dust": 22.6,
+     "ambient.map_bridge.amb_bridge_resin_flame": 18.5,
+     "ambient.map_bridge.dialwren": 23
+    }
+   }
+  ],
+  "fray_standard": [
+   {
+    "spot": "arena centre (32,32)",
+    "x": 32,
+    "y": 32,
+    "cleanBlocks": 0,
+    "blocks": 164,
+    "musicLUFS": -27.8,
+    "ambLUFS": -48.8,
+    "ambUnderMusicLU": 21,
+    "emitterUnderMusicLU": {
+     "ambient.map_fray.bed": 21.3
+    }
+   },
+   {
+    "spot": "lantern pt0",
+    "x": 15.6,
+    "y": 2.2,
+    "cleanBlocks": 160,
+    "blocks": 305,
+    "musicLUFS": -28.1,
+    "ambLUFS": -39.4,
+    "ambUnderMusicLU": 11.3,
+    "emitterUnderMusicLU": {
+     "ambient.map_fray.bed": 14.6,
+     "ambient.map_fray.bunting": 19.2,
+     "ambient.map_fray.amb_fray_lantern_glow": 19.3,
+     "ambient.map_fray.amb_fray_lamp_flame": 19.4,
+     "ambient.map_fray.dialwren": 24.1
+    }
+   },
+   {
+    "spot": "bunting pt0",
+    "x": 5.6,
+    "y": 11.8,
+    "cleanBlocks": 0,
+    "blocks": 164,
+    "musicLUFS": -28.9,
+    "ambLUFS": -45.1,
+    "ambUnderMusicLU": 16.3,
+    "emitterUnderMusicLU": {
+     "ambient.map_fray.bed": 19.7,
+     "ambient.map_fray.bunting": 24.1,
+     "ambient.map_fray.amb_fray_lantern_glow": 23.9,
+     "ambient.map_fray.amb_fray_lamp_flame": 24.5,
+     "ambient.map_fray.dialwren": 28.2
+    }
+   },
+   {
+    "spot": "arena edge (12,32)",
+    "x": 12,
+    "y": 32,
+    "cleanBlocks": 56,
+    "blocks": 164,
+    "musicLUFS": -29.7,
+    "ambLUFS": -41.4,
+    "ambUnderMusicLU": 11.7,
+    "emitterUnderMusicLU": {
+     "ambient.map_fray.bed": 13.6,
+     "ambient.map_fray.bunting": 23.1,
+     "ambient.map_fray.amb_fray_lantern_glow": 20.7,
+     "ambient.map_fray.amb_fray_lamp_flame": 26,
+     "ambient.map_fray.dialwren": 21.5
+    }
+   },
+   {
+    "spot": "busiest (score 0.149, amb_fray_bunting)",
+    "x": 5.6,
+    "y": 11.8,
+    "cleanBlocks": 25,
+    "blocks": 304,
+    "musicLUFS": -28.1,
+    "ambLUFS": -43.4,
+    "ambUnderMusicLU": 15.3,
+    "emitterUnderMusicLU": {
+     "ambient.map_fray.bed": 18.8,
+     "ambient.map_fray.bunting": 23.5,
+     "ambient.map_fray.amb_fray_lantern_glow": 23.3,
+     "ambient.map_fray.amb_fray_lamp_flame": 23.7,
+     "ambient.map_fray.dialwren": 26.8
+    }
+   }
+  ]
+ },
+ "spotNotes": "With the fight duck off (clean blocks), every spot is inside the bars. The whole bus is 9.7-14.0 LU under the music on RIFT (lane bottom 9.7 and lane mid 9.9 are the closest, against >= 8), 10.5 at the BRIDGE busiest point and 11.3-11.7 on FRAY. The bed is 11.3-16.1 LU under (lane bottom 11.3 against >= 11 is the slimmest margin). The loudest emitter on its point is 16.7 LU under (RIFT shallows) against >= 12. The presences are 19.1-22 LU under 10 m off their pits. Spots marked cleanBlocks 0 were under a fight duck the whole window (BRIDGE and FRAY bots fight almost constantly); there the bus sits 16-21 LU under the music. That is intended, not dead silence.",
+ "rawBusDecode": {
+  "spots_bridge_standard_1.f32": {
+   "sec": 25.0,
+   "st_swell_lu": 2.31,
+   "band_range_db": 3.12,
+   "band_ac_max": [
+    0.51,
+    8.25
+   ],
+   "hf2k_pct": 2.3,
+   "lt200_pct": 20.8,
+   "centroid": 638,
+   "flat": 0.187,
+   "lr_corr": 0.49,
+   "mono_loss_db": 1.28
+  },
+  "spots_bridge_standard_4.f32": {
+   "sec": 25.0,
+   "st_swell_lu": 1.35,
+   "band_range_db": 4.8,
+   "band_ac_max": [
+    0.37,
+    12.0
+   ],
+   "hf2k_pct": 2.1,
+   "lt200_pct": 22.0,
+   "centroid": 590,
+   "flat": 0.171,
+   "lr_corr": 0.51,
+   "mono_loss_db": 1.22
+  },
+  "spots_fray_standard_1.f32": {
+   "sec": 25.0,
+   "st_swell_lu": 7.39,
+   "band_range_db": 8.66,
+   "band_ac_max": [
+    0.8,
+    2.0
+   ],
+   "hf2k_pct": 11.2,
+   "lt200_pct": 8.9,
+   "centroid": 1114,
+   "flat": 0.439,
+   "lr_corr": 0.79,
+   "mono_loss_db": 0.52
+  },
+  "spots_fray_standard_4.f32": {
+   "sec": 24.9,
+   "st_swell_lu": 6.43,
+   "band_range_db": 7.71,
+   "band_ac_max": [
+    0.71,
+    2.0
+   ],
+   "hf2k_pct": 11.1,
+   "lt200_pct": 8.9,
+   "centroid": 1116,
+   "flat": 0.435,
+   "lr_corr": 0.8,
+   "mono_loss_db": 0.46
+  },
+  "spots_rift_coop_11.f32": {
+   "sec": 24.9,
+   "st_swell_lu": 6.16,
+   "band_range_db": 8.51,
+   "band_ac_max": [
+    0.69,
+    2.0
+   ],
+   "hf2k_pct": 12.5,
+   "lt200_pct": 21.7,
+   "centroid": 964,
+   "flat": 0.337,
+   "lr_corr": 0.49,
+   "mono_loss_db": 1.28
+  },
+  "spots_rift_coop_4.f32": {
+   "sec": 25.0,
+   "st_swell_lu": 1.49,
+   "band_range_db": 2.92,
+   "band_ac_max": [
+    0.65,
+    12.0
+   ],
+   "hf2k_pct": 6.2,
+   "lt200_pct": 5.6,
+   "centroid": 761,
+   "flat": 0.301,
+   "lr_corr": 0.39,
+   "mono_loss_db": 1.59
+  }
+ },
+ "rawBusNotes": "At calm spots the bus as heard holds a short-term swell of 1.35-2.31 LU and a band range of 2.9-4.8 dB, with no lag repeating at >= 0.6 while it moves >= 3 dB (RIFT canopy 0.65 at 12 s over only 2.9 dB). It keeps 2.1-6.2 % of its energy above 2 kHz and is not anti-correlated (L/R +0.39 to +0.80, mono loss 0.5-1.6 dB). The 6.2-7.4 LU swells at the FRAY lantern, FRAY busiest and RIFT busiest spots come from the fight duck releasing over 3.5 s in windows that were 8-62 % ducked. That is the designed 'world fades back in', not a whoosh in any cue, and it moves the bus only while it sits 12+ LU under the music.",
+ "cueDecode": {
+  "u_longshade_presence": {
+   "loop": true,
+   "gain": 0.2,
+   "dur": 26.0,
+   "file_lufs": -30.01,
+   "played_lufs": -43.99,
+   "st_swell_lu": 0.96,
+   "band250_2k_range_db": 2.29,
+   "band_ac": [
+    0.316,
+    11.0
+   ],
+   "broad_range_db": 1.33,
+   "broad_ac": [
+    0.368,
+    10.25
+   ],
+   "centroid_range_hz": [
+    132,
+    141
+   ],
+   "loud_bright_corr": -0.44,
+   "hf2k": 0.0,
+   "hf4k": 0.0,
+   "lt200": 98.4,
+   "flat200_4k": 0.043,
+   "centroid": 90,
+   "peaks": [
+    76,
+    70,
+    111
+   ],
+   "p10_db_vs_p90": -1.4,
+   "crest_frames": 1.1,
+   "seam": {
+    "rms_step_db": -0.33,
+    "jump_over_p999_diff": 0.31
+   },
+   "mono": {
+    "lr_corr": 1.0,
+    "mono_loss_db": 0.0
+   },
+   "third_oct_db": {
+    "80": -47.3,
+    "100": -53.2,
+    "125": -60.8,
+    "160": -56.4
+   }
+  },
+  "u_sunsplinter_presence": {
+   "loop": true,
+   "gain": 0.2,
+   "dur": 22.0,
+   "file_lufs": -30.02,
+   "played_lufs": -44.0,
+   "st_swell_lu": 0.83,
+   "band250_2k_range_db": 1.63,
+   "band_ac": [
+    0.461,
+    8.75
+   ],
+   "broad_range_db": 1.2,
+   "broad_ac": [
+    0.405,
+    8.75
+   ],
+   "centroid_range_hz": [
+    404,
+    430
+   ],
+   "loud_bright_corr": 0.25,
+   "hf2k": 0.1,
+   "hf4k": 0.0,
+   "lt200": 18.6,
+   "flat200_4k": 0.004,
+   "centroid": 417,
+   "peaks": [
+    439,
+    146,
+    445
+   ],
+   "p10_db_vs_p90": -1.0,
+   "crest_frames": 0.7,
+   "seam": {
+    "rms_step_db": 0.1,
+    "jump_over_p999_diff": 0.64
+   },
+   "mono": {
+    "lr_corr": 1.0,
+    "mono_loss_db": 0.0
+   },
+   "third_oct_db": {
+    "80": -87.7,
+    "100": -88.3,
+    "125": -76.9,
+    "160": -54.3
+   }
+  },
+  "amb_rift_air": {
+   "loop": true,
+   "gain": 0.56,
+   "dur": 24.0,
+   "file_lufs": -32.99,
+   "played_lufs": -38.02,
+   "st_swell_lu": 1.9,
+   "band250_2k_range_db": 2.9,
+   "band_ac": [
+    0.55,
+    10.25
+   ],
+   "broad_range_db": 2.76,
+   "broad_ac": [
+    0.506,
+    10.25
+   ],
+   "centroid_range_hz": [
+    425,
+    497
+   ],
+   "loud_bright_corr": -0.36,
+   "hf2k": 0.7,
+   "hf4k": 0.0,
+   "lt200": 8.0,
+   "flat200_4k": 0.063,
+   "centroid": 456,
+   "peaks": [
+    275,
+    270,
+    281
+   ],
+   "p10_db_vs_p90": -2.8,
+   "crest_frames": 2.0,
+   "seam": {
+    "rms_step_db": 0.78,
+    "jump_over_p999_diff": 0.54
+   },
+   "mono": {
+    "lr_corr": 0.22,
+    "mono_loss_db": 2.15
+   },
+   "third_oct_db": {
+    "80": -79.0,
+    "100": -70.5,
+    "125": -62.7,
+    "160": -55.9
+   }
+  },
+  "amb_rift_canopy": {
+   "loop": true,
+   "gain": 0.2,
+   "dur": 12.0,
+   "file_lufs": -27.97,
+   "played_lufs": -41.94,
+   "st_swell_lu": 1.36,
+   "band250_2k_range_db": 5.28,
+   "band_ac": [
+    0.25,
+    2.25
+   ],
+   "broad_range_db": 3.98,
+   "broad_ac": [
+    0.223,
+    2.5
+   ],
+   "centroid_range_hz": [
+    1276,
+    1616
+   ],
+   "loud_bright_corr": 0.17,
+   "hf2k": 18.4,
+   "hf4k": 0.9,
+   "lt200": 0.0,
+   "flat200_4k": 0.544,
+   "centroid": 1444,
+   "peaks": [
+    1049,
+    1113,
+    1184
+   ],
+   "p10_db_vs_p90": -9.2,
+   "crest_frames": 5.0,
+   "seam": {
+    "rms_step_db": 204.88,
+    "jump_over_p999_diff": 0.0
+   },
+   "mono": {
+    "lr_corr": 1.0,
+    "mono_loss_db": 0.0
+   },
+   "third_oct_db": {
+    "80": -105.3,
+    "100": -99.4,
+    "125": -92.5,
+    "160": -86.0
+   }
+  },
+  "amb_rift_water": {
+   "loop": true,
+   "gain": 0.2,
+   "dur": 12.0,
+   "file_lufs": -28.01,
+   "played_lufs": -41.99,
+   "st_swell_lu": 1.68,
+   "band250_2k_range_db": 4.63,
+   "band_ac": [
+    0.098,
+    6.0
+   ],
+   "broad_range_db": 3.4,
+   "broad_ac": [
+    0.06,
+    6.0
+   ],
+   "centroid_range_hz": [
+    554,
+    864
+   ],
+   "loud_bright_corr": 0.36,
+   "hf2k": 2.3,
+   "hf4k": 0.3,
+   "lt200": 6.6,
+   "flat200_4k": 0.187,
+   "centroid": 718,
+   "peaks": [
+    328,
+    439,
+    457
+   ],
+   "p10_db_vs_p90": -5.7,
+   "crest_frames": 4.8,
+   "seam": {
+    "rms_step_db": -0.07,
+    "jump_over_p999_diff": 0.08
+   },
+   "mono": {
+    "lr_corr": 1.0,
+    "mono_loss_db": 0.0
+   },
+   "third_oct_db": {
+    "80": -71.1,
+    "100": -66.9,
+    "125": -64.2,
+    "160": -61.5
+   }
+  },
+  "amb_rift_insects": {
+   "loop": true,
+   "gain": 0.19,
+   "dur": 6.0,
+   "file_lufs": -28.11,
+   "played_lufs": -42.54,
+   "st_swell_lu": 1.46,
+   "band250_2k_range_db": 128.07,
+   "band_ac": [
+    0.051,
+    2.0
+   ],
+   "broad_range_db": 94.41,
+   "broad_ac": [
+    0.0,
+    0
+   ],
+   "centroid_range_hz": [
+    3640,
+    4458
+   ],
+   "loud_bright_corr": 0.95,
+   "hf2k": 100.0,
+   "hf4k": 84.4,
+   "lt200": 0.0,
+   "flat200_4k": 0.006,
+   "centroid": 4342,
+   "peaks": [
+    4295,
+    4324,
+    4266
+   ],
+   "p10_db_vs_p90": -210.9,
+   "crest_frames": 213.6,
+   "seam": {
+    "rms_step_db": 0.0,
+    "jump_over_p999_diff": 0.0
+   },
+   "mono": {
+    "lr_corr": 1.0,
+    "mono_loss_db": 0.0
+   },
+   "third_oct_db": {
+    "80": -164.9,
+    "100": -164.7,
+    "125": -157.1,
+    "160": -150.2
+   }
+  },
+  "amb_bridge_air": {
+   "loop": true,
+   "gain": 0.56,
+   "dur": 24.0,
+   "file_lufs": -33.03,
+   "played_lufs": -38.07,
+   "st_swell_lu": 2.41,
+   "band250_2k_range_db": 4.21,
+   "band_ac": [
+    0.35,
+    10.5
+   ],
+   "broad_range_db": 3.8,
+   "broad_ac": [
+    0.331,
+    10.5
+   ],
+   "centroid_range_hz": [
+    559,
+    653
+   ],
+   "loud_bright_corr": -0.42,
+   "hf2k": 1.9,
+   "hf4k": 0.1,
+   "lt200": 6.1,
+   "flat200_4k": 0.14,
+   "centroid": 606,
+   "peaks": [
+    375,
+    416,
+    410
+   ],
+   "p10_db_vs_p90": -3.1,
+   "crest_frames": 3.0,
+   "seam": {
+    "rms_step_db": -0.76,
+    "jump_over_p999_diff": 0.35
+   },
+   "mono": {
+    "lr_corr": 0.17,
+    "mono_loss_db": 2.33
+   },
+   "third_oct_db": {
+    "80": -74.1,
+    "100": -67.4,
+    "125": -61.7,
+    "160": -56.9
+   }
+  },
+  "amb_bridge_updraft": {
+   "loop": true,
+   "gain": 0.19,
+   "dur": 13.0,
+   "file_lufs": -28.01,
+   "played_lufs": -42.43,
+   "st_swell_lu": 0.87,
+   "band250_2k_range_db": 2.27,
+   "band_ac": [
+    0.46,
+    5.25
+   ],
+   "broad_range_db": 1.94,
+   "broad_ac": [
+    0.442,
+    5.25
+   ],
+   "centroid_range_hz": [
+    658,
+    730
+   ],
+   "loud_bright_corr": 0.11,
+   "hf2k": 2.9,
+   "hf4k": 0.1,
+   "lt200": 16.9,
+   "flat200_4k": 0.213,
+   "centroid": 663,
+   "peaks": [
+    135,
+    141,
+    170
+   ],
+   "p10_db_vs_p90": -1.7,
+   "crest_frames": 1.8,
+   "seam": {
+    "rms_step_db": 0.05,
+    "jump_over_p999_diff": 0.07
+   },
+   "mono": {
+    "lr_corr": 1.0,
+    "mono_loss_db": 0.0
+   },
+   "third_oct_db": {
+    "80": -63.3,
+    "100": -61.2,
+    "125": -60.0,
+    "160": -59.0
+   }
+  },
+  "amb_bridge_creak": {
+   "loop": true,
+   "gain": 0.2,
+   "dur": 10.0,
+   "file_lufs": -28.02,
+   "played_lufs": -42.0,
+   "st_swell_lu": 172.38,
+   "band250_2k_range_db": 164.23,
+   "band_ac": [
+    0.185,
+    2.0
+   ],
+   "broad_range_db": 174.87,
+   "broad_ac": [
+    0.184,
+    2.0
+   ],
+   "centroid_range_hz": [
+    0,
+    4043
+   ],
+   "loud_bright_corr": 0.34,
+   "hf2k": 1.1,
+   "hf4k": 0.6,
+   "lt200": 82.2,
+   "flat200_4k": 0.074,
+   "centroid": 219,
+   "peaks": [
+    164,
+    158,
+    129
+   ],
+   "p10_db_vs_p90": -210.5,
+   "crest_frames": 216.7,
+   "seam": {
+    "rms_step_db": 0.0,
+    "jump_over_p999_diff": 0.0
+   },
+   "mono": {
+    "lr_corr": 1.0,
+    "mono_loss_db": 0.0
+   },
+   "third_oct_db": {
+    "80": -64.7,
+    "100": -60.2,
+    "125": -54.0,
+    "160": -53.0
+   }
+  },
+  "amb_fray_murmur": {
+   "loop": true,
+   "gain": 0.56,
+   "dur": 36.0,
+   "file_lufs": -32.98,
+   "played_lufs": -38.01,
+   "st_swell_lu": 1.42,
+   "band250_2k_range_db": 3.02,
+   "band_ac": [
+    0.503,
+    15.0
+   ],
+   "broad_range_db": 2.46,
+   "broad_ac": [
+    0.515,
+    15.0
+   ],
+   "centroid_range_hz": [
+    812,
+    932
+   ],
+   "loud_bright_corr": -0.04,
+   "hf2k": 3.4,
+   "hf4k": 0.0,
+   "lt200": 0.5,
+   "flat200_4k": 0.168,
+   "centroid": 867,
+   "peaks": [
+    604,
+    598,
+    633
+   ],
+   "p10_db_vs_p90": -4.6,
+   "crest_frames": 3.7,
+   "seam": {
+    "rms_step_db": -1.69,
+    "jump_over_p999_diff": 0.34
+   },
+   "mono": {
+    "lr_corr": 0.617,
+    "mono_loss_db": 0.93
+   },
+   "third_oct_db": {
+    "80": -82.3,
+    "100": -78.6,
+    "125": -74.9,
+    "160": -69.5
+   }
+  },
+  "amb_fray_bunting": {
+   "loop": true,
+   "gain": 0.19,
+   "dur": 6.0,
+   "file_lufs": -27.96,
+   "played_lufs": -42.39,
+   "st_swell_lu": 1.08,
+   "band250_2k_range_db": 3.55,
+   "band_ac": [
+    0.0,
+    0
+   ],
+   "broad_range_db": 3.43,
+   "broad_ac": [
+    0.0,
+    0
+   ],
+   "centroid_range_hz": [
+    1206,
+    1286
+   ],
+   "loud_bright_corr": 0.15,
+   "hf2k": 13.2,
+   "hf4k": 1.4,
+   "lt200": 0.4,
+   "flat200_4k": 0.509,
+   "centroid": 1250,
+   "peaks": [
+    662,
+    756,
+    879
+   ],
+   "p10_db_vs_p90": -6.5,
+   "crest_frames": 3.7,
+   "seam": {
+    "rms_step_db": 5.83,
+    "jump_over_p999_diff": 0.24
+   },
+   "mono": {
+    "lr_corr": 1.0,
+    "mono_loss_db": 0.0
+   },
+   "third_oct_db": {
+    "80": -91.0,
+    "100": -86.5,
+    "125": -80.1,
+    "160": -74.2
+   }
+  },
+  "amb_fray_lantern": {
+   "loop": true,
+   "gain": 0.19,
+   "dur": 8.0,
+   "file_lufs": -27.91,
+   "played_lufs": -42.33,
+   "st_swell_lu": 2.41,
+   "band250_2k_range_db": 10.61,
+   "band_ac": [
+    0.055,
+    4.0
+   ],
+   "broad_range_db": 6.54,
+   "broad_ac": [
+    0.158,
+    4.0
+   ],
+   "centroid_range_hz": [
+    2230,
+    3479
+   ],
+   "loud_bright_corr": -0.57,
+   "hf2k": 59.2,
+   "hf4k": 24.1,
+   "lt200": 0.0,
+   "flat200_4k": 0.542,
+   "centroid": 3009,
+   "peaks": [
+    1758,
+    1318,
+    1764
+   ],
+   "p10_db_vs_p90": -6.8,
+   "crest_frames": 7.5,
+   "seam": {
+    "rms_step_db": -56.07,
+    "jump_over_p999_diff": 0.0
+   },
+   "mono": {
+    "lr_corr": 1.0,
+    "mono_loss_db": 0.0
+   },
+   "third_oct_db": {
+    "80": -118.1,
+    "100": -112.7,
+    "125": -106.3,
+    "160": -98.8
+   }
+  },
+  "amb_lamp_flame": {
+   "loop": true,
+   "gain": 0.18,
+   "dur": 6.0,
+   "file_lufs": -27.99,
+   "played_lufs": -42.88,
+   "st_swell_lu": 0.13,
+   "band250_2k_range_db": 1.2,
+   "band_ac": [
+    0.215,
+    2.5
+   ],
+   "broad_range_db": 0.8,
+   "broad_ac": [
+    0.209,
+    2.5
+   ],
+   "centroid_range_hz": [
+    375,
+    435
+   ],
+   "loud_bright_corr": -0.4,
+   "hf2k": 0.9,
+   "hf4k": 0.1,
+   "lt200": 38.6,
+   "flat200_4k": 0.095,
+   "centroid": 355,
+   "peaks": [
+    76,
+    70,
+    146
+   ],
+   "p10_db_vs_p90": -3.0,
+   "crest_frames": 2.2,
+   "seam": {
+    "rms_step_db": 0.67,
+    "jump_over_p999_diff": 0.16
+   },
+   "mono": {
+    "lr_corr": 1.0,
+    "mono_loss_db": 0.0
+   },
+   "third_oct_db": {
+    "80": -55.8,
+    "100": -59.8,
+    "125": -58.2,
+    "160": -55.0
+   }
+  },
+  "amb_wren": {
+   "loop": true,
+   "gain": 0.21,
+   "dur": 8.0,
+   "file_lufs": -28.01,
+   "played_lufs": -41.56,
+   "st_swell_lu": 13.92,
+   "band250_2k_range_db": 169.9,
+   "band_ac": [
+    0.15,
+    4.0
+   ],
+   "broad_range_db": 170.89,
+   "broad_ac": [
+    0.152,
+    4.0
+   ],
+   "centroid_range_hz": [
+    0,
+    1890
+   ],
+   "loud_bright_corr": 0.99,
+   "hf2k": 6.3,
+   "hf4k": 5.3,
+   "lt200": 0.0,
+   "flat200_4k": 0.001,
+   "centroid": 1755,
+   "peaks": [
+    1535,
+    1541,
+    1529
+   ],
+   "p10_db_vs_p90": -204.3,
+   "crest_frames": 215.9,
+   "seam": {
+    "rms_step_db": 0.0,
+    "jump_over_p999_diff": 0.0
+   },
+   "mono": {
+    "lr_corr": 1.0,
+    "mono_loss_db": 0.0
+   },
+   "third_oct_db": {
+    "80": -151.8,
+    "100": -151.3,
+    "125": -150.9,
+    "160": -150.8
+   }
+  },
+  "m_gorge_gust": {
+   "loop": false,
+   "gain": 0.7,
+   "dur": 3.0,
+   "file_lufs": -30.56,
+   "played_lufs": -33.65,
+   "st_swell_lu": 0.03,
+   "band250_2k_range_db": 32.06,
+   "band_ac": [
+    0.0,
+    0
+   ],
+   "broad_range_db": 28.68,
+   "broad_ac": [
+    0.0,
+    0
+   ],
+   "centroid_range_hz": [
+    289,
+    1058
+   ],
+   "loud_bright_corr": -0.24,
+   "hf2k": 0.1,
+   "hf4k": 0.0,
+   "lt200": 7.6,
+   "flat200_4k": 0.02,
+   "centroid": 529,
+   "peaks": [
+    557,
+    545,
+    562
+   ],
+   "p10_db_vs_p90": -28.7,
+   "crest_frames": 12.8,
+   "seam": {
+    "rms_step_db": 2.39,
+    "jump_over_p999_diff": 0.0
+   },
+   "mono": {
+    "lr_corr": 0.899,
+    "mono_loss_db": 0.23
+   },
+   "third_oct_db": {
+    "80": -67.0,
+    "100": -59.5,
+    "125": -57.9,
+    "160": -53.2
+   }
+  }
+ },
+ "musicReference": {
+  "rift": {
+   "file_lufs": -22.99,
+   "gain": 0.75,
+   "played_lufs": -25.49,
+   "quietest10s_lufs": -28.17,
+   "dur": 160.0,
+   "quiet10s_third_oct_db": {
+    "80": -39.9,
+    "100": -41.2,
+    "125": -56.3,
+    "160": -41.4
+   }
+  },
+  "bridge": {
+   "file_lufs": -23.0,
+   "gain": 0.75,
+   "played_lufs": -25.49,
+   "quietest10s_lufs": -27.34,
+   "dur": 160.0,
+   "quiet10s_third_oct_db": {
+    "80": -61.8,
+    "100": -69.0,
+    "125": -41.4,
+    "160": -45.2
+   }
+  },
+  "fray": {
+   "file_lufs": -23.0,
+   "gain": 0.75,
+   "played_lufs": -25.5,
+   "quietest10s_lufs": -27.86,
+   "dur": 160.0,
+   "quiet10s_third_oct_db": {
+    "80": -38.4,
+    "100": -70.0,
+    "125": -45.0,
+    "160": -43.0
+   }
+  }
+ },
+ "thirdOctaveVsQuietMusic": {
+  "rift": {
+   "music_quiet_3oct": {
+    "63": -41.1,
+    "80": -38.4,
+    "100": -35.4,
+    "125": -47.3,
+    "160": -38.8,
+    "200": -35.4,
+    "250": -38.0,
+    "315": -34.7,
+    "400": -40.0,
+    "500": -36.8,
+    "630": -37.1,
+    "800": -45.2,
+    "1000": -43.3,
+    "1250": -48.2,
+    "1600": -44.4,
+    "2000": -48.6,
+    "2500": -53.5,
+    "3150": -53.8,
+    "4000": -56.4,
+    "5000": -59.0,
+    "6300": -61.1,
+    "8000": -66.6
+   },
+   "cues": {
+    "amb_rift_air": {
+     "max_over_quiet_music_db": -4.9,
+     "at_hz": 400,
+     "bands_over_minus6": [
+      400,
+      800,
+      1250
+     ]
+    },
+    "amb_rift_canopy": {
+     "max_over_quiet_music_db": -0.4,
+     "at_hz": 2500,
+     "bands_over_minus6": [
+      1250,
+      2000,
+      2500,
+      3150,
+      4000
+     ]
+    },
+    "amb_rift_water": {
+     "max_over_quiet_music_db": -4.1,
+     "at_hz": 1250,
+     "bands_over_minus6": [
+      800,
+      1250
+     ]
+    },
+    "amb_rift_insects": {
+     "max_over_quiet_music_db": 8.3,
+     "at_hz": 4000,
+     "bands_over_minus6": [
+      3150,
+      4000,
+      5000,
+      6300
+     ]
+    },
+    "amb_lamp_flame": {
+     "max_over_quiet_music_db": -6.9,
+     "at_hz": 125,
+     "bands_over_minus6": []
+    },
+    "amb_wren": {
+     "max_over_quiet_music_db": -4.8,
+     "at_hz": 5000,
+     "bands_over_minus6": [
+      1250,
+      5000
+     ]
+    },
+    "u_longshade_presence": {
+     "max_over_quiet_music_db": -5.1,
+     "at_hz": 125,
+     "bands_over_minus6": [
+      80,
+      125
+     ]
+    },
+    "u_sunsplinter_presence": {
+     "max_over_quiet_music_db": -7.3,
+     "at_hz": 400,
+     "bands_over_minus6": []
+    }
+   }
+  },
+  "bridge": {
+   "music_quiet_3oct": {
+    "63": -34.1,
+    "80": -41.0,
+    "100": -45.4,
+    "125": -40.1,
+    "160": -39.3,
+    "200": -37.4,
+    "250": -35.1,
+    "315": -34.5,
+    "400": -39.2,
+    "500": -37.0,
+    "630": -36.6,
+    "800": -41.6,
+    "1000": -38.5,
+    "1250": -44.8,
+    "1600": -49.9,
+    "2000": -53.5,
+    "2500": -52.7,
+    "3150": -53.0,
+    "4000": -59.2,
+    "5000": -60.4,
+    "6300": -63.8,
+    "8000": -69.5
+   },
+   "cues": {
+    "amb_bridge_air": {
+     "max_over_quiet_music_db": -2.5,
+     "at_hz": 2000,
+     "bands_over_minus6": [
+      800,
+      1600,
+      2000,
+      2500
+     ]
+    },
+    "amb_bridge_updraft": {
+     "max_over_quiet_music_db": -4.8,
+     "at_hz": 2000,
+     "bands_over_minus6": [
+      2000
+     ]
+    },
+    "amb_bridge_creak": {
+     "max_over_quiet_music_db": -7.4,
+     "at_hz": 8000,
+     "bands_over_minus6": []
+    },
+    "amb_lamp_flame": {
+     "max_over_quiet_music_db": -10.7,
+     "at_hz": 100,
+     "bands_over_minus6": []
+    },
+    "amb_wren": {
+     "max_over_quiet_music_db": -1.4,
+     "at_hz": 1600,
+     "bands_over_minus6": [
+      1600,
+      2000,
+      4000,
+      5000,
+      6300,
+      8000
+     ]
+    }
+   }
+  },
+  "fray": {
+   "music_quiet_3oct": {
+    "63": -36.0,
+    "80": -38.7,
+    "100": -40.7,
+    "125": -41.8,
+    "160": -43.2,
+    "200": -38.4,
+    "250": -38.2,
+    "315": -34.2,
+    "400": -37.1,
+    "500": -36.1,
+    "630": -36.7,
+    "800": -40.8,
+    "1000": -44.5,
+    "1250": -46.7,
+    "1600": -48.0,
+    "2000": -50.3,
+    "2500": -51.1,
+    "3150": -53.0,
+    "4000": -56.1,
+    "5000": -60.4,
+    "6300": -62.5,
+    "8000": -66.3
+   },
+   "cues": {
+    "amb_fray_murmur": {
+     "max_over_quiet_music_db": 0.4,
+     "at_hz": 2000,
+     "bands_over_minus6": [
+      1000,
+      1250,
+      1600,
+      2000,
+      2500
+     ]
+    },
+    "amb_fray_bunting": {
+     "max_over_quiet_music_db": -3.9,
+     "at_hz": 2000,
+     "bands_over_minus6": [
+      1250,
+      1600,
+      2000,
+      2500,
+      3150,
+      4000,
+      5000
+     ]
+    },
+    "amb_fray_lantern": {
+     "max_over_quiet_music_db": 6.9,
+     "at_hz": 8000,
+     "bands_over_minus6": [
+      1600,
+      2000,
+      2500,
+      3150,
+      4000,
+      5000,
+      6300,
+      8000
+     ]
+    },
+    "amb_lamp_flame": {
+     "max_over_quiet_music_db": -8.3,
+     "at_hz": 160,
+     "bands_over_minus6": []
+    },
+    "amb_wren": {
+     "max_over_quiet_music_db": -3.2,
+     "at_hz": 1600,
+     "bands_over_minus6": [
+      1600,
+      2000,
+      5000
+     ]
+    }
+   }
+  }
+ },
+ "seamHoles": {
+  "amb_rift_air": {
+   "median_10ms_db": -34.9,
+   "longest_hole_ms": 0,
+   "hole_end_s": 0.0,
+   "seam_hole_ms": 0,
+   "hole_frac": 0.0
+  },
+  "amb_rift_canopy": {
+   "median_10ms_db": -30.8,
+   "longest_hole_ms": 110,
+   "hole_end_s": 0.02,
+   "seam_hole_ms": 110,
+   "hole_frac": 0.102
+  },
+  "amb_rift_water": {
+   "median_10ms_db": -29.6,
+   "longest_hole_ms": 0,
+   "hole_end_s": 0.0,
+   "seam_hole_ms": 0,
+   "hole_frac": 0.0
+  },
+  "amb_rift_insects": {
+   "median_10ms_db": -240.0,
+   "longest_hole_ms": 0,
+   "hole_end_s": 0.0,
+   "seam_hole_ms": 0,
+   "hole_frac": 0.0
+  },
+  "amb_bridge_air": {
+   "median_10ms_db": -35.3,
+   "longest_hole_ms": 0,
+   "hole_end_s": 0.0,
+   "seam_hole_ms": 0,
+   "hole_frac": 0.0
+  },
+  "amb_bridge_updraft": {
+   "median_10ms_db": -27.9,
+   "longest_hole_ms": 0,
+   "hole_end_s": 0.0,
+   "seam_hole_ms": 0,
+   "hole_frac": 0.0
+  },
+  "amb_bridge_creak": {
+   "median_10ms_db": -240.0,
+   "longest_hole_ms": 0,
+   "hole_end_s": 0.0,
+   "seam_hole_ms": 0,
+   "hole_frac": 0.0
+  },
+  "amb_fray_murmur": {
+   "median_10ms_db": -34.6,
+   "longest_hole_ms": 0,
+   "hole_end_s": 0.0,
+   "seam_hole_ms": 0,
+   "hole_frac": 0.0
+  },
+  "amb_fray_bunting": {
+   "median_10ms_db": -31.2,
+   "longest_hole_ms": 0,
+   "hole_end_s": 0.0,
+   "seam_hole_ms": 0,
+   "hole_frac": 0.0
+  },
+  "amb_fray_lantern": {
+   "median_10ms_db": -32.0,
+   "longest_hole_ms": 70,
+   "hole_end_s": 0.04,
+   "seam_hole_ms": 70,
+   "hole_frac": 0.028
+  },
+  "amb_lamp_flame": {
+   "median_10ms_db": -27.5,
+   "longest_hole_ms": 0,
+   "hole_end_s": 0.0,
+   "seam_hole_ms": 0,
+   "hole_frac": 0.0
+  },
+  "amb_wren": {
+   "median_10ms_db": -240.0,
+   "longest_hole_ms": 0,
+   "hole_end_s": 0.0,
+   "seam_hole_ms": 0,
+   "hole_frac": 0.0
+  },
+  "u_longshade_presence": {
+   "median_10ms_db": -27.9,
+   "longest_hole_ms": 0,
+   "hole_end_s": 0.0,
+   "seam_hole_ms": 0,
+   "hole_frac": 0.0
+  },
+  "u_sunsplinter_presence": {
+   "median_10ms_db": -29.3,
+   "longest_hole_ms": 0,
+   "hole_end_s": 0.0,
+   "seam_hole_ms": 0,
+   "hole_frac": 0.0
+  }
+ },
+ "soundDesignerJudgement": {
+  "amb_rift_air": "A warm, steady low breath (centroid 456 Hz, peak 275 Hz, 0.7 % above 2 kHz). Swell 1.9 LU, band 2.9 dB, no gust and no sweep (the centroid moves 425-497 Hz). It plays 12.5 LU under the RIFT music by file and stays at least 4.9 dB under the music's quietest frames in every third-octave. The 125 Hz roar is gone (-62.7 dB vs -41.4 dB music). Reads as valley air or room tone, not heavy wind.",
+  "amb_bridge_air": "The intended 'high wind', held soft: steady (swell 2.4 LU, band 4.2 dB, ac 0.35), with a faint 760 Hz whistle. At most 2.5 dB under the quiet music, at 2 kHz, so it is audible as air on the bridge, as the map calls for. Live it sits 13.2-21 LU under the music. A player could call it wind, rightly, but not heavy wind and not a repeating whoosh.",
+  "amb_bridge_updraft": "A steady fixed-band rush (centroid 658-730 Hz, swell 0.87 LU, band 2.3 dB). It is wind by design but local: at full only within 5 m of its 12 points, 17.8-25.4 LU under the music live. Fine.",
+  "amb_fray_murmur": "A far fair (36 s, random bells). Swell 1.4 LU, band 3.0 dB, ac 0.50 at 15 s over only 3 dB, so no audible cycle. No wind character (centroid 867 Hz, flatness 0.17). There is a -1.7 dB level step across the seam, masked.",
+  "amb_rift_canopy": "Sparse leaf patter (18.4 % above 2 kHz, flatness 0.54, swell 1.4 LU). Not wind. It carries a 110 ms digital-silence hole at its loop seam, every 12 s (see problems).",
+  "amb_rift_water": "Bubbles and laps over a fixed-band murmur (band 4.6 dB, ac 0.10). Not a wash swell. Fine.",
+  "amb_fray_lantern": "Paper rustle plus high chimes. In practice it is a continuous high-band rustle: 59 % above 2 kHz, 83 % of its >2 kHz energy within 6 dB of its floor, flatness 0.54. It is classed as a non-wash, so the 25 % HF cap never reads it. Hiss or rustle, not wind. It also has a 70 ms seam hole every 8 s.",
+  "amb_lamp_flame / amb_fray_bunting / amb_bridge_creak / amb_rift_insects / amb_wren": "Local details. None continuous noise with a swell. Insects are tonal chirps at 4.3 kHz (flatness 0.006). Fine.",
+  "u_longshade_presence / u_sunsplinter_presence": "Still drones (swell 0.96 / 0.83 LU, band 2.3 / 1.6 dB, no >2 kHz content, mono). 19.3-21.3 LU under the music live on their pit edges. No breathing. Fine.",
+  "m_gorge_gust": "Not a loop (sudden death only, 3 s). L/R +0.90, mono loss 0.23 dB, -33.7 LUFS as played. Fine."
+ },
+ "senseOfPlace": "Kept on all three maps. RIFT: valley air, plus leaf patter in the jungle, water and insects at the river, and a drone at each pit. BRIDGE: soft high wind, plus a rush at the deck edges, creaks and lamp flame. FRAY: a far murmur with bells, plus lanterns, bunting and lamps. In calm the bed sits 11-16 LU under the music, quiet but present. It is near-inaudible only under fight ducks, which is the genre norm.",
+ "problems": [
+  {
+   "severity": "minor",
+   "cue": "amb_rift_canopy",
+   "what": "A 110 ms run of digital silence at the loop seam (the last 60 ms and first 25 ms of the file are zero, ogg and m4a alike), so the patter's continuous component drops out every 12 s (pitchVar 0). Live at a canopy point the 500 Hz-10 kHz band of the bus dips 6.4-7.2 dB at 1.33, 13.30 and 25.08 s, exactly the loop period. Likely cause: the patter's grains are scattered without wrapping around the loop, and the build's edge gate rewards quiet edges. Fix: wrap the scatter (add_at wrap=True) so the seam carries grains."
+  },
+  {
+   "severity": "minor",
+   "cue": "amb_fray_lantern",
+   "what": "A 70 ms hole at the loop seam (50 ms of zeros at the head, a 20 ms tail fade), every 8 s, in what is otherwise a near-continuous rustle. Masked live at the lantern point (no >5 dB periodic dip proven), but audible solo. Same likely cause (a scatter without wrap)."
+  },
+  {
+   "severity": "minor",
+   "cue": "amb_fray_lantern",
+   "what": "A continuous high-band paper rustle (59 % above 2 kHz, flatness 0.54, a steady floor) that the build gate does not class as a wash, so neither the 25 % HF cap nor the wash swell bar applies to it. By file it peaks 6.9 dB over the FRAY music's quietest frames at 8 kHz, at full on its 8 points. Live it is 19.3-23.9 LU under the music. It reads as hiss, not wind, but it is the one ambience cue with an ungated noise floor. Fix: thin the grain density (220/s -> ~60/s) or class it as a wash."
+  },
+  {
+   "severity": "note",
+   "what": "RIFT lane bottom: bed 11.3 LU under the music (bar 11), whole bus 9.7 (bar 8). This is the slimmest live margin, because the RIFT music runs about -31 LUFS there."
+  },
+  {
+   "severity": "note",
+   "what": "Beds are wide, decorrelated noise (L/R +0.22 / +0.17 / +0.62) and lose 2.2 / 2.3 / 0.9 dB summed to mono. They are not anti-correlated (no cancellation); this is normal for a stereo bed."
+  },
+  {
+   "severity": "open, not ambience",
+   "what": "BRIDGE / FRAY standard masters -11.84 / -15.05 LUFS fail the -18 +/- 1.5 token. BRIDGE heal chimes exceed 6 per minute, and announcer margins fail on rift seed 3, BRIDGE and FRAY. Combat sfx lane, already open in ruling 37."
+  }
+ ],
+ "gatesBuild": "audio/build.py --gates PASS. Ambience: RIFT busiest 8.24 LU under, BRIDGE 8.24, FRAY 8.36. Beds 12.5 LU under, swell 2.06 / 2.53 / 1.52 LU, band 2.61 / 3.45 / 2.35 dB. Emitters 13.06-15.49 LU under. Presences swell 1.03 / 0.88 LU.",
+ "filesEdited": "none (probes and analysis scripts lived in the session scratchpad)"
+}
