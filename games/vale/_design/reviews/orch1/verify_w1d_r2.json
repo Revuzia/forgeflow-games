@@ -1,0 +1,10 @@
+{"lane":"W1-D","round":2,"verifier":"Sonnet 5.5","pass":true,"score":7.6,"safeToShip":true,"blockers":[],
+"doneWhen":{
+"units_gate":"PASS with caveat. heavy.py run 128 s (<=15 min), 144 runs, 16 fighters, 0 errors, exit fail count 16 (P1 pair, was 22 at r1). Known fails no longer reproduce because W1-B fixed them: Vashil-Dunsom dE min 33.7, Ardit top HSV 182.6/0.395/0.396 inAlly false. Saved units_gate_head.json still holds the old fails, so the gate discriminates.",
+"visual_pack":"PASS. file(1) over all 389 files in evidence/visual: 0 colormap PNGs (was 80/338). index.json 182 records, encode lossless-png 144, webp-q95 37, 1 record without a file (a non-frame metadata entry), every listed file exists. Teamfight lead/peak 10/10 visible onScreen 10, after 9/9, 4 quality frames and 3 colour-blind frames 10/10, pending 0.",
+"clutter_scan":"PASS (scripted). natural12k.json: peakFrames4v4 30/30/30 on seeds 7/11/23, natural 0/0/2, scripted rest; median occlusion 0.239/0.131/0.19; worst run 300/600/400 ms (bar 300 fails on 2 seeds, enforced by W2-B); selfRing 30/30, 30/30, 28/30. Natural 4v4 is rare so 30 frames needs the scripted arena.",
+"require_quiet":"PASS. Live run exit nonzero (ok false) at load1 5.12 >= 2.5 with 3 heavy slots held, reasons list load1; the load1 branch is now observed. Outside-GPU >5% branch (readings 0 to 0.4%) not triggered, code reading only.",
+"quality_tiers":"PASS. Per-scene verdict: High vs Ultra dE teamfight 1.048, river_mid 1.008, base 0.294, jungle 0.565; indistinguishable false for teamfight and river_mid; 4-scene mean 0.729 kept separately. Medium dE 2.50 SSIM 0.9165, low 4.79 / 0.8396.",
+"moments_latency_perf":"Files present (moment_* frames, latency_probe_busy.json, idle_gates.json matchMatrix 8 cases); not re-run. Idle gates (perf_1080, probe_match_memory, latency idle) still unrun: machine never quiet (load1 5.2 now)."},
+"problems":["Idle gates need a lead-run quiet window","units_gate still 16 fails (W1-B asset results, not tool faults)","natural 4v4 only 2 of 90 scan windows"],
+"needsFromLead":["idle window for perf_1080/probe_match_memory/latency_probe --require-quiet"]}
