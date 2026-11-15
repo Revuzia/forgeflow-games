@@ -20,7 +20,8 @@
 //   K4  a fighter WITHOUT a kit keeps its catalog / generic cues (attack → its present.sfx, ult cast → present.sfx
 //       or the castUlt role) and requests no f_* kit cue but its passive
 //   K5  fighterCall(id): true and f_<id>_call for a kitted fighter, false and silent for one without a call
-//   K6  a kitted fighter's ability landing on another team ('hit' from its abilities) → f_<id>_hit, one touching its own side never; its own dash (a 'dash' event the
+//   K6  a kitted fighter's ability landing on another team ('hit' from its abilities) → f_<id>_hit (its slot's own
+//       f_<id>_<slot>_hit when content binds one, max2 SFX-4), one touching its own side never; its own dash (a 'dash' event the
 //       sim emits for a dash effect, the one carrying the effect's vfx key) → f_<id>_dash; a displacement (the sim's
 //       dash of a unit knocked airborne) keeps the generic events.dash and no kit dash
 //   K7  round-robin never repeats a take back to back: no cue with >= 2 files plays the same file twice in a row
@@ -134,6 +135,10 @@ for (const f of catalog.fighters) {
   for (const fm of Object.values(f.kit?.passive?.forms ?? {})) abs.push(...Object.entries(fm.kit ?? {}).filter(([, a]) => a));
   for (const [slot, a] of abs) if (!OWN_AB.has(a.id)) OWN_AB.set(a.id, { fighter: f.id, slot });
 }
+// (max2 SFX-4) a slot's own impact: f_<id>_<slot>_hit voices that slot's 'hit' in the kit hit's place when content binds
+// one (the engine's slotHit); else the kit's shared f_<id>_hit
+const kitHit = (f, ability) => { const o = OWN_AB.get(ability); const c = o && o.fighter === f ? `f_${f}_${o.slot}_hit` : null;
+  return c && audio.cues[c] ? c : `f_${f}_hit`; };
 const k9 = [];
 const k9n = { areas: 0, ultAreas: 0, ultProjectiles: 0 };
 const report = { probe: 'probe_audio_kits', catalog: ver, seeds: SEEDS, kitted, bare, modes: {} };
@@ -294,18 +299,19 @@ for (const SEED of SEEDS) for (const [mi, modeId] of MODES.entries()) {
       const got = asked(e);
       // a delivery touching its own side (a haste line, a dome, a mend) is no impact: never the kit hit
       if (view.entity(e.dst)?.team === view.entity(e.src)?.team) {
-        const quiet = !got.includes(`f_${f}_hit`);
+        const quiet = !got.includes(`f_${f}_hit`) && !got.includes(kitHit(f, e.ability));
         tally(f, 'hit on own side (silent)', quiet);
         if (!quiet) miss.push(`${f} own-side touch (${e.ability}) → ${got.join(',')}`);
         continue;
       }
-      const ok = got.includes(`f_${f}_hit`);
+      const kh = kitHit(f, e.ability);
+      const ok = got.includes(kh);
       tally(f, 'hit', ok);
       if (!ok) miss.push(`${f} ability hit (${e.ability}) → ${got.join(',') || 'nothing'}`);
       // K8: a damage-type / crit hitSfx sounds under the kit hit; any other library hitSfx stays replaced
-      if (e.sfx && e.sfx !== `f_${f}_hit`) {
+      if (e.sfx && e.sfx !== kh) {
         const semantic = SEMANTIC.has(e.sfx);
-        const ok8 = got.includes(`f_${f}_hit`) && got.includes(e.sfx) === semantic;
+        const ok8 = got.includes(kh) && got.includes(e.sfx) === semantic;
         tally(f, semantic ? `hit+${e.sfx}` : 'hit (library hitSfx replaced)', ok8);
         if (!ok8) k8.push(`${run} ${f} ${e.ability} hitSfx ${e.sfx} → ${got.join(',') || 'nothing'}`);
       }
