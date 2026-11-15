@@ -20,6 +20,28 @@ Five asks, each of which must be visibly true in the finished game:
 4. **Pieces too, without noise.** Cut pieces do similar interactions, and the feedback stays calm when there are many characters.
 5. **A real game with purpose.** Goals, quests, or something else that gives playing a purpose.
 
+## 1b. OWNER CLARIFICATION (2026-11-15, after the panel started): the three places were EXAMPLES, not the list
+
+> I gave you SOME examples of environments and didn't want to limit you to them. I expect more than just what I suggested.
+
+This overrides every "at least the beach, a snowy mountain and a forest log cabin" below. What it means for the design:
+- **A world of places, not three.** The final design must have **at least 8 places beyond Home**, invented by us and clearly different
+  from each other in ground, zones, things, weather, light, sound and what squishies do there. The owner's three are in, and they are
+  the minority. Think widely: for example a rain-soaked garden with puddles and leaves, a bath or bubble pool, a kitchen counter
+  (dough, flour, a warm oven door), a moonlit rooftop or night sky with wind, a cave with crystals and echoes, a meadow with wind and
+  dandelions, a pond with lily pads, a playground or toy room, a desert dune, a cloud top, a music room, an aquarium floor, a
+  lantern-lit night market of objects (no characters), a workshop bench with magnets and springs. These are prompts, not a list to copy:
+  pick and invent the set that gives the most different play.
+- **Places must be cheap to add.** The data model (D5) is the point: a new place is mostly data (ground, zones, a set of things built
+  from a shared library of prop mechanisms, palette, ambience recipe, reaction rules) plus a small lazy scene module. The design must show
+  the shared mechanism library (about 12 to 16 mechanisms that all the things are built from) and what a ninth or tenth place costs.
+- **More than the examples in every other ask too.** More things per place where they earn their keep, a richer set of social
+  interactions, and a Journal with a chapter per place plus cross-place quests. Surprise the owner; do not stop at what was named.
+- **Slices change.** S1 is still one complete new place with life, social play, pieces and the first Journal chapter. S2 adds the next
+  three places; S3 the remaining four or more. The unlock order spreads them over weeks of play.
+- A proposal or judgement written before this note that designs only three places is incomplete on this point: the synthesizer must
+  extend it to the full set, in the same quality (names, ground, zones, things, family reactions, quests, budgets).
+
 ## 2. What exists today (read the code and the maps in `_handoff/maps/` for the details)
 
 - A 3D soft-body squishy toy (custom XPBD, 50 species in 6 rarity tiers, 12 material families with distinct feel), procedural audio

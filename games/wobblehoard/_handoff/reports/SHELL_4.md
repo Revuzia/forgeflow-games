@@ -1,5 +1,24 @@
 # SHELL-4 report (lane SHELL; running report, updated after every finished item)
 
+## SESSION 3 CONTINUATION (2026-11-15, Linux container; the second SHELL-4 engineer; this part wins where it differs from the session-2 part below)
+Machine: `/home/user/forgeflow-games/games/wobblehoard` (G), 4 cores, Chromium headless shell 1243 + SwiftShader, port 5366 (vite) and 5367 (prod-build
+static server). Scratch `SC3` = `/tmp/claude-0/-home-user-forgeflow-games/2d4e12a5-0f4d-5239-bdda-16316c996a1a/scratchpad/shell4/` (logs `SC3/*.log`).
+Baseline at HEAD 1e5a1159 (orchestrator, this machine): tsc clean; node_checks 124/124; probe_app 183/183; probe_gestures 128/128.
+
+### Status table (session 3)
+| # | Step | Status | Key number |
+|---|------|--------|-----------|
+| 1 | run every written-but-never-run check, fix at the root | in progress | node_checks 124/124 in 10 s (7f rows pass: bend compression 0.25 / press 1.00 with, 0.03 / 1.00 without; one feed 1.4800 SP); capsule-loop 15/15 (the held-press row: ring 0 -> 0.0473); xp 8/8 after 2 TEST faults fixed; cut-x 16/17 as found (1 TEST fault, fixed) |
+
+### Session 3 log
+- `node _harness/shellview/node_checks.ts` -> `124/124 shell-core node checks passed` (10.3 s; `SC3/node_checks_1.log`). The 7f rows (CALIBRATION.bendWithPress) and the 7g real-SoftBody cut rows all pass on this machine.
+- `node _harness/browser_shell.mjs --port=5366 --only=capsule-loop,xp,console-and-network` (`SC3/s1a_capsule_xp.log`): 22/24. capsule-loop 15/15 in 51.8 s, the held-press row verbatim: `ok meter: a real held press (squeeze, 1.2 s) moves the ring ... 0 -> {"fill":0.0473...}`. xp: 2 failures, both TEST faults:
+  - `FAIL XP: letting go banks it: ... bank null; fill 0.0000 -> 0.0983 (+9.8% of the ring)`. Cause: the ring's `data-bank` marker is transient (meterRing.ts bankPending sets 'paid' and a 900 ms WALL-clock timer clears it); 4 stepped slices of SwiftShader frames after the let-go take longer than 900 ms, so the read afterwards found nothing. Fix (test only): a MutationObserver logs every value the marker takes; the row reads that log (it would still fail on 'none' or on no bank at all). Threshold untouched.
+  - `FAIL xp: section ran to the end  Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.` Cause: `squeezeHold` passed two arguments to page.evaluate (Playwright takes one). Fix: pass `[b, frames]`.
+  - Re-run `--only=xp,console-and-network` (`SC3/s1a_xp_2.log`): **10/10** (xp 8/8 in 62.7 s): bank `paid`, arc 9.7 % vs banked 9.8 %, squeeze sparks +6, ring moved 11.7 %, Calm: no sparks, soft glow, fill 0.2150 -> 0.2650.
+- `--only=cut-x,console-and-network` (`SC3/s1b_cutx.log`, 6 min 17 s): **16/17**. Passing on the real physics: X02 edge refusal; X01 2 pieces by swipe (0.871 + 0.129); X03 one face (stage views 1 face + 1 chunk, the face nearest the anchor); 6 pieces by 5 real swipes (0.34 + 0.132 + 0.138 + 0.129 + 0.131 + 0.129, 1 face + 5 chunks); the 7th refused by the LIMIT in words; the smallest refused ("That piece is as small as it gets."); X06 nothing paid; X04 whole from 6; **the held bridge: some chunk's skin clear of the face piece 0.63 s (every chunk 0.53 s) of the 1.20 s join** (was 0.02 s as found in session 2); the near-twin hold does not join (rest gap 0.10 m); let-go-while-touching joins; X06 piece squeeze 0.0500 = face 0.0500 of the ring, tap 0; X10 keyboard only. The failure verbatim:
+  `FAIL reconnect by DRAGGING a piece into another and holding it there: ... {"cut":"cut","touch0":-1,"join0":0.63,"drag":1.2,"holdBeforeJoin":null,"pieces":1}`. Cause: a TEST fault: the row sampled the skin gap every SECOND frame; the cutter checks every sim step and keeps a running contact while the skins stay within TOUCH_KEEP_GAP (0.09 m), so the one frame under TOUCH_GAP (0.03 m) was missed and touch0 stayed -1 while the join had started by itself. Fix: the row samples every frame (the join itself happened, the squishy was whole again: pieces 1).
+
 Branch claude/exciting-faraday-2dakqx, local HEAD f01e476d at start. Nothing committed by this engineer (the orchestrator commits).
 Scratch: `SC` = `C:\Users\TestRun\AppData\Local\Temp\claude\C--Users-TestRun-AppData-Roaming-Claude-scratch-workspaces-10f6a62c-5610-424a-ba29-8c51dbde9f88-b3ecf43b-de12-4070-80de-e1daecc887bf-scratch-2026-10-06-8a5967\3b1103ab-0174-4d88-adc9-dd448a718f0d\scratchpad\shell4\` (logs `SC\*.log`, filmstrips `SC\base_film`, `SC\new_film`).
 As-found snapshot of HEAD (for before-numbers): `C:\Users\TestRun\AppData\Local\Temp\vs4\games\wobblehoard` (HEAD + my debugHook.ts; node_modules is a junction: remove with `cmd /c rmdir`).
