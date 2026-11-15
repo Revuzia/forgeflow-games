@@ -1,0 +1,799 @@
+{
+ "drop_t10": {
+  "n": 49,
+  "chutes": 49,
+  "t": 10.3,
+  "shipped": {
+   "calls": 482,
+   "tris": 20065124,
+   "programs": 80,
+   "textures": 164,
+   "geometries": 500,
+   "submitMs": 30341.8,
+   "finishMs": 30341.8,
+   "byKey": {
+    "shadow|map:mesh": {
+     "calls": 24,
+     "tris": 8716,
+     "objs": 24
+    },
+    "shadow|map:inst": {
+     "calls": 3,
+     "tris": 30356,
+     "objs": 3
+    },
+    "main|map:mesh": {
+     "calls": 52,
+     "tris": 104652,
+     "objs": 51
+    },
+    "main|map:inst": {
+     "calls": 12,
+     "tris": 603536,
+     "objs": 12
+    },
+    "main|actor-weapon": {
+     "calls": 50,
+     "tris": 297750,
+     "objs": 50
+    },
+    "main|actor-body": {
+     "calls": 50,
+     "tris": 18999500,
+     "objs": 50
+    },
+    "main|actor-chute": {
+     "calls": 200,
+     "tris": 19800,
+     "objs": 200
+    },
+    "main|map:sprite": {
+     "calls": 10,
+     "tris": 20,
+     "objs": 10
+    },
+    "main|loot:sprite": {
+     "calls": 5,
+     "tris": 10,
+     "objs": 5
+    },
+    "main|loot:mesh": {
+     "calls": 10,
+     "tris": 160,
+     "objs": 5
+    },
+    "main|fx:inst": {
+     "calls": 1,
+     "tris": 128,
+     "objs": 1
+    },
+    "main|actor-nametag": {
+     "calls": 49,
+     "tris": 98,
+     "objs": 49
+    },
+    "main|storm:mesh": {
+     "calls": 2,
+     "tris": 384,
+     "objs": 1
+    },
+    "post|(no-parent):mesh": {
+     "calls": 14,
+     "tris": 14,
+     "objs": 2
+    }
+   }
+  },
+  "swapped": 50,
+  "lod0": {
+   "calls": 482,
+   "tris": 1815404,
+   "programs": 81,
+   "textures": 164,
+   "geometries": 505,
+   "submitMs": 67.4,
+   "finishMs": 67.4,
+   "byKey": {
+    "shadow|map:mesh": {
+     "calls": 24,
+     "tris": 8716,
+     "objs": 24
+    },
+    "shadow|map:inst": {
+     "calls": 3,
+     "tris": 30356,
+     "objs": 3
+    },
+    "main|map:mesh": {
+     "calls": 52,
+     "tris": 104652,
+     "objs": 51
+    },
+    "main|map:inst": {
+     "calls": 12,
+     "tris": 603536,
+     "objs": 12
+    },
+    "main|actor-weapon": {
+     "calls": 50,
+     "tris": 297750,
+     "objs": 50
+    },
+    "main|actor-body": {
+     "calls": 50,
+     "tris": 749780,
+     "objs": 50
+    },
+    "main|actor-chute": {
+     "calls": 200,
+     "tris": 19800,
+     "objs": 200
+    },
+    "main|map:sprite": {
+     "calls": 10,
+     "tris": 20,
+     "objs": 10
+    },
+    "main|loot:sprite": {
+     "calls": 5,
+     "tris": 10,
+     "objs": 5
+    },
+    "main|loot:mesh": {
+     "calls": 10,
+     "tris": 160,
+     "objs": 5
+    },
+    "main|fx:inst": {
+     "calls": 1,
+     "tris": 128,
+     "objs": 1
+    },
+    "main|actor-nametag": {
+     "calls": 49,
+     "tris": 98,
+     "objs": 49
+    },
+    "main|storm:mesh": {
+     "calls": 2,
+     "tris": 384,
+     "objs": 1
+    },
+    "post|(no-parent):mesh": {
+     "calls": 14,
+     "tris": 14,
+     "objs": 2
+    }
+   }
+  },
+  "fixedSim": {
+   "calls": 237,
+   "tris": 1795902,
+   "programs": 81,
+   "textures": 164,
+   "geometries": 505,
+   "submitMs": 20.7,
+   "finishMs": 20.7,
+   "byKey": {
+    "shadow|map:mesh": {
+     "calls": 24,
+     "tris": 8716,
+     "objs": 24
+    },
+    "shadow|map:inst": {
+     "calls": 3,
+     "tris": 30356,
+     "objs": 3
+    },
+    "main|map:mesh": {
+     "calls": 52,
+     "tris": 104652,
+     "objs": 51
+    },
+    "main|map:inst": {
+     "calls": 12,
+     "tris": 603536,
+     "objs": 12
+    },
+    "main|actor-weapon": {
+     "calls": 50,
+     "tris": 297750,
+     "objs": 50
+    },
+    "main|actor-body": {
+     "calls": 50,
+     "tris": 749780,
+     "objs": 50
+    },
+    "main|actor-chute": {
+     "calls": 4,
+     "tris": 396,
+     "objs": 4
+    },
+    "main|map:sprite": {
+     "calls": 10,
+     "tris": 20,
+     "objs": 10
+    },
+    "main|loot:sprite": {
+     "calls": 5,
+     "tris": 10,
+     "objs": 5
+    },
+    "main|loot:mesh": {
+     "calls": 10,
+     "tris": 160,
+     "objs": 5
+    },
+    "main|fx:inst": {
+     "calls": 1,
+     "tris": 128,
+     "objs": 1
+    },
+    "main|storm:mesh": {
+     "calls": 2,
+     "tris": 384,
+     "objs": 1
+    },
+    "post|(no-parent):mesh": {
+     "calls": 14,
+     "tris": 14,
+     "objs": 2
+    }
+   }
+  },
+  "fixedSimNearShadow": {
+   "calls": 237,
+   "tris": 1795902,
+   "programs": 81,
+   "textures": 164,
+   "geometries": 505,
+   "submitMs": 20.6,
+   "finishMs": 20.6,
+   "byKey": {
+    "shadow|map:mesh": {
+     "calls": 24,
+     "tris": 8716,
+     "objs": 24
+    },
+    "shadow|map:inst": {
+     "calls": 3,
+     "tris": 30356,
+     "objs": 3
+    },
+    "main|map:mesh": {
+     "calls": 52,
+     "tris": 104652,
+     "objs": 51
+    },
+    "main|map:inst": {
+     "calls": 12,
+     "tris": 603536,
+     "objs": 12
+    },
+    "main|actor-weapon": {
+     "calls": 50,
+     "tris": 297750,
+     "objs": 50
+    },
+    "main|actor-body": {
+     "calls": 50,
+     "tris": 749780,
+     "objs": 50
+    },
+    "main|actor-chute": {
+     "calls": 4,
+     "tris": 396,
+     "objs": 4
+    },
+    "main|map:sprite": {
+     "calls": 10,
+     "tris": 20,
+     "objs": 10
+    },
+    "main|loot:sprite": {
+     "calls": 5,
+     "tris": 10,
+     "objs": 5
+    },
+    "main|loot:mesh": {
+     "calls": 10,
+     "tris": 160,
+     "objs": 5
+    },
+    "main|fx:inst": {
+     "calls": 1,
+     "tris": 128,
+     "objs": 1
+    },
+    "main|storm:mesh": {
+     "calls": 2,
+     "tris": 384,
+     "objs": 1
+    },
+    "post|(no-parent):mesh": {
+     "calls": 14,
+     "tris": 14,
+     "objs": 2
+    }
+   }
+  },
+  "world": {
+   "calls": 133,
+   "tris": 747976,
+   "programs": 81,
+   "textures": 164,
+   "geometries": 505,
+   "submitMs": 8.6,
+   "finishMs": 8.6,
+   "byKey": {
+    "shadow|map:mesh": {
+     "calls": 24,
+     "tris": 8716,
+     "objs": 24
+    },
+    "shadow|map:inst": {
+     "calls": 3,
+     "tris": 30356,
+     "objs": 3
+    },
+    "main|map:mesh": {
+     "calls": 52,
+     "tris": 104652,
+     "objs": 51
+    },
+    "main|map:inst": {
+     "calls": 12,
+     "tris": 603536,
+     "objs": 12
+    },
+    "main|map:sprite": {
+     "calls": 10,
+     "tris": 20,
+     "objs": 10
+    },
+    "main|loot:sprite": {
+     "calls": 5,
+     "tris": 10,
+     "objs": 5
+    },
+    "main|loot:mesh": {
+     "calls": 10,
+     "tris": 160,
+     "objs": 5
+    },
+    "main|fx:inst": {
+     "calls": 1,
+     "tris": 128,
+     "objs": 1
+    },
+    "main|storm:mesh": {
+     "calls": 2,
+     "tris": 384,
+     "objs": 1
+    },
+    "post|(no-parent):mesh": {
+     "calls": 14,
+     "tris": 14,
+     "objs": 2
+    }
+   }
+  }
+ },
+ "ground_t45": {
+  "n": 37,
+  "chutes": 0,
+  "t": 46.5,
+  "shipped": {
+   "calls": 363,
+   "tris": 32913531,
+   "programs": 83,
+   "textures": 164,
+   "geometries": 520,
+   "submitMs": 34,
+   "finishMs": 34,
+   "byKey": {
+    "shadow|map:mesh": {
+     "calls": 46,
+     "tris": 48751,
+     "objs": 46
+    },
+    "shadow|map:inst": {
+     "calls": 0,
+     "tris": 0,
+     "objs": 3
+    },
+    "shadow|loot:mesh": {
+     "calls": 22,
+     "tris": 18785,
+     "objs": 22
+    },
+    "shadow|actor-body": {
+     "calls": 41,
+     "tris": 16296756,
+     "objs": 41
+    },
+    "shadow|actor-weapon": {
+     "calls": 39,
+     "tris": 232245,
+     "objs": 39
+    },
+    "main|map:mesh": {
+     "calls": 50,
+     "tris": 78348,
+     "objs": 49
+    },
+    "main|fx:inst": {
+     "calls": 1,
+     "tris": 128,
+     "objs": 2
+    },
+    "main|map:inst": {
+     "calls": 9,
+     "tris": 573180,
+     "objs": 12
+    },
+    "main|actor-weapon": {
+     "calls": 38,
+     "tris": 226290,
+     "objs": 38
+    },
+    "main|actor-body": {
+     "calls": 38,
+     "tris": 15438412,
+     "objs": 38
+    },
+    "main|map:sprite": {
+     "calls": 14,
+     "tris": 28,
+     "objs": 14
+    },
+    "main|loot:sprite": {
+     "calls": 4,
+     "tris": 8,
+     "objs": 4
+    },
+    "main|loot:mesh": {
+     "calls": 8,
+     "tris": 128,
+     "objs": 4
+    },
+    "main|actor-nametag": {
+     "calls": 37,
+     "tris": 74,
+     "objs": 37
+    },
+    "main|storm:mesh": {
+     "calls": 2,
+     "tris": 384,
+     "objs": 1
+    },
+    "post|(no-parent):mesh": {
+     "calls": 14,
+     "tris": 14,
+     "objs": 2
+    }
+   }
+  },
+  "swapped": 50,
+  "lod0": {
+   "calls": 363,
+   "tris": 2363015,
+   "programs": 83,
+   "textures": 164,
+   "geometries": 520,
+   "submitMs": 52,
+   "finishMs": 52,
+   "byKey": {
+    "shadow|map:mesh": {
+     "calls": 46,
+     "tris": 48751,
+     "objs": 46
+    },
+    "shadow|map:inst": {
+     "calls": 0,
+     "tris": 0,
+     "objs": 3
+    },
+    "shadow|loot:mesh": {
+     "calls": 22,
+     "tris": 18785,
+     "objs": 22
+    },
+    "shadow|actor-body": {
+     "calls": 41,
+     "tris": 614820,
+     "objs": 41
+    },
+    "shadow|actor-weapon": {
+     "calls": 39,
+     "tris": 232245,
+     "objs": 39
+    },
+    "main|map:mesh": {
+     "calls": 50,
+     "tris": 78348,
+     "objs": 49
+    },
+    "main|fx:inst": {
+     "calls": 1,
+     "tris": 128,
+     "objs": 2
+    },
+    "main|map:inst": {
+     "calls": 9,
+     "tris": 573180,
+     "objs": 12
+    },
+    "main|actor-weapon": {
+     "calls": 38,
+     "tris": 226290,
+     "objs": 38
+    },
+    "main|actor-body": {
+     "calls": 38,
+     "tris": 569832,
+     "objs": 38
+    },
+    "main|map:sprite": {
+     "calls": 14,
+     "tris": 28,
+     "objs": 14
+    },
+    "main|loot:sprite": {
+     "calls": 4,
+     "tris": 8,
+     "objs": 4
+    },
+    "main|loot:mesh": {
+     "calls": 8,
+     "tris": 128,
+     "objs": 4
+    },
+    "main|actor-nametag": {
+     "calls": 37,
+     "tris": 74,
+     "objs": 37
+    },
+    "main|storm:mesh": {
+     "calls": 2,
+     "tris": 384,
+     "objs": 1
+    },
+    "post|(no-parent):mesh": {
+     "calls": 14,
+     "tris": 14,
+     "objs": 2
+    }
+   }
+  },
+  "fixedSim": {
+   "calls": 287,
+   "tris": 2130696,
+   "programs": 83,
+   "textures": 164,
+   "geometries": 520,
+   "submitMs": 33.2,
+   "finishMs": 33.2,
+   "byKey": {
+    "shadow|map:mesh": {
+     "calls": 46,
+     "tris": 48751,
+     "objs": 46
+    },
+    "shadow|map:inst": {
+     "calls": 0,
+     "tris": 0,
+     "objs": 3
+    },
+    "shadow|loot:mesh": {
+     "calls": 22,
+     "tris": 18785,
+     "objs": 22
+    },
+    "shadow|actor-body": {
+     "calls": 41,
+     "tris": 614820,
+     "objs": 41
+    },
+    "main|map:mesh": {
+     "calls": 50,
+     "tris": 78348,
+     "objs": 49
+    },
+    "main|fx:inst": {
+     "calls": 1,
+     "tris": 128,
+     "objs": 2
+    },
+    "main|map:inst": {
+     "calls": 9,
+     "tris": 573180,
+     "objs": 12
+    },
+    "main|actor-weapon": {
+     "calls": 38,
+     "tris": 226290,
+     "objs": 38
+    },
+    "main|actor-body": {
+     "calls": 38,
+     "tris": 569832,
+     "objs": 38
+    },
+    "main|map:sprite": {
+     "calls": 14,
+     "tris": 28,
+     "objs": 14
+    },
+    "main|loot:sprite": {
+     "calls": 4,
+     "tris": 8,
+     "objs": 4
+    },
+    "main|loot:mesh": {
+     "calls": 8,
+     "tris": 128,
+     "objs": 4
+    },
+    "main|storm:mesh": {
+     "calls": 2,
+     "tris": 384,
+     "objs": 1
+    },
+    "post|(no-parent):mesh": {
+     "calls": 14,
+     "tris": 14,
+     "objs": 2
+    }
+   }
+  },
+  "fixedSimNearShadow": {
+   "calls": 285,
+   "tris": 2100706,
+   "programs": 83,
+   "textures": 164,
+   "geometries": 520,
+   "submitMs": 29.8,
+   "finishMs": 29.8,
+   "byKey": {
+    "shadow|map:mesh": {
+     "calls": 46,
+     "tris": 48751,
+     "objs": 46
+    },
+    "shadow|map:inst": {
+     "calls": 0,
+     "tris": 0,
+     "objs": 3
+    },
+    "shadow|loot:mesh": {
+     "calls": 22,
+     "tris": 18785,
+     "objs": 22
+    },
+    "shadow|actor-body": {
+     "calls": 39,
+     "tris": 584830,
+     "objs": 39
+    },
+    "main|map:mesh": {
+     "calls": 50,
+     "tris": 78348,
+     "objs": 49
+    },
+    "main|fx:inst": {
+     "calls": 1,
+     "tris": 128,
+     "objs": 2
+    },
+    "main|map:inst": {
+     "calls": 9,
+     "tris": 573180,
+     "objs": 12
+    },
+    "main|actor-weapon": {
+     "calls": 38,
+     "tris": 226290,
+     "objs": 38
+    },
+    "main|actor-body": {
+     "calls": 38,
+     "tris": 569832,
+     "objs": 38
+    },
+    "main|map:sprite": {
+     "calls": 14,
+     "tris": 28,
+     "objs": 14
+    },
+    "main|loot:sprite": {
+     "calls": 4,
+     "tris": 8,
+     "objs": 4
+    },
+    "main|loot:mesh": {
+     "calls": 8,
+     "tris": 128,
+     "objs": 4
+    },
+    "main|storm:mesh": {
+     "calls": 2,
+     "tris": 384,
+     "objs": 1
+    },
+    "post|(no-parent):mesh": {
+     "calls": 14,
+     "tris": 14,
+     "objs": 2
+    }
+   }
+  },
+  "world": {
+   "calls": 170,
+   "tris": 719754,
+   "programs": 83,
+   "textures": 164,
+   "geometries": 520,
+   "submitMs": 17.3,
+   "finishMs": 17.3,
+   "byKey": {
+    "shadow|map:mesh": {
+     "calls": 46,
+     "tris": 48751,
+     "objs": 46
+    },
+    "shadow|map:inst": {
+     "calls": 0,
+     "tris": 0,
+     "objs": 3
+    },
+    "shadow|loot:mesh": {
+     "calls": 22,
+     "tris": 18785,
+     "objs": 22
+    },
+    "main|map:mesh": {
+     "calls": 50,
+     "tris": 78348,
+     "objs": 49
+    },
+    "main|fx:inst": {
+     "calls": 1,
+     "tris": 128,
+     "objs": 2
+    },
+    "main|map:inst": {
+     "calls": 9,
+     "tris": 573180,
+     "objs": 12
+    },
+    "main|map:sprite": {
+     "calls": 14,
+     "tris": 28,
+     "objs": 14
+    },
+    "main|loot:sprite": {
+     "calls": 4,
+     "tris": 8,
+     "objs": 4
+    },
+    "main|loot:mesh": {
+     "calls": 8,
+     "tris": 128,
+     "objs": 4
+    },
+    "main|storm:mesh": {
+     "calls": 2,
+     "tris": 384,
+     "objs": 1
+    },
+    "post|(no-parent):mesh": {
+     "calls": 14,
+     "tris": 14,
+     "objs": 2
+    }
+   }
+  }
+ }
+}

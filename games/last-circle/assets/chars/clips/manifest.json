@@ -1,0 +1,311 @@
+{
+ "about": "ART-A clip manifest. Rig space: +Y up, character faces +Z, +X = character's left. Heights in metres above the feet origin (soldier rig).",
+ "clips": {
+  "idle": {
+   "bytes": 105632,
+   "kind": "shared"
+  },
+  "walk": {
+   "bytes": 28512,
+   "kind": "shared"
+  },
+  "run": {
+   "bytes": 26096,
+   "kind": "shared"
+  },
+  "death": {
+   "bytes": 43404,
+   "kind": "shared"
+  },
+  "hit": {
+   "bytes": 25664,
+   "kind": "shared"
+  },
+  "dance": {
+   "bytes": 49704,
+   "kind": "shared"
+  },
+  "cheer": {
+   "bytes": 57692,
+   "kind": "shared"
+  },
+  "jump": {
+   "bytes": 41252,
+   "kind": "shared"
+  },
+  "swim": {
+   "bytes": 31892,
+   "kind": "shared"
+  },
+  "crouch": {
+   "bytes": 37248,
+   "kind": "shared"
+  },
+  "rifle_idle": {
+   "bytes": 33772,
+   "kind": "shared"
+  },
+  "rifle_walk": {
+   "bytes": 28824,
+   "kind": "shared"
+  },
+  "rifle_run": {
+   "bytes": 26116,
+   "kind": "shared"
+  },
+  "rifle_reload": {
+   "bytes": 64896,
+   "kind": "shared"
+  },
+  "rifle_crouch": {
+   "bytes": 28820,
+   "kind": "shared"
+  },
+  "death_front": {
+   "bytes": 44136,
+   "kind": "death",
+   "duration": 3.433,
+   "hipsStartY": 0.953,
+   "hipsEndY": 0.208,
+   "startPose": "standing",
+   "endChestFrontY": -0.23,
+   "endLying": "on-side",
+   "headHeadingDeg": -19.0,
+   "headHeading": "forward(+Z)",
+   "source": "Mixamo (Adobe), royalty-free in games; baked clip only",
+   "lowestVertexY": {
+    "athlete": {
+     "start": -0.11,
+     "end": -0.12
+    },
+    "juggernaut": {
+     "start": 0.05,
+     "end": -0.127
+    },
+    "soldier": {
+     "start": -0.0,
+     "end": -0.116
+    },
+    "viper": {
+     "start": -0.077,
+     "end": -0.12
+    },
+    "wraith": {
+     "start": 0.036,
+     "end": -0.103
+    }
+   }
+  },
+  "death_front_head": {
+   "bytes": 45900,
+   "kind": "death",
+   "duration": 2.833,
+   "hipsStartY": 0.953,
+   "hipsEndY": 0.14,
+   "startPose": "standing",
+   "endChestFrontY": 0.92,
+   "endLying": "face-up",
+   "headHeadingDeg": -165.0,
+   "headHeading": "backward(-Z)",
+   "source": "Mixamo (Adobe), royalty-free in games; baked clip only",
+   "lowestVertexY": {
+    "athlete": {
+     "start": -0.11,
+     "end": -0.082
+    },
+    "juggernaut": {
+     "start": 0.05,
+     "end": -0.111
+    },
+    "soldier": {
+     "start": -0.0,
+     "end": -0.146
+    },
+    "viper": {
+     "start": -0.077,
+     "end": -0.064
+    },
+    "wraith": {
+     "start": 0.036,
+     "end": -0.074
+    }
+   }
+  },
+  "death_back": {
+   "bytes": 45284,
+   "kind": "death",
+   "duration": 2.967,
+   "hipsStartY": 0.953,
+   "hipsEndY": 0.218,
+   "startPose": "standing",
+   "endChestFrontY": 0.05,
+   "endLying": "on-side",
+   "headHeadingDeg": 18.0,
+   "headHeading": "forward(+Z)",
+   "source": "Mixamo (Adobe), royalty-free in games; baked clip only",
+   "lowestVertexY": {
+    "athlete": {
+     "start": -0.11,
+     "end": -0.121
+    },
+    "juggernaut": {
+     "start": 0.05,
+     "end": -0.157
+    },
+    "soldier": {
+     "start": -0.0,
+     "end": -0.118
+    },
+    "viper": {
+     "start": -0.077,
+     "end": -0.119
+    },
+    "wraith": {
+     "start": 0.036,
+     "end": -0.103
+    }
+   }
+  },
+  "death_back_head": {
+   "bytes": 51124,
+   "kind": "death",
+   "duration": 3.7,
+   "hipsStartY": 0.953,
+   "hipsEndY": 0.183,
+   "startPose": "standing",
+   "endChestFrontY": -0.93,
+   "endLying": "face-down",
+   "headHeadingDeg": 11.0,
+   "headHeading": "forward(+Z)",
+   "source": "Mixamo (Adobe), royalty-free in games; baked clip only",
+   "lowestVertexY": {
+    "athlete": {
+     "start": -0.11,
+     "end": -0.179
+    },
+    "juggernaut": {
+     "start": 0.05,
+     "end": -0.173
+    },
+    "soldier": {
+     "start": -0.0,
+     "end": -0.167
+    },
+    "viper": {
+     "start": -0.077,
+     "end": -0.083
+    },
+    "wraith": {
+     "start": 0.036,
+     "end": -0.16
+    }
+   }
+  },
+  "death_right": {
+   "bytes": 43716,
+   "kind": "death",
+   "duration": 3.3,
+   "hipsStartY": 0.953,
+   "hipsEndY": 0.204,
+   "startPose": "standing",
+   "endChestFrontY": 0.42,
+   "endLying": "on-side",
+   "headHeadingDeg": 87.0,
+   "headHeading": "left(+X)",
+   "source": "Mixamo (Adobe), royalty-free in games; baked clip only",
+   "lowestVertexY": {
+    "athlete": {
+     "start": -0.11,
+     "end": -0.131
+    },
+    "juggernaut": {
+     "start": 0.05,
+     "end": -0.16
+    },
+    "soldier": {
+     "start": -0.0,
+     "end": -0.148
+    },
+    "viper": {
+     "start": -0.077,
+     "end": -0.121
+    },
+    "wraith": {
+     "start": 0.036,
+     "end": -0.134
+    }
+   }
+  },
+  "death_crouch_head": {
+   "bytes": 39200,
+   "kind": "death",
+   "duration": 1.9,
+   "hipsStartY": 0.453,
+   "hipsEndY": 0.141,
+   "startPose": "crouch",
+   "endChestFrontY": -1.0,
+   "endLying": "face-down",
+   "headHeadingDeg": 7.0,
+   "headHeading": "forward(+Z)",
+   "source": "Mixamo (Adobe), royalty-free in games; baked clip only",
+   "lowestVertexY": {
+    "athlete": {
+     "start": -0.055,
+     "end": -0.127
+    },
+    "juggernaut": {
+     "start": -0.043,
+     "end": -0.14
+    },
+    "soldier": {
+     "start": -0.064,
+     "end": -0.125
+    },
+    "viper": {
+     "start": -0.06,
+     "end": -0.085
+    },
+    "wraith": {
+     "start": -0.062,
+     "end": -0.111
+    }
+   }
+  },
+  "death_walking": {
+   "bytes": 44480,
+   "kind": "death",
+   "duration": 3.067,
+   "hipsStartY": 0.925,
+   "hipsEndY": 0.263,
+   "startPose": "walking",
+   "endChestFrontY": -0.48,
+   "endLying": "face-down",
+   "headHeadingDeg": 20.0,
+   "headHeading": "forward(+Z)",
+   "source": "Mixamo (Adobe), royalty-free in games; baked clip only",
+   "lowestVertexY": {
+    "athlete": {
+     "start": -0.132,
+     "end": -0.077
+    },
+    "juggernaut": {
+     "start": 0.03,
+     "end": -0.122
+    },
+    "soldier": {
+     "start": -0.031,
+     "end": -0.082
+    },
+    "viper": {
+     "start": -0.101,
+     "end": -0.081
+    },
+    "wraith": {
+     "start": 0.011,
+     "end": -0.074
+    }
+   }
+  }
+ },
+ "lowestVertexY_about": "metres relative to the actor origin (feet = 0). The standing start differs by skin (-0.11..+0.05, the same for every shipped clip: the clips carry the soldier's 1.0179 m hips height); the lying end pose sinks 0.06-0.18 m below y=0 on every skin, like the shipped 'death' clip (-0.08..-0.21). A corpse lift of ~0.10 m would sit it on the ground."
+}

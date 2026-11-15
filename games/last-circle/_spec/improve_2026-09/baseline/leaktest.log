@@ -1,0 +1,8 @@
+{'tag': 'm1_lobby', 'programs': 71, 'geometries': 316, 'textures': 44, 'heapMB': 137.7, 'mixers': 51, 'updaters': 8, 'sceneObjects': 5134, 't': 0, 'phase': 'lobby', 'load_s': 45.1}
+{'tag': 'm1_end', 'programs': 78, 'geometries': 448, 'textures': 97, 'heapMB': 151.4, 'mixers': 51, 'updaters': 8, 'sceneObjects': 2518, 't': 430.2, 'phase': 'over'}
+{'tag': 'm2_lobby', 'programs': 78, 'geometries': 323, 'textures': 86, 'heapMB': 194.4, 'mixers': 51, 'updaters': 8, 'sceneObjects': 5437, 't': 0, 'phase': 'lobby', 'load_s': 16.8}
+{'tag': 'm2_end', 'programs': 80, 'geometries': 493, 'textures': 152, 'heapMB': 156.1, 'mixers': 51, 'updaters': 8, 'sceneObjects': 2580, 't': 363.5, 'phase': 'over'}
+{'tag': 'm3_lobby', 'programs': 81, 'geometries': 409, 'textures': 177, 'heapMB': 197, 'mixers': 51, 'updaters': 8, 'sceneObjects': 5437, 't': 0, 'phase': 'lobby', 'load_s': 32.1}
+{'tag': 'm3_end', 'programs': 81, 'geometries': 503, 'textures': 219, 'heapMB': 146.2, 'mixers': 51, 'updaters': 8, 'sceneObjects': 2573, 't': 387.2, 'phase': 'over'}
+pageerrors: 0 []
+ALLDONE

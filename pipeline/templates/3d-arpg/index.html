@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{GAME_TITLE}} - ForgeFlow Games</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0e1a;font-family:'Segoe UI',system-ui,sans-serif}
+canvas{display:block;width:100%;height:100%}
+
+/* HUD Overlay */
+#hud{position:absolute;top:0;left:0;right:0;pointer-events:none;padding:12px;z-index:10}
+#hud *{pointer-events:auto}
+.bar-container{width:200px;height:16px;background:rgba(0,0,0,0.7);border-radius:8px;border:1px solid rgba(255,255,255,0.1);overflow:hidden;margin:4px 0}
+.bar-fill{height:100%;border-radius:8px;transition:width 0.3s}
+.health-fill{background:linear-gradient(90deg,#cc0000,#ff3333)}
+.mana-fill{background:linear-gradient(90deg,#0044cc,#3366ff)}
+.xp-fill{background:linear-gradient(90deg,#cc8800,#ffaa00)}
+.hud-text{color:#fff;font-size:12px;font-weight:600;text-shadow:0 1px 3px rgba(0,0,0,0.8)}
+.hud-level{color:#ffaa00;font-size:14px;font-weight:700}
+
+/* Damage Numbers */
+.damage-number{position:absolute;color:#ff3333;font-size:18px;font-weight:900;text-shadow:0 0 4px #000;pointer-events:none;animation:float-up 1s ease-out forwards;z-index:20}
+.damage-number.heal{color:#00ff88}
+.damage-number.crit{color:#ffcc00;font-size:24px}
+@keyframes float-up{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-60px)}}
+
+/* Inventory Panel */
+#inventory-panel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(10,14,26,0.95);border:2px solid #334155;border-radius:12px;padding:20px;display:none;z-index:30;min-width:300px}
+#inventory-panel h2{color:#fff;margin-bottom:12px;font-size:18px}
+.inv-slot{width:48px;height:48px;background:rgba(255,255,255,0.05);border:1px solid #334155;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;margin:4px;cursor:pointer;font-size:20px}
+.inv-slot:hover{border-color:#ff8800}
+.inv-slot.equipped{border-color:#ffaa00;background:rgba(255,170,0,0.1)}
+
+/* Menu Overlay */
+#menu-screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,14,26,0.95);z-index:50}
+#menu-screen h1{font-size:52px;font-weight:900;margin-bottom:8px}
+#menu-screen .title-main{background:linear-gradient(135deg,#ff8800,#ff5500);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+#menu-screen .subtitle{color:#888;font-size:16px;margin-bottom:24px}
+#menu-screen .controls{color:#666;font-size:13px;line-height:2;text-align:center;margin-bottom:20px}
+#menu-screen .controls b{color:#ddd}
+#menu-screen button{padding:16px 52px;font-size:22px;font-weight:700;border:none;border-radius:14px;cursor:pointer;background:linear-gradient(135deg,#ff8800,#ff5500);color:#fff;box-shadow:0 4px 20px rgba(255,136,0,0.4);transition:transform .15s}
+#menu-screen button:hover{transform:scale(1.06)}
+
+/* Game Over */
+#gameover-screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,14,26,0.9);z-index:50}
+#gameover-screen h1{font-size:48px;color:#ff3366;font-weight:900;margin-bottom:12px}
+#gameover-screen p{color:#888;font-size:18px;margin-bottom:24px}
+
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- Menu Screen -->
+<div id="menu-screen">
+  <h1><span class="title-main">{{GAME_TITLE}}</span></h1>
+  <p class="subtitle">{{GAME_TAGLINE}}</p>
+  <div class="controls">
+    <b>WASD</b> or <b>Click</b> to move &bull; <b>Click enemy</b> or <b>X</b> to attack<br>
+    <b>Space</b> to dodge &bull; <b>1/2</b> for potions &bull; <b>I</b> for inventory<br>
+    {{EXTRA_CONTROLS}}
+  </div>
+  <button id="play-btn">Enter the Dungeon</button>
+</div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div style="display:flex;gap:16px;align-items:flex-start">
+    <div>
+      <div class="hud-text">HP <span id="hp-text">100/100</span></div>
+      <div class="bar-container"><div class="bar-fill health-fill" id="hp-bar" style="width:100%"></div></div>
+      <div class="hud-text">MP <span id="mp-text">50/50</span></div>
+      <div class="bar-container"><div class="bar-fill mana-fill" id="mp-bar" style="width:100%"></div></div>
+      <div class="hud-text">XP <span id="xp-text">0/100</span></div>
+      <div class="bar-container" style="width:150px"><div class="bar-fill xp-fill" id="xp-bar" style="width:0%"></div></div>
+    </div>
+    <div style="margin-left:auto;text-align:right">
+      <div class="hud-level">Lv. <span id="level-text">1</span></div>
+      <div class="hud-text" style="color:#ffcc00">Gold: <span id="gold-text">0</span></div>
+      <div class="hud-text">Floor: <span id="floor-text">1</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Inventory -->
+<div id="inventory-panel">
+  <h2>Inventory</h2>
+  <div id="equipment-slots"></div>
+  <div id="bag-slots"></div>
+</div>
+
+<!-- Game Over -->
+<div id="gameover-screen">
+  <h1>DEFEATED</h1>
+  <p>You reached Floor <span id="go-floor">1</span> with <span id="go-gold">0</span> gold</p>
+  <button onclick="location.reload()">Try Again</button>
+</div>
+
+<!-- Three.js from CDN -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="game.js"></script>
+</body>
+</html>

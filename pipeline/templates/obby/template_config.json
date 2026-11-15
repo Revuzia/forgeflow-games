@@ -1,0 +1,123 @@
+{
+  "template_name": "obby",
+  "engine": "phaser",
+  "phaser_version": "3.90.0",
+  "physics": "arcade",
+  "aspect_ratio": "16:9",
+  "target_fps": 60,
+  "scenes": [
+    "BootScene",
+    "PreloadScene",
+    "MenuScene",
+    "GameScene",
+    "CheckpointScene",
+    "WinScene",
+    "GameOverScene"
+  ],
+  "features": {
+    "player": {
+      "movement": [
+        "run",
+        "jump",
+        "double_jump",
+        "wall_jump",
+        "dash",
+        "climb"
+      ],
+      "physics": "arcade_gravity",
+      "one_hit_death": true,
+      "respawn_at_checkpoint": true
+    },
+    "stages": {
+      "format": "checkpoint_linear",
+      "min_count": 12,
+      "stage_types": [
+        "jump_precision",
+        "moving_platforms",
+        "kill_floor",
+        "lava_ground",
+        "spinning_blades",
+        "disappearing_platforms",
+        "wall_run",
+        "long_jump",
+        "color_coded",
+        "timer_challenge",
+        "boss_gauntlet"
+      ],
+      "checkpoint_every_n_stages": 3
+    },
+    "hazards": [
+      "kill_floor",
+      "spike_wall",
+      "saw_blade",
+      "pendulum",
+      "lava",
+      "falling_block",
+      "laser_grid",
+      "conveyor_reverse"
+    ],
+    "collectibles": [
+      "stage_coin",
+      "secret_badge"
+    ],
+    "ui": {
+      "hud": [
+        "stage_number",
+        "total_time",
+        "deaths",
+        "current_checkpoint"
+      ],
+      "menus": [
+        "main_menu",
+        "pause",
+        "stage_select",
+        "leaderboard"
+      ]
+    },
+    "audio": {
+      "sfx": [
+        "jump",
+        "death",
+        "checkpoint",
+        "stage_clear",
+        "collectible",
+        "laser",
+        "grind"
+      ],
+      "music": [
+        "menu_theme",
+        "stage_theme_1",
+        "stage_theme_2",
+        "final_theme"
+      ]
+    },
+    "progression": "linear_with_checkpoints"
+  },
+  "test_hooks": {
+    "expose_on_window": true,
+    "api": {
+      "getPlayer": "returns {x, y, alive, checkpoint_num, deaths}",
+      "getStageNumber": "returns current stage 1-based",
+      "getCurrentScene": "returns scene key",
+      "getDeathCount": "returns number",
+      "simulateInput": "triggers keys for QA"
+    }
+  },
+  "kenney_assets": {
+    "tileset": "pixel-platformer/Tilemap/tilemap_packed.png",
+    "characters": "pixel-platformer/Tilemap/tilemap-characters_packed.png",
+    "tile_width": 18,
+    "tile_height": 18
+  },
+  "deployment": {
+    "bundle_type": "folder",
+    "build_tool": "vite",
+    "output": "dist/",
+    "files": [
+      "index.html",
+      "game.js",
+      "assets/"
+    ]
+  },
+  "main_scene_class": "GameScene"
+}

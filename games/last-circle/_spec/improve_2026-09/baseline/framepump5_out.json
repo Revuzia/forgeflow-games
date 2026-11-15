@@ -1,0 +1,258 @@
+{
+ "every": 30,
+ "envMenu": {
+  "dpr": 1.0000000149011612,
+  "rendererPR": 1.0000000149011612,
+  "buffer": [
+   1280,
+   720
+  ],
+  "programs": 18,
+  "shadowMapSize": 2048,
+  "shadowExt": 150,
+  "shadows": true,
+  "graphics": "medium",
+  "bloomEnabled": true,
+  "bloomStrength": 0.45,
+  "composerPasses": [
+   "RenderPass",
+   "UnrealBloomPass",
+   "OutputPass"
+  ],
+  "composerRTType": 1016,
+  "preserveDrawingBuffer": true,
+  "antialias": false
+ },
+ "menu": {
+  "label": "menu",
+  "frames": 60,
+  "renderedFrames": 6,
+  "simViewMs": {
+   "p50": 0.1,
+   "p90": 0.3,
+   "p99": 0.7,
+   "max": 0.7,
+   "mean": 0.18
+  },
+  "updaterMs": {
+   "p50": 0.1,
+   "p90": 0.3,
+   "p99": 0.7,
+   "max": 0.7,
+   "mean": 0.17
+  },
+  "mixerMs": {
+   "p50": 0,
+   "p90": 0,
+   "p99": 0,
+   "max": 0,
+   "mean": 0.0
+  },
+  "renderSubmitMs": {
+   "p50": 10.3,
+   "p90": 51198.5,
+   "p99": 51198.5,
+   "max": 51198.5,
+   "mean": 8540.68
+  },
+  "draws": {
+   "p50": 287,
+   "p90": 291,
+   "p99": 291,
+   "max": 291,
+   "mean": 287.67
+  },
+  "tris": {
+   "p50": 92510,
+   "p90": 92510,
+   "p99": 92510,
+   "max": 92510,
+   "mean": 92479.33
+  },
+  "programsEnd": 19,
+  "newProgramFrames": [
+   {
+    "i": 9,
+    "n": 1,
+    "submitMs": 51198.5,
+    "phase": "menu",
+    "t": 0
+   }
+  ],
+  "simViewOver22ms": 0,
+  "renderedOver450draws": 0
+ },
+ "startMatchMs": 164155,
+ "programsBeforeStartMatch": 19,
+ "programsAfterStartMatch": 46,
+ "envDrop": {
+  "dpr": 1.0000000149011612,
+  "rendererPR": 1.0000000149011612,
+  "buffer": [
+   1280,
+   720
+  ],
+  "programs": 46,
+  "shadowMapSize": 2048,
+  "shadowExt": 150,
+  "shadows": true,
+  "graphics": "medium",
+  "bloomEnabled": true,
+  "bloomStrength": 0.14,
+  "composerPasses": [
+   "RenderPass",
+   "UnrealBloomPass",
+   "OutputPass"
+  ],
+  "composerRTType": 1016,
+  "preserveDrawingBuffer": true,
+  "antialias": false
+ },
+ "attrFirstDrop": {
+  "shadow:map": [
+   62,
+   37580
+  ],
+  "shadow:map[inst]": [
+   3,
+   0
+  ],
+  "shadow:actors[skinned]": [
+   22,
+   8573580
+  ],
+  "main:map": [
+   122,
+   162611
+  ],
+  "main:fx[inst]": [
+   2,
+   128
+  ],
+  "main:map[inst]": [
+   33,
+   717904
+  ],
+  "main:actors": [
+   1,
+   5955
+  ],
+  "main:actors[skinned]": [
+   1,
+   409150
+  ],
+  "main:loot": [
+   105,
+   1190
+  ],
+  "main:storm": [
+   2,
+   384
+  ],
+  "post:other": [
+   14,
+   14
+  ]
+ },
+ "firstDropFrame": [
+  79,
+  40.8,
+  7.6,
+  48206.6,
+  360,
+  9908496,
+  73,
+  27,
+  "drop",
+  0.02
+ ],
+ "attrDrop4s": {
+  "shadow:map": [
+   62,
+   37580
+  ],
+  "shadow:map[inst]": [
+   3,
+   0
+  ],
+  "shadow:actors[skinned]": [
+   21,
+   8491270
+  ],
+  "shadow:actors": [
+   5,
+   29775
+  ],
+  "main:map": [
+   114,
+   200237
+  ],
+  "main:fx[inst]": [
+   2,
+   128
+  ],
+  "main:map[inst]": [
+   33,
+   717904
+  ],
+  "main:actors": [
+   1,
+   5955
+  ],
+  "main:actors[skinned]": [
+   2,
+   654880
+  ],
+  "main:loot": [
+   114,
+   1292
+  ],
+  "main:storm": [
+   2,
+   384
+  ],
+  "post:other": [
+   14,
+   14
+  ]
+ },
+ "censusDrop": {
+  "phase": "drop",
+  "t": 4,
+  "alive": 50,
+  "actors": 50,
+  "perActorVisibleDrawables": {
+   "min": 1,
+   "med": 1,
+   "max": 5,
+   "sum": 64
+  },
+  "skinnedMeshesVisibleOnActors": 50,
+  "bonesPerSkeletonMax": 52,
+  "weaponMeshesVisible": 5,
+  "chutesOut": 2,
+  "nameTagsVisible": 1,
+  "weaponsVisible": 5,
+  "groups": {
+   "fx": 2,
+   "menu3d": 0,
+   "map": 310,
+   "storm": 1,
+   "loot": 118,
+   "actors": 64
+  },
+  "mixers": 50,
+  "mesh": 227,
+  "skinned": 50,
+  "instanced": 35,
+  "lines": 2,
+  "sprites": 181,
+  "points": 0,
+  "visibleDrawables": 495,
+  "castShadow": 129,
+  "materials": 268,
+  "geometries": 394,
+  "textures": 74,
+  "programs": 74
+ }
+}

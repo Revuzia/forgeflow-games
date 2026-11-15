@@ -1,0 +1,4 @@
+# Vendored third-party files (three@0.172.0 and its decoders) check out byte-exact on every OS and every
+# core.autocrlf setting: no end-of-line conversion. artb_check's vendor row pins the meshopt decoder at the
+# upstream byte count (24,850 B), and a CRLF checkout (core.autocrlf=true on Windows) inflates every file.
+assets/vendor/** -text

@@ -1,0 +1,14 @@
+{
+  "_comment": "Per-genre AAA render requirements consumed by render_quality_gate.py. 'required_3d' is the kernel-level floor every 3D game must clear (these markers are what separate the AAA Three kernel from the weak from-scratch engine). 'advisory' becomes REQUIRED in Phase 2 once the F: PBR/HDRI material library is staged into builds. Per-genre 'extra' lists additional markers a genre should show.",
+  "version": 1,
+  "required_3d": ["toneMapping", "shadows", "lights", "postfx"],
+  "advisory_3d": ["pbr", "srgb", "textured"],
+  "genres": {
+    "tactics3d":   { "extra": ["pbr", "textured"], "note": "cast shadows on units + textured tiles + AO" },
+    "tactics":     { "extra": ["pbr", "textured"] },
+    "chess":       { "extra": ["pbr"], "note": "piece shadows + contact AO" },
+    "naval":       { "extra": ["textured"] },
+    "shmup":       { "extra": ["postfx"], "note": "additive bullet glow via bloom" },
+    "platformer":  { "extra": [], "note": "2D: parallax layers handled by the 2D-art gate" }
+  }
+}

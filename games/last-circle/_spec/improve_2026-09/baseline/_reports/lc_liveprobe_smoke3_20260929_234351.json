@@ -1,0 +1,596 @@
+{
+ "args": {
+  "maps": "ashgrid",
+  "reps": 1,
+  "seed": 1234,
+  "menu": 2.0,
+  "drop": 3.0,
+  "ground": 3.0,
+  "again": 2.0,
+  "slice": 8.0,
+  "real": 1.5,
+  "max_slices": 3,
+  "width": 1600,
+  "height": 900,
+  "headed": false,
+  "uncapped": false,
+  "no_again": false,
+  "label": "smoke3"
+ },
+ "url": "http://127.0.0.1:8790/games/last-circle/index.html",
+ "results": [
+  {
+   "map": "ashgrid",
+   "seed": 1234,
+   "rep": 1,
+   "windows": {
+    "menu": {
+     "frames": 0,
+     "seconds": 0.0,
+     "avgFps": null,
+     "p50": null,
+     "p95": null,
+     "p99": null,
+     "max": null,
+     "over20": null,
+     "over33": null,
+     "cpuUpd_p50": null,
+     "cpuUpd_p99": null,
+     "cpuRender_p50": null,
+     "cpuRender_p99": null,
+     "cpuFrame_p50": null,
+     "cpuFrame_p95": null,
+     "cpuFrame_p99": null,
+     "cpuFrame_max": null,
+     "calls_med": null,
+     "calls_max": null,
+     "scene_med": null,
+     "shadow_med": null,
+     "tris_med": null,
+     "tris_max": null,
+     "programs": 19,
+     "programs_start": 19,
+     "geometries": 205,
+     "textures": 16,
+     "heapMB_start": 14,
+     "heapMB_end": 14,
+     "heapMB_max": 14,
+     "dpr": 1,
+     "buf": [
+      1600,
+      900
+     ],
+     "mixers": 0,
+     "phase_start": "menu",
+     "phase_end": "menu",
+     "alive_start": null,
+     "alive_end": null,
+     "pAlive_end": null,
+     "pGlide_end": null,
+     "sceneChildren": 5,
+     "gpu": null
+    },
+    "_drop_state_start": {
+     "phase": "drop",
+     "t": 0,
+     "alive": 50,
+     "player": {
+      "hp": 100,
+      "shield": 0,
+      "pos": {
+       "x": 0,
+       "y": 252.61362784076482,
+       "z": 0
+      },
+      "weapon": "pistol"
+     },
+     "map": "ashgrid",
+     "mode": "standard",
+     "seed": 1234
+    },
+    "drop": {
+     "frames": 0,
+     "seconds": 0.0,
+     "avgFps": null,
+     "p50": null,
+     "p95": null,
+     "p99": null,
+     "max": null,
+     "over20": null,
+     "over33": null,
+     "cpuUpd_p50": null,
+     "cpuUpd_p99": null,
+     "cpuRender_p50": null,
+     "cpuRender_p99": null,
+     "cpuFrame_p50": null,
+     "cpuFrame_p95": null,
+     "cpuFrame_p99": null,
+     "cpuFrame_max": null,
+     "calls_med": null,
+     "calls_max": null,
+     "scene_med": null,
+     "shadow_med": null,
+     "tris_med": null,
+     "tris_max": null,
+     "programs": 70,
+     "programs_start": 70,
+     "geometries": 311,
+     "textures": 55,
+     "heapMB_start": 129.2,
+     "heapMB_end": 131.3,
+     "heapMB_max": 131.3,
+     "dpr": 1,
+     "buf": [
+      1600,
+      900
+     ],
+     "mixers": 50,
+     "phase_start": "drop",
+     "phase_end": "drop",
+     "alive_start": 50,
+     "alive_end": 50,
+     "pAlive_end": true,
+     "pGlide_end": true,
+     "sceneChildren": 9,
+     "gpu": null
+    },
+    "ground": {
+     "frames": 0,
+     "seconds": 0.0,
+     "avgFps": null,
+     "p50": null,
+     "p95": null,
+     "p99": null,
+     "max": null,
+     "over20": null,
+     "over33": null,
+     "cpuUpd_p50": null,
+     "cpuUpd_p99": null,
+     "cpuRender_p50": null,
+     "cpuRender_p99": null,
+     "cpuFrame_p50": null,
+     "cpuFrame_p95": null,
+     "cpuFrame_p99": null,
+     "cpuFrame_max": null,
+     "calls_med": null,
+     "calls_max": null,
+     "scene_med": null,
+     "shadow_med": null,
+     "tris_med": null,
+     "tris_max": null,
+     "programs": 70,
+     "programs_start": 70,
+     "geometries": 311,
+     "textures": 55,
+     "heapMB_start": 136.5,
+     "heapMB_end": 136.5,
+     "heapMB_max": 136.5,
+     "dpr": 1,
+     "buf": [
+      1600,
+      900
+     ],
+     "mixers": 50,
+     "phase_start": "match",
+     "phase_end": "match",
+     "alive_start": 50,
+     "alive_end": 50,
+     "pAlive_end": true,
+     "pGlide_end": false,
+     "sceneChildren": 9,
+     "gpu": null
+    },
+    "endgame_realframes": {
+     "frames": 0,
+     "seconds": 0.0,
+     "avgFps": null,
+     "p50": null,
+     "p95": null,
+     "p99": null,
+     "max": null,
+     "over20": null,
+     "over33": null,
+     "cpuUpd_p50": null,
+     "cpuUpd_p99": null,
+     "cpuRender_p50": null,
+     "cpuRender_p99": null,
+     "cpuFrame_p50": null,
+     "cpuFrame_p95": null,
+     "cpuFrame_p99": null,
+     "cpuFrame_max": null,
+     "calls_med": null,
+     "calls_max": null,
+     "scene_med": null,
+     "shadow_med": null,
+     "tris_med": null,
+     "tris_max": null,
+     "programs": 70,
+     "programs_start": 70,
+     "geometries": 311,
+     "textures": 55,
+     "heapMB_start": 136.7,
+     "heapMB_end": 134.7,
+     "heapMB_max": 137.3,
+     "dpr": 1,
+     "buf": [
+      1600,
+      900
+     ],
+     "mixers": 50,
+     "phase_start": "match",
+     "phase_end": "match",
+     "alive_start": 50,
+     "alive_end": 39,
+     "pAlive_end": true,
+     "pGlide_end": false,
+     "sceneChildren": 9
+    }
+   },
+   "notes": [
+    "post-match PLAY AGAIN button never became visible within 12 s"
+   ],
+   "automated_chromes_at_start": [
+    {
+     "pid": 37456,
+     "headless": true
+    },
+    {
+     "pid": 42584,
+     "headless": true
+    },
+    {
+     "pid": 30808,
+     "headless": true
+    },
+    {
+     "pid": 41600,
+     "headless": true
+    },
+    {
+     "pid": 4584,
+     "headless": true
+    },
+    {
+     "pid": 33696,
+     "headless": false
+    },
+    {
+     "pid": 35964,
+     "headless": true
+    },
+    {
+     "pid": 42080,
+     "headless": true
+    },
+    {
+     "pid": 48072,
+     "headless": true
+    },
+    {
+     "pid": 37996,
+     "headless": false
+    },
+    {
+     "pid": 29720,
+     "headless": true
+    }
+   ],
+   "boot_cold": {
+    "lastResponses": [
+     [
+      "/games/last-circle/assets/chars/meshy/soldier.glb",
+      29797,
+      29865,
+      1958836
+     ],
+     [
+      "/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap",
+      18467,
+      18986,
+      573
+     ],
+     [
+      "/games/last-circle/assets/props/pine.glb",
+      18588,
+      18645,
+      93688
+     ],
+     [
+      "/games/last-circle/assets/props/rocks.glb",
+      18587,
+      18639,
+      48840
+     ],
+     [
+      "/games/last-circle/assets/props/tree.glb",
+      18586,
+      18634,
+      158708
+     ],
+     [
+      "/games/last-circle/assets/props/palm.glb",
+      18586,
+      18626,
+      118032
+     ]
+    ],
+    "cdnCount": 17,
+    "cdnLastEnd": 653,
+    "localLastEnd": 29865,
+    "longtasks": {
+     "n": 3,
+     "ms": 31585,
+     "max": 31137,
+     "over250": 2
+    },
+    "marks": {
+     "splashSeen": 30.899999991059303,
+     "__LC__": 30023.29999999702,
+     "canvas": 30023.29999999702,
+     "__FFG3D__": 32007.39999999106,
+     "splashGone": 169484.29999999702
+    },
+    "paint": {
+     "first-paint": 13684,
+     "first-contentful-paint": 13684
+    },
+    "dcl": 132.3,
+    "load": 132.7,
+    "resources": 44,
+    "transferMB": 3.5,
+    "encodedMB": 3.49,
+    "glbCount": 5,
+    "glbMB": 2.27,
+    "wall_s": 169.88
+   },
+   "boot_warm": {
+    "lastResponses": [
+     [
+      "/games/last-circle/assets/chars/meshy/soldier.glb",
+      54193,
+      54197,
+      1958836
+     ],
+     [
+      "/games/last-circle/assets/props/pine.glb",
+      54168,
+      54170,
+      93688
+     ],
+     [
+      "/games/last-circle/assets/props/rocks.glb",
+      54168,
+      54170,
+      48840
+     ],
+     [
+      "/games/last-circle/assets/props/tree.glb",
+      54168,
+      54169,
+      158708
+     ],
+     [
+      "/games/last-circle/assets/props/palm.glb",
+      54167,
+      54168,
+      118032
+     ],
+     [
+      "/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap",
+      54081,
+      54083,
+      573
+     ]
+    ],
+    "cdnCount": 17,
+    "cdnLastEnd": 209,
+    "localLastEnd": 54197,
+    "longtasks": {
+     "n": 2,
+     "ms": 54339,
+     "max": 54058,
+     "over250": 2
+    },
+    "marks": {
+     "splashSeen": 30.19999998807907,
+     "__LC__": 54246.69999998808,
+     "canvas": 54246.79999999702,
+     "__FFG3D__": 54598.29999999702,
+     "splashGone": 161533.69999998808
+    },
+    "paint": {
+     "first-paint": 54040,
+     "first-contentful-paint": 54040
+    },
+    "dcl": 92.6,
+    "load": 95.3,
+    "resources": 43,
+    "transferMB": 0,
+    "encodedMB": 3.49,
+    "glbCount": 5,
+    "glbMB": 2.27,
+    "wall_s": 162.58
+   },
+   "instrument": "ok",
+   "gl": {
+    "renderer": "ANGLE (Intel, Intel(R) UHD Graphics (0x00009A60) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "webgl2": true,
+    "maxTex": 16384,
+    "dpr": 1,
+    "pixelRatio": 1,
+    "graphics": "medium",
+    "shadow": true,
+    "bloom": true
+   },
+   "load": {
+    "ms": 347394.2,
+    "phase": "lobby",
+    "map": "ashgrid",
+    "wall_s": 347.44
+   },
+   "lobby_skip_s": 0.197,
+   "land_ff": {
+    "wall_s": 1.73,
+    "state": {
+     "landed": true,
+     "s": {
+      "phase": "match",
+      "t": 27.300000000000516,
+      "alive": 50,
+      "player": {
+       "hp": 100,
+       "shield": 0,
+       "pos": {
+        "x": 0,
+        "y": 5.727196321029594,
+        "z": -23.560454545454615
+       },
+       "weapon": "pistol"
+      },
+      "map": "ashgrid",
+      "mode": "standard",
+      "seed": 1234
+     }
+    }
+   },
+   "endgame": {
+    "wall_s": 7.5,
+    "over": false,
+    "slices": 3,
+    "trace_head": [
+     {
+      "t": 35.3,
+      "alive": 47,
+      "phase": "match",
+      "hp": 100,
+      "ffMs": 1165
+     },
+     {
+      "t": 43.4,
+      "alive": 42,
+      "phase": "match",
+      "hp": 84,
+      "ffMs": 909
+     },
+     {
+      "t": 51.4,
+      "alive": 39,
+      "phase": "match",
+      "hp": 58,
+      "ffMs": 709
+     }
+    ],
+    "trace_tail": [
+     {
+      "t": 35.3,
+      "alive": 47,
+      "phase": "match",
+      "hp": 100,
+      "ffMs": 1165
+     },
+     {
+      "t": 43.4,
+      "alive": 42,
+      "phase": "match",
+      "hp": 84,
+      "ffMs": 909
+     },
+     {
+      "t": 51.4,
+      "alive": 39,
+      "phase": "match",
+      "hp": 58,
+      "ffMs": 709
+     }
+    ],
+    "state": {
+     "phase": "match",
+     "t": 51.39999999999964,
+     "alive": 39,
+     "player": {
+      "hp": 58,
+      "shield": 0,
+      "pos": {
+       "x": 0,
+       "y": 5.727196321029594,
+       "z": -23.560454545454615
+      },
+      "weapon": "pistol"
+     },
+     "map": "ashgrid",
+     "mode": "standard",
+     "seed": 1234
+    }
+   },
+   "postmatch_panel_s": null,
+   "window_errors": [],
+   "console": {
+    "boot_cold": {
+     "error": 1,
+     "warning": 0,
+     "samples": [
+      "[error] Failed to load resource: the server responded with a status of 404 (File not found) @http://127.0.0.1:8790/favicon.ico:0"
+     ]
+    },
+    "menu": {
+     "error": 1,
+     "warning": 0,
+     "samples": [
+      "[error] Failed to load resource: the server responded with a status of 404 (File not found) @http://127.0.0.1:8790/favicon.ico:0"
+     ]
+    },
+    "load": {
+     "error": 0,
+     "warning": 235,
+     "samples": [
+      "[warning] [rig] soldier FAILS the skeleton contract \u2014 missing: [Hips, Spine02, Spine01, Spine, Head, RightArm, RightForeArm, RightHand, LeftArm, LeftForeArm, LeftHand, RightUpLeg, RightLeg, RightFoot, LeftUpLeg, LeftLeg, LeftFoot, neck|Neck], skinnedMeshes: 1, handBone: NONE. Downstream: pose.js aim chain and the weapon holder will misbehave on this rig. @http://127.0.0.1:8790/games/last-circle/runtime/3d/royale/rig_pipeline.js?v=1789530264:88",
+      "[warning] [rig] soldier attachment issues: [weapon holder parented to \"mixamorigRightHand\" \u2014 legal: RightHand, FistR] @http://127.0.0.1:8790/games/last-circle/runtime/3d/royale/rig_pipeline.js?v=1789530264:177",
+      "[warning] [rig] athlete FAILS the skeleton contract \u2014 missing: [Hips, Spine02, Spine01, Spine, Head, RightArm, RightForeArm, RightHand, LeftArm, LeftForeArm, LeftHand, RightUpLeg, RightLeg, RightFoot, LeftUpLeg, LeftLeg, LeftFoot, neck|Neck], skinnedMeshes: 1, handBone: NONE. Downstream: pose.js aim chain and the weapon holder will misbehave on this rig. @http://127.0.0.1:8790/games/last-circle/runtime/3d/royale/rig_pipeline.js?v=1789530264:88",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandMiddle1.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandMiddle2.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandMiddle3.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264"
+     ]
+    },
+    "drop": {
+     "error": 3,
+     "warning": 0,
+     "samples": [
+      "[error] Failed to load resource: net::ERR_CONNECTION_REFUSED @http://127.0.0.1:8790/games/last-circle/assets/audio/sfx/step_concrete_003.ogg:0",
+      "[error] Failed to load resource: net::ERR_CONNECTION_REFUSED @http://127.0.0.1:8790/games/last-circle/assets/audio/sfx/step_wood_001.ogg:0",
+      "[error] Failed to load resource: net::ERR_CONNECTION_REFUSED @http://127.0.0.1:8790/games/last-circle/assets/audio/sfx/step_wood_002.ogg:0"
+     ]
+    },
+    "endgame": {
+     "error": 0,
+     "warning": 18,
+     "samples": [
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigRightHandMiddle4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigRightHandRing4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigRightHandPinky4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandMiddle4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandRing4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandPinky4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264"
+     ]
+    }
+   },
+   "pageerrors": [],
+   "pageerror_count": 0,
+   "reqfail": [
+    [
+     "drop",
+     "FAILED http://127.0.0.1:8790/games/last-circle/assets/audio/sfx/step_concrete_003.ogg net::ERR_CONNECTION_REFUSED"
+    ],
+    [
+     "drop",
+     "FAILED http://127.0.0.1:8790/games/last-circle/assets/audio/sfx/step_wood_001.ogg net::ERR_CONNECTION_REFUSED"
+    ],
+    [
+     "drop",
+     "FAILED http://127.0.0.1:8790/games/last-circle/assets/audio/sfx/step_wood_002.ogg net::ERR_CONNECTION_REFUSED"
+    ]
+   ],
+   "run_wall_s": 765.6,
+   "browser_version": "154.0.8037.58"
+  }
+ ]
+}

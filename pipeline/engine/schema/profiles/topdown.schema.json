@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "ffg://profiles/topdown.schema.json",
+  "title": "FFG Top-down ARPG content profile",
+  "description": "Zelda-like top-down adventure. Profile defined ahead of its runtime (ffg_topdown.js, next bucket) to prove the schema generalizes. The signature mechanic of this bucket is room-to-room navigation + lock-and-key gating + melee combat.",
+  "type": "object",
+  "required": ["genre", "rooms", "player"],
+  "properties": {
+    "genre": { "const": "topdown" },
+    "player": {
+      "type": "object",
+      "required": ["hp", "spawn_room"],
+      "properties": {
+        "hp": { "type": "integer", "minimum": 1 },
+        "speed": { "type": "number", "minimum": 20 },
+        "spawn_room": { "type": "string" },
+        "spawn_x": { "type": "integer" },
+        "spawn_y": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "rooms": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "tiles", "exits"],
+        "properties": {
+          "id": { "type": "string" },
+          "tiles": {
+            "type": "array",
+            "description": "Row-major char-grid. '.'=floor '#'=wall 'D'=door 'L'=locked-door '~'=water.",
+            "items": { "type": "string" }
+          },
+          "exits": {
+            "type": "object",
+            "properties": {
+              "N": { "type": "string" }, "S": { "type": "string" },
+              "E": { "type": "string" }, "W": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
+          "enemies": { "type": "array", "items": { "type": "object" } },
+          "items": { "type": "array", "items": { "type": "object" } }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

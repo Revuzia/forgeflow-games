@@ -1,0 +1,379 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "generated": "2026-05-05",
+    "purpose": "Genre conventions for ForgeFlow Games automated 2D action pipeline. Each genre object documents the minimum requirements for a 'recognizable, playable example' of the genre.",
+    "sources_consulted": [
+      "https://en.wikipedia.org/wiki/Twin-stick_shooter",
+      "https://en.wikipedia.org/wiki/Robotron:_2084",
+      "https://en.wikipedia.org/wiki/Shoot_'em_up",
+      "https://en.wikipedia.org/wiki/Galaga",
+      "https://en.wikipedia.org/wiki/Ikaruga",
+      "https://en.wikipedia.org/wiki/Sonic_the_Hedgehog_(1991_video_game)",
+      "https://en.wikipedia.org/wiki/Enter_the_Gungeon",
+      "https://en.wikipedia.org/wiki/Star_Fox",
+      "https://obby.fandom.com/wiki/Obstacle_course",
+      "https://roblox.fandom.com/wiki/Obstacle_course",
+      "https://gamedesignskills.com/game-design/platformer/",
+      "http://higherorderfun.com/blog/2012/05/20/the-guide-to-implementing-2d-platformers/",
+      "https://www.tadeasjun.com/blog/2d-level-design/",
+      "https://www.thealmightyguru.com/Wiki/index.php?title=Coyote_time",
+      "https://www.ketra-games.com/2021/08/coyote-time-and-jump-buffering.html",
+      "https://docs.phaser.io/phaser/concepts/scenes",
+      "https://photonstorm.github.io/phaser3-docs/Phaser.Physics.Arcade.Tilemap.html",
+      "https://phaser.io/news/2019/02/build-a-space-shooter-in-phaser-3",
+      "https://codecaptain.io/blog/game-development/shooting-bullets-phaser-3-using-arcade-physics-groups/696",
+      "https://www.gamedeveloper.com/design/7-twin-stick-shooters-that-game-developers-should-study",
+      "https://shmuplations.com/ikaruga/",
+      "https://sonic.fandom.com/wiki/Ring",
+      "https://www.gameuidatabase.com/gameData.php?id=499",
+      "https://boostroom.com/blog/obby-mastery-movement-tech-checkpoint-tricks",
+      "https://www.creation.dev/blog/roblox-obby-design-guide",
+      "https://gameinformer.com/b/features/archive/2014/12/08/twin-sticking-to-your-guns.aspx",
+      "https://www.pcgamingwiki.com/wiki/Hotline_Miami",
+      "https://www.pwrdown.com/gaming/enter-the-gungeon-controls-key-bindings-settings/",
+      "https://strategywiki.org/wiki/Star_Fox_2/Controls",
+      "https://strategywiki.org/wiki/Galaga/Gameplay"
+    ]
+  },
+
+  "platformer": {
+    "identity": "Side-view, gravity-driven traversal where a character runs and jumps across discrete platforms toward a level exit, with falling and enemy contact as the primary failure modes.",
+    "controls": {
+      "keyboard": "Arrow keys or WASD = move (Left/A and Right/D primary; Down/S = duck/drop-through), Space or Up/W = jump (variable height: hold for max), Shift = run/dash, Z/J = attack (if combat platformer), X/K = special/secondary, P/Esc = pause",
+      "mouse": "Not required. Optional aim for projectile-attack platformers (Hollow Knight uses gamepad-style 8-dir, not mouse).",
+      "gamepad": "Left stick or D-pad = move, A/Cross = jump, X/Square = attack, B/Circle = dash/run, Y/Triangle = special, Start = pause"
+    },
+    "player_abilities": ["walk", "run", "jump (variable height)", "fall", "land", "duck/crouch", "drop-through one-way platforms", "attack (optional)", "double-jump (optional unlock)", "wall-cling/wall-jump (optional)", "dash (optional)"],
+    "win_conditions": ["Reach level exit (flag, door, sign post)", "Defeat boss at end of level", "Collect all required collectibles in some sub-modes"],
+    "lose_conditions": ["Lives = 0", "Fall into pit / off bottom of screen", "Touch hazard (spikes, lava) at 0 HP/rings", "Time runs out (Mario-style timer)", "Boss reduces HP to 0"],
+    "scene_structure": ["Boot", "Preload", "Menu", "LevelSelect (optional)", "Game", "Pause", "GameOver", "Win/LevelComplete"],
+    "standard_enemy_types": [
+      {"name": "patroller", "behavior": "Walks left-right between edges, dies when stomped on (Goomba archetype)"},
+      {"name": "shell_walker", "behavior": "Armored walker; stomp retracts into kickable shell that becomes a hazard (Koopa archetype)"},
+      {"name": "flyer", "behavior": "Sinusoidal or hover patrol in air, requires aerial combat or dodge"},
+      {"name": "shooter", "behavior": "Stationary or slow patrol; fires projectiles on a timer"},
+      {"name": "charger", "behavior": "Idle until line-of-sight, then rushes the player"},
+      {"name": "jumper", "behavior": "Hops in place or in arcs to block traversal"},
+      {"name": "boss", "behavior": "Multi-phase HP gauge, telegraphed attacks, weak window"}
+    ],
+    "collectibles": ["coins/rings (score + extra-life threshold)", "1UPs/extra lives", "checkpoints/flags", "keys (door unlock)", "power-ups (mushroom, fire flower, shield)", "health/hearts", "secret tokens (red coins, gems)"],
+    "hud_elements": ["score", "coin/ring counter", "lives counter", "health/HP bar (or hearts)", "level timer (optional)", "current level/world label", "power-up indicator"],
+    "iconic_mechanics": [
+      "Variable jump height tied to button hold duration",
+      "Stomp-to-kill enemies from above (Mario-style head-bounce)",
+      "Coyote time + jump buffer for forgiving jumps",
+      "Ring/coin shield: take a hit, scatter rings, no death (Sonic)",
+      "Momentum preservation through slopes and loops"
+    ],
+    "sound_design": ["jump", "land", "footstep (optional)", "coin_pickup", "powerup_pickup", "hurt", "enemy_stomp", "enemy_die", "extra_life", "checkpoint", "level_complete", "game_over", "boss_intro", "boss_hit", "music_level", "music_boss"],
+    "common_bugs_anti_patterns": [
+      "Jump cuts to zero velocity instantly on key release (no taper) — feels broken; correct fix is to dampen upward velocity, not zero it",
+      "No coyote time: jumping one frame after walking off ledge fails — players blame the game",
+      "No jump buffer: pressing jump 2 frames before landing eats the input",
+      "Resetting velocity by re-adding to physics group every frame — bullets/enemies stutter",
+      "Using physics.matter for a simple platformer — overkill, slower, harder to tune",
+      "Gravity applied via setVelocityY instead of setGravityY — frame-rate dependent",
+      "Forgetting world bounds → player falls forever instead of dying",
+      "One-way platforms with two-way collision blocking jump-up",
+      "Enemy patrollers without ledge-detection raycasts walk off platforms"
+    ],
+    "phaser_implementation": "physics.arcade (NOT matter) for snappy feel. Tilemap with collision layer for level geometry (setCollisionByProperty or setCollisionBetween). Player as Sprite with arcade body, setGravityY on world or body. enemies = physics.add.group({allowGravity:true}). add.collider(player, layer) and add.collider(player, enemies, hitEnemy). Use blocked.down for ground detection. Particles for coin sparkle and stomp puff."
+  },
+
+  "arcade": {
+    "identity": "Single-screen, twin-stick or single-stick shooter where the player survives escalating waves of enemies in a bounded arena with no scrolling.",
+    "controls": {
+      "keyboard": "WASD = move, Arrow keys = aim/shoot direction (twin-stick on keyboard), Space = bomb/special, Shift = boost (optional), P/Esc = pause",
+      "mouse": "Optional alternative to right stick: mouse position = aim, left-click = shoot, right-click = bomb",
+      "gamepad": "Left stick = move, Right stick = aim+shoot (auto-fire while pushed), RT/R2 = bomb, LT/L2 = boost"
+    },
+    "player_abilities": ["8-directional move", "8-directional aim+shoot (decoupled from movement)", "auto-fire", "screen-clearing bomb (limited charges)", "boost/dash (optional)", "collect score multipliers"],
+    "win_conditions": ["Survive all waves to high-score threshold", "Endless mode: highest score before death", "Defeat wave boss every N waves"],
+    "lose_conditions": ["Lives = 0", "All humanoids killed (Robotron-style mission failure)", "Touched by enemy or enemy bullet"],
+    "scene_structure": ["Boot", "Preload", "Menu", "Game", "Pause", "GameOver", "HighScore"],
+    "standard_enemy_types": [
+      {"name": "grunt", "behavior": "Walks/drifts toward player in straight line, dies in 1 hit"},
+      {"name": "shooter", "behavior": "Maintains distance, fires aimed bullets at player"},
+      {"name": "splitter", "behavior": "On death, splits into 2-4 smaller faster enemies (Geometry Wars green diamond)"},
+      {"name": "swarmer", "behavior": "Spawned in groups, weak individually but overwhelm (Geometry Wars purple)"},
+      {"name": "chaser_smart", "behavior": "Pathfinds around obstacles, persistent threat (Robotron Hulk archetype)"},
+      {"name": "indestructible", "behavior": "Cannot be killed, must be avoided (Robotron Hulks)"},
+      {"name": "rescuable_humanoid", "behavior": "Non-enemy NPC, contact = bonus score, killed by enemies = lose"}
+    ],
+    "collectibles": ["score multiplier gems/geoms", "smart-bomb pickups", "extra life at score threshold", "humanoids (Robotron rescue)", "weapon-mod power-ups (spread, laser)"],
+    "hud_elements": ["score", "high-score", "lives", "bombs remaining", "wave number", "score multiplier (e.g. x4)", "humanoids saved counter (Robotron-style)"],
+    "iconic_mechanics": [
+      "Decoupled move-and-shoot (twin-stick): aim while strafing in any direction",
+      "Score multiplier that climbs with kill-streak and resets on hit",
+      "Spawn-in waves with brief invulnerability flash",
+      "Smart bombs as panic-button screen clears with limited charges",
+      "Bullet-time / boost meters that fill from kills"
+    ],
+    "sound_design": ["shoot", "enemy_die", "enemy_hit", "explode", "player_hurt", "bomb_blast", "multiplier_tick", "wave_start", "wave_clear", "extra_life", "humanoid_rescued", "humanoid_killed", "music_combat", "music_menu"],
+    "common_bugs_anti_patterns": [
+      "Bullets created without object pool → GC stutter at high fire rates",
+      "Resetting bullet velocity inside physics group iteration",
+      "Aim direction calculated from mouse but not normalized — diagonal bullets travel sqrt(2) faster",
+      "Spawning enemies on top of player at wave start — unfair instant deaths",
+      "No invulnerability frames after respawn",
+      "Score multiplier stored as float and decays mid-frame causing jitter in HUD",
+      "Bombs that don't actually destroy off-screen bullets",
+      "Splitter enemies spawning their children at exact dead position, causing chain-overlap damage"
+    ],
+    "phaser_implementation": "physics.arcade with setCollideWorldBounds(true) on player. bullets = this.physics.add.group({classType: Bullet, runChildUpdate: true, maxSize: 200}) with bullets.get() / killAndHide pattern for pooling. enemies = physics.add.group with custom AI in update. Particles for explosions (this.add.particles). Camera shake on bomb (this.cameras.main.shake). Pad input via this.input.gamepad."
+  },
+
+  "shmup": {
+    "identity": "Auto-scrolling shooter (vertical or horizontal) where the player moves freely in 2D while the camera/world drives forward, dodging dense enemy bullet patterns and downing waves and bosses.",
+    "controls": {
+      "keyboard": "Arrow keys or WASD = move (4 or 8 dir), Z = primary fire (auto-fire while held), X = bomb/special, Shift = focus/slow-mode (smaller hitbox, slower move), P/Esc = pause",
+      "mouse": "Not standard. Some Western shmups support mouse-aim but it breaks bullet-pattern memorization design.",
+      "gamepad": "Left stick or D-pad = move, A/Cross = shoot, B/Circle = bomb, RB/R1 = focus mode, Start = pause"
+    },
+    "player_abilities": ["2D move within screen bounds", "auto-fire primary weapon", "bomb (limited, clears bullets + heavy damage)", "focus/slow mode with reduced hitbox", "weapon-tier upgrades", "polarity switch (Ikaruga-specific)"],
+    "win_conditions": ["Complete all stages and final boss", "Reach score threshold (1CC = one-credit-clear)", "Defeat stage boss to advance"],
+    "lose_conditions": ["Lives = 0", "Touched by any enemy or bullet (one-hit-kill on player hitbox)", "Continues exhausted (arcade mode)"],
+    "scene_structure": ["Boot", "Preload", "Menu", "StageSelect (optional)", "Game", "Pause", "GameOver", "StageClear", "Credits"],
+    "standard_enemy_types": [
+      {"name": "popcorn", "behavior": "Trash mobs in formations, 1-hit kills, fire 1-2 bullets each (Galaga grunts)"},
+      {"name": "formation_diver", "behavior": "Holds position then dives at player in arc (Galaga attack pattern)"},
+      {"name": "turret", "behavior": "Stationary on scrolling background, fires aimed shots until destroyed"},
+      {"name": "tank", "behavior": "Heavy mid-boss, multiple HP, complex bullet pattern"},
+      {"name": "kamikaze", "behavior": "Rushes player position in straight line"},
+      {"name": "boss", "behavior": "Multi-phase, bullet-pattern attacks, large hitbox, HP bar visible"}
+    ],
+    "collectibles": ["power-up icons (P) for weapon level", "bomb stock (B)", "extra life (1UP) at score threshold", "score medals/coins", "polarity-flip pickups (Ikaruga-style)"],
+    "hud_elements": ["score", "high-score", "lives", "bombs remaining", "weapon level / power gauge", "boss HP bar (during boss)", "stage number"],
+    "iconic_mechanics": [
+      "Auto-fire so player focuses on dodging",
+      "Tiny visible hitbox vs large sprite (focus mode reveals it)",
+      "Memorizable bullet patterns (danmaku); skill = pattern recognition",
+      "Power-up tiers that escalate weapon spread/damage, lost on death",
+      "Capture/rescue (Galaga): boss tractor-beams ship; rescue gives dual fighter",
+      "Polarity switching (Ikaruga): match polarity = absorb, mismatch = damage"
+    ],
+    "sound_design": ["shoot", "enemy_hit", "enemy_die", "explode_small", "explode_big", "powerup", "bomb_use", "player_hurt", "extra_life", "boss_warning", "boss_die", "stage_clear", "music_stage", "music_boss"],
+    "common_bugs_anti_patterns": [
+      "Player hitbox = full sprite size — felt unfair vs visible-bullet spec; fix: shrink body to 4-8px square center-of-sprite",
+      "Bullets spawned with physics body but no maxVelocity → frame-rate scaling issues",
+      "Enemy patterns built with setTimeout instead of scene timer — pause breaks them",
+      "Scrolling background moved by camera scroll but enemies not in same coord space → desync",
+      "Power-up sprite collidable with bullets, gets shot off-screen",
+      "No bullet-pool: 200 bullets/sec creates 200 sprites/sec, GC death",
+      "Boss HP bar reads from dead reference after boss exit"
+    ],
+    "phaser_implementation": "physics.arcade. Player body shrunk via setSize() and setOffset() to tiny hitbox. TileSprite for scrolling background (this.add.tileSprite + tilePositionY += scrollSpeed). bullets pool with physics.add.group, maxSize: 500. Enemies spawned via Phaser.Time timer events on stage timeline. Boss HP bar = Graphics rect redrawn each frame. Use scene.tweens for bullet-pattern arcs."
+  },
+
+  "flight": {
+    "identity": "Top-down or 3/4-perspective scrolling combat-flight game with banking/turning ship feel, scrolling terrain, and missions structured around objectives or boss encounters (1942, Aero Fighters, Tyrian).",
+    "controls": {
+      "keyboard": "Arrow keys or WASD = pitch/yaw (Up=accelerate or pitch-down, Down=decelerate or pitch-up depending on convention), Z = primary gun, X = bomb/missile, Shift = boost/afterburner, C = roll/barrel-roll (Star Fox-style), P/Esc = pause",
+      "mouse": "Optional aim (cursor = lead reticle); not standard for arcade flight",
+      "gamepad": "Left stick = move plane, A = fire, X = bomb, RT = boost, LB/RB = barrel-roll left/right, Start = pause"
+    },
+    "player_abilities": ["scrolling-bound move", "primary gun auto-fire", "bomb / missile (limited)", "barrel-roll (deflects bullets, Star Fox)", "boost/afterburner (temporary speed)", "loop / u-turn (advanced)", "weapon swap (cannon vs spread vs laser)"],
+    "win_conditions": ["Complete mission objective (escort, defend, destroy fleet)", "Defeat stage boss", "Reach the carrier / landing strip", "Survive the timed mission"],
+    "lose_conditions": ["Health/HP = 0", "Crash into terrain or enemy", "Mission objective failed (escort target died, time expired)", "Lives = 0"],
+    "scene_structure": ["Boot", "Preload", "Menu", "MissionBriefing", "Game", "Pause", "MissionDebrief", "GameOver", "Hangar/Loadout (optional)"],
+    "standard_enemy_types": [
+      {"name": "fighter", "behavior": "Single small plane, weaves toward player, fires aimed bursts"},
+      {"name": "bomber", "behavior": "Slow, heavy HP, fires straight or drops bombs"},
+      {"name": "ground_aa", "behavior": "Anti-aircraft on terrain, tracks player, fires flak"},
+      {"name": "ship", "behavior": "Naval target, multiple turrets, scrolls slowly"},
+      {"name": "missile", "behavior": "Homing projectile, must be dodged or shot down"},
+      {"name": "ace", "behavior": "Mid-boss, evasive maneuvers, signature paint"},
+      {"name": "boss_battleship", "behavior": "Stage-end large target, multiple destructible parts before core"}
+    ],
+    "collectibles": ["weapon power-up (P)", "bomb stock", "shield/repair pickup", "wingmen/escort allies", "medals (score)", "fuel canister (some games)"],
+    "hud_elements": ["score", "lives or health bar", "bomb/missile stock", "weapon power level", "altitude (optional)", "radar/minimap (mission objective marker)", "boss HP bar", "mission timer"],
+    "iconic_mechanics": [
+      "Banking sprite frames (3-5 frames: hard-left, left, neutral, right, hard-right) tied to horizontal velocity",
+      "Barrel-roll i-frames that deflect bullets",
+      "Loop maneuver to flip 180 (in non-rail flight)",
+      "Wingmen that can be lost (Star Fox: 'Falco, where are you?')",
+      "Mission-based level structure with branching paths (Star Fox map)"
+    ],
+    "sound_design": ["engine_loop", "gun_fire", "missile_fire", "missile_lock_warning", "bomb_drop", "explode_air", "explode_ground", "barrel_roll", "boost", "hit_taken", "wingman_chatter (optional)", "mission_complete", "mission_fail", "boss_alert", "music_mission", "music_boss"],
+    "common_bugs_anti_patterns": [
+      "No banking animation — plane feels static and stuck",
+      "Boost has no fuel limit → flies off ahead of camera",
+      "Ground vs air enemies use same collision layer → fighter killed by tank",
+      "Missile lock without warning audio → feels random",
+      "Camera scroll speed not matched to player forward velocity → terrain rubber-bands",
+      "Barrel-roll i-frames last whole animation including landing frame → exploit",
+      "Mission objective marker doesn't update on minimap"
+    ],
+    "phaser_implementation": "physics.arcade. Player Sprite with frame-swap on velocity.x for banking. Scrolling TileSprite for terrain/clouds (multi-layer parallax: tilePositionY += speed). Enemies in physics groups split by air/ground tag. Minimap = second Camera (cameras.add) at scaled view. Missile homing via Phaser.Math.Angle.Between + setVelocity per frame."
+  },
+
+  "obby": {
+    "identity": "Stage-based obstacle course (Roblox-popularized) where players traverse a sequence of platforming challenges separated by checkpoints, with death sending player back to the last checkpoint instead of game over.",
+    "controls": {
+      "keyboard": "WASD or Arrows = move, Space = jump, Shift = sprint (optional), R = reset to last checkpoint, P/Esc = pause/menu",
+      "mouse": "Camera control in 3D obbies; not used in 2D obby variants",
+      "gamepad": "Left stick = move, A/Cross = jump, X/Square = reset, Start = pause"
+    },
+    "player_abilities": ["walk", "run/sprint", "jump (often single, sometimes double)", "manual reset to checkpoint", "wall-jump (advanced obbies)", "ledge-grab (rare, advanced)"],
+    "win_conditions": ["Reach the final stage / Winner's Room", "Touch the goal pad / final checkpoint", "Complete all N stages"],
+    "lose_conditions": ["Touch a kill-brick (lava, spike, void)", "Fall off the world / into the void", "Time runs out (rare, only timed-obby variants)"],
+    "scene_structure": ["Boot", "Preload", "Menu", "Game (single continuous run)", "Pause", "Win/CompletionScreen", "Leaderboard (optional)"],
+    "standard_enemy_types": [
+      {"name": "kill_brick", "behavior": "Static hazard tile (lava, spikes, void) — instant death on touch"},
+      {"name": "moving_platform", "behavior": "Patrols path; not enemy but as much a hazard if missed"},
+      {"name": "disappearing_block", "behavior": "Vanishes after step or on timer, forces speed-traversal"},
+      {"name": "swinging_axe", "behavior": "Pendulum hazard requiring timing"},
+      {"name": "saw", "behavior": "Spinning blade on rail, periodic kill-trigger"},
+      {"name": "pusher", "behavior": "Piston / wall that knocks player into void"}
+    ],
+    "collectibles": ["checkpoints (the core 'collectible': updates spawn point)", "stage badges (cosmetic)", "coins (optional shop currency)", "secret skips / shortcuts"],
+    "hud_elements": ["current stage number", "total stages", "checkpoint counter", "deaths counter (signature obby HUD)", "speedrun timer (optional)", "leaderboard (optional)"],
+    "iconic_mechanics": [
+      "Checkpoints every 3-5 obstacles that update respawn point and play a positive jingle",
+      "Death is cheap and frequent: instant respawn at last checkpoint, no lives system",
+      "Stage progression with named themes (lava world, sky world, etc.)",
+      "Difficulty curve: simple jumps -> moving parts -> disappearing blocks -> timed combos",
+      "Trolling/joke stages as a sub-genre signature"
+    ],
+    "sound_design": ["jump", "land", "checkpoint_reached", "death", "respawn", "stage_complete", "win_finale", "saw_loop", "lava_sizzle", "music_world1", "music_world2 (per theme change)"],
+    "common_bugs_anti_patterns": [
+      "Checkpoint script doesn't validate sequence — player skips stages by touching a far checkpoint first",
+      "Respawn places player inside collision geometry → instant re-death loop",
+      "Kill-brick collision uses overlap but logic in collide → 1-frame intersect bypasses",
+      "Disappearing blocks regenerate while player still standing on them → throws player",
+      "No jump buffer / coyote time — feels worse than Roblox itself",
+      "Camera doesn't follow respawn cleanly, jarring snap"
+    ],
+    "phaser_implementation": "physics.arcade like a platformer. Checkpoint = overlap zone (physics.add.overlap) that writes player.lastCheckpoint = {x,y}. Kill-brick = overlap that calls respawn(). Moving platforms via tweens or setVelocity with reverse on bounds. Disappearing blocks = sprite with body.enable toggled on timer. R-key handler in scene update. Stage transitions can stay in one Game scene with checkpoint-driven camera bounds."
+  },
+
+  "topdown": {
+    "identity": "Overhead 4 or 8-directional movement game emphasizing exploration and tile-based combat (Zelda LttP, Pokemon, Hotline Miami) where the player navigates rooms/screens populated with enemies, NPCs, and puzzles.",
+    "controls": {
+      "keyboard": "WASD or Arrows = 8-dir move, Space or J = primary attack/sword, Shift or K = secondary/shield/dash, E = interact/pickup, Q = inventory or item-swap, P/Esc = pause/menu",
+      "mouse": "Optional aim (cursor = facing direction). Hotline Miami uses mouse to face/aim while WASD strafes.",
+      "gamepad": "Left stick = move, A = attack, X = interact, B = dodge/dash, Y = item, RB/LB = cycle items, Start = menu"
+    },
+    "player_abilities": ["8-directional move", "face/aim (separate from move when mouse used)", "primary attack (melee or ranged)", "interact (talk, open chest, push block)", "dodge-roll/dash", "use consumable item (bomb, potion, key)", "block/parry (Zelda shield)"],
+    "win_conditions": ["Reach next area/screen exit", "Defeat all enemies in room (lock-in style)", "Solve puzzle (push blocks, light torches)", "Defeat dungeon boss", "Collect main quest item"],
+    "lose_conditions": ["HP/hearts = 0", "Spotted by stealth enemy in fail-state mission (rare)", "Time runs out (timed dungeon variants)"],
+    "scene_structure": ["Boot", "Preload", "Menu", "Overworld", "Dungeon/Room", "Inventory", "Dialogue", "Pause", "GameOver", "Cutscene (optional)"],
+    "standard_enemy_types": [
+      {"name": "patroller", "behavior": "Walks fixed path, hits on contact (Zelda Octorok)"},
+      {"name": "shooter", "behavior": "Stops, faces player, fires projectile (Zelda Octorok rocks)"},
+      {"name": "charger", "behavior": "Detects on line-of-sight, rushes player (Hotline thug)"},
+      {"name": "armored", "behavior": "Blocks frontal attacks, must be flanked or stunned"},
+      {"name": "spawner", "behavior": "Stationary; emits weak adds until destroyed"},
+      {"name": "ranged_sniper", "behavior": "Long sight-line, telegraphed shot (Hotline shotgun cop)"},
+      {"name": "boss", "behavior": "Locked-room encounter, weak point cycles, phase shifts at HP thresholds"}
+    ],
+    "collectibles": ["hearts/HP refills", "rupees/coins", "keys (small key vs boss key)", "bombs", "arrows/ammo", "heart containers (max-HP increase)", "map/compass", "quest items"],
+    "hud_elements": ["heart bar / HP", "rupee/coin counter", "keys held", "current item slot (A/B button mapping)", "minimap (dungeon)", "magic/stamina meter", "boss HP bar"],
+    "iconic_mechanics": [
+      "Room-based level design: enter screen, sometimes door locks until cleared",
+      "Overworld vs dungeon distinction with separate music and tilesets",
+      "8-direction sprite system: 4 cardinals minimum, 8 ideal, with attack animations per facing",
+      "Push-block and torch-light puzzles in dungeons",
+      "Item-based progression gates (Hotline: weapons drop in level; Zelda: bomb opens cracked walls)",
+      "One-shot lethality (Hotline) vs hearts (Zelda) as a tonal lever"
+    ],
+    "sound_design": ["footstep", "sword_swing", "sword_hit", "enemy_die", "hurt", "pickup_heart", "pickup_rupee", "door_open", "door_locked", "puzzle_solved", "secret_jingle", "menu_select", "boss_alert", "music_overworld", "music_dungeon", "music_boss"],
+    "common_bugs_anti_patterns": [
+      "Diagonal movement = sqrt(2) faster than cardinal (forgot to normalize velocity vector)",
+      "Sprite facing not updated when only y-axis input held → looks frozen",
+      "Attack hitbox active for whole animation including recovery frames",
+      "Camera follows player past room edge → revealed unintended areas",
+      "Enemy pathfinding uses raycasts every frame → CPU spike with many enemies",
+      "Z-ordering: player drawn under tree they're standing in front of",
+      "Knockback applied as velocity then immediately overwritten by movement input"
+    ],
+    "phaser_implementation": "physics.arcade. Player velocity normalized via Phaser.Math.Vector2.normalize() then *speed. Tilemap with collision layer. Anim keys per direction (walk_up, walk_down, walk_left, walk_right; or 8-dir if needed). Attack hitbox = transient Sprite or Zone added to physics group, destroyed after N ms. Z-sort via depth = body.bottom for player vs prop layering. Camera.startFollow with deadzone."
+  },
+
+  "arpg": {
+    "identity": "Top-down combat-and-loot game where the player kills enemies, collects randomized gear, and grows in power through skills and item stats (Diablo lineage; Hades adds run-based roguelite structure).",
+    "controls": {
+      "keyboard": "WASD = move, Left-click = primary attack/move-to-cursor, Right-click = secondary skill, 1-4 = ability hotkeys, Q = potion/heal, E = interact, Tab = inventory, Esc = pause/menu",
+      "mouse": "Required. Mouse position = facing/aim. Click-to-move (Diablo) or WASD-strafe with mouse-aim (Hades, Path of Exile 2) — both are standard variants.",
+      "gamepad": "Left stick = move, Right stick = aim, A = primary attack, B = dodge, X = secondary, Y = special/cast, RT = ultimate, LT = consumable, D-pad = ability cycle"
+    },
+    "player_abilities": ["8-dir move (or click-to-move)", "primary attack (basic, no cooldown)", "secondary skill (short cooldown)", "ability/cast (cooldown or mana cost)", "ultimate/special (long cooldown or charge)", "dodge-roll (i-frame dash)", "consume potion / use flask", "equip and swap gear", "level up and assign points/passives"],
+    "win_conditions": ["Defeat final boss / clear final area", "Complete a run (Hades roguelite)", "Reach max level / build target", "Clear endgame mapping tier"],
+    "lose_conditions": ["HP = 0 (run ends in roguelite, respawn at checkpoint in non-roguelite)", "Hardcore mode: permadeath", "All allies dead (party variants)"],
+    "scene_structure": ["Boot", "Preload", "Menu", "CharacterSelect", "Hub (town/safe zone)", "Game (zone/dungeon)", "Inventory", "SkillTree", "Pause", "GameOver/RunEnd", "Loadout"],
+    "standard_enemy_types": [
+      {"name": "trash_melee", "behavior": "Skeleton/zombie pack, weak HP, swarms (Diablo Fallen)"},
+      {"name": "ranged_caster", "behavior": "Stationary or kiting, fires projectile/spell"},
+      {"name": "elite", "behavior": "Tougher trash with affixes (fire-aura, vampiric, fast)"},
+      {"name": "champion", "behavior": "Mini-boss with name plate, drops better loot"},
+      {"name": "summoner", "behavior": "Spawns trash adds; priority kill"},
+      {"name": "boss", "behavior": "Phased, telegraphed AoE, drops guaranteed unique"}
+    ],
+    "collectibles": ["gold/currency", "health/mana globes (Diablo)", "weapons (white/blue/yellow/orange tier)", "armor pieces (helm/chest/boots/gloves)", "rings/amulets", "gems/runes for socketing", "scrolls/potions/flasks", "keys", "skill points / boons (Hades)", "passive tree points"],
+    "hud_elements": ["HP orb/bar", "mana/resource orb/bar", "ability hotbar (1-4 + Q/E icons with cooldown overlays)", "XP bar", "level number", "minimap", "buff/debuff icons", "boss HP bar", "item rarity color glow on ground", "potion belt"],
+    "iconic_mechanics": [
+      "Loot rarity tiers with color coding: white < blue (magic) < yellow (rare) < orange/gold (unique/legendary)",
+      "Cooldown-gated skills shown on hotbar with sweep overlay",
+      "Health/mana globes drop from kills and replenish on pickup",
+      "Ability synergy / build crafting: passives + gear + skill combos",
+      "Loot explosion on boss kill (Diablo loot pinata)",
+      "Roguelite room-by-room reward choice (Hades boons)"
+    ],
+    "sound_design": ["attack_swing", "attack_hit", "ability_cast", "skill_impact", "level_up", "loot_drop_white", "loot_drop_rare", "loot_drop_unique (signature 'PLINK')", "potion_drink", "hurt", "enemy_die", "boss_intro", "boss_phase_change", "boss_die", "town_ambient", "music_zone", "music_boss"],
+    "common_bugs_anti_patterns": [
+      "Cooldown timer keeps running while game paused",
+      "Loot drops created without depth-sort → items rendered under floor tiles",
+      "Click-to-move pathfinds through walls due to A* misconfig",
+      "Damage numbers stack at exact same pixel → unreadable",
+      "Crit chance rolled per damage instance instead of per attack → multi-hit weapons feel wrong",
+      "Mana cost deducted after cast succeeds, not before → can cast at 0 mana",
+      "Inventory grid that allows item overlap on drag-drop",
+      "Loot magnet/pickup radius applies through walls"
+    ],
+    "phaser_implementation": "physics.arcade for collision. Tilemap or hand-built room layouts. Player attack via add.zone + physics.add.overlap with enemy group. Skills in a SkillManager class with cooldown timers. Floating damage numbers via this.add.text + tween fadeOut. Loot items as Sprites with rarity-tinted glow (Graphics or particles). Inventory in a separate Scene launched via scene.launch (overlay)."
+  },
+
+  "action": {
+    "identity": "2D top-down combat-focused action game (Hotline Miami, Enter the Gungeon) where fast movement, aim, and one-or-few-shot lethality combine in tight rooms — distinguished from arpg by absence of loot/skill-tree progression and by emphasis on twitch reflex over build crafting.",
+    "controls": {
+      "keyboard": "WASD = move, Mouse = aim, Left-click = shoot/attack, Right-click = throw weapon / lock direction (Hotline) or active item (Gungeon), Space = dodge-roll (Gungeon) or pickup/melee (Hotline), R = reload, F = pickup, Q = swap weapon, Shift = sprint (optional), Esc = pause",
+      "mouse": "Required. Cursor = aim direction; player faces cursor at all times.",
+      "gamepad": "Left stick = move, Right stick = aim, RT = shoot, LT = active item, A = dodge-roll, B = reload, X = pickup, Y = swap, RB/LB = cycle weapon, Start = pause"
+    },
+    "player_abilities": ["8-dir move + independent mouse aim", "shoot (limited ammo, reload mechanic)", "melee (panic attack with no ammo)", "dodge-roll with i-frames (Gungeon) or quick-dash (Hotline)", "throw current weapon (Hotline)", "pickup weapon off ground/enemy", "swap between 2 carried weapons", "use consumable / active item"],
+    "win_conditions": ["Clear all enemies in current room/level", "Reach exit door (unlocks after room clear)", "Defeat floor boss → next floor", "Beat the run (roguelike final boss)"],
+    "lose_conditions": ["HP = 0 (often 1-2 hit kills for Hotline tone; Gungeon has hearts)", "Run ends, return to start (roguelike)", "Trapped/cornered by enemies"],
+    "scene_structure": ["Boot", "Preload", "Menu", "Hub (Gungeon Breach)", "Game (floor/level)", "Inventory/MapTable (optional)", "Pause", "GameOver", "RunSummary"],
+    "standard_enemy_types": [
+      {"name": "thug_melee", "behavior": "Rushes player with bat/knife (Hotline thug, Gungeon Bullet Kin melee variant)"},
+      {"name": "pistol_grunt", "behavior": "Stops, fires aimed shots, low HP (Bullet Kin / Hotline cop)"},
+      {"name": "shotgunner", "behavior": "Close-range high-damage spread; dangerous in tight rooms"},
+      {"name": "armored", "behavior": "Heavy HP, slow, fires heavier weapon"},
+      {"name": "fast_swarmer", "behavior": "Low HP but fast, comes in groups, flanks"},
+      {"name": "boss", "behavior": "Multi-phase room boss with bullet patterns + minion summons"}
+    ],
+    "collectibles": ["ammo pickups (per weapon type)", "health/heart pickups (Gungeon)", "currency (casings, money)", "active items (Gungeon)", "passive items (Gungeon)", "keys (chest unlocks)", "blanks (Gungeon panic-clear)", "weapon drops from killed enemies"],
+    "hud_elements": ["HP/hearts (or single life indicator for Hotline tone)", "current weapon icon + ammo (clip / reserve)", "active item icon + charge", "currency counters (cash, casings, keys)", "blanks remaining (Gungeon)", "minimap (room cleared status)", "score / combo (Hotline)", "boss HP bar"],
+    "iconic_mechanics": [
+      "Mouse-aim decoupled from move direction (twin-stick on KBM)",
+      "Pickup-and-throw weapons: every weapon is also a thrown projectile (Hotline)",
+      "Dodge-roll i-frames (Gungeon) — i-frames during the roll, vulnerable on recovery",
+      "Reload-as-skill: timing/managing reload mid-combat",
+      "Room lockdown: doors close until all enemies cleared, then unlock with thunk",
+      "Score-multiplier combo (Hotline): chain kills with no pause, A+ rank as goal"
+    ],
+    "sound_design": ["shoot (per weapon)", "reload_start", "reload_finish", "click_empty", "melee_hit", "weapon_pickup", "weapon_throw", "weapon_throw_hit", "hurt", "enemy_die", "blood_splat", "door_lock", "door_unlock", "room_clear", "boss_alert", "music_level", "music_boss"],
+    "common_bugs_anti_patterns": [
+      "Bullet inherits player velocity unintentionally → moving sideways while shooting curves bullets",
+      "Aim line drawn from sprite center but bullet spawns at gun-tip → bullet path doesn't match preview",
+      "Dodge-roll i-frames not actually disabled on hitbox, just ignored in damage func — overlap calls still queue",
+      "Room-clear check fires before last enemy's death animation completes → door opens with corpse mid-air",
+      "Reload triggered while throw animation playing → soft-lock state",
+      "Weapon swap mid-reload duplicates ammo",
+      "Picked-up weapon retains physics velocity → flies away after pickup",
+      "Combo timer pauses with menu, but combo bar doesn't render that way — visual desync"
+    ],
+    "phaser_implementation": "physics.arcade. Player Sprite with rotation = Phaser.Math.Angle.Between(player, mousePointer.worldX/Y). Bullets pooled in physics.add.group, spawned at gun-tip offset (rotated). Dodge-roll = state machine: set body.checkCollision.none = true for N ms, restore. Room as a Phaser.Geom.Rectangle; enemy count tracked; on 0, tween door sprite open and emit room_clear. Weapons as data + sprite; pickup via overlap + key press."
+  }
+}
