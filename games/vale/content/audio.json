@@ -481,7 +481,7 @@
   "screens": { "menu": "mus_menu", "draft": "mus_draft", "postgame": "mus_postgame" },
   "stings": { "victory": "m_victory_sting", "defeat": "m_defeat_sting", "placement": "m_placement_sting" },
   "mix": { "$comment": "orch1 AUD-O1: each mode's static sfx trim (dB) on all three sfx paths; src/audio/index.ts `leveller` rides the density on top (cut only, <= 8 dB, toward -19 LUFS sfx short-term). The 5v5 maps are denser by design: BRIDGE read -11.8 and FRAY -15.0 LUFS master at RIFT's trim",
-    "modes": { "rift": { "sfxTrimDb": 1.2 }, "bridge": { "sfxTrimDb": -3.8 }, "fray": { "sfxTrimDb": -2.5 } } },
+    "modes": { "rift": { "sfxTrimDb": 1.2 }, "bridge": { "sfxTrimDb": -4.5 }, "fray": { "sfxTrimDb": -3 } } },
   "music": {
     "mus_menu": {"file": "assets/audio/music/mus_menu.ogg", "bpm": 60, "loopStart": 0, "gain": 0.8, "layers": [
       {"id": "stem_b", "file": "assets/audio/music/mus_menu_stem_b.ogg"}, {"id": "stem_c", "file": "assets/audio/music/mus_menu_stem_c.ogg"}], "pieces": [
