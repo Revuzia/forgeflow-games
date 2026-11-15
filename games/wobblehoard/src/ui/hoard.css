@@ -39,6 +39,14 @@ body:not([data-calm="true"]) .hoard-btn[data-dot="true"] .hoard-btn-dot { animat
   .capsule-btn-label { display: none; }
   .hoard-btn-count { display: none; }
 }
+/* SHELL-4 (screenshot review, _shots/shell/hint_capsule_390x844.png): while a capsule waits, the Open button joins the bottom row and squeezed the
+   name tag to "Dol..." with its tier word running on under the Hoard button. On a phone the Hoard button then drops its "1 of 50" count (the
+   Hoard says it), and the tier word is cut off INSIDE the tag (an ellipsis) instead of sliding under the next button. */
+@media (max-width: 480px) {
+  .hud-bottom:has(.capsule-btn:not([hidden])) .hoard-btn-count { display: none; }
+}
+.nametag { overflow: hidden; }
+.nametag-tier { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
 /* ---------- the panel ---------- */
 .hoard {

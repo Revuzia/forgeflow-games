@@ -314,7 +314,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
       toys.setTool(t);
       document.body.dataset.tool = t;
       cutBar.show(t === 'cut');
-      if (t === 'cut') { piecesKey = `${g.cut.pieces},${g.cut.maxPieces},${g.cut.busy}`; cutBar.setPieces(g.cut.pieces, g.cut.maxPieces, g.cut.busy); }   // right now, not on the next sim step (a paused sim showed both buttons on)
+      if (t === 'cut') { piecesKey = `${g.cut.pieces},${g.cut.maxPieces},${g.cut.busy},${g.cut.activity}`; cutBar.setPieces(g.cut.pieces, g.cut.maxPieces, g.cut.busy, g.cut.activity); }   // right now, not on the next sim step (a paused sim showed both buttons on)
       if (t === 'snap') { placeTint(); snap.show(true); } else snap.show(false);
       if (t === 'hand' && (document.activeElement === document.body || !document.activeElement || root.contains(document.activeElement) && (document.activeElement as HTMLElement).closest('.cutbar, .snapbar'))) toys.button.focus({ preventScroll: true });
       announcer.say(TOOL_LINES[t]);
@@ -328,8 +328,8 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     g.on('identity', () => toys.setAvailable(toolsNow())),
     g.onStep(() => {
       if (g.tool !== 'cut') return;
-      const k = `${g.cut.pieces},${g.cut.maxPieces},${g.cut.busy}`;
-      if (k !== piecesKey) { piecesKey = k; cutBar.setPieces(g.cut.pieces, g.cut.maxPieces, g.cut.busy); }
+      const k = `${g.cut.pieces},${g.cut.maxPieces},${g.cut.busy},${g.cut.activity}`;
+      if (k !== piecesKey) { piecesKey = k; cutBar.setPieces(g.cut.pieces, g.cut.maxPieces, g.cut.busy, g.cut.activity); }
     }),
     () => { cutBar.destroy(); snap.destroy(); toys.destroy(); },
   );

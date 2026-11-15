@@ -6,8 +6,9 @@ import { h } from './dom.ts';
 export interface CutBar {
   readonly el: HTMLElement;
   show(on: boolean): void;
-  /** pieces of the squishy now (1 = whole) and the most it can make */
-  setPieces(n: number, max: number, busy: boolean): void;
+  /** pieces of the squishy now (1 = whole) and the most it can make; `activity`: a cut or a join playing (the line says so instead of the
+   *  idle advice: "That's as many pieces as it can make." stood over six pieces flowing back together) */
+  setPieces(n: number, max: number, busy: boolean, activity?: 'cut' | 'join' | null): void;
   /** the swipe in progress in page px, or null */
   setBlade(b: { x0: number; y0: number; x1: number; y1: number } | null): void;
   destroy(): void;
@@ -41,9 +42,10 @@ export function createCutBar(root: HTMLElement, o: { onSplit(): void; onReconnec
   return {
     el,
     show(on) { el.hidden = !on; if (!on) svg.style.display = 'none'; },
-    setPieces(n, max, busy) {
+    setPieces(n, max, busy, activity = null) {
       count.textContent = n > 1 ? `${n} pieces` : '';
-      text.textContent = n >= max ? "That's as many pieces as it can make." : n > 1 ? 'Swipe to cut again. With the Hand, drag a piece into another and hold to join them.' : 'Swipe across a squishy to cut it.';
+      text.textContent = busy && activity === 'cut' ? 'Cutting…' : busy && activity === 'join' ? 'Joining the pieces…'
+        : n >= max ? "That's as many pieces as it can make." : n > 1 ? 'Swipe to cut again. With the Hand, drag a piece into another and hold to join them.' : 'Swipe across a squishy to cut it.';
       const hadSplit = document.activeElement === split, hadJoin = document.activeElement === join;
       const noSplit = n >= max, noJoin = n <= 1;
       split.disabled = noSplit; join.disabled = noJoin;   // really off: nothing more to cut, nothing to join

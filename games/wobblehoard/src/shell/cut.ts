@@ -38,6 +38,11 @@ import type { BodyManager, ExtraBody } from './bodies.ts';
 export const MAX_PIECES: Readonly<Record<QualityTier, number>> = { low: 4, med: 6, high: 6 };
 /** No piece smaller than this share of the whole (CUT.md 2.4; the physics clamps setFrac there too). */
 export const PIECE_MIN = 1 / 8;
+/** measureCut is exact for the body's CURRENT shape, which is never quite symmetric: a cut through the middle of a quarter piece measured 0.498, so
+ *  its halves came to 0.1245 of the whole and Split in two was refused at 4 pieces ("as small as it gets") while its button was on (found in the
+ *  browser, SHELL-4 section cut-flash: 3 of 10 presses refused). A side within SIZE_TOL of the 1/8 limit is snapped onto it: the sizes stay within
+ *  2.4 % of the measure (CUT.md X02 allows 3 %), the shares still sum exactly, and no piece is ever under 1/8. */
+export const SIZE_TOL = 0.003;
 /** The neck (pinch) by material family (CUT.md 3): firm ones resist, plastic ones cut slow and sharp, the rest about 0.25 s. */
 export const NECK_S: Readonly<Record<string, number>> = { firmsilicone: 0.4, popdome: 0.4, putty: 0.34, mochidough: 0.34, slowrise: 0.3, marshmallow: 0.3, stickystretch: 0.3, slimegoo: 0.3 };
 export const NECK_DEFAULT_S = 0.25;
@@ -125,6 +130,8 @@ export interface Cutter {
   fracs(): number[];
   /** a neck or a reconnect is playing */
   readonly busy: boolean;
+  /** what plays: a cut's neck ('cut'), a join, Reconnect all or the glide home ('join'), or nothing (the Cut bar says it) */
+  readonly activity: 'cut' | 'join' | null;
   readonly maxPieces: number;
   /** a swipe over the canvas, CSS px from (x0, y0) to (x1, y1) */
   swipe(x0: number, y0: number, x1: number, y1: number): CutResult;
@@ -234,11 +241,34 @@ export function createCutter(d: CutDeps): Cutter {
     } catch (e) { d.report(e); }
   }
 
+  /** Split in two means HALVES by volume: the plane through the piece's centre, slid along its normal until measureCut reads one half (bisection;
+   *  the current shape is never quite symmetric). Without a bracket (a body whose measure does not change across the middle) the centre plane. */
+  function halvingPoint(p: Piece, c: V3, normal: V3): V3 {
+    const at = (s: number): V3 => ({ x: c.x + normal.x * s, y: c.y + normal.y * s, z: c.z + normal.z * s });
+    try {
+      // the 'a' side (dot(x - point, normal) >= 0) shrinks as the plane moves along +normal; a plane past the body's skin misses (null): the 'a'
+      // side is then all of it (behind) or nothing (ahead)
+      const m = (s: number): number => { const f = p.body.measureCut!({ point: at(s), normal }); return f === null ? (s > 0 ? 0 : 1) : f; };
+      // a piece that has just parted can be lopsided (it pushes off its cut face and wobbles): widen the bracket until it holds the half
+      let lo = 0, hi = 0, found = false;
+      for (const k of [0.3, 0.6, 1]) { lo = -k * radius(p); hi = k * radius(p); if (m(lo) >= 0.5 && m(hi) <= 0.5) { found = true; break; } }
+      if (!found) return at(0);
+      for (let i = 0; i < 12; i++) { const s = (lo + hi) / 2; if (m(s) > 0.5) lo = s; else hi = s; }
+      return at((lo + hi) / 2);
+    } catch (e) { d.report(e); return at(0); }
+  }
+
   function startCut(p: Piece, plane: CutPlane): CutResult {
     let fa: number | null = null;
     try { fa = p.body.measureCut!(plane); } catch (e) { d.report(e); fa = null; }
     if (fa === null || !(fa > 0) || !(fa < 1)) return 'miss';
-    const small = Math.min(fa, 1 - fa) * p.frac;
+    let small = Math.min(fa, 1 - fa) * p.frac;
+    if (small < PIECE_MIN - 1e-6 && small >= PIECE_MIN - SIZE_TOL && p.frac >= 2 * PIECE_MIN - 1e-9) {
+      // a hair under the limit (the measure of a not-quite-symmetric shape): the smaller side becomes exactly 1/8 of the whole (SIZE_TOL)
+      const lim = PIECE_MIN / p.frac;
+      fa = fa < 0.5 ? lim : 1 - lim;
+      small = PIECE_MIN;
+    }
     if (small < PIECE_MIN - 1e-6) { wobble(p.body); d.say(p.frac < 2 * PIECE_MIN + 1e-6 ? "That piece is as small as it gets." : 'Too small to cut there. Try nearer the middle.'); return 'small'; }
     if (list().length + 1 > max()) { wobble(p.body); d.say("That's as many pieces as it can make."); return 'limit'; }
     if (!pieces.length) {
@@ -436,6 +466,7 @@ export function createCutter(d: CutDeps): Cutter {
     get pieces() { return list().length; },
     fracs: () => list().map((p) => p.frac),
     get busy() { return anim !== null; },
+    get activity() { return anim === null ? null : anim.kind === 'neck' ? 'cut' : 'join'; },
     get maxPieces() { return max(); },
     swipe(x0, y0, x1, y1) {
       if (!supported()) return 'unsupported';
@@ -481,7 +512,7 @@ export function createCutter(d: CutDeps): Cutter {
       const up = unit({ x: w[4], y: w[5], z: w[6] }) ?? { x: 0, y: 1, z: 0 };
       const normal = view ? unit(cross(view, up)) : null;
       if (!normal) return 'miss';
-      return startCut(p, { point: { x: c.x, y: c.y, z: c.z }, normal });
+      return startCut(p, { point: halvingPoint(p, c, normal), normal });
     },
     reconnectAll(animated) {
       if (!pieces.length && !anim) return false;

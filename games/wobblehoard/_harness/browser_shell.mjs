@@ -1832,7 +1832,8 @@ async function main() {
         wh.pointerDown(sx / vw, sy / vh, 0); wh.step(1 / 60, 8);
         let carried = false;
         for (let i = 1; i <= 24; i++) { wh.pointerMove((sx + dir * i * 9) / vw, (sy - i * 9) / vh, 0); wh.step(1 / 60, 2); if (wh.shell.matInfo().bodies.some((x) => x.carried)) carried = true; }
-        for (let i = 1; i <= 6; i++) { wh.pointerMove((sx + dir * (216 + i * 30)) / vw, (sy - 216 + i * 10) / vh, 0); wh.step(1 / 60, 1); }
+        // (the carry is sampled through the flick too: the first run read carried false while audio.lift had fired, i.e. the lift began in the flick, which was not sampled)
+        for (let i = 1; i <= 6; i++) { wh.pointerMove((sx + dir * (216 + i * 30)) / vw, (sy - 216 + i * 10) / vh, 0); wh.step(1 / 60, 1); if (wh.shell.matInfo().bodies.some((x) => x.carried)) carried = true; }
         const grabbed = wh.shell.matInfo().bodies.findIndex((x) => x.fingers > 0 || x.carried);
         wh.pointerUp(0);
         const kinds = [];
@@ -2000,6 +2001,10 @@ async function main() {
       check('X01 real: a swipe cuts the whole squishy into 2 pieces whose shares sum to 1 (0.5 %), the smaller just over 1/8', p1.r === 'cut' && t1.pieces === 2 && Math.abs(t1.fracs[0] + t1.fracs[1] - 1) < 0.005 && Math.min(...t1.fracs) >= 0.125 - 1e-6, JSON.stringify({ r: p1.r, dx: p1.dx, fracs: t1.fracs.map((f) => +f.toFixed(3)) }));
       check('X03 real: the stage draws ONE face and one eyeless chunk (stage views); the face piece is the play body, the one holding the eyes\' anchor (nearest to where it was); the identity is unchanged',
         v1 && v1.faces === 1 && v1.chunks === 1 && nearest1 === 0 && (await page.evaluate(() => window.__WH__.shell.identity().itemId)) === id0.itemId, JSON.stringify({ v1, nearest: g1.map((q) => +q.near.toFixed(3)), id: id0.itemId }));
+      // the parting gap on the real stage (the node row 7g proves it on the real SoftBody): 0.45 s after the parting the chunk is held SETTLE_GAP (0.16 m) from its twin, so
+      // the parting strand has room to stretch (as found in session 2: 0.005 .. 0.03 m, a short thick band)
+      check(`parting gap (real physics + stage): 0.45 s after the parting the chunk's skin is ${g1[1] && g1[1].gap !== null ? g1[1].gap.toFixed(3) : 'n/a'} m from the face piece's (steered to 0.16 m +/- 0.04; it was 0.005 .. 0.03 m as found)`,
+        g1.length === 2 && g1[1].gap !== null && Math.abs(g1[1].gap - 0.16) < 0.04, JSON.stringify(g1.map((q) => ({ frac: +q.frac.toFixed(3), gap: q.gap === null ? null : +q.gap.toFixed(3) }))));
       const pk = [];
       for (let k = 2; k < 6; k++) { const p = await peel(); pk.push(p.r); }
       const t6 = await tools(page), v6 = await views(), g6 = await gaps(anchor0);
@@ -2093,8 +2098,6 @@ async function main() {
         return { touch0, join0, drag: +(36 * 2 / 60).toFixed(2) };
       }, [{ x: chunkA.x - dirA * 0.62 * chunkA.r, y: chunkA.y - 0.1 * chunkA.r }, { x: faceA.x + dirA * -0.15 * faceA.r, y: chunkA.y - 0.1 * chunkA.r }, vp.width, vp.height]);
       const startedAt = held.join0 >= 0 ? held : null;   // { touch0: first time the skins touched, join0: when the join began, both from the press; drag: the drag lasted this long }
-      // (SHELL-4 step 4) a still of the drag-to-reconnect bridge: 0.25 s into the join the giver is held at its small gap and the glowing neck is drawn
-      if (startedAt) { await stepSim(page, 0.25); await shot(page, 'drag_reconnect_bridge_desktop'); }
       await page.evaluate(() => window.__WH__.pointerUp(0));
       await cutIdle(page, 3); await stepSim(page, 1.5);
       const tA = await tools(page);
@@ -2120,6 +2123,9 @@ async function main() {
         wh.step(1 / 60, 3);
         return { tTouch, busyBefore: early, stillBefore, busyAfter: wh.shell.tools().busy, trace: trace.filter((_, i) => i % 3 === 0) };
       }, [{ x: chunkB.x - dirB * 0.62 * chunkB.r, y: chunkB.y - 0.1 * chunkB.r }, { x: faceB.x + dirB * -0.15 * faceB.r, y: chunkB.y - 0.1 * chunkB.r }, vp.width, vp.height]);
+      // (SHELL-4 step 4) a still of the drag-to-reconnect bridge: 0.25 s into the join the giver is held at its small gap and the glowing neck is drawn (the first try
+      // took it in the held-drag case above, where the join had begun DURING the 1.2 s drag and was over by then: a whole squishy, no bridge)
+      if (quick.busyAfter) { await stepSim(page, 0.25); await shot(page, 'drag_reconnect_bridge_desktop'); }
       await cutIdle(page, 3); await stepSim(page, 1.5);
       const tB = await tools(page);
       check('reconnect by LETTING GO while touching: no join while the finger is down for under 0.4 s; the let-go starts it, and the squishy is whole again', rB === 'cut' && !quick.busyBefore && !quick.stillBefore && quick.busyAfter && tB.pieces === 1 && tB.extras === 0, JSON.stringify({ cut: rB, quick, pieces: tB.pieces }));
@@ -2291,7 +2297,7 @@ async function main() {
             const p0 = wh.shell.tools().pieces;
             btn('split').click();
             await frame();
-            if (wh.shell.tools().busy || wh.shell.tools().pieces > p0) { cuts++; marks.push(`cut@${lumas.length}`); } else { refused++; marks.push(`refused@${lumas.length}`); }
+            if (wh.shell.tools().busy || wh.shell.tools().pieces > p0) { cuts++; marks.push(`cut@${lumas.length}`); } else { refused++; marks.push(`refused@${lumas.length}(${p0} pieces ${wh.shell.tools().fracs.map((f) => f.toFixed(3)).join('+')}: "${document.getElementById('wh-live')?.textContent ?? ''}")`); }
           }
           await idle(60);
           btn('join').click(); joins++; marks.push(`join@${lumas.length}`);
@@ -2304,7 +2310,7 @@ async function main() {
         await shot(page, `cut_flash_end${calm ? '_calm' : ''}`);
         check(`X09 real shell${calm ? ' (Calm effects)' : ''}: 10 rapid cuts and a Reconnect all through src/shell/cut.ts: <= 3 luminance transitions (0.04) in any 1 s, the screen light never on, never more than 6 pieces, whole again with one view and one face`,
           wN <= 3 && maxLight === 0 && r.cuts === 10 && r.maxPieces <= 6 && r.piecesAtEnd === 1 && r.frac === 1 && r.views && r.views.total === 1 && r.views.faces === 1,
-          `worst 1 s window ${wN} transitions (${w02} at 0.02), luma ${lo.toFixed(3)}..${hi.toFixed(3)} over ${r.lumas.length} frames, screen light ${maxLight}, cuts ${r.cuts} (refused ${r.refused}), joins ${r.joins}, pieces <= ${r.maxPieces}, end ${r.piecesAtEnd} piece(s) ${JSON.stringify(r.views)}`);
+          `worst 1 s window ${wN} transitions (${w02} at 0.02), luma ${lo.toFixed(3)}..${hi.toFixed(3)} over ${r.lumas.length} frames, screen light ${maxLight}, cuts ${r.cuts} (refused ${r.refused}), joins ${r.joins}, pieces <= ${r.maxPieces}, end ${r.piecesAtEnd} piece(s) ${JSON.stringify(r.views)}; ${r.marks.join(' ')}`);
         await context.close();
       }
     });
@@ -2352,12 +2358,13 @@ async function main() {
       const cand = (await hstate(page)).items.filter((it) => it.id !== idNow.itemId && it.species !== idNow.species);
       await bringOut(page, cand[0].species);
       await page.evaluate(() => window.__WH__.resume()); await stepSim(page, 2.5);
-      const m2 = await page.evaluate(() => window.__WH__.shell.matInfo());
       // X08 (step 3): the physics cost per frame of the shell's own bodies.step (contact included) with these 2 whole squishies; the 6-piece figure is taken at the end of
-      // the section in this same page (best of 5 batches of 30 frames each; physics only, no render, so the software GL does not weigh in)
+      // the section in this same page (best of 5 batches of 30 frames each; physics only, no render, so the software GL does not weigh in). Taken BEFORE the mat is read:
+      // matStepCost advances the physics 2.5 s, and the first try read the bodies' screen spots first, then pressed a stale spot (the bump row failed: nothing was carried)
       const costOf = () => page.evaluate(() => { const wh = window.__WH__; wh.pause(); const r = []; for (let k = 0; k < 5; k++) r.push(wh.shell.matStepCost(30)); return { bodies: r[0].bodies, contact: wh.shell.tools().extras, best: +Math.min(...r.map((q) => q.msPerFrame)).toFixed(3), all: r.map((q) => +q.msPerFrame.toFixed(3)) }; });
       const cost2 = await costOf();
-      await stepSim(page, 0.5);
+      await stepSim(page, 1);
+      const m2 = await page.evaluate(() => window.__WH__.shell.matInfo());
       const playB = m2.bodies[0], extraB = m2.bodies[1];
       const outward = Math.sign(extraB.x - playB.x) || 1;
       const bumpRun = await page.evaluate(([f, t, vw, vh, rr]) => {
@@ -2453,6 +2460,15 @@ async function main() {
           return { cap: cap ? { x: cap.x * innerWidth, y: cap.y * innerHeight, r: cap.rPx } : null, show: el.dataset.show, yielded: el.dataset.yield ?? null, dx: getComputedStyle(el).getPropertyValue('--hint-dx'), pill: { x: r.left, y: r.top, r: r.right, b: r.bottom }, clear: cap ? dist(r) - cap.rPx : null, naturalClear: cap ? dist(nat) - cap.rPx : null, iw: innerWidth, sw: document.documentElement.scrollWidth, font: parseFloat(getComputedStyle(el).fontSize), text: el.textContent };
         });
         const L = await layoutOf(page);
+        // (step 4) the bottom row with a capsule waiting: the Open button joins it; the name tag must keep the squishy's name whole and its tier word inside the tag
+        const tag = await page.evaluate(() => {
+          const r = (s) => { const e = document.querySelector(s); if (!e || e.hidden) return null; const b = e.getBoundingClientRect(); return b.width ? { x: b.left, y: b.top, r: b.right, b: b.bottom } : null; };
+          const nm = document.querySelector('.nametag-name'), tr = document.querySelector('.nametag-tier');
+          return { name: nm.textContent, nameClipped: nm.scrollWidth > nm.clientWidth + 1, tierClipped: tr.scrollWidth > tr.clientWidth + 1, tag: r('.nametag'), tier: r('.nametag-tier'), hoard: r('.hoard-btn'), toys: r('.toys-btn'), open: r('.capsule-btn'), count: getComputedStyle(document.querySelector('.hoard-btn-count')).display };
+        });
+        const tagOk = !tag.nameClipped && !tag.tierClipped && !!tag.tier && tag.tier.r <= tag.tag.r + 0.5 && !overlap(tag.tag, tag.hoard) && !overlap(tag.tag, tag.toys) && !overlap(tag.tag, tag.open);
+        if (vp.width > 380) check(`${vp.width} x ${vp.height}, a capsule waiting: the name tag keeps "${tag.name}" whole and its tier word inside the tag, clear of the Hoard, Toys and Open buttons`, tagOk, JSON.stringify(tag));
+        else check(`KNOWN (UI stage, not gated) ${vp.width} x ${vp.height}, a capsule waiting: the five-item bottom row leaves the name tag ${tag.tag ? Math.round(tag.tag.r - tag.tag.x) : 0} px (name clipped ${tag.nameClipped}, tier clipped ${tag.tierClipped})`, !!tag.tag, JSON.stringify(tag));
         await shot(page, `hint_capsule_${vp.width}x${vp.height}`);
         check(`${vp.width} x ${vp.height}: the hint pill keeps clear of the waiting capsule's tap circle (>= 4 px; without the slide it would be ${m.naturalClear === null ? 'n/a' : m.naturalClear.toFixed(0)} px), is shown (not waiting), inside the screen, readable, clear of the bottom row`,
           !!m.cap && m.show === 'true' && m.yielded !== 'true' && m.clear >= 4 && m.pill.x >= 0 && m.pill.r <= m.iw + 0.5 && m.sw <= m.iw && m.font >= 12 && !overlap(L.hint, L.name) && !overlap(L.hint, L.meter) && !overlap(L.hint, L.capsuleBtn), JSON.stringify(m));

@@ -1231,7 +1231,20 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   app.cut.splitInTwo(); settleIdle(); go(300);
   const cutAgain = app.cut.pieces;
   app.setGenome(speciesBaseGenome('twangle', 1));
-  check('X05 real physics: a switch of squishy while cut reconnects first (the new squishy is whole, nothing left on the mat, the Hoard unchanged)', cutAgain === 2 && app.cut.pieces === 1 && app.bodies.extras.length === 0 && app.hoard.items().length === items0, `pieces ${cutAgain} -> ${app.cut.pieces}`);
+  check('X05 real physics: a switch of squishy while cut reconnects first (the new squishy is whole, nothing left on the mat, the Hoard unchanged)', cutAgain === 2 && app.cut.pieces === 1 && app.bodies.extras.length === 0 && app.hoard.items().length=== items0, `pieces ${cutAgain} -> ${app.cut.pieces}`);
+  // (SHELL-4, found in the browser: section cut-flash) Split in two ALONE reaches the 6-piece limit at med quality: from four quarters the next press makes two exact
+  // eighths (the halving plane is balanced by measureCut, and a side a hair under 1/8 is snapped onto it: SIZE_TOL). It was refused ("That piece is as small as it
+  // gets.") whenever the real measure of a quarter read 0.498 through its centre, while the button stayed on.
+  {
+    go(800);
+    const rs: string[] = [];
+    for (let i = 0; i < 6 && app.cut.pieces < 6; i++) { rs.push(app.cut.splitInTwo()); settleIdle(); go(1000 / 60); }   // RAPID: the next press one frame after the parting, as a player taps it
+    const f6 = app.cut.fracs();
+    check('Split in two alone (the keyboard path) reaches the 6-piece limit on the real SoftBody: five presses, five cuts, shares sum to 1 (0.5 %), none under 1/8',
+      rs.length === 5 && rs.every((r) => r === 'cut') && app.cut.pieces === 6 && Math.abs(f6.reduce((s, f) => s + f, 0) - 1) < 0.005 && f6.every((f) => f >= 0.125 - 1e-9),
+      `${rs.join(',')}; ${f6.map((f) => f.toFixed(4)).join(' + ')}`);
+    app.cut.reconnectAll(false); go(300);
+  }
   app.dispose();
 }
 
