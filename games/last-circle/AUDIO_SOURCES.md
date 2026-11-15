@@ -341,7 +341,7 @@ games to reference its itch.io page - a request, not a licence term); Kenney.
 
 ## W10 R2B - recorded ambience, foley, reloads, water (2026-11-14)
 
-99 new files in `assets/audio/sfx/` (1,445,665 B), mono 48 kHz Ogg Vorbis, cut / mixed / levelled / encoded deterministically by
+99 new files in `assets/audio/sfx/` (1,473,220 B after fix 3), mono 48 kHz Ogg Vorbis, cut / mixed / levelled / encoded deterministically by
 `F:/lc_p23/w10/r2/R2B/build1/tools/build_w10_sfx.py` (dev-only, never shipped) from free packs already on F: - no spend. Two licences:
 
 - **Kenney CC0 1.0** (rpg-audio, impact-sounds, interface-sounds; `F:/games/forgeflow-games-assets/<pack>/License.txt`): public domain, no attribution needed (credited anyway).

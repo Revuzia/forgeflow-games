@@ -15,7 +15,7 @@ Web Audio context, every game event fired against the fully decoded pack) plus f
     python _harness/p23/sfxcheck.py --disk --plant lazy-drop        # a lazy take's first use is decoded but never played     - MUST FAIL lazy-play
     python _harness/p23/sfxcheck.py --disk --plant snow-birds       # Deepwood's snow stage keeps the birdsong bed up         - MUST FAIL snow-birds
     python _harness/p23/sfxcheck.py --disk --plant hiss-bed         # the Savanna bed is the pre-fix hiss take (53cd76820)    - MUST FAIL bed-hiss
-    python _harness/p23/sfxcheck.py --disk --plant seam-cut         # one ambience loop's seam is a hard cut (rotated a third) - MUST FAIL loop-seam
+    python _harness/p23/sfxcheck.py --disk --plant seam-gap         # one ambience loop ends in 30 ms of silence (non-gapless) - MUST FAIL loop-seam
     python _harness/p23/sfxcheck.py --disk --plant clip-hot         # one equip take +12 dB in the loudness table             - MUST FAIL no-clip
     python _harness/p23/sfxcheck.py --disk --plant xcat-hot         # every reload take +8 dB (its family stays level)        - MUST FAIL xcat
     python _harness/p23/sfxcheck.py --disk --plant siren-gone       # the storm warning loses the W9 siren                    - MUST FAIL storm-siren
@@ -48,9 +48,10 @@ Rows (PLAN.md Lane R2B acceptance bars):
   snow-birds      Deepwood in its snow stage: every layer still up has <= 5 % bird-tonal frames (2.5-9 kHz peak >= 25 dB over the band
                   median, within 20 dB of the frame peak), the birdsong bed is down (gain 0) and comes back out of the snow
   bed-hiss        no ambience layer is hiss: 2-12 kHz spectral flatness >= 0.9 (white noise ~1) WITH >= -12 dB of its energy above 5 kHz
-  loop-seam       every looping file (ambience layers + the underwater bed) is click-free at its seam: the wrap step |x[0]-x[-1]| <= the
-                  99.9th percentile of the file's own |dx|, and the 5 ms window across the wrap has <= the 99th percentile 4 kHz+ energy
-                  of 400 windows inside the file
+  loop-seam       every looping file (ambience layers + the underwater bed) wraps without a click or a gap: the wrap step |x[0]-x[-1]|
+                  <= the 99.9th percentile of the file's own |dx|; the 10 ms window across the wrap has <= the 99th percentile 4 kHz+
+                  energy of 400 windows inside the file; and the level jump between the last and the first 10 ms <= the 99.9th
+                  percentile of the file's own adjacent-10 ms level jumps
   no-clip         no added file is clipped (no run of >= 3 samples at |x| >= 0.98, no sample over 0 dBFS) and no play of one in the census
                   peaks over -1 dBFS in game (file peak + 20 log10 of the call gain x CLIP_DB trim, before the bus)
   xcat            loudness matched ACROSS the R2B own-action categories (foley, reload, movement, water, grenade, equip): each category's
@@ -120,7 +121,7 @@ PLANTS = {
     "lazy-drop": ("audio", [("      _lazy.played++;\n      playBuf(", "      _lazy.played++; return;\n      playBuf(")]),
     "snow-birds": ("audio", [("const AMB_SNOW = { forest: { amb_forest_bed: 0, amb_forest_wind: 0.62 } };", "const AMB_SNOW = { forest: { amb_forest_wind: 0.62 } };")]),
     "hiss-bed": ("measure", None),
-    "seam-cut": ("measure", None),
+    "seam-gap": ("measure", None),
     "clip-hot": ("audio", [("// LOUD-TABLE-END", 'CLIP_DB["equip_0"] = (CLIP_DB["equip_0"] || 0) + 12;\n// LOUD-TABLE-END')]),
     "xcat-hot": ("audio", [("// LOUD-TABLE-END", 'for (const k in SFX) if (k.indexOf("rl_") === 0) for (const f of SFX[k]) CLIP_DB[f] = (CLIP_DB[f] || 0) + 8;\n// LOUD-TABLE-END')]),
     "siren-gone": ("audio", [('on("stormWarning", () => { tone("storm_siren", () => siren(W, 2)); ', 'on("stormWarning", () => { ')]),
@@ -391,7 +392,7 @@ def main():
                     if a not in src:
                         raise C.HarnessError("plant %s: anchor not found in audio.js: %r" % (args.plant, a[:80]))
                     src = src.replace(a, b, 1)
-            else:
+            elif kind == "sources":
                 victim = new_files[0] if new_files else None
                 if not victim:
                     raise C.HarnessError("plant no-licence-row: no new sfx file to drop a row for")
@@ -607,8 +608,8 @@ def main():
                 open(tmp, "wb").write(g.stdout)
                 return ffdecode(tmp).astype(np.float64)
             x = ffdecode(os.path.join(sfxd, f + ".ogg")).astype(np.float64)
-            if args.plant == "seam-cut" and f == "amb_tropical_bed":
-                x = np.roll(x, len(x) // 3)
+            if args.plant == "seam-gap" and f == "amb_tropical_bed":
+                x = np.concatenate([x, np.zeros(1440)])           # 30 ms of digital silence at the loop end (a non-gapless export)
             return x
         layers_all = sorted(set(l[0] for th in ar for l in ar[th]) | ({uwn} if uwn else set()))
         LX = {f: layer_x(f) for f in layers_all if os.path.exists(os.path.join(sfxd, f + ".ogg"))}
@@ -656,9 +657,13 @@ def main():
             rng = np.random.RandomState(7); pos = rng.randint(w, len(x) - w, 400)
             inner = [hfe(x[i - w:i + w]) for i in pos]; p99 = float(np.percentile(inner, 99))
             se = hfe(np.concatenate([x[-w:], x[:w]]))
+            r10 = lambda seg: 10 * np.log10(max(float(np.mean(seg ** 2)), 1e-20))
+            nw = len(x) // 480
+            lv = np.array([r10(x[k * 480:(k + 1) * 480]) for k in range(nw)])
+            jp999 = float(np.percentile(np.abs(np.diff(lv)), 99.9)); jump = abs(r10(x[-480:]) - r10(x[:480]))
             seams[f] = {"step": round(step, 5), "dxP999": round(p999, 5), "seamHF_dB_vs_p99": round(10 * np.log10(max(se, 1e-30) / max(p99, 1e-30)), 2),
-                        "ok": step <= p999 and se <= p99}
-        v.check("loop-seam (every loop wraps click-free: step <= p99.9 |dx| and the wrap window's 4 kHz+ energy <= the file's p99)",
+                        "levelJumpDb": round(jump, 2), "jumpP999Db": round(jp999, 2), "ok": step <= p999 and se <= p99 and jump <= jp999}
+        v.check("loop-seam (every loop wraps without a click or gap: step <= p99.9 |dx|, wrap 4 kHz+ energy <= p99, level jump <= p99.9)",
                 bool(seams) and all(x["ok"] for x in seams.values()), seams, "every loop ok")
         # no-clip
         clips, filepk = [], {}
