@@ -145,7 +145,7 @@
 //               small item sustain (an on-kill or on-hit heal) is silent. Since orch1 AUD-O3 only YOUR fighter's heals
 //               and an ally's big heal (HEAL_ALLY_FRAC) within LISTEN_INNER_M of you chime, from one token bucket
 //               (HEAL_PER_MIN, burst HEAL_BURST) with one chime per HEAL_TEAM_MERGE_S; a heal of HEAL_BIG_FRAC or more
-//               bypasses both (a 5v5 chimed 25.75 a minute, a glassy chatter over the hits); a heal cast that voices the
+//               may borrow HEAL_BORROW token past empty (a 5v5 chimed 25.75 a minute, a glassy chatter over the hits); a heal cast that voices the
 //               heal chime (a flask's drink) is held to the same rules (yours always, an ally's near you from the bucket, a
 //               foe's never, its ticks merged into it); any other item active's cast plays its
 //               present.sfx (the flask's one drink). A fighter's death is heard team-relative: yours
@@ -411,10 +411,12 @@ const HEAL_CHAIN_S = 1.2;    // … and not when the same target was healed this
 // (orch1 AUD-O3) a 5v5 chimed 25.75 heals a minute (gate 6): a chime is for YOUR fighter's heals (HEAL_MIN_FRAC) and an
 // ally's big heal (HEAL_ALLY_FRAC of its max HP) within LISTEN_INNER_M of you; every chime draws on one token bucket
 // (HEAL_PER_MIN, burst HEAL_BURST), one team's heals within HEAL_TEAM_MERGE_S are one chime, and a heal of
-// HEAL_BIG_FRAC or more bypasses both (a burst heal is news)
+// HEAL_BIG_FRAC or more (and your own heal cast) may borrow HEAL_BORROW token past empty (a burst heal is news; one ulkro
+// seat in BRIDGE chimed 7.1 a minute while bypasses were free)
 const HEAL_ALLY_FRAC = 0.10;
 const HEAL_BIG_FRAC = 0.25;
-const HEAL_PER_MIN = 6;
+const HEAL_PER_MIN = 5.5;       // under the gate's 6 with the burst and one borrowed token over a 7-minute match
+const HEAL_BORROW = 1;          // a bypass (a big heal, your own heal cast) may run the bucket this far below empty, no further
 const HEAL_BURST = 2;
 const HEAL_TEAM_MERGE_S = 1.0;
 // the mixer (see `buses` / `ducking` in the header)
@@ -2616,6 +2618,13 @@ class Engine implements ValeAudioPort {
     return now - this.healTeamLast >= HEAL_TEAM_MERGE_S && this.healTokens >= 1;
   }
 
+  /** (AUD-O3) a bypassing heal chime (HEAL_BIG_FRAC, your own heal cast) may sound: the team merge window has passed and
+   *  the bucket is not yet HEAL_BORROW below empty */
+  private healBorrow(now: number): boolean {
+    this.healToken(now);
+    return now - this.healTeamLast >= HEAL_TEAM_MERGE_S && this.healTokens > -HEAL_BORROW;
+  }
+
   /** within AWARE_M of your living fighter (a cue with no place is not) */
   private nearMe(pos: { x: number; y: number } | null): boolean {
     const me = pos ? this.aliveAt() : null;
@@ -2772,9 +2781,9 @@ class Engine implements ValeAudioPort {
           const self = !!src && src.id === youId;
           const near0 = me ?? ear;
           const ally = !!src && !self && src.team === mine && !!near0 && Math.hypot(src.x - near0.x, src.y - near0.y) <= LISTEN_INNER_M;
-          if (src && (self || (ally && this.healToken(now))) && this.cue(pr.sfx, at(src), 1, 0, aw) === 'played') {
+          if (src && (self ? this.healBorrow(now) : ally && this.healToken(now)) && this.cue(pr.sfx, at(src), 1, 0, aw) === 'played') {
             this.healLast.set(src.id, now); this.healAny.set(src.id, now); this.healTeamLast = now;
-            this.healTokens = Math.max(-HEAL_BURST, this.healTokens - 1);
+            this.healTokens -= 1;
           }
         }
         else this.cue(own ?? pr?.sfx ?? this.ev(slot === 'ult' ? 'castUlt' : src?.kind === 'monster' ? 'castMonster' : 'cast'), at(src), 1, 0, aw);
@@ -2813,7 +2822,9 @@ class Engine implements ValeAudioPort {
         if (uk) { this.cue(uk.hit, at(dst), 1, 0, aw); break; }     // an epic unit: its own impact or none (see `epic`)
         const lib = (e.sfx as string | undefined) ?? pr?.hitSfx;
         // a delivery touching your own side is no impact (see `kits` in the header): only a hitSfx content wrote for it
-        if (src && dst && src.team === dst.team) { if (lib) this.cue(lib, at(dst), 1, 0, aw); break; }
+        // (AUD-O3) a mend whose sfx is the heal chime is voiced by its heal, under the heal budget (a Sukri / Ilsheta
+        // team chimed every ally touch: 7.1 a minute on a BRIDGE seat)
+        if (src && dst && src.team === dst.team) { if (lib && lib !== this.ev('heal')) this.cue(lib, at(dst), 1, 0, aw); break; }
         // (max2 SFX-4) the slot's own impact when content binds one, else the kit's shared ability impact
         const ab = this.ownAb.get(e.ability as string);
         const slotHit = ab && src?.kind === 'fighter' && src.def === ab.fighter ? this.kits.get(ab.fighter)?.[`${ab.slot}_hit` as KitSlot] : undefined;
@@ -2904,11 +2915,11 @@ class Engine implements ValeAudioPort {
         if (!self && (!near0 || Math.hypot(dst.x - near0.x, dst.y - near0.y) > LISTEN_INNER_M)) break;
         if (now - (this.healLast.get(dst.id) ?? -1e9) < HEAL_MERGE_S) break;
         const big = amt >= HEAL_BIG_FRAC * maxHp;
-        if (!big && !this.healToken(now)) break;
+        if (big ? !this.healBorrow(now) : !this.healToken(now)) break;
         if (this.cue(this.ev('heal'), at(dst), 0.7, 0, aw) === 'played') {
           this.healLast.set(dst.id, now);
           this.healTeamLast = now;
-          this.healTokens = Math.max(-HEAL_BURST, this.healTokens - 1);   // a bypass still pays: the long-run rate holds
+          this.healTokens -= 1;   // a bypass still pays: the long-run rate holds
         }
         break;
       }
