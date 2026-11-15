@@ -257,7 +257,7 @@ export const WEAPONS = {
       // the eye 3 cm further back, so the receiver top no longer fills the lower picture;
       // adsKickMult tames the ADS shot's drive back into the eye (hip kick unchanged)
       posHip: [0.115, -0.165, -0.47], rot: [3, 5, -7], posAds: [0, -0.1357, -0.18],
-      muzzle: [0, 0.088, -0.75], eject: [0.02, 0.083, -0.1], sightY: 0.1357, adsKickMult: 0.6,
+      muzzle: [0, 0.088, -0.75], eject: [0.02, 0.083, -0.1], sightY: 0.1357, adsKickMult: 0.4, adsRiseMult: 0.15,
       scale: 1,
       // hand animation (viewmodel.js): per-shell loading with the gun canted
       anim: { kind: "shell", tilt: [8, 0, -26], lift: [-0.03, 0.055, 0.0],
@@ -289,7 +289,10 @@ export const WEAPONS = {
       // low and small with the hands' wrist cuffs filling the bottom edge; ADS arms extended
       // rot (hip only, eased out at ADS): yawed to show the slide's left flank and the hands
       // three-quarter on, instead of two glove backs seen square from behind
-      posHip: [0.09, -0.085, -0.40], rot: [4, 12, -6], posAds: [0, -0.0843, -0.38],
+      // 2026-11-15 hold pass: a real two-handed grip at arm's length (a5 A5_POSE pike) — ADS eye
+      // 52 cm behind the grip (was 38: the gloves filled the lower half and the slide read as a
+      // toy), hip pushed out with it
+      posHip: [0.095, -0.10, -0.48], rot: [4, 12, -6], posAds: [0, -0.0843, -0.52],
       muzzle: [0, 0.047, -0.186], eject: [0.014, 0.066, -0.04], sightY: 0.0843,
       scale: 1,
       anim: { kind: "gripmag", tilt: [26, 10, -38], lift: [-0.045, 0.10, 0.02], magDrop: 0.09 },

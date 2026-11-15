@@ -1,0 +1,15 @@
+[ctf] side lock DEFUSED for team 0 — the spawn director locked a cluster the side rule forbids (W1 seam: V7 unreachable for the initial wave)
+lanternwalk n=8  caps/match 1.00 (caps by team 3:5, team-0 match share 38%)  carried 40% both 15% (carrier holding near stand 94% of carried time)
+            carrier deaths 57 (7.1/match) by quarter home [8,15,19,15]  could score 13/57  killer order {"carry":11,"lane":32,"attack":9,"intercept":4,"escort":1}  killer->carrier's stand median 25 m, killer->carrier 10 m  own mates within 15 m 0.53
+            top killer reasons lane/LANE_QUOTA 32, carry/HOLD_NEAR_STAND 11, attack/ATTACK_FLAG 5, attack/CUTOFF_INFEASIBLE 4, intercept/CUTOFF_FEASIBLE 2, intercept/HUNT 2
+            drops 7.1/match: re-grabbed by the carrier's side 0.6, returned by touch 6.1  escorts: samples 1002, median distance to carrier 19.9 m, ahead of carrier 28%
+switchyard  n=8  caps/match 1.13 (caps by team 2:7, team-0 match share 31%)  carried 50% both 19% (carrier holding near stand 84% of carried time)
+            carrier deaths 63 (7.9/match) by quarter home [6,14,18,25]  could score 27/63  killer order {"lane":18,"intercept":15,"attack":18,"carry":9,"return":1,"escort":2}  killer->carrier's stand median 24 m, killer->carrier 8 m  own mates within 15 m 0.68
+            top killer reasons lane/LANE_QUOTA 18, attack/ATTACK_FLAG 10, carry/HOLD_NEAR_STAND 9, attack/CUTOFF_INFEASIBLE 8, intercept/CUTOFF_FEASIBLE 8, intercept/HUNT 7
+            drops 7.9/match: re-grabbed by the carrier's side 1.4, returned by touch 6.4  escorts: samples 1376, median distance to carrier 16.8 m, ahead of carrier 27%
+saltmarket  n=8  caps/match 0.25 (caps by team 0:2, team-0 match share 38%)  carried 42% both 20% (carrier holding near stand 113% of carried time)
+            carrier deaths 51 (6.4/match) by quarter home [8,18,15,10]  could score 11/51  killer order {"lane":21,"carry":14,"attack":7,"intercept":9}  killer->carrier's stand median 39 m, killer->carrier 7 m  own mates within 15 m 0.51
+            top killer reasons lane/LANE_QUOTA 21, carry/HOLD_NEAR_STAND 14, intercept/CUTOFF_FEASIBLE 7, attack/ATTACK_FLAG 4, attack/CUTOFF_INFEASIBLE 3, intercept/HUNT 2
+            drops 6.4/match: re-grabbed by the carrier's side 0.8, returned by touch 5.1  escorts: samples 827, median distance to carrier 17.8 m, ahead of carrier 20%
+
+ctf_probe  secs=180 seeds=8  AI avg 0.252 ms/tick  OBJ 0.033 ms/tick  wall 141 s

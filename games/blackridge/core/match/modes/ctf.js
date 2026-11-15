@@ -45,6 +45,7 @@
 //     may not write. Human carrier grenades ARE suppressed (flags.js).
 
 import { makeFlags, FLAG_DEFAULTS } from "../flags.js";
+import { ctfSides } from "../spawns.js";
 
 const DT = 1 / 60;
 
@@ -166,6 +167,21 @@ export function createMode(ctx) {
       st.preHomes.push([f.home[0], f.home[1] || 0, f.home[2]]);
     }
   }
+  // 2026-11 CTF fairness: authored side sets that name none of THIS arena's
+  // clusters (content.modes.ctf.sideClusters is lanternwalk's) are replaced
+  // by the geometric side rule the spawn director uses (spawns.js ctfSides),
+  // instead of the lock standing down after two fallback spawns.
+  function fixSideSets(arena) {
+    if (!arena || !arena.spawnPoints) return;
+    const have = new Set(arena.spawnPoints.map((p) => p.cluster));
+    const named = (set) => { if (!set) return false; for (const c of set) if (have.has(c)) return true; return false; };
+    if (named(st.homeSet[0]) && named(st.homeSet[1])) return;
+    const g = ctfSides(arena);
+    if (!g) return;
+    st.homeSet[0] = new Set(g.sets[0]);
+    st.homeSet[1] = new Set(g.sets[1]);
+  }
+  fixSideSets(ctx && ctx.arena);
   for (let i = 0; i < 10; i++) {
     st.duties.push({ role: null, target: [0, 0, 0], urgency: 0, targetHint: null });
     st.dutyAssignedT[i] = -1e9;
@@ -548,6 +564,7 @@ export function createMode(ctx) {
       for (let team = 0; team < 2; team++) {
         st.homeSet[team] = sc && sc[team] ? new Set(sc[team]) : null;
       }
+      fixSideSets(m.arena);
       st.clusterOfPoint.clear();
       for (const p of (m.arena ? m.arena.spawnPoints : [])) {
         st.clusterOfPoint.set(p.id, p.cluster);

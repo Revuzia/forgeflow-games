@@ -97,6 +97,7 @@ export const SCHEMA = {
   hitmarker:  { kind: "enum", options: ONOFF, default: "on" },
   hudScale:   { kind: "range", min: 0.75, max: 1.25, step: 0.05, default: 1 },
   hudOpacity: { kind: "range", min: 0.3, max: 1, step: 0.05, default: 1 },
+  blood:      { kind: "enum", options: ONOFF, default: "on" },   // [integration v153] fx.js bloodEnabled()
   scoreFeed:  { kind: "enum", options: ONOFF, default: "on" },   // +score popups and XP feed
   minimap:    { kind: "enum", options: ONOFF, default: "on" },   // read by the minimap lane
   minimapSize:{ kind: "enum", options: ["small", "medium", "large"], default: "medium" },

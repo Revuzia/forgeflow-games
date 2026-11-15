@@ -1,0 +1,13 @@
+lanternwalk n=16  caps/match 0.63 (caps by team 0:10, team-0 match share 22%)  carried 6% both 0% (carrier holding near stand 12% of carried time)
+            carrier deaths 17 (1.1/match) by quarter home [12,3,2,0]  could score 15/17  killer order {"lane":8,"attack":9}  killer->carrier's stand median 55 m, killer->carrier 9 m  own mates within 15 m 0.29
+            top killer reasons lane/LANE_QUOTA 8, attack/ATTACK_FLAG 5, attack/CUTOFF_INFEASIBLE 4
+            drops 1.1/match: re-grabbed by the carrier's side 0.1, returned by touch 0.9  escorts: samples 387, median distance to carrier 14.8 m, ahead of carrier 52%
+switchyard  n=16  caps/match 1.31 (caps by team 1:20, team-0 match share 16%)  carried 16% both 1% (carrier holding near stand 10% of carried time)
+            carrier deaths 44 (2.8/match) by quarter home [30,8,5,1]  could score 34/44  killer order {"attack":24,"carry":1,"lane":16,"defend":3}  killer->carrier's stand median 57 m, killer->carrier 9 m  own mates within 15 m 0.30
+            top killer reasons attack/ATTACK_FLAG 17, lane/LANE_QUOTA 16, attack/CUTOFF_INFEASIBLE 7, defend/DEFEND_STAND 3, carry/HOLD_NEAR_STAND 1
+            drops 2.8/match: re-grabbed by the carrier's side 0.3, returned by touch 2.4  escorts: samples 943, median distance to carrier 12.3 m, ahead of carrier 44%
+saltmarket  n=16  caps/match 1.13 (caps by team 1:17, team-0 match share 19%)  carried 21% both 1% (carrier holding near stand 8% of carried time)
+            carrier deaths 31 (1.9/match) by quarter home [11,17,1,2]  could score 26/31  killer order {"lane":19,"attack":9,"escort":2,"carry":1}  killer->carrier's stand median 58 m, killer->carrier 9 m  own mates within 15 m 0.35
+            top killer reasons lane/LANE_QUOTA 19, attack/ATTACK_FLAG 5, attack/CUTOFF_INFEASIBLE 4, escort/ESCORT_STATION 2, carry/HOLD_NEAR_STAND 1
+            drops 1.9/match: re-grabbed by the carrier's side 0.2, returned by touch 1.8  escorts: samples 1638, median distance to carrier 20.1 m, ahead of carrier 47%
+ctf_probe  secs=180 seeds=16  AI avg 0.368 ms/tick  OBJ 0.044 ms/tick  wall 149 s

@@ -32,6 +32,8 @@ import { makeCasings } from "./casings.js";
 import { makeExplosions } from "./explosions.js";
 import { makeGrounding } from "./grounding.js";
 import { makeSurfaceIndex, CLS_GLASS, CLS_METAL, CLS_WOOD, CLS_DIRT } from "./surfaceindex.js";
+import { playerMuzzle, botMuzzle } from "./muzzle_socket.js";
+const _tStart = [0, 0, 0];
 
 const FX_SEED = 0xa7f0c5; // reseeded every mission:start → deterministic batteries
 const MISS_TRACER_DIST = 130; // terminal-miss streak length cap (m)
@@ -46,6 +48,14 @@ const IMPACT_BY_CLASS = {
   ar:      { power: 1.00, size: 0.19 },
   dmr:     { power: 1.50, size: 0.27 },
   shotgun: { power: 0.50, size: 0.15 },
+  // [feel v153] the HX-60 Bastion fell through to the generic rifle row: a
+  // full-power belt round hits harder than the M-72's and leaves a wider hole
+  lmg:     { power: 1.20, size: 0.21 },
+};
+// Collider box kinds that read as a different MATERIAL than their sim surface.
+const KIND_RETYPE = {
+  sandbags: "fabric",
+  car: "vehicle", van: "vehicle", truck: "vehicle",
 };
 const IMPACT_DEFAULT = { power: 1.0, size: 0.19 };
 
@@ -214,13 +224,23 @@ export function createFx(ctx) {
       // distance.
       if (hit.entity === "P") return;
       const key = hit.entity == null ? "?" : hit.entity;
-      // The sim emits `hurt` BEFORE this round's `shot`, so onHurt has usually
-      // already taken fleshGate and drawn the puff. The exit spray + spatter are
-      // directional — only this event knows the bullet — so they take their own
-      // gate and still run when the puff gate is closed (measured 2026-10-14:
-      // with one shared gate the spatter never fired at all).
-      if (d.dir && bloodGate(key)) bloodBehind(hit.pos, d.dir, profFor(d));
+      // The sim emits `hurt` BEFORE this round's `shot`. [feel v153] onHurt no
+      // longer draws its puff at the victim's CHEST straight away (a headshot
+      // bled from the sternum): it queues one, and this event — which knows the
+      // exact point, the part and the bullet — claims it here. Anything left in
+      // the queue at the end of the dispatch (explosion / env damage) is flushed
+      // as the old chest puff by update().
+      pendingHurt.delete(key);
+      const head = hit.part === "head";
+      const bloodOn = bloodEnabled();
+      // The exit spray + spatter are directional, so they take their own gate
+      // (one per shotgun volley) and run even when the puff gate is closed.
+      if (bloodOn && d.dir && bloodGate(key)) bloodBehind(hit.pos, d.dir, head ? HEAD_PROF : profFor(d));
       if (!fleshGate(key)) return;
+      impacts.spawn(hit.pos, d.dir ? [-d.dir[0], -d.dir[1], -d.dir[2]] : hit.normal,
+        !bloodOn ? "fleshMuted" : head ? "fleshHead" : "flesh", d.dir, profFor(d));
+      counters.impacts++;
+      return;
     }
     // ---- snap the sim's collider hit onto the VISIBLE surface (surfaceindex.js)
     let pos = hit.pos, normal = hit.normal, surface = surf;
@@ -266,9 +286,63 @@ export function createFx(ctx) {
     const s = ctx.sim && ctx.sim();
     const wt = s && s.weapons ? s.weapons[d.weaponId] : null;
     const prof = (wt && IMPACT_BY_CLASS[wt.class]) || IMPACT_DEFAULT;
-    impacts.spawn(pos, normal, surface, d.dir, prof);
+    // [feel v153] material from the collider KIND where the sim surface is too
+    // coarse: sandbags are "dirt" boxes (-> fabric), cars/vans/trucks "metal"
+    // boxes (-> vehicle). The hit payload carries no box, so look it up with
+    // a 0.5 m probe straddling the hit point (one ray, only for these two).
+    let box = null;
+    if ((surface === "dirt" || surface === "metal") && d.dir && s && s.world && s.world.raycast) {
+      const hp = hit.pos;
+      _probe[0] = hp[0] - d.dir[0] * 0.25; _probe[1] = hp[1] - d.dir[1] * 0.25; _probe[2] = hp[2] - d.dir[2] * 0.25;
+      const h2 = s.world.raycast(_probe, d.dir, 0.5);
+      box = h2 && h2.box;
+      const kind = box && (box.kind || "");
+      if (kind && KIND_RETYPE[kind]) surface = KIND_RETYPE[kind];
+      else if (box && box.id && /(^|_)(car|van|truck)(_|~|\d)/.test(box.id)) surface = "vehicle";
+      if (surface === "fabric" || surface === "vehicle") snapCounters[surface] = (snapCounters[surface] || 0) + 1;
+    }
+    // wet streets: a round into the ground (no box, upward normal) splashes —
+    // a full crown inside an authored puddle, a small droplet crown elsewhere
+    let opts = prof;
+    if (normal && normal[1] > 0.7 && !box && (surface === "concrete" || surface === "dirt")) {
+      if (inPuddle(pos)) { surface = "water"; snapCounters.puddle = (snapCounters.puddle || 0) + 1; }
+      else if (wetStreets()) { _wetProf.power = prof.power; _wetProf.size = prof.size; opts = _wetProf; }
+    }
+    impacts.spawn(pos, normal, surface, d.dir, opts);
     counters.impacts++;
   }
+  const _probe = [0, 0, 0];
+  function replayActive() {
+    const kc = ctx.killcam || (typeof window !== "undefined" && window.__FPS__ ? window.__FPS__.killcam : null);
+    return !!(kc && kc.isReplaying && kc.isReplaying());
+  }
+  const _wetProf = { power: 1, size: 0.19, wet: true };
+  const HEAD_PROF = { power: 1.6, size: 0.2 };
+  function puddles() {
+    const t = ctx.layout && ctx.layout.terrain;
+    return (t && t.heroPuddles) || [];
+  }
+  function inPuddle(p) {
+    const P = puddles();
+    for (let i = 0; i < P.length; i++) {
+      const h = P[i];
+      if (!h || !h.pos) continue;
+      const dx = p[0] - h.pos[0], dz = p[2] - h.pos[1];
+      if (dx * dx + dz * dz < (h.r || 1) * (h.r || 1)) return true;
+    }
+    return false;
+  }
+  // every BLACKRIDGE map is a rain-soaked night street; a map without weather
+  // (or a future dry one with no puddles authored) gets no crown
+  function wetStreets() { return !!ctx.weather && puddles().length > 0; }
+  // Blood respects a `blood` setting ("off" -> neutral hit puffs, no spray, no
+  // spatter decals) when one exists; settings.js has none today (hook filed).
+  function bloodEnabled() {
+    const S = ctx.settings;
+    return !(S && (S.blood === "off" || S.blood === false));
+  }
+  // hurt events wait for their shot event (see handleHit); victim -> sim time
+  const pendingHurt = new Map();
 
   function profFor(d) {
     const s = ctx.sim && ctx.sim();
@@ -336,7 +410,11 @@ export function createFx(ctx) {
     if (!d) return;
     counters.shots++;
     if (d.pen) { if (d.hit) handleHit(d); return; }        // both-face pen fx
-    if (d.impactOnly) { if (d.hit) handleHit(d); return; } // late flight resolve
+    if (d.impactOnly) {                                    // late flight resolve
+      if (d.hit && d.hit.pos && d.origin) tracers.clip(d.origin, d.hit.pos);
+      if (d.hit) handleHit(d);
+      return;
+    }
     // fire-time event: muzzle + tracer + casing (+ inline hit)
     // A SHOTGUN blast arrives as one shot event per pellet (same tick, same origin):
     // the flash, the shell and the report belong to the TRIGGER PULL (pellet 0); only
@@ -354,7 +432,9 @@ export function createFx(ctx) {
     }
     if ((d.tracer || d.firstShot) && (first || d.pellet < 4)) {
       const dist = d.hit ? dist3(d.origin, d.hit.pos) : MISS_TRACER_DIST;
-      tracers.spawn(d.origin, d.dir, dist);
+      // [feel v153] the streak leaves the visible MUZZLE (muzzle_socket.js)
+      const ok = d.shooter === "P" ? playerMuzzle(ctx.camera, _tStart) : botMuzzle(d.shooter, _tStart);
+      tracers.spawn(d.origin, d.dir, dist, ok ? _tStart : null);
     }
     const cam = ctx.camera.position;
     if (first && Math.hypot(d.origin[0] - cam.x, d.origin[2] - cam.z) < CASING_MAX_CAM_DIST) {
@@ -365,11 +445,20 @@ export function createFx(ctx) {
 
   function onHurt(d) {
     if (!d || d.victim === "P") return;
-    if (!fleshGate(d.victim)) return; // the shot event already puffed this hit
-    const p = botPos(d.victim);
-    if (!p) return;
-    _puffPos[0] = p[0]; _puffPos[1] = p[1] + 1.05; _puffPos[2] = p[2];
-    impacts.puff(_puffPos, "flesh");
+    pendingHurt.set(d.victim, simNow()); // claimed by this round's shot event, else flushed
+  }
+  // Called once per frame after the bridge dispatch: hurts no shot claimed
+  // (explosions, environment) get the generic chest puff, as before.
+  function flushHurt() {
+    if (pendingHurt.size === 0) return;
+    for (const [victim] of pendingHurt) {
+      if (!fleshGate(victim)) continue;
+      const p = botPos(victim);
+      if (!p) continue;
+      _puffPos[0] = p[0]; _puffPos[1] = p[1] + 1.05; _puffPos[2] = p[2];
+      impacts.puff(_puffPos, bloodEnabled() ? "flesh" : "dustSmall");
+    }
+    pendingHurt.clear();
   }
 
   function onDeath(d) {
@@ -418,7 +507,7 @@ export function createFx(ctx) {
     if (d.phase === "hit" && d.pos && d.victim !== "P") {   // never blood at the camera (see handleHit)
       const key = d.victim == null ? "?" : d.victim;
       if (fleshGate(key)) impacts.puff(d.pos, "flesh");
-      if (d.dir && bloodGate(key)) bloodBehind(d.pos, d.dir, MELEE_PROF);
+      if (d.dir && bloodEnabled() && bloodGate(key)) bloodBehind(d.pos, d.dir, MELEE_PROF);
     } else if (d.phase === "miss" && d.surface && d.pos) {
       impacts.puff(d.pos, "dustSmall");
     }
@@ -433,6 +522,7 @@ export function createFx(ctx) {
     explosions.clear();
     lastFlesh.clear();
     lastBlood.clear();
+    pendingHurt.clear();
     // A fresh sim restarts state.time at 0; re-latch so the first simDt() after
     // a mission start is 0 rather than a large negative (which would clamp to
     // 0 anyway, but latching keeps the intent explicit).
@@ -458,9 +548,14 @@ export function createFx(ctx) {
       // epoch check: attach runs right after boot's epoch++/bridge.clear();
       // any handler still registered for an older sim instance no-ops.
       const epoch0 = ctx.sim && ctx.sim() ? ctx.sim().epoch : -1;
-      const guard = (fn) => (d, t) => {
+      const guard = (fn, always) => (d, t) => {
         const s = ctx.sim && ctx.sim();
         if (!s || s.epoch !== epoch0) return;
+        // [feel v153] while a kill-cam replay owns the screen, the LIVE sim keeps
+        // stepping (measured: the final replay on switchyard carried 21-24 live
+        // tracers — the whole pool — on top of the replayed fight). Only the
+        // replay's own re-emitted events (d.replay) may draw.
+        if (!always && !(d && d.replay) && replayActive()) return;
         fn(d, t);
       };
       bridge.register("mission:start", guard(() => {
@@ -471,7 +566,7 @@ export function createFx(ctx) {
           console.warn("[fx] surface index bake failed — decals fall back to collider points:", e && e.message);
           surfaceIndex.clear();
         }
-      }));
+      }, true));
       bridge.register("shot", guard(onShot));
       bridge.register("hurt", guard(onHurt));
       bridge.register("death", guard(onDeath));
@@ -482,8 +577,20 @@ export function createFx(ctx) {
     },
 
     update(dtWall) {
-      const dt = simDt(dtWall);   // sim time, never wall time (see the header)
+      let dt = simDt(dtWall);   // sim time, never wall time (see the header)
+      // [feel v153] KILL CAM: while a replay owns the screen the effects it
+      // re-emits belong to REPLAY time. They used to age on the live clock, so
+      // in the 0.3x slow-motion stretch smoke, sparks and tracers ran ~3x ahead
+      // of the bodies. killcam.fxDt() is the replay's own advance this frame
+      // (rate-scaled, 0 while held or paused). simDt above still runs so the
+      // live latch never jumps when the replay hands the screen back.
+      const kc = ctx.killcam || (typeof window !== "undefined" && window.__FPS__ ? window.__FPS__.killcam : null);
+      if (kc && kc.fxDt && kc.isReplaying && kc.isReplaying()) {
+        const r = kc.fxDt();
+        if (r >= 0) dt = Math.min(r, 0.25);
+      }
       clock += dt;
+      flushHurt();
       healParents(); // reclaim pools a prewarm pass reparented (see above)
       // One-time grounding bake, the first frame the level exists in the scene
       // (props are built before boot's rAF loop starts, so this is frame 1).
@@ -495,7 +602,7 @@ export function createFx(ctx) {
       // perspective point-size factor: drawingBufferHeight / (2 tan(vfov/2))
       const h = ctx.renderer.domElement.height || 1080;
       const f = h / (2 * Math.tan((ctx.camera.fov * Math.PI) / 360));
-      pools.setProj(f);
+      pools.setProj(f, ctx.renderer.domElement.width, h);
       pools.update(dt);
       muzzle.update(dt);
       tracers.update(dt);

@@ -47,7 +47,21 @@ C = {
     "grey": lin("#46494c"), "green": lin("#323a2a"), "coyote": lin("#5a4a36"),
     "khaki": lin("#6a6048"), "strap": lin("#26271f"), "lens": lin("#0c0e10"),
     "knit": lin("#38342f"), "sand": lin("#7a6c52"),
+    # (2026-11-15 hold pass) two value extremes for the range read: a pale sand and a
+    # true black, so each look carries ONE big light or dark mass that survives 30 m
+    "bone": lin("#8c7d5e"), "ink": lin("#121314"),
 }
+
+# (2026-11-15 hold pass) OPERATORS AT RANGE. At 10 m the six looks read apart; at 30 m an
+# operator is ~45 px tall and only the head shape, the back mass and one value block
+# survive. Each look now owns one distinct SILHOUETTE feature plus one value contrast:
+#   L0 LINE   tall flip-up NV block over the brow (a "horn" on the helmet)   + tan shell
+#   L1 RECON  big pale ruck rising above the shoulders                       + bone pack
+#   L2 BREACH bare round head, very wide black shoulder plates               + ink plates
+#   L3 SIGNAL long whip antenna well over the head, boxy radio               + ink radio
+#   L4 SCOUT  slouched watch cap + a slung satchel bulging off the left hip    + bone satchel
+#   L5 SHARP  wide oval brim (wider at the sides/back than the front, so it
+#             never reaches a cheek-welded optic) + a long bedroll across the shoulders
 
 # ---------------------------------------------------------------- scene
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -257,6 +271,11 @@ def look0():
     fz = c.z + 0.035
     part(0, "Head", box((0, c.y - r.y - 0.004, fz), (0.045, 0.018, 0.035), (0.35, 0, 0), 0.004), C["black"])   # shroud
     part(0, "Head", box((0, c.y - r.y - 0.026, fz - 0.012), (0.03, 0.03, 0.02), (0.2, 0, 0), 0.004), C["black"])  # mount arm
+    # flipped-up night-vision block standing on the mount: the helmet's range silhouette
+    part(0, "Head", box((0, c.y - r.y - 0.030, fz + 0.050), (0.072, 0.040, 0.070), (0.55, 0, 0), 0.008), C["ink"])
+    for s_ in (-1, 1):
+        part(0, "Head", tube((s_ * 0.018, c.y - r.y - 0.040, fz + 0.080), (s_ * 0.018, c.y - r.y - 0.040, fz + 0.118),
+                             0.016, 0.015, 14), C["ink"], 0.3)
     for s in (-1, 1):   # side rails
         part(0, "Head", box((s * (r.x + 0.002), c.y - 0.01, c.z + 0.008), (0.012, 0.095, 0.02), (0, 0, 0), 0.003), C["black"])
     part(0, "Head", box((0, c.y + r.y + 0.004, c.z + 0.0), (0.075, 0.03, 0.05), (-0.35, 0, 0), 0.008), C["olive"])  # counterweight
@@ -290,9 +309,10 @@ def look1():
     part(1, "Head", bmb, C["coyote"], 0.3, solid=0.006)
     part(1, "Head", ring(Vector((c.x, c.y, c.z + 0.012)), (0, 0, 1), r.x - 0.004, 0.016, 0.006), ACCENT)  # hat band
     # assault pack on the back plate
-    part(1, "Spine2", box((0, 0.335, 1.27), (0.27, 0.12, 0.34), (0.05, 0, 0), 0.022), C["coyote"])
-    part(1, "Spine2", box((0, 0.405, 1.22), (0.20, 0.035, 0.16), (0.05, 0, 0), 0.012), C["coyote"], 0.3)
-    part(1, "Spine2", box((0, 0.33, 1.455), (0.25, 0.10, 0.04), (0.05, 0, 0), 0.01), C["strap"])
+    part(1, "Spine2", box((0, 0.355, 1.33), (0.31, 0.16, 0.46), (0.05, 0, 0), 0.03), C["bone"])          # ruck, over the shoulders
+    part(1, "Spine2", box((0, 0.445, 1.24), (0.22, 0.04, 0.20), (0.05, 0, 0), 0.014), C["coyote"], 0.3)
+    part(1, "Spine2", box((0, 0.345, 1.575), (0.28, 0.13, 0.05), (0.05, 0, 0), 0.012), C["strap"])     # lid strap
+    part(1, "Spine2", tube((-0.15, 0.36, 1.62), (0.15, 0.36, 1.62), 0.045, seg=14), C["olive"], 0.4)   # rolled shelter on top
     part(1, "Spine2", box((0.07, -0.295, 1.255), (0.10, 0.07, 0.08), (0, 0, 0), 0.012), C["coyote"])  # binocular pouch
     armband(1)
 
@@ -323,9 +343,9 @@ def look2():
     for side, a0, a1, bone in ((1, L_ARM, L_FORE, "LeftArm"), (-1, R_ARM, R_FORE, "RightArm")):
         ax = (a1 - a0).normalized()
         cc = a0 + ax * 0.06
-        bm4 = tube(cc - ax * 0.07, cc + ax * 0.06, ARM_R + 0.028, ARM_R + 0.020, seg=20, cap=False)
-        cut(bm4, lambda p, cc=cc: p.z < cc.z - 0.012)
-        part(2, bone, bm4, C["black"], 0.5, solid=0.008)
+        bm4 = tube(cc - ax * 0.09, cc + ax * 0.07, ARM_R + 0.048, ARM_R + 0.034, seg=20, cap=False)
+        cut(bm4, lambda p, cc=cc: p.z < cc.z - 0.020)
+        part(2, bone, bm4, C["ink"], 0.5, solid=0.010)
     # breaching tool pouch low on the back
     part(2, "Spine2", box((0.0, 0.31, 1.16), (0.24, 0.07, 0.09), (0, 0, 0), 0.012), C["black"])
     armband(2)
@@ -339,10 +359,10 @@ def look3():
         part(3, "Head", tube((x - s * 0.012, HC.y + 0.01, HC.z - 0.045), (x + s * 0.03, HC.y + 0.01, HC.z - 0.045), 0.045, 0.040, 18), C["black"], 0.3)
         part(3, "Head", box((s * (HR.x + 0.05), HC.y + 0.01, HC.z + 0.02), (0.012, 0.03, 0.07), (0, 0, 0), 0.004), C["black"])
     part(3, "Head", box((0, HC.y + 0.012, c.z + r.z + 0.002), (0.05, 0.10, 0.012), (0, 0, 0), 0.004), ACCENT)  # crown stripe
-    part(3, "Spine2", box((-0.05, 0.33, 1.29), (0.20, 0.12, 0.33), (0.04, 0, 0), 0.018), C["olive"])
-    part(3, "Spine2", box((-0.05, 0.40, 1.26), (0.15, 0.03, 0.18), (0.04, 0, 0), 0.01), C["black"])
-    part(3, "Spine2", tube((-0.12, 0.33, 1.45), (-0.16, 0.36, 1.86), 0.006, 0.003, 8), C["black"], 0.0)  # antenna
-    part(3, "Spine2", tube((-0.157, 0.358, 1.83), (-0.161, 0.361, 1.87), 0.007, 0.007, 8), ACCENT)
+    part(3, "Spine2", box((-0.05, 0.34, 1.30), (0.22, 0.14, 0.36), (0.04, 0, 0), 0.018), C["ink"])
+    part(3, "Spine2", box((-0.05, 0.42, 1.26), (0.16, 0.03, 0.18), (0.04, 0, 0), 0.01), C["olive"])
+    part(3, "Spine2", tube((-0.12, 0.33, 1.47), (-0.19, 0.37, 2.12), 0.010, 0.005, 8), C["ink"], 0.0)   # whip antenna
+    part(3, "Spine2", tube((-0.186, 0.368, 2.07), (-0.192, 0.371, 2.13), 0.010, 0.010, 8), ACCENT)
     armband(3)
 
 
@@ -354,6 +374,12 @@ def look4():
     cut(bm, lambda p: p.z < c.z - 0.010 + max(0.0, -(p.y - c.y) / r.y) * 0.030)
     part(4, "Head", bm, C["knit"], 0.35, solid=0.008)
     part(4, "Head", ring(Vector((c.x, c.y, c.z + 0.002)), (0, 0.25, 1), r.x + 0.002, 0.030, 0.008, 24), C["knit"], 0.2)  # rolled cuff
+    bmk = ellipsoid(Vector((c.x, c.y + 0.040, c.z + r.z - 0.004)), Vector((0.062, 0.070, 0.050)), 18, 10)
+    cut(bmk, lambda p: p.z < c.z + r.z - 0.030)
+    part(4, "Head", bmk, C["knit"], 0.35)          # slouched crown: a soft lump falling to the back
+    # satchel slung on the left hip (crosses the body from the right shoulder)
+    part(4, "Hips", box((0.21, -0.02, 0.98), (0.07, 0.22, 0.20), (0, 0, 0.1), 0.02), C["bone"])
+    part(4, "Spine2", tube((-0.17, -0.10, 1.48), (0.17, -0.13, 1.06), 0.012, seg=8), C["strap"], 0.2)
     # drop-leg pouch on the right thigh (outer side) + strap
     tc = R_UP.lerp(R_LEG, 0.5)
     part(4, "RightUpLeg", box((tc.x - THIGH_R - 0.03, tc.y + 0.01, tc.z - 0.02), (0.05, 0.13, 0.17), (0, 0, 0), 0.015), C["grey"])
@@ -386,7 +412,10 @@ def look5():
         a = 2 * math.pi * i / N
         ca, sa = math.cos(a), math.sin(a)
         inner.append(bmb.verts.new((c.x + ca * r.x * 0.98, c.y + sa * r.y * 0.98, c.z + 0.0)))
-        outer.append(bmb.verts.new((c.x + ca * (r.x + 0.065), c.y + sa * (r.y + 0.065), c.z - 0.022)))
+        # oval: 9 cm at the sides and back, 5.5 cm at the front (sa < 0 is the face side),
+        # so the range silhouette widens without reaching a cheek-welded optic
+        ext = 0.090 if sa >= 0 else 0.090 - 0.035 * (-sa)
+        outer.append(bmb.verts.new((c.x + ca * (r.x + ext), c.y + sa * (r.y + ext), c.z - 0.024)))
     for i in range(N):
         j = (i + 1) % N
         bmb.faces.new((inner[i], inner[j], outer[j], outer[i]))
@@ -394,9 +423,9 @@ def look5():
     part(5, "Head", ring(Vector((c.x, c.y, c.z + 0.016)), (0, 0, 1), r.x - 0.003, 0.018, 0.006), ACCENT)
     part(5, "Spine2", box((-0.085, -0.292, 1.26), (0.09, 0.06, 0.12), (0, 0, 0), 0.012), C["olive"])
     # rolled mat across the top of the back
-    part(5, "Spine2", tube((-0.17, 0.30, 1.47), (0.17, 0.30, 1.47), 0.055, seg=16), C["sand"], 0.4)
+    part(5, "Spine2", tube((-0.25, 0.30, 1.48), (0.25, 0.30, 1.48), 0.060, seg=16), C["bone"], 0.4)
     for s in (-1, 1):
-        part(5, "Spine2", ring(Vector((s * 0.11, 0.30, 1.47)), (1, 0, 0), 0.056, 0.02, 0.005), C["strap"])
+        part(5, "Spine2", ring(Vector((s * 0.15, 0.30, 1.48)), (1, 0, 0), 0.061, 0.02, 0.005), C["strap"])
     armband(5)
 
 

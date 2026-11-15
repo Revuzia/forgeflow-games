@@ -21,6 +21,8 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { clone as skeletonClone } from "three/addons/utils/SkeletonUtils.js";
 import { CLIP_FILES, CLIP_DERIVED, ANIMS, LOCO } from "./anim_map.js";
+// [hold pass 2026-11-15] the gun leads, the arms follow (per-weapon 3P holds)
+import { createHold } from "./hold.js";
 
 // ---------------------------------------------------------------------------
 // Loader (Draco decoder is vendored — a CDN outage must never take the
@@ -724,6 +726,13 @@ export function createActor(proto) {
   bones.rKnuckle = byName.get("RightHandMiddle1") || bones.rHand;
   bones.lKnuckle = byName.get("LeftHandMiddle1") || bones.lHand;
   const grips = [];  // attached weapon holders, re-solved every update()
+  // [hold pass] weapon-first hold: the gun is placed from the body, both arms IK
+  // onto it (core/chars/hold.js). `held` = the live grip it drives.
+  const wHold = createHold({ root, bones, byName });
+  let holdCaptured = false;
+  let held = null;
+  const holdIn = { ry: 0, aimYaw: 0, aimPitch: 0, readyW: 1, speed: 0, armK: 0, engA: 0,
+                   melee: 0, reload: -1, on: false };
 
   /**
    * Seat the weapon in both hands. The firing palm holds the weapon ORIGIN,
@@ -797,7 +806,11 @@ export function createActor(proto) {
                      // exactly the way it compounded a finger to 153 deg.
                      bones.lArm, bones.rArm, bones.lFore, bones.rFore,
                      bones.lUpLeg, bones.rUpLeg, bones.lLeg, bones.rLeg,
-                     bones.lFoot, bones.rFoot].filter(Boolean);
+                     bones.lFoot, bones.rFoot,
+                     // [hold pass] the hold solve writes both hands and the right
+                     // clavicle (absolute world rotations) — snapshot them too so a
+                     // skipped mixer write can never leave our value behind
+                     bones.rHand, bones.lHand, byName.get("RightShoulder")].filter(Boolean);
   const snapQ = new Float32Array(poseBones.length * 4);
   let snapY = hipsRestY;      // hips.position.y as the CLIP wrote it
   let snapped = false;
@@ -1399,6 +1412,11 @@ export function createActor(proto) {
       // Solve once NOW: the actor is already settled into idle, so the very
       // first rendered frame is correct — never one frame of the bind basis.
       solveGrip(h);
+      // [hold pass] the authored grip is captured ONCE, on the first attach (the
+      // actor is still in the settled idle then, dressed and scaled); later swaps
+      // reuse it — the hand-on-grip relation does not depend on the gun
+      if (!holdCaptured) { wHold.capture(GRIP_Y); holdCaptured = true; }
+      if (hand !== "L" && group) { wHold.attach(h, group.userData.brKind || "ar"); held = h; }
       return holder;
     },
 
@@ -1437,6 +1455,16 @@ export function createActor(proto) {
     // ---- [a11] operator looks (core/chars/operator_looks.js owns the data) ----
     _model: model,
     _boneByName: byName,
+    _hold: wHold,       // [hold pass] harness/debug read-only
+    /** [hold pass] world muzzle point of the held 3P gun (null when none) — for
+     *  fx to start bot tracers / flashes at the real barrel (hook, see report). */
+    muzzleWorld(out) {
+      if (!held || !held.holder.parent) return null;
+      const g = held.holder.children[0];
+      if (!g || !g.userData.brMuzzle) return null;
+      const m = g.userData.brMuzzle;
+      return out.set(m[0], m[1], m[2]).applyMatrix4(g.matrixWorld);
+    },
     /** Add a gear mesh (already skinned to this actor's bones) under the model.
      *  Its material joins rim / flash / dispose; geometry stays shared. */
     addGear(mesh) {
@@ -1681,7 +1709,12 @@ export function createActor(proto) {
           - life.armK.x * 0.85
           + engA
           - meleeArm;                                       // [melee] arms punch out (− = raise forward)
-        if (armPitch && (bones.lArm || bones.rArm)) {
+        // [hold pass] with the weapon-first hold on, these channels move the GUN
+        // (hold.js) and the arms follow it by IK — writing them here too would
+        // be overwritten anyway
+        const holdOn = !!(held && !held.carry && wHold.state.ok);
+        holdIn.armK = life.armK.x; holdIn.engA = engA; holdIn.melee = meleeArm / 0.78;
+        if (!holdOn && armPitch && (bones.lArm || bones.rArm)) {
           _v1.set(rx, 0, rz);
           _q1.setFromAxisAngle(_v1, armPitch);
           if (bones.lArm) rotateBoneWorld(bones.lArm, _q1);
@@ -1703,9 +1736,10 @@ export function createActor(proto) {
           // an aiming soldier still checks off-axis — the scan is DAMPED under
           // aim, not switched off (killing it entirely removed the single most
           // legible channel from exactly the bots the filmstrip photographs)
-          const scanW = (1 - 0.68 * aimK) * still;
+          // [hold pass] cheek on the stock: a shouldered gun holds the head too
+          const scanW = (1 - 0.68 * aimK) * still * (held && !held.carry ? 1 - 0.8 * life.readyW : 1);
           const headYaw = LIFE.scanYaw * scan * scanW
-            + LIFE.engNeck * engN                       // fast off-axis checks
+            + LIFE.engNeck * engN * (held && !held.carry ? 1 - 0.7 * life.readyW : 1) // fast off-axis checks
             - yawSpine * 0.35 * aimK;
           const headPitch = LIFE.scanPitch * scanP * scanW
             + life.fireK.x * 0.75          // chin lifts with the muzzle
@@ -1741,8 +1775,29 @@ export function createActor(proto) {
       // reload. While the reload layer is in, the weapon instead rides the
       // firing hand rigidly on its last two-hand basis (holder.quaternion is
       // bone-local, so simply not re-solving holds it).
-      const reloadHold = upper.kind === "reload" && upper.want > 0;
-      if (!reloadHold) for (let i = 0; i < grips.length; i++) if (!grips[i].carry) solveGrip(grips[i]);
+      // [hold pass] the weapon-first hold owns the live grip whenever the soldier
+      // is alive and the gun is in his firing hand (not riding the left hand
+      // through a grenade toss); the legacy two-hand solve below keeps the dead
+      // and the carried cases.
+      let holdDone = false;
+      if (held && wHold.state.ok) {
+        holdIn.on = actor.lifeGain > 0.001 && !held.carry && !!held.holder.parent;
+        holdIn.ry = root.rotation.y - actor.legYaw * actor.lifeGain;
+        holdIn.aimYaw = life.aimYaw * life.aimW * actor.lifeGain;
+        holdIn.aimPitch = life.aimPitch * life.aimW * actor.lifeGain;
+        holdIn.readyW = life.readyW;
+        holdIn.speed = actor.groundSpeed || 0;
+        holdIn.reload = (upper.kind === "reload" && upper.want > 0 && upper.a)
+          ? Math.min(1, upper.a.time / Math.max(0.1, upper.a.getClip().duration)) : -1;
+        if (actor.lifeGain <= 0.001) { holdIn.armK = 0; holdIn.engA = 0; holdIn.melee = 0; }
+        holdDone = wHold.solve(holdIn, dt);
+      }
+      const reloadHold = !holdDone && upper.kind === "reload" && upper.want > 0;
+      if (!reloadHold) for (let i = 0; i < grips.length; i++) {
+        if (grips[i].carry) continue;
+        if (holdDone && grips[i] === held) continue;
+        solveGrip(grips[i]);
+      }
     },
 
     dispose() {

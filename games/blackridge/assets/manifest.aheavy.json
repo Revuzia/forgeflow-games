@@ -5,7 +5,7 @@
  "entries": [
   {
    "path": "assets/weapons/bastion.glb",
-   "bytes": 537556,
+   "bytes": 518940,
    "kind": "generated",
    "license": "Original (authored procedurally in tools/a5_build_guns.py; hands from the a4 hand generator)",
    "source": "tools/a5_build_guns.py bastion"
@@ -19,7 +19,7 @@
   },
   {
    "path": "assets/weapons/wpn3p_bastion.glb",
-   "bytes": 45368,
+   "bytes": 45156,
    "kind": "generated",
    "license": "Original (authored procedurally in tools/a5_build_guns.py; hands from the a4 hand generator)",
    "source": "tools/a5_build_guns.py 3p:bastion"

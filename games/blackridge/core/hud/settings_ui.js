@@ -170,6 +170,8 @@ const ROWS = [
     desc: "Size of the compass, ammo, health, killfeed and score readouts." },
   { tab: "interface", key: "hudOpacity", label: "HUD opacity", kind: "range", min: 0.3, max: 1, step: 0.05, fmt: PCT,
     desc: "How solid the HUD readouts are. Damage and flash effects are not affected." },
+  { tab: "interface", key: "blood", label: "Blood", kind: "seg", options: ["on", "off"],
+    desc: "Blood spray and spatter on hits." },
   { tab: "interface", key: "scoreFeed", label: "Score popups & XP feed", kind: "seg", options: ["on", "off"],
     desc: "The +points popups and the XP feed during play." },
   { tab: "interface", key: "minimap", label: "Minimap", kind: "seg", options: ["on", "off"], desc: "Show the minimap." },

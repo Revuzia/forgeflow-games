@@ -164,6 +164,9 @@ export function makeTracers(env) {
   const wid = new Float32Array(N);      // per-weapon streak width
   const spd = new Float32Array(N);      // per-weapon fraction of the speed cap
   const alive = new Uint8Array(N);
+  const okey = new Float32Array(N * 3); // the shot event's origin (clip() key)
+  const s0 = new Float32Array(N * 3);   // where the streak started
+  const clipped = new Uint8Array(N);
   let cursor = 0;
   let activeCount = 0;
   let spawnedCount = 0;
@@ -182,7 +185,12 @@ export function makeTracers(env) {
   return {
     // origin/direction are the shot event's [3] arrays; dist = metres to the
     // resolved hit (or a far cap on a terminal miss).
-    spawn(origin, direction, dist) {
+    // [feel v153] `start` (optional [3]) = where the round visibly leaves the gun
+    // (muzzle_socket.js). The streak then flies from there to the SAME end point
+    // the sim resolved (origin + direction * dist), so it converges on the hit
+    // instead of starting on the crosshair, and a bot's leaves its gun, not its
+    // forehead.
+    spawn(origin, direction, dist, start) {
       // env.shot is published by muzzle.spawn(d), which fx.js calls for the SAME
       // event immediately before this; trust it only when the origin matches.
       let st = STYLE_DEFAULT;
@@ -200,14 +208,47 @@ export function makeTracers(env) {
       if (!alive[i]) { alive[i] = 1; activeCount++; }
       maxLen[i] = st.len; wid[i] = st.w; spd[i] = st.spd;
       const i3 = i * 3;
-      // start slightly downrange so the quad never sits inside the camera
-      head[i3] = origin[0] + direction[0] * 0.9;
-      head[i3 + 1] = origin[1] + direction[1] * 0.9;
-      head[i3 + 2] = origin[2] + direction[2] * 0.9;
-      dir[i3] = direction[0]; dir[i3 + 1] = direction[1]; dir[i3 + 2] = direction[2];
-      traveled[i] = 0;
-      total[i] = Math.max(0.5, dist - 0.9);
+      okey[i3] = origin[0]; okey[i3 + 1] = origin[1]; okey[i3 + 2] = origin[2];
+      clipped[i] = dist >= 129 ? 0 : 1; // a fire-tick hit is already sized: never re-clip it
+      if (start) {
+        const ex = origin[0] + direction[0] * dist, ey = origin[1] + direction[1] * dist, ez = origin[2] + direction[2] * dist;
+        let dx = ex - start[0], dy = ey - start[1], dz = ez - start[2];
+        const L = Math.hypot(dx, dy, dz) || 1;
+        dx /= L; dy /= L; dz /= L;
+        head[i3] = start[0]; head[i3 + 1] = start[1]; head[i3 + 2] = start[2];
+        dir[i3] = dx; dir[i3 + 1] = dy; dir[i3 + 2] = dz;
+        traveled[i] = 0;
+        total[i] = Math.max(0.5, L);
+      } else {
+        // start slightly downrange so the quad never sits inside the camera
+        head[i3] = origin[0] + direction[0] * 0.9;
+        head[i3 + 1] = origin[1] + direction[1] * 0.9;
+        head[i3 + 2] = origin[2] + direction[2] * 0.9;
+        dir[i3] = direction[0]; dir[i3 + 1] = direction[1]; dir[i3 + 2] = direction[2];
+        traveled[i] = 0;
+        total[i] = Math.max(0.5, dist - 0.9);
+      }
+      s0[i3] = head[i3]; s0[i3 + 1] = head[i3 + 1]; s0[i3 + 2] = head[i3 + 2];
       spawnedCount++;
+    },
+
+    // [feel v153] A round that resolves in FLIGHT (beyond the fire tick) fires
+    // its fire-time event with no hit, so its tracer was sized for a 130 m miss
+    // and sailed straight through the wall it then hit. The impactOnly event
+    // calls this: the streak of that shot (same origin) now ends at the hit.
+    clip(origin, hitPos) {
+      // oldest first: rounds from one muzzle resolve in the order they left it
+      for (let k = 0; k < N; k++) {
+        const i = (cursor + k) % N;
+        if (!alive[i] || clipped[i]) continue;
+        const i3 = i * 3;
+        if (okey[i3] !== origin[0] || okey[i3 + 1] !== origin[1] || okey[i3 + 2] !== origin[2]) continue;
+        const L = Math.hypot(hitPos[0] - s0[i3], hitPos[1] - s0[i3 + 1], hitPos[2] - s0[i3 + 2]);
+        clipped[i] = 1;
+        if (L < total[i]) total[i] = Math.max(0.1, L);
+        if (traveled[i] >= total[i]) deactivate(i);
+        return;
+      }
     },
 
     update(dt) {

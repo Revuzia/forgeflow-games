@@ -5,7 +5,7 @@
   "entries": [
     {
       "path": "assets/chars/op_gear.glb",
-      "bytes": 50424,
+      "bytes": 53776,
       "kind": "authored",
       "license": "original (FFG owned) — authored procedurally by tools/a11_build_operators.py",
       "source": "tools/a11_build_operators.py (meshes L<look>__<Bone>, COLOR_0, magenta = team accent)"

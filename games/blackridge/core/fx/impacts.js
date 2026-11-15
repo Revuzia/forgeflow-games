@@ -23,9 +23,13 @@ import * as THREE from "three";
 // Frozen keys + tolerated aliases (unknown surfaces read as concrete).
 export const SURFACE_ALIAS = {
   concrete: "concrete", brick: "concrete", asphalt: "concrete",
-  stone: "concrete", plaster: "concrete", sandbag: "concrete",
+  stone: "concrete", plaster: "concrete",
+  // [feel v153] fabric + water get their own rows (fx.js also retypes a
+  // collider "dirt" box of kind sandbags to fabric, and vehicles to vehicle)
+  sandbag: "fabric", sandbags: "fabric", fabric: "fabric", cloth: "fabric",
+  vehicle: "vehicle",
   metal: "metal", metal_thin: "metal", steel: "metal",
-  dirt: "dirt", grass: "dirt", mud: "dirt", sand: "dirt", water: "dirt",
+  dirt: "dirt", grass: "dirt", mud: "dirt", sand: "dirt", water: "water",
   wood: "wood",
   glass: "glass",
   flesh: "flesh",
@@ -215,22 +219,194 @@ function makePool(env, N, blending, renderOrder, tex) {
   };
 }
 
+// ---------------------------------------------------------------- streak pool
+// [feel v153] VELOCITY-STRETCHED particles. Every spark, splinter, shard and
+// droplet used to be a round soft point sprite, so a ricochet off a steel
+// container read as a handful of glowing dots — the single cheapest tell in the
+// impact set. A streak is a camera-facing quad drawn from the particle's head
+// back along its own velocity for `stretch` seconds of travel, built in SCREEN
+// space in the vertex shader (no per-particle matrices on the CPU), with a
+// minimum on-screen width (uMinPx) so a 12 mm spark still reads as a thread of
+// light at 40 m instead of resampling to nothing.
+// Two meshes, ONE program: additive (sparks, glints) and normal-blended
+// (splinters, droplets, fibres) share the exact same shader source, and
+// blending is render state, not a program key. Both live in the scene from
+// boot and are in prewarmables(), so the boot prewarm compiles the program.
+const STREAK_VERT = /* glsl */ `
+attribute vec3 iPos;
+attribute vec3 iVel;
+attribute vec4 iCol;
+attribute vec2 iSz;      // x = width (m), y = stretch (s of travel)
+uniform float uProj;     // drawingBufferHeight / (2 tan(vfov/2))
+uniform vec2 uRes;       // drawing buffer size (px)
+uniform float uMinPx;
+varying vec4 vCol;
+varying vec2 vUv;
+void main() {
+  vCol = iCol;
+  vUv = position.xy;
+  vec4 ch = projectionMatrix * viewMatrix * vec4(iPos, 1.0);
+  vec4 ct = projectionMatrix * viewMatrix * vec4(iPos - iVel * iSz.y, 1.0);
+  // a tail behind the eye: clamp it to the head (the streak degenerates to a dot)
+  if (ct.w < 0.05) ct = ch;
+  float wh = max(ch.w, 0.05);
+  vec2 sh = ch.xy / wh * 0.5 * uRes;
+  vec2 st = ct.xy / max(ct.w, 0.05) * 0.5 * uRes;
+  vec2 d = sh - st;
+  float L = length(d);
+  vec2 dir = L > 1e-4 ? d / L : vec2(1.0, 0.0);
+  vec2 nrm = vec2(-dir.y, dir.x);
+  float hw = max(uMinPx, 0.5 * iSz.x * uProj / wh);
+  // dead slot (alpha 0): collapse off screen, costs nothing to raster
+  if (iCol.a <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  vec2 base = mix(sh, st, position.y);
+  vec2 px = base + nrm * position.x * hw + dir * (position.y < 0.5 ? hw : -hw);
+  float w = mix(ch.w, max(ct.w, 0.05), position.y);
+  float z = mix(ch.z / wh, ct.z / max(ct.w, 0.05), position.y);
+  gl_Position = vec4(px / (0.5 * uRes) * w, z * w, w);
+}`;
+
+const STREAK_FRAG = /* glsl */ `
+varying vec4 vCol;
+varying vec2 vUv;
+void main() {
+  float x = vUv.x;
+  float cross = 1.0 - x * x;
+  float a = vCol.a * cross * cross * mix(1.0, 0.18, vUv.y);
+  if (a < 0.004) discard;
+  gl_FragColor = vec4(vCol.rgb, a);
+}`;
+
+function makeStreakPool(env, N, blending, renderOrder) {
+  const geo = new THREE.InstancedBufferGeometry();
+  // quad: x = side (-1..1), y = 0 head / 1 tail
+  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([
+    -1, 0, 0, 1, 0, 0, -1, 1, 0, 1, 1, 0]), 3));
+  geo.setIndex([0, 2, 1, 1, 2, 3]);
+  const pos = new Float32Array(N * 3);
+  const vel = new Float32Array(N * 3);
+  const col = new Float32Array(N * 4);
+  const sz = new Float32Array(N * 2);
+  const aPos = new THREE.InstancedBufferAttribute(pos, 3);
+  const aVel = new THREE.InstancedBufferAttribute(vel, 3);
+  const aCol = new THREE.InstancedBufferAttribute(col, 4);
+  const aSz = new THREE.InstancedBufferAttribute(sz, 2);
+  for (const a of [aPos, aVel, aCol, aSz]) a.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute("iPos", aPos);
+  geo.setAttribute("iVel", aVel);
+  geo.setAttribute("iCol", aCol);
+  geo.setAttribute("iSz", aSz);
+  geo.instanceCount = N;
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e6);
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uProj: { value: 900 }, uRes: { value: new THREE.Vector2(1920, 1080) }, uMinPx: { value: 0.75 } },
+    vertexShader: STREAK_VERT,
+    fragmentShader: STREAK_FRAG,
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    // the quad is built in screen space, so its winding flips with the streak's
+    // on-screen direction: never cull it
+    side: THREE.DoubleSide,
+    blending,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = renderOrder;
+  mesh.name = blending === THREE.AdditiveBlending ? "fx.streakAdd" : "fx.streakMix";
+  env.root.add(mesh);
+
+  const birth = new Float32Array(N);
+  const life = new Float32Array(N);
+  const a0 = new Float32Array(N);
+  const grav = new Float32Array(N);
+  const rest = new Float32Array(N);
+  const floorY = new Float32Array(N);
+  const damp = new Float32Array(N);
+  const aliveF = new Uint8Array(N);
+  const list = new Int32Array(N);
+  let activeCount = 0, cursor = 0, dirty = false;
+
+  function kill(i) { aliveF[i] = 0; col[i * 4 + 3] = 0; }
+
+  // width (m), stretch (s): a spark at 6 m/s with 0.022 s stretch is a 13 cm streak
+  function spawn(x, y, z, vx, vy, vz, lifeS, width, stretch, r, g, b, alpha0, gravity, restit, floor, damping) {
+    const i = cursor;
+    cursor = (cursor + 1) % N;
+    if (!aliveF[i]) { list[activeCount++] = i; aliveF[i] = 1; }
+    const i3 = i * 3, i4 = i * 4;
+    pos[i3] = x; pos[i3 + 1] = y; pos[i3 + 2] = z;
+    vel[i3] = vx; vel[i3 + 1] = vy; vel[i3 + 2] = vz;
+    col[i4] = r; col[i4 + 1] = g; col[i4 + 2] = b; col[i4 + 3] = alpha0;
+    sz[i * 2] = width; sz[i * 2 + 1] = stretch;
+    birth[i] = env.now(); life[i] = lifeS; a0[i] = alpha0;
+    grav[i] = gravity; rest[i] = restit; floorY[i] = floor; damp[i] = damping;
+    aSz.needsUpdate = true;
+    dirty = true;
+  }
+
+  function update(dt) {
+    if (activeCount === 0) {
+      if (dirty) { aPos.needsUpdate = aVel.needsUpdate = aCol.needsUpdate = true; dirty = false; }
+      return;
+    }
+    const now = env.now();
+    for (let k = 0; k < activeCount; k++) {
+      const i = list[k];
+      const u = (now - birth[i]) / life[i];
+      if (u >= 1) { kill(i); list[k] = list[--activeCount]; k--; continue; }
+      const i3 = i * 3;
+      vel[i3 + 1] += grav[i] * dt;
+      const dm = Math.max(0, 1 - damp[i] * dt);
+      vel[i3] *= dm; vel[i3 + 1] *= dm; vel[i3 + 2] *= dm;
+      pos[i3] += vel[i3] * dt; pos[i3 + 1] += vel[i3 + 1] * dt; pos[i3 + 2] += vel[i3 + 2] * dt;
+      if (vel[i3 + 1] < 0 && pos[i3 + 1] < floorY[i] + 0.01) {
+        pos[i3 + 1] = floorY[i] + 0.01;
+        if (rest[i] > 0) { vel[i3 + 1] = -vel[i3 + 1] * rest[i]; vel[i3] *= 0.55; vel[i3 + 2] *= 0.55; }
+        else { vel[i3] = vel[i3 + 1] = vel[i3 + 2] = 0; }
+      }
+      // sparks cool fast (ease-out), everything else fades linearly
+      col[i * 4 + 3] = a0[i] * (1 - u * u);
+    }
+    aPos.needsUpdate = aVel.needsUpdate = aCol.needsUpdate = true;
+    dirty = false;
+  }
+
+  function clear() {
+    for (let k = 0; k < activeCount; k++) kill(list[k]);
+    activeCount = 0;
+    aCol.needsUpdate = true;
+  }
+
+  return { mesh, mat, spawn, update, clear, active: () => activeCount };
+}
+
 // ---------------------------------------------------------------- pools API
 export function makeParticlePools(env) {
   const tex = softCircleTexture();
   const dust = makePool(env, 640, THREE.NormalBlending, 20, tex);
   const spark = makePool(env, 384, THREE.AdditiveBlending, 22, tex);
+  const streak = makeStreakPool(env, 320, THREE.AdditiveBlending, 22);
+  const shard = makeStreakPool(env, 256, THREE.NormalBlending, 21);
   return {
     dust,
     spark,
-    update(dt) { dust.update(dt); spark.update(dt); },
-    setProj(f) {
+    streak,
+    shard,
+    update(dt) { dust.update(dt); spark.update(dt); streak.update(dt); shard.update(dt); },
+    setProj(f, w, h) {
       dust.mat.uniforms.uProj.value = f;
       spark.mat.uniforms.uProj.value = f;
+      for (const p of [streak, shard]) {
+        p.mat.uniforms.uProj.value = f;
+        if (w > 0 && h > 0) p.mat.uniforms.uRes.value.set(w, h);
+      }
     },
-    clear() { dust.clear(); spark.clear(); },
-    prewarmables() { return [dust.points, spark.points]; },
-    active() { return dust.active() + spark.active(); },
+    clear() { dust.clear(); spark.clear(); streak.clear(); shard.clear(); },
+    prewarmables() { return [dust.points, spark.points, streak.mesh, shard.mesh]; },
+    active() { return dust.active() + spark.active() + streak.active() + shard.active(); },
+    streaksActive() { return streak.active() + shard.active(); },
   };
 }
 
@@ -299,105 +475,198 @@ export function makeImpacts(env, pools, decals) {
     }
   }
 
-  // combat_spec §4.2 table, row by row — REWORKED (owner report: "a pistol puts 3
-  // holes on the wall"). The old rows stamped a 0.36-0.54 m crater PLUS three
-  // 0.3-0.48 m "satellite" craters scattered up to 0.44 m away PLUS (45 %) a 1 m
-  // dust wash: five marks and ~1 m of damage for ONE 9 mm round, and the
-  // satellites were laid in the impact PLANE with no idea where the wall ended, so
-  // near an edge they hung in the air. Now:
-  //   ONE mark per bullet (per pellet for a shotgun), sized by the weapon, snapped
-  //   onto the visible surface and clipped to it by fx.js before it gets here.
-  //   `k`  = impact power (particle counts/sizes), `sz` = decal edge in metres.
-  // The particles keep their iter06-09 legibility tuning (hot additive core,
-  // chips, spall puff, lingering smoke) but scale with k, so a pistol round reads
-  // as a pistol round and a marksman round as a marksman round.
+  // ---- [feel v153] streak helpers ------------------------------------------
+  // `axis` is the emission direction (normal, ricochet or the bullet's own
+  // direction); `cone` is isotropic jitter in m/s on top of axis * speed.
+  function streakBurst(pool, p, axis, count, spMin, spMax, cone, lifeS, lifeJit, width, stretch,
+    r, g, b, cJit, alpha0, gravity, restit, damping) {
+    const floor = floorBelow(p[0], p[1], p[2]);
+    for (let i = 0; i < count; i++) {
+      const s = spMin + (spMax - spMin) * rnd();
+      const cv = 1 - cJit * rnd();
+      pool.spawn(
+        p[0] + axis[0] * 0.01, p[1] + axis[1] * 0.01, p[2] + axis[2] * 0.01,
+        axis[0] * s + (rnd() * 2 - 1) * cone,
+        axis[1] * s + (rnd() * 2 - 1) * cone,
+        axis[2] * s + (rnd() * 2 - 1) * cone,
+        lifeS + lifeJit * rnd(), width, stretch,
+        r * cv, g * cv, b * cv, alpha0, gravity, restit, floor, damping);
+    }
+  }
+  // Ricochet axis: the bullet's reflection off the surface, pulled toward the
+  // normal so a grazing round sprays along the wall and a square hit sprays back.
+  const _rf = [0, 0, 0];
+  function ricochet(n, dir, wN) {
+    if (!dir) { _rf[0] = n[0]; _rf[1] = n[1]; _rf[2] = n[2]; return _rf; }
+    const dn = dir[0] * n[0] + dir[1] * n[1] + dir[2] * n[2];
+    const x = dir[0] - 2 * dn * n[0], y = dir[1] - 2 * dn * n[1], z = dir[2] - 2 * dn * n[2];
+    _rf[0] = x + n[0] * wN; _rf[1] = y + n[1] * wN; _rf[2] = z + n[2] * wN;
+    const l = Math.hypot(_rf[0], _rf[1], _rf[2]) || 1;
+    _rf[0] /= l; _rf[1] /= l; _rf[2] /= l;
+    return _rf;
+  }
+  const UPV = [0, 1, 0];
+
+  // combat_spec §4.2 table, row by row. ONE mark per bullet (per pellet for a
+  // shotgun), sized by the weapon, snapped onto the visible surface and clipped
+  // to it by fx.js before it gets here. `k` = impact power (particle counts and
+  // sizes), `sz` = decal edge in metres, `far` = distance legibility factor
+  // (1 at <= 14 m, up to 2.4 at 34 m+): airborne puffs and the flash grow with
+  // range so a strike still reads at 40 m, while streaks keep a minimum
+  // on-screen width in the shader. Decals never scale with `far`.
+  //
+  // [feel v153] REWORK (impact review against a current military shooter):
+  //  - sparks, splinters, shards, chips and droplets are VELOCITY STREAKS now,
+  //    not round dots (makeStreakPool above);
+  //  - concrete no longer throws a fistful of orange sparks on every round (a
+  //    masonry hit is a grey spall cone + chips; a hot spark only sometimes);
+  //    steel and vehicles own the spark showers, along the RICOCHET direction;
+  //  - new rows: fabric (sandbags), vehicle (sheet metal + paint flecks),
+  //    water (puddle crown splash) and a wet-street droplet crown on top of the
+  //    surface's own row; flesh splits into body and HEAD.
   const TABLE = {
-    concrete(p, n, dir, k, sz) {
+    concrete(p, n, dir, k, sz, far) {
       const kk = Math.sqrt(k);
-      // hot core flash — what survives 20 m of night air (iter06)
-      burstAt(pools.spark, p, n, 1, 0.15, 0.35, 0.05, 0.15, 0.03, 0.26 * kk, 0.08 * kk,
-        4.4, 2.9, 1.35, 0, 1.0, 0, 0, 0);
-      // ricochet sparks + chips
-      burstAt(pools.spark, p, n, Math.max(2, Math.round(5 * k)), 2.2, 5.6, 1.4, 0.34, 0.14, 0.019, 0.032,
-        3.1, 1.8, 0.72, 0.25, 1.0, -9, 0.4, 0.5);
-      burstAt(pools.dust, p, n, Math.max(2, Math.round(5 * k)), 1.6, 3.4, 1.1, 0.42, 0.16, 0.055, 0.105,
-        0.60, 0.58, 0.55, 0.25, 0.95, -9, 0.35, 0.4);
-      // spall puff + a thin lingering haze on some strikes (survives the AgX shoulder)
-      burstAt(pools.dust, p, n, 2, 0.5, 1.1, 0.24, 0.85, 0.28, 0.12 * kk, 0.70 * kk,
-        0.62, 0.60, 0.56, 0.1, 0.46, -0.35, 0, 1.5);
+      // brief hot pop — the frame a round strikes stone, not a glowing ball
+      burstAt(pools.spark, p, n, 1, 0.1, 0.2, 0.03, 0.06, 0.02, 0.15 * kk * far, 0.05 * far,
+        3.2, 2.5, 1.5, 0, 0.9, 0, 0, 0);
+      // a hot spark only some of the time (steel owns the showers)
+      if (rnd() < 0.5) {
+        streakBurst(pools.streak, p, ricochet(n, dir, 0.9), Math.max(1, Math.round(2 * k)), 5, 11, 1.8,
+          0.10, 0.08, 0.010, 0.032, 3.0, 1.9, 0.8, 0.2, 1.0, -9.8, 0.3, 0.5);
+      }
+      // chips: grey grit thrown off the face, falling and skittering
+      streakBurst(pools.shard, p, n, Math.max(3, Math.round(6 * k)), 2.2, 5.5, 1.7,
+        0.55, 0.25, 0.016, 0.014, 0.36, 0.35, 0.33, 0.3, 0.95, -9.8, 0.25, 0.4);
+      // spall cone: fast out of the face, braking hard, swelling as it slows
+      burstAt(pools.dust, p, n, 5, 1.2, 4.2, 0.7, 0.7, 0.3, 0.05 * kk * far, 0.55 * kk * far,
+        0.42, 0.40, 0.38, 0.15, 0.30, -0.25, 0, 3.6);
       if (rnd() < 0.40) {
-        burstAt(pools.dust, p, n, 1, 0.25, 0.55, 0.16, 1.8, 0.9, 0.22 * kk, 0.80 * kk,
+        burstAt(pools.dust, p, n, 1, 0.25, 0.55, 0.16, 1.8, 0.9, 0.22 * kk * far, 0.85 * kk * far,
           0.56, 0.55, 0.53, 0.08, 0.075, 0.10, 0, 1.9);
       }
-      // THE mark: exactly one hole.
       decals.spawn(p, n, rnd() < 0.5 ? 0 : 3, sz * (0.88 + rnd() * 0.24), dir);
     },
-    metal(p, n, dir, k, sz) {
-      // Steel throws the longest-lived sparks of any surface (iter09) — keep them,
-      // scale the count; one bare-metal gouge decal.
-      burstAt(pools.spark, p, n, Math.max(3, Math.round(7 * k)), 2.6, 6.6, 1.5, 0.30, 0.14, 0.016, 0.028,
-        2.8, 2.0, 1.0, 0.2, 1.0, -9, 0.45, 0.5);
-      burstAt(pools.spark, p, n, 1, 0.2, 0.4, 0.05, 0.15, 0.03, 0.18 * Math.sqrt(k), 0.06,
+    metal(p, n, dir, k, sz, far) {
+      const kk = Math.sqrt(k);
+      burstAt(pools.spark, p, n, 1, 0.1, 0.2, 0.03, 0.06, 0.02, 0.2 * kk * far, 0.05 * far,
         3.8, 3.0, 1.9, 0, 1.0, 0, 0, 0);
-      burstAt(pools.dust, p, n, 1, 0.4, 0.9, 0.20, 0.8, 0.24, 0.10, 0.60,
-        0.57, 0.55, 0.52, 0.1, 0.34, -0.3, 0, 1.5);
+      // the shower: long, hot, ricocheting, bouncing on the floor
+      streakBurst(pools.streak, p, ricochet(n, dir, 0.7), Math.max(6, Math.round(12 * k)), 5, 14, 3.0,
+        0.16, 0.28, 0.012, 0.042, 3.4, 2.05, 0.75, 0.25, 1.0, -9.8, 0.35, 0.7);
+      // a couple of slow fat embers that hang a moment
+      burstAt(pools.spark, p, n, 2, 0.6, 1.6, 0.6, 0.35, 0.15, 0.022, 0.012,
+        2.8, 1.6, 0.5, 0.2, 1.0, -6, 0.3, 0.8);
+      burstAt(pools.dust, p, n, 1, 0.4, 0.9, 0.20, 0.8, 0.24, 0.08 * far, 0.45 * far,
+        0.57, 0.55, 0.52, 0.1, 0.30, -0.3, 0, 1.5);
       decals.spawn(p, n, 2, sz * (0.95 + rnd() * 0.2), dir);
     },
-    wood(p, n, dir, k, sz) {
-      burstAt(pools.dust, p, n, Math.max(3, Math.round(6 * k)), 1.8, 4.0, 1.0, 0.38, 0.14, 0.035, 0.06,
-        0.42, 0.30, 0.18, 0.3, 0.9, -9, 0.2, 0.6);
-      burstAt(pools.dust, p, n, 1, 0.3, 0.7, 0.15, 0.6, 0.15, 0.08, 0.38,
-        0.40, 0.32, 0.22, 0.1, 0.30, -0.3, 0, 1.4);
+    // car / van / truck panels: thin sheet steel — fewer sparks, a paint-fleck
+    // spray and a puff of road grime knocked off the panel
+    vehicle(p, n, dir, k, sz, far) {
+      const kk = Math.sqrt(k);
+      burstAt(pools.spark, p, n, 1, 0.1, 0.2, 0.03, 0.05, 0.02, 0.16 * kk * far, 0.05 * far,
+        3.6, 2.9, 1.9, 0, 1.0, 0, 0, 0);
+      streakBurst(pools.streak, p, ricochet(n, dir, 0.8), Math.max(4, Math.round(7 * k)), 5, 12, 2.4,
+        0.12, 0.18, 0.011, 0.036, 3.3, 2.1, 0.8, 0.25, 1.0, -9.8, 0.3, 0.7);
+      streakBurst(pools.shard, p, n, Math.max(3, Math.round(5 * k)), 1.8, 4.2, 1.4,
+        0.6, 0.25, 0.014, 0.010, 0.62, 0.62, 0.60, 0.35, 0.9, -9.8, 0.2, 0.6);
+      burstAt(pools.dust, p, n, 2, 0.8, 1.8, 0.3, 0.6, 0.2, 0.07 * kk * far, 0.40 * kk * far,
+        0.40, 0.38, 0.35, 0.1, 0.35, -0.3, 0, 2.6);
+      decals.spawn(p, n, 2, sz * (0.9 + rnd() * 0.2), dir);
+    },
+    wood(p, n, dir, k, sz, far) {
+      const kk = Math.sqrt(k);
+      // splinters: pale fresh-cut wood, tumbling out and dropping
+      streakBurst(pools.shard, p, n, Math.max(4, Math.round(7 * k)), 2.2, 5.8, 1.6,
+        0.7, 0.3, 0.026, 0.030, 0.46, 0.33, 0.19, 0.3, 1.0, -9.8, 0.15, 0.5);
+      burstAt(pools.dust, p, n, 2, 0.9, 2.2, 0.3, 0.6, 0.2, 0.07 * kk * far, 0.42 * kk * far,
+        0.50, 0.40, 0.28, 0.1, 0.42, -0.3, 0, 3.0);
       decals.spawn(p, n, 6, sz * (0.9 + rnd() * 0.2), dir);
     },
-    dirt(p, n, dir, k, sz) {
-      burstAt(pools.dust, p, n, 1, 0.5, 0.8, 0.1, 0.6, 0.1, 0.12 * Math.sqrt(k), 0.38 * Math.sqrt(k),
-        0.36, 0.29, 0.2, 0.1, 0.42, -0.3, 0, 1.4);
-      burstAt(pools.dust, p, n, Math.max(2, Math.round(4 * k)), 1.6, 3.4, 0.9, 0.5, 0.2, 0.03, 0.05,
-        0.3, 0.24, 0.16, 0.25, 0.9, -9, 0.25, 0.4);
+    dirt(p, n, dir, k, sz, far) {
+      const kk = Math.sqrt(k);
+      // clods kicked up + a brown puff
+      streakBurst(pools.shard, p, n, Math.max(3, Math.round(5 * k)), 2.0, 4.6, 1.2,
+        0.6, 0.2, 0.022, 0.016, 0.24, 0.19, 0.13, 0.3, 1.0, -9.8, 0.1, 0.4);
+      burstAt(pools.dust, p, n, 2, 0.6, 1.6, 0.3, 0.7, 0.2, 0.10 * kk * far, 0.48 * kk * far,
+        0.36, 0.29, 0.2, 0.1, 0.48, -0.3, 0, 2.4);
       decals.spawn(p, n, 7, sz * (1.0 + rnd() * 0.3), dir);
     },
-    water(p, n, dir, k, sz) {
-      // canal: a quick upward splash of droplets + a low mist; no mark (water keeps none)
-      void dir; void sz;
-      const up = [0, 1, 0];
-      burstAt(pools.dust, p, up, Math.max(4, Math.round(7 * k)), 1.6, 3.4, 0.5, 0.65, 0.22, 0.09, 0.30,
-        0.74, 0.80, 0.86, 0.12, 0.75, -9, 0, 1.0);
-      burstAt(pools.dust, p, up, 1, 0.3, 0.6, 0.1, 0.9, 0.2, 0.16, 0.80,
-        0.62, 0.70, 0.76, 0.1, 0.34, -0.2, 0, 1.5);
-      burstAt(pools.spark, p, up, 2, 1.0, 2.2, 0.4, 0.4, 0.1, 0.014, 0.024,
-        1.2, 1.6, 2.0, 0.2, 0.8, -9, 0, 0.5);
+    // sandbags / fabric: no sparks at all — a burlap puff, sand pouring out of the
+    // hole and a few fibres
+    fabric(p, n, dir, k, sz, far) {
+      const kk = Math.sqrt(k);
+      burstAt(pools.dust, p, n, 3, 1.0, 2.6, 0.35, 0.7, 0.25, 0.08 * kk * far, 0.52 * kk * far,
+        0.58, 0.50, 0.38, 0.1, 0.55, -0.4, 0, 3.0);
+      // sand: a short spill out of the face, falling
+      streakBurst(pools.shard, p, n, Math.max(4, Math.round(6 * k)), 0.4, 1.4, 0.35,
+        0.7, 0.3, 0.012, 0.03, 0.64, 0.56, 0.42, 0.2, 0.95, -9.8, 0, 0.3);
+      streakBurst(pools.shard, p, n, 3, 1.2, 2.6, 1.0, 0.6, 0.2, 0.006, 0.05,
+        0.72, 0.64, 0.50, 0.2, 0.7, -2.5, 0, 2.0);
+      decals.spawn(p, n, 7, sz * (0.8 + rnd() * 0.2), dir);
     },
-    glass(p, n, dir, k, sz) {
-      // glinting shards + the star-crack decal (a pane keeps its wound)
-      burstAt(pools.spark, p, n, Math.max(5, Math.round(9 * k)), 1.6, 4.6, 1.5, 0.4, 0.18, 0.011, 0.02,
-        1.4, 1.8, 2.0, 0.25, 0.9, -9, 0.3, 0.4);
+    water(p, n, dir, k, sz, far) {
+      // puddle / canal: a crown of droplets straight up + a low mist; no mark
+      void dir; void sz;
+      streakBurst(pools.shard, p, UPV, Math.max(9, Math.round(13 * k)), 2.0, 4.6, 0.9,
+        0.6, 0.2, 0.018, 0.045, 0.74, 0.80, 0.86, 0.15, 0.75, -9.8, 0, 0.3);
+      burstAt(pools.dust, p, UPV, 1, 0.3, 0.6, 0.1, 0.8, 0.2, 0.14 * far, 0.70 * far,
+        0.62, 0.70, 0.76, 0.1, 0.30, -0.2, 0, 1.5);
+      streakBurst(pools.streak, p, UPV, 2, 1.0, 2.4, 0.5, 0.35, 0.1, 0.008, 0.03,
+        1.0, 1.3, 1.6, 0.2, 0.7, -9.8, 0, 0.3);
+    },
+    // a round into a WET street: a small droplet crown on top of the surface row
+    wet(p) {
+      streakBurst(pools.shard, p, UPV, 4, 1.2, 2.8, 0.7, 0.4, 0.15, 0.010, 0.03,
+        0.70, 0.76, 0.82, 0.15, 0.6, -9.8, 0, 0.3);
+    },
+    glass(p, n, dir, k, sz, far) {
+      // glinting slivers back toward the shooter + the pane's shards falling
+      // out of BOTH faces (the round goes through), the star-crack decal
+      streakBurst(pools.streak, p, n, Math.max(5, Math.round(9 * k)), 1.6, 4.8, 1.6,
+        0.35, 0.2, 0.008, 0.022, 1.5, 1.8, 2.1, 0.25, 0.9, -9.8, 0.3, 0.4);
+      if (dir) {
+        streakBurst(pools.shard, p, dir, 4, 0.8, 2.4, 0.8, 0.7, 0.2, 0.016, 0.02,
+          0.70, 0.78, 0.82, 0.15, 0.55, -9.8, 0.2, 0.3);
+      }
+      burstAt(pools.dust, p, n, 1, 0.3, 0.8, 0.2, 0.45, 0.1, 0.05 * far, 0.26 * far,
+        0.78, 0.82, 0.84, 0.1, 0.25, -0.4, 0, 1.6);
       decals.spawn(p, n, 5, sz * (2.4 + rnd() * 0.5), dir);
     },
-    flesh(p, n) {
-      // 8 dark-red 0.06 m puffs, 0.35 s, gravity -4; no decal (portal rating)
-      // ---- iter09, D6 -----------------------------------------------------
-      // THE ONE SURFACE THE C1 SCRIPT ACTUALLY HITS. The scored filmstrip is a
-      // hip burst at two soldiers, so `concrete` gets the misses and `flesh`
-      // gets the hits — and at the 12-20 m the contacts stand at, a 45-90 mm
-      // puff at 0.28/0.045/0.045 linear is a 5-9 px near-black dot on a night
-      // street: the shot that KILLS is the one event in the whole take with no
-      // visible answer. 0.10 -> 0.22 m is 10-22 px, and lifting the red off
-      // black (0.42/0.07/0.06) puts it above the AgX toe instead of under it.
-      // Still no decal and still no gore geometry — this is a hit ANSWER, not
-      // a wound. Count 8 -> 11 so a burst reads as sustained, not as one tick.
-      burstAt(pools.dust, p, n, 11, 0.9, 2.0, 0.8, 0.34, 0.12, 0.10, 0.22,
-        0.42, 0.07, 0.06, 0.25, 0.80, -4, 0, 1.2);
+    flesh(p, n, dir, k, sz, far) {
+      // BODY hit: a dark-red mist puff (still a hit ANSWER, not a wound) and a
+      // few heavy droplets that fall. Sized for 12-20 m legibility (iter09).
+      const f = far || 1;
+      burstAt(pools.dust, p, n, 7, 0.7, 1.7, 0.7, 0.32, 0.12, 0.09 * f, 0.22 * f,
+        0.40, 0.06, 0.05, 0.25, 0.78, -4, 0, 1.6);
+      streakBurst(pools.shard, p, n, 4, 1.2, 2.6, 1.1, 0.4, 0.12, 0.016, 0.03,
+        0.30, 0.03, 0.03, 0.2, 0.85, -9.8, 0, 0.5);
     },
-    // 2026-10-14: the exit SPRAY — a short fan of droplets thrown ALONG the bullet,
-    // out the far side of the target (fx.js also stamps KIND_BLOOD on whatever is
-    // behind him). Small, fast, heavy (they fall), gone in ~0.4 s.
+    // HEADSHOT: distinct at a glance without gore geometry — a sharper, brighter,
+    // wider mist burst that hangs a beat longer, plus a fan of fine droplets
+    fleshHead(p, n, dir, k, sz, far) {
+      const f = far || 1;
+      burstAt(pools.dust, p, n, 10, 1.0, 2.4, 1.1, 0.45, 0.15, 0.10 * f, 0.34 * f,
+        0.52, 0.08, 0.07, 0.2, 0.85, -2.5, 0, 1.8);
+      streakBurst(pools.shard, p, n, 7, 1.8, 3.8, 1.6, 0.45, 0.15, 0.014, 0.035,
+        0.34, 0.03, 0.03, 0.2, 0.9, -9.8, 0, 0.5);
+    },
+    // 2026-10-14: the exit SPRAY thrown ALONG the bullet, out the far side of the
+    // target (fx.js also stamps KIND_BLOOD on whatever is behind him). [feel
+    // v153] droplets are streaks; `k` > 1.2 (head) widens the fan.
     fleshExit(p, n, dir, k) {
       if (!dir) return;
-      burstAt(pools.dust, p, dir, Math.max(6, Math.round(10 * k)), 2.4, 5.2, 0.35, 0.40, 0.12, 0.035, 0.07,
-        0.36, 0.035, 0.03, 0.15, 0.85, -9.5, 0, 0.6);
+      streakBurst(pools.shard, p, dir, Math.max(6, Math.round(9 * k)), 2.4, 5.6, 0.45,
+        0.40, 0.12, 0.016, 0.03, 0.34, 0.03, 0.03, 0.15, 0.9, -9.8, 0, 0.6);
       burstAt(pools.dust, p, dir, 2, 0.6, 1.2, 0.5, 0.55, 0.15, 0.14, 0.30,
         0.30, 0.04, 0.04, 0.12, 0.45, -1.5, 0, 1.4);
+    },
+    // blood setting "off": the hit still gets an answer, in a neutral grey
+    fleshMuted(p, n, dir, k, sz, far) {
+      const f = far || 1;
+      burstAt(pools.dust, p, n, 6, 0.7, 1.6, 0.7, 0.28, 0.1, 0.08 * f, 0.2 * f,
+        0.42, 0.42, 0.40, 0.2, 0.6, -2, 0, 1.6);
     },
   };
 
@@ -444,11 +713,17 @@ export function makeImpacts(env, pools, decals) {
     // than stamped edge-on inside solid geometry (decals.js header).
     // `opts` = {power, size} from fx.js (weapon-class table). Defaults are a
     // generic 5.56-ish round.
+    // `opts.wet` adds the wet-street droplet crown on top of the surface row.
     spawn(pos, normal, surface, dir, opts) {
       const fn = TABLE[surface] || TABLE.concrete;
       const k = opts && opts.power > 0 ? opts.power : 1;
       const sz = opts && opts.size > 0 ? opts.size : 0.19;
-      fn(pos, normal || UP, dir, k, sz);
+      // distance legibility: 1 inside 14 m, growing to 2.4 by ~34 m
+      const c = env.cam && env.cam.position;
+      const dc = c ? Math.hypot(pos[0] - c.x, pos[1] - c.y, pos[2] - c.z) : 0;
+      const far = Math.min(2.4, Math.max(1, dc / 14));
+      fn(pos, normal || UP, dir, k, sz, far);
+      if (opts && opts.wet) TABLE.wet(pos);
     },
     puff(pos, kind) {
       const fn = PUFFS[kind];

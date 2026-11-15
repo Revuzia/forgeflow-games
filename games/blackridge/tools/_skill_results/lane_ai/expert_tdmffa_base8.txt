@@ -1,0 +1,44 @@
+lanternwalk tdm n=8 ended 8/8  kills/min  14.4  acc 35.0%  ttk 1.29s  stuck>3s/match 0.00  worstIdle 3s  flank/min 0.86  frag/min 1.97  pick/m 31.6  idle@wall 2.4%  rev/100 1.16
+  STUCK {"t":3.3,"id":5,"st":"suspicious","pos":[-40.68,0,-14.45],"goal":[-28.5,0,13.5],"pathI":1,"n":8,"wp":[-35.88,0,-12.63],"v":0.87,"yield":false,"yieldN":0,"stuckN":0,"space":false}
+lanternwalk ffa n=8 ended 8/8  kills/min  24.0  acc 45.6%  ttk 0.78s  stuck>3s/match 0.13  worstIdle 2s  flank/min 0.61  frag/min 1.80  pick/m 32.0  idle@wall 4.9%  rev/100 0.79
+switchyard  tdm n=8 ended 8/8  kills/min  18.2  acc 61.5%  ttk 0.66s  stuck>3s/match 0.00  worstIdle 3s  flank/min 0.78  frag/min 2.05  pick/m 42.8  idle@wall 2.5%  rev/100 0.92
+switchyard  ffa n=8 ended 8/8  kills/min  22.5  acc 63.6%  ttk 0.67s  stuck>3s/match 0.00  worstIdle 2s  flank/min 0.66  frag/min 2.34  pick/m 32.6  idle@wall 4.0%  rev/100 0.64
+saltmarket  tdm n=8 ended 8/8  kills/min  18.5  acc 49.3%  ttk 0.73s  stuck>3s/match 0.00  worstIdle 2s  flank/min 0.94  frag/min 1.84  pick/m 46.8  idle@wall 0.7%  rev/100 0.66
+saltmarket  ffa n=8 ended 8/8  kills/min  25.7  acc 53.2%  ttk 0.80s  stuck>3s/match 0.00  worstIdle 3s  flank/min 0.66  frag/min 2.50  pick/m 42.0  idle@wall 0.1%  rev/100 0.65
+
+expert_probe  difficulty=expert  secs=180  seeds=8  AI avg 0.150 ms/tick  wall 174 s
+  x {"t":57.5,"id":19,"k":"alert|trade/freeform/p0.80|clr0|arrived|idle0","pos":[40,0,31.85],"goal":null,"anchor":[34,0,30],"box":"bv_drums_s","goalClr":null}
+  x {"t":57.8,"id":19,"k":"alert|trade/freeform/p0.80|clr0|arrived|idle0","pos":[40,0,31.85],"goal":null,"anchor":[34,0,30],"box":"bv_drums_s","goalClr":null}
+  x {"t":169,"id":49,"k":"alert|trade/freeform/p0.80|clr0|arrived|idle0","pos":[40,0,31.85],"goal":null,"anchor":[34,0,30],"box":"bv_drums_s","goalClr":null}
+  x {"t":169.3,"id":49,"k":"alert|trade/freeform/p0.80|clr0|arrived|idle0","pos":[40,0,31.85],"goal":null,"anchor":[34,0,30],"box":"bv_drums_s","goalClr":null}
+  x {"t":66.3,"id":22,"k":"alert|-|clr0|arrived|idle0","pos":[40,0,31.85],"goal":null,"box":"bv_drums_s","goalClr":null}
+  x {"t":66.5,"id":22,"k":"alert|trade/freeform/p0.80|clr0|arrived|idle0","pos":[40,0,31.85],"goal":null,"anchor":[34,0,30],"box":"bv_drums_s","goalClr":null}
+  x {"t":165.3,"id":49,"k":"alert|attack/lane/p0.80|clr0|arrived|idle0","pos":[40,0,31.85],"goal":null,"anchor":[34,0,30],"box":"bv_drums_s","goalClr":null}
+  x {"t":165.5,"id":49,"k":"alert|attack/lane/p0.80|clr0|arrived|idle0","pos":[40,0,31.85],"goal":null,"anchor":[34,0,30],"box":"bv_drums_s","goalClr":null}
+  x {"t":182,"id":49,"k":"alert|-|clr0|arrived|idle0","pos":[40,0,31.85],"goal":null,"box":"bv_drums_s","goalClr":null}
+  x {"t":182.3,"id":49,"k":"alert|lane/lane/p0.80|clr0|arrived|idle0","pos":[40,0,31.85],"goal":null,"anchor":[34,0,30],"box":"bv_drums_s","goalClr":null}
+  idle@wall 94 patrol|-|clr0|notArrived|idle-
+  idle@wall 59 alert|lane/lane/p0.75|clr0|arrived|idle0
+  idle@wall 54 patrol|-|clr1|notArrived|idle-
+  idle@wall 24 alert|-|clr0|arrived|idle0
+  idle@wall 18 patrol|-|clr0|arrived|idle0
+  idle@wall 16 patrol|lane/lane/p0.80|clr0|arrived|idle0
+  idle@wall 14 alert|lane/lane/p0.85|clr0|arrived|idle0
+  idle@wall 11 alert|-|clr0|notArrived|idle-
+  idle@wall 9 alert|lane/lane/p0.80|clr0|arrived|idle-
+  idle@wall 8 patrol|lane/lane/p0.80|clr0|arrived|idle1
+  idle@wall 8 patrol|lane/lane/p0.45|clr0|arrived|idle0
+  idle@wall 8 patrol|-|clr0|notArrived|idle1
+  idle@wall 8 patrol|-|clr1|notArrived|idle0
+  idle@wall 8 patrol|-|clr1|notArrived|idle1
+  idle@wall 6 alert|lane/lane/p0.75|clr0|notArrived|idle-
+  idle@wall 6 patrol|-|clr0|notArrived|idle0
+  idle@wall 6 patrol|-|clr0|notArrived|idle2
+  idle@wall 5 patrol|lane/lane/p0.80|clr0|arrived|idle-
+  idle@wall 5 alert|trade/freeform/p0.80|clr0|arrived|idle0
+  idle@wall 5 patrol|lane/lane/p0.75|clr0|arrived|idle0
+  idle@wall 4 alert|attack/lane/p0.80|clr0|arrived|idle0
+  idle@wall 3 patrol|lane/lane/p0.80|clr0|arrived|idle2
+  idle@wall 3 alert|lane/lane/p0.80|clr0|notArrived|idle-
+  idle@wall 2 patrol|-|clr1|notArrived|idle2
+  idle@wall 2 alert|attack/lane/p0.45|clr0|notArrived|idle-

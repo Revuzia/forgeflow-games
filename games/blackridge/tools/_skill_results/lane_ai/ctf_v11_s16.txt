@@ -1,0 +1,13 @@
+lanternwalk n=16  caps/match 0.50 (caps by team 1:7, team-0 match share 34%)  carried 5% both 0% (carrier holding near stand 0% of carried time)
+            carrier deaths 13 (0.8/match) by quarter home [7,3,3,0]  could score 13/13  killer order {"attack":8,"lane":5}  killer->carrier's stand median 53 m, killer->carrier 9 m  own mates within 15 m 0.15
+            top killer reasons lane/LANE_QUOTA 5, attack/ATTACK_FLAG 4, attack/CUTOFF_INFEASIBLE 4
+            drops 0.8/match: re-grabbed by the carrier's side 0.1, returned by touch 0.7  escorts: samples 363, median distance to carrier 20.2 m, ahead of carrier 64%
+switchyard  n=16  caps/match 2.25 (caps by team 12:24, team-0 match share 34%)  carried 38% both 9% (carrier holding near stand 59% of carried time)
+            carrier deaths 96 (6.0/match) by quarter home [35,21,22,18]  could score 39/96  killer order {"lane":58,"attack":24,"carry":2,"intercept":12}  killer->carrier's stand median 42 m, killer->carrier 9 m  own mates within 15 m 0.32
+            top killer reasons lane/LANE_QUOTA 58, attack/CUTOFF_INFEASIBLE 15, attack/ATTACK_FLAG 9, intercept/HUNT 9, intercept/CUTOFF_FEASIBLE 3, carry/HOLD_NEAR_STAND 2
+            drops 6.0/match: re-grabbed by the carrier's side 0.6, returned by touch 5.4  escorts: samples 2079, median distance to carrier 16.6 m, ahead of carrier 37%
+saltmarket  n=16  caps/match 1.56 (caps by team 2:23, team-0 match share 13%)  carried 30% both 2% (carrier holding near stand 14% of carried time)
+            carrier deaths 44 (2.8/match) by quarter home [12,25,6,1]  could score 37/44  killer order {"lane":23,"attack":17,"defend":2,"carry":2}  killer->carrier's stand median 57 m, killer->carrier 9 m  own mates within 15 m 0.50
+            top killer reasons lane/LANE_QUOTA 23, attack/ATTACK_FLAG 15, attack/CUTOFF_INFEASIBLE 2, carry/HOLD_NEAR_STAND 2, defend/DEFEND_STAND 1, defend/LEASH 1
+            drops 2.8/match: re-grabbed by the carrier's side 0.7, returned by touch 2.1  escorts: samples 2297, median distance to carrier 17.2 m, ahead of carrier 42%
+ctf_probe  secs=180 seeds=16  AI avg 0.368 ms/tick  OBJ 0.041 ms/tick  wall 146 s
