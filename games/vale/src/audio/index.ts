@@ -2774,7 +2774,7 @@ class Engine implements ValeAudioPort {
           const ally = !!src && !self && src.team === mine && !!near0 && Math.hypot(src.x - near0.x, src.y - near0.y) <= LISTEN_INNER_M;
           if (src && (self || (ally && this.healToken(now))) && this.cue(pr.sfx, at(src), 1, 0, aw) === 'played') {
             this.healLast.set(src.id, now); this.healAny.set(src.id, now); this.healTeamLast = now;
-            this.healTokens = Math.max(0, this.healTokens - 1);
+            this.healTokens = Math.max(-HEAL_BURST, this.healTokens - 1);
           }
         }
         else this.cue(own ?? pr?.sfx ?? this.ev(slot === 'ult' ? 'castUlt' : src?.kind === 'monster' ? 'castMonster' : 'cast'), at(src), 1, 0, aw);
@@ -2908,7 +2908,7 @@ class Engine implements ValeAudioPort {
         if (this.cue(this.ev('heal'), at(dst), 0.7, 0, aw) === 'played') {
           this.healLast.set(dst.id, now);
           this.healTeamLast = now;
-          if (!big) this.healTokens -= 1;
+          this.healTokens = Math.max(-HEAL_BURST, this.healTokens - 1);   // a bypass still pays: the long-run rate holds
         }
         break;
       }

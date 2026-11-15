@@ -648,6 +648,10 @@ export interface PlanOpts {
   readonly enemies?: readonly FighterProfile[];
   /** per-seat taste (e.g. match seed × 31 + player): breaks near-ties between items differently per game */
   readonly salt?: number;
+  /** lane AI G9: the team is well behind on Gleam — defence pieces are worth 20 % more */
+  readonly behind?: boolean;
+  /** lane AI G9: the enemy team's real size when `enemies` lists some fighters more than once (weights) */
+  readonly teamSize?: number;
 }
 
 /** how much an item is worth in THIS match (1 = neutral): the enemy read, the seat's role, what the kit can trigger */
@@ -670,11 +674,17 @@ export function buildPlan(idx: CatalogIndex, rules: RulesParamsT, prof: FighterP
   const pool = rules.itemPool;
   const inPool = (it: ItemDefT): boolean => it.pools.length === 0 || it.pools.includes(pool);
   const items = idx.catalog.items.filter(inPool);
-  const er = readEnemies(opts.enemies ?? []);
+  const er0 = readEnemies(opts.enemies ?? []);
+  // (lane AI G9: a live read weighs some enemies more by listing them again; its counts are scaled back to the real team
+  // size, so a weight shifts the mix without inventing a second healer or tank)
+  const k = opts.teamSize && er0.n > opts.teamSize ? opts.teamSize / er0.n : 1;
+  const er: EnemyRead = k === 1 ? er0 : { ...er0, n: opts.teamSize!, healers: er0.healers * k, tanks: er0.tanks * k, threats: er0.threats * k, soft: er0.soft * k };
   const support = !!opts.support;
   const salt = opts.salt ?? 0;
+  const behind = !!opts.behind;
   const score = (it: ItemDefT): number => itemValue(it, prof) / Math.max(150, it.cost) * 1000 *
-    situational(it, prof, er, support) * (0.9 + 0.2 * taste(salt, it.id));
+    situational(it, prof, er, support) * (0.9 + 0.2 * taste(salt, it.id)) *
+    (behind && it.tags.includes('defense') ? 1.2 : 1);
   const byScore = (list: ItemDefT[]): ItemDefT[] => list.map((it) => ({ it, s: score(it) }))
     .sort((a, b) => b.s - a.s || (a.it.id < b.it.id ? -1 : 1)).map((x) => x.it);
   const cores = byScore(items.filter((i) => i.tier === 'core'));

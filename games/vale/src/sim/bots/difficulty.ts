@@ -88,6 +88,51 @@ export interface DifficultyProfile {
    *  waits at its door while a road is under threat, and gives up on one that is not falling (60 s before it tries
    *  again); keeps fighters under 45 % health out of its sieges and objective calls */
   readonly objectiveSense: boolean;
+  // ── lane AI (2026-11-15, owner: "defend their base, sneak attack, defend their partners"; owner_rulings 40) ──
+  // Every field below is a decision knob, never a stat: how many fighters a threatened structure gets, whether a
+  // defender recalls to it, how often a fighter peels for a partner, how long a ganker lurks, how much a fighter fears
+  // enemies it cannot see, whether CC is chained, whether the team splits a pusher off and trades objectives cross-map.
+  /** structure defence: defenders sent = ceil((enemy fighters there + 1 at an inner / base structure) × defendMatch) */
+  readonly defendMatch: number;
+  /** structure defence: recalls to a threatened structure when that is faster than walking ('none', 'base' = base
+   *  structures only, 'inner' = inner and base) */
+  readonly recallDefend: 'none' | 'base' | 'inner';
+  /** structure defence: seconds a defender keeps its post after the threat has cleared */
+  readonly defendHold: number;
+  /** peel: chance (rolled once per episode) that a fighter near a partner being dived or held turns to protect it */
+  readonly peelChance: number;
+  /** peel: a frontline or warden steps between the partner and the diver */
+  readonly peelBodyBlock: boolean;
+  /** ganks: the longest wait (s) in a thicket for the target to step into reach (0: walks straight in) */
+  readonly lurkMax: number;
+  /** ganks: the approach avoids the enemy's known lamps and the open river */
+  readonly avoidVision: boolean;
+  /** team fights: a burst or diver fighter with an escape flanks from the side and goes in after the frontline */
+  readonly flank: boolean;
+  /** fog risk (Σ weighted enemies unseen 6–40 s that could be near) at which a fighter stops pushing deep alone */
+  readonly riskCap: number;
+  /** leaves a fight early when the visible enemies' burst would take most of its health */
+  readonly burstRetreat: boolean;
+  /** mid and late game: one fighter with an escape split-pushes the road opposite the siege */
+  readonly splitPush: boolean;
+  /** group calls are followed at least this often (the intentFollow roll only delays the arrival) */
+  readonly groupFollowFloor: number;
+  /** objectives: lamps go round the pit before it spawns, and enemy lamps there are cleared */
+  readonly visionSetup: boolean;
+  /** objectives: the long objective (time to kill over 15 s) is taken at even numbers up to this time to kill (s, 0: never) */
+  readonly longshadeTtk: number;
+  /** objectives: an enemy objective the team cannot contest is traded for a structure across the map */
+  readonly crossTrade: boolean;
+  /** objectives: desire at even numbers after 12:00 for a tier with objectiveEven 0 (a beginner's macro) */
+  readonly objectiveEvenLate: number;
+  /** chance a hard CC is held for the moment a partner's CC on the same target is about to end (chains) */
+  readonly ccChain: number;
+  /** CC goes on the enemy doing the most damage to the team, not on whatever the fighter is hitting */
+  readonly threatCc: boolean;
+  /** the build re-reads the match on every shop visit: the fed enemy, the damage mix taken, being behind */
+  readonly adaptiveBuild: boolean;
+  /** FRAY: waits outside a fight between two others and enters when one is low (chance per fight) */
+  readonly thirdParty: number;
 }
 
 export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
@@ -108,6 +153,9 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     decisionNoise: 0.2, focusDiscipline: 0.05, abilityEvery: 1.3,
     macroDelay: 22, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
     objectiveLead: 10, objectiveEven: 0, contests: false, objectiveSense: false,
+    defendMatch: 0.5, recallDefend: 'none', defendHold: 4, peelChance: 0.3, peelBodyBlock: false, lurkMax: 0, avoidVision: false,
+    flank: false, riskCap: Infinity, burstRetreat: false, splitPush: false, groupFollowFloor: 0, visionSetup: false,
+    longshadeTtk: 0, crossTrade: false, objectiveEvenLate: 0.35, ccChain: 0, threatCc: false, adaptiveBuild: false, thirdParty: 0,
   },
   // (CW3s r3, CL-1: adept's longest quiet stretch fell at 3:00-12:00 with the laners 9 m apart at 75 % health; deaths a minute run under veteran's from 5:00 to 13:00. It now contests an enemy start at a camp, the fight veteran's team takes there, and reads a kill as veteran does. A flat +0.08 on the trade edge was tried and dropped: stretch 3.2 min, takedowns by 10:00 7.15 -> 6.70. team.ts thinkGank and bot.ts's roam read widen for every tier: gaps at 8:00-12:00. Laning retreat bias -0.04: takedowns by 10:00 5.95 -> 6.50 on seeds 8101-8120. Untuned seeds 8501-8520 / 8701-8720: stretch 2.7 / 2.8 min, was 3.4 / 3.6)
   adept: {
@@ -117,14 +165,20 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     decisionNoise: 0.06, focusDiscipline: 0.65, abilityEvery: 0.3,
     macroDelay: 2.5, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
     objectiveLead: 30, objectiveEven: 0.55, contests: true, objectiveSense: false,
+    defendMatch: 1, recallDefend: 'base', defendHold: 6, peelChance: 0.7, peelBodyBlock: true, lurkMax: 4, avoidVision: false,
+    flank: false, riskCap: 2.0, burstRetreat: true, splitPush: false, groupFollowFloor: 0.9, visionSetup: true,
+    longshadeTtk: 45, crossTrade: false, objectiveEvenLate: 0, ccChain: 0.5, threatCc: false, adaptiveBuild: true, thirdParty: 0.6,
   },
   veteran: {
     id: 'veteran', reaction: 0.12, reactionJitter: 0.04, aimErrorDeg: 2.5, leadSkill: 0.95,
-    lastHitSigma: 0.03, lastHitMiss: 0.03, riftLastHitMiss: 0.02, dodgeChance: 0.85, kiteSkill: 0.9, shotPatience: 1,
+    lastHitSigma: 0.03, lastHitMiss: 0.03, riftLastHitMiss: 0.02, dodgeChance: 0.85, kiteSkill: 0.9, shotPatience: 1, riftShotPatience: 0.6,
     intentFollow: 1, recallBias: 0.04, retreatBias: 0.03, riftRetreatBias: -0.02, riftRecallBias: 0, riftKillRead: 0.8, riftPassivePress: 0.8, knowsCooldowns: true,
     decisionNoise: 0.03, focusDiscipline: 1, abilityEvery: 0.2,
     macroDelay: 0, convertsLeads: true, leadGleam: 1500, readsWaves: true,
     objectiveLead: 50, objectiveEven: 0.68, contests: true, objectiveSense: true,
+    defendMatch: 1, recallDefend: 'inner', defendHold: 6, peelChance: 1, peelBodyBlock: true, lurkMax: 8, avoidVision: true,
+    flank: true, riskCap: 1.5, burstRetreat: true, splitPush: true, groupFollowFloor: 1, visionSetup: true,
+    longshadeTtk: 45, crossTrade: true, objectiveEvenLate: 0, ccChain: 1, threatCc: true, adaptiveBuild: true, thirdParty: 1,
   },
 };
 

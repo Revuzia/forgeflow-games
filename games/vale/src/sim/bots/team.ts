@@ -32,8 +32,31 @@ import { lanePoint, progress, fromProgress, proj, type CampInfo, type Knowledge,
 import type { TeamPerc } from './perception.ts';
 import { dhypot, sq } from '../dmath.ts';
 import { DIFFICULTIES, type DifficultyProfile } from './difficulty.ts';
+import { recallTime } from '../units/fighters.ts';
+import { abilityInfo, U_ESCAPE } from './knowledge.ts';
 
 export interface LaneAssign { lane: number; jungle: boolean; support: boolean }
+
+/** structure class by how deep it sits: 0 outer (guards nothing behind it), 1 inner, 2 base (a Lantern, a Bell Needle, the core) */
+export type StructClass = 0 | 1 | 2;
+
+/** a fighter posted to a threatened own structure (lane AI G1): it keeps this post until the threat has been gone
+ *  for the tier's defendHold, and is never pulled onto another call meanwhile */
+export interface Guard {
+  readonly sid: string;
+  /** the structure, and where to stand: inside its reach on the home side (a gate or the core: at it) */
+  x: number; y: number; standX: number; standY: number;
+  /** its reach (range + radius − 1; 0: it does not shoot) */
+  reach: number;
+  cls: StructClass;
+  /** recall to it (the recall plus the walk from the fountain is clearly faster than walking) */
+  recall: boolean;
+  /** the post holds until then (renewed while the threat holds) */
+  until: number;
+}
+
+/** a place a ganker can wait out of sight beside a road: a thicket whose centre is 4–22 m off the road (lane AI G3) */
+export interface Entry { readonly x: number; readonly y: number; readonly lane: number; readonly thicket: number }
 
 export const TEAM_THINK_TICKS = 15;
 
@@ -136,6 +159,26 @@ export class TeamBrain {
   aliveAllies = 0; aliveEnemies = 0;
   /** enemy fighters not seen for a while (danger of pushing deep) */
   missing = 0;
+  /** lane AI G1: fighters posted to threatened own structures */
+  readonly guard = new Map<PlayerId, Guard>();
+  /** structure id → class (outer / inner / base) */
+  private readonly classes = new Map<string, StructClass>();
+  /** lane AI G3: thickets beside each road a ganker can wait in, and every thicket centre (ambush spots) */
+  readonly entries: Entry[] = [];
+  readonly thicketXs: number[] = [];
+  readonly thicketYs: number[] = [];
+  /** lane AI G3: a roam heading for this road's gank (the laner holds its wave for it), and when it was last seen */
+  gankComing = -1; gankComingAt = -1e9;
+  /** lane AI G6: the split-pusher (-1: none), its road, and whether the road is safe for it */
+  splitSeat: PlayerId = -1; splitLane = -1; splitSafe = false;
+  /** lane AI G5: the group is gathered enough to press (fit fighters at the group point) */
+  gathered = true;
+  /** lane AI G7: a cross-map trade for an objective the team cannot contest — press this structure until then */
+  tradeUntil = -1e9;
+  private tradeX = 0; private tradeY = 0;
+  /** lane AI G7: an objective to light up before it spawns (lamps round the pit), and enemy lamps there to clear */
+  visionPit: CampInfo | null = null;
+
 
   /** shared with the match: map structure id → when it fell */
   readonly downAt: ReadonlyMap<string, number>;
@@ -153,6 +196,28 @@ export class TeamBrain {
     this.campBlock = new Float64Array(k.camps.length);
     this.campOn = new Float64Array(k.camps.length).fill(-1);
     for (const c of k.camps) this.campReady[c.index] = c.firstSpawn;
+    // structure classes by requires-depth (a structure that guards nothing is outer; the core and its guards are base)
+    const depth = (id: string, g: number): number => {
+      const st = k.structs.find((x) => x.id === id);
+      if (!st || g > 12) return 0;
+      let d = 0;
+      for (const r of st.requires) d = Math.max(d, 1 + depth(r, g + 1));
+      return d;
+    };
+    for (const st of k.structs) this.classes.set(st.id, st.isCore || st.lane < 0 ? 2 : Math.min(2, depth(st.id, 0)) as StructClass);
+    // gank entries and ambush spots
+    const th = k.map.thickets;
+    for (let i = 0; i < th.length; i++) {
+      const poly = th[i];
+      let cx = 0, cy = 0;
+      for (const pt of poly) { cx += pt[0]; cy += pt[1]; }
+      cx /= poly.length; cy /= poly.length;
+      this.thicketXs.push(cx); this.thicketYs.push(cy);
+      for (const l of k.lanes) {
+        const pr = this.projectTo(l.index, cx, cy);
+        if (pr.d2 >= 4 * 4 && pr.d2 <= 22 * 22) this.entries.push({ x: cx, y: cy, lane: l.index, thicket: i });
+      }
+    }
     this.assignLanes();
     for (const a of this.assign.values()) if (a.lane >= 0 && !a.jungle) this.laners[a.lane]++;
   }
@@ -162,6 +227,15 @@ export class TeamBrain {
     for (const [p, a] of assignLanes(this.k, this.team)) this.assign.set(p, a);
   }
   laneOf(p: PlayerId): LaneAssign { return this.assign.get(p) ?? { lane: this.k.lanes.length > 0 ? 0 : -1, jungle: false, support: false }; }
+  /** is the own structure of this map id standing */
+  private ownStanding(id: string): boolean {
+    const s = this.k.structs.find((x) => x.id === id);
+    if (!s) return false;
+    for (const e of this.perc.allyStructs) if (e.alive && Math.abs(e.x - s.x) < 0.5 && Math.abs(e.y - s.y) < 0.5) return true;
+    return false;
+  }
+  /** a structure's class (outer 0, inner 1, base 2) */
+  classOf(info: StructInfo): StructClass { return this.classes.get(info.id) ?? 0; }
   /** how many of this team's laners hold `lane` */
   lanersOn(lane: number): number { return lane >= 0 && lane < this.laners.length ? this.laners[lane] : 0; }
 
@@ -198,6 +272,138 @@ export class TeamBrain {
     this.thinkObjective(w, aa, ae);
     this.thinkGank(w);
     this.thinkAnswers(w);
+    this.thinkGuard(w);
+    this.thinkSplit(w);
+  }
+
+  /**
+   * Lane AI G1 — structure defence (RIFT). Every own structure with visible enemy fighters at it needs
+   * ceil((fighters + 1 at an inner or base structure) × defendMatch) defenders; an inner or base structure with a
+   * stacked wave and no enemy fighter (a wave into the base, or a backdoor of Wicks) needs one. In the laning phase an
+   * outer Needle with no more enemy fighters than its road has laners is laning, not a call. Defenders are picked
+   * greedily by arrival time — the walk, or the recall plus the walk from the fountain when the tier recalls to that
+   * class — never below 35 % health, and keep their post (no switching calls) until the threat has been gone for
+   * defendHold s. Inner and base calls wait at most 5 s of the tier's macroDelay; outer calls wait all of it.
+   */
+  private thinkGuard(w: World): void {
+    const k = this.k, tp = this.perc, now = w.time, d = this.diff;
+    if (k.kind !== 'rift') { this.guard.clear(); return; }
+    for (const [p, g] of this.guard) {
+      const e = w.players[p]?.ent;
+      if (!e || !e.alive || e.hp < e.maxHp * 0.25 || now > g.until) this.guard.delete(p);
+    }
+    const laning = now < 840 && !this.rush && !this.stage && this.phase !== 'late';
+    // (from 25:00 the game is closing: a structure gets as many defenders as it has divers, not one more — long death timers
+    // decide it, and a base that always out-numbers its attackers turns the late game into a stall; owner_rulings 40)
+    const closing = now >= 1500;
+    const base = k.bases.find((b) => b.team === this.team);
+    const rt = k.rules.recall ? recallTime(w) : Infinity;
+    const threats: { st: Entity; info: StructInfo; cls: StructClass; need: number; n: number }[] = [];
+    for (const st of tp.allyStructs) {
+      if (!st.alive) continue;
+      const info = this.structInfoOf(st);
+      if (!info) continue;
+      const cls = this.classOf(info);
+      const reach = Math.max(9, info.range + info.radius + 6);
+      let n = 0, minions = 0, mine = 0, coming = 0;
+      // (an inner or base structure that is the front of its road — everything in front of it has fallen — is defended
+      // before the push reaches it: enemy fighters within 28 m count, as a player holds the next tower)
+      const front = cls > 0 && !laning && info.requires.every((r) => !this.ownStanding(r));
+      for (const f of tp.enemyFighters) {
+        if (!f.alive) continue;
+        const d2 = sq(f.x - st.x) + sq(f.y - st.y);
+        if (d2 <= reach * reach) n++; else if (front && d2 <= 28 * 28) coming++;
+      }
+      for (const u of tp.enemyUnits) if (u.alive && u.kind === 'minion' && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) minions++;
+      for (const u of tp.allyUnits) if (u.alive && u.kind === 'minion' && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) mine++;
+      let need = 0;
+      if (n > 0) {
+        // (one more than the divers at an inner or base structure — not in the laning phase, where the roads hold first)
+        if (!(cls === 0 && laning && n <= this.lanersOn(info.lane))) need = Math.max(1, Math.ceil((n + (cls > 0 && !laning && !closing ? 1 : 0)) * d.defendMatch - 1e-9));
+      } else if (coming > 0) need = Math.max(1, Math.ceil(coming * d.defendMatch - 1e-9));
+      else if (cls > 0 && minions - mine >= 4) need = 1;
+      const delay = cls === 0 ? d.macroDelay : Math.min(d.macroDelay, 5);
+      if (!this.held(`g:${info.id}`, need > 0, now, delay)) need = 0;
+      if (need > 0) threats.push({ st, info, cls, need, n: n + coming });
+    }
+    // the deepest structure first, then the bigger push (map order breaks ties: deterministic)
+    threats.sort((a, b) => b.cls - a.cls || b.n - a.n);
+    for (const th of threats) {
+      const { st, info, cls } = th;
+      let have = 0;
+      for (const g of this.guard.values()) if (g.sid === info.id) { have++; g.until = now + d.defendHold; }
+      // where to stand: inside the tower's reach on the home side (fight the diver under it, never in front of it)
+      const reach = info.attacks ? Math.max(0, info.range + info.radius - 1) : 0;
+      let sx = st.x, sy = st.y;
+      if (base) {
+        const dx = base.fx - st.x, dy = base.fy - st.y, dd = dhypot(dx, dy) || 1;
+        const off = info.attacks ? Math.min(reach * 0.5, 3.5) : info.radius + 1.5;
+        sx = st.x + (dx / dd) * off; sy = st.y + (dy / dd) * off;
+      }
+      const recallOk = !!base && rt < Infinity && (d.recallDefend === 'inner' ? cls >= 1 : d.recallDefend === 'base' ? cls >= 2 : false);
+      const cap = cls === 2 ? 45 : cls === 1 ? 30 : 20;
+      while (have < th.need) {
+        let best: PlayerId = -1, bt = Infinity, bRecall = false;
+        for (const p of w.players) {
+          if (!p || p.team !== this.team || this.guard.has(p.player)) continue;
+          const e = p.ent;
+          if (!e || !e.alive || e.hp < e.maxHp * 0.35) continue;
+          const ms = Math.max(1, e.stats.moveSpeed);
+          const dist = dhypot(e.x - st.x, e.y - st.y);
+          const walk = dist < 14 ? 0 : dist * 1.25 / ms;
+          let eta = walk, rec = false;
+          if (recallOk && base && dist > 45) {
+            const r = rt + dhypot(base.fx - st.x, base.fy - st.y) * 1.15 / ms;
+            if (r + 8 <= walk) { eta = r; rec = true; }
+          }
+          if (eta > cap || eta >= bt) continue;
+          bt = eta; best = p.player; bRecall = rec;
+        }
+        if (best < 0) break;
+        this.guard.set(best, { sid: info.id, x: st.x, y: st.y, standX: sx, standY: sy, reach, cls, recall: bRecall, until: now + d.defendHold });
+        have++;
+      }
+    }
+  }
+
+  /**
+   * Lane AI G6 — split push (tiers with splitPush, RIFT mid and late game, while the team groups with four or more up):
+   * one diver or skirmisher with an escape takes the road opposite the siege; the road is safe while at most one enemy
+   * fighter was seen near it in the last 8 s and fewer than two enemies are missing.
+   */
+  private thinkSplit(w: World): void {
+    const k = this.k, d = this.diff, now = w.time;
+    const on = d.splitPush && k.kind === 'rift' && this.phase !== 'early' && this.group && !this.rush && !this.stage && this.aliveAllies >= 4 && this.siegeLane >= 0 && k.lanes.length >= 3;
+    if (!on) { this.splitSeat = -1; this.splitLane = -1; this.splitSafe = false; return; }
+    const cur = this.splitSeat >= 0 ? w.players[this.splitSeat]?.ent : null;
+    if (!cur || !cur.alive || cur.hp < cur.maxHp * 0.4) {
+      this.splitSeat = -1;
+      let bs = -Infinity;
+      for (const p of w.players) {
+        if (!p || p.team !== this.team) continue;
+        const e = p.ent;
+        if (!e || !e.alive || e.hp < e.maxHp * 0.7) continue;
+        const prof = k.profiles.get(e.def);
+        if (!prof || (prof.style !== 'diver' && prof.style !== 'skirmisher')) continue;
+        let esc = false;
+        for (let i = 0; i < 4; i++) { const sl = e.slots[i]; if (sl && (abilityInfo(sl.def).use & U_ESCAPE)) { esc = true; break; } }
+        if (!esc) continue;
+        const sc = e.level + (this.assign.get(p.player)?.jungle ? -3 : 0);
+        if (sc > bs) { bs = sc; this.splitSeat = p.player; }
+      }
+    }
+    if (this.splitSeat < 0) { this.splitLane = -1; this.splitSafe = false; return; }
+    // the road farthest from the siege, the one with more of our Wicks on it first
+    let bl = -1, bv = -Infinity;
+    for (const l of k.lanes) {
+      if (l.index === this.siegeLane) continue;
+      const v = Math.abs(l.index - this.siegeLane) * 3 + this.perc.ownN[l.index] - this.perc.enemyN[l.index] * 0.5;
+      if (v > bv) { bv = v; bl = l.index; }
+    }
+    this.splitLane = bl;
+    let seen = 0;
+    if (bl >= 0) for (const ls of this.perc.lastSeen.values()) if (now - ls.t <= 8 && this.projectTo(bl, ls.x, ls.y).d2 <= 25 * 25) seen++;
+    this.splitSafe = bl >= 0 && seen <= 1 && this.missing < 2;
   }
 
   /**
@@ -276,11 +482,11 @@ export class TeamBrain {
   }
 
   /** macroDelay: true once `cond` has held for the tier's delay (resets the moment it fails) */
-  private held(key: string, cond: boolean, now: number): boolean {
+  private held(key: string, cond: boolean, now: number, delay = this.diff.macroDelay): boolean {
     if (!cond) { this.since.delete(key); return false; }
     let t = this.since.get(key);
     if (t === undefined) { t = now; this.since.set(key, t); }
-    return now - t + 1e-9 >= this.diff.macroDelay;
+    return now - t + 1e-9 >= delay;
   }
 
   /**
@@ -485,7 +691,26 @@ export class TeamBrain {
       if (clock || ready >= need || this.aliveEnemies <= 2) this.rush = aliveDiff >= -1 || this.aliveEnemies <= 2;
       else this.stage = true;
     }
+    // (lane AI G7: a cross-map trade — the enemy is on an objective we cannot contest: press the structure farthest from
+    // it for 25 s; G5: a pressed siege goes in only with enough fit fighters at the group point)
+    if (k.kind === 'rift' && now0 < this.tradeUntil && !endgame) {
+      let tb: Entity | null = null, tbI: StructInfo | undefined, td = -Infinity;
+      for (const e of tp.enemyStructs) {
+        if (!e.alive || !e.targetable) continue;
+        const info = this.structInfoOf(e);
+        if (!info || info.isCore || info.respawns || info.lane < 0) continue;
+        const dd = sq(e.x - this.tradeX) + sq(e.y - this.tradeY) - progress(k.lanes[info.lane], this.team, info.s) * 4;
+        if (dd > td) { td = dd; tb = e; tbI = info; }
+      }
+      if (tb && tbI) { this.siege = tb; this.siegeLane = tbI.lane; bestInfo = tbI; group = true; this.press = true; }
+    }
     this.group = group && !!this.siege;
+    this.gathered = true;
+    if (k.kind === 'rift' && (this.window || this.press) && !this.rush && this.group) {
+      let fitAt = 0;
+      for (const f of tp.allyFighters) if (f.alive && f.hp >= f.maxHp * 0.45 && sq(f.x - this.groupX) + sq(f.y - this.groupY) <= 18 * 18) fitAt++;
+      this.gathered = now0 >= 1500 || fitAt >= Math.min(3, this.aliveAllies);
+    }
     if (this.siege) {
       const s = this.siege;
       const info = bestInfo!;
@@ -510,7 +735,9 @@ export class TeamBrain {
   private thinkObjective(w: World, aa: number, ae: number): void {
     const prev = this.objective?.camp ?? null;
     this.objective = null;
+    this.visionPit = null;
     if (this.k.kind !== 'rift') return;
+    this.thinkObjectiveExtras(w, aa, ae);
     // never while the base is under siege or the team is closing the game
     if (this.baseThreat >= 0.4 || this.rush || this.stage) return;
     let threat = 0;
@@ -545,6 +772,9 @@ export class TeamBrain {
           // a long objective only with a fighter more; none the team cannot take in 40 s; at even numbers a short one
           // only when the team is near (no road is under threat here: that returned above)
           desire = ttk > 40 ? 0 : up ? 0.75 : !long && aa >= ae && this.phase !== 'early' && near ? d.objectiveEven : 0;
+          // (lane AI G7: the long objective at even numbers once the team can take it fast enough, fit, with the enemy
+          // unable to answer — a fallen enemy's respawn clock or nobody of theirs seen near the pit for 10 s)
+          if (long && desire === 0 && this.longOk(w, c, ttk, aa, ae)) desire = d.objectiveEven;
           // (CW3s refix, done:2: the laning phase's own objective is taken at even numbers once it is up and short for us
           // — the grovehunter and the roads beside it; it used to wait for a fighter more, 8.5 min past its spawn)
           if (early && ttk <= 30 && aa >= ae) desire = Math.max(desire, 0.75);
@@ -565,7 +795,14 @@ export class TeamBrain {
         // (one call at a time: the camp the team is already on keeps it against an equal one — no walking back and forth)
         if (desire > 0 && prev === c) desire = Math.max(desire, Math.min(0.8, desire + 0.06));
       } else if (alive) {
-        desire = aa >= ae + 1 ? 0.75 : aa >= ae && this.phase !== 'early' ? d.objectiveEven : 0;
+        // (lane AI G7: a beginner's macro still takes an even objective late, as a beginner does — never zero takes)
+        const even = d.objectiveEven > 0 ? d.objectiveEven : now >= 720 ? d.objectiveEvenLate : 0;
+        desire = aa >= ae + 1 ? 0.75 : aa >= ae && this.phase !== 'early' ? even : 0;
+        // (lane AI G7: the long objective needs the time to kill and an enemy that cannot answer, as above)
+        if (desire > 0 && aa < ae + 1 && d.longshadeTtk > 0) {
+          const { ttk } = this.campTtk(w, c);
+          if (ttk > 15 && !this.longOk(w, c, ttk, aa, ae)) desire = 0;
+        }
         // (CW3s refix, done:2: the laning phase's objective at even numbers, as above)
         // (a beginner, objectiveEven 0, takes it only with a fighter more: three Splinters at even numbers kept novice in games)
         if (early && aa >= ae && d.objectiveEven > 0) desire = Math.max(desire, 0.75);
@@ -577,6 +814,40 @@ export class TeamBrain {
       // (macroDelay: the call goes out once it has held)
       if (!this.held(`obj${c.index}`, desire > 0, now)) desire = 0;
       if (desire > (this.objective?.desire ?? 0)) this.objective = { camp: c, desire, alive };
+    }
+  }
+
+  /** the long objective is worth it at even numbers: time to kill within the tier's longshadeTtk, four fit fighters, and
+   *  an enemy that cannot answer (one of them dead for 60 % of the time to kill, or none seen near the pit for 10 s) */
+  private longOk(w: World, c: CampInfo, ttk: number, aa: number, ae: number): boolean {
+    const d = this.diff;
+    if (d.longshadeTtk <= 0 || ttk > d.longshadeTtk || aa < ae) return false;
+    let fit = 0;
+    for (const p of w.players) if (p && p.team === this.team && p.ent && p.ent.alive && p.ent.hp >= p.ent.maxHp * 0.5) fit++;
+    if (fit < 4) return false;
+    for (const p of w.players) if (p && p.team !== this.team && p.ent && !p.ent.alive && p.respawnIn >= ttk * 0.6) return true;
+    for (const ls of this.perc.lastSeen.values()) if (w.time - ls.t < 10 && sq(ls.x - c.x) + sq(ls.y - c.y) <= 40 * 40) return false;
+    for (const f of this.perc.enemyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 40 * 40) return false;
+    return true;
+  }
+
+  /**
+   * Lane AI G7: vision before an objective (tiers with visionSetup: from objectiveLead before a spawn, and while it is up,
+   * lamps go round the pit and enemy lamps there are cleared), and the cross-map trade (crossTrade: the enemy is on a
+   * live objective the team cannot contest — fewer fighters up, or a camp it would take much longer — so the team
+   * presses the structure farthest from it for 25 s).
+   */
+  private thinkObjectiveExtras(w: World, aa: number, ae: number): void {
+    const d = this.diff, now = w.time;
+    for (const c of this.k.camps) {
+      if (!c.objective) continue;
+      const ready = this.campReady[c.index];
+      if (d.visionSetup && ready - now <= d.objectiveLead && now >= 240 && (!this.visionPit || ready < this.campReady[this.visionPit.index])) this.visionPit = c;
+      if (!d.crossTrade || ready > now || now < this.tradeUntil) continue;
+      let at = 0;
+      for (const f of this.perc.enemyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 16 * 16) at++;
+      if (at < 2) continue;
+      if (aa < ae || this.campTtk(w, c).ttk > 30) { this.tradeUntil = now + 25; this.tradeX = c.x; this.tradeY = c.y; }
     }
   }
 

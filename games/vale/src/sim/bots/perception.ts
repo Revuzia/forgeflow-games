@@ -21,7 +21,17 @@ import type { World } from '../world.ts';
 import { laneProject, progress, proj, type Knowledge } from './knowledge.ts';
 import { dasin, dcos, dhypot, dsin } from '../dmath.ts';
 
-export interface LastSeen { x: number; y: number; t: number; id: EntityId }
+/** an enemy fighter as last seen: where, when, and (lane AI, G4: fog-honest memory) its health share, level and
+ *  fighting power at that moment — a reader never looks at a hidden enemy's live state */
+export interface LastSeen { x: number; y: number; t: number; id: EntityId; hpF: number; level: number; power: number }
+
+/** fighting power proxy: effective hp × damage per second (what a fight read weighs) */
+export function fighterPower(f: Entity): number {
+  const s = f.stats;
+  const ehp = (f.hp + f.shield) * (1 + (s.armor + s.resist) / 200);
+  const dps = s.ad * s.attackSpeed * (1 + s.crit * 0.75) + s.ap * 0.6 + f.level * 12;
+  return Math.sqrt(Math.max(1, ehp) * Math.max(1, dps));
+}
 /** how much a last-seen sighting still counts (1 fresh → 0 after `span` s) */
 export function memoryWeight(ls: LastSeen, now: number, span = 20): number {
   const age = now - ls.t;
@@ -86,8 +96,9 @@ export function rebuildPerception(w: World, k: Knowledge, teams: readonly TeamPe
           else if ((e.visibleMask & tp.bit) !== 0 && e.targetable) {
             tp.enemyFighters.push(e);
             let ls = tp.lastSeen.get(e.id);
-            if (!ls) { ls = { x: e.x, y: e.y, t: now, id: e.id }; tp.lastSeen.set(e.id, ls); }
+            if (!ls) { ls = { x: e.x, y: e.y, t: now, id: e.id, hpF: 1, level: 1, power: 0 }; tp.lastSeen.set(e.id, ls); }
             ls.x = e.x; ls.y = e.y; ls.t = now;
+            ls.hpF = e.hp / Math.max(1, e.maxHp); ls.level = e.level; ls.power = fighterPower(e);
           }
         }
         break;

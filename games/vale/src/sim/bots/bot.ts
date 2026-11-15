@@ -33,15 +33,16 @@ import type { Rng } from '../rng.ts';
 import type { BotController } from '../sim.ts';
 import { noonTollOn } from '../modes/match.ts';
 import { seatState } from '../units/fighters.ts';
-import { SLOT_ULT } from '../entity.ts';
+import { CC_HARD, ORDER_MOVE, SLOT_ULT } from '../entity.ts';
 import type { World } from '../world.ts';
 import type { DifficultyProfile } from './difficulty.ts';
 import { Economy } from './economy.ts';
 import type { AbilityCoreT } from '../catalog_index.ts';
-import { abilityInfo, estimateDamage, fromProgress, lanePoint, laneProject, progress, proj, type BuildPlan, type CampInfo, type FighterProfile } from './knowledge.ts';
+import { abilityInfo, estimateDamage, U_ENGAGE, U_ESCAPE, U_GAPCLOSE, U_HEAL, U_SHIELD, fromProgress, lanePoint, laneProject, progress, proj, type BuildPlan, type CampInfo, type FighterProfile, type PlanOpts } from './knowledge.ts';
 import type { BotMatch } from './match.ts';
-import { BotBase, gauss, type Mode } from './micro.ts';
-import { memoryWeight } from './perception.ts';
+import { BotBase, gauss, holdLeft, type Mode } from './micro.ts';
+import type { Guard } from './team.ts';
+import { fighterPower, memoryWeight } from './perception.ts';
 import { dcos, dhypot, dsin, sq } from '../dmath.ts';
 
 const MODE_TICKS = 6;
@@ -102,6 +103,35 @@ export class Bot extends BotBase implements BotController {
   /** damage per second of the enemy Wicks, summons and monsters attacking me (after my defenses) */
   unitDps = 0;
   private holdX = 0; private holdY = 0;
+  // ── lane AI (2026-11-15, owner_rulings 40) ──
+  /** G6: the group call roll (at least groupFollowFloor), rerolled with `follows` */
+  private groupFollows = true;
+  /** G5: fog risk — enemies unseen 6-40 s that could be near me, weighted by how long ago — and whether it leaves me
+   *  exposed (risk over the tier's cap with no partner within 20 m) */
+  fogRisk = 0;
+  private exposed = false;
+  /** fighters within 18 m (G6: a fight of five or more bodies is a team fight in the mid game) */
+  private nE18 = 0; private nA18 = 0;
+  /** G2: per partner, the start of its current peel episode and whether I answer it (peelChance, rolled once) */
+  private readonly peelRolls = new Map<number, { at: number; last: number; ok: boolean }>();
+  private protectAlly: Entity | null = null;
+  private protectDiver: Entity | null = null;
+  private protectU = 0;
+  /** an answered dive is seen through for 3 s after its last trigger (it does not drop the moment the burst pauses) */
+  private protectUntil = -1e9;
+  private protectAllyId = -1; private protectDiverId = -1;
+  /** G3: the gank approach (approach → lurk → strike), its entry point and its clocks */
+  private roamPhase: 'approach' | 'lurk' | 'strike' = 'strike';
+  private roamX = 0; private roamY = 0;
+  private roamTarget = -1;
+  private lurkSince = 0;
+  private lurkFor = 0;
+  private roamLostAt = -1;
+  private roamBlockUntil = -1e9;
+  /** G3: when the fight near me started (a flanker goes in 1.5 s after the frontline) */
+  private fightSince = -1;
+  /** G10: FRAY third party — the target it waits on, and the roll for that wait */
+  private thirdRoll = { id: -1, ok: false };
 
   constructor(m: BotMatch, seat: SeatSetup, diff: DifficultyProfile, rng: Rng, prof: FighterProfile, plan: BuildPlan, support: boolean) {
     super(m, seat, diff, rng, prof);
@@ -122,6 +152,7 @@ export class Bot extends BotBase implements BotController {
     this.brain = this.m.brain(this.team);
     if (!this.assigned) this.assign();
     this.eco.levelUp(p, out);
+    if (this.diff.adaptiveBuild && p.canShop && this.k.kind === 'rift') this.eco.replan(w, p, this.liveRead(), this.jungle);
     this.eco.shop(w, p, out);
     if (w.phase !== 'live' || !e.alive || seatState(w, this.player)?.eliminated) {
       if (!e.alive) { this.m.ffaTarget.delete(this.player); this.brain?.focus.delete(this.player); }
@@ -142,25 +173,51 @@ export class Bot extends BotBase implements BotController {
     return out;
   }
 
+  /** lane AI G9: the build's read of the match as it stands — the draft's enemy team, the fed enemy (scoreboard
+   *  takedowns minus half its deaths, three or more: counted twice more), the damage mix I have been taking (two
+   *  thirds of one type: that type's enemies count again), and my team 2,500 Gleam or more behind */
+  private liveRead(): PlanOpts {
+    const w = this.w, k = this.k;
+    const enemies: FighterProfile[] = [];
+    let fed: FighterProfile | null = null, fs = 2.99;
+    for (const s of k.setup.seats) {
+      if (s.team === this.team) continue;
+      const pr = k.profiles.get(s.fighter);
+      if (!pr) continue;
+      enemies.push(pr);
+      const pl = w.players[s.player];
+      const sc = pl ? pl.kills + pl.assists * 0.5 - pl.deaths * 0.5 : 0;
+      if (sc > fs) { fs = sc; fed = pr; }
+    }
+    const base = enemies.slice();
+    if (fed) enemies.push(fed, fed);
+    const mx = this.m.takenMix.get(this.e.id);
+    if (mx && mx.phys + mx.magic > this.e.maxHp) {
+      const mf = mx.magic / (mx.phys + mx.magic);
+      if (mf >= 0.67) for (const pr of base) { if (pr.scaling === 'magic') enemies.push(pr); }
+      else if (mf <= 0.33) for (const pr of base) { if (pr.scaling !== 'magic') enemies.push(pr); }
+    }
+    let lead = 0;
+    for (const t of w.teams) lead += t.team === this.team ? t.gold : -t.gold;
+    return { support: this.eco.support, enemies, teamSize: base.length, salt: (k.setup.seed | 0) * 31 + this.player, behind: w.teams.length === 2 && lead <= -2500 };
+  }
+
   private assign(): void {
     this.assigned = true;
     const a = this.brain ? this.brain.laneOf(this.player) : { lane: this.k.lanes.length > 0 && !this.k.ffa ? 0 : -1, jungle: false, support: false };
     this.lane = a.lane; this.jungle = a.jungle; this.support = a.support;
+    this.eco.carriesWards = this.eco.support || (a.jungle && this.diff.visionSetup);
   }
 
   private clearPlan(): void {
     this.pMove = false; this.pFight = null; this.pSiege = null; this.pSiegeFirst = false; this.pFarm = 0; this.pMonsters = false; this.pAggro = 0; this.pDive = false; this.pLhFight = false;
     this.caged = false;
+    this.peelVictim = null; this.peelDiver = null;
   }
 
   // ── situation ─────────────────────────────────────────────────────────────────────────────────
   /** fighting power proxy: effective hp × damage per second */
-  private power(f: Entity): number {
-    const s = f.stats;
-    const ehp = (f.hp + f.shield) * (1 + (s.armor + s.resist) / 200);
-    const dps = s.ad * s.attackSpeed * (1 + s.crit * 0.75) + s.ap * 0.6 + f.level * 12;
-    return Math.sqrt(Math.max(1, ehp) * Math.max(1, dps));
-  }
+  private power(f: Entity): number { return fighterPower(f); }
   /** what I can deal in ~3 s: ready damaging abilities + attacks */
   private burstOn(t: Entity): number {
     const e = this.e;
@@ -214,11 +271,13 @@ export class Bot extends BotBase implements BotController {
       nA++; powA += this.power(f);
     }
     // enemies seen moments ago near me still count (decayed)
+    // (lane AI G4: fog-honest — the power it had when last seen, never the hidden fighter's live state; a fighter seen
+    // dying is dropped by the death itself, which is public on the scoreboard)
     for (const ls of tp.lastSeen.values()) {
       const f = this.w.entity(ls.id);
       if (!f || !f.alive || this.isNoticed(f)) continue;
       const wgt = memoryWeight(ls, this.now, 6);
-      if (wgt > 0 && sq(ls.x - e.x) + sq(ls.y - e.y) <= R * R) powE += this.power(f) * wgt * 0.6;
+      if (wgt > 0 && sq(ls.x - e.x) + sq(ls.y - e.y) <= R * R) powE += ls.power * wgt * 0.6;
     }
     this.nearE = nE; this.nearA = nA;
     if (this.k.ffa) {
@@ -261,7 +320,7 @@ export class Bot extends BotBase implements BotController {
     if (this.laneEnemy && this.lane >= 0 && !this.jungle) {
       if (this.laneFoe !== this.laneEnemy.id) { this.foeSince = this.now; this.foeHitAt = -1e9; }
       this.laneFoe = this.laneEnemy.id;
-      const fs = this.m.castSeen.get(this.laneEnemy.id);
+      const fs = this.m.castSeen(this.team, this.laneEnemy.id);
       if (this.laneEnemy.atkTarget === e.id || (fs && fs.some((x) => x > this.now))) this.foeHitAt = this.now;
       if (this.laneEnemy.stateOverride === 'recall') this.foeRecallAt = this.now;
     }
@@ -270,6 +329,47 @@ export class Bot extends BotBase implements BotController {
     for (const u of tp.enemyUnits) if (u.alive && u.atkTarget === e.id && u.attackDef) ud += mitigated(u, e, u.stats.ad, u.attackDef.damageType) * u.stats.attackSpeed;
     for (const m of tp.monsters) if (m.alive && m.atkTarget === e.id && m.attackDef) ud += mitigated(m, e, m.stats.ad, m.attackDef.damageType) * m.stats.attackSpeed;
     this.unitDps = ud;
+    // (lane AI G6: bodies within 18 m)
+    let e18 = 0, a18 = 0;
+    for (const f of tp.enemyFighters) if (this.isNoticed(f) && this.dist2(f, e.x, e.y) <= 18 * 18) e18++;
+    for (const f of tp.allyFighters) if (f.alive && this.dist2(f, e.x, e.y) <= 18 * 18) a18++;
+    this.nE18 = e18; this.nA18 = a18;
+    // (lane AI G5: fog risk from memory only — where each enemy was last seen and how long ago; a fighter seen 20 s ago
+    // 40 m away could be on me now)
+    let risk = 0;
+    if (rift && this.diff.riskCap < Infinity) {
+      const ms = Math.max(1, e.stats.moveSpeed);
+      for (const ls of tp.lastSeen.values()) {
+        const age = this.now - ls.t;
+        if (age < 6 || age > 40) continue;
+        const f = this.w.entity(ls.id);
+        if (!f || !f.alive) continue;
+        const r = ms * age * 0.6 + 10;
+        if (sq(ls.x - e.x) + sq(ls.y - e.y) <= r * r) risk += memoryWeight(ls, this.now, 40);
+      }
+      // (enemies never seen at all count as missing too, half each)
+      const known = tp.lastSeen.size;
+      if (this.brain && this.brain.aliveEnemies > known) risk += (this.brain.aliveEnemies - known) * 0.5;
+    }
+    this.fogRisk = risk;
+    this.exposed = rift && risk >= this.diff.riskCap && this.alliesNear(e.x, e.y, 20) <= 1 && !this.lanePhase() && !!this.brain && this.brain.phase !== 'early' && !this.brain.rush;
+  }
+
+  /** lane AI G5: the visible enemy fighters within 10 m can take most of my health before my side finishes one of them
+   *  (their attacks for 2.5 s plus a share for abilities, against mine and my partners' burst on the weakest of them) */
+  private burstDanger(): boolean {
+    const e = this.e;
+    let inc = 0;
+    let weakest: Entity | null = null;
+    for (const f of this.perc.enemyFighters) {
+      if (!this.isNoticed(f) || this.dist2(f, e.x, e.y) > 10 * 10) continue;
+      inc += this.dpsOn(f, e) * 2.5 + f.stats.ap * 0.9 + f.level * 22;
+      if (!weakest || f.hp + f.shield < weakest.hp + weakest.shield) weakest = f;
+    }
+    if (!weakest || inc <= 0.8 * (e.hp + e.shield)) return false;
+    let ours = this.burstOn(weakest);
+    for (const a of this.perc.allyFighters) if (a !== e && a.alive && this.dist2(a, weakest.x, weakest.y) <= 9 * 9) ours += this.dpsOn(a, weakest) * 2.5 + a.stats.ap * 0.9 + a.level * 22;
+    return ours < (weakest.hp + weakest.shield);
   }
 
   /** fighters are trading blows near me: an enemy fighter hitting one of us, or one of us hitting it */
@@ -365,7 +465,11 @@ export class Bot extends BotBase implements BotController {
   private selectMode(): void {
     this.situate();
     const k = this.k, kind = k.kind, e = this.e, b = this.brain, now = this.now;
-    if (now - this.followRollAt > 15) { this.followRollAt = now; this.follows = this.rng.chance(this.diff.intentFollow); }
+    if (now - this.followRollAt > 15) {
+      this.followRollAt = now; this.follows = this.rng.chance(this.diff.intentFollow);
+      // (lane AI G6: a group call is followed at least groupFollowFloor of the time — the roll only delays the arrival)
+      this.groupFollows = this.follows || (this.diff.groupFollowFloor > 0 && this.rng.chance(this.diff.groupFollowFloor));
+    }
     const hpF = this.hpF;
     const res = e.resource;
     const resF = res && res.model === 'pool' && e.maxRes > 0 ? e.res / e.maxRes : 1;
@@ -379,7 +483,8 @@ export class Bot extends BotBase implements BotController {
     // (CW3s r2 refix, CL-1: on a road in the laning phase a skilled tier's read of its own burst holds it in the trade; its caution
     // bias, right for the mid game, left veteran laners with fewer takedowns than adept ones on every real-seat window)
     const edgy = this.lanePhase();
-    const thr = this.prof.retreatHp + (edgy ? this.diff.riftRetreatBias ?? this.diff.retreatBias : this.diff.retreatBias) + (lastLife ? 0.15 : 0) + (this.adv < 0.4 && !tolled ? 0.08 : 0) - (tolled ? 0.05 : 0);
+    // (lane AI G5: alone with enemies unaccounted for in the fog, a fighter leaves a fight 10 points of health sooner)
+    const thr = this.prof.retreatHp + (edgy ? this.diff.riftRetreatBias ?? this.diff.retreatBias : this.diff.retreatBias) + (lastLife ? 0.15 : 0) + (this.adv < 0.4 && !tolled ? 0.08 : 0) - (tolled ? 0.05 : 0) + (this.exposed ? 0.1 : 0);
     let best: Mode = this.mode, bestS = -1;
     const consider = (m: Mode, s: number): void => {
       if (s <= 0) return;
@@ -401,6 +506,11 @@ export class Bot extends BotBase implements BotController {
     }
     if (this.towerAggro && !(this.mode === 'allin' && this.killTarget && this.killTarget.hp < this.killTarget.maxHp * 0.25 && hpF > 0.5)) retreat = Math.max(retreat, 0.86);
     if (kind === 'fray' && hpF < thr && this.recentDps > 0) retreat = Math.max(retreat, 0.75);
+    // (lane AI G5: leave early when the visible enemies' burst would take most of my health before my side finishes one of
+    // them — RIFT from the mid game: not in a road's laning phase, whose trades CL-1 tuned, never off a kill that is on, and
+    // not in FRAY, where every seat turning from the hardest hitter handed it the placements, ulkro 2.7 against the 3.5 floor)
+    if (this.diff.burstRetreat && this.nearE > 0 && kind === 'rift' && !edgy && !!b && b.phase !== 'early' && hpF < (lastLife ? 0.85 : 0.75) &&
+      !(this.killTarget && this.killMargin >= 1.2) && !tolled && this.burstDanger()) retreat = Math.max(retreat, 0.86);
     retreat = Math.max(retreat, this.outmatched());
     consider('retreat', retreat);
     // recall / shop
@@ -416,7 +526,10 @@ export class Bot extends BotBase implements BotController {
         // health only once the camp would take more than it has left)
         const camp = this.jungle && kind === 'rift' && this.campAtHand(14);
         const lowAt = (k.rules.recall ? (lp ? 0.25 : camp ? 0.22 : 0.36) : 0.22) + (edgy ? this.diff.riftRecallBias ?? this.diff.recallBias : this.diff.recallBias);
-        if (atBase && (hpF < 0.9 || (this.p.canShop && this.eco.canBuyNow(this.w, this.p)))) recall = 0.92;
+        // (lane AI G1: a defender posted to a structure leaves the fountain once it is fit to — the shop works anywhere
+        // in the base, ruling 31)
+        const posted = !!b && b.guard.has(this.player) && hpF >= 0.5;
+        if (atBase && !posted && (hpF < 0.9 || (this.p.canShop && this.eco.canBuyNow(this.w, this.p)))) recall = 0.92;
         // (CW3 CL-1: a laner with a wave of its own to take and no enemy fighter in sight takes it before going home,
         // unless it is nearly out — a recall at every trade's end cost the roads their last hits)
         else if (hpF < lowAt && this.nearE === 0 && !(lp && hpF > 0.18 && this.unitDps <= 0 && this.wicksNear(e.x, e.y, 12) >= 3 && this.nearestEnemyFighter(22) === null)) recall = 0.74;
@@ -442,6 +555,8 @@ export class Bot extends BotBase implements BotController {
       const c = k.camps[this.campTarget];
       if (c && this.campUp(c.x, c.y) && this.dist2(e, c.x, c.y) < 16 * 16 && !this.campOdds(c.x, c.y)) recall = Math.max(recall, 0.6);
     }
+    // (lane AI G3: a laner holds its wave — no shopping trip — while a partner's gank is on its way to its road)
+    if (recall > 0 && recall < 0.7 && b && b.gankComing === this.lane && now - b.gankComingAt < 1 && hpF > 0.3) recall *= 0.6;
     consider('recall', recall);
     // lane / return
     const laner = (kind === 'rift' && !this.jungle && this.lane >= 0) || kind === 'bridge';
@@ -462,7 +577,7 @@ export class Bot extends BotBase implements BotController {
     if (le && hpF > (edgy ? 0.5 : 0.55) && this.adv >= 0.45 && now >= this.tradeRestUntil && this.towerSafe(le.x, le.y, 0.5) &&
       (this.mode === 'lane' || this.mode === 'trade' || this.mode === 'push')) {
       const leF = le.hp / Math.max(1, le.maxHp);
-      const spent = this.diff.knowsCooldowns ? this.m.spentAbilities(le.id, now) : 0;
+      const spent = this.diff.knowsCooldowns ? this.m.spentAbilities(le.id, now, this.team) : 0;
       // hitting a fighter that stands in its own wave turns that wave on me: a trade there costs more
       const wavePenalty0 = Math.max(0, this.coverWicks(le) - 1) * 0.07 + (this.unitDps > 0 ? 0.1 : 0);
       // (CW3 CL-1 measured trade windows — a level on the opponent, my burst ready, the opponent turning to a Wick — on
@@ -485,7 +600,7 @@ export class Bot extends BotBase implements BotController {
     }
     // all-in
     const kt = this.killTarget;
-    if (kt && hpF > 0.3 && (this.towerSafe(kt.x, kt.y, 0) || (kt.hp < kt.maxHp * 0.2 && hpF > 0.6))) {
+    if (kt && hpF > 0.3 && (!this.exposed || this.killMargin >= 1.3) && (this.towerSafe(kt.x, kt.y, 0) || (kt.hp < kt.maxHp * 0.2 && hpF > 0.6))) {
       consider('allin', 0.7 + Math.min(0.2, (this.killMargin - 1) * 0.2) - (lastLife && this.killMargin < 1.5 ? 0.15 : 0));
     } else if (kind === 'rift' && le && !this.jungle && (this.mode === 'trade' || this.mode === 'allin') && hpF > 0.5 && this.towerSafe(le.x, le.y, 0)) {
       // (CW3 CL-1: a trade I am winning — its health well under mine and below half, nobody of theirs beside it — is pressed
@@ -523,7 +638,13 @@ export class Bot extends BotBase implements BotController {
     // teamfight (laning: two against two is a lane, not a fight — join only one that has started)
     if (this.nearE >= 2 && this.nearA >= 2 && this.adv >= 0.42 && (!lp || this.nearE + this.nearA >= 5 || this.fightOn())) {
       consider('teamfight', 0.6 + (this.adv - 0.5) * 0.6);
+    } else if (kind === 'rift' && b && b.phase !== 'early' && !lp && this.nE18 >= 2 && this.nE18 + this.nA18 >= 5 && this.adv >= 0.45) {
+      // (lane AI G6: five or more bodies within 18 m in the mid game is a team fight — the team joins it as one)
+      consider('teamfight', 0.62 + (this.adv - 0.5) * 0.6);
     }
+    // (lane AI G2: a partner being dived or held — turn and protect it)
+    const pu = this.protectUtility();
+    if (pu > 0) consider('protect', pu);
     // push / group / defend / objective / roam (team intents)
     if (b) {
       const follow = this.follows ? 1 : 0;
@@ -539,11 +660,16 @@ export class Bot extends BotBase implements BotController {
       // (a lead to press, W4 G3: the tiers that convert leads group on the siege without a won fight)
       else if (b.press && b.siege && !b.objective && hpF > 0.5 && (!this.jungle || b.phase !== 'early')) consider('push', 0.62);
       else if (kind === 'bridge' || kind === 'brawl') consider('push', b.siege ? 0.5 : 0.35);
-      else if (b.group && follow && (!this.jungle || b.phase === 'late') && (!this.diff.objectiveSense || hpF > 0.45)) consider('push', 0.56);
+      // (lane AI G6: the split-pusher takes its road; the rest follow the group call at least groupFollowFloor of the time)
+      else if (b.group && b.splitSeat === this.player && b.splitLane >= 0 && hpF > 0.45) consider('push', 0.64);
+      else if (b.group && (follow || this.groupFollows) && (!this.jungle || b.phase === 'late') && (!this.diff.objectiveSense || hpF > 0.45)) consider('push', kind === 'rift' && this.diff.groupFollowFloor > 0 ? 0.64 : 0.56);
       // (laning: shove my own lane only while no enemy fighter is there to farm it under its tower)
       else if (this.lane >= 0 && b.push[this.lane] > 0 && !this.jungle && (!lp || this.nearestEnemyFighter(20) === null)) consider('push', 0.3 + 0.2 * b.push[this.lane]);
       // (sent to answer a threatened road, W4 G3: before the plan, not before my life)
       if (b.answer.has(this.player) && hpF > 0.5) consider('defend', 0.8);
+      // (lane AI G1: posted to a threatened structure — the post comes before the plan, and in the laning phase too)
+      const post = b.guard.get(this.player);
+      if (post && hpF > 0.3) consider('defend', post.cls === 0 ? 0.78 : 0.84);
       const d = this.lane >= 0 ? b.defend[this.lane] : 0;
       let global = 0;
       // (a tier that reads waves sends answers to a threatened road; the whole team turns for a push of three or more
@@ -579,9 +705,10 @@ export class Bot extends BotBase implements BotController {
       // a laner holds its road through the laning phase — CW3 CL-1 measured laners' roams from a shoved road: the road
       // they left lost more Wicks than the roams won takedowns)
       const g = b.gank;
-      if (g && g.alive && hpF > 0.6) {
+      if (g && g.alive && hpF > 0.6 && !this.exposed && now >= this.roamBlockUntil) {
         const d2 = this.dist2(e, g.x, g.y);
-        const roaming = this.mode === 'roam' && now - this.modeSince < ROAM_MAX;
+        // (lane AI G3: a planned approach and a lurk take longer than a straight walk)
+        const roaming = this.mode === 'roam' && now - this.modeSince < ROAM_MAX + this.diff.lurkMax;
         if (this.jungle) {
           if (now >= JUNGLE_GANK_FROM && e.level >= 3 && (roaming || g.hp < g.maxHp * 0.6 || !this.campAtHand(10)) && d2 < sq(roaming ? 70 : 55)) consider('roam', 0.53);
         } else if (!lp) {
@@ -608,6 +735,7 @@ export class Bot extends BotBase implements BotController {
     if (best !== this.mode) {
       if (now - this.modeSince < MIN_MODE_TIME && bestS < 0.8) return;
       if (this.mode === 'allin') this.allinTarget = -1;
+      if (this.mode === 'roam') this.roamTarget = -1;
       if (best === 'allin' && this.killTarget) this.allinTarget = this.killTarget.id;
       this.mode = best;
       this.modeSince = now;
@@ -635,6 +763,7 @@ export class Bot extends BotBase implements BotController {
       case 'teamfight': this.execTeamfight(); break;
       case 'hunt': this.execHunt(); break;
       case 'pickup': this.execPickup(); break;
+      case 'protect': this.execProtect(); break;
     }
   }
 
@@ -707,6 +836,8 @@ export class Bot extends BotBase implements BotController {
     // never park inside the first enemy tower's reach (micro re-checks minions tanking it)
     const cap = enemyTowerP - enemyTowerR - e.radius - 1;
     if (p > cap) p = cap;
+    // (lane AI G5: exposed — alone with enemies unaccounted for — no deeper than half the road or my own front tower)
+    if (this.exposed) p = Math.min(p, Math.max(l.length * 0.5, towerP));
     if (p < 3) p = 3;
     lanePoint(l, fromProgress(l, team, p));
     const side = (this.player % 2 === 0 ? 1 : -1) * (this.support ? 1.6 : 0.8);
@@ -811,11 +942,34 @@ export class Bot extends BotBase implements BotController {
   }
 
   private execTeamfight(): void {
-    const t = this.pickFightTarget(13);
+    const t = this.pickFightTarget(this.nearE > 0 ? 13 : 18);
     if (!t) { this.execLaneOrPush(); return; }
     this.pFight = t; this.pAggro = 0.9;
     this.pFarm = 0;
     const e = this.e;
+    // (lane AI G3: a flanker — burst or diver with an escape, tiers with flank — comes from the side, 10 m off the line
+    // between the two groups, and goes in 1.5 s after the frontline has started the fight)
+    if (this.k.kind === 'rift' && this.diff.flank && (this.prof.style === 'burst' || this.prof.style === 'diver') && this.hasEscape()) {
+      const on = this.fightOn();
+      if (!on) this.fightSince = -1; else if (this.fightSince < 0) this.fightSince = this.now;
+      if (this.fightSince < 0 || this.now - this.fightSince < 1.5) {
+        let ax = 0, ay = 0, an = 0, ex = 0, ey = 0, en = 0;
+        for (const a of this.perc.allyFighters) if (a !== e && a.alive && this.dist2(a, e.x, e.y) <= 20 * 20) { ax += a.x; ay += a.y; an++; }
+        for (const f of this.perc.enemyFighters) if (this.isNoticed(f) && this.dist2(f, e.x, e.y) <= 22 * 22) { ex += f.x; ey += f.y; en++; }
+        if (an > 0 && en > 0 && this.recentDps <= 0) {
+          ax /= an; ay /= an; ex /= en; ey /= en;
+          const ux = ex - ax, uy = ey - ay, ud = dhypot(ux, uy) || 1;
+          let fx = 0, fy = 0, fd = Infinity;
+          for (const sg of [1, -1]) {
+            const px = ex + (-uy / ud) * 10 * sg - (ux / ud) * 2, py = ey + (ux / ud) * 10 * sg - (uy / ud) * 2;
+            if (!this.w.nav.walkable(px, py)) continue;
+            const d2 = this.dist2(e, px, py);
+            if (d2 < fd) { fd = d2; fx = px; fy = py; }
+          }
+          if (fd < Infinity) { this.pFight = null; this.pAggro = 0.3; this.pMove = true; this.pMoveX = fx; this.pMoveY = fy; return; }
+        }
+      }
+    }
     // ranged styles keep their preferred range; melee walk in
     const want = this.prof.ranged ? Math.max(this.prof.prefRange, this.prof.attackRange) : 0;
     const dx = e.x - t.x, dy = e.y - t.y, d = dhypot(dx, dy) || 1;
@@ -884,7 +1038,12 @@ export class Bot extends BotBase implements BotController {
       return;
     }
     const atBase = this.dist2(e, base.fx, base.fy) <= sq(base.fr - 0.5);
-    if (atBase) { this.pMove = true; this.pMoveX = base.fx; this.pMoveY = base.fy; return; }
+    // (lane AI G12: inside the fountain is home — the bot stops there instead of pressing on to its centre, where other
+    // bodies stand and a move order never finishes)
+    if (atBase) {
+      if (this.dist2(e, base.fx, base.fy) <= sq(base.fr - 1.5)) { if (e.order === ORDER_MOVE && !e.cast) this.out.push({ type: 'stop' }); return; }
+      this.pMove = true; this.pMoveX = base.fx; this.pMoveY = base.fy; return;
+    }
     const threat = this.nearestEnemyFighter(10) !== null || this.recentDps > 0;
     if (k.rules.recall && !threat) {
       if (e.stateOverride === 'recall') return;
@@ -897,6 +1056,193 @@ export class Bot extends BotBase implements BotController {
     this.pMove = true; this.pMoveX = k.rules.recall ? this.safeX : base.fx; this.pMoveY = k.rules.recall ? this.safeY : base.fy;
   }
 
+  // ── lane AI G2: protect a partner ─────────────────────────────────────────────────────────────
+  /**
+   * A partner within peelR (12 m, 15 m for a ranged fighter or a support) that enemy fighters took 15 % of its health
+   * from in the last 2 s (22 % in a road's laning phase, where a duo's trades are laning), or that is held by hard CC
+   * with an enemy fighter within 6 m, is being dived. Whether I answer is rolled once per episode (peelChance), and
+   * the diver must be noticed (reaction delay). Utility 0.66 + 0.2 × its value (a carry, or under 40 %: 1, else 0.5)
+   * + 0.1 for a tank or support − 0.3 when I am under 35 % − 0.2 when the diver stands under an enemy tower.
+   */
+  private protectUtility(): number {
+    this.protectAlly = null; this.protectDiver = null;
+    const k = this.k;
+    // (RIFT: BRIDGE keeps the fights its G5 pace was measured with — one road, the whole team always on it)
+    if (k.kind !== 'rift') return 0;
+    const e = this.e, now = this.now, m = this.m;
+    const prevU = this.protectU;
+    this.protectU = 0;
+    const peelR = this.prof.ranged || this.support ? 15 : 12;
+    const lp = this.lanePhase();
+    let best = 0;
+    for (const a of this.perc.allyFighters) {
+      if (a === e || !a.alive || this.dist2(a, e.x, e.y) > peelR * peelR) continue;
+      const burst = m.hurtBy(a.id, now, 2);
+      const held = (a.ccMask & CC_HARD) !== 0 || holdLeft(a) > 0;
+      const dived = burst >= (lp ? 0.22 : 0.15) * a.maxHp;
+      if (!dived && !held) continue;
+      // (a road's laning phase: a duo's trades are laning — only a partner held, or one taken under half, is a dive)
+      if (lp && !held && a.hp > a.maxHp * 0.5) continue;
+      // (and the laning phase's peel is for the partner on my own road: the other roads are their laners' and the grovehunter's)
+      if (lp && (!this.brain || !a.player || this.brain.laneOf(a.player.player).lane !== this.lane)) continue;
+      let diver: Entity | null = null;
+      if (burst > 0) { const id = m.topHurter(a.id, now, 2); const f = id >= 0 ? this.w.entity(id) : null; if (f && f.alive && f.kind === 'fighter' && this.isNoticed(f)) diver = f; }
+      if (!diver) {
+        let bd = 6 * 6;
+        for (const f of this.perc.enemyFighters) { if (!this.isNoticed(f)) continue; const d2 = this.dist2(f, a.x, a.y); if (d2 < bd) { bd = d2; diver = f; } }
+      }
+      if (!diver || (lp && !this.towerSafe(diver.x, diver.y, 0))) continue;
+      let r = this.peelRolls.get(a.id);
+      if (!r || now - r.last > 3) { r = { at: now, last: now, ok: this.rng.chance(this.diff.peelChance) }; this.peelRolls.set(a.id, r); }
+      r.last = now;
+      if (!r.ok) continue;
+      const st = k.profiles.get(a.def)?.style;
+      const carry = st === 'marksman' || st === 'artillery' || st === 'burst';
+      const value = carry || a.hp < a.maxHp * 0.4 ? 1 : 0.5;
+      const tank = this.support || this.prof.style === 'frontline' || this.prof.style === 'warden';
+      // (from 0.72: a dive is urgent — it overrides a mode younger than its minimum time; a kill of mine that is on comes first)
+      const u = 0.72 + 0.2 * value + (tank ? 0.1 : 0) - (this.hpF < 0.35 ? 0.3 : 0) - (this.towerSafe(diver.x, diver.y, 0) ? 0 : 0.2) -
+        (this.mode === 'allin' && this.killTarget && this.killTarget !== diver && this.killMargin >= 1.2 ? 0.25 : 0);
+      if (u > best) { best = u; this.protectAlly = a; this.protectDiver = diver; }
+    }
+    if (this.peelRolls.size > 12) for (const [id, r] of [...this.peelRolls]) if (now - r.last > 6) this.peelRolls.delete(id);
+    if (best > 0 && this.protectAlly && this.protectDiver) {
+      this.protectUntil = now + 3; this.protectAllyId = this.protectAlly.id; this.protectDiverId = this.protectDiver.id;
+    } else if (now < this.protectUntil && this.mode === 'protect') {
+      // (the burst paused: keep on the same diver while it is still in sight near my partner)
+      const a = this.w.entity(this.protectAllyId), d = this.w.entity(this.protectDiverId);
+      if (a && d && a.alive && d.alive && this.isNoticed(d) && this.dist2(d, a.x, a.y) <= 14 * 14 && this.hpF >= 0.3) {
+        this.protectAlly = a; this.protectDiver = d; best = prevU * 0.97;
+      }
+    }
+    this.protectU = best;
+    return best;
+  }
+
+  /** turn on the diver: its damage on my partner first, CC on it whatever the ability's target count, heals and
+   *  shields on the partner (walking into range first, up to 4 m), and a frontline or warden steps between them */
+  private execProtect(): void {
+    const a = this.protectAlly, d = this.protectDiver, e = this.e;
+    if (!a || !d || !a.alive || !d.alive || !this.isNoticed(d)) { this.execLaneOrPush(); return; }
+    this.peelVictim = a; this.peelDiver = d;
+    this.pFight = d; this.pAggro = 0.9; this.pFarm = 0; this.pDive = false;
+    this.pMove = true; this.pMoveX = d.x; this.pMoveY = d.y;
+    const tank = this.prof.style === 'frontline' || this.prof.style === 'warden' || this.support;
+    const contact = dhypot(d.x - a.x, d.y - a.y) <= d.stats.range + d.radius + a.radius + 1.5;
+    // (a body-block is for a partner I stand beside; from farther off the diver is reached faster than the gap between them)
+    if (this.diff.peelBodyBlock && tank && !contact && !inAttackRange(e, d) && this.dist2(a, e.x, e.y) <= 4 * 4) {
+      const dx = d.x - a.x, dy = d.y - a.y, dd = dhypot(dx, dy) || 1;
+      const bx = a.x + (dx / dd) * 1.6, by = a.y + (dy / dd) * 1.6;
+      if (this.w.nav.walkable(bx, by) && sq(bx - e.x) + sq(by - e.y) > 1.2 * 1.2) { this.pMoveX = bx; this.pMoveY = by; this.pFight = null; }
+    }
+    // a heal or shield for the partner, ready, and the partner just out of its range: close in first
+    if (a.hp <= a.maxHp * 0.85) {
+      for (let i = 0; i < 4; i++) {
+        const sl = e.slots[i];
+        if (!sl || !sl.ready) continue;
+        const info = abilityInfo(sl.def);
+        if (!info.allyUnit || !(info.use & (U_HEAL | U_SHIELD))) continue;
+        const dd = Math.sqrt(this.dist2(a, e.x, e.y)), r = info.range + a.radius + 0.5;
+        if (dd > r && dd <= r + 4) { this.pFight = null; this.pMoveX = a.x; this.pMoveY = a.y; break; }
+      }
+    }
+  }
+
+  // ── lane AI G1: hold a post at a threatened structure ─────────────────────────────────────────
+  private execGuard(g: Guard): void {
+    const e = this.e, now = this.now;
+    // recall to the post when that is the faster way there and nothing is on me
+    if (g.recall && this.k.rules.recall && this.dist2(e, g.x, g.y) > 45 * 45 && this.nearestEnemyFighter(12) === null && this.recentDps <= 0) {
+      if (e.stateOverride !== 'recall' && now - this.recallTriedAt > 1 && !e.cast && !e.dash) { this.recallTriedAt = now; this.out.push({ type: 'recall' }); }
+      return;
+    }
+    this.pFarm = 2; this.pAggro = 0.75;
+    let t: Entity | null = null, bs = Infinity, nE = 0, inside = false;
+    for (const f of this.perc.enemyFighters) {
+      if (!this.isNoticed(f) || this.dist2(f, g.x, g.y) > 15 * 15) continue;
+      nE++;
+      const inR = g.reach > 0 && this.dist2(f, g.x, g.y) <= sq(g.reach + f.radius);
+      const sc = f.hp + Math.sqrt(this.dist2(f, e.x, e.y)) * 40 - (inR ? 5000 : 0);
+      if (sc < bs) { bs = sc; t = f; inside = inR; }
+    }
+    const nA = this.alliesNear(g.x, g.y, 15);
+    // (fight the diver under the tower, never in front of it — unless we have the bodies there, or the post does not shoot)
+    if (t && (g.reach === 0 || inside || nA > nE || this.adv >= 0.58)) {
+      this.pFight = t; this.pDive = false;
+      this.pMove = true; this.pMoveX = t.x; this.pMoveY = t.y;
+      this.waveGuard();
+      return;
+    }
+    let sx = g.standX, sy = g.standY;
+    // (defensive ambush, tiers that lurk: an enemy at the post that has not committed under it — wait in a thicket
+    // beside the tower and come out when it does)
+    if (t && this.diff.lurkMax > 0 && this.brain) {
+      const b = this.brain;
+      let bd = 10 * 10;
+      for (let i = 0; i < b.thicketXs.length; i++) {
+        const d2 = sq(b.thicketXs[i] - g.x) + sq(b.thicketYs[i] - g.y);
+        if (d2 < bd && this.w.nav.walkable(b.thicketXs[i], b.thicketYs[i])) { bd = d2; sx = b.thicketXs[i]; sy = b.thicketYs[i]; }
+      }
+    }
+    this.pMove = true; this.pMoveX = sx; this.pMoveY = sy;
+    this.selfDefense();
+    this.waveGuard();
+  }
+
+  // ── lane AI G3: the gank approach ─────────────────────────────────────────────────────────────
+  /** how far I can reach a fighter from where I stand: my longest ready gap-closer or engage, else my attack */
+  private strikeReach(): number {
+    let r = this.prof.attackRange + this.e.radius;
+    for (let i = 0; i < 4; i++) {
+      const sl = this.e.slots[i];
+      if (!sl || !sl.ready) continue;
+      const info = abilityInfo(sl.def);
+      if (info.use & (U_GAPCLOSE | U_ENGAGE)) r = Math.max(r, info.reach);
+    }
+    return r;
+  }
+  /** seconds of exposure a straight walk from (ax, ay) to (bx, by) costs: 6 s per 4 m sample inside a known enemy lamp's sight */
+  private visPenalty(ax: number, ay: number, bx: number, by: number): number {
+    const wards = this.perc.enemyWards;
+    if (wards.length === 0) return 0;
+    const d = dhypot(bx - ax, by - ay), n = Math.max(1, Math.ceil(d / 4));
+    let pen = 0;
+    for (let i = 0; i <= n; i++) {
+      const x = ax + (bx - ax) * (i / n), y = ay + (by - ay) * (i / n);
+      for (const wd of wards) { const r = Math.max(6, wd.sight); if (wd.alive && sq(wd.x - x) + sq(wd.y - y) <= r * r) { pen += 6; break; } }
+    }
+    return pen;
+  }
+  /** plan a gank on `t`: the thicket beside its road that is quickest to reach unseen (and behind it, toward its base,
+   *  is worth 4 s), or straight in when no thicket is worth the detour (or the tier does not lurk) */
+  private planRoam(t: Entity): void {
+    const b = this.brain, e = this.e;
+    this.roamTarget = t.id; this.roamLostAt = -1; this.roamPhase = 'strike';
+    // (the laning phase's ganks are on a clock — the road's fight is on now: they walk straight in, as CW3 CL-1 tuned them; a
+    // planned approach through a thicket cost a quarter of the laning takedowns and half the grovehunter's)
+    if (this.diff.lurkMax <= 0 || !b || this.k.kind !== 'rift' || b.gankLane < 0 || this.now < LANE_PHASE_END) return;
+    const ms = Math.max(1, e.stats.moveSpeed);
+    const eb = this.k.bases.find((x) => x.team !== this.team);
+    let best: { x: number; y: number } | null = null, bc = Infinity;
+    for (const en of b.entries) {
+      if (en.lane !== b.gankLane) continue;
+      const dT = dhypot(en.x - t.x, en.y - t.y);
+      // (a thicket the target is near — a wait farther off is a gank that never lands — and nearer it than I am)
+      if (dT > 20 || dT < 3 || dT >= dhypot(t.x - e.x, t.y - e.y) || !this.w.nav.walkable(en.x, en.y)) continue;
+      let lamp = false;
+      for (const wd of this.perc.enemyWards) if (wd.alive && sq(wd.x - en.x) + sq(wd.y - en.y) <= sq(Math.max(6, wd.sight))) { lamp = true; break; }
+      if (lamp) continue;
+      let cost = dhypot(en.x - e.x, en.y - e.y) / ms + (dT / ms) * 0.5;
+      if (this.diff.avoidVision) cost += this.visPenalty(e.x, e.y, en.x, en.y);
+      if (eb && (en.x - t.x) * (eb.fx - t.x) + (en.y - t.y) * (eb.fy - t.y) > 0) cost -= 4;
+      if (cost < bc) { bc = cost; best = en; }
+    }
+    const direct = dhypot(t.x - e.x, t.y - e.y) / ms + (this.diff.avoidVision ? this.visPenalty(e.x, e.y, t.x, t.y) : 0);
+    if (!best || bc > direct + 8) return;
+    this.roamX = best.x; this.roamY = best.y; this.roamPhase = 'approach';
+    this.lurkFor = this.diff.lurkMax;
+  }
+
   private execLaneOrPush(): void {
     if (this.k.kind === 'fray') { this.execHunt(); return; }
     if (this.jungle && this.k.kind === 'rift') { this.execFarm(); return; }
@@ -906,9 +1252,12 @@ export class Bot extends BotBase implements BotController {
   private execPush(): void {
     const b = this.brain, k = this.k, e = this.e;
     // a laner in the laning phase pushes its own lane (a won fight is a free wave, not a cross-map siege)
-    const grouped = !!b && (b.group || k.kind === 'bridge' || k.kind === 'brawl') && !this.lanePhase();
+    // (lane AI G6: the split-pusher works its own road, away from the group)
+    const split = !!b && k.kind === 'rift' && b.splitSeat === this.player && b.splitLane >= 0 && b.group;
+    const grouped = !!b && (b.group || k.kind === 'bridge' || k.kind === 'brawl') && !this.lanePhase() && !split;
     let lane = this.lane >= 0 ? this.lane : 0;
-    if (grouped && b && b.siegeLane >= 0) lane = b.siegeLane;
+    if (split && b) lane = b.splitLane;
+    else if (grouped && b && b.siegeLane >= 0) lane = b.siegeLane;
     const saveLane = this.lane;
     this.lane = lane;
     this.computeHold();
@@ -916,8 +1265,13 @@ export class Bot extends BotBase implements BotController {
     this.pFarm = 2;
     this.pAggro = 0.5;
     this.pMove = true;
-    const siege = grouped && b && b.siege && b.siege.alive ? b.siege : this.nextEnemyStructure(lane);
+    let siege = grouped && b && b.siege && b.siege.alive ? b.siege : this.nextEnemyStructure(lane);
     let mx = this.holdX, my = this.holdY;
+    // (lane AI G6: the split road turns unsafe — enemies seen on it, or two missing — back to my nearest own tower there)
+    if (split && b && !b.splitSafe) { siege = null; this.pFarm = 1; }
+    // (lane AI G5: exposed, no structure past where I hold; a pressed siege waits at the group point until the team is there)
+    if (siege && this.exposed && !(b && (b.rush || b.stage)) && this.dist2(siege, this.holdX, this.holdY) > 14 * 14) siege = null;
+    if (siege && grouped && b && !b.gathered && !b.rush && !b.stage && this.minionsTanking(siege) < 2) siege = null;
     if (b && b.stage) {
       // gathering for the final push: wait at the staging point, fight what comes
       this.pMoveX = b.groupX; this.pMoveY = b.groupY;
@@ -963,6 +1317,8 @@ export class Bot extends BotBase implements BotController {
   private execDefend(): void {
     const b = this.brain;
     if (!b) { this.execLane(); return; }
+    const post = b.guard.get(this.player);
+    if (post) { this.execGuard(post); return; }
     let x = b.baseX, y = b.baseY, best = b.baseThreat;
     const ans = b.answer.get(this.player);
     if (ans !== undefined) { x = b.answerX[ans]; y = b.answerY[ans]; best = 3; }
@@ -1066,6 +1422,10 @@ export class Bot extends BotBase implements BotController {
     }
     const f = this.pickFightTarget(10);
     if (f && this.dist2(f, c.x, c.y) < 14 * 14) { this.pFight = f; this.pMonsters = false; }
+    // (lane AI G7: an enemy lamp watching the pit is cleared first while nobody of theirs is near)
+    else if (this.diff.visionSetup && this.nearestEnemyFighter(12) === null) {
+      for (const wd of this.perc.enemyWards) if (wd.alive && wd.targetable && this.dist2(wd, c.x, c.y) <= 20 * 20) { this.pSiege = wd; this.pMonsters = false; this.pMoveX = wd.x; this.pMoveY = wd.y; break; }
+    }
     void e;
   }
 
@@ -1098,18 +1458,52 @@ export class Bot extends BotBase implements BotController {
     if (b.campReady[ci] > now + 1 && this.dist2(e, c.x, c.y) < 6 * 6) this.pMove = false;
   }
 
+  /**
+   * A gank (lane AI G3): approach — walk to the planned thicket, not fighting on the way (aggression 0); lurk — stand
+   * in it, out of sight, up to lurkMax s, until the target steps within my reach + 1 m, or is under 60 % or held within
+   * 11 m; strike — the old straight run at it (gap-closer or CC first, the laner joins through its gank read). The
+   * approach is given up when the target is lost for 3 s or a second enemy fighter stands beside it.
+   */
   private execRoam(): void {
-    const t = this.brain?.gank;
+    const b = this.brain, t = b?.gank, e = this.e, now = this.now;
     if (!t || !t.alive) { this.execLaneOrPush(); return; }
+    if (this.roamTarget !== t.id) this.planRoam(t);
+    if (b && b.gankLane >= 0) { b.gankComing = b.gankLane; b.gankComingAt = now; }
+    const seen = this.isNoticed(t);
+    if (seen) this.roamLostAt = -1; else if (this.roamLostAt < 0) this.roamLostAt = now;
+    const d2 = this.dist2(t, e.x, e.y);
+    if (this.roamPhase !== 'strike') {
+      if ((this.roamLostAt >= 0 && now - this.roamLostAt > 3) || this.enemiesNear(t.x, t.y, 9) >= 2) {
+        this.roamBlockUntil = now + 12; this.roamTarget = -1; this.execLaneOrPush(); return;
+      }
+      // (strike: the target steps into my reach + 3 m, or is under 60 %, held, or already fighting my laner, within 14 m)
+      const reach = this.strikeReach() + 3;
+      if (seen && (d2 <= reach * reach || ((t.hp < t.maxHp * 0.6 || holdLeft(t) > 0 || this.fightOn()) && d2 <= 14 * 14))) this.roamPhase = 'strike';
+    }
+    if (this.roamPhase === 'approach') {
+      this.pMove = true; this.pMoveX = this.roamX; this.pMoveY = this.roamY; this.pAggro = 0;
+      this.selfDefense();
+      if (this.dist2(e, this.roamX, this.roamY) <= 1.6 * 1.6) { this.roamPhase = 'lurk'; this.lurkSince = now; }
+      return;
+    }
+    if (this.roamPhase === 'lurk') {
+      this.pAggro = 0;
+      this.selfDefense();
+      if (now - this.lurkSince <= this.lurkFor) return;
+      // (the wait is over: go anyway while it is in sight and in walking range — a gank is two on one either way)
+      if (seen && d2 <= 22 * 22) this.roamPhase = 'strike';
+      else { this.roamBlockUntil = now + 12; this.roamTarget = -1; this.execLaneOrPush(); return; }
+    }
     this.pMove = true; this.pMoveX = t.x; this.pMoveY = t.y;
     this.pAggro = 0.8;
-    if (this.isNoticed(t) && this.dist2(t, this.e.x, this.e.y) < 9 * 9) { this.pFight = t; this.pAggro = 1; }
+    if (seen && d2 < 9 * 9) { this.pFight = t; this.pAggro = 1; }
   }
 
   private execHunt(): void {
     const t = this.huntTarget;
     if (t && t.alive) {
       this.m.ffaTarget.set(this.player, t.player ? t.player.player : -1);
+      if (this.isNoticed(t) && this.thirdParty(t)) return;
       if (this.isNoticed(t)) {
         this.pFight = t; this.pAggro = 0.85;
         this.pMove = true; this.pMoveX = t.x; this.pMoveY = t.y;
@@ -1136,6 +1530,12 @@ export class Bot extends BotBase implements BotController {
     this.selfDefense();
   }
 
+  /** a ready escape (dash, blink or haste) among my abilities */
+  private hasEscape(): boolean {
+    for (let i = 0; i < 4; i++) { const sl = this.e.slots[i]; if (sl && sl.ready && (abilityInfo(sl.def).use & U_ESCAPE)) return true; }
+    return false;
+  }
+
   // ── targets ───────────────────────────────────────────────────────────────────────────────────
   /** focus fire: lowest effective hp in reach, fighters first, with team focus and tower penalties */
   private pickFightTarget(R: number): Entity | null {
@@ -1152,6 +1552,14 @@ export class Bot extends BotBase implements BotController {
       let s = ehp / myDps + d * 0.15;
       const st = this.m.k.profiles.get(f.def)?.style;
       if (st === 'marksman' || st === 'artillery' || st === 'burst') s -= 0.6;
+      // (lane AI G2: an enemy hitting one of our carries within 10 m of me is the one to turn on)
+      if (f.atkTarget >= 0 && f.atkTarget !== e.id) {
+        const v = this.w.entity(f.atkTarget);
+        if (v && v.kind === 'fighter' && v.team === this.team && v.alive && this.dist2(v, e.x, e.y) <= 10 * 10) {
+          const vs = this.m.k.profiles.get(v.def)?.style;
+          if (vs === 'marksman' || vs === 'artillery' || vs === 'burst') s -= 1.0 * this.diff.focusDiscipline;
+        }
+      }
       if (b) {
         const n = b.focusCount(f.id, this.player);
         s -= n * 1.2 * this.diff.focusDiscipline;
@@ -1181,8 +1589,12 @@ export class Bot extends BotBase implements BotController {
     const e = this.e;
     const myBurst = (t: Entity): number => this.burstOn(t);
     let best: Entity | null = null, bs = -Infinity;
-    let leaderScore = 0;
-    for (const p of this.w.players) if (p && (p.score ?? 0) > leaderScore) leaderScore = p.score ?? 0;
+    let leaderScore = 0, second = 0, leader = -1;
+    for (const p of this.w.players) {
+      if (!p) continue;
+      const sc = p.score ?? 0;
+      if (sc > leaderScore) { second = leaderScore; leaderScore = sc; leader = p.player; } else if (sc > second) second = sc;
+    }
     for (const f of this.perc.enemyFighters) {
       if (!this.isNoticed(f) || !f.player) continue;
       const d = Math.sqrt(this.dist2(f, e.x, e.y));
@@ -1201,6 +1613,8 @@ export class Bot extends BotBase implements BotController {
       }
       let s = Math.min(2, kill) - d / 30 - third * 0.35;
       if ((tp.score ?? 0) > 0 && (tp.score ?? 0) >= leaderScore) s += 0.12;
+      // (lane AI G10: a leader two or more ahead is everyone's problem — more so while it is busy with someone else)
+      if (tp.player === leader && leaderScore >= second + 2) s += 0.3 + (third > 0 ? 0.15 : 0);
       if ((tp.lives ?? 2) <= 1) s += 0.08;
       // careful on the last life: an even fight is a worse pick, never no pick (a skip here froze whole endgames)
       if (lastLife && kill < 0.8 && f.hp > f.maxHp * 0.4) s -= 0.6;
@@ -1208,6 +1622,39 @@ export class Bot extends BotBase implements BotController {
     }
     this.huntQuality = Math.max(0, bs);
     return best;
+  }
+
+  /**
+   * Lane AI G10 (FRAY): my target is trading blows with someone else within 20 m — wait 12 m off their fight (in a
+   * thicket within 8 m of that spot when there is one) and go in once either is under 35 % or my burst kills it.
+   * Rolled once per target (thirdParty). True while waiting.
+   */
+  private thirdParty(t: Entity): boolean {
+    if (this.diff.thirdParty <= 0 || this.recentDps > 0) return false;
+    const e = this.e;
+    let o: Entity | null = null;
+    for (const g of this.perc.enemyFighters) {
+      if (g === t || !this.isNoticed(g) || this.dist2(g, t.x, t.y) > 20 * 20) continue;
+      if (g.atkTarget === t.id || t.atkTarget === g.id) { o = g; break; }
+    }
+    if (!o) return false;
+    if (this.thirdRoll.id !== t.id) this.thirdRoll = { id: t.id, ok: this.rng.chance(this.diff.thirdParty) };
+    if (!this.thirdRoll.ok) return false;
+    if (t.hp < t.maxHp * 0.35 || o.hp < o.maxHp * 0.35 || this.burstOn(t) >= (t.hp + t.shield) * 0.9) return false;
+    const cx = (t.x + o.x) * 0.5, cy = (t.y + o.y) * 0.5;
+    const dx = e.x - cx, dy = e.y - cy, d = dhypot(dx, dy) || 1;
+    let wx = cx + (dx / d) * 12, wy = cy + (dy / d) * 12;
+    let bd = 8 * 8;
+    for (const poly of this.k.map.thickets) {
+      let tx = 0, ty = 0;
+      for (const pt of poly) { tx += pt[0]; ty += pt[1]; }
+      tx /= poly.length; ty /= poly.length;
+      const d2 = sq(tx - wx) + sq(ty - wy);
+      if (d2 < bd && sq(tx - cx) + sq(ty - cy) >= 10 * 10 && this.w.nav.walkable(tx, ty)) { bd = d2; wx = tx; wy = ty; }
+    }
+    if (!this.w.nav.walkable(wx, wy)) return false;
+    this.pMove = true; this.pMoveX = wx; this.pMoveY = wy; this.pAggro = 0.2;
+    return true;
   }
 
   private nearestPickup(): { x: number; y: number } | null {

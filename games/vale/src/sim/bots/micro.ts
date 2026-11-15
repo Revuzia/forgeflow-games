@@ -45,7 +45,16 @@ import type { TeamBrain } from './team.ts';
 import { dcos, dhypot, dsin, sq } from '../dmath.ts';
 
 export type Mode = 'lane' | 'farm' | 'trade' | 'allin' | 'retreat' | 'recall' | 'push' | 'defend' | 'objective' | 'roam'
-  | 'teamfight' | 'hunt' | 'pickup' | 'return';
+  | 'teamfight' | 'hunt' | 'pickup' | 'return' | 'protect';
+
+/** statuses that hold a fighter in place (CC chains time the next one for when these end) */
+const HOLD_KINDS = new Set(['stun', 'root', 'airborne', 'taunt', 'sleep', 'fear']);
+/** seconds of hard CC left on a fighter (0: none); a status's timer is shown on its bar, as in the genre */
+export function holdLeft(t: Entity): number {
+  let m = 0;
+  for (const st of t.statuses) if (HOLD_KINDS.has(st.kind) && st.remaining > m) m = st.remaining;
+  return m;
+}
 
 const scratch: Entity[] = [];
 const MOVE_EPS = 0.6;
@@ -102,6 +111,12 @@ export abstract class BotBase {
   safeX = 0; safeY = 0;
   /** retreating hemmed in by Wicks pressed against me on several sides (an escape fires whatever my health) */
   caged = false;
+  /** lane AI G2 (protect): the partner being dived and the enemy diving it — heals and shields go to the partner,
+   *  CC goes on the diver even when the ability would wait for a second target */
+  peelVictim: Entity | null = null;
+  peelDiver: Entity | null = null;
+  /** lane AI G8: CC chain rolls per target hold (target id → the hold's start it was rolled for, and the roll) */
+  private readonly chainRoll = new Map<number, { at: number; ok: boolean }>();
 
   // perception (reaction-delayed)
   readonly noticed = new Map<number, number>();
@@ -441,6 +456,10 @@ export abstract class BotBase {
     // support: heals and shields
     if (u & (U_HEAL | U_SHIELD)) {
       if (info.allyUnit) {
+        // (lane AI G2: a partner under burst is healed or shielded at 85 %, not left to fall to the 60 % gate)
+        const pv = this.peelVictim;
+        if (pv && pv.alive && pv !== e && pv.hp / pv.maxHp <= Math.min(0.85, info.targetHpBelow <= 1 ? info.targetHpBelow : 1) &&
+          this.dist2(pv, e.x, e.y) <= sq(info.range + pv.radius + 0.5) && matchesFilter(this.w, e, pv, info.filter)) { this.cast(s, info, pv, pv.x, pv.y); return true; }
         const gate = info.targetHpBelow <= 1 ? info.targetHpBelow : 0.6;
         let best: Entity | null = null, bestF = gate;
         for (const f of this.perc.allyFighters) {
@@ -498,7 +517,8 @@ export abstract class BotBase {
       if (t && this.dist2(t, e.x, e.y) <= 64) { this.cast(s, info, t, t.x, t.y); return true; }
     }
     if (u & U_VISION) {
-      if (this.now - this.lastWardAt > 45 && (this.mode === 'lane' || this.mode === 'push' || this.mode === 'objective' || this.mode === 'farm')) {
+      const pitCall = !!this.brain?.visionPit && this.now - this.lastWardAt > 12;
+      if ((this.now - this.lastWardAt > 45 || pitCall) && (this.mode === 'lane' || this.mode === 'push' || this.mode === 'objective' || this.mode === 'farm' || this.mode === 'return')) {
         const spot = this.wardSpot(info.range);
         if (spot) { this.lastWardAt = this.now; this.cast(s, info, null, spot.x, spot.y); return true; }
       }
@@ -507,9 +527,29 @@ export abstract class BotBase {
     if (!(u & (U_OFFENSE | U_GAPCLOSE | U_WAVECLEAR))) return false;
     // ── offense ──
     const reach = Math.max(info.reach, 1.5);
-    const ft = this.pAggro >= 0.3 || this.mode === 'retreat' ? this.fighterInReach(reach + ((u & (U_GAPCLOSE | U_ENGAGE)) ? 1 : 0)) : null;
+    // (lane AI G8: an item active is used in any fight, not only once the bot has called an all-in)
+    const item = s.slot.startsWith('item');
+    const fightMode = this.mode === 'allin' || this.mode === 'teamfight' || this.mode === 'protect' || this.mode === 'defend' || this.mode === 'trade' || this.mode === 'roam';
+    const aggro = this.pAggro >= 0.3 || this.mode === 'retreat' || (item && fightMode && this.k.kind === 'rift');
+    let ft = aggro ? this.fighterInReach(reach + ((u & (U_GAPCLOSE | U_ENGAGE)) ? 1 : 0)) : null;
+    // (lane AI G2/G8: CC goes on the diver of a partner I am protecting, else — for a tier that reads threats — on the
+    // enemy that has been hurting my team most in the last 3 s, a carry first; whatever I am hitting is the fallback)
+    if (ft && (u & U_CC) && this.k.kind === 'rift') {
+      const pd = this.peelDiver;
+      if (this.mode === 'protect' && pd && pd.alive && this.isNoticed(pd) && this.dist2(pd, e.x, e.y) <= sq(reach + pd.radius + 0.5)) ft = pd;
+      // (not in a kill I chose — an all-in, a gank, a trade: the CC goes on the fighter I am killing)
+      else if (this.diff.threatCc && (this.mode === 'teamfight' || this.mode === 'defend' || this.mode === 'push' || this.mode === 'objective')) {
+        let bs = 0;
+        for (const g of this.perc.enemyFighters) {
+          if (!this.isNoticed(g) || this.dist2(g, e.x, e.y) > sq(reach + g.radius + 0.5)) continue;
+          const st = this.k.profiles.get(g.def)?.style;
+          const sc = this.m.dealt(g.id, this.now) + (st === 'marksman' || st === 'artillery' || st === 'burst' ? 0.5 * g.maxHp * 0.25 : 0);
+          if (sc > bs * 1.25) { bs = sc; ft = g; }
+        }
+      }
+    }
     if (ft && matchesFilter(this.w, e, ft, info.tk === 'unit' ? info.filter : undefined)) {
-      if (this.offensiveOn(s, info, ft, hpF)) return true;
+      if (this.offensiveOn(s, info, ft, hpF, item && fightMode && this.k.kind === 'rift')) return true;
     }
     // minions / monsters / structures
     if ((u & (U_WAVECLEAR | U_DAMAGE | U_EXECUTE)) && (this.pFarm === 2 || this.pMonsters)) {
@@ -519,7 +559,7 @@ export abstract class BotBase {
     return false;
   }
 
-  private offensiveOn(s: AbilitySlot, info: AbilityInfo, t: Entity, hpF: number): boolean {
+  private offensiveOn(s: AbilitySlot, info: AbilityInfo, t: Entity, hpF: number, itemFight = false): boolean {
     const e = this.e, u = info.use;
     const tF = (t.hp + t.shield) / Math.max(1, t.maxHp);
     if (info.targetHpBelow <= 1 && tF >= info.targetHpBelow) return false;
@@ -537,7 +577,7 @@ export abstract class BotBase {
         const o = e.slots[si];
         if (!o || o === s || !o.ready) continue;
         const oi = abilityInfo(o.def);
-        if (oi.applies.includes(info.upgrade) && !oi.upgrade && this.offensiveOn(o, oi, t, hpF)) return true;
+        if (oi.applies.includes(info.upgrade) && !oi.upgrade && this.offensiveOn(o, oi, t, hpF, itemFight)) return true;
       }
     }
     // (a skilled tier holds a cast its own setup is about to upgrade: Tunlan's Hand went out while the Hound was still
@@ -546,15 +586,32 @@ export abstract class BotBase {
     const d = Math.sqrt(this.dist2(t, e.x, e.y));
     // (a lunge that spares this target pays nothing: it is only the way in, never spent at arm's length)
     if (info.spares && d <= this.prof.attackRange + e.radius + t.radius + 0.5 && hasStatus(t, info.spares as Parameters<typeof hasStatus>[1])) return false;
-    const ag = this.pAggro;
+    const ag = itemFight ? Math.max(this.pAggro, 0.7) : this.pAggro;
     const rank = Math.max(1, s.rank);
+    // (lane AI G8: a CC chain — a hold on a target that is already held waits until that hold is about to end, then
+    // lands as it does, so the two last back to back instead of overlapping; veteran always, adept half the time)
+    if ((u & U_CC) && this.k.kind === 'rift' && this.diff.ccChain > 0 && t.kind === 'fighter') {
+      const left = holdLeft(t);
+      // (a hold of my own is followed by my damage, not by a wait: chains are across partners)
+      if (left > 0 && !(t.id === this.setupTarget && this.now < this.setupUntil + 1.5)) {
+        const at = this.m.heldAt.get(t.id) ?? 0;
+        let r = this.chainRoll.get(t.id);
+        if (!r || r.at !== at) { r = { at, ok: this.rng.chance(this.diff.ccChain) }; this.chainRoll.set(t.id, r); if (this.chainRoll.size > 24) this.chainRoll.clear(); }
+        const land = info.castTime + (info.delivery === 'projectile' ? Math.sqrt(this.dist2(t, e.x, e.y)) / Math.max(1, info.projSpeed) : info.delay);
+        if (r.ok && left > land + this.diff.reaction + 0.15) return false;
+      }
+    }
     const dmg = info.dmg.length ? estimateDamage(info, e, rank, t) : 0;
     const pureExecute = (u & U_EXECUTE) && !(u & (U_DAMAGE | U_POKE | U_CC | U_ENGAGE | U_ZONE));
     // (CW3 CL-1: committed to a kill — an all-in, a gank, or a target this low — an area that wants several targets is
     // spent on one: the kill is the point, not the second body)
     // (and a 1-on-1 trade on a road spends it once the opponent is under 60 %: a laner's ult is how a lane trade becomes a kill)
     // (RIFT's laning only: BRIDGE keeps the casts its G5 pace was measured with)
-    const need = this.k.kind !== 'rift' ? info.minTargets : (ag >= 0.9 && (this.mode === 'allin' || this.mode === 'roam')) || (ag >= 0.5 && (this.unanswering(t) || tF < (this.mode === 'trade' ? (s.slot === 'ult' ? 0.8 : 0.6) : 0.45))) ? 1 : info.minTargets;
+    let need = this.k.kind !== 'rift' ? info.minTargets : (ag >= 0.9 && (this.mode === 'allin' || this.mode === 'roam')) || (ag >= 0.5 && (this.unanswering(t) || tF < (this.mode === 'trade' ? (s.slot === 'ult' ? 0.8 : 0.6) : 0.45))) ? 1 : info.minTargets;
+    // (lane AI G2: CC and damage on the diver of a partner I protect need no second body; G8: a team fight's area ult
+    // goes out on two, never held for three)
+    if (this.k.kind === 'rift' && this.mode === 'protect' && t === this.peelDiver) need = 1;
+    else if (this.k.kind === 'rift' && this.mode === 'teamfight' && s.slot === 'ult' && need > 2) need = 2;
     if (pureExecute && dmg < (t.hp + t.shield) * 0.9 && !(info.targetHpBelow <= 1)) return false;
     let ok = false;
     if ((u & U_EXECUTE) && dmg >= (t.hp + t.shield) * 0.9) ok = true;
@@ -719,6 +776,23 @@ export abstract class BotBase {
 
   private wardSpot(range: number): { x: number; y: number } | null {
     const e = this.e, map = this.k.map;
+    // (lane AI G7: before an objective, lamps go round its pit — 10-14 m out, the side nearer me first, none twice)
+    const pit = this.brain?.visionPit;
+    if (pit && this.dist2(e, pit.x, pit.y) <= sq(range + 26)) {
+      let bp: { x: number; y: number } | null = null, bd2 = Infinity;
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4, r = i % 2 === 0 ? 12 : 11;
+        const x = pit.x + dcos(a) * r, y = pit.y + dsin(a) * r;
+        if (!this.w.nav.walkable(x, y)) continue;
+        let warded = false;
+        for (const u of this.perc.allyUnits) if (u.kind === 'ward' && this.dist2(u, x, y) < 8 * 8) { warded = true; break; }
+        if (warded) continue;
+        const d2 = this.dist2(e, x, y);
+        if (d2 < bd2) { bd2 = d2; bp = { x, y }; }
+      }
+      if (bp && bd2 <= sq(range + 0.5)) return bp;
+      if (bp) return null;
+    }
     let best: { x: number; y: number } | null = null, bd = sq(range + 4);
     for (const poly of map.thickets) {
       let cx = 0, cy = 0;

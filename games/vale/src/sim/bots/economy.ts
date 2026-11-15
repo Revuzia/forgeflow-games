@@ -18,9 +18,9 @@
 
 import type { Command } from '../../contracts/sim.ts';
 import type { Player } from '../entity.ts';
-import { quoteBuy } from '../shop.ts';
+import { dialClash, quoteBuy } from '../shop.ts';
 import type { World } from '../world.ts';
-import { abilityInfo, U_HEAL, type BuildPlan, type FighterProfile, type Knowledge } from './knowledge.ts';
+import { abilityInfo, buildPlan, itemRole, U_HEAL, type BuildPlan, type FighterProfile, type Knowledge, type PlanOpts } from './knowledge.ts';
 
 const LEVEL_SLOTS = ['a1', 'a2', 'a3'] as const;
 /** the laning phase (s): base visits top the healing consumable back up (two charges until 6:00, then one) */
@@ -32,8 +32,9 @@ const WARD_SPARE = 250;
 export class Economy {
   readonly k: Knowledge;
   readonly prof: FighterProfile;
-  readonly plan: BuildPlan;
+  plan: BuildPlan;
   private nextShopTick = 0;
+  private replanAt = -1e9;
   private startDone = false;
   private consumablesBought = 0;
   private wardBought = false;
@@ -42,9 +43,45 @@ export class Economy {
   /** goals the shop refused for good (unique conflicts) */
   private readonly skip = new Set<string>();
   readonly support: boolean;
+  /** lane AI G7: carries lamps (the support always; the grovehunter too on a tier that sets vision up for objectives) */
+  carriesWards = false;
 
   constructor(k: Knowledge, prof: FighterProfile, plan: BuildPlan, support: boolean) {
-    this.k = k; this.prof = prof; this.plan = plan; this.support = support;
+    this.k = k; this.prof = prof; this.plan = plan; this.support = support; this.carriesWards = support;
+  }
+
+  /**
+   * Lane AI G9 (adaptiveBuild): on a shop visit, the rest of the build is planned again from the match as it stands —
+   * the enemy fighter the scoreboard shows fed (twice the weight), the damage mix this fighter has been taking (the
+   * enemies of that type count again), and the team well behind (defence pieces worth more). What is owned and
+   * the piece in progress keep their place; only the pieces not started yet can change. Same inputs, same order.
+   */
+  replan(w: World, p: Player, opts: PlanOpts, jungler: boolean): void {
+    if (!p.canShop || w.time - this.replanAt < 30) return;
+    this.replanAt = w.time;
+    const own = this.owned(p);
+    const has = (id: string): boolean => (own.get(id) ?? 0) > 0;
+    const cur = this.goal(w, p);
+    const fresh = buildPlan(this.k.idx, this.k.rules, this.prof, jungler, opts);
+    const core: string[] = [];
+    for (const id of this.plan.core) if (has(id) || id === cur) core.push(id);
+    const n = Math.max(this.plan.core.length, 5);
+    const items = this.k.idx.items;
+    const fits = (id: string): boolean => {
+      const it = items.get(id);
+      if (!it || core.includes(id)) return false;
+      for (const o of core) {
+        const ot = items.get(o);
+        if (!ot) continue;
+        if (it.uniqueGroup && ot.uniqueGroup === it.uniqueGroup) return false;
+        if (dialClash(it, ot)) return false;
+        if (itemRole(it).antiHeal && itemRole(ot).antiHeal) return false;
+      }
+      return true;
+    };
+    for (const id of fresh.core) { if (core.length >= n) break; if (fits(id)) core.push(id); }
+    for (const id of this.plan.core) { if (core.length >= n) break; if (fits(id)) core.push(id); }
+    this.plan = { ...this.plan, core };
   }
 
   /** one levelUp command when a skill point is free */
@@ -173,10 +210,10 @@ export class Economy {
     }
     // the support keeps vision stocked: a ward item once, or a consumable lamp topped up to WARD_CHARGES on each trip
     // home (the second charge only with WARD_SPARE gold left over, so lamps never delay the next item piece)
-    if (plan.ward && this.support && refill) {
+    if (plan.ward && this.carriesWards && refill) {
       const consumable = !!this.k.idx.items.get(plan.ward)?.consumable;
       const have = this.charges(p, plan.ward);
-      if (consumable ? have < WARD_CHARGES : !this.wardBought) {
+      if (consumable ? have < (this.support ? WARD_CHARGES : 1) : !this.wardBought) {
         const q = quoteBuy(w, p, plan.ward);
         if (q.ok && (have === 0 || p.gold - q.price >= WARD_SPARE)) { this.wardBought = true; out.push({ type: 'buy', item: plan.ward }); return; }
       }
