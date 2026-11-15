@@ -1,0 +1,179 @@
+{
+ "gate": "quality_tiers (GFX-10)",
+ "pack": "_design/reviews/orch1/evidence/visual",
+ "scenes": [
+  "teamfight",
+  "river_mid",
+  "base_aubade",
+  "jungle_glasshorn"
+ ],
+ "tiers": [
+  "low",
+  "medium",
+  "high",
+  "ultra"
+ ],
+ "rows": [
+  {
+   "scene": "teamfight",
+   "tier": "low",
+   "ssimVsUltra": 0.8423,
+   "dEMean": 5.946,
+   "dEp95": 20.228,
+   "shareOver2_3": 0.6282
+  },
+  {
+   "scene": "teamfight",
+   "tier": "medium",
+   "ssimVsUltra": 0.9123,
+   "dEMean": 2.921,
+   "dEp95": 11.793,
+   "shareOver2_3": 0.2931
+  },
+  {
+   "scene": "teamfight",
+   "tier": "high",
+   "ssimVsUltra": 0.9838,
+   "dEMean": 0.98,
+   "dEp95": 2.688,
+   "shareOver2_3": 0.0824
+  },
+  {
+   "scene": "teamfight",
+   "tier": "ultra",
+   "ssimVsUltra": 1.0,
+   "dEMean": 0.0,
+   "dEp95": 0.0,
+   "shareOver2_3": 0.0
+  },
+  {
+   "scene": "river_mid",
+   "tier": "low",
+   "ssimVsUltra": 0.7185,
+   "dEMean": 10.853,
+   "dEp95": 54.877,
+   "shareOver2_3": 0.5507
+  },
+  {
+   "scene": "river_mid",
+   "tier": "medium",
+   "ssimVsUltra": 0.7794,
+   "dEMean": 7.742,
+   "dEp95": 45.801,
+   "shareOver2_3": 0.3493
+  },
+  {
+   "scene": "river_mid",
+   "tier": "high",
+   "ssimVsUltra": 0.8661,
+   "dEMean": 5.527,
+   "dEp95": 39.576,
+   "shareOver2_3": 0.1968
+  },
+  {
+   "scene": "river_mid",
+   "tier": "ultra",
+   "ssimVsUltra": 1.0,
+   "dEMean": 0.0,
+   "dEp95": 0.0,
+   "shareOver2_3": 0.0
+  },
+  {
+   "scene": "base_aubade",
+   "tier": "low",
+   "ssimVsUltra": 0.9066,
+   "dEMean": 2.579,
+   "dEp95": 9.195,
+   "shareOver2_3": 0.2604
+  },
+  {
+   "scene": "base_aubade",
+   "tier": "medium",
+   "ssimVsUltra": 0.9395,
+   "dEMean": 1.407,
+   "dEp95": 4.732,
+   "shareOver2_3": 0.1193
+  },
+  {
+   "scene": "base_aubade",
+   "tier": "high",
+   "ssimVsUltra": 0.9924,
+   "dEMean": 0.392,
+   "dEp95": 1.228,
+   "shareOver2_3": 0.0201
+  },
+  {
+   "scene": "base_aubade",
+   "tier": "ultra",
+   "ssimVsUltra": 1.0,
+   "dEMean": 0.0,
+   "dEp95": 0.0,
+   "shareOver2_3": 0.0
+  },
+  {
+   "scene": "jungle_glasshorn",
+   "tier": "low",
+   "ssimVsUltra": 0.717,
+   "dEMean": 7.284,
+   "dEp95": 24.625,
+   "shareOver2_3": 0.6368
+  },
+  {
+   "scene": "jungle_glasshorn",
+   "tier": "medium",
+   "ssimVsUltra": 0.8278,
+   "dEMean": 3.506,
+   "dEp95": 16.745,
+   "shareOver2_3": 0.3129
+  },
+  {
+   "scene": "jungle_glasshorn",
+   "tier": "high",
+   "ssimVsUltra": 0.928,
+   "dEMean": 1.264,
+   "dEp95": 3.849,
+   "shareOver2_3": 0.0815
+  },
+  {
+   "scene": "jungle_glasshorn",
+   "tier": "ultra",
+   "ssimVsUltra": 1.0,
+   "dEMean": 0.0,
+   "dEp95": 0.0,
+   "shareOver2_3": 0.0
+  }
+ ],
+ "perTierMean": {
+  "low": {
+   "ssimVsUltra": 0.7961,
+   "dEMean": 6.665,
+   "dEp95": 27.231
+  },
+  "medium": {
+   "ssimVsUltra": 0.8647,
+   "dEMean": 3.894,
+   "dEp95": 19.768
+  },
+  "high": {
+   "ssimVsUltra": 0.9426,
+   "dEMean": 2.041,
+   "dEp95": 11.835
+  },
+  "ultra": {
+   "ssimVsUltra": 1.0,
+   "dEMean": 0.0,
+   "dEp95": 0.0
+  }
+ },
+ "verdict": {
+  "highVsUltra": {
+   "ssimVsUltra": 0.9426,
+   "dEMean": 2.041,
+   "dEp95": 11.835
+  },
+  "ultraIndistinguishableFromHigh": false,
+  "note": "GFX-10: when true, either drop the 4096 shadow map to 2048 and spend the saved memory/GPU time on something visible, or label Ultra honestly in the settings copy."
+ },
+ "missing": [],
+ "method": "luma SSIM (7x7 box window) and CIELAB dE76 of each tier frame against the Ultra frame of the same scene at the game camera, 1920x1080, DPR 1"
+}

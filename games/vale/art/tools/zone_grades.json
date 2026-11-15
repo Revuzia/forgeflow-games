@@ -450,12 +450,12 @@
  "ardit": {
   "zones": [
    {
-    "why": "orch1 FU-3: the helm a deep steel-teal (CIELAB h ~210, in game HSV h 180-190), out of the reserved ally band 200-225 (r3's #33739C slate blue rendered HSV 204.8) and dark enough (in game L* ~50) to sit >= 25 dE from Lisvel's pale cyan wrap",
+    "why": "orch1 FU-3: the helm a deep steel-teal (albedo HSV ~196 renders HSV 180-190 under the warm sun; CIELAB h ~220, in game HSV h 180-190), out of the reserved ally band 200-225 (r3's #33739C slate blue rendered HSV 204.8) and dark enough (in game L* ~50) to sit >= 25 dE from Lisvel's pale cyan wrap",
     "parts": [
      "helm"
     ],
-    "hex": "#2F6F78",
-    "L": 28,
+    "hex": "#2C6A80",
+    "L": 16,
     "C": 30
    },
    {
@@ -467,8 +467,8 @@
      "tier_L"
     ],
     "hex": "#2F6F78",
-    "L": 50,
-    "C": 7
+    "L": 40,
+    "C": 6
    },
    {
     "why": "u3: the signature periwinkle moves to the coat (mid body), so the crown leaves the lilac family and sigPct holds",
@@ -555,6 +555,27 @@
     "L": 20,
     "C": 18,
     "k": 0.35
+   },
+   {
+    "why": "orch1 FU-1: the three pale stone shards over the shoulders (the game camera's top cluster) a pale teal-green stone glaze (CIELAB h ~160: >= 30 deg from Lisvel's cyan, >= 25 dE from Marund's pale green by value), so Hesmi's top owns a hue (r3: achromatic grey top, C 5) and stays the figure's bright crown (bible top band)",
+    "boxes": [
+     [
+      -0.45,
+      -0.2,
+      2.0,
+      0.45,
+      0.6,
+      2.6
+     ]
+    ],
+    "rough": [
+     0.0,
+     0.79
+    ],
+    "hex": "#2E6650",
+    "L": 62,
+    "C": 14,
+    "k": 0.8
    }
   ]
  },
@@ -608,9 +629,9 @@
     "parts": [
      "hat"
     ],
-    "hex": "#3B3F7A",
-    "L": 24,
-    "C": 20,
+    "hex": "#2F4A80",
+    "L": 16,
+    "C": 22,
     "k": 0.7
    },
    {
@@ -622,7 +643,7 @@
      "sleeve_R"
     ],
     "hex": "#5A5C70",
-    "L": 46,
+    "L": 64,
     "C": 6
    }
   ],
@@ -648,15 +669,45 @@
  "ulkro": {
   "zones": [
    {
-    "why": "orch1 FU-1/FU-3: the hood a deep moss green (CIELAB h ~128, in game HSV ~80: outside the harm and heal bands), so the scout no longer shares Odrum's and Nurrow's honey-tan top (r3 dE 4.9); the cowl keeps the tan, so the crown breaks by hue",
+    "why": "orch1 FU-1/FU-3: the hood's lit dome (z > 1.70) a sage moss green (CIELAB h ~128, in game HSV ~70: outside the harm and heal bands), so the scout no longer shares Odrum's and Nurrow's honey-tan top (r3 dE 4.9)",
+    "parts": [
+     "hood"
+    ],
+    "hex": "#4A6B35",
+    "L": 48,
+    "C": 20,
+    "k": 0.8,
+    "boxes": [
+     [
+      -0.5,
+      -0.5,
+      1.7,
+      0.5,
+      0.5,
+      2.0
+     ]
+    ]
+   },
+   {
+    "why": "orch1 FU-1: the hood's lower shell and tail a deep moss, so the dome breaks from the shoulders by value (units_gate P4; r3 crown dL 3.1)",
     "parts": [
      "hood",
      "hood_tail"
     ],
     "hex": "#4A6B35",
     "L": 26,
-    "C": 20,
-    "k": 0.7
+    "C": 18,
+    "k": 0.8,
+    "boxes": [
+     [
+      -0.5,
+      -0.5,
+      0.0,
+      0.5,
+      0.5,
+      1.7
+     ]
+    ]
    }
   ],
   "reserveModes": {

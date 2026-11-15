@@ -246,11 +246,13 @@ async function fightSession() {
   ASSERT = false;                                           // the quiet scenes carry whoever stands there
   // same on a quiet scene: mid lane at the river crossing, base west, jungle
   for (const [name, x, y] of [['river_mid', 85, 55], ['base_aubade', 14.5, 55], ['jungle_glasshorn', 61.6, 41.5]]) {
-    await B(page, (b) => b.setQuality('high'));
+    // one sim state per scene (advanced once, on High), then every tier renders THAT frame with the sim frozen (render(0)): the tiers differ only in rendering
+    await B(page, (b, p) => { b.setQuality('high'); b.focus(p.x, p.y); b.frames(20, 1 / 30); b.focus(p.x, p.y); }, { x, y });
     for (const q of ['low', 'medium', 'high', 'ultra']) {
-      await B(page, (b, p) => { b.setQuality(p.q); b.focus(p.x, p.y); b.frames(20, 1 / 30); for (let i = 0; i < 6; i++) b.renderer.render(0); }, { q, x, y });
+      await B(page, (b, p) => { b.setQuality(p.q); b.focus(p.x, p.y); for (let i = 0; i < 24; i++) b.renderer.render(0); }, { q, x, y });
+      await still(6);
       const st = await B(page, (b) => { const s = b.stats(); return { calls: s.calls, triangles: s.triangles, scale: s.renderScale }; });
-      await cap(`quality_${name}_${q}.png`, { kind: 'quality', what: `${name} at the game camera on the ${q} preset (a still taken 20 frames after the camera moved)`, map: 'rift', quality: q, world: [x, y], stats: st });
+      await cap(`quality_${name}_${q}.png`, { kind: 'quality', what: `${name} at the game camera on the ${q} preset (the same frozen sim frame on every tier, camera still for 24 frames)`, map: 'rift', quality: q, world: [x, y], stats: st });
     }
     await B(page, (b) => b.setQuality('high'));
   }

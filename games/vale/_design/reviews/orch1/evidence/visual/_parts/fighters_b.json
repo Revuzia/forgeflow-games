@@ -231,7 +231,7 @@
    },
    "silhouette": {
     "meshes": 5,
-    "silhouettePx": 9856,
+    "silhouettePx": 9882,
     "bodyPx": 6255,
     "visibleShare": 1,
     "box": [
@@ -282,7 +282,7 @@
    },
    "silhouette": {
     "meshes": 5,
-    "silhouettePx": 21855,
+    "silhouettePx": 21916,
     "bodyPx": 14712,
     "visibleShare": 1,
     "box": [
@@ -333,7 +333,7 @@
    },
    "silhouette": {
     "meshes": 6,
-    "silhouettePx": 6361,
+    "silhouettePx": 6360,
     "bodyPx": 3641,
     "visibleShare": 1,
     "box": [
@@ -639,7 +639,7 @@
    },
    "silhouette": {
     "meshes": 5,
-    "silhouettePx": 6048,
+    "silhouettePx": 6088,
     "bodyPx": 3684,
     "visibleShare": 1,
     "box": [
@@ -690,7 +690,7 @@
    },
    "silhouette": {
     "meshes": 5,
-    "silhouettePx": 13372,
+    "silhouettePx": 13430,
     "bodyPx": 8663,
     "visibleShare": 1,
     "box": [
@@ -741,7 +741,7 @@
    },
    "silhouette": {
     "meshes": 5,
-    "silhouettePx": 10182,
+    "silhouettePx": 10183,
     "bodyPx": 6566,
     "visibleShare": 1,
     "box": [

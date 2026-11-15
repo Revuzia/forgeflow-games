@@ -42,6 +42,10 @@ for r in records:
         final.append(r)   # a record with no frame (a camp that was empty at its spawn time): kept as a fact
         continue
     path = os.path.join(OUT, r['file'])
+    wp = os.path.splitext(path)[0] + '.webp'
+    if not os.path.exists(path) and os.path.exists(wp) and r['kind'] not in ('fighter_raw', 'structure_raw'):
+        e = dict(r); e['file'] = os.path.basename(wp); e['encode'] = 'webp-q95'; final.append(e)   # an earlier run already re-encoded this frame
+        continue
     if not os.path.exists(path):
         continue
     if k == 'fighter_raw':
@@ -132,4 +136,4 @@ idx = {
     'files': final,
 }
 json.dump(idx, open(os.path.join(OUT, 'index.json'), 'w'), indent=1)
-print(len(final), 'files; webp:', [r['file'] for r in final if r['file'].endswith('.webp')], 'palette frames:', [r['file'] for r in final if 'palette' in str(r.get('encode'))])
+print(len(final), 'files; webp:', [r['file'] for r in final if (r.get('file') or '').endswith('.webp')], 'palette frames:', [r['file'] for r in final if 'palette' in str(r.get('encode'))])

@@ -1,12 +1,12 @@
 {
  "pack": "orch1 visual evidence",
  "collector": "EVIDENCE COLLECTOR (visual): collects and measures, does not judge",
- "head": "e7858d1f5",
+ "head": "477494ec2",
  "build": "working tree of the branch at collection time, served by vite dev (catalog 2026.11.5), render bench _harness/web/render_bench.html",
  "camera": "real game camera (map camera distance, free mode centred on the subject); canvas drawing buffer 1920x1080 at device scale 1; preset High unless the file says otherwise; dynamic resolution off",
  "seed": 7,
  "driver": "_harness/orch1_visual_pack.mjs (+ _harness/orch1_visual_post.py for crops, sheets, size cap)",
- "size_cap": "1400000 bytes per PNG; over the cap a file is re-encoded as an adaptive palette PNG (field \"encode\"), never resized except contact/side-by-side sheets",
+ "size_cap": "3000000 bytes per PNG; over the cap a file is re-encoded as WebP q95 (field \"encode\"), never a palette, never resized except contact/side-by-side sheets",
  "files": [
   {
    "file": "map_bridge_t0062_span_centre.png",
@@ -24,7 +24,7 @@
     22
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1086918
   },
   {
@@ -43,7 +43,7 @@
     22
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1142764
   },
   {
@@ -62,7 +62,7 @@
     22
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1294382
   },
   {
@@ -81,7 +81,7 @@
     22
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1049880
   },
   {
@@ -100,7 +100,7 @@
     22
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1235518
   },
   {
@@ -119,7 +119,7 @@
     22
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1037141
   },
   {
@@ -138,7 +138,7 @@
     22
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1113852
   },
   {
@@ -157,7 +157,7 @@
     22
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1293750
   },
   {
@@ -176,7 +176,7 @@
     22
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1050283
   },
   {
@@ -195,7 +195,7 @@
     22
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1232896
   },
   {
@@ -214,7 +214,7 @@
     22
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1126191
   },
   {
@@ -233,7 +233,7 @@
     22
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1135889
   },
   {
@@ -252,7 +252,7 @@
     22
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1288833
   },
   {
@@ -271,7 +271,7 @@
     22
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 817001
   },
   {
@@ -290,7 +290,7 @@
     22
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1216113
   },
   {
@@ -309,7 +309,7 @@
     32
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1187159
   },
   {
@@ -328,7 +328,7 @@
     20
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1051642
   },
   {
@@ -347,7 +347,7 @@
     32
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1067237
   },
   {
@@ -366,7 +366,7 @@
     44
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1169763
   },
   {
@@ -385,7 +385,7 @@
     32
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 935306
   },
   {
@@ -404,7 +404,7 @@
     20
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1081278
   },
   {
@@ -423,7 +423,7 @@
     32
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1059963
   },
   {
@@ -442,7 +442,7 @@
     44
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1078336
   },
   {
@@ -461,7 +461,7 @@
     32
    ],
    "ended": false,
-   "encode": "lossless",
+   "encode": "lossless-png",
    "bytes": 1029022
   },
   {
@@ -480,7 +480,7 @@
     20
    ],
    "ended": false,
-   "encode": "lossless",
+   "encode": "lossless-png",
    "bytes": 986717
   },
   {
@@ -499,7 +499,7 @@
     32
    ],
    "ended": false,
-   "encode": "lossless",
+   "encode": "lossless-png",
    "bytes": 827181
   },
   {
@@ -518,7 +518,7 @@
     44
    ],
    "ended": false,
-   "encode": "lossless",
+   "encode": "lossless-png",
    "bytes": 951411
   },
   {
@@ -537,7 +537,7 @@
     55
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1220685
   },
   {
@@ -556,7 +556,7 @@
     55
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1323133
   },
   {
@@ -575,7 +575,7 @@
     41.5
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1073557
   },
   {
@@ -594,7 +594,7 @@
     85.1
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1089431
   },
   {
@@ -613,7 +613,7 @@
     24.9
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1173852
   },
   {
@@ -632,7 +632,7 @@
     68.5
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1192444
   },
   {
@@ -651,7 +651,7 @@
     13.5
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1072704
   },
   {
@@ -670,7 +670,7 @@
     96.5
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1062488
   },
   {
@@ -689,7 +689,7 @@
     55
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1062130
   },
   {
@@ -708,7 +708,7 @@
     31
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1247050
   },
   {
@@ -727,7 +727,7 @@
     80
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1114726
   },
   {
@@ -746,7 +746,7 @@
     43
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 967208
   },
   {
@@ -765,7 +765,7 @@
     67
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 859884
   },
   {
@@ -784,7 +784,7 @@
     55
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1223887
   },
   {
@@ -803,7 +803,7 @@
     55
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1315053
   },
   {
@@ -822,7 +822,7 @@
     41.5
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1061516
   },
   {
@@ -841,7 +841,7 @@
     85.1
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1123786
   },
   {
@@ -860,7 +860,7 @@
     24.9
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1209032
   },
   {
@@ -879,7 +879,7 @@
     68.5
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1160503
   },
   {
@@ -898,7 +898,7 @@
     13.5
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1074807
   },
   {
@@ -917,7 +917,7 @@
     96.5
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1058788
   },
   {
@@ -936,7 +936,7 @@
     55
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1027137
   },
   {
@@ -955,7 +955,7 @@
     31
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1252689
   },
   {
@@ -974,7 +974,7 @@
     80
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 931733
   },
   {
@@ -993,7 +993,7 @@
     43
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 947510
   },
   {
@@ -1012,7 +1012,7 @@
     67
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 830279
   },
   {
@@ -1031,7 +1031,7 @@
     55
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1223374
   },
   {
@@ -1050,7 +1050,7 @@
     55
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1315330
   },
   {
@@ -1069,7 +1069,7 @@
     41.5
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1056588
   },
   {
@@ -1088,7 +1088,7 @@
     85.1
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1203266
   },
   {
@@ -1107,7 +1107,7 @@
     24.9
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1152755
   },
   {
@@ -1126,7 +1126,7 @@
     68.5
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1181135
   },
   {
@@ -1145,7 +1145,7 @@
     13.5
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1095602
   },
   {
@@ -1164,7 +1164,7 @@
     96.5
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1024155
   },
   {
@@ -1183,7 +1183,7 @@
     55
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1044427
   },
   {
@@ -1202,7 +1202,7 @@
     31
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1250003
   },
   {
@@ -1221,7 +1221,7 @@
     80
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1110884
   },
   {
@@ -1240,7 +1240,7 @@
     43
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 962658
   },
   {
@@ -1259,7 +1259,7 @@
     67
    ],
    "ended": false,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 834354
   },
   {
@@ -1277,7 +1277,7 @@
     93,
     54.8
    ],
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1041010
   },
   {
@@ -1295,7 +1295,7 @@
     93,
     54.8
    ],
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1062851
   },
   {
@@ -1313,175 +1313,254 @@
     93,
     54.8
    ],
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1061287
   },
   {
-   "file": "quality_teamfight_high.png",
+   "file": "quality_teamfight_high.webp",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 835.17,
-   "time": "13:55",
+   "time_s": 720.97,
+   "time": "12:00",
+   "bodies": {
+    "pending": 0,
+    "fighters": 9,
+    "onScreen": 9,
+    "visible": 9,
+    "missing": []
+   },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    87.7,
-    98.1
+    84.2,
+    54.9
    ],
-   "fighters_team0": 2,
-   "fighters_team1": 2,
-   "vfx_actors": 70,
-   "particles": 543,
-   "telegraphs": 1,
+   "fighters_team0": 4,
+   "fighters_team1": 5,
+   "vfx_actors": 90,
+   "particles": 994,
+   "telegraphs": 5,
    "what": "the same teamfight peak frame on the high preset",
    "quality": "high",
    "stats": {
-    "calls": 188,
-    "triangles": 311749,
+    "calls": 195,
+    "triangles": 378743,
     "scale": 1,
     "w": 1920,
     "h": 1080
    },
-   "encode": "palette256",
-   "bytes": 873547
+   "encode": "webp-q95",
+   "bytes": 550224
   },
   {
    "file": "quality_teamfight_low.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 835.17,
-   "time": "13:55",
+   "time_s": 720.97,
+   "time": "12:00",
+   "bodies": {
+    "pending": 0,
+    "fighters": 9,
+    "onScreen": 9,
+    "visible": 9,
+    "missing": []
+   },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    87.7,
-    98.1
+    84.2,
+    54.9
    ],
-   "fighters_team0": 2,
-   "fighters_team1": 2,
-   "vfx_actors": 70,
-   "particles": 543,
-   "telegraphs": 1,
+   "fighters_team0": 4,
+   "fighters_team1": 5,
+   "vfx_actors": 90,
+   "particles": 994,
+   "telegraphs": 5,
    "what": "the same teamfight peak frame on the low preset",
    "quality": "low",
    "stats": {
     "calls": 152,
-    "triangles": 233068,
+    "triangles": 288116,
     "scale": 0.75,
     "w": 1440,
     "h": 810
    },
-   "encode": "palette256",
-   "bytes": 524861
+   "encode": "lossless-png",
+   "bytes": 1664412
   },
   {
-   "file": "quality_teamfight_ultra.png",
+   "file": "quality_teamfight_medium.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 835.17,
-   "time": "13:55",
+   "time_s": 720.97,
+   "time": "12:00",
+   "bodies": {
+    "pending": 0,
+    "fighters": 9,
+    "onScreen": 9,
+    "visible": 9,
+    "missing": []
+   },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    87.7,
-    98.1
+    84.2,
+    54.9
    ],
-   "fighters_team0": 2,
-   "fighters_team1": 2,
-   "vfx_actors": 70,
-   "particles": 543,
-   "telegraphs": 1,
+   "fighters_team0": 4,
+   "fighters_team1": 5,
+   "vfx_actors": 90,
+   "particles": 994,
+   "telegraphs": 5,
+   "what": "the same teamfight peak frame on the medium preset",
+   "quality": "medium",
+   "stats": {
+    "calls": 186,
+    "triangles": 332146,
+    "scale": 0.9,
+    "w": 1728,
+    "h": 972
+   },
+   "encode": "lossless-png",
+   "bytes": 2365637
+  },
+  {
+   "file": "quality_teamfight_ultra.webp",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 720.97,
+   "time": "12:00",
+   "bodies": {
+    "pending": 0,
+    "fighters": 9,
+    "onScreen": 9,
+    "visible": 9,
+    "missing": []
+   },
+   "kind": "teamfight",
+   "map": "rift",
+   "world": [
+    84.2,
+    54.9
+   ],
+   "fighters_team0": 4,
+   "fighters_team1": 5,
+   "vfx_actors": 90,
+   "particles": 994,
+   "telegraphs": 5,
    "what": "the same teamfight peak frame on the ultra preset",
    "quality": "ultra",
    "stats": {
-    "calls": 188,
-    "triangles": 317763,
+    "calls": 195,
+    "triangles": 378743,
     "scale": 1,
     "w": 1920,
     "h": 1080
    },
-   "encode": "palette256",
-   "bytes": 872790
+   "encode": "webp-q95",
+   "bytes": 544256
   },
   {
    "file": "teamfight_rift_after.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 836.67,
-   "time": "13:56",
+   "time_s": 722.47,
+   "time": "12:02",
+   "bodies": {
+    "pending": 0,
+    "fighters": 9,
+    "onScreen": 9,
+    "visible": 9,
+    "missing": []
+   },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    87.7,
-    98.1
+    84.2,
+    54.9
    ],
-   "fighters_team0": 2,
-   "fighters_team1": 2,
-   "vfx_actors": 70,
-   "particles": 543,
-   "telegraphs": 1,
+   "fighters_team0": 4,
+   "fighters_team1": 5,
+   "vfx_actors": 90,
+   "particles": 994,
+   "telegraphs": 5,
    "what": "5v5 teamfight, one and a half seconds after the peak",
    "quality": "high",
-   "encode": "palette256",
-   "bytes": 541584
+   "encode": "lossless-png",
+   "bytes": 2942392
   },
   {
    "file": "teamfight_rift_lead.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 833.67,
-   "time": "13:53",
+   "time_s": 720.07,
+   "time": "12:00",
+   "bodies": {
+    "pending": 0,
+    "fighters": 9,
+    "onScreen": 1,
+    "visible": 9,
+    "missing": []
+   },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    87.7,
-    98.1
+    84.2,
+    54.9
    ],
-   "fighters_team0": 2,
-   "fighters_team1": 2,
-   "vfx_actors": 70,
-   "particles": 543,
-   "telegraphs": 1,
+   "fighters_team0": 4,
+   "fighters_team1": 5,
+   "vfx_actors": 90,
+   "particles": 994,
+   "telegraphs": 5,
    "what": "5v5 teamfight, one and a half seconds before the peak",
    "quality": "high",
-   "encode": "palette256",
-   "bytes": 613178
+   "encode": "lossless-png",
+   "bytes": 2738709
   },
   {
-   "file": "teamfight_rift_peak.png",
+   "file": "teamfight_rift_peak.webp",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 835.17,
-   "time": "13:55",
+   "time_s": 720.97,
+   "time": "12:00",
+   "bodies": {
+    "pending": 0,
+    "fighters": 9,
+    "onScreen": 9,
+    "visible": 9,
+    "missing": []
+   },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    87.7,
-    98.1
+    84.2,
+    54.9
    ],
-   "fighters_team0": 2,
-   "fighters_team1": 2,
-   "vfx_actors": 70,
-   "particles": 543,
-   "telegraphs": 1,
+   "fighters_team0": 4,
+   "fighters_team1": 5,
+   "vfx_actors": 90,
+   "particles": 994,
+   "telegraphs": 5,
    "what": "5v5 teamfight, peak ability/VFX frame",
    "quality": "high",
-   "encode": "palette256",
-   "bytes": 493884
+   "encode": "webp-q95",
+   "bytes": 550474
   },
   {
    "file": "quality_base_aubade_high.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 838.5,
-   "time": "13:58",
+   "time_s": 725.63,
+   "time": "12:05",
    "kind": "quality",
    "what": "base_aubade at the game camera on the high preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -1491,20 +1570,20 @@
     55
    ],
    "stats": {
-    "calls": 158,
-    "triangles": 124894,
+    "calls": 156,
+    "triangles": 121552,
     "scale": 1
    },
-   "encode": "palette256",
-   "bytes": 1214995
+   "encode": "lossless-png",
+   "bytes": 2840120
   },
   {
    "file": "quality_base_aubade_low.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 837.83,
-   "time": "13:57",
+   "time_s": 724.3,
+   "time": "12:04",
    "kind": "quality",
    "what": "base_aubade at the game camera on the low preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -1514,20 +1593,43 @@
     55
    ],
    "stats": {
-    "calls": 126,
-    "triangles": 107808,
+    "calls": 123,
+    "triangles": 104897,
     "scale": 0.75
    },
-   "encode": "palette256",
-   "bytes": 649623
+   "encode": "lossless-png",
+   "bytes": 1521260
+  },
+  {
+   "file": "quality_base_aubade_medium.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 724.97,
+   "time": "12:04",
+   "kind": "quality",
+   "what": "base_aubade at the game camera on the medium preset (a still taken 20 frames after the camera moved)",
+   "map": "rift",
+   "quality": "medium",
+   "world": [
+    14.5,
+    55
+   ],
+   "stats": {
+    "calls": 149,
+    "triangles": 110122,
+    "scale": 0.9
+   },
+   "encode": "lossless-png",
+   "bytes": 2196969
   },
   {
    "file": "quality_base_aubade_ultra.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 839.17,
-   "time": "13:59",
+   "time_s": 726.3,
+   "time": "12:06",
    "kind": "quality",
    "what": "base_aubade at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -1537,20 +1639,20 @@
     55
    ],
    "stats": {
-    "calls": 158,
-    "triangles": 124450,
+    "calls": 157,
+    "triangles": 123092,
     "scale": 1
    },
-   "encode": "palette256",
-   "bytes": 1219374
+   "encode": "lossless-png",
+   "bytes": 2834084
   },
   {
    "file": "quality_jungle_glasshorn_high.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 840.5,
-   "time": "14:00",
+   "time_s": 728.3,
+   "time": "12:08",
    "kind": "quality",
    "what": "jungle_glasshorn at the game camera on the high preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -1560,20 +1662,20 @@
     41.5
    ],
    "stats": {
-    "calls": 133,
-    "triangles": 185021,
+    "calls": 150,
+    "triangles": 235339,
     "scale": 1
    },
-   "encode": "palette256",
-   "bytes": 1063990
+   "encode": "lossless-png",
+   "bytes": 2961492
   },
   {
    "file": "quality_jungle_glasshorn_low.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 839.83,
-   "time": "13:59",
+   "time_s": 726.97,
+   "time": "12:06",
    "kind": "quality",
    "what": "jungle_glasshorn at the game camera on the low preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -1583,20 +1685,43 @@
     41.5
    ],
    "stats": {
-    "calls": 100,
-    "triangles": 97374,
+    "calls": 114,
+    "triangles": 137858,
     "scale": 0.75
    },
-   "encode": "palette256",
-   "bytes": 647826
+   "encode": "lossless-png",
+   "bytes": 1695526
+  },
+  {
+   "file": "quality_jungle_glasshorn_medium.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 727.63,
+   "time": "12:07",
+   "kind": "quality",
+   "what": "jungle_glasshorn at the game camera on the medium preset (a still taken 20 frames after the camera moved)",
+   "map": "rift",
+   "quality": "medium",
+   "world": [
+    61.6,
+    41.5
+   ],
+   "stats": {
+    "calls": 141,
+    "triangles": 192473,
+    "scale": 0.9
+   },
+   "encode": "lossless-png",
+   "bytes": 2308645
   },
   {
    "file": "quality_jungle_glasshorn_ultra.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 841.17,
-   "time": "14:01",
+   "time_s": 728.97,
+   "time": "12:08",
    "kind": "quality",
    "what": "jungle_glasshorn at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -1606,20 +1731,20 @@
     41.5
    ],
    "stats": {
-    "calls": 133,
-    "triangles": 185601,
+    "calls": 146,
+    "triangles": 235731,
     "scale": 1
    },
-   "encode": "palette256",
-   "bytes": 1062072
+   "encode": "lossless-png",
+   "bytes": 2960929
   },
   {
    "file": "quality_river_mid_high.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 836.5,
-   "time": "13:56",
+   "time_s": 722.97,
+   "time": "12:02",
    "kind": "quality",
    "what": "river_mid at the game camera on the high preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -1629,20 +1754,20 @@
     55
    ],
    "stats": {
-    "calls": 190,
-    "triangles": 281141,
+    "calls": 177,
+    "triangles": 344062,
     "scale": 1
    },
-   "encode": "palette256",
-   "bytes": 1066781
+   "encode": "lossless-png",
+   "bytes": 2926898
   },
   {
    "file": "quality_river_mid_low.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 835.83,
-   "time": "13:55",
+   "time_s": 721.63,
+   "time": "12:01",
    "kind": "quality",
    "what": "river_mid at the game camera on the low preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -1652,20 +1777,43 @@
     55
    ],
    "stats": {
-    "calls": 142,
-    "triangles": 195709,
+    "calls": 134,
+    "triangles": 257911,
     "scale": 0.75
    },
-   "encode": "palette256",
-   "bytes": 597053
+   "encode": "lossless-png",
+   "bytes": 1633660
+  },
+  {
+   "file": "quality_river_mid_medium.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 722.3,
+   "time": "12:02",
+   "kind": "quality",
+   "what": "river_mid at the game camera on the medium preset (a still taken 20 frames after the camera moved)",
+   "map": "rift",
+   "quality": "medium",
+   "world": [
+    85,
+    55
+   ],
+   "stats": {
+    "calls": 167,
+    "triangles": 302923,
+    "scale": 0.9
+   },
+   "encode": "lossless-png",
+   "bytes": 2278198
   },
   {
    "file": "quality_river_mid_ultra.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 837.17,
-   "time": "13:57",
+   "time_s": 723.63,
+   "time": "12:03",
    "kind": "quality",
    "what": "river_mid at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -1675,69 +1823,90 @@
     55
    ],
    "stats": {
-    "calls": 188,
-    "triangles": 278137,
+    "calls": 178,
+    "triangles": 345718,
     "scale": 1
    },
-   "encode": "palette256",
-   "bytes": 1072107
+   "encode": "lossless-png",
+   "bytes": 2911216
   },
   {
-   "file": "colorblind_teamfight_deutan_peak.png",
+   "file": "colorblind_teamfight_deutan_peak.webp",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 835.17,
-   "time": "13:55",
+   "time_s": 720.97,
+   "time": "12:00",
+   "bodies": {
+    "pending": 0,
+    "fighters": 9,
+    "onScreen": 9,
+    "visible": 9,
+    "missing": []
+   },
    "kind": "colorblind",
    "what": "the teamfight peak frame with the deutan colour-blind mode (identical sim frame as teamfight_rift_peak.png)",
    "map": "rift",
    "quality": "high",
    "colorblind": "deutan",
    "world": [
-    87.7,
-    98.1
+    84.2,
+    54.9
    ],
-   "encode": "palette256",
-   "bytes": 500750
+   "encode": "webp-q95",
+   "bytes": 549952
   },
   {
-   "file": "colorblind_teamfight_protan_peak.png",
+   "file": "colorblind_teamfight_protan_peak.webp",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 835.17,
-   "time": "13:55",
+   "time_s": 720.97,
+   "time": "12:00",
+   "bodies": {
+    "pending": 0,
+    "fighters": 9,
+    "onScreen": 9,
+    "visible": 9,
+    "missing": []
+   },
    "kind": "colorblind",
    "what": "the teamfight peak frame with the protan colour-blind mode (identical sim frame as teamfight_rift_peak.png)",
    "map": "rift",
    "quality": "high",
    "colorblind": "protan",
    "world": [
-    87.7,
-    98.1
+    84.2,
+    54.9
    ],
-   "encode": "palette256",
-   "bytes": 503130
+   "encode": "webp-q95",
+   "bytes": 549776
   },
   {
-   "file": "colorblind_teamfight_tritan_peak.png",
+   "file": "colorblind_teamfight_tritan_peak.webp",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 835.17,
-   "time": "13:55",
+   "time_s": 720.97,
+   "time": "12:00",
+   "bodies": {
+    "pending": 0,
+    "fighters": 9,
+    "onScreen": 9,
+    "visible": 9,
+    "missing": []
+   },
    "kind": "colorblind",
    "what": "the teamfight peak frame with the tritan colour-blind mode (identical sim frame as teamfight_rift_peak.png)",
    "map": "rift",
    "quality": "high",
    "colorblind": "tritan",
    "world": [
-    87.7,
-    98.1
+    84.2,
+    54.9
    ],
-   "encode": "palette256",
-   "bytes": 495980
+   "encode": "webp-q95",
+   "bytes": 552098
   },
   {
    "file": "fighter_ardit_game_frame.png",
@@ -1747,13 +1916,13 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 31.77,
-   "time": "00:31",
+   "time_s": 32,
+   "time": "00:32",
    "quality": "high",
    "width": 1920,
    "height": 1080,
-   "encode": "palette256",
-   "bytes": 1025418
+   "encode": "lossless-png",
+   "bytes": 2453291
   },
   {
    "file": "fighter_burdam_game_frame.png",
@@ -1763,13 +1932,13 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 33.17,
+   "time_s": 33.87,
    "time": "00:33",
    "quality": "high",
    "width": 1920,
    "height": 1080,
-   "encode": "palette256",
-   "bytes": 1144195
+   "encode": "lossless-png",
+   "bytes": 2476741
   },
   {
    "file": "fighter_dunsom_game_frame.png",
@@ -1779,13 +1948,13 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 34.57,
-   "time": "00:34",
+   "time_s": 35.73,
+   "time": "00:35",
    "quality": "high",
    "width": 1920,
    "height": 1080,
-   "encode": "palette256",
-   "bytes": 1065908
+   "encode": "lossless-png",
+   "bytes": 2492178
   },
   {
    "file": "fighter_ervet_game_frame.png",
@@ -1795,13 +1964,13 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 35.97,
-   "time": "00:35",
+   "time_s": 37.6,
+   "time": "00:37",
    "quality": "high",
    "width": 1920,
    "height": 1080,
-   "encode": "palette256",
-   "bytes": 1134285
+   "encode": "lossless-png",
+   "bytes": 2462744
   },
   {
    "file": "fighter_hesmi_game_frame.png",
@@ -1811,13 +1980,13 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 37.37,
-   "time": "00:37",
+   "time_s": 39.47,
+   "time": "00:39",
    "quality": "high",
    "width": 1920,
    "height": 1080,
-   "encode": "palette256",
-   "bytes": 1134297
+   "encode": "lossless-png",
+   "bytes": 2467148
   },
   {
    "file": "fighter_ilsheta_game_frame.png",
@@ -1827,13 +1996,13 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 38.77,
-   "time": "00:38",
+   "time_s": 41.33,
+   "time": "00:41",
    "quality": "high",
    "width": 1920,
    "height": 1080,
-   "encode": "palette256",
-   "bytes": 1220675
+   "encode": "lossless-png",
+   "bytes": 2467944
   },
   {
    "file": "fighter_kemdo_game_frame.png",
@@ -1843,13 +2012,13 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 40.17,
-   "time": "00:40",
+   "time_s": 43.2,
+   "time": "00:43",
    "quality": "high",
    "width": 1920,
    "height": 1080,
-   "encode": "palette256",
-   "bytes": 1275544
+   "encode": "lossless-png",
+   "bytes": 2470520
   },
   {
    "file": "fighter_lisvel_game_frame.png",
@@ -1859,13 +2028,13 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 41.57,
-   "time": "00:41",
+   "time_s": 45.07,
+   "time": "00:45",
    "quality": "high",
    "width": 1920,
    "height": 1080,
-   "encode": "palette256",
-   "bytes": 1136243
+   "encode": "lossless-png",
+   "bytes": 2512983
   },
   {
    "file": "fighter_marund_game_frame.png",
@@ -1875,13 +2044,13 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 31.77,
-   "time": "00:31",
+   "time_s": 32,
+   "time": "00:32",
    "quality": "high",
    "width": 1920,
    "height": 1080,
-   "encode": "palette256",
-   "bytes": 1035984
+   "encode": "lossless-png",
+   "bytes": 2459965
   },
   {
    "file": "fighter_nurrow_game_frame.png",
@@ -1891,13 +2060,13 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 33.17,
+   "time_s": 33.87,
    "time": "00:33",
    "quality": "high",
    "width": 1920,
    "height": 1080,
-   "encode": "palette256",
-   "bytes": 1150702
+   "encode": "lossless-png",
+   "bytes": 2472188
   },
   {
    "file": "fighter_odrum_game_frame.png",
@@ -1907,13 +2076,13 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 34.57,
-   "time": "00:34",
+   "time_s": 35.73,
+   "time": "00:35",
    "quality": "high",
    "width": 1920,
    "height": 1080,
-   "encode": "palette256",
-   "bytes": 1071496
+   "encode": "lossless-png",
+   "bytes": 2483025
   },
   {
    "file": "fighter_rishal_game_frame.png",
@@ -1923,13 +2092,13 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 35.97,
-   "time": "00:35",
+   "time_s": 37.6,
+   "time": "00:37",
    "quality": "high",
    "width": 1920,
    "height": 1080,
-   "encode": "palette256",
-   "bytes": 1131443
+   "encode": "lossless-png",
+   "bytes": 2462759
   },
   {
    "file": "fighter_sukri_game_frame.png",
@@ -1939,13 +2108,13 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 37.37,
-   "time": "00:37",
+   "time_s": 39.47,
+   "time": "00:39",
    "quality": "high",
    "width": 1920,
    "height": 1080,
-   "encode": "palette256",
-   "bytes": 1148231
+   "encode": "lossless-png",
+   "bytes": 2456972
   },
   {
    "file": "fighter_tunlan_game_frame.png",
@@ -1955,13 +2124,13 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 38.77,
-   "time": "00:38",
+   "time_s": 41.33,
+   "time": "00:41",
    "quality": "high",
    "width": 1920,
    "height": 1080,
-   "encode": "palette256",
-   "bytes": 1223706
+   "encode": "lossless-png",
+   "bytes": 2454482
   },
   {
    "file": "fighter_ulkro_game_frame.png",
@@ -1971,13 +2140,13 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 40.17,
-   "time": "00:40",
+   "time_s": 43.2,
+   "time": "00:43",
    "quality": "high",
    "width": 1920,
    "height": 1080,
-   "encode": "palette256",
-   "bytes": 1267930
+   "encode": "lossless-png",
+   "bytes": 2458006
   },
   {
    "file": "fighter_vashil_game_frame.png",
@@ -1987,13 +2156,13 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 41.57,
-   "time": "00:41",
+   "time_s": 45.07,
+   "time": "00:45",
    "quality": "high",
    "width": 1920,
    "height": 1080,
-   "encode": "palette256",
-   "bytes": 1138674
+   "encode": "lossless-png",
+   "bytes": 2506234
   },
   {
    "file": "fighter_ardit_close_crop.png",
@@ -2003,18 +2172,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 32.47,
+   "time_s": 32.93,
    "time": "00:32",
    "quality": "high",
    "width": 900,
    "height": 900,
    "crop_origin": [
-    499,
-    30
+    510,
+    15
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 1047968
+   "encode": "lossless-png",
+   "bytes": 943291
   },
   {
    "file": "fighter_ardit_game_crop.png",
@@ -2024,18 +2193,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 31.77,
-   "time": "00:31",
+   "time_s": 32,
+   "time": "00:32",
    "quality": "high",
    "width": 520,
    "height": 520,
    "crop_origin": [
-    693,
-    237
+    700,
+    232
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 401652
+   "encode": "lossless-png",
+   "bytes": 345503
   },
   {
    "file": "fighter_burdam_close_crop.png",
@@ -2045,18 +2214,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 33.87,
-   "time": "00:33",
+   "time_s": 34.8,
+   "time": "00:34",
    "quality": "high",
    "width": 900,
    "height": 900,
    "crop_origin": [
     509,
-    29
+    15
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 970071
+   "encode": "lossless-png",
+   "bytes": 968729
   },
   {
    "file": "fighter_burdam_game_crop.png",
@@ -2066,7 +2235,7 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 33.17,
+   "time_s": 33.87,
    "time": "00:33",
    "quality": "high",
    "width": 520,
@@ -2076,8 +2245,8 @@
     232
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 339394
+   "encode": "lossless-png",
+   "bytes": 356291
   },
   {
    "file": "fighter_dunsom_close_crop.png",
@@ -2087,18 +2256,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 35.27,
-   "time": "00:35",
+   "time_s": 36.67,
+   "time": "00:36",
    "quality": "high",
    "width": 900,
    "height": 900,
    "crop_origin": [
-    498,
-    29
+    510,
+    15
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 1034059
+   "encode": "lossless-png",
+   "bytes": 952010
   },
   {
    "file": "fighter_dunsom_game_crop.png",
@@ -2108,18 +2277,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 34.57,
-   "time": "00:34",
+   "time_s": 35.73,
+   "time": "00:35",
    "quality": "high",
    "width": 520,
    "height": 520,
    "crop_origin": [
-    691,
+    699,
     232
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 362186
+   "encode": "lossless-png",
+   "bytes": 362703
   },
   {
    "file": "fighter_ervet_close_crop.png",
@@ -2129,18 +2298,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 36.67,
-   "time": "00:36",
+   "time_s": 38.53,
+   "time": "00:38",
    "quality": "high",
    "width": 900,
    "height": 900,
    "crop_origin": [
-    498,
-    27
+    509,
+    15
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 1018415
+   "encode": "lossless-png",
+   "bytes": 954917
   },
   {
    "file": "fighter_ervet_game_crop.png",
@@ -2150,18 +2319,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 35.97,
-   "time": "00:35",
+   "time_s": 37.6,
+   "time": "00:37",
    "quality": "high",
    "width": 520,
    "height": 520,
    "crop_origin": [
-    691,
-    230
+    699,
+    232
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 372142
+   "encode": "lossless-png",
+   "bytes": 358318
   },
   {
    "file": "fighter_hesmi_close_crop.png",
@@ -2171,18 +2340,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 38.07,
-   "time": "00:38",
+   "time_s": 40.4,
+   "time": "00:40",
    "quality": "high",
    "width": 900,
    "height": 900,
    "crop_origin": [
-    499,
-    26
+    510,
+    15
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 1044591
+   "encode": "lossless-png",
+   "bytes": 966621
   },
   {
    "file": "fighter_hesmi_game_crop.png",
@@ -2192,18 +2361,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 37.37,
-   "time": "00:37",
+   "time_s": 39.47,
+   "time": "00:39",
    "quality": "high",
    "width": 520,
    "height": 520,
    "crop_origin": [
-    691,
-    230
+    700,
+    232
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 380709
+   "encode": "lossless-png",
+   "bytes": 363687
   },
   {
    "file": "fighter_ilsheta_close_crop.png",
@@ -2213,18 +2382,18 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 39.47,
-   "time": "00:39",
+   "time_s": 42.27,
+   "time": "00:42",
    "quality": "high",
    "width": 900,
    "height": 900,
    "crop_origin": [
-    520,
-    31
+    510,
+    15
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 794696
+   "encode": "lossless-png",
+   "bytes": 940766
   },
   {
    "file": "fighter_ilsheta_game_crop.png",
@@ -2234,18 +2403,18 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 38.77,
-   "time": "00:38",
+   "time_s": 41.33,
+   "time": "00:41",
    "quality": "high",
    "width": 520,
    "height": 520,
    "crop_origin": [
-    708,
-    234
+    699,
+    232
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 262448
+   "encode": "lossless-png",
+   "bytes": 352815
   },
   {
    "file": "fighter_kemdo_close_crop.png",
@@ -2255,18 +2424,18 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 40.87,
-   "time": "00:40",
+   "time_s": 44.13,
+   "time": "00:44",
    "quality": "high",
    "width": 900,
    "height": 900,
    "crop_origin": [
-    509,
-    29
+    510,
+    15
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 734816
+   "encode": "lossless-png",
+   "bytes": 944364
   },
   {
    "file": "fighter_kemdo_game_crop.png",
@@ -2276,8 +2445,8 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 40.17,
-   "time": "00:40",
+   "time_s": 43.2,
+   "time": "00:43",
    "quality": "high",
    "width": 520,
    "height": 520,
@@ -2286,8 +2455,8 @@
     232
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 255135
+   "encode": "lossless-png",
+   "bytes": 354846
   },
   {
    "file": "fighter_lisvel_close_crop.png",
@@ -2297,18 +2466,18 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 42.27,
-   "time": "00:42",
+   "time_s": 46,
+   "time": "00:46",
    "quality": "high",
    "width": 900,
    "height": 900,
    "crop_origin": [
-    498,
-    29
+    510,
+    15
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 771286
+   "encode": "lossless-png",
+   "bytes": 951597
   },
   {
    "file": "fighter_lisvel_game_crop.png",
@@ -2318,18 +2487,18 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 41.57,
-   "time": "00:41",
+   "time_s": 45.07,
+   "time": "00:45",
    "quality": "high",
    "width": 520,
    "height": 520,
    "crop_origin": [
-    691,
+    699,
     232
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 245331
+   "encode": "lossless-png",
+   "bytes": 364003
   },
   {
    "file": "fighter_marund_close_crop.png",
@@ -2339,18 +2508,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 32.47,
+   "time_s": 32.93,
    "time": "00:32",
    "quality": "high",
    "width": 900,
    "height": 900,
    "crop_origin": [
-    499,
-    30
+    510,
+    15
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 1044391
+   "encode": "lossless-png",
+   "bytes": 948484
   },
   {
    "file": "fighter_marund_game_crop.png",
@@ -2360,18 +2529,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 31.77,
-   "time": "00:31",
+   "time_s": 32,
+   "time": "00:32",
    "quality": "high",
    "width": 520,
    "height": 520,
    "crop_origin": [
-    693,
-    237
+    700,
+    232
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 402030
+   "encode": "lossless-png",
+   "bytes": 348093
   },
   {
    "file": "fighter_nurrow_close_crop.png",
@@ -2381,18 +2550,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 33.87,
-   "time": "00:33",
+   "time_s": 34.8,
+   "time": "00:34",
    "quality": "high",
    "width": 900,
    "height": 900,
    "crop_origin": [
     509,
-    29
+    15
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 966264
+   "encode": "lossless-png",
+   "bytes": 946977
   },
   {
    "file": "fighter_nurrow_game_crop.png",
@@ -2402,18 +2571,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 33.17,
+   "time_s": 33.87,
    "time": "00:33",
    "quality": "high",
    "width": 520,
    "height": 520,
    "crop_origin": [
-    699,
+    700,
     232
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 336371
+   "encode": "lossless-png",
+   "bytes": 349907
   },
   {
    "file": "fighter_odrum_close_crop.png",
@@ -2423,18 +2592,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 35.27,
-   "time": "00:35",
+   "time_s": 36.67,
+   "time": "00:36",
    "quality": "high",
    "width": 900,
    "height": 900,
    "crop_origin": [
-    498,
-    29
+    510,
+    15
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 1026327
+   "encode": "lossless-png",
+   "bytes": 954777
   },
   {
    "file": "fighter_odrum_game_crop.png",
@@ -2444,18 +2613,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 34.57,
-   "time": "00:34",
+   "time_s": 35.73,
+   "time": "00:35",
    "quality": "high",
    "width": 520,
    "height": 520,
    "crop_origin": [
-    691,
+    699,
     232
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 365416
+   "encode": "lossless-png",
+   "bytes": 354756
   },
   {
    "file": "fighter_rishal_close_crop.png",
@@ -2465,18 +2634,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 36.67,
-   "time": "00:36",
+   "time_s": 38.53,
+   "time": "00:38",
    "quality": "high",
    "width": 900,
    "height": 900,
    "crop_origin": [
-    498,
-    27
+    509,
+    15
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 1010195
+   "encode": "lossless-png",
+   "bytes": 950707
   },
   {
    "file": "fighter_rishal_game_crop.png",
@@ -2486,18 +2655,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 35.97,
-   "time": "00:35",
+   "time_s": 37.6,
+   "time": "00:37",
    "quality": "high",
    "width": 520,
    "height": 520,
    "crop_origin": [
-    691,
-    230
+    700,
+    232
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 362659
+   "encode": "lossless-png",
+   "bytes": 358894
   },
   {
    "file": "fighter_sukri_close_crop.png",
@@ -2507,18 +2676,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 38.07,
-   "time": "00:38",
+   "time_s": 40.4,
+   "time": "00:40",
    "quality": "high",
    "width": 900,
    "height": 900,
    "crop_origin": [
-    499,
-    26
+    509,
+    15
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 1035928
+   "encode": "lossless-png",
+   "bytes": 945383
   },
   {
    "file": "fighter_sukri_game_crop.png",
@@ -2528,18 +2697,18 @@
    "team": 0,
    "map": "rift",
    "seed": 7,
-   "time_s": 37.37,
-   "time": "00:37",
+   "time_s": 39.47,
+   "time": "00:39",
    "quality": "high",
    "width": 520,
    "height": 520,
    "crop_origin": [
-    691,
-    230
+    699,
+    232
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 384277
+   "encode": "lossless-png",
+   "bytes": 353292
   },
   {
    "file": "fighter_tunlan_close_crop.png",
@@ -2549,18 +2718,18 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 39.47,
-   "time": "00:39",
+   "time_s": 42.27,
+   "time": "00:42",
    "quality": "high",
    "width": 900,
    "height": 900,
    "crop_origin": [
-    520,
-    31
+    510,
+    15
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 792444
+   "encode": "lossless-png",
+   "bytes": 923902
   },
   {
    "file": "fighter_tunlan_game_crop.png",
@@ -2570,18 +2739,18 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 38.77,
-   "time": "00:38",
+   "time_s": 41.33,
+   "time": "00:41",
    "quality": "high",
    "width": 520,
    "height": 520,
    "crop_origin": [
-    708,
-    234
+    699,
+    232
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 263050
+   "encode": "lossless-png",
+   "bytes": 340643
   },
   {
    "file": "fighter_ulkro_close_crop.png",
@@ -2591,18 +2760,18 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 40.87,
-   "time": "00:40",
+   "time_s": 44.13,
+   "time": "00:44",
    "quality": "high",
    "width": 900,
    "height": 900,
    "crop_origin": [
     510,
-    29
+    15
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 732370
+   "encode": "lossless-png",
+   "bytes": 925980
   },
   {
    "file": "fighter_ulkro_game_crop.png",
@@ -2612,8 +2781,8 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 40.17,
-   "time": "00:40",
+   "time_s": 43.2,
+   "time": "00:43",
    "quality": "high",
    "width": 520,
    "height": 520,
@@ -2622,8 +2791,8 @@
     232
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 255750
+   "encode": "lossless-png",
+   "bytes": 343663
   },
   {
    "file": "fighter_vashil_close_crop.png",
@@ -2633,18 +2802,18 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 42.27,
-   "time": "00:42",
+   "time_s": 46,
+   "time": "00:46",
    "quality": "high",
    "width": 900,
    "height": 900,
    "crop_origin": [
-    498,
-    29
+    510,
+    15
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 781152
+   "encode": "lossless-png",
+   "bytes": 968060
   },
   {
    "file": "fighter_vashil_game_crop.png",
@@ -2654,22 +2823,22 @@
    "team": 1,
    "map": "rift",
    "seed": 7,
-   "time_s": 41.57,
-   "time": "00:41",
+   "time_s": 45.07,
+   "time": "00:45",
    "quality": "high",
    "width": 520,
    "height": 520,
    "crop_origin": [
-    691,
+    699,
     232
    ],
    "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 248663
+   "encode": "lossless-png",
+   "bytes": 354920
   },
   {
-   "file": "contact_fighters_close.png",
-   "what": "contact sheet of all 16 fighters, base skin, closest camera, 4x4 grid of 480px cells (crops downscaled to 480px), labelled with the fighter id (sheet downscaled to 75% to fit the size cap)",
+   "file": "contact_fighters_close.webp",
+   "what": "contact sheet of all 16 fighters, base skin, closest camera, 4x4 grid of 480px cells (crops downscaled to 480px), labelled with the fighter id",
    "kind": "contact_sheet",
    "fighters": [
     "ardit",
@@ -2691,14 +2860,14 @@
    ],
    "map": "rift",
    "quality": "high",
-   "width": 1440,
-   "height": 1524,
-   "encode": "resized to 75%, palette192",
-   "bytes": 1338622
+   "width": 1920,
+   "height": 2032,
+   "encode": "webp-q95",
+   "bytes": 1016784
   },
   {
-   "file": "contact_fighters_game.png",
-   "what": "contact sheet of all 16 fighters, base skin, game camera, 4x4 grid of 480px cells (crops downscaled to 480px), labelled with the fighter id (sheet downscaled to 75% to fit the size cap)",
+   "file": "contact_fighters_game.webp",
+   "what": "contact sheet of all 16 fighters, base skin, game camera, 4x4 grid of 480px cells (crops downscaled to 480px), labelled with the fighter id",
    "kind": "contact_sheet",
    "fighters": [
     "ardit",
@@ -2720,3850 +2889,1654 @@
    ],
    "map": "rift",
    "quality": "high",
-   "width": 1440,
-   "height": 1524,
-   "encode": "resized to 75%, palette256",
-   "bytes": 1378062
-  },
-  {
-   "file": "structure_bridge_hourbell_team0_collapse_037.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 15,
-   "team": 0,
-   "stage": "collapse_037",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    12.5,
-    22
-   ],
-   "what": "hourbell team 0 0.37 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 539329
-  },
-  {
-   "file": "structure_bridge_hourbell_team0_collapse_107.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 15,
-   "team": 0,
-   "stage": "collapse_107",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    12.5,
-    22
-   ],
-   "what": "hourbell team 0 1.07 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 529796
-  },
-  {
-   "file": "structure_bridge_hourbell_team0_collapse_240.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 15,
-   "team": 0,
-   "stage": "collapse_240",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    12.5,
-    22
-   ],
-   "what": "hourbell team 0 2.40 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 489271
-  },
-  {
-   "file": "structure_bridge_hourbell_team0_hp100.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 16.57,
-   "time": "00:16",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 15,
-   "team": 0,
-   "stage": "hp100",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    12.5,
-    22
-   ],
-   "hp_fraction": 1,
-   "what": "hourbell team 0 at 100 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 689685
-  },
-  {
-   "file": "structure_bridge_hourbell_team0_hp30.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 16.57,
-   "time": "00:16",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 15,
-   "team": 0,
-   "stage": "hp30",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    12.5,
-    22
-   ],
-   "hp_fraction": 0.3,
-   "what": "hourbell team 0 at 30 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 688302
-  },
-  {
-   "file": "structure_bridge_hourbell_team0_hp60.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 16.57,
-   "time": "00:16",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 15,
-   "team": 0,
-   "stage": "hp60",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    12.5,
-    22
-   ],
-   "hp_fraction": 0.6,
-   "what": "hourbell team 0 at 60 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 689361
-  },
-  {
-   "file": "structure_bridge_hourbell_team0_ruin.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 15,
-   "team": 0,
-   "stage": "ruin",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    12.5,
-    22
-   ],
-   "what": "hourbell team 0 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 489010
-  },
-  {
-   "file": "structure_bridge_hourbell_team1_collapse_037.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 20,
-   "team": 1,
-   "stage": "collapse_037",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    143.5,
-    22
-   ],
-   "what": "hourbell team 1 0.37 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 485280
-  },
-  {
-   "file": "structure_bridge_hourbell_team1_collapse_107.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 20,
-   "team": 1,
-   "stage": "collapse_107",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    143.5,
-    22
-   ],
-   "what": "hourbell team 1 1.07 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 477937
-  },
-  {
-   "file": "structure_bridge_hourbell_team1_collapse_240.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 20,
-   "team": 1,
-   "stage": "collapse_240",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    143.5,
-    22
-   ],
-   "what": "hourbell team 1 2.40 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 472735
-  },
-  {
-   "file": "structure_bridge_hourbell_team1_hp100.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 20.07,
-   "time": "00:20",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 20,
-   "team": 1,
-   "stage": "hp100",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    143.5,
-    22
-   ],
-   "hp_fraction": 1,
-   "what": "hourbell team 1 at 100 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 555791
-  },
-  {
-   "file": "structure_bridge_hourbell_team1_hp30.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 20.07,
-   "time": "00:20",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 20,
-   "team": 1,
-   "stage": "hp30",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    143.5,
-    22
-   ],
-   "hp_fraction": 0.3,
-   "what": "hourbell team 1 at 30 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 545274
-  },
-  {
-   "file": "structure_bridge_hourbell_team1_hp60.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 20.07,
-   "time": "00:20",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 20,
-   "team": 1,
-   "stage": "hp60",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    143.5,
-    22
-   ],
-   "hp_fraction": 0.6,
-   "what": "hourbell team 1 at 60 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 548748
-  },
-  {
-   "file": "structure_bridge_hourbell_team1_ruin.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 20,
-   "team": 1,
-   "stage": "ruin",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    143.5,
-    22
-   ],
-   "what": "hourbell team 1 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 476996
-  },
-  {
-   "file": "structure_bridge_lantern_team0_collapse_037.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 31.33,
-   "time": "00:31",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 13,
-   "team": 0,
-   "stage": "collapse_037",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    29,
-    19
-   ],
-   "what": "lantern team 0 0.37 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 505317
-  },
-  {
-   "file": "structure_bridge_lantern_team0_collapse_107.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 32.03,
-   "time": "00:32",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 13,
-   "team": 0,
-   "stage": "collapse_107",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    29,
-    19
-   ],
-   "what": "lantern team 0 1.07 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 511921
-  },
-  {
-   "file": "structure_bridge_lantern_team0_collapse_240.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 33.37,
-   "time": "00:33",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 13,
-   "team": 0,
-   "stage": "collapse_240",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    29,
-    19
-   ],
-   "what": "lantern team 0 2.40 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 470661
-  },
-  {
-   "file": "structure_bridge_lantern_team0_hp100.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 15.17,
-   "time": "00:15",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 13,
-   "team": 0,
-   "stage": "hp100",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    29,
-    19
-   ],
-   "hp_fraction": 1,
-   "what": "lantern team 0 at 100 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 534987
-  },
-  {
-   "file": "structure_bridge_lantern_team0_hp30.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 15.17,
-   "time": "00:15",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 13,
-   "team": 0,
-   "stage": "hp30",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    29,
-    19
-   ],
-   "hp_fraction": 0.3,
-   "what": "lantern team 0 at 30 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 535750
-  },
-  {
-   "file": "structure_bridge_lantern_team0_hp60.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 15.17,
-   "time": "00:15",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 13,
-   "team": 0,
-   "stage": "hp60",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    29,
-    19
-   ],
-   "hp_fraction": 0.6,
-   "what": "lantern team 0 at 60 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 536824
-  },
-  {
-   "file": "structure_bridge_lantern_team0_ruin.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 35.37,
-   "time": "00:35",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 13,
-   "team": 0,
-   "stage": "ruin",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    29,
-    19
-   ],
-   "what": "lantern team 0 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 481555
-  },
-  {
-   "file": "structure_bridge_lantern_team1_collapse_037.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 18,
-   "team": 1,
-   "stage": "collapse_037",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    127,
-    19
-   ],
-   "what": "lantern team 1 0.37 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 395809
-  },
-  {
-   "file": "structure_bridge_lantern_team1_collapse_107.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 18,
-   "team": 1,
-   "stage": "collapse_107",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    127,
-    19
-   ],
-   "what": "lantern team 1 1.07 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 388523
-  },
-  {
-   "file": "structure_bridge_lantern_team1_collapse_240.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 18,
-   "team": 1,
-   "stage": "collapse_240",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    127,
-    19
-   ],
-   "what": "lantern team 1 2.40 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 388867
-  },
-  {
-   "file": "structure_bridge_lantern_team1_hp100.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 18.67,
-   "time": "00:18",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 18,
-   "team": 1,
-   "stage": "hp100",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    127,
-    19
-   ],
-   "hp_fraction": 1,
-   "what": "lantern team 1 at 100 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 441184
-  },
-  {
-   "file": "structure_bridge_lantern_team1_hp30.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 18.67,
-   "time": "00:18",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 18,
-   "team": 1,
-   "stage": "hp30",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    127,
-    19
-   ],
-   "hp_fraction": 0.3,
-   "what": "lantern team 1 at 30 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 442808
-  },
-  {
-   "file": "structure_bridge_lantern_team1_hp60.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 18.67,
-   "time": "00:18",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 18,
-   "team": 1,
-   "stage": "hp60",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    127,
-    19
-   ],
-   "hp_fraction": 0.6,
-   "what": "lantern team 1 at 60 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 438780
-  },
-  {
-   "file": "structure_bridge_lantern_team1_ruin.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 18,
-   "team": 1,
-   "stage": "ruin",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    127,
-    19
-   ],
-   "what": "lantern team 1 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 384554
-  },
-  {
-   "file": "structure_bridge_needle_bell_team0_collapse_037.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 36.43,
-   "time": "00:36",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 14,
-   "team": 0,
-   "stage": "collapse_037",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    21.5,
-    25.4
-   ],
-   "what": "needle_bell team 0 0.37 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 642054
-  },
-  {
-   "file": "structure_bridge_needle_bell_team0_collapse_107.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 37.13,
-   "time": "00:37",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 14,
-   "team": 0,
-   "stage": "collapse_107",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    21.5,
-    25.4
-   ],
-   "what": "needle_bell team 0 1.07 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 628142
-  },
-  {
-   "file": "structure_bridge_needle_bell_team0_collapse_240.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 38.47,
-   "time": "00:38",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 14,
-   "team": 0,
-   "stage": "collapse_240",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    21.5,
-    25.4
-   ],
-   "what": "needle_bell team 0 2.40 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 613617
-  },
-  {
-   "file": "structure_bridge_needle_bell_team0_hp100.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 15.87,
-   "time": "00:15",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 14,
-   "team": 0,
-   "stage": "hp100",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    21.5,
-    25.4
-   ],
-   "hp_fraction": 1,
-   "what": "needle_bell team 0 at 100 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 659839
-  },
-  {
-   "file": "structure_bridge_needle_bell_team0_hp30.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 15.87,
-   "time": "00:15",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 14,
-   "team": 0,
-   "stage": "hp30",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    21.5,
-    25.4
-   ],
-   "hp_fraction": 0.3,
-   "what": "needle_bell team 0 at 30 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 659556
-  },
-  {
-   "file": "structure_bridge_needle_bell_team0_hp60.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 15.87,
-   "time": "00:15",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 14,
-   "team": 0,
-   "stage": "hp60",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    21.5,
-    25.4
-   ],
-   "hp_fraction": 0.6,
-   "what": "needle_bell team 0 at 60 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 659495
-  },
-  {
-   "file": "structure_bridge_needle_bell_team0_ruin.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 40.47,
-   "time": "00:40",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 14,
-   "team": 0,
-   "stage": "ruin",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    21.5,
-    25.4
-   ],
-   "what": "needle_bell team 0 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 632994
-  },
-  {
-   "file": "structure_bridge_needle_bell_team1_collapse_037.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 19,
-   "team": 1,
-   "stage": "collapse_037",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    134.5,
-    25.4
-   ],
-   "what": "needle_bell team 1 0.37 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 475943
-  },
-  {
-   "file": "structure_bridge_needle_bell_team1_collapse_107.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 19,
-   "team": 1,
-   "stage": "collapse_107",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    134.5,
-    25.4
-   ],
-   "what": "needle_bell team 1 1.07 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 466122
-  },
-  {
-   "file": "structure_bridge_needle_bell_team1_collapse_240.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 19,
-   "team": 1,
-   "stage": "collapse_240",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    134.5,
-    25.4
-   ],
-   "what": "needle_bell team 1 2.40 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 461317
-  },
-  {
-   "file": "structure_bridge_needle_bell_team1_hp100.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 19.37,
-   "time": "00:19",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 19,
-   "team": 1,
-   "stage": "hp100",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    134.5,
-    25.4
-   ],
-   "hp_fraction": 1,
-   "what": "needle_bell team 1 at 100 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 525257
-  },
-  {
-   "file": "structure_bridge_needle_bell_team1_hp30.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 19.37,
-   "time": "00:19",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 19,
-   "team": 1,
-   "stage": "hp30",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    134.5,
-    25.4
-   ],
-   "hp_fraction": 0.3,
-   "what": "needle_bell team 1 at 30 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 523635
-  },
-  {
-   "file": "structure_bridge_needle_bell_team1_hp60.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 19.37,
-   "time": "00:19",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 19,
-   "team": 1,
-   "stage": "hp60",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    134.5,
-    25.4
-   ],
-   "hp_fraction": 0.6,
-   "what": "needle_bell team 1 at 60 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 523876
-  },
-  {
-   "file": "structure_bridge_needle_bell_team1_ruin.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 19,
-   "team": 1,
-   "stage": "ruin",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    134.5,
-    25.4
-   ],
-   "what": "needle_bell team 1 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 464151
-  },
-  {
-   "file": "structure_bridge_needle_inner_team0_collapse_037.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 26.23,
-   "time": "00:26",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 12,
-   "team": 0,
-   "stage": "collapse_037",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    41,
-    25
-   ],
-   "what": "needle_inner team 0 0.37 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 619628
-  },
-  {
-   "file": "structure_bridge_needle_inner_team0_collapse_107.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 26.93,
-   "time": "00:26",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 12,
-   "team": 0,
-   "stage": "collapse_107",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    41,
-    25
-   ],
-   "what": "needle_inner team 0 1.07 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 608195
-  },
-  {
-   "file": "structure_bridge_needle_inner_team0_collapse_240.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 28.27,
-   "time": "00:28",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 12,
-   "team": 0,
-   "stage": "collapse_240",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    41,
-    25
-   ],
-   "what": "needle_inner team 0 2.40 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 597788
-  },
-  {
-   "file": "structure_bridge_needle_inner_team0_hp100.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 14.47,
-   "time": "00:14",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 12,
-   "team": 0,
-   "stage": "hp100",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    41,
-    25
-   ],
-   "hp_fraction": 1,
-   "what": "needle_inner team 0 at 100 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 667390
-  },
-  {
-   "file": "structure_bridge_needle_inner_team0_hp30.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 14.47,
-   "time": "00:14",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 12,
-   "team": 0,
-   "stage": "hp30",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    41,
-    25
-   ],
-   "hp_fraction": 0.3,
-   "what": "needle_inner team 0 at 30 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 667336
-  },
-  {
-   "file": "structure_bridge_needle_inner_team0_hp60.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 14.47,
-   "time": "00:14",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 12,
-   "team": 0,
-   "stage": "hp60",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    41,
-    25
-   ],
-   "hp_fraction": 0.6,
-   "what": "needle_inner team 0 at 60 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 666152
-  },
-  {
-   "file": "structure_bridge_needle_inner_team0_ruin.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 30.27,
-   "time": "00:30",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 12,
-   "team": 0,
-   "stage": "ruin",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    41,
-    25
-   ],
-   "what": "needle_inner team 0 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 575010
-  },
-  {
-   "file": "structure_bridge_needle_inner_team1_collapse_037.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 17,
-   "team": 1,
-   "stage": "collapse_037",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    115,
-    25
-   ],
-   "what": "needle_inner team 1 0.37 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 439807
-  },
-  {
-   "file": "structure_bridge_needle_inner_team1_collapse_107.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 17,
-   "team": 1,
-   "stage": "collapse_107",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    115,
-    25
-   ],
-   "what": "needle_inner team 1 1.07 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 434584
-  },
-  {
-   "file": "structure_bridge_needle_inner_team1_collapse_240.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 17,
-   "team": 1,
-   "stage": "collapse_240",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    115,
-    25
-   ],
-   "what": "needle_inner team 1 2.40 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 431442
-  },
-  {
-   "file": "structure_bridge_needle_inner_team1_hp100.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 17.97,
-   "time": "00:17",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 17,
-   "team": 1,
-   "stage": "hp100",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    115,
-    25
-   ],
-   "hp_fraction": 1,
-   "what": "needle_inner team 1 at 100 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 482808
-  },
-  {
-   "file": "structure_bridge_needle_inner_team1_hp30.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 17.97,
-   "time": "00:17",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 17,
-   "team": 1,
-   "stage": "hp30",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    115,
-    25
-   ],
-   "hp_fraction": 0.3,
-   "what": "needle_inner team 1 at 30 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 483951
-  },
-  {
-   "file": "structure_bridge_needle_inner_team1_hp60.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 17.97,
-   "time": "00:17",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 17,
-   "team": 1,
-   "stage": "hp60",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    115,
-    25
-   ],
-   "hp_fraction": 0.6,
-   "what": "needle_inner team 1 at 60 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 483223
-  },
-  {
-   "file": "structure_bridge_needle_inner_team1_ruin.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 17,
-   "team": 1,
-   "stage": "ruin",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    115,
-    25
-   ],
-   "what": "needle_inner team 1 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 429939
-  },
-  {
-   "file": "structure_bridge_needle_outer_team0_collapse_037.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 21.13,
-   "time": "00:21",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 11,
-   "team": 0,
-   "stage": "collapse_037",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    57,
-    19
-   ],
-   "what": "needle_outer team 0 0.37 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 508916
-  },
-  {
-   "file": "structure_bridge_needle_outer_team0_collapse_107.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 21.83,
-   "time": "00:21",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 11,
-   "team": 0,
-   "stage": "collapse_107",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    57,
-    19
-   ],
-   "what": "needle_outer team 0 1.07 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 488253
-  },
-  {
-   "file": "structure_bridge_needle_outer_team0_collapse_240.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 23.17,
-   "time": "00:23",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 11,
-   "team": 0,
-   "stage": "collapse_240",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    57,
-    19
-   ],
-   "what": "needle_outer team 0 2.40 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 462595
-  },
-  {
-   "file": "structure_bridge_needle_outer_team0_hp100.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 13.77,
-   "time": "00:13",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 11,
-   "team": 0,
-   "stage": "hp100",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    57,
-    19
-   ],
-   "hp_fraction": 1,
-   "what": "needle_outer team 0 at 100 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 514624
-  },
-  {
-   "file": "structure_bridge_needle_outer_team0_hp30.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 13.77,
-   "time": "00:13",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 11,
-   "team": 0,
-   "stage": "hp30",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    57,
-    19
-   ],
-   "hp_fraction": 0.3,
-   "what": "needle_outer team 0 at 30 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 519866
-  },
-  {
-   "file": "structure_bridge_needle_outer_team0_hp60.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 13.77,
-   "time": "00:13",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 11,
-   "team": 0,
-   "stage": "hp60",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    57,
-    19
-   ],
-   "hp_fraction": 0.6,
-   "what": "needle_outer team 0 at 60 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 516015
-  },
-  {
-   "file": "structure_bridge_needle_outer_team0_ruin.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 25.17,
-   "time": "00:25",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 11,
-   "team": 0,
-   "stage": "ruin",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    57,
-    19
-   ],
-   "what": "needle_outer team 0 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 464349
-  },
-  {
-   "file": "structure_bridge_needle_outer_team1_collapse_037.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 16,
-   "team": 1,
-   "stage": "collapse_037",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    99,
-    19
-   ],
-   "what": "needle_outer team 1 0.37 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 395885
-  },
-  {
-   "file": "structure_bridge_needle_outer_team1_collapse_107.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 16,
-   "team": 1,
-   "stage": "collapse_107",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    99,
-    19
-   ],
-   "what": "needle_outer team 1 1.07 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 390275
-  },
-  {
-   "file": "structure_bridge_needle_outer_team1_collapse_240.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 16,
-   "team": 1,
-   "stage": "collapse_240",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    99,
-    19
-   ],
-   "what": "needle_outer team 1 2.40 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 384896
-  },
-  {
-   "file": "structure_bridge_needle_outer_team1_hp100.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 17.27,
-   "time": "00:17",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 16,
-   "team": 1,
-   "stage": "hp100",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    99,
-    19
-   ],
-   "hp_fraction": 1,
-   "what": "needle_outer team 1 at 100 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 418150
-  },
-  {
-   "file": "structure_bridge_needle_outer_team1_hp30.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 17.27,
-   "time": "00:17",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 16,
-   "team": 1,
-   "stage": "hp30",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    99,
-    19
-   ],
-   "hp_fraction": 0.3,
-   "what": "needle_outer team 1 at 30 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 427987
-  },
-  {
-   "file": "structure_bridge_needle_outer_team1_hp60.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 17.27,
-   "time": "00:17",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 16,
-   "team": 1,
-   "stage": "hp60",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    99,
-    19
-   ],
-   "hp_fraction": 0.6,
-   "what": "needle_outer team 1 at 60 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 425872
-  },
-  {
-   "file": "structure_bridge_needle_outer_team1_ruin.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 41.2,
-   "time": "00:41",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 16,
-   "team": 1,
-   "stage": "ruin",
-   "map": "bridge",
-   "quality": "high",
-   "world": [
-    99,
-    19
-   ],
-   "what": "needle_outer team 1 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 386895
-  },
-  {
-   "file": "structure_rift_hourbell_team0_collapse_037.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 22,
-   "team": 0,
-   "stage": "collapse_037",
+   "width": 1920,
+   "height": 2032,
+   "encode": "webp-q95",
+   "bytes": 1041958
+  },
+  {
+   "file": "camp_a_glasshorn_death_005.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 102.53,
+   "time": "01:42",
+   "kind": "camp",
+   "camp": "a_glasshorn",
+   "stage": "death_0.05",
+   "what": "a_glasshorn 0.05 s after the last monster fell (the death tick)",
    "map": "rift",
    "quality": "high",
    "world": [
-    15,
+    61.6,
+    41.5
+   ],
+   "encode": "lossless-png",
+   "bytes": 2890138
+  },
+  {
+   "file": "camp_a_glasshorn_death_040.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 103.1,
+   "time": "01:43",
+   "kind": "camp",
+   "camp": "a_glasshorn",
+   "stage": "death_0.4",
+   "what": "a_glasshorn 0.40 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    61.6,
+    41.5
+   ],
+   "encode": "lossless-png",
+   "bytes": 2895439
+  },
+  {
+   "file": "camp_a_glasshorn_death_120.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 104.13,
+   "time": "01:44",
+   "kind": "camp",
+   "camp": "a_glasshorn",
+   "stage": "death_1.2",
+   "what": "a_glasshorn 1.20 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    61.6,
+    41.5
+   ],
+   "encode": "lossless-png",
+   "bytes": 2889439
+  },
+  {
+   "file": "camp_a_glasshorn_midfight.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 102.23,
+   "time": "01:42",
+   "kind": "camp",
+   "camp": "a_glasshorn",
+   "stage": "midfight",
+   "what": "a_glasshorn 0.6 s after a 45 % hit: the monsters have aggroed",
+   "monsters": [
+    {
+     "id": 199,
+     "def": "glasshorn",
+     "hp": 688,
+     "maxHp": 1250,
+     "state": "attack",
+     "x": 60.5,
+     "y": 41.7
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    61.6,
+    41.5
+   ],
+   "encode": "lossless-png",
+   "bytes": 2898919
+  },
+  {
+   "file": "camp_a_glasshorn_spawn.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 101.4,
+   "time": "01:41",
+   "kind": "camp",
+   "camp": "a_glasshorn",
+   "stage": "spawn",
+   "what": "a_glasshorn (glasshorn) at its spawn, untouched",
+   "monsters": [
+    {
+     "id": 199,
+     "def": "glasshorn",
+     "hp": 1250,
+     "maxHp": 1250,
+     "state": "idle",
+     "x": 61.6,
+     "y": 41.5
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    61.6,
+    41.5
+   ],
+   "encode": "lossless-png",
+   "bytes": 2892421
+  },
+  {
+   "file": "camp_a_resinback_death_005.webp",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 105.6,
+   "time": "01:45",
+   "kind": "camp",
+   "camp": "a_resinback",
+   "stage": "death_0.05",
+   "what": "a_resinback 0.05 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    64.3,
+    85.1
+   ],
+   "encode": "webp-q95",
+   "bytes": 577584
+  },
+  {
+   "file": "camp_a_resinback_death_040.webp",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 106.17,
+   "time": "01:46",
+   "kind": "camp",
+   "camp": "a_resinback",
+   "stage": "death_0.4",
+   "what": "a_resinback 0.40 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    64.3,
+    85.1
+   ],
+   "encode": "webp-q95",
+   "bytes": 578472
+  },
+  {
+   "file": "camp_a_resinback_death_120.webp",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 107.2,
+   "time": "01:47",
+   "kind": "camp",
+   "camp": "a_resinback",
+   "stage": "death_1.2",
+   "what": "a_resinback 1.20 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    64.3,
+    85.1
+   ],
+   "encode": "webp-q95",
+   "bytes": 582130
+  },
+  {
+   "file": "camp_a_resinback_midfight.webp",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 105.3,
+   "time": "01:45",
+   "kind": "camp",
+   "camp": "a_resinback",
+   "stage": "midfight",
+   "what": "a_resinback 0.6 s after a 45 % hit: the monsters have aggroed",
+   "monsters": [
+    {
+     "id": 215,
+     "def": "resinback",
+     "hp": 715,
+     "maxHp": 1300,
+     "state": "attack",
+     "x": 63.2,
+     "y": 85.6
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    64.3,
+    85.1
+   ],
+   "encode": "webp-q95",
+   "bytes": 579188
+  },
+  {
+   "file": "camp_a_resinback_spawn.webp",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 104.47,
+   "time": "01:44",
+   "kind": "camp",
+   "camp": "a_resinback",
+   "stage": "spawn",
+   "what": "a_resinback (resinback) at its spawn, untouched",
+   "monsters": [
+    {
+     "id": 215,
+     "def": "resinback",
+     "hp": 1300,
+     "maxHp": 1300,
+     "state": "idle",
+     "x": 64.3,
+     "y": 85.1
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    64.3,
+    85.1
+   ],
+   "encode": "webp-q95",
+   "bytes": 578332
+  },
+  {
+   "file": "camp_a_strays_north_death_005.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 111.73,
+   "time": "01:51",
+   "kind": "camp",
+   "camp": "a_strays_north",
+   "stage": "death_0.05",
+   "what": "a_strays_north 0.05 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    46,
+    32.5
+   ],
+   "encode": "lossless-png",
+   "bytes": 2838198
+  },
+  {
+   "file": "camp_a_strays_north_death_040.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 112.3,
+   "time": "01:52",
+   "kind": "camp",
+   "camp": "a_strays_north",
+   "stage": "death_0.4",
+   "what": "a_strays_north 0.40 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    46,
+    32.5
+   ],
+   "encode": "lossless-png",
+   "bytes": 2843911
+  },
+  {
+   "file": "camp_a_strays_north_death_120.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 113.33,
+   "time": "01:53",
+   "kind": "camp",
+   "camp": "a_strays_north",
+   "stage": "death_1.2",
+   "what": "a_strays_north 1.20 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    46,
+    32.5
+   ],
+   "encode": "lossless-png",
+   "bytes": 2835120
+  },
+  {
+   "file": "camp_a_strays_north_midfight.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 111.43,
+   "time": "01:51",
+   "kind": "camp",
+   "camp": "a_strays_north",
+   "stage": "midfight",
+   "what": "a_strays_north 0.6 s after a 45 % hit: the monsters have aggroed",
+   "monsters": [
+    {
+     "id": 209,
+     "def": "stray_numeral",
+     "hp": 523,
+     "maxHp": 950,
+     "state": "move",
+     "x": 44.7,
+     "y": 32.8
+    },
+    {
+     "id": 210,
+     "def": "stray_tick",
+     "hp": 143,
+     "maxHp": 260,
+     "state": "move",
+     "x": 44.9,
+     "y": 34.1
+    },
+    {
+     "id": 211,
+     "def": "stray_tick",
+     "hp": 143,
+     "maxHp": 260,
+     "state": "move",
+     "x": 45.8,
+     "y": 32.2
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    46,
+    32.5
+   ],
+   "encode": "lossless-png",
+   "bytes": 2847896
+  },
+  {
+   "file": "camp_a_strays_north_spawn.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 110.6,
+   "time": "01:50",
+   "kind": "camp",
+   "camp": "a_strays_north",
+   "stage": "spawn",
+   "what": "a_strays_north (stray_numeral, stray_tick, stray_tick) at its spawn, untouched",
+   "monsters": [
+    {
+     "id": 209,
+     "def": "stray_numeral",
+     "hp": 950,
+     "maxHp": 950,
+     "state": "idle",
+     "x": 46,
+     "y": 32.5
+    },
+    {
+     "id": 210,
+     "def": "stray_tick",
+     "hp": 260,
+     "maxHp": 260,
+     "state": "idle",
+     "x": 47.6,
+     "y": 34
+    },
+    {
+     "id": 211,
+     "def": "stray_tick",
+     "hp": 260,
+     "maxHp": 260,
+     "state": "idle",
+     "x": 47.7,
+     "y": 31.4
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    46,
+    32.5
+   ],
+   "encode": "lossless-png",
+   "bytes": 2844897
+  },
+  {
+   "file": "camp_longshade_death_005.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 970.53,
+   "time": "16:10",
+   "kind": "camp",
+   "camp": "longshade",
+   "stage": "death_0.05",
+   "what": "longshade 0.05 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    31
+   ],
+   "encode": "lossless-png",
+   "bytes": 2638743
+  },
+  {
+   "file": "camp_longshade_death_040.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 971.1,
+   "time": "16:11",
+   "kind": "camp",
+   "camp": "longshade",
+   "stage": "death_0.4",
+   "what": "longshade 0.40 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    31
+   ],
+   "encode": "lossless-png",
+   "bytes": 2630578
+  },
+  {
+   "file": "camp_longshade_death_120.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 972.13,
+   "time": "16:12",
+   "kind": "camp",
+   "camp": "longshade",
+   "stage": "death_1.2",
+   "what": "longshade 1.20 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    31
+   ],
+   "encode": "lossless-png",
+   "bytes": 2559612
+  },
+  {
+   "file": "camp_longshade_midfight.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 970.23,
+   "time": "16:10",
+   "kind": "camp",
+   "camp": "longshade",
+   "stage": "midfight",
+   "what": "longshade 0.6 s after a 45 % hit: the monsters have aggroed",
+   "monsters": [
+    {
+     "id": 14770,
+     "def": "longshade",
+     "hp": 7700,
+     "maxHp": 14000,
+     "state": "cast",
+     "x": 85,
+     "y": 31
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    31
+   ],
+   "encode": "lossless-png",
+   "bytes": 2656986
+  },
+  {
+   "file": "camp_longshade_spawn.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 969.4,
+   "time": "16:09",
+   "kind": "camp",
+   "camp": "longshade",
+   "stage": "spawn",
+   "what": "longshade (longshade) at its spawn, untouched",
+   "monsters": [
+    {
+     "id": 14770,
+     "def": "longshade",
+     "hp": 14000,
+     "maxHp": 14000,
+     "state": "idle",
+     "x": 85,
+     "y": 31
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    31
+   ],
+   "encode": "lossless-png",
+   "bytes": 2630334
+  },
+  {
+   "file": "camp_s_gloamoths_death_005.webp",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 108.67,
+   "time": "01:48",
+   "kind": "camp",
+   "camp": "s_gloamoths",
+   "stage": "death_0.05",
+   "what": "s_gloamoths 0.05 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    105.7,
+    24.9
+   ],
+   "encode": "webp-q95",
+   "bytes": 615388
+  },
+  {
+   "file": "camp_s_gloamoths_death_040.webp",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 109.23,
+   "time": "01:49",
+   "kind": "camp",
+   "camp": "s_gloamoths",
+   "stage": "death_0.4",
+   "what": "s_gloamoths 0.40 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    105.7,
+    24.9
+   ],
+   "encode": "webp-q95",
+   "bytes": 611748
+  },
+  {
+   "file": "camp_s_gloamoths_death_120.webp",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 110.27,
+   "time": "01:50",
+   "kind": "camp",
+   "camp": "s_gloamoths",
+   "stage": "death_1.2",
+   "what": "s_gloamoths 1.20 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    105.7,
+    24.9
+   ],
+   "encode": "webp-q95",
+   "bytes": 613172
+  },
+  {
+   "file": "camp_s_gloamoths_midfight.webp",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 108.37,
+   "time": "01:48",
+   "kind": "camp",
+   "camp": "s_gloamoths",
+   "stage": "midfight",
+   "what": "s_gloamoths 0.6 s after a 45 % hit: the monsters have aggroed",
+   "monsters": [
+    {
+     "id": 205,
+     "def": "gloamoth",
+     "hp": 358,
+     "maxHp": 650,
+     "state": "attack",
+     "x": 105.7,
+     "y": 24.9
+    },
+    {
+     "id": 206,
+     "def": "gloamoth_little",
+     "hp": 110,
+     "maxHp": 200,
+     "state": "move",
+     "x": 104.9,
+     "y": 27.1
+    },
+    {
+     "id": 207,
+     "def": "gloamoth_little",
+     "hp": 16,
+     "maxHp": 200,
+     "state": "attack",
+     "x": 103.3,
+     "y": 26.7
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    105.7,
+    24.9
+   ],
+   "encode": "webp-q95",
+   "bytes": 618708
+  },
+  {
+   "file": "camp_s_gloamoths_spawn.webp",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 107.53,
+   "time": "01:47",
+   "kind": "camp",
+   "camp": "s_gloamoths",
+   "stage": "spawn",
+   "what": "s_gloamoths (gloamoth, gloamoth_little, gloamoth_little) at its spawn, untouched",
+   "monsters": [
+    {
+     "id": 205,
+     "def": "gloamoth",
+     "hp": 650,
+     "maxHp": 650,
+     "state": "idle",
+     "x": 105.7,
+     "y": 24.9
+    },
+    {
+     "id": 206,
+     "def": "gloamoth_little",
+     "hp": 200,
+     "maxHp": 200,
+     "state": "idle",
+     "x": 107.3,
+     "y": 25.9
+    },
+    {
+     "id": 207,
+     "def": "gloamoth_little",
+     "hp": 200,
+     "maxHp": 200,
+     "state": "idle",
+     "x": 104.1,
+     "y": 25.9
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    105.7,
+    24.9
+   ],
+   "encode": "webp-q95",
+   "bytes": 616256
+  },
+  {
+   "file": "camp_sunsplinter_death_005.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 371.13,
+   "time": "06:11",
+   "kind": "camp",
+   "camp": "sunsplinter",
+   "stage": "death_0.05",
+   "what": "sunsplinter 0.05 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    80
+   ],
+   "encode": "lossless-png",
+   "bytes": 2639794
+  },
+  {
+   "file": "camp_sunsplinter_death_040.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 371.7,
+   "time": "06:11",
+   "kind": "camp",
+   "camp": "sunsplinter",
+   "stage": "death_0.4",
+   "what": "sunsplinter 0.40 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    80
+   ],
+   "encode": "lossless-png",
+   "bytes": 2583527
+  },
+  {
+   "file": "camp_sunsplinter_death_120.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 372.73,
+   "time": "06:12",
+   "kind": "camp",
+   "camp": "sunsplinter",
+   "stage": "death_1.2",
+   "what": "sunsplinter 1.20 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    80
+   ],
+   "encode": "lossless-png",
+   "bytes": 2583489
+  },
+  {
+   "file": "camp_sunsplinter_midfight.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 370.83,
+   "time": "06:10",
+   "kind": "camp",
+   "camp": "sunsplinter",
+   "stage": "midfight",
+   "what": "sunsplinter 0.6 s after a 45 % hit: the monsters have aggroed",
+   "monsters": [
+    {
+     "id": 5226,
+     "def": "sunsplinter",
+     "hp": 2310,
+     "maxHp": 4200,
+     "state": "cast",
+     "x": 85,
+     "y": 80
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    80
+   ],
+   "encode": "lossless-png",
+   "bytes": 2676194
+  },
+  {
+   "file": "camp_sunsplinter_spawn.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 370,
+   "time": "06:10",
+   "kind": "camp",
+   "camp": "sunsplinter",
+   "stage": "spawn",
+   "what": "sunsplinter (sunsplinter) at its spawn, untouched",
+   "monsters": [
+    {
+     "id": 5226,
+     "def": "sunsplinter",
+     "hp": 4200,
+     "maxHp": 4200,
+     "state": "idle",
+     "x": 85,
+     "y": 80
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    80
+   ],
+   "encode": "lossless-png",
+   "bytes": 2611010
+  },
+  {
+   "file": "moment_level_up_high_00.webp",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 376.67,
+   "time": "06:16",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0,
+   "what": "seat 0 levels up, 0 s after the trigger",
+   "map": "rift",
+   "world": [
+    60,
     55
    ],
-   "what": "hourbell team 0 0.37 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 552549
+   "encode": "webp-q95",
+   "bytes": 597854
   },
   {
-   "file": "structure_rift_hourbell_team0_collapse_107.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_level_up_high_01.webp",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 22,
-   "team": 0,
-   "stage": "collapse_107",
-   "map": "rift",
+   "time_s": 376.77,
+   "time": "06:16",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "high",
    "quality": "high",
+   "offset_s": 0.1,
+   "what": "seat 0 levels up, 0.1 s after the trigger",
+   "map": "rift",
    "world": [
-    15,
+    60,
     55
    ],
-   "what": "hourbell team 0 1.07 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 556155
+   "encode": "webp-q95",
+   "bytes": 595692
   },
   {
-   "file": "structure_rift_hourbell_team0_collapse_240.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_level_up_high_03.webp",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 22,
-   "team": 0,
-   "stage": "collapse_240",
-   "map": "rift",
+   "time_s": 376.97,
+   "time": "06:16",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "high",
    "quality": "high",
+   "offset_s": 0.3,
+   "what": "seat 0 levels up, 0.3 s after the trigger",
+   "map": "rift",
    "world": [
-    15,
+    60,
     55
    ],
-   "what": "hourbell team 0 2.40 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 499261
+   "encode": "webp-q95",
+   "bytes": 596222
   },
   {
-   "file": "structure_rift_hourbell_team0_hp100.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_level_up_high_08.webp",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 21.47,
-   "time": "00:21",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 22,
-   "team": 0,
-   "stage": "hp100",
-   "map": "rift",
+   "time_s": 377.47,
+   "time": "06:17",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "high",
    "quality": "high",
+   "offset_s": 0.8,
+   "what": "seat 0 levels up, 0.8 s after the trigger",
+   "map": "rift",
    "world": [
-    15,
+    60,
     55
    ],
-   "hp_fraction": 1,
-   "what": "hourbell team 0 at 100 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 718379
+   "encode": "webp-q95",
+   "bytes": 598218
   },
   {
-   "file": "structure_rift_hourbell_team0_hp30.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_level_up_high_15.webp",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 21.47,
-   "time": "00:21",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 22,
-   "team": 0,
-   "stage": "hp30",
-   "map": "rift",
+   "time_s": 378.17,
+   "time": "06:18",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "high",
    "quality": "high",
+   "offset_s": 1.5,
+   "what": "seat 0 levels up, 1.5 s after the trigger",
+   "map": "rift",
    "world": [
-    15,
+    60,
     55
    ],
-   "hp_fraction": 0.3,
-   "what": "hourbell team 0 at 30 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 714893
+   "encode": "webp-q95",
+   "bytes": 586182
   },
   {
-   "file": "structure_rift_hourbell_team0_hp60.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_level_up_low_00.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 21.47,
-   "time": "00:21",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 22,
-   "team": 0,
-   "stage": "hp60",
+   "time_s": 376.67,
+   "time": "06:16",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0,
+   "what": "seat 0 levels up, 0 s after the trigger",
    "map": "rift",
-   "quality": "high",
    "world": [
-    15,
+    60,
     55
    ],
-   "hp_fraction": 0.6,
-   "what": "hourbell team 0 at 60 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 715879
+   "encode": "lossless-png",
+   "bytes": 1687722
   },
   {
-   "file": "structure_rift_hourbell_team0_ruin.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_level_up_low_01.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 22,
-   "team": 0,
-   "stage": "ruin",
+   "time_s": 376.77,
+   "time": "06:16",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.1,
+   "what": "seat 0 levels up, 0.1 s after the trigger",
    "map": "rift",
-   "quality": "high",
    "world": [
-    15,
+    60,
     55
    ],
-   "what": "hourbell team 0 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 505222
+   "encode": "lossless-png",
+   "bytes": 1687875
   },
   {
-   "file": "structure_rift_hourbell_team1_collapse_037.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_level_up_low_03.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 34,
-   "team": 1,
-   "stage": "collapse_037",
+   "time_s": 376.97,
+   "time": "06:16",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.3,
+   "what": "seat 0 levels up, 0.3 s after the trigger",
    "map": "rift",
-   "quality": "high",
    "world": [
-    155,
+    60,
     55
    ],
-   "what": "hourbell team 1 0.37 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 493876
+   "encode": "lossless-png",
+   "bytes": 1693078
   },
   {
-   "file": "structure_rift_hourbell_team1_collapse_107.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_level_up_low_08.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 34,
-   "team": 1,
-   "stage": "collapse_107",
+   "time_s": 377.47,
+   "time": "06:17",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.8,
+   "what": "seat 0 levels up, 0.8 s after the trigger",
    "map": "rift",
-   "quality": "high",
    "world": [
-    155,
+    60,
     55
    ],
-   "what": "hourbell team 1 1.07 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 484880
+   "encode": "lossless-png",
+   "bytes": 1683529
   },
   {
-   "file": "structure_rift_hourbell_team1_collapse_240.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_level_up_low_15.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 34,
-   "team": 1,
-   "stage": "collapse_240",
+   "time_s": 378.17,
+   "time": "06:18",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 1.5,
+   "what": "seat 0 levels up, 1.5 s after the trigger",
    "map": "rift",
-   "quality": "high",
    "world": [
-    155,
+    60,
     55
    ],
-   "what": "hourbell team 1 2.40 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 486321
+   "encode": "lossless-png",
+   "bytes": 1664378
   },
   {
-   "file": "structure_rift_hourbell_team1_hp100.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_noon_toll_high_00.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 29.87,
-   "time": "00:29",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 34,
-   "team": 1,
-   "stage": "hp100",
-   "map": "rift",
+   "time_s": 41.37,
+   "time": "00:41",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "high",
    "quality": "high",
+   "offset_s": 0,
+   "what": "the Noon Toll sounds, 0 s after the trigger",
+   "map": "fray",
    "world": [
-    155,
+    32,
+    32
+   ],
+   "encode": "lossless-png",
+   "bytes": 2521729
+  },
+  {
+   "file": "moment_noon_toll_high_01.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.47,
+   "time": "00:41",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0.1,
+   "what": "the Noon Toll sounds, 0.1 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ],
+   "encode": "lossless-png",
+   "bytes": 2531902
+  },
+  {
+   "file": "moment_noon_toll_high_03.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.67,
+   "time": "00:41",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0.3,
+   "what": "the Noon Toll sounds, 0.3 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ],
+   "encode": "lossless-png",
+   "bytes": 2556155
+  },
+  {
+   "file": "moment_noon_toll_high_08.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 42.17,
+   "time": "00:42",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0.8,
+   "what": "the Noon Toll sounds, 0.8 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ],
+   "encode": "lossless-png",
+   "bytes": 2531609
+  },
+  {
+   "file": "moment_noon_toll_high_15.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 42.87,
+   "time": "00:42",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 1.5,
+   "what": "the Noon Toll sounds, 1.5 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ],
+   "encode": "lossless-png",
+   "bytes": 2490997
+  },
+  {
+   "file": "moment_noon_toll_low_00.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.37,
+   "time": "00:41",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0,
+   "what": "the Noon Toll sounds, 0 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ],
+   "encode": "lossless-png",
+   "bytes": 1167516
+  },
+  {
+   "file": "moment_noon_toll_low_01.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.47,
+   "time": "00:41",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.1,
+   "what": "the Noon Toll sounds, 0.1 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ],
+   "encode": "lossless-png",
+   "bytes": 1187464
+  },
+  {
+   "file": "moment_noon_toll_low_03.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.67,
+   "time": "00:41",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.3,
+   "what": "the Noon Toll sounds, 0.3 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ],
+   "encode": "lossless-png",
+   "bytes": 1195067
+  },
+  {
+   "file": "moment_noon_toll_low_08.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 42.17,
+   "time": "00:42",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.8,
+   "what": "the Noon Toll sounds, 0.8 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ],
+   "encode": "lossless-png",
+   "bytes": 1173368
+  },
+  {
+   "file": "moment_noon_toll_low_15.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 42.87,
+   "time": "00:42",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 1.5,
+   "what": "the Noon Toll sounds, 1.5 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ],
+   "encode": "lossless-png",
+   "bytes": 1137362
+  },
+  {
+   "file": "moment_own_kill_high_00.webp",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 378.6,
+   "time": "06:18",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 0 s after the trigger",
+   "map": "rift",
+   "world": [
+    62,
     55
    ],
-   "hp_fraction": 1,
-   "what": "hourbell team 1 at 100 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 592265
+   "encode": "webp-q95",
+   "bytes": 595972
   },
   {
-   "file": "structure_rift_hourbell_team1_hp30.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_own_kill_high_01.webp",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 29.87,
-   "time": "00:29",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 34,
-   "team": 1,
-   "stage": "hp30",
-   "map": "rift",
+   "time_s": 378.7,
+   "time": "06:18",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "high",
    "quality": "high",
+   "offset_s": 0.1,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 0.1 s after the trigger",
+   "map": "rift",
    "world": [
-    155,
+    62,
     55
    ],
-   "hp_fraction": 0.3,
-   "what": "hourbell team 1 at 30 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 582787
+   "encode": "webp-q95",
+   "bytes": 597258
   },
   {
-   "file": "structure_rift_hourbell_team1_hp60.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_own_kill_high_03.webp",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 29.87,
-   "time": "00:29",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 34,
-   "team": 1,
-   "stage": "hp60",
-   "map": "rift",
+   "time_s": 378.9,
+   "time": "06:18",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "high",
    "quality": "high",
+   "offset_s": 0.3,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 0.3 s after the trigger",
+   "map": "rift",
    "world": [
-    155,
+    62,
     55
    ],
-   "hp_fraction": 0.6,
-   "what": "hourbell team 1 at 60 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 585076
+   "encode": "webp-q95",
+   "bytes": 594826
   },
   {
-   "file": "structure_rift_hourbell_team1_ruin.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_own_kill_high_08.webp",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "hourbell",
-   "structure_id": 34,
-   "team": 1,
-   "stage": "ruin",
-   "map": "rift",
+   "time_s": 379.4,
+   "time": "06:19",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "high",
    "quality": "high",
+   "offset_s": 0.8,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 0.8 s after the trigger",
+   "map": "rift",
    "world": [
-    155,
+    62,
     55
    ],
-   "what": "hourbell team 1 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 485041
+   "encode": "webp-q95",
+   "bytes": 602052
   },
   {
-   "file": "structure_rift_lantern_team0_collapse_037.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_own_kill_high_15.webp",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 71.73,
-   "time": "01:11",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 19,
-   "team": 0,
-   "stage": "collapse_037",
-   "map": "rift",
+   "time_s": 380.1,
+   "time": "06:20",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "high",
    "quality": "high",
+   "offset_s": 1.5,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 1.5 s after the trigger",
+   "map": "rift",
    "world": [
-    26.9,
-    74.2
+    62,
+    55
    ],
-   "what": "lantern team 0 0.37 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 572621
+   "encode": "webp-q95",
+   "bytes": 599716
   },
   {
-   "file": "structure_rift_lantern_team0_collapse_107.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_own_kill_low_00.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 72.43,
-   "time": "01:12",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 19,
-   "team": 0,
-   "stage": "collapse_107",
+   "time_s": 378.6,
+   "time": "06:18",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 0 s after the trigger",
    "map": "rift",
-   "quality": "high",
    "world": [
-    26.9,
-    74.2
+    62,
+    55
    ],
-   "what": "lantern team 0 1.07 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 560714
+   "encode": "lossless-png",
+   "bytes": 1673483
   },
   {
-   "file": "structure_rift_lantern_team0_collapse_240.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_own_kill_low_01.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 73.77,
-   "time": "01:13",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 19,
-   "team": 0,
-   "stage": "collapse_240",
+   "time_s": 378.7,
+   "time": "06:18",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.1,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 0.1 s after the trigger",
    "map": "rift",
-   "quality": "high",
    "world": [
-    26.9,
-    74.2
+    62,
+    55
    ],
-   "what": "lantern team 0 2.40 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 550978
+   "encode": "lossless-png",
+   "bytes": 1676181
   },
   {
-   "file": "structure_rift_lantern_team0_hp100.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_own_kill_low_03.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 19.37,
-   "time": "00:19",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 19,
-   "team": 0,
-   "stage": "hp100",
+   "time_s": 378.9,
+   "time": "06:18",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.3,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 0.3 s after the trigger",
    "map": "rift",
-   "quality": "high",
    "world": [
-    26.9,
-    74.2
+    62,
+    55
    ],
-   "hp_fraction": 1,
-   "what": "lantern team 0 at 100 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 686010
+   "encode": "lossless-png",
+   "bytes": 1672546
   },
   {
-   "file": "structure_rift_lantern_team0_hp30.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_own_kill_low_08.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 19.37,
-   "time": "00:19",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 19,
-   "team": 0,
-   "stage": "hp30",
+   "time_s": 379.4,
+   "time": "06:19",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.8,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 0.8 s after the trigger",
    "map": "rift",
-   "quality": "high",
    "world": [
-    26.9,
-    74.2
+    62,
+    55
    ],
-   "hp_fraction": 0.3,
-   "what": "lantern team 0 at 30 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 688039
+   "encode": "lossless-png",
+   "bytes": 1684299
   },
   {
-   "file": "structure_rift_lantern_team0_hp60.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_own_kill_low_15.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 19.37,
-   "time": "00:19",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 19,
-   "team": 0,
-   "stage": "hp60",
+   "time_s": 380.1,
+   "time": "06:20",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 1.5,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 1.5 s after the trigger",
    "map": "rift",
-   "quality": "high",
    "world": [
-    26.9,
-    74.2
+    62,
+    55
    ],
-   "hp_fraction": 0.6,
-   "what": "lantern team 0 at 60 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 688251
+   "encode": "lossless-png",
+   "bytes": 1669670
   },
   {
-   "file": "structure_rift_lantern_team0_ruin.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_pit_last_hit_high_00.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 75.77,
-   "time": "01:15",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 19,
-   "team": 0,
-   "stage": "ruin",
-   "map": "rift",
+   "time_s": 374.8,
+   "time": "06:14",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "high",
    "quality": "high",
+   "offset_s": 0,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 0 s after the trigger",
+   "map": "rift",
    "world": [
-    26.9,
-    74.2
+    85,
+    80
    ],
-   "what": "lantern team 0 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 552585
+   "encode": "lossless-png",
+   "bytes": 2736530
   },
   {
-   "file": "structure_rift_lantern_team1_collapse_037.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_pit_last_hit_high_01.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 31,
-   "team": 1,
-   "stage": "collapse_037",
-   "map": "rift",
+   "time_s": 374.9,
+   "time": "06:14",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "high",
    "quality": "high",
+   "offset_s": 0.1,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 0.1 s after the trigger",
+   "map": "rift",
    "world": [
-    143.1,
-    74.2
+    85,
+    80
    ],
-   "what": "lantern team 1 0.37 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 505102
+   "encode": "lossless-png",
+   "bytes": 2739091
   },
   {
-   "file": "structure_rift_lantern_team1_collapse_107.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_pit_last_hit_high_03.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 31,
-   "team": 1,
-   "stage": "collapse_107",
-   "map": "rift",
+   "time_s": 375.1,
+   "time": "06:15",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "high",
    "quality": "high",
+   "offset_s": 0.3,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 0.3 s after the trigger",
+   "map": "rift",
    "world": [
-    143.1,
-    74.2
+    85,
+    80
    ],
-   "what": "lantern team 1 1.07 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 499413
+   "encode": "lossless-png",
+   "bytes": 2738597
   },
   {
-   "file": "structure_rift_lantern_team1_collapse_240.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_pit_last_hit_high_08.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 31,
-   "team": 1,
-   "stage": "collapse_240",
-   "map": "rift",
+   "time_s": 375.6,
+   "time": "06:15",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "high",
    "quality": "high",
+   "offset_s": 0.8,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 0.8 s after the trigger",
+   "map": "rift",
    "world": [
-    143.1,
-    74.2
+    85,
+    80
    ],
-   "what": "lantern team 1 2.40 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 498926
+   "encode": "lossless-png",
+   "bytes": 2716173
   },
   {
-   "file": "structure_rift_lantern_team1_hp100.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_pit_last_hit_high_15.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 27.77,
-   "time": "00:27",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 31,
-   "team": 1,
-   "stage": "hp100",
-   "map": "rift",
+   "time_s": 376.3,
+   "time": "06:16",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "high",
    "quality": "high",
+   "offset_s": 1.5,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 1.5 s after the trigger",
+   "map": "rift",
    "world": [
-    143.1,
-    74.2
+    85,
+    80
    ],
-   "hp_fraction": 1,
-   "what": "lantern team 1 at 100 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 533237
+   "encode": "lossless-png",
+   "bytes": 2720597
   },
   {
-   "file": "structure_rift_lantern_team1_hp30.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_pit_last_hit_low_00.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 27.77,
-   "time": "00:27",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 31,
-   "team": 1,
-   "stage": "hp30",
+   "time_s": 374.8,
+   "time": "06:14",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 0 s after the trigger",
    "map": "rift",
-   "quality": "high",
    "world": [
-    143.1,
-    74.2
+    85,
+    80
    ],
-   "hp_fraction": 0.3,
-   "what": "lantern team 1 at 30 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 539620
+   "encode": "lossless-png",
+   "bytes": 1570986
   },
   {
-   "file": "structure_rift_lantern_team1_hp60.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_pit_last_hit_low_01.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 27.77,
-   "time": "00:27",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 31,
-   "team": 1,
-   "stage": "hp60",
+   "time_s": 374.9,
+   "time": "06:14",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.1,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 0.1 s after the trigger",
    "map": "rift",
-   "quality": "high",
    "world": [
-    143.1,
-    74.2
+    85,
+    80
    ],
-   "hp_fraction": 0.6,
-   "what": "lantern team 1 at 60 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 534634
+   "encode": "lossless-png",
+   "bytes": 1571613
   },
   {
-   "file": "structure_rift_lantern_team1_ruin.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_pit_last_hit_low_03.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "lantern",
-   "structure_id": 31,
-   "team": 1,
-   "stage": "ruin",
+   "time_s": 375.1,
+   "time": "06:15",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.3,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 0.3 s after the trigger",
    "map": "rift",
-   "quality": "high",
    "world": [
-    143.1,
-    74.2
+    85,
+    80
    ],
-   "what": "lantern team 1 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 495300
+   "encode": "lossless-png",
+   "bytes": 1570326
   },
   {
-   "file": "structure_rift_needle_bell_team0_collapse_037.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_pit_last_hit_low_08.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 81.93,
-   "time": "01:21",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 21,
-   "team": 0,
-   "stage": "collapse_037",
+   "time_s": 375.6,
+   "time": "06:15",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.8,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 0.8 s after the trigger",
    "map": "rift",
-   "quality": "high",
    "world": [
-    21.5,
-    58.8
+    85,
+    80
    ],
-   "what": "needle_bell team 0 0.37 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 717442
+   "encode": "lossless-png",
+   "bytes": 1562954
   },
   {
-   "file": "structure_rift_needle_bell_team0_collapse_107.png",
-   "width": 960,
-   "height": 540,
+   "file": "moment_pit_last_hit_low_15.png",
+   "width": 1920,
+   "height": 1080,
    "seed": 7,
-   "time_s": 82.63,
-   "time": "01:22",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 21,
-   "team": 0,
-   "stage": "collapse_107",
+   "time_s": 376.3,
+   "time": "06:16",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 1.5,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 1.5 s after the trigger",
    "map": "rift",
-   "quality": "high",
    "world": [
-    21.5,
-    58.8
-   ],
-   "what": "needle_bell team 0 1.07 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 704573
-  },
-  {
-   "file": "structure_rift_needle_bell_team0_collapse_240.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 83.97,
-   "time": "01:23",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 21,
-   "team": 0,
-   "stage": "collapse_240",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    21.5,
-    58.8
-   ],
-   "what": "needle_bell team 0 2.40 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 678644
-  },
-  {
-   "file": "structure_rift_needle_bell_team0_hp100.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 20.77,
-   "time": "00:20",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 21,
-   "team": 0,
-   "stage": "hp100",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    21.5,
-    58.8
-   ],
-   "hp_fraction": 1,
-   "what": "needle_bell team 0 at 100 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 721205
-  },
-  {
-   "file": "structure_rift_needle_bell_team0_hp30.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 20.77,
-   "time": "00:20",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 21,
-   "team": 0,
-   "stage": "hp30",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    21.5,
-    58.8
-   ],
-   "hp_fraction": 0.3,
-   "what": "needle_bell team 0 at 30 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 719851
-  },
-  {
-   "file": "structure_rift_needle_bell_team0_hp60.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 20.77,
-   "time": "00:20",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 21,
-   "team": 0,
-   "stage": "hp60",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    21.5,
-    58.8
-   ],
-   "hp_fraction": 0.6,
-   "what": "needle_bell team 0 at 60 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 720399
-  },
-  {
-   "file": "structure_rift_needle_bell_team0_ruin.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 85.97,
-   "time": "01:25",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 21,
-   "team": 0,
-   "stage": "ruin",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    21.5,
-    58.8
-   ],
-   "what": "needle_bell team 0 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 689356
-  },
-  {
-   "file": "structure_rift_needle_bell_team1_collapse_037.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 33,
-   "team": 1,
-   "stage": "collapse_037",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    148.5,
-    58.8
-   ],
-   "what": "needle_bell team 1 0.37 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 547249
-  },
-  {
-   "file": "structure_rift_needle_bell_team1_collapse_107.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 33,
-   "team": 1,
-   "stage": "collapse_107",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    148.5,
-    58.8
-   ],
-   "what": "needle_bell team 1 1.07 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 521522
-  },
-  {
-   "file": "structure_rift_needle_bell_team1_collapse_240.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 33,
-   "team": 1,
-   "stage": "collapse_240",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    148.5,
-    58.8
-   ],
-   "what": "needle_bell team 1 2.40 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 519114
-  },
-  {
-   "file": "structure_rift_needle_bell_team1_hp100.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 29.17,
-   "time": "00:29",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 33,
-   "team": 1,
-   "stage": "hp100",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    148.5,
-    58.8
-   ],
-   "hp_fraction": 1,
-   "what": "needle_bell team 1 at 100 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 593156
-  },
-  {
-   "file": "structure_rift_needle_bell_team1_hp30.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 29.17,
-   "time": "00:29",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 33,
-   "team": 1,
-   "stage": "hp30",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    148.5,
-    58.8
-   ],
-   "hp_fraction": 0.3,
-   "what": "needle_bell team 1 at 30 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 592043
-  },
-  {
-   "file": "structure_rift_needle_bell_team1_hp60.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 29.17,
-   "time": "00:29",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 33,
-   "team": 1,
-   "stage": "hp60",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    148.5,
-    58.8
-   ],
-   "hp_fraction": 0.6,
-   "what": "needle_bell team 1 at 60 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 591987
-  },
-  {
-   "file": "structure_rift_needle_bell_team1_ruin.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "needle_bell",
-   "structure_id": 33,
-   "team": 1,
-   "stage": "ruin",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    148.5,
-    58.8
-   ],
-   "what": "needle_bell team 1 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 518632
-  },
-  {
-   "file": "structure_rift_needle_inner_team0_collapse_037.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 66.63,
-   "time": "01:06",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 18,
-   "team": 0,
-   "stage": "collapse_037",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    35,
-    91.6
-   ],
-   "what": "needle_inner team 0 0.37 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 624468
-  },
-  {
-   "file": "structure_rift_needle_inner_team0_collapse_107.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 67.33,
-   "time": "01:07",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 18,
-   "team": 0,
-   "stage": "collapse_107",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    35,
-    91.6
-   ],
-   "what": "needle_inner team 0 1.07 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 631321
-  },
-  {
-   "file": "structure_rift_needle_inner_team0_collapse_240.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 68.67,
-   "time": "01:08",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 18,
-   "team": 0,
-   "stage": "collapse_240",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    35,
-    91.6
-   ],
-   "what": "needle_inner team 0 2.40 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 694341
-  },
-  {
-   "file": "structure_rift_needle_inner_team0_hp100.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 18.67,
-   "time": "00:18",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 18,
-   "team": 0,
-   "stage": "hp100",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    35,
-    91.6
-   ],
-   "hp_fraction": 1,
-   "what": "needle_inner team 0 at 100 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 714570
-  },
-  {
-   "file": "structure_rift_needle_inner_team0_hp30.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 18.67,
-   "time": "00:18",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 18,
-   "team": 0,
-   "stage": "hp30",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    35,
-    91.6
-   ],
-   "hp_fraction": 0.3,
-   "what": "needle_inner team 0 at 30 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 712115
-  },
-  {
-   "file": "structure_rift_needle_inner_team0_hp60.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 18.67,
-   "time": "00:18",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 18,
-   "team": 0,
-   "stage": "hp60",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    35,
-    91.6
-   ],
-   "hp_fraction": 0.6,
-   "what": "needle_inner team 0 at 60 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 712709
-  },
-  {
-   "file": "structure_rift_needle_inner_team0_ruin.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 70.67,
-   "time": "01:10",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 18,
-   "team": 0,
-   "stage": "ruin",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    35,
-    91.6
-   ],
-   "what": "needle_inner team 0 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 714871
-  },
-  {
-   "file": "structure_rift_needle_inner_team1_collapse_037.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 30,
-   "team": 1,
-   "stage": "collapse_037",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    135,
-    91.6
-   ],
-   "what": "needle_inner team 1 0.37 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 534098
-  },
-  {
-   "file": "structure_rift_needle_inner_team1_collapse_107.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 30,
-   "team": 1,
-   "stage": "collapse_107",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    135,
-    91.6
-   ],
-   "what": "needle_inner team 1 1.07 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 526221
-  },
-  {
-   "file": "structure_rift_needle_inner_team1_collapse_240.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 30,
-   "team": 1,
-   "stage": "collapse_240",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    135,
-    91.6
-   ],
-   "what": "needle_inner team 1 2.40 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 526081
-  },
-  {
-   "file": "structure_rift_needle_inner_team1_hp100.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 27.07,
-   "time": "00:27",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 30,
-   "team": 1,
-   "stage": "hp100",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    135,
-    91.6
-   ],
-   "hp_fraction": 1,
-   "what": "needle_inner team 1 at 100 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 567270
-  },
-  {
-   "file": "structure_rift_needle_inner_team1_hp30.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 27.07,
-   "time": "00:27",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 30,
-   "team": 1,
-   "stage": "hp30",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    135,
-    91.6
-   ],
-   "hp_fraction": 0.3,
-   "what": "needle_inner team 1 at 30 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 567043
-  },
-  {
-   "file": "structure_rift_needle_inner_team1_hp60.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 27.07,
-   "time": "00:27",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 30,
-   "team": 1,
-   "stage": "hp60",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    135,
-    91.6
-   ],
-   "hp_fraction": 0.6,
-   "what": "needle_inner team 1 at 60 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 567341
-  },
-  {
-   "file": "structure_rift_needle_inner_team1_ruin.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "needle_inner",
-   "structure_id": 30,
-   "team": 1,
-   "stage": "ruin",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    135,
-    91.6
-   ],
-   "what": "needle_inner team 1 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 526527
-  },
-  {
-   "file": "structure_rift_needle_outer_team0_collapse_037.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 61.53,
-   "time": "01:01",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 17,
-   "team": 0,
-   "stage": "collapse_037",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    59.5,
-    93.9
-   ],
-   "what": "needle_outer team 0 0.37 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 594318
-  },
-  {
-   "file": "structure_rift_needle_outer_team0_collapse_107.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 62.23,
-   "time": "01:02",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 17,
-   "team": 0,
-   "stage": "collapse_107",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    59.5,
-    93.9
-   ],
-   "what": "needle_outer team 0 1.07 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 579711
-  },
-  {
-   "file": "structure_rift_needle_outer_team0_collapse_240.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 63.57,
-   "time": "01:03",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 17,
-   "team": 0,
-   "stage": "collapse_240",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    59.5,
-    93.9
-   ],
-   "what": "needle_outer team 0 2.40 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 565530
-  },
-  {
-   "file": "structure_rift_needle_outer_team0_hp100.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 17.97,
-   "time": "00:17",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 17,
-   "team": 0,
-   "stage": "hp100",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    59.5,
-    93.9
-   ],
-   "hp_fraction": 1,
-   "what": "needle_outer team 0 at 100 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 743553
-  },
-  {
-   "file": "structure_rift_needle_outer_team0_hp30.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 17.97,
-   "time": "00:17",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 17,
-   "team": 0,
-   "stage": "hp30",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    59.5,
-    93.9
-   ],
-   "hp_fraction": 0.3,
-   "what": "needle_outer team 0 at 30 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 743065
-  },
-  {
-   "file": "structure_rift_needle_outer_team0_hp60.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 17.97,
-   "time": "00:17",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 17,
-   "team": 0,
-   "stage": "hp60",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    59.5,
-    93.9
-   ],
-   "hp_fraction": 0.6,
-   "what": "needle_outer team 0 at 60 % hp",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 741171
-  },
-  {
-   "file": "structure_rift_needle_outer_team0_ruin.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 65.57,
-   "time": "01:05",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 17,
-   "team": 0,
-   "stage": "ruin",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    59.5,
-    93.9
-   ],
-   "what": "needle_outer team 0 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    479,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 575231
-  },
-  {
-   "file": "structure_rift_needle_outer_team1_collapse_037.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 29,
-   "team": 1,
-   "stage": "collapse_037",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    110.5,
-    93.9
-   ],
-   "what": "needle_outer team 1 0.37 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 569925
-  },
-  {
-   "file": "structure_rift_needle_outer_team1_collapse_107.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 29,
-   "team": 1,
-   "stage": "collapse_107",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    110.5,
-    93.9
-   ],
-   "what": "needle_outer team 1 1.07 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 564922
-  },
-  {
-   "file": "structure_rift_needle_outer_team1_collapse_240.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 29,
-   "team": 1,
-   "stage": "collapse_240",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    110.5,
-    93.9
-   ],
-   "what": "needle_outer team 1 2.40 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 557489
-  },
-  {
-   "file": "structure_rift_needle_outer_team1_hp100.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 26.37,
-   "time": "00:26",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 29,
-   "team": 1,
-   "stage": "hp100",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    110.5,
-    93.9
-   ],
-   "hp_fraction": 1,
-   "what": "needle_outer team 1 at 100 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 586209
-  },
-  {
-   "file": "structure_rift_needle_outer_team1_hp30.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 26.37,
-   "time": "00:26",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 29,
-   "team": 1,
-   "stage": "hp30",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    110.5,
-    93.9
-   ],
-   "hp_fraction": 0.3,
-   "what": "needle_outer team 1 at 30 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 588459
-  },
-  {
-   "file": "structure_rift_needle_outer_team1_hp60.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 26.37,
-   "time": "00:26",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 29,
-   "team": 1,
-   "stage": "hp60",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    110.5,
-    93.9
-   ],
-   "hp_fraction": 0.6,
-   "what": "needle_outer team 1 at 60 % hp",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 587946
-  },
-  {
-   "file": "structure_rift_needle_outer_team1_ruin.png",
-   "width": 960,
-   "height": 540,
-   "seed": 7,
-   "time_s": 86.7,
-   "time": "01:26",
-   "kind": "structure_stage",
-   "structure": "needle_outer",
-   "structure_id": 29,
-   "team": 1,
-   "stage": "ruin",
-   "map": "rift",
-   "quality": "high",
-   "world": [
-    110.5,
-    93.9
-   ],
-   "what": "needle_outer team 1 ruin, 4.4 s after it was killed",
-   "crop_origin": [
-    480,
-    119
-   ],
-   "source_frame": 1920,
-   "encode": "lossless",
-   "bytes": 563156
+    85,
+    80
+   ],
+   "encode": "lossless-png",
+   "bytes": 1565748
   },
   {
    "file": "life_recall_00_before.png",
@@ -6583,7 +4556,7 @@
     "x": 44,
     "y": 55
    },
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 958924
   },
   {
@@ -6604,7 +4577,7 @@
     "x": 44,
     "y": 55
    },
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 961251
   },
   {
@@ -6625,7 +4598,7 @@
     "x": 44,
     "y": 55
    },
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 959458
   },
   {
@@ -6646,7 +4619,7 @@
     "x": 44,
     "y": 55
    },
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 953648
   },
   {
@@ -6667,7 +4640,7 @@
     "x": 44,
     "y": 55
    },
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 954441
   },
   {
@@ -6688,7 +4661,7 @@
     "x": 4.5,
     "y": 55
    },
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 980029
   },
   {
@@ -6709,7 +4682,7 @@
     "x": 4.5,
     "y": 55
    },
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 987786
   },
   {
@@ -6730,7 +4703,7 @@
     "x": 4.5,
     "y": 55
    },
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 987196
   },
   {
@@ -6751,7 +4724,7 @@
     "x": 44,
     "y": 55
    },
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1032473
   },
   {
@@ -6772,7 +4745,7 @@
     "x": 44,
     "y": 55
    },
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1201341
   },
   {
@@ -6793,7 +4766,7 @@
     "x": 44,
     "y": 55
    },
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1201133
   },
   {
@@ -6814,7 +4787,7 @@
     "x": 44,
     "y": 55
    },
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1202633
   },
   {
@@ -6835,7 +4808,7 @@
     "x": 10.1,
     "y": 55
    },
-   "encode": "palette192",
+   "encode": "lossless-png",
    "bytes": 1360242
   },
   {
@@ -6856,7 +4829,7 @@
     "x": 10.1,
     "y": 55
    },
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1186747
   },
   {
@@ -6877,84 +4850,66 @@
     "x": 10.1,
     "y": 55
    },
-   "encode": "palette256",
+   "encode": "lossless-png",
    "bytes": 1181562
   },
   {
-   "file": "sheet_colorblind_teamfight.png",
-   "what": "the same teamfight peak frame, default and the three colour-blind modes (each downscaled to 960x540, 2 across is not used: 4 across)",
+   "file": "sheet_quality_base_aubade.png",
+   "what": "side by side (each downscaled to 960x540): base_aubade on Low, Medium, High and Ultra",
    "kind": "sheet",
    "map": "rift",
    "width": 3840,
    "height": 564,
-   "encode": "palette256",
-   "sources": [
-    "teamfight_rift_peak.png",
-    "colorblind_teamfight_deutan_peak.png",
-    "colorblind_teamfight_protan_peak.png",
-    "colorblind_teamfight_tritan_peak.png"
-   ],
-   "bytes": 645523
-  },
-  {
-   "file": "sheet_quality_base_aubade.png",
-   "what": "side by side (each downscaled to 960x540): base_aubade on Low, High and Ultra",
-   "kind": "sheet",
-   "map": "rift",
-   "width": 2880,
-   "height": 564,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "sources": [
     "quality_base_aubade_low.png",
+    "quality_base_aubade_medium.png",
     "quality_base_aubade_high.png",
     "quality_base_aubade_ultra.png"
    ],
-   "bytes": 1018817
+   "bytes": 2689622
   },
   {
-   "file": "sheet_quality_jungle_glasshorn.png",
-   "what": "side by side (each downscaled to 960x540): jungle_glasshorn on Low, High and Ultra",
+   "file": "sheet_quality_jungle_glasshorn.webp",
+   "what": "side by side (each downscaled to 960x540): jungle_glasshorn on Low, Medium, High and Ultra",
    "kind": "sheet",
    "map": "rift",
-   "width": 2880,
+   "width": 3840,
    "height": 564,
-   "encode": "palette256",
+   "encode": "webp-q95",
    "sources": [
     "quality_jungle_glasshorn_low.png",
+    "quality_jungle_glasshorn_medium.png",
     "quality_jungle_glasshorn_high.png",
     "quality_jungle_glasshorn_ultra.png"
    ],
-   "bytes": 996249
+   "bytes": 675908
   },
   {
    "file": "sheet_quality_river_mid.png",
-   "what": "side by side (each downscaled to 960x540): river_mid on Low, High and Ultra",
+   "what": "side by side (each downscaled to 960x540): river_mid on Low, Medium, High and Ultra",
    "kind": "sheet",
    "map": "rift",
-   "width": 2880,
+   "width": 3840,
    "height": 564,
-   "encode": "palette256",
+   "encode": "lossless-png",
    "sources": [
     "quality_river_mid_low.png",
+    "quality_river_mid_medium.png",
     "quality_river_mid_high.png",
     "quality_river_mid_ultra.png"
    ],
-   "bytes": 935275
+   "bytes": 2952023
   },
   {
-   "file": "sheet_quality_teamfight.png",
-   "what": "side by side (each downscaled to 960x540): the same teamfight peak frame on Low, High and Ultra",
-   "kind": "sheet",
-   "map": "rift",
-   "width": 2880,
-   "height": 564,
-   "encode": "palette256",
-   "sources": [
-    "quality_teamfight_low.png",
-    "quality_teamfight_high.png",
-    "quality_teamfight_ultra.png"
+   "file": null,
+   "kind": "camp_missing",
+   "camp": "a_stilltusks",
+   "world": [
+    61.6,
+    68.5
    ],
-   "bytes": 779157
+   "seed": 7
   }
  ]
 }

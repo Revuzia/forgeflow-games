@@ -114,7 +114,7 @@
    "quality": "low",
    "stats": {
     "calls": 152,
-    "triangles": 288116,
+    "triangles": 288112,
     "scale": 0.75,
     "w": 1440,
     "h": 810
@@ -149,7 +149,7 @@
    "quality": "medium",
    "stats": {
     "calls": 186,
-    "triangles": 332146,
+    "triangles": 332142,
     "scale": 0.9,
     "w": 1728,
     "h": 972
@@ -184,7 +184,7 @@
    "quality": "high",
    "stats": {
     "calls": 195,
-    "triangles": 378743,
+    "triangles": 378739,
     "scale": 1,
     "w": 1920,
     "h": 1080
@@ -219,7 +219,7 @@
    "quality": "ultra",
    "stats": {
     "calls": 195,
-    "triangles": 378743,
+    "triangles": 378739,
     "scale": 1,
     "w": 1920,
     "h": 1080
@@ -233,7 +233,7 @@
    "time_s": 721.63,
    "time": "12:01",
    "kind": "quality",
-   "what": "river_mid at the game camera on the low preset (a still taken 20 frames after the camera moved)",
+   "what": "river_mid at the game camera on the low preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "low",
    "world": [
@@ -242,7 +242,7 @@
    ],
    "stats": {
     "calls": 134,
-    "triangles": 257911,
+    "triangles": 258301,
     "scale": 0.75
    }
   },
@@ -251,10 +251,10 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 722.3,
-   "time": "12:02",
+   "time_s": 721.63,
+   "time": "12:01",
    "kind": "quality",
-   "what": "river_mid at the game camera on the medium preset (a still taken 20 frames after the camera moved)",
+   "what": "river_mid at the game camera on the medium preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "medium",
    "world": [
@@ -262,8 +262,8 @@
     55
    ],
    "stats": {
-    "calls": 167,
-    "triangles": 302923,
+    "calls": 168,
+    "triangles": 306103,
     "scale": 0.9
    }
   },
@@ -272,10 +272,10 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 722.97,
-   "time": "12:02",
+   "time_s": 721.63,
+   "time": "12:01",
    "kind": "quality",
-   "what": "river_mid at the game camera on the high preset (a still taken 20 frames after the camera moved)",
+   "what": "river_mid at the game camera on the high preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "high",
    "world": [
@@ -284,7 +284,7 @@
    ],
    "stats": {
     "calls": 177,
-    "triangles": 344062,
+    "triangles": 342388,
     "scale": 1
    }
   },
@@ -293,10 +293,10 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 723.63,
-   "time": "12:03",
+   "time_s": 721.63,
+   "time": "12:01",
    "kind": "quality",
-   "what": "river_mid at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
+   "what": "river_mid at the game camera on the ultra preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "ultra",
    "world": [
@@ -304,8 +304,8 @@
     55
    ],
    "stats": {
-    "calls": 178,
-    "triangles": 345718,
+    "calls": 177,
+    "triangles": 342388,
     "scale": 1
    }
   },
@@ -314,10 +314,10 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 724.3,
-   "time": "12:04",
+   "time_s": 722.3,
+   "time": "12:02",
    "kind": "quality",
-   "what": "base_aubade at the game camera on the low preset (a still taken 20 frames after the camera moved)",
+   "what": "base_aubade at the game camera on the low preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "low",
    "world": [
@@ -325,8 +325,8 @@
     55
    ],
    "stats": {
-    "calls": 123,
-    "triangles": 104897,
+    "calls": 152,
+    "triangles": 169214,
     "scale": 0.75
    }
   },
@@ -335,10 +335,10 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 724.97,
-   "time": "12:04",
+   "time_s": 722.3,
+   "time": "12:02",
    "kind": "quality",
-   "what": "base_aubade at the game camera on the medium preset (a still taken 20 frames after the camera moved)",
+   "what": "base_aubade at the game camera on the medium preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "medium",
    "world": [
@@ -346,8 +346,8 @@
     55
    ],
    "stats": {
-    "calls": 149,
-    "triangles": 110122,
+    "calls": 179,
+    "triangles": 177738,
     "scale": 0.9
    }
   },
@@ -356,10 +356,10 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 725.63,
-   "time": "12:05",
+   "time_s": 722.3,
+   "time": "12:02",
    "kind": "quality",
-   "what": "base_aubade at the game camera on the high preset (a still taken 20 frames after the camera moved)",
+   "what": "base_aubade at the game camera on the high preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "high",
    "world": [
@@ -367,8 +367,8 @@
     55
    ],
    "stats": {
-    "calls": 156,
-    "triangles": 121552,
+    "calls": 186,
+    "triangles": 189268,
     "scale": 1
    }
   },
@@ -377,10 +377,10 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 726.3,
-   "time": "12:06",
+   "time_s": 722.3,
+   "time": "12:02",
    "kind": "quality",
-   "what": "base_aubade at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
+   "what": "base_aubade at the game camera on the ultra preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "ultra",
    "world": [
@@ -388,8 +388,8 @@
     55
    ],
    "stats": {
-    "calls": 157,
-    "triangles": 123092,
+    "calls": 186,
+    "triangles": 189268,
     "scale": 1
    }
   },
@@ -398,10 +398,10 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 726.97,
-   "time": "12:06",
+   "time_s": 722.97,
+   "time": "12:02",
    "kind": "quality",
-   "what": "jungle_glasshorn at the game camera on the low preset (a still taken 20 frames after the camera moved)",
+   "what": "jungle_glasshorn at the game camera on the low preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "low",
    "world": [
@@ -409,8 +409,8 @@
     41.5
    ],
    "stats": {
-    "calls": 114,
-    "triangles": 137858,
+    "calls": 108,
+    "triangles": 115539,
     "scale": 0.75
    }
   },
@@ -419,10 +419,10 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 727.63,
-   "time": "12:07",
+   "time_s": 722.97,
+   "time": "12:02",
    "kind": "quality",
-   "what": "jungle_glasshorn at the game camera on the medium preset (a still taken 20 frames after the camera moved)",
+   "what": "jungle_glasshorn at the game camera on the medium preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "medium",
    "world": [
@@ -430,8 +430,8 @@
     41.5
    ],
    "stats": {
-    "calls": 141,
-    "triangles": 192473,
+    "calls": 137,
+    "triangles": 173706,
     "scale": 0.9
    }
   },
@@ -440,10 +440,10 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 728.3,
-   "time": "12:08",
+   "time_s": 722.97,
+   "time": "12:02",
    "kind": "quality",
-   "what": "jungle_glasshorn at the game camera on the high preset (a still taken 20 frames after the camera moved)",
+   "what": "jungle_glasshorn at the game camera on the high preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "high",
    "world": [
@@ -451,8 +451,8 @@
     41.5
    ],
    "stats": {
-    "calls": 150,
-    "triangles": 235339,
+    "calls": 144,
+    "triangles": 205092,
     "scale": 1
    }
   },
@@ -461,10 +461,10 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 728.97,
-   "time": "12:08",
+   "time_s": 722.97,
+   "time": "12:02",
    "kind": "quality",
-   "what": "jungle_glasshorn at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
+   "what": "jungle_glasshorn at the game camera on the ultra preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "ultra",
    "world": [
@@ -472,8 +472,8 @@
     41.5
    ],
    "stats": {
-    "calls": 146,
-    "triangles": 235731,
+    "calls": 144,
+    "triangles": 205092,
     "scale": 1
    }
   }
