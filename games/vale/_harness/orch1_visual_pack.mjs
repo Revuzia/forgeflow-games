@@ -177,10 +177,22 @@ async function clashScan() {
 
 // ------------------------------------------------------------------ teamfight (+ quality tiers, colour-blind)
 const FIGHT_T0 = Number(opt('t0', 720)), FIGHT_SCAN = Number(opt('scan', 4500));
+/** the teamfight is SCRIPTED (VFX-O1): the bots rarely meet 5v5 on their own (the old scan's best fight was 2v2), so every 450 sim frames the ten fighters are moved
+ *  into one arena on the mid lane (5 a side, 2.5 m from the centre), deterministically from the match start; the scan and the replays use the same schedule. */
+const installArena = () => page.evaluate(() => {
+  window.__arena = (b) => {
+    const v = b.host.view; let i0 = 0, i1 = 0;
+    for (const f of v.entities.filter((e) => e.kind === 'fighter' && e.alive)) { const t = f.team === 0 ? i0++ : i1++; f.x = 85 + (f.team === 0 ? -2.5 : 2.5) + (t % 2) * 0.7; f.y = 55 + (t - 2) * 1.7; f.vx = f.vy = 0; }
+    v.hashDirty = true;
+  };
+  /** n frames from step s0, the arena applied at every step index divisible by 450 */
+  window.__stepArena = (b, n, s0 = 0) => { for (let i = 0; i < n; i++) { if ((s0 + i) % 450 === 0) window.__arena(b); b.frames(1, 1 / 30); } };
+});
 async function openFight(extra = '') {
   await open({ mode: 'rift', t: FIGHT_T0, extra });
   await B(page, (b) => b.rebuild());                        // the identical match again from T0 (frame 0 of every replay)
   await B(page, (b) => b.frames(2, 1 / 30));
+  await installArena();
   await spectate(); ASSERT = true;                          // GFX-11: spectator seating, bodies asserted before every cap
 }
 async function scanFight() {
@@ -188,7 +200,8 @@ async function scanFight() {
     let best = null;
     const stepsPerLook = 3;
     for (let i = 0; i < N; i += stepsPerLook) {
-      const s = b.frames(stepsPerLook, 1 / 30);
+      window.__stepArena(b, stepsPerLook, i);
+      const s = b.renderer.stats();
       const v = b.host.view;
       const fs = v.entities.filter((e) => e.kind === 'fighter' && e.alive);
       for (const f of fs) {
@@ -205,7 +218,7 @@ async function scanFight() {
     return best;
   }, FIGHT_SCAN);
 }
-const replayTo = (best) => B(page, (b, p) => { b.rebuild(); b.frames(2, 1 / 30); b.frames(p.frame - 2, 1 / 30); b.focus(p.x, p.y); for (let i = 0; i < 4; i++) b.renderer.render(0); }, best);
+const replayTo = (best, off = 0) => B(page, (b, p) => { b.rebuild(); b.frames(2, 1 / 30); window.__stepArena(b, Math.max(0, p.frame - 2 + p.off), 0); b.focus(p.x, p.y); for (let i = 0; i < 4; i++) b.renderer.render(0); }, { ...best, off });
 
 async function fightSession() {
   await openFight();
@@ -216,7 +229,7 @@ async function fightSession() {
   const meta = (extra = {}) => ({ kind: 'teamfight', map: 'rift', world: [+best.x.toFixed(1), +best.y.toFixed(1)], fighters_team0: best.a, fighters_team1: best.c, vfx_actors: best.vfx, particles: best.particles, telegraphs: best.tele, ...extra });
   // lead-up, peak, aftermath of the same fight
   for (const [label, off] of [['lead', -45], ['peak', 0], ['after', 45]]) {
-    await B(page, (b, p) => { b.rebuild(); b.frames(Math.max(2, p.frame + p.off), 1 / 30); b.focus(p.x, p.y); for (let i = 0; i < 4; i++) b.renderer.render(0); }, { ...best, off });
+    await B(page, (b, p) => { b.rebuild(); b.frames(2, 1 / 30); window.__stepArena(b, Math.max(0, p.frame - 2 + p.off), 0); b.focus(p.x, p.y); for (let i = 0; i < 4; i++) b.renderer.render(0); }, { ...best, off });
     await spectate();
     await cap(`teamfight_rift_${label}.png`, meta({ what: `5v5 teamfight, ${label === 'peak' ? 'peak ability/VFX frame' : label === 'lead' ? 'one and a half seconds before the peak' : 'one and a half seconds after the peak'}`, quality: 'high' }));
   }
@@ -248,7 +261,7 @@ async function cbSession(cb) {
   const best = JSON.parse(readFileSync(join(OUT, '_parts', 'fight_best.json'), 'utf8'));
   await openFight(`&cb=${cb}`);
   for (const [label, off] of [['peak', 0]]) {
-    await B(page, (b, p) => { b.rebuild(); b.frames(Math.max(2, p.frame + p.off), 1 / 30); b.focus(p.x, p.y); for (let i = 0; i < 4; i++) b.renderer.render(0); }, { ...best, off });
+    await B(page, (b, p) => { b.rebuild(); b.frames(2, 1 / 30); window.__stepArena(b, Math.max(0, p.frame - 2 + p.off), 0); b.focus(p.x, p.y); for (let i = 0; i < 4; i++) b.renderer.render(0); }, { ...best, off });
     await spectate();
     await cap(`colorblind_teamfight_${cb}_${label}.png`, { kind: 'colorblind', what: `the teamfight peak frame with the ${cb} colour-blind mode (identical sim frame as teamfight_rift_peak.png)`, map: 'rift', quality: 'high', colorblind: cb, world: [+best.x.toFixed(1), +best.y.toFixed(1)] });
   }
@@ -320,9 +333,10 @@ async function fightersRun(which) {
 async function campsSession() {
   await open({ mode: 'rift', t: 100 });
   await B(page, (b) => b.host.drivers.delete(0));
+  await B(page, (b) => { const v = b.host.view, e = v.entity(v.players.find((p) => p.player === 0).entity); for (let i = 0; i < 600 && !e.alive; i++) b.frames(1, 1 / 30); });
   const m = map('rift');
   const me = await B(page, (b) => { const v = b.host.view; const id = v.players.find((p) => p.player === 0).entity; return { id, def: v.entity(id).def, team: v.entity(id).team }; });
-  const place = (x, y) => page.evaluate(async (p) => { const b = window.__VALE_BENCH__, e = b.host.view.entity(p.id); if (!e.alive) { const { respawnFighter } = await import('/src/sim/spawn.ts'); respawnFighter(b.host.view, e, p.x, p.y); } e.x = p.x; e.y = p.y; e.vx = 0; e.vy = 0; e.hp = e.maxHp; b.host.view.hashDirty = true; b.host.sim.command(0, { type: 'stop' }); b.frames(3, 1 / 30); }, { id: me.id, x, y });
+  const place = (x, y) => page.evaluate(async (p) => { const b = window.__VALE_BENCH__, e = b.host.view.entity(p.id); if (!e.alive) { const { respawnFighter } = await import('/src/sim/spawn.ts'); respawnFighter(b.host.sim.world, b.host.sim.world.entity(p.id), p.x, p.y); } e.x = p.x; e.y = p.y; e.vx = 0; e.vy = 0; e.hp = e.maxHp; b.host.view.hashDirty = true; b.host.sim.command(0, { type: 'stop' }); b.frames(3, 1 / 30); }, { id: me.id, x, y });
   const monstersAt = (x, y) => B(page, (b, p) => b.host.view.entities.filter((e) => e.kind === 'monster' && e.alive && Math.hypot(e.x - p.x, e.y - p.y) < 7).map((e) => ({ id: e.id, def: e.def, hp: Math.round(e.hp), maxHp: Math.round(e.maxHp), state: e.state, x: +e.x.toFixed(1), y: +e.y.toFixed(1) })), { x, y });
   const view = (x, y) => B(page, (b, p) => { b.zoom(b.catalog.maps.find((q) => q.id === b.host.setup.map).camera.distance); b.focus(p.x, p.y); b.frames(6, 1 / 30); b.focus(p.x, p.y); b.frames(1, 1 / 30); }, { x, y });
   const hitIds = (ids, frac, kill = false) => page.evaluate(async (p) => {
@@ -367,6 +381,7 @@ async function momentsSession() {
     for (const mode of ['rift', 'fray']) {
       await open({ mode, t: mode === 'rift' ? 368 : 40, q: tier });
       await B(page, (b) => b.host.drivers.delete(0));
+      await B(page, (b) => { const v = b.host.view, e = v.entity(v.players.find((p) => p.player === 0).entity); for (let i = 0; i < 600 && !e.alive; i++) b.frames(1, 1 / 30); });   // seat 0 can be waiting out a respawn
       await spectate(); ASSERT = false;
       await B(page, (b) => {                                   // the fired-def log: every id the director fires, with the match time
         const d = b.renderer.director, orig = d.fire.bind(d);

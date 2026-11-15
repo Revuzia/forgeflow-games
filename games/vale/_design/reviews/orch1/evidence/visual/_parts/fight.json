@@ -6,19 +6,26 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 833.67,
-   "time": "13:53",
+   "time_s": 720.07,
+   "time": "12:00",
+   "bodies": {
+    "pending": 0,
+    "fighters": 9,
+    "onScreen": 1,
+    "visible": 9,
+    "missing": []
+   },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    87.7,
-    98.1
+    84.2,
+    54.9
    ],
-   "fighters_team0": 2,
-   "fighters_team1": 2,
-   "vfx_actors": 70,
-   "particles": 543,
-   "telegraphs": 1,
+   "fighters_team0": 4,
+   "fighters_team1": 5,
+   "vfx_actors": 90,
+   "particles": 994,
+   "telegraphs": 5,
    "what": "5v5 teamfight, one and a half seconds before the peak",
    "quality": "high"
   },
@@ -27,19 +34,26 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 835.17,
-   "time": "13:55",
+   "time_s": 720.97,
+   "time": "12:00",
+   "bodies": {
+    "pending": 0,
+    "fighters": 9,
+    "onScreen": 9,
+    "visible": 9,
+    "missing": []
+   },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    87.7,
-    98.1
+    84.2,
+    54.9
    ],
-   "fighters_team0": 2,
-   "fighters_team1": 2,
-   "vfx_actors": 70,
-   "particles": 543,
-   "telegraphs": 1,
+   "fighters_team0": 4,
+   "fighters_team1": 5,
+   "vfx_actors": 90,
+   "particles": 994,
+   "telegraphs": 5,
    "what": "5v5 teamfight, peak ability/VFX frame",
    "quality": "high"
   },
@@ -48,19 +62,26 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 836.67,
-   "time": "13:56",
+   "time_s": 722.47,
+   "time": "12:02",
+   "bodies": {
+    "pending": 0,
+    "fighters": 9,
+    "onScreen": 9,
+    "visible": 9,
+    "missing": []
+   },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    87.7,
-    98.1
+    84.2,
+    54.9
    ],
-   "fighters_team0": 2,
-   "fighters_team1": 2,
-   "vfx_actors": 70,
-   "particles": 543,
-   "telegraphs": 1,
+   "fighters_team0": 4,
+   "fighters_team1": 5,
+   "vfx_actors": 90,
+   "particles": 994,
+   "telegraphs": 5,
    "what": "5v5 teamfight, one and a half seconds after the peak",
    "quality": "high"
   },
@@ -69,27 +90,69 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 835.17,
-   "time": "13:55",
+   "time_s": 720.97,
+   "time": "12:00",
+   "bodies": {
+    "pending": 0,
+    "fighters": 9,
+    "onScreen": 9,
+    "visible": 9,
+    "missing": []
+   },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    87.7,
-    98.1
+    84.2,
+    54.9
    ],
-   "fighters_team0": 2,
-   "fighters_team1": 2,
-   "vfx_actors": 70,
-   "particles": 543,
-   "telegraphs": 1,
+   "fighters_team0": 4,
+   "fighters_team1": 5,
+   "vfx_actors": 90,
+   "particles": 994,
+   "telegraphs": 5,
    "what": "the same teamfight peak frame on the low preset",
    "quality": "low",
    "stats": {
     "calls": 152,
-    "triangles": 233068,
+    "triangles": 288116,
     "scale": 0.75,
     "w": 1440,
     "h": 810
+   }
+  },
+  {
+   "file": "quality_teamfight_medium.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 720.97,
+   "time": "12:00",
+   "bodies": {
+    "pending": 0,
+    "fighters": 9,
+    "onScreen": 9,
+    "visible": 9,
+    "missing": []
+   },
+   "kind": "teamfight",
+   "map": "rift",
+   "world": [
+    84.2,
+    54.9
+   ],
+   "fighters_team0": 4,
+   "fighters_team1": 5,
+   "vfx_actors": 90,
+   "particles": 994,
+   "telegraphs": 5,
+   "what": "the same teamfight peak frame on the medium preset",
+   "quality": "medium",
+   "stats": {
+    "calls": 186,
+    "triangles": 332146,
+    "scale": 0.9,
+    "w": 1728,
+    "h": 972
    }
   },
   {
@@ -97,24 +160,31 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 835.17,
-   "time": "13:55",
+   "time_s": 720.97,
+   "time": "12:00",
+   "bodies": {
+    "pending": 0,
+    "fighters": 9,
+    "onScreen": 9,
+    "visible": 9,
+    "missing": []
+   },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    87.7,
-    98.1
+    84.2,
+    54.9
    ],
-   "fighters_team0": 2,
-   "fighters_team1": 2,
-   "vfx_actors": 70,
-   "particles": 543,
-   "telegraphs": 1,
+   "fighters_team0": 4,
+   "fighters_team1": 5,
+   "vfx_actors": 90,
+   "particles": 994,
+   "telegraphs": 5,
    "what": "the same teamfight peak frame on the high preset",
    "quality": "high",
    "stats": {
-    "calls": 188,
-    "triangles": 311749,
+    "calls": 195,
+    "triangles": 378743,
     "scale": 1,
     "w": 1920,
     "h": 1080
@@ -125,24 +195,31 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 835.17,
-   "time": "13:55",
+   "time_s": 720.97,
+   "time": "12:00",
+   "bodies": {
+    "pending": 0,
+    "fighters": 9,
+    "onScreen": 9,
+    "visible": 9,
+    "missing": []
+   },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    87.7,
-    98.1
+    84.2,
+    54.9
    ],
-   "fighters_team0": 2,
-   "fighters_team1": 2,
-   "vfx_actors": 70,
-   "particles": 543,
-   "telegraphs": 1,
+   "fighters_team0": 4,
+   "fighters_team1": 5,
+   "vfx_actors": 90,
+   "particles": 994,
+   "telegraphs": 5,
    "what": "the same teamfight peak frame on the ultra preset",
    "quality": "ultra",
    "stats": {
-    "calls": 188,
-    "triangles": 317763,
+    "calls": 195,
+    "triangles": 378743,
     "scale": 1,
     "w": 1920,
     "h": 1080
@@ -153,8 +230,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 835.83,
-   "time": "13:55",
+   "time_s": 721.63,
+   "time": "12:01",
    "kind": "quality",
    "what": "river_mid at the game camera on the low preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -164,9 +241,30 @@
     55
    ],
    "stats": {
-    "calls": 142,
-    "triangles": 195709,
+    "calls": 134,
+    "triangles": 257911,
     "scale": 0.75
+   }
+  },
+  {
+   "file": "quality_river_mid_medium.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 722.3,
+   "time": "12:02",
+   "kind": "quality",
+   "what": "river_mid at the game camera on the medium preset (a still taken 20 frames after the camera moved)",
+   "map": "rift",
+   "quality": "medium",
+   "world": [
+    85,
+    55
+   ],
+   "stats": {
+    "calls": 167,
+    "triangles": 302923,
+    "scale": 0.9
    }
   },
   {
@@ -174,8 +272,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 836.5,
-   "time": "13:56",
+   "time_s": 722.97,
+   "time": "12:02",
    "kind": "quality",
    "what": "river_mid at the game camera on the high preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -185,8 +283,8 @@
     55
    ],
    "stats": {
-    "calls": 190,
-    "triangles": 281141,
+    "calls": 177,
+    "triangles": 344062,
     "scale": 1
    }
   },
@@ -195,8 +293,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 837.17,
-   "time": "13:57",
+   "time_s": 723.63,
+   "time": "12:03",
    "kind": "quality",
    "what": "river_mid at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -206,8 +304,8 @@
     55
    ],
    "stats": {
-    "calls": 188,
-    "triangles": 278137,
+    "calls": 178,
+    "triangles": 345718,
     "scale": 1
    }
   },
@@ -216,8 +314,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 837.83,
-   "time": "13:57",
+   "time_s": 724.3,
+   "time": "12:04",
    "kind": "quality",
    "what": "base_aubade at the game camera on the low preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -227,9 +325,30 @@
     55
    ],
    "stats": {
-    "calls": 126,
-    "triangles": 107808,
+    "calls": 123,
+    "triangles": 104897,
     "scale": 0.75
+   }
+  },
+  {
+   "file": "quality_base_aubade_medium.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 724.97,
+   "time": "12:04",
+   "kind": "quality",
+   "what": "base_aubade at the game camera on the medium preset (a still taken 20 frames after the camera moved)",
+   "map": "rift",
+   "quality": "medium",
+   "world": [
+    14.5,
+    55
+   ],
+   "stats": {
+    "calls": 149,
+    "triangles": 110122,
+    "scale": 0.9
    }
   },
   {
@@ -237,8 +356,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 838.5,
-   "time": "13:58",
+   "time_s": 725.63,
+   "time": "12:05",
    "kind": "quality",
    "what": "base_aubade at the game camera on the high preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -248,8 +367,8 @@
     55
    ],
    "stats": {
-    "calls": 158,
-    "triangles": 124894,
+    "calls": 156,
+    "triangles": 121552,
     "scale": 1
    }
   },
@@ -258,8 +377,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 839.17,
-   "time": "13:59",
+   "time_s": 726.3,
+   "time": "12:06",
    "kind": "quality",
    "what": "base_aubade at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -269,8 +388,8 @@
     55
    ],
    "stats": {
-    "calls": 158,
-    "triangles": 124450,
+    "calls": 157,
+    "triangles": 123092,
     "scale": 1
    }
   },
@@ -279,8 +398,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 839.83,
-   "time": "13:59",
+   "time_s": 726.97,
+   "time": "12:06",
    "kind": "quality",
    "what": "jungle_glasshorn at the game camera on the low preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -290,9 +409,30 @@
     41.5
    ],
    "stats": {
-    "calls": 100,
-    "triangles": 97374,
+    "calls": 114,
+    "triangles": 137858,
     "scale": 0.75
+   }
+  },
+  {
+   "file": "quality_jungle_glasshorn_medium.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 727.63,
+   "time": "12:07",
+   "kind": "quality",
+   "what": "jungle_glasshorn at the game camera on the medium preset (a still taken 20 frames after the camera moved)",
+   "map": "rift",
+   "quality": "medium",
+   "world": [
+    61.6,
+    41.5
+   ],
+   "stats": {
+    "calls": 141,
+    "triangles": 192473,
+    "scale": 0.9
    }
   },
   {
@@ -300,8 +440,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 840.5,
-   "time": "14:00",
+   "time_s": 728.3,
+   "time": "12:08",
    "kind": "quality",
    "what": "jungle_glasshorn at the game camera on the high preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -311,8 +451,8 @@
     41.5
    ],
    "stats": {
-    "calls": 133,
-    "triangles": 185021,
+    "calls": 150,
+    "triangles": 235339,
     "scale": 1
    }
   },
@@ -321,8 +461,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 841.17,
-   "time": "14:01",
+   "time_s": 728.97,
+   "time": "12:08",
    "kind": "quality",
    "what": "jungle_glasshorn at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
    "map": "rift",
@@ -332,8 +472,8 @@
     41.5
    ],
    "stats": {
-    "calls": 133,
-    "triangles": 185601,
+    "calls": 146,
+    "triangles": 235731,
     "scale": 1
    }
   }

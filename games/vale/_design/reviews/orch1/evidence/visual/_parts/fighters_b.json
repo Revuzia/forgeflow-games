@@ -6,304 +6,816 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 31.77,
-   "time": "00:31",
+   "time_s": 32,
+   "time": "00:32",
+   "bodies": {
+    "pending": 0,
+    "fighters": 10,
+    "onScreen": 1,
+    "visible": 10,
+    "missing": []
+   },
    "kind": "fighter_raw",
    "fighter": "marund",
+   "entity_id": 1,
+   "entity_def": "marund",
    "team": 0,
    "screen": {
-    "x": 953.8389151908515,
-    "y": 497.05402278265467,
+    "x": 960,
+    "y": 492.3357990468794,
     "visible": true
+   },
+   "silhouette": {
+    "meshes": 5,
+    "silhouettePx": 19119,
+    "bodyPx": 12207,
+    "visibleShare": 1,
+    "box": [
+     810,
+     257,
+     300,
+     380
+    ]
+   },
+   "relocated": {
+    "from": [
+     63.7,
+     15.8
+    ],
+    "to": [
+     85,
+     11.5
+    ]
    },
    "quality": "high",
    "map": "rift",
-   "camera": "game (distance from the map camera)"
+   "camera": "game (distance from the map camera)",
+   "spectator": true
   },
   {
    "file": "_raw_fighter_marund_close.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 32.47,
+   "time_s": 32.93,
    "time": "00:32",
+   "bodies": {
+    "pending": 0,
+    "fighters": 10,
+    "onScreen": 1,
+    "visible": 10,
+    "missing": []
+   },
    "kind": "fighter_raw",
    "fighter": "marund",
+   "entity_id": 1,
+   "entity_def": "marund",
    "team": 0,
    "screen": {
-    "x": 949.3664990561151,
-    "y": 480.9363312590306,
+    "x": 960,
+    "y": 465.0452252411107,
     "visible": true
+   },
+   "silhouette": {
+    "meshes": 5,
+    "silhouettePx": 46775,
+    "bodyPx": 30695,
+    "visibleShare": 1,
+    "box": [
+     810,
+     229,
+     300,
+     380
+    ]
+   },
+   "relocated": {
+    "from": [
+     63.7,
+     15.8
+    ],
+    "to": [
+     85,
+     11.5
+    ]
    },
    "quality": "high",
    "map": "rift",
-   "camera": "closest game camera"
+   "camera": "closest game camera",
+   "spectator": true
   },
   {
    "file": "_raw_fighter_nurrow_game.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 33.17,
+   "time_s": 33.87,
    "time": "00:33",
+   "bodies": {
+    "pending": 0,
+    "fighters": 10,
+    "onScreen": 2,
+    "visible": 10,
+    "missing": []
+   },
    "kind": "fighter_raw",
    "fighter": "nurrow",
+   "entity_id": 2,
+   "entity_def": "nurrow",
    "team": 0,
    "screen": {
-    "x": 959.9999999999994,
+    "x": 960,
     "y": 492.3357990468793,
     "visible": true
    },
+   "silhouette": {
+    "meshes": 5,
+    "silhouettePx": 10521,
+    "bodyPx": 6361,
+    "visibleShare": 1,
+    "box": [
+     810,
+     257,
+     300,
+     380
+    ]
+   },
+   "relocated": {
+    "from": [
+     46,
+     77.5
+    ],
+    "to": [
+     85,
+     11.5
+    ]
+   },
    "quality": "high",
    "map": "rift",
-   "camera": "game (distance from the map camera)"
+   "camera": "game (distance from the map camera)",
+   "spectator": true
   },
   {
    "file": "_raw_fighter_nurrow_close.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 33.87,
-   "time": "00:33",
+   "time_s": 34.8,
+   "time": "00:34",
+   "bodies": {
+    "pending": 0,
+    "fighters": 10,
+    "onScreen": 2,
+    "visible": 10,
+    "missing": []
+   },
    "kind": "fighter_raw",
    "fighter": "nurrow",
+   "entity_id": 2,
+   "entity_def": "nurrow",
    "team": 0,
    "screen": {
-    "x": 959.9999999999992,
-    "y": 479.26994856188,
+    "x": 959.9999999999983,
+    "y": 465.04522524111087,
     "visible": true
+   },
+   "silhouette": {
+    "meshes": 5,
+    "silhouettePx": 25782,
+    "bodyPx": 15177,
+    "visibleShare": 1,
+    "box": [
+     810,
+     229,
+     300,
+     380
+    ]
+   },
+   "relocated": {
+    "from": [
+     46,
+     77.5
+    ],
+    "to": [
+     85,
+     11.5
+    ]
    },
    "quality": "high",
    "map": "rift",
-   "camera": "closest game camera"
+   "camera": "closest game camera",
+   "spectator": true
   },
   {
    "file": "_raw_fighter_odrum_game.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 34.57,
-   "time": "00:34",
+   "time_s": 35.73,
+   "time": "00:35",
+   "bodies": {
+    "pending": 0,
+    "fighters": 10,
+    "onScreen": 3,
+    "visible": 10,
+    "missing": []
+   },
    "kind": "fighter_raw",
    "fighter": "odrum",
+   "entity_id": 3,
+   "entity_def": "odrum",
    "team": 0,
    "screen": {
-    "x": 951.3548229780822,
-    "y": 492.3357990468793,
+    "x": 959.999999999999,
+    "y": 492.3357990468791,
     "visible": true
+   },
+   "silhouette": {
+    "meshes": 5,
+    "silhouettePx": 9856,
+    "bodyPx": 6255,
+    "visibleShare": 1,
+    "box": [
+     810,
+     257,
+     300,
+     380
+    ]
+   },
+   "relocated": {
+    "from": [
+     55.8,
+     55.8
+    ],
+    "to": [
+     85,
+     11.5
+    ]
    },
    "quality": "high",
    "map": "rift",
-   "camera": "game (distance from the map camera)"
+   "camera": "game (distance from the map camera)",
+   "spectator": true
   },
   {
    "file": "_raw_fighter_odrum_close.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 35.27,
-   "time": "00:35",
+   "time_s": 36.67,
+   "time": "00:36",
+   "bodies": {
+    "pending": 0,
+    "fighters": 10,
+    "onScreen": 1,
+    "visible": 10,
+    "missing": []
+   },
    "kind": "fighter_raw",
    "fighter": "odrum",
+   "entity_id": 3,
+   "entity_def": "odrum",
    "team": 0,
    "screen": {
-    "x": 948.984981710926,
-    "y": 479.26994856188,
+    "x": 960,
+    "y": 465.0452252411105,
     "visible": true
+   },
+   "silhouette": {
+    "meshes": 5,
+    "silhouettePx": 21855,
+    "bodyPx": 14712,
+    "visibleShare": 1,
+    "box": [
+     810,
+     229,
+     300,
+     380
+    ]
+   },
+   "relocated": {
+    "from": [
+     55.8,
+     55.8
+    ],
+    "to": [
+     85,
+     11.5
+    ]
    },
    "quality": "high",
    "map": "rift",
-   "camera": "closest game camera"
+   "camera": "closest game camera",
+   "spectator": true
   },
   {
    "file": "_raw_fighter_rishal_game.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 35.97,
-   "time": "00:35",
+   "time_s": 37.6,
+   "time": "00:37",
+   "bodies": {
+    "pending": 0,
+    "fighters": 10,
+    "onScreen": 2,
+    "visible": 10,
+    "missing": []
+   },
    "kind": "fighter_raw",
    "fighter": "rishal",
+   "entity_id": 4,
+   "entity_def": "rishal",
    "team": 0,
    "screen": {
-    "x": 951.0876157028815,
-    "y": 490.7080187828725,
+    "x": 960,
+    "y": 492.3357990468791,
     "visible": true
+   },
+   "silhouette": {
+    "meshes": 6,
+    "silhouettePx": 6361,
+    "bodyPx": 3641,
+    "visibleShare": 1,
+    "box": [
+     810,
+     257,
+     300,
+     380
+    ]
+   },
+   "relocated": {
+    "from": [
+     51.7,
+     91
+    ],
+    "to": [
+     85,
+     11.5
+    ]
    },
    "quality": "high",
    "map": "rift",
-   "camera": "game (distance from the map camera)"
+   "camera": "game (distance from the map camera)",
+   "spectator": true
   },
   {
    "file": "_raw_fighter_rishal_close.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 36.67,
-   "time": "00:36",
+   "time_s": 38.53,
+   "time": "00:38",
+   "bodies": {
+    "pending": 0,
+    "fighters": 10,
+    "onScreen": 1,
+    "visible": 10,
+    "missing": []
+   },
    "kind": "fighter_raw",
    "fighter": "rishal",
+   "entity_id": 4,
+   "entity_def": "rishal",
    "team": 0,
    "screen": {
-    "x": 948.6548260681127,
-    "y": 477.1779080054672,
+    "x": 959.9999999999983,
+    "y": 465.04522524111087,
     "visible": true
+   },
+   "silhouette": {
+    "meshes": 6,
+    "silhouettePx": 15199,
+    "bodyPx": 9176,
+    "visibleShare": 1,
+    "box": [
+     810,
+     229,
+     300,
+     380
+    ]
+   },
+   "relocated": {
+    "from": [
+     51.7,
+     91
+    ],
+    "to": [
+     85,
+     11.5
+    ]
    },
    "quality": "high",
    "map": "rift",
-   "camera": "closest game camera"
+   "camera": "closest game camera",
+   "spectator": true
   },
   {
    "file": "_raw_fighter_sukri_game.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 37.37,
-   "time": "00:37",
+   "time_s": 39.47,
+   "time": "00:39",
+   "bodies": {
+    "pending": 0,
+    "fighters": 10,
+    "onScreen": 2,
+    "visible": 10,
+    "missing": []
+   },
    "kind": "fighter_raw",
    "fighter": "sukri",
+   "entity_id": 5,
+   "entity_def": "sukri",
    "team": 0,
    "screen": {
-    "x": 951.5367701374927,
-    "y": 490.5560264144047,
+    "x": 959.999999999999,
+    "y": 492.3357990468791,
     "visible": true
+   },
+   "silhouette": {
+    "meshes": 7,
+    "silhouettePx": 9444,
+    "bodyPx": 6383,
+    "visibleShare": 1,
+    "box": [
+     810,
+     257,
+     300,
+     380
+    ]
+   },
+   "relocated": {
+    "from": [
+     43.9,
+     88.5
+    ],
+    "to": [
+     85,
+     11.5
+    ]
    },
    "quality": "high",
    "map": "rift",
-   "camera": "game (distance from the map camera)"
+   "camera": "game (distance from the map camera)",
+   "spectator": true
   },
   {
    "file": "_raw_fighter_sukri_close.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 38.07,
-   "time": "00:38",
+   "time_s": 40.4,
+   "time": "00:40",
+   "bodies": {
+    "pending": 0,
+    "fighters": 10,
+    "onScreen": 1,
+    "visible": 10,
+    "missing": []
+   },
    "kind": "fighter_raw",
    "fighter": "sukri",
+   "entity_id": 5,
+   "entity_def": "sukri",
    "team": 0,
    "screen": {
-    "x": 949.6011802781362,
-    "y": 476.12672437818065,
+    "x": 959.9999999999983,
+    "y": 465.0452252411107,
     "visible": true
+   },
+   "silhouette": {
+    "meshes": 7,
+    "silhouettePx": 22549,
+    "bodyPx": 15494,
+    "visibleShare": 1,
+    "box": [
+     810,
+     229,
+     300,
+     380
+    ]
+   },
+   "relocated": {
+    "from": [
+     43.9,
+     88.5
+    ],
+    "to": [
+     85,
+     11.5
+    ]
    },
    "quality": "high",
    "map": "rift",
-   "camera": "closest game camera"
+   "camera": "closest game camera",
+   "spectator": true
   },
   {
    "file": "_raw_fighter_tunlan_game.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 38.77,
-   "time": "00:38",
+   "time_s": 41.33,
+   "time": "00:41",
+   "bodies": {
+    "pending": 0,
+    "fighters": 10,
+    "onScreen": 2,
+    "visible": 10,
+    "missing": []
+   },
    "kind": "fighter_raw",
    "fighter": "tunlan",
+   "entity_id": 6,
+   "entity_def": "tunlan",
    "team": 1,
    "screen": {
-    "x": 968.1862689364198,
-    "y": 494.50630443725413,
+    "x": 959.999999999999,
+    "y": 492.3357990468791,
     "visible": true
+   },
+   "silhouette": {
+    "meshes": 6,
+    "silhouettePx": 12764,
+    "bodyPx": 7980,
+    "visibleShare": 1,
+    "box": [
+     810,
+     257,
+     300,
+     380
+    ]
+   },
+   "relocated": {
+    "from": [
+     131.2,
+     22.6
+    ],
+    "to": [
+     85,
+     11.5
+    ]
    },
    "quality": "high",
    "map": "rift",
-   "camera": "game (distance from the map camera)"
+   "camera": "game (distance from the map camera)",
+   "spectator": true
   },
   {
    "file": "_raw_fighter_tunlan_close.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 39.47,
-   "time": "00:39",
+   "time_s": 42.27,
+   "time": "00:42",
+   "bodies": {
+    "pending": 0,
+    "fighters": 10,
+    "onScreen": 1,
+    "visible": 10,
+    "missing": []
+   },
    "kind": "fighter_raw",
    "fighter": "tunlan",
+   "entity_id": 6,
+   "entity_def": "tunlan",
    "team": 1,
    "screen": {
-    "x": 970.7152678977088,
-    "y": 481.2651211245298,
+    "x": 960,
+    "y": 465.0452252411102,
     "visible": true
+   },
+   "silhouette": {
+    "meshes": 6,
+    "silhouettePx": 29742,
+    "bodyPx": 18669,
+    "visibleShare": 1,
+    "box": [
+     810,
+     229,
+     300,
+     380
+    ]
+   },
+   "relocated": {
+    "from": [
+     131.2,
+     22.6
+    ],
+    "to": [
+     85,
+     11.5
+    ]
    },
    "quality": "high",
    "map": "rift",
-   "camera": "closest game camera"
+   "camera": "closest game camera",
+   "spectator": true
   },
   {
    "file": "_raw_fighter_ulkro_game.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 40.17,
-   "time": "00:40",
+   "time_s": 43.2,
+   "time": "00:43",
+   "bodies": {
+    "pending": 0,
+    "fighters": 10,
+    "onScreen": 2,
+    "visible": 10,
+    "missing": []
+   },
    "kind": "fighter_raw",
    "fighter": "ulkro",
+   "entity_id": 7,
+   "entity_def": "ulkro",
    "team": 1,
    "screen": {
     "x": 960,
-    "y": 492.3357990468787,
+    "y": 492.3357990468791,
     "visible": true
+   },
+   "silhouette": {
+    "meshes": 5,
+    "silhouettePx": 6048,
+    "bodyPx": 3684,
+    "visibleShare": 1,
+    "box": [
+     810,
+     257,
+     300,
+     380
+    ]
+   },
+   "relocated": {
+    "from": [
+     124,
+     77.5
+    ],
+    "to": [
+     85,
+     11.5
+    ]
    },
    "quality": "high",
    "map": "rift",
-   "camera": "game (distance from the map camera)"
+   "camera": "game (distance from the map camera)",
+   "spectator": true
   },
   {
    "file": "_raw_fighter_ulkro_close.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 40.87,
-   "time": "00:40",
+   "time_s": 44.13,
+   "time": "00:44",
+   "bodies": {
+    "pending": 0,
+    "fighters": 10,
+    "onScreen": 2,
+    "visible": 10,
+    "missing": []
+   },
    "kind": "fighter_raw",
    "fighter": "ulkro",
+   "entity_id": 7,
+   "entity_def": "ulkro",
    "team": 1,
    "screen": {
     "x": 960,
-    "y": 479.2699485618793,
+    "y": 465.0452252411107,
     "visible": true
+   },
+   "silhouette": {
+    "meshes": 5,
+    "silhouettePx": 13372,
+    "bodyPx": 8663,
+    "visibleShare": 1,
+    "box": [
+     810,
+     229,
+     300,
+     380
+    ]
+   },
+   "relocated": {
+    "from": [
+     124,
+     77.5
+    ],
+    "to": [
+     85,
+     11.5
+    ]
    },
    "quality": "high",
    "map": "rift",
-   "camera": "closest game camera"
+   "camera": "closest game camera",
+   "spectator": true
   },
   {
    "file": "_raw_fighter_vashil_game.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 41.57,
-   "time": "00:41",
+   "time_s": 45.07,
+   "time": "00:45",
+   "bodies": {
+    "pending": 0,
+    "fighters": 10,
+    "onScreen": 4,
+    "visible": 10,
+    "missing": []
+   },
    "kind": "fighter_raw",
    "fighter": "vashil",
+   "entity_id": 8,
+   "entity_def": "vashil",
    "team": 1,
    "screen": {
-    "x": 951.3548229749896,
-    "y": 492.33580010060115,
+    "x": 959.999999999999,
+    "y": 492.3357990468791,
     "visible": true
+   },
+   "silhouette": {
+    "meshes": 5,
+    "silhouettePx": 10182,
+    "bodyPx": 6566,
+    "visibleShare": 1,
+    "box": [
+     810,
+     257,
+     300,
+     380
+    ]
+   },
+   "relocated": {
+    "from": [
+     109.7,
+     54.2
+    ],
+    "to": [
+     85,
+     11.5
+    ]
    },
    "quality": "high",
    "map": "rift",
-   "camera": "game (distance from the map camera)"
+   "camera": "game (distance from the map camera)",
+   "spectator": true
   },
   {
    "file": "_raw_fighter_vashil_close.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 42.27,
-   "time": "00:42",
+   "time_s": 46,
+   "time": "00:46",
+   "bodies": {
+    "pending": 0,
+    "fighters": 10,
+    "onScreen": 4,
+    "visible": 10,
+    "missing": []
+   },
    "kind": "fighter_raw",
    "fighter": "vashil",
+   "entity_id": 8,
+   "entity_def": "vashil",
    "team": 1,
    "screen": {
-    "x": 948.9849817108615,
-    "y": 479.2699485788876,
+    "x": 960,
+    "y": 465.0452252411102,
     "visible": true
+   },
+   "silhouette": {
+    "meshes": 5,
+    "silhouettePx": 25216,
+    "bodyPx": 15662,
+    "visibleShare": 1,
+    "box": [
+     810,
+     229,
+     300,
+     380
+    ]
+   },
+   "relocated": {
+    "from": [
+     109.7,
+     54.2
+    ],
+    "to": [
+     85,
+     11.5
+    ]
    },
    "quality": "high",
    "map": "rift",
-   "camera": "closest game camera"
+   "camera": "closest game camera",
+   "spectator": true
   }
  ]
 }

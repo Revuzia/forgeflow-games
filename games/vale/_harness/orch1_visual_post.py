@@ -38,6 +38,9 @@ final = []
 sheets = {}
 for r in records:
     k = r['kind']
+    if not r.get('file'):
+        final.append(r)   # a record with no frame (a camp that was empty at its spawn time): kept as a fact
+        continue
     path = os.path.join(OUT, r['file'])
     if not os.path.exists(path):
         continue
@@ -114,8 +117,10 @@ for nm in ('river_mid', 'base_aubade', 'jungle_glasshorn'):
 sbs(['teamfight_rift_peak.png'] + [f'colorblind_teamfight_{c}_peak.png' for c in ('deutan', 'protan', 'tritan')], ['DEFAULT', 'DEUTAN', 'PROTAN', 'TRITAN'], 'sheet_colorblind_teamfight.png', 'the same teamfight peak frame, default and the three colour-blind modes (each downscaled to 960x540, 2 across is not used: 4 across)', 'sheet')
 
 order = {k: i for i, k in enumerate(['map', 'minion_clash', 'teamfight', 'quality', 'colorblind', 'fighter_frame', 'fighter_crop', 'contact_sheet', 'structure_stage', 'camp', 'moment', 'recall', 'death', 'respawn', 'sheet'])}
-final.sort(key=lambda r: (order.get(r['kind'], 99), r['file']))
+final.sort(key=lambda r: (order.get(r['kind'], 99), r.get('file') or ''))
 for r in final:
+    if not r.get('file'):
+        continue
     r['file'] = RENAMED.get(r['file'], r['file'])
     r['bytes'] = os.path.getsize(os.path.join(OUT, r['file']))
 idx = {

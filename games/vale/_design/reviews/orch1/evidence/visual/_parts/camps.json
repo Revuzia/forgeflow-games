@@ -1,0 +1,759 @@
+{
+ "session": "camps",
+ "records": [
+  {
+   "file": "camp_a_glasshorn_spawn.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 101.4,
+   "time": "01:41",
+   "kind": "camp",
+   "camp": "a_glasshorn",
+   "stage": "spawn",
+   "what": "a_glasshorn (glasshorn) at its spawn, untouched",
+   "monsters": [
+    {
+     "id": 199,
+     "def": "glasshorn",
+     "hp": 1250,
+     "maxHp": 1250,
+     "state": "idle",
+     "x": 61.6,
+     "y": 41.5
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    61.6,
+    41.5
+   ]
+  },
+  {
+   "file": "camp_a_glasshorn_midfight.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 102.23,
+   "time": "01:42",
+   "kind": "camp",
+   "camp": "a_glasshorn",
+   "stage": "midfight",
+   "what": "a_glasshorn 0.6 s after a 45 % hit: the monsters have aggroed",
+   "monsters": [
+    {
+     "id": 199,
+     "def": "glasshorn",
+     "hp": 688,
+     "maxHp": 1250,
+     "state": "attack",
+     "x": 60.5,
+     "y": 41.7
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    61.6,
+    41.5
+   ]
+  },
+  {
+   "file": "camp_a_glasshorn_death_005.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 102.53,
+   "time": "01:42",
+   "kind": "camp",
+   "camp": "a_glasshorn",
+   "stage": "death_0.05",
+   "what": "a_glasshorn 0.05 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    61.6,
+    41.5
+   ]
+  },
+  {
+   "file": "camp_a_glasshorn_death_040.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 103.1,
+   "time": "01:43",
+   "kind": "camp",
+   "camp": "a_glasshorn",
+   "stage": "death_0.4",
+   "what": "a_glasshorn 0.40 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    61.6,
+    41.5
+   ]
+  },
+  {
+   "file": "camp_a_glasshorn_death_120.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 104.13,
+   "time": "01:44",
+   "kind": "camp",
+   "camp": "a_glasshorn",
+   "stage": "death_1.2",
+   "what": "a_glasshorn 1.20 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    61.6,
+    41.5
+   ]
+  },
+  {
+   "file": "camp_a_resinback_spawn.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 104.47,
+   "time": "01:44",
+   "kind": "camp",
+   "camp": "a_resinback",
+   "stage": "spawn",
+   "what": "a_resinback (resinback) at its spawn, untouched",
+   "monsters": [
+    {
+     "id": 215,
+     "def": "resinback",
+     "hp": 1300,
+     "maxHp": 1300,
+     "state": "idle",
+     "x": 64.3,
+     "y": 85.1
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    64.3,
+    85.1
+   ]
+  },
+  {
+   "file": "camp_a_resinback_midfight.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 105.3,
+   "time": "01:45",
+   "kind": "camp",
+   "camp": "a_resinback",
+   "stage": "midfight",
+   "what": "a_resinback 0.6 s after a 45 % hit: the monsters have aggroed",
+   "monsters": [
+    {
+     "id": 215,
+     "def": "resinback",
+     "hp": 715,
+     "maxHp": 1300,
+     "state": "attack",
+     "x": 63.2,
+     "y": 85.6
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    64.3,
+    85.1
+   ]
+  },
+  {
+   "file": "camp_a_resinback_death_005.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 105.6,
+   "time": "01:45",
+   "kind": "camp",
+   "camp": "a_resinback",
+   "stage": "death_0.05",
+   "what": "a_resinback 0.05 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    64.3,
+    85.1
+   ]
+  },
+  {
+   "file": "camp_a_resinback_death_040.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 106.17,
+   "time": "01:46",
+   "kind": "camp",
+   "camp": "a_resinback",
+   "stage": "death_0.4",
+   "what": "a_resinback 0.40 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    64.3,
+    85.1
+   ]
+  },
+  {
+   "file": "camp_a_resinback_death_120.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 107.2,
+   "time": "01:47",
+   "kind": "camp",
+   "camp": "a_resinback",
+   "stage": "death_1.2",
+   "what": "a_resinback 1.20 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    64.3,
+    85.1
+   ]
+  },
+  {
+   "file": null,
+   "kind": "camp_missing",
+   "camp": "a_stilltusks",
+   "world": [
+    61.6,
+    68.5
+   ],
+   "seed": 7
+  },
+  {
+   "file": "camp_s_gloamoths_spawn.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 107.53,
+   "time": "01:47",
+   "kind": "camp",
+   "camp": "s_gloamoths",
+   "stage": "spawn",
+   "what": "s_gloamoths (gloamoth, gloamoth_little, gloamoth_little) at its spawn, untouched",
+   "monsters": [
+    {
+     "id": 205,
+     "def": "gloamoth",
+     "hp": 650,
+     "maxHp": 650,
+     "state": "idle",
+     "x": 105.7,
+     "y": 24.9
+    },
+    {
+     "id": 206,
+     "def": "gloamoth_little",
+     "hp": 200,
+     "maxHp": 200,
+     "state": "idle",
+     "x": 107.3,
+     "y": 25.9
+    },
+    {
+     "id": 207,
+     "def": "gloamoth_little",
+     "hp": 200,
+     "maxHp": 200,
+     "state": "idle",
+     "x": 104.1,
+     "y": 25.9
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    105.7,
+    24.9
+   ]
+  },
+  {
+   "file": "camp_s_gloamoths_midfight.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 108.37,
+   "time": "01:48",
+   "kind": "camp",
+   "camp": "s_gloamoths",
+   "stage": "midfight",
+   "what": "s_gloamoths 0.6 s after a 45 % hit: the monsters have aggroed",
+   "monsters": [
+    {
+     "id": 205,
+     "def": "gloamoth",
+     "hp": 358,
+     "maxHp": 650,
+     "state": "attack",
+     "x": 105.7,
+     "y": 24.9
+    },
+    {
+     "id": 206,
+     "def": "gloamoth_little",
+     "hp": 110,
+     "maxHp": 200,
+     "state": "move",
+     "x": 104.9,
+     "y": 27.1
+    },
+    {
+     "id": 207,
+     "def": "gloamoth_little",
+     "hp": 16,
+     "maxHp": 200,
+     "state": "attack",
+     "x": 103.3,
+     "y": 26.7
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    105.7,
+    24.9
+   ]
+  },
+  {
+   "file": "camp_s_gloamoths_death_005.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 108.67,
+   "time": "01:48",
+   "kind": "camp",
+   "camp": "s_gloamoths",
+   "stage": "death_0.05",
+   "what": "s_gloamoths 0.05 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    105.7,
+    24.9
+   ]
+  },
+  {
+   "file": "camp_s_gloamoths_death_040.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 109.23,
+   "time": "01:49",
+   "kind": "camp",
+   "camp": "s_gloamoths",
+   "stage": "death_0.4",
+   "what": "s_gloamoths 0.40 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    105.7,
+    24.9
+   ]
+  },
+  {
+   "file": "camp_s_gloamoths_death_120.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 110.27,
+   "time": "01:50",
+   "kind": "camp",
+   "camp": "s_gloamoths",
+   "stage": "death_1.2",
+   "what": "s_gloamoths 1.20 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    105.7,
+    24.9
+   ]
+  },
+  {
+   "file": "camp_a_strays_north_spawn.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 110.6,
+   "time": "01:50",
+   "kind": "camp",
+   "camp": "a_strays_north",
+   "stage": "spawn",
+   "what": "a_strays_north (stray_numeral, stray_tick, stray_tick) at its spawn, untouched",
+   "monsters": [
+    {
+     "id": 209,
+     "def": "stray_numeral",
+     "hp": 950,
+     "maxHp": 950,
+     "state": "idle",
+     "x": 46,
+     "y": 32.5
+    },
+    {
+     "id": 210,
+     "def": "stray_tick",
+     "hp": 260,
+     "maxHp": 260,
+     "state": "idle",
+     "x": 47.6,
+     "y": 34
+    },
+    {
+     "id": 211,
+     "def": "stray_tick",
+     "hp": 260,
+     "maxHp": 260,
+     "state": "idle",
+     "x": 47.7,
+     "y": 31.4
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    46,
+    32.5
+   ]
+  },
+  {
+   "file": "camp_a_strays_north_midfight.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 111.43,
+   "time": "01:51",
+   "kind": "camp",
+   "camp": "a_strays_north",
+   "stage": "midfight",
+   "what": "a_strays_north 0.6 s after a 45 % hit: the monsters have aggroed",
+   "monsters": [
+    {
+     "id": 209,
+     "def": "stray_numeral",
+     "hp": 523,
+     "maxHp": 950,
+     "state": "move",
+     "x": 44.7,
+     "y": 32.8
+    },
+    {
+     "id": 210,
+     "def": "stray_tick",
+     "hp": 143,
+     "maxHp": 260,
+     "state": "move",
+     "x": 44.9,
+     "y": 34.1
+    },
+    {
+     "id": 211,
+     "def": "stray_tick",
+     "hp": 143,
+     "maxHp": 260,
+     "state": "move",
+     "x": 45.8,
+     "y": 32.2
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    46,
+    32.5
+   ]
+  },
+  {
+   "file": "camp_a_strays_north_death_005.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 111.73,
+   "time": "01:51",
+   "kind": "camp",
+   "camp": "a_strays_north",
+   "stage": "death_0.05",
+   "what": "a_strays_north 0.05 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    46,
+    32.5
+   ]
+  },
+  {
+   "file": "camp_a_strays_north_death_040.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 112.3,
+   "time": "01:52",
+   "kind": "camp",
+   "camp": "a_strays_north",
+   "stage": "death_0.4",
+   "what": "a_strays_north 0.40 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    46,
+    32.5
+   ]
+  },
+  {
+   "file": "camp_a_strays_north_death_120.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 113.33,
+   "time": "01:53",
+   "kind": "camp",
+   "camp": "a_strays_north",
+   "stage": "death_1.2",
+   "what": "a_strays_north 1.20 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    46,
+    32.5
+   ]
+  },
+  {
+   "file": "camp_sunsplinter_spawn.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 370,
+   "time": "06:10",
+   "kind": "camp",
+   "camp": "sunsplinter",
+   "stage": "spawn",
+   "what": "sunsplinter (sunsplinter) at its spawn, untouched",
+   "monsters": [
+    {
+     "id": 5226,
+     "def": "sunsplinter",
+     "hp": 4200,
+     "maxHp": 4200,
+     "state": "idle",
+     "x": 85,
+     "y": 80
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    80
+   ]
+  },
+  {
+   "file": "camp_sunsplinter_midfight.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 370.83,
+   "time": "06:10",
+   "kind": "camp",
+   "camp": "sunsplinter",
+   "stage": "midfight",
+   "what": "sunsplinter 0.6 s after a 45 % hit: the monsters have aggroed",
+   "monsters": [
+    {
+     "id": 5226,
+     "def": "sunsplinter",
+     "hp": 2310,
+     "maxHp": 4200,
+     "state": "cast",
+     "x": 85,
+     "y": 80
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    80
+   ]
+  },
+  {
+   "file": "camp_sunsplinter_death_005.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 371.13,
+   "time": "06:11",
+   "kind": "camp",
+   "camp": "sunsplinter",
+   "stage": "death_0.05",
+   "what": "sunsplinter 0.05 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    80
+   ]
+  },
+  {
+   "file": "camp_sunsplinter_death_040.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 371.7,
+   "time": "06:11",
+   "kind": "camp",
+   "camp": "sunsplinter",
+   "stage": "death_0.4",
+   "what": "sunsplinter 0.40 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    80
+   ]
+  },
+  {
+   "file": "camp_sunsplinter_death_120.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 372.73,
+   "time": "06:12",
+   "kind": "camp",
+   "camp": "sunsplinter",
+   "stage": "death_1.2",
+   "what": "sunsplinter 1.20 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    80
+   ]
+  },
+  {
+   "file": "camp_longshade_spawn.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 969.4,
+   "time": "16:09",
+   "kind": "camp",
+   "camp": "longshade",
+   "stage": "spawn",
+   "what": "longshade (longshade) at its spawn, untouched",
+   "monsters": [
+    {
+     "id": 14770,
+     "def": "longshade",
+     "hp": 14000,
+     "maxHp": 14000,
+     "state": "idle",
+     "x": 85,
+     "y": 31
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    31
+   ]
+  },
+  {
+   "file": "camp_longshade_midfight.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 970.23,
+   "time": "16:10",
+   "kind": "camp",
+   "camp": "longshade",
+   "stage": "midfight",
+   "what": "longshade 0.6 s after a 45 % hit: the monsters have aggroed",
+   "monsters": [
+    {
+     "id": 14770,
+     "def": "longshade",
+     "hp": 7700,
+     "maxHp": 14000,
+     "state": "cast",
+     "x": 85,
+     "y": 31
+    }
+   ],
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    31
+   ]
+  },
+  {
+   "file": "camp_longshade_death_005.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 970.53,
+   "time": "16:10",
+   "kind": "camp",
+   "camp": "longshade",
+   "stage": "death_0.05",
+   "what": "longshade 0.05 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    31
+   ]
+  },
+  {
+   "file": "camp_longshade_death_040.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 971.1,
+   "time": "16:11",
+   "kind": "camp",
+   "camp": "longshade",
+   "stage": "death_0.4",
+   "what": "longshade 0.40 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    31
+   ]
+  },
+  {
+   "file": "camp_longshade_death_120.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 972.13,
+   "time": "16:12",
+   "kind": "camp",
+   "camp": "longshade",
+   "stage": "death_1.2",
+   "what": "longshade 1.20 s after the last monster fell (the death tick)",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    31
+   ]
+  }
+ ]
+}

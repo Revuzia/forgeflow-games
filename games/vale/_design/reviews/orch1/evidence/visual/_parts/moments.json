@@ -1,0 +1,765 @@
+{
+ "session": "moments",
+ "records": [
+  {
+   "file": "moment_pit_last_hit_high_00.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 374.8,
+   "time": "06:14",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 0 s after the trigger",
+   "map": "rift",
+   "world": [
+    85,
+    80
+   ]
+  },
+  {
+   "file": "moment_pit_last_hit_high_01.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 374.9,
+   "time": "06:14",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0.1,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 0.1 s after the trigger",
+   "map": "rift",
+   "world": [
+    85,
+    80
+   ]
+  },
+  {
+   "file": "moment_pit_last_hit_high_03.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 375.1,
+   "time": "06:15",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0.3,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 0.3 s after the trigger",
+   "map": "rift",
+   "world": [
+    85,
+    80
+   ]
+  },
+  {
+   "file": "moment_pit_last_hit_high_08.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 375.6,
+   "time": "06:15",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0.8,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 0.8 s after the trigger",
+   "map": "rift",
+   "world": [
+    85,
+    80
+   ]
+  },
+  {
+   "file": "moment_pit_last_hit_high_15.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 376.3,
+   "time": "06:16",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 1.5,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 1.5 s after the trigger",
+   "map": "rift",
+   "world": [
+    85,
+    80
+   ]
+  },
+  {
+   "file": "moment_level_up_high_00.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 376.67,
+   "time": "06:16",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0,
+   "what": "seat 0 levels up, 0 s after the trigger",
+   "map": "rift",
+   "world": [
+    60,
+    55
+   ]
+  },
+  {
+   "file": "moment_level_up_high_01.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 376.77,
+   "time": "06:16",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0.1,
+   "what": "seat 0 levels up, 0.1 s after the trigger",
+   "map": "rift",
+   "world": [
+    60,
+    55
+   ]
+  },
+  {
+   "file": "moment_level_up_high_03.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 376.97,
+   "time": "06:16",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0.3,
+   "what": "seat 0 levels up, 0.3 s after the trigger",
+   "map": "rift",
+   "world": [
+    60,
+    55
+   ]
+  },
+  {
+   "file": "moment_level_up_high_08.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 377.47,
+   "time": "06:17",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0.8,
+   "what": "seat 0 levels up, 0.8 s after the trigger",
+   "map": "rift",
+   "world": [
+    60,
+    55
+   ]
+  },
+  {
+   "file": "moment_level_up_high_15.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 378.17,
+   "time": "06:18",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 1.5,
+   "what": "seat 0 levels up, 1.5 s after the trigger",
+   "map": "rift",
+   "world": [
+    60,
+    55
+   ]
+  },
+  {
+   "file": "moment_own_kill_high_00.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 378.6,
+   "time": "06:18",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 0 s after the trigger",
+   "map": "rift",
+   "world": [
+    62,
+    55
+   ]
+  },
+  {
+   "file": "moment_own_kill_high_01.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 378.7,
+   "time": "06:18",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0.1,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 0.1 s after the trigger",
+   "map": "rift",
+   "world": [
+    62,
+    55
+   ]
+  },
+  {
+   "file": "moment_own_kill_high_03.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 378.9,
+   "time": "06:18",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0.3,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 0.3 s after the trigger",
+   "map": "rift",
+   "world": [
+    62,
+    55
+   ]
+  },
+  {
+   "file": "moment_own_kill_high_08.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 379.4,
+   "time": "06:19",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0.8,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 0.8 s after the trigger",
+   "map": "rift",
+   "world": [
+    62,
+    55
+   ]
+  },
+  {
+   "file": "moment_own_kill_high_15.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 380.1,
+   "time": "06:20",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 1.5,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 1.5 s after the trigger",
+   "map": "rift",
+   "world": [
+    62,
+    55
+   ]
+  },
+  {
+   "file": "moment_noon_toll_high_00.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.37,
+   "time": "00:41",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0,
+   "what": "the Noon Toll sounds, 0 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ]
+  },
+  {
+   "file": "moment_noon_toll_high_01.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.47,
+   "time": "00:41",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0.1,
+   "what": "the Noon Toll sounds, 0.1 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ]
+  },
+  {
+   "file": "moment_noon_toll_high_03.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.67,
+   "time": "00:41",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0.3,
+   "what": "the Noon Toll sounds, 0.3 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ]
+  },
+  {
+   "file": "moment_noon_toll_high_08.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 42.17,
+   "time": "00:42",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 0.8,
+   "what": "the Noon Toll sounds, 0.8 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ]
+  },
+  {
+   "file": "moment_noon_toll_high_15.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 42.87,
+   "time": "00:42",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "high",
+   "quality": "high",
+   "offset_s": 1.5,
+   "what": "the Noon Toll sounds, 1.5 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ]
+  },
+  {
+   "file": "moment_pit_last_hit_low_00.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 374.8,
+   "time": "06:14",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 0 s after the trigger",
+   "map": "rift",
+   "world": [
+    85,
+    80
+   ]
+  },
+  {
+   "file": "moment_pit_last_hit_low_01.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 374.9,
+   "time": "06:14",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.1,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 0.1 s after the trigger",
+   "map": "rift",
+   "world": [
+    85,
+    80
+   ]
+  },
+  {
+   "file": "moment_pit_last_hit_low_03.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 375.1,
+   "time": "06:15",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.3,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 0.3 s after the trigger",
+   "map": "rift",
+   "world": [
+    85,
+    80
+   ]
+  },
+  {
+   "file": "moment_pit_last_hit_low_08.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 375.6,
+   "time": "06:15",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.8,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 0.8 s after the trigger",
+   "map": "rift",
+   "world": [
+    85,
+    80
+   ]
+  },
+  {
+   "file": "moment_pit_last_hit_low_15.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 376.3,
+   "time": "06:16",
+   "kind": "moment",
+   "moment": "pit_last_hit",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 1.5,
+   "what": "Pit monster falls to seat 0's last hit (1 monster(s)), 1.5 s after the trigger",
+   "map": "rift",
+   "world": [
+    85,
+    80
+   ]
+  },
+  {
+   "file": "moment_level_up_low_00.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 376.67,
+   "time": "06:16",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0,
+   "what": "seat 0 levels up, 0 s after the trigger",
+   "map": "rift",
+   "world": [
+    60,
+    55
+   ]
+  },
+  {
+   "file": "moment_level_up_low_01.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 376.77,
+   "time": "06:16",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.1,
+   "what": "seat 0 levels up, 0.1 s after the trigger",
+   "map": "rift",
+   "world": [
+    60,
+    55
+   ]
+  },
+  {
+   "file": "moment_level_up_low_03.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 376.97,
+   "time": "06:16",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.3,
+   "what": "seat 0 levels up, 0.3 s after the trigger",
+   "map": "rift",
+   "world": [
+    60,
+    55
+   ]
+  },
+  {
+   "file": "moment_level_up_low_08.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 377.47,
+   "time": "06:17",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.8,
+   "what": "seat 0 levels up, 0.8 s after the trigger",
+   "map": "rift",
+   "world": [
+    60,
+    55
+   ]
+  },
+  {
+   "file": "moment_level_up_low_15.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 378.17,
+   "time": "06:18",
+   "kind": "moment",
+   "moment": "level_up",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 1.5,
+   "what": "seat 0 levels up, 1.5 s after the trigger",
+   "map": "rift",
+   "world": [
+    60,
+    55
+   ]
+  },
+  {
+   "file": "moment_own_kill_low_00.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 378.6,
+   "time": "06:18",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 0 s after the trigger",
+   "map": "rift",
+   "world": [
+    62,
+    55
+   ]
+  },
+  {
+   "file": "moment_own_kill_low_01.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 378.7,
+   "time": "06:18",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.1,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 0.1 s after the trigger",
+   "map": "rift",
+   "world": [
+    62,
+    55
+   ]
+  },
+  {
+   "file": "moment_own_kill_low_03.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 378.9,
+   "time": "06:18",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.3,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 0.3 s after the trigger",
+   "map": "rift",
+   "world": [
+    62,
+    55
+   ]
+  },
+  {
+   "file": "moment_own_kill_low_08.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 379.4,
+   "time": "06:19",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.8,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 0.8 s after the trigger",
+   "map": "rift",
+   "world": [
+    62,
+    55
+   ]
+  },
+  {
+   "file": "moment_own_kill_low_15.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 380.1,
+   "time": "06:20",
+   "kind": "moment",
+   "moment": "own_kill",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 1.5,
+   "what": "seat 0 kills an enemy fighter (the bounty pop), 1.5 s after the trigger",
+   "map": "rift",
+   "world": [
+    62,
+    55
+   ]
+  },
+  {
+   "file": "moment_noon_toll_low_00.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.37,
+   "time": "00:41",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0,
+   "what": "the Noon Toll sounds, 0 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ]
+  },
+  {
+   "file": "moment_noon_toll_low_01.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.47,
+   "time": "00:41",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.1,
+   "what": "the Noon Toll sounds, 0.1 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ]
+  },
+  {
+   "file": "moment_noon_toll_low_03.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.67,
+   "time": "00:41",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.3,
+   "what": "the Noon Toll sounds, 0.3 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ]
+  },
+  {
+   "file": "moment_noon_toll_low_08.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 42.17,
+   "time": "00:42",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 0.8,
+   "what": "the Noon Toll sounds, 0.8 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ]
+  },
+  {
+   "file": "moment_noon_toll_low_15.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 42.87,
+   "time": "00:42",
+   "kind": "moment",
+   "moment": "noon_toll",
+   "tier": "low",
+   "quality": "low",
+   "offset_s": 1.5,
+   "what": "the Noon Toll sounds, 1.5 s after the trigger",
+   "map": "fray",
+   "world": [
+    32,
+    32
+   ]
+  }
+ ]
+}
