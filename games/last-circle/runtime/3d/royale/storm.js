@@ -73,7 +73,7 @@ const TINT_SKY_TOP = 0x7662a6;              // a touch deeper overhead, the same
 const TINT_FOG_DENS_K = 1.5, TINT_FOG_DENS_ADD = 0.0006;   // FogExp2 density: base * k + add at full tint
 const N_BOLTS = 6;
 const ALPHA_CAP = 0.40;                     // a silhouette 20 m behind the wall keeps >= 60 % of its contrast
-const WALL_FAR = [420, 700];                // W10 R2A: the whole wall fades out between these camera distances (m; desktop medium+)
+const WALL_FAR = [700, 1100];               // W10 R2A: the whole wall fades out between these camera distances (m; desktop medium+). Was 420-700: the far end of a tangent view along the closing wall (stormfx_storm phase2/tangent) lost its ground band (19.9-20.5 vs the 20/255 bar; 29.4 with no fade)
 const WALL_FADE_IN_S = 4;                   // W10 R2A: ... and in over its first seconds once circle 1 starts closing
 // Wall palette. base = the dense violet layer hugging the ground (alpha at the cap up to baseH0 m, blending
 // into the curtain by baseH1 m); band = the 0-bandH m line where the wall meets the ground; streak = the hue
