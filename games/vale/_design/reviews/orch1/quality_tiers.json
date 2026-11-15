@@ -17,26 +17,26 @@
   {
    "scene": "teamfight",
    "tier": "low",
-   "ssimVsUltra": 0.842,
-   "dEMean": 5.946,
-   "dEp95": 20.22,
-   "shareOver2_3": 0.6283
+   "ssimVsUltra": 0.8358,
+   "dEMean": 5.424,
+   "dEp95": 21.99,
+   "shareOver2_3": 0.524
   },
   {
    "scene": "teamfight",
    "tier": "medium",
-   "ssimVsUltra": 0.9123,
-   "dEMean": 2.921,
-   "dEp95": 11.795,
-   "shareOver2_3": 0.2933
+   "ssimVsUltra": 0.9158,
+   "dEMean": 3.015,
+   "dEp95": 12.071,
+   "shareOver2_3": 0.3123
   },
   {
    "scene": "teamfight",
    "tier": "high",
-   "ssimVsUltra": 0.9837,
-   "dEMean": 0.982,
-   "dEp95": 2.695,
-   "shareOver2_3": 0.0828
+   "ssimVsUltra": 0.9842,
+   "dEMean": 1.048,
+   "dEp95": 2.833,
+   "shareOver2_3": 0.0952
   },
   {
    "scene": "teamfight",
@@ -49,26 +49,26 @@
   {
    "scene": "river_mid",
    "tier": "low",
-   "ssimVsUltra": 0.8536,
-   "dEMean": 4.601,
-   "dEp95": 19.078,
-   "shareOver2_3": 0.4313
+   "ssimVsUltra": 0.8554,
+   "dEMean": 4.454,
+   "dEp95": 18.116,
+   "shareOver2_3": 0.4633
   },
   {
    "scene": "river_mid",
    "tier": "medium",
-   "ssimVsUltra": 0.9166,
-   "dEMean": 2.281,
-   "dEp95": 10.874,
-   "shareOver2_3": 0.194
+   "ssimVsUltra": 0.911,
+   "dEMean": 2.968,
+   "dEp95": 12.034,
+   "shareOver2_3": 0.2964
   },
   {
    "scene": "river_mid",
    "tier": "high",
-   "ssimVsUltra": 0.9818,
-   "dEMean": 1.776,
-   "dEp95": 5.067,
-   "shareOver2_3": 0.1766
+   "ssimVsUltra": 0.9839,
+   "dEMean": 1.008,
+   "dEp95": 2.72,
+   "shareOver2_3": 0.0854
   },
   {
    "scene": "river_mid",
@@ -81,25 +81,25 @@
   {
    "scene": "base_aubade",
    "tier": "low",
-   "ssimVsUltra": 0.9132,
-   "dEMean": 2.505,
-   "dEp95": 9.03,
-   "shareOver2_3": 0.263
+   "ssimVsUltra": 0.9131,
+   "dEMean": 2.519,
+   "dEp95": 8.695,
+   "shareOver2_3": 0.266
   },
   {
    "scene": "base_aubade",
    "tier": "medium",
-   "ssimVsUltra": 0.9486,
-   "dEMean": 1.268,
-   "dEp95": 4.198,
-   "shareOver2_3": 0.1118
+   "ssimVsUltra": 0.948,
+   "dEMean": 1.271,
+   "dEp95": 4.206,
+   "shareOver2_3": 0.1119
   },
   {
    "scene": "base_aubade",
    "tier": "high",
-   "ssimVsUltra": 0.996,
-   "dEMean": 0.295,
-   "dEp95": 1.191,
+   "ssimVsUltra": 0.9958,
+   "dEMean": 0.294,
+   "dEp95": 1.182,
    "shareOver2_3": 0.0168
   },
   {
@@ -113,26 +113,26 @@
   {
    "scene": "jungle_glasshorn",
    "tier": "low",
-   "ssimVsUltra": 0.755,
-   "dEMean": 6.874,
-   "dEp95": 23.875,
-   "shareOver2_3": 0.6169
+   "ssimVsUltra": 0.7541,
+   "dEMean": 6.774,
+   "dEp95": 23.728,
+   "shareOver2_3": 0.6049
   },
   {
    "scene": "jungle_glasshorn",
    "tier": "medium",
-   "ssimVsUltra": 0.892,
-   "dEMean": 2.736,
-   "dEp95": 13.614,
-   "shareOver2_3": 0.2492
+   "ssimVsUltra": 0.8913,
+   "dEMean": 2.755,
+   "dEp95": 13.688,
+   "shareOver2_3": 0.2503
   },
   {
    "scene": "jungle_glasshorn",
    "tier": "high",
-   "ssimVsUltra": 0.9919,
-   "dEMean": 0.559,
-   "dEp95": 1.43,
-   "shareOver2_3": 0.0249
+   "ssimVsUltra": 0.9918,
+   "dEMean": 0.565,
+   "dEp95": 1.446,
+   "shareOver2_3": 0.0253
   },
   {
    "scene": "jungle_glasshorn",
@@ -145,19 +145,19 @@
  ],
  "perTierMean": {
   "low": {
-   "ssimVsUltra": 0.8409,
-   "dEMean": 4.981,
-   "dEp95": 18.051
+   "ssimVsUltra": 0.8396,
+   "dEMean": 4.793,
+   "dEp95": 18.132
   },
   "medium": {
-   "ssimVsUltra": 0.9174,
-   "dEMean": 2.301,
-   "dEp95": 10.12
+   "ssimVsUltra": 0.9165,
+   "dEMean": 2.502,
+   "dEp95": 10.5
   },
   "high": {
-   "ssimVsUltra": 0.9884,
-   "dEMean": 0.903,
-   "dEp95": 2.596
+   "ssimVsUltra": 0.9889,
+   "dEMean": 0.729,
+   "dEp95": 2.045
   },
   "ultra": {
    "ssimVsUltra": 1.0,
@@ -167,56 +167,56 @@
  },
  "verdict": {
   "highVsUltra": {
-   "ssimVsUltra": 0.9884,
-   "dEMean": 0.903,
-   "dEp95": 2.596
+   "ssimVsUltra": 0.9889,
+   "dEMean": 0.729,
+   "dEp95": 2.045
   },
   "highVsUltraPerScene": [
    {
     "scene": "teamfight",
     "tier": "high",
-    "ssimVsUltra": 0.9837,
-    "dEMean": 0.982,
-    "dEp95": 2.695,
-    "shareOver2_3": 0.0828
+    "ssimVsUltra": 0.9842,
+    "dEMean": 1.048,
+    "dEp95": 2.833,
+    "shareOver2_3": 0.0952
    },
    {
     "scene": "river_mid",
     "tier": "high",
-    "ssimVsUltra": 0.9818,
-    "dEMean": 1.776,
-    "dEp95": 5.067,
-    "shareOver2_3": 0.1766
+    "ssimVsUltra": 0.9839,
+    "dEMean": 1.008,
+    "dEp95": 2.72,
+    "shareOver2_3": 0.0854
    },
    {
     "scene": "base_aubade",
     "tier": "high",
-    "ssimVsUltra": 0.996,
-    "dEMean": 0.295,
-    "dEp95": 1.191,
+    "ssimVsUltra": 0.9958,
+    "dEMean": 0.294,
+    "dEp95": 1.182,
     "shareOver2_3": 0.0168
    },
    {
     "scene": "jungle_glasshorn",
     "tier": "high",
-    "ssimVsUltra": 0.9919,
-    "dEMean": 0.559,
-    "dEp95": 1.43,
-    "shareOver2_3": 0.0249
+    "ssimVsUltra": 0.9918,
+    "dEMean": 0.565,
+    "dEp95": 1.446,
+    "shareOver2_3": 0.0253
    }
   ],
   "indistinguishablePerScene": {
-   "teamfight": true,
+   "teamfight": false,
    "river_mid": false,
    "base_aubade": true,
    "jungle_glasshorn": true
   },
   "worstScene": {
-   "scene": "river_mid",
-   "dEMean": 1.776,
-   "dEp95": 5.067,
-   "ssimVsUltra": 0.9818,
-   "shareOver2_3": 0.1766
+   "scene": "teamfight",
+   "dEMean": 1.048,
+   "dEp95": 2.833,
+   "ssimVsUltra": 0.9842,
+   "shareOver2_3": 0.0952
   },
   "ultraIndistinguishableFromHigh_4sceneMean": true,
   "ultraIndistinguishableFromHigh": false,
