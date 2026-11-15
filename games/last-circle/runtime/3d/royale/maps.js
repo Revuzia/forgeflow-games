@@ -7265,7 +7265,7 @@ export async function buildMap(W, mapId) {
       uGrTint: { value: tintTex }, uGrMask: { value: maskTex }, uGrH: { value: K.w10Grass || 1 } };   // (uGrH: the map's blade height - Savanna's dry grass stands taller)
     const gMat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0, side: THREE.DoubleSide });
     gMat.name = "grass-blades";
-    gMat.customProgramCacheKey = () => "lc-grass-v2";
+    gMat.customProgramCacheKey = () => "lc-grass-v3";
     gMat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, GU, { uLcHgt: LCU.uLcHgt, uLcHgtK: LCU.uLcHgtK, uGrT: LCU.uLcT, uGrWind: LCU.uLcWind });
       sh.vertexShader = sh.vertexShader.replace("#include <common>", `#include <common>
@@ -7277,12 +7277,12 @@ float grH( vec2 p ) { vec3 p3 = fract( vec3( p.xyx ) * 0.1031 ); p3 += dot( p3, 
         .replace("#include <begin_vertex>", `vec2 gc = uGrCam + aCell;
 float gh1 = grH( gc ), gh2 = grH( gc + 17.3 ), gh3 = grH( gc - 41.7 ), gh4 = grH( gc + 93.1 );
 vec2 wp = ( gc + 0.5 + ( vec2( gh1, gh2 ) - 0.5 ) * 0.9 ) * uGrK.y;
-// clumps (W10 R2A repair): ~2.4 m world cells, each with a jittered centre; a card is pulled 30 % toward its clump's centre and stands tallest there,
+// clumps (W10 R2A repair; fix3 tighter): ~2.4 m world cells, each with a jittered centre; a card is pulled 50 % toward its clump's centre and stands tallest there,
 // shortest at the clump's rim - tufts with gaps between them, not an even field of spikes
 vec2 gk = floor( wp / 2.4 );
 vec2 gkc = ( gk + 0.5 + ( vec2( grH( gk + 211.0 ), grH( gk + 307.0 ) ) - 0.5 ) * 0.7 ) * 2.4;
-float gcl = mix( 1.25, 0.4, clamp( length( wp - gkc ) / 1.7, 0.0, 1.0 ) );
-wp = mix( wp, gkc, 0.3 );
+float gcl = mix( 1.5, 0.4, clamp( length( wp - gkc ) / 1.7, 0.0, 1.0 ) );
+wp = mix( wp, gkc, 0.5 );
 float gy = texture2D( uLcHgt, wp * uLcHgtK.x + uLcHgtK.y ).r;
 vec2 guv = ( wp + ${HALF.toFixed(1)} ) / ${SIZE.toFixed(1)};
 vec4 gt = texture2D( uGrTint, guv );
@@ -7290,7 +7290,10 @@ float gs = ( 1.0 - smoothstep( uGrK.x * 0.72, uGrK.x, length( wp - uGrEye.xz ) )
          * step( max( abs( wp.x ), abs( wp.y ) ), uGrK.w ) * ( 0.6 + 0.7 * gh3 ) * gcl
          * step( gh3 * 0.9 + 0.05, gt.a );   // (grass ground only: the tint's alpha is grassAt - a lawn's edge thins out, small cards last)
 float gca = cos( gh4 * 6.2832 ), gsa = sin( gh4 * 6.2832 ), gtip = position.y;
-vec3 transformed = vec3( position.x * gca - position.z * gsa, position.y * uGrH, position.x * gsa + position.z * gca ) * gs;
+// fix3: a blade near the eye is thin (roots x0.75 within ~1 m, full width from ~6 m - the width that keeps a far lawn covered): close up it reads as
+// a blade, not a wide spike; the two roots of a card close up together into a tuft
+vec3 gpo = position; gpo.xz *= gtip < 0.001 ? mix( 0.75, 1.0, smoothstep( 1.0, 6.0, length( wp - uGrEye.xz ) ) ) : 1.0;
+vec3 transformed = vec3( gpo.x * gca - gpo.z * gsa, gpo.y * uGrH, gpo.x * gsa + gpo.z * gca ) * gs;
 transformed.xz += uGrWind.xy * uGrWind.z * ( 0.6 * sin( uGrT * 1.7 + dot( wp, vec2( 0.31, 0.23 ) ) ) + 0.45 ) * gtip * gtip * 0.6 * gs;
 transformed += vec3( wp.x, gy, wp.y );
 vGrC = gt.rgb * mix( 0.36, 1.36, clamp( gtip / 0.4, 0.0, 1.0 ) ) * ( 0.8 + 0.4 * gh2 ) * mix( vec3( 1.0 ), vec3( 1.12, 1.08, 0.82 ), step( 0.78, gh1 ) );   // shaded root, sunlit tip; every 5th blade drier`);

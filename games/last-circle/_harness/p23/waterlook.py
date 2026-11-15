@@ -226,8 +226,8 @@ GRASS_JS = r"""([x, z, r]) => { const W = window.__LC__.W, M = W.map, b = W._gra
       const h1 = grH(gx, gz), h2 = grH(gx + 17.3, gz + 17.3), h3 = grH(gx - 41.7, gz - 41.7);
       let wx = (gx + 0.5 + (h1 - 0.5) * 0.9) * GC, wz = (gz + 0.5 + (h2 - 0.5) * 0.9) * GC;
       const kx = Math.floor(wx / 2.4), kz = Math.floor(wz / 2.4), kcx = (kx + 0.5 + (grH(kx + 211, kz + 211) - 0.5) * 0.7) * 2.4, kcz = (kz + 0.5 + (grH(kx + 307, kz + 307) - 0.5) * 0.7) * 2.4;
-      const kt = Math.min(1, Math.max(0, Math.hypot(wx - kcx, wz - kcz) / 1.7)), gcl = 1.25 + (0.4 - 1.25) * kt;
-      wx += (kcx - wx) * 0.3; wz += (kcz - wz) * 0.3;
+      const kt = Math.min(1, Math.max(0, Math.hypot(wx - kcx, wz - kcz) / 1.7)), gcl = 1.5 + (0.4 - 1.5) * kt;
+      wx += (kcx - wx) * 0.5; wz += (kcz - wz) * 0.5;
       const d = Math.hypot(wx - x, wz - z); if (d > r) continue;
       const e0 = GR * 0.72, tt = Math.min(1, Math.max(0, (d - e0) / (GR - e0))); const fade = 1 - tt * tt * (3 - 2 * tt);
       const g = M.heightAt(wx, wz); if (g < M.waterY + 0.35 || Math.max(Math.abs(wx), Math.abs(wz)) > M.half - 4) continue;
