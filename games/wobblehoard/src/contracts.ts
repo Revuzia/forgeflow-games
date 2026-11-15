@@ -1,6 +1,9 @@
 // WOBBLEHOARD — the seams between lanes. Types only (no runtime code), so every lane can import this without cycles.
 // Full prose contract: _spec/CONTRACT.md. If a lane needs to change a signature here, it changes THIS file in the
 // smallest backwards-compatible way (add optional fields), never renames or removes, and reports the change.
+// PLAYGROUND (2026-11-15): the optional members for places, things, LIFE, emotes, voices and the Journal are declared in the
+// PLAYGROUND block at the end of this file, by interface merging (SoftEvent, SoftMetrics, SoftBodyLike, AudioSettings, SquishAudio,
+// AddBodyOpts, StageLike, Settings, DebugHook), so no member above changed. Spec: _spec/PLAYGROUND_BUILD.md section 7.
 import type * as THREE from 'three';
 import type { Genome } from './core/genome.ts';
 
@@ -473,6 +476,360 @@ export interface DebugHook {
   playSound(kind: 'poke' | 'squish' | 'release' | 'land' | 'pop' | 'blend'): void;
   /** Optional (SHELL, additive): where the squishy is on screen right now. x,y are 0..1 over the canvas (the same space as pointerDown); rPx is its projected rest radius in CSS px. null before the first frame. */
   bodyScreen?(): { x: number; y: number; rPx: number } | null;
+}
+
+/* ═══════════════════════════════════════════════ PLAYGROUND (2026-11-15) ═══════════════════════════════════════════════
+ * Places to take squishies to, things in them, a little LIFE in every character, emotes ("squishmoji"), voices, calm pieces and the
+ * Journal. Specs: _spec/PLAYGROUND_BUILD.md (architecture; section 7 lists every member below), _spec/PLACES.md, _spec/LIFE.md,
+ * _spec/QUESTS.md. EVERY member here is OPTIONAL and ADDITIVE: consumers feature-detect, mocks keep compiling, and the interfaces above
+ * are extended by interface merging, so none of their members changed.
+ * Contracts carry numbers, strings and typed arrays only. The id tables (places, things, zone kinds, emotes, expressions, syllables,
+ * flavours, prop sounds, event kinds, flag bits) are VALUES in src/data/places.ts, src/data/life.ts and src/data/quests.ts, so a new
+ * place, thing or icon is a data change, never a contract change. Hot-path members take numbers or caller-owned typed arrays and return
+ * numbers or booleans (no object per call), the zero-allocation rule of softbody.ts lines 3-7.
+ */
+
+/* ── PLAYGROUND physics (src/physics; PLAYGROUND_BUILD.md 8) ── */
+
+export interface SoftEvent {
+  /** PLAYGROUND: true when the player did not cause it: a LIFE hop, a spring-pad bounce, a prop launch, a fall the player did not
+   *  throw. Physics sets it on every 'land' and every prop 'bump' UNLESS the body was thrown by the player (a carry released, a toss)
+   *  since its last landing. The shell sends auto events to the attention budget, never to feedback.ts and never to collection.feed. */
+  auto?: boolean;
+  /** PLAYGROUND: this 'bump' was against a prop: the prop's index in the bound PropWorldLike. Absent (or -1) = another body. */
+  prop?: number;
+}
+
+export interface SoftMetrics {
+  /** PLAYGROUND: the body is asleep (frozen, costs about 0.02 ms a frame); every wake cause of PLAYGROUND_BUILD.md 8.6 clears it. */
+  asleep?: boolean;
+  /** PLAYGROUND: 0..1, the share of the body's bounding sphere under a water zone's surface (0 when no water zone is bound). */
+  submerged?: number;
+  /** PLAYGROUND: index of the prop whose up-facing face (normal within 35 degrees of world up) supports the body; -1 = none. */
+  onProp?: number;
+  /** PLAYGROUND: no particle is touching the table or a supporting prop face (a hop, a toss, a bounce, floating). */
+  airborne?: boolean;
+  /** LOCK.md section 3 (planned for physics round 3; PHYS fills it): locked lobes on this body. Declared here because PLAYGROUND's
+   *  touch gate counts a lock as a touch: HELD = fingers > 0 || grabbed || carried || (locked ?? 0) > 0. */
+  locked?: number;
+}
+
+export interface SoftBodyLike {
+  /** PLAYGROUND: 8 eased per-body modifiers written by the shell (on change, at most 10 Hz), eased by physics over 0.3 s:
+   *  [0] grip (x tableMu), [1] glue (x tack layer), [2] peel (x peel damping), [3] drag (x the baked air drag; ice needs it low),
+   *  [4] density relative to water (water zones only: g_eff = g x (1 - submerged / density); 1 = today's behaviour),
+   *  [5] field catch (wind and updraft act ONLY on an airborne or floating body, scaled by this), [6] bounce gain (spring pads),
+   *  [7] reserved (0). All 1 except [7] = today's behaviour bit for bit. Never a stiffness or damping change (PLACES.md 1). */
+  readonly mods?: Float64Array;
+  /** PLAYGROUND: place bounds that replace the home-spot corral for this body (the same brake, glide back and rim bounce, about the
+   *  place's area instead of the body's home). shape 0 = disc (a = radius), 1 = rounded rectangle (a, b = half sizes, round = corner
+   *  radius); shape -1 clears them (back to the home corral). Called on travel and spawn, not per frame. */
+  setBounds?(shape: number, cx: number, cz: number, a: number, b: number, round: number): void;
+  /** PLAYGROUND: move the corral's home spot (where a LIFE body last came to rest), so the corral never drags it back to its spawn. */
+  setHome?(x: number, z: number): void;
+  /** PLAYGROUND: the place's props and zones (null = none, today's table only). The body solves them inside each of its substeps
+   *  (a prop contact pass between the fingertip pass and the table pass) and adds its impulses to the world's accumulators. */
+  setPropWorld?(w: PropWorldLike | null): void;
+  /** PLAYGROUND LIFE driver: a volume-preserving goal squash (y x s, x and z x 1 / sqrt(s)), eased with time constant tauS (>= 0.08 s).
+   *  s 0.75..1.12; 1 releases it. Paused and eased out within 0.12 s while the body is HELD (see SoftMetrics.locked); ceremony drivers
+   *  are not affected. Refused (no effect) for putty, mochi dough and bead squeeze while their plastic memory has not converged. */
+  setSquash?(s: number, tauS: number): void;
+  /** PLAYGROUND LIFE driver: a hop: an impulse with the family's glue and peel damping suspended for 10 substeps, so the same impulse
+   *  leaves the ground at the same height in every family. Allowed only while supported (by the table or an up-facing prop face); on a
+   *  moving prop the horizontal part is relative to the prop's surface velocity. vy is clamped to the slice's hop cap (S1: 0.84 m/s,
+   *  apex 3.5 cm). Returns false (and does nothing) when HELD, airborne, inside 0.8 s of its last hop, a ceremony driver is on, or the
+   *  family's memory has not converged. Its landing carries SoftEvent.auto. */
+  hop?(vx: number, vy: number, vz: number): boolean;
+  /** PLAYGROUND (keyboard parity, "Go play with..."): a scripted lift of the whole body along a smooth arc to (x, y, z) over `seconds`,
+   *  set down with no velocity. Emits no poke, press, release, grab or snap (it can never pay); its landing is NOT auto (the player asked).
+   *  Returns false when HELD, carried, locked, asleep-and-touched or another driver owns the body. */
+  carryTo?(x: number, y: number, z: number, seconds: number): boolean;
+  /** PLAYGROUND: opt in to sleep (default false, so every existing hash row stays valid). The shell sets it for place and party bodies. */
+  sleepEnabled?: boolean;
+  /** PLAYGROUND: wake now (a LIFE action is about to drive the body). Waking never moves a particle. */
+  wake?(): void;
+}
+
+/** PLAYGROUND: one place's props (rigid things built from the mechanism library, PLACES.md 2) and zones (water, wind, updraft, warm,
+ *  cold, wet, current, magnet, echo). Built by src/physics/props.ts from a PlaceDef (src/data/places.ts); its packed layouts (stride
+ *  per prop and per zone) are physics VALUES documented in that file's header. Bodies see a moving prop at pose(t0) + v x (k x H) in
+ *  substep k (as fingertips advance), so a prop never jumps; the world integrates the accumulated impulses ONCE per frame after every
+ *  body stepped (a one-frame lag, stable for the damped 1-DOF joints and the one clamped free ball the library allows). */
+export interface PropWorldLike {
+  /** Props in this world. */
+  readonly count: number;
+  /** 8 floats per prop, rewritten by endFrame(): x, y, z, qx, qy, qz, qw, state (hinge angle in radians, slider offset in m, or ball
+   *  speed in m/s). The stage binds this array once (StageLike.bindProps) and reads it in update(); LIFE reads it through the shell. */
+  readonly poses: Float32Array;
+  /** Zones in this world, and one on/off byte per zone (a switch thing toggles its zone: the tap, the magnet, the echo stone). */
+  readonly zoneCount: number;
+  readonly zoneOn: Uint8Array;
+  /** Clear the impulse accumulators; call once per frame BEFORE the bodies step. */
+  beginFrame(): void;
+  /** Integrate hinge, slider and free props from this frame's impulses (body impulses are scaled by bodyMass / particle mass, so a
+   *  detail-2 twin and a detail-3 body tip a seesaw alike and a 1/8 piece tips it an eighth as much); clamp speeds (ball and swing
+   *  seat at most 2.0 m/s); call once per frame AFTER every body stepped. */
+  endFrame(dt: number): void;
+  setZoneOn(zone: number, on: boolean): void;
+  /** Turn a prop's motor on or off (the wound cog, the tap's swirl ride). */
+  setMotor(prop: number, on: boolean): void;
+  /** Ray against the props (a tap on a thing). Returns the prop index or -1; writes nothing, allocates nothing. */
+  raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number): number;
+  /** A player's tap or flick on a prop: an impulse in m/s at its centre (a ball rolls, a seesaw end dips, a chime swings). */
+  poke(prop: number, ix: number, iy: number, iz: number): void;
+  /** Struck chimes, bells, crystals and pads since the last call, as triples [prop, intensity 0..1, auto 0 | 1] into `out`; returns the
+   *  number of triples written (at most out.length / 3). Drives prop sounds and Use events. */
+  drainStrikes(out: Float32Array): number;
+  /** For the queued Stamp and Roll tools (FUN.md 1) and the player's own pushes: drive prop `prop` kinematically (a tool shape the player
+   *  moves) to this pose and velocity for the coming frame. Only props built with the kinematic flag accept it. */
+  setKinematic?(prop: number, x: number, y: number, z: number, vx: number, vy: number, vz: number): void;
+  /** A cheap 32-bit hash of the props' state (determinism probes). */
+  stateHash(): number;
+}
+
+/* ── PLAYGROUND render (src/render; PLAYGROUND_BUILD.md 9) ── */
+
+export interface AddBodyOpts {
+  /** PLAYGROUND: draw this body with the low fine mesh (2562 vertices) whatever the tier: chunks of a cut squishy on med and high. */
+  lite?: boolean;
+}
+
+export interface StageLike {
+  /** PLAYGROUND: lazily import a place's look chunk (src/render/places/<id>.ts) and the shared away chunk; resolves true when it is ready,
+   *  false on a load failure (the player stays where they were). 'home' is built in and resolves at once. */
+  loadPlace?(id: string): Promise<boolean>;
+  /** PLAYGROUND: show a loaded place (null or 'home' = Home) under a fadeS ScreenFx crossfade (a snapshot fade, never a flash). Swaps sky,
+   *  ground, backdrop, weather, lights (and the jelly light uniforms and white balance), environment panels (the old cube is disposed)
+   *  and the prop kit. Returns false when the place is not loaded. */
+  setPlace?(id: string | null, fadeS: number): boolean;
+  /** PLAYGROUND: bind the PropWorldLike poses array (8 floats per prop, place order) once per travel; the stage reads it in update(). */
+  bindProps?(poses: Float32Array | null, count: number): void;
+  /** PLAYGROUND: frame the camera on the whole play bounds of the place (or of Home's mat). Autonomy never moves the camera: framing
+   *  uses these bounds, never live LIFE positions; the player still orbits and zooms. */
+  setPlayBounds?(cx: number, cz: number, hx: number, hz: number): void;
+  /** PLAYGROUND: prop footprints (x, z, r triples) the meter-full capsule must land clear of. */
+  setObstacles?(xzr: Float32Array | null, n: number): void;
+  /** PLAYGROUND: where a body's eyes look (world point) with weight 0..1; weight 0 hands them back to the pointer and the idle wander. The
+   *  pointer always wins on a body the player is touching. */
+  setBodyGaze?(id: number, x: number, y: number, z: number, weight: number): void;
+  /** PLAYGROUND: an eyes-only expression eased in over ~0.2 s; expr ids in src/data/life.ts EXPR (0 none, 1 happy, 2 sleepy, 3 surprised,
+   *  4 shy, 5 proud), amount 0..1. No mouth, no blush (REFERENCES.md 3). */
+  setBodyExpression?(id: number, expr: number, amount: number): void;
+  /** PLAYGROUND: render-side pose, the motion that does not move the body (so a sleeping body can lean, sway and sing at about zero physics
+   *  cost): a lean of (leanX, leanZ) in rest radii (length at most 0.1), a side-to-side sway of swayAmp rest radii (at most 0.05; a shiver
+   *  is 7 Hz at most 0.015) at swayHz (at most 4, or 7 for a shiver) starting at phase swayPhase (radians, so a sway can sit on the music
+   *  beat), and a slow breathing scale while asleep. Applied in the jelly vertex stage AND to the eye anchors on the CPU. All 0 = off. */
+  setBodyPose?(id: number, leanX: number, leanZ: number, swayAmp: number, swayHz: number, swayPhase: number): void;
+  /** PLAYGROUND: place looks on one body, each 0..1, eased by the stage: frost, wet, sand, toast, snow. All 0 = today's look exactly. */
+  setBodyLook?(id: number, frost: number, wet: number, sand: number, toast: number, snow: number): void;
+  /** PLAYGROUND: the place's heat point (the hearth, the chimney): toast browns the side of a body facing it. NaN x clears it. */
+  setHeatPoint?(x: number, y: number, z: number): void;
+  /** PLAYGROUND: the water surface height over this body (the under-the-waterline tint); NaN = not in water. */
+  setBodyWater?(id: number, surfaceY: number): void;
+  /** PLAYGROUND: the body sleeps: skip its fine-mesh evaluation (its eyes still blink and its pose still sways). */
+  setBodyAsleep?(id: number, asleep: boolean): void;
+  /** PLAYGROUND: how many emote bubble slots the stage pools (8). */
+  readonly emoteSlots?: number;
+  /** PLAYGROUND: show a squishmoji bubble in `slot` (0..emoteSlots-1) over body `bodyId`: icon id (src/data/life.ts EMOTE), style 0 say,
+   *  1 think (a wish: stays until cleared), 2 group (pieces: double outline and `dots` 1..3), lifeS (say and group), flags bit 0 = a small
+   *  sparkle badge (close friends, best friends). One instanced draw for every bubble; never a flash; Calm and reduced motion fade only.
+   *  The ATTENTION BUDGET (LIFE.md 10) decides what reaches this call; the stage only draws. */
+  emote?(slot: number, bodyId: number, icon: number, style: number, lifeS: number, dots: number, flags: number): void;
+  clearEmote?(slot: number): void;
+  /** PLAYGROUND: a bubble's centre and radius in CSS px over the canvas into out[0..2] (for its 44 x 44 hit area and its word label,
+   *  both DOM); false when the slot is empty or off screen. Zero allocation. */
+  emoteScreen?(slot: number, out: Float32Array): boolean;
+  /** PLAYGROUND: bubbles appear in Snap photos (default true; the Snap bar's "Bubbles in photo" switch). */
+  setEmotesInPhoto?(on: boolean): void;
+  /** PLAYGROUND: stamp a ground mark (kind id in src/data/places.ts MARK: print, trail, dust, dent, glow) at (x, z) with angle, size
+   *  (m) and life (s) into the place's ring buffer (64 / 48 / 24 by tier). */
+  stampMark?(kind: number, x: number, z: number, angle: number, size: number, lifeS: number): void;
+  /** PLAYGROUND: a body's centre on screen in CSS px and its projected rest radius into out[0..2]; false when off screen or unknown.
+   *  Zero allocation (DebugHook.bodyScreen is the dev-only 0..1 version). */
+  bodyScreenPoint?(id: number, out: Float32Array): boolean;
+}
+
+/* ── PLAYGROUND audio (src/audio; PLAYGROUND_BUILD.md 10) ── */
+
+export interface AudioSettings {
+  /** PLAYGROUND: the "Voices" slider 0..1 (creature voices only; 0 mutes them). Default 0.6. */
+  chatter?: number;
+  /** PLAYGROUND: the "Place sounds" slider 0..1 (each place's ambience bed). Default 0.5. */
+  ambience?: number;
+}
+
+export interface SquishAudio {
+  /** PLAYGROUND: one creature phrase (no words, no samples). `phrase` holds up to 4 syllables, 4 floats each: [syllable id (src/data/life.ts
+   *  SYL), pentatonic degree offset (-4..4), start offset s from the phrase start, length scale 0.5..2]; n = syllables used.
+   *  flavour 0..5 = gel, sticky, foam, beads, dough, firm (audio/cut.ts FAMILY_FLAVOUR); register 0 whole, 1 piece (one octave up, 7 dB
+   *  quieter); pitch = pitchRatio(genome) (snapped to D major pentatonic inside audio); pan -1..1; level 0..1 (distance from the frame
+   *  centre); group 1..3 = one group voice of that many detuned oscillators (pieces, never N voices); echo = one scheduled repeat
+   *  (+220 ms, -12 dB, no DelayNode); at = AudioContext time to start (0 = now; the shell passes a bar line from musicClock for harmony).
+   *  Never asks the music to make room (not in ROOM_KINDS), priority -1 (stolen before any player sound), its own rng stream, silent
+   *  during ceremonies and for 1 s after. Returns false when the backstop ChatterLimiter refuses it. */
+  creature?(p: { phrase: Float32Array; n: number; flavour: number; register: number; pitch: number; pan: number; level: number; group?: number; echo?: boolean; at?: number }): boolean;
+  /** PLAYGROUND: the music as it SOUNDS now into out: [field index sounding (0 home, 1 lift, 2 dusk, 3 glow), bar start (AudioContext
+   *  time), bpm, AudioContext now, eighth-slot length s]. false before unlock or with the music off. */
+  musicClock?(out: Float64Array): boolean;
+  /** PLAYGROUND: lazily import a place's ambience recipe (src/audio/places/<id>.ts); true when ready. */
+  loadAmbience?(place: string): Promise<boolean>;
+  /** PLAYGROUND: the place's ambience bed (null = none): crossfades about 2 s on a change; follows mute, pause and setPaused. Never asks
+   *  for room; takes its own shallow dip under player effects. */
+  setAmbience?(p: { place?: string | null; on?: boolean; volume?: number }): void;
+  /** PLAYGROUND: a thing's sound: kind id (src/data/places.ts PROP_SOUND: ball, creak, chime, splash, crunch, crackle, boing, bell, tick,
+   *  kettle, rustle, whoosh), intensity 0..1, a D major pentatonic MIDI note for tuned things, pan, auto = moved by itself or by a squishy
+   *  (never makes room in the music; budgeted), key = prop index for held voices (a creaking rocker), held = 0..1 for a held voice. */
+  prop?(p: { kind: number; intensity: number; note?: number; pan?: number; auto: boolean; key?: number; held?: number }): void;
+  /** PLAYGROUND: the Music Box and the Singing Kettle tune: while it plays the music bed mutes its own mallets so two melodies never clash. */
+  musicBox?(p: { on: boolean; tune?: number }): void;
+  /** PLAYGROUND: a place's music style (field weights and mallet timbre only; the key stays D and the tempo 66 BPM, so ceremonies and the
+   *  whole-again run stay in tune). 'home' (the default) is bit-identical to today. */
+  setMusicStyle?(style: string): void;
+}
+
+/* ── PLAYGROUND shell and the dev hook (src/shell, src/ui; PLAYGROUND_BUILD.md 11) ──
+ * The five PLAYGROUND settings (chatter, ambience, autonomy, bubbleWords, bubblesInPhoto) are NOT declared here yet on purpose:
+ * src/core/settings.ts resolveSettings() returns Required<Settings>, so a Settings key and its default must land in ONE change. The SHELL
+ * lane adds them to `Settings` in this file together with SETTING_KEYS, OPTIONAL_UNITS / OPTIONAL_BOOLS, optionalDefaults and
+ * resolveSettings (exact text: PLAYGROUND_BUILD.md 11.9). */
+
+export interface DebugHook {
+  /** PLAYGROUND (dev only): brain states, needs, behaviour ids, the attention counters and the awake units, as plain JSON. */
+  life?(): unknown;
+  /** PLAYGROUND (dev only): the journal state, open quests with their counters, the event ring's last 64 records, as plain JSON. */
+  quests?(): unknown;
+  /** PLAYGROUND (dev only): travel to a place id at once (the same path as the Travel sheet, without the sheet); true on arrival. */
+  travel?(place: string): Promise<boolean>;
+}
+
+/* ── PLAYGROUND LIFE seam (src/life is pure: no DOM, no three, no physics, no clock, no Math.random; LIFE.md 12) ──
+ * The shell host fills a LifeSnapshot IN PLACE at each think tick (10 Hz on sim time, staggered by character slot), calls lifeStep (a
+ * src/life value), applies the LifeIntents, sends the expressions through the attention budget and the LifeEvents into the play-event
+ * ring. Every array is allocated once by the host at capacity (16 characters, 64 intents, 32 events, 32 things, 32 bumps) and only its
+ * first n entries are meaningful. Flag bits, intent kinds and event kinds are values in src/data/life.ts (LIFE_FLAG, INTENT, LIFE_EV). */
+export interface LifeSnapshot {
+  /** Characters this tick (wholes, face pieces and chunks), at most 16. */
+  n: number;
+  /** Sim seconds (the shell's simTime: never a wall clock). */
+  t: number;
+  /** Place index (src/data/places.ts PLACE_IDS order), quality tier (0 low, 1 med, 2 high). */
+  place: number;
+  tier: number;
+  /** One boolean computed by the shell: coarse pointer OR the short viewport side under 600 CSS px. */
+  phone: boolean;
+  calm: boolean;
+  reducedMotion: boolean;
+  /** The "Squishies move on their own" setting. */
+  autonomy: boolean;
+  /** No new LIFE motion: a ceremony, a cut neck or join, any non-Hand tool in hand, the Travel or Journal sheet open, the desktop Hoard
+   *  holding input, a hidden tab. Gaze, expressions and needs keep working. */
+  quiet: boolean;
+  /** Deterministic awake-cost units right now (LIFE.md 10.3: an awake whole 1.0, a sleeper 0.03, an awake piece 0.35, an awake pair in
+   *  contact +0.3). LIFE's motion gate reads this, never a measured frame time. */
+  units: number;
+  /** Music as it sounds (SquishAudio.musicClock): field index, on, the Music Box or kettle tune playing, beat phase 0..1. */
+  musicField: number;
+  musicOn: boolean;
+  musicBoxOn: boolean;
+  beatPhase: number;
+  /** Per character: 0 whole, 1 face piece, 2 chunk; the slot of its owning whole (itself for a whole); catalog idx; family idx
+   *  (MATERIAL_FAMILY_IDS order); volume fraction; rest radius (m). */
+  kind: Uint8Array;
+  group: Int8Array;
+  species: Uint8Array;
+  family: Uint8Array;
+  frac: Float32Array;
+  r: Float32Array;
+  /** Centre (m, place space) and horizontal velocity (m/s). */
+  x: Float32Array;
+  y: Float32Array;
+  z: Float32Array;
+  vx: Float32Array;
+  vz: Float32Array;
+  /** Screen position 0..1 over the canvas; NaN when off screen. */
+  sx: Float32Array;
+  sy: Float32Array;
+  /** LIFE_FLAG bits (TOUCHED, CARRIED, LOCKED, ASLEEP, GROUNDED, ON_PROP, IN_WATER, AIRBORNE, TOSSED, NEW, VISIBLE, MEMORY_BUSY). */
+  flags: Uint16Array;
+  /** Zone kinds at the centre as bits (ZONE kind ids), submerged share 0..1, warmth glow dots 0..5 of the instance. */
+  zoneMask: Uint16Array;
+  submerged: Float32Array;
+  warmth: Uint8Array;
+  /** Live things: count, centre x and z, a state number (hinge angle, slider offset, ball speed) and a busy byte (someone uses it). */
+  nThings: number;
+  thingX: Float32Array;
+  thingZ: Float32Array;
+  thingState: Float32Array;
+  thingBusy: Uint8Array;
+  /** Body-to-body contacts that STARTED since the last tick (character slots), and how many. */
+  nBumps: number;
+  bumpA: Int8Array;
+  bumpB: Int8Array;
+  /** The player's touch kind on each character since the last tick (src/data/life.ts TOUCH ids; -1 none). */
+  touchKind: Int8Array;
+}
+
+/** What LIFE asks for (filled by lifeStep, applied by the shell host through its one arbiter: finger > cut and ceremony > LIFE). */
+export interface LifeIntents {
+  n: number;
+  /** INTENT ids: GAZE, SCOOT (moveTo), HOP, SQUASH, POSE (render lean and sway), GLIDE (a nudge on a slick patch), SETTLE, EXPRESS,
+   *  EMOTE, VOICE, CANCEL, USE (ask the shell to perform a player-asked use). No intent kind can press, grab or lock: autonomy never pays. */
+  kind: Uint8Array;
+  /** Character slot, start delay (s, the host queues at most 4 per character). */
+  who: Uint8Array;
+  delayS: Float32Array;
+  /** Arguments by kind (target x, y, z, speed or amount, frequency, phase ...). */
+  a: Float32Array;
+  b: Float32Array;
+  c: Float32Array;
+  d: Float32Array;
+  /** EMOTE: icon (EMOTE id), style (0 say, 1 think, 2 group), priority score (LIFE.md 10.2), group key (one bubble per piece group),
+   *  dots (piece count 1..3). VOICE uses icon as the phrase id. */
+  icon: Uint8Array;
+  style: Uint8Array;
+  prio: Float32Array;
+  groupKey: Int16Array;
+  dots: Uint8Array;
+}
+
+/** What happened in LIFE this tick, for the play-event ring (Social, Use, React, Wish, Discover, Pieces). LIFE_EV ids in src/data/life.ts;
+ *  a and b are character slots (the host maps them to species and items), thing a thing index or -1, sub the kind's sub id, n2 the
+ *  participants (pieces count). Capacity 32. */
+export interface LifeEvents {
+  n: number;
+  kind: Uint8Array;
+  sub: Uint8Array;
+  a: Uint8Array;
+  b: Uint8Array;
+  n2: Uint8Array;
+  thing: Int8Array;
+}
+
+/* ── PLAYGROUND play-event ring (the shell's typed events for the Journal; QUESTS.md 4) ──
+ * A preallocated ring the shell fills from its producers (mat and party, physics events, LIFE events, travel, cut, Snap, the Journal UI)
+ * and the quest host drains once a frame into the pure reducer (src/core/quests.ts). Never filled through emit() (it allocates). EV ids,
+ * sub ids and flag bits are values in src/data/quests.ts. Capacity 64; overflow is counted in `dropped`, never wraps over unread events. */
+export interface PlayEventRing {
+  n: number;
+  dropped: number;
+  /** EV id (VISIT, BRING, TOUCH, USE, REACT, SOCIAL, FRIEND, WISH, DISCOVER, PIECES, CUT, WHOLE, PHOTO, CAPSULE, GIFT, UI, SIGNATURE). */
+  kind: Uint8Array;
+  /** The kind's sub id: a REACT, SOCIAL, USE verb, WISH state, TOUCH or UI id. */
+  sub: Uint8Array;
+  /** Place index; global thing index or -1; species idx of the actor and of the partner (255 = none); the actor's family idx (255 none). */
+  place: Uint8Array;
+  thing: Int16Array;
+  a: Uint8Array;
+  b: Uint8Array;
+  fam: Uint8Array;
+  /** Participants (pieces count), 0 when it does not apply. */
+  n2: Uint8Array;
+  /** 0 = by itself (LIFE or physics), 1 = by the player (a touch, a flick, a switch, a ride the player set up, a scripted "Go play with..."). */
+  by: Uint8Array;
+  /** Bit 0 a piece took part, bit 1 a best-friend pair, bit 2 a species new to the player. */
+  flag: Uint8Array;
+  /** A value the rule may need (a hold in s, a pull level, a glide in m). */
+  v: Float32Array;
 }
 
 declare global {

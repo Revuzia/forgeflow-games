@@ -1,5 +1,146 @@
 # SHELL-4 report (lane SHELL; running report, updated after every finished item)
 
+## SESSION 3, THIRD ENGINEER (2026-11-15 07:23 UTC on, after the second engineer's usage-limit cutoff and a container restart; this part wins where it differs)
+Start state: HEAD 8ad72fe1, tree clean, `npx tsc --noEmit -p tsconfig.json` clean (exit 0). Scratch `SC3` (same folder as below) survived the restart.
+What the second engineer left: step 1 done but 3 re-runs pending (cut-flash Calm, feel-routes, cut-real "toss a piece"); step 2 batches s1 and b4 run, **b1 run
+(83/86, 3 FAIL, never looked at)**, b2 killed at its first row (`Target page, context or browser has been closed`: the cutoff), b3 b5 b6 b7 b8 never run;
+steps 4 and 5 open; the seams section written against older line numbers.
+
+### Status table (third engineer)
+| # | Step | Status | Key number |
+|---|------|--------|-----------|
+| 1 | the pending re-runs (cut-flash Calm, feel-routes, cut-real toss) + rows written but never run (cut-x parting gap, hint-capsule name tag) + a new Cut bar row | **done** | p1 37/41 as found (1 REAL shell fault: Split in two refused at 5 pieces, fixed in cut.ts HALF_TOL + node row; 1 REAL layout fault: 390 px tier word clipped with a capsule waiting, fixed in hoard.css; 1 TEST fault: the bump row's drag path; X08 noisy) -> **41/41**; p2 37/37 (parting gap 0.179 m, toss a piece passes, Cut bar row passes) |
+| 2 | b1 failures, then b2 b3 b5 b6 b7 b8 | b1 b2 b3 b5 b6 done; b7 b8 running | b1 83/86 as found -> 3 TEST faults fixed -> 49/49; b2 34/34; b3 47/47; b5 12/12; b6 15/15 |
+| 3 | X01..X10 map | done (second engineer); rows added this session: Split exact halves under a turned camera (X01/X02), Cut bar line (X10) | see the map below |
+| 4 | screenshots | done (judged below); fixed: 390 px tag (hoard.css); reported to RENDER: four-eyed read through a clear jelly, the bridge's tube look; KNOWN for the UI stage: 320 px tag with a capsule waiting | |
+| 5 | final run + bundle | running (batch F, then probe_cut, then a vite build by hand) | node_checks 126/126; probe_app 183/183; probe_gestures 128/128 |
+| 6 | seams for PLAYGROUND | done; cut.ts line numbers corrected, section 7 (lazy place code, size gate) added | |
+
+### Log (third engineer)
+- **b1 as found** (`SC3/run1_b1.log`, the second engineer's run, never read): 83/86. The 3 failures, verbatim:
+  `FAIL orbit: a LEFT-button drag on empty space does NOT turn the view ... camera {"yaw":-0.020380119774794883,"pitch":0.29304747735051634} -> {"yaw":0.0032445098382566017,"pitch":0.27602354670148516}`
+  `FAIL release: TWO snap SoftEvents (fingers 0 and 1), each at a high pull level ...  snap intensities 0.73 / 0.78`
+  `FAIL the same drag WITHOUT Shift is a lone hand: one grab (no finger 1), the body is picked up (metrics.carried), one snap  grab finger 1 false, snap finger 1 false, snap 0.86`
+  All three are TEST faults (no app code changed for them; no threshold touched):
+  1. orbit: the row measured the camera's angle around the body's CENTRE; the stage's camera target follows only 0.6 of the body's offset with a 1/6 s
+     lag (stage.ts 527-536), so a body still drifting after the pull's snap one row earlier read as a 0.024 rad "turn". Fix: the hook's `tools()` now also
+     returns `look` = the camera's view direction from its own matrix (debugHook.ts, a test seam), which is exactly the orbit yaw / pitch; the row uses it
+     (threshold 0.02 rad unchanged) and still prints the old angle. Re-run: left drag yaw 0.0000228 -> 0 (pitch 0.2700 -> 0.27), the around-the-body
+     angle still drifted; the right drag still reads as a turn (mean abs diff 25.33, camera moved).
+  2 + 3. test ORDER: mouse-gestures ends with a blind `wheel(0,-700)` that left the camera zoomed in (rPx 299 for a start of 210); shift-pull sizes its drag
+     from rPx and the viewport, so its drag was capped at 0.98 x maxPull, under the 1.15 lift limit (the lone hand could not lift; the Shift snaps could
+     not reach full level). The INPUT_SHIFT run (1.50 x maxPull) never had mouse-gestures before it. Fix: mouse-gestures puts the zoom back to its start
+     (rPx within 6 %, logged), and shift-pull gets a precondition row (the drag must ask >= 1.3 x maxPull) so a capped drag can never silently test less.
+  Re-run `--only=desktop-boot,mouse-gestures,shift-pull,console-and-network` (`SC3/e3_b1fix.log`): **49/49**: zoom restored rPx 210 (start 210); drag
+  569 px = 1.51 x maxPull; snaps 1.00 / 1.00; the lone hand carried, snap 1.00, no finger 1.
+- Found unrun at HEAD (added by the second engineer AFTER their last run of the section, so never executed): cut-x "parting gap (real physics + stage)"
+  (the 0.16 m SETTLE_GAP on the real stage), hint-capsule "a capsule waiting: the name tag keeps ... whole" (the hoard.css phone fix), and no row at all
+  for the Cut bar's new "Cutting… / Joining the pieces…" line. Added: cut-x row "Cut bar during Reconnect all says what plays" (reads `.cutbar-text`
+  before, 0.27 s into, and after Reconnect all from six pieces). All three run in batches p1 / p2 below.
+- b2 `capsule-loop,merge-dev,skip-timing,ceremony-spacing,calm-mode` (`SC3/run2_b2.log`): **34/34** (capsule-loop 49.7 s, merge-dev 6.5 s, skip-timing
+  13.9 s, ceremony-spacing 7.8 s, calm-mode 63.5 s; console and network clean).
+- b3 `hoard-loop,hoard-switch` (`SC3/run2_b3.log`, 315 s): **47/47** (hoard-loop 234.8 s, hoard-switch 68.6 s; console and network clean).
+- b6 `hoard-meter-line` (`SC3/run2_b6.log`): **15/15** (80.8 s).
+- p1 `cut-flash,feel-routes,hint-capsule,xp` (`SC3/run3_p1.log`, ~11 min): **37/41**. xp 8/8 (54.4 s). The 4 failures, verbatim (shortened where marked):
+  1. `FAIL X09 real shell: ... worst 1 s window 0 transitions (2 at 0.02), luma 0.055..0.092 over 112 frames, screen light 0, cuts 4 (refused 6), joins 1,
+     pieces <= 5 ...; cut@1 cut@11 cut@21 cut@31 refused@41(5 pieces 0.125+0.125+0.250+0.250+0.250: "") refused@42(...) ... refused@46(...) join@46`
+     (NORMAL effects this time; the second engineer's run passed normal and failed Calm). The flash gate held (0 transitions). From 5 pieces every
+     Split in two press is refused. In node (the 7g rig, real SoftBody, this genome, the same press rhythm: `SC3/probe/split5.ts`) the 5th press cuts
+     every time, so the browser difference is the real camera / stage. The row's own diagnostic read the live region at once, but the announcer flushes
+     on a 250 ms WALL-clock batch (announcer.ts:36), so it is always "" there: the row now records the Split button's aria-disabled / disabled at the
+     press and reads the live line 320 ms after a refusal.
+     **Root cause found (a REAL shell fault, src/shell/cut.ts):** reproduced in node with the camera turned as the stage frames the pieces
+     (`SC3/probe/split5.ts`, pose (-1.5, 1.4, 4.2)): `cut,cut,cut,cut,small,small,...` "That piece is as small as it gets.". The halving bisection lands a
+     hair off 0.5 (about 1e-4), so the cutter BOOKED the quarters at 0.2499; a 0.2499 piece cannot be halved without a piece under 1/8, the SIZE_TOL
+     snap rightly refuses it (it needs the piece to be >= 2/8), and once all three quarters are a hair under, every press is refused. Under other
+     camera poses one quarter happens to come out >= 0.25 and is the one picked, which is why node's default camera and the second engineer's normal
+     run passed and their Calm run (and today's normal run) did not. Fix: Split in two books EXACT halves once the bisection has found the half
+     (`HALF_TOL` = 0.003 on the measured fraction: the physics builds both pieces at exactly half the volume; the measured lobes differ by at most 0.6 %,
+     CUT.md X02 allows 3 %); a swipe keeps the measured sizes. New node row (7g) "Split in two alone under a turned camera (-1.5, 1.4, 4.2), the cut-flash
+     squishy, reaches 6 pieces ... EXACT halves": on HEAD's cut.ts it FAILS verbatim `cut,cut,cut,cut,small,small,small; 0.1250 + 0.1250 + 0.2500 + ...`,
+     with the fix it passes `cut,cut,cut,cut,cut; 0.1250 x 4 + 0.2500 x 2` (`SC3/node_checks_oldcut4.log`, `SC3/node_checks_e3c.log`: **126/126**). The
+     existing 7g "Split in two alone" row now reads exact shares too (`0.1250 + 0.1250 + 0.1250 + 0.1250 + 0.2500 + 0.2500`; it was 0.1251 + 0.1250 + ...).
+- p1 re-run after the fix (`SC3/run4_p1.log`, frozen, source hash `73f605367511`): xp 8/8 (55.8 s); **cut-flash 2/2** (311 s): normal `worst 1 s window
+  1 transitions (2 at 0.02), luma 0.054..0.095 over 218 frames, screen light 0, cuts 10 (refused 0), joins 2, pieces <= 6, end 1 piece(s)`; Calm `worst 1 s
+  window 0 transitions (1 at 0.02), luma 0.053..0.089 ..., cuts 10 (refused 0), joins 2`. **feel-routes all pass** (283 s): the bump row with the fixed
+  path `{"carried":true,"audio":{"lift":1,"bump":2,"land":2},"haptics":{"poke":2,"squeeze":130,"pop":5,"release":1},"vibrate":["8","5","14","6","18"]}`;
+  mat body flicked lift 1 / toss 1 (speed 1) / land 1; play body the same; a chunk flicked lift 1 / toss 1 (0.957); a chunk carried into the face piece
+  bump 2, pop 5; X08 `0.887 vs 1.113 ms, x0.80` (PASS). **X08 is noisy as an in-page sequential comparison**: the same row read x0.99 (second engineer),
+  x1.16 (p1, FAIL) and x0.80 (here) on this shared 4-core machine; the 2-whole and 6-piece figures are taken minutes apart in different scenes, so
+  machine load moves the ratio by about 18 %. I did not change the row (best of 5, threshold 1.0): its result is a proxy; the gate is probe_cut X08
+  (interleaved, physics), run in the final run. **hint-capsule all pass** (58.9 s): 390 x 844 with a capsule waiting, tag "Dollop" whole and tier whole
+  (`"tierClipped":false`, tag 16..126.5, Open now 262..306 = 44 px, Hoard at 157: the tag column has about 24 px to spare for longer tier words);
+  the pill clears the capsule by 197.6 px; 320 x 568 stays the KNOWN row (tag 68 px). Total **41/41**.
+- b5 `cut-swell,cut-low` (`SC3/run4_b5.log`, frozen, hash `73f605367511`): **12/12** (cut-swell 73.5 s, cut-low 33.5 s). cut-low: LOW quality, three swipes
+  make 4, Split in two disabled, the bar and the live region say "That's as many pieces as it can make.", a 5th swipe refused by the LIMIT. KNOWN PHYS
+  rows (not gated) re-measured: neck swell dollop x1.13, thudge x1.84, boingle x1.80 of the rest height (was x1.14 / x1.84 / x1.94).
+- b7 `hoard-keyboard,hoard-phone,hoard-calm,hoard-offline,settings-migration,hint-timing` (`SC3/run4_b7.log`): **38/39**. The failure, verbatim:
+  `FAIL U07 offline: the banner says "Offline. Your Hoard is read-only until we reconnect.", the ring says "Waiting for connection" and keeps previewing touches,
+  no error toast storm  {"banner":true,"text":"Offline. Your Hoard is read-only until we reconnect.","state":"Waiting for connection","live":"Offline. ...","fill":0,"fillAfter":0,"toasts":0}`.
+  A check that encodes behaviour the OWNER deliberately changed: the row showed "keeps previewing touches" with 4 quick clicks, and since commit
+  2f9cc8fc (owner decision 2026-10-06, independently verified, VERIFY_ECON_NOTAP.md) a tap pays nothing anywhere, so the ring cannot move for it; the row
+  had not been run since that change. **Re-specified** (written reason in the row): the touch is a real mouse press held 1.2 s of sim time (a squeeze, which
+  pays), exactly as the capsule-loop row was re-specified; every other condition is unchanged. Re-run in the final batch.
+- b8 `touch-phone,reflow,keyboard-only,context-loss,hidden-tab,reduced-motion,no-vibrate,storage-blocked,error-cards,url-params,lab-panel,prod-mode`
+  (`SC3/run4_b8.log`): **113/114**. The failure, verbatim: `FAIL Tab order in play: Mute, Settings, the Hoard, the squishy (and no other stop)  BODY > Mute sound >
+  Settings > Hoard > Toys > Squishy > BODY`. A check that predates the owner's toy tray (FUN.md 1: "one Toys button next to the Hoard button"): the Toys
+  button is a real, wanted stop, after the Hoard in DOM order. **Re-specified** (written reason in the row): Mute, Settings, Hoard, Toys, the squishy, and no
+  other stop (one more Tab press so a whole cycle of five is seen). Re-run after the final batch.
+- game.ts: the `cut` event's doc comment (ShellEvents) claimed Split in two and Reconnect all emit it; only the swipe does (game.ts:650). Comment corrected
+  (one line, so no line number moved). Source hash `73f605367511` -> `d13df909fc69` (the final source state); the only difference is that comment line.
+- probe_app **183/183** (0.6 s), probe_gestures **128/128** (10.9 s) on hash `73f605367511` (`SC3/final_probe_app.log`, `SC3/final_probe_gestures.log`).
+- Process fault found and fixed: the batch script ran the harness WITHOUT `WH_FROZEN=1` (vite.config.ts: no HMR, no file watch), so a source edit during
+  a run could reload a page mid-section. My cut.ts edit landed while p2's cut-x ran: that cut-x result is NOT counted as final. `batches.sh` now exports
+  `WH_FROZEN=1`; every later run is frozen.
+- p2 `cut-real,cut-x` (`SC3/run3_p2.log`): cut-real **all pass** (318.1 s), including the re-run "toss a piece" row (the flick is sampled) and the merge
+  leave row; cut-x see the final run (an edit landed mid-section). On the way, cut-x's new rows passed: the Cut bar row
+  (`{"before":"That's as many pieces as it can make.","during":"Joining the pieces…","after":"Swipe across a squishy to cut it."}`) and Reconnect all
+  from 6 with the bridge clear 0.67 s (every chunk 0.50 s) of a 1.20 s join.
+  2. `FAIL mat body, REAL physics: carried over its neighbour, ... {"carried":false,"audio":{},"haptics":{"poke":1,"squeeze":130,"release":1},"vibrate":["8","4","18"]}`:
+     a TEST fault, the same verbatim result as in the second engineer's run (they blamed the X08 ordering; reordering changed nothing). The row
+     pressed the mat body's OUTER shoulder and then rose while moving 60 px TOWARD the play body, i.e. inward from the pressed point: a press-and-move
+     (130 squeeze ticks), never a pull, so nothing could lift. The row has never passed. Fix: the lift goes OUTWARD 30 degrees above the horizontal for
+     3 radii (1.68 x maxPull), as the section's own `flick()` does (which passes), then carries over the neighbour, holds and lets go. Threshold untouched.
+  3. `FAIL X08 real (the shell's own bodies.step, contact on, physics only): 6 pieces cost no more per frame than the 2 whole squishies ... (best of 5 x 30
+     frames: 1.3 vs 1.123 ms, x1.16)  {"cost2":{...,"best":1.123,"all":[1.163,1.24,1.307,1.15,1.123]},"cost6":{...,"best":1.3,"all":[1.36,1.3,1.31,1.313,1.327]}}`.
+     The second engineer's run of the same row: 1.207 vs 1.223 (x0.99). The shell calls `collide(others)` once per body per step with every other body,
+     which is the physics' documented usage (softbody.ts:1321-1329); the cost is the physics' (CUT.md 4: PHYS owns "6 pieces no more than 2 whole";
+     the gate is probe_cut X08, interleaved). Not loosened, not hidden: re-run below and reported to PHYS if it stays over.
+  4. `FAIL 390 x 844, a capsule waiting: the name tag keeps "Dollop" whole and its tier word inside the tag ... {"name":"Dollop","nameClipped":false,
+     "tierClipped":true,"tag":{"x":16,...,"r":125.17},...,"open":{"x":237.17,...,"r":306},"count":"none"}`: a REAL layout fault (this row was written by the
+     second engineer and never run): the word "Open" leaves the tag 109 px and the tier word is cut to "COMMO…". Fix (src/ui/hoard.css, layout only):
+     from 381 to 480 px, while a capsule waits, the Open button shows its capsule pips instead of the word, as it already does under 381 px (its
+     aria-label "Open a capsule (n waiting)" names it), giving the tag about 25 px. 568 x 320 and 844 x 390 passed (tag 118 px, tier whole).
+- Source state of these runs: `git diff HEAD -- src index.html | sha1sum` = `68993e86d37f` (only the debugHook `look` seam differs from HEAD).
+- Step 4 screenshots judged so far (read as a product designer; `_shots/shell/`):
+  - `toys_tray_desktop.png`, `toys_tray_390.png`: clear. Tray titled TOYS, three tools each with a one-line purpose, the current tool filled and
+    outlined, the keyboard ring visible; at 390 x 844 it sits above the bottom row, nothing clipped. (Snap's amber edge on desktop is the mouse hover.)
+    The phone Toys button is an icon only and the Hoard button shows "1 of 50" without the word: understandable next to the tray, but it is the UI stage's call.
+  - `snap_mat_desktop.png` (HUD hidden, Snap bar: hint line, Night / Lagoon / Dusk / Ember, Save photo, Done) and `snap_saved_photo.png` (the saved
+    PNG opened: 1280 x 800, no HUD, no dev overlay, the three squishies and the table, not blank): good.
+  - `cut_neck_desktop.png`, `cut4_neck_desktop.png`, `cut4_parted_desktop.png`: the bar says "Cutting…" and dims Split / Reconnect all while a neck
+    plays (Done stays live); the face piece keeps the face (closed happy eyes after the parting), chunks show flat cut faces, all 4 pieces in frame.
+    The waist mid-neck is shallow (a warm seam band with notches top and bottom), which is the physics / render lanes' shape, not the shell's.
+  - **REPORT to RENDER (not fixed, not my lane)**: `mat_stack_desktop.png` and the saved photo: the blue squishy standing behind the orange Dollop shows
+    its eyes crisp through the clear orange gel, so the Dollop reads as ONE FOUR-EYED squishy. Repro: browser_shell section snap-mat (`?dev=1&rseed=4242`,
+    three on the mat, one carried onto its neighbour, 1.5 s later). Likely the transmission pass shows the opaque eyes behind a low-roughness jelly
+    un-blurred; consider dimming / tinting / depth-fading eyes seen through another body. (Bodies may also overlap a little after the drop; not measured.)
+  - `drag_reconnect_bridge_desktop.png` (re-taken in p2 at the let-go join, 0.25 s in) and `reconnect6_16_desktop.png` (Reconnect all from six, 0.27 s
+    in): the bridge is drawn and held between the pieces; the Cut bar now says "Joining the pieces…" (Split / Reconnect all dimmed, Done live) instead
+    of the stale limit line; the face piece squints happily. **REPORT to RENDER (art, minor)**: the bridges read as pale, solid, flat-lit tubes (a
+    bone or a sausage) rather than a glowing gooey neck in the jelly's own colour and translucency (stage setBridge look).
+  - `hint_capsule_390x844.png` (re-taken after the hoard.css fix, the phone play view with a capsule waiting and the hint pill): clear. "Dollop" and
+    "COMMON" whole in the tag, the one-line hint pill above the bottom row and 197 px clear of the capsule's tap circle, the row uncrowded (tag, Hoard,
+    Toys, the amber Open pill with its capsule pip, the ring with its "x1"). Trade-off stated: the Open pill now shows a capsule pip instead of the word
+    on 381..480 px phones (as it already did under 381 px); the amber colour, the ring's "x1" badge and the capsule on the table carry the meaning, and
+    the button's aria-label names it. The squishy sits low in a tall empty frame: the stage's framing, not the shell's.
+  - `hint_capsule_320x568.png` (the pre-fix shot): with a capsule waiting, the 320 px bottom row holds five items (tag, Hoard, Toys, Open, ring), the
+    tag gets about 66 px and reads "Do…". The second engineer's hoard.css fix keeps the tier word INSIDE the tag (no more running under the Hoard
+    button) and drops the Hoard count. I looked for a layout-only fix that gives the name back and found none that holds: stacking Open above the
+    ring needs the hint pill and the ring's status line to move up (the status line would then sit on the raised pill); a 52 px ring and tighter
+    gaps win about 14 px, enough for "Dollop" but not for the longer names. Left as the KNOWN (not gated) hint-capsule row for the UI stage, which
+    is queued right after SHELL-4 and redoes this row. Without a capsule waiting, phone-names proves all 50 names whole at 320 px.
+
 ## SESSION 3 CONTINUATION (2026-11-15, Linux container; the second SHELL-4 engineer; this part wins where it differs from the session-2 part below)
 Machine: `/home/user/forgeflow-games/games/wobblehoard` (G), 4 cores, Chromium headless shell 1243 + SwiftShader, port 5366 (vite) and 5367 (prod-build
 static server). Scratch `SC3` = `/tmp/claude-0/-home-user-forgeflow-games/2d4e12a5-0f4d-5239-bdda-16316c996a1a/scratchpad/shell4/` (logs `SC3/*.log`).
@@ -18,16 +159,16 @@ Baseline at HEAD 1e5a1159 (orchestrator, this machine): tsc clean; node_checks 1
 (browser = `_harness/browser_shell.mjs`, real SoftBody + real stage + real audio engine in Chromium; node 7g = `_harness/shellview/node_checks.ts` section 7g, the real SoftBody through the whole game with a mock stage; probe_cut = `_harness/probe_cut.ts`, physics only; render = `_harness/browser_render.mjs` section cut, the render lane's replica of the shell's call order. **NEW** = added in this session because nothing proved it at the app level.)
 | Id | Proved by (row names abbreviated) |
 |---|---|
-| X01 sizes | browser cut-x "X01 real: a swipe cuts ... 2 pieces" and "five REAL swipes make 6 pieces"; cut-real "a real mouse swipe ... two pieces", "Split in two twice: 4 pieces", "6 pieces at quality high"; node 7g "X01 real physics" x2 and **NEW** "Split in two alone reaches the 6-piece limit"; probe_cut X01 (the measured VOLUMES of the built pieces against their fractions, within 3 %: physics only, the browser cannot measure a volume better than the physics' own probe) |
+| X01 sizes | browser cut-x "X01 real: a swipe cuts ... 2 pieces" and "five REAL swipes make 6 pieces"; cut-real "a real mouse swipe ... two pieces", "Split in two twice: 4 pieces", "6 pieces at quality high"; node 7g "X01 real physics" x2 and **NEW** "Split in two alone reaches the 6-piece limit" and **NEW (third engineer)** "Split in two alone under a turned camera ... EXACT halves" (fails on HEAD's cut.ts: `cut,cut,cut,cut,small,small,small`); probe_cut X01 (the measured VOLUMES of the built pieces against their fractions, within 3 %: physics only, the browser cannot measure a volume better than the physics' own probe) |
 | X02 refusals | browser cut-x "X02 real" x3 (edge "Too small", the 7th by the LIMIT with Split disabled, the smallest "as small as it gets"); cut-low (LOW: 4 pieces, the 5th by the LIMIT, bar + live region); node 5d "X02 shell" rows; probe_cut X02 (the piece built with measureCut's fraction holds it within 3 %) |
 | X03 one face | browser cut-x "X03 real" x2 (stage views: 1 face + N chunks; the face piece is the play body nearest the anchor); cut-real (pieceViews 1, face on the side that held the eyes); render "CUT: a real body added with { chunk: true } is drawn without a face" |
 | X04 whole again | browser cut-x "X04 real: Reconnect all from 6 pieces ends whole" and **NEW** "X04 real: whole again is the ORIGINAL" (rest-shape RMS against the snapshot taken before the first cut, genome, mesh, radius); cut-real "Reconnect all: whole again ... at the middle of the table"; node 7g "X04 real physics"; probe_cut X04 (the GROWN face piece's goal RMS < 0.002 R0: the shell does not rely on it, it swaps in a FRESH whole body) |
 | X05 leave paths | browser cut-real "leaving:" rows: Hoard, quick switch, hidden 30 s keeps / 60+ s whole, capsule ceremony, **NEW** merge ceremony, reload (nothing about pieces stored); node 5d "X05 shell" x2 (switch, card preview, ceremony, hidden 61 s, Hoard never sees a piece); node 7g "X05 real physics" |
 | X06 meter | browser cut-x "X06 real" x3 (six cuts + refusals pay 0, Reconnect all pays 0, a tap on a piece pays 0 and a held squeeze on a chunk pays like on the face piece: 0.0500 = 0.0500); node 7g "X06 real physics"; node 7f bendWithPress "never paid twice" |
 | X07 no fold / hop / tunnel | probe_cut X07 (settle, presses, shoves at 3 m/s, determinism: physics only) + **NEW** browser cut-x "X07 real: six pieces on the real mat, settled" (finite, every lowest particle <= 1 mm, no centre inside another's skin) |
-| X08 cost | probe_cut X08 (the gate: physics, interleaved) + **NEW** browser feel-routes "X08 real" (the shell's own bodies.step with contact: 6 pieces vs the 2 whole squishies on the mat in the same page, best of 5 x 30 frames, physics only); the render lane's frame-budget readout (KNOWN OPEN x1.32..x1.45 of its 1.5 bar) |
-| X09 flash gate | render "CUT X09" (stub and real body in the shell's call order) + **NEW** browser section cut-flash: 10 rapid cuts and Reconnect all THROUGH src/shell/cut.ts, normal and Calm (luminance transitions in any 1 s, screen light) |
-| X10 keyboard | browser cut-x "X10: keyboard only" (C, Tab, Enter, live-region lines, Done, no trap); toys-tray rows (T, arrows, Enter, Escape); keyboard-only section |
+| X08 cost | probe_cut X08 (the gate: physics, interleaved) + **NEW** browser feel-routes "X08 real" (a noisy sequential proxy: x0.99, x1.16 FAIL, x0.80 in three runs on this machine) (the shell's own bodies.step with contact: 6 pieces vs the 2 whole squishies on the mat in the same page, best of 5 x 30 frames, physics only); the render lane's frame-budget readout (KNOWN OPEN x1.32..x1.45 of its 1.5 bar) |
+| X09 flash gate | render "CUT X09" (stub and real body in the shell's call order) + **NEW** browser section cut-flash: 10 rapid cuts and Reconnect all THROUGH src/shell/cut.ts, normal and Calm (luminance transitions in any 1 s, screen light); it also caught the Split-in-two refusal at 5 pieces (fixed: HALF_TOL), and now reads 10 cuts / 0 refused in both modes |
+| X10 keyboard | browser cut-x "X10: keyboard only" (C, Tab, Enter, live-region lines, Done, no trap); toys-tray rows (T, arrows, Enter, Escape); keyboard-only section; **NEW (third engineer)** cut-x "Cut bar during Reconnect all says what plays" (the visible line, not the live region) |
 
 ### Session 3 log
 - `node _harness/shellview/node_checks.ts` -> `124/124 shell-core node checks passed` (10.3 s; `SC3/node_checks_1.log`). The 7f rows (CALIBRATION.bendWithPress) and the 7g real-SoftBody cut rows all pass on this machine.
@@ -117,7 +258,7 @@ is built on this shell. Where each part plugs in, what already exists, and what 
   (338: the body the fingers act on; `pickBody` 445 changes it only between touches). LIFE must also stand still for that body while `cut.busy`
   (cut.ts owns moveTo then), while `ceremonies.active` (`inputLive`, 605) and while any pause reason holds (`reasons`, 315).
 - Key a brain by the squishy's identity (item id; a piece by its index in `cut.fracs()`), never by the SoftBodyLike object: a cut REPLACES the play
-  body with a new face-piece body (cut.ts:313-321 `swapTo(..., silent: true)`), and whole-again swaps in a FRESH body (`swapWhole`, cut.ts:374-384).
+  body with a new face-piece body (cut.ts:321 `swapTo(..., silent: true)`), and whole-again swaps in a FRESH body (`swapWhole`, cut.ts:376-385).
 
 ### 2. A place and party manager (mat.ts, bodies.ts, game.ts)
 - The party IS the play mat: `mat.add` (mat.ts:107-126) builds each squishy at the stage's `matLayout(n)` spot (`offsets`, 77-84) in the play body's
@@ -143,7 +284,7 @@ is built on this shell. Where each part plugs in, what already exists, and what 
   is 0 / 1, -1 for land).
 - **Missing, add them (additive, typed) before a quest needs them**: `cut` is emitted only for a SWIPE (game.ts:650); Split in two and Reconnect
   all from the bar call the cutter directly (hudBinding.ts:242-243) and emit nothing; "cut into N", "joined", "whole again" exist only as notice
-  TEXT (cut.ts:334, 352, 360) and lift / toss / bump only inside feedback.ts (197, 186-189, 146-152); Snap's save only as "Photo saved." in the live
+  TEXT (cut.ts:336, 354, 362, 573) and lift / toss / bump only inside feedback.ts (197, 186-189, 146-152); Snap's save only as "Photo saved." in the live
   region (hudBinding.ts:301). A quest must never parse notice text: add one typed `play` event (a kind union: cut / joined / whole / lift / toss /
   bump / photo / matAdd / travel ...) emitted at those lines.
 
@@ -181,3 +322,12 @@ is built on this shell. Where each part plugs in, what already exists, and what 
 7. The dev hook stays out of production: `debugHook.ts` is imported only behind `import.meta.env.DEV` (boot.ts), and the prod-build row greps the
    bundle for its strings (browser_shell.mjs FORBIDDEN). New test seams go into debugHook.ts only.
 8. Determinism: the harness steps the game with DebugHook.step; a LIFE brain that reads wall time or Math.random breaks every stepped check.
+
+### 7. Lazy place code and the size gate (DIRECTION D5 / D9; added by the third engineer)
+- The model for a module that must not weigh on the first load is already in boot.ts: the engine modules are dynamic imports (boot.ts:95-97) and
+  the dev tools are imported only behind `import.meta.env.DEV` (boot.ts:187-189). A place's render / audio module should be a dynamic import made
+  by the travel path (after `leaving()`, before the stage's place change), awaited behind a short "getting there" state with input held
+  (`holdInput`, game.ts:819), never a static import from game.ts or hudBinding.ts.
+- The prod-build row (browser_shell.mjs, section prod-build) measures the WHOLE dist against the old 1.2 MB gate (G0, browser_shell.mjs:3432) and greps
+  every emitted file for dev strings. D9 splits that into a first-load budget (1300 KB) and a whole-build budget (2000 KB): that row has to learn
+  which files the entry page pulls in before play (the entry chunk plus its static imports) before PLAYGROUND adds any lazy chunk.

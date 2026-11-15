@@ -155,7 +155,7 @@ export interface ShellEvents {
   tool: (t: Tool) => void;
   /** the Cut tool's blade: a swipe in progress over the canvas (CSS px), or its end (null) */
   blade: (b: { x0: number; y0: number; x1: number; y1: number } | null) => void;
-  /** a swipe, a Split in two or a Reconnect all ended: what happened (the cutter says the line itself) */
+  /** a SWIPE ended: what happened (the cutter says the line itself). Only the swipe emits it: the Cut bar's Split in two and Reconnect all call the cutter directly (hudBinding.ts) */
   cut: (r: CutResult | 'joined') => void;
 }
 

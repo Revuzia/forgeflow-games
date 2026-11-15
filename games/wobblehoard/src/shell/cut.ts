@@ -43,6 +43,12 @@ export const PIECE_MIN = 1 / 8;
  *  browser, SHELL-4 section cut-flash: 3 of 10 presses refused). A side within SIZE_TOL of the 1/8 limit is snapped onto it: the sizes stay within
  *  2.4 % of the measure (CUT.md X02 allows 3 %), the shares still sum exactly, and no piece is ever under 1/8. */
 export const SIZE_TOL = 0.003;
+/** Split in two books EXACT halves once the bisection has found the half (|measure - 0.5| within HALF_TOL): the bisection lands a hair off 0.5
+ *  (12 steps: about 1e-4), and quarters booked at 0.2499 can never be halved again without a piece under 1/8, so from 5 pieces every further press
+ *  was refused ("as small as it gets") under some camera angles (browser section cut-flash; node 7g row "under a turned camera"). The physics
+ *  builds the two pieces at exactly half the volume each; the measured lobes differ by at most 0.6 % (CUT.md X02 allows 3 %). A swipe keeps the
+ *  measured sizes (the player chose that plane). */
+export const HALF_TOL = 0.003;
 /** The neck (pinch) by material family (CUT.md 3): firm ones resist, plastic ones cut slow and sharp, the rest about 0.25 s. */
 export const NECK_S: Readonly<Record<string, number>> = { firmsilicone: 0.4, popdome: 0.4, putty: 0.34, mochidough: 0.34, slowrise: 0.3, marshmallow: 0.3, stickystretch: 0.3, slimegoo: 0.3 };
 export const NECK_DEFAULT_S = 0.25;
@@ -243,25 +249,27 @@ export function createCutter(d: CutDeps): Cutter {
 
   /** Split in two means HALVES by volume: the plane through the piece's centre, slid along its normal until measureCut reads one half (bisection;
    *  the current shape is never quite symmetric). Without a bracket (a body whose measure does not change across the middle) the centre plane. */
-  function halvingPoint(p: Piece, c: V3, normal: V3): V3 {
-    const at = (s: number): V3 => ({ x: c.x + normal.x * s, y: c.y + normal.y * s, z: c.z + normal.z * s });
+  function halvingPoint(p: Piece, c: V3, normal: V3): { point: V3; found: boolean } {
+    const at = (s: number): { point: V3; found: boolean } => ({ point: { x: c.x + normal.x * s, y: c.y + normal.y * s, z: c.z + normal.z * s }, found: false });
     try {
       // the 'a' side (dot(x - point, normal) >= 0) shrinks as the plane moves along +normal; a plane past the body's skin misses (null): the 'a'
       // side is then all of it (behind) or nothing (ahead)
-      const m = (s: number): number => { const f = p.body.measureCut!({ point: at(s), normal }); return f === null ? (s > 0 ? 0 : 1) : f; };
+      const m = (s: number): number => { const f = p.body.measureCut!({ point: at(s).point, normal }); return f === null ? (s > 0 ? 0 : 1) : f; };
       // a piece that has just parted can be lopsided (it pushes off its cut face and wobbles): widen the bracket until it holds the half
       let lo = 0, hi = 0, found = false;
       for (const k of [0.3, 0.6, 1]) { lo = -k * radius(p); hi = k * radius(p); if (m(lo) >= 0.5 && m(hi) <= 0.5) { found = true; break; } }
       if (!found) return at(0);
       for (let i = 0; i < 12; i++) { const s = (lo + hi) / 2; if (m(s) > 0.5) lo = s; else hi = s; }
-      return at((lo + hi) / 2);
+      return { point: at((lo + hi) / 2).point, found: true };
     } catch (e) { d.report(e); return at(0); }
   }
 
-  function startCut(p: Piece, plane: CutPlane): CutResult {
+  /** `half`: Split in two found the halving plane (HALF_TOL books exact halves) */
+  function startCut(p: Piece, plane: CutPlane, half = false): CutResult {
     let fa: number | null = null;
     try { fa = p.body.measureCut!(plane); } catch (e) { d.report(e); fa = null; }
     if (fa === null || !(fa > 0) || !(fa < 1)) return 'miss';
+    if (half && Math.abs(fa - 0.5) <= HALF_TOL) fa = 0.5;
     let small = Math.min(fa, 1 - fa) * p.frac;
     if (small < PIECE_MIN - 1e-6 && small >= PIECE_MIN - SIZE_TOL && p.frac >= 2 * PIECE_MIN - 1e-9) {
       // a hair under the limit (the measure of a not-quite-symmetric shape): the smaller side becomes exactly 1/8 of the whole (SIZE_TOL)
@@ -512,7 +520,8 @@ export function createCutter(d: CutDeps): Cutter {
       const up = unit({ x: w[4], y: w[5], z: w[6] }) ?? { x: 0, y: 1, z: 0 };
       const normal = view ? unit(cross(view, up)) : null;
       if (!normal) return 'miss';
-      return startCut(p, { point: halvingPoint(p, c, normal), normal });
+      const h = halvingPoint(p, c, normal);
+      return startCut(p, { point: h.point, normal }, h.found);
     },
     reconnectAll(animated) {
       if (!pieces.length && !anim) return false;

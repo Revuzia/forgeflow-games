@@ -47,6 +47,13 @@ body:not([data-calm="true"]) .hoard-btn[data-dot="true"] .hoard-btn-dot { animat
 }
 .nametag { overflow: hidden; }
 .nametag-tier { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* SHELL-4 (third engineer, section hint-capsule at 390 x 844): even so, the word "Open" (69 px) left the tag 109 px and cut its tier word to "COMMO…".
+   From 381 to 480 px, while a capsule waits, the button shows its capsule pips instead of the word, as it already does under 381 px (its aria-label,
+   "Open a capsule (n waiting)", names it for assistive tech), and the tag gets about 25 px back. */
+@media (max-width: 480px) and (min-width: 381px) {
+  .hud-bottom:has(.capsule-btn:not([hidden])) .capsule-btn-label { display: none; }
+  .hud-bottom:has(.capsule-btn:not([hidden])) .capsule-pips:not(:empty) { display: inline-flex; }
+}
 
 /* ---------- the panel ---------- */
 .hoard {

@@ -435,9 +435,13 @@ async function main() {
 
       // owner decision 2026-10-06: with a mouse only the RIGHT button turns the view. A LEFT drag on empty space does nothing (no turn, no poke) ...
       seen = await evKeys(page); a0 = await started(page);
-      // (the camera's ANGLE around the squishy is the measure: the squishy keeps wobbling, its eyes follow the mouse and the camera eases sideways to follow
-      // the body, so neither an image difference nor the camera position is ever still; a turn changes yaw or pitch, following does not)
-      const camOf = () => page.evaluate(() => { const k = window.__WH__.shell.tools(); if (!k.cam) return null; const dx = k.cam.x - k.body.x, dz = k.cam.z - k.body.z; return { yaw: Math.atan2(dx, dz), pitch: Math.atan2(k.cam.y - k.body.y, Math.hypot(dx, dz)) }; });
+      // (the camera's VIEW DIRECTION is the measure: the squishy keeps wobbling, its eyes follow the mouse and the camera eases sideways to follow
+      // the body, so neither an image difference nor the camera position is ever still; a turn changes the view's yaw or pitch, following does not.
+      // RE-MEASURED 2026-11-15 (SHELL-4, third engineer), threshold unchanged: the row used to take the angle of the camera around the body's CENTRE,
+      // but the camera's target follows only 0.6 of the body's offset with a 1/6 s lag, so a body still drifting after the pull's snap just above read
+      // as a 0.024 rad "turn" on this slower machine (b1: yaw -0.0204 -> 0.0032). The view direction from the camera's own matrix (hook tools().look)
+      // is exactly the orbit yaw / pitch the stage sets; the body-centre angle is still printed next to it.)
+      const camOf = () => page.evaluate(() => { const k = window.__WH__.shell.tools(); if (!k.cam) return null; const dx = k.cam.x - k.body.x, dz = k.cam.z - k.body.z; const around = { yaw: Math.atan2(dx, dz), pitch: Math.atan2(k.cam.y - k.body.y, Math.hypot(dx, dz)) }; return k.look ? { yaw: k.look.yaw, pitch: k.look.pitch, around } : around; });
       const camMoved = (p, q) => !p || !q ? true : Math.abs(p.yaw - q.yaw) > 0.02 || Math.abs(p.pitch - q.pitch) > 0.02;
       const cL0 = await camOf();
       await page.mouse.move(90, 140);
@@ -475,8 +479,17 @@ async function main() {
       await sleep(1500);
       const r2 = (await body(page)).rPx;
       check('wheel down zooms out', r2 < r1 * 0.95, `rPx ${r1.toFixed(0)} -> ${r2.toFixed(0)}`);
-      await page.mouse.wheel(0, -700);
-      await sleep(2500);
+      // put the zoom back where the section found it (rPx r0 within 6 %): the next section (shift-pull) sizes its drag from the body's radius and the
+      // viewport, so a camera left zoomed in caps its drag at 0.98 x maxPull, under the 1.15 lift limit (b1 2026-11-15: the old blind wheel(-700)
+      // left rPx 299 for a start of 210)
+      for (let k = 0; k < 12; k++) {
+        const rn = (await body(page)).rPx;
+        if (Math.abs(rn / r0 - 1) < 0.06) break;
+        await page.mouse.wheel(0, rn > r0 ? 120 : -120);
+        await sleep(900);
+      }
+      await sleep(1500);
+      console.log(`   zoom restored: rPx ${(await body(page)).rPx.toFixed(0)} (section start ${r0.toFixed(0)})`);
 
       // right button on the body = orbit, never a finger
       const B2 = await body(page);
@@ -524,6 +537,7 @@ async function main() {
       const reachPx = Math.min(1.6 * 1.79 * r, (vp.width - 12 - x0) / Math.cos(ang));
       const dragFrom = (i) => [x0 + (reachPx * Math.cos(ang) * i) / 14, y0 - (reachPx * Math.sin(ang) * i) / 14];
       console.log(`   shift path: press (${x0.toFixed(0)}, ${y0.toFixed(0)}), drag ${reachPx.toFixed(0)} px = ${(reachPx / (1.79 * r)).toFixed(2)} x maxPull (the lift limit is 1.15)`);
+      check('shift-pull precondition: the drag asks at least 1.3 x maxPull (past the 1.15 lift limit), so the rows below test a pull that WOULD lift a lone hand', reachPx / (1.79 * r) >= 1.3, `${(reachPx / (1.79 * r)).toFixed(2)} x maxPull, rPx ${r.toFixed(0)}`);
       // ---- a Shift pull: past the lift limit, Shift let go mid-drag
       let seen = await evKeys(page); let a0 = await started(page);
       await page.mouse.move(x0, y0);
@@ -2036,14 +2050,18 @@ async function main() {
       check('X06 real: six cuts and the refusals paid the meter nothing and the Hoard saw no piece (fill and items unchanged)', m6.fill === m0.fill && m6.credits === m0.credits && (await hstate(page)).items.length === items0, JSON.stringify({ fill: [m0.fill, m6.fill], items: [items0, (await hstate(page)).items.length] }));
       // ---- X04 + the bridge: Reconnect all from six pieces, the chunks' SURFACE gap to the face piece every step (the bridge is drawn while the skins are apart)
       const R0 = t0.body.r;   // the whole squishy's radius, read before the first cut
+      const barText = () => page.evaluate(() => document.querySelector('.cutbar-text')?.textContent ?? null);
+      const barBefore = await barText();
       await pclick(page, '.cutbar [data-key="join"]');
       const series = [];
+      let barDuring = null;
       // (two frames per sample: every step() renders a frame, and a software-GL frame is slow; 0.033 s resolution is plenty for a 0.3 s bridge)
       for (let i = 0; i < 52; i++) {
         await stepSim(page, 2 / 60);
         const g = await gaps(null);
         if (g.length < 2) break;
         series.push([(i + 1) * 2 / 60, Math.min(...g.slice(1).map((q) => q.gap)), Math.max(...g.slice(1).map((q) => q.gap))]);
+        if (i === 7) barDuring = await barText();
         if (i === 2 || i === 7 || i === 15 || i === 27) await shot(page, `reconnect6_${(i + 1) * 2}_desktop`);
       }
       // seconds with the chunk that is furthest apart still showing a gap that opens the bridge (> 2 % of the whole's radius), and the same for ANY chunk
@@ -2055,6 +2073,9 @@ async function main() {
       check('X04 real: whole again is the ORIGINAL: the same genome, the same mesh and radius, and its rest shape equals the one before the first cut (RMS under 0.002 R0); not a piece build',
         !!rc4 && rc4.sameGenome && rc4.n[0] === rc4.n[1] && Math.abs(rc4.radiusRatio - 1) < 1e-9 && rc4.rmsR0 < 0.002 && rc4.frac === 1 && !rc4.piece, JSON.stringify({ before: snap0, ...rc4 }));
       check(`Reconnect all keeps the glowing bridge in view: some chunk's skin stays more than 2 % of the radius clear of the face piece for at least 0.3 s (measured ${tAny.toFixed(2)} s; every chunk ${tAll.toFixed(2)} s; the whole join ${(series.length * 2 / 60).toFixed(2)} s)`, tAny >= 0.3 && series.length * 2 / 60 <= 1.45, JSON.stringify(series.filter((_, i) => i % 3 === 0).map((s) => [+s[0].toFixed(2), +s[1].toFixed(3), +s[2].toFixed(3)])));
+      // (step 4 finding, second engineer: the Cut bar kept saying "That's as many pieces as it can make." over the pieces flowing back) the bar says what plays
+      const barAfter = await barText();
+      check('Cut bar during Reconnect all says what plays ("Joining the pieces…"), not the limit line; whole again it asks for a swipe', /as many pieces/.test(barBefore ?? '') && barDuring === 'Joining the pieces…' && barAfter === 'Swipe across a squishy to cut it.', JSON.stringify({ before: barBefore, during: barDuring, after: barAfter }));
       const m7 = await meter(page);
       check('X06 real: Reconnect all paid nothing either', m7.fill === m0.fill, `${m0.fill} -> ${m7.fill}`);
       // ---- the gestures: drag a chunk into the face piece and HOLD (0.4 s), then the other way: let go while touching
@@ -2295,9 +2316,11 @@ async function main() {
             await idle(60);
             if (wh.shell.tools().pieces >= 6) { btn('join').click(); joins++; marks.push(`join@${lumas.length}`); await frame(); await idle(120); await frame(); }
             const p0 = wh.shell.tools().pieces;
-            btn('split').click();
+            const b0 = btn('split'), ad = b0.getAttribute('aria-disabled'), dis = b0.disabled;
+            b0.click();
             await frame();
-            if (wh.shell.tools().busy || wh.shell.tools().pieces > p0) { cuts++; marks.push(`cut@${lumas.length}`); } else { refused++; marks.push(`refused@${lumas.length}(${p0} pieces ${wh.shell.tools().fracs.map((f) => f.toFixed(3)).join('+')}: "${document.getElementById('wh-live')?.textContent ?? ''}")`); }
+            // (on a refusal the live line is read after the announcer's 250 ms wall-clock batch: read at once it is always empty, as the first logs showed)
+            if (wh.shell.tools().busy || wh.shell.tools().pieces > p0) { cuts++; marks.push(`cut@${lumas.length}`); } else { refused++; await new Promise((res) => setTimeout(res, 320)); marks.push(`refused@${lumas.length}(${p0} pieces ${wh.shell.tools().fracs.map((f) => f.toFixed(3)).join('+')}; button aria-disabled ${ad} disabled ${dis}: "${document.getElementById('wh-live')?.textContent ?? ''}")`); }
           }
           await idle(60);
           btn('join').click(); joins++; marks.push(`join@${lumas.length}`);
@@ -2372,7 +2395,10 @@ async function main() {
         wh.pointerDown(f.x / vw, f.y / vh, 0); wh.step(1 / 60, 8);
         let carried = false;
         const samp = () => { if (wh.shell.matInfo().bodies.some((x) => x.carried)) carried = true; };
-        const ux = f.x + Math.sign(t.x - f.x) * 60, uy = f.y - 2.4 * rr;   // up by 2.4 radii (1.34 x maxPull): the lift, whatever size the body is on screen
+        // the lift: OUTWARD from the pressed shoulder, 30 degrees above the horizontal, 3 radii (1.68 x maxPull, past the 1.15 lift limit), as flick() does.
+        // (TEST fault fixed 2026-11-15, third engineer: the path used to rise while moving 60 px TOWARD the neighbour, i.e. inward from the outer shoulder it
+        // pressed; that is a press-and-move, not a pull: 130 squeeze ticks, no grab, no lift, in both runs of this row; it had never passed)
+        const out = Math.sign(f.x - t.x) || 1, ux = f.x + out * Math.cos(Math.PI / 6) * 3.0 * rr, uy = f.y - Math.sin(Math.PI / 6) * 3.0 * rr;
         for (let i = 1; i <= 24; i++) { const k = i / 24; wh.pointerMove((f.x + (ux - f.x) * k) / vw, (f.y + (uy - f.y) * k) / vh, 0); wh.step(1 / 60, 2); samp(); }
         for (let i = 1; i <= 24; i++) { const k = i / 24; wh.pointerMove((ux + (t.x - ux) * k) / vw, (uy + (t.y - uy) * k) / vh, 0); wh.step(1 / 60, 2); samp(); }
         for (let i = 0; i < 6; i++) { wh.step(1 / 60, 6); samp(); }
@@ -2785,7 +2811,15 @@ async function main() {
       await sleep(500);
       const s1 = await page.evaluate(() => ({ banner: !document.querySelector('.net-banner').hidden, text: document.querySelector('.net-banner').textContent, state: document.querySelector('.meter-state')?.textContent, live: document.getElementById('wh-live')?.textContent, fill: window.__WH__.shell.meter().fill }));
       const B = await body(page); const vp = page.viewportSize();
-      for (let i = 0; i < 4; i++) { await page.mouse.click(B.x * vp.width + (i - 2) * 8, B.y * vp.height - 0.3 * B.rPx); await sleep(1100); }
+      // RE-SPECIFIED 2026-11-15 (SHELL-4, third engineer; owner decision 2026-10-06, commit 2f9cc8fc, "short taps pay nothing", independently verified): the
+      // preview used to be shown with 4 quick clicks, and a tap now pays nothing anywhere, offline or not, so the ring can never move for it (run4_b7:
+      // fill 0 -> 0). The same "keeps previewing touches" is shown with a touch that pays: a real mouse press held 1.2 s of SIM time (a squeeze), as the
+      // capsule-loop row does. Every other condition of the row is unchanged.
+      await page.mouse.move(B.x * vp.width, B.y * vp.height - 0.3 * B.rPx);
+      await page.mouse.down();
+      await page.evaluate(() => { window.__WH__.pause(); window.__WH__.step(1 / 60, 72); });
+      await page.mouse.up();
+      await page.evaluate(() => { window.__WH__.step(1 / 60, 12); window.__WH__.resume(); });
       await waitUntil(page, (f) => window.__WH__.shell.meter().fill > f, s1.fill, 30000);   // SwiftShader frames are slow on a loaded machine
       const s2 = await page.evaluate(() => ({ fill: window.__WH__.shell.meter().fill, toasts: window.__toasts, banner: !document.querySelector('.net-banner').hidden }));
       await shot(page, 'offline_desktop');
@@ -3114,12 +3148,15 @@ async function main() {
       await page.evaluate(() => document.activeElement.blur());
       const order = [];
       // a stop's name up to its first ':' or ',' (the Hoard button's name goes on with the count: "Hoard, 3 of 50 species, ...")
-      for (let i = 0; i < 7; i++) { await page.keyboard.press('Tab'); order.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')?.split(/[:,]/)[0] ?? document.activeElement?.tagName)); }
+      // RE-SPECIFIED 2026-11-15 (SHELL-4, third engineer): the owner's toy tray (FUN.md 1: "one Toys button next to the Hoard button") adds the Toys
+      // button to the bottom row, after the Hoard in DOM order; the row predates it (run4_b8: BODY > Mute sound > Settings > Hoard > Toys > Squishy > BODY).
+      // Still exactly these stops, in order, and no other; one more Tab press so a whole cycle of the five is seen.
+      for (let i = 0; i < 8; i++) { await page.keyboard.press('Tab'); order.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')?.split(/[:,]/)[0] ?? document.activeElement?.tagName)); }
       const stops = order.filter((o) => o !== 'BODY');
-      const want = ['Mute sound', 'Settings', 'Hoard', 'Squishy'];
+      const want = ['Mute sound', 'Settings', 'Hoard', 'Toys', 'Squishy'];
       const k0 = stops.indexOf('Mute sound');
       const cycleOk = k0 >= 0 && stops.length >= k0 + want.length && stops.every((o, i) => o === want[(((i - k0) % want.length) + want.length) % want.length]);
-      check('Tab order in play: Mute, Settings, the Hoard, the squishy (and no other stop)', cycleOk, order.join(' > '));
+      check('Tab order in play: Mute, Settings, the Hoard, Toys, the squishy (and no other stop)', cycleOk, order.join(' > '));
       // shortcuts stay out of form controls
       await page.focus('button[aria-label="Settings"]'); await page.keyboard.press('Enter'); await sleep(500);
       const g0 = (await state(page)).settings.gravity;

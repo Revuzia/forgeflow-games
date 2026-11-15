@@ -7,7 +7,7 @@
 import type { CapsuleHandle, CapsuleRevealSpec, CeremonyBeat, CeremonyHandle, CeremonyHooks, MergeCeremonySpec, SoftBodyLike, SoftEvent, StageLike, TierName } from '../../src/contracts.ts';
 import { createApp } from '../../src/app.ts';
 import type { App } from '../../src/app.ts';
-import { makeStarterGenome, encodeGenome } from '../../src/core/genome.ts';
+import { makeStarterGenome, encodeGenome, decodeGenome } from '../../src/core/genome.ts';
 import type { Genome } from '../../src/core/genome.ts';
 import { SETTINGS_KEY, defaultSettings, loadSettings, memoryStorage, resolveSettings, saveSettings } from '../../src/core/settings.ts';
 import { speciesBaseGenome, tierOf } from '../../src/data/catalog.ts';
@@ -1244,6 +1244,26 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
       rs.length === 5 && rs.every((r) => r === 'cut') && app.cut.pieces === 6 && Math.abs(f6.reduce((s, f) => s + f, 0) - 1) < 0.005 && f6.every((f) => f >= 0.125 - 1e-9),
       `${rs.join(',')}; ${f6.map((f) => f.toFixed(4)).join(' + ')}`);
     app.cut.reconnectAll(false); go(300);
+  }
+  // (SHELL-4, third engineer, found in the browser: section cut-flash, NORMAL effects) the same with the camera turned to the side, as the stage frames the pieces:
+  // the bisection booked the quarters a hair under 1/4 (0.2499) and a quarter can then never be halved without a piece under 1/8, so from 5 pieces every press
+  // was refused "That piece is as small as it gets." while the button was on (old code, this pose: cut,cut,cut,cut,small,small). Split in two now books exact
+  // halves once the bisection has found the half (HALF_TOL), so the shares are exactly 1/2, 1/4, 1/8.
+  {
+    const cam = (w.stage as unknown as { camera: { position: { x: number; y: number; z: number; set(x: number, y: number, z: number): void }; lookAt(x: number, y: number, z: number): void; updateMatrixWorld(f?: boolean): void } }).camera;
+    const p0 = { x: cam.position.x, y: cam.position.y, z: cam.position.z };
+    cam.position.set(-1.5, 1.4, 4.2); cam.lookAt(0, 0.3, 0); cam.updateMatrixWorld(true);
+    app.setGenome(decodeGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA')!);   // the browser cut-flash squishy
+    go(800);
+    const rs: string[] = [];
+    for (let i = 0; i < 7; i++) { while (app.cut.busy) go(2000 / 60); if (app.cut.pieces >= 6) break; rs.push(app.cut.splitInTwo()); go(2000 / 60); }
+    while (app.cut.busy) go(2000 / 60);
+    const f6 = app.cut.fracs();
+    check('Split in two alone under a turned camera (-1.5, 1.4, 4.2), the cut-flash squishy, reaches 6 pieces: five presses, five cuts, the shares are EXACT halves (1/2, 1/4, 1/8: every share a power of 1/2 within 1e-9), sum 1, none under 1/8',
+      rs.length === 5 && rs.every((r) => r === 'cut') && app.cut.pieces === 6 && f6.every((f) => [0.125, 0.25, 0.5].some((q) => Math.abs(f - q) < 1e-9)) && Math.abs(f6.reduce((s, f) => s + f, 0) - 1) < 1e-9,
+      `${rs.join(',')}; ${f6.map((f) => f.toFixed(4)).join(' + ')}`);
+    app.cut.reconnectAll(false); go(300);
+    cam.position.set(p0.x, p0.y, p0.z); cam.lookAt(0, 0.35, 0); cam.updateMatrixWorld(true);
   }
   app.dispose();
 }
