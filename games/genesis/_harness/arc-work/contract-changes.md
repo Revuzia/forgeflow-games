@@ -199,3 +199,7 @@
 ## Owner ruling 2026-11-12
 - Clouds: a camera resting inside the cloud deck must not show a white screen. Thin the deck locally around the camera (default ON, URL switch to disable). Open the clear tunnel for any sustained vertical travel.
 - "fix the found issues": far-tree colour/shape match, white frames, water over hills east of Rubolhin, reduced-res post where identical.
+
+## Owner ruling 2026-11-15
+- Powers should reveal as faith develops: the god grows stronger and can perform bigger miracles the more people believe (owner cites Black & White for this ONE mechanic; the earlier "nothing Black & White-like" ruling otherwise stands: no creature, no hand-slapping, no good/evil alignment). Purpose: keep players pushing through. Spec first (_spec/POWERS-GROWTH.md), owner approves before build.
+- GitHub: genesis-check must not e-mail on WIP checkpoints (now main / PR / manual only).
