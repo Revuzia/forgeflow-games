@@ -187,7 +187,10 @@ def grade(sid: str, glb: str | None = None, dry: bool = False, fresh: float = 0.
             prot += ["--protect-sat", str(rec["protectSat"])]
         cap = float(rec.get("capMax", CAP))
         for aim, margin in [(min(a, cap - 1.0), m) for a, m in LADDER]:
-            for q in range(84, 59, -4):
+            # orch1 W1-B fix 2: a recipe's qMin (default 60) lets a fighter whose zones add texture detail (Odrum's
+            # mask keeps every painted feature) step the WebP quality further down to stay inside the 1172 KiB budget
+            qmin = int(rec.get("qMin", 60))
+            for q in range(84, qmin - 1, -4):
                 shutil.copyfile(glb, trial)
                 r = subprocess.run([node(), GRADE, trial, "--q", str(q), "--reserve-cap", str(aim), "--reserve-margin",
                                     str(margin)] + [x for k, v in rec.get("reserveModes", {}).items() for x in ("--reserve-mode", f"{k}={v}")]
@@ -199,7 +202,7 @@ def grade(sid: str, glb: str | None = None, dry: bool = False, fresh: float = 0.
                                + (["--protect-max-s", str(rec["protectMaxS"])] if "protectMaxS" in rec else []) + prot + tint, cwd=GAME, capture_output=True, text=True)
                 if r.returncode:
                     raise SystemExit(r.stderr[-1200:])
-                if os.path.getsize(trial) <= max(min(before + 24 * 1024, 1160 * 1024), before) or q <= 60:
+                if os.path.getsize(trial) <= max(min(before + 24 * 1024, 1160 * 1024), before) or q <= qmin:
                     break
             # ruling 32 (max2 round 2, strict reading): a zoned fighter's albedo ends with every reserved band at
             # <= 8 %, whatever its bake held (the grade's --reserve-cap brings a bake over the cap under it); a grade

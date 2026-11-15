@@ -450,13 +450,13 @@
  "ardit": {
   "zones": [
    {
-    "why": "orch1 FU-3: the helm a deep steel-teal (albedo HSV ~196 renders HSV 180-190 under the warm sun; CIELAB h ~220, in game HSV h 180-190), out of the reserved ally band 200-225 (r3's #33739C slate blue rendered HSV 204.8) and dark enough (in game L* ~50) to sit >= 25 dE from Lisvel's pale cyan wrap",
+    "why": "orch1 W1-B fix 2 (FU-3): the helm a deep steel-teal (albedo HSV ~186; fix-1's HSV 196 at L 10 rendered HSV 187-204, median 194.4 with two runs in the ally band), so in game it sits at HSV 180-190 out of the ally band (200-225) on every seating",
     "parts": [
      "helm"
     ],
-    "hex": "#2C6A80",
-    "L": 10,
-    "C": 30
+    "hex": "#2D7780",
+    "L": 14,
+    "C": 26
    },
    {
     "why": "orch1 FU-3: pauldrons and tiers a cool slate (low chroma, teal-leaning), so no pale blue mass on the shoulders reads ally or Lisvel",
@@ -603,23 +603,33 @@
  "odrum": {
   "zones": [
    {
+    "why": "orch1 W1-B fix 2 (units_gate P1, FU-2): the mask a deep muted honey (CIELAB h ~95, albedo L* 32, in game HSV h ~40-47, L* ~45-55); it keeps its honey hue and every painted feature (k 0.8) and sits a value step under Nurrow's, Tunlan's, Sukri's and Ilsheta's pale tops (fix-1 run 0 read L* 74 h 83, dE 7.9 to Nurrow) and 30+ deg of hue from Burdam's russet",
+    "parts": [
+     "mask"
+    ],
+    "hex": "#5C553D",
+    "L": 32,
+    "C": 13,
+    "k": 0.8
+   },
+   {
     "why": "orch1 FU-2: the felt cap a real deep olive (CIELAB h ~112, HSV h ~65: out of the harm band; in game L* <= 40; r3's #B3A400 L 36 read L 58 khaki at HSV h 49 in game beside Sukri and Ilsheta); the mask and hands are never zoned",
     "parts": [
      "cap"
     ],
-    "hex": "#494D2D",
+    "hex": "#3F4B32",
     "L": 20,
-    "C": 18,
+    "C": 16,
     "k": 0.6
    },
    {
-    "why": "orch1 FU-2 / units_gate P2: the pale linen shirt (coat texels L* >= 50) a cool olive-grey, so the warm sun no longer reads the whole top as honey in the harm band; the honey stays on the mask, hands and pots",
+    "why": "orch1 FU-2 / W1-B fix 2: the pale linen shirt (coat texels L* >= 50) a mid olive-grey (L* 40): in game the sunlit shoulders sit in the top quarter of the silhouette, and a pale shirt (fix-1 L* 52 read L* 69) lifted the top into the honey fighters' value",
     "parts": [
      "coat"
     ],
     "minL": 50,
     "hex": "#6B6E5C",
-    "L": 52,
+    "L": 40,
     "C": 6
    },
    {
@@ -645,6 +655,16 @@
     "L": 32,
     "C": 10,
     "k": 0.5
+   },
+   {
+    "why": "orch1 W1-B fix 2: the skirt a pale olive linen (low chroma) so the brightest quarter of the body stays in the bible band (70-85) once the mask and shirt sit a value step down",
+    "parts": [
+     "skirt"
+    ],
+    "hex": "#959083",
+    "L": 78,
+    "C": 6,
+    "k": 0.8
    }
   ],
   "reserveModes": {
@@ -665,7 +685,8 @@
   "protectSat": 0.375,
   "capMax": 7.0,
   "darkGuard": 90,
-  "protectMaxS": 0.41
+  "protectMaxS": 0.41,
+  "qMin": 40
  },
  "dunsom": {
   "zones": [
@@ -714,13 +735,13 @@
  "ulkro": {
   "zones": [
    {
-    "why": "orch1 FU-1/FU-3: the hood's lit dome (z > 1.70) a sage moss green (CIELAB h ~128, in game HSV ~70: outside the harm and heal bands), so the scout no longer shares Odrum's and Nurrow's honey-tan top (r3 dE 4.9)",
+    "why": "orch1 W1-B fix 2: the hood's lit dome (z > 1.70) a deep forest moss (CIELAB h ~155, albedo L* 22, in game L* ~45-55, HSV h ~105-120: outside the harm and heal bands), a value step under Ilsheta's, Sukri's, Nurrow's and Marund's pale tops (fix-1 dE 18-21) and 30 deg of hue from Odrum's olive",
     "parts": [
      "hood"
     ],
-    "hex": "#4A6B35",
-    "L": 48,
-    "C": 20,
+    "hex": "#2B4E39",
+    "L": 22,
+    "C": 17,
     "k": 0.8,
     "boxes": [
      [
@@ -739,9 +760,9 @@
      "hood",
      "hood_tail"
     ],
-    "hex": "#4A6B35",
-    "L": 26,
-    "C": 18,
+    "hex": "#2B4E39",
+    "L": 14,
+    "C": 12,
     "k": 0.8,
     "boxes": [
      [
@@ -753,6 +774,40 @@
       1.7
      ]
     ]
+   },
+   {
+    "why": "orch1 W1-B fix 2: the cowl and sleeves (the shoulders in the top quarter of the silhouette) a deep moss-olive, so the whole top reads one dark moss family and the lit dome breaks from them by value",
+    "parts": [
+     "cowl",
+     "sleeves"
+    ],
+    "hex": "#2B4E39",
+    "L": 16,
+    "C": 10,
+    "k": 0.7
+   },
+   {
+    "why": "orch1 W1-B fix 2: the skirt a pale linen sage (low chroma) so the brightest quarter of the body stays in the bible band (70-85) under the darker hood and shoulders",
+    "parts": [
+     "skirt"
+    ],
+    "hex": "#9B9688",
+    "L": 68,
+    "C": 7,
+    "k": 0.8
+   },
+   {
+    "why": "orch1 W1-B fix 2: the shoulder plates a deep moss leather (their pale bone-cream lacquer, L* 48-53, read as the pale top in game and lifted Ulkro into Marund's and Ilsheta's value)",
+    "parts": [
+     "plate_R1",
+     "plate_R2",
+     "plate_L1",
+     "plate_L2"
+    ],
+    "hex": "#2B4E39",
+    "L": 22,
+    "C": 10,
+    "k": 0.7
    }
   ],
   "reserveModes": {
@@ -772,6 +827,7 @@
   },
   "reserveGutterFirst": true,
   "darkGuard": 90,
-  "capMax": 7.0
+  "capMax": 7.0,
+  "qMin": 48
  }
 }
