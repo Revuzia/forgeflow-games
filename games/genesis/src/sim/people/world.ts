@@ -221,6 +221,10 @@ export function isLand(p: Planet, c: number): boolean {
 
 /** water (m) above which nothing is built and no band settles: a film or a puddle is ground, more is not */
 export const SITE_WET_MAX = 0.15;
+/** water (m) allowed under a new building's footprint: next to none — a lake's margin moves a hand or two with the rains
+ * (seed 307987276: 0.15 m in the first three days), and a house begun with 0.15 m at its wall was lost to the sweep
+ * at 0.3 m that same week; from 0.05 m the margin has 0.25 m to rise first */
+export const FOOT_WET_MAX = 0.05;
 /** water (m) under a finished building's footprint above which it is lost (buildings.ts floodSweep, daily); also the
  * depth at which the renderer calls a footprint wet (render/life/buildings.ts place()) and a site is given up */
 export const STANDING_WATER_MAX = 0.3;
@@ -265,12 +269,12 @@ export function standingWater(p: Planet, pos: ArrayLike<number>, footprint = 0):
 }
 
 /**
- * Dry ground for a building: no more than a film of water (SITE_WET_MAX) at the point itself or anywhere under a
- * footprint of radius `footprint` metres. THE test of every building placement (buildings.ts findSite and its shore
+ * Dry ground for a building: next to no water (FOOT_WET_MAX) at the point itself or anywhere under a footprint of
+ * radius `footprint` metres. THE test of every building placement (buildings.ts findSite and its shore
  * and edge searches); docks, shipyards and lighthouses, which stand at the water, ask only their own cell (dryCell).
  */
 export function dryAt(p: Planet, pos: ArrayLike<number>, footprint = 0): boolean {
-  return standingWater(p, pos, footprint) <= SITE_WET_MAX;
+  return standingWater(p, pos, footprint) <= FOOT_WET_MAX;
 }
 
 const _heapC: number[] = [];

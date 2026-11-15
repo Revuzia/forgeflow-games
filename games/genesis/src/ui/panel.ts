@@ -25,7 +25,7 @@ let panelSound: ((cue: string) => void) | null = null;
 export function setPanelSound(f: ((cue: string) => void) | null): void { panelSound = f; }
 
 /** the minimum of an element that focus can be given back to */
-interface FocusLike { isConnected?: boolean; hidden?: boolean; focus(o?: { preventScroll?: boolean }): void }
+interface FocusLike { isConnected?: boolean; hidden?: boolean | string; tagName?: string; focus(o?: { preventScroll?: boolean }): void }
 
 /**
  * where focus goes when a window closes: back to what had it when the window opened, if that is still on the page and
@@ -118,7 +118,7 @@ export class Panel {
     this.opener = null;
     this.onClose?.();
     // (not into a field of the page: the world's keys must keep working, so only buttons, links and the like get it back)
-    if (back && !/^(INPUT|TEXTAREA|SELECT)$/.test(back.tagName)) back.focus({ preventScroll: true });
+    if (back && !/^(INPUT|TEXTAREA|SELECT)$/.test(back.tagName ?? '')) back.focus({ preventScroll: true });
   }
 
   toggle(): void { if (this.isOpen) this.close(); else this.open(); }
