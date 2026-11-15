@@ -271,7 +271,7 @@ export function buildCustomSetup(catalog: CatalogT, queue: QueueDefT, cfg: Custo
     const cands = pool.filter((f) => !used.has(f));
     const fighter = s.fighter && pool.includes(s.fighter) ? s.fighter : o.rng.pick(cands.length ? cands : pool);
     used.add(fighter);
-    const name = s.you ? o.displayName : o.botNames[bot++ % Math.max(1, o.botNames.length)] ?? `Bot ${s.player + 1}`;
+    const name = s.you ? o.displayName : o.botNames[bot++ % Math.max(1, o.botNames.length)] ?? `Guest ${s.player + 1}`;
     return {
       player: s.player, team: s.team, name, isBot: !s.you, isYou: s.you, fighter,
       skin: s.you ? yourSkins(catalog, o.profile, fighter)[0] : botSkins(catalog, fighter, o.rng)[0],

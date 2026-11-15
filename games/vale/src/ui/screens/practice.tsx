@@ -78,7 +78,7 @@ export function PracticeScreen(): JSX.Element {
         <div class="srow2 stg"><div class="srow2__text"><span class="t-body">{cv.t('practice.sparring', 'Sparring partner')}</span><span class="t-caption muted">{cv.t('practice.sparring_desc', '')}</span></div>
           <div class="srow2__ctl srow2__ctl--pair">
             <Select label={cv.t('practice.sparring', 'Sparring partner')} value={spar} options={sparOpts} onChange={setSpar} />
-            {spar ? <Select label={cv.t('custom.difficulty', 'Bot difficulty')} value={sparDiff} options={diffOpts} onChange={setSparDiff} /> : null}
+            {spar ? <Select label={cv.t('custom.difficulty', 'Match intensity')} value={sparDiff} options={diffOpts} onChange={setSparDiff} /> : null}
           </div></div>
       </div>
       <Section title={cv.t('play.preset.fighter', 'Fighter')} hint={f ? f.name : cv.t('practice.fighter_hint', 'Optional. Leave it empty and you pick on the next screen.')}>

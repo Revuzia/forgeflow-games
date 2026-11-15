@@ -45,7 +45,7 @@ export function CustomScreen(): JSX.Element {
   };
   const hasYou = seats.some((s) => s.kind === 'you');
   const kindOpts: Option<Seat['kind']>[] = [
-    { value: 'you', label: cv.t('custom.seat_you', 'You') }, { value: 'bot', label: cv.t('custom.seat_bot', 'Bot') }, { value: 'open', label: cv.t('custom.seat_open', 'Open') },
+    { value: 'you', label: cv.t('custom.seat_you', 'You') }, { value: 'bot', label: cv.t('custom.seat_bot', 'Player') }, { value: 'open', label: cv.t('custom.seat_open', 'Open') },
   ];
   const diffOpts: Option<NonNullable<Seat['difficulty']>>[] = (['novice', 'adept', 'veteran'] as const).map((d) => ({ value: d, label: cv.t(`custom.difficulty_${d}`, d) }));
   const fighterOpts: Option<string>[] = [{ value: '', label: cv.t('custom.fighter_random', 'Random') }, ...cv.playable().map((f) => ({ value: f.id, label: f.name }))];
@@ -62,7 +62,7 @@ export function CustomScreen(): JSX.Element {
     <Screen title={cv.t('custom.title', 'Custom game')} layout="wide"
       foot={<span class={`t-body-s ${hasYou ? 'muted' : 'reason reason--warn'}`}>{hasYou ? cv.t('custom.no_rewards', 'No rewards are given in custom games.') : cv.t('custom.need_seat', 'Put yourself in a seat to start.')}</span>}
       cta={<Button variant="chalk" size="l" wedge disabled={!hasYou} reason={cv.t('custom.need_seat', 'Put yourself in a seat to start.')} onPress={start}>{cv.t('btn.start_custom', 'Start game')}</Button>}>
-      <p class="t-body muted stg">{cv.t('custom.hint', 'Set the mode, the seats and the bots yourself.')}</p>
+      <p class="t-body muted stg">{cv.t('custom.hint', 'Set the mode and the seats yourself.')}</p>
       <div class="row custom__top stg">
         <span class="t-label">{cv.t('custom.mode', 'Mode')}</span>
         <Segmented label={cv.t('custom.mode', 'Mode')} value={modeId} options={live.map((m) => ({ value: m.id, label: m.name }))} onChange={pickMode} />
@@ -77,7 +77,7 @@ export function CustomScreen(): JSX.Element {
               <div class={`cseat ${s.kind === 'you' ? 'is-you' : ''}`}>
                 <span class="cseat__n t-caption">{ffa ? <SeatMark seat={seatOf(i)} you={s.kind === 'you'} size={14} /> : null}{cv.t('custom.seat', 'Seat {n}', { n: i + 1 })}</span>
                 <Segmented size="s" label={cv.t('custom.seat', 'Seat {n}', { n: i + 1 })} value={s.kind} options={kindOpts} onChange={(k) => setSeat(i, { kind: k })} />
-                <Select label={cv.t('custom.difficulty', 'Bot difficulty')} value={s.difficulty ?? 'adept'} options={diffOpts} onChange={(d) => setSeat(i, { difficulty: d })}
+                <Select label={cv.t('custom.difficulty', 'Match intensity')} value={s.difficulty ?? 'adept'} options={diffOpts} onChange={(d) => setSeat(i, { difficulty: d })}
                   disabled={s.kind === 'you' ? cv.t('custom.seat_you', 'You') : undefined} class="cseat__sel" />
                 <Select label={cv.t('custom.fighter', 'Fighter')} value={s.fighter ?? ''} options={fighterOpts} onChange={(f) => setSeat(i, { fighter: f || undefined })} class="cseat__sel" />
               </div>

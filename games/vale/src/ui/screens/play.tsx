@@ -91,7 +91,7 @@ export function PlayScreen(p: { params: Record<string, string> }): JSX.Element {
   return (
     <Screen title={cv.t('play.title', 'Play')}
       stage={<PlayArt modeId={modeId} queue={queue} note={slot?.note} />}
-      foot={reason ? <span class={`reason t-body-s ${lockLeft > 0 ? 'reason--warn' : ''}`}>{reason}</span> : queue ? <span class="t-body-s muted">{queue.bots.fill === 'none' ? cv.t('play.queue.bots_none', 'No bots.') : cv.t('queue.bots_note', 'Open seats are filled with bots.')}</span> : null}
+      foot={reason ? <span class={`reason t-body-s ${lockLeft > 0 ? 'reason--warn' : ''}`}>{reason}</span> : null}
       cta={<Button variant="chalk" size="l" wedge disabled={!!reason} reason={reason ?? undefined} onPress={find} cue="confirm">{cv.t('btn.find_match', 'Find match')}</Button>}>
       <div class="play">
         <div class="play__dialwrap stg">
@@ -129,22 +129,22 @@ export function PlayScreen(p: { params: Record<string, string> }): JSX.Element {
         ) : null}
 
         {queue ? (
-          <Section title={cv.t('play.party', 'Party')} hint={queue.partyMax > 1 ? cv.t('play.party_hint', 'Fill open seats with bots, or play with the seats open.') : undefined}>
+          <Section title={cv.t('play.party', 'Party')} hint={queue.partyMax > 1 ? cv.t('play.party_hint', 'Fill open seats with teammates, or play with the seats open.') : undefined}>
             <div class="party">
               {party.map((m) => (
-                <span class={`party__m ${m.isBot ? 'is-bot' : ''}`}>
-                  <Icon name={m.isBot ? 'bot' : 'user'} size={16} />
+                <span class="party__m">
+                  <Icon name="user" size={16} />
                   <span class="t-body-s">{m.name}</span>
-                  {m.isBot ? <span class="chip chip--bot">{cv.t('party.bot', 'Bot')}</span> : <span class="chip chip--line">{cv.t('party.you', 'You')}</span>}
+                  {m.isBot ? null : <span class="chip chip--line">{cv.t('party.you', 'You')}</span>}
                 </span>
               ))}
               {queue.partyMax > 1 && session.setPartyBots ? (
-                <span class="stepper" role="group" aria-label={cv.t('play.party_bots', 'Bot allies')}>
-                  <span class="t-label muted">{cv.t('play.party_bots', 'Bot allies')}</span>
-                  <Button variant="icon" size="s" icon="minus" label={cv.t('party.remove_bot', 'Remove bot')} disabled={partyBots <= 0} reason={cv.t('state.empty.party', 'You are playing alone.')}
+                <span class="stepper" role="group" aria-label={cv.t('play.party_bots', 'Fill seats')}>
+                  <span class="t-label muted">{cv.t('play.party_bots', 'Fill seats')}</span>
+                  <Button variant="icon" size="s" icon="minus" label={cv.t('party.remove_bot', 'Remove teammate')} disabled={partyBots <= 0} reason={cv.t('state.empty.party', 'You are playing alone.')}
                     onPress={() => { session.setPartyBots!(partyBots - 1); state.refreshParty(); }} />
                   <span class="num stepper__n" aria-live="polite">{partyBots}</span>
-                  <Button variant="icon" size="s" icon="plus" label={cv.t('party.add_bot', 'Add a bot')} disabled={party.length >= Math.min(5, queue.partyMax)}
+                  <Button variant="icon" size="s" icon="plus" label={cv.t('party.add_bot', 'Add a teammate')} disabled={party.length >= Math.min(5, queue.partyMax)}
                     reason={cv.t('play.party_size', 'Party of up to {n}', { n: queue.partyMax })}
                     onPress={() => { session.setPartyBots!(partyBots + 1); state.refreshParty(); sound.play('notify'); }} />
                 </span>
@@ -172,7 +172,6 @@ function queueTerms(cv: ReturnType<typeof useApp>['cv'], q: QueueDefT): { reward
   }
   const bans = cv.pickOf(q) === 'draft' ? q.draft?.bansPerTeam ?? 0 : null;
   if (bans !== null) more.push(bans === 0 ? cv.t('play.queue.bans_none', 'No bans') : bans === 1 ? cv.t('play.queue.bans', '{n} ban per team', { n: bans }) : cv.t('play.queue.bans_plural', '{n} bans per team', { n: bans }));
-  more.push(q.bots.fill === 'opponents_only' ? cv.t('play.queue.bots_opponents', 'Opponents are bots.') : q.bots.fill === 'none' ? cv.t('play.queue.bots_none', 'No bots.') : cv.t('play.queue.bots_fill', 'Open seats are filled with bots.'));
   return { reward, more };
 }
 

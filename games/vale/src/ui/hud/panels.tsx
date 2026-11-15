@@ -115,7 +115,7 @@ function PlayerCell(p: { p: PlayerView }): JSX.Element {
         {down ? <span class="hscore__resp num" title={cv.t('hud.dead.respawn', 'Back in {t}', { t: `${Math.ceil(p.p.respawnIn)} s` })}>{Math.ceil(p.p.respawnIn)}</span> : null}
       </span>
       <span class="hscore__names">
-        <span class="t-body-s">{p.p.player === model.you ? `${p.p.name}` : p.p.name}{p.p.controller === 'bot' ? <span class="chip chip--bot">{cv.t('score.bot', 'Bot')}</span> : null}</span>
+        <span class="t-body-s">{p.p.player === model.you ? `${p.p.name}` : p.p.name}</span>
         <span class="t-caption muted">{f?.name}{role ? ` · ${role.name}` : ''}</span>
       </span>
     </td>

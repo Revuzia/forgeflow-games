@@ -37,6 +37,9 @@ export function LoadingScreen(): JSX.Element {
   const tips = useMemo(() => cv.tipsFor(setup?.mode), [setup?.mode]);
   const [tipN, setTipN] = useState(() => Math.floor(Math.random() * 1e6));
   const tipI = tips.length ? tipN % tips.length : 0;
+  // presentation only: every other seat reads ready after a short, uneven moment, so the cards look alike
+  const [tickMs, setTickMs] = useState(0);
+  useEffect(() => { const t0 = Date.now(); const t = setInterval(() => setTickMs(Date.now() - t0), 250); return () => clearInterval(t); }, [setup?.matchId]);
   const [assets, setAssets] = useState(state.renderer?.preload ? 0 : 1);
   const [failed, setFailed] = useState<string | null>(null);
   const started = useRef(performance.now());
@@ -97,7 +100,7 @@ export function LoadingScreen(): JSX.Element {
           <section class={`lteam ${ffa ? 'lteam--ffa' : ti === 0 ? 'lteam--ally' : 'lteam--enemy'}`} aria-label={ffa ? cv.t('hourboard.title', 'Hour Board') : ti === 0 ? cv.t('team.yours', 'Your team') : cv.t('team.theirs', 'The other team')}>
             {!ffa ? <h2 class="lteam__head t-label"><SideMark team={seats[0]?.team ?? 0} withName />{ti === 0 ? cv.t('team.yours', 'Your team') : cv.t('team.theirs', 'The other team')}</h2> : null}
             <div class="lteam__cards">
-              {seats.map((s, i) => <PlayerCard s={s} ffa={ffa} you={s === you} ready={s.controller === 'bot' || ready} rel={s === you ? 'self' : ffa ? 'enemy' : ti === 0 ? 'ally' : 'enemy'} i={i} />)}
+              {seats.map((s, i) => <PlayerCard s={s} ffa={ffa} you={s === you} ready={ready || seatReady(s, i, tickMs)} rel={s === you ? 'self' : ffa ? 'enemy' : ti === 0 ? 'ally' : 'enemy'} i={i} />)}
             </div>
           </section>
         ))}
@@ -126,6 +129,11 @@ export function LoadingScreen(): JSX.Element {
   );
 }
 
+/** a neutral stand-in for other seats' ready state: 0.6 to 2.4 s, uneven per seat */
+function seatReady(s: SeatSetup, i: number, ms: number): boolean {
+  return ms >= 600 + ((s.player * 7 + i * 5) % 7) * 300;
+}
+
 function PlayerCard(p: { s: SeatSetup; ffa: boolean; you: boolean; ready: boolean; rel: 'self' | 'ally' | 'enemy'; i: number }): JSX.Element {
   const { cv } = useApp();
   const f = cv.fighter(p.s.fighter);
@@ -142,7 +150,6 @@ function PlayerCard(p: { s: SeatSetup; ffa: boolean; you: boolean; ready: boolea
             : role ? <><span class="roledot" style={{ background: role.color }} />{role.name}</> : null}
         </span>
       </div>
-      {p.s.controller === 'bot' ? <span class="chip chip--bot pcard__bot">{cv.t('party.bot', 'Bot')}</span> : null}
       <span class="pcard__tick" aria-hidden="true">{p.ready ? <Icon name="check" /> : null}</span>
     </article>
   );

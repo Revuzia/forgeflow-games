@@ -378,7 +378,7 @@ function Scoreboard(p: { res: MatchResult; me: PlayerResult; ffa: boolean; nod?:
                     <div class="pgrow__who">
                       <Portrait fighter={f} skin={r.skin} size="xs" round={rel === 'ally'} />
                       {p.ffa ? <SeatMark seat={seatOf(r.player)} you={you} size={14} showNumeral={false} /> : null}
-                      <span class="pgrow__names"><span class="t-body-s">{you ? cv.t('score.you', 'You') : r.name}{r.controller === 'bot' ? <span class="chip chip--bot">{cv.t('score.bot', 'Bot')}</span> : null}{p.nod === r.player ? <LanternMark label={cv.t('postgame.nod.given_to', 'You lit a lantern for {name}.', { name: r.name })} /> : null}</span>
+                      <span class="pgrow__names"><span class="t-body-s">{you ? cv.t('score.you', 'You') : r.name}{p.nod === r.player ? <LanternMark label={cv.t('postgame.nod.given_to', 'You lit a lantern for {name}.', { name: r.name })} /> : null}</span>
                         <span class="t-caption muted">{f?.name}{r.role ? ` · ${cv.role(r.role)?.name ?? ''}` : ''}{p.ffa ? ` · ${roman(seatOf(r.player))}` : ''}</span></span>
                     </div>
                   </td>

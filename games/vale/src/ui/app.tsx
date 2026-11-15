@@ -431,9 +431,9 @@ function OnlinePill(p: { info: OnlineInfo }): JSX.Element {
   const status = trying && i.status === 'offline' ? 'connecting' : i.status;
   const label = status === 'online' ? cv.t('net.online', 'Online · {n}', { n: i.players })
     : status === 'connecting' ? cv.t('net.connecting', 'Connecting…')
-      : status === 'refused' ? cv.t('net.refused', 'Update needed') : cv.t('net.offline', 'Offline · vs bots');
-  const tip = status === 'online' ? cv.t('net.online_tip', 'Matchmade queues play online with other players; bots fill the empty seats.')
-    : status === 'refused' ? (i.reason ?? '') : cv.t('net.offline_tip', 'The game server is not reachable: queues play against bots. VALE keeps trying in the background.');
+      : status === 'refused' ? cv.t('net.refused', 'Update needed') : cv.t('net.offline', 'Offline');
+  const tip = status === 'online' ? cv.t('net.online_tip', 'Matchmade queues play online with other players.')
+    : status === 'refused' ? (i.reason ?? '') : cv.t('net.offline_tip', 'The game server is not reachable, so matches start from this device. VALE keeps trying in the background.');
   const retry = (): void => {
     sound.play('click');
     setTrying(true);

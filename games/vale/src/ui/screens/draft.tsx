@@ -191,7 +191,7 @@ function SeatCard(p: { s: DraftSeat; d: DraftState; rel: 'self' | 'ally' | 'enem
       </span>
       <span class="seat__text">
         <span class="seat__name t-body-s" title={s.isYou ? undefined : s.name}>{s.isYou ? cv.t('draft.you', 'You') : s.name}</span>
-        {role || s.isBot ? <span class="seat__role t-caption">{role ? <><span class="roledot" style={{ background: role.color }} /><span class="seat__rolename">{role.name}</span></> : null}{s.isBot ? <span class="chip chip--bot chip--glyph" role="img" title={cv.t('draft.seat.bot', 'Bot')} aria-label={cv.t('draft.seat.bot', 'Bot')}><Icon name="bot" size={12} /></span> : null}</span> : null}
+        {role ? <span class="seat__role t-caption">{role ? <><span class="roledot" style={{ background: role.color }} /><span class="seat__rolename">{role.name}</span></> : null}</span> : null}
         <span class={`seat__status t-caption ${s.locked ? 'is-locked' : ''} ${ready ? 'is-ready' : ''}`}>{s.locked && !p.hidden ? <Icon name="check" size={12} /> : null}<span class="seat__statustext">{status}</span>{ready ? <span class="chip chip--ok chip--ready">{cv.t('draft.seat.ready', 'Ready')}</span> : null}</span>
       </span>
       {p.actions}

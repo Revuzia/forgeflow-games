@@ -44,7 +44,6 @@ export function QueueScreen(): JSX.Element {
   const idle = !q || q.state === 'idle' || q.state === 'declined';
   return (
     <Screen kicker={mode ? `${mode.name}${queue ? ` · ${queue.name}` : ''}` : undefined} title={cv.t('queue.title', 'Finding a match')}
-      foot={<span class="t-body-s muted">{cv.t('queue.bots_note', 'Open seats are filled with bots.')}</span>}
       cta={<Button variant="chalk" size="l" cue="back" onPress={idle ? () => router.reset('play', {}, 'back') : cancel} data-autofocus="" disabled={found} reason={cv.t('ready.timeout_note', 'If the timer runs out, you leave the queue.')}>
         {idle ? cv.t('common.back', 'Back') : cv.t('btn.cancel_search', 'Cancel search')}
       </Button>}>
@@ -62,7 +61,7 @@ export function QueueScreen(): JSX.Element {
               : cv.t('queue.searching_short', 'Searching · {elapsed}', { elapsed: fmtWait(elapsed) })}
         </p>
         {state.online.value?.status === 'online' && !idle ? (
-          <p class="t-body-s queue__net stg">{cv.t('queue.online', 'Online · {n} searching this queue · bots fill the empty seats', { n: state.online.value.searching[q?.queue ?? ''] ?? 1 })}</p>
+          <p class="t-body-s queue__net stg">{cv.t('queue.online', 'Online · {n} searching this queue', { n: state.online.value.searching[q?.queue ?? ''] ?? 1 })}</p>
         ) : null}
         {queue ? <p class="t-body-s muted queue__desc stg">{queue.desc}</p> : null}
       </div>
