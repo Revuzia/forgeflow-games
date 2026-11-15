@@ -221,7 +221,7 @@ function runOne(modeId: string, scen: string, seed: number): { stuck: Stuck[]; i
       if (e && e.alive) {
         const ot = w.entity(e.orderTarget);
         const m = minionState(e)!;
-        const nb = w.entities.filter((o) => o !== e && o.alive && o.kind !== 'projectile' && o.kind !== 'zone' && Math.hypot(o.x - e.x, o.y - e.y) < 2.2).map((o) => `${o.kind[0]}${o.team}${o.static ? 'S' : ''}@${f1(o.x)},${f1(o.y)}`);
+        const nb = w.entities.filter((o) => o !== e && o.alive && o.kind !== 'projectile' && o.kind !== 'zone' && Math.hypot(o.x - e.x, o.y - e.y) < 2.2).map((o) => `${o.kind[0]}${o.team}${o.static ? 'S' : ''}#${o.id}o${o.order}${o.atkWindup >= 0 ? 'W' : ''}np${o.noProgress}@${f1(o.x)},${f1(o.y)}`);
         console.log(`  trace t${f1(w.time)} (${f1(e.x)},${f1(e.y)}) ord${e.order} to(${f1(e.orderX)},${f1(e.orderY)}) ot:${ot ? `${ot.kind}${ot.alive ? '' : '+dead'}@${f1(ot.x)},${f1(ot.y)} vis${(ot.visibleMask >> e.team) & 1}` : '-'} path${e.path.length >> 1}/${e.pathIdx} np${e.noProgress} as${e.arriveStall} wd${f1(e.atkWindup)} an${f1(e.atkAnim)} fl${m.flankUntil - w.tick} cT${m.chaseT} near[${nb.join(' ')}]`);
       }
     }

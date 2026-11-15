@@ -152,6 +152,17 @@ function roomFor(w: World, x: number, y: number, r: number): boolean {
   return true;
 }
 
+/** squared distance from (px, py) to the segment (ax, ay)-(bx, by), its first 0.1 m left out (the walker's own contacts) */
+function segDist2(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+  if (l2 < 1e-9) return Infinity;
+  const t0 = Math.min(1, 0.1 / Math.sqrt(l2));
+  let t = ((px - ax) * dx + (py - ay) * dy) / l2;
+  if (t < t0) return Infinity;   // behind or touching the walker: not on its way
+  if (t > 1) t = 1;
+  const qx = ax + dx * t - px, qy = ay + dy * t - py;
+  return qx * qx + qy * qy;
+}
 /** an open spot to attack `t` from, off the crowded line: on its ring at reach, the side nearest first; null: none */
 function flankSpot(w: World, e: Entity, t: Entity): { x: number; y: number } | null {
   const R = t.radius + e.radius + Math.max(0.2, attackRange(e) * 0.7);
@@ -161,13 +172,16 @@ function flankSpot(w: World, e: Entity, t: Entity): { x: number; y: number } | n
     const x = t.x + dcos(base + a * s) * R, y = t.y + dsin(base + a * s) * R;
     // room for the whole body there and on the way (the strip behind a tower is open to the nav's thin walker only)
     if (!roomFor(w, x, y, e.radius) || !w.nav.lineOfWalk(e.x, e.y, x, y, e.radius)) continue;
-    const n = w.query(x, y, e.radius + 1.5, flankNear);
+    // the spot is free, and so is the way there (orch1 r2: a melee Wick boxed in behind its own casters picked a spot
+    // through them and stood pressed on their backs; a spot round the open side is walked to instead)
+    const mx = (e.x + x) / 2, my = (e.y + y) / 2, half = Math.sqrt((x - e.x) * (x - e.x) + (y - e.y) * (y - e.y)) / 2;
+    const n = w.query(mx, my, half + e.radius + 1.5, flankNear);
     let free = true;
     for (let i = 0; i < n; i++) {
       const o = flankNear[i];
-      if (o === e || !o.alive || o.kind === 'projectile' || o.kind === 'zone' || o.kind === 'pickup' || o.kind === 'ward') continue;
+      if (o === e || o === t || !o.alive || o.kind === 'projectile' || o.kind === 'zone' || o.kind === 'pickup' || o.kind === 'ward') continue;
       const rr = o.radius + e.radius - 0.05;
-      if ((o.x - x) * (o.x - x) + (o.y - y) * (o.y - y) < rr * rr) { free = false; break; }
+      if ((o.x - x) * (o.x - x) + (o.y - y) * (o.y - y) < rr * rr || segDist2(o.x, o.y, e.x, e.y, x, y) < rr * rr) { free = false; break; }
     }
     if (free) return { x, y };
   }
