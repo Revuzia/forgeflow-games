@@ -3,6 +3,15 @@
  * Serves game files from R2 bucket with proper CORS headers.
  * Games are loaded in iframes from forgeflowgames.com.
  */
+/** RFC 9110 If-None-Match: a list of entity tags (weak or strong), or "*" */
+export function etagMatches(header, etag) {
+  if (!header || !etag) return false;
+  if (header.trim() === "*") return true;
+  const bare = (t) => t.trim().replace(/^W\//, "");
+  const mine = bare(etag);
+  return header.split(",").some((t) => bare(t) === mine);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -84,9 +93,19 @@ export default {
     // change under their name: cache them for a year, immutable, so a relaunch
     // (a home-screen icon included) re-downloads nothing. Opt-in per game: an
     // unhashed name that merely looks hashed must never be pinned.
-    const IMMUTABLE_HASHED_GAMES = new Set(["dyefield"]);
-    const hashed = IMMUTABLE_HASHED_GAMES.has(key.split("/")[0]) &&
+    const game = key.split("/")[0];
+    const IMMUTABLE_HASHED_GAMES = new Set(["dyefield", "vale"]);
+    const hashed = IMMUTABLE_HASHED_GAMES.has(game) &&
       /\/assets\/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+$/.test(key);
+    // VALE (opt-in, 2026-11-15 TECH-01): the catalog's content-addressed files
+    // (catalog/assets/<12 hex of the content hash>-<name>) never change under their name, so a
+    // returning player re-downloads none of the ~55 MB. The files that name them (manifest, the
+    // catalog json, config.js, game_controls.js) are revalidated against their ETag on every load
+    // (no-cache = may be stored, must be checked), and a matching If-None-Match answers 304.
+    const VALE_IMMUTABLE_ASSET = /^vale\/catalog\/assets\/[0-9a-f]{12}-[^/]+$/;
+    const VALE_REVALIDATED = /^vale\/(catalog\/manifest\.json|catalog\/schema-\d+\/[^/]+\/catalog\.json|config\.js|game_controls\.js)$/;
+    const valeImmutable = VALE_IMMUTABLE_ASSET.test(key);
+    const valeRevalidated = VALE_REVALIDATED.test(key);
 
     // HTML: no-store (Cloudflare's edge cache will not retain). Assets: 1 day.
     // 2026-05-05 — switched HTML from no-cache to no-store + private after
@@ -97,8 +116,10 @@ export default {
       headers.set("cache-control", "no-store, no-cache, must-revalidate, private");
       headers.set("pragma", "no-cache");
       headers.set("expires", "0");
-    } else if (hashed) {
+    } else if (hashed || valeImmutable) {
       headers.set("cache-control", "public, max-age=31536000, immutable");
+    } else if (valeRevalidated) {
+      headers.set("cache-control", "no-cache");
     } else if (ext === "js") {
       headers.set("cache-control", "no-store, no-cache, must-revalidate, private");
       headers.set("pragma", "no-cache");
@@ -111,6 +132,13 @@ export default {
       headers.set("cache-control", "no-cache, must-revalidate");
     } else {
       headers.set("cache-control", "public, max-age=86400");
+    }
+
+    // VALE only (other games keep answering 200): a matching If-None-Match is a 304 with no body.
+    if (game === "vale" && etagMatches(request.headers.get("if-none-match"), object.httpEtag)) {
+      headers.delete("content-encoding");
+      headers.delete("x-file-size");
+      return new Response(null, { status: 304, headers });
     }
 
     return new Response(object.body, { headers });
