@@ -41,6 +41,7 @@ if (arm === 'broken') {
 }
 const start = sim.u.tick, end = start + Math.round(years * year);
 const perYear: { y: number; max: number; mean: number; w: number; hi: number }[] = [];
+const overAt: number[] = [];
 let over = 0, samples = 0, worst = 0, peakMax = 0, nextY = year;
 while (sim.u.tick < end) {
   const t = town();
@@ -54,11 +55,11 @@ while (sim.u.tick < end) {
   const tr = trust(), c = ceil();
   samples++;
   peakMax = Math.max(peakMax, tr.max);
-  if (arm === 'broken' && tr.max > c.hi + 0.005) { over++; worst = Math.max(worst, tr.max - c.hi); }
+  if (arm === 'broken' && tr.max > c.hi + 0.005) { over++; overAt.push(Math.round((sim.u.tick - breakTick) / day)); worst = Math.max(worst, tr.max - c.hi); }
   if (sim.u.tick - start >= nextY) { nextY += year; perYear.push({ y: Math.round((sim.u.tick - start) / year), max: r3(tr.max), mean: r3(tr.mean), w: c.b, hi: r3(c.hi) }); }
   sim.drainEvents();
 }
 function r3(x: number): number { return Math.round(x * 1000) / 1000; }
 const last = ceil();
-console.log('RESULT ' + JSON.stringify({ arm, seed, years, secs: Math.round((Date.now() - t0) / 1000), brokeOk, fell: town().fallen >= 0, samples, peakMax: r3(peakMax), overCeilingDays: over, worstOvershoot: r3(worst),
+console.log('RESULT ' + JSON.stringify({ arm, seed, years, secs: Math.round((Date.now() - t0) / 1000), brokeOk, fell: town().fallen >= 0, samples, peakMax: r3(peakMax), overCeilingDays: over, worstOvershoot: r3(worst), overAtDaysAfterBreak: overAt,
   wEnd: last.b, ceilEnd: r3(last.hi), perYear: perYear.filter((_, i) => i % 4 === 0 || i === perYear.length - 1) }));

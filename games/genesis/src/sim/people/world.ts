@@ -268,13 +268,33 @@ export function standingWater(p: Planet, pos: ArrayLike<number>, footprint = 0):
   return d;
 }
 
+/** metres a building's cell must stand above the level of any water standing beside it */
+export const SITE_FREEBOARD = 0.3;
+
 /**
- * Dry ground for a building: next to no water (FOOT_WET_MAX) at the point itself or anywhere under a footprint of
- * radius `footprint` metres. THE test of every building placement (buildings.ts findSite and its shore
- * and edge searches); docks, shipyards and lighthouses, which stand at the water, ask only their own cell (dryCell).
+ * The cell's ground stands clear of the water beside it: no neighbour holds standing water whose level comes within
+ * SITE_FREEBOARD of this cell's ground. Ground level with a lake (or under its level: the water has not come yet) is
+ * flooded as soon as the lake moves — seed 307987276's workshop stood dry in a cell 0.3 m BELOW the lake cell beside it
+ * and was under 0.4 m in three days; settlement.ts siteScore asks the same of a town's heart.
  */
-export function dryAt(p: Planet, pos: ArrayLike<number>, footprint = 0): boolean {
-  return standingWater(p, pos, footprint) <= FOOT_WET_MAX;
+export function aboveWater(p: Planet, c: number): boolean {
+  const g = p.grid, f = p.f;
+  const floor = f.surface[c] - SITE_FREEBOARD;
+  for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
+    const o = g.nbr[e];
+    if (f.water[o] > STANDING_WATER_MAX && f.surface[o] + f.water[o] > floor) return false;
+  }
+  return true;
+}
+
+/**
+ * Dry ground for a building at `pos` (in cell `cell`): the cell is land under no more than a film (dryCell) and stands
+ * clear of the water beside it (aboveWater), and there is next to no water (FOOT_WET_MAX) at the point itself or
+ * anywhere under a footprint of radius `footprint` metres. THE test of every building placement (buildings.ts findSite
+ * and its edge search); docks, shipyards and lighthouses, which stand at the water, ask only their own cell (dryCell).
+ */
+export function dryAt(p: Planet, pos: ArrayLike<number>, footprint = 0, cell: number = p.cellAt(pos)): boolean {
+  return dryCell(p, cell) && aboveWater(p, cell) && standingWater(p, pos, footprint) <= FOOT_WET_MAX;
 }
 
 const _heapC: number[] = [];

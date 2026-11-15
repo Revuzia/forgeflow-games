@@ -12,7 +12,7 @@ import type { Planet } from '../world/planet.ts';
 import { BuildingFlag } from '../types.ts';
 import { hash32, hashFloat } from '../core/rng.ts';
 import { igniteCell } from '../fields/fire.ts';
-import { offsetPoint, distM, spotInCell, dryAt, dryCell, standingWater, FLOODED_DEPTH, STANDING_WATER_MAX } from './world.ts';
+import { offsetPoint, distM, spotInCell, aboveWater, dryAt, dryCell, standingWater, FLOODED_DEPTH, STANDING_WATER_MAX } from './world.ts';
 import { storeAdd, storeHas, storeTake } from './store.ts';
 import { availability } from './resources.ts';
 import { checkLoss, recomputeWritten } from './knowledge.ts';
@@ -327,7 +327,7 @@ export function findSite(x: PCtx, st: Settlement, t: number): { pos: [number, nu
     }
     offsetPoint(centre, r, a, R, out);
     const cell = p.cellAt(out);
-    if (!dryCell(p, cell) || (!shoreKind && !dryAt(p, out, def.footprint))) continue;
+    if (shoreKind ? !dryCell(p, cell) : !dryAt(p, out, def.footprint, cell)) continue;
     if (p.f.lava[cell] > 0 || p.f.fire[cell] > 0.1) continue;
     if (fn !== 'mine' && (p.f.crop[cell] > 0.05 || st.fields.includes(cell))) continue;
     // slope at the cell
@@ -409,14 +409,14 @@ function edgeSite(x: PCtx, st: Settlement, t: number): { pos: [number, number, n
   const out: number[] = [0, 0, 0];
   for (let d = 0; d <= 4; d++) {
     for (const cell of ring) {
-      if (!dryCell(p, cell) || p.f.lava[cell] > 0 || p.f.fire[cell] > 0.1) continue;
+      if (!dryCell(p, cell) || !aboveWater(p, cell) || p.f.lava[cell] > 0 || p.f.fire[cell] > 0.1) continue;
       if (p.f.crop[cell] > 0.05 || st.fields.includes(cell)) continue;
       let steep = 0;
       for (let e = g.nbrStart[cell]; e < g.nbrStart[cell + 1]; e++) steep = Math.max(steep, Math.abs(p.f.surface[g.nbr[e]] - p.f.surface[cell]));
       if (steep / p.edgeM > SITE_STEEP_MAX) continue;
       for (let k = 0; k < 6; k++) {
         spotInCell(p, cell, st.id * 64 + t, 0x5e1 + k, out);
-        if (p.cellAt(out) !== cell || !dryAt(p, out, def.footprint)) continue;
+        if (p.cellAt(out) !== cell || !dryAt(p, out, def.footprint, cell)) continue;
         let clear = true;
         for (const b of x.ps.buildings) {
           if (Math.abs(b.pos[0] - out[0]) + Math.abs(b.pos[1] - out[1]) + Math.abs(b.pos[2] - out[2]) > 0.05) continue;
