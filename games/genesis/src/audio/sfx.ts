@@ -939,6 +939,22 @@ export const SFX: Record<string, Recipe> = {
   },
   // an idol set up: stone knocked on stone
   'stone.knock': (s) => { for (let i = 0; i < 3; i++) s.bell('wood', i * 0.3, s.rr(90, 120), 0.18, ['lowpass', 1200]); thud(s, 0.95, 0.12, 1.2); s.wet(0.4); },
+  // a tower lost (the people leave it or the work is ruined): a single low toll, a sinking minor third, wind through stone
+  'tower.lost': (s) => {
+    s.bell('toll', 0, 73.4, 0.22, ['lowpass', 900], 4);
+    s.bell('toll', 0.9, 61.7, 0.16, ['lowpass', 800], 4);
+    s.nz('brown', 0.2, 1.8, 0.08, 1.8, 0.2, ['lowpass', 500]);
+    s.wet(0.65);
+  },
+  // a town parts from its capital: two lyre lines that start together and go different ways, a distant horn
+  secession: (s) => {
+    s.pluck('lyre', 0, 67, 0.28);
+    s.pluck('lyre', 0, 60, 0.26);
+    s.pluck('lyre', 0.35, 71, 0.22);
+    s.pluck('lyre', 0.35, 55, 0.22);
+    s.horn(0.8, 110, 0.7, 0.05, 0.4);
+    s.wet(0.45);
+  },
   // the covenant's sign: a slow rising cluster of bells (D, A, D, F#, A)
   'covenant.chime': (s) => { s.arp('chime', 0, [62, 69, 74, 78, 81], 0.42, 0.13); s.pad(0.4, [50, 57, 62, 66], 1, 1.6, 2.6, 0.08); s.wet(0.75); },
   // the covenant broken: the same cluster detuned and cut short

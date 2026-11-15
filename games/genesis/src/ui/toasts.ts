@@ -82,8 +82,8 @@ const PRIORITY: Partial<Record<ToastKind, number>> = {
   // the answer to what the player just did (god, warn) outranks any news
   god: 4, warn: 4, loss: 3, fall: 3, war: 3, refusal: 3, plague: 3, discovery: 2, founding: 2, peace: 2, birth: 1, death: 1, info: 1, nature: 0,
 };
-/** at most this many toasts at once (the shell lowers it in a short window: the site's 888 × 500 frame holds two) */
-const MAX_SHOWN = 4;
+/** at most this many toasts at once (two: the site's 888 × 500 frame holds two, and a busy world is told in the chronicle) */
+const MAX_SHOWN = 2;
 
 interface Burst {
   planet: number;
@@ -737,15 +737,15 @@ function dateOf(view: WorldView, planet: number, tick: number): string | undefin
   return `Year ${c.year} · day ${c.day}`;
 }
 
-function kindOfChronicle(k: string): ToastKind {
+export function kindOfChronicle(k: string): ToastKind {
   switch (k) {
     case 'discovery': return 'discovery';
-    case 'founding': case 'diaspora': case 'golden-age': case 'split': case 'era': case 'people': case 'polity': case 'culture': return 'founding';
+    case 'founding': case 'diaspora': case 'golden-age': case 'age': case 'split': case 'era': case 'people': case 'polity': case 'culture': return 'founding';
     case 'loss': return 'loss';
-    case 'fall': case 'dark-age': case 'world': return 'fall';
+    case 'fall': case 'dark-age': return 'fall';
     case 'plague': return 'plague';
     case 'god': return 'god';
-    case 'nature': case 'extinction': case 'speciation': case 'ecology': return 'nature';
+    case 'nature': case 'world': case 'extinction': case 'speciation': case 'ecology': return 'nature';
     case 'war': case 'crime': return 'war';
     case 'treaty': case 'trade': case 'contact': case 'gift': return 'peace';
     case 'orbit': return 'discovery';
@@ -754,13 +754,13 @@ function kindOfChronicle(k: string): ToastKind {
   }
 }
 
-function titleOfChronicle(k: string, view: WorldView, planet: number): string {
+export function titleOfChronicle(k: string, view: WorldView, planet: number): string {
   const world = view.planet(planet)?.name ?? '';
   const label: Record<string, string> = {
     discovery: 'Discovery', founding: 'Milestone', diaspora: 'Diaspora', 'golden-age': 'A new age', loss: 'Lost', fall: 'Fall',
     plague: 'Plague', god: 'The god', nature: 'The world', disaster: 'Disaster', 'dark-age': 'Dark age', people: 'The peoples', hardship: 'Hardship',
     war: 'War', treaty: 'Treaty', trade: 'Trade', contact: 'Contact', gift: 'Gift', crime: 'Crime', extinction: 'Extinction',
-    speciation: 'New species', ecology: 'Life', culture: 'Custom', polity: 'Realm', split: 'Schism', era: 'A new age', world: 'The worlds', orbit: 'The sky',
+    speciation: 'New species', ecology: 'Life', culture: 'Their ways', age: 'A new age', polity: 'Realm', split: 'Schism', era: 'A new age', world: 'The worlds', orbit: 'The sky',
   };
   return `${label[k] ?? 'Chronicle'}${world ? ` · ${world}` : ''}`;
 }

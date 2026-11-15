@@ -175,7 +175,7 @@ kbd { font: 600 11.5px var(--gn-mono); color: var(--gn-gold-hi); border: 1px sol
 .gn-meter-loyalty .gn-meter-track i, .gn-god-cell.gn-meter-loyalty i { background: linear-gradient(90deg, #6b5aa8, #d6c6ff); }
 .gn-meter-cred .gn-meter-track i { background: linear-gradient(90deg, #a07a3a, #ffe2a0); }
 .gn-meters { display: flex; flex-direction: column; gap: 5px; margin: 4px 0; }
-.gn-regard { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; font: 600 10.5px var(--gn-sans); letter-spacing: .14em; text-transform: uppercase; color: var(--gn-ivory-faint); }
+.gn-regard { position: relative; display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 8px; font: 600 10.5px var(--gn-sans); letter-spacing: .14em; text-transform: uppercase; color: var(--gn-ivory-faint); }
 .gn-regard-track { position: relative; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--gn-feared), rgba(239, 231, 214, .45) 50%, var(--gn-trusted)); }
 .gn-regard-mark { position: absolute; top: 50%; width: 11px; height: 11px; border-radius: 50%; transform: translate(-50%, -50%); background: #fff8e6; box-shadow: 0 0 0 2px rgba(9, 11, 17, .85), 0 0 10px rgba(255, 240, 200, .8); }
 
@@ -1411,3 +1411,8 @@ span.gn-book-link:hover, span.gn-book-link:focus-visible { color: var(--gn-gold-
   .gn-book-ageh { font-size: 17.5px; }
   .gn-chron-tabs { margin-bottom: 6px; }
 }
+.gn-toggle:disabled { opacity: .45; cursor: default; }
+
+.gn-regard-info { pointer-events: auto; cursor: help; width: 16px; height: 16px; padding: 0; border-radius: 50%; border: 1px solid var(--gn-line-2); background: rgba(0, 0, 0, .3); color: var(--gn-ivory-dim); font: 600 10px var(--gn-sans); letter-spacing: 0; text-transform: none; }
+.gn-regard-info:focus-visible { outline: 2px solid var(--gn-gold-hi); outline-offset: 2px; }
+.gn-regard-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; max-width: 260px; padding: 7px 9px; border-radius: 6px; border: 1px solid var(--gn-line-gold); background: rgba(9, 11, 17, .96); color: var(--gn-ivory); font: 400 12px/1.4 var(--gn-sans); letter-spacing: 0; text-transform: none; }

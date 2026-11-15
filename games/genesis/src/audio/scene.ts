@@ -296,12 +296,18 @@ interface CellCache { version: number; cells: number[] }
  *  the thunderstorm it came in, inaudible; the act the player chose must be heard over the weather it rides in */
 export const CALLED_FLOOR = 0.45;
 
+/** wind-bed gate (scene units of `windDrive`): about 3 m/s to open, 2 m/s to close, at ground level */
+const WIND_OPEN = 0.02;
+const WIND_CLOSE = 0.008;
+
 export class SceneProbe {
   /** disasters the god called ('planet:id', newest last, at most 64) */
   private readonly called = new Set<string>();
   private fireCache = new Map<number, CellCache>();
   private lavaCache = new Map<number, CellCache>();
   private readonly t3: [number, number, number] = [0, 0, 0];
+  /** the wind bed's gate: open above WIND_OPEN, closed below WIND_CLOSE (a breeze at the threshold must not flutter it) */
+  private windOpen = false;
 
   /** a disaster the god called (engine: from its 'disaster' event): heard at CALLED_FLOOR at least while it lives */
   markCalled(planet: number, id: number): void {
@@ -482,7 +488,10 @@ export class SceneProbe {
     const altWind = smoothstep(15, 520, alt);
     // owner 2026-11-13: the wind was heard 'always', a heavy roar even in calm air near the ground. Calm, low air is now
     // nearly silent; ordinary breezes stay soft (power curve); altitude and real storms still bring the full roar
-    lay.wind = inAir * clamp01(0.03 + 0.4 * Math.pow(windN, 1.6) + 0.5 * altWind + 0.6 * stormWind);
+    // 2026-11-15: the 0.03 floor was itself a constant hiss in dead calm; below the gate the bed is exactly zero
+    const windDrive = 0.4 * Math.pow(windN, 1.6) + 0.5 * altWind + 0.6 * stormWind;
+    this.windOpen = windDrive > (this.windOpen ? WIND_CLOSE : WIND_OPEN);
+    lay.wind = this.windOpen ? inAir * clamp01(0.03 + windDrive) : 0;
     lay.windPitch = clamp01(windN * 0.6 + altWind * 0.45 + stormWind * 0.4 + (temp < -5 ? 0.15 : 0));
     lay.gust = clamp01(0.25 + windN * 0.6 + stormWind * 0.5);
     // waves break at the waterline: as loud as it is near (a lake laps, the sea pounds; wind and storms raise it)

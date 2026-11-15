@@ -7,7 +7,7 @@ import { SFX } from '../src/audio/sfx.ts';
 
 const ARC_EVENTS = [
   'heart', 'heart.proud', 'tower.begun', 'tower.tier', 'tower.omen', 'tower.choice', 'tower.warned', 'tower.heeded',
-  'tower.refused', 'tower.confused', 'tower.struck', 'tower.finished', 'tower.abandoned', 'tower.rebuilt', 'defy',
+  'tower.refused', 'tower.lost', 'tower.confused', 'tower.struck', 'tower.finished', 'tower.abandoned', 'tower.rebuilt', 'defy',
   'defy.answered', 'covenant.offered', 'covenant.bow', 'covenant.made', 'covenant.kept', 'covenant.refused',
   'covenant.broken', 'chronicle.age', 'legend.retold',
 ];
@@ -49,6 +49,8 @@ test('the cues the spec names (§1.6, §2.6, §3.4, §4.5, §5.5)', () => {
   assert.equal(c('tower.struck')?.cue, 'masonry.collapse');
   assert.equal(c('tower.finished')?.cue, 'crowd.cheer');
   assert.equal(c('tower.warned'), null);
+  assert.equal(c('tower.lost')?.cue, 'tower.lost');
+  assert.equal(c('secession', { cause: 'distance' })?.cue, 'secession');
   assert.equal(c('defy', { kind: 'curse' })?.cue, 'crowd.shout');
   assert.equal(c('defy', { kind: 'hurl' })?.variant, 'hurl');
   assert.equal(c('defy', { kind: 'burn' })?.cue, 'crowd.shout', 'the fire event brings its own cue');
@@ -65,7 +67,7 @@ test('the cues the spec names (§1.6, §2.6, §3.4, §4.5, §5.5)', () => {
 
 test('the new arc recipes lay down layers without error (a recording builder)', () => {
   const NEW = ['crowd.jeer', 'crowd.hymn', 'toil.drums', 'toil.chant', 'ui.great', 'babel.babble', 'masonry.collapse',
-    'crowd.cheer', 'crowd.shout', 'stone.knock', 'covenant.chime', 'covenant.chime.broken', 'ui.deny'];
+    'crowd.cheer', 'crowd.shout', 'stone.knock', 'tower.lost', 'secession', 'covenant.chime', 'covenant.chime.broken', 'ui.deny'];
   for (const name of NEW) {
     let calls = 0, seed = 1;
     const rec = new Proxy({ variant: '', size: 1, count: 1 } as Record<string, unknown>, {

@@ -183,6 +183,11 @@ export function wrathNeedWords(min: number): string {
   return `needs wrath: ${wrathWord(min)} (${Math.round(min * 100) / 100})`;
 }
 
+/** the power card's one line where harm is scaled by wrath: what this cast's wrath means for those under it */
+export function wrathScaleLine(w: number): string {
+  return `Harm is scaled by wrath. At ${wrathWord(w)} (${w.toFixed(2)}): ${wrathMeans(w)}.`;
+}
+
 /** what a wrath does to the people under it, in a line (the slider's caption) */
 export function wrathMeans(w: number): string {
   if (w >= 0.93) return 'nothing is spared: a town can fall to one blow';

@@ -63,3 +63,13 @@ anything) unless the row says pan:
 | 3 | freeze | `index.html?freeze=1&gpuprobe=1` | wait until the report would say 'freeze: ACTIVE' (about 10 s after landing settles), then record, still camera |
 | 4 | notimer | `index.html?gputimer=0` | ABAB against #1: what the GPU timers cost by themselves |
 Also, once: the same base run in your normal Chrome (with the other tabs) right after a separate-instance run.
+
+## Fixed-camera screenshots (look, compare between builds)
+Press Shift+F8 (the screenshot key) at each of the four views below. It saves a PNG at the canvas's own pixel size, with a
+header strip above the picture (build, size, preset, GPU, altitude). Same seed, Ultra, window maximised, UI left as is
+(press H first to hide it if you want the bare world). Do not touch the camera between the move and the key. Send the four
+PNGs back with the report texts, named by the number.
+1. **Orbit**: start of a new world, camera at its default orbit altitude, sunlit hemisphere toward you.
+2. **Town at 100 m**: zoom straight down to Rubolhin by the Lake (or the town you used before), about 100 m altitude, wait 10 s.
+3. **Forest edge at 50 m**: descend over a forest to about 50 m, looking along the forest edge, wait 10 s.
+4. **Evening shadows**: the town of shot 2 at low sun (about an hour before sunset; set it by waiting, not by skipping), 100 m, looking toward the sun.

@@ -67,12 +67,26 @@ function merge<T>(base: T, over: unknown): T {
   return out as T;
 }
 
+/** does the system ask for reduced motion (false where matchMedia is missing or throws) */
+export function systemPrefersReducedMotion(): boolean {
+  try { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+}
+
+/** first-run defaults that follow the system: reduce motion starts on when the system asks for it */
+export function seedFirstRun(p: Prefs, reducedMotion: boolean): Prefs {
+  if (reducedMotion) p.ui.reduceMotion = true;
+  return p;
+}
+
 export class PrefsStore {
   value: Prefs;
   private listeners: ((p: Prefs, what: string) => void)[] = [];
 
   constructor(persist = true) {
-    this.value = persist ? merge(structuredClone(DEFAULT_PREFS), store.get<unknown>(KEY, null)) : structuredClone(DEFAULT_PREFS);
+    const saved = persist ? store.get<unknown>(KEY, null) : null;
+    this.value = persist ? merge(structuredClone(DEFAULT_PREFS), saved) : structuredClone(DEFAULT_PREFS);
+    // first run (nothing stored yet): the system's own "reduce motion" request seeds ours; after that the player's choice stands
+    if (persist && saved === null) this.value = seedFirstRun(this.value, systemPrefersReducedMotion());
     // (a world left behind lost up to ten minutes of play: the cadence an earlier build kept by default, never chosen,
     // gives way to today's)
     if (!this.value.game.autosaveChosen && this.value.game.autosaveMinutes === 10) this.value.game.autosaveMinutes = DEFAULT_PREFS.game.autosaveMinutes;

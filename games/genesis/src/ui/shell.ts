@@ -22,6 +22,7 @@
 // radial, the palette or a gesture card is up.
 
 import type { IUniform } from 'three';
+import { takeScreenshot } from './shot.ts';
 import type { InputState } from '../render/camera/common.ts';
 import type { CommandResult, EntityRef } from '../sim/types.ts';
 import { SPEED_PRESETS } from '../sim/types.ts';
@@ -121,7 +122,7 @@ const CAM_KEYS: Record<string, [string, string]> = {
 };
 
 /** what still works while a veiled window (settings, saves, the controls card, the menu) is open */
-const MODAL_OK = new Set(['ui.settings', 'ui.saves', 'ui.help', 'ui.menu', 'ui.newWorld', 'ui.mods', 'ui.credits', 'ui.quicksave', 'ui.quickload', 'ui.chronicle', 'tool.cancel',
+const MODAL_OK = new Set(['ui.screenshot', 'ui.settings', 'ui.saves', 'ui.help', 'ui.menu', 'ui.newWorld', 'ui.mods', 'ui.credits', 'ui.quicksave', 'ui.quickload', 'ui.chronicle', 'tool.cancel',
   'time.pause', ...SPEED_KEYS.map(([x]) => `time.speed${x}`), 'time.faster', 'time.slower', 'time.stepTick', 'time.stepHour', 'time.stepDay']);
 
 /** the scenery world behind a cold load's title turns at this speed (its day passes in a few minutes) */
@@ -639,6 +640,7 @@ export class Shell {
       case 'ui.saves': if (this.saves.isOpen) this.saves.close(); else this.openWindow('saves'); return;
       case 'ui.quicksave': void this.saves.quicksave(); return;
       case 'ui.quickload': void this.saves.quickload(); return;
+      case 'ui.screenshot': void takeScreenshot(host); return;
       case 'ui.help': if (this.help.isOpen) this.help.close(); else this.openWindow('help'); return;
       case 'ui.credits': if (this.credits.isOpen) this.credits.close(); else this.openWindow('credits'); return;
       case 'ui.god': this.god.toggle(); return;
@@ -1305,8 +1307,8 @@ export class Shell {
       // too little room above the card for the column: the toasts go to the top centre
       if (card.top < H * 0.42) top = true;
     }
-    // (a short window — the site's 888 × 500 frame — holds two toasts between the time panel and the dock)
-    this.hud.toasts.maxShown = H < 600 ? 2 : H < 760 ? 3 : 4;
+    // (two toasts at most, in any window: the site's 888 × 500 frame holds two between the time panel and the dock, and the rest is in the chronicle)
+    this.hud.toasts.maxShown = 2;
     const tickerMax = Math.max(160, (dock.left - 36 - 18) / s);
     // a window open on the left (the chronicle, The god) would cover the toasts: they stand beside it (to the right of
     // it, short of the inspector when that is open)

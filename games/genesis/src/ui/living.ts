@@ -237,15 +237,37 @@ export function meterRow(m: Meter, v: number, compact = false): HTMLDivElement {
     h('span', { class: 'gn-meter-w', text: compact ? `${pct}` : meterWord(m, v) }));
 }
 
-/** the feared … trusted gauge: a track with a mark at the regard and the band's word */
+/** what the gauge means (the F1 card says the same: controlstext.ts livingRows 'regard') */
+export function regardExplain(r: number): string {
+  const band = regardBand(r);
+  return `How the people see you: ${band} (${r >= 0 ? '+' : ''}${r.toFixed(2)}, from −1 feared to +1 trusted). The Touch's light follows it.`;
+}
+
+/**
+ * the feared … trusted gauge: a track with a mark at the regard and the band's word. The explanation is a popover on a
+ * focusable "?" (keyboard, touch and hover; Esc closes), not a mouse-only title.
+ */
 export function regardGauge(r: number): HTMLDivElement {
   const x = Math.round((Math.max(-1, Math.min(1, r)) + 1) * 50);
   const band = regardBand(r);
-  return h('div', { class: `gn-regard gn-regard-${band}`, title: `How the people see you: ${band} (${r >= 0 ? '+' : ''}${r.toFixed(2)}, from −1 feared to +1 trusted). The Touch's light follows it.` },
+  const text = regardExplain(r);
+  const pop = h('div', { class: 'gn-regard-pop', role: 'tooltip', text });
+  pop.hidden = true;
+  pop.id = `gn-regard-pop-${++regardUid}`;
+  const info = h('button', { class: 'gn-regard-info', text: '?', aria: { label: 'What this gauge means', describedby: pop.id, expanded: 'false' } });
+  const show = (on: boolean) => { pop.hidden = !on; info.setAttribute('aria-expanded', String(on)); };
+  info.addEventListener('click', () => show(pop.hidden));
+  info.addEventListener('focus', () => show(true));
+  info.addEventListener('blur', () => show(false));
+  info.addEventListener('mouseenter', () => show(true));
+  info.addEventListener('mouseleave', () => { if (typeof document === 'undefined' || document.activeElement !== info) show(false); });
+  info.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pop.hidden) { e.stopPropagation(); show(false); } });
+  return h('div', { class: `gn-regard gn-regard-${band}` },
     h('span', { class: 'gn-regard-end', text: 'feared' }),
-    h('span', { class: 'gn-regard-track' }, h('i', { class: 'gn-regard-mark', style: `left:${x}%` })),
-    h('span', { class: 'gn-regard-end', text: 'trusted' }));
+    h('span', { class: 'gn-regard-track', role: 'img', aria: { label: `Regard: ${band}` } }, h('i', { class: 'gn-regard-mark', style: `left:${x}%` })),
+    h('span', { class: 'gn-regard-end', text: 'trusted' }), info, pop);
 }
+let regardUid = 0;
 
 // ───────────────────────────── Send a sign ─────────────────────────────
 

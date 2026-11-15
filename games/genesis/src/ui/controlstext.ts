@@ -73,6 +73,7 @@ export function livingRows(hint: Hint): [string, string][] {
     [k('god.answer', '⇧ F4'), 'answer the most pressing prayer (a lamp over a town is a prayer: its card, its toast and The god answer it too)'],
     ['a prophet', 'select a grown person · Make them your prophet · Foretell what you will do, then make it true: they are believed, and the town with them'],
     [k('ui.signs', 'F7'), 'send a sign: an eclipse, a comet, a rainbow, the sun standing still… — a trusting town reads favour, a fearful one anger'],
+    ['regard gauge', 'feared to trusted: how the people see you, from −1 to +1, with its word (feared · awed · trusted); the Touch\'s light follows it · on The god card, the ? beside it explains it (Tab to it, or hover, or press it; Esc closes)'],
     ['wrath', 'how hard your harm falls: survivable by default (The god) · say “a gentle storm” or “a huge meteor” for one act'],
     ['holy things', 'hallow a spring, a grove or a peak · a town\'s sacred animal on its card · the Signs ring of the radial has them all'],
     ['invent', 'a material or a plant from Ideas / Life (a form: name, kind, traits, uses) · Seed a vein lays ore in the ground'],

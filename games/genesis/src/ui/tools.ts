@@ -24,7 +24,7 @@
 import type { Command, CommandResult, EntityRef } from '../sim/types.ts';
 import type { GroundHit, UiHost } from './host.ts';
 import type { ParamSpec, Power, ToolMode } from './powers.ts';
-import { toolMode, radiusParam, strengthParam, cardParams, missingRequired, paramLabel, fmtParam, buildCommand, entityKey, castValues, sliderStart, autoWords, categoryLabel, worldPrefill, wrathWord, wrathNeedWords, type Place } from './powers.ts';
+import { toolMode, radiusParam, strengthParam, cardParams, missingRequired, paramLabel, fmtParam, buildCommand, entityKey, castValues, sliderStart, autoWords, categoryLabel, worldPrefill, wrathWord, wrathNeedWords, wrathScaleLine, type Place } from './powers.ts';
 import { h, clear, fmtDist, clamp, store } from './dom.ts';
 import { icon } from './icons.ts';
 import { slider, toggle } from './panel.ts';
@@ -278,7 +278,7 @@ export class Tools {
       this.cardBody.append(this.row(k, cap(paramLabel(k)), ctl, keys, s.desc ?? (k === sk ? 'Strength (also Alt + wheel)' : '')));
     }
     this.needEl = null;
-    if (this.host.powers.minWrathOf(p) !== undefined) {
+    if (this.host.powers.minWrathOf(p) !== undefined || p.schema.wrath !== undefined) {
       this.needEl = h('div', { class: 'gn-tool-need', data: { key: 'wrath-need' } });
       this.cardBody.append(this.needEl);
       this.renderNeed();
@@ -302,7 +302,15 @@ export class Tools {
     if (!el || !p) return;
     const min = this.host.powers.minWrathOf(p);
     clear(el);
-    if (min === undefined) { el.hidden = true; return; }
+    if (min === undefined) {
+      // a harmful power with no floor: one line on how its wrath scales the harm (the default is untouched)
+      if (p.schema.wrath === undefined) { el.hidden = true; return; }
+      const own = typeof this.values.wrath === 'number' ? this.values.wrath : typeof p.params.wrath === 'number' ? p.params.wrath : this.host.powers.wrathLaw;
+      el.hidden = false;
+      el.classList.remove('gn-short');
+      el.append(h('span', { text: wrathScaleLine(own) }));
+      return;
+    }
     el.hidden = false;
     const short = this.host.powers.wrathShort(p, this.values);
     el.classList.toggle('gn-short', short !== null);

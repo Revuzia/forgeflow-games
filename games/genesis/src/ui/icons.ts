@@ -378,6 +378,8 @@ const ICONS: Record<string, string> = {
     + P('M7.8 11.6h4.4'),
   // a small stepped tower (the town is proud)
   'heart-proud': P('M5 21h14M6.6 21v-4h10.8v4M8.4 17v-4h7.2v4M10.2 13V9h3.6v4M11.2 9V6h1.6v3'),
+  // the tower of one speech: a stepped tower under a small sign of many voices
+  tower: P('M4 21h16M6 21v-4h12v4M8 17v-4h8v4M10 13V9h4v4M11.2 9V6h1.6v3') + P('M3.4 5.2c1-.9 2-.9 3 0M17.6 5.2c1-.9 2-.9 3 0M12 1.6v1.6'),
   touch: touchLight,
   regard: P('M3 15a9 9 0 0 1 18 0') + P('M12 15l4.6-5.2') + DOT(12, 15, 1.4) + P('M4.6 18.6h3M16.4 18.6h3'),
   called: person + P('M5.4 6.4l2 .8M18.6 6.4l-2 .8M12 1.2v1.2'),

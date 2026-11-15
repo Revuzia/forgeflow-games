@@ -106,6 +106,7 @@ export const ACTIONS: ActionDef[] = [
   { id: 'ui.quickload', label: 'Quickload', group: 'Windows', keys: ['F9'] },
   { id: 'ui.help', label: 'Controls card', group: 'Windows', keys: ['F1', 'Shift+Slash'] },
   { id: 'ui.menu', label: 'Game menu', group: 'Windows', keys: ['F2'], pad: ['Start'] },
+  { id: 'ui.screenshot', label: 'Screenshot (PNG at the canvas\'s own size, with the build header)', group: 'Windows', keys: ['Shift+F8'] },
   { id: 'ui.hide', label: 'Hide the interface', group: 'Windows', keys: ['KeyH'] },
   // photo mode (its own layer: the camera flies free, the interface is hidden, time stands still unless let run)
   { id: 'photo.capture', label: 'Take the picture', group: 'Photo mode', keys: ['Space', 'Enter'], pad: ['A'], context: 'photo' },

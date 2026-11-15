@@ -86,11 +86,11 @@ export class Settings {
       }
       case 'audio': {
         const a = v.audio;
-        if (!this.deps.audioReady()) this.content.append(h('div', { class: 'gn-set-note', text: 'The sound of the worlds is still being tuned; these volumes are kept and take effect when it plays.' }));
+        if (!this.deps.audioReady()) this.content.append(h('div', { class: 'gn-set-note', text: 'No sound is playing yet. These volumes are kept and apply once it starts.' }));
         const pctF = (x: number) => `${Math.round(x * 100)}%`;
         this.content.append(
           field('Master', slider({ min: 0, max: 1, step: 0.01, value: a.master, fmt: pctF, on: set('audio.master') })),
-          field('Music', slider({ min: 0, max: 1, step: 0.01, value: a.music, fmt: pctF, on: set('audio.music') }), 'the peoples\' songs, the score of orbit'),
+          field('Music', slider({ min: 0, max: 1, step: 0.01, value: a.music, fmt: pctF, on: set('audio.music') }), 'the peoples\' songs and the score'),
           field('Effects', slider({ min: 0, max: 1, step: 0.01, value: a.sfx, fmt: pctF, on: set('audio.sfx') }), 'the Touch, miracles, disasters'),
           field('Ambience', slider({ min: 0, max: 1, step: 0.01, value: a.ambience, fmt: pctF, on: set('audio.ambience') }), 'wind, surf, birds, rain, crowds'),
           field('Mute', toggle(a.muted, set('audio.muted'), 'Mute')));
@@ -118,58 +118,18 @@ export class Settings {
       case 'controls': this.controls(); break;
       case 'game': {
         const restraint = this.host.view.restraint;
+        // (shown off and disabled until the world answers what its law is now; a click before then would write over it blind)
+        const natTg = toggle(false, (on) => void this.host.cmd({ k: 'set', path: 'disasters.natural', value: on ? 1 : 0 }), 'Natural disasters');
+        natTg.disabled = true;
+        natTg.title = 'Reading the world\'s law…';
         this.content.append(
           field('Restraint', toggle(restraint, (on) => void this.host.cmd({ k: 'meta.restraint', on }), 'Restraint'), 'powers cost worship and need time — off: omnipotence'),
-          field('Natural disasters', toggle(true, (on) => void this.host.cmd({ k: 'set', path: 'disasters.natural', value: on ? 1 : 0 }), 'Natural disasters'), 'the world sends its own (a law: see the laws of the world)'),
+          field('Natural disasters', natTg, 'the world sends its own (a law: see the laws of the world)'),
           field('Autosave', select([{ value: '0', label: 'Off' }, { value: '1', label: 'Every minute' }, { value: '2', label: 'Every 2 minutes' }, { value: '5', label: 'Every 5 minutes' }, { value: '10', label: 'Every 10 minutes' }, { value: '20', label: 'Every 20 minutes' }, { value: '30', label: 'Every 30 minutes' }],
             String(v.game.autosaveMinutes), (x) => { P.set('game.autosaveMinutes', Number(x)); P.set('game.autosaveChosen', true); })),
           field('Pause when hidden', select([{ value: 'auto', label: isEmbedded() ? 'Auto (on: playing inside the site)' : 'Auto (off: on its own page)' }, { value: 'on', label: 'On' }, { value: 'off', label: 'Off' }],
             v.game.pauseHidden, (x) => P.set('game.pauseHidden', x)), 'time stands still while you look at another tab, and runs again when you come back'),
-          h('div', { class: 'gn-set-note', text: 'Every other law of the world — gravity, the length of the day, the air, the star, how fast fire spreads — is in the laws of the world (U, or the inspector on a world).' }),
-          h('button', { class: 'gn-btn gn-set-reset', text: 'Open the laws of this world', on: { click: () => { this.close(); this.host.action('ui.laws'); } } }));
-        void this.host.query('laws').then((d) => {
-          const l = (d as { laws?: Record<string, number> } | null)?.laws;
-          const nat = l?.['disasters.natural'];
-          if (typeof nat === 'number') {
-            const tg = this.content.querySelector('[aria-label="Natural disasters"]');
-            if (tg) { tg.classList.toggle('gn-on', nat > 0); tg.setAttribute('aria-checked', String(nat > 0)); }
-          }
-        });
-        break;
-      }
-    }
-  }
-
-  // ───────────────────────────── controls ─────────────────────────────
-
-  private controls(): void {
-    const kb = this.host.keybinds;
-    const conflicts = kb.conflicts();
-    const pad = this.host.prefs.value.pad;
-    const set = (path: string) => (x: unknown) => this.host.prefs.set(path, x);
-    if (conflicts.length) {
-      this.content.append(h('div', { class: 'gn-set-warn' }, h('span', { html: icon('help') }),
-        `${conflicts.length} key${conflicts.length === 1 ? ' is' : 's are'} bound to more than one action (the key is marked in red; hover it to see where else). The first action listed wins.`));
-    }
-    const table = h('div', { class: 'gn-binds' });
-    table.append(h('div', { class: 'gn-binds-h' }, h('span', { text: 'Action' }), h('span', { text: 'Key' }), h('span', { text: 'Second key' }), h('span', { text: 'Gamepad' }), h('span')));
-    let group = '';
-    for (const a of ACTIONS) {
-      if (a.group !== group) { group = a.group; table.append(h('div', { class: 'gn-binds-g', text: group })); }
-      table.append(this.bindRow(a));
-    }
-    this.content.append(table,
-      h('div', { class: 'gn-set-row' },
-        h('button', { class: 'gn-btn gn-set-reset', text: 'Reset every binding', on: { click: () => kb.resetAll() } }),
-        h('span', { class: 'gn-set-note', text: 'Click a key to change it: press the new key (Esc cancels, Backspace clears).' })),
-      h('div', { class: 'gn-set-h', text: 'Gamepad' }),
-      field('Gamepad', toggle(pad.enabled, set('pad.enabled'), 'Gamepad')),
-      field('Stick dead zone', slider({ min: 0.05, max: 0.45, step: 0.01, value: pad.deadzone, fmt: (x) => x.toFixed(2), on: set('pad.deadzone') })),
-      field('Cursor speed', slider({ min: 300, max: 2400, step: 50, value: pad.cursorSpeed, fmt: (x) => `${fmtNum(x)} px/s`, on: set('pad.cursorSpeed') })),
-      field('Camera speed', slider({ min: 0.3, max: 3, step: 0.05, value: pad.lookSpeed, fmt: (x) => `${x.toFixed(2)}×`, on: set('pad.lookSpeed') })),
-      field('Invert camera tilt', toggle(pad.invertY, set('pad.invertY'), 'Invert camera tilt')),
-      field('Edge pan', toggle(this.host.prefs.value.game.edgePan, set('game.edgePan'), 'Edge pan'), 'the camera pans when the cursor reaches the edge'),
-      field('Slow down for great moments', toggle(this.host.prefs.value.game.slowGreat !== false, set('game.slowGreat'), 'Slow down for great moments'), 'when a great choice comes, time eases to 10x until you answer'));
+          field('Slow down for great moments', toggle(this.host.prefs.value.game.slowGreat !== false, set('game.slowGreat'), 'Slow down for great moments'), 'when a great choice comes, time eases to 10x until you answer'));
   }
 
   private bindRow(a: ActionDef): HTMLDivElement {

@@ -218,6 +218,10 @@ export function cueFor(e: SimEvent): CueSpec | null {
     case 'settlement.founded': return spec('founded', 'news', { gap: 1.5 });
     case 'settlement.fallen': return spec('fallen', 'news', { gap: 2, pri: 6 });
     case 'settlement.split': return spec('split', 'news', { gap: 2 });
+    // a daughter town parts from its capital (politics.ts secessionCheck): a rare, heard-everywhere news moment
+    case 'secession': return spec('secession', 'news', { gap: 6, pri: 6, gain: 0.7, variant: str(d.cause) });
+    // a building falls (age, fire, a quake): the sound of masonry at the town, small; quakes and fires carry their own
+    case 'collapsed': return spec('landslide', 'world', { size: 0.4, reach: 300, travel: true, gap: 1.5, gain: 0.5, pri: 3, variant: 'building' });
     case 'war': return spec('war', 'news', { gap: 3, pri: 6 });
     case 'siege': return spec('siege', 'news', { gap: 4, pri: 5 });
     case 'conquest': return spec('conquest', 'news', { gap: 3, pri: 6 });
@@ -275,6 +279,24 @@ export function cueFor(e: SimEvent): CueSpec | null {
   return arc ? arc(e) : null;
 }
 
+/**
+ * Sim events that are silent on purpose, each with the reason. A new sim event must be mapped in `cueFor` or
+ * `ARC_CUES`, or listed here: tests/audio-events.test.ts fails on any sim event that is none of the three.
+ */
+export const SILENT_EVENTS: Record<string, string> = {
+  aid: 'a town sends days of work to another: the chronicle line carries it, and it is frequent',
+  'content.plant': 'a modded plant placed: the world is the sound, nothing happened to a people',
+  'fire.out': 'the last flame went out: the ambience fire bed fades on its own and a hiss would double the steam cue',
+  harvest: 'every field, every day: far too frequent for a cue',
+  hunt: 'frequent and small: the animals and the ambience carry it',
+  'livestock.killed': 'small and frequent; a death cue exists for people, not for herds',
+  'material.first': 'a first find of a material: the discovery cue and the chronicle carry it',
+  'ore.seeded': 'bookkeeping at world start',
+  tame: 'frequent and small',
+  'warning.end': 'the river warning lapsing: the warning cue already sounded; a second sound would read as a new alarm',
+  'weather.end': 'weather fading: the wind and rain beds already follow the sky',
+};
+
 /** ARC §6.3 age kinds heard as dark (§5.5); the rest are golden */
 const DARK_AGES = /flood|fire|ruin|fall|brokenvow|dread|defiance|silence|dark/;
 
@@ -298,6 +320,8 @@ export const ARC_CUES: Record<string, ((e: SimEvent) => CueSpec | null) | null> 
   'tower.heeded': null,
   'tower.refused': null,
   'tower.confused': () => spec('babel.babble', 'god', { gain: 0.8, gap: 10, pri: 9 }),
+  // the people lose the tower (the work is ruined or the towns scatter): a low toll, once in a long while
+  'tower.lost': () => spec('tower.lost', 'news', { gain: 0.6, gap: 20, pri: 7 }),
   'tower.struck': () => spec('masonry.collapse', 'world', { gain: 0.9, gap: 4, reach: 2500, travel: true, pri: 8 }),
   'tower.finished': () => spec('crowd.cheer', 'news', { gain: 0.6, gap: 10, pri: 6 }),
   'tower.abandoned': null,
