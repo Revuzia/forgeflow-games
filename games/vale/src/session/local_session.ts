@@ -241,7 +241,7 @@ export class LocalSession implements Session {
     const names = this.botNames(new Set([this.identity.displayName]));
     while (this.partyBots.length < n) {
       const i = this.partyBots.length;
-      this.partyBots.push({ id: `party-bot-${i + 1}`, name: names[i] ?? `Bot ${i + 1}`, isBot: true, ready: true });
+      this.partyBots.push({ id: `party-bot-${i + 1}`, name: names[i] ?? `Guest ${i + 1}`, isBot: true, ready: true });
     }
     this.partyBots.length = n;
     return this.party();
@@ -466,7 +466,7 @@ export class LocalSession implements Session {
     return slots.map((s) => {
       const isYou = s.player === you;
       const isParty = !!s.party;
-      const name = isYou ? this.identity.displayName : isParty ? partyNames[partyI++] ?? `Bot ${s.player + 1}` : names[botI++ % Math.max(1, names.length)] ?? `Bot ${s.player + 1}`;
+      const name = isYou ? this.identity.displayName : isParty ? partyNames[partyI++] ?? `Guest ${s.player + 1}` : names[botI++ % Math.max(1, names.length)] ?? `Guest ${s.player + 1}`;
       if (!isYou) pd.difficulty.set(s.player, s.difficulty ?? (queue.kind === 'custom' ? 'adept' : queueDiff));
       const d: DraftSeatInit = { player: s.player, team: s.team, name, isBot: !isYou, isYou };
       const role = roleOf.get(s.player);

@@ -65,7 +65,8 @@ for (const f of files(join(root, 'src/ui'), /\.(tsx?|css)$/)) {
 }
 scanLiterals('src/session/setup.ts', readFileSync(join(root, 'src/session/setup.ts'), 'utf8').split('\n').filter((l) => /\?\?\s*`/.test(l)).join('\n'), false);
 
-for (const f of [...files(join(root, 'dist'), /\.(html|js)$/), ...files(join(root, 'dist-catalog'), /\.json$/)]) {
+const ver = (JSON.parse(readFileSync(join(root, 'content/version.json'), 'utf8')) as { version: string }).version;   // older built catalogs are history
+for (const f of [...files(join(root, 'dist'), /\.(html|js)$/), ...files(join(root, 'dist-catalog'), /\.json$/).filter((x) => x.includes(`/${ver}/`))]) {
   const rel = f.replace(root + '/', '');
   const t = readFileSync(f, 'utf8');
   if (rel.endsWith('.json')) { try { walk(JSON.parse(t), '', rel, false); } catch { /* not json */ } continue; }
