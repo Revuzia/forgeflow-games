@@ -53,7 +53,8 @@ Rows (PLAN.md Lane R2B acceptance bars):
                   energy of 400 windows inside the file; and the level jump between the last and the first 10 ms <= the 99.9th
                   percentile of the file's own adjacent-10 ms level jumps
   no-clip         no added file is clipped (no run of >= 3 samples at |x| >= 0.98, no sample over 0 dBFS) and no play of one in the census
-                  peaks over -1 dBFS in game (file peak + 20 log10 of the call gain x CLIP_DB trim, before the bus)
+                  peaks over -1 dBFS in game (file peak + 20 log10 of the call gain x CLIP_DB trim x 1.1 jitter top, before the bus),
+                  judged on EVERY take of each played SFX key (fix 4: not only the census pick)
   xcat            loudness matched ACROSS the R2B own-action categories (foley, reload, movement, water, grenade, equip): each category's
                   median in-game level (loudest-50 ms RMS + 20 log10 of the call gain x trim, own plays in the census) within +-3 dB of the
                   median of the category medians. Own footsteps are listed, not judged: their level is the W8 footstep mix (p23_footsteps)
@@ -98,6 +99,7 @@ SWAP_PEAK_MIN = -6.0
 RELOAD_SETS_MIN = 4
 ADDED_MAX, TOTAL_MAX = 2.0e6, 3.5e6
 PCM_SHARE = 0.001               # a file held below 48 kHz: decoded at its rate + linear-interpolated playback at 48 kHz within -30 dB error energy
+PLAY_JITTER_MAX = 1.1           # sample(): per-play level x (0.9 + rand x 0.2) - no-clip judges the top of it
 PCM_BUDGET = 10.0e6             # PLAN R2B Budget: decoded memory "+6-10 MB" (the top of the estimate)
 BIRD_MAX = 0.05
 HISS_FLAT, HISS_HF_DB = 0.9, -12.0
@@ -189,6 +191,10 @@ globalThis.setInterval = (f, ms) => { if (!SYNC) return realSI(f, ms); Q.push({ 
 const realCT = clearTimeout, realCI = clearInterval;
 globalThis.clearTimeout = (h) => { if (h) realCT(h); }; globalThis.clearInterval = (h) => { if (h) realCI(h); };
 // ── the world ─────────────────────────────────────────────────────────────────
+// W10 R2B fix 4: a seeded Math.random (mulberry32), so the census picks the same takes run to run (the verifier saw the clean
+// loudestPlayDb drift -7.65 / -6.58 between runs)
+{ let _s = 0x5eed1234 >>> 0; Math.random = () => { _s = (_s + 0x6D2B79F5) >>> 0; let t = _s; t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 A = await import(pathToFileURL(AUDIO).href);
 const H = {};
 const events = { on: (n, f) => { (H[n] = H[n] || []).push(f); }, emit: (n, ...a) => { for (const f of (H[n] || [])) f(...a); } };
@@ -676,13 +682,25 @@ def main():
             run = int(np.max(np.diff(np.flatnonzero(np.concatenate([[1], ~hot, [1]]))) - 1)) if hot.any() else 0
             if run >= 3 or filepk[f] > 0.0:
                 clips.append({"file": f, "peakDb": round(filepk[f], 2), "flatTopRun": run})
-        playpk, hotplays = -99.0, []
+        # W10 R2B fix 4: a played family is judged on EVERY take, not only the one the census picked (sample() picks a take at
+        # random): the call gain (tap g / the pick's CLIP_DB trim) x each take's own trim x the top of the per-play level jitter
+        # (0.9..1.1 in sample()). Before this, a hot take slipped past when the census happened to pick a sibling (plant clip-hot 0/3)
+        sfx_t, clipg = T["SFX"], {f: 10 ** (d / 20.0) for f, d in (T.get("CLIP_DB") or {}).items()}
+        f2ks = {}
+        for k_, fs_ in sfx_t.items():
+            for f_ in fs_:
+                f2ks.setdefault(f_, []).append(k_)
+        playpk, hotplays, seen = -99.0, [], set()
         for c in res["cases"]:
             for e in (c.get("levels") or []):
-                if e["f"] in filepk:
-                    pp = filepk[e["f"]] + 20 * np.log10(max(e["g"], 1e-9)); playpk = max(playpk, pp)
-                    if pp > -1.0:
-                        hotplays.append({"case": c["label"], "file": e["f"], "peakDb": round(pp, 2)})
+                callg = max(e["g"], 1e-9) / clipg.get(e["f"], 1.0)
+                for k_ in ([e["k"]] if e.get("k") in sfx_t else f2ks.get(e["f"], [])):
+                    for t_ in sfx_t[k_]:
+                        if t_ not in filepk:
+                            continue
+                        pp = filepk[t_] + 20 * np.log10(callg * clipg.get(t_, 1.0) * PLAY_JITTER_MAX); playpk = max(playpk, pp)
+                        if pp > -1.0 and (c["label"], t_) not in seen:
+                            seen.add((c["label"], t_)); hotplays.append({"case": c["label"], "key": k_, "file": t_, "peakDb": round(pp, 2)})
         v.check("no-clip (no added file is clipped; no census play of one peaks over -1 dBFS in game, before the bus)", not clips and not hotplays,
                 {"files": len(filepk), "loudestFileDb": round(max(filepk.values() or [-99]), 2), "loudestPlayDb": round(playpk, 2),
                  "clippedFiles": clips[:10], "hotPlays": hotplays[:10]}, "0 clipped files, every play <= -1 dBFS")
