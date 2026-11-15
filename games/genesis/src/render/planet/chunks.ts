@@ -37,6 +37,7 @@ import { RING_N, ringFrame } from '../bufring.ts';
 import { perfSwitch } from '../perfswitch.ts';
 import { FREEZE, freezeLandTick } from '../freeze.ts';
 import { earlyGeo } from '../uploadsched.ts';
+import { registerPageWorker } from '../pagerelease.ts';
 
 export { PATCH_RES };
 
@@ -119,7 +120,7 @@ function browserPatchPort(): PatchPort | null {
     };
     const load = new Int32Array(nw);
     for (let i = 0; i < nw; i++) {
-      const w = new Worker(new URL('./patchbuild.worker.ts', import.meta.url), { type: 'module', name: `genesis-patches-${i}` });
+      const w = registerPageWorker(new Worker(new URL('./patchbuild.worker.ts', import.meta.url), { type: 'module', name: `genesis-patches-${i}` }));
       w.onmessage = (e: MessageEvent<PatchReply>) => { load[i]--; subs.get(e.data.id)?.reply(e.data); };
       w.onerror = (e) => { console.warn('[genesis] patch building worker failed; building on the main thread', e.message ?? e); fail(); };
       w.onmessageerror = fail;

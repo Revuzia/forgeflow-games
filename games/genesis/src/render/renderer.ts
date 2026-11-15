@@ -73,6 +73,7 @@ const SW_AOALIAS = perfSwitch('aoalias');
 const SW_AOBLUR = perfSwitch('aoblur');
 let _flatMat: MeshBasicMaterial | null = null;
 import { flushTextureUploads, installSpanUploads, installTexturePreUpload, wantSpanUploads } from './upload.ts';
+import { PAGE_RELEASE_STATE, installPageRelease, onPageRelease } from './pagerelease.ts';
 /** PERF F20: textures flagged for upload go up before the frame's first pass (`?preupload=0` = at their draw, as before) */
 // (OFF by default since session 9, `?preupload=1` = on: the owner's M5 A/B ran 1.9 fps without it vs 1.2-1.3 with it;
 // it also uploads textures nothing draws this frame — other planets' particle fields, hidden batches — whose bytes
@@ -275,6 +276,19 @@ export class Renderer {
     this.scene.matrixWorldAutoUpdate = true;
   }
 
+  private pageReleaseOn = false;
+  /** (PERF s18, pagerelease.ts) when the page goes: workers ended, the WebGL context lost on purpose, the scene dropped.
+   *  Installed at the first frame, so the listeners run after the UI's own (the autosave on the way out). */
+  private installRelease(): void {
+    this.pageReleaseOn = true;
+    if (typeof window === 'undefined') return;
+    const gl = this.three.getContext() as WebGL2RenderingContext;
+    if (installPageRelease(window as unknown as Parameters<typeof installPageRelease>[0], gl, this.canvas, () => { location.reload(); })) {
+      onPageRelease(() => { try { this.dispose(); } catch { /* a lost context: nothing to free one by one */ } });
+    }
+    (globalThis as { __GENESIS_RELEASE__?: unknown }).__GENESIS_RELEASE__ = PAGE_RELEASE_STATE;
+  }
+
   setQuality(name: QualityName): void {
     this.quality = QUALITY[name];
     this.settings.bloom = this.quality.bloom;
@@ -404,6 +418,7 @@ export class Renderer {
   }
 
   render(view: WorldView, pose: CameraPose, dt: number, time: number): void {
+    if (!this.pageReleaseOn) this.installRelease();
     const t0 = performance.now();
     const r = this.three;
     r.info.reset();

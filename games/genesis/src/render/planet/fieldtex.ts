@@ -41,6 +41,7 @@ import { texUpload } from '../uploadsched.ts';
 import { FREEZE } from '../freeze.ts';
 import { BASE_PACK } from '../../data/index.ts';
 import { FIELD_ROW, FieldPacker, SOURCES, TEX_NAMES, type PackReply, type PackRequest, type TexName } from './fieldpack.ts';
+import { registerPageWorker } from '../pagerelease.ts';
 
 export { FIELD_ROW };
 
@@ -95,7 +96,7 @@ function browserPort(): PackPort | null {
   try {
     if (typeof Worker === 'undefined' || typeof location === 'undefined') return null;
     if (new URLSearchParams(location.search).get('packworker') === '0') return null;
-    const w = new Worker(new URL('./fieldpack.worker.ts', import.meta.url), { type: 'module', name: 'genesis-fieldpack' });
+    const w = registerPageWorker(new Worker(new URL('./fieldpack.worker.ts', import.meta.url), { type: 'module', name: 'genesis-fieldpack' }));
     const subs = new Map<number, { reply: (r: PackReply) => void; fail: () => void }>();
     const fail = (): void => {
       sharedPort = null;
