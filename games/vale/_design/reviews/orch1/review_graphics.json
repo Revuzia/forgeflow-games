@@ -1,0 +1,179 @@
+{
+ "lane": "orch1 graphics review: RENDERING AND LOOK",
+ "reviewer": "senior graphics lead (fresh eyes)",
+ "date": "2026-11-15 06:45 CST",
+ "head": "5e7ce6b76",
+ "read": [
+  "src/render/{quality,post,lighting,fog,world_material,camera,ink,sky}.ts, terrain.ts water and ground sections",
+  "_design/STYLE_BIBLE.md, WORLD.md, tokens.json grade and valueLstar",
+  "_design/reviews/max2/critic.json, gfx/GE_results.md, orch1/idle_gates.json",
+  "evidence: visual sheets (quality x4), map_rift lane/river/base/jungle, teamfight lead/peak, contact_fighters_game, fighter close crops; ux cold1920_030 and hud_bridge sheet"
+ ],
+ "score": 6.2,
+ "scoreNote": "The pipeline is solid and budget-disciplined: fitted stable shadows, N8AO, Neutral tone map plus per-map LUT, overlay drawn after the grade, SMAA plus CAS, x-ray silhouettes, dynamic resolution. The look at the game camera is below shipped quality: a dim, murky value key; pale, low-chroma fighters; faceted foliage; flat ground at the 16-128 px scale; effects that may bury fighters in teamfights; and fog-of-war edges on a 2 m lattice. No blocker is confirmed on this evidence. GFX-3 becomes one if a live-match recapture (GFX-11) confirms bodies vanish under effects.",
+ "strengths": [
+  "Stable, fitted single shadow map: frustum fitted to the visible ground each frame, quantised to 2 m with texel-snapped centre (lighting.ts). Crisp shadows that never shimmer while panning, and no cascades wasted on a camera that never sees the horizon.",
+  "Competitive-fair post chain: Neutral tone map, per-map 3D LUT and vignette are identical on every tier, and the overlay (telegraphs, bars, rings) is drawn into the graded buffer and depth-tested by hand, so overlay hexes are the screen pixels (post.ts).",
+  "Fog-of-war shading is solved per fragment against the actual tone map and LUT response (world_material.ts valeFogShade), so unseen ground reaches an exact display-luma ratio on any surface, which is better engineering than a multiply.",
+  "Unit readability tooling: inverted-hull ink outline, a hover rim in the overlay, and an x-ray occluded silhouette with depth GREATER behind cover, all on three raw programs (ink.ts). Silhouette behind walls is solved.",
+  "Ultimate impact envelope lights the ground but caps pixels above it (LIFT_BODY_CAP), so a struck unit stays a silhouette. This is a thoughtful readability rule.",
+  "Budget discipline is measured, not assumed: program count, triangles, draws and memory are gated (40 programs, 295 draws of 450 at peak), and Low reads close to High, which keeps the game fair across tiers.",
+  "Structures read well at the camera: the Glass Belfry and needles have clear silhouettes, team ticks and health states (structure_* evidence)."
+ ],
+ "improvements": [
+  {
+   "id": "GFX-1",
+   "impact": "high",
+   "effort": "L",
+   "model": "opus",
+   "modelWhy": "A whole-frame value re-key is art direction plus a gate change that needs judgement and an owner ruling.",
+   "what": "Re-key the environment's values up. The world is dim and murky, which contradicts the brief's 'luminous'.",
+   "why": "tokens.json grade.maps.rift.valueLstar (r12 B5 rebase) pins lanes at L* 36-41, the jungle floor at 12-20, wall faces at 12-16 and the Standing Shadow at 14-18. On screen every jungle and base frame reads as late dusk under a grey veil: _design/reviews/orch1/evidence/visual/map_rift_t0481_jungle_a_glasshorn.png, map_rift_t0481_base_aubade.png and ux/1920x1080/cold1920_030_first_match_after_Q.png (an olive-grey plaza). Shipped stylised MOBAs keep the environment in the mid values with low chroma and low local contrast, and make characters pop through chroma, hue and an edge light, not by darkening the world. VALE bought fighter separation by sinking the world, and the whole image pays for it.",
+   "how": "1) Prototype on one map behind a uniform, with no new program: lift the environment to lanes L* ~50-58, jungle floor ~28-34, wall faces ~24-30, and compress environment chroma by about 0.75 and local contrast in the per-map LUT (vale_grade_<map>). 2) Restore character separation with GFX-2 (chroma and edge light) rather than value. 3) Re-solve valeFogShade's targets, since they mirror the grade. 4) Run value_probe, telegraph ΔE and colour-blind sheets as an A/B. 5) The valueLstar bands are a bar set by an earlier round, so record the change as an owner ruling (fixwaves/owner_rulings.md) before landing it.",
+   "risk": "Telegraph and HARM contrast against a brighter ground, and the fog-solve and lift envelope tuned to the old curve. Gate it on value_probe and the telegraph ΔE probes."
+  },
+  {
+   "id": "GFX-2",
+   "impact": "high",
+   "effort": "M",
+   "model": "opus",
+   "modelWhy": "Character lighting model change; needs shading judgement and lineup-level art direction.",
+   "what": "Fighters read pale and near-white at the game camera. The character light flattens their hue.",
+   "why": "_design/reviews/orch1/evidence/visual/contact_fighters_game.png: Dunsom, Nurrow, Marund and Ardit read as cream or white blobs about 100 px tall, and the signature colour is barely visible. lighting.ts CHAR_LIGHT adds a Noonwhite-leaning crown at luminance 3.4 (power 2.5), a 0.7 fill and a 0.3 albedo floor. On light-albedo tops this pushes the top of the body toward white and washes chroma out. The max2 critic also lists 'cream tops' on Hesmi, Odrum, Burdam and Ilsheta as open. Top-tier MOBAs keep a hero's primary colour block saturated at gameplay zoom; it is the main identity cue.",
+   "how": "In world_material.ts's character path, make the crown and fill hue-preserving: scale the lit albedo by a luminance gain, or tint the rim by the albedo's own chroma, instead of adding Noonwhite. Clamp crown output so top-25 L* stays <= ~80, and keep a chroma floor (C* >= 20) on each fighter's signature zone. Verify with lineup_qa at the game camera on RIFT, BRIDGE and FRAY, and keep the lilac-collision rule (ΔE76 >= 25).",
+   "risk": "Fighters could lose value separation against a GFX-1 re-keyed world, so land GFX-1 and GFX-2 together and gate both on one A/B."
+  },
+  {
+   "id": "GFX-3",
+   "impact": "high",
+   "effort": "M",
+   "model": "opus",
+   "modelWhy": "VFX-versus-character compositing rule; adversarial readability judgement and render engineering.",
+   "what": "In teamfights, effects bury the fighters. Add a character-protection rule to the VFX composite.",
+   "why": "_design/reviews/orch1/evidence/visual/teamfight_rift_peak.png (and the Low/High/Ultra sheet_quality_teamfight.png): where slowbell, stillwater_jo and ferrow stand there are only near-white bursts and pale spheres, and a 6 m violet zone fill covers the middle of the lane. No body silhouette is readable. STYLE_BIBLE says only T4 reaches white. Shipped MOBAs dim and thin effects over champions and keep their silhouettes on top. Caveat: the render-bench lead frame (teamfight_rift_lead.png) shows bars and rings with no bodies, so actors may not have loaded in this capture. GFX-11 must recapture from a live match before this is scored as a blocker.",
+   "how": "1) After the GFX-11 recapture, measure the share of each fighter's silhouette pixels covered by VFX at display L* > 85; the bar is <= 30% at peak. 2) In VfxPass (post.ts), read a fighter mask. The hover pass already renders an R8 silhouette mask (ink.ts INK.mask), so draw it once per frame for all fighters, with no new program. Attenuate non-T4 VFX alpha and luminance inside it (about 0.45x) and on its 1-2 px rim. 3) Cap zone fills at about 20-25% alpha with the brightness carried by the edge, per the bible's 'danger edge is brightest'.",
+   "risk": "One extra mask draw per frame (draws, about 10-20). Ultimates must still read, so exempt T4 for its first 150 ms."
+  },
+  {
+   "id": "GFX-4",
+   "impact": "high",
+   "effort": "L",
+   "model": "opus",
+   "modelWhy": "It needs a GPU-side technique and a shader-program budget decision.",
+   "what": "Free shader-program and triangle headroom before any other render upgrade. Every budget is at its ceiling.",
+   "why": "idle_gates perfCounts: programs 40/40/40 (bar 40), triangle peaks 455k/445k/483k (bar 500k, seed 23), with actors at 250k of the peak frame. The max2 critic saw seed 11 at 497k. GFX-6, GFX-7 and GFX-9 each need at least one program or more triangles, so nothing in this list can land without a trade.",
+   "how": "1) List the 40 programs (renderer.ts warm-up list) and merge variants that differ only in defines into uniform-switched uber paths, as ink.ts did for the unlit passes. The terrain ground, wall and inlay variants and world_material per-map defines are the likely candidates. The target is <= 36 programs. 2) Fighters at the default 31 m camera cover ~100 px: check lod.ts thresholds and make LOD1 kick in at the default zoom for non-local fighters, aiming for actors <= 190k at the peak frame. Verify with perf_1080 --prod --match-seeds 7,11,23 through heavy.py.",
+   "risk": "Uber branches can cost ALU on tile GPUs. A/B the frame time on an idle machine."
+  },
+  {
+   "id": "GFX-5",
+   "impact": "medium",
+   "effort": "M",
+   "model": "opus",
+   "modelWhy": "Readability semantics between two dark-cool surfaces is a design call.",
+   "what": "The Standing Shadow and fog of war look alike: both are dark and cool.",
+   "why": "_design/reviews/orch1/evidence/visual/map_rift_t0481_river_north.png: the left half (unseen, darkened, desaturated, tint #2A3140) and the centre (the Standing Shadow, hard-edged violet stone at L* 14-18) are both dark blue-grey. Players cannot tell 'unseen' from 'shadow stone' at a glance. Fog of war is competitive information. The fog shader multiplies the value (valeFogValue 0.55) on a surface that is already the darkest on the map (valeFogLocal 0.9 there), so the cue nearly vanishes.",
+   "how": "Give unseen ground a texture cue as well as a value cue: a slow world-space noise breakup or desaturation hatch inside fog (GFX-6), and/or lift the Standing Shadow's chroma toward violet so the two differ in hue (ΔE >= 15 on display). Verify with a paired fog/no-fog capture on the Noonline.",
+   "risk": "Low; fog is cosmetic over sim visibility."
+  },
+  {
+   "id": "GFX-6",
+   "impact": "medium",
+   "effort": "M",
+   "model": "opus",
+   "modelWhy": "Fog-of-war presentation technique; needs care for fairness and program budget.",
+   "what": "Fog-of-war edges follow a 2 m grid, and unseen areas are a flat darken.",
+   "why": "src/sim/vision.ts: the grid is navCell x 4 = 2 m. render/fog.ts uploads it as R8 and world_material.ts valeVision does bilinear plus a 5-tap smoothstep, so the edge is a rounded staircase on a 2 m lattice that crawls as the 10 Hz vision updates. Inside, unseen terrain is darkened and desaturated with no motion. Shipped MOBAs show a smooth vision boundary (upsampled and blurred, or a distance field) and a soft animated veil in unseen space, so the boundary reads as a vision radius and not as tiles.",
+   "how": "In FogOfWar, keep the sim grid but render a 4x-resolution presentation texture on the GPU each vision update (10 Hz): a two-pass separable blur, or a jump-flood distance field, of the R8 grid. Warp the sample in valeVision by a slow world-space noise (+/- 0.4 m), and add a faint cool edge band at the boundary. Keep it identical on every tier. This needs 1-2 programs, so it depends on GFX-4.",
+   "risk": "Must not reveal anything the sim hides: entities stay gated by visibleMask, and the shader edge must never lead the sim's grid by more than 0.5 m."
+  },
+  {
+   "id": "GFX-7",
+   "impact": "medium",
+   "effort": "L",
+   "model": "opus",
+   "modelWhy": "Foliage look development is art direction; the batch rebuild after the look is set can go to sonnet.",
+   "what": "Tree canopies read as hard-faceted paper polygons instead of painted masses.",
+   "why": "_design/reviews/orch1/evidence/visual/map_rift_t0481_jungle_a_glasshorn.png and map_rift_t0481_lane_seat.png (bottom): Dialwood, Hourtier and Lampbough crowns show every facet as a flat-lit wedge, like folded paper rosettes. That is the strongest 'indie' tell in the frame. Shipped stylised games shade canopies as soft volumes.",
+   "how": "Technique, not copying: in the Blender canopy builders, transfer normals from a smooth ellipsoid proxy (Data Transfer custom normals) so each crown shades as one volume. In the existing tree program, add a wrap-diffuse term with a little back-light translucency and a top-to-bottom albedo gradient, and break the silhouette with a few alpha-tested leaf clusters on the rim. Re-export with art/blender through heavy.py. The opus lane sets one tree's look, then a sonnet lane batch-applies it to every species.",
+   "risk": "Alpha-tested rims add overdraw and shadow cost; keep tree tris flat (env verify noted -2.5 % per tree) and check the triangle peak."
+  },
+  {
+   "id": "GFX-8",
+   "impact": "medium",
+   "effort": "M",
+   "model": "opus",
+   "modelWhy": "Ground macro design needs an art eye; previous attempts failed to show at camera.",
+   "what": "Lane and plaza ground lacks macro variation at the game camera.",
+   "why": "_design/reviews/orch1/evidence/visual/map_rift_t0481_lane_seat.png: one uniform Voronoi flagstone with constant dark grout end to end. ux cold1920_030_first_match_after_Q.png and _design/reviews/orch1/evidence/visual/map_rift_t0481_base_aubade.png: the base plaza is a large even olive field. The max2 env verifier saw no change at the game camera for ENV-5 plaza and ENV-1 floor break-up, and GE-1 micro detail works only at 3-12 px. The missing band is 16-128 px: wear paths, colour pools and dirt gathered at walls. That band makes shipped stylised maps read as hand-painted.",
+   "how": "Add a low-frequency world-space macro layer to the ground program: a painted or baked per-map mask (wear along the lane centre lighter and warmer, darker grime and moss creep 1-3 m from wall feet, a few large colour pools) sampled from one small texture, with no new program. Hand-place 10-20 decals per map (scuffs, chalk marks, cracked flags) through terrain_inlay. Gate it on low-pass (16-64 px) luminance variance at the game camera rising measurably while lane p50 holds its band.",
+   "risk": "Busy ground lowers telegraph contrast; keep the GE telegraph-delta/high-pass ratio >= 3."
+  },
+  {
+   "id": "GFX-9",
+   "impact": "medium",
+   "effort": "M",
+   "model": "opus",
+   "modelWhy": "Water shading look; needs judgement within one existing program.",
+   "what": "The Fallen Shaft water is a flat 50 % opacity film: no reflection, no depth colour, a grey fall foot.",
+   "why": "terrain.ts:1557: a MeshStandardMaterial at opacity 0.5 with noise ripples, a lap and a lip. _design/reviews/orch1/evidence/visual/teamfight_rift_lead.png (top centre): the falls' foot reads as grey vertical streaks over dark water, with sparkle motes the only life. Shipped stylised water sells itself through a fresnel sky reflection, depth tint and shore foam.",
+   "how": "Inside the existing water program: a fresnel-weighted sample of the scene PMREM (already bound as scene.environment), depth-fade colour from the existing bank SDF (shallow warm-teal to deep cool), a soft foam band at the bank and the fall foot driven by that SDF and valeNoise, and flow-scrolled normals on the fall sheet. Keep it within the RIFT valueLstar fallenShaft band (or the GFX-1 re-key).",
+   "risk": "Reflection brightness against telegraphs crossing the shaft; cap the sheen."
+  },
+  {
+   "id": "GFX-10",
+   "impact": "medium",
+   "effort": "S",
+   "model": "sonnet",
+   "modelWhy": "Measurement and a settings table; well specified.",
+   "what": "Ultra is indistinguishable from High at the game camera, and Medium has no visual evidence.",
+   "why": "_design/reviews/orch1/evidence/visual/sheet_quality_teamfight.png, sheet_quality_river_mid.png and sheet_quality_base_aubade.png: High and Ultra are visually identical at 1080p. Ultra pays a 4096² shadow map (16 MB R8 colour plus depth), finer AO and DPR <= 2 (which does nothing at device scale 1). Menu tiers count High 136k tris / 39 programs and Ultra 139k / 39. Low reads close to High, which is good for fairness, but there is no Medium capture at all.",
+   "how": "Capture Medium for the four quality scenes. Compute per-tier SSIM and the mean ΔE versus Ultra at the game camera. If Ultra versus High is < 1 ΔE, either drop Ultra's 4096 map to 2048 and spend the saved memory and GPU time on something visible (secondaryDensity, more scatter), or label Ultra honestly in the settings copy. Write the table to _design/reviews.",
+   "risk": "None; measurement first."
+  },
+  {
+   "id": "GFX-11",
+   "impact": "high",
+   "effort": "S",
+   "model": "sonnet",
+   "modelWhy": "Harness fixes and recapture; mechanical.",
+   "what": "Fix the visual-evidence harness. Six of 16 fighter captures are empty, teamfight bodies are missing, and the PNGs are palette-quantised.",
+   "why": "_design/reviews/orch1/evidence/visual/contact_fighters_game.png: Ilsheta, Kemdo, Lisvel, Tunlan, Ulkro and Vashil (all team 1) show empty ground, because they are under fog for local team 0. teamfight_rift_lead.png shows bars and selection rings with no bodies: the render-bench replay (_harness/orch1_visual_pack.mjs replayTo, b.rebuild then render(0)) does not wait for actor templates. Most full frames are 'encode: palette256', which bands the grade, AO and fog gradients a graphics review must judge. GFX-1, GFX-2 and GFX-3 cannot be verified on this pack.",
+   "how": "In orch1_visual_pack.mjs: capture fighter crops as spectator (team -1, fog off) or seat the subject on the local team; after rebuild and frame stepping, await the renderer's template and asset-ready promise and assert every fighter mesh is visible before cap(); save grade-review frames lossless, or as WebP q95 under the size cap. Recapture the teamfight from a live match through heavy.py.",
+   "risk": "None."
+  },
+  {
+   "id": "GFX-12",
+   "impact": "medium",
+   "effort": "M",
+   "model": "sonnet",
+   "modelWhy": "Idle-machine measurement through the existing gates.",
+   "what": "Prove High holds 60 fps at 1080p on an idle machine, so the ladder ships honestly.",
+   "why": "idle_gates: High read 57.1 fps with 29 dropped frames (not measured, load 2.0-2.6), the real-time match had 57.6 % of seconds at 58+, and Chrome's GPU helper used 27-29 % CPU during the run. The budget says 60 fps on High/Ultra at 1080p. Every item above adds GPU work, so the baseline must be known first.",
+   "how": "With the owner's Chrome closed and load < 3: run perf_1080 --prod --no-build --match-only and probe_match_memory --fake-audio through heavy.py. Record per-pass GPU time (N8AO, bloom, SMAA+CAS, VfxPass) from a manual timer A/B (the ANGLE-Metal timer is untrusted, quality.ts), so later items have a cost model.",
+   "risk": "None."
+  },
+  {
+   "id": "GFX-13",
+   "impact": "low",
+   "effort": "M",
+   "model": "opus",
+   "modelWhy": "Atmosphere tuning is art direction.",
+   "what": "Add atmospheric depth between terrace levels and in jungle pockets.",
+   "why": "With a 26° telephoto at 52° pitch (camera.ts) the frame is near-orthographic. Terrace levels separate only by wall faces, and the jungle floor reads as one dark plane (_design/reviews/orch1/evidence/visual/map_rift_t0481_jungle_a_glasshorn.png). God rays were deferred (max2 env). Shipped stylised MOBAs add height-based tint (low ground cooler and darker, high ground warmer), soft light pools under canopy gaps and gentle haze in pits.",
+   "how": "world_material.ts: a height-gradient tint uniform per map (y-based, applied before the fog solve, with no new program), plus 3-6 baked light-pool decals per jungle quadrant using the existing inlay path. Keep it within valueLstar, or the GFX-1 re-keyed bands.",
+   "risk": "Low."
+  },
+  {
+   "id": "GFX-14",
+   "impact": "low",
+   "effort": "S",
+   "model": "opus",
+   "modelWhy": "Material art direction on structures.",
+   "what": "Aubade structure 'dawnglass' reads as flat UI-blue fills, not glass.",
+   "why": "_design/reviews/orch1/evidence/visual/map_rift_t0481_base_aubade.png and ux cold1920_030: the Glass Belfry's windows and the turret ticks are saturated, uniform azure (close to the HUD's ally blue). They read as decals or team paint rather than lit glass, against WORLD's 'cool dawnglass'. Shipped structures carry team colour in glow trims while the glass shows depth.",
+   "how": "Give the window material an inner gradient with a fake-interior or parallax term, plus a fresnel edge from the PMREM inside the structure program, and keep pure ally-blue only on the base ticks. Verify the team read stays at ΔE >= 20 from Serenade.",
+   "risk": "Low; team identity must stay obvious."
+  }
+ ]
+}
