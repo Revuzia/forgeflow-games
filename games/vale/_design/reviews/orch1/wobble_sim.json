@@ -1,0 +1,63 @@
+{
+  "what": "Headless-sim diagnosis of the owner's 2026-11-15 report: Wicks on RIFT leave the lane line and come back near the 2nd (inner) tower, mostly on the top lane",
+  "script": "_harness/_tmp_wobble_sim.ts (sweep | trace | trail)",
+  "repro": "node _harness/_tmp_wobble_sim.ts sweep --seeds 3,7,11,19,23,31 --minutes 14 --scen idle,bots --towers alive,kill --out <out>",
+  "runs": "24 runs on HEAD 62f2d49e8 + 24 on 098ac7436 (pre ruling 39): seeds 3,7,11,19,23,31 x {idle fighters, computer-played fighters} x {towers alive, all outer towers killed at 2:30-4:30 (one side) / +60 s (other side)}, 0:00-14:00, every tick, every Wick",
+  "conventions": "d = signed lateral offset from the lane polyline (the lane's waypoint path); +d = left of team-0 travel; 'down' = world +y = screen DOWN under the fixed-yaw default camera (screen up = -y). FREE = no attack order, no chase flag, no swing/windup/anim, no cast, no attackable enemy within aggro range; the first and last 6 m of each road are left out",
+  "files": {
+    "report_cur": "_design/reviews/orch1/wobble_sim_cur.txt",
+    "report_pre": "_design/reviews/orch1/wobble_sim_pre_098ac7436.txt",
+    "trail_top_team0": "_design/reviews/orch1/wobble_sim_trail_high_t0.svg (seed 3 idle, team 0 free Wicks 0:00-5:30, x 18..56 y 10..34: trails sit below the dashed waypoint line between waypoints and turn before each waypoint dot)",
+    "trail_top_team1": "_design/reviews/orch1/wobble_sim_trail_high_t1.svg (mirror at x 114..152)"
+  },
+  "verdict": "The dip is corner cutting of the lane polyline by every free Wick on every wave, not a stall, a nav detour or ruling 39. units/minions.ts followLane advances to the next lane waypoint once the Wick is within WAYPOINT_REACH = 2.5 m of the current one and then attack-moves in a straight line to it; with the line of walk clear (no nav path, no body lane for Wicks) movement.ts stepToward walks that chord. The road polylines of the top and bottom lanes bend most (12-20 deg per waypoint) between the base lantern and the inner tower, so the chord leaves the line by 0.4-0.7 m on the INSIDE of each bend and converges back on the next waypoint (a sawtooth: dip right after each waypoint, back on the line at the next). The top road arcs toward -y, so its inside is +y = screen DOWN ('under the path'); the bottom road is the mirror (inside = screen UP). The wave's side columns (spawned 1.1 m either side) then press on the middle one as all three converge on the same waypoint, and separation (movement.ts separate, factor 0.5) pushes the outer-side Wicks further out, to 1.0-1.3 m. Larger 2-3.3 m swings near the inner towers are Wicks walking back after a fight (they fought standing 2-3 m off the road; followLane walks straight to the next waypoint ahead, so they rejoin over 6-9 m).",
+  "corner_cut_geometry_top_road_team0": [
+    { "wp": 1, "at": [22.8, 38.6], "s": 9.1, "turn_deg": -13.8, "predicted_cut_m": 0.47, "side": "screen up" },
+    { "wp": 2, "at": [26.2, 30.1], "s": 18.3, "turn_deg": 20.5, "predicted_cut_m": 0.69, "side": "screen down" },
+    { "wp": 3, "at": [32.3, 23.4], "s": 27.3, "turn_deg": 15.7, "predicted_cut_m": 0.54, "side": "screen down", "note": "inner tower a_high_needle_inner (35, 18.4) is 2.8 m on the up side of this leg" },
+    { "wp": 4, "at": [40.0, 18.6], "s": 36.4, "turn_deg": 12.3, "predicted_cut_m": 0.42, "side": "screen down" },
+    { "wp": 5, "at": [48.7, 15.5], "s": 45.6, "turn_deg": 6.9, "predicted_cut_m": 0.24, "side": "screen down" },
+    { "wp": 6, "at": [57.6, 13.5], "s": 54.7, "turn_deg": 5.2, "predicted_cut_m": 0.18, "side": "screen down" },
+    { "wp": 7, "at": [66.7, 12.3], "s": 63.9, "turn_deg": 3.7, "predicted_cut_m": 0.13, "side": "screen down" }
+  ],
+  "trace_wave1_top_team0_seed3_idle": {
+    "note": "ids 35-40, the first top-road wave of team 0; d sampled every 0.5 s while free, peak right after each waypoint then decaying to the next",
+    "middle_wick_35_peaks_d_m_at_s": { "18": 0.39, "28": 0.57, "36": 0.44, "46": 0.31, "56": 0.21, "64": 0.16, "73": 0.11 },
+    "wick_36_peak": "+1.22 m at s 19 (pushed by the converging column at the wp2 bend), back to +0.27 by s 34",
+    "nav_path_ticks": 0, "step_out_ticks": 0, "structure_contacts": 0,
+    "pre_ruling_39": "the same trace on 098ac7436 (ids 20-80, t 29-75 s, 44069 lines) is byte-identical"
+  },
+  "per_lane_free_cur": {
+    "road_high t0": "p50 0.21 p95 0.83 max 11.75 m, >1 m 2.03 %, >1.5 m 0.26 %, 89 % of >1 m samples screen-down",
+    "road_high t1": "p50 0.21 p95 0.93 max 22.60 m, >1 m 3.29 %, >1.5 m 0.19 %",
+    "road_seat t0": "p50 0.49 p95 1.05 max 24.79 m, >1 m 5.84 %, >1.5 m 0.52 %",
+    "road_seat t1": "p50 0.31 p95 0.87 max 14.00 m, >1 m 1.52 %, >1.5 m 0.46 %",
+    "road_low t0": "p50 0.21 p95 0.93 max 22.90 m, >1 m 3.63 %, >1.5 m 0.36 %",
+    "road_low t1": "p50 0.21 p95 0.83 max 12.57 m, >1 m 1.67 %, >1.5 m 0.13 %"
+  },
+  "hot_spots": [
+    { "rank": 1, "where": "road_high team 0, s 16-20 @(26.1,30.3), wp2 bend between a_high_lantern and a_high_needle_inner", "free_n": 149165, "p50_p95_max_m": [0.47, 1.11, 1.29], "over_1m": "10.0 %", "over_1_5m": "0.0 %", "side": "100 % screen down", "mean_down_m": { "left_col": 0.32, "middle": 0.51, "right_col": 0.07, "all": 0.21 }, "mean_heading_off_road_deg": 10.8, "cause": "corner cut at wp2 (20.5 deg, 0.69 m predicted) + columns converging on wp2 (separation)", "mirror": "road_high team 1 s 144-148 @(143.6,29.9): >1 m 9.3 %, 100 % down; road_low both teams: same, screen up" },
+    { "rank": 2, "where": "road_high team 0, s 36-40 @(41.5,18.1), just past a_high_needle_inner (35,18.4)", "free_n": 135884, "p50_p95_max_m": [0.39, 0.99, 2.43], "over_1m": "3.8 %", "over_1_5m": "0.1 %", "side": "100 % screen down", "mean_down_m": { "left_col": 0.35, "middle": 0.41, "right_col": 0.42, "all": 0.40 }, "cause": "corner cuts at wp3 (15.7 deg) and wp4 (12.3 deg) back to back: the largest whole-wave mean offset on the road (+0.40 m, all three columns)", "mirror": "road_high team 1 s 124-128 @(128,17.9) near s_high_needle_inner: mean down +0.42, >1 m 1.5 %; road_low team 0 s 36-40: mean -0.43 (screen up); road_low team 1 s 124-128: -0.39" },
+    { "rank": 3, "where": "road_high team 1 (attacking) s 40-44 @(45.3,16.7), between team 0's outer and inner tower", "free_n": 5365, "p50_p95_max_m": [0.23, 1.79, 3.15], "over_1m": "13.2 %", "over_1_5m": "8.2 %", "side": "96 % screen down", "cause": "return after a fight: Wicks that fought 2-3 m below the road walk straight to the next waypoint ahead and rejoin over 6-9 m", "trace": "bots/kill seed 19 #9388: d 1.3 -> 3.1 m while chasing an ATTACK target below the road (fighting), then free 3.09 -> 1.70 m in 1.2 s toward wp (40,18.6)", "pre_098ac7436": "n 9527, p95 1.17, >1 m 7.2 %, >1.5 m 2.9 %" },
+    { "rank": 4, "where": "road_high team 0 s 36-40 @(40.6-41.4, 20.6-21.5), idle/kill seed 11 #10242", "cause": "return after a fight", "trace": "stood 13 s in an attack at d 2.7-3.2 m pressed on ally #9539; at t 653.6 the fight ended (order 3 -> 2), followLane aimed wp5 (48.7,15.5) and walked the chord: d 2.22 (t 654.0) -> 1.00 (655.6) -> 0.49 (656.4), 7.9 m walked, no nav path, no contacts with structures" },
+    { "rank": 5, "where": "road_high team 1 s 124-128 @(128.65,20.87), near s_high_needle_inner, bots/kill seed 23 #6587", "cause": "return after a fight", "trace": "fought at d 2.83 m for 11 s; at t 476.2 free, chord to wp (121.3,15.5): d 2.47 -> 0.99 (477.8) -> 0.62 (478.2), then the next chord to (112.4,13.5) keeps it at 0.6 m until the next waypoint" }
+  ],
+  "excursions": {
+    "definition": "free Wick over 1.0 m off the line and back under 0.5 m",
+    "cur": { "total": 13636, "push:ally-separation": 8055, "steer:direct-to-waypoint": 681, "return-after-fight": 1030, "return-after-fight(ended-in-fight)": 3310, "step-out": 15, "step-out(ended-in-fight)": 85, "push:structure(ended-in-fight)": 3, "nav-path or snapped-order": 0 },
+    "pre_098ac7436": { "total": 13777, "push:ally-separation": 8024, "steer:direct-to-waypoint": 660, "return-after-fight": 1139, "return-after-fight(ended-in-fight)": 3584, "step-out": 0 }
+  },
+  "ruled_out": [
+    "nav grid / A* corners: 0 nav-path ticks in the free excursions near the inner towers; the lane chords are in line of walk (WALL_CLEARANCE and tower discs are 2.8 m away)",
+    "tower footprint / sealed strip (ruling 39): the inner tower disc (r 1.1 + 0.35) sits 2.81 m off the road on the wall side; the sealed strip is behind it; structure contacts in free excursions: 0 (3 of 13636 excursions, all ending in a fight)",
+    "snapped order points: 0 ticks with the attack-move point off the lane waypoint",
+    "body lanes (bodypath): fighters only, Wicks never plan one",
+    "step-out (ruling 39): 15 free excursions in 24 runs, none in the own-side marches near the inner towers"
+  ],
+  "ruling_39_effect": "None on the reported dip: followLane and WAYPOINT_REACH (2.5, unchanged since 2026-10-07) are identical on 098ac7436; the first top-lane wave traces byte-identically; own-side segments round both inner towers match to 0.01 m in p50/p95 and mean offset (e.g. road_high t0 s 36-40: p50 0.39 / p95 0.99 / mean down 0.40 on both). Attacking-side samples near team 0's inner tower (small n) show more 1.5 m+ swings on HEAD (road_high t1 s 40-44 >1.5 m 8.2 % vs 2.9 %), with 100 step-out excursions overall that do not exist before ruling 39; these come from fights, not the free march",
+  "fix_levers_for_the_sim_lane": [
+    "units/minions.ts followLane: aim at the point on the polyline a fixed lookahead ahead of the Wick's projection (pure pursuit) instead of the next vertex with a 2.5 m reach, or drop WAYPOINT_REACH toward ~0.8 m: predicted cut at wp2 0.69 m -> ~0.2 m",
+    "content/maps/map_rift.json road_high / road_low: add intermediate waypoints on the 12-20 deg bends between the lantern and the inner tower (cut scales with the turn angle and the 2.5 m reach)",
+    "after a fight: rejoin toward the projection a few metres ahead on the line, not straight to the next vertex up to ~9 m ahead"
+  ]
+}

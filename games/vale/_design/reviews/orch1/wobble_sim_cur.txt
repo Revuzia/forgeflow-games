@@ -1,0 +1,960 @@
+# Wick lateral wobble on RIFT: seeds 3,7,11,19,23,31, 14 min, scen idle,bots, towers alive,kill; segments of 4 m along each road (s from team 0's end)
+run idle/alive seed 3: 14.0 min, kills [] (4 s)
+run idle/alive seed 7: 14.0 min, kills [] (3 s)
+run idle/alive seed 11: 14.0 min, kills [] (3 s)
+run idle/alive seed 19: 14.0 min, kills [] (3 s)
+run idle/alive seed 23: 14.0 min, kills [] (3 s)
+run idle/alive seed 31: 14.0 min, kills [] (3 s)
+run idle/kill seed 3: 10.4 min, kills [2.50m s_seat_needle_outer; 2.50m s_high_needle_outer; 2.50m s_low_needle_outer; 3.50m a_seat_needle_outer; 3.50m a_high_needle_outer; 3.50m a_low_needle_outer] (2 s)
+run idle/kill seed 7: 13.5 min, kills [3.50m s_seat_needle_outer; 3.50m s_high_needle_outer; 3.50m s_low_needle_outer; 4.50m a_seat_needle_outer; 4.50m a_high_needle_outer; 4.50m a_low_needle_outer] (3 s)
+run idle/kill seed 11: 14.0 min, kills [4.50m s_seat_needle_outer; 4.50m s_high_needle_outer; 4.50m s_low_needle_outer; 5.50m a_seat_needle_outer; 5.50m a_high_needle_outer; 5.50m a_low_needle_outer] (3 s)
+run idle/kill seed 19: 13.5 min, kills [3.50m s_seat_needle_outer; 3.50m s_high_needle_outer; 3.50m s_low_needle_outer; 4.50m a_seat_needle_outer; 4.50m a_high_needle_outer; 4.50m a_low_needle_outer] (3 s)
+run idle/kill seed 23: 14.0 min, kills [4.50m s_seat_needle_outer; 4.50m s_high_needle_outer; 4.50m s_low_needle_outer; 5.50m a_seat_needle_outer; 5.50m a_high_needle_outer; 5.50m a_low_needle_outer] (3 s)
+run idle/kill seed 31: 13.5 min, kills [3.50m s_seat_needle_outer; 3.50m s_high_needle_outer; 3.50m s_low_needle_outer; 4.50m a_seat_needle_outer; 4.50m a_high_needle_outer; 4.50m a_low_needle_outer] (3 s)
+run bots/alive seed 3: 14.0 min, kills [] (7 s)
+run bots/alive seed 7: 14.0 min, kills [] (7 s)
+run bots/alive seed 11: 14.0 min, kills [] (7 s)
+run bots/alive seed 19: 14.0 min, kills [] (7 s)
+run bots/alive seed 23: 14.0 min, kills [] (5 s)
+run bots/alive seed 31: 14.0 min, kills [] (5 s)
+run bots/kill seed 3: 14.0 min, kills [2.50m s_seat_needle_outer; 2.50m s_high_needle_outer; 2.50m s_low_needle_outer; 3.50m a_seat_needle_outer; 3.50m a_high_needle_outer; 3.50m a_low_needle_outer] (6 s)
+run bots/kill seed 7: 14.0 min, kills [3.50m s_seat_needle_outer; 3.50m s_high_needle_outer; 3.50m s_low_needle_outer; 4.50m a_seat_needle_outer; 4.50m a_high_needle_outer; 4.50m a_low_needle_outer] (5 s)
+run bots/kill seed 11: 14.0 min, kills [4.50m s_seat_needle_outer; 4.50m s_high_needle_outer; 4.50m s_low_needle_outer; 5.50m a_seat_needle_outer; 5.50m a_high_needle_outer; 5.50m a_low_needle_outer] (5 s)
+run bots/kill seed 19: 14.0 min, kills [3.50m s_seat_needle_outer; 3.50m s_high_needle_outer; 3.50m s_low_needle_outer; 4.50m a_seat_needle_outer; 4.50m a_high_needle_outer; 4.50m a_low_needle_outer] (5 s)
+run bots/kill seed 23: 14.0 min, kills [4.50m s_seat_needle_outer; 4.50m s_high_needle_outer; 4.50m s_low_needle_outer; 5.50m a_seat_needle_outer; 5.50m a_high_needle_outer; 5.50m a_low_needle_outer] (6 s)
+run bots/kill seed 31: 14.0 min, kills [3.50m s_seat_needle_outer; 3.50m s_high_needle_outer; 3.50m s_low_needle_outer; 4.50m a_seat_needle_outer; 4.50m a_high_needle_outer; 4.50m a_low_needle_outer] (5 s)
+sign: d>0 = left of team-0 travel; "down" = world +y = screen DOWN under the default camera (screen up = -y)
+
+## hottest segments, all scenarios combined (share of FREE samples > 1.0 m)
+road_seat t1 s 12-16 @(36.0,55.0): >1 m 26.0%, >1.5 m 12.6%, p95 2.39, max 2.60 [idle/kill/s11 #7178 t=713.8 (37.25,57.60)], down 74%, near a_seat_lantern(4.9m); per scen: idle/alive -, idle/kill 26.0%, bots/alive -, bots/kill -
+road_low t0 s 8-12 @(23.1,72.2): >1 m 25.6%, >1.5 m 0.0%, p95 1.21, max 1.34 [idle/alive/s3 #3976 t=272.9 (21.60,72.03)], down 100%, near a_low_lantern(4.2m); per scen: idle/alive 25.5%, idle/kill 25.2%, bots/alive 25.8%, bots/kill 25.7%
+road_seat t0 s 112-116 @(136.0,55.0): >1 m 23.3%, >1.5 m 13.1%, p95 1.87, max 2.63 [idle/kill/s3 #6814 t=504.0 (134.06,52.37)], down 33%, near s_seat_lantern(3.4m); per scen: idle/alive -, idle/kill 23.3%, bots/alive -, bots/kill -
+road_high t1 s 152-156 @(146.7,37.3): >1 m 22.4%, >1.5 m 0.0%, p95 1.21, max 1.34 [idle/alive/s3 #2296 t=182.9 (148.40,37.97)], down 0%, near s_high_lantern(3.9m); per scen: idle/alive 22.5%, idle/kill 22.2%, bots/alive 22.5%, bots/kill 22.5%
+road_seat t0 s 116-120 @(140.0,55.0): >1 m 18.5%, >1.5 m 3.8%, p95 1.45, max 1.86 [idle/kill/s3 #6814 t=505.3 (138.10,53.14)], down 48%, near s_seat_lantern(3.4m); per scen: idle/alive -, idle/kill 18.5%, bots/alive -, bots/kill -
+road_high t1 s 156-160 @(148.7,40.7): >1 m 18.0%, >1.5 m 0.0%, p95 1.11, max 1.27 [idle/alive/s3 #2296 t=182.8 (148.64,38.43)], down 0%, near s_high_lantern(7.5m); per scen: idle/alive 18.0%, idle/kill 17.6%, bots/alive 18.1%, bots/kill 18.2%
+road_low t0 s 156-160 @(148.7,69.3): >1 m 16.9%, >1.5 m 2.2%, p95 1.37, max 2.31 [idle/kill/s7 #10615 t=704.1 (149.77,71.77)], down 88%, near s_low_lantern(7.5m); per scen: idle/alive -, idle/kill 16.9%, bots/alive -, bots/kill -
+road_seat t0 s 24-28 @(48.0,55.0): >1 m 16.8%, >1.5 m 0.0%, p95 1.21, max 1.61 [idle/kill/s7 #11668 t=699.3 (48.77,53.39)], down 99%, near a_seat_needle_inner(3.4m); per scen: idle/alive 16.7%, idle/kill 17.2%, bots/alive 16.7%, bots/kill 16.7%
+road_seat t1 s 8-12 @(32.0,55.0): >1 m 16.7%, >1.5 m 10.6%, p95 1.87, max 2.13 [idle/kill/s11 #7178 t=714.8 (33.97,57.13)], down 42%, near a_seat_lantern(2.8m); per scen: idle/alive -, idle/kill 16.7%, bots/alive -, bots/kill -
+road_seat t0 s 16-20 @(40.0,55.0): >1 m 16.1%, >1.5 m 0.0%, p95 1.09, max 1.26 [idle/kill/s11 #13113 t=756.2 (41.98,56.26)], down 100%, near a_seat_needle_inner(6.6m); per scen: idle/alive 16.1%, idle/kill 16.5%, bots/alive 16.0%, bots/kill 16.0%
+road_seat t0 s 20-24 @(44.0,55.0): >1 m 15.8%, >1.5 m 0.0%, p95 1.17, max 1.34 [idle/kill/s11 #13113 t=757.4 (45.90,56.34)], down 100%, near a_seat_needle_inner(3.4m); per scen: idle/alive 15.7%, idle/kill 16.0%, bots/alive 15.7%, bots/kill 15.7%
+road_high t0 s 156-160 @(148.7,40.7): >1 m 15.4%, >1.5 m 1.2%, p95 1.27, max 1.94 [idle/kill/s7 #11659 t=775.5 (150.15,39.39)], down 22%, near s_high_lantern(7.5m); per scen: idle/alive -, idle/kill 15.4%, bots/alive -, bots/kill -
+road_low t0 s 4-8 @(21.0,68.9): >1 m 15.0%, >1.5 m 0.0%, p95 1.05, max 1.20 [idle/alive/s3 #3976 t=272.6 (21.18,71.20)], down 100%, near a_low_lantern(8.0m); per scen: idle/alive 14.8%, idle/kill 14.6%, bots/alive 15.2%, bots/kill 15.2%
+road_seat t0 s 80-84 @(104.0,55.0): >1 m 14.2%, >1.5 m 5.9%, p95 1.55, max 3.36 [bots/kill/s23 #8639 t=608.4 (105.83,58.36)], down 47%, near s_seat_needle_outer(4.9m); per scen: idle/alive 11.1%, idle/kill 13.2%, bots/alive -, bots/kill 19.2%
+road_seat t0 s 96-100 @(120.0,55.0): >1 m 13.2%, >1.5 m 5.4%, p95 1.57, max 2.69 [idle/kill/s3 #5084 t=455.1 (120.73,57.69)], down 62%, near s_seat_needle_inner(4.9m); per scen: idle/alive -, idle/kill 13.2%, bots/alive -, bots/kill -
+road_high t1 s 40-44 @(45.3,16.7): >1 m 13.2%, >1.5 m 8.2%, p95 1.79, max 3.15 [bots/kill/s19 #9388 t=723.1 (47.41,19.30)], down 96%, near ; per scen: idle/alive 16.2%, idle/kill 8.9%, bots/alive 8.4%, bots/kill 13.2%
+road_high t0 s 152-156 @(146.7,37.3): >1 m 12.8%, >1.5 m 1.8%, p95 1.31, max 2.06 [idle/kill/s7 #8858 t=617.4 (144.04,36.25)], down 54%, near s_high_lantern(3.9m); per scen: idle/alive -, idle/kill 12.8%, bots/alive -, bots/kill -
+road_seat t0 s 108-112 @(132.0,55.0): >1 m 12.5%, >1.5 m 7.4%, p95 1.83, max 2.69 [idle/kill/s3 #6814 t=503.9 (133.74,52.31)], down 16%, near s_seat_lantern(6.6m); per scen: idle/alive -, idle/kill 12.5%, bots/alive -, bots/kill -
+road_low t0 s 148-152 @(145.2,76.4): >1 m 12.4%, >1.5 m 3.2%, p95 1.39, max 2.40 [idle/kill/s11 #8895 t=679.7 (143.65,73.80)], down 12%, near s_low_lantern(3.0m); per scen: idle/alive -, idle/kill 12.4%, bots/alive -, bots/kill -
+road_seat t0 s 84-88 @(108.0,55.0): >1 m 12.1%, >1.5 m 2.9%, p95 1.31, max 14.63 [bots/kill/s11 #3168 t=333.8 (109.04,40.37)], down 51%, near s_seat_needle_outer(2.8m); per scen: idle/alive 12.2%, idle/kill 9.4%, bots/alive -, bots/kill 20.7%
+road_low t1 s 144-148 @(143.6,80.1): >1 m 11.8%, >1.5 m 0.0%, p95 1.13, max 1.29 [idle/alive/s3 #66 t=35.7 (142.69,79.21)], down 0%, near s_low_lantern(5.9m); per scen: idle/alive 12.0%, idle/kill 11.8%, bots/alive 11.9%, bots/kill 11.5%
+road_seat t1 s 40-44 @(64.0,55.0): >1 m 11.6%, >1.5 m 4.8%, p95 1.49, max 2.83 [bots/kill/s11 #7710 t=602.3 (65.90,52.17)], down 62%, near a_seat_needle_outer(3.4m); per scen: idle/alive -, idle/kill 4.0%, bots/alive 32.1%, bots/kill 30.1%
+road_low t1 s 52-56 @(56.9,96.3): >1 m 10.6%, >1.5 m 2.4%, p95 1.21, max 2.68 [bots/kill/s11 #9200 t=671.9 (57.23,93.67)], down 29%, near a_low_needle_outer(3.6m); per scen: idle/alive 8.1%, idle/kill 16.8%, bots/alive 28.8%, bots/kill 3.6%
+road_seat t1 s 24-28 @(48.0,55.0): >1 m 10.6%, >1.5 m 5.5%, p95 1.57, max 1.95 [idle/kill/s11 #7178 t=634.9 (49.92,56.95)], down 85%, near a_seat_needle_inner(3.4m); per scen: idle/alive -, idle/kill 10.6%, bots/alive -, bots/kill -
+road_seat t0 s 72-76 @(96.0,55.0): >1 m 10.4%, >1.5 m 3.7%, p95 1.41, max 24.79 [bots/kill/s11 #3168 t=327.6 (95.31,30.21)], down 55%, near ; per scen: idle/alive 12.2%, idle/kill 4.6%, bots/alive 13.2%, bots/kill 15.8%
+
+## per lane x team, all scenarios (free samples away from the road ends)
+road_high t0: free 2879467, p50 0.21 p95 0.83 max 11.75, >1 m 2.03%, >1.5 m 0.26%, down-share 89%
+road_high t1: free 2602390, p50 0.21 p95 0.93 max 22.60, >1 m 3.29%, >1.5 m 0.19%, down-share 38%
+road_seat t0: free 1938268, p50 0.49 p95 1.05 max 24.79, >1 m 5.84%, >1.5 m 0.52%, down-share 87%
+road_seat t1: free 2030634, p50 0.31 p95 0.87 max 14.00, >1 m 1.52%, >1.5 m 0.46%, down-share 54%
+road_low t0: free 2811170, p50 0.21 p95 0.93 max 22.90, >1 m 3.63%, >1.5 m 0.36%, down-share 55%
+road_low t1: free 2639030, p50 0.21 p95 0.83 max 12.57, >1 m 1.67%, >1.5 m 0.13%, down-share 8%
+
+## formation: mean signed screen-down offset (world +y, m) per spawn column L/M/R (walker-relative) and all; mean d (+ = left of team-0 travel); all scenarios
+road_high t0 4-8 @(21.0,41.1): down L 0.50 M 0.11 R -0.21 all 0.08 | d L 0.86 M 0.19 R -0.36 all 0.14 | n 79398 | a_high_lantern(8.0m)
+road_high t0 8-12 @(23.1,37.8): down L 0.21 M 0.03 R -0.22 all -0.03 | d L 0.47 M 0.08 R -0.51 all -0.09 | n 155109 | a_high_lantern(4.2m)
+road_high t0 12-16 @(24.6,34.1): down L 0.13 M 0.16 R -0.15 all -0.01 | d L 0.34 M 0.42 R -0.39 all -0.02 | n 158953 | a_high_lantern(2.9m)
+road_high t0 16-20 @(26.1,30.3): down L 0.32 M 0.51 R 0.07 all 0.21 | d L 0.61 M 0.99 R 0.09 all 0.39 | n 149165 | a_high_lantern(5.5m)
+road_high t0 20-24 @(28.7,27.3): down L 0.32 M 0.59 R 0.06 all 0.23 | d L 0.48 M 0.87 R 0.09 all 0.34 | n 159053 | a_high_lantern(8.7m)
+road_high t0 24-28 @(31.4,24.4): down L 0.25 M 0.43 R 0.14 all 0.22 | d L 0.34 M 0.61 R 0.18 all 0.30 | n 149969 | a_high_needle_inner(7.0m)
+road_high t0 28-32 @(34.6,22.0): down L 0.34 M 0.50 R 0.30 all 0.35 | d L 0.41 M 0.59 R 0.36 all 0.41 | n 148047 | a_high_needle_inner(3.6m)
+road_high t0 32-36 @(38.0,19.9): down L 0.19 M 0.27 R 0.24 all 0.23 | d L 0.22 M 0.32 R 0.28 all 0.27 | n 144335 | a_high_needle_inner(3.3m)
+road_high t0 36-40 @(41.5,18.1): down L 0.35 M 0.41 R 0.42 all 0.40 | d L 0.37 M 0.44 R 0.45 all 0.43 | n 135884 | a_high_needle_inner(6.5m)
+road_high t0 40-44 @(45.3,16.7): down L 0.14 M 0.21 R 0.25 all 0.21 | d L 0.15 M 0.23 R 0.26 all 0.22 | n 138746 | 
+road_high t0 44-48 @(49.1,15.4): down L 0.19 M 0.26 R 0.28 all 0.25 | d L 0.20 M 0.27 R 0.29 all 0.26 | n 134685 | 
+road_high t0 48-52 @(53.0,14.5): down L 0.11 M 0.16 R 0.17 all 0.15 | d L 0.12 M 0.17 R 0.17 all 0.15 | n 135003 | a_high_needle_outer(6.7m)
+road_high t0 52-56 @(56.9,13.7): down L 0.14 M 0.15 R 0.14 all 0.14 | d L 0.14 M 0.15 R 0.14 all 0.14 | n 125362 | a_high_needle_outer(3.6m)
+road_high t0 56-60 @(60.8,13.1): down L 0.15 M 0.14 R 0.12 all 0.13 | d L 0.15 M 0.14 R 0.12 all 0.13 | n 115389 | a_high_needle_outer(3.3m)
+road_high t0 60-64 @(64.8,12.6): down L 0.12 M 0.08 R 0.06 all 0.08 | d L 0.12 M 0.09 R 0.06 all 0.08 | n 103969 | a_high_needle_outer(6.4m)
+road_high t0 64-68 @(68.8,12.2): down L 0.16 M 0.12 R 0.10 all 0.12 | d L 0.16 M 0.12 R 0.10 all 0.12 | n 99191 | 
+road_high t0 68-72 @(72.8,11.9): down L 0.11 M 0.06 R 0.06 all 0.07 | d L 0.11 M 0.06 R 0.06 all 0.07 | n 98003 | 
+road_high t0 72-76 @(76.8,11.7): down L 0.15 M 0.09 R 0.09 all 0.11 | d L 0.15 M 0.09 R 0.09 all 0.11 | n 90094 | 
+road_high t0 76-80 @(80.8,11.6): down L 0.11 M 0.06 R 0.07 all 0.08 | d L 0.11 M 0.06 R 0.07 all 0.08 | n 75081 | 
+road_high t0 80-84 @(84.8,11.5): down L 0.12 M 0.11 R 0.10 all 0.11 | d L 0.12 M 0.11 R 0.10 all 0.11 | n 69627 | 
+road_high t0 84-88 @(88.7,11.6): down L 0.07 M 0.07 R 0.07 all 0.07 | d L 0.07 M 0.07 R 0.07 all 0.07 | n 63484 | 
+road_high t0 88-92 @(92.7,11.7): down L 0.07 M 0.06 R 0.06 all 0.06 | d L 0.07 M 0.06 R 0.06 all 0.06 | n 57583 | 
+road_high t0 92-96 @(96.7,11.9): down L 0.08 M 0.10 R 0.09 all 0.09 | d L 0.08 M 0.10 R 0.09 all 0.09 | n 48656 | 
+road_high t0 96-100 @(100.7,12.1): down L 0.07 M 0.04 R 0.06 all 0.06 | d L 0.07 M 0.04 R 0.06 all 0.06 | n 37149 | 
+road_high t0 100-104 @(104.7,12.5): down L 0.12 M 0.15 R 0.14 all 0.14 | d L 0.13 M 0.15 R 0.14 all 0.14 | n 26440 | s_high_needle_outer(6.8m)
+road_high t0 104-108 @(108.7,13.0): down L 0.07 M 0.10 R 0.09 all 0.09 | d L 0.07 M 0.10 R 0.09 all 0.09 | n 24057 | s_high_needle_outer(3.6m)
+road_high t0 108-112 @(112.6,13.6): down L 0.16 M 0.20 R 0.17 all 0.17 | d L 0.16 M 0.20 R 0.17 all 0.17 | n 23331 | s_high_needle_outer(3.3m)
+road_high t0 112-116 @(116.5,14.4): down L 0.13 M 0.14 R 0.14 all 0.14 | d L 0.14 M 0.15 R 0.15 all 0.14 | n 24902 | s_high_needle_outer(6.3m)
+road_high t0 116-120 @(120.4,15.3): down L 0.18 M 0.20 R 0.19 all 0.19 | d L 0.19 M 0.21 R 0.19 all 0.19 | n 23710 | 
+road_high t0 120-124 @(124.2,16.5): down L 0.18 M 0.20 R 0.23 all 0.21 | d L 0.19 M 0.21 R 0.24 all 0.22 | n 21981 | 
+road_high t0 124-128 @(128.0,17.9): down L 0.13 M 0.29 R 0.17 all 0.18 | d L 0.14 M 0.31 R 0.18 all 0.19 | n 9507 | s_high_needle_inner(7.0m)
+road_high t0 128-132 @(131.6,19.6): down L 0.29 M 0.29 R 0.30 all 0.30 | d L 0.34 M 0.34 R 0.36 all 0.35 | n 8839 | s_high_needle_inner(3.6m)
+road_high t0 132-136 @(135.0,21.7): down L 0.17 M 0.07 R 0.21 all 0.18 | d L 0.20 M 0.08 R 0.25 all 0.21 | n 9677 | s_high_needle_inner(3.3m)
+road_high t0 136-140 @(138.3,24.0): down L 0.35 M 0.23 R 0.35 all 0.33 | d L 0.48 M 0.31 R 0.49 all 0.46 | n 7855 | s_high_needle_inner(6.5m)
+road_high t0 140-144 @(140.9,27.0): down L 0.20 M 0.15 R 0.21 all 0.20 | d L 0.30 M 0.22 R 0.31 all 0.29 | n 6573 | 
+road_high t0 144-148 @(143.6,29.9): down L 0.25 M 0.26 R 0.30 all 0.28 | d L 0.48 M 0.53 R 0.56 all 0.53 | n 5364 | s_high_lantern(5.9m)
+road_high t0 148-152 @(145.2,33.6): down L 0.13 M 0.19 R 0.16 all 0.15 | d L 0.35 M 0.52 R 0.42 all 0.41 | n 5685 | s_high_lantern(3.0m)
+road_high t0 152-156 @(146.7,37.3): down L -0.02 M 0.02 R 0.02 all 0.01 | d L -0.03 M 0.06 R 0.06 all 0.03 | n 6342 | s_high_lantern(3.9m)
+road_high t0 156-160 @(148.7,40.7): down L -0.12 M -0.12 R -0.15 all -0.14 | d L -0.20 M -0.20 R -0.26 all -0.24 | n 3269 | s_high_lantern(7.5m)
+road_high t1 36-40 @(41.5,18.1): down L 0.44 M 0.42 R 0.08 all 0.30 | d L 0.47 M 0.45 R 0.09 all 0.32 | n 340 | a_high_needle_inner(6.5m)
+road_high t1 40-44 @(45.3,16.7): down L 0.35 M 0.28 R 0.37 all 0.35 | d L 0.37 M 0.30 R 0.39 all 0.37 | n 5365 | 
+road_high t1 44-48 @(49.1,15.4): down L 0.25 M 0.18 R 0.24 all 0.24 | d L 0.26 M 0.19 R 0.25 all 0.25 | n 7714 | 
+road_high t1 48-52 @(53.0,14.5): down L 0.11 M 0.13 R 0.14 all 0.13 | d L 0.12 M 0.14 R 0.15 all 0.13 | n 12476 | a_high_needle_outer(6.7m)
+road_high t1 52-56 @(56.9,13.7): down L 0.17 M 0.20 R 0.20 all 0.18 | d L 0.17 M 0.20 R 0.20 all 0.19 | n 16602 | a_high_needle_outer(3.6m)
+road_high t1 56-60 @(60.8,13.1): down L 0.10 M 0.07 R 0.11 all 0.10 | d L 0.10 M 0.07 R 0.11 all 0.10 | n 17101 | a_high_needle_outer(3.3m)
+road_high t1 60-64 @(64.8,12.6): down L 0.14 M 0.10 R 0.17 all 0.15 | d L 0.15 M 0.10 R 0.17 all 0.15 | n 18237 | a_high_needle_outer(6.4m)
+road_high t1 64-68 @(68.8,12.2): down L 0.03 M 0.09 R 0.14 all 0.08 | d L 0.03 M 0.09 R 0.14 all 0.08 | n 25700 | 
+road_high t1 68-72 @(72.8,11.9): down L 0.06 M 0.09 R 0.14 all 0.09 | d L 0.06 M 0.09 R 0.14 all 0.09 | n 38529 | 
+road_high t1 72-76 @(76.8,11.7): down L 0.06 M 0.08 R 0.11 all 0.08 | d L 0.06 M 0.08 R 0.11 all 0.08 | n 49210 | 
+road_high t1 76-80 @(80.8,11.6): down L 0.06 M 0.08 R 0.12 all 0.08 | d L 0.06 M 0.08 R 0.12 all 0.08 | n 56571 | 
+road_high t1 80-84 @(84.8,11.5): down L 0.12 M 0.13 R 0.15 all 0.13 | d L 0.12 M 0.13 R 0.15 all 0.13 | n 63023 | 
+road_high t1 84-88 @(88.7,11.6): down L 0.05 M 0.05 R 0.07 all 0.06 | d L 0.05 M 0.05 R 0.07 all 0.06 | n 72023 | 
+road_high t1 88-92 @(92.7,11.7): down L 0.08 M 0.09 R 0.11 all 0.09 | d L 0.08 M 0.09 R 0.11 all 0.09 | n 88920 | 
+road_high t1 92-96 @(96.7,11.9): down L 0.06 M 0.05 R 0.08 all 0.06 | d L 0.06 M 0.05 R 0.08 all 0.07 | n 92161 | 
+road_high t1 96-100 @(100.7,12.1): down L 0.11 M 0.11 R 0.14 all 0.12 | d L 0.11 M 0.11 R 0.14 all 0.12 | n 97243 | 
+road_high t1 100-104 @(104.7,12.5): down L 0.12 M 0.14 R 0.13 all 0.13 | d L 0.13 M 0.14 R 0.13 all 0.13 | n 101537 | s_high_needle_outer(6.8m)
+road_high t1 104-108 @(108.7,13.0): down L 0.12 M 0.14 R 0.18 all 0.15 | d L 0.13 M 0.14 R 0.18 all 0.15 | n 109344 | s_high_needle_outer(3.6m)
+road_high t1 108-112 @(112.6,13.6): down L 0.15 M 0.16 R 0.24 all 0.18 | d L 0.15 M 0.17 R 0.24 all 0.19 | n 115921 | s_high_needle_outer(3.3m)
+road_high t1 112-116 @(116.5,14.4): down L 0.08 M 0.14 R 0.26 all 0.16 | d L 0.09 M 0.14 R 0.27 all 0.16 | n 125707 | s_high_needle_outer(6.3m)
+road_high t1 116-120 @(120.4,15.3): down L 0.19 M 0.25 R 0.42 all 0.29 | d L 0.20 M 0.26 R 0.44 all 0.30 | n 128579 | 
+road_high t1 120-124 @(124.2,16.5): down L 0.14 M 0.17 R 0.39 all 0.24 | d L 0.15 M 0.18 R 0.41 all 0.25 | n 134514 | 
+road_high t1 124-128 @(128.0,17.9): down L 0.33 M 0.35 R 0.58 all 0.42 | d L 0.35 M 0.37 R 0.62 all 0.45 | n 134556 | s_high_needle_inner(7.0m)
+road_high t1 128-132 @(131.6,19.6): down L 0.12 M 0.22 R 0.40 all 0.24 | d L 0.15 M 0.25 R 0.47 all 0.28 | n 133863 | s_high_needle_inner(3.6m)
+road_high t1 132-136 @(135.0,21.7): down L 0.07 M 0.31 R 0.48 all 0.26 | d L 0.08 M 0.37 R 0.57 all 0.30 | n 139992 | s_high_needle_inner(3.3m)
+road_high t1 136-140 @(138.3,24.0): down L 0.03 M 0.27 R 0.46 all 0.22 | d L 0.04 M 0.36 R 0.62 all 0.30 | n 139786 | s_high_needle_inner(6.5m)
+road_high t1 140-144 @(140.9,27.0): down L -0.04 M 0.18 R 0.43 all 0.17 | d L -0.06 M 0.26 R 0.63 all 0.25 | n 145523 | 
+road_high t1 144-148 @(143.6,29.9): down L 0.06 M 0.20 R 0.48 all 0.23 | d L 0.08 M 0.35 R 0.88 all 0.41 | n 139854 | s_high_lantern(5.9m)
+road_high t1 148-152 @(145.2,33.6): down L -0.19 M -0.09 R 0.17 all -0.04 | d L -0.51 M -0.24 R 0.46 all -0.11 | n 153327 | s_high_lantern(3.0m)
+road_high t1 152-156 @(146.7,37.3): down L -0.35 M -0.20 R 0.10 all -0.16 | d L -0.88 M -0.49 R 0.26 all -0.39 | n 142937 | s_high_lantern(3.9m)
+road_high t1 156-160 @(148.7,40.7): down L -0.47 M -0.18 R 0.27 all -0.16 | d L -0.80 M -0.31 R 0.47 all -0.27 | n 95735 | s_high_lantern(7.5m)
+road_seat t0 4-8 @(28.0,55.0): down L 0.59 M 0.03 R -0.84 all -0.03 | d L 0.59 M 0.03 R -0.84 all -0.03 | n 72556 | a_seat_lantern(4.9m)
+road_seat t0 8-12 @(32.0,55.0): down L 0.61 M 0.03 R -0.78 all 0.00 | d L 0.61 M 0.03 R -0.78 all 0.00 | n 149060 | a_seat_lantern(2.8m)
+road_seat t0 12-16 @(36.0,55.0): down L 0.68 M 0.03 R -0.72 all 0.07 | d L 0.68 M 0.03 R -0.72 all 0.07 | n 147760 | a_seat_lantern(4.9m)
+road_seat t0 16-20 @(40.0,55.0): down L 0.75 M 0.02 R -0.66 all 0.12 | d L 0.75 M 0.02 R -0.66 all 0.12 | n 146390 | a_seat_needle_inner(6.6m)
+road_seat t0 20-24 @(44.0,55.0): down L 0.81 M 0.02 R -0.60 all 0.17 | d L 0.81 M 0.02 R -0.60 all 0.17 | n 143079 | a_seat_needle_inner(3.4m)
+road_seat t0 24-28 @(48.0,55.0): down L 0.86 M 0.02 R -0.54 all 0.21 | d L 0.86 M 0.02 R -0.54 all 0.21 | n 143496 | a_seat_needle_inner(3.4m)
+road_seat t0 28-32 @(52.0,55.0): down L 0.73 M 0.01 R -0.45 all 0.19 | d L 0.73 M 0.01 R -0.45 all 0.19 | n 144992 | a_seat_needle_inner(6.6m)
+road_seat t0 32-36 @(56.0,55.0): down L 0.61 M 0.01 R -0.36 all 0.16 | d L 0.61 M 0.01 R -0.36 all 0.16 | n 134733 | a_seat_needle_outer(6.6m)
+road_seat t0 36-40 @(60.0,55.0): down L 0.59 M 0.01 R -0.33 all 0.16 | d L 0.59 M 0.01 R -0.33 all 0.16 | n 124460 | a_seat_needle_outer(3.4m)
+road_seat t0 40-44 @(64.0,55.0): down L 0.57 M 0.02 R -0.29 all 0.17 | d L 0.57 M 0.02 R -0.29 all 0.17 | n 113898 | a_seat_needle_outer(3.4m)
+road_seat t0 44-48 @(68.0,55.0): down L 0.54 M 0.02 R -0.26 all 0.16 | d L 0.54 M 0.02 R -0.26 all 0.16 | n 104823 | a_seat_needle_outer(6.6m)
+road_seat t0 48-52 @(72.0,55.0): down L 0.48 M 0.01 R -0.26 all 0.14 | d L 0.48 M 0.01 R -0.26 all 0.14 | n 92635 | 
+road_seat t0 52-56 @(76.0,55.0): down L 0.41 M 0.01 R -0.30 all 0.08 | d L 0.41 M 0.01 R -0.30 all 0.08 | n 88546 | 
+road_seat t0 56-60 @(80.0,55.0): down L 0.37 M -0.00 R -0.33 all 0.05 | d L 0.37 M -0.00 R -0.33 all 0.05 | n 75286 | 
+road_seat t0 60-64 @(84.0,55.0): down L 0.29 M -0.01 R -0.34 all 0.01 | d L 0.29 M -0.01 R -0.34 all 0.01 | n 56499 | 
+road_seat t0 64-68 @(88.0,55.0): down L 0.27 M -0.02 R -0.40 all -0.01 | d L 0.27 M -0.02 R -0.40 all -0.01 | n 46030 | 
+road_seat t0 68-72 @(92.0,55.0): down L 0.28 M -0.01 R -0.38 all -0.01 | d L 0.28 M -0.01 R -0.38 all -0.01 | n 39192 | 
+road_seat t0 72-76 @(96.0,55.0): down L 0.25 M -0.00 R -0.40 all -0.04 | d L 0.25 M -0.00 R -0.40 all -0.04 | n 31695 | 
+road_seat t0 76-80 @(100.0,55.0): down L 0.24 M 0.02 R -0.35 all -0.01 | d L 0.24 M 0.02 R -0.35 all -0.01 | n 20191 | s_seat_needle_outer(8.5m)
+road_seat t0 80-84 @(104.0,55.0): down L 0.27 M 0.05 R -0.46 all -0.04 | d L 0.27 M 0.05 R -0.46 all -0.04 | n 16219 | s_seat_needle_outer(4.9m)
+road_seat t0 84-88 @(108.0,55.0): down L 0.27 M 0.12 R -0.60 all -0.09 | d L 0.27 M 0.12 R -0.60 all -0.09 | n 15020 | s_seat_needle_outer(2.8m)
+road_seat t0 88-92 @(112.0,55.0): down L 0.18 M 0.03 R -0.46 all -0.09 | d L 0.18 M 0.03 R -0.46 all -0.09 | n 11505 | s_seat_needle_outer(4.9m)
+road_seat t0 92-96 @(116.0,55.0): down L 0.13 M -0.07 R -0.55 all -0.13 | d L 0.13 M -0.07 R -0.55 all -0.13 | n 6232 | s_seat_needle_outer(8.5m)
+road_seat t0 96-100 @(120.0,55.0): down L 0.39 M 0.01 R -0.35 all 0.08 | d L 0.39 M 0.01 R -0.35 all 0.08 | n 3028 | s_seat_needle_inner(4.9m)
+road_seat t0 100-104 @(124.0,55.0): down L 0.32 M 0.08 R -0.40 all 0.02 | d L 0.32 M 0.08 R -0.40 all 0.02 | n 2701 | s_seat_needle_inner(2.8m)
+road_seat t0 104-108 @(128.0,55.0): down L 0.16 M 0.02 R -0.49 all -0.09 | d L 0.16 M 0.02 R -0.49 all -0.09 | n 1916 | s_seat_needle_inner(4.9m)
+road_seat t0 108-112 @(132.0,55.0): down L -0.08 M -0.00 R -0.58 all -0.29 | d L -0.08 M -0.00 R -0.58 all -0.29 | n 1995 | s_seat_lantern(6.6m)
+road_seat t0 112-116 @(136.0,55.0): down L -0.05 M -0.09 R -0.55 all -0.26 | d L -0.05 M -0.09 R -0.55 all -0.26 | n 2743 | s_seat_lantern(3.4m)
+road_seat t0 116-120 @(140.0,55.0): down L 0.12 M -0.17 R -0.51 all -0.14 | d L 0.12 M -0.17 R -0.51 all -0.14 | n 1588 | s_seat_lantern(3.4m)
+road_seat t1 8-12 @(32.0,55.0): down L 0.70 M -0.45 R -0.04 all 0.03 | d L 0.70 M -0.45 R -0.04 all 0.03 | n 718 | a_seat_lantern(2.8m)
+road_seat t1 12-16 @(36.0,55.0): down L 0.06 M 0.00 R 0.43 all 0.27 | d L 0.06 M 0.00 R 0.43 all 0.27 | n 570 | a_seat_lantern(4.9m)
+road_seat t1 16-20 @(40.0,55.0): down L 0.05 M -0.12 R 0.30 all 0.05 | d L 0.05 M -0.12 R 0.30 all 0.05 | n 386 | a_seat_needle_inner(6.6m)
+road_seat t1 20-24 @(44.0,55.0): down L 0.05 M 0.12 R -0.01 all 0.04 | d L 0.05 M 0.12 R -0.01 all 0.04 | n 1158 | a_seat_needle_inner(3.4m)
+road_seat t1 24-28 @(48.0,55.0): down L 0.02 M 0.17 R 0.18 all 0.12 | d L 0.02 M 0.17 R 0.18 all 0.12 | n 1642 | a_seat_needle_inner(3.4m)
+road_seat t1 28-32 @(52.0,55.0): down L 0.03 M -0.05 R 0.11 all 0.05 | d L 0.03 M -0.05 R 0.11 all 0.05 | n 2656 | a_seat_needle_inner(6.6m)
+road_seat t1 32-36 @(56.0,55.0): down L 0.12 M -0.14 R -0.11 all -0.04 | d L 0.12 M -0.14 R -0.11 all -0.04 | n 9498 | a_seat_needle_outer(6.6m)
+road_seat t1 36-40 @(60.0,55.0): down L 0.22 M -0.16 R -0.01 all 0.04 | d L 0.22 M -0.16 R -0.01 all 0.04 | n 11772 | a_seat_needle_outer(3.4m)
+road_seat t1 40-44 @(64.0,55.0): down L 0.28 M -0.04 R -0.04 all 0.06 | d L 0.28 M -0.04 R -0.04 all 0.06 | n 11573 | a_seat_needle_outer(3.4m)
+road_seat t1 44-48 @(68.0,55.0): down L 0.25 M -0.04 R 0.03 all 0.09 | d L 0.25 M -0.04 R 0.03 all 0.09 | n 14052 | a_seat_needle_outer(6.6m)
+road_seat t1 48-52 @(72.0,55.0): down L 0.32 M -0.17 R 0.01 all 0.09 | d L 0.32 M -0.17 R 0.01 all 0.09 | n 28289 | 
+road_seat t1 52-56 @(76.0,55.0): down L 0.28 M -0.21 R -0.01 all 0.06 | d L 0.28 M -0.21 R -0.01 all 0.06 | n 40013 | 
+road_seat t1 56-60 @(80.0,55.0): down L 0.22 M -0.27 R -0.03 all 0.01 | d L 0.22 M -0.27 R -0.03 all 0.01 | n 54182 | 
+road_seat t1 60-64 @(84.0,55.0): down L 0.17 M -0.32 R -0.06 all -0.02 | d L 0.17 M -0.32 R -0.06 all -0.02 | n 64220 | 
+road_seat t1 64-68 @(88.0,55.0): down L 0.23 M -0.37 R -0.05 all -0.01 | d L 0.23 M -0.37 R -0.05 all -0.01 | n 76443 | 
+road_seat t1 68-72 @(92.0,55.0): down L 0.13 M -0.60 R -0.05 all -0.08 | d L 0.13 M -0.60 R -0.05 all -0.08 | n 100191 | 
+road_seat t1 72-76 @(96.0,55.0): down L 0.00 M -0.68 R -0.03 all -0.12 | d L 0.00 M -0.68 R -0.03 all -0.12 | n 107179 | 
+road_seat t1 76-80 @(100.0,55.0): down L -0.06 M -0.71 R -0.01 all -0.13 | d L -0.06 M -0.71 R -0.01 all -0.13 | n 116562 | s_seat_needle_outer(8.5m)
+road_seat t1 80-84 @(104.0,55.0): down L -0.08 M -0.70 R 0.01 all -0.13 | d L -0.08 M -0.70 R 0.01 all -0.13 | n 119571 | s_seat_needle_outer(4.9m)
+road_seat t1 84-88 @(108.0,55.0): down L -0.10 M -0.67 R 0.02 all -0.13 | d L -0.10 M -0.67 R 0.02 all -0.13 | n 123559 | s_seat_needle_outer(2.8m)
+road_seat t1 88-92 @(112.0,55.0): down L -0.13 M -0.65 R 0.05 all -0.12 | d L -0.13 M -0.65 R 0.05 all -0.12 | n 130842 | s_seat_needle_outer(4.9m)
+road_seat t1 92-96 @(116.0,55.0): down L -0.16 M -0.61 R 0.08 all -0.11 | d L -0.16 M -0.61 R 0.08 all -0.11 | n 137892 | s_seat_needle_outer(8.5m)
+road_seat t1 96-100 @(120.0,55.0): down L -0.36 M -0.52 R 0.17 all -0.11 | d L -0.36 M -0.52 R 0.17 all -0.11 | n 144648 | s_seat_needle_inner(4.9m)
+road_seat t1 100-104 @(124.0,55.0): down L -0.61 M -0.43 R 0.20 all -0.16 | d L -0.61 M -0.43 R 0.20 all -0.16 | n 142988 | s_seat_needle_inner(2.8m)
+road_seat t1 104-108 @(128.0,55.0): down L -0.74 M -0.34 R 0.30 all -0.14 | d L -0.74 M -0.34 R 0.30 all -0.14 | n 145942 | s_seat_needle_inner(4.9m)
+road_seat t1 108-112 @(132.0,55.0): down L -0.80 M -0.25 R 0.40 all -0.09 | d L -0.80 M -0.25 R 0.40 all -0.09 | n 146731 | s_seat_lantern(6.6m)
+road_seat t1 112-116 @(136.0,55.0): down L -0.82 M -0.15 R 0.50 all -0.04 | d L -0.82 M -0.15 R 0.50 all -0.04 | n 147736 | s_seat_lantern(3.4m)
+road_seat t1 116-120 @(140.0,55.0): down L -0.83 M -0.05 R 0.58 all 0.02 | d L -0.83 M -0.05 R 0.58 all 0.02 | n 149551 | s_seat_lantern(3.4m)
+road_low t0 4-8 @(21.0,68.9): down L 0.45 M 0.16 R -0.29 all 0.14 | d L 0.78 M 0.27 R -0.51 all 0.25 | n 79514 | a_low_lantern(8.0m)
+road_low t0 8-12 @(23.1,72.2): down L 0.39 M 0.22 R -0.11 all 0.17 | d L 0.90 M 0.50 R -0.25 all 0.40 | n 148882 | a_low_lantern(4.2m)
+road_low t0 12-16 @(24.6,75.9): down L 0.21 M 0.10 R -0.16 all 0.06 | d L 0.57 M 0.28 R -0.43 all 0.15 | n 159959 | a_low_lantern(2.9m)
+road_low t0 16-20 @(26.1,79.7): down L -0.04 M -0.16 R -0.43 all -0.20 | d L -0.03 M -0.29 R -0.84 all -0.36 | n 147129 | a_low_lantern(5.5m)
+road_low t0 20-24 @(28.7,82.7): down L 0.02 M -0.20 R -0.46 all -0.20 | d L 0.02 M -0.30 R -0.69 all -0.29 | n 152873 | a_low_lantern(8.7m)
+road_low t0 24-28 @(31.4,85.6): down L -0.01 M -0.23 R -0.42 all -0.19 | d L -0.00 M -0.31 R -0.60 all -0.26 | n 149068 | a_low_needle_inner(7.0m)
+road_low t0 28-32 @(34.6,88.0): down L -0.09 M -0.34 R -0.52 all -0.28 | d L -0.10 M -0.40 R -0.61 all -0.33 | n 148752 | a_low_needle_inner(3.6m)
+road_low t0 32-36 @(38.0,90.1): down L -0.09 M -0.20 R -0.39 all -0.22 | d L -0.11 M -0.23 R -0.46 all -0.25 | n 147145 | a_low_needle_inner(3.3m)
+road_low t0 36-40 @(41.5,91.9): down L -0.32 M -0.36 R -0.60 all -0.43 | d L -0.35 M -0.39 R -0.64 all -0.46 | n 139139 | a_low_needle_inner(6.5m)
+road_low t0 40-44 @(45.3,93.3): down L -0.15 M -0.18 R -0.41 all -0.25 | d L -0.16 M -0.19 R -0.44 all -0.27 | n 144951 | 
+road_low t0 44-48 @(49.1,94.6): down L -0.19 M -0.24 R -0.44 all -0.29 | d L -0.20 M -0.25 R -0.45 all -0.30 | n 136824 | 
+road_low t0 48-52 @(53.0,95.5): down L -0.09 M -0.15 R -0.30 all -0.18 | d L -0.09 M -0.16 R -0.30 all -0.18 | n 134937 | a_low_needle_outer(6.7m)
+road_low t0 52-56 @(56.9,96.3): down L -0.12 M -0.15 R -0.23 all -0.17 | d L -0.12 M -0.15 R -0.24 all -0.17 | n 124222 | a_low_needle_outer(3.6m)
+road_low t0 56-60 @(60.8,96.9): down L -0.13 M -0.15 R -0.20 all -0.16 | d L -0.13 M -0.15 R -0.20 all -0.16 | n 117813 | a_low_needle_outer(3.3m)
+road_low t0 60-64 @(64.8,97.4): down L -0.10 M -0.09 R -0.13 all -0.11 | d L -0.10 M -0.10 R -0.13 all -0.11 | n 109030 | a_low_needle_outer(6.4m)
+road_low t0 64-68 @(68.8,97.8): down L -0.13 M -0.12 R -0.15 all -0.13 | d L -0.13 M -0.12 R -0.15 all -0.14 | n 104662 | 
+road_low t0 68-72 @(72.8,98.1): down L -0.06 M -0.07 R -0.09 all -0.07 | d L -0.06 M -0.07 R -0.09 all -0.07 | n 100015 | 
+road_low t0 72-76 @(76.8,98.3): down L -0.09 M -0.11 R -0.12 all -0.10 | d L -0.09 M -0.11 R -0.12 all -0.10 | n 96058 | 
+road_low t0 76-80 @(80.8,98.4): down L -0.03 M -0.06 R -0.10 all -0.06 | d L -0.03 M -0.06 R -0.10 all -0.06 | n 69060 | 
+road_low t0 80-84 @(84.8,98.5): down L -0.15 M -0.24 R -0.21 all -0.18 | d L -0.15 M -0.24 R -0.21 all -0.18 | n 58434 | 
+road_low t0 84-88 @(88.7,98.4): down L -0.10 M -0.11 R -0.17 all -0.13 | d L -0.10 M -0.11 R -0.17 all -0.13 | n 50886 | 
+road_low t0 88-92 @(92.7,98.3): down L -0.08 M -0.09 R -0.13 all -0.10 | d L -0.08 M -0.09 R -0.13 all -0.10 | n 45030 | 
+road_low t0 92-96 @(96.7,98.1): down L -0.12 M -0.16 R -0.17 all -0.14 | d L -0.12 M -0.16 R -0.17 all -0.14 | n 37829 | 
+road_low t0 96-100 @(100.7,97.9): down L -0.03 M -0.11 R -0.14 all -0.08 | d L -0.03 M -0.11 R -0.14 all -0.08 | n 31438 | 
+road_low t0 100-104 @(104.7,97.5): down L -0.15 M -0.40 R -0.17 all -0.19 | d L -0.15 M -0.40 R -0.17 all -0.20 | n 22645 | s_low_needle_outer(6.8m)
+road_low t0 104-108 @(108.7,97.0): down L -0.10 M -0.52 R -0.11 all -0.16 | d L -0.10 M -0.53 R -0.11 all -0.16 | n 23951 | s_low_needle_outer(3.6m)
+road_low t0 108-112 @(112.6,96.4): down L -0.19 M -0.19 R -0.18 all -0.19 | d L -0.20 M -0.19 R -0.19 all -0.19 | n 21909 | s_low_needle_outer(3.3m)
+road_low t0 112-116 @(116.5,95.6): down L -0.13 M -0.12 R -0.14 all -0.13 | d L -0.13 M -0.12 R -0.15 all -0.14 | n 21447 | s_low_needle_outer(6.3m)
+road_low t0 116-120 @(120.4,94.7): down L -0.19 M -0.20 R -0.18 all -0.19 | d L -0.20 M -0.20 R -0.18 all -0.20 | n 18960 | 
+road_low t0 120-124 @(124.2,93.5): down L -0.22 M -0.17 R -0.21 all -0.21 | d L -0.23 M -0.18 R -0.22 all -0.22 | n 16515 | 
+road_low t0 124-128 @(128.0,92.1): down L -0.17 M -0.17 R -0.20 all -0.18 | d L -0.18 M -0.18 R -0.21 all -0.19 | n 8891 | s_low_needle_inner(7.0m)
+road_low t0 128-132 @(131.6,90.4): down L -0.31 M -0.27 R -0.38 all -0.33 | d L -0.36 M -0.32 R -0.45 all -0.39 | n 6715 | s_low_needle_inner(3.6m)
+road_low t0 132-136 @(135.0,88.3): down L -0.24 M -0.21 R -0.21 all -0.22 | d L -0.28 M -0.25 R -0.25 all -0.26 | n 7391 | s_low_needle_inner(3.3m)
+road_low t0 136-140 @(138.3,86.0): down L -0.38 M -0.37 R -0.35 all -0.37 | d L -0.53 M -0.51 R -0.49 all -0.52 | n 7796 | s_low_needle_inner(6.5m)
+road_low t0 140-144 @(140.9,83.0): down L -0.21 M -0.16 R -0.21 all -0.20 | d L -0.32 M -0.24 R -0.31 all -0.30 | n 5746 | 
+road_low t0 144-148 @(143.6,80.1): down L -0.27 M -0.25 R -0.33 all -0.29 | d L -0.53 M -0.49 R -0.67 all -0.58 | n 3361 | s_low_lantern(5.9m)
+road_low t0 148-152 @(145.2,76.4): down L -0.14 M -0.14 R -0.22 all -0.17 | d L -0.37 M -0.38 R -0.58 all -0.45 | n 4728 | s_low_lantern(3.0m)
+road_low t0 152-156 @(146.7,72.7): down L 0.05 M 0.06 R -0.00 all 0.03 | d L 0.12 M 0.14 R -0.02 all 0.06 | n 4302 | s_low_lantern(3.9m)
+road_low t0 156-160 @(148.7,69.3): down L 0.22 M 0.25 R 0.15 all 0.19 | d L 0.38 M 0.42 R 0.26 all 0.33 | n 3163 | s_low_lantern(7.5m)
+road_low t1 40-44 @(45.3,93.3): down L -0.20 M -0.03 R -0.17 all -0.15 | d L -0.21 M -0.04 R -0.18 all -0.16 | n 6495 | 
+road_low t1 44-48 @(49.1,94.6): down L -0.19 M -0.09 R -0.18 all -0.18 | d L -0.20 M -0.10 R -0.19 all -0.18 | n 14282 | 
+road_low t1 48-52 @(53.0,95.5): down L -0.13 M 0.02 R -0.14 all -0.12 | d L -0.13 M 0.02 R -0.14 all -0.12 | n 15452 | a_low_needle_outer(6.7m)
+road_low t1 52-56 @(56.9,96.3): down L -0.14 M -0.05 R -0.20 all -0.17 | d L -0.14 M -0.05 R -0.21 all -0.17 | n 14951 | a_low_needle_outer(3.6m)
+road_low t1 56-60 @(60.8,96.9): down L -0.13 M -0.02 R -0.13 all -0.11 | d L -0.13 M -0.02 R -0.13 all -0.11 | n 16306 | a_low_needle_outer(3.3m)
+road_low t1 60-64 @(64.8,97.4): down L -0.14 M -0.08 R -0.14 all -0.13 | d L -0.14 M -0.08 R -0.14 all -0.13 | n 19088 | a_low_needle_outer(6.4m)
+road_low t1 64-68 @(68.8,97.8): down L -0.02 M -0.04 R -0.07 all -0.05 | d L -0.02 M -0.04 R -0.07 all -0.05 | n 27671 | 
+road_low t1 68-72 @(72.8,98.1): down L -0.06 M -0.03 R -0.13 all -0.09 | d L -0.06 M -0.03 R -0.13 all -0.09 | n 37960 | 
+road_low t1 72-76 @(76.8,98.3): down L -0.05 M -0.01 R -0.11 all -0.07 | d L -0.05 M -0.01 R -0.11 all -0.07 | n 46433 | 
+road_low t1 76-80 @(80.8,98.4): down L -0.03 M -0.06 R -0.05 all -0.05 | d L -0.03 M -0.06 R -0.05 all -0.05 | n 51313 | 
+road_low t1 80-84 @(84.8,98.5): down L -0.11 M -0.13 R -0.09 all -0.10 | d L -0.11 M -0.13 R -0.09 all -0.10 | n 54812 | 
+road_low t1 84-88 @(88.7,98.4): down L -0.08 M -0.06 R -0.05 all -0.06 | d L -0.08 M -0.06 R -0.05 all -0.06 | n 68460 | 
+road_low t1 88-92 @(92.7,98.3): down L -0.14 M -0.09 R -0.09 all -0.10 | d L -0.14 M -0.09 R -0.09 all -0.10 | n 93706 | 
+road_low t1 92-96 @(96.7,98.1): down L -0.10 M -0.07 R -0.05 all -0.07 | d L -0.10 M -0.07 R -0.05 all -0.07 | n 101118 | 
+road_low t1 96-100 @(100.7,97.9): down L -0.14 M -0.12 R -0.09 all -0.11 | d L -0.14 M -0.12 R -0.09 all -0.11 | n 104113 | 
+road_low t1 100-104 @(104.7,97.5): down L -0.11 M -0.11 R -0.07 all -0.09 | d L -0.11 M -0.11 R -0.07 all -0.09 | n 107070 | s_low_needle_outer(6.8m)
+road_low t1 104-108 @(108.7,97.0): down L -0.12 M -0.13 R -0.11 all -0.12 | d L -0.12 M -0.13 R -0.12 all -0.12 | n 115368 | s_low_needle_outer(3.6m)
+road_low t1 108-112 @(112.6,96.4): down L -0.14 M -0.17 R -0.16 all -0.15 | d L -0.14 M -0.17 R -0.16 all -0.16 | n 120384 | s_low_needle_outer(3.3m)
+road_low t1 112-116 @(116.5,95.6): down L -0.08 M -0.15 R -0.16 all -0.13 | d L -0.08 M -0.15 R -0.16 all -0.13 | n 126264 | s_low_needle_outer(6.3m)
+road_low t1 116-120 @(120.4,94.7): down L -0.19 M -0.26 R -0.29 all -0.25 | d L -0.19 M -0.27 R -0.30 all -0.26 | n 128349 | 
+road_low t1 120-124 @(124.2,93.5): down L -0.12 M -0.19 R -0.24 all -0.20 | d L -0.13 M -0.21 R -0.26 all -0.21 | n 132645 | 
+road_low t1 124-128 @(128.0,92.1): down L -0.33 M -0.40 R -0.42 all -0.39 | d L -0.35 M -0.42 R -0.45 all -0.41 | n 132958 | s_low_needle_inner(7.0m)
+road_low t1 128-132 @(131.6,90.4): down L -0.20 M -0.29 R -0.26 all -0.25 | d L -0.24 M -0.34 R -0.31 all -0.29 | n 131972 | s_low_needle_inner(3.6m)
+road_low t1 132-136 @(135.0,88.3): down L -0.32 M -0.46 R -0.28 all -0.32 | d L -0.38 M -0.54 R -0.34 all -0.38 | n 136845 | s_low_needle_inner(3.3m)
+road_low t1 136-140 @(138.3,86.0): down L -0.29 M -0.47 R -0.18 all -0.26 | d L -0.39 M -0.64 R -0.24 all -0.35 | n 139453 | s_low_needle_inner(6.5m)
+road_low t1 140-144 @(140.9,83.0): down L -0.29 M -0.54 R -0.04 all -0.20 | d L -0.43 M -0.80 R -0.06 all -0.29 | n 153059 | 
+road_low t1 144-148 @(143.6,80.1): down L -0.37 M -0.58 R -0.10 all -0.25 | d L -0.66 M -1.05 R -0.15 all -0.44 | n 141949 | s_low_lantern(5.9m)
+road_low t1 148-152 @(145.2,76.4): down L -0.12 M -0.17 R 0.14 all 0.00 | d L -0.33 M -0.47 R 0.37 all 0.01 | n 153617 | s_low_lantern(3.0m)
+road_low t1 152-156 @(146.7,72.7): down L -0.18 M -0.04 R 0.20 all 0.04 | d L -0.44 M -0.10 R 0.50 all 0.09 | n 150251 | s_low_lantern(3.9m)
+road_low t1 156-160 @(148.7,69.3): down L -0.48 M -0.09 R 0.23 all -0.06 | d L -0.82 M -0.16 R 0.39 all -0.11 | n 96537 | s_low_lantern(7.5m)
+
+## +-8 m round each road tower (projection on its road), all scenarios, per walking team
+a_seat_needle_outer (team 0, at s 40.0, d -2.80) walkers t0: free 477914, p50 0.47 p95 0.75 max 4.29, >1 m 1.3%, >1.5 m 0.3%, down 59%, +d 59%
+a_seat_needle_outer (team 0, at s 40.0, d -2.80) walkers t1: free 46895, p50 0.13 p95 1.33 max 4.56, >1 m 9.8%, >1.5 m 3.6%, down 57%, +d 57%
+a_seat_needle_inner (team 0, at s 24.0, d 2.80) walkers t0: free 577957, p50 0.55 p95 1.17 max 2.03, >1 m 13.6%, >1.5 m 0.0%, down 100%, +d 100%
+a_seat_needle_inner (team 0, at s 24.0, d 2.80) walkers t1: free 5842, p50 0.01 p95 1.41 max 3.96, >1 m 8.0%, >1.5 m 4.8%, down 80%, +d 80%
+a_high_needle_outer (team 0, at s 56.3, d 2.83) walkers t0: free 479723, p50 0.15 p95 0.53 max 2.32, >1 m 0.5%, >1.5 m 0.1%, down 82%, +d 82%
+a_high_needle_outer (team 0, at s 56.3, d 2.83) walkers t1: free 64416, p50 0.11 p95 0.87 max 2.68, >1 m 3.7%, >1.5 m 1.0%, down 88%, +d 88%
+a_high_needle_inner (team 0, at s 32.3, d -2.81) walkers t0: free 578235, p50 0.37 p95 0.83 max 2.57, >1 m 1.0%, >1.5 m 0.0%, down 100%, +d 100%
+a_high_needle_inner (team 0, at s 32.3, d -2.81) walkers t1: free 340, p50 0.35 p95 1.31 max 3.32, >1 m 7.6%, >1.5 m 3.2%, down 100%, +d 100%
+a_low_needle_outer (team 0, at s 56.3, d -2.83) walkers t0: free 486002, p50 0.15 p95 0.49 max 3.23, >1 m 0.5%, >1.5 m 0.1%, down 13%, +d 13%
+a_low_needle_outer (team 0, at s 56.3, d -2.83) walkers t1: free 65797, p50 0.13 p95 1.09 max 3.20, >1 m 6.0%, >1.5 m 1.5%, down 23%, +d 23%
+a_low_needle_inner (team 0, at s 32.3, d 2.81) walkers t0: free 584104, p50 0.37 p95 0.89 max 10.37, >1 m 1.2%, >1.5 m 0.1%, down 0%, +d 0%
+a_low_needle_inner (team 0, at s 32.3, d 2.81) walkers t1: free 149, p50 0.19 p95 0.75 max 2.73, >1 m 3.4%, >1.5 m 3.4%, down 0%, +d 0%
+s_seat_needle_outer (team 1, at s 86.0, d -2.80) walkers t0: free 69167, p50 0.37 p95 1.37 max 14.63, >1 m 11.3%, >1.5 m 3.8%, down 46%, +d 46%
+s_seat_needle_outer (team 1, at s 86.0, d -2.80) walkers t1: free 628426, p50 0.21 p95 0.69 max 2.89, >1 m 1.2%, >1.5 m 0.4%, down 39%, +d 39%
+s_seat_needle_inner (team 1, at s 102.0, d 2.80) walkers t0: free 15872, p50 0.31 p95 1.33 max 2.69, >1 m 9.8%, >1.5 m 3.7%, down 39%, +d 39%
+s_seat_needle_inner (team 1, at s 102.0, d 2.80) walkers t1: free 718201, p50 0.41 p95 0.79 max 2.85, >1 m 0.2%, >1.5 m 0.1%, down 54%, +d 54%
+s_high_needle_outer (team 1, at s 108.2, d 2.83) walkers t0: free 98730, p50 0.11 p95 1.01 max 3.91, >1 m 5.1%, >1.5 m 1.5%, down 74%, +d 74%
+s_high_needle_outer (team 1, at s 108.2, d 2.83) walkers t1: free 452509, p50 0.15 p95 0.47 max 22.60, >1 m 0.3%, >1.5 m 0.1%, down 93%, +d 93%
+s_high_needle_inner (team 1, at s 132.2, d -2.81) walkers t0: free 35878, p50 0.29 p95 0.95 max 2.60, >1 m 4.5%, >1.5 m 1.4%, down 92%, +d 92%
+s_high_needle_inner (team 1, at s 132.2, d -2.81) walkers t1: free 548197, p50 0.37 p95 0.89 max 2.98, >1 m 1.1%, >1.5 m 0.0%, down 100%, +d 100%
+s_low_needle_outer (team 1, at s 108.2, d -2.83) walkers t0: free 89952, p50 0.11 p95 1.09 max 22.90, >1 m 5.8%, >1.5 m 2.2%, down 20%, +d 20%
+s_low_needle_outer (team 1, at s 108.2, d -2.83) walkers t1: free 469086, p50 0.15 p95 0.45 max 2.77, >1 m 0.3%, >1.5 m 0.1%, down 8%, +d 8%
+s_low_needle_inner (team 1, at s 132.2, d 2.81) walkers t0: free 30793, p50 0.29 p95 1.03 max 3.19, >1 m 5.3%, >1.5 m 1.6%, down 1%, +d 1%
+s_low_needle_inner (team 1, at s 132.2, d 2.81) walkers t1: free 541228, p50 0.35 p95 0.83 max 3.39, >1 m 1.1%, >1.5 m 0.0%, down 0%, +d 0%
+
+## excursions (free Wick > 1.0 m off, back under 0.5 m): 13636
+push:ally-separation: 8055 (max 1.36 m)
+return-after-fight(ended-in-fight): 3310 (max 24.79 m)
+return-after-fight: 1030 (max 9.98 m)
+steer:direct-to-waypoint: 681 (max 1.10 m)
+push:ally-separation(ended-in-fight): 441 (max 1.74 m)
+step-out(ended-in-fight): 85 (max 23.56 m)
+steer:direct-to-waypoint(ended-in-fight): 16 (max 1.22 m)
+step-out: 15 (max 9.12 m)
+push:structure(ended-in-fight): 3 (max 1.18 m)
+
+## excursion hot cells (free start and end, by lane/team/4 m of the peak): top 15
+road_low t0 s 8-12 @(23.1,72.2) near a_low_lantern(4.2m): 1274 excursions, median peak 1.22 m, down 100%, +d 100%; causes {"push:ally-separation":1274}; scen {"idle/alive":324,"idle/kill":304,"bots/alive":324,"bots/kill":322}
+    worst: idle/alive/s3 #3976 shieldwick t 271.9-275.0 s 6.1->15.7 peak 1.34 at (21.60,72.03) steerOut 0.23 pushOut 0.79 path/direct 0/94 snap 0 flank 0 fought -1.0 s before; touch ally/struct/enemy 94/0/0 of 94
+road_high t1 s 152-156 @(146.7,37.3) near s_high_lantern(3.9m): 1218 excursions, median peak 1.24 m, down 0%, +d 0%; causes {"push:ally-separation":1218}; scen {"idle/alive":324,"idle/kill":249,"bots/alive":324,"bots/kill":321}
+    worst: idle/alive/s3 #2296 shieldwick t 181.9-185.0 s 158.4->148.8 peak 1.34 at (148.40,37.97) steerOut 0.23 pushOut 0.79 path/direct 0/94 snap 0 flank 0 fought -1.0 s before; touch ally/struct/enemy 94/0/0 of 94
+road_low t0 s 16-20 @(26.1,79.7) near a_low_lantern(5.5m): 1023 excursions, median peak 1.10 m, down 0%, +d 0%; causes {"push:ally-separation":677,"steer:direct-to-waypoint":346}; scen {"idle/alive":264,"idle/kill":236,"bots/alive":266,"bots/kill":257}
+    worst: idle/alive/s3 #3977 glimwick t 275.9-280.6 s 17.1->32.8 peak 1.30 at (27.33,79.21) steerOut 0.51 pushOut 1.08 path/direct 0/142 snap 0 flank 0 fought -1.0 s before; touch ally/struct/enemy 142/0/0 of 142
+road_high t1 s 144-148 @(143.6,29.9) near s_high_lantern(5.9m): 1017 excursions, median peak 1.10 m, down 100%, +d 100%; causes {"push:ally-separation":682,"steer:direct-to-waypoint":335}; scen {"idle/alive":288,"idle/kill":199,"bots/alive":271,"bots/kill":259}
+    worst: idle/alive/s3 #2297 glimwick t 185.9-190.6 s 147.4->131.7 peak 1.30 at (142.67,30.79) steerOut 0.51 pushOut 1.08 path/direct 0/142 snap 0 flank 0 fought -1.0 s before; touch ally/struct/enemy 142/0/0 of 142
+road_high t0 s 16-20 @(26.1,30.3) near a_high_lantern(5.5m): 780 excursions, median peak 1.17 m, down 100%, +d 100%; causes {"push:ally-separation":780}; scen {"idle/alive":198,"idle/kill":191,"bots/alive":201,"bots/kill":190}
+    worst: idle/alive/s3 #36 shieldwick t 35.4-38.0 s 17.1->25.2 peak 1.29 at (27.31,30.79) steerOut 0.21 pushOut 0.59 path/direct 0/77 snap 0 flank 0 fought -1.0 s before; touch ally/struct/enemy 77/0/0 of 77
+road_low t1 s 144-148 @(143.6,80.1) near s_low_lantern(5.9m): 746 excursions, median peak 1.17 m, down 0%, +d 0%; causes {"push:ally-separation":746}; scen {"idle/alive":198,"idle/kill":151,"bots/alive":210,"bots/kill":187}
+    worst: idle/alive/s3 #66 shieldwick t 35.4-38.0 s 147.4->139.3 peak 1.29 at (142.69,79.21) steerOut 0.21 pushOut 0.59 path/direct 0/77 snap 0 flank 0 fought -1.0 s before; touch ally/struct/enemy 77/0/0 of 77
+road_high t0 s 4-8 @(21.0,41.1) near a_high_lantern(8.0m): 638 excursions, median peak 1.02 m, down 100%, +d 100%; causes {"push:ally-separation":638}; scen {"idle/alive":162,"idle/kill":152,"bots/alive":162,"bots/kill":162}
+    worst: idle/alive/s3 #37 shieldwick t 31.9-32.9 s 6.1->8.8 peak 1.02 at (21.85,41.67) steerOut 0.00 pushOut 0.50 path/direct 0/31 snap 0 flank 0 fought -1.0 s before; touch ally/struct/enemy 31/0/0 of 31
+road_low t1 s 156-160 @(148.7,69.3) near s_low_lantern(7.5m): 615 excursions, median peak 1.02 m, down 0%, +d 0%; causes {"push:ally-separation":615}; scen {"idle/alive":162,"idle/kill":129,"bots/alive":162,"bots/kill":162}
+    worst: idle/alive/s3 #67 shieldwick t 31.9-32.9 s 158.4->155.7 peak 1.02 at (148.15,68.33) steerOut 0.00 pushOut 0.50 path/direct 0/31 snap 0 flank 0 fought -1.0 s before; touch ally/struct/enemy 31/0/0 of 31
+road_seat t0 s 24-28 @(48.0,55.0) near a_seat_needle_inner(3.4m): 544 excursions, median peak 1.21 m, down 100%, +d 100%; causes {"push:ally-separation":543,"return-after-fight":1}; scen {"idle/alive":162,"idle/kill":107,"bots/alive":143,"bots/kill":132}
+    worst: idle/kill/s11 #13608 shieldwick t 783.0-792.4 s 9.9->39.0 peak 1.36 at (47.85,56.36) steerOut 0.00 pushOut 2.61 path/direct 0/281 snap 0 flank 0 fought -1.0 s before; touch ally/struct/enemy 281/0/0 of 281
+road_low t1 s 124-128 @(128.0,92.1) near s_low_needle_inner(7.0m): 366 excursions, median peak 1.02 m, down 0%, +d 0%; causes {"push:ally-separation":360,"return-after-fight":6}; scen {"idle/alive":102,"idle/kill":57,"bots/alive":107,"bots/kill":100}
+    worst: bots/kill/s19 #8832 glimwick t 627.7-630.5 s 124.1->115.6 peak 2.29 at (125.43,90.60) steerOut 0.04 pushOut 0.03 path/direct 0/84 snap 0 flank 0 fought 0.0 s before; touch ally/struct/enemy 81/0/0 of 84
+road_high t0 s 36-40 @(41.5,18.1) near a_high_needle_inner(6.5m): 349 excursions, median peak 1.02 m, down 100%, +d 100%; causes {"push:ally-separation":343,"return-after-fight":6}; scen {"idle/alive":66,"idle/kill":81,"bots/alive":106,"bots/kill":96}
+    worst: idle/kill/s11 #10242 glimwick t 654.0-656.2 s 36.1->43.5 peak 2.22 at (40.97,20.61) steerOut 0.01 pushOut 0.00 path/direct 0/67 snap 0 flank 0 fought 0.0 s before; touch ally/struct/enemy 39/0/0 of 67
+road_high t1 s 124-128 @(128.0,17.9) near s_high_needle_inner(7.0m): 111 excursions, median peak 1.01 m, down 100%, +d 100%; causes {"push:ally-separation":95,"return-after-fight":16}; scen {"idle/alive":42,"idle/kill":18,"bots/alive":23,"bots/kill":28}
+    worst: bots/kill/s23 #6587 shieldwick t 476.1-479.6 s 127.6->116.3 peak 2.59 at (128.65,20.87) steerOut 0.09 pushOut 0.00 path/direct 0/107 snap 0 flank 0 fought 0.0 s before; touch ally/struct/enemy 78/0/0 of 107
+road_low t0 s 36-40 @(41.5,91.9) near a_low_needle_inner(6.5m): 93 excursions, median peak 1.01 m, down 0%, +d 0%; causes {"push:ally-separation":81,"return-after-fight":12}; scen {"idle/alive":36,"idle/kill":18,"bots/alive":17,"bots/kill":22}
+    worst: bots/kill/s23 #10758 glimwick t 716.6-720.7 s 38.9->51.4 peak 2.23 at (43.13,90.15) steerOut 0.00 pushOut 1.50 path/direct 0/123 snap 0 flank 0 fought 0.0 s before; touch ally/struct/enemy 123/0/0 of 123
+road_low t1 s 76-80 @(80.8,98.4) near : 47 excursions, median peak 1.68 m, down 60%, +d 60%; causes {"return-after-fight":47}; scen {"idle/alive":18,"idle/kill":16,"bots/alive":6,"bots/kill":7}
+    worst: bots/kill/s19 #1091 glimwick t 248.8-253.3 s 79.3->66.5 peak 2.03 at (81.98,100.46) steerOut 0.00 pushOut 2.19 path/direct 0/136 snap 0 flank 0 fought 0.0 s before; touch ally/struct/enemy 136/0/0 of 136
+road_high t0 s 76-80 @(80.8,11.6) near : 40 excursions, median peak 1.33 m, down 68%, +d 68%; causes {"return-after-fight":38,"step-out":2}; scen {"idle/alive":12,"idle/kill":13,"bots/alive":11,"bots/kill":4}
+    worst: bots/alive/s31 #11381 glimwick t 794.8-798.2 s 76.8->87.2 peak 3.14 at (79.66,14.76) steerOut 0.00 pushOut 0.00 path/direct 0/101 snap 0 flank 12 fought 0.0 s before; touch ally/struct/enemy 3/0/0 of 101
+
+## segments, idle/alive (only segments with > 1 % of free samples over 1 m)
+lane team seg(s m) @xy | free n | p50 p95 max |d| m | >1.0 m  >1.5 m (free share) | down-share of >1 | +d share | mean heading off-road deg | nearest structure
+road_high t0 4-8 @(21.0,41.1) | 20172 | 0.65 0.99 1.02 | 4.8% 0.0% | 100% | 100% | 6.5 | a_high_lantern(8.0m)
+road_high t0 16-20 @(26.1,30.3) | 37866 | 0.47 1.13 1.29 | 10.1% 0.0% | 100% | 100% | 10.8 | a_high_lantern(5.5m)
+road_high t0 20-24 @(28.7,27.3) | 40356 | 0.39 0.97 1.17 | 4.0% 0.0% | 100% | 100% | 4.6 | a_high_lantern(8.7m)
+road_high t0 36-40 @(41.5,18.1) | 31812 | 0.39 0.97 1.30 | 3.4% 0.0% | 100% | 100% | 3.5 | a_high_needle_inner(6.5m)
+road_high t0 48-52 @(53.0,14.5) | 31986 | 0.19 0.81 2.00 | 3.1% 0.8% | 77% | 77% | 2.6 | a_high_needle_outer(6.7m)
+road_high t0 64-68 @(68.8,12.2) | 22908 | 0.13 0.57 2.24 | 2.3% 0.2% | 55% | 55% | 1.4 | 
+road_high t0 68-72 @(72.8,11.9) | 22998 | 0.07 0.79 2.12 | 3.5% 1.5% | 74% | 74% | 2.2 | 
+road_high t0 72-76 @(76.8,11.7) | 20634 | 0.09 0.75 1.56 | 2.2% 0.5% | 95% | 95% | 2.3 | 
+road_high t0 76-80 @(80.8,11.6) | 16110 | 0.05 0.79 1.33 | 4.2% 0.0% | 94% | 94% | 1.5 | 
+road_high t0 80-84 @(84.8,11.5) | 16458 | 0.09 0.85 1.40 | 3.6% 0.0% | 98% | 98% | 2.2 | 
+road_high t0 88-92 @(92.7,11.7) | 11082 | 0.09 1.13 2.27 | 5.8% 2.1% | 58% | 58% | 2.2 | 
+road_high t0 92-96 @(96.7,11.9) | 11160 | 0.19 1.23 1.87 | 9.6% 2.1% | 72% | 72% | 2.5 | 
+road_high t0 96-100 @(100.7,12.1) | 7044 | 0.21 0.97 1.28 | 4.3% 0.0% | 71% | 71% | 4.0 | 
+road_high t0 100-104 @(104.7,12.5) | 1716 | 0.11 1.13 1.47 | 6.3% 0.0% | 61% | 61% | 2.7 | s_high_needle_outer(6.8m)
+road_high t0 108-112 @(112.6,13.6) | 2436 | 0.17 1.07 2.19 | 13.3% 1.7% | 98% | 98% | 3.0 | s_high_needle_outer(3.3m)
+road_high t0 112-116 @(116.5,14.4) | 3774 | 0.23 1.49 2.05 | 14.1% 4.9% | 82% | 82% | 3.5 | s_high_needle_outer(6.3m)
+road_high t0 116-120 @(120.4,15.3) | 3924 | 0.23 1.21 1.31 | 12.7% 0.0% | 100% | 100% | 4.4 | 
+road_high t0 120-124 @(124.2,16.5) | 4254 | 0.25 1.15 1.27 | 9.6% 0.0% | 100% | 100% | 6.5 | 
+road_high t0 124-128 @(128.0,17.9) | 618 | 0.43 1.11 1.14 | 26.2% 0.0% | 100% | 100% | 13.4 | s_high_needle_inner(7.0m)
+road_high t1 40-44 @(45.3,16.7) | 2292 | 0.21 1.99 2.07 | 16.2% 11.8% | 100% | 100% | 8.0 | 
+road_high t1 44-48 @(49.1,15.4) | 3426 | 0.23 1.19 1.65 | 6.8% 0.2% | 85% | 85% | 4.6 | 
+road_high t1 48-52 @(53.0,14.5) | 5280 | 0.11 1.07 1.87 | 6.1% 1.3% | 89% | 89% | 6.8 | a_high_needle_outer(6.7m)
+road_high t1 52-56 @(56.9,13.7) | 8598 | 0.17 0.67 1.53 | 1.4% 0.2% | 100% | 100% | 3.5 | a_high_needle_outer(3.6m)
+road_high t1 56-60 @(60.8,13.1) | 7776 | 0.05 0.61 1.44 | 1.3% 0.0% | 100% | 100% | 2.3 | a_high_needle_outer(3.3m)
+road_high t1 60-64 @(64.8,12.6) | 7728 | 0.11 0.59 1.85 | 3.7% 2.9% | 100% | 100% | 1.3 | a_high_needle_outer(6.4m)
+road_high t1 64-68 @(68.8,12.2) | 10752 | 0.05 0.87 1.88 | 3.4% 0.7% | 59% | 59% | 2.7 | 
+road_high t1 68-72 @(72.8,11.9) | 15324 | 0.07 1.19 2.15 | 6.3% 2.1% | 64% | 64% | 3.0 | 
+road_high t1 72-76 @(76.8,11.7) | 15840 | 0.07 0.77 2.44 | 3.2% 1.6% | 42% | 42% | 1.8 | 
+road_high t1 76-80 @(80.8,11.6) | 17772 | 0.05 0.69 1.51 | 2.0% 0.0% | 53% | 53% | 1.1 | 
+road_high t1 84-88 @(88.7,11.6) | 23190 | 0.05 0.41 1.52 | 1.1% 0.1% | 75% | 75% | 1.4 | 
+road_high t1 88-92 @(92.7,11.7) | 27768 | 0.09 0.15 2.02 | 1.1% 0.8% | 25% | 25% | 1.2 | 
+road_high t1 136-140 @(138.3,24.0) | 37500 | 0.41 0.83 1.20 | 2.0% 0.0% | 100% | 100% | 8.0 | s_high_needle_inner(6.5m)
+road_high t1 140-144 @(140.9,27.0) | 38976 | 0.31 0.81 1.18 | 1.6% 0.0% | 100% | 100% | 4.4 | 
+road_high t1 144-148 @(143.6,29.9) | 37344 | 0.35 1.05 1.30 | 8.7% 0.0% | 100% | 100% | 9.7 | s_high_lantern(5.9m)
+road_high t1 152-156 @(146.7,37.3) | 37866 | 0.47 1.21 1.34 | 22.5% 0.0% | 0% | 0% | 5.2 | s_high_lantern(3.9m)
+road_high t1 156-160 @(148.7,40.7) | 25200 | 0.55 1.11 1.27 | 18.0% 0.0% | 0% | 0% | 7.2 | s_high_lantern(7.5m)
+road_low t0 4-8 @(21.0,68.9) | 20208 | 0.57 1.05 1.20 | 14.8% 0.0% | 100% | 100% | 6.5 | a_low_lantern(8.0m)
+road_low t0 8-12 @(23.1,72.2) | 37842 | 0.47 1.21 1.34 | 25.5% 0.0% | 100% | 100% | 5.9 | a_low_lantern(4.2m)
+road_low t0 16-20 @(26.1,79.7) | 37440 | 0.35 1.05 1.30 | 8.8% 0.0% | 0% | 0% | 10.7 | a_low_lantern(5.5m)
+road_low t0 20-24 @(28.7,82.7) | 38832 | 0.31 0.91 1.21 | 3.0% 0.0% | 0% | 0% | 4.4 | a_low_lantern(8.7m)
+road_low t0 24-28 @(31.4,85.6) | 37974 | 0.37 0.85 1.20 | 2.0% 0.0% | 0% | 0% | 7.9 | a_low_needle_inner(7.0m)
+road_low t0 36-40 @(41.5,91.9) | 32478 | 0.41 0.93 1.83 | 1.2% 0.4% | 0% | 0% | 3.3 | a_low_needle_inner(6.5m)
+road_low t0 60-64 @(64.8,97.4) | 24018 | 0.09 0.33 2.01 | 1.2% 0.4% | 35% | 35% | 2.5 | a_low_needle_outer(6.4m)
+road_low t0 68-72 @(72.8,98.1) | 22380 | 0.07 0.35 1.33 | 1.3% 0.0% | 26% | 26% | 1.6 | 
+road_low t0 72-76 @(76.8,98.3) | 22770 | 0.09 0.61 2.11 | 1.6% 0.3% | 33% | 33% | 2.1 | 
+road_low t0 76-80 @(80.8,98.4) | 14262 | 0.07 1.05 2.03 | 5.9% 0.9% | 46% | 46% | 3.4 | 
+road_low t0 80-84 @(84.8,98.5) | 9816 | 0.09 0.89 1.15 | 2.9% 0.0% | 0% | 0% | 3.6 | 
+road_low t0 92-96 @(96.7,98.1) | 2406 | 0.07 1.97 2.50 | 13.5% 8.0% | 33% | 33% | 4.5 | 
+road_low t0 96-100 @(100.7,97.9) | 3132 | 0.83 1.79 2.13 | 36.2% 9.6% | 58% | 58% | 9.0 | 
+road_low t0 100-104 @(104.7,97.5) | 114 | 0.33 1.09 1.10 | 10.5% 0.0% | 100% | 100% | 9.0 | s_low_needle_outer(6.8m)
+road_low t1 44-48 @(49.1,94.6) | 7224 | 0.21 0.73 1.51 | 2.9% 0.2% | 0% | 0% | 4.4 | 
+road_low t1 48-52 @(53.0,95.5) | 7044 | 0.11 0.95 1.57 | 3.2% 0.3% | 0% | 0% | 2.3 | a_low_needle_outer(6.7m)
+road_low t1 52-56 @(56.9,96.3) | 5604 | 0.17 1.11 1.88 | 8.1% 1.3% | 34% | 34% | 3.1 | a_low_needle_outer(3.6m)
+road_low t1 56-60 @(60.8,96.9) | 5784 | 0.07 0.33 1.69 | 1.1% 0.4% | 18% | 18% | 4.5 | a_low_needle_outer(3.3m)
+road_low t1 60-64 @(64.8,97.4) | 6636 | 0.11 0.31 2.49 | 1.3% 1.3% | 0% | 0% | 1.3 | a_low_needle_outer(6.4m)
+road_low t1 64-68 @(68.8,97.8) | 10416 | 0.05 0.71 1.97 | 2.7% 0.9% | 74% | 74% | 2.7 | 
+road_low t1 68-72 @(72.8,98.1) | 15270 | 0.07 0.71 1.49 | 1.3% 0.0% | 24% | 24% | 1.7 | 
+road_low t1 72-76 @(76.8,98.3) | 19530 | 0.07 0.67 1.46 | 1.4% 0.0% | 18% | 18% | 2.1 | 
+road_low t1 76-80 @(80.8,98.4) | 20334 | 0.05 0.75 1.77 | 2.3% 0.6% | 47% | 47% | 1.4 | 
+road_low t1 80-84 @(84.8,98.5) | 19362 | 0.09 0.69 1.52 | 1.6% 0.0% | 2% | 2% | 1.5 | 
+road_low t1 96-100 @(100.7,97.9) | 33708 | 0.11 0.41 2.10 | 1.2% 0.6% | 43% | 43% | 1.3 | 
+road_low t1 124-128 @(128.0,92.1) | 38256 | 0.37 0.97 1.12 | 3.5% 0.0% | 0% | 0% | 3.0 | s_low_needle_inner(7.0m)
+road_low t1 140-144 @(140.9,83.0) | 40764 | 0.37 0.91 1.12 | 1.9% 0.0% | 0% | 0% | 4.9 | 
+road_low t1 144-148 @(143.6,80.1) | 37584 | 0.49 1.13 1.29 | 12.0% 0.0% | 0% | 0% | 9.6 | s_low_lantern(5.9m)
+road_low t1 156-160 @(148.7,69.3) | 25200 | 0.65 0.99 1.02 | 3.9% 0.0% | 0% | 0% | 7.1 | s_low_lantern(7.5m)
+road_seat t0 12-16 @(36.0,55.0) | 37962 | 0.67 0.99 1.01 | 2.6% 0.0% | 100% | 100% | 0.9 | a_seat_lantern(4.9m)
+road_seat t0 16-20 @(40.0,55.0) | 38340 | 0.55 1.09 1.11 | 16.1% 0.0% | 100% | 100% | 0.8 | a_seat_needle_inner(6.6m)
+road_seat t0 20-24 @(44.0,55.0) | 38124 | 0.45 1.17 1.19 | 15.7% 0.0% | 100% | 100% | 0.7 | a_seat_needle_inner(3.4m)
+road_seat t0 24-28 @(48.0,55.0) | 38826 | 0.49 1.21 1.21 | 16.7% 0.0% | 100% | 100% | 0.8 | a_seat_needle_inner(3.4m)
+road_seat t0 28-32 @(52.0,55.0) | 39864 | 0.59 1.01 1.15 | 5.3% 0.0% | 100% | 100% | 3.0 | a_seat_needle_inner(6.6m)
+road_seat t0 52-56 @(76.0,55.0) | 27552 | 0.35 0.75 1.57 | 1.9% 0.2% | 42% | 42% | 0.9 | 
+road_seat t0 56-60 @(80.0,55.0) | 24942 | 0.31 0.73 1.39 | 1.9% 0.0% | 43% | 43% | 1.7 | 
+road_seat t0 68-72 @(92.0,55.0) | 10644 | 0.37 1.35 1.97 | 10.8% 4.2% | 41% | 41% | 0.9 | 
+road_seat t0 72-76 @(96.0,55.0) | 8976 | 0.37 1.51 1.76 | 12.2% 5.1% | 49% | 49% | 1.5 | 
+road_seat t0 76-80 @(100.0,55.0) | 4506 | 0.31 0.75 1.71 | 4.7% 2.4% | 69% | 69% | 0.6 | s_seat_needle_outer(8.5m)
+road_seat t0 80-84 @(104.0,55.0) | 3936 | 0.29 1.47 1.63 | 11.1% 4.6% | 51% | 51% | 1.4 | s_seat_needle_outer(4.9m)
+road_seat t0 84-88 @(108.0,55.0) | 3642 | 0.37 1.13 1.30 | 12.2% 0.0% | 36% | 36% | 2.7 | s_seat_needle_outer(2.8m)
+road_seat t0 88-92 @(112.0,55.0) | 960 | 0.37 0.75 1.29 | 1.3% 0.0% | 100% | 100% | 4.7 | s_seat_needle_outer(4.9m)
+road_seat t0 92-96 @(116.0,55.0) | 288 | 1.27 1.75 1.79 | 62.5% 22.9% | 33% | 33% | 6.8 | s_seat_needle_outer(8.5m)
+road_seat t1 48-52 @(72.0,55.0) | 3390 | 0.51 0.93 1.06 | 1.4% 0.0% | 100% | 100% | 1.3 | 
+road_seat t1 52-56 @(76.0,55.0) | 8874 | 0.27 0.97 1.18 | 4.0% 0.0% | 100% | 100% | 0.9 | 
+road_seat t1 56-60 @(80.0,55.0) | 15432 | 0.23 1.07 1.27 | 8.2% 0.0% | 70% | 70% | 0.6 | 
+road_seat t1 60-64 @(84.0,55.0) | 18582 | 0.23 1.13 1.30 | 6.2% 0.0% | 55% | 55% | 0.4 | 
+road_seat t1 64-68 @(88.0,55.0) | 18558 | 0.25 1.01 1.90 | 5.1% 0.7% | 44% | 44% | 3.2 | 
+road_seat t1 68-72 @(92.0,55.0) | 23634 | 0.15 0.67 2.01 | 2.1% 0.8% | 45% | 45% | 2.5 | 
+road_seat t1 76-80 @(100.0,55.0) | 30126 | 0.15 0.73 1.74 | 2.3% 0.8% | 32% | 32% | 0.6 | s_seat_needle_outer(8.5m)
+road_seat t1 80-84 @(104.0,55.0) | 30138 | 0.17 0.71 1.90 | 3.8% 0.8% | 39% | 39% | 0.6 | s_seat_needle_outer(4.9m)
+road_seat t1 84-88 @(108.0,55.0) | 31140 | 0.21 0.69 2.26 | 2.3% 0.7% | 36% | 36% | 0.5 | s_seat_needle_outer(2.8m)
+
+## segments, idle/kill (only segments with > 1 % of free samples over 1 m)
+lane team seg(s m) @xy | free n | p50 p95 max |d| m | >1.0 m  >1.5 m (free share) | down-share of >1 | +d share | mean heading off-road deg | nearest structure
+road_high t0 4-8 @(21.0,41.1) | 18886 | 0.65 0.99 1.02 | 4.8% 0.0% | 100% | 100% | 6.5 | a_high_lantern(8.0m)
+road_high t0 16-20 @(26.1,30.3) | 35448 | 0.47 1.13 1.29 | 10.3% 0.0% | 100% | 100% | 10.8 | a_high_lantern(5.5m)
+road_high t0 20-24 @(28.7,27.3) | 37717 | 0.39 0.97 1.17 | 3.8% 0.0% | 100% | 100% | 4.7 | a_high_lantern(8.7m)
+road_high t0 36-40 @(41.5,18.1) | 32769 | 0.39 0.99 2.43 | 3.8% 0.6% | 100% | 100% | 3.6 | a_high_needle_inner(6.5m)
+road_high t0 64-68 @(68.8,12.2) | 25130 | 0.13 0.53 2.19 | 1.8% 0.4% | 71% | 71% | 1.4 | 
+road_high t0 68-72 @(72.8,11.9) | 26029 | 0.07 0.57 1.52 | 1.1% 0.0% | 69% | 69% | 1.9 | 
+road_high t0 76-80 @(80.8,11.6) | 17769 | 0.05 0.53 1.89 | 1.5% 0.5% | 49% | 49% | 1.3 | 
+road_high t0 80-84 @(84.8,11.5) | 17765 | 0.09 0.71 2.64 | 1.9% 0.6% | 44% | 44% | 1.7 | 
+road_high t0 84-88 @(88.7,11.6) | 18376 | 0.07 0.71 1.79 | 1.5% 0.2% | 40% | 40% | 1.3 | 
+road_high t0 96-100 @(100.7,12.1) | 14654 | 0.05 0.63 2.24 | 2.1% 0.9% | 82% | 82% | 2.2 | 
+road_high t0 100-104 @(104.7,12.5) | 14202 | 0.11 0.91 2.31 | 4.1% 0.6% | 80% | 80% | 2.1 | s_high_needle_outer(6.8m)
+road_high t0 104-108 @(108.7,13.0) | 13516 | 0.07 0.87 1.88 | 3.6% 1.0% | 44% | 44% | 2.0 | s_high_needle_outer(3.6m)
+road_high t0 108-112 @(112.6,13.6) | 13855 | 0.15 1.03 2.53 | 5.5% 1.2% | 60% | 60% | 2.7 | s_high_needle_outer(3.3m)
+road_high t0 112-116 @(116.5,14.4) | 15538 | 0.11 0.99 2.37 | 4.7% 1.0% | 77% | 77% | 2.2 | s_high_needle_outer(6.3m)
+road_high t0 116-120 @(120.4,15.3) | 15150 | 0.19 0.75 1.44 | 2.4% 0.0% | 100% | 100% | 3.8 | 
+road_high t0 120-124 @(124.2,16.5) | 14015 | 0.17 0.67 2.12 | 1.8% 0.1% | 95% | 95% | 3.3 | 
+road_high t0 128-132 @(131.6,19.6) | 8214 | 0.33 0.85 2.06 | 4.0% 1.7% | 95% | 95% | 3.5 | s_high_needle_inner(3.6m)
+road_high t0 132-136 @(135.0,21.7) | 8856 | 0.19 0.93 2.38 | 3.7% 0.5% | 81% | 81% | 6.1 | s_high_needle_inner(3.3m)
+road_high t0 136-140 @(138.3,24.0) | 7560 | 0.47 0.99 2.45 | 5.0% 2.2% | 95% | 95% | 6.3 | s_high_needle_inner(6.5m)
+road_high t0 140-144 @(140.9,27.0) | 6573 | 0.27 0.55 3.06 | 2.8% 1.5% | 100% | 100% | 4.4 | 
+road_high t0 144-148 @(143.6,29.9) | 5364 | 0.55 1.03 2.46 | 5.5% 1.7% | 100% | 100% | 12.1 | s_high_lantern(5.9m)
+road_high t0 148-152 @(145.2,33.6) | 5685 | 0.45 1.19 2.46 | 8.3% 3.3% | 100% | 100% | 6.2 | s_high_lantern(3.0m)
+road_high t0 152-156 @(146.7,37.3) | 6342 | 0.27 1.31 2.06 | 12.8% 1.8% | 54% | 54% | 9.1 | s_high_lantern(3.9m)
+road_high t0 156-160 @(148.7,40.7) | 3269 | 0.29 1.27 1.94 | 15.4% 1.2% | 22% | 22% | 3.3 | s_high_lantern(7.5m)
+road_high t1 36-40 @(41.5,18.1) | 91 | 0.39 0.79 2.13 | 2.2% 2.2% | 100% | 100% | 25.5 | a_high_needle_inner(6.5m)
+road_high t1 40-44 @(45.3,16.7) | 1158 | 0.21 1.49 2.24 | 8.9% 4.8% | 90% | 90% | 7.2 | 
+road_high t1 56-60 @(60.8,13.1) | 3806 | 0.07 0.83 1.64 | 2.6% 0.3% | 69% | 69% | 3.0 | a_high_needle_outer(3.3m)
+road_high t1 60-64 @(64.8,12.6) | 3416 | 0.11 1.15 2.22 | 5.9% 1.6% | 69% | 69% | 1.9 | a_high_needle_outer(6.4m)
+road_high t1 64-68 @(68.8,12.2) | 3372 | 0.07 1.27 2.22 | 8.9% 4.1% | 57% | 57% | 3.7 | 
+road_high t1 68-72 @(72.8,11.9) | 6841 | 0.07 0.97 2.33 | 4.9% 0.7% | 71% | 71% | 4.2 | 
+road_high t1 72-76 @(76.8,11.7) | 11024 | 0.07 0.75 1.24 | 1.5% 0.0% | 46% | 46% | 1.7 | 
+road_high t1 76-80 @(80.8,11.6) | 12896 | 0.05 0.77 1.51 | 3.5% 0.0% | 60% | 60% | 1.2 | 
+road_high t1 80-84 @(84.8,11.5) | 12870 | 0.09 0.77 1.86 | 2.6% 1.1% | 66% | 66% | 1.5 | 
+road_high t1 124-128 @(128.0,17.9) | 24445 | 0.39 0.93 1.81 | 1.5% 0.2% | 100% | 100% | 2.8 | s_high_needle_inner(7.0m)
+road_high t1 136-140 @(138.3,24.0) | 27769 | 0.39 0.83 1.20 | 1.9% 0.0% | 100% | 100% | 8.0 | s_high_needle_inner(6.5m)
+road_high t1 140-144 @(140.9,27.0) | 29064 | 0.31 0.83 1.18 | 1.3% 0.0% | 100% | 100% | 4.4 | 
+road_high t1 144-148 @(143.6,29.9) | 28266 | 0.33 1.05 1.30 | 9.5% 0.0% | 100% | 100% | 9.8 | s_high_lantern(5.9m)
+road_high t1 152-156 @(146.7,37.3) | 29384 | 0.47 1.21 1.34 | 22.2% 0.0% | 0% | 0% | 5.2 | s_high_lantern(3.9m)
+road_high t1 156-160 @(148.7,40.7) | 20103 | 0.55 1.11 1.27 | 17.6% 0.0% | 0% | 0% | 7.2 | s_high_lantern(7.5m)
+road_low t0 4-8 @(21.0,68.9) | 18945 | 0.57 1.03 1.20 | 14.6% 0.0% | 100% | 100% | 6.6 | a_low_lantern(8.0m)
+road_low t0 8-12 @(23.1,72.2) | 35433 | 0.47 1.21 1.34 | 25.2% 0.0% | 100% | 100% | 5.9 | a_low_lantern(4.2m)
+road_low t0 16-20 @(26.1,79.7) | 34997 | 0.33 1.05 1.30 | 8.2% 0.0% | 0% | 0% | 10.8 | a_low_lantern(5.5m)
+road_low t0 20-24 @(28.7,82.7) | 36446 | 0.31 0.87 1.21 | 2.1% 0.0% | 0% | 0% | 4.5 | a_low_lantern(8.7m)
+road_low t0 24-28 @(31.4,85.6) | 35517 | 0.37 0.83 1.20 | 1.4% 0.0% | 0% | 0% | 8.0 | a_low_needle_inner(7.0m)
+road_low t0 36-40 @(41.5,91.9) | 33380 | 0.41 0.93 1.94 | 1.5% 0.2% | 0% | 0% | 3.3 | a_low_needle_inner(6.5m)
+road_low t0 52-56 @(56.9,96.3) | 31970 | 0.19 0.49 2.68 | 1.3% 0.1% | 33% | 33% | 3.0 | a_low_needle_outer(3.6m)
+road_low t0 80-84 @(84.8,98.5) | 15329 | 0.09 0.49 1.98 | 2.2% 0.8% | 43% | 43% | 1.6 | 
+road_low t0 84-88 @(88.7,98.4) | 15809 | 0.07 0.63 2.27 | 2.3% 0.6% | 29% | 29% | 1.1 | 
+road_low t0 88-92 @(92.7,98.3) | 16914 | 0.05 0.73 1.99 | 2.6% 0.7% | 37% | 37% | 2.1 | 
+road_low t0 92-96 @(96.7,98.1) | 15920 | 0.07 0.59 1.85 | 1.2% 0.0% | 40% | 40% | 1.2 | 
+road_low t0 96-100 @(100.7,97.9) | 14262 | 0.05 0.47 2.08 | 1.5% 0.5% | 52% | 52% | 2.3 | 
+road_low t0 100-104 @(104.7,97.5) | 13941 | 0.11 0.81 1.91 | 4.0% 1.3% | 27% | 27% | 1.8 | s_low_needle_outer(6.8m)
+road_low t0 104-108 @(108.7,97.0) | 15446 | 0.07 1.09 2.00 | 6.1% 2.4% | 41% | 41% | 2.3 | s_low_needle_outer(3.6m)
+road_low t0 108-112 @(112.6,96.4) | 14972 | 0.15 0.87 1.65 | 3.0% 0.3% | 32% | 32% | 2.5 | s_low_needle_outer(3.3m)
+road_low t0 112-116 @(116.5,95.6) | 15185 | 0.11 0.91 2.12 | 3.2% 0.4% | 37% | 37% | 1.7 | s_low_needle_outer(6.3m)
+road_low t0 116-120 @(120.4,94.7) | 13734 | 0.17 0.71 2.54 | 1.6% 0.2% | 27% | 27% | 3.6 | 
+road_low t0 120-124 @(124.2,93.5) | 12135 | 0.17 0.49 2.55 | 1.7% 0.4% | 14% | 14% | 2.5 | 
+road_low t0 124-128 @(128.0,92.1) | 8076 | 0.11 0.41 2.89 | 1.2% 1.0% | 0% | 0% | 6.6 | s_low_needle_inner(7.0m)
+road_low t0 128-132 @(131.6,90.4) | 6450 | 0.33 1.05 2.87 | 5.4% 2.0% | 1% | 1% | 3.4 | s_low_needle_inner(3.6m)
+road_low t0 132-136 @(135.0,88.3) | 7369 | 0.19 0.99 2.78 | 4.8% 1.0% | 3% | 3% | 5.8 | s_low_needle_inner(3.3m)
+road_low t0 136-140 @(138.3,86.0) | 7759 | 0.47 1.29 1.98 | 9.3% 1.5% | 1% | 1% | 6.4 | s_low_needle_inner(6.5m)
+road_low t0 140-144 @(140.9,83.0) | 5691 | 0.27 0.83 2.46 | 3.1% 0.7% | 0% | 0% | 5.7 | 
+road_low t0 144-148 @(143.6,80.1) | 3361 | 0.59 1.47 2.21 | 8.0% 4.8% | 0% | 0% | 10.6 | s_low_lantern(5.9m)
+road_low t0 148-152 @(145.2,76.4) | 4728 | 0.45 1.39 2.40 | 12.4% 3.2% | 12% | 12% | 6.9 | s_low_lantern(3.0m)
+road_low t0 152-156 @(146.7,72.7) | 4302 | 0.23 1.25 2.36 | 9.5% 2.0% | 73% | 73% | 8.9 | s_low_lantern(3.9m)
+road_low t0 156-160 @(148.7,69.3) | 3163 | 0.27 1.37 2.31 | 16.9% 2.2% | 88% | 88% | 3.1 | s_low_lantern(7.5m)
+road_low t1 40-44 @(45.3,93.3) | 3584 | 0.23 0.97 1.12 | 3.4% 0.0% | 8% | 8% | 4.8 | 
+road_low t1 44-48 @(49.1,94.6) | 5121 | 0.25 1.03 1.25 | 6.1% 0.0% | 6% | 6% | 3.7 | 
+road_low t1 48-52 @(53.0,95.5) | 5423 | 0.29 1.21 1.55 | 12.6% 0.2% | 35% | 35% | 3.3 | a_low_needle_outer(6.7m)
+road_low t1 52-56 @(56.9,96.3) | 5441 | 0.23 1.41 1.80 | 16.8% 3.7% | 32% | 32% | 2.8 | a_low_needle_outer(3.6m)
+road_low t1 56-60 @(60.8,96.9) | 4632 | 0.07 1.27 2.04 | 8.5% 3.3% | 29% | 29% | 4.9 | a_low_needle_outer(3.3m)
+road_low t1 68-72 @(72.8,98.1) | 7678 | 0.07 0.79 1.41 | 1.7% 0.0% | 0% | 0% | 1.6 | 
+road_low t1 72-76 @(76.8,98.3) | 8391 | 0.09 0.85 1.46 | 3.0% 0.0% | 16% | 16% | 2.1 | 
+road_low t1 76-80 @(80.8,98.4) | 7722 | 0.07 1.17 1.89 | 6.5% 1.7% | 41% | 41% | 2.0 | 
+road_low t1 80-84 @(84.8,98.5) | 6150 | 0.09 0.47 2.08 | 3.0% 0.3% | 10% | 10% | 1.6 | 
+road_low t1 124-128 @(128.0,92.1) | 22919 | 0.37 0.95 1.12 | 2.9% 0.0% | 0% | 0% | 3.1 | s_low_needle_inner(7.0m)
+road_low t1 140-144 @(140.9,83.0) | 31277 | 0.37 0.91 1.17 | 2.0% 0.0% | 0% | 0% | 4.9 | 
+road_low t1 144-148 @(143.6,80.1) | 29528 | 0.47 1.13 1.29 | 11.8% 0.0% | 0% | 0% | 9.6 | s_low_lantern(5.9m)
+road_low t1 156-160 @(148.7,69.3) | 20970 | 0.63 0.99 1.37 | 4.3% 0.0% | 12% | 12% | 7.1 | s_low_lantern(7.5m)
+road_seat t0 12-16 @(36.0,55.0) | 33889 | 0.67 0.99 1.16 | 3.2% 0.0% | 100% | 100% | 0.9 | a_seat_lantern(4.9m)
+road_seat t0 16-20 @(40.0,55.0) | 32160 | 0.55 1.09 1.26 | 16.5% 0.0% | 100% | 100% | 0.8 | a_seat_needle_inner(6.6m)
+road_seat t0 20-24 @(44.0,55.0) | 30517 | 0.45 1.17 1.34 | 16.0% 0.0% | 100% | 100% | 0.8 | a_seat_needle_inner(3.4m)
+road_seat t0 24-28 @(48.0,55.0) | 29529 | 0.49 1.21 1.61 | 17.2% 0.1% | 98% | 98% | 1.1 | a_seat_needle_inner(3.4m)
+road_seat t0 28-32 @(52.0,55.0) | 27930 | 0.59 1.05 1.90 | 6.2% 0.1% | 96% | 96% | 3.2 | a_seat_needle_inner(6.6m)
+road_seat t0 32-36 @(56.0,55.0) | 26676 | 0.57 0.73 1.95 | 2.1% 0.5% | 59% | 59% | 0.7 | a_seat_needle_outer(6.6m)
+road_seat t0 36-40 @(60.0,55.0) | 26624 | 0.51 0.83 2.31 | 3.2% 0.5% | 57% | 57% | 0.8 | a_seat_needle_outer(3.4m)
+road_seat t0 40-44 @(64.0,55.0) | 25495 | 0.43 0.85 2.07 | 2.6% 0.1% | 49% | 49% | 0.9 | a_seat_needle_outer(3.4m)
+road_seat t0 44-48 @(68.0,55.0) | 24556 | 0.37 0.81 1.71 | 1.3% 0.1% | 54% | 54% | 0.8 | a_seat_needle_outer(6.6m)
+road_seat t0 52-56 @(76.0,55.0) | 20974 | 0.23 0.73 2.78 | 1.4% 0.3% | 74% | 74% | 0.8 | 
+road_seat t0 56-60 @(80.0,55.0) | 17424 | 0.37 0.75 2.50 | 2.9% 0.7% | 63% | 63% | 2.0 | 
+road_seat t0 60-64 @(84.0,55.0) | 12789 | 0.35 0.91 1.63 | 3.3% 0.1% | 84% | 84% | 1.3 | 
+road_seat t0 64-68 @(88.0,55.0) | 12593 | 0.33 0.91 1.76 | 3.5% 0.1% | 96% | 96% | 0.5 | 
+road_seat t0 68-72 @(92.0,55.0) | 12134 | 0.33 0.89 1.73 | 4.5% 0.5% | 88% | 88% | 0.6 | 
+road_seat t0 72-76 @(96.0,55.0) | 11367 | 0.33 0.95 2.48 | 4.6% 0.3% | 76% | 76% | 1.5 | 
+road_seat t0 76-80 @(100.0,55.0) | 8339 | 0.33 1.21 2.48 | 7.1% 3.8% | 56% | 56% | 1.4 | s_seat_needle_outer(8.5m)
+road_seat t0 80-84 @(104.0,55.0) | 8320 | 0.37 1.57 2.34 | 13.2% 5.9% | 40% | 40% | 1.7 | s_seat_needle_outer(4.9m)
+road_seat t0 84-88 @(108.0,55.0) | 8647 | 0.37 1.29 2.14 | 9.4% 2.0% | 48% | 48% | 1.8 | s_seat_needle_outer(2.8m)
+road_seat t0 88-92 @(112.0,55.0) | 8437 | 0.37 1.13 2.17 | 8.9% 1.6% | 23% | 23% | 3.1 | s_seat_needle_outer(4.9m)
+road_seat t0 92-96 @(116.0,55.0) | 5147 | 0.37 1.07 1.57 | 5.5% 0.5% | 6% | 6% | 3.7 | s_seat_needle_outer(8.5m)
+road_seat t0 96-100 @(120.0,55.0) | 3028 | 0.29 1.57 2.69 | 13.2% 5.4% | 62% | 62% | 1.3 | s_seat_needle_inner(4.9m)
+road_seat t0 100-104 @(124.0,55.0) | 2701 | 0.27 1.49 1.90 | 9.2% 5.0% | 55% | 55% | 0.8 | s_seat_needle_inner(2.8m)
+road_seat t0 104-108 @(128.0,55.0) | 1916 | 0.19 0.73 2.30 | 2.2% 0.9% | 93% | 93% | 1.8 | s_seat_needle_inner(4.9m)
+road_seat t0 108-112 @(132.0,55.0) | 1995 | 0.31 1.83 2.69 | 12.5% 7.4% | 16% | 16% | 2.1 | s_seat_lantern(6.6m)
+road_seat t0 112-116 @(136.0,55.0) | 2743 | 0.53 1.87 2.63 | 23.3% 13.1% | 33% | 33% | 3.3 | s_seat_lantern(3.4m)
+road_seat t0 116-120 @(140.0,55.0) | 1588 | 0.41 1.45 1.86 | 18.5% 3.8% | 48% | 48% | 3.1 | s_seat_lantern(3.4m)
+road_seat t1 8-12 @(32.0,55.0) | 718 | 0.61 1.87 2.13 | 16.7% 10.6% | 42% | 42% | 4.8 | a_seat_lantern(2.8m)
+road_seat t1 12-16 @(36.0,55.0) | 570 | 0.57 2.39 2.60 | 26.0% 12.6% | 74% | 74% | 4.0 | a_seat_lantern(4.9m)
+road_seat t1 16-20 @(40.0,55.0) | 386 | 0.01 0.63 2.09 | 2.6% 2.1% | 100% | 100% | 7.8 | a_seat_needle_inner(6.6m)
+road_seat t1 20-24 @(44.0,55.0) | 1158 | 0.01 0.43 1.56 | 3.5% 1.6% | 100% | 100% | 6.1 | a_seat_needle_inner(3.4m)
+road_seat t1 24-28 @(48.0,55.0) | 1642 | 0.01 1.57 1.95 | 10.6% 5.5% | 85% | 85% | 1.5 | a_seat_needle_inner(3.4m)
+road_seat t1 28-32 @(52.0,55.0) | 2571 | 0.01 1.57 2.10 | 8.5% 5.7% | 82% | 82% | 2.2 | a_seat_needle_inner(6.6m)
+road_seat t1 32-36 @(56.0,55.0) | 7074 | 0.07 1.21 2.69 | 9.5% 3.7% | 42% | 42% | 3.9 | a_seat_needle_outer(6.6m)
+road_seat t1 36-40 @(60.0,55.0) | 8019 | 0.05 1.21 2.15 | 7.0% 1.9% | 58% | 58% | 3.3 | a_seat_needle_outer(3.4m)
+road_seat t1 40-44 @(64.0,55.0) | 8201 | 0.07 0.89 1.83 | 4.0% 2.2% | 62% | 62% | 1.7 | a_seat_needle_outer(3.4m)
+road_seat t1 44-48 @(68.0,55.0) | 10407 | 0.11 0.83 2.12 | 3.0% 1.1% | 52% | 52% | 1.3 | a_seat_needle_outer(6.6m)
+road_seat t1 48-52 @(72.0,55.0) | 12984 | 0.13 0.87 2.26 | 3.1% 1.2% | 36% | 36% | 0.9 | 
+road_seat t1 52-56 @(76.0,55.0) | 14451 | 0.17 1.03 2.26 | 5.0% 1.0% | 64% | 64% | 0.7 | 
+road_seat t1 56-60 @(80.0,55.0) | 16153 | 0.19 1.07 2.36 | 7.8% 0.6% | 63% | 63% | 0.5 | 
+road_seat t1 60-64 @(84.0,55.0) | 16223 | 0.17 1.03 1.61 | 5.4% 0.5% | 67% | 67% | 0.3 | 
+road_seat t1 64-68 @(88.0,55.0) | 17816 | 0.23 0.53 2.16 | 2.2% 0.6% | 52% | 52% | 2.9 | 
+road_seat t1 72-76 @(96.0,55.0) | 28141 | 0.11 0.71 1.65 | 2.2% 0.9% | 32% | 32% | 0.8 | 
+road_seat t1 76-80 @(100.0,55.0) | 28298 | 0.13 0.73 2.08 | 2.7% 1.5% | 43% | 43% | 0.6 | s_seat_needle_outer(8.5m)
+road_seat t1 80-84 @(104.0,55.0) | 27491 | 0.17 0.71 2.13 | 2.5% 1.0% | 46% | 46% | 0.5 | s_seat_needle_outer(4.9m)
+road_seat t1 88-92 @(112.0,55.0) | 29896 | 0.23 0.67 2.11 | 1.7% 0.5% | 56% | 56% | 0.6 | s_seat_needle_outer(4.9m)
+
+## segments, bots/alive (only segments with > 1 % of free samples over 1 m)
+lane team seg(s m) @xy | free n | p50 p95 max |d| m | >1.0 m  >1.5 m (free share) | down-share of >1 | +d share | mean heading off-road deg | nearest structure
+road_high t0 4-8 @(21.0,41.1) | 20168 | 0.65 0.99 1.02 | 4.8% 0.0% | 100% | 100% | 6.5 | a_high_lantern(8.0m)
+road_high t0 16-20 @(26.1,30.3) | 37935 | 0.47 1.11 1.29 | 10.0% 0.0% | 100% | 100% | 10.8 | a_high_lantern(5.5m)
+road_high t0 20-24 @(28.7,27.3) | 40469 | 0.39 0.95 1.17 | 3.2% 0.0% | 100% | 100% | 4.6 | a_high_lantern(8.7m)
+road_high t0 36-40 @(41.5,18.1) | 36679 | 0.39 0.99 1.47 | 3.8% 0.0% | 100% | 100% | 3.6 | a_high_needle_inner(6.5m)
+road_high t0 72-76 @(76.8,11.7) | 23608 | 0.09 0.61 2.80 | 1.6% 0.6% | 56% | 56% | 1.3 | 
+road_high t0 76-80 @(80.8,11.6) | 20968 | 0.05 0.59 3.67 | 2.8% 1.3% | 59% | 59% | 1.7 | 
+road_high t0 80-84 @(84.8,11.5) | 17817 | 0.09 0.89 11.75 | 3.9% 1.7% | 77% | 77% | 2.6 | 
+road_high t0 84-88 @(88.7,11.6) | 15836 | 0.07 0.73 3.11 | 2.2% 0.4% | 84% | 84% | 1.6 | 
+road_high t0 88-92 @(92.7,11.7) | 13944 | 0.07 0.79 2.84 | 2.7% 0.7% | 95% | 95% | 2.6 | 
+road_high t0 92-96 @(96.7,11.9) | 10202 | 0.09 1.09 3.58 | 5.9% 2.1% | 89% | 89% | 2.9 | 
+road_high t0 96-100 @(100.7,12.1) | 5550 | 0.17 1.09 4.31 | 6.6% 1.5% | 73% | 73% | 4.0 | 
+road_high t0 100-104 @(104.7,12.5) | 1463 | 0.11 0.55 1.81 | 2.5% 0.7% | 35% | 35% | 2.1 | s_high_needle_outer(6.8m)
+road_high t0 104-108 @(108.7,13.0) | 1482 | 0.07 1.03 3.00 | 5.4% 1.6% | 76% | 76% | 3.1 | s_high_needle_outer(3.6m)
+road_high t0 108-112 @(112.6,13.6) | 957 | 0.15 0.81 1.26 | 3.0% 0.0% | 100% | 100% | 7.1 | s_high_needle_outer(3.3m)
+road_high t0 112-116 @(116.5,14.4) | 346 | 0.13 0.91 1.12 | 2.6% 0.0% | 100% | 100% | 10.5 | s_high_needle_outer(6.3m)
+road_high t0 116-120 @(120.4,15.3) | 207 | 0.57 1.85 1.86 | 23.7% 9.2% | 100% | 100% | 5.9 | 
+road_high t0 120-124 @(124.2,16.5) | 141 | 0.35 1.83 1.85 | 14.2% 7.1% | 100% | 100% | 2.4 | 
+road_high t1 40-44 @(45.3,16.7) | 393 | 0.19 1.25 1.63 | 8.4% 1.8% | 100% | 100% | 3.1 | 
+road_high t1 44-48 @(49.1,15.4) | 452 | 0.21 0.79 1.92 | 1.5% 1.5% | 100% | 100% | 4.4 | 
+road_high t1 48-52 @(53.0,14.5) | 714 | 0.23 1.25 1.95 | 12.6% 0.6% | 77% | 77% | 5.7 | a_high_needle_outer(6.7m)
+road_high t1 52-56 @(56.9,13.7) | 419 | 0.19 0.65 1.60 | 1.2% 1.0% | 100% | 100% | 2.4 | a_high_needle_outer(3.6m)
+road_high t1 56-60 @(60.8,13.1) | 732 | 0.17 1.49 2.30 | 14.6% 4.9% | 100% | 100% | 4.6 | a_high_needle_outer(3.3m)
+road_high t1 60-64 @(64.8,12.6) | 1263 | 0.13 1.35 2.36 | 6.2% 3.2% | 95% | 95% | 1.6 | a_high_needle_outer(6.4m)
+road_high t1 64-68 @(68.8,12.2) | 3992 | 0.17 1.03 3.94 | 5.6% 1.2% | 79% | 79% | 3.9 | 
+road_high t1 68-72 @(72.8,11.9) | 6908 | 0.09 0.99 1.92 | 4.9% 1.0% | 54% | 54% | 2.7 | 
+road_high t1 72-76 @(76.8,11.7) | 10465 | 0.07 0.81 2.18 | 2.9% 0.6% | 74% | 74% | 2.3 | 
+road_high t1 76-80 @(80.8,11.6) | 12325 | 0.05 0.75 13.26 | 2.8% 1.3% | 78% | 78% | 2.1 | 
+road_high t1 80-84 @(84.8,11.5) | 14344 | 0.09 0.81 11.92 | 4.0% 2.5% | 91% | 91% | 3.2 | 
+road_high t1 84-88 @(88.7,11.6) | 16804 | 0.05 0.55 12.68 | 1.5% 0.3% | 84% | 84% | 1.6 | 
+road_high t1 88-92 @(92.7,11.7) | 20230 | 0.09 0.49 4.18 | 1.4% 0.5% | 80% | 80% | 1.2 | 
+road_high t1 96-100 @(100.7,12.1) | 24720 | 0.11 0.47 1.88 | 1.0% 0.1% | 76% | 76% | 1.5 | 
+road_high t1 124-128 @(128.0,17.9) | 38238 | 0.39 0.93 1.16 | 1.3% 0.0% | 100% | 100% | 2.8 | s_high_needle_inner(7.0m)
+road_high t1 136-140 @(138.3,24.0) | 37793 | 0.41 0.83 1.20 | 2.0% 0.0% | 100% | 100% | 7.9 | s_high_needle_inner(6.5m)
+road_high t1 140-144 @(140.9,27.0) | 39012 | 0.31 0.83 1.18 | 1.1% 0.0% | 100% | 100% | 4.4 | 
+road_high t1 144-148 @(143.6,29.9) | 37358 | 0.37 1.07 1.30 | 9.7% 0.0% | 100% | 100% | 9.7 | s_high_lantern(5.9m)
+road_high t1 152-156 @(146.7,37.3) | 37845 | 0.47 1.21 1.34 | 22.5% 0.0% | 0% | 0% | 5.2 | s_high_lantern(3.9m)
+road_high t1 156-160 @(148.7,40.7) | 25217 | 0.55 1.11 1.27 | 18.1% 0.0% | 0% | 0% | 7.2 | s_high_lantern(7.5m)
+road_low t0 4-8 @(21.0,68.9) | 20208 | 0.57 1.05 1.20 | 15.2% 0.0% | 100% | 100% | 6.6 | a_low_lantern(8.0m)
+road_low t0 8-12 @(23.1,72.2) | 37859 | 0.49 1.23 1.34 | 25.8% 0.0% | 100% | 100% | 5.9 | a_low_lantern(4.2m)
+road_low t0 16-20 @(26.1,79.7) | 37419 | 0.35 1.07 1.30 | 9.4% 0.0% | 0% | 0% | 10.8 | a_low_lantern(5.5m)
+road_low t0 20-24 @(28.7,82.7) | 38910 | 0.31 0.89 1.21 | 2.3% 0.0% | 0% | 0% | 4.5 | a_low_lantern(8.7m)
+road_low t0 24-28 @(31.4,85.6) | 38006 | 0.37 0.85 1.20 | 1.8% 0.0% | 0% | 0% | 7.9 | a_low_needle_inner(7.0m)
+road_low t0 36-40 @(41.5,91.9) | 37554 | 0.41 0.95 1.08 | 1.4% 0.0% | 0% | 0% | 3.3 | a_low_needle_inner(6.5m)
+road_low t0 76-80 @(80.8,98.4) | 17913 | 0.05 0.37 2.76 | 1.5% 0.7% | 5% | 5% | 1.3 | 
+road_low t0 80-84 @(84.8,98.5) | 15690 | 0.09 0.83 10.05 | 4.0% 3.2% | 0% | 0% | 3.2 | 
+road_low t0 84-88 @(88.7,98.4) | 11956 | 0.07 0.99 10.25 | 4.9% 1.8% | 11% | 11% | 2.0 | 
+road_low t0 88-92 @(92.7,98.3) | 9198 | 0.07 1.05 3.25 | 5.6% 1.7% | 5% | 5% | 2.9 | 
+road_low t0 92-96 @(96.7,98.1) | 7595 | 0.11 1.45 4.01 | 10.4% 4.8% | 0% | 0% | 3.6 | 
+road_low t0 96-100 @(100.7,97.9) | 4765 | 0.23 1.15 2.89 | 7.2% 2.1% | 7% | 7% | 4.3 | 
+road_low t0 100-104 @(104.7,97.5) | 1372 | 0.11 0.61 3.56 | 1.7% 0.9% | 8% | 8% | 2.0 | s_low_needle_outer(6.8m)
+road_low t0 104-108 @(108.7,97.0) | 1272 | 0.07 0.81 1.83 | 2.0% 0.9% | 0% | 0% | 2.0 | s_low_needle_outer(3.6m)
+road_low t0 108-112 @(112.6,96.4) | 739 | 0.17 1.19 1.97 | 12.0% 2.2% | 0% | 0% | 3.5 | s_low_needle_outer(3.3m)
+road_low t0 112-116 @(116.5,95.6) | 820 | 0.41 1.63 2.71 | 15.7% 7.0% | 0% | 0% | 6.1 | s_low_needle_outer(6.3m)
+road_low t0 116-120 @(120.4,94.7) | 867 | 0.33 1.13 1.48 | 7.7% 0.0% | 0% | 0% | 4.3 | 
+road_low t0 120-124 @(124.2,93.5) | 342 | 0.35 1.15 1.36 | 14.9% 0.0% | 0% | 0% | 2.5 | 
+road_low t1 48-52 @(53.0,95.5) | 57 | 0.75 1.05 1.09 | 8.8% 0.0% | 0% | 0% | 7.2 | a_low_needle_outer(6.7m)
+road_low t1 52-56 @(56.9,96.3) | 299 | 0.63 1.61 1.70 | 28.8% 9.4% | 0% | 0% | 4.2 | a_low_needle_outer(3.6m)
+road_low t1 56-60 @(60.8,96.9) | 454 | 0.93 2.27 2.81 | 44.3% 24.9% | 3% | 3% | 12.5 | a_low_needle_outer(3.3m)
+road_low t1 60-64 @(64.8,97.4) | 165 | 0.93 1.93 2.78 | 47.9% 22.4% | 10% | 10% | 14.6 | a_low_needle_outer(6.4m)
+road_low t1 64-68 @(68.8,97.8) | 2477 | 0.41 1.25 2.18 | 8.6% 2.3% | 14% | 14% | 5.4 | 
+road_low t1 68-72 @(72.8,98.1) | 5389 | 0.25 1.23 3.10 | 9.0% 2.5% | 12% | 12% | 4.6 | 
+road_low t1 72-76 @(76.8,98.3) | 7285 | 0.09 1.13 2.76 | 6.6% 1.6% | 26% | 26% | 2.8 | 
+road_low t1 76-80 @(80.8,98.4) | 9564 | 0.05 0.71 2.56 | 2.9% 0.9% | 31% | 31% | 1.7 | 
+road_low t1 80-84 @(84.8,98.5) | 13274 | 0.09 0.51 3.79 | 2.3% 0.9% | 19% | 19% | 1.8 | 
+road_low t1 84-88 @(88.7,98.4) | 16843 | 0.05 0.11 3.56 | 1.4% 0.8% | 12% | 12% | 1.4 | 
+road_low t1 96-100 @(100.7,97.9) | 25854 | 0.11 0.47 2.84 | 1.6% 0.3% | 9% | 9% | 1.6 | 
+road_low t1 100-104 @(104.7,97.5) | 27545 | 0.09 0.53 1.82 | 1.0% 0.1% | 24% | 24% | 2.3 | s_low_needle_outer(6.8m)
+road_low t1 124-128 @(128.0,92.1) | 37398 | 0.37 0.97 1.49 | 3.0% 0.0% | 0% | 0% | 3.0 | s_low_needle_inner(7.0m)
+road_low t1 140-144 @(140.9,83.0) | 40795 | 0.37 0.91 1.12 | 1.5% 0.0% | 0% | 0% | 4.8 | 
+road_low t1 144-148 @(143.6,80.1) | 37622 | 0.47 1.11 1.29 | 11.9% 0.0% | 0% | 0% | 9.6 | s_low_lantern(5.9m)
+road_low t1 156-160 @(148.7,69.3) | 25191 | 0.65 0.99 1.02 | 3.9% 0.0% | 0% | 0% | 7.2 | s_low_lantern(7.5m)
+road_seat t0 12-16 @(36.0,55.0) | 37962 | 0.67 0.99 1.01 | 2.6% 0.0% | 100% | 100% | 0.9 | a_seat_lantern(4.9m)
+road_seat t0 16-20 @(40.0,55.0) | 38309 | 0.55 1.09 1.11 | 16.0% 0.0% | 100% | 100% | 0.8 | a_seat_needle_inner(6.6m)
+road_seat t0 20-24 @(44.0,55.0) | 37903 | 0.45 1.17 1.19 | 15.7% 0.0% | 100% | 100% | 0.7 | a_seat_needle_inner(3.4m)
+road_seat t0 24-28 @(48.0,55.0) | 38599 | 0.49 1.21 1.21 | 16.7% 0.0% | 100% | 100% | 0.8 | a_seat_needle_inner(3.4m)
+road_seat t0 28-32 @(52.0,55.0) | 39652 | 0.59 1.01 1.15 | 5.3% 0.0% | 100% | 100% | 3.0 | a_seat_needle_inner(6.6m)
+road_seat t0 44-48 @(68.0,55.0) | 26710 | 0.39 0.81 1.89 | 1.8% 0.3% | 69% | 69% | 1.4 | a_seat_needle_outer(6.6m)
+road_seat t0 48-52 @(72.0,55.0) | 21585 | 0.39 0.83 1.81 | 1.8% 0.3% | 61% | 61% | 1.4 | 
+road_seat t0 52-56 @(76.0,55.0) | 19215 | 0.33 0.79 2.06 | 2.2% 0.4% | 39% | 39% | 1.1 | 
+road_seat t0 56-60 @(80.0,55.0) | 15643 | 0.29 0.69 2.34 | 1.3% 0.3% | 60% | 60% | 1.4 | 
+road_seat t0 60-64 @(84.0,55.0) | 12501 | 0.33 0.75 1.83 | 2.0% 0.2% | 60% | 60% | 1.1 | 
+road_seat t0 64-68 @(88.0,55.0) | 10049 | 0.33 1.07 1.98 | 6.0% 2.0% | 51% | 51% | 1.1 | 
+road_seat t0 68-72 @(92.0,55.0) | 6862 | 0.35 1.31 3.40 | 10.5% 3.6% | 50% | 50% | 1.8 | 
+road_seat t0 72-76 @(96.0,55.0) | 4362 | 0.39 1.35 3.15 | 13.2% 2.1% | 53% | 53% | 1.7 | 
+road_seat t0 76-80 @(100.0,55.0) | 1633 | 0.43 1.37 2.53 | 12.9% 1.5% | 67% | 67% | 2.1 | s_seat_needle_outer(8.5m)
+road_seat t1 32-36 @(56.0,55.0) | 152 | 0.43 1.25 1.53 | 30.9% 0.7% | 0% | 0% | 3.0 | a_seat_needle_outer(6.6m)
+road_seat t1 36-40 @(60.0,55.0) | 111 | 0.59 1.65 1.73 | 17.1% 11.7% | 0% | 0% | 5.5 | a_seat_needle_outer(3.4m)
+road_seat t1 44-48 @(68.0,55.0) | 244 | 0.79 2.13 3.25 | 37.3% 16.0% | 100% | 100% | 2.5 | a_seat_needle_outer(6.6m)
+road_seat t1 48-52 @(72.0,55.0) | 5408 | 0.53 1.55 3.87 | 19.5% 6.3% | 67% | 67% | 1.9 | 
+road_seat t1 52-56 @(76.0,55.0) | 7999 | 0.33 1.51 3.98 | 15.7% 5.3% | 63% | 63% | 1.5 | 
+road_seat t1 56-60 @(80.0,55.0) | 11687 | 0.21 1.25 2.30 | 7.2% 2.4% | 68% | 68% | 0.8 | 
+road_seat t1 60-64 @(84.0,55.0) | 15649 | 0.19 0.71 2.35 | 2.6% 1.0% | 47% | 47% | 0.5 | 
+road_seat t1 68-72 @(92.0,55.0) | 26966 | 0.15 0.65 3.45 | 1.1% 0.5% | 69% | 69% | 1.7 | 
+road_seat t1 72-76 @(96.0,55.0) | 28525 | 0.11 0.71 3.29 | 1.1% 0.1% | 66% | 66% | 0.8 | 
+
+## segments, bots/kill (only segments with > 1 % of free samples over 1 m)
+lane team seg(s m) @xy | free n | p50 p95 max |d| m | >1.0 m  >1.5 m (free share) | down-share of >1 | +d share | mean heading off-road deg | nearest structure
+road_high t0 4-8 @(21.0,41.1) | 20172 | 0.65 0.99 1.02 | 4.8% 0.0% | 100% | 100% | 6.5 | a_high_lantern(8.0m)
+road_high t0 16-20 @(26.1,30.3) | 37916 | 0.47 1.11 1.29 | 9.7% 0.0% | 100% | 100% | 10.8 | a_high_lantern(5.5m)
+road_high t0 20-24 @(28.7,27.3) | 40511 | 0.39 0.95 1.17 | 3.2% 0.0% | 100% | 100% | 4.7 | a_high_lantern(8.7m)
+road_high t0 36-40 @(41.5,18.1) | 34624 | 0.39 0.99 1.95 | 4.3% 0.0% | 100% | 100% | 3.6 | a_high_needle_inner(6.5m)
+road_high t0 76-80 @(80.8,11.6) | 20234 | 0.05 0.45 2.13 | 1.4% 0.4% | 82% | 82% | 1.5 | 
+road_high t0 80-84 @(84.8,11.5) | 17587 | 0.09 0.61 3.34 | 3.2% 0.9% | 83% | 83% | 1.9 | 
+road_high t0 84-88 @(88.7,11.6) | 16804 | 0.07 0.85 3.60 | 3.7% 1.0% | 80% | 80% | 1.6 | 
+road_high t0 88-92 @(92.7,11.7) | 15143 | 0.07 0.75 2.84 | 2.0% 0.3% | 74% | 74% | 2.2 | 
+road_high t0 92-96 @(96.7,11.9) | 11629 | 0.07 0.75 3.58 | 1.9% 0.6% | 67% | 67% | 1.7 | 
+road_high t0 96-100 @(100.7,12.1) | 9901 | 0.05 0.81 3.99 | 3.2% 1.2% | 64% | 64% | 2.6 | 
+road_high t0 100-104 @(104.7,12.5) | 9059 | 0.13 1.05 3.33 | 5.4% 2.1% | 83% | 83% | 2.2 | s_high_needle_outer(6.8m)
+road_high t0 104-108 @(108.7,13.0) | 7655 | 0.07 1.01 2.76 | 5.1% 1.9% | 83% | 83% | 2.9 | s_high_needle_outer(3.6m)
+road_high t0 108-112 @(112.6,13.6) | 6083 | 0.15 0.91 3.50 | 4.0% 2.3% | 84% | 84% | 3.0 | s_high_needle_outer(3.3m)
+road_high t0 112-116 @(116.5,14.4) | 5244 | 0.11 0.87 3.91 | 4.5% 3.0% | 76% | 76% | 3.1 | s_high_needle_outer(6.3m)
+road_high t0 116-120 @(120.4,15.3) | 4429 | 0.19 1.41 3.47 | 7.9% 4.8% | 70% | 70% | 5.5 | 
+road_high t0 120-124 @(124.2,16.5) | 3571 | 0.21 1.53 2.63 | 11.1% 5.2% | 87% | 87% | 6.0 | 
+road_high t0 124-128 @(128.0,17.9) | 673 | 0.27 1.63 2.60 | 8.2% 5.8% | 100% | 100% | 12.8 | s_high_needle_inner(7.0m)
+road_high t0 128-132 @(131.6,19.6) | 625 | 0.39 1.71 2.19 | 20.0% 7.5% | 83% | 83% | 5.4 | s_high_needle_inner(3.6m)
+road_high t0 132-136 @(135.0,21.7) | 821 | 0.31 1.31 1.74 | 15.3% 1.2% | 97% | 97% | 8.1 | s_high_needle_inner(3.3m)
+road_high t0 136-140 @(138.3,24.0) | 295 | 0.39 1.39 1.50 | 13.9% 0.0% | 100% | 100% | 8.0 | s_high_needle_inner(6.5m)
+road_high t1 36-40 @(41.5,18.1) | 62 | 0.55 3.07 3.32 | 27.4% 14.5% | 100% | 100% | 11.9 | a_high_needle_inner(6.5m)
+road_high t1 40-44 @(45.3,16.7) | 1522 | 0.39 1.65 3.15 | 13.2% 7.0% | 92% | 92% | 5.6 | 
+road_high t1 44-48 @(49.1,15.4) | 2343 | 0.23 1.11 2.06 | 8.3% 2.0% | 100% | 100% | 5.2 | 
+road_high t1 48-52 @(53.0,14.5) | 3359 | 0.13 0.99 2.14 | 4.4% 1.0% | 100% | 100% | 3.1 | a_high_needle_outer(6.7m)
+road_high t1 52-56 @(56.9,13.7) | 3888 | 0.17 1.09 1.90 | 6.0% 1.1% | 100% | 100% | 2.7 | a_high_needle_outer(3.6m)
+road_high t1 56-60 @(60.8,13.1) | 4787 | 0.07 1.01 2.68 | 5.4% 1.1% | 81% | 81% | 3.3 | a_high_needle_outer(3.3m)
+road_high t1 60-64 @(64.8,12.6) | 5830 | 0.13 1.05 2.60 | 5.6% 1.1% | 70% | 70% | 1.8 | a_high_needle_outer(6.4m)
+road_high t1 64-68 @(68.8,12.2) | 7584 | 0.09 1.01 2.82 | 5.1% 1.7% | 75% | 75% | 4.1 | 
+road_high t1 68-72 @(72.8,11.9) | 9456 | 0.07 1.05 3.64 | 5.8% 1.8% | 71% | 71% | 2.0 | 
+road_high t1 72-76 @(76.8,11.7) | 11881 | 0.07 0.81 3.79 | 3.5% 1.8% | 86% | 86% | 2.3 | 
+road_high t1 76-80 @(80.8,11.6) | 13578 | 0.05 0.87 3.27 | 3.9% 1.0% | 64% | 64% | 1.6 | 
+road_high t1 100-104 @(104.7,12.5) | 24931 | 0.11 0.31 21.86 | 1.1% 0.8% | 93% | 93% | 2.9 | s_high_needle_outer(6.8m)
+road_high t1 124-128 @(128.0,17.9) | 34757 | 0.39 0.95 2.59 | 2.2% 0.3% | 100% | 100% | 2.9 | s_high_needle_inner(7.0m)
+road_high t1 136-140 @(138.3,24.0) | 36724 | 0.41 0.85 1.20 | 2.3% 0.0% | 100% | 100% | 7.9 | s_high_needle_inner(6.5m)
+road_high t1 140-144 @(140.9,27.0) | 38471 | 0.31 0.83 1.18 | 1.6% 0.0% | 100% | 100% | 4.4 | 
+road_high t1 144-148 @(143.6,29.9) | 36886 | 0.37 1.07 1.30 | 9.5% 0.0% | 100% | 100% | 9.7 | s_high_lantern(5.9m)
+road_high t1 152-156 @(146.7,37.3) | 37842 | 0.47 1.21 1.34 | 22.5% 0.0% | 0% | 0% | 5.2 | s_high_lantern(3.9m)
+road_high t1 156-160 @(148.7,40.7) | 25215 | 0.55 1.11 1.27 | 18.2% 0.0% | 0% | 0% | 7.2 | s_high_lantern(7.5m)
+road_low t0 4-8 @(21.0,68.9) | 20153 | 0.57 1.05 1.20 | 15.2% 0.0% | 100% | 100% | 6.6 | a_low_lantern(8.0m)
+road_low t0 8-12 @(23.1,72.2) | 37748 | 0.47 1.21 1.34 | 25.7% 0.0% | 100% | 100% | 5.9 | a_low_lantern(4.2m)
+road_low t0 16-20 @(26.1,79.7) | 37273 | 0.35 1.07 1.30 | 9.2% 0.0% | 0% | 0% | 10.8 | a_low_lantern(5.5m)
+road_low t0 20-24 @(28.7,82.7) | 38685 | 0.31 0.91 1.21 | 2.9% 0.0% | 0% | 0% | 4.4 | a_low_lantern(8.7m)
+road_low t0 24-28 @(31.4,85.6) | 37571 | 0.37 0.87 1.20 | 2.1% 0.0% | 0% | 0% | 7.9 | a_low_needle_inner(7.0m)
+road_low t0 32-36 @(38.0,90.1) | 38343 | 0.31 0.81 10.37 | 1.2% 0.8% | 0% | 0% | 6.6 | a_low_needle_inner(3.3m)
+road_low t0 36-40 @(41.5,91.9) | 35727 | 0.41 0.95 3.31 | 2.2% 0.5% | 0% | 0% | 3.4 | a_low_needle_inner(6.5m)
+road_low t0 52-56 @(56.9,96.3) | 31425 | 0.19 0.51 3.23 | 1.1% 0.5% | 0% | 0% | 3.0 | a_low_needle_outer(3.6m)
+road_low t0 64-68 @(68.8,97.8) | 25177 | 0.13 0.29 3.13 | 1.3% 0.5% | 9% | 9% | 1.4 | 
+road_low t0 76-80 @(80.8,98.4) | 18535 | 0.05 0.09 3.43 | 1.3% 0.8% | 14% | 14% | 1.2 | 
+road_low t0 80-84 @(84.8,98.5) | 17599 | 0.09 1.51 10.45 | 6.8% 5.0% | 2% | 2% | 4.5 | 
+road_low t0 84-88 @(88.7,98.4) | 15969 | 0.07 1.15 4.83 | 6.5% 3.4% | 3% | 3% | 2.3 | 
+road_low t0 88-92 @(92.7,98.3) | 13728 | 0.07 1.01 2.61 | 5.0% 1.4% | 5% | 5% | 2.5 | 
+road_low t0 92-96 @(96.7,98.1) | 11908 | 0.07 0.85 4.03 | 2.8% 1.1% | 10% | 10% | 1.7 | 
+road_low t0 96-100 @(100.7,97.9) | 9279 | 0.05 0.79 4.35 | 4.3% 3.0% | 1% | 1% | 2.9 | 
+road_low t0 100-104 @(104.7,97.5) | 7218 | 0.11 1.51 22.13 | 9.3% 5.0% | 10% | 10% | 4.0 | s_low_needle_outer(6.8m)
+road_low t0 104-108 @(108.7,97.0) | 7233 | 0.07 1.47 22.90 | 10.6% 4.8% | 9% | 9% | 5.6 | s_low_needle_outer(3.6m)
+road_low t0 108-112 @(112.6,96.4) | 6198 | 0.17 1.67 3.85 | 10.0% 5.9% | 0% | 0% | 4.2 | s_low_needle_outer(3.3m)
+road_low t0 112-116 @(116.5,95.6) | 5442 | 0.11 1.29 2.90 | 8.8% 3.0% | 8% | 8% | 3.3 | s_low_needle_outer(6.3m)
+road_low t0 116-120 @(120.4,94.7) | 4359 | 0.21 1.25 3.65 | 10.8% 3.5% | 11% | 11% | 5.1 | 
+road_low t0 120-124 @(124.2,93.5) | 4038 | 0.23 1.51 4.23 | 13.4% 5.1% | 11% | 11% | 5.2 | 
+road_low t0 124-128 @(128.0,92.1) | 796 | 0.19 1.41 3.19 | 6.7% 4.9% | 0% | 0% | 10.5 | s_low_needle_inner(7.0m)
+road_low t0 128-132 @(131.6,90.4) | 265 | 0.35 0.47 2.51 | 4.9% 4.9% | 0% | 0% | 3.8 | s_low_needle_inner(3.6m)
+road_low t0 140-144 @(140.9,83.0) | 55 | 0.59 2.11 2.15 | 32.7% 16.4% | 0% | 0% | 5.5 | 
+road_low t1 40-44 @(45.3,93.3) | 1303 | 0.17 0.93 2.03 | 4.2% 0.5% | 0% | 0% | 5.1 | 
+road_low t1 44-48 @(49.1,94.6) | 1937 | 0.21 1.07 2.14 | 6.6% 2.3% | 5% | 5% | 4.6 | 
+road_low t1 48-52 @(53.0,95.5) | 2928 | 0.11 0.89 2.27 | 2.2% 0.7% | 3% | 3% | 2.2 | a_low_needle_outer(6.7m)
+road_low t1 52-56 @(56.9,96.3) | 3607 | 0.17 0.87 2.68 | 3.6% 1.4% | 12% | 12% | 3.5 | a_low_needle_outer(3.6m)
+road_low t1 56-60 @(60.8,96.9) | 5436 | 0.07 0.99 3.20 | 4.8% 1.4% | 14% | 14% | 3.7 | a_low_needle_outer(3.3m)
+road_low t1 60-64 @(64.8,97.4) | 6529 | 0.11 0.93 2.70 | 4.3% 1.3% | 7% | 7% | 1.9 | a_low_needle_outer(6.4m)
+road_low t1 64-68 @(68.8,97.8) | 7628 | 0.07 0.81 1.94 | 2.7% 0.7% | 35% | 35% | 3.1 | 
+road_low t1 68-72 @(72.8,98.1) | 9623 | 0.07 0.89 2.71 | 4.2% 0.6% | 28% | 28% | 2.0 | 
+road_low t1 72-76 @(76.8,98.3) | 11227 | 0.07 0.77 2.38 | 3.0% 0.9% | 34% | 34% | 1.9 | 
+road_low t1 76-80 @(80.8,98.4) | 13693 | 0.05 0.55 2.03 | 1.7% 0.5% | 46% | 46% | 1.7 | 
+road_low t1 104-108 @(108.7,97.0) | 26962 | 0.13 0.55 2.69 | 1.1% 0.4% | 3% | 3% | 1.9 | s_low_needle_outer(3.6m)
+road_low t1 124-128 @(128.0,92.1) | 34385 | 0.37 0.99 3.39 | 4.2% 0.4% | 0% | 0% | 3.1 | s_low_needle_inner(7.0m)
+road_low t1 128-132 @(131.6,90.4) | 34172 | 0.25 0.79 2.02 | 1.2% 0.1% | 0% | 0% | 6.3 | s_low_needle_inner(3.6m)
+road_low t1 140-144 @(140.9,83.0) | 40223 | 0.37 0.91 1.12 | 1.6% 0.0% | 0% | 0% | 4.8 | 
+road_low t1 144-148 @(143.6,80.1) | 37215 | 0.47 1.11 1.29 | 11.5% 0.0% | 0% | 0% | 9.6 | s_low_lantern(5.9m)
+road_low t1 156-160 @(148.7,69.3) | 25176 | 0.65 0.99 1.02 | 3.9% 0.0% | 0% | 0% | 7.1 | s_low_lantern(7.5m)
+road_seat t0 12-16 @(36.0,55.0) | 37947 | 0.67 0.99 1.01 | 2.6% 0.0% | 100% | 100% | 0.9 | a_seat_lantern(4.9m)
+road_seat t0 16-20 @(40.0,55.0) | 37581 | 0.55 1.09 1.11 | 16.0% 0.0% | 100% | 100% | 0.8 | a_seat_needle_inner(6.6m)
+road_seat t0 20-24 @(44.0,55.0) | 36535 | 0.45 1.17 1.19 | 15.7% 0.0% | 100% | 100% | 0.8 | a_seat_needle_inner(3.4m)
+road_seat t0 24-28 @(48.0,55.0) | 36542 | 0.49 1.21 1.26 | 16.7% 0.0% | 100% | 100% | 0.8 | a_seat_needle_inner(3.4m)
+road_seat t0 28-32 @(52.0,55.0) | 37546 | 0.59 1.03 2.03 | 5.6% 0.1% | 96% | 96% | 3.1 | a_seat_needle_inner(6.6m)
+road_seat t0 40-44 @(64.0,55.0) | 28400 | 0.43 0.77 4.01 | 3.2% 1.8% | 68% | 68% | 1.0 | a_seat_needle_outer(3.4m)
+road_seat t0 44-48 @(68.0,55.0) | 26953 | 0.41 0.83 3.30 | 3.6% 1.4% | 69% | 69% | 1.1 | a_seat_needle_outer(6.6m)
+road_seat t0 48-52 @(72.0,55.0) | 23448 | 0.39 0.85 3.09 | 3.5% 1.1% | 59% | 59% | 1.2 | 
+road_seat t0 52-56 @(76.0,55.0) | 20805 | 0.37 0.77 3.36 | 2.5% 0.8% | 50% | 50% | 1.0 | 
+road_seat t0 56-60 @(80.0,55.0) | 17277 | 0.33 0.71 3.95 | 2.0% 0.7% | 43% | 43% | 1.4 | 
+road_seat t0 60-64 @(84.0,55.0) | 14445 | 0.31 0.69 9.98 | 3.1% 1.3% | 28% | 28% | 1.2 | 
+road_seat t0 64-68 @(88.0,55.0) | 12642 | 0.33 1.75 23.51 | 9.2% 6.0% | 42% | 42% | 2.2 | 
+road_seat t0 68-72 @(92.0,55.0) | 9552 | 0.35 1.83 23.72 | 11.5% 7.0% | 56% | 56% | 1.6 | 
+road_seat t0 72-76 @(96.0,55.0) | 6990 | 0.39 2.31 24.79 | 15.8% 8.3% | 51% | 51% | 2.0 | 
+road_seat t0 76-80 @(100.0,55.0) | 5713 | 0.41 1.81 3.35 | 16.2% 7.4% | 48% | 48% | 2.2 | s_seat_needle_outer(8.5m)
+road_seat t0 80-84 @(104.0,55.0) | 3963 | 0.45 1.67 3.36 | 19.2% 7.4% | 54% | 54% | 3.3 | s_seat_needle_outer(4.9m)
+road_seat t0 84-88 @(108.0,55.0) | 2731 | 0.57 2.31 14.63 | 20.7% 9.5% | 68% | 68% | 5.7 | s_seat_needle_outer(2.8m)
+road_seat t0 88-92 @(112.0,55.0) | 2108 | 0.45 1.43 12.23 | 17.2% 4.6% | 56% | 56% | 8.4 | s_seat_needle_outer(4.9m)
+road_seat t0 92-96 @(116.0,55.0) | 797 | 0.49 1.37 1.96 | 20.2% 3.0% | 40% | 40% | 6.3 | s_seat_needle_outer(8.5m)
+road_seat t1 28-32 @(52.0,55.0) | 70 | 0.41 3.91 3.96 | 28.6% 28.6% | 0% | 0% | 4.9 | a_seat_needle_inner(6.6m)
+road_seat t1 32-36 @(56.0,55.0) | 2272 | 0.43 1.85 4.56 | 10.3% 5.4% | 26% | 26% | 4.6 | a_seat_needle_outer(6.6m)
+road_seat t1 36-40 @(60.0,55.0) | 3642 | 0.49 1.29 2.55 | 15.8% 2.1% | 50% | 50% | 4.7 | a_seat_needle_outer(3.4m)
+road_seat t1 40-44 @(64.0,55.0) | 3344 | 0.55 1.79 2.83 | 30.1% 10.9% | 62% | 62% | 4.5 | a_seat_needle_outer(3.4m)
+road_seat t1 44-48 @(68.0,55.0) | 3311 | 0.27 1.93 3.33 | 22.3% 10.5% | 79% | 79% | 2.8 | a_seat_needle_outer(6.6m)
+road_seat t1 48-52 @(72.0,55.0) | 6507 | 0.21 1.73 3.87 | 14.3% 7.4% | 86% | 86% | 1.6 | 
+road_seat t1 52-56 @(76.0,55.0) | 8689 | 0.17 1.45 4.03 | 7.8% 4.5% | 71% | 71% | 0.9 | 
+road_seat t1 56-60 @(80.0,55.0) | 10910 | 0.17 1.13 6.66 | 5.2% 3.6% | 35% | 35% | 1.2 | 
+road_seat t1 60-64 @(84.0,55.0) | 13766 | 0.19 0.87 14.00 | 3.9% 3.4% | 14% | 14% | 1.7 | 
+road_seat t1 68-72 @(92.0,55.0) | 23735 | 0.13 0.65 1.88 | 1.1% 0.2% | 42% | 42% | 1.7 | 
+road_seat t1 72-76 @(96.0,55.0) | 25205 | 0.11 0.71 1.61 | 1.9% 0.1% | 26% | 26% | 0.8 | 
+road_seat t1 76-80 @(100.0,55.0) | 27295 | 0.15 0.71 2.45 | 2.1% 0.6% | 37% | 37% | 0.8 | s_seat_needle_outer(8.5m)
+road_seat t1 80-84 @(104.0,55.0) | 29574 | 0.17 0.71 2.89 | 1.5% 0.3% | 38% | 38% | 0.6 | s_seat_needle_outer(4.9m)
+road_seat t1 84-88 @(108.0,55.0) | 31164 | 0.21 0.69 1.81 | 1.0% 0.0% | 36% | 36% | 0.4 | s_seat_needle_outer(2.8m)
+road_seat t1 88-92 @(112.0,55.0) | 33034 | 0.23 0.65 2.74 | 1.3% 0.3% | 46% | 46% | 0.4 | s_seat_needle_outer(4.9m)
+road_seat t1 92-96 @(116.0,55.0) | 35251 | 0.27 0.63 2.16 | 1.0% 0.3% | 25% | 25% | 1.2 | s_seat_needle_outer(8.5m)
+
+## all segments, all scenarios combined
+lane team seg(s m) @xy | free n | p50 p95 max |d| m | >1.0 m  >1.5 m (free share) | down-share of >1 | +d share | mean heading off-road deg | nearest structure
+road_high t0 4-8 @(21.0,41.1) | 79398 | 0.65 0.99 1.02 | 4.8% 0.0% | 100% | 100% | 6.5 | a_high_lantern(8.0m)
+road_high t0 8-12 @(23.1,37.8) | 155109 | 0.47 0.85 0.96 | 0.0% 0.0% | - | - | 5.3 | a_high_lantern(4.2m)
+road_high t0 12-16 @(24.6,34.1) | 158953 | 0.43 0.67 0.74 | 0.0% 0.0% | - | - | 3.3 | a_high_lantern(2.9m)
+road_high t0 16-20 @(26.1,30.3) | 149165 | 0.47 1.11 1.29 | 10.0% 0.0% | 100% | 100% | 10.8 | a_high_lantern(5.5m)
+road_high t0 20-24 @(28.7,27.3) | 159053 | 0.39 0.97 1.17 | 3.5% 0.0% | 100% | 100% | 4.7 | a_high_lantern(8.7m)
+road_high t0 24-28 @(31.4,24.4) | 149969 | 0.39 0.79 0.95 | 0.0% 0.0% | - | - | 8.6 | a_high_needle_inner(7.0m)
+road_high t0 28-32 @(34.6,22.0) | 148047 | 0.43 0.81 0.91 | 0.0% 0.0% | - | - | 3.4 | a_high_needle_inner(3.6m)
+road_high t0 32-36 @(38.0,19.9) | 144335 | 0.25 0.77 2.57 | 0.3% 0.0% | 100% | 100% | 5.7 | a_high_needle_inner(3.3m)
+road_high t0 36-40 @(41.5,18.1) | 135884 | 0.39 0.99 2.43 | 3.8% 0.1% | 100% | 100% | 3.6 | a_high_needle_inner(6.5m)
+road_high t0 40-44 @(45.3,16.7) | 138746 | 0.21 0.79 2.39 | 0.4% 0.2% | 99% | 99% | 3.6 | 
+road_high t0 44-48 @(49.1,15.4) | 134685 | 0.25 0.69 2.97 | 0.6% 0.1% | 92% | 92% | 3.3 | 
+road_high t0 48-52 @(53.0,14.5) | 135003 | 0.17 0.51 2.32 | 0.9% 0.2% | 80% | 80% | 2.3 | a_high_needle_outer(6.7m)
+road_high t0 52-56 @(56.9,13.7) | 125362 | 0.19 0.45 1.81 | 0.4% 0.0% | 84% | 84% | 3.0 | a_high_needle_outer(3.6m)
+road_high t0 56-60 @(60.8,13.1) | 115389 | 0.15 0.57 1.91 | 0.3% 0.1% | 86% | 86% | 1.8 | a_high_needle_outer(3.3m)
+road_high t0 60-64 @(64.8,12.6) | 103969 | 0.09 0.53 2.28 | 0.3% 0.1% | 76% | 76% | 2.5 | a_high_needle_outer(6.4m)
+road_high t0 64-68 @(68.8,12.2) | 99191 | 0.13 0.47 2.24 | 1.2% 0.2% | 64% | 64% | 1.3 | 
+road_high t0 68-72 @(72.8,11.9) | 98003 | 0.07 0.55 2.12 | 1.3% 0.4% | 74% | 74% | 1.9 | 
+road_high t0 72-76 @(76.8,11.7) | 90094 | 0.09 0.63 2.80 | 1.2% 0.3% | 78% | 78% | 1.5 | 
+road_high t0 76-80 @(80.8,11.6) | 75081 | 0.05 0.63 3.67 | 2.4% 0.6% | 74% | 74% | 1.5 | 
+road_high t0 80-84 @(84.8,11.5) | 69627 | 0.09 0.79 11.75 | 3.1% 0.8% | 79% | 79% | 2.1 | 
+road_high t0 84-88 @(88.7,11.6) | 63484 | 0.07 0.73 3.60 | 2.0% 0.4% | 72% | 72% | 1.5 | 
+road_high t0 88-92 @(92.7,11.7) | 57583 | 0.07 0.71 2.84 | 2.4% 0.6% | 68% | 68% | 2.2 | 
+road_high t0 92-96 @(96.7,11.9) | 48656 | 0.09 0.93 3.58 | 4.0% 1.1% | 75% | 75% | 1.9 | 
+road_high t0 96-100 @(100.7,12.1) | 37149 | 0.05 0.87 4.31 | 3.5% 0.9% | 72% | 72% | 2.9 | 
+road_high t0 100-104 @(104.7,12.5) | 26440 | 0.11 0.95 3.33 | 4.6% 1.1% | 78% | 78% | 2.2 | s_high_needle_outer(6.8m)
+road_high t0 104-108 @(108.7,13.0) | 24057 | 0.07 0.91 3.00 | 4.0% 1.3% | 63% | 63% | 2.3 | s_high_needle_outer(3.6m)
+road_high t0 108-112 @(112.6,13.6) | 23331 | 0.15 1.03 3.50 | 5.8% 1.5% | 74% | 74% | 3.0 | s_high_needle_outer(3.3m)
+road_high t0 112-116 @(116.5,14.4) | 24902 | 0.11 1.05 3.91 | 6.0% 2.0% | 78% | 78% | 2.7 | s_high_needle_outer(6.3m)
+road_high t0 116-120 @(120.4,15.3) | 23710 | 0.21 1.03 3.47 | 5.3% 1.0% | 92% | 92% | 4.2 | 
+road_high t0 120-124 @(124.2,16.5) | 21981 | 0.19 0.99 2.63 | 4.9% 1.0% | 94% | 94% | 4.3 | 
+road_high t0 124-128 @(128.0,17.9) | 9507 | 0.11 0.71 2.60 | 3.0% 0.8% | 100% | 100% | 7.3 | s_high_needle_inner(7.0m)
+road_high t0 128-132 @(131.6,19.6) | 8839 | 0.35 1.03 2.19 | 5.2% 2.1% | 91% | 91% | 3.6 | s_high_needle_inner(3.6m)
+road_high t0 132-136 @(135.0,21.7) | 9677 | 0.19 0.97 2.38 | 4.7% 0.6% | 85% | 85% | 6.3 | s_high_needle_inner(3.3m)
+road_high t0 136-140 @(138.3,24.0) | 7855 | 0.47 1.05 2.45 | 5.3% 2.1% | 95% | 95% | 6.4 | s_high_needle_inner(6.5m)
+road_high t0 140-144 @(140.9,27.0) | 6573 | 0.27 0.55 3.06 | 2.8% 1.5% | 100% | 100% | 4.4 | 
+road_high t0 144-148 @(143.6,29.9) | 5364 | 0.55 1.03 2.46 | 5.5% 1.7% | 100% | 100% | 12.1 | s_high_lantern(5.9m)
+road_high t0 148-152 @(145.2,33.6) | 5685 | 0.45 1.19 2.46 | 8.3% 3.3% | 100% | 100% | 6.2 | s_high_lantern(3.0m)
+road_high t0 152-156 @(146.7,37.3) | 6342 | 0.27 1.31 2.06 | 12.8% 1.8% | 54% | 54% | 9.1 | s_high_lantern(3.9m)
+road_high t0 156-160 @(148.7,40.7) | 3269 | 0.29 1.27 1.94 | 15.4% 1.2% | 22% | 22% | 3.3 | s_high_lantern(7.5m)
+road_high t1 36-40 @(41.5,18.1) | 340 | 0.35 1.31 3.32 | 7.6% 3.2% | 100% | 100% | 18.8 | a_high_needle_inner(6.5m)
+road_high t1 40-44 @(45.3,16.7) | 5365 | 0.23 1.79 3.15 | 13.2% 8.2% | 96% | 96% | 6.8 | 
+road_high t1 44-48 @(49.1,15.4) | 7714 | 0.23 1.07 2.06 | 5.8% 0.8% | 92% | 92% | 4.8 | 
+road_high t1 48-52 @(53.0,14.5) | 12476 | 0.11 0.97 2.14 | 4.5% 0.8% | 90% | 90% | 4.4 | a_high_needle_outer(6.7m)
+road_high t1 52-56 @(56.9,13.7) | 16602 | 0.17 0.73 1.90 | 2.3% 0.4% | 100% | 100% | 3.0 | a_high_needle_outer(3.6m)
+road_high t1 56-60 @(60.8,13.1) | 17101 | 0.07 0.85 2.68 | 3.3% 0.6% | 86% | 86% | 2.8 | a_high_needle_outer(3.3m)
+road_high t1 60-64 @(64.8,12.6) | 18237 | 0.11 0.99 2.60 | 4.9% 2.1% | 82% | 82% | 1.6 | a_high_needle_outer(6.4m)
+road_high t1 64-68 @(68.8,12.2) | 25700 | 0.07 0.99 3.94 | 5.0% 1.5% | 67% | 67% | 3.4 | 
+road_high t1 68-72 @(72.8,11.9) | 38529 | 0.07 1.05 3.64 | 5.7% 1.6% | 65% | 65% | 2.9 | 
+road_high t1 72-76 @(76.8,11.7) | 49210 | 0.07 0.77 3.79 | 2.8% 1.1% | 63% | 63% | 2.0 | 
+road_high t1 76-80 @(80.8,11.6) | 56571 | 0.05 0.73 13.26 | 3.0% 0.5% | 64% | 64% | 1.5 | 
+road_high t1 80-84 @(84.8,11.5) | 63023 | 0.09 0.65 11.92 | 2.0% 1.1% | 78% | 78% | 2.0 | 
+road_high t1 84-88 @(88.7,11.6) | 72023 | 0.05 0.37 12.68 | 1.1% 0.2% | 78% | 78% | 1.5 | 
+road_high t1 88-92 @(92.7,11.7) | 88920 | 0.09 0.27 4.18 | 0.9% 0.5% | 58% | 58% | 1.2 | 
+road_high t1 92-96 @(96.7,11.9) | 92161 | 0.07 0.15 1.52 | 0.3% 0.0% | 74% | 74% | 1.6 | 
+road_high t1 96-100 @(100.7,12.1) | 97243 | 0.11 0.25 1.88 | 0.6% 0.1% | 79% | 79% | 1.3 | 
+road_high t1 100-104 @(104.7,12.5) | 101537 | 0.11 0.27 21.86 | 0.6% 0.3% | 92% | 92% | 2.6 | s_high_needle_outer(6.8m)
+road_high t1 104-108 @(108.7,13.0) | 109344 | 0.13 0.41 22.60 | 0.2% 0.0% | 82% | 82% | 1.8 | s_high_needle_outer(3.6m)
+road_high t1 108-112 @(112.6,13.6) | 115921 | 0.19 0.49 1.72 | 0.2% 0.0% | 100% | 100% | 2.8 | s_high_needle_outer(3.3m)
+road_high t1 112-116 @(116.5,14.4) | 125707 | 0.17 0.57 1.87 | 0.2% 0.0% | 100% | 100% | 2.4 | s_high_needle_outer(6.3m)
+road_high t1 116-120 @(120.4,15.3) | 128579 | 0.27 0.75 1.93 | 0.1% 0.0% | 100% | 100% | 3.0 | 
+road_high t1 120-124 @(124.2,16.5) | 134514 | 0.19 0.77 2.08 | 0.2% 0.0% | 98% | 98% | 4.0 | 
+road_high t1 124-128 @(128.0,17.9) | 134556 | 0.39 0.93 2.59 | 1.5% 0.1% | 100% | 100% | 2.8 | s_high_needle_inner(7.0m)
+road_high t1 128-132 @(131.6,19.6) | 133863 | 0.31 0.81 2.98 | 0.4% 0.1% | 100% | 100% | 6.9 | s_high_needle_inner(3.6m)
+road_high t1 132-136 @(135.0,21.7) | 139992 | 0.41 0.75 1.80 | 0.2% 0.0% | 100% | 100% | 3.4 | s_high_needle_inner(3.3m)
+road_high t1 136-140 @(138.3,24.0) | 139786 | 0.41 0.85 1.20 | 2.1% 0.0% | 100% | 100% | 8.0 | s_high_needle_inner(6.5m)
+road_high t1 140-144 @(140.9,27.0) | 145523 | 0.31 0.83 1.18 | 1.4% 0.0% | 100% | 100% | 4.4 | 
+road_high t1 144-148 @(143.6,29.9) | 139854 | 0.35 1.05 1.30 | 9.3% 0.0% | 100% | 100% | 9.7 | s_high_lantern(5.9m)
+road_high t1 148-152 @(145.2,33.6) | 153327 | 0.49 0.87 0.99 | 0.0% 0.0% | - | - | 5.6 | s_high_lantern(3.0m)
+road_high t1 152-156 @(146.7,37.3) | 142937 | 0.47 1.21 1.34 | 22.4% 0.0% | 0% | 0% | 5.2 | s_high_lantern(3.9m)
+road_high t1 156-160 @(148.7,40.7) | 95735 | 0.55 1.11 1.27 | 18.0% 0.0% | 0% | 0% | 7.2 | s_high_lantern(7.5m)
+road_low t0 4-8 @(21.0,68.9) | 79514 | 0.57 1.05 1.20 | 15.0% 0.0% | 100% | 100% | 6.6 | a_low_lantern(8.0m)
+road_low t0 8-12 @(23.1,72.2) | 148882 | 0.47 1.21 1.34 | 25.6% 0.0% | 100% | 100% | 5.9 | a_low_lantern(4.2m)
+road_low t0 12-16 @(24.6,75.9) | 159959 | 0.49 0.91 1.05 | 0.5% 0.0% | 100% | 100% | 4.7 | a_low_lantern(2.9m)
+road_low t0 16-20 @(26.1,79.7) | 147129 | 0.35 1.05 1.30 | 8.9% 0.0% | 0% | 0% | 10.8 | a_low_lantern(5.5m)
+road_low t0 20-24 @(28.7,82.7) | 152873 | 0.31 0.89 1.21 | 2.6% 0.0% | 0% | 0% | 4.5 | a_low_lantern(8.7m)
+road_low t0 24-28 @(31.4,85.6) | 149068 | 0.37 0.85 1.20 | 1.8% 0.0% | 0% | 0% | 7.9 | a_low_needle_inner(7.0m)
+road_low t0 28-32 @(34.6,88.0) | 148752 | 0.45 0.79 3.72 | 0.8% 0.0% | 0% | 0% | 3.6 | a_low_needle_inner(3.6m)
+road_low t0 32-36 @(38.0,90.1) | 147145 | 0.31 0.77 10.37 | 0.5% 0.2% | 0% | 0% | 6.3 | a_low_needle_inner(3.3m)
+road_low t0 36-40 @(41.5,91.9) | 139139 | 0.41 0.93 3.31 | 1.6% 0.3% | 0% | 0% | 3.4 | a_low_needle_inner(6.5m)
+road_low t0 40-44 @(45.3,93.3) | 144951 | 0.21 0.79 2.35 | 0.4% 0.1% | 0% | 0% | 3.7 | 
+road_low t0 44-48 @(49.1,94.6) | 136824 | 0.27 0.79 1.74 | 0.2% 0.0% | 0% | 0% | 3.3 | 
+road_low t0 48-52 @(53.0,95.5) | 134937 | 0.19 0.61 1.83 | 0.2% 0.1% | 14% | 14% | 2.4 | a_low_needle_outer(6.7m)
+road_low t0 52-56 @(56.9,96.3) | 124222 | 0.19 0.49 3.23 | 0.7% 0.1% | 16% | 16% | 3.0 | a_low_needle_outer(3.6m)
+road_low t0 56-60 @(60.8,96.9) | 117813 | 0.15 0.45 3.08 | 0.5% 0.1% | 4% | 4% | 1.7 | a_low_needle_outer(3.3m)
+road_low t0 60-64 @(64.8,97.4) | 109030 | 0.09 0.29 2.42 | 0.6% 0.2% | 16% | 16% | 2.4 | a_low_needle_outer(6.4m)
+road_low t0 64-68 @(68.8,97.8) | 104662 | 0.13 0.27 3.13 | 0.8% 0.2% | 19% | 19% | 1.4 | 
+road_low t0 68-72 @(72.8,98.1) | 100015 | 0.07 0.23 4.43 | 0.9% 0.1% | 27% | 27% | 1.6 | 
+road_low t0 72-76 @(76.8,98.3) | 96058 | 0.09 0.33 4.55 | 0.9% 0.3% | 22% | 22% | 1.7 | 
+road_low t0 76-80 @(80.8,98.4) | 69060 | 0.05 0.51 3.43 | 2.0% 0.6% | 33% | 33% | 2.0 | 
+road_low t0 80-84 @(84.8,98.5) | 58434 | 0.09 0.87 10.45 | 4.2% 2.6% | 7% | 7% | 3.2 | 
+road_low t0 84-88 @(88.7,98.4) | 50886 | 0.07 0.87 10.25 | 4.0% 1.7% | 10% | 10% | 1.7 | 
+road_low t0 88-92 @(92.7,98.3) | 45030 | 0.07 0.87 3.25 | 3.6% 1.0% | 14% | 14% | 2.4 | 
+road_low t0 92-96 @(96.7,98.1) | 37829 | 0.07 0.95 4.03 | 4.4% 1.8% | 13% | 13% | 2.0 | 
+road_low t0 96-100 @(100.7,97.9) | 31438 | 0.05 1.17 4.35 | 6.6% 2.4% | 38% | 38% | 3.5 | 
+road_low t0 100-104 @(104.7,97.5) | 22645 | 0.11 1.07 22.13 | 5.6% 2.5% | 19% | 19% | 2.5 | s_low_needle_outer(6.8m)
+road_low t0 104-108 @(108.7,97.0) | 23951 | 0.07 1.17 22.90 | 7.3% 3.1% | 26% | 26% | 3.3 | s_low_needle_outer(3.6m)
+road_low t0 108-112 @(112.6,96.4) | 21909 | 0.15 1.01 3.85 | 5.3% 2.0% | 12% | 12% | 3.0 | s_low_needle_outer(3.3m)
+road_low t0 112-116 @(116.5,95.6) | 21447 | 0.11 1.01 2.90 | 5.1% 1.3% | 20% | 20% | 2.2 | s_low_needle_outer(6.3m)
+road_low t0 116-120 @(120.4,94.7) | 18960 | 0.19 0.91 3.65 | 4.0% 1.0% | 15% | 15% | 4.0 | 
+road_low t0 120-124 @(124.2,93.5) | 16515 | 0.17 0.99 4.23 | 4.9% 1.5% | 11% | 11% | 3.2 | 
+road_low t0 124-128 @(128.0,92.1) | 8891 | 0.11 0.43 3.19 | 1.6% 1.4% | 0% | 0% | 6.9 | s_low_needle_inner(7.0m)
+road_low t0 128-132 @(131.6,90.4) | 6715 | 0.33 1.05 2.87 | 5.3% 2.1% | 1% | 1% | 3.4 | s_low_needle_inner(3.6m)
+road_low t0 132-136 @(135.0,88.3) | 7391 | 0.19 0.99 2.78 | 4.9% 1.2% | 3% | 3% | 5.8 | s_low_needle_inner(3.3m)
+road_low t0 136-140 @(138.3,86.0) | 7796 | 0.47 1.31 2.64 | 9.6% 1.8% | 1% | 1% | 6.4 | s_low_needle_inner(6.5m)
+road_low t0 140-144 @(140.9,83.0) | 5746 | 0.27 0.85 2.46 | 3.4% 0.9% | 0% | 0% | 5.7 | 
+road_low t0 144-148 @(143.6,80.1) | 3361 | 0.59 1.47 2.21 | 8.0% 4.8% | 0% | 0% | 10.6 | s_low_lantern(5.9m)
+road_low t0 148-152 @(145.2,76.4) | 4728 | 0.45 1.39 2.40 | 12.4% 3.2% | 12% | 12% | 6.9 | s_low_lantern(3.0m)
+road_low t0 152-156 @(146.7,72.7) | 4302 | 0.23 1.25 2.36 | 9.5% 2.0% | 73% | 73% | 8.9 | s_low_lantern(3.9m)
+road_low t0 156-160 @(148.7,69.3) | 3163 | 0.27 1.37 2.31 | 16.9% 2.2% | 88% | 88% | 3.1 | s_low_lantern(7.5m)
+road_low t1 36-40 @(41.5,91.9) | 149 | 0.19 0.75 2.73 | 3.4% 3.4% | 0% | 0% | 14.3 | a_low_needle_inner(6.5m)
+road_low t1 40-44 @(45.3,93.3) | 6495 | 0.21 0.93 2.03 | 2.7% 0.1% | 6% | 6% | 5.8 | 
+road_low t1 44-48 @(49.1,94.6) | 14282 | 0.21 0.95 2.14 | 4.5% 0.4% | 4% | 4% | 4.2 | 
+road_low t1 48-52 @(53.0,95.5) | 15452 | 0.11 1.11 2.27 | 6.4% 0.3% | 24% | 24% | 2.6 | a_low_needle_outer(6.7m)
+road_low t1 52-56 @(56.9,96.3) | 14951 | 0.17 1.21 2.68 | 10.6% 2.4% | 29% | 29% | 3.1 | a_low_needle_outer(3.6m)
+road_low t1 56-60 @(60.8,96.9) | 16306 | 0.07 1.09 3.20 | 5.6% 2.2% | 18% | 18% | 4.6 | a_low_needle_outer(3.3m)
+road_low t1 60-64 @(64.8,97.4) | 19088 | 0.11 0.63 2.78 | 2.3% 1.1% | 7% | 7% | 2.1 | a_low_needle_outer(6.4m)
+road_low t1 64-68 @(68.8,97.8) | 27671 | 0.07 0.75 2.18 | 2.5% 0.7% | 45% | 45% | 2.9 | 
+road_low t1 68-72 @(72.8,98.1) | 37960 | 0.07 0.85 3.10 | 3.2% 0.5% | 18% | 18% | 2.2 | 
+road_low t1 72-76 @(76.8,98.3) | 46433 | 0.07 0.79 2.76 | 2.9% 0.5% | 25% | 25% | 2.2 | 
+road_low t1 76-80 @(80.8,98.4) | 51313 | 0.05 0.77 2.56 | 2.9% 0.8% | 42% | 42% | 1.6 | 
+road_low t1 80-84 @(84.8,98.5) | 54812 | 0.09 0.55 12.57 | 1.7% 0.4% | 13% | 13% | 1.7 | 
+road_low t1 84-88 @(88.7,98.4) | 68460 | 0.05 0.41 3.56 | 0.8% 0.2% | 36% | 36% | 2.2 | 
+road_low t1 88-92 @(92.7,98.3) | 93706 | 0.09 0.19 3.28 | 0.3% 0.0% | 22% | 22% | 1.2 | 
+road_low t1 92-96 @(96.7,98.1) | 101118 | 0.07 0.45 2.38 | 0.6% 0.1% | 42% | 42% | 1.8 | 
+road_low t1 96-100 @(100.7,97.9) | 104113 | 0.11 0.41 2.84 | 1.0% 0.3% | 30% | 30% | 1.4 | 
+road_low t1 100-104 @(104.7,97.5) | 107070 | 0.09 0.51 1.93 | 0.4% 0.0% | 22% | 22% | 2.3 | s_low_needle_outer(6.8m)
+road_low t1 104-108 @(108.7,97.0) | 115368 | 0.13 0.51 2.69 | 0.3% 0.1% | 3% | 3% | 1.7 | s_low_needle_outer(3.6m)
+road_low t1 108-112 @(112.6,96.4) | 120384 | 0.19 0.41 2.26 | 0.3% 0.1% | 0% | 0% | 2.8 | s_low_needle_outer(3.3m)
+road_low t1 112-116 @(116.5,95.6) | 126264 | 0.15 0.45 2.77 | 0.2% 0.1% | 0% | 0% | 2.3 | s_low_needle_outer(6.3m)
+road_low t1 116-120 @(120.4,94.7) | 128349 | 0.27 0.65 2.39 | 0.2% 0.0% | 0% | 0% | 2.9 | 
+road_low t1 120-124 @(124.2,93.5) | 132645 | 0.19 0.73 2.25 | 0.2% 0.1% | 0% | 0% | 3.8 | 
+road_low t1 124-128 @(128.0,92.1) | 132958 | 0.37 0.97 3.39 | 3.4% 0.1% | 0% | 0% | 3.1 | s_low_needle_inner(7.0m)
+road_low t1 128-132 @(131.6,90.4) | 131972 | 0.25 0.77 2.02 | 0.9% 0.0% | 0% | 0% | 6.3 | s_low_needle_inner(3.6m)
+road_low t1 132-136 @(135.0,88.3) | 136845 | 0.39 0.81 1.60 | 0.0% 0.0% | 0% | 0% | 3.3 | s_low_needle_inner(3.3m)
+road_low t1 136-140 @(138.3,86.0) | 139453 | 0.43 0.81 1.57 | 0.0% 0.0% | 0% | 0% | 8.5 | s_low_needle_inner(6.5m)
+road_low t1 140-144 @(140.9,83.0) | 153059 | 0.37 0.91 1.17 | 1.8% 0.0% | 0% | 0% | 4.9 | 
+road_low t1 144-148 @(143.6,80.1) | 141949 | 0.47 1.13 1.29 | 11.8% 0.0% | 0% | 0% | 9.6 | s_low_lantern(5.9m)
+road_low t1 148-152 @(145.2,76.4) | 153617 | 0.41 0.69 0.99 | 0.0% 0.0% | - | - | 4.6 | s_low_lantern(3.0m)
+road_low t1 152-156 @(146.7,72.7) | 150251 | 0.47 0.85 1.45 | 0.1% 0.0% | 100% | 100% | 4.4 | s_low_lantern(3.9m)
+road_low t1 156-160 @(148.7,69.3) | 96537 | 0.65 0.99 1.37 | 4.0% 0.0% | 3% | 3% | 7.1 | s_low_lantern(7.5m)
+road_seat t0 4-8 @(28.0,55.0) | 72556 | 0.83 0.93 0.95 | 0.0% 0.0% | - | - | 0.7 | a_seat_lantern(4.9m)
+road_seat t0 8-12 @(32.0,55.0) | 149060 | 0.79 0.93 1.27 | 0.1% 0.0% | 100% | 100% | 1.0 | a_seat_lantern(2.8m)
+road_seat t0 12-16 @(36.0,55.0) | 147760 | 0.67 0.99 1.16 | 2.7% 0.0% | 100% | 100% | 0.9 | a_seat_lantern(4.9m)
+road_seat t0 16-20 @(40.0,55.0) | 146390 | 0.55 1.09 1.26 | 16.1% 0.0% | 100% | 100% | 0.8 | a_seat_needle_inner(6.6m)
+road_seat t0 20-24 @(44.0,55.0) | 143079 | 0.45 1.17 1.34 | 15.8% 0.0% | 100% | 100% | 0.8 | a_seat_needle_inner(3.4m)
+road_seat t0 24-28 @(48.0,55.0) | 143496 | 0.49 1.21 1.61 | 16.8% 0.0% | 99% | 99% | 0.8 | a_seat_needle_inner(3.4m)
+road_seat t0 28-32 @(52.0,55.0) | 144992 | 0.59 1.03 2.03 | 5.5% 0.0% | 98% | 98% | 3.1 | a_seat_needle_inner(6.6m)
+road_seat t0 32-36 @(56.0,55.0) | 134733 | 0.55 0.73 1.95 | 0.6% 0.1% | 51% | 51% | 0.6 | a_seat_needle_outer(6.6m)
+road_seat t0 36-40 @(60.0,55.0) | 124460 | 0.49 0.71 4.29 | 1.0% 0.2% | 52% | 52% | 0.7 | a_seat_needle_outer(3.4m)
+road_seat t0 40-44 @(64.0,55.0) | 113898 | 0.43 0.77 4.01 | 1.8% 0.5% | 60% | 60% | 1.1 | a_seat_needle_outer(3.4m)
+road_seat t0 44-48 @(68.0,55.0) | 104823 | 0.37 0.81 3.30 | 2.0% 0.6% | 65% | 65% | 1.1 | a_seat_needle_outer(6.6m)
+road_seat t0 48-52 @(72.0,55.0) | 92635 | 0.33 0.81 3.09 | 1.4% 0.4% | 63% | 63% | 1.2 | 
+road_seat t0 52-56 @(76.0,55.0) | 88546 | 0.33 0.75 3.36 | 2.0% 0.4% | 49% | 49% | 0.9 | 
+road_seat t0 56-60 @(80.0,55.0) | 75286 | 0.33 0.73 3.95 | 2.0% 0.4% | 52% | 52% | 1.6 | 
+road_seat t0 60-64 @(84.0,55.0) | 56499 | 0.33 0.69 9.98 | 2.0% 0.4% | 56% | 56% | 1.1 | 
+road_seat t0 64-68 @(88.0,55.0) | 46030 | 0.33 0.97 23.51 | 4.8% 2.1% | 55% | 55% | 1.0 | 
+road_seat t0 68-72 @(92.0,55.0) | 39192 | 0.35 1.31 23.72 | 9.0% 3.6% | 55% | 55% | 1.1 | 
+road_seat t0 72-76 @(96.0,55.0) | 31695 | 0.37 1.41 24.79 | 10.4% 3.7% | 55% | 55% | 1.6 | 
+road_seat t0 76-80 @(100.0,55.0) | 20191 | 0.37 1.43 3.35 | 9.6% 4.3% | 55% | 55% | 1.5 | s_seat_needle_outer(8.5m)
+road_seat t0 80-84 @(104.0,55.0) | 16219 | 0.37 1.55 3.36 | 14.2% 5.9% | 47% | 47% | 2.0 | s_seat_needle_outer(4.9m)
+road_seat t0 84-88 @(108.0,55.0) | 15020 | 0.39 1.31 14.63 | 12.1% 2.9% | 51% | 51% | 2.8 | s_seat_needle_outer(2.8m)
+road_seat t0 88-92 @(112.0,55.0) | 11505 | 0.39 1.17 12.23 | 9.8% 2.0% | 34% | 34% | 4.2 | s_seat_needle_outer(4.9m)
+road_seat t0 92-96 @(116.0,55.0) | 6232 | 0.39 1.27 1.96 | 10.0% 1.9% | 23% | 23% | 4.1 | s_seat_needle_outer(8.5m)
+road_seat t0 96-100 @(120.0,55.0) | 3028 | 0.29 1.57 2.69 | 13.2% 5.4% | 62% | 62% | 1.3 | s_seat_needle_inner(4.9m)
+road_seat t0 100-104 @(124.0,55.0) | 2701 | 0.27 1.49 1.90 | 9.2% 5.0% | 55% | 55% | 0.8 | s_seat_needle_inner(2.8m)
+road_seat t0 104-108 @(128.0,55.0) | 1916 | 0.19 0.73 2.30 | 2.2% 0.9% | 93% | 93% | 1.8 | s_seat_needle_inner(4.9m)
+road_seat t0 108-112 @(132.0,55.0) | 1995 | 0.31 1.83 2.69 | 12.5% 7.4% | 16% | 16% | 2.1 | s_seat_lantern(6.6m)
+road_seat t0 112-116 @(136.0,55.0) | 2743 | 0.53 1.87 2.63 | 23.3% 13.1% | 33% | 33% | 3.3 | s_seat_lantern(3.4m)
+road_seat t0 116-120 @(140.0,55.0) | 1588 | 0.41 1.45 1.86 | 18.5% 3.8% | 48% | 48% | 3.1 | s_seat_lantern(3.4m)
+road_seat t1 4-8 @(28.0,55.0) | 70 | 0.39 0.77 0.77 | 0.0% 0.0% | - | - | 3.6 | a_seat_lantern(4.9m)
+road_seat t1 8-12 @(32.0,55.0) | 718 | 0.61 1.87 2.13 | 16.7% 10.6% | 42% | 42% | 4.8 | a_seat_lantern(2.8m)
+road_seat t1 12-16 @(36.0,55.0) | 570 | 0.57 2.39 2.60 | 26.0% 12.6% | 74% | 74% | 4.0 | a_seat_lantern(4.9m)
+road_seat t1 16-20 @(40.0,55.0) | 386 | 0.01 0.63 2.09 | 2.6% 2.1% | 100% | 100% | 7.8 | a_seat_needle_inner(6.6m)
+road_seat t1 20-24 @(44.0,55.0) | 1158 | 0.01 0.43 1.56 | 3.5% 1.6% | 100% | 100% | 6.1 | a_seat_needle_inner(3.4m)
+road_seat t1 24-28 @(48.0,55.0) | 1642 | 0.01 1.57 1.95 | 10.6% 5.5% | 85% | 85% | 1.5 | a_seat_needle_inner(3.4m)
+road_seat t1 28-32 @(52.0,55.0) | 2656 | 0.01 1.59 3.96 | 9.2% 6.3% | 73% | 73% | 2.3 | a_seat_needle_inner(6.6m)
+road_seat t1 32-36 @(56.0,55.0) | 9498 | 0.15 1.23 4.56 | 10.0% 4.1% | 36% | 36% | 4.0 | a_seat_needle_outer(6.6m)
+road_seat t1 36-40 @(60.0,55.0) | 11772 | 0.11 1.25 2.55 | 9.8% 2.1% | 53% | 53% | 3.7 | a_seat_needle_outer(3.4m)
+road_seat t1 40-44 @(64.0,55.0) | 11573 | 0.11 1.49 2.83 | 11.6% 4.8% | 62% | 62% | 2.5 | a_seat_needle_outer(3.4m)
+road_seat t1 44-48 @(68.0,55.0) | 14052 | 0.13 1.33 3.33 | 8.1% 3.6% | 73% | 73% | 1.7 | a_seat_needle_outer(6.6m)
+road_seat t1 48-52 @(72.0,55.0) | 28289 | 0.21 1.31 3.87 | 8.6% 3.4% | 70% | 70% | 1.3 | 
+road_seat t1 52-56 @(76.0,55.0) | 40013 | 0.21 1.17 4.03 | 7.5% 2.4% | 69% | 69% | 0.9 | 
+road_seat t1 56-60 @(80.0,55.0) | 54182 | 0.19 1.09 6.66 | 7.3% 1.4% | 62% | 62% | 0.8 | 
+road_seat t1 60-64 @(84.0,55.0) | 64220 | 0.19 0.91 14.00 | 4.6% 1.1% | 50% | 50% | 0.7 | 
+road_seat t1 64-68 @(88.0,55.0) | 76443 | 0.25 0.63 3.27 | 2.2% 0.5% | 43% | 43% | 2.7 | 
+road_seat t1 68-72 @(92.0,55.0) | 100191 | 0.13 0.65 3.45 | 1.3% 0.4% | 49% | 49% | 2.0 | 
+road_seat t1 72-76 @(96.0,55.0) | 107179 | 0.11 0.71 3.29 | 1.4% 0.3% | 35% | 35% | 1.0 | 
+road_seat t1 76-80 @(100.0,55.0) | 116562 | 0.15 0.71 2.45 | 1.9% 0.8% | 38% | 38% | 0.7 | s_seat_needle_outer(8.5m)
+road_seat t1 80-84 @(104.0,55.0) | 119571 | 0.17 0.71 2.89 | 2.0% 0.5% | 40% | 40% | 0.6 | s_seat_needle_outer(4.9m)
+road_seat t1 84-88 @(108.0,55.0) | 123559 | 0.21 0.69 2.26 | 1.0% 0.3% | 38% | 38% | 0.5 | s_seat_needle_outer(2.8m)
+road_seat t1 88-92 @(112.0,55.0) | 130842 | 0.23 0.65 2.74 | 0.7% 0.2% | 51% | 51% | 0.5 | s_seat_needle_outer(4.9m)
+road_seat t1 92-96 @(116.0,55.0) | 137892 | 0.27 0.63 2.16 | 0.4% 0.1% | 24% | 24% | 1.2 | s_seat_needle_outer(8.5m)
+road_seat t1 96-100 @(120.0,55.0) | 144648 | 0.37 0.55 1.91 | 0.2% 0.0% | 37% | 37% | 2.4 | s_seat_needle_inner(4.9m)
+road_seat t1 100-104 @(124.0,55.0) | 142988 | 0.45 0.71 1.48 | 0.2% 0.0% | 59% | 59% | 2.0 | s_seat_needle_inner(2.8m)
+road_seat t1 104-108 @(128.0,55.0) | 145942 | 0.55 0.81 2.85 | 0.2% 0.0% | 93% | 93% | 1.5 | s_seat_needle_inner(4.9m)
+road_seat t1 108-112 @(132.0,55.0) | 146731 | 0.63 0.91 1.90 | 0.1% 0.1% | 100% | 100% | 1.2 | s_seat_lantern(6.6m)
+road_seat t1 112-116 @(136.0,55.0) | 147736 | 0.73 0.91 2.29 | 0.1% 0.1% | 100% | 100% | 1.1 | s_seat_lantern(3.4m)
+road_seat t1 116-120 @(140.0,55.0) | 149551 | 0.81 0.91 2.69 | 0.1% 0.1% | 100% | 100% | 2.3 | s_seat_lantern(3.4m)
