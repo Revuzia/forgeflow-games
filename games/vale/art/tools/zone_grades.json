@@ -603,11 +603,11 @@
  "odrum": {
   "zones": [
    {
-    "why": "orch1 W1-B fix 2 (units_gate P1, FU-2): the mask a deep muted honey (CIELAB h ~95, albedo L* 32, in game HSV h ~40-47, L* ~45-55); it keeps its honey hue and every painted feature (k 0.8) and sits a value step under Nurrow's, Tunlan's, Sukri's and Ilsheta's pale tops (fix-1 run 0 read L* 74 h 83, dE 7.9 to Nurrow) and 30+ deg of hue from Burdam's russet",
+    "why": "orch1 W1-B fix 2 (units_gate P1, FU-2): the mask a deep muted honey (CIELAB h ~98, albedo L* 32, in game HSV h ~40-47, L* ~45-55); it keeps its honey hue and every painted feature (k 0.8) and sits a value step under Nurrow's, Tunlan's, Sukri's and Ilsheta's pale tops (fix-1 run 0 read L* 74 h 83, dE 7.9 to Nurrow) and 30+ deg of hue from Burdam's russet",
     "parts": [
      "mask"
     ],
-    "hex": "#5C553D",
+    "hex": "#5B553B",
     "L": 32,
     "C": 13,
     "k": 0.8
@@ -619,7 +619,7 @@
     ],
     "hex": "#3F4B32",
     "L": 20,
-    "C": 16,
+    "C": 20,
     "k": 0.6
    },
    {
