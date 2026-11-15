@@ -557,12 +557,12 @@
     "k": 0.35
    },
    {
-    "why": "orch1 FU-1: the three pale stone shards over the shoulders (the game camera's top cluster) a pale teal-green stone glaze (CIELAB h ~160: >= 30 deg from Lisvel's cyan, >= 25 dE from Marund's pale green by value), so Hesmi's top owns a hue (r3: achromatic grey top, C 5) and stays the figure's bright crown (bible top band); k 1.8 keeps the honed cut tops bright over darker faces, so the bright quarter holds the bible band while the median top sits >= 25 dE under Marund's pale green",
+    "why": "orch1 FU-1: the shards' honed upper sections (z > 2.12, the game camera's crown) a pale teal stone (bible top band; low chroma, so no hue pair with Lisvel's cyan or Marund's green)",
     "boxes": [
      [
       -0.45,
-      -0.2,
-      2.0,
+      0.15,
+      2.12,
       0.45,
       0.6,
       2.6
@@ -573,9 +573,30 @@
      0.79
     ],
     "hex": "#2E6650",
-    "L": 50,
+    "L": 72,
+    "C": 10,
+    "k": 1.0
+   },
+   {
+    "why": "orch1 FU-1: the shards' lower faces a deep teal-ink stone in the hood's family, so the pale crown breaks by value (units_gate P4) and Hesmi's top reads teal-ink",
+    "boxes": [
+     [
+      -0.45,
+      0.15,
+      1.69,
+      0.45,
+      0.6,
+      2.12
+     ]
+    ],
+    "rough": [
+     0.0,
+     0.79
+    ],
+    "hex": "#2E6650",
+    "L": 38,
     "C": 16,
-    "k": 1.8
+    "k": 1.0
    }
   ]
  },
