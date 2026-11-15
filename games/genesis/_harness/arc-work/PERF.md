@@ -1438,3 +1438,54 @@ long press frame-rate independent. Report after 1-2 verified.
   yet: three's own BatchedMesh tables / others; next). SwiftShader main ms not comparable (41 vs 31, planets-slot noise).
 - probe-freeze.mjs --decals=1: patches the page's DecalPass.prepare to add 4 decals (scorch / ring / FX light / tint,
   all 3 groups) at the ground point at the screen centre every frame. run-s17g.sh: dc1 / dc0 (hdrmerge=0) / dc2.
+
+## SESSION 18 (2026-11-15 ~08:50Z) — round 7 (MAC-ROUND7-9a6b6521): freeze=1 still ~2 fps -> GPU-EXECUTION branch: step 8 revz, the reload leak, the pale triangles
+- Round 7 decision (ROADMAP §2 step 2 rule): base 1.3-1.9 fps, freeze=1 1.8 / 2.2 fps in a clean separate Chrome with
+  pressure green at the start: uploads / frame structure / other apps are NOT the floor. Steps 7-9 carry the weight.
+- STEP 8 `?revz=0` off (default ON where EXT_clip_control exists) — src/render/shaders/revz.ts (new):
+  * chooseDepthMode(gl): the Renderer now gets the canvas's webgl2 context ITSELF (same attributes three would ask
+    for) before `new WebGLRenderer({ context })`, asks getSupportedExtensions for EXT_clip_control, and builds three
+    with EITHER reversedDepthBuffer: true OR logarithmicDepthBuffer: true (three compiles the log chunks or none: it
+    cannot be both). No extension / ?revz=0 -> exactly the old path (log depth + zcons + orthodepth). confirmDepthMode
+    re-checks three's own state after construction.
+  * report: two new header lines after 'perf fixes': `depth: REVERSED-Z float ... | EXT_clip_control YES/NO | why`
+    and `depth extensions: +EXT_clip_control +EXT_conservative_depth ...` (+ present, - missing); the switch line
+    prints revz=1 / 0 / 0(no-ext) and zcons=0(revz).
+  * decoders: ONE chunk DEPTH_DECODE (= atmosphere.glsl.ts LOGDEPTH_DECODE, same name kept) keyed on three's own
+    `USE_REVERSED_DEPTH_BUFFER` prefix define (every non-raw ShaderMaterial gets it while reversed depth is on):
+    viewZFromLogDepth(d, far) = n·far / (d·(far − n) + n) (n = CAM_NEAR 0.05) | exp2(d·log2(far+1)) − 1;
+    depthIsSky(d) = d <= 0 | d >= 0.999999; GENESIS_NDC_NEAR = 1.0 | −1.0.
+    Edit sites: post/pipeline.ts (linDepth copy, god-ray mask), post/gtao.ts (viewZAt, viewPosAt), sky/atmosphere.ts
+    (viewDir, sceneDistance), sky/clouds.ts (march x3 sky tests + zAt, 2 view rays), fx/decals.ts, fx/rainbow.ts,
+    fx/vfx.ts (3 rays, vertex shader), fx/screenfx.ts (viewRay) — every `uInvProj * vec4(ndc, -1.0, 1.0)` (a ray
+    through the NEAR plane; with a reversed projection z = −1 un-projects BEHIND the eye) now uses GENESIS_NDC_NEAR;
+    fx/launch.ts x2 (`gl_Position.z = -w * 0.999` would be clipped at z < 0 with clip z in 0..1: +w * 0.999 there).
+    Everything else (ocean, decals, particles, vfx soft depth, FX_DEPTH_GLSL, screenfx, app linearDepthAt) reads the
+    R32F LINEAR depth copy and needed nothing. Starfield / orbit lines / ship points set clip z by hand with
+    depthTest off (0.99999·w, 0): inside 0..w in both conventions. three's LineMaterial handles reversed itself.
+  * shadows: standardDepth(r, true/false) (state.buffers.depth.setReversed) around SunShadows.init / warm / render:
+    the cascades keep standard depth, their ortho cameras are never reversed (three reverses a camera at its first
+    draw in reversed mode only), their twins link without USE_REVERSED_DEPTH_BUFFER, LessEqual compare and uShadowMat
+    unchanged -> the atlas is what it was. (No gl_FragDepth in the twins either way now: no log chunks at all.)
+  * CPU: the camera is reversed at construction (three would only do it at its first draw; the frustum and uInvProj
+    are read before); frustumFromProjection(out, m, camera) passes camera.reversedDepth (renderer.ts view frustum,
+    bldbatch per-instance culling). projectToScreen / sun uv / eclipse / water uProj / cloud reprojection use x, y, w
+    only. zcons is skipped (ZCONS.why 'not needed'), DEPTH_CLAMP stays off.
+  * precision: hdr depth is already DepthTexture FloatType (D32F, also the MSAA renderbuffer); d ~ n/w has float's
+    own relative precision: tests/render-revz.test.ts decodes three's own reversed projection at 0.05 m .. 1.9e7 m to
+    < 4e-7 relative, and 2 cm at 1 km / 1 m at 1000 km / 5 cm at 7.6 km stay distinct float32 depths.
+  * tests/render-revz.test.ts (5): the choice with / without the extension and switched off, the report lines, the
+    decode round trip against three's matrix, distinct depths, the chunk's two branches, reversed frustum == standard
+    frustum on 4000 random spheres.
+- LOCAL: headless Chromium (ANGLE SwiftShader) EXPOSES EXT_clip_control: reversed=true, camera reversed, boots, renders
+  (s18/dbg1.png). Whether Chrome 157 ANGLE-Metal exposes it is what the Mac's next report prints.
+- RELOAD LEAK `?pagerelease=0` off (default on) — src/render/pagerelease.ts (new): nothing released anything when a
+  page went (grep: no pagehide / unload / loseContext in the render or app code; ui/embed.ts pagehide only autosaves).
+  The old document's WebGL context (~0.7 GB GPU) and workers lived until GC — or as long as Chrome kept the whole
+  page in its back/forward cache (the owner's rounds are NAVIGATIONS to another ?query in the same tab: those pages
+  are bfcache candidates, frozen with all their memory). Now on `pagehide`: render workers (patch x1-2, fieldpack)
+  terminated; WEBGL_lose_context.loseContext() (the GPU process frees everything of the page at once); canvas 1x1;
+  Renderer.dispose(). `pageshow` with persisted (a bfcache restore of a page without its context) -> location.reload
+  (the autosave ran on the way out; saves.ts uses lastThumb when the page is hidden, never the canvas). Installed at
+  the FIRST FRAME so its listener runs after the UI's. The sim worker is not touched (client lane; it writes that
+  save). tests/render-pagerelease.test.ts (4).

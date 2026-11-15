@@ -17,7 +17,7 @@ import type { Planet } from '../src/sim/world/planet.ts';
 import type { Building } from '../src/sim/people/state.ts';
 import { BuildingFlag } from '../src/sim/types.ts';
 import { waterside } from '../src/sim/people/buildings.ts';
-import { aboveWater, dryAt, dryCell, isLand, standingWater, waterDepthAt, FOOT_WET_MAX, SITE_WET_MAX, STANDING_WATER_MAX } from '../src/sim/people/world.ts';
+import { aboveWater, dryAt, dryCell, isLand, standingWater, waterDepthAt, SITE_FREEBOARD, SITE_WET_MAX, STANDING_WATER_MAX } from '../src/sim/people/world.ts';
 
 const YEARS = Number(process.env.DRYLAND_YEARS ?? 0.25);
 
@@ -101,7 +101,7 @@ test('dry land: the owner world (babel 307987276, Rubolhin by the Lake) — no f
   assert.ok(waterDepthAt(p0, house.pos) > STANDING_WATER_MAX, `and it stands in ${waterDepthAt(p0, house.pos).toFixed(2)} m`);
   assert.equal(dryAt(p0, house.pos, 4, dry), false, 'dryAt refuses the spot');
   assert.equal(dryAt(p0, house.pos, 0, dry), false, 'the point alone is enough');
-  assert.ok(FOOT_WET_MAX < STANDING_WATER_MAX, 'a building is begun well short of the depth that takes it');
+  assert.ok(SITE_FREEBOARD >= 0.25 && SITE_WET_MAX < STANDING_WATER_MAX, 'a building is begun well short of the depth that takes it');
 
   const loaded = Sim.load(sim.save());
   const p = loaded.u.planets[0];
