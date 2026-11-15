@@ -1,0 +1,145 @@
+{
+ "lane": "orch1 review: VFX and combat feel",
+ "reviewer": "senior VFX lead, fresh eyes (read-only; no game code or assets changed)",
+ "date": "2026-11-15 Central",
+ "head": "5e7ce6b76",
+ "read": [
+  "src/render/director.ts (header contract, event switch 500-770)",
+  "src/render/vfx/screen.ts, src/render/vfx/system.ts (opacity rules), src/render/overlay/bars.ts (CC plate)",
+  "src/ui/hud/world.tsx + model.ts (damage numbers, killfeed, banners)",
+  "_design/tokens.json vfx + team blocks; content/vfx.json (302 defs: T0 13, T1 52, T2 133, T3 66, T4 38); content/client.json vfxEvents/vfxStatus",
+  "_design/reviews/max2/vfx verify1_q (7.8) / verify1_r (7.6), m2_ult_windups_ab.png, m2_heavyhit_ab.png; max2/critic.json",
+  "orch1/evidence/visual index.json + teamfight_rift_{lead,peak,after}, quality_teamfight_ultra, clash_mid_lane_2, life_death_{01,05,12}, life_recall_{05,40,72}, life_respawn_05; _harness/orch1_visual_pack.mjs",
+  "_harness/probe_combat_polish.mjs header (what is and is not gated)"
+ ],
+ "score": 7.0,
+ "verdict": "Below par (7.5). The rule system behind the VFX is shipped-studio grade, but nothing proves it holds in a real 5v5, the fighter-death moment does not show in the evidence, and in the one teamfight frame we have, pale shells and zone fills cover the fighters' bodies.",
+ "evidenceCaveats": [
+  "teamfight_rift_lead/peak/after.png and the three colorblind_teamfight_*.png show NO fighter or minion bodies and no trees: only bars, names, rings and VFX. quality_teamfight_ultra.png of the same sim frame (taken after replayTo + 8 renders) shows them. This is a harness artifact (rebuild() then synchronous frames() before the actor meshes re-attach), not a game bug, but it means the pack's main clutter evidence cannot be used as is.",
+  "The 'teamfight' found by the scan is 2v2 (index.json fighters_team0 2, fighters_team1 2, 70 vfx actors, 543 particles), not a 5v5. No evidence in any pack shows a 5v5 fight at its peak.",
+  "life_death_01/05 (0.1 s and 0.5 s after death) show the body still standing and no lib_death_shatter layer (no chips, no ring, no flash) around it. The harness kills with a direct combat.dealDamage call from page script, so the death event may never reach the director. It is unverified, not proven missing."
+ ],
+ "strengths": [
+  "A real VFX grammar in tokens.json and enforced in data: T0-T4 tiers with emissive/L* caps, a white core only at T4, motion grammar (up = help, out/down = harm, spiral = control), reserved hue bands per relationship, signature hues per fighter at least 25 deg apart, and ally effects at 0.65 opacity (system.ts:514). Most shipped MOBAs only reached this discipline after launch.",
+  "Telegraphs come from the first wind-up frame, one per area an enemy must read, with per-viewer visibility, dash paths and delayed-area landing timing derived from the sim tick (director.ts header). Fog-gated: VFX never leak positions.",
+  "Hard-CC readability: one CC plate per fighter (mark + caps name, 70 ms fade in, bars.ts:18) plus 17 status looks for each status's whole duration, all distinct by silhouette (stun dial vs silence bell).",
+  "Hit feedback is layered and measured: victim flash by tier and damage type (tauMs 70, crit x1.3), flinch and squash, flash/mark/settle impact phases, a per-type mark (chalk chips / orchid light / ink), and basic-hit hold gated at 167 ms or more (VFX-8: kemdo 267, rishal 333, tunlan 200).",
+  "Ultimate impact envelope (screen.ts): a local, eased light lift centred on the impact, one per cast instance, a body-white cap of 0.10 enforced by probe_combat_polish, and reduced motion respected. It is restrained and original.",
+  "Kill and economy feedback exist and are clean: own damage numbers by type (phys chalk, magic orchid, true ink with a halo, crits larger), merged per 0.5 s and capped at 8; gold pops; a 3-row killfeed with multi, streak and shutdown banners; the death grade to grey (life_death_05/12 shows it working).",
+  "Recall reads well: a white hour-dial ring that closes over the 7 s channel (life_recall_05/40), visible to every viewer who sees the fighter.",
+  "Team colour coding (azure / marigold, noonwhite self) reads in every frame. Rings use different shapes per relationship (12-dash ally, notched enemy, gnomon self), so colour is not the only cue. Colourblind palettes exist."
+ ],
+ "improvements": [
+  {
+   "id": "VFX-O1",
+   "what": "Build a real 5v5 clutter gate and fix the teamfight capture",
+   "why": "Par is about readability at the moment that matters most, and that is unmeasured. The pack's teamfight shots render no bodies (harness bug), the best fight found is 2v2, and probe_combat_polish only measures single casts at one victim. Seed 23 already peaks with 40k VFX triangles at 483k total. Nobody has checked whether a player can find their own fighter, enemy telegraphs and CC when 10 kits overlap.",
+   "how": "(1) Fix orch1_visual_pack.mjs fightSession: after rebuild()+frames(), await actor GLB attach (poll b.renderer actors ready) before cap, like replayTo + 8 renders does. (2) Add a scan mode that requires >= 4 fighters per side within 14 m (force bots to group via an objective at ~20:00 on seeds 7/11/23). (3) New probe section `clutter` in probe_combat_polish: on 30 peak frames per seed, measure for each fighter the share of its body pixels (actor-only render, as `body` already does) whose luma/chroma are changed by more than X by the VFX pass (occlusion share), the self-ring visibility, and the contrast of each enemy telegraph edge band against the frame below it. Proposed gates: median body occlusion <= 25 %, no fighter > 60 % for > 300 ms, enemy telegraph edge >= 0.45 alpha-equivalent contrast, self ring always found. Report screen particle counts against screenParticleBudget.",
+   "impact": "high",
+   "effort": "M",
+   "model": "sonnet",
+   "modelWhy": "Harness and measurement work on an existing probe pattern; the gate values above are already set."
+  },
+  {
+   "id": "VFX-O2",
+   "what": "Shrink and hollow the shield and buff shells that bury fighters",
+   "why": "In quality_teamfight_ultra.png, ferrow's body sits behind a ~2.5 m pale pink sphere that reads almost opaque, and slowbell's sits inside a pale shell with a white starburst. You can see the bodies only by their bars. lib_shield_up is an orb at scale 1.6 for 0.8 s, with a 0.35 alpha additive fill, on pale stone where additive light reads as white. A shield should read as an edge, not a ball.",
+   "how": "Identify each shell def visible at the peak frame (log fired def ids per entity at that frame through the bench). For orb-type shells: fill alpha <= 0.12, rimPow 3+ so only the fresnel edge carries the team colour, scale <= 1.25 x body height, and cut the 'hold' to the impact beat, then hand off to a thin ground ring plus a rim on the bar's shield segment for the duration. Add a rule to tokens.vfx.rules: 'sustained looks on a body: fill alpha <= 0.12, read by rim'. Then gate with VFX-O1 body occlusion.",
+   "impact": "high",
+   "effort": "M",
+   "model": "opus",
+   "modelWhy": "Needs art-direction judgement on how a VALE 'Dawnglass' shell should read without losing its identity."
+  },
+  {
+   "id": "VFX-O3",
+   "what": "Thin out large zone fills, especially allied ones",
+   "why": "quality_teamfight_ultra.png and teamfight_rift_peak.png: one blue-rimmed violet zone (~5.5 m radius) floods half the fight. Its violet fill tints the ground, the enemy's notched ring and two Wicks inside it. The enemy circle and the orange ult arcs inside lose contrast. Allied zones should be the quietest thing on screen; the team rule (ally 0.65) is not enough for a big fill.",
+   "how": "Add a ground-fill cap by relationship in system.ts decal layers: ally zone fill alpha <= 0.10, enemy <= 0.18, with the edge band carrying identity (the 'flash' probe's middle <= 0.22 / edge >= 0.45 rule, applied to sustained zones and not only landings). Audit the T3/T4 zone defs in kit_defs.py and bespoke_defs.py for fills over that, and re-run probe_combat_polish flash plus VFX-O1.",
+   "impact": "high",
+   "effort": "S",
+   "model": "sonnet",
+   "modelWhy": "A mechanical cap and an audit against numeric rules that already exist."
+  },
+  {
+   "id": "VFX-O4",
+   "what": "Verify, then strengthen, the fighter-death moment",
+   "why": "A champion kill is the biggest beat in a MOBA. In life_death_01 and 05, 0.5 s after death the body still stands and no death VFX shows; it lies down only by 1.2 s. lib_death_shatter is authored at T2, the same tier as a basic ability. At the game camera, the kill reads only through the greyscale, which only the dead player sees, and the killfeed.",
+   "how": "First recapture the life session with a real kill (an enemy bot's ability or attack-move, not dealDamage from page script) and log the director's fired defs. If the death VFX does fire: start the collapse clip on the death tick (no idle frames), raise lib_death_shatter to T3 for fighters (a 0.8 m flash radius, a stronger ring that rises in the victim's relationship colour, the lamp-out signature), and add a 2-frame victim flash at k 1.0. If it does not fire: fix the event path first. Respect the sensitivity rules (no skull or horror reads; the 'mask cracks' wording in the def comment must not produce face fragments).",
+   "impact": "high",
+   "effort": "M",
+   "model": "opus",
+   "modelWhy": "Needs a call on a key game moment and diagnosis across sim events, director and animation."
+  },
+  {
+   "id": "VFX-O5",
+   "what": "Give each ultimate wind-up its own identity under the shared dial",
+   "why": "m2_ult_windups_ab.png: Ardit's, Burdam's and Marund's wind-ups are the same team-blue hour-dial and white shaft, plus a blue glow ball. Only the small centre mesh differs. A player should know which ultimate is coming from the wind-up shape (top-tier MOBAs make every ult wind-up unique). This one shared look also adds a big closed ring to every teamfight.",
+   "how": "Keep the dial as the T4 'ult incoming' grammar but cut it to 60 % radius and 0.5 alpha. Let each fighter's windupVfx lead with a signature-hue silhouette that predicts the ult's shape: Ardit a pavise beacon rising, Burdam a pulling hook/chain spiral (control = spiral), Marund his own motif. Rule: signature share >= 0.5 of the wind-up's emissive pixels (kitEmissiveShareMin). Gate with probe_kit_hue on wind-up frames.",
+   "impact": "medium",
+   "effort": "L",
+   "model": "opus",
+   "modelWhy": "Per-fighter art direction across 16 ultimates."
+  },
+  {
+   "id": "VFX-O6",
+   "what": "Remove the near-black ink puffs from Wick death and the few defs still using them",
+   "why": "The max2 verifiers left it open, and it is confirmed in content/vfx.json: lib_wick_death still emits 3 ink_puff particles in #17181B/#2A2C33 at alpha 0.9. Wick deaths are the most frequent event in the game (17 Wicks in clash_mid_lane), so the lane gets a stream of black blots. hesmi_ult_windup/shadow and the silence and summon ink specks are the same issue.",
+   "how": "In tools/vfx/lib_defs.py, replace the ink layer with warm-grey dust (#6E6A62, alpha <= 0.45), as was done for structure_break and death_shatter. Grep content/vfx.json for #17181B on emitters outside the Shade family's sanctioned uses and apply the same fix. Run build_vfx and vfx_gallery A/B.",
+   "impact": "medium",
+   "effort": "S",
+   "model": "sonnet",
+   "modelWhy": "A known, mechanical def edit with a precedent."
+  },
+  {
+   "id": "VFX-O7",
+   "what": "Lighten the dark 'pit' under heavy physical hits",
+   "why": "m2_heavyhit_ab.png, 3rd frame: lib_hit_phys_heavy leaves a dark navy ellipse with a blue rune star under the victim. At the game camera it reads as a hole in the ground under the target for ~0.3 s, and it repeats on every heavy auto. The mark phase is meant to be 'chalk chips' for physical damage (tokens.vfx.impact.mark.byType).",
+   "how": "Swap the decal for a chalk crack star in the settle range (L* 45-55, no reserved hue); keep the blue only in a thin edge ring or drop it. Re-run probe_combat_polish hold to keep discMs >= 167.",
+   "impact": "medium",
+   "effort": "S",
+   "model": "sonnet",
+   "modelWhy": "A single-def change with numeric bounds."
+  },
+  {
+   "id": "VFX-O8",
+   "what": "Close the three ultimates still at the detail-loss limit",
+   "why": "max2 verify1_q/r: Hesmi, Nurrow and Vashil sit at detailLost 2 (the gate's limit), with body detail mins of 0.30-0.38. The struck fighter goes flat for two beats: the victim can't read their own body at the very moment they need to dodge or flash.",
+   "how": "Per ult, find the layer that flattens the body (the probe can run with layers toggled) and cut its core size or emissive on the body box only. Target detailLost <= 1 and min >= 0.45 on the all-ults run (not the 4-fighter subset that did not reproduce before).",
+   "impact": "medium",
+   "effort": "M",
+   "model": "sonnet",
+   "modelWhy": "Iterative tuning against an existing probe; the gate has already been set by design."
+  },
+  {
+   "id": "VFX-O9",
+   "what": "Add T4 objective-moment and level-up evidence, then judge them",
+   "why": "There is no frame in any orch1 pack of an objective take (lib_objective_taken), a monster fall, a level up, or an own-kill bounty pop. Structure collapses exist (structure_* shots). These moments carry most of the 'juice' in a shipped MOBA, so they cannot be scored as they stand.",
+   "how": "Extend orch1_visual_pack.mjs with a 'moments' session: Pit monster last hit by seat 0, a level up, an own fighter kill (bounty), and a Noon Toll. Capture at 0, 0.1, 0.3, 0.8 and 1.5 s at the game camera on High and Low, with a fired-def log. Then hand it to an opus reviewer.",
+   "impact": "medium",
+   "effort": "S",
+   "model": "sonnet",
+   "modelWhy": "A harness capture extension."
+  },
+  {
+   "id": "VFX-O10",
+   "what": "Buy VFX triangle headroom before adding anything",
+   "why": "Idle gate: seed 23 peaks at 483k of 500k triangles with VFX at 40k. Every fix above that adds a mesh layer risks the budget, and a 5v5 (VFX-O1) will draw more VFX than the 2v2 peak did.",
+   "how": "Report VFX triangles per def at the peak frames (b.stats with VFX per def), move orb/ringwave meshes over 512 triangles to lower-segment variants or camera-facing sprites where shape allows, and set a VFX cap of 35k triangles at the 5v5 peak in perf_1080.",
+   "impact": "medium",
+   "effort": "M",
+   "model": "sonnet",
+   "modelWhy": "Measurement and mesh-variant substitution with a clear budget."
+  },
+  {
+   "id": "VFX-O11",
+   "what": "Make low-HP and execute-range danger readable on enemies",
+   "why": "In the evidence, a nearly dead enemy reads only through the bar fill (thessaly_b in teamfight_rift_peak at ~85 %; nothing marks a kill-threshold target). Shipped MOBAs give a strong 'this one can die now' read (bar flash or a pulse) that drives teamfight focus. The bars have a trail/pop layer but no low-HP state.",
+   "how": "Presentation only: in bars.ts, add a low-HP state below 25 %: the fill edge pulses at 1.5 Hz in the relationship colour, the frame thickens 1 px, and there is no world VFX. Also an optional tick at the local player's executable threshold if a kit exposes one in Present data (no content ids in src).",
+   "impact": "low",
+   "effort": "S",
+   "model": "sonnet",
+   "modelWhy": "A small, well-specified shader state."
+  }
+ ],
+ "scoreRationale": "7.0: the rules, telegraphs, CC plates, impact phases, envelope and HUD feedback are at or above shipped level in design, and the max2 verifiers' 7.6-7.8 holds for single effects. It is held under par by what is unproven or visible in the one real fight frame: body occlusion by shells and zone fills (O2, O3), no 5v5 clutter evidence or gate (O1), a kill moment that does not show in the evidence (O4), and samey ult wind-ups (O5). O1-O4 done and verified would put this dimension at about 7.6-7.8."
+}
