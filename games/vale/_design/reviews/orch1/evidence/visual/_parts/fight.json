@@ -6,27 +6,27 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 720.07,
+   "time_s": 720.43,
    "time": "12:00",
    "bodies": {
     "pending": 0,
-    "fighters": 9,
-    "onScreen": 1,
-    "visible": 9,
+    "fighters": 10,
+    "onScreen": 10,
+    "visible": 10,
     "missing": []
    },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    84.2,
-    54.9
+    83.7,
+    57.1
    ],
-   "fighters_team0": 4,
+   "fighters_team0": 5,
    "fighters_team1": 5,
-   "vfx_actors": 90,
-   "particles": 994,
-   "telegraphs": 5,
-   "what": "5v5 teamfight, one and a half seconds before the peak",
+   "vfx_actors": 123,
+   "particles": 881,
+   "telegraphs": 7,
+   "what": "5v5 teamfight, 0.8 seconds before the peak (after the fighters have moved in)",
    "quality": "high"
   },
   {
@@ -34,26 +34,26 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 720.97,
-   "time": "12:00",
+   "time_s": 721.27,
+   "time": "12:01",
    "bodies": {
     "pending": 0,
-    "fighters": 9,
-    "onScreen": 9,
-    "visible": 9,
+    "fighters": 10,
+    "onScreen": 10,
+    "visible": 10,
     "missing": []
    },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    84.2,
-    54.9
+    83.7,
+    57.1
    ],
-   "fighters_team0": 4,
+   "fighters_team0": 5,
    "fighters_team1": 5,
-   "vfx_actors": 90,
-   "particles": 994,
-   "telegraphs": 5,
+   "vfx_actors": 123,
+   "particles": 881,
+   "telegraphs": 7,
    "what": "5v5 teamfight, peak ability/VFX frame",
    "quality": "high"
   },
@@ -62,7 +62,7 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 722.47,
+   "time_s": 722.77,
    "time": "12:02",
    "bodies": {
     "pending": 0,
@@ -74,14 +74,14 @@
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    84.2,
-    54.9
+    83.7,
+    57.1
    ],
-   "fighters_team0": 4,
+   "fighters_team0": 5,
    "fighters_team1": 5,
-   "vfx_actors": 90,
-   "particles": 994,
-   "telegraphs": 5,
+   "vfx_actors": 123,
+   "particles": 881,
+   "telegraphs": 7,
    "what": "5v5 teamfight, one and a half seconds after the peak",
    "quality": "high"
   },
@@ -90,31 +90,31 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 720.97,
-   "time": "12:00",
+   "time_s": 721.27,
+   "time": "12:01",
    "bodies": {
     "pending": 0,
-    "fighters": 9,
-    "onScreen": 9,
-    "visible": 9,
+    "fighters": 10,
+    "onScreen": 10,
+    "visible": 10,
     "missing": []
    },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    84.2,
-    54.9
+    83.7,
+    57.1
    ],
-   "fighters_team0": 4,
+   "fighters_team0": 5,
    "fighters_team1": 5,
-   "vfx_actors": 90,
-   "particles": 994,
-   "telegraphs": 5,
+   "vfx_actors": 123,
+   "particles": 881,
+   "telegraphs": 7,
    "what": "the same teamfight peak frame on the low preset",
    "quality": "low",
    "stats": {
-    "calls": 152,
-    "triangles": 288112,
+    "calls": 169,
+    "triangles": 317836,
     "scale": 0.75,
     "w": 1440,
     "h": 810
@@ -125,31 +125,31 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 720.97,
-   "time": "12:00",
+   "time_s": 721.27,
+   "time": "12:01",
    "bodies": {
     "pending": 0,
-    "fighters": 9,
-    "onScreen": 9,
-    "visible": 9,
+    "fighters": 10,
+    "onScreen": 10,
+    "visible": 10,
     "missing": []
    },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    84.2,
-    54.9
+    83.7,
+    57.1
    ],
-   "fighters_team0": 4,
+   "fighters_team0": 5,
    "fighters_team1": 5,
-   "vfx_actors": 90,
-   "particles": 994,
-   "telegraphs": 5,
+   "vfx_actors": 123,
+   "particles": 881,
+   "telegraphs": 7,
    "what": "the same teamfight peak frame on the medium preset",
    "quality": "medium",
    "stats": {
-    "calls": 186,
-    "triangles": 332142,
+    "calls": 202,
+    "triangles": 358521,
     "scale": 0.9,
     "w": 1728,
     "h": 972
@@ -160,31 +160,31 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 720.97,
-   "time": "12:00",
+   "time_s": 721.27,
+   "time": "12:01",
    "bodies": {
     "pending": 0,
-    "fighters": 9,
-    "onScreen": 9,
-    "visible": 9,
+    "fighters": 10,
+    "onScreen": 10,
+    "visible": 10,
     "missing": []
    },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    84.2,
-    54.9
+    83.7,
+    57.1
    ],
-   "fighters_team0": 4,
+   "fighters_team0": 5,
    "fighters_team1": 5,
-   "vfx_actors": 90,
-   "particles": 994,
-   "telegraphs": 5,
+   "vfx_actors": 123,
+   "particles": 881,
+   "telegraphs": 7,
    "what": "the same teamfight peak frame on the high preset",
    "quality": "high",
    "stats": {
-    "calls": 195,
-    "triangles": 378739,
+    "calls": 209,
+    "triangles": 378607,
     "scale": 1,
     "w": 1920,
     "h": 1080
@@ -195,31 +195,31 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 720.97,
-   "time": "12:00",
+   "time_s": 721.27,
+   "time": "12:01",
    "bodies": {
     "pending": 0,
-    "fighters": 9,
-    "onScreen": 9,
-    "visible": 9,
+    "fighters": 10,
+    "onScreen": 10,
+    "visible": 10,
     "missing": []
    },
    "kind": "teamfight",
    "map": "rift",
    "world": [
-    84.2,
-    54.9
+    83.7,
+    57.1
    ],
-   "fighters_team0": 4,
+   "fighters_team0": 5,
    "fighters_team1": 5,
-   "vfx_actors": 90,
-   "particles": 994,
-   "telegraphs": 5,
+   "vfx_actors": 123,
+   "particles": 881,
+   "telegraphs": 7,
    "what": "the same teamfight peak frame on the ultra preset",
    "quality": "ultra",
    "stats": {
-    "calls": 195,
-    "triangles": 378739,
+    "calls": 209,
+    "triangles": 385367,
     "scale": 1,
     "w": 1920,
     "h": 1080
@@ -230,7 +230,7 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 721.63,
+   "time_s": 721.93,
    "time": "12:01",
    "kind": "quality",
    "what": "river_mid at the game camera on the low preset (the same frozen sim frame on every tier, camera still for 24 frames)",
@@ -241,8 +241,8 @@
     55
    ],
    "stats": {
-    "calls": 134,
-    "triangles": 258301,
+    "calls": 182,
+    "triangles": 342391,
     "scale": 0.75
    }
   },
@@ -251,7 +251,7 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 721.63,
+   "time_s": 721.93,
    "time": "12:01",
    "kind": "quality",
    "what": "river_mid at the game camera on the medium preset (the same frozen sim frame on every tier, camera still for 24 frames)",
@@ -262,8 +262,8 @@
     55
    ],
    "stats": {
-    "calls": 168,
-    "triangles": 306103,
+    "calls": 214,
+    "triangles": 389452,
     "scale": 0.9
    }
   },
@@ -272,7 +272,7 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 721.63,
+   "time_s": 721.93,
    "time": "12:01",
    "kind": "quality",
    "what": "river_mid at the game camera on the high preset (the same frozen sim frame on every tier, camera still for 24 frames)",
@@ -283,8 +283,8 @@
     55
    ],
    "stats": {
-    "calls": 177,
-    "triangles": 342388,
+    "calls": 223,
+    "triangles": 425737,
     "scale": 1
    }
   },
@@ -293,7 +293,7 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 721.63,
+   "time_s": 721.93,
    "time": "12:01",
    "kind": "quality",
    "what": "river_mid at the game camera on the ultra preset (the same frozen sim frame on every tier, camera still for 24 frames)",
@@ -304,8 +304,8 @@
     55
    ],
    "stats": {
-    "calls": 177,
-    "triangles": 342388,
+    "calls": 223,
+    "triangles": 425737,
     "scale": 1
    }
   },
@@ -314,7 +314,7 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 722.3,
+   "time_s": 722.6,
    "time": "12:02",
    "kind": "quality",
    "what": "base_aubade at the game camera on the low preset (the same frozen sim frame on every tier, camera still for 24 frames)",
@@ -325,8 +325,8 @@
     55
    ],
    "stats": {
-    "calls": 152,
-    "triangles": 169214,
+    "calls": 138,
+    "triangles": 136734,
     "scale": 0.75
    }
   },
@@ -335,7 +335,7 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 722.3,
+   "time_s": 722.6,
    "time": "12:02",
    "kind": "quality",
    "what": "base_aubade at the game camera on the medium preset (the same frozen sim frame on every tier, camera still for 24 frames)",
@@ -346,8 +346,8 @@
     55
    ],
    "stats": {
-    "calls": 179,
-    "triangles": 177738,
+    "calls": 165,
+    "triangles": 144511,
     "scale": 0.9
    }
   },
@@ -356,7 +356,7 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 722.3,
+   "time_s": 722.6,
    "time": "12:02",
    "kind": "quality",
    "what": "base_aubade at the game camera on the high preset (the same frozen sim frame on every tier, camera still for 24 frames)",
@@ -367,8 +367,8 @@
     55
    ],
    "stats": {
-    "calls": 186,
-    "triangles": 189268,
+    "calls": 170,
+    "triangles": 152306,
     "scale": 1
    }
   },
@@ -377,7 +377,7 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 722.3,
+   "time_s": 722.6,
    "time": "12:02",
    "kind": "quality",
    "what": "base_aubade at the game camera on the ultra preset (the same frozen sim frame on every tier, camera still for 24 frames)",
@@ -388,8 +388,8 @@
     55
    ],
    "stats": {
-    "calls": 186,
-    "triangles": 189268,
+    "calls": 193,
+    "triangles": 187686,
     "scale": 1
    }
   },
@@ -398,8 +398,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 722.97,
-   "time": "12:02",
+   "time_s": 723.27,
+   "time": "12:03",
    "kind": "quality",
    "what": "jungle_glasshorn at the game camera on the low preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
@@ -409,8 +409,8 @@
     41.5
    ],
    "stats": {
-    "calls": 108,
-    "triangles": 115539,
+    "calls": 113,
+    "triangles": 128853,
     "scale": 0.75
    }
   },
@@ -419,8 +419,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 722.97,
-   "time": "12:02",
+   "time_s": 723.27,
+   "time": "12:03",
    "kind": "quality",
    "what": "jungle_glasshorn at the game camera on the medium preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
@@ -430,8 +430,8 @@
     41.5
    ],
    "stats": {
-    "calls": 137,
-    "triangles": 173706,
+    "calls": 142,
+    "triangles": 187020,
     "scale": 0.9
    }
   },
@@ -440,8 +440,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 722.97,
-   "time": "12:02",
+   "time_s": 723.27,
+   "time": "12:03",
    "kind": "quality",
    "what": "jungle_glasshorn at the game camera on the high preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
@@ -451,8 +451,8 @@
     41.5
    ],
    "stats": {
-    "calls": 144,
-    "triangles": 205092,
+    "calls": 149,
+    "triangles": 218406,
     "scale": 1
    }
   },
@@ -461,8 +461,8 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 722.97,
-   "time": "12:02",
+   "time_s": 723.27,
+   "time": "12:03",
    "kind": "quality",
    "what": "jungle_glasshorn at the game camera on the ultra preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
@@ -472,8 +472,8 @@
     41.5
    ],
    "stats": {
-    "calls": 144,
-    "triangles": 205092,
+    "calls": 149,
+    "triangles": 218406,
     "scale": 1
    }
   }

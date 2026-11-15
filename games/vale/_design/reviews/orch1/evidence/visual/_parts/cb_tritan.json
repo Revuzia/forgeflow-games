@@ -6,13 +6,13 @@
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 720.97,
-   "time": "12:00",
+   "time_s": 721.27,
+   "time": "12:01",
    "bodies": {
     "pending": 0,
-    "fighters": 9,
-    "onScreen": 9,
-    "visible": 9,
+    "fighters": 10,
+    "onScreen": 10,
+    "visible": 10,
     "missing": []
    },
    "kind": "colorblind",
@@ -21,8 +21,8 @@
    "quality": "high",
    "colorblind": "tritan",
    "world": [
-    84.2,
-    54.9
+    83.7,
+    57.1
    ]
   }
  ]

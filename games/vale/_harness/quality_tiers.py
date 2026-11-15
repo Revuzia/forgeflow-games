@@ -76,8 +76,14 @@ summ = {t: {'ssimVsUltra': round(float(np.mean([r['ssimVsUltra'] for r in v])), 
 hi = summ.get('high')
 verdict = None
 if hi:
-    verdict = {'highVsUltra': hi, 'ultraIndistinguishableFromHigh': bool(hi['dEMean'] < 1.0 and hi['ssimVsUltra'] >= 0.98),
-               'note': 'GFX-10: when true, either drop the 4096 shadow map to 2048 and spend the saved memory/GPU time on something visible, or label Ultra honestly in the settings copy.'}
+    hrows = [r for r in rows if r['tier'] == 'high']
+    per_scene = {r['scene']: bool(r['dEMean'] < 1.0 and r['ssimVsUltra'] >= 0.98) for r in hrows}
+    worst = max(hrows, key=lambda r: r['dEMean'])
+    verdict = {'highVsUltra': hi, 'highVsUltraPerScene': hrows, 'indistinguishablePerScene': per_scene,
+               'worstScene': {'scene': worst['scene'], 'dEMean': worst['dEMean'], 'dEp95': worst['dEp95'], 'ssimVsUltra': worst['ssimVsUltra'], 'shareOver2_3': worst['shareOver2_3']},
+               'ultraIndistinguishableFromHigh_4sceneMean': bool(hi['dEMean'] < 1.0 and hi['ssimVsUltra'] >= 0.98),
+               'ultraIndistinguishableFromHigh': bool(all(per_scene.values())),
+               'note': 'GFX-10: indistinguishable only when EVERY scene has mean dE < 1 and SSIM >= 0.98 (the 4-scene mean hides the worst scene). When true, drop the 4096 shadow map to 2048 or label Ultra honestly. When false, state which scenes differ (see worstScene).'}
 out = {'gate': 'quality_tiers (GFX-10)', 'pack': os.path.relpath(PACK, os.path.join(HERE, '..')), 'scenes': SCENES, 'tiers': TIERS, 'rows': rows, 'perTierMean': summ, 'verdict': verdict, 'missing': missing,
        'method': 'luma SSIM (7x7 box window) and CIELAB dE76 of each tier frame against the Ultra frame of the same scene at the game camera, 1920x1080, DPR 1'}
 os.makedirs(os.path.dirname(OUT), exist_ok=True)

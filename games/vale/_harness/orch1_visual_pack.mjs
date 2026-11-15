@@ -208,7 +208,9 @@ async function scanFight() {
         const near = fs.filter((e) => Math.hypot(e.x - f.x, e.y - f.y) < 14);
         const a = near.filter((e) => e.team === 0).length, c = near.filter((e) => e.team === 1).length;
         if (!a || !c) continue;
-        const sc = Math.min(a, c) * 4000 + (s.vfx ?? 0) * 6 + (s.particles ?? 0) + (s.telegraphs ?? 0) * 20;
+        if (i % 450 < 30) continue;                         // W1-D r1: a lead frame 25 steps earlier must still be inside the same arena window (after the move-in, before the next one)
+        const sc = Math.min(a, c) * 1000000 +               // W1-D r1: a full 5v5 always beats a 4v5 with more VFX
+ (s.vfx ?? 0) * 6 + (s.particles ?? 0) + (s.telegraphs ?? 0) * 20;
         if (!best || sc > best.sc) {
           const x = near.reduce((q, e) => q + e.x, 0) / near.length, y = near.reduce((q, e) => q + e.y, 0) / near.length;
           best = { sc, frame: i + stepsPerLook + 2, x, y, a, c, vfx: s.vfx, particles: s.particles, tele: s.telegraphs, t: v.time };
@@ -228,10 +230,10 @@ async function fightSession() {
   if (!best) throw new Error('no teamfight found');
   const meta = (extra = {}) => ({ kind: 'teamfight', map: 'rift', world: [+best.x.toFixed(1), +best.y.toFixed(1)], fighters_team0: best.a, fighters_team1: best.c, vfx_actors: best.vfx, particles: best.particles, telegraphs: best.tele, ...extra });
   // lead-up, peak, aftermath of the same fight
-  for (const [label, off] of [['lead', -45], ['peak', 0], ['after', 45]]) {
+  for (const [label, off] of [['lead', -25], ['peak', 0], ['after', 45]]) {
     await B(page, (b, p) => { b.rebuild(); b.frames(2, 1 / 30); window.__stepArena(b, Math.max(0, p.frame - 2 + p.off), 0); b.focus(p.x, p.y); for (let i = 0; i < 4; i++) b.renderer.render(0); }, { ...best, off });
     await spectate();
-    await cap(`teamfight_rift_${label}.png`, meta({ what: `5v5 teamfight, ${label === 'peak' ? 'peak ability/VFX frame' : label === 'lead' ? 'one and a half seconds before the peak' : 'one and a half seconds after the peak'}`, quality: 'high' }));
+    await cap(`teamfight_rift_${label}.png`, meta({ what: `5v5 teamfight, ${label === 'peak' ? 'peak ability/VFX frame' : label === 'lead' ? '0.8 seconds before the peak (after the fighters have moved in)' : 'one and a half seconds after the peak'}`, quality: 'high' }));
   }
   // same peak frame at Low / High / Ultra (frozen sim, render(0))
   await replayTo(best); await spectate();

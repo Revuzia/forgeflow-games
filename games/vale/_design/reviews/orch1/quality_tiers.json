@@ -171,8 +171,56 @@
    "dEMean": 0.903,
    "dEp95": 2.596
   },
-  "ultraIndistinguishableFromHigh": true,
-  "note": "GFX-10: when true, either drop the 4096 shadow map to 2048 and spend the saved memory/GPU time on something visible, or label Ultra honestly in the settings copy."
+  "highVsUltraPerScene": [
+   {
+    "scene": "teamfight",
+    "tier": "high",
+    "ssimVsUltra": 0.9837,
+    "dEMean": 0.982,
+    "dEp95": 2.695,
+    "shareOver2_3": 0.0828
+   },
+   {
+    "scene": "river_mid",
+    "tier": "high",
+    "ssimVsUltra": 0.9818,
+    "dEMean": 1.776,
+    "dEp95": 5.067,
+    "shareOver2_3": 0.1766
+   },
+   {
+    "scene": "base_aubade",
+    "tier": "high",
+    "ssimVsUltra": 0.996,
+    "dEMean": 0.295,
+    "dEp95": 1.191,
+    "shareOver2_3": 0.0168
+   },
+   {
+    "scene": "jungle_glasshorn",
+    "tier": "high",
+    "ssimVsUltra": 0.9919,
+    "dEMean": 0.559,
+    "dEp95": 1.43,
+    "shareOver2_3": 0.0249
+   }
+  ],
+  "indistinguishablePerScene": {
+   "teamfight": true,
+   "river_mid": false,
+   "base_aubade": true,
+   "jungle_glasshorn": true
+  },
+  "worstScene": {
+   "scene": "river_mid",
+   "dEMean": 1.776,
+   "dEp95": 5.067,
+   "ssimVsUltra": 0.9818,
+   "shareOver2_3": 0.1766
+  },
+  "ultraIndistinguishableFromHigh_4sceneMean": true,
+  "ultraIndistinguishableFromHigh": false,
+  "note": "GFX-10: indistinguishable only when EVERY scene has mean dE < 1 and SSIM >= 0.98 (the 4-scene mean hides the worst scene). When true, drop the 4096 shadow map to 2048 or label Ultra honestly. When false, state which scenes differ (see worstScene)."
  },
  "missing": [],
  "method": "luma SSIM (7x7 box window) and CIELAB dE76 of each tier frame against the Ultra frame of the same scene at the game camera, 1920x1080, DPR 1"
