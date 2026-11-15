@@ -16,3 +16,6 @@
   `node _harness/gen-controls.ts`. I did not touch it.
 - #12: there was no `.github` directory in the repo, so there were no conventions to follow.
 - A hand-started `npx vite` no longer serves `/__shot`: set `GENESIS_SHOTS=1`.
+
+## Gate
+`bash _harness/slot.sh npm run check`: detban, typecheck, 972 / 972 tests pass (17 min under load). `npm run build` ok. `node _harness/release-check.ts --no-build` all clear.

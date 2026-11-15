@@ -37,4 +37,4 @@ new test `tests/audio-events.test.ts` scans `src/sim/**` and fails on any unmapp
 - It listed "no `arc` HeaderStep"; there is one (a documented no-op, see §7).
 
 ## Gate
-See the end of this file (filled after the full run).
+2026-11-15: `bash _harness/slot.sh npm run check` green (detban, typecheck, 972 / 972 tests); `npm run build` green; `npm run release-check --no-build` all clear (8.75 MB, 56 files, stamp 19c39bbd clean).
