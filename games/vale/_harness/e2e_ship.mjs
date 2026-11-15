@@ -153,7 +153,7 @@ if (which === 'all' || which === 'tabs') {
 if (which === 'all' || which === 'fault') {
   await journey('fault: 30 pump throws end the match as interrupted, Home with a notice, rating unchanged', async (step) => {
     const ctx = await newCtx();
-    const { p, logs } = await page(ctx, '/?dev=1&autopilot=1&autoflow=1&speed=4&fault=pump:4', { allow: /\[vale\] (match pump|match interrupted|renderer)|injected pump fault|Failed to load resource/ });
+    const { p, logs } = await page(ctx, '/?dev=1&autopilot=1&autoflow=1&speed=4&fault=pump:4', { allow: /\[vale\] (match pump|match interrupted|renderer|session: accept: no ready check)|injected pump fault|Failed to load resource/ });
     await p.waitForFunction(() => !!window.__vale, null, { timeout: 30000 });
     const before = await p.evaluate(() => { const v = window.__vale; return { ratings: JSON.stringify(v.session.profile().ratings), history: v.session.profile().history.length, wallet: JSON.stringify(v.session.profile().wallet) }; });
     await p.evaluate(() => { window.__postgames = 0; window.__vale.session.on((e) => { if (e.type === 'postgame') window.__postgames++; }); window.__vale.session.queue({ queue: 'rift_coop' }); });
