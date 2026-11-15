@@ -39,6 +39,17 @@
 //           --q low runs the section on that preset (screen coordinates are mapped to its smaller buffer); --slot a3 casts that
 //           slot, measures the body on every frame of the window, and leaves out the ult-only core and anchor gates (--every: an ult too,
 //           every frame, not only the beats).
+//   clutter orch1 VFX-O1 (W1-D; measured here, ENFORCED by W2-B). A whole bot match (10 fighters) on RIFT/High at the game camera is scanned
+//           from --t0 (default 720 s) for looks (3 sim frames apart) with >= 4 fighters of each side within 14 m of one fighter; every such
+//           look (up to --frames 30 a seed, ranked by VFX load) is measured on the live frame: per visible on-screen fighter its BODY (the
+//           skinned meshes alone into an empty target) share of pixels the VFX pass changes (VFX draw + telegraph layer off vs on; changed =
+//           luma delta > 24/255 or chroma delta > 40/255) = `occlusion`; whether the local fighter's ground ring is found (ring mesh off vs
+//           on: >= 60 changed pixels around its feet) = `selfRing`; the telegraph edge contrast (telegraph layer off vs on, the 90th
+//           percentile of |dL| / max(L, 16) over the changed pixels) = `teleEdge`; screen particles vs the preset's budget. If a seed finds
+//           fewer than 30 natural looks, the 10 fighters are moved into one arena (5 a side, 5 m apart) and the scan goes on (`scripted`).
+//           Bars (W2-B): median occlusion <= 0.25, no fighter above 0.60 for more than 300 ms, teleEdge >= 0.45, selfRing 100 %.
+//           node _harness/probe_combat_polish.mjs clutter [--seeds 7,11,23] [--frames 30] [--t0 720] [--scan 4500] [--tag <name>] [--out <json>]
+//           -> _design/reviews/orch1/evidence/clutter/clutter[_tag].json (exit 0 whatever the bars say; `bars.pass` carries the verdict)
 //   node _harness/probe_combat_polish.mjs [ult,cc,flash,hold] [--before <vfx.json>] [--tag <name>] [--ults kemdo,rishal,tunlan,hesmi | all] [--q high|low] [--slot ult]
 //   (--ults all: the 16 fighters, critic combat-16; a fighter outside the first lineup's enemy side is cast from a lineup of its own)
 //                                         [--vfxcap off|1.3]   (renderer.vfx.liftCap: the most the envelope lifts an effect)
@@ -65,10 +76,160 @@ const SELF_ULT = new Set(readdirSync(join(HERE, '../content/fighters')).filter((
   .filter((f) => { const fx = (f.kit?.ult?.effects ?? []).filter((e) => e.op === 'area' || e.op === 'zone'); return fx.length > 0 && fx.every((e) => e.at === 'self'); }).map((f) => f.id));
 const ALL = readdirSync(join(HERE, '../content/fighters')).filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, '')).sort();
 
+
+const QUALITY = opt('q', 'high');
+// ---------------------------------------------------------------------------------------------- clutter (orch1 VFX-O1, W1-D)
+async function clutterMain() {
+  const SEEDS = opt('seeds', '7,11,23').split(',').map(Number), WANT = Number(opt('frames', 30)), T0 = Number(opt('t0', 720)), SCAN = Number(opt('scan', 4500));
+  const outDir = join(HERE, '..', '_design', 'reviews', 'orch1', 'evidence', 'clutter'); mkdirSync(outDir, { recursive: true });
+  const res = { gate: 'clutter', at: new Date().toISOString(), quality: QUALITY, t0: T0, scan: SCAN, bars: { medianOcclusion: 0.25, worstRunMs: 300, worstRunOcclusion: 0.6, teleEdge: 0.45, selfRing: 1 }, seeds: [] };
+  for (const seed of SEEDS) {
+    const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=rift&q=${QUALITY}&t=${T0}&seed=${seed}&dev=1&hud=0&manual=1`, { wait: false, hmr: false });
+    try {
+      await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 300000 });
+      const err = await page.evaluate(() => window.__VALE_BENCH__?.error ?? null); if (err) throw new Error(err);
+      await page.waitForTimeout(6000);                                                  // models, textures, shader warm-up
+      const B = (fn, a) => page.evaluate(([src, x]) => (0, eval)(`(${src})`)(window.__VALE_BENCH__, x), [fn.toString(), a]);
+      for (let i = 0; i < 60 && (await B((b) => b.renderer.lib?.pending ?? 0)) > 0; i++) await page.waitForTimeout(1000);
+      await B((b) => { b.frames(30, 1 / 30); b.follow(); });
+      const out = await page.evaluate(async ([want, scan, q]) => {
+        const b = window.__VALE_BENCH__, R = b.renderer, host = b.host, canvas = document.getElementById('c');
+        const gl = R.gl.getContext();
+        const budget = { low: 700, medium: 900, high: 2000, ultra: 2500 }[q] ?? 2000;
+        const luma = (px, o) => 0.2126 * px[o] + 0.7152 * px[o + 1] + 0.0722 * px[o + 2];
+        const chroma = (px, o) => Math.max(px[o], px[o + 1], px[o + 2]) - Math.min(px[o], px[o + 1], px[o + 2]);
+        const grab = () => { R.render(0); const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, px = new Uint8Array(W * H * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px); return { px, W, H }; };
+        const bodyMask = (a, W, H) => {
+          const skip = []; a.root.traverse((o) => { if (o.isMesh && !o.isSkinnedMesh) { skip.push([o, o.layers.mask]); o.layers.disableAll(); } });
+          for (const m of a.flashMeshes ?? []) m.traverse((o) => { skip.push([o, o.layers.mask]); o.layers.disableAll(); });
+          const RT = new (R.overlay.teleTarget.constructor)(W, H), g = R.gl, mask = new Uint8Array(W * H * 4);
+          const cc = g.getClearColor(new (R.tmpColor.constructor)()), ca = g.getClearAlpha(), ac = g.autoClear;
+          try { g.setRenderTarget(RT); g.setClearColor(0x000000, 0); g.clear(true, true, false); g.autoClear = false; g.render(a.root, R.rig.camera); g.readRenderTargetPixels(RT, 0, 0, W, H, mask); }
+          finally { g.setRenderTarget(null); g.setClearColor(cc, ca); g.autoClear = ac; for (const [o, m] of skip) o.layers.mask = m; RT.dispose(); }
+          return mask;
+        };
+        const measure = () => {
+          const v = host.view, W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, st = R.stats();
+          const full = grab();
+          const dv = R.vfx.draw, tv = R.overlay.teleScene.visible;
+          R.vfx.draw = () => {}; R.overlay.teleScene.visible = false;
+          const noFx = grab();
+          R.vfx.draw = dv; R.overlay.teleScene.visible = tv;
+          // telegraph alone off
+          R.overlay.teleScene.visible = false; const noTele = grab(); R.overlay.teleScene.visible = tv;
+          const ringV = R.rings.mesh.visible; R.rings.mesh.visible = false; const noRing = grab(); R.rings.mesh.visible = ringV;
+          R.render(0);
+          const me = v.players.find((p) => p.player === 0), meE = me ? v.entity(me.entity) : null;
+          const fighters = [];
+          for (const f of v.entities.filter((e) => e.kind === 'fighter' && e.alive)) {
+            const a = R.actors.get(f.id); if (!a || !a.model || !a.root.visible) continue;
+            const sc = b.screen(f.x, f.y, 1.0); if (sc.x < 0 || sc.x > 1920 || sc.y < 0 || sc.y > 1080) continue;
+            const mask = bodyMask(a, W, H);
+            let n = 0, ch = 0;
+            for (let o = 0; o < W * H * 4; o += 4) {
+              if (mask[o + 3] < 128) continue; n++;
+              if (Math.abs(luma(full.px, o) - luma(noFx.px, o)) > 24 || Math.abs(chroma(full.px, o) - chroma(noFx.px, o)) > 40) ch++;
+            }
+            if (n >= 200) fighters.push({ id: f.id, def: f.def, team: f.team, bodyPx: n, occlusion: +(ch / n).toFixed(3), me: f.id === meE?.id });
+          }
+          // self ring: pixels the ring mesh changes around the local fighter's feet
+          let selfRing = null;
+          if (meE && meE.alive) {
+            const g0 = b.screen(meE.x, meE.y, 0), k = W / 1920, R0 = Math.round(110 * k), cx = Math.round(g0.x * k), cy = Math.round(g0.y * k);
+            let n = 0;
+            for (let y = Math.max(0, cy - R0); y < Math.min(H, cy + R0); y++) for (let x = Math.max(0, cx - R0); x < Math.min(W, cx + R0); x++) {
+              const o = ((H - 1 - y) * W + x) * 4; if (Math.abs(luma(full.px, o) - luma(noRing.px, o)) > 12) n++;
+            }
+            selfRing = { px: n, found: n >= 60 };
+          }
+          // telegraph edge contrast over the pixels the telegraph layer changes
+          let teleEdge = null;
+          if ((st.telegraphs ?? 0) > 0) {
+            const d = [];
+            for (let o = 0; o < W * H * 4; o += 4 * 2) { const a = luma(full.px, o), c = luma(noTele.px, o); const dd = Math.abs(a - c) / Math.max(c, a, 16); if (dd > 0.04) d.push(dd); }
+            d.sort((x, y) => x - y);
+            teleEdge = { px: d.length, p90: d.length ? +d[Math.floor(d.length * 0.9)].toFixed(3) : 0, n: st.telegraphs };
+          }
+          return { fighters, selfRing, teleEdge, particles: st.particles, vfx: st.vfx, telegraphs: st.telegraphs, particleBudget: budget };
+        };
+        const looks = []; let step = 0;
+        const consider = () => {
+          const v = host.view, fs = v.entities.filter((e) => e.kind === 'fighter' && e.alive);
+          let best = null;
+          for (const f of fs) {
+            const near = fs.filter((e) => Math.hypot(e.x - f.x, e.y - f.y) < 14), a = near.filter((e) => e.team === 0).length, c = near.filter((e) => e.team === 1).length;
+            if (a < 4 || c < 4) continue;
+            const x = near.reduce((s, e) => s + e.x, 0) / near.length, y = near.reduce((s, e) => s + e.y, 0) / near.length;
+            if (!best || a + c > best.a + best.c) best = { a, c, x, y };
+          }
+          return best;
+        };
+        const placeArena = () => { // scripted: 5 a side in one arena on the mid lane, 5 m apart (bots fight from there)
+          const v = host.view; const x0 = 85, y0 = 55; let i0 = 0, i1 = 0;
+          for (const f of v.entities.filter((e) => e.kind === 'fighter')) { const t = f.team === 0 ? i0++ : i1++; f.x = x0 + (f.team === 0 ? -2.5 : 2.5) + (t % 2) * 0.6; f.y = y0 + (t - 2) * 1.6; f.vx = f.vy = 0; if (!f.alive) { f.alive = true; f.hp = f.maxHp; } }
+          v.hashDirty = true;
+        };
+        let scripted = false, natural = 0;
+        const t0 = performance.now();
+        for (let i = 0; i < scan * 2 && looks.length < want; i += 3) {
+          if (i === scan && !scripted && looks.length < want) { scripted = true; placeArena(); }
+          if (scripted && i % 900 === 0) placeArena();
+          b.frames(3, 1 / 30);
+          const c = consider(); if (!c) continue;
+          const m = measure();
+          const t = +host.view.time.toFixed(2);
+          looks.push({ t, a: c.a, c: c.c, scripted, ...m });
+          if (!scripted) natural++;
+          b.focus(c.x, c.y);
+          if (performance.now() - t0 > 900000) break;
+        }
+        return { looks, natural, scripted, secs: Math.round((performance.now() - t0) / 1000) };
+      }, [WANT, SCAN, QUALITY]);
+      // aggregate
+      const med = (v) => { const a = [...v].sort((x, y) => x - y); return a.length ? a[a.length >> 1] : null; };
+      const occ = out.looks.flatMap((l) => l.fighters.map((f) => f.occlusion));
+      const byFighter = new Map();
+      for (const l of out.looks) for (const f of l.fighters) { const r = byFighter.get(f.id) ?? []; r.push({ t: l.t, o: f.occlusion, def: f.def }); byFighter.set(f.id, r); }
+      let worst = { ms: 0, id: null, def: null };
+      for (const [id, r] of byFighter) {
+        let run = 0, start = 0;
+        for (let i = 0; i < r.length; i++) {
+          if (r[i].o > res.bars.worstRunOcclusion) { if (!run) start = r[i].t; run++; const ms = Math.round((r[i].t - start) * 1000) + 100; if (ms > worst.ms) worst = { ms, id, def: r[i].def }; } else run = 0;
+        }
+      }
+      const rings = out.looks.map((l) => l.selfRing).filter(Boolean), teles = out.looks.map((l) => l.teleEdge).filter(Boolean);
+      const peaks = out.looks.map((l) => l.particles);
+      const s = {
+        seed, peakFrames4v4: out.looks.length, naturalPeakFrames: out.natural, scriptedPeakFrames: out.looks.length - out.natural, scanSeconds: out.secs,
+        looksWithSides: { minA: Math.min(...out.looks.map((l) => l.a)), minC: Math.min(...out.looks.map((l) => l.c)) },
+        medianOcclusion: med(occ), p90Occlusion: occ.length ? [...occ].sort((x, y) => x - y)[Math.floor(occ.length * 0.9)] : null, fighterSamples: occ.length,
+        worstFighterRun: worst, selfRing: { frames: rings.length, found: rings.filter((r) => r.found).length, rate: rings.length ? +(rings.filter((r) => r.found).length / rings.length).toFixed(3) : null },
+        teleEdge: { frames: teles.length, medianP90: med(teles.map((t) => t.p90)) },
+        particles: { peak: Math.max(0, ...peaks), median: med(peaks), budget: out.looks[0]?.particleBudget ?? null, overBudgetFrames: out.looks.filter((l) => l.particles > l.particleBudget).length },
+        consoleErrors: logs.filter((l) => !/favicon/.test(l)).slice(0, 5), looks: out.looks,
+      };
+      res.seeds.push(s);
+      console.log(`clutter seed ${seed}: ${s.peakFrames4v4} peak frames (${s.naturalPeakFrames} natural), median occlusion ${s.medianOcclusion}, worst run ${s.worstFighterRun.ms} ms (${s.worstFighterRun.def}), self ring ${s.selfRing.found}/${s.selfRing.frames}, tele edge p90 ${s.teleEdge.medianP90}, particles peak ${s.particles.peak}/${s.particles.budget}`);
+    } finally { await browser.close(); }
+  }
+  const okSeeds = res.seeds.filter((s) => s.peakFrames4v4 >= WANT).length;
+  const all = (k) => res.seeds.map((s) => k(s)).filter((v) => v !== null && v !== undefined);
+  res.summary = { seedsWith30PeakFrames: okSeeds, medianOcclusion: all((s) => s.medianOcclusion).length ? Math.max(...all((s) => s.medianOcclusion)) : null, worstRunMs: Math.max(0, ...res.seeds.map((s) => s.worstFighterRun.ms)), teleEdge: all((s) => s.teleEdge.medianP90).length ? Math.min(...all((s) => s.teleEdge.medianP90)) : null, selfRingRate: all((s) => s.selfRing.rate).length ? Math.min(...all((s) => s.selfRing.rate)) : null, particlesPeak: Math.max(0, ...res.seeds.map((s) => s.particles.peak)) };
+  res.bars.pass = { scan: okSeeds >= 2, medianOcclusion: res.summary.medianOcclusion !== null && res.summary.medianOcclusion <= res.bars.medianOcclusion, worstRun: res.summary.worstRunMs <= res.bars.worstRunMs, teleEdge: res.summary.teleEdge !== null && res.summary.teleEdge >= res.bars.teleEdge, selfRing: res.summary.selfRingRate === 1 };
+  res.bars.enforcedBy = 'W2-B (measured here only)';
+  res.load1 = (await import('node:os')).loadavg()[0];
+  const tag = opt('tag', '');
+  const outFile = opt('out', join(outDir, `clutter${tag ? '_' + tag : ''}.json`));
+  writeFileSync(outFile, JSON.stringify(res, null, 1));
+  console.log(`clutter: ${okSeeds}/${SEEDS.length} seeds with ${WANT} peak frames; summary ${JSON.stringify(res.summary)}; bars ${JSON.stringify(res.bars.pass)} -> ${outFile}`);
+  process.exit(okSeeds >= 2 ? 0 : 1);
+}
+if (ONLY.includes('clutter')) await clutterMain();
+
 const report = { at: new Date().toISOString(), defs: BEFORE || 'content/vfx.json', ult: [], cc: null, flash: [], hold: [], pass: true, fails: [] };
 const fail = (m) => { report.pass = false; report.fails.push(m); console.log('FAIL', m); };
 
-const QUALITY = opt('q', 'high'), SLOT = opt('slot', 'ult');
+const SLOT = opt('slot', 'ult');
 report.quality = QUALITY; report.slot = SLOT;
 const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=rift&q=${QUALITY}&t=0&dev=1&hud=0&manual=1`, { wait: false, hmr: false });
 try {

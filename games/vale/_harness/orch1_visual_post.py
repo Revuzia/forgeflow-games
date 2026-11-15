@@ -5,21 +5,27 @@ import json, glob, os, sys
 from PIL import Image, ImageDraw
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, '..', '_design', 'reviews', 'orch1', 'evidence', 'visual')
-CAP = 1_400_000
+OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, '..', '_design', 'reviews', 'orch1', 'evidence', 'visual')
+CAP = 3_000_000
+RENAMED = {}   # png name -> webp name, for a frame that stayed over the cap as a lossless PNG
 
 
 def save_capped(im, path, note=None):
-    """save PNG; over the cap -> 256-colour adaptive palette (no resize) then 128; returns method"""
+    """save lossless PNG. Over the cap: WebP quality 95 next to it (the PNG is removed). NEVER a palette: the grade, AO and
+    fog gradients must stay unbanded (orch1 GFX-11). Returns the method."""
     im.save(path, optimize=True)
     if os.path.getsize(path) <= CAP:
-        return 'lossless'
-    for n in (256, 192, 128):
-        q = im.convert('RGB').quantize(colors=n, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.FLOYDSTEINBERG)
-        q.save(path, optimize=True)
-        if os.path.getsize(path) <= CAP:
-            return f'palette{n}'
-    return 'palette128-still-over'
+        return 'lossless-png'
+    wp = os.path.splitext(path)[0] + '.webp'
+    im.convert('RGB').save(wp, 'WEBP', quality=95, method=6)
+    os.remove(path)
+    RENAMED[os.path.basename(path)] = os.path.basename(wp)
+    return 'webp-q95' if os.path.getsize(wp) <= CAP else 'webp-q95-over-cap'
+
+
+def openimg(n):
+    p = os.path.join(OUT, n)
+    return Image.open(p if os.path.exists(p) else os.path.join(OUT, RENAMED.get(n, n)))
 
 
 parts = []
@@ -91,7 +97,7 @@ for cam, label in (('game', 'game camera'), ('close', 'closest camera')):
 
 # quality triples and colour-blind side-by-side sheets
 def sbs(names, labels, out, what, kind):
-    ims = [Image.open(os.path.join(OUT, n)).convert('RGB') for n in names if os.path.exists(os.path.join(OUT, n))]
+    ims = [openimg(n).convert('RGB') for n in names if os.path.exists(os.path.join(OUT, n)) or os.path.exists(os.path.join(OUT, RENAMED.get(n, n)))]
     if len(ims) != len(names):
         return
     w = 960; h = 540
@@ -107,17 +113,18 @@ for nm in ('river_mid', 'base_aubade', 'jungle_glasshorn'):
     sbs([f'quality_{nm}_{q}.png' for q in ('low', 'high', 'ultra')], ['LOW', 'HIGH', 'ULTRA'], f'sheet_quality_{nm}.png', f'side by side (each downscaled to 960x540): {nm} on Low, High and Ultra', 'sheet')
 sbs(['teamfight_rift_peak.png'] + [f'colorblind_teamfight_{c}_peak.png' for c in ('deutan', 'protan', 'tritan')], ['DEFAULT', 'DEUTAN', 'PROTAN', 'TRITAN'], 'sheet_colorblind_teamfight.png', 'the same teamfight peak frame, default and the three colour-blind modes (each downscaled to 960x540, 2 across is not used: 4 across)', 'sheet')
 
-order = {k: i for i, k in enumerate(['map', 'minion_clash', 'teamfight', 'quality', 'colorblind', 'fighter_frame', 'fighter_crop', 'contact_sheet', 'structure_stage', 'recall', 'death', 'respawn', 'sheet'])}
+order = {k: i for i, k in enumerate(['map', 'minion_clash', 'teamfight', 'quality', 'colorblind', 'fighter_frame', 'fighter_crop', 'contact_sheet', 'structure_stage', 'camp', 'moment', 'recall', 'death', 'respawn', 'sheet'])}
 final.sort(key=lambda r: (order.get(r['kind'], 99), r['file']))
 for r in final:
+    r['file'] = RENAMED.get(r['file'], r['file'])
     r['bytes'] = os.path.getsize(os.path.join(OUT, r['file']))
 idx = {
     'pack': 'orch1 visual evidence', 'collector': 'EVIDENCE COLLECTOR (visual): collects and measures, does not judge', 'head': os.popen('git rev-parse --short HEAD').read().strip(),
     'build': 'working tree of the branch at collection time, served by vite dev (catalog 2026.11.5), render bench _harness/web/render_bench.html',
     'camera': 'real game camera (map camera distance, free mode centred on the subject); canvas drawing buffer 1920x1080 at device scale 1; preset High unless the file says otherwise; dynamic resolution off',
     'seed': 7, 'driver': '_harness/orch1_visual_pack.mjs (+ _harness/orch1_visual_post.py for crops, sheets, size cap)',
-    'size_cap': f'{CAP} bytes per PNG; over the cap a file is re-encoded as an adaptive palette PNG (field "encode"), never resized except contact/side-by-side sheets',
+    'size_cap': f'{CAP} bytes per PNG; over the cap a file is re-encoded as WebP q95 (field "encode"), never a palette, never resized except contact/side-by-side sheets',
     'files': final,
 }
 json.dump(idx, open(os.path.join(OUT, 'index.json'), 'w'), indent=1)
-print(len(final), 'files; over cap:', [r['file'] for r in final if r['bytes'] > 1_500_000])
+print(len(final), 'files; webp:', [r['file'] for r in final if r['file'].endswith('.webp')], 'palette frames:', [r['file'] for r in final if 'palette' in str(r.get('encode'))])
