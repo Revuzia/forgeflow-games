@@ -35,6 +35,11 @@ const bufOf = new WeakMap<BufferAttribute, WebGLBuffer>();
 /** ranges [start, count, ...] (array elements) taken from three's updateRanges, per pending attribute (empty: whole) */
 const rangesOf = new WeakMap<BufferAttribute, number[]>();
 const isIdx = new WeakSet<BufferAttribute>();
+/** pending attributes whose ranges are read at the flush (three adds them after its needsUpdate); those that got a
+ *  needsUpdate while holding no range; those of them that got a range afterwards */
+const late = new Set<BufferAttribute>();
+const lateWhole = new Set<BufferAttribute>();
+const lateRanged = new Set<BufferAttribute>();
 /** an index buffer bound to COPY_WRITE_BUFFER raised a GL error on this browser: index updates stay with three */
 let indexOk = true;
 let indexChecked = false;
@@ -65,7 +70,7 @@ export function texUpload(tex: Texture): void {
  * register a buffer attribute whose updates go up in the uploads slot (its first upload — three's bufferData — still
  * happens at its first draw, which is when its GL buffer becomes known here)
  */
-export function earlyAttr(a: BufferAttribute, isIndex = false, ringMember = false): void {
+export function earlyAttr(a: BufferAttribute, isIndex = false, ringMember = false, lateRanges = false): void {
   if (!UPSCHED) return;
   const o = a as unknown as { __early?: boolean; onUploadCallback: () => void; updateRanges: { start: number; count: number }[] };
   if (o.__early) return;
@@ -80,6 +85,14 @@ export function earlyAttr(a: BufferAttribute, isIndex = false, ringMember = fals
     }
     prevCb.call(a);
   };
+  if (lateRanges) {
+    const add = a.addUpdateRange;
+    a.addUpdateRange = function (this: BufferAttribute, start: number, count: number): void {
+      // (a range after a range-less needsUpdate is that update's own range: three's order)
+      if (lateWhole.has(a)) lateRanged.add(a);
+      add.call(this, start, count);
+    };
+  }
   const proto = Object.getPrototypeOf(a) as object;
   let d: PropertyDescriptor | undefined;
   for (let p: object | null = proto; p && !d; p = Object.getPrototypeOf(p)) d = Object.getOwnPropertyDescriptor(p, 'needsUpdate');
@@ -93,6 +106,20 @@ export function earlyAttr(a: BufferAttribute, isIndex = false, ringMember = fals
       // before its addUpdateRange, which the ring intercepts): it would re-send the WHOLE array into a buffer the GPU
       // may still read. Dropped; the ring's dirty list has those bytes for when the member is next installed.)
       if (v === true && ringMember && bufOf.has(a) && o.updateRanges.length === 0) return;
+      // (PERF s18, the owner's 'large flat triangles' on 9a6b6521) an attribute three's BatchedMesh writes itself:
+      // setGeometryAt sets needsUpdate FIRST and adds its update range AFTER. Taking the ranges here found none (so the
+      // whole array went up — and then the range three added next was left on the attribute, and the NEXT landing
+      // sent that stale range instead of its own: every patch landed one landing late, and until then its slot drew
+      // the vertices of the patch that had the slot before). Such an attribute is only noted here; its ranges are
+      // read at the flush, when three has added them.
+      if (v === true && lateRanges && deferring() && bufOf.has(a) && (indexOk || !isIdx.has(a))) {
+        if (!attrs.has(a)) lateWhole.delete(a);
+        // (no range may follow at all — a plain whole-array needsUpdate: remembered; any range added later clears it)
+        if (o.updateRanges.length === 0) lateWhole.add(a);
+        late.add(a);
+        attrs.add(a);
+        return;
+      }
       if (v === true && deferring() && bufOf.has(a) && (indexOk || !isIdx.has(a))) {
         // take the ranges three would have sent; an empty list means the whole array
         let r = rangesOf.get(a);
@@ -121,7 +148,17 @@ export function flushUploads(r: WebGLRenderer): void {
     const g = gl;
     for (const a of attrs) {
       const b = bufOf.get(a);
-      const r0 = rangesOf.get(a);
+      let r0 = rangesOf.get(a);
+      if (late.has(a)) {
+        // (the ranges three added after its needsUpdate; none, or a needsUpdate that came with none: the whole array)
+        const ur = (a as unknown as { updateRanges: { start: number; count: number }[] }).updateRanges;
+        if (!r0) { r0 = []; rangesOf.set(a, r0); }
+        r0.length = 0;
+        if (ur.length === 0 || (lateWhole.has(a) && !lateRanged.has(a))) r0.push(0, a.array.length);
+        else for (const x of ur) r0.push(x.start, x.count);
+        a.clearUpdateRanges();
+        late.delete(a); lateWhole.delete(a); lateRanged.delete(a);
+      }
       if (!b || !r0) { (a as unknown as { version: number }).version++; continue; }
       const first = isIdx.has(a) && indexChecked === false;
       if (first) { indexChecked = true; while (g.getError() !== g.NO_ERROR) { /* clear */ } }
@@ -156,9 +193,9 @@ export function flushUploads(r: WebGLRenderer): void {
 /** every attribute and the index of a geometry (a BatchedMesh page, after its first addGeometry made them) */
 export function earlyGeo(geo: { attributes: Record<string, unknown>; index: unknown }): void {
   if (!UPSCHED) return;
-  for (const a of new Set(Object.values(geo.attributes))) earlyAttr(a as BufferAttribute);
-  if (geo.index) earlyAttr(geo.index as BufferAttribute, true);
+  for (const a of new Set(Object.values(geo.attributes))) earlyAttr(a as BufferAttribute, false, false, true);
+  if (geo.index) earlyAttr(geo.index as BufferAttribute, true, false, true);
 }
 
 /** (tests) forget the scheduler's state */
-export function uploadSchedReset(): void { live = false; flushedThisFrame = false; tasks.length = 0; texs.clear(); attrs.clear(); gl = null; }
+export function uploadSchedReset(): void { live = false; flushedThisFrame = false; tasks.length = 0; texs.clear(); attrs.clear(); late.clear(); lateWhole.clear(); lateRanged.clear(); gl = null; }

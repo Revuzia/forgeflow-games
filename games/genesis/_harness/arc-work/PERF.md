@@ -1489,3 +1489,44 @@ long press frame-rate independent. Report after 1-2 verified.
   (the autosave ran on the way out; saves.ts uses lastThumb when the page is hidden, never the canvas). Installed at
   the FIRST FRAME so its listener runs after the UI's. The sim worker is not touched (client lane; it writes that
   save). tests/render-pagerelease.test.ts (4).
+- IMAGE A/B revz=1 (r1) vs revz=0 (l1), distA, medium 320x180, speed 0, babel 307987276, LOOKED at every pair + x4
+  diff (s18/shots/r1-*.png, l1-*.png, d-*.png, sheet-*.png; probe _harness/arc-work/probe-revz.mjs):
+  town 3.09/255 (2.85% px > 16) | region 1.94 (1.49%) | ridge 2.20 (1.44%) | orbit 1.07 | night 1.00 | towndecal
+  (in the cloud deck at that distance: useless for decals) 1.49 | shore 6.56 (15%: cloud-reflection drift + the
+  artefact below, in the LOG image). The s17 floor for this scene was 3.0-3.2. Houses, tree and house shadows, the
+  lake, the shoreline line, clouds against terrain, the aurora, the starfield and the planet limb are the same; no
+  z-fighting seen anywhere in the reversed images. NOTE the run-to-run floor is LARGER than in s17 when runs take
+  different wall time (r1 vs r2 town 8.5/255: the lake's coarse water sheet and the clouds were in another state).
+  The only differences that were not noise: (1) the god's pointer ring, present only when the SIM's hand was active
+  inside its 30 s window (timing; forced on with hand.force in the later runs), (2) the triangles below.
+  0 page errors, no shader / GL errors in either path. Report header prints the two depth lines in both modes.
+- RELOAD LEAK, LOCAL PROOF (probe _harness/arc-work/probe-reload.mjs, ps RSS of the browser's GPU process / renderer):
+  * 4 navigations in one tab, headless Chromium: NO growth with or without the fix (GPU MB 649 -> 447 -> 463 -> 476
+    off; 634 -> 910 -> 466 -> 493 on; with the back/forward cache flag left on, off: 647 -> 454 -> 460 -> 482). Headless
+    frees the old document at once and does not keep it in the bfcache, so the Mac's doubling is NOT reproduced here.
+  * what IS proven (--inpage=1: the page stays alive, as a bfcache-kept page does, and gets a pagehide): pagerelease=1:
+    GPU process 657 -> 243 MB (414 MB freed within 4 s), renderer 869 -> 760 MB, 2 workers ended, context lost;
+    pageshow(persisted) -> the page reloads. pagerelease=0: 623 -> 703 MB, nothing freed, no reload.
+  So the release works when a page is kept; whether the Mac's growth was kept pages is for the next round (same 3
+  loads in one tab, watch GPU process / tab MB; A/B `?pagerelease=0`). Tab JS heap of a kept page is NOT freed by
+  this (the app still holds the world); only its GPU memory and render workers.
+- THE OWNER'S 'LARGE FLAT TRIANGLES' — REPRODUCED AND FIXED (a regression of step 4 upsched, new in 9a6b6521):
+  * repro: distA revz=0, views town -> towndecal -> shore: large flat triangles over the sea (l1-shore: white + dark
+    blue; el-shore: two dark-blue ones; el-town-2: a white one by the houses); not in the shot 2 frames after the cut,
+    there 10 frames later, gone on the next visit; still there with the life layer hidden (not boats / buildings).
+  * cause (uploadsched.ts earlyAttr, terrain pages via earlyGeo): three r186 BatchedMesh.setGeometryAt does
+    `dstAttribute.needsUpdate = true` and only THEN `dstAttribute.addUpdateRange(...)` (three.core.js:27044-27045).
+    The scheduler's needsUpdate setter took the attribute's ranges at that moment: none on the first landing (so the
+    whole array went up), and the range three added a line later stayed on the attribute. From then on every
+    landing sent the PREVIOUS landing's range and left its own behind: a patch's vertices (all 13 attributes and the
+    index) reached the GPU only when the next patch landed in the same page. Until then that slot drew the
+    vertices of the patch that had the slot before, as terrain and as its water sheet: flat triangles of some other
+    place, floating. s17's note had the order the wrong way round (it only mattered for the rings, which were right).
+  * fix: earlyAttr(..., lateRanges) for earlyGeo attributes: the setter only notes the attribute; flushUploads reads
+    its updateRanges THEN (after three added them), the whole array if none came. tests/render-upsched.test.ts (3rd
+    test, a real BatchedMesh): each landing's own vertices go up at the next flush, nothing left behind — FAILS on
+    the old code, passes now.
+  * the Mac's bisect switches for it, in order: `?upsched=0` (must cure 9a6b6521), then if anything is left:
+    `?bufring=0`, `?freshland=0`, `?watershare=0`, `?pagenormal=0`, `?hdrmerge=0`, `?prefetchkeep=0`,
+    `?orthodepth=0`, `?pagepool=0`, `?patchworker=0`; `?hide=life` / `?hide=terrain` / `?water=0` / `?decals=0` to
+    name the layer.

@@ -249,7 +249,10 @@ export function missionEvacuation(u: Universe, planet: number, pos: readonly num
 export function evacuationsHourly(u: Universe, p: Planet): void {
   const R = u.god.rel;
   if (!R) return;
-  for (const [k, r] of Object.entries(R.st)) {
+  // (sorted keys: a loaded save holds R.st in sorted order, a live world in insertion order; the all-clear lines must come out
+  // in the same order either way)
+  for (const k of Object.keys(R.st).sort()) {
+    const r = R.st[k];
     if (!r.evacuate || !k.startsWith(`${p.id}:`)) continue;
     const gone = !u.god.disasters.some((d) => d.id === r.evacuate!.disaster);
     if (r.evacuate.until <= u.tick || (gone && r.evacuate.until - u.tick > 120)) {

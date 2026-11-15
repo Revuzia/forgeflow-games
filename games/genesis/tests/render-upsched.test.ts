@@ -89,3 +89,49 @@ test('upsched: a ring member drops a bare needsUpdate (no ranges) once its buffe
   uploadSchedReset();
 });
 
+
+// PERF s18 — the owner's 'large flat triangles' (9a6b6521): three's BatchedMesh.setGeometryAt sets needsUpdate BEFORE
+// it adds its update range, so the scheduler took the ranges one landing late: a patch's vertices reached the GPU only
+// when the NEXT patch landed in the same page; until then its slot drew the previous patch's vertices.
+test('upsched: a BatchedMesh page uploads each landing\'s own vertices at the next flush (three sets needsUpdate before its range)', async () => {
+  const { BatchedMesh, BufferGeometry, Float32BufferAttribute, MeshBasicMaterial } = await import('three');
+  const { earlyGeo } = await import('../src/render/uploadsched.ts');
+  uploadSchedReset();
+  const gl = fakeGL();
+  const r = { getContext: () => gl, initTexture: () => {} } as never;
+  setUploadGL(gl as never);
+  const NV = 3;
+  const tri = (v: number) => { const g = new BufferGeometry(); g.setAttribute('position', new Float32BufferAttribute(new Float32Array(NV * 3).fill(v), 3)); g.setIndex([0, 1, 2]); return g; };
+  const mesh = new BatchedMesh(4, 4 * NV, 4 * 3, new MeshBasicMaterial());
+  const ids = [mesh.addGeometry(tri(1), NV, 3), mesh.addGeometry(tri(2), NV, 3), mesh.addGeometry(tri(3), NV, 3)];
+  earlyGeo(mesh.geometry);
+  const pos = mesh.geometry.getAttribute('position') as BufferAttribute;
+  const idx = mesh.geometry.index as BufferAttribute;
+  // three's first upload of both buffers (at the page's first draw)
+  const bp = { id: 'pos' }, bi = { id: 'idx' };
+  gl.setBound(bp); pos.clearUpdateRanges(); pos.onUploadCallback();
+  gl.setBound(bi); idx.clearUpdateRanges(); idx.onUploadCallback();
+  flushUploads(r); uploadFrameBegin();
+  const sent = (buf: object): number[][] => {
+    const out: number[][] = [];
+    let cur: object | null = null;
+    for (const c of gl.calls) { if (c[0] === 'bind') cur = c[2] as object | null; else if (c[0] === 'sub' && cur === buf) out.push([c[2] as number, ...(c[3] as number[])]); }
+    return out;
+  };
+  for (const [slot, v] of [[1, 7], [2, 8], [0, 9], [1, 5]] as const) {
+    gl.calls.length = 0;
+    const ver = pos.version;
+    mesh.setGeometryAt(ids[slot], tri(v));
+    assert.equal(pos.version, ver, 'deferred: three sees the buffer current');
+    flushUploads(r);
+    const p = sent(bp);
+    // this landing's slot went up with this landing's values (byte offset = slot * 3 vertices * 3 floats * 4 bytes)
+    const hit = p.find((c) => c[0] <= slot * NV * 3 * 4 && c.length - 1 >= NV * 3 && c.slice(1).includes(v));
+    assert.ok(hit, `landing of ${v} in slot ${slot}: its vertices are sent at this flush (sent ${JSON.stringify(p)})`);
+    const all = p.flatMap((c) => c.slice(1).map((x, i) => [c[0] / 4 + i, x]));
+    for (let k = slot * NV * 3; k < (slot + 1) * NV * 3; k++) assert.ok(all.some(([at, x]) => at === k && x === v), `float ${k} of slot ${slot} = ${v}`);
+    assert.ok(sent(bi).length > 0, 'the index range too');
+    assert.equal(pos.updateRanges.length, 0, 'no range left behind for the next landing');
+    uploadFrameBegin();
+  }
+});
