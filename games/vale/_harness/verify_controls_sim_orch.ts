@@ -214,9 +214,17 @@ async function waves(L: L) {
         let last = 0, ag = 0;
         const flipAt: number[] = [];
         let endQ = -1;
+        const wdiag = process.env.WDIAG === `${modeId}:${who}:${seed}:${t}`;
+        if (wdiag) console.log(`WDIAG start (${f2(x0)},${f2(y0)}) goal (${f2(gx)},${f2(gy)}) straight ${f2(straight)} refLane ${f2(lane)} r${me.radius} tick ${w.tick}`);
         for (let q = 0; q < 360; q++) {
           if (q === 0) sim.command(0, { type: 'move', x: gx, y: gy });
           me.hp = me.maxHp; sim.step(); tr.push({ x: me.x, y: me.y });
+          if (wdiag && q % 3 === 0) {
+            const ex = me as unknown as Record<string, unknown>;
+            const nb = w.entities.filter((o) => o !== me && o.alive && (o.kind === 'minion' || o.kind === 'fighter' || o.kind === 'structure') && Math.hypot(o.x - me.x, o.y - me.y) < o.radius + me.radius + 1.5)
+              .map((o) => `${o.kind[0]}${o.team}@${f2(o.x)},${f2(o.y)}r${f2(o.radius)}v${f2(Math.hypot(o.vx ?? 0, o.vy ?? 0))}`).join(' ');
+            console.log(`q${q} (${f2(me.x)},${f2(me.y)}) d${f2(Math.hypot(me.x - gx, me.y - gy))} order ${me.order} oxy ${f2(me.orderX)},${f2(me.orderY)} lane ${me.lane.length / 2} side ${me.steerSide} path ${me.path.length / 2} wt ${ex.watchTicks} ws ${ex.watchStage} wf ${ex.watchFails} lp ${ex.lanePlanned} st ${ex.arriveStall}/${ex.arrivePinned} | ${nb}`);
+          }
           if (me.steerSide !== 0 && last !== 0 && me.steerSide !== last) flipAt.push(q);
           if (me.steerSide !== 0) last = me.steerSide;
           ag = Math.max(ag, Math.hypot(me.x - gx, me.y - gy) - dg0);
@@ -434,25 +442,27 @@ async function det(L: L) {
 // ── F. held button through packed lane fights after 4:00 (the live HOLD-DITHER repro shape): the controller's held
 //      re-send (same point every 500 ms = 15 ticks while > 2 m short), 9 s held. Reversals are counted like the live
 //      lens: turning points of the projection on the start→goal axis that swing >= 0.5 m (zigzag filter).
+const HELD_T0 = Number(process.env.HELD_T0 ?? '240');
+const DIAG = process.env.DIAG ?? '';
 async function held(L: L) {
   const out: Record<string, unknown> = {};
   const crowdAt = (w: World, me: Entity, x: number, y: number) => w.entities
     .filter((o) => o !== me && o.alive && !o.static && (o.kind === 'minion' || o.kind === 'fighter' || o.kind === 'monster') && Math.hypot(o.x - x, o.y - y) < o.radius + me.radius + 0.6).length;
   for (const modeId of ['rift', 'bridge']) {
-    let n = 0, rev3 = 0, rev5 = 0, revMax = 0, shortUncrowded = 0, shortAny = 0, regress1 = 0, worstRegress = 0, nearTower = 0, worstShort = 0;
+    let deadOrDisplaced = 0, n = 0, rev3 = 0, rev5 = 0, revMax = 0, shortUncrowded = 0, shortAny = 0, regress1 = 0, worstRegress = 0, nearTower = 0, worstShort = 0;
     const tArrive: number[] = [];
     const bad: string[] = [];
     for (const seed of [7, 19]) for (const who of L.fs) {
-      const { sim, me } = L.fresh(modeId, who, seed);
+      const { sim, me } = L.fresh(modeId, who, seed, process.env.HELD_BOTS !== '1');
       const w = sim.world, nav = w.nav;
-      zeroTowers(w);
+      if (process.env.HELD_BOTS !== '1') zeroTowers(w);
       const main = nav.componentAt(me.x, me.y);
       const rnd = lcg(77003 + 7919 * L.fs.indexOf(who) + seed * 104729 + (modeId === 'bridge' ? 13 : 0));
       let k = 0;
       for (let t = 0; t < 30 * 800 && k < 12; t++) {
         me.hp = me.maxHp; sim.step();
         if (w.phase !== 'live') break;
-        if (t < 30 * 240 || t % 41) continue;
+        if (t < 30 * HELD_T0 || t % 41) continue;
         const ms = w.entities.filter((e) => e.kind === 'minion' && e.alive);
         if (ms.length < 8) continue;
         const m = ms[Math.floor(rnd() * ms.length)];
@@ -463,26 +473,39 @@ async function held(L: L) {
         const d = 6 + rnd() * 6, gx = hx + Math.cos(a) * d, gy = hy + Math.sin(a) * d;
         if (!nav.walkable(hx, hy) || !nav.walkable(gx, gy) || nav.componentAt(gx, gy) !== main || nav.componentAt(hx, hy) !== main || !nav.lineOfWalk(hx, hy, gx, gy, me.radius)) continue;
         place(w, me, hx, hy); sim.step();
+        if (Math.hypot(me.x - hx, me.y - hy) > 0.6 || !me.alive) continue;
         const x0 = me.x, y0 = me.y, ux = (gx - x0) / Math.hypot(gx - x0, gy - y0), uy = (gy - y0) / Math.hypot(gx - x0, gy - y0);
         const tw = Math.min(...w.entities.filter((e) => e.kind === 'structure' && e.alive).map((e) => Math.hypot(e.x - x0, e.y - y0)));
         if (tw < 12) nearTower++;
         let minD = Math.hypot(gx - x0, gy - y0), regress = 0, arrivedAt = -1;
         let ext = 0, dirSign = 0, revs = 0;
+        const diag = DIAG === `${modeId}:${who}:${seed}:${k}`;
+        let displaced = false, px = me.x, py = me.y;
+        const dtr: string[] = [];
         for (let q = 0; q < 270; q++) {
           const dg = Math.hypot(me.x - gx, me.y - gy);
-          if (q === 0 || (q % 15 === 0 && dg > 2)) sim.command(0, { type: 'move', x: gx, y: gy });
+          if (q === 0 || (q % 15 === 0 && dg > 2 && !(diag && process.env.DIAG_NORESEND === '1'))) sim.command(0, { type: 'move', x: gx, y: gy });
           me.hp = me.maxHp; sim.step();
           const p = (me.x - x0) * ux + (me.y - y0) * uy;
           if (dirSign === 0) { if (p - ext >= 0.5) { dirSign = 1; ext = p; } else if (ext - p >= 0.5) { dirSign = -1; ext = p; } }
           else if (dirSign > 0) { if (p > ext) ext = p; else if (ext - p >= 0.5) { revs++; dirSign = -1; ext = p; } }
           else { if (p < ext) ext = p; else if (p - ext >= 0.5) { revs++; dirSign = 1; ext = p; } }
           const d2 = Math.hypot(me.x - gx, me.y - gy);
+          if (Math.hypot(me.x - px, me.y - py) > 1.2) displaced = true;
+          px = me.x; py = me.y;
           regress = Math.max(regress, d2 - minD); minD = Math.min(minD, d2);
           if (arrivedAt < 0 && d2 < 0.5) arrivedAt = q;
+          if (diag && q % 3 === 0) {
+            const nb = w.entities.filter((o) => o !== me && o.alive && (o.kind === 'minion' || o.kind === 'fighter' || o.kind === 'structure') && Math.hypot(o.x - me.x, o.y - me.y) < o.radius + me.radius + 1.2)
+              .map((o) => `${o.kind[0]}${o.team}@${f2(o.x)},${f2(o.y)}r${f2(o.radius)}${o.static ? 'S' : ''}v${f2(Math.hypot(o.vx ?? 0, o.vy ?? 0))}`).join(' ');
+            const ex = me as unknown as Record<string, unknown>; dtr.push(`q${q} (${f2(me.x)},${f2(me.y)}) wk ${nav.walkable(me.x, me.y) ? 1 : 0} ms ${f2(me.stats.moveSpeed)} wt ${ex.watchTicks} ws ${ex.watchStage} wf ${ex.watchFails} np ${ex.noProgress} lp ${ex.lanePlanned} aw ${ex.atkWindup} cast ${me.cast ? 1 : 0} cc ${ex.ccMask} pc ${ex.pathCheck} st ${ex.arriveStall}/${ex.arrivePinned} d${f2(d2)} order ${me.order} lane ${me.lane.length / 2} side ${me.steerSide} path ${me.path.length / 2} | ${nb}`);
+          }
           if (d2 < 0.3 && me.order === ORDER_NONE) break;
         }
+        if (diag) { console.log(`DIAG ${modeId} ${who} s${seed} k${k} t${f2(w.tick / 30)} start (${f2(x0)},${f2(y0)}) goal (${f2(gx)},${f2(gy)}) r${me.radius}`); for (const l of dtr) console.log(l); }
         k++; n++;
         const dEnd = Math.hypot(me.x - gx, me.y - gy), crowd = crowdAt(w, me, gx, gy);
+        if (!me.alive || displaced) { k--; n--; deadOrDisplaced++; continue; }
         revMax = Math.max(revMax, revs); if (revs >= 3) rev3++; if (revs >= 5) rev5++;
         if (regress > 1) regress1++; worstRegress = Math.max(worstRegress, regress);
         if (dEnd > 2) shortAny++;
@@ -492,11 +515,11 @@ async function held(L: L) {
         if (revs >= 3) tags.push(`reversals ${revs}`);
         if (regress > 1) tags.push(`regress ${f2(regress)}`);
         if (dEnd > 2) tags.push(`short ${f2(dEnd)} crowd ${crowd}`);
-        if (tags.length && bad.length < 16) bad.push(`${who} s${seed} t${f2(w.tick / 30)}s (${f2(x0)},${f2(y0)})→(${f2(gx)},${f2(gy)}) tower ${f2(tw)} m ${tags.join(' ')}`);
+        if (tags.length && (bad.length < 16 || revs >= 3 || (dEnd > 2 && crowd === 0)) && bad.length < 40) bad.push(`${who} s${seed} k${k - 1} t${f2(w.tick / 30)}s (${f2(x0)},${f2(y0)})→(${f2(gx)},${f2(gy)}) tower ${f2(tw)} m ${tags.join(' ')}`);
       }
     }
     const s = [...tArrive].sort((a, b) => a - b);
-    out[modeId] = { n, reversals3plus: rev3, reversals5plus: rev5, revMax, regressOver1m: regress1, worstRegress: f2(worstRegress), endedOver2mShort: shortAny, endedOver2mShortUncrowded: shortUncrowded,
+    out[modeId] = { n, excludedDeadOrDisplaced: deadOrDisplaced, reversals3plus: rev3, reversals5plus: rev5, revMax, regressOver1m: regress1, worstRegress: f2(worstRegress), endedOver2mShort: shortAny, endedOver2mShortUncrowded: shortUncrowded,
       worstShortUncrowded: f2(worstShort), startsWithin12mOfStructure: nearTower, arrived: s.length, arriveP50s: s.length ? f2(s[s.length >> 1]) : null, arriveP95s: s.length ? f2(s[Math.floor(s.length * 0.95)]) : null, bad };
     console.log(modeId, JSON.stringify(out[modeId]));
   }

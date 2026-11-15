@@ -236,7 +236,8 @@ section('ruling 36: boxed in by bodies with no way through, the hero re-plans wi
   // swaying 1.5 m side to side in front of the row.)
   const w = makeWorld(cat, [{ fighter: 'fx_slinger', team: 0, x: 45, y: 20 }, { fighter: 'fx_foe', team: 1, x: 10, y: 55 }]);
   const h = fighterEnt(w, 0);
-  for (let x = 32.6; x < 60; x += 0.85) { addUnit(w, 'fx_dummy', 0, x, 24); addUnit(w, 'fx_dummy', 0, x + 0.425, 24.75); }
+  // (enemy bodies: a fighter walks through its own Wicks since ruling 39)
+  for (let x = 32.6; x < 60; x += 0.85) { addUnit(w, 'fx_dummy', 1, x, 24); addUnit(w, 'fx_dummy', 1, x + 0.425, 24.75); }
   issueMove(w, h, 45, 30, false);
   let replanAt = -1, blockedAt = -1;
   const tr = trace(w, h, 240, (k) => {

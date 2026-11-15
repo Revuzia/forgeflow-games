@@ -17,6 +17,9 @@
 // attackable enemy within its aggro range + 1.5 m (a Wick queuing behind a fight or waiting for its turn at a tower is
 // fighting, not stuck), and more than 8 m from its road's end (holding the end is its job). Gate: 0 stuck Wicks on
 // every road of both maps (all six seeds, both scenarios).
+// A Wick is IDLE (what a viewer reads as stuck, fighting or not) when for 6 s it neither swings nor gains 0.5 m along its
+// road nor covers 1 m of ground, away from its road's end and not held by CC: a melee Wick waiting behind the front row
+// for a target it never reaches (ruling 39 steps it out to an open attack spot). Gate: 0 idle Wicks as well.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -107,8 +110,8 @@ function free(w: World, e: Entity): boolean {
   return true;
 }
 
-interface Stuck { map: string; scen: string; seed: number; t: string; id: number; team: number; at: string; s: string; road: string; struct: string; bodies: number; fighterD: string; order: number; path: number; np: number }
-interface Track { since: number; s0: number; g: LaneG; road: string }
+interface Stuck { map: string; scen: string; seed: number; t: string; id: number; team: number; at: string; s: string; road: string; struct: string; bodies: number; fighterD: string; order: number; path: number; np: number; ot?: string }
+interface Track { since: number; s0: number; g: LaneG; road: string; idle: number; ix: number; iy: number; is0: number }
 
 function structNear(w: World, x: number, y: number): string {
   let best = '', bd = Infinity;
@@ -145,7 +148,7 @@ function player(w: World, me: Entity, tower: StructEntry | undefined, laneG: Lan
   void base;
 }
 
-function runOne(modeId: string, scen: string, seed: number): { stuck: Stuck[]; end: number; wicks: number; secs: number } {
+function runOne(modeId: string, scen: string, seed: number): { stuck: Stuck[]; idle: Stuck[]; end: number; wicks: number; secs: number } {
   const t0 = Date.now();
   const setup = lineup(modeId, seed, scen === 'player');
   const factory = scen === 'player' ? createBots(catalog, setup) : null;
@@ -155,6 +158,7 @@ function runOne(modeId: string, scen: string, seed: number): { stuck: Stuck[]; e
   const mid = (roads.find((l) => /seat|mid|span/.test(l.id)) ?? roads[Math.floor(roads.length / 2)]).id;
   const tracks = new Map<number, Track>();
   const stuck: Stuck[] = [];
+  const idle: Stuck[] = [];
   const geoms = new Map<string, LaneG>();
   const laneOf = (path: readonly (readonly [number, number])[]): { g: LaneG; road: string } => {
     const k = `${path[0][0]},${path[0][1]}>${path[path.length - 1][0]},${path[path.length - 1][1]}`;
@@ -201,7 +205,17 @@ function runOne(modeId: string, scen: string, seed: number): { stuck: Stuck[]; e
       let tr = tracks.get(e.id);
       const { g, road } = tr ?? laneOf(m.path);
       const s = project(g, e.x, e.y);
-      if (!tr) { tr = { since: w.tick, s0: s, g, road }; tracks.set(e.id, tr); continue; }
+      if (!tr) { tr = { since: w.tick, s0: s, g, road, idle: w.tick, ix: e.x, iy: e.y, is0: s }; tracks.set(e.id, tr); continue; }
+      // IDLE (what a viewer reads as stuck, fight or no fight): 6 s with no swing, under 0.5 m along the road and under
+      // 1 m of ground, away from the road's end and not held by CC
+      if (g.len - s < END_NEAR || e.atkWindup >= 0 || e.atkAnim > 0 || e.cast || (e.ccMask & (CC_HARD | CC_ROOT)) !== 0 || s - tr.is0 >= STUCK_GAIN || Math.hypot(e.x - tr.ix, e.y - tr.iy) >= 1) {
+        tr.idle = w.tick; tr.ix = e.x; tr.iy = e.y; tr.is0 = s;
+      } else if (w.tick - tr.idle >= STUCK_TICKS) {
+        idle.push({ map: modeId, scen, seed, t: `${Math.floor(w.time / 60)}:${String(Math.floor(w.time % 60)).padStart(2, '0')}`, id: e.id, team: e.team,
+          at: `(${f1(e.x)}, ${f1(e.y)})`, s: `${f1(s)}/${f1(g.len)}`, road, struct: structNear(w, e.x, e.y), bodies: 0, fighterD: '', order: e.order, path: e.path.length >> 1, np: e.noProgress,
+          ot: e.order === ORDER_ATTACK ? (() => { const o = w.entity(e.orderTarget); return o ? `${o.kind} ${f1(Math.hypot(o.x - e.x, o.y - e.y) - o.radius - e.radius)} m` : '?'; })() : '' } as Stuck);
+        tr.idle = w.tick; tr.ix = e.x; tr.iy = e.y; tr.is0 = s;
+      }
       if (g.len - s < END_NEAR || !free(w, e) || s - tr.s0 >= STUCK_GAIN) { tr.since = w.tick; tr.s0 = s; continue; }
       if (w.tick - tr.since >= STUCK_TICKS) {
         let bodies = 0, fd = Infinity;
@@ -218,21 +232,25 @@ function runOne(modeId: string, scen: string, seed: number): { stuck: Stuck[]; e
     }
     for (const id of tracks.keys()) { const e = w.entity(id); if (!e || !e.alive) tracks.delete(id); }
   }
-  return { stuck, end: worldOf(sim).time, wicks, secs: (Date.now() - t0) / 1000 };
+  return { stuck, idle, end: worldOf(sim).time, wicks, secs: (Date.now() - t0) / 1000 };
 }
 
 const all: Stuck[] = [];
+const idleAll: Stuck[] = [];
 const runs: unknown[] = [];
 for (const map of MAPS) for (const scen of SCENS) for (let seed = SEED0; seed < SEED0 + SEEDS; seed++) {
   const r = runOne(map, scen, seed);
   all.push(...r.stuck);
-  runs.push({ map, scen, seed, minutes: Number((r.end / 60).toFixed(1)), wicks: r.wicks, stuck: r.stuck.length, secs: Math.round(r.secs) });
-  console.log(`${map} ${scen} seed ${seed}: ${f1(r.end / 60)} min, ${r.wicks} Wicks, ${r.stuck.length} stuck (${Math.round(r.secs)} s)`);
+  idleAll.push(...r.idle);
+  runs.push({ map, scen, seed, minutes: Number((r.end / 60).toFixed(1)), wicks: r.wicks, stuck: r.stuck.length, idle: r.idle.length, secs: Math.round(r.secs) });
+  console.log(`${map} ${scen} seed ${seed}: ${f1(r.end / 60)} min, ${r.wicks} Wicks, ${r.stuck.length} stuck, ${r.idle.length} idle (${Math.round(r.secs)} s)`);
+  for (const s of r.idle.slice(0, 4)) console.log(`   idle ${JSON.stringify(s)}`);
   for (const s of r.stuck.slice(0, 6)) console.log(`   stuck ${JSON.stringify(s)}`);
 }
-try { mkdirSync(dirname(OUT), { recursive: true }); writeFileSync(OUT, JSON.stringify({ at: new Date().toISOString(), gate: '0 stuck', stuck: all.length, runs, episodes: all }, null, 1) + '\n'); } catch { /* report only */ }
+try { mkdirSync(dirname(OUT), { recursive: true }); writeFileSync(OUT, JSON.stringify({ at: new Date().toISOString(), gate: '0 stuck', stuck: all.length, idle: idleAll.length, runs, episodes: all, idleEpisodes: idleAll }, null, 1) + '\n'); } catch { /* report only */ }
 const byRoad = new Map<string, number>();
 for (const s of all) byRoad.set(`${s.map}/${s.road}`, (byRoad.get(`${s.map}/${s.road}`) ?? 0) + 1);
 console.log(`stuck Wicks: ${all.length} ${JSON.stringify(Object.fromEntries(byRoad))}`);
-if (all.length > 0) { console.log(`FAIL ${all.length} stuck Wick episode(s) (gate 0)`); process.exit(1); }
-console.log('PASS 0 stuck Wicks on every road of every map');
+console.log(`idle Wicks: ${idleAll.length}`);
+if (all.length > 0 || idleAll.length > 0) { console.log(`FAIL ${all.length} stuck and ${idleAll.length} idle Wick episode(s) (gate 0 and 0)`); process.exit(1); }
+console.log('PASS 0 stuck and 0 idle Wicks on every road of every map');

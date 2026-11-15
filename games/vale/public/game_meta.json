@@ -5,7 +5,7 @@
   "genre": "action",
   "sub_genre": "moba",
   "difficulty": "hard",
-  "controls_keyboard": "Right-click move / attack · Q W E R abilities · D F Hour spells · 1-6 items · A attack-move · S stop · B recall · P shop · Tab scoreboard · G ping · Y lock camera · Space center camera · Alt + ability self-cast · Esc menu",
+  "controls_keyboard": "Right-click move / attack · Shift + left-click attack in place toward the cursor · Q W E R abilities · D F Hour spells · 1-6 items · A attack-move · S stop · B recall · P shop · Tab scoreboard · G ping · Y lock camera · Space center camera · Alt + ability self-cast · Esc menu",
   "tags": [
     "moba",
     "lane-brawler",
