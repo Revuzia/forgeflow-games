@@ -570,6 +570,11 @@ const LC_FRAG_ALBEDO = `
     lcFoamA = clamp( max( lfo, lline ) * uLcWaterK.y, 0.0, 1.0 );
     diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.93, 0.95, 0.94 ), lcFoamA );
     diffuseColor.a = max( mix( 0.62, diffuseColor.a, smoothstep( 0.0, 2.5, ldep ) ), lcFoamA );
+    // FAR SEA: the sea plane is 3.5x the map, the ground (seabed) only 1x - past the map edge the translucent water had only the sky dome under it,
+    // a hard straight colour step along the edge in every wide view. The water turns opaque over the last 240 m before the edge
+    vec2 lmu = abs( vLcW.xz * uLcHgtK.x + uLcHgtK.y - 0.5 );
+    float lout = ( max( lmu.x, lmu.y ) - 0.5 ) / uLcHgtK.x;        // metres past the drawn ground's edge (< 0 inside the map)
+    diffuseColor.a = mix( diffuseColor.a, 1.0, smoothstep( -240.0, -20.0, lout ) );
   }
 #else
   // surf lines follow the depth contours (so they run along the shore and roll in), broken into ~12 m patches; once a band is under ~2 px (the drop

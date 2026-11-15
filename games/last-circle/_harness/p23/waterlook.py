@@ -8,6 +8,7 @@ seed 7), turned into bar rows (PLAN.md "Lane R2A" acceptance bars; the audit val
     python _harness/p23/waterlook.py --disk --plant storm-early      # the W9 wall: drawn pre-close, no distance fade - MUST FAIL storm-early
     python _harness/p23/waterlook.py --disk --plant flat-light       # the W9 hemisphere / sun, no contrast curve   - MUST FAIL light
     python _harness/p23/waterlook.py --disk --plant dim-rooms        # the rooms without the W10 indoor lift       - MUST FAIL light: interiors
+    python _harness/p23/waterlook.py --disk --plant sea-edge         # the sea translucent past the map edge        - MUST FAIL light: far-sea edge
     python _harness/p23/waterlook.py --disk --plant sparse-grass     # the blade cell 0.56 -> 1.4 m                 - MUST FAIL grass
     python _harness/p23/waterlook.py --disk --plant grass-on-low     # the blade layer built on low too             - MUST FAIL low-identical
     python _harness/p23/waterlook.py --disk --plant grass-on-sand    # the blades without the grass-ness mask (on beaches) - MUST FAIL grass-sand
@@ -29,7 +30,8 @@ clock then pinned - SHORE_T for the shore / in-water views, VIEW_T for the rest 
                 the horizon band (+3 % of the frame) <= 0.1 % of the frame [every view]
   storm-late    circle 1 closing: the wall A/B moves >= 1 % of the frame from 380 m (and the stormfx rows stay: run stormfx_storm)
   light         ground luminance spread p95 - p5 >= 0.25 on every map (mean of ground / ground2 / groundlow, lower half) [0.14 / 0.17 / 0.28];
-                the OD-2 drop view mean 0.45-0.55 held; interiors (3 houses' biggest ground-floor rooms) mean >= 0.9 x the base's ON EVERY MAP
+                the OD-2 drop view mean 0.45-0.55 held; far sea: no colour step along the map edge in the drop view
+                (p90 <= 0.02); interiors (3 houses' biggest ground-floor rooms) mean >= 0.9 x the base's ON EVERY MAP
   grass-sand    medium, a low view (0.5 m) over dry non-grass ground (the nearest 30 m disc - the blade ring - that is >= 95 % sand band, dunes,
                 dry wash, mud, snow or rock by the blade layer's own grass-ness bake): the blades A/B moves <= 0.5 % of the lower half
                 [build 1: the sand under blades]
@@ -89,6 +91,8 @@ PLANTS = {
                                      ("op.uniforms.lcGrade.value.set(K.w10Light && K.w10Light.contrast != null ? K.w10Light.contrast : W10_CONTRAST, uw, 0, 0);", "op.uniforms.lcGrade.value.set(0, uw, 0, 0);")])],
     # dim-rooms = the furnished rooms without the W10 indoor lift (the W10 R1 HG_INDOOR against the W10 lower fill): MUST FAIL light: interiors
     "dim-rooms": [(RP + "maps.js", [("const HG_INDOOR = (mapId === \"deepwood\" ? 0.95 : 0.8) * (W10V ? (K.w10Indoor || W10_INDOOR) : 1);", "const HG_INDOOR = (mapId === \"deepwood\" ? 0.95 : 0.8);")])],
+    # sea-edge = the sea plane translucent past the map edge (no opaque fade): the sky dome shows through, a hard straight step - MUST FAIL far-sea edge
+    "sea-edge": [(RP + "maps.js", [("    diffuseColor.a = mix( diffuseColor.a, 1.0, smoothstep( -240.0, -20.0, lout ) );", "")])],
     "sparse-grass": [(RP + "maps.js", [("lamps: 4, grassR: 30, grassC: 0.56,", "lamps: 4, grassR: 30, grassC: 1.4,")])],
     # grass-on-low = the blade layer (and the ground lattice texture it stands on) built on the low tier too
     "grass-on-low": [(RP + "maps.js", [("lamps: 0, grassR: 0, grassC: 1,", "lamps: 0, grassR: 30, grassC: 0.56,"),
@@ -402,8 +406,12 @@ def part_map(s, v, R, map_id, shots, want, interiors=True):
         dspec = s.js(SS.SPEC_JS, ["drop", {"dropAt": SS.DEF_DROP[map_id], "streetAt": SS.DEF_STREET[map_id], "plant": None}])
         s.js(SS.UNPIN_JS)
         if dspec:
-            r = shoot(s, dspec, shots, "%s_drop" % tag, settle=VIEW_T)
+            ed = s.js(EDGE_JS, [list(EDGE_OFF)])
+            epts = edge_pts(ed[0], ed[1]) if ed[1] > -900 else None
+            r = shoot(s, dspec, shots, "%s_drop" % tag, pts=epts, settle=VIEW_T)
             M["dropMean"] = round(float(lum(r["A"]).mean()), 4)
+            if epts:
+                M["seaEdge"] = edge_step(r, ed[2])
         if interiors:
             rooms = s.js(ROOMS_JS, [SS.DEF_DROP[map_id]])
             im = []
@@ -489,6 +497,49 @@ def part_map(s, v, R, map_id, shots, want, interiors=True):
         r = shoot(s, cams["underup"], shots, "%s_underup" % tag, settle=VIEW_T)
         M["underup"] = {"hf": round(hf_energy(r["A"]), 5), "uw": s.safe_js("() => window.__LC__.W._uw", default=None)}
     return M
+
+
+# far sea: the sea plane is 3.5x the map, the ground (seabed) under it only 1x. Points on the water along the four map edges at -100 / -60 / -20 / +20 m
+# across the edge (41 per edge): the step across the edge |L(+20) - L(-20)| against the same 40 m step well inside |L(-60) - L(-100)|
+EDGE_OFF = (-100, -60, -20, 20)
+
+
+# per (sample, side): True when the ground at the three inside points is open sea (>= 1 m under the water): a land edge (Deepwood) is not judged
+EDGE_JS = r"""([off]) => { const M = window.__LC__.W.map, half = M.half, wy = (typeof M.waterY === 'number') ? M.waterY : -999, ok = [];
+  for (let i = 0; i < 41; i++) { const t = -0.95 + 1.9 * i / 40;
+    const P = [(o) => [half + o, t * half], (o) => [-half - o, t * half], (o) => [t * half, half + o], (o) => [t * half, -half - o]];
+    for (const f of P) ok.push(off.filter((o) => o < 0).every((o) => { const q = f(o); return M.heightAt(q[0], q[1]) < wy - 1; })); }
+  return [half, wy, ok]; }"""
+
+
+def edge_pts(half, wy):
+    pts = []
+    for i in range(41):
+        t = -0.95 + 1.9 * i / 40
+        for o in EDGE_OFF:
+            pts += [[half + o, wy, t * half], [-half - o, wy, t * half], [t * half, wy, half + o], [t * half, wy, -half - o]]
+    return pts
+
+
+def edge_step(r, sea):
+    Lm = lum(r["A"])
+    Hh, Ww = Lm.shape
+    P = r["proj"]
+
+    def at(q):
+        if q[2] >= 1 or not (0 <= q[0] < 1 and 0 <= q[1] < 1):
+            return None
+        return float(Lm[int(q[1] * Hh), int(q[0] * Ww)])
+    steps, ctrl = [], []
+    for i in range(41):
+        for side in range(4):
+            v = [at(P[(i * len(EDGE_OFF) + o) * 4 + side]) for o in range(len(EDGE_OFF))]
+            if None in v or not sea[i * 4 + side]:
+                continue
+            steps.append(abs(v[3] - v[2]))
+            ctrl.append(abs(v[1] - v[0]))
+    return {"n": len(steps), "stepP90": round(float(np.percentile(steps, 90)), 4) if steps else None,
+            "insideP90": round(float(np.percentile(ctrl, 90)), 4) if ctrl else None}
 
 
 def shore_measure(a, b, tr):
@@ -758,6 +809,12 @@ def main():
                 return b0 is not None and not (0.45 <= b0 <= 0.55) and out(x) <= out(b0) + 0.005
             v.check("light: OD-2 drop-view mean held in 0.45-0.55 (every map; a map already outside on the base: not further out)",
                     all(held(m, x) for m, x in dm.items()), {"build": dm, "base": bd}, "0.45-0.55")
+            se = {m: R.get(m, {}).get("seaEdge") for m in maps if (R.get(m, {}).get("seaEdge") or {}).get("n", 0) >= 8}
+            if not se:
+                v.cnj("light: far-sea edge", "no drop view shows >= 8 points of the map edge over water: %s" % {m: R.get(m, {}).get("seaEdge") for m in maps})
+            else:
+                v.check("light: far sea - no colour step along the map edge in the drop view (p90 |L(+20 m) - L(-20 m)| across the edge <= 0.02; well inside the map it reads ~0.01)",
+                        all(x["stepP90"] <= 0.02 for x in se.values()), se, "<= 0.02")
             bia = (base or {}).get("interiors") or {}
             if isinstance(bia, list):
                 bia = {"isla_viva": bia}                 # (a v6 cache: isla_viva only - never judged as all maps)
