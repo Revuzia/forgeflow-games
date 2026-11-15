@@ -585,7 +585,7 @@ def part_low(s, v, R, shots, tag):
 
 def base_cache(args, v, shots):
     """the base build's underwater HF, interiors and low-tier views (second Chrome on BASE_REV), cached"""
-    stem = os.path.join(C.REPORTS, "w10_waterlook_base_%s_%dx%d_v5" % (BASE_REV, args.width, args.height))
+    stem = os.path.join(C.REPORTS, "w10_waterlook_base_%s_%dx%d_v6" % (BASE_REV, args.width, args.height))
     if os.path.exists(stem + ".json") and not args.no_cache:
         with open(stem + ".json") as f:
             res = json.load(f)
@@ -771,7 +771,7 @@ def main():
             gs_ = {m: R.get(m, {}).get("grassSand") for m in maps}
             judged = {m: x for m, x in gs_.items() if x}
             if not judged:
-                v.cnj("grass-sand", "no map has a 30 m disc of >= 95 % dry non-grass ground (or the build has no grass-ness bake): %s" % gs_)
+                v.cnj("grass-sand", "no map has a 30 m disc of >= 95 %% dry non-grass ground (or the build has no grass-ness bake): %s" % gs_)
             else:
                 v.check("grass-sand: the blade layer grows on grass only - a low view over dry non-grass ground (a 30 m disc >= 95 % sand / dunes / mud / snow), the blades A/B moves <= 0.5 % of the lower half (every map with such a spot)",
                         all(x["bladePixPct"] <= 0.5 for x in judged.values()), gs_, "<= 0.5 %")
