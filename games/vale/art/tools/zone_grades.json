@@ -557,7 +557,7 @@
     "k": 0.35
    },
    {
-    "why": "orch1 FU-1: the three pale stone shards over the shoulders (the game camera's top cluster) a pale teal-green stone glaze (CIELAB h ~160: >= 30 deg from Lisvel's cyan, >= 25 dE from Marund's pale green by value), so Hesmi's top owns a hue (r3: achromatic grey top, C 5) and stays the figure's bright crown (bible top band)",
+    "why": "orch1 FU-1: the three pale stone shards over the shoulders (the game camera's top cluster) a pale teal-green stone glaze (CIELAB h ~160: >= 30 deg from Lisvel's cyan, >= 25 dE from Marund's pale green by value), so Hesmi's top owns a hue (r3: achromatic grey top, C 5) and stays the figure's bright crown (bible top band); k 1.8 keeps the honed cut tops bright over darker faces, so the bright quarter holds the bible band while the median top sits >= 25 dE under Marund's pale green",
     "boxes": [
      [
       -0.45,
@@ -573,9 +573,9 @@
      0.79
     ],
     "hex": "#2E6650",
-    "L": 62,
-    "C": 14,
-    "k": 0.8
+    "L": 50,
+    "C": 16,
+    "k": 1.8
    }
   ]
  },
