@@ -361,7 +361,7 @@ const LCU = {
   uLcShallow: { value: new THREE.Color() }, uLcDeep: { value: new THREE.Color() },
   // W10 R2A water / shore (desktop medium and up only: LC_WATER2, LC_WATER_HI, LC_WET). The two textures are SHARED (_texCache), never per match.
   uLcWN: { value: null },                                               // the water normal map (three.js examples waternormals.jpg, MIT; 512 px)
-  uLcFoam: { value: null },                                             // the foam pattern (lettier 3d-game-shaders-for-beginners, BSD-3; 512 px, grey)
+  uLcFoam: { value: null },                                             // the foam pattern (in house, CC0: _harness/p23/make_water_foam.py; 512 px, grey)
   uLcWaterK: { value: new THREE.Vector4(0.55, 1, 6, 1.5) },              // x = wave normal strength, y = foam gain, z = sun glint gain, w = sky fresnel gain
   uLcSun: { value: new THREE.Vector3(0, 1, 0) },                       // the sun's direction (the glint)
   uLcSkyH: { value: new THREE.Color() }, uLcSkyZ: { value: new THREE.Color() },   // the dome's horizon / zenith colours (what the water reflects)
