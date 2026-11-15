@@ -395,6 +395,23 @@ export function godCharacter(u: Universe, planet: number): GodChar {
 
 /** §5.4 what they call the god: the strongest one or two traits at or above their thresholds, else "the god" */
 export function epithetOf(u: Universe, planet: number): string {
+  // snapshots ask for this on every tick; it reads only godActs, the append-only arcEvents and ages, the covenants and the
+  // tick, so the value is kept per (universe, planet, tick) and rebuilt when a command changed one of those inside the tick
+  const R = u.god.rel;
+  const ga0 = R?.godActs?.[String(planet)];
+  let sig = `${u.tick}|${R?.arcEvents?.length ?? 0}|${R?.ages?.length ?? 0}|`;
+  if (ga0) for (const k in ga0) sig += `${(ga0 as Record<string, unknown>)[k]},`;
+  for (const c of R?.covenants ?? []) sig += `${c.status}${c.made}${c.signAt}${c.planet}`;
+  const hit = epiCache;
+  if (hit && hit.u === u && hit.planet === planet && hit.sig === sig) return hit.value;
+  const value = epithetUncached(u, planet);
+  epiCache = { u, planet, sig, value };
+  return value;
+}
+let epiCache: { u: Universe; planet: number; sig: string; value: string } | null = null;
+
+/** the scan itself (epithetOf caches it); exported so a test can hold the cache to it */
+export function epithetUncached(u: Universe, planet: number): string {
   const ga = u.god.rel?.godActs?.[String(planet)] ?? {};
   const p = u.planets.find((q) => q.id === planet);
   const yr = p ? yearTicks(p) : 1;
