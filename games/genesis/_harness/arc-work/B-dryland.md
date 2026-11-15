@@ -87,5 +87,26 @@ Session 1, 2026-11-15. Owner bug: babel seed 307987276, "Rubolhin by the Lake", 
 4. `aboveWater` / `dryAt` unit case.
 `DRYLAND_YEARS=3 node --test tests/dryland.test.ts` runs the long form.
 
-## Final runs
-(see the end of this file)
+## Final runs (2026-11-15, final code)
+- `bash _harness/slot.sh npm run check`: detban clean (152 sim files), typecheck clean, 1002 tests, 1001 pass, 1 fail.
+- The one failure is `tests/arc-determinism.test.ts` "save at year 40, load, run to year 80 equals a straight run"
+  (Lane C's new test, 42 min). NOT caused by this work: the same test run on a tree copy with the three files as they
+  were before this lane (git 66cec8a3 versions of buildings.ts, settlement.ts, world.ts) fails the same way (different
+  hashes, same assertion). With `ARC_TRACE=1` on the live tree the first differing day is day 153 after year 40.
+  Owner: Lane C (src/sim/god).
+- `npm run build`: passes.
+- `node --test tests/dryland.test.ts`: 4/4, 22-28 s wall.
+- `_harness/arc-work/probe-dryland-reload.ts 1 4 12` (babel seed 1, n 20, save at year 4, load, compare each year to
+  year 12): equal every year. The flood sweep and the dry-site rules do not disturb save/load.
+- Hash or golden pins changed: NONE. No test outside tests/dryland.test.ts was edited.
+
+## Open / NEXT
+1. God lane: `god/tower.ts:318`, `god/defiance.ts:323`, `god/sacred.ts:160`, `god/projectiles.ts:229` place buildings
+   with `addBuilding` directly. Call `dryAt(p, pos, footprint, cell)` there. The sweep skips the Tower ('wonder').
+2. Render lane D task 3: the renderer's own wet test (`render/life/buildings.ts` place(), blended depth > 0.3) is not
+   the sim's measure; on steep shores it calls dry houses wet. Mirror `world.ts waterDepthAt`.
+3. Task 3 (graduated wet state, one chronicle line per town): the sweep ruins at once and tells only 'collapsed'
+   events. An old save of the owner world loses about 23 buildings on its first day, with no chronicle line.
+4. A whole town cell under more than 0.3 m for a daily check (a real flood) ruins every building in it. Intended by
+   the task; the graduated state of task 3 is where to soften it.
+5. Not seen by eye: no shot of Rubolhin was taken (no browsers in this stint).

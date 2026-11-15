@@ -61,6 +61,20 @@ for (let i = 1; i <= loads; i++) {
   rows.push({ load: i, ...m, heap: st.heap });
   console.log(`load ${i}: GPU process ${m.gpu} MB | renderer ${m.renderer} MB (${m.n} proc) | js heap ${st.heap} MB | release installed ${st.rel?.installed ?? 'n/a'} | ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 }
+// --inpage=1: the page is KEPT (as the back/forward cache keeps it) but told it is hidden: a synthetic pagehide with
+// persisted; memory before / after shows what the release gives back while the document still lives; then a synthetic
+// pageshow with persisted must reload the page (it has no context any more)
+if (opts.inpage) {
+  const before = procs();
+  await page.evaluate(() => { window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })); });
+  await page.waitForTimeout(4000);
+  const after = procs();
+  const st = await page.evaluate(() => ({ rel: globalThis.__GENESIS_RELEASE__ ?? null, lost: globalThis.__GENESIS_R__.three.getContext().isContextLost() }));
+  console.log(`INPAGE ${tag}: before pagehide GPU ${before.gpu} MB renderer ${before.renderer} MB | after GPU ${after.gpu} MB renderer ${after.renderer} MB | freed GPU ${before.gpu - after.gpu} MB renderer ${before.renderer - after.renderer} MB | state ${JSON.stringify(st)}`);
+  const nav = page.waitForNavigation({ timeout: 20000 }).then(() => 'reloaded').catch(() => 'no reload');
+  await page.evaluate(() => { window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })); }).catch(() => {});
+  console.log(`INPAGE ${tag}: pageshow(persisted) -> ${await nav}`);
+}
 // one more sample after an idle pause (lazy collection of the last dead document)
 await page.waitForTimeout(Number(opts.idle ?? 5000));
 const m = procs();
