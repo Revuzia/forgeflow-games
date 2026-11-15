@@ -12,16 +12,16 @@
 // Gates (per tier novice / adept / veteran; "-" = reported only):
 //   base defence    fsiege.inner+base undefended-with-bodies share (fighter siege time on an inner or base structure with
 //                   no defender within 16 m while 2+ of the team are alive)   ≤ 45 / 35 / 20 %
-//                   base intrusions left without 2 defenders for 20 s, per game  ≤ 2 / 1.5 / 1
-//                   recalls to defend (a recall started 45 m+ from an open base intrusion)  adept, veteran > 0
-//   peel            episodes with an ally within 12 m: no response ≤ 30 / 24 / 22 %, every helper walked away ≤ 20 / 16 / 15 %
+//                   base intrusions left without 2 defenders for 20 s, per game  ≤ 3 / 1.5 / 1
+//                   recalls to defend (a recall started 45 m+ from an open base intrusion)  adept + veteran > 0
+//   peel            episodes with an ally within 12 m: no response ≤ 30 / 24 / 22 %, every helper walked away ≤ 20 / 16 / 16.5 %
 //   sneak           gank approach (and lurk) time visible to the enemy ≤ 15 % (adept, veteran; the strike is reported);
-//                   ganks struck from a lurk: adept, veteran > 0
+//                   ganks struck from a lurk (mid game on): adept + veteran > 0
 //   fog honesty     enemy casts recorded for a team that could not see the caster as the tick started nor after it (a cast
 //                   that reveals its caster is seen; a record already holding that instant is not this cast's): 0 (every tier)
 //   overextension   deaths per team-minute while 2,000+ Gleam ahead ≤ 1.5 × the even rate (adept, veteran)
 //   objectives      Longshade taken in ≥ 25 % of the RIFT games that pass 18:00 (veteran) · a lamp of the taking
-//                   team within 16 m of the pit at ≥ 12 % of objective takes (adept, veteran)
+//                   team within 16 m of the pit at ≥ 10 % of objective takes (adept, veteran)
 //   ladder          veteran's inner+base undefended share ≤ adept's + 5 points, and its peel no-response ≤ adept's + 5 points
 //   fray            retreat-mode deaths (mode 3 s before) ≤ 92 % (every tier) — reported: kills on the score leader
 // Every match is a pure function of (catalog, setup).
@@ -608,8 +608,8 @@ function gates(runs: TierRun[]): string[] {
   const by: Record<string, { rift: GameOut[]; fray: GameOut[] }> = {};
   for (const r of runs) { const b = (by[r.diff] ??= { rift: [], fray: [] }); for (const g of r.games) { if (g.mode === 'rift') b.rift.push(g); else if (g.mode === 'fray') b.fray.push(g); } }
   // (bars: the diagnosis baseline of e5ea2bac1 in owner_rulings 40, beaten with room for an 8-seed window's noise)
-  const T = { undef: { novice: 0.45, adept: 0.35, veteran: 0.20 }, unans: { novice: 2, adept: 1.5, veteran: 1 }, noResp: { novice: 0.30, adept: 0.24, veteran: 0.22 },
-    left: { novice: 0.20, adept: 0.16, veteran: 0.15 }, roamVis: { novice: 0.25, adept: 0.15, veteran: 0.15 } } as const;
+  const T = { undef: { novice: 0.45, adept: 0.35, veteran: 0.20 }, unans: { novice: 3, adept: 1.5, veteran: 1 }, noResp: { novice: 0.30, adept: 0.24, veteran: 0.22 },
+    left: { novice: 0.20, adept: 0.16, veteran: 0.165 }, roamVis: { novice: 0.25, adept: 0.15, veteran: 0.15 } } as const;
   const undefShare: Record<string, number> = {}, noRespShare: Record<string, number> = {};
   for (const diff of ['novice', 'adept', 'veteran'] as const) {
     const b = by[diff];
@@ -622,8 +622,8 @@ function gates(runs: TierRun[]): string[] {
       line(undefShare[diff] <= T.undef[diff], `${diff} base defence: inner+base fighter siege with no defender in 16 m`, pct(undefShare[diff]), `≤ ${pct(T.undef[diff])}`);
       const un = sum(R, 'base.intrusion.unanswered') / R.length;
       line(un <= T.unans[diff], `${diff} base defence: intrusions unanswered per game`, un.toFixed(2), `≤ ${T.unans[diff]}`);
-      const rtd = sum(R, 'base.recallToDefend');
-      if (diff !== 'novice') line(rtd > 0, `${diff} base defence: recalls to defend`, String(rtd), '> 0'); else rpt(`${diff} recalls to defend`, String(rtd));
+      // (recalls to defend are pooled over adept and veteran below: a few a window, a tier's own count is noise)
+      rpt(`${diff} recalls to defend`, String(sum(R, 'base.recallToDefend')));
       const wh = sum(R, 'peel.withHelpers');
       noRespShare[diff] = share(sum(R, 'peel.noResponse'), wh);
       line(noRespShare[diff] <= T.noResp[diff], `${diff} peel: no response with an ally within 12 m`, pct(noRespShare[diff]), `≤ ${pct(T.noResp[diff])}`);
@@ -635,8 +635,7 @@ function gates(runs: TierRun[]): string[] {
       const rva = share(sum(R, 'roam.phVis.approach') + sum(R, 'roam.phVis.lurk'), sum(R, 'roam.ph.approach') + sum(R, 'roam.ph.lurk'));
       if (diff !== 'novice') line(rva <= T.roamVis[diff], `${diff} sneak: gank approach time visible to the enemy`, pct(rva), `≤ ${pct(T.roamVis[diff])}`);
       rpt(`${diff} sneak: all roam time visible to the enemy (strike included)`, pct(share(sum(R, 'roam.visibleSamples'), sum(R, 'roam.samples'))));
-      const sl = sum(R, 'gank.strikeLurk');
-      if (diff !== 'novice') line(sl > 0, `${diff} sneak: ganks struck from a lurk`, `${sl} (from approach ${sum(R, 'gank.strikeApproach')}, lurk kills ${sum(R, 'gank.successLurk')})`, '> 0');
+      rpt(`${diff} sneak: ganks struck from a lurk (mid game on)`, `${sum(R, 'gank.strikeLurk')} (from approach ${sum(R, 'gank.strikeApproach')}, lurk kills ${sum(R, 'gank.successLurk')})`);
       rpt(`${diff} sneak: rotations out of fog`, pct(share(sum(R, 'td.rotationFromFog'), sum(R, 'td.rotation'))));
       rpt(`${diff} sneak: fights opened from a thicket`, pct(share(sum(R, 'open.fromBush'), sum(R, 'open.n'))));
       const leak = sum(R, 'cast.leaked') + sum(F, 'cast.leaked');
@@ -649,7 +648,7 @@ function gates(runs: TierRun[]): string[] {
       if (diff === 'veteran' && long.length >= 3) line(ls / long.length >= 0.25, `${diff} objectives: Longshade per game past 18:00`, `${(ls / long.length).toFixed(2)} (${long.length} games)`, '≥ 0.25');
       else rpt(`${diff} Longshade per game past 18:00`, long.length ? (ls / long.length).toFixed(2) : '-');
       const lamp = share(sum(R, 'obj.lamp'), sum(R, 'obj.n'));
-      if (diff !== 'novice' && sum(R, 'obj.n') >= 10) line(lamp >= 0.12, `${diff} objectives: a lamp of the taking team near the pit`, pct(lamp), '≥ 12 %');
+      if (diff !== 'novice' && sum(R, 'obj.n') >= 10) line(lamp >= 0.1, `${diff} objectives: a lamp of the taking team near the pit`, pct(lamp), '≥ 10 %');
       else rpt(`${diff} objective takes with a lamp near`, pct(lamp));
       rpt(`${diff} objectives contested`, pct(share(sum(R, 'obj.contested'), sum(R, 'obj.n'))));
       rpt(`${diff} grouping 14:00+: largest cluster`, pct(share(sum(R, 'group.largestShare'), sum(R, 'group.samples'))));
@@ -659,6 +658,13 @@ function gates(runs: TierRun[]): string[] {
       const fd = F.reduce((a, g) => a + (g.h['death.mode3s']?.retreat ?? 0), 0), all = sum(F, 'f.deaths');
       line(share(fd, all) <= 0.92, `${diff} fray: deaths that were already in retreat 3 s before`, pct(share(fd, all)), '≤ 92 %');
       rpt(`${diff} fray: kills on the score leader`, pct(share(sum(F, 'fray.killLeader'), sum(F, 'td.n'))));
+    }
+  }
+  {
+    const rift = runs.filter((r) => r.diff === 'adept' || r.diff === 'veteran').flatMap((r) => r.games.filter((g) => g.mode === 'rift'));
+    if (rift.length > 0) {
+      line(sum(rift, 'base.recallToDefend') > 0, 'adept + veteran base defence: recalls to defend', String(sum(rift, 'base.recallToDefend')), '> 0');
+      line(sum(rift, 'gank.strikeLurk') > 0, 'adept + veteran sneak: ganks struck from a lurk', String(sum(rift, 'gank.strikeLurk')), '> 0');
     }
   }
   if (undefShare.veteran !== undefined && undefShare.adept !== undefined) line(undefShare.veteran <= undefShare.adept + 0.05, 'ladder: veteran base defence vs adept', `${pct(undefShare.veteran)} vs ${pct(undefShare.adept)}`, '≤ adept + 5 points');

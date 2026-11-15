@@ -1,0 +1,21 @@
+{
+ "probe": "latency_probe",
+ "at": "2026-11-15T19:55:27.305Z",
+ "n": 12,
+ "load1": {
+  "start": 6.85
+ },
+ "quiet": null,
+ "targets": {
+  "uiFrames": 2,
+  "uiMsAt60": 33.4,
+  "motionMs": 50
+ },
+ "move": [],
+ "slot": [],
+ "summary": {},
+ "pass": null,
+ "errors": [
+  "page.evaluate: TypeError: Cannot read properties of null (reading 'rank')\n    at eval (eval at <anonymous> (eval at evaluate (:370:30)), <anonymous>:8:61)\n    at eval (eval at evaluate (:370:30), <anonymous>:1:36)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\n    at vale (/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/pw.mjs:58:15)\n    at /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/latency_probe.mjs:51:9"
+ ]
+}

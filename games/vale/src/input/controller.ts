@@ -148,6 +148,9 @@ export class InputController {
   /** the left button is held after an attack-in-place click (re-sent while the modifier stays held) */
   private leftShoot = false;
   private lastShoot = 0;
+  /** attack-in-place orders sent by the current press (a hold re-sends; a single click sends one) and its last point */
+  private shootSends = 0;
+  private shootAt = { x: 0, y: 0 };
   /** the attack-in-place aim line is drawn (setAim is ours to clear) */
   private shootAim = false;
   private lastHoldMove = 0;
@@ -288,7 +291,7 @@ export class InputController {
   private releaseAll(): void {
     this.held.clear();
     this.rightHeld = false;
-    this.leftShoot = false;
+    this.endShoot();
     this.ptrShift = false;
     this.buttons = 0;
     if (this.middle?.scouting) this.r.camera?.scout(false);
@@ -316,7 +319,7 @@ export class InputController {
       const g = this.ground();
       if (g) { this.r.setAim?.(this.shootSpec(body!, g)); this.shootAim = true; }
     } else if (this.shootAim) { this.shootAim = false; if (!aim) this.r.setAim?.(null); }
-    if (this.leftShoot && (!shooting || (this.buttons & 1) === 0)) this.leftShoot = false;
+    if (this.leftShoot && (!shooting || (this.buttons & 1) === 0)) this.endShoot();
     if (this.leftShoot && now - this.lastShoot >= SHOOT_RESEND_MS) { this.lastShoot = now; this.shoot(false); }
     if (now - this.hoverAt > HOVER_MS && this.ptr.inside) {
       this.hoverAt = now;
@@ -566,7 +569,7 @@ export class InputController {
       const prev = this.buttons;
       this.buttons = e.buttons;
       if (this.rightHeld && (e.buttons & 2) === 0) this.releaseRight();
-      if ((e.buttons & 1) === 0) this.leftShoot = false;
+      if ((e.buttons & 1) === 0) this.endShoot();
       const pressed = e.buttons & ~prev;
       if (pressed & 3) {
         const onSurface = e.target === this.surface || (typeof Node !== 'undefined' && e.target instanceof Node && this.surface.contains(e.target));
@@ -615,7 +618,7 @@ export class InputController {
   private onUp(e: PointerEvent): void {
     this.ptr.x = e.clientX; this.ptr.y = e.clientY;
     this.buttons = e.buttons;
-    if (e.button === 0) this.leftShoot = false;
+    if (e.button === 0) this.endShoot();
     if (e.button === 2) this.releaseRight();
     else if (this.rightHeld && (e.buttons & 2) === 0) this.rightHeld = false;   // right went up first (chorded)
     if (e.button === 1) { if (this.middle?.scouting) this.r.camera?.scout(false); this.middle = null; }
@@ -685,8 +688,18 @@ export class InputController {
     if (!g) return false;
     const t = this.attackMoveTarget(g);
     this.client.send({ type: 'attackAt', x: g.x, y: g.y, ...(t ? { target: t.id } : {}), ...(this.fightersOnly() ? { fighters: true } : {}) });
+    this.shootSends = marker ? 1 : this.shootSends + 1;
+    this.shootAt = { x: g.x, y: g.y };
     if (marker && t) this.hooks.marker({ x: t.x, y: t.y, kind: 'attack', target: t.id });
     return true;
+  }
+  /** the held attack-in-place press ends (button or modifier let go): a hold that re-sent tells the sim to stop now, so
+   *  no owed attack goes off after the release (orch1 r2); a single click keeps its one attack */
+  private endShoot(): void {
+    if (!this.leftShoot) return;
+    this.leftShoot = false;
+    if (this.shootSends >= 2) this.client.send({ type: 'attackAt', x: this.shootAt.x, y: this.shootAt.y, end: true });
+    this.shootSends = 0;
   }
   /** the attack-in-place aim line: from the hero toward the cursor, its attack reach (range + body) long, the reach ring */
   private shootSpec(b: EntityView, g: { x: number; y: number }): AimSpecLike {

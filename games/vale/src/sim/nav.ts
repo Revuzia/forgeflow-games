@@ -41,6 +41,14 @@ const SNAP_DETOUR_M = 0.5;
 const SNAP_FAR = 1.5;
 const SNAP_FAR_M = 1;
 const SNAP_AWAY = 0.5;
+/** … and when the straight walk would gain under SNAP_STUCK_GAIN m toward the click (the walker stands against the
+ *  obstacle, e.g. beside a tower with the wall behind it), a click must still do something (orch1 r2: a click on the
+ *  wall 0.94 m from an open point stood the hero still): the open point within SNAP_STUCK_R of the click whose route
+ *  is at most SNAP_STUCK × straight + SNAP_STUCK_M, even if the way round first steps away from the click */
+const SNAP_STUCK_GAIN = 1;
+const SNAP_STUCK_R = 3;
+const SNAP_STUCK = 2;
+const SNAP_STUCK_M = 2;
 /** route confirmations per snap (the flood prices the rest; candidates in straight line of walk cost one march) */
 const SNAP_SEARCHES = 6;
 /** candidates further (m) than this from the walker are only taken in straight line of walk (the flood is bounded
@@ -453,6 +461,8 @@ export class NavGrid {
    * (the same radius test stepToward uses) or at most SNAP_DETOUR × straight + SNAP_DETOUR_M of route away, or along a
    * longer route (≤ SNAP_FAR × straight + SNAP_FAR_M); every route one that never takes it more than SNAP_AWAY further
    * from the click than it starts (ruling 38: the pricing flood is confined to that disc round the click).
+   * When that straight walk would gain under SNAP_STUCK_GAIN (the walker stands against the obstacle), the open point
+   * within SNAP_STUCK_R of the click reachable within SNAP_STUCK × straight + SNAP_STUCK_M, even round the obstacle.
    * Failing that, the end of the walker's straight walk toward the click (stop at the obstacle). Every candidate
    * is nearer the click than the walker, so a held cursor just inside a face never steps it backwards.
    * Writes `out`; false when nothing is open at all.
@@ -505,17 +515,17 @@ export class NavGrid {
       // steps run up to ~8 % over the string-pulled walk), so a candidate it leaves unpriced is out of reach
       this.flood(sx, sy, (far * SNAP_FAR + SNAP_FAR_M) * 1.09 + c, x, y, d0 + SNAP_AWAY);
       for (let k = 0; k < cand.length; k++) cost.push(this.closedGen[cand[k]] === this.gen ? this.g[cand[k]] * c : Infinity);
-      let searches = 0;
+      let searches = 0, picked = false;
       const route = this.snapRoute;
       const slack = c * 0.75;   // the walker's offset from its cell centre, start and end
       for (let k = 0; k < cand.length; k++) {
         const i = cand[k];
         const px = ((i % this.w) + 0.5) * c, py = (Math.floor(i / this.w) + 0.5) * c;
-        if (this.lineOfWalk(sx, sy, px, py, r)) { gx = px; gy = py; break; }
+        if (this.lineOfWalk(sx, sy, px, py, r)) { gx = px; gy = py; picked = true; break; }
         const D = Math.sqrt((px - sx) * (px - sx) + (py - sy) * (py - sy));
         const cap = D * SNAP_DETOUR + SNAP_DETOUR_M;
         const g = cost[k];
-        if (g <= cap - slack) { gx = px; gy = py; break; }   // clearly within the detour bound
+        if (g <= cap - slack) { gx = px; gy = py; picked = true; break; }   // clearly within the detour bound
         // otherwise the walker's own route decides: within the bound, or (a longer way round, e.g. a distant point
         // in a pit) one that never takes the walker further from the click than it starts
         const capFar = D * SNAP_FAR + SNAP_FAR_M;
@@ -528,8 +538,28 @@ export class NavGrid {
         if (Math.abs(ex - px) + Math.abs(ey - py) > 1e-6) continue;
         const L = polyLen(sx, sy, route, 0);
         if (L > capFar || !routeNear(sx, sy, route, x, y, d0 + SNAP_AWAY)) continue;
-        gx = px; gy = py;
+        gx = px; gy = py; picked = true;
         break;
+      }
+      // C: the straight walk barely moves the walker (it stands against the obstacle): the way round to an open point
+      // beside the click, so a click never does nothing while such a point is in reach
+      if (!picked && d0 - dB < SNAP_STUCK_GAIN) {
+        let tries = 0;
+        for (let k = 0; k < cand.length && tries < SNAP_SEARCHES; k++) {
+          const i = cand[k];
+          const px = ((i % this.w) + 0.5) * c, py = (Math.floor(i / this.w) + 0.5) * c;
+          if ((px - x) * (px - x) + (py - y) * (py - y) > SNAP_STUCK_R * SNAP_STUCK_R) break;   // cand is nearest-first
+          const D = Math.sqrt((px - sx) * (px - sx) + (py - sy) * (py - sy));
+          const capS = D * SNAP_STUCK + SNAP_STUCK_M;
+          tries++;
+          route.length = 0;
+          if (!this.boundedPath(sx, sy, px, py, route, r, capS)) continue;
+          const ex = route[route.length - 2], ey = route[route.length - 1];
+          if (Math.abs(ex - px) + Math.abs(ey - py) > 1e-6) continue;
+          if (polyLen(sx, sy, route, 0) > capS) continue;
+          gx = px; gy = py;
+          break;
+        }
       }
     }
     out.x = gx; out.y = gy;

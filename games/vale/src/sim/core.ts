@@ -21,7 +21,7 @@ import { attackSystem } from './attack.ts';
 import type { CatalogIndex } from './catalog_index.ts';
 import { killEntity, tickShields } from './combat.ts';
 import { SLOT_INDEX, type Entity } from './entity.ts';
-import { finalizeStates, issueAttack, issueAttackAt, issueMove, issueStop, movementSystem } from './movement.ts';
+import { endAttackAt, finalizeStates, issueAttack, issueAttackAt, issueMove, issueStop, movementSystem } from './movement.ts';
 import { projectileSystem } from './projectiles.ts';
 import { hashString } from './rng.ts';
 import { spawnFighter } from './spawn.ts';
@@ -47,7 +47,7 @@ export function commandSystem(w: World): void {
         if (e && e.alive && t && t.team !== e.team) issueAttack(w, e, t);
         break;
       }
-      case 'attackAt': if (e && e.alive) issueAttackAt(w, e, cmd.x, cmd.y, cmd.target ?? -1, !!cmd.fighters); break;
+      case 'attackAt': if (e && e.alive) { if (cmd.end) endAttackAt(e); else issueAttackAt(w, e, cmd.x, cmd.y, cmd.target ?? -1, !!cmd.fighters); } break;
       case 'stop': if (e && e.alive) issueStop(w, e); break;
       case 'cast': if (e) tryCast(w, e, SLOT_INDEX[cmd.slot] ?? -1, cmd.x, cmd.y, cmd.target); break;
       case 'levelUp': if (e) levelUpAbility(w, e, cmd.slot); break;

@@ -102,16 +102,21 @@ export function spawnAttackProjectile(w: World, src: Entity, target: Entity, cri
   w.emit({ e: 'projectile', t: w.time, id: p.id, src: src.id, ability: 'attack', vfx: ad.present?.vfx });
 }
 
+/** width (m) of a ranged basic attack thrown at the ground */
+const AIM_SHOT_W = 0.3;
 /** a ranged basic attack thrown at the ground (ruling 39): along (dx, dy) for `reach` m, the attack on the first enemy hit */
 export function spawnAttackShot(w: World, src: Entity, dx: number, dy: number, reach: number, crit: boolean, dtype: 'phys' | 'magic' | 'true',
   empower: readonly EffectT[] | null, empCtx: EffectCtx | null): void {
   const ad = src.attackDef!;
-  const p = newProjectile(w, src, src.def, src.x, src.y, 0.3, ad.present?.vfx);
+  const p = newProjectile(w, src, src.def, src.x, src.y, AIM_SHOT_W, ad.present?.vfx);
   const speed = ad.projectileSpeed ?? 20;
+  // the shot's hit test reaches half its width past its centre: end the flight that much short, so it never lands on a
+  // unit a targeted attack could not reach (orch1 r2: a post at range + 0.15 m was hit, inAttackRange false at + 0.10)
+  reach = Math.max(0, reach - AIM_SHOT_W / 2);
   p.facing = datan2(dy, dx);
   p.vx = dx * speed; p.vy = dy * speed;
   p.proj = {
-    attack: true, eff: null, ctx: empCtx, src, target: -1, targetLife: 0, homing: false, speed, range: Math.max(0, reach), traveled: 0, width: 0.3,
+    attack: true, eff: null, ctx: empCtx, src, target: -1, targetLife: 0, homing: false, speed, range: reach, traveled: 0, width: AIM_SHOT_W,
     pierceLeft: 0, hits: [], returning: false, stopAtWalls: true, dirX: dx, dirY: dy, tx: src.x + dx * reach, ty: src.y + dy * reach,
     crit, dtype, empower: empower ? empower.slice() : null, empowerSrc: '',
   };

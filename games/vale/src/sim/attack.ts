@@ -239,6 +239,7 @@ function attackAtStep(w: World, e: Entity): void {
   const t = attackAtTarget(w, e);
   if (e.atkCd > 0) { e.atkTarget = t ? t.id : -1; return; }
   e.atkAtLeft--;
+  e.atkAtFired = true;
   if (t) startAttack(w, e, t); else startAimed(w, e);
 }
 

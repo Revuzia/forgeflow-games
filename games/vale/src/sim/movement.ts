@@ -172,6 +172,7 @@ export function issueAttackAt(w: World, e: Entity, x: number, y: number, target:
     const t = e.atkAimed ? null : w.live(e.atkTarget);
     if (!t || !attackAtMeans(e, t, x, y)) { e.atkWindup = -1; e.atkAnim = 0; }
   }
+  if (e.order !== ORDER_ATTACK_AT) e.atkAtFired = false;
   e.order = ORDER_ATTACK_AT;
   e.orderX = x; e.orderY = y; e.orderTarget = target; e.pendingSlot = -1;
   e.orderReqX = NaN; e.orderReqY = NaN;
@@ -185,6 +186,12 @@ export function issueAttackAt(w: World, e: Entity, x: number, y: number, target:
     const dx = x - e.x, dy = y - e.y;
     if (dx * dx + dy * dy > 1e-6) e.facing = datan2(dy, dx);
   }
+}
+/** the held attack-in-place button was let go (orch1 r2): a run that already fired owes nothing more (the swing in
+ *  progress finishes); a press that has not fired yet keeps its one attack (one click is one attack) */
+export function endAttackAt(e: Entity): void {
+  if (e.order !== ORDER_ATTACK_AT || !e.atkAtFired) return;
+  e.order = ORDER_NONE; e.orderTarget = -1; e.atkAtLeft = 0;
 }
 export function issueStop(w: World, e: Entity): void {
   e.order = ORDER_NONE; e.orderTarget = -1; e.pendingSlot = -1;

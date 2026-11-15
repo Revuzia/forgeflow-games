@@ -55,7 +55,7 @@ try {
     W.command = (p, cmd) => { if (p === c.you) orig(p, cmd); };
     window.__me = me.entity;
     const s = W.entity(me.entity); s.hp = s.maxHp;
-    for (const sl of s.slots ?? []) { sl.rank = Math.max(sl.rank, 1); sl.cooldown = 0; }
+    for (const sl of s.slots ?? []) if (sl) { sl.rank = Math.max(sl.rank, 1); sl.cooldown = 0; }
     // the in-page logger: per rAF frame the drawn state, and every input's timeStamp
     const L = { frames: [], ev: [] };
     window.__L = L;
@@ -117,7 +117,7 @@ try {
   }
   for (let i = 0; i < N; i++) {
     await page.keyboard.press('KeyS'); await page.waitForTimeout(200); await still();
-    await vale(page, (v) => { const W = v.state.match.value.sim.world, s = W.entity(window.__me); for (const sl of s.slots ?? []) sl.cooldown = 0; s.res = s.maxRes ?? s.res; });
+    await vale(page, (v) => { const W = v.state.match.value.sim.world, s = W.entity(window.__me); for (const sl of s.slots ?? []) if (sl) sl.cooldown = 0; s.res = s.maxRes ?? s.res; });
     await page.mouse.move(960, 400); await page.waitForTimeout(80);
     const e1 = await vale(page, () => window.__L.ev.length);
     await page.keyboard.press('KeyQ');

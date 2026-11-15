@@ -455,7 +455,7 @@
      "helm"
     ],
     "hex": "#2C6A80",
-    "L": 12,
+    "L": 10,
     "C": 30
    },
    {
@@ -467,7 +467,7 @@
      "tier_L"
     ],
     "hex": "#2F6F78",
-    "L": 32,
+    "L": 28,
     "C": 6
    },
    {
@@ -573,7 +573,7 @@
      0.79
     ],
     "hex": "#2E6650",
-    "L": 80,
+    "L": 93,
     "C": 7,
     "k": 1.0
    },
@@ -594,7 +594,7 @@
      0.79
     ],
     "hex": "#2E6650",
-    "L": 26,
+    "L": 22,
     "C": 16,
     "k": 1.0
    }
@@ -613,16 +613,6 @@
     "k": 0.6
    },
    {
-    "why": "orch1 W1-B fix 1: the mask a deep honey (albedo HSV ~44, L* 54): hue kept inside 28-50 in game (FU-2), value one step under the pale honey tops of Nurrow, Tunlan and Sukri (units_gate P1), yellower than Burdam's oxblood-brown",
-    "parts": [
-     "mask"
-    ],
-    "hex": "#A8862A",
-    "L": 54,
-    "C": 22,
-    "k": 1.0
-   },
-   {
     "why": "orch1 FU-2 / units_gate P2: the pale linen shirt (coat texels L* >= 50) a cool olive-grey, so the warm sun no longer reads the whole top as honey in the harm band; the honey stays on the mask, hands and pots",
     "parts": [
      "coat"
@@ -631,6 +621,30 @@
     "hex": "#6B6E5C",
     "L": 52,
     "C": 6
+   },
+   {
+    "why": "orch1 W1-B fix 1 (units_gate P1/P2): the carried pots and their rims a deep olive glaze in the cap's family; in game the yoke lifts the pots into the top quarter of the silhouette, where their pale honey clay read the whole top as Nurrow's and Tunlan's honey (dE 5.3); the honey resin in the mouths, the mask and the hands keep their honey",
+    "parts": [
+     "pot_R",
+     "pot_L",
+     "pot_rim_R",
+     "pot_rim_L"
+    ],
+    "hex": "#3E4A2A",
+    "L": 34,
+    "C": 14,
+    "k": 0.8
+   },
+   {
+    "why": "orch1 W1-B fix 1: the yoke staff and its caps a dark seasoned wood (it rises over the head in most stances)",
+    "parts": [
+     "staff",
+     "staff_caps"
+    ],
+    "hex": "#5A4E36",
+    "L": 32,
+    "C": 10,
+    "k": 0.8
    }
   ],
   "reserveModes": {
@@ -704,9 +718,9 @@
     "parts": [
      "hood"
     ],
-    "hex": "#3F7A4A",
-    "L": 36,
-    "C": 22,
+    "hex": "#447038",
+    "L": 48,
+    "C": 20,
     "k": 0.8,
     "boxes": [
      [
@@ -725,8 +739,8 @@
      "hood",
      "hood_tail"
     ],
-    "hex": "#3F7A4A",
-    "L": 22,
+    "hex": "#447038",
+    "L": 26,
     "C": 18,
     "k": 0.8,
     "boxes": [
@@ -739,17 +753,6 @@
       1.7
      ]
     ]
-   },
-   {
-    "why": "orch1 W1-B fix 1: the cowl and sleeves a pale undyed linen (low chroma), so the bible's top value band holds under the deep green hood and the dome breaks from the shoulders by value",
-    "parts": [
-     "cowl",
-     "sleeves"
-    ],
-    "hex": "#8A7B5C",
-    "L": 68,
-    "C": 7,
-    "k": 0.8
    }
   ],
   "reserveModes": {
