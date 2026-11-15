@@ -1,0 +1,582 @@
+{
+ "what": "orch1 wobble diag, LIVE BROWSER lens: Wick lateral offset from the road centre on RIFT (Hourfall) high/low roads",
+ "when": "2026-11-15 17:15-17:31 CST",
+ "how": "real Chrome 1920x1080 headless, own frozen vite :5277, render bench (bots on all 10 seats, spectator, fog off), seeds 3/7/11, match 1:33-8:00 stepped at 1/30 s, every Wick sim + drawn position every frame (716,665 marching Wick-frames), JPEG every 2 s cycling 4 inner-tower spots (scratch), 5 annotated frames in evidence/wobble/",
+ "scripts": [
+  "_harness/_tmp_wobble_live.mjs",
+  "_harness/_tmp_wobble_analyze.py",
+  "_harness/_tmp_wobble_vertex.py",
+  "_harness/_tmp_wobble_shots.mjs"
+ ],
+ "sign": "offset > 0 = world +y = screen-down (bench camera); on the low road the same inside-of-curve dip is negative (screen-up)",
+ "marching_filter": "order attack-move, not chasing, not stepping out (ruling 39 flank), no attack target",
+ "road_vs_sim": "render/terrain.ts bakes the road band from the same map lane polyline (terrain.ts:621,805; LANE_HALF 3.6): drawn road centre == sim lane polyline by construction; annotated frames show the stone band inside the dashed +-3.6 m edges",
+ "drawn_minus_sim_offset_m": {
+  "n": 716665,
+  "median_abs": 0.005,
+  "p99_abs": 0.032,
+  "max_abs": 0.109
+ },
+ "per_vertex_dip_m": {
+  "road_high|t0|v1": {
+   "s": 9.1,
+   "xy": [
+    22.8,
+    38.6
+   ],
+   "turn_deg": -13.8,
+   "n_wicks": 228,
+   "n_waves": 36,
+   "dip_mean": -0.02,
+   "dip_median": -0.2,
+   "dip_p90_abs": 0.42,
+   "dip_max_abs": 0.44,
+   "share_screen_down": 0.44,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.38,
+   "drawn_peak_mean": -0.01
+  },
+  "road_high|t0|v2": {
+   "s": 18.3,
+   "xy": [
+    26.2,
+    30.1
+   ],
+   "turn_deg": 20.5,
+   "n_wicks": 249,
+   "n_waves": 39,
+   "dip_mean": 0.46,
+   "dip_median": 0.48,
+   "dip_p90_abs": 0.58,
+   "dip_max_abs": 0.64,
+   "share_screen_down": 0.97,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 1.3,
+   "drawn_peak_mean": 0.45
+  },
+  "road_high|t0|v3": {
+   "s": 27.3,
+   "xy": [
+    32.3,
+    23.4
+   ],
+   "turn_deg": 15.7,
+   "n_wicks": 249,
+   "n_waves": 39,
+   "dip_mean": 0.15,
+   "dip_median": 0.24,
+   "dip_p90_abs": 0.34,
+   "dip_max_abs": 0.38,
+   "share_screen_down": 0.75,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.23,
+   "drawn_peak_mean": 0.14
+  },
+  "road_high|t0|v4": {
+   "s": 36.4,
+   "xy": [
+    40.0,
+    18.6
+   ],
+   "turn_deg": 12.3,
+   "n_wicks": 249,
+   "n_waves": 39,
+   "dip_mean": 0.21,
+   "dip_median": 0.22,
+   "dip_p90_abs": 0.28,
+   "dip_max_abs": 0.33,
+   "share_screen_down": 0.97,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.0,
+   "drawn_peak_mean": 0.2
+  },
+  "road_high|t0|v5": {
+   "s": 45.6,
+   "xy": [
+    48.7,
+    15.5
+   ],
+   "turn_deg": 6.9,
+   "n_wicks": 249,
+   "n_waves": 39,
+   "dip_mean": 0.06,
+   "dip_median": 0.11,
+   "dip_p90_abs": 0.15,
+   "dip_max_abs": 0.21,
+   "share_screen_down": 0.73,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.02,
+   "drawn_peak_mean": 0.06
+  },
+  "road_high|t0|v6": {
+   "s": 54.7,
+   "xy": [
+    57.6,
+    13.5
+   ],
+   "turn_deg": 5.2,
+   "n_wicks": 202,
+   "n_waves": 37,
+   "dip_mean": 0.06,
+   "dip_median": 0.09,
+   "dip_p90_abs": 0.19,
+   "dip_max_abs": 0.75,
+   "share_screen_down": 0.79,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.03,
+   "drawn_peak_mean": 0.05
+  },
+  "road_high|t0|v7": {
+   "s": 63.9,
+   "xy": [
+    66.7,
+    12.3
+   ],
+   "turn_deg": 3.7,
+   "n_wicks": 147,
+   "n_waves": 25,
+   "dip_mean": 0.04,
+   "dip_median": 0.06,
+   "dip_p90_abs": 0.17,
+   "dip_max_abs": 0.54,
+   "share_screen_down": 0.8,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.07,
+   "drawn_peak_mean": 0.04
+  },
+  "road_high|t0|v8": {
+   "s": 73.0,
+   "xy": [
+    75.8,
+    11.7
+   ],
+   "turn_deg": 2.5,
+   "n_wicks": 114,
+   "n_waves": 20,
+   "dip_mean": 0.04,
+   "dip_median": 0.04,
+   "dip_p90_abs": 0.07,
+   "dip_max_abs": 0.49,
+   "share_screen_down": 0.92,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.03,
+   "drawn_peak_mean": 0.03
+  },
+  "road_high|t1|v10": {
+   "s": 91.5,
+   "xy": [
+    94.2,
+    11.7
+   ],
+   "turn_deg": 2.5,
+   "n_wicks": 146,
+   "n_waves": 29,
+   "dip_mean": 0.04,
+   "dip_median": 0.04,
+   "dip_p90_abs": 0.12,
+   "dip_max_abs": 1.19,
+   "share_screen_down": 0.8,
+   "waves_with_dip_gt_0_75": 1,
+   "dur_off_mean_s": 0.09,
+   "drawn_peak_mean": 0.04
+  },
+  "road_high|t1|v11": {
+   "s": 100.6,
+   "xy": [
+    103.3,
+    12.3
+   ],
+   "turn_deg": 3.7,
+   "n_wicks": 163,
+   "n_waves": 29,
+   "dip_mean": 0.05,
+   "dip_median": 0.06,
+   "dip_p90_abs": 0.11,
+   "dip_max_abs": 0.4,
+   "share_screen_down": 0.8,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.03,
+   "drawn_peak_mean": 0.04
+  },
+  "road_high|t1|v12": {
+   "s": 109.8,
+   "xy": [
+    112.4,
+    13.5
+   ],
+   "turn_deg": 5.2,
+   "n_wicks": 198,
+   "n_waves": 35,
+   "dip_mean": 0.04,
+   "dip_median": 0.08,
+   "dip_p90_abs": 0.16,
+   "dip_max_abs": 0.47,
+   "share_screen_down": 0.75,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.02,
+   "drawn_peak_mean": 0.04
+  },
+  "road_high|t1|v13": {
+   "s": 118.9,
+   "xy": [
+    121.3,
+    15.5
+   ],
+   "turn_deg": 6.9,
+   "n_wicks": 246,
+   "n_waves": 39,
+   "dip_mean": 0.05,
+   "dip_median": 0.1,
+   "dip_p90_abs": 0.2,
+   "dip_max_abs": 0.21,
+   "share_screen_down": 0.7,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.02,
+   "drawn_peak_mean": 0.05
+  },
+  "road_high|t1|v14": {
+   "s": 128.1,
+   "xy": [
+    130.0,
+    18.6
+   ],
+   "turn_deg": 12.3,
+   "n_wicks": 249,
+   "n_waves": 39,
+   "dip_mean": 0.21,
+   "dip_median": 0.26,
+   "dip_p90_abs": 0.35,
+   "dip_max_abs": 0.38,
+   "share_screen_down": 0.89,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.14,
+   "drawn_peak_mean": 0.2
+  },
+  "road_high|t1|v15": {
+   "s": 137.2,
+   "xy": [
+    137.7,
+    23.4
+   ],
+   "turn_deg": 15.7,
+   "n_wicks": 249,
+   "n_waves": 39,
+   "dip_mean": 0.23,
+   "dip_median": 0.28,
+   "dip_p90_abs": 0.35,
+   "dip_max_abs": 0.42,
+   "share_screen_down": 0.9,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.09,
+   "drawn_peak_mean": 0.22
+  },
+  "road_high|t1|v16": {
+   "s": 146.2,
+   "xy": [
+    143.8,
+    30.1
+   ],
+   "turn_deg": 20.5,
+   "n_wicks": 249,
+   "n_waves": 39,
+   "dip_mean": 0.55,
+   "dip_median": 0.53,
+   "dip_p90_abs": 0.68,
+   "dip_max_abs": 0.74,
+   "share_screen_down": 1.0,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 1.67,
+   "drawn_peak_mean": 0.53
+  },
+  "road_high|t1|v17": {
+   "s": 155.4,
+   "xy": [
+    147.2,
+    38.6
+   ],
+   "turn_deg": -13.8,
+   "n_wicks": 228,
+   "n_waves": 36,
+   "dip_mean": -0.4,
+   "dip_median": -0.4,
+   "dip_p90_abs": 0.45,
+   "dip_max_abs": 0.48,
+   "share_screen_down": 0.0,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.68,
+   "drawn_peak_mean": -0.39
+  },
+  "road_low|t0|v1": {
+   "s": 9.1,
+   "xy": [
+    22.8,
+    71.4
+   ],
+   "turn_deg": 13.8,
+   "n_wicks": 228,
+   "n_waves": 36,
+   "dip_mean": 0.4,
+   "dip_median": 0.4,
+   "dip_p90_abs": 0.46,
+   "dip_max_abs": 0.48,
+   "share_screen_down": 1.0,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.68,
+   "drawn_peak_mean": 0.39
+  },
+  "road_low|t0|v2": {
+   "s": 18.3,
+   "xy": [
+    26.2,
+    79.9
+   ],
+   "turn_deg": -20.5,
+   "n_wicks": 249,
+   "n_waves": 39,
+   "dip_mean": -0.55,
+   "dip_median": -0.53,
+   "dip_p90_abs": 0.68,
+   "dip_max_abs": 0.74,
+   "share_screen_down": 0.0,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 1.68,
+   "drawn_peak_mean": -0.53
+  },
+  "road_low|t0|v3": {
+   "s": 27.3,
+   "xy": [
+    32.3,
+    86.6
+   ],
+   "turn_deg": -15.7,
+   "n_wicks": 249,
+   "n_waves": 39,
+   "dip_mean": -0.23,
+   "dip_median": -0.29,
+   "dip_p90_abs": 0.35,
+   "dip_max_abs": 0.42,
+   "share_screen_down": 0.12,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.09,
+   "drawn_peak_mean": -0.21
+  },
+  "road_low|t0|v4": {
+   "s": 36.4,
+   "xy": [
+    40.0,
+    91.4
+   ],
+   "turn_deg": -12.3,
+   "n_wicks": 249,
+   "n_waves": 39,
+   "dip_mean": -0.21,
+   "dip_median": -0.26,
+   "dip_p90_abs": 0.35,
+   "dip_max_abs": 0.38,
+   "share_screen_down": 0.11,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.14,
+   "drawn_peak_mean": -0.2
+  },
+  "road_low|t0|v5": {
+   "s": 45.6,
+   "xy": [
+    48.7,
+    94.5
+   ],
+   "turn_deg": -6.9,
+   "n_wicks": 242,
+   "n_waves": 39,
+   "dip_mean": -0.05,
+   "dip_median": -0.1,
+   "dip_p90_abs": 0.2,
+   "dip_max_abs": 0.37,
+   "share_screen_down": 0.29,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.03,
+   "drawn_peak_mean": -0.05
+  },
+  "road_low|t0|v6": {
+   "s": 54.7,
+   "xy": [
+    57.6,
+    96.5
+   ],
+   "turn_deg": -5.2,
+   "n_wicks": 200,
+   "n_waves": 36,
+   "dip_mean": -0.04,
+   "dip_median": -0.08,
+   "dip_p90_abs": 0.16,
+   "dip_max_abs": 0.79,
+   "share_screen_down": 0.26,
+   "waves_with_dip_gt_0_75": 1,
+   "dur_off_mean_s": 0.05,
+   "drawn_peak_mean": -0.04
+  },
+  "road_low|t0|v7": {
+   "s": 63.9,
+   "xy": [
+    66.7,
+    97.7
+   ],
+   "turn_deg": -3.7,
+   "n_wicks": 127,
+   "n_waves": 26,
+   "dip_mean": -0.05,
+   "dip_median": -0.06,
+   "dip_p90_abs": 0.24,
+   "dip_max_abs": 1.36,
+   "share_screen_down": 0.24,
+   "waves_with_dip_gt_0_75": 3,
+   "dur_off_mean_s": 0.16,
+   "drawn_peak_mean": -0.05
+  },
+  "road_low|t1|v10": {
+   "s": 91.5,
+   "xy": [
+    94.2,
+    98.3
+   ],
+   "turn_deg": -2.5,
+   "n_wicks": 162,
+   "n_waves": 28,
+   "dip_mean": -0.0,
+   "dip_median": -0.04,
+   "dip_p90_abs": 0.06,
+   "dip_max_abs": 1.3,
+   "share_screen_down": 0.1,
+   "waves_with_dip_gt_0_75": 2,
+   "dur_off_mean_s": 0.09,
+   "drawn_peak_mean": -0.0
+  },
+  "road_low|t1|v11": {
+   "s": 100.6,
+   "xy": [
+    103.3,
+    97.7
+   ],
+   "turn_deg": -3.7,
+   "n_wicks": 216,
+   "n_waves": 35,
+   "dip_mean": -0.05,
+   "dip_median": -0.06,
+   "dip_p90_abs": 0.08,
+   "dip_max_abs": 0.2,
+   "share_screen_down": 0.17,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.0,
+   "drawn_peak_mean": -0.04
+  },
+  "road_low|t1|v12": {
+   "s": 109.8,
+   "xy": [
+    112.4,
+    96.5
+   ],
+   "turn_deg": -5.2,
+   "n_wicks": 236,
+   "n_waves": 38,
+   "dip_mean": -0.05,
+   "dip_median": -0.08,
+   "dip_p90_abs": 0.16,
+   "dip_max_abs": 0.41,
+   "share_screen_down": 0.21,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.01,
+   "drawn_peak_mean": -0.04
+  },
+  "road_low|t1|v13": {
+   "s": 118.9,
+   "xy": [
+    121.3,
+    94.5
+   ],
+   "turn_deg": -6.9,
+   "n_wicks": 248,
+   "n_waves": 39,
+   "dip_mean": -0.06,
+   "dip_median": -0.11,
+   "dip_p90_abs": 0.15,
+   "dip_max_abs": 0.21,
+   "share_screen_down": 0.27,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.02,
+   "drawn_peak_mean": -0.05
+  },
+  "road_low|t1|v14": {
+   "s": 128.1,
+   "xy": [
+    130.0,
+    91.4
+   ],
+   "turn_deg": -12.3,
+   "n_wicks": 249,
+   "n_waves": 39,
+   "dip_mean": -0.22,
+   "dip_median": -0.22,
+   "dip_p90_abs": 0.28,
+   "dip_max_abs": 0.33,
+   "share_screen_down": 0.02,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.01,
+   "drawn_peak_mean": -0.21
+  },
+  "road_low|t1|v15": {
+   "s": 137.2,
+   "xy": [
+    137.7,
+    86.6
+   ],
+   "turn_deg": -15.7,
+   "n_wicks": 249,
+   "n_waves": 39,
+   "dip_mean": -0.16,
+   "dip_median": -0.25,
+   "dip_p90_abs": 0.36,
+   "dip_max_abs": 0.38,
+   "share_screen_down": 0.22,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.28,
+   "drawn_peak_mean": -0.16
+  },
+  "road_low|t1|v16": {
+   "s": 146.2,
+   "xy": [
+    143.8,
+    79.9
+   ],
+   "turn_deg": -20.5,
+   "n_wicks": 249,
+   "n_waves": 39,
+   "dip_mean": -0.48,
+   "dip_median": -0.48,
+   "dip_p90_abs": 0.58,
+   "dip_max_abs": 0.64,
+   "share_screen_down": 0.01,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 1.26,
+   "drawn_peak_mean": -0.46
+  },
+  "road_low|t1|v17": {
+   "s": 155.4,
+   "xy": [
+    147.2,
+    71.4
+   ],
+   "turn_deg": 13.8,
+   "n_wicks": 228,
+   "n_waves": 36,
+   "dip_mean": 0.01,
+   "dip_median": 0.19,
+   "dip_p90_abs": 0.42,
+   "dip_max_abs": 0.44,
+   "share_screen_down": 0.55,
+   "waves_with_dip_gt_0_75": 0,
+   "dur_off_mean_s": 0.38,
+   "drawn_peak_mean": 0.01
+  }
+ },
+ "lantern_navpath": "1 Wick in 6-10 of 13 waves per seed, high team 1 (s_high_lantern) and low team 0 (a_low_lantern) only: a 4-point nav path round the lantern clearance disc (r 1.5 + 0.35, 2.77 m off the line) for <= 1.1 s, <= 0.70 m off; near the inner/outer towers 0 body-lane frames and 0-119 nav-path frames per seed",
+ "flank_frames_share": "279 of 729,974 Wick-frames (seed 7) in the ruling-39 step-out; none while marching"
+}
