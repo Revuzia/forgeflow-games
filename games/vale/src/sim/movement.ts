@@ -165,14 +165,14 @@ const ATTACK_AT_GRACE = 0.5;
  * already under way finishes when the new aim still means its target, else it is dropped (its cooldown still runs, as a
  * move's). The order lapses ATTACK_AT_GRACE s after its cooldown ends if no attack could start (disarmed, stunned).
  */
-export function issueAttackAt(w: World, e: Entity, x: number, y: number, target: EntityId, fighters: boolean): void {
+export function issueAttackAt(w: World, e: Entity, x: number, y: number, target: EntityId, fighters: boolean, held = false): void {
   const m = w.mapDef.size;
   x = Math.max(0, Math.min(m[0] - 1e-3, x)); y = Math.max(0, Math.min(m[1] - 1e-3, y));
   if (e.atkWindup >= 0 && e.order !== ORDER_ATTACK_AT) {
     const t = e.atkAimed ? null : w.live(e.atkTarget);
     if (!t || !attackAtMeans(e, t, x, y)) { e.atkWindup = -1; e.atkAnim = 0; }
   }
-  if (e.order !== ORDER_ATTACK_AT) e.atkAtFired = false;
+  if (!held) e.atkAtFired = false;   // a new press (a held button's re-sends carry held: true)
   e.order = ORDER_ATTACK_AT;
   e.orderX = x; e.orderY = y; e.orderTarget = target; e.pendingSlot = -1;
   e.orderReqX = NaN; e.orderReqY = NaN;
@@ -187,7 +187,7 @@ export function issueAttackAt(w: World, e: Entity, x: number, y: number, target:
     if (dx * dx + dy * dy > 1e-6) e.facing = datan2(dy, dx);
   }
 }
-/** the held attack-in-place button was let go (orch1 r2): a run that already fired owes nothing more (the swing in
+/** the held attack-in-place button was let go (orch1 r2): a press that already fired owes nothing more (the swing in
  *  progress finishes); a press that has not fired yet keeps its one attack (one click is one attack) */
 export function endAttackAt(e: Entity): void {
   if (e.order !== ORDER_ATTACK_AT || !e.atkAtFired) return;

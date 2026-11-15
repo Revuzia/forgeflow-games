@@ -55,7 +55,7 @@ export type Command =
   /** CHANGED(ruling 39), additive: attack in place toward (x, y), never walking (Shift + left-click): the enemy nearest
    *  the point already in attack range (`target` first when it is), else a basic attack thrown toward the point;
    *  fighters: consider enemy fighters only */
-  | { type: 'attackAt'; x: number; y: number; target?: EntityId; fighters?: boolean; end?: boolean }
+  | { type: 'attackAt'; x: number; y: number; target?: EntityId; fighters?: boolean; held?: boolean; end?: boolean }
   | { type: 'stop' }
   | { type: 'cast'; slot: SlotT; x?: number; y?: number; target?: EntityId }
   | { type: 'levelUp'; slot: 'a1' | 'a2' | 'a3' | 'ult' }

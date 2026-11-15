@@ -167,7 +167,8 @@ export class BotMatch {
           push3(this.dealtLog, src.id, { t: ev.t, a: ev.amount }, ev.t);
           let mx = this.takenMix.get(dst.id);
           if (!mx) { mx = { phys: 0, magic: 0, t: ev.t }; this.takenMix.set(dst.id, mx); }
-          const k = Math.exp(-(ev.t - mx.t) / 180);
+          // (a ~3-minute fade; rational, not Math.exp: the sim's math stays bit-identical everywhere, probe_sim_dmath)
+          const k = 1 / (1 + Math.max(0, ev.t - mx.t) / 180);
           mx.phys *= k; mx.magic *= k; mx.t = ev.t;
           if (ev.dtype === 'magic') mx.magic += ev.amount; else if (ev.dtype === 'phys') mx.phys += ev.amount;
           break;

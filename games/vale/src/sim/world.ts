@@ -160,7 +160,7 @@ export function validCommand(c: unknown): c is Command {
   switch (o.type) {
     case 'move': return finite(o.x) && finite(o.y) && (o.attackMove === undefined || typeof o.attackMove === 'boolean') && optInt(o.prefer);
     case 'attack': return Number.isInteger(o.target);
-    case 'attackAt': return finite(o.x) && finite(o.y) && optInt(o.target) && (o.fighters === undefined || typeof o.fighters === 'boolean') && (o.end === undefined || typeof o.end === 'boolean');
+    case 'attackAt': return finite(o.x) && finite(o.y) && optInt(o.target) && (o.fighters === undefined || typeof o.fighters === 'boolean') && (o.end === undefined || typeof o.end === 'boolean') && (o.held === undefined || typeof o.held === 'boolean');
     case 'stop': case 'undo': case 'recall': return true;
     case 'cast': return typeof o.slot === 'string' && optFinite(o.x) && optFinite(o.y) && optInt(o.target);
     case 'levelUp': return typeof o.slot === 'string';

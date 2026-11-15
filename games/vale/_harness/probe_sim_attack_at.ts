@@ -247,6 +247,67 @@ section('fighters-only: the enemy fighter in range is picked over a minion neare
   check('the fighter is attacked', a.length === 1 && a[0].dst === r.foe.id, { got: a.map((e) => e.dst), minion: m.id, fighter: r.foe.id });
 });
 
+section('reach (orch1 r2): a ground shot never lands on an enemy a targeted attack could not reach', () => {
+  for (const over of [0.02, 0.1, 0.14, 0.3]) {
+    const r = world('fx_slinger');
+    const m = addUnit(r.w, 'fx_dummy', 1, 5, 5);
+    const edge = 5.6 + r.h.radius + m.radius;                  // inAttackRange's bound, centre to centre
+    m.x = r.h.x + edge + over; m.y = r.h.y; r.w.hashDirty = true;
+    cmd(r, { type: 'attackAt', x: m.x, y: m.y, target: m.id });
+    steps(r, 60);
+    check(`a post ${over} m past attack range is not hit by the aimed shot`, dmgTo(r, m.id) === 0 && attacks(r).length === 1 && attacks(r)[0].dst === -1, { hits: dmgTo(r, m.id), a: attacks(r).map((e) => e.dst) });
+  }
+  {
+    const r = world('fx_slinger');
+    const m = addUnit(r.w, 'fx_dummy', 1, 5, 5);
+    m.x = r.h.x + 5.6 + r.h.radius + m.radius - 0.02; m.y = r.h.y; r.w.hashDirty = true;
+    cmd(r, { type: 'attackAt', x: m.x, y: m.y, target: m.id });
+    steps(r, 60);
+    check('a post just inside attack range is attacked and hit', dmgTo(r, m.id) === 1, dmgTo(r, m.id));
+  }
+});
+
+section('release (orch1 r2): letting go of a held button that already fired owes no further attack', () => {
+  {
+    const r = world('fx_slinger');
+    addUnit(r.w, 'fx_dummy', 1, 15, 30);
+    // held: re-sent every 3 ticks for 1.2 s (one attack at t0, the next owed at ~1 s), released at 1.2 s
+    steps(r, 36, (k) => { if (k % 3 === 0) cmd(r, { type: 'attackAt', x: 15, y: 30, ...(k ? { held: true } : {}) }); });
+    const n0 = attacks(r).length;
+    cmd(r, { type: 'attackAt', x: 15, y: 30, end: true });
+    steps(r, 90);
+    const after = attacks(r).length - n0;
+    check('{attackAt, end} is a valid command', validCommand({ type: 'attackAt', x: 1, y: 2, end: true }) && !validCommand({ type: 'attackAt', x: 1, y: 2, end: 1 }));
+    check('the hold attacked', n0 >= 1, n0);
+    check('no attack starts after the release (auto-attack off)', after === 0, { after, order: r.h.order });
+    check('the order is over', r.h.order === ORDER_NONE, r.h.order);
+  }
+  {
+    // a quick windup (0.05 s) ends the order between two re-sends: the press still counts as fired
+    const r = world('fx_slinger');
+    r.h.attackDef = { ...r.h.attackDef!, windup: 0.05 };
+    addUnit(r.w, 'fx_dummy', 1, 15, 30);
+    steps(r, 40, (k) => { if (k % 5 === 0) cmd(r, { type: 'attackAt', x: 15, y: 30, ...(k ? { held: true } : {}) }); });
+    const n0 = attacks(r).length;
+    cmd(r, { type: 'attackAt', x: 15, y: 30, end: true });
+    steps(r, 90);
+    check('quick windup, re-sends 5 ticks apart: no attack after the release', n0 >= 1 && attacks(r).length === n0, { n0, n: attacks(r).length });
+  }
+  {
+    const r = world('fx_slinger');
+    const m = addUnit(r.w, 'fx_dummy', 1, 15, 30);
+    cmd(r, { type: 'attackAt', x: 15, y: 30 });
+    steps(r, 12);                                              // the first attack is out; cooldown ~0.6 s left
+    cmd(r, { type: 'attackAt', x: 15, y: 30 });                // a new press during the cooldown, held …
+    steps(r, 3);
+    cmd(r, { type: 'attackAt', x: 15, y: 30, held: true });
+    steps(r, 1);
+    cmd(r, { type: 'attackAt', x: 15, y: 30, end: true });     // … and let go before the cooldown is over
+    steps(r, 60);
+    check('a press let go before its attack could start still gets its one attack', attacks(r).length === 2 && dmgTo(r, m.id) === 2, attacks(r).length);
+  }
+});
+
 section('determinism: the same command stream gives the same events twice', () => {
   const run = (): string => {
     const r = world('fx_slinger');

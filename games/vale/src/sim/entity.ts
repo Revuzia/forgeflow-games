@@ -380,7 +380,7 @@ export class Entity implements EntityView {
   atkAtLeft = 0;
   atkAtUntil = 0;
   atkAtFighters = false;
-  /** an attack has started under the current run of attack-in-place orders (a held button that already fired) */
+  /** an attack has started under the current attack-in-place press (its re-sends carry held: true) */
   atkAtFired = false;
   /** the attack winding up is thrown at the ground toward (atkAimX, atkAimY), not at atkTarget */
   atkAimed = false;

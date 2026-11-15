@@ -10,7 +10,11 @@
 //       POST /__shot/<name>    body = PNG data URL or raw image/* bytes → _harness/_shots/<name>.<ext>
 //       POST /__report/<name>  body = JSON                              → _harness/_reports/<name>.json
 //     <name> is sanitized to [A-Za-z0-9_.-] (no traversal); reply {ok, path, rel, bytes}.
-//   * VALE_FROZEN=1 (harness runs while other lanes edit): no HMR, no file watching.
+//   * VALE_FROZEN=1 (harness runs while other lanes edit): no HMR, no file watching. A frozen server serves the code as it
+//     was when it started, so it must not outlive its run (orch1 r2: one left on :5190 for 11 h served a controller.ts
+//     without the attack-in-place code to everyone who played or verified there): it answers every request with
+//     `X-Vale-Frozen: <start ISO>`, GET /__frozen reports {since, ttlMin, changed: src files edited since it started}, and
+//     it exits after VALE_FROZEN_TTL_MIN minutes (default 120; 0 = never, for a run that needs longer).
 //     VALE_CATALOG_DIR=<dir> serves /catalog/* from <dir> instead of dist-catalog/ (fixture catalogs).
 //   * css.postcss inline + empty: isolates the game from the repo-root postcss/Tailwind config.
 //   * JSX: Vite 8 transforms TS/TSX with oxc (not esbuild). `oxc.jsx` is set explicitly to the
@@ -42,6 +46,7 @@ const SHOTS_DIR = resolve(ROOT, '_harness', '_shots');
 const REPORTS_DIR = resolve(ROOT, '_harness', '_reports');
 const MAX_BODY_BYTES = 64 * 1024 * 1024;
 const FROZEN = process.env.VALE_FROZEN === '1';
+const FROZEN_TTL_MIN = Number(process.env.VALE_FROZEN_TTL_MIN ?? 120);
 const UNWATCHED = ['dist', 'dist-catalog', 'deploy', 'art', 'audio', 'content', '_harness', '_design'].map((d) => resolve(ROOT, d));
 
 type Next = (err?: unknown) => void;
@@ -334,12 +339,50 @@ function valeServer(): Plugin {
   };
 }
 
+// ── frozen-server guard (VALE_FROZEN=1) ──────────────────────────────────────────────────────────
+function srcChangedSince(t: number): string[] {
+  const out: string[] = [];
+  const walk = (d: string): void => {
+    for (const n of readdirSync(d, { withFileTypes: true })) {
+      const p = resolve(d, n.name);
+      if (n.isDirectory()) walk(p);
+      else if (statSync(p).mtimeMs > t) out.push(relative(ROOT, p).split(sep).join('/'));
+    }
+  };
+  for (const d of ['src', 'public']) if (existsSync(resolve(ROOT, d))) walk(resolve(ROOT, d));
+  return out.sort();
+}
+function frozenGuard(): Plugin {
+  return {
+    name: 'vale-frozen-guard',
+    configureServer(server) {
+      if (!FROZEN) return;
+      const since = Date.now(), iso = new Date(since).toISOString();
+      server.middlewares.use((req: IncomingMessage, res: ServerResponse, next: Next) => {
+        res.setHeader('X-Vale-Frozen', iso);
+        if (req.method === 'GET' && (req.url ?? '').split('?')[0] === '/__frozen') {
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({ since: iso, ttlMin: FROZEN_TTL_MIN, changed: srcChangedSince(since) }));
+          return;
+        }
+        next();
+      });
+      if (FROZEN_TTL_MIN > 0) {
+        setTimeout(() => {
+          server.config.logger.warn(`[vale] frozen dev server: ${FROZEN_TTL_MIN} min are up, exiting (VALE_FROZEN_TTL_MIN)`);
+          void server.close().finally(() => process.exit(0));
+        }, FROZEN_TTL_MIN * 60_000).unref();
+      }
+    },
+  };
+}
+
 export default defineConfig({
   root: ROOT,
   base: './',
   publicDir: resolve(ROOT, 'public'),
   clearScreen: false,
-  plugins: [valeServer(), thirdPartyNotices(), favicon()],
+  plugins: [frozenGuard(), valeServer(), thirdPartyNotices(), favicon()],
   css: { postcss: { plugins: [] } },
   oxc: {
     jsx: { runtime: 'automatic', importSource: 'preact' },

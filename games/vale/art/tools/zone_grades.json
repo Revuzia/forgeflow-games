@@ -562,7 +562,7 @@
      [
       -0.45,
       0.15,
-      2.12,
+      2.08,
       0.45,
       0.6,
       2.6
@@ -586,7 +586,7 @@
       1.69,
       0.45,
       0.6,
-      2.12
+      2.08
      ]
     ],
     "rough": [
@@ -630,21 +630,21 @@
      "pot_rim_R",
      "pot_rim_L"
     ],
-    "hex": "#3E4A2A",
+    "hex": "#4E5236",
     "L": 34,
     "C": 14,
-    "k": 0.8
+    "k": 0.5
    },
    {
-    "why": "orch1 W1-B fix 1: the yoke staff and its caps a dark seasoned wood (it rises over the head in most stances)",
+    "why": "orch1 W1-B fix 1: the yoke staff and its caps a dark olive-grey seasoned wood (it rises over the head in most stances; an olive, not a brown, so the crown leaves the harm band)",
     "parts": [
      "staff",
      "staff_caps"
     ],
-    "hex": "#5A4E36",
+    "hex": "#4E5236",
     "L": 32,
     "C": 10,
-    "k": 0.8
+    "k": 0.5
    }
   ],
   "reserveModes": {
@@ -718,7 +718,7 @@
     "parts": [
      "hood"
     ],
-    "hex": "#447038",
+    "hex": "#4A6B35",
     "L": 48,
     "C": 20,
     "k": 0.8,
@@ -739,7 +739,7 @@
      "hood",
      "hood_tail"
     ],
-    "hex": "#447038",
+    "hex": "#4A6B35",
     "L": 26,
     "C": 18,
     "k": 0.8,

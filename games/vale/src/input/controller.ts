@@ -687,7 +687,7 @@ export class InputController {
     const g = this.ground();
     if (!g) return false;
     const t = this.attackMoveTarget(g);
-    this.client.send({ type: 'attackAt', x: g.x, y: g.y, ...(t ? { target: t.id } : {}), ...(this.fightersOnly() ? { fighters: true } : {}) });
+    this.client.send({ type: 'attackAt', x: g.x, y: g.y, ...(t ? { target: t.id } : {}), ...(this.fightersOnly() ? { fighters: true } : {}), ...(marker ? {} : { held: true }) });
     this.shootSends = marker ? 1 : this.shootSends + 1;
     this.shootAt = { x: g.x, y: g.y };
     if (marker && t) this.hooks.marker({ x: t.x, y: t.y, kind: 'attack', target: t.id });

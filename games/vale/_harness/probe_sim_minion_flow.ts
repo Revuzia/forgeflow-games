@@ -21,7 +21,9 @@
 // road nor covers 1 m of ground, away from its road's end and not held by CC: a melee Wick waiting behind the front row
 // for a target it never reaches (ruling 39 steps it out to an open attack spot). Gate: 0 idle Wicks as well. A Wick at
 // the back of its own wave's blob (an enemy within aggro, 3+ allied Wicks pressed on it) creeps with the crowd: counted
-// as queued, not idle.
+// as queued, not idle, unless it holds an attack order: a Wick FROZEN in an attack order (6 s with no swing and under
+// 0.75 m of ground, the orch1 r2 verifier's bar: the back of a blob sieging a base lantern at 0.2 m/s) is counted on its
+// own, gate 0 (the creep watch in units/minions.ts steps it out to an open attack spot or another enemy).
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -125,6 +127,8 @@ function queued(w: World, e: Entity): boolean {
   return k >= QUEUE_TOUCH;
 }
 let queuedN = 0;
+const IDLE_GROUND = 0.75;
+const frozenAll: Stuck[] = [];
 
 interface Stuck { map: string; scen: string; seed: number; t: string; id: number; team: number; at: string; s: string; road: string; struct: string; bodies: number; fighterD: string; order: number; path: number; np: number; ot?: string }
 interface Track { since: number; s0: number; g: LaneG; road: string; idle: number; ix: number; iy: number; is0: number }
@@ -232,8 +236,15 @@ function runOne(modeId: string, scen: string, seed: number): { stuck: Stuck[]; i
       const s = project(g, e.x, e.y);
       if (!tr) { tr = { since: w.tick, s0: s, g, road, idle: w.tick, ix: e.x, iy: e.y, is0: s }; tracks.set(e.id, tr); continue; }
       // IDLE (what a viewer reads as stuck, fight or no fight): 6 s with no swing, under 0.5 m along the road and under
-      // 1 m of ground, away from the road's end and not held by CC
-      if (g.len - s < END_NEAR || e.atkWindup >= 0 || e.atkAnim > 0 || e.cast || (e.ccMask & (CC_HARD | CC_ROOT)) !== 0 || s - tr.is0 >= STUCK_GAIN || Math.hypot(e.x - tr.ix, e.y - tr.iy) >= 1) {
+      // 0.75 m of ground (the orch1 r2 verifier's bar), away from the road's end and not held by CC
+      if (g.len - s < END_NEAR || e.atkWindup >= 0 || e.atkAnim > 0 || e.cast || (e.ccMask & (CC_HARD | CC_ROOT)) !== 0 || s - tr.is0 >= STUCK_GAIN || Math.hypot(e.x - tr.ix, e.y - tr.iy) >= IDLE_GROUND) {
+        tr.idle = w.tick; tr.ix = e.x; tr.iy = e.y; tr.is0 = s;
+      } else if (w.tick - tr.idle >= STUCK_TICKS && e.order === ORDER_ATTACK) {
+        // holding an attack order 6 s without a swing or 0.75 m of ground: frozen behind its own blob (orch1 r2: the back
+        // of a 3-4 Wick blob sieging a base lantern, 0.2 m/s); the creep watch steps it out, so none may be left
+        frozenAll.push({ map: modeId, scen, seed, t: `${Math.floor(w.time / 60)}:${String(Math.floor(w.time % 60)).padStart(2, '0')}`, id: e.id, team: e.team,
+          at: `(${f1(e.x)}, ${f1(e.y)})`, s: `${f1(s)}/${f1(g.len)}`, road, struct: structNear(w, e.x, e.y), bodies: 0, fighterD: '', order: e.order, path: e.path.length >> 1, np: e.noProgress,
+          ot: (() => { const o = w.entity(e.orderTarget); return o ? `${o.kind} ${f1(Math.hypot(o.x - e.x, o.y - e.y) - o.radius - e.radius)} m` : '?'; })() } as Stuck);
         tr.idle = w.tick; tr.ix = e.x; tr.iy = e.y; tr.is0 = s;
       } else if (w.tick - tr.idle >= STUCK_TICKS && queued(w, e)) {
         queuedN++;
@@ -275,10 +286,12 @@ for (const map of MAPS) for (const scen of SCENS) for (let seed = SEED0; seed < 
   for (const s of r.idle.slice(0, 4)) console.log(`   idle ${JSON.stringify(s)}`);
   for (const s of r.stuck.slice(0, 6)) console.log(`   stuck ${JSON.stringify(s)}`);
 }
-try { mkdirSync(dirname(OUT), { recursive: true }); writeFileSync(OUT, JSON.stringify({ at: new Date().toISOString(), gate: '0 stuck', stuck: all.length, idle: idleAll.length, queued: queuedN, runs, episodes: all, idleEpisodes: idleAll }, null, 1) + '\n'); } catch { /* report only */ }
+try { mkdirSync(dirname(OUT), { recursive: true }); writeFileSync(OUT, JSON.stringify({ at: new Date().toISOString(), gate: '0 stuck, 0 idle, 0 frozen in an attack order', stuck: all.length, idle: idleAll.length, frozen: frozenAll.length, queued: queuedN, runs, episodes: all, idleEpisodes: idleAll, frozenEpisodes: frozenAll }, null, 1) + '\n'); } catch { /* report only */ }
 const byRoad = new Map<string, number>();
 for (const s of all) byRoad.set(`${s.map}/${s.road}`, (byRoad.get(`${s.map}/${s.road}`) ?? 0) + 1);
 console.log(`stuck Wicks: ${all.length} ${JSON.stringify(Object.fromEntries(byRoad))}`);
 console.log(`idle Wicks: ${idleAll.length} (queued in their own wave's crowd, not counted: ${queuedN})`);
-if (all.length > 0 || idleAll.length > 0) { console.log(`FAIL ${all.length} stuck and ${idleAll.length} idle Wick episode(s) (gate 0 and 0)`); process.exit(1); }
+console.log(`frozen in an attack order (6 s, no swing, < 0.75 m): ${frozenAll.length}`);
+for (const s of frozenAll.slice(0, 8)) console.log(`   frozen ${JSON.stringify(s)}`);
+if (all.length > 0 || idleAll.length > 0 || frozenAll.length > 0) { console.log(`FAIL ${all.length} stuck, ${idleAll.length} idle and ${frozenAll.length} frozen Wick episode(s) (gate 0, 0 and 0)`); process.exit(1); }
 console.log('PASS 0 stuck and 0 idle Wicks on every road of every map');

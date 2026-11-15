@@ -148,16 +148,50 @@ section('held left button: re-sent at the moving cursor at the shoot cadence, st
   check('1 s held: about 10 re-sends (every 100 ms) plus the click', a.length >= 9 && a.length <= 12, a.length);
   check('the re-sends re-aim at the cursor', new Set(a.map((q) => q.x.toFixed(2))).size >= 8);
   check('never a move', of('move').length === 0);
-  leftUp(c);
+  check('the press is a new one, every re-send says held (the sim keeps the press, orch1 r2)', !(a[0] as { held?: boolean }).held && a.slice(1).every((q) => (q as { held?: boolean }).held === true));
   const n = sent.length;
+  leftUp(c);
+  const endN = sent.slice(n).filter((q) => q.type === 'attackAt' && (q as { end?: boolean }).end === true).length;
+  check('button up after a hold: one { attackAt, end } (no owed attack goes off after the release)', endN === 1 && sent.length === n + 1, sent.slice(n));
+  const n1 = sent.length;
   for (let i = 0; i < 10; i++) { now += 50; c.frame(now); }
-  check('button up: no more sends', sent.length === n, sent.length - n);
+  check('button up: no more sends', sent.length === n1, sent.length - n1);
   leftDown(c, true);
+  for (let i = 0; i < 4; i++) { now += 50; c.frame(now); }
   const n2 = sent.length;
   key(c, 'ShiftLeft', false);
   c.ptrShift = false;
   for (let i = 0; i < 10; i++) { now += 50; c.frame(now); }
-  check('Shift up while the button is held: no more sends', sent.length === n2, sent.length - n2);
+  const tail = sent.slice(n2);
+  check('Shift up while the button is held: one end, then no more sends', tail.length === 1 && (tail[0] as { end?: boolean }).end === true, tail);
+});
+
+section('fog (orch1 r2 note): an enemy its team cannot see is never sent as the target', () => {
+  lane();
+  views = views.map((v) => (v.id === 20 ? ({ ...v, visibleMask: 0b10 }) as EntityView : v));   // hidden from team 0
+  const c = controller();
+  key(c, 'ShiftLeft', true);
+  at(c, toScreen(57, 50));                                    // right on the hidden fighter
+  leftDown(c, true);
+  const a = of('attackAt') as unknown as AttackAt[];
+  check('one attackAt, not carrying the hidden fighter', a.length === 1 && a[0].target !== 20, a);
+  lane();
+  const c2 = controller();
+  key(c2, 'ShiftLeft', true);
+  at(c2, toScreen(57, 50));
+  leftDown(c2, true);
+  const b = of('attackAt') as unknown as AttackAt[];
+  check('control: the same click with the fighter in sight targets it', b.length === 1 && b[0].target === 20, b);
+});
+
+section('a single Shift + left-click keeps its one attack: the release sends no end', () => {
+  lane();
+  const c = controller();
+  key(c, 'ShiftLeft', true);
+  at(c, toScreen(44, 56));
+  leftDown(c, true);
+  leftUp(c);
+  check('one attackAt, no end', sent.length === 1 && sent[0].type === 'attackAt' && !(sent[0] as { end?: boolean }).end, sent);
 });
 
 section('a plain left-click still selects and sends nothing; Shift + right and A + left are unchanged', () => {

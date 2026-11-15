@@ -43,7 +43,7 @@ try {
   const ready = page.getByRole('button', { name: /^Ready/ }); if (await ready.count()) await click(ready.first());
   await waitFor(page, (v) => !!v.state.draft.value || !!v.state.loading.value || !!v.state.match.value, 30000);
   await waitFor(page, (v) => v.state.match.value?.view.phase === 'live', 240000);
-  await waitFor(page, (v) => { const c = v.state.match.value, R = v.state.renderer; const me = c.view.players.find((p) => p.player === c.you); return !!R.actors.get(me.entity)?.model; }, 60000);
+  await waitFor(page, (v) => { const c = v.state.match.value, R = v.state.renderer; if (!c || !R) return false; const me = c.view.players.find((p) => p.player === c.you); return !!R.actors.get(me.entity)?.model; }, 60000);
   await page.mouse.move(960, 540);
   await page.waitForTimeout(1500);
 
@@ -65,7 +65,7 @@ try {
       requestAnimationFrame(tick);
       const a = R.actors.get(window.__me); if (!a) return;
       let flash = 0;
-      for (const an of document.getAnimations()) { const t = an.effect?.target; if (t && t.classList && t.classList.contains('aslot') && an.playState === 'running') flash++; }
+      for (const an of document.getAnimations()) { const t = an.effect?.target; if (t && t.classList && (t.classList.contains('aslot') || t.closest?.('.aslot__wrap')) && (an.playState === 'running' || an.pending)) flash++; }
       L.frames.push({ ts, now: performance.now(), x: a.root.position.x, z: a.root.position.z, rot: a.root.rotation.y, key: a.currentKey, mm: document.querySelectorAll('.wmark--move').length, flash, aim: !!R.aim });
       if (L.frames.length > 20000) L.frames.splice(0, 5000);
     };
@@ -123,7 +123,12 @@ try {
     await page.keyboard.press('KeyQ');
     await page.waitForTimeout(350);
     const r = await resolve(e1);
-    report.slot.push({ i, ...r });
+    // an aimed ability flashes its slot when the cast is CONFIRMED (the HUD's cast hook), a self cast on the key itself: the confirm click is timed too
+    const e2 = await vale(page, () => window.__L.ev.length);
+    await page.mouse.down({ button: 'left' }); await page.mouse.up({ button: 'left' });
+    await page.waitForTimeout(350);
+    const c = await resolve(e2);
+    report.slot.push({ i, ...r, flashOnKey: r.flash, flash: r.flash ?? c.flash, flashFrom: r.flash ? 'key' : c.flash ? 'confirm click' : null });
     await page.keyboard.press('Escape'); await page.waitForTimeout(200);
   }
   // summary

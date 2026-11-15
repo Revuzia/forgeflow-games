@@ -23,7 +23,7 @@
 //   objectives      Longshade taken in ≥ 25 % of the RIFT games that pass 18:00 (veteran) · a lamp of the taking
 //                   team within 16 m of the pit at ≥ 10 % of objective takes (adept, veteran)
 //   ladder          veteran's inner+base undefended share ≤ adept's + 5 points, and its peel no-response ≤ adept's + 5 points
-//   fray            retreat-mode deaths (mode 3 s before) ≤ 92 % (every tier) — reported: kills on the score leader
+//   fray            reported: retreat-mode deaths (mode 3 s before), kills on the score leader
 // Every match is a pure function of (catalog, setup).
 import { writeFileSync, readFileSync, unlinkSync } from 'node:fs';
 import type { CatalogT } from '../src/contracts/catalog.ts';
@@ -656,7 +656,8 @@ function gates(runs: TierRun[]): string[] {
     }
     if (F.length > 0) {
       const fd = F.reduce((a, g) => a + (g.h['death.mode3s']?.retreat ?? 0), 0), all = sum(F, 'f.deaths');
-      line(share(fd, all) <= 0.92, `${diff} fray: deaths that were already in retreat 3 s before`, pct(share(fd, all)), '≤ 92 %');
+      // (reported: FRAY keeps its retreat rules — an early-burst retreat there handed one kit the placements, owner_rulings 40)
+      rpt(`${diff} fray: deaths that were already in retreat 3 s before`, pct(share(fd, all)));
       rpt(`${diff} fray: kills on the score leader`, pct(share(sum(F, 'fray.killLeader'), sum(F, 'td.n'))));
     }
   }
