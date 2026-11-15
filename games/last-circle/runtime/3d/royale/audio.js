@@ -29,6 +29,7 @@ let ctx = null, master = null, sfxBus = null;
 let W_ = null;
 let lastImpactT = 0;      // voice budget for the impact listener — see wire()
 let lastWhizT = 0;        // ditto for the near-miss crack
+let _lastBounceT = 0;     // ditto for grenade / launcher round bounces (W10 R2B)
 let _lisT = -1e9, _lisFrame = -1;  // wall ms / pool frame the WebAudio listener was last synced
 let _lf = null, _lu = null;   // scratch forward/up vectors (THREE arrives with W)
 const _lisW = [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN];   // last listener values written
@@ -41,6 +42,7 @@ let _scoped = false;      // last scopeState — that event re-fires EVERY frame
 const _L = { x: 0, y: 0, z: 0, ok: false, cam: true };
 let tailIn = null, roomIn = null;   // per-voice send inputs: outdoor tail / indoor room reverb
 let ambBus = null;                  // ambience + shoreline (threat-ducked)
+let ambRoofF = null, ambRoofG = null, _ambRoofW = false;   // W10 R2B: indoor low-pass + level on the ambience
 let monoNode = null;                // master downmix point for the mono option
 let musicThreat = null;             // threat duck on the music chain
 let _lisRoof = false;               // the listener's own head is under a roof (4 Hz)
@@ -54,7 +56,9 @@ const _acc = { occTests: 0, occCached: 0, occluded: 0, roofed: 0, delayed: 0, re
                steps: 0, tailSends: 0, roomSends: 0, musicLoops: 0, musicXfades: 0, pings: 0,
                // P23
                distMid: 0, distFar: 0, vocals: 0, vocalsDropped: 0, downed: 0, revives: 0, reviveCancels: 0, revived: 0,
-               falls: 0, smokes: 0, shimmerOn: 0, knockConfirms: 0, teamAlerts: 0 };
+               falls: 0, smokes: 0, shimmerOn: 0, knockConfirms: 0, teamAlerts: 0,
+               // W10 R2B
+               ambRecorded: 0 };
 
 // Speed of sound, and the range below which a report is left on time (a 25 m
 // shot would be 73 ms late — inside the muzzle-flash read, so not worth it).
@@ -299,6 +303,7 @@ export function init(W) {
     if (!uwFilter || !ctx) return;
     // glide the cutoff so the waterline is a swoosh, not a click
     uwFilter.frequency.setTargetAtTime(on ? 700 : 20000, ctx.currentTime, 0.08);
+    uwBedSet(on);                 // W10 R2B (item 5): the underwater bed
   };
   W.__audio.setVolumes = () => setVolumes(W);
   // test surface until __LC__.feel() lands (C9): same object readback() returns
@@ -348,6 +353,8 @@ export function readback(W) {
     peakVoices: _pool.peakVoices, peakSources: _pool.peakSources,
     admitted: _pool.admitted, stolen: _pool.stolen, rejected: _pool.rejected, budgetSteals: _pool.budgetSteals,
     sfxDecoded: Object.keys(sfxBuf).length,
+    sfxLazy: Object.keys(sfxRaw).length,       // W10 R2B (fix 3): lazy files held compressed (decoded on first use)
+    lazy: lazyStats(),
     // P1-B
     listener: { x: _L.x, y: _L.y, z: _L.z, fromCamera: _L.cam, roofed: _lisRoof },
     options: { output: _opt.output, mix: _opt.mix, mono: _opt.mono },
@@ -363,6 +370,12 @@ export function readback(W) {
                          x: shimmer.x, z: shimmer.z, accessor: typeof (W && W.nearbyChests) === "function" ? "nearbyChests" : "debugChests" } : null,
     revivesActive: _rev.size,
     sfxLate: Object.keys(sfxBuf).filter(lateSfx).length,
+    // W10 R2B: the ambience in play - recorded layers (theme, count) or the synth fallback bed; the indoor stage; the underwater bed
+    ambience: { recorded: ambRec ? ambRec.theme : null, layers: ambRec ? ambRec.srcs.length : 0, synthBed: !!ambBed,
+                snow: _ambSnowW, layerGain: ambRec ? Object.fromEntries(ambRec.names.map((n, i) => [n, ambRec.tgt[i]])) : null,
+                indoor: _ambRoofW, indoorGain: ambRoofG ? Math.round(ambRoofG.gain.value * 1000) / 1000 : null, underwater: !!uwBed,
+                resident: Object.keys(_ambBuf).filter((k) => _ambBuf[k] && !(_ambBuf[k] instanceof Promise)) },
+    pcmBytes: pcmHeld(),                     // W10 R2B (repair): decoded PCM held (pack + ambience)
   };
 }
 
@@ -441,10 +454,9 @@ const SFX = {
   imp_metal:     ["impactMetal_light_000", "impactMetal_light_001", "impactMetal_light_002"],
   imp_glass:     ["impactGlass_light_000", "impactGlass_light_001", "impactGlass_light_002"],
   imp_dirt:      ["impactGeneric_light_000", "impactGeneric_light_001", "impactGeneric_light_002"],
-  mag_out:       ["dropLeather", "beltHandle1"],
-  mag_in:        ["metalClick", "beltHandle2"],
-  rack:          ["metalLatch"],
-  equip:         ["drawKnife1", "cloth1"],
+  // W10 R2B: the generic mag_out / mag_in / rack trio is gone - every class reloads with its own set (RELOAD_SETS);
+  // equip is rebuilt (drawKnife1 peaked -24 dBFS: a near-silent swap). Built by F:/lc_p23/w10/r2/R2B/build1/tools/build_w10_sfx.py.
+  equip:         ["equip_0", "equip_1", "equip_2"],
   cloth:         ["cloth1", "cloth2"],
   ui_click:      ["ui_click_001", "ui_click_002"],
   ui_back:       ["ui_back_001"],
@@ -459,7 +471,237 @@ const SFX = {
   // AR takes pitched down (GUN_SND.lmg.rate), so it needs no file of its own.
   shot_dmr:      ["shot_dmr_0", "shot_dmr_1", "shot_dmr_2"],
   shot_burst:    ["shot_burst_0", "shot_burst_1"],
+  // ── W10 R2B: recorded foley for every cue that was a computer tone (Kenney CC0 + Sonniss GDC 2024, AUDIO_SOURCES.md) ──
+  shot_launcher: ["shot_launcher_0", "shot_launcher_1"],
+  dry_fire:      ["dry_fire_0", "dry_fire_1"],
+  rl_cancel:     ["rl_cancel_0"],
+  gren_throw:    ["gren_throw_0", "gren_throw_1"],
+  gren_pin:      ["gren_pin_0"],
+  gren_bounce:   ["gren_bounce_0", "gren_bounce_1", "gren_bounce_2"],
+  pickup:        ["pickup_0", "pickup_1", "pickup_2"],
+  chest_open:    ["chest_open_0", "chest_open_1"],
+  heal_start:    ["heal_start_0", "heal_start_1"],
+  heal_done:     ["heal_done_0", "heal_done_1"],
+  prop_break:    ["prop_break_0", "prop_break_1"],
+  drop_open:     ["drop_open_0"],
+  drop_land:     ["drop_land_0", "drop_land_1"],
+  body_fall:     ["body_fall_0", "body_fall_1"],
+  hurt_thud:     ["hurt_thud_0", "hurt_thud_1"],
+  weapon_drop:   ["weapon_drop_0", "weapon_drop_1"],
+  smoke_pop:     ["smoke_pop_0"],
+  smoke_hiss:    ["smoke_hiss_0"],
+  smoke_fade:    ["smoke_fade_0"],
+  scope:         ["scope_0", "scope_1"],
+  chute_open:    ["chute_open_0"],
+  chute_cut:     ["chute_cut_0"],
+  launch_whoosh: ["launch_whoosh_0"],
+  whiz:          ["whiz_0", "whiz_1"],
+  storm_surge:   ["storm_surge_0", "storm_surge_1"],
+  storm_zap:     ["storm_zap_0", "storm_zap_1"],
+  splash:        ["splash_0", "splash_1"],
+  swim:          ["swim_0", "swim_1", "swim_2", "swim_3"],
+  jump:          ["jump_0", "jump_1"],
+  land:          ["land_0", "land_1", "land_2"],
+  land_hard:     ["land_hard_0", "land_hard_1"],
+  mantle:        ["mantle_0", "mantle_1"],
+  slide:         ["slide_0", "slide_1"],
+  slide_end:     ["slide_end_0"],
+  ui_alert:      ["ui_alert_0"],
 };
+// W10 R2B (item 4): one reload SET per weapon class, each a list of [fraction of reloadS, cue]. The beats are timed to the
+// weapon's own reloadS (shells one by one, the bolt last), so R3B's reload motion can key off the same table.
+export const RELOAD_SETS = {
+  pistol:   [[0.00, "rl_pistol_out"], [0.55, "rl_pistol_in"], [0.84, "rl_pistol_slide"]],
+  rifle:    [[0.05, "rl_rifle_out"], [0.55, "rl_rifle_in"], [0.86, "rl_rifle_rack"]],
+  shotgun:  [[0.08, "rl_shell"], [0.27, "rl_shell"], [0.46, "rl_shell"], [0.65, "rl_shell"], [0.86, "rl_pump"]],
+  sniper:   [[0.03, "rl_bolt_open"], [0.22, "rl_rifle_out"], [0.58, "rl_rifle_in"], [0.88, "rl_bolt_close"]],
+  launcher: [[0.05, "rl_break_open"], [0.50, "rl_ln_shell"], [0.86, "rl_break_close"]],
+};
+/** gunSnd class -> reload set */
+export const RELOAD_SET_OF = { pistol: "pistol", smg: "rifle", ar: "rifle", dmr: "rifle", lmg: "rifle", burst: "rifle",
+                               shotgun: "shotgun", sniper: "sniper", launcher: "launcher" };
+for (const k in RELOAD_SETS) for (const b of RELOAD_SETS[k]) if (!SFX[b[1]]) {
+  const n = { rl_pistol_out: 2, rl_pistol_in: 2, rl_pistol_slide: 1, rl_rifle_out: 2, rl_rifle_in: 2, rl_rifle_rack: 2, rl_shell: 3, rl_pump: 2,
+              rl_bolt_open: 2, rl_bolt_close: 2, rl_break_open: 1, rl_break_close: 2, rl_ln_shell: 2 }[b[1]] || 1;
+  SFX[b[1]] = Array.from({ length: n }, (_, i) => b[1] + "_" + i);
+}
+// W10 R2B (item 1): the per-map ambience - two RECORDED layers (a bed and a wind layer, seamless 20 / 16 s loops),
+// fetched for the current map only (decoded ~3.8 MB a layer), so it is not in the SFX pack above.
+export const AMB_REC = {
+  forest:   [["amb_forest_bed", 0.5], ["amb_forest_wind", 0.5]],       // Deepwood: forest-edge birdsong + insects, wind in oak canopy
+  tropical: [["amb_tropical_bed", 0.5], ["amb_tropical_wind", 0.42]],  // Isla Viva: shore waves on rocks, light aspen gusts
+  savanna:  [["amb_savanna_bed", 0.5], ["amb_savanna_wind", 0.5]],     // Savanna (ashgrid): open-plain wind over grass, deep wind rumble
+};
+const UW_BED = "uw_bed_0";            // underwater bubbles loop (setUnderwater)
+// Indoor ambience (item 1): under a roof (the listener roof test, 4 Hz) the beds are low-passed and 6 dB down.
+const AMB_ROOF_G = 0.5, AMB_ROOF_F = 700;
+// W10 R2B (fix 3): Deepwood's northern SNOW biome has no birdsong. The forest bed (birds + insects) fades out there and the
+// canopy wind comes up a little; the listener's ground is probed at 4 Hz (maps.surfaceAt at five points, the centre and
+// 15 m out, one point per probe) and the last five votes decide, so a snowy town lot or a single patch does not flip it.
+// Written on the EDGE only, like the roof stage.
+const AMB_SNOW = { forest: { amb_forest_bed: 0, amb_forest_wind: 0.62 } };
+const _SNOW_OFF = [[0, 0], [15, 0], [0, 15], [-15, 0], [0, -15]];
+const _snowVote = [0, 0, 0, 0, 0];
+let _snowI = 0, _lisSnow = false, _ambSnowW = false;
+// W10 R2B (repair, decoded-memory budget): the STORE RATE of the files R2B added. decodeAudioData on the page's context
+// always gives 48 kHz float32 (192 KB a second); a file that, decoded at r and played back by a 48 kHz buffer source
+// (linear interpolation, as Chromium does), stays within -30 dB error energy of its 48 kHz decode is decoded on an
+// OfflineAudioContext at r instead (16 or 24 kHz: 1/3 or 1/2 the PCM). Files not listed stay at the context rate. Generated by
+// F:/lc_p23/w10/r2/R2B/build2/tools/pcmrate.py from the shipped files; checked by _harness/p23/sfxcheck.py (pcm-rate).
+// PCM-TABLE-BEGIN
+export const PCM_HZ = {
+  "amb_tropical_bed": 32000, "amb_tropical_wind": 22050, "body_fall_0": 16000, "body_fall_1": 16000, "chest_open_0": 32000,
+  "chest_open_1": 32000, "chute_open_0": 22050, "gren_bounce_0": 22050, "gren_bounce_1": 16000, "gren_bounce_2": 16000,
+  "hurt_thud_0": 16000, "hurt_thud_1": 16000, "land_0": 22050, "land_1": 22050, "land_2": 24000, "land_hard_0": 24000,
+  "land_hard_1": 24000, "mantle_0": 16000, "mantle_1": 16000, "prop_break_1": 16000, "shot_launcher_0": 22050, "shot_launcher_1": 16000,
+  "slide_end_0": 32000, "smoke_fade_0": 16000, "smoke_pop_0": 16000, "splash_0": 32000, "splash_1": 22050, "storm_surge_0": 16000,
+  "storm_surge_1": 16000, "ui_alert_0": 16000, "uw_bed_0": 16000, "weapon_drop_1": 32000,
+};
+// PCM-TABLE-END
+// W10 R2B (item 8): the LOUDNESS TABLE. Per-clip trim (dB) so every take of a family has the same loudest-50 ms RMS
+// (the family median): footsteps on dirt / wood / water were up to 7 dB over grass at the same stance. One family per
+// SFX key, except the footsteps, which are ONE family across all surfaces (LOUD_GROUP). Generated by
+// F:/lc_p23/w10/r2/R2B/build1/tools/loudtable.py from the shipped files; checked by _harness/p23/sfxcheck.py (loudness).
+export const LOUD_GROUP = { step: ["step_grass", "step_concrete", "step_wood", "step_snow", "step_sand", "step_dirt", "step_metal", "step_water"] };
+// LOUD-TABLE-BEGIN
+export const CLIP_DB = {
+  "cloth1": -1.9,
+  "cloth2": 1.9,
+  "drop_land_0": 0.3,
+  "drop_land_1": -0.3,
+  "dry_fire_0": 0.4,
+  "dry_fire_1": -0.4,
+  "equip_0": 1.9,
+  "equip_1": -2.0,
+  "explosion_0": 0.5,
+  "explosion_1": -0.5,
+  "gd_ar_mid_0": -0.9,
+  "gd_ar_mid_1": 0.9,
+  "gd_burst_far_0": 0.4,
+  "gd_burst_far_1": -0.4,
+  "gd_dmr_far_0": -0.4,
+  "gd_dmr_far_1": 0.4,
+  "gd_dmr_mid_0": 0.4,
+  "gd_dmr_mid_1": -0.4,
+  "gren_bounce_2": 2.3,
+  "heal_done_0": 0.7,
+  "heal_done_1": -0.7,
+  "heal_start_0": -0.6,
+  "heal_start_1": 0.6,
+  "hit_flesh_0": -0.4,
+  "hit_flesh_1": 0.4,
+  "hit_shield_0": 1.2,
+  "hit_shield_1": -1.2,
+  "impactGeneric_light_000": -0.3,
+  "impactGeneric_light_001": 0.3,
+  "impactGlass_light_002": -1.4,
+  "impactMetal_light_000": -0.5,
+  "impactMetal_light_002": 0.8,
+  "impactPlank_medium_000": 2.9,
+  "impactPlank_medium_001": -0.4,
+  "impactPlate_light_001": 1.0,
+  "land_1": 0.9,
+  "pickup_0": -0.6,
+  "pickup_2": 2.2,
+  "prop_break_0": 1.8,
+  "prop_break_1": -1.8,
+  "rl_bolt_close_0": -0.3,
+  "rl_bolt_close_1": 0.3,
+  "rl_bolt_open_0": -0.7,
+  "rl_bolt_open_1": 0.7,
+  "rl_break_close_0": 1.9,
+  "rl_break_close_1": -1.9,
+  "rl_ln_shell_0": -0.3,
+  "rl_ln_shell_1": 0.3,
+  "rl_pistol_in_0": -0.3,
+  "rl_pistol_in_1": 0.3,
+  "rl_pistol_out_0": 0.3,
+  "rl_pistol_out_1": -0.3,
+  "rl_pump_0": 1.2,
+  "rl_pump_1": -1.2,
+  "rl_rifle_in_0": 0.9,
+  "rl_rifle_in_1": -0.9,
+  "rl_rifle_out_0": 0.5,
+  "rl_rifle_out_1": -0.5,
+  "rl_rifle_rack_0": -0.3,
+  "rl_rifle_rack_1": 0.3,
+  "rl_shell_0": 1.3,
+  "rl_shell_1": -0.4,
+  "scope_0": 0.7,
+  "scope_1": -0.7,
+  "shot_ar_0": 3.6,
+  "shot_ar_2": -0.6,
+  "shot_burst_0": -0.5,
+  "shot_burst_1": 0.5,
+  "shot_dmr_2": 0.4,
+  "shot_pistol_0": -0.3,
+  "shot_pistol_1": 0.3,
+  "shot_shotgun_0": 0.4,
+  "shot_shotgun_1": -0.4,
+  "shot_smg_1": 0.5,
+  "step_concrete_000": 2.1,
+  "step_concrete_001": 3.5,
+  "step_concrete_002": 3.6,
+  "step_concrete_003": 2.7,
+  "step_dirt_000": -1.5,
+  "step_dirt_001": -1.1,
+  "step_dirt_002": -1.9,
+  "step_dirt_003": -1.9,
+  "step_grass_000": 2.3,
+  "step_grass_001": 1.9,
+  "step_grass_002": 2.4,
+  "step_grass_003": 2.5,
+  "step_metal_000": 2.4,
+  "step_metal_001": 2.4,
+  "step_metal_002": 2.4,
+  "step_metal_003": 2.4,
+  "step_sand_000": 0.3,
+  "step_snow_000": -0.3,
+  "step_snow_001": -4.0,
+  "step_snow_002": -3.9,
+  "step_snow_003": 1.6,
+  "step_water_000": -1.7,
+  "step_water_001": -1.6,
+  "step_water_002": -1.9,
+  "step_water_003": -1.9,
+  "step_wood_000": -1.9,
+  "step_wood_001": -2.6,
+  "step_wood_002": -3.2,
+  "step_wood_003": -1.1,
+  "storm_zap_0": -7.8,
+  "storm_zap_1": 7.8,
+  "swim_3": 0.3,
+  "ui_click_001": 3.7,
+  "ui_click_002": -3.7,
+  "vo_f_downed_0": -1.7,
+  "vo_f_downed_1": 1.7,
+  "vo_f_hurt_0": -3.8,
+  "vo_f_hurt_2": -1.2,
+  "vo_f_hurt_3": 0.5,
+  "vo_f_hurt_4": 0.4,
+  "vo_m1_death_0": -0.4,
+  "vo_m1_death_1": 0.4,
+  "vo_m1_downed_0": -0.8,
+  "vo_m1_downed_1": 0.8,
+  "vo_m1_hurt_0": -2.4,
+  "vo_m1_hurt_1": -1.2,
+  "vo_m1_hurt_2": 1.2,
+  "vo_m1_hurt_3": 1.9,
+  "vo_m1_revive_0": 0.8,
+  "vo_m1_revive_1": -0.8,
+  "vo_m2_death_0": -1.0,
+  "vo_m2_death_1": 4.7,
+  "vo_m2_hurt_2": -1.3,
+  "vo_m2_hurt_3": 1.9,
+  "vo_m2_hurt_4": 3.0,
+  "vo_m2_revive_0": -1.9,
+  "vo_m2_revive_1": 1.9,
+};
+// W10 R2B fix 3: the smoke vent take was cut from 5.5 s to 3.0 s (decoded-memory budget); +1.0 dB keeps its old loudest-50 ms level
+CLIP_DB["smoke_hiss_0"] = 1.0;
+// LOUD-TABLE-END
+const CLIP_G = {};
+for (const f in CLIP_DB) CLIP_G[f] = Math.pow(10, CLIP_DB[f] / 20);
 // P23 (LC-08): the DISTANT layers - FFSL "mid distance" (Prepared SFX) and "far distance" (Master Tracks) takes,
 // recorded tens to hundreds of metres from the shooter: gd_<class>_mid / gd_<class>_far. No shotgun far layer
 // (its 120 m radius ends before the far band starts). Built by F:/lc_p23/audio/tools/build_sfx.py.
@@ -474,6 +716,16 @@ for (const k in GD_SETS) {
 const VO_SETS = { m1: { hurt: 4, downed: 2, death: 2, revive: 2 }, m2: { hurt: 5, downed: 2, death: 3, revive: 2 },
                   f: { hurt: 5, downed: 2, death: 2, revive: 1 } };
 for (const v in VO_SETS) for (const k in VO_SETS[v]) SFX["vo_" + v + "_" + k] = Array.from({ length: VO_SETS[v][k] }, (_, i) => "vo_" + v + "_" + k + "_" + i);
+/** read-only view of the cue tables for the Node census (_harness/p23/sfxcheck.py) */
+export function sfxTable() { return { SFX, CLIP_DB, LOUD_GROUP, RELOAD_SETS, RELOAD_SET_OF, AMB_REC, UW_BED, PCM_HZ }; }
+/** W10 R2B (repair): the rate every decoded buffer is held at (pack + ambience), for the census's pcm rows */
+export function pcmCensus() {
+  const sfx = Object.assign({}, _decLog), amb = {}, held = {};
+  for (const k in sfxBuf) held[k] = sfxBuf[k].length * sfxBuf[k].numberOfChannels * 4;
+  for (const k in _ambBuf) { const x = _ambBuf[k]; if (x && !(x instanceof Promise)) { amb[k] = x.sampleRate; held[k] = x.length * x.numberOfChannels * 4; } }
+  // sfx: the rate every pack file was decoded at (lazy ones included, once decoded); held: bytes decoded RIGHT NOW (pack + ambience)
+  return { sfx, amb, held, lazy: lazyStats() };
+}
 /** the second fetch wave: layers that only ever ADD to a cue that already has a fallback */
 function lateSfx(n) { return n.indexOf("gd_") === 0 || n.indexOf("vo_") === 0; }
 const sfxBuf = {};       // filename -> AudioBuffer
@@ -514,6 +766,80 @@ function oneShotSlice(buf) {
   } catch (e) { return { off: 0, dur: buf.duration }; }
 }
 let sfxReady = false;
+// W10 R2B (repair): one decoder context per store rate (PCM_HZ), made on first use; null if the browser has none
+const _dec = {};
+function decodeAt(name, ab) {
+  const hz = PCM_HZ[name];
+  if (hz && hz < ctx.sampleRate) {
+    if (!(hz in _dec)) {
+      const OAC = typeof window !== "undefined" && (window.OfflineAudioContext || window.webkitOfflineAudioContext);
+      try { _dec[hz] = OAC ? new OAC(1, 1, hz) : null; } catch (e) { _dec[hz] = null; }
+    }
+    // a decoder that cannot (old Safari: callback-only, or a refused rate) falls back to the page context, never to silence
+    if (_dec[hz]) return _dec[hz].decodeAudioData(ab.slice(0)).catch(() => ctx.decodeAudioData(ab));
+  }
+  return ctx.decodeAudioData(ab);
+}
+// W10 R2B (fix 3, decoded-memory budget): the R2B one-shot families are LAZY. Their compressed .ogg bytes are fetched with
+// the pack (~1.4 MB, not PCM) and each file is decoded on its FIRST use; the cue plays the moment the decode lands (a few ms,
+// off the main thread) and is dropped, never replaced by a synth beep, if that takes over LAZY_LATE s. The decoded lazy files
+// sit in a least-recently-used cache capped at LAZY_CAP bytes: the takes in play (your gun's reload set, your movement,
+// the last foley) stay decoded, a take nobody has heard for a while is freed and decoded again if it comes back. A buffer
+// that is still sounding is never freed early (that would not free its memory). The gunshot takes stay eager (latency).
+// Checked by _harness/p23/sfxcheck.py (pcm-budget, lazy-play).
+export const LAZY_KEYS = ["equip", "dry_fire", "rl_cancel", "gren_throw", "gren_pin", "gren_bounce", "pickup", "chest_open", "heal_start",
+  "heal_done", "prop_break", "drop_open", "drop_land", "body_fall", "hurt_thud", "weapon_drop", "smoke_pop", "smoke_hiss", "smoke_fade",
+  "scope", "chute_open", "chute_cut", "launch_whoosh", "whiz", "storm_surge", "storm_zap", "splash", "swim", "jump", "land", "land_hard",
+  "mantle", "slide", "slide_end", "ui_alert", "rl_pistol_out", "rl_pistol_in", "rl_pistol_slide", "rl_rifle_out", "rl_rifle_in",
+  "rl_rifle_rack", "rl_shell", "rl_pump", "rl_bolt_open", "rl_bolt_close", "rl_break_open", "rl_ln_shell", "rl_break_close"];
+export const LAZY_CAP = 1.3e6;        // bytes of decoded lazy PCM kept (float32 frames x channels)
+const LAZY_LATE = 0.25;               // s: a first-use decode that lands later than this is dropped
+const LAZY = new Set();
+for (const k of LAZY_KEYS) for (const n of (SFX[k] || [])) LAZY.add(n);
+const sfxRaw = {};                    // lazy file -> its compressed bytes
+const _decLog = {};                   // file -> the rate it was last decoded at (the census's pcm-rate row)
+const _lazy = { lru: new Map(), end: {}, busy: {}, bytes: 0, peak: 0, miss: 0, played: 0, late: 0, evicted: 0, decodes: 0 };
+function lazyDecode(n) {
+  if (_lazy.busy[n]) return _lazy.busy[n];
+  _lazy.decodes++;
+  const p = decodeAt(n, sfxRaw[n].slice(0)).then((b) => {
+    delete _lazy.busy[n];
+    if (!b) return null;
+    if (sfxBuf[n]) return sfxBuf[n];
+    _decLog[n] = b.sampleRate;
+    const sz = b.length * b.numberOfChannels * 4;
+    sfxBuf[n] = b; _lazy.lru.set(n, sz); _lazy.bytes += sz;
+    if (_lazy.bytes > _lazy.peak) _lazy.peak = _lazy.bytes;      // counted BEFORE the trim: the new buffer and the old ones coexist here
+    lazyTrim(n);
+    return b;
+  }, () => { delete _lazy.busy[n]; return null; });
+  _lazy.busy[n] = p;
+  return p;
+}
+function lazyTrim(keep) {
+  const now = ctx ? ctx.currentTime : 0;
+  for (const [k, sz] of _lazy.lru) {
+    if (_lazy.bytes <= LAZY_CAP) break;
+    if (k === keep || (_lazy.end[k] || 0) > now) continue;
+    _lazy.lru.delete(k); delete sfxBuf[k]; _lazy.bytes -= sz; _lazy.evicted++;
+  }
+}
+/** census only (sfxcheck): decode every lazy file once through the same cache (its rate is checked; the cap is stressed) */
+export async function pcmProbe() {
+  for (const n of Object.keys(sfxRaw)) { if (!sfxBuf[n]) await lazyDecode(n); }
+  return lazyStats();
+}
+function lazyStats() {
+  return { cap: LAZY_CAP, files: Object.keys(sfxRaw).length, held: _lazy.lru.size, bytes: _lazy.bytes, peak: _lazy.peak, miss: _lazy.miss,
+           played: _lazy.played, late: _lazy.late, evicted: _lazy.evicted, decodes: _lazy.decodes };
+}
+/** decoded PCM held by the pack + the ambience (bytes: float32 frames x channels), for the readback and the sfxcheck census */
+function pcmHeld() {
+  let b = 0;
+  for (const k in sfxBuf) b += sfxBuf[k].length * sfxBuf[k].numberOfChannels * 4;
+  for (const k in _ambBuf) { const x = _ambBuf[k]; if (x && !(x instanceof Promise)) b += x.length * x.numberOfChannels * 4; }
+  return b;
+}
 
 /** Decode the pack once, after the context exists. Failures are silent by
  *  design: every caller falls back to the synth path it used before. */
@@ -526,7 +852,10 @@ async function loadSfx(W) {
     try {
       const r = await fetch(W.assetBase + "assets/audio/sfx/" + n + ".ogg");
       if (!r.ok) return;
-      sfxBuf[n] = await ctx.decodeAudioData(await r.arrayBuffer());
+      const ab = await r.arrayBuffer();
+      if (LAZY.has(n)) { sfxRaw[n] = ab; return; }
+      sfxBuf[n] = await decodeAt(n, ab);
+      _decLog[n] = sfxBuf[n].sampleRate;
       if (n.indexOf("shot_") === 0) sfxSlice[n] = oneShotSlice(sfxBuf[n]);
     } catch (e) { /* fall back to synth */ }
   };
@@ -547,7 +876,28 @@ function sample(key, pos, gain, maxD, rate, tier, fx) {
   if (!list || !list.length) return false;
   const pick = list[(Math.random() * list.length) | 0];
   const buf = sfxBuf[pick];
-  if (!buf) return false;
+  if (!buf) {
+    if (!sfxRaw[pick]) return false;
+    // a lazy take's first use (or first since it was freed): decode it and play it as it lands. Handled either way, so the
+    // synth fallback never fires for it
+    _lazy.miss++;
+    const tReq = ctx.currentTime;
+    lazyDecode(pick).then((b) => {
+      if (!b || !ctx) return;
+      if (ctx.currentTime - tReq > LAZY_LATE) { _lazy.late++; return; }
+      _lazy.played++;
+      playBuf(pick, b, pos, gain, maxD, rate, tier, fx);
+    });
+    return true;
+  }
+  if (_lazy.lru.has(pick)) { const sz = _lazy.lru.get(pick); _lazy.lru.delete(pick); _lazy.lru.set(pick, sz); }
+  return playBuf(pick, buf, pos, gain, maxD, rate, tier, fx);
+}
+/** census only (sfxcheck xcat row): log every placed take's call level (gain x CLIP_DB trim, before the per-play jitter) while on */
+let _lvlTap = null;
+export function levelTap(on) { const r = _lvlTap; _lvlTap = on ? [] : null; return r; }
+/** play one decoded take of a cue (sample() picked it) */
+function playBuf(pick, buf, pos, gain, maxD, rate, tier, fx) {
   // openVoice() hands back a pool handle whose .out is a GainNode already wired
   // through occlusion, the HRTF panner and the reverb sends into sfxBus, with
   // the distance stashed on __d — so connect straight to it and the clip
@@ -557,10 +907,12 @@ function sample(key, pos, gain, maxD, rate, tier, fx) {
   const h = openVoice(pos, maxD, tier, gain == null ? 0.5 : gain, 1, fx);
   if (!h) return true;
   const out = h.out;
+  if (_lvlTap) _lvlTap.push({ f: pick, g: (gain == null ? 0.5 : gain) * (CLIP_G[pick] || 1), d: out.__d == null ? null : out.__d });
   const src = ctx.createBufferSource();
   src.buffer = buf;
   src.playbackRate.value = (rate || 1) * (0.94 + Math.random() * 0.12);
-  const lvl = (gain == null ? 0.5 : gain) * (0.9 + Math.random() * 0.2);
+  // W10 R2B: the loudness table's per-clip trim (CLIP_DB) rides the per-play level
+  const lvl = (gain == null ? 0.5 : gain) * (0.9 + Math.random() * 0.2) * (CLIP_G[pick] || 1);
   // On a pooled strip the per-play level folds into the strip's own gain (and
   // its two sends, which tap BEFORE that gain) and the end taper rides its input gain, so a placed clip costs ONE new node
   // (the source). Head-relative clips keep their own gain node.
@@ -607,6 +959,7 @@ function sample(key, pos, gain, maxD, rate, tier, fx) {
     src.start(t0);
     voiceArm(h, out, [src], t0 + buf.duration / pr);
   }
+  if (LAZY.has(pick)) _lazy.end[pick] = t0 + buf.duration / pr;
   return true;
 }
 
@@ -692,7 +1045,10 @@ function ensureCtx(W) {
   sfxBus.gain.value = W.settings.sfxVol;
   sfxBus.connect(master);
   ambBus = ctx.createGain(); ambBus.gain.value = 1;
-  ambBus.connect(sfxBus);
+  // W10 R2B (item 1): the indoor stage - under a roof the ambience is low-passed and 6 dB down (written on a roof EDGE only)
+  ambRoofF = ctx.createBiquadFilter(); ambRoofF.type = "lowpass"; ambRoofF.frequency.value = 20000; ambRoofF.Q.value = 0.5;
+  ambRoofG = ctx.createGain(); ambRoofG.gain.value = 1;
+  ambBus.connect(ambRoofF); ambRoofF.connect(ambRoofG); ambRoofG.connect(sfxBus);
   // REVERBS (P1-B / LC-08 + LC-26). The old graph had ONE wet send on the whole
   // sfxBus, opened by a roof over the CAMERA: every sound — the enemy in the
   // field outside included — got the same room, and the room's tail sat ~50 dB
@@ -1335,7 +1691,7 @@ const GUN_SND = {
   dmr:      { near: "shot_dmr",     dist: "dmr",     R: 420, synth: "sniper" },              // SKS: a heavier semi-auto crack than the AR
   lmg:      { near: "shot_ar",      dist: "ar",      R: 360, rate: 0.86, g: 1.12, synth: "ar" },   // AK takes a fourth lower = a bigger, slower gun
   burst:    { near: "shot_burst",   dist: "burst",   R: 320, synth: "ar" },                  // AR-15: a brighter 5.56 than the AK
-  launcher: { near: null,           dist: null,      R: 260 },
+  launcher: { near: "shot_launcher", dist: null,     R: 260 },   // W10 R2B: recorded (RPG launch charge, natural speed); shot() fallback
 };
 const GUN_ALIAS = { dmr: "dmr", marksman: "dmr", lmg: "lmg", mg: "lmg", hmg: "lmg", burst: "burst", burstar: "burst",
                     burst_ar: "burst", ar_burst: "burst", rifle: "ar", glauncher: "launcher" };
@@ -1420,6 +1776,15 @@ function farBoom(cls, pos, maxD) {
   voiceArm(h, out, [n], t + dur + 0.02);
 }
 
+// W10 R2B (item 3): a synthesised one-shot is now only ever (a) the fallback of a recorded cue that has not decoded, or
+// (b) one of the KEPT TONAL cues the genre plays as tones - hit marker, kill / knock confirm, pings, countdown, UI, team
+// stings. Every (b) call runs inside tone(tag, ...), and _harness/p23/sfxcheck.py (synth-count) fires every event against a
+// fully decoded pack and counts the synth sources each one starts, by this tag: an untagged one is a beep that should be foley.
+let _tone = null;
+function tone(tag, f) { const p = _tone; _tone = tag; try { f(); } finally { _tone = p; } }
+/** the tonal tag of the synth source being built right now (null = not a kept tonal cue) - the census reads it */
+export function synthTag() { return _tone; }
+
 function blip(freq, dur, vol, type, pos, maxD, tier, fx) {
   if (!ctx) return;
   const h = openVoice(pos, maxD || 40, tier, vol || 0.2, 1, fx); if (!h) return;
@@ -1468,7 +1833,8 @@ const STEP = {
 // the mag-seat clunk and slide rack of a gun you no longer hold.
 function cancelReload() { for (let i = 0; i < reloadTimers.length; i++) clearTimeout(reloadTimers[i]); reloadTimers.length = 0; }
 
-function sting(victory) {
+function sting(victory) { tone("team_sting", () => stingNotes(victory)); }
+function stingNotes(victory) {
   if (!ctx) return;
   const seq = victory ? [523, 659, 784, 1046] : [392, 330, 262];
   // one pooled voice for the whole arpeggio (head-relative -> top tier)
@@ -1537,30 +1903,24 @@ function reloadFoley(a, wpn) {
   if (!own && a._audRlT && nowMs - a._audRlT < 600) return;
   a._audRlT = nowMs;
   if (own) cancelReload();
-  const def = (W.SIM.WEAPONS[wpn && wpn.id] || {});
+  const wid = wpn && wpn.id, def = (W.SIM.WEAPONS[wid] || {});
   const total = Math.max(0.8, (def.reloadS || 1.5)) * 1000;
   const p2 = own ? null : a.pos, R = 25, k = own ? 1 : 0.6;
-  // RECORDED FOLEY FIRST; each beat keeps its thump as the fallback.
-  thump(2600, 0.03, 0.22 * k, p2, R);                                       // mag release click
-  // `!own && !a.alive` guards: enemy timers are untracked (reloadTimers only
-  // collects OWN handles), so an enemy killed mid-reload still played the
-  // mag-seat clunk and rack at their corpse
-  const t1 = setTimeout(() => {                                             // mag out / drop
-    if (!own && !a.alive) return;
-    if (!sample("mag_out", p2, 0.3 * k, R)) thump(700, 0.06, 0.16 * k, p2, R);
-  }, 110);
-  const t2 = setTimeout(() => {                                             // mag seated
-    if (!own && !a.alive) return;
-    if (!sample("mag_in", p2, 0.34 * k, R)) { thump(950, 0.05, 0.26 * k, p2, R); thump(420, 0.09, 0.2 * k, p2, R); }
-  }, total * 0.55);
-  const t3 = setTimeout(() => {                                             // slide rack
-    if (!own && !a.alive) return;
-    if (sample("rack", p2, 0.34 * k, R)) return;
-    thump(3000, 0.025, 0.24 * k, p2, R);
-    const t4 = setTimeout(() => thump(1400, 0.05, 0.26 * k, p2, R), 70);
-    if (own) reloadTimers.push(t4);
-  }, total * 0.86);
-  if (own) reloadTimers.push(t1, t2, t3);
+  // W10 R2B (item 4): the beats of THIS class's set (pistol / rifle / shotgun shells + pump / sniper bolt / launcher
+  // break-open), each at its fraction of the weapon's reloadS. Recorded first; the old thump stays each beat's fallback.
+  // `!own && !a.alive` guards: enemy timers are untracked (reloadTimers only collects OWN handles), so an enemy killed
+  // mid-reload must not play the rest of the set at its corpse.
+  const set = RELOAD_SETS[RELOAD_SET_OF[gunSnd(wid, def)] || "rifle"];
+  for (let i = 0; i < set.length; i++) {
+    const key = set[i][1], last = i === set.length - 1;
+    const beat = () => {
+      if (!own && !a.alive) return;
+      if (!sample(key, p2, 0.34 * k, R)) { thump(last ? 3000 : 950, 0.04, 0.24 * k, p2, R); if (last) thump(1400, 0.05, 0.26 * k, p2, R); }
+    };
+    const at = set[i][0] * total;
+    if (at <= 0) beat();
+    else { const t = setTimeout(beat, at); if (own) reloadTimers.push(t); }
+  }
 }
 
 // ── vocals (P23 / LC-67) ────────────────────────────────────────────────────
@@ -1646,15 +2006,25 @@ function isOwnTeam(a) { const me = W_ && W_.player; return !!(me && a && (a === 
 function teamSting(up) {
   _acc.teamAlerts++;
   const seq = up ? [660, 990] : [880, 587];
-  blip(seq[0], 0.09, 0.15, "triangle", null, 0, VOICE_TIER.own);
-  setTimeout(() => blip(seq[1], up ? 0.16 : 0.2, 0.15, "triangle", null, 0, VOICE_TIER.own), 85);
+  tone("team_sting", () => blip(seq[0], 0.09, 0.15, "triangle", null, 0, VOICE_TIER.own));
+  setTimeout(() => tone("team_sting", () => blip(seq[1], up ? 0.16 : 0.2, 0.15, "triangle", null, 0, VOICE_TIER.own)), 85);
   if (up) sample("ui_ok", null, 0.14, 999);
-  else thump(160, 0.16, 0.16, null, 0, VOICE_TIER.own, null);
+  else tone("team_sting", () => thump(160, 0.16, 0.16, null, 0, VOICE_TIER.own, null));
+}
+/** W10 R2B (item 7): a whole squad is out - the sting family, three falling notes (softer for a squad that is not yours) */
+function teamWipe(own) {
+  _acc.teamAlerts++;
+  const g = own ? 0.15 : 0.1, seq = own ? [784, 587, 392] : [988, 740, 587];
+  seq.forEach((f, i) => setTimeout(() => tone("team_sting", () => blip(f, 0.12 + i * 0.05, g, "triangle", null, 0, VOICE_TIER.own)), i * 110));
 }
 function knockConfirm() {
   _acc.knockConfirms++;
-  blip(560, 0.06, 0.18, "square", null, 0, VOICE_TIER.own);
-  setTimeout(() => blip(420, 0.12, 0.18, "square", null, 0, VOICE_TIER.own), 60);
+  tone("knock_confirm", () => blip(560, 0.06, 0.18, "square", null, 0, VOICE_TIER.own));
+  setTimeout(() => tone("knock_confirm", () => blip(420, 0.12, 0.18, "square", null, 0, VOICE_TIER.own)), 60);
+}
+function killConfirm() {
+  tone("kill_confirm", () => blip(700, 0.09, 0.2, "triangle", null, 0, VOICE_TIER.own));
+  setTimeout(() => tone("kill_confirm", () => blip(1050, 0.14, 0.22, "triangle", null, 0, VOICE_TIER.own)), 90);
 }
 function reviveFoley(reviver, target) {
   if (!target) return;
@@ -1682,7 +2052,9 @@ function fallCue(a, info) {
   _acc.falls++;
   const own = a === W_.player, p = own ? null : a.pos;
   const k = Math.min(1, dmg / 60);
-  thump(110, 0.2 + 0.15 * k, 0.2 + 0.2 * k, p, 50, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY);
+  // W10 R2B: the crunch is a recorded body hit (the synth thump only as its fallback)
+  if (!sample("land_hard", p, 0.22 + 0.2 * k, 50, 0.8, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY))
+    thump(110, 0.2 + 0.15 * k, 0.2 + 0.2 * k, p, 50, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY);
   sample("imp_wood", p, 0.16 + 0.14 * k, 30, 0.5, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY);
   // player.js emits fallDamage BEFORE it applies the hp: a fall that kills or knocks cries via
   // actorDied / actorDowned instead, so it never grunts AND cries
@@ -1710,8 +2082,11 @@ function smokePop(s) {
   if (!ctx || !s || !isFinite(s.x) || !isFinite(s.z)) return;
   _acc.smokes++;
   const pos = { x: s.x, y: (isFinite(s.y) ? s.y : 0) + 0.3, z: s.z };
-  blip(190, 0.05, 0.16, "square", pos, 60, VOICE_TIER.step, FX_FOLEY);
-  sample("imp_metal", pos, 0.14, 60, 0.7, VOICE_TIER.step, FX_FOLEY);
+  // W10 R2B: a recorded canister pop + a recorded 5.5 s vent (effervescent fizz, high-passed); the synth pop + noise
+  // hiss below are the fallback until the pack has decoded
+  const popRec = sample("smoke_pop", pos, 0.2, 60, 1, VOICE_TIER.step, FX_FOLEY);
+  if (!popRec) { blip(190, 0.05, 0.16, "square", pos, 60, VOICE_TIER.step, FX_FOLEY); sample("imp_metal", pos, 0.14, 60, 0.7, VOICE_TIER.step, FX_FOLEY); }
+  if (sample("smoke_hiss", pos, 0.3, 55, 1, VOICE_TIER.step, FX_FOLEY)) return;
   const h = openVoice(pos, 55, VOICE_TIER.step, 0.2, 1, FX_FOLEY); if (!h) return;
   // the canister vents for seconds while the cloud builds (PUBG / Warzone smokes hiss ~5 s): hold, then a long fade
   const out = h.out, t = h.start, dur = 5.5;
@@ -1919,10 +2294,13 @@ function wire(W) {
       const key = "gd_" + G.dist + "_" + band, dgain = dg[band === "far" ? 1 : 0];
       if (dgain > 0 && SFX[key] && sample(key, pos, g * dgain, maxD, G.rate, tier, FX_GUN_DIST)) { distant = true; _acc[band === "far" ? "distFar" : "distMid"]++; }
     }
-    if (!distant && !(G.near && sample(G.near, pos, g, maxD, G.rate, tier, FX_GUN))) shot(cls, pos, tier);
+    const nearRec = !distant && !!(G.near && sample(G.near, pos, g, maxD, G.rate, tier, FX_GUN));
+    if (!distant && !nearRec) shot(cls, pos, tier);
     if (own) duckFireShot();
     else if (ctx && eye && place(eye, maxD) >= 0) {
-      if (_pd > FAR_M && !distant) farBoom(cls, eye, maxD);
+      // farBoom = the distant body a class WITHOUT distant takes falls back to; a class with no distant layers at all
+      // (the launcher, W10 R2B: recorded near take) is carried by its recording's own distance filter instead
+      if (_pd > FAR_M && !distant && !(nearRec && !G.dist)) farBoom(cls, eye, maxD);
       if (!isMate(a)) bumpThreat(Math.max(0, 1 - _pd / 120));
     }
   });
@@ -1930,12 +2308,15 @@ function wire(W) {
   // mag seat clunk (timed to the weapon's reloadS) → slide rack near the end.
   // Enemy reloads are positional at <= 25 m and mixed at 0.6x of your own.
   on("reloadStart", (a, wpn) => reloadFoley(a, wpn));
-  on("reloadDone", (a) => {
+  // W10 R2B: the set's last beat (rack / pump / bolt / break-close) IS the "ready" sound; the extra synth tick is gone
+  on("reloadDone", (a) => { if (a === W.player) cancelReload(); });
+  // W10 R2B (item 7): a reload cut short (a swap, a sprint) stops the set and gives a short cloth / mag fumble
+  on("reloadCancel", (a) => {
     const own = a === W.player;
     if (own) cancelReload();
-    thump(1800, 0.03, own ? 0.14 : 0.09, own ? null : a.pos, 25);
+    sample("rl_cancel", own ? null : a.pos, own ? 0.2 : 0.12, 18, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY);
   });
-  on("dryFire", (a) => { if (a === W.player) blip(300, 0.05, 0.12, "square"); });
+  on("dryFire", (a) => { if (a === W.player && !sample("dry_fire", null, 0.26, 0, 1, VOICE_TIER.own)) blip(300, 0.05, 0.12, "square"); });
   // Hurt / hit material (LC-55). YOUR hit on someone: a crystalline tink while
   // the damage lands on shield, a body thud once it reaches flesh, a glass
   // break on the hit that empties the shield — head-relative, like the
@@ -1943,7 +2324,7 @@ function wire(W) {
   // breaking is a world event at their position. Your own hurt keeps its thud.
   on("actorHurt", (victim, info) => {
     const me = W.player;
-    if (victim === me) { thump(600, 0.12, 0.3); bumpThreat(1); }
+    if (victim === me) { if (!sample("hurt_thud", null, 0.3, 0, 1, VOICE_TIER.own)) thump(600, 0.12, 0.3); bumpThreat(1); }
     const mine = !!(me && info && info.attackerId != null && info.attackerId === me.id && victim !== me);
     if (info.broke) {
       const p2 = (victim === me || mine) ? null : victim.pos;
@@ -1960,10 +2341,19 @@ function wire(W) {
     if (victim === W.player) cancelReload();   // do not rack the slide of a corpse's gun
     stopRevive(victim);
     vocal(victim, "death");                    // P23 (LC-67)
-    thump(300, 0.3, 0.3, victim === W.player ? null : victim.pos, 90, victim === W.player ? VOICE_TIER.own : VOICE_TIER.gun);
+    const dOwn = victim === W.player, dp = dOwn ? null : victim.pos, dt = dOwn ? VOICE_TIER.own : VOICE_TIER.gun;
+    if (!sample("body_fall", dp, 0.34, 60, 1, dt, dOwn ? null : FX_FOLEY)) thump(300, 0.3, 0.3, dp, 90, dt);   // W10 R2B: the body hits the ground
   });
-  on("swimState", (a, swimming) => { if (swimming) thump(900, 0.25, 0.25, a === W.player ? null : a.pos, 40); });
-  on("swimStroke", (a) => thump(1100, 0.12, 0.15, a === W.player ? null : a.pos, 25));
+  // W10 R2B (item 5): a recorded entry splash and recorded strokes (the old muffled thumps are the fallback)
+  on("swimState", (a, swimming) => {
+    if (!swimming) return;
+    const own = a === W.player, p2 = own ? null : a.pos;
+    if (!sample("splash", p2, own ? 0.28 : 0.3, 50, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY)) thump(900, 0.25, 0.25, p2, 40);
+  });
+  on("swimStroke", (a) => {
+    const own = a === W.player, p2 = own ? null : a.pos;
+    if (!sample("swim", p2, own ? 0.17 : 0.18, 28, 1, VOICE_TIER.step, own ? null : FX_FOLEY)) thump(1100, 0.12, 0.15, p2, 25);
+  });
   // footsteps: see playStep (stance row, teammate / enemy mix, surface)
   on("footstep", (a) => playStep(a, false));
   on("weaponEquipped", (a) => {
@@ -1972,24 +2362,24 @@ function wire(W) {
     if (sample("equip", own ? null : a.pos, own ? 0.22 : 0.14, 18)) return;
     blip(640, 0.05, own ? 0.12 : 0.08, "square", own ? null : a.pos, 18);
   });
-  on("chuteDeployed", (a) => thump(1300, 0.35, a === W.player ? 0.3 : 0.2, a === W.player ? null : a.pos, 60));
-  on("chuteCut", (a) => { if (a === W.player) blip(420, 0.12, 0.16, "sawtooth"); });
-  // launch portal: rising whoosh
+  on("chuteDeployed", (a) => {
+    const own = a === W.player, p2 = own ? null : a.pos;
+    if (!sample("chute_open", p2, own ? 0.34 : 0.24, 60, 1, own ? VOICE_TIER.own : VOICE_TIER.step)) thump(1300, 0.35, own ? 0.3 : 0.2, p2, 60);
+  });
+  on("chuteCut", (a) => { if (a === W.player && !sample("chute_cut", null, 0.26, 0, 1, VOICE_TIER.own)) blip(420, 0.12, 0.16, "sawtooth"); });
+  // launch portal: a recorded rising whoosh (W10 R2B; the three-tone sweep is the fallback)
   on("portalLaunch", (a) => {
     const own = a === W.player;
+    if (sample("launch_whoosh", own ? null : a.pos, own ? 0.3 : 0.2, 70, 1, own ? VOICE_TIER.own : VOICE_TIER.step)) return;
     blip(300, 0.5, own ? 0.28 : 0.16, "sawtooth", own ? null : a.pos, 70);
     setTimeout(() => blip(620, 0.35, own ? 0.22 : 0.12, "sine", own ? null : a.pos, 70), 120);
     setTimeout(() => blip(980, 0.3, own ? 0.18 : 0.1, "sine", own ? null : a.pos, 70), 260);
   });
-  // hitmarker ping: a short click when YOU land a hit (higher pitch on a headshot)
-  on("hitMarker", (owner, target, dmg, isHead) => { if (W.player && owner === W.player) blip(isHead ? 1400 : 950, 0.045, 0.16, "square", null, 0, VOICE_TIER.own); });
-  // kill confirm: rising two-tone when YOUR target drops
-  on("actorDied", (victim, killerId) => {
-    if (W.player && killerId === W.player.id) {
-      blip(700, 0.09, 0.2, "triangle", null, 0, VOICE_TIER.own);
-      setTimeout(() => blip(1050, 0.14, 0.22, "triangle", null, 0, VOICE_TIER.own), 90);
-    }
-  });
+  // hitmarker ping: a short click when YOU land a hit (higher pitch on a headshot) - a KEPT tonal cue
+  on("hitMarker", (owner, target, dmg, isHead) => { if (W.player && owner === W.player) tone("hit_marker", () => blip(isHead ? 1400 : 950, 0.045, 0.16, "square", null, 0, VOICE_TIER.own)); });
+  // kill confirm: rising two-tone when YOUR target drops (kept tonal); the practice dummy popping is a kill too
+  on("actorDied", (victim, killerId) => { if (W.player && killerId === W.player.id) killConfirm(); });
+  on("dummyPopped", () => killConfirm());
   // Bullet impacts: how you learn you MISSED and what you hit instead. Short
   // and quiet so a full-auto burst does not become a wall of noise.
   on("impact", (pos, surface) => {
@@ -2013,6 +2403,8 @@ function wire(W) {
     if (!ctx || ctx.currentTime - lastWhizT < 0.06) return;
     lastWhizT = ctx.currentTime;
     const wg = 0.4 / (1 + (missM || 0) * 0.6);
+    // W10 R2B: a recorded air crack (two high-passed whoosh slices); the band-passed noise burst is the fallback
+    if (sample("whiz", pos, wg * 0.8, 12, 0.9 + Math.random() * 0.25, VOICE_TIER.gun, null)) return;
     const h = openVoice(pos, 12, VOICE_TIER.gun, wg, 1, null); if (!h) return;
     const out = h.out, t = h.start;
     const n = ctx.createBufferSource(); n.buffer = noiseBuf();
@@ -2027,43 +2419,140 @@ function wire(W) {
     n.start(t, Math.random() * 0.9); n.stop(t + 0.07);
     voiceArm(h, out, [n], t + 0.07);
   });
-  on("hardLand", (a, speed) => thump(180, 0.22, Math.min(0.4, 0.12 + speed * 0.008), a === W.player ? null : a.pos, 60));
-  on("propBreak", (p2) => { blip(320, 0.16, 0.22, "square", p2, 60); setTimeout(() => blip(210, 0.2, 0.16, "square", p2, 60), 70); });
-  on("supplyDropLanded", (p2) => { thump(140, 0.5, 0.4, p2, 240, VOICE_TIER.gun, FX_BOOM); setTimeout(() => blip(880, 0.5, 0.18, "triangle", p2, 240, VOICE_TIER.gun), 160); });
-  on("chestOpened", (a, c) => { blip(660, 0.3, 0.14, "triangle", a === W.player ? null : c.pos, 40); setTimeout(() => blip(990, 0.4, 0.12, "triangle", a === W.player ? null : c.pos, 40), 120); });
-  on("pickedUp", (a) => { const own = a === W.player; blip(840, 0.07, own ? 0.12 : 0.07, "sine", own ? null : a.pos, 16); });
-  on("healStart", (a) => { const own = a === W.player; blip(520, 0.3, own ? 0.1 : 0.08, "sine", own ? null : a.pos, 20); });
-  on("healed", (a) => { const own = a === W.player; blip(700, 0.25, own ? 0.14 : 0.09, "sine", own ? null : a.pos, 20); });
+  // ── W10 R2B (items 3, 6): recorded foley instead of beeps; every old tone / thump stays as the cue's fallback ──
+  on("hardLand", (a, speed) => {
+    const own = a === W.player, p2 = own ? null : a.pos, g = Math.min(0.4, 0.12 + speed * 0.008);
+    if (!sample("land_hard", p2, g + 0.06, 60, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY)) thump(180, 0.22, g, p2, 60);
+  });
+  on("propBreak", (p2) => {
+    if (sample("prop_break", p2, 0.3, 60, 1, VOICE_TIER.step, FX_FOLEY)) return;
+    blip(320, 0.16, 0.22, "square", p2, 60); setTimeout(() => blip(210, 0.2, 0.16, "square", p2, 60), 70);
+  });
+  on("supplyDropLanded", (p2) => {
+    if (sample("drop_land", p2, 0.5, 240, 1, VOICE_TIER.gun, FX_BOOM)) return;
+    thump(140, 0.5, 0.4, p2, 240, VOICE_TIER.gun, FX_BOOM); setTimeout(() => blip(880, 0.5, 0.18, "triangle", p2, 240, VOICE_TIER.gun), 160);
+  });
+  on("chestOpened", (a, c) => {
+    const own = a === W.player, p2 = own ? null : c.pos;
+    if (sample("chest_open", p2, own ? 0.28 : 0.2, 40, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY)) return;
+    blip(660, 0.3, 0.14, "triangle", p2, 40); setTimeout(() => blip(990, 0.4, 0.12, "triangle", p2, 40), 120);
+  });
+  on("supplyDropOpened", (a, info) => {
+    const own = a === W.player;
+    const p2 = own ? null : (info && isFinite(info.x) ? { x: info.x, y: (a && a.pos ? a.pos.y : 0) + 0.5, z: info.z } : a && a.pos);
+    sample("drop_open", p2, own ? 0.3 : 0.24, 50, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY);
+  });
+  on("pickedUp", (a) => {
+    const own = a === W.player;
+    if (!sample("pickup", own ? null : a.pos, own ? 0.24 : 0.14, 16, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY))
+      blip(840, 0.07, own ? 0.12 : 0.07, "sine", own ? null : a.pos, 16);
+  });
+  on("weaponDropped", (a) => {
+    const own = a === W.player;
+    sample("weapon_drop", own ? null : a.pos, own ? 0.24 : 0.18, 22, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY);
+  });
+  on("healStart", (a) => {
+    const own = a === W.player;
+    if (!sample("heal_start", own ? null : a.pos, own ? 0.22 : 0.14, 20, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY))
+      blip(520, 0.3, own ? 0.1 : 0.08, "sine", own ? null : a.pos, 20);
+  });
+  on("healed", (a) => {
+    const own = a === W.player;
+    if (!sample("heal_done", own ? null : a.pos, own ? 0.24 : 0.14, 20, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY))
+      blip(700, 0.25, own ? 0.14 : 0.09, "sine", own ? null : a.pos, 20);
+  });
+  on("healCancel", (a) => {
+    const own = a === W.player;
+    sample("cloth", own ? null : a.pos, own ? 0.22 : 0.14, 16, 0.85, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY);
+  });
   // scopeState re-fires EVERY FRAME (player.js) — latch the edge or it machine-guns
-  on("scopeState", (s) => { if (!!s === _scoped) return; _scoped = !!s; blip(_scoped ? 1500 : 1100, 0.035, 0.09, "square"); });
+  on("scopeState", (s) => {
+    if (!!s === _scoped) return; _scoped = !!s;
+    if (!sample("scope", null, 0.2, 0, _scoped ? 1.06 : 0.94, VOICE_TIER.own)) blip(_scoped ? 1500 : 1100, 0.035, 0.09, "square");
+  });
+  // grenades (item 2): the throw whoosh, the pin of a quick-throw, a metal bounce per hard contact
+  on("grenadeThrown", (a, wid, from) => {
+    const own = a === W.player;
+    const p2 = own ? null : (from && isFinite(from.x) ? from : a && a.pos);
+    sample("gren_throw", p2, own ? 0.3 : 0.24, 30, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY);
+  });
+  on("quickThrow", (a) => {
+    const own = a === W.player;
+    sample("gren_pin", own ? null : a.pos, own ? 0.24 : 0.16, 16, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY);
+  });
+  on("roundBounce", (p2, wid, vin) => {
+    // a rolling round re-touches the ground every few frames: one bounce voice per 60 ms, level by the impact speed
+    if (!ctx || ctx.currentTime - _lastBounceT < 0.06) return;
+    _lastBounceT = ctx.currentTime;
+    const k = Math.min(1, Math.max(0.25, (vin || 3) / 9));
+    sample("gren_bounce", p2, 0.32 * k, 40, 0.9 + 0.2 * k, VOICE_TIER.step, FX_FOLEY);
+  });
+  // movement (item 6): slide start / end as cloth + gear foley
+  on("slideStart", (a) => {
+    const own = a === W.player;
+    sample("slide", own ? null : a.pos, own ? 0.22 : 0.18, 26, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_STEP);
+  });
+  on("slideEnd", (a, jumped) => {
+    if (jumped) return;          // the jump's own foley takes over
+    const own = a === W.player;
+    sample("slide_end", own ? null : a.pos, own ? 0.18 : 0.14, 20, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_STEP);
+  });
+  // smoke clearing (item 7): a soft airy tail at the cloud as it thins out
+  on("smokeExpired", (s) => {
+    if (!s || !isFinite(s.x) || !isFinite(s.z)) return;
+    sample("smoke_fade", { x: s.x, y: (isFinite(s.y) ? s.y : 0) + 1, z: s.z }, 0.22, 45, 1, VOICE_TIER.impact, FX_FOLEY);
+  });
+  // squads (item 7): a whole squad gone is the sting family (falling notes; yours louder)
+  on("teamEliminated", (teamId) => { const me = W.player; teamWipe(!!(me && teamId != null && me.teamId === teamId)); });
+  // the drop map's waypoint and a bot's ping acknowledgement: UI / ping family
+  on("dropWaypoint", () => { if (!sample("ui_click", null, 0.22, 999)) tone("ui", () => blip(900, 0.04, 0.1, "square")); });
+  on("pingAck", () => tone("ping", () => blip(1320, 0.06, 0.09, "triangle", null, 0, VOICE_TIER.own)));
   // Explosion (LC-55): the recorded blast (Kenney CC0 thump + rumble), delayed
   // and tailed like a report; the synth thump is the fallback. The music duck
   // only for a blast you can HEAR.
   on("explosion", (pos) => {
-    if (!sample("explosion", pos, 0.8, 260, 1, VOICE_TIER.gun, FX_BOOM)) thump(180, 0.6, 0.7, pos, 200, VOICE_TIER.gun, FX_BOOM);
-    if (W.camShake > 0.2) thump(90, 0.8, 0.5);
+    // (the recorded blast carries its own rumble; the extra close-in synth thump is part of the fallback only, W10 R2B)
+    if (!sample("explosion", pos, 0.8, 260, 1, VOICE_TIER.gun, FX_BOOM)) { thump(180, 0.6, 0.7, pos, 200, VOICE_TIER.gun, FX_BOOM); if (W.camShake > 0.2) thump(90, 0.8, 0.5); }
     if (ctx && place(pos, 260) >= 0) { duckBlast(); bumpThreat(Math.max(0, 1 - _pd / 150)); }
   });
-  on("stormWarning", () => siren(W, 2));
-  on("stormClosing", () => siren(W, 3));
-  on("stormTick", () => blip(140, 0.3, 0.14, "sawtooth"));
-  on("playerStormState", (inStorm) => { if (inStorm) thump(200, 0.5, 0.25); });
-  on("stormKill", () => {});
-  on("supplyDropSpawned", () => { blip(880, 0.2, 0.16, "triangle"); setTimeout(() => blip(1100, 0.3, 0.14, "triangle"), 200); });
-  on("landed", (a) => {
+  // the storm (W10 R2B, item 7): a recorded wall SURGE (a wind swell) on every phase edge - warning, closing, a new
+  // phase - and on stepping into the storm; an electric crackle per damage tick and on a storm death (at the victim).
+  // The tones are the fallback until the pack has decoded.
+  const surge = (g) => sample("storm_surge", null, g, 0, 1, VOICE_TIER.own);
+  // W10 R2B (fix 3): the W9 siren stays THE storm warning / closing cue (the owner did not ask for it to change); the
+  // recorded wall surge is layered UNDER it, quieter than the surge alone on a phase edge
+  on("stormWarning", () => { tone("storm_siren", () => siren(W, 2)); surge(0.22); });
+  on("stormClosing", () => { tone("storm_siren", () => siren(W, 3)); surge(0.26); });
+  on("stormPhase", () => { surge(0.26); });
+  on("stormTick", () => { if (!sample("storm_zap", null, 0.2, 0, 1, VOICE_TIER.own)) blip(140, 0.3, 0.14, "sawtooth"); });
+  on("playerStormState", (inStorm) => { if (inStorm && !surge(0.3)) thump(200, 0.5, 0.25); });
+  on("stormKill", (a) => {
+    if (!a || !a.pos) return;
     const own = a === W.player;
-    thump(500, 0.15, own ? 0.25 : 0.14, own ? null : a.pos, 60);
+    sample("storm_zap", own ? null : a.pos, own ? 0.3 : 0.26, 60, 0.8, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_FOLEY);
   });
-  on("jump", (a) => { if (a === W.player) thump(300, 0.09, 0.16); });
-  // mantle: cloth scrape + a low effort thump; positional for others at close range
+  on("supplyDropSpawned", () => {
+    if (sample("ui_alert", null, 0.28, 999)) return;
+    blip(880, 0.2, 0.16, "triangle"); setTimeout(() => blip(1100, 0.3, 0.14, "triangle"), 200);
+  });
+  on("landed", (a) => {
+    const own = a === W.player, p2 = own ? null : a.pos;
+    if (!sample("land", p2, own ? 0.22 : 0.16, 40, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_STEP)) thump(500, 0.15, own ? 0.25 : 0.14, p2, 60);
+  });
+  on("jump", (a) => {
+    const own = a === W.player;
+    if (!sample("jump", own ? null : a.pos, own ? 0.16 : 0.12, 18, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_STEP) && own) thump(300, 0.09, 0.16);
+  });
+  // mantle: cloth scrape + hands on the ledge; positional for others at close range
   on("mantle", (a) => {
     const own = a === W.player, p2 = own ? null : a.pos;
     if (!sample("cloth", p2, own ? 0.3 : 0.2, 18)) thump(900, 0.06, own ? 0.18 : 0.1, p2, 18);
-    thump(240, 0.1, own ? 0.2 : 0.12, p2, 18);
+    if (!sample("mantle", p2, own ? 0.24 : 0.16, 18, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_STEP)) thump(240, 0.1, own ? 0.2 : 0.12, p2, 18);
   });
   on("touchdown", (a, speed) => {
-    const k = Math.min(1, (speed || 4) / 14);
-    thump(360 - k * 120, 0.10 + k * 0.06, 0.12 + k * 0.14, a === W.player ? null : a.pos, 40);
+    const k = Math.min(1, (speed || 4) / 14), own = a === W.player, p2 = own ? null : a.pos;
+    if (!sample(k > 0.6 ? "land_hard" : "land", p2, 0.14 + k * 0.14, 40, 1, own ? VOICE_TIER.own : VOICE_TIER.step, own ? null : FX_STEP))
+      thump(360 - k * 120, 0.10 + k * 0.06, 0.12 + k * 0.14, p2, 40);
   });
   // UI (LC-95): the four Kenney UI clips that sat decoded but unreachable are
   // wired to the events that mean them — back (Esc), close (big map), ok
@@ -2075,7 +2564,7 @@ function wire(W) {
   on("squadRefused", () => { if (!sample("ui_err", null, 0.3, 999)) blip(220, 0.18, 0.14, "square"); });
   on("hostLost", () => { if (!sample("ui_err", null, 0.3, 999)) blip(220, 0.18, 0.14, "square"); });
   on("chatMsg", () => { sample("ui_click", null, 0.16, 999); });
-  on("countdownBeep", (final) => blip(final ? 1200 : 800, final ? 0.3 : 0.12, 0.2, "square"));
+  on("countdownBeep", (final) => tone("countdown", () => blip(final ? 1200 : 800, final ? 0.3 : 0.12, 0.2, "square")));
   // Ping (P1-D emits it): a bright two-note chirp, head-relative like Apex's —
   // a ping is a message, not a world sound. Teammates' pings a touch softer.
   // Accepts any payload shape (pos / {x,z} / {by, kind}); only the owner matters.
@@ -2084,9 +2573,9 @@ function wire(W) {
     const fromMe = !p || p.own || p.local || (W.player && (p.by === W.player.id || p.owner === W.player.id || p.from === W.player.id || p.actor === W.player));
     const g = fromMe ? 0.16 : 0.12, danger = p && (p.kind === "enemy" || p.kind === "danger");
     // P23: a big-map PIN (a waypoint, not a callout) is one soft low note; a world ping keeps the chirp
-    if (p && p.kind === "pin") { blip(880, 0.12, g * 0.8, "sine", null, 0, VOICE_TIER.own); return; }
-    blip(danger ? 1320 : 1180, 0.07, g, "triangle", null, 0, VOICE_TIER.own);
-    setTimeout(() => blip(danger ? 990 : 1570, 0.11, g * 0.85, "triangle", null, 0, VOICE_TIER.own), 70);
+    if (p && p.kind === "pin") { tone("ping", () => blip(880, 0.12, g * 0.8, "sine", null, 0, VOICE_TIER.own)); return; }
+    tone("ping", () => blip(danger ? 1320 : 1180, 0.07, g, "triangle", null, 0, VOICE_TIER.own));
+    setTimeout(() => tone("ping", () => blip(danger ? 990 : 1570, 0.11, g * 0.85, "triangle", null, 0, VOICE_TIER.own)), 70);
   });
   // ── P23: DBNO (C-DBNO), fall damage (C-FALL), smoke (C-SMOKE), chest shimmer (P2-J) ──
   on("actorDowned", (a, src) => {
@@ -2095,7 +2584,8 @@ function wire(W) {
     stopRevive(a);
     vocal(a, "downed");
     const own = a === W.player;
-    thump(210, 0.24, own ? 0.24 : 0.2, own ? null : a.pos, 50, own ? VOICE_TIER.own : VOICE_TIER.gun, own ? null : FX_FOLEY);
+    if (!sample("body_fall", own ? null : a.pos, own ? 0.28 : 0.26, 50, 1.08, own ? VOICE_TIER.own : VOICE_TIER.gun, own ? null : FX_FOLEY))
+      thump(210, 0.24, own ? 0.24 : 0.2, own ? null : a.pos, 50, own ? VOICE_TIER.own : VOICE_TIER.gun, own ? null : FX_FOLEY);
     const me = W.player;
     if (me && isOwnTeam(a)) teamSting(false);
     else if (me && src != null && (src === me || src === me.id || src.id === me.id)) knockConfirm();
@@ -2105,7 +2595,7 @@ function wire(W) {
     // by target; a cancel that names only the reviver stops that reviver's channel
     if (!(target && stopRevive(target)) && reviver) for (const [t, r] of _rev) if (r.reviver === reviver) stopRevive(t);
     _acc.reviveCancels++;
-    if (W.player && (reviver === W.player || target === W.player)) blip(300, 0.1, 0.1, "square", null, 0, VOICE_TIER.own);
+    if (W.player && (reviver === W.player || target === W.player) && !sample("rl_cancel", null, 0.2, 0, 0.9, VOICE_TIER.own)) blip(300, 0.1, 0.1, "square", null, 0, VOICE_TIER.own);
   });
   on("actorRevived", (a) => {
     if (!a) return;
@@ -2191,7 +2681,7 @@ function tick(W, dt) {
   flushHurt();                    // P23: last frame's hurt grunts (see vocal)
   // the probes that cost a lookup rather than a gain write run at 4 Hz
   _slowAcc += dt;
-  if (_slowAcc >= 0.25) { const sd = _slowAcc; _slowAcc = 0; roomTone(W); waterTone(W); smokeScan(W); chestShimmer(W, sd); }
+  if (_slowAcc >= 0.25) { const sd = _slowAcc; _slowAcc = 0; roomTone(W); waterTone(W); smokeScan(W); chestShimmer(W, sd); if (_uwOn && !uwBed) uwBedSet(true); }
   _tickMs += performance.now() - t0; _tickN++;
 }
 
@@ -2321,6 +2811,107 @@ const AMBIENCE = {
   savanna:  { rate: 0.45, type: "bandpass", freq: 500,  g: 0.050, gust: 0.11 },
 };
 
+// W10 R2B (item 1): the RECORDED ambience - two looping layers per map (AMB_REC), fetched for the current map's theme the
+// first time a match goes live and decoded once (they stay decoded for the page: a later match on the same map reuses
+// them). Until both have decoded the old filtered-noise bed below plays, exactly as before; then it fades out and the
+// recorded layers fade in. Under a roof (the listener's own roof test, 4 Hz) the whole ambience bus is low-passed and
+// 6 dB down - written only on the roof EDGE, so the steady state costs nothing per frame.
+const _ambBuf = {};                 // name -> AudioBuffer | null (fetch failed) | Promise (in flight)
+let ambRec = null;                  // { theme, srcs, gains }
+let _ambTheme = null;               // the theme whose layers are resident (W10 R2B repair: the others are freed)
+let uwBed = null, _uwOn = false;
+function ambLoad(W, name) {
+  if (name in _ambBuf) return _ambBuf[name] instanceof Promise ? null : _ambBuf[name];
+  const p = (async () => {
+    let b = null;
+    try {
+      const r = await fetch(W.assetBase + "assets/audio/sfx/" + name + ".ogg");
+      b = r.ok ? await decodeAt(name, await r.arrayBuffer()) : null;
+    } catch (e) { b = null; }
+    // freed while in flight (the map changed): drop the result instead of re-pinning it
+    if (_ambBuf[name] === p) _ambBuf[name] = b;
+  })();
+  _ambBuf[name] = p;
+  return null;
+}
+/** W10 R2B (repair): a new map theme frees the other themes' decoded layers (~2-7 MB each), so a session that plays all
+ *  three maps holds one map's ambience, not three. Runs on a theme CHANGE only (not per frame). The underwater bed stays. */
+function ambEvict(th) {
+  if (_ambTheme === th) return;
+  _ambTheme = th;
+  const keep = {};
+  for (const l of (AMB_REC[th] || AMB_REC.forest)) keep[l[0]] = 1;
+  for (const t in AMB_REC) for (const l of AMB_REC[t]) if (!keep[l[0]] && l[0] in _ambBuf) delete _ambBuf[l[0]];
+}
+function ambRecStop(fade) {
+  if (!ambRec) return;
+  const t = ctx.currentTime;
+  for (let i = 0; i < ambRec.srcs.length; i++) {
+    try { ambRec.gains[i].gain.setTargetAtTime(0, t, fade || 0.05); ambRec.srcs[i].stop(t + (fade || 0.05) * 6); } catch (e) {}
+  }
+  ambRec = null;
+}
+function ambRecord(W) {
+  const th = (W.map.K && W.map.K.theme) || "forest";
+  const L = AMB_REC[th] || AMB_REC.forest;
+  if (ambRec && ambRec.theme === th) return true;
+  if (ambRec) ambRecStop(0.3);
+  ambEvict(th);
+  let ready = true;
+  for (let i = 0; i < L.length; i++) if (!ambLoad(W, L[i][0])) ready = false;
+  if (!ready) return false;
+  const t = ctx.currentTime, srcs = [], gains = [], tgt = [];
+  const SN = _lisSnow && AMB_SNOW[th];
+  for (let i = 0; i < L.length; i++) {
+    const src = ctx.createBufferSource(); src.buffer = _ambBuf[L[i][0]]; src.loop = true;
+    const gt = SN && L[i][0] in SN ? SN[L[i][0]] : L[i][1];
+    const g = ctx.createGain(); g.gain.value = 0; g.gain.setTargetAtTime(gt, t, 0.8); tgt.push(gt);
+    src.connect(g); g.connect(ambBus || sfxBus);
+    // the two loops are 20 s and 16 s long, so the layers drift against each other and never repeat as a pair
+    src.start(t, (i * 7.3) % src.buffer.duration);
+    srcs.push(src); gains.push(g);
+  }
+  ambRec = { theme: th, srcs, gains, names: L.map((l) => l[0]), tgt };
+  _ambSnowW = !!SN;
+  _acc.ambRecorded++;
+  return true;
+}
+function ambSnow() {
+  if (!ambRec || _lisSnow === _ambSnowW) return;
+  _ambSnowW = _lisSnow;
+  const L = AMB_REC[ambRec.theme] || AMB_REC.forest, SN = AMB_SNOW[ambRec.theme], t = ctx.currentTime;
+  if (!SN) return;
+  for (let i = 0; i < ambRec.gains.length; i++) {
+    const gt = _lisSnow && L[i][0] in SN ? SN[L[i][0]] : L[i][1];
+    ambRec.tgt[i] = gt;
+    try { ambRec.gains[i].gain.setTargetAtTime(gt, t, 1.2); } catch (e) {}
+  }
+}
+function ambRoof() {
+  if (!ambRoofG || _lisRoof === _ambRoofW) return;
+  _ambRoofW = _lisRoof;
+  const t = ctx.currentTime;
+  ambRoofG.gain.setTargetAtTime(_lisRoof ? AMB_ROOF_G : 1, t, 0.25);
+  ambRoofF.frequency.setTargetAtTime(_lisRoof ? AMB_ROOF_F : 20000, t, 0.25);
+}
+/** the underwater bed: player.js's setUnderwater() turns it on and off (the master low-pass already muffles the rest) */
+function uwBedSet(on) {
+  _uwOn = !!on;
+  if (!ctx || !W_) return;
+  if (_uwOn && !uwBed) {
+    const b = ambLoad(W_, UW_BED);
+    if (!b) return;                 // still loading: the next submersion change (or the 4 Hz probe) starts it
+    const src = ctx.createBufferSource(); src.buffer = b; src.loop = true;
+    const g = ctx.createGain(); g.gain.value = 0; g.gain.setTargetAtTime(0.42, ctx.currentTime, 0.12);
+    src.connect(g); g.connect(sfxBus); src.start();
+    uwBed = { src, g };
+  } else if (!_uwOn && uwBed) {
+    const t = ctx.currentTime;
+    try { uwBed.g.gain.setTargetAtTime(0, t, 0.08); uwBed.src.stop(t + 0.5); } catch (e) {}
+    uwBed = null;
+  }
+}
+
 // Between gunshots all three maps were dead air. Non-positional, because wind
 // has no bearing. Routed through ambBus, which the threat envelope ducks.
 function ambience(W) {
@@ -2328,6 +2919,15 @@ function ambience(W) {
   if (!live) {
     if (ambBed) { try { ambBed.src.stop(); } catch (e) {} ambBed = null; }
     if (ambWater) { try { ambWater.src.stop(); } catch (e) {} ambWater = null; }
+    if (ambRec) ambRecStop(0.05);
+    if (uwBed) uwBedSet(false);
+    return;
+  }
+  ambRoof();
+  ambSnow();
+  if (ambRec || ambRecord(W)) {
+    // the recorded layers are up: retire the synth bed (once)
+    if (ambBed) { try { ambBed.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.5); ambBed.src.stop(ctx.currentTime + 3); } catch (e) {} ambBed = null; }
     return;
   }
   if (!ambBed) {
@@ -2347,7 +2947,8 @@ function ambience(W) {
 
 // Shoreline layer, tropical and forest only (both carry water: true in MAPS).
 function waterTone(W) {
-  if (!ambBed || !W.map || !W.map.K || !W.map.K.water || !W.player) {
+  // W10 R2B: also under the recorded ambience, except on Isla Viva, whose recorded bed IS the shore
+  if ((!ambBed && !(ambRec && ambRec.theme !== "tropical")) || !W.map || !W.map.K || !W.map.K.water || !W.player) {
     if (ambWater) ambWater.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.6);
     return;
   }
@@ -2370,6 +2971,15 @@ function waterTone(W) {
 function roomTone(W) {
   if (!_L.ok) return;
   _lisRoof = roofAt(_L.x, _L.y, _L.z);
+  // the snow-biome vote (W10 R2B fix 3): one ground lookup per probe, only on a map whose ambience has a snow stage
+  const th = W && W.map && W.map.K && W.map.K.theme;
+  if (th && AMB_SNOW[th] && W.map.surfaceAt) {
+    const o = _SNOW_OFF[_snowI % 5];
+    let lab = null;
+    try { lab = W.map.surfaceAt(_L.x + o[0], _L.z + o[1], -1e4); } catch (e) { lab = null; }
+    _snowVote[_snowI % 5] = lab === "snow" ? 1 : 0; _snowI++;
+    _lisSnow = _snowVote[0] + _snowVote[1] + _snowVote[2] + _snowVote[3] + _snowVote[4] >= 3;
+  } else if (_lisSnow) { _lisSnow = false; _snowVote.fill(0); }
 }
 
 // Pull the score back as the lobby drains so the last fight is carried by
