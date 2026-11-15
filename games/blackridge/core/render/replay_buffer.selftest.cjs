@@ -110,6 +110,27 @@ const near = (a, b, e) => Math.abs(a - b) <= e;
   let threw = false; try { yb.copyFrom(rb); } catch (e) { threw = true; }
   ok(threw, "copyFrom rejects a geometry mismatch");
 
+  // [fx v152] projectile track: id-matched interpolation, a splice in the sim's
+  // list (order change) never swaps two projectiles, and a frozen clip keeps it
+  const pb = createReplayBuffer({ slots: 2, seconds: 1 });
+  const PK = RB.PK;
+  pb.beginSample(0); pb.writeProj(7, PK.FRAG, 1, 0, 1, 0, 0, 0); pb.writeProj(9, PK.ROCKET, 0, 10, 1, 0, 0.5, 0); pb.endSample();
+  pb.beginSample(0.1); pb.writeProj(9, PK.ROCKET, 0, 14, 1, 0, 0.5, 0); pb.writeProj(7, PK.FRAG, 1, 1, 1, 0, 0, 0); pb.endSample();
+  pb.beginSample(0.2); pb.writeProj(7, PK.FRAG, 1, 2, 1, 0, 0, 0); pb.endSample();
+  const po = [{}, {}, {}, {}];
+  pb.locate(0.05, loc);
+  let pn = pb.readProjs(loc, po);
+  const f7 = po.slice(0, pn).find((p) => p.id === 7), r9 = po.slice(0, pn).find((p) => p.id === 9);
+  ok(pn === 2 && f7 && r9 && near(f7.x, 0.5, 1e-5) && near(r9.x, 12, 1e-5), "projectiles lerp by id across a list reorder");
+  pb.locate(0.15, loc);
+  pn = pb.readProjs(loc, po);
+  ok(pn === 2 && po.slice(0, pn).some((p) => p.id === 9 && near(p.x, 14, 1e-5)), "a projectile gone in the later sample holds its last spot");
+  const pc = createReplayBuffer({ slots: 2, seconds: 1 });
+  pc.copyFrom(pb);
+  pc.locate(0.2, loc);
+  ok(pc.readProjs(loc, po) === 1 && near(po[0].x, 2, 1e-5), "clip copy carries the projectile track");
+  ok(rb.bytes < 300 * 1024, `with the projectile track one buffer is still ${(rb.bytes / 1024).toFixed(0)} KB (< 300 KB)`);
+
   console.log("\n===== " + passed + " passed, " + failed + " failed =====");
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error("FATAL", e); process.exit(1); });

@@ -444,6 +444,16 @@ export function createFx(ctx) {
 
   // ---- frozen surface ---------------------------------------------------------
   const fx = {
+    // [fx v152] the kill cam cuts between the live world and a replay of the
+    // last seconds: airborne effects (particles, smoke, fireballs, tracers,
+    // flashes) belong to one timeline and must not bleed into the other. Marks
+    // on surfaces (decals, settled casings) stay — they are the world.
+    clearTransient() {
+      pools.clear();
+      tracers.clear();
+      muzzle.clear();
+      explosions.clear();
+    },
     attach(bridge) {
       // epoch check: attach runs right after boot's epoch++/bridge.clear();
       // any handler still registered for an older sim instance no-ops.

@@ -68,38 +68,38 @@
     },
     {
       "path": "assets/chars/wpn3p_ar.glb",
-      "bytes": 92456,
-      "kind": "imported",
-      "license": "Meshy generated (FFG owned, last-circle provenance)",
-      "source": "games/last-circle/assets/props/meshy_wpn/wpn_ar.glb (draco)"
+      "bytes": 45184,
+      "kind": "generated",
+      "license": "Original (authored procedurally in tools/a5_build_guns.py)",
+      "source": "tools/a5_build_guns.py 3p:warden (2026-11-14: replaces the last-circle Meshy scan at this path)"
     },
     {
       "path": "assets/chars/wpn3p_smg.glb",
-      "bytes": 70704,
-      "kind": "imported",
-      "license": "Meshy generated (FFG owned, last-circle provenance)",
-      "source": "games/last-circle/assets/props/meshy_wpn/wpn_smg.glb (draco)"
+      "bytes": 41672,
+      "kind": "generated",
+      "license": "Original (authored procedurally in tools/a5_build_guns.py)",
+      "source": "tools/a5_build_guns.py 3p:vesper (2026-11-14: replaces the last-circle Meshy scan at this path)"
     },
     {
       "path": "assets/chars/wpn3p_sniper.glb",
-      "bytes": 61036,
-      "kind": "imported",
-      "license": "Meshy generated (FFG owned, last-circle provenance)",
-      "source": "games/last-circle/assets/props/meshy_wpn/wpn_sniper.glb (draco)"
+      "bytes": 37988,
+      "kind": "generated",
+      "license": "Original (authored procedurally in tools/a5_build_guns.py)",
+      "source": "tools/a5_build_guns.py 3p:corvus (2026-11-14: replaces the last-circle Meshy scan at this path)"
     },
     {
       "path": "assets/weapons/wpn3p_pistol.glb",
-      "bytes": 100076,
-      "kind": "imported",
-      "license": "Meshy generated (FFG owned, last-circle provenance)",
-      "source": "games/last-circle/assets/props/meshy_wpn/wpn_pistol.glb (via core/weapons/world_weapon.js prep)"
+      "bytes": 18152,
+      "kind": "generated",
+      "license": "Original (authored procedurally in tools/a5_build_guns.py)",
+      "source": "tools/a5_build_guns.py 3p:pike (2026-11-14: replaces the last-circle Meshy scan at this path)"
     },
     {
       "path": "assets/weapons/wpn3p_shotgun.glb",
-      "bytes": 68372,
-      "kind": "imported",
-      "license": "Meshy generated (FFG owned, last-circle provenance)",
-      "source": "games/last-circle/assets/props/meshy_wpn/wpn_shotgun.glb (via core/weapons/world_weapon.js prep)"
+      "bytes": 36268,
+      "kind": "generated",
+      "license": "Original (authored procedurally in tools/a5_build_guns.py)",
+      "source": "tools/a5_build_guns.py 3p:breaker (2026-11-14: replaces the last-circle Meshy scan at this path)"
     },
     {
       "path": "assets/chars/clip_rifle_idle_g.glb",

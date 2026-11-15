@@ -38,13 +38,21 @@ export const S = {
   SURF: 15, ENTITY: 16, WEAPON: 17, FLAGS: 18, PELLET: 19,
   STRIDE: 20,
 };
-export const SF = { TRACER: 1, FIRST: 2, HEAD: 4 };
+export const SF = { TRACER: 1, FIRST: 2, HEAD: 4, ROCKET: 8, SUPP: 16 };
 // ---- event layout (deaths, explosions) ---------------------------------------
 export const E = {
   T: 0, KIND: 1, A: 2, B: 3, X: 4, Y: 5, Z: 6, R: 7, HEAD: 8, AUX: 9,
   STRIDE: 10,
 };
-export const EK = { DEATH: 1, EXPLOSION: 2 };
+export const EK = { DEATH: 1, EXPLOSION: 2, THROW: 3 };
+// ---- projectile track (frags / rockets in flight), per sample ------------------
+// [fx v152] the explosive kill cam has to SHOW the projectile, and the live
+// grenadefx view reads sim.internal lists that are long gone by replay time, so
+// every sample also stores up to PROJ in-flight projectiles. Matched across the
+// two bracketing samples by a view-side id, so a list splice in the sim never
+// teleports one into another's place.
+export const P = { ID: 0, KIND: 1, OWNER: 2, X: 3, Y: 4, Z: 5, A: 6, B: 7, STRIDE: 8 };
+export const PK = { FRAG: 1, ROCKET: 2 };
 
 // Shared, append-only string table. One per kill cam (all buffers share it, so a
 // copied clip's indices stay valid). Index 0 is the empty string.
@@ -78,11 +86,14 @@ export function createReplayBuffer(opts = {}) {
   const SHOTS = opts.shots | 0 || 1024;
   const EVENTS = opts.events | 0 || 128;
   const TELEPORT = opts.teleportM || 2.0;          // never lerp across a jump
+  const PROJ = opts.proj | 0 || 4;                 // projectiles per sample
 
   const times = new Float64Array(N);
   const act = new Float32Array(N * slots * A.STRIDE);
   const shots = new Float32Array(SHOTS * S.STRIDE);
   const evts = new Float32Array(EVENTS * E.STRIDE);
+  const proj = new Float32Array(N * PROJ * P.STRIDE);
+  const projN = new Uint8Array(N);
 
   // ring cursors (head = next write index; count = valid entries)
   let head = 0, count = 0;
@@ -91,11 +102,12 @@ export function createReplayBuffer(opts = {}) {
   let cur = -1;          // sample being written (between begin/end)
 
   const buf = {
-    slots, hz, N, SHOTS, EVENTS,
+    slots, hz, N, SHOTS, EVENTS, PROJ,
     get count() { return count; },
     get shotCount() { return sCount; },
     get eventCount() { return eCount; },
-    bytes: times.byteLength + act.byteLength + shots.byteLength + evts.byteLength,
+    bytes: times.byteLength + act.byteLength + shots.byteLength + evts.byteLength +
+      proj.byteLength + projN.byteLength,
 
     clear() { head = count = sHead = sCount = eHead = eCount = 0; cur = -1; },
 
@@ -111,6 +123,7 @@ export function createReplayBuffer(opts = {}) {
       times[cur] = t;
       const base = cur * slots * A.STRIDE;
       for (let s = 0; s < slots; s++) act[base + s * A.STRIDE + A.PRESENT] = 0;
+      projN[cur] = 0;
       head = (head + 1) % N;
       if (count < N) count++;
       return cur;
@@ -125,7 +138,43 @@ export function createReplayBuffer(opts = {}) {
       act[o + 10] = flags; act[o + 11] = weaponIdx; act[o + 12] = animIdx;
       act[o + 13] = 1;
     },
+    // One in-flight projectile for the sample being written (beyond PROJ: dropped).
+    writeProj(id, kind, owner, x, y, z, a, b) {
+      if (cur < 0) return;
+      const n = projN[cur];
+      if (n >= PROJ) return;
+      const o = (cur * PROJ + n) * P.STRIDE;
+      proj[o] = id; proj[o + 1] = kind; proj[o + 2] = owner;
+      proj[o + 3] = x; proj[o + 4] = y; proj[o + 5] = z;
+      proj[o + 6] = a; proj[o + 7] = b;
+      projN[cur] = n + 1;
+    },
     endSample() { cur = -1; },
+
+    // Projectiles at the located bracket, interpolated by id. Writes up to
+    // out.length plain objects {id, kind, owner, x, y, z, a, b} (reused) and
+    // returns the count. A projectile present only in the earlier sample is
+    // held there (it is about to detonate); one only in the later sample is
+    // not drawn yet (it has not left the hand).
+    readProjs(loc, out) {
+      const n0 = projN[loc.i0], n1 = projN[loc.i1];
+      let k = 0;
+      for (let i = 0; i < n0 && k < out.length; i++) {
+        const o = (loc.i0 * PROJ + i) * P.STRIDE;
+        const id = proj[o];
+        let m = -1;
+        for (let j = 0; j < n1; j++) if (proj[(loc.i1 * PROJ + j) * P.STRIDE] === id) { m = (loc.i1 * PROJ + j) * P.STRIDE; break; }
+        const r = out[k++];
+        const t = m >= 0 ? loc.k : 0, q = m >= 0 ? m : o;
+        r.id = id; r.kind = proj[o + 1]; r.owner = proj[o + 2];
+        r.x = proj[o + 3] + (proj[q + 3] - proj[o + 3]) * t;
+        r.y = proj[o + 4] + (proj[q + 4] - proj[o + 4]) * t;
+        r.z = proj[o + 5] + (proj[q + 5] - proj[o + 5]) * t;
+        r.a = proj[o + 6] + wrapPi(proj[q + 6] - proj[o + 6]) * t;
+        r.b = proj[o + 7] + (proj[q + 7] - proj[o + 7]) * t;
+      }
+      return k;
+    },
 
     pushShot(t, slot, o, d, hit, nrm, surfIdx, entity, weaponIdx, flags, pellet) {
       const b = sHead * S.STRIDE;
@@ -157,15 +206,16 @@ export function createReplayBuffer(opts = {}) {
     // a memcpy: ~0.27 MB in well under a millisecond, and only on a kill.
     copyFrom(src) {
       const r = src._raw();
-      if (r.N !== N || r.slots !== slots || r.SHOTS !== SHOTS || r.EVENTS !== EVENTS) {
+      if (r.N !== N || r.slots !== slots || r.SHOTS !== SHOTS || r.EVENTS !== EVENTS || r.PROJ !== PROJ) {
         throw new Error("replay_buffer.copyFrom: geometry mismatch");
       }
       times.set(r.times); act.set(r.act); shots.set(r.shots); evts.set(r.evts);
+      proj.set(r.proj); projN.set(r.projN);
       head = r.head; count = r.count; sHead = r.sHead; sCount = r.sCount;
       eHead = r.eHead; eCount = r.eCount; cur = -1;
     },
     _raw() {
-      return { N, slots, SHOTS, EVENTS, times, act, shots, evts, head, count, sHead, sCount, eHead, eCount };
+      return { N, slots, SHOTS, EVENTS, PROJ, times, act, shots, evts, proj, projN, head, count, sHead, sCount, eHead, eCount };
     },
 
     // ---- lookup -----------------------------------------------------------------

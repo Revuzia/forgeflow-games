@@ -273,7 +273,7 @@ function botRec(st, bot, t) {
         anchor: null, anchorKind: null, route: null,
         priority: 0, firePolicy: "free", selfDefenseM: 12,
         posture: "balanced", breakFight: false,
-        noRetreat: false, noFlank: false, noGrenade: false,
+        noRetreat: false, noFlank: false, noGrenade: false, leash: null,
       },
       objRoute: { laneId: null, wpIndex: 0, dir: 1 },
     };
@@ -310,6 +310,10 @@ function writeObj(sim, st, rec, bot, t, f) {
   o.noRetreat = !!f.noRetreat;
   o.noFlank = !!f.noFlank;
   o.noGrenade = !!f.noGrenade;
+  // 2026-11 review: a HOLD order's leash [x, y, z, r] — the area the bot may
+  // not leave for its own reasons (wander, investigate, hunt, loot, cover,
+  // reload break); botfsm.js enforces it. Only the commander releases it.
+  o.leash = f.leash || null;
   if (OBJ_TEST.disableWrites) return;
   bot._obj = o;
   if (changed) sim.emit("objrole", { botId: bot.id, role: f.role, reason: f.reason, t });
@@ -370,7 +374,13 @@ function buildRoute(st, g, fromPos, toPos, costFn) {
 function followRoute(rec, bot) {
   const r = rec.route;
   if (!r || !r.wps.length) return null;
-  while (r.i < r.wps.length - 1 && hdist(bot.pos, r.wps[r.i]) <= WP_ARRIVE_M) r.i++;
+  // 2026-11 review: + the distance the bot covers before the next 2 Hz pass
+  // (0.6 s of its speed). With a fixed 4 m a sprinting bot reached an
+  // intermediate lane waypoint between two passes, ARRIVED, and stood there
+  // (often against the wall the lane node hugs) until the next pass moved it on.
+  const vb = bot.vel ? Math.hypot(bot.vel[0], bot.vel[2]) : 0;
+  const adv = WP_ARRIVE_M + 0.6 * vb;
+  while (r.i < r.wps.length - 1 && hdist(bot.pos, r.wps[r.i]) <= adv) r.i++;
   rec.objRoute.laneId = r.laneIds[r.i] || null;
   rec.objRoute.wpIndex = r.i;
   rec.objRoute.dir = 1;

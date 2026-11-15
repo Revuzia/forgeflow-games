@@ -359,7 +359,10 @@ export function assign(ctx) {
         role: "carry", reason: stalled ? R.STALL_BREAKER : R.CARRY,
         anchor, anchorKind: "stand", routeUse: false,
         priority: stalled ? 1.0 : 0.95,
-        firePolicy: "defensive", selfDefenseM: 12, posture,
+        // 2026-11 review: 12 -> 22 m. The carrier shoots back at what blocks
+        // its way home (it now fires on the walk, botfsm fireOnMove), but
+        // still does not start long-range duels (defensive policy).
+        firePolicy: "defensive", selfDefenseM: 22, posture,
         noRetreat: true, noFlank: true, noGrenade: true, holdS: 2,
       });
       carrierRouteWps = rec.route ? rec.route.wps : null;

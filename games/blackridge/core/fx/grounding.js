@@ -234,12 +234,16 @@ const BLOB_VERT = /* glsl */ `
 attribute float aStrength;
 attribute vec4 aDim;      // rx, rz (footprint half-extents, m), castLen (m), yaw
 attribute float aShape;
+attribute vec2 aLight;    // [fx v152] per-instance travel direction; (0,0) = the moon
+uniform vec2 uLightXZ;
 varying vec2 vLocal;
 varying float vS;
 varying vec4 vDim;
 varying float vShape;
+varying vec2 vL;
 void main() {
   vS = aStrength; vDim = aDim; vShape = aShape;
+  vL = dot(aLight, aLight) > 0.01 ? normalize(aLight) : uLightXZ;
   // Uniform scale in X/Z by construction (see write()/bakeStatics()).
   float E = length(instanceMatrix[0].xyz);
   vLocal = position.xz * E;
@@ -247,12 +251,12 @@ void main() {
 }`;
 
 const BLOB_FRAG = /* glsl */ `
-uniform vec2 uLightXZ;    // unit; the direction a shadow TRAVELS on the ground
 uniform float uAlpha;     // pool master alpha
 varying vec2 vLocal;
 varying float vS;
 varying vec4 vDim;
 varying float vShape;
+varying vec2 vL;          // unit; the direction a shadow TRAVELS on the ground
 ${SIL_GLSL}
 void main() {
   if (vS < 0.004) discard;
@@ -267,7 +271,7 @@ void main() {
   for (int i = 0; i < 4; i++) {
     float t = float(i) / 3.0;
     float pen = mix(${PEN_NEAR.toFixed(3)}, ${PEN_FAR.toFixed(3)}, t) + soft;
-    vec2 q = vLocal - uLightXZ * (cl * t);
+    vec2 q = vLocal - vL * (cl * t);
     float d = silTop(rot2(q, yaw), r, vShape);
     float cov = 1.0 - smoothstep(-pen * 0.40, pen, d);
     a = max(a, cov * mix(1.0, ${CAST_TIP_ALPHA.toFixed(3)}, t));
@@ -449,17 +453,21 @@ function makeBlobPool(mat, n, dynamic, name) {
   const strength = new Float32Array(n);
   const dim = new Float32Array(n * 4);
   const shape = new Float32Array(n);
+  const light = new Float32Array(n * 2);
   const aS = new THREE.InstancedBufferAttribute(strength, 1);
   const aD = new THREE.InstancedBufferAttribute(dim, 4);
   const aSh = new THREE.InstancedBufferAttribute(shape, 1);
+  const aL = new THREE.InstancedBufferAttribute(light, 2);
   if (dynamic) {
     aS.setUsage(THREE.DynamicDrawUsage);
     aD.setUsage(THREE.DynamicDrawUsage);
     aSh.setUsage(THREE.DynamicDrawUsage);
+    aL.setUsage(THREE.DynamicDrawUsage);
   }
   geo.setAttribute("aStrength", aS);
   geo.setAttribute("aDim", aD);
   geo.setAttribute("aShape", aSh);
+  geo.setAttribute("aLight", aL);
   const mesh = new THREE.InstancedMesh(geo, mat, n);
   mesh.name = name;
   mesh.frustumCulled = false;
@@ -474,7 +482,7 @@ function makeBlobPool(mat, n, dynamic, name) {
   mesh.userData.noReflect = true;
   _m.makeScale(0, 0, 0);
   for (let i = 0; i < n; i++) mesh.setMatrixAt(i, _m);
-  return { mesh, geo, strength, dim, shape, aS, aD, aSh };
+  return { mesh, geo, strength, dim, shape, light, aS, aD, aSh, aL };
 }
 
 export function makeGrounding(env) {
@@ -569,8 +577,11 @@ export function makeGrounding(env) {
     return m + Math.max(castLen + PEN_FAR + 0.06 * m, aoR) + QUAD_PAD;
   }
 
-  function writeBlob(pool, i, x, y, z, rx, rz, s, castLen, yaw, shape) {
+  function writeBlob(pool, i, x, y, z, rx, rz, s, castLen, yaw, shape, lx, lz) {
     const E = extentFor(rx, rz, castLen);
+    const l0 = pool.light[i * 2], l1 = pool.light[i * 2 + 1];
+    const nx = lx || 0, nz = lz || 0;
+    if (l0 !== nx || l1 !== nz) { pool.light[i * 2] = nx; pool.light[i * 2 + 1] = nz; pool.aL.needsUpdate = true; }
     _p.set(x, y, z);
     _s.set(E * 2, 1, E * 2);           // PlaneGeometry spans [-0.5, 0.5]
     _m.compose(_p, _q.identity(), _s);
@@ -705,17 +716,25 @@ export function makeGrounding(env) {
      * are written from one call. Omitting h keeps the shadow and parks the
      * reflection.
      */
-    write(i, x, y, z, rx, rz, s, h, tint, yaw, shape) {
+    // [fx v152] opts (optional): {cast: metres of cast smear, overriding the
+    // height rule; lx, lz: the ground direction THIS shadow travels (a
+    // practical lamp rather than the moon); noRefl: no wet-street mirror card}.
+    // The player's own body uses it: it needs the moon's cast smear and a
+    // lamp's, and never a reflection of itself under its own boots.
+    write(i, x, y, z, rx, rz, s, h, tint, yaw, shape, opts) {
       if (i < 0 || i >= DYN_N) return;
       if (!(s > 0.004)) { hideSlot(i); return; }
       const hh = h > 0 ? h : 0;
       const sh = shape == null ? SHAPE.HUMAN : shape;
-      const castLen = Math.min(Math.max(hh, 0.05) * CAST_PER_H, CAST_MAX_DYN);
-      writeBlob(dynPool, i, x, y, z, rx, rz, s, castLen, yaw || 0, sh);
-      writeRefl(dynReflGeo, i, x, y, z, rx, rz, hh, yaw || 0,
+      const castLen = opts && opts.cast >= 0 ? Math.min(opts.cast, CAST_MAX_DYN * 1.6)
+        : Math.min(Math.max(hh, 0.05) * CAST_PER_H, CAST_MAX_DYN);
+      writeBlob(dynPool, i, x, y, z, rx, rz, s, castLen, yaw || 0, sh, opts ? opts.lx : 0, opts ? opts.lz : 0);
+      const refl = opts && opts.noRefl ? 0 : hh;
+      writeRefl(dynReflGeo, i, x, y, z, rx, rz, refl, yaw || 0,
         tint == null ? DEFAULT_TINT : tint,
-        hh > 0 ? Math.min(1, s / 0.6) * wetAt(x, z) : 0, sh);
+        refl > 0 ? Math.min(1, s / 0.6) * wetAt(x, z) : 0, sh);
     },
+    lightXZ: () => blobUniforms.uLightXZ.value,
     hide: hideSlot,
     free(i) { hideSlot(i); if (i >= 0 && i < DYN_N) used[i] = 0; },
     clear() { for (let i = 0; i < DYN_N; i++) { hideSlot(i); used[i] = 0; } },

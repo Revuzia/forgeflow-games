@@ -113,7 +113,10 @@ export const WPN_GLB = {
 // [heavy weapons] kinds whose GLB is AUTHORED in the generator's frame (origin at the
 // pistol grip, barrel down -Z, metres, true scale): no yaw search, no 180° guess, no
 // length normalisation, no grip-cluster search — the frame is known, so it is used.
-export const WPN_AUTHORED = { lmg: true, launcher: true };
+// (2026-11-14 guns pass) every kind: ar/smg/sniper/pistol/shotgun are now the generator's
+// own Warden/Vesper/Corvus/Pike/Breaker (`3p:<id>`), replacing the last-circle Meshy scans
+// at the same paths — the operator carries the gun the player sees in first person.
+export const WPN_AUTHORED = { ar: true, smg: true, sniper: true, pistol: true, shotgun: true, lmg: true, launcher: true };
 // Overall length in metres. iter06: the old set (0.62 / 0.50 / 0.95) was
 // sub-scale — a 0.62 m "assault rifle" is a prop, and it is also WHY the
 // support hand had nothing to hold: the grip anchor sits 0.26 m behind the
@@ -146,7 +149,8 @@ export const WPN_GRIP = { shotgun: { fz: 0.255, fy: 0.575 } };
 // pump shotgun it left the support hand 4 cm PAST the forend's front tip, so it
 // takes a NEGATIVE shift: the gun rides forward and the forend (z 0.085..0.365
 // from the anchor) comes under the support hand (z 0.40) instead of behind it.
-export const WPN_GRIP_SHIFT = { shotgun: -0.045 };
+// pistol 0: one-handed class, no stock to clear (the measured-proto path gave it 0 by length)
+export const WPN_GRIP_SHIFT = { shotgun: -0.045, pistol: 0.0 };
 // Kinds too short for the rifle-clip support-hand reach: actor.js always solves
 // the support hand ~0.37 m ahead of the palm, i.e. ~0.19 m PAST a 0.22 m pistol's
 // muzzle. userData.brOneHand = 1 marks the proto; soldiers.js then runs the
@@ -281,7 +285,11 @@ export function buildGunMaps(src) {
 // [heavy weapons] the generated 3P guns carry their finish in vertex colour (linear,
 // authored for the FP detail maps' x2.5 mean, i.e. very dark): lift it into the same
 // gunmetal family as the remapped Meshy guns (GUN_STEEL ~ linear 0.10).
-const VCOL_LIFT = 2.6;
+// (2026-11-14 guns pass) 2.6 -> 1.3: matched to the remapped Meshy guns' flat 0.10 it rendered
+// the authored guns pale blue-grey and their FDE furniture cream at night (FDE vertex colour
+// 0.124 x 2.6 = 0.32 linear), ~8x the first-person gun's albedo. 1.3 keeps the 3P gun a
+// little brighter than the FP one (it is seen at 3-15 m) with anodize / polymer / FDE apart.
+const VCOL_LIFT = 1.3;
 export function repairGunMaterial(mat) {
   if (!mat || mat.userData.__brGun) return;
   mat.userData.__brGun = true;
@@ -290,8 +298,13 @@ export function repairGunMaterial(mat) {
     if (mat.emissive) mat.emissive.setHex(0x000000);
     mat.envMapIntensity = 0.5;
     if (mat.color) mat.color.setScalar(VCOL_LIFT);
-    mat.roughness = 0.58;
-    mat.metalness = 0.35;
+    // (2026-11-14 guns pass) the generator splits each 3P gun into wpn3p_metal / wpn3p_poly
+    // so steel and anodize keep a metal lobe while polymer furniture stays matte (one flat
+    // 0.58/0.35 made a polymer stock as shiny as the barrel); legacy single "wpn3p" keeps it
+    const nm = mat.name || "";
+    if (/poly/i.test(nm)) { mat.roughness = 0.74; mat.metalness = 0.0; mat.envMapIntensity = 0.3; }
+    else if (/metal/i.test(nm)) { mat.roughness = 0.46; mat.metalness = 0.55; }
+    else { mat.roughness = 0.58; mat.metalness = 0.35; }
     mat.needsUpdate = true;
     return;
   }
@@ -504,7 +517,7 @@ function _prepAuthored(kind, m) {
   const g = new THREE.Group();
   g.userData.brHold = ys.length ? ys[Math.floor(ys.length * 0.25)] : 0.05;
   g.userData.brGripShiftZ = gripShiftZ;
-  g.userData.brOneHand = 0;
+  g.userData.brOneHand = WPN_ONE_HAND[kind] ? 1 : 0;   // the authored Pike is one-handed too
   g.userData.brLen = bb.max.z - bb.min.z;
   g.add(m);
   return g;
@@ -665,7 +678,10 @@ function _worldMaterial(src) {
   let w = _G.worldMats.get(src);
   if (!w) {
     w = src.clone();
-    w.color.setScalar(WORLD_LIFT);
+    // x1.25 OF the source colour (was setScalar: right for the white-factor textured guns,
+    // but it cut a vertex-coloured gun's 2.6 lift to 1.25 — the authored loot lay darker
+    // on the ground than the same gun in a bot's hands)
+    w.color.multiplyScalar(WORLD_LIFT);
     w.metalness = WORLD_METAL;
     w.userData.__brWorld = true;
     w.needsUpdate = true;

@@ -73,7 +73,10 @@ const GRID_MAX = 160;       // frozen budget
 //    treats as full-radius walls, so paths ran through 0.2–0.35 m "gaps" that
 //    snagged every bot that took them.
 const PULL_PAD = 0.22;
-const WALL_PEN = [0.75, 0.28, 0.08];
+// 2026-11 review: [0.75, 0.28, 0.08] -> [1.5, 0.45, 0.1]. nav_probe hug% (capsule
+// within 0.1 m of a face) lanternwalk 1.39 -> 1.04, switchyard 1.28 -> 0.72 for
+// +2-3% path length; [2.4, 0.6, 0.12] bought ~0.05 more for another +2%.
+const WALL_PEN = [1.5, 0.45, 0.1];
 const CLR_MAX = 6;
 const NOISE_DEFAULT = 0;
 // probe-only timing split (nav_probe --perf sets globalThis.__NAV_PERF__)
@@ -166,6 +169,57 @@ export function bakeNav(colliders, opts = {}) {
       const r = (b.kind === "step" && b.max[1] - y <= 2 * STEP + 0.01 ? 0.2 : FOOT_R) + pd;
       if (x + r <= b.min[0] || x - r >= b.max[0]) continue;
       if (z + r <= b.min[2] || z - r >= b.max[2]) continue;
+      return true;
+    }
+    return false;
+  }
+
+  // Exact swept footprint test (2026-11 nav review). blockedAt is a POINT test;
+  // hops and pulled legs used to sample it at the midpoint / quarter points /
+  // every 0.25-0.3 m, so a diagonal leg could clip a box corner between two
+  // samples (nav_probe badSeg: 35/45 lanternwalk and 45/47 saltmarket bad legs
+  // were 0.8-1.1 m diagonal A* hops grazing a pallet / container corner by
+  // 1-3 cm between the samples). The mover's footprint is a square, so the
+  // region a box blocks is the box inflated by r with square corners — an open
+  // AABB; a segment vs AABB slab test is exact and costs the same as one point
+  // test. Same height / kerb / stair-riser rules as blockedAt. A segment whose
+  // START is already inside an inflated box (a bot standing against a wall)
+  // ignores that box unless the leg goes deeper into it — the mover pushes
+  // out of such an overlap along the face, it does not block.
+  function sweepBlocked(ax, az, bx, bz, y, near, pad) {
+    const pd = pad || 0;
+    const dx = bx - ax, dz = bz - az;
+    for (let k = 0; k < near.length; k++) {
+      const b = boxes[near[k]];
+      if (b.max[1] <= y + STEP + 0.01) continue;
+      if (b.min[1] >= y + CLEAR_H) continue;
+      const r = (b.kind === "step" && b.max[1] - y <= 2 * STEP + 0.01 ? 0.2 : FOOT_R) + pd;
+      const x0 = b.min[0] - r, x1 = b.max[0] + r, z0 = b.min[2] - r, z1 = b.max[2] + r;
+      // quick reject on the segment's bounds
+      if ((ax > bx ? ax : bx) <= x0 || (ax < bx ? ax : bx) >= x1) continue;
+      if ((az > bz ? az : bz) <= z0 || (az < bz ? az : bz) >= z1) continue;
+      let tin = 0, tout = 1;
+      if (Math.abs(dx) < 1e-9) { if (ax <= x0 || ax >= x1) continue; }
+      else {
+        let t1 = (x0 - ax) / dx, t2 = (x1 - ax) / dx;
+        if (t1 > t2) { const s = t1; t1 = t2; t2 = s; }
+        if (t1 > tin) tin = t1; if (t2 < tout) tout = t2;
+      }
+      if (Math.abs(dz) < 1e-9) { if (az <= z0 || az >= z1) continue; }
+      else {
+        let t1 = (z0 - az) / dz, t2 = (z1 - az) / dz;
+        if (t1 > t2) { const s = t1; t1 = t2; t2 = s; }
+        if (t1 > tin) tin = t1; if (t2 < tout) tout = t2;
+      }
+      if (tout - tin <= 1e-6) continue;
+      if (tin <= 1e-9 && ax > x0 && ax < x1 && az > z0 && az < z1) {
+        // starts inside: blocked only if the leg moves deeper (toward the
+        // shallower-penetration face's interior, i.e. against its normal)
+        const cx = (b.min[0] + b.max[0]) * 0.5, cz = (b.min[2] + b.max[2]) * 0.5;
+        const px = (x1 - x0) * 0.5 - Math.abs(ax - cx), pz = (z1 - z0) * 0.5 - Math.abs(az - cz);
+        const into = px < pz ? -(ax - cx) * dx : -(az - cz) * dz;
+        if (into <= 0) continue;
+      }
       return true;
     }
     return false;
@@ -281,6 +335,114 @@ export function bakeNav(colliders, opts = {}) {
       if (ids) cellNodes[ix * nz + iz] = ids;
     }
   }
+  // ---- anchor clearance margin (2026-11 review). Anchors pass blockedAt at
+  // FOOT_R 0.34, i.e. up to 1 cm INSIDE the mover's 0.35 capsule: a bot on a
+  // waypoint line through a slit rubbed the wall every tick (snag_probe:
+  // lanternwalk's 0.72 m n_hoard_w/van gap carried ~70% of all contact
+  // ticks, anchors at exactly 0.34 from the hoarding). Nudge each anchor out
+  // of any box it overlaps at a preferred ANCHOR_R (see below), keep it only
+  // if it still passes the bake's own test and stays in its cell and floor.
+  // Lane centring first: an anchor inside a lane narrower than LANE_W (a door,
+  // a gap between a wall end and a building) moves to the lane's middle on
+  // that axis (<= 0.3 m, same cell). Anchors were cell-quantised: switchyard's
+  // 1.0 m rw_n_a / ya_3 gap was crossed 0.37 m off one face and 0.63 m off the
+  // other (hug% hot spot: 741 of 4906 hug ticks on that one wall).
+  {
+    const LANE_W = 1.7, BAND = 0.36;
+    const blocks = (b, y) => !(b.max[1] <= y + STEP + 0.01 || b.min[1] >= y + CLEAR_H || b.kind === "step");
+    for (let n = 0; n < nodeX.length; n++) {
+      const x0 = nodeX[n], z0 = nodeZ[n], y = nodeY[n];
+      const near = nearBoxes(x0, z0);
+      if (!near.length) continue;
+      let lo = -1e9, hi = 1e9, loZ = -1e9, hiZ = 1e9;
+      for (let k = 0; k < near.length; k++) {
+        const b = boxes[near[k]];
+        if (!blocks(b, y)) continue;
+        if (b.max[2] > z0 - BAND && b.min[2] < z0 + BAND) {
+          if (b.max[0] <= x0 + 0.01 && b.max[0] > lo) lo = b.max[0];
+          if (b.min[0] >= x0 - 0.01 && b.min[0] < hi) hi = b.min[0];
+        }
+        if (b.max[0] > x0 - BAND && b.min[0] < x0 + BAND) {
+          if (b.max[2] <= z0 + 0.01 && b.max[2] > loZ) loZ = b.max[2];
+          if (b.min[2] >= z0 - 0.01 && b.min[2] < hiZ) hiZ = b.min[2];
+        }
+      }
+      let x = x0, z = z0;
+      if (hi - lo < LANE_W) x = (lo + hi) * 0.5;
+      if (hiZ - loZ < LANE_W) z = (loZ + hiZ) * 0.5;
+      if (x === x0 && z === z0) continue;
+      if (Math.abs(x - x0) > 0.3 || Math.abs(z - z0) > 0.3) continue;
+      const ci = nodeCell[n], cix = (ci / nz) | 0, ciz = ci - cix * nz;
+      if (Math.floor((x - ox) / cell) !== cix || Math.floor((z - oz) / cell) !== ciz) continue;
+      if (blockedAt(x, z, y, near)) continue;
+      let floorOk = Math.abs(groundY(x, z) - y) < 0.01;
+      for (let k = 0; k < near.length && !floorOk; k++) {
+        const b = boxes[near[k]];
+        if (Math.abs(b.max[1] - y) < 0.01 && x >= b.min[0] && x <= b.max[0] && z >= b.min[2] && z <= b.max[2]) floorOk = true;
+      }
+      if (!floorOk) continue;
+      nodeX[n] = x; nodeZ[n] = z;
+    }
+  }
+  {
+    // preferred margin: push out of any box within ANCHOR_R (shallow axis,
+    // <= 0.2 m, 3 passes); keep the move only if the anchor's clearance to the
+    // nearest blocking face actually IMPROVES (so in a slit narrower than
+    // 2 x ANCHOR_R the centred anchor is kept, not shoved at the other face)
+    const ANCHOR_R = 0.5, MAX_SHIFT = 0.2;
+    const isStep = (b, y) => b.kind === "step" && b.max[1] - y <= 2 * STEP + 0.01;
+    const clearOf = (x, z, y, near) => {
+      let c = 9;
+      for (let k = 0; k < near.length; k++) {
+        const b = boxes[near[k]];
+        if (b.max[1] <= y + STEP + 0.01 || b.min[1] >= y + CLEAR_H || isStep(b, y)) continue;
+        const dx = Math.max(b.min[0] - x, x - b.max[0], 0), dz = Math.max(b.min[2] - z, z - b.max[2], 0);
+        const d = dx > dz ? dx : dz; // square footprint: Chebyshev gap
+        if (d < c) c = d;
+      }
+      return c;
+    };
+    for (let n = 0; n < nodeX.length; n++) {
+      let x = nodeX[n], z = nodeZ[n];
+      const y = nodeY[n];
+      const near = nearBoxes(x, z);
+      if (!near.length) continue;
+      const x0 = x, z0 = z;
+      const c0 = clearOf(x0, z0, y, near);
+      if (c0 >= ANCHOR_R) continue;
+      for (let it = 0; it < 3; it++) {
+        let moved = false;
+        for (let k = 0; k < near.length; k++) {
+          const b = boxes[near[k]];
+          if (b.max[1] <= y + STEP + 0.01 || b.min[1] >= y + CLEAR_H || isStep(b, y)) continue;
+          const r = ANCHOR_R;
+          if (x + r <= b.min[0] || x - r >= b.max[0] || z + r <= b.min[2] || z - r >= b.max[2]) continue;
+          const pl = x + r - b.min[0], pr = b.max[0] + r - x, pn = z + r - b.min[2], pf = b.max[2] + r - z;
+          const m = Math.min(pl, pr, pn, pf);
+          if (m > MAX_SHIFT + 0.01) continue; // anchor is deep beside this box: not a margin case
+          if (m === pl) x -= pl + 1e-4; else if (m === pr) x += pr + 1e-4;
+          else if (m === pn) z -= pn + 1e-4; else z += pf + 1e-4;
+          moved = true;
+        }
+        if (!moved) break;
+      }
+      if (Math.abs(x - x0) > MAX_SHIFT) x = x0 + Math.sign(x - x0) * MAX_SHIFT;
+      if (Math.abs(z - z0) > MAX_SHIFT) z = z0 + Math.sign(z - z0) * MAX_SHIFT;
+      if (x === x0 && z === z0) continue;
+      if (clearOf(x, z, y, near) <= c0 + 0.005) continue;
+      const ci = nodeCell[n], cix = (ci / nz) | 0, ciz = ci - cix * nz;
+      if (Math.floor((x - ox) / cell) !== cix || Math.floor((z - oz) / cell) !== ciz) continue;
+      if (blockedAt(x, z, y, near)) continue;
+      // still standing on the same floor height (terrain or a box top)
+      let floorOk = Math.abs(groundY(x, z) - y) < 0.01;
+      for (let k = 0; k < near.length && !floorOk; k++) {
+        const b = boxes[near[k]];
+        if (Math.abs(b.max[1] - y) < 0.01 && x >= b.min[0] && x <= b.max[0] && z >= b.min[2] && z <= b.max[2]) floorOk = true;
+      }
+      if (!floorOk) continue;
+      nodeX[n] = x; nodeZ[n] = z;
+    }
+  }
   mark("floors");
   const N = nodeX.length;
   // typed copies (hot A*/line loops); values identical to the build arrays
@@ -355,6 +517,8 @@ export function bakeNav(colliders, opts = {}) {
     return sup;
   }
   let replays = 0;
+  const boxSeen = new Int32Array(boxes.length);
+  let hopStamp = 0;
   function moverHopOk(ax, ay, az, bx, by, bz) {
     replays++;
     const dx = bx - ax, dz = bz - az;
@@ -364,11 +528,22 @@ export function bakeNav(colliders, opts = {}) {
     hopBoxes.length = 0;
     const lx0 = Math.min(ax, bx) - 0.5, lx1 = Math.max(ax, bx) + 0.5;
     const lz0 = Math.min(az, bz) - 0.5, lz1 = Math.max(az, bz) + 0.5;
-    const near = nearBoxes((ax + bx) * 0.5, (az + bz) * 0.5);
-    for (let k = 0; k < near.length; k++) {
-      const b = boxes[near[k]];
-      if (b.max[0] < lx0 || b.min[0] > lx1 || b.max[2] < lz0 || b.min[2] > lz1) continue;
-      hopBoxes.push(b);
+    // every bucket the hop's bounds touch (2026-11 review: the midpoint's
+    // bucket alone missed boxes along a pulled leg longer than ~2 m — a 10.8 m
+    // switchyard leg was "replayed" without the stair riser it ran into)
+    const bi0 = Math.max(0, Math.floor((lx0 - ox) / BK)), bi1 = Math.min(bw - 1, Math.floor((lx1 - ox) / BK));
+    const bj0 = Math.max(0, Math.floor((lz0 - oz) / BK)), bj1 = Math.min(bh - 1, Math.floor((lz1 - oz) / BK));
+    hopStamp++;
+    for (let bi = bi0; bi <= bi1; bi++) for (let bj = bj0; bj <= bj1; bj++) {
+      const near = buckets[bi * bh + bj];
+      for (let k = 0; k < near.length; k++) {
+        const id = near[k];
+        if (boxSeen[id] === hopStamp) continue;
+        boxSeen[id] = hopStamp;
+        const b = boxes[id];
+        if (b.max[0] < lx0 || b.min[0] > lx1 || b.max[2] < lz0 || b.min[2] > lz1) continue;
+        hopBoxes.push(b);
+      }
     }
     const steps = Math.max(2, Math.ceil(dist / 0.06));
     let x = ax, y = ay, z = az;
@@ -440,15 +615,9 @@ export function bakeNav(colliders, opts = {}) {
     }
     if (!solidFlag[nodeCell[a]] && !solidFlag[nodeCell[b]]) { link(a, b); return; } // open ground
     const my = Math.min(nodeY[a], nodeY[b]);
-    const hx = nodeX[b] - nodeX[a], hz = nodeZ[b] - nodeZ[a];
-    // long / diagonal hops also get the quarter points: a square footprint
-    // can clip a box corner between the midpoint and an anchor
-    const long = hx * hx + hz * hz > 0.81;
-    for (let q = long ? 1 : 2; q <= (long ? 3 : 2); q += long ? 1 : 2) {
-      const f = q * (long ? 0.25 : 0.25);
-      const mx = nodeX[a] + hx * f, mz = nodeZ[a] + hz * f;
-      if (blockedAt(mx, mz, my, hopList())) { hopsCut++; return; }
-    }
+    // exact swept footprint (was: midpoint, + quarter points only for hops
+    // > 0.9 m — 0.8-0.9 m diagonals clipped corners between the samples)
+    if (sweepBlocked(nodeX[a], nodeZ[a], nodeX[b], nodeZ[b], my, hopList(), 0)) { hopsCut++; return; }
     link(a, b);
   };
   const bestPair = (idsA, idsB) => {
@@ -809,6 +978,7 @@ export function bakeNav(colliders, opts = {}) {
     const dist = Math.sqrt(dx0 * dx0 + dz0 * dz0);
     const steps = Math.max(1, Math.ceil(dist / (cell * (pd > 0 ? 0.33 : 0.4))));
     let y = y0;
+    let px = x0, pz = z0;
     for (let s = 1; s <= steps; s++) {
       const t = s / steps;
       const x = x0 + dx0 * t, z = z0 + dz0 * t;
@@ -816,13 +986,27 @@ export function bakeNav(colliders, opts = {}) {
       if (ci < 0) return false;
       const ids = cellNodes[ci];
       if (!ids) return false;
-      let ok = false;
+      // 2026-11 review: of the floors chainable from the running height take
+      // the one nearest the leg's own height profile (linear y0 -> y1), not
+      // the LOWEST (ids are sorted ascending): a leg down a stair run used to
+      // keep dropping a riser per sample past its end height and fail the end
+      // test, so lineClear(B, C) was false on legs findPath had produced
+      // (switchyard bank_se stair: a bot oscillated 20 s at the bottom).
+      const yWant = y0 + (y1 - y0) * t;
+      let ok = false, bestE = 1e9, yN = y;
       for (let k = 0; k < ids.length; k++) {
-        if (walk[ids[k]] && Math.abs(nodeY[ids[k]] - y) <= STEP + 0.02) { y = nodeY[ids[k]]; ok = true; break; }
+        const ny = nodeY[ids[k]];
+        if (!walk[ids[k]] || Math.abs(ny - y) > STEP + 0.02) continue;
+        const e = Math.abs(ny - yWant);
+        if (e < bestE) { bestE = e; yN = ny; ok = true; }
       }
       if (!ok) return false;
+      y = yN;
       if (lowFlag[ci]) lowHit = true;
-      if (blockedAt(x, z, y, nearBoxes(x, z), pd)) return false;
+      // swept sub-leg prev sample -> this sample (exact; the old point samples
+      // let a padded leg clip a corner between two of them)
+      if (sweepBlocked(px, pz, x, z, y, nearBoxes((px + x) * 0.5, (pz + z) * 0.5), pd)) return false;
+      px = x; pz = z;
       const dyy = y - y0;
       if (dyy > lwDY) lwDY = dyy; else if (-dyy > lwDY) lwDY = -dyy;
     }
