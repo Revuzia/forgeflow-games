@@ -1,7 +1,7 @@
 {
  "pack": "orch1 visual evidence",
  "collector": "EVIDENCE COLLECTOR (visual): collects and measures, does not judge",
- "head": "477494ec2",
+ "head": "ece23002c",
  "build": "working tree of the branch at collection time, served by vite dev (catalog 2026.11.5), render bench _harness/web/render_bench.html",
  "camera": "real game camera (map camera distance, free mode centred on the subject); canvas drawing buffer 1920x1080 at device scale 1; preset High unless the file says otherwise; dynamic resolution off",
  "seed": 7,
@@ -1345,13 +1345,13 @@
    "quality": "high",
    "stats": {
     "calls": 195,
-    "triangles": 378743,
+    "triangles": 378739,
     "scale": 1,
     "w": 1920,
     "h": 1080
    },
    "encode": "webp-q95",
-   "bytes": 550224
+   "bytes": 550382
   },
   {
    "file": "quality_teamfight_low.png",
@@ -1382,13 +1382,13 @@
    "quality": "low",
    "stats": {
     "calls": 152,
-    "triangles": 288116,
+    "triangles": 288112,
     "scale": 0.75,
     "w": 1440,
     "h": 810
    },
    "encode": "lossless-png",
-   "bytes": 1664412
+   "bytes": 1664781
   },
   {
    "file": "quality_teamfight_medium.png",
@@ -1419,13 +1419,13 @@
    "quality": "medium",
    "stats": {
     "calls": 186,
-    "triangles": 332146,
+    "triangles": 332142,
     "scale": 0.9,
     "w": 1728,
     "h": 972
    },
    "encode": "lossless-png",
-   "bytes": 2365637
+   "bytes": 2365220
   },
   {
    "file": "quality_teamfight_ultra.webp",
@@ -1456,13 +1456,13 @@
    "quality": "ultra",
    "stats": {
     "calls": 195,
-    "triangles": 378743,
+    "triangles": 378739,
     "scale": 1,
     "w": 1920,
     "h": 1080
    },
    "encode": "webp-q95",
-   "bytes": 544256
+   "bytes": 544456
   },
   {
    "file": "teamfight_rift_after.png",
@@ -1492,7 +1492,7 @@
    "what": "5v5 teamfight, one and a half seconds after the peak",
    "quality": "high",
    "encode": "lossless-png",
-   "bytes": 2942392
+   "bytes": 2942045
   },
   {
    "file": "teamfight_rift_lead.png",
@@ -1522,7 +1522,7 @@
    "what": "5v5 teamfight, one and a half seconds before the peak",
    "quality": "high",
    "encode": "lossless-png",
-   "bytes": 2738709
+   "bytes": 2738235
   },
   {
    "file": "teamfight_rift_peak.webp",
@@ -1552,17 +1552,17 @@
    "what": "5v5 teamfight, peak ability/VFX frame",
    "quality": "high",
    "encode": "webp-q95",
-   "bytes": 550474
+   "bytes": 552300
   },
   {
    "file": "quality_base_aubade_high.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 725.63,
-   "time": "12:05",
+   "time_s": 722.3,
+   "time": "12:02",
    "kind": "quality",
-   "what": "base_aubade at the game camera on the high preset (a still taken 20 frames after the camera moved)",
+   "what": "base_aubade at the game camera on the high preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "high",
    "world": [
@@ -1570,22 +1570,22 @@
     55
    ],
    "stats": {
-    "calls": 156,
-    "triangles": 121552,
+    "calls": 186,
+    "triangles": 189268,
     "scale": 1
    },
    "encode": "lossless-png",
-   "bytes": 2840120
+   "bytes": 2852615
   },
   {
    "file": "quality_base_aubade_low.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 724.3,
-   "time": "12:04",
+   "time_s": 722.3,
+   "time": "12:02",
    "kind": "quality",
-   "what": "base_aubade at the game camera on the low preset (a still taken 20 frames after the camera moved)",
+   "what": "base_aubade at the game camera on the low preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "low",
    "world": [
@@ -1593,22 +1593,22 @@
     55
    ],
    "stats": {
-    "calls": 123,
-    "triangles": 104897,
+    "calls": 152,
+    "triangles": 169214,
     "scale": 0.75
    },
    "encode": "lossless-png",
-   "bytes": 1521260
+   "bytes": 1527608
   },
   {
    "file": "quality_base_aubade_medium.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 724.97,
-   "time": "12:04",
+   "time_s": 722.3,
+   "time": "12:02",
    "kind": "quality",
-   "what": "base_aubade at the game camera on the medium preset (a still taken 20 frames after the camera moved)",
+   "what": "base_aubade at the game camera on the medium preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "medium",
    "world": [
@@ -1616,22 +1616,22 @@
     55
    ],
    "stats": {
-    "calls": 149,
-    "triangles": 110122,
+    "calls": 179,
+    "triangles": 177738,
     "scale": 0.9
    },
    "encode": "lossless-png",
-   "bytes": 2196969
+   "bytes": 2210672
   },
   {
    "file": "quality_base_aubade_ultra.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 726.3,
-   "time": "12:06",
+   "time_s": 722.3,
+   "time": "12:02",
    "kind": "quality",
-   "what": "base_aubade at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
+   "what": "base_aubade at the game camera on the ultra preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "ultra",
    "world": [
@@ -1639,22 +1639,22 @@
     55
    ],
    "stats": {
-    "calls": 157,
-    "triangles": 123092,
+    "calls": 186,
+    "triangles": 189268,
     "scale": 1
    },
    "encode": "lossless-png",
-   "bytes": 2834084
+   "bytes": 2845443
   },
   {
    "file": "quality_jungle_glasshorn_high.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 728.3,
-   "time": "12:08",
+   "time_s": 722.97,
+   "time": "12:02",
    "kind": "quality",
-   "what": "jungle_glasshorn at the game camera on the high preset (a still taken 20 frames after the camera moved)",
+   "what": "jungle_glasshorn at the game camera on the high preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "high",
    "world": [
@@ -1662,22 +1662,22 @@
     41.5
    ],
    "stats": {
-    "calls": 150,
-    "triangles": 235339,
+    "calls": 144,
+    "triangles": 205092,
     "scale": 1
    },
    "encode": "lossless-png",
-   "bytes": 2961492
+   "bytes": 2960299
   },
   {
    "file": "quality_jungle_glasshorn_low.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 726.97,
-   "time": "12:06",
+   "time_s": 722.97,
+   "time": "12:02",
    "kind": "quality",
-   "what": "jungle_glasshorn at the game camera on the low preset (a still taken 20 frames after the camera moved)",
+   "what": "jungle_glasshorn at the game camera on the low preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "low",
    "world": [
@@ -1685,22 +1685,22 @@
     41.5
    ],
    "stats": {
-    "calls": 114,
-    "triangles": 137858,
+    "calls": 108,
+    "triangles": 115539,
     "scale": 0.75
    },
    "encode": "lossless-png",
-   "bytes": 1695526
+   "bytes": 1695503
   },
   {
    "file": "quality_jungle_glasshorn_medium.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 727.63,
-   "time": "12:07",
+   "time_s": 722.97,
+   "time": "12:02",
    "kind": "quality",
-   "what": "jungle_glasshorn at the game camera on the medium preset (a still taken 20 frames after the camera moved)",
+   "what": "jungle_glasshorn at the game camera on the medium preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "medium",
    "world": [
@@ -1708,22 +1708,22 @@
     41.5
    ],
    "stats": {
-    "calls": 141,
-    "triangles": 192473,
+    "calls": 137,
+    "triangles": 173706,
     "scale": 0.9
    },
    "encode": "lossless-png",
-   "bytes": 2308645
+   "bytes": 2307201
   },
   {
    "file": "quality_jungle_glasshorn_ultra.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 728.97,
-   "time": "12:08",
+   "time_s": 722.97,
+   "time": "12:02",
    "kind": "quality",
-   "what": "jungle_glasshorn at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
+   "what": "jungle_glasshorn at the game camera on the ultra preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "ultra",
    "world": [
@@ -1731,22 +1731,22 @@
     41.5
    ],
    "stats": {
-    "calls": 146,
-    "triangles": 235731,
+    "calls": 144,
+    "triangles": 205092,
     "scale": 1
    },
    "encode": "lossless-png",
-   "bytes": 2960929
+   "bytes": 2960808
   },
   {
-   "file": "quality_river_mid_high.png",
+   "file": "quality_river_mid_high.webp",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 722.97,
-   "time": "12:02",
+   "time_s": 721.63,
+   "time": "12:01",
    "kind": "quality",
-   "what": "river_mid at the game camera on the high preset (a still taken 20 frames after the camera moved)",
+   "what": "river_mid at the game camera on the high preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "high",
    "world": [
@@ -1755,11 +1755,11 @@
    ],
    "stats": {
     "calls": 177,
-    "triangles": 344062,
+    "triangles": 342388,
     "scale": 1
    },
-   "encode": "lossless-png",
-   "bytes": 2926898
+   "encode": "webp-q95",
+   "bytes": 536160
   },
   {
    "file": "quality_river_mid_low.png",
@@ -1769,7 +1769,7 @@
    "time_s": 721.63,
    "time": "12:01",
    "kind": "quality",
-   "what": "river_mid at the game camera on the low preset (a still taken 20 frames after the camera moved)",
+   "what": "river_mid at the game camera on the low preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "low",
    "world": [
@@ -1778,21 +1778,21 @@
    ],
    "stats": {
     "calls": 134,
-    "triangles": 257911,
+    "triangles": 258301,
     "scale": 0.75
    },
    "encode": "lossless-png",
-   "bytes": 1633660
+   "bytes": 1636096
   },
   {
    "file": "quality_river_mid_medium.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 722.3,
-   "time": "12:02",
+   "time_s": 721.63,
+   "time": "12:01",
    "kind": "quality",
-   "what": "river_mid at the game camera on the medium preset (a still taken 20 frames after the camera moved)",
+   "what": "river_mid at the game camera on the medium preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "medium",
    "world": [
@@ -1800,22 +1800,22 @@
     55
    ],
    "stats": {
-    "calls": 167,
-    "triangles": 302923,
+    "calls": 168,
+    "triangles": 306103,
     "scale": 0.9
    },
    "encode": "lossless-png",
-   "bytes": 2278198
+   "bytes": 2332994
   },
   {
    "file": "quality_river_mid_ultra.png",
    "width": 1920,
    "height": 1080,
    "seed": 7,
-   "time_s": 723.63,
-   "time": "12:03",
+   "time_s": 721.63,
+   "time": "12:01",
    "kind": "quality",
-   "what": "river_mid at the game camera on the ultra preset (a still taken 20 frames after the camera moved)",
+   "what": "river_mid at the game camera on the ultra preset (the same frozen sim frame on every tier, camera still for 24 frames)",
    "map": "rift",
    "quality": "ultra",
    "world": [
@@ -1823,12 +1823,12 @@
     55
    ],
    "stats": {
-    "calls": 178,
-    "triangles": 345718,
+    "calls": 177,
+    "triangles": 342388,
     "scale": 1
    },
    "encode": "lossless-png",
-   "bytes": 2911216
+   "bytes": 2995073
   },
   {
    "file": "colorblind_teamfight_deutan_peak.webp",
@@ -1907,992 +1907,6 @@
    ],
    "encode": "webp-q95",
    "bytes": 552098
-  },
-  {
-   "file": "fighter_ardit_game_frame.png",
-   "what": "ardit base skin in a real match at the game camera, full frame",
-   "kind": "fighter_frame",
-   "fighter": "ardit",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 32,
-   "time": "00:32",
-   "quality": "high",
-   "width": 1920,
-   "height": 1080,
-   "encode": "lossless-png",
-   "bytes": 2453291
-  },
-  {
-   "file": "fighter_burdam_game_frame.png",
-   "what": "burdam base skin in a real match at the game camera, full frame",
-   "kind": "fighter_frame",
-   "fighter": "burdam",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 33.87,
-   "time": "00:33",
-   "quality": "high",
-   "width": 1920,
-   "height": 1080,
-   "encode": "lossless-png",
-   "bytes": 2476741
-  },
-  {
-   "file": "fighter_dunsom_game_frame.png",
-   "what": "dunsom base skin in a real match at the game camera, full frame",
-   "kind": "fighter_frame",
-   "fighter": "dunsom",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 35.73,
-   "time": "00:35",
-   "quality": "high",
-   "width": 1920,
-   "height": 1080,
-   "encode": "lossless-png",
-   "bytes": 2492178
-  },
-  {
-   "file": "fighter_ervet_game_frame.png",
-   "what": "ervet base skin in a real match at the game camera, full frame",
-   "kind": "fighter_frame",
-   "fighter": "ervet",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 37.6,
-   "time": "00:37",
-   "quality": "high",
-   "width": 1920,
-   "height": 1080,
-   "encode": "lossless-png",
-   "bytes": 2462744
-  },
-  {
-   "file": "fighter_hesmi_game_frame.png",
-   "what": "hesmi base skin in a real match at the game camera, full frame",
-   "kind": "fighter_frame",
-   "fighter": "hesmi",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 39.47,
-   "time": "00:39",
-   "quality": "high",
-   "width": 1920,
-   "height": 1080,
-   "encode": "lossless-png",
-   "bytes": 2467148
-  },
-  {
-   "file": "fighter_ilsheta_game_frame.png",
-   "what": "ilsheta base skin in a real match at the game camera, full frame",
-   "kind": "fighter_frame",
-   "fighter": "ilsheta",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 41.33,
-   "time": "00:41",
-   "quality": "high",
-   "width": 1920,
-   "height": 1080,
-   "encode": "lossless-png",
-   "bytes": 2467944
-  },
-  {
-   "file": "fighter_kemdo_game_frame.png",
-   "what": "kemdo base skin in a real match at the game camera, full frame",
-   "kind": "fighter_frame",
-   "fighter": "kemdo",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 43.2,
-   "time": "00:43",
-   "quality": "high",
-   "width": 1920,
-   "height": 1080,
-   "encode": "lossless-png",
-   "bytes": 2470520
-  },
-  {
-   "file": "fighter_lisvel_game_frame.png",
-   "what": "lisvel base skin in a real match at the game camera, full frame",
-   "kind": "fighter_frame",
-   "fighter": "lisvel",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 45.07,
-   "time": "00:45",
-   "quality": "high",
-   "width": 1920,
-   "height": 1080,
-   "encode": "lossless-png",
-   "bytes": 2512983
-  },
-  {
-   "file": "fighter_marund_game_frame.png",
-   "what": "marund base skin in a real match at the game camera, full frame",
-   "kind": "fighter_frame",
-   "fighter": "marund",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 32,
-   "time": "00:32",
-   "quality": "high",
-   "width": 1920,
-   "height": 1080,
-   "encode": "lossless-png",
-   "bytes": 2459965
-  },
-  {
-   "file": "fighter_nurrow_game_frame.png",
-   "what": "nurrow base skin in a real match at the game camera, full frame",
-   "kind": "fighter_frame",
-   "fighter": "nurrow",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 33.87,
-   "time": "00:33",
-   "quality": "high",
-   "width": 1920,
-   "height": 1080,
-   "encode": "lossless-png",
-   "bytes": 2472188
-  },
-  {
-   "file": "fighter_odrum_game_frame.png",
-   "what": "odrum base skin in a real match at the game camera, full frame",
-   "kind": "fighter_frame",
-   "fighter": "odrum",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 35.73,
-   "time": "00:35",
-   "quality": "high",
-   "width": 1920,
-   "height": 1080,
-   "encode": "lossless-png",
-   "bytes": 2483025
-  },
-  {
-   "file": "fighter_rishal_game_frame.png",
-   "what": "rishal base skin in a real match at the game camera, full frame",
-   "kind": "fighter_frame",
-   "fighter": "rishal",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 37.6,
-   "time": "00:37",
-   "quality": "high",
-   "width": 1920,
-   "height": 1080,
-   "encode": "lossless-png",
-   "bytes": 2462759
-  },
-  {
-   "file": "fighter_sukri_game_frame.png",
-   "what": "sukri base skin in a real match at the game camera, full frame",
-   "kind": "fighter_frame",
-   "fighter": "sukri",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 39.47,
-   "time": "00:39",
-   "quality": "high",
-   "width": 1920,
-   "height": 1080,
-   "encode": "lossless-png",
-   "bytes": 2456972
-  },
-  {
-   "file": "fighter_tunlan_game_frame.png",
-   "what": "tunlan base skin in a real match at the game camera, full frame",
-   "kind": "fighter_frame",
-   "fighter": "tunlan",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 41.33,
-   "time": "00:41",
-   "quality": "high",
-   "width": 1920,
-   "height": 1080,
-   "encode": "lossless-png",
-   "bytes": 2454482
-  },
-  {
-   "file": "fighter_ulkro_game_frame.png",
-   "what": "ulkro base skin in a real match at the game camera, full frame",
-   "kind": "fighter_frame",
-   "fighter": "ulkro",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 43.2,
-   "time": "00:43",
-   "quality": "high",
-   "width": 1920,
-   "height": 1080,
-   "encode": "lossless-png",
-   "bytes": 2458006
-  },
-  {
-   "file": "fighter_vashil_game_frame.png",
-   "what": "vashil base skin in a real match at the game camera, full frame",
-   "kind": "fighter_frame",
-   "fighter": "vashil",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 45.07,
-   "time": "00:45",
-   "quality": "high",
-   "width": 1920,
-   "height": 1080,
-   "encode": "lossless-png",
-   "bytes": 2506234
-  },
-  {
-   "file": "fighter_ardit_close_crop.png",
-   "what": "ardit base skin, closest game camera, native-pixel 900x900 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "ardit",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 32.93,
-   "time": "00:32",
-   "quality": "high",
-   "width": 900,
-   "height": 900,
-   "crop_origin": [
-    510,
-    15
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 943291
-  },
-  {
-   "file": "fighter_ardit_game_crop.png",
-   "what": "ardit base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "ardit",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 32,
-   "time": "00:32",
-   "quality": "high",
-   "width": 520,
-   "height": 520,
-   "crop_origin": [
-    700,
-    232
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 345503
-  },
-  {
-   "file": "fighter_burdam_close_crop.png",
-   "what": "burdam base skin, closest game camera, native-pixel 900x900 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "burdam",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 34.8,
-   "time": "00:34",
-   "quality": "high",
-   "width": 900,
-   "height": 900,
-   "crop_origin": [
-    509,
-    15
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 968729
-  },
-  {
-   "file": "fighter_burdam_game_crop.png",
-   "what": "burdam base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "burdam",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 33.87,
-   "time": "00:33",
-   "quality": "high",
-   "width": 520,
-   "height": 520,
-   "crop_origin": [
-    699,
-    232
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 356291
-  },
-  {
-   "file": "fighter_dunsom_close_crop.png",
-   "what": "dunsom base skin, closest game camera, native-pixel 900x900 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "dunsom",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 36.67,
-   "time": "00:36",
-   "quality": "high",
-   "width": 900,
-   "height": 900,
-   "crop_origin": [
-    510,
-    15
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 952010
-  },
-  {
-   "file": "fighter_dunsom_game_crop.png",
-   "what": "dunsom base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "dunsom",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 35.73,
-   "time": "00:35",
-   "quality": "high",
-   "width": 520,
-   "height": 520,
-   "crop_origin": [
-    699,
-    232
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 362703
-  },
-  {
-   "file": "fighter_ervet_close_crop.png",
-   "what": "ervet base skin, closest game camera, native-pixel 900x900 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "ervet",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 38.53,
-   "time": "00:38",
-   "quality": "high",
-   "width": 900,
-   "height": 900,
-   "crop_origin": [
-    509,
-    15
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 954917
-  },
-  {
-   "file": "fighter_ervet_game_crop.png",
-   "what": "ervet base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "ervet",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 37.6,
-   "time": "00:37",
-   "quality": "high",
-   "width": 520,
-   "height": 520,
-   "crop_origin": [
-    699,
-    232
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 358318
-  },
-  {
-   "file": "fighter_hesmi_close_crop.png",
-   "what": "hesmi base skin, closest game camera, native-pixel 900x900 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "hesmi",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 40.4,
-   "time": "00:40",
-   "quality": "high",
-   "width": 900,
-   "height": 900,
-   "crop_origin": [
-    510,
-    15
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 966621
-  },
-  {
-   "file": "fighter_hesmi_game_crop.png",
-   "what": "hesmi base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "hesmi",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 39.47,
-   "time": "00:39",
-   "quality": "high",
-   "width": 520,
-   "height": 520,
-   "crop_origin": [
-    700,
-    232
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 363687
-  },
-  {
-   "file": "fighter_ilsheta_close_crop.png",
-   "what": "ilsheta base skin, closest game camera, native-pixel 900x900 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "ilsheta",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 42.27,
-   "time": "00:42",
-   "quality": "high",
-   "width": 900,
-   "height": 900,
-   "crop_origin": [
-    510,
-    15
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 940766
-  },
-  {
-   "file": "fighter_ilsheta_game_crop.png",
-   "what": "ilsheta base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "ilsheta",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 41.33,
-   "time": "00:41",
-   "quality": "high",
-   "width": 520,
-   "height": 520,
-   "crop_origin": [
-    699,
-    232
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 352815
-  },
-  {
-   "file": "fighter_kemdo_close_crop.png",
-   "what": "kemdo base skin, closest game camera, native-pixel 900x900 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "kemdo",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 44.13,
-   "time": "00:44",
-   "quality": "high",
-   "width": 900,
-   "height": 900,
-   "crop_origin": [
-    510,
-    15
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 944364
-  },
-  {
-   "file": "fighter_kemdo_game_crop.png",
-   "what": "kemdo base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "kemdo",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 43.2,
-   "time": "00:43",
-   "quality": "high",
-   "width": 520,
-   "height": 520,
-   "crop_origin": [
-    699,
-    232
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 354846
-  },
-  {
-   "file": "fighter_lisvel_close_crop.png",
-   "what": "lisvel base skin, closest game camera, native-pixel 900x900 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "lisvel",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 46,
-   "time": "00:46",
-   "quality": "high",
-   "width": 900,
-   "height": 900,
-   "crop_origin": [
-    510,
-    15
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 951597
-  },
-  {
-   "file": "fighter_lisvel_game_crop.png",
-   "what": "lisvel base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "lisvel",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 45.07,
-   "time": "00:45",
-   "quality": "high",
-   "width": 520,
-   "height": 520,
-   "crop_origin": [
-    699,
-    232
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 364003
-  },
-  {
-   "file": "fighter_marund_close_crop.png",
-   "what": "marund base skin, closest game camera, native-pixel 900x900 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "marund",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 32.93,
-   "time": "00:32",
-   "quality": "high",
-   "width": 900,
-   "height": 900,
-   "crop_origin": [
-    510,
-    15
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 948484
-  },
-  {
-   "file": "fighter_marund_game_crop.png",
-   "what": "marund base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "marund",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 32,
-   "time": "00:32",
-   "quality": "high",
-   "width": 520,
-   "height": 520,
-   "crop_origin": [
-    700,
-    232
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 348093
-  },
-  {
-   "file": "fighter_nurrow_close_crop.png",
-   "what": "nurrow base skin, closest game camera, native-pixel 900x900 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "nurrow",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 34.8,
-   "time": "00:34",
-   "quality": "high",
-   "width": 900,
-   "height": 900,
-   "crop_origin": [
-    509,
-    15
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 946977
-  },
-  {
-   "file": "fighter_nurrow_game_crop.png",
-   "what": "nurrow base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "nurrow",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 33.87,
-   "time": "00:33",
-   "quality": "high",
-   "width": 520,
-   "height": 520,
-   "crop_origin": [
-    700,
-    232
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 349907
-  },
-  {
-   "file": "fighter_odrum_close_crop.png",
-   "what": "odrum base skin, closest game camera, native-pixel 900x900 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "odrum",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 36.67,
-   "time": "00:36",
-   "quality": "high",
-   "width": 900,
-   "height": 900,
-   "crop_origin": [
-    510,
-    15
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 954777
-  },
-  {
-   "file": "fighter_odrum_game_crop.png",
-   "what": "odrum base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "odrum",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 35.73,
-   "time": "00:35",
-   "quality": "high",
-   "width": 520,
-   "height": 520,
-   "crop_origin": [
-    699,
-    232
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 354756
-  },
-  {
-   "file": "fighter_rishal_close_crop.png",
-   "what": "rishal base skin, closest game camera, native-pixel 900x900 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "rishal",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 38.53,
-   "time": "00:38",
-   "quality": "high",
-   "width": 900,
-   "height": 900,
-   "crop_origin": [
-    509,
-    15
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 950707
-  },
-  {
-   "file": "fighter_rishal_game_crop.png",
-   "what": "rishal base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "rishal",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 37.6,
-   "time": "00:37",
-   "quality": "high",
-   "width": 520,
-   "height": 520,
-   "crop_origin": [
-    700,
-    232
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 358894
-  },
-  {
-   "file": "fighter_sukri_close_crop.png",
-   "what": "sukri base skin, closest game camera, native-pixel 900x900 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "sukri",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 40.4,
-   "time": "00:40",
-   "quality": "high",
-   "width": 900,
-   "height": 900,
-   "crop_origin": [
-    509,
-    15
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 945383
-  },
-  {
-   "file": "fighter_sukri_game_crop.png",
-   "what": "sukri base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "sukri",
-   "team": 0,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 39.47,
-   "time": "00:39",
-   "quality": "high",
-   "width": 520,
-   "height": 520,
-   "crop_origin": [
-    699,
-    232
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 353292
-  },
-  {
-   "file": "fighter_tunlan_close_crop.png",
-   "what": "tunlan base skin, closest game camera, native-pixel 900x900 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "tunlan",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 42.27,
-   "time": "00:42",
-   "quality": "high",
-   "width": 900,
-   "height": 900,
-   "crop_origin": [
-    510,
-    15
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 923902
-  },
-  {
-   "file": "fighter_tunlan_game_crop.png",
-   "what": "tunlan base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "tunlan",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 41.33,
-   "time": "00:41",
-   "quality": "high",
-   "width": 520,
-   "height": 520,
-   "crop_origin": [
-    699,
-    232
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 340643
-  },
-  {
-   "file": "fighter_ulkro_close_crop.png",
-   "what": "ulkro base skin, closest game camera, native-pixel 900x900 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "ulkro",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 44.13,
-   "time": "00:44",
-   "quality": "high",
-   "width": 900,
-   "height": 900,
-   "crop_origin": [
-    510,
-    15
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 925980
-  },
-  {
-   "file": "fighter_ulkro_game_crop.png",
-   "what": "ulkro base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "ulkro",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 43.2,
-   "time": "00:43",
-   "quality": "high",
-   "width": 520,
-   "height": 520,
-   "crop_origin": [
-    700,
-    232
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 343663
-  },
-  {
-   "file": "fighter_vashil_close_crop.png",
-   "what": "vashil base skin, closest game camera, native-pixel 900x900 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "vashil",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 46,
-   "time": "00:46",
-   "quality": "high",
-   "width": 900,
-   "height": 900,
-   "crop_origin": [
-    510,
-    15
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 968060
-  },
-  {
-   "file": "fighter_vashil_game_crop.png",
-   "what": "vashil base skin, game (distance from the map camera), native-pixel 520x520 crop around the fighter",
-   "kind": "fighter_crop",
-   "fighter": "vashil",
-   "team": 1,
-   "map": "rift",
-   "seed": 7,
-   "time_s": 45.07,
-   "time": "00:45",
-   "quality": "high",
-   "width": 520,
-   "height": 520,
-   "crop_origin": [
-    699,
-    232
-   ],
-   "source_frame": 1920,
-   "encode": "lossless-png",
-   "bytes": 354920
-  },
-  {
-   "file": "contact_fighters_close.webp",
-   "what": "contact sheet of all 16 fighters, base skin, closest camera, 4x4 grid of 480px cells (crops downscaled to 480px), labelled with the fighter id",
-   "kind": "contact_sheet",
-   "fighters": [
-    "ardit",
-    "burdam",
-    "dunsom",
-    "ervet",
-    "hesmi",
-    "ilsheta",
-    "kemdo",
-    "lisvel",
-    "marund",
-    "nurrow",
-    "odrum",
-    "rishal",
-    "sukri",
-    "tunlan",
-    "ulkro",
-    "vashil"
-   ],
-   "map": "rift",
-   "quality": "high",
-   "width": 1920,
-   "height": 2032,
-   "encode": "webp-q95",
-   "bytes": 1016784
-  },
-  {
-   "file": "contact_fighters_game.webp",
-   "what": "contact sheet of all 16 fighters, base skin, game camera, 4x4 grid of 480px cells (crops downscaled to 480px), labelled with the fighter id",
-   "kind": "contact_sheet",
-   "fighters": [
-    "ardit",
-    "burdam",
-    "dunsom",
-    "ervet",
-    "hesmi",
-    "ilsheta",
-    "kemdo",
-    "lisvel",
-    "marund",
-    "nurrow",
-    "odrum",
-    "rishal",
-    "sukri",
-    "tunlan",
-    "ulkro",
-    "vashil"
-   ],
-   "map": "rift",
-   "quality": "high",
-   "width": 1920,
-   "height": 2032,
-   "encode": "webp-q95",
-   "bytes": 1041958
   },
   {
    "file": "camp_a_glasshorn_death_005.png",
@@ -4867,7 +3881,7 @@
     "quality_base_aubade_high.png",
     "quality_base_aubade_ultra.png"
    ],
-   "bytes": 2689622
+   "bytes": 2625701
   },
   {
    "file": "sheet_quality_jungle_glasshorn.webp",
@@ -4883,23 +3897,39 @@
     "quality_jungle_glasshorn_high.png",
     "quality_jungle_glasshorn_ultra.png"
    ],
-   "bytes": 675908
+   "bytes": 673164
   },
   {
-   "file": "sheet_quality_river_mid.png",
+   "file": "sheet_quality_river_mid.webp",
    "what": "side by side (each downscaled to 960x540): river_mid on Low, Medium, High and Ultra",
    "kind": "sheet",
    "map": "rift",
    "width": 3840,
    "height": 564,
-   "encode": "lossless-png",
+   "encode": "webp-q95",
    "sources": [
     "quality_river_mid_low.png",
     "quality_river_mid_medium.png",
     "quality_river_mid_high.png",
     "quality_river_mid_ultra.png"
    ],
-   "bytes": 2952023
+   "bytes": 627692
+  },
+  {
+   "file": "sheet_quality_teamfight.webp",
+   "what": "side by side (each downscaled to 960x540): the same teamfight peak frame on Low, Medium, High and Ultra",
+   "kind": "sheet",
+   "map": "rift",
+   "width": 3840,
+   "height": 564,
+   "encode": "webp-q95",
+   "sources": [
+    "quality_teamfight_low.png",
+    "quality_teamfight_medium.png",
+    "quality_teamfight_high.png",
+    "quality_teamfight_ultra.png"
+   ],
+   "bytes": 638512
   },
   {
    "file": null,

@@ -17,26 +17,26 @@
   {
    "scene": "teamfight",
    "tier": "low",
-   "ssimVsUltra": 0.8423,
+   "ssimVsUltra": 0.842,
    "dEMean": 5.946,
-   "dEp95": 20.228,
-   "shareOver2_3": 0.6282
+   "dEp95": 20.22,
+   "shareOver2_3": 0.6283
   },
   {
    "scene": "teamfight",
    "tier": "medium",
    "ssimVsUltra": 0.9123,
    "dEMean": 2.921,
-   "dEp95": 11.793,
-   "shareOver2_3": 0.2931
+   "dEp95": 11.795,
+   "shareOver2_3": 0.2933
   },
   {
    "scene": "teamfight",
    "tier": "high",
-   "ssimVsUltra": 0.9838,
-   "dEMean": 0.98,
-   "dEp95": 2.688,
-   "shareOver2_3": 0.0824
+   "ssimVsUltra": 0.9837,
+   "dEMean": 0.982,
+   "dEp95": 2.695,
+   "shareOver2_3": 0.0828
   },
   {
    "scene": "teamfight",
@@ -49,26 +49,26 @@
   {
    "scene": "river_mid",
    "tier": "low",
-   "ssimVsUltra": 0.7185,
-   "dEMean": 10.853,
-   "dEp95": 54.877,
-   "shareOver2_3": 0.5507
+   "ssimVsUltra": 0.8536,
+   "dEMean": 4.601,
+   "dEp95": 19.078,
+   "shareOver2_3": 0.4313
   },
   {
    "scene": "river_mid",
    "tier": "medium",
-   "ssimVsUltra": 0.7794,
-   "dEMean": 7.742,
-   "dEp95": 45.801,
-   "shareOver2_3": 0.3493
+   "ssimVsUltra": 0.9166,
+   "dEMean": 2.281,
+   "dEp95": 10.874,
+   "shareOver2_3": 0.194
   },
   {
    "scene": "river_mid",
    "tier": "high",
-   "ssimVsUltra": 0.8661,
-   "dEMean": 5.527,
-   "dEp95": 39.576,
-   "shareOver2_3": 0.1968
+   "ssimVsUltra": 0.9818,
+   "dEMean": 1.776,
+   "dEp95": 5.067,
+   "shareOver2_3": 0.1766
   },
   {
    "scene": "river_mid",
@@ -81,26 +81,26 @@
   {
    "scene": "base_aubade",
    "tier": "low",
-   "ssimVsUltra": 0.9066,
-   "dEMean": 2.579,
-   "dEp95": 9.195,
-   "shareOver2_3": 0.2604
+   "ssimVsUltra": 0.9132,
+   "dEMean": 2.505,
+   "dEp95": 9.03,
+   "shareOver2_3": 0.263
   },
   {
    "scene": "base_aubade",
    "tier": "medium",
-   "ssimVsUltra": 0.9395,
-   "dEMean": 1.407,
-   "dEp95": 4.732,
-   "shareOver2_3": 0.1193
+   "ssimVsUltra": 0.9486,
+   "dEMean": 1.268,
+   "dEp95": 4.198,
+   "shareOver2_3": 0.1118
   },
   {
    "scene": "base_aubade",
    "tier": "high",
-   "ssimVsUltra": 0.9924,
-   "dEMean": 0.392,
-   "dEp95": 1.228,
-   "shareOver2_3": 0.0201
+   "ssimVsUltra": 0.996,
+   "dEMean": 0.295,
+   "dEp95": 1.191,
+   "shareOver2_3": 0.0168
   },
   {
    "scene": "base_aubade",
@@ -113,26 +113,26 @@
   {
    "scene": "jungle_glasshorn",
    "tier": "low",
-   "ssimVsUltra": 0.717,
-   "dEMean": 7.284,
-   "dEp95": 24.625,
-   "shareOver2_3": 0.6368
+   "ssimVsUltra": 0.755,
+   "dEMean": 6.874,
+   "dEp95": 23.875,
+   "shareOver2_3": 0.6169
   },
   {
    "scene": "jungle_glasshorn",
    "tier": "medium",
-   "ssimVsUltra": 0.8278,
-   "dEMean": 3.506,
-   "dEp95": 16.745,
-   "shareOver2_3": 0.3129
+   "ssimVsUltra": 0.892,
+   "dEMean": 2.736,
+   "dEp95": 13.614,
+   "shareOver2_3": 0.2492
   },
   {
    "scene": "jungle_glasshorn",
    "tier": "high",
-   "ssimVsUltra": 0.928,
-   "dEMean": 1.264,
-   "dEp95": 3.849,
-   "shareOver2_3": 0.0815
+   "ssimVsUltra": 0.9919,
+   "dEMean": 0.559,
+   "dEp95": 1.43,
+   "shareOver2_3": 0.0249
   },
   {
    "scene": "jungle_glasshorn",
@@ -145,19 +145,19 @@
  ],
  "perTierMean": {
   "low": {
-   "ssimVsUltra": 0.7961,
-   "dEMean": 6.665,
-   "dEp95": 27.231
+   "ssimVsUltra": 0.8409,
+   "dEMean": 4.981,
+   "dEp95": 18.051
   },
   "medium": {
-   "ssimVsUltra": 0.8647,
-   "dEMean": 3.894,
-   "dEp95": 19.768
+   "ssimVsUltra": 0.9174,
+   "dEMean": 2.301,
+   "dEp95": 10.12
   },
   "high": {
-   "ssimVsUltra": 0.9426,
-   "dEMean": 2.041,
-   "dEp95": 11.835
+   "ssimVsUltra": 0.9884,
+   "dEMean": 0.903,
+   "dEp95": 2.596
   },
   "ultra": {
    "ssimVsUltra": 1.0,
@@ -167,11 +167,11 @@
  },
  "verdict": {
   "highVsUltra": {
-   "ssimVsUltra": 0.9426,
-   "dEMean": 2.041,
-   "dEp95": 11.835
+   "ssimVsUltra": 0.9884,
+   "dEMean": 0.903,
+   "dEp95": 2.596
   },
-  "ultraIndistinguishableFromHigh": false,
+  "ultraIndistinguishableFromHigh": true,
   "note": "GFX-10: when true, either drop the 4096 shadow map to 2048 and spend the saved memory/GPU time on something visible, or label Ultra honestly in the settings copy."
  },
  "missing": [],
