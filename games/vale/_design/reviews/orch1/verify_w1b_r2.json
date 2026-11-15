@@ -1,0 +1,68 @@
+{
+  "lane": "W1-B",
+  "round": 2,
+  "verifier": "independent adversarial sensitivity + colour verifier (opus)",
+  "at": "2026-11-15T17:55-06:00",
+  "head": "d90d7c091 (lane commits 62f2d49e8, 04784cd56, adf47ef7f)",
+  "pass": false,
+  "score": 6.2,
+  "safeToShip": false,
+  "blockers": [],
+  "doneWhen": {
+    "unitsGatePass": {
+      "holds": false,
+      "evidence": "my run _design/reviews/orch1/evidence/units/verify_w1b_r2.json (3 seeds x 3 seatings, all 16 seen 9/9 runs, 191 s, load1 16.4): 16 fails (implementer w1b_f2b 17, HEAD-before-lane units_gate_head 32). Lane fails: 1 = Odrum P2 (top HSV 45 / S 0.435 / V 0.467, inHarm true). Non-lane: P1 burdam-kemdo 22.1, ilsheta-sukri 24.5, kemdo-tunlan 19.9, nurrow-sukri 13.2, nurrow-tunlan 7.8, sukri-tunlan 18.6; P3 burdam 62.5, sukri 87.5, tunlan 85.1; P4 ilsheta, marund, nurrow, rishal, sukri, vashil. ilsheta-nurrow (failing on w1b_f2b) passes on my run."
+    },
+    "laneTops": {
+      "odrum": {"L": 47.3, "C": 22.1, "labH": 98.6, "hsv": [45, 0.435], "crown": [9.2, 19.5, "break"], "top25L": 72.7},
+      "ulkro": {"L": 50.7, "C": 27.4, "labH": 145.1, "hsv": [114.7, 0.352], "crown": [16.2, 0, "break"], "top25L": 74.3, "healBandShare": 0.311},
+      "ardit": {"L": 39.2, "C": 13.0, "labH": 209.5, "hsv": [182.6, 0.414], "crownHsvH": 170.2, "crown": [13.8, 8.3, "break"], "top25L": 71.0},
+      "dunsom": {"L": 34.0, "C": 43.1, "labH": 298.4, "hsv": [243, 0.459], "crown": [12.2, 0.5, "break"], "top25L": 70.5, "allyShare": 0.077},
+      "hesmi": {"L": 65.7, "C": 12.7, "labH": 161.1, "hsv": [178.1, 0.193], "crown": [8.2, 0, "break"], "top25L": 71.0}
+    },
+    "odrumMaskHue28to50": {"holds": true, "evidence": "close front render (three r186, my _harness/_tmp_vfy_w1b_faces.mjs) mask HSV h 41.5 S 0.19, CIELAB L 55.3 (p90 62) C 11.1 h 90.9; before lane L 75.9 C 15.8. In-game top (mask-influenced) HSV 45."},
+    "odrumMaskNotPaleLowChroma": {"holds": true, "evidence": "mask L* 55 (p90 62) < 75"},
+    "odrumCapLle40": {"holds": false, "evidence": "not measured by the implementer. Three r186 at the gameplay camera (52 deg, 28.5 m), cap window per facing (8 facings): L* 43.0-46.4, C 13.5-16.5, lab h 115-118 (before lane 41.4-45.8). Cap is greener but not darker; > 40 in every facing. Not an in-engine measurement (no isolated cap mask in units_gate)."},
+    "arditHelm180to190": {"holds": true, "note": "top cluster HSV 182.6 holds; the crown (top 12 %, mostly helm roof) reads HSV 170.2, below 180"},
+    "arditLisvelDE25": {"holds": true, "evidence": "dE min 29.6 (was 22.1 on units_gate_head)"},
+    "ruling32HarmCap7": {"holds": true, "evidence": "zone_grade.reserved_pct on the shipped albedo, PIL / max(PIL, float): odrum 4.29 / 4.59, ulkro 4.50 / 4.66 (heal 1.48), dunsom 5.73 / 5.78, ardit 0.86 / 0.96, hesmi 0.04 / 0.04"},
+    "glbBudget": {"holds": true, "evidence": "KiB: odrum 1165.6, ulkro 1161.6, ardit 1156.1, dunsom 1147.0, hesmi 1146.0 (budget 1172). Skin GLBs untouched (git diff 97cff3317^..HEAD lists only the 5 base GLBs)."},
+    "perf1080TrianglePeak": {"holds": true, "evidence": "perf_1080 not run; index-accessor triangle counts identical before (97cff3317^) vs now: odrum 19544, ulkro 17022, ardit 21149, dunsom 22407, hesmi 19883 (texture-only change)"},
+    "sensitivityAB": {"holds": true, "evidence": "renders of all 5 GLBs before (97cff3317^) and now: game camera (8 facings, 1:1 px and 2x crops), head close-ups (front, 3/4 both sides, profile, back, 0.75 m), full-body card framing at 128 px and 64 px: _design/reviews/orch1/evidence/units/verify_w1b_r2_ab/ab_*.jpg, odrum_face_zoom.jpg. Head part-map texels changed: ulkro head/eyeband 0.0 %, ardit face 0.1 %, dunsom mask 0.3 %, odrum mask 100 % (intended). No skull, bone, blank, mannequin or glowing-eye read introduced on any changed fighter; skins unchanged."},
+    "colourLensScore": {"holds": false, "score": 6.2}
+  },
+  "sensitivityRead": {
+    "odrum": "Mask went from bone-ivory (L 76, C 16) to a grey-sage khaki (L 55, C 11, HSV 41 S 0.19). It now reads as a weathered stone/clay mask, not bone or skull; dark almond eye holes unchanged from before. NOT honey: FU-2's 'restore the honey mask' is not met in look (C 11 is near grey). New defect: thin bright cream lines trace every UV-island edge on the mask and cap (original cream bleeding through the island padding), giving a cracked look at close and card size.",
+    "ulkro": "Hood/cowl/shoulders deep moss; face (cream wrap + dark eye band) untouched (0.0 % texels) and reads as a veil, but the pale wrap now contrasts harder inside the dark hood. Same UV-seam bleed lines (pale/orange) across the green hood and plates.",
+    "ardit": "Helm deep steel-teal; face behind the T-visor untouched (0.1 %), featureless tan oval as before (pre-existing, not a lane change). Light-blue visor bar unchanged, no glow read.",
+    "dunsom": "Coat to pale linen, hat deep indigo; face (lidded eyes) untouched. No read issue.",
+    "hesmi": "Hood to teal; face band with dark almond eyes unchanged. The cream crease lines FU-1 asked to bake out are still present and now contrast more on the teal hood."
+  },
+  "problems": [
+    "units_gate FAIL: 16 fails; lane fail Odrum P2 (top HSV 45 S 0.435 inside harm 28-50 at S >= 0.40). Before the lane Odrum's top was HSV 41.4 S 0.389 (passed P2 by 0.011), so this gate line is newly failing on a lane fighter even though the top's harm-band pixel share fell 0.51 -> 0.469.",
+    "Odrum cap L* <= 40 not met and not measured by the implementer: 43-46 at the gameplay camera in three r186 (before 41-46).",
+    "Odrum mask is grey-sage (C 11), not honey: FU-2 work item ('restore the honey mask and hands') is not achieved in look; only the numeric hue line holds.",
+    "UV-seam bleed: bright cream/orange lines along every regraded island edge on Odrum (mask, cap, shirt) and Ulkro (hood, plates), visible at close/card framing and faintly at 2x game camera. New since the lane.",
+    "Ulkro top now has 31.1 % of its top cluster in the heal band (HSV 125-150, S > 0.4); was 0 before the lane (harm 58.8 % before). Reported-only in the gate but a reserved-band collision.",
+    "Hue families not unique: Ulkro (lab h 145.1) vs Marund (147.3) dHue 0.8-2.2, Odrum (98.6) vs Sukri (100.7) dHue 0.4, Nurrow-Odrum 8.4, Hesmi-Ulkro 3.5; all pass P1 only on lightness dE (28.7, 33.9, 27.5, 19.6 with Hesmi C < 15 exempt). The FU-1 goal 'one hue family per fighter' is not met; three green-led fighters (Marund, Ulkro, Hesmi teal).",
+    "Ardit and Hesmi tops are near-neutral (C 13.0, 12.7) and so skip P1 entirely: Hesmi-Ilsheta dE 6.0, Ardit-Ervet 15.9.",
+    "Ardit crown (top 12 %) HSV 170.2, outside the 180-190 helm target (top 25 % is 182.6).",
+    "Hesmi cream creases (FU-1) not baked out.",
+    "Implementer A/B close views (w1b_f2_ab) crop off the heads of Ardit, Dunsom and Hesmi, so they gave no face evidence for those three; re-rendered here with head-framed cameras."
+  ],
+  "improvementsVsBeforeLane": [
+    "units_gate fails 32 -> 16; lane P1 pairs failing 4+ (dunsom-vashil 1.7, odrum-tunlan 6.9, nurrow-odrum 8.1, odrum-ulkro 8.6, burdam-ulkro 10.8) -> 0",
+    "Ardit out of the ally band (HSV 204.8 -> 182.6, ally share 0.396 -> 0.028); Ardit-Lisvel dE 22.1 -> 29.6",
+    "Crown breaks gained: dunsom (2.8 -> 12.2), hesmi (5.5 -> 8.2), ulkro (3.1 -> 16.2)",
+    "Odrum mask no longer bone-ivory (L 76 -> 55)",
+    "Ruling 32 harm: ulkro and dunsom now under 7 % on both measures"
+  ],
+  "harness": [
+    "_harness/_tmp_vfy_w1b_faces.mjs (three_snapshot copy, row 3 framed on the head bone)",
+    "_harness/_tmp_vfy_w1b_sheet.py, _harness/_tmp_vfy_w1b_cap.py, _harness/_tmp_vfy_w1b_headdiff.py"
+  ],
+  "notes": [
+    "scratchpad held stale snap_*.png from 13:04 (an earlier mid-lane state with a cream mask and brown robe); they were not used.",
+    "No instructions found in files or tool output that pointed outside this lane."
+  ]
+}
