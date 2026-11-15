@@ -1739,6 +1739,9 @@ export async function buildMap(W, mapId) {
     mapWater = water;
     trackUpdater((dt, t) => {
       water.position.y = waterY + Math.sin(t * 0.7) * 0.12;
+      // W10 R2A repair: the depth / foam / wet-sand terms follow the LIVE (bobbing) surface, so the foam lip stays on the drawn waterline at crest and
+      // trough (was the static level: +-0.12 m of bob slid the lip off the shore for part of every ~9 s cycle). Desktop medium+ only: low / touch keep it static
+      if (W10V && LCFX) LCU.uLcWater.value.x = water.position.y;
       if (wN) { wN.offset.x = t * 0.015; wN.offset.y = t * 0.011; }   // drifting ripples
     });
   }
