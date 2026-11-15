@@ -70,10 +70,12 @@ const injectDecals = () => page.evaluate(() => {
     const dx = -e[2], dy = -e[5], dz = -e[8];
     const bq = c.x * dx + c.y * dy + c.z * dz, cq = l * l - g * g, disc = bq * bq - cq;
     const t = disc > 0 ? -bq - Math.sqrt(disc) : 0;
-    const P = { x: c.x + dx * t, y: c.y + dy * t, z: c.z + dz * t };
+    // (under the camera, wide: the view looks down at ~60 degrees, the town lies within 200 m of the nadir)
+    void t;
+    const P = { x: c.x / l * g, y: c.y / l * g, z: c.z / l * g };
     const mk = (type, r, cr, cg, cb, ca) => ({ type, x: P.x, y: P.y, z: P.z, r, ax: P.x / g, ay: P.y / g, az: P.z / g, cr, cg, cb, ca, p0: r, p1: 0, p2: 0, p3: 0, q0: 0, q1: 0, q2: 0, q3: 0 });
-    dp.add(Object.assign(mk(5, 70, 1, 1, 1, 1), { p0: 60, p1: 0.8, p2: 3.3 }));
-    dp.add(Object.assign(mk(10, 90, 1, 0.55, 0.2, 1), { p0: 90, p1: 4e3, p2: 20, p3: 40 }));
+    dp.add(Object.assign(mk(5, 260, 1, 1, 1, 1), { p0: 220, p1: 0.8, p2: 3.3 }));
+    dp.add(Object.assign(mk(10, 300, 1, 0.55, 0.2, 1), { p0: 300, p1: 4e3, p2: 20, p3: 40 }));
     dp.add(Object.assign(mk(16, 50, 1, 1, 1, 1), { p0: 40, p1: 0.8, p2: 2 }));
     return orig(...a);
   };
@@ -82,16 +84,30 @@ const injectDecals = () => page.evaluate(() => {
 if (opts.hand) { await page.mouse.move(vw / 2, vh / 2); await page.evaluate(() => { globalThis.__GENESIS_FX__.fx.hand.force = true; }); }
 const views = String(opts.views ?? 'region,town,towndecal,ridge,orbit,night,coast,shore,forest').split(',');
 const settle = Number(opts.settle ?? 40);
+const seen = new Map();
 for (const v of views) {
   const t1 = Date.now();
+  // (a view visited again: -2, -3 ... in the shot name)
+  seen.set(v, (seen.get(v) ?? 0) + 1);
+  const vn = seen.get(v) > 1 ? `${v}-${seen.get(v)}` : v;
   if (v === 'towndecal') await injectDecals(); else await page.evaluate(() => { globalThis.__DECALS_ON__ = false; });
   if (v === 'towndecal') await page.evaluate(() => { globalThis.__DECALS_ON__ = true; });
   await page.evaluate((c) => window.__GENESIS__.camera(c), CAM[v]);
   const early = Number(opts.early ?? 0);
-  if (early) { await page.evaluate((n) => window.__GENESIS__.frames(n), early); await page.screenshot({ path: join(OUT, `${tag}-${v}-early.png`) }); }
+  if (early) { await page.evaluate((n) => window.__GENESIS__.frames(n), early); await page.screenshot({ path: join(OUT, `${tag}-${vn}-early.png`) }); }
   // settle: until the terrain stops landing (stats.pending / built unchanged), at most `settle` frames
   for (let f = 0; f < settle; f += 5) await page.evaluate(() => window.__GENESIS__.frames(5));
-  await page.screenshot({ path: join(OUT, `${tag}-${v}.png`) });
+  await page.screenshot({ path: join(OUT, `${tag}-${vn}.png`) });
+  // (item 3 diagnosis) the shore again without the life layer (people, boats, camps, buildings), then without water
+  if (v === 'shore' && !opts.nodiag) {
+    for (const [name, hide] of [['nolife', 'life'], ['nowater', 'water']]) {
+      await page.evaluate((h) => { const vis = [...globalThis.__GENESIS_R__.planets.values()][0]; globalThis.__HID__ = []; const hideObj = (o) => { if (o && o.visible) { o.visible = false; globalThis.__HID__.push(o); } };
+        if (h === 'life') hideObj(vis.life?.group); else vis.group.traverse((o) => { if (o.layers && (o.layers.mask & 4) && o.isMesh) hideObj(o); }); }, hide);
+      await page.evaluate(() => window.__GENESIS__.frames(2));
+      await page.screenshot({ path: join(OUT, `${tag}-${vn}-${name}.png`) });
+      await page.evaluate(() => { for (const o of globalThis.__HID__) o.visible = true; });
+    }
+  }
   const st = await page.evaluate(() => { const s = globalThis.__GENESIS_R__.stats; return { d: s.drawCalls, t: s.triangles, alt: Math.round(s.altitude) }; });
   console.log('view', v, JSON.stringify(st), ((Date.now() - t1) / 1000).toFixed(0), 's');
 }

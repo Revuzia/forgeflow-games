@@ -27,7 +27,7 @@ function drive(r: Run, endTick: number, onStep?: (sim: Sim) => void): void {
     if (r.stage === 0 && sim.u.tick >= 60) {
       if (r.stage === 0 && h) { r.log.push(`y${yr.toFixed(1)} offer ${sim.applyNow({ k: 'covenant.offer', settlement: h.id } as never).ok}`); r.stage = 1; }
     } else if (r.stage === 1 && sim.u.tick >= 4 * day) {
-      r.log.push(`y${yr.toFixed(1)} make ${sim.applyNow({ k: 'covenant.make', vow: 'no-flood' } as never).ok}`); r.stage = 2;
+      r.log.push(`y${yr.toFixed(1)} make ${sim.applyNow({ k: 'covenant.make', vow: 'gentle' } as never).ok}`); r.stage = 2;
     } else if (r.stage === 2 && (R.towers?.length ?? 0) > 0) r.stage = 3;
     else if (r.stage === 4 && yr >= 12) {
       const t = ps.settlements.find((s) => s.fallen < 0 && !s.band);
