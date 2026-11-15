@@ -1,0 +1,716 @@
+{
+ "session": "rift",
+ "records": [
+  {
+   "file": "clash_mid_lane_1.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 114.3,
+   "time": "01:54",
+   "kind": "minion_clash",
+   "what": "mid-lane minion clash (17 Wicks within 6 m, 2 fighters within 14 m), frame 1 of 3 half a second apart",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    93,
+    54.8
+   ]
+  },
+  {
+   "file": "clash_mid_lane_2.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 115.03,
+   "time": "01:55",
+   "kind": "minion_clash",
+   "what": "mid-lane minion clash (17 Wicks within 6 m, 2 fighters within 14 m), frame 2 of 3 half a second apart",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    93,
+    54.8
+   ]
+  },
+  {
+   "file": "clash_mid_lane_3.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 115.77,
+   "time": "01:55",
+   "kind": "minion_clash",
+   "what": "mid-lane minion clash (17 Wicks within 6 m, 2 fighters within 14 m), frame 3 of 3 half a second apart",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    93,
+    54.8
+   ]
+  },
+  {
+   "file": "map_rift_t0154_lane_high.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 154.4,
+   "time": "02:34",
+   "kind": "map",
+   "what": "North Road (road_high) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    57.6,
+    13.5
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0154_lane_seat.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 155.2,
+   "time": "02:35",
+   "kind": "map",
+   "what": "Mid Road (road_seat) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    55,
+    55
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0154_lane_low.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 156,
+   "time": "02:36",
+   "kind": "map",
+   "what": "South Road (road_low) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    57.6,
+    96.5
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0154_base_aubade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 156.8,
+   "time": "02:36",
+   "kind": "map",
+   "what": "west base (team 0) fountain side",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    14.5,
+    55
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0154_base_serenade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 157.6,
+   "time": "02:37",
+   "kind": "map",
+   "what": "east base (team 1) fountain side",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    155.5,
+    55
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0154_jungle_a_glasshorn.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 158.4,
+   "time": "02:38",
+   "kind": "map",
+   "what": "jungle clearing a_glasshorn",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    61.6,
+    41.5
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0154_jungle_a_resinback.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 159.2,
+   "time": "02:39",
+   "kind": "map",
+   "what": "jungle clearing a_resinback",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    64.3,
+    85.1
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0154_jungle_s_stilltusks.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 160,
+   "time": "02:40",
+   "kind": "map",
+   "what": "jungle clearing s_stilltusks",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    108.4,
+    68.5
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0154_jungle_s_gloamoths.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 160.8,
+   "time": "02:40",
+   "kind": "map",
+   "what": "jungle clearing s_gloamoths",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    105.7,
+    24.9
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0154_river_north.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 161.6,
+   "time": "02:41",
+   "kind": "map",
+   "what": "river (Noonline) north of mid",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    43
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0154_river_south.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 162.4,
+   "time": "02:42",
+   "kind": "map",
+   "what": "river (Noonline) south of mid",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    67
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0154_pit_longshade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 163.2,
+   "time": "02:43",
+   "kind": "map",
+   "what": "objective pit longshade",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    31
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0154_pit_sunsplinter.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 164,
+   "time": "02:44",
+   "kind": "map",
+   "what": "objective pit sunsplinter",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    80
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0481_lane_high.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 482.13,
+   "time": "08:02",
+   "kind": "map",
+   "what": "North Road (road_high) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    57.6,
+    13.5
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0481_lane_seat.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 482.93,
+   "time": "08:02",
+   "kind": "map",
+   "what": "Mid Road (road_seat) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    55,
+    55
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0481_lane_low.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 483.73,
+   "time": "08:03",
+   "kind": "map",
+   "what": "South Road (road_low) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    57.6,
+    96.5
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0481_base_aubade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 484.53,
+   "time": "08:04",
+   "kind": "map",
+   "what": "west base (team 0) fountain side",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    14.5,
+    55
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0481_base_serenade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 485.33,
+   "time": "08:05",
+   "kind": "map",
+   "what": "east base (team 1) fountain side",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    155.5,
+    55
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0481_jungle_a_glasshorn.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 486.13,
+   "time": "08:06",
+   "kind": "map",
+   "what": "jungle clearing a_glasshorn",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    61.6,
+    41.5
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0481_jungle_a_resinback.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 486.93,
+   "time": "08:06",
+   "kind": "map",
+   "what": "jungle clearing a_resinback",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    64.3,
+    85.1
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0481_jungle_s_stilltusks.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 487.73,
+   "time": "08:07",
+   "kind": "map",
+   "what": "jungle clearing s_stilltusks",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    108.4,
+    68.5
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0481_jungle_s_gloamoths.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 488.53,
+   "time": "08:08",
+   "kind": "map",
+   "what": "jungle clearing s_gloamoths",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    105.7,
+    24.9
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0481_river_north.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 489.33,
+   "time": "08:09",
+   "kind": "map",
+   "what": "river (Noonline) north of mid",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    43
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0481_river_south.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 490.13,
+   "time": "08:10",
+   "kind": "map",
+   "what": "river (Noonline) south of mid",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    67
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0481_pit_longshade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 490.93,
+   "time": "08:10",
+   "kind": "map",
+   "what": "objective pit longshade",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    31
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0481_pit_sunsplinter.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 491.73,
+   "time": "08:11",
+   "kind": "map",
+   "what": "objective pit sunsplinter",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    80
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0965_lane_high.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 965.87,
+   "time": "16:05",
+   "kind": "map",
+   "what": "North Road (road_high) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    57.6,
+    13.5
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0965_lane_seat.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 966.67,
+   "time": "16:06",
+   "kind": "map",
+   "what": "Mid Road (road_seat) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    55,
+    55
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0965_lane_low.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 967.47,
+   "time": "16:07",
+   "kind": "map",
+   "what": "South Road (road_low) at its west third",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    57.6,
+    96.5
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0965_base_aubade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 968.27,
+   "time": "16:08",
+   "kind": "map",
+   "what": "west base (team 0) fountain side",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    14.5,
+    55
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0965_base_serenade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 969.07,
+   "time": "16:09",
+   "kind": "map",
+   "what": "east base (team 1) fountain side",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    155.5,
+    55
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0965_jungle_a_glasshorn.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 969.87,
+   "time": "16:09",
+   "kind": "map",
+   "what": "jungle clearing a_glasshorn",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    61.6,
+    41.5
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0965_jungle_a_resinback.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 970.67,
+   "time": "16:10",
+   "kind": "map",
+   "what": "jungle clearing a_resinback",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    64.3,
+    85.1
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0965_jungle_s_stilltusks.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 971.47,
+   "time": "16:11",
+   "kind": "map",
+   "what": "jungle clearing s_stilltusks",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    108.4,
+    68.5
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0965_jungle_s_gloamoths.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 972.27,
+   "time": "16:12",
+   "kind": "map",
+   "what": "jungle clearing s_gloamoths",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    105.7,
+    24.9
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0965_river_north.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 973.07,
+   "time": "16:13",
+   "kind": "map",
+   "what": "river (Noonline) north of mid",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    43
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0965_river_south.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 973.87,
+   "time": "16:13",
+   "kind": "map",
+   "what": "river (Noonline) south of mid",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    67
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0965_pit_longshade.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 974.67,
+   "time": "16:14",
+   "kind": "map",
+   "what": "objective pit longshade",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    31
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_rift_t0965_pit_sunsplinter.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 975.47,
+   "time": "16:15",
+   "kind": "map",
+   "what": "objective pit sunsplinter",
+   "map": "rift",
+   "quality": "high",
+   "world": [
+    85,
+    80
+   ],
+   "ended": false
+  }
+ ]
+}

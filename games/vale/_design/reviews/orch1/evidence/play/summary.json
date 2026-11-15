@@ -1,0 +1,3248 @@
+{
+ "source": "_harness/_reports/fw_W4_soak_orch1_play.json",
+ "label": "orch1_play",
+ "games": 680,
+ "bot_faults": 0,
+ "gates": [
+  {
+   "group": "laning",
+   "item": "gameplay:G1",
+   "label": "Wicks dying \u2264 14:00 last-hit by fighters",
+   "value": "adept 44.9 % / veteran 44.6 %",
+   "target": "\u2265 42 % (owner_rulings 15)",
+   "pass": true,
+   "n": 200
+  },
+  {
+   "group": "laning",
+   "item": "gameplay:G1",
+   "label": "solo-laner cs at 10:00",
+   "value": "adept 51.7 / veteran 51.5",
+   "target": "\u2265 45",
+   "pass": true,
+   "n": 200
+  },
+  {
+   "group": "laning",
+   "item": "gameplay:G1",
+   "label": "laners in lane, 1:00\u201314:00",
+   "value": "adept 68.9 % / veteran 67.2 %",
+   "target": "\u2265 65 %",
+   "pass": true,
+   "n": 200
+  },
+  {
+   "group": "laning",
+   "item": "gameplay:G1",
+   "label": "fighter deaths to Wicks/monsters, no enemy fighter",
+   "value": "adept 2.7 % / veteran 1.2 %",
+   "target": "\u2264 5 %",
+   "pass": true,
+   "n": 200
+  },
+  {
+   "group": "jungle",
+   "item": "gameplay:G2",
+   "label": "jungler level gap to solo laners at 15:00",
+   "value": "adept 0.81 / veteran 0.76",
+   "target": "\u2264 1.5",
+   "pass": true,
+   "n": 200
+  },
+  {
+   "group": "jungle",
+   "item": "gameplay:G2",
+   "label": "grovehunter deaths per game vs the laner roles' highest",
+   "value": "adept 2.8 vs 4.2 / veteran 2.6 vs 4.5",
+   "target": "\u2264",
+   "pass": true,
+   "n": 200,
+   "reportOnly": false
+  },
+  {
+   "group": "structures",
+   "item": "gameplay:G4",
+   "label": "median first structure (RIFT)",
+   "value": "adept 9.9 min / veteran 9.6 min",
+   "target": "9\u201312 min",
+   "pass": true,
+   "n": 200,
+   "reportOnly": false
+  },
+  {
+   "group": "early",
+   "item": "gameplay:CL-2",
+   "label": "RIFT adept: laning objective first taken after its spawn, median",
+   "value": "1.4 min",
+   "target": "\u2264 3 min",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "early",
+   "item": "gameplay:CL-1",
+   "label": "RIFT adept: credited takedowns by 10:00 a game (both teams)",
+   "value": "7.12",
+   "target": "\u2265 6",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "early",
+   "item": "gameplay:CL-1",
+   "label": "RIFT adept: games with no takedown by 10:00",
+   "value": "0/100",
+   "target": "\u2264 1 in 20",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "early",
+   "item": "gameplay:CL-1",
+   "label": "RIFT adept: median longest stretch without a fighter death from 3:00",
+   "value": "2.7 min",
+   "target": "\u2264 3 min",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "early",
+   "item": "gameplay:CL-1",
+   "label": "RIFT adept: shadehold takedowns before 14:00 a game",
+   "value": "1.37",
+   "target": "\u2265 1",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "early",
+   "item": "gameplay:CL-1",
+   "label": "RIFT adept: fighters with a median first ult after 10:00 (\u2265 3 games; never = game length)",
+   "value": "none",
+   "target": "none",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "early",
+   "item": "gameplay:CL-1",
+   "label": "RIFT adept: cores fallen before 16:00",
+   "value": "0",
+   "target": "at most 1 in 100 games, none before 14:00 (owner_rulings 21)",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "early",
+   "item": "gameplay:CL-1",
+   "label": "RIFT adept: duo road (shaftlight) level 6, median",
+   "value": "7.5 min",
+   "target": "\u2264 8:00",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "early",
+   "item": "gameplay:CL-2",
+   "label": "RIFT veteran: laning objective first taken after its spawn, median",
+   "value": "1.6 min",
+   "target": "\u2264 3 min",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "early",
+   "item": "gameplay:CL-1",
+   "label": "RIFT veteran: credited takedowns by 10:00 a game (both teams)",
+   "value": "7.60",
+   "target": "\u2265 6",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "early",
+   "item": "gameplay:CL-1",
+   "label": "RIFT veteran: games with no takedown by 10:00",
+   "value": "0/100",
+   "target": "\u2264 1 in 20",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "early",
+   "item": "gameplay:CL-1",
+   "label": "RIFT veteran: median longest stretch without a fighter death from 3:00",
+   "value": "2.9 min",
+   "target": "\u2264 3 min",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "early",
+   "item": "gameplay:CL-1",
+   "label": "RIFT veteran: shadehold takedowns before 14:00 a game",
+   "value": "1.36",
+   "target": "\u2265 1",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "early",
+   "item": "gameplay:CL-1",
+   "label": "RIFT veteran: fighters with a median first ult after 10:00 (\u2265 3 games; never = game length)",
+   "value": "none",
+   "target": "none",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "early",
+   "item": "gameplay:CL-1",
+   "label": "RIFT veteran: cores fallen before 16:00",
+   "value": "0",
+   "target": "at most 1 in 100 games, none before 14:00 (owner_rulings 21)",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "early",
+   "item": "gameplay:CL-1",
+   "label": "RIFT veteran: duo road (shaftlight) level 6, median",
+   "value": "7.7 min",
+   "target": "\u2264 8:00",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "micro",
+   "item": "critic:bot-micro",
+   "label": "skillshot hit rate at adept targets: veteran vs adept shooters",
+   "value": "82.7 % vs 79.1 %",
+   "target": "veteran \u2265 adept",
+   "pass": true,
+   "n": 8911
+  },
+  {
+   "group": "items",
+   "item": "gameplay:G7",
+   "label": "finished items held per player at min(25:00, end)",
+   "value": "2.58",
+   "target": "\u2265 2.5",
+   "pass": true,
+   "n": 200
+  },
+  {
+   "group": "items",
+   "item": "gameplay:G7",
+   "label": "finished items bought at least once",
+   "value": "100.0 % (31/31)",
+   "target": "\u2265 80 %",
+   "pass": true,
+   "n": 200
+  },
+  {
+   "group": "items",
+   "item": "gameplay:G7",
+   "label": "anti-heal item families",
+   "value": "3 (lampblack_edge, lampblack_coat, lampblack_lens)",
+   "target": "\u2265 1",
+   "pass": true,
+   "n": 0
+  },
+  {
+   "group": "items",
+   "item": "gameplay:G7",
+   "label": "builds answer the enemy team: players buying an anti-heal piece, \u2265 2 enemy healers vs fewer",
+   "value": "90.6 % of 1100 vs 27.3 % of 900",
+   "target": "more than twice as often",
+   "pass": true,
+   "n": 200
+  },
+  {
+   "group": "items",
+   "item": "gameplay:G7",
+   "label": "fighters whose first two finished items vary",
+   "value": "100.0 % of 16",
+   "target": "\u2265 50 %",
+   "pass": true,
+   "n": 200
+  },
+  {
+   "group": "difficulty",
+   "item": "gameplay:G3",
+   "label": "veteran beats novice (mirrored)",
+   "value": "36/40 (90.0 %)",
+   "target": "\u2265 85 %",
+   "pass": true,
+   "n": 40,
+   "reportOnly": false
+  },
+  {
+   "group": "difficulty",
+   "item": "gameplay:G3",
+   "label": "veteran beats adept (mirrored)",
+   "value": "31/40 (77.5 %)",
+   "target": "\u2265 65 %",
+   "pass": true,
+   "n": 40,
+   "reportOnly": false
+  },
+  {
+   "group": "bridge",
+   "item": "gameplay:G5",
+   "label": "BRIDGE games ending in sudden death",
+   "value": "27/200 (13.5 %)",
+   "target": "\u2264 25 %",
+   "pass": true,
+   "n": 200
+  },
+  {
+   "group": "bridge",
+   "item": "gameplay:G5",
+   "label": "BRIDGE cores fallen with their chain standing",
+   "value": "0",
+   "target": "0",
+   "pass": true,
+   "n": 200
+  },
+  {
+   "group": "bridge",
+   "item": "gameplay:G5",
+   "label": "BRIDGE median length",
+   "value": "15.9 min",
+   "target": "15\u201318 min",
+   "pass": true,
+   "n": 200
+  },
+  {
+   "group": "pace",
+   "item": "gameplay:g2",
+   "label": "RIFT adept match length p90",
+   "value": "27.3 min (median 22.1)",
+   "target": "\u2264 32 min",
+   "pass": true,
+   "n": 100
+  },
+  {
+   "group": "balance",
+   "item": "balance:real-seat",
+   "label": "real-seat win rate, 200 decided same-tier RIFT games, lineup shuffle: whole 95 % interval outside 40\u201360 %",
+   "value": "none (rates 39.7 %\u201365.6 %; point outside 40\u201360: odrum 65.6 %, dunsom 64.7 %, ervet 61.5 %, burdam 39.7 %; interval wholly inside: 2/16)",
+   "target": "none (owner_rulings 22)",
+   "pass": true,
+   "n": 200,
+   "reportOnly": false
+  },
+  {
+   "group": "fray",
+   "item": "gameplay:G6",
+   "label": "FRAY adept: games with no 90 s stretch without a death while 3+ seats are in",
+   "value": "95/100 (95.0 %)",
+   "target": "\u2265 85 %",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "fray",
+   "item": "gameplay:G6",
+   "label": "FRAY veteran: games with no 90 s stretch without a death while 3+ seats are in",
+   "value": "95/100 (95.0 %)",
+   "target": "\u2265 85 %",
+   "pass": true,
+   "n": 100,
+   "reportOnly": false
+  },
+  {
+   "group": "fray",
+   "item": "gameplay:G9",
+   "label": "FRAY: every fighter's mean placement, adept + veteran pooled (fighters with \u2265 100 games: 16/16)",
+   "value": "best ulkro 3.27, worst dunsom 7.16; outside: ulkro 3.27, nurrow 3.48",
+   "target": "3.5\u20137.5",
+   "pass": false,
+   "n": 200,
+   "reportOnly": false
+  }
+ ],
+ "match_length_min": {
+  "bridge adept/adept": {
+   "n": 100,
+   "min": 11.13,
+   "p10": 11.94,
+   "p25": 13.13,
+   "median": 15.69,
+   "p75": 19.24,
+   "p90": 21.35,
+   "max": 25.71,
+   "mean": 16.28,
+   "reasons": {
+    "core": 100
+   },
+   "sudden": 12
+  },
+  "bridge veteran/veteran": {
+   "n": 100,
+   "min": 8.76,
+   "p10": 12.06,
+   "p25": 13.65,
+   "median": 15.99,
+   "p75": 19.23,
+   "p90": 22.51,
+   "max": 28.33,
+   "mean": 16.53,
+   "reasons": {
+    "core": 100
+   },
+   "sudden": 15
+  },
+  "fray adept/adept": {
+   "n": 100,
+   "min": 4.8,
+   "p10": 6.64,
+   "p25": 7.77,
+   "median": 8.82,
+   "p75": 10.57,
+   "p90": 11.0,
+   "max": 11.0,
+   "mean": 8.87,
+   "reasons": {
+    "last_standing": 38,
+    "time": 22,
+    "score": 40
+   },
+   "sudden": 0
+  },
+  "fray veteran/veteran": {
+   "n": 100,
+   "min": 4.47,
+   "p10": 7.21,
+   "p25": 8.26,
+   "median": 9.98,
+   "p75": 11.0,
+   "p90": 11.0,
+   "max": 11.0,
+   "mean": 9.47,
+   "reasons": {
+    "time": 34,
+    "score": 32,
+    "last_standing": 34
+   },
+   "sudden": 0
+  },
+  "mirror_adept adept/veteran": {
+   "n": 20,
+   "min": 18.06,
+   "p10": 18.85,
+   "p25": 19.98,
+   "median": 21.08,
+   "p75": 24.19,
+   "p90": 31.46,
+   "max": 32.44,
+   "mean": 22.73,
+   "reasons": {
+    "core": 20
+   },
+   "sudden": 0
+  },
+  "mirror_adept veteran/adept": {
+   "n": 20,
+   "min": 17.02,
+   "p10": 19.41,
+   "p25": 20.73,
+   "median": 22.55,
+   "p75": 26.04,
+   "p90": 27.98,
+   "max": 28.55,
+   "mean": 23.11,
+   "reasons": {
+    "core": 20
+   },
+   "sudden": 0
+  },
+  "mirror_novice novice/veteran": {
+   "n": 20,
+   "min": 16.86,
+   "p10": 17.87,
+   "p25": 18.21,
+   "median": 20.39,
+   "p75": 22.83,
+   "p90": 26.1,
+   "max": 26.14,
+   "mean": 20.63,
+   "reasons": {
+    "core": 20
+   },
+   "sudden": 0
+  },
+  "mirror_novice veteran/novice": {
+   "n": 20,
+   "min": 16.35,
+   "p10": 17.71,
+   "p25": 19.35,
+   "median": 20.86,
+   "p75": 22.62,
+   "p90": 26.59,
+   "max": 27.99,
+   "mean": 20.94,
+   "reasons": {
+    "core": 20
+   },
+   "sudden": 0
+  },
+  "rift adept/adept": {
+   "n": 100,
+   "min": 17.95,
+   "p10": 19.37,
+   "p25": 20.46,
+   "median": 22.07,
+   "p75": 25.11,
+   "p90": 27.38,
+   "max": 31.48,
+   "mean": 22.82,
+   "reasons": {
+    "core": 100
+   },
+   "sudden": 0
+  },
+  "rift veteran/veteran": {
+   "n": 100,
+   "min": 16.35,
+   "p10": 19.33,
+   "p25": 20.95,
+   "median": 23.4,
+   "p75": 25.53,
+   "p90": 29.15,
+   "max": 33.86,
+   "mean": 23.71,
+   "reasons": {
+    "core": 100
+   },
+   "sudden": 0
+  }
+ },
+ "winrate_rift": {
+  "odrum": {
+   "win": 84,
+   "n": 128,
+   "rate": 65.6,
+   "ci95": [
+    57.0,
+    73.3
+   ]
+  },
+  "dunsom": {
+   "win": 66,
+   "n": 102,
+   "rate": 64.7,
+   "ci95": [
+    55.1,
+    73.3
+   ]
+  },
+  "ervet": {
+   "win": 80,
+   "n": 130,
+   "rate": 61.5,
+   "ci95": [
+    53.0,
+    69.5
+   ]
+  },
+  "marund": {
+   "win": 84,
+   "n": 140,
+   "rate": 60.0,
+   "ci95": [
+    51.7,
+    67.7
+   ]
+  },
+  "kemdo": {
+   "win": 77,
+   "n": 134,
+   "rate": 57.5,
+   "ci95": [
+    49.0,
+    65.5
+   ]
+  },
+  "ardit": {
+   "win": 69,
+   "n": 136,
+   "rate": 50.7,
+   "ci95": [
+    42.4,
+    59.0
+   ]
+  },
+  "hesmi": {
+   "win": 62,
+   "n": 124,
+   "rate": 50.0,
+   "ci95": [
+    41.3,
+    58.7
+   ]
+  },
+  "sukri": {
+   "win": 60,
+   "n": 124,
+   "rate": 48.4,
+   "ci95": [
+    39.8,
+    57.1
+   ]
+  },
+  "vashil": {
+   "win": 39,
+   "n": 82,
+   "rate": 47.6,
+   "ci95": [
+    37.1,
+    58.2
+   ]
+  },
+  "rishal": {
+   "win": 55,
+   "n": 116,
+   "rate": 47.4,
+   "ci95": [
+    38.6,
+    56.4
+   ]
+  },
+  "lisvel": {
+   "win": 60,
+   "n": 138,
+   "rate": 43.5,
+   "ci95": [
+    35.5,
+    51.8
+   ]
+  },
+  "ulkro": {
+   "win": 56,
+   "n": 134,
+   "rate": 41.8,
+   "ci95": [
+    33.8,
+    50.3
+   ]
+  },
+  "nurrow": {
+   "win": 54,
+   "n": 130,
+   "rate": 41.5,
+   "ci95": [
+    33.4,
+    50.1
+   ]
+  },
+  "ilsheta": {
+   "win": 56,
+   "n": 136,
+   "rate": 41.2,
+   "ci95": [
+    33.3,
+    49.6
+   ]
+  },
+  "tunlan": {
+   "win": 40,
+   "n": 100,
+   "rate": 40.0,
+   "ci95": [
+    30.9,
+    49.8
+   ]
+  },
+  "burdam": {
+   "win": 58,
+   "n": 146,
+   "rate": 39.7,
+   "ci95": [
+    32.1,
+    47.8
+   ]
+  }
+ },
+ "winrate_bridge": {
+  "ervet": {
+   "win": 91,
+   "n": 124,
+   "rate": 73.4,
+   "ci95": [
+    65.0,
+    80.4
+   ]
+  },
+  "dunsom": {
+   "win": 89,
+   "n": 124,
+   "rate": 71.8,
+   "ci95": [
+    63.3,
+    78.9
+   ]
+  },
+  "hesmi": {
+   "win": 82,
+   "n": 124,
+   "rate": 66.1,
+   "ci95": [
+    57.4,
+    73.9
+   ]
+  },
+  "rishal": {
+   "win": 77,
+   "n": 126,
+   "rate": 61.1,
+   "ci95": [
+    52.4,
+    69.2
+   ]
+  },
+  "tunlan": {
+   "win": 76,
+   "n": 126,
+   "rate": 60.3,
+   "ci95": [
+    51.6,
+    68.4
+   ]
+  },
+  "sukri": {
+   "win": 74,
+   "n": 126,
+   "rate": 58.7,
+   "ci95": [
+    50.0,
+    66.9
+   ]
+  },
+  "ulkro": {
+   "win": 65,
+   "n": 126,
+   "rate": 51.6,
+   "ci95": [
+    42.9,
+    60.1
+   ]
+  },
+  "vashil": {
+   "win": 65,
+   "n": 126,
+   "rate": 51.6,
+   "ci95": [
+    42.9,
+    60.1
+   ]
+  },
+  "ilsheta": {
+   "win": 62,
+   "n": 124,
+   "rate": 50.0,
+   "ci95": [
+    41.3,
+    58.7
+   ]
+  },
+  "burdam": {
+   "win": 61,
+   "n": 126,
+   "rate": 48.4,
+   "ci95": [
+    39.9,
+    57.1
+   ]
+  },
+  "odrum": {
+   "win": 61,
+   "n": 126,
+   "rate": 48.4,
+   "ci95": [
+    39.9,
+    57.1
+   ]
+  },
+  "ardit": {
+   "win": 55,
+   "n": 126,
+   "rate": 43.7,
+   "ci95": [
+    35.3,
+    52.4
+   ]
+  },
+  "kemdo": {
+   "win": 50,
+   "n": 124,
+   "rate": 40.3,
+   "ci95": [
+    32.1,
+    49.1
+   ]
+  },
+  "lisvel": {
+   "win": 36,
+   "n": 124,
+   "rate": 29.0,
+   "ci95": [
+    21.8,
+    37.6
+   ]
+  },
+  "marund": {
+   "win": 29,
+   "n": 124,
+   "rate": 23.4,
+   "ci95": [
+    16.8,
+    31.6
+   ]
+  },
+  "nurrow": {
+   "win": 27,
+   "n": 124,
+   "rate": 21.8,
+   "ci95": [
+    15.4,
+    29.8
+   ]
+  }
+ },
+ "winrate_rift_bridge_pooled": {
+  "dunsom": {
+   "win": 155,
+   "n": 226,
+   "rate": 68.6,
+   "ci95": [
+    62.3,
+    74.3
+   ]
+  },
+  "ervet": {
+   "win": 171,
+   "n": 254,
+   "rate": 67.3,
+   "ci95": [
+    61.3,
+    72.8
+   ]
+  },
+  "hesmi": {
+   "win": 144,
+   "n": 248,
+   "rate": 58.1,
+   "ci95": [
+    51.8,
+    64.0
+   ]
+  },
+  "odrum": {
+   "win": 145,
+   "n": 254,
+   "rate": 57.1,
+   "ci95": [
+    50.9,
+    63.0
+   ]
+  },
+  "rishal": {
+   "win": 132,
+   "n": 242,
+   "rate": 54.5,
+   "ci95": [
+    48.2,
+    60.7
+   ]
+  },
+  "sukri": {
+   "win": 134,
+   "n": 250,
+   "rate": 53.6,
+   "ci95": [
+    47.4,
+    59.7
+   ]
+  },
+  "tunlan": {
+   "win": 116,
+   "n": 226,
+   "rate": 51.3,
+   "ci95": [
+    44.8,
+    57.8
+   ]
+  },
+  "vashil": {
+   "win": 104,
+   "n": 208,
+   "rate": 50.0,
+   "ci95": [
+    43.3,
+    56.7
+   ]
+  },
+  "kemdo": {
+   "win": 127,
+   "n": 258,
+   "rate": 49.2,
+   "ci95": [
+    43.2,
+    55.3
+   ]
+  },
+  "ardit": {
+   "win": 124,
+   "n": 262,
+   "rate": 47.3,
+   "ci95": [
+    41.4,
+    53.4
+   ]
+  },
+  "ulkro": {
+   "win": 121,
+   "n": 260,
+   "rate": 46.5,
+   "ci95": [
+    40.6,
+    52.6
+   ]
+  },
+  "ilsheta": {
+   "win": 118,
+   "n": 260,
+   "rate": 45.4,
+   "ci95": [
+    39.4,
+    51.5
+   ]
+  },
+  "burdam": {
+   "win": 119,
+   "n": 272,
+   "rate": 43.8,
+   "ci95": [
+    38.0,
+    49.7
+   ]
+  },
+  "marund": {
+   "win": 113,
+   "n": 264,
+   "rate": 42.8,
+   "ci95": [
+    37.0,
+    48.8
+   ]
+  },
+  "lisvel": {
+   "win": 96,
+   "n": 262,
+   "rate": 36.6,
+   "ci95": [
+    31.0,
+    42.6
+   ]
+  },
+  "nurrow": {
+   "win": 81,
+   "n": 254,
+   "rate": 31.9,
+   "ci95": [
+    26.5,
+    37.9
+   ]
+  }
+ },
+ "per_fighter": {
+  "ardit bridge": {
+   "n": 126,
+   "kills": 3.72,
+   "deaths": 7.48,
+   "kd": 0.5,
+   "cs": 18.77,
+   "gold25": 6814,
+   "level": 16.13,
+   "dealt": 13354,
+   "dealt_per_min": 779.55,
+   "taken": 22430,
+   "heal": 6426,
+   "first_ult_min_median": 3.8,
+   "games_never_ult": 0
+  },
+  "ardit rift": {
+   "n": 136,
+   "kills": 1.78,
+   "deaths": 2.36,
+   "kd": 0.75,
+   "cs": 49.93,
+   "gold25": 7398,
+   "level": 13.12,
+   "dealt": 7298,
+   "dealt_per_min": 309.45,
+   "taken": 8878,
+   "heal": 2812,
+   "first_ult_min_median": 6.4,
+   "games_never_ult": 0
+  },
+  "burdam bridge": {
+   "n": 126,
+   "kills": 6.35,
+   "deaths": 9.81,
+   "kd": 0.65,
+   "cs": 19.89,
+   "gold25": 7331,
+   "level": 15.33,
+   "dealt": 15818,
+   "dealt_per_min": 926.13,
+   "taken": 24277,
+   "heal": 7220,
+   "first_ult_min_median": 3.8,
+   "games_never_ult": 0
+  },
+  "burdam rift": {
+   "n": 146,
+   "kills": 2.1,
+   "deaths": 3.64,
+   "kd": 0.58,
+   "cs": 80.85,
+   "gold25": 7404,
+   "level": 13.54,
+   "dealt": 11576,
+   "dealt_per_min": 492.03,
+   "taken": 14611,
+   "heal": 3972,
+   "first_ult_min_median": 5.1,
+   "games_never_ult": 0
+  },
+  "dunsom bridge": {
+   "n": 124,
+   "kills": 8.69,
+   "deaths": 5.34,
+   "kd": 1.63,
+   "cs": 45.36,
+   "gold25": 8705,
+   "level": 17.05,
+   "dealt": 27670,
+   "dealt_per_min": 1601.29,
+   "taken": 15520,
+   "heal": 6886,
+   "first_ult_min_median": 4.6,
+   "games_never_ult": 0
+  },
+  "dunsom rift": {
+   "n": 102,
+   "kills": 4.49,
+   "deaths": 1.95,
+   "kd": 2.3,
+   "cs": 122.91,
+   "gold25": 9024,
+   "level": 14.75,
+   "dealt": 19264,
+   "dealt_per_min": 806.09,
+   "taken": 10339,
+   "heal": 1678,
+   "first_ult_min_median": 5.6,
+   "games_never_ult": 0
+  },
+  "ervet bridge": {
+   "n": 124,
+   "kills": 8.14,
+   "deaths": 6.52,
+   "kd": 1.25,
+   "cs": 43.9,
+   "gold25": 8362,
+   "level": 16.69,
+   "dealt": 22189,
+   "dealt_per_min": 1313.6,
+   "taken": 23295,
+   "heal": 7018,
+   "first_ult_min_median": 4.2,
+   "games_never_ult": 0
+  },
+  "ervet rift": {
+   "n": 130,
+   "kills": 3.9,
+   "deaths": 2.38,
+   "kd": 1.64,
+   "cs": 110.3,
+   "gold25": 8670,
+   "level": 14.66,
+   "dealt": 17710,
+   "dealt_per_min": 742.78,
+   "taken": 12942,
+   "heal": 1826,
+   "first_ult_min_median": 4.8,
+   "games_never_ult": 0
+  },
+  "hesmi bridge": {
+   "n": 124,
+   "kills": 5.18,
+   "deaths": 6.19,
+   "kd": 0.84,
+   "cs": 29.58,
+   "gold25": 7440,
+   "level": 16.66,
+   "dealt": 12187,
+   "dealt_per_min": 737.16,
+   "taken": 21463,
+   "heal": 5257,
+   "first_ult_min_median": 3.4,
+   "games_never_ult": 0
+  },
+  "hesmi rift": {
+   "n": 124,
+   "kills": 1.69,
+   "deaths": 2.15,
+   "kd": 0.79,
+   "cs": 79.77,
+   "gold25": 7334,
+   "level": 14.04,
+   "dealt": 7317,
+   "dealt_per_min": 314.95,
+   "taken": 13661,
+   "heal": 1485,
+   "first_ult_min_median": 4.5,
+   "games_never_ult": 0
+  },
+  "ilsheta bridge": {
+   "n": 124,
+   "kills": 3.55,
+   "deaths": 6.77,
+   "kd": 0.52,
+   "cs": 9.6,
+   "gold25": 6465,
+   "level": 15.95,
+   "dealt": 10020,
+   "dealt_per_min": 594.12,
+   "taken": 18858,
+   "heal": 17651,
+   "first_ult_min_median": 4.4,
+   "games_never_ult": 0
+  },
+  "ilsheta rift": {
+   "n": 136,
+   "kills": 1.45,
+   "deaths": 2.95,
+   "kd": 0.49,
+   "cs": 26.02,
+   "gold25": 6446,
+   "level": 11.21,
+   "dealt": 6319,
+   "dealt_per_min": 271.95,
+   "taken": 10774,
+   "heal": 10522,
+   "first_ult_min_median": 7.9,
+   "games_never_ult": 0
+  },
+  "kemdo bridge": {
+   "n": 124,
+   "kills": 6.19,
+   "deaths": 8.23,
+   "kd": 0.75,
+   "cs": 20.88,
+   "gold25": 6990,
+   "level": 15.23,
+   "dealt": 16643,
+   "dealt_per_min": 1029.39,
+   "taken": 20974,
+   "heal": 6805,
+   "first_ult_min_median": 3.6,
+   "games_never_ult": 0
+  },
+  "kemdo rift": {
+   "n": 134,
+   "kills": 4.54,
+   "deaths": 2.45,
+   "kd": 1.86,
+   "cs": 57.01,
+   "gold25": 8363,
+   "level": 13.84,
+   "dealt": 11570,
+   "dealt_per_min": 478.38,
+   "taken": 10002,
+   "heal": 4286,
+   "first_ult_min_median": 5.0,
+   "games_never_ult": 0
+  },
+  "lisvel bridge": {
+   "n": 124,
+   "kills": 9.85,
+   "deaths": 6.4,
+   "kd": 1.54,
+   "cs": 35.82,
+   "gold25": 8284,
+   "level": 16.15,
+   "dealt": 23582,
+   "dealt_per_min": 1459.09,
+   "taken": 13812,
+   "heal": 4733,
+   "first_ult_min_median": 3.6,
+   "games_never_ult": 0
+  },
+  "lisvel rift": {
+   "n": 138,
+   "kills": 4.08,
+   "deaths": 4.76,
+   "kd": 0.86,
+   "cs": 77.82,
+   "gold25": 8068,
+   "level": 11.47,
+   "dealt": 15020,
+   "dealt_per_min": 639.0,
+   "taken": 11030,
+   "heal": 1971,
+   "first_ult_min_median": 7.8,
+   "games_never_ult": 0
+  },
+  "marund bridge": {
+   "n": 124,
+   "kills": 3.59,
+   "deaths": 6.06,
+   "kd": 0.59,
+   "cs": 19.13,
+   "gold25": 6204,
+   "level": 15.44,
+   "dealt": 10843,
+   "dealt_per_min": 698.0,
+   "taken": 22073,
+   "heal": 16397,
+   "first_ult_min_median": 3.9,
+   "games_never_ult": 0
+  },
+  "marund rift": {
+   "n": 140,
+   "kills": 1.67,
+   "deaths": 3.63,
+   "kd": 0.46,
+   "cs": 37.96,
+   "gold25": 6748,
+   "level": 11.46,
+   "dealt": 7746,
+   "dealt_per_min": 333.54,
+   "taken": 16474,
+   "heal": 11073,
+   "first_ult_min_median": 7.3,
+   "games_never_ult": 0
+  },
+  "nurrow bridge": {
+   "n": 124,
+   "kills": 4.3,
+   "deaths": 8.36,
+   "kd": 0.51,
+   "cs": 6.25,
+   "gold25": 5888,
+   "level": 14.21,
+   "dealt": 11938,
+   "dealt_per_min": 766.64,
+   "taken": 19033,
+   "heal": 7490,
+   "first_ult_min_median": 3.8,
+   "games_never_ult": 0
+  },
+  "nurrow rift": {
+   "n": 130,
+   "kills": 2.87,
+   "deaths": 3.4,
+   "kd": 0.84,
+   "cs": 47.44,
+   "gold25": 7586,
+   "level": 12.99,
+   "dealt": 9856,
+   "dealt_per_min": 415.22,
+   "taken": 8213,
+   "heal": 3140,
+   "first_ult_min_median": 5.1,
+   "games_never_ult": 0
+  },
+  "odrum bridge": {
+   "n": 126,
+   "kills": 8.05,
+   "deaths": 5.36,
+   "kd": 1.5,
+   "cs": 45.02,
+   "gold25": 8156,
+   "level": 16.46,
+   "dealt": 18553,
+   "dealt_per_min": 1168.31,
+   "taken": 15850,
+   "heal": 6159,
+   "first_ult_min_median": 3.5,
+   "games_never_ult": 0
+  },
+  "odrum rift": {
+   "n": 128,
+   "kills": 4.08,
+   "deaths": 4.48,
+   "kd": 0.91,
+   "cs": 69.83,
+   "gold25": 8090,
+   "level": 11.36,
+   "dealt": 11503,
+   "dealt_per_min": 487.14,
+   "taken": 12896,
+   "heal": 2197,
+   "first_ult_min_median": 8.0,
+   "games_never_ult": 0
+  },
+  "rishal bridge": {
+   "n": 126,
+   "kills": 8.41,
+   "deaths": 7.67,
+   "kd": 1.1,
+   "cs": 23.13,
+   "gold25": 7722,
+   "level": 15.48,
+   "dealt": 23676,
+   "dealt_per_min": 1485.36,
+   "taken": 18857,
+   "heal": 7795,
+   "first_ult_min_median": 3.4,
+   "games_never_ult": 0
+  },
+  "rishal rift": {
+   "n": 116,
+   "kills": 3.84,
+   "deaths": 2.93,
+   "kd": 1.31,
+   "cs": 99.8,
+   "gold25": 8429,
+   "level": 13.54,
+   "dealt": 13911,
+   "dealt_per_min": 583.97,
+   "taken": 16596,
+   "heal": 3755,
+   "first_ult_min_median": 5.1,
+   "games_never_ult": 0
+  },
+  "sukri bridge": {
+   "n": 126,
+   "kills": 4.1,
+   "deaths": 5.86,
+   "kd": 0.7,
+   "cs": 16.97,
+   "gold25": 6796,
+   "level": 16.66,
+   "dealt": 9933,
+   "dealt_per_min": 601.2,
+   "taken": 20624,
+   "heal": 18369,
+   "first_ult_min_median": 3.9,
+   "games_never_ult": 0
+  },
+  "sukri rift": {
+   "n": 124,
+   "kills": 1.51,
+   "deaths": 2.92,
+   "kd": 0.52,
+   "cs": 29.15,
+   "gold25": 6590,
+   "level": 11.4,
+   "dealt": 6747,
+   "dealt_per_min": 287.56,
+   "taken": 13026,
+   "heal": 8424,
+   "first_ult_min_median": 7.3,
+   "games_never_ult": 0
+  },
+  "tunlan bridge": {
+   "n": 126,
+   "kills": 8.38,
+   "deaths": 6.17,
+   "kd": 1.36,
+   "cs": 26.33,
+   "gold25": 8091,
+   "level": 16.63,
+   "dealt": 29289,
+   "dealt_per_min": 1764.72,
+   "taken": 14888,
+   "heal": 6047,
+   "first_ult_min_median": 3.3,
+   "games_never_ult": 0
+  },
+  "tunlan rift": {
+   "n": 100,
+   "kills": 3.43,
+   "deaths": 2.75,
+   "kd": 1.25,
+   "cs": 122.62,
+   "gold25": 8720,
+   "level": 14.16,
+   "dealt": 17952,
+   "dealt_per_min": 753.98,
+   "taken": 10086,
+   "heal": 2065,
+   "first_ult_min_median": 4.5,
+   "games_never_ult": 0
+  },
+  "ulkro bridge": {
+   "n": 126,
+   "kills": 11.51,
+   "deaths": 4.06,
+   "kd": 2.83,
+   "cs": 28.87,
+   "gold25": 9025,
+   "level": 17.09,
+   "dealt": 29400,
+   "dealt_per_min": 1753.29,
+   "taken": 14180,
+   "heal": 6856,
+   "first_ult_min_median": 3.1,
+   "games_never_ult": 0
+  },
+  "ulkro rift": {
+   "n": 134,
+   "kills": 4.6,
+   "deaths": 3.8,
+   "kd": 1.21,
+   "cs": 76.96,
+   "gold25": 8241,
+   "level": 11.46,
+   "dealt": 16271,
+   "dealt_per_min": 696.45,
+   "taken": 12036,
+   "heal": 2327,
+   "first_ult_min_median": 8.5,
+   "games_never_ult": 0
+  },
+  "vashil bridge": {
+   "n": 126,
+   "kills": 6.46,
+   "deaths": 6.5,
+   "kd": 0.99,
+   "cs": 45.44,
+   "gold25": 8079,
+   "level": 16.75,
+   "dealt": 25686,
+   "dealt_per_min": 1498.76,
+   "taken": 14963,
+   "heal": 5985,
+   "first_ult_min_median": 4.0,
+   "games_never_ult": 0
+  },
+  "vashil rift": {
+   "n": 82,
+   "kills": 3.46,
+   "deaths": 2.94,
+   "kd": 1.18,
+   "cs": 114.29,
+   "gold25": 8478,
+   "level": 14.51,
+   "dealt": 18406,
+   "dealt_per_min": 768.57,
+   "taken": 10087,
+   "heal": 1729,
+   "first_ult_min_median": 5.2,
+   "games_never_ult": 0
+  }
+ },
+ "ability_damage_usage": {
+  "tunlan": {
+   "player_games": 226,
+   "damage_share_pct": {
+    "passive": 0.0,
+    "a1": 34.5,
+    "a2": 26.4,
+    "a3": 0.0,
+    "ult": 11.5,
+    "auto": 15.9
+   },
+   "games_with_any_damage": {
+    "passive": 0,
+    "a1": 226,
+    "a2": 226,
+    "a3": 0,
+    "ult": 225
+   },
+   "games_without_damage": {
+    "passive": 226,
+    "a1": 0,
+    "a2": 0,
+    "a3": 226,
+    "ult": 1
+   }
+  },
+  "marund": {
+   "player_games": 264,
+   "damage_share_pct": {
+    "passive": 0.0,
+    "a1": 18.2,
+    "a2": 0.0,
+    "a3": 44.2,
+    "ult": 7.1,
+    "auto": 30.1
+   },
+   "games_with_any_damage": {
+    "passive": 0,
+    "a1": 264,
+    "a2": 0,
+    "a3": 264,
+    "ult": 253
+   },
+   "games_without_damage": {
+    "passive": 264,
+    "a1": 0,
+    "a2": 264,
+    "a3": 0,
+    "ult": 11
+   }
+  },
+  "nurrow": {
+   "player_games": 254,
+   "damage_share_pct": {
+    "passive": 0.0,
+    "a1": 22.3,
+    "a2": 0.0,
+    "a3": 32.0,
+    "ult": 14.4,
+    "auto": 17.5
+   },
+   "games_with_any_damage": {
+    "passive": 0,
+    "a1": 254,
+    "a2": 0,
+    "a3": 254,
+    "ult": 254
+   },
+   "games_without_damage": {
+    "passive": 254,
+    "a1": 0,
+    "a2": 254,
+    "a3": 0,
+    "ult": 0
+   }
+  },
+  "rishal": {
+   "player_games": 242,
+   "damage_share_pct": {
+    "passive": 4.5,
+    "a1": 49.8,
+    "a2": 19.1,
+    "a3": 3.5,
+    "ult": 5.3,
+    "auto": 14.7
+   },
+   "games_with_any_damage": {
+    "passive": 242,
+    "a1": 242,
+    "a2": 242,
+    "a3": 240,
+    "ult": 242
+   },
+   "games_without_damage": {
+    "passive": 0,
+    "a1": 0,
+    "a2": 0,
+    "a3": 2,
+    "ult": 0
+   }
+  },
+  "dunsom": {
+   "player_games": 226,
+   "damage_share_pct": {
+    "passive": 0.0,
+    "a1": 39.0,
+    "a2": 23.4,
+    "a3": 0.0,
+    "ult": 9.8,
+    "auto": 18.3
+   },
+   "games_with_any_damage": {
+    "passive": 0,
+    "a1": 226,
+    "a2": 226,
+    "a3": 0,
+    "ult": 224
+   },
+   "games_without_damage": {
+    "passive": 226,
+    "a1": 0,
+    "a2": 0,
+    "a3": 226,
+    "ult": 2
+   }
+  },
+  "odrum": {
+   "player_games": 254,
+   "damage_share_pct": {
+    "passive": 0.0,
+    "a1": 8.1,
+    "a2": 7.3,
+    "a3": 3.8,
+    "ult": 5.9,
+    "auto": 59.7
+   },
+   "games_with_any_damage": {
+    "passive": 0,
+    "a1": 254,
+    "a2": 254,
+    "a3": 254,
+    "ult": 251
+   },
+   "games_without_damage": {
+    "passive": 254,
+    "a1": 0,
+    "a2": 0,
+    "a3": 0,
+    "ult": 3
+   }
+  },
+  "burdam": {
+   "player_games": 272,
+   "damage_share_pct": {
+    "passive": 0.0,
+    "a1": 31.6,
+    "a2": 3.3,
+    "a3": 23.7,
+    "ult": 6.6,
+    "auto": 31.8
+   },
+   "games_with_any_damage": {
+    "passive": 0,
+    "a1": 272,
+    "a2": 269,
+    "a3": 272,
+    "ult": 272
+   },
+   "games_without_damage": {
+    "passive": 272,
+    "a1": 0,
+    "a2": 3,
+    "a3": 0,
+    "ult": 0
+   }
+  },
+  "hesmi": {
+   "player_games": 248,
+   "damage_share_pct": {
+    "passive": 9.2,
+    "a1": 11.8,
+    "a2": 38.7,
+    "a3": 0.0,
+    "ult": 9.0,
+    "auto": 29.2
+   },
+   "games_with_any_damage": {
+    "passive": 248,
+    "a1": 248,
+    "a2": 248,
+    "a3": 0,
+    "ult": 247
+   },
+   "games_without_damage": {
+    "passive": 0,
+    "a1": 0,
+    "a2": 0,
+    "a3": 248,
+    "ult": 1
+   }
+  },
+  "ilsheta": {
+   "player_games": 260,
+   "damage_share_pct": {
+    "passive": 0.0,
+    "a1": 23.6,
+    "a2": 0.0,
+    "a3": 0.0,
+    "ult": 0.0,
+    "auto": 64.3
+   },
+   "games_with_any_damage": {
+    "passive": 0,
+    "a1": 260,
+    "a2": 0,
+    "a3": 0,
+    "ult": 0
+   },
+   "games_without_damage": {
+    "passive": 260,
+    "a1": 0,
+    "a2": 260,
+    "a3": 260,
+    "ult": 260
+   }
+  },
+  "lisvel": {
+   "player_games": 262,
+   "damage_share_pct": {
+    "passive": 0.0,
+    "a1": 18.6,
+    "a2": 0.0,
+    "a3": 0.0,
+    "ult": 5.4,
+    "auto": 61.8
+   },
+   "games_with_any_damage": {
+    "passive": 0,
+    "a1": 262,
+    "a2": 0,
+    "a3": 0,
+    "ult": 262
+   },
+   "games_without_damage": {
+    "passive": 262,
+    "a1": 0,
+    "a2": 262,
+    "a3": 262,
+    "ult": 0
+   }
+  },
+  "kemdo": {
+   "player_games": 258,
+   "damage_share_pct": {
+    "passive": 0.0,
+    "a1": 40.7,
+    "a2": 0.0,
+    "a3": 12.1,
+    "ult": 16.7,
+    "auto": 25.8
+   },
+   "games_with_any_damage": {
+    "passive": 0,
+    "a1": 258,
+    "a2": 0,
+    "a3": 258,
+    "ult": 258
+   },
+   "games_without_damage": {
+    "passive": 258,
+    "a1": 0,
+    "a2": 258,
+    "a3": 0,
+    "ult": 0
+   }
+  },
+  "sukri": {
+   "player_games": 250,
+   "damage_share_pct": {
+    "passive": 0.0,
+    "a1": 17.7,
+    "a2": 0.0,
+    "a3": 9.9,
+    "ult": 0.0,
+    "auto": 62.2
+   },
+   "games_with_any_damage": {
+    "passive": 0,
+    "a1": 250,
+    "a2": 0,
+    "a3": 250,
+    "ult": 0
+   },
+   "games_without_damage": {
+    "passive": 250,
+    "a1": 0,
+    "a2": 250,
+    "a3": 0,
+    "ult": 250
+   }
+  },
+  "ardit": {
+   "player_games": 262,
+   "damage_share_pct": {
+    "passive": 0.0,
+    "a1": 22.6,
+    "a2": 32.2,
+    "a3": 18.6,
+    "ult": 0.0,
+    "auto": 24.5
+   },
+   "games_with_any_damage": {
+    "passive": 0,
+    "a1": 262,
+    "a2": 262,
+    "a3": 262,
+    "ult": 0
+   },
+   "games_without_damage": {
+    "passive": 262,
+    "a1": 0,
+    "a2": 0,
+    "a3": 0,
+    "ult": 262
+   }
+  },
+  "ulkro": {
+   "player_games": 260,
+   "damage_share_pct": {
+    "passive": 2.9,
+    "a1": 35.0,
+    "a2": 0.0,
+    "a3": 6.1,
+    "ult": 0.0,
+    "auto": 43.2
+   },
+   "games_with_any_damage": {
+    "passive": 260,
+    "a1": 260,
+    "a2": 0,
+    "a3": 260,
+    "ult": 0
+   },
+   "games_without_damage": {
+    "passive": 0,
+    "a1": 0,
+    "a2": 260,
+    "a3": 0,
+    "ult": 260
+   }
+  },
+  "vashil": {
+   "player_games": 208,
+   "damage_share_pct": {
+    "passive": 0.0,
+    "a1": 31.5,
+    "a2": 19.5,
+    "a3": 4.8,
+    "ult": 16.0,
+    "auto": 17.7
+   },
+   "games_with_any_damage": {
+    "passive": 0,
+    "a1": 208,
+    "a2": 208,
+    "a3": 208,
+    "ult": 208
+   },
+   "games_without_damage": {
+    "passive": 208,
+    "a1": 0,
+    "a2": 0,
+    "a3": 0,
+    "ult": 0
+   }
+  },
+  "ervet": {
+   "player_games": 254,
+   "damage_share_pct": {
+    "passive": 7.1,
+    "a1": 26.9,
+    "a2": 0.0,
+    "a3": 15.4,
+    "ult": 12.1,
+    "auto": 13.9
+   },
+   "games_with_any_damage": {
+    "passive": 254,
+    "a1": 254,
+    "a2": 0,
+    "a3": 254,
+    "ult": 253
+   },
+   "games_without_damage": {
+    "passive": 0,
+    "a1": 0,
+    "a2": 254,
+    "a3": 0,
+    "ult": 1
+   }
+  }
+ },
+ "objectives": {
+  "bridge lantern": {
+   "takes": 273,
+   "per_game": 1.36,
+   "median_min": 13.76,
+   "p10": 10.27,
+   "p90": 20.03
+  },
+  "rift glasshorn": {
+   "takes": 1034,
+   "per_game": 5.17,
+   "median_min": 9.99,
+   "p10": 2.22,
+   "p90": 17.99
+  },
+  "rift lantern": {
+   "takes": 740,
+   "per_game": 3.7,
+   "median_min": 20.66,
+   "p10": 17.23,
+   "p90": 26.37
+  },
+  "rift longshade": {
+   "takes": 64,
+   "per_game": 0.32,
+   "median_min": 20.35,
+   "p10": 17.86,
+   "p90": 25.19
+  },
+  "rift resinback": {
+   "takes": 1099,
+   "per_game": 5.5,
+   "median_min": 8.25,
+   "p10": 1.72,
+   "p90": 16.49
+  },
+  "rift sunsplinter": {
+   "takes": 527,
+   "per_game": 2.63,
+   "median_min": 14.5,
+   "p10": 6.95,
+   "p90": 21.38
+  }
+ },
+ "structures_fallen": {
+  "bridge hourbell": {
+   "count": 200,
+   "per_game": 1.0,
+   "median_min": 15.97,
+   "p10": 11.97,
+   "p90": 21.89
+  },
+  "bridge lantern": {
+   "count": 273,
+   "per_game": 1.36,
+   "median_min": 13.76,
+   "p10": 10.27,
+   "p90": 20.03
+  },
+  "bridge needle_bell": {
+   "count": 220,
+   "per_game": 1.1,
+   "median_min": 14.27,
+   "p10": 11.2,
+   "p90": 20.01
+  },
+  "bridge needle_inner": {
+   "count": 256,
+   "per_game": 1.28,
+   "median_min": 12.35,
+   "p10": 9.01,
+   "p90": 17.63
+  },
+  "bridge needle_outer": {
+   "count": 334,
+   "per_game": 1.67,
+   "median_min": 9.39,
+   "p10": 5.29,
+   "p90": 13.52
+  },
+  "rift hourbell": {
+   "count": 200,
+   "per_game": 1.0,
+   "median_min": 22.63,
+   "p10": 19.34,
+   "p90": 27.86
+  },
+  "rift lantern": {
+   "count": 740,
+   "per_game": 3.7,
+   "median_min": 20.66,
+   "p10": 17.23,
+   "p90": 26.37
+  },
+  "rift needle_bell": {
+   "count": 411,
+   "per_game": 2.06,
+   "median_min": 21.96,
+   "p10": 18.77,
+   "p90": 27.05
+  },
+  "rift needle_inner": {
+   "count": 779,
+   "per_game": 3.9,
+   "median_min": 19.1,
+   "p10": 16.03,
+   "p90": 23.67
+  },
+  "rift needle_outer": {
+   "count": 1061,
+   "per_game": 5.3,
+   "median_min": 14.84,
+   "p10": 9.47,
+   "p90": 19.22
+  }
+ },
+ "core_fall_min": {
+  "bridge": {
+   "median": 15.97,
+   "p10": 11.97,
+   "p90": 21.89
+  },
+  "rift": {
+   "median": 22.63,
+   "p10": 19.34,
+   "p90": 27.86
+  }
+ },
+ "kill_pace": {
+  "rift": {
+   "first_blood_median_min": 2.47,
+   "kills_per_game": 30.5,
+   "kills_per_min": 1.29,
+   "deaths_by_killer": {
+    "fighter": 5009,
+    "minion": 893,
+    "structure": 241,
+    "monster": 122
+   }
+  },
+  "bridge": {
+   "first_blood_median_min": 0.56,
+   "kills_per_game": 66.6,
+   "kills_per_min": 4.12,
+   "deaths_by_killer": {
+    "fighter": 11901,
+    "minion": 1066,
+    "structure": 382
+   }
+  }
+ },
+ "snowball_comeback": {
+  "rift": {
+   "leader_at_5min_wins_pct": 54.5,
+   "lead>=1500_at_5min_wins_pct": {
+    "n": 4,
+    "pct": 25.0
+   },
+   "lead>=3000_at_5min_wins_pct": {
+    "n": 0,
+    "pct": null
+   },
+   "comeback_trailing3000_at_5min": {
+    "trailing_winners": 0,
+    "of_games": 200
+   },
+   "leader_at_10min_wins_pct": 57.0,
+   "lead>=1500_at_10min_wins_pct": {
+    "n": 56,
+    "pct": 64.3
+   },
+   "lead>=3000_at_10min_wins_pct": {
+    "n": 4,
+    "pct": 100.0
+   },
+   "comeback_trailing3000_at_10min": {
+    "trailing_winners": 0,
+    "of_games": 200
+   },
+   "leader_at_15min_wins_pct": 61.5,
+   "lead>=1500_at_15min_wins_pct": {
+    "n": 104,
+    "pct": 75.0
+   },
+   "lead>=3000_at_15min_wins_pct": {
+    "n": 32,
+    "pct": 81.2
+   },
+   "comeback_trailing3000_at_15min": {
+    "trailing_winners": 6,
+    "of_games": 200
+   },
+   "winner_trailed_at_10min_pct": 43.0,
+   "abs_gold_diff_mean_at_10_15_20": {
+    "10": 1092,
+    "15": 1759,
+    "20": 2627
+   }
+  },
+  "bridge": {
+   "leader_at_5min_wins_pct": 71.0,
+   "lead>=1500_at_5min_wins_pct": {
+    "n": 109,
+    "pct": 84.4
+   },
+   "lead>=3000_at_5min_wins_pct": {
+    "n": 41,
+    "pct": 87.8
+   },
+   "comeback_trailing3000_at_5min": {
+    "trailing_winners": 5,
+    "of_games": 200
+   },
+   "leader_at_10min_wins_pct": 74.4,
+   "lead>=1500_at_10min_wins_pct": {
+    "n": 151,
+    "pct": 82.1
+   },
+   "lead>=3000_at_10min_wins_pct": {
+    "n": 113,
+    "pct": 87.6
+   },
+   "comeback_trailing3000_at_10min": {
+    "trailing_winners": 14,
+    "of_games": 199
+   },
+   "leader_at_15min_wins_pct": 73.3,
+   "lead>=1500_at_15min_wins_pct": {
+    "n": 98,
+    "pct": 70.4
+   },
+   "lead>=3000_at_15min_wins_pct": {
+    "n": 64,
+    "pct": 79.7
+   },
+   "comeback_trailing3000_at_15min": {
+    "trailing_winners": 13,
+    "of_games": 135
+   },
+   "winner_trailed_at_10min_pct": 25.5,
+   "abs_gold_diff_mean_at_10_15_20": {
+    "10": 3648,
+    "15": 3667,
+    "20": 3284
+   }
+  }
+ },
+ "gold_diff_curve_winner_perspective": {
+  "rift": [
+   {
+    "minute": 0,
+    "n": 200,
+    "winner_lead_mean": 0,
+    "winner_lead_median": 0,
+    "winner_ahead_pct": 0.0
+   },
+   {
+    "minute": 1,
+    "n": 200,
+    "winner_lead_mean": 3,
+    "winner_lead_median": 0,
+    "winner_ahead_pct": 39.0
+   },
+   {
+    "minute": 2,
+    "n": 200,
+    "winner_lead_mean": 31,
+    "winner_lead_median": 24,
+    "winner_ahead_pct": 55.0
+   },
+   {
+    "minute": 3,
+    "n": 200,
+    "winner_lead_mean": 25,
+    "winner_lead_median": -12,
+    "winner_ahead_pct": 49.5
+   },
+   {
+    "minute": 4,
+    "n": 200,
+    "winner_lead_mean": 14,
+    "winner_lead_median": 66,
+    "winner_ahead_pct": 52.5
+   },
+   {
+    "minute": 5,
+    "n": 200,
+    "winner_lead_mean": 79,
+    "winner_lead_median": 86,
+    "winner_ahead_pct": 54.5
+   },
+   {
+    "minute": 6,
+    "n": 200,
+    "winner_lead_mean": 138,
+    "winner_lead_median": 196,
+    "winner_ahead_pct": 62.5
+   },
+   {
+    "minute": 7,
+    "n": 200,
+    "winner_lead_mean": 132,
+    "winner_lead_median": 170,
+    "winner_ahead_pct": 56.5
+   },
+   {
+    "minute": 8,
+    "n": 200,
+    "winner_lead_mean": 150,
+    "winner_lead_median": 138,
+    "winner_ahead_pct": 55.5
+   },
+   {
+    "minute": 9,
+    "n": 200,
+    "winner_lead_mean": 199,
+    "winner_lead_median": 225,
+    "winner_ahead_pct": 57.0
+   },
+   {
+    "minute": 10,
+    "n": 200,
+    "winner_lead_mean": 307,
+    "winner_lead_median": 300,
+    "winner_ahead_pct": 57.0
+   },
+   {
+    "minute": 11,
+    "n": 200,
+    "winner_lead_mean": 353,
+    "winner_lead_median": 344,
+    "winner_ahead_pct": 56.5
+   },
+   {
+    "minute": 12,
+    "n": 200,
+    "winner_lead_mean": 435,
+    "winner_lead_median": 484,
+    "winner_ahead_pct": 60.5
+   },
+   {
+    "minute": 13,
+    "n": 200,
+    "winner_lead_mean": 531,
+    "winner_lead_median": 543,
+    "winner_ahead_pct": 63.0
+   },
+   {
+    "minute": 14,
+    "n": 200,
+    "winner_lead_mean": 672,
+    "winner_lead_median": 725,
+    "winner_ahead_pct": 63.0
+   },
+   {
+    "minute": 15,
+    "n": 200,
+    "winner_lead_mean": 763,
+    "winner_lead_median": 982,
+    "winner_ahead_pct": 61.5
+   },
+   {
+    "minute": 16,
+    "n": 200,
+    "winner_lead_mean": 934,
+    "winner_lead_median": 1066,
+    "winner_ahead_pct": 65.5
+   },
+   {
+    "minute": 17,
+    "n": 200,
+    "winner_lead_mean": 1159,
+    "winner_lead_median": 1262,
+    "winner_ahead_pct": 68.5
+   },
+   {
+    "minute": 18,
+    "n": 198,
+    "winner_lead_mean": 1396,
+    "winner_lead_median": 1422,
+    "winner_ahead_pct": 70.7
+   },
+   {
+    "minute": 19,
+    "n": 194,
+    "winner_lead_mean": 1608,
+    "winner_lead_median": 1469,
+    "winner_ahead_pct": 71.6
+   },
+   {
+    "minute": 20,
+    "n": 183,
+    "winner_lead_mean": 1820,
+    "winner_lead_median": 1746,
+    "winner_ahead_pct": 72.7
+   },
+   {
+    "minute": 21,
+    "n": 165,
+    "winner_lead_mean": 2106,
+    "winner_lead_median": 2067,
+    "winner_ahead_pct": 77.0
+   },
+   {
+    "minute": 22,
+    "n": 140,
+    "winner_lead_mean": 1916,
+    "winner_lead_median": 1614,
+    "winner_ahead_pct": 77.9
+   },
+   {
+    "minute": 23,
+    "n": 117,
+    "winner_lead_mean": 1637,
+    "winner_lead_median": 1426,
+    "winner_ahead_pct": 73.5
+   },
+   {
+    "minute": 24,
+    "n": 90,
+    "winner_lead_mean": 1678,
+    "winner_lead_median": 1852,
+    "winner_ahead_pct": 74.4
+   },
+   {
+    "minute": 25,
+    "n": 72,
+    "winner_lead_mean": 1427,
+    "winner_lead_median": 1768,
+    "winner_ahead_pct": 69.4
+   },
+   {
+    "minute": 26,
+    "n": 60,
+    "winner_lead_mean": 1327,
+    "winner_lead_median": 1664,
+    "winner_ahead_pct": 66.7
+   },
+   {
+    "minute": 27,
+    "n": 38,
+    "winner_lead_mean": 1916,
+    "winner_lead_median": 1546,
+    "winner_ahead_pct": 71.1
+   },
+   {
+    "minute": 28,
+    "n": 26,
+    "winner_lead_mean": 2889,
+    "winner_lead_median": 2528,
+    "winner_ahead_pct": 69.2
+   },
+   {
+    "minute": 29,
+    "n": 18,
+    "winner_lead_mean": 3389,
+    "winner_lead_median": 3349,
+    "winner_ahead_pct": 72.2
+   },
+   {
+    "minute": 30,
+    "n": 17,
+    "winner_lead_mean": 3983,
+    "winner_lead_median": 4093,
+    "winner_ahead_pct": 76.5
+   },
+   {
+    "minute": 31,
+    "n": 14,
+    "winner_lead_mean": 5064,
+    "winner_lead_median": 5425,
+    "winner_ahead_pct": 85.7
+   },
+   {
+    "minute": 32,
+    "n": 8,
+    "winner_lead_mean": 3525,
+    "winner_lead_median": 4345,
+    "winner_ahead_pct": 75.0
+   },
+   {
+    "minute": 33,
+    "n": 3,
+    "winner_lead_mean": 4207,
+    "winner_lead_median": 4484,
+    "winner_ahead_pct": 100.0
+   },
+   {
+    "minute": 34,
+    "n": 3,
+    "winner_lead_mean": 3998,
+    "winner_lead_median": 4443,
+    "winner_ahead_pct": 100.0
+   }
+  ],
+  "bridge": [
+   {
+    "minute": 0,
+    "n": 200,
+    "winner_lead_mean": 0,
+    "winner_lead_median": 0,
+    "winner_ahead_pct": 0.0
+   },
+   {
+    "minute": 1,
+    "n": 200,
+    "winner_lead_mean": 333,
+    "winner_lead_median": 403,
+    "winner_ahead_pct": 66.5
+   },
+   {
+    "minute": 2,
+    "n": 200,
+    "winner_lead_mean": 423,
+    "winner_lead_median": 449,
+    "winner_ahead_pct": 65.5
+   },
+   {
+    "minute": 3,
+    "n": 200,
+    "winner_lead_mean": 775,
+    "winner_lead_median": 800,
+    "winner_ahead_pct": 70.0
+   },
+   {
+    "minute": 4,
+    "n": 200,
+    "winner_lead_mean": 860,
+    "winner_lead_median": 883,
+    "winner_ahead_pct": 66.0
+   },
+   {
+    "minute": 5,
+    "n": 200,
+    "winner_lead_mean": 1216,
+    "winner_lead_median": 1315,
+    "winner_ahead_pct": 71.0
+   },
+   {
+    "minute": 6,
+    "n": 200,
+    "winner_lead_mean": 1480,
+    "winner_lead_median": 1392,
+    "winner_ahead_pct": 75.5
+   },
+   {
+    "minute": 7,
+    "n": 200,
+    "winner_lead_mean": 1778,
+    "winner_lead_median": 1688,
+    "winner_ahead_pct": 73.5
+   },
+   {
+    "minute": 8,
+    "n": 200,
+    "winner_lead_mean": 1945,
+    "winner_lead_median": 1940,
+    "winner_ahead_pct": 75.0
+   },
+   {
+    "minute": 9,
+    "n": 200,
+    "winner_lead_mean": 2296,
+    "winner_lead_median": 2340,
+    "winner_ahead_pct": 74.5
+   },
+   {
+    "minute": 10,
+    "n": 199,
+    "winner_lead_mean": 2543,
+    "winner_lead_median": 2810,
+    "winner_ahead_pct": 74.4
+   },
+   {
+    "minute": 11,
+    "n": 199,
+    "winner_lead_mean": 2694,
+    "winner_lead_median": 2714,
+    "winner_ahead_pct": 79.4
+   },
+   {
+    "minute": 12,
+    "n": 194,
+    "winner_lead_mean": 2805,
+    "winner_lead_median": 2883,
+    "winner_ahead_pct": 77.3
+   },
+   {
+    "minute": 13,
+    "n": 179,
+    "winner_lead_mean": 2744,
+    "winner_lead_median": 2688,
+    "winner_ahead_pct": 74.9
+   },
+   {
+    "minute": 14,
+    "n": 158,
+    "winner_lead_mean": 2635,
+    "winner_lead_median": 2491,
+    "winner_ahead_pct": 75.9
+   },
+   {
+    "minute": 15,
+    "n": 135,
+    "winner_lead_mean": 2159,
+    "winner_lead_median": 1583,
+    "winner_ahead_pct": 73.3
+   },
+   {
+    "minute": 16,
+    "n": 111,
+    "winner_lead_mean": 1418,
+    "winner_lead_median": 923,
+    "winner_ahead_pct": 63.1
+   },
+   {
+    "minute": 17,
+    "n": 96,
+    "winner_lead_mean": 1000,
+    "winner_lead_median": 1074,
+    "winner_ahead_pct": 61.5
+   },
+   {
+    "minute": 18,
+    "n": 79,
+    "winner_lead_mean": 448,
+    "winner_lead_median": 178,
+    "winner_ahead_pct": 57.0
+   },
+   {
+    "minute": 19,
+    "n": 66,
+    "winner_lead_mean": 209,
+    "winner_lead_median": 58,
+    "winner_ahead_pct": 50.0
+   },
+   {
+    "minute": 20,
+    "n": 51,
+    "winner_lead_mean": -92,
+    "winner_lead_median": -521,
+    "winner_ahead_pct": 45.1
+   },
+   {
+    "minute": 21,
+    "n": 42,
+    "winner_lead_mean": -382,
+    "winner_lead_median": -362,
+    "winner_ahead_pct": 40.5
+   },
+   {
+    "minute": 22,
+    "n": 27,
+    "winner_lead_mean": -987,
+    "winner_lead_median": -652,
+    "winner_ahead_pct": 40.7
+   },
+   {
+    "minute": 23,
+    "n": 19,
+    "winner_lead_mean": -641,
+    "winner_lead_median": 66,
+    "winner_ahead_pct": 52.6
+   },
+   {
+    "minute": 24,
+    "n": 11,
+    "winner_lead_mean": -1873,
+    "winner_lead_median": -2044,
+    "winner_ahead_pct": 45.5
+   },
+   {
+    "minute": 25,
+    "n": 5,
+    "winner_lead_mean": -4287,
+    "winner_lead_median": -2058,
+    "winner_ahead_pct": 40.0
+   },
+   {
+    "minute": 26,
+    "n": 3,
+    "winner_lead_mean": -3473,
+    "winner_lead_median": -1825,
+    "winner_ahead_pct": 33.3
+   },
+   {
+    "minute": 27,
+    "n": 1,
+    "winner_lead_mean": -10590,
+    "winner_lead_median": -10590,
+    "winner_ahead_pct": 0.0
+   },
+   {
+    "minute": 28,
+    "n": 1,
+    "winner_lead_mean": -9192,
+    "winner_lead_median": -9192,
+    "winner_ahead_pct": 0.0
+   },
+   {
+    "minute": 29,
+    "n": 1,
+    "winner_lead_mean": -7499,
+    "winner_lead_median": -7499,
+    "winner_ahead_pct": 0.0
+   }
+  ]
+ },
+ "cumulative_kills_per_game_every_2min": {
+  "rift": [
+   0,
+   0.94,
+   2.38,
+   4.28,
+   6.32,
+   8.28,
+   10.2,
+   12.51,
+   15.91,
+   19.22,
+   23.58,
+   28.44,
+   34.35,
+   40.63,
+   44.17,
+   51.29,
+   62
+  ],
+  "bridge": [
+   3.56,
+   14.64,
+   24.44,
+   33.82,
+   42.43,
+   49.74,
+   55.86,
+   61.79,
+   67.89,
+   74.15,
+   79.76,
+   87.05,
+   95.8,
+   93,
+   98
+  ]
+ },
+ "item_buys_total": {
+  "lampblack_lens": 1273,
+  "focal_lens": 879,
+  "lampblack_coat": 660,
+  "lampblack_edge": 655,
+  "glass_veil": 640,
+  "shadowpin": 630,
+  "deepglass_rod": 526,
+  "hourcleaver": 404,
+  "noonglass": 391,
+  "dialcutter": 388,
+  "kindly_lamp": 360,
+  "glintmail": 330,
+  "splitlight_bow": 311,
+  "quarry_pick": 285,
+  "inkglass_rod": 283,
+  "almslamp": 273,
+  "warning_bell": 257,
+  "bellrope": 209,
+  "ironstone_mantle": 171,
+  "sunstring": 158,
+  "dawnspur": 155,
+  "hourstring": 148,
+  "shelter_lamp": 108,
+  "resin_maul": 96,
+  "stillhour": 51,
+  "afterlight": 45,
+  "seatstone": 40,
+  "watchbell": 33,
+  "shadecut": 28,
+  "needlefall": 24,
+  "callstone": 13
+ },
+ "item_final_inventory": {
+  "road_sandals": {
+   "count": 2435,
+   "winrate_pct": 47.4
+  },
+  "lampblack_lens": {
+   "count": 1273,
+   "winrate_pct": 56.6
+  },
+  "focal_lens": {
+   "count": 879,
+   "winrate_pct": 53.5
+  },
+  "chalk_slippers": {
+   "count": 715,
+   "winrate_pct": 55.7
+  },
+  "lampblack_coat": {
+   "count": 660,
+   "winrate_pct": 55.8
+  },
+  "lampblack_edge": {
+   "count": 655,
+   "winrate_pct": 49.8
+  },
+  "glass_lens": {
+   "count": 653,
+   "winrate_pct": 52.4
+  },
+  "glass_veil": {
+   "count": 640,
+   "winrate_pct": 56.7
+  },
+  "shadowpin": {
+   "count": 630,
+   "winrate_pct": 45.4
+  },
+  "hand_bell": {
+   "count": 554,
+   "winrate_pct": 46.0
+  },
+  "deepglass_rod": {
+   "count": 526,
+   "winrate_pct": 50.2
+  },
+  "chalk_knife": {
+   "count": 511,
+   "winrate_pct": 41.9
+  },
+  "dust_runners": {
+   "count": 468,
+   "winrate_pct": 51.5
+  },
+  "burning_glass": {
+   "count": 467,
+   "winrate_pct": 54.8
+  },
+  "bellglass": {
+   "count": 466,
+   "winrate_pct": 46.1
+  },
+  "ochre_brick": {
+   "count": 420,
+   "winrate_pct": 46.2
+  },
+  "hourcleaver": {
+   "count": 404,
+   "winrate_pct": 54.7
+  },
+  "noonglass": {
+   "count": 391,
+   "winrate_pct": 54.5
+  },
+  "dialcutter": {
+   "count": 388,
+   "winrate_pct": 49.0
+  },
+  "felt_treads": {
+   "count": 380,
+   "winrate_pct": 54.2
+  },
+  "sap_flask": {
+   "count": 366,
+   "winrate_pct": 36.9
+  },
+  "kindly_lamp": {
+   "count": 360,
+   "winrate_pct": 46.4
+  },
+  "glintmail": {
+   "count": 330,
+   "winrate_pct": 53.6
+  },
+  "splitlight_bow": {
+   "count": 311,
+   "winrate_pct": 43.1
+  },
+  "quarry_pick": {
+   "count": 285,
+   "winrate_pct": 45.3
+  },
+  "inkglass_rod": {
+   "count": 283,
+   "winrate_pct": 52.3
+  },
+  "almslamp": {
+   "count": 273,
+   "winrate_pct": 46.5
+  },
+  "banded_club": {
+   "count": 260,
+   "winrate_pct": 45.8
+  },
+  "warning_bell": {
+   "count": 257,
+   "winrate_pct": 52.1
+  },
+  "glint_sling": {
+   "count": 247,
+   "winrate_pct": 49.0
+  },
+  "spare_lamp": {
+   "count": 233,
+   "winrate_pct": 36.9
+  },
+  "taut_cord": {
+   "count": 230,
+   "winrate_pct": 49.6
+  },
+  "linen_hood": {
+   "count": 217,
+   "winrate_pct": 58.5
+  },
+  "bellrope": {
+   "count": 209,
+   "winrate_pct": 44.0
+  },
+  "lamp_oil": {
+   "count": 202,
+   "winrate_pct": 47.0
+  },
+  "whetted_knife": {
+   "count": 176,
+   "winrate_pct": 39.8
+  },
+  "ironstone_mantle": {
+   "count": 171,
+   "winrate_pct": 58.5
+  },
+  "sunstring": {
+   "count": 158,
+   "winrate_pct": 46.8
+  },
+  "dawnspur": {
+   "count": 155,
+   "winrate_pct": 56.8
+  },
+  "hourstring": {
+   "count": 148,
+   "winrate_pct": 45.3
+  },
+  "felt_coat": {
+   "count": 126,
+   "winrate_pct": 53.2
+  },
+  "shelter_lamp": {
+   "count": 108,
+   "winrate_pct": 43.5
+  },
+  "resin_maul": {
+   "count": 96,
+   "winrate_pct": 59.4
+  },
+  "linen_wrap": {
+   "count": 81,
+   "winrate_pct": 46.9
+  },
+  "felt_vest": {
+   "count": 53,
+   "winrate_pct": 54.7
+  },
+  "stillhour": {
+   "count": 51,
+   "winrate_pct": 68.6
+  },
+  "afterlight": {
+   "count": 45,
+   "winrate_pct": 55.6
+  },
+  "seatstone": {
+   "count": 40,
+   "winrate_pct": 57.5
+  },
+  "watchbell": {
+   "count": 33,
+   "winrate_pct": 60.6
+  },
+  "shadecut": {
+   "count": 28,
+   "winrate_pct": 46.4
+  },
+  "needlefall": {
+   "count": 24,
+   "winrate_pct": 70.8
+  },
+  "callstone": {
+   "count": 13,
+   "winrate_pct": 46.2
+  }
+ },
+ "bot_mode_share_pct_rift": {
+  "lane": 41.1,
+  "farm": 11.3,
+  "return": 9.3,
+  "recall": 6.7,
+  "allin": 6.6,
+  "objective": 5.9,
+  "retreat": 4.7,
+  "trade": 4.1,
+  "push": 4.0,
+  "roam": 3.1,
+  "teamfight": 2.3,
+  "defend": 0.9
+ },
+ "bot_anomalies": {
+  "faults": 0,
+  "wick_missed_top": {
+   "A:here/lane": 161,
+   "shadehold/lane": 66,
+   "A:away/return": 54,
+   "L:near": 43,
+   "lampglass/lane": 42,
+   "A:here/allin": 42
+  },
+  "never_ult_player_games": 0,
+  "never_ult_by_fighter": {},
+  "zero_recall_player_games": 0,
+  "deaths_with_lowStay": 468,
+  "total_fighter_deaths": 6265,
+  "deaths_by_mode": {
+   "retreat": 6185,
+   "recall": 58,
+   "objective": 11,
+   "push": 7,
+   "defend": 2,
+   "teamfight": 1,
+   "lane": 1
+  },
+  "feeding_top_deaths_per_game_fighters": {
+   "lisvel": 4.76,
+   "odrum": 4.48,
+   "ulkro": 3.8,
+   "burdam": 3.64,
+   "marund": 3.63
+  }
+ },
+ "fray": {
+  "adept": {
+   "reasons": {
+    "last_standing": 38,
+    "time": 22,
+    "score": 40
+   },
+   "lullMax": 144.60000000000002,
+   "quiet": 5,
+   "openings": {
+    "mean": 27.162000000000006,
+    "max": 57.333333333333336
+   },
+   "endAir": {
+    "n": 22,
+    "mean": 62.604545454545445,
+    "max": 125.20000000000005
+   },
+   "fighters": [
+    {
+     "f": "nurrow",
+     "n": 62,
+     "place": 3.193548387096774,
+     "kills": 5.709677419354839
+    },
+    {
+     "f": "ulkro",
+     "n": 63,
+     "place": 3.2857142857142856,
+     "kills": 9.031746031746032
+    },
+    {
+     "f": "burdam",
+     "n": 63,
+     "place": 4.5396825396825395,
+     "kills": 4.571428571428571
+    },
+    {
+     "f": "marund",
+     "n": 62,
+     "place": 4.580645161290323,
+     "kills": 1.3870967741935485
+    },
+    {
+     "f": "hesmi",
+     "n": 62,
+     "place": 4.790322580645161,
+     "kills": 1.7096774193548387
+    },
+    {
+     "f": "lisvel",
+     "n": 62,
+     "place": 5.193548387096774,
+     "kills": 6.338709677419355
+    },
+    {
+     "f": "ardit",
+     "n": 63,
+     "place": 5.2063492063492065,
+     "kills": 1.5238095238095237
+    },
+    {
+     "f": "rishal",
+     "n": 63,
+     "place": 5.365079365079365,
+     "kills": 3.507936507936508
+    },
+    {
+     "f": "tunlan",
+     "n": 63,
+     "place": 5.587301587301587,
+     "kills": 4.031746031746032
+    },
+    {
+     "f": "ervet",
+     "n": 62,
+     "place": 5.806451612903226,
+     "kills": 2.8225806451612905
+    },
+    {
+     "f": "kemdo",
+     "n": 62,
+     "place": 5.903225806451613,
+     "kills": 2.6774193548387095
+    },
+    {
+     "f": "vashil",
+     "n": 63,
+     "place": 6.587301587301587,
+     "kills": 4.174603174603175
+    },
+    {
+     "f": "sukri",
+     "n": 63,
+     "place": 6.714285714285714,
+     "kills": 1.7619047619047619
+    },
+    {
+     "f": "ilsheta",
+     "n": 62,
+     "place": 6.838709677419355,
+     "kills": 2.1774193548387095
+    },
+    {
+     "f": "odrum",
+     "n": 63,
+     "place": 7.111111111111111,
+     "kills": 3.142857142857143
+    },
+    {
+     "f": "dunsom",
+     "n": 62,
+     "place": 7.290322580645161,
+     "kills": 3.6774193548387095
+    }
+   ]
+  },
+  "veteran": {
+   "reasons": {
+    "time": 34,
+    "score": 32,
+    "last_standing": 34
+   },
+   "lullMax": 124.69999999999993,
+   "quiet": 5,
+   "openings": {
+    "mean": 29.267333333333337,
+    "max": 81.23333333333333
+   },
+   "endAir": {
+    "n": 34,
+    "mean": 53.70000000000001,
+    "max": 163.83333333333331
+   },
+   "fighters": [
+    {
+     "f": "ulkro",
+     "n": 63,
+     "place": 3.253968253968254,
+     "kills": 8.507936507936508
+    },
+    {
+     "f": "nurrow",
+     "n": 62,
+     "place": 3.774193548387097,
+     "kills": 4.967741935483871
+    },
+    {
+     "f": "lisvel",
+     "n": 62,
+     "place": 4.225806451612903,
+     "kills": 6.82258064516129
+    },
+    {
+     "f": "burdam",
+     "n": 63,
+     "place": 4.301587301587301,
+     "kills": 4.666666666666667
+    },
+    {
+     "f": "marund",
+     "n": 62,
+     "place": 4.67741935483871,
+     "kills": 1.4838709677419355
+    },
+    {
+     "f": "hesmi",
+     "n": 62,
+     "place": 4.903225806451613,
+     "kills": 1.6451612903225807
+    },
+    {
+     "f": "rishal",
+     "n": 63,
+     "place": 4.968253968253968,
+     "kills": 3.5714285714285716
+    },
+    {
+     "f": "kemdo",
+     "n": 62,
+     "place": 5.967741935483871,
+     "kills": 2.596774193548387
+    },
+    {
+     "f": "ardit",
+     "n": 63,
+     "place": 6.031746031746032,
+     "kills": 1.3650793650793651
+    },
+    {
+     "f": "ervet",
+     "n": 62,
+     "place": 6.080645161290323,
+     "kills": 2.7903225806451615
+    },
+    {
+     "f": "tunlan",
+     "n": 63,
+     "place": 6.111111111111111,
+     "kills": 3.8253968253968256
+    },
+    {
+     "f": "odrum",
+     "n": 63,
+     "place": 6.253968253968254,
+     "kills": 4.190476190476191
+    },
+    {
+     "f": "vashil",
+     "n": 63,
+     "place": 6.301587301587301,
+     "kills": 4.746031746031746
+    },
+    {
+     "f": "ilsheta",
+     "n": 62,
+     "place": 6.741935483870968,
+     "kills": 2.129032258064516
+    },
+    {
+     "f": "dunsom",
+     "n": 62,
+     "place": 7.032258064516129,
+     "kills": 3.564516129032258
+    },
+    {
+     "f": "sukri",
+     "n": 63,
+     "place": 7.365079365079365,
+     "kills": 1.4761904761904763
+    }
+   ]
+  }
+ },
+ "detail_balance": {
+  "lineup": "shuffle",
+  "games": 200,
+  "fighters": [
+   {
+    "fighter": "odrum",
+    "games": 128,
+    "rate": 0.65625,
+    "lo": 0.5704946622111811,
+    "hi": 0.7328997140706601
+   },
+   {
+    "fighter": "dunsom",
+    "games": 102,
+    "rate": 0.6470588235294118,
+    "lo": 0.5505209704774588,
+    "hi": 0.7329214566967336
+   },
+   {
+    "fighter": "ervet",
+    "games": 130,
+    "rate": 0.6153846153846154,
+    "lo": 0.5295835084683116,
+    "hi": 0.6945620486678853
+   },
+   {
+    "fighter": "marund",
+    "games": 140,
+    "rate": 0.6,
+    "lo": 0.5172240406779872,
+    "hi": 0.6774345281922145
+   },
+   {
+    "fighter": "kemdo",
+    "games": 134,
+    "rate": 0.5746268656716418,
+    "lo": 0.48998474518744267,
+    "hi": 0.6551093338133814
+   },
+   {
+    "fighter": "ardit",
+    "games": 136,
+    "rate": 0.5073529411764706,
+    "lo": 0.42428765117860484,
+    "hi": 0.5900142446807102
+   },
+   {
+    "fighter": "hesmi",
+    "games": 124,
+    "rate": 0.5,
+    "lo": 0.4133257730247514,
+    "hi": 0.5866742269752486
+   },
+   {
+    "fighter": "sukri",
+    "games": 124,
+    "rate": 0.4838709677419355,
+    "lo": 0.3977251649074819,
+    "hi": 0.5709861153017769
+   },
+   {
+    "fighter": "vashil",
+    "games": 82,
+    "rate": 0.47560975609756095,
+    "lo": 0.371047982844021,
+    "hi": 0.5823545632408609
+   },
+   {
+    "fighter": "rishal",
+    "games": 116,
+    "rate": 0.47413793103448276,
+    "lo": 0.3855624896647156,
+    "hi": 0.564371423100134
+   },
+   {
+    "fighter": "lisvel",
+    "games": 138,
+    "rate": 0.43478260869565216,
+    "lo": 0.3549471151477231,
+    "hi": 0.5181507630488004
+   },
+   {
+    "fighter": "ulkro",
+    "games": 134,
+    "rate": 0.417910447761194,
+    "lo": 0.33782807660784847,
+    "hi": 0.502568436491245
+   },
+   {
+    "fighter": "nurrow",
+    "games": 130,
+    "rate": 0.4153846153846154,
+    "lo": 0.3342905969843901,
+    "hi": 0.5013359944490656
+   },
+   {
+    "fighter": "ilsheta",
+    "games": 136,
+    "rate": 0.4117647058823529,
+    "lo": 0.33258120745899433,
+    "hi": 0.49579604222922424
+   },
+   {
+    "fighter": "tunlan",
+    "games": 100,
+    "rate": 0.4,
+    "lo": 0.3093997461136029,
+    "hi": 0.4979992153815976
+   },
+   {
+    "fighter": "burdam",
+    "games": 146,
+    "rate": 0.3972602739726027,
+    "lo": 0.3214994215435278,
+    "hi": 0.47828915519350657
+   }
+  ]
+ }
+}
