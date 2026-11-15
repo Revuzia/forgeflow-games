@@ -1596,5 +1596,17 @@
   "net.retry": "Try again",
   "net.online_tip": "Matchmade queues play online with other players.",
   "net.offline_tip": "The game server is not reachable, so matches start from this device. VALE keeps trying in the background.",
-  "queue.online": "Online · {n} searching this queue"
+  "queue.online": "Online · {n} searching this queue",
+  "ship.device.touch": "VALE plays on a computer with a mouse and keyboard.",
+  "ship.device.small": "This window is too small for VALE. Make it at least 1024 by 600, or use a bigger screen.",
+  "ship.device.try": "Try anyway",
+  "ship.device.reload": "Reload",
+  "ship.tab.title": "VALE is open in another tab",
+  "ship.tab.body": "Your progress is saved from one tab at a time. Close the other tab, or play here instead.",
+  "ship.tab.moved": "VALE moved to another tab. Close this one, or play here instead.",
+  "ship.tab.use": "Play here",
+  "ship.stale.toast": "Another tab saved newer progress, so this tab will not save. Reload to continue.",
+  "ship.match.interrupted": "The match hit a problem and was ended. Your rating is unchanged.",
+  "ship.view.lost": "The picture stopped drawing",
+  "ship.view.lost_sub": "Trying to bring it back. If it stays blank, reload the page."
 }
