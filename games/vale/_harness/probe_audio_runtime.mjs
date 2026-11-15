@@ -468,6 +468,8 @@ async function runMatch() {
       const by = (re) => r2(100 * sfxIds.filter((k) => re.test(k)).reduce((a, k) => a + rep.heardG2[k], 0) / tot);
       rep.kitShare = { fighterPct: by(/^f_/), libraryPct: by(/^c_/), wickPct: by(/^w_/), unitPct: by(/^u_/), matchPct: by(/^m_/),
         top: sfxIds.sort((a, b) => rep.heardG2[b] - rep.heardG2[a]).slice(0, 12).map((k) => [k, r2(100 * rep.heardG2[k] / tot)]) }; }
+    // (orch1) the leveller as the match left it (leaving resets the mode trim)
+    const levLive = await page.evaluate(() => { const l = window.__valeAudio.leveller; return l ? { stats: { ...l.stats }, trimDb: l.trimDb } : null; }).catch(() => null);
     await page.evaluate(() => { try { window.__vale.state.match.value?.leave(); } catch { /* */ } });
     // ── analysis ──
     const col = (i) => blocks.map((r) => r[i]);
@@ -476,8 +478,7 @@ async function runMatch() {
     ms.sfx = ms.sfxBus.map((x, i) => x + ms.threat[i] + ms.prio[i]);       // the sfx the player hears: bus + threat path + priority sub-bus
     // (orch1 AUD-O1) the leveller over the capture: its gain per block, the priority sub-bus's share of the sfx heard
     { const gdb = col(9), sum = (a) => a.reduce((x, y) => x + y, 0), sfxE = sum(ms.sfx) || 1;
-      rep.leveller = { stats: await page.evaluate(() => window.__valeAudio.leveller?.stats ?? null).catch(() => null),
-        trimDb: await page.evaluate(() => window.__valeAudio.leveller?.trimDb ?? null).catch(() => null),
+      rep.leveller = { stats: levLive?.stats ?? null, trimDb: levLive?.trimDb ?? null,
         gainDbP50: r2(pct(gdb, 50)), gainDbP10: r2(pct(gdb, 10)), gainDbMin: r2(Math.min(...gdb)),
         cutOver1dBPct: r2(100 * gdb.filter((x) => x < -1).length / Math.max(1, gdb.length)),
         prioSharePct: r2(100 * sum(ms.prio) / sfxE), threatSharePct: r2(100 * sum(ms.threat) / sfxE) }; }

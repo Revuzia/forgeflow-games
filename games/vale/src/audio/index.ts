@@ -432,12 +432,13 @@ const CAMP_DB = -3;
 // the sfx leveller (orch1 AUD-O1, see `leveller` in the header). The target is on the probes' sfx scale (the three sfx
 // paths at the default 0.8 slider, before the fight and voice ducks): -19 LUFS short-term puts a dense 5v5 master
 // near the -18 token, where a RIFT co-op lane (-21 to -24 sfx short-term p50) is never touched
-const LEVEL_TARGET_LUFS = -19;
+const LEVEL_TARGET_LUFS = -20;
 const LEVEL_MAX_CUT_DB = 8;
 const LEVEL_ATTACK_S = 0.8;     // time constants of the gain's glide: down …
 const LEVEL_RELEASE_S = 3;      // … and back up
 const LEVEL_WINDOW_S = 3;       // the detector's short-term window (BS.1770 short-term)
 const LEVEL_POLL_MS = 100;      // one 4096-sample read per path per poll (85 ms at 48 kHz)
+const LEVEL_BG_ROOM_LU = 6;     // the background is never cut below this under the target (see levelPoll)
 const LEVEL_REF_SFX = 0.8;      // the default sfx slider: the detector is referred to it, so the slider still sets the level
 const OWN_KIT_GAIN = Math.pow(10, OWN_KIT_DB / 20);
 const CAMP_GAIN = Math.pow(10, CAMP_DB / 20);
@@ -1184,9 +1185,12 @@ class Engine implements ValeAudioPort {
     const N = (sn / k) * ref, P = (sp / k) * ref;
     const T = Math.pow(10, (LEVEL_TARGET_LUFS + 0.691) / 10);
     const floor = Math.pow(10, -LEVEL_MAX_CUT_DB / 20);
-    // the one gain on the background that brings background + priority to the target: g^2 N + P = T
+    // the one gain on the background that brings background + priority to the target: g^2 N + P = T, but the background
+    // keeps at least LEVEL_BG_ROOM_LU under the target whatever the priority sub-bus does (your own burst of casts must
+    // not crush the world around it: RIFT seed 3 sat at the full 8 dB cut 10 % of the match on its own kit alone)
     let g = 1;
-    if (N > 0 && N + P > T) g = T - P <= 0 ? floor : Math.max(floor, Math.min(1, Math.sqrt((T - P) / N)));
+    const room = T * Math.pow(10, -LEVEL_BG_ROOM_LU / 10);
+    if (N > 0 && N + P > T) g = Math.max(floor, Math.min(1, Math.sqrt(Math.max(T - P, room) / N)));
     const st = this.levStats;
     st.polls++;
     if (N + P > 1e-9) { st.prioShareSum += P / (N + P); st.prioSharePolls++; }
@@ -2740,6 +2744,19 @@ class Engine implements ValeAudioPort {
         // an epic unit's cast: its ability's own wind-up, else its shared one; never castMonster (see `epic`)
         if (uk) this.cue((ua ? uk[ua.slot] : undefined) ?? uk.cast, at(src), 1, 0, aw);
         else if (this.wardSetAb.has(e.ability as string) && this.ev('wardSet')) this.cue(this.ev('wardSet'), at(src), 1, 0, aw);
+        else if (!own && pr?.sfx && pr.sfx === this.ev('heal')) {
+          // (AUD-O3) a heal cast that voices the heal chime (a flask's drink, a heal spell) is a heal chime: yours always
+          // (it answers your key), an ally's within LISTEN_INNER_M of you from the bucket, a foe's never; its heal ticks
+          // that follow merge into it (a 5v5 heard every fighter's flask in earshot: 152 chimes in 7 min)
+          const now = this.ctx?.currentTime ?? 0;
+          const self = !!src && src.id === youId;
+          const near0 = me ?? ear;
+          const ally = !!src && !self && src.team === mine && !!near0 && Math.hypot(src.x - near0.x, src.y - near0.y) <= LISTEN_INNER_M;
+          if (src && (self || (ally && this.healToken(now))) && this.cue(pr.sfx, at(src), 1, 0, aw) === 'played') {
+            this.healLast.set(src.id, now); this.healAny.set(src.id, now); this.healTeamLast = now;
+            this.healTokens = Math.max(0, this.healTokens - 1);
+          }
+        }
         else this.cue(own ?? pr?.sfx ?? this.ev(slot === 'ult' ? 'castUlt' : src?.kind === 'monster' ? 'castMonster' : 'cast'), at(src), 1, 0, aw);
         // the shared shade-breath swell for every enemy fighter's T3+ wind-up (STYLE_BIBLE 'enemy T3+ wind-ups share one
         // shade-breath swell'; see `threat` in the header), placed at the caster like any spatial cue
