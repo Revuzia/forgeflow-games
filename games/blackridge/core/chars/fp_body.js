@@ -42,7 +42,12 @@ const MAX_BONES = 64;
 // placement (metres): how far the body stands BEHIND the eye.
 const BACK_STAND = 0.02;
 const BACK_CROUCH = 0.10;
-const SLIDE = { tilt: -0.30, back: 0.05, drop: 0.20 };
+// [fx v152] SLIDE: was {tilt -0.30, back 0.05, drop 0.20} over the CROUCH clip —
+// knees folded under the lens, so looking down mid-slide showed one knee and
+// nothing else (fx/slide_before.png). A slide is legs out in front: the
+// straight-legged idle pose laid back ~64 degrees about the boots, then the
+// whole body slid forward so the hips sit under the eye and the boots lead.
+const SLIDE = { tilt: -1.12, back: -0.80, drop: 0.02 };
 // looking steeply down, the body eases a little further back
 // and the legs swing forward about the boots (hips back, boots under the eye), so
 // the view lands on thighs and boots rather than on the closed waist
@@ -182,7 +187,68 @@ export function createFpBody(ctx, deps = {}) {
     if (actor) actor.root.visible = false;
     const g = G();
     if (g && shadowSlot >= 0) g.hide(shadowSlot);
+    if (g && lampSlot >= 0) g.hide(lampSlot);
     stats.visible = false;
+  }
+
+  // ---- [fx v152] what is lighting the player (see the shadow note in update)
+  let lampSlot = -1;
+  let shadowProbe = 0;
+  let moonWant = 0, moonVis = 0, lampVis = 0;
+  const lamp = { w: 0, dx: 0, dz: 0, len: 0 };
+  const SH_OPTS = { cast: 0, lx: 0, lz: 0, noRefl: true };
+  const LP_OPTS = { cast: 0, lx: 0, lz: 0, noRefl: true };
+  const _md = [0, 0, 0], _o = [0, 0, 0];
+  function lightsApi() {
+    return ctx.lights || ((typeof window !== "undefined" && window.__FPS__) ? window.__FPS__.lights : null);
+  }
+  function probeLights(sim, bx, by, bz) {
+    const L = lightsApi();
+    const world = sim && sim.world;
+    moonWant = 0;
+    if (L && L.moon && world && world.raycast) {
+      const m = L.moon;
+      _md[0] = m.position.x - m.target.position.x; _md[1] = m.position.y - m.target.position.y; _md[2] = m.position.z - m.target.position.z;
+      const ml = Math.hypot(_md[0], _md[1], _md[2]) || 1;
+      _md[0] /= ml; _md[1] /= ml; _md[2] /= ml;
+      // chest height: a low wall beside you still lets your shoulders cast
+      _o[0] = bx; _o[1] = by + 1.25; _o[2] = bz;
+      const h = world.raycast(_o, _md, 80);
+      moonWant = h && h.dist < 80 ? 0 : (m.intensity > 0.5 ? 1 : 0);
+    }
+    // the strongest practical spot that reaches you
+    lamp.w = 0;
+    const spots = L && L.spots;
+    if (spots) {
+      for (let i = 0; i < spots.length; i++) {
+        const s = spots[i];
+        if (!s || !s.visible || !(s.intensity > 0)) continue;
+        const dx = bx - s.position.x, dz = bz - s.position.z, dy = by + 1.0 - s.position.y;
+        const d = Math.hypot(dx, dy, dz);
+        const R = s.distance > 0 ? s.distance : 15;
+        if (d > R) continue;
+        // inside the cone?
+        const tx = s.target.position.x - s.position.x, ty = s.target.position.y - s.position.y, tz = s.target.position.z - s.position.z;
+        const tl = Math.hypot(tx, ty, tz) || 1;
+        const c = (dx * tx + dy * ty + dz * tz) / (tl * (d || 1));
+        const cone = Math.cos(s.angle || 0.6);
+        if (c < cone) continue;
+        const fall = (1 - d / R) * (1 - d / R) * Math.min(1, s.intensity / 30) * Math.min(1, (c - cone) / 0.08);
+        if (fall <= lamp.w) continue;
+        const hd = Math.hypot(dx, dz);
+        const hl = s.position.y - by;
+        if (hd < 0.25 || hl < 2.0) continue;                   // straight overhead: the pool is the shadow
+        if (world && world.raycast) {                           // something between you and the lamp
+          _o[0] = bx; _o[1] = by + 1.25; _o[2] = bz;
+          _md[0] = -dx / d; _md[1] = -dy / d; _md[2] = -dz / d;
+          const h = world.raycast(_o, _md, d - 0.3);
+          if (h && h.dist < d - 0.3) continue;
+        }
+        lamp.w = fall;
+        lamp.dx = dx / hd; lamp.dz = dz / hd;
+        lamp.len = Math.max(0.3, Math.min(2.1, 1.7 * hd / Math.max(0.4, hl - 1.7)));
+      }
+    }
   }
 
   // background prefetch, like soldiers.js (boot is never gated on it)
@@ -241,7 +307,7 @@ export function createFpBody(ctx, deps = {}) {
       actor.legYaw = st8.legYaw; actor.locoDir = 1;
       st8.airT = p.grounded === false && !sliding ? st8.airT + dta : 0;
       actor.airborne = st8.airT > 0.12;
-      actor.crouched = sliding || p.stance === "crouch";
+      actor.crouched = !sliding && p.stance === "crouch";   // [fx v152] legs straight in a slide
       actor.groundSpeed = sliding ? 0 : hs;
       actor.readyWant = 1;
       actor.crouchW = 0;
@@ -280,24 +346,52 @@ export function createFpBody(ctx, deps = {}) {
         }
       }
 
-      // ---- contact silhouette from the shared pool (the operators' own recipe)
+      // ---- contact silhouette + cast smears from the shared pool
+      // [fx v152] THE OWN SHADOW WAS INVISIBLE. Measured on Lantern Walk under
+      // open moonlight (A/B with the body's castShadow toggled): the shadow-map
+      // shadow moved the median ground pixel 1.3/255 — the wet cobbles are lit
+      // by the hemisphere, the IBL and the light sheets, and the moon's direct
+      // term that a shadow map removes is a small part of that. And this slot
+      // was written with h = 0, which also zeroed the grounding cast sweep that
+      // every other operator gets. Now the slot carries the moon's cast (gated
+      // by a real line-of-sight test to the moon, so it vanishes under a roof
+      // or in a building's shadow) and a second slot throws the shadow AWAY
+      // from the nearest practical lamp that is lighting you. Both ride the
+      // existing instanced pool: no draw call, no program, two raycasts per
+      // ~8 frames.
       const g = G();
       if (g) {
         if (shadowSlot < 0) shadowSlot = g.alloc();
+        if (lampSlot < 0) lampSlot = g.alloc();
+        const gy = ctx.colliders && ctx.colliders.groundY ? ctx.colliders.groundY(bx, bz) : by;
+        const lift = Math.max(0, by - gy);
+        const air = Math.max(0, 1 - lift / 0.55);
+        const cy = Math.min(by, gy) + 0.014;
+        if (--shadowProbe <= 0) { shadowProbe = 8; probeLights(sim, bx, by, bz); }
+        moonVis = damp(moonVis, moonWant, 6, dt);
+        lampVis = damp(lampVis, lamp.w, 6, dt);
         if (shadowSlot >= 0) {
-          const gy = ctx.colliders && ctx.colliders.groundY ? ctx.colliders.groundY(bx, bz) : by;
-          const lift = Math.max(0, by - gy);
-          const air = Math.max(0, 1 - lift / 0.55);
-          // no reflection card (h = 0): a mirrored man under your own boots reads
-          // as a second body, and the camera is never far enough to need it
-          g.write(shadowSlot, bx - fx * 0.05, Math.min(by, gy) + 0.014, bz - fz * 0.05,
-            0.30, 0.26, 0.85 * air, 0, 0x4b5142, yaw, SHAPE.HUMAN);
+          // no reflection card: a mirrored man under your own boots reads as a
+          // second body, and the camera is never far enough to need it
+          SH_OPTS.cast = 0.06 + 1.85 * moonVis; SH_OPTS.lx = 0; SH_OPTS.lz = 0;
+          g.write(shadowSlot, bx - fx * 0.05, cy, bz - fz * 0.05,
+            0.30, 0.26, (0.85 + 0.1 * moonVis) * air, 1.8, 0x4b5142, yaw + st8.legYaw, SHAPE.HUMAN, SH_OPTS);
+        }
+        if (lampSlot >= 0) {
+          if (lampVis > 0.03) {
+            LP_OPTS.cast = lamp.len; LP_OPTS.lx = lamp.dx; LP_OPTS.lz = lamp.dz;
+            g.write(lampSlot, bx, cy + 0.002, bz, 0.28, 0.24, 0.9 * Math.min(1, lampVis * 1.6) * air, 1.8, 0x4b5142,
+              yaw + st8.legYaw, SHAPE.HUMAN, LP_OPTS);
+          } else g.hide(lampSlot);
         }
       }
     },
 
     // harness / checks (read-only)
-    stats() { return Object.assign({}, stats, { ready: !!proto, failed }); },
+    stats() {
+      return Object.assign({}, stats, { ready: !!proto, failed,
+        shadow: { moon: +moonVis.toFixed(2), lamp: +lampVis.toFixed(2), lampLen: +lamp.len.toFixed(2) } });
+    },
     get _actor() { return actor; },
   };
 }

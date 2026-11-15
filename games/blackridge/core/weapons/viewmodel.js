@@ -892,7 +892,10 @@ export function createViewmodel(ctx) {
   function impulse(w, adsEase) {
     const vmK = w.recoil.vmKick || 3;     // rotational action-cycle read
     const vmP = w.recoil.vmPunch || 0.7;  // barrel-axis slide
-    const gv = KICK.adsVmMult + (1 - KICK.adsVmMult) * (1 - adsEase);
+    // (2026-11-14 guns pass) per-gun ADS gain (view.adsKickMult): the Breaker's 12/2.6 kick at
+    // a 15-18 cm eye relief drove the receiver up and back over a third of the sight picture
+    const am = KICK.adsVmMult * ((w.view && w.view.adsKickMult) || 1);
+    const gv = am + (1 - am) * (1 - adsEase);
     const gc = KICK.adsCamMult + (1 - KICK.adsCamMult) * (1 - adsEase);
     const side = kickSide > 0 ? 1 : KICK.altRollMult;
     kickSide = -kickSide;

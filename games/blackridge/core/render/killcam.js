@@ -59,7 +59,7 @@
 // the words KILLCAM / FINAL KILL / KILLED BY / HEADSHOT / SKIP. Nothing says or
 // implies bot, AI or NPC.
 
-import { createReplayBuffer, createInterner, F, S, SF, E, EK } from "./replay_buffer.js";
+import { createReplayBuffer, createInterner, F, S, SF, E, EK, PK } from "./replay_buffer.js";
 
 const LIVE_PHASES = new Set(["live", "warmup", "overtime"]);
 
@@ -85,7 +85,9 @@ const SLOW_IN = 0.16, SLOW_OUT = 0.24, SLOW_RATE = 0.33, SLOW_EDGE = 0.12;
 const RESPAWN_MARGIN = 0.12;    // end this long before the respawn
 const HOLD_MAX = 1.2;           // overtime (no respawn): hold the end, then orbit
 const SKIP_ARM = 0.3;
-const SHOULDER_BACK = 0.95, SHOULDER_SIDE = 0.40, SHOULDER_UP = 0.10;
+// [fx v152] 0.40 -> 0.50 side, 0.10 -> 0.16 up: the killer's back filled the
+// middle third of the frame and his head sat on the line of fire
+const SHOULDER_BACK = 0.95, SHOULDER_SIDE = 0.50, SHOULDER_UP = 0.16;
 const EYE_STAND = 1.62, EYE_CROUCH = 1.10;   // = core/sim/player.js MOVE
 const HIDE_POS = [0, -900, 0];  // where live actors are parked during a replay
 const FLASH_S = 0.16;
@@ -149,7 +151,20 @@ export function createKillCam(ctx) {
     explosive: false, srcPos: null, startT: 0, endT: 0, t: 0, slow: true,
     wall: 0, done: false, holdT: 0, anDt: 0, frame: 0, hideKiller: false,
     camInit: false,
+    // [fx v152] explosive kill plan (see planExplosive)
+    blastT: 0, blastAux: 0, blastYaw: 0, launchT: NaN, launchPos: null, cutT: -Infinity,
+    vant: null, vantInit: false, vantScore: 0, approach: [1, 0, 0], cuts: 0,
   };
+  const vLook = [0, 0, 0];
+  const _sr = [0, 0, 0];
+  let zoomS = 1;
+  const projOut = [];
+  for (let i = 0; i < 4; i++) projOut.push({ id: 0, kind: 0, owner: -1, x: 0, y: 0, z: 0, a: 0, b: 0 });
+  // what grenadefx draws while a replay is on screen (ctx.replayFx; see publishReplayFx)
+  const replayFx = { projs: projOut, n: 0, mines: [], minesN: 0 };
+  const mineOut = [];
+  for (let i = 0; i < 4; i++) mineOut.push({ x: 0, y: 0, z: 0, yaw: 0 });
+  replayFx.mines = mineOut;
   const loc = { i0: 0, i1: 0, k: 0 };
   const smp = {};
   const ghosts = [];
@@ -181,6 +196,9 @@ export function createKillCam(ctx) {
   let releaseQueued = false;
   let failsafe = null;
   let finalWaitT = 0;
+  // wall-clock failsafe; a harness that photographs every frame (seconds per
+  // frame) may lengthen it through setFailsafeMs — players never reach it
+  let failsafeMs = FINAL_FAILSAFE_MS;
 
   // replay targets (bound by boot after fx/audio/soldiers exist)
   let fxRef = null, audioRef = null, soldiersRef = null;
@@ -190,17 +208,30 @@ export function createKillCam(ctx) {
   function matchOf(s) { return s && s.match && s.match.m ? s.match.m : null; }
   function paused() { return !!(ctx.pauseCtl && ctx.pauseCtl.active); }
 
+  let savedFov = 0;
   function acquire() {
     if (driving) return;
     driving = true;
     prevDetached = !!ctx.cameraDetached;
     ctx.cameraDetached = true;   // releases the rig AND hides the floating gun
+    savedFov = ctx.camera ? ctx.camera.fov : 0;
   }
   function release() {
     if (!driving) return;
     driving = false;
     ctx.cameraDetached = prevDetached;
+    if (savedFov > 0) setFov(savedFov);
   }
+  function setFov(f) {
+    const c = ctx.camera;
+    if (!c || !(f > 1) || Math.abs(c.fov - f) < 0.01) return;
+    c.fov = f;
+    c.updateProjectionMatrix();
+  }
+  // [fx v152] the replay's lens: the settings FOV (a death while aiming down
+  // sights used to replay through the dead player's ADS zoom), narrowed toward
+  // the kill on long bullet shots so the victim is more than a few pixels.
+  function baseFov() { return (ctx.settings && ctx.settings.fov) || 74; }
 
   // =================================================================== record
   function wIdx(id) {
@@ -268,10 +299,36 @@ export function createKillCam(ctx) {
           wIdx(b.weapon && b.weapon.id), animIdx(b.anim));
       }
     }
+    // [fx v152] frags + rockets in flight (the explosive kill cam draws them)
+    const inl = s.internal;
+    if (inl) {
+      const gl = inl.grenades;
+      if (gl) for (let i = 0; i < gl.length; i++) {
+        const g = gl[i];
+        if (g && g.pos) ring.writeProj(projId(g), PK.FRAG, slotOfWho(m, g.who), g.pos[0], g.pos[1], g.pos[2], g.fuseLeft || 0, 0);
+      }
+      const rl = inl.rockets;
+      if (rl) for (let i = 0; i < rl.length; i++) {
+        const r = rl[i];
+        if (!r || !r.pos) continue;
+        const v = r.vel || HIDE_POS;
+        ring.writeProj(projId(r), PK.ROCKET, slotOfWho(m, r.who), r.pos[0], r.pos[1], r.pos[2],
+          Math.atan2(v[0], v[2]), Math.atan2(v[1], Math.hypot(v[0], v[2])));
+      }
+    }
     ring.endSample();
     maybeFreezeFinal(t);
     const ms = performance.now() - t0;
     stats.samples++; stats.recMs += ms; if (ms > stats.recMaxMs) stats.recMaxMs = ms;
+  }
+
+  // view-side ids for sim projectile objects (never written back into them)
+  const PROJ_IDS = new WeakMap();
+  let projSeq = 1;
+  function projId(o) {
+    let i = PROJ_IDS.get(o);
+    if (i === undefined) { i = projSeq++; if (projSeq > 1e6) projSeq = 1; PROJ_IDS.set(o, i); }
+    return i;
   }
 
   const ANIM_IDX = new Map();
@@ -317,16 +374,32 @@ export function createKillCam(ctx) {
     if (d.tracer || d.firstShot) fl |= SF.TRACER;
     if (d.firstShot) fl |= SF.FIRST;
     if (h && h.part === "head") fl |= SF.HEAD;
+    if (d.rocket) fl |= SF.ROCKET;      // [fx v152] replayed as a launch, never a tracer
+    if (d.suppressed) fl |= SF.SUPP;    // [fx v152] the replayed flash keeps the can
     _o[0] = d.origin[0]; _o[1] = d.origin[1]; _o[2] = d.origin[2];
     _d[0] = d.dir[0]; _d[1] = d.dir[1]; _d[2] = d.dir[2];
-    ring.pushShot(t != null ? t : s.state.time, slot, _o, _d, h && h.pos ? h.pos : null, h ? h.normal : null,
+    const ts = t != null ? t : s.state.time;
+    ring.pushShot(ts, slot, _o, _d, h && h.pos ? h.pos : null, h ? h.normal : null,
       h ? intern.id(h.surface) : 0, ent, wIdx(d.weaponId), fl, d.pellet | 0);
+    // the launch is the start of an explosive kill's story
+    if (d.rocket && !(d.pellet > 0)) ring.pushEvent(ts, EK.THROW, slot, -1, _o[0], _o[1], _o[2], 0, 0, PK.ROCKET);
+  }
+  function onGrenadeRec(d, t) {
+    if (!d || d.phase !== "out" || !d.pos) return;
+    const s = sim();
+    const m = matchOf(s);
+    if (!m || s !== recSim) return;
+    const slot = slotOfWho(m, d.who);
+    if (slot < 0) return;
+    ring.pushEvent(t != null ? t : s.state.time, EK.THROW, slot, -1, d.pos[0], d.pos[1], d.pos[2], 0, 0, PK.FRAG);
   }
   function onExplosionRec(d, t) {
     if (!d || !d.pos) return;
     const s = sim();
-    if (!matchOf(s) || s !== recSim) return;
-    ring.pushEvent(t != null ? t : s.state.time, EK.EXPLOSION, -1, -1, d.pos[0], d.pos[1] || 0, d.pos[2],
+    const m = matchOf(s);
+    if (!m || s !== recSim) return;
+    // [fx v152] slot A = the owner (the explosion event carries `who`)
+    ring.pushEvent(t != null ? t : s.state.time, EK.EXPLOSION, slotOfWho(m, d.who), -1, d.pos[0], d.pos[1] || 0, d.pos[2],
       // [polish v149] aux 3 = tripmine; its facing rides the (unused for
       // explosions) head slot so the replay draws the same directional blast
       d.radius || 5.5, d.source === "claymore" && typeof d.yaw === "number" ? d.yaw : 0,
@@ -391,6 +464,7 @@ export function createKillCam(ctx) {
     bridge.register("death", onDeath);
     bridge.register("shot", onShotRec);
     bridge.register("explosion", onExplosionRec);
+    bridge.register("grenade", onGrenadeRec);
     // replay output: fx + audio re-registered on a PRIVATE mini bridge, so a
     // re-emitted shot reaches exactly those two consumers (never the HUD hit
     // markers, the kill feed, scoring or rumble). Re-done per match because
@@ -441,9 +515,17 @@ export function createKillCam(ctx) {
       const r = (a[o + E.R] || 5.5) * 1.3;
       if (Math.hypot(a[o + E.X] - dpx, a[o + E.Z] - dpz) <= r) {
         rp.explosive = true; rp.srcPos = [a[o + E.X], a[o + E.Y], a[o + E.Z]];
+        rp.blastT = a[o + E.T]; rp.blastAux = a[o + E.AUX] | 0; rp.blastYaw = a[o + E.HEAD];
       }
     });
+    // [fx v152] explosive kills: who threw, the projectile, the blast, the body
+    rp.cutT = -Infinity; rp.launchT = NaN; rp.vant = null; rp.vantInit = false;
+    if (rp.explosive) planExplosive(buf, kill);
     for (let i = 0; i < SLOTS; i++) { ghosts[i].present = false; ghosts[i].wasAlive = null; }
+    // the live world's own copy of the blast (smoke, fire, sparks) must not sit
+    // in the replay before the replayed one goes off
+    clearTransientFx();
+    publishReplayFx(true);
     acquire();
     mode = kind === "final" ? "final" : "replay";
     if (kind === "final") stats.finals++; else stats.replays++;
@@ -453,9 +535,12 @@ export function createKillCam(ctx) {
   }
 
   function endReplay() {
+    const had = !!rp.buf;
     rp.buf = null;
     wrapCache.clear();
     ghostBots.length = 0;
+    publishReplayFx(false);
+    if (had) clearTransientFx();   // replayed smoke / fire must not leak into the live view
     // ghost actors: soldiers.js reaps them on its next LIVE update (their ids
     // are not in sim.state.bots); restore anything we hid
     if (soldiersRef && soldiersRef._actors) {
@@ -464,6 +549,17 @@ export function createKillCam(ctx) {
       }
     }
     overlayHide();
+  }
+
+  // ctx.replayFx: while non-null, grenadefx draws THESE projectiles / mines
+  // instead of the live sim's, and the live-only ground clutter (loot glows)
+  // stays hidden. Plain shared-ctx channel: no boot wiring needed.
+  function publishReplayFx(on) {
+    if (on) { replayFx.n = 0; replayFx.minesN = 0; ctx.replayFx = replayFx; }
+    else if (ctx.replayFx === replayFx) ctx.replayFx = null;
+  }
+  function clearTransientFx() {
+    try { if (fxRef && fxRef.clearTransient) fxRef.clearTransient(); } catch (e) { /* view must not break */ }
   }
 
   function liveWrap(b) {
@@ -509,6 +605,14 @@ export function createKillCam(ctx) {
       g.pitch = smp.pitch;
       ghostBots.push(g);
     }
+    // [fx v152] projectiles + tripmines for grenadefx's replay feed
+    replayFx.n = buf.readProjs(loc, projOut);
+    replayFx.minesN = 0;
+    buf.forEvents(rp.t, rp.t + 8, (a, o) => {
+      if (a[o + E.KIND] !== EK.EXPLOSION || (a[o + E.AUX] | 0) !== 3 || replayFx.minesN >= mineOut.length) return;
+      const q = mineOut[replayFx.minesN++];
+      q.x = a[o + E.X]; q.y = a[o + E.Y]; q.z = a[o + E.Z]; q.yaw = a[o + E.HEAD];
+    });
     ghostState.player = st.player;
     ghostState.match = st.match;
     ghostState.phase = st.phase;
@@ -555,11 +659,15 @@ export function createKillCam(ctx) {
         };
       }
       const pellet = a[o + S.PELLET] | 0;
+      const sf = a[o + S.FLAGS] | 0;
       const d = {
         shooter: gid, weaponId: intern.str(a[o + S.WEAPON]),
         origin: [a[o + S.OX], a[o + S.OY], a[o + S.OZ]],
         dir: [a[o + S.DX], a[o + S.DY], a[o + S.DZ]],
-        hit, tracer: true, firstShot: (a[o + S.FLAGS] & SF.FIRST) !== 0, pellet,
+        // [fx v152] every replayed round draws a tracer (the story is the shot)
+        // EXCEPT a rocket launch: the rocket itself flies (grenadefx replay feed)
+        hit, tracer: (sf & SF.ROCKET) === 0, firstShot: (sf & SF.FIRST) !== 0, pellet,
+        rocket: (sf & SF.ROCKET) !== 0, suppressed: (sf & SF.SUPP) !== 0,
         replay: true,
       };
       if (mini) mini.emit("shot", d, liveT);
@@ -603,6 +711,241 @@ export function createKillCam(ctx) {
     return ghosts[a.actorId].id;
   }
 
+  // ======================================================== explosive kill cam
+  // [fx v152] The v151 "framing camera" orbited the victim from a fixed 5.2 m /
+  // +2.4 m offset whose only collision handling was a pull-in ray: on Lantern
+  // Walk it parked on a container roof with the roof filling half the frame, it
+  // never showed who threw, and the blast was not in a single sampled frame.
+  // Now an explosive kill is told in two shots:
+  //   1. OVER THE THROWER'S SHOULDER (the bullet cam) from the start of the clip
+  //      until just after the frag leaves the hand / the rocket leaves the tube
+  //      (a short rocket shot stays on the shoulder through the blast — the
+  //      rocket, its trail and the fireball are all in that frame);
+  //   2. a BLAST VANTAGE: one fixed camera picked once at replay start from a
+  //      ring of candidates around the blast, each collision-tested (a clear line
+  //      from the blast to the lens, 0.7 m of clearance on every axis so it never
+  //      grazes a wall or a roof, a floor under it) and scored on what it can see
+  //      (victim chest + feet, the incoming path, a ring around the blast so no
+  //      wall fills the frame). It looks at the projectile as it arrives, the
+  //      blast as it goes off, and settles on the body; a slow push-in.
+  // A tripmine / air strike / absent thrower is shot entirely from the vantage.
+  // The candidate search is capped (MAX_VANT_RAYS) — it runs once, on the cut.
+  const MAX_VANT_RAYS = 420;
+  const CLEAR = 0.7;
+  const _vr = [0, 0, 0];
+  let vRays = 0;
+  function ray(world, o, d, L) {
+    vRays++;
+    return world.raycast(o, d, L);
+  }
+  // is the segment a→b free of geometry (end-inclusive margin m)?
+  function clearSeg(world, a, b, m) {
+    const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
+    const L = Math.hypot(dx, dy, dz);
+    if (L < 1e-3) return true;
+    _vr[0] = dx / L; _vr[1] = dy / L; _vr[2] = dz / L;
+    const h = ray(world, a, _vr, L);
+    return !(h && h.dist != null && h.dist < L - (m || 0));
+  }
+  const AXES = [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0], [0.7071, -0.7071, 0], [-0.7071, -0.7071, 0], [0, -0.7071, 0.7071], [0, -0.7071, -0.7071]];
+  function clearance(world, c) {
+    for (let i = 0; i < AXES.length; i++) {
+      const h = ray(world, c, AXES[i], CLEAR);
+      if (h && h.dist != null && h.dist < CLEAR) return false;
+    }
+    // a floor under the lens, but not a roof right under it
+    _vr[0] = 0; _vr[1] = -1; _vr[2] = 0;
+    const f = ray(world, c, _vr, 12);
+    lastFloorDrop = f ? f.dist : 99;
+    return !!(f && f.dist > 0.9);
+  }
+  let lastFloorDrop = 0;
+
+  function readSlotAt(buf, slot, t, out) {
+    buf.locate(t, loc);
+    return buf.readActor(slot, loc, out) ? out : null;
+  }
+
+  function planExplosive(buf, kill) {
+    const s = sim();
+    const world = s && s.world;
+    const B = rp.srcPos;
+    rp.cuts = 0;
+    // the launch: the killer's last throw / launch before the blast
+    let lt = NaN, lp = null, kindL = 0;
+    buf.forEvents(rp.blastT - 5.5, rp.blastT, (a, o) => {
+      if (a[o + E.KIND] !== EK.THROW || (a[o + E.A] | 0) !== kill.a) return;
+      lt = a[o + E.T]; lp = [a[o + E.X], a[o + E.Y], a[o + E.Z]]; kindL = a[o + E.AUX] | 0;
+    });
+    rp.launchT = lt; rp.launchPos = lp;
+    // the approach direction (blast → where it came from), flattened
+    let ax = 0, az = 0;
+    const smpK = {};
+    if (lp) { ax = lp[0] - B[0]; az = lp[2] - B[2]; }
+    else if (readSlotAt(buf, kill.a, rp.blastT, smpK)) { ax = smpK.x - B[0]; az = smpK.z - B[2]; }
+    if (Math.hypot(ax, az) < 0.5) {
+      // a tripmine: the victim walked in — look from where he came
+      const sv = {};
+      if (readSlotAt(buf, kill.v, rp.startT, sv)) { ax = sv.x - B[0]; az = sv.z - B[2]; }
+    }
+    if (Math.hypot(ax, az) < 0.5) { ax = Math.sin(rp.blastYaw || 0); az = Math.cos(rp.blastYaw || 0); }
+    const AL = Math.hypot(ax, az) || 1;
+    rp.approach[0] = ax / AL; rp.approach[1] = 0; rp.approach[2] = az / AL;
+    // when the thrower's shot ends
+    const kAlive = readSlotAt(buf, kill.a, Number.isFinite(lt) ? lt : rp.blastT, smpK) && (smpK.flags & F.ALIVE);
+    if (Number.isFinite(lt) && kAlive && lt > rp.startT + 0.25) {
+      const span = lp ? Math.hypot(lp[0] - B[0], lp[1] - B[1], lp[2] - B[2]) : 99;
+      // rocket: off the shoulder once it has left the tube (the vantage sees it
+      // arrive); very short shots stay on the shoulder — there is no flight
+      if (kindL === PK.ROCKET) rp.cutT = span < 5 ? rp.blastT + 0.25 : Math.min(lt + 0.1, rp.blastT - 0.12);
+      else rp.cutT = Math.min(lt + 0.55, rp.blastT - 0.45);
+    } else rp.cutT = -Infinity;
+    // the victim where he dies
+    const sv = {};
+    const V = readSlotAt(buf, kill.v, rp.blastT, sv) ? [sv.x, sv.y, sv.z] : B.slice();
+    // bodies standing around the blast: a lens parked against a teammate's back
+    // is as blind as one against a wall
+    bodiesN = 0;
+    buf.locate(rp.blastT, loc);
+    for (let sl = 0; sl < SLOTS && bodiesN < bodies.length; sl++) {
+      if (sl === kill.v || !buf.readActor(sl, loc, sv)) continue;
+      const q = bodies[bodiesN++]; q[0] = sv.x; q[1] = sv.y; q[2] = sv.z;
+    }
+    rp.vant = world && world.raycast ? pickVantage(world, B, V, rp.approach) : null;
+  }
+  const bodies = [];
+  for (let i = 0; i < SLOTS; i++) bodies.push([0, 0, 0]);
+  let bodiesN = 0;
+  function nearBody(c) {
+    for (let i = 0; i < bodiesN; i++) {
+      const q = bodies[i];
+      if (Math.hypot(q[0] - c[0], q[2] - c[2]) < 1.8 && c[1] - q[1] < 2.3) return true;
+    }
+    return false;
+  }
+
+  function pickVantage(world, B, V, D) {
+    vRays = 0;
+    const Bc = [B[0], B[1] + 0.45, B[2]];
+    // the blast may sit against a wall: start the sight lines from the open side
+    const ground = (world.supportAt ? world.supportAt(B[0], B[2], B[1] + 0.5, 0.2) : B[1] - 0.5);
+    const baseY = Number.isFinite(ground) && ground <= B[1] + 0.3 ? ground : B[1] - 0.4;
+    const vChest = [V[0], V[1] + 1.15, V[2]], vFeet = [V[0], V[1] + 0.25, V[2]];
+    const app = [B[0] + D[0] * 3.2, Bc[1] + 0.7, B[2] + D[2] * 3.2];
+    const ANG = [1.15, -1.15, 0.75, -0.75, 1.6, -1.6, 0.4, -0.4, 2.1, -2.1, 0, Math.PI];
+    const DIST = [6.2, 4.8, 8.0, 3.8];
+    const HT = [1.75, 2.6, 1.2];
+    let best = null, bestScore = -1;
+    const C = [0, 0, 0];
+    outer:
+    for (let di = 0; di < DIST.length; di++) {
+      for (let ai = 0; ai < ANG.length; ai++) {
+        const ca = Math.cos(ANG[ai]), sa = Math.sin(ANG[ai]);
+        const dx = D[0] * ca - D[2] * sa, dz = D[0] * sa + D[2] * ca;
+        for (let hi = 0; hi < HT.length; hi++) {
+          if (vRays > MAX_VANT_RAYS) break outer;
+          C[0] = B[0] + dx * DIST[di]; C[1] = baseY + HT[hi]; C[2] = B[2] + dz * DIST[di];
+          if (nearBody(C)) continue;
+          if (!clearSeg(world, Bc, C, 0.05)) continue;          // the blast must be in sight
+          if (!clearance(world, C)) continue;                   // never inside / grazing geometry
+          let sc = 4;
+          // standing over the blast's own ground, not hovering over a car roof or
+          // a container lid (its edge would cut across the bottom of the frame)
+          if (Math.abs(C[1] - lastFloorDrop - baseY) > 0.45) sc -= 2;
+          if (clearSeg(world, C, vChest, 0.3)) sc += 3;
+          if (clearSeg(world, C, vFeet, 0.3)) sc += 1;
+          if (clearSeg(world, C, app, 0.2)) sc += 2;
+          // nothing big right in front of the lens: points around the blast
+          const rx = -dz, rz = dx;
+          for (let k = -1; k <= 1; k += 2) {
+            _rp[0] = B[0] + rx * 1.6 * k; _rp[1] = Bc[1] + 0.4; _rp[2] = B[2] + rz * 1.6 * k;
+            if (clearSeg(world, C, _rp, 0.2)) sc += 0.5;
+          }
+          _rp[0] = B[0]; _rp[1] = Bc[1] + 1.8; _rp[2] = B[2];
+          if (clearSeg(world, C, _rp, 0.2)) sc += 0.5;
+          // FOREGROUND: a car bonnet or a crate 1 m from the lens fills half the
+          // frame even with every target in sight. Rays toward the lower and
+          // side thirds of the picture must run at least half-way to the blast.
+          const fx = (B[0] + V[0]) * 0.5 - C[0], fy = Bc[1] + 0.3 - C[1], fz = (B[2] + V[2]) * 0.5 - C[2];
+          const fL = Math.hypot(fx, fy, fz) || 1;
+          const sx = -fz / fL, sz = fx / fL;
+          let fg = 0;
+          for (let j = 0; j < FG.length; j++) {
+            _rp[0] = C[0] + fx + sx * FG[j][0] * fL; _rp[1] = C[1] + fy + FG[j][1] * fL; _rp[2] = C[2] + fz + sz * FG[j][0] * fL;
+            const ex = _rp[0] - C[0], ey = _rp[1] - C[1], ez = _rp[2] - C[2];
+            const eL = Math.hypot(ex, ey, ez);
+            _vr[0] = ex / eL; _vr[1] = ey / eL; _vr[2] = ez / eL;
+            const h = ray(world, C, _vr, eL * 0.5);
+            if (h && h.dist != null && h.dist < eL * 0.5) fg++;
+          }
+          sc -= fg * 1.2;
+          sc -= ai * 0.04 + di * 0.15 + hi * 0.05;              // authored preference order
+          if (sc > bestScore) { bestScore = sc; best = C.slice(); }
+          if (sc >= 11.3) break outer;                           // everything in view: take it
+        }
+      }
+    }
+    rp.vantScore = +bestScore.toFixed(2);
+    if (best) return best;
+    // nothing passed: straight up over the blast, if the sky is open there
+    for (const h of [6.5, 4.5, 3.0]) {
+      C[0] = B[0] + D[0] * 1.5; C[1] = baseY + h; C[2] = B[2] + D[2] * 1.5;
+      if (clearSeg(world, Bc, C, 0.05) && clearance(world, C)) { rp.vantScore = 0; return C.slice(); }
+    }
+    rp.vantScore = -1;
+    return null;
+  }
+  const _rp = [0, 0, 0];
+  // frame points (fraction of the target distance): lower corners, lower
+  // middle, the two sides — where a foreground occluder would sit
+  const FG = [[-0.32, -0.22], [0.32, -0.22], [0, -0.26], [-0.42, 0.02], [0.42, 0.02]];
+
+  // Blast-vantage camera frame. Returns false when there is no vantage.
+  function vantageCamera(dtWall) {
+    const camera = ctx.camera;
+    const C = rp.vant;
+    if (!C) return false;
+    const B = rp.srcPos;
+    const V = ghosts[rp.victim];
+    const u = rp.t - rp.blastT;
+    // look target: the projectile on its way in, the blast, then the body
+    let tx = B[0], ty = B[1] + 0.6, tz = B[2];
+    let pj = null;
+    for (let i = 0; i < replayFx.n; i++) {
+      const q = projOut[i];
+      if (q.owner === rp.killer) { pj = q; break; }
+    }
+    if (u < 0 && pj) {
+      const k = 0.4;
+      tx = pj.x + (tx - pj.x) * k; ty = pj.y + (ty - pj.y) * k; tz = pj.z + (tz - pj.z) * k;
+    }
+    if (V && V.present) {
+      const vy = V.pos[1] + (V.alive ? 1.0 : 0.35);
+      const w = u < 0 ? 0.35 : 0.35 + 0.4 * smooth01(u / 0.35);
+      tx += (V.pos[0] - tx) * w; ty += (vy - ty) * w; tz += (V.pos[2] - tz) * w;
+    }
+    const kS = rp.vantInit ? 1 - Math.exp(-7 * Math.max(0, dtWall)) : 1;
+    vLook[0] += (tx - vLook[0]) * kS; vLook[1] += (ty - vLook[1]) * kS; vLook[2] += (tz - vLook[2]) * kS;
+    // slow push-in along the (clear) line toward the blast
+    const span = Math.max(0.5, rp.endT - Math.max(rp.startT, rp.cutT));
+    const prog = smooth01((rp.t - Math.max(rp.startT, rp.cutT)) / span);
+    const dx = B[0] - C[0], dy = B[1] + 0.45 - C[1], dz = B[2] - C[2];
+    const L = Math.hypot(dx, dy, dz);
+    const push = Math.min(0.12 * prog * L, Math.max(0, L - 2.6));
+    const px = C[0] + (dx / (L || 1)) * push, py = C[1] + (dy / (L || 1)) * push, pz = C[2] + (dz / (L || 1)) * push;
+    camPos[0] = px; camPos[1] = py; camPos[2] = pz;
+    camLook[0] = vLook[0]; camLook[1] = vLook[1]; camLook[2] = vLook[2];
+    camera.position.set(px, py, pz);
+    camera.lookAt(vLook[0], vLook[1], vLook[2]);
+    zoomS = 1;
+    setFov(baseFov());
+    camera.updateMatrixWorld();
+    if (!rp.vantInit) { rp.vantInit = true; if (rp.cutT > rp.startT) { flash(0.45); rp.cuts++; } }
+    rp.camInit = true;
+    rp.hideKiller = false;
+    return true;
+  }
+
   // Camera for the replay frame.
   function replayCamera(dtWall) {
     const camera = ctx.camera;
@@ -613,8 +956,11 @@ export function createKillCam(ctx) {
     const u = rp.t - rp.killT;
     let lookX, lookY, lookZ, px, py, pz;
     rp.hideKiller = false;
-    const killerOk = K && K.present && K.alive && !rp.explosive;
-    if (killerOk || (K && K.present && !rp.explosive && rp.camInit && !K.alive)) {
+    // [fx v152] explosive: the thrower's shoulder until rp.cutT, then the vantage
+    const shoulderOk = !rp.explosive || rp.t < rp.cutT;
+    if (rp.explosive && !shoulderOk && vantageCamera(dtWall)) return;
+    const killerOk = K && K.present && K.alive && shoulderOk;
+    if (killerOk || (K && K.present && shoulderOk && rp.camInit && !K.alive)) {
       if (!K.alive) {               // the killer was traded after the kill: hold the shot
         camera.position.set(camPos[0], camPos[1], camPos[2]);
         camera.lookAt(camLook[0], camLook[1], camLook[2]);
@@ -662,10 +1008,32 @@ export function createKillCam(ctx) {
           ox *= k; oy *= k; oz *= k; OL *= k;
         }
       }
+      // [fx v152] the lens must not graze the wall BESIDE him either: the
+      // pull-in ray only guards the line from his eye to the lens, so a wall
+      // 0.2 m to the lens's right still filled half the near plane
+      if (world && world.raycast && OL >= 0.45) {
+        _sr[0] = rx; _sr[1] = 0; _sr[2] = rz;
+        const sh = world.raycast([ex + ox, ey + oy, ez + oz], _sr, 0.32);
+        if (sh && sh.dist != null && sh.dist < 0.32) {
+          const k = Math.max(0, (sh.dist - 0.1)) / 0.32;    // slide in toward his centre line
+          ox -= rx * SHOULDER_SIDE * (1 - k); oz -= rz * SHOULDER_SIDE * (1 - k);
+          OL = Math.hypot(ox, oy, oz);
+        }
+      }
       // too tight to frame his shoulder → we are in his eyes; hide his body
       if (OL < 0.45) rp.hideKiller = true;
       px = ex + ox; py = ey + oy; pz = ez + oz;
       lookX = ex + fx * 30; lookY = ey + fy * 30; lookZ = ez + fz * 30;
+      // [fx v152] long shots: narrow the lens onto the kill (to 60% at >= 18 m)
+      let zf = 1;
+      if (V && V.present && !rp.explosive) {
+        const dv = Math.hypot(V.pos[0] - ex, V.pos[2] - ez);
+        const zk = Math.max(0.6, Math.min(1, Math.pow(8 / Math.max(1, dv), 0.6)));
+        const w = u < 0 ? smooth01((u + 1.0) / 0.7) : 1;
+        zf = 1 - (1 - zk) * w;
+      }
+      zoomS += (zf - zoomS) * (rp.camInit ? 1 - Math.exp(-5 * Math.max(0, dtWall)) : 1);
+      setFov(baseFov() * zoomS);
     } else {
       // FRAMING CAMERA: explosive kill, or the killer is not in the clip.
       const src = rp.srcPos || (K && K.present ? K.pos : null);
@@ -686,6 +1054,7 @@ export function createKillCam(ctx) {
       }
       px = ax + ox; py = ay + oy; pz = az + oz;
       lookX = ax; lookY = ay - 0.2; lookZ = az;
+      setFov(baseFov());
     }
     camPos[0] = px; camPos[1] = py; camPos[2] = pz;
     camLook[0] = lookX; camLook[1] = lookY; camLook[2] = lookZ;
@@ -881,7 +1250,7 @@ body.kc-on #mh-killcam,body.kc-on #ld-root,body.kc-on #hud > *{visibility:hidden
         mode = "idle";
         const s2 = sim();
         if (s2 && s2.epoch === heldEpoch && ctx.bridge) ctx.bridge.dispatch([h]);
-      }, FINAL_FAILSAFE_MS);
+      }, failsafeMs);
     }
     return list;
   }
@@ -994,6 +1363,7 @@ body.kc-on #mh-killcam,body.kc-on #ld-root,body.kc-on #hud > *{visibility:hidden
     // boot.js zeroes the sim accumulator while paused but still calls
     // viewUpdates with the real frame dt: keep ownership, stop advancing.
     if (paused()) { camera.updateMatrixWorld(); return true; }
+    setFov(baseFov());   // [fx v152] never inherit a replay's zoom (or a dead ADS)
 
     since += dt;
     orbit += dt * ORBIT_RATE;
@@ -1084,6 +1454,7 @@ body.kc-on #mh-killcam,body.kc-on #ld-root,body.kc-on #hud > *{visibility:hidden
     },
     isActive() { return driving; },
     isReplaying() { return mode === "replay" || mode === "final"; },
+    setFailsafeMs(ms) { failsafeMs = Math.max(FINAL_FAILSAFE_MS, +ms || FINAL_FAILSAFE_MS); },
     skip() { if (replaying()) { skipReq = true; rp.wall = Math.max(rp.wall, SKIP_ARM); } },
     reset() {
       if (replaying() || mode === "finalHold") endReplay();
@@ -1104,6 +1475,11 @@ body.kc-on #mh-killcam,body.kc-on #ld-root,body.kc-on #hud > *{visibility:hidden
           startRel: +(rp.startT - rp.killT).toFixed(3), endRel: +(rp.endT - rp.killT).toFixed(3),
           wall: +rp.wall.toFixed(3), slow: rp.slow, done: rp.done, explosive: rp.explosive,
           hideKiller: rp.hideKiller, ghosts: ghostBots.length,
+          // [fx v152] explosive plan
+          cutRel: Number.isFinite(rp.cutT) ? +(rp.cutT - rp.killT).toFixed(3) : null,
+          launchRel: Number.isFinite(rp.launchT) ? +(rp.launchT - rp.killT).toFixed(3) : null,
+          vant: rp.vant ? rp.vant.map((v) => +v.toFixed(2)) : null, vantScore: rp.vantScore,
+          vantRays: vRays, projs: replayFx.n, cam: camPos.map((v) => +v.toFixed(2)),
         } : null,
         held: !!held,
         lastKill: lastKill.valid ? { t: lastKill.t, a: lastKill.a, v: lastKill.v } : null,

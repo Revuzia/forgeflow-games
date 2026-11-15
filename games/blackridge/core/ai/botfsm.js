@@ -268,6 +268,22 @@ function eyeOf(bot) {
   return [bot.pos[0], bot.pos[1] + (bot.stance === "crouch" ? 1.10 : 1.62), bot.pos[2]];
 }
 function hdist(a, b) { return Math.hypot(a[0] - b[0], a[2] - b[2]); }
+// 2026-11 review: HOLD leash (objective.js writeObj f.leash = [x, y, z, r]).
+// A leashed bot never walks out of the disc for its own reasons — wander,
+// investigating a sound, hunting a lost target, a push, a loot detour, a cover
+// or reload-break spot outside it. Only the commander moves the leash.
+function leashOf(bot) { const o = bot._obj; return o && o.leash ? o.leash : null; }
+function inLeash(L, p, slack) {
+  return !L || (Math.hypot(p[0] - L[0], p[2] - L[2]) <= L[3] + (slack || 0) && Math.abs((p[1] || 0) - L[1]) < 2.5);
+}
+function leashClamp(nav, L, p) {
+  if (!L || !p || inLeash(L, p)) return p;
+  const dx = p[0] - L[0], dz = p[2] - L[2];
+  const d = Math.hypot(dx, dz) || 1;
+  let q = [L[0] + dx / d * L[3] * 0.75, L[1], L[2] + dz / d * L[3] * 0.75];
+  if (nav && nav.openSpot) { const sp = nav.openSpot(q, 1.5, 0); if (sp && inLeash(L, sp)) q = sp; }
+  return q;
+}
 function burstRange(bot, weapon) {
   const cls = weapon ? weapon.class : "ar";
   if (BURST_BY_ARCH[bot.archetype] && (!weapon || NATIVE_CLASS[bot.archetype] === cls)) return BURST_BY_ARCH[bot.archetype];
@@ -540,7 +556,17 @@ function think(sim, nav, squad, bot, t) {
     case "patrol":
     case "alert": {
       if (st === "alert" && t >= brain.alertUntil) setState(sim, bot, brain, "patrol");
-      if (P.awareness >= 0.5) {
+      // 2026-11 review: an operator ON A TASK (objective anchor, priority
+      // >= 0.6) does not drop it to investigate a stimulus 25+ m away that
+      // did not hit him — distant gunfire used to pull capturers / holders
+      // across the whole map (measured: a lanternwalk spawn walked 90 m
+      // toward a far firefight instead of its lane). Close stimuli and hits
+      // still turn him; sight still goes straight to combat (above).
+      const objT = bot._obj;
+      const stim0 = P.lastKnown || P.heardAt;
+      const onTask = objT && objT.anchor && objT.priority >= 0.6 && stim0 &&
+        hdist(bot.pos, stim0) > 25 && t - (bot.lastHitT ?? -9) > 2;
+      if (P.awareness >= 0.5 && !onTask) {
         const stim = P.lastKnown || P.heardAt;
         if (stim) {
           setState(sim, bot, brain, "suspicious");
@@ -548,7 +574,7 @@ function think(sim, nav, squad, bot, t) {
             until: t + 14, sweepUntil: -9, nextSampleT: -9,
             sprint: P.heardKind === "gunshot", target: stim.slice(),
           };
-          setGoal(nav, sim, brain, bot, brain.investT.target, brain.investT.sprint);
+          setGoal(nav, sim, brain, bot, leashClamp(nav, leashOf(bot), brain.investT.target), brain.investT.sprint);
         }
         break;
       }
@@ -562,7 +588,18 @@ function think(sim, nav, squad, bot, t) {
         if (!brain.anchor || hdist(brain.anchor, obj.anchor) > 0.5) {
           brain.anchor = obj.anchor.slice();
           brain.floorAnchor = brain.anchor;
-          setGoal(nav, sim, brain, bot, brain.anchor, false);
+          // 2026-11 review: a loose anchor (lane / station / freeform, not a
+          // stand, flag or cutoff spot) that sits against a wall is taken
+          // 1-2 m out in the open instead: lane-graph nodes hug walls, and
+          // operators idled there nose-to-the-wall until the 2.5 s nudge
+          // (expert_probe idle@wall 7% on lanternwalk, all at clr-0 anchors)
+          let goal = brain.anchor;
+          const exact0 = obj.priority >= 0.85 || obj.anchorKind === "stand" || obj.anchorKind === "flag" || obj.anchorKind === "cutoff";
+          if (!exact0 && nav && nav.clearAt && nav.clearAt(goal) === 0) {
+            const sp = nav.openSpot(goal, 2.0, 1);
+            if (sp && inLeash(obj.leash, sp)) goal = sp;
+          }
+          setGoal(nav, sim, brain, bot, goal, false);
         }
       } else if (!bot.patrol && !brain.floorAnchor) {
         // W3 PATROL FLOOR (plan Part 4.2): with the campaign's authored
@@ -579,7 +616,8 @@ function think(sim, nav, squad, bot, t) {
         // brain.anchor can be cleared by a role change while floorAnchor survives
         // (2026-11-13: threw "reading '0' of null" in nav.randomPoint and froze the sim)
         const wa = brain.anchor || brain.floorAnchor || bot.pos;
-        const p2 = nav ? nav.randomPoint(wa, 12, rng, 2) : null; // minClr 2: not in a doorway
+        const Lw = leashOf(bot);
+        const p2 = nav ? (Lw ? nav.randomPoint(Lw, Lw[3] * 0.7, rng, 1) : nav.randomPoint(wa, 12, rng, 2)) : null; // minClr 2: not in a doorway
         if (p2) setGoal(nav, sim, brain, bot, p2, band.loudP > 0 && rng() < band.loudP);
       }
       // BOT-AI PASS: an idle bot parked IN a doorway / against a wall (wall-
@@ -588,11 +626,11 @@ function think(sim, nav, squad, bot, t) {
       if (nav && brain.arrived && !bot.patrol) {
         if (brain.idleSinceT < 0) brain.idleSinceT = t;
         const exactSpot = obj && obj.anchor && (obj.priority >= 0.85 || obj.anchorKind === "stand" || obj.anchorKind === "flag" || obj.anchorKind === "cutoff");
-        if (!exactSpot && t - brain.idleSinceT > 2.5 && t - brain.nudgeCheckT > 3) {
+        if (!exactSpot && t - brain.idleSinceT > 0.8 && t - brain.nudgeCheckT > 3) {
           brain.nudgeCheckT = t;
           if (nav.clearAt(bot.pos) === 0) {
             const spot = nav.openSpot(bot.pos, 3, 2);
-            if (spot) { brain.arrived = false; setGoal(nav, sim, brain, bot, spot, false); brain.idleSinceT = -9; }
+            if (spot && inLeash(leashOf(bot), spot)) { brain.arrived = false; setGoal(nav, sim, brain, bot, spot, false); brain.idleSinceT = -9; }
           }
         }
       } else brain.idleSinceT = -9;
@@ -609,13 +647,14 @@ function think(sim, nav, squad, bot, t) {
       if (P.lastHeardT > 0 && t - P.lastHeardT < 0.5 && P.heardAt) {
         inv.target = P.heardAt.slice();
         inv.until = Math.max(inv.until, t + 8);
-        setGoal(nav, sim, brain, bot, inv.target, P.heardKind === "gunshot");
+        setGoal(nav, sim, brain, bot, leashClamp(nav, leashOf(bot), inv.target), P.heardKind === "gunshot");
       }
       if (brain.arrived && inv.sweepUntil < 0) inv.sweepUntil = t + 6; // cone sweep
       if (inv.sweepUntil > 0 && t > inv.sweepUntil && t >= inv.nextSampleT) {
         // widen 10 m (§5.3)
         inv.nextSampleT = t + 2.5;
-        const p2 = nav ? nav.randomPoint(inv.target, 10, rng) : inv.target;
+        const Ls = leashOf(bot);
+        const p2 = nav ? (Ls ? nav.randomPoint(Ls, Ls[3] * 0.7, rng) : nav.randomPoint(inv.target, 10, rng)) : inv.target;
         setGoal(nav, sim, brain, bot, p2, false);
       }
       if (t >= inv.until) {
@@ -744,7 +783,7 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
     const lk0 = squad.squadLastKnown(bot.id, who) || (P.lastKnown ? { pos: P.lastKnown } : null);
     setState(sim, bot, brain, "suspicious");
     brain.investT = { until: t + 14, sweepUntil: -9, nextSampleT: -9, sprint: false, target: lk0 ? lk0.pos.slice() : bot.pos.slice() };
-    setGoal(nav, sim, brain, bot, brain.investT.target, false);
+    setGoal(nav, sim, brain, bot, leashClamp(nav, leashOf(bot), brain.investT.target), false);
     squad.release(bot.id);
     return;
   }
@@ -773,7 +812,7 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
   // referee-forced flank (W3: _obj.noFlank removes it)
   if (brain.forceFlank) {
     brain.forceFlank = false;
-    if (!(obj && obj.noFlank)) { enterFlank(sim, nav, squad, bot, brain, t, rng); return; }
+    if (!(obj && (obj.noFlank || obj.leash))) { enterFlank(sim, nav, squad, bot, brain, t, rng); return; }
   }
 
   const lk = squad.squadLastKnown(bot.id, who);
@@ -791,7 +830,7 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
       setState(sim, bot, brain, "suppress");
       return;
     }
-    if (t - brain.flankThinkAt > band.flankEvery && !(obj && obj.noFlank)) {
+    if (t - brain.flankThinkAt > band.flankEvery && !(obj && (obj.noFlank || obj.leash))) {
       brain.flankThinkAt = t;
       if (rng() < band.flankP) { enterFlank(sim, nav, squad, bot, brain, t, rng); return; }
     }
@@ -815,14 +854,14 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
   if (seenNow && tbody.weapon && tbody.weapon.state === "reloading" && t - brain.reloadSeenT > 2.5) {
     brain.reloadSeenT = t;
     const dR = hdist(bot.pos, tbody.pos);
-    if (band.pushReload > 0 && dR > 5 && dR < 32 && (band.pushReload >= 1 || rng() < band.pushReload) && !objDrive && bot.hp > 45) {
+    if (band.pushReload > 0 && dR > 5 && dR < 32 && (band.pushReload >= 1 || rng() < band.pushReload) && !objDrive && bot.hp > 45 && !(obj && obj.leash)) {
       const f = Math.max(0.35, 1 - 9 / dR); // close to ~9 m, never onto the muzzle
       setGoal(nav, sim, brain, bot, [bot.pos[0] + (tbody.pos[0] - bot.pos[0]) * (1 - f), bot.pos[1], bot.pos[2] + (tbody.pos[2] - bot.pos[2]) * (1 - f)], true);
       brain.pushUntil = t + 2.2;
     }
   }
   const lostS = t - P.lastSeenT;
-  brain.huntOn = !!(band.huntAfterS > 0 && !objDrive && !seenNow && P.lastSeenT > -8 && lostS > band.huntAfterS &&
+  brain.huntOn = !!(band.huntAfterS > 0 && !objDrive && !(obj && obj.leash) && !seenNow && P.lastSeenT > -8 && lostS > band.huntAfterS &&
     bot.hp > 55 && t >= brain.taskLockUntil);
 
   // cover (re)scoring: entry / every 6 s / compromised ≥20 dmg (§5.8)
@@ -843,7 +882,7 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
     if (brain.coverIdx < 0 || t - brain.coverScoreAt >= band.coverRescoreS || compromised) {
       brain.coverScoreAt = t;
       brain.hpAtCover = bot.hp;
-      const pick = pickCover(sim, nav, bot, brain, threat, weapon, pushOn, { pathOnly: true, obj, t, noise: band.coverNoise, rng });
+      const pick = pickCover(sim, nav, bot, brain, threat, weapon, pushOn, { pathOnly: true, obj, t, noise: band.coverNoise, rng, leash: obj.leash });
       if (pick) brain.coverIdx = pick.idx; // note the node; the GOAL stays the anchor
     }
     // (objective runners keep the tempo: no dives for attackers / escorts /
@@ -852,7 +891,7 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
     if (band.peek > 0 && pri < 0.9 && !runner && !hopping && t >= brain.coverHopNextT && seenNow && brain.coverIdx >= 0 && nav) {
       const cv = sim.colliders.cover && sim.colliders.cover[brain.coverIdx];
       const dC = cv ? hdist(bot.pos, cv.pos) : 99;
-      if (cv && dC >= 1.0 && dC <= 5.0 && Math.abs(cv.pos[1] - bot.pos[1]) < 1.0) {
+      if (cv && dC >= 1.0 && dC <= 5.0 && Math.abs(cv.pos[1] - bot.pos[1]) < 1.0 && inLeash(obj.leash, cv.pos)) {
         brain.coverHopNextT = t + 6;
         const eye = [cv.pos[0], cv.pos[1] + 1.3, cv.pos[2]];
         if (sim.world.losBlocked(eye, [threat[0], threat[1] + 1.0, threat[2]]) && (band.peek >= 1 || rng() < band.peek)) {
@@ -861,7 +900,7 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
         }
       }
     }
-  } else if (pushOn || lastStand || brain.huntOn) {
+  } else if ((pushOn || lastStand || brain.huntOn) && !(obj && obj.leash)) {
     // push: close on last-known directly (§5.3 — the engagement ends); a
     // hunter walks (gun up, quieter) and sweeps around the spot once there
     setGoal(nav, sim, brain, bot, threat, !brain.huntOn || lostS > band.huntAfterS + 6);
@@ -873,8 +912,12 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
     brain.coverScoreAt = t;
     brain.hpAtCover = bot.hp;
     const pick = pickCover(sim, nav, bot, brain, threat, weapon, pushOn,
-      pri >= 0.40 && obj && obj.anchor ? { obj, t, noise: band.coverNoise, rng } : { t, noise: band.coverNoise, rng });
-    if (pick) {
+      pri >= 0.40 && obj && obj.anchor ? { obj, t, noise: band.coverNoise, rng, leash: obj.leash } : { t, noise: band.coverNoise, rng, leash: obj ? obj.leash : null });
+    if (!pick && obj && obj.leash) {
+      // no cover node inside the hold: fight from the assigned spot
+      brain.coverIdx = -1;
+      setGoal(nav, sim, brain, bot, obj.anchor || obj.leash, false);
+    } else if (pick) {
       brain.coverIdx = pick.idx;
       setGoal(nav, sim, brain, bot, pick.pos, hdist(bot.pos, pick.pos) > 8);
     } else {
@@ -912,7 +955,14 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
       (!seenNow || staticFor >= 6) && // a target in plain view is shot, not fragged (the low hardened/veteran
                                       // thresholds mean 'flush it out of cover', i.e. out of sight)
       brain.confirmT >= 0 && t >= brain.confirmT + brain.reactionS) {
-    const target = [threat[0], sim.world.sphereGround(threat[0], threat[2]), threat[2]];
+    // 2026-11 review: aim the frag at the FLOOR the target stands on. The old
+    // sphereGround(x, z) is the highest surface over that point — under
+    // saltmarket's market-hall roofs and the arcade decks that is the ROOF
+    // (5-7 m up), so the arc was unsolvable (out of range upward) or the frag
+    // was lobbed onto the roof: 0 frags per TDM match there (expert_probe
+    // frag/min 0.00), 157/157 'no arc' rejections in the gate count.
+    const fy = nav && nav.floorAt ? nav.floorAt(threat) : null;
+    const target = [threat[0], fy != null && Math.abs(fy - (threat[1] || 0)) < 1.2 ? fy : (threat[1] || 0), threat[2]];
     const d = hdist(bot.pos, target);
     if (d >= 8 && d <= 30) {
       const pitch = solveArcPitch(eyeOf(bot), target, GRENADE.BOT_THROW_V);
@@ -934,7 +984,7 @@ function planCombat(sim, nav, squad, bot, brain, t, rng) {
   if (!brain.gPlanned) {
     EQAI.planTactical(sim, bot, brain, t, rng, band, {
       threat, seenNow, lostS, staticFor, objDrive, obj, pushOn, lastStand, solveArcPitch,
-      setGoal: (pos, sprint) => setGoal(nav, sim, brain, bot, pos, sprint),
+      setGoal: (pos, sprint) => setGoal(nav, sim, brain, bot, leashClamp(nav, obj ? obj.leash : null, pos), sprint),
     });
   }
   if (!seenNow && lostS > 4 && brain.arrived && !brain.gPlanned) EQAI.planMine(sim, bot, brain, t, rng, band);
@@ -1072,6 +1122,7 @@ function pickCover(sim, nav, bot, brain, threatPos, weapon, pushOn, objOpts) {
     const dBot = hdist(c.pos, bot.pos);
     if (dBot > 45) continue;
     if (legA && distToSeg(c.pos, legA, legB) > 6) continue; // H1: stay on the path
+    if (objOpts && objOpts.leash && !inLeash(objOpts.leash, c.pos, -0.4)) continue; // HOLD: inside the ring
     const dThreat = hdist(c.pos, threatPos);
     if (dThreat < 2 || dThreat > band[1] * 1.6 + 10) continue;
     let s = 0;
@@ -1247,6 +1298,14 @@ function considerLoot(sim, nav, squad, bot, brain, band, t) {
     let it = null;
     for (let i = 0; i < loot.length; i++) if (loot[i].id === brain.lootId) { it = loot[i]; break; }
     if (it && !brain.arrived && brain.goal && hdist(brain.goal, it.pos) < 1.6) return true; // still walking there
+    // 2026-11 review: "arrived" next to an item that is still lying there =
+    // the item is not walkable-to (behind a wall face / inside a prop's
+    // footprint; the path ended short). Blacklist it for this bot for 30 s —
+    // it used to re-pick it every 1.5 s and stand at the wall forever.
+    if (it && brain.arrived && hdist(bot.pos, it.pos) > 1.0) {
+      if (!brain.lootBad) brain.lootBad = new Map();
+      brain.lootBad.set(it.id, t + 30);
+    }
     brain.lootUntil = -9; brain.lootId = -1; brain.anchor = null; // gone / reached: resume orders
     return false;
   }
@@ -1267,6 +1326,8 @@ function considerLoot(sim, nav, squad, bot, brain, band, t) {
     if (S.time < it.armedAt) continue;
     if (!sim.match && it.src === "placed") continue;         // campaign: placed items are the player's
     if (Math.abs(it.pos[1] - bot.pos[1]) > 2.5) continue;
+    if (obj && obj.leash && !inLeash(obj.leash, it.pos)) continue; // HOLD: no detours out of the ring
+    if (brain.lootBad && brain.lootBad.get(it.id) > t) continue;
     const d = hdist(bot.pos, it.pos);
     if (d > range) continue;
     let val = 0;
@@ -1444,6 +1505,7 @@ function act(sim, nav, squad, bot, dt, t) {
   c.fire = false; c.ads = false; c.reload = false; c.switchTo = null;
   c.interact = false; c.grenade = false;
   brain.mvActive = false; // steer.js re-arms it when a path is followed this tick
+  brain.fireOnMove = false; // re-derived in the combat movement block
 
   // [equipment lane] blinded / looking away from a flash / clearing a noticed
   // tripmine own the tick (equip_ai.react)
@@ -1517,6 +1579,7 @@ function act(sim, nav, squad, bot, dt, t) {
       }
       // a recruit reloads where it stands (in the open, in the line of fire)
       if (dest && band.reloadBreak < 1 && rng() >= band.reloadBreak) dest = null;
+      if (dest && !inLeash(leashOf(bot), dest)) dest = null; // HOLD: reload inside the ring
       brain.reloadDest = dest;
     } else brain.reloadDest = null;
   }
@@ -1657,9 +1720,21 @@ function act(sim, nav, squad, bot, dt, t) {
     const hopRun = (t < brain.pushUntil && hdist(bot.pos, brain.goal || bot.pos) > 3) ||
       (t < brain.coverHopUntil && !brain.arrived && hdist(bot.pos, brain.goal || bot.pos) > 0.8);
     const wantHold = ((visibleFresh && t >= brain.taskLockUntil) || st === "suppress") && !objPress && !hopRun;
+    // 2026-11 review: an objective runner (carrier, return: priority
+    // >= 0.9) keeps its feet moving through a fight (F1 above) — but it also
+    // never stopped, so the stationary fire gate meant it NEVER SHOT BACK:
+    // a flag carrier ran home as a target (mode_probe ctf: ~1 capture per 18
+    // grabs, almost every carrier died with the flag). A human carrier walks
+    // and shoots. Inside 25 m of a visible target it now drops the sprint and
+    // may fire on the walk (the shared moving-spread penalty applies; the
+    // reaction latch, tokens and fire policy still gate every pull).
+    // Scoped to the flag carrier / returner (the objective layer stays
+    // remove-only for every other order — objective.selftest AC-32).
+    brain.fireOnMove = !!(objPress && obj && (obj.role === "carry" || obj.role === "return") &&
+      visibleFresh && tb && hdist(bot.pos, tb.pos) <= 25);
     if (!brain.arrived && brain.goal && !wantHold) {
       followPath(sim, nav, bot, brain, c, dt);
-      c.sprint = brain.sprintMove && hdist(bot.pos, brain.goal) > 6;
+      c.sprint = brain.sprintMove && hdist(bot.pos, brain.goal) > 6 && !brain.fireOnMove;
       desYaw = brain.moveYaw != null ? brain.moveYaw : brain.curYaw;
       moving = true;
       turnRate = 5.6;
@@ -1699,6 +1774,25 @@ function act(sim, nav, squad, bot, dt, t) {
       let ty = targetPos[1] + (brain.aimHigh && visibleFresh
         ? (crouched ? 1.02 : 1.55)
         : (crouched ? 0.75 : 1.05));
+      // 2026-11 review: aim at the part of the body that is actually in view.
+      // Perception calls a target "seen" when its chest OR its head is in
+      // line (and keeps it seen for 0.3 s between 0.15 s evaluations), but
+      // the aim point was always the centre of mass — so a man showing his
+      // head over a crate, or one who had just stepped behind a container,
+      // was shot THROUGH the cover (fight_probe: 52% of lanternwalk trigger
+      // pulls had the muzzle->chest line blocked, hit rate 18% on those).
+      // Now: chest clear -> chest; else head clear -> head; else nothing to
+      // shoot at -> no pull (combat only: suppress fire at cover is intended).
+      // Same body position the aim already uses; re-tested every 0.1 s.
+      if (st === "combat" && visibleFresh && sim.world.losBlocked) {
+        if (!(t < brain.aimVisT) || brain.aimVisWho !== (P ? P.target : null)) {
+          brain.aimVisT = t + 0.1; brain.aimVisWho = P ? P.target : null;
+          const cy = targetPos[1] + (crouched ? 0.75 : 1.05), hy = targetPos[1] + (crouched ? 1.0 : 1.52);
+          brain.aimVis = !sim.world.losBlocked(eye, [targetPos[0], cy, targetPos[2]]) ? 1
+            : (!sim.world.losBlocked(eye, [targetPos[0], hy, targetPos[2]]) ? 2 : 0);
+        }
+        if (brain.aimVis === 2) ty = targetPos[1] + (crouched ? 1.0 : 1.52);
+      } else brain.aimVis = 1;
       // [heavy weapons] a rocket goes at the FEET: the blast does the rest
       if (weapon && weapon.class === "launcher") ty = targetPos[1] + 0.35;
       if (st === "suppress") {
@@ -1718,14 +1812,15 @@ function act(sim, nav, squad, bot, dt, t) {
 
       // gates — every one must pass on the tick of the pull (§5.5–§5.7)
       const reactionReady = brain.confirmT >= 0 && t >= brain.confirmT + brain.reactionS - 1e-9;
-      const stationary = Math.hypot(bot.vel[0], bot.vel[2]) < band.fireSpeed;
+      const stationary = Math.hypot(bot.vel[0], bot.vel[2]) < band.fireSpeed ||
+        (st === "combat" && brain.fireOnMove && !c.sprint);
       if (reactionReady && stationary) c.ads = d3 > 12 && !(weapon && weapon.class === "shotgun"); // steady ADS posture
       const who = P ? P.target : null;
       const hasToken = st === "suppress"
         ? squad.holdsSuppress(bot.id)
         : (squad.holdsFire(bot.id) || squad.requestToken(bot.id, who));
       let wantFire = reactionReady && hasToken && stationary && mag > 0 &&
-        t >= brain.pauseUntil;
+        t >= brain.pauseUntil && brain.aimVis !== 0;
       // W3 H3: the objective fire policy — MONOTONIC, it can only remove a
       // shot. 'hold' → never; 'defensive' → only inside selfDefenseM or
       // when hit in the last 2.0 s.
@@ -1815,6 +1910,11 @@ function act(sim, nav, squad, bot, dt, t) {
       if (!bursting && (reacting || pausing) && bot.hp > 0) strafeStep(sim, nav, bot, brain, band, t, rng, c);
     }
   }
+
+  // ---- 2026-11 review: never stand inside another body (team-mate or the
+  // player) — two hold / arrival points can coincide (steer.spaceOut)
+  if (!moving && !brain.mvActive && !c.fire && !(brain.burstLeft > 0 && brain.burstSize > 0) &&
+      !(reloading && brain.reloadDest) && STEER.spaceOut(sim, nav, bot, brain)) moving = true;
 
   // ---- peek stance at low cover while engaged (visual peek cycle)
   if (st === "combat" && brain.arrived && brain.coverIdx >= 0 && !c.fire && !brain.pk.on) {

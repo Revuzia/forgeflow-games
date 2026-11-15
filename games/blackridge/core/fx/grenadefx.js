@@ -147,6 +147,55 @@ export function createGrenadeFx(ctx) {
   let reconEndT = -1, reconT0 = 0, lastSweepT = -99;
   let lastSim = null;
 
+  // ---- [fx v152] kill cam replay feed (see update) ------------------------------
+  let lastRf = null;
+  const rFrag = [], rRock = [];
+  const rFragV = [], rRockV = [];
+  for (let i = 0; i < 4; i++) {
+    rFragV.push({ pos: [0, 0, 0], vel: [0, 0, 0], fuseLeft: 2, _p: [0, 0, 0], _id: -1 });
+    rRockV.push({ pos: [0, 0, 0], vel: [0, 0, -1], age: 1 });
+  }
+  function fragView(pool, i, q) {
+    const v = pool[i];
+    if (v._id !== q.id) { v._id = q.id; v._p[0] = q.x; v._p[1] = q.y; v._p[2] = q.z; }
+    // a spin axis from the recorded path (the recording keeps no velocity)
+    v.vel[0] = (q.x - v._p[0]) * 30; v.vel[1] = (q.y - v._p[1]) * 30; v.vel[2] = (q.z - v._p[2]) * 30;
+    v._p[0] = q.x; v._p[1] = q.y; v._p[2] = q.z;
+    v.pos[0] = q.x; v.pos[1] = q.y; v.pos[2] = q.z;
+    v.fuseLeft = q.a;
+    return v;
+  }
+  function rockView(pool, i, q) {
+    const v = pool[i];
+    v.pos[0] = q.x; v.pos[1] = q.y; v.pos[2] = q.z;
+    const cp = Math.cos(q.b);
+    v.vel[0] = Math.sin(q.a) * cp * 50; v.vel[1] = Math.sin(q.b) * 50; v.vel[2] = Math.cos(q.a) * cp * 50;
+    return v;
+  }
+  // replay-only tripmines (the live ones are equipment_fx's; a mine that made
+  // the kill no longer exists in the live sim when its kill is replayed)
+  const MINE_N = 4;
+  const mines = [];
+  {
+    const mm = new THREE.MeshStandardMaterial({ color: 0x3d4434, roughness: 0.7, metalness: 0.2 });
+    const legM = new THREE.MeshStandardMaterial({ color: 0x24261f, roughness: 0.8 });
+    const bodyG = new THREE.BoxGeometry(0.22, 0.12, 0.05); bodyG.translate(0, 0.11, 0);
+    const legG = new THREE.CylinderGeometry(0.006, 0.006, 0.07, 5); legG.translate(0, 0.035, 0);
+    for (let i = 0; i < MINE_N; i++) {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(bodyG, mm));
+      for (const x of [-0.08, 0.08]) { const l = new THREE.Mesh(legG, legM); l.position.x = x; g.add(l); }
+      const led = new THREE.Sprite(new THREE.SpriteMaterial({ map: gTex, color: 0xff2a1a, transparent: true, opacity: 0.6,
+        depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+      led.scale.setScalar(0.07); led.position.set(0.07, 0.16, -0.03);
+      g.add(led);
+      g.userData.led = led;
+      g.visible = false; g.frustumCulled = false;
+      root.add(g);
+      mines.push(g);
+    }
+  }
+
   function onStreak(d) {
     if (!d || d.id !== "recon") return;
     const s = ctx.sim && ctx.sim();
@@ -172,8 +221,39 @@ export function createGrenadeFx(ctx) {
       if (s !== lastSim) { lastSim = s; reconEndT = -1; }
       const t = s.state.time;
 
+      // [fx v152] KILL CAM REPLAY FEED. While killcam.js plays a replay it
+      // publishes ctx.replayFx: the RECORDED frags / rockets in flight (and
+      // tripmines that are about to go off). The live lists are the wrong
+      // timeline then — the rocket that made the kill is long gone — so they are
+      // swapped for the recording, and the trail pool is wiped at both cuts.
+      const rf = ctx.replayFx || null;
+      if (rf !== lastRf) {
+        lastRf = rf;
+        for (const p of trail) p.s.visible = false;
+        for (const R of rockets) { R.g.visible = false; R.ref = null; }
+      }
+      let list = (s.internal && s.internal.grenades) || [];
+      let rl = (s.internal && s.internal.rockets) || [];
+      if (rf) {
+        rFrag.length = 0; rRock.length = 0;
+        for (let i = 0; i < rf.n; i++) {
+          const q = rf.projs[i];
+          if (q.kind === 1) rFrag.push(fragView(rFragV, rFrag.length, q));
+          else if (q.kind === 2) rRock.push(rockView(rRockV, rRock.length, q));
+        }
+        list = rFrag; rl = rRock;
+      }
+      for (let i = 0; i < MINE_N; i++) {
+        const mn = mines[i];
+        const q = rf && i < rf.minesN ? rf.mines[i] : null;
+        if (!q) { if (mn.visible) mn.visible = false; continue; }
+        mn.visible = true;
+        mn.position.set(q.x, q.y - 0.05, q.z);
+        mn.rotation.set(0, q.yaw || 0, 0);
+        mn.userData.led.material.opacity = (t % 0.8) < 0.12 ? 1 : 0.25;
+      }
+
       // frags in flight
-      const list = (s.internal && s.internal.grenades) || [];
       for (let i = 0; i < POOL; i++) {
         const f = frags[i];
         const gr = list[i];
@@ -194,7 +274,6 @@ export function createGrenadeFx(ctx) {
       }
 
       // [heavy weapons] rockets in flight + their smoke trails
-      const rl = (s.internal && s.internal.rockets) || [];
       for (let i = 0; i < R_POOL; i++) {
         const R = rockets[i];
         const rk = rl[i];

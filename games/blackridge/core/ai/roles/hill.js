@@ -149,6 +149,9 @@ export function assign(ctx) {
         role: ours ? "defend" : "attack", reason, anchor: spot, anchorKind: "flag",
         priority: contested || !ours ? 0.9 : 0.8, firePolicy: "free", posture,
         noRetreat: d <= live.r, noFlank: true,
+        // 2026-11 review: once on the hill, a HOLD leash (botfsm.js) — the
+        // cover hop / reload break / sound investigation stay inside the ring
+        leash: d <= live.r + 4 ? [live.pos[0], live.pos[1], live.pos[2], Math.max(1.5, live.r - 0.5)] : null,
       });
     } else {
       const anchor = driveTo(ctx, b, [live.pos[0], live.pos[1], live.pos[2]]);

@@ -196,6 +196,11 @@ export function createLootFx(ctx) {
     update(dt) {
       const s = ctx.sim ? ctx.sim() : null;
       if (!s) return;
+      // [fx v152] a kill cam replay shows the seconds BEFORE the kill: the loot
+      // the victim dropped (live state) would sit glowing at his feet before he
+      // dies. Hidden for the replay; nothing else changes.
+      const rep = !!ctx.replayFx;
+      if (root.visible === rep) root.visible = !rep;
       clock += Math.min(dt, 0.1);
       if (s !== lastSim) { for (const e of items.values()) dispose(e); items.clear(); for (const e of pads.values()) root.remove(e.g); pads.clear(); lastSim = s; }
       const loot = s.state.loot || [];

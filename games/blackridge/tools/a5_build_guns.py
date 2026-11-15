@@ -599,25 +599,85 @@ def reddot(y, rail_top, sight_z, half_w=0.0165, win_h=0.0125, node="dressing"):
     through sway and recoil like a real collimated sight seen slightly off-axis."""
     z0 = rail_top + 0.006
     top = sight_z + win_h + 0.0035
+    iw = half_w - 0.0030
 
+    # (2026-11-14 guns pass) was a clamp + a plain hooded box + a battery block: in-game it
+    # read as "a black box with a hole". Now a hooded box sight's real anatomy (the gunsmith
+    # calls it RED DOT; its HOLO is att_holo in attachments.glb): a chamfered
+    # housing whose hood rakes forward into a sun visor, a rear control deck under the
+    # window carrying two rubber buttons (the face the eye sees at ADS), a side battery
+    # cap, a cross-bolt nut and QD lever on the base, grip grooves down the hood sides.
     def body(bm):
-        rbox(bm, -0.0125, 0.0125, y - 0.026, y + 0.026, rail_top - 0.004, z0)                 # clamp base
-        cyl_x(bm, y - 0.014, rail_top - 0.0005, 0.0125, 0.0180, 0.0045, seg=14)                 # clamp nuts
-        cyl_x(bm, y + 0.014, rail_top - 0.0005, 0.0125, 0.0180, 0.0045, seg=14)
-        prism_y(bm, [(-half_w, z0 - 0.001), (half_w, z0 - 0.001), (half_w, top - 0.004), (half_w - 0.004, top),
-                     (-half_w + 0.004, top), (-half_w, top - 0.004)], y - 0.020, y + 0.022)     # hood
-        rbox(bm, -0.0105, 0.0105, y - 0.034, y - 0.020, z0 - 0.001, sight_z - win_h - 0.001)   # battery box
-        cyl_x(bm, y - 0.027, z0 + 0.006, -0.0105, -0.0150, 0.0048, seg=14)                      # brightness dial
+        rbox(bm, -0.0130, 0.0130, y - 0.030, y + 0.028, rail_top - 0.004, z0)                 # base / clamp
+        cyl_x(bm, y + 0.010, rail_top - 0.0005, 0.0130, 0.0185, 0.0046, seg=6)                  # cross-bolt hex nut
+        prism_x(bm, [(y - 0.024, rail_top - 0.001), (y + 0.004, rail_top - 0.001), (y + 0.006, z0 - 0.0005),
+                     (y - 0.026, z0 - 0.0005)], -0.0160, -0.0130)                              # QD lever (left)
+        # hood: chamfered octagon section; the top rakes forward over the window as a visor
+        prism_y(bm, [(-half_w, z0 - 0.001), (half_w, z0 - 0.001), (half_w, top - 0.005), (half_w - 0.005, top),
+                     (-half_w + 0.005, top), (-half_w, top - 0.005)], y - 0.016, y + 0.020)
+        prism_x(bm, [(y + 0.019, top - 0.0035), (y + 0.031, top - 0.0020), (y + 0.031, top - 0.0005),
+                     (y + 0.019, top)], -half_w + 0.004, half_w - 0.004)                       # sun visor
+        for sx in (-1, 1):                                                                       # window cheeks
+            prism_x(bm, [(y + 0.019, z0 - 0.001), (y + 0.027, z0 - 0.001), (y + 0.031, top - 0.0035),
+                         (y + 0.019, top - 0.0035)],
+                    sx * half_w - (0.0035 if sx > 0 else 0.0), sx * half_w + (0.0 if sx > 0 else 0.0035))
+        # rear control deck under the window + two rubber buttons facing the eye
+        prism_x(bm, [(y - 0.031, z0 - 0.001), (y - 0.016, z0 - 0.001), (y - 0.016, sight_z - win_h - 0.0010),
+                     (y - 0.026, sight_z - win_h - 0.0010), (y - 0.031, sight_z - win_h - 0.0045)],
+                -half_w + 0.0015, half_w - 0.0015)
+        cyl_x(bm, y - 0.004, z0 + 0.0075, half_w - 0.0005, half_w + 0.0032, 0.0060, seg=20)    # battery cap (right)
+        cyl_x(bm, y - 0.004, z0 + 0.0075, half_w + 0.0030, half_w + 0.0040, 0.0050, seg=20)
 
     def cut(bm):
-        iw = half_w - 0.0030
         prism_y(bm, [(-iw, sight_z - win_h), (iw, sight_z - win_h), (iw, sight_z + win_h - 0.003),
                      (iw - 0.003, sight_z + win_h), (-iw + 0.003, sight_z + win_h), (-iw, sight_z + win_h - 0.003)],
                 y - 0.040, y + 0.040)                                                           # the window
-    part("optic_body", body, COL["optic"], "optic", node, bevel=0.0009, seg=2, angle=25, cut=cut)
+        for k in range(4):                                                                       # hood grip grooves
+            zz = z0 + 0.003 + k * 0.0032
+            if zz + 0.0012 < sight_z - win_h - 0.001:
+                rbox(bm, -half_w - 0.002, -half_w + 0.0007, y - 0.012, y + 0.016, zz, zz + 0.0012)
+                rbox(bm, half_w - 0.0007, half_w + 0.002, y - 0.012, y + 0.016, zz, zz + 0.0012)
+    part("optic_body", body, COL["optic"], "optic", node, bevel=0.0008, seg=2, angle=25, cut=cut)
+
+    def buttons(bm):
+        for xx in (-0.0055, 0.0055):
+            cyl_y(bm, xx, z0 + 0.0060, y - 0.0335, y - 0.0300, 0.0026, seg=14)
+    part("optic_buttons", buttons, COL["rubber"], "rubber", node, bevel=0.0005, seg=1)
 
     def dot(bm):
         cyl_y(bm, 0.0, sight_z, y + 0.0100, y + 0.0104, 0.00095, seg=12)
+    part("optic_dot", dot, (1.0, 0.05, 0.03), "dot", node, bevel=0)
+
+
+def tube_dot(y, rail_top, sight_z, r=0.0165, L=0.040, node="dressing"):
+    """(2026-11-14 guns pass) Tube micro red dot on a riser — the Vesper's own optic, so
+    the SMG no longer shares the Warden's holo box: at the hip a short round can with
+    turret caps; at ADS a ROUND window instead of the holo's rectangle. Same sight
+    contract: the emissive dot sits on the sight line (SOCKET_sight)."""
+    zb = sight_z - r                                     # tube underside
+
+    def body(bm):
+        rbox(bm, -0.0125, 0.0125, y - 0.020, y + 0.020, rail_top - 0.004, rail_top + 0.004)    # clamp
+        cyl_x(bm, y + 0.008, rail_top - 0.0005, 0.0125, 0.0180, 0.0044, seg=6)                   # cross-bolt nut
+        prism_x(bm, [(y - 0.017, rail_top + 0.003), (y + 0.017, rail_top + 0.003), (y + 0.012, zb + 0.004),
+                     (y - 0.012, zb + 0.004)], -0.0095, 0.0095)                                  # riser
+        cyl_y(bm, 0.0, sight_z, y - L * 0.5, y + L * 0.5, r, seg=36)                             # tube
+        for yy in (y - L * 0.5, y + L * 0.5 - 0.006):                                           # lens bells
+            cyl_y(bm, 0.0, sight_z, yy, yy + 0.006, r + 0.0018, seg=36)
+        cyl_z(bm, 0.0, y + 0.002, sight_z + r - 0.002, sight_z + r + 0.0075, 0.0068, seg=20)     # elevation cap
+        cyl_x(bm, y + 0.002, sight_z, r - 0.002, r + 0.0075, 0.0068, seg=20)                     # windage cap
+        cyl_x(bm, y - 0.006, sight_z - 0.003, -r - 0.0070, -r + 0.002, 0.0072, seg=20)           # dial / battery (left)
+
+    def cut(bm):
+        cyl_y(bm, 0.0, sight_z, y - L, y + L, r - 0.0024, seg=36)                               # the bore you look down
+        for k in range(10):                                                                      # dial knurl
+            a = 2 * math.pi * k / 10
+            yy, zz = y - 0.006 + math.cos(a) * 0.0072, sight_z - 0.003 + math.sin(a) * 0.0072
+            rbox(bm, -r - 0.0080, -r - 0.0030, yy - 0.0009, yy + 0.0009, zz - 0.0009, zz + 0.0009)
+    part("optic_body", body, COL["optic"], "optic", node, bevel=0.0007, seg=2, angle=25, cut=cut)
+
+    def dot(bm):
+        cyl_y(bm, 0.0, sight_z, y + L * 0.5 - 0.008, y + L * 0.5 - 0.0076, 0.00095, seg=12)
     part("optic_dot", dot, (1.0, 0.05, 0.03), "dot", node, bevel=0)
 
 
@@ -705,6 +765,35 @@ def mlok_handguard(y0, y1, cz, r_flat, col, name="handguard", n=8, slot_rows=(2,
                     bm.faces.new([v[i] for i in f])
                 y += 0.044
     part(name, b, col, "metal", "base", bevel=0.0012, seg=2, angle=20, cut=cut)
+
+
+def round_handguard(y0, y1, cz, r, col, name="handguard"):
+    """(2026-11-14 guns pass) The Vesper's own handguard: a round tube with rows of
+    raked vent slots and a stepped front lip — at the hip it no longer reads as the
+    Warden's octagon with M-LOK windows."""
+    def b(bm):
+        cyl_y(bm, 0.0, cz, y0, y1 - 0.010, r, seg=32)
+        cyl_y(bm, 0.0, cz, y1 - 0.010, y1, r * 1.05, r * 1.02, seg=32)               # front lip
+        cyl_y(bm, 0.0, cz, y0, y0 + 0.008, r * 1.06, seg=32)                          # barrel-nut collar
+
+    def cut(bm):
+        for deg in (-120, -75, 75, 120):           # slots on the upper / lower flanks of each side
+            a = math.radians(deg)
+            nrm = Vector((math.sin(a), 0.0, math.cos(a)))
+            t = Vector((math.cos(a), 0.0, -math.sin(a)))
+            y = y0 + 0.020
+            while y + 0.020 < y1 - 0.016:
+                c = Vector((0.0, 0.0, cz)) + nrm * r
+                v = []
+                for dy, sh in ((0.0, 0.0), (0.020, 0.004)):              # raked: the slot leans forward
+                    for dt in (-0.0024, 0.0024):
+                        for dn in (-0.006, 0.004):
+                            p = c + t * (dt + sh) + nrm * dn
+                            v.append(bm.verts.new((p.x, y + dy, p.z)))
+                for f in [(0, 2, 6, 4), (1, 5, 7, 3), (0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6)]:
+                    bm.faces.new([v[k] for k in f])
+                y += 0.028
+    part(name, b, col, "metal", "base", bevel=0.0010, seg=2, angle=20, cut=cut)
 
 
 def flash_hider(y0, y1, z, r, node="muzzle"):
@@ -863,7 +952,10 @@ def gun_ar(spec):
 
     # handguard
     hr = spec["hg_r"]
-    mlok_handguard(ry1 - 0.001, hg1, bz, hr, spec.get("hg_col", recv_col))
+    if spec.get("hg_style") == "round":
+        round_handguard(ry1 - 0.001, hg1, bz, hr, spec.get("hg_col", recv_col))
+    else:
+        mlok_handguard(ry1 - 0.001, hg1, bz, hr, spec.get("hg_col", recv_col))
 
     # barrel, gas block, muzzle device
     by1 = spec["barrel_end"]
@@ -912,28 +1004,87 @@ def gun_ar(spec):
     if st["kind"] == "carbine":
         y0s, y1s = st["y0"], st["y1"]
 
+        # (2026-11-14 guns pass) at the hip this stock is the surface nearest the eye, and the
+        # old one was a single extruded slab: in game "a large flat untextured block in the
+        # bottom-right corner". Now it has the parts a real adjustable stock shows from
+        # above-left: a raised cheek spine with chamfered flanks (the top is no longer one
+        # flat plane, so the key light breaks across it), a recessed side panel, a QD sling
+        # socket, the position-lock lever under the nose, and a separate ribbed rubber pad.
         def stock(bm):
             prism_x(bm, [(y1s, tz + 0.019), (y1s - 0.030, tz + 0.024), (y0s + 0.010, tz + 0.028),
                          (y0s, tz + 0.022), (y0s, tz - 0.070), (y0s + 0.010, tz - 0.076),
                          (y0s + 0.030, tz - 0.066), (y1s - 0.020, tz - 0.024), (y1s, tz - 0.020)],
                     -0.0170, 0.0170)
-            rbox(bm, -0.0190, 0.0190, y0s - 0.012, y0s + 0.001, tz - 0.074, tz + 0.026)            # buttpad
+            # cheek spine: trapezoid section along the top, rising toward the butt
+            prism_y(bm, [(-0.0150, tz + 0.0235), (0.0150, tz + 0.0235), (0.0085, tz + 0.0330), (-0.0085, tz + 0.0330)],
+                    y0s + 0.006, y1s - 0.034)
+            prism_x(bm, [(y1s - 0.034, tz + 0.0235), (y1s - 0.030, tz + 0.0235), (y1s - 0.034, tz + 0.0330)],
+                    -0.0085, 0.0085)
+            # QD socket boss (left) + lock lever (under the nose)
+            cyl_x(bm, y0s + 0.034, tz - 0.046, -0.0200, -0.0160, 0.0065, seg=18)
+            prism_x(bm, [(y1s - 0.044, tz - 0.026), (y1s - 0.012, tz - 0.020), (y1s - 0.014, tz - 0.026),
+                         (y1s - 0.040, tz - 0.032)], -0.0060, 0.0060)
 
         def stock_cut(bm):
             prism_x(bm, [(y0s + 0.020, tz - 0.016), (y1s - 0.040, tz - 0.016), (y0s + 0.026, tz - 0.054)],
                     -0.030, 0.030)                                                                 # lightening cut
-        part("stock", stock, furn, "grip", bevel=0.0026, seg=3, angle=25, cut=stock_cut)
+            for sx in (-1, 1):                                                                     # recessed panel
+                prism_x(bm, [(y0s + 0.016, tz + 0.016), (y1s - 0.046, tz + 0.014), (y1s - 0.052, tz - 0.006),
+                             (y0s + 0.016, tz - 0.004)],
+                        sx * 0.0155 - 0.003 * (sx < 0), sx * 0.0155 + 0.003 * (sx > 0))
+            cyl_x(bm, y0s + 0.034, tz - 0.046, -0.0215, -0.0170, 0.0036, seg=14)                   # QD cup
+            for k in range(3):                                                                     # spine grooves
+                yy = y0s + 0.030 + k * 0.018
+                rbox(bm, -0.012, 0.012, yy, yy + 0.0025, tz + 0.0305, tz + 0.036)
+        part("stock", stock, furn, "grip", bevel=0.0022, seg=3, angle=25, cut=stock_cut)
+
+        def pad(bm):
+            rbox(bm, -0.0190, 0.0190, y0s - 0.013, y0s + 0.001, tz - 0.076, tz + 0.031)
+
+        def pad_cut(bm):
+            for k in range(7):
+                zz = tz - 0.068 + k * 0.014
+                rbox(bm, -0.025, 0.025, y0s - 0.016, y0s - 0.011, zz, zz + 0.004)
+        part("buttpad", pad, COL["rubber"], "rubber", bevel=0.0025, seg=2, cut=pad_cut)
     elif st["kind"] == "precision":
         y0s, y1s = st["y0"], st["y1"]
 
+        # (2026-11-14 guns pass) same treatment as the carbine stock: riser on two posts with
+        # adjustment knobs, recessed flanks, LOP spacer stack, QD cup, ribbed rubber pad
         def stock(bm):
             prism_x(bm, [(y1s, tz + 0.020), (y1s - 0.020, tz + 0.034), (y0s + 0.016, tz + 0.034),
                          (y0s, tz + 0.026), (y0s, tz - 0.080), (y0s + 0.020, tz - 0.084),
                          (y0s + 0.070, tz - 0.032), (y1s, tz - 0.024)], -0.0200, 0.0200)
-            rbox(bm, -0.0215, 0.0215, y0s - 0.012, y0s + 0.002, tz - 0.082, tz + 0.030)            # buttpad
-            prism_x(bm, [(y0s + 0.020, tz + 0.034), (y1s - 0.030, tz + 0.034), (y1s - 0.040, tz + 0.046),
-                         (y0s + 0.030, tz + 0.048)], -0.0160, 0.0160)                               # cheek riser
-        part("stock", stock, furn, "grip", bevel=0.0030, seg=3, angle=25)
+            for k in range(3):                                                                      # LOP spacers
+                yy = y0s - 0.0005 - k * 0.0042
+                rbox(bm, -0.0205, 0.0205, yy - 0.0036, yy, tz - 0.081, tz + 0.029)
+            # cheek riser: chamfered top, sits 4 mm proud on two posts
+            prism_y(bm, [(-0.0165, tz + 0.039), (0.0165, tz + 0.039), (0.0165, tz + 0.046), (0.0110, tz + 0.052),
+                         (-0.0110, tz + 0.052), (-0.0165, tz + 0.046)], y0s + 0.022, y1s - 0.034)
+            for yy in (y0s + 0.040, y1s - 0.056):
+                cyl_z(bm, 0.0, yy, tz + 0.032, tz + 0.040, 0.0045, seg=14)                          # riser posts
+                cyl_x(bm, yy, tz + 0.024, -0.0235, -0.0195, 0.0052, seg=18)                          # lock knobs
+            cyl_x(bm, y0s + 0.050, tz - 0.058, -0.0225, -0.0190, 0.0068, seg=18)                     # QD boss
+
+        def stock_cut(bm):
+            for sx in (-1, 1):
+                prism_x(bm, [(y0s + 0.020, tz + 0.020), (y1s - 0.030, tz + 0.016), (y0s + 0.080, tz - 0.024),
+                             (y0s + 0.022, tz - 0.040)],
+                        sx * 0.0185 - 0.003 * (sx < 0), sx * 0.0185 + 0.003 * (sx > 0))
+            cyl_x(bm, y0s + 0.050, tz - 0.058, -0.0240, -0.0200, 0.0038, seg=14)
+            for k in range(4):                                                                      # riser grooves
+                yy = y0s + 0.052 + k * 0.020
+                rbox(bm, -0.009, 0.009, yy, yy + 0.003, tz + 0.050, tz + 0.056)
+        part("stock", stock, furn, "grip", bevel=0.0026, seg=3, angle=25, cut=stock_cut)
+
+        def pad(bm):
+            rbox(bm, -0.0215, 0.0215, y0s - 0.026, y0s - 0.012, tz - 0.084, tz + 0.031)
+
+        def pad_cut(bm):
+            for k in range(8):
+                zz = tz - 0.076 + k * 0.0135
+                rbox(bm, -0.030, 0.030, y0s - 0.030, y0s - 0.024, zz, zz + 0.004)
+        part("buttpad", pad, COL["rubber"], "rubber", bevel=0.0025, seg=2, cut=pad_cut)
     elif st["kind"] == "skeleton":
         y0s = st["y0"]
 
@@ -977,6 +1128,8 @@ def gun_ar(spec):
     sz = spec["sight_z"]
     if spec.get("optic") == "scope":
         scope(spec["scope_y"][0], spec["scope_y"][1], sz, rail_top=rail_top, node="optic")
+    elif spec.get("optic") == "tube":
+        tube_dot(spec["optic_y"], rail_top, sz, node="optic")
     elif spec.get("optic") == "reddot":
         reddot(spec["optic_y"], rail_top, sz, half_w=spec.get("optic_w", 0.0165), win_h=spec.get("optic_h", 0.0125),
                node="optic")
@@ -1016,14 +1169,23 @@ def gun_breaker():
         rbox(bm, -0.006, 0.006, 0.010, 0.022, 0.112, 0.118)
     part("safety", safety, COL["steel"], "metal", bevel=0.0008)
 
-    SZ = 0.1237                                                       # sight line (SOCKET_sight)
+    # (2026-11-14 guns pass) sight line raised 12 mm (0.1237 -> 0.1357): ghost ring and post
+    # now stand on real towers, so at ADS the receiver top sits ~2 cm under the eye line
+    # instead of 9 mm — it was the "flat grey slab" filling the lower sight picture
+    SZ = 0.1357                                                       # sight line (SOCKET_sight)
 
     def barrel(bm):
         cyl_y(bm, 0, bz, 0.170, 0.750, 0.0118, 0.0112, seg=28)
-        rbox(bm, -0.0035, 0.0035, 0.700, 0.742, bz + 0.010, bz + 0.016)     # front sight ramp
-        # blade: its bright insert is centred ON the sight line, so the blade stands 1.4 mm above it
-        prism_x(bm, [(0.7340, bz + 0.010), (0.7405, bz + 0.010), (0.7395, SZ + 0.0014),
-                     (0.7340, SZ + 0.0014)], -0.0014, 0.0014)
+        # front sight tower: barrel clamp, tapered tower, protective wings, post
+        tube_ring_y(bm, 0, bz, 0.714, 0.738, 0.0110, 0.0142, seg=28)
+        prism_x(bm, [(0.715, bz + 0.012), (0.737, bz + 0.012), (0.7365, SZ - 0.0070), (0.7300, SZ - 0.0070)],
+                -0.0050, 0.0050)
+        for x0, x1 in ((-0.0098, -0.0068), (0.0068, 0.0098)):
+            prism_x(bm, [(0.7255, SZ - 0.0085), (0.7375, SZ - 0.0085), (0.7365, SZ + 0.0045), (0.7290, SZ + 0.0045)],
+                    x0, x1)
+        prism_x(bm, [(0.7340, SZ - 0.0080), (0.7405, SZ - 0.0080), (0.7395, SZ + 0.0014),
+                     (0.7340, SZ + 0.0014)], -0.0014, 0.0014)                                    # post
+        rbox(bm, -0.0098, 0.0098, 0.7255, 0.7375, SZ - 0.0110, SZ - 0.0070)                       # wing bridge
     def bcut(bm):
         cyl_y(bm, 0, bz, 0.742, 0.756, 0.0092, seg=24)
     part("barrel", barrel, COL["steel"], "metal", "dressing", bevel=0.0008, cut=bcut)
@@ -1050,8 +1212,8 @@ def gun_breaker():
             prism_x(bm, [(RY - 0.009, 0.112), (RY + 0.009, 0.112), (RY + 0.005, SZ + 0.0088),
                          (RY - 0.005, SZ + 0.0088)], x0, x1)
         tube_ring_y(bm, 0, SZ, RY - 0.0016, RY + 0.0019, 0.0062, 0.0080, seg=40)
-        prism_x(bm, [(RY - 0.0026, 0.112), (RY + 0.0026, 0.112), (RY + 0.0016, SZ - 0.0072),
-                     (RY - 0.0016, SZ - 0.0072)], -0.0018, 0.0018)
+        prism_x(bm, [(RY - 0.0075, 0.112), (RY + 0.0075, 0.112), (RY + 0.0024, SZ - 0.0072),
+                     (RY - 0.0024, SZ - 0.0072)], -0.0032, 0.0032)          # tower (taller since 11-14)
     # (gunsmith) its own node: a receiver optic hides the ghost ring (weapon_meshes.js)
     part("rear_sight", rear, COL["anod"], "metal", "irons", bevel=0.0004, seg=1)
 
@@ -1101,7 +1263,10 @@ def gun_breaker():
     def wrist(bm):
         # (2026-11-13 ADS pass) comb dropped ~1 cm: with the cheek on the wrist the old comb ran
         # 2-3.6 cm under the eye and filled the lower sight picture as a slab
-        prism_x(bm, [(-0.012, 0.100), (-0.060, 0.078), (-0.110, 0.068), (-0.110, -0.026), (-0.080, -0.044), (-0.058, -0.068),
+        # (2026-11-14 guns pass) comb dropped again (0.100/0.078 -> 0.088/0.066): with the eye on
+        # the raised sight line 18 cm behind the grip, the old comb top 3.6 cm under the eye and
+        # 7 cm ahead of it was the dark slab in the lower centre of the ADS picture
+        prism_x(bm, [(-0.012, 0.088), (-0.060, 0.066), (-0.110, 0.062), (-0.110, -0.026), (-0.080, -0.044), (-0.058, -0.068),
                      (-0.040, -0.066), (-0.030, -0.046), (-0.022, -0.016), (-0.012, 0.030)], -0.0160, 0.0160)
     # (2026-11-13 ADS pass) textured "grip" polymer, not smooth "poly": at ADS the wrist/comb
     # top is the lower sight picture, and the smooth polymer's grazing moon specular rendered
@@ -1109,7 +1274,7 @@ def gun_breaker():
     part("stock_wrist", wrist, COL["poly"], "grip", bevel=0.0045, seg=3, angle=24)
 
     def butt(bm):
-        prism_x(bm, [(-0.100, 0.070), (-0.232, 0.056), (-0.239, 0.048), (-0.239, -0.070),
+        prism_x(bm, [(-0.100, 0.064), (-0.232, 0.056), (-0.239, 0.048), (-0.239, -0.070),
                      (-0.228, -0.078), (-0.100, -0.028)], -0.0200, 0.0200)
     def butt_cut(bm):
         for x0, x1 in ((-0.030, -0.0185), (0.0185, 0.030)):            # recessed side panels
@@ -1463,23 +1628,47 @@ def gun_anvil():
 # core/weapons/world_weapon.js gives vertex-coloured 3P kinds a plain gunmetal
 # material. Frame: origin at the grip, barrel down -Z after the Y-up export.
 # usage: blender ... --python tools/a5_build_guns.py -- 3p:bastion 3p:anvil
-def build_3p(wid, ratio=0.22):
+# (2026-11-14 guns pass) ALL seven guns now: the five original kinds were last-circle Meshy
+# scans (lime / orange baked albedo remapped at runtime, 17-100 KB of blobby mesh, and NOT
+# the gun the player holds — the kill cam close-up showed a different, blocky rifle). Now
+# every operator carries the same authored gun as the first-person model, decimated to a
+# per-class triangle target. Two materials (wpn3p_metal / wpn3p_poly) so metal and polymer
+# answer the night light differently (world_weapon.repairGunMaterial keys on the name).
+# Output paths are the ones world_weapon.WPN_GLB already loads (ar/smg/sniper under
+# assets/chars/, the rest under assets/weapons/).
+WPN3P_OUT = {"warden": ("chars", "wpn3p_ar"), "vesper": ("chars", "wpn3p_smg"), "corvus": ("chars", "wpn3p_sniper"),
+             "pike": ("weapons", "wpn3p_pistol"), "breaker": ("weapons", "wpn3p_shotgun"),
+             "bastion": ("weapons", "wpn3p_bastion"), "anvil": ("weapons", "wpn3p_anvil")}
+WPN3P_TRIS = {"warden": 6500, "vesper": 6500, "corvus": 7000, "pike": 2600, "breaker": 6000,
+              "bastion": 7000, "anvil": 4500}
+
+
+def build_3p(wid, ratio=None):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     PARTS.clear()
     _TEX.clear()
-    info = gun_bastion() if wid == "bastion" else gun_anvil()
-    m = bpy.data.materials.new("wpn3p")
-    m.use_nodes = True
-    b = next(n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
-    b.inputs["Base Color"].default_value = (0.3, 0.3, 0.3, 1)
+    if wid in SPECS:
+        info = gun_ar(SPECS[wid])
+    else:
+        info = {"breaker": gun_breaker, "pike": gun_pike, "bastion": gun_bastion, "anvil": gun_anvil}[wid]()
+    mats = {}
+    for k, base in (("metal", 0.3), ("poly", 0.3)):
+        m = bpy.data.materials.new("wpn3p_" + k)
+        m.use_nodes = True
+        b = next(n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+        b.inputs["Base Color"].default_value = (base, base, base, 1)
+        mats[k] = m
     objs = []
     for o, node in PARTS:
         if not o.data.vertices or "__" in node or o["a5_mat"] in ("dot", "glass", "lume", "mark"):
             continue
         paint(o)
         o.data.materials.clear()
-        o.data.materials.append(m)
+        o.data.materials.append(mats["metal" if o["a5_mat"] in ("metal", "optic") else "poly"])
         objs.append(o)
+    if ratio is None:
+        n0 = sum(len(p.vertices) - 2 for o in objs for p in o.data.polygons)
+        ratio = min(1.0, WPN3P_TRIS.get(wid, 6000) / max(1, n0))
     for so in bpy.context.selected_objects:
         so.select_set(False)
     for o in objs:
@@ -1498,7 +1687,8 @@ def build_3p(wid, ratio=0.22):
     tris = len(j.data.polygons)
     for o in bpy.context.scene.objects:
         o.select_set(o is j)
-    out = os.path.join(OUT_DIR, "wpn3p_%s.glb" % wid)
+    sub, stem = WPN3P_OUT[wid]
+    out = os.path.join(OUT_DIR if sub == "weapons" else os.path.join(os.path.dirname(OUT_DIR), "chars"), stem + ".glb")
     bpy.ops.export_scene.gltf(
         filepath=out, export_format="GLB", use_selection=True,
         export_animations=False, export_skins=False, export_morph=False,
@@ -1515,7 +1705,7 @@ def build_3p(wid, ratio=0.22):
                                capture_output=True, text=True, shell=(os.name == "nt"))
             if r.returncode == 0:
                 break
-    rep = {"weapon": "wpn3p_" + wid, "tris": tris, "bytes_raw": before, "bytes": os.path.getsize(out),
+    rep = {"weapon": stem, "gun": wid, "tris": tris, "bytes_raw": before, "bytes": os.path.getsize(out),
            "draco": bool(r is not None and r.returncode == 0)}
     print("A5GUN3P " + json.dumps(rep))
     return rep
@@ -1527,12 +1717,16 @@ SPECS = {
                    optic="reddot", optic_y=-0.030, lower_z0=0.000,
                    stock=dict(kind="carbine", y_tube=-0.236, y0=-0.262, y1=-0.150),
                    mag=dict(depth=0.170, curve=0.042, half_w=0.0112, col=COL["fde"]),
-                   furniture=COL["fde"], grip_col=COL["poly"],
+                   # (2026-11-14 guns pass) identity: FDE-cerakote handguard + FDE mag on a black
+                   # receiver and a BLACK stock (the tan stock was the beige block at the hip)
+                   furniture=COL["poly"], grip_col=COL["poly"], hg_col=COL["fdem"],
                    marks=dict(model="M-72 WARDEN", cal="CAL 5.56x45", serial="BR-04417",
                               fire=("SAFE", "SEMI", "AUTO"))),
     "vesper": dict(bore_z=0.042, recv=(-0.095, 0.105), magwell=(0.038, 0.078), handguard=(0.105, 0.300),
                    hg_r=0.0225, barrel_end=0.330, muzzle="can", can_r=0.0185, muzzle_end=0.609,
-                   sight_z=0.0997, optic="reddot", optic_y=-0.020, optic_w=0.0145, optic_h=0.0105,
+                   # (2026-11-14 guns pass) its own optic (tube micro dot) and a round vented
+                   # handguard: it used to share the Warden's holo box and octagon
+                   sight_z=0.0997, optic="tube", optic_y=-0.012, hg_style="round",
                    lower_z0=-0.006,
                    stock=dict(kind="skeleton", y_tube=-0.120, y0=-0.253),
                    mag=dict(depth=0.120, curve=0.010, half_w=0.0095, col=COL["poly"]),
@@ -1596,12 +1790,16 @@ A5_POSE = {
         ("L", (-0.050, 0.245, 0.012), (0.82, 0.48, -0.31), (0.35, 0.0, 0.94),
          {"elbow_world": (-0.55, -0.42, -0.72), "curl": (40, 70, 35), "thumb_rot": (0, 0, 5, 5)}),
     ],
+    # (2026-11-14 guns pass) elbows dropped: the forearms ran almost straight back at the
+    # eye (-0.74/-0.66 rearward), so at the hip the camera looked down the sleeves at the
+    # wrist cuffs — two dark tubes ending in tan "mittens". Steeper forearms show the
+    # backs and sides of the gloves from above, like the long guns' support hand.
     "pike": [
         ("R", (0.028, -0.066, 0.004), (0.0, 0.90, -0.43), (-1.0, 0.0, 0.0),
-         {"index_curl": (8, 12, 6), "elbow_world": (0.30, -0.74, -0.60), "sleeve_r0": 0.033, "sleeve_r": 0.040}),
+         {"index_curl": (8, 12, 6), "elbow_world": (0.34, -0.50, -0.80), "sleeve_r0": 0.034, "sleeve_r": 0.042}),
         ("L", (-0.043, -0.026, 0.000), (0.1, 0.7, -0.7), (1.0, 0.0, 0.0),
-         {"elbow_world": (-0.42, -0.66, -0.62), "curl": (50, 70, 40), "thumb_rot": (0, 0, 5, 5),
-          "sleeve_r0": 0.033, "sleeve_r": 0.040}),
+         {"elbow_world": (-0.44, -0.44, -0.78), "curl": (50, 70, 40), "thumb_rot": (0, 0, 5, 5),
+          "sleeve_r0": 0.034, "sleeve_r": 0.042}),
     ],
 }
 
@@ -1719,7 +1917,10 @@ def build(wid):
         if gt and wid in ("bastion", "anvil"):
             # [heavy weapons] 1.2 MB lane budget: the shared detail/normal maps re-encoded at
             # WebP q62 (-138 KB a gun, measured) BEFORE Draco, so no mesh is decoded lossy
-            r = subprocess.run([gt, "webp", out, out, "--quality", "62"],
+            # (2026-11-14 guns pass) q62 -> q80: side by side with the Warden (q88) the Anvil's
+            # tube read visibly softer; q80 recovers the scratch/grain detail for a fraction
+            # of the bytes q62 saved (sizes in the A5WEBP line / manifest.aheavy.json)
+            r = subprocess.run([gt, "webp", out, out, "--quality", "80"],
                                capture_output=True, text=True, shell=(os.name == "nt"))
             print("A5WEBP %s: rc %d, %d bytes" % (wid, r.returncode, os.path.getsize(out)))
         if gt:
@@ -1781,6 +1982,9 @@ def _patch_gltf_materials(path):
             if bti is not None:
                 bti.pop("extensions", None)
                 bti.pop("texCoord", None)
+                btt = tt.get("base_tt")            # (2026-11-14) sleeve cloth map: metre UVs, tiled
+                if btt:
+                    bti["extensions"] = {"KHR_texture_transform": {"scale": [float(v) for v in btt]}}
             used.add("KHR_texture_transform")
             continue
         f = bm.get("a5_factors") if bm is not None else None

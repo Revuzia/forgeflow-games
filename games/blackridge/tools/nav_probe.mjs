@@ -72,14 +72,24 @@ function pathLen(p) {
 
 // capsule sweep along a segment using the mover's own blocked test (linear scan
 // of all boxes — fine for a probe). Steps at 0.15 m, follows floor height.
+// 2026-11 review: made faithful to world.moveCapsule — (1) 0.07 m steps (one
+// walking tick is 7.7 cm; the old 0.15 m step tested the next riser before the
+// lift the mover makes in between), (2) the start height is SETTLED on the
+// support the mover would stand on (a point-sampled node on a 0.25 m tread is
+// often one riser below where the capsule actually stands), (3) a start that
+// already overlaps a box (bot against a wall) is pushed out by the mover, not
+// blocked: that one box is ignored for the first 0.35 m of the leg.
 function segmentWalkable(world, a, b) {
   const dist = Math.hypot(b[0] - a[0], b[2] - a[2]);
-  const n = Math.max(1, Math.ceil(dist / 0.15));
+  const n = Math.max(1, Math.ceil(dist / 0.07));
   let y = a[1];
+  for (let r = 0; r < 4; r++) { const s2 = world.supportAt(a[0], a[2], y, 0.35); if (s2 <= y + 1e-6) break; y = s2; }
+  const startBox = world.capsuleBlocked(a[0], y, a[2], 0.33, 1.7);
   for (let i = 1; i <= n; i++) {
     const t = i / n;
     const x = a[0] + (b[0] - a[0]) * t, z = a[2] + (b[2] - a[2]) * t;
-    if (world.capsuleBlocked(x, y, z, 0.33, 1.7)) return false; // 0.02 slack: a graze is not a wedge
+    const bx = world.capsuleBlocked(x, y, z, 0.33, 1.7); // 0.02 slack: a graze is not a wedge
+    if (bx && !(bx === startBox && dist * t < 0.35)) return false;
     const sup = world.supportAt(x, z, y, 0.35);
     if (sup > y + 0.36) return false;
     y = Math.max(sup, y - 0.4);
@@ -275,7 +285,16 @@ async function runSquad(mapId) {
       out.ticks++;
       if (k % 60 === 0) {
         for (let i = 0; i < bots.length; i++) for (let j = i + 1; j < bots.length; j++) {
-          if (Math.hypot(bots[i].pos[0] - bots[j].pos[0], bots[i].pos[2] - bots[j].pos[2]) < 0.45) out.overlapTicks++;
+          if (Math.hypot(bots[i].pos[0] - bots[j].pos[0], bots[i].pos[2] - bots[j].pos[2]) < 0.45) {
+            out.overlapTicks++;
+            // where: both still at the spawn cluster (k=0 sample), both parked
+            // at their goals, or while travelling (the doorway case this
+            // metric is meant to catch)
+            const parked = arr.has(bots[i].id) && arr.has(bots[j].id);
+            if (k === 0) out.ovSpawn = (out.ovSpawn || 0) + 1;
+            else if (parked) out.ovParked = (out.ovParked || 0) + 1;
+            else out.ovMoving = (out.ovMoving || 0) + 1;
+          }
         }
         if (k % 300 === 0) routes.add(bots.map((x) => `${Math.round(x.pos[0] / 4)},${Math.round(x.pos[2] / 4)}`).join("|"));
       }
@@ -286,8 +305,15 @@ async function runSquad(mapId) {
       }
       if (arr.size === bots.length) break;
     }
+    if (VERBOSE) for (const bt of bots) if (!arr.has(bt.id)) { const b3 = bt._brain; console.log(`     SQUAD-FAIL run=${out.runs} id=${bt.id} pos=${bt.pos.map((v) => v.toFixed(2))} goal=${b3.goal && b3.goal.map((v) => v.toFixed(2))} pathI=${b3.pathI}/${b3.path ? b3.path.length : null} wp=${b3.path && b3.path[b3.pathI] ? b3.path[b3.pathI].map((v) => v.toFixed(2)) : "-"} arrived=${b3.arrived} stuckN=${b3.stuckN} v=${Math.hypot(bt.vel[0], bt.vel[2]).toFixed(2)} unreach=${b3.goalUnreach}`); }
     out.runs++;
-    out.botsTotal += bots.length;
+    // 2026-11: a cluster member sampled onto a floor island with no route to
+    // the goal (randomPoint does not test reachability; e.g. saltmarket's
+    // y2.8 roofs) is not a navigation failure: excluded and counted apart
+    // (same rng stream as before, so runs stay comparable)
+    const unreach = bots.filter((bt) => !arr.has(bt.id) && !nav.reachable(bt._spawnP || bt.pos, bt._brain.goal || g));
+    out.unreachStarts = (out.unreachStarts || 0) + unreach.length;
+    out.botsTotal += bots.length - unreach.length;
     out.botsArrived += arr.size;
     if (arr.size > 1) { const v = [...arr.values()]; out.worstSpread.push(Math.max(...v) - Math.min(...v)); }
   }
@@ -356,7 +382,7 @@ for (const m of MAPS) {
     const r = await runSquad(m);
     allRes.push(r);
     console.log(`${m.padEnd(14)} squads=${r.runs} bots arrived ${r.botsArrived}/${r.botsTotal} (${f2(100 * r.botsArrived / Math.max(1, r.botsTotal))}%)` +
-      `  spread mean=${f2(mean(r.worstSpread))}s p95=${f2(pct(r.worstSpread, 0.95))}s  overlap(<0.45m) samples=${r.overlapTicks}`);
+      `  spread mean=${f2(mean(r.worstSpread))}s p95=${f2(pct(r.worstSpread, 0.95))}s  overlap(<0.45m) samples=${r.overlapTicks} [spawn ${r.ovSpawn || 0} / parked at goal ${r.ovParked || 0} / travelling ${r.ovMoving || 0}]` + (r.unreachStarts ? `  (excluded ${r.unreachStarts} bots spawned on an island with no route)` : ""));
     continue;
   }
   const r = await runMap(m);

@@ -46,7 +46,7 @@ const FIRST = WD.FIRST_SHOT ||
   { gapS: 0.5, flashScaleMult: 1.2, flashIntensityMult: 1.25, fullTracer: true };
 
 const N_WORLD = 12;         // world-layer sprite slots (bots)
-const N_VM = 8;             // vm-layer sprite slots (player)
+const N_VM = 12;            // vm-layer sprite slots (player) [fx v152] 8 -> 12: the ADS bloom adds 2 per round
 // ---- THE SUB-FRAME EXPIRY BUG (iter06, D6 lane) ---------------------------
 // combat_spec §4.2 specifies a 55 ms pulse, and 55 ms is CORRECT as an
 // authored duration. It is NOT a correct *lifetime* on this build, because the
@@ -128,31 +128,36 @@ const CELLS_SIDE = [6];
 const CELLS_SOFT = [7];
 const CELLS_SUPP = [7, 7, 0];
 const PROFILE_DEFAULT = { size: 0.14, bright: 1, life: [0.070, 0.025], cells: CELLS_GEN,
-  tint: [0.92, 0.80], grow: 0.45, light: 1, puffs: 1, botMult: BOT_SIZE_MULT };
+  tint: [0.92, 0.80], grow: 0.45, light: 1, puffs: 1, botMult: BOT_SIZE_MULT,
+  ads: { size: 2.2, bright: 1.2, off: 0.2, ring: 0.45 } };
 const PROFILE = {
   // AR: the baseline look, untouched — a tight ragged cone
   warden: { size: 0.13, bright: 1, life: [0.070, 0.025], cells: CELLS_GEN,
-    tint: [0.92, 0.80], grow: 0.45, light: 1, puffs: 1, botMult: BOT_SIZE_MULT },
+    tint: [0.92, 0.80], grow: 0.45, light: 1, puffs: 1, botMult: BOT_SIZE_MULT,
+    ads: { size: 2.4, bright: 1.25, off: 0.2, ring: 0.5 } },
   // suppressed SMG: a small DIM flash and a faint smoke puff only
   vesper: { size: 0.088, bright: 0.62, life: [0.048, 0.020], cells: CELLS_SUPP,
-    tint: [0.86, 0.66], grow: 0.30, light: 0.40, puffs: 0.5, botMult: 2.0 },
+    tint: [0.86, 0.66], grow: 0.30, light: 0.40, puffs: 0.5, botMult: 2.0,
+    ads: { size: 1.15, bright: 0.45, off: 0.12, ring: 0 } },
   // DMR: a big flash with a muzzle-brake side-blast
   corvus: { size: 0.17, bright: 1.15, life: [0.078, 0.025], cells: CELLS_GEN,
     tint: [0.90, 0.74], grow: 0.50, light: 1.2, puffs: 2, botMult: BOT_SIZE_MULT,
-    side: { size: 1.55, asp: 2.1, bright: 1.35 } },
+    side: { size: 1.55, asp: 2.1, bright: 1.35 }, ads: { size: 2.6, bright: 1.3, off: 0.22, ring: 0.55 } },
   // pistol: quick and snappy
   pike: { size: 0.108, bright: 1.15, life: [0.040, 0.015], cells: CELLS_GEN,
-    tint: [0.92, 0.80], grow: 0.32, light: 1, puffs: 1, botMult: BOT_SIZE_MULT },
+    tint: [0.92, 0.80], grow: 0.32, light: 1, puffs: 1, botMult: BOT_SIZE_MULT,
+    ads: { size: 1.9, bright: 1.2, off: 0.16, ring: 0.4 } },
   // [heavy weapons] belt-fed LMG: a rifle flash, a touch bigger and longer
   bastion: { size: 0.15, bright: 1.05, life: [0.060, 0.022], cells: CELLS_GEN,
-    tint: [0.92, 0.78], grow: 0.48, light: 1.1, puffs: 1, botMult: BOT_SIZE_MULT },
+    tint: [0.92, 0.78], grow: 0.48, light: 1.1, puffs: 1, botMult: BOT_SIZE_MULT,
+    ads: { size: 2.8, bright: 1.3, off: 0.24, ring: 0.6 } },
   // launcher: the motor lighting — big, orange, long, with a smoke burst
   anvil: { size: 0.36, bright: 0.75, life: [0.13, 0.04], cells: CELLS_BLAST,
     tint: [0.70, 0.38], grow: 0.9, light: 1.6, puffs: 3, botMult: 1.6, ignoreFirst: true },
   // pump shotgun: a wide, violent, orange blast — core + side spray + fireball
   breaker: { size: 0.31, bright: 0.55, life: [0.088, 0.024], cells: CELLS_BLAST,
     tint: [0.62, 0.30], grow: 0.75, light: 1.4, puffs: 2, botMult: 1.9, ignoreFirst: true,
-    side: { size: 1.15, asp: 1.9, bright: 1.5 } },
+    side: { size: 1.15, asp: 1.9, bright: 1.5 }, ads: { size: 1.6, bright: 0.9, off: 0.22, ring: 0.7 } },
 };
 
 // ---- shot-VOLLEY bookkeeping (shared through env.shot) -------------------------
@@ -656,6 +661,35 @@ export function makeMuzzle(env) {
       if (isPlayer && typeof window !== "undefined") {
         const vmS = window.__FPS__ && window.__FPS__.vm;
         scoped = !!(vmS && vmS.scope && vmS.scope.active);
+      }
+      // [fx v152] ADS FLASH. Aimed down the sights the crown sprite sits dead
+      // behind the optic / front sight from the eye, so the gun's own depth
+      // hides almost all of it (owner report: "barely visible when aiming down
+      // sights on the rifles"; measured in fx/muzzle_before_*_ads.png — no
+      // flash pixel outside the sight housing). A real flash is bigger than the
+      // sight picture: a wide, short-lived bloom 18-30 cm down-range, scaled
+      // per weapon (the suppressed Vesper keeps almost nothing, the Breaker and
+      // the Bastion throw a lot), so its rim shows AROUND the optic and lights
+      // the picture for a frame or two. Hip fire is unchanged.
+      if (isPlayer && !scoped && P.ads) {
+        const F2 = typeof window !== "undefined" ? window.__FPS__ : null;
+        const pw = F2 && F2.sim && F2.sim.state && F2.sim.state.player && F2.sim.state.player.weapon;
+        const adsT = pw ? (pw.adsT || 0) : 0;
+        if (adsT > 0.35) {
+          const k = Math.min(1, (adsT - 0.35) / 0.4);
+          const so = P.ads.off;
+          pool.spawn(_mz[0] + dir[0] * so, _mz[1] + dir[1] * so, _mz[2] + dir[2] * so,
+                     base * P.ads.size * (0.9 + rnd() * 0.25), P.ads.bright * hb * k, P.cells, 1, NaN,
+                     P.life[0] * 0.9, P.life[1], P.tint[0], P.tint[1] * 0.92, P.grow * 0.8);
+          if (P.ads.ring) {
+            // a second, bigger ragged flame a little further out: its petals are
+            // what reads around the optic housing while the core is hidden (a
+            // soft disc here read as a halo, not a flash)
+            pool.spawn(_mz[0] + dir[0] * (so + 0.10), _mz[1] + dir[1] * (so + 0.10), _mz[2] + dir[2] * (so + 0.10),
+                       base * P.ads.size * 1.75, P.ads.ring * hb * k, P.cells, 1, NaN,
+                       P.life[0] * 0.8, P.life[1] * 0.5, P.tint[0], P.tint[1] * 0.85, 0.2);
+          }
+        }
       }
       // 2-sprite cluster (VT §5): crown core + a smaller leading puff 12 cm
       // down-range — both frame-randomized, both swap frames mid-life.

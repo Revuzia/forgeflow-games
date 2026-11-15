@@ -1,0 +1,25 @@
+
+lanternwalk tdm: 1942 trigger pulls, hit 29%; kills 96, mean TTK 2.98 s, median 0.80 s, pulls/kill 6.9
+  pulls with the muzzle->chest line BLOCKED by geometry: 50% (hit 20%; of those head in view 71%, nothing in view 14% of all pulls); target not in shooter's view: 0%; target crouched: 4%
+  shooter moving >1 m/s: 7% (hit 23%); target moving >2 m/s: 55% (hit 30%)
+  clear-line pulls by range: 0-8m 2% hit 66% | 8-15m 3% hit 33% | 15-25m 15% hit 49% | 25-40m 27% hit 34% | 40-60m 2% hit 17% | 60-+m 0% hit 0%
+  by weapon class: pistol 1305 (hit 28%), ar 331 (hit 34%), smg 296 (hit 28%), shotgun 4 (hit 75%), dmr 6 (hit 33%)
+  while SEEING its target (sampled 10 Hz): firing 8%, reaction window 21%, burst pause 31%, reloading 4%, moving too fast to fire 10%, other (token / turn / gates) 26%
+
+switchyard tdm: 930 trigger pulls, hit 52%; kills 114, mean TTK 0.92 s, median 0.52 s, pulls/kill 3.8
+  pulls with the muzzle->chest line BLOCKED by geometry: 10% (hit 34%; of those head in view 65%, nothing in view 3% of all pulls); target not in shooter's view: 1%; target crouched: 4%
+  shooter moving >1 m/s: 6% (hit 43%); target moving >2 m/s: 48% (hit 58%)
+  clear-line pulls by range: 0-8m 17% hit 76% | 8-15m 34% hit 56% | 15-25m 34% hit 43% | 25-40m 5% hit 36% | 40-60m 0% hit 0% | 60-+m 0% hit 0%
+  by weapon class: pistol 530 (hit 54%), shotgun 17 (hit 100%), ar 240 (hit 53%), smg 117 (hit 39%), dmr 26 (hit 35%)
+  while SEEING its target (sampled 10 Hz): firing 8%, reaction window 38%, burst pause 24%, reloading 1%, moving too fast to fire 8%, other (token / turn / gates) 21%
+
+saltmarket tdm: 1113 trigger pulls, hit 50%; kills 120, mean TTK 0.73 s, median 0.50 s, pulls/kill 4.0
+  pulls with the muzzle->chest line BLOCKED by geometry: 5% (hit 40%; of those head in view 55%, nothing in view 2% of all pulls); target not in shooter's view: 0%; target crouched: 3%
+  shooter moving >1 m/s: 5% (hit 37%); target moving >2 m/s: 47% (hit 52%)
+  clear-line pulls by range: 0-8m 7% hit 62% | 8-15m 24% hit 59% | 15-25m 52% hit 47% | 25-40m 10% hit 37% | 40-60m 2% hit 30% | 60-+m 0% hit 0%
+  by weapon class: ar 345 (hit 55%), pistol 674 (hit 46%), smg 90 (hit 56%), shotgun 4 (hit 50%)
+  while SEEING its target (sampled 10 Hz): firing 8%, reaction window 41%, burst pause 22%, reloading 3%, moving too fast to fire 8%, other (token / turn / gates) 18%
+(node:281096) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/TestRun/AppData/Local/Temp/claude/4097386dafa9cdc3/7370adf0-7436-4a8b-8e44-47246b52f7f3/scratchpad/base/core/sim/sim.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\TestRun\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

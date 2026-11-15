@@ -3013,34 +3013,67 @@ def _bm_cone(bm, p, q, r1, r2, seg=14):
                           radius1=r1, radius2=r2, depth=d.length, matrix=M, calc_uvs=False)
 
 
-def _bm_sleeve(bm, axis, a0, a1, r0, r1, seg=32):
-    """Fabric sleeve along `axis` from a0 to a1 (m): a lofted tube that tapers
-    r0 -> r1 over the first 0.22 m and carries soft folds — tight bunching near
-    the cuff, long diagonal drapes further up. Capped at the far end."""
+SLEEVE_HEM_M = 0.014          # rolled hem length at the sleeve mouth
+SLEEVE_CLEAR_R = 0.0350        # nothing of the sleeve dips inside this radius near the wrist
+
+
+def _sleeve_basis(axis):
+    """(ax, u, w) — the sleeve loft's frame; _glove_atlas_uv unwraps with the same one."""
     ax = Vector(axis).normalized()
     ref = Vector((0, 0, 1)) if abs(ax.z) < 0.9 else Vector((1, 0, 0))
     u = ref.cross(ax).normalized()
     w = ax.cross(u).normalized()
+    return ax, u, w
+
+
+def _bm_sleeve(bm, axis, a0, a1, r0, r1, seg=32, hem=0.0):
+    """Fabric sleeve along `axis` from a0 to a1 (m): a lofted tube that tapers
+    r0 -> r1 over the first 0.22 m and carries soft folds — tight bunching near
+    the cuff, long diagonal drapes further up. Capped at the far end.
+    (2026-11-14 guns pass) hem > 0: the mouth is a ROLLED HEM (lip, roll, stitch
+    groove) whose radius clears the glove cuff, and the folds fade in behind it. The
+    old mouth was a separate elastic-band cylinder the fold ripples poked through —
+    the jagged dark/olive cuff edge seen on every long gun at the hip."""
+    ax, u, w = _sleeve_basis(axis)
+    rings = []
+
+    def ring_at(t, rfun):
+        ring = []
+        for j in range(seg):
+            th = 2 * math.pi * j / seg
+            ring.append(bm.verts.new(ax * t + (u * math.cos(th) + w * math.sin(th)) * rfun(th)))
+        rings.append(ring)
+    t0 = a0
+    if hem > 0:
+        rh = max(r0 + 0.0025, SLEEVE_CLEAR_R + 0.0020)
+        for dt, rr in ((0.0, rh - 0.0030), (0.0012, rh - 0.0008), (0.0040, rh), (hem - 0.0035, rh),
+                       (hem - 0.0012, rh - 0.0013), (hem, rh - 0.0004)):
+            ring_at(a0 + dt, lambda th, rr=rr: rr * (1.0 + 0.012 * math.sin(3 * th + 0.4)))
+        t0 = a0 + hem + 0.003
+        r0 = rh - 0.0010
     ts = []
-    t = a0
+    t = t0
     while t < a1:
         ts.append(t)
         t += 0.006 if t < 0.12 else (0.015 if t < 0.35 else 0.06)
     ts.append(a1)
-    rings = []
     for t in ts:
-        k = min(1.0, (t - a0) / 0.22)
+        k = min(1.0, (t - t0) / 0.22)
         base = r0 + (r1 - r0) * (k * k * (3 - 2 * k))
-        bunch = math.exp(-((t - a0) / 0.06) ** 2)            # folds pile up at the cuff
-        ring = []
-        for j in range(seg):
-            th = 2 * math.pi * j / seg
-            f = (0.055 * bunch * math.sin(t * 260.0 + 1.3 * math.sin(3 * th))
-                 + 0.030 * math.sin(3 * th + t * 22.0)
-                 + 0.018 * math.sin(5 * th - t * 37.0 + 0.7))
-            r = base * (1.0 + f)
-            ring.append(bm.verts.new(ax * t + (u * math.cos(th) + w * math.sin(th)) * r))
-        rings.append(ring)
+        bunch = math.exp(-((t - t0) / 0.07) ** 2)             # folds pile up at the cuff
+        env = min(1.0, (t - t0) / 0.030) if hem > 0 else 1.0  # ...but not inside the hem
+        env = env * env * (3 - 2 * env)
+        rmin = SLEEVE_CLEAR_R if (hem > 0 and t < 0.11) else 0.0
+
+        def rf(th, t=t, base=base, bunch=bunch, env=env, rmin=rmin):
+            # long drapes (2 + 3 lobes, spiralling) carry the shading; the bunched cuff
+            # ripples are a little deeper than before so the key light models them
+            f = env * (0.065 * bunch * math.sin(t * 240.0 + 1.3 * math.sin(3 * th))
+                       + 0.042 * math.sin(2 * th + t * 14.0 + 0.6)
+                       + 0.026 * math.sin(3 * th + t * 22.0)
+                       + 0.014 * math.sin(5 * th - t * 37.0 + 0.7))
+            return max(rmin, base * (1.0 + f))
+        ring_at(t, rf)
     for a, b in zip(rings, rings[1:]):
         for j in range(seg):
             bm.faces.new((a[j], a[(j + 1) % seg], b[(j + 1) % seg], b[j]))
@@ -3620,8 +3653,6 @@ def _glove_atlas_uv(arm, hand, e, chains):
     select(glove)
     bpy.ops.uv.smart_project(angle_limit=math.radians(62), island_margin=0.006, area_weight=0.0,
                              correct_aspect=True, scale_to_bounds=False)
-    select(mi == 1)
-    bpy.ops.uv.cube_project(cube_size=1.0)
     bpy.ops.object.mode_set(mode="OBJECT")
 
     nl = len(me.loops)
@@ -3630,6 +3661,23 @@ def _glove_atlas_uv(arm, hand, e, chains):
     lp = np.zeros(nl, np.int32)
     for p in me.polygons:
         lp[p.loop_start:p.loop_start + p.loop_total] = p.index
+    # (2026-11-14) SLEEVE: cylindrical unwrap in METRES (u = arc length round a 4.2 cm
+    # radius, v = distance along the forearm), set per loop so the seam column carries
+    # u = 2*pi*r on one side and 0 on the other without splitting vertices. The cube
+    # projection it replaces tore the weave / camo into six differently-oriented patches.
+    _, su, sw = _sleeve_basis(e)
+    su = np.array(tuple(su)); sw = np.array(tuple(sw))
+    th = np.arctan2(co @ sw, co @ su)                       # -pi..pi per vertex
+    RU = 0.042
+    for p in me.polygons:
+        if mi[p.index] != 1:
+            continue
+        ls = np.arange(p.loop_start, p.loop_start + p.loop_total)
+        t_ = th[lv[ls]].copy()
+        if t_.max() - t_.min() > math.pi:                   # straddles the seam
+            t_[t_ < 0] += 2 * math.pi
+        uv[ls, 0] = t_ * RU
+        uv[ls, 1] = ax[lv[ls]]
 
     # metres per uv unit (glove / sleeve), from summed areas
     def mpu(mask):
@@ -3695,6 +3743,71 @@ def _glove_atlas_uv(arm, hand, e, chains):
         hand, len(tris), int(hidden.sum()), 100.0 * cov.mean(), m_g, m_s))
 
 
+SLEEVE_TILE_M = 0.16           # the sleeve albedo tile (256 px -> 0.6 mm a texel)
+_SLEEVE_TEX = {}
+
+
+def _pnoise(S, c, seed):
+    """Truly periodic value noise (c x c cells over S px) — the sleeve map tiles."""
+    rng = np.random.default_rng(seed)
+    g = rng.random((c, c))
+    f = np.arange(S) * c / S
+    i0 = f.astype(int) % c
+    i1 = (i0 + 1) % c
+    t = f - np.floor(f)
+    t = t * t * (3 - 2 * t)
+    a = g[i0][:, i0]; b = g[i0][:, i1]; cc = g[i1][:, i0]; d = g[i1][:, i1]
+    tx = t[None, :]; ty = t[:, None]
+    return a + (b - a) * tx + (cc - a) * ty + (a - b - cc + d) * tx * ty
+
+
+def _pfbm(S, seed, cells, octaves=3):
+    out = np.zeros((S, S)); amp = 1.0; tot = 0.0
+    for o in range(octaves):
+        out += _pnoise(S, cells * (2 ** o), seed + 31 * o) * amp
+        tot += amp; amp *= 0.5
+    return out / tot
+
+
+def sleeve_albedo_path():
+    """(2026-11-14 guns pass) Tileable sleeve cloth: an original four-tone mottled
+    pattern (olive base, dark green-brown and earth blobs, sparse light khaki flecks)
+    on ripstop — a 5 mm reinforcement grid and fine thread nap. The old sleeve was ONE
+    flat olive vertex colour: at the hip it read as a plain tube next to an authored
+    gun. Mean value kept at the old cloth colour (sRGB ~44,47,38: the night pool lifts
+    it ~1.4x); the pattern is low-contrast on purpose (a uniform, not a costume)."""
+    if "p" in _SLEEVE_TEX and os.path.exists(_SLEEVE_TEX["p"]):
+        return _SLEEVE_TEX["p"]
+    S = 256
+    C = {k: np.array(_srgb_lin(v)) for k, v in {
+        "base": (47, 50, 39), "dark": (31, 34, 27), "earth": (52, 44, 33), "light": (66, 64, 50)}.items()}
+    n1 = _pfbm(S, 7301, 3)                     # large blobs (~5 cm)
+    n2 = _pfbm(S, 7313, 4)                     # mid shapes
+    n3 = _pfbm(S, 7331, 8)                     # flecks
+    col = np.zeros((S, S, 3)) + C["base"]
+    q = lambda a, f: float(np.quantile(a, f))       # coverage by quantile, not a guessed level
+    m_dark = _sstep(q(n1, 0.68), q(n1, 0.72), n1)
+    m_earth = _sstep(q(n2, 0.80), q(n2, 0.84), n2) * (1 - m_dark)
+    m_light = _sstep(q(n3, 0.93), q(n3, 0.95), n3) * (1 - m_dark) * (1 - m_earth)
+    col = col * (1 - m_dark[..., None]) + C["dark"] * m_dark[..., None]
+    col = col * (1 - m_earth[..., None]) + C["earth"] * m_earth[..., None]
+    col = col * (1 - m_light[..., None]) + C["light"] * m_light[..., None]
+    # ripstop: a slightly heavier thread every 5 mm both ways (8 px at 0.625 mm/px)
+    ix = np.arange(S)
+    grid = ((ix % 8) == 0).astype(np.float64)
+    g2 = np.maximum(grid[None, :], grid[:, None])
+    col *= (1.0 - 0.10 * g2)[..., None]
+    # thread nap + slow fade (washed / worn)
+    col *= (0.93 + 0.14 * _pfbm(S, 7351, 32, 2))[..., None]
+    col *= (0.92 + 0.16 * _pfbm(S, 7369, 2, 2))[..., None]
+    srgb = np.where(col <= 0.0031308, col * 12.92, 1.055 * np.power(np.clip(col, 0, 1), 1 / 2.4) - 0.055)
+    rgba = np.concatenate([srgb, np.ones((S, S, 1))], 2)
+    _SLEEVE_TEX["p"] = _save_img("sleeve_albedo", np.ascontiguousarray(rgba), fmt="PNG")
+    print("A4SLEEVE albedo: mean lin %s, dark %.0f%% earth %.0f%% light %.0f%%" % (
+        np.round(col.reshape(-1, 3).mean(0), 4), 100 * m_dark.mean(), 100 * m_earth.mean(), 100 * m_light.mean()))
+    return _SLEEVE_TEX["p"]
+
+
 def glove_atlas_finish(tag):
     """Compose both hands into one atlas and wire br_glove / br_sleeve to it. Returns the
     texture transforms for the exporter patch (or None when no atlas was built)."""
@@ -3713,7 +3826,9 @@ def glove_atlas_finish(tag):
     tt_g = [2.0 * m_g / WEAVE_TILE_M, m_g / WEAVE_TILE_M]
     tt_s = [m_s / WEAVE_TILE_M, m_s / WEAVE_TILE_M]
     nrm = fabric_normal_path()
-    for name, rough, ns, tt, img in (("br_glove", 0.72, 0.18, tt_g, path), ("br_sleeve", 0.90, 0.22, tt_s, None)):
+    tt_b = [m_s / SLEEVE_TILE_M, m_s / SLEEVE_TILE_M]
+    for name, rough, ns, tt, img in (("br_glove", 0.72, 0.18, tt_g, path),
+                                     ("br_sleeve", 0.90, 0.30, tt_s, sleeve_albedo_path())):
         m = bpy.data.materials[name]
         nt = m.node_tree
         nt.nodes.clear()
@@ -3731,7 +3846,13 @@ def glove_atlas_finish(tag):
             ti.image = bpy.data.images.load(img, check_existing=True)
             ti.image.reload()
             ti.image.colorspace_settings.name = "sRGB"
-            L(uvn.outputs["UV"], ti.inputs["Vector"])
+            if name == "br_sleeve":
+                mpb = nt.nodes.new("ShaderNodeMapping"); mpb.vector_type = "POINT"
+                mpb.inputs["Scale"].default_value = (tt_b[0], tt_b[1], 1.0)
+                L(uvn.outputs["UV"], mpb.inputs["Vector"])
+                L(mpb.outputs["Vector"], ti.inputs["Vector"])
+            else:
+                L(uvn.outputs["UV"], ti.inputs["Vector"])
             mix = nt.nodes.new("ShaderNodeMix"); mix.data_type = "RGBA"; mix.blend_type = "MULTIPLY"
             mix.inputs[0].default_value = 1.0
             sock = lambda coll, ident: next(x for x in coll if x.identifier == ident)
@@ -3749,6 +3870,8 @@ def glove_atlas_finish(tag):
         nm = nt.nodes.new("ShaderNodeNormalMap"); nm.inputs["Strength"].default_value = ns
         L(tn.outputs["Color"], nm.inputs["Color"]); L(nm.outputs["Normal"], b.inputs["Normal"])
         m["a4_tt"] = {"normal": [round(tt[0], 4), round(tt[1], 4)], "base": bool(img)}
+        if name == "br_sleeve":
+            m["a4_tt"]["base_tt"] = [round(tt_b[0], 4), round(tt_b[1], 4)]
     print("A4GLOVE finish %s: atlas %dx%d, weave tt glove %s sleeve %s" % (tag, 2 * S, S, tt_g, tt_s))
     _GLOVE_HALF.clear()
     return {"glove": tt_g, "sleeve": tt_s, "path": path}
@@ -3922,8 +4045,10 @@ def build_hand(tag, hand, prm):
     if USE_REAL_HANDS:
         # (2026-10-13) a perfect cylinder read as a stovepipe next to a real hand:
         # lofted tube, tapered wrist -> forearm, with bunched folds at the cuff
-        _bm_sleeve(bs, e, 0.040, L, prm.get("sleeve_r0", 0.0355), prm.get("sleeve_r", 0.0460))
-        _bm_cone(bs, e * 0.036, e * 0.060, 0.0392, 0.0398, seg=32)       # elastic cuff band
+        # (2026-11-14) the mouth is the loft's own rolled hem (the separate elastic-band
+        # cylinder here had the fold ripples poking through it: a jagged cuff edge)
+        _bm_sleeve(bs, e, 0.040, L, prm.get("sleeve_r0", 0.0355), prm.get("sleeve_r", 0.0460),
+                   seg=32, hem=SLEEVE_HEM_M)
     else:
         _bm_cone(bs, e * 0.034, e * L, r0, r1, seg=28)
         _bm_cone(bs, e * 0.030, e * 0.058, 0.0452, 0.0452, seg=28)       # elastic cuff band
@@ -3989,6 +4114,17 @@ def build_hand(tag, hand, prm):
 
     def paint_sleeve(co, no):
         ax = co @ ea
+        if GLOVE_ATLAS and USE_REAL_HANDS:
+            # (2026-11-14) the ripstop/camo albedo map carries the cloth colour; the vertex
+            # colour is a neutral factor: the doubled-fabric hem a touch darker, the
+            # stitch groove behind it darker still, plus the shadow fade below
+            hem = _ss(0.036, 0.041, ax) * _ss(0.0545, 0.0515, ax)
+            groove = _ss(0.0510, 0.0522, ax) * _ss(0.0545, 0.0533, ax)
+            k = 1.0 - 0.22 * hem - 0.30 * groove
+            col = np.repeat(k[:, None], 3, 1)
+            col *= (1.0 + 0.05 * _noise(co, 3.0))[:, None]
+            col *= (1.0 - 0.45 * _ss(0.10, 0.45, ax))[:, None]
+            return np.clip(col, 0, 1)
         band = _ss(0.026, 0.032, ax) * _ss(0.064, 0.058, ax)
         c_cl = np.array(SLEEVE_COL["cloth"])[None]
         c_bd = np.array(SLEEVE_COL["band"])[None]

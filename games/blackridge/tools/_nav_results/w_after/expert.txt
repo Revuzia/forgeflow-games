@@ -1,0 +1,11 @@
+lanternwalk tdm n=2 ended 2/2  kills/min  14.9  acc 36.0%  ttk 1.74s  stuck>3s/match 0.00  worstIdle 2s  flank/min 0.82  frag/min 1.31  pick/m 32.5  idle@wall 3.7%  rev/100 1.19
+lanternwalk ctf n=2 ended 2/2  kills/min  15.9  acc 48.1%  ttk 1.10s  caps/match 1.0 (first@113s)  stuck>3s/match 0.00  worstIdle 3s  flank/min 0.16  frag/min 1.31  pick/m 42.0  idle@wall 0.2%  rev/100 0.85
+lanternwalk ffa n=2 ended 2/2  kills/min  24.8  acc 45.7%  ttk 0.76s  stuck>3s/match 0.00  worstIdle 2s  flank/min 0.49  frag/min 1.48  pick/m 31.5  idle@wall 2.8%  rev/100 0.73
+switchyard  tdm n=2 ended 2/2  kills/min  17.5  acc 64.6%  ttk 0.66s  stuck>3s/match 0.00  worstIdle 2s  flank/min 0.66  frag/min 1.97  pick/m 39.0  idle@wall 3.8%  rev/100 0.76
+switchyard  ctf n=2 ended 2/2  kills/min  14.9  acc 66.7%  ttk 0.70s  caps/match 1.5 (first@98s)  stuck>3s/match 0.00  worstIdle 4s  flank/min 0.49  frag/min 2.13  pick/m 43.0  idle@wall 1.1%  rev/100 0.95
+switchyard  ffa n=2 ended 2/2  kills/min  22.6  acc 74.2%  ttk 0.66s  stuck>3s/match 0.00  worstIdle 2s  flank/min 0.66  frag/min 1.64  pick/m 34.0  idle@wall 4.0%  rev/100 0.62
+saltmarket  tdm n=2 ended 2/2  kills/min  18.4  acc 51.6%  ttk 0.76s  stuck>3s/match 0.00  worstIdle 2s  flank/min 0.66  frag/min 1.15  pick/m 48.5  idle@wall 1.4%  rev/100 0.63
+saltmarket  ctf n=2 ended 2/2  kills/min  10.5  acc 57.3%  ttk 0.56s  caps/match 0.0 (first@n/a)  stuck>3s/match 0.00  worstIdle 2s  flank/min 0.16  frag/min 0.49  pick/m 43.5  idle@wall 0.1%  rev/100 0.75
+saltmarket  ffa n=2 ended 2/2  kills/min  24.8  acc 49.8%  ttk 0.76s  stuck>3s/match 0.00  worstIdle 3s  flank/min 0.66  frag/min 3.61  pick/m 39.0  idle@wall 0.0%  rev/100 0.81
+
+expert_probe  difficulty=expert  secs=180  seeds=2  AI avg 0.133 ms/tick  wall 59 s
