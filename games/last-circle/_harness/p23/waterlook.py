@@ -11,6 +11,7 @@ seed 7), turned into bar rows (PLAN.md "Lane R2A" acceptance bars; the audit val
     python _harness/p23/waterlook.py --disk --plant sea-edge         # the sea translucent past the map edge        - MUST FAIL light: far-sea edge
     python _harness/p23/waterlook.py --disk --plant lip-static       # foam on the static level, not the bobbing one - MUST FAIL shore lip
     python _harness/p23/waterlook.py --disk --plant wet-flat         # wet sand by height alone (whole islets)     - MUST FAIL wet sand from the air
+    python _harness/p23/waterlook.py --disk --plant wet-seabed       # the seabed darkened under the water (halo)  - MUST FAIL wet sand from the air (live frame)
     python _harness/p23/waterlook.py --disk --plant sparse-grass     # the blade cell 0.56 -> 1.4 m                 - MUST FAIL grass
     python _harness/p23/waterlook.py --disk --plant grass-on-low     # the blade layer built on low too             - MUST FAIL low-identical
     python _harness/p23/waterlook.py --disk --plant grass-on-sand    # the blades without the grass-ness mask (on beaches) - MUST FAIL grass-sand
@@ -82,6 +83,8 @@ SHORE_T = (2.244, 4.488, 6.732)
 VIEW_T = 100.0
 RP = "runtime/3d/royale/"
 
+# the wet-sand line of maps.js (the wet plants replace it whole)
+WET_LINE = '  diffuseColor.rgb *= 1.0 - uLcWetK.x * ( 1.0 - smoothstep( mix( 0.05, 0.3, lnear ), mix( 0.35, 1.1, lnear ), lhw ) ) * ( 1.0 - smoothstep( mix( 2.0, 3.0, lnear ), mix( 4.0, 7.0, lnear ), lwd ) ) * lsub;'
 PLANTS = {
     # flat-water = item 1 not delivered: the W9 surface - ONE weak ripple layer (0.2 ~ its 0.35 normalScale x our 0.55) and no fresnel sky / sun glint
     "flat-water": [(RP + "maps.js", [("    vec2 lsl = ln1 * 0.55 + ln2 * 0.45;", "    vec2 lsl = ln1 * 0.2;"),
@@ -98,7 +101,10 @@ PLANTS = {
     # lip-static = the foam / depth terms on the STATIC water level (the bobbing mesh not followed): the lip slides off the shore - MUST FAIL shore lip
     "lip-static": [(RP + "maps.js", [("if (W10V && LCFX) LCU.uLcWater.value.x = water.position.y;", "")])],
     # wet-flat = the wet-sand term by height alone (no slope-distance cap): whole low islets darkened from the air - MUST FAIL wet sand from the air
-    "wet-flat": [(RP + "maps.js", [(" * ( 1.0 - smoothstep( 3.0, 7.0, lwd ) ) * step( -8.0, lhw );", " * step( -8.0, lhw );")])],
+    "wet-flat": [(RP + "maps.js", [(WET_LINE, "  diffuseColor.rgb *= 1.0 - uLcWetK.x * ( 1.0 - smoothstep( 0.3, 1.1, lhw ) ) * step( -8.0, lhw );")])],
+    # wet-seabed = the fix3 wet term: 3-7 m swash band at every distance AND the seabed darkened down to 8 m under the water - every coast a thick dark
+    #              halo from the air, a submerged neck muddy - MUST FAIL wet sand from the air (live frame)
+    "wet-seabed": [(RP + "maps.js", [(WET_LINE, "  diffuseColor.rgb *= 1.0 - uLcWetK.x * ( 1.0 - smoothstep( 0.3, 1.1, lhw ) ) * ( 1.0 - smoothstep( 3.0, 7.0, lwd ) ) * step( -8.0, lhw );")])],
     "sparse-grass": [(RP + "maps.js", [("lamps: 4, grassR: 30, grassC: 0.56,", "lamps: 4, grassR: 30, grassC: 1.4,")])],
     # grass-on-low = the blade layer (and the ground lattice texture it stands on) built on the low tier too
     "grass-on-low": [(RP + "maps.js", [("lamps: 0, grassR: 0, grassC: 1,", "lamps: 0, grassR: 30, grassC: 0.56,"),
@@ -423,16 +429,23 @@ def part_map(s, v, R, map_id, shots, want, interiors=True):
                 # water does not cover in the live frame - the term also darkens the seabed under the water, which is not this row's): the share of the
                 # drop view it darkens by > 0.02
                 Bw = decode(s.js(RENDER_JS, [dspec, ["water"], None])["png"])
+                Ow = decode(s.js(RENDER_JS, [dspec, [], None])["png"])   # fix4: the LIVE frame (water drawn) - the seabed seen through the water counts too
                 wk = s.js("() => { const U = window.__LC__.W._lcU; if (!U || !U.uLcWetK) return null; const u = U.uLcWetK.value; const x = u.x; u.x = 0; return x; }")
                 if wk is None:                           # (a build without the wet-sand term: the base - nothing to judge)
                     Cw = Bw
                 else:
                     Cw = decode(s.js(RENDER_JS, [dspec, ["water"], None])["png"])
+                    Fw = decode(s.js(RENDER_JS, [dspec, [], None])["png"])
                     s.js("(x) => { window.__LC__.W._lcU.uLcWetK.value.x = x; return 1; }", wk)
                 land = ~water_mask(r["A"], Bw)
                 d = lum(Cw) - lum(Bw)
                 M["wetDrop"] = None if wk is None else {"wetK": wk, "landPct": round(float(land.mean() * 100), 2), "darkenedPct": round(float(((d > 0.02) & land).mean() * 100), 3),
                                 "ofLandPct": round(float(((d > 0.02) & land).sum() / max(1, land.sum()) * 100), 2)}
+                if M["wetDrop"]:
+                    dv = lum(Fw) - lum(Ow)
+                    M["wetDrop"]["framePct"] = round(float((dv > 0.02).mean() * 100), 3)          # the whole live frame: land AND seabed through the water
+                    M["wetDrop"]["seabedPct"] = round(float(((dv > 0.02) & ~land).mean() * 100), 3)
+                    Image.fromarray(np.concatenate([Ow, Fw], axis=0)[..., :3].astype(np.uint8)).save(os.path.join(shots, "%s_drop_wet_on_off.png" % tag))
         if interiors:
             rooms = s.js(ROOMS_JS, [SS.DEF_DROP[map_id]])
             im = []
@@ -841,8 +854,13 @@ def main():
             if wmiss:
                 v.cnj("light: wet sand from the air", "no wet-sand term to toggle on %s (a build without it)" % wmiss)
             elif wd:
-                v.check("light: wet sand from the air - the wet-sand term darkens <= 18 % of the dry land in the drop view (a swash band, not whole low islets; by height alone: 28.5 %)",
-                        all(x["ofLandPct"] <= 18.0 for x in wd.values()), wd, "<= 18 % of the land")
+                v.check("light: wet sand from the air - the wet-sand term darkens <= 10 % of the dry land in the drop view (a thin swash line, not whole low islets or a wide rim; by height alone: 28.5 %, fix3's 3-7 m band: 13.4 %)",
+                        all(x["ofLandPct"] <= 10.0 for x in wd.values()), wd, "<= 10 % of the land")
+                # fix4: the LIVE frame (water drawn) - the seabed seen through the water counts too, so a dark halo round every coast or a darkened
+                # submerged neck cannot hide outside the land mask (fix3's term: 47.1 % of the frame, 42.0 % on the seabed)
+                v.check("light: wet sand from the air, live frame - the wet-sand term darkens <= 6 % of the whole drop view and <= 1 % of it under the water (a thin swash line; fix3's seabed term: 47.1 / 42.0 %)",
+                        all(x.get("framePct") is not None and x["framePct"] <= 6.0 and x["seabedPct"] <= 1.0 for x in wd.values()),
+                        {m: {k: x.get(k) for k in ("framePct", "seabedPct")} for m, x in wd.items()}, "<= 6 % frame, <= 1 % seabed")
             se = {m: R.get(m, {}).get("seaEdge") for m in maps if (R.get(m, {}).get("seaEdge") or {}).get("n", 0) >= 8}
             if not se:
                 v.cnj("light: far-sea edge", "no drop view shows >= 8 points of the map edge over water: %s" % {m: R.get(m, {}).get("seaEdge") for m in maps})

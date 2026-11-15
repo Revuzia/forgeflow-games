@@ -598,7 +598,13 @@ const LC_FRAG_ALBEDO = `
   float ldx = dFdx( lhw ), ldy = dFdy( lhw ), ldet = lgx.x * lgy.y - lgx.y * lgy.x;
   vec2 lgr = abs( ldet ) > 1e-7 ? vec2( lgy.y * ldx - lgx.y * ldy, -lgy.x * ldx + lgx.x * ldy ) / ldet : vec2( 0.0 );
   float lwd = max( lhw, 0.0 ) / clamp( length( lgr ), 0.02, 2.0 );   // metres of slope from the waterline
-  diffuseColor.rgb *= 1.0 - uLcWetK.x * ( 1.0 - smoothstep( 0.3, 1.1, lhw ) ) * ( 1.0 - smoothstep( 3.0, 7.0, lwd ) ) * step( -8.0, lhw );
+  // fix4: from the air the seabed under the water is NOT darkened past the first ~0.4 m - the water's depth tint shades it, and darkening it as well gave
+  // every coast a thick dark halo in the drop view and turned a submerged neck muddy. Close up (<= ~180 m, gone by ~300 m: the drop view is >= 330 m up) the shallow seabed keeps its
+  // darker wet tone (it carries the in-water / looking-down detail). The swash band on land is 3-7 m of slope close up (it carries the shore's wet look
+  // there) and narrows to 2-4 m from the air (a thin line, not a wide dark rim round every islet).
+  float lnear = 1.0 - smoothstep( 180.0, 300.0, length( cameraPosition - vLcW ) );
+  float lsub = max( smoothstep( -0.12, -0.02, lhw ), lnear * step( -8.0, lhw ) );
+  diffuseColor.rgb *= 1.0 - uLcWetK.x * ( 1.0 - smoothstep( mix( 0.05, 0.3, lnear ), mix( 0.35, 1.1, lnear ), lhw ) ) * ( 1.0 - smoothstep( mix( 2.0, 3.0, lnear ), mix( 4.0, 7.0, lnear ), lwd ) ) * lsub;
 }
 #endif`;
 // W10 R2A: the water's shading normal is the two-layer wave normal (after three's normal chunk; faceDirection keeps the plane lit from below)
