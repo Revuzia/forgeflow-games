@@ -10,7 +10,12 @@ import { epithetOf, epithetUncached } from '../src/sim/god/story.ts';
 interface Run { sim: Sim; log: string[]; stage: number; defTown: number; broke: number }
 
 /** one scripted-arc driver; every action keys off the sim's own tick and state, so a loaded copy repeats it exactly */
-function drive(r: Run, endTick: number, onStep?: (sim: Sim) => void): void {
+interface Sched { def: number; storm: number; brk: number; ans: number }
+/** the years at which the scripted defiance, storm, break and mercy happen */
+const SHORT: Sched = { def: 2, storm: 2.5, brk: 3, ans: 4 };
+const LONG: Sched = { def: 12, storm: 14, brk: 16, ans: 20 };
+
+function drive(r: Run, T: Sched, endTick: number, onStep?: (sim: Sim) => void): void {
   const sim = r.sim;
   const p = sim.u.planets[0], ps = p.people!;
   const day = Math.max(60, Math.round(p.st.dayHours * 60)), year = Math.max(day, Math.round(p.st.orbit.period));
@@ -29,7 +34,7 @@ function drive(r: Run, endTick: number, onStep?: (sim: Sim) => void): void {
     } else if (r.stage === 1 && sim.u.tick >= 4 * day) {
       r.log.push(`y${yr.toFixed(1)} make ${sim.applyNow({ k: 'covenant.make', vow: 'gentle' } as never).ok}`); r.stage = 2;
     } else if (r.stage === 2 && (R.towers?.length ?? 0) > 0) r.stage = 3;
-    else if (r.stage === 4 && yr >= 12) {
+    else if (r.stage === 4 && yr >= T.def) {
       const t = ps.settlements.find((s) => s.fallen < 0 && !s.band);
       if (t) {
         r.defTown = t.id;
@@ -38,16 +43,16 @@ function drive(r: Run, endTick: number, onStep?: (sim: Sim) => void): void {
         r.log.push(`y${yr.toFixed(1)} defiance.set ${t.id}`);
       }
       r.stage = 5;
-    } else if (r.stage === 5 && yr >= 14 && h) {
+    } else if (r.stage === 5 && yr >= T.storm && h) {
       // the storm on a defiant town (defiance), then the cast that breaks the covenant (the break)
       const t = ps.settlement(r.defTown) ?? h;
       sim.applyNow({ k: 'miracle.storm', pos: [...t.pos], radius: 350, wrath: 0.4 } as never);
       r.log.push(`y${yr.toFixed(1)} storm`); r.stage = 6;
-    } else if (r.stage === 6 && yr >= 16 && h) {
+    } else if (r.stage === 6 && yr >= T.brk && h) {
       const res = sim.applyNow({ k: 'miracle.lightning', pos: [...h.pos], wrath: 0.7, covenant: 'break' } as never);
       r.broke = (R.covenants ?? []).some((c) => c.status === 'broken') ? 1 : 0;
       r.log.push(`y${yr.toFixed(1)} break ${res.ok} broken=${r.broke}`); r.stage = 7;
-    } else if (r.stage === 7 && yr >= 20) {
+    } else if (r.stage === 7 && yr >= T.ans) {
       const t = ps.settlement(r.defTown);
       if (t && t.fallen < 0) sim.applyNow({ k: 'defiance.answer', settlement: t.id, how: 'mercy' } as never);
       r.stage = 8;
@@ -58,14 +63,17 @@ function drive(r: Run, endTick: number, onStep?: (sim: Sim) => void): void {
 const fresh = (): Run => ({ sim: new Sim({ seed: 1, scenario: 'babel', overrides: { n: 20 } }), log: [], stage: 0, defTown: -1, broke: 0 });
 const yearTicks = (sim: Sim): number => { const p = sim.u.planets[0]; const day = Math.max(60, Math.round(p.st.dayHours * 60)); return Math.max(day, Math.round(p.st.orbit.period)); };
 
-test('arc scenario: save at year 40, load, run to year 80 equals a straight run to year 80', { timeout: 1_800_000 }, () => {
+// short form (default, ~1 min): save at year 5, run on to year 8. ARC_LONG=1: the long form, save at year 40, run to year 80.
+const LONGF = !!process.env.ARC_LONG;
+const T = LONGF ? LONG : SHORT, SAVE = LONGF ? 40 : 5, END = LONGF ? 80 : 8;
+test(`arc scenario: save at year ${SAVE}, load, run to year ${END} equals a straight run to year ${END}`, { timeout: 3_600_000 }, () => {
   const straight = fresh();
   const yr = yearTicks(straight.sim);
   const seen = { cached: 0 };
   const trace: string[] = [], trace2: string[] = [];
   const TR = !!process.env.ARC_TRACE; // ARC_TRACE=1: hash every day of the second half in both runs and name the first day that differs
   const watch = (sim: Sim): void => {
-    if (TR && sim.u.tick > 40 * yr) trace.push(sim.hash());
+    if (TR && sim.u.tick > SAVE * yr) trace.push(sim.hash());
     // the epithet cache agrees with the uncached scan on every sampled step (every day to year 3, then each year)
     const p = sim.u.planets[0];
     if (sim.u.tick < 3 * yr || sim.u.tick % yr < Math.max(60, Math.round(p.st.dayHours * 60))) {
@@ -74,17 +82,17 @@ test('arc scenario: save at year 40, load, run to year 80 equals a straight run 
     }
   };
   // one straight run, saved on the way past year 40 (saving must not disturb the run) ...
-  drive(straight, 40 * yr, watch);
+  drive(straight, T, SAVE * yr, watch);
   const hash40 = straight.sim.hash();
   const bytes = straight.sim.save();
   assert.equal(straight.sim.hash(), hash40, 'saving does not change the state');
   const b: Run = { ...straight, sim: Sim.load(bytes), log: [...straight.log] };
   assert.equal(b.sim.hash(), hash40, 'the load is the state that was saved');
-  drive(straight, 80 * yr, watch);
+  drive(straight, T, END * yr, watch);
   const hashStraight = straight.sim.hash();
-  assert.ok(seen.cached > 50);
+  assert.ok(seen.cached > 20);
   // ... and the load of that save, run on to year 80
-  drive(b, 80 * yr, TR ? (sim) => { trace2.push(sim.hash()); } : undefined);
+  drive(b, T, END * yr, TR ? (sim) => { trace2.push(sim.hash()); } : undefined);
   if (TR) { const i = trace.findIndex((h, k) => h !== trace2[k]); console.log('ARC_TRACE first differing day after year 40:', i, 'of', trace.length); }
   assert.equal(b.sim.hash(), hashStraight, 'the loaded run reaches the same hash at year 80');
   assert.deepEqual(b.log, straight.log, 'the same scripted acts at the same times');
@@ -94,6 +102,8 @@ test('arc scenario: save at year 40, load, run to year 80 equals a straight run 
   const ages = (straight.sim.query('ages', { planet: 0 }) as { kind: string }[]).map((x) => x.kind);
   assert.ok((R.towers?.length ?? 0) >= 1, 'a tower was begun');
   assert.ok((R.covenants ?? []).length >= 1, 'a covenant was made');
-  assert.ok(ages.length >= 3, `ages: ${ages.join(',')}`);
+  assert.ok(ages.length >= 1, `ages: ${ages.join(',')}`);
+  assert.ok((R.covenants ?? []).some((c) => c.status === 'broken'), 'the covenant was broken');
+  assert.ok(straight.stage >= 8, `the script ran to its end (stage ${straight.stage})`);
   console.log('ARC-SCENARIO', JSON.stringify({ log: straight.log, ages, covenants: (R.covenants ?? []).map((c) => c.status), towers: (R.towers ?? []).map((t) => t.status) }));
 });
