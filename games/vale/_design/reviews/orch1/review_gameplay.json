@@ -1,0 +1,279 @@
+{
+  "lane": "orch1 review: gameplay, balance and systems (fresh eyes, senior gameplay lead)",
+  "date": "2026-11-15 Central",
+  "head": "2c1bfe862",
+  "score": 6.4,
+  "scoreNote": "Measured against a shipped top-tier MOBA, not against VALE's own soak gates. closing2/gameplay.json held 7.5 by checking the soak gates, and 41 of 42 orch1 soak gates pass. The low score comes from gaps those gates do not measure. There is no tutorial. BRIDGE has five fighters at 22-29 % or 72-73 % win rate. Longshade decides the game (the first taker wins 62 of 64) but is taken in only 32 % of RIFT games. Vision is shallow: walls do not block sight, only supports ward, and nothing is built to clear lamps. Bots leave towers and partners undefended, which is the owner's own complaint. Progression is cosmetic only and thin. No blocker in the sensitivity sense, but the onboarding gap and the BRIDGE balance spread would each block a shipped launch.",
+  "read": [
+    "_design/reviews/orch1/evidence/play/{summary.json,soak_report.txt,kits.md} (680-match soak orch1_play: 200 RIFT, 200 BRIDGE, 200 FRAY, 80 mirror)",
+    "_harness/_reports/fw_W4_soak_orch1_play.json (raw per-game: lamps by seat, Longshade takes vs winner)",
+    "scratchpad diag_table2.txt from _harness/_tmp_diag_ai.ts (commit e5ea2bac1; 8 RIFT + 4 BRIDGE games per tier, novice/adept/veteran)",
+    "_design/reviews/orch1/evidence/ux notes.md and screenshots: cold1920_024 first-match hint, hud_056 fight, post_rift_017 postgame, menus_039 loadout, menus_051 profile",
+    "content/{modes,queues,items,setup,team_buffs,ranks,store,units}.json, content/maps/map_rift.json camps, content/fighters/*.json",
+    "src/sim/{vision.ts,economy.ts}, src/sim/bots/{difficulty.ts,economy.ts,knowledge.ts,team.ts}, src/ui/hud/index.tsx (HINTS), src/session/{profile_store.ts,grants.ts}",
+    "_design/reviews/closing2/gameplay.json, final/gameplay.json, max2/critic.json, fixwaves/owner_rulings.md (4, 8, 15, 21, 22), _harness/probe_sim_rekey.ts"
+  ],
+  "verifiedClaims": [
+    "Longshade: the first taker wins 62 of 64 RIFT games in orch1_play (closing2 had 93 of 95). It is taken in 64 of 200 RIFT games, and in 1 of 8 veteran games in the diag run.",
+    "Hooded Lamps placed per seat per RIFT game: lampglass 10.81, every other role 0.00 (400 seats each). Only the support ward plan exists (src/sim/bots/economy.ts:174-185).",
+    "src/sim/vision.ts:14-16 says walls do not block sight: sight is a plain disc.",
+    "No guided tutorial. The only onboarding is 7 timed text hints, 7 s apart (src/ui/hud/index.tsx:40-49). The first hint shows during pregame: 'Right-click the ground to move.' (ux notes, first_match). profile.tutorialsSeen is declared but never read outside profile_store/contracts. The default first queue is Quick with adept bots (queues.json rift_quick), not the novice co-op.",
+    "BRIDGE win rates (summary.json winrate_bridge, n 124-126 each): Ervet 73.4 [65.0-80.4], Dunsom 71.8 [63.3-78.9], Lisvel 29.0 [21.8-37.6], Marund 23.4 [16.8-31.6], Nurrow 21.8 [15.4-29.8]. All five 95 % intervals lie wholly outside 40-60, but the ruling-22 gate reads only RIFT.",
+    "Progression is account level (100 + 25 per level), Candles for skins, and 9 emblems (menus_051). There is no per-fighter track, no tasks and no season reward."
+  ],
+  "strengths": [
+    "16 kits, each built on its own interaction rather than stat sticks: Grudge stacks for Burdam, Shaded for Hesmi, Mortared into a root for Marund, Settled for Dunsom, the Hum chord stun for Vashil, Cut tracks for Rishal, Run-up for Ulkro, sleep that damage breaks for Nurrow, Heat and overheat for Kemdo, and the whole and Hilt blade forms for Ervet. The counterplay is readable: a disarm does not stop casters, damage wakes a sleeper, and Marund's dome blocks entry.",
+    "Systems breadth on par with the genre: 57 items (31 finished, 11 apex) with the original dial-slot rule in place of a one-apex cap, 8 Hour spells, 3 boon paths, side-bound camp buffs, stacking but expiring Splinters, Lanternwake, Ringshade backdoor protection, the Dawn Seal, the Grove tithe catch-up XP and the Noon Toll in FRAY.",
+    "Three distinct modes with their own pick protocols and paced lengths: RIFT median 22.1 min (p90 27.3), BRIDGE 15.9 min with The Lot draw, FRAY 8.9 min with no 90 s lulls in 95 % of games.",
+    "A deterministic soak harness with about 40 gameplay gates (laning, jungle, structures, early fight pace, items, difficulty ladder, pace, balance, FRAY). It ran 680 matches in 17 min with 0 bot faults. Few studios have this before launch.",
+    "Bots are tiered by perception and execution, never by stats, and they produce a real ladder: veteran beats novice 36/40 and adept 31/40. Bots build against the enemy team (anti-heal 90.6 % vs 27.3 %), every finished item gets bought (31/31), and every fighter's first two items vary.",
+    "Early game is lively, not passive: 7.1-7.6 takedowns by 10:00, first blood median 2.5 min, no game without a takedown by 10:00, and every fighter's median first ult comes before 10:00.",
+    "Practice lab with dummies, a damage meter, wave and structure toggles and teleport. Glicko-2 ranked with placements. Free roster. Cosmetics confirmed stat-free on the loadout screen."
+  ],
+  "improvements": [
+    {
+      "id": "GPO-1",
+      "what": "Guided first-hour onboarding: a scripted tutorial in the practice sim, contextual hints, and first matches routed to co-op",
+      "why": "A brand-new player clicks FIND A MATCH and lands in Quick RIFT against adept bots (queues.json rift_quick, bots.difficulty adept). Those bots last-hit 44.9 % and win 22.5 % of mirrors against veteran. The only teaching is 7 text lines on a 7 s timer (src/ui/hud/index.tsx:40-49), and the first one appears in pregame before anything can move (ux cold1920_024: 'Right-click the ground to move.' at 0:19 pregame). Nothing explains last-hitting, Needles, the shop, recall, Hour spells, boons, camp buffs or Longshade. Every shipped top-tier MOBA ships a multi-part tutorial and a bots-only intro. profile.tutorialsSeen exists but nothing reads it.",
+      "how": "1) Three tutorial chapters as a new 'tutorial' queue on src/sim/modes/practice.ts, which already has dummies, waves and structures on/off and teleport. Ch1: move, attack, last-hit 5 Wicks with the Wick gold callout. Ch2: abilities, ranking up, a combo on a dummy, Hour spells. Ch3: Needle aggro under a tower, the shop with the Suggested row, recall, and a camp-buff take. Each step is gated on a sim event, not a timer. 2) Replace HINTS with event-triggered hints: first time below 35 % hp -> recall; first level-up -> rank a skill; first time with gold >= the cheapest component in base -> shop; first Sunsplinter spawn -> objective; first death -> the death-recap read. Store them in profile.tutorialsSeen. 3) Make the Lantern Drill co-op (novice) the default Find Match until 3 matches are completed, and offer the tutorial on first launch. Fighter detail gets a 3-line 'how to play' per kit.",
+      "impact": "high",
+      "effort": "L",
+      "model": "opus",
+      "modelWhy": "Teaching order, pacing and the event-gated script design are design judgement across sim, session and HUD.",
+      "risk": "The tutorial queue must not leak practice commands into other queues. practice.ts already gates them on queue.kind, so keep that. The copy needs copy_lint and the strings file."
+    },
+    {
+      "id": "GPO-2",
+      "what": "BRIDGE balance: bring five fighters back from 22-29 % and 72-73 %, and gate BRIDGE like RIFT",
+      "why": "BRIDGE assigns fighters by lot, so a player cannot dodge a bad draw. Nurrow wins 21.8 % [15.4-29.8], Marund 23.4 % [16.8-31.6] and Lisvel 29.0 % [21.8-37.6]. Ervet wins 73.4 % [65.0-80.4] and Dunsom 71.8 % [63.3-78.9] (summary.json winrate_bridge, n 124-126). Each 95 % interval lies wholly outside ruling 22's 40-60 band, but the balance gate in probe_sim_bot_soak only reads RIFT, so no gate is red. A shipped mode with a 50-point spread is unplayable for the losing draws.",
+      "how": "1) Add a BRIDGE row to the ruling-22 gate in _harness/probe_sim_bot_soak.ts with the same Wilson interval over at least 200 decided same-tier games. 2) Diagnose pilot vs kit per ruling 22. Nurrow's sleep-and-snuff dive and Marund's dome/charge peel are built for side-lane isolation, which a five-man single lane removes. Ervet's shard burst and Dunsom's group displacement scale with clumped enemies. 3) Fix in order: pilot fixes in bots/micro.ts (Nurrow targets a backline sleeper and holds the a2 dart for a peeler; Marund leads with the dome against divers). Then add BRIDGE-only fighterWeights in modes.json, mirroring FRAY's dealt/taken weights. Kit numbers come last. 4) Re-soak 200+200 BRIDGE games on fresh seeds.",
+      "impact": "high",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "Separating pilot error from kit strength in a 5v5 single lane, and picking the least invasive lever, is balance design judgement.",
+      "risk": "Mode weights are a band-aid that players cannot see. Keep them small (0.85-1.15) and record them in the mode $comment. Check the probe_sim_rekey 10 % gate on any headline number."
+    },
+    {
+      "id": "GPO-3",
+      "what": "Longshade: make the epic objective contested and answerable instead of rare and decisive",
+      "why": "The first Longshade taker wins 62 of 64 RIFT games in orch1_play (closing2 measured 93 of 95). It is taken in only 32 % of RIFT games (0.32 a game; median take 20.4 min, spawn 16:00), and veteran teams took it once in 8 games in the diag run. So the late-game decision point usually never happens, and when it does it ends the game. Shipped MOBAs make the epic objective a mid-late pivot that defenders can answer, with a typical first-taker win rate of 70-80 %, not 97 %.",
+      "how": "1) Bot macro (bots/team.ts objective calls): from the Longshade spawn, gather on a numbers advantage or after a won fight, and contest with vision when the enemy starts it. 2) Defender answer (already the closing2 GP2-m4 fix): bots group at the nearest standing Needle against the empowered wave and clear it before siegeing back. 3) Tune the buff toward pressure rather than an auto-win: the Long Shade minionStats (hp 400, ad 30, armor/resist 25) on Wicks behind a full chain is the closer, so scale the minion bonus down with each standing Needle of the defender, or end it when the buffed wave is cleared. Keep inside the probe_sim_rekey gate. 4) New soak gates: Longshade taken in >= 60 % of RIFT games that reach 20:00, and first-taker win rate <= 80 %.",
+      "impact": "high",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "Objective design plus team-brain macro, where the soak gates trade against each other (pace, early cores, ruling 21).",
+      "risk": "More Longshade takes could shorten games or create early cores. Watch the ruling-21 tail bar and the p90 length."
+    },
+    {
+      "id": "GPO-4",
+      "what": "Bots defend their structures and base (the owner's 'defend their base' ask)",
+      "why": "Diag run, veteran RIFT, 8 games: when enemy fighters siege an outer Needle, 48 % of that siege time has no defender even though defenders are alive ('undefended-with-bodies'); 55 % at inner Needles. 9 outer Needles fell with no defender within 20 m while at least 2 were alive. 13 base intrusions went unanswered and only 3 bots recalled to defend. Absent defenders were in push 103 s, defend-in-transit 90 s, lane 31 s and farm 30 s. Players read a tower falling while 2-3 bot allies farm elsewhere as broken AI.",
+      "how": "In bots/team.ts thinkDefend/delayDefend: weight the defend call by the fighters sieging, not only the Wick count. Pull the two nearest healthy fighters (a laner on that road plus the jungler) when enemy fighters are at a structure. Teleport-recall a fighter whose route is over 40 m. Treat any base intrusion as a must-answer by 2+ seats regardless of macroDelay. Add soak gates from _tmp_diag_ai's measures: undefended-with-bodies <= 20 % at outer and inner, base intrusions unanswered 0, falls with no defender and >= 2 alive <= 1 per 8 games. Promote _tmp_diag_ai.ts to a permanent probe.",
+      "impact": "high",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "Team-brain macro trade-offs: over-defending kills push pace and the CL-1 early-fight gates.",
+      "risk": "Can raise RIFT length and lower first-structure time. Hold the 9-12 min first-structure and p90 <= 32 min gates."
+    },
+    {
+      "id": "GPO-5",
+      "what": "Bots protect partners (peel) and stop dying alone",
+      "why": "Diag run, veteran RIFT: 47 % of 1516 peel episodes (an enemy diving an ally) had no ally in range. Of the helped episodes, 26 % got no response and in 15 % every helper walked away. 23 % of veteran deaths are isolated. The team that trails by 2000+ Gleam dies 1.21 times per team-minute against 0.57 when even, so a deficit snowballs because bots keep taking fights alone. This is the owner's 'defend their partners' ask, and a human ally feels it at once when a bot support walks off while their carry is dived.",
+      "how": "1) bots/micro.ts and bot.ts: a protect intent with priority over push and farm. When an allied fighter within 12 m is hit by an enemy fighter, a support or frontline answers with its peel tools: knowledge.ts already tags peel, cc and shield abilities, and Sukri's Draw Near, Marund's dome and Ardit's Glare are built for it. 2) A behind posture in team.ts: at a deficit of 1500+ Gleam, laners hug their own Needle, objectives are contested only at even numbers, and nobody walks a side road without vision. 3) Gates: isolated peel <= 30 %, no response <= 15 %, deaths per team-minute behind <= 1.5x even.",
+      "impact": "high",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "Combat micro under perception limits, with tier differentiation, is hard AI engineering.",
+      "risk": "A stronger peel lowers kill pace. Keep the CL-1 takedowns >= 6 by 10:00 gate green."
+    },
+    {
+      "id": "GPO-6",
+      "what": "Vision with depth: walls block sight, a lamp-clearing tool, and every role wards",
+      "why": "src/sim/vision.ts:14-16: 'Walls do NOT occlude sight', so sight is a plain 12 m disc that sees over Dialwood walls. Ganks and jukes around corners, the genre's core jungle skill, cannot happen. Hooded Lamps are invisible, and the only ways to find one are the Calling Bell spell (150 s, which costs a Hour spell slot) and Ilsheta's lamp light. No item or trinket clears vision, and the soak has no lamps-cleared metric. Only lampglass bots ward (10.81 lamps a game). The other four roles place 0.00 over 400 seats each. The diag run counts 3 % of engagements opened from a thicket and 3 % from fog.",
+      "how": "1) Line of sight: at the 10 Hz rebuild, clip each stamp disc against the nav grid's wall cells with a precomputed per-cell shadow table (the interface stays the same, as vision.ts already anticipates). Budget it under 0.5 ms on the sim worker. 2) A VALE-themed reveal: an Unhooding Lamp consumable or a free per-fighter 'Shutter' trinket slot, a 90 s cone that reveals and disables Hooded Lamps. Lamp kills pay the existing 20-Gleam bounty. 3) Bot vision plans: the jungler and the solo laners each place 1 lamp per back, supports place at objective approaches before spawns, and bots clear lamps they reveal. 4) Soak metrics: lamps by role, lamps cleared, gank success from fog. A playtest note should check the minimap reads the occlusion.",
+      "impact": "high",
+      "effort": "L",
+      "model": "opus",
+      "modelWhy": "This changes the jungle, gank and objective meta and needs engineering for a deterministic, cheap occlusion. Design and hard engineering together.",
+      "risk": "Determinism: the shadow table must be built from integer nav cells only. Bot perception reads vision, so expect laning gates to shift. Rerun the full soak."
+    },
+    {
+      "id": "GPO-7",
+      "what": "Bots ambush and use fog ('sneak attack')",
+      "why": "Diag run, veteran RIFT: thickets hold 5 % of fighter-time (bots stand still in one only 1.4 %), 3 % of engagement openers come from a thicket and 3 % from fog. Roams have a median of 4.3 s and are visible to the enemy 27 % of the time. Bot fights start face-first in the open, so a human never sees a bot jungler appear from a thicket. Thickets exist on the map (map_rift.json thickets) but go unused.",
+      "how": "In bots/team.ts gank and bot.ts roam: path ganks through thickets and fog, using the vision grid to avoid enemy-visible cells. Wait in the lane-side thicket nearest the target until it is past the river line. At veteran, the support and jungler hold a thicket before an objective spawn. Tier it by perception: novice never waits, veteran waits up to 6 s. Gate: thicket or fog openers >= 15 % of jungler engagements at veteran. Best done after GPO-6, because line of sight makes ambushes real.",
+      "impact": "medium",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "Behaviour design inside the perception model needs judgement to stay fair (no fog cheating).",
+      "risk": "The bot must not read hidden enemies. Use only team vision (w.vision.seen) as now."
+    },
+    {
+      "id": "GPO-8",
+      "what": "RIFT balance into the 45-55 design band",
+      "why": "Ruling 22's gate passes only because no interval lies wholly outside 40-60. The point estimates are far from the 45-55 design target: Odrum 65.6 % [57.0-73.3], Dunsom 64.7 % [55.1-73.3], Ervet 61.5 % [53.0-69.5], Marund 60.0 % against Burdam 39.7 % [32.1-47.8], Tunlan 40.0 % and Ilsheta 41.2 %. Burdam has been low on every seed set since closing2 (pooled 34.9 % there). Only 2 of 16 fighters have an interval wholly inside 40-60.",
+      "how": "Per ruling 22, check the pilot before the numbers. Odrum and Ilsheta deal 59.7 % and 64.3 % of their damage with autos (summary ability_damage_usage), and Ilsheta's ult deals no damage by design. Diagnose with probe_sim_kit_diag. For Burdam: does the bot build Grudge before the ult (the ult's damage share is 6.6 %)? For Tunlan: are fear-into-stun combos landing? Then make small number changes on Odrum's Resin Shot root and the Dunsom ult. Re-soak 400 decided games so the intervals tighten below ±7.",
+      "impact": "medium",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "Balance calls on bot-piloted data need judgement about pilot vs kit.",
+      "risk": "Shifts the BRIDGE and FRAY numbers too. Run all three suites."
+    },
+    {
+      "id": "GPO-9",
+      "what": "Turn the red FRAY placement gate green (Ulkro 3.27, Nurrow 3.48 against the 3.5 floor)",
+      "why": "The only enforced gate that fails in orch1_play (summary.json gates[-1]). It has failed on every seed set since closing2 (GP2-1). In FRAY Nurrow places 3.2-3.8 but wins 21.8 % in BRIDGE and 41.5 % in RIFT: the same kit is both best and worst depending on the mode.",
+      "how": "Retune content/modes.json FRAY fighterWeights for ulkro and nurrow (dealt down about 0.05-0.08 each, or taken up). Re-run the FRAY soak with 2 x 100 seeds on two fresh seed bases and keep both inside 3.5-7.5. Commit with the soak lines in the message.",
+      "impact": "medium",
+      "effort": "S",
+      "model": "sonnet",
+      "modelWhy": "A well-specified numeric retune against an existing gate.",
+      "risk": "Nudging one fighter shifts others. Check the 16/16 list, not just the two."
+    },
+    {
+      "id": "GPO-10",
+      "what": "BRIDGE comeback: break the respawn-death loop and early snowball",
+      "why": "In BRIDGE, the leader at 5:00 wins 71 % (RIFT 54.5 %), and a 1500+ lead at 5:00 wins 84.4 %. The mean gold gap at 10:00 is 3648. First blood comes at 0:34 median, and 36 % of BRIDGE deaths (diag, adept) happen within 75 s of respawning. The trailing team walks back into a five-man road and dies again. A shipped single-lane mode keeps the losing side in the game for 15 minutes.",
+      "how": "1) A deficit bounty in sim/economy.ts: when the victim's team leads by >= 1500 Gleam, kill gold rises by up to +50 %, assist share included. Rules key bounty.deficit, BRIDGE only at first. 2) A 3 s 'Returning' state after respawn (no damage taken from structures, +20 % move speed until first damage dealt) so the walk back is not a free kill. 3) Optionally, Mending Sunmotes spawn closer to the losing side. Gate: BRIDGE leader-at-5 win rate <= 65 %, and deaths within 75 s of respawn <= 25 %.",
+      "impact": "medium",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "Comeback design must not reward throwing; it needs economy judgement.",
+      "risk": "Can stretch BRIDGE past 18 min and raise sudden-death endings over 25 %. Gate both."
+    },
+    {
+      "id": "GPO-11",
+      "what": "Retention: a cosmetic-only fighter mastery track, weekly tasks and a ranked season reward",
+      "why": "The profile shows account level, Candles and 9 emblems (menus_051), and the only thing to buy is skins. With all 16 fighters free and no unlocks, nothing pulls a player into match 5 or match 50: no per-fighter progress, no goals per session, no season end. Shipped top-tier MOBAs ship all three (in their own forms).",
+      "how": "1) Fighter Hours: per-fighter XP from matches. Milestones 1-7 award a portrait frame, an emblem, a card border and a victory pose. Cosmetic only, and session-side only (src/session/grants.ts, profile_store schema bump with a migration). 2) Three weekly tasks drawn from a content list (play a role, take a camp buff, land 20 ability hits with a fighter) paying Candles, stored in the profile. 3) A ranked season (content/ranks.json gains season dates) with an end-of-season emblem by highest tier. Show progress on Home and in the postgame.",
+      "impact": "high",
+      "effort": "L",
+      "model": "opus",
+      "modelWhy": "Reward pacing and economy design first. A sonnet lane can then implement against a written spec.",
+      "risk": "Must never touch sim stats (hard rule). Profile migration must keep old saves. Grants must stay earned-only Candles."
+    },
+    {
+      "id": "GPO-12",
+      "what": "Boons with real choices: one keystone per path",
+      "why": "Boons are 3 paths x 3 boons, pick 2 from one path, so 9 loadouts. Most are flat stats: Dense Stone +50 hp, Keen Edge 6 % pen, Long Stride +4 % move speed (setup.json). None changes how a fighter plays, so the loadout screen (menus_039) offers a stat shade rather than a playstyle. Shipped MOBAs make the pre-game layer a playstyle choice.",
+      "how": "Add a keystone row: pick 1 of 3 per path, with the 2 minors as now. Each keystone is a VALE rule. Shadeline: 'Noon Strike', the third hit on a fighter within 3 s cracks it for armor-ignoring damage. Warmstone: 'Hearthstone', after 3 s in combat, gain a stacking shield. Hourturn: 'Dial Turn', a cast after a dash refunds 1 s. Then add the bot loadout choice per kit style in bots/knowledge.ts, extend probe_sim_rekey to cover the keystones, and run the soak.",
+      "impact": "medium",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "New system design that must stay original and balanced across 16 kits.",
+      "risk": "Balance churn across all three modes. Expect one re-tune round."
+    },
+    {
+      "id": "GPO-13",
+      "what": "Thin out the slows and give each kit one skill decision",
+      "why": "The fighter JSONs reference the slow status 36 times, and all 16 fighters can slow (kits.md; for example Ervet has 5 slow refs and Odrum 4). Universal slows blur class identity and make kiting moot. Two kits are shallow. Lisvel's a3 Morning Draw is a flat 30-50 % attack-speed steroid. Ilsheta's 4 abilities are 1 skillshot plus 3 reactive heals and shields. Both sit low: Lisvel 43.5 % RIFT and 29 % BRIDGE, Ilsheta 41.2 % RIFT.",
+      "how": "1) Replace about a third of the incidental slows with each kit's own mark or effect: Ervet's a1 just applies a shard, Kemdo's a2 shimmer grants Heat instead, Rishal keeps the Cut slow only. 2) Lisvel a3: a held draw (up to 1 s) that adds range and pierce, so the player trades DPS uptime for a long shot. 3) Ilsheta: a second cast of Hung Lamp moves the lamp to another ally, so she has to read the fight. 4) Re-soak and re-check the ruling-22 band.",
+      "impact": "medium",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "Kit design judgement, and it touches identity and readability for 16 fighters.",
+      "risk": "VFX, strings and the bot ability-use tags must follow every kit edit (content, vfx.json, strings.en.json, ai.use)."
+    },
+    {
+      "id": "GPO-14",
+      "what": "Re-key the systems that still map one to one to the gauge, and extend the re-key gate to cover them",
+      "why": "Ruling 4 says no rule may map one to one to the gauge, but probe_sim_rekey.ts covers only spells, starters, potions, boots, wards, camp buffs and the epic buff. Several RIFT rules still map one to one. Waves come every 30 s with 3 melee and 3 caster Wicks plus a siege Wick every 3rd wave, then every 2nd wave from 15:00 (modes.json rift minionWaves). The ultimate ranks at 6/11/16, with level cap 18 and basic rank 5. RIFT start gold is 480, within 10 % of the gauge's 500. These are the frame of every match, so they decide whether VALE reads as its own game.",
+      "how": "1) Add rows to probe_sim_rekey.ts for wave interval, composition, siege cadence, ult rank levels and start gold. 2) Re-key with a VALE rule, for example: the wave mix follows the dial hour (4 Glimwicks + 2 Shieldwicks on odd hours, the reverse on even; the Greatwick on every 'quarter'); ult ranks at 6/12/17 tied to the Hourbell chimes; start Gleam 450-560 outside the band. 3) Re-soak, since this moves laning gates.",
+      "impact": "medium",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "Originality judgement balanced against laning-gate stability.",
+      "risk": "Moving the wave cadence shifts cs@10, last-hit and pace gates. Plan one tuning round."
+    },
+    {
+      "id": "GPO-15",
+      "what": "Match-to-match variety: a per-match Sunsplinter facet",
+      "why": "RIFT has one map, one camp layout and one Sunsplinter with the same Splinters buff every match (team_buffs.json), so objective priority is identical every game. Closing2 GP2-m7 also notes recurring lane matchups with 3-4 fighters per role. After a dozen matches every RIFT plays the same.",
+      "how": "At match start, a seeded draw (deterministic from the setup seed) picks one of three Sunsplinter facets, announced at 0:00 and shown on the HUD sky strip. Each facet is a different team buff: Splinters (pen and haste, as now), a 'Long Noon' (+vision radius and out-of-combat speed), and a 'Shard Ward' (a shield on Needle-adjacent fights). Each comes with its own small VFX tint. Bots value the facet in their objective call. Keep it out of BRIDGE and FRAY.",
+      "impact": "medium",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "Objective design that must avoid copying the gauge's elemental-drake system: each facet must be a VALE light-and-shadow rule.",
+      "risk": "Needs VFX and strings and an extra probe_sim_rekey row. The determinism of the draw must come from setup.seed."
+    },
+    {
+      "id": "GPO-16",
+      "what": "Roster expansion plan to 24, filling the archetypes VALE lacks",
+      "why": "16 fighters with 3-4 per role (closing2 GP2-m7). No kit is a stealth or scout, a summoner with a pet, a terrain-shaper (walls), a global presence, or an enchanter who empowers an ally's attacks. Draft depth and counter-picking stay narrow, so ranked bans (1 per team) barely matter.",
+      "how": "Write _design/ROSTER.md additions for 8 fighters, each naming its archetype gap, its VALE mark mechanic and its counter. Order by role scarcity: grovehunter, lampglass and shaftlight first. Build them through the existing content and Blender pipeline. The bans-by-roster table in queues.json already scales.",
+      "impact": "medium",
+      "effort": "XL",
+      "model": "opus",
+      "modelWhy": "Character and kit design plus art direction.",
+      "risk": "Each fighter costs art, cards and VFX budget (shader programs are already at 40/40), so plan programs before kits."
+    },
+    {
+      "id": "GPO-17",
+      "what": "Close the duo-lane level gap",
+      "why": "Shaftlight is level 6.6 at 10:00 and 8.5 at 15:00, against 9.0-9.2 and 11.4-11.6 for the solo laners. The carry is about 3 levels behind and dies most (4.2 deaths a game; orch1 soak_report). This has been open since closing2 GP2-m2. Players on the carry role feel underleveled in every mid-game fight.",
+      "how": "Add rules.tuning.duoXpBonus in sim/economy.ts: when exactly 2 allied fighters share a Wick's XP, each gets 0.6 of the XP instead of 0.5. Keep it under the probe_sim_rekey 10 % rule against the gauge's duo bonus. The lampglass bot cedes last hits when the shaftlight is within 6 m. New gate: shaftlight level at 15:00 >= solo median - 1.5.",
+      "impact": "medium",
+      "effort": "S",
+      "model": "sonnet",
+      "modelWhy": "A well-specified rule key plus a bot tweak plus a gate.",
+      "risk": "A small shift in early kill pace. Keep the CL-1 gates green."
+    },
+    {
+      "id": "GPO-18",
+      "what": "Anti-heal is near-default: narrow the bots' 'healer' read and the item's appeal",
+      "why": "Lampblack Lens is the most-bought finished item (597) and the most-held overall (1273 counts, 56.6 % win rate in the final inventory). The anti-heal family is held by 50 % of veteran RIFT players and 73-75 % of BRIDGE players (diag). Even against teams with fewer than 2 healers, 27.3 % buy it. A situational counter has become a staple, which squeezes build diversity in every mage build.",
+      "how": "In bots/knowledge.ts, count a 'healer' only for kits whose heal or omnivamp share is over a threshold measured from the soak (Ilsheta, Sukri, Burdam, Kemdo's ult window), not for any heal op. Raise the anti-heal pull threshold to >= 2 real healers. Cut lampblack_lens to 2000 Gleam with 10 less ap, keeping the dial rule. Gates: anti-heal owners <= 35 % RIFT, and the existing 'more than twice as often' gate still green.",
+      "impact": "low",
+      "effort": "S",
+      "model": "sonnet",
+      "modelWhy": "A measurable classifier threshold and an item number against defined gates.",
+      "risk": "The G7 gate 'builds answer the enemy team' must stay green."
+    },
+    {
+      "id": "GPO-19",
+      "what": "Fix Wicks idling near the base gates",
+      "why": "Diag run, veteran RIFT: 2536 Wick-seconds with no target and under 0.3 m of movement over 3 s in 8 games, at hotspots (152,64) 291 s and (16,64) 172 s, beside each base. That reads to a player as Wicks frozen at the gate. Untracked _harness/_tmp_diag_minion_stuck.ts shows someone has started looking, but nothing is committed.",
+      "how": "Reproduce with _tmp_diag_minion_stuck.ts on the diag seeds and find whether the cause is a lane waypoint, a Ringshade/Lantern state or collision with the gate structure. Fix in src/sim/units/minions.ts or the map lane polyline. Add a gate: Wick-stuck <= 100 Wick-s per 8 games.",
+      "impact": "medium",
+      "effort": "S",
+      "model": "sonnet",
+      "modelWhy": "A bounded diagnosis with an existing probe and a measurable gate.",
+      "risk": "Coordinate with whoever owns _tmp_diag_minion_stuck.ts. Check git log and pgrep first."
+    },
+    {
+      "id": "GPO-20",
+      "what": "Postgame coaching: benchmark the player's match",
+      "why": "The postgame (post_rift_017) shows T/F/A, Wicks, Gleam, damage and healing with no reference. A new player cannot tell whether 71 Wicks at 23 min is good, or why they died. Shipped games give at least a role benchmark.",
+      "how": "In src/ui/screens/postgame.tsx, add a 'Your hour' card: cs@10 against the role median from the soak (content/client.json gains role benchmarks), deaths with no ally within 12 m, lamps placed against the role norm, and the items bought against the Suggested set. Each gets one plain-language tip from strings. The sim already emits the events. Record them in profile history.",
+      "impact": "low",
+      "effort": "M",
+      "model": "sonnet",
+      "modelWhy": "Well-specified UI and data plumbing once the benchmarks are fixed.",
+      "risk": "Copy must pass copy_lint. Keep the benchmarks in content, not src (no content ids in src)."
+    },
+    {
+      "id": "GPO-21",
+      "what": "A human balance signal: local match telemetry export",
+      "why": "Every balance number here comes from bots piloting both sides. Ruling 22 says human data overrides it when it exists, and none exists. Odrum at 65.6 % may be a bot-pilot artifact, and Nurrow's 21.8 % in BRIDGE may not survive a human pilot.",
+      "how": "Profile history already stores matches. Add per-match fighter, role, result, cs@10, deaths and items to the history record, plus a Settings 'Export match log' button that saves a JSON file. No network until the release go-ahead (owner memory). Add a harness script that merges exported logs into the same win-rate table as the soak.",
+      "impact": "medium",
+      "effort": "S",
+      "model": "sonnet",
+      "modelWhy": "Mechanical plumbing with a clear schema.",
+      "risk": "Privacy: export player-chosen names only, and only on the player's click."
+    },
+    {
+      "id": "GPO-22",
+      "what": "A difficulty tier above veteran for ranked and experienced players",
+      "why": "Ranked fills seats with bots 'by_rating' (queues.json rift_ranked), but the top tier is veteran, which beats adept only 77.5 % and lands skillshots 82.7 % of the time. A Highsun-and-up player has no bot that tests macro: veteran still leaves 28 % of outer-siege time undefended. Shipped bot ladders cap higher.",
+      "how": "Add a 'Noonward' profile in bots/difficulty.ts: reaction about 0.18 s, aim error -30 %, objectiveSense on, macroDelay halved, readsWaves on, plus the GPO-4, GPO-5 and GPO-7 behaviours at full strength. Map ranked ratings of 1825 and up to it. Gate: Noonward beats veteran >= 65 % mirrored over 40 games.",
+      "impact": "low",
+      "effort": "M",
+      "model": "opus",
+      "modelWhy": "Tier design depends on the macro work. Tune it after GPO-4, GPO-5 and GPO-7.",
+      "risk": "It must stay perception and execution only, never stats (difficulty.ts contract)."
+    }
+  ],
+  "order": "GPO-1 (onboarding) and GPO-2 (BRIDGE balance) first: each blocks a shipped launch. Then the bot trio GPO-4, GPO-5 and GPO-3 (the owner's explicit ask, sharing team.ts). Then GPO-6 vision, which GPO-7 builds on. The sonnet lanes GPO-9, GPO-17, GPO-19 and GPO-21 can run in parallel at any time. They are sim-only, but soaks are heavy, so queue them through heavy.py.",
+  "notDone": "No gameplay code or content changed. My own heavy diag run queued behind 3 busy slots and I stopped it. The diag numbers above come from the same _tmp_diag_ai.ts run already in the scratchpad (diag_table2.txt, 06:31 Central, no src/sim or fighter content changed since; the one later content commit, 2c1bfe862, is copy only). No human playtest was available."
+}
