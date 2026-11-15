@@ -1416,3 +1416,20 @@ span.gn-book-link:hover, span.gn-book-link:focus-visible { color: var(--gn-gold-
 .gn-regard-info { pointer-events: auto; cursor: help; width: 16px; height: 16px; padding: 0; border-radius: 50%; border: 1px solid var(--gn-line-2); background: rgba(0, 0, 0, .3); color: var(--gn-ivory-dim); font: 600 10px var(--gn-sans); letter-spacing: 0; text-transform: none; }
 .gn-regard-info:focus-visible { outline: 2px solid var(--gn-gold-hi); outline-offset: 2px; }
 .gn-regard-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; max-width: 260px; padding: 7px 9px; border-radius: 6px; border: 1px solid var(--gn-line-gold); background: rgba(9, 11, 17, .96); color: var(--gn-ivory); font: 400 12px/1.4 var(--gn-sans); letter-spacing: 0; text-transform: none; }
+
+/* ── accessibility: second cue for the regard gauge, window focus, high contrast (body.gn-high-contrast) ── */
+.gn-regard-word { grid-column: 1 / -1; font: 600 11px var(--gn-sans); letter-spacing: .18em; text-transform: uppercase; color: var(--gn-ivory-dim); }
+.gn-win:focus { outline: none; }
+.gn-win:focus-visible { outline: 2px solid var(--gn-gold-hi); outline-offset: -2px; }
+body.gn-high-contrast {
+  --gn-ivory: #fffaf0;
+  --gn-ivory-dim: rgba(255, 250, 240, 0.9);
+  --gn-ivory-faint: rgba(255, 250, 240, 0.72);
+  --gn-line: rgba(255, 250, 240, 0.34);
+  --gn-line-2: rgba(255, 250, 240, 0.5);
+  --gn-line-gold: rgba(243, 223, 174, 0.8);
+  --gn-glass: rgba(6, 8, 14, 0.82);
+  --gn-glass-strong: rgba(6, 8, 14, 0.94);
+}
+body.gn-high-contrast .gn-win { background: rgba(6, 8, 14, 0.96); }
+body.gn-high-contrast :focus-visible { outline: 3px solid var(--gn-gold-hi); outline-offset: 2px; }

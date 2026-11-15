@@ -30,4 +30,14 @@ const report = (label: string) => {
 };
 report('y0');
 const x0 = makeCtx(sim.u, sim.u.planets[0]);
-for (let y = 1; y <= years; y++) { sim.step(Math.round(y * x0.year) - sim.u.tick); report('y' + y); }
+let floods = 0, other = 0;
+for (let y = 1; y <= years; y++) {
+  const end = Math.round(y * x0.year);
+  while (sim.u.tick < end) {
+    sim.step(Math.min(x0.day * 5, end - sim.u.tick));
+    for (const e of sim.drainEvents() as unknown as { t: string; text?: string }[]) if (e.t === 'collapsed') { if (e.text === 'flood') floods++; else other++; }
+  }
+  report('y' + y);
+  const ps = sim.u.planets[0].people!;
+  console.log('   collapsed by flood', floods, 'otherwise', other, 'towns', ps.settlements.filter((s) => !s.band && s.fallen < 0).map((s) => `${s.name}:${ps.members.get(s.id)?.length ?? 0}/${ps.of(s.id).length}b`).join(', '));
+}

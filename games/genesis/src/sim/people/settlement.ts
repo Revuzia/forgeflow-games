@@ -14,10 +14,10 @@ import { ERAS } from '../content.ts';
 import { DEATH, INV, NS, NT, PHASE, ROLE, SKILL, TASK, TRAIT } from './defs.ts';
 import { birth, die, ageHazard, spawnAgent, insertSorted, worldSalt } from './lifecycle.ts';
 import { accident, computeEra, hiveShare, learn, libHas, refreshLibrary } from './knowledge.ts';
-import { planBuilding, canBuild, decayBuildings, hearthAccidents, reviseSite, ruin, styleOf } from './buildings.ts';
+import { planBuilding, canBuild, decayBuildings, floodSweep, hearthAccidents, reviseSite, ruin, styleOf } from './buildings.ts';
 import { updateFlow, updateResources, availability, itemIdx, gatherable, territoryRings } from './resources.ts';
 import { capacity, foodDays, spoil, storeAdd, storeHas, storeAny } from './store.ts';
-import { cellPos, distM, drinkable, freshWater, hollowDepth, isLand, offsetPoint, snowWater, sunAt, wellFlows } from './world.ts';
+import { cellPos, distM, drinkable, dryCell, freshWater, hollowDepth, isLand, offsetPoint, snowWater, sunAt, wellFlows, DROWNED_DEPTH, FLOODED_DEPTH, FLOOD_RUIN_DEPTH, SITE_WET_MAX } from './world.ts';
 import { settlementName, rootLanguage, driftLanguage, placeRoot } from './names.ts';
 import { tell, remember } from './story.ts';
 import { keepName, settlementRef, vars, emitSt } from './util.ts';
@@ -140,7 +140,7 @@ export function siteScore(x: PCtx, species: number, c: number, exclude = -1): nu
   const p = x.p, f = p.f, g = p.grid;
   const sp = x.info[species];
   const def = sp.def;
-  if (!isLand(p, c) || f.water[c] > 0.15 || f.lava[c] > 0) return -1;
+  if (!dryCell(p, c) || f.lava[c] > 0) return -1;
   const [tMin, , , tMax] = def.temp;
   const year = seasonTemps(x, c);
   const t = year.now;
@@ -422,7 +422,12 @@ export function settlementStep(x: PCtx, st: Settlement): void {
   // SIM perf push 3 — the peoples' time-lapse (perf/plapse.ts): at 100x / 1000x the step runs every 2 / 4 hours and
   // integrates the hours since the last one (H); at level 0 H is 1 and every line below is the plain hourly step
   const H = settleHours(x, st);
-  if (st.fallen >= 0 || H === 0) return;
+  if (st.fallen >= 0) {
+    // (Lane B) nobody keeps a fallen town's houses, but the water still takes the ones it reaches (once a day)
+    if (!st.band && dueIn(Math.floor(x.tick / 60) + st.id * 5, 24, H)) floodSweep(x, st);
+    return;
+  }
+  if (H === 0) return;
   const members = x.ps.members.get(st.id) ?? [];
   const pop = members.length + cohortTotal(st);
   if (pop <= 0.5) { fall(x, st, st.stats.starved > st.stats.deaths * 0.4 ? 'starvation' : 'emptied'); return; }
@@ -564,7 +569,7 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
       for (let k = 0; k < 12; k++) {
         offsetPoint(at, 8 * x.p.edgeM, base + k * (Math.PI / 6), x.p.st.radius, out);
         const o = x.p.cellAt(out);
-        if (!isLand(x.p, o) || f.water[o] >= 0.15 || f.lava[o] > 0 || reachCost(x, o) === Infinity) continue;
+        if (!isLand(x.p, o) || f.water[o] >= SITE_WET_MAX || f.lava[o] > 0 || reachCost(x, o) === Infinity) continue;
         let promise = k === 0 ? 0.3 : 0;
         let n = 0;
         const look = (q: number) => {
@@ -596,7 +601,7 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
   const roaming = st.recent.roam !== undefined;
   // (a place the god chose is kept unless it floods: the god's word outweighs the band's judgement of the site)
   const godSite = st.recent.godSite !== undefined;
-  const spoilt = x.p.f.water[tc] > 0.15 || (!roaming && !godSite && (siteScore(x, st.species, tc, st.id) < 3.2 || (apart && nearTown(x, st, tc, BUD_APART))));
+  const spoilt = x.p.f.water[tc] > SITE_WET_MAX || (!roaming && !godSite && (siteScore(x, st.species, tc, st.id) < 3.2 || (apart && nearTown(x, st, tc, BUD_APART))));
   if (leadD < (st.recent.tgtBest ?? Infinity) - 30) { st.recent.tgtBest = Math.round(leadD); st.recent.tgtAt = x.tick; }
   const stuck = x.tick - (st.recent.tgtAt ?? x.tick) > 3 * x.day;
   // a bearing is judged again every six hours: given up when the band can no longer walk to it (LIVING.md §2.7)
@@ -1243,6 +1248,8 @@ function daily(x: PCtx, st: Settlement): void {
   const rot = spoil(x, st, granary, capacity(x, st));
   if (rot > 0.4) accident(x, st, 'rotten-grain', st.cell);
   decayBuildings(x, st);
+  // (Lane B) a finished building standing in water is lost to it (buildings.ts floodSweep)
+  floodSweep(x, st);
   hearthAccidents(x, st);
   // belief, alignment, taboos and sacred things, the parties, households (culture.ts, social.ts)
   cultureDaily(x, st);
@@ -1529,16 +1536,21 @@ function abandonCheck(x: PCtx, st: Settlement): boolean {
   const A = x.A;
   // flood: the centre, or most of the standing buildings, under water
   let built = 0, drowned = 0;
+  // (Lane B: the daily flood sweep ruins a building in standing water before this count sees it, so a ruin lying
+  // under that water still counts as one of the town's drowned houses — else a town with every house lost to a flood
+  // had nothing 'built' and was never called flooded)
   for (const b of x.ps.of(st.id)) {
-    if (b.progress < 1 || b.flags & BuildingFlag.ruined) continue;
+    if (b.progress < 1) continue;
+    const under = f.water[b.cell] > DROWNED_DEPTH;
+    if (b.flags & BuildingFlag.ruined) { if (under) { built++; drowned++; } continue; }
     built++;
-    if (f.water[b.cell] > 0.5) drowned++;
+    if (under) drowned++;
   }
   // (fix r1 #15: the god's flood omen is a sign, not the place failing them — for a day after it (`recent.omenFlood`,
   // stamped by god/omens.ts) its water does not count)
   const omen = st.recent.omenFlood !== undefined && x.tick - st.recent.omenFlood < x.day;
   if (!omen && st.recent.omenFlood !== undefined) delete st.recent.omenFlood;
-  const flooded = !omen && (f.water[st.cell] > 0.6 || (built >= 2 && drowned * 2 > built));
+  const flooded = !omen && (f.water[st.cell] > FLOODED_DEPTH || (built >= 2 && drowned * 2 > built));
   // (its own key, LIVING integration 2026-10-20: `recent.flood` is also the cooldown stamp of the 'flood' discovery
   // accident (knowledge.ts accident), which fires every few hours while water stands at the centre and kept restarting
   // this timer — a town lived 4.6 days in a 5 m crater lake before it was let go)
@@ -1619,7 +1631,7 @@ export function moveHeart(x: PCtx, st: Settlement, why: 'flood' | 'ruin' = 'floo
     }
   }
   if (best < 0) return false;
-  for (const b of x.ps.of(st.id)) if (b.progress >= 1 && !(b.flags & BuildingFlag.ruined) && f.water[b.cell] > 1.5) ruin(x, st, b, 'flood');
+  for (const b of x.ps.of(st.id)) if (b.progress >= 1 && !(b.flags & BuildingFlag.ruined) && f.water[b.cell] > FLOOD_RUIN_DEPTH) ruin(x, st, b, 'flood');
   st.cell = best;
   st.pos = cellPos(p, best) as [number, number, number];
   // (the territory is reckoned from the centre, as when the god moves a town: god/civic.ts; and the views see the move)

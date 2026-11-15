@@ -161,6 +161,10 @@ const CARDS: Card[] = [
   { id: 'twoworlds-late', name: 'Two worlds: the age of rockets', desc: 'Both peoples at the edge of space: Gaia\'s launchpad stands ready; Rust is a light in its telescopes.', icon: 'w-rocket' },
   { id: 'system', name: 'Living system', desc: 'Six worlds and a moon, several peoples at different ages — one at the edge of rockets.', icon: 'orbit' },
   { id: 'babel', name: 'One speech', desc: 'Four proud towns of one people and one tongue in the bronze age, close enough to see each other\'s smoke. What they build is theirs to decide; yours to answer.', icon: 'tower' },
+  { id: 'shore', name: 'A people on the shore', desc: 'One small coastal people in the stone age, new to their beach. Watch whether they follow the fish along the coast or turn inland.', icon: 'wave' },
+  { id: 'neighbours', name: 'Two peoples, one world', desc: 'Plains folk and coastal folk, both in the stone age, on one green world. Watch how they meet, and what each thinks of the other.', icon: 'world' },
+  { id: 'coldforge', name: 'The cold forge', desc: 'A hardy people in their iron age on a world of ice. Watch what the winters ask of them, and what they lay by.', icon: 'snow' },
+  { id: 'fewhands', name: 'Twelve hands', desc: 'A single band of twelve in the stone age, with the whole world before them. Watch whether the band becomes a village, and how long that takes.', icon: 'person' },
   { id: 'sandbox', name: 'Sandbox', desc: 'A temperate world with seas, mountains and rivers, nothing alive yet. Shape it as you like.', icon: 'mountain' },
   { id: 'custom', name: 'Your own system', desc: 'Choose the star, how many worlds and what kind, and who lives where.', icon: 'star' },
 ];

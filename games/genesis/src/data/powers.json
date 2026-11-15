@@ -10329,6 +10329,276 @@
     "be terrible"
    ],
    "desc": "How hard your harm falls: 0 gentle, 0.3 survivable (the default), 1 total destruction allowed."
+  },
+  {
+   "id": "tower-confuse",
+   "name": "Confuse their tongues",
+   "category": "Signs",
+   "icon": "tower",
+   "ring": 1,
+   "gesture": null,
+   "command": "tower.confuse",
+   "params": {},
+   "schema": {},
+   "target": "none",
+   "synonyms": [
+    "confuse their tongues",
+    "confuse the builders",
+    "scatter the builders"
+   ],
+   "desc": "The builders of the rising tower can no longer understand each other: they scatter and speak apart."
+  },
+  {
+   "id": "tower-strike",
+   "name": "Strike down the tower",
+   "category": "Signs",
+   "icon": "lightning",
+   "ring": 1,
+   "gesture": null,
+   "command": "tower.strike",
+   "params": {},
+   "schema": {},
+   "target": "none",
+   "synonyms": [
+    "strike down the tower",
+    "bring down the tower",
+    "fell the tower"
+   ],
+   "desc": "Bring the tower down. How hard it falls follows your wrath."
+  },
+  {
+   "id": "tower-warn",
+   "name": "Send a prophet to the builders",
+   "category": "Signs",
+   "icon": "prophet",
+   "ring": 1,
+   "gesture": null,
+   "command": "tower.warn",
+   "params": {},
+   "schema": {},
+   "target": "none",
+   "synonyms": [
+    "warn the builders",
+    "send my prophet to the tower",
+    "warn the tower"
+   ],
+   "desc": "Your prophet goes to the foot of the tower and tells the builders to go home. You need a prophet among them."
+  },
+  {
+   "id": "tower-let",
+   "name": "Let the tower stand",
+   "category": "Signs",
+   "icon": "tower",
+   "ring": 1,
+   "gesture": null,
+   "command": "tower.let",
+   "params": {},
+   "schema": {},
+   "target": "none",
+   "synonyms": [
+    "let the tower stand",
+    "leave the tower",
+    "let them build"
+   ],
+   "desc": "Do nothing against the tower, and let the builders know it."
+  },
+  {
+   "id": "vow-no-flood",
+   "name": "Promise: never again by water",
+   "category": "Signs",
+   "icon": "sign",
+   "ring": 1,
+   "gesture": null,
+   "command": "covenant.make",
+   "params": {
+    "vow": "no-flood"
+   },
+   "schema": {},
+   "target": "none",
+   "synonyms": [
+    "never again by water",
+    "promise no more floods"
+   ],
+   "desc": "To the survivors of a great destruction: you will never again destroy them by water."
+  },
+  {
+   "id": "vow-spare-the-many",
+   "name": "Promise: never again so many",
+   "category": "Signs",
+   "icon": "sign",
+   "ring": 1,
+   "gesture": null,
+   "command": "covenant.make",
+   "params": {
+    "vow": "spare-the-many"
+   },
+   "schema": {},
+   "target": "none",
+   "synonyms": [
+    "never again so many",
+    "promise to spare the many"
+   ],
+   "desc": "To the survivors: you will never again take so many."
+  },
+  {
+   "id": "vow-gentle",
+   "name": "Promise: always gentle",
+   "category": "Signs",
+   "icon": "sign",
+   "ring": 1,
+   "gesture": null,
+   "command": "covenant.make",
+   "params": {
+    "vow": "gentle"
+   },
+   "schema": {},
+   "target": "none",
+   "synonyms": [
+    "always gentle",
+    "promise to be gentle"
+   ],
+   "desc": "To the survivors: your harm will always fall gently."
+  },
+  {
+   "id": "vow-warn-first",
+   "name": "Promise: always warn first",
+   "category": "Signs",
+   "icon": "sign",
+   "ring": 1,
+   "gesture": null,
+   "command": "covenant.make",
+   "params": {
+    "vow": "warn-first"
+   },
+   "schema": {},
+   "target": "none",
+   "synonyms": [
+    "always warn first",
+    "promise to warn first"
+   ],
+   "desc": "To the survivors: you will never strike unwarned."
+  },
+  {
+   "id": "vow-none",
+   "name": "Say nothing to the survivors",
+   "category": "Signs",
+   "icon": "forget",
+   "ring": 1,
+   "gesture": null,
+   "command": "covenant.decline",
+   "params": {},
+   "schema": {},
+   "target": "none",
+   "synonyms": [
+    "say nothing to the survivors",
+    "make no promise",
+    "decline the covenant"
+   ],
+   "desc": "The survivors wait, and then go back to their fields."
+  },
+  {
+   "id": "answer-wrath",
+   "name": "Answer with lightning",
+   "category": "Signs",
+   "icon": "lightning",
+   "ring": 1,
+   "gesture": null,
+   "command": "defiance.answer",
+   "params": {
+    "how": "wrath"
+   },
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "answer them with lightning",
+    "answer defiance with lightning"
+   ],
+   "desc": "Answer a defiant town with a bolt that falls beside them, not on them. How hard it falls follows your wrath."
+  },
+  {
+   "id": "answer-mercy",
+   "name": "Answer with bread",
+   "category": "Signs",
+   "icon": "bread",
+   "ring": 1,
+   "gesture": null,
+   "command": "defiance.answer",
+   "params": {
+    "how": "mercy"
+   },
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "answer them with bread",
+    "answer defiance with bread"
+   ],
+   "desc": "Answer a defiant town by sending them bread."
+  },
+  {
+   "id": "answer-sign",
+   "name": "Answer with a sign",
+   "category": "Signs",
+   "icon": "sign",
+   "ring": 1,
+   "gesture": null,
+   "command": "defiance.answer",
+   "params": {
+    "how": "sign"
+   },
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "answer them with a sign",
+    "answer defiance with a sign"
+   ],
+   "desc": "Answer a defiant town with a sign over it."
+  },
+  {
+   "id": "answer-patience",
+   "name": "Answer with patience",
+   "category": "Signs",
+   "icon": "forget",
+   "ring": 1,
+   "gesture": null,
+   "command": "defiance.answer",
+   "params": {
+    "how": "patience"
+   },
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "answer them with patience",
+    "answer defiance with patience"
+   ],
+   "desc": "Let a defiant town rage, and do nothing. They remember it."
   }
  ]
 }

@@ -28,6 +28,7 @@ import type { HandView, SimEvent, StarView, UnitVec } from '../sim/types.ts';
 import { BufferBank, PRELOAD } from './bank.ts';
 import { softClipCurve, rng } from './dsp.ts';
 import { CueGate, cueFor, touchVariant, type CueSpec } from './eventmap.ts';
+import { duckTarget, newsReach } from './duck.ts';
 import { SceneProbe, attenuate, bodyPoint, hearingRef, toLocal, rotate, rotateInv, type AudioScene, type SceneWorld, type ScenePlanet, type ListenerState } from './scene.ts';
 import { Ambience, type PlayOpts } from './ambience.ts';
 import { Emitters } from './emitters.ts';
@@ -578,7 +579,8 @@ class AudioEngine implements GenesisAudio {
     }
     this.music!.setSpeed(view.speed);
     this.music!.update(sc, now);
-    this.kDuck!.set(now < this.duckUntil ? 0.45 : 1, now, now < this.duckUntil ? 0.12 : 1.2);
+    const dk = duckTarget(now, this.duckUntil);
+    this.kDuck!.set(dk.gain, now, dk.glide);
     // the hand's air
     if (sc?.hand && pv) {
       if (!this.handAir && this.bank!.has('pink')) this.handAir = new HandAir(ctx, this.bank!, this.sfx!.input, this.hrtf);
@@ -689,11 +691,12 @@ class AudioEngine implements GenesisAudio {
         break;
       }
       case 'news':
-        if (local && samePlanet) {
-          level *= Math.max(0.3, attenuate(dist, hearingRef(spec.reach * 1.5, alt)));
-          spread = dist > spec.reach ? 0.45 : 0.15;
-        } else { level *= 0.28; local = undefined; }
+      {
+        const nr = newsReach(!!local, samePlanet, dist, spec.reach, alt);
+        level *= nr.mul;
+        if (nr.spread === null) local = undefined; else spread = nr.spread;
         break;
+      }
       default:
         local = undefined;
     }

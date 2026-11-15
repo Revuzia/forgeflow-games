@@ -78,6 +78,42 @@
         { "phase": 2, "species": "plains-folk", "planet": 0, "count": 90, "era": "bronze", "settlements": ["town"],
           "cluster": { "towns": 4, "km": 10 }, "knowledge": ["mudbrick"], "store": { "mudbrick": 60 },
           "pride": 0.7, "prideYears": 20, "towerArm": true }
+      ] },
+    { "id": "shore", "name": "A people on the shore", "description": "One small coastal people in the stone age, new to their beach. What to watch: whether they follow the fish along the coast or turn inland.",
+      "star": "G", "starName": "Aster", "focus": 0, "startHour": 9.5,
+      "planets": [
+        { "name": "Gaia", "kind": "terran", "orbit": { "a": 1.0, "e": 0.012, "inc": 0, "node": 0, "phase0": 50, "yearDays": 12 },
+          "moons": [ { "name": "Selene", "kind": "moon", "orbit": { "a": 21000, "e": 0.03, "inc": 5, "node": 23, "phase0": 126, "periodDays": 2 } } ] }
+      ],
+      "peoples": [
+        { "phase": 2, "species": "coastal-folk", "planet": 0, "count": 30, "era": "stone", "knowledge": ["hunting"] }
+      ] },
+    { "id": "neighbours", "name": "Two peoples, one world", "description": "Plains folk and coastal folk, both in the stone age, on one green world. What to watch: how they meet, and what each thinks of the other.",
+      "star": "G", "starName": "Aster", "focus": 0, "startHour": 9.5,
+      "planets": [
+        { "name": "Gaia", "kind": "terran", "orbit": { "a": 1.0, "e": 0.012, "inc": 0, "node": 0, "phase0": 50, "yearDays": 12 },
+          "moons": [ { "name": "Selene", "kind": "moon", "orbit": { "a": 21000, "e": 0.03, "inc": 5, "node": 23, "phase0": 126, "periodDays": 2 } } ] }
+      ],
+      "peoples": [
+        { "phase": 2, "species": "plains-folk", "planet": 0, "count": 40, "era": "stone", "knowledge": ["hunting"] },
+        { "phase": 2, "species": "coastal-folk", "planet": 0, "count": 40, "era": "stone", "knowledge": ["hunting"] }
+      ] },
+    { "id": "coldforge", "name": "The cold forge", "description": "A hardy people in their iron age on a world of ice. What to watch: what the winters ask of them, and what they lay by.",
+      "star": "G", "starName": "Aster", "focus": 0, "startHour": 9.5,
+      "planets": [
+        { "name": "Rime", "kind": "ice", "overrides": { "n": 40, "climateOffset": 85 }, "orbit": { "a": 1.0, "e": 0.012, "inc": 0, "node": 0, "phase0": 50, "yearDays": 12 } }
+      ],
+      "peoples": [
+        { "phase": 2, "species": "cold-folk", "planet": 0, "count": 70, "era": "iron" }
+      ] },
+    { "id": "fewhands", "name": "Twelve hands", "description": "A single band of twelve in the stone age, with the whole world before them. What to watch: whether the band becomes a village, and how long that takes.",
+      "star": "G", "starName": "Aster", "focus": 0, "startHour": 9.5,
+      "planets": [
+        { "name": "Gaia", "kind": "terran", "orbit": { "a": 1.0, "e": 0.012, "inc": 0, "node": 0, "phase0": 50, "yearDays": 12 },
+          "moons": [ { "name": "Selene", "kind": "moon", "orbit": { "a": 21000, "e": 0.03, "inc": 5, "node": 23, "phase0": 126, "periodDays": 2 } } ] }
+      ],
+      "peoples": [
+        { "phase": 2, "species": "plains-folk", "planet": 0, "count": 12, "era": "stone", "knowledge": ["hunting"] }
       ] }
   ]
 }

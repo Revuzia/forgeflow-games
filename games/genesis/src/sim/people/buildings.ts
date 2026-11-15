@@ -12,7 +12,7 @@ import type { Planet } from '../world/planet.ts';
 import { BuildingFlag } from '../types.ts';
 import { hash32, hashFloat } from '../core/rng.ts';
 import { igniteCell } from '../fields/fire.ts';
-import { offsetPoint, distM, isLand, spotInCell } from './world.ts';
+import { offsetPoint, distM, spotInCell, dryAt, dryCell, standingWater, FLOODED_DEPTH, STANDING_WATER_MAX } from './world.ts';
 import { storeAdd, storeHas, storeTake } from './store.ts';
 import { availability } from './resources.ts';
 import { checkLoss, recomputeWritten } from './knowledge.ts';
@@ -150,7 +150,11 @@ export function reviseSite(x: PCtx, st: Settlement, b: Building): boolean {
   // that no one was making, waited with 30 bricks, 20 stone blocks and 27 timber in the store — 'obtainable' because
   // the recipe was known. A site under water is given up; a site nothing has reached yet takes a material the store can
   // pay for now)
-  if (x.p.f.water[b.cell] > 0.6) {
+  // (Lane B: a site that stands at the water asks its own cell, as before; any other asks the ground under its whole
+  // footprint, and at the depth a finished building would be lost to — floodSweep — so nobody finishes a house the
+  // water takes the day after)
+  const def0 = x.c.buildings.list[b.type];
+  if (waterside(def0) ? x.p.f.water[b.cell] > FLOODED_DEPTH : standingWater(x.p, b.pos, def0.footprint) > STANDING_WATER_MAX) {
     for (const [it, q] of materialItems(x, b.material)) storeAdd(x, st, it, q * b.delivered);
     removeBuilding(x, b);
     return false;
@@ -236,6 +240,16 @@ export function takeMaterial(x: PCtx, st: Settlement, b: Building, units: number
 }
 
 const GOLDEN = 2.399963229728653;
+/** metres kept clear between two buildings' footprints */
+const BUILD_GAP = 1.5;
+/** the steepest ground (rise over run between neighbouring cells) a building is set on */
+const SITE_STEEP_MAX = 0.55;
+
+/** a building made to stand at the water (dock, shipyard, lighthouse): placed on the shore by its own rules, exempt
+ * from the dry-footprint test and from the flood sweep */
+export function waterside(def: { function: string; provides: string[] }): boolean {
+  return def.function === 'dock' || def.function === 'shipyard' || def.provides.includes('dock');
+}
 
 /**
  * A site for a building of type t near the settlement centre: a spiral of candidate spots, the first on dry, gentle
@@ -248,7 +262,9 @@ export function findSite(x: PCtx, st: Settlement, t: number): { pos: [number, nu
   const mine = x.ps.of(st.id).filter((b) => !(b.flags & BuildingFlag.ruined));
   let centre: number[] = st.pos;
   const fn = def.function;
-  if ((fn === 'dock' || fn === 'shipyard' || def.provides.includes('dock')) && st.res) {
+  // (Lane B) every building but one made for the water stands with its whole footprint on dry ground (world.ts dryAt)
+  const shoreKind = waterside(def);
+  if (shoreKind && st.res) {
     const c = st.res.fish[0] ?? st.res.water[0];
     // (punch P04) on the shore itself, its pier out over the water: the spiral below kept every spot on dry cells around
     // a point 0.3 of the way to the water's centre, ~30 m short of the shore drawn between them, and faced the pier home
@@ -262,7 +278,7 @@ export function findSite(x: PCtx, st: Settlement, t: number): { pos: [number, nu
       let best = -1, bd = Infinity;
       for (let e = p.grid.nbrStart[c]; e < p.grid.nbrStart[c + 1]; e++) {
         const o = p.grid.nbr[e];
-        if (!isLand(p, o) || p.f.water[o] > 0.15) continue;
+        if (!dryCell(p, o)) continue;
         const d = distM(p, st.pos, [P[o * 3], P[o * 3 + 1], P[o * 3 + 2]]);
         if (d < bd) { bd = d; best = o; }
       }
@@ -311,18 +327,18 @@ export function findSite(x: PCtx, st: Settlement, t: number): { pos: [number, nu
     }
     offsetPoint(centre, r, a, R, out);
     const cell = p.cellAt(out);
-    if (!isLand(p, cell) || p.f.water[cell] > 0.15) continue;
+    if (!dryCell(p, cell) || (!shoreKind && !dryAt(p, out, def.footprint))) continue;
     if (p.f.lava[cell] > 0 || p.f.fire[cell] > 0.1) continue;
     if (fn !== 'mine' && (p.f.crop[cell] > 0.05 || st.fields.includes(cell))) continue;
     // slope at the cell
     let steep = 0;
     const g = p.grid;
     for (let e = g.nbrStart[cell]; e < g.nbrStart[cell + 1]; e++) steep = Math.max(steep, Math.abs(p.f.surface[g.nbr[e]] - p.f.surface[cell]));
-    if (steep / p.edgeM > 0.55) continue;
+    if (steep / p.edgeM > SITE_STEEP_MAX) continue;
     let clear = true;
     for (const b of x.ps.buildings) {
       if (Math.abs(b.pos[0] - out[0]) + Math.abs(b.pos[1] - out[1]) + Math.abs(b.pos[2] - out[2]) > 0.05) continue;
-      const need = x.c.buildings.list[b.type].footprint + def.footprint + 1.5;
+      const need = x.c.buildings.list[b.type].footprint + def.footprint + BUILD_GAP;
       if (distM(p, b.pos, out) < need) { clear = false; break; }
     }
     if (!clear) continue;
@@ -353,7 +369,7 @@ function shoreSite(x: PCtx, st: Settlement, t: number, c: number): { pos: [numbe
   const dry: { o: number; d: number }[] = [];
   for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
     const o = g.nbr[e];
-    if (!isLand(p, o) || p.f.water[o] > 0.15 || p.f.lava[o] > 0 || p.f.fire[o] > 0.1) continue;
+    if (!dryCell(p, o) || p.f.lava[o] > 0 || p.f.fire[o] > 0.1) continue;
     dry.push({ o, d: distM(p, st.pos, [P[o * 3], P[o * 3 + 1], P[o * 3 + 2]]) });
   }
   dry.sort((a, b) => a.d - b.d || a.o - b.o);
@@ -374,7 +390,7 @@ function shoreSite(x: PCtx, st: Settlement, t: number, c: number): { pos: [numbe
         let clear = true;
         for (const b of x.ps.buildings) {
           if (Math.abs(b.pos[0] - out[0]) + Math.abs(b.pos[1] - out[1]) + Math.abs(b.pos[2] - out[2]) > 0.05) continue;
-          if (distM(p, b.pos, out) < x.c.buildings.list[b.type].footprint + def.footprint + 1.5) { clear = false; break; }
+          if (distM(p, b.pos, out) < x.c.buildings.list[b.type].footprint + def.footprint + BUILD_GAP) { clear = false; break; }
         }
         if (clear) return { pos: [out[0], out[1], out[2]], cell: o, rot: facing(out, wc) };
       }
@@ -393,18 +409,18 @@ function edgeSite(x: PCtx, st: Settlement, t: number): { pos: [number, number, n
   const out: number[] = [0, 0, 0];
   for (let d = 0; d <= 4; d++) {
     for (const cell of ring) {
-      if (!isLand(p, cell) || p.f.water[cell] > 0.15 || p.f.lava[cell] > 0 || p.f.fire[cell] > 0.1) continue;
+      if (!dryCell(p, cell) || p.f.lava[cell] > 0 || p.f.fire[cell] > 0.1) continue;
       if (p.f.crop[cell] > 0.05 || st.fields.includes(cell)) continue;
       let steep = 0;
       for (let e = g.nbrStart[cell]; e < g.nbrStart[cell + 1]; e++) steep = Math.max(steep, Math.abs(p.f.surface[g.nbr[e]] - p.f.surface[cell]));
-      if (steep / p.edgeM > 0.55) continue;
+      if (steep / p.edgeM > SITE_STEEP_MAX) continue;
       for (let k = 0; k < 6; k++) {
         spotInCell(p, cell, st.id * 64 + t, 0x5e1 + k, out);
-        if (p.cellAt(out) !== cell) continue;
+        if (p.cellAt(out) !== cell || !dryAt(p, out, def.footprint)) continue;
         let clear = true;
         for (const b of x.ps.buildings) {
           if (Math.abs(b.pos[0] - out[0]) + Math.abs(b.pos[1] - out[1]) + Math.abs(b.pos[2] - out[2]) > 0.05) continue;
-          if (distM(p, b.pos, out) < x.c.buildings.list[b.type].footprint + def.footprint + 1.5) { clear = false; break; }
+          if (distM(p, b.pos, out) < x.c.buildings.list[b.type].footprint + def.footprint + BUILD_GAP) { clear = false; break; }
         }
         if (clear) return { pos: [out[0], out[1], out[2]], cell, rot: facing(out, st.pos) };
       }
@@ -526,6 +542,26 @@ export function decayBuildings(x: PCtx, st: Settlement): void {
     if (b.damage >= 1) ruin(x, st, b, 'decay');
     // hearths burn down without tending
   }
+}
+
+/**
+ * (Lane B) the daily flood sweep: a finished building that stands in more than STANDING_WATER_MAX of water — at its own
+ * point or anywhere under its footprint — is lost to it, by the ordinary ruin path ('collapsed', why 'flood'). Docks,
+ * shipyards and lighthouses stand at the water and are left; so is a wonder (the Tower: god/tower.ts keeps its life).
+ * A world saved before buildings asked their footprint (houses begun in a dry cell beside a lake cell) is put right by
+ * this the first day it runs. Returns the number lost.
+ */
+export function floodSweep(x: PCtx, st: Settlement): number {
+  let lost = 0;
+  for (const b of x.ps.of(st.id)) {
+    if (b.progress < 1 || b.flags & BuildingFlag.ruined) continue;
+    const def = x.c.buildings.list[b.type];
+    if (waterside(def) || def.function === 'wonder') continue;
+    if (standingWater(x.p, b.pos, def.footprint) <= STANDING_WATER_MAX) continue;
+    ruin(x, st, b, 'flood');
+    lost++;
+  }
+  return lost;
 }
 
 /** a building becomes a ruin (fire, decay, a quake...) */

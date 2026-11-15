@@ -4,6 +4,9 @@
 
 import { store } from './dom.ts';
 
+export type TextSize = 'normal' | 'large' | 'larger';
+export const TEXT_SIZE_MULT: Record<TextSize, number> = { normal: 1, large: 1.15, larger: 1.3 };
+
 export type CvdPalette = 'standard' | 'deuteranopia' | 'protanopia' | 'tritanopia' | 'monochrome';
 
 export interface Prefs {
@@ -30,6 +33,10 @@ export interface Prefs {
     scale: number;
     palette: CvdPalette;
     reduceMotion: boolean;
+    /** text size: the interface grows by this step on top of its scale (normal, large, larger) */
+    textSize: TextSize;
+    /** stronger text, lines and panels (never changes the world's look) */
+    highContrast: boolean;
     hints: boolean;
     toastSeconds: number;
     ticker: boolean;
@@ -48,7 +55,7 @@ export const DEFAULT_PREFS: Prefs = {
   quality: 'auto',
   gfx: { renderScale: 1, shadows: true, ssao: true, godRays: true, bloom: 1, flare: true, fxaa: true, grain: true, vignette: true, vegetation: 1, grass: true, orbits: true, exposure: 0 },
   audio: { master: 0.8, music: 0.6, sfx: 0.8, ambience: 0.7, muted: false },
-  ui: { autoScale: true, scale: 1, palette: 'standard', reduceMotion: false, hints: true, toastSeconds: 8, ticker: true, labels: true, showFps: false },
+  ui: { autoScale: true, scale: 1, palette: 'standard', reduceMotion: false, textSize: 'normal', highContrast: false, hints: true, toastSeconds: 8, ticker: true, labels: true, showFps: false },
   game: { autosaveMinutes: 2, autosaveChosen: false, edgePan: true, pauseHidden: 'auto', slowGreat: true },
   pad: { enabled: true, deadzone: 0.18, cursorSpeed: 900, invertY: false, lookSpeed: 1 },
 };
@@ -65,6 +72,11 @@ function merge<T>(base: T, over: unknown): T {
     else if (typeof v === typeof b) out[k] = v;
   }
   return out as T;
+}
+
+/** the interface scale with the text-size step on top (an unknown step counts as normal; the result stays within 0.8 … 2.5) */
+export function effectiveScale(base: number, size: TextSize): number {
+  return Math.min(2.5, Math.max(0.8, base * (TEXT_SIZE_MULT[size] ?? 1)));
 }
 
 /** does the system ask for reduced motion (false where matchMedia is missing or throws) */

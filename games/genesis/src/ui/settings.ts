@@ -107,6 +107,8 @@ export class Settings {
             { value: 'standard', label: 'Standard' }, { value: 'deuteranopia', label: 'Deuteranopia (red–green)' }, { value: 'protanopia', label: 'Protanopia (red–green)' },
             { value: 'tritanopia', label: 'Tritanopia (blue–yellow)' }, { value: 'monochrome', label: 'Monochrome' },
           ], u.palette, set('ui.palette')), 'map overlays, toasts, inspector bars'),
+          field('Text size', segmented([{ value: 'normal', label: 'Normal' }, { value: 'large', label: 'Large' }, { value: 'larger', label: 'Larger' }], u.textSize, set('ui.textSize')), 'grows the whole interface a step on top of its scale'),
+          field('High contrast', toggle(u.highContrast, set('ui.highContrast'), 'High contrast'), 'brighter text, firmer lines and panels'),
           field('Reduce motion', toggle(u.reduceMotion, set('ui.reduceMotion'), 'Reduce motion')),
           field('Hints', toggle(u.hints, set('ui.hints'), 'Hints'), 'the Touch\'s hints and the controls line'),
           field('Toasts stay', slider({ min: 3, max: 30, step: 1, value: u.toastSeconds, fmt: (x) => `${x} s`, on: set('ui.toastSeconds') })),

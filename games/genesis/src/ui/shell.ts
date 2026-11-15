@@ -27,6 +27,7 @@ import type { InputState } from '../render/camera/common.ts';
 import type { CommandResult, EntityRef } from '../sim/types.ts';
 import { SPEED_PRESETS } from '../sim/types.ts';
 import type { ContentPack } from '../sim/content.ts';
+import { effectiveScale } from './prefs.ts';
 import type { UiHost, InspectRef, GroundHit } from './host.ts';
 import type { Power } from './powers.ts';
 import { categoryLabel } from './powers.ts';
@@ -402,6 +403,7 @@ export class Shell {
     document.documentElement.style.setProperty('--gn-ui-scale', String(this.uiScale()));
     document.body.dataset.cvd = u.palette;
     document.body.classList.toggle('gn-reduce-motion', u.reduceMotion);
+    document.body.classList.toggle('gn-high-contrast', u.highContrast);
     this.hud.setHint(u.hints);
     this.hud.toasts.life = Math.max(this.hud.toasts.life > 60000 ? this.hud.toasts.life : 0, u.toastSeconds * 1000);
     const p = this.host.prefs.value.pad;
@@ -413,7 +415,7 @@ export class Shell {
   /** the interface scale now (the auto one from the window, or the player's) */
   uiScale(): number {
     const u = this.host.prefs.value.ui;
-    return u.autoScale ? autoScale() : u.scale;
+    return effectiveScale(u.autoScale ? autoScale() : u.scale, u.textSize);
   }
 
   // ───────────────────────────── doors ─────────────────────────────

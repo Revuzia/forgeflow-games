@@ -265,7 +265,9 @@ export function regardGauge(r: number): HTMLDivElement {
   return h('div', { class: `gn-regard gn-regard-${band}` },
     h('span', { class: 'gn-regard-end', text: 'feared' }),
     h('span', { class: 'gn-regard-track', role: 'img', aria: { label: `Regard: ${band}` } }, h('i', { class: 'gn-regard-mark', style: `left:${x}%` })),
-    h('span', { class: 'gn-regard-end', text: 'trusted' }), info, pop);
+    h('span', { class: 'gn-regard-end', text: 'trusted' }), info,
+    // a second cue besides the mark's place and the track's colours: the band as a word
+    h('span', { class: 'gn-regard-word', text: band }), pop);
 }
 let regardUid = 0;
 

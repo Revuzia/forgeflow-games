@@ -24,6 +24,19 @@ let zTop = 10;
 let panelSound: ((cue: string) => void) | null = null;
 export function setPanelSound(f: ((cue: string) => void) | null): void { panelSound = f; }
 
+/** the minimum of an element that focus can be given back to */
+interface FocusLike { isConnected?: boolean; hidden?: boolean; focus(o?: { preventScroll?: boolean }): void }
+
+/**
+ * where focus goes when a window closes: back to what had it when the window opened, if that is still on the page and
+ * focus is not already somewhere else the player chose (nothing, the page body, or inside the closing window)
+ */
+export function focusReturnTarget<T extends FocusLike>(opener: T | null, active: unknown, inside: (a: unknown) => boolean, body: unknown): T | null {
+  if (!opener || opener.isConnected === false || opener.hidden) return null;
+  if (active && active !== body && !inside(active)) return null;
+  return opener;
+}
+
 export class Panel {
   readonly root: HTMLDivElement;
   /** veiled windows are modal: world input pauses while one is open */
@@ -34,6 +47,7 @@ export class Panel {
   private titleEl: HTMLDivElement;
   private subEl: HTMLDivElement;
   private veil: HTMLDivElement | null = null;
+  private opener: HTMLElement | null = null;
   onClose: (() => void) | null = null;
   onOpen: (() => void) | null = null;
 
@@ -44,7 +58,7 @@ export class Panel {
       this.veil.hidden = true;
       parent.appendChild(this.veil);
     }
-    this.root = h('div', { class: `gn-panel gn-win gn-win-${o.place ?? 'center'} gn-win-${o.name}`, role: 'dialog', aria: { label: o.title } });
+    this.root = h('div', { class: `gn-panel gn-win gn-win-${o.place ?? 'center'} gn-win-${o.name}`, role: 'dialog', tabindex: '-1', aria: { label: o.title, ...(o.veil ? { modal: 'true' } : {}) } });
     this.root.hidden = true;
     this.titleEl = h('div', { class: 'gn-win-title', text: o.title });
     this.subEl = h('div', { class: 'gn-win-sub', text: o.subtitle ?? '' });
@@ -71,12 +85,17 @@ export class Panel {
   open(): void {
     if (this.isOpen) return;
     panelSound?.('ui.open');
+    // what had focus comes back to it when the window closes
+    const was = document.activeElement as HTMLElement | null;
+    this.opener = was && was !== document.body && !this.root.contains(was) ? was : null;
     this.root.hidden = false;
     // z-order follows open order: a window opened over another is drawn over it (and its veil over the other)
     zTop += 2;
     this.root.style.zIndex = String(zTop);
     if (this.veil) { this.veil.hidden = false; this.veil.style.zIndex = String(zTop - 1); }
     this.onOpen?.();
+    // keyboard and screen-reader users land in the window (a window that focused its own control keeps it)
+    if (!this.root.contains(document.activeElement)) this.root.focus({ preventScroll: true });
   }
 
   /** bring an open window to the top */
@@ -95,7 +114,11 @@ export class Panel {
     panelSound?.('ui.close');
     this.root.hidden = true;
     if (this.veil) this.veil.hidden = true;
+    const back = focusReturnTarget(this.opener, document.activeElement, (x) => this.root.contains(x as Node), document.body);
+    this.opener = null;
     this.onClose?.();
+    // (not into a field of the page: the world's keys must keep working, so only buttons, links and the like get it back)
+    if (back && !/^(INPUT|TEXTAREA|SELECT)$/.test(back.tagName)) back.focus({ preventScroll: true });
   }
 
   toggle(): void { if (this.isOpen) this.close(); else this.open(); }

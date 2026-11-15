@@ -204,9 +204,73 @@ export function snowWater(p: Planet, c: number): boolean {
   return f.snow[c] > 0.1 || f.ice[c] > 0.1 || (p.s.seaIce[c] > 0.05 && f.salinity[c] < 0.5);
 }
 
+/** water (m) a person still wades through: deeper, and the cell is not land (isLand) */
+export const WADE_DEPTH = 0.6;
+
 /** the cell is walkable land (not under water deeper than wading) */
 export function isLand(p: Planet, c: number): boolean {
-  return p.f.water[c] < 0.6 && !p.s.ocean[c];
+  return p.f.water[c] < WADE_DEPTH && !p.s.ocean[c];
+}
+
+// ───────────────────────────── dry ground (Lane B: buildings sit on dry land) ─────────────────────────────
+// A cell's water is its depth at the cell centre; between centres the water lies as the grid interpolates it (the
+// renderer draws the sheet from that same interpolation: render/life/buildings.ts samples it under a footprint, and
+// ocean.ts draws a level that is linear over each triangle). A house in a dry cell beside a 2 m lake cell therefore
+// stood in up to 2 m of water: the placement rules below asked only the cell (babel seed 307987276, 'Rubolhin by the
+// Lake': 35 of 168 finished buildings in more than 0.3 m at year 0).
+
+/** water (m) above which nothing is built and no band settles: a film or a puddle is ground, more is not */
+export const SITE_WET_MAX = 0.15;
+/** water (m) under a finished building's footprint above which it is lost (buildings.ts floodSweep, daily); also the
+ * depth at which the renderer calls a footprint wet (render/life/buildings.ts place()) and a site is given up */
+export const STANDING_WATER_MAX = 0.3;
+/** water (m) over a building's cell above which the town counts it drowned (settlement.ts abandonCheck) */
+export const DROWNED_DEPTH = 0.5;
+/** water (m) over a town's heart above which the place is flooded (abandonCheck), or over a dock's own cell above
+ * which its site is given up (buildings.ts reviseSite) */
+export const FLOODED_DEPTH = 0.6;
+/** water (m) over a building's cell above which it falls when the heart moves (settlement.ts moveHeart) */
+export const FLOOD_RUIN_DEPTH = 1.5;
+
+/** the cell is ground to build or settle on: land, and no more than a film of water over it */
+export function dryCell(p: Planet, c: number): boolean {
+  return isLand(p, c) && p.f.water[c] <= SITE_WET_MAX;
+}
+
+/** water depth (m) at unit vector `pos`: the cells' depths as the grid interpolates them between their centres */
+export function waterDepthAt(p: Planet, pos: ArrayLike<number>): number {
+  return p.grid.sample(p.f.water, pos[0], pos[1], pos[2]);
+}
+
+/** the points of a footprint that are asked for water: the eight compass points of its edge (the centre besides) */
+const FOOT_RING = 8;
+const _foot: number[] = [0, 0, 0];
+
+/**
+ * The deepest water (m) under a building at `pos` with a footprint of radius `footprint` metres: at its own point and
+ * round the footprint's edge (the depth is linear over each grid triangle, so over a footprint smaller than a cell its
+ * greatest value lies on the edge or at the building's own cell centre, which the callers ask as the cell).
+ */
+export function standingWater(p: Planet, pos: ArrayLike<number>, footprint = 0): number {
+  let d = waterDepthAt(p, pos);
+  if (footprint > 0) {
+    const R = p.st.radius;
+    for (let k = 0; k < FOOT_RING; k++) {
+      offsetPoint(pos, footprint, k * (Math.PI * 2 / FOOT_RING), R, _foot);
+      const w = waterDepthAt(p, _foot);
+      if (w > d) d = w;
+    }
+  }
+  return d;
+}
+
+/**
+ * Dry ground for a building: no more than a film of water (SITE_WET_MAX) at the point itself or anywhere under a
+ * footprint of radius `footprint` metres. THE test of every building placement (buildings.ts findSite and its shore
+ * and edge searches); docks, shipyards and lighthouses, which stand at the water, ask only their own cell (dryCell).
+ */
+export function dryAt(p: Planet, pos: ArrayLike<number>, footprint = 0): boolean {
+  return standingWater(p, pos, footprint) <= SITE_WET_MAX;
 }
 
 const _heapC: number[] = [];

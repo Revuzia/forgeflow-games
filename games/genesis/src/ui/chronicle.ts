@@ -32,6 +32,11 @@ const WEIGHTS = [
   { value: '3', label: 'Era-defining', title: 'only importance 3' },
 ];
 
+/** the tabs: the Book, every day, and what the god did (the entries of kind 'god': casts, signs, answers) */
+export type ChronicleTab = 'book' | 'days' | 'did';
+/** does the "What you did" tab show this entry */
+export const isGodAct = (e: { kind: string }): boolean => e.kind === 'god';
+
 export class Chronicle {
   readonly panel: Panel;
   private host: UiHost;
@@ -50,7 +55,7 @@ export class Chronicle {
   private dirty = true;
   private lastRender = 0;
   /** ARC §5.5 */
-  private tab: 'book' | 'days' = 'days';
+  private tab: ChronicleTab = 'days';
   private tabChosen = false;
   private tabBar: HTMLDivElement;
   private dayEls: HTMLElement[] = [];
@@ -79,7 +84,7 @@ export class Chronicle {
     this.panel.tools.append(h('span', { class: 'gn-chron-exl', html: icon('download'), title: 'Export the chronicle' }), ex('md', 'Markdown', 'MD'), ex('html', 'HTML', 'HTML'), ex('txt', 'plain text', 'TXT'));
     const filters = h('div', { class: 'gn-chron-filters' }, this.search, this.planetBar, h('div', { class: 'gn-chron-row' }, weight, order), this.kindBar, this.countEl);
     this.tabBar = h('div', { class: 'gn-seg gn-chron-tabs', role: 'tablist' });
-    for (const [v, label, title] of [['book', 'Book', 'The story this world tells about its god'], ['days', 'Every day', 'Everything the chronicle remembers, day by day']] as const) {
+    for (const [v, label, title] of [['book', 'Book', 'The story this world tells about its god'], ['days', 'Every day', 'Everything the chronicle remembers, day by day'], ['did', 'What you did', 'Only what you did: miracles, signs, answers']] as const) {
       const b = h('button', { class: 'gn-seg-b', role: 'tab', text: label, title, data: { tab: v } });
       b.addEventListener('click', () => { this.tabChosen = true; this.setTab(v); });
       this.tabBar.append(b);
@@ -104,14 +109,15 @@ export class Chronicle {
     this.bookEl.scrollTop = 0;
   }
 
-  private setTab(t: 'book' | 'days'): void {
+  private setTab(t: ChronicleTab): void {
     this.tab = t;
     for (const b of Array.from(this.tabBar.children) as HTMLElement[]) {
       const on = b.dataset.tab === t;
       b.classList.toggle('gn-on', on);
       b.setAttribute('aria-selected', String(on));
     }
-    for (const e of this.dayEls) e.hidden = t !== 'days';
+    for (const e of this.dayEls) e.hidden = t === 'book';
+    this.kindBar.hidden = t === 'did';
     this.bookEl.hidden = t !== 'book';
     this.panel.root.classList.toggle('gn-chron-bookmode', t === 'book');
     if (t === 'book') { this.bookDrawn = ''; this.renderBook(); } else this.dirty = true;
@@ -177,7 +183,7 @@ export class Chronicle {
     const q = this.search.value.trim().toLowerCase();
     const words = q ? q.split(/\s+/) : [];
     return this.entries.filter((e) =>
-      (this.planet < 0 || e.planet === this.planet) && e.weight >= this.minWeight && (!this.kinds.size || this.kinds.has(e.kind)) &&
+      (this.planet < 0 || e.planet === this.planet) && e.weight >= this.minWeight && (this.tab === 'did' ? isGodAct(e) : !this.kinds.size || this.kinds.has(e.kind)) &&
       (!words.length || words.every((w) => e.text.toLowerCase().includes(w) || e.kind.includes(w))));
   }
 
@@ -210,7 +216,7 @@ export class Chronicle {
     const shown = this.newestFirst ? list.slice(-this.limit).reverse() : list.slice(0, this.limit);
     const scroll = this.listEl.scrollTop;
     clear(this.listEl);
-    if (!shown.length) this.listEl.append(h('div', { class: 'gn-chron-empty', text: this.entries.length ? 'Nothing matches.' : 'Nothing has happened yet that anyone remembers.' }));
+    if (!shown.length) this.listEl.append(h('div', { class: 'gn-chron-empty', text: this.entries.length ? 'Nothing matches.' : this.tab === 'did' ? 'You have not yet done anything the chronicle remembers.' : 'Nothing has happened yet that anyone remembers.' }));
     let lastKey = '';
     for (const e of shown) {
       const key = `${e.planet}:${e.year}`;
@@ -353,7 +359,7 @@ p{margin:.25em 0}.d{font:12px Inter,system-ui,sans-serif;color:#9c968a;letter-sp
   }
 
   /** test surface: the tab */
-  showTab(t: 'book' | 'days'): void { this.tabChosen = true; this.setTab(t); }
+  showTab(t: ChronicleTab): void { this.tabChosen = true; this.setTab(t); }
 
   setSearch(q: string): void { this.search.value = q; this.dirty = true; }
 }
