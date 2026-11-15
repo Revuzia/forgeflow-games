@@ -176,6 +176,8 @@ const ROWS = [
   { tab: "interface", key: "minimapSize", label: "Minimap size", kind: "seg", options: ["small", "medium", "large"], desc: "Minimap size." },
   { tab: "interface", key: "killcam", label: "Kill cam", kind: "seg", options: ["on", "off"],
     desc: "Replay of how you were taken out while you wait to respawn." },
+  { tab: "interface", key: "fpBody", label: "Show body", kind: "seg", options: ["on", "off"],
+    desc: "See your own legs and shadow when you look down." },
   { tab: "interface", key: "subtitles", label: "Subtitles", kind: "seg", options: ["on", "off"],
     desc: "Text for radio lines, bottom left (and teammate callouts, if set to subtitles below)." },
   { tab: "interface", key: "subSize", label: "Subtitle size", kind: "seg", options: ["small", "medium", "large"], desc: "Subtitle text size." },

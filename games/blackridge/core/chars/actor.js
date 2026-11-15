@@ -258,10 +258,26 @@ export function applyWetShoulder(mat) {
     // match (programs delta 0 during play — AC-49's FAIL gate).
     const rim = { c: { value: new THREE.Color(0, 0, 0) }, s: { value: 0 } };
     m.userData.__brRim = rim;
+    // [a11 operator looks] per-actor cloth/skin recolour (core/chars/operator_looks.js).
+    // uBrLook.x = 0 (the default, the campaign and the juggernaut) skips the branch
+    // entirely, so those frames are unchanged. Same ONE program for the whole cast.
+    const look = {
+      on: { value: new THREE.Vector4(0, 0.08, 0, 0) },      // x: cloth blend, y: flatten ref lum
+      mask: { value: _whiteTex() },
+      top: { value: new THREE.Vector4(1, 1, 1, 1) },         // rgb tint, a: camo contrast
+      low: { value: new THREE.Vector4(1, 1, 1, 1) },
+      skin: { value: new THREE.Vector3(1, 1, 1) },
+    };
+    m.userData.__brLook = look;
     m.customProgramCacheKey = () => "br_soldier_wet_rim";
     m.onBeforeCompile = (sh) => {
       sh.uniforms.uBrRimC = rim.c;
       sh.uniforms.uBrRimS = rim.s;
+      sh.uniforms.uBrLook = look.on;
+      sh.uniforms.uBrMask = look.mask;
+      sh.uniforms.uBrTop = look.top;
+      sh.uniforms.uBrLow = look.low;
+      sh.uniforms.uBrSkin = look.skin;
       sh.vertexShader =
         "varying float vBrWetY;\n" +
         sh.vertexShader.replace(
@@ -270,7 +286,23 @@ export function applyWetShoulder(mat) {
         );
       sh.fragmentShader =
         "varying float vBrWetY;\nuniform vec3 uBrRimC;\nuniform float uBrRimS;\n" +
+        "uniform vec4 uBrLook;\nuniform sampler2D uBrMask;\nuniform vec4 uBrTop;\nuniform vec4 uBrLow;\nuniform vec3 uBrSkin;\n" +
         sh.fragmentShader.replace(
+          "#include <map_fragment>",
+          "#include <map_fragment>\n" +
+          "#ifdef USE_MAP\n" +
+          "\tif (uBrLook.x > 0.0) {\n" +
+          // mask R = bare skin, G = trousers (tools/a11_build_operators.py bake)
+          "\t\tvec3 brMk = texture2D(uBrMask, vMapUv).rgb;\n" +
+          "\t\tvec3 brC = diffuseColor.rgb;\n" +
+          "\t\tfloat brL = dot(brC, vec3(0.2126, 0.7152, 0.0722));\n" +
+          "\t\tvec4 brCl = mix(uBrTop, uBrLow, brMk.g);\n" +
+          "\t\tvec3 brRc = mix(uBrLook.y, brL, brCl.a) * brCl.rgb;\n" +
+          "\t\tbrC = mix(brC, brRc, (1.0 - brMk.r) * uBrLook.x);\n" +
+          "\t\tdiffuseColor.rgb = mix(brC, brC * uBrSkin, brMk.r);\n" +
+          "\t}\n" +
+          "#endif"
+        ).replace(
           "#include <roughnessmap_fragment>",
           "#include <roughnessmap_fragment>\n" +
           "\tfloat brWet = smoothstep(1.05, 1.42, vBrWetY);\n" +
@@ -655,6 +687,7 @@ export function createActor(proto) {
     o.material = Array.isArray(o.material) ? out : out[0];
   });
   const baseColor = new THREE.Color(1, 1, 1);
+  const gearMats = [];   // [a11] operator-look gear materials (addGear)
 
   // Bones (mixamorig: prefix — THREE sanitizes the colon away; normalize like
   // last-circle's findArmBones or every lookup silently no-ops).
@@ -1383,7 +1416,7 @@ export function createActor(proto) {
      *  strength 0 (the default) is an exact no-op — the campaign never
      *  calls this, so its frames are unchanged (Amendment A2). */
     setRim(hex, strength = 0.4) {
-      for (const m of mats) {
+      for (const m of mats.concat(gearMats)) {
         const r = m.userData && m.userData.__brRim;
         if (!r) continue;
         r.c.value.set(hex);
@@ -1398,7 +1431,35 @@ export function createActor(proto) {
         if (on) m.color.copy(baseColor).multiplyScalar(1.6);
         else m.color.copy(baseColor);
       }
+      for (const m of gearMats) m.color.setScalar(on ? 1.6 : 1);
     },
+
+    // ---- [a11] operator looks (core/chars/operator_looks.js owns the data) ----
+    _model: model,
+    _boneByName: byName,
+    /** Add a gear mesh (already skinned to this actor's bones) under the model.
+     *  Its material joins rim / flash / dispose; geometry stays shared. */
+    addGear(mesh) {
+      model.add(mesh);
+      const ms = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const m of ms) gearMats.push(m);
+      return mesh;
+    },
+    /** Body cloth/skin recolour uniforms (see applyWetShoulder). null = off. */
+    setLook(u) {
+      for (const m of mats) {
+        const L = m.userData && m.userData.__brLook;
+        if (!L) continue;
+        if (!u) { L.on.value.x = 0; continue; }
+        L.mask.value = u.mask;
+        L.on.value.set(u.k, u.ref, 0, 0);
+        L.top.value.set(u.top[0], u.top[1], u.top[2], u.top[3]);
+        L.low.value.set(u.low[0], u.low[1], u.low[2], u.low[3]);
+        L.skin.value.set(u.skin[0], u.skin[1], u.skin[2]);
+      }
+    },
+    /** All materials this actor owns (body clones + gear) — fp_body patches them. */
+    get materials() { return mats.concat(gearMats); },
 
     /** Advance animation. Foot-planting: loco clips cycle at a fixed rate, so
      *  timeScale rides actual ground speed (colosseum trick) — sliding feet
@@ -1689,6 +1750,7 @@ export function createActor(proto) {
       mixer.stopAllAction();
       // geometry + textures are the proto's (shared); only the clones die
       for (const m of mats) m.dispose();
+      for (const m of gearMats) m.dispose();
     },
   };
 
@@ -1700,3 +1762,13 @@ export function createActor(proto) {
 }
 
 const _WHITE = new THREE.Color(1, 1, 1);
+// [a11] 1x1 stand-in for the look mask so every soldier material binds the same
+// sampler (one program); never read while uBrLook.x == 0.
+let _WT = null;
+function _whiteTex() {
+  if (!_WT) {
+    _WT = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+    _WT.needsUpdate = true;
+  }
+  return _WT;
+}

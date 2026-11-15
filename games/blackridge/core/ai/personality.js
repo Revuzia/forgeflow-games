@@ -165,6 +165,9 @@ export function personalClass(base, p, archetype) {
   if (role === "cqb") {
     out.primary = p.range === "close" && p.aggression > 0.5 ? "breaker" : "vesper";
     out.name = out.primary === "breaker" ? "BREACHER" : (p.move === "rusher" ? "RUNNER" : "CLOSE QUARTERS");
+  } else if (role === "rifleman" && base.primary === "bastion") {
+    // [heavy weapons] a support gunner keeps the belt-fed gun (opponentClass picked it)
+    out.name = "SUPPORT";
   } else if (role === "rifleman") {
     out.primary = p.range === "close" ? "vesper" : "warden";
     out.name = out.primary === "vesper" ? "SKIRMISHER" : (p.objective > 0.7 ? "LINE" : p.aggression > 0.3 ? "ASSAULT" : "RECON");

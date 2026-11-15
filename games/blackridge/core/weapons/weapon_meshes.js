@@ -33,7 +33,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
-import { WEAPONS, VIEWMODEL, SLOT_ORDER } from "./weapon_data.js";
+import { WEAPONS, VIEWMODEL, ALL_WEAPON_IDS } from "./weapon_data.js";
 import { CAMOS, GUNSMITH, partInSlot, factoryPart } from "../sim/attachments.js"; // [gunsmith]
 
 const DEG = Math.PI / 180;
@@ -392,6 +392,10 @@ export async function loadWeaponGLB(id) {
       const group = gltf.scene || (gltf.scenes && gltf.scenes[0]);
       if (!group) throw new Error("GLB contained no scene");
       repair(group);
+      // [heavy weapons] gunsmith parts authored INSIDE a gun GLB (`<id>__<att>` nodes and
+      // their __SIGHT/__MUZZLE/__BEAM empties, tools/a5_build_guns.py bastion/anvil) start
+      // hidden — mountParts adopts them exactly like the attachments.glb clones
+      for (const c of group.children) if (/^[a-z0-9]+__/.test(c.name || "")) { c.visible = false; c.userData.gsOwn = true; }
       installCamoAll(group); // [gunsmith] camo uniforms compiled in from the first (prewarm) draw
       if (w && w.view && w.view.scale && w.view.scale !== 1) {
         group.scale.setScalar(w.view.scale);
@@ -448,6 +452,7 @@ export async function loadWeaponGLB(id) {
         group.traverse((o) => {
           if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
           if (o.userData.isArm) return;
+          if (o.parent && o.parent.userData.gsOwn || o.userData.gsOwn) return; // [heavy weapons] hidden gunsmith parts
           const a = o.geometry.attributes.position;
           const stride = Math.max(1, Math.floor(a.count / 4000));
           for (let i = 0; i < a.count; i += stride) {
@@ -518,7 +523,7 @@ export function loadedPrototypes() {
 /** Kick off (and await) every weapon in the five slots so a weapon switch never
  *  pays a network + decode + material-compile hitch. Safe to call repeatedly. */
 export function loadAllWeapons(ids) {
-  return Promise.all((ids || SLOT_ORDER).map((id) => loadWeaponGLB(id)));
+  return Promise.all((ids || ALL_WEAPON_IDS).map((id) => loadWeaponGLB(id)));
 }
 
 /** Dev/hot-reload seam: forget a cached prototype so the next loadWeaponGLB(id)
@@ -654,6 +659,21 @@ function mountParts(group, weaponId, g) {
   g.mounted = true;
   const host = hostMaterials(group);
   const prefix = weaponId + "__";
+  // [heavy weapons] parts the gun GLB carries itself: adopted in place (already on the
+  // gun's own materials), registered under the same names as attachments.glb parts
+  for (const node of group.children.slice()) {
+    const nm = node.name || "";
+    if (!node.userData.gsOwn || nm.indexOf(prefix) !== 0) continue;
+    const rest = nm.slice(prefix.length);
+    if (rest.indexOf("__") >= 0) { g.empties[rest] = node.position.clone(); continue; }
+    node.name = "gs_" + rest;
+    node.visible = false;
+    node.traverse((o) => {
+      o.layers.mask = group.layers.mask;
+      if (o.isMesh) { o.userData.gsPart = true; o.castShadow = false; o.receiveShadow = true; o.frustumCulled = false; }
+    });
+    g.parts[rest] = node;
+  }
   for (const node of _attScene.children) {
     const nm = node.name || "";
     if (nm.indexOf(prefix) !== 0) continue;

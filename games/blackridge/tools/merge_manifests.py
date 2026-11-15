@@ -13,7 +13,7 @@ Payload classes (Part 5):
             GLBs (boot phase 4), HUD font.
   mission — streamed during menu / behind soldiers.ready(): chars, audio,
             vesper+corvus FP GLBs.
-Gates: menu <= 6.5 MB (was 6; raised 2026-10-12 — the re-authored first-person hands grew warden+pike from 0.3 to 1.4 MB, the only menu-path change), mission <= +5 MB. Exit 1 on missing file or blown gate.
+Gates: menu <= 6.5 MB (was 6; raised 2026-10-12 — the re-authored first-person hands grew warden+pike from 0.3 to 1.4 MB, the only menu-path change), mission <= +6.75 MB (was 5; raised 2026-11-14 on the owner's instruction for the LMG, launcher, operator variants and first-person body). Exit 1 on missing file or blown gate.
 """
 import glob
 import json
@@ -29,6 +29,10 @@ MISSION_FILES = {
     # 2026-10-12: the Breaker and the 3rd-person pistol/shotgun meshes (bots + ground loot)
     # are fetched behind soldiers.ready() / on first pick-up, never on the menu path
     "assets/weapons/breaker.glb", "assets/weapons/wpn3p_pistol.glb", "assets/weapons/wpn3p_shotgun.glb",
+    # 2026-11-14 [heavy weapons]: HX-60 Bastion LMG + KR-5 Anvil launcher (FP) and their
+    # generated third-person meshes — streamed with the other non-boot guns
+    "assets/weapons/bastion.glb", "assets/weapons/anvil.glb",
+    "assets/weapons/wpn3p_bastion.glb", "assets/weapons/wpn3p_anvil.glb",
 }
 
 
@@ -79,7 +83,7 @@ def main():
             "menu": sums["menu"],
             "mission": sums["mission"],
             "menu_budget": int(6.5 * 1024 * 1024),
-            "mission_budget": 5 * 1024 * 1024,
+            "mission_budget": int(6.75 * 1024 * 1024),
         },
         "entries": [merged[k] for k in sorted(merged)],
     }
@@ -90,13 +94,13 @@ def main():
     print(f"fragments merged: {[os.path.basename(f) for f in frag_names]}")
     print(f"entries: {len(out['entries'])}")
     print(f"menu payload:    {sums['menu']:>9d} bytes ({sums['menu']/1048576:.2f} MB, budget 6.5 MB)")
-    print(f"mission payload: {sums['mission']:>9d} bytes ({sums['mission']/1048576:.2f} MB, budget +5 MB)")
+    print(f"mission payload: {sums['mission']:>9d} bytes ({sums['mission']/1048576:.2f} MB, budget +6.75 MB)")
     for p in problems:
         print("PROBLEM:", p)
     if sums["menu"] > int(6.5 * 1024 * 1024):
         problems.append("menu payload gate BLOWN")
         print("PROBLEM: menu payload gate BLOWN")
-    if sums["mission"] > 5 * 1024 * 1024:
+    if sums["mission"] > int(6.75 * 1024 * 1024):
         problems.append("mission payload gate BLOWN")
         print("PROBLEM: mission payload gate BLOWN")
     sys.exit(1 if problems else 0)

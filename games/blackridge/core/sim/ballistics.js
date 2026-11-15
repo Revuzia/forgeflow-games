@@ -20,6 +20,7 @@
 
 import { applyDamage } from "./damage.js";
 import { rayBox } from "./world.js";
+import { spawnRocket } from "./grenades.js"; // [heavy weapons] the Anvil's travelling rocket
 
 // ---------------------------------------------------------------- constants
 const SUBSTEP_M = 2.5;          // §3.1 sub-step cap
@@ -37,8 +38,10 @@ export const PENETRATION = {
   warden: { classes: ["soft", "metal_thin"], retain: 0.70, maxThick: 0.25 },
   vesper: { classes: ["soft"], retain: 0.45, maxThick: 0.15 },
   corvus: { classes: ["soft", "metal_thin"], retain: 0.85, maxThick: 0.40 },
+  bastion: { classes: ["soft", "metal_thin"], retain: 0.75, maxThick: 0.30 },
   pike: null,
-  _byClass: { ar: "warden", smg: "vesper", dmr: "corvus", pistol: "pike" },
+  anvil: null,
+  _byClass: { ar: "warden", smg: "vesper", dmr: "corvus", pistol: "pike", lmg: "bastion" },
 };
 
 export function penFor(weaponId, weapon) {
@@ -342,9 +345,23 @@ export function fireShot(sim, shooter, weapon, origin, aimDir, rng) {
       const mb = sim.world.raycast(origin, dir, 1.2);
       if (mb && mb.box && (mb.box.matClass || "hard") === "hard") continue;
     }
+    const firstOfBurst = (w.recoilIndex || 0) === 0;
+    // [heavy weapons] LAUNCHER: the round is a visible, travelling rocket owned by
+    // grenades.js (stepRockets) — it resolves through the frag explosion path, so
+    // splash, self-damage, cover and BLAST WEAVE all behave exactly like a frag.
+    // The fire-time `shot` event still goes out (sfx / muzzle / recoil / challenge
+    // attribution all key on it), with no hit and no tracer, flagged `rocket`.
+    if (weapon.projectile === "rocket") {
+      if (shooter === "P") sim.state.counters.shotsFired++;
+      spawnRocket(sim, shooter, weaponId, weapon, origin, dir);
+      const ev = { shooter, weaponId, origin: origin.slice(), dir: dir.slice(), hit: null, tracer: false,
+        pellet: p, rocket: true, suppressed: false };
+      if (firstOfBurst) ev.firstShot = true;
+      sim.emit("shot", ev);
+      continue;
+    }
     const shotIdx = (w._shotCount = (w._shotCount || 0) + 1);
     const te = weapon.tracerEvery | 0;
-    const firstOfBurst = (w.recoilIndex || 0) === 0;
     // §2.8 first-shot signature: one full tracer even on non-tracer rounds
     // [gunsmith] a SUPPRESSOR attachment (noTracer) leaves no tracer at all
     const tracer = !weapon.noTracer && (firstOfBurst || (te > 0 && shotIdx % te === 0));

@@ -258,6 +258,7 @@ export function createScenarios(ctx) {
     if (sim.internal) {
       if (Array.isArray(sim.internal.projectiles)) sim.internal.projectiles.length = 0;
       if (Array.isArray(sim.internal.grenades)) sim.internal.grenades.length = 0;
+      if (Array.isArray(sim.internal.rockets)) sim.internal.rockets.length = 0;
     }
     const evs = ctx.bus.drain().filter(
       (e) => !(e.type === "spawn" && e.data && removed.has(e.data.botId)));

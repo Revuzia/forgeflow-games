@@ -343,6 +343,15 @@ export function createFx(ctx) {
     // a few pellets draw a tracer, and every pellet still gets its own impact below.
     const first = !(d.pellet > 0);
     if (first) muzzle.spawn(d);
+    // [heavy weapons] a rocket launch: the flash + a back-blast dust cloud behind the
+    // shooter; no tracer (the rocket itself flies, grenadefx.js) and no casing
+    if (d.rocket) {
+      if (d.origin && d.dir) {
+        _puffPos[0] = d.origin[0] - d.dir[0] * 1.4; _puffPos[1] = d.origin[1] - 0.3; _puffPos[2] = d.origin[2] - d.dir[2] * 1.4;
+        impacts.puff(_puffPos, "dust");
+      }
+      return;
+    }
     if ((d.tracer || d.firstShot) && (first || d.pellet < 4)) {
       const dist = d.hit ? dist3(d.origin, d.hit.pos) : MISS_TRACER_DIST;
       tracers.spawn(d.origin, d.dir, dist);

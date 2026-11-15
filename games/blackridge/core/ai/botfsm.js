@@ -227,9 +227,9 @@ function kOf(sim, bot, brain) {
 // (sim does not expose content; values are the combat_spec numbers verbatim,
 // weapon-class fallback for test spawns).
 const BURST_BY_ARCH = { rifleman: [3, 5], cqb: [5, 8], marksman: [1, 1], heavy: [5, 8] };
-const BURST_BY_CLASS = { ar: [3, 5], smg: [5, 8], dmr: [1, 1], pistol: [2, 3], shotgun: [1, 1] };
+const BURST_BY_CLASS = { ar: [3, 5], smg: [5, 8], dmr: [1, 1], pistol: [2, 3], shotgun: [1, 1], lmg: [7, 14], launcher: [1, 1] };
 const BAND_BY_ARCH = { rifleman: [15, 35], cqb: [8, 18], marksman: [35, 80], heavy: [10, 30] };
-const BAND_BY_CLASS = { ar: [15, 35], smg: [8, 18], dmr: [35, 80], pistol: [6, 15], shotgun: [2, 9] };
+const BAND_BY_CLASS = { ar: [15, 35], smg: [8, 18], dmr: [35, 80], pistol: [6, 15], shotgun: [2, 9], lmg: [14, 42], launcher: [18, 55] };
 // the weapon class each archetype is built around. The archetype tables above
 // describe THAT gun; when the bot actually holds something else (PVP: every
 // body starts on the pistol, then picks racks/drops up) the held weapon's CLASS
@@ -1117,8 +1117,39 @@ function pickCover(sim, nav, bot, brain, threatPos, weapon, pushOn, objOpts) {
 // ============================================================ BOT-AI PASS helpers
 // ---- weapon choice: the right gun for the range, a swap instead of a reload
 // when the primary is nearly dry, the shotgun for anything inside ~8 m.
-const CLS_MID = { pistol: 9, shotgun: 5, smg: 13, ar: 25, dmr: 55 };
-const CLS_HALF = { pistol: 7, shotgun: 6, smg: 9, ar: 18, dmr: 30 };
+const CLS_MID = { pistol: 9, shotgun: 5, smg: 13, ar: 25, dmr: 55, lmg: 28 };
+const CLS_HALF = { pistol: 7, shotgun: 6, smg: 9, ar: 18, dmr: 30, lmg: 20 };
+
+// ---- [heavy weapons] THE LAUNCHER. An operator raises the Anvil only for a shot
+// worth a rocket: never inside LAUNCHER_MIN_M (the blast would reach them too),
+// never past LAUNCHER_MAX_M (a 52 m/s rocket is dodged out there), and only at a
+// GROUP (2+ hostiles inside the blast) or a target on/near an objective. Pure
+// function of sim state — no rng drawn, so turning it on shifts no other roll.
+export const LAUNCHER_MIN_M = 12, LAUNCHER_MAX_M = 60, LAUNCHER_GROUP_R = 4.5;
+export function rocketValue(sim, bot, tPos, dT) {
+  if (!tPos || dT == null || dT < LAUNCHER_MIN_M || dT > LAUNCHER_MAX_M) return 0;
+  const S = sim.state;
+  const hostile = (id) => id !== bot.id && (!sim.match || !sim.match.sameTeam || !sim.match.sameTeam(bot.id, id));
+  let n = 0;
+  const near = (p) => Math.hypot(p[0] - tPos[0], p[2] - tPos[2]) <= LAUNCHER_GROUP_R && Math.abs(p[1] - tPos[1]) < 2.5;
+  if (S.player && S.player.alive && hostile("P") && near(S.player.pos)) n++;
+  for (const b of S.bots) if (b.alive && hostile(b.id) && near(b.pos)) n++;
+  // a friendly inside the blast vetoes the rocket outright
+  const friendly = (id) => id !== bot.id && sim.match && sim.match.sameTeam && sim.match.sameTeam(bot.id, id);
+  if (S.player && S.player.alive && friendly("P") && near(S.player.pos)) return 0;
+  for (const b of S.bots) if (b.alive && friendly(b.id) && near(b.pos)) return 0;
+  const obj = bot._obj;
+  const onObjective = !!(obj && obj.anchor && Math.hypot(obj.anchor[0] - tPos[0], obj.anchor[2] - tPos[2]) <= 9);
+  if (n >= 2) return 1.0 + 0.25 * (n - 2);
+  if (onObjective) return 0.8;
+  return 0;
+}
+// the first 7 m of the rocket's path must be clear: a rocket into a near wall is
+// a self-inflicted blast (and inside 3 m a dud)
+export function rocketPathClear(sim, eye, dir) {
+  const h = sim.world && sim.world.raycast ? sim.world.raycast(eye, dir, 7) : null;
+  return !(h && h.dist < 7);
+}
 function fitScore(cls, d) {
   const m = CLS_MID[cls] != null ? CLS_MID[cls] : 20, h = CLS_HALF[cls] != null ? CLS_HALF[cls] : 15;
   let f = 1 - Math.abs(d - m) / (h * 1.7);
@@ -1132,7 +1163,7 @@ function ammoOfSlot(bot, id) {
   return a ? a.mag + a.reserve : 0;
 }
 // returns a weapon id to switch to, or null. Throttled to one look per 0.5 s.
-function chooseWeapon(sim, bot, brain, band, t, rng, dT) {
+function chooseWeapon(sim, bot, brain, band, t, rng, dT, tPos) {
   const slots = bot.slots;
   if (!slots || !slots.length) return null;
   const w = bot.weapon;
@@ -1153,7 +1184,8 @@ function chooseWeapon(sim, bot, brain, band, t, rng, dT) {
   if (!brain.smartSwap || dT == null) return null;
   const wt = sim.weapons[cur];
   // nearly dry primary, a loaded alternative, enemy in view: swap beats reloading
-  if (wt && w.mag <= Math.max(1, wt.mag * 0.12) && w.reserve > 0) {
+  // (not the single-round launcher: it is "nearly dry" by construction)
+  if (wt && wt.class !== "launcher" && w.mag <= Math.max(1, wt.mag * 0.12) && w.reserve > 0) {
     for (const id of slots) {
       if (!id || id === cur) continue;
       const a = bot._slotAmmo && bot._slotAmmo[id];
@@ -1167,7 +1199,13 @@ function chooseWeapon(sim, bot, brain, band, t, rng, dT) {
     if (ammoOfSlot(bot, id) <= 0) continue;
     if (id !== cur) { const a = bot._slotAmmo && bot._slotAmmo[id]; if (!a || a.mag <= 0) continue; }
     const cls = sim.weapons[id] ? sim.weapons[id].class : "ar";
-    const sc = fitScore(cls, dT) + (id === cur ? 0.35 : 0); // hysteresis: the gun in hand gets a bonus
+    let sc;
+    if (cls === "launcher") {
+      // [heavy weapons] only for a rocket worth firing, and only while loaded
+      const loaded = id === cur ? w.mag > 0 : !!(bot._slotAmmo && bot._slotAmmo[id] && bot._slotAmmo[id].mag > 0);
+      const v = loaded ? rocketValue(sim, bot, tPos, dT) : 0;
+      sc = v > 0 ? 1.2 + v + (id === cur ? 0.35 : 0) : -9;
+    } else sc = fitScore(cls, dT) + (id === cur ? 0.35 : 0); // hysteresis: the gun in hand gets a bonus
     if (id === cur) curS = sc;
     if (sc > bestS) { bestS = sc; best = id; }
   }
@@ -1488,7 +1526,7 @@ function act(sim, nav, squad, bot, dt, t) {
   // loaded sidearm is in the holster, shotgun inside ~8 m
   {
     const tbS = P && P.seesTarget && t - P.lastSeenT <= 0.5 ? tb : null;
-    const pick = chooseWeapon(sim, bot, brain, band, t, rng, tbS ? hdist(bot.pos, tbS.pos) : null);
+    const pick = chooseWeapon(sim, bot, brain, band, t, rng, tbS ? hdist(bot.pos, tbS.pos) : null, tbS ? tbS.pos : null);
     if (pick && pick !== bot.weapon.id) c.switchTo = pick;
   }
 
@@ -1661,6 +1699,8 @@ function act(sim, nav, squad, bot, dt, t) {
       let ty = targetPos[1] + (brain.aimHigh && visibleFresh
         ? (crouched ? 1.02 : 1.55)
         : (crouched ? 0.75 : 1.05));
+      // [heavy weapons] a rocket goes at the FEET: the blast does the rest
+      if (weapon && weapon.class === "launcher") ty = targetPos[1] + 0.35;
       if (st === "suppress") {
         // §5.8: timed bursts AT the player's cover edge (lateral offset)
         const py = yawTo(eye, targetPos);
@@ -1719,6 +1759,10 @@ function act(sim, nav, squad, bot, dt, t) {
         if (fireBlocked(sim, bot, eye, dir, d3, who)) {
           wantFire = false;
           brain.coverScoreAt = -9; // reposition next think
+        } else if (weapon && weapon.class === "launcher" &&
+                   (d3 < LAUNCHER_MIN_M || !rocketPathClear(sim, eye, dir))) {
+          // [heavy weapons] NEVER a rocket at point blank or into a near wall
+          wantFire = false;
         }
       }
 
@@ -1854,7 +1898,7 @@ function act(sim, nav, squad, bot, dt, t) {
 // §1.8 sprint-out (mirrors player.js SPRINT_OUT_S normal column — bots never
 // tac-sprint) + rpm interval: true when a pull issued THIS tick fires THIS
 // tick, so the buffered edge can never outlive its fire-window authorization.
-const SPRINT_OUT = { smg: 0.160, pistol: 0.130, ar: 0.210, dmr: 0.290 };
+const SPRINT_OUT = { smg: 0.160, pistol: 0.130, ar: 0.210, dmr: 0.290, shotgun: 0.190, lmg: 0.330, launcher: 0.380 };
 function fireReadyNow(bot, weapon, t) {
   const w = bot.weapon;
   if (t - (w.lastShotT ?? -9) < 60 / weapon.rpm - 1e-6) return false;

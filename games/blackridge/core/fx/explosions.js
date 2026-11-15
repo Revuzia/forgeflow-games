@@ -38,6 +38,17 @@ const VARIANTS = {
     fireballs: 5,
     puffFire: 7, puffSmoke: 8, fireLife: 0.75, arc: 0, puffShade: 0.7,
   },
+  // [heavy weapons] the Anvil's rocket: a frag's punch with more fire and a dirtier,
+  // longer smoke — between the frag and the fuel drum
+  rocket: {
+    flash: [3.2, 2.0, 1.0], flashScaleR: 0.78,
+    light: 0xffa050, peak: 72, lightR: 24,
+    ring: [2.6, 1.5, 0.8],
+    smoke: 10, smokeC: [0.11, 0.105, 0.10],
+    debris: 16, embers: 22, emberC: [2.6, 1.15, 0.35],
+    fireballs: 5,
+    puffFire: 7, puffSmoke: 8, fireLife: 0.55, arc: 0,
+  },
   // kill-streak call-ins (mortar / airstrike / orbital): bigger, longer, with a
   // rising smoke column — they used to fall back to the frag-grenade look
   streak: {

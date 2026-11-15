@@ -70,6 +70,7 @@ const STYLE = {
   corvus:  { len: 11.0, w: 0.100, spd: 1 },
   pike:    { len: 5.5, w: 0.074, spd: 1 },
   breaker: { len: 3.2, w: 0.046, spd: 0.72 },
+  bastion: { len: 9.0, w: 0.090, spd: 1 },
 };
 // Of the nine fire-time events of ONE volley only the first TRACERS_PER_VOLLEY
 // that reach spawn() draw a streak. Counted here per volley id (env.shot.volleys)

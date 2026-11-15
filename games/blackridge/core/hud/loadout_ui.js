@@ -33,11 +33,11 @@ const PVP_WEAPONS = applyTuning(WEAPONS, getTuning("pvp"));
 
 const WNAME = {
   warden: "M-72 WARDEN", vesper: "KS-23 VESPER", breaker: "B-12 BREAKER",
-  corvus: "LR-1 CORVUS", pike: "GS-9 PIKE",
+  corvus: "LR-1 CORVUS", pike: "GS-9 PIKE", bastion: "HX-60 BASTION", anvil: "KR-5 ANVIL",
 };
 const WROLE = {
   warden: "assault rifle", vesper: "submachine gun", breaker: "pump shotgun",
-  corvus: "marksman rifle", pike: "sidearm",
+  corvus: "marksman rifle", pike: "sidearm", bastion: "light machine gun", anvil: "rocket launcher",
 };
 const TIER_LABEL = ["PERK 1", "PERK 2", "PERK 3"];
 

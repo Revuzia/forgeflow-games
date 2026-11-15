@@ -454,6 +454,10 @@ const GLYPHS = { // per weapon class, tiny original silhouettes for the killfeed
   pistol: "M6 2h14v2h-7l-1 4h-4l1-4H6z",
   // pump shotgun: barrel, magazine tube under it, pump forend, receiver + stock
   shotgun: "M0 2.6h16v1.4H0zM2.5 4.6H16v1.4H2.5zM7 6h6v2H7zM16 2h5l1 1h5v5l-4.5-.5L21 7h-5z",
+  // [heavy weapons] belt-fed LMG: long barrel + bipod legs, box under the receiver, stock
+  lmg: "M0 3h14V1.6h7l1 1.4h5v2.4h-6l-1 2.6h-2.6l.6-2.6H14v3.4h-4.6V5.4H0zM3 5.4l-2 3.6h1.1l2-3.6zM5 5.4l1.6 3.6H5.5L4 5.4z",
+  // [heavy weapons] launcher tube with the warhead out front, grip + sight block
+  launcher: "M5 3h17v3.2H5zM0 3.4 5 2.4v4.4L0 5.8zM22 2.6h4.4v4H22zM11 6.2h2.4l-.8 3h-2.2zM15 1.4h3V3h-3z",
   // [polish v149] equipment + melee own their glyphs (never the held gun's)
   mine: "M6 3.5q7.5-3 15 0V8H6zM8 8h1.4v2H8zM17.6 8H19v2h-1.6zM4 1l3 1.6-.5.8zM23 1l-3 1.6.5.8z", // curved tripmine on legs + cone ticks
   frag: "M10.5 3.2a4.2 4.2 0 1 0 6 0zM12 0h4v2.6h-4zM16 .6l3.4-.6.3 1.2-3.7.6z",
@@ -1429,7 +1433,9 @@ export function createHud(ctx) {
     const kName = nameOf(d.attacker), vName = nameOf(d.victim);
     // [polish v149] equipment / melee kills: the death event names its own weapon
     const eqW = d.melee ? "knife" : (d.weaponId === "claymore" || d.weaponId === "frag") ? d.weaponId : null;
-    const wid = eqW ? eqW : d.attacker === "P"
+    // [heavy weapons] a rocket kill lands seconds after the pull: the death event names the launcher
+    const projW = !eqW && d.weaponId && W[d.weaponId] && W[d.weaponId].projectile ? d.weaponId : null;
+    const wid = eqW ? eqW : projW ? projW : d.attacker === "P"
       ? ((hmSt.fireW && t >= hmSt.fireT && t - hmSt.fireT <= 0.6 && hmSt.fireW) ||
          (sim.state.player.weapon && sim.state.player.weapon.id) ||
          st.lastHitWeapon[d.victim])

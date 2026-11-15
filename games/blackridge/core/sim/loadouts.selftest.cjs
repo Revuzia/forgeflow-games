@@ -163,8 +163,8 @@ async function main() {
     ok(p.grenades === 1 && p.perks.doubleTime && p.perks.hardline && p.perks.deadsilence && !p.perks.ghost, "lethal x1 + the three Runner perks");
     ok(p._slotAmmo.vesper.mag === WEAPONS.vesper.mag && p._slotAmmo.pike.reserve === WEAPONS.pike.reserve, "both guns full");
     const bots = sim.state.bots.filter((b) => b.alive);
-    ok(bots.length === 9 && bots.every((b) => b.kit && b.perks && b.slots[4] === "pike" && b.grenades === 1),
-      "all 9 opponents/teammates spawn with a class kit (primary + pike + frag)");
+    ok(bots.length === 9 && bots.every((b) => b.kit && b.perks && (b.slots[4] === "pike" || b.slots[4] === "anvil") && b.grenades === 1),
+      "all 9 opponents/teammates spawn with a class kit (primary + pike or the Anvil + one lethal)");
     ok(bots.every((b) => b.weapon.id === b.kit.primary && b.weapon.id !== "pike"), "each operator holds their class primary, not a pistol");
     const names = new Set(bots.map((b) => b.kit.name)), prims = new Set(bots.map((b) => b.kit.primary));
     ok(names.size >= 4 && prims.size >= 3, `classes vary across the lobby (${[...names].join("/")}; ${[...prims].join("/")})`);

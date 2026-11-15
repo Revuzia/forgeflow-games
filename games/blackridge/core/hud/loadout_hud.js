@@ -16,6 +16,7 @@
 // sim.state each frame and listens to the sim's bridge events. No game logic here.
 
 import { relDegTo } from "./hud.js";
+import { slotOf } from "../weapons/weapon_data.js"; // [heavy weapons] shared slots
 const STYLE_ID = "ld-style";
 
 // ---- MEDAL EMBLEMS (2026-10-14: medals were text only). Inline SVG, one per kind,
@@ -44,8 +45,10 @@ const MEDAL_ICONS = (() => {
 })();
 
 
-const NAMES = { warden: "WARDEN", vesper: "VESPER", breaker: "BREAKER", corvus: "CORVUS", pike: "PIKE" };
-const FULL_NAMES = { warden: "M-72 WARDEN", vesper: "KS-23 VESPER", breaker: "B-12 BREAKER", corvus: "LR-1 CORVUS", pike: "GS-9 PIKE" };
+const NAMES = { warden: "WARDEN", vesper: "VESPER", breaker: "BREAKER", corvus: "CORVUS", pike: "PIKE",
+  bastion: "BASTION", anvil: "ANVIL" };
+const FULL_NAMES = { warden: "M-72 WARDEN", vesper: "KS-23 VESPER", breaker: "B-12 BREAKER", corvus: "LR-1 CORVUS", pike: "GS-9 PIKE",
+  bastion: "HX-60 BASTION", anvil: "KR-5 ANVIL" };
 const SLOT_ORDER = ["warden", "vesper", "breaker", "corvus", "pike"];
 const TIERS = [
   { tier: 1, id: "recon", name: "SWEEP", at: 3, key: 6 },
@@ -172,7 +175,7 @@ export function createLoadoutHud(ctx) {
     const s = el("div", null, "ld-slot empty",
       `<span class="k">${i + 1}</span><span class="n">${NAMES[id]}</span><span class="a"></span>`);
     bar.appendChild(s);
-    return { id, s, a: s.querySelector(".a"), cache: "" };
+    return { id, s, a: s.querySelector(".a"), n: s.querySelector(".n"), cache: "", ncache: id };
   });
   const toast = el("div", "ld-toast");
   const lootEl = el("div", "ld-loot");
@@ -350,6 +353,10 @@ export function createLoadoutHud(ctx) {
         txt = mag + " / " + res;
         if (w && mag + res > 0 && mag <= Math.ceil(w.mag * 0.25)) cls += " low";
       }
+      // [heavy weapons] shared slots: the label names the gun actually in the slot
+      // (slot 1 reads BASTION when the LMG is there), the slot default when empty
+      const nm = id || se.id;
+      if (nm !== se.ncache) { se.ncache = nm; se.n.textContent = NAMES[nm] || String(nm).toUpperCase(); }
       const key = cls + "|" + txt;
       if (key !== se.cache) {
         se.cache = key;
@@ -384,8 +391,10 @@ export function createLoadoutHud(ctx) {
       if (sp) {
         lootEl.style.left = sp[0] + "px";
         lootEl.style.top = sp[1] + "px";
-        const slot = SLOT_ORDER.indexOf(best.weapon) + 1;
-        const html = `${FULL_NAMES[best.weapon] || best.weapon}<i>${owned ? "AMMO" : "[" + slot + "]"}</i>`;
+        const slot = slotOf(best.weapon) + 1;
+        const rival = !owned && p.slots && p.slots[slot - 1] && p.slots[slot - 1] !== best.weapon ? p.slots[slot - 1] : null;
+        const tag = owned ? "AMMO" : rival ? "[" + slot + "] HOLDS " + (NAMES[rival] || rival) : "[" + slot + "]";
+        const html = `${FULL_NAMES[best.weapon] || best.weapon}<i>${tag}</i>`;
         if (lootEl.dataset.h !== html) { lootEl.innerHTML = html; lootEl.dataset.h = html; }
         lootEl.classList.add("on");
       } else lootEl.classList.remove("on");
