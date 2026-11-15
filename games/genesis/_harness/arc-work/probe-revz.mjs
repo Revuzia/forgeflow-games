@@ -24,6 +24,8 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
 const [vw, vh] = String(opts.size ?? '400x225').split('x').map(Number);
 const page = await (await browser.newContext({ viewport: { width: vw, height: vh } })).newPage();
 page.setDefaultTimeout(3600000);
+// --hc=N: report N logical cores (>= 6 makes the game start TWO patch workers, as on the owner's Mac)
+if (opts.hc) await page.addInitScript((n) => { Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => n, configurable: true }); }, Number(opts.hc));
 const errors = [];
 const glmsgs = [];
 page.on('pageerror', (e) => errors.push(String(e)));
