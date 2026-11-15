@@ -1,0 +1,1917 @@
+{
+ "phase": "hud_fray",
+ "finishedAt": "2026-11-15T09:29:32.021Z",
+ "env": {
+  "chrome": "157.0.8103.78",
+  "load1End": 4.14,
+  "node": "v22.23.3",
+  "base": "http://localhost:5232",
+  "wallMs": 103261
+ },
+ "steps": [
+  {
+   "file": "1920x1080/hud_fray_001_fray_flow_01_queue.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_01_queue",
+   "name": "fray_flow_01_queue",
+   "desc": "fray_flow: state scr--queue, heading \"FRAY · STANDARD/Finding a match/0:00\", buttons [CANCEL SEARCH], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 2370553,
+   "tMs": 7152,
+   "load1": 3.64,
+   "layout": {
+    "minFont": {
+     "px": 14,
+     "el": "p.t-body-s.muted.queue__desc \"Ten players, no teams. Pick an\""
+    },
+    "textNodes": 11,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_002_fray_flow_02_queue.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_02_queue",
+   "name": "fray_flow_02_queue",
+   "desc": "fray_flow: state scr--queue, heading \"FRAY · STANDARD/Finding a match/0:02\", buttons [DECLINE | READY | CANCEL SEARCH (disabled)], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 1434945,
+   "tMs": 9691,
+   "load1": 3.91,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "p.t-caption.quiet.ready__note \"Declining or missing the check\""
+    },
+    "textNodes": 17,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_003_fray_flow_03_queue.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_03_queue",
+   "name": "fray_flow_03_queue",
+   "desc": "fray_flow: state scr--queue, heading \"FRAY · STANDARD/Finding a match/0:04\", buttons [CANCEL SEARCH (disabled)], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 912410,
+   "tMs": 10612,
+   "load1": 3.91,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "p.t-caption.quiet.ready__note \"Declining or missing the check\""
+    },
+    "textNodes": 17,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_004_fray_flow_04_none.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_04_none",
+   "name": "fray_flow_04_none",
+   "desc": "fray_flow: state undefined, heading \"\", buttons [], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 955350,
+   "tMs": 12073,
+   "load1": 3.91,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 48,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_005_fray_flow_05_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_05_draft",
+   "name": "fray_flow_05_draft",
+   "desc": "fray_flow: state scr--draft, heading \"Pick your fighter\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN (disabled)], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2068764,
+   "tMs": 13134,
+   "load1": 4.24,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 51,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_006_fray_flow_06_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_06_draft",
+   "name": "fray_flow_06_draft",
+   "desc": "fray_flow: state scr--draft, heading \"Pick your fighter\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2083703,
+   "tMs": 14266,
+   "load1": 4.24,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 51,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_007_fray_flow_07_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_07_draft",
+   "name": "fray_flow_07_draft",
+   "desc": "fray_flow: state scr--draft, heading \"Pick your fighter\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam\nloamy_pip locked  (disabled) | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN (disabled)], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2154970,
+   "tMs": 15959,
+   "load1": 4.24,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 54,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_008_fray_flow_08_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_08_draft",
+   "name": "fray_flow_08_draft",
+   "desc": "fray_flow: state scr--draft, heading \"Pick your fighter\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam\nloamy_pip locked  (disabled) | Dunsom\ntessel_nine locke (disabled) | Ervet | Hesmi | Ilsheta | Kemdo\nquillon_7 locked K (disabled) | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro\nbellringer_lu lock (disabled) | Vashil\nnadir_kai locked  (disabled) | LOCK IN (disabled)], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2189418,
+   "tMs": 17301,
+   "load1": 4.24,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 54,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_009_fray_flow_09_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_09_draft",
+   "name": "fray_flow_09_draft",
+   "desc": "fray_flow: state scr--draft, heading \"Pick your fighter\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam\nloamy_pip locked  (disabled) | Dunsom\ntessel_nine locke (disabled) | Ervet | Hesmi | Ilsheta | Kemdo\nquillon_7 locked K (disabled) | Lisvel | Marund\nbelle_of_noon loc (disabled) | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro\nbellringer_lu lock (disabled) | Vashil\nnadir_kai locked  (disabled) | LOCK IN (disabled)], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2208531,
+   "tMs": 18601,
+   "load1": 4.22,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 56,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_010_fray_flow_10_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_10_draft",
+   "name": "fray_flow_10_draft",
+   "desc": "fray_flow: state scr--draft, heading \"Pick your fighter\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam\nloamy_pip locked  (disabled) | Dunsom\ntessel_nine locke (disabled) | Ervet | Hesmi | Ilsheta | Kemdo\nquillon_7 locked K (disabled) | Lisvel\nnoor_lampwright l (disabled) | Marund\nbelle_of_noon loc (disabled) | Nurrow\nbartholo locked N (disabled) | Odrum | Rishal | Sukri | Tunlan | Ulkro\nbellringer_lu lock (disabled) | Vashil\nnadir_kai locked  (disabled) | LOCK IN (disabled)], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 1535111,
+   "tMs": 19357,
+   "load1": 4.22,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 73,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_011_fray_flow_11_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_11_draft",
+   "name": "fray_flow_11_draft",
+   "desc": "fray_flow: state scr--draft, heading \"Skin and loadout/Ardit/Locked in\", buttons [Base skin\nEquipped | Chalkline Pavise\n600 | First Bell Pavise\n1,500 | D\nSlot 1\nGlint Step | F\nSlot 2\nGlass Pane | D\nGlint Step | Saplight | Hairline | Hourstrike (disabled) | Running Light | Shake Loose (disabled) | F\nGlass Pane | Calling Bell (disabled) | LOCKED IN (disabled)], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2070817,
+   "tMs": 21067,
+   "load1": 4.22,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 75,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_012_fray_flow_12_loading.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_flow_12_loading",
+   "desc": "fray_flow: state scr--loading, heading \"FRAY · STANDARD Noonplate Noonplate · th/Noonplate\", buttons [], 0 selected card(s)",
+   "route": "scr--loading",
+   "hud": false,
+   "crop": null,
+   "bytes": 1307136,
+   "tMs": 22389,
+   "load1": 4.22,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--bot.pcard__bot \"BOT\""
+    },
+    "textNodes": 61,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_013_fray_idle.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_idle",
+   "desc": "fray HUD, match live at the start",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2011064,
+   "tMs": 31722,
+   "load1": 4.11,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 64,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2,
+     "ellipsis-truncated": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_fray_014_fray_idle.png",
+   "viewport": "1366x768",
+   "phase": "hud_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_idle",
+   "desc": "fray HUD, match live at the start",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1093190,
+   "tMs": 32956,
+   "load1": 4.34,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 67,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2,
+     "ellipsis-truncated": 3
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_015_fray_minimap_crop.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_minimap_crop",
+   "desc": "fray minimap region",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 1652,
+    "y": 812,
+    "w": 248,
+    "h": 248
+   },
+   "bytes": 75804,
+   "tMs": 33806,
+   "load1": 4.34,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 74,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2,
+     "ellipsis-truncated": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_fray_016_fray_minimap_crop.png",
+   "viewport": "1366x768",
+   "phase": "hud_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_minimap_crop",
+   "desc": "fray minimap region",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 1150,
+    "y": 552,
+    "w": 202,
+    "h": 202
+   },
+   "bytes": 52790,
+   "tMs": 34698,
+   "load1": 4.34,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 71,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2,
+     "ellipsis-truncated": 3
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_017_fray_scoreboard.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_scoreboard",
+   "desc": "fray scoreboard held",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1715396,
+   "tMs": 36995,
+   "load1": 4.34,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 186,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2,
+     "ellipsis-truncated": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_fray_018_fray_scoreboard.png",
+   "viewport": "1366x768",
+   "phase": "hud_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_scoreboard",
+   "desc": "fray scoreboard held",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 859781,
+   "tMs": 38849,
+   "load1": 4.15,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 187,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2,
+     "ellipsis-truncated": 3
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_019_fray_ping_wheel.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_ping_wheel",
+   "desc": "fray ping wheel (G held)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2044321,
+   "tMs": 41452,
+   "load1": 4.15,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 72,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2,
+     "ellipsis-truncated": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_fray_020_fray_ping_wheel.png",
+   "viewport": "1366x768",
+   "phase": "hud_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_ping_wheel",
+   "desc": "fray ping wheel (G held)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1086522,
+   "tMs": 43528,
+   "load1": 4.06,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 72,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2,
+     "ellipsis-truncated": 3
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_021_fray_shop.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_shop",
+   "desc": "fray shop",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1622127,
+   "tMs": 45785,
+   "load1": 4.06,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 118,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2,
+     "ellipsis-truncated": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_fray_022_fray_shop.png",
+   "viewport": "1366x768",
+   "phase": "hud_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_shop",
+   "desc": "fray shop",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 813370,
+   "tMs": 46705,
+   "load1": 4.06,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 117,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2,
+     "ellipsis-truncated": 3
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_023_fray_fight.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_fight",
+   "desc": "fray first fighter damage (paused, t=16.9)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1968055,
+   "tMs": 48659,
+   "load1": 3.81,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 73,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2,
+     "ellipsis-truncated": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_fray_024_fray_fight.png",
+   "viewport": "1366x768",
+   "phase": "hud_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_fight",
+   "desc": "fray first fighter damage (paused, t=16.9)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1040202,
+   "tMs": 49790,
+   "load1": 3.81,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 71,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2,
+     "ellipsis-truncated": 3
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_025_fray_midgame.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_midgame",
+   "desc": "fray at 200.7s",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2269659,
+   "tMs": 97539,
+   "load1": 3.88,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 79,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2,
+     "ellipsis-truncated": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_fray_026_fray_midgame.png",
+   "viewport": "1366x768",
+   "phase": "hud_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_midgame",
+   "desc": "fray at 200.7s",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1184762,
+   "tMs": 98665,
+   "load1": 3.89,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 79,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2,
+     "ellipsis-truncated": 3
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_fray_027_fray_midgame_scoreboard.png",
+   "viewport": "1920x1080",
+   "phase": "hud_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_midgame_scoreboard",
+   "desc": "fray scoreboard at 200.7s",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1893481,
+   "tMs": 100933,
+   "load1": 3.89,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 194,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2,
+     "ellipsis-truncated": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_fray_028_fray_midgame_scoreboard.png",
+   "viewport": "1366x768",
+   "phase": "hud_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_midgame_scoreboard",
+   "desc": "fray scoreboard at 200.7s",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 939372,
+   "tMs": 102752,
+   "load1": 4.14,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 190,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2,
+     "ellipsis-truncated": 3
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.5 (schema 1) from http://localhost:5232/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/hud_fray_001_fray_flow_01_queue.png",
+   "step": "fray_flow_01_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_002_fray_flow_02_queue.png",
+   "step": "fray_flow_02_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_003_fray_flow_03_queue.png",
+   "step": "fray_flow_03_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_004_fray_flow_04_none.png",
+   "step": "fray_flow_04_none",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_004_fray_flow_04_none.png",
+   "step": "fray_flow_04_none",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 901,
+   "clientH": 896,
+   "scrollW": 1738,
+   "clientW": 1738,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/hud_fray_005_fray_flow_05_draft.png",
+   "step": "fray_flow_05_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_006_fray_flow_06_draft.png",
+   "step": "fray_flow_06_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_007_fray_flow_07_draft.png",
+   "step": "fray_flow_07_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_008_fray_flow_08_draft.png",
+   "step": "fray_flow_08_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_009_fray_flow_09_draft.png",
+   "step": "fray_flow_09_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_010_fray_flow_10_draft.png",
+   "step": "fray_flow_10_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_010_fray_flow_10_draft.png",
+   "step": "fray_flow_10_draft",
+   "kind": "scrollable",
+   "el": "aside.dteam",
+   "scrollH": 800,
+   "clientH": 792,
+   "scrollW": 347,
+   "clientW": 347,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/hud_fray_011_fray_flow_11_draft.png",
+   "step": "fray_flow_11_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_011_fray_flow_11_draft.png",
+   "step": "fray_flow_11_draft",
+   "kind": "scrollable",
+   "el": "aside.dteam",
+   "scrollH": 800,
+   "clientH": 792,
+   "scrollW": 347,
+   "clientW": 347,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/hud_fray_012_fray_flow_12_loading.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_013_fray_idle.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_013_fray_idle.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "noor_lampwright",
+   "scroll": 102,
+   "client": 90,
+   "font": "13px"
+  },
+  {
+   "file": "1920x1080/hud_fray_013_fray_idle.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_fray_014_fray_idle.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_fray_014_fray_idle.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "belle_of_noon",
+   "scroll": 77,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_014_fray_idle.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "candlewick_ro",
+   "scroll": 79,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_014_fray_idle.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "noor_lampwright",
+   "scroll": 94,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_014_fray_idle.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_fray_015_fray_minimap_crop.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_015_fray_minimap_crop.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "noor_lampwright",
+   "scroll": 102,
+   "client": 90,
+   "font": "13px"
+  },
+  {
+   "file": "1920x1080/hud_fray_015_fray_minimap_crop.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_fray_016_fray_minimap_crop.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_fray_016_fray_minimap_crop.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "noor_lampwright",
+   "scroll": 94,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_016_fray_minimap_crop.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "belle_of_noon",
+   "scroll": 77,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_016_fray_minimap_crop.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "candlewick_ro",
+   "scroll": 79,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_016_fray_minimap_crop.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_fray_017_fray_scoreboard.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_017_fray_scoreboard.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "noor_lampwright",
+   "scroll": 102,
+   "client": 90,
+   "font": "13px"
+  },
+  {
+   "file": "1920x1080/hud_fray_017_fray_scoreboard.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_fray_018_fray_scoreboard.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_fray_018_fray_scoreboard.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "candlewick_ro",
+   "scroll": 79,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_018_fray_scoreboard.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "noor_lampwright",
+   "scroll": 94,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_018_fray_scoreboard.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "belle_of_noon",
+   "scroll": 77,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_018_fray_scoreboard.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_fray_019_fray_ping_wheel.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_019_fray_ping_wheel.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "noor_lampwright",
+   "scroll": 102,
+   "client": 90,
+   "font": "13px"
+  },
+  {
+   "file": "1920x1080/hud_fray_019_fray_ping_wheel.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_fray_020_fray_ping_wheel.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_fray_020_fray_ping_wheel.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "candlewick_ro",
+   "scroll": 79,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_020_fray_ping_wheel.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "noor_lampwright",
+   "scroll": 94,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_020_fray_ping_wheel.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "belle_of_noon",
+   "scroll": 77,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_020_fray_ping_wheel.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_fray_021_fray_shop.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_021_fray_shop.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "noor_lampwright",
+   "scroll": 102,
+   "client": 90,
+   "font": "13px"
+  },
+  {
+   "file": "1920x1080/hud_fray_021_fray_shop.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_fray_022_fray_shop.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_fray_022_fray_shop.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "candlewick_ro",
+   "scroll": 79,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_022_fray_shop.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "belle_of_noon",
+   "scroll": 77,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_022_fray_shop.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "noor_lampwright",
+   "scroll": 94,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_022_fray_shop.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_fray_023_fray_fight.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_023_fray_fight.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "noor_lampwright",
+   "scroll": 102,
+   "client": 90,
+   "font": "13px"
+  },
+  {
+   "file": "1920x1080/hud_fray_023_fray_fight.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_fray_024_fray_fight.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_fray_024_fray_fight.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "candlewick_ro",
+   "scroll": 79,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_024_fray_fight.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "belle_of_noon",
+   "scroll": 77,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_024_fray_fight.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "noor_lampwright",
+   "scroll": 94,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_024_fray_fight.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_fray_025_fray_midgame.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_025_fray_midgame.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "noor_lampwright",
+   "scroll": 102,
+   "client": 90,
+   "font": "13px"
+  },
+  {
+   "file": "1920x1080/hud_fray_025_fray_midgame.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_fray_026_fray_midgame.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_fray_026_fray_midgame.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "noor_lampwright",
+   "scroll": 94,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_026_fray_midgame.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "candlewick_ro",
+   "scroll": 79,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_026_fray_midgame.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "belle_of_noon",
+   "scroll": 77,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_026_fray_midgame.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_fray_027_fray_midgame_scoreboard.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_fray_027_fray_midgame_scoreboard.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "noor_lampwright",
+   "scroll": 102,
+   "client": 90,
+   "font": "13px"
+  },
+  {
+   "file": "1920x1080/hud_fray_027_fray_midgame_scoreboard.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_fray_028_fray_midgame_scoreboard.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_fray_028_fray_midgame_scoreboard.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "noor_lampwright",
+   "scroll": 94,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_028_fray_midgame_scoreboard.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "candlewick_ro",
+   "scroll": 79,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_028_fray_midgame_scoreboard.png",
+   "step": "fray_flow_12_loading",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "belle_of_noon",
+   "scroll": 77,
+   "client": 71,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/hud_fray_028_fray_midgame_scoreboard.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
+ "notes": [
+  {
+   "step": "fray_flow_12_loading",
+   "tMs": 25418,
+   "load1": 4.2,
+   "text": "fray: flow to HUD took 19373 ms"
+  }
+ ],
+ "timings": {}
+}

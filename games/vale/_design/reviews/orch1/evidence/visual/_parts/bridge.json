@@ -1,0 +1,260 @@
+{
+ "session": "bridge",
+ "records": [
+  {
+   "file": "map_bridge_t0062_span_west_base.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 63.2,
+   "time": "01:03",
+   "kind": "map",
+   "what": "west base (team 0)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    13,
+    22
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_bridge_t0062_span_west.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 64,
+   "time": "01:04",
+   "kind": "map",
+   "what": "span west quarter",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    40,
+    22
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_bridge_t0062_span_centre.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 64.8,
+   "time": "01:04",
+   "kind": "map",
+   "what": "span centre (snap point)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    78,
+    22
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_bridge_t0062_span_east.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 65.6,
+   "time": "01:05",
+   "kind": "map",
+   "what": "span east quarter",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    116,
+    22
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_bridge_t0062_span_east_base.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 66.4,
+   "time": "01:06",
+   "kind": "map",
+   "what": "east base (team 1)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143,
+    22
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_bridge_t0304_span_west_base.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 304.53,
+   "time": "05:04",
+   "kind": "map",
+   "what": "west base (team 0)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    13,
+    22
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_bridge_t0304_span_west.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 305.33,
+   "time": "05:05",
+   "kind": "map",
+   "what": "span west quarter",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    40,
+    22
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_bridge_t0304_span_centre.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 306.13,
+   "time": "05:06",
+   "kind": "map",
+   "what": "span centre (snap point)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    78,
+    22
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_bridge_t0304_span_east.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 306.93,
+   "time": "05:06",
+   "kind": "map",
+   "what": "span east quarter",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    116,
+    22
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_bridge_t0304_span_east_base.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 307.73,
+   "time": "05:07",
+   "kind": "map",
+   "what": "east base (team 1)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143,
+    22
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_bridge_t0725_span_west_base.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 725.87,
+   "time": "12:05",
+   "kind": "map",
+   "what": "west base (team 0)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    13,
+    22
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_bridge_t0725_span_west.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 726.67,
+   "time": "12:06",
+   "kind": "map",
+   "what": "span west quarter",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    40,
+    22
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_bridge_t0725_span_centre.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 727.47,
+   "time": "12:07",
+   "kind": "map",
+   "what": "span centre (snap point)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    78,
+    22
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_bridge_t0725_span_east.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 728.27,
+   "time": "12:08",
+   "kind": "map",
+   "what": "span east quarter",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    116,
+    22
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_bridge_t0725_span_east_base.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 729.07,
+   "time": "12:09",
+   "kind": "map",
+   "what": "east base (team 1)",
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143,
+    22
+   ],
+   "ended": false
+  }
+ ]
+}

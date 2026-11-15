@@ -413,7 +413,9 @@ async function practice() {
     rec.obs('practice flow to HUD ms', flow.ms);
     await p.waitForFunction(() => !!window.__vale?.state?.match?.value, null, { timeout: 30000 }); await installWatch(rec);
     const send = (cmd) => rec.V((v, c) => v.state.match.value.send(c), cmd);
-    await setScale(rec, 1); await wait(p, 3000);
+    await setScale(rec, 1);
+    await p.waitForFunction(() => window.__vale.state.match.value.view.phase === 'live', null, { timeout: 90000 }).catch(() => rec.obs('practice never went live'));
+    await wait(p, 2500);
     rec.step('practice_hud'); await rec.snap2('practice_hud_idle', 'practice HUD with the practice tools panel');
     rec.obs('practice panel text', await p.evaluate(() => document.querySelector('.ptools')?.innerText?.replace(/\s+/g, ' ').slice(0, 400) ?? null));
     await send({ type: 'practice', action: 'spawnDummy' }); await wait(p, 1200); await rec.snap2('practice_dummy', 'after Spawn dummy');
@@ -423,10 +425,10 @@ async function practice() {
     for (let i = 0; i < 3; i++) { await send({ type: 'practice', action: 'level' }); await wait(p, 200); }
     await wait(p, 600); await rec.snap2('practice_level_pips', 'after four Level actions (ability rank pips / skill points)');
     // real fight with the dummy: find dummy position, teleport next to it, cast
-    const info = await rec.V((v) => { const c = v.state.match.value; const me = c.view.entity(c.view.players[c.you].entity); const d = c.view.entities.find((e) => e.kind === 'fighter' && e.owner !== c.you && e.team !== me.team) ?? c.view.entities.find((e) => e.kind === 'summon'); return { me: [me.x, me.y], d: d ? [d.x, d.y, d.kind] : null, n: c.view.entities.length }; });
+    const info = await rec.V((v) => { const c = v.state.match.value; const me = c.view.entity(c.view.players[c.you].entity); const kinds = {}; for (const e of c.view.entities) kinds[e.kind] = (kinds[e.kind] ?? 0) + 1; const d = c.view.entities.filter((e) => e.kind === 'fighter' && e.id !== me.id).sort((a, b) => ((a.x - me.x) ** 2 + (a.y - me.y) ** 2) - ((b.x - me.x) ** 2 + (b.y - me.y) ** 2))[0]; return { me: [me.x, me.y], d: d ? [d.x, d.y, d.kind, d.id, d.team, me.team] : null, kinds }; });
     rec.obs('practice positions', info);
     if (info.d) { await send({ type: 'practice', action: 'teleport', x: info.d[0] - 3, y: info.d[1] }); await wait(p, 900); }
-    for (const slot of ['a1', 'a2', 'a3', 'ult']) { await rec.V((v, s) => { const c = v.state.match.value; const me = c.view.entity(c.view.players[c.you].entity); const d = c.view.entities.find((e) => e.kind === 'fighter' && e.owner !== c.you && e.team !== me.team); c.send({ type: 'cast', slot: s, x: d?.x ?? me.x + 3, y: d?.y ?? me.y, ...(d ? { target: d.id } : {}) }); }, slot); await wait(p, 250); if (slot === 'a2') await rec.snap2('practice_cast_vfx', 'ability casts in flight at a dummy (live sim)'); }
+    for (const slot of ['a1', 'a2', 'a3', 'ult']) { await rec.V((v, s) => { const c = v.state.match.value; const me = c.view.entity(c.view.players[c.you].entity); const d = c.view.entities.filter((e) => e.kind === 'fighter' && e.id !== me.id).sort((a, b) => ((a.x - me.x) ** 2 + (a.y - me.y) ** 2) - ((b.x - me.x) ** 2 + (b.y - me.y) ** 2))[0]; c.send({ type: 'cast', slot: s, x: d?.x ?? me.x + 3, y: d?.y ?? me.y, ...(d ? { target: d.id } : {}) }); }, slot); await wait(p, 250); if (slot === 'a2') await rec.snap2('practice_cast_vfx', 'ability casts in flight at a dummy (live sim)'); }
     await wait(p, 700); await rec.snap2('practice_damage_meter', 'after casting at the dummy: damage meter in the practice panel');
     await send({ type: 'practice', action: 'heal' }); await send({ type: 'practice', action: 'resetCooldowns' });
     rec.obs('events after fight', (await poll(rec)));
@@ -468,7 +470,36 @@ async function post() {
   }
 }
 
-const parts = { cold, menus, draft, hud, hud2, practice, post };
+
+// ═══ DEAD: autopilot RIFT until the player's fighter dies (recap, respawn line, shop while dead) and a teamfight ═══
+async function dead() {
+  const rec = new Rec('hud_dead'); await rec.open('/?dev=1&autopilot=match&speed=1&seed=11', { base: DEV });
+  const p = rec.page; await homeReady(rec);
+  try {
+    await toMatch(rec, 'rift', 'Lantern Drill', 'rift');
+    await setScale(rec, 8);
+    const got = new Set(); const t0 = Date.now(); let st;
+    while (Date.now() - t0 < 14 * 60 * 1000) {
+      await wait(p, 200); st = await poll(rec); if (!st || st.ended) break;
+      if (st.dead && !got.has('dead')) {
+        got.add('dead'); await setScale(rec, 1); rec.step('dead'); await wait(p, 1700);
+        await rec.snap2('hud_dead_recap', `dead, respawn in ${st.respawnIn?.toFixed?.(1)} s, 1.7 s after the death (sim x1; t=${st.time})`);
+        await wait(p, 1500); await rec.snap2('hud_dead_later', 'dead, 3 s after the death');
+        await p.keyboard.press('KeyP'); await wait(p, 800); await rec.snap2('hud_dead_shop', 'shop opened while dead'); await p.keyboard.press('KeyP'); await wait(p, 400);
+        rec.obs('death', { time: st.time, level: st.level, respawnIn: st.respawnIn });
+        await setScale(rec, 8);
+      }
+      if (st.respawnIn === 0 && got.has('dead') && !got.has('respawn')) { got.add('respawn'); await setScale(rec, 1); await rec.snap2('hud_respawned', 'right after respawning'); await setScale(rec, 8); }
+      if (st.nearFighters >= 5 && st.time > 90 && !got.has('teamfight') && st.evs.some((x) => x.e === 'dmg')) { got.add('teamfight'); await setScale(rec, 0); rec.step('teamfight'); await rec.snap2('hud_teamfight', `${st.nearFighters} fighters within 10 m with damage flowing (sim paused; t=${st.time})`); await setScale(rec, 8); }
+      if (got.has('dead') && got.has('respawn') && got.has('teamfight')) break;
+      if (st.time > 1100 && got.has('dead')) break;
+    }
+    rec.obs('captured', [...got]); rec.obs('last poll', st);
+  } catch (e) { rec.obs('dead run failed: ' + String(e).slice(0, 200)); await rec.snap1('dead_FAILED', 'state at failure').catch(() => {}); }
+  await rec.finish();
+}
+
+const parts = { dead, cold, menus, draft, hud, hud2, practice, post };
 if (!parts[part]) { console.error('part? ' + Object.keys(parts).join(' | ')); process.exit(2); }
 await deadline(part, 70 * 60 * 1000, parts[part]);
 process.exit(0);

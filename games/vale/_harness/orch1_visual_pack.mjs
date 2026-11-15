@@ -135,7 +135,7 @@ async function clashScan() {
 }
 
 // ------------------------------------------------------------------ teamfight (+ quality tiers, colour-blind)
-const FIGHT_T0 = 420, FIGHT_SCAN = 2400;
+const FIGHT_T0 = Number(opt('t0', 720)), FIGHT_SCAN = Number(opt('scan', 4500));
 async function openFight(extra = '') {
   await open({ mode: 'rift', t: FIGHT_T0, extra });
   await B(page, (b) => b.rebuild());                        // the identical match again from T0 (frame 0 of every replay)
@@ -150,7 +150,7 @@ async function scanFight() {
       const v = b.host.view;
       const fs = v.entities.filter((e) => e.kind === 'fighter' && e.alive);
       for (const f of fs) {
-        const near = fs.filter((e) => Math.hypot(e.x - f.x, e.y - f.y) < 10);
+        const near = fs.filter((e) => Math.hypot(e.x - f.x, e.y - f.y) < 12);
         const a = near.filter((e) => e.team === 0).length, c = near.filter((e) => e.team === 1).length;
         if (!a || !c) continue;
         const sc = Math.min(a, c) * 4000 + (s.vfx ?? 0) * 6 + (s.particles ?? 0) + (s.telegraphs ?? 0) * 20;

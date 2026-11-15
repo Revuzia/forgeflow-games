@@ -1,0 +1,1961 @@
+{
+ "phase": "hud_dead",
+ "finishedAt": "2026-11-15T09:42:48.702Z",
+ "env": {
+  "chrome": "157.0.8103.78",
+  "load1End": 3.45,
+  "node": "v22.23.3",
+  "base": "http://localhost:5232",
+  "wallMs": 208242
+ },
+ "steps": [
+  {
+   "file": "1920x1080/hud_dead_001_rift_flow_01_queue.png",
+   "viewport": "1920x1080",
+   "phase": "hud_dead",
+   "step": "rift_flow_01_queue",
+   "name": "rift_flow_01_queue",
+   "desc": "rift_flow: state scr--queue, heading \"RIFT · LANTERN DRILL/Finding a match/0:00\", buttons [CANCEL SEARCH], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 2406329,
+   "tMs": 6204,
+   "load1": 3.93,
+   "layout": {
+    "minFont": {
+     "px": 14,
+     "el": "p.t-body-s.muted.queue__desc \"Your team against five bots th\""
+    },
+    "textNodes": 11,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_dead_002_rift_flow_02_queue.png",
+   "viewport": "1920x1080",
+   "phase": "hud_dead",
+   "step": "rift_flow_02_queue",
+   "name": "rift_flow_02_queue",
+   "desc": "rift_flow: state scr--queue, heading \"RIFT · LANTERN DRILL/Finding a match/0:05\", buttons [DECLINE | READY | CANCEL SEARCH (disabled)], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 925355,
+   "tMs": 11869,
+   "load1": 3.7,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "p.t-caption.quiet.ready__note \"Declining or missing the check\""
+    },
+    "textNodes": 17,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_dead_003_rift_flow_03_queue.png",
+   "viewport": "1920x1080",
+   "phase": "hud_dead",
+   "step": "rift_flow_03_queue",
+   "name": "rift_flow_03_queue",
+   "desc": "rift_flow: state scr--queue, heading \"RIFT · LANTERN DRILL/Finding a match/0:06\", buttons [CANCEL SEARCH (disabled)], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 911459,
+   "tMs": 12623,
+   "load1": 3.7,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "p.t-caption.quiet.ready__note \"Declining or missing the check\""
+    },
+    "textNodes": 17,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_dead_004_rift_flow_04_none.png",
+   "viewport": "1920x1080",
+   "phase": "hud_dead",
+   "step": "rift_flow_04_none",
+   "name": "rift_flow_04_none",
+   "desc": "rift_flow: state undefined, heading \"\", buttons [], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 10056,
+   "tMs": 15171,
+   "load1": 3.7,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.quiet \"No bans.\""
+    },
+    "textNodes": 58,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_dead_005_rift_flow_05_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_dead",
+   "step": "rift_flow_05_draft",
+   "name": "rift_flow_05_draft",
+   "desc": "rift_flow: state scr--draft, heading \"Pick phase/YOUR TEAM/THE OTHER TEAM\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN (disabled)], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2111345,
+   "tMs": 16906,
+   "load1": 3.49,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.quiet \"No bans.\""
+    },
+    "textNodes": 58,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_dead_006_rift_flow_06_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_dead",
+   "step": "rift_flow_06_draft",
+   "name": "rift_flow_06_draft",
+   "desc": "rift_flow: state scr--draft, heading \"Pick phase/YOUR TEAM/Ardit\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2087189,
+   "tMs": 19023,
+   "load1": 3.49,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.sicon__key \"Q\""
+    },
+    "textNodes": 65,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_dead_007_rift_flow_07_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_dead",
+   "step": "rift_flow_07_draft",
+   "name": "rift_flow_07_draft",
+   "desc": "rift_flow: state scr--draft, heading \"Pick phase/YOUR TEAM/Ardit\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow\nruth_afterlight (disabled) | Odrum | Rishal | Sukri\ndunmoor_ash (disabled) | Tunlan | Ulkro | Vashil | LOCK IN (disabled)], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2124019,
+   "tMs": 20914,
+   "load1": 3.49,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.fcard__taken \"ruth_afterlight\""
+    },
+    "textNodes": 64,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_dead_008_rift_flow_08_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_dead",
+   "step": "rift_flow_08_draft",
+   "name": "rift_flow_08_draft",
+   "desc": "rift_flow: state scr--draft, heading \"Pick phase/YOUR TEAM/Ardit\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow\nruth_afterlight (disabled) | Odrum | Rishal\nsorrel_hour (disabled) | Sukri\ndunmoor_ash (disabled) | Tunlan | Ulkro | Vashil | LOCK IN (disabled)], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2107804,
+   "tMs": 22728,
+   "load1": 4.41,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.fcard__taken \"ruth_afterlight\""
+    },
+    "textNodes": 64,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_dead_009_rift_flow_09_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_dead",
+   "step": "rift_flow_09_draft",
+   "name": "rift_flow_09_draft",
+   "desc": "rift_flow: state scr--draft, heading \"Skin and loadout/YOUR TEAM/Ardit\", buttons [ |  |  |  | Base skin\nEquipped | Chalkline Pavise\n600 | First Bell Pavise\n1,500 | HOUR SPELLS\n2/2 | BOONS\n2/2 | D\nSlot 1\nGlint Step | F\nSlot 2\nGlass Pane | D\nGlint Step | Saplight | Hairline | Hourstrike | Running Light | Shake Loose | F\nGlass Pane | Calling Bell | LOCK IN], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2012701,
+   "tMs": 24753,
+   "load1": 4.41,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--ok.chip--ready \"READY\""
+    },
+    "textNodes": 76,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_dead_010_rift_flow_10_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_dead",
+   "step": "rift_flow_10_draft",
+   "name": "rift_flow_10_draft",
+   "desc": "rift_flow: state scr--draft, heading \"Skin and loadout/YOUR TEAM/Ardit\", buttons [ |  |  |  | Base skin\nEquipped | Chalkline Pavise\n600 | First Bell Pavise\n1,500 | HOUR SPELLS\n2/2 | BOONS\n2/2 | D\nSlot 1\nGlint Step | F\nSlot 2\nGlass Pane | D\nGlint Step | Saplight | Hairline | Hourstrike | Running Light | Shake Loose | F\nGlass Pane | Calling Bell | LOCKED IN (disabled)], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2016999,
+   "tMs": 26624,
+   "load1": 4.38,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--ok.chip--ready \"READY\""
+    },
+    "textNodes": 84,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_dead_011_rift_flow_11_loading.png",
+   "viewport": "1920x1080",
+   "phase": "hud_dead",
+   "step": "rift_flow_11_loading",
+   "name": "rift_flow_11_loading",
+   "desc": "rift_flow: state scr--loading, heading \"RIFT · LANTERN DRILL Hourfall Hourfall ·/Hourfall/SERENADE YOUR TEAM\", buttons [], 0 selected card(s)",
+   "route": "scr--loading",
+   "hud": false,
+   "crop": null,
+   "bytes": 2168856,
+   "tMs": 28417,
+   "load1": 4.38,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--bot.pcard__bot \"BOT\""
+    },
+    "textNodes": 55,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_dead_012_rift_flow_12_loading.png",
+   "viewport": "1920x1080",
+   "phase": "hud_dead",
+   "step": "rift_flow_12_loading",
+   "name": "rift_flow_12_loading",
+   "desc": "rift_flow: state scr--loading, heading \"RIFT · LANTERN DRILL Hourfall Hourfall ·/Hourfall/SERENADE YOUR TEAM\", buttons [], 0 selected card(s)",
+   "route": "scr--loading",
+   "hud": false,
+   "crop": null,
+   "bytes": 2321721,
+   "tMs": 29550,
+   "load1": 4.38,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--bot.pcard__bot \"BOT\""
+    },
+    "textNodes": 54,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_dead_013_hud_teamfight.png",
+   "viewport": "1920x1080",
+   "phase": "hud_dead",
+   "step": "teamfight",
+   "name": "hud_teamfight",
+   "desc": "5 fighters within 10 m with damage flowing (sim paused; t=1149.6)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2806038,
+   "tMs": 180608,
+   "load1": 3.5,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 58,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_dead_014_hud_teamfight.png",
+   "viewport": "1366x768",
+   "phase": "hud_dead",
+   "step": "teamfight",
+   "name": "hud_teamfight",
+   "desc": "5 fighters within 10 m with damage flowing (sim paused; t=1149.6)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1476091,
+   "tMs": 181843,
+   "load1": 3.46,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 56,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_dead_015_hud_dead_recap.png",
+   "viewport": "1920x1080",
+   "phase": "hud_dead",
+   "step": "dead",
+   "name": "hud_dead_recap",
+   "desc": "dead, respawn in 37.0 s, 1.7 s after the death (sim x1; t=1256.3)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1678700,
+   "tMs": 198534,
+   "load1": 3.91,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 90,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_dead_016_hud_dead_recap.png",
+   "viewport": "1366x768",
+   "phase": "hud_dead",
+   "step": "dead",
+   "name": "hud_dead_recap",
+   "desc": "dead, respawn in 37.0 s, 1.7 s after the death (sim x1; t=1256.3)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 928816,
+   "tMs": 199628,
+   "load1": 3.91,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 88,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 8
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_dead_017_hud_dead_later.png",
+   "viewport": "1920x1080",
+   "phase": "hud_dead",
+   "step": "dead",
+   "name": "hud_dead_later",
+   "desc": "dead, 3 s after the death",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1608186,
+   "tMs": 202890,
+   "load1": 3.75,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 82,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_dead_018_hud_dead_later.png",
+   "viewport": "1366x768",
+   "phase": "hud_dead",
+   "step": "dead",
+   "name": "hud_dead_later",
+   "desc": "dead, 3 s after the death",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 871968,
+   "tMs": 203993,
+   "load1": 3.75,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 82,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 8
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_dead_019_hud_dead_shop.png",
+   "viewport": "1920x1080",
+   "phase": "hud_dead",
+   "step": "dead",
+   "name": "hud_dead_shop",
+   "desc": "shop opened while dead",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1454538,
+   "tMs": 206317,
+   "load1": 3.75,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 183,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 14,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "viewport": "1366x768",
+   "phase": "hud_dead",
+   "step": "dead",
+   "name": "hud_dead_shop",
+   "desc": "shop opened while dead",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 793656,
+   "tMs": 207286,
+   "load1": 3.45,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 183,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 31,
+     "scrollable": 1
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.5 (schema 1) from http://localhost:5232/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/hud_dead_001_rift_flow_01_queue.png",
+   "step": "rift_flow_01_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_002_rift_flow_02_queue.png",
+   "step": "rift_flow_02_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_003_rift_flow_03_queue.png",
+   "step": "rift_flow_03_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_004_rift_flow_04_none.png",
+   "step": "rift_flow_04_none",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_005_rift_flow_05_draft.png",
+   "step": "rift_flow_05_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_006_rift_flow_06_draft.png",
+   "step": "rift_flow_06_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_007_rift_flow_07_draft.png",
+   "step": "rift_flow_07_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_008_rift_flow_08_draft.png",
+   "step": "rift_flow_08_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_009_rift_flow_09_draft.png",
+   "step": "rift_flow_09_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_010_rift_flow_10_draft.png",
+   "step": "rift_flow_10_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_011_rift_flow_11_loading.png",
+   "step": "rift_flow_11_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_012_rift_flow_12_loading.png",
+   "step": "rift_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_013_hud_teamfight.png",
+   "step": "teamfight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_013_hud_teamfight.png",
+   "step": "teamfight",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "14",
+   "rect": [
+    648,
+    1058,
+    680,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_dead_014_hud_teamfight.png",
+   "step": "teamfight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_014_hud_teamfight.png",
+   "step": "teamfight",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "14",
+   "rect": [
+    433,
+    750,
+    459,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_dead_015_hud_dead_recap.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_015_hud_dead_recap.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "14",
+   "rect": [
+    648,
+    1058,
+    680,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_dead_016_hud_dead_recap.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_016_hud_dead_recap.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "14",
+   "rect": [
+    433,
+    750,
+    459,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_016_hud_dead_recap.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-label.num",
+   "text": "TOTAL 3,218",
+   "rect": [
+    246,
+    780,
+    338,
+    796
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_016_hud_dead_recap.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dchip.dchip--phys.num",
+   "text": "Physical 2,657",
+   "rect": [
+    246,
+    802,
+    349,
+    822
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_016_hud_dead_recap.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dchip.dchip--magic.num",
+   "text": "Magic 471",
+   "rect": [
+    353,
+    802,
+    424,
+    822
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_016_hud_dead_recap.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dchip.dchip--true.num",
+   "text": "Piercing 90",
+   "rect": [
+    428,
+    802,
+    512,
+    822
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_016_hud_dead_recap.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "p.t-body-s.recap__held.num",
+   "text": "Held for 1.8 s of the last 15 s.",
+   "rect": [
+    246,
+    828,
+    512,
+    846
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_016_hud_dead_recap.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "p.t-body-s.recap__tip",
+   "text": "Most of that was physical damage. Armor shrinks it.",
+   "rect": [
+    246,
+    852,
+    512,
+    886
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_dead_017_hud_dead_later.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_017_hud_dead_later.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "14",
+   "rect": [
+    648,
+    1058,
+    680,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_dead_018_hud_dead_later.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_018_hud_dead_later.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "14",
+   "rect": [
+    433,
+    750,
+    459,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_018_hud_dead_later.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-label.num",
+   "text": "TOTAL 3,218",
+   "rect": [
+    246,
+    780,
+    338,
+    796
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_018_hud_dead_later.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dchip.dchip--phys.num",
+   "text": "Physical 2,657",
+   "rect": [
+    246,
+    802,
+    349,
+    822
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_018_hud_dead_later.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dchip.dchip--magic.num",
+   "text": "Magic 471",
+   "rect": [
+    353,
+    802,
+    424,
+    822
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_018_hud_dead_later.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dchip.dchip--true.num",
+   "text": "Piercing 90",
+   "rect": [
+    428,
+    802,
+    512,
+    822
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_018_hud_dead_later.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "p.t-body-s.recap__held.num",
+   "text": "Held for 1.8 s of the last 15 s.",
+   "rect": [
+    246,
+    828,
+    512,
+    846
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_018_hud_dead_later.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "p.t-body-s.recap__tip",
+   "text": "Most of that was physical damage. Armor shrinks it.",
+   "rect": [
+    246,
+    852,
+    512,
+    886
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_dead_019_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_019_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "14",
+   "rect": [
+    648,
+    1058,
+    680,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_019_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "scrollable",
+   "el": "div.lshop__grid",
+   "scrollH": 1144,
+   "clientH": 643,
+   "scrollW": 650,
+   "clientW": 650,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/hud_dead_019_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "h3.lshop__sech.t-label",
+   "text": "APEX",
+   "rect": [
+    564,
+    1075,
+    1186,
+    1095
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_019_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,300",
+   "rect": [
+    571,
+    1153,
+    613,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_019_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,400",
+   "rect": [
+    635,
+    1153,
+    677,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_019_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    699,
+    1153,
+    741,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_019_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    763,
+    1153,
+    805,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_019_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    827,
+    1153,
+    869,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_019_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    891,
+    1153,
+    933,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_019_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    955,
+    1153,
+    997,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_019_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    1019,
+    1153,
+    1061,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_019_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    1083,
+    1153,
+    1125,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_019_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    571,
+    1233,
+    613,
+    1253
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_dead_019_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,800",
+   "rect": [
+    635,
+    1233,
+    677,
+    1253
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "14",
+   "rect": [
+    433,
+    750,
+    459,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "scrollable",
+   "el": "div.lshop__grid",
+   "scrollH": 915,
+   "clientH": 514,
+   "scrollW": 520,
+   "clientW": 520,
+   "top": 0
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,100",
+   "rect": [
+    370,
+    767,
+    408,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,150",
+   "rect": [
+    421,
+    767,
+    459,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,150",
+   "rect": [
+    472,
+    767,
+    510,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,150",
+   "rect": [
+    523,
+    767,
+    561,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,150",
+   "rect": [
+    574,
+    767,
+    612,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,250",
+   "rect": [
+    626,
+    767,
+    663,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,250",
+   "rect": [
+    677,
+    767,
+    715,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,250",
+   "rect": [
+    728,
+    767,
+    766,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,250",
+   "rect": [
+    779,
+    767,
+    817,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,250",
+   "rect": [
+    370,
+    831,
+    408,
+    849
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,300",
+   "rect": [
+    421,
+    831,
+    459,
+    849
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "h3.lshop__sech.t-label",
+   "text": "APEX",
+   "rect": [
+    366,
+    861,
+    864,
+    877
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,300",
+   "rect": [
+    370,
+    921,
+    408,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,400",
+   "rect": [
+    421,
+    921,
+    459,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    472,
+    921,
+    510,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    523,
+    921,
+    561,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    574,
+    921,
+    612,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    626,
+    921,
+    663,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    677,
+    921,
+    715,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    728,
+    921,
+    766,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    779,
+    921,
+    817,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    370,
+    985,
+    408,
+    1003
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,800",
+   "rect": [
+    421,
+    985,
+    459,
+    1003
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-label.num",
+   "text": "TOTAL 3,218",
+   "rect": [
+    246,
+    780,
+    338,
+    796
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dchip.dchip--phys.num",
+   "text": "Physical 2,657",
+   "rect": [
+    246,
+    802,
+    349,
+    822
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dchip.dchip--magic.num",
+   "text": "Magic 471",
+   "rect": [
+    353,
+    802,
+    424,
+    822
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dchip.dchip--true.num",
+   "text": "Piercing 90",
+   "rect": [
+    428,
+    802,
+    512,
+    822
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "p.t-body-s.recap__held.num",
+   "text": "Held for 1.8 s of the last 15 s.",
+   "rect": [
+    246,
+    828,
+    512,
+    846
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_dead_020_hud_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "p.t-body-s.recap__tip",
+   "text": "Most of that was physical damage. Armor shrinks it.",
+   "rect": [
+    246,
+    852,
+    512,
+    886
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
+ "notes": [
+  {
+   "step": "rift_flow_12_loading",
+   "tMs": 31795,
+   "load1": 4.43,
+   "text": "rift: flow to HUD took 26186 ms"
+  },
+  {
+   "step": "dead",
+   "tMs": 208241,
+   "load1": 3.45,
+   "text": "death",
+   "data": {
+    "time": 1256.3,
+    "level": 14,
+    "respawnIn": 37.03333333333353
+   }
+  },
+  {
+   "step": "dead",
+   "tMs": 208242,
+   "load1": 3.45,
+   "text": "captured",
+   "data": [
+    "teamfight",
+    "dead"
+   ]
+  },
+  {
+   "step": "dead",
+   "tMs": 208242,
+   "load1": 3.45,
+   "text": "last poll",
+   "data": {
+    "phase": "live",
+    "time": 1256.3,
+    "scale": 8,
+    "level": 14,
+    "dead": true,
+    "respawnIn": 37.03333333333353,
+    "gold": 492,
+    "items": 4,
+    "skill": 0,
+    "nearFighters": 5,
+    "ended": false,
+    "evs": [
+     {
+      "e": "dmg",
+      "t": 1255.0666666666666,
+      "other": "fighter",
+      "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 1255.0666666666666,
+      "other": "fighter",
+      "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 1255.5,
+      "other": "fighter",
+      "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 1255.9,
+      "other": "fighter",
+      "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 1256.1666666666667,
+      "other": "fighter",
+      "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 1256.1666666666667,
+      "other": "fighter",
+      "dir": "in"
+     },
+     {
+      "e": "died",
+      "t": 1256.1666666666667
+     },
+     {
+      "e": "takedown",
+      "t": 1256.1666666666667,
+      "mine": "death"
+     }
+    ]
+   }
+  }
+ ],
+ "timings": {}
+}

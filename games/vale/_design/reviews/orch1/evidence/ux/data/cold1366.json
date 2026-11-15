@@ -1,0 +1,2211 @@
+{
+ "phase": "cold1366",
+ "finishedAt": "2026-11-15T09:37:56.216Z",
+ "env": {
+  "chrome": "157.0.8103.78",
+  "load1End": 3,
+  "node": "v22.23.3",
+  "base": "http://localhost:5231",
+  "wallMs": 68947
+ },
+ "steps": [
+  {
+   "file": "1366x768/cold1366_001_boot_01.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "boot",
+   "name": "boot_01",
+   "desc": "cold load, 25 ms after navigation commit",
+   "route": "scr--home",
+   "hud": false,
+   "crop": null,
+   "bytes": 123145,
+   "tMs": 745,
+   "load1": 3.81,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--line.num \"LV 1\""
+    },
+    "textNodes": 13,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_002_home_first_paint.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "home",
+   "name": "home_first_paint",
+   "desc": "Home just after it appears on a cold load (fresh profile, empty cache)",
+   "route": "scr--home",
+   "hud": false,
+   "crop": null,
+   "bytes": 1268052,
+   "tMs": 1710,
+   "load1": 3.81,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 36,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_003_home_settled.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "home_settled",
+   "name": "home_settled",
+   "desc": "Home 5 s after first paint (after the first-run video calibration window)",
+   "route": "scr--home",
+   "hud": false,
+   "crop": null,
+   "bytes": 1267924,
+   "tMs": 6438,
+   "load1": 3.67,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 36,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_004_play_first_visit.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "first_flow",
+   "name": "play_first_visit",
+   "desc": "Play on first visit (fresh profile, default selection)",
+   "route": "scr--play",
+   "hud": false,
+   "crop": null,
+   "bytes": 1272314,
+   "tMs": 9562,
+   "load1": 3.61,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 67,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 7,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_005_play_rift_coop.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "first_flow",
+   "name": "play_rift_coop",
+   "desc": "Play: RIFT, Lantern Drill (co-op) selected",
+   "route": "scr--play",
+   "hud": false,
+   "crop": null,
+   "bytes": 1259736,
+   "tMs": 10768,
+   "load1": 3.61,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 67,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 7,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_006_cold_flow_01_queue.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "cold_flow_01_queue",
+   "name": "cold_flow_01_queue",
+   "desc": "cold_flow: state scr--queue, heading \"RIFT · LANTERN DRILL/Finding a match/0:00\", buttons [CANCEL SEARCH], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 1265792,
+   "tMs": 11118,
+   "load1": 3.61,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 11,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_007_cold_flow_02_queue.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "cold_flow_02_queue",
+   "name": "cold_flow_02_queue",
+   "desc": "cold_flow: state scr--queue, heading \"RIFT · LANTERN DRILL/Finding a match/0:04\", buttons [DECLINE | READY | CANCEL SEARCH (disabled)], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 887090,
+   "tMs": 15259,
+   "load1": 3.56,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 17,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_008_cold_flow_03_queue.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "cold_flow_03_queue",
+   "name": "cold_flow_03_queue",
+   "desc": "cold_flow: state scr--queue, heading \"RIFT · LANTERN DRILL/Finding a match/0:04\", buttons [CANCEL SEARCH (disabled)], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 495532,
+   "tMs": 15869,
+   "load1": 3.56,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 17,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_009_cold_flow_04_none.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "cold_flow_04_none",
+   "name": "cold_flow_04_none",
+   "desc": "cold_flow: state undefined, heading \"\", buttons [], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 391876,
+   "tMs": 18350,
+   "load1": 3.56,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 34,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_010_cold_flow_05_draft.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "cold_flow_05_draft",
+   "name": "cold_flow_05_draft",
+   "desc": "cold_flow: state scr--draft, heading \"Pick phase/YOUR TEAM/THE OTHER TEAM\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN (disabled)], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 1109633,
+   "tMs": 19111,
+   "load1": 3.56,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 58,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_011_cold_flow_06_draft.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "cold_flow_06_draft",
+   "name": "cold_flow_06_draft",
+   "desc": "cold_flow: state scr--draft, heading \"Pick phase/YOUR TEAM/Ardit\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 1109923,
+   "tMs": 19897,
+   "load1": 3.52,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 68,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_012_cold_flow_07_draft.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "cold_flow_07_draft",
+   "name": "cold_flow_07_draft",
+   "desc": "cold_flow: state scr--draft, heading \"Pick phase/YOUR TEAM/Ardit\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN (disabled)], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 1150453,
+   "tMs": 20911,
+   "load1": 3.52,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 66,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_013_cold_flow_08_draft.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "cold_flow_08_draft",
+   "name": "cold_flow_08_draft",
+   "desc": "cold_flow: state scr--draft, heading \"Pick phase/YOUR TEAM/Ardit\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet\nsable_hourly (disabled) | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN (disabled)], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 1138306,
+   "tMs": 23622,
+   "load1": 3.52,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 62,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_014_cold_flow_09_draft.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "cold_flow_09_draft",
+   "name": "cold_flow_09_draft",
+   "desc": "cold_flow: state scr--draft, heading \"Skin and loadout/YOUR TEAM/Ardit\", buttons [ |  |  |  | Base skin\nEquipped | Chalkline Pavise\n600 | First Bell Pavise\n1,500 | HOUR SPELLS\n2/2 | BOONS\n2/2 | D\nSlot 1\nGlint Step | F\nSlot 2\nGlass Pane | D\nGlint Step | Saplight | Hairline | Hourstrike | Running Light | Shake Loose | F\nGlass Pane | Calling Bell | LOCK IN], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 1113376,
+   "tMs": 25037,
+   "load1": 3.48,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 72,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_015_cold_flow_10_draft.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "cold_flow_10_draft",
+   "name": "cold_flow_10_draft",
+   "desc": "cold_flow: state scr--draft, heading \"Skin and loadout/YOUR TEAM/Ardit\", buttons [ |  |  |  | Base skin\nEquipped | Chalkline Pavise\n600 | First Bell Pavise\n1,500 | HOUR SPELLS\n2/2 | BOONS\n2/2 | D\nSlot 1\nGlint Step | F\nSlot 2\nGlass Pane | D\nGlint Step | Saplight | Hairline | Hourstrike | Running Light | Shake Loose | F\nGlass Pane | Calling Bell | LOCKED IN (disabled)], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 1117245,
+   "tMs": 26044,
+   "load1": 3.48,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 80,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_016_cold_flow_11_loading.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "cold_flow_11_loading",
+   "name": "cold_flow_11_loading",
+   "desc": "cold_flow: state scr--loading, heading \"RIFT · LANTERN DRILL Hourfall Hourfall ·/Hourfall/SERENADE YOUR TEAM\", buttons [], 0 selected card(s)",
+   "route": "scr--loading",
+   "hud": false,
+   "crop": null,
+   "bytes": 81502,
+   "tMs": 27549,
+   "load1": 3.48,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 20,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_017_cold_flow_12_loading.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "cold_flow_12_loading",
+   "name": "cold_flow_12_loading",
+   "desc": "cold_flow: state scr--loading, heading \"RIFT · LANTERN DRILL Hourfall Hourfall ·/Hourfall/SERENADE YOUR TEAM\", buttons [], 0 selected card(s)",
+   "route": "scr--loading",
+   "hud": false,
+   "crop": null,
+   "bytes": 1291335,
+   "tMs": 28486,
+   "load1": 3.48,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 55,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_018_cold_flow_13_loading.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "cold_flow_13_loading",
+   "name": "cold_flow_13_loading",
+   "desc": "cold_flow: state scr--loading, heading \"RIFT · LANTERN DRILL Hourfall Hourfall ·/Hourfall/SERENADE YOUR TEAM\", buttons [], 0 selected card(s)",
+   "route": "scr--loading",
+   "hud": false,
+   "crop": null,
+   "bytes": 1292122,
+   "tMs": 29416,
+   "load1": 3.48,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 55,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_019_cold_flow_14_match.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "cold_flow_14_match",
+   "name": "cold_flow_14_match",
+   "desc": "cold_flow: state scr--match, heading \"HOURFALL The match begins in 0:30 MENU E\", buttons [MENU\nESC], 0 selected card(s)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1396958,
+   "tMs": 30964,
+   "load1": 3.28,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 43,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_020_first_match_frame_0.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "first_match",
+   "name": "first_match_frame_0",
+   "desc": "first frame with the HUD in the DOM (prod, fresh profile, no autopilot)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1429290,
+   "tMs": 31672,
+   "load1": 3.28,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 44,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_021_first_match_frame_3s.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "first_match",
+   "name": "first_match_frame_3s",
+   "desc": "3 s after the HUD appeared",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1429147,
+   "tMs": 34480,
+   "load1": 3.28,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 44,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_022_first_match_hint_1.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "first_match",
+   "name": "first_match_hint_1",
+   "desc": "8 s into the match: first-match hint lines (if any)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1428866,
+   "tMs": 39779,
+   "load1": 3.3,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 43,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_023_first_match_hint_2.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "first_match",
+   "name": "first_match_hint_2",
+   "desc": "16 s into the match",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1428986,
+   "tMs": 48080,
+   "load1": 3.36,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 43,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_024_first_match_hint_3.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "first_match",
+   "name": "first_match_hint_3",
+   "desc": "24 s into the match",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1429302,
+   "tMs": 56421,
+   "load1": 3.46,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 43,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_025_first_match_hint_4.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "first_match",
+   "name": "first_match_hint_4",
+   "desc": "32 s into the match",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1406257,
+   "tMs": 64693,
+   "load1": 3,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 43,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_026_first_match_after_move_click.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "first_match_input",
+   "name": "first_match_after_move_click",
+   "desc": "after one right-click on the ground",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1340462,
+   "tMs": 66176,
+   "load1": 3,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 43,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_027_first_match_ability_tooltip.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "first_match_input",
+   "name": "first_match_ability_tooltip",
+   "desc": "hovering the first ability slot",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1307878,
+   "tMs": 67194,
+   "load1": 3,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 63,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_028_first_match_after_Q.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "first_match_input",
+   "name": "first_match_after_Q",
+   "desc": "after pressing Q with the cursor on the ground",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1340810,
+   "tMs": 67993,
+   "load1": 3,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 44,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/cold1366_029_first_match_esc_menu.png",
+   "viewport": "1366x768",
+   "phase": "cold1366",
+   "step": "first_match_input",
+   "name": "first_match_esc_menu",
+   "desc": "Esc in the match: the in-match menu",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 727001,
+   "tMs": 68946,
+   "load1": 3,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 46,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 0
+ },
+ "infoSample": [
+  "[vale] catalog 2026.11.5 (schema 1) from http://localhost:5231/catalog/manifest.json"
+ ],
+ "layout": [
+  {
+   "file": "1366x768/cold1366_001_boot_01.png",
+   "step": "boot",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_001_boot_01.png",
+   "step": "boot",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade",
+   "scrollH": 644,
+   "clientH": 584,
+   "scrollW": 862,
+   "clientW": 862,
+   "top": 0
+  },
+  {
+   "file": "1366x768/cold1366_002_home_first_paint.png",
+   "step": "home",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_003_home_settled.png",
+   "step": "home_settled",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_004_play_first_visit.png",
+   "step": "first_flow",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_004_play_first_visit.png",
+   "step": "first_flow",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 695,
+   "clientH": 565,
+   "scrollW": 692,
+   "clientW": 692,
+   "top": 0
+  },
+  {
+   "file": "1366x768/cold1366_004_play_first_visit.png",
+   "step": "first_flow",
+   "kind": "outside-scroll-ancestor",
+   "el": "h2.t-h2.sect__title",
+   "text": "PARTY",
+   "rect": [
+    68,
+    751,
+    114,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_004_play_first_visit.png",
+   "step": "first_flow",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body-s.sect__hint",
+   "text": "Fill open seats with bots, or play with the seats open.",
+   "rect": [
+    124,
+    753,
+    409,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_004_play_first_visit.png",
+   "step": "first_flow",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body-s",
+   "text": "Player 4872",
+   "rect": [
+    97,
+    784,
+    161,
+    801
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_004_play_first_visit.png",
+   "step": "first_flow",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.chip.chip--line",
+   "text": "YOU",
+   "rect": [
+    167,
+    783,
+    205,
+    802
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_004_play_first_visit.png",
+   "step": "first_flow",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-label.muted",
+   "text": "BOT ALLIES",
+   "rect": [
+    595,
+    785,
+    661,
+    801
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_004_play_first_visit.png",
+   "step": "first_flow",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.num.stepper__n",
+   "text": "0",
+   "rect": [
+    700,
+    782,
+    718,
+    803
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_005_play_rift_coop.png",
+   "step": "first_flow",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_005_play_rift_coop.png",
+   "step": "first_flow",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 695,
+   "clientH": 565,
+   "scrollW": 692,
+   "clientW": 692,
+   "top": 0
+  },
+  {
+   "file": "1366x768/cold1366_005_play_rift_coop.png",
+   "step": "first_flow",
+   "kind": "outside-scroll-ancestor",
+   "el": "h2.t-h2.sect__title",
+   "text": "PARTY",
+   "rect": [
+    68,
+    751,
+    114,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_005_play_rift_coop.png",
+   "step": "first_flow",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body-s.sect__hint",
+   "text": "Fill open seats with bots, or play with the seats open.",
+   "rect": [
+    124,
+    753,
+    409,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_005_play_rift_coop.png",
+   "step": "first_flow",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body-s",
+   "text": "Player 4872",
+   "rect": [
+    97,
+    784,
+    161,
+    801
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_005_play_rift_coop.png",
+   "step": "first_flow",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.chip.chip--line",
+   "text": "YOU",
+   "rect": [
+    167,
+    783,
+    205,
+    802
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_005_play_rift_coop.png",
+   "step": "first_flow",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-label.muted",
+   "text": "BOT ALLIES",
+   "rect": [
+    595,
+    785,
+    661,
+    801
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_005_play_rift_coop.png",
+   "step": "first_flow",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.num.stepper__n",
+   "text": "0",
+   "rect": [
+    700,
+    782,
+    718,
+    803
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_006_cold_flow_01_queue.png",
+   "step": "cold_flow_01_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_007_cold_flow_02_queue.png",
+   "step": "cold_flow_02_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_008_cold_flow_03_queue.png",
+   "step": "cold_flow_03_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_009_cold_flow_04_none.png",
+   "step": "cold_flow_04_none",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_010_cold_flow_05_draft.png",
+   "step": "cold_flow_05_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_011_cold_flow_06_draft.png",
+   "step": "cold_flow_06_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_012_cold_flow_07_draft.png",
+   "step": "cold_flow_07_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_013_cold_flow_08_draft.png",
+   "step": "cold_flow_08_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_014_cold_flow_09_draft.png",
+   "step": "cold_flow_09_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_015_cold_flow_10_draft.png",
+   "step": "cold_flow_10_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_016_cold_flow_11_loading.png",
+   "step": "cold_flow_11_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_017_cold_flow_12_loading.png",
+   "step": "cold_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_018_cold_flow_13_loading.png",
+   "step": "cold_flow_13_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_019_cold_flow_14_match.png",
+   "step": "cold_flow_14_match",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_019_cold_flow_14_match.png",
+   "step": "cold_flow_14_match",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_020_first_match_frame_0.png",
+   "step": "first_match",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_020_first_match_frame_0.png",
+   "step": "first_match",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_021_first_match_frame_3s.png",
+   "step": "first_match",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_021_first_match_frame_3s.png",
+   "step": "first_match",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_022_first_match_hint_1.png",
+   "step": "first_match",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_022_first_match_hint_1.png",
+   "step": "first_match",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_023_first_match_hint_2.png",
+   "step": "first_match",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_023_first_match_hint_2.png",
+   "step": "first_match",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_024_first_match_hint_3.png",
+   "step": "first_match",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_024_first_match_hint_3.png",
+   "step": "first_match",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_025_first_match_hint_4.png",
+   "step": "first_match",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_025_first_match_hint_4.png",
+   "step": "first_match",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_026_first_match_after_move_click.png",
+   "step": "first_match_input",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_026_first_match_after_move_click.png",
+   "step": "first_match_input",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_027_first_match_ability_tooltip.png",
+   "step": "first_match_input",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_027_first_match_ability_tooltip.png",
+   "step": "first_match_input",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_028_first_match_after_Q.png",
+   "step": "first_match_input",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_028_first_match_after_Q.png",
+   "step": "first_match_input",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_029_first_match_esc_menu.png",
+   "step": "first_match_input",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/cold1366_029_first_match_esc_menu.png",
+   "step": "first_match_input",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
+ "notes": [
+  {
+   "step": "home",
+   "tMs": 1711,
+   "load1": 3.81,
+   "text": "home inventory on first load",
+   "data": {
+    "dialogs": 0,
+    "toasts": 0,
+    "nav": [
+     "HOME",
+     "PLAY",
+     "COLLECTION",
+     "SHOP",
+     "PROFILE",
+     "SETTINGS"
+    ],
+    "buttons": [
+     "FIND A MATCH",
+     "RANKED SEASON Opens at account level 20.",
+     "SKINS IN THE SHOP Spend the Candles you ",
+     "SPARRING PRACTICE Any fighter, the full ",
+     "YOUR COLLECTION Every fighter is free. S",
+     "PLAY FRAY"
+    ],
+    "canvases": 1,
+    "fonts": "10/23",
+    "title": "VALE",
+    "lang": "en",
+    "storage": [
+     "vale.profile.v1"
+    ]
+   }
+  },
+  {
+   "step": "home_settled",
+   "tMs": 6440,
+   "load1": 3.67,
+   "text": "video settings after first-run calibration",
+   "data": {
+    "preset": "high",
+    "renderScale": 1,
+    "shadows": 2,
+    "ao": 1,
+    "bloom": true,
+    "antialias": "smaa",
+    "particles": 2,
+    "scatter": 2,
+    "fpsCap": 0,
+    "maxDpr": 1,
+    "fullscreen": false,
+    "ambientEffects": true,
+    "dynamicResolution": true
+   }
+  },
+  {
+   "step": "first_flow",
+   "tMs": 9563,
+   "load1": 3.61,
+   "text": "Play: stations and queue cards on first visit",
+   "data": {
+    "modes": [
+     "RIFT",
+     "BRIDGE",
+     "FRAY",
+     "The uncarved hour"
+    ],
+    "queues": [
+     "QUICK QUICK Win: 100 Candles · Loss: 70 Candles",
+     "DRAFT STANDARD Reach level 3 to play Draft.",
+     "RANKED ? RANKED Reach level 20 to play Ranked.",
+     "LANTERN DRILL CO-OP Win: 80 Candles · Loss: 60 Candles"
+    ]
+   }
+  },
+  {
+   "step": "first_match",
+   "tMs": 64695,
+   "load1": 3,
+   "text": "hud feed/hint text lines at 32 s",
+   "data": [
+    "Right-click the ground to move."
+   ]
+  },
+  {
+   "step": "first_match_input",
+   "tMs": 67194,
+   "load1": 3,
+   "text": "tooltip text on ability hover",
+   "data": [
+    "LANCING RUN Q Ability 1 · Rank 0 of 5 Cooldown 14 s Cost 60 Light Range 7 m Ardit runs up to 7 m behind the pavise and stops at the first enemy fighter he meets. They take 70 (+50% Power, +3% bonus Health) magic damage and are knocked airborne for 0.75 s. Hold Shift for every rank. Level up · Ctrl +"
+   ]
+  }
+ ],
+ "timings": {
+  "load1_start": 3.81,
+  "t_commit_ms": 12,
+  "cold": {
+   "nodeSideToHomeMs": 503,
+   "marks": {
+    "longtasks": [
+     [
+      103,
+      73
+     ],
+     [
+      178,
+      76
+     ],
+     [
+      297,
+      55
+     ]
+    ],
+    "canvas": 15,
+    "fcp": 77,
+    "lcp": 432,
+    "lcp_el": "SECTION.hband plate stg",
+    "home_screen": 268,
+    "nav": 268,
+    "now": 500
+   },
+   "resourcesAtHome": {
+    "count": 28,
+    "transferBytes": 5790250,
+    "encodedBytes": 5781850,
+    "decodedBytes": 7433007,
+    "byExt": {
+     "js": 8,
+     "css": 1,
+     "json": 2,
+     "woff2": 8,
+     "hdr": 1,
+     "cube": 1,
+     "webp": 6,
+     "svg": 1
+    },
+    "largest": [
+     [
+      "/catalog/assets/e056aa49908d-sky.hdr",
+      1687306,
+      182
+     ],
+     [
+      "/catalog/schema-1/2026.11.5/catalog.json",
+      1171815,
+      58
+     ],
+     [
+      "/catalog/assets/d4bc69852f5a-vale_grade_01.cube",
+      970651,
+      181
+     ],
+     [
+      "/catalog/assets/77b3b1f4a83d-seat_center.webp",
+      328330,
+      179
+     ],
+     [
+      "/catalog/assets/9e8ec9466567-store_banner.webp",
+      230538,
+      270
+     ],
+     [
+      "/assets/render-BFDTUnc9.js",
+      212910,
+      100
+     ],
+     [
+      "/assets/index-F4AWHnNK.js",
+      185497,
+      31
+     ],
+     [
+      "/assets/vendor-three-D3oU4niC.js",
+      178846,
+      97
+     ]
+    ]
+   },
+   "frameStatsToHome": {
+    "frames": 9,
+    "windowMs": 268,
+    "avgFps": 32,
+    "p50ms": 16.7,
+    "p95ms": 133.3,
+    "maxMs": 133.3,
+    "over33ms": 1,
+    "over50ms": 1
+   },
+   "marksSettled": {
+    "longtasks": [
+     [
+      103,
+      73
+     ],
+     [
+      178,
+      76
+     ],
+     [
+      297,
+      55
+     ]
+    ],
+    "canvas": 15,
+    "fcp": 77,
+    "lcp": 580,
+    "lcp_el": "IMG.aimg is-ok ",
+    "home_screen": 268,
+    "nav": 268,
+    "now": 6061
+   },
+   "frameStatsHomeIdle5s": {
+    "frames": 342,
+    "windowMs": 5793,
+    "avgFps": 59.3,
+    "p50ms": 16.7,
+    "p95ms": 16.7,
+    "maxMs": 83.4,
+    "over33ms": 1,
+    "over50ms": 1
+   }
+  },
+  "warm": {
+   "nodeSideToHomeMs": 301,
+   "marks": {
+    "longtasks": [
+     [
+      72,
+      50
+     ],
+     [
+      123,
+      55
+     ]
+    ],
+    "canvas": 12,
+    "fcp": 65,
+    "lcp": 48,
+    "lcp_el": "SPAN.bar__brand",
+    "home_screen": 216,
+    "nav": 216,
+    "now": 299
+   },
+   "resources": {
+    "count": 28,
+    "transferBytes": 5790250,
+    "encodedBytes": 5781850,
+    "decodedBytes": 7433007,
+    "byExt": {
+     "js": 8,
+     "css": 1,
+     "json": 2,
+     "woff2": 8,
+     "hdr": 1,
+     "webp": 6,
+     "cube": 1,
+     "svg": 1
+    },
+    "largest": [
+     [
+      "/catalog/assets/e056aa49908d-sky.hdr",
+      1687306,
+      126
+     ],
+     [
+      "/catalog/schema-1/2026.11.5/catalog.json",
+      1171815,
+      35
+     ],
+     [
+      "/catalog/assets/d4bc69852f5a-vale_grade_01.cube",
+      970651,
+      125
+     ],
+     [
+      "/catalog/assets/77b3b1f4a83d-seat_center.webp",
+      328330,
+      122
+     ],
+     [
+      "/catalog/assets/9e8ec9466567-store_banner.webp",
+      230538,
+      212
+     ],
+     [
+      "/assets/render-BFDTUnc9.js",
+      212910,
+      70
+     ],
+     [
+      "/assets/index-F4AWHnNK.js",
+      185497,
+      27
+     ],
+     [
+      "/assets/vendor-three-D3oU4niC.js",
+      178846,
+      67
+     ]
+    ]
+   },
+   "loadAvg": 3.67
+  },
+  "t_play_click_to_screen_ms": 1004,
+  "match": {
+   "findClickToHudNodeMs": 20553,
+   "flowLoopMs": 20472,
+   "findClickAtPageMs": 4326,
+   "marks": {
+    "longtasks": [
+     [
+      72,
+      50
+     ],
+     [
+      123,
+      55
+     ],
+     [
+      222,
+      70
+     ],
+     [
+      1901,
+      161
+     ],
+     [
+      11580,
+      54
+     ],
+     [
+      11635,
+      51
+     ],
+     [
+      11775,
+      104
+     ],
+     [
+      12231,
+      77
+     ],
+     [
+      12682,
+      68
+     ],
+     [
+      12754,
+      50
+     ],
+     [
+      13922,
+      84
+     ],
+     [
+      16635,
+      70
+     ],
+     [
+      17934,
+      75
+     ],
+     [
+      18074,
+      87
+     ],
+     [
+      18164,
+      82
+     ],
+     [
+      18290,
+      88
+     ],
+     [
+      18384,
+      91
+     ],
+     [
+      18481,
+      93
+     ],
+     [
+      18608,
+      85
+     ],
+     [
+      18696,
+      82
+     ],
+     [
+      18779,
+      92
+     ],
+     [
+      23378,
+      418
+     ],
+     [
+      23797,
+      198
+     ]
+    ],
+    "canvas": 12,
+    "fcp": 65,
+    "lcp": 532,
+    "lcp_el": "IMG.aimg is-ok ",
+    "home_screen": 216,
+    "nav": 216,
+    "queue": 4403,
+    "draft": 11890,
+    "loading": 20982,
+    "hud": 24084,
+    "hud_2raf": 24101,
+    "now": 24878
+   },
+   "hudMinusFindClickMs": 19758,
+   "hud2rafMinusFindClickMs": 19775,
+   "stageMsFromFind": {
+    "queue": 77,
+    "draft": 7564,
+    "loading": 16656,
+    "hud": 19758
+   },
+   "resources": {
+    "count": 250,
+    "transferBytes": 54766014,
+    "encodedBytes": 54691014,
+    "decodedBytes": 56392246,
+    "byExt": {
+     "js": 8,
+     "css": 2,
+     "json": 2,
+     "woff2": 9,
+     "hdr": 2,
+     "webp": 62,
+     "cube": 2,
+     "svg": 6,
+     "ogg": 69,
+     "glb": 88
+    },
+    "largest": [
+     [
+      "/catalog/assets/c08026cd11e1-glass_belfry.glb",
+      1744092,
+      12170
+     ],
+     [
+      "/catalog/assets/e056aa49908d-sky.hdr",
+      1687306,
+      126
+     ],
+     [
+      "/catalog/assets/2b8de80ba599-odrum.glb",
+      1189612,
+      17911
+     ],
+     [
+      "/catalog/assets/1302f15cd177-burdam.glb",
+      1186956,
+      18017
+     ],
+     [
+      "/catalog/assets/b83e1497a596-rishal.glb",
+      1186868,
+      18171
+     ],
+     [
+      "/catalog/assets/6f2504255aea-ardit.glb",
+      1184260,
+      13887
+     ],
+     [
+      "/catalog/assets/3e54a7bfd707-ervet.glb",
+      1183936,
+      16609
+     ],
+     [
+      "/catalog/assets/1fd9a02ae95a-ilsheta.glb",
+      1181636,
+      18017
+     ]
+    ]
+   },
+   "frameStatsFirst5s": null,
+   "frameStatsMatch": {
+    "frames": 2303,
+    "windowMs": 38419,
+    "avgFps": 60,
+    "p50ms": 16.7,
+    "p95ms": 16.7,
+    "maxMs": 50,
+    "over33ms": 1,
+    "over50ms": 0
+   }
+  },
+  "loadAvgEnd": 3
+ },
+ "cold": true
+}

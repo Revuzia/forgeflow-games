@@ -27,7 +27,7 @@ for f in sorted(glob.glob(os.path.join(OUT, '_parts', '*.json'))):
     d = json.load(open(f))
     if 'records' in d:
         parts.append(d)
-records = [r for p in parts for r in p['records']]
+records = list({r['file']: r for p in parts for r in p['records']}.values())   # same file name written twice (several structures of one kind share a name): the last write is what is on disk
 final = []
 sheets = {}
 for r in records:

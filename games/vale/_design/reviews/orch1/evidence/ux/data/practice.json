@@ -1,0 +1,3766 @@
+{
+ "phase": "practice",
+ "finishedAt": "2026-11-15T09:39:18.293Z",
+ "env": {
+  "chrome": "157.0.8103.78",
+  "load1End": 3.32,
+  "node": "v22.23.3",
+  "base": "http://localhost:5232",
+  "wallMs": 81275
+ },
+ "steps": [
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_setup",
+   "name": "practice_setup",
+   "desc": "Practice setup screen",
+   "route": "scr--practice",
+   "hud": false,
+   "crop": null,
+   "bytes": 2350329,
+   "tMs": 4423,
+   "load1": 2.92,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.fcard__role \"Grovehunter\""
+    },
+    "textNodes": 78,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 33,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "viewport": "1366x768",
+   "phase": "practice",
+   "step": "practice_setup",
+   "name": "practice_setup",
+   "desc": "Practice setup screen",
+   "route": "scr--practice",
+   "hud": false,
+   "crop": null,
+   "bytes": 1272603,
+   "tMs": 5414,
+   "load1": 2.93,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 78,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 35,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_setup",
+   "name": "practice_setup_scrolled",
+   "desc": "Practice setup screen (scrolled to the bottom of scr__body sfade is-more-b ; 583px of extra content at 1920x1080)",
+   "route": "scr--practice",
+   "hud": false,
+   "crop": null,
+   "bytes": 2325949,
+   "tMs": 6978,
+   "load1": 2.93,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.fcard__role \"Grovehunter\""
+    },
+    "textNodes": 78,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 18,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "viewport": "1366x768",
+   "phase": "practice",
+   "step": "practice_setup",
+   "name": "practice_setup_scrolled",
+   "desc": "Practice setup screen (scrolled to the bottom of scr__body sfade is-more-b ; 583px of extra content at 1920x1080)",
+   "route": "scr--practice",
+   "hud": false,
+   "crop": null,
+   "bytes": 1254726,
+   "tMs": 8205,
+   "load1": 2.93,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 78,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 21,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/practice_005_practice_01_none.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_01_none",
+   "name": "practice_01_none",
+   "desc": "practice: state undefined, heading \"\", buttons [], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 740878,
+   "tMs": 10215,
+   "load1": 2.85,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.quiet \"No bans.\""
+    },
+    "textNodes": 36,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/practice_006_practice_02_draft.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_02_draft",
+   "name": "practice_02_draft",
+   "desc": "practice: state scr--draft, heading \"Pick phase/YOUR TEAM/THE OTHER TEAM\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN (disabled)], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2207028,
+   "tMs": 11842,
+   "load1": 2.85,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.quiet \"No bans.\""
+    },
+    "textNodes": 36,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/practice_007_practice_03_draft.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_03_draft",
+   "name": "practice_03_draft",
+   "desc": "practice: state scr--draft, heading \"Pick phase/YOUR TEAM/Ardit\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2176149,
+   "tMs": 14054,
+   "load1": 2.85,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.sicon__key \"Q\""
+    },
+    "textNodes": 46,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/practice_008_practice_04_draft.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_04_draft",
+   "name": "practice_04_draft",
+   "desc": "practice: state scr--draft, heading \"Skin and loadout/YOUR TEAM/Ardit\", buttons [Base skin\nEquipped | Chalkline Pavise\n600 | First Bell Pavise\n1,500 | HOUR SPELLS\n2/2 | BOONS\n2/2 | D\nSlot 1\nGlint Step | F\nSlot 2\nGlass Pane | D\nGlint Step | Saplight | Hairline | Hourstrike | Running Light | Shake Loose | F\nGlass Pane | Calling Bell | LOCK IN], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2101527,
+   "tMs": 15886,
+   "load1": 3.11,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.tab__badge.num \"2/2\""
+    },
+    "textNodes": 50,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/practice_009_practice_05_draft.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_05_draft",
+   "name": "practice_05_draft",
+   "desc": "practice: state scr--draft, heading \"Skin and loadout/YOUR TEAM/Ardit\", buttons [Base skin\nEquipped | Chalkline Pavise\n600 | First Bell Pavise\n1,500 | HOUR SPELLS\n2/2 | BOONS\n2/2 | D\nSlot 1\nGlint Step | F\nSlot 2\nGlass Pane | D\nGlint Step | Saplight | Hairline | Hourstrike | Running Light | Shake Loose | F\nGlass Pane | Calling Bell | LOCKED IN (disabled)], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2103920,
+   "tMs": 17637,
+   "load1": 3.11,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--ok.chip--ready \"READY\""
+    },
+    "textNodes": 53,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/practice_010_practice_06_loading.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_06_loading",
+   "name": "practice_06_loading",
+   "desc": "practice: state scr--loading, heading \"RIFT · PRACTICE Hourfall Hourfall · quie/Hourfall/AUBADE YOUR TEAM\", buttons [], 0 selected card(s)",
+   "route": "scr--loading",
+   "hud": false,
+   "crop": null,
+   "bytes": 144405,
+   "tMs": 18534,
+   "load1": 3.11,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption \"AUBADE\""
+    },
+    "textNodes": 17,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/practice_011_practice_07_loading.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_07_loading",
+   "name": "practice_07_loading",
+   "desc": "practice: state scr--loading, heading \"RIFT · PRACTICE Hourfall Hourfall · quie/Hourfall/AUBADE YOUR TEAM\", buttons [], 0 selected card(s)",
+   "route": "scr--loading",
+   "hud": false,
+   "crop": null,
+   "bytes": 2304875,
+   "tMs": 20024,
+   "load1": 3.1,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption \"AUBADE\""
+    },
+    "textNodes": 17,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/practice_012_practice_08_loading.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_08_loading",
+   "name": "practice_08_loading",
+   "desc": "practice: state scr--loading, heading \"RIFT · PRACTICE Hourfall Hourfall · quie/Hourfall/AUBADE YOUR TEAM\", buttons [], 0 selected card(s)",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 2304449,
+   "tMs": 22508,
+   "load1": 3.1,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.keycap.keycap--quiet \"ESC\""
+    },
+    "textNodes": 5,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/practice_013_practice_hud_idle.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_hud",
+   "name": "practice_hud_idle",
+   "desc": "practice HUD with the practice tools panel",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2242261,
+   "tMs": 55192,
+   "load1": 3.12,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 72,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/practice_014_practice_hud_idle.png",
+   "viewport": "1366x768",
+   "phase": "practice",
+   "step": "practice_hud",
+   "name": "practice_hud_idle",
+   "desc": "practice HUD with the practice tools panel",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1202671,
+   "tMs": 56293,
+   "load1": 3.12,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 70,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/practice_015_practice_dummy.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_hud",
+   "name": "practice_dummy",
+   "desc": "after Spawn dummy",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2232704,
+   "tMs": 59120,
+   "load1": 3.12,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 71,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/practice_016_practice_dummy.png",
+   "viewport": "1366x768",
+   "phase": "practice",
+   "step": "practice_hud",
+   "name": "practice_dummy",
+   "desc": "after Spawn dummy",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1197898,
+   "tMs": 60222,
+   "load1": 3.11,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 71,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/practice_017_practice_shop_rich.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_hud",
+   "name": "practice_shop_rich",
+   "desc": "practice: shop with infinite/boosted gold",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1759924,
+   "tMs": 63073,
+   "load1": 3.11,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 170,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 14,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "viewport": "1366x768",
+   "phase": "practice",
+   "step": "practice_hud",
+   "name": "practice_shop_rich",
+   "desc": "practice: shop with infinite/boosted gold",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 892464,
+   "tMs": 64032,
+   "load1": 3.11,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 169,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 25,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/practice_019_practice_levelup_moment.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_hud",
+   "name": "practice_levelup_moment",
+   "desc": "0.35 s after the practice Level action",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2248970,
+   "tMs": 66440,
+   "load1": 2.86,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 72,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/practice_020_practice_levelup_moment.png",
+   "viewport": "1366x768",
+   "phase": "practice",
+   "step": "practice_hud",
+   "name": "practice_levelup_moment",
+   "desc": "0.35 s after the practice Level action",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1196220,
+   "tMs": 67523,
+   "load1": 2.86,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 71,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/practice_021_practice_level_pips.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_hud",
+   "name": "practice_level_pips",
+   "desc": "after four Level actions (ability rank pips / skill points)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2247333,
+   "tMs": 70232,
+   "load1": 3.19,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 74,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/practice_022_practice_level_pips.png",
+   "viewport": "1366x768",
+   "phase": "practice",
+   "step": "practice_hud",
+   "name": "practice_level_pips",
+   "desc": "after four Level actions (ability rank pips / skill points)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1196920,
+   "tMs": 71326,
+   "load1": 3.19,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 73,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/practice_023_practice_cast_vfx.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_hud",
+   "name": "practice_cast_vfx",
+   "desc": "ability casts in flight at a dummy (live sim)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2233551,
+   "tMs": 73306,
+   "load1": 3.19,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 73,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/practice_024_practice_cast_vfx.png",
+   "viewport": "1366x768",
+   "phase": "practice",
+   "step": "practice_hud",
+   "name": "practice_cast_vfx",
+   "desc": "ability casts in flight at a dummy (live sim)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1197317,
+   "tMs": 74323,
+   "load1": 3.19,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 73,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/practice_025_practice_damage_meter.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_hud",
+   "name": "practice_damage_meter",
+   "desc": "after casting at the dummy: damage meter in the practice panel",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2233829,
+   "tMs": 76967,
+   "load1": 3.17,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 70,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/practice_026_practice_damage_meter.png",
+   "viewport": "1366x768",
+   "phase": "practice",
+   "step": "practice_hud",
+   "name": "practice_damage_meter",
+   "desc": "after casting at the dummy: damage meter in the practice panel",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1197790,
+   "tMs": 77950,
+   "load1": 3.17,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 70,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/practice_027_practice_esc_menu.png",
+   "viewport": "1920x1080",
+   "phase": "practice",
+   "step": "practice_hud",
+   "name": "practice_esc_menu",
+   "desc": "practice in-match menu",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1148583,
+   "tMs": 79875,
+   "load1": 3.17,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 76,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/practice_028_practice_esc_menu.png",
+   "viewport": "1366x768",
+   "phase": "practice",
+   "step": "practice_hud",
+   "name": "practice_esc_menu",
+   "desc": "practice in-match menu",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 622471,
+   "tMs": 80760,
+   "load1": 3.32,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 76,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 1,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.5 (schema 1) from http://localhost:5232/catalog/manifest.json"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 1391,
+   "clientH": 808,
+   "scrollW": 862,
+   "clientW": 862,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Ardit",
+   "rect": [
+    104,
+    1117,
+    223,
+    1133
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Grovehunter",
+   "rect": [
+    122,
+    1135,
+    187,
+    1153
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Burdam",
+   "rect": [
+    247,
+    1117,
+    367,
+    1133
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Shadehold",
+   "rect": [
+    265,
+    1135,
+    322,
+    1153
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Dunsom",
+   "rect": [
+    391,
+    1117,
+    510,
+    1133
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Dialcross",
+   "rect": [
+    409,
+    1135,
+    457,
+    1153
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Ervet",
+   "rect": [
+    534,
+    1117,
+    653,
+    1133
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Shadehold",
+   "rect": [
+    552,
+    1135,
+    608,
+    1153
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Hesmi",
+   "rect": [
+    677,
+    1117,
+    797,
+    1133
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Shadehold",
+   "rect": [
+    695,
+    1135,
+    752,
+    1153
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Ilsheta",
+   "rect": [
+    821,
+    1117,
+    940,
+    1133
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Lampglass",
+   "rect": [
+    839,
+    1135,
+    896,
+    1153
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Kemdo",
+   "rect": [
+    104,
+    1315,
+    223,
+    1331
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Grovehunter",
+   "rect": [
+    122,
+    1333,
+    187,
+    1351
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Lisvel",
+   "rect": [
+    247,
+    1315,
+    367,
+    1331
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Shaftlight",
+   "rect": [
+    265,
+    1333,
+    316,
+    1351
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Marund",
+   "rect": [
+    391,
+    1315,
+    510,
+    1331
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Lampglass",
+   "rect": [
+    409,
+    1333,
+    466,
+    1351
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Nurrow",
+   "rect": [
+    534,
+    1315,
+    653,
+    1331
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Grovehunter",
+   "rect": [
+    552,
+    1333,
+    617,
+    1351
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Odrum",
+   "rect": [
+    677,
+    1315,
+    797,
+    1331
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Shaftlight",
+   "rect": [
+    695,
+    1333,
+    746,
+    1351
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Rishal",
+   "rect": [
+    821,
+    1315,
+    940,
+    1331
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Dialcross",
+   "rect": [
+    839,
+    1333,
+    887,
+    1351
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Sukri",
+   "rect": [
+    104,
+    1512,
+    223,
+    1529
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Lampglass",
+   "rect": [
+    122,
+    1531,
+    179,
+    1549
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Tunlan",
+   "rect": [
+    247,
+    1512,
+    367,
+    1529
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Dialcross",
+   "rect": [
+    265,
+    1531,
+    313,
+    1549
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Ulkro",
+   "rect": [
+    391,
+    1512,
+    510,
+    1529
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Shaftlight",
+   "rect": [
+    409,
+    1531,
+    460,
+    1549
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Vashil",
+   "rect": [
+    534,
+    1512,
+    653,
+    1529
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_001_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Dialcross",
+   "rect": [
+    552,
+    1531,
+    600,
+    1549
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 1175,
+   "clientH": 546,
+   "scrollW": 692,
+   "clientW": 692,
+   "top": 0
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-label",
+   "text": "ALL",
+   "rect": [
+    78,
+    784,
+    100,
+    800
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.select__value",
+   "text": "Role: All",
+   "rect": [
+    311,
+    784,
+    381,
+    803
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Ardit",
+   "rect": [
+    75,
+    937,
+    170,
+    952
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Grovehunter",
+   "rect": [
+    89,
+    954,
+    154,
+    972
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Burdam",
+   "rect": [
+    189,
+    937,
+    285,
+    952
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Shadehold",
+   "rect": [
+    204,
+    954,
+    260,
+    972
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Dunsom",
+   "rect": [
+    304,
+    937,
+    399,
+    952
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Dialcross",
+   "rect": [
+    318,
+    954,
+    366,
+    972
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Ervet",
+   "rect": [
+    419,
+    937,
+    514,
+    952
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Shadehold",
+   "rect": [
+    433,
+    954,
+    489,
+    972
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Hesmi",
+   "rect": [
+    533,
+    937,
+    629,
+    952
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Shadehold",
+   "rect": [
+    548,
+    954,
+    604,
+    972
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Ilsheta",
+   "rect": [
+    648,
+    937,
+    743,
+    952
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Lampglass",
+   "rect": [
+    662,
+    954,
+    720,
+    972
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Kemdo",
+   "rect": [
+    75,
+    1101,
+    170,
+    1116
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Grovehunter",
+   "rect": [
+    89,
+    1118,
+    154,
+    1136
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Lisvel",
+   "rect": [
+    189,
+    1101,
+    285,
+    1116
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Shaftlight",
+   "rect": [
+    204,
+    1118,
+    255,
+    1136
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Marund",
+   "rect": [
+    304,
+    1101,
+    399,
+    1116
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Lampglass",
+   "rect": [
+    318,
+    1118,
+    376,
+    1136
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Nurrow",
+   "rect": [
+    419,
+    1101,
+    514,
+    1116
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Grovehunter",
+   "rect": [
+    433,
+    1118,
+    498,
+    1136
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Odrum",
+   "rect": [
+    533,
+    1101,
+    629,
+    1116
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Shaftlight",
+   "rect": [
+    548,
+    1118,
+    599,
+    1136
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Rishal",
+   "rect": [
+    648,
+    1101,
+    743,
+    1116
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Dialcross",
+   "rect": [
+    662,
+    1118,
+    710,
+    1136
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Sukri",
+   "rect": [
+    75,
+    1265,
+    170,
+    1280
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Lampglass",
+   "rect": [
+    89,
+    1282,
+    146,
+    1300
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Tunlan",
+   "rect": [
+    189,
+    1265,
+    285,
+    1280
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Dialcross",
+   "rect": [
+    204,
+    1282,
+    252,
+    1300
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Ulkro",
+   "rect": [
+    304,
+    1265,
+    399,
+    1280
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Shaftlight",
+   "rect": [
+    318,
+    1282,
+    369,
+    1300
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__name",
+   "text": "Vashil",
+   "rect": [
+    419,
+    1265,
+    514,
+    1280
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_002_practice_setup.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.fcard__role",
+   "text": "Dialcross",
+   "rect": [
+    433,
+    1282,
+    481,
+    1300
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade",
+   "scrollH": 1391,
+   "clientH": 808,
+   "scrollW": 862,
+   "clientW": 862,
+   "top": 583
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "p.t-body-l.muted.stg",
+   "text": "Try any fighter on the full map. Add Gleam and levels, set up training",
+   "rect": [
+    96,
+    -407,
+    948,
+    -351
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body",
+   "text": "Map",
+   "rect": [
+    96,
+    -337,
+    481,
+    -313
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Practice on any map that ends at a core.",
+   "rect": [
+    96,
+    -311,
+    481,
+    -293
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-label",
+   "text": "RIFT",
+   "rect": [
+    816,
+    -325,
+    848,
+    -305
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-label",
+   "text": "BRIDGE",
+   "rect": [
+    878,
+    -325,
+    932,
+    -305
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body",
+   "text": "Infinite Gleam",
+   "rect": [
+    96,
+    -264,
+    481,
+    -240
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Your Gleam never runs out.",
+   "rect": [
+    96,
+    -238,
+    481,
+    -220
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.toggle__state.t-label",
+   "text": "ON",
+   "rect": [
+    919,
+    -252,
+    946,
+    -232
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body",
+   "text": "No cooldowns",
+   "rect": [
+    96,
+    -191,
+    481,
+    -167
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Abilities and spells are ready the moment you cast them.",
+   "rect": [
+    96,
+    -165,
+    481,
+    -147
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.toggle__state.t-label",
+   "text": "OFF",
+   "rect": [
+    918,
+    -179,
+    946,
+    -159
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body",
+   "text": "Wicks",
+   "rect": [
+    96,
+    -118,
+    481,
+    -94
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Waves of Wicks walk the roads. Turn them on or off at any time in the ",
+   "rect": [
+    96,
+    -92,
+    481,
+    -56
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.toggle__state.t-label",
+   "text": "ON",
+   "rect": [
+    919,
+    -97,
+    946,
+    -77
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body",
+   "text": "Structures",
+   "rect": [
+    96,
+    -27,
+    481,
+    -3
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Needles and Lanterns shoot and can be broken. Off, they neither shoot ",
+   "rect": [
+    96,
+    -1,
+    481,
+    35
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_003_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.toggle__state.t-label",
+   "text": "ON",
+   "rect": [
+    919,
+    -6,
+    946,
+    14
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade",
+   "scrollH": 1175,
+   "clientH": 546,
+   "scrollW": 692,
+   "clientW": 692,
+   "top": 629
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "p.t-body-l.muted.stg",
+   "text": "Try any fighter on the full map. Add Gleam and levels, set up training",
+   "rect": [
+    68,
+    -488,
+    750,
+    -443
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body",
+   "text": "Map",
+   "rect": [
+    68,
+    -432,
+    376,
+    -413
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Practice on any map that ends at a core.",
+   "rect": [
+    68,
+    -411,
+    376,
+    -394
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-label",
+   "text": "RIFT",
+   "rect": [
+    643,
+    -421,
+    669,
+    -405
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-label",
+   "text": "BRIDGE",
+   "rect": [
+    693,
+    -421,
+    737,
+    -405
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body",
+   "text": "Infinite Gleam",
+   "rect": [
+    68,
+    -371,
+    376,
+    -352
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Your Gleam never runs out.",
+   "rect": [
+    68,
+    -350,
+    376,
+    -333
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.toggle__state.t-label",
+   "text": "ON",
+   "rect": [
+    726,
+    -360,
+    748,
+    -344
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body",
+   "text": "No cooldowns",
+   "rect": [
+    68,
+    -310,
+    376,
+    -291
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Abilities and spells are ready the moment you cast them.",
+   "rect": [
+    68,
+    -289,
+    376,
+    -255
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.toggle__state.t-label",
+   "text": "OFF",
+   "rect": [
+    725,
+    -291,
+    748,
+    -275
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body",
+   "text": "Wicks",
+   "rect": [
+    68,
+    -232,
+    376,
+    -213
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Waves of Wicks walk the roads. Turn them on or off at any time in the ",
+   "rect": [
+    68,
+    -211,
+    376,
+    -178
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.toggle__state.t-label",
+   "text": "ON",
+   "rect": [
+    726,
+    -213,
+    748,
+    -197
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body",
+   "text": "Structures",
+   "rect": [
+    68,
+    -154,
+    376,
+    -135
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Needles and Lanterns shoot and can be broken. Off, they neither shoot ",
+   "rect": [
+    68,
+    -133,
+    376,
+    -100
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.toggle__state.t-label",
+   "text": "ON",
+   "rect": [
+    726,
+    -135,
+    748,
+    -119
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body",
+   "text": "Training targets",
+   "rect": [
+    68,
+    -77,
+    376,
+    -57
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Targets stand still and never attack. They heal to full 4 s after the ",
+   "rect": [
+    68,
+    -55,
+    376,
+    -22
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_004_practice_setup_scrolled.png",
+   "step": "practice_setup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.slider__value.num",
+   "text": "3",
+   "rect": [
+    704,
+    -58,
+    750,
+    -40
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/practice_005_practice_01_none.png",
+   "step": "practice_01_none",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_006_practice_02_draft.png",
+   "step": "practice_02_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_007_practice_03_draft.png",
+   "step": "practice_03_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_008_practice_04_draft.png",
+   "step": "practice_04_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_009_practice_05_draft.png",
+   "step": "practice_05_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_010_practice_06_loading.png",
+   "step": "practice_06_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_011_practice_07_loading.png",
+   "step": "practice_07_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_012_practice_08_loading.png",
+   "step": "practice_08_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_013_practice_hud_idle.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_013_practice_hud_idle.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/practice_014_practice_hud_idle.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_014_practice_hud_idle.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/practice_015_practice_dummy.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_015_practice_dummy.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/practice_016_practice_dummy.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_016_practice_dummy.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/practice_017_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_017_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_017_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "scrollable",
+   "el": "div.lshop__grid",
+   "scrollH": 1144,
+   "clientH": 643,
+   "scrollW": 650,
+   "clientW": 650,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/practice_017_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "h3.lshop__sech.t-label",
+   "text": "APEX",
+   "rect": [
+    564,
+    1075,
+    1186,
+    1095
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_017_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,300",
+   "rect": [
+    571,
+    1153,
+    613,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_017_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,400",
+   "rect": [
+    635,
+    1153,
+    677,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_017_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    699,
+    1153,
+    741,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_017_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    763,
+    1153,
+    805,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_017_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    827,
+    1153,
+    869,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_017_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    891,
+    1153,
+    933,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_017_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    955,
+    1153,
+    997,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_017_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    1019,
+    1153,
+    1061,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_017_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    1083,
+    1153,
+    1125,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_017_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    571,
+    1233,
+    613,
+    1253
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_017_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,800",
+   "rect": [
+    635,
+    1233,
+    677,
+    1253
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "scrollable",
+   "el": "div.lshop__grid",
+   "scrollH": 915,
+   "clientH": 514,
+   "scrollW": 520,
+   "clientW": 520,
+   "top": 0
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,100",
+   "rect": [
+    370,
+    767,
+    408,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,150",
+   "rect": [
+    421,
+    767,
+    459,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,150",
+   "rect": [
+    472,
+    767,
+    510,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,150",
+   "rect": [
+    523,
+    767,
+    561,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,150",
+   "rect": [
+    574,
+    767,
+    612,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,250",
+   "rect": [
+    626,
+    767,
+    663,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,250",
+   "rect": [
+    677,
+    767,
+    715,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,250",
+   "rect": [
+    728,
+    767,
+    766,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,250",
+   "rect": [
+    779,
+    767,
+    817,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,250",
+   "rect": [
+    370,
+    831,
+    408,
+    849
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,300",
+   "rect": [
+    421,
+    831,
+    459,
+    849
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "h3.lshop__sech.t-label",
+   "text": "APEX",
+   "rect": [
+    366,
+    861,
+    864,
+    877
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,300",
+   "rect": [
+    370,
+    921,
+    408,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,400",
+   "rect": [
+    421,
+    921,
+    459,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    472,
+    921,
+    510,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    523,
+    921,
+    561,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    574,
+    921,
+    612,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    626,
+    921,
+    663,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    677,
+    921,
+    715,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    728,
+    921,
+    766,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    779,
+    921,
+    817,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    370,
+    985,
+    408,
+    1003
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_018_practice_shop_rich.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,800",
+   "rect": [
+    421,
+    985,
+    459,
+    1003
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/practice_019_practice_levelup_moment.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_019_practice_levelup_moment.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/practice_020_practice_levelup_moment.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_020_practice_levelup_moment.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/practice_021_practice_level_pips.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_021_practice_level_pips.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "5",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/practice_022_practice_level_pips.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_022_practice_level_pips.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "5",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/practice_023_practice_cast_vfx.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_023_practice_cast_vfx.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "5",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/practice_024_practice_cast_vfx.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_024_practice_cast_vfx.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "5",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/practice_025_practice_damage_meter.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_025_practice_damage_meter.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "5",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/practice_026_practice_damage_meter.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_026_practice_damage_meter.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "5",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/practice_027_practice_esc_menu.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/practice_027_practice_esc_menu.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "5",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/practice_028_practice_esc_menu.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/practice_028_practice_esc_menu.png",
+   "step": "practice_hud",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "5",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
+ "notes": [
+  {
+   "step": "practice_setup",
+   "tMs": 8712,
+   "load1": 2.93,
+   "text": "practice rows",
+   "data": [
+    "Map Practice on any map that ends at a core. RIFT BRIDGE",
+    "Infinite Gleam Your Gleam never runs out. ON",
+    "No cooldowns Abilities and spells are ready the moment you cast them. OFF",
+    "Wicks Waves of Wicks walk the roads. Turn them on or off at any time in the match. ON",
+    "Structures Needles and Lanterns shoot and can be broken. Off, they neither shoot nor take damage. ON",
+    "Training targets Targets stand still and never attack. They heal to full 4 s after the last hit. 3",
+    "Starting level 1",
+    "Sparring partner A fighter on the other team, played by a bot. None"
+   ]
+  },
+  {
+   "step": "practice_setup",
+   "tMs": 8730,
+   "load1": 2.93,
+   "text": "practice CTA",
+   "data": "START PRACTICE"
+  },
+  {
+   "step": "practice_08_loading",
+   "tMs": 22879,
+   "load1": 3.1,
+   "text": "practice flow to HUD ms",
+   "data": 13654
+  },
+  {
+   "step": "practice_hud",
+   "tMs": 56817,
+   "load1": 3.12,
+   "text": "practice panel text",
+   "data": "PRACTICE BENCH ADD 5,000 GLEAM LEVEL UP REFRESH COOLDOWNS NO COOLDOWNS FULL HEAL MOVE TO A POINT The map WICKS STRUCTURES RESET MATCH Training targets PLACE A TRAINING TARGET REMOVE ALL TARGETS Health Armor Resist Speed PAUSED ×1 ×2 ×4 ×8 ×16 Damage you dealt CLEAR Last hit — This burst — Per second — Last 5 s — Total —"
+  },
+  {
+   "step": "practice_hud",
+   "tMs": 71864,
+   "load1": 3.19,
+   "text": "practice positions",
+   "data": {
+    "me": [
+     8.5,
+     55
+    ],
+    "d": null,
+    "kinds": {
+     "fighter": 1,
+     "structure": 24,
+     "minion": 2
+    }
+   }
+  },
+  {
+   "step": "practice_hud",
+   "tMs": 78466,
+   "load1": 3.17,
+   "text": "events after fight",
+   "data": {
+    "phase": "live",
+    "time": 22.5,
+    "scale": 1,
+    "level": 5,
+    "dead": false,
+    "respawnIn": 0,
+    "gold": 55000,
+    "items": 0,
+    "skill": 5,
+    "nearFighters": 1,
+    "ended": false,
+    "evs": [
+     {
+      "e": "levelUp",
+      "level": 2,
+      "t": 11.43333333333333
+     },
+     {
+      "e": "levelUp",
+      "level": 3,
+      "t": 13.733333333333334
+     },
+     {
+      "e": "levelUp",
+      "level": 4,
+      "t": 13.93333333333333
+     },
+     {
+      "e": "levelUp",
+      "level": 5,
+      "t": 14.133333333333333
+     }
+    ]
+   }
+  }
+ ],
+ "timings": {}
+}

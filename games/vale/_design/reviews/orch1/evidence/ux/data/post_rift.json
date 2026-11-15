@@ -1,0 +1,2296 @@
+{
+ "phase": "post_rift",
+ "finishedAt": "2026-11-15T09:34:27.928Z",
+ "env": {
+  "chrome": "157.0.8103.78",
+  "load1End": 6.79,
+  "node": "v22.23.3",
+  "base": "http://localhost:5232",
+  "wallMs": 139841
+ },
+ "steps": [
+  {
+   "file": "1920x1080/post_rift_001_rift_flow_01_queue.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "rift_flow_01_queue",
+   "name": "rift_flow_01_queue",
+   "desc": "rift_flow: state scr--queue, heading \"RIFT · LANTERN DRILL/Finding a match/0:00\", buttons [CANCEL SEARCH], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 2400339,
+   "tMs": 5656,
+   "load1": 6.21,
+   "layout": {
+    "minFont": {
+     "px": 14,
+     "el": "p.t-body-s.muted.queue__desc \"Your team against five bots th\""
+    },
+    "textNodes": 11,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_002_rift_flow_02_queue.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "rift_flow_02_queue",
+   "name": "rift_flow_02_queue",
+   "desc": "rift_flow: state scr--queue, heading \"RIFT · LANTERN DRILL/Finding a match/0:03\", buttons [DECLINE | READY | CANCEL SEARCH (disabled)], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 912908,
+   "tMs": 8287,
+   "load1": 6.21,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "p.t-caption.quiet.ready__note \"Declining or missing the check\""
+    },
+    "textNodes": 17,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_003_rift_flow_03_queue.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "rift_flow_03_queue",
+   "name": "rift_flow_03_queue",
+   "desc": "rift_flow: state scr--queue, heading \"RIFT · LANTERN DRILL/Finding a match/0:03\", buttons [CANCEL SEARCH (disabled)], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 910459,
+   "tMs": 9238,
+   "load1": 6.11,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "p.t-caption.quiet.ready__note \"Declining or missing the check\""
+    },
+    "textNodes": 17,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_004_rift_flow_04_none.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "rift_flow_04_none",
+   "name": "rift_flow_04_none",
+   "desc": "rift_flow: state undefined, heading \"\", buttons [], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 939692,
+   "tMs": 10618,
+   "load1": 6.11,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.seat__rolename \"Shaftlight\""
+    },
+    "textNodes": 34,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_005_rift_flow_05_draft.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "rift_flow_05_draft",
+   "name": "rift_flow_05_draft",
+   "desc": "rift_flow: state scr--draft, heading \"Pick phase/YOUR TEAM/THE OTHER TEAM\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN (disabled)], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2101764,
+   "tMs": 11958,
+   "load1": 6.11,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.quiet \"No bans.\""
+    },
+    "textNodes": 58,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_006_rift_flow_06_draft.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "rift_flow_06_draft",
+   "name": "rift_flow_06_draft",
+   "desc": "rift_flow: state scr--draft, heading \"Pick phase/YOUR TEAM/Ardit\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2070534,
+   "tMs": 14420,
+   "load1": 6.1,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.sicon__key \"Q\""
+    },
+    "textNodes": 68,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_007_rift_flow_07_draft.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "rift_flow_07_draft",
+   "name": "rift_flow_07_draft",
+   "desc": "rift_flow: state scr--draft, heading \"Pick phase/YOUR TEAM/Ardit\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN (disabled)], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2143922,
+   "tMs": 16425,
+   "load1": 6.1,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.fcard__taken \"quillon_7\""
+    },
+    "textNodes": 66,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_008_rift_flow_08_draft.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "rift_flow_08_draft",
+   "name": "rift_flow_08_draft",
+   "desc": "rift_flow: state scr--draft, heading \"Pick phase/YOUR TEAM/Ardit\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel\nquillon_7 (disabled) | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil\ntessel_nine (disabled) | LOCK IN (disabled)], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2127822,
+   "tMs": 17971,
+   "load1": 6.1,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.fcard__taken \"belle_of_noon\""
+    },
+    "textNodes": 66,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_009_rift_flow_09_draft.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "rift_flow_09_draft",
+   "name": "rift_flow_09_draft",
+   "desc": "rift_flow: state scr--draft, heading \"Pick phase/YOUR TEAM/Ardit\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam\nbelle_of_noon (disabled) | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel\nquillon_7 (disabled) | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil\ntessel_nine (disabled) | LOCK IN (disabled)], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2115002,
+   "tMs": 19219,
+   "load1": 5.77,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.fcard__taken \"belle_of_noon\""
+    },
+    "textNodes": 64,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_010_rift_flow_10_draft.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "rift_flow_10_draft",
+   "name": "rift_flow_10_draft",
+   "desc": "rift_flow: state scr--draft, heading \"Skin and loadout/YOUR TEAM/Ardit\", buttons [ |  |  |  | Base skin\nEquipped | Chalkline Pavise\n600 | First Bell Pavise\n1,500 | HOUR SPELLS\n2/2 | BOONS\n2/2 | D\nSlot 1\nGlint Step | F\nSlot 2\nGlass Pane | D\nGlint Step | Saplight | Hairline | Hourstrike | Running Light | Shake Loose | F\nGlass Pane | Calling Bell | LOCK IN], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2014756,
+   "tMs": 21573,
+   "load1": 5.77,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--ok.chip--ready \"READY\""
+    },
+    "textNodes": 74,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_011_rift_flow_11_draft.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "rift_flow_11_draft",
+   "name": "rift_flow_11_draft",
+   "desc": "rift_flow: state scr--draft, heading \"Skin and loadout/YOUR TEAM/Ardit\", buttons [ |  |  |  | Base skin\nEquipped | Chalkline Pavise\n600 | First Bell Pavise\n1,500 | HOUR SPELLS\n2/2 | BOONS\n2/2 | D\nSlot 1\nGlint Step | F\nSlot 2\nGlass Pane | D\nGlint Step | Saplight | Hairline | Hourstrike | Running Light | Shake Loose | F\nGlass Pane | Calling Bell | LOCKED IN (disabled)], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2017529,
+   "tMs": 23239,
+   "load1": 5.77,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--ok.chip--ready \"READY\""
+    },
+    "textNodes": 82,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_012_rift_flow_12_loading.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "rift_flow_12_loading",
+   "name": "rift_flow_12_loading",
+   "desc": "rift_flow: state scr--loading, heading \"RIFT · LANTERN DRILL Hourfall Hourfall ·/Hourfall/AUBADE YOUR TEAM\", buttons [], 0 selected card(s)",
+   "route": "scr--loading",
+   "hud": false,
+   "crop": null,
+   "bytes": 2410493,
+   "tMs": 25464,
+   "load1": 5.47,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--bot.pcard__bot \"BOT\""
+    },
+    "textNodes": 55,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_013_end_banner_early.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "end_banner",
+   "name": "end_banner_early",
+   "desc": "result in the view; end banner starting (sim x1)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2667196,
+   "tMs": 119452,
+   "load1": 8.4,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 56,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/post_rift_014_end_banner_early.png",
+   "viewport": "1366x768",
+   "phase": "post_rift",
+   "step": "end_banner",
+   "name": "end_banner_early",
+   "desc": "result in the view; end banner starting (sim x1)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1440790,
+   "tMs": 120304,
+   "load1": 8.4,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 56,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_015_end_banner.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "end_banner",
+   "name": "end_banner",
+   "desc": "end banner held over the last frame",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 444460,
+   "tMs": 121950,
+   "load1": 8.4,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.muted \"Level 14\""
+    },
+    "textNodes": 28,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/post_rift_016_end_banner.png",
+   "viewport": "1366x768",
+   "phase": "post_rift",
+   "step": "end_banner",
+   "name": "end_banner",
+   "desc": "end banner held over the last frame",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1000889,
+   "tMs": 122764,
+   "load1": 8.4,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 48,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_017_postgame_summary.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "postgame_summary",
+   "name": "postgame_summary",
+   "desc": "rift post-game default tab",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1850192,
+   "tMs": 125483,
+   "load1": 7.97,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.muted \"Ulkro\""
+    },
+    "textNodes": 59,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/post_rift_018_postgame_summary.png",
+   "viewport": "1366x768",
+   "phase": "post_rift",
+   "step": "postgame_summary",
+   "name": "postgame_summary",
+   "desc": "rift post-game default tab",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1004672,
+   "tMs": 126251,
+   "load1": 7.97,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 52,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_019_postgame_tab_summary.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "postgame_tab_summary",
+   "name": "postgame_tab_summary",
+   "desc": "postgame screen, tab \"SUMMARY\"",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1850088,
+   "tMs": 127854,
+   "load1": 7.97,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.muted \"Ulkro\""
+    },
+    "textNodes": 59,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/post_rift_020_postgame_tab_summary.png",
+   "viewport": "1366x768",
+   "phase": "post_rift",
+   "step": "postgame_tab_summary",
+   "name": "postgame_tab_summary",
+   "desc": "postgame screen, tab \"SUMMARY\"",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1004285,
+   "tMs": 128610,
+   "load1": 7.65,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 52,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_021_postgame_tab_scoreboard.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "postgame_tab_scoreboard",
+   "name": "postgame_tab_scoreboard",
+   "desc": "postgame screen, tab \"SCOREBOARD\"",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1887204,
+   "tMs": 130220,
+   "load1": 7.65,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--line \"DEFEATED\""
+    },
+    "textNodes": 137,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 11,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "viewport": "1366x768",
+   "phase": "post_rift",
+   "step": "postgame_tab_scoreboard",
+   "name": "postgame_tab_scoreboard",
+   "desc": "postgame screen, tab \"SCOREBOARD\"",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1071000,
+   "tMs": 130988,
+   "load1": 7.65,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 137,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 39,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_023_postgame_tab_scoreboard_scrolled.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "postgame_tab_scoreboard",
+   "name": "postgame_tab_scoreboard_scrolled",
+   "desc": "postgame screen, tab \"SCOREBOARD\" (scrolled to the bottom of scr__body sfade is-more-b ; 145px of extra content at 1920x1080)",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1779639,
+   "tMs": 132452,
+   "load1": 7.65,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--line \"DEFEATED\""
+    },
+    "textNodes": 137,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 3,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/post_rift_024_postgame_tab_scoreboard_scrolled.png",
+   "viewport": "1366x768",
+   "phase": "post_rift",
+   "step": "postgame_tab_scoreboard",
+   "name": "postgame_tab_scoreboard_scrolled",
+   "desc": "postgame screen, tab \"SCOREBOARD\" (scrolled to the bottom of scr__body sfade is-more-b ; 145px of extra content at 1920x1080)",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 930656,
+   "tMs": 133546,
+   "load1": 7.65,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 137,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 5,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_025_postgame_tab_gleam-lead.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "postgame_tab_gleam-lead",
+   "name": "postgame_tab_gleam-lead",
+   "desc": "postgame screen, tab \"GLEAM LEAD\"",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1745226,
+   "tMs": 135106,
+   "load1": 7.12,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "text \"0\""
+    },
+    "textNodes": 24,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/post_rift_026_postgame_tab_gleam-lead.png",
+   "viewport": "1366x768",
+   "phase": "post_rift",
+   "step": "postgame_tab_gleam-lead",
+   "name": "postgame_tab_gleam-lead",
+   "desc": "postgame screen, tab \"GLEAM LEAD\"",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 919776,
+   "tMs": 135853,
+   "load1": 7.12,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 24,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_rift_027_after_postgame_leave.png",
+   "viewport": "1920x1080",
+   "phase": "post_rift",
+   "step": "postgame_tab_gleam-lead",
+   "name": "after_postgame_leave",
+   "desc": "screen after the post-game CTA",
+   "route": "scr--home",
+   "hud": false,
+   "crop": null,
+   "bytes": 2340355,
+   "tMs": 138615,
+   "load1": 6.79,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--line.num \"LV 2\""
+    },
+    "textNodes": 42,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/post_rift_028_after_postgame_leave.png",
+   "viewport": "1366x768",
+   "phase": "post_rift",
+   "step": "postgame_tab_gleam-lead",
+   "name": "after_postgame_leave",
+   "desc": "screen after the post-game CTA",
+   "route": "scr--home",
+   "hud": false,
+   "crop": null,
+   "bytes": 1273564,
+   "tMs": 139345,
+   "load1": 6.79,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 40,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.5 (schema 1) from http://localhost:5232/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":16,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/post_rift_001_rift_flow_01_queue.png",
+   "step": "rift_flow_01_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_002_rift_flow_02_queue.png",
+   "step": "rift_flow_02_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_003_rift_flow_03_queue.png",
+   "step": "rift_flow_03_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_004_rift_flow_04_none.png",
+   "step": "rift_flow_04_none",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_005_rift_flow_05_draft.png",
+   "step": "rift_flow_05_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_006_rift_flow_06_draft.png",
+   "step": "rift_flow_06_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_007_rift_flow_07_draft.png",
+   "step": "rift_flow_07_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_008_rift_flow_08_draft.png",
+   "step": "rift_flow_08_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_009_rift_flow_09_draft.png",
+   "step": "rift_flow_09_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_010_rift_flow_10_draft.png",
+   "step": "rift_flow_10_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_011_rift_flow_11_draft.png",
+   "step": "rift_flow_11_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_012_rift_flow_12_loading.png",
+   "step": "rift_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_013_end_banner_early.png",
+   "step": "end_banner",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_013_end_banner_early.png",
+   "step": "end_banner",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "14",
+   "rect": [
+    648,
+    1058,
+    680,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/post_rift_014_end_banner_early.png",
+   "step": "end_banner",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_014_end_banner_early.png",
+   "step": "end_banner",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "14",
+   "rect": [
+    433,
+    750,
+    459,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/post_rift_015_end_banner.png",
+   "step": "end_banner",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/post_rift_016_end_banner.png",
+   "step": "end_banner",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_016_end_banner.png",
+   "step": "end_banner",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 672,
+   "clientH": 616,
+   "scrollW": 1239,
+   "clientW": 1239,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/post_rift_017_postgame_summary.png",
+   "step": "postgame_summary",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/post_rift_018_postgame_summary.png",
+   "step": "postgame_summary",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_018_postgame_summary.png",
+   "step": "postgame_summary",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 672,
+   "clientH": 616,
+   "scrollW": 1239,
+   "clientW": 1239,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/post_rift_019_postgame_tab_summary.png",
+   "step": "postgame_tab_summary",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/post_rift_020_postgame_tab_summary.png",
+   "step": "postgame_tab_summary",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_020_postgame_tab_summary.png",
+   "step": "postgame_tab_summary",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 672,
+   "clientH": 616,
+   "scrollW": 1239,
+   "clientW": 1239,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/post_rift_021_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_021_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 1041,
+   "clientH": 896,
+   "scrollW": 1738,
+   "clientW": 1738,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/post_rift_021_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body-s",
+   "text": "bellringer_lu BOT",
+   "rect": [
+    146,
+    1072,
+    269,
+    1096
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_021_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.chip.chip--bot",
+   "text": "BOT",
+   "rect": [
+    230,
+    1072,
+    269,
+    1096
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_021_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Ulkro · Shaftlight",
+   "rect": [
+    146,
+    1096,
+    269,
+    1114
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_021_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "14",
+   "rect": [
+    580,
+    1065,
+    666,
+    1120
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_021_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "8 / 5 / 2",
+   "rect": [
+    666,
+    1065,
+    839,
+    1120
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_021_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "102",
+   "rect": [
+    839,
+    1065,
+    960,
+    1120
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_021_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.bestv",
+   "text": "10,311",
+   "rect": [
+    999,
+    1079,
+    1059,
+    1106
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_021_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "15,911",
+   "rect": [
+    1098,
+    1065,
+    1236,
+    1120
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_021_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "1,497",
+   "rect": [
+    1236,
+    1065,
+    1375,
+    1120
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_021_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.bestv",
+   "text": "3,898",
+   "rect": [
+    1427,
+    1079,
+    1478,
+    1106
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 865,
+   "clientH": 616,
+   "scrollW": 1239,
+   "clientW": 1239,
+   "top": 0
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Ardit · Grovehunter",
+   "rect": [
+    108,
+    766,
+    224,
+    783
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "14",
+   "rect": [
+    413,
+    742,
+    474,
+    788
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "2 / 3 / 2",
+   "rect": [
+    474,
+    742,
+    597,
+    788
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "64",
+   "rect": [
+    597,
+    742,
+    683,
+    788
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "8,243",
+   "rect": [
+    683,
+    742,
+    781,
+    788
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "5,860",
+   "rect": [
+    781,
+    742,
+    880,
+    788
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "2,683",
+   "rect": [
+    880,
+    742,
+    978,
+    788
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "305",
+   "rect": [
+    978,
+    742,
+    1089,
+    788
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body-s",
+   "text": "noor_lampwright BOT",
+   "rect": [
+    108,
+    793,
+    239,
+    813
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.chip.chip--bot",
+   "text": "BOT",
+   "rect": [
+    203,
+    793,
+    239,
+    813
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Burdam · Shadehold",
+   "rect": [
+    108,
+    813,
+    239,
+    829
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.bestv",
+   "text": "16",
+   "rect": [
+    435,
+    800,
+    451,
+    822
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "4 / 4 / 2",
+   "rect": [
+    474,
+    788,
+    597,
+    835
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "52",
+   "rect": [
+    597,
+    788,
+    683,
+    835
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "7,884",
+   "rect": [
+    683,
+    788,
+    781,
+    835
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "13,863",
+   "rect": [
+    781,
+    788,
+    880,
+    835
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "3,640",
+   "rect": [
+    880,
+    788,
+    978,
+    835
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "2,422",
+   "rect": [
+    978,
+    788,
+    1089,
+    835
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body-s",
+   "text": "bartholo BOT",
+   "rect": [
+    108,
+    840,
+    209,
+    859
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.chip.chip--bot",
+   "text": "BOT",
+   "rect": [
+    158,
+    840,
+    195,
+    859
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Sukri · Lampglass",
+   "rect": [
+    108,
+    859,
+    209,
+    876
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "13",
+   "rect": [
+    413,
+    835,
+    474,
+    881
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "1 / 4 / 8",
+   "rect": [
+    474,
+    835,
+    597,
+    881
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "22",
+   "rect": [
+    597,
+    835,
+    683,
+    881
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "7,238",
+   "rect": [
+    683,
+    835,
+    781,
+    881
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "7,132",
+   "rect": [
+    781,
+    835,
+    880,
+    881
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "7,041",
+   "rect": [
+    880,
+    835,
+    978,
+    881
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "1,361",
+   "rect": [
+    978,
+    835,
+    1089,
+    881
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body-s",
+   "text": "bellringer_lu BOT",
+   "rect": [
+    108,
+    886,
+    216,
+    905
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.chip.chip--bot",
+   "text": "BOT",
+   "rect": [
+    180,
+    886,
+    216,
+    905
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Ulkro · Shaftlight",
+   "rect": [
+    108,
+    905,
+    216,
+    922
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "14",
+   "rect": [
+    413,
+    881,
+    474,
+    927
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "8 / 5 / 2",
+   "rect": [
+    474,
+    881,
+    597,
+    927
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "102",
+   "rect": [
+    597,
+    881,
+    683,
+    927
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.bestv",
+   "text": "10,311",
+   "rect": [
+    708,
+    893,
+    756,
+    915
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "15,911",
+   "rect": [
+    781,
+    881,
+    880,
+    927
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "1,497",
+   "rect": [
+    880,
+    881,
+    978,
+    927
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_022_postgame_tab_scoreboard.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.bestv",
+   "text": "3,898",
+   "rect": [
+    1013,
+    893,
+    1054,
+    915
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/post_rift_023_postgame_tab_scoreboard_scrolled.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_023_postgame_tab_scoreboard_scrolled.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade",
+   "scrollH": 1041,
+   "clientH": 896,
+   "scrollW": 1738,
+   "clientW": 1738,
+   "top": 145
+  },
+  {
+   "file": "1920x1080/post_rift_023_postgame_tab_scoreboard_scrolled.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-label.muted.pg__queue",
+   "text": "RIFT · LANTERN DRILL",
+   "rect": [
+    96,
+    -41,
+    251,
+    -21
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_rift_023_postgame_tab_scoreboard_scrolled.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "h1.t-display-xl.pg__title.is-caps",
+   "text": "DEFEAT",
+   "rect": [
+    96,
+    -13,
+    541,
+    99
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/post_rift_024_postgame_tab_scoreboard_scrolled.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_024_postgame_tab_scoreboard_scrolled.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade",
+   "scrollH": 865,
+   "clientH": 616,
+   "scrollW": 1239,
+   "clientW": 1239,
+   "top": 249
+  },
+  {
+   "file": "1366x768/post_rift_024_postgame_tab_scoreboard_scrolled.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-label.muted.pg__queue",
+   "text": "RIFT · LANTERN DRILL",
+   "rect": [
+    68,
+    -166,
+    192,
+    -150
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_024_postgame_tab_scoreboard_scrolled.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "h1.t-display-xl.pg__title.is-caps",
+   "text": "DEFEAT",
+   "rect": [
+    68,
+    -143,
+    424,
+    -54
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_024_postgame_tab_scoreboard_scrolled.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "p.t-body-l.pg__sub",
+   "text": "Your Hourbell fell quiet. The light holds for another day.",
+   "rect": [
+    68,
+    -47,
+    416,
+    -25
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_024_postgame_tab_scoreboard_scrolled.png",
+   "step": "postgame_tab_scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "p.t-body-s.muted.pg__reason",
+   "text": "Hourbell silenced · 23:31 played",
+   "rect": [
+    68,
+    -19,
+    240,
+    -2
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/post_rift_025_postgame_tab_gleam-lead.png",
+   "step": "postgame_tab_gleam-lead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/post_rift_026_postgame_tab_gleam-lead.png",
+   "step": "postgame_tab_gleam-lead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_rift_026_postgame_tab_gleam-lead.png",
+   "step": "postgame_tab_gleam-lead",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 628,
+   "clientH": 616,
+   "scrollW": 1239,
+   "clientW": 1239,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/post_rift_027_after_postgame_leave.png",
+   "step": "postgame_tab_gleam-lead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/post_rift_028_after_postgame_leave.png",
+   "step": "postgame_tab_gleam-lead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
+ "notes": [
+  {
+   "step": "rift_flow_12_loading",
+   "tMs": 28502,
+   "load1": 5.47,
+   "text": "rift: flow to HUD took 23814 ms"
+  },
+  {
+   "step": "fast_forward",
+   "tMs": 28945,
+   "load1": 6.07,
+   "text": "progress",
+   "data": {
+    "t": -6,
+    "scale": 16,
+    "level": 1
+   }
+  },
+  {
+   "step": "fast_forward",
+   "tMs": 59060,
+   "load1": 6.62,
+   "text": "progress",
+   "data": {
+    "t": 475.6,
+    "scale": 16,
+    "level": 7
+   }
+  },
+  {
+   "step": "fast_forward",
+   "tMs": 89173,
+   "load1": 8.38,
+   "text": "progress",
+   "data": {
+    "t": 955.8,
+    "scale": 16,
+    "level": 12
+   }
+  },
+  {
+   "step": "postgame_summary",
+   "tMs": 126761,
+   "load1": 7.97,
+   "text": "postgame tabs",
+   "data": [
+    "SUMMARY",
+    "SCOREBOARD",
+    "GLEAM LEAD"
+   ]
+  },
+  {
+   "step": "postgame_tab_gleam-lead",
+   "tMs": 136359,
+   "load1": 7.12,
+   "text": "postgame text (default tab)",
+   "data": "RIFT · LANTERN DRILL DEFEAT Your Hourbell fell quiet. The light holds for another day. Hourbell silenced · 23:31 played SUMMARY SCOREBOARD GLEAM LEAD GLEAM LEAD BY MINUTE Above the line, your team was ahead. 0 5 10 15 20 +3,597 −3,597 Minute CHOOSE ANOTHER MODE RETURN HOME PLAY AGAIN"
+  },
+  {
+   "step": "postgame_tab_gleam-lead",
+   "tMs": 136359,
+   "load1": 7.12,
+   "text": "postgame buttons",
+   "data": [
+    "SUMMARY",
+    "SCOREBOARD",
+    "GLEAM LEAD",
+    "CHOOSE ANOTHER MODE",
+    "RETURN HOME",
+    "PLAY AGAIN"
+   ]
+  }
+ ],
+ "timings": {}
+}

@@ -1,0 +1,1785 @@
+{
+ "session": "structures:bridge",
+ "records": [
+  {
+   "file": "_raw_struct_bridge_needle_outer_team0_hp100.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 13.77,
+   "time": "00:13",
+   "kind": "structure_raw",
+   "structure": "needle_outer",
+   "structure_id": 11,
+   "team": 0,
+   "stage": "hp100",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    57,
+    19
+   ],
+   "hp_fraction": 1,
+   "what": "needle_outer team 0 at 100 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_outer_team0_hp60.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 13.77,
+   "time": "00:13",
+   "kind": "structure_raw",
+   "structure": "needle_outer",
+   "structure_id": 11,
+   "team": 0,
+   "stage": "hp60",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    57,
+    19
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_outer team 0 at 60 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_outer_team0_hp30.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 13.77,
+   "time": "00:13",
+   "kind": "structure_raw",
+   "structure": "needle_outer",
+   "structure_id": 11,
+   "team": 0,
+   "stage": "hp30",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    57,
+    19
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_outer team 0 at 30 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_inner_team0_hp100.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 14.47,
+   "time": "00:14",
+   "kind": "structure_raw",
+   "structure": "needle_inner",
+   "structure_id": 12,
+   "team": 0,
+   "stage": "hp100",
+   "screen": {
+    "x": 959.9999999999994,
+    "y": 389.1375943970609,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    41,
+    25
+   ],
+   "hp_fraction": 1,
+   "what": "needle_inner team 0 at 100 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_inner_team0_hp60.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 14.47,
+   "time": "00:14",
+   "kind": "structure_raw",
+   "structure": "needle_inner",
+   "structure_id": 12,
+   "team": 0,
+   "stage": "hp60",
+   "screen": {
+    "x": 959.9999999999994,
+    "y": 389.1375943970609,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    41,
+    25
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_inner team 0 at 60 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_inner_team0_hp30.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 14.47,
+   "time": "00:14",
+   "kind": "structure_raw",
+   "structure": "needle_inner",
+   "structure_id": 12,
+   "team": 0,
+   "stage": "hp30",
+   "screen": {
+    "x": 959.9999999999994,
+    "y": 389.1375943970609,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    41,
+    25
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_inner team 0 at 30 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_lantern_team0_hp100.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 15.17,
+   "time": "00:15",
+   "kind": "structure_raw",
+   "structure": "lantern",
+   "structure_id": 13,
+   "team": 0,
+   "stage": "hp100",
+   "screen": {
+    "x": 959.9999999999997,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    29,
+    19
+   ],
+   "hp_fraction": 1,
+   "what": "lantern team 0 at 100 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_lantern_team0_hp60.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 15.17,
+   "time": "00:15",
+   "kind": "structure_raw",
+   "structure": "lantern",
+   "structure_id": 13,
+   "team": 0,
+   "stage": "hp60",
+   "screen": {
+    "x": 959.9999999999997,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    29,
+    19
+   ],
+   "hp_fraction": 0.6,
+   "what": "lantern team 0 at 60 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_lantern_team0_hp30.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 15.17,
+   "time": "00:15",
+   "kind": "structure_raw",
+   "structure": "lantern",
+   "structure_id": 13,
+   "team": 0,
+   "stage": "hp30",
+   "screen": {
+    "x": 959.9999999999997,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    29,
+    19
+   ],
+   "hp_fraction": 0.3,
+   "what": "lantern team 0 at 30 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_bell_team0_hp100.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 15.87,
+   "time": "00:15",
+   "kind": "structure_raw",
+   "structure": "needle_bell",
+   "structure_id": 14,
+   "team": 0,
+   "stage": "hp100",
+   "screen": {
+    "x": 959.9999999999997,
+    "y": 389.13759439706115,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    21.5,
+    25.4
+   ],
+   "hp_fraction": 1,
+   "what": "needle_bell team 0 at 100 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_bell_team0_hp60.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 15.87,
+   "time": "00:15",
+   "kind": "structure_raw",
+   "structure": "needle_bell",
+   "structure_id": 14,
+   "team": 0,
+   "stage": "hp60",
+   "screen": {
+    "x": 959.9999999999997,
+    "y": 389.13759439706115,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    21.5,
+    25.4
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_bell team 0 at 60 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_bell_team0_hp30.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 15.87,
+   "time": "00:15",
+   "kind": "structure_raw",
+   "structure": "needle_bell",
+   "structure_id": 14,
+   "team": 0,
+   "stage": "hp30",
+   "screen": {
+    "x": 959.9999999999997,
+    "y": 389.13759439706115,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    21.5,
+    25.4
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_bell team 0 at 30 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_hourbell_team0_hp100.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 16.57,
+   "time": "00:16",
+   "kind": "structure_raw",
+   "structure": "hourbell",
+   "structure_id": 15,
+   "team": 0,
+   "stage": "hp100",
+   "screen": {
+    "x": 959.9999999999999,
+    "y": 389.1375943970601,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    12.5,
+    22
+   ],
+   "hp_fraction": 1,
+   "what": "hourbell team 0 at 100 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_hourbell_team0_hp60.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 16.57,
+   "time": "00:16",
+   "kind": "structure_raw",
+   "structure": "hourbell",
+   "structure_id": 15,
+   "team": 0,
+   "stage": "hp60",
+   "screen": {
+    "x": 959.9999999999999,
+    "y": 389.1375943970601,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    12.5,
+    22
+   ],
+   "hp_fraction": 0.6,
+   "what": "hourbell team 0 at 60 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_hourbell_team0_hp30.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 16.57,
+   "time": "00:16",
+   "kind": "structure_raw",
+   "structure": "hourbell",
+   "structure_id": 15,
+   "team": 0,
+   "stage": "hp30",
+   "screen": {
+    "x": 959.9999999999999,
+    "y": 389.1375943970601,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    12.5,
+    22
+   ],
+   "hp_fraction": 0.3,
+   "what": "hourbell team 0 at 30 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_outer_team1_hp100.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 17.27,
+   "time": "00:17",
+   "kind": "structure_raw",
+   "structure": "needle_outer",
+   "structure_id": 16,
+   "team": 1,
+   "stage": "hp100",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    99,
+    19
+   ],
+   "hp_fraction": 1,
+   "what": "needle_outer team 1 at 100 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_outer_team1_hp60.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 17.27,
+   "time": "00:17",
+   "kind": "structure_raw",
+   "structure": "needle_outer",
+   "structure_id": 16,
+   "team": 1,
+   "stage": "hp60",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    99,
+    19
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_outer team 1 at 60 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_outer_team1_hp30.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 17.27,
+   "time": "00:17",
+   "kind": "structure_raw",
+   "structure": "needle_outer",
+   "structure_id": 16,
+   "team": 1,
+   "stage": "hp30",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    99,
+    19
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_outer team 1 at 30 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_inner_team1_hp100.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 17.97,
+   "time": "00:17",
+   "kind": "structure_raw",
+   "structure": "needle_inner",
+   "structure_id": 17,
+   "team": 1,
+   "stage": "hp100",
+   "screen": {
+    "x": 959.9999999999989,
+    "y": 389.1375943970609,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    115,
+    25
+   ],
+   "hp_fraction": 1,
+   "what": "needle_inner team 1 at 100 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_inner_team1_hp60.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 17.97,
+   "time": "00:17",
+   "kind": "structure_raw",
+   "structure": "needle_inner",
+   "structure_id": 17,
+   "team": 1,
+   "stage": "hp60",
+   "screen": {
+    "x": 959.9999999999989,
+    "y": 389.1375943970609,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    115,
+    25
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_inner team 1 at 60 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_inner_team1_hp30.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 17.97,
+   "time": "00:17",
+   "kind": "structure_raw",
+   "structure": "needle_inner",
+   "structure_id": 17,
+   "team": 1,
+   "stage": "hp30",
+   "screen": {
+    "x": 959.9999999999989,
+    "y": 389.1375943970609,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    115,
+    25
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_inner team 1 at 30 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_lantern_team1_hp100.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 18.67,
+   "time": "00:18",
+   "kind": "structure_raw",
+   "structure": "lantern",
+   "structure_id": 18,
+   "team": 1,
+   "stage": "hp100",
+   "screen": {
+    "x": 959.9999999999989,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    127,
+    19
+   ],
+   "hp_fraction": 1,
+   "what": "lantern team 1 at 100 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_lantern_team1_hp60.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 18.67,
+   "time": "00:18",
+   "kind": "structure_raw",
+   "structure": "lantern",
+   "structure_id": 18,
+   "team": 1,
+   "stage": "hp60",
+   "screen": {
+    "x": 959.9999999999989,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    127,
+    19
+   ],
+   "hp_fraction": 0.6,
+   "what": "lantern team 1 at 60 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_lantern_team1_hp30.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 18.67,
+   "time": "00:18",
+   "kind": "structure_raw",
+   "structure": "lantern",
+   "structure_id": 18,
+   "team": 1,
+   "stage": "hp30",
+   "screen": {
+    "x": 959.9999999999989,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    127,
+    19
+   ],
+   "hp_fraction": 0.3,
+   "what": "lantern team 1 at 30 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_bell_team1_hp100.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 19.37,
+   "time": "00:19",
+   "kind": "structure_raw",
+   "structure": "needle_bell",
+   "structure_id": 19,
+   "team": 1,
+   "stage": "hp100",
+   "screen": {
+    "x": 959.9999999999976,
+    "y": 389.13759439706115,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    134.5,
+    25.4
+   ],
+   "hp_fraction": 1,
+   "what": "needle_bell team 1 at 100 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_bell_team1_hp60.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 19.37,
+   "time": "00:19",
+   "kind": "structure_raw",
+   "structure": "needle_bell",
+   "structure_id": 19,
+   "team": 1,
+   "stage": "hp60",
+   "screen": {
+    "x": 959.9999999999976,
+    "y": 389.13759439706115,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    134.5,
+    25.4
+   ],
+   "hp_fraction": 0.6,
+   "what": "needle_bell team 1 at 60 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_bell_team1_hp30.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 19.37,
+   "time": "00:19",
+   "kind": "structure_raw",
+   "structure": "needle_bell",
+   "structure_id": 19,
+   "team": 1,
+   "stage": "hp30",
+   "screen": {
+    "x": 959.9999999999976,
+    "y": 389.13759439706115,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    134.5,
+    25.4
+   ],
+   "hp_fraction": 0.3,
+   "what": "needle_bell team 1 at 30 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_hourbell_team1_hp100.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 20.07,
+   "time": "00:20",
+   "kind": "structure_raw",
+   "structure": "hourbell",
+   "structure_id": 20,
+   "team": 1,
+   "stage": "hp100",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970601,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143.5,
+    22
+   ],
+   "hp_fraction": 1,
+   "what": "hourbell team 1 at 100 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_hourbell_team1_hp60.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 20.07,
+   "time": "00:20",
+   "kind": "structure_raw",
+   "structure": "hourbell",
+   "structure_id": 20,
+   "team": 1,
+   "stage": "hp60",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970601,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143.5,
+    22
+   ],
+   "hp_fraction": 0.6,
+   "what": "hourbell team 1 at 60 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_hourbell_team1_hp30.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 20.07,
+   "time": "00:20",
+   "kind": "structure_raw",
+   "structure": "hourbell",
+   "structure_id": 20,
+   "team": 1,
+   "stage": "hp30",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970601,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143.5,
+    22
+   ],
+   "hp_fraction": 0.3,
+   "what": "hourbell team 1 at 30 % hp"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_outer_team0_collapse_037.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 21.13,
+   "time": "00:21",
+   "kind": "structure_raw",
+   "structure": "needle_outer",
+   "structure_id": 11,
+   "team": 0,
+   "stage": "collapse_037",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    57,
+    19
+   ],
+   "what": "needle_outer team 0 0.37 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_outer_team0_collapse_107.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 21.83,
+   "time": "00:21",
+   "kind": "structure_raw",
+   "structure": "needle_outer",
+   "structure_id": 11,
+   "team": 0,
+   "stage": "collapse_107",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    57,
+    19
+   ],
+   "what": "needle_outer team 0 1.07 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_outer_team0_collapse_240.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 23.17,
+   "time": "00:23",
+   "kind": "structure_raw",
+   "structure": "needle_outer",
+   "structure_id": 11,
+   "team": 0,
+   "stage": "collapse_240",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    57,
+    19
+   ],
+   "what": "needle_outer team 0 2.40 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_outer_team0_ruin.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 25.17,
+   "time": "00:25",
+   "kind": "structure_raw",
+   "structure": "needle_outer",
+   "structure_id": 11,
+   "team": 0,
+   "stage": "ruin",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    57,
+    19
+   ],
+   "what": "needle_outer team 0 ruin, 4.4 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_inner_team0_collapse_037.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 26.23,
+   "time": "00:26",
+   "kind": "structure_raw",
+   "structure": "needle_inner",
+   "structure_id": 12,
+   "team": 0,
+   "stage": "collapse_037",
+   "screen": {
+    "x": 959.9999999999994,
+    "y": 389.1375943970609,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    41,
+    25
+   ],
+   "what": "needle_inner team 0 0.37 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_inner_team0_collapse_107.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 26.93,
+   "time": "00:26",
+   "kind": "structure_raw",
+   "structure": "needle_inner",
+   "structure_id": 12,
+   "team": 0,
+   "stage": "collapse_107",
+   "screen": {
+    "x": 959.9999999999994,
+    "y": 389.1375943970609,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    41,
+    25
+   ],
+   "what": "needle_inner team 0 1.07 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_inner_team0_collapse_240.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 28.27,
+   "time": "00:28",
+   "kind": "structure_raw",
+   "structure": "needle_inner",
+   "structure_id": 12,
+   "team": 0,
+   "stage": "collapse_240",
+   "screen": {
+    "x": 959.9999999999994,
+    "y": 389.1375943970609,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    41,
+    25
+   ],
+   "what": "needle_inner team 0 2.40 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_inner_team0_ruin.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 30.27,
+   "time": "00:30",
+   "kind": "structure_raw",
+   "structure": "needle_inner",
+   "structure_id": 12,
+   "team": 0,
+   "stage": "ruin",
+   "screen": {
+    "x": 959.9999999999994,
+    "y": 389.1375943970609,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    41,
+    25
+   ],
+   "what": "needle_inner team 0 ruin, 4.4 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_lantern_team0_collapse_037.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 31.33,
+   "time": "00:31",
+   "kind": "structure_raw",
+   "structure": "lantern",
+   "structure_id": 13,
+   "team": 0,
+   "stage": "collapse_037",
+   "screen": {
+    "x": 959.9999999999997,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    29,
+    19
+   ],
+   "what": "lantern team 0 0.37 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_lantern_team0_collapse_107.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 32.03,
+   "time": "00:32",
+   "kind": "structure_raw",
+   "structure": "lantern",
+   "structure_id": 13,
+   "team": 0,
+   "stage": "collapse_107",
+   "screen": {
+    "x": 959.9999999999997,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    29,
+    19
+   ],
+   "what": "lantern team 0 1.07 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_lantern_team0_collapse_240.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 33.37,
+   "time": "00:33",
+   "kind": "structure_raw",
+   "structure": "lantern",
+   "structure_id": 13,
+   "team": 0,
+   "stage": "collapse_240",
+   "screen": {
+    "x": 959.9999999999997,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    29,
+    19
+   ],
+   "what": "lantern team 0 2.40 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_lantern_team0_ruin.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 35.37,
+   "time": "00:35",
+   "kind": "structure_raw",
+   "structure": "lantern",
+   "structure_id": 13,
+   "team": 0,
+   "stage": "ruin",
+   "screen": {
+    "x": 959.9999999999997,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    29,
+    19
+   ],
+   "what": "lantern team 0 ruin, 4.4 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_bell_team0_collapse_037.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 36.43,
+   "time": "00:36",
+   "kind": "structure_raw",
+   "structure": "needle_bell",
+   "structure_id": 14,
+   "team": 0,
+   "stage": "collapse_037",
+   "screen": {
+    "x": 959.9999999999997,
+    "y": 389.13759439706115,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    21.5,
+    25.4
+   ],
+   "what": "needle_bell team 0 0.37 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_bell_team0_collapse_107.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 37.13,
+   "time": "00:37",
+   "kind": "structure_raw",
+   "structure": "needle_bell",
+   "structure_id": 14,
+   "team": 0,
+   "stage": "collapse_107",
+   "screen": {
+    "x": 959.9999999999997,
+    "y": 389.13759439706115,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    21.5,
+    25.4
+   ],
+   "what": "needle_bell team 0 1.07 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_bell_team0_collapse_240.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 38.47,
+   "time": "00:38",
+   "kind": "structure_raw",
+   "structure": "needle_bell",
+   "structure_id": 14,
+   "team": 0,
+   "stage": "collapse_240",
+   "screen": {
+    "x": 959.9999999999997,
+    "y": 389.13759439706115,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    21.5,
+    25.4
+   ],
+   "what": "needle_bell team 0 2.40 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_bell_team0_ruin.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 40.47,
+   "time": "00:40",
+   "kind": "structure_raw",
+   "structure": "needle_bell",
+   "structure_id": 14,
+   "team": 0,
+   "stage": "ruin",
+   "screen": {
+    "x": 959.9999999999997,
+    "y": 389.13759439706115,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    21.5,
+    25.4
+   ],
+   "what": "needle_bell team 0 ruin, 4.4 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_hourbell_team0_collapse_037.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "hourbell",
+   "structure_id": 15,
+   "team": 0,
+   "stage": "collapse_037",
+   "screen": {
+    "x": 959.9999999999999,
+    "y": 389.1375943970601,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    12.5,
+    22
+   ],
+   "what": "hourbell team 0 0.37 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_hourbell_team0_collapse_107.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "hourbell",
+   "structure_id": 15,
+   "team": 0,
+   "stage": "collapse_107",
+   "screen": {
+    "x": 959.9999999999999,
+    "y": 389.1375943970601,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    12.5,
+    22
+   ],
+   "what": "hourbell team 0 1.07 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_hourbell_team0_collapse_240.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "hourbell",
+   "structure_id": 15,
+   "team": 0,
+   "stage": "collapse_240",
+   "screen": {
+    "x": 959.9999999999999,
+    "y": 389.1375943970601,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    12.5,
+    22
+   ],
+   "what": "hourbell team 0 2.40 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_hourbell_team0_ruin.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "hourbell",
+   "structure_id": 15,
+   "team": 0,
+   "stage": "ruin",
+   "screen": {
+    "x": 959.9999999999999,
+    "y": 389.1375943970601,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    12.5,
+    22
+   ],
+   "what": "hourbell team 0 ruin, 4.4 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_outer_team1_collapse_037.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "needle_outer",
+   "structure_id": 16,
+   "team": 1,
+   "stage": "collapse_037",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    99,
+    19
+   ],
+   "what": "needle_outer team 1 0.37 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_outer_team1_collapse_107.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "needle_outer",
+   "structure_id": 16,
+   "team": 1,
+   "stage": "collapse_107",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    99,
+    19
+   ],
+   "what": "needle_outer team 1 1.07 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_outer_team1_collapse_240.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "needle_outer",
+   "structure_id": 16,
+   "team": 1,
+   "stage": "collapse_240",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    99,
+    19
+   ],
+   "what": "needle_outer team 1 2.40 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_outer_team1_ruin.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "needle_outer",
+   "structure_id": 16,
+   "team": 1,
+   "stage": "ruin",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    99,
+    19
+   ],
+   "what": "needle_outer team 1 ruin, 4.4 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_inner_team1_collapse_037.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "needle_inner",
+   "structure_id": 17,
+   "team": 1,
+   "stage": "collapse_037",
+   "screen": {
+    "x": 959.9999999999989,
+    "y": 389.1375943970609,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    115,
+    25
+   ],
+   "what": "needle_inner team 1 0.37 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_inner_team1_collapse_107.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "needle_inner",
+   "structure_id": 17,
+   "team": 1,
+   "stage": "collapse_107",
+   "screen": {
+    "x": 959.9999999999989,
+    "y": 389.1375943970609,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    115,
+    25
+   ],
+   "what": "needle_inner team 1 1.07 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_inner_team1_collapse_240.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "needle_inner",
+   "structure_id": 17,
+   "team": 1,
+   "stage": "collapse_240",
+   "screen": {
+    "x": 959.9999999999989,
+    "y": 389.1375943970609,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    115,
+    25
+   ],
+   "what": "needle_inner team 1 2.40 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_inner_team1_ruin.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "needle_inner",
+   "structure_id": 17,
+   "team": 1,
+   "stage": "ruin",
+   "screen": {
+    "x": 959.9999999999989,
+    "y": 389.1375943970609,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    115,
+    25
+   ],
+   "what": "needle_inner team 1 ruin, 4.4 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_lantern_team1_collapse_037.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "lantern",
+   "structure_id": 18,
+   "team": 1,
+   "stage": "collapse_037",
+   "screen": {
+    "x": 959.9999999999989,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    127,
+    19
+   ],
+   "what": "lantern team 1 0.37 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_lantern_team1_collapse_107.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "lantern",
+   "structure_id": 18,
+   "team": 1,
+   "stage": "collapse_107",
+   "screen": {
+    "x": 959.9999999999989,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    127,
+    19
+   ],
+   "what": "lantern team 1 1.07 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_lantern_team1_collapse_240.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "lantern",
+   "structure_id": 18,
+   "team": 1,
+   "stage": "collapse_240",
+   "screen": {
+    "x": 959.9999999999989,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    127,
+    19
+   ],
+   "what": "lantern team 1 2.40 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_lantern_team1_ruin.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "lantern",
+   "structure_id": 18,
+   "team": 1,
+   "stage": "ruin",
+   "screen": {
+    "x": 959.9999999999989,
+    "y": 389.1375943970603,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    127,
+    19
+   ],
+   "what": "lantern team 1 ruin, 4.4 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_bell_team1_collapse_037.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "needle_bell",
+   "structure_id": 19,
+   "team": 1,
+   "stage": "collapse_037",
+   "screen": {
+    "x": 959.9999999999976,
+    "y": 389.13759439706115,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    134.5,
+    25.4
+   ],
+   "what": "needle_bell team 1 0.37 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_bell_team1_collapse_107.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "needle_bell",
+   "structure_id": 19,
+   "team": 1,
+   "stage": "collapse_107",
+   "screen": {
+    "x": 959.9999999999976,
+    "y": 389.13759439706115,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    134.5,
+    25.4
+   ],
+   "what": "needle_bell team 1 1.07 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_bell_team1_collapse_240.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "needle_bell",
+   "structure_id": 19,
+   "team": 1,
+   "stage": "collapse_240",
+   "screen": {
+    "x": 959.9999999999976,
+    "y": 389.13759439706115,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    134.5,
+    25.4
+   ],
+   "what": "needle_bell team 1 2.40 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_needle_bell_team1_ruin.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "needle_bell",
+   "structure_id": 19,
+   "team": 1,
+   "stage": "ruin",
+   "screen": {
+    "x": 959.9999999999976,
+    "y": 389.13759439706115,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    134.5,
+    25.4
+   ],
+   "what": "needle_bell team 1 ruin, 4.4 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_hourbell_team1_collapse_037.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "hourbell",
+   "structure_id": 20,
+   "team": 1,
+   "stage": "collapse_037",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970601,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143.5,
+    22
+   ],
+   "what": "hourbell team 1 0.37 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_hourbell_team1_collapse_107.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "hourbell",
+   "structure_id": 20,
+   "team": 1,
+   "stage": "collapse_107",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970601,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143.5,
+    22
+   ],
+   "what": "hourbell team 1 1.07 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_hourbell_team1_collapse_240.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "hourbell",
+   "structure_id": 20,
+   "team": 1,
+   "stage": "collapse_240",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970601,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143.5,
+    22
+   ],
+   "what": "hourbell team 1 2.40 s after it was killed"
+  },
+  {
+   "file": "_raw_struct_bridge_hourbell_team1_ruin.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.2,
+   "time": "00:41",
+   "kind": "structure_raw",
+   "structure": "hourbell",
+   "structure_id": 20,
+   "team": 1,
+   "stage": "ruin",
+   "screen": {
+    "x": 960,
+    "y": 389.1375943970601,
+    "visible": true
+   },
+   "map": "bridge",
+   "quality": "high",
+   "world": [
+    143.5,
+    22
+   ],
+   "what": "hourbell team 1 ruin, 4.4 s after it was killed"
+  }
+ ]
+}

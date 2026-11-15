@@ -1,0 +1,309 @@
+{
+ "session": "fighters:a",
+ "records": [
+  {
+   "file": "_raw_fighter_ardit_game.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 31.77,
+   "time": "00:31",
+   "kind": "fighter_raw",
+   "fighter": "ardit",
+   "team": 0,
+   "screen": {
+    "x": 953.8389151908515,
+    "y": 497.05402278265467,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "game (distance from the map camera)"
+  },
+  {
+   "file": "_raw_fighter_ardit_close.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 32.47,
+   "time": "00:32",
+   "kind": "fighter_raw",
+   "fighter": "ardit",
+   "team": 0,
+   "screen": {
+    "x": 949.3664990561151,
+    "y": 480.9363312590306,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "closest game camera"
+  },
+  {
+   "file": "_raw_fighter_burdam_game.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 33.17,
+   "time": "00:33",
+   "kind": "fighter_raw",
+   "fighter": "burdam",
+   "team": 0,
+   "screen": {
+    "x": 959.9999999999994,
+    "y": 492.3357990468793,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "game (distance from the map camera)"
+  },
+  {
+   "file": "_raw_fighter_burdam_close.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 33.87,
+   "time": "00:33",
+   "kind": "fighter_raw",
+   "fighter": "burdam",
+   "team": 0,
+   "screen": {
+    "x": 959.9999999999992,
+    "y": 479.26994856188,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "closest game camera"
+  },
+  {
+   "file": "_raw_fighter_dunsom_game.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 34.57,
+   "time": "00:34",
+   "kind": "fighter_raw",
+   "fighter": "dunsom",
+   "team": 0,
+   "screen": {
+    "x": 951.3548232730425,
+    "y": 492.33569885871765,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "game (distance from the map camera)"
+  },
+  {
+   "file": "_raw_fighter_dunsom_close.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 35.27,
+   "time": "00:35",
+   "kind": "fighter_raw",
+   "fighter": "dunsom",
+   "team": 0,
+   "screen": {
+    "x": 948.9849822292143,
+    "y": 479.26981093773435,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "closest game camera"
+  },
+  {
+   "file": "_raw_fighter_ervet_game.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 35.97,
+   "time": "00:35",
+   "kind": "fighter_raw",
+   "fighter": "ervet",
+   "team": 0,
+   "screen": {
+    "x": 951.3364774931849,
+    "y": 490.7605644403927,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "game (distance from the map camera)"
+  },
+  {
+   "file": "_raw_fighter_ervet_close.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 36.67,
+   "time": "00:36",
+   "kind": "fighter_raw",
+   "fighter": "ervet",
+   "team": 0,
+   "screen": {
+    "x": 948.9875323467791,
+    "y": 477.19466624355783,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "closest game camera"
+  },
+  {
+   "file": "_raw_fighter_hesmi_game.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 37.37,
+   "time": "00:37",
+   "kind": "fighter_raw",
+   "fighter": "hesmi",
+   "team": 0,
+   "screen": {
+    "x": 951.6775471934207,
+    "y": 490.5363541731668,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "game (distance from the map camera)"
+  },
+  {
+   "file": "_raw_fighter_hesmi_close.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 38.07,
+   "time": "00:38",
+   "kind": "fighter_raw",
+   "fighter": "hesmi",
+   "team": 0,
+   "screen": {
+    "x": 949.4838119499226,
+    "y": 476.76434674312713,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "closest game camera"
+  },
+  {
+   "file": "_raw_fighter_ilsheta_game.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 38.77,
+   "time": "00:38",
+   "kind": "fighter_raw",
+   "fighter": "ilsheta",
+   "team": 1,
+   "screen": {
+    "x": 968.1789749862517,
+    "y": 494.5228932714775,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "game (distance from the map camera)"
+  },
+  {
+   "file": "_raw_fighter_ilsheta_close.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 39.47,
+   "time": "00:39",
+   "kind": "fighter_raw",
+   "fighter": "ilsheta",
+   "team": 1,
+   "screen": {
+    "x": 970.7069263974195,
+    "y": 481.2919632650156,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "closest game camera"
+  },
+  {
+   "file": "_raw_fighter_kemdo_game.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 40.17,
+   "time": "00:40",
+   "kind": "fighter_raw",
+   "fighter": "kemdo",
+   "team": 1,
+   "screen": {
+    "x": 959.999999999999,
+    "y": 492.3357990468787,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "game (distance from the map camera)"
+  },
+  {
+   "file": "_raw_fighter_kemdo_close.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 40.87,
+   "time": "00:40",
+   "kind": "fighter_raw",
+   "fighter": "kemdo",
+   "team": 1,
+   "screen": {
+    "x": 959.9999999999986,
+    "y": 479.2699485618793,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "closest game camera"
+  },
+  {
+   "file": "_raw_fighter_lisvel_game.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.57,
+   "time": "00:41",
+   "kind": "fighter_raw",
+   "fighter": "lisvel",
+   "team": 1,
+   "screen": {
+    "x": 951.3548229780284,
+    "y": 492.33579906500387,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "game (distance from the map camera)"
+  },
+  {
+   "file": "_raw_fighter_lisvel_close.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 42.27,
+   "time": "00:42",
+   "kind": "fighter_raw",
+   "fighter": "lisvel",
+   "team": 1,
+   "screen": {
+    "x": 948.9849817109247,
+    "y": 479.26994856206954,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "closest game camera"
+  }
+ ]
+}

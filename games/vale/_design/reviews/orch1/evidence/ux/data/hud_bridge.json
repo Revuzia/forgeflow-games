@@ -1,0 +1,1779 @@
+{
+ "phase": "hud_bridge",
+ "finishedAt": "2026-11-15T09:27:47.237Z",
+ "env": {
+  "chrome": "157.0.8103.78",
+  "load1End": 3.7,
+  "node": "v22.23.3",
+  "base": "http://localhost:5232",
+  "wallMs": 127315
+ },
+ "steps": [
+  {
+   "file": "1920x1080/hud_bridge_001_bridge_flow_01_queue.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_01_queue",
+   "name": "bridge_flow_01_queue",
+   "desc": "bridge_flow: state scr--queue, heading \"BRIDGE · STANDARD/Finding a match/0:00\", buttons [CANCEL SEARCH], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 2304547,
+   "tMs": 7348,
+   "load1": 3.46,
+   "layout": {
+    "minFont": {
+     "px": 14,
+     "el": "p.t-body-s.muted.queue__desc \"Your fighter is drawn by lot. \""
+    },
+    "textNodes": 11,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_002_bridge_flow_02_queue.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_02_queue",
+   "name": "bridge_flow_02_queue",
+   "desc": "bridge_flow: state scr--queue, heading \"BRIDGE · STANDARD/Finding a match/0:02\", buttons [DECLINE | READY | CANCEL SEARCH (disabled)], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 991791,
+   "tMs": 9981,
+   "load1": 3.46,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "p.t-caption.quiet.ready__note \"Declining or missing the check\""
+    },
+    "textNodes": 17,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_003_bridge_flow_03_queue.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_03_queue",
+   "name": "bridge_flow_03_queue",
+   "desc": "bridge_flow: state scr--queue, heading \"BRIDGE · STANDARD/Finding a match/0:04\", buttons [CANCEL SEARCH (disabled)], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 912293,
+   "tMs": 11375,
+   "load1": 3.58,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "p.t-caption.quiet.ready__note \"Declining or missing the check\""
+    },
+    "textNodes": 17,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_004_bridge_flow_04_none.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_04_none",
+   "name": "bridge_flow_04_none",
+   "desc": "bridge_flow: state undefined, heading \"\", buttons [], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 954222,
+   "tMs": 13375,
+   "load1": 3.58,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.lot__takes \"1 take left\""
+    },
+    "textNodes": 39,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_005_bridge_flow_05_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_05_draft",
+   "name": "bridge_flow_05_draft",
+   "desc": "bridge_flow: state scr--draft, heading \"The Lot/Ulkro/YOUR TEAM'S LOT 3/3\", buttons [TAKE | TAKE | TAKE], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2238553,
+   "tMs": 15992,
+   "load1": 3.58,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.lot__takes \"1 take left\""
+    },
+    "textNodes": 38,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_006_bridge_flow_06_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_06_draft",
+   "name": "bridge_flow_06_draft",
+   "desc": "bridge_flow: state scr--draft, heading \"The Lot/Ulkro/YOUR TEAM'S LOT 3/3\", buttons [TAKE | TAKE | TAKE], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2238411,
+   "tMs": 24717,
+   "load1": 3.86,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.lot__takes \"1 take left\""
+    },
+    "textNodes": 39,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_007_bridge_flow_07_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_07_draft",
+   "name": "bridge_flow_07_draft",
+   "desc": "bridge_flow: state scr--draft, heading \"The Lot/Ulkro/YOUR TEAM'S LOT 2/3\", buttons [TAKE | TAKE], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2243788,
+   "tMs": 26152,
+   "load1": 3.86,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.lot__takes \"1 take left\""
+    },
+    "textNodes": 36,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_008_bridge_flow_08_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_08_draft",
+   "name": "bridge_flow_08_draft",
+   "desc": "bridge_flow: state scr--draft, heading \"The Lot/Ulkro/YOUR TEAM'S LOT 1/3\", buttons [TAKE], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2232132,
+   "tMs": 34185,
+   "load1": 3.63,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.lot__takes \"1 take left\""
+    },
+    "textNodes": 33,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_009_bridge_flow_09_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_09_draft",
+   "name": "bridge_flow_09_draft",
+   "desc": "bridge_flow: state scr--draft, heading \"The Lot/Ulkro/YOUR TEAM'S LOT 0/3\", buttons [], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2219467,
+   "tMs": 42018,
+   "load1": 3.46,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.tab__badge.num \"2/2\""
+    },
+    "textNodes": 67,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_010_bridge_flow_10_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_10_draft",
+   "name": "bridge_flow_10_draft",
+   "desc": "bridge_flow: state scr--draft, heading \"Skin and loadout/YOUR TEAM/Ulkro\", buttons [ |  |  |  | Base skin\nEquipped | Highrim Thrower\n600 | Long Evening Darts\n1,500 | HOUR SPELLS\n2/2 | BOONS\n2/2 | D\nSlot 1\nGlint Step | F\nSlot 2\nGlass Pane | D\nGlint Step | Saplight | Hairline | Hourstrike (disabled) | Running Light | Shake Loose | F\nGlass Pane | Calling Bell | LOCKED IN (disabled)], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2062060,
+   "tMs": 43824,
+   "load1": 3.46,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--ok.chip--ready \"READY\""
+    },
+    "textNodes": 74,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_011_bridge_flow_11_loading.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_11_loading",
+   "name": "bridge_flow_11_loading",
+   "desc": "bridge_flow: state scr--loading, heading \"BRIDGE · STANDARD Needlespan Needlespan /Needlespan/AUBADE YOUR TEAM\", buttons [], 0 selected card(s)",
+   "route": "scr--loading",
+   "hud": false,
+   "crop": null,
+   "bytes": 2366654,
+   "tMs": 45691,
+   "load1": 3.46,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--bot.pcard__bot \"BOT\""
+    },
+    "textNodes": 45,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_012_bridge_flow_12_loading.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_12_loading",
+   "name": "bridge_flow_12_loading",
+   "desc": "bridge_flow: state scr--loading, heading \"BRIDGE · STANDARD Needlespan Needlespan /Needlespan/AUBADE YOUR TEAM\", buttons [], 0 selected card(s)",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 2326434,
+   "tMs": 48772,
+   "load1": 3.58,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.keycap.keycap--quiet \"ESC\""
+    },
+    "textNodes": 5,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_013_bridge_idle.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_12_loading",
+   "name": "bridge_idle",
+   "desc": "bridge HUD, match live at the start",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2333707,
+   "tMs": 55478,
+   "load1": 3.38,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 42,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_bridge_014_bridge_idle.png",
+   "viewport": "1366x768",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_12_loading",
+   "name": "bridge_idle",
+   "desc": "bridge HUD, match live at the start",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1284925,
+   "tMs": 56701,
+   "load1": 3.27,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 40,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_015_bridge_minimap_crop.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_12_loading",
+   "name": "bridge_minimap_crop",
+   "desc": "bridge minimap region",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 1500,
+    "y": 936,
+    "w": 400,
+    "h": 124
+   },
+   "bytes": 43963,
+   "tMs": 57481,
+   "load1": 3.27,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 40,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_bridge_016_bridge_minimap_crop.png",
+   "viewport": "1366x768",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_12_loading",
+   "name": "bridge_minimap_crop",
+   "desc": "bridge minimap region",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 1028,
+    "y": 651,
+    "w": 323,
+    "h": 102
+   },
+   "bytes": 32016,
+   "tMs": 58198,
+   "load1": 3.27,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 40,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_017_bridge_scoreboard.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_12_loading",
+   "name": "bridge_scoreboard",
+   "desc": "bridge scoreboard held",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1800003,
+   "tMs": 60434,
+   "load1": 3.27,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 146,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_bridge_018_bridge_scoreboard.png",
+   "viewport": "1366x768",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_12_loading",
+   "name": "bridge_scoreboard",
+   "desc": "bridge scoreboard held",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 921831,
+   "tMs": 62303,
+   "load1": 3.33,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 147,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_019_bridge_ping_wheel.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_12_loading",
+   "name": "bridge_ping_wheel",
+   "desc": "bridge ping wheel (G held)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2326059,
+   "tMs": 64876,
+   "load1": 3.33,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 41,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_bridge_020_bridge_ping_wheel.png",
+   "viewport": "1366x768",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_12_loading",
+   "name": "bridge_ping_wheel",
+   "desc": "bridge ping wheel (G held)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1209209,
+   "tMs": 66840,
+   "load1": 3.06,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 41,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_021_bridge_shop.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_12_loading",
+   "name": "bridge_shop",
+   "desc": "bridge shop",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1853341,
+   "tMs": 69145,
+   "load1": 3.06,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 135,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 4,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_bridge_022_bridge_shop.png",
+   "viewport": "1366x768",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_12_loading",
+   "name": "bridge_shop",
+   "desc": "bridge shop",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 969425,
+   "tMs": 70158,
+   "load1": 3.06,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 135,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 14,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_023_bridge_fight.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_12_loading",
+   "name": "bridge_fight",
+   "desc": "bridge first fighter damage (paused, t=20.3)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2335810,
+   "tMs": 73063,
+   "load1": 2.97,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 41,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_bridge_024_bridge_fight.png",
+   "viewport": "1366x768",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_12_loading",
+   "name": "bridge_fight",
+   "desc": "bridge first fighter damage (paused, t=20.3)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1215321,
+   "tMs": 74295,
+   "load1": 2.97,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 41,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_025_bridge_midgame.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_12_loading",
+   "name": "bridge_midgame",
+   "desc": "bridge at 200.1s",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2331731,
+   "tMs": 121073,
+   "load1": 3.65,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 49,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_bridge_026_bridge_midgame.png",
+   "viewport": "1366x768",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_12_loading",
+   "name": "bridge_midgame",
+   "desc": "bridge at 200.1s",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1227042,
+   "tMs": 122355,
+   "load1": 3.67,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 49,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_bridge_027_bridge_midgame_scoreboard.png",
+   "viewport": "1920x1080",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_12_loading",
+   "name": "bridge_midgame_scoreboard",
+   "desc": "bridge scoreboard at 200.1s",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1726462,
+   "tMs": 124793,
+   "load1": 3.67,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 156,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_bridge_028_bridge_midgame_scoreboard.png",
+   "viewport": "1366x768",
+   "phase": "hud_bridge",
+   "step": "bridge_flow_12_loading",
+   "name": "bridge_midgame_scoreboard",
+   "desc": "bridge scoreboard at 200.1s",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 872670,
+   "tMs": 126760,
+   "load1": 3.7,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 156,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.5 (schema 1) from http://localhost:5232/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/hud_bridge_001_bridge_flow_01_queue.png",
+   "step": "bridge_flow_01_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_002_bridge_flow_02_queue.png",
+   "step": "bridge_flow_02_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_003_bridge_flow_03_queue.png",
+   "step": "bridge_flow_03_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_004_bridge_flow_04_none.png",
+   "step": "bridge_flow_04_none",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_005_bridge_flow_05_draft.png",
+   "step": "bridge_flow_05_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_006_bridge_flow_06_draft.png",
+   "step": "bridge_flow_06_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_007_bridge_flow_07_draft.png",
+   "step": "bridge_flow_07_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_008_bridge_flow_08_draft.png",
+   "step": "bridge_flow_08_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_009_bridge_flow_09_draft.png",
+   "step": "bridge_flow_09_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_010_bridge_flow_10_draft.png",
+   "step": "bridge_flow_10_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_011_bridge_flow_11_loading.png",
+   "step": "bridge_flow_11_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_012_bridge_flow_12_loading.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_013_bridge_idle.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_013_bridge_idle.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_bridge_014_bridge_idle.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_014_bridge_idle.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_bridge_015_bridge_minimap_crop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_015_bridge_minimap_crop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_bridge_016_bridge_minimap_crop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_016_bridge_minimap_crop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_bridge_017_bridge_scoreboard.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_017_bridge_scoreboard.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_bridge_018_bridge_scoreboard.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_018_bridge_scoreboard.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_bridge_019_bridge_ping_wheel.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_019_bridge_ping_wheel.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_bridge_020_bridge_ping_wheel.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_020_bridge_ping_wheel.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_bridge_021_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_021_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_021_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "scrollable",
+   "el": "div.lshop__grid",
+   "scrollH": 1032,
+   "clientH": 643,
+   "scrollW": 650,
+   "clientW": 650,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/hud_bridge_021_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    571,
+    1121,
+    613,
+    1141
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_021_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,800",
+   "rect": [
+    635,
+    1121,
+    677,
+    1141
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_bridge_022_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_022_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_022_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "scrollable",
+   "el": "div.lshop__grid",
+   "scrollH": 826,
+   "clientH": 514,
+   "scrollW": 520,
+   "clientW": 520,
+   "top": 0
+  },
+  {
+   "file": "1366x768/hud_bridge_022_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "h3.lshop__sech.t-label",
+   "text": "APEX",
+   "rect": [
+    366,
+    771,
+    864,
+    787
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_022_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,300",
+   "rect": [
+    370,
+    831,
+    408,
+    849
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_022_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,400",
+   "rect": [
+    421,
+    831,
+    459,
+    849
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_022_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    472,
+    831,
+    510,
+    849
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_022_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    523,
+    831,
+    561,
+    849
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_022_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    574,
+    831,
+    612,
+    849
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_022_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,750",
+   "rect": [
+    626,
+    831,
+    663,
+    849
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_022_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,750",
+   "rect": [
+    677,
+    831,
+    715,
+    849
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_022_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    728,
+    831,
+    766,
+    849
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_022_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,800",
+   "rect": [
+    779,
+    831,
+    817,
+    849
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_022_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    370,
+    895,
+    408,
+    913
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_022_bridge_shop.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,800",
+   "rect": [
+    421,
+    895,
+    459,
+    913
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_bridge_023_bridge_fight.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_023_bridge_fight.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_bridge_024_bridge_fight.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_024_bridge_fight.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_bridge_025_bridge_midgame.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_025_bridge_midgame.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "7",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_bridge_026_bridge_midgame.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_026_bridge_midgame.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "7",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_bridge_027_bridge_midgame_scoreboard.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_bridge_027_bridge_midgame_scoreboard.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "7",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_bridge_028_bridge_midgame_scoreboard.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_bridge_028_bridge_midgame_scoreboard.png",
+   "step": "bridge_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "7",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
+ "notes": [
+  {
+   "step": "bridge_flow_12_loading",
+   "tMs": 49142,
+   "load1": 3.58,
+   "text": "bridge: flow to HUD took 42930 ms"
+  }
+ ],
+ "timings": {}
+}

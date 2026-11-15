@@ -1,0 +1,5415 @@
+{
+ "phase": "hud",
+ "finishedAt": "2026-11-15T09:25:37.621Z",
+ "env": {
+  "chrome": "157.0.8103.78",
+  "load1End": 3.47,
+  "node": "v22.23.3",
+  "base": "http://localhost:5232",
+  "wallMs": 444945
+ },
+ "steps": [
+  {
+   "file": "1920x1080/hud_001_rift_flow_01_queue.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "rift_flow_01_queue",
+   "name": "rift_flow_01_queue",
+   "desc": "rift_flow: state scr--queue, heading \"RIFT · LANTERN DRILL/Finding a match/0:00\", buttons [CANCEL SEARCH], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 2286442,
+   "tMs": 18553,
+   "load1": 37.98,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "p.t-caption.quiet.ready__note \"Declining or missing the check\""
+    },
+    "textNodes": 17,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_002_rift_flow_02_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "rift_flow_02_draft",
+   "name": "rift_flow_02_draft",
+   "desc": "rift_flow: state scr--draft, heading \"Pick phase/YOUR TEAM/THE OTHER TEAM\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN (disabled)], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2103110,
+   "tMs": 22085,
+   "load1": 37.98,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.quiet \"No bans.\""
+    },
+    "textNodes": 58,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_003_rift_flow_03_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "rift_flow_03_draft",
+   "name": "rift_flow_03_draft",
+   "desc": "rift_flow: state scr--draft, heading \"Pick phase/YOUR TEAM/Ardit\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2079584,
+   "tMs": 28306,
+   "load1": 38.49,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.sicon__key \"Q\""
+    },
+    "textNodes": 68,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_004_rift_flow_04_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "rift_flow_04_draft",
+   "name": "rift_flow_04_draft",
+   "desc": "rift_flow: state scr--draft, heading \"Pick phase/YOUR TEAM/Ardit\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN (disabled)], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2136911,
+   "tMs": 32773,
+   "load1": 38.49,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.fcard__taken \"belle_of_noon\""
+    },
+    "textNodes": 64,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_005_rift_flow_05_draft.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "rift_flow_05_draft",
+   "name": "rift_flow_05_draft",
+   "desc": "rift_flow: state scr--draft, heading \"Skin and loadout/YOUR TEAM/Ardit\", buttons [ |  |  |  | Base skin\nEquipped | Chalkline Pavise\n600 | First Bell Pavise\n1,500 | HOUR SPELLS\n2/2 | BOONS\n2/2 | D\nSlot 1\nGlint Step | F\nSlot 2\nGlass Pane | D\nGlint Step | Saplight | Hairline | Hourstrike | Running Light | Shake Loose | F\nGlass Pane | Calling Bell | LOCKED IN (disabled)], 0 selected card(s)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2018882,
+   "tMs": 44902,
+   "load1": 39.58,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 44,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_006_hud_first_frame.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "pregame",
+   "name": "hud_first_frame",
+   "desc": "HUD at the first frame (sim phase pregame, time -26.5)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2397257,
+   "tMs": 52994,
+   "load1": 39.37,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 44,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_007_hud_first_frame.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "pregame",
+   "name": "hud_first_frame",
+   "desc": "HUD at the first frame (sim phase pregame, time -26.5)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1256549,
+   "tMs": 56027,
+   "load1": 43.19,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 44,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_008_hud_idle_live.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "idle_live",
+   "name": "hud_idle_live",
+   "desc": "HUD, match live, standing at the fountain",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2408443,
+   "tMs": 83894,
+   "load1": 43.27,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 44,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_009_hud_idle_live.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "idle_live",
+   "name": "hud_idle_live",
+   "desc": "HUD, match live, standing at the fountain",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1317228,
+   "tMs": 88585,
+   "load1": 43.49,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 43,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_010_hud_shop_open.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "shop",
+   "name": "hud_shop_open",
+   "desc": "shop open (P) at the fountain, default view with the suggested section",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1883585,
+   "tMs": 96069,
+   "load1": 43.05,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 146,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 14,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "shop",
+   "name": "hud_shop_open",
+   "desc": "shop open (P) at the fountain, default view with the suggested section",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1001218,
+   "tMs": 99349,
+   "load1": 42.8,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 147,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 25,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_012_hud_shop_search_blade.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "shop",
+   "name": "hud_shop_search_blade",
+   "desc": "shop search \"blade\"",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1800439,
+   "tMs": 105641,
+   "load1": 43.38,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 74,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_013_hud_shop_search_blade.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "shop",
+   "name": "hud_shop_search_blade",
+   "desc": "shop search \"blade\"",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 927430,
+   "tMs": 107759,
+   "load1": 43.38,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 75,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_014_hud_shop_search_empty.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "shop",
+   "name": "hud_shop_search_empty",
+   "desc": "shop search with no match (\"zzzz\")",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1833376,
+   "tMs": 111508,
+   "load1": 44.63,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 65,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_015_hud_shop_search_empty.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "shop",
+   "name": "hud_shop_search_empty",
+   "desc": "shop search with no match (\"zzzz\")",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 905393,
+   "tMs": 114157,
+   "load1": 46.5,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 65,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_016_hud_shop_item_hover.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "shop",
+   "name": "hud_shop_item_hover",
+   "desc": "shop: hovering the first item tile",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2032695,
+   "tMs": 120690,
+   "load1": 48.78,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 147,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 14,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "shop",
+   "name": "hud_shop_item_hover",
+   "desc": "shop: hovering the first item tile",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1030692,
+   "tMs": 124765,
+   "load1": 48.16,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 146,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 25,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_018_hud_shop_item_selected.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "shop",
+   "name": "hud_shop_item_selected",
+   "desc": "shop: first item selected, detail panel",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2032217,
+   "tMs": 135691,
+   "load1": 57.6,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 146,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 14,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "shop",
+   "name": "hud_shop_item_selected",
+   "desc": "shop: first item selected, detail panel",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1036123,
+   "tMs": 137581,
+   "load1": 57.6,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 146,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 25,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_020_hud_shop_tag_1.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "shop",
+   "name": "hud_shop_tag_1",
+   "desc": "shop filter tag 1",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1965251,
+   "tMs": 140979,
+   "load1": 54.83,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 99,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_021_hud_shop_tag_1.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "shop",
+   "name": "hud_shop_tag_1",
+   "desc": "shop filter tag 1",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 995837,
+   "tMs": 144081,
+   "load1": 54.76,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 99,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_022_hud_shop_tag_2.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "shop",
+   "name": "hud_shop_tag_2",
+   "desc": "shop filter tag 2",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1898620,
+   "tMs": 147215,
+   "load1": 54.76,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 83,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_023_hud_shop_tag_2.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "shop",
+   "name": "hud_shop_tag_2",
+   "desc": "shop filter tag 2",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 951243,
+   "tMs": 149899,
+   "load1": 53.66,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 83,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_024_hud_shop_tag_3.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "shop",
+   "name": "hud_shop_tag_3",
+   "desc": "shop filter tag 3",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1883725,
+   "tMs": 153002,
+   "load1": 53.66,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 79,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_025_hud_shop_tag_3.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "shop",
+   "name": "hud_shop_tag_3",
+   "desc": "shop filter tag 3",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 942398,
+   "tMs": 155143,
+   "load1": 52.17,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 79,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_026_hud_tip_ability_a1.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "tooltips",
+   "name": "hud_tip_ability_a1",
+   "desc": "tooltip on ability slot 0",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2545231,
+   "tMs": 160029,
+   "load1": 49.43,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 61,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_027_hud_tip_ability_a1.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "tooltips",
+   "name": "hud_tip_ability_a1",
+   "desc": "tooltip on ability slot 0",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1389803,
+   "tMs": 163121,
+   "load1": 49.43,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 61,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_028_hud_tip_ability_a2.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "tooltips",
+   "name": "hud_tip_ability_a2",
+   "desc": "tooltip on ability slot 1",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2556443,
+   "tMs": 166943,
+   "load1": 45.79,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 61,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_029_hud_tip_ability_a2.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "tooltips",
+   "name": "hud_tip_ability_a2",
+   "desc": "tooltip on ability slot 1",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1349012,
+   "tMs": 170076,
+   "load1": 42.68,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 61,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_030_hud_tip_ability_a3.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "tooltips",
+   "name": "hud_tip_ability_a3",
+   "desc": "tooltip on ability slot 2",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2463968,
+   "tMs": 174357,
+   "load1": 39.83,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 63,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_031_hud_tip_ability_a3.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "tooltips",
+   "name": "hud_tip_ability_a3",
+   "desc": "tooltip on ability slot 2",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1353882,
+   "tMs": 177834,
+   "load1": 39.83,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 63,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_032_hud_tip_ability_ult.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "tooltips",
+   "name": "hud_tip_ability_ult",
+   "desc": "tooltip on ability slot 3",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2450519,
+   "tMs": 181555,
+   "load1": 37.04,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 60,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_033_hud_tip_ability_ult.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "tooltips",
+   "name": "hud_tip_ability_ult",
+   "desc": "tooltip on ability slot 3",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1351414,
+   "tMs": 184717,
+   "load1": 34.39,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 58,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_034_hud_tip_hp.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "tooltips",
+   "name": "hud_tip_hp",
+   "desc": "tooltip on the health bar",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2508813,
+   "tMs": 188687,
+   "load1": 31.88,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 50,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_035_hud_tip_hp.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "tooltips",
+   "name": "hud_tip_hp",
+   "desc": "tooltip on the health bar",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1375880,
+   "tMs": 191506,
+   "load1": 31.88,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 48,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_036_hud_stats_ledger.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "tooltips",
+   "name": "hud_stats_ledger",
+   "desc": "the stats ledger opened from the portrait",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2489434,
+   "tMs": 195369,
+   "load1": 29.32,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 62,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_037_hud_stats_ledger.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "tooltips",
+   "name": "hud_stats_ledger",
+   "desc": "the stats ledger opened from the portrait",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1369579,
+   "tMs": 197298,
+   "load1": 29.32,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 60,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_038_hud_scoreboard.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "scoreboard",
+   "name": "hud_scoreboard",
+   "desc": "scoreboard held (Tab)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1985759,
+   "tMs": 200942,
+   "load1": 27.14,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 155,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_039_hud_scoreboard.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "scoreboard",
+   "name": "hud_scoreboard",
+   "desc": "scoreboard held (Tab)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1032818,
+   "tMs": 203689,
+   "load1": 25.36,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 154,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_040_hud_minimap_crop.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "minimap",
+   "name": "hud_minimap_crop",
+   "desc": "the minimap region only",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 1532,
+    "y": 816,
+    "w": 368,
+    "h": 244
+   },
+   "bytes": 105411,
+   "tMs": 205675,
+   "load1": 25.36,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 47,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_041_hud_minimap_crop.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "minimap",
+   "name": "hud_minimap_crop",
+   "desc": "the minimap region only",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 1054,
+    "y": 555,
+    "w": 298,
+    "h": 198
+   },
+   "bytes": 75909,
+   "tMs": 207062,
+   "load1": 25.36,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 51,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_042_hud_ping_wheel.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "ping",
+   "name": "hud_ping_wheel",
+   "desc": "ping wheel held open (G) at the cursor",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2560632,
+   "tMs": 209635,
+   "load1": 23.57,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 50,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_043_hud_ping_wheel.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "ping",
+   "name": "hud_ping_wheel",
+   "desc": "ping wheel held open (G) at the cursor",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1426552,
+   "tMs": 212272,
+   "load1": 23.57,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 48,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_044_hud_ping_tap.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "ping",
+   "name": "hud_ping_tap",
+   "desc": "after a tap of G (a ping at the cursor)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2585353,
+   "tMs": 215632,
+   "load1": 21.76,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 47,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_045_hud_ping_tap.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "ping",
+   "name": "hud_ping_tap",
+   "desc": "after a tap of G (a ping at the cursor)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1423489,
+   "tMs": 216491,
+   "load1": 21.76,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 47,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_046_hud_esc_menu.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "esc_menu",
+   "name": "hud_esc_menu",
+   "desc": "Esc: in-match menu",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1330460,
+   "tMs": 218699,
+   "load1": 21.14,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 51,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_047_hud_esc_menu.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "esc_menu",
+   "name": "hud_esc_menu",
+   "desc": "Esc: in-match menu",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 741448,
+   "tMs": 219636,
+   "load1": 21.14,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 53,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_048_hud_levelup.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "levelup",
+   "name": "hud_levelup",
+   "desc": "level-up event to level 2 (sim paused for the shot; sim t=108.3, skill points 0)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2603002,
+   "tMs": 223218,
+   "load1": 21.14,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 47,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_049_hud_levelup.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "levelup",
+   "name": "hud_levelup",
+   "desc": "level-up event to level 2 (sim paused for the shot; sim t=108.3, skill points 0)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1421855,
+   "tMs": 224976,
+   "load1": 19.69,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 47,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_050_hud_items_owned.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "items",
+   "name": "hud_items_owned",
+   "desc": "item slots with 2 owned item(s) (t=108.3)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2554818,
+   "tMs": 226668,
+   "load1": 19.69,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 47,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_051_hud_items_owned.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "items",
+   "name": "hud_items_owned",
+   "desc": "item slots with 2 owned item(s) (t=108.3)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1406431,
+   "tMs": 227744,
+   "load1": 19.69,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 47,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_052_hud_tip_item.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "items",
+   "name": "hud_tip_item",
+   "desc": "tooltip on the first owned item slot",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2515721,
+   "tMs": 230294,
+   "load1": 18.27,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 55,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_053_hud_tip_item.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "items",
+   "name": "hud_tip_item",
+   "desc": "tooltip on the first owned item slot",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1380989,
+   "tMs": 232286,
+   "load1": 18.27,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 55,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_054_hud_fight.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "fight",
+   "name": "hud_fight",
+   "desc": "first fighter-vs-fighter damage (sim paused; t=304.5)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2398000,
+   "tMs": 283361,
+   "load1": 15.92,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 53,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_055_hud_fight.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "fight",
+   "name": "hud_fight",
+   "desc": "first fighter-vs-fighter damage (sim paused; t=304.5)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1294520,
+   "tMs": 284612,
+   "load1": 15.2,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 53,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_056_hud_fight_live.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "fight",
+   "name": "hud_fight_live",
+   "desc": "same fight, sim at x1 for 0.7 s",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2392414,
+   "tMs": 287684,
+   "load1": 15.2,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 55,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_057_hud_fight_live.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "fight",
+   "name": "hud_fight_live",
+   "desc": "same fight, sim at x1 for 0.7 s",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1296781,
+   "tMs": 288834,
+   "load1": 14.07,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 55,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_058_hud_midgame.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "late",
+   "name": "hud_midgame",
+   "desc": "HUD at 330.9s of sim time (level 6, 4 items)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2439638,
+   "tMs": 296433,
+   "load1": 13.98,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 53,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_059_hud_midgame.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "late",
+   "name": "hud_midgame",
+   "desc": "HUD at 330.9s of sim time (level 6, 4 items)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1316861,
+   "tMs": 297518,
+   "load1": 13.98,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 51,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/hud_060_hud_midgame_scoreboard.png",
+   "viewport": "1920x1080",
+   "phase": "hud",
+   "step": "late",
+   "name": "hud_midgame_scoreboard",
+   "desc": "scoreboard mid-game",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1989768,
+   "tMs": 300092,
+   "load1": 14.94,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 156,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/hud_061_hud_midgame_scoreboard.png",
+   "viewport": "1366x768",
+   "phase": "hud",
+   "step": "late",
+   "name": "hud_midgame_scoreboard",
+   "desc": "scoreboard mid-game",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 992089,
+   "tMs": 302076,
+   "load1": 14.94,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 156,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.5 (schema 1) from http://localhost:5232/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/hud_001_rift_flow_01_queue.png",
+   "step": "rift_flow_01_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_002_rift_flow_02_draft.png",
+   "step": "rift_flow_02_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_003_rift_flow_03_draft.png",
+   "step": "rift_flow_03_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_004_rift_flow_04_draft.png",
+   "step": "rift_flow_04_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_005_rift_flow_05_draft.png",
+   "step": "rift_flow_05_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_005_rift_flow_05_draft.png",
+   "step": "rift_flow_05_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_006_hud_first_frame.png",
+   "step": "pregame",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_006_hud_first_frame.png",
+   "step": "pregame",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_007_hud_first_frame.png",
+   "step": "pregame",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_007_hud_first_frame.png",
+   "step": "pregame",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_008_hud_idle_live.png",
+   "step": "idle_live",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_008_hud_idle_live.png",
+   "step": "idle_live",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_009_hud_idle_live.png",
+   "step": "idle_live",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_009_hud_idle_live.png",
+   "step": "idle_live",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_010_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_010_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_010_hud_shop_open.png",
+   "step": "shop",
+   "kind": "scrollable",
+   "el": "div.lshop__grid",
+   "scrollH": 1144,
+   "clientH": 643,
+   "scrollW": 650,
+   "clientW": 650,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/hud_010_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "h3.lshop__sech.t-label",
+   "text": "APEX",
+   "rect": [
+    564,
+    1075,
+    1186,
+    1095
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_010_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,300",
+   "rect": [
+    571,
+    1153,
+    613,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_010_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,400",
+   "rect": [
+    635,
+    1153,
+    677,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_010_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    699,
+    1153,
+    741,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_010_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    763,
+    1153,
+    805,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_010_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    827,
+    1153,
+    869,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_010_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    891,
+    1153,
+    933,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_010_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    955,
+    1153,
+    997,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_010_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    1019,
+    1153,
+    1061,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_010_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    1083,
+    1153,
+    1125,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_010_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    571,
+    1233,
+    613,
+    1253
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_010_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,800",
+   "rect": [
+    635,
+    1233,
+    677,
+    1253
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "scrollable",
+   "el": "div.lshop__grid",
+   "scrollH": 915,
+   "clientH": 507,
+   "scrollW": 520,
+   "clientW": 520,
+   "top": 0
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,800",
+   "rect": [
+    370,
+    775,
+    408,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,850",
+   "rect": [
+    421,
+    775,
+    459,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,850",
+   "rect": [
+    472,
+    775,
+    510,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,850",
+   "rect": [
+    523,
+    775,
+    561,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,850",
+   "rect": [
+    574,
+    775,
+    612,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,950",
+   "rect": [
+    626,
+    775,
+    663,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,950",
+   "rect": [
+    677,
+    775,
+    715,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,950",
+   "rect": [
+    728,
+    775,
+    766,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,950",
+   "rect": [
+    779,
+    775,
+    817,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,950",
+   "rect": [
+    370,
+    839,
+    408,
+    857
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,000",
+   "rect": [
+    421,
+    839,
+    459,
+    857
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "h3.lshop__sech.t-label",
+   "text": "APEX",
+   "rect": [
+    366,
+    868,
+    864,
+    884
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,300",
+   "rect": [
+    370,
+    929,
+    408,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,400",
+   "rect": [
+    421,
+    929,
+    459,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    472,
+    929,
+    510,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    523,
+    929,
+    561,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    574,
+    929,
+    612,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    626,
+    929,
+    663,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    677,
+    929,
+    715,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    728,
+    929,
+    766,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    779,
+    929,
+    817,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    370,
+    993,
+    408,
+    1011
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_011_hud_shop_open.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,800",
+   "rect": [
+    421,
+    993,
+    459,
+    1011
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_012_hud_shop_search_blade.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_012_hud_shop_search_blade.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_013_hud_shop_search_blade.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_013_hud_shop_search_blade.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_014_hud_shop_search_empty.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_014_hud_shop_search_empty.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_015_hud_shop_search_empty.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_015_hud_shop_search_empty.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_016_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_016_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_016_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "scrollable",
+   "el": "div.lshop__grid",
+   "scrollH": 1144,
+   "clientH": 643,
+   "scrollW": 650,
+   "clientW": 650,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/hud_016_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "h3.lshop__sech.t-label",
+   "text": "APEX",
+   "rect": [
+    564,
+    1075,
+    1186,
+    1095
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_016_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,300",
+   "rect": [
+    571,
+    1153,
+    613,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_016_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,400",
+   "rect": [
+    635,
+    1153,
+    677,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_016_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    699,
+    1153,
+    741,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_016_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    763,
+    1153,
+    805,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_016_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    827,
+    1153,
+    869,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_016_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    891,
+    1153,
+    933,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_016_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    955,
+    1153,
+    997,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_016_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    1019,
+    1153,
+    1061,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_016_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    1083,
+    1153,
+    1125,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_016_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    571,
+    1233,
+    613,
+    1253
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_016_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,800",
+   "rect": [
+    635,
+    1233,
+    677,
+    1253
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "scrollable",
+   "el": "div.lshop__grid",
+   "scrollH": 915,
+   "clientH": 507,
+   "scrollW": 520,
+   "clientW": 520,
+   "top": 0
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,800",
+   "rect": [
+    370,
+    775,
+    408,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,850",
+   "rect": [
+    421,
+    775,
+    459,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,850",
+   "rect": [
+    472,
+    775,
+    510,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,850",
+   "rect": [
+    523,
+    775,
+    561,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,850",
+   "rect": [
+    574,
+    775,
+    612,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,950",
+   "rect": [
+    626,
+    775,
+    663,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,950",
+   "rect": [
+    677,
+    775,
+    715,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,950",
+   "rect": [
+    728,
+    775,
+    766,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,950",
+   "rect": [
+    779,
+    775,
+    817,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,950",
+   "rect": [
+    370,
+    839,
+    408,
+    857
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,000",
+   "rect": [
+    421,
+    839,
+    459,
+    857
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "h3.lshop__sech.t-label",
+   "text": "APEX",
+   "rect": [
+    366,
+    868,
+    864,
+    884
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,300",
+   "rect": [
+    370,
+    929,
+    408,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,400",
+   "rect": [
+    421,
+    929,
+    459,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    472,
+    929,
+    510,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    523,
+    929,
+    561,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    574,
+    929,
+    612,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    626,
+    929,
+    663,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    677,
+    929,
+    715,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    728,
+    929,
+    766,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    779,
+    929,
+    817,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    370,
+    993,
+    408,
+    1011
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_017_hud_shop_item_hover.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,800",
+   "rect": [
+    421,
+    993,
+    459,
+    1011
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_018_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_018_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_018_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "scrollable",
+   "el": "div.lshop__grid",
+   "scrollH": 1144,
+   "clientH": 643,
+   "scrollW": 650,
+   "clientW": 650,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/hud_018_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "h3.lshop__sech.t-label",
+   "text": "APEX",
+   "rect": [
+    564,
+    1075,
+    1186,
+    1095
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_018_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,300",
+   "rect": [
+    571,
+    1153,
+    613,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_018_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,400",
+   "rect": [
+    635,
+    1153,
+    677,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_018_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    699,
+    1153,
+    741,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_018_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    763,
+    1153,
+    805,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_018_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    827,
+    1153,
+    869,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_018_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    891,
+    1153,
+    933,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_018_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    955,
+    1153,
+    997,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_018_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    1019,
+    1153,
+    1061,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_018_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    1083,
+    1153,
+    1125,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_018_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    571,
+    1233,
+    613,
+    1253
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_018_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,800",
+   "rect": [
+    635,
+    1233,
+    677,
+    1253
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "scrollable",
+   "el": "div.lshop__grid",
+   "scrollH": 915,
+   "clientH": 507,
+   "scrollW": 520,
+   "clientW": 520,
+   "top": 0
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,800",
+   "rect": [
+    370,
+    775,
+    408,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,850",
+   "rect": [
+    421,
+    775,
+    459,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,850",
+   "rect": [
+    472,
+    775,
+    510,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,850",
+   "rect": [
+    523,
+    775,
+    561,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,850",
+   "rect": [
+    574,
+    775,
+    612,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,950",
+   "rect": [
+    626,
+    775,
+    663,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,950",
+   "rect": [
+    677,
+    775,
+    715,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,950",
+   "rect": [
+    728,
+    775,
+    766,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,950",
+   "rect": [
+    779,
+    775,
+    817,
+    793
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,950",
+   "rect": [
+    370,
+    839,
+    408,
+    857
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,000",
+   "rect": [
+    421,
+    839,
+    459,
+    857
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "h3.lshop__sech.t-label",
+   "text": "APEX",
+   "rect": [
+    366,
+    868,
+    864,
+    884
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,300",
+   "rect": [
+    370,
+    929,
+    408,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,400",
+   "rect": [
+    421,
+    929,
+    459,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    472,
+    929,
+    510,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    523,
+    929,
+    561,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    574,
+    929,
+    612,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    626,
+    929,
+    663,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    677,
+    929,
+    715,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    728,
+    929,
+    766,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    779,
+    929,
+    817,
+    947
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    370,
+    993,
+    408,
+    1011
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_019_hud_shop_item_selected.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,800",
+   "rect": [
+    421,
+    993,
+    459,
+    1011
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_020_hud_shop_tag_1.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_020_hud_shop_tag_1.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_021_hud_shop_tag_1.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_021_hud_shop_tag_1.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_022_hud_shop_tag_2.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_022_hud_shop_tag_2.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_023_hud_shop_tag_2.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_023_hud_shop_tag_2.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_024_hud_shop_tag_3.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_024_hud_shop_tag_3.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_025_hud_shop_tag_3.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_025_hud_shop_tag_3.png",
+   "step": "shop",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_026_hud_tip_ability_a1.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_026_hud_tip_ability_a1.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_027_hud_tip_ability_a1.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_027_hud_tip_ability_a1.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_028_hud_tip_ability_a2.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_028_hud_tip_ability_a2.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_029_hud_tip_ability_a2.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_029_hud_tip_ability_a2.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_030_hud_tip_ability_a3.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_030_hud_tip_ability_a3.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_031_hud_tip_ability_a3.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_031_hud_tip_ability_a3.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_032_hud_tip_ability_ult.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_032_hud_tip_ability_ult.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_033_hud_tip_ability_ult.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_033_hud_tip_ability_ult.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_034_hud_tip_hp.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_034_hud_tip_hp.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_035_hud_tip_hp.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_035_hud_tip_hp.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_036_hud_stats_ledger.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_036_hud_stats_ledger.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_037_hud_stats_ledger.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_037_hud_stats_ledger.png",
+   "step": "tooltips",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_038_hud_scoreboard.png",
+   "step": "scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_038_hud_scoreboard.png",
+   "step": "scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_039_hud_scoreboard.png",
+   "step": "scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_039_hud_scoreboard.png",
+   "step": "scoreboard",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_040_hud_minimap_crop.png",
+   "step": "minimap",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_040_hud_minimap_crop.png",
+   "step": "minimap",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_041_hud_minimap_crop.png",
+   "step": "minimap",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_041_hud_minimap_crop.png",
+   "step": "minimap",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_042_hud_ping_wheel.png",
+   "step": "ping",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_042_hud_ping_wheel.png",
+   "step": "ping",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_043_hud_ping_wheel.png",
+   "step": "ping",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_043_hud_ping_wheel.png",
+   "step": "ping",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_044_hud_ping_tap.png",
+   "step": "ping",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_044_hud_ping_tap.png",
+   "step": "ping",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_045_hud_ping_tap.png",
+   "step": "ping",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_045_hud_ping_tap.png",
+   "step": "ping",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_046_hud_esc_menu.png",
+   "step": "esc_menu",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_046_hud_esc_menu.png",
+   "step": "esc_menu",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_047_hud_esc_menu.png",
+   "step": "esc_menu",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_047_hud_esc_menu.png",
+   "step": "esc_menu",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_048_hud_levelup.png",
+   "step": "levelup",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_048_hud_levelup.png",
+   "step": "levelup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_049_hud_levelup.png",
+   "step": "levelup",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_049_hud_levelup.png",
+   "step": "levelup",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_050_hud_items_owned.png",
+   "step": "items",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_050_hud_items_owned.png",
+   "step": "items",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_051_hud_items_owned.png",
+   "step": "items",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_051_hud_items_owned.png",
+   "step": "items",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_052_hud_tip_item.png",
+   "step": "items",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_052_hud_tip_item.png",
+   "step": "items",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_053_hud_tip_item.png",
+   "step": "items",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_053_hud_tip_item.png",
+   "step": "items",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "2",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_054_hud_fight.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_054_hud_fight.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_055_hud_fight.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_055_hud_fight.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_056_hud_fight_live.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_056_hud_fight_live.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_057_hud_fight_live.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_057_hud_fight_live.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_058_hud_midgame.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_058_hud_midgame.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_059_hud_midgame.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_059_hud_midgame.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/hud_060_hud_midgame_scoreboard.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/hud_060_hud_midgame_scoreboard.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/hud_061_hud_midgame_scoreboard.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/hud_061_hud_midgame_scoreboard.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
+ "notes": [
+  {
+   "step": "rift_flow_05_draft",
+   "tMs": 45274,
+   "load1": 39.58,
+   "text": "rift: flow to HUD took 36871 ms"
+  },
+  {
+   "step": "pregame",
+   "tMs": 45282,
+   "load1": 39.58,
+   "text": "first poll after HUD",
+   "data": {
+    "phase": "pregame",
+    "time": -26.5,
+    "scale": 1,
+    "level": 1,
+    "dead": false,
+    "respawnIn": 0,
+    "gold": 100,
+    "items": 2,
+    "skill": 0,
+    "nearFighters": 5,
+    "ended": false,
+    "evs": []
+   }
+  },
+  {
+   "step": "shop",
+   "tMs": 99999,
+   "load1": 42.8,
+   "text": "shop facts",
+   "data": {
+    "sections": [
+     "SUGGESTED · ARDIT",
+     "STARTERS",
+     "CONSUMABLES",
+     "BOOTS",
+     "BASIC",
+     "CORE",
+     "APEX"
+    ],
+    "tags": [
+     "ALL ITEMS",
+     "ATTACK",
+     "CRITICAL",
+     "ON HIT",
+     "MAGIC",
+     "HASTE",
+     "DEFENSE",
+     "SUSTAIN",
+     "SPEED",
+     "SUPPORT",
+     "VISION",
+     "UTILITY",
+     "DIALWOOD"
+    ],
+    "tiles": 62,
+    "gold": "100",
+    "access": "You can shop anywhere in your base, or while you wait to return."
+   }
+  },
+  {
+   "step": "shop",
+   "tMs": 108263,
+   "load1": 43.38,
+   "text": "search \"blade\" tiles",
+   "data": 1
+  },
+  {
+   "step": "tooltips",
+   "tMs": 156702,
+   "load1": 52.17,
+   "text": "ability slot count",
+   "data": 6
+  },
+  {
+   "step": "tooltips",
+   "tMs": 185459,
+   "load1": 34.39,
+   "text": "ability tooltip DOM (last)",
+   "data": []
+  },
+  {
+   "step": "levelup",
+   "tMs": 225641,
+   "load1": 19.69,
+   "text": "level-up",
+   "data": {
+    "level": 2,
+    "skillPoints": 0,
+    "time": 108.3
+   }
+  },
+  {
+   "step": "late",
+   "tMs": 444944,
+   "load1": 3.47,
+   "text": "captured events",
+   "data": [
+    "levelup",
+    "items",
+    "fight",
+    "late"
+   ]
+  },
+  {
+   "step": "late",
+   "tMs": 444944,
+   "load1": 3.47,
+   "text": "last poll",
+   "data": {
+    "phase": "live",
+    "time": 900.2,
+    "scale": 4,
+    "level": 12,
+    "dead": false,
+    "respawnIn": 0,
+    "gold": 499,
+    "items": 5,
+    "skill": 0,
+    "nearFighters": 1,
+    "ended": false,
+    "evs": []
+   }
+  }
+ ],
+ "timings": {
+  "hud": {
+   "start": 1794734513369
+  }
+ }
+}

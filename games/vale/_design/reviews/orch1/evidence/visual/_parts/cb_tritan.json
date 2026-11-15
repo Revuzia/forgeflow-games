@@ -1,0 +1,22 @@
+{
+ "session": "cb:tritan",
+ "records": [
+  {
+   "file": "colorblind_teamfight_tritan_peak.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 498.17,
+   "time": "08:18",
+   "kind": "colorblind",
+   "what": "the teamfight peak frame with the tritan colour-blind mode (identical sim frame as teamfight_rift_peak.png)",
+   "map": "rift",
+   "quality": "high",
+   "colorblind": "tritan",
+   "world": [
+    76.9,
+    81.2
+   ]
+  }
+ ]
+}

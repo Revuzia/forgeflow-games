@@ -1,0 +1,290 @@
+{
+ "session": "life",
+ "records": [
+  {
+   "file": "life_recall_00_before.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 202.2,
+   "time": "03:22",
+   "kind": "recall",
+   "what": "ervet standing in mid lane before the recall",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "idle",
+    "alive": true,
+    "hp": 1185,
+    "x": 44,
+    "y": 55
+   }
+  },
+  {
+   "file": "life_recall_05_channel.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 202.73,
+   "time": "03:22",
+   "kind": "recall",
+   "what": "recall channel 0.5 s in (the channel is 7 s)",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "recall",
+    "alive": true,
+    "hp": 1185,
+    "x": 44,
+    "y": 55
+   }
+  },
+  {
+   "file": "life_recall_20_channel.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 204.27,
+   "time": "03:24",
+   "kind": "recall",
+   "what": "recall channel 2 s in (the channel is 7 s)",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "recall",
+    "alive": true,
+    "hp": 1185,
+    "x": 44,
+    "y": 55
+   }
+  },
+  {
+   "file": "life_recall_40_channel.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 206.3,
+   "time": "03:26",
+   "kind": "recall",
+   "what": "recall channel 4 s in (the channel is 7 s)",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "recall",
+    "alive": true,
+    "hp": 1185,
+    "x": 44,
+    "y": 55
+   }
+  },
+  {
+   "file": "life_recall_65_channel.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 208.83,
+   "time": "03:28",
+   "kind": "recall",
+   "what": "recall channel 6.5 s in (the channel is 7 s)",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "recall",
+    "alive": true,
+    "hp": 1185,
+    "x": 44,
+    "y": 55
+   }
+  },
+  {
+   "file": "life_recall_72_departure.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 209.57,
+   "time": "03:29",
+   "kind": "recall",
+   "what": "7.2 s after the recall command (departure)",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "idle",
+    "alive": true,
+    "hp": 1185,
+    "x": 4.5,
+    "y": 55
+   }
+  },
+  {
+   "file": "life_recall_80_departure.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 210.4,
+   "time": "03:30",
+   "kind": "recall",
+   "what": "8 s after the recall command (departure)",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "idle",
+    "alive": true,
+    "hp": 1185,
+    "x": 4.5,
+    "y": 55
+   }
+  },
+  {
+   "file": "life_recall_99_base.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 211.93,
+   "time": "03:31",
+   "kind": "recall",
+   "what": "after the recall, back at the fountain",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "idle",
+    "alive": true,
+    "hp": 1185,
+    "x": 4.5,
+    "y": 55
+   }
+  },
+  {
+   "file": "life_death_01.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 213.2,
+   "time": "03:33",
+   "kind": "death",
+   "what": "0.1 s after the fighter died",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "dead",
+    "alive": false,
+    "hp": 0,
+    "x": 44,
+    "y": 55
+   }
+  },
+  {
+   "file": "life_death_05.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 213.63,
+   "time": "03:33",
+   "kind": "death",
+   "what": "0.5 s after the fighter died",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "dead",
+    "alive": false,
+    "hp": 0,
+    "x": 44,
+    "y": 55
+   }
+  },
+  {
+   "file": "life_death_12.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 214.37,
+   "time": "03:34",
+   "kind": "death",
+   "what": "1.2 s after the fighter died",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "dead",
+    "alive": false,
+    "hp": 0,
+    "x": 44,
+    "y": 55
+   }
+  },
+  {
+   "file": "life_death_30.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 216.2,
+   "time": "03:36",
+   "kind": "death",
+   "what": "3 s after the fighter died",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "dead",
+    "alive": false,
+    "hp": 0,
+    "x": 44,
+    "y": 55
+   }
+  },
+  {
+   "file": "life_respawn_00.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 228.7,
+   "time": "03:48",
+   "kind": "respawn",
+   "what": "the fighter respawns (about 12.4 s after death)",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "idle",
+    "alive": true,
+    "hp": 1185,
+    "x": 10.1,
+    "y": 55
+   }
+  },
+  {
+   "file": "life_respawn_05.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 229.23,
+   "time": "03:49",
+   "kind": "respawn",
+   "what": "0.5 s after the respawn",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "idle",
+    "alive": true,
+    "hp": 1185,
+    "x": 10.1,
+    "y": 55
+   }
+  },
+  {
+   "file": "life_respawn_15.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 229.77,
+   "time": "03:49",
+   "kind": "respawn",
+   "what": "1.5 s after the respawn",
+   "map": "rift",
+   "quality": "high",
+   "entity": {
+    "state": "idle",
+    "alive": true,
+    "hp": 1185,
+    "x": 10.1,
+    "y": 55
+   }
+  }
+ ]
+}

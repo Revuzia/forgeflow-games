@@ -1,0 +1,209 @@
+{
+ "session": "fray",
+ "records": [
+  {
+   "file": "map_fray_t0022_plate_centre.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 23.2,
+   "time": "00:23",
+   "kind": "map",
+   "what": "Noonplate centre",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    32,
+    32
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_fray_t0022_plate_nw.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 24,
+   "time": "00:24",
+   "kind": "map",
+   "what": "Noonplate north-west quadrant",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    20,
+    20
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_fray_t0022_plate_se.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 24.8,
+   "time": "00:24",
+   "kind": "map",
+   "what": "Noonplate south-east quadrant",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    44,
+    44
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_fray_t0022_plate_rim_w.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 25.6,
+   "time": "00:25",
+   "kind": "map",
+   "what": "Noonplate west rim",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    8,
+    32
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_fray_t0123_plate_centre.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 123.73,
+   "time": "02:03",
+   "kind": "map",
+   "what": "Noonplate centre",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    32,
+    32
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_fray_t0123_plate_nw.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 124.53,
+   "time": "02:04",
+   "kind": "map",
+   "what": "Noonplate north-west quadrant",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    20,
+    20
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_fray_t0123_plate_se.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 125.33,
+   "time": "02:05",
+   "kind": "map",
+   "what": "Noonplate south-east quadrant",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    44,
+    44
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_fray_t0123_plate_rim_w.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 126.13,
+   "time": "02:06",
+   "kind": "map",
+   "what": "Noonplate west rim",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    8,
+    32
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_fray_t0363_plate_centre.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 364.27,
+   "time": "06:04",
+   "kind": "map",
+   "what": "Noonplate centre",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    32,
+    32
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_fray_t0363_plate_nw.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 365.07,
+   "time": "06:05",
+   "kind": "map",
+   "what": "Noonplate north-west quadrant",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    20,
+    20
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_fray_t0363_plate_se.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 365.87,
+   "time": "06:05",
+   "kind": "map",
+   "what": "Noonplate south-east quadrant",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    44,
+    44
+   ],
+   "ended": false
+  },
+  {
+   "file": "map_fray_t0363_plate_rim_w.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 366.67,
+   "time": "06:06",
+   "kind": "map",
+   "what": "Noonplate west rim",
+   "map": "fray",
+   "quality": "high",
+   "world": [
+    8,
+    32
+   ],
+   "ended": false
+  }
+ ]
+}

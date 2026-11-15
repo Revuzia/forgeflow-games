@@ -1,0 +1,1907 @@
+{
+ "phase": "post_fray",
+ "finishedAt": "2026-11-15T09:32:07.036Z",
+ "env": {
+  "chrome": "157.0.8103.78",
+  "load1End": 6.49,
+  "node": "v22.23.3",
+  "base": "http://localhost:5232",
+  "wallMs": 92467
+ },
+ "steps": [
+  {
+   "file": "1920x1080/post_fray_001_fray_flow_01_queue.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "fray_flow_01_queue",
+   "name": "fray_flow_01_queue",
+   "desc": "fray_flow: state scr--queue, heading \"FRAY · STANDARD/Finding a match/0:00\", buttons [CANCEL SEARCH], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 2365956,
+   "tMs": 7552,
+   "load1": 4.8,
+   "layout": {
+    "minFont": {
+     "px": 14,
+     "el": "p.t-body-s.muted.queue__desc \"Ten players, no teams. Pick an\""
+    },
+    "textNodes": 11,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_002_fray_flow_02_queue.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "fray_flow_02_queue",
+   "name": "fray_flow_02_queue",
+   "desc": "fray_flow: state scr--queue, heading \"FRAY · STANDARD/Finding a match/0:06\", buttons [DECLINE | READY | CANCEL SEARCH (disabled)], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 908903,
+   "tMs": 12984,
+   "load1": 4.49,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "p.t-caption.quiet.ready__note \"Declining or missing the check\""
+    },
+    "textNodes": 17,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_003_fray_flow_03_queue.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "fray_flow_03_queue",
+   "name": "fray_flow_03_queue",
+   "desc": "fray_flow: state scr--queue, heading \"FRAY · STANDARD/Finding a match/0:06\", buttons [CANCEL SEARCH (disabled)], 0 selected card(s)",
+   "route": "scr--queue",
+   "hud": false,
+   "crop": null,
+   "bytes": 911761,
+   "tMs": 13822,
+   "load1": 4.49,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "p.t-caption.quiet.ready__note \"Declining or missing the check\""
+    },
+    "textNodes": 17,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_004_fray_flow_04_none.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "fray_flow_04_none",
+   "name": "fray_flow_04_none",
+   "desc": "fray_flow: state undefined, heading \"\", buttons [], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 974724,
+   "tMs": 16541,
+   "load1": 4.49,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 51,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_005_fray_flow_05_draft.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "fray_flow_05_draft",
+   "name": "fray_flow_05_draft",
+   "desc": "fray_flow: state scr--draft, heading \"Pick your fighter\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN (disabled)], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2068607,
+   "tMs": 17664,
+   "load1": 4.45,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 51,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_006_fray_flow_06_draft.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "fray_flow_06_draft",
+   "name": "fray_flow_06_draft",
+   "desc": "fray_flow: state scr--draft, heading \"Pick your fighter\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam | Dunsom | Ervet | Hesmi | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum | Rishal | Sukri | Tunlan | Ulkro | Vashil | LOCK IN], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2084418,
+   "tMs": 19847,
+   "load1": 4.45,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 55,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_007_fray_flow_07_draft.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "fray_flow_07_draft",
+   "name": "fray_flow_07_draft",
+   "desc": "fray_flow: state scr--draft, heading \"Pick your fighter\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam\ndunmoor_ash locke (disabled) | Dunsom\nruth_afterlight l (disabled) | Ervet\nsorrel_hour locked (disabled) | Hesmi\nwrenna_lamp locked (disabled) | Ilsheta | Kemdo | Lisvel | Marund | Nurrow | Odrum\nledger_lou locked  (disabled) | Rishal | Sukri | Tunlan | Ulkro | Vashil\noda_longlight loc (disabled) | LOCK IN (disabled)], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2201369,
+   "tMs": 22752,
+   "load1": 4.9,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 56,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_008_fray_flow_08_draft.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "fray_flow_08_draft",
+   "name": "fray_flow_08_draft",
+   "desc": "fray_flow: state scr--draft, heading \"Pick your fighter\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam\ndunmoor_ash locke (disabled) | Dunsom\nruth_afterlight l (disabled) | Ervet\nsorrel_hour locked (disabled) | Hesmi\nwrenna_lamp locked (disabled) | Ilsheta | Kemdo | Lisvel | Marund | Nurrow\nkit_lanterns lock (disabled) | Odrum\nledger_lou locked  (disabled) | Rishal | Sukri | Tunlan | Ulkro | Vashil\noda_longlight loc (disabled) | LOCK IN (disabled)], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2210697,
+   "tMs": 24008,
+   "load1": 4.9,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 57,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_009_fray_flow_09_draft.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "fray_flow_09_draft",
+   "name": "fray_flow_09_draft",
+   "desc": "fray_flow: state scr--draft, heading \"Pick your fighter\", buttons [ALL |  |  |  |  |  |  | Role: All | Ardit | Burdam\ndunmoor_ash locke (disabled) | Dunsom\nruth_afterlight l (disabled) | Ervet\nsorrel_hour locked (disabled) | Hesmi\nwrenna_lamp locked (disabled) | Ilsheta | Kemdo | Lisvel | Marund | Nurrow\nkit_lanterns lock (disabled) | Odrum\nledger_lou locked  (disabled) | Rishal | Sukri\nottoline_v locked  (disabled) | Tunlan | Ulkro | Vashil\noda_longlight loc (disabled) | LOCK IN (disabled)], 1 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2217605,
+   "tMs": 25864,
+   "load1": 4.9,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 73,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_010_fray_flow_10_draft.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "fray_flow_10_draft",
+   "name": "fray_flow_10_draft",
+   "desc": "fray_flow: state scr--draft, heading \"Skin and loadout/Ardit/Locked in\", buttons [Base skin\nEquipped | Chalkline Pavise\n600 | First Bell Pavise\n1,500 | D\nSlot 1\nGlint Step | F\nSlot 2\nGlass Pane | D\nGlint Step | Saplight | Hairline | Hourstrike (disabled) | Running Light | Shake Loose (disabled) | F\nGlass Pane | Calling Bell (disabled) | LOCKED IN (disabled)], 0 selected card(s)",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2071036,
+   "tMs": 27366,
+   "load1": 4.75,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 75,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_011_fray_flow_11_loading.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "fray_flow_11_loading",
+   "name": "fray_flow_11_loading",
+   "desc": "fray_flow: state scr--loading, heading \"FRAY · STANDARD Noonplate Noonplate · th/Noonplate\", buttons [], 0 selected card(s)",
+   "route": "scr--loading",
+   "hud": false,
+   "crop": null,
+   "bytes": 2267256,
+   "tMs": 29511,
+   "load1": 4.75,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--bot.pcard__bot \"BOT\""
+    },
+    "textNodes": 61,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_012_fray_flow_12_loading.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "fray_flow_12_loading",
+   "name": "fray_flow_12_loading",
+   "desc": "fray_flow: state scr--loading, heading \"FRAY · STANDARD Noonplate Noonplate · th/Noonplate\", buttons [], 0 selected card(s)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2313505,
+   "tMs": 32556,
+   "load1": 9.25,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 73,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_013_end_banner_early.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "end_banner",
+   "name": "end_banner_early",
+   "desc": "result in the view; end banner starting (sim x1)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1773377,
+   "tMs": 69632,
+   "load1": 8.8,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 96,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/post_fray_014_end_banner_early.png",
+   "viewport": "1366x768",
+   "phase": "post_fray",
+   "step": "end_banner",
+   "name": "end_banner_early",
+   "desc": "result in the view; end banner starting (sim x1)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 964151,
+   "tMs": 70629,
+   "load1": 8.8,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 96,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2,
+     "ellipsis-truncated": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_015_end_banner.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "end_banner",
+   "name": "end_banner",
+   "desc": "end banner held over the last frame",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 151826,
+   "tMs": 72195,
+   "load1": 8.33,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.muted \"Nurrow\""
+    },
+    "textNodes": 39,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/post_fray_016_end_banner.png",
+   "viewport": "1366x768",
+   "phase": "post_fray",
+   "step": "end_banner",
+   "name": "end_banner",
+   "desc": "end banner held over the last frame",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1021814,
+   "tMs": 72966,
+   "load1": 8.33,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 48,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_017_postgame_summary.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "postgame_summary",
+   "name": "postgame_summary",
+   "desc": "fray post-game default tab",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1891693,
+   "tMs": 75628,
+   "load1": 8.33,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.muted \"Nurrow\""
+    },
+    "textNodes": 54,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/post_fray_018_postgame_summary.png",
+   "viewport": "1366x768",
+   "phase": "post_fray",
+   "step": "postgame_summary",
+   "name": "postgame_summary",
+   "desc": "fray post-game default tab",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1029183,
+   "tMs": 76348,
+   "load1": 8.33,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 52,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_019_postgame_tab_summary.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "postgame_tab_summary",
+   "name": "postgame_tab_summary",
+   "desc": "postgame screen, tab \"SUMMARY\"",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1889040,
+   "tMs": 77904,
+   "load1": 7.66,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.muted \"Nurrow\""
+    },
+    "textNodes": 54,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/post_fray_020_postgame_tab_summary.png",
+   "viewport": "1366x768",
+   "phase": "post_fray",
+   "step": "postgame_tab_summary",
+   "name": "postgame_tab_summary",
+   "desc": "postgame screen, tab \"SUMMARY\"",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1028757,
+   "tMs": 78634,
+   "load1": 7.66,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 52,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_021_postgame_tab_hour-board.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "postgame_tab_hour-board",
+   "name": "postgame_tab_hour-board",
+   "desc": "postgame screen, tab \"HOUR BOARD\"",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1812957,
+   "tMs": 80406,
+   "load1": 7.66,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--bot \"BOT\""
+    },
+    "textNodes": 134,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "viewport": "1366x768",
+   "phase": "post_fray",
+   "step": "postgame_tab_hour-board",
+   "name": "postgame_tab_hour-board",
+   "desc": "postgame screen, tab \"HOUR BOARD\"",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1031246,
+   "tMs": 81484,
+   "load1": 7.66,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 134,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 23,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_023_postgame_tab_hour-board_scrolled.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "postgame_tab_hour-board",
+   "name": "postgame_tab_hour-board_scrolled",
+   "desc": "postgame screen, tab \"HOUR BOARD\" (scrolled to the bottom of scr__body sfade is-more-b ; 46px of extra content at 1920x1080)",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1761086,
+   "tMs": 83195,
+   "load1": 7.21,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--bot \"BOT\""
+    },
+    "textNodes": 134,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/post_fray_024_postgame_tab_hour-board_scrolled.png",
+   "viewport": "1366x768",
+   "phase": "post_fray",
+   "step": "postgame_tab_hour-board",
+   "name": "postgame_tab_hour-board_scrolled",
+   "desc": "postgame screen, tab \"HOUR BOARD\" (scrolled to the bottom of scr__body sfade is-more-b ; 46px of extra content at 1920x1080)",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 921886,
+   "tMs": 84596,
+   "load1": 7.21,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 134,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 3,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_025_postgame_tab_gleam-lead.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "postgame_tab_gleam-lead",
+   "name": "postgame_tab_gleam-lead",
+   "desc": "postgame screen, tab \"GLEAM LEAD\"",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1745985,
+   "tMs": 86652,
+   "load1": 7.21,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "text \"0\""
+    },
+    "textNodes": 22,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/post_fray_026_postgame_tab_gleam-lead.png",
+   "viewport": "1366x768",
+   "phase": "post_fray",
+   "step": "postgame_tab_gleam-lead",
+   "name": "postgame_tab_gleam-lead",
+   "desc": "postgame screen, tab \"GLEAM LEAD\"",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 918908,
+   "tMs": 87663,
+   "load1": 6.79,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 22,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/post_fray_027_after_postgame_leave.png",
+   "viewport": "1920x1080",
+   "phase": "post_fray",
+   "step": "postgame_tab_gleam-lead",
+   "name": "after_postgame_leave",
+   "desc": "screen after the post-game CTA",
+   "route": "scr--home",
+   "hud": false,
+   "crop": null,
+   "bytes": 2340432,
+   "tMs": 90948,
+   "load1": 6.79,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--line.num \"LV 2\""
+    },
+    "textNodes": 42,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/post_fray_028_after_postgame_leave.png",
+   "viewport": "1366x768",
+   "phase": "post_fray",
+   "step": "postgame_tab_gleam-lead",
+   "name": "after_postgame_leave",
+   "desc": "screen after the post-game CTA",
+   "route": "scr--home",
+   "hud": false,
+   "crop": null,
+   "bytes": 1275026,
+   "tMs": 91961,
+   "load1": 6.79,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 40,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.5 (schema 1) from http://localhost:5232/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":16,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/post_fray_001_fray_flow_01_queue.png",
+   "step": "fray_flow_01_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_fray_002_fray_flow_02_queue.png",
+   "step": "fray_flow_02_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_fray_003_fray_flow_03_queue.png",
+   "step": "fray_flow_03_queue",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_fray_004_fray_flow_04_none.png",
+   "step": "fray_flow_04_none",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_fray_005_fray_flow_05_draft.png",
+   "step": "fray_flow_05_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_fray_006_fray_flow_06_draft.png",
+   "step": "fray_flow_06_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_fray_007_fray_flow_07_draft.png",
+   "step": "fray_flow_07_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_fray_008_fray_flow_08_draft.png",
+   "step": "fray_flow_08_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_fray_009_fray_flow_09_draft.png",
+   "step": "fray_flow_09_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_fray_009_fray_flow_09_draft.png",
+   "step": "fray_flow_09_draft",
+   "kind": "scrollable",
+   "el": "aside.dteam",
+   "scrollH": 800,
+   "clientH": 792,
+   "scrollW": 347,
+   "clientW": 347,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/post_fray_010_fray_flow_10_draft.png",
+   "step": "fray_flow_10_draft",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_fray_010_fray_flow_10_draft.png",
+   "step": "fray_flow_10_draft",
+   "kind": "scrollable",
+   "el": "aside.dteam",
+   "scrollH": 800,
+   "clientH": 792,
+   "scrollW": 347,
+   "clientW": 347,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/post_fray_011_fray_flow_11_loading.png",
+   "step": "fray_flow_11_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_fray_012_fray_flow_12_loading.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_fray_012_fray_flow_12_loading.png",
+   "step": "fray_flow_12_loading",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "6",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_fray_013_end_banner_early.png",
+   "step": "end_banner",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_fray_013_end_banner_early.png",
+   "step": "end_banner",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "7",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/post_fray_014_end_banner_early.png",
+   "step": "end_banner",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_014_end_banner_early.png",
+   "step": "end_banner",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "oda_longlight",
+   "scroll": 76,
+   "client": 73,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/post_fray_014_end_banner_early.png",
+   "step": "end_banner",
+   "kind": "ellipsis-truncated",
+   "el": "span.frow__name.t-caption",
+   "text": "ruth_afterlight",
+   "scroll": 80,
+   "client": 73,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/post_fray_014_end_banner_early.png",
+   "step": "end_banner",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "7",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/post_fray_015_end_banner.png",
+   "step": "end_banner",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_fray_015_end_banner.png",
+   "step": "end_banner",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 922,
+   "clientH": 896,
+   "scrollW": 1738,
+   "clientW": 1738,
+   "top": 0
+  },
+  {
+   "file": "1366x768/post_fray_016_end_banner.png",
+   "step": "end_banner",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_016_end_banner.png",
+   "step": "end_banner",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 701,
+   "clientH": 616,
+   "scrollW": 1239,
+   "clientW": 1239,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/post_fray_017_postgame_summary.png",
+   "step": "postgame_summary",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/post_fray_018_postgame_summary.png",
+   "step": "postgame_summary",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_018_postgame_summary.png",
+   "step": "postgame_summary",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 701,
+   "clientH": 616,
+   "scrollW": 1239,
+   "clientW": 1239,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/post_fray_019_postgame_tab_summary.png",
+   "step": "postgame_tab_summary",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/post_fray_020_postgame_tab_summary.png",
+   "step": "postgame_tab_summary",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_020_postgame_tab_summary.png",
+   "step": "postgame_tab_summary",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 701,
+   "clientH": 616,
+   "scrollW": 1239,
+   "clientW": 1239,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/post_fray_021_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_fray_021_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 942,
+   "clientH": 896,
+   "scrollW": 1738,
+   "clientW": 1738,
+   "top": 0
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 784,
+   "clientH": 616,
+   "scrollW": 1239,
+   "clientW": 1239,
+   "top": 0
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__place",
+   "text": "9th",
+   "rect": [
+    68,
+    753,
+    154,
+    799
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body-s",
+   "text": "dunmoor_ash BOT",
+   "rect": [
+    212,
+    758,
+    324,
+    777
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.chip.chip--bot",
+   "text": "BOT",
+   "rect": [
+    288,
+    758,
+    324,
+    777
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Burdam · VII",
+   "rect": [
+    212,
+    777,
+    324,
+    794
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "7",
+   "rect": [
+    413,
+    753,
+    474,
+    799
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "2 / 4 / 3",
+   "rect": [
+    474,
+    753,
+    597,
+    799
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "0",
+   "rect": [
+    597,
+    753,
+    683,
+    799
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "2,919",
+   "rect": [
+    683,
+    753,
+    781,
+    799
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "7,762",
+   "rect": [
+    781,
+    753,
+    880,
+    799
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "2,872",
+   "rect": [
+    880,
+    753,
+    978,
+    799
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "0",
+   "rect": [
+    978,
+    753,
+    1089,
+    799
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__place",
+   "text": "10th",
+   "rect": [
+    68,
+    799,
+    154,
+    846
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-body-s",
+   "text": "ruth_afterlight BOT",
+   "rect": [
+    212,
+    805,
+    328,
+    824
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.chip.chip--bot",
+   "text": "BOT",
+   "rect": [
+    292,
+    805,
+    328,
+    824
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-caption.muted",
+   "text": "Dunsom · IX",
+   "rect": [
+    212,
+    824,
+    328,
+    840
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "7",
+   "rect": [
+    413,
+    799,
+    474,
+    846
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "2 / 4 / 1",
+   "rect": [
+    474,
+    799,
+    597,
+    846
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "0",
+   "rect": [
+    597,
+    799,
+    683,
+    846
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "2,836",
+   "rect": [
+    683,
+    799,
+    781,
+    846
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "6,165",
+   "rect": [
+    781,
+    799,
+    880,
+    846
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "1,301",
+   "rect": [
+    880,
+    799,
+    978,
+    846
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_022_postgame_tab_hour-board.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "0",
+   "rect": [
+    978,
+    799,
+    1089,
+    846
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/post_fray_023_postgame_tab_hour-board_scrolled.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/post_fray_023_postgame_tab_hour-board_scrolled.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade",
+   "scrollH": 942,
+   "clientH": 896,
+   "scrollW": 1738,
+   "clientW": 1738,
+   "top": 46
+  },
+  {
+   "file": "1366x768/post_fray_024_postgame_tab_hour-board_scrolled.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_024_postgame_tab_hour-board_scrolled.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade",
+   "scrollH": 784,
+   "clientH": 616,
+   "scrollW": 1239,
+   "clientW": 1239,
+   "top": 168
+  },
+  {
+   "file": "1366x768/post_fray_024_postgame_tab_hour-board_scrolled.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.t-label.muted.pg__queue",
+   "text": "FRAY · STANDARD",
+   "rect": [
+    68,
+    -85,
+    168,
+    -69
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_024_postgame_tab_hour-board_scrolled.png",
+   "step": "postgame_tab_hour-board",
+   "kind": "outside-scroll-ancestor",
+   "el": "h1.t-display-xl.pg__title",
+   "text": "3rd of 10",
+   "rect": [
+    68,
+    -62,
+    432,
+    27
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/post_fray_025_postgame_tab_gleam-lead.png",
+   "step": "postgame_tab_gleam-lead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/post_fray_026_postgame_tab_gleam-lead.png",
+   "step": "postgame_tab_gleam-lead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/post_fray_026_postgame_tab_gleam-lead.png",
+   "step": "postgame_tab_gleam-lead",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 628,
+   "clientH": 616,
+   "scrollW": 1239,
+   "clientW": 1239,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/post_fray_027_after_postgame_leave.png",
+   "step": "postgame_tab_gleam-lead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/post_fray_028_after_postgame_leave.png",
+   "step": "postgame_tab_gleam-lead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
+ "notes": [
+  {
+   "step": "fray_flow_12_loading",
+   "tMs": 32913,
+   "load1": 9.25,
+   "text": "fray: flow to HUD took 26497 ms"
+  },
+  {
+   "step": "fast_forward",
+   "tMs": 33339,
+   "load1": 9.25,
+   "text": "progress",
+   "data": {
+    "t": 32.6,
+    "scale": 16,
+    "level": 6
+   }
+  },
+  {
+   "step": "fast_forward",
+   "tMs": 63731,
+   "load1": 9.3,
+   "text": "progress",
+   "data": {
+    "t": 519,
+    "scale": 16,
+    "level": 7
+   }
+  },
+  {
+   "step": "postgame_summary",
+   "tMs": 76851,
+   "load1": 8.33,
+   "text": "postgame tabs",
+   "data": [
+    "SUMMARY",
+    "HOUR BOARD",
+    "GLEAM LEAD"
+   ]
+  },
+  {
+   "step": "postgame_tab_gleam-lead",
+   "tMs": 88170,
+   "load1": 6.79,
+   "text": "postgame text (default tab)",
+   "data": "FRAY · STANDARD 3rd of 10 You kept your hour longer than seven others. Last one standing · 9:43 played SUMMARY HOUR BOARD GLEAM LEAD GLEAM LEAD BY MINUTE Above the line, your team was ahead. 0 5 10 +1,000 −1,000 Minute CHOOSE ANOTHER MODE RETURN HOME PLAY AGAIN"
+  },
+  {
+   "step": "postgame_tab_gleam-lead",
+   "tMs": 88171,
+   "load1": 6.79,
+   "text": "postgame buttons",
+   "data": [
+    "SUMMARY",
+    "HOUR BOARD",
+    "GLEAM LEAD",
+    "CHOOSE ANOTHER MODE",
+    "RETURN HOME",
+    "PLAY AGAIN"
+   ]
+  }
+ ],
+ "timings": {}
+}

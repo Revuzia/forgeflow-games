@@ -1,0 +1,309 @@
+{
+ "session": "fighters:b",
+ "records": [
+  {
+   "file": "_raw_fighter_marund_game.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 31.77,
+   "time": "00:31",
+   "kind": "fighter_raw",
+   "fighter": "marund",
+   "team": 0,
+   "screen": {
+    "x": 953.8389151908515,
+    "y": 497.05402278265467,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "game (distance from the map camera)"
+  },
+  {
+   "file": "_raw_fighter_marund_close.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 32.47,
+   "time": "00:32",
+   "kind": "fighter_raw",
+   "fighter": "marund",
+   "team": 0,
+   "screen": {
+    "x": 949.3664990561151,
+    "y": 480.9363312590306,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "closest game camera"
+  },
+  {
+   "file": "_raw_fighter_nurrow_game.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 33.17,
+   "time": "00:33",
+   "kind": "fighter_raw",
+   "fighter": "nurrow",
+   "team": 0,
+   "screen": {
+    "x": 959.9999999999994,
+    "y": 492.3357990468793,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "game (distance from the map camera)"
+  },
+  {
+   "file": "_raw_fighter_nurrow_close.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 33.87,
+   "time": "00:33",
+   "kind": "fighter_raw",
+   "fighter": "nurrow",
+   "team": 0,
+   "screen": {
+    "x": 959.9999999999992,
+    "y": 479.26994856188,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "closest game camera"
+  },
+  {
+   "file": "_raw_fighter_odrum_game.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 34.57,
+   "time": "00:34",
+   "kind": "fighter_raw",
+   "fighter": "odrum",
+   "team": 0,
+   "screen": {
+    "x": 951.3548229780822,
+    "y": 492.3357990468793,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "game (distance from the map camera)"
+  },
+  {
+   "file": "_raw_fighter_odrum_close.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 35.27,
+   "time": "00:35",
+   "kind": "fighter_raw",
+   "fighter": "odrum",
+   "team": 0,
+   "screen": {
+    "x": 948.984981710926,
+    "y": 479.26994856188,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "closest game camera"
+  },
+  {
+   "file": "_raw_fighter_rishal_game.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 35.97,
+   "time": "00:35",
+   "kind": "fighter_raw",
+   "fighter": "rishal",
+   "team": 0,
+   "screen": {
+    "x": 951.0876157028815,
+    "y": 490.7080187828725,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "game (distance from the map camera)"
+  },
+  {
+   "file": "_raw_fighter_rishal_close.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 36.67,
+   "time": "00:36",
+   "kind": "fighter_raw",
+   "fighter": "rishal",
+   "team": 0,
+   "screen": {
+    "x": 948.6548260681127,
+    "y": 477.1779080054672,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "closest game camera"
+  },
+  {
+   "file": "_raw_fighter_sukri_game.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 37.37,
+   "time": "00:37",
+   "kind": "fighter_raw",
+   "fighter": "sukri",
+   "team": 0,
+   "screen": {
+    "x": 951.5367701374927,
+    "y": 490.5560264144047,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "game (distance from the map camera)"
+  },
+  {
+   "file": "_raw_fighter_sukri_close.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 38.07,
+   "time": "00:38",
+   "kind": "fighter_raw",
+   "fighter": "sukri",
+   "team": 0,
+   "screen": {
+    "x": 949.6011802781362,
+    "y": 476.12672437818065,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "closest game camera"
+  },
+  {
+   "file": "_raw_fighter_tunlan_game.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 38.77,
+   "time": "00:38",
+   "kind": "fighter_raw",
+   "fighter": "tunlan",
+   "team": 1,
+   "screen": {
+    "x": 968.1862689364198,
+    "y": 494.50630443725413,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "game (distance from the map camera)"
+  },
+  {
+   "file": "_raw_fighter_tunlan_close.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 39.47,
+   "time": "00:39",
+   "kind": "fighter_raw",
+   "fighter": "tunlan",
+   "team": 1,
+   "screen": {
+    "x": 970.7152678977088,
+    "y": 481.2651211245298,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "closest game camera"
+  },
+  {
+   "file": "_raw_fighter_ulkro_game.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 40.17,
+   "time": "00:40",
+   "kind": "fighter_raw",
+   "fighter": "ulkro",
+   "team": 1,
+   "screen": {
+    "x": 960,
+    "y": 492.3357990468787,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "game (distance from the map camera)"
+  },
+  {
+   "file": "_raw_fighter_ulkro_close.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 40.87,
+   "time": "00:40",
+   "kind": "fighter_raw",
+   "fighter": "ulkro",
+   "team": 1,
+   "screen": {
+    "x": 960,
+    "y": 479.2699485618793,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "closest game camera"
+  },
+  {
+   "file": "_raw_fighter_vashil_game.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 41.57,
+   "time": "00:41",
+   "kind": "fighter_raw",
+   "fighter": "vashil",
+   "team": 1,
+   "screen": {
+    "x": 951.3548229749896,
+    "y": 492.33580010060115,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "game (distance from the map camera)"
+  },
+  {
+   "file": "_raw_fighter_vashil_close.png",
+   "width": 1920,
+   "height": 1080,
+   "seed": 7,
+   "time_s": 42.27,
+   "time": "00:42",
+   "kind": "fighter_raw",
+   "fighter": "vashil",
+   "team": 1,
+   "screen": {
+    "x": 948.9849817108615,
+    "y": 479.2699485788876,
+    "visible": true
+   },
+   "quality": "high",
+   "map": "rift",
+   "camera": "closest game camera"
+  }
+ ]
+}
