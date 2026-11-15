@@ -116,8 +116,9 @@ async function clutterMain() {
           const noFx = grab();
           R.vfx.draw = dv; R.overlay.teleScene.visible = tv;
           // telegraph alone off
-          R.overlay.teleScene.visible = false; const noTele = grab(); R.overlay.teleScene.visible = tv;
-          const ringV = R.rings.mesh.visible; R.rings.mesh.visible = false; const noRing = grab(); R.rings.mesh.visible = ringV;
+          const tMask = R.teles.mesh.layers.mask; R.overlay.teleScene.visible = false; R.teles.mesh.layers.disableAll(); const noTele = grab(); R.teles.mesh.layers.mask = tMask; R.overlay.teleScene.visible = tv;
+          // the renderer rewrites .visible every frame: hide the ring layer through the layers mask
+          const ringMask = R.rings.mesh.layers.mask; R.rings.mesh.layers.disableAll(); const noRing = grab(); R.rings.mesh.layers.mask = ringMask;
           R.render(0);
           const me = v.players.find((p) => p.player === 0), meE = me ? v.entity(me.entity) : null;
           const fighters = [];
