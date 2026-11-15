@@ -17,16 +17,18 @@
 import { CustomBlending, DstColorFactor, HalfFloatType, LinearFilter, Matrix4, OneFactor, OneMinusSrcAlphaFactor, Vector2, Vector3, WebGLRenderTarget, ZeroFactor, type IUniform, type Texture, type WebGLRenderer } from 'three';
 import { passMaterial, type FullscreenQuad } from '../post/fsquad.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
+import { DEPTH_DECODE } from '../shaders/revz.ts';
 
 const COMMON = /* glsl */ `
 uniform sampler2D tSceneDepth;
 uniform vec2 uResolution;
+${DEPTH_DECODE}
 uniform mat4 uInvProj;
 uniform mat3 uViewToBody;
 uniform vec3 uCamBody;
 uniform float uGroundR;
 varying vec2 vUv;
-vec3 viewRay(vec2 uv) { vec4 r = uInvProj * vec4(uv * 2.0 - 1.0, -1.0, 1.0); return r.xyz / r.w; }
+vec3 viewRay(vec2 uv) { vec4 r = uInvProj * vec4(uv * 2.0 - 1.0, GENESIS_NDC_NEAR, 1.0); return r.xyz / r.w; }
 `;
 
 const OVER = /* glsl */ `

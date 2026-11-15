@@ -60,13 +60,14 @@ uniform float uMode;
 void main() {
   if (uMode < 0.5) { gl_FragColor = vec4(sane(texture(tColor, vUv).rgb), 1.0); return; }
   float d = texture(tDepth, vUv).r;
-  gl_FragColor = vec4(d >= 0.999999 ? 1e9 : viewZFromLogDepth(d, uFar), 0.0, 0.0, 1.0);
+  gl_FragColor = vec4(depthIsSky(d) ? 1e9 : viewZFromLogDepth(d, uFar), 0.0, 0.0, 1.0);
 }
 `;
 
 const GOD_MASK_FRAG = /* glsl */ `
 // one NaN / Inf pixel (a degenerate normal on the horizon) must never bloom into a screen-wide glare: drop it
 vec3 sane(vec3 c) { return (any(isnan(c)) || any(isinf(c)) || !(dot(c, c) < 1e18)) ? vec3(0.0) : c; }
+${LOGDEPTH_DECODE}
 varying vec2 vUv;
 uniform sampler2D tColor;
 uniform sampler2D tDepth;
@@ -79,7 +80,7 @@ void main() {
     vec2 o = (vec2(float(i), float(j)) - 0.5) * 0.5 / vec2(textureSize(tColor, 0)) * 4.0;
     float d = texture(tDepth, vUv + o).r;
     vec3 c = sane(texture(tColor, vUv + o).rgb);
-    acc += d >= 0.999999 ? c : vec3(0.0);
+    acc += depthIsSky(d) ? c : vec3(0.0);
   }
   acc *= 0.25;
   vec2 dv = (vUv - uSunUV) * vec2(uAspect, 1.0);

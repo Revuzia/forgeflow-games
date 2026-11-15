@@ -8,6 +8,8 @@
 //
 // Positions are relative to the planet CENTRE, in metres, in whatever frame the caller uses (only dot products).
 
+import { DEPTH_DECODE } from './revz.ts';
+
 export const ATMO_PARS = /* glsl */ `
 #ifndef GENESIS_ATMO
 #define GENESIS_ATMO
@@ -124,15 +126,8 @@ void atmoIntegrate(vec3 o, vec3 d, vec3 sunDir, float t0, float t1, int steps, f
 #endif
 `;
 
-/** decode three.js logarithmic depth (gl_FragDepth = log2(1 + w) / log2(far + 1)) to view-space distance along -Z */
-export const LOGDEPTH_DECODE = /* glsl */ `
-#ifndef GENESIS_LOGDEPTH
-#define GENESIS_LOGDEPTH
-float viewZFromLogDepth(float d, float far) {
-  return exp2(d * log2(far + 1.0)) - 1.0;
-}
-#endif
-`;
+/** decode the scene depth texture (log depth, or reversed-Z float depth: shaders/revz.ts) to view-space distance along -Z */
+export const LOGDEPTH_DECODE = DEPTH_DECODE;
 
 /**
  * Lookups into the per-planet sky LUTs for surface shading (terrain ambient, water reflections, cloud ambient).

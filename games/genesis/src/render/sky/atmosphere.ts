@@ -364,13 +364,13 @@ uniform vec4 uForest;     // inside a wood: x = canopy density at the camera, y 
                           // z = canopy height (m); 0 density elsewhere (renderer.ts)
 
 vec3 viewDir(vec2 uv) {
-  vec4 v = uInvProj * vec4(uv * 2.0 - 1.0, -1.0, 1.0);
+  vec4 v = uInvProj * vec4(uv * 2.0 - 1.0, GENESIS_NDC_NEAR, 1.0);
   return normalize(v.xyz / v.w);
 }
 
 float sceneDistance(vec2 uv, vec3 vdir) {
   float dz = texture(tDepth, uv).r;
-  if (dz >= 0.999999) return 1e30;
+  if (depthIsSky(dz)) return 1e30;
   return viewZFromLogDepth(dz, uFar) / max(-vdir.z, 1e-4);
 }
 

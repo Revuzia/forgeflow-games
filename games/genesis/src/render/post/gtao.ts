@@ -47,10 +47,10 @@ uniform float uFar;
 uniform vec2 uDepthRes;
 float viewZAt(vec2 uv) {
   float d = texture(tDepth, uv).r;
-  return d >= 0.999999 ? 1e9 : viewZFromLogDepth(d, uFar);
+  return depthIsSky(d) ? 1e9 : viewZFromLogDepth(d, uFar);
 }
 vec3 viewPosAt(vec2 uv, float z) {
-  vec4 v = uInvProj * vec4(uv * 2.0 - 1.0, -1.0, 1.0);
+  vec4 v = uInvProj * vec4(uv * 2.0 - 1.0, GENESIS_NDC_NEAR, 1.0);
   vec3 r = v.xyz / v.w;
   return r * (z / max(-r.z, 1e-6));
 }

@@ -851,12 +851,12 @@ void main() {
   vec2 pix = floor(gl_FragCoord.xy) * uK + uOffset + 0.5;
   if (pix.x > uFullRes.x || pix.y > uFullRes.y) { oCol = vec4(0.0, 0.0, 0.0, 1.0); oAux = vec4(-1.0, -1.0, 0.0, 0.0); return; }
   vec2 uv = pix / uFullRes;
-  vec4 v = uInvProj * vec4(uv * 2.0 - 1.0, -1.0, 1.0);
+  vec4 v = uInvProj * vec4(uv * 2.0 - 1.0, GENESIS_NDC_NEAR, 1.0);
   vec3 vdir = normalize(v.xyz / v.w);
   float dz = texelFetch(tDepth, ivec2(pix), 0).r;
-  float tScene = dz >= 0.999999 ? 1e30 : viewZFromLogDepth(dz, uFar) / max(-vdir.z, 1e-4);
+  float tScene = depthIsSky(dz) ? 1e30 : viewZFromLogDepth(dz, uFar) / max(-vdir.z, 1e-4);
   // (the resolve's depth weights read the sample's scene depth from here: 16 fewer full-res depth fetches per pixel)
-  float zLog = dz >= 0.999999 ? 24.0 : log2(viewZFromLogDepth(dz, uFar) + 1.0);
+  float zLog = depthIsSky(dz) ? 24.0 : log2(viewZFromLogDepth(dz, uFar) + 1.0);
   // march in the planet's body frame (the weather cubes and the noise live there)
   vec3 d = normalize(uWorldToBody * (uCamRot * vdir));
   vec3 o = uWorldToBody * (-uPlanetPos);
@@ -1146,7 +1146,7 @@ uniform float uSoftUp;
 
 float zAt(ivec2 p) {
   float dz = texelFetch(tDepth, p, 0).r;
-  return dz >= 0.999999 ? 24.0 : log2(viewZFromLogDepth(dz, uFar) + 1.0);
+  return depthIsSky(dz) ? 24.0 : log2(viewZFromLogDepth(dz, uFar) + 1.0);
 }
 vec3 toYCoCg(vec3 c) { return vec3(0.25 * c.r + 0.5 * c.g + 0.25 * c.b, 0.5 * c.r - 0.5 * c.b, -0.25 * c.r + 0.5 * c.g - 0.25 * c.b); }
 vec3 fromYCoCg(vec3 c) { return vec3(c.x + c.y - c.z, c.x + c.z, c.x - c.y - c.z); }
@@ -1184,13 +1184,13 @@ vec4 histCR(vec2 uv) {
 void main() {
   ivec2 P = ivec2(gl_FragCoord.xy);
   vec2 uv = (vec2(P) + 0.5) / uFullRes;
-  vec4 v = uInvProj * vec4(uv * 2.0 - 1.0, -1.0, 1.0);
+  vec4 v = uInvProj * vec4(uv * 2.0 - 1.0, GENESIS_NDC_NEAR, 1.0);
   vec3 vdir = normalize(v.xyz / v.w);
   vec3 d = normalize(uWorldToBody * (uCamRot * vdir));
   vec3 o = uWorldToBody * (-uPlanetPos);
   float r0 = length(o);
   float dz = texelFetch(tDepth, P, 0).r;
-  float tScene = dz >= 0.999999 ? 1e30 : viewZFromLogDepth(dz, uFar) / max(-vdir.z, 1e-4);
+  float tScene = depthIsSky(dz) ? 1e30 : viewZFromLogDepth(dz, uFar) / max(-vdir.z, 1e-4);
   // geometry in front of every cloud layer sees no cloud at all
   float entry = 1e30;
   if (r0 >= uShell.x && r0 <= uShell.y) entry = 0.0;

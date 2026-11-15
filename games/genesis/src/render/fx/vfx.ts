@@ -25,6 +25,7 @@ import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { texUpload } from '../uploadsched.ts';
 import { FX_DEPTH_GLSL, FX_LAYER } from './fxcommon.ts';
+import { DEPTH_DECODE } from '../shaders/revz.ts';
 
 /** particle systems (vertex shader branches). 0–19 and 40–59: the lit pass; 20–39: the emissive pass */
 /** the display luminance additive emission (sparks, embers, lava, flashes) rolls off toward (punch P03) */
@@ -97,6 +98,7 @@ uniform sampler2D tEmit;
 uniform sampler2D tBlocks;
 uniform sampler2D tSceneDepth;
 uniform vec2 uResolution;
+${DEPTH_DECODE}
 uniform mat4 uInvProj;
 uniform mat3 uViewToBody;
 uniform vec3 uCamBody;
@@ -419,13 +421,13 @@ void main() {
     vec2 suv = vec2(r1, r2);
     float sz0 = textureLod(tSceneDepth, suv, 0.0).r;
     if (sz0 > p0 || sz0 > 1e6) { hideMe(); return; }
-    vec4 rd4 = uInvProj * vec4(suv * 2.0 - 1.0, -1.0, 1.0);
+    vec4 rd4 = uInvProj * vec4(suv * 2.0 - 1.0, GENESIS_NDC_NEAR, 1.0);
     vec3 rd = rd4.xyz / rd4.w;
     vec3 Sv = rd * (sz0 / max(-rd.z, 1e-6));
     // only on surfaces that face the sky (the ground, a roof, a table): not up a wall or down someone's back — the
     // surface's slope from two neighbouring depth samples
     vec2 suvX = suv + vec2(0.004, 0.0), suvY = suv + vec2(0.0, 0.004);
-    vec4 rx4 = uInvProj * vec4(suvX * 2.0 - 1.0, -1.0, 1.0), ry4 = uInvProj * vec4(suvY * 2.0 - 1.0, -1.0, 1.0);
+    vec4 rx4 = uInvProj * vec4(suvX * 2.0 - 1.0, GENESIS_NDC_NEAR, 1.0), ry4 = uInvProj * vec4(suvY * 2.0 - 1.0, GENESIS_NDC_NEAR, 1.0);
     vec3 rx = rx4.xyz / rx4.w, ry = ry4.xyz / ry4.w;
     vec3 Sx = rx * (textureLod(tSceneDepth, suvX, 0.0).r / max(-rx.z, 1e-6));
     vec3 Sy = ry * (textureLod(tSceneDepth, suvY, 0.0).r / max(-ry.z, 1e-6));

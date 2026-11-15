@@ -761,7 +761,11 @@ void main() {
   vC = iC;
   gl_Position = projectionMatrix * mv;
   // the quad sits at the front of the light's reach: always in front of what it lights
-  gl_Position.z = -gl_Position.w * 0.999;
+  #ifdef USE_REVERSED_DEPTH_BUFFER
+    gl_Position.z = gl_Position.w * 0.999;
+  #else
+    gl_Position.z = -gl_Position.w * 0.999;
+  #endif
 }
 `;
 
@@ -926,7 +930,11 @@ void main() {
   vReach = reach;
   vC = normalize((modelViewMatrix * vec4(iC, 0.0)).xyz);
   gl_Position = projectionMatrix * mv;
-  gl_Position.z = -gl_Position.w * 0.999;
+  #ifdef USE_REVERSED_DEPTH_BUFFER
+    gl_Position.z = gl_Position.w * 0.999;
+  #else
+    gl_Position.z = -gl_Position.w * 0.999;
+  #endif
 }
 `;
 

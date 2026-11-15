@@ -34,6 +34,7 @@ import { perfSwitch } from '../perfswitch.ts';
 export const HDR_MERGE = perfSwitch('hdrmerge', false);
 export const DECAL_ORDER0 = -1000;
 import { FX_EXPOSURE } from './particles.ts';
+import { DEPTH_DECODE } from '../shaders/revz.ts';
 
 export const DECAL = {
   shadow: 0, brush: 1, reticle: 2, glow: 3, cracks: 4, scorch: 5, frost: 6, tint: 7, ring: 8, paint: 9, light: 10,
@@ -105,6 +106,7 @@ const FRAG = /* glsl */ `
 ${NOISE_GLSL}
 uniform sampler2D tSceneDepth;
 uniform vec2 uResolution;
+${DEPTH_DECODE}
 uniform mat4 uInvProj;
 uniform mat3 uViewToBody;
 uniform vec3 uCamBody;
@@ -140,7 +142,7 @@ void main() {
   vec2 uv = gl_FragCoord.xy / uResolution;
   float sz = texture(tSceneDepth, uv).r;
   bool skyPx = sz > 1e6;
-  vec4 rd4 = uInvProj * vec4(uv * 2.0 - 1.0, -1.0, 1.0);
+  vec4 rd4 = uInvProj * vec4(uv * 2.0 - 1.0, GENESIS_NDC_NEAR, 1.0);
   vec3 rd = rd4.xyz / rd4.w;
   vec3 S = rd * (min(sz, 1e6) / max(-rd.z, 1e-6));
   // screen derivatives before any discard (they are undefined once neighbours have left the quad)

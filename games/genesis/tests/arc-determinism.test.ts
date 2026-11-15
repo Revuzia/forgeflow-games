@@ -62,21 +62,25 @@ test('arc scenario: save at year 40, load, run to year 80 equals a straight run 
   const straight = fresh();
   const yr = yearTicks(straight.sim);
   const seen = { cached: 0 };
-  drive(straight, 80 * yr, (sim) => {
+  const watch = (sim: Sim): void => {
     // the epithet cache agrees with the uncached scan on every sampled step (every day to year 3, then each year)
     const p = sim.u.planets[0];
     if (sim.u.tick < 3 * yr || sim.u.tick % yr < Math.max(60, Math.round(p.st.dayHours * 60))) {
       assert.equal(epithetOf(sim.u, p.id), epithetUncached(sim.u, p.id), `epithet at tick ${sim.u.tick}`);
       seen.cached++;
     }
-  });
+  };
+  // one straight run, saved on the way past year 40 (saving must not disturb the run) ...
+  drive(straight, 40 * yr, watch);
+  const hash40 = straight.sim.hash();
+  const bytes = straight.sim.save();
+  assert.equal(straight.sim.hash(), hash40, 'saving does not change the state');
+  const b: Run = { ...straight, sim: Sim.load(bytes), log: [...straight.log] };
+  assert.equal(b.sim.hash(), hash40, 'the load is the state that was saved');
+  drive(straight, 80 * yr, watch);
   const hashStraight = straight.sim.hash();
   assert.ok(seen.cached > 50);
-
-  const a = fresh();
-  drive(a, 40 * yr);
-  const bytes = a.sim.save();
-  const b: Run = { ...a, sim: Sim.load(bytes), log: [...a.log] };
+  // ... and the load of that save, run on to year 80
   drive(b, 80 * yr);
   assert.equal(b.sim.hash(), hashStraight, 'the loaded run reaches the same hash at year 80');
   assert.deepEqual(b.log, straight.log, 'the same scripted acts at the same times');

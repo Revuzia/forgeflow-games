@@ -14,6 +14,7 @@ import type { PlanetView } from '../../client/worldview.ts';
 import { ATMO_PARS } from '../shaders/atmosphere.glsl.ts';
 import { CustomBlending, OneFactor, OneMinusSrcAlphaFactor, ZeroFactor } from 'three';
 import { FX_DEPTH_GLSL, FX_LAYER } from './fxcommon.ts';
+import { DEPTH_DECODE } from '../shaders/revz.ts';
 
 const MAX_BOWS = 4;
 
@@ -28,6 +29,7 @@ void main() {
 const FRAG = /* glsl */ `
 ${ATMO_PARS}
 ${FX_DEPTH_GLSL}
+${DEPTH_DECODE}
 uniform mat4 uInvProj;
 uniform mat3 uViewToBody;
 uniform vec3 uCamB;
@@ -64,7 +66,7 @@ float coverAt(vec3 P) {
 
 void main() {
   // (the near plane: through the far plane's w, ~1e-7 at 20 000 km, float precision left every ray the same)
-  vec4 rv = uInvProj * vec4(vNdc, -1.0, 1.0);
+  vec4 rv = uInvProj * vec4(vNdc, GENESIS_NDC_NEAR, 1.0);
   vec3 rdV = normalize(rv.xyz / rv.w);
   vec3 rd = normalize(uViewToBody * rdV);
   vec3 up = normalize(uCamB);

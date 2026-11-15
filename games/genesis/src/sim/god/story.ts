@@ -402,6 +402,7 @@ export function epithetOf(u: Universe, planet: number): string {
   let sig = `${u.tick}|${R?.arcEvents?.length ?? 0}|${R?.ages?.length ?? 0}|`;
   if (ga0) for (const k in ga0) sig += `${(ga0 as Record<string, unknown>)[k]},`;
   for (const c of R?.covenants ?? []) sig += `${c.status}${c.made}${c.signAt}${c.planet}`;
+  return epithetUncached(u, planet);
   const hit = epiCache;
   if (hit && hit.u === u && hit.planet === planet && hit.sig === sig) return hit.value;
   const value = epithetUncached(u, planet);
