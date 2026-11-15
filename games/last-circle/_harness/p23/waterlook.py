@@ -7,6 +7,7 @@ seed 7), turned into bar rows (PLAN.md "Lane R2A" acceptance bars; the audit val
     python _harness/p23/waterlook.py --disk --plant flat-water       # the W9 surface: one weak layer, no fresnel/glint - MUST FAIL water-detail, glint
     python _harness/p23/waterlook.py --disk --plant storm-early      # the W9 wall: drawn pre-close, no distance fade - MUST FAIL storm-early
     python _harness/p23/waterlook.py --disk --plant flat-light       # the W9 hemisphere / sun, no contrast curve   - MUST FAIL light
+    python _harness/p23/waterlook.py --disk --plant dim-rooms        # the rooms without the W10 indoor lift       - MUST FAIL light: interiors
     python _harness/p23/waterlook.py --disk --plant sparse-grass     # the blade cell 0.56 -> 1.4 m                 - MUST FAIL grass
     python _harness/p23/waterlook.py --disk --plant grass-on-low     # the blade layer built on low too             - MUST FAIL low-identical
     python _harness/p23/waterlook.py --disk --plant grass-on-sand    # the blades without the grass-ness mask (on beaches) - MUST FAIL grass-sand
@@ -28,7 +29,7 @@ clock then pinned - SHORE_T for the shore / in-water views, VIEW_T for the rest 
                 the horizon band (+3 % of the frame) <= 0.1 % of the frame [every view]
   storm-late    circle 1 closing: the wall A/B moves >= 1 % of the frame from 380 m (and the stormfx rows stay: run stormfx_storm)
   light         ground luminance spread p95 - p5 >= 0.25 on every map (mean of ground / ground2 / groundlow, lower half) [0.14 / 0.17 / 0.28];
-                the OD-2 drop view mean 0.45-0.55 held; interiors (3 houses' biggest ground-floor rooms) mean >= 0.9 x the base's
+                the OD-2 drop view mean 0.45-0.55 held; interiors (3 houses' biggest ground-floor rooms) mean >= 0.9 x the base's ON EVERY MAP
   grass-sand    medium, a low view (0.5 m) over dry non-grass ground (the nearest 30 m disc - the blade ring - that is >= 95 % sand band, dunes,
                 dry wash, mud, snow or rock by the blade layer's own grass-ness bake): the blades A/B moves <= 0.5 % of the lower half
                 [build 1: the sand under blades]
@@ -86,6 +87,8 @@ PLANTS = {
                                        ("if (v10) vu.set(WALL_FAR[0], WALL_FAR[1], Math.min(1, ctl.visT / WALL_FADE_IN_S)); else vu.set(1e9, 2e9, 1);", "vu.set(1e9, 2e9, 1);")])],
     "flat-light": [(RP + "maps.js", [("const lw = W10V ? (K.w10Light || W10_LIGHT) : null;", "const lw = null;"),
                                      ("op.uniforms.lcGrade.value.set(K.w10Light && K.w10Light.contrast != null ? K.w10Light.contrast : W10_CONTRAST, uw, 0, 0);", "op.uniforms.lcGrade.value.set(0, uw, 0, 0);")])],
+    # dim-rooms = the furnished rooms without the W10 indoor lift (the W10 R1 HG_INDOOR against the W10 lower fill): MUST FAIL light: interiors
+    "dim-rooms": [(RP + "maps.js", [("const HG_INDOOR = (mapId === \"deepwood\" ? 0.95 : 0.8) * (W10V ? (K.w10Indoor || W10_INDOOR) : 1);", "const HG_INDOOR = (mapId === \"deepwood\" ? 0.95 : 0.8);")])],
     "sparse-grass": [(RP + "maps.js", [("lamps: 4, grassR: 30, grassC: 0.56,", "lamps: 4, grassR: 30, grassC: 1.4,")])],
     # grass-on-low = the blade layer (and the ground lattice texture it stands on) built on the low tier too
     "grass-on-low": [(RP + "maps.js", [("lamps: 0, grassR: 0, grassC: 1,", "lamps: 0, grassR: 30, grassC: 0.56,"),
@@ -585,7 +588,7 @@ def part_low(s, v, R, shots, tag):
 
 def base_cache(args, v, shots):
     """the base build's underwater HF, interiors and low-tier views (second Chrome on BASE_REV), cached"""
-    stem = os.path.join(C.REPORTS, "w10_waterlook_base_%s_%dx%d_v6" % (BASE_REV, args.width, args.height))
+    stem = os.path.join(C.REPORTS, "w10_waterlook_base_%s_%dx%d_v7" % (BASE_REV, args.width, args.height))
     if os.path.exists(stem + ".json") and not args.no_cache:
         with open(stem + ".json") as f:
             res = json.load(f)
@@ -601,7 +604,7 @@ def base_cache(args, v, shots):
         res["info"] = start(s, "medium", "isla_viva")
         R = {}
         part_map(s, v, R, "isla_viva", os.path.join(shots, "base"), {"light", "uw"})
-        res["interiors"] = R["isla_viva"].get("interiors")
+        res["interiors"] = {"isla_viva": R["isla_viva"].get("interiors")}   # (v7: interiors on all 3 maps; v6 had isla_viva only)
         res["underup"] = R["isla_viva"].get("underup")
         res["spread"] = {"isla_viva": R["isla_viva"].get("spread")}
         res["drop"] = {"isla_viva": R["isla_viva"].get("dropMean")}
@@ -609,7 +612,8 @@ def base_cache(args, v, shots):
         with C.Session(a2, "w10_waterlook_base_" + m) as s:
             start(s, "medium", m)
             R = {}
-            part_map(s, v, R, m, os.path.join(shots, "base"), {"light"}, interiors=False)
+            part_map(s, v, R, m, os.path.join(shots, "base"), {"light"})
+            res["interiors"][m] = R[m].get("interiors")
             res["spread"][m] = R[m].get("spread")
             res["drop"][m] = R[m].get("dropMean")
     with C.Session(a2, "w10_waterlook_base_low") as s:
@@ -754,14 +758,22 @@ def main():
                 return b0 is not None and not (0.45 <= b0 <= 0.55) and out(x) <= out(b0) + 0.005
             v.check("light: OD-2 drop-view mean held in 0.45-0.55 (every map; a map already outside on the base: not further out)",
                     all(held(m, x) for m, x in dm.items()), {"build": dm, "base": bd}, "0.45-0.55")
-            bi = (base or {}).get("interiors") or []
-            ii = I.get("interiors") or []
-            if not bi or not ii:
-                v.cnj("light: interiors", "no interior views (build %d, base %d)" % (len(ii), len(bi)))
-            else:
+            bia = (base or {}).get("interiors") or {}
+            if isinstance(bia, list):
+                bia = {"isla_viva": bia}                 # (a v6 cache: isla_viva only - never judged as all maps)
+            rows, miss = {}, []
+            for m in maps:
+                bi, ii = bia.get(m) or [], R.get(m, {}).get("interiors") or []
+                if not bi or not ii:
+                    miss.append("%s (build %d, base %d)" % (m, len(ii), len(bi)))
+                    continue
                 bm, im = float(np.mean([x["mean"] for x in bi])), float(np.mean([x["mean"] for x in ii]))
-                v.check("light: interiors (isla_viva, 3 houses) mean luminance >= 0.9 x the base's", im >= 0.9 * bm,
-                        {"build": ii, "base": bi, "ratio": round(im / max(1e-4, bm), 3)}, ">= 0.9x")
+                rows[m] = {"build": ii, "base": bi, "ratio": round(im / max(1e-4, bm), 3)}
+            if miss:
+                v.cnj("light: interiors", "no interior views on %s" % ", ".join(miss))
+            else:
+                v.check("light: interiors (every map, 3 houses each) mean luminance >= 0.9 x the base's", all(x["ratio"] >= 0.9 for x in rows.values()),
+                        rows, ">= 0.9x every map")
         if "grass" in want:
             gr = {m: R.get(m, {}).get("grass") for m in maps}
             ok = all(x and x.get("perM2") is not None and x["perM2"] >= 0.8 and x.get("bladePixPct", 0) >= 8.0 for x in gr.values())

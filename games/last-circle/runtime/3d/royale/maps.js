@@ -48,10 +48,10 @@ const _V = (() => { try { return new URL(import.meta.url).search || ""; } catch 
 export const MAPS = {
   isla_viva: { name: "Isla Viva", theme: "tropical", sky: "#9ed0e3", zenith: "#5c8dc1", cloud: 0.66, fog: 0.0018, themeColor: "#22d3a0", water: true,
     sun: { pos: [90, 130, 60], color: 0xfff4e0, intensity: 2.05 }, hemi: { sky: 0xdcefff, ground: 0x86a06a, intensity: 1.25 },
-    grade: { exposure: 0.72, ground: 0.6, water: 0.6 } },
+    grade: { exposure: 0.72, ground: 0.6, water: 0.6 }, w10Indoor: 1.32 },
   ashgrid:   { name: "Savanna", theme: "savanna", sky: "#e5cf9f", zenith: "#6585ab", cloud: 0.54, fog: 0.0019, themeColor: "#e0854a", water: false,
     sun: { pos: [-120, 105, 45], color: 0xffe6b4, intensity: 2.25 }, hemi: { sky: 0xf0e3c4, ground: 0xb59a63, intensity: 1.15 },
-    grade: { exposure: 0.80, ground: 0.6, water: 0.6 }, w10Light: { hemi: 0.6, sun: 1.18, contrast: 1.0 }, w10Grass: 1.7 },   // (W10 R2A: the flattest map - its open ground got the least of the hemisphere cut and the full contrast curve)
+    grade: { exposure: 0.80, ground: 0.6, water: 0.6 }, w10Light: { hemi: 0.6, sun: 1.18, contrast: 1.0 }, w10Indoor: 1.8, w10Grass: 1.7 },   // (W10 R2A: the flattest map - its open ground got the least of the hemisphere cut and the full contrast curve)
   deepwood:  { name: "Deepwood", theme: "forest", sky: "#acc5dc", zenith: "#506e9b", cloud: 0.72, fog: 0.0020, themeColor: "#7fb069", water: true,
     sun: { pos: [-60, 150, -80], color: 0xfff6e6, intensity: 1.95 }, hemi: { sky: 0xd2e7ff, ground: 0x63705a, intensity: 1.35 },
     grade: { exposure: 1.14, ground: 0.6, water: 0.6 } },
@@ -62,6 +62,8 @@ const W10_LIGHT = { hemi: 0.72, sun: 1.12 };
 const W10_CONTRAST = 0.4;
 const W10_CLOUD_SHADOW = 0.62;          // (was 0.5: a cloud's shadow takes this share of the sun - with more sun it reads as a patch of shade again)
 const W10_INDOOR = 1.22;                // the furnished rooms' albedo lift (HG_INDOOR x this) against the lower fill
+                                        // (per map K.w10Indoor: Isla Viva 1.32, Savanna 1.8 - its fill is cut most (x0.6) and its contrast curve is the full one, so its rooms
+                                        //  lost the most: 0.68x the W10 R1 rooms at 1.22; gate w10_waterlook interiors, every map >= 0.9x)
 // LC-04 / owner decision OD-2 (2026-10-20, grade "G2 Balanced" from the P1-G A/B sheets): the drop view was 2-2.5x the reference's luminance (0.67-0.81 vs
 // 0.32). G2 darkens the GROUND and the WATER (terrain, city ground and tufts x `ground`, water x `water`) and cuts the exposure a little, leaving the sun, the
 // sky fill and the environment as they were, so a room keeps its light (the other grades took Isla Viva's interiors to 0.07-0.08). Target: the drop view's
@@ -4348,7 +4350,7 @@ export async function buildMap(W, mapId) {
   // the indoor ambient term: interior faces and furniture take this share of their colour (lamp panels keep theirs). Deepwood's forest light is darker than the
   // other maps' and its lodges are timber inside: at 0.8 a third of a lodge room's pixels read near-black from its doorway (interiorcheck light: dark share 0.31-0.36)
   // W10 R2A (desktop medium+): the hemisphere fill is x0.75 outside, and indoors that fill is most of the light - the rooms are lifted back (gate: interiors >= 0.9x)
-  const HG_INDOOR = (mapId === "deepwood" ? 0.95 : 0.8) * (W10V ? W10_INDOOR : 1);
+  const HG_INDOOR = (mapId === "deepwood" ? 0.95 : 0.8) * (W10V ? (K.w10Indoor || W10_INDOOR) : 1);   // (per map: K.w10Indoor)
   const HG_TKI = { s: 0, plank: 1, stucco: 2 };   // dualStructMaterial's texture index per struct kind (furniture wears the near-flat stucco grain unless it is wood)
   const HG_FURN_CELL = 32, HG_FURN_DIST = TIER_Q.furnD;    // (60 m; high 70, ULTRA 95)
   const _hgc = new THREE.Color(), hgColCache = new Map();
