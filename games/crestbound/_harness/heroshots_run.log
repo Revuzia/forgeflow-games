@@ -1,0 +1,73 @@
+spawn      : {'x': 0, 'y': 2, 'z': 40}
+checkpoints: 5
+shot spot  : {'x': -12.727922061357859, 'y': 1.986328125, 'z': 27.272077938642145, 'near': 18, 'score': 17.99}
+seize      : {'ok': True}
+  cand0 [-12.7, 2.0, 27.3]  luma 75.2
+  cand1 [12.7, 2.2, 27.3]  luma 99.2
+  cand2 [0.0, 2.7, 58]  luma 143.9
+  cand3 [-12.7, 2.8, 52.7]  luma 138.5
+  cand4 [12.7, 3.3, 52.7]  luma 138.8
+  cand5 [-18, 3.9, 40]  luma 59.9
+chosen spot: {'x': 1.102182119232618e-15, 'y': 2.658660888671875, 'z': 58, 'near': 18, 'score': 17.67}  luma 143.9
+  run_p10                    t=0.063  vis=True  2.7s
+  run_p50                    t=0.317  vis=True  2.4s
+  run_p90                    t=0.583  vis=True  3.1s
+  skid_p10                   t=0.03   vis=True  2.0s
+  skid_p50                   t=0.15   vis=True  1.7s
+  skid_p90                   t=0.283  vis=True  2.0s
+  pivot_p10                  t=0.013  vis=True  2.0s
+  pivot_p50                  t=0.06   vis=True  1.9s
+Traceback (most recent call last):
+  File "C:\Users\TestRun\Claude Claw\forgeflow-games\games\crestbound\_harness\heroshots.py", line 566, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "C:\Users\TestRun\Claude Claw\forgeflow-games\games\crestbound\_harness\heroshots.py", line 506, in main
+    state_paths.append((nm + " " + ph, shot("%s_%s" % (nm, ph), o)))
+                                       ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\TestRun\Claude Claw\forgeflow-games\games\crestbound\_harness\heroshots.py", line 478, in shot
+    pg.screenshot(path=path, timeout=120_000)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\TestRun\AppData\Local\Programs\Python\Python313\Lib\site-packages\playwright\sync_api\_generated.py", line 9819, in screenshot
+    self._sync(
+    ~~~~~~~~~~^
+        self._impl_obj.screenshot(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<13 lines>...
+        )
+        ^
+    )
+    ^
+  File "C:\Users\TestRun\AppData\Local\Programs\Python\Python313\Lib\site-packages\playwright\_impl\_sync_base.py", line 115, in _sync
+    return task.result()
+           ~~~~~~~~~~~^^
+  File "C:\Users\TestRun\AppData\Local\Programs\Python\Python313\Lib\site-packages\playwright\_impl\_page.py", line 814, in screenshot
+    encoded_binary = await self._channel.send(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^
+        "screenshot", self._timeout_settings.timeout, params
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\TestRun\AppData\Local\Programs\Python\Python313\Lib\site-packages\playwright\_impl\_connection.py", line 69, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\TestRun\AppData\Local\Programs\Python\Python313\Lib\site-packages\playwright\_impl\_connection.py", line 559, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.TargetClosedError: Page.screenshot: Target page, context or browser has been closed
+Browser logs:
+
+<launching> C:\Program Files\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --ignore-gpu-blocklist --use-angle=d3d11 --disable-gpu-sandbox --enable-gpu-rasterization --disable-features=CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --force-device-scale-factor=1 --user-data-dir=C:\Users\TestRun\AppData\Local\Temp\playwright_chromiumdev_profile-O310x2 --remote-debugging-pipe --no-startup-window
+<launched> pid=28632
+[pid=28632][err] [28632:33380:0902/144613.409:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR
+[pid=28632][err] [28632:33380:0902/144613.423:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[pid=28632][err] [28632:33380:0902/144613.431:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR
+[pid=28632][err] [28632:33380:0902/144635.017:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[pid=28632][err] Created TensorFlow Lite XNNPACK delegate for CPU.
+[pid=28632][err] [28632:33380:0902/144729.157:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+Call log:
+  - taking page screenshot
+  - waiting for fonts to load...
+  - fonts loaded
+

@@ -1,0 +1,1055 @@
+{
+  "id": "kit_b",
+  "name": "KIT B (TEST GRAPPLER)",
+  "persona": "fixture",
+  "archetype": "grappler",
+  "body": "fixture",
+  "heightM": 1.95,
+  "hp": 11000,
+  "walk": {
+    "fwd": 1.64,
+    "back": 1.13
+  },
+  "dash": {
+    "fwd": 0.76,
+    "back": 0.54,
+    "fwdFrames": 20,
+    "backFrames": 25
+  },
+  "jump": {
+    "prejump": 5,
+    "air": 42,
+    "landing": 4,
+    "apexM": 1.4,
+    "fwdM": 1.2
+  },
+  "throwRangeM": 0.77,
+  "hurt": {
+    "stand": [
+      0.62,
+      1.95
+    ],
+    "crouch": [
+      0.66,
+      1.25
+    ],
+    "air": [
+      0.58,
+      1.3
+    ]
+  },
+  "pushbox": [
+    0.6,
+    1.6
+  ],
+  "colors": [
+    {
+      "name": "Test",
+      "tint": null
+    }
+  ],
+  "moves": {
+    "5L": {
+      "kind": "normal",
+      "input": "5L",
+      "startup": 5,
+      "active": 3,
+      "recovery": 9,
+      "damage": 300,
+      "hitstop": 9,
+      "hitstun": 15,
+      "blockstun": 10,
+      "guard": "HL",
+      "boxes": [
+        {
+          "f": [
+            5,
+            7
+          ],
+          "x": 0.72,
+          "y": 1.35,
+          "w": 0.3,
+          "h": 0.25
+        }
+      ],
+      "cancel": [
+        "chain:5L",
+        "special",
+        "super"
+      ],
+      "gain": {
+        "showtime": 300
+      },
+      "anim": {
+        "clip": "b_5l"
+      }
+    },
+    "5M": {
+      "kind": "normal",
+      "input": "5M",
+      "startup": 9,
+      "active": 3,
+      "recovery": 17,
+      "damage": 650,
+      "hitstop": 11,
+      "hitstun": 23,
+      "blockstun": 17,
+      "guard": "HL",
+      "boxes": [
+        {
+          "f": [
+            9,
+            11
+          ],
+          "x": 0.9,
+          "y": 1.3,
+          "w": 0.45,
+          "h": 0.3
+        }
+      ],
+      "cancel": [
+        "special",
+        "super"
+      ],
+      "gain": {
+        "showtime": 500
+      },
+      "anim": {
+        "clip": "b_5m"
+      }
+    },
+    "5H": {
+      "kind": "normal",
+      "input": "5H",
+      "startup": 14,
+      "active": 4,
+      "recovery": 22,
+      "damage": 900,
+      "hitstop": 13,
+      "hitstun": 28,
+      "blockstun": 22,
+      "guard": "HL",
+      "boxes": [
+        {
+          "f": [
+            14,
+            17
+          ],
+          "x": 1.1,
+          "y": 1.3,
+          "w": 0.55,
+          "h": 0.4
+        }
+      ],
+      "onHit": {
+        "wallSplat": true
+      },
+      "cancel": [
+        "special"
+      ],
+      "gain": {
+        "showtime": 1000
+      },
+      "anim": {
+        "clip": "b_5h"
+      }
+    },
+    "2L": {
+      "kind": "normal",
+      "input": "2L",
+      "startup": 5,
+      "active": 3,
+      "recovery": 9,
+      "damage": 250,
+      "hitstop": 9,
+      "hitstun": 15,
+      "blockstun": 10,
+      "guard": "L",
+      "boxes": [
+        {
+          "f": [
+            5,
+            7
+          ],
+          "x": 0.7,
+          "y": 0.35,
+          "w": 0.3,
+          "h": 0.25
+        }
+      ],
+      "cancel": [
+        "chain:2L",
+        "special",
+        "super"
+      ],
+      "gain": {
+        "showtime": 300
+      },
+      "anim": {
+        "clip": "b_2l"
+      }
+    },
+    "2M": {
+      "kind": "normal",
+      "input": "2M",
+      "startup": 9,
+      "active": 3,
+      "recovery": 16,
+      "damage": 600,
+      "hitstop": 11,
+      "hitstun": 22,
+      "blockstun": 16,
+      "guard": "L",
+      "boxes": [
+        {
+          "f": [
+            9,
+            11
+          ],
+          "x": 0.86,
+          "y": 0.3,
+          "w": 0.5,
+          "h": 0.3
+        }
+      ],
+      "cancel": [
+        "special",
+        "super"
+      ],
+      "gain": {
+        "showtime": 500
+      },
+      "anim": {
+        "clip": "b_2m"
+      }
+    },
+    "2H": {
+      "kind": "normal",
+      "input": "2H",
+      "startup": 11,
+      "active": 3,
+      "recovery": 25,
+      "damage": 950,
+      "hitstop": 13,
+      "hitstun": 62,
+      "blockstun": 16,
+      "guard": "L",
+      "boxes": [
+        {
+          "f": [
+            11,
+            13
+          ],
+          "x": 1.12,
+          "y": 0.2,
+          "w": 0.6,
+          "h": 0.3
+        }
+      ],
+      "onHit": {
+        "kd": "soft"
+      },
+      "gain": {
+        "showtime": 1000
+      },
+      "anim": {
+        "clip": "b_2h"
+      }
+    },
+    "j.L": {
+      "kind": "normal",
+      "input": "j.L",
+      "startup": 6,
+      "active": 6,
+      "recovery": 10,
+      "damage": 300,
+      "hitstop": 9,
+      "hitstun": 13,
+      "blockstun": 9,
+      "guard": "H",
+      "boxes": [
+        {
+          "f": [
+            6,
+            11
+          ],
+          "x": 0.5,
+          "y": 0.9,
+          "w": 0.35,
+          "h": 0.3
+        }
+      ],
+      "anim": {
+        "clip": "b_jl"
+      }
+    },
+    "j.M": {
+      "kind": "normal",
+      "input": "j.M",
+      "startup": 8,
+      "active": 6,
+      "recovery": 12,
+      "damage": 650,
+      "hitstop": 11,
+      "hitstun": 17,
+      "blockstun": 13,
+      "guard": "H",
+      "boxes": [
+        {
+          "f": [
+            8,
+            13
+          ],
+          "x": 0.55,
+          "y": 0.7,
+          "w": 0.4,
+          "h": 0.35
+        }
+      ],
+      "anim": {
+        "clip": "b_jm"
+      }
+    },
+    "j.H": {
+      "kind": "normal",
+      "input": "j.H",
+      "startup": 11,
+      "active": 6,
+      "recovery": 14,
+      "damage": 900,
+      "hitstop": 13,
+      "hitstun": 19,
+      "blockstun": 15,
+      "guard": "H",
+      "boxes": [
+        {
+          "f": [
+            11,
+            16
+          ],
+          "x": 0.6,
+          "y": 0.5,
+          "w": 0.55,
+          "h": 0.5
+        }
+      ],
+      "anim": {
+        "clip": "b_jh"
+      }
+    },
+    "throw_f": {
+      "kind": "throw",
+      "input": "LM",
+      "startup": 5,
+      "active": 3,
+      "recovery": 23,
+      "damage": 1300,
+      "hitstun": 0,
+      "guard": "U",
+      "onHit": {
+        "kd": "soft"
+      },
+      "gain": {
+        "showtime": 2000
+      },
+      "anim": {
+        "clip": "b_throw_f"
+      },
+      "grab": {
+        "frames": 40,
+        "adv": 21,
+        "hitF": 25,
+        "swap": false,
+        "air": false,
+        "techable": true,
+        "clip": "b_throw_hold"
+      }
+    },
+    "throw_b": {
+      "kind": "throw",
+      "input": "4LM",
+      "startup": 5,
+      "active": 3,
+      "recovery": 23,
+      "damage": 1300,
+      "hitstun": 0,
+      "guard": "U",
+      "onHit": {
+        "kd": "soft"
+      },
+      "gain": {
+        "showtime": 2000
+      },
+      "anim": {
+        "clip": "b_throw_b"
+      },
+      "grab": {
+        "frames": 44,
+        "adv": 15,
+        "hitF": 28,
+        "swap": true,
+        "air": false,
+        "techable": true,
+        "clip": "b_throw_hold"
+      }
+    },
+    "slam_l": {
+      "kind": "cmdgrab",
+      "input": "360L",
+      "startup": 5,
+      "active": 3,
+      "recovery": 54,
+      "damage": 2500,
+      "hitstun": 85,
+      "guard": "U",
+      "boxes": [
+        {
+          "f": [
+            5,
+            7
+          ],
+          "x": 1.02,
+          "y": 1.0,
+          "w": 0.4,
+          "h": 1.0
+        }
+      ],
+      "onHit": {
+        "kd": "hard"
+      },
+      "gain": {
+        "showtime": 3000
+      },
+      "anim": {
+        "clip": "b_slam"
+      }
+    },
+    "slam_m": {
+      "kind": "cmdgrab",
+      "input": "360M",
+      "startup": 5,
+      "active": 3,
+      "recovery": 54,
+      "damage": 2900,
+      "hitstun": 85,
+      "guard": "U",
+      "boxes": [
+        {
+          "f": [
+            5,
+            7
+          ],
+          "x": 0.9,
+          "y": 1.0,
+          "w": 0.4,
+          "h": 1.0
+        }
+      ],
+      "onHit": {
+        "kd": "hard"
+      },
+      "gain": {
+        "showtime": 3000
+      },
+      "anim": {
+        "clip": "b_slam"
+      }
+    },
+    "slam_h": {
+      "kind": "cmdgrab",
+      "input": "360H",
+      "startup": 5,
+      "active": 3,
+      "recovery": 54,
+      "damage": 3300,
+      "hitstun": 85,
+      "guard": "U",
+      "boxes": [
+        {
+          "f": [
+            5,
+            7
+          ],
+          "x": 0.72,
+          "y": 1.0,
+          "w": 0.4,
+          "h": 1.0
+        }
+      ],
+      "onHit": {
+        "kd": "hard"
+      },
+      "gain": {
+        "showtime": 3000
+      },
+      "anim": {
+        "clip": "b_slam"
+      }
+    },
+    "slam_ex": {
+      "kind": "cmdgrab",
+      "input": "360S",
+      "startup": 5,
+      "active": 3,
+      "recovery": 54,
+      "damage": 3000,
+      "hitstun": 85,
+      "guard": "U",
+      "boxes": [
+        {
+          "f": [
+            5,
+            7
+          ],
+          "x": 1.05,
+          "y": 1.0,
+          "w": 0.4,
+          "h": 1.0
+        }
+      ],
+      "onHit": {
+        "kd": "hard"
+      },
+      "invuln": {
+        "strike": [
+          1,
+          5
+        ]
+      },
+      "cost": {
+        "nerve": 20000
+      },
+      "gain": {
+        "showtime": 3000
+      },
+      "anim": {
+        "clip": "b_slam"
+      }
+    },
+    "lariat_l": {
+      "kind": "special",
+      "input": "623L",
+      "startup": 7,
+      "active": 12,
+      "recovery": 30,
+      "damage": 900,
+      "hitstop": 15,
+      "blockstun": 18,
+      "guard": "HL",
+      "boxes": [
+        {
+          "f": [
+            7,
+            18
+          ],
+          "x": 0.55,
+          "y": 1.4,
+          "w": 0.7,
+          "h": 0.8
+        }
+      ],
+      "onHit": {
+        "kd": "soft",
+        "launch": [
+          1.2,
+          5.0
+        ]
+      },
+      "invuln": {
+        "air": [
+          1,
+          10
+        ],
+        "proj": [
+          1,
+          20
+        ]
+      },
+      "juggle": {
+        "js": 1,
+        "ji": 1,
+        "jl": 3
+      },
+      "gain": {
+        "showtime": 800
+      },
+      "anim": {
+        "clip": "b_lariat"
+      }
+    },
+    "lariat_m": {
+      "kind": "special",
+      "input": "623M",
+      "startup": 8,
+      "active": 12,
+      "recovery": 34,
+      "damage": 1000,
+      "hitstop": 15,
+      "blockstun": 18,
+      "guard": "HL",
+      "boxes": [
+        {
+          "f": [
+            8,
+            19
+          ],
+          "x": 0.55,
+          "y": 1.4,
+          "w": 0.7,
+          "h": 0.8
+        }
+      ],
+      "onHit": {
+        "kd": "soft",
+        "launch": [
+          1.2,
+          5.4
+        ]
+      },
+      "invuln": {
+        "air": [
+          1,
+          9
+        ],
+        "proj": [
+          1,
+          20
+        ]
+      },
+      "juggle": {
+        "js": 1,
+        "ji": 1,
+        "jl": 3
+      },
+      "gain": {
+        "showtime": 800
+      },
+      "anim": {
+        "clip": "b_lariat"
+      }
+    },
+    "lariat_h": {
+      "kind": "special",
+      "input": "623H",
+      "startup": 9,
+      "active": 12,
+      "recovery": 38,
+      "damage": 1100,
+      "hitstop": 15,
+      "blockstun": 18,
+      "guard": "HL",
+      "boxes": [
+        {
+          "f": [
+            9,
+            20
+          ],
+          "x": 0.55,
+          "y": 1.4,
+          "w": 0.7,
+          "h": 0.8
+        }
+      ],
+      "onHit": {
+        "kd": "soft",
+        "launch": [
+          1.2,
+          5.8
+        ]
+      },
+      "invuln": {
+        "air": [
+          1,
+          8
+        ],
+        "proj": [
+          1,
+          20
+        ]
+      },
+      "juggle": {
+        "js": 1,
+        "ji": 1,
+        "jl": 3
+      },
+      "gain": {
+        "showtime": 800
+      },
+      "anim": {
+        "clip": "b_lariat"
+      }
+    },
+    "step": {
+      "kind": "special",
+      "input": "214M",
+      "startup": 18,
+      "active": 3,
+      "recovery": 20,
+      "damage": 1000,
+      "hitstop": 15,
+      "hitstun": 26,
+      "blockstun": 20,
+      "guard": "HL",
+      "boxes": [
+        {
+          "f": [
+            18,
+            20
+          ],
+          "x": 0.8,
+          "y": 1.2,
+          "w": 0.5,
+          "h": 0.45
+        }
+      ],
+      "move": [
+        [
+          0,
+          0
+        ],
+        [
+          18,
+          0.6
+        ],
+        [
+          41,
+          0.6
+        ]
+      ],
+      "armor": {
+        "hits": 1,
+        "f": [
+          1,
+          20
+        ]
+      },
+      "gain": {
+        "showtime": 800
+      },
+      "anim": {
+        "clip": "b_step"
+      }
+    },
+    "charge_bash": {
+      "kind": "special",
+      "input": "[4]6M",
+      "startup": 10,
+      "active": 3,
+      "recovery": 20,
+      "damage": 800,
+      "hitstop": 13,
+      "hitstun": 26,
+      "blockstun": 20,
+      "guard": "HL",
+      "boxes": [
+        {
+          "f": [
+            10,
+            12
+          ],
+          "x": 0.85,
+          "y": 1.2,
+          "w": 0.5,
+          "h": 0.5
+        }
+      ],
+      "move": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0.8
+        ],
+        [
+          32,
+          0.8
+        ]
+      ],
+      "gain": {
+        "showtime": 600
+      },
+      "anim": {
+        "clip": "b_bash"
+      }
+    },
+    "charge_up": {
+      "kind": "special",
+      "input": "[2]8M",
+      "startup": 6,
+      "active": 8,
+      "recovery": 30,
+      "damage": 900,
+      "hitstop": 15,
+      "blockstun": 18,
+      "guard": "HL",
+      "boxes": [
+        {
+          "f": [
+            6,
+            13
+          ],
+          "x": 0.5,
+          "y": 1.6,
+          "w": 0.6,
+          "h": 0.9
+        }
+      ],
+      "onHit": {
+        "kd": "soft",
+        "launch": [
+          0.8,
+          6.0
+        ]
+      },
+      "invuln": {
+        "air": [
+          1,
+          8
+        ]
+      },
+      "gain": {
+        "showtime": 600
+      },
+      "anim": {
+        "clip": "b_up"
+      }
+    },
+    "fridge_rush": {
+      "kind": "super1",
+      "input": "236236L",
+      "startup": 10,
+      "active": 6,
+      "recovery": 45,
+      "damage": 2200,
+      "hitstop": 9,
+      "hitstun": 76,
+      "blockstun": 25,
+      "guard": "HL",
+      "boxes": [
+        {
+          "f": [
+            10,
+            15
+          ],
+          "x": 0.8,
+          "y": 1.2,
+          "w": 0.7,
+          "h": 0.8
+        }
+      ],
+      "move": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          1.5
+        ],
+        [
+          16,
+          1.8
+        ]
+      ],
+      "onHit": {
+        "kd": "hard"
+      },
+      "invuln": {
+        "strike": [
+          1,
+          12
+        ],
+        "throw": [
+          1,
+          12
+        ]
+      },
+      "anim": {
+        "clip": "b_fridge"
+      }
+    },
+    "cold_storage": {
+      "kind": "super3",
+      "input": "214214L",
+      "startup": 8,
+      "active": 3,
+      "recovery": 60,
+      "damage": 5000,
+      "hitstop": 9,
+      "blockstun": 20,
+      "guard": "HL",
+      "boxes": [
+        {
+          "f": [
+            8,
+            10
+          ],
+          "x": 0.8,
+          "y": 1.2,
+          "w": 0.6,
+          "h": 0.8
+        }
+      ],
+      "invuln": {
+        "strike": [
+          1,
+          12
+        ],
+        "throw": [
+          1,
+          12
+        ]
+      },
+      "cinematic": {
+        "frames": 170,
+        "cue": "kit_b_cold_storage",
+        "hits": [
+          [
+            40,
+            1500
+          ],
+          [
+            90,
+            1000
+          ],
+          [
+            150,
+            2500
+          ]
+        ],
+        "endAdv": 25,
+        "endGapM": 1.5
+      },
+      "anim": {
+        "clip": "b_cold"
+      }
+    },
+    "toss_l": {
+      "kind": "projectile",
+      "input": "421L",
+      "startup": 18,
+      "active": 1,
+      "recovery": 30,
+      "damage": 700,
+      "hitstop": 8,
+      "hitstun": 33,
+      "blockstun": 27,
+      "guard": "HL",
+      "projectile": {
+        "speed": 3.0,
+        "vy": 5.0,
+        "g": 25.0,
+        "ground": true,
+        "life": 150,
+        "box": [
+          0.4,
+          0.4
+        ],
+        "y": 1.4,
+        "hits": 1,
+        "x": 0.6,
+        "clip": "barrel"
+      },
+      "gain": {
+        "showtime": 600
+      },
+      "anim": {
+        "clip": "b_toss"
+      }
+    },
+    "finale": {
+      "kind": "special",
+      "input": "22M",
+      "phase": 2,
+      "startup": 10,
+      "active": 3,
+      "recovery": 20,
+      "damage": 1000,
+      "hitstop": 13,
+      "hitstun": 24,
+      "blockstun": 18,
+      "guard": "HL",
+      "boxes": [
+        {
+          "f": [
+            10,
+            12
+          ],
+          "x": 0.8,
+          "y": 1.2,
+          "w": 0.5,
+          "h": 0.5
+        }
+      ],
+      "anim": {
+        "clip": "b_finale"
+      }
+    }
+  },
+  "simple": {
+    "5S": "slam_m",
+    "6S": "step",
+    "2S": "lariat_m",
+    "4S": "lariat_l",
+    "S+H": "fridge_rush",
+    "S+H+2": "cold_storage",
+    "assist": [
+      "5L",
+      "5M",
+      "lariat_m"
+    ]
+  },
+  "classic": [
+    {
+      "motion": "360",
+      "btn": "LMH",
+      "move": "slam_{s}"
+    },
+    {
+      "motion": "623",
+      "btn": "LMH",
+      "move": "lariat_{s}"
+    },
+    {
+      "motion": "214",
+      "btn": "M",
+      "move": "step"
+    },
+    {
+      "motion": "[4]6",
+      "btn": "LMH",
+      "move": "charge_bash"
+    },
+    {
+      "motion": "[2]8",
+      "btn": "LMH",
+      "move": "charge_up"
+    },
+    {
+      "motion": "421",
+      "btn": "L",
+      "move": "toss_l"
+    },
+    {
+      "motion": "22",
+      "btn": "M",
+      "move": "finale"
+    }
+  ],
+  "unique": {
+    "kind": "armorStep"
+  },
+  "intro": "b_intro",
+  "win": [
+    "b_win1",
+    "b_win2"
+  ],
+  "taunt": "b_taunt",
+  "rival": "kit_a",
+  "stage": "butcher_block",
+  "cpu": {
+    "style": "grappler"
+  }
+}

@@ -1,0 +1,587 @@
+{
+ "kit": "props",
+ "realm": "rime",
+ "generated": "2026-09-08T12:44:28",
+ "blender": "5.1.2",
+ "units": "metres, +Y up (glTF), origin at the base unless pivot says otherwise",
+ "atlas": {
+  "albedo_px": 2048,
+  "small_px": 1024,
+  "emissive_strength": 3.0,
+  "maps": "albedo(RGBA sRGB) normal(tangent, OpenGL +Y) orm(R=AO G=rough B=metal) emissive(sRGB)"
+ },
+ "materials": {
+  "opaque": "rime_atlas",
+  "cutout": "rime_atlas_cutout (alphaMode MASK 0.5, doubleSided)"
+ },
+ "turntable_layout": "<realm>_<prop>_turntable.png = 2048x1024 sheet, 8 yaw angles at 512 px (a0..a3 top row, a4..a7 bottom row, 45 deg steps from 30 deg, 18 deg elevation); <realm>_<prop>_close.png = 1024 px close-up (3/4 view, upper 2/3); <realm>_<prop>_lod1.png = 1024x512 LOD1 at two angles. Eevee, AgX, neutral 3-point rig.",
+ "textures": [
+  {
+   "file": "rime/textures/rime_albedo.png",
+   "px": [
+    2048,
+    2048
+   ],
+   "bytes": 2319899
+  },
+  {
+   "file": "rime/textures/rime_emissive.png",
+   "px": [
+    1024,
+    1024
+   ],
+   "bytes": 118528
+  },
+  {
+   "file": "rime/textures/rime_normal.png",
+   "px": [
+    1024,
+    1024
+   ],
+   "bytes": 1072746
+  },
+  {
+   "file": "rime/textures/rime_orm.png",
+   "px": [
+    1024,
+    1024
+   ],
+   "bytes": 608375
+  }
+ ],
+ "textures_bytes": 4119548,
+ "props": [
+  {
+   "name": "pine_snow_trunk",
+   "file": "rime/pine_snow_trunk.gltf",
+   "lod1": "rime/pine_snow_trunk_lod1.gltf",
+   "tris": 348,
+   "tris_gltf": 348,
+   "tris_lod1": 138,
+   "verts": 186,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.6588,
+     -0.0733,
+     -0.6429
+    ],
+    "max": [
+     0.7523,
+     9.2,
+     0.6659
+    ],
+    "size": [
+     1.411,
+     9.2733,
+     1.3088
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "rime_atlas",
+   "cutout": false,
+   "bytes": 16295,
+   "bytes_lod1": 9355,
+   "runtime": {
+    "kind": "tree",
+    "h": 9.2,
+    "part": "trunk"
+   },
+   "notes": "frosted pine bole + snow collar",
+   "turntable": [
+    "_turntable/rime_pine_snow_trunk_turntable.webp",
+    "_turntable/rime_pine_snow_trunk_close.webp",
+    "_turntable/rime_pine_snow_trunk_lod1.webp"
+   ]
+  },
+  {
+   "name": "pine_snow_canopy",
+   "file": "rime/pine_snow_canopy.gltf",
+   "lod1": "rime/pine_snow_canopy_lod1.gltf",
+   "tris": 756,
+   "tris_gltf": 756,
+   "tris_lod1": 302,
+   "verts": 438,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -2.0722,
+     2.4166,
+     -2.2423
+    ],
+    "max": [
+     2.3,
+     9.95,
+     2.2423
+    ],
+    "size": [
+     4.3722,
+     7.5334,
+     4.4847
+    ]
+   },
+   "pivot": "tree base (y=0)",
+   "material": "rime_atlas",
+   "cutout": false,
+   "bytes": 36409,
+   "bytes_lod1": 21188,
+   "runtime": {
+    "kind": "tree",
+    "part": "canopy"
+   },
+   "notes": "six needle tiers each with a snow cap",
+   "turntable": [
+    "_turntable/rime_pine_snow_canopy_turntable.webp",
+    "_turntable/rime_pine_snow_canopy_close.webp",
+    "_turntable/rime_pine_snow_canopy_lod1.webp"
+   ]
+  },
+  {
+   "name": "icicle_cluster",
+   "file": "rime/icicle_cluster.gltf",
+   "lod1": "rime/icicle_cluster_lod1.gltf",
+   "tris": 314,
+   "tris_gltf": 314,
+   "tris_lod1": 124,
+   "verts": 173,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.3356,
+     -0.8117,
+     -0.3383
+    ],
+    "max": [
+     0.3244,
+     0.061,
+     0.3432
+    ],
+    "size": [
+     0.6601,
+     0.8727,
+     0.6815
+    ]
+   },
+   "pivot": "TOP attachment (y=0); spikes hang to y -1.0",
+   "material": "rime_atlas",
+   "cutout": false,
+   "bytes": 15132,
+   "bytes_lod1": 9494,
+   "runtime": {
+    "id": "icicle",
+    "fit": "max"
+   },
+   "notes": "ice shelf + 7 tapered icicles (faint emissive)",
+   "turntable": [
+    "_turntable/rime_icicle_cluster_turntable.webp",
+    "_turntable/rime_icicle_cluster_close.webp",
+    "_turntable/rime_icicle_cluster_lod1.webp"
+   ]
+  },
+  {
+   "name": "icicle_fringe",
+   "file": "rime/icicle_fringe.gltf",
+   "lod1": "rime/icicle_fringe_lod1.gltf",
+   "tris": 548,
+   "tris_gltf": 548,
+   "tris_lod1": 218,
+   "verts": 300,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.88,
+     -0.8475,
+     -0.1058
+    ],
+    "max": [
+     0.88,
+     0.0,
+     0.0931
+    ],
+    "size": [
+     1.76,
+     0.8475,
+     0.1989
+    ]
+   },
+   "pivot": "TOP attachment (y=0); a 1.76 m eave bar with 12 icicles",
+   "material": "rime_atlas",
+   "cutout": false,
+   "bytes": 24676,
+   "bytes_lod1": 13166,
+   "runtime": {
+    "id": "icicle_fringe",
+    "fit": "max"
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/rime_icicle_fringe_turntable.webp",
+    "_turntable/rime_icicle_fringe_close.webp",
+    "_turntable/rime_icicle_fringe_lod1.webp"
+   ]
+  },
+  {
+   "name": "snowdrift",
+   "file": "rime/snowdrift.gltf",
+   "lod1": "rime/snowdrift_lod1.gltf",
+   "tris": 1040,
+   "tris_gltf": 1040,
+   "tris_lod1": 416,
+   "verts": 528,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.9447,
+     -0.0024,
+     -1.0627
+    ],
+    "max": [
+     0.965,
+     0.2665,
+     0.7582
+    ],
+    "size": [
+     1.9097,
+     0.2689,
+     1.821
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "rime_atlas",
+   "cutout": false,
+   "bytes": 32944,
+   "bytes_lod1": 17862,
+   "runtime": {
+    "id": "snowdrift",
+    "fit": "max"
+   },
+   "notes": "wind-shaped drift, three mounds",
+   "turntable": [
+    "_turntable/rime_snowdrift_turntable.webp",
+    "_turntable/rime_snowdrift_close.webp",
+    "_turntable/rime_snowdrift_lod1.webp"
+   ]
+  },
+  {
+   "name": "ice_crystal",
+   "file": "rime/ice_crystal.gltf",
+   "lod1": "rime/ice_crystal_lod1.gltf",
+   "tris": 236,
+   "tris_gltf": 236,
+   "tris_lod1": 94,
+   "verts": 132,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.3574,
+     0.0244,
+     -0.3768
+    ],
+    "max": [
+     0.3895,
+     1.28,
+     0.4159
+    ],
+    "size": [
+     0.7468,
+     1.2556,
+     0.7927
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "rime_atlas",
+   "cutout": false,
+   "bytes": 21308,
+   "bytes_lod1": 11513,
+   "runtime": {
+    "id": "crystal",
+    "h": 1.6
+   },
+   "notes": "hex crystal cluster on a rock (emissive)",
+   "turntable": [
+    "_turntable/rime_ice_crystal_turntable.webp",
+    "_turntable/rime_ice_crystal_close.webp",
+    "_turntable/rime_ice_crystal_lod1.webp"
+   ]
+  },
+  {
+   "name": "ice_crystal_small",
+   "file": "rime/ice_crystal_small.gltf",
+   "lod1": "rime/ice_crystal_small_lod1.gltf",
+   "tris": 164,
+   "tris_gltf": 164,
+   "tris_lod1": 64,
+   "verts": 92,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.2088,
+     0.0134,
+     -0.2113
+    ],
+    "max": [
+     0.2341,
+     0.704,
+     0.2066
+    ],
+    "size": [
+     0.4429,
+     0.6906,
+     0.4179
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "rime_atlas",
+   "cutout": false,
+   "bytes": 15456,
+   "bytes_lod1": 8473,
+   "runtime": {
+    "id": "crystal_small",
+    "h": 0.8
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/rime_ice_crystal_small_turntable.webp",
+    "_turntable/rime_ice_crystal_small_close.webp",
+    "_turntable/rime_ice_crystal_small_lod1.webp"
+   ]
+  },
+  {
+   "name": "lantern_post",
+   "file": "rime/lantern_post.gltf",
+   "lod1": "rime/lantern_post_lod1.gltf",
+   "tris": 628,
+   "tris_gltf": 628,
+   "tris_lod1": 249,
+   "verts": 340,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.2893,
+     -0.0144,
+     -0.3005
+    ],
+    "max": [
+     0.7413,
+     2.455,
+     0.2969
+    ],
+    "size": [
+     1.0305,
+     2.4694,
+     0.5974
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "rime_atlas",
+   "cutout": false,
+   "bytes": 31410,
+   "bytes_lod1": 15971,
+   "runtime": {
+    "id": "lantern",
+    "h": 2.6
+   },
+   "notes": "iron post, curled arm, glowing lantern box, snow caps",
+   "turntable": [
+    "_turntable/rime_lantern_post_turntable.webp",
+    "_turntable/rime_lantern_post_close.webp",
+    "_turntable/rime_lantern_post_lod1.webp"
+   ]
+  },
+  {
+   "name": "cottage_roof_module",
+   "file": "rime/cottage_roof_module.gltf",
+   "lod1": "rime/cottage_roof_module_lod1.gltf",
+   "tris": 584,
+   "tris_gltf": 584,
+   "tris_lod1": 232,
+   "verts": 318,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -1.55,
+     -0.15,
+     -1.8701
+    ],
+    "max": [
+     1.55,
+     1.4494,
+     0.05
+    ],
+    "size": [
+     3.1,
+     1.5994,
+     1.9201
+    ]
+   },
+   "pivot": "EAVE line centre (y=0); slab rises +Z (glTF -Z toward the ridge) at 35\u00b0, 3.0 wide",
+   "material": "rime_atlas",
+   "cutout": false,
+   "bytes": 26430,
+   "bytes_lod1": 14510,
+   "runtime": {
+    "kind": "building",
+    "style": "cottage",
+    "part": "roof slab"
+   },
+   "notes": "architecture: 7 shingle rows, 3 rafters, snow",
+   "turntable": [
+    "_turntable/rime_cottage_roof_module_turntable.webp",
+    "_turntable/rime_cottage_roof_module_close.webp",
+    "_turntable/rime_cottage_roof_module_lod1.webp"
+   ]
+  },
+  {
+   "name": "cottage_roof_ridge",
+   "file": "rime/cottage_roof_ridge.gltf",
+   "lod1": "rime/cottage_roof_ridge_lod1.gltf",
+   "tris": 240,
+   "tris_gltf": 240,
+   "tris_lod1": 96,
+   "verts": 130,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -1.5,
+     -0.06,
+     -1.55
+    ],
+    "max": [
+     1.5,
+     0.4,
+     1.55
+    ],
+    "size": [
+     3.0,
+     0.46,
+     3.1
+    ]
+   },
+   "pivot": "ridge line centre; runs 3.0 along Z",
+   "material": "rime_atlas",
+   "cutout": false,
+   "bytes": 12234,
+   "bytes_lod1": 7451,
+   "runtime": {
+    "kind": "building",
+    "style": "cottage",
+    "part": "ridge cap"
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/rime_cottage_roof_ridge_turntable.webp",
+    "_turntable/rime_cottage_roof_ridge_close.webp",
+    "_turntable/rime_cottage_roof_ridge_lod1.webp"
+   ]
+  },
+  {
+   "name": "snow_rock",
+   "file": "rime/snow_rock.gltf",
+   "lod1": "rime/snow_rock_lod1.gltf",
+   "tris": 180,
+   "tris_gltf": 180,
+   "tris_lod1": 72,
+   "verts": 96,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.8195,
+     -0.02,
+     -0.5797
+    ],
+    "max": [
+     0.882,
+     0.7915,
+     0.7112
+    ],
+    "size": [
+     1.7015,
+     0.8115,
+     1.2909
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "rime_atlas",
+   "cutout": false,
+   "bytes": 14631,
+   "bytes_lod1": 8110,
+   "runtime": {
+    "id": "rock",
+    "fit": "max"
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/rime_snow_rock_turntable.webp",
+    "_turntable/rime_snow_rock_close.webp",
+    "_turntable/rime_snow_rock_lod1.webp"
+   ]
+  },
+  {
+   "name": "pine_snow_tree",
+   "file": "rime/pine_snow_tree.gltf",
+   "lod1": "rime/pine_snow_tree_lod1.gltf",
+   "tris": 1104,
+   "tris_gltf": 1104,
+   "tris_lod1": 440,
+   "verts": 624,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -2.0722,
+     -0.0733,
+     -2.2423
+    ],
+    "max": [
+     2.3,
+     9.95,
+     2.2423
+    ],
+    "size": [
+     4.3722,
+     10.0233,
+     4.4846
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": [
+    "rime_atlas"
+   ],
+   "cutout": "mixed",
+   "bytes": 51636,
+   "bytes_lod1": 29477,
+   "compose": [
+    "pine_snow_trunk",
+    "pine_snow_canopy"
+   ],
+   "runtime": {
+    "kind": "tree",
+    "h": 9.9
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/rime_pine_snow_tree_turntable.webp",
+    "_turntable/rime_pine_snow_tree_close.webp",
+    "_turntable/rime_pine_snow_tree_lod1.webp"
+   ]
+  }
+ ],
+ "budgets": {
+  "prop_tris_max": 1500,
+  "architecture_tris_max": 3000,
+  "atlas_px_max": 2048
+ },
+ "over_budget": [],
+ "build_seconds": 412.1
+}

@@ -1,0 +1,2998 @@
+{
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rogue Waves - Anime Studio/FGHTImpt_Fight Combo x4_RogueWaves_AnimeStudio.wav": [
+  {
+   "start_ms": 10,
+   "end_ms": 940,
+   "len_ms": 930,
+   "peak_db": -8.4,
+   "rms_db": -19.2,
+   "centroid_hz": 685,
+   "lt150": 0.579,
+   "gt4k": 0.013
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Doex Studio - 90s Anime SFX Pack/Noise_Punch_006.wav": [
+  {
+   "start_ms": 70,
+   "end_ms": 1670,
+   "len_ms": 1600,
+   "peak_db": -4.8,
+   "rms_db": -12.7,
+   "centroid_hz": 1128,
+   "lt150": 0.486,
+   "gt4k": 0.051
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Gore Mini Pack/GOREBone_Bone Breaks Celery 01_JSE_GMP.wav": [
+  {
+   "start_ms": 30,
+   "end_ms": 1550,
+   "len_ms": 1520,
+   "peak_db": -20.5,
+   "rms_db": -33.7,
+   "centroid_hz": 4231,
+   "lt150": 0.004,
+   "gt4k": 0.442
+  },
+  {
+   "start_ms": 3730,
+   "end_ms": 4400,
+   "len_ms": 670,
+   "peak_db": -31.8,
+   "rms_db": -42.0,
+   "centroid_hz": 4906,
+   "lt150": 0.002,
+   "gt4k": 0.58
+  },
+  {
+   "start_ms": 4550,
+   "end_ms": 4920,
+   "len_ms": 370,
+   "peak_db": -30.4,
+   "rms_db": -41.9,
+   "centroid_hz": 3871,
+   "lt150": 0.002,
+   "gt4k": 0.432
+  },
+  {
+   "start_ms": 5150,
+   "end_ms": 6210,
+   "len_ms": 1060,
+   "peak_db": -22.8,
+   "rms_db": -35.6,
+   "centroid_hz": 4786,
+   "lt150": 0.001,
+   "gt4k": 0.571
+  },
+  {
+   "start_ms": 8320,
+   "end_ms": 8890,
+   "len_ms": 570,
+   "peak_db": -23.4,
+   "rms_db": -38.0,
+   "centroid_hz": 4749,
+   "lt150": 0.013,
+   "gt4k": 0.622
+  },
+  {
+   "start_ms": 9090,
+   "end_ms": 9140,
+   "len_ms": 50,
+   "peak_db": -44.2,
+   "rms_db": -48.8,
+   "centroid_hz": 8343,
+   "lt150": 0.002,
+   "gt4k": 0.87
+  },
+  {
+   "start_ms": 11310,
+   "end_ms": 12220,
+   "len_ms": 910,
+   "peak_db": -22.4,
+   "rms_db": -37.0,
+   "centroid_hz": 5042,
+   "lt150": 0.002,
+   "gt4k": 0.776
+  },
+  {
+   "start_ms": 14360,
+   "end_ms": 15190,
+   "len_ms": 830,
+   "peak_db": -20.8,
+   "rms_db": -33.1,
+   "centroid_hz": 4927,
+   "lt150": 0.023,
+   "gt4k": 0.523
+  },
+  {
+   "start_ms": 17250,
+   "end_ms": 18010,
+   "len_ms": 760,
+   "peak_db": -23.2,
+   "rms_db": -34.3,
+   "centroid_hz": 5677,
+   "lt150": 0.081,
+   "gt4k": 0.516
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Gore Mini Pack/GOREFlsh_Flesh Drops on Floor 03_JSE_GMP.wav": [
+  {
+   "start_ms": 0,
+   "end_ms": 700,
+   "len_ms": 700,
+   "peak_db": -19.9,
+   "rms_db": -31.6,
+   "centroid_hz": 6115,
+   "lt150": 0.12,
+   "gt4k": 0.711
+  },
+  {
+   "start_ms": 2250,
+   "end_ms": 2620,
+   "len_ms": 370,
+   "peak_db": -15.9,
+   "rms_db": -24.6,
+   "centroid_hz": 531,
+   "lt150": 0.908,
+   "gt4k": 0.054
+  },
+  {
+   "start_ms": 2740,
+   "end_ms": 3020,
+   "len_ms": 280,
+   "peak_db": -35.9,
+   "rms_db": -41.7,
+   "centroid_hz": 5393,
+   "lt150": 0.0,
+   "gt4k": 0.617
+  },
+  {
+   "start_ms": 4610,
+   "end_ms": 4960,
+   "len_ms": 350,
+   "peak_db": -16.7,
+   "rms_db": -26.3,
+   "centroid_hz": 840,
+   "lt150": 0.886,
+   "gt4k": 0.094
+  },
+  {
+   "start_ms": 5200,
+   "end_ms": 5350,
+   "len_ms": 150,
+   "peak_db": -39.0,
+   "rms_db": -44.7,
+   "centroid_hz": 7830,
+   "lt150": 0.0,
+   "gt4k": 0.928
+  },
+  {
+   "start_ms": 5490,
+   "end_ms": 5530,
+   "len_ms": 40,
+   "peak_db": -36.4,
+   "rms_db": -38.7,
+   "centroid_hz": 7063,
+   "lt150": 0.0,
+   "gt4k": 0.974
+  },
+  {
+   "start_ms": 7110,
+   "end_ms": 7890,
+   "len_ms": 780,
+   "peak_db": -10.9,
+   "rms_db": -23.4,
+   "centroid_hz": 6482,
+   "lt150": 0.058,
+   "gt4k": 0.719
+  },
+  {
+   "start_ms": 9530,
+   "end_ms": 10290,
+   "len_ms": 760,
+   "peak_db": -8.5,
+   "rms_db": -21.8,
+   "centroid_hz": 5669,
+   "lt150": 0.146,
+   "gt4k": 0.701
+  },
+  {
+   "start_ms": 12470,
+   "end_ms": 12640,
+   "len_ms": 170,
+   "peak_db": -33.5,
+   "rms_db": -38.3,
+   "centroid_hz": 4992,
+   "lt150": 0.0,
+   "gt4k": 0.424
+  },
+  {
+   "start_ms": 13720,
+   "end_ms": 13940,
+   "len_ms": 220,
+   "peak_db": -13.3,
+   "rms_db": -20.3,
+   "centroid_hz": 168,
+   "lt150": 0.953,
+   "gt4k": 0.007
+  },
+  {
+   "start_ms": 16610,
+   "end_ms": 16800,
+   "len_ms": 190,
+   "peak_db": -16.6,
+   "rms_db": -25.5,
+   "centroid_hz": 157,
+   "lt150": 0.939,
+   "gt4k": 0.009
+  },
+  {
+   "start_ms": 17680,
+   "end_ms": 17840,
+   "len_ms": 160,
+   "peak_db": -37.4,
+   "rms_db": -41.6,
+   "centroid_hz": 3061,
+   "lt150": 0.0,
+   "gt4k": 0.195
+  },
+  {
+   "start_ms": 18180,
+   "end_ms": 18410,
+   "len_ms": 230,
+   "peak_db": -23.1,
+   "rms_db": -31.1,
+   "centroid_hz": 2966,
+   "lt150": 0.0,
+   "gt4k": 0.204
+  },
+  {
+   "start_ms": 18910,
+   "end_ms": 18950,
+   "len_ms": 40,
+   "peak_db": -31.8,
+   "rms_db": -34.5,
+   "centroid_hz": 3072,
+   "lt150": 0.0,
+   "gt4k": 0.303
+  },
+  {
+   "start_ms": 19230,
+   "end_ms": 19310,
+   "len_ms": 80,
+   "peak_db": -40.0,
+   "rms_db": -44.7,
+   "centroid_hz": 4900,
+   "lt150": 0.0,
+   "gt4k": 0.625
+  },
+  {
+   "start_ms": 19700,
+   "end_ms": 20010,
+   "len_ms": 310,
+   "peak_db": -23.3,
+   "rms_db": -30.2,
+   "centroid_hz": 5297,
+   "lt150": 0.0,
+   "gt4k": 0.494
+  },
+  {
+   "start_ms": 22210,
+   "end_ms": 22510,
+   "len_ms": 300,
+   "peak_db": -18.8,
+   "rms_db": -26.7,
+   "centroid_hz": 312,
+   "lt150": 0.893,
+   "gt4k": 0.023
+  },
+  {
+   "start_ms": 23090,
+   "end_ms": 23210,
+   "len_ms": 120,
+   "peak_db": -37.4,
+   "rms_db": -45.8,
+   "centroid_hz": 4623,
+   "lt150": 0.0,
+   "gt4k": 0.843
+  },
+  {
+   "start_ms": 23390,
+   "end_ms": 23700,
+   "len_ms": 310,
+   "peak_db": -16.0,
+   "rms_db": -23.3,
+   "centroid_hz": 818,
+   "lt150": 0.722,
+   "gt4k": 0.058
+  },
+  {
+   "start_ms": 25830,
+   "end_ms": 29020,
+   "len_ms": 3190,
+   "peak_db": -12.0,
+   "rms_db": -27.2,
+   "centroid_hz": 5790,
+   "lt150": 0.002,
+   "gt4k": 0.646
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Gore Mini Pack/GORESplt_Gore Splatter 01_JSE_GMP.wav": [
+  {
+   "start_ms": 10,
+   "end_ms": 1250,
+   "len_ms": 1240,
+   "peak_db": -15.2,
+   "rms_db": -26.4,
+   "centroid_hz": 3953,
+   "lt150": 0.001,
+   "gt4k": 0.318
+  },
+  {
+   "start_ms": 2410,
+   "end_ms": 3720,
+   "len_ms": 1310,
+   "peak_db": -15.8,
+   "rms_db": -26.4,
+   "centroid_hz": 4029,
+   "lt150": 0.0,
+   "gt4k": 0.419
+  },
+  {
+   "start_ms": 4820,
+   "end_ms": 5370,
+   "len_ms": 550,
+   "peak_db": -13.7,
+   "rms_db": -23.7,
+   "centroid_hz": 3593,
+   "lt150": 0.006,
+   "gt4k": 0.277
+  },
+  {
+   "start_ms": 7220,
+   "end_ms": 8000,
+   "len_ms": 780,
+   "peak_db": -17.5,
+   "rms_db": -25.5,
+   "centroid_hz": 5542,
+   "lt150": 0.001,
+   "gt4k": 0.519
+  },
+  {
+   "start_ms": 9620,
+   "end_ms": 11060,
+   "len_ms": 1440,
+   "peak_db": -17.3,
+   "rms_db": -29.0,
+   "centroid_hz": 3238,
+   "lt150": 0.0,
+   "gt4k": 0.259
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Melee Weapons/WEAPAxe_Long Two-Handed Axe Flesh Hit_JSE_MW.wav": [
+  {
+   "start_ms": 20,
+   "end_ms": 650,
+   "len_ms": 630,
+   "peak_db": -13.5,
+   "rms_db": -21.5,
+   "centroid_hz": 3035,
+   "lt150": 0.291,
+   "gt4k": 0.27
+  },
+  {
+   "start_ms": 2440,
+   "end_ms": 3090,
+   "len_ms": 650,
+   "peak_db": -9.4,
+   "rms_db": -18.9,
+   "centroid_hz": 2326,
+   "lt150": 0.367,
+   "gt4k": 0.173
+  },
+  {
+   "start_ms": 4840,
+   "end_ms": 5590,
+   "len_ms": 750,
+   "peak_db": -11.1,
+   "rms_db": -19.4,
+   "centroid_hz": 2501,
+   "lt150": 0.388,
+   "gt4k": 0.212
+  },
+  {
+   "start_ms": 7250,
+   "end_ms": 7710,
+   "len_ms": 460,
+   "peak_db": -10.8,
+   "rms_db": -17.4,
+   "centroid_hz": 1374,
+   "lt150": 0.477,
+   "gt4k": 0.113
+  },
+  {
+   "start_ms": 9640,
+   "end_ms": 10200,
+   "len_ms": 560,
+   "peak_db": -9.8,
+   "rms_db": -18.2,
+   "centroid_hz": 1327,
+   "lt150": 0.508,
+   "gt4k": 0.108
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Melee Weapons/WEAPArmr_Metal Shield Block Hits_JSE_MW.wav": [
+  {
+   "start_ms": 10,
+   "end_ms": 670,
+   "len_ms": 660,
+   "peak_db": -12.5,
+   "rms_db": -20.1,
+   "centroid_hz": 716,
+   "lt150": 0.841,
+   "gt4k": 0.067
+  },
+  {
+   "start_ms": 2430,
+   "end_ms": 3130,
+   "len_ms": 700,
+   "peak_db": -12.5,
+   "rms_db": -20.0,
+   "centroid_hz": 454,
+   "lt150": 0.862,
+   "gt4k": 0.042
+  },
+  {
+   "start_ms": 4810,
+   "end_ms": 5420,
+   "len_ms": 610,
+   "peak_db": -13.5,
+   "rms_db": -20.4,
+   "centroid_hz": 755,
+   "lt150": 0.788,
+   "gt4k": 0.064
+  },
+  {
+   "start_ms": 7280,
+   "end_ms": 7940,
+   "len_ms": 660,
+   "peak_db": -13.7,
+   "rms_db": -21.0,
+   "centroid_hz": 923,
+   "lt150": 0.74,
+   "gt4k": 0.083
+  },
+  {
+   "start_ms": 9630,
+   "end_ms": 10290,
+   "len_ms": 660,
+   "peak_db": -14.9,
+   "rms_db": -21.6,
+   "centroid_hz": 538,
+   "lt150": 0.84,
+   "gt4k": 0.038
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Steampunk Gadgets/MECHMisc_Ricochet Hits 01_JSE_SG.wav": [
+  {
+   "start_ms": 10,
+   "end_ms": 1510,
+   "len_ms": 1500,
+   "peak_db": -20.6,
+   "rms_db": -29.4,
+   "centroid_hz": 3235,
+   "lt150": 0.456,
+   "gt4k": 0.286
+  },
+  {
+   "start_ms": 2460,
+   "end_ms": 3450,
+   "len_ms": 990,
+   "peak_db": -20.0,
+   "rms_db": -28.6,
+   "centroid_hz": 2869,
+   "lt150": 0.528,
+   "gt4k": 0.28
+  },
+  {
+   "start_ms": 4800,
+   "end_ms": 6200,
+   "len_ms": 1400,
+   "peak_db": -13.2,
+   "rms_db": -26.2,
+   "centroid_hz": 3000,
+   "lt150": 0.63,
+   "gt4k": 0.298
+  },
+  {
+   "start_ms": 7210,
+   "end_ms": 8360,
+   "len_ms": 1150,
+   "peak_db": -18.7,
+   "rms_db": -31.6,
+   "centroid_hz": 3998,
+   "lt150": 0.282,
+   "gt4k": 0.369
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rogue Waves - Creaking Door/DOORCreak_Wooden Door, Door Slams, Impacts, 3_RogueWaves_CreakingDoor.wav": [
+  {
+   "start_ms": 0,
+   "end_ms": 560,
+   "len_ms": 560,
+   "peak_db": -6.0,
+   "rms_db": -15.9,
+   "centroid_hz": 67,
+   "lt150": 0.953,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 2270,
+   "end_ms": 2890,
+   "len_ms": 620,
+   "peak_db": -3.2,
+   "rms_db": -14.0,
+   "centroid_hz": 57,
+   "lt150": 0.96,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 6070,
+   "end_ms": 6750,
+   "len_ms": 680,
+   "peak_db": -6.5,
+   "rms_db": -16.6,
+   "centroid_hz": 76,
+   "lt150": 0.923,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 8520,
+   "end_ms": 9170,
+   "len_ms": 650,
+   "peak_db": -2.5,
+   "rms_db": -13.8,
+   "centroid_hz": 67,
+   "lt150": 0.941,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 11140,
+   "end_ms": 11810,
+   "len_ms": 670,
+   "peak_db": -4.2,
+   "rms_db": -14.2,
+   "centroid_hz": 66,
+   "lt150": 0.943,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 12890,
+   "end_ms": 13560,
+   "len_ms": 670,
+   "peak_db": -3.6,
+   "rms_db": -14.1,
+   "centroid_hz": 66,
+   "lt150": 0.952,
+   "gt4k": 0.0
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Mechanical Wave - Glass/GLASBrk_Glass Break Hit_04_MWSFX_GL.wav": [
+  {
+   "start_ms": 90,
+   "end_ms": 740,
+   "len_ms": 650,
+   "peak_db": -7.2,
+   "rms_db": -19.1,
+   "centroid_hz": 9555,
+   "lt150": 0.001,
+   "gt4k": 0.91
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Mechanical Wave - Torturing Metal/METLImpt_Metal Impact-03_MWSFX_TM.wav": [
+  {
+   "start_ms": 70,
+   "end_ms": 730,
+   "len_ms": 660,
+   "peak_db": -12.3,
+   "rms_db": -18.5,
+   "centroid_hz": 1806,
+   "lt150": 0.007,
+   "gt4k": 0.015
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - The Metal Hit Sweeteners Library/Iron - Thick - HIT - Hammer.wav": [
+  {
+   "start_ms": 0,
+   "end_ms": 100,
+   "len_ms": 100,
+   "peak_db": -13.5,
+   "rms_db": -21.3,
+   "centroid_hz": 3862,
+   "lt150": 0.014,
+   "gt4k": 0.302
+  },
+  {
+   "start_ms": 1800,
+   "end_ms": 1900,
+   "len_ms": 100,
+   "peak_db": -14.9,
+   "rms_db": -21.1,
+   "centroid_hz": 3797,
+   "lt150": 0.016,
+   "gt4k": 0.218
+  },
+  {
+   "start_ms": 3590,
+   "end_ms": 3690,
+   "len_ms": 100,
+   "peak_db": -14.7,
+   "rms_db": -21.9,
+   "centroid_hz": 4034,
+   "lt150": 0.018,
+   "gt4k": 0.326
+  },
+  {
+   "start_ms": 5350,
+   "end_ms": 5450,
+   "len_ms": 100,
+   "peak_db": -15.3,
+   "rms_db": -21.1,
+   "centroid_hz": 3900,
+   "lt150": 0.02,
+   "gt4k": 0.271
+  },
+  {
+   "start_ms": 7020,
+   "end_ms": 7120,
+   "len_ms": 100,
+   "peak_db": -16.3,
+   "rms_db": -23.6,
+   "centroid_hz": 3864,
+   "lt150": 0.026,
+   "gt4k": 0.328
+  },
+  {
+   "start_ms": 8690,
+   "end_ms": 8800,
+   "len_ms": 110,
+   "peak_db": -19.8,
+   "rms_db": -26.3,
+   "centroid_hz": 3444,
+   "lt150": 0.033,
+   "gt4k": 0.132
+  },
+  {
+   "start_ms": 10330,
+   "end_ms": 10430,
+   "len_ms": 100,
+   "peak_db": -15.1,
+   "rms_db": -21.8,
+   "centroid_hz": 4024,
+   "lt150": 0.023,
+   "gt4k": 0.29
+  },
+  {
+   "start_ms": 12020,
+   "end_ms": 12160,
+   "len_ms": 140,
+   "peak_db": -16.8,
+   "rms_db": -24.1,
+   "centroid_hz": 3770,
+   "lt150": 0.002,
+   "gt4k": 0.353
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - The Metal Hit Sweeteners Library/Oil Barrel - HIT - Hammer - Take 2.wav": [
+  {
+   "start_ms": 0,
+   "end_ms": 200,
+   "len_ms": 200,
+   "peak_db": -11.7,
+   "rms_db": -22.0,
+   "centroid_hz": 738,
+   "lt150": 0.154,
+   "gt4k": 0.003
+  },
+  {
+   "start_ms": 2150,
+   "end_ms": 2370,
+   "len_ms": 220,
+   "peak_db": -11.8,
+   "rms_db": -22.4,
+   "centroid_hz": 648,
+   "lt150": 0.114,
+   "gt4k": 0.002
+  },
+  {
+   "start_ms": 4570,
+   "end_ms": 4800,
+   "len_ms": 230,
+   "peak_db": -13.8,
+   "rms_db": -23.0,
+   "centroid_hz": 720,
+   "lt150": 0.096,
+   "gt4k": 0.004
+  },
+  {
+   "start_ms": 6860,
+   "end_ms": 7110,
+   "len_ms": 250,
+   "peak_db": -11.8,
+   "rms_db": -22.7,
+   "centroid_hz": 583,
+   "lt150": 0.188,
+   "gt4k": 0.002
+  },
+  {
+   "start_ms": 9100,
+   "end_ms": 9320,
+   "len_ms": 220,
+   "peak_db": -12.3,
+   "rms_db": -22.5,
+   "centroid_hz": 667,
+   "lt150": 0.116,
+   "gt4k": 0.003
+  },
+  {
+   "start_ms": 11170,
+   "end_ms": 11380,
+   "len_ms": 210,
+   "peak_db": -11.4,
+   "rms_db": -21.8,
+   "centroid_hz": 672,
+   "lt150": 0.119,
+   "gt4k": 0.002
+  },
+  {
+   "start_ms": 13230,
+   "end_ms": 13450,
+   "len_ms": 220,
+   "peak_db": -11.9,
+   "rms_db": -22.5,
+   "centroid_hz": 626,
+   "lt150": 0.138,
+   "gt4k": 0.002
+  },
+  {
+   "start_ms": 15440,
+   "end_ms": 15650,
+   "len_ms": 210,
+   "peak_db": -11.7,
+   "rms_db": -22.0,
+   "centroid_hz": 728,
+   "lt150": 0.102,
+   "gt4k": 0.002
+  },
+  {
+   "start_ms": 17600,
+   "end_ms": 17800,
+   "len_ms": 200,
+   "peak_db": -13.2,
+   "rms_db": -23.1,
+   "centroid_hz": 634,
+   "lt150": 0.108,
+   "gt4k": 0.001
+  },
+  {
+   "start_ms": 19770,
+   "end_ms": 20000,
+   "len_ms": 230,
+   "peak_db": -11.9,
+   "rms_db": -21.8,
+   "centroid_hz": 664,
+   "lt150": 0.113,
+   "gt4k": 0.002
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - The Metal Hit Sweeteners Library/Spade - HIT - Drumstick - Ring - Mute.wav": [
+  {
+   "start_ms": 70,
+   "end_ms": 350,
+   "len_ms": 280,
+   "peak_db": -11.0,
+   "rms_db": -24.4,
+   "centroid_hz": 2142,
+   "lt150": 0.0,
+   "gt4k": 0.024
+  },
+  {
+   "start_ms": 2350,
+   "end_ms": 2500,
+   "len_ms": 150,
+   "peak_db": -10.7,
+   "rms_db": -21.8,
+   "centroid_hz": 2765,
+   "lt150": 0.001,
+   "gt4k": 0.068
+  },
+  {
+   "start_ms": 4440,
+   "end_ms": 4560,
+   "len_ms": 120,
+   "peak_db": -10.4,
+   "rms_db": -20.4,
+   "centroid_hz": 2720,
+   "lt150": 0.001,
+   "gt4k": 0.244
+  },
+  {
+   "start_ms": 6530,
+   "end_ms": 6700,
+   "len_ms": 170,
+   "peak_db": -11.4,
+   "rms_db": -21.7,
+   "centroid_hz": 2386,
+   "lt150": 0.0,
+   "gt4k": 0.11
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - The Metal Hit Sweeteners Library/Toolbox - DROP.wav": [
+  {
+   "start_ms": 90,
+   "end_ms": 460,
+   "len_ms": 370,
+   "peak_db": -16.5,
+   "rms_db": -22.7,
+   "centroid_hz": 2619,
+   "lt150": 0.006,
+   "gt4k": 0.185
+  },
+  {
+   "start_ms": 1880,
+   "end_ms": 2290,
+   "len_ms": 410,
+   "peak_db": -12.9,
+   "rms_db": -21.6,
+   "centroid_hz": 1697,
+   "lt150": 0.004,
+   "gt4k": 0.104
+  },
+  {
+   "start_ms": 3610,
+   "end_ms": 3950,
+   "len_ms": 340,
+   "peak_db": -14.8,
+   "rms_db": -20.8,
+   "centroid_hz": 3730,
+   "lt150": 0.004,
+   "gt4k": 0.261
+  },
+  {
+   "start_ms": 5320,
+   "end_ms": 5730,
+   "len_ms": 410,
+   "peak_db": -15.3,
+   "rms_db": -23.3,
+   "centroid_hz": 2829,
+   "lt150": 0.007,
+   "gt4k": 0.219
+  },
+  {
+   "start_ms": 7230,
+   "end_ms": 7670,
+   "len_ms": 440,
+   "peak_db": -16.8,
+   "rms_db": -23.3,
+   "centroid_hz": 3336,
+   "lt150": 0.008,
+   "gt4k": 0.242
+  },
+  {
+   "start_ms": 8900,
+   "end_ms": 9400,
+   "len_ms": 500,
+   "peak_db": -13.2,
+   "rms_db": -22.5,
+   "centroid_hz": 2758,
+   "lt150": 0.005,
+   "gt4k": 0.185
+  },
+  {
+   "start_ms": 10610,
+   "end_ms": 10990,
+   "len_ms": 380,
+   "peak_db": -13.4,
+   "rms_db": -19.9,
+   "centroid_hz": 2894,
+   "lt150": 0.007,
+   "gt4k": 0.204
+  },
+  {
+   "start_ms": 12370,
+   "end_ms": 12800,
+   "len_ms": 430,
+   "peak_db": -14.3,
+   "rms_db": -20.8,
+   "centroid_hz": 2298,
+   "lt150": 0.009,
+   "gt4k": 0.154
+  },
+  {
+   "start_ms": 14120,
+   "end_ms": 14550,
+   "len_ms": 430,
+   "peak_db": -13.1,
+   "rms_db": -20.0,
+   "centroid_hz": 3348,
+   "lt150": 0.006,
+   "gt4k": 0.242
+  },
+  {
+   "start_ms": 15860,
+   "end_ms": 16260,
+   "len_ms": 400,
+   "peak_db": -14.5,
+   "rms_db": -21.7,
+   "centroid_hz": 2763,
+   "lt150": 0.008,
+   "gt4k": 0.183
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/InMotionAudio - Wood/WOODBrk_Snap09_InMotionAudio_Wood.wav": [
+  {
+   "start_ms": 300,
+   "end_ms": 390,
+   "len_ms": 90,
+   "peak_db": -23.9,
+   "rms_db": -31.9,
+   "centroid_hz": 3992,
+   "lt150": 0.0,
+   "gt4k": 0.223
+  },
+  {
+   "start_ms": 570,
+   "end_ms": 730,
+   "len_ms": 160,
+   "peak_db": -9.9,
+   "rms_db": -17.3,
+   "centroid_hz": 4160,
+   "lt150": 0.002,
+   "gt4k": 0.341
+  },
+  {
+   "start_ms": 1410,
+   "end_ms": 1610,
+   "len_ms": 200,
+   "peak_db": -24.1,
+   "rms_db": -36.2,
+   "centroid_hz": 6357,
+   "lt150": 0.002,
+   "gt4k": 0.654
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/InMotionAudio - Wood/WOODImpt_Drops20_InMotionAudio_Wood.wav": [
+  {
+   "start_ms": 50,
+   "end_ms": 490,
+   "len_ms": 440,
+   "peak_db": -4.3,
+   "rms_db": -18.3,
+   "centroid_hz": 2032,
+   "lt150": 0.002,
+   "gt4k": 0.048
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Mechanical Wave - Cardboard and Paper/OBJPack_Big Cardboard Box Impact_ 02_MWSFX_CDAP.wav": [
+  {
+   "start_ms": 20,
+   "end_ms": 550,
+   "len_ms": 530,
+   "peak_db": -3.1,
+   "rms_db": -13.5,
+   "centroid_hz": 233,
+   "lt150": 0.357,
+   "gt4k": 0.003
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - The Plastic Textures Library/Flexible Sewer Pipe Big - Broken - DROP - Thump - Mono.wav": [
+  {
+   "start_ms": 140,
+   "end_ms": 1050,
+   "len_ms": 910,
+   "peak_db": -14.9,
+   "rms_db": -29.0,
+   "centroid_hz": 3860,
+   "lt150": 0.107,
+   "gt4k": 0.442
+  },
+  {
+   "start_ms": 2390,
+   "end_ms": 3080,
+   "len_ms": 690,
+   "peak_db": -14.2,
+   "rms_db": -28.2,
+   "centroid_hz": 2601,
+   "lt150": 0.446,
+   "gt4k": 0.276
+  },
+  {
+   "start_ms": 5110,
+   "end_ms": 5920,
+   "len_ms": 810,
+   "peak_db": -15.8,
+   "rms_db": -30.1,
+   "centroid_hz": 4752,
+   "lt150": 0.218,
+   "gt4k": 0.496
+  },
+  {
+   "start_ms": 7770,
+   "end_ms": 8370,
+   "len_ms": 600,
+   "peak_db": -15.1,
+   "rms_db": -26.4,
+   "centroid_hz": 3422,
+   "lt150": 0.312,
+   "gt4k": 0.338
+  },
+  {
+   "start_ms": 8550,
+   "end_ms": 8710,
+   "len_ms": 160,
+   "peak_db": -41.9,
+   "rms_db": -50.7,
+   "centroid_hz": 4096,
+   "lt150": 0.056,
+   "gt4k": 0.412
+  },
+  {
+   "start_ms": 9880,
+   "end_ms": 10430,
+   "len_ms": 550,
+   "peak_db": -11.8,
+   "rms_db": -24.4,
+   "centroid_hz": 3913,
+   "lt150": 0.222,
+   "gt4k": 0.415
+  },
+  {
+   "start_ms": 11020,
+   "end_ms": 11220,
+   "len_ms": 200,
+   "peak_db": -40.7,
+   "rms_db": -45.1,
+   "centroid_hz": 7722,
+   "lt150": 0.003,
+   "gt4k": 0.754
+  },
+  {
+   "start_ms": 12540,
+   "end_ms": 13110,
+   "len_ms": 570,
+   "peak_db": -14.5,
+   "rms_db": -28.1,
+   "centroid_hz": 2609,
+   "lt150": 0.42,
+   "gt4k": 0.272
+  },
+  {
+   "start_ms": 15030,
+   "end_ms": 15430,
+   "len_ms": 400,
+   "peak_db": -12.7,
+   "rms_db": -22.7,
+   "centroid_hz": 1216,
+   "lt150": 0.721,
+   "gt4k": 0.131
+  },
+  {
+   "start_ms": 15640,
+   "end_ms": 15750,
+   "len_ms": 110,
+   "peak_db": -38.0,
+   "rms_db": -44.6,
+   "centroid_hz": 3958,
+   "lt150": 0.161,
+   "gt4k": 0.473
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/The Soundcatcher - Seismic Activities/Kitchen_Cupboard_Impact_Rattle_Vibrate_Rumble_Mkh8040Seismic_Activities_2.Wav": [
+  {
+   "start_ms": 0,
+   "end_ms": 32400,
+   "len_ms": 32400,
+   "peak_db": -24.7,
+   "rms_db": -38.2,
+   "centroid_hz": 221,
+   "lt150": 0.58,
+   "gt4k": 0.0
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/BluezoneCorp - Stone Impact/Bluezone_BC0297_stone_impact_015.wav": [
+  {
+   "start_ms": 0,
+   "end_ms": 970,
+   "len_ms": 970,
+   "peak_db": -6.3,
+   "rms_db": -19.2,
+   "centroid_hz": 4382,
+   "lt150": 0.008,
+   "gt4k": 0.432
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/BluezoneCorp - Stone Impact/Bluezone_BC0297_stone_impact_041.wav": [
+  {
+   "start_ms": 0,
+   "end_ms": 860,
+   "len_ms": 860,
+   "peak_db": -8.7,
+   "rms_db": -20.6,
+   "centroid_hz": 3282,
+   "lt150": 0.002,
+   "gt4k": 0.217
+  },
+  {
+   "start_ms": 1000,
+   "end_ms": 1100,
+   "len_ms": 100,
+   "peak_db": -42.9,
+   "rms_db": -47.9,
+   "centroid_hz": 1159,
+   "lt150": 0.104,
+   "gt4k": 0.062
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/InMotionAudio - Torn T-Shirt/CLOTHRip_CottonRips92_InMotionAudio_TornTShirt.wav": [
+  {
+   "start_ms": 60,
+   "end_ms": 210,
+   "len_ms": 150,
+   "peak_db": -10.4,
+   "rms_db": -16.5,
+   "centroid_hz": 4666,
+   "lt150": 0.001,
+   "gt4k": 0.452
+  },
+  {
+   "start_ms": 440,
+   "end_ms": 620,
+   "len_ms": 180,
+   "peak_db": -16.2,
+   "rms_db": -20.0,
+   "centroid_hz": 4647,
+   "lt150": 0.012,
+   "gt4k": 0.502
+  },
+  {
+   "start_ms": 810,
+   "end_ms": 1130,
+   "len_ms": 320,
+   "peak_db": -18.8,
+   "rms_db": -26.5,
+   "centroid_hz": 4274,
+   "lt150": 0.006,
+   "gt4k": 0.452
+  },
+  {
+   "start_ms": 1510,
+   "end_ms": 3820,
+   "len_ms": 2310,
+   "peak_db": -11.4,
+   "rms_db": -27.4,
+   "centroid_hz": 4304,
+   "lt150": 0.005,
+   "gt4k": 0.406
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/InMotionAudio - Torn T-Shirt/CLOTHRip_CottonRips74_InMotionAudio_TornTShirt.wav": [
+  {
+   "start_ms": 30,
+   "end_ms": 640,
+   "len_ms": 610,
+   "peak_db": -18.9,
+   "rms_db": -26.6,
+   "centroid_hz": 7182,
+   "lt150": 0.018,
+   "gt4k": 0.727
+  },
+  {
+   "start_ms": 830,
+   "end_ms": 1290,
+   "len_ms": 460,
+   "peak_db": -15.9,
+   "rms_db": -23.1,
+   "centroid_hz": 5969,
+   "lt150": 0.013,
+   "gt4k": 0.748
+  },
+  {
+   "start_ms": 1450,
+   "end_ms": 1610,
+   "len_ms": 160,
+   "peak_db": -22.1,
+   "rms_db": -30.0,
+   "centroid_hz": 4449,
+   "lt150": 0.017,
+   "gt4k": 0.344
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/TheWorkRoom Audio Post - Neoprene - Dry - Wetsuit/NEO008.wav": [
+  {
+   "start_ms": 430,
+   "end_ms": 910,
+   "len_ms": 480,
+   "peak_db": -22.6,
+   "rms_db": -28.6,
+   "centroid_hz": 2225,
+   "lt150": 0.002,
+   "gt4k": 0.131
+  },
+  {
+   "start_ms": 2000,
+   "end_ms": 2430,
+   "len_ms": 430,
+   "peak_db": -17.2,
+   "rms_db": -25.8,
+   "centroid_hz": 7537,
+   "lt150": 0.0,
+   "gt4k": 0.544
+  },
+  {
+   "start_ms": 3750,
+   "end_ms": 4100,
+   "len_ms": 350,
+   "peak_db": -21.3,
+   "rms_db": -26.9,
+   "centroid_hz": 3850,
+   "lt150": 0.0,
+   "gt4k": 0.317
+  },
+  {
+   "start_ms": 5270,
+   "end_ms": 5580,
+   "len_ms": 310,
+   "peak_db": -16.4,
+   "rms_db": -22.2,
+   "centroid_hz": 7877,
+   "lt150": 0.001,
+   "gt4k": 0.55
+  },
+  {
+   "start_ms": 6680,
+   "end_ms": 7270,
+   "len_ms": 590,
+   "peak_db": -25.1,
+   "rms_db": -32.8,
+   "centroid_hz": 3601,
+   "lt150": 0.002,
+   "gt4k": 0.339
+  },
+  {
+   "start_ms": 7410,
+   "end_ms": 7570,
+   "len_ms": 160,
+   "peak_db": -21.7,
+   "rms_db": -27.6,
+   "centroid_hz": 1502,
+   "lt150": 0.004,
+   "gt4k": 0.039
+  },
+  {
+   "start_ms": 8050,
+   "end_ms": 8130,
+   "len_ms": 80,
+   "peak_db": -17.4,
+   "rms_db": -23.5,
+   "centroid_hz": 1093,
+   "lt150": 0.0,
+   "gt4k": 0.021
+  },
+  {
+   "start_ms": 8250,
+   "end_ms": 8820,
+   "len_ms": 570,
+   "peak_db": -35.6,
+   "rms_db": -43.2,
+   "centroid_hz": 4662,
+   "lt150": 0.002,
+   "gt4k": 0.34
+  },
+  {
+   "start_ms": 9920,
+   "end_ms": 10710,
+   "len_ms": 790,
+   "peak_db": -28.5,
+   "rms_db": -35.8,
+   "centroid_hz": 7233,
+   "lt150": 0.002,
+   "gt4k": 0.622
+  },
+  {
+   "start_ms": 10830,
+   "end_ms": 10930,
+   "len_ms": 100,
+   "peak_db": -23.4,
+   "rms_db": -28.7,
+   "centroid_hz": 2048,
+   "lt150": 0.002,
+   "gt4k": 0.145
+  },
+  {
+   "start_ms": 13740,
+   "end_ms": 13990,
+   "len_ms": 250,
+   "peak_db": -25.3,
+   "rms_db": -38.7,
+   "centroid_hz": 1341,
+   "lt150": 0.005,
+   "gt4k": 0.051
+  },
+  {
+   "start_ms": 14420,
+   "end_ms": 14700,
+   "len_ms": 280,
+   "peak_db": -15.1,
+   "rms_db": -22.9,
+   "centroid_hz": 4444,
+   "lt150": 0.0,
+   "gt4k": 0.326
+  },
+  {
+   "start_ms": 15570,
+   "end_ms": 16390,
+   "len_ms": 820,
+   "peak_db": -22.6,
+   "rms_db": -31.7,
+   "centroid_hz": 4095,
+   "lt150": 0.001,
+   "gt4k": 0.301
+  },
+  {
+   "start_ms": 16890,
+   "end_ms": 17710,
+   "len_ms": 820,
+   "peak_db": -23.1,
+   "rms_db": -35.5,
+   "centroid_hz": 4254,
+   "lt150": 0.131,
+   "gt4k": 0.36
+  },
+  {
+   "start_ms": 19220,
+   "end_ms": 19660,
+   "len_ms": 440,
+   "peak_db": -22.8,
+   "rms_db": -29.5,
+   "centroid_hz": 5426,
+   "lt150": 0.023,
+   "gt4k": 0.447
+  },
+  {
+   "start_ms": 21450,
+   "end_ms": 21850,
+   "len_ms": 400,
+   "peak_db": -29.7,
+   "rms_db": -33.6,
+   "centroid_hz": 3427,
+   "lt150": 0.048,
+   "gt4k": 0.256
+  },
+  {
+   "start_ms": 23470,
+   "end_ms": 23750,
+   "len_ms": 280,
+   "peak_db": -17.3,
+   "rms_db": -24.1,
+   "centroid_hz": 6915,
+   "lt150": 0.001,
+   "gt4k": 0.54
+  },
+  {
+   "start_ms": 25180,
+   "end_ms": 25360,
+   "len_ms": 180,
+   "peak_db": -16.6,
+   "rms_db": -20.3,
+   "centroid_hz": 4392,
+   "lt150": 0.0,
+   "gt4k": 0.347
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/TheWorkRoom Audio Post - Neoprene - Dry - Wetsuit/NEO028.wav": [
+  {
+   "start_ms": 1180,
+   "end_ms": 1290,
+   "len_ms": 110,
+   "peak_db": -38.9,
+   "rms_db": -43.4,
+   "centroid_hz": 3683,
+   "lt150": 0.007,
+   "gt4k": 0.325
+  },
+  {
+   "start_ms": 1680,
+   "end_ms": 1800,
+   "len_ms": 120,
+   "peak_db": -43.6,
+   "rms_db": -45.1,
+   "centroid_hz": 2875,
+   "lt150": 0.0,
+   "gt4k": 0.182
+  },
+  {
+   "start_ms": 2110,
+   "end_ms": 2520,
+   "len_ms": 410,
+   "peak_db": -29.8,
+   "rms_db": -40.8,
+   "centroid_hz": 1843,
+   "lt150": 0.005,
+   "gt4k": 0.088
+  },
+  {
+   "start_ms": 2640,
+   "end_ms": 2830,
+   "len_ms": 190,
+   "peak_db": -39.4,
+   "rms_db": -43.4,
+   "centroid_hz": 3836,
+   "lt150": 0.006,
+   "gt4k": 0.28
+  },
+  {
+   "start_ms": 4340,
+   "end_ms": 5110,
+   "len_ms": 770,
+   "peak_db": -33.6,
+   "rms_db": -39.9,
+   "centroid_hz": 3525,
+   "lt150": 0.015,
+   "gt4k": 0.267
+  },
+  {
+   "start_ms": 6760,
+   "end_ms": 7520,
+   "len_ms": 760,
+   "peak_db": -30.6,
+   "rms_db": -36.8,
+   "centroid_hz": 3053,
+   "lt150": 0.028,
+   "gt4k": 0.231
+  },
+  {
+   "start_ms": 9160,
+   "end_ms": 9300,
+   "len_ms": 140,
+   "peak_db": -29.5,
+   "rms_db": -35.6,
+   "centroid_hz": 3516,
+   "lt150": 0.035,
+   "gt4k": 0.245
+  },
+  {
+   "start_ms": 9510,
+   "end_ms": 9570,
+   "len_ms": 60,
+   "peak_db": -38.6,
+   "rms_db": -40.1,
+   "centroid_hz": 2951,
+   "lt150": 0.006,
+   "gt4k": 0.141
+  },
+  {
+   "start_ms": 9730,
+   "end_ms": 9760,
+   "len_ms": 30,
+   "peak_db": -43.7,
+   "rms_db": -44.7,
+   "centroid_hz": 2636,
+   "lt150": 0.005,
+   "gt4k": 0.166
+  },
+  {
+   "start_ms": 9900,
+   "end_ms": 10240,
+   "len_ms": 340,
+   "peak_db": -33.4,
+   "rms_db": -42.3,
+   "centroid_hz": 2119,
+   "lt150": 0.013,
+   "gt4k": 0.139
+  },
+  {
+   "start_ms": 11760,
+   "end_ms": 12070,
+   "len_ms": 310,
+   "peak_db": -27.0,
+   "rms_db": -34.6,
+   "centroid_hz": 1337,
+   "lt150": 0.189,
+   "gt4k": 0.059
+  },
+  {
+   "start_ms": 12240,
+   "end_ms": 13040,
+   "len_ms": 800,
+   "peak_db": -24.0,
+   "rms_db": -36.8,
+   "centroid_hz": 2077,
+   "lt150": 0.014,
+   "gt4k": 0.132
+  },
+  {
+   "start_ms": 14490,
+   "end_ms": 14640,
+   "len_ms": 150,
+   "peak_db": -37.5,
+   "rms_db": -42.6,
+   "centroid_hz": 1908,
+   "lt150": 0.004,
+   "gt4k": 0.087
+  },
+  {
+   "start_ms": 14800,
+   "end_ms": 15270,
+   "len_ms": 470,
+   "peak_db": -27.7,
+   "rms_db": -35.4,
+   "centroid_hz": 3339,
+   "lt150": 0.003,
+   "gt4k": 0.277
+  },
+  {
+   "start_ms": 16790,
+   "end_ms": 17050,
+   "len_ms": 260,
+   "peak_db": -25.4,
+   "rms_db": -34.1,
+   "centroid_hz": 3436,
+   "lt150": 0.013,
+   "gt4k": 0.253
+  },
+  {
+   "start_ms": 17260,
+   "end_ms": 17700,
+   "len_ms": 440,
+   "peak_db": -32.9,
+   "rms_db": -38.9,
+   "centroid_hz": 3974,
+   "lt150": 0.006,
+   "gt4k": 0.338
+  },
+  {
+   "start_ms": 20270,
+   "end_ms": 21460,
+   "len_ms": 1190,
+   "peak_db": -27.6,
+   "rms_db": -36.9,
+   "centroid_hz": 3289,
+   "lt150": 0.036,
+   "gt4k": 0.268
+  },
+  {
+   "start_ms": 22570,
+   "end_ms": 23410,
+   "len_ms": 840,
+   "peak_db": -13.9,
+   "rms_db": -27.0,
+   "centroid_hz": 1247,
+   "lt150": 0.048,
+   "gt4k": 0.034
+  },
+  {
+   "start_ms": 25140,
+   "end_ms": 25210,
+   "len_ms": 70,
+   "peak_db": -32.6,
+   "rms_db": -37.8,
+   "centroid_hz": 1895,
+   "lt150": 0.027,
+   "gt4k": 0.108
+  },
+  {
+   "start_ms": 26580,
+   "end_ms": 27070,
+   "len_ms": 490,
+   "peak_db": -23.3,
+   "rms_db": -32.3,
+   "centroid_hz": 2187,
+   "lt150": 0.027,
+   "gt4k": 0.138
+  },
+  {
+   "start_ms": 27340,
+   "end_ms": 28710,
+   "len_ms": 1370,
+   "peak_db": -22.9,
+   "rms_db": -37.6,
+   "centroid_hz": 2095,
+   "lt150": 0.03,
+   "gt4k": 0.129
+  },
+  {
+   "start_ms": 28950,
+   "end_ms": 29180,
+   "len_ms": 230,
+   "peak_db": -32.9,
+   "rms_db": -43.2,
+   "centroid_hz": 2262,
+   "lt150": 0.051,
+   "gt4k": 0.139
+  },
+  {
+   "start_ms": 29440,
+   "end_ms": 29680,
+   "len_ms": 240,
+   "peak_db": -40.6,
+   "rms_db": -43.8,
+   "centroid_hz": 5061,
+   "lt150": 0.007,
+   "gt4k": 0.404
+  },
+  {
+   "start_ms": 29800,
+   "end_ms": 30090,
+   "len_ms": 290,
+   "peak_db": -11.4,
+   "rms_db": -22.8,
+   "centroid_hz": 869,
+   "lt150": 0.166,
+   "gt4k": 0.029
+  },
+  {
+   "start_ms": 31020,
+   "end_ms": 31450,
+   "len_ms": 430,
+   "peak_db": -19.2,
+   "rms_db": -29.2,
+   "centroid_hz": 1741,
+   "lt150": 0.035,
+   "gt4k": 0.11
+  },
+  {
+   "start_ms": 32590,
+   "end_ms": 33910,
+   "len_ms": 1320,
+   "peak_db": -27.9,
+   "rms_db": -37.9,
+   "centroid_hz": 2656,
+   "lt150": 0.036,
+   "gt4k": 0.228
+  },
+  {
+   "start_ms": 34400,
+   "end_ms": 34920,
+   "len_ms": 520,
+   "peak_db": -24.2,
+   "rms_db": -36.1,
+   "centroid_hz": 1163,
+   "lt150": 0.119,
+   "gt4k": 0.023
+  },
+  {
+   "start_ms": 36960,
+   "end_ms": 37220,
+   "len_ms": 260,
+   "peak_db": -31.7,
+   "rms_db": -39.1,
+   "centroid_hz": 1829,
+   "lt150": 0.038,
+   "gt4k": 0.106
+  },
+  {
+   "start_ms": 37350,
+   "end_ms": 37570,
+   "len_ms": 220,
+   "peak_db": -31.2,
+   "rms_db": -42.4,
+   "centroid_hz": 2149,
+   "lt150": 0.002,
+   "gt4k": 0.106
+  },
+  {
+   "start_ms": 38580,
+   "end_ms": 38610,
+   "len_ms": 30,
+   "peak_db": -30.7,
+   "rms_db": -35.0,
+   "centroid_hz": 672,
+   "lt150": 0.0,
+   "gt4k": 0.005
+  },
+  {
+   "start_ms": 39140,
+   "end_ms": 39410,
+   "len_ms": 270,
+   "peak_db": -13.0,
+   "rms_db": -20.2,
+   "centroid_hz": 1006,
+   "lt150": 0.066,
+   "gt4k": 0.031
+  },
+  {
+   "start_ms": 41400,
+   "end_ms": 41750,
+   "len_ms": 350,
+   "peak_db": -10.8,
+   "rms_db": -21.2,
+   "centroid_hz": 827,
+   "lt150": 0.05,
+   "gt4k": 0.022
+  },
+  {
+   "start_ms": 43270,
+   "end_ms": 43430,
+   "len_ms": 160,
+   "peak_db": -40.1,
+   "rms_db": -44.2,
+   "centroid_hz": 2988,
+   "lt150": 0.009,
+   "gt4k": 0.194
+  },
+  {
+   "start_ms": 44050,
+   "end_ms": 44310,
+   "len_ms": 260,
+   "peak_db": -34.2,
+   "rms_db": -41.0,
+   "centroid_hz": 4614,
+   "lt150": 0.016,
+   "gt4k": 0.358
+  },
+  {
+   "start_ms": 44470,
+   "end_ms": 45700,
+   "len_ms": 1230,
+   "peak_db": -24.6,
+   "rms_db": -39.7,
+   "centroid_hz": 2659,
+   "lt150": 0.05,
+   "gt4k": 0.196
+  },
+  {
+   "start_ms": 46000,
+   "end_ms": 46150,
+   "len_ms": 150,
+   "peak_db": -41.0,
+   "rms_db": -46.3,
+   "centroid_hz": 2030,
+   "lt150": 0.004,
+   "gt4k": 0.102
+  },
+  {
+   "start_ms": 46410,
+   "end_ms": 46660,
+   "len_ms": 250,
+   "peak_db": -34.1,
+   "rms_db": -39.9,
+   "centroid_hz": 1395,
+   "lt150": 0.101,
+   "gt4k": 0.052
+  },
+  {
+   "start_ms": 46830,
+   "end_ms": 47260,
+   "len_ms": 430,
+   "peak_db": -29.8,
+   "rms_db": -40.1,
+   "centroid_hz": 2605,
+   "lt150": 0.007,
+   "gt4k": 0.176
+  },
+  {
+   "start_ms": 47490,
+   "end_ms": 47600,
+   "len_ms": 110,
+   "peak_db": -41.4,
+   "rms_db": -46.5,
+   "centroid_hz": 1884,
+   "lt150": 0.009,
+   "gt4k": 0.097
+  },
+  {
+   "start_ms": 48350,
+   "end_ms": 48780,
+   "len_ms": 430,
+   "peak_db": -37.8,
+   "rms_db": -43.6,
+   "centroid_hz": 2425,
+   "lt150": 0.008,
+   "gt4k": 0.141
+  },
+  {
+   "start_ms": 48960,
+   "end_ms": 49060,
+   "len_ms": 100,
+   "peak_db": -42.6,
+   "rms_db": -46.6,
+   "centroid_hz": 2348,
+   "lt150": 0.002,
+   "gt4k": 0.136
+  },
+  {
+   "start_ms": 49210,
+   "end_ms": 49250,
+   "len_ms": 40,
+   "peak_db": -39.8,
+   "rms_db": -42.0,
+   "centroid_hz": 3704,
+   "lt150": 0.0,
+   "gt4k": 0.318
+  },
+  {
+   "start_ms": 49580,
+   "end_ms": 50030,
+   "len_ms": 450,
+   "peak_db": -21.7,
+   "rms_db": -29.6,
+   "centroid_hz": 1208,
+   "lt150": 0.078,
+   "gt4k": 0.041
+  },
+  {
+   "start_ms": 50430,
+   "end_ms": 50460,
+   "len_ms": 30,
+   "peak_db": -36.6,
+   "rms_db": -38.9,
+   "centroid_hz": 1343,
+   "lt150": 0.002,
+   "gt4k": 0.01
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rogue Waves - Metal Tensions/MUSCStngr_Pick Scrape Down, Short, Overdriven_RogueWaves_MetalTensions.wav": [
+  {
+   "start_ms": 0,
+   "end_ms": 1080,
+   "len_ms": 1080,
+   "peak_db": -14.2,
+   "rms_db": -16.3,
+   "centroid_hz": 1796,
+   "lt150": 0.007,
+   "gt4k": 0.06
+  },
+  {
+   "start_ms": 2000,
+   "end_ms": 2820,
+   "len_ms": 820,
+   "peak_db": -14.6,
+   "rms_db": -16.4,
+   "centroid_hz": 1984,
+   "lt150": 0.014,
+   "gt4k": 0.069
+  },
+  {
+   "start_ms": 4000,
+   "end_ms": 5120,
+   "len_ms": 1120,
+   "peak_db": -14.5,
+   "rms_db": -16.5,
+   "centroid_hz": 1842,
+   "lt150": 0.009,
+   "gt4k": 0.062
+  },
+  {
+   "start_ms": 6000,
+   "end_ms": 7530,
+   "len_ms": 1530,
+   "peak_db": -13.2,
+   "rms_db": -16.1,
+   "centroid_hz": 1739,
+   "lt150": 0.005,
+   "gt4k": 0.05
+  },
+  {
+   "start_ms": 8660,
+   "end_ms": 10380,
+   "len_ms": 1720,
+   "peak_db": -13.1,
+   "rms_db": -17.0,
+   "centroid_hz": 1263,
+   "lt150": 0.01,
+   "gt4k": 0.029
+  },
+  {
+   "start_ms": 11330,
+   "end_ms": 13220,
+   "len_ms": 1890,
+   "peak_db": -14.0,
+   "rms_db": -16.0,
+   "centroid_hz": 854,
+   "lt150": 0.017,
+   "gt4k": 0.018
+  },
+  {
+   "start_ms": 14000,
+   "end_ms": 16270,
+   "len_ms": 2270,
+   "peak_db": -14.2,
+   "rms_db": -16.2,
+   "centroid_hz": 1071,
+   "lt150": 0.037,
+   "gt4k": 0.025
+  },
+  {
+   "start_ms": 17330,
+   "end_ms": 22230,
+   "len_ms": 4900,
+   "peak_db": -14.2,
+   "rms_db": -16.0,
+   "centroid_hz": 1021,
+   "lt150": 0.026,
+   "gt4k": 0.024
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rogue Waves - Metal Tensions/MUSCStngr_Open String Dive Bomb Down, Whammy bar, Low_RogueWaves_MetalTensions_13.wav": [
+  {
+   "start_ms": 0,
+   "end_ms": 5250,
+   "len_ms": 5250,
+   "peak_db": -34.1,
+   "rms_db": -43.8,
+   "centroid_hz": 750,
+   "lt150": 0.003,
+   "gt4k": 0.001
+  },
+  {
+   "start_ms": 7110,
+   "end_ms": 11100,
+   "len_ms": 3990,
+   "peak_db": -35.8,
+   "rms_db": -44.5,
+   "centroid_hz": 809,
+   "lt150": 0.0,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 11450,
+   "end_ms": 14520,
+   "len_ms": 3070,
+   "peak_db": -55.0,
+   "rms_db": -60.5,
+   "centroid_hz": 196,
+   "lt150": 0.565,
+   "gt4k": 0.0
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Rogue Waves - Metal Tensions/MUSCStngr_Plastic Comb Scraping Strings, 2, Overdriven_RogueWaves_MetalTensions.wav": [
+  {
+   "start_ms": 0,
+   "end_ms": 2700,
+   "len_ms": 2700,
+   "peak_db": -13.6,
+   "rms_db": -17.1,
+   "centroid_hz": 1193,
+   "lt150": 0.078,
+   "gt4k": 0.034
+  },
+  {
+   "start_ms": 3130,
+   "end_ms": 4500,
+   "len_ms": 1370,
+   "peak_db": -12.0,
+   "rms_db": -16.4,
+   "centroid_hz": 1085,
+   "lt150": 0.048,
+   "gt4k": 0.029
+  },
+  {
+   "start_ms": 4960,
+   "end_ms": 8380,
+   "len_ms": 3420,
+   "peak_db": -14.1,
+   "rms_db": -17.2,
+   "centroid_hz": 1638,
+   "lt150": 0.033,
+   "gt4k": 0.051
+  },
+  {
+   "start_ms": 8830,
+   "end_ms": 11890,
+   "len_ms": 3060,
+   "peak_db": -13.0,
+   "rms_db": -16.6,
+   "centroid_hz": 1102,
+   "lt150": 0.079,
+   "gt4k": 0.03
+  },
+  {
+   "start_ms": 12340,
+   "end_ms": 14050,
+   "len_ms": 1710,
+   "peak_db": -13.8,
+   "rms_db": -17.1,
+   "centroid_hz": 1226,
+   "lt150": 0.066,
+   "gt4k": 0.032
+  },
+  {
+   "start_ms": 14500,
+   "end_ms": 16210,
+   "len_ms": 1710,
+   "peak_db": -15.4,
+   "rms_db": -17.5,
+   "centroid_hz": 1443,
+   "lt150": 0.041,
+   "gt4k": 0.036
+  },
+  {
+   "start_ms": 16660,
+   "end_ms": 18640,
+   "len_ms": 1980,
+   "peak_db": -14.7,
+   "rms_db": -17.3,
+   "centroid_hz": 1532,
+   "lt150": 0.038,
+   "gt4k": 0.046
+  },
+  {
+   "start_ms": 19080,
+   "end_ms": 21600,
+   "len_ms": 2520,
+   "peak_db": -12.0,
+   "rms_db": -16.7,
+   "centroid_hz": 1262,
+   "lt150": 0.047,
+   "gt4k": 0.033
+  },
+  {
+   "start_ms": 22050,
+   "end_ms": 24330,
+   "len_ms": 2280,
+   "peak_db": -14.7,
+   "rms_db": -17.4,
+   "centroid_hz": 1280,
+   "lt150": 0.061,
+   "gt4k": 0.035
+  },
+  {
+   "start_ms": 24790,
+   "end_ms": 28290,
+   "len_ms": 3500,
+   "peak_db": -13.3,
+   "rms_db": -17.5,
+   "centroid_hz": 1349,
+   "lt150": 0.067,
+   "gt4k": 0.04
+  },
+  {
+   "start_ms": 28740,
+   "end_ms": 44750,
+   "len_ms": 16010,
+   "peak_db": -13.3,
+   "rms_db": -17.2,
+   "centroid_hz": 1240,
+   "lt150": 0.06,
+   "gt4k": 0.034
+  },
+  {
+   "start_ms": 45170,
+   "end_ms": 55010,
+   "len_ms": 9840,
+   "peak_db": -14.1,
+   "rms_db": -17.9,
+   "centroid_hz": 1681,
+   "lt150": 0.036,
+   "gt4k": 0.046
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Mechanical Wave - Sound Effects Collection/BELLHand_Metallic Bell_ 22_MWSFX_SEC.wav": [
+  {
+   "start_ms": 30,
+   "end_ms": 1320,
+   "len_ms": 1290,
+   "peak_db": -12.6,
+   "rms_db": -22.9,
+   "centroid_hz": 5695,
+   "lt150": 0.0,
+   "gt4k": 0.904
+  },
+  {
+   "start_ms": 1470,
+   "end_ms": 1580,
+   "len_ms": 110,
+   "peak_db": -46.5,
+   "rms_db": -46.9,
+   "centroid_hz": 1236,
+   "lt150": 0.007,
+   "gt4k": 0.001
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - The Vehicle Doors and More Library/Man Lions Coach - VAR SFX - Horn Various - Mono - RSM191.wav": [
+  {
+   "start_ms": 1510,
+   "end_ms": 2060,
+   "len_ms": 550,
+   "peak_db": -10.3,
+   "rms_db": -11.9,
+   "centroid_hz": 2499,
+   "lt150": 0.004,
+   "gt4k": 0.022
+  },
+  {
+   "start_ms": 5120,
+   "end_ms": 5860,
+   "len_ms": 740,
+   "peak_db": -10.5,
+   "rms_db": -11.7,
+   "centroid_hz": 2487,
+   "lt150": 0.003,
+   "gt4k": 0.022
+  },
+  {
+   "start_ms": 23780,
+   "end_ms": 24350,
+   "len_ms": 570,
+   "peak_db": -11.3,
+   "rms_db": -13.3,
+   "centroid_hz": 2361,
+   "lt150": 0.0,
+   "gt4k": 0.02
+  },
+  {
+   "start_ms": 46420,
+   "end_ms": 46980,
+   "len_ms": 560,
+   "peak_db": -10.7,
+   "rms_db": -12.2,
+   "centroid_hz": 2538,
+   "lt150": 0.001,
+   "gt4k": 0.027
+  },
+  {
+   "start_ms": 55360,
+   "end_ms": 55920,
+   "len_ms": 560,
+   "peak_db": -11.2,
+   "rms_db": -12.8,
+   "centroid_hz": 2154,
+   "lt150": 0.0,
+   "gt4k": 0.025
+  },
+  {
+   "start_ms": 59930,
+   "end_ms": 60870,
+   "len_ms": 940,
+   "peak_db": -9.4,
+   "rms_db": -10.8,
+   "centroid_hz": 2399,
+   "lt150": 0.0,
+   "gt4k": 0.018
+  },
+  {
+   "start_ms": 64160,
+   "end_ms": 64460,
+   "len_ms": 300,
+   "peak_db": -11.2,
+   "rms_db": -14.0,
+   "centroid_hz": 2205,
+   "lt150": 0.0,
+   "gt4k": 0.024
+  },
+  {
+   "start_ms": 67510,
+   "end_ms": 67790,
+   "len_ms": 280,
+   "peak_db": -11.0,
+   "rms_db": -14.1,
+   "centroid_hz": 2330,
+   "lt150": 0.0,
+   "gt4k": 0.024
+  },
+  {
+   "start_ms": 67920,
+   "end_ms": 68230,
+   "len_ms": 310,
+   "peak_db": -11.2,
+   "rms_db": -13.7,
+   "centroid_hz": 2323,
+   "lt150": 0.0,
+   "gt4k": 0.023
+  },
+  {
+   "start_ms": 71070,
+   "end_ms": 71590,
+   "len_ms": 520,
+   "peak_db": -10.8,
+   "rms_db": -12.6,
+   "centroid_hz": 2329,
+   "lt150": 0.0,
+   "gt4k": 0.021
+  },
+  {
+   "start_ms": 71770,
+   "end_ms": 72530,
+   "len_ms": 760,
+   "peak_db": -11.1,
+   "rms_db": -12.5,
+   "centroid_hz": 2264,
+   "lt150": 0.0,
+   "gt4k": 0.023
+  },
+  {
+   "start_ms": 75710,
+   "end_ms": 76640,
+   "len_ms": 930,
+   "peak_db": -11.5,
+   "rms_db": -14.5,
+   "centroid_hz": 2254,
+   "lt150": 0.0,
+   "gt4k": 0.022
+  },
+  {
+   "start_ms": 79310,
+   "end_ms": 79800,
+   "len_ms": 490,
+   "peak_db": -11.7,
+   "rms_db": -13.3,
+   "centroid_hz": 2208,
+   "lt150": 0.0,
+   "gt4k": 0.024
+  },
+  {
+   "start_ms": 79920,
+   "end_ms": 80430,
+   "len_ms": 510,
+   "peak_db": -11.7,
+   "rms_db": -13.4,
+   "centroid_hz": 2217,
+   "lt150": 0.0,
+   "gt4k": 0.023
+  },
+  {
+   "start_ms": 80550,
+   "end_ms": 81190,
+   "len_ms": 640,
+   "peak_db": -12.2,
+   "rms_db": -13.5,
+   "centroid_hz": 2171,
+   "lt150": 0.0,
+   "gt4k": 0.027
+  },
+  {
+   "start_ms": 83870,
+   "end_ms": 84070,
+   "len_ms": 200,
+   "peak_db": -11.9,
+   "rms_db": -16.3,
+   "centroid_hz": 2350,
+   "lt150": 0.0,
+   "gt4k": 0.027
+  },
+  {
+   "start_ms": 86940,
+   "end_ms": 87400,
+   "len_ms": 460,
+   "peak_db": -13.3,
+   "rms_db": -17.1,
+   "centroid_hz": 2157,
+   "lt150": 0.0,
+   "gt4k": 0.031
+  },
+  {
+   "start_ms": 89900,
+   "end_ms": 101020,
+   "len_ms": 11120,
+   "peak_db": -8.7,
+   "rms_db": -11.6,
+   "centroid_hz": 2093,
+   "lt150": 0.0,
+   "gt4k": 0.036
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - Ferrari 458 2013/Ferrari 458 Straight Pipes - t11 - VAR SFX - Horn Various - Wide AB - MKH8060.wav": [
+  {
+   "start_ms": 370,
+   "end_ms": 1580,
+   "len_ms": 1210,
+   "peak_db": -17.8,
+   "rms_db": -22.4,
+   "centroid_hz": 876,
+   "lt150": 0.001,
+   "gt4k": 0.005
+  },
+  {
+   "start_ms": 1730,
+   "end_ms": 1820,
+   "len_ms": 90,
+   "peak_db": -51.3,
+   "rms_db": -53.1,
+   "centroid_hz": 292,
+   "lt150": 0.859,
+   "gt4k": 0.008
+  },
+  {
+   "start_ms": 2280,
+   "end_ms": 2780,
+   "len_ms": 500,
+   "peak_db": -50.6,
+   "rms_db": -53.9,
+   "centroid_hz": 256,
+   "lt150": 0.962,
+   "gt4k": 0.018
+  },
+  {
+   "start_ms": 4780,
+   "end_ms": 6920,
+   "len_ms": 2140,
+   "peak_db": -17.8,
+   "rms_db": -19.4,
+   "centroid_hz": 878,
+   "lt150": 0.0,
+   "gt4k": 0.005
+  },
+  {
+   "start_ms": 7570,
+   "end_ms": 7680,
+   "len_ms": 110,
+   "peak_db": -52.1,
+   "rms_db": -54.4,
+   "centroid_hz": 255,
+   "lt150": 0.935,
+   "gt4k": 0.013
+  },
+  {
+   "start_ms": 8870,
+   "end_ms": 8940,
+   "len_ms": 70,
+   "peak_db": -51.7,
+   "rms_db": -54.1,
+   "centroid_hz": 182,
+   "lt150": 0.972,
+   "gt4k": 0.011
+  },
+  {
+   "start_ms": 9460,
+   "end_ms": 10490,
+   "len_ms": 1030,
+   "peak_db": -17.9,
+   "rms_db": -21.1,
+   "centroid_hz": 876,
+   "lt150": 0.0,
+   "gt4k": 0.005
+  },
+  {
+   "start_ms": 10670,
+   "end_ms": 11240,
+   "len_ms": 570,
+   "peak_db": -50.2,
+   "rms_db": -53.8,
+   "centroid_hz": 293,
+   "lt150": 0.86,
+   "gt4k": 0.01
+  },
+  {
+   "start_ms": 11420,
+   "end_ms": 11510,
+   "len_ms": 90,
+   "peak_db": -52.1,
+   "rms_db": -53.8,
+   "centroid_hz": 168,
+   "lt150": 0.953,
+   "gt4k": 0.009
+  },
+  {
+   "start_ms": 11680,
+   "end_ms": 11810,
+   "len_ms": 130,
+   "peak_db": -50.8,
+   "rms_db": -53.6,
+   "centroid_hz": 310,
+   "lt150": 0.939,
+   "gt4k": 0.027
+  },
+  {
+   "start_ms": 12180,
+   "end_ms": 12250,
+   "len_ms": 70,
+   "peak_db": -51.7,
+   "rms_db": -54.4,
+   "centroid_hz": 205,
+   "lt150": 0.967,
+   "gt4k": 0.013
+  },
+  {
+   "start_ms": 12670,
+   "end_ms": 13490,
+   "len_ms": 820,
+   "peak_db": -17.9,
+   "rms_db": -21.0,
+   "centroid_hz": 882,
+   "lt150": 0.0,
+   "gt4k": 0.006
+  },
+  {
+   "start_ms": 13830,
+   "end_ms": 13980,
+   "len_ms": 150,
+   "peak_db": -51.7,
+   "rms_db": -53.7,
+   "centroid_hz": 353,
+   "lt150": 0.791,
+   "gt4k": 0.009
+  },
+  {
+   "start_ms": 15730,
+   "end_ms": 24800,
+   "len_ms": 9070,
+   "peak_db": -17.6,
+   "rms_db": -18.2,
+   "centroid_hz": 877,
+   "lt150": 0.0,
+   "gt4k": 0.006
+  },
+  {
+   "start_ms": 24960,
+   "end_ms": 25320,
+   "len_ms": 360,
+   "peak_db": -51.1,
+   "rms_db": -54.1,
+   "centroid_hz": 232,
+   "lt150": 0.912,
+   "gt4k": 0.011
+  },
+  {
+   "start_ms": 25450,
+   "end_ms": 25500,
+   "len_ms": 50,
+   "peak_db": -51.9,
+   "rms_db": -53.6,
+   "centroid_hz": 219,
+   "lt150": 0.941,
+   "gt4k": 0.011
+  },
+  {
+   "start_ms": 26070,
+   "end_ms": 26420,
+   "len_ms": 350,
+   "peak_db": -51.1,
+   "rms_db": -53.7,
+   "centroid_hz": 159,
+   "lt150": 0.975,
+   "gt4k": 0.009
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - McLaren 720S Spider SSG 2019/McLaren 720S - t14 - VAR SFX - Horn Various - ENGINE - DPA4061.wav": [
+  {
+   "start_ms": 0,
+   "end_ms": 4640,
+   "len_ms": 4640,
+   "peak_db": -20.2,
+   "rms_db": -30.7,
+   "centroid_hz": 14,
+   "lt150": 0.998,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 6350,
+   "end_ms": 18860,
+   "len_ms": 12510,
+   "peak_db": -25.1,
+   "rms_db": -33.2,
+   "centroid_hz": 63,
+   "lt150": 0.938,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 19150,
+   "end_ms": 19190,
+   "len_ms": 40,
+   "peak_db": -49.0,
+   "rms_db": -51.7,
+   "centroid_hz": 808,
+   "lt150": 0.05,
+   "gt4k": 0.018
+  },
+  {
+   "start_ms": 19490,
+   "end_ms": 19680,
+   "len_ms": 190,
+   "peak_db": -49.3,
+   "rms_db": -54.0,
+   "centroid_hz": 1254,
+   "lt150": 0.651,
+   "gt4k": 0.151
+  },
+  {
+   "start_ms": 19810,
+   "end_ms": 20310,
+   "len_ms": 500,
+   "peak_db": -48.9,
+   "rms_db": -55.8,
+   "centroid_hz": 226,
+   "lt150": 0.782,
+   "gt4k": 0.005
+  },
+  {
+   "start_ms": 20500,
+   "end_ms": 23110,
+   "len_ms": 2610,
+   "peak_db": -24.8,
+   "rms_db": -28.3,
+   "centroid_hz": 817,
+   "lt150": 0.001,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 23620,
+   "end_ms": 23690,
+   "len_ms": 70,
+   "peak_db": -51.7,
+   "rms_db": -56.0,
+   "centroid_hz": 446,
+   "lt150": 0.589,
+   "gt4k": 0.013
+  },
+  {
+   "start_ms": 24200,
+   "end_ms": 24280,
+   "len_ms": 80,
+   "peak_db": -52.9,
+   "rms_db": -56.0,
+   "centroid_hz": 269,
+   "lt150": 0.741,
+   "gt4k": 0.008
+  },
+  {
+   "start_ms": 24410,
+   "end_ms": 24550,
+   "len_ms": 140,
+   "peak_db": -49.7,
+   "rms_db": -55.7,
+   "centroid_hz": 243,
+   "lt150": 0.752,
+   "gt4k": 0.007
+  },
+  {
+   "start_ms": 25240,
+   "end_ms": 30970,
+   "len_ms": 5730,
+   "peak_db": -24.2,
+   "rms_db": -28.1,
+   "centroid_hz": 812,
+   "lt150": 0.001,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 31480,
+   "end_ms": 32330,
+   "len_ms": 850,
+   "peak_db": -51.5,
+   "rms_db": -56.7,
+   "centroid_hz": 316,
+   "lt150": 0.706,
+   "gt4k": 0.014
+  },
+  {
+   "start_ms": 32450,
+   "end_ms": 32770,
+   "len_ms": 320,
+   "peak_db": -50.2,
+   "rms_db": -57.3,
+   "centroid_hz": 353,
+   "lt150": 0.632,
+   "gt4k": 0.013
+  },
+  {
+   "start_ms": 32900,
+   "end_ms": 33060,
+   "len_ms": 160,
+   "peak_db": -52.9,
+   "rms_db": -56.0,
+   "centroid_hz": 171,
+   "lt150": 0.84,
+   "gt4k": 0.006
+  },
+  {
+   "start_ms": 33180,
+   "end_ms": 33280,
+   "len_ms": 100,
+   "peak_db": -51.7,
+   "rms_db": -56.8,
+   "centroid_hz": 633,
+   "lt150": 0.599,
+   "gt4k": 0.046
+  },
+  {
+   "start_ms": 33430,
+   "end_ms": 35980,
+   "len_ms": 2550,
+   "peak_db": -24.5,
+   "rms_db": -29.0,
+   "centroid_hz": 770,
+   "lt150": 0.027,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 36100,
+   "end_ms": 47240,
+   "len_ms": 11140,
+   "peak_db": -24.7,
+   "rms_db": -27.3,
+   "centroid_hz": 797,
+   "lt150": 0.016,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 47380,
+   "end_ms": 49140,
+   "len_ms": 1760,
+   "peak_db": -40.9,
+   "rms_db": -53.9,
+   "centroid_hz": 178,
+   "lt150": 0.829,
+   "gt4k": 0.006
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Dramatic Cat - Audi Q7/VEHHorn_Audi Q7 EXTERIOR Horn Short And Long MONO_DRCA_AUQ7_Kmr81i.wav": [
+  {
+   "start_ms": 50,
+   "end_ms": 320,
+   "len_ms": 270,
+   "peak_db": -9.4,
+   "rms_db": -12.1,
+   "centroid_hz": 870,
+   "lt150": 0.0,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 1280,
+   "end_ms": 1530,
+   "len_ms": 250,
+   "peak_db": -9.3,
+   "rms_db": -11.9,
+   "centroid_hz": 931,
+   "lt150": 0.0,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 2510,
+   "end_ms": 4170,
+   "len_ms": 1660,
+   "peak_db": -9.0,
+   "rms_db": -9.9,
+   "centroid_hz": 926,
+   "lt150": 0.0,
+   "gt4k": 0.0
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/UberDuo - The Mountain Townhouse Audio Playset/BEEPAppl_Microwave, Beeps_UberDuo_TOWN.wav": [
+  {
+   "start_ms": 490,
+   "end_ms": 550,
+   "len_ms": 60,
+   "peak_db": -48.9,
+   "rms_db": -51.2,
+   "centroid_hz": 5,
+   "lt150": 1.0,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 2050,
+   "end_ms": 2740,
+   "len_ms": 690,
+   "peak_db": -25.1,
+   "rms_db": -35.2,
+   "centroid_hz": 5,
+   "lt150": 1.0,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 3020,
+   "end_ms": 3270,
+   "len_ms": 250,
+   "peak_db": -30.7,
+   "rms_db": -35.1,
+   "centroid_hz": 2006,
+   "lt150": 0.0,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 3490,
+   "end_ms": 3920,
+   "len_ms": 430,
+   "peak_db": -36.2,
+   "rms_db": -43.9,
+   "centroid_hz": 2,
+   "lt150": 1.0,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 5050,
+   "end_ms": 6040,
+   "len_ms": 990,
+   "peak_db": -26.8,
+   "rms_db": -36.1,
+   "centroid_hz": 1632,
+   "lt150": 0.184,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 6640,
+   "end_ms": 6870,
+   "len_ms": 230,
+   "peak_db": -26.8,
+   "rms_db": -30.9,
+   "centroid_hz": 1998,
+   "lt150": 0.001,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 7700,
+   "end_ms": 8220,
+   "len_ms": 520,
+   "peak_db": -28.4,
+   "rms_db": -36.0,
+   "centroid_hz": 1997,
+   "lt150": 0.004,
+   "gt4k": 0.001
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Doex Studio - 90s Anime SFX Pack/Comedic_006.wav": [
+  {
+   "start_ms": 30,
+   "end_ms": 760,
+   "len_ms": 730,
+   "peak_db": -11.7,
+   "rms_db": -24.2,
+   "centroid_hz": 986,
+   "lt150": 0.0,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 1990,
+   "end_ms": 2720,
+   "len_ms": 730,
+   "peak_db": -11.7,
+   "rms_db": -24.2,
+   "centroid_hz": 986,
+   "lt150": 0.0,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 3990,
+   "end_ms": 4720,
+   "len_ms": 730,
+   "peak_db": -11.7,
+   "rms_db": -24.2,
+   "centroid_hz": 986,
+   "lt150": 0.0,
+   "gt4k": 0.0
+  },
+  {
+   "start_ms": 5950,
+   "end_ms": 6680,
+   "len_ms": 730,
+   "peak_db": -11.7,
+   "rms_db": -24.2,
+   "centroid_hz": 986,
+   "lt150": 0.0,
+   "gt4k": 0.0
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/UberDuo - Inhale \u2013 Owen \u2013 Character Playset/HMNBrth_Human, Adult, Male, Breath, Surprise, Gasp_UberDuo_INHL_17.wav": [
+  {
+   "start_ms": 210,
+   "end_ms": 500,
+   "len_ms": 290,
+   "peak_db": -12.6,
+   "rms_db": -18.4,
+   "centroid_hz": 2480,
+   "lt150": 0.001,
+   "gt4k": 0.237
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/BluezoneCorp - High Voltage/Bluezone_BC0299_electricity_surge_discharge_electrical_arc_crackling_002_01.wav": [
+  {
+   "start_ms": 0,
+   "end_ms": 3500,
+   "len_ms": 3500,
+   "peak_db": -4.3,
+   "rms_db": -11.8,
+   "centroid_hz": 1248,
+   "lt150": 0.183,
+   "gt4k": 0.053
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Justsoundeffects - Steampunk Gadgets/AIRBrst_Steam Release Short 03_JSE_SG_Mono.wav": [
+  {
+   "start_ms": 10,
+   "end_ms": 970,
+   "len_ms": 960,
+   "peak_db": -18.2,
+   "rms_db": -22.0,
+   "centroid_hz": 12647,
+   "lt150": 0.001,
+   "gt4k": 0.945
+  },
+  {
+   "start_ms": 2400,
+   "end_ms": 3480,
+   "len_ms": 1080,
+   "peak_db": -17.5,
+   "rms_db": -23.3,
+   "centroid_hz": 12346,
+   "lt150": 0.001,
+   "gt4k": 0.943
+  },
+  {
+   "start_ms": 4810,
+   "end_ms": 5620,
+   "len_ms": 810,
+   "peak_db": -18.2,
+   "rms_db": -23.1,
+   "centroid_hz": 9604,
+   "lt150": 0.002,
+   "gt4k": 0.834
+  },
+  {
+   "start_ms": 7220,
+   "end_ms": 8030,
+   "len_ms": 810,
+   "peak_db": -17.9,
+   "rms_db": -23.3,
+   "centroid_hz": 9840,
+   "lt150": 0.001,
+   "gt4k": 0.858
+  },
+  {
+   "start_ms": 9620,
+   "end_ms": 10590,
+   "len_ms": 970,
+   "peak_db": -18.7,
+   "rms_db": -24.9,
+   "centroid_hz": 10168,
+   "lt150": 0.0,
+   "gt4k": 0.913
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - The Warfare 2 Library/Tank Mine - EXPLOSION - Mounted on Metal Beam - DISTANT - AMBEO BLD.wav": [
+  {
+   "start_ms": 840,
+   "end_ms": 2650,
+   "len_ms": 1810,
+   "peak_db": -8.8,
+   "rms_db": -21.9,
+   "centroid_hz": 450,
+   "lt150": 0.645,
+   "gt4k": 0.013
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - The Warfare 2 Library/RPG - FIRING AND IMPACT - Through Car Roof Hit Metal - XY - MKH8040.wav": [
+  {
+   "start_ms": 310,
+   "end_ms": 1170,
+   "len_ms": 860,
+   "peak_db": -7.6,
+   "rms_db": -23.0,
+   "centroid_hz": 606,
+   "lt150": 0.493,
+   "gt4k": 0.015
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Sonic Bat - Videogame Foley Essentials Vol. II/SBvfe2_Glass 114.wav": [
+  {
+   "start_ms": 0,
+   "end_ms": 440,
+   "len_ms": 440,
+   "peak_db": -36.3,
+   "rms_db": -44.4,
+   "centroid_hz": 7013,
+   "lt150": 0.0,
+   "gt4k": 0.89
+  }
+ ],
+ "F:/games/forgeflow-games-assets/sonniss-gdc2024/Pole Position - Hammerli 280 22LR/H\u00e4mmerli 280 - VAR SFX - Grabs With Gloves - XY - RSM191.wav": [
+  {
+   "start_ms": 430,
+   "end_ms": 460,
+   "len_ms": 30,
+   "peak_db": -40.4,
+   "rms_db": -42.7,
+   "centroid_hz": 1937,
+   "lt150": 0.014,
+   "gt4k": 0.149
+  },
+  {
+   "start_ms": 930,
+   "end_ms": 970,
+   "len_ms": 40,
+   "peak_db": -50.7,
+   "rms_db": -52.8,
+   "centroid_hz": 5738,
+   "lt150": 0.003,
+   "gt4k": 0.852
+  },
+  {
+   "start_ms": 2450,
+   "end_ms": 2480,
+   "len_ms": 30,
+   "peak_db": -54.5,
+   "rms_db": -55.7,
+   "centroid_hz": 1996,
+   "lt150": 0.062,
+   "gt4k": 0.113
+  },
+  {
+   "start_ms": 3370,
+   "end_ms": 3400,
+   "len_ms": 30,
+   "peak_db": -47.5,
+   "rms_db": -50.3,
+   "centroid_hz": 5249,
+   "lt150": 0.004,
+   "gt4k": 0.611
+  },
+  {
+   "start_ms": 4390,
+   "end_ms": 4420,
+   "len_ms": 30,
+   "peak_db": -46.1,
+   "rms_db": -49.8,
+   "centroid_hz": 3519,
+   "lt150": 0.03,
+   "gt4k": 0.341
+  },
+  {
+   "start_ms": 5520,
+   "end_ms": 5550,
+   "len_ms": 30,
+   "peak_db": -40.9,
+   "rms_db": -45.3,
+   "centroid_hz": 3114,
+   "lt150": 0.023,
+   "gt4k": 0.252
+  },
+  {
+   "start_ms": 6410,
+   "end_ms": 6480,
+   "len_ms": 70,
+   "peak_db": -45.0,
+   "rms_db": -51.0,
+   "centroid_hz": 2374,
+   "lt150": 0.008,
+   "gt4k": 0.181
+  },
+  {
+   "start_ms": 7380,
+   "end_ms": 7410,
+   "len_ms": 30,
+   "peak_db": -41.8,
+   "rms_db": -46.1,
+   "centroid_hz": 2124,
+   "lt150": 0.013,
+   "gt4k": 0.143
+  },
+  {
+   "start_ms": 8410,
+   "end_ms": 8470,
+   "len_ms": 60,
+   "peak_db": -44.3,
+   "rms_db": -51.5,
+   "centroid_hz": 2627,
+   "lt150": 0.152,
+   "gt4k": 0.28
+  },
+  {
+   "start_ms": 9820,
+   "end_ms": 9890,
+   "len_ms": 70,
+   "peak_db": -23.1,
+   "rms_db": -31.4,
+   "centroid_hz": 4689,
+   "lt150": 0.0,
+   "gt4k": 0.435
+  },
+  {
+   "start_ms": 11720,
+   "end_ms": 11750,
+   "len_ms": 30,
+   "peak_db": -53.1,
+   "rms_db": -55.0,
+   "centroid_hz": 2574,
+   "lt150": 0.033,
+   "gt4k": 0.222
+  },
+  {
+   "start_ms": 14470,
+   "end_ms": 14500,
+   "len_ms": 30,
+   "peak_db": -56.3,
+   "rms_db": -58.3,
+   "centroid_hz": 1759,
+   "lt150": 0.085,
+   "gt4k": 0.099
+  }
+ ]
+}

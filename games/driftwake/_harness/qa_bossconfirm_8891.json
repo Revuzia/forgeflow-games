@@ -1,0 +1,31 @@
+{
+ "Q leash wipes fight state": {
+  "oldId": 9,
+  "newId": 12,
+  "before": {
+   "hp": 1100,
+   "hpMax": 1200,
+   "poise": 40,
+   "poiseMax": 160,
+   "chill": 0,
+   "brittleLeft": 3.9,
+   "breakLeft": 0,
+   "lvl": 10,
+   "name": "The Icewall",
+   "kind": "boss"
+  },
+  "after": {
+   "hp": 1200,
+   "hpMax": 1200,
+   "poise": 160,
+   "poiseMax": 160,
+   "chill": 0,
+   "brittleLeft": 0,
+   "breakLeft": 0,
+   "lvl": 10,
+   "name": "The Icewall",
+   "kind": "boss"
+  },
+  "leashReturns": 1
+ }
+}

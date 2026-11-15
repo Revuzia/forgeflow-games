@@ -1,0 +1,39 @@
+arena lanternwalk — colliders 518 boxes, nav baked
+
+== LIVE BATTERY — tdm/ctf/ffa × 3 seeds × 2 runs (real arena, real AI, Idle human) ==
+  tdm seed  1: end=311.5s result=win/1 kills=81 stress=0 spawnDeaths=0 stuckIdle=2s hash=5459e896
+  tdm seed  2: end=356.7s result=win/1 kills=92 stress=0 spawnDeaths=0 stuckIdle=2s hash=f0e8ae88
+  tdm seed  3: end=306.9s result=win/1 kills=89 stress=0 spawnDeaths=0 stuckIdle=2s hash=8654aecf
+  ctf seed  1: end=510.2s result=win/1 kills=122 caps=3 first@222.6s stress=5.5 spawnDeaths=0 stuckIdle=2s hash=9baf3aad
+  ctf seed  2: end=562.3s result=win/1 kills=110 caps=3 first@92.7s stress=5.5 spawnDeaths=0 stuckIdle=3s hash=df80399f
+  ctf seed  3: end=483.5s result=win/1 kills=100 caps=3 first@146s stress=5.4 spawnDeaths=0 stuckIdle=2s hash=6cec040
+  ffa seed  1: end=356.8s result=win/6 kills=137 stress=0.1 spawnDeaths=0 stuckIdle=2s hash=3358812f
+  ffa seed  2: end=433.2s result=win/6 kills=161 stress=0.1 spawnDeaths=0 stuckIdle=2s hash=6170c72d
+  ffa seed  3: end=427.9s result=win/9 kills=172 stress=0.1 spawnDeaths=0 stuckIdle=2s hash=6ad82fbd
+  info  battery wall time 310 s
+  PASS  AC-1 termination: every match ended within warmup+timeLimit+180+15 s
+  PASS  AC-2 watchdog: never fired
+  PASS  AC-3 result consistency: win/draw/forfeit + winner consistent with the deciding rule
+  PASS  AC-4 stuck bots: none PUSHING against the world >20 s without moving (<0.5 m)
+  info  worst stationary window of ANY kind 89 s (station/cover holds included — reported, not gated)
+  PASS  AC-7 determinism: same (mode,seed) twice → identical snapshot hash
+  PASS  AC-8 zero out-of-bounds deaths (the backstop never fired)
+  PASS  AC-9 zero deaths within 2.0 s of spawning
+  PASS  AC-10 median spawnStress/pick 0.071 ≤ 0.5 (ladder is not choosing spawns)
+  PASS  spawn director wired on every match (no silent fallback-picker demotion)
+  PASS  AC-11 (live): no spawn point reused <12 s without ladder stress
+  info  AC-11/AC-12 statistical halves (2000-selection sweep, ffaSafety shape, V10) live in core/match/spawns.selftest.cjs — run by the wave gate
+  PASS  AC-12 FFA battery first-class: 3 seeds, all ended, zero spawn deaths, director live
+  PASS  AC-5 three-state invariant held every sampled tick (no fourth state observed)
+  PASS  AC-5 flags.js invariantViolations === 0 in every match
+  PASS  AC-5 flagStuckResets === 0 in every match
+  PASS  AC-5 no flag DROPPED >45 s (worst 20.3 s; dropReturnS 30 enforces this)
+  PASS  AC-5 every flag ends AT_STAND or CARRIED
+  PASS  AC-6 stalemate forced reset ≤1 per match (worst 1)
+  PASS  AC-6 flag:captureBlocked fired 3× across the battery (rule reachable live)
+  info  AC-14 capture bar: 3/3 seeds with ≥1 capture; 0 capture-less seeds; median first capture 146 s
+  PASS  AC-14 PLAYABLE bar (≥8/20 seeds with a capture): 3/3
+  PASS  AC-14 SHIP bar reached (≥17/20, no 0-0, median first capture ≤150 s)
+
+---- matchprobe verdict ----
+20 passed, 0 failed, 0 skipped

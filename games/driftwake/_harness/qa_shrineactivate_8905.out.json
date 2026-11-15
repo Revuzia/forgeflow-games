@@ -1,0 +1,261 @@
+{
+ "walk": [
+  {
+   "arm": "walk",
+   "shrine": "shrine_e",
+   "before": "cold_spawn",
+   "after": "cold_spawn",
+   "minDist": 0,
+   "frames": 81,
+   "idsSeen": [
+    "cold_spawn"
+   ],
+   "shrinesKnown": 7
+  },
+  {
+   "arm": "walk",
+   "shrine": "shrine_ne",
+   "before": "cold_spawn",
+   "after": "cold_spawn",
+   "minDist": 0,
+   "frames": 81,
+   "idsSeen": [
+    "cold_spawn"
+   ],
+   "shrinesKnown": 7
+  },
+  {
+   "arm": "walk",
+   "shrine": "shrine_nw",
+   "before": "cold_spawn",
+   "after": "cold_spawn",
+   "minDist": 0,
+   "frames": 81,
+   "idsSeen": [
+    "cold_spawn"
+   ],
+   "shrinesKnown": 7
+  },
+  {
+   "arm": "walk",
+   "shrine": "shrine_w",
+   "before": "cold_spawn",
+   "after": "cold_spawn",
+   "minDist": 0,
+   "frames": 81,
+   "idsSeen": [
+    "cold_spawn"
+   ],
+   "shrinesKnown": 7
+  },
+  {
+   "arm": "walk",
+   "shrine": "shrine_sw",
+   "before": "cold_spawn",
+   "after": "cold_spawn",
+   "minDist": 0,
+   "frames": 81,
+   "idsSeen": [
+    "cold_spawn"
+   ],
+   "shrinesKnown": 7
+  },
+  {
+   "arm": "walk",
+   "shrine": "shrine_se",
+   "before": "cold_spawn",
+   "after": "cold_spawn",
+   "minDist": 0,
+   "frames": 81,
+   "idsSeen": [
+    "cold_spawn"
+   ],
+   "shrinesKnown": 7
+  }
+ ],
+ "dwell": [
+  {
+   "arm": "dwell",
+   "shrine": "shrine_e",
+   "before": "cold_spawn",
+   "after": "cold_spawn",
+   "gameSec": 6,
+   "dist": 0
+  },
+  {
+   "arm": "dwell",
+   "shrine": "shrine_ne",
+   "before": "cold_spawn",
+   "after": "cold_spawn",
+   "gameSec": 6,
+   "dist": 0
+  }
+ ],
+ "deaths": [
+  {
+   "tag": "no-touch@shrine_e",
+   "from": {
+    "x": 323,
+    "z": -18.5
+   },
+   "landed": {
+    "x": 5,
+    "z": 5.5
+   },
+   "lastShrineId": "cold_spawn",
+   "resolved": {
+    "x": 5,
+    "z": 5.5
+   },
+   "deadSeen": true,
+   "deaths": 1,
+   "hpFrac": 1,
+   "saveLastShrine": "cold_spawn"
+  },
+  {
+   "tag": "dead-centre@shrine_w",
+   "from": {
+    "x": -337,
+    "z": 13.5
+   },
+   "landed": {
+    "x": 5,
+    "z": 5.5
+   },
+   "lastShrineId": "cold_spawn",
+   "resolved": {
+    "x": 5,
+    "z": 5.5
+   },
+   "deadSeen": true,
+   "deaths": 1,
+   "hpFrac": 1,
+   "saveLastShrine": "cold_spawn"
+  }
+ ],
+ "static": {
+  "shrinePositions": [
+   {
+    "id": "cold_spawn",
+    "x": 5,
+    "z": 5.5
+   },
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6
+   }
+  ],
+  "progressionShrines": {
+   "cold_spawn": {
+    "x": 5,
+    "z": 5.5
+   },
+   "shrine_e": {
+    "x": 315,
+    "z": -18.5
+   },
+   "shrine_ne": {
+    "x": 172.00000000000003,
+    "z": 276.6088913245535
+   },
+   "shrine_nw": {
+    "x": -169.99999999999991,
+    "z": 340.60889132455355
+   },
+   "shrine_w": {
+    "x": -337,
+    "z": 13.500000000000043
+   },
+   "shrine_sw": {
+    "x": -138.00000000000014,
+    "z": -329.60889132455344
+   },
+   "shrine_se": {
+    "x": 147.99999999999977,
+    "z": -313.60889132455367
+   }
+  },
+  "lastShrineIdAtBoot": "cold_spawn",
+  "hasAddShrine": "function",
+  "hasRegisterShrine": "function",
+  "testMode": true,
+  "level": 1
+ },
+ "control": {
+  "tag": "CONTROL-addShrine@shrine_w",
+  "from": {
+   "x": -297,
+   "z": 53.5
+  },
+  "landed": {
+   "x": -337,
+   "z": 13.5
+  },
+  "lastShrineId": "shrine_w",
+  "resolved": {
+   "x": -337,
+   "z": 13.500000000000043
+  },
+  "deadSeen": true,
+  "deaths": 1,
+  "hpFrac": 1,
+  "saveLastShrine": "shrine_w",
+  "activated": "shrine_w"
+ },
+ "distance": [
+  {
+   "id": "cold_spawn",
+   "metresFromColdSpawn": 0
+  },
+  {
+   "id": "shrine_e",
+   "metresFromColdSpawn": 310.9
+  },
+  {
+   "id": "shrine_ne",
+   "metresFromColdSpawn": 318.4
+  },
+  {
+   "id": "shrine_nw",
+   "metresFromColdSpawn": 378.1
+  },
+  {
+   "id": "shrine_w",
+   "metresFromColdSpawn": 342.1
+  },
+  {
+   "id": "shrine_sw",
+   "metresFromColdSpawn": 364.3
+  },
+  {
+   "id": "shrine_se",
+   "metresFromColdSpawn": 349.7
+  }
+ ]
+}

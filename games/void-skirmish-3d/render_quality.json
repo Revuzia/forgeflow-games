@@ -1,0 +1,19 @@
+{
+ "slug": "void-skirmish-3d",
+ "dimension": "3d",
+ "render_path": "three-kernel",
+ "markers": {
+  "toneMapping": true,
+  "shadows": true,
+  "lights": true,
+  "postfx": true,
+  "pbr": true,
+  "srgb": true,
+  "textured": true
+ },
+ "missing": [],
+ "warnings": [],
+ "ok": true,
+ "verdict": "pass",
+ "reason": "AAA render markers present"
+}

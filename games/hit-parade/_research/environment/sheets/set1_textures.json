@@ -1,0 +1,630 @@
+[
+ {
+  "label": "GYP Wall_Rock_01 BLUE",
+  "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Rock/Wall_Rock_01_Blue_Albedo.tif",
+  "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Rock/Wall_Rock_01_Normal.tif",
+  "rough": null,
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "GYP Wall_Rock_01 GRAY",
+  "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Rock/Wall_Rock_01_Gray_Albedo.tif",
+  "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Rock/Wall_Rock_01_Normal.tif",
+  "rough": null,
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "GYP Wall_Rock_01 RED",
+  "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Rock/Wall_Rock_01_Red_Albedo.tif",
+  "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Rock/Wall_Rock_01_Normal.tif",
+  "rough": null,
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "GYP Wall_Brick_Basic",
+  "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Basic/Wall_Brick_Basic_Albedo.tif",
+  "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Basic/Wall_Brick_Basic_Normal.tif",
+  "rough": null,
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "GYP Brick_Wall_L BLUE (asset UV)",
+  "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Brick/Brick_Wall/Brick_Wall_L/Brick_Wall_L_Blue_Albedo.tif",
+  "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Brick/Brick_Wall/Brick_Wall_L/Brick_Wall_L_Normal.tif",
+  "rough": null,
+  "lic": "Unity Asset Store EULA",
+  "tile": false,
+  "albedo_size": [
+   4096,
+   4096
+  ],
+  "normal_size": [
+   4096,
+   4096
+  ]
+ },
+ {
+  "label": "GYP Wall_Brick_Damaged_01",
+  "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Damaged/Wall_Brick_Damaged_01_Albedo.tif",
+  "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Damaged/Wall_Brick_Damaged_01_Normal.tif",
+  "rough": null,
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "GYP Wall_Wood_01",
+  "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Wood/Wall_Wood_01_Albedo.tif",
+  "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Wood/Wall_Wood_01_Normal.tif",
+  "rough": null,
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "GYP Wall_Wood_Damaged_01",
+  "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Damaged/Wall_Wood_Damaged_01_Albedo.tif",
+  "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Damaged/Wall_Wood_Damaged_01_Normal.tif",
+  "rough": null,
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "GYP Door_Wood_01 RED (asset UV)",
+  "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Door/Door_Wood_01/Door_Wood_01_Red_Albedo.tif",
+  "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Door/Door_Wood_01/Door_Wood_01_Normal.tif",
+  "rough": null,
+  "lic": "Unity Asset Store EULA",
+  "tile": false,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "GYP Ground_02",
+  "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Ground/Ground_02_Albedo.tif",
+  "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Ground/Ground_02_Normal.tif",
+  "rough": null,
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "GYP Ground_03",
+  "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Ground/Ground_03_Albedo.tif",
+  "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Ground/Ground_03_Normal.tif",
+  "rough": null,
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "GYP Ground_04",
+  "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Ground/Ground_04_Albedo.tif",
+  "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Ground/Ground_04_Normal.tif",
+  "rough": null,
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "GYP Ground_05",
+  "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Ground/Ground_05_Albedo.tif",
+  "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Ground/Ground_05_Normal.tif",
+  "rough": null,
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "GYP Ground_06",
+  "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Ground/Ground_06_Albedo.tif",
+  "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Ground/Ground_06_Normal.tif",
+  "rough": null,
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "GYP Ground_07",
+  "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Ground/Ground_07_Albedo.tif",
+  "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Ground/Ground_07_Normal.tif",
+  "rough": null,
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "QMV T_UnevenBrick",
+  "albedo": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_UnevenBrick_BaseColor.png",
+  "normal": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_UnevenBrick_Normal.png",
+  "rough": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_UnevenBrick_Roughness.png",
+  "lic": "CC0 (Quaternius)",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "QMV T_Brick",
+  "albedo": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_Brick_BaseColor.png",
+  "normal": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_Brick_Normal.png",
+  "rough": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_Brick_Roughness.png",
+  "lic": "CC0 (Quaternius)",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "QMV T_RedBrick",
+  "albedo": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_RedBrick_BaseColor.png",
+  "normal": null,
+  "rough": null,
+  "lic": "CC0 (Quaternius)",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "QMV T_RockTrim (trim sheet)",
+  "albedo": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_RockTrim_BaseColor.png",
+  "normal": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_RockTrim_Normal.png",
+  "rough": null,
+  "lic": "CC0 (Quaternius)",
+  "tile": false,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "QMV T_WoodTrim (trim sheet)",
+  "albedo": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_WoodTrim_BaseColor.png",
+  "normal": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_WoodTrim_Normal.png",
+  "rough": null,
+  "lic": "CC0 (Quaternius)",
+  "tile": false,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "QFP T_Trim_Cloth (trim)",
+  "albedo": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Textures/T_Trim_Cloth_BaseColor.png",
+  "normal": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Textures/T_Trim_Cloth_Normal.png",
+  "rough": null,
+  "lic": "CC0 (Quaternius)",
+  "tile": false,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "QFP T_Trim_Metal (trim)",
+  "albedo": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Textures/T_Trim_Metal_BaseColor.png",
+  "normal": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Textures/T_Trim_Metal_Normal.png",
+  "rough": null,
+  "lic": "CC0 (Quaternius)",
+  "tile": false,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "Blink Dwarven_Wall",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Dwarven_Wall/Dwarven_Wall_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Dwarven_Wall/Dwarven_Wall_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Dwarven_Wall/Dwarven_Wall_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "Blink Stone_Gate",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Stone_Gate/Stone_Gate_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Stone_Gate/Stone_Gate_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Stone_Gate/Stone_Gate_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "Blink Wall_Chain",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Wall_Chain/Wall_Chain_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Wall_Chain/Wall_Chain_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Wall_Chain/Wall_Chain_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "Blink Floor_Sharp_Stones",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Floor_Sharp_Stones/Floor_Sharp_Stones_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Floor_Sharp_Stones/Floor_Sharp_Stones_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Floor_Sharp_Stones/Floor_Sharp_Stones_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "Blink Boss_Floor_1",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_1/Boss_Floor_1_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_1/Boss_Floor_1_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_1/Boss_Floor_1_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "Blink Boss_Floor_2",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_2/Boss_Floor_2_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_2/Boss_Floor_2_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_2/Boss_Floor_2_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "Astrofish Masonary_Walls",
+  "albedo": "F:/games/unity-assets/Astrofish Games__DETAILED - Medieval Village/Assets/ASTROFISH_GAMES/MEDIEVAL_SERIES/MEDIEVAL_VILLAGE_HD/_Assets/Masonary/Mats/Medieval_Masonary_Walls_ALBEDO_4k.tif",
+  "normal": "F:/games/unity-assets/Astrofish Games__DETAILED - Medieval Village/Assets/ASTROFISH_GAMES/MEDIEVAL_SERIES/MEDIEVAL_VILLAGE_HD/_Assets/Masonary/Mats/Medieval_Masonary_Walls_NRM_4k.tif",
+  "rough": null,
+  "lic": "Unity Asset Store EULA",
+  "tile": false,
+  "albedo_size": [
+   4096,
+   4096
+  ],
+  "normal_size": [
+   4096,
+   4096
+  ]
+ },
+ {
+  "label": "Astrofish Doors (atlas)",
+  "albedo": "F:/games/unity-assets/Astrofish Games__DETAILED - Medieval Village/Assets/ASTROFISH_GAMES/MEDIEVAL_SERIES/MEDIEVAL_VILLAGE_HD/_Assets/Doors/Mats/Medieval_Doors_ALBEDO_4k.tif",
+  "normal": "F:/games/unity-assets/Astrofish Games__DETAILED - Medieval Village/Assets/ASTROFISH_GAMES/MEDIEVAL_SERIES/MEDIEVAL_VILLAGE_HD/_Assets/Doors/Mats/Medieval_Doors_NRM_4k.tif",
+  "rough": null,
+  "lic": "Unity Asset Store EULA",
+  "tile": false,
+  "albedo_size": [
+   4096,
+   4096
+  ],
+  "normal_size": [
+   4096,
+   4096
+  ]
+ },
+ {
+  "label": "GEN wall_brick_roman",
+  "albedo": "F:/games/forgeflow-games-assets/generated-materials/wall_brick_roman_albedo.webp",
+  "normal": "F:/games/forgeflow-games-assets/generated-materials/wall_brick_roman_normal.webp",
+  "rough": "F:/games/forgeflow-games-assets/generated-materials/wall_brick_roman_rough.webp",
+  "lic": "original (xAI-generated)",
+  "tile": true,
+  "albedo_size": [
+   1024,
+   1024
+  ],
+  "normal_size": [
+   1024,
+   1024
+  ],
+  "rough_size": [
+   1024,
+   1024
+  ]
+ },
+ {
+  "label": "GEN stone_cobble",
+  "albedo": "F:/games/forgeflow-games-assets/generated-materials/stone_cobble_albedo.webp",
+  "normal": "F:/games/forgeflow-games-assets/generated-materials/stone_cobble_normal.webp",
+  "rough": "F:/games/forgeflow-games-assets/generated-materials/stone_cobble_rough.webp",
+  "lic": "original (xAI-generated)",
+  "tile": true,
+  "albedo_size": [
+   1024,
+   1024
+  ],
+  "normal_size": [
+   1024,
+   1024
+  ],
+  "rough_size": [
+   1024,
+   1024
+  ]
+ },
+ {
+  "label": "GEN wood_planks",
+  "albedo": "F:/games/forgeflow-games-assets/generated-materials/wood_planks_albedo.webp",
+  "normal": "F:/games/forgeflow-games-assets/generated-materials/wood_planks_normal.webp",
+  "rough": "F:/games/forgeflow-games-assets/generated-materials/wood_planks_rough.webp",
+  "lic": "original (xAI-generated)",
+  "tile": true,
+  "albedo_size": [
+   1024,
+   1024
+  ],
+  "normal_size": [
+   1024,
+   1024
+  ],
+  "rough_size": [
+   1024,
+   1024
+  ]
+ },
+ {
+  "label": "GEN cloth_banner",
+  "albedo": "F:/games/forgeflow-games-assets/generated-materials/cloth_banner_albedo.webp",
+  "normal": "F:/games/forgeflow-games-assets/generated-materials/cloth_banner_normal.webp",
+  "rough": "F:/games/forgeflow-games-assets/generated-materials/cloth_banner_rough.webp",
+  "lic": "original (xAI-generated)",
+  "tile": true,
+  "albedo_size": [
+   1024,
+   1024
+  ],
+  "normal_size": [
+   1024,
+   1024
+  ],
+  "rough_size": [
+   1024,
+   1024
+  ]
+ },
+ {
+  "label": "GEN iron_plate",
+  "albedo": "F:/games/forgeflow-games-assets/generated-materials/iron_plate_albedo.webp",
+  "normal": "F:/games/forgeflow-games-assets/generated-materials/iron_plate_normal.webp",
+  "rough": "F:/games/forgeflow-games-assets/generated-materials/iron_plate_rough.webp",
+  "lic": "original (xAI-generated)",
+  "tile": true,
+  "albedo_size": [
+   1024,
+   1024
+  ],
+  "normal_size": [
+   1024,
+   1024
+  ],
+  "rough_size": [
+   1024,
+   1024
+  ]
+ },
+ {
+  "label": "GEN leather_worn",
+  "albedo": "F:/games/forgeflow-games-assets/generated-materials/leather_worn_albedo.webp",
+  "normal": "F:/games/forgeflow-games-assets/generated-materials/leather_worn_normal.webp",
+  "rough": "F:/games/forgeflow-games-assets/generated-materials/leather_worn_rough.webp",
+  "lic": "original (xAI-generated)",
+  "tile": true,
+  "albedo_size": [
+   1024,
+   1024
+  ],
+  "normal_size": [
+   1024,
+   1024
+  ],
+  "rough_size": [
+   1024,
+   1024
+  ]
+ }
+]

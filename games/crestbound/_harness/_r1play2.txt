@@ -1,0 +1,162 @@
+starting: ice shaft towerdoor barnstair drift chute bridge geyser roofs bells pine face lift tracks gnasher
+booted rime-1, engine stopped
+
+### BEAT 1 - WHAT IS UNDER THE ICE PLUG, AND WHY IT CRUSHES YOU ###
+  colliders in the plug's footprint (x 3..7, z 39..45):
+     {"kind": "?", "surface": "ice", "breakable": false, "x": [-13, 3.5], "z": [31, 57], "top": 1.3, "active": true, "solid": true}
+     {"kind": "?", "surface": "ice", "breakable": false, "x": [3.5, 6.5], "z": [31, 42.5], "top": 1.3, "active": true, "solid": true}
+     {"kind": "?", "surface": "normal", "breakable": true, "x": [3.5, 6.5], "z": [40.5, 43.5], "top": 1.3, "active": true, "solid": true}
+     {"kind": "?", "surface": "ice", "breakable": false, "x": [3.5, 6.5], "z": [42.5, 57], "top": 1.3, "active": true, "solid": true}
+     {"kind": "?", "surface": "ice", "breakable": false, "x": [6.5, 13], "z": [31, 57], "top": 1.3, "active": true, "solid": true}
+  stand on the plug, per-frame:
+   [[5, "idle", [5, 1.3, 42], 1], [15, "idle", [5, 1.3, 42], 1], [25, "idle", [5, 1.3, 42], 1], [35, "idle", [5, 1.3, 42], 1], [45, "idle", [5, 1.3, 42], 1], [55, "idle", [5, 1.3, 42], 1], [65, "idle", [5, 1.3, 42], 1], [75, "idle", [5, 1.3, 42], 1], [85, "idle", [5, 1.3, 42], 1], [95, "idle", [5, 1.3, 42], 1], [105, "idle", [5, 1.3, 42], 1], [115, "idle", [5, 1.3, 42], 1], [125, "idle", [5, 1.3, 42], 1], [135, "idle", [5, 1.3, 42], 1], [145, "idle", [5, 1.3, 42], 1], [155, "idle", [5, 1.3, 42], 1], [165, "idle", [5, 1.3, 42], 1], [175, "idle", [5, 1.3, 42], 1], [185, "idle", [5, 1.3, 42], 1], [195, "idle", [5, 1.3, 42], 1], [205, "idle", [5, 1.3, 42], 1], [215, "idle", [5, 1.3, 42], 1], [225, "idle", [5, 1.3, 42], 1], [235, "fall", [5.34, 1.4, 41.99], 0], [245, "land", [6.18, 1.3, 41.94], 1], [255, "skid", [6.59, 1.3, 41.91], 1], [265, "skid", [6.91, 1.3, 41.88], 1], [275, "skid", [7.13, 1.3, 41.87], 1], [285, "idle", [7.27, 1.3, 41.86], 1], [295, "idle", [7.32, 1.3, 41.85], 1], [304, "idle", [7.32, 1.3, 41.85], 1]]
+  deaths: []
+
+now POUND it immediately and see whether the hole opens:
+   pound track: [[340, "poundHang", [5, 2.77, 42], 0, 0], [348, "poundLand", [5, 1.3, 42], 1, 0], [356, "idle", [5, 1.3, 42], 1, 0], [364, "idle", [5, 1.3, 42], 1, 0], [372, "idle", [5, 1.3, 42], 1, 0], [380, "idle", [5, 1.3, 42], 1, 0], [388, "idle", [5, 1.3, 42], 1, 0], [396, "idle", [5, 1.3, 42], 1, 0], [404, "idle", [5, 1.3, 42], 1, 0], [412, "idle", [5, 1.3, 42], 1, 0], [419, "idle", [5, 1.3, 42], 1, 0]]
+   breakables: [{"k": "breakable", "p": [5, 1.15, 42], "broken": false, "trig": "ice-hole-open", "act": [false]}, {"k": "breakable", "p": [-27.2, 9.45, 2.9], "broken": false, "trig": "hay-wall-broken", "act": [true]}]
+   flag ice-hole-open: null
+   colliders in the footprint AFTER the pound:
+     {"kind": "?", "surface": "ice", "breakable": false, "x": [-13, 3.5], "z": [31, 57], "top": 1.3, "active": true, "solid": true}
+     {"kind": "?", "surface": "ice", "breakable": false, "x": [3.5, 6.5], "z": [31, 42.5], "top": 1.3, "active": true, "solid": true}
+     {"kind": "?", "surface": "ice", "breakable": false, "x": [3.5, 6.5], "z": [42.5, 57], "top": 1.3, "active": true, "solid": true}
+     {"kind": "?", "surface": "ice", "breakable": false, "x": [6.5, 13], "z": [31, 57], "top": 1.3, "active": true, "solid": true}
+   240 frames later: [[420, "idle", [5, 1.3, 42], 0, 0], [444, "idle", [5, 1.3, 42], 0, 0], [468, "idle", [0, 1.4, 58.5], 0, 0], [492, "idle", [0, 1.4, 58.5], 0, 0], [516, "idle", [0, 1.4, 58.5], 0, 0], [540, "idle", [0, 1.4, 58.5], 0, 0], [564, "idle", [0, 1.4, 58.5], 0, 0], [588, "idle", [0, 1.4, 58.5], 0, 0], [612, "idle", [0, 1.4, 58.5], 0, 0], [636, "idle", [0, 1.4, 58.5], 0, 0], [659, "idle", [0, 1.4, 58.5], 0, 0]]
+   collectibles: {"coins": 4, "sigils": 0, "crests": 0, "cp": 0, "deaths": 1}
+   deaths: [{"cause": "crush", "p": [4.92, 1.2, 42.1]}]
+
+### THE BELL TOWER WALL-KICK SHAFT (0, 15.10 -> 23.10, -47) ###
+  in the shaft: [(5, 'fall', [0, 15.34, -47], 0), (11, 'land', [0, 15.1, -47], 1), (17, 'idle', [0, 15.1, -47], 1), (23, 'idle', [0, 15.1, -47], 1), (29, 'idle', [0, 15.1, -47], 1), (34, 'idle', [0, 15.1, -47], 1)]
+  camera: [1.95, -3.14, 0.22]
+    kick 1 -> y=15.87 st=fall w=0.00 cam=[2.56, -3.14, 0.22]
+    kick 2 -> y=16.29 st=jump2 w=1.00 cam=[2.03, 0, 0.22]
+    kick 3 -> y=17.75 st=wallkick w=0.00 cam=[3.17, 3.14, 0.22]
+    kick 4 -> y=18.40 st=wallslide w=1.00 cam=[3.36, 0, 0.22]
+    kick 5 -> y=19.58 st=wallkick w=0.00 cam=[3.32, 3.14, 0.22]
+    kick 6 -> y=22.36 st=sideflip w=0.00 cam=[4.25, 0, 0.22]
+    kick 7 -> y=23.46 st=fall w=0.00 cam=[6.13, 3.14, 0.22]
+  highest y reached in the shaft: 23.46 (deck is 23.10)
+  camera dist range in the shaft: [1.44, 1.46, 1.56, 1.63, 1.73, 1.76, 1.82, 1.9]
+
+### BEAT 8 — THE TOWER DOORWAY (east face, 1.10 x 2.40 at x 1.8, z ~-46.7) ###
+  walk -> (0.0, -47.0) through the door into the shaft : ended [2.38, 15.1, -47] idle d=2.38  *** DID NOT ARRIVE
+  inside?: {"i": 330, "t": 5.5, "p": [2.38, 15.1, -47], "v": [0, -0.19, 0], "st": "idle", "g": 1, "sur": "snow", "jc": 0, "w": 1, "water": 0, "sub": 0, "slope": 0, "cam": [6.8, 1.57, 0.22]}
+  camera in the shaft: dist=[6.8, 1.57, 0.22]
+  cam dist through the walk: [6.54, 6.65, 6.71, 6.74, 6.75, 6.77, 6.78, 6.79, 6.8]
+
+### BEAT 4 — THE BARN STAIR, THE EAVES WALK AND THE LOFT GANTRY ###
+  stair foot: {"i": 24, "t": 0.4, "p": [-17.32, 4.99, 6.4], "v": [0.01, -0.19, 0.01], "st": "idle", "g": 1, "sur": "snow", "jc": 0, "w": 0, "water": 0, "sub": 0, "slope": 1.9, "cam": [5.67, 0, 0.22]}
+  walk -> (-22.0, 6.4) up the barn stair (10 x 0.34 = 3.4 m) : ended [-22.82, 8.4, 6.75] skid d=0.89
+  y track: [5.34, 6.7, 7.38, 7.38, 7.38, 7.38, 7.38, 7.72, 8.4]
+  walk -> (-25.8, 6.3) the eaves walk (top 8.20) : ended [-25.88, 8.4, 6.73] skid d=0.44
+  walk -> (-27.2, 4.5) onto the loft gantry : ended [-27.68, 8.4, 4.41] skid d=0.49
+  walk -> (-27.2, 3.8) up to the hay wall : ended [-26.47, 8.4, 3.78] idle d=0.73
+  at the hay: {"i": 208, "t": 3.467, "p": [-26.47, 8.4, 3.78], "v": [0, -0.19, 0], "st": "idle", "g": 1, "sur": "normal", "jc": 0, "w": 1, "water": 0, "sub": 0, "slope": 0, "cam": [6.8, -0.81, 0.22]}
+    hay pound 1: breakables [{"k": "breakable", "p": [5, 1.15, 42], "broken": false, "trig": "ice-hole-open", "act": [true]}, {"k": "breakable", "p": [-27.2, 9.45, 2.9], "broken": false, "trig": "hay-wall-broken", "act": [true]}] crests {"coins": 7, "sigils": 0, "crests": 0, "cp": 0, "deaths": 1}
+    hay pound 2: breakables [{"k": "breakable", "p": [5, 1.15, 42], "broken": false, "trig": "ice-hole-open", "act": [true]}, {"k": "breakable", "p": [-27.2, 9.45, 2.9], "broken": false, "trig": "hay-wall-broken", "act": [true]}] crests {"coins": 7, "sigils": 0, "crests": 0, "cp": 0, "deaths": 1}
+    hay pound 3: breakables [{"k": "breakable", "p": [5, 1.15, 42], "broken": false, "trig": "ice-hole-open", "act": [true]}, {"k": "breakable", "p": [-27.2, 9.45, 2.9], "broken": false, "trig": "hay-wall-broken", "act": [true]}] crests {"coins": 7, "sigils": 0, "crests": 0, "cp": 0, "deaths": 1}
+  walk -> (-27.2, 0.6) past the hay to the SECRET crest : ended [-27.22, 8.4, 3.78] idle d=3.18  *** DID NOT ARRIVE
+  after: {"i": 810, "t": 13.5, "p": [-27.22, 8.4, 3.78], "v": [0, -0.19, 0], "st": "idle", "g": 1, "sur": "normal", "jc": 0, "w": 1, "water": 0, "sub": 0, "slope": 0, "cam": [6.8, -0.01, 0.22]} ; crests {"coins": 7, "sigils": 0, "crests": 0, "cp": 0, "deaths": 1}
+
+### THE DRIFT: 41 deg slide, jump at the lip, catch ledge ###
+  on the cornice: [(5, 'fall', [-6, 9.94, -13.4], 0), (11, 'land', [-6, 9.6, -13.4], 1), (17, 'idle', [-6, 9.6, -13.4], 1), (23, 'idle', [-6, 9.6, -13.4], 1), (29, 'idle', [-6, 9.6, -13.4], 1), (34, 'idle', [-6, 9.6, -13.4], 1)]
+  riding: [(35, 'run', [-6, 9.6, -13.39], 1), (40, 'run', [-6, 9.6, -13.17], 1), (45, 'slopeSlide', [-6, 9.63, -12.68], 1), (50, 'fall', [-6, 9.8, -12.36], 0), (55, 'slopeSlide', [-6, 9.61, -11.95], 1), (60, 'slopeSlide', [-6, 9.14, -11.42], 1), (65, 'slopeSlide', [-6, 8.54, -10.73], 1), (70, 'slopeSlide', [-6, 7.8, -9.88], 1), (75, 'slopeSlide', [-6, 6.93, -8.89], 1), (80, 'fall', [-6, 6.55, -7.78], 0), (85, 'fall', [-6, 6.15, -6.66], 0), (90, 'land', [-6, 5.9, -5.65], 1), (95, 'run', [-6, 5.9, -4.9], 1), (100, 'run', [-6, 5.9, -4.15], 1), (104, 'fall', [-6, 5.81, -3.55], 0)]
+  states seen: ['fall', 'land', 'run', 'slopeSlide']
+  slope deg seen: [0, 41.3, 48.7]
+  after the lip jump: [(105, 'jump1', [-6, 6, -3.4], 0), (109, 'jump1', [-6, 6.64, -2.8], 0), (112, 'jump1', [-6, 7.03, -2.35], 0), (113, 'jump1', [-6, 7.08, -2.2], 0), (119, 'fall', [-6, 7.2, -1.3], 0), (125, 'fall', [-6, 6.9, -0.4], 0), (131, 'fall', [-6, 6.15, 0.49], 0), (137, 'fall', [-6, 4.94, 1.39], 0), (143, 'run', [-6, 4.7, 2.22], 1), (149, 'run', [-6, 4.7, 3.12], 1), (155, 'run', [-6, 4.7, 4.02], 1), (161, 'run', [-6, 4.7, 4.92], 1), (167, 'run', [-6, 4.7, 5.82], 1), (172, 'run', [-6, 4.7, 6.57], 1)]
+  landed: {"i": 172, "t": 2.867, "p": [-6, 4.7, 6.57], "v": [0, -0.19, 9], "st": "run", "g": 1, "sur": "snow", "jc": 0, "w": 0, "water": 0, "sub": 0, "slope": 0, "cam": [6.78, -3.14, 0.22]}
+  sigils: {"coins": 12, "sigils": 1, "crests": 0, "cp": 0, "deaths": 1}
+
+### THE CHUTE into the gorge, and the jump ledge ###
+  launch block: [(5, 'fall', [17, 11.64, -23.8], 0), (11, 'land', [17, 11.4, -23.8], 1), (17, 'idle', [17, 11.4, -23.8], 1), (23, 'idle', [17, 11.4, -23.8], 1), (29, 'idle', [17, 11.4, -23.8], 1), (34, 'idle', [17, 11.4, -23.8], 1)]
+  chute: [(35, 'run', [17.01, 11.4, -23.81], 1), (40, 'run', [17.16, 11.4, -23.96], 1), (45, 'fall', [17.5, 11.45, -24.27], 0), (50, 'fall', [17.74, 11.58, -24.5], 0), (55, 'fall', [18.03, 11.44, -24.77], 0), (60, 'run', [18.46, 11.4, -25.2], 1), (65, 'fall', [18.96, 11.28, -25.69], 0), (70, 'fall', [19.5, 10.85, -26.21], 0), (75, 'fall', [20.04, 10.1, -26.73], 0), (80, 'fall', [20.57, 9.03, -27.36], 0), (85, 'slopeSlide', [21.11, 7.72, -27.88], 1), (90, 'slopeSlide', [21.72, 6.94, -28.47], 1), (95, 'slopeSlide', [22.43, 6.03, -29.18], 1), (100, 'fall', [23.24, 5.19, -29.99], 0), (105, 'fall', [24.09, 4.95, -30.85], 0), (110, 'slopeSlide', [24.52, 4.82, -31.45], 1), (114, 'slopeSlide', [24.52, 4.93, -31.6], 1)]
+  states: ['fall', 'run', 'slopeSlide']
+  after: [(115, 'jump1', [24.52, 5.1, -31.63], 0), (119, 'jump1', [24.52, 5.68, -31.79], 0), (122, 'jump1', [24.52, 6.02, -31.96], 0), (123, 'jump1', [24.52, 6.07, -32.02], 0), (129, 'wallslide', [24.52, 6.14, -32.47], 0), (135, 'slopeSlide', [24.52, 6.03, -32.92], 1), (141, 'slopeSlide', [24.52, 6.02, -32.92], 1), (147, 'slopeSlide', [24.52, 5.78, -32.65], 1), (153, 'slopeSlide', [24.52, 5.29, -32.09], 1), (159, 'slopeSlide', [24.52, 4.66, -31.21], 1), (165, 'pivot', [24.59, 4.14, -30.25], 1), (171, 'run', [24.73, 3.98, -29.75], 1), (177, 'run', [25.03, 3.99, -29.51], 1), (183, 'run', [25.45, 4.24, -29.56], 1), (189, 'run', [26, 4.49, -29.86], 1), (192, 'slopeSlide', [26.28, 4.66, -30.08], 1)]
+  landed: {"i": 192, "t": 3.2, "p": [26.28, 4.66, -30.08], "v": [5.01, 2.41, -4.51], "st": "slopeSlide", "g": 1, "sur": "snow", "jc": 0, "w": 0, "water": 0, "sub": 0, "slope": 39.3, "cam": [2.58, -1.07, 0.22]}
+
+### THE VANISHING ICE BRIDGE ledge -> knoll ###
+  bridge start: [(5, 'slopeSlide', [19.22, 10.99, -24.75], 1), (11, 'skid', [19.43, 10.82, -25], 1), (17, 'idle', [19.44, 10.82, -25.02], 1), (23, 'idle', [19.44, 10.82, -25.02], 1), (29, 'idle', [19.44, 10.82, -25.02], 1), (34, 'idle', [19.44, 10.82, -25.02], 1)]
+  tiles: [[[20.25, 10.62, -25.21], [true]], [[22.75, 11.05, -26.62], [true]], [[25.25, 11.48, -28.04], [true]], [[27.75, 11.92, -29.46], [true]], [[30.25, 12.35, -30.87], [true]], [[32.75, 12.78, -32.29], [true]]]
+  crossing: [(35, 'run', [19.45, 10.82, -25.03], 1), (47, 'run', [20.11, 10.82, -25.79], 1), (59, 'run', [21.29, 11.25, -27.15], 1), (71, 'fall', [22.47, 11.23, -28.52], 0), (83, 'wallslide', [23.45, 10.17, -29.89], 0), (95, 'fall', [23.49, 8.92, -31.68], 0), (107, 'slopeSlide', [24.23, 6.75, -33.3], 1), (119, 'slopeSlide', [24.52, 5.29, -32.1], 1), (131, 'run', [24.74, 3.97, -29.6], 1), (143, 'run', [25.58, 4.34, -29.45], 1), (155, 'slopeSlide', [26.38, 4.74, -30.11], 1), (167, 'bonk', [26.32, 4.6, -30.52], 1), (179, 'bonk', [26.3, 4.59, -30.52], 1), (191, 'bonk', [26.49, 4.72, -30.52], 1), (203, 'run', [26.45, 4.69, -30.52], 1), (215, 'bonk', [26.03, 4.37, -30.59], 1), (227, 'run', [26.35, 4.52, -31.25], 1), (239, 'run', [26.9, 4.67, -32.33], 1), (251, 'run', [27.58, 4.92, -33.58], 1), (254, 'run', [27.81, 5, -34.33], 1)]
+  ended: {"i": 254, "t": 4.233, "p": [27.81, 5, -34.33], "v": [5.06, 0.99, -6.41], "st": "run", "g": 1, "sur": "snow", "jc": 0, "w": 1, "water": 0, "sub": 0, "slope": 9.8, "cam": [0.12, -0.63, 0.22]}
+
+### THE GEYSER PAD on the gorge floor (23.3, -27.9), apex 8.5 ###
+  gorge floor: [(5, 'fall', [23.3, 6.04, -25.6], 0), (11, 'fall', [23.3, 5.43, -25.6], 0), (17, 'fall', [23.3, 4.35, -25.6], 0), (23, 'skid', [22.96, 3.37, -25.78], 1), (29, 'skid', [22.41, 3.16, -26.08], 1), (34, 'idle', [22.32, 3.15, -26.14], 1)]
+  onto the pad: [(35, 'run', [22.32, 3.15, -26.15], 1), (39, 'run', [22.34, 3.19, -26.3], 1), (43, 'bonk', [22.38, 3.2, -26.32], 1), (47, 'bonk', [22.43, 3.21, -26.32], 1), (51, 'bonk', [22.48, 3.22, -26.32], 1), (55, 'bonk', [22.52, 3.22, -26.32], 1), (59, 'bonk', [22.55, 3.23, -26.32], 1), (63, 'bonk', [22.57, 3.23, -26.32], 1), (67, 'bonk', [22.58, 3.23, -26.32], 1), (71, 'bonk', [22.57, 3.23, -26.32], 1), (74, 'bonk', [22.56, 3.23, -26.32], 1), (75, 'idle', [22.56, 3.23, -26.32], 1), (80, 'idle', [22.56, 3.23, -26.32], 1), (85, 'idle', [22.56, 3.23, -26.32], 1), (90, 'idle', [22.56, 3.23, -26.32], 1), (95, 'idle', [22.56, 3.23, -26.32], 1), (100, 'idle', [22.56, 3.23, -26.32], 1), (105, 'idle', [22.56, 3.23, -26.32], 1), (110, 'idle', [22.56, 3.23, -26.32], 1), (115, 'idle', [22.56, 3.23, -26.32], 1), (120, 'idle', [22.56, 3.23, -26.32], 1), (125, 'idle', [22.56, 3.23, -26.32], 1), (130, 'idle', [22.56, 3.23, -26.32], 1), (135, 'idle', [22.56, 3.23, -26.32], 1), (140, 'idle', [22.56, 3.23, -26.32], 1), (144, 'idle', [22.56, 3.23, -26.32], 1)]
+  apex y: 3.23
+  ledge is 10.20 — reached it?
+
+### BEAT 3 — THE VILLAGE ROOF LINE (snow blocks -> lean-to -> four caps) ###
+  square, at the foot of the roof stair: {"i": 24, "t": 0.4, "p": [-14.6, 4.65, 9.4], "v": [-0.01, -0.19, 0.01], "st": "idle", "g": 1, "sur": "snow", "jc": 0, "w": 0, "water": 0, "sub": 0, "slope": 2.5, "cam": [2.03, 0, 0.22]}
+  hop -> (-14.6, 11.8) snow block 1 (top 5.90) : [0, 1.3, 51.19] skid g=1 d=42.01
+    ^^ did NOT land on snow block 1 (y 1.30, wanted 5.90)
+  hop -> (-14.6, 13.6) snow block 2 (top 7.40) : [-0.91, 1.3, 41.58] skid g=1 d=31.15
+    ^^ did NOT land on snow block 2 (y 1.30, wanted 7.40)
+  hop -> (-13.4, 15.6) lean-to (top 8.90) : [-2.61, 1.3, 33.35] skid g=1 d=20.77
+    ^^ did NOT land on lean-to (y 1.30, wanted 8.90)
+  hop -> (-9.0, 16.0) CAP 1 (top 10.25) : [-5.06, 2.89, 25.15] idle g=1 d=9.96
+    ^^ did NOT land on CAP 1 (y 2.89, wanted 10.25)
+  hop -> (-1.5, 18.0) CAP 2 : [-0.4, 4.66, 20.89] idle g=1 d=3.09
+    collectibles: {"coins": 21, "sigils": 1, "crests": 0, "cp": 0, "deaths": 2}
+  hop -> (6.0, 16.0) CAP 3 (across the bells) : [6.19, 4.64, 19.58] idle g=1 d=3.59
+    collectibles: {"coins": 21, "sigils": 1, "crests": 0, "cp": 0, "deaths": 2}
+  hop -> (13.0, 12.0) CAP 4 + sigil 2 : [10.53, 4.34, 18.68] idle g=1 d=7.12
+    collectibles: {"coins": 21, "sigils": 1, "crests": 0, "cp": 0, "deaths": 2}
+
+### BEAT 3 — THE TWO SWINGING BELLS between caps 2 and 3, sigil 4 at (2.2, 11.90, 16.5) ###
+  on cap 2: {"i": 24, "t": 0.4, "p": [-1.5, 10.55, 18], "v": [0, -0.19, 0], "st": "idle", "g": 1, "sur": "normal", "jc": 0, "w": 0, "water": 0, "sub": 0, "slope": 0, "cam": [6.38, 0, 0.22]}
+  bells: [null, null, null]
+  hop -> (2.2, 16.5) into the bell gap for sigil 4 : [12.28, 8.19, 14.71] skid g=1 d=10.24
+  states through the gap: ['fall', 'jump1', 'land', 'run', 'skid', 'wallslide']
+  before {"coins": 21, "sigils": 1, "crests": 0, "cp": 0, "deaths": 2} after {"coins": 23, "sigils": 2, "crests": 0, "cp": 0, "deaths": 2}
+
+### BEAT 3 — THE OLD PINE at (-16, 20): 'PRESS INTO THE TRUNK TO CLIMB' ###
+  at the pine: {"i": 24, "t": 0.4, "p": [-16, 2.45, 23.43], "v": [-0.01, -0.2, 0.06], "st": "land", "g": 1, "sur": "snow", "jc": 0, "w": 0, "water": 0, "sub": 0, "slope": 8.3, "cam": [5.93, 0, 0.22]}
+  climb: [(25, 'run', [-16, 2.45, 23.43], 1), (50, 'climb', [-16.01, 3.14, 21.36], 0), (75, 'climb', [-16, 4.22, 21.18], 0), (100, 'climb', [-16, 5.31, 21.18], 0), (125, 'climb', [-16, 6.39, 21.18], 0), (150, 'climb', [-16, 7.47, 21.18], 0), (175, 'climb', [-16, 8.66, 20.88], 0), (200, 'climb', [-16, 8.88, 20.24], 0), (225, 'fall', [-15.96, 9, 20.31], 0), (250, 'fall', [-15.76, 8.91, 20.19], 0), (275, 'fall', [-15.49, 9.01, 19.7], 0), (300, 'fall', [-15.74, 8.92, 19.27], 0), (325, 'fall', [-15.9, 9, 19.26], 0), (350, 'fall', [-15.97, 8.94, 19.22], 0), (375, 'fall', [-15.99, 8.98, 19.24], 0), (400, 'fall', [-15.99, 8.99, 19.24], 0), (424, 'fall', [-16, 8.94, 19.22], 0)]
+  states: ['climb', 'fall', 'run']
+  highest y: 9.01 (crow's nest top is gy(-16,20)+8.8 ~ 6.0+8.8)
+  collectibles: {"coins": 25, "sigils": 2, "crests": 0, "cp": 0, "deaths": 2}
+
+### THE CREST FACE: ride the slope, hit the kicker, land on the belfry ###
+  shelf: [(5, 'fall', [0, 40.64, -79], 0), (11, 'land', [0, 40.4, -79], 1), (17, 'idle', [0, 40.4, -79], 1), (23, 'idle', [0, 40.4, -79], 1), (29, 'idle', [0, 40.4, -79], 1), (34, 'idle', [0, 40.4, -79], 1)]
+  sigils here: {"coins": 25, "sigils": 3, "crests": 0, "cp": 0, "deaths": 2}
+  the face: [(35, 'run', [0, 40.4, -78.99], 1), (45, 'run', [0, 40.4, -78.26], 1), (55, 'fall', [0, 40.35, -76.78], 0), (65, 'run', [0, 40.1, -75.35], 1), (75, 'run', [0, 40.05, -73.85], 1), (85, 'slopeSlide', [-0.0, 37.89, -72.19], 1), (95, 'fall', [-0.0, 35.27, -70.19], 0), (105, 'fall', [-0.0, 31.66, -68.23], 0), (115, 'fall', [-0.0, 26.76, -66.3], 0), (125, 'hardLand', [0, 23.83, -63.7], 1), (135, 'fall', [0.01, 22.12, -61.27], 0), (145, 'run', [0.01, 22.94, -59.76], 1), (155, 'fall', [0.01, 24.12, -58.27], 0), (165, 'fall', [0.02, 24.11, -56.78], 0), (175, 'fall', [0.02, 22.88, -55.28], 0), (185, 'fall', [0.02, 20.36, -53.78], 0), (195, 'fall', [0.02, 16.57, -52.28], 0), (205, 'hardLand', [0.02, 15.1, -51.64], 1), (215, 'run', [0.02, 15.1, -51.51], 1), (225, 'run', [0.02, 15.1, -50.39], 1), (234, 'bonk', [0.02, 15.1, -49.42], 1)]
+  states: ['bonk', 'fall', 'hardLand', 'run', 'slopeSlide']
+  max speed: 17.28
+  ended: {"i": 234, "t": 3.9, "p": [0.02, 15.1, -49.42], "v": [0.01, -0.19, -0.8], "st": "bonk", "g": 1, "sur": "snow", "jc": 0, "w": 1, "water": 0, "sub": 0, "slope": 0, "cam": [5.46, -3.14, 0.22]}
+
+### THE SLEIGH LIFT green -> crest shelf ###
+  sleigh at: None
+  sleigh at the bottom: None
+  !! lift raised TypeError("'NoneType' object is not subscriptable")
+
+### THE REQUIRED WALK: square -> hillside -> ledge -> chapel track -> green ###
+  walk -> (2.0, -1.0) : ended [2.52, 4.7, -2.03] skid d=1.15
+  walk -> (6.0, -8.0) : ended [6.34, 6.29, -8.25] skid d=0.42
+  walk -> (10.0, -14.0) : ended [10.03, 8.6, -13.92] skid d=0.09
+  walk -> (13.0, -19.0) : ended [13.41, 10.2, -19.75] skid d=0.85
+  walk -> (14.0, -22.0) : ended [14.29, 10.2, -22.71] skid d=0.77
+  walk -> (12.0, -25.0) : ended [11.7, 10.2, -25.1] skid d=0.32
+  walk -> (8.0, -29.0) : ended [10.33, 10.93, -28.17] skid d=2.47  *** DID NOT ARRIVE
+  walk -> (6.0, -31.0) : ended [5.44, 12.1, -31.2] skid d=0.59
+  walk -> (4.0, -33.0) : ended [3.69, 12.59, -33.48] skid d=0.57
+  walk -> (0.0, -37.0) : ended [-0.96, 14.45, -36.6] land d=1.04
+  walk -> (2.0, -42.0) : ended [2.83, 14.29, -36.62] idle d=5.44  *** DID NOT ARRIVE
+      states on this leg: ['bonk', 'pivot', 'run']
+  walk -> (0.0, -44.0) : ended [-0.01, 14.48, -36.62] idle d=7.38  *** DID NOT ARRIVE
+      states on this leg: ['bonk']
+  green: {"i": 1816, "t": 30.267, "p": [-0.01, 14.48, -36.62], "v": [-0.0, -0.29, 0.19], "st": "idle", "g": 1, "sur": "snow", "jc": 0, "w": 1, "water": 0, "sub": 0, "slope": 26.5, "cam": [6.8, -0.0, 0.22]}
+  checkpoints hit: {"coins": 44, "sigils": 3, "crests": 0, "cp": 3, "deaths": 2}
+
+### BEAT 4 — THE GNASHER at the barn door (post -19, 8.6; chain 5.5) ###
+  gnasher: [{"k": "gnasher", "p": [0, 0, 0], "kills": 1}]
+  walk -> (-18.5, 7.2) into the gnasher's reach : ended [-9.48, 4.85, -2.18] skid d=13.01  *** DID NOT ARRIVE
+  standing in reach, 8 s, no input:
+    [(291, 'skid', [-9.5, 4.84, -2.14], 1), (351, 'idle', [-9.52, 4.84, -2.11], 1), (411, 'idle', [-9.52, 4.84, -2.11], 1), (471, 'idle', [-9.52, 4.84, -2.11], 1), (531, 'idle', [-9.52, 4.84, -2.11], 1), (591, 'idle', [-9.52, 4.84, -2.11], 1), (651, 'idle', [-9.52, 4.84, -2.11], 1), (711, 'idle', [-9.52, 4.84, -2.11], 1), (770, 'idle', [-9.52, 4.84, -2.11], 1)]
+  deaths: {"coins": 44, "sigils": 3, "crests": 0, "cp": 3, "deaths": 3}
+    post pound 1 -> [9.41, 11.73, -29.68] idle ; flags [["gnasher-freed", null]]
+    post pound 2 -> [5.05, 10.21, -22.21] idle ; flags [["gnasher-freed", null]]
+    post pound 3 -> [0.29, 8.75, -14.98] idle ; flags [["gnasher-freed", null]]
+    post pound 4 -> [-4.06, 5.67, -7.58] skid ; flags [["gnasher-freed", null]]
+
+console: ["warning: [Course rime-1] props.js had no entry for: cart"]

@@ -1,0 +1,114 @@
+# Thronedrift — Build Status
+
+## v1.0 — VERSUS SHIPPED (2026-07-10)
+Champion engine + FFA/Duel/Teams vs intelligent bots + lobby UX + local
+leaderboards. Verified headless: all 3 modes complete matches end-to-end;
+lobby real-time flow (join → vote → countdown → launch) verified live.
+NEXT (online): NetPlay transport copy from games/pirates-cove/runtime/net/
+ffg_netplay.js (Supabase Realtime, quick-match lobby channel, room codes) +
+NetController (12Hz state, victim hit-authority per last-circle) + global
+leaderboards need supabase/migrations/0004 applied to qkid + portal-SDK
+score submission (research in workflows/wf_f94f9fcd journal).
+
+PLAYER LEADERBOARDS — owner spec (2026-07-10, ships with online phase):
+boards rank PLAYERS, not the local player's own history. Categories: MOST
+DAMAGE DEALT · BEST W/L RATIO · MOST WINS. Every category gets per-class
+tabs (e.g. top damage dealt by Warrior). Until then the in-game panel is
+labeled STATS (v1.3) and shows only local records.
+
+## ✅ BUILD COMPLETE — 2026-07-10 (loop closed after 5 iterations)
+Every deliverable from the original spec + both owner feedback batches is
+shipped and LIVE at https://forgeflowgames.com/games/thronedrift/ .
+Final iteration added: bestiary runtime 3D portraits (all 20 foes render from
+their GLBs), mobile pass (responsive title, menu camera pull-back on narrow
+aspects, ability cluster raised clear of the game_controls bar).
+Gates: selftest.mjs 718 PASS · repo CI 12/12 · full campaign headless-verified
+to CROWN CLAIMED · CDN curl-verified.
+
+**Optional upgrades (spend-gated, need owner OK):**
+- Per-realm music via music_generator (Stable Audio, ~23cr/track x 5-7 tracks)
+- Meshy bow-draw animation set for the Archer (currently rogue slashes rate-fit)
+- New Meshy 2H-warrior character if the barbarian should be visually distinct
+
+Ongoing: balance tuning from owner playtests — new feedback reopens the loop
+(/loop with the thronedrift context prompt).
+
+## Iteration 4 — 2026-07-10 ✅ CAMPAIGN QA + MUSIC + SELFTEST
+Full campaign headless-verified to CROWN CLAIMED (all bosses exercised their
+kits). Heavies capped 4/wave. Music beds wired (menu/level/boss). selftest.mjs
+PASS 718. Remaining queue: bestiary runtime 3D portraits; mobile touch pass
+(375px: cluster hit targets, pinch); balance watch on owner playtests; consider
+per-realm Stable Audio tracks later (music_generator, ~23cr/track).
+
+## DEPLOYED LIVE — 2026-07-10
+https://forgeflowgames.com/games/thronedrift/ (CDN 81/81 files 200 after re-upload
+of imp.glb + cthulhu.glb which failed on transient connectivity; Supabase row
+inserted status=published; portal prerender refreshed).
+
+## Iteration 3 — 2026-07-10 ✅ BOSSES + BESTIARY×20 + LIVE-3D MENU + SETTINGS
+Feedback batch 2 landed (CHANGELOG v0.3). Verified headless: Vulkar spawns wave
+5 w/ HP bar + telegraphed casts; menu showcase 3 heroes + cards; settings/
+bestiary screens; heart drops. Visual: title screenshot w/ all 3 champions.
+Queue adds: boss fights realms 2-5 live QA; bestiary 3D portraits; music.
+
+## Iteration 2 — 2026-07-10 ✅ OWNER FEEDBACK BATCH + RENAME + DEPLOY
+All 20 owner feedback items from the /loop message landed (see CHANGELOG v0.2).
+Verified: weapon scale/grips, relaxArms, 7 hearts, fan=7 arrows, rain fallers=8,
+fire+frost residuals, bestiary discovery, ground spawns, pause, camera orbit/zoom.
+Remaining polish queue:
+1. Balance validation across realms 2-5 (owner played mid-build — watch feedback)
+2. Arenas 3-5 visual QA + full campaign → CROWN CLAIMED panel live check
+3. Meshy bow-draw anim set for Archer (rogue slashes still stand in)
+4. Runtime 3D portraits in bestiary (models already loaded — render-to-canvas)
+5. Stock music via audio_mapper (9 tracks) — SFX-only today
+6. selftest.mjs node gate
+7. Mobile device pass (touch cluster hit targets, pinch zoom)
+
+Working doc for the /loop build. Update every iteration. Delete when shipped.
+
+## Iteration 1 — 2026-07-10 ✅ VERTICAL SLICE PLAYABLE
+
+**Done + verified in browser (localhost:8197/games/thronedrift/):**
+- Boot, loading screen, title → class select → arena select → playing flow
+- Emberthrone + Glacier Court render **visually distinct** (screenshots verified);
+  board = floating realm disc w/ rune ring, motif, rim pylons, debris, sky, portals
+- Warrior 2H + Sword&Shield: mode swap (TAB) verified swapping kit + model +
+  separate cooldown tracks; Shield Bash fires w/ cooldown radial ticking
+- Waves spawn/stagger from portals, enemies chase/windup/attack, player death →
+  FALLEN IN THE ARENA panel → RESTART works
+- Score/combo/gold/hearts HUD live; radial conic-gradient cooldowns work
+- Human play test (user in preview panel): mage run to wave 3 (3,288), warrior
+  glacier run to 5,967 — game is genuinely playable and engaging
+
+**Fixed this iteration:**
+- Meshy skinned-rig height: Box3-on-bind-pose garbage → poseRig bone-measure
+  (DF recipe); weapons were flying at y=111 before this
+- Mode-swap edge consumed silently while attacking (togglePressed order bug)
+- Rain-of-arrows TDZ crash; double-kill guard; floor emissive overexposure
+- Board readability: BOARD_RADIUS 21→13.5 + camera (0,19,14.5) + 0.72 center
+  bias so rim/void/sky always frame the shot
+
+## Punch list (next iterations, in order)
+
+1. **Balance**: users died on wave 2-3 twice — early lethality hot. Lower wave-1/2
+   counts or enemy speed; consider hearts=6 for warrior, contact dmg windup longer.
+2. **Verify live**: Whirlwind/Ground Slam/Earthsplitter callouts+shake+hitstop;
+   Bulwark hold-block + perfect-block pulse; Archer kit (fan/fire arrow/rain);
+   Mage kit (fireball/frost orb residual DECALS on ground, ward bubble).
+3. **Arenas 3-5** visual QA (tempest lightning flashes, umbra fog, solar god-rays).
+4. **Full campaign run**: realm unlock chain → CROWN CLAIMED final panel.
+5. **Mobile pass**: joystick + touch buttons on 375px viewport; DPR/fps check.
+6. **Audio**: procedural SFX QA (mute toggle via game_controls), consider stock
+   music via audio_mapper (9 tracks avail) or keep silent+SFX.
+7. **thumbnail.png**: pipeline/generate_cover.py --out games/thronedrift (writes
+   thumbnail.png directly — that IS the catalog card for new games).
+8. **selftest.mjs**: node syntax-load of all runtime modules + data invariants
+   (5 arenas, 3 classes × kit shape, cd>0, enemy defs sane) like siegeheart.
+9. Meshy bow-draw anim set for Archer (currently rogue slash reinterpreted).
+10. **Deploy**: python pipeline/deploy_game.py --game-dir games/thronedrift --slug
+    crownfire (auto-runs portal rebuild). Publish toggle after full QA only.
+
+## Conventions locked
+- Slug `thronedrift` (renamed from crownfire 07-10) · port 8197 in .claude/launch.json · ?v=1 cache-bust suffix
+- Assets: chars from dungeon-forge Meshy set (shared), enemies from creature lib
+- __FFG3D__.stats() eval hook for automated verification

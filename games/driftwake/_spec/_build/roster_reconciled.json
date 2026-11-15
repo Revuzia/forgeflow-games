@@ -1,0 +1,5424 @@
+{
+ "_meta": {
+  "generated": "R3 roster reconciliation",
+  "sourceA": "F:\\GrokUI\\driftwake_enemies_meshy\\_build_roster_html.py (ENEMIES/ROLE_KIT/PLAYER/BOSSES/MISSING_MESH/PACKS, ast-parsed)",
+  "sourceB": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\src\\combat\\combatData.js (ENEMIES/BOSSES/TIER_TABLE/PLAYER, node ESM import)",
+  "sourceC": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\driftwake\\src\\combat\\enemies.js L145-209 (COLD_KEYS/KEY_ALIAS/COLD_DATA)",
+  "meshDisk": "F:\\GrokUI\\driftwake_enemies_meshy\\mixamo_rig\\<slug>\\web\\<slug>_draco.glb",
+  "counts": {
+   "rosterUnitsA": 30,
+   "combatDataRowsB": 30,
+   "combatDataBossesB": 6,
+   "rosterBossesA": 6,
+   "runtimeArchetypesC": 4,
+   "meshDirsOnDisk": 30,
+   "distinctKeysUsedByRoster": 24,
+   "roleKitRoles": 15
+  },
+  "playerAnchor": {
+   "hpMax": 100,
+   "runSpeedMS": 5.4,
+   "surfSpeedMS": 19.5,
+   "boltDmg": 12,
+   "plantedDps": 26.7,
+   "boltFireCycleS": 0.45,
+   "dmgPerLevel": 1.09,
+   "hpPerLevel": 1.07
+  },
+  "resolutionRule": "Numbers: B (combatData.js) wins - its header declares the L10 ANCHOR CONTRACT and damageable.js register() consumes it at runtime. Mesh/look/weapon/grip/element/pack: A wins - it is the only mesh-anchored source. Boss STRUCTURE: A wins where B's boss has no mesh (moraineElder).",
+  "slugsMatchDisk": true
+ },
+ "units": {
+  "01_cold_rime_imp": {
+   "slug": "01_cold_rime_imp",
+   "n": "01",
+   "name": "Rime Imp",
+   "realm": "cold",
+   "role": "swarm",
+   "animRole": "swarm",
+   "grip": "CLAWS / BODY",
+   "combatDataKey": "rimeImp",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "fodder",
+   "cost": 1,
+   "hp": 24,
+   "speed": 6.2,
+   "perception": 25,
+   "attackRange": 1.2,
+   "gapCloser": 4,
+   "poise": 10,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "rake 4×3 · pounce 8 · ice spit 3",
+   "attackPeakDmg": 8,
+   "element": "ice",
+   "rangeBand": "Mid",
+   "weaponProp": "Claws (body) — no prop",
+   "telegraphMs": [
+    500,
+    650,
+    600
+   ],
+   "special": "Pack Call: first spotter aggros imps in 30 m; +15% atk speed / nearby imp (cap 3)",
+   "packDoctrine": {
+    "mode": "always",
+    "note": "3–6 on erupt; never solo",
+    "byDifficulty": "E:3  N:4–5  H:5–6 + sprite"
+   },
+   "look": "Small hunched humanoid, ice-cyan tight plates, claw hands empty",
+   "kitWhy": "Claws → rake/pounce; tiny frame → low HP; short spit matches imp range not mage staff",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "fodder",
+    "cost": 1,
+    "hp": 24,
+    "speed": 6.2,
+    "perception": 25,
+    "attackRange": 1.2,
+    "gapCloser": 4,
+    "poise": 10,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     500,
+     650,
+     600
+    ],
+    "attackPeakDmg": 8
+   },
+   "sourceB": {
+    "archetype": "swarm-melee",
+    "tier": "fodder",
+    "tierId": 0,
+    "cost": 1,
+    "hp": 24,
+    "speed": 6.2,
+    "perception": 25,
+    "attackRange": 1.2,
+    "gapCloser": 4,
+    "poise": 10,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     500,
+     650,
+     600
+    ],
+    "red": null,
+    "attacks": "rake 4x3 . pounce 8 . spit 3",
+    "maxSingleHit": 8,
+    "maxBurst": 12,
+    "special": "Pack Call: first spotter aggros all imps in 30 m; +15% atk speed per nearby imp (cap 3)"
+   },
+   "sourceC": {
+    "implemented": true,
+    "runtimeKey": "rimeImp",
+    "arch": "ARCH_IMP",
+    "row": {
+     "arch": "ARCH_IMP",
+     "tier": 0,
+     "hp": 24,
+     "poise": 10,
+     "speed": 6.2,
+     "perception": 25,
+     "atkRange": 1.2,
+     "dmg": 4,
+     "telegraphMs": 500,
+     "leash": 40,
+     "radius": 0.35,
+     "height": 0.9
+    }
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 24,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 0.9,
+    "boltsToKill": 2,
+    "topSpeed": 6.2,
+    "fasterThanPlayerRun": true,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": false,
+    "note": "uncatchable on foot AND unescapable on foot (must surf)"
+   }
+  },
+  "02_cold_glacier_brute": {
+   "slug": "02_cold_glacier_brute",
+   "n": "02",
+   "name": "Glacier Brute",
+   "realm": "cold",
+   "role": "brute",
+   "animRole": "brute",
+   "grip": "2H MAUL",
+   "combatDataKey": "glacierBrute",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "elite",
+   "cost": 5,
+   "hp": 520,
+   "speed": 3.2,
+   "perception": 18,
+   "attackRange": 2.5,
+   "gapCloser": 8,
+   "poise": 120,
+   "hyperArmor": true,
+   "construct": false,
+   "sizeScale": 1.45,
+   "burstSpeed": 4,
+   "leash": null,
+   "carapace": 260,
+   "attack": "slam 22 (4 m) · sweep 16 · ram 18",
+   "attackPeakDmg": 22,
+   "element": "ice/phys",
+   "rangeBand": "Melee",
+   "weaponProp": "Ice maul prop (mesh empty hands)",
+   "telegraphMs": [
+    1200,
+    900,
+    1000
+   ],
+   "special": "Rime Carapace 260. MINIBOSS The Icewall 1200 — mid-realm; does NOT open Sand.",
+   "packDoctrine": {
+    "mode": "solo+",
+    "note": "Field tank / Glacier Line · arena as Icewall",
+    "byDifficulty": "E:solo  N:1+cultist  H:1+2 casters"
+   },
+   "look": "Massive glacier-plate torso, thick limbs, square stance — largest cold field silhouette",
+   "kitWhy": "Bulk → slam/sweep/ram; carapace reads as armored ice shell; size reads miniboss",
+   "mage": false,
+   "bossKind": "miniboss",
+   "bossName": "The Icewall (field 520 → arena 1200)",
+   "bossKey": "glacierIcewall",
+   "arenaHp": 1200,
+   "arenaStance": 160,
+   "sourceA": {
+    "tier": "elite",
+    "cost": 5,
+    "hp": 520,
+    "speed": 3.2,
+    "perception": 18,
+    "attackRange": 2.5,
+    "gapCloser": 8,
+    "poise": 120,
+    "carapace": 260,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     1200,
+     900,
+     1000
+    ],
+    "attackPeakDmg": 22
+   },
+   "sourceB": {
+    "archetype": "tank",
+    "tier": "elite",
+    "tierId": 4,
+    "cost": 5,
+    "hp": 520,
+    "speed": 3.2,
+    "perception": 18,
+    "attackRange": 2.5,
+    "gapCloser": 8,
+    "poise": 120,
+    "carapace": 260,
+    "burstSpeed": 4,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": true,
+    "telegraphMs": [
+     1200,
+     900,
+     1000
+    ],
+    "red": [
+     2
+    ],
+    "attacks": "slam 22 . sweep 16 . ram 18",
+    "maxSingleHit": 22,
+    "maxBurst": 22,
+    "special": "Rime Carapace: 260 over-health; while up immune to Wave KB & Vortex fling; Spikes crack ×3. Shatter → flingable but +25% speed"
+   },
+   "sourceC": {
+    "implemented": true,
+    "runtimeKey": "glacierBrute",
+    "arch": "ARCH_BRUTE",
+    "row": {
+     "arch": "ARCH_BRUTE",
+     "tier": 4,
+     "hp": 520,
+     "poise": 120,
+     "speed": 3.2,
+     "perception": 18,
+     "atkRange": 2.5,
+     "dmg": 22,
+     "telegraphMs": 1200,
+     "leash": 40,
+     "radius": 0.9,
+     "height": 2.4
+    }
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 780,
+    "effectiveHpNote": "hp + carapace over-health",
+    "ttkAt26_7dps_s": 29.2,
+    "boltsToKill": 65,
+    "topSpeed": 4,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  },
+  "03_cold_frost_stalker": {
+   "slug": "03_cold_frost_stalker",
+   "n": "03",
+   "name": "Frost Stalker",
+   "realm": "cold",
+   "role": "stalker",
+   "animRole": "stalker",
+   "grip": "DUAL KNIVES",
+   "combatDataKey": "frostStalker",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "light",
+   "cost": 3,
+   "hp": 50,
+   "speed": 7,
+   "perception": 15,
+   "attackRange": 8,
+   "gapCloser": 0,
+   "poise": 20,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": 13,
+   "leash": 60,
+   "carapace": null,
+   "attack": "pounce 18 · rake 7×2 · backflip 9",
+   "attackPeakDmg": 18,
+   "element": "ice",
+   "rangeBand": "Melee",
+   "weaponProp": "Frost knives prop",
+   "telegraphMs": [
+    700,
+    550,
+    500
+   ],
+   "special": "Powder Dive pursuer: submerged 13 m/s, 60 m leash. Mini-Vortex on wake → stun 1.5 s",
+   "packDoctrine": {
+    "mode": "pair",
+    "note": "Hunt packs: 2 stalkers + imps",
+    "byDifficulty": "E:1  N:2  H:2 + imp screen"
+   },
+   "look": "Lean hunter silhouette, tight frost hide, agile limb proportions",
+   "kitWhy": "Lean speed → leap/rake; submerge fits powder-stalk fantasy not heavy plate",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "light",
+    "cost": 3,
+    "hp": 50,
+    "speed": 7.0,
+    "perception": 15,
+    "attackRange": 8,
+    "gapCloser": 0,
+    "poise": 20,
+    "carapace": null,
+    "burstSpeed": 13,
+    "leash": 60,
+    "telegraphMs": [
+     700,
+     550,
+     500
+    ],
+    "attackPeakDmg": 18
+   },
+   "sourceB": {
+    "archetype": "ambusher-pursuer",
+    "tier": "light",
+    "tierId": 1,
+    "cost": 3,
+    "hp": 50,
+    "speed": 7,
+    "perception": 15,
+    "attackRange": 8,
+    "gapCloser": null,
+    "poise": 20,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": 13,
+    "leash": 60,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     700,
+     550,
+     500
+    ],
+    "red": null,
+    "attacks": "pounce 18 . rake 7x2 . backflip 9",
+    "maxSingleHit": 18,
+    "maxBurst": 18,
+    "special": "Powder Dive: submerged wake-ripple, bolt-immune; pursues at 13 m/s up to 60 m. Erupts when player <10 m/s or <8 m. Mini-Vortex on the wake → out, stunned 1.5 s"
+   },
+   "sourceC": {
+    "implemented": true,
+    "runtimeKey": "frostStalker",
+    "arch": "ARCH_STALKER",
+    "row": {
+     "arch": "ARCH_STALKER",
+     "tier": 1,
+     "hp": 50,
+     "poise": 20,
+     "speed": 7.0,
+     "perception": 15,
+     "atkRange": null,
+     "dmg": 18,
+     "telegraphMs": 700,
+     "leash": 60,
+     "radius": 0.45,
+     "height": 0.8
+    }
+   },
+   "_burstIsSubmerged": true,
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 50,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 1.9,
+    "boltsToKill": 5,
+    "topSpeed": 13,
+    "fasterThanPlayerRun": true,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": false,
+    "note": "uncatchable on foot AND unescapable on foot (must surf)"
+   }
+  },
+  "31_v2_cold_rime_imp": {
+   "slug": "31_v2_cold_rime_imp",
+   "n": "31",
+   "name": "Rime Imp v2",
+   "realm": "cold",
+   "role": "swarm",
+   "animRole": "swarm",
+   "grip": "CLAWS / BODY",
+   "combatDataKey": "rimeImp",
+   "meshOnDisk": true,
+   "meshNote": "v2 mesh of rimeImp",
+   "tier": "fodder",
+   "cost": 1,
+   "hp": 24,
+   "speed": 6.2,
+   "perception": 25,
+   "attackRange": 1.2,
+   "gapCloser": 4,
+   "poise": 10,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "same kit as 01 · slightly faster spit",
+   "attackPeakDmg": 8,
+   "element": "ice",
+   "rangeBand": "Mid",
+   "weaponProp": "Claws",
+   "telegraphMs": [
+    500,
+    600,
+    550
+   ],
+   "special": "Visual upgrade of Rime Imp; same Pack Call doctrine",
+   "packDoctrine": {
+    "mode": "always",
+    "note": "Interchangeable with 01 in Imp Warren",
+    "byDifficulty": "E:3  N:4–5  H:5–6"
+   },
+   "look": "Cleaner rime-imp plates (v2 silhouette of 01)",
+   "kitWhy": "Same role as 01 — stats +1–2 only for visual refresh",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "fodder",
+    "cost": 1,
+    "hp": 26,
+    "speed": 6.4,
+    "perception": 25,
+    "attackRange": 1.2,
+    "gapCloser": 4,
+    "poise": 10,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     500,
+     600,
+     550
+    ],
+    "attackPeakDmg": 8
+   },
+   "sourceB": {
+    "archetype": "swarm-melee",
+    "tier": "fodder",
+    "tierId": 0,
+    "cost": 1,
+    "hp": 24,
+    "speed": 6.2,
+    "perception": 25,
+    "attackRange": 1.2,
+    "gapCloser": 4,
+    "poise": 10,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     500,
+     650,
+     600
+    ],
+    "red": null,
+    "attacks": "rake 4x3 . pounce 8 . spit 3",
+    "maxSingleHit": 8,
+    "maxBurst": 12,
+    "special": "Pack Call: first spotter aggros all imps in 30 m; +15% atk speed per nearby imp (cap 3)"
+   },
+   "sourceC": {
+    "implemented": true,
+    "runtimeKey": "rimeImp",
+    "arch": "ARCH_IMP",
+    "row": {
+     "arch": "ARCH_IMP",
+     "tier": 0,
+     "hp": 24,
+     "poise": 10,
+     "speed": 6.2,
+     "perception": 25,
+     "atkRange": 1.2,
+     "dmg": 4,
+     "telegraphMs": 500,
+     "leash": 40,
+     "radius": 0.35,
+     "height": 0.9
+    }
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 24,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 0.9,
+    "boltsToKill": 2,
+    "topSpeed": 6.2,
+    "fasterThanPlayerRun": true,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": false,
+    "note": "uncatchable on foot AND unescapable on foot (must surf)"
+   }
+  },
+  "32_v2_cold_glacier_brute": {
+   "slug": "32_v2_cold_glacier_brute",
+   "n": "32",
+   "name": "Glacier Brute v2",
+   "realm": "cold",
+   "role": "brute",
+   "animRole": "brute",
+   "grip": "2H MAUL",
+   "combatDataKey": "glacierBrute",
+   "meshOnDisk": true,
+   "meshNote": "v2 mesh of glacierBrute (miniboss base #02 · preferred Icewall visual)",
+   "tier": "elite",
+   "cost": 5,
+   "hp": 520,
+   "speed": 3.2,
+   "perception": 18,
+   "attackRange": 2.5,
+   "gapCloser": 8,
+   "poise": 120,
+   "hyperArmor": true,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": 4,
+   "leash": null,
+   "carapace": 260,
+   "attack": "smash + ice shockwave · ram",
+   "attackPeakDmg": 24,
+   "element": "ice/phys",
+   "rangeBand": "Melee",
+   "weaponProp": "Ice maul prop",
+   "telegraphMs": [
+    1200,
+    900,
+    1000
+   ],
+   "special": "Higher ARM/poise flavor of Glacier Brute",
+   "packDoctrine": {
+    "mode": "solo+",
+    "note": "Elite single-threat",
+    "byDifficulty": "E:solo  N:solo+  H:1+support"
+   },
+   "look": "Heavier ice-plate brute v2 — thicker armor read",
+   "kitWhy": "Same brute kit; +poise/carapace matches denser plate; use as Icewall presentation mesh",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "elite",
+    "cost": 5,
+    "hp": 540,
+    "speed": 3.1,
+    "perception": 18,
+    "attackRange": 2.5,
+    "gapCloser": 8,
+    "poise": 130,
+    "carapace": 280,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     1200,
+     900,
+     1000
+    ],
+    "attackPeakDmg": 24
+   },
+   "sourceB": {
+    "archetype": "tank",
+    "tier": "elite",
+    "tierId": 4,
+    "cost": 5,
+    "hp": 520,
+    "speed": 3.2,
+    "perception": 18,
+    "attackRange": 2.5,
+    "gapCloser": 8,
+    "poise": 120,
+    "carapace": 260,
+    "burstSpeed": 4,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": true,
+    "telegraphMs": [
+     1200,
+     900,
+     1000
+    ],
+    "red": [
+     2
+    ],
+    "attacks": "slam 22 . sweep 16 . ram 18",
+    "maxSingleHit": 22,
+    "maxBurst": 22,
+    "special": "Rime Carapace: 260 over-health; while up immune to Wave KB & Vortex fling; Spikes crack ×3. Shatter → flingable but +25% speed"
+   },
+   "sourceC": {
+    "implemented": true,
+    "runtimeKey": "glacierBrute",
+    "arch": "ARCH_BRUTE",
+    "row": {
+     "arch": "ARCH_BRUTE",
+     "tier": 4,
+     "hp": 520,
+     "poise": 120,
+     "speed": 3.2,
+     "perception": 18,
+     "atkRange": 2.5,
+     "dmg": 22,
+     "telegraphMs": 1200,
+     "leash": 40,
+     "radius": 0.9,
+     "height": 2.4
+    }
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 780,
+    "effectiveHpNote": "hp + carapace over-health",
+    "ttkAt26_7dps_s": 29.2,
+    "boltsToKill": 65,
+    "topSpeed": 4,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  },
+  "34_v2_cold_ice_cultist": {
+   "slug": "34_v2_cold_ice_cultist",
+   "n": "34",
+   "name": "Ice Cultist",
+   "realm": "cold",
+   "role": "cultist",
+   "animRole": "cultist",
+   "grip": "STAFF CAST",
+   "combatDataKey": "rimeboundCultist",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "light",
+   "cost": 3,
+   "hp": 55,
+   "speed": 4.6,
+   "perception": 30,
+   "attackRange": 30,
+   "gapCloser": 0,
+   "poise": 25,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "rune bolt 8×2 · glyph snare 14 · lash 10",
+   "attackPeakDmg": 14,
+   "element": "ice",
+   "rangeBand": "Far",
+   "weaponProp": "Ice staff / totem prop",
+   "telegraphMs": [
+    700,
+    1200,
+    500
+   ],
+   "special": "★ TRUE MAGE. Rime Ritual shields allies 15 m (−50% frost). Interrupt = team stagger",
+   "packDoctrine": {
+    "mode": "pack",
+    "note": "Ritual Circle w/ guard + imps; never alone",
+    "byDifficulty": "E:1+imps  N:1+guard  H:1+guard+imps"
+   },
+   "look": "Ritual fitted leathers + horned hood hug (LOOK: no hanging robes)",
+   "kitWhy": "Caster stance + hood → bolt/snare/buff; not melee primary",
+   "mage": true,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "light",
+    "cost": 3,
+    "hp": 55,
+    "speed": 4.6,
+    "perception": 30,
+    "attackRange": 30,
+    "gapCloser": 0,
+    "poise": 25,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     700,
+     1200,
+     500
+    ],
+    "attackPeakDmg": 14
+   },
+   "sourceB": {
+    "archetype": "ranged-caster",
+    "tier": "light",
+    "tierId": 1,
+    "cost": 3,
+    "hp": 55,
+    "speed": 4.6,
+    "perception": 30,
+    "attackRange": 30,
+    "gapCloser": null,
+    "poise": 25,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     700,
+     1200,
+     500
+    ],
+    "red": null,
+    "attacks": "runeBolt 8x2 . glyphSnare 14 . lash 10",
+    "maxSingleHit": 14,
+    "maxBurst": 16,
+    "special": "Rime Ritual: channel shields allies in 15 m (-50% frost dmg). Kill or Spike-stun mid-channel → shield shatters, tethered allies stagger 0.7 s"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": "hoarfrostSprite",
+    "arch": "ARCH_SPRITE",
+    "note": "KEY_ALIAS substitutes a built archetype; stats are the alias's, not this unit's"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 55,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 2.1,
+    "boltsToKill": 5,
+    "topSpeed": 4.6,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  },
+  "39_v2_cold_blizzard_assassin": {
+   "slug": "39_v2_cold_blizzard_assassin",
+   "n": "39",
+   "name": "Blizzard Assassin",
+   "realm": "cold",
+   "role": "assassin",
+   "animRole": "assassin",
+   "grip": "DUAL 1H",
+   "combatDataKey": "blizzardAssassin",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "light",
+   "cost": 4,
+   "hp": 48,
+   "speed": 8,
+   "perception": 12,
+   "attackRange": 10,
+   "gapCloser": 0,
+   "poise": 15,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": 16,
+   "leash": null,
+   "carapace": null,
+   "attack": "dash 16 · needles 4×3 · exec 8×4=32",
+   "attackPeakDmg": 32,
+   "element": "ice",
+   "rangeBand": "Mid",
+   "weaponProp": "Short blades / ice darts prop",
+   "telegraphMs": [
+    500,
+    550,
+    600
+   ],
+   "special": "Whiteout Cloak stealth; 3× openers. Wave strips cloak. One stealth striker at a time",
+   "packDoctrine": {
+    "mode": "solo+",
+    "note": "Solo pick-off or Elite Hunt with Colossus",
+    "byDifficulty": "E:solo rare  N:1  H:1 + elite"
+   },
+   "look": "Slim cold assassin, tight leathers, blade-ready arms",
+   "kitWhy": "Slim + fast → dash/backstab; low HP matches glass silhouette",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "light",
+    "cost": 4,
+    "hp": 48,
+    "speed": 8.0,
+    "perception": 12,
+    "attackRange": 10,
+    "gapCloser": 0,
+    "poise": 15,
+    "carapace": null,
+    "burstSpeed": 16,
+    "leash": null,
+    "telegraphMs": [
+     500,
+     550,
+     600
+    ],
+    "attackPeakDmg": 32
+   },
+   "sourceB": {
+    "archetype": "assassin",
+    "tier": "light",
+    "tierId": 1,
+    "cost": 4,
+    "hp": 48,
+    "speed": 8,
+    "perception": 12,
+    "attackRange": 10,
+    "gapCloser": null,
+    "poise": 15,
+    "carapace": null,
+    "burstSpeed": 16,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     500,
+     550,
+     600
+    ],
+    "red": null,
+    "attacks": "dashSlash 16 . needles 4x3 . execution 8x4",
+    "maxSingleHit": 16,
+    "maxBurst": 32,
+    "special": "Whiteout Cloak: near-invisible circling; cyan seams flicker 0.5 s pre-strike. Wave strips cloak; never cloaks while Chilled"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": "frostStalker",
+    "arch": "ARCH_STALKER",
+    "note": "KEY_ALIAS substitutes a built archetype; stats are the alias's, not this unit's"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 48,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 1.8,
+    "boltsToKill": 4,
+    "topSpeed": 16,
+    "fasterThanPlayerRun": true,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": false,
+    "note": "uncatchable on foot AND unescapable on foot (must surf)"
+   }
+  },
+  "61_v3_cold_frost_golem": {
+   "slug": "61_v3_cold_frost_golem",
+   "n": "61",
+   "name": "Frost Golem",
+   "realm": "cold",
+   "role": "golem",
+   "animRole": "golem",
+   "grip": "BODY/FISTS",
+   "combatDataKey": "packIceGolem",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "heavy",
+   "cost": 5,
+   "hp": 300,
+   "speed": 2,
+   "perception": 16,
+   "attackRange": 3,
+   "gapCloser": 0,
+   "poise": 0,
+   "hyperArmor": true,
+   "construct": true,
+   "sizeScale": 2.2,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "piston 24 · pound 20 · swat 16 · core shockwave · masonry lob",
+   "attackPeakDmg": 24,
+   "element": "ice/phys",
+   "rangeBand": "Melee",
+   "weaponProp": "Crystal arms (no prop)",
+   "telegraphMs": [
+    900,
+    1300,
+    1000,
+    1500
+   ],
+   "special": "★ COLD REALM BOSS fixed L10 — 5 crystal cores (body invuln). Kill opens Sand. Field elite 300 HP cores.",
+   "packDoctrine": {
+    "mode": "boss",
+    "note": "Arena gate · 34 m shrine cirque",
+    "byDifficulty": "Arena only"
+   },
+   "look": "Blocky living ice construct — largest cold boss silhouette (~2.2× player)",
+   "kitWhy": "Construct limbs → piston/pound; cores match crystal joint read; slow 2.0 reads colossal",
+   "mage": false,
+   "bossKind": "realm_boss",
+   "bossName": "Shrinebreaker (field 300 cores → arena 2000)",
+   "bossKey": "shrinebreaker",
+   "arenaHp": 2000,
+   "arenaStance": 0,
+   "sourceA": {
+    "tier": "boss",
+    "cost": 25,
+    "hp": 2000,
+    "speed": 2.0,
+    "perception": 20,
+    "attackRange": 3.5,
+    "gapCloser": 0,
+    "poise": 0,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     900,
+     1300,
+     1000,
+     1500
+    ],
+    "attackPeakDmg": 24
+   },
+   "sourceB": {
+    "archetype": "tank-golem",
+    "tier": "heavy",
+    "tierId": 3,
+    "cost": 5,
+    "hp": 300,
+    "speed": 2,
+    "perception": 16,
+    "attackRange": 3,
+    "gapCloser": null,
+    "poise": 0,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": 5,
+    "coreHpEach": 60,
+    "coreHp": null,
+    "construct": true,
+    "hyperArmor": false,
+    "telegraphMs": [
+     900,
+     1300,
+     1000
+    ],
+    "red": null,
+    "attacks": "piston 20 . pound 16 . swat 14",
+    "maxSingleHit": 20,
+    "maxBurst": 20,
+    "special": "Crystal Cores: body invulnerable, bolts deflect; only the 5 crystals damage. Knee → -50% speed; shoulder → arm lost; crown → kill. Boss variant: Shrinebreaker"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 300,
+    "effectiveHpNote": "5 crystal cores x 60 (body invulnerable) - equals the hp field, not additive",
+    "ttkAt26_7dps_s": 11.2,
+    "boltsToKill": 25,
+    "topSpeed": 2,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  },
+  "65_v3_cold_rime_skier_raider": {
+   "slug": "65_v3_cold_rime_skier_raider",
+   "n": "65",
+   "name": "Rime Skier Raider",
+   "realm": "cold",
+   "role": "raider",
+   "animRole": "raider",
+   "grip": "1H AXE/SPEAR",
+   "combatDataKey": null,
+   "meshOnDisk": true,
+   "meshNote": "not in combatData ENEMIES — proposed",
+   "tier": "light",
+   "cost": 2,
+   "hp": 70,
+   "speed": 7.2,
+   "perception": 28,
+   "attackRange": 1.8,
+   "gapCloser": 12,
+   "poise": 25,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": 14,
+   "leash": null,
+   "carapace": null,
+   "attack": "slide charge 14 · spear poke 9 · snow spray 6",
+   "attackPeakDmg": 14,
+   "element": "ice/phys",
+   "rangeBand": "Mid",
+   "weaponProp": "Spear / ice axe prop",
+   "telegraphMs": [
+    550,
+    600,
+    650
+   ],
+   "special": "MESH-ONLY (no combatData row). Alpine ski-leather skirmisher — high mobility anti-kite",
+   "packDoctrine": {
+    "mode": "pair",
+    "note": "2–3 skirmishers; can fill Scout Screen role",
+    "byDifficulty": "E:1–2  N:2  H:3 + imp"
+   },
+   "look": "Alpine raider: tight ski-leathers + short hard shell (LOOK v3 rime_skier_raider)",
+   "kitWhy": "Ski leathers → slide charge primary; spear poke not heavy maul",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "light",
+    "cost": 2,
+    "hp": 70,
+    "speed": 7.2,
+    "perception": 28,
+    "attackRange": 1.8,
+    "gapCloser": 12,
+    "poise": 25,
+    "carapace": null,
+    "burstSpeed": 14,
+    "leash": null,
+    "telegraphMs": [
+     550,
+     600,
+     650
+    ],
+    "attackPeakDmg": 14
+   },
+   "sourceB": null,
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "A-only (mesh has no combatData row) -> A stands as the proposed row",
+   "playerAnchor": {
+    "effectiveHp": 70,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 2.6,
+    "boltsToKill": 6,
+    "topSpeed": 14,
+    "fasterThanPlayerRun": true,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": false,
+    "note": "uncatchable on foot AND unescapable on foot (must surf)"
+   }
+  },
+  "68_v3_cold_hail_plate_guard": {
+   "slug": "68_v3_cold_hail_plate_guard",
+   "n": "68",
+   "name": "Hail Plate Guard",
+   "realm": "cold",
+   "role": "knight",
+   "animRole": "knight",
+   "grip": "1H SWORD+SHIELD",
+   "combatDataKey": "hailPlateGuard",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "heavy",
+   "cost": 5,
+   "hp": 300,
+   "speed": 3,
+   "perception": 30,
+   "attackRange": 1.8,
+   "gapCloser": 4,
+   "poise": 100,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "hook 18 · check 12 · hail stomp 14",
+   "attackPeakDmg": 18,
+   "element": "ice/phys",
+   "rangeBand": "Melee",
+   "weaponProp": "Sword + shield prop",
+   "telegraphMs": [
+    800,
+    700,
+    1100
+   ],
+   "special": "Hailstone Bulwark: planted KB/fling immune; frontal bolts ricochet. Protects mages",
+   "packDoctrine": {
+    "mode": "post",
+    "note": "Post guard with cultist/imps (Ritual Circle)",
+    "byDifficulty": "E:solo post  N:1+cultist  H:1+mage+imps"
+   },
+   "look": "Full plate soldier, hailstone emboss, square stance (LOOK v3 hail_plate_guard)",
+   "kitWhy": "Full plate + square stance → guard/hook/stomp; wall not skirmisher",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "heavy",
+    "cost": 5,
+    "hp": 300,
+    "speed": 3.0,
+    "perception": 30,
+    "attackRange": 1.8,
+    "gapCloser": 4,
+    "poise": 100,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     800,
+     700,
+     1100
+    ],
+    "attackPeakDmg": 18
+   },
+   "sourceB": {
+    "archetype": "warden-tank",
+    "tier": "heavy",
+    "tierId": 3,
+    "cost": 5,
+    "hp": 300,
+    "speed": 3,
+    "perception": 30,
+    "attackRange": 1.8,
+    "gapCloser": 4,
+    "poise": 100,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     800,
+     700,
+     1100
+    ],
+    "red": null,
+    "attacks": "hook 18 . check 12 . hailStomp 14",
+    "maxSingleHit": 18,
+    "maxBurst": 18,
+    "special": "Hailstone Bulwark: planted — immune to KB AND fling; frontal bolts ricochet as hail chips (3 dmg to player <4 m). Breaks from behind or Spike-stun"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": "glacierBrute",
+    "arch": "ARCH_BRUTE",
+    "note": "KEY_ALIAS substitutes a built archetype; stats are the alias's, not this unit's"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 300,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 11.2,
+    "boltsToKill": 25,
+    "topSpeed": 3,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  },
+  "11_sand_dune_imp": {
+   "slug": "11_sand_dune_imp",
+   "n": "11",
+   "name": "Dune Imp",
+   "realm": "sand",
+   "role": "swarm",
+   "animRole": "swarm",
+   "grip": "CLAWS / BODY",
+   "combatDataKey": "duneImp",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "fodder",
+   "cost": 1,
+   "hp": 30,
+   "speed": 6.2,
+   "perception": 18,
+   "attackRange": 1.2,
+   "gapCloser": 4,
+   "poise": 10,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "rake 5×2 · pounce 9 · grit fling",
+   "attackPeakDmg": 9,
+   "element": "sand",
+   "rangeBand": "Mid",
+   "weaponProp": "Claws",
+   "telegraphMs": [
+    500,
+    650,
+    550
+   ],
+   "special": "Dune Dive: pack submerges as mounds, resurfaces surrounding player",
+   "packDoctrine": {
+    "mode": "always",
+    "note": "3–6 mounds; Mound Field pack",
+    "byDifficulty": "E:3  N:5  H:5–6 + husk"
+   },
+   "look": "Small ochre grit-leather humanoid, claw hands",
+   "kitWhy": "Imp scale → rake/pounce/grit; Dune Dive matches sand-mound fantasy",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "fodder",
+    "cost": 1,
+    "hp": 30,
+    "speed": 6.2,
+    "perception": 18,
+    "attackRange": 1.2,
+    "gapCloser": 4,
+    "poise": 10,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     500,
+     650,
+     550
+    ],
+    "attackPeakDmg": 9
+   },
+   "sourceB": {
+    "archetype": "swarm-melee",
+    "tier": "fodder",
+    "tierId": 0,
+    "cost": 1,
+    "hp": 30,
+    "speed": 6.2,
+    "perception": 18,
+    "attackRange": 1.2,
+    "gapCloser": 4,
+    "poise": 10,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     500,
+     650,
+     550
+    ],
+    "red": null,
+    "attacks": "rake 5x2 . pounce 9 . gritFling 0",
+    "maxSingleHit": 9,
+    "maxBurst": 10,
+    "special": "Dune Dive: pack submerges, travels as mounds, resurfaces surrounding the player. Wave/Vortex scatters the ring"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 30,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 1.1,
+    "boltsToKill": 3,
+    "topSpeed": 6.2,
+    "fasterThanPlayerRun": true,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": false,
+    "note": "uncatchable on foot AND unescapable on foot (must surf)"
+   }
+  },
+  "12_sand_dune_brute": {
+   "slug": "12_sand_dune_brute",
+   "n": "12",
+   "name": "Dune Brute",
+   "realm": "sand",
+   "role": "brute",
+   "animRole": "brute",
+   "grip": "2H MAUL",
+   "combatDataKey": "duneBrute",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "elite",
+   "cost": 5,
+   "hp": 680,
+   "speed": 2.2,
+   "perception": 22,
+   "attackRange": 2.5,
+   "gapCloser": 12,
+   "poise": 140,
+   "hyperArmor": true,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "slam 26 · sweep 20 · bulldoze 24 · grab 28",
+   "attackPeakDmg": 28,
+   "element": "sand/phys",
+   "rangeBand": "Melee",
+   "weaponProp": "Stone club prop",
+   "telegraphMs": [
+    1300,
+    1000,
+    1500,
+    900
+   ],
+   "special": "Anchored Mass: full KB/fling immune. Spike-stun only opener. MINIBOSS: Gatekeeper of Brass 1500",
+   "packDoctrine": {
+    "mode": "solo+",
+    "note": "Brass Wall tank; rarely alone on Hard",
+    "byDifficulty": "E:solo  N:1+bandits  H:1+bandits+mage"
+   },
+   "look": "Huge dune-plate smash frame, bronze/ochre mass",
+   "kitWhy": "Mass + slow SPD → slam/bulldoze/grab; not a caster",
+   "mage": false,
+   "bossKind": "miniboss",
+   "bossName": "Gatekeeper of Brass (1500 HP)",
+   "bossKey": "gatekeeperOfBrass",
+   "arenaHp": 1500,
+   "arenaStance": 220,
+   "sourceA": {
+    "tier": "elite",
+    "cost": 5,
+    "hp": 680,
+    "speed": 2.2,
+    "perception": 22,
+    "attackRange": 2.5,
+    "gapCloser": 12,
+    "poise": 140,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     1300,
+     1000,
+     1500,
+     900
+    ],
+    "attackPeakDmg": 28
+   },
+   "sourceB": {
+    "archetype": "tank",
+    "tier": "elite",
+    "tierId": 4,
+    "cost": 5,
+    "hp": 680,
+    "speed": 2.2,
+    "perception": 22,
+    "attackRange": 2.5,
+    "gapCloser": 12,
+    "poise": 140,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": true,
+    "telegraphMs": [
+     1300,
+     1000,
+     1500,
+     900
+    ],
+    "red": [
+     2
+    ],
+    "attacks": "slam 26 . sweep 20 . bulldoze 24 . grabHurl 28",
+    "maxSingleHit": 28,
+    "maxBurst": 28,
+    "special": "Anchored Mass: fully immune to Wave KB and Vortex fling; Spike-stun is the ONLY opener (visor weak window ×2 dmg, 2.5 s). Boss variant: Gatekeeper of Brass"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 680,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 25.5,
+    "boltsToKill": 57,
+    "topSpeed": 2.2,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  },
+  "13_sand_dust_stalker": {
+   "slug": "13_sand_dust_stalker",
+   "n": "13",
+   "name": "Dust Stalker",
+   "realm": "sand",
+   "role": "stalker",
+   "animRole": "stalker",
+   "grip": "DUAL KNIVES",
+   "combatDataKey": "dustStalker",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "light",
+   "cost": 3,
+   "hp": 55,
+   "speed": 7.8,
+   "perception": 12,
+   "attackRange": 8,
+   "gapCloser": 0,
+   "poise": 15,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": 13,
+   "leash": 60,
+   "carapace": null,
+   "attack": "opener 26 (~3×) · flurry 6×3 · hamstring 10",
+   "attackPeakDmg": 26,
+   "element": "sand",
+   "rangeBand": "Melee",
+   "weaponProp": "Curved knives prop",
+   "telegraphMs": [
+    600,
+    500,
+    550
+   ],
+   "special": "Sand Shroud pursuer 13 m/s submerged, 60 m leash — Sand anti-kite",
+   "packDoctrine": {
+    "mode": "pair",
+    "note": "1–2 with packs; stealth token shared",
+    "byDifficulty": "E:1  N:1–2  H:2"
+   },
+   "look": "Lean dust predator, fitted grit wraps, knife-ready",
+   "kitWhy": "Predator lean → ambush opener + flurry; shroud = sand submerge",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "light",
+    "cost": 3,
+    "hp": 55,
+    "speed": 7.8,
+    "perception": 12,
+    "attackRange": 8,
+    "gapCloser": 0,
+    "poise": 15,
+    "carapace": null,
+    "burstSpeed": 13,
+    "leash": 60,
+    "telegraphMs": [
+     600,
+     500,
+     550
+    ],
+    "attackPeakDmg": 26
+   },
+   "sourceB": {
+    "archetype": "ambusher-pursuer",
+    "tier": "light",
+    "tierId": 1,
+    "cost": 3,
+    "hp": 55,
+    "speed": 7.8,
+    "perception": 12,
+    "attackRange": 8,
+    "gapCloser": null,
+    "poise": 15,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": 13,
+    "leash": 60,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     600,
+     500,
+     550
+    ],
+    "red": null,
+    "attacks": "opener 26 . flurry 6x3 . hamstring 10",
+    "maxSingleHit": 26,
+    "maxBurst": 26,
+    "special": "Sand Shroud: dust-ripple stalking; pursues submerged 13 m/s up to 60 m; goggle-immune to blinds/spray. Mini-Vortex on the ripple → out, stunned 1.5 s"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "_burstIsSubmerged": true,
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 55,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 2.1,
+    "boltsToKill": 5,
+    "topSpeed": 13,
+    "fasterThanPlayerRun": true,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": false,
+    "note": "uncatchable on foot AND unescapable on foot (must surf)"
+   }
+  },
+  "16_sand_dust_mage": {
+   "slug": "16_sand_dust_mage",
+   "n": "16",
+   "name": "Dust Mage",
+   "realm": "sand",
+   "role": "mage",
+   "animRole": "mage",
+   "grip": "STAFF CAST",
+   "combatDataKey": "dustMage",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "light",
+   "cost": 3,
+   "hp": 60,
+   "speed": 4.6,
+   "perception": 32,
+   "attackRange": 28,
+   "gapCloser": 0,
+   "poise": 25,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "grit bolt 9 · sandblast 12 · dust devil 4/s · glass lance 22★",
+   "attackPeakDmg": 22,
+   "element": "sand",
+   "rangeBand": "Far",
+   "weaponProp": "Staff / sand focus prop",
+   "telegraphMs": [
+    700,
+    550,
+    800,
+    1500
+   ],
+   "special": "★ TRUE MAGE. Mirage Step blink + clone. Glass lance = 1.5 s red interruptible channel",
+   "packDoctrine": {
+    "mode": "pack",
+    "note": "Always with bandits/brute (ranged slot rule)",
+    "byDifficulty": "E:1+imps  N:1+bandits  H:1+brute pack"
+   },
+   "look": "Caster body language, ochre fitted wraps (no robe flaps per LOOK lock)",
+   "kitWhy": "Caster pose → grit bolt / zone / glass lance; true ranged slot",
+   "mage": true,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "light",
+    "cost": 3,
+    "hp": 60,
+    "speed": 4.6,
+    "perception": 32,
+    "attackRange": 28,
+    "gapCloser": 0,
+    "poise": 25,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     700,
+     550,
+     800,
+     1500
+    ],
+    "attackPeakDmg": 22
+   },
+   "sourceB": {
+    "archetype": "mage",
+    "tier": "light",
+    "tierId": 1,
+    "cost": 3,
+    "hp": 60,
+    "speed": 4.6,
+    "perception": 32,
+    "attackRange": 28,
+    "gapCloser": null,
+    "poise": 25,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     700,
+     550,
+     800,
+     1500
+    ],
+    "red": [
+     3
+    ],
+    "attacks": "gritBolt 9 . sandblast 12 . dustDevil 4 . glassLance 22",
+    "maxSingleHit": 22,
+    "maxBurst": 22,
+    "special": "Mirage Step: on hit blinks 8 m leaving a crumbling clone; 6 s cd — Mini-Vortex covers the radius; sustained pressure wins"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 60,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 2.2,
+    "boltsToKill": 5,
+    "topSpeed": 4.6,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  },
+  "43_v2_sand_dust_stalker": {
+   "slug": "43_v2_sand_dust_stalker",
+   "n": "43",
+   "name": "Dust Stalker v2",
+   "realm": "sand",
+   "role": "stalker",
+   "animRole": "stalker",
+   "grip": "DUAL KNIVES",
+   "combatDataKey": "dustStalker",
+   "meshOnDisk": true,
+   "meshNote": "v2 mesh of dustStalker",
+   "tier": "light",
+   "cost": 3,
+   "hp": 55,
+   "speed": 7.8,
+   "perception": 12,
+   "attackRange": 8,
+   "gapCloser": 0,
+   "poise": 15,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": 13,
+   "leash": 60,
+   "carapace": null,
+   "attack": "same as 13, cleaner silhouette",
+   "attackPeakDmg": 26,
+   "element": "sand",
+   "rangeBand": "Melee",
+   "weaponProp": "Knives prop",
+   "telegraphMs": [
+    600,
+    500,
+    550
+   ],
+   "special": "Elite pack stalker variant",
+   "packDoctrine": {
+    "mode": "pair",
+    "note": "Swap with 13",
+    "byDifficulty": "E:1  N:1–2  H:2"
+   },
+   "look": "Cleaner dust-stalker v2 of 13",
+   "kitWhy": "Same stalker kit as 13",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "light",
+    "cost": 3,
+    "hp": 58,
+    "speed": 7.9,
+    "perception": 12,
+    "attackRange": 8,
+    "gapCloser": 0,
+    "poise": 15,
+    "carapace": null,
+    "burstSpeed": 13,
+    "leash": 60,
+    "telegraphMs": [
+     600,
+     500,
+     550
+    ],
+    "attackPeakDmg": 26
+   },
+   "sourceB": {
+    "archetype": "ambusher-pursuer",
+    "tier": "light",
+    "tierId": 1,
+    "cost": 3,
+    "hp": 55,
+    "speed": 7.8,
+    "perception": 12,
+    "attackRange": 8,
+    "gapCloser": null,
+    "poise": 15,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": 13,
+    "leash": 60,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     600,
+     500,
+     550
+    ],
+    "red": null,
+    "attacks": "opener 26 . flurry 6x3 . hamstring 10",
+    "maxSingleHit": 26,
+    "maxBurst": 26,
+    "special": "Sand Shroud: dust-ripple stalking; pursues submerged 13 m/s up to 60 m; goggle-immune to blinds/spray. Mini-Vortex on the ripple → out, stunned 1.5 s"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "_burstIsSubmerged": true,
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 55,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 2.1,
+    "boltsToKill": 5,
+    "topSpeed": 13,
+    "fasterThanPlayerRun": true,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": false,
+    "note": "uncatchable on foot AND unescapable on foot (must surf)"
+   }
+  },
+  "48_v2_sand_dune_sentinel": {
+   "slug": "48_v2_sand_dune_sentinel",
+   "n": "48",
+   "name": "Dune Sentinel",
+   "realm": "sand",
+   "role": "sentinel",
+   "animRole": "sentinel",
+   "grip": "1H+SHIELD",
+   "combatDataKey": "duneSentinel",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "elite",
+   "cost": 8,
+   "hp": 380,
+   "speed": 3.2,
+   "perception": 35,
+   "attackRange": 3.5,
+   "gapCloser": 0,
+   "poise": 110,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "sweep 18 · chop 30 · stomp quake 14",
+   "attackPeakDmg": 30,
+   "element": "sand/phys",
+   "rangeBand": "Melee",
+   "weaponProp": "Halberd / spear + shield prop",
+   "telegraphMs": [
+    900,
+    1400,
+    1000
+   ],
+   "special": "Watchman's Horn: 35 m sight; pulls imps/bandits 30 m. Snipe 36–40 m or Spike-cancel",
+   "packDoctrine": {
+    "mode": "post",
+    "note": "Watch Post: 1 sentinel + scouts",
+    "byDifficulty": "E:solo post  N:1+2 scouts  H:1+bandits"
+   },
+   "look": "Gate-guard plate, tall spear-ready stance",
+   "kitWhy": "Post sentinel → block/thrust/horn; holds ground not chases",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "elite",
+    "cost": 8,
+    "hp": 380,
+    "speed": 3.2,
+    "perception": 35,
+    "attackRange": 3.5,
+    "gapCloser": 0,
+    "poise": 110,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     900,
+     1400,
+     1000
+    ],
+    "attackPeakDmg": 30
+   },
+   "sourceB": {
+    "archetype": "sentinel",
+    "tier": "elite",
+    "tierId": 4,
+    "cost": 8,
+    "hp": 380,
+    "speed": 3.2,
+    "perception": 35,
+    "attackRange": 3.5,
+    "gapCloser": null,
+    "poise": 110,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     900,
+     1400,
+     1000
+    ],
+    "red": [
+     1
+    ],
+    "attacks": "sweep 18 . chop 30 . stompQuake 14",
+    "maxSingleHit": 30,
+    "maxBurst": 30,
+    "special": "Watchman's Horn: 35 m sightline; horn pulls every imp/bandit in 30 m. Kill first from 36–40 m — the pick-off lesson"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 380,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 14.2,
+    "boltsToKill": 32,
+    "topSpeed": 3.2,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  },
+  "50_v2_sand_dune_warden": {
+   "slug": "50_v2_sand_dune_warden",
+   "n": "50",
+   "name": "Dune Warden",
+   "realm": "sand",
+   "role": "warden",
+   "animRole": "boss",
+   "grip": "2H GLAIVE",
+   "combatDataKey": "duneWarden",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "boss",
+   "cost": 25,
+   "hp": 2400,
+   "speed": 4.8,
+   "perception": 35,
+   "attackRange": 2.5,
+   "gapCloser": 0,
+   "poise": 220,
+   "hyperArmor": true,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "sand slash 18 · khopesh chain · warden slam · geyser",
+   "attackPeakDmg": 18,
+   "element": "sand",
+   "rangeBand": "Mid",
+   "weaponProp": "Khopesh / glaive prop",
+   "telegraphMs": [
+    800,
+    700,
+    1100,
+    1200
+   ],
+   "special": "★ REALM BOSS. Sand Ward dome + Decree troop command. Stance 220. Fixed L20",
+   "packDoctrine": {
+    "mode": "boss",
+    "note": "Arena only + adds; not ambient",
+    "byDifficulty": "Arena script only"
+   },
+   "look": "Elite sand controller plate + command silhouette",
+   "kitWhy": "Warden mass + command posture → slash/slam/dome/decree (arena script)",
+   "mage": false,
+   "bossKind": "realm_boss",
+   "bossName": "Warden of the Sundered Gate",
+   "bossKey": "duneWarden",
+   "arenaHp": 2400,
+   "arenaStance": 220,
+   "sourceA": {
+    "tier": "boss",
+    "cost": 25,
+    "hp": 2400,
+    "speed": 4.8,
+    "perception": 35,
+    "attackRange": 2.5,
+    "gapCloser": 0,
+    "poise": 220,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     800,
+     700,
+     1100,
+     1200
+    ],
+    "attackPeakDmg": 18
+   },
+   "sourceB": {
+    "archetype": "boss",
+    "tier": "boss",
+    "tierId": 5,
+    "cost": 25,
+    "hp": 2400,
+    "speed": 4.8,
+    "perception": 35,
+    "attackRange": 2.5,
+    "gapCloser": null,
+    "poise": 220,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     800,
+     700,
+     1100,
+     1200
+    ],
+    "red": [
+     2
+    ],
+    "attacks": "sandSlash 18 . khopeshChain 12x3 . wardensSlam ? . geyser 10",
+    "maxSingleHit": 18,
+    "maxBurst": 36,
+    "special": "Sand Ward dome (eats outside bolts; Mini-Vortex collapses 12 s) + Decree troop command. Full script: BOSSES.duneWarden / §7.4"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 2400,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 89.9,
+    "boltsToKill": 200,
+    "topSpeed": 4.8,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  },
+  "73_v3_sand_mummy": {
+   "slug": "73_v3_sand_mummy",
+   "n": "73",
+   "name": "Sand Mummy",
+   "realm": "sand",
+   "role": "mummy",
+   "animRole": "mummy",
+   "grip": "FISTS/WRAP",
+   "combatDataKey": null,
+   "meshOnDisk": true,
+   "meshNote": "not in combatData — proposed undead medium · #73 mummy",
+   "tier": "medium",
+   "cost": 3,
+   "hp": 110,
+   "speed": 2.4,
+   "perception": 16,
+   "attackRange": 2.0,
+   "gapCloser": 0,
+   "poise": 40,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "grab 14 · curse DoT 4/s · sand spit 8 · wrap snare 10",
+   "attackPeakDmg": 14,
+   "element": "sand/dark",
+   "rangeBand": "Melee",
+   "weaponProp": "Bandaged fists (optional khopesh prop)",
+   "telegraphMs": [
+    700,
+    900,
+    600
+   ],
+   "special": "MESH-ONLY undead. #73 IS MUMMY (user lock) — not scorpion. Slow horror / decay stacks",
+   "packDoctrine": {
+    "mode": "pair",
+    "note": "1–2 with imp mounds; rarely packs alone",
+    "byDifficulty": "E:1  N:1–2  H:2 + imps"
+   },
+   "look": "Tight linen body wraps, desert undead (LOOK v3 dune_mummy — no loose flaps)",
+   "kitWhy": "Wraps → grab/wrap snare; slow SPD 2.4; curse/spit secondary — not scorpion tail kit",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "medium",
+    "cost": 3,
+    "hp": 110,
+    "speed": 2.4,
+    "perception": 16,
+    "attackRange": 2.0,
+    "gapCloser": 0,
+    "poise": 40,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     700,
+     900,
+     600
+    ],
+    "attackPeakDmg": 14
+   },
+   "sourceB": null,
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "A-only (mesh has no combatData row) -> A stands as the proposed row",
+   "playerAnchor": {
+    "effectiveHp": 110,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 4.1,
+    "boltsToKill": 10,
+    "topSpeed": 2.4,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  },
+  "75_v3_sand_bleached_bone_knight": {
+   "slug": "75_v3_sand_bleached_bone_knight",
+   "n": "75",
+   "name": "Bone Knight",
+   "realm": "sand",
+   "role": "knight",
+   "animRole": "knight",
+   "grip": "1H SWORD+SHIELD",
+   "combatDataKey": null,
+   "meshOnDisk": true,
+   "meshNote": "not in combatData — proposed heavy",
+   "tier": "heavy",
+   "cost": 5,
+   "hp": 320,
+   "speed": 2.8,
+   "perception": 28,
+   "attackRange": 2.2,
+   "gapCloser": 4,
+   "poise": 110,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "slash combo 12×2 · shield slam 18 · bone shard 10",
+   "attackPeakDmg": 20,
+   "element": "phys/dark",
+   "rangeBand": "Melee",
+   "weaponProp": "Bone sword + shield prop",
+   "telegraphMs": [
+    800,
+    1000,
+    700
+   ],
+   "special": "MESH-ONLY. Undead bone plate; can stand in for Hourglass Automaton post if needed",
+   "packDoctrine": {
+    "mode": "solo+",
+    "note": "Solo elite or with 2 imps",
+    "byDifficulty": "E:solo  N:1+imps  H:1+bandit"
+   },
+   "look": "White bone plate over dried sinew, desert-bleached (LOOK v3 bleached_bone_knight)",
+   "kitWhy": "Bone plate knight → slash/shield/stomp; chip resist fantasy via high poise",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "heavy",
+    "cost": 5,
+    "hp": 320,
+    "speed": 2.8,
+    "perception": 28,
+    "attackRange": 2.2,
+    "gapCloser": 4,
+    "poise": 110,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     800,
+     1000,
+     700
+    ],
+    "attackPeakDmg": 20
+   },
+   "sourceB": null,
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "A-only (mesh has no combatData row) -> A stands as the proposed row",
+   "playerAnchor": {
+    "effectiveHp": 320,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 12.0,
+    "boltsToKill": 27,
+    "topSpeed": 2.8,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  },
+  "77_v3_sand_windscour_bandit": {
+   "slug": "77_v3_sand_windscour_bandit",
+   "n": "77",
+   "name": "Windscour Bandit",
+   "realm": "sand",
+   "role": "bandit",
+   "animRole": "bandit",
+   "grip": "1H SCIMITAR",
+   "combatDataKey": "windscourBandit",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "medium",
+   "cost": 3,
+   "hp": 90,
+   "speed": 5,
+   "perception": 26,
+   "attackRange": 1.8,
+   "gapCloser": 10,
+   "poise": 30,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "slash 9×2 · grit blind · boot shove 6 · flank +30%",
+   "attackPeakDmg": 9,
+   "element": "sand/phys",
+   "rangeBand": "Melee",
+   "weaponProp": "Scimitar + dagger prop",
+   "telegraphMs": [
+    600,
+    550,
+    500
+   ],
+   "special": "Pack Doctrine: NEVER alone — 3–5, one off-camera. Great Vortex designed wipe",
+   "packDoctrine": {
+    "mode": "always",
+    "note": "Bandit Doctrine flagship pack",
+    "byDifficulty": "E:3  N:4  H:5 + mage"
+   },
+   "look": "Weathered human bandit, short hard vest + wraps (LOOK v3 windscour_bandit)",
+   "kitWhy": "Human raider clothes → scimitar/kick/blind; pack doctrine not solo elite",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "medium",
+    "cost": 3,
+    "hp": 90,
+    "speed": 5.0,
+    "perception": 26,
+    "attackRange": 1.8,
+    "gapCloser": 10,
+    "poise": 30,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     600,
+     550,
+     500
+    ],
+    "attackPeakDmg": 9
+   },
+   "sourceB": {
+    "archetype": "skirmisher",
+    "tier": "medium",
+    "tierId": 2,
+    "cost": 3,
+    "hp": 90,
+    "speed": 5,
+    "perception": 26,
+    "attackRange": 1.8,
+    "gapCloser": 10,
+    "poise": 30,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     600,
+     550,
+     500
+    ],
+    "red": null,
+    "attacks": "slash 9x2 . gritBlind 0 . bootShove 6",
+    "maxSingleHit": 9,
+    "maxBurst": 18,
+    "special": "Pack Doctrine: never alone — 3–5 strong, one circling off-camera, one blinding frontally. Great Vortex is the designed wipe"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 90,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 3.4,
+    "boltsToKill": 8,
+    "topSpeed": 5,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  },
+  "21_ash_cinder_imp": {
+   "slug": "21_ash_cinder_imp",
+   "n": "21",
+   "name": "Cinder Imp",
+   "realm": "ash",
+   "role": "swarm",
+   "animRole": "swarm",
+   "grip": "CLAWS / BODY",
+   "combatDataKey": "cinderImp",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "fodder",
+   "cost": 1,
+   "hp": 34,
+   "speed": 6.2,
+   "perception": 16,
+   "attackRange": 1,
+   "gapCloser": 3.5,
+   "poise": 10,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "rake 5×2 · lunge 8 · frenzy bite DoT",
+   "attackPeakDmg": 8,
+   "element": "fire",
+   "rangeBand": "Mid",
+   "weaponProp": "Claws",
+   "telegraphMs": [
+    500,
+    600
+   ],
+   "special": "Ash-drift pop: buried packs of 3–6; death cinder puff 3 dmg",
+   "packDoctrine": {
+    "mode": "always",
+    "note": "3–6 erupt packs",
+    "byDifficulty": "E:3  N:4–5  H:5–6"
+   },
+   "look": "Small charcoal/cinder imp, scorched tight hide",
+   "kitWhy": "Imp scale + fire accent → rake/lunge/death puff",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "fodder",
+    "cost": 1,
+    "hp": 34,
+    "speed": 6.2,
+    "perception": 16,
+    "attackRange": 1.0,
+    "gapCloser": 3.5,
+    "poise": 10,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     500,
+     600
+    ],
+    "attackPeakDmg": 8
+   },
+   "sourceB": {
+    "archetype": "swarm-melee",
+    "tier": "fodder",
+    "tierId": 0,
+    "cost": 1,
+    "hp": 34,
+    "speed": 6.2,
+    "perception": 16,
+    "attackRange": 1,
+    "gapCloser": 3.5,
+    "poise": 10,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     500,
+     600
+    ],
+    "red": null,
+    "attacks": "rake 5x2 . lunge 8 . frenzyBite 2",
+    "maxSingleHit": 8,
+    "maxBurst": 10,
+    "special": "Ash-drift pop: sleeps buried, erupts in packs of 3–6; death cinder puff 3 dmg point-blank — kill at range"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 34,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 1.3,
+    "boltsToKill": 3,
+    "topSpeed": 6.2,
+    "fasterThanPlayerRun": true,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": false,
+    "note": "uncatchable on foot AND unescapable on foot (must surf)"
+   }
+  },
+  "22_ash_slag_brute": {
+   "slug": "22_ash_slag_brute",
+   "n": "22",
+   "name": "Slag Brute",
+   "realm": "ash",
+   "role": "brute",
+   "animRole": "brute",
+   "grip": "2H MAUL",
+   "combatDataKey": "slagBrute",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "elite",
+   "cost": 5,
+   "hp": 560,
+   "speed": 2.2,
+   "perception": 22,
+   "attackRange": 2.5,
+   "gapCloser": 8,
+   "poise": 140,
+   "hyperArmor": true,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "slam 28 · backhand 22 · slag charge 26",
+   "attackPeakDmg": 28,
+   "element": "fire/phys",
+   "rangeBand": "Melee",
+   "weaponProp": "Slag hammer prop",
+   "telegraphMs": [
+    1300,
+    900,
+    1200
+   ],
+   "special": "Too heavy to fling; Vortex 50% slow only. Charge into Spike wall = self-stagger",
+   "packDoctrine": {
+    "mode": "solo+",
+    "note": "Widowmaker triad with assassin + mage",
+    "byDifficulty": "E:solo  N:1+mage  H:1+assassin+mage"
+   },
+   "look": "Oversized slag/charcoal brute mass",
+   "kitWhy": "Huge frame → slam/charge; hyper-armor matches dense slag read",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "elite",
+    "cost": 5,
+    "hp": 560,
+    "speed": 2.2,
+    "perception": 22,
+    "attackRange": 2.5,
+    "gapCloser": 8,
+    "poise": 140,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     1300,
+     900,
+     1200
+    ],
+    "attackPeakDmg": 28
+   },
+   "sourceB": {
+    "archetype": "tank",
+    "tier": "elite",
+    "tierId": 4,
+    "cost": 5,
+    "hp": 560,
+    "speed": 2.2,
+    "perception": 22,
+    "attackRange": 2.5,
+    "gapCloser": 8,
+    "poise": 140,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": true,
+    "telegraphMs": [
+     1300,
+     900,
+     1200
+    ],
+    "red": [
+     2
+    ],
+    "attacks": "slam 28 . backhand 22 . slagCharge 26",
+    "maxSingleHit": 28,
+    "maxBurst": 28,
+    "special": "Too heavy to fling: Wave KB immune; Great Vortex only slows 50%. Charge into rock/Spike wall = 1.5 s self-stagger; Spike-stun = the window"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 560,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 21.0,
+    "boltsToKill": 47,
+    "topSpeed": 2.2,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  },
+  "25_ash_scorch_raider": {
+   "slug": "25_ash_scorch_raider",
+   "n": "25",
+   "name": "Scorch Raider",
+   "realm": "ash",
+   "role": "raider",
+   "animRole": "raider",
+   "grip": "1H AXE/SPEAR",
+   "combatDataKey": "scorchRaider",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "light",
+   "cost": 2,
+   "hp": 75,
+   "speed": 6.6,
+   "perception": 30,
+   "attackRange": 1.5,
+   "gapCloser": 12,
+   "poise": 25,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": 17,
+   "leash": 60,
+   "carapace": null,
+   "attack": "combo 7×3 · ember flick 8 · cutting lunge 14",
+   "attackPeakDmg": 14,
+   "element": "fire/phys",
+   "rangeBand": "Melee",
+   "weaponProp": "Hatchet / fire axe prop",
+   "telegraphMs": [
+    550,
+    600,
+    650
+   ],
+   "special": "Slope-chaser: toboggan 17 m/s downslope — Ash anti-kite. Cast-on-the-move lesson",
+   "packDoctrine": {
+    "mode": "pack",
+    "note": "Slope Chase: 3 raiders + mage",
+    "byDifficulty": "E:2  N:3  H:3–4 + mage"
+   },
+   "look": "Mobile scorch skirmisher, fitted scorched leathers",
+   "kitWhy": "Mobile raider → combo/lunge/slope chase; not tank",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "light",
+    "cost": 2,
+    "hp": 75,
+    "speed": 6.6,
+    "perception": 30,
+    "attackRange": 1.5,
+    "gapCloser": 12,
+    "poise": 25,
+    "carapace": null,
+    "burstSpeed": 17,
+    "leash": 60,
+    "telegraphMs": [
+     550,
+     600,
+     650
+    ],
+    "attackPeakDmg": 14
+   },
+   "sourceB": {
+    "archetype": "skirmisher-pursuer",
+    "tier": "light",
+    "tierId": 1,
+    "cost": 2,
+    "hp": 75,
+    "speed": 6.6,
+    "perception": 30,
+    "attackRange": 1.5,
+    "gapCloser": 12,
+    "poise": 25,
+    "carapace": null,
+    "burstSpeed": 17,
+    "submergedSpeed": null,
+    "leash": 60,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     550,
+     600,
+     650
+    ],
+    "red": null,
+    "attacks": "combo 7x3 . emberFlick 8 . cuttingLunge 14",
+    "maxSingleHit": 14,
+    "maxBurst": 21,
+    "special": "Slope-chaser: pursues at near-surf speed (toboggan 17 m/s downslope), flanking both sides — Ash's anti-kite answer"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 75,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 2.8,
+    "boltsToKill": 7,
+    "topSpeed": 17,
+    "fasterThanPlayerRun": true,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": false,
+    "note": "uncatchable on foot AND unescapable on foot (must surf)"
+   }
+  },
+  "26_ash_smoke_mage": {
+   "slug": "26_ash_smoke_mage",
+   "n": "26",
+   "name": "Smoke Mage",
+   "realm": "ash",
+   "role": "mage",
+   "animRole": "mage",
+   "grip": "STAFF CAST",
+   "combatDataKey": "smokeMage",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "light",
+   "cost": 3,
+   "hp": 65,
+   "speed": 3.4,
+   "perception": 35,
+   "attackRange": 35,
+   "gapCloser": 0,
+   "poise": 20,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "smolder bolt 12 · ash pall 5/s · ember lash 14",
+   "attackPeakDmg": 14,
+   "element": "fire/dark",
+   "rangeBand": "Far",
+   "weaponProp": "Ember staff prop",
+   "telegraphMs": [
+    800,
+    1200,
+    550
+   ],
+   "special": "★ TRUE MAGE. Smoke-step escape (max ×2). Spike-stun interrupts step",
+   "packDoctrine": {
+    "mode": "pack",
+    "note": "In nearly every Ash pack (ranged slot)",
+    "byDifficulty": "E:1+imps  N:1+raiders  H:1+full triad"
+   },
+   "look": "Ash caster silhouette, charcoal fitted wraps + ember accents",
+   "kitWhy": "Caster → bolt/zone/smoke-step; true ash ranged",
+   "mage": true,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "light",
+    "cost": 3,
+    "hp": 65,
+    "speed": 3.4,
+    "perception": 35,
+    "attackRange": 35,
+    "gapCloser": 0,
+    "poise": 20,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     800,
+     1200,
+     550
+    ],
+    "attackPeakDmg": 14
+   },
+   "sourceB": {
+    "archetype": "mage",
+    "tier": "light",
+    "tierId": 1,
+    "cost": 3,
+    "hp": 65,
+    "speed": 3.4,
+    "perception": 35,
+    "attackRange": 35,
+    "gapCloser": null,
+    "poise": 20,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     800,
+     1200,
+     550
+    ],
+    "red": null,
+    "attacks": "smolderBolt 12 . ashPall 5 . emberLash 14",
+    "maxSingleHit": 14,
+    "maxBurst": 14,
+    "special": "Smoke-step: at <8 m or on heavy hit re-forms 12–15 m away (2 s cd, max ×2). Spike-stun interrupts: stun → burst"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 65,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 2.4,
+    "boltsToKill": 6,
+    "topSpeed": 3.4,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  },
+  "28_ash_cinder_sentinel": {
+   "slug": "28_ash_cinder_sentinel",
+   "n": "28",
+   "name": "Cinder Sentinel",
+   "realm": "ash",
+   "role": "sentinel",
+   "animRole": "sentinel",
+   "grip": "1H+SHIELD",
+   "combatDataKey": "cinderSentinel",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "heavy",
+   "cost": 8,
+   "hp": 260,
+   "speed": 4.8,
+   "perception": 35,
+   "attackRange": 4,
+   "gapCloser": 0,
+   "poise": 90,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "sweep 16 · advancing thrust 20 · crest bash 12",
+   "attackPeakDmg": 20,
+   "element": "fire/phys",
+   "rangeBand": "Melee",
+   "weaponProp": "Spear + tower shield prop",
+   "telegraphMs": [
+    900,
+    800,
+    600
+   ],
+   "special": "Beacon crest: 3 s ignition pings ash enemies 40 m. Fixed patrols; snipe 36–40 m",
+   "packDoctrine": {
+    "mode": "post",
+    "note": "Beacon Route: 1 + 2 raiders",
+    "byDifficulty": "E:solo patrol  N:1+2 raiders  H:1+mage+raiders"
+   },
+   "look": "Cinder gate guard, spear/shield stance",
+   "kitWhy": "Sentinel post → thrust/bash/beacon; patrol not pack rush",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "heavy",
+    "cost": 8,
+    "hp": 260,
+    "speed": 4.8,
+    "perception": 35,
+    "attackRange": 4,
+    "gapCloser": 0,
+    "poise": 90,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     900,
+     800,
+     600
+    ],
+    "attackPeakDmg": 20
+   },
+   "sourceB": {
+    "archetype": "sentinel",
+    "tier": "heavy",
+    "tierId": 3,
+    "cost": 8,
+    "hp": 260,
+    "speed": 4.8,
+    "perception": 35,
+    "attackRange": 4,
+    "gapCloser": null,
+    "poise": 90,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     900,
+     800,
+     600
+    ],
+    "red": null,
+    "attacks": "sweep 16 . advancingThrust 20 . crestBash 12",
+    "maxSingleHit": 20,
+    "maxBurst": 20,
+    "special": "Beacon crest: 3 s ignition pings all ash enemies in 40 m; kill or Spike-stun during ignition cancels. Fixed patrols; snipe window 36–40 m"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 260,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 9.7,
+    "boltsToKill": 22,
+    "topSpeed": 4.8,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  },
+  "29_ash_soot_assassin": {
+   "slug": "29_ash_soot_assassin",
+   "n": "29",
+   "name": "Soot Assassin",
+   "realm": "ash",
+   "role": "assassin",
+   "animRole": "assassin",
+   "grip": "DUAL 1H",
+   "combatDataKey": "sootAssassin",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "light",
+   "cost": 4,
+   "hp": 40,
+   "speed": 8.5,
+   "perception": 12,
+   "attackRange": 8,
+   "gapCloser": 0,
+   "poise": 12,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": 17,
+   "leash": null,
+   "carapace": null,
+   "attack": "backstab 30 (3×) · flurry 6×4 · soot slip",
+   "attackPeakDmg": 30,
+   "element": "fire/dark",
+   "rangeBand": "Melee",
+   "weaponProp": "Twin daggers prop",
+   "telegraphMs": [
+    500,
+    550
+   ],
+   "special": "Soot veil shimmer; punishes cast/carve commits. Fragile — 4 bolts once caught",
+   "packDoctrine": {
+    "mode": "solo+",
+    "note": "Widowmaker: 1 assassin + brute + mage",
+    "byDifficulty": "E:rare solo  N:1  H:1 + triad"
+   },
+   "look": "Slim soot killer, dark tight leathers",
+   "kitWhy": "Glass assassin body → backstab burst + vanish; lowest HP",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "light",
+    "cost": 4,
+    "hp": 40,
+    "speed": 8.5,
+    "perception": 12,
+    "attackRange": 8,
+    "gapCloser": 0,
+    "poise": 12,
+    "carapace": null,
+    "burstSpeed": 17,
+    "leash": null,
+    "telegraphMs": [
+     500,
+     550
+    ],
+    "attackPeakDmg": 30
+   },
+   "sourceB": {
+    "archetype": "assassin",
+    "tier": "light",
+    "tierId": 1,
+    "cost": 4,
+    "hp": 40,
+    "speed": 8.5,
+    "perception": 12,
+    "attackRange": 8,
+    "gapCloser": null,
+    "poise": 12,
+    "carapace": null,
+    "burstSpeed": 17,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     500,
+     550
+    ],
+    "red": null,
+    "attacks": "backstab 30 . flurry 6x4",
+    "maxSingleHit": 30,
+    "maxBurst": 30,
+    "special": "Soot veil: heat-shimmer-only visibility while stationary/walking; punishes cast/carve commits. Wave/Vortex clipping the shimmer strips veil 6 s"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 40,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 1.5,
+    "boltsToKill": 4,
+    "topSpeed": 17,
+    "fasterThanPlayerRun": true,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": false,
+    "note": "uncatchable on foot AND unescapable on foot (must surf)"
+   }
+  },
+  "53_v2_ash_soot_stalker": {
+   "slug": "53_v2_ash_soot_stalker",
+   "n": "53",
+   "name": "Soot Stalker",
+   "realm": "ash",
+   "role": "stalker",
+   "animRole": "stalker",
+   "grip": "DUAL KNIVES",
+   "combatDataKey": "sootStalker",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "light",
+   "cost": 3,
+   "hp": 70,
+   "speed": 7,
+   "perception": 20,
+   "attackRange": 0,
+   "gapCloser": 0,
+   "poise": 18,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": 13,
+   "leash": null,
+   "carapace": null,
+   "attack": "eruption pounce 18 · hooked rake 8×2 + Shredded",
+   "attackPeakDmg": 18,
+   "element": "fire",
+   "rangeBand": "Melee",
+   "weaponProp": "Claws / short blades prop",
+   "telegraphMs": [
+    550,
+    500
+   ],
+   "special": "Ash-swimming mound; pairs alternate opposite pounces. Mini-Vortex counter",
+   "packDoctrine": {
+    "mode": "pair",
+    "note": "Pall Trap: 2 stalkers under mage cloud",
+    "byDifficulty": "E:1  N:2  H:2 + imps"
+   },
+   "look": "Soot predator lean hybrid, ash-swimmer build",
+   "kitWhy": "Stalker limbs → emerge pounce + rake; pairs with smoke cloud",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "light",
+    "cost": 3,
+    "hp": 70,
+    "speed": 7.0,
+    "perception": 20,
+    "attackRange": 0,
+    "gapCloser": 0,
+    "poise": 18,
+    "carapace": null,
+    "burstSpeed": 13,
+    "leash": null,
+    "telegraphMs": [
+     550,
+     500
+    ],
+    "attackPeakDmg": 18
+   },
+   "sourceB": {
+    "archetype": "ambusher",
+    "tier": "light",
+    "tierId": 1,
+    "cost": 3,
+    "hp": 70,
+    "speed": 7,
+    "perception": 20,
+    "attackRange": 0,
+    "gapCloser": null,
+    "poise": 18,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": 13,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     550,
+     500
+    ],
+    "red": null,
+    "attacks": "eruptionPounce 18 . hookedRake 8x2",
+    "maxSingleHit": 18,
+    "maxBurst": 18,
+    "special": "Ash-swimming: moving mound under the crust; untargetable submerged except Mini-Vortex on the mound (out, stunned). Pairs alternate opposite-side pounces"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "_burstIsSubmerged": true,
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 70,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 2.6,
+    "boltsToKill": 6,
+    "topSpeed": 13,
+    "fasterThanPlayerRun": true,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": false,
+    "note": "uncatchable on foot AND unescapable on foot (must surf)"
+   }
+  },
+  "60_v2_ash_scorch_warden": {
+   "slug": "60_v2_ash_scorch_warden",
+   "n": "60",
+   "name": "Scorch Warden",
+   "realm": "ash",
+   "role": "warden",
+   "animRole": "warden",
+   "grip": "2H GLAIVE",
+   "combatDataKey": "scorchWarden",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "heavy",
+   "cost": 5,
+   "hp": 480,
+   "speed": 3,
+   "perception": 35,
+   "attackRange": 2.5,
+   "gapCloser": 0,
+   "poise": 130,
+   "hyperArmor": false,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "mace slam 26 · chain drag · suppression stomp 16",
+   "attackPeakDmg": 26,
+   "element": "fire",
+   "rangeBand": "Mid",
+   "weaponProp": "Fire glaive / mace + chain prop",
+   "telegraphMs": [
+    1100,
+    1000,
+    900
+   ],
+   "special": "Warding rune field 12 m: −30% spell dmg, vortex halved. Bolts from outside full",
+   "packDoctrine": {
+    "mode": "post",
+    "note": "Jailer Camp: warden + mage + imps",
+    "byDifficulty": "E:solo camp  N:1+mage  H:1+mage+imps"
+   },
+   "look": "Heavy scorch controller, glaive/chain stance",
+   "kitWhy": "Warden mass → slam/aura/chain; control post not fodder",
+   "mage": false,
+   "bossKind": "none",
+   "bossName": null,
+   "bossKey": null,
+   "arenaHp": null,
+   "arenaStance": null,
+   "sourceA": {
+    "tier": "heavy",
+    "cost": 5,
+    "hp": 480,
+    "speed": 3.0,
+    "perception": 35,
+    "attackRange": 2.5,
+    "gapCloser": 0,
+    "poise": 130,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     1100,
+     1000,
+     900
+    ],
+    "attackPeakDmg": 26
+   },
+   "sourceB": {
+    "archetype": "warden",
+    "tier": "heavy",
+    "tierId": 3,
+    "cost": 5,
+    "hp": 480,
+    "speed": 3,
+    "perception": 35,
+    "attackRange": 2.5,
+    "gapCloser": null,
+    "poise": 130,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     1100,
+     1000,
+     900
+    ],
+    "red": [
+     1
+    ],
+    "attacks": "maceSlam 26 . chainDrag 0 . suppressionStomp 16",
+    "maxSingleHit": 26,
+    "maxBurst": 26,
+    "special": "Warding rune field: 12 m zone, player spell dmg -30%, vortex durations halved. Bolts from OUTSIDE hit full — range discipline"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 480,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 18.0,
+    "boltsToKill": 40,
+    "topSpeed": 3,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  },
+  "86_v3_ash_volcanic_plate_knight": {
+   "slug": "86_v3_ash_volcanic_plate_knight",
+   "n": "86",
+   "name": "Volcanic Plate Knight",
+   "realm": "ash",
+   "role": "knight",
+   "animRole": "boss",
+   "grip": "1H SWORD+SHIELD",
+   "combatDataKey": "volcanicPlateKnight",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "boss",
+   "cost": 40,
+   "hp": 3000,
+   "speed": 1.8,
+   "perception": 35,
+   "attackRange": 3,
+   "gapCloser": 0,
+   "poise": 300,
+   "hyperArmor": true,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "seismic punch · magma sweep · basalt lob · scar burn",
+   "attackPeakDmg": 28,
+   "element": "fire/phys",
+   "rangeBand": "Mid",
+   "weaponProp": "Magma sword / fists prop",
+   "telegraphMs": [
+    1200,
+    1400,
+    1500
+   ],
+   "special": "★ REALM BOSS / FINALE. Progressive Fracture 3-phase. Stance 300. Fixed L30",
+   "packDoctrine": {
+    "mode": "boss",
+    "note": "Arena finale only",
+    "byDifficulty": "Arena script only"
+   },
+   "look": "Heavy basalt/obsidian plate knight (LOOK v3 volcanic_plate_knight)",
+   "kitWhy": "Heaviest plate → seismic/sweep/lob; finale script not field pack",
+   "mage": false,
+   "bossKind": "realm_boss",
+   "bossName": "Volcanic Plate Knight (finale)",
+   "bossKey": "volcanicPlateKnight",
+   "arenaHp": 3000,
+   "arenaStance": 300,
+   "sourceA": {
+    "tier": "boss",
+    "cost": 40,
+    "hp": 3000,
+    "speed": 1.8,
+    "perception": 35,
+    "attackRange": 3,
+    "gapCloser": 0,
+    "poise": 300,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     1200,
+     1400,
+     1500
+    ],
+    "attackPeakDmg": 28
+   },
+   "sourceB": {
+    "archetype": "boss",
+    "tier": "boss",
+    "tierId": 5,
+    "cost": 40,
+    "hp": 3000,
+    "speed": 1.8,
+    "perception": 35,
+    "attackRange": 3,
+    "gapCloser": null,
+    "poise": 300,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     1200,
+     1400,
+     1500
+    ],
+    "red": [
+     1,
+     2
+    ],
+    "attacks": "seismicPunch ? . magmaVeinSweep ? . basaltLob ? . cracklineEruption 8",
+    "maxSingleHit": 8,
+    "maxBurst": 8,
+    "special": "Progressive Fracture 3-stage enrage; scar-economy arena. Full script: BOSSES.volcanicPlateKnight / §7.6"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 3000,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 112.4,
+    "boltsToKill": 250,
+    "topSpeed": 1.8,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  },
+  "88_v3_ash_furnace_guardian": {
+   "slug": "88_v3_ash_furnace_guardian",
+   "n": "88",
+   "name": "Furnace Guardian",
+   "realm": "ash",
+   "role": "guardian",
+   "animRole": "guardian",
+   "grip": "2H HAMMER",
+   "combatDataKey": "furnaceGuardian",
+   "meshOnDisk": true,
+   "meshNote": null,
+   "tier": "boss",
+   "cost": 25,
+   "hp": 2200,
+   "speed": 2,
+   "perception": 25,
+   "attackRange": 5,
+   "gapCloser": 0,
+   "poise": 260,
+   "hyperArmor": true,
+   "construct": false,
+   "sizeScale": null,
+   "burstSpeed": null,
+   "leash": null,
+   "carapace": null,
+   "attack": "furnace vent cone · slag spit 16 · stoke pulse · grate grapple",
+   "attackPeakDmg": 16,
+   "element": "fire",
+   "rangeBand": "Mid",
+   "weaponProp": "Forge hammer prop",
+   "telegraphMs": [
+    1000
+   ],
+   "special": "★ MINIBOSS. Core duel: douse grate 3 stages → 5 s stun + ×1.5 weak. Breath = cone not bullet",
+   "packDoctrine": {
+    "mode": "boss",
+    "note": "Forge-gate arena",
+    "byDifficulty": "Arena script only"
+   },
+   "look": "Blocky forge-warden, iron grate chest plate (LOOK v3 furnace_guardian)",
+   "kitWhy": "Grate chest → douse duel; breath cone + grapple match forge body",
+   "mage": false,
+   "bossKind": "miniboss",
+   "bossName": "Furnace Guardian",
+   "bossKey": "furnaceGuardian",
+   "arenaHp": 2200,
+   "arenaStance": 260,
+   "sourceA": {
+    "tier": "boss",
+    "cost": 25,
+    "hp": 2200,
+    "speed": 2.0,
+    "perception": 25,
+    "attackRange": 5,
+    "gapCloser": 0,
+    "poise": 260,
+    "carapace": null,
+    "burstSpeed": null,
+    "leash": null,
+    "telegraphMs": [
+     1000
+    ],
+    "attackPeakDmg": 16
+   },
+   "sourceB": {
+    "archetype": "boss",
+    "tier": "boss",
+    "tierId": 5,
+    "cost": 25,
+    "hp": 2200,
+    "speed": 2,
+    "perception": 25,
+    "attackRange": 5,
+    "gapCloser": null,
+    "poise": 260,
+    "carapace": null,
+    "burstSpeed": null,
+    "submergedSpeed": null,
+    "leash": null,
+    "cores": null,
+    "coreHpEach": null,
+    "coreHp": null,
+    "construct": false,
+    "hyperArmor": false,
+    "telegraphMs": [
+     1000
+    ],
+    "red": [
+     0
+    ],
+    "attacks": "furnaceVent ? . slagSpit 16 . stokePulse ? . grateGrapple 6",
+    "maxSingleHit": 16,
+    "maxBurst": 16,
+    "special": "Furnace core duel: core stokes dim→orange→white ~30 s; bolts through the grate douse it — 3 stages = 5 s stun + ×1.5 weak point. Full script: BOSSES.furnaceGuardian / §7.5"
+   },
+   "sourceC": {
+    "implemented": false,
+    "aliasedTo": null,
+    "note": "no runtime row and no KEY_ALIAS entry -> cannot spawn today"
+   },
+   "resolution": "stats from B (combatData L10 anchor); look/weapon/grip/pack/element from A",
+   "playerAnchor": {
+    "effectiveHp": 2200,
+    "effectiveHpNote": "hp",
+    "ttkAt26_7dps_s": 82.4,
+    "boltsToKill": 184,
+    "topSpeed": 2,
+    "fasterThanPlayerRun": false,
+    "outrunsPlayerSurf": false,
+    "escapableOnFoot": true,
+    "note": "player outpaces it on foot"
+   }
+  }
+ },
+ "discrepancyReport": [
+  {
+   "slug": "61_v3_cold_frost_golem",
+   "key": "packIceGolem",
+   "field": "boss.kind/arenaHp",
+   "sourceA": {
+    "boss": "realm_boss",
+    "bossName": "Shrinebreaker (field 300 cores -> arena 2000)",
+    "arenaHp": 2000,
+    "stance": 0,
+    "gates": "kill opens Sand"
+   },
+   "sourceB": {
+    "kind": "miniboss",
+    "hp": 760,
+    "coreHp": {
+     "crown": 200,
+     "shoulder": 140,
+     "knee": 140
+    },
+    "cold realmBoss in B": "moraineElder hp 2000 stance 240 (baseKey moraineColossus, NO MESH)"
+   },
+   "winner": "A",
+   "reason": "A is mesh-anchored and its MISSING_MESH parks Moraine Colossus as 'Design park only'; B's cold realm boss has no mesh, so B's structure is unshippable",
+   "severity": "critical",
+   "kind": "structure"
+  },
+  {
+   "slug": "61_v3_cold_frost_golem",
+   "key": "packIceGolem",
+   "field": "hp",
+   "sourceA": 2000,
+   "sourceB": 300,
+   "winner": "B",
+   "reason": "combatData is the executable L10 anchor contract; roster page is derived documentation",
+   "severity": "critical",
+   "kind": "numeric"
+  },
+  {
+   "slug": "61_v3_cold_frost_golem",
+   "key": "packIceGolem",
+   "field": "cost",
+   "sourceA": 25,
+   "sourceB": 5,
+   "winner": "B",
+   "reason": "combatData is the executable L10 anchor contract; roster page is derived documentation",
+   "severity": "high",
+   "kind": "numeric"
+  },
+  {
+   "slug": "50_v2_sand_dune_warden",
+   "key": "duneWarden",
+   "field": "damages[].dmg = null",
+   "sourceA": "sand slash 18 · khopesh chain · warden slam · geyser",
+   "sourceB": {
+    "attacksWithNoDamageNumber": [
+     "wardensSlam"
+    ],
+    "note": "combatData defers to _spec sections; nothing to read at runtime"
+   },
+   "winner": "A",
+   "reason": "these attacks have no number in B at all; A's atk string is the only numeric source (peak 18) - a spawned unit would deal 0",
+   "severity": "high",
+   "kind": "gap"
+  },
+  {
+   "slug": "86_v3_ash_volcanic_plate_knight",
+   "key": "volcanicPlateKnight",
+   "field": "damages[].dmg = null",
+   "sourceA": "seismic punch · magma sweep · basalt lob · scar burn",
+   "sourceB": {
+    "attacksWithNoDamageNumber": [
+     "seismicPunch",
+     "magmaVeinSweep",
+     "basaltLob"
+    ],
+    "note": "combatData defers to _spec sections; nothing to read at runtime"
+   },
+   "winner": "A",
+   "reason": "these attacks have no number in B at all; A's atk string is the only numeric source (peak 28) - a spawned unit would deal 0",
+   "severity": "high",
+   "kind": "gap"
+  },
+  {
+   "slug": "88_v3_ash_furnace_guardian",
+   "key": "furnaceGuardian",
+   "field": "damages[].dmg = null",
+   "sourceA": "furnace vent cone · slag spit 16 · stoke pulse · grate grapple",
+   "sourceB": {
+    "attacksWithNoDamageNumber": [
+     "furnaceVent",
+     "stokePulse"
+    ],
+    "note": "combatData defers to _spec sections; nothing to read at runtime"
+   },
+   "winner": "A",
+   "reason": "these attacks have no number in B at all; A's atk string is the only numeric source (peak 16) - a spawned unit would deal 0",
+   "severity": "high",
+   "kind": "gap"
+  },
+  {
+   "slug": "31_v2_cold_rime_imp",
+   "key": "rimeImp",
+   "field": "hp",
+   "sourceA": 26,
+   "sourceB": 24,
+   "winner": "B",
+   "reason": "combatData is the executable L10 anchor contract; roster page is derived documentation",
+   "severity": "high",
+   "kind": "numeric"
+  },
+  {
+   "slug": "32_v2_cold_glacier_brute",
+   "key": "glacierBrute",
+   "field": "hp",
+   "sourceA": 540,
+   "sourceB": 520,
+   "winner": "B",
+   "reason": "combatData is the executable L10 anchor contract; roster page is derived documentation",
+   "severity": "high",
+   "kind": "numeric"
+  },
+  {
+   "slug": "43_v2_sand_dust_stalker",
+   "key": "dustStalker",
+   "field": "hp",
+   "sourceA": 58,
+   "sourceB": 55,
+   "winner": "B",
+   "reason": "combatData is the executable L10 anchor contract; roster page is derived documentation",
+   "severity": "high",
+   "kind": "numeric"
+  },
+  {
+   "slug": "61_v3_cold_frost_golem",
+   "key": "packIceGolem",
+   "field": "hyperArmor",
+   "sourceA": true,
+   "sourceB": false,
+   "winner": "A",
+   "reason": "enemies.js L551 and L734 read row.hyperArmor to decide whether a windup survives a stagger; B omits it on this non-boss row, so once wired the unit gets interrupted out of every windup",
+   "severity": "high",
+   "kind": "flag"
+  },
+  {
+   "slug": "31_v2_cold_rime_imp",
+   "key": "rimeImp",
+   "field": "speed",
+   "sourceA": 6.4,
+   "sourceB": 6.2,
+   "winner": "B",
+   "reason": "combatData is the executable L10 anchor contract; roster page is derived documentation",
+   "severity": "high",
+   "kind": "numeric"
+  },
+  {
+   "slug": "32_v2_cold_glacier_brute",
+   "key": "glacierBrute",
+   "field": "speed",
+   "sourceA": 3.1,
+   "sourceB": 3.2,
+   "winner": "B",
+   "reason": "combatData is the executable L10 anchor contract; roster page is derived documentation",
+   "severity": "high",
+   "kind": "numeric"
+  },
+  {
+   "slug": "43_v2_sand_dust_stalker",
+   "key": "dustStalker",
+   "field": "speed",
+   "sourceA": 7.9,
+   "sourceB": 7.8,
+   "winner": "B",
+   "reason": "combatData is the executable L10 anchor contract; roster page is derived documentation",
+   "severity": "high",
+   "kind": "numeric"
+  },
+  {
+   "slug": "31_v2_cold_rime_imp",
+   "key": "rimeImp",
+   "field": "telegraphMs",
+   "sourceA": [
+    500,
+    600,
+    550
+   ],
+   "sourceB": [
+    500,
+    650,
+    600
+   ],
+   "winner": "B",
+   "reason": "telegraph array is aligned to damages[] indices in B; A's string drops/reorders entries",
+   "severity": "high",
+   "kind": "list"
+  },
+  {
+   "slug": "61_v3_cold_frost_golem",
+   "key": "packIceGolem",
+   "field": "telegraphMs",
+   "sourceA": [
+    900,
+    1300,
+    1000,
+    1500
+   ],
+   "sourceB": [
+    900,
+    1300,
+    1000
+   ],
+   "winner": "B",
+   "reason": "telegraph array is aligned to damages[] indices in B; A's string drops/reorders entries",
+   "severity": "high",
+   "kind": "list"
+  },
+  {
+   "slug": "61_v3_cold_frost_golem",
+   "key": "packIceGolem",
+   "field": "tier",
+   "sourceA": "boss",
+   "sourceB": "heavy",
+   "winner": "B",
+   "reason": "combatData tier is the damageable.js TIER id (damageable.js L38) that indexes the CC matrix; A's tier string is documentation only",
+   "severity": "high",
+   "kind": "numeric"
+  },
+  {
+   "slug": "32_v2_cold_glacier_brute",
+   "key": "glacierBrute",
+   "field": "attackPeakDmg",
+   "sourceA": 24,
+   "sourceB": {
+    "maxSingleHit": 22,
+    "maxBurst": 22
+   },
+   "winner": "B",
+   "reason": "A's atkPeak is neither B's max single hit nor its max burst",
+   "severity": "medium",
+   "kind": "derived"
+  },
+  {
+   "slug": "61_v3_cold_frost_golem",
+   "key": "packIceGolem",
+   "field": "attackPeakDmg",
+   "sourceA": 24,
+   "sourceB": {
+    "maxSingleHit": 20,
+    "maxBurst": 20
+   },
+   "winner": "B",
+   "reason": "A's atkPeak is neither B's max single hit nor its max burst",
+   "severity": "medium",
+   "kind": "derived"
+  },
+  {
+   "slug": "86_v3_ash_volcanic_plate_knight",
+   "key": "volcanicPlateKnight",
+   "field": "attackPeakDmg",
+   "sourceA": 28,
+   "sourceB": {
+    "maxSingleHit": 8,
+    "maxBurst": 8
+   },
+   "winner": "B",
+   "reason": "A's atkPeak is neither B's max single hit nor its max burst",
+   "severity": "medium",
+   "kind": "derived"
+  },
+  {
+   "slug": "61_v3_cold_frost_golem",
+   "key": "packIceGolem",
+   "field": "attackRange",
+   "sourceA": 3.5,
+   "sourceB": 3,
+   "winner": "B",
+   "reason": "combatData is the executable L10 anchor contract; roster page is derived documentation",
+   "severity": "medium",
+   "kind": "numeric"
+  },
+  {
+   "slug": "02_cold_glacier_brute",
+   "key": "glacierBrute",
+   "field": "burstSpeed",
+   "sourceA": null,
+   "sourceB": 4,
+   "winner": "B",
+   "reason": "combatData is the executable L10 anchor contract; roster page is derived documentation",
+   "severity": "medium",
+   "kind": "numeric"
+  },
+  {
+   "slug": "32_v2_cold_glacier_brute",
+   "key": "glacierBrute",
+   "field": "burstSpeed",
+   "sourceA": null,
+   "sourceB": 4,
+   "winner": "B",
+   "reason": "combatData is the executable L10 anchor contract; roster page is derived documentation",
+   "severity": "medium",
+   "kind": "numeric"
+  },
+  {
+   "slug": "32_v2_cold_glacier_brute",
+   "key": "glacierBrute",
+   "field": "carapace",
+   "sourceA": 280,
+   "sourceB": 260,
+   "winner": "B",
+   "reason": "combatData is the executable L10 anchor contract; roster page is derived documentation",
+   "severity": "medium",
+   "kind": "numeric"
+  },
+  {
+   "slug": "61_v3_cold_frost_golem",
+   "key": "packIceGolem",
+   "field": "perception",
+   "sourceA": 20,
+   "sourceB": 16,
+   "winner": "B",
+   "reason": "combatData is the executable L10 anchor contract; roster page is derived documentation",
+   "severity": "medium",
+   "kind": "numeric"
+  },
+  {
+   "slug": "32_v2_cold_glacier_brute",
+   "key": "glacierBrute",
+   "field": "poise",
+   "sourceA": 130,
+   "sourceB": 120,
+   "winner": "B",
+   "reason": "combatData is the executable L10 anchor contract; roster page is derived documentation",
+   "severity": "medium",
+   "kind": "numeric"
+  },
+  {
+   "slug": "21_ash_cinder_imp",
+   "key": "cinderImp",
+   "field": "telegraphMs length vs damages length",
+   "sourceA": 2,
+   "sourceB": {
+    "telegraphMs": 2,
+    "damages": 3
+   },
+   "winner": "B",
+   "reason": "combatData L159-161 says telegraphMs[] is index-aligned with damages[]; this row breaks the alignment so telegraph lookup by damage index is unsafe",
+   "severity": "medium",
+   "kind": "alignment"
+  },
+  {
+   "slug": "86_v3_ash_volcanic_plate_knight",
+   "key": "volcanicPlateKnight",
+   "field": "telegraphMs length vs damages length",
+   "sourceA": 3,
+   "sourceB": {
+    "telegraphMs": 3,
+    "damages": 4
+   },
+   "winner": "B",
+   "reason": "combatData L159-161 says telegraphMs[] is index-aligned with damages[]; this row breaks the alignment so telegraph lookup by damage index is unsafe",
+   "severity": "medium",
+   "kind": "alignment"
+  },
+  {
+   "slug": "88_v3_ash_furnace_guardian",
+   "key": "furnaceGuardian",
+   "field": "telegraphMs length vs damages length",
+   "sourceA": 1,
+   "sourceB": {
+    "telegraphMs": 1,
+    "damages": 4
+   },
+   "winner": "B",
+   "reason": "combatData L159-161 says telegraphMs[] is index-aligned with damages[]; this row breaks the alignment so telegraph lookup by damage index is unsafe",
+   "severity": "medium",
+   "kind": "alignment"
+  },
+  {
+   "slug": "32_v2_cold_glacier_brute",
+   "key": "glacierBrute",
+   "field": "variant/attackPeakDmg",
+   "sourceA": {
+    "02_cold_glacier_brute": 22,
+    "32_v2_cold_glacier_brute": 24
+   },
+   "sourceB": null,
+   "winner": "B",
+   "reason": "duplicate mesh rows for one key drift apart; runtime can only hold one row",
+   "severity": "medium",
+   "kind": "variant_drift"
+  },
+  {
+   "slug": "32_v2_cold_glacier_brute",
+   "key": "glacierBrute",
+   "field": "variant/carapace",
+   "sourceA": {
+    "02_cold_glacier_brute": 260,
+    "32_v2_cold_glacier_brute": 280
+   },
+   "sourceB": 260,
+   "winner": "B",
+   "reason": "duplicate mesh rows for one key drift apart; runtime can only hold one row",
+   "severity": "medium",
+   "kind": "variant_drift"
+  },
+  {
+   "slug": "31_v2_cold_rime_imp",
+   "key": "rimeImp",
+   "field": "variant/hp",
+   "sourceA": {
+    "01_cold_rime_imp": 24,
+    "31_v2_cold_rime_imp": 26
+   },
+   "sourceB": 24,
+   "winner": "B",
+   "reason": "duplicate mesh rows for one key drift apart; runtime can only hold one row",
+   "severity": "medium",
+   "kind": "variant_drift"
+  },
+  {
+   "slug": "32_v2_cold_glacier_brute",
+   "key": "glacierBrute",
+   "field": "variant/hp",
+   "sourceA": {
+    "02_cold_glacier_brute": 520,
+    "32_v2_cold_glacier_brute": 540
+   },
+   "sourceB": 520,
+   "winner": "B",
+   "reason": "duplicate mesh rows for one key drift apart; runtime can only hold one row",
+   "severity": "medium",
+   "kind": "variant_drift"
+  },
+  {
+   "slug": "43_v2_sand_dust_stalker",
+   "key": "dustStalker",
+   "field": "variant/hp",
+   "sourceA": {
+    "13_sand_dust_stalker": 55,
+    "43_v2_sand_dust_stalker": 58
+   },
+   "sourceB": 55,
+   "winner": "B",
+   "reason": "duplicate mesh rows for one key drift apart; runtime can only hold one row",
+   "severity": "medium",
+   "kind": "variant_drift"
+  },
+  {
+   "slug": "32_v2_cold_glacier_brute",
+   "key": "glacierBrute",
+   "field": "variant/poise",
+   "sourceA": {
+    "02_cold_glacier_brute": 120,
+    "32_v2_cold_glacier_brute": 130
+   },
+   "sourceB": 120,
+   "winner": "B",
+   "reason": "duplicate mesh rows for one key drift apart; runtime can only hold one row",
+   "severity": "medium",
+   "kind": "variant_drift"
+  },
+  {
+   "slug": "31_v2_cold_rime_imp",
+   "key": "rimeImp",
+   "field": "variant/speed",
+   "sourceA": {
+    "01_cold_rime_imp": 6.2,
+    "31_v2_cold_rime_imp": 6.4
+   },
+   "sourceB": 6.2,
+   "winner": "B",
+   "reason": "duplicate mesh rows for one key drift apart; runtime can only hold one row",
+   "severity": "medium",
+   "kind": "variant_drift"
+  },
+  {
+   "slug": "32_v2_cold_glacier_brute",
+   "key": "glacierBrute",
+   "field": "variant/speed",
+   "sourceA": {
+    "02_cold_glacier_brute": 3.2,
+    "32_v2_cold_glacier_brute": 3.1
+   },
+   "sourceB": 3.2,
+   "winner": "B",
+   "reason": "duplicate mesh rows for one key drift apart; runtime can only hold one row",
+   "severity": "medium",
+   "kind": "variant_drift"
+  },
+  {
+   "slug": "43_v2_sand_dust_stalker",
+   "key": "dustStalker",
+   "field": "variant/speed",
+   "sourceA": {
+    "13_sand_dust_stalker": 7.8,
+    "43_v2_sand_dust_stalker": 7.9
+   },
+   "sourceB": 7.8,
+   "winner": "B",
+   "reason": "duplicate mesh rows for one key drift apart; runtime can only hold one row",
+   "severity": "medium",
+   "kind": "variant_drift"
+  },
+  {
+   "slug": "31_v2_cold_rime_imp",
+   "key": "rimeImp",
+   "field": "variant/telegraphMs",
+   "sourceA": {
+    "01_cold_rime_imp": [
+     500,
+     650,
+     600
+    ],
+    "31_v2_cold_rime_imp": [
+     500,
+     600,
+     550
+    ]
+   },
+   "sourceB": [
+    500,
+    650,
+    600
+   ],
+   "winner": "B",
+   "reason": "duplicate mesh rows for one key drift apart; runtime can only hold one row",
+   "severity": "medium",
+   "kind": "variant_drift"
+  }
+ ],
+ "discrepancyCountByField": {
+  "hp": 4,
+  "damages[].dmg = null": 3,
+  "speed": 3,
+  "attackPeakDmg": 3,
+  "telegraphMs length vs damages length": 3,
+  "variant/hp": 3,
+  "variant/speed": 3,
+  "telegraphMs": 2,
+  "burstSpeed": 2,
+  "boss.kind/arenaHp": 1,
+  "cost": 1,
+  "hyperArmor": 1,
+  "tier": 1,
+  "attackRange": 1,
+  "carapace": 1,
+  "perception": 1,
+  "poise": 1,
+  "variant/attackPeakDmg": 1,
+  "variant/carapace": 1,
+  "variant/poise": 1,
+  "variant/telegraphMs": 1
+ },
+ "discrepancyCountBySeverity": {
+  "critical": 2,
+  "high": 14,
+  "medium": 22,
+  "low": 0
+ },
+ "variantDrift": [
+  {
+   "key": "rimeImp",
+   "slugs": [
+    "01_cold_rime_imp",
+    "31_v2_cold_rime_imp"
+   ],
+   "driftingFields": {
+    "hp": {
+     "01_cold_rime_imp": 24,
+     "31_v2_cold_rime_imp": 26
+    },
+    "speed": {
+     "01_cold_rime_imp": 6.2,
+     "31_v2_cold_rime_imp": 6.4
+    },
+    "telegraphMs": {
+     "01_cold_rime_imp": [
+      500,
+      650,
+      600
+     ],
+     "31_v2_cold_rime_imp": [
+      500,
+      600,
+      550
+     ]
+    }
+   },
+   "bValue": {
+    "hp": 24,
+    "speed": 6.2,
+    "telegraphMs": [
+     500,
+     650,
+     600
+    ]
+   },
+   "recommendation": "one combatData key cannot hold two stat rows at runtime (damageable registers per key) -> collapse to B's single row, keep both meshes as visual variants"
+  },
+  {
+   "key": "glacierBrute",
+   "slugs": [
+    "02_cold_glacier_brute",
+    "32_v2_cold_glacier_brute"
+   ],
+   "driftingFields": {
+    "hp": {
+     "02_cold_glacier_brute": 520,
+     "32_v2_cold_glacier_brute": 540
+    },
+    "speed": {
+     "02_cold_glacier_brute": 3.2,
+     "32_v2_cold_glacier_brute": 3.1
+    },
+    "poise": {
+     "02_cold_glacier_brute": 120,
+     "32_v2_cold_glacier_brute": 130
+    },
+    "carapace": {
+     "02_cold_glacier_brute": 260,
+     "32_v2_cold_glacier_brute": 280
+    },
+    "attackPeakDmg": {
+     "02_cold_glacier_brute": 22,
+     "32_v2_cold_glacier_brute": 24
+    }
+   },
+   "bValue": {
+    "hp": 520,
+    "speed": 3.2,
+    "poise": 120,
+    "carapace": 260,
+    "attackPeakDmg": null
+   },
+   "recommendation": "one combatData key cannot hold two stat rows at runtime (damageable registers per key) -> collapse to B's single row, keep both meshes as visual variants"
+  },
+  {
+   "key": "dustStalker",
+   "slugs": [
+    "13_sand_dust_stalker",
+    "43_v2_sand_dust_stalker"
+   ],
+   "driftingFields": {
+    "hp": {
+     "13_sand_dust_stalker": 55,
+     "43_v2_sand_dust_stalker": 58
+    },
+    "speed": {
+     "13_sand_dust_stalker": 7.8,
+     "43_v2_sand_dust_stalker": 7.9
+    }
+   },
+   "bValue": {
+    "hp": 55,
+    "speed": 7.8
+   },
+   "recommendation": "one combatData key cannot hold two stat rows at runtime (damageable registers per key) -> collapse to B's single row, keep both meshes as visual variants"
+  }
+ ],
+ "orphans": {
+  "dataRowsWithoutMesh": [
+   {
+    "kind": "combatData row with NO mesh",
+    "key": "hoarfrostSprite",
+    "name": "Hoarfrost Sprite",
+    "realm": "cold",
+    "tier": "fodder",
+    "hp": 28,
+    "speed": 4.5,
+    "inMissingMeshList": true,
+    "recommendation": "MESH REUSE",
+    "reuseMesh": "34_v2_cold_ice_cultist",
+    "reason": "reuse the Ice Cultist mesh scaled ~0.7 with a cyan emissive tint - both are cold fodder/light casters (ROLE_KIT 'cultist' grip STAFF CAST); no new Meshy spend",
+    "usedInPacksA": [
+     [
+      "Imp Warren",
+      "5× Imp + 1 Sprite",
+      8,
+      "Wave scatters, Vortex deletes"
+     ],
+     [
+      "Glacier Line",
+      "1 Glacier Brute + 1 Cultist + 2 Sprites",
+      14,
+      "Spikes crack carapace"
+     ]
+    ]
+   },
+   {
+    "kind": "combatData row with NO mesh",
+    "key": "moraineColossus",
+    "name": "Moraine Colossus",
+    "realm": "cold",
+    "tier": "elite",
+    "hp": 640,
+    "speed": 3,
+    "inMissingMeshList": true,
+    "recommendation": "MESH REUSE",
+    "reuseMesh": "32_v2_cold_glacier_brute",
+    "reason": "reuse Glacier Brute v2 at sizeScale ~1.9; A's MISSING_MESH marks Moraine 'Design park only - Sand gate is #61 Frost Golem / Shrinebreaker', so this is the cheap stand-in, not a new mesh",
+    "usedInPacksA": [
+     [
+      "Elite Hunt",
+      "1 Colossus + 1 Blizzard Assassin",
+      12,
+      "Wall-bait + back watch"
+     ]
+    ]
+   },
+   {
+    "kind": "combatData row with NO mesh",
+    "key": "glassRevenant",
+    "name": "Glass Revenant",
+    "realm": "cold",
+    "tier": "light",
+    "hp": 45,
+    "speed": 6.4,
+    "inMissingMeshList": true,
+    "recommendation": "MESH REUSE",
+    "reuseMesh": "39_v2_cold_blizzard_assassin",
+    "reason": "reuse Blizzard Assassin mesh with a glass/refractive material swap - both are light cold skirmishers with 1H silhouettes",
+    "usedInPacksA": [
+     [
+      "Scout Screen",
+      "1 Glass Revenant (ambient)",
+      2,
+      "Alarm management"
+     ]
+    ]
+   },
+   {
+    "kind": "combatData row with NO mesh",
+    "key": "scourScout",
+    "name": "Scour Scout",
+    "realm": "sand",
+    "tier": "medium",
+    "hp": 95,
+    "speed": 6.5,
+    "inMissingMeshList": true,
+    "recommendation": "MESH REUSE",
+    "reuseMesh": "65_v3_cold_rime_skier_raider",
+    "reason": "the skier raider IS a 'raider' ROLE_KIT unit with slide/spear kit; retexture to sand palette. A's PACKS 'Watch Post' needs 2 Scouts",
+    "usedInPacksA": [
+     [
+      "Watch Post",
+      "1 Dune Sentinel + 2 Scouts",
+      14,
+      "Snipe horn 36–40 m"
+     ]
+    ]
+   },
+   {
+    "kind": "combatData row with NO mesh",
+    "key": "scorpionHusk",
+    "name": "Scorpion Husk",
+    "realm": "sand",
+    "tier": "light",
+    "hp": 50,
+    "speed": 6.8,
+    "inMissingMeshList": true,
+    "recommendation": "MESH REUSE",
+    "reuseMesh": "73_v3_sand_mummy",
+    "reason": "MESH GAP - A explicitly locks #73 as MUMMY, not scorpion ('#73 IS MUMMY (user lock) - not scorpion'). No quadruped/arthropod mesh exists in the 30. Recommend: retire scorpionHusk's buried-ambush role onto 73_v3_sand_mummy (a buried mummy reads the same) OR budget one new Meshy generation",
+    "usedInPacksA": [
+     [
+      "Mound Field",
+      "5× Dune Imp + 1 Scorpion Husk",
+      8,
+      "Mounds vs buried tell"
+     ]
+    ]
+   },
+   {
+    "kind": "combatData row with NO mesh",
+    "key": "hourglassAutomaton",
+    "name": "Hourglass Automaton",
+    "realm": "sand",
+    "tier": "heavy",
+    "hp": 420,
+    "speed": 2.8,
+    "inMissingMeshList": true,
+    "recommendation": "MESH REUSE",
+    "reuseMesh": "75_v3_sand_bleached_bone_knight",
+    "reason": "A's own meshNote on 75 says 'can stand in for Hourglass Automaton post if needed'; reuse it with a sand/brass material and the golem ROLE_KIT",
+    "usedInPacksA": [
+     [
+      "Glass Patrol",
+      "1 Automaton + 2 Imps",
+      10,
+      "Freeze-the-pile execute"
+     ]
+    ]
+   }
+  ],
+  "meshesWithoutDataRow": [
+   {
+    "kind": "mesh with NO combatData row",
+    "slug": "65_v3_cold_rime_skier_raider",
+    "n": "65",
+    "name": "Rime Skier Raider",
+    "realm": "cold",
+    "role": "raider",
+    "proposedKey": "rimeSkierRaider",
+    "recommendation": "NEW DATA ROW",
+    "reason": "cold LIGHT cost 2 - A already supplies the full stat line (hp70 spd7.2 perc28 atkR1.8 gap12 poise25 burst14). It is also the best mesh for combatData's orphan scourScout; ship BOTH keys off this mesh (cold = rimeSkierRaider, sand retexture = scourScout)",
+    "proposedRow": {
+     "tier": "light",
+     "cost": 2,
+     "hp": 70,
+     "speed": 7.2,
+     "perception": 28,
+     "attackRange": 1.8,
+     "gapCloser": 12,
+     "poise": 25,
+     "carapace": null,
+     "burstSpeed": 14,
+     "leash": null,
+     "telegraphMs": [
+      550,
+      600,
+      650
+     ],
+     "attackPeakDmg": 14
+    },
+    "meshNote": "not in combatData ENEMIES — proposed"
+   },
+   {
+    "kind": "mesh with NO combatData row",
+    "slug": "73_v3_sand_mummy",
+    "n": "73",
+    "name": "Sand Mummy",
+    "realm": "sand",
+    "role": "mummy",
+    "proposedKey": "sandMummy",
+    "recommendation": "NEW DATA ROW",
+    "reason": "sand MEDIUM cost 3 - A supplies hp110 spd2.4 perc16 atkR2.0 poise40. Also the only viable host for the orphan scorpionHusk buried-ambush role",
+    "proposedRow": {
+     "tier": "medium",
+     "cost": 3,
+     "hp": 110,
+     "speed": 2.4,
+     "perception": 16,
+     "attackRange": 2.0,
+     "gapCloser": 0,
+     "poise": 40,
+     "carapace": null,
+     "burstSpeed": null,
+     "leash": null,
+     "telegraphMs": [
+      700,
+      900,
+      600
+     ],
+     "attackPeakDmg": 14
+    },
+    "meshNote": "not in combatData — proposed undead medium · #73 mummy"
+   },
+   {
+    "kind": "mesh with NO combatData row",
+    "slug": "75_v3_sand_bleached_bone_knight",
+    "n": "75",
+    "name": "Bone Knight",
+    "realm": "sand",
+    "role": "knight",
+    "proposedKey": "boneKnight",
+    "recommendation": "NEW DATA ROW",
+    "reason": "sand HEAVY cost 5 - A supplies hp320 spd2.8 perc28 atkR2.2 gap4 poise110. Alternative per A's own meshNote: bind it to the orphan hourglassAutomaton row instead of authoring a new key",
+    "proposedRow": {
+     "tier": "heavy",
+     "cost": 5,
+     "hp": 320,
+     "speed": 2.8,
+     "perception": 28,
+     "attackRange": 2.2,
+     "gapCloser": 4,
+     "poise": 110,
+     "carapace": null,
+     "burstSpeed": null,
+     "leash": null,
+     "telegraphMs": [
+      800,
+      1000,
+      700
+     ],
+     "attackPeakDmg": 20
+    },
+    "meshNote": "not in combatData — proposed heavy"
+   }
+  ],
+  "bossRows": [
+   {
+    "kind": "boss row present in one source only",
+    "side": "A-only",
+    "name": "Icewall",
+    "arenaHp": 1200,
+    "stance": 160,
+    "base": "#02 Glacier Brute",
+    "note": "Carapace crack; ice slab lob"
+   },
+   {
+    "kind": "boss row present in one source only",
+    "side": "B-only",
+    "key": "moraineElder",
+    "name": "Moraine Colossus, 'The Moraine Elder'",
+    "kindB": "realmBoss",
+    "hp": 2000,
+    "baseKey": "moraineColossus",
+    "meshForBase": false
+   }
+  ],
+  "missingMeshListA": [
+   {
+    "name": "Hoarfrost Sprite",
+    "realm": "cold",
+    "role": "ranged-caster",
+    "note": "Pack Imp Warren ranged slot"
+   },
+   {
+    "name": "Moraine Colossus / Elder",
+    "realm": "cold",
+    "role": "optional giant",
+    "note": "Design park only — Sand gate is #61 Frost Golem / Shrinebreaker"
+   },
+   {
+    "name": "Glass Revenant",
+    "realm": "cold",
+    "role": "scout/alarm",
+    "note": "Scout Screen ambient"
+   },
+   {
+    "name": "Scorpion Husk",
+    "realm": "sand",
+    "role": "ambusher",
+    "note": "Mound Field buried tell (separate from #73 mummy)"
+   },
+   {
+    "name": "Hourglass Automaton",
+    "realm": "sand",
+    "role": "elite golem",
+    "note": "Glass Patrol reassembly unit"
+   },
+   {
+    "name": "Scour Scout",
+    "realm": "sand",
+    "role": "skirmisher",
+    "note": "Watch Post flankers"
+   }
+  ]
+ },
+ "bossReconciliation": [
+  {
+   "aName": "Icewall",
+   "aRole": "Cold mid-boss",
+   "aBase": "#02 Glacier Brute",
+   "aArenaHp": 1200,
+   "aStance": 160,
+   "aNote": "Carapace crack; ice slab lob",
+   "bKey": null,
+   "bKind": null,
+   "bHp": null,
+   "bStance": null,
+   "bBaseKey": null,
+   "agree": false
+  },
+  {
+   "aName": "Shrinebreaker",
+   "aRole": "Cold realm boss",
+   "aBase": "#61 Frost Golem",
+   "aArenaHp": 2000,
+   "aStance": 0,
+   "aNote": "Core-gated; masonry lob; opens Sand",
+   "bKey": "shrinebreaker",
+   "bKind": "miniboss",
+   "bHp": 760,
+   "bStance": null,
+   "bBaseKey": "packIceGolem",
+   "agree": false
+  },
+  {
+   "aName": "Gatekeeper of Brass",
+   "aRole": "Sand mid-boss",
+   "aBase": "Dune Brute arena",
+   "aArenaHp": 1500,
+   "aStance": 220,
+   "aNote": "Slab throw; 2 phases",
+   "bKey": "gatekeeperOfBrass",
+   "bKind": "miniboss",
+   "bHp": 1500,
+   "bStance": 220,
+   "bBaseKey": "duneBrute",
+   "agree": true
+  },
+  {
+   "aName": "Warden of the Sundered Gate",
+   "aRole": "Sand realm boss",
+   "aBase": "Dune Warden",
+   "aArenaHp": 2400,
+   "aStance": 220,
+   "aNote": "Sand Ward + Decree",
+   "bKey": "duneWarden",
+   "bKind": "realmBoss",
+   "bHp": 2400,
+   "bStance": 220,
+   "bBaseKey": "duneWarden",
+   "agree": true
+  },
+  {
+   "aName": "Furnace Guardian",
+   "aRole": "Ash mid-boss",
+   "aBase": "Furnace Guardian",
+   "aArenaHp": 2200,
+   "aStance": 260,
+   "aNote": "Douse grate duel",
+   "bKey": "furnaceGuardian",
+   "bKind": "miniboss",
+   "bHp": 2200,
+   "bStance": 260,
+   "bBaseKey": "furnaceGuardian",
+   "agree": true
+  },
+  {
+   "aName": "Volcanic Plate Knight",
+   "aRole": "Ash finale",
+   "aBase": "Volcanic Plate Knight",
+   "aArenaHp": 3000,
+   "aStance": 300,
+   "aNote": "Progressive Fracture",
+   "bKey": "volcanicPlateKnight",
+   "bKind": "realmBoss",
+   "bHp": 3000,
+   "bStance": 300,
+   "bBaseKey": "volcanicPlateKnight",
+   "agree": true
+  }
+ ],
+ "playerAnchorAudit": {
+  "ttkTable": [
+   {
+    "slug": "86_v3_ash_volcanic_plate_knight",
+    "name": "Volcanic Plate Knight",
+    "tier": "boss",
+    "effectiveHp": 3000,
+    "ttk_s": 112.4,
+    "bolts": 250,
+    "topSpeed": 1.8
+   },
+   {
+    "slug": "50_v2_sand_dune_warden",
+    "name": "Dune Warden",
+    "tier": "boss",
+    "effectiveHp": 2400,
+    "ttk_s": 89.9,
+    "bolts": 200,
+    "topSpeed": 4.8
+   },
+   {
+    "slug": "88_v3_ash_furnace_guardian",
+    "name": "Furnace Guardian",
+    "tier": "boss",
+    "effectiveHp": 2200,
+    "ttk_s": 82.4,
+    "bolts": 184,
+    "topSpeed": 2
+   },
+   {
+    "slug": "32_v2_cold_glacier_brute",
+    "name": "Glacier Brute v2",
+    "tier": "elite",
+    "effectiveHp": 780,
+    "ttk_s": 29.2,
+    "bolts": 65,
+    "topSpeed": 4
+   },
+   {
+    "slug": "02_cold_glacier_brute",
+    "name": "Glacier Brute",
+    "tier": "elite",
+    "effectiveHp": 780,
+    "ttk_s": 29.2,
+    "bolts": 65,
+    "topSpeed": 4
+   },
+   {
+    "slug": "12_sand_dune_brute",
+    "name": "Dune Brute",
+    "tier": "elite",
+    "effectiveHp": 680,
+    "ttk_s": 25.5,
+    "bolts": 57,
+    "topSpeed": 2.2
+   },
+   {
+    "slug": "22_ash_slag_brute",
+    "name": "Slag Brute",
+    "tier": "elite",
+    "effectiveHp": 560,
+    "ttk_s": 21.0,
+    "bolts": 47,
+    "topSpeed": 2.2
+   },
+   {
+    "slug": "60_v2_ash_scorch_warden",
+    "name": "Scorch Warden",
+    "tier": "heavy",
+    "effectiveHp": 480,
+    "ttk_s": 18.0,
+    "bolts": 40,
+    "topSpeed": 3
+   },
+   {
+    "slug": "48_v2_sand_dune_sentinel",
+    "name": "Dune Sentinel",
+    "tier": "elite",
+    "effectiveHp": 380,
+    "ttk_s": 14.2,
+    "bolts": 32,
+    "topSpeed": 3.2
+   },
+   {
+    "slug": "75_v3_sand_bleached_bone_knight",
+    "name": "Bone Knight",
+    "tier": "heavy",
+    "effectiveHp": 320,
+    "ttk_s": 12.0,
+    "bolts": 27,
+    "topSpeed": 2.8
+   },
+   {
+    "slug": "68_v3_cold_hail_plate_guard",
+    "name": "Hail Plate Guard",
+    "tier": "heavy",
+    "effectiveHp": 300,
+    "ttk_s": 11.2,
+    "bolts": 25,
+    "topSpeed": 3
+   },
+   {
+    "slug": "61_v3_cold_frost_golem",
+    "name": "Frost Golem",
+    "tier": "heavy",
+    "effectiveHp": 300,
+    "ttk_s": 11.2,
+    "bolts": 25,
+    "topSpeed": 2
+   },
+   {
+    "slug": "28_ash_cinder_sentinel",
+    "name": "Cinder Sentinel",
+    "tier": "heavy",
+    "effectiveHp": 260,
+    "ttk_s": 9.7,
+    "bolts": 22,
+    "topSpeed": 4.8
+   },
+   {
+    "slug": "73_v3_sand_mummy",
+    "name": "Sand Mummy",
+    "tier": "medium",
+    "effectiveHp": 110,
+    "ttk_s": 4.1,
+    "bolts": 10,
+    "topSpeed": 2.4
+   },
+   {
+    "slug": "77_v3_sand_windscour_bandit",
+    "name": "Windscour Bandit",
+    "tier": "medium",
+    "effectiveHp": 90,
+    "ttk_s": 3.4,
+    "bolts": 8,
+    "topSpeed": 5
+   },
+   {
+    "slug": "25_ash_scorch_raider",
+    "name": "Scorch Raider",
+    "tier": "light",
+    "effectiveHp": 75,
+    "ttk_s": 2.8,
+    "bolts": 7,
+    "topSpeed": 17
+   },
+   {
+    "slug": "65_v3_cold_rime_skier_raider",
+    "name": "Rime Skier Raider",
+    "tier": "light",
+    "effectiveHp": 70,
+    "ttk_s": 2.6,
+    "bolts": 6,
+    "topSpeed": 14
+   },
+   {
+    "slug": "53_v2_ash_soot_stalker",
+    "name": "Soot Stalker",
+    "tier": "light",
+    "effectiveHp": 70,
+    "ttk_s": 2.6,
+    "bolts": 6,
+    "topSpeed": 13
+   },
+   {
+    "slug": "26_ash_smoke_mage",
+    "name": "Smoke Mage",
+    "tier": "light",
+    "effectiveHp": 65,
+    "ttk_s": 2.4,
+    "bolts": 6,
+    "topSpeed": 3.4
+   },
+   {
+    "slug": "16_sand_dust_mage",
+    "name": "Dust Mage",
+    "tier": "light",
+    "effectiveHp": 60,
+    "ttk_s": 2.2,
+    "bolts": 5,
+    "topSpeed": 4.6
+   },
+   {
+    "slug": "43_v2_sand_dust_stalker",
+    "name": "Dust Stalker v2",
+    "tier": "light",
+    "effectiveHp": 55,
+    "ttk_s": 2.1,
+    "bolts": 5,
+    "topSpeed": 13
+   },
+   {
+    "slug": "34_v2_cold_ice_cultist",
+    "name": "Ice Cultist",
+    "tier": "light",
+    "effectiveHp": 55,
+    "ttk_s": 2.1,
+    "bolts": 5,
+    "topSpeed": 4.6
+   },
+   {
+    "slug": "13_sand_dust_stalker",
+    "name": "Dust Stalker",
+    "tier": "light",
+    "effectiveHp": 55,
+    "ttk_s": 2.1,
+    "bolts": 5,
+    "topSpeed": 13
+   },
+   {
+    "slug": "03_cold_frost_stalker",
+    "name": "Frost Stalker",
+    "tier": "light",
+    "effectiveHp": 50,
+    "ttk_s": 1.9,
+    "bolts": 5,
+    "topSpeed": 13
+   },
+   {
+    "slug": "39_v2_cold_blizzard_assassin",
+    "name": "Blizzard Assassin",
+    "tier": "light",
+    "effectiveHp": 48,
+    "ttk_s": 1.8,
+    "bolts": 4,
+    "topSpeed": 16
+   },
+   {
+    "slug": "29_ash_soot_assassin",
+    "name": "Soot Assassin",
+    "tier": "light",
+    "effectiveHp": 40,
+    "ttk_s": 1.5,
+    "bolts": 4,
+    "topSpeed": 17
+   },
+   {
+    "slug": "21_ash_cinder_imp",
+    "name": "Cinder Imp",
+    "tier": "fodder",
+    "effectiveHp": 34,
+    "ttk_s": 1.3,
+    "bolts": 3,
+    "topSpeed": 6.2
+   },
+   {
+    "slug": "11_sand_dune_imp",
+    "name": "Dune Imp",
+    "tier": "fodder",
+    "effectiveHp": 30,
+    "ttk_s": 1.1,
+    "bolts": 3,
+    "topSpeed": 6.2
+   },
+   {
+    "slug": "31_v2_cold_rime_imp",
+    "name": "Rime Imp v2",
+    "tier": "fodder",
+    "effectiveHp": 24,
+    "ttk_s": 0.9,
+    "bolts": 2,
+    "topSpeed": 6.2
+   },
+   {
+    "slug": "01_cold_rime_imp",
+    "name": "Rime Imp",
+    "tier": "fodder",
+    "effectiveHp": 24,
+    "ttk_s": 0.9,
+    "bolts": 2,
+    "topSpeed": 6.2
+   }
+  ],
+  "ttkGuardsByTier": {
+   "fodder": 2.0,
+   "light": 4.0,
+   "medium": 6.0,
+   "heavy": 15.0,
+   "elite": 25.0,
+   "boss": 60.0
+  },
+  "ttkOutliers": [
+   {
+    "slug": "86_v3_ash_volcanic_plate_knight",
+    "name": "Volcanic Plate Knight",
+    "tier": "boss",
+    "effectiveHp": 3000,
+    "effectiveHpNote": "hp",
+    "ttk_s": 112.4,
+    "bolts": 250,
+    "guard_s": 60.0,
+    "overBy_s": 52.4,
+    "verdict": "112.4 s of perfect planted uptime at the L10 anchor - exceeds the 60 s guard for tier 'boss'"
+   },
+   {
+    "slug": "50_v2_sand_dune_warden",
+    "name": "Dune Warden",
+    "tier": "boss",
+    "effectiveHp": 2400,
+    "effectiveHpNote": "hp",
+    "ttk_s": 89.9,
+    "bolts": 200,
+    "guard_s": 60.0,
+    "overBy_s": 29.9,
+    "verdict": "89.9 s of perfect planted uptime at the L10 anchor - exceeds the 60 s guard for tier 'boss'"
+   },
+   {
+    "slug": "88_v3_ash_furnace_guardian",
+    "name": "Furnace Guardian",
+    "tier": "boss",
+    "effectiveHp": 2200,
+    "effectiveHpNote": "hp",
+    "ttk_s": 82.4,
+    "bolts": 184,
+    "guard_s": 60.0,
+    "overBy_s": 22.4,
+    "verdict": "82.4 s of perfect planted uptime at the L10 anchor - exceeds the 60 s guard for tier 'boss'"
+   },
+   {
+    "slug": "32_v2_cold_glacier_brute",
+    "name": "Glacier Brute v2",
+    "tier": "elite",
+    "effectiveHp": 780,
+    "effectiveHpNote": "hp + carapace over-health",
+    "ttk_s": 29.2,
+    "bolts": 65,
+    "guard_s": 25.0,
+    "overBy_s": 4.2,
+    "verdict": "29.2 s of perfect planted uptime at the L10 anchor - exceeds the 25 s guard for tier 'elite'"
+   },
+   {
+    "slug": "02_cold_glacier_brute",
+    "name": "Glacier Brute",
+    "tier": "elite",
+    "effectiveHp": 780,
+    "effectiveHpNote": "hp + carapace over-health",
+    "ttk_s": 29.2,
+    "bolts": 65,
+    "guard_s": 25.0,
+    "overBy_s": 4.2,
+    "verdict": "29.2 s of perfect planted uptime at the L10 anchor - exceeds the 25 s guard for tier 'elite'"
+   },
+   {
+    "slug": "12_sand_dune_brute",
+    "name": "Dune Brute",
+    "tier": "elite",
+    "effectiveHp": 680,
+    "effectiveHpNote": "hp",
+    "ttk_s": 25.5,
+    "bolts": 57,
+    "guard_s": 25.0,
+    "overBy_s": 0.5,
+    "verdict": "25.5 s of perfect planted uptime at the L10 anchor - exceeds the 25 s guard for tier 'elite'"
+   },
+   {
+    "slug": "60_v2_ash_scorch_warden",
+    "name": "Scorch Warden",
+    "tier": "heavy",
+    "effectiveHp": 480,
+    "effectiveHpNote": "hp",
+    "ttk_s": 18.0,
+    "bolts": 40,
+    "guard_s": 15.0,
+    "overBy_s": 3.0,
+    "verdict": "18.0 s of perfect planted uptime at the L10 anchor - exceeds the 15 s guard for tier 'heavy'"
+   }
+  ],
+  "arenaTtk": [
+   {
+    "name": "Icewall",
+    "role": "Cold mid-boss",
+    "base": "#02 Glacier Brute",
+    "arenaHp": 1200,
+    "ttkAtL10_s": 44.9,
+    "bolts": 100,
+    "verdict": "within the 60 s boss guard at L10"
+   },
+   {
+    "name": "Shrinebreaker",
+    "role": "Cold realm boss",
+    "base": "#61 Frost Golem",
+    "arenaHp": 2000,
+    "ttkAtL10_s": 74.9,
+    "bolts": 167,
+    "verdict": "OUTLIER - over 60 s at the L10 anchor"
+   },
+   {
+    "name": "Gatekeeper of Brass",
+    "role": "Sand mid-boss",
+    "base": "Dune Brute arena",
+    "arenaHp": 1500,
+    "ttkAtL10_s": 56.2,
+    "bolts": 125,
+    "verdict": "within the 60 s boss guard at L10"
+   },
+   {
+    "name": "Warden of the Sundered Gate",
+    "role": "Sand realm boss",
+    "base": "Dune Warden",
+    "arenaHp": 2400,
+    "ttkAtL10_s": 89.9,
+    "bolts": 200,
+    "verdict": "OUTLIER - over 60 s at the L10 anchor"
+   },
+   {
+    "name": "Furnace Guardian",
+    "role": "Ash mid-boss",
+    "base": "Furnace Guardian",
+    "arenaHp": 2200,
+    "ttkAtL10_s": 82.4,
+    "bolts": 184,
+    "verdict": "OUTLIER - over 60 s at the L10 anchor"
+   },
+   {
+    "name": "Volcanic Plate Knight",
+    "role": "Ash finale",
+    "base": "Volcanic Plate Knight",
+    "arenaHp": 3000,
+    "ttkAtL10_s": 112.4,
+    "bolts": 250,
+    "verdict": "OUTLIER - over 60 s at the L10 anchor"
+   }
+  ],
+  "fixedLevelBossTtk": [
+   {
+    "key": "moraineElder",
+    "name": "Moraine Colossus, 'The Moraine Elder'",
+    "fixedLevel": 10,
+    "hp": 2000,
+    "ttkAtL10_s": 74.9,
+    "playerDpsAtLevel": 26.7,
+    "ttkAtFixedLevel_s": 74.9
+   },
+   {
+    "key": "duneWarden",
+    "name": "Dune Warden, 'Warden of the Sundered Gate'",
+    "fixedLevel": 20,
+    "hp": 2400,
+    "ttkAtL10_s": 89.9,
+    "playerDpsAtLevel": 63.2,
+    "ttkAtFixedLevel_s": 38.0
+   },
+   {
+    "key": "volcanicPlateKnight",
+    "name": "Volcanic Plate Knight",
+    "fixedLevel": 30,
+    "hp": 3000,
+    "ttkAtL10_s": 112.4,
+    "playerDpsAtLevel": 149.6,
+    "ttkAtFixedLevel_s": 20.0
+   }
+  ],
+  "speedFlags": [
+   {
+    "slug": "01_cold_rime_imp",
+    "name": "Rime Imp",
+    "speed": 6.2,
+    "burst": null,
+    "submerged": null,
+    "top": 6.2,
+    "flag": "faster than player run 5.4 - unescapable on foot, must surf"
+   },
+   {
+    "slug": "03_cold_frost_stalker",
+    "name": "Frost Stalker",
+    "speed": 7,
+    "burst": 13,
+    "submerged": 13,
+    "top": 13,
+    "flag": "faster than player run 5.4 - unescapable on foot, must surf"
+   },
+   {
+    "slug": "31_v2_cold_rime_imp",
+    "name": "Rime Imp v2",
+    "speed": 6.2,
+    "burst": null,
+    "submerged": null,
+    "top": 6.2,
+    "flag": "faster than player run 5.4 - unescapable on foot, must surf"
+   },
+   {
+    "slug": "39_v2_cold_blizzard_assassin",
+    "name": "Blizzard Assassin",
+    "speed": 8,
+    "burst": 16,
+    "submerged": null,
+    "top": 16,
+    "flag": "faster than player run 5.4 - unescapable on foot, must surf"
+   },
+   {
+    "slug": "65_v3_cold_rime_skier_raider",
+    "name": "Rime Skier Raider",
+    "speed": 7.2,
+    "burst": 14,
+    "submerged": null,
+    "top": 14,
+    "flag": "faster than player run 5.4 - unescapable on foot, must surf"
+   },
+   {
+    "slug": "11_sand_dune_imp",
+    "name": "Dune Imp",
+    "speed": 6.2,
+    "burst": null,
+    "submerged": null,
+    "top": 6.2,
+    "flag": "faster than player run 5.4 - unescapable on foot, must surf"
+   },
+   {
+    "slug": "13_sand_dust_stalker",
+    "name": "Dust Stalker",
+    "speed": 7.8,
+    "burst": 13,
+    "submerged": 13,
+    "top": 13,
+    "flag": "faster than player run 5.4 - unescapable on foot, must surf"
+   },
+   {
+    "slug": "43_v2_sand_dust_stalker",
+    "name": "Dust Stalker v2",
+    "speed": 7.8,
+    "burst": 13,
+    "submerged": 13,
+    "top": 13,
+    "flag": "faster than player run 5.4 - unescapable on foot, must surf"
+   },
+   {
+    "slug": "21_ash_cinder_imp",
+    "name": "Cinder Imp",
+    "speed": 6.2,
+    "burst": null,
+    "submerged": null,
+    "top": 6.2,
+    "flag": "faster than player run 5.4 - unescapable on foot, must surf"
+   },
+   {
+    "slug": "25_ash_scorch_raider",
+    "name": "Scorch Raider",
+    "speed": 6.6,
+    "burst": 17,
+    "submerged": null,
+    "top": 17,
+    "flag": "faster than player run 5.4 - unescapable on foot, must surf"
+   },
+   {
+    "slug": "29_ash_soot_assassin",
+    "name": "Soot Assassin",
+    "speed": 8.5,
+    "burst": 17,
+    "submerged": null,
+    "top": 17,
+    "flag": "faster than player run 5.4 - unescapable on foot, must surf"
+   },
+   {
+    "slug": "53_v2_ash_soot_stalker",
+    "name": "Soot Stalker",
+    "speed": 7,
+    "burst": 13,
+    "submerged": 13,
+    "top": 13,
+    "flag": "faster than player run 5.4 - unescapable on foot, must surf"
+   }
+  ],
+  "noEnemyOutrunsSurf": true
+ },
+ "tierBandAudit": [
+  {
+   "slug": "02_cold_glacier_brute",
+   "name": "Glacier Brute",
+   "tier": "elite",
+   "issues": [
+    "cost 5 != tier 'elite' table cost 8 (per-unit override is documented in combatData L158-161)"
+   ]
+  },
+  {
+   "slug": "03_cold_frost_stalker",
+   "name": "Frost Stalker",
+   "tier": "light",
+   "issues": [
+    "cost 3 != tier 'light' table cost 2 (per-unit override is documented in combatData L158-161)"
+   ]
+  },
+  {
+   "slug": "32_v2_cold_glacier_brute",
+   "name": "Glacier Brute v2",
+   "tier": "elite",
+   "issues": [
+    "cost 5 != tier 'elite' table cost 8 (per-unit override is documented in combatData L158-161)"
+   ]
+  },
+  {
+   "slug": "34_v2_cold_ice_cultist",
+   "name": "Ice Cultist",
+   "tier": "light",
+   "issues": [
+    "cost 3 != tier 'light' table cost 2 (per-unit override is documented in combatData L158-161)"
+   ]
+  },
+  {
+   "slug": "39_v2_cold_blizzard_assassin",
+   "name": "Blizzard Assassin",
+   "tier": "light",
+   "issues": [
+    "cost 4 != tier 'light' table cost 2 (per-unit override is documented in combatData L158-161)"
+   ]
+  },
+  {
+   "slug": "61_v3_cold_frost_golem",
+   "name": "Frost Golem",
+   "tier": "heavy",
+   "issues": [
+    "poise 0 outside tier 'heavy' poiseBand [90, 140]"
+   ]
+  },
+  {
+   "slug": "12_sand_dune_brute",
+   "name": "Dune Brute",
+   "tier": "elite",
+   "issues": [
+    "cost 5 != tier 'elite' table cost 8 (per-unit override is documented in combatData L158-161)"
+   ]
+  },
+  {
+   "slug": "13_sand_dust_stalker",
+   "name": "Dust Stalker",
+   "tier": "light",
+   "issues": [
+    "cost 3 != tier 'light' table cost 2 (per-unit override is documented in combatData L158-161)"
+   ]
+  },
+  {
+   "slug": "16_sand_dust_mage",
+   "name": "Dust Mage",
+   "tier": "light",
+   "issues": [
+    "cost 3 != tier 'light' table cost 2 (per-unit override is documented in combatData L158-161)"
+   ]
+  },
+  {
+   "slug": "43_v2_sand_dust_stalker",
+   "name": "Dust Stalker v2",
+   "tier": "light",
+   "issues": [
+    "cost 3 != tier 'light' table cost 2 (per-unit override is documented in combatData L158-161)"
+   ]
+  },
+  {
+   "slug": "73_v3_sand_mummy",
+   "name": "Sand Mummy",
+   "tier": "medium",
+   "issues": [
+    "poise 40 outside tier 'medium' poiseBand [15, 35]"
+   ]
+  },
+  {
+   "slug": "22_ash_slag_brute",
+   "name": "Slag Brute",
+   "tier": "elite",
+   "issues": [
+    "cost 5 != tier 'elite' table cost 8 (per-unit override is documented in combatData L158-161)"
+   ]
+  },
+  {
+   "slug": "26_ash_smoke_mage",
+   "name": "Smoke Mage",
+   "tier": "light",
+   "issues": [
+    "cost 3 != tier 'light' table cost 2 (per-unit override is documented in combatData L158-161)"
+   ]
+  },
+  {
+   "slug": "28_ash_cinder_sentinel",
+   "name": "Cinder Sentinel",
+   "tier": "heavy",
+   "issues": [
+    "cost 8 != tier 'heavy' table cost 5 (per-unit override is documented in combatData L158-161)"
+   ]
+  },
+  {
+   "slug": "29_ash_soot_assassin",
+   "name": "Soot Assassin",
+   "tier": "light",
+   "issues": [
+    "poise 12 outside tier 'light' poiseBand [15, 35]",
+    "cost 4 != tier 'light' table cost 2 (per-unit override is documented in combatData L158-161)"
+   ]
+  },
+  {
+   "slug": "53_v2_ash_soot_stalker",
+   "name": "Soot Stalker",
+   "tier": "light",
+   "issues": [
+    "cost 3 != tier 'light' table cost 2 (per-unit override is documented in combatData L158-161)"
+   ]
+  }
+ ],
+ "runtimeCoverage": {
+  "implementedArchetypes": [
+   "rimeImp",
+   "hoarfrostSprite",
+   "frostStalker",
+   "glacierBrute"
+  ],
+  "implementedCount": 4,
+  "rosterUnitsWithRealRuntimeRow": [
+   "01_cold_rime_imp",
+   "02_cold_glacier_brute",
+   "03_cold_frost_stalker",
+   "31_v2_cold_rime_imp",
+   "32_v2_cold_glacier_brute"
+  ],
+  "rosterUnitsAliasedToWrongArchetype": [
+   {
+    "slug": "34_v2_cold_ice_cultist",
+    "key": "rimeboundCultist",
+    "aliasedTo": "hoarfrostSprite"
+   },
+   {
+    "slug": "39_v2_cold_blizzard_assassin",
+    "key": "blizzardAssassin",
+    "aliasedTo": "frostStalker"
+   },
+   {
+    "slug": "68_v3_cold_hail_plate_guard",
+    "key": "hailPlateGuard",
+    "aliasedTo": "glacierBrute"
+   }
+  ],
+  "rosterUnitsThatCannotSpawn": [
+   {
+    "slug": "61_v3_cold_frost_golem",
+    "key": "packIceGolem",
+    "realm": "cold"
+   },
+   {
+    "slug": "65_v3_cold_rime_skier_raider",
+    "key": null,
+    "realm": "cold"
+   },
+   {
+    "slug": "11_sand_dune_imp",
+    "key": "duneImp",
+    "realm": "sand"
+   },
+   {
+    "slug": "12_sand_dune_brute",
+    "key": "duneBrute",
+    "realm": "sand"
+   },
+   {
+    "slug": "13_sand_dust_stalker",
+    "key": "dustStalker",
+    "realm": "sand"
+   },
+   {
+    "slug": "16_sand_dust_mage",
+    "key": "dustMage",
+    "realm": "sand"
+   },
+   {
+    "slug": "43_v2_sand_dust_stalker",
+    "key": "dustStalker",
+    "realm": "sand"
+   },
+   {
+    "slug": "48_v2_sand_dune_sentinel",
+    "key": "duneSentinel",
+    "realm": "sand"
+   },
+   {
+    "slug": "50_v2_sand_dune_warden",
+    "key": "duneWarden",
+    "realm": "sand"
+   },
+   {
+    "slug": "73_v3_sand_mummy",
+    "key": null,
+    "realm": "sand"
+   },
+   {
+    "slug": "75_v3_sand_bleached_bone_knight",
+    "key": null,
+    "realm": "sand"
+   },
+   {
+    "slug": "77_v3_sand_windscour_bandit",
+    "key": "windscourBandit",
+    "realm": "sand"
+   },
+   {
+    "slug": "21_ash_cinder_imp",
+    "key": "cinderImp",
+    "realm": "ash"
+   },
+   {
+    "slug": "22_ash_slag_brute",
+    "key": "slagBrute",
+    "realm": "ash"
+   },
+   {
+    "slug": "25_ash_scorch_raider",
+    "key": "scorchRaider",
+    "realm": "ash"
+   },
+   {
+    "slug": "26_ash_smoke_mage",
+    "key": "smokeMage",
+    "realm": "ash"
+   },
+   {
+    "slug": "28_ash_cinder_sentinel",
+    "key": "cinderSentinel",
+    "realm": "ash"
+   },
+   {
+    "slug": "29_ash_soot_assassin",
+    "key": "sootAssassin",
+    "realm": "ash"
+   },
+   {
+    "slug": "53_v2_ash_soot_stalker",
+    "key": "sootStalker",
+    "realm": "ash"
+   },
+   {
+    "slug": "60_v2_ash_scorch_warden",
+    "key": "scorchWarden",
+    "realm": "ash"
+   },
+   {
+    "slug": "86_v3_ash_volcanic_plate_knight",
+    "key": "volcanicPlateKnight",
+    "realm": "ash"
+   },
+   {
+    "slug": "88_v3_ash_furnace_guardian",
+    "key": "furnaceGuardian",
+    "realm": "ash"
+   }
+  ],
+  "hoarfrostSpriteIsRuntimeOnly": true,
+  "note": "enemies.js COLD_KEYS ships 4 archetypes; KEY_ALIAS maps 8 more cold keys onto them, and every SAND and ASH unit has no runtime row at all."
+ }
+}

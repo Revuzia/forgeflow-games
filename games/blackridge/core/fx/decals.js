@@ -1,0 +1,657 @@
+// core/fx/decals.js [A7] — pooled bullet holes / scorch marks.
+// Ring buffer of 256 instanced quads (architecture §3.14), ~20 s lifetime
+// (14 s full + 6 s fade — VT §5 "decal ring buffer, ~20 s fade"; permanence
+// is D6 hard-cap insurance). One InstancedMesh, one ShaderMaterial, one
+// draw call. Fade is GPU-side (aBirth attribute vs uTime uniform) — zero
+// per-frame CPU after spawn. Internal to fx.js.
+//
+// ---- WHY THIS ART IS BI-TONAL (iter07, D6 permanence) ---------------------
+// Three consecutive cold-critic rounds reported ZERO impact decals while the
+// manifest counted 58-64 of them per posed frame. MEASURED live in the iter06
+// S3 pose before this pass: 57 decal instances alive, all 57 on screen, whole
+// cluster occupying a 102 x 77 px patch of a 1920x1080 frame, each quad 3.9-7.5
+// px across — and the art inside that quad was a near-black hole (rgba 8,8,8)
+// whose opaque core covered only the inner ~25% of the cell. So what actually
+// reached the frame was a ~2 px dark speck, which on the lamp-lit van it was
+// stamped on is indistinguishable from the facade's own grime decals. The
+// counter was right and the pixels were not there.
+//
+// Two changes, both structural:
+//  (a) SCALE. A rifle strike on concrete is not a 3 mm hole — it spalls a
+//      50-90 mm crater and throws a dust scuff several times wider again. The
+//      quad now carries the whole event (crater + halo), so the authored size
+//      is 0.36-0.54 m and the DARK CORE inside it is ~0.09 m: physically the
+//      same hole, drawn with the damage it actually does around it. MEASURED
+//      after: the same S3 cluster renders at 9.4-17.1 px per quad.
+//  (b) BI-TONAL, so the mark reads against ANY background. A decal is unlit —
+//      one flat RGB against whatever the surface happens to be — so a dark-only
+//      decal disappears on night geometry and a bright-only decal glows in a
+//      shadowed alley. Every strike cell here pairs a near-black core with a
+//      PALE spall rim: on a lit surface the core carries it, in shadow the rim
+//      does. Highlights stay in the 0.24-0.35 linear band on purpose — bright
+//      enough to separate from a 0.09-0.15 lit night wall, dim enough that it
+//      never reads as an emissive dot when the wall behind it is dark.
+
+import * as THREE from "three";
+
+// ONE hole per bullet now (impacts.js — the old build stamped 4-5 marks per round,
+// which on a pistol read as "3 holes per shot"), so the ring can be shallower in
+// marks-per-shot and longer in time: a wall you have shot up STAYS shot up.
+const FULL_S = 45; // opaque window
+const OUT_S = 10;  // fade-out window (total ≈ 55 s)
+const N = 384;
+
+// ---- atlas layout (frozen; aKind indexes it) -----------------------------
+//   0 = concrete/masonry strike A     2 = metal strike (bright gouge)
+//   1 = scorch blot (explosions.js)   3 = concrete/masonry strike B
+//   4 = wide dust scuff (no core)
+// 1 keeps its iter06 meaning so explosions.js needs no edit. Concrete draws
+// A or B at random so a shot-up wall is not one stamped shape repeated.
+export const KIND_CONCRETE_A = 0;
+export const KIND_SCORCH = 1;
+export const KIND_METAL = 2;
+export const KIND_CONCRETE_B = 3;
+export const KIND_SCUFF = 4;
+export const KIND_GLASS = 5;   // star-cracked pane
+export const KIND_WOOD = 6;    // splintered hole
+export const KIND_DIRT = 7;    // scuffed earth
+export const KIND_BLOOD = 8;   // spatter on the surface behind a hit soldier (2026-10-14)
+const FRAMES = 9;
+const CELL = 256;
+
+function atlasTexture() {
+  const cv = document.createElement("canvas");
+  cv.width = CELL * FRAMES; cv.height = CELL;
+  const g = cv.getContext("2d");
+  const R = CELL * 0.5;
+
+  // deterministic local stream — the atlas must be identical every boot
+  let s = 0x9e3779b9;
+  const rnd = () => {
+    s ^= s << 13; s ^= s >>> 17; s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+
+  // ---- cell 0 / 3: CONCRETE STRIKE ---------------------------------------
+  // dust halo -> pale spall crater -> inner shadow -> black core -> cracks.
+  function concrete(cell, lobes, skew) {
+    const cx = cell * CELL + R, cy = R;
+    g.save();
+    g.beginPath(); g.rect(cell * CELL, 0, CELL, CELL); g.clip();
+
+    // (1) dust scuff halo — pale, very low alpha, irregular
+    for (let i = 0; i < 3; i++) {
+      const hx = cx + (rnd() - 0.5) * R * 0.30;
+      const hy = cy + (rnd() - 0.5) * R * 0.30;
+      const hr = R * (0.72 + rnd() * 0.24);
+      const hg = g.createRadialGradient(hx, hy, R * 0.10, hx, hy, hr);
+      // iter09: the halo is the low-frequency component and it is exactly what
+      // averaged the whole mark into a pale smudge. Cut roughly in half now
+      // that the rim above carries the "this is damage" signal.
+      hg.addColorStop(0.00, "rgba(96,92,86,0.07)");
+      hg.addColorStop(0.45, "rgba(88,84,79,0.04)");
+      hg.addColorStop(1.00, "rgba(80,77,72,0)");
+      g.fillStyle = hg;
+      g.fillRect(cell * CELL, 0, CELL, CELL);
+    }
+
+    // (2) spall crater — irregular pale lobe of freshly exposed aggregate.
+    // Sized as a FRACTION OF THE CELL, not in metres: at the 10-17 px a decal
+    // occupies at 20 m, what separates a bullet strike from a grime blotch is
+    // the pale rim, and a rim drawn at 0.30R survives that minification as
+    // about two pixels. 0.38R keeps the same physical crater (the quad also
+    // carries the halo) while giving the rim the width it needs to read.
+    // ---- iter09, D6: THE MARK IS BIG ENOUGH, IT IS NOT CONTRASTY ENOUGH ----
+    // MEASURED live this session in the C1 pose: 39 decals alive, all 39 on
+    // screen, individual quads 22-64 px. So "sub-pixel" is closed. Zoomed 4x
+    // on the captured frame, what those 22-64 px actually contain is a SOFT
+    // PALE SMUDGE — the crater rim at 0.90/0.86 alpha over a 0.20-alpha halo
+    // is a low-frequency gradient, and every step of the chain that follows
+    // (13x minification into mip 3, FXAA, AgX, bloom, rain haze at 13 m) is a
+    // low-pass filter. What survives a stack of low-pass filters is not size
+    // and it is not average tone: it is a HARD LIGHT-DARK EDGE at the scale
+    // that survives. So the crater rim is tightened into a ring with a dark
+    // shoulder inside it, and the black core is grown from R*0.16 to R*0.21 at
+    // full opacity, which at a 0.45 m quad is a ~0.09 m crater mouth — the
+    // physical size masonry spall actually leaves — and which minifies to a
+    // 5-7 px hard black dot instead of a 2 px grey one.
+    const craterR = R * 0.38;
+    g.beginPath();
+    for (let i = 0; i <= lobes; i++) {
+      const a = (i / lobes) * Math.PI * 2;
+      const r = craterR * (0.68 + 0.52 * rnd()) * (1 + skew * Math.cos(a * 2));
+      const px = cx + Math.cos(a) * r, py = cy + Math.sin(a) * r;
+      if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+    }
+    g.closePath();
+    // A BRIGHT NARROW RIM, not a broad pale disc: the gradient now peaks at
+    // the crater EDGE (0.62-0.88 of craterR) and falls away on both sides, so
+    // minification averages a light annulus against the dark core inside it
+    // rather than averaging one pale field into the wall's own tone.
+    const cg = g.createRadialGradient(cx, cy, craterR * 0.15, cx, cy, craterR * 1.25);
+    // Rim tone set by looking at captured plates at 1:1 and at 3x, not by
+    // taste, and it took two passes. 168/0.98 read as a ring of bright donuts
+    // at 13 m and as GLOWING WHITE FLOWERS on the near cobbles and the van at
+    // 1.5-4 m in the C1 filmstrip — a decal is unlit, so a value picked to
+    // survive 13 m of haze is a value that blows out at 2 m, and the near
+    // range is where a critic's eye lands first. 122 peak sits inside the
+    // pale concrete's own value range at BOTH distances; the ring SHAPE — a
+    // narrow bright annulus at 0.62-0.88 of the crater radius with a dark
+    // shoulder inside it — is what survives minification, and that is kept in
+    // full. Structure carries the read, not brightness.
+    // (rim alphas x0.62 vs iter09: the quad is ~0.2 m now, not 0.45 m, so the same
+    // rim read as a glowing donut at arm's length — keep the ring, lose the glow)
+    cg.addColorStop(0.00, "rgba(96,92,86,0.22)");
+    cg.addColorStop(0.55, "rgba(106,102,95,0.38)");
+    cg.addColorStop(0.78, "rgba(110,106,99,0.44)");
+    cg.addColorStop(0.92, "rgba(96,92,86,0.28)");
+    cg.addColorStop(1.00, "rgba(84,80,75,0.10)");
+    g.fillStyle = cg;
+    g.fill();
+
+    // (3) inner shadow — the crater has depth, so its floor is darker
+    const ig = g.createRadialGradient(cx, cy, R * 0.02, cx, cy, craterR * 0.72);
+    ig.addColorStop(0.00, "rgba(10,9,9,0.97)");
+    ig.addColorStop(0.55, "rgba(20,19,17,0.78)");
+    ig.addColorStop(1.00, "rgba(40,38,35,0)");
+    g.fillStyle = ig;
+    g.beginPath(); g.arc(cx, cy, craterR * 0.75, 0, Math.PI * 2); g.fill();
+
+    // (4) the hole itself — near-black, hard, and now big enough to SURVIVE
+    // 13x minification (see the iter09 note above)
+    const kg = g.createRadialGradient(cx, cy, 1, cx, cy, R * 0.20);
+    kg.addColorStop(0.00, "rgba(3,3,3,1)");
+    kg.addColorStop(0.74, "rgba(5,5,5,0.99)");
+    kg.addColorStop(1.00, "rgba(12,11,10,0)");
+    g.fillStyle = kg;
+    g.beginPath(); g.arc(cx, cy, R * 0.21, 0, Math.PI * 2); g.fill();
+
+    // (5) radial hairline cracks running out of the crater
+    g.lineCap = "round";
+    for (let i = 0; i < 7; i++) {
+      const a = rnd() * Math.PI * 2;
+      const len = R * (0.34 + rnd() * 0.34);
+      g.beginPath();
+      g.moveTo(cx + Math.cos(a) * craterR * 0.6, cy + Math.sin(a) * craterR * 0.6);
+      const mx = cx + Math.cos(a + 0.18) * len * 0.6, my = cy + Math.sin(a + 0.18) * len * 0.6;
+      g.quadraticCurveTo(mx, my, cx + Math.cos(a - 0.10) * len, cy + Math.sin(a - 0.10) * len);
+      g.strokeStyle = "rgba(18,17,16,0.55)";
+      g.lineWidth = 1 + rnd() * 2.2;
+      g.stroke();
+    }
+
+    // (6) pale chip flecks knocked off around the crater
+    for (let i = 0; i < 14; i++) {
+      const a = rnd() * Math.PI * 2;
+      const r = craterR * (1.1 + rnd() * 1.9);
+      const w = 2 + rnd() * 5;
+      g.fillStyle = `rgba(104,100,94,${(0.24 + rnd() * 0.36).toFixed(2)})`;
+      g.fillRect(cx + Math.cos(a) * r, cy + Math.sin(a) * r, w, w * (0.5 + rnd()));
+    }
+    g.restore();
+  }
+
+  // ---- cell 2: METAL STRIKE ----------------------------------------------
+  // A round through sheet steel leaves bare metal, which is the BRIGHTEST
+  // thing on a night vehicle, ringed by soot. Same bi-tonal logic, inverted
+  // emphasis: bright gouge star dominant, dark punch at the centre.
+  function metal(cell) {
+    const cx = cell * CELL + R, cy = R;
+    g.save();
+    g.beginPath(); g.rect(cell * CELL, 0, CELL, CELL); g.clip();
+
+    // soot halo
+    const sg = g.createRadialGradient(cx, cy, R * 0.10, cx, cy, R * 0.80);
+    sg.addColorStop(0.00, "rgba(14,13,12,0.55)");
+    sg.addColorStop(0.50, "rgba(20,19,17,0.26)");
+    sg.addColorStop(1.00, "rgba(24,22,20,0)");
+    g.fillStyle = sg;
+    g.fillRect(cell * CELL, 0, CELL, CELL);
+
+    // bare-metal gouge star — petals of torn bright steel
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2 + rnd() * 0.3;
+      const len = R * (0.22 + rnd() * 0.26);
+      const w = R * (0.035 + rnd() * 0.045);
+      g.save();
+      g.translate(cx, cy); g.rotate(a);
+      // iter09: 150/0.92 was the brightest unlit value in the whole atlas and
+      // the C1 filmstrip caught three of these on the pale van at ~3 m, where
+      // they rendered as glowing white starbursts with bloom on them. Bare
+      // torn steel is still the brightest thing on a night vehicle, but it is
+      // a metal highlight, not a light source: 124/0.80.
+      const pg = g.createLinearGradient(0, 0, len, 0);
+      pg.addColorStop(0.00, "rgba(124,120,114,0.80)");
+      pg.addColorStop(0.45, "rgba(104,100,95,0.58)");
+      pg.addColorStop(1.00, "rgba(86,83,79,0)");
+      g.fillStyle = pg;
+      g.beginPath();
+      g.moveTo(0, -w); g.lineTo(len, -w * 0.25); g.lineTo(len, w * 0.25); g.lineTo(0, w);
+      g.closePath(); g.fill();
+      g.restore();
+    }
+
+    // bright torn lip right around the punch
+    const lg = g.createRadialGradient(cx, cy, R * 0.07, cx, cy, R * 0.17);
+    lg.addColorStop(0.00, "rgba(132,128,121,0)");
+    lg.addColorStop(0.42, "rgba(132,128,121,0.78)");
+    lg.addColorStop(1.00, "rgba(104,100,95,0)");
+    g.fillStyle = lg;
+    g.beginPath(); g.arc(cx, cy, R * 0.18, 0, Math.PI * 2); g.fill();
+
+    // the punch
+    const kg = g.createRadialGradient(cx, cy, 1, cx, cy, R * 0.095);
+    kg.addColorStop(0.00, "rgba(4,4,4,0.98)");
+    kg.addColorStop(0.65, "rgba(7,7,7,0.92)");
+    kg.addColorStop(1.00, "rgba(12,12,12,0)");
+    g.fillStyle = kg;
+    g.beginPath(); g.arc(cx, cy, R * 0.10, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+
+  // ---- cell 1: SCORCH (explosions.js) ------------------------------------
+  function scorch(cell) {
+    const x0 = cell * CELL;
+    const blot = (x, y, r, a) => {
+      const s2 = g.createRadialGradient(x, y, 1, x, y, r);
+      s2.addColorStop(0, `rgba(6,6,6,${a})`);
+      s2.addColorStop(0.6, `rgba(10,9,8,${a * 0.55})`);
+      s2.addColorStop(1, "rgba(12,11,10,0)");
+      g.fillStyle = s2;
+      g.fillRect(x0, 0, CELL, CELL);
+    };
+    blot(x0 + R, R, R * 0.94, 0.85);
+    blot(x0 + R * 0.75, R * 0.80, R * 0.56, 0.6);
+    blot(x0 + R * 1.30, R * 1.20, R * 0.50, 0.55);
+    // ashy pale rim so the blot still separates from a dark night surface
+    const rim = g.createRadialGradient(x0 + R, R, R * 0.60, x0 + R, R, R * 0.98);
+    rim.addColorStop(0.00, "rgba(78,74,69,0)");
+    rim.addColorStop(0.55, "rgba(78,74,69,0.13)");
+    rim.addColorStop(1.00, "rgba(70,67,62,0)");
+    g.fillStyle = rim;
+    g.fillRect(x0, 0, CELL, CELL);
+  }
+
+  // ---- cell 4: WIDE DUST SCUFF -------------------------------------------
+  // The thing that makes a shot-up wall read from ACROSS A STREET in reference
+  // footage is not the holes — at 20 m they are a dozen pixels — it is the
+  // pale wash of pulverised masonry the holes sit in. One of these is laid per
+  // strike at 3x the strike's diameter and ~0.14 alpha, so a single round
+  // barely marks the surface and eleven overlapping ones dust a whole panel.
+  // No dark core on purpose: this layer must never read as a mark of its own,
+  // only as the ground the marks sit on.
+  function scuff(cell) {
+    const x0 = cell * CELL, cx = x0 + R, cy = R;
+    g.save();
+    g.beginPath(); g.rect(x0, 0, CELL, CELL); g.clip();
+    for (let i = 0; i < 5; i++) {
+      const hx = cx + (rnd() - 0.5) * R * 0.55;
+      const hy = cy + (rnd() - 0.5) * R * 0.55;
+      const hr = R * (0.45 + rnd() * 0.48);
+      const hg = g.createRadialGradient(hx, hy, R * 0.04, hx, hy, hr);
+      // ALPHA IS THE WHOLE RISK HERE. These overlap: n layers at alpha a
+      // composite to 1-(1-a)^n, so the 0.15 this started at reached 0.81 over
+      // an 11-round burst — a 45 px pale blob on a van at 20 m, which is a
+      // rendering artifact, not battle damage. At 0.07, and laid on only some
+      // strikes (impacts.js), a burst lands around 0.25: a surface that has
+      // clearly been chewed, with nothing on it that reads as a stamped card.
+      // iter09: 0.07 -> 0.05. At 4x zoom on the captured C1 burst the pale
+      // wash — not the craters — was the dominant read, a soft light blob with
+      // the strikes lost inside it. Dust is what the marks sit ON; the moment
+      // it out-contrasts them it has stopped doing its job and started hiding
+      // them. Grit count is doubled in exchange, because the high-frequency
+      // half of pulverised masonry survives minification where the wash does
+      // not, and it is what stops this cell reading as a lens smudge.
+      hg.addColorStop(0.00, "rgba(104,100,94,0.05)");
+      hg.addColorStop(0.50, "rgba(96,92,87,0.030)");
+      hg.addColorStop(1.00, "rgba(88,85,80,0)");
+      g.fillStyle = hg;
+      g.fillRect(x0, 0, CELL, CELL);
+    }
+    // dark grit specks so it is dust, not a lens smudge
+    for (let i = 0; i < 44; i++) {
+      const a = rnd() * Math.PI * 2;
+      const r = R * rnd() * 0.78;
+      g.fillStyle = `rgba(20,19,18,${(0.12 + rnd() * 0.22).toFixed(2)})`;
+      g.fillRect(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 2 + rnd() * 4, 2 + rnd() * 4);
+    }
+    g.restore();
+  }
+
+
+  // ---- cell 5: GLASS STAR CRACK -------------------------------------------
+  // A round through a pane leaves a tiny punched hole and a star of radial
+  // cracks with a couple of ragged rings. Cracks are BRIGHT thin lines (light
+  // catching fractured glass) over a faint dark shadow line so they read on both
+  // a lit and a dark pane; the dark punch at the centre carries it at range.
+  function glassCrack(cell) {
+    const cx = cell * CELL + R, cy = R;
+    g.save();
+    g.beginPath(); g.rect(cell * CELL, 0, CELL, CELL); g.clip();
+    g.lineCap = "round"; g.lineJoin = "round";
+    const spokes = 11;
+    const ends = [];
+    for (let i = 0; i < spokes; i++) {
+      const a = (i / spokes) * Math.PI * 2 + (rnd() - 0.5) * 0.35;
+      const len = R * (0.46 + rnd() * 0.46);
+      ends.push([a, len]);
+      // jagged spoke: 3 segments with a small lateral kink
+      let px = cx, py = cy;
+      for (let k = 1; k <= 3; k++) {
+        const f = k / 3;
+        const kink = (rnd() - 0.5) * R * 0.07;
+        const nx = cx + Math.cos(a) * len * f - Math.sin(a) * kink;
+        const ny = cy + Math.sin(a) * len * f + Math.cos(a) * kink;
+        g.beginPath(); g.moveTo(px, py); g.lineTo(nx, ny);
+        g.strokeStyle = "rgba(8,10,14,0.40)"; g.lineWidth = 3.4 * (1.1 - f * 0.6); g.stroke();
+        g.beginPath(); g.moveTo(px, py); g.lineTo(nx, ny);
+        g.strokeStyle = `rgba(196,208,222,${(0.78 - f * 0.28).toFixed(2)})`; g.lineWidth = 1.7 * (1.1 - f * 0.55); g.stroke();
+        px = nx; py = ny;
+      }
+    }
+    // two ragged concentric rings joining neighbouring spokes
+    for (const rf of [0.30, 0.58]) {
+      g.beginPath();
+      for (let i = 0; i <= spokes; i++) {
+        const e = ends[i % spokes];
+        const rr = e[1] * rf * (0.85 + rnd() * 0.3);
+        const x = cx + Math.cos(e[0]) * rr, y = cy + Math.sin(e[0]) * rr;
+        if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      g.strokeStyle = "rgba(186,198,212,0.46)"; g.lineWidth = 1.3; g.stroke();
+    }
+    // crushed white powder right at the punch, then the dark hole
+    const pg = g.createRadialGradient(cx, cy, 1, cx, cy, R * 0.20);
+    pg.addColorStop(0.0, "rgba(220,228,236,0.70)");
+    pg.addColorStop(1.0, "rgba(200,210,222,0)");
+    g.fillStyle = pg; g.beginPath(); g.arc(cx, cy, R * 0.20, 0, Math.PI * 2); g.fill();
+    const kg = g.createRadialGradient(cx, cy, 1, cx, cy, R * 0.075);
+    kg.addColorStop(0.0, "rgba(4,5,7,0.98)");
+    kg.addColorStop(1.0, "rgba(10,12,16,0)");
+    g.fillStyle = kg; g.beginPath(); g.arc(cx, cy, R * 0.08, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+
+  // ---- cell 6: WOOD SPLINTER HOLE ------------------------------------------
+  function woodHole(cell) {
+    const cx = cell * CELL + R, cy = R;
+    g.save();
+    g.beginPath(); g.rect(cell * CELL, 0, CELL, CELL); g.clip();
+    g.lineCap = "round";
+    // pale exposed-grain splinters radiating out of the hole
+    for (let i = 0; i < 12; i++) {
+      const a = rnd() * Math.PI * 2;
+      const len = R * (0.20 + rnd() * 0.30);
+      const w = R * (0.018 + rnd() * 0.030);
+      g.save(); g.translate(cx, cy); g.rotate(a);
+      const lg = g.createLinearGradient(0, 0, len, 0);
+      lg.addColorStop(0.0, "rgba(150,118,76,0.80)");
+      lg.addColorStop(1.0, "rgba(120,92,58,0)");
+      g.fillStyle = lg;
+      g.beginPath(); g.moveTo(0, -w); g.lineTo(len, 0); g.lineTo(0, w); g.closePath(); g.fill();
+      g.restore();
+    }
+    const sg = g.createRadialGradient(cx, cy, R * 0.04, cx, cy, R * 0.26);
+    sg.addColorStop(0.0, "rgba(14,10,6,0.95)");
+    sg.addColorStop(0.6, "rgba(30,22,14,0.55)");
+    sg.addColorStop(1.0, "rgba(40,30,20,0)");
+    g.fillStyle = sg; g.beginPath(); g.arc(cx, cy, R * 0.26, 0, Math.PI * 2); g.fill();
+    const kg = g.createRadialGradient(cx, cy, 1, cx, cy, R * 0.12);
+    kg.addColorStop(0.0, "rgba(3,2,2,1)");
+    kg.addColorStop(0.8, "rgba(6,4,3,0.98)");
+    kg.addColorStop(1.0, "rgba(10,7,5,0)");
+    g.fillStyle = kg; g.beginPath(); g.arc(cx, cy, R * 0.13, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+
+  // ---- cell 7: DIRT / SAND SCUFF ---------------------------------------------
+  function dirtScuff(cell) {
+    const cx = cell * CELL + R, cy = R;
+    g.save();
+    g.beginPath(); g.rect(cell * CELL, 0, CELL, CELL); g.clip();
+    for (let i = 0; i < 6; i++) {
+      const hx = cx + (rnd() - 0.5) * R * 0.45, hy = cy + (rnd() - 0.5) * R * 0.45;
+      const hr = R * (0.18 + rnd() * 0.20);
+      const hg = g.createRadialGradient(hx, hy, 1, hx, hy, hr);
+      hg.addColorStop(0.0, "rgba(34,26,18,0.62)");
+      hg.addColorStop(0.7, "rgba(44,34,24,0.32)");
+      hg.addColorStop(1.0, "rgba(52,42,30,0)");
+      g.fillStyle = hg; g.beginPath(); g.arc(hx, hy, hr, 0, Math.PI * 2); g.fill();
+    }
+    for (let i = 0; i < 22; i++) {
+      const a = rnd() * Math.PI * 2, r = R * (0.2 + rnd() * 0.5);
+      g.fillStyle = `rgba(70,56,40,${(0.25 + rnd() * 0.35).toFixed(2)})`;
+      g.fillRect(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 2 + rnd() * 4, 2 + rnd() * 3);
+    }
+    const kg = g.createRadialGradient(cx, cy, 1, cx, cy, R * 0.12);
+    kg.addColorStop(0.0, "rgba(10,8,5,0.9)"); kg.addColorStop(1.0, "rgba(20,15,10,0)");
+    g.fillStyle = kg; g.beginPath(); g.arc(cx, cy, R * 0.12, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+
+  concrete(KIND_CONCRETE_A, 11, 0.14);
+  scorch(KIND_SCORCH);
+  metal(KIND_METAL);
+  concrete(KIND_CONCRETE_B, 9, -0.18);
+  scuff(KIND_SCUFF);
+  glassCrack(KIND_GLASS);
+  woodHole(KIND_WOOD);
+  dirtScuff(KIND_DIRT);
+
+  // ---- cell 8: BLOOD SPATTER ----------------------------------------------
+  // An exit spray thrown onto the wall/floor behind a hit: a dense irregular core,
+  // satellite droplets flung to one side (the decal's random roll varies which),
+  // and a few elongated streaks. Dark
+  // arterial red with a slightly brighter wet rim so it reads at night (decals
+  // are unlit — same bi-tonal reasoning as the strike cells above).
+  (function blood(cell) {
+    const cx = cell * CELL + R * 0.82, cy = R;
+    g.save();
+    g.beginPath(); g.rect(cell * CELL, 0, CELL, CELL); g.clip();
+    const blob = (x, y, r, a, rim) => {
+      const bg = g.createRadialGradient(x, y, r * 0.15, x, y, r);
+      bg.addColorStop(0.0, `rgba(58,4,5,${a})`);
+      bg.addColorStop(0.75, `rgba(78,7,8,${a * 0.95})`);
+      bg.addColorStop(0.92, `rgba(${rim ? 120 : 70},${rim ? 16 : 8},${rim ? 14 : 8},${a * 0.8})`);
+      bg.addColorStop(1.0, "rgba(60,5,5,0)");
+      g.fillStyle = bg; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    };
+    // core: overlapping lobes
+    for (let i = 0; i < 7; i++) {
+      blob(cx + (rnd() - 0.5) * R * 0.22, cy + (rnd() - 0.5) * R * 0.22, R * (0.10 + rnd() * 0.10), 0.92, true);
+    }
+    // streaks flung along +x
+    for (let i = 0; i < 9; i++) {
+      const a = (rnd() - 0.5) * 1.3;
+      const len = R * (0.25 + rnd() * 0.55);
+      const x0 = cx + Math.cos(a) * R * 0.12, y0 = cy + Math.sin(a) * R * 0.12;
+      const x1 = cx + Math.cos(a) * len, y1 = cy + Math.sin(a) * len;
+      const lg = g.createLinearGradient(x0, y0, x1, y1);
+      lg.addColorStop(0, "rgba(70,6,7,0.85)"); lg.addColorStop(1, "rgba(70,6,7,0)");
+      g.strokeStyle = lg; g.lineWidth = 2 + rnd() * 5; g.lineCap = "round";
+      g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+      blob(x1 - Math.cos(a) * 4, y1 - Math.sin(a) * 4, 3 + rnd() * 5, 0.85, false);
+    }
+    // fine mist droplets, denser forward
+    for (let i = 0; i < 60; i++) {
+      const a = (rnd() - 0.5) * (rnd() < 0.7 ? 1.6 : 6.0);
+      const d = R * (0.15 + Math.pow(rnd(), 0.7) * 0.7);
+      blob(cx + Math.cos(a) * d, cy + Math.sin(a) * d, 1.2 + rnd() * 3.2, 0.8, false);
+    }
+    g.restore();
+  })(KIND_BLOOD);
+
+  const t = new THREE.CanvasTexture(cv);
+  // Mipmapped: a 0.40 m decal is ~19 px at 20 m against a 256 px cell, i.e.
+  // 13x minification — unfiltered that is a sparkling crawl of aliased crack
+  // pixels. Every cell fades to alpha 0 well inside its own borders, so the
+  // usual atlas mip-bleed does not apply here.
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.generateMipmaps = true;
+  t.anisotropy = 4;
+  return t;
+}
+
+const VERT = /* glsl */ `
+attribute float aBirth;
+attribute float aKind;
+uniform float uTime;
+varying vec2 vUv;
+varying float vFade;
+void main() {
+  vUv = vec2((uv.x + aKind) * ${(1 / FRAMES).toFixed(6)}, uv.y);
+  float age = uTime - aBirth;
+  vFade = (age < 0.0) ? 0.0
+        : clamp(1.0 - (age - ${FULL_S.toFixed(1)}) / ${OUT_S.toFixed(1)}, 0.0, 1.0);
+  gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+}`;
+
+const FRAG = /* glsl */ `
+uniform sampler2D uMap;
+varying vec2 vUv;
+varying float vFade;
+void main() {
+  vec4 t = texture2D(uMap, vUv);
+  float a = t.a * vFade;
+  if (a < 0.004) discard;
+  gl_FragColor = vec4(t.rgb, a);
+}`;
+
+const _q = new THREE.Quaternion();
+const _qRoll = new THREE.Quaternion();
+const _m = new THREE.Matrix4();
+const _p = new THREE.Vector3();
+const _n = new THREE.Vector3();
+const _s = new THREE.Vector3();
+const _Z = new THREE.Vector3(0, 0, 1);
+const _ZAXIS = new THREE.Vector3(0, 0, 1);
+
+export function makeDecals(env) {
+  const geo = new THREE.PlaneGeometry(1, 1);
+  const birth = new Float32Array(N).fill(-1e9);
+  const kind = new Float32Array(N);
+  const birthAttr = new THREE.InstancedBufferAttribute(birth, 1);
+  const kindAttr = new THREE.InstancedBufferAttribute(kind, 1);
+  birthAttr.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute("aBirth", birthAttr);
+  geo.setAttribute("aKind", kindAttr);
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e6);
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uMap: { value: atlasTexture() }, uTime: { value: 0 } },
+    vertexShader: VERT,
+    fragmentShader: FRAG,
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  });
+
+  const mesh = new THREE.InstancedMesh(geo, mat, N);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 4;
+  mesh.name = "fx.decals";
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  // park every instance at zero scale so nothing flickers pre-spawn
+  _m.makeScale(0, 0, 0);
+  for (let i = 0; i < N; i++) mesh.setMatrixAt(i, _m);
+  env.root.add(mesh);
+
+  let cursor = 0;
+  let spawned = 0;
+  const rnd = env.rng;
+
+  let rejected = 0;
+  let clipped = 0;
+  // Optional surface clipper (fx.js wires it to surfaceindex.supportedScale):
+  // (pos, normal, halfSize) -> 1 | 0.7 | 0.5 | 0 — the largest fraction of the quad
+  // that is fully backed by visible geometry (a mark never hangs off an edge).
+  let clipper = null;
+
+  return {
+    setClipper(fn) { clipper = fn || null; },
+    // kind indexes the atlas (KIND_* above). size = quad edge in metres.
+    // `dir` (optional) = the incoming ray direction, used ONLY to reject a
+    // decal whose surface normal cannot be trusted.
+    //
+    // WHY THE REJECT EXISTS (iter07). ballistics' resolveHitPayload falls back
+    // to [0,1,0] whenever a world hit arrives without a normal, and the pose
+    // battery hits that path: MEASURED in the live iter06 S3 pose, 22 of the
+    // 57 live decals sat at exactly (-24.00, 1.63, 46.00) with normal (0,1,0)
+    // — inside the q_van collider box [-25.55,0,45.25]..[-22.45,2.4,50.75],
+    // at the same height as the eye. A horizontal quad at eye height is edge
+    // on to the camera: 22 of 57 decals, 39% of the whole permanence budget,
+    // were geometrically incapable of showing a single pixel. A bullet that
+    // STOPPED on a surface cannot have arrived parallel to it, so a near-zero
+    // dot is proof the normal is a fallback, not a measurement. Dropping them
+    // is right twice over: it frees the ring buffer for decals that can be
+    // seen, and it refuses to place a mark inside solid geometry.
+    //
+    // BOTH tests must fail before a decal is dropped. A near-horizontal round
+    // scuffing the ground 4 m from the eye is also grazing to the RAY, and
+    // that decal is legitimate and highly visible — the camera looks down on
+    // it. What is unrecoverable is a quad grazing to the ray AND edge on to
+    // the camera, which is the van case exactly. One test alone would have
+    // thrown away every long-range ground strike in the level.
+    spawn(pos, normal, kindId, size, dir) {
+      _n.set(normal[0], normal[1], normal[2]);
+      if (_n.lengthSq() < 1e-6) _n.set(0, 1, 0);
+      _n.normalize();
+      if (dir) {
+        const dl = Math.hypot(dir[0], dir[1], dir[2]);
+        if (dl > 1e-6) {
+          const dot = (_n.x * dir[0] + _n.y * dir[1] + _n.z * dir[2]) / dl;
+          if (Math.abs(dot) < 0.2) {
+            const cam = env.cam;
+            let seen = false;
+            if (cam) {
+              const vx = pos[0] - cam.position.x;
+              const vy = pos[1] - cam.position.y;
+              const vz = pos[2] - cam.position.z;
+              const vl = Math.hypot(vx, vy, vz);
+              if (vl > 1e-6) {
+                seen = Math.abs((_n.x * vx + _n.y * vy + _n.z * vz) / vl) >= 0.2;
+              }
+            }
+            if (!seen) { rejected++; return -1; }
+          }
+        }
+      }
+      if (clipper) {
+        const sc = clipper(pos, [_n.x, _n.y, _n.z], size * 0.5);
+        if (!(sc > 0)) { clipped++; return -1; }
+        size *= sc;
+      }
+      const i = cursor;
+      cursor = (cursor + 1) % N;
+      _q.setFromUnitVectors(_Z, _n);
+      _qRoll.setFromAxisAngle(_ZAXIS, rnd() * Math.PI * 2);
+      _q.multiply(_qRoll);
+      // normal-offset with a per-decal jitter so stacked decals never z-fight
+      const off = 0.006 + rnd() * 0.006;
+      _p.set(pos[0] + _n.x * off, pos[1] + _n.y * off, pos[2] + _n.z * off);
+      _s.set(size, size, 1);
+      _m.compose(_p, _q, _s);
+      mesh.setMatrixAt(i, _m);
+      birth[i] = env.now();
+      kind[i] = kindId;
+      mesh.instanceMatrix.needsUpdate = true;
+      birthAttr.needsUpdate = true;
+      kindAttr.needsUpdate = true;
+      spawned++;
+      return i;
+    },
+    update() { mat.uniforms.uTime.value = env.now(); },
+    clear() {
+      birth.fill(-1e9);
+      birthAttr.needsUpdate = true;
+    },
+    prewarmables() { return [mesh]; },
+    spawnedCount: () => spawned,
+    rejectedCount: () => rejected,
+    clippedCount: () => clipped,
+  };
+}

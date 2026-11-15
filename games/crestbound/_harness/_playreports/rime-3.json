@@ -1,0 +1,234 @@
+{
+ "area": "rime-3",
+ "note": "BLIZZARD PEAK playtest. Driver _harness/_play_rime3.py + _harness/_pr3_*.py, headless Chrome, ?dev=1&quality=low&autoscale=0, real KeyboardEvents. Shots in _shots/play_rime3/.",
+ "defects": [
+  {
+   "where": "rime-3 base camp, the FIRST FRAME of the course. Hero at the authored spawn (0, 2.20, 46), yaw 0, camera at (0.35, 5.37, 47.64).",
+   "did": "Loaded rime-3, teleported to the authored spawn, set facing/cam yaw to 0 (what a player sees on entering), screenshotted, then raycast the screen through the pale mass and projected the checkpoint into the frame.",
+   "happened": "A large translucent pale-blue mass hangs in the sky dead centre of frame, above the mountain silhouette. All-hits raycast names it `Mesh < checkpoints < course:rime-3`, instance 0, with hit points at (0, 6.9, 41.7), (-0.5, 7.5, 41.5) and (0.7, 6.1, 41.1) - i.e. the cp-camp marker, whose pad is at y 2.20. Projection: the pad lands at py 0.532 and the beacon top at py 0.157, so the marker fills the middle third of the opening frame and covers the peak the intro line ('Everything above the camp is wind') is pointing at.",
+   "should": "The opening frame should read camp -> mountain -> shrine. A checkpoint marker should sit on its pad, not float 2.3-5.5 m above it as a 5 m wide mass in the middle of the establishing shot.",
+   "png": "_shots/play_rime3/frame_01_spawn_pitch0.png, _shots/play_rime3/ray2_01_frame_pitch0.png, _shots/play_rime3/spawn_01_authored_spawn.png"
+  },
+  {
+   "where": "rime-3 base camp, spawn frame (same camera as above).",
+   "did": "Projected all 14 authored wing-ring centres into the spawn camera.",
+   "happened": "SIX wing rings (indices 5,6,7,8,9,10) are ON SCREEN in the opening frame at 65-88 m, strung across the top of the picture at py 0.00-0.14 (px 0.376 -> 0.902). They are drawn at opacity 0.30 with the wing power NOT taken. The owner's 'a wing ring was hanging over base camp' is only half fixed: ring 13 was moved to (12,6,52), but the ring belt still hangs over the mountain in the establishing shot, and ring 13 itself is a 2.8 m hoop 4 m off the snow 12 m east of the spawn.",
+   "should": "Either the ring overlay only lights up once the wing hat is taken, or the spiral is authored to sit outside the spawn camera's cone.",
+   "png": "_shots/play_rime3/frame_01_spawn_pitch0.png, _shots/play_rime3/cpgeo_03_cp_marker_close.png"
+  },
+  {
+   "where": "rime-3 base camp, around (0, 4.5, 43.4) - the authored `{kind:'light'} p: on(0,43.4,2.6)`.",
+   "did": "Stood at the spawn and at (0,2.4,44) and looked at the camp.",
+   "happened": "A bare orange glowing ball hangs in mid-air about 2.6 m above the snow with no torch, brazier or lamp under it. It reads as a floating fireball between the hero and the mountain in every camp shot.",
+   "should": "A light that is meant to be 'the only warm source below the cave' needs a fixture, or its glow sprite should not be drawn.",
+   "png": "_shots/play_rime3/ray_01_ray_frame.png, _shots/play_rime3/cpgeo_03_cp_marker_close.png"
+  },
+  {
+   "where": "rime-3 base camp, the two crest pedestals at (-5, 41) and (6, 42).",
+   "did": "Walked/teleported around the camp and looked at both pedestals from the front and from the side (hero at (9, 2.26, 41), cam yaw pi/2).",
+   "happened": "Both pedestals render as near-black discs with hard black spikes fanning out across the snow underneath them, and the (6,42) one looks half-buried and tilted. Against white snow they read as broken geometry, not stone. Same pattern the owner photographed in the Keep as 'broken understructure'.",
+   "should": "A stone pedestal with a GOLD/AURORA glow should read as pale stone with a soft contact shadow.",
+   "png": "_shots/play_rime3/frame_02_cpcamp_side.png, _shots/play_rime3/cpgeo_03_cp_marker_close.png"
+  },
+  {
+   "where": "rime-3 base camp, the 'FOURTEEN RINGS COME DOWN HERE' text at (6, ~3.7, 42).",
+   "did": "Read the sign from the spawn and from 3 m away.",
+   "happened": "A gold coin from the camp coin trail floats directly in front of the lettering and covers the D in 'COME DOWN HERE' from every angle I tried.",
+   "should": "Coins should not be placed on the sight line of a text plate.",
+   "png": "_shots/play_rime3/frame_02_cpcamp_side.png, _shots/play_rime3/cpgeo_03_cp_marker_close.png"
+  },
+  {
+   "where": "rime-3, death screen (I fell into the gorge at (-35.6, -30.4, -10.4)).",
+   "did": "Died once and read the death overlay.",
+   "happened": "The death cause 'FELL' is drawn in dark grey inside the dark centre of the white rewind ring and is barely legible; the '<< REWIND' hint at the bottom is dimmer still.",
+   "should": "The cause of death and the rewind affordance are the two things a player must read on that screen.",
+   "png": "_shots/play_rime3/frame_03_cpgorge_side.png"
+  },
+  {
+   "where": "rime-3 BEAT 2, the west face. The 'LEAN WEST - THE LEDGES ARE CUT WIDE FOR IT' text plate at (-25.2, 5.2, 29.6), on the walking line between cp-westface and shelf A.",
+   "did": "Stood on cp-westface and looked at it (12 m), then walked to (-25.4, 3.92, 26.4) and looked straight on from 3.7 m.",
+   "happened": "It renders as a SOLID BLACK PANEL about 4.5 m wide and 3 m tall. Not one letter is readable at any distance or angle. All-hits raycast through it names 'Mesh (material cb.wood.rime) < detail 2,4 < course:rime-3' at (-25.0, 5.6, 29.6) - the authored text object. It is also tall enough that on the approach it hides Nim completely: only the top of his head shows above it.",
+   "should": "This is the sign that teaches the course's one new verb. It should read like the camp boards (cream plate, dark blue letters) and it should not stand as an opaque wall across the route.",
+   "png": "_shots/play_rime3/look2_01_frame_for_ray.png, _shots/play_rime3/look_03_sign_leanwest_close.png, _shots/play_rime3/west_04_sign_leanwest.png"
+  },
+  {
+   "where": "rime-3 BEAT 3, the gorge lip, standing motionless at (-31.87, 7.22, -15.11) on snow (surface reported 'snow', y 7.22 vs vanish tile top 6.90 - I was NOT on the tile).",
+   "did": "Teleported there, released every key, sampled state every 600 ms without touching an input. Repeated the same test twice more in a later session.",
+   "happened": "First run: deaths went 0 -> 1 about 2.5 s in and I was rewound to cp-gorge with nothing pressed. Two later runs at the same spot survived 8 s each. So it is INTERMITTENT, not deterministic. The only things that reach that point are the gorge skitter (path [-36,11,-14] -> [-22,14,-30], speed 4.0) and the swinging plank mover at (-32.1, 6.80, -17.0).",
+   "should": "Standing still on solid ground beside an OPTIONAL hazard line should never kill. If the skitter swoops that far down it needs a telegraph.",
+   "png": "_shots/play_rime3/gorge_06_vanish_tile1.png"
+  },
+  {
+   "where": "rime-3 ROUTE C, the gorge floor. Ice shelf top -0.80 at (-27.6, -19.0) -> the frozen-fall chamber floor 0.10 at (-26.7, -16.5).",
+   "did": "Walked north toward the frozen fall with W held, twice, then tried short hops.",
+   "happened": "Walking stops DEAD at (-27.38, -0.80, -18.48): 0.5 m of travel on the first attempt and 0.00 m on the second, hero pinned against a near-vertical dark wall with no feedback of any kind. A 0.90 m lip is what blocks it - a short hop clears it and lands on the chamber floor at y 0.10 (and on one hop the sigil counter went 0 -> 1, so sigil 5 is right there). Nothing in the frame tells a player the wall in front of them is a 0.9 m step.",
+   "should": "Either the lip is low enough to walk up, or the ice shelf reads as a step. Right now the route the course advertises ('falling in is a way down') dead-ends on a wall.",
+   "png": "_shots/play_rime3/gorge_09_frozen_fall.png, _shots/play_rime3/gorge2_03_frozenfall_blocked.png"
+  },
+  {
+   "where": "rime-3 BEAT 3, the rope bridge, standing at the mouth of span A (-36.59, 6.60, -14.71).",
+   "did": "Walked to the bridge mouth and looked along it.",
+   "happened": "The bridge reads as a dark skeleton - two posts, a rail, a couple of thin dark slats and some rope lines - with the snow visible straight through it; there is barely any deck. The 13 m chasm it crosses is also not legible from the mouth: the terrain reads as one continuous white swell with a faint blue shadow.",
+   "should": "The set piece of the course should read as a plank bridge over a visible chasm.",
+   "png": "_shots/play_rime3/gorge_03_bridge_mouth.png"
+  },
+  {
+   "where": "rime-3 terrain, everywhere I walked (camp, west face, gorge lip).",
+   "did": "Looked at the snow from eye height at several stations and raycast the light and dark halves.",
+   "happened": "Two recurring artefacts. (1) Large regions of the mountain render near-black brown with heavy mottled noise and a HARD boundary against white snow; the raycast confirms both halves are the same mesh and material ('terrain.1,2', material 'terrain_snow'), so one surface splits into a lit and an unlit half on a hard line. (2) Dead-straight bright hairlines run across the snow the full width of the frame - across look_01 at eye level and diagonally in the bridge-mouth frame.",
+   "should": "One snow surface should not read as two, and there should be no bright seams across it. Same family as the owner's P7.",
+   "png": "_shots/play_rime3/look_01_westface_shadows_on.png, _shots/play_rime3/gorge_03_bridge_mouth.png"
+  },
+  {
+   "where": "rime-3 BEAT 2, shelf A (-29.0, top 4.15, 26.0) -> shelf B (-32.6, top 5.20, 20.0), in the 9-11 m/s2 gale.",
+   "did": "Stood on shelf A, faced B, ran up and jumped twice (0.8 s and 1.4 s run-ups), holding forward through the air and re-aiming every 200 ms.",
+   "happened": "Both attempts missed. Run 1 took off already blown to (-33.98, 3.28, 22.38) and landed on snow at (-34.92, 2.87, 22.79), 3.63 m from B. Run 2 landed at (-34.98, 3.50, 20.20), 2.39 m from B's centre and 1.70 m BELOW its top. Measured push: walking due north from (-28, 26) with W held and no correction for 5 s ended at (-37.52, 6.35, 11.40) - 9.5 m of lateral drift, about 1.9 m/s.",
+   "should": "If the shelf chain is BEAT 2's authored line, a run-and-jump aimed at the next shelf should land on it. Nothing is lost when you miss (the snow catches you), and I then walked the entire west face from (-35, 20) down to the gorge lip (-37.2, -1.4) with no jump at all - so the four carved shelves are decorative and the beat can be walked straight past.",
+   "png": "_shots/play_rime3/west_07_shelfA.png, _shots/play_rime3/west_08_after_A_to_B.png"
+  },
+  {
+   "where": "rime-3 CHECKPOINT 4 'cp-bridge' at (-23.8, 8.00, -30.7), the far lip of the gorge - the checkpoint every player who crosses the rope bridge lands on.",
+   "did": "Loaded the course straight to cp 3 in a fresh browser and then STOOD STILL with every key released, three separate runs.",
+   "happened": "DEATH LOOP. The run already reported deaths=8 at load, before I pressed anything, and died again 3.6 s later while motionless. The death record at that instant: cause 'crush', and the gorge SKITTER was 2.9 m away in state 'swoop'. Two earlier runs read deaths=6 and deaths=6 at load and then died again while idle. The skitter's authored patrol is [-36,11,-14] -> [-22,14,-30] and its far endpoint (-22, -30) is 1.9 m from the checkpoint pad, so the bird's turnaround sits on top of the respawn point.",
+   "should": "A checkpoint must be safe. Standing on it with no input must never kill, let alone kill 8 times before the player has touched a key. (Also: the death cause for a bird strike reads 'crush'.)",
+   "png": "_shots/play_rime3/east3_01_cpbridge_death.png, _shots/play_rime3/east2_01_cpbridge_load.png"
+  },
+  {
+   "where": "rime-3 BEAT 5, ROUTE A: the ice-shelf stair. Standing exactly on IS1's top (26.22, 15.20, -11.98), hopping for IS2 (26.4, top 16.80, -8.4).",
+   "did": "Teleported onto IS1 (confirmed: y 15.20, grounded, idle), faced IS2, ran 330 ms and jumped, three times in a row.",
+   "happened": "Zero height gained on any of the three attempts. The hero walked 1.7 m north, jammed at z -10.28 against IS2's south face, and every subsequent jump left him at exactly y 15.20: (26.60, 15.20, -10.28), (26.22, 15.20, -10.28), (25.13, 15.20, -10.28). IS2 is a 1.60 m step. I also tried the stair from its authored foot after walking the trodden path to (26, 15.20, -11.73): every hop LOST height (15.2 -> 7.68 -> 7.55 -> 9.36) as the 34-52 degree slope slid me east.",
+   "should": "ROUTE A is the STATIC route to the shrine - 'every required surface is authored geometry or walkable ground'. If IS1 -> IS2 cannot be made, the whole east shoulder is impassable on ROUTE A.",
+   "png": "_shots/play_rime3/east3_02_on_IS1.png, _shots/play_rime3/east3_03_stair_isolated.png, _shots/play_rime3/east2_03_stair_foot.png"
+  },
+  {
+   "where": "rime-3 BEAT 5, ROUTE B: the east mill's gondola, authored boarding spot (30, -6), 'deck 12.65 over ground 11.83'.",
+   "did": "Teleported to (30, 12.9, -6) and waited 15 s with no input for the gondola to come round.",
+   "happened": "The hero never stood at the boarding spot: he settled at (34.22, 8.74, -6.07) on snow, 4.2 m east and 4.1 m BELOW the stated ground height. Fifteen seconds later he was still at y 8.74 - no gondola reached him, best y 8.74 against a terrace at 19.60.",
+   "should": "ROUTE B is one of the three advertised ways to the crest. The boarding spot must be ground you can stand on, under the sweep the gondola actually passes through.",
+   "png": "_shots/play_rime3/east3_04_mill_wait.png, _shots/play_rime3/east3_05_mill_after.png"
+  },
+  {
+   "where": "rime-3 BEAT 6, the wall-kick chimney out of the crusher cave (floor 19.60/20.00 -> exit ledge 27.70, 8.10 m). This is the ONLY link ROUTE A has from the cave to the shrine stair.",
+   "did": "Reactive kick loop: hold W into one wall, sample every ~170 ms, tap Space the instant the hero is wallslide/fall/jump next to it, and flip walls only after a kick actually fires. 16 presses.",
+   "happened": "Five wall kicks DID fire, and the ladder still tops out at y 25.40 - 2.30 m short of the 27.70 ledge - then collapses: 25.40 -> 23.83 -> 23.17 -> 20.81 and back to running on the floor. A blind alternating version of the same test (8 presses, 6 kicks) peaked at 24.74. The crevasse chimney in the gorge behaves the same: floor 3.60, best y 9.53 against a 13.00 ledge, 3.47 m short, with 'slopeSlide' states inside the slot because the steep gorge terrain intrudes into it.",
+   "should": "One jump plus four kicks is authored to clear 8.10 m. Measured net gain per successful kick is about 1.7 m and the hero loses more than that repositioning, so neither chimney climbs out. With the ice-shelf stair and the mill lift also failing, I could not reach the shrine from the terrace by any route the course offers.",
+   "png": "_shots/play_rime3/east_12_cave_chimney.png, _shots/play_rime3/chim_01_crevasse_kicks.png"
+  },
+  {
+   "where": "rime-3 BEAT 5/6, the terrace. The GNASHER post is at (21, 19.60, -2) with a 5.5 m chain; the 8-coin ring is authored at centre (19, 2) radius 4.2.",
+   "did": "Walked the coin ring from cp-terrace, and separately walked cp-terrace -> cave mouth, three times.",
+   "happened": "Killed every time, and never once reached the cave. Deaths at (20.34, 19.6, 1.58) [3.63 m from the post], (21.93, 19.6, 1.58) [3.60 m] and (23.07, 19.6, 2.09) [4.60 m]. Computing the ring: three of its eight coins sit 4.56 m, 2.01 m and 1.41 m from the gnasher's post, i.e. two of them are practically ON the post. The coin ring cannot be collected.",
+   "should": "A chained critter's disc is meant to be paced out and dodged. It should not contain two of the eight coins of a collectible ring, and the walk from cp-terrace to the cave mouth should be survivable at least sometimes.",
+   "png": "_shots/play_rime3/east2_05_gnashed_ring_90.png, _shots/play_rime3/east_09_gnasher.png"
+  },
+  {
+   "where": "rime-3 BEAT 4, the north flank ice slabs: authored (-8.0, 8.20, -36.0) top 8.40 and (8.0, 8.90, -34.0) top 9.10.",
+   "did": "Dropped the hero from 6 m above each slab and read where he landed and what surface he reported.",
+   "happened": "West slab: landed y 8.40, surface 'ice' - correct. EAST slab: landed y 9.56 on surface 'snow', 0.46 m ABOVE the slab's top. It is buried in the heightfield and does nothing; the ice-slab beat is half missing.",
+   "should": "Both slabs should be the surface the player is standing on.",
+   "png": "_shots/play_rime3/east2_02_ice_slabs.png"
+  },
+  {
+   "where": "rime-3 BEAT 7, the shrine cap. Walking off the marble platform in any direction.",
+   "did": "From (4.40, 35.58, -7.78) walked 4.6 m toward the warden at (0, -9). From (2.0, 35.6, 6.0) walked 2 m toward the wing hat at (2.0, 36.30, 4.0). Also teleported to (-4.0, 35.4, -9.0) to hop the ice pinnacle.",
+   "did_more": "",
+   "happened": "Two walks off the marble platform threw me off the mountain: from (4.40, 35.58, -7.78) toward the warden I ended at (4.79, 17.85, -24.49) - 17.7 m lower and 17 m north; from (2.0, 35.6, 6.0) toward the wing hat at (2.0, 36.30, 4.0) I ended at (4.89, 16.96, 17.66) - 18.6 m lower and 12 m south. A later drop-grid maps why: the cap is genuinely flat at 35.20 over roughly x -3..+3, z -4..-11, but it ENDS abruptly - at z -12 all four sample columns fall away (landed 17.47 / 12.35 / 15.17 / 16.15), x -6 falls away from z -8 south, and x +6 falls away from z -10. The WARDEN's arena is authored c=[0,-4] r=7.0, i.e. x -7..+7 and z +3..-11, so its west and east thirds hang over the cliff, and the wing hat at (2.0, 36.30, 4.0) is past the southern lip.",
+   "should": "The boss arena and the wing hat should sit inside ground you can stand on. As it is, sidestepping a charge toward the arena rim is a death, and the second wing hat cannot be picked up.",
+   "png": "_shots/play_rime3/final_02_cap_map.png, _shots/play_rime3/shrine_08_cap.png, _shots/play_rime3/shrine_16_wing_hat.png"
+  },
+  {
+   "where": "rime-3 BEAT 7, THE WARDEN at (0, 35.20, -9), arena c=[0,-4] r=7.0, hp 3.",
+   "did": "Loaded at cp-gate, walked onto the cap, moved into the arena, and ran six rounds of jump-then-pound within a few metres of it.",
+   "happened": "CORRECTED after a second pass. The warden DOES wake: standing at (0, 36.5, -6) inside its arena flipped it from 'dormant' to 'stomp' within 1 s and it slid to (0, 35.2, -6). But it went straight back to dormant and hp stayed 3 through four rounds of walk-in + jump + pound beside it, so I never landed a hit and never saw a charge or a shockwave. My first session reported it inert - that reading was taken while I was 18 m BELOW the cap after sliding off, so it is withdrawn.",
+   "should": "'Jump the wave, sidestep the charge, pound its back'. It wakes; I could not damage it in four attempts and it re-slept while I was standing 3 m away.",
+   "png": "_shots/play_rime3/shrine_10_warden_engage.png, _shots/play_rime3/shrine_11_warden_fight.png, _shots/play_rime3/shrine_08_cap.png"
+  },
+  {
+   "where": "rime-3 BEAT 7, the stair viaduct, flight P2 (landing 31.10 -> P2 top 35.00 -> gate landing 35.10).",
+   "did": "Walked DOWN the viaduct from the gate landing to the chimney ledge (fine), then walked back UP the way a player would.",
+   "happened": "Going up, the climb STUCK at (10.41, 33.80, -6.38) - 1.2 m below P2's top and 2.18 m from the gate landing - and would not advance. Going down the same flight worked. The last flight of the shrine stair is one-way.",
+   "should": "The viaduct is the final approach to the shrine gate; it has to be climbable.",
+   "png": "_shots/play_rime3/shrine_07_viaduct_climb_end.png"
+  },
+  {
+   "where": "rime-3, the ice chamber behind the frozen fall, hero at (-23.60, 0.15, -17.37).",
+   "did": "Hopped the lip into the chamber and walked in.",
+   "happened": "The camera snapped to a hard top-down shot of the top of Nim's head at very close range - you cannot see ahead at all, and there is no way to look forward from inside the chamber. This is the owner's P10 ('camera gets buggy and hard to look around when inside a structure') reproduced exactly, in the one interior on this course.",
+   "should": "Interiors need a camera that stays behind the hero or pulls to a usable angle.",
+   "png": "_shots/play_rime3/chim_06_chamber.png"
+  },
+  {
+   "where": "rime-3, the crest pedestals - at the shrine (0, 36.00, -4) as well as the two at base camp.",
+   "did": "Claimed the open crest and looked at the plinth in the CREST CLAIMED frame.",
+   "happened": "The shrine pedestal renders as a dark olive-black disc standing on thin black legs with a black web of shadow under it - the same broken-looking object as the two at base camp, and here it is on a white marble platform where it is impossible to miss.",
+   "should": "Consistent pale stone/marble with a soft contact shadow.",
+   "png": "_shots/play_rime3/shrine_13_plinth.png, _shots/play_rime3/frame_02_cpcamp_side.png"
+  },
+  {
+   "where": "rime-3 BEAT 6, THE CRUSHER CAVE. The 10.6 x 4.8 m chamber along z = -2, from the terrace mouth at x 25 to the chimney at x 14. Floor authored 'EXACTLY 19.60'.",
+   "did": "Dropped the hero from y 21.5 at twelve x positions along z = -2 and recorded where he came to rest.",
+   "happened": "THERE IS NO FLOOR. x = 25, 24, 23, 22, 21, 20, 19, 18 and 17 ALL fell out of the world and respawned at cp-terrace (16.50, 19.60, 6.50) - nine of nine. A direct teleport to (21, 20, -2) read (21.00, -14.88, -2.00) with vy -54.63 m/s in open sky below the mountain. Only x = 16, 15 and 14 have ground, at y 20.00 (the authored ice block and the chimney floor). Every hammer (x 23.0 / 20.5 / 18.0) and both beam tripwires (x 21.8 / 19.2) stand over a hole.",
+   "should": "The cave is a required beat on ROUTE A and its floor is supposed to be the terrace flat at 19.60. Walking in from the terrace should not drop the player off the map.",
+   "png": "_shots/play_rime3/final_01_cave_floor_map.png, _shots/play_rime3/east4_02_cave_under_hammer.png"
+  },
+  {
+   "where": "rime-3 BEAT 5, the mechanical root of the ice-shelf stair failure. Standing on IS1 (26.2, 15.20, -12.0).",
+   "did": "Three plain standing jumps from a standstill on IS1, sampling y every 110 ms.",
+   "happened": "Apex rise measured 1.42 m, 1.30 m and 1.48 m. Every riser on the ice-shelf stair is 1.60 m (15.20 -> 16.80 -> 18.40). The jump is 12-19 % short of the step, so from a standstill the stair is physically unclimbable; with a run-up you hit IS2's face and stop dead at z -10.28. The course text asserts 'single-safe at +1.6 is 3.28'.",
+   "should": "Either the risers come down to something the jump clears, or the jump reaches the height the course was authored against.",
+   "png": "_shots/play_rime3/east4_01_is1_early_jump.png, _shots/play_rime3/east3_02_on_IS1.png"
+  },
+  {
+   "where": "rime-3 BEAT 5/6, the GNASHER at the crusher-cave mouth (post 21, 19.60, -2; chain 5.5 m; contract says it 'telegraphs with a 0.5 s crouch before every lunge').",
+   "did": "Walked slowly east from (16.23, 19.99, -2.01) toward the post, sampling the gnasher's own state and its distance every 150 ms.",
+   "happened": "t=0.0 s state 'idle' at 7.73 m; t=0.1 s state 'telegraph' at 6.65 m; t=0.3 s still 'telegraph' at 5.80 m; t=0.4 s still 'telegraph' at 5.00 m - and I was killed on that frame. The bite lands 0.3 s into a telegraph that is supposed to run 0.5 s before the lunge, so the tell never finishes before the kill.",
+   "should": "The telegraph has to complete before the bite can connect, or the 0.5 s promise is worthless. This is what made the terrace unpassable for me on four separate runs.",
+   "png": "_shots/play_rime3/east4_05_gnasher_bite.png"
+  },
+  {
+   "where": "rime-3 BEAT 7, the ground beside the shrine gate landing. Teleport target (13.0, 35.4, -4.2), 2.6 m east of the gate landing platform (10.4, top 35.10, -4.2).",
+   "did": "Tried to stand 2.6 m east of the gate landing to photograph the SHRINE GATE board.",
+   "happened": "The hero fell to (13.00, 28.26, -4.20) and came to rest on the very corner tip of a stair flight hanging in open sky. The resulting frame shows the viaduct as three disconnected pieces of staircase and a dark slab floating over the mountain with nothing joining them - which is the owner's P6 'the images have odd stairs but i cant reach the main stairs' on this course.",
+   "should": "The gate landing needs ground beside it, and the viaduct should read as one connected structure.",
+   "png": "_shots/play_rime3/shrine_02_gate_sign.png"
+  },
+  {
+   "where": "rime-3, the snow, at several stations (e.g. (24.24, 13.37, -17.33) on the east flank, and beside the base-camp pedestals).",
+   "did": "Looked at the ground while standing on it.",
+   "happened": "Blown-out white circular hot spots sit on the snow with no visible source - a 1.5 m fully-saturated patch a metre from the hero at (24.24, -17.33), and similar blue-white blobs around the camp pedestals. Combined with the dark/light terrain split they make the snow read as a texture problem rather than a surface.",
+   "should": "Point-light falloff on snow should not clip to pure white.",
+   "png": "_shots/play_rime3/final_04_viaduct_wide.png, _shots/play_rime3/frame_02_cpcamp_side.png"
+  }
+ ],
+ "worked": [
+  "rime-3 loads clean through __dev.goto from the Keep, hero lands on cp-camp at (0, 2.34, 41) grounded, surface 'snow'.",
+  "The BLIZZARD PEAK board is large and completely legible from the spawn: title plus the three wind lines.",
+  "The bumbler is alive and waddling at the camp on load.",
+  "The wind is honest: standing still inside the strongest volume for 8 s drifted me 0.14 m total, so the gale never steals a stationary player; held W across it drifts about 1.9 m/s, which is legible and correctable.",
+  "Death and rewind: dying at the gorge respawned me EXACTLY on the cp-gorge pad (-36.01, 6.63, -9.00) with the course clock rewound 98 s -> 16 s, in 445 ms.",
+  "Checkpoints arm on contact and the HUD toast reads clearly (CHECKPOINT 1/5 at cp-westface, 2/5 at cp-gorge).",
+  "Coins pick up on contact along the trodden track - 11 between the camp and cp-westface without aiming at any of them.",
+  "The whole west face is walkable on foot; the 28-35 degree slope never turned into an uncontrolled slide.",
+  "The BLIZZARD PEAK camp board is large and completely legible from the spawn, wrapped onto five lines.",
+  "THE OPEN CREST WORKS: standing on the shrine plinth claimed it - the card read 'CREST CLAIMED - THE CREST OF THE STORM SHRINE - 1 OF 7' and the game went to state 'clear'.",
+  "Sigil 5 (behind the frozen fall) collects on contact - the sigil counter went 0 -> 1 when a hop put me on the chamber floor.",
+  "Walking DOWN the whole stair viaduct works cleanly: gate landing 35.10 -> P2 -> landing P 31.10 -> P1 -> chimney ledge 27.70, picking up the viaduct coins on the way.",
+  "The prayer wheels on the cap are safe: walking into one at (4.6, 36.1, -8.6) shoved and did not kill (deaths 0 -> 0).",
+  "The north-flank ice wheel (rotor at -3.0, 9.60, -37.4) shoves rather than executes: standing in its sweep for 7 s pushed me 4 m clear with no death.",
+  "The WEST ice slab on the north flank behaves: dropped onto it I land at exactly 8.40 with surface 'ice', and standing still on it drifts 0.00 m in 6 s.",
+  "Checkpoint respawn is fast and exact everywhere I died: 445 ms, and always onto the authored pad.",
+  "The three camp text boards are legible from the spawn; the unreadable-black-plate failure is specific to the west-face and gorge plates.",
+  "The shrine cap IS a real plateau in its core: drops at (-3,-4), (+3,-4), (-6,-4), (+6,-4), (-3,-2), (-6,-2), (0,-2), (0,-8) all settle at exactly 35.20 with 0.00 m of slide.",
+  "The crusher cave's own chimney floor and the authored ice block at x 14-16 are solid at y 20.00.",
+  "The gnasher's state machine does run an 'idle' -> 'telegraph' cycle and its distance readout is sane - the tell exists, it is just too short to survive.",
+  "The wall kick DOES fire and gains height when the hero is genuinely pressed into a wall (5 kicks in 16 presses in the cave chimney, 2 in 8 in the crevasse) - the failure is the ladder's net gain, not the move."
+ ],
+ "blocked": [
+  "Renderer crashes: with 93 Chrome processes live on this box (other lanes' browser gates plus the owner's own Chrome) the headless page was killed mid-run four times. Every phase now retries a fresh browser 3x (run() in _harness/_play_rime3.py). This is contention, not a game defect - but the fps 20-23 readings in these shots are NOT usable as perf evidence.",
+  "The BLIZZARD RUN race (90 s, camp -> shrine gate) - not attempted; the route it grades is broken at the terrace, so a timing run would only re-measure that.",
+  "The 14-ring wing overlay and both wing hats - never got the power: the cap hat at (2.0, 36.30, 4.0) is past the cap's southern lip and the terrace hat is on the far side of the gnasher.",
+  "Sigils 1, 2, 3, 4, 6, 7 and 8 - only sigil 5 (behind the frozen fall) was collected. 1 and 2 are off the west-face shelf chain I could not land on, 3 is on the mill gallery (ROUTE B does not board), 6 is past the crushers in the floorless cave, 7 and 8 are off the cap lip.",
+  "The vanish-ice line and the two swinging planks over the gorge - I stood beside tile 1 and was killed by the skitter before a cycle completed, and did not get back to them.",
+  "Frame rate: every number in these shots was taken with 93 Chrome processes live on the box (fps 20-34, p99 80-700 ms). Not usable as perf evidence either way."
+ ]
+}

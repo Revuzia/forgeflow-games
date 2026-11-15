@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Sanctum Assault — ForgeFlow Games</title>
+  <meta name="description" content="Top-down isometric arena wave survival — three champions, five mystical realm boards, combos, Shock, and juicy combat." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%A5%3C/text%3E%3C/svg%3E" />
+  <style>
+    :root {
+      --gold: #f0c14b;
+      --gold-dim: #b8860b;
+      --crimson: #e63946;
+      --ember: #ff6b35;
+      --violet: #7b2cbf;
+      --deep: #0b0614;
+      --panel: rgba(12, 8, 22, 0.88);
+      --frame: linear-gradient(135deg, #f0c14b 0%, #7b2cbf 50%, #f0c14b 100%);
+      --ui-font: "Segoe UI", system-ui, -apple-system, sans-serif;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: var(--deep); color: #f5e6c8;
+      font-family: var(--ui-font); user-select: none; touch-action: none;
+    }
+    #game-container { width: 100%; height: 100%; position: relative; }
+    #game-container canvas { display: block; width: 100%; height: 100%; }
+
+    /* ── HUD ── */
+    #hud { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+    #hud .ptr { pointer-events: auto; }
+
+    #hud-top {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      padding: 10px 14px; gap: 12px;
+    }
+    .hud-panel {
+      background: var(--panel);
+      border: 2px solid transparent;
+      border-image: linear-gradient(135deg, #c9a227, #5a2d82, #c9a227) 1;
+      border-radius: 4px;
+      padding: 8px 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.45), inset 0 0 20px rgba(123,44,191,.12);
+      backdrop-filter: blur(6px);
+    }
+    #player-card { display: flex; align-items: center; gap: 10px; min-width: 160px; }
+    #portrait {
+      width: 48px; height: 48px; border-radius: 50%;
+      border: 2px solid var(--gold);
+      background: radial-gradient(circle at 35% 30%, #5a2d82, #1a0a28);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; box-shadow: 0 0 12px rgba(240,193,75,.35);
+    }
+    #hearts { display: flex; gap: 3px; margin-top: 4px; font-size: 14px; letter-spacing: 1px; }
+    #gold-row { font-size: 13px; color: var(--gold); margin-top: 2px; }
+    #score-wrap { text-align: center; min-width: 140px; }
+    #score-label { font-size: 11px; letter-spacing: 2px; color: #a89070; text-transform: uppercase; }
+    #score-val { font-size: 28px; font-weight: 800; color: #fff; text-shadow: 0 0 12px rgba(240,193,75,.5); }
+    #combo-val {
+      font-size: 22px; font-weight: 900; color: var(--ember);
+      text-shadow: 0 0 16px rgba(255,107,53,.8);
+      min-height: 28px; transition: transform .1s;
+    }
+    #combo-val.pulse { transform: scale(1.35); }
+    #wave-wrap { text-align: right; min-width: 140px; margin-right: 48px; }
+    #wave-val { font-size: 18px; font-weight: 700; color: var(--gold); }
+    #arena-name { font-size: 12px; color: #c4a8e8; margin-top: 2px; }
+
+    /* ── Bottom controls ── */
+    #hud-bottom {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      display: flex; justify-content: space-between; align-items: flex-end;
+      padding: 12px 16px 18px; gap: 12px;
+    }
+    #joystick-zone {
+      width: 130px; height: 130px; position: relative;
+      pointer-events: auto; touch-action: none;
+    }
+    #joy-base {
+      width: 110px; height: 110px; border-radius: 50%;
+      background: rgba(20,10,30,.55);
+      border: 2px solid rgba(240,193,75,.45);
+      position: absolute; left: 10px; bottom: 10px;
+      box-shadow: inset 0 0 20px rgba(123,44,191,.25);
+    }
+    #joy-knob {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #f0c14b, #8b4513);
+      border: 2px solid #fff3;
+      position: absolute; left: 41px; bottom: 41px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.4);
+      pointer-events: none;
+    }
+    #ability-bar {
+      display: flex; gap: 10px; align-items: flex-end;
+      pointer-events: auto;
+    }
+    .ability-btn {
+      width: 64px; height: 64px; border-radius: 50%;
+      border: 3px solid var(--gold-dim);
+      background: radial-gradient(circle at 40% 30%, #3d1a5c, #12081c);
+      color: #fff; font-size: 11px; font-weight: 700;
+      cursor: pointer; position: relative; overflow: hidden;
+      box-shadow: 0 4px 14px rgba(0,0,0,.45), 0 0 10px rgba(123,44,191,.3);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      line-height: 1.1; padding: 4px; text-align: center;
+    }
+    .ability-btn.basic { border-color: var(--ember); width: 72px; height: 72px; }
+    .ability-btn:active, .ability-btn.pressed { transform: scale(.92); filter: brightness(1.2); }
+    .ability-btn.ready { box-shadow: 0 0 16px rgba(240,193,75,.55); }
+    .ability-btn .icon { font-size: 20px; }
+    .ability-btn .label { font-size: 9px; opacity: .9; margin-top: 2px; max-width: 56px; }
+    .cd-ring {
+      position: absolute; inset: -3px; border-radius: 50%;
+      pointer-events: none;
+      background: conic-gradient(transparent var(--cd, 0%), rgba(0,0,0,.72) var(--cd, 0%));
+    }
+    .cd-ring.hidden { display: none; }
+    #mode-btn {
+      width: 56px; height: 56px; border-radius: 12px;
+      border: 2px solid var(--gold); background: var(--panel);
+      color: var(--gold); font-size: 10px; font-weight: 800;
+      cursor: pointer; text-align: center; line-height: 1.15;
+      box-shadow: 0 0 12px rgba(230,57,70,.35);
+    }
+    #block-btn {
+      width: 56px; height: 56px; border-radius: 12px;
+      border: 2px solid #6ec6ff; background: var(--panel);
+      color: #9fdfff; font-size: 10px; font-weight: 800;
+      cursor: pointer; display: none;
+    }
+    #block-btn.active { background: rgba(80,160,255,.35); box-shadow: 0 0 16px #4af; }
+    #btn-heal {
+      width: 56px; height: 56px; border-radius: 12px;
+      border: 2px solid #4ade80; background: var(--panel);
+      color: #86efac; font-size: 10px; font-weight: 800;
+      cursor: pointer;
+    }
+    #btn-heal.ready { box-shadow: 0 0 14px rgba(74,222,128,.45); }
+    #btn-heal.dim { opacity: 0.45; filter: grayscale(.4); }
+    #mode-label {
+      position: absolute; bottom: 100px; right: 16px;
+      font-size: 12px; color: var(--gold); background: var(--panel);
+      padding: 4px 10px; border-radius: 6px; border: 1px solid var(--gold-dim);
+      pointer-events: none;
+    }
+    #btn-pause {
+      position: absolute; top: 10px; right: 14px;
+      width: 40px; height: 40px; border-radius: 10px;
+      border: 2px solid var(--gold-dim); background: var(--panel);
+      color: var(--gold); font-size: 16px; font-weight: 800;
+      cursor: pointer; pointer-events: auto;
+      box-shadow: 0 2px 10px rgba(0,0,0,.4);
+      z-index: 11;
+    }
+    #btn-pause:hover { border-color: var(--gold); }
+
+    #hint-bar {
+      position: absolute; left: 50%; bottom: 160px; transform: translateX(-50%);
+      background: rgba(0,0,0,.7); border: 1px solid rgba(240,193,75,.4);
+      padding: 8px 16px; border-radius: 8px; font-size: 13px;
+      color: #f5e6c8; max-width: 90%; text-align: center;
+      transition: opacity .4s;
+    }
+    #hint-bar.hidden { opacity: 0; pointer-events: none; }
+
+    /* ── Banners / overlays ── */
+    #banner {
+      position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%) scale(.6);
+      font-size: clamp(28px, 6vw, 56px); font-weight: 900;
+      letter-spacing: 4px; text-align: center;
+      color: #fff; text-shadow: 0 0 24px var(--ember), 0 4px 0 #5a1020;
+      opacity: 0; pointer-events: none; z-index: 20;
+      transition: opacity .15s, transform .25s cubic-bezier(.2,1.4,.4,1);
+    }
+    #banner.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    #banner.gold { color: var(--gold); text-shadow: 0 0 28px rgba(240,193,75,.9), 0 4px 0 #5a4010; }
+    #banner.violet { color: #d8b4fe; text-shadow: 0 0 28px rgba(123,44,191,.9); }
+
+    #callout {
+      position: absolute; left: 50%; top: 28%; transform: translateX(-50%);
+      font-size: 22px; font-weight: 800; color: var(--ember);
+      text-shadow: 0 0 12px #f60; opacity: 0; pointer-events: none; z-index: 15;
+      transition: opacity .12s, transform .2s;
+    }
+    #callout.show { opacity: 1; transform: translateX(-50%) translateY(-8px); }
+
+    #float-layer {
+      position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 12;
+    }
+    .float-txt {
+      position: absolute; font-weight: 800; pointer-events: none;
+      text-shadow: 0 2px 4px #000; white-space: nowrap;
+      animation: floatUp .9s ease-out forwards;
+    }
+    @keyframes floatUp {
+      0% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -48px) scale(1.15); }
+    }
+
+    /* ── Menus ── */
+    .overlay {
+      position: absolute; inset: 0; z-index: 30;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: radial-gradient(ellipse at center, rgba(40,15,50,.92), rgba(8,4,14,.96));
+      pointer-events: auto; padding: 20px;
+    }
+    .overlay.hidden { display: none; }
+    .overlay h1 {
+      font-size: clamp(32px, 8vw, 56px); font-weight: 900;
+      background: linear-gradient(180deg, #fff 0%, var(--gold) 40%, var(--ember) 100%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      text-shadow: none; filter: drop-shadow(0 4px 12px rgba(230,57,70,.4));
+      margin-bottom: 8px; letter-spacing: 2px;
+    }
+    .overlay .sub { color: #c4a8e8; margin-bottom: 28px; font-size: 15px; text-align: center; max-width: 420px; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; max-width: 720px; }
+    .menu-btn {
+      min-width: 160px; padding: 14px 22px; border-radius: 10px;
+      border: 2px solid var(--gold-dim); cursor: pointer;
+      background: linear-gradient(180deg, #3a1a55 0%, #1a0c28 100%);
+      color: #f5e6c8; font-size: 16px; font-weight: 700;
+      box-shadow: 0 4px 16px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.08);
+      transition: transform .1s, box-shadow .15s;
+    }
+    .menu-btn:hover, .menu-btn:focus {
+      transform: translateY(-2px);
+      border-color: var(--gold);
+      box-shadow: 0 0 20px rgba(240,193,75,.35);
+    }
+    .menu-btn.primary {
+      background: linear-gradient(180deg, #a33 0%, #5a1020 100%);
+      border-color: var(--ember);
+    }
+    .class-card, .arena-card {
+      width: 180px; padding: 16px; border-radius: 12px;
+      border: 2px solid #5a3a20; background: var(--panel);
+      cursor: pointer; text-align: center; transition: all .15s;
+    }
+    .class-card:hover, .arena-card:hover, .class-card.selected, .arena-card.selected {
+      border-color: var(--gold); transform: scale(1.04);
+      box-shadow: 0 0 22px rgba(240,193,75,.35);
+    }
+    .class-card .emoji, .arena-card .emoji { font-size: 36px; margin-bottom: 8px; }
+    .class-card h3, .arena-card h3 { color: var(--gold); font-size: 16px; margin-bottom: 6px; }
+    .class-card p, .arena-card p { font-size: 12px; color: #b8a090; line-height: 1.35; }
+    .hiscore { margin-top: 18px; color: var(--gold); font-size: 14px; }
+    #result-score { font-size: 42px; font-weight: 900; color: var(--gold); margin: 12px 0; }
+    #loading {
+      position: absolute; inset: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: center;
+      background: #0b0614; color: var(--gold); font-size: 18px;
+    }
+    #loading.hidden { display: none; }
+
+    @media (max-width: 600px) {
+      .ability-btn { width: 54px; height: 54px; }
+      .ability-btn.basic { width: 60px; height: 60px; }
+      #joystick-zone { width: 110px; height: 110px; }
+      #joy-base { width: 96px; height: 96px; }
+      #joy-knob { width: 40px; height: 40px; left: 38px; bottom: 38px; }
+      .class-card, .arena-card { width: 140px; }
+      #mode-label { bottom: 90px; font-size: 11px; }
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="game-container">
+    <div id="loading">Igniting the sanctum…</div>
+
+    <!-- Menus -->
+    <div id="menu" class="overlay">
+      <h1>SANCTUM ASSAULT</h1>
+      <p class="sub">Champion the five realm boards. Clear the legions. Stack the combo. Claim the sanctum.</p>
+      <div class="btn-row">
+        <button class="menu-btn primary" id="btn-campaign">Campaign (1→5)</button>
+        <button class="menu-btn" id="btn-arena-select">Arena Select</button>
+      </div>
+      <div class="hiscore" id="menu-hiscore">Best: 0</div>
+    </div>
+
+    <div id="class-select" class="overlay hidden">
+      <h1>Choose Champion</h1>
+      <p class="sub">Each class brings a full kit. Warrior carries two weapon modes.</p>
+      <div class="btn-row" id="class-cards"></div>
+      <div class="btn-row" style="margin-top:20px">
+        <button class="menu-btn" id="btn-class-back">Back</button>
+      </div>
+    </div>
+
+    <div id="arena-select" class="overlay hidden">
+      <h1>Choose Realm Board</h1>
+      <p class="sub">Every board is a floating sanctum with unique light and atmosphere.</p>
+      <div class="btn-row" id="arena-cards"></div>
+      <div class="btn-row" style="margin-top:20px">
+        <button class="menu-btn" id="btn-arena-back">Back</button>
+      </div>
+    </div>
+
+    <div id="pause-menu" class="overlay hidden">
+      <h1>Paused</h1>
+      <div class="btn-row">
+        <button class="menu-btn primary" id="btn-resume">Resume</button>
+        <button class="menu-btn" id="btn-quit-menu">Quit to Menu</button>
+      </div>
+    </div>
+
+    <div id="result-screen" class="overlay hidden">
+      <h1 id="result-title">REALM CLEARED!</h1>
+      <p class="sub" id="result-sub">The legions fall silent.</p>
+      <div id="result-score">0</div>
+      <div class="btn-row">
+        <button class="menu-btn primary" id="btn-restart">Restart</button>
+        <button class="menu-btn" id="btn-next-arena">Next Arena</button>
+        <button class="menu-btn" id="btn-result-menu">Main Menu</button>
+      </div>
+    </div>
+
+    <!-- In-game HUD -->
+    <div id="hud" class="hidden" style="display:none">
+      <button id="btn-pause" type="button" title="Pause (Esc)" aria-label="Pause">❚❚</button>
+      <div id="hud-top">
+        <div class="hud-panel" id="player-card">
+          <div id="portrait">⚔</div>
+          <div>
+            <div id="player-name" style="font-weight:700;font-size:14px;color:var(--gold)">Warrior</div>
+            <div id="hearts">❤❤❤❤❤</div>
+            <div id="gold-row">◈ <span id="gold-val">0</span></div>
+          </div>
+        </div>
+        <div class="hud-panel" id="score-wrap">
+          <div id="score-label">Score</div>
+          <div id="score-val">0</div>
+          <div id="combo-val"></div>
+        </div>
+        <div class="hud-panel" id="wave-wrap">
+          <div id="wave-val">WAVE 1/8</div>
+          <div id="arena-name">Ember Crucible</div>
+        </div>
+      </div>
+
+      <div id="banner"></div>
+      <div id="callout"></div>
+      <div id="float-layer"></div>
+      <div id="hint-bar">WASD move · Click/J attack · 1-3 abilities · Q mode · H heal (8◈)</div>
+
+      <div id="mode-label" class="hidden" style="display:none"></div>
+
+      <div id="hud-bottom">
+        <div id="joystick-zone" class="ptr">
+          <div id="joy-base"><div id="joy-knob"></div></div>
+        </div>
+        <div id="ability-bar" class="ptr">
+          <button class="ability-btn" id="btn-heal" type="button" title="Heal 1❤ for 8◈ (H)"><span class="icon">❤</span><span class="label">8◈</span></button>
+          <button class="ability-btn" id="block-btn" type="button"><span class="icon">🛡</span><span class="label">BLOCK</span></button>
+          <button class="ability-btn" id="mode-btn" type="button" style="display:none"><span class="icon">⚔</span><span class="label">2H</span></button>
+          <button class="ability-btn" data-slot="1" type="button"><span class="cd-ring hidden"></span><span class="icon">1</span><span class="label">A1</span></button>
+          <button class="ability-btn" data-slot="2" type="button"><span class="cd-ring hidden"></span><span class="icon">2</span><span class="label">A2</span></button>
+          <button class="ability-btn" data-slot="3" type="button"><span class="cd-ring hidden"></span><span class="icon">3</span><span class="label">A3</span></button>
+          <button class="ability-btn basic" data-slot="0" type="button"><span class="cd-ring hidden"></span><span class="icon">⚔</span><span class="label">ATK</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>window.GAME_CONFIG = { hide_bug_button: true };</script>
+  <script type="module" src="./runtime/boot.js"></script>
+</body>
+</html>

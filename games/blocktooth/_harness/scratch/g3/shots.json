@@ -1,0 +1,34 @@
+{
+  "game": "BLOCKTOOTH",
+  "created": "2026-09-25T07:02:39",
+  "base": "http://localhost:5178/",
+  "headless": false,
+  "viewport": [
+    1600,
+    900
+  ],
+  "via": "page",
+  "groups": [
+    "v2hud"
+  ],
+  "seed": 11,
+  "missing": [],
+  "contactSheets": [
+    "_shots/g3/_contact_v2hud.png"
+  ],
+  "captured": 2,
+  "planned": 2,
+  "wallS": 16.1,
+  "overlaysCleared": 0,
+  "diagnostics": {
+    "consoleErrors": [],
+    "shader": [],
+    "warnings": [],
+    "pageErrors": [],
+    "screenshotErrors": [],
+    "windowErrors": [],
+    "failedRequests": []
+  },
+  "fatal": null,
+  "note": "*_close.png files are centre crops of the same gameplay frame (upscaled), not re-renders."
+}

@@ -1,0 +1,77 @@
+{
+ "name": "balustrade",
+ "file": "balustrade.glb",
+ "kind": "architecture",
+ "bytes": 223132,
+ "tris": 2220,
+ "tris_budget": 3000,
+ "tris_ok": true,
+ "bones": 0,
+ "clips": [],
+ "bounds": {
+  "min": [
+   -1.0,
+   0.0,
+   -0.13
+  ],
+  "max": [
+   1.0,
+   1.05,
+   0.13
+  ],
+  "size": [
+   2.0,
+   1.05,
+   0.26
+  ]
+ },
+ "pivot": "base centre; runs along X, 2.0 m; rails 0.22-0.26 m wide; 1.05 m tall (keep.js RAILS height)",
+ "front": "+Z (glTF) \u2014 the face that looks into the room",
+ "materials": [
+  "balustrade"
+ ],
+ "nodes": [
+  "balustrade"
+ ],
+ "textures": {
+  "atlas": 1024,
+  "maps": [
+   "albedo (sRGB, webp)",
+   "normal (tangent, OpenGL +Y, webp)",
+   "orm (R=occlusion G=roughness B=metallic, webp)"
+  ]
+ },
+ "notes": [
+  "5 turned balusters per 2.0 m; butt segments end to end, put a newel at every corner / stair foot"
+ ],
+ "reimport": {
+  "meshes": [
+   "balustrade"
+  ],
+  "tris": 2220,
+  "bones": 0,
+  "clips": [],
+  "images": [
+   [
+    "balustrade_albedo",
+    1024,
+    1024
+   ],
+   [
+    "balustrade_normal",
+    1024,
+    1024
+   ],
+   [
+    "balustrade_orm",
+    1024,
+    1024
+   ]
+  ],
+  "materials": [
+   "balustrade"
+  ]
+ },
+ "reimport_ok": true,
+ "seconds": 65.0
+}

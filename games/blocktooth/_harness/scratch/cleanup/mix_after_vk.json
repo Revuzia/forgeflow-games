@@ -1,0 +1,29 @@
+{
+ "tag": "after_vk",
+ "titan": "voltkite",
+ "biome": "lockwater",
+ "rank": 2,
+ "n": 208,
+ "seconds": 20,
+ "music_mean_rms": 0.0483,
+ "sfx_mean_rms": 0.0712,
+ "music_energy_rms": 0.0563,
+ "sfx_energy_rms": 0.0737,
+ "music_dbfs": -25.0,
+ "sfx_dbfs": -22.6,
+ "sfx_over_music_energy": 1.31,
+ "music_over_sfx_median": 0.577,
+ "frac_sfx_5x_music": 0.053,
+ "music_p10_p90": [
+  0.0207,
+  0.1028
+ ],
+ "sfx_p10_p90": [
+  0.0456,
+  0.097
+ ],
+ "music_predk_mean": 0.0495,
+ "sfx_preglue_mean": 0.118,
+ "master_mean": 0.0569,
+ "diag_errors": []
+}

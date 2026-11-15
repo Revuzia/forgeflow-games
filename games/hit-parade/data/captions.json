@@ -1,0 +1,142 @@
+{
+  "_doc": "Host caption pools (RICKY MARQUEE), read by runtime/src/ui/broadcast.ts. One line is picked per trigger (never the same line twice in a row per pool). Placeholders: {attacker} {victim} {winner} {loser} {name} {n}. priority: a higher value may interrupt a lower one on screen; minGapMs: the least time between two captions (KO / match lines ignore it). Lines stay short (CHANGED(UI) P2, verifier D6: the caption is a one-line ticker in the top band): <= 52 characters before names. CONTRACT section 8.",
+  "host": "RICKY MARQUEE",
+  "minGapMs": 2600,
+  "showMs": 2800,
+  "priority": {
+    "round_start": 2,
+    "final_round": 3,
+    "match_point": 3,
+    "first_blood": 2,
+    "counter": 1,
+    "punish": 2,
+    "back_hit": 2,
+    "perfect_parry": 3,
+    "throw_escape": 1,
+    "wall_splat": 2,
+    "super": 3,
+    "stage_fright": 2,
+    "comeback": 4,
+    "ko": 5,
+    "time_over": 5,
+    "perfect_round": 5,
+    "round_end": 4,
+    "match_end": 5,
+    "boss_phase2": 5,
+    "draw": 5
+  },
+  "pools": {
+    "round_start": [
+      "Cameras are hot, folks. Somebody hit somebody!",
+      "Round {n}! Keep your teeth inside your face!",
+      "We're live in five, four... oh, forget it. FIGHT!",
+      "The network paid for this set. Try to break all of it.",
+      "Round {n}! Nobody leaves until the ratings say so.",
+      "Studio audience, make some noise for pain!"
+    ],
+    "final_round": [
+      "Final round! Loser takes the ambulance.",
+      "One round, one winner, one huge medical bill.",
+      "Final round, folks. Our lawyers have left the building."
+    ],
+    "match_point": [
+      "{name} is one round away from the episode!",
+      "Match point, {name}! Sponsors, are you watching?"
+    ],
+    "first_blood": [
+      "First hit, {attacker}! Tell the ratings desk!",
+      "{attacker} draws first! Put it on the reel!",
+      "{attacker} opens the account! Crowd loves it!",
+      "First touch, {attacker}! Save some for the ads."
+    ],
+    "counter": [
+      "COUNTER! {victim} walked right into that one.",
+      "Caught! {attacker} reads it like a teleprompter.",
+      "Ooh, bad timing, {victim}. Great television.",
+      "{attacker} saw that coming from the parking lot!"
+    ],
+    "punish": [
+      "PUNISHED! {victim} will be feeling that in syndication.",
+      "You whiff on my show, you pay on my show!",
+      "{attacker} makes {victim} pay full price!",
+      "Punish counter! That replay goes on a T-shirt."
+    ],
+    "back_hit": [
+      "BACK HIT! {victim} never saw it coming!",
+      "Around the back! {attacker} works the angles!",
+      "Behind you, {victim}! Too late now.",
+      "{attacker} takes the scenic route to the spine!"
+    ],
+    "perfect_parry": [
+      "PERFECT PARRY! {attacker} just stopped time on live TV!",
+      "Did you see that? Neither did {victim}!",
+      "Pixel perfect! The booth nerds are losing it.",
+      "{attacker} catches it clean! Somebody frame that!"
+    ],
+    "throw_escape": [
+      "Nice try! {attacker} slips the grab.",
+      "Not today! {attacker} breaks free.",
+      "Tech! Our contestants read the same script."
+    ],
+    "wall_splat": [
+      "SPLAT! Somebody get a mop for that wall!",
+      "{victim} just became part of the set dressing!",
+      "Wall splat! That set cost us good money, {attacker}!",
+      "Say hello to the wall, {victim}!"
+    ],
+    "super": [
+      "IT'S PRIME TIME! {attacker} cashes in the ratings!",
+      "Somebody cue the pyro! {attacker} goes big!",
+      "The money shot! {attacker} brings the house down!",
+      "Super! The sponsors just renewed for three more seasons!"
+    ],
+    "stage_fright": [
+      "STAGE FRIGHT! Get {name} a glass of water!",
+      "{name} is out of nerve! The lights are too bright!",
+      "Knees shaking, {name}? This is live TV!",
+      "STAGE FRIGHT! {name} forgot their lines!"
+    ],
+    "comeback": [
+      "Last sliver and {winner} takes it! Can't script it!",
+      "What a COMEBACK! The writers are furious!",
+      "{winner} was one hit from cancelled. Renewed!",
+      "From the grave to the top of the charts: {winner}!"
+    ],
+    "ko": [
+      "K.O.! Lights out for {loser}!",
+      "And {loser} is DOWN! That's a wrap on that one!",
+      "{winner} with the knockout! Roll the credits!",
+      "Goodnight, {loser}! Tip your waitress!",
+      "That leaves a mark. On the ratings. {winner}!"
+    ],
+    "time_over": [
+      "Time! We go to the judges' cards... which I wrote.",
+      "The clock beats them both! Let's check the damage.",
+      "Time's up! Nobody fell over, so we count the bruises."
+    ],
+    "perfect_round": [
+      "PERFECT! {winner} didn't even get their hair messed up!",
+      "Not a scratch! {loser} looks like an extra!",
+      "Perfect! Check {loser} for a pulse... and a contract."
+    ],
+    "round_end": [
+      "Round to {winner}! The advertisers want more!",
+      "{winner} takes the round! Stay tuned, folks.",
+      "One for {winner}! {loser} better find a second wind."
+    ],
+    "match_end": [
+      "By popular demand and blunt force: {winner}!",
+      "{winner} takes the episode! Same time next week!",
+      "That is the show! {loser} gets carried out."
+    ],
+    "draw": [
+      "A draw! Nobody wins, which means I win!",
+      "Dead even! The network hates a tie. Do it again!"
+    ],
+    "boss_phase2": [
+      "Commercial break's over. Now I'm in the ring.",
+      "You messed up my jacket. Now it's personal.",
+      "Phase two, kid. The host always has a phase two."
+    ]
+  }
+}

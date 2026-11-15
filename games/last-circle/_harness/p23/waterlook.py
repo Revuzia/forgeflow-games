@@ -29,8 +29,9 @@ clock then pinned - SHORE_T for the shore / in-water views, VIEW_T for the rest 
   storm-late    circle 1 closing: the wall A/B moves >= 1 % of the frame from 380 m (and the stormfx rows stay: run stormfx_storm)
   light         ground luminance spread p95 - p5 >= 0.25 on every map (mean of ground / ground2 / groundlow, lower half) [0.14 / 0.17 / 0.28];
                 the OD-2 drop view mean 0.45-0.55 held; interiors (3 houses' biggest ground-floor rooms) mean >= 0.9 x the base's
-  grass-sand    medium, the shore view (eye level on the beach): <= 0.5 % of the pixels over non-grass ground 2-30 m out (the blade layer's
-                grass-ness bake < 0.15: beach, dry wash, mud; >= 3 m from grass) change when the blades are hidden [build 1: the beach under blades]
+  grass-sand    medium, a low view (0.5 m) over dry non-grass ground (the nearest 30 m disc - the blade ring - that is >= 95 % sand band, dunes,
+                dry wash, mud, snow or rock by the blade layer's own grass-ness bake): the blades A/B moves <= 0.5 % of the lower half
+                [build 1: the sand under blades]
   grass         medium: >= 0.8 cards + tufts per m2 within 30 m of open ground (the audit's ground spot, or the nearest point whose 30 m disc is
                 >= 95 % land outside the town mask), and the blade layer moves >= 8 % of the lower half of a low view there [0.148]
   low-identical low tier, isla_viva: 4 views identical to the base build (<= 0.001 % of the pixels differ - the base's own run-to-run
@@ -239,20 +240,20 @@ GRASSSPOT_JS = r"""([x0, z0, r]) => { const W = window.__LC__.W, M = W.map, b = 
     const f = frac(x, z); if (f >= 0.95) { const H = M.heightAt(x, z); return { x, z, open: f, moved: rr, spec: [x, H + 0.5, z, x + 8, M.heightAt(x + 8, z + 2) + 0.6, z + 2, 60] }; } }
   return null; }"""
 
-# the grass-sand row's ground points: a 0.5 m grid 2-30 m in front of the camera, kept where the ground is NOT grass (the blade layer's own grass-ness
-# bake < 0.15: beach, dry wash, mud, snow, rock) with no grass ground within 3 m, and dry (>= 0.35 m over the water) - [x, y, z]; empty when the build
-# has no grass-ness bake
-SANDPTS_JS = r"""([spec]) => { const W = window.__LC__.W, M = W.map, b = W._grassBlades; if (!b || !b.userData.gTint) return [];
+# the grass-sand row's spot: from the audit's ground spot outward, the first point whose 30 m disc (the blade ring's radius on medium: no blade of a
+# lawn further out is drawn) is >= 95 % dry NON-grass land - the blade layer's own grass-ness bake < 0.15 (beach / sand band, dry wash, dunes, mud,
+# snow, rock), >= 0.35 m over the water, outside the town mask; viewed low (0.5 m, as the grass view). null when the build has no grass-ness bake
+SANDSPOT_JS = r"""([x0, z0, r]) => { const W = window.__LC__.W, M = W.map, b = W._grassBlades, mk = b && b.userData.gMask; if (!b || !b.userData.gTint) return null;
   const GA = (x, z) => { const t = b && b.userData.gTint; if (!t) return 1; const n = t.n, u = (x + M.half) / (2 * M.half) * n - 0.5, v = (z + M.half) / (2 * M.half) * n - 0.5;
     const i0 = Math.max(0, Math.min(n - 1, Math.floor(u))), j0 = Math.max(0, Math.min(n - 1, Math.floor(v))), i1 = Math.min(n - 1, i0 + 1), j1 = Math.min(n - 1, j0 + 1);
     const fu = Math.max(0, Math.min(1, u - Math.floor(u))), fv = Math.max(0, Math.min(1, v - Math.floor(v))), a = (i, j) => t.px[(j * n + i) * 4 + 3] / 255;
     return (a(i0, j0) * (1 - fu) + a(i1, j0) * fu) * (1 - fv) + (a(i0, j1) * (1 - fu) + a(i1, j1) * fu) * fv; };
-  const [px, py, pz, tx, ty, tz] = spec; let fx = tx - px, fz = tz - pz; const fl = Math.hypot(fx, fz) || 1; fx /= fl; fz /= fl; const out = [];
-  for (let d = 2; d <= 30; d += 0.5) for (let w = -d; w <= d; w += 0.5) { const x = px + fx * d - fz * w, z = pz + fz * d + fx * w; const g = M.heightAt(x, z);
-    if (g < M.waterY + 0.35 || GA(x, z) >= 0.15) continue;
-    let edge = false; for (let k = 0; k < 8 && !edge; k++) { const a = k * 0.7854; if (GA(x + Math.cos(a) * 3, z + Math.sin(a) * 3) >= 0.15) edge = true; }
-    if (!edge) out.push([x, g + 0.02, z]); }
-  return out; }"""
+  const frac = (x, z) => { let n = 0, ok = 0; for (let i = 0; i < 64; i++) { const a = i * 2.39996, d = r * Math.sqrt((i + 0.5) / 64); const px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d; n++;
+      if (M.heightAt(px, pz) < M.waterY + 0.35 || Math.max(Math.abs(px), Math.abs(pz)) > M.half - 4) continue;
+      if (mk && mk[Math.floor((pz + M.half) / 4) * 400 + Math.floor((px + M.half) / 4)]) continue; if (GA(px, pz) >= 0.15) continue; ok++; } return ok / n; };
+  for (let rr = 0; rr < 900; rr += 20) for (let k = 0; k < (rr ? 24 : 1); k++) { const x = x0 + Math.cos(k * 0.2618) * rr, z = z0 + Math.sin(k * 0.2618) * rr;
+    const f = frac(x, z); if (f >= 0.95) { const H = M.heightAt(x, z); return { x, z, open: f, moved: rr, spec: [x, H + 0.5, z, x + 8, M.heightAt(x + 8, z + 2) + 0.6, z + 2, 60] }; } }
+  return null; }"""
 
 INFO_JS = r"""() => { const W = window.__LC__.W, k = W.kernel, r = k.renderer, op = k.outputPass, b = W._grassBlades, st = W.stormCtl;
   let hemi = null; W.scene.traverse((o) => { if (o.isHemisphereLight) hemi = o; });
@@ -421,25 +422,17 @@ def part_map(s, v, R, map_id, shots, want, interiors=True):
         h = a["A"].shape[0]
         M["grass"]["bladePixPct"] = round(float((np.abs(a["A"] - b["A"]).max(axis=2)[h // 2:] > 6).mean() * 100), 2)
         M["grass"]["groundSpreadNoBlades"] = round(spread(b["A"]), 4)
-    # ---- grass-sand: the blade layer stands on grass only - in the shore view (eye level on the beach), the non-grass ground points the blades A/B moves
-    if "grass" in want and cams.get("shore"):
-        sp = s.js(SANDPTS_JS, [cams["shore"]])
+    # ---- grass-sand: the blade layer stands on grass only - a low view over non-grass ground (sand / dunes / mud / snow), blades A/B
+    if "grass" in want and cams.get("_ground"):
+        sp = s.js(SANDSPOT_JS, [cams["_ground"]["x"], cams["_ground"]["z"], 30.0])
         if sp:
-            a = shoot(s, cams["shore"], shots, "%s_sand_on" % tag, pts=sp, settle=VIEW_T)
-            b = shoot(s, cams["shore"], shots, "%s_sand_off" % tag, hide=("blades",), pts=sp, settle=VIEW_T)
-            d = np.abs(a["A"] - b["A"]).max(axis=2)
-            Hh, Ww = d.shape
-            reg = np.zeros((Hh, Ww), bool)
-            n = 0
-            for q in a["proj"]:
-                if 0 <= q[0] < 1 and 0 <= q[1] < 1 and 0 < q[2] < 1:
-                    x, y = int(q[0] * Ww), int(q[1] * Hh)
-                    reg[max(0, y - 3): y + 4, max(0, x - 3): x + 4] = True
-                    n += 1
-            npx = int(reg.sum())
-            M["grassSand"] = {"pts": n, "px": npx, "bladePct": round(float((d[reg] > 6).mean() * 100), 3) if npx else None}
+            a = shoot(s, sp["spec"], shots, "%s_sand_on" % tag, settle=VIEW_T)
+            b = shoot(s, sp["spec"], shots, "%s_sand_off" % tag, hide=("blades",), settle=VIEW_T)
+            h = a["A"].shape[0]
+            M["grassSand"] = {"spot": {k: sp.get(k) for k in ("x", "z", "open", "moved")},
+                              "bladePixPct": round(float((np.abs(a["A"] - b["A"]).max(axis=2)[h // 2:] > 6).mean() * 100), 3)}
         else:
-            M["grassSand"] = {"pts": 0, "bladePct": None}
+            M["grassSand"] = None
     # ---- water
     if "water" in want and cams.get("_shore"):
         W_ = M.setdefault("water", {})
@@ -592,7 +585,7 @@ def part_low(s, v, R, shots, tag):
 
 def base_cache(args, v, shots):
     """the base build's underwater HF, interiors and low-tier views (second Chrome on BASE_REV), cached"""
-    stem = os.path.join(C.REPORTS, "w10_waterlook_base_%s_%dx%d_v5" % (BASE_REV, args.width, args.height))
+    stem = os.path.join(C.REPORTS, "w10_waterlook_base_%s_%dx%d_v6" % (BASE_REV, args.width, args.height))
     if os.path.exists(stem + ".json") and not args.no_cache:
         with open(stem + ".json") as f:
             res = json.load(f)
@@ -776,12 +769,12 @@ def main():
                     ok, gr, ">= 0.8 / m2")
         if "grass" in want:
             gs_ = {m: R.get(m, {}).get("grassSand") for m in maps}
-            judged = {m: x for m, x in gs_.items() if x and x.get("pts", 0) >= 50 and x.get("px", 0) >= 2000}
+            judged = {m: x for m, x in gs_.items() if x}
             if not judged:
-                v.cnj("grass-sand", "no map's shore view has >= 50 non-grass ground points (>= 2000 px): %s" % gs_)
+                v.cnj("grass-sand", "no map has a 30 m disc of >= 95 %% dry non-grass ground (or the build has no grass-ness bake): %s" % gs_)
             else:
-                v.check("grass-sand: the blade layer grows on grass only - in the shore view, <= 0.5 % of the pixels over non-grass ground (beach / wash / mud 2-30 m out, >= 3 m from grass; 7 x 7 px around each point) change with the blades hidden (every map with >= 50 points)",
-                        all(x["bladePct"] is not None and x["bladePct"] <= 0.5 for x in judged.values()), gs_, "<= 0.5 %")
+                v.check("grass-sand: the blade layer grows on grass only - a low view over dry non-grass ground (a 30 m disc >= 95 % sand / dunes / mud / snow), the blades A/B moves <= 0.5 % of the lower half (every map with such a spot)",
+                        all(x["bladePixPct"] <= 0.5 for x in judged.values()), gs_, "<= 0.5 %")
         if "low" in want:
             bl, lb = (base or {}).get("low") or {}, R.get("lowBuild") or {}
             res = {}

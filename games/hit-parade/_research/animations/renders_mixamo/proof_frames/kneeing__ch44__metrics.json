@@ -1,0 +1,221 @@
+{
+ "clip": "F:/games/forgeflow-games-assets/_downloaded/mixamo/animations/Soccer_Game_Pack/kneeing soccerball.fbx",
+ "body": "F:/games/forgeflow-games-assets/_downloaded/mixamo/characters/Ch44_nonPBR.fbx",
+ "frames": [
+  7,
+  13,
+  21
+ ],
+ "ratio": 0.9829920239855412,
+ "hidden": [],
+ "identity_test": {
+  "ok": true,
+  "worst": 6.407499313354492e-07,
+  "bone": "mixamorig:LeftHandPinky3"
+ },
+ "metrics": {
+  "xbot": {
+   "7": {
+    "lowest_vertex_z_m": -0.0054,
+    "striker_rel_hips_over_hipheight": [
+     0.136,
+     -0.098,
+     -0.454
+    ],
+    "hips_z_m": 1.009
+   },
+   "13": {
+    "lowest_vertex_z_m": -0.0002,
+    "striker_rel_hips_over_hipheight": [
+     0.136,
+     -0.365,
+     -0.228
+    ],
+    "hips_z_m": 0.9802
+   },
+   "21": {
+    "lowest_vertex_z_m": -0.0003,
+    "striker_rel_hips_over_hipheight": [
+     0.142,
+     -0.366,
+     -0.228
+    ],
+    "hips_z_m": 1.0044
+   }
+  },
+  "naive_blender": {
+   "7": {
+    "lowest_vertex_z_m": -0.0112,
+    "striker_rel_hips_over_hipheight": [
+     0.191,
+     -0.089,
+     -0.467
+    ],
+    "hips_z_m": 0.9986
+   },
+   "13": {
+    "lowest_vertex_z_m": -0.0113,
+    "striker_rel_hips_over_hipheight": [
+     0.176,
+     -0.381,
+     -0.251
+    ],
+    "hips_z_m": 0.9699
+   },
+   "21": {
+    "lowest_vertex_z_m": -0.0141,
+    "striker_rel_hips_over_hipheight": [
+     0.181,
+     -0.384,
+     -0.249
+    ],
+    "hips_z_m": 0.9944
+   }
+  },
+  "naive_three_raw": {
+   "7": {
+    "lowest_vertex_z_m": -0.0167,
+    "striker_rel_hips_over_hipheight": [
+     0.139,
+     -0.102,
+     -0.468
+    ],
+    "hips_z_m": 1.009
+   },
+   "13": {
+    "lowest_vertex_z_m": -0.0175,
+    "striker_rel_hips_over_hipheight": [
+     0.14,
+     -0.377,
+     -0.235
+    ],
+    "hips_z_m": 0.9802
+   },
+   "21": {
+    "lowest_vertex_z_m": -0.0174,
+    "striker_rel_hips_over_hipheight": [
+     0.146,
+     -0.379,
+     -0.234
+    ],
+    "hips_z_m": 1.0044
+   }
+  },
+  "naive_three": {
+   "7": {
+    "lowest_vertex_z_m": -0.0368,
+    "striker_rel_hips_over_hipheight": [
+     0.156,
+     -0.121,
+     -0.463
+    ],
+    "hips_z_m": 0.9918
+   },
+   "13": {
+    "lowest_vertex_z_m": -0.0321,
+    "striker_rel_hips_over_hipheight": [
+     0.155,
+     -0.396,
+     -0.227
+    ],
+    "hips_z_m": 0.9635
+   },
+   "21": {
+    "lowest_vertex_z_m": -0.0326,
+    "striker_rel_hips_over_hipheight": [
+     0.161,
+     -0.398,
+     -0.227
+    ],
+    "hips_z_m": 0.9873
+   }
+  },
+  "retarget_dw": {
+   "7": {
+    "lowest_vertex_z_m": 0.0255,
+    "striker_rel_hips_over_hipheight": [
+     0.194,
+     -0.085,
+     -0.467
+    ],
+    "hips_z_m": 1.0374
+   },
+   "13": {
+    "lowest_vertex_z_m": 0.0272,
+    "striker_rel_hips_over_hipheight": [
+     0.198,
+     -0.376,
+     -0.252
+    ],
+    "hips_z_m": 1.0091
+   },
+   "21": {
+    "lowest_vertex_z_m": 0.0256,
+    "striker_rel_hips_over_hipheight": [
+     0.204,
+     -0.378,
+     -0.25
+    ],
+    "hips_z_m": 1.0329
+   }
+  },
+  "retarget": {
+   "7": {
+    "lowest_vertex_z_m": -0.0201,
+    "striker_rel_hips_over_hipheight": [
+     0.194,
+     -0.085,
+     -0.467
+    ],
+    "hips_z_m": 0.9918
+   },
+   "13": {
+    "lowest_vertex_z_m": -0.0184,
+    "striker_rel_hips_over_hipheight": [
+     0.198,
+     -0.376,
+     -0.252
+    ],
+    "hips_z_m": 0.9635
+   },
+   "21": {
+    "lowest_vertex_z_m": -0.02,
+    "striker_rel_hips_over_hipheight": [
+     0.204,
+     -0.378,
+     -0.25
+    ],
+    "hips_z_m": 0.9873
+   }
+  },
+  "hybrid": {
+   "7": {
+    "lowest_vertex_z_m": -0.0201,
+    "striker_rel_hips_over_hipheight": [
+     0.194,
+     -0.085,
+     -0.467
+    ],
+    "hips_z_m": 0.9918
+   },
+   "13": {
+    "lowest_vertex_z_m": -0.0184,
+    "striker_rel_hips_over_hipheight": [
+     0.198,
+     -0.376,
+     -0.252
+    ],
+    "hips_z_m": 0.9635
+   },
+   "21": {
+    "lowest_vertex_z_m": -0.02,
+    "striker_rel_hips_over_hipheight": [
+     0.204,
+     -0.378,
+     -0.25
+    ],
+    "hips_z_m": 0.9873
+   }
+  }
+ }
+}

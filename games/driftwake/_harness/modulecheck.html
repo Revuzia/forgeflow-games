@@ -1,0 +1,120 @@
+<!doctype html>
+<!--
+  Module-graph and shader-chunk check.
+
+  Faster than bootcheck.py: it never creates a WebGL context. It imports every
+  module under src/ and reports the ones that throw, then registers the shared
+  chunks and resolves every `#include` in every registered chunk. That catches
+  the three failure modes that cost the most time at integration — a wrong
+  import path, a duplicate chunk registration, and an `#include` naming a chunk
+  nobody wrote — without waiting for a device, an atmosphere bake or a pipeline
+  compile.
+
+  Driven by modulecheck.py; open it directly in a browser to read the same
+  report by eye.
+-->
+<meta charset="utf-8">
+<title>snowflow module check</title>
+<style>
+  body { background:#0a1019; color:#dbe6f2; font:13px/1.6 ui-monospace, Consolas, monospace;
+         padding:24px; }
+  .ok   { color:#7fd7a4; }
+  .bad  { color:#ff8080; }
+  .warn { color:#ffd27f; }
+  h2 { font-size:13px; letter-spacing:.18em; text-transform:uppercase; color:#7d8ea3;
+       margin:22px 0 6px; font-weight:400; }
+  pre { white-space:pre-wrap; margin:0; }
+</style>
+<pre id="out">running…</pre>
+
+<script type="importmap">
+{ "imports": { "three": "../assets/vendor/three/build/three.module.js" } }
+</script>
+
+<script type="module">
+const out = document.getElementById("out");
+const lines = [];
+const say = (cls, s) => lines.push(cls ? `<span class="${cls}">${s}</span>` : s);
+const flush = () => (out.innerHTML = lines.join("\n"));
+
+// Kept in sync by hand rather than crawled: there is no directory listing from a
+// static server, and an explicit list also catches a module that was never wired
+// up at all.
+const MODULES = [
+  "core/settings.js", "core/input.js", "core/loading.js", "core/perf.js",
+  "core/glsl.js", "core/gfx.js", "core/camera.js",
+  "shaders/registry.js",
+  "terrain/heightfield.js", "terrain/clipmapMesh.js", "terrain/terrain.js",
+  "terrain/deformation.js",
+  "render/sky.js", "render/shadows.js", "render/depthPass.js",
+  "character/build.js", "character/figure.js", "character/character.js",
+  "character/controller.js", "character/cloth.js", "character/snowContact.js",
+  "vfx/particles.js", "vfx/surfWake.js",
+  "spells/spellSystem.js", "spells/waterBody.js", "spells/sweep.js",
+  "spells/ribbon.js", "spells/bloom.js", "spells/crystallize.js",
+  "spells/crystals.js", "spells/vortex.js", "spells/spellLights.js",
+  "post/postChain.js", "ui/overlay.js",
+  "main.js",
+];
+
+let failed = 0, missing = 0;
+
+say("", "── module imports ──────────────────────────────────────────");
+for (const m of MODULES) {
+  try {
+    await import(`../src/${m}`);
+    say("ok", `  ok       ${m}`);
+  } catch (e) {
+    const msg = String(e && e.message || e);
+    // A 404 means "not written yet", which during a staged build is expected
+    // and materially different from "written, but broken".
+    const notWritten = /Failed to fetch dynamically imported module|404/i.test(msg);
+    if (notWritten) { missing++; say("warn", `  ABSENT   ${m}`); }
+    else { failed++; say("bad", `  FAILED   ${m}\n             ${msg}`); }
+  }
+}
+
+say("", "\n── shader chunks ───────────────────────────────────────────");
+let chunkErr = 0;
+try {
+  const reg = await import("../src/shaders/registry.js");
+  const glsl = await import("../src/core/glsl.js");
+  reg.registerShaders();
+
+  // The contract's chunk list (ARCHITECTURE.md §3), not whatever happens to be
+  // registered: a chunk that nobody wrote must show up as a failure here rather
+  // than be quietly absent from the roll call.
+  const CHUNKS = [
+    "lib/common", "lib/noise", "lib/terrain", "lib/clipmap", "lib/deform",
+    "lib/shadowLookup", "lib/atmosphere", "lib/shading", "lib/spellLights",
+    "lib/water", "lib/crystal", "lib/wake", "lib/charSkin", "lib/postCommon",
+  ];
+
+  // Resolving a chunk expands its own #includes, so this transitively proves
+  // every include inside it names something that exists.
+  for (const n of CHUNKS) {
+    try {
+      const src = glsl.resolve(`#include "${n}"`);
+      say("ok", `  ok       ${n}  (${src.split("\n").length} lines resolved)`);
+    } catch (e) {
+      const msg = String(e && e.message || e);
+      if (/unknown|not registered|no such/i.test(msg)) {
+        say("warn", `  ABSENT   ${n}`);
+      } else {
+        chunkErr++;
+        say("bad", `  FAILED   ${n}\n             ${msg}`);
+      }
+    }
+  }
+} catch (e) {
+  chunkErr++;
+  say("bad", `  registry failed to load: ${e.message}`);
+}
+
+say("", "\n────────────────────────────────────────────────────────────");
+const verdict = failed || chunkErr ? "MODULECHECK FAILED" : "MODULECHECK OK";
+say(failed || chunkErr ? "bad" : "ok",
+    `${verdict}   broken=${failed}  chunk-errors=${chunkErr}  not-yet-written=${missing}`);
+flush();
+globalThis.__MODULECHECK__ = { failed, chunkErr, missing, text: out.textContent };
+</script>

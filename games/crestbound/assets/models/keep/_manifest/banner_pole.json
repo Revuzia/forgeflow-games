@@ -1,0 +1,91 @@
+{
+ "name": "banner_pole",
+ "file": "banner_pole.glb",
+ "kind": "prop",
+ "bytes": 366080,
+ "tris": 848,
+ "tris_budget": 3000,
+ "tris_ok": true,
+ "bones": 4,
+ "clips": [
+  {
+   "name": "sway",
+   "seconds": 3.0,
+   "frames": 72
+  }
+ ],
+ "bounds": {
+  "min": [
+   -0.82,
+   0.0,
+   -0.17
+  ],
+  "max": [
+   0.82,
+   3.62,
+   0.17
+  ],
+  "size": [
+   1.64,
+   3.62,
+   0.34
+  ]
+ },
+ "pivot": "base centre of the pole foot; pole 3.62 m to the spear tip, cloth 1.36 x 2.6 m hangs at glTF +Z 0.08",
+ "front": "+Z (glTF) \u2014 the face that looks into the room",
+ "materials": [
+  "banner_pole"
+ ],
+ "nodes": [
+  "banner_pole",
+  "banner_pole_rig"
+ ],
+ "textures": {
+  "atlas": 1024,
+  "maps": [
+   "albedo (sRGB, webp)",
+   "normal (tangent, OpenGL +Y, webp)",
+   "orm (R=occlusion G=roughness B=metallic, webp)"
+  ]
+ },
+ "notes": [
+  "cloth baked CREAM on purpose: tint banner_pole material.color per realm at runtime (keep.js banners carry a realm tint)",
+  "bones pole / cloth1 / cloth2 / cloth3; clip `sway` 3.0 s loop; gilt hexagram appliqu\u00e9 + fringe",
+  "cloth material is double-sided (no backface culling)"
+ ],
+ "reimport": {
+  "meshes": [
+   "banner_pole"
+  ],
+  "tris": 848,
+  "bones": 4,
+  "clips": [
+   [
+    "sway",
+    3.0
+   ]
+  ],
+  "images": [
+   [
+    "banner_pole_albedo",
+    1024,
+    1024
+   ],
+   [
+    "banner_pole_normal",
+    1024,
+    1024
+   ],
+   [
+    "banner_pole_orm",
+    1024,
+    1024
+   ]
+  ],
+  "materials": [
+   "banner_pole"
+  ]
+ },
+ "reimport_ok": true,
+ "seconds": 29.0
+}

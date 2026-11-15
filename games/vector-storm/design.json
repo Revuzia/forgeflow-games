@@ -1,0 +1,134 @@
+{
+  "title": "Vector Storm",
+  "tagline": "Survive the geometry. Outlast the swarm.",
+  "genre": "simulation",
+  "sub_genre": "twin-stick-arena-shooter",
+  "controls": {
+    "move": "WASD or left stick - 8-directional ship movement",
+    "aim": "mouse cursor or right stick - independent firing direction",
+    "fire": "left mouse / right trigger - continuous fire while held",
+    "bomb": "space / left trigger - clears all enemies on screen, limited stock"
+  },
+  "core_loop": [
+    "Spawn waves of geometric enemies (snakes, diamonds, pinwheels, gravity wells)",
+    "Player ship strafes around a single-screen arena while shooting",
+    "Each kill increments the score multiplier (capped); dying resets multiplier",
+    "Survive 60 seconds \u2192 wave clears, brief pause, next wave spawns harder",
+    "Game over on running out of lives; high score persists in localStorage"
+  ],
+  "enemies": [
+    {
+      "name": "Blue Square",
+      "behavior": "drift toward player slowly",
+      "hp": 1,
+      "color": "0x4488ff"
+    },
+    {
+      "name": "Diamond",
+      "behavior": "sine-wave oscillating chase",
+      "hp": 1,
+      "color": "0xff44ff"
+    },
+    {
+      "name": "Snake",
+      "behavior": "follow leader segment",
+      "hp": 1,
+      "color": "0x44ff88"
+    },
+    {
+      "name": "Pinwheel",
+      "behavior": "spawn 4 child shards on death",
+      "hp": 2,
+      "color": "0xffaa00"
+    },
+    {
+      "name": "Gravity Well",
+      "behavior": "pull player + bullets toward center",
+      "hp": 5,
+      "color": "0xff0044"
+    }
+  ],
+  "player": {
+    "starting_lives": 3,
+    "starting_bombs": 3,
+    "fire_rate_per_sec": 8,
+    "bullet_speed": 600,
+    "ship_speed": 280
+  },
+  "scoring": {
+    "kill_base": 25,
+    "multiplier_increment_per_kill": 1,
+    "multiplier_cap": 99,
+    "death_resets_multiplier": true
+  },
+  "art_direction": "Neon vector graphics on near-black background. Bloom glow on every sprite. Particle trails. Bullets are bright cyan lines. Enemies are pure-color geometric shapes drawn with Phaser.Graphics (NOT sprites - vector primitives).",
+  "audio_direction": "Pumping electronic beat (loop). Distinct enemy-spawn synth zaps. Satisfying bass kick on every kill. Multiplier tick rises in pitch as multiplier climbs.",
+  "iconic_moments": [
+    "Wave-clear screen-shake + bloom flash",
+    "Multiplier number swelling 2x scale on kill",
+    "Bomb explosion: white flash + radial wave",
+    "First gravity well of the run pulls the camera"
+  ],
+  "victory_condition": "Survive 5 minutes (5 waves \u00d7 60s)",
+  "loss_condition": "lives reach 0",
+  "level_count": 5,
+  "boss_count": 1,
+  "worlds": [
+    {
+      "name": "Wave 1",
+      "color_palette": [
+        "#080820",
+        "#00cc00"
+      ],
+      "boss": null
+    },
+    {
+      "name": "Wave 2",
+      "color_palette": [
+        "#080820",
+        "#00aaff"
+      ],
+      "boss": null
+    },
+    {
+      "name": "Wave 3",
+      "color_palette": [
+        "#080820",
+        "#00ff00"
+      ],
+      "boss": null
+    },
+    {
+      "name": "Wave 4",
+      "color_palette": [
+        "#080820",
+        "#0088ff"
+      ],
+      "boss": null
+    },
+    {
+      "name": "Wave 5",
+      "color_palette": [
+        "#080820",
+        "#004400"
+      ],
+      "boss": {
+        "name": "Gravity Well"
+      }
+    }
+  ],
+  "collectible_types": [
+    {
+      "name": "extra_life",
+      "frame": 0
+    },
+    {
+      "name": "extra_bomb",
+      "frame": 1
+    },
+    {
+      "name": "speed_boost",
+      "frame": 2
+    }
+  ]
+}

@@ -1,0 +1,505 @@
+{
+  "_meta": {
+    "agent": "researcher",
+    "task": "XCOM (EU2012 + XCOM2/WOTC) design spec for Void Skirmish rebuild",
+    "generated": "2026-06-02",
+    "purpose": "Actionable, implementable tactics specs. Numbers are real measured/datamined values from cited sources. Where a value is community-measured (not from a canonical wiki stat table) it is flagged. EU = XCOM: Enemy Unknown/Within (2012); X2 = XCOM 2 / War of the Chosen (2016).",
+    "fetch_note": "ufopaedia.org and fandom 403 WebFetch but were scraped successfully via Python urllib (canonical stat tables). Steam/GameFAQs community figures flagged as community-measured."
+  },
+
+  "map_size": {
+    "summary": "Grid of square tiles, ~4 vertical levels. EU = handcrafted map pool. X2 = procedural plot+parcel. Maps are roughly square/blocky urban or open, NOT long corridors; a mission is typically cleared in ~8-15 player turns.",
+    "tile_counts_EU": {
+      "smallest_map": {"name": "Fallen Highway", "tiles": 3320},
+      "abduction_maps_typical": "6000-12000 tiles (playable floor area, height ignored)",
+      "ufo_crash_landing_sites": "15000-20000 tiles",
+      "vertical_levels": "~4 height levels on most maps",
+      "source_quality": "community-measured (Steam/GameFAQs discussion, not a Firaxis stat table)",
+      "implementable_footprint_hint": "A 12000-tile floor at ~4 levels => roughly a 55x55 to 70x70 tile bounding box per level if square. For a browser tactics game, 24x24 to 40x40 single-level grids are a faithful, performant analog of one EU abduction map."
+    },
+    "map_pool_EU": {
+      "total_handcrafted_maps": "~68 base maps + 3 Slingshot DLC (community count)",
+      "abduction_pool": "~25 urban maps chosen at random",
+      "terror_pool": "~9 dense-urban maps",
+      "note": "EU has limited/no meaningful procedural generation; maps are authored. The leftover procedural placement in EU was criticized as placing cover with no tactical value."
+    },
+    "x2_plot_and_parcel": {
+      "concept": "Hybrid procedural. A PLOT = the hand-authored base layout (roads, rivers, train tracks, alleys, forest paths) that defines the skeleton and connective tissue. PARCELS = pre-allocated slots into which hand-authored, fully-destructible modular building/object chunks are randomly dropped each load. The engine only SHUFFLES placement of authored chunks; it does not generate geometry from noise.",
+      "why": "Solves EU's 'random trash cover in pointless places' problem by guaranteeing every placed chunk is a designer-vetted, enterable/climbable tactical asset.",
+      "objective_placement": "Mission objective (e.g. hack terminal, VIP, relay) is spawned into the plot/parcels at generation time so each playthrough differs.",
+      "implementable_recipe": "1) Author N plot skeletons per biome (city/forest/facility). 2) Author a library of M parcel chunks (each a self-contained, destructible, multi-level building with cover + interior). 3) At mission start pick 1 plot, fill its K parcel slots by random draw from compatible chunks, place objective + enemy patrol routes, scatter low/high cover props only at authored anchor points.",
+      "source_quality": "GDC 2018 talk 'Plot and Parcel: Procedural Level Design in XCOM 2' (Brian Hess, Firaxis) + Wikipedia + GameRant"
+    },
+    "sources": [
+      "https://gamefaqs.gamespot.com/boards/655782-xcom-enemy-unknown/63878777",
+      "https://steamcommunity.com/app/200510/discussions/0/846964363960693455/",
+      "https://www.ufopaedia.org/index.php/Maps_(EU2012)",
+      "https://gdcvault.com/play/1025387/Plot-and-Parcel-Procedural-Level",
+      "https://media.gdcvault.com/gdc2018/presentations/Hess_Brian_PlotAndParcel.pdf",
+      "https://en.wikipedia.org/wiki/XCOM_2",
+      "https://gamerant.com/xcom-2-procedural-level-detail/"
+    ]
+  },
+
+  "mission_types": {
+    "EU2012": [
+      {"type": "Abduction", "objective": "Aliens raid 3 cities at once; pick ONE site (others penalize panic). Sweep urban map, kill all hostiles."},
+      {"type": "Terror Site", "objective": "Rescue civilians while killing all aliens; civilians die each enemy turn (Chryssalids convert them to zombies)."},
+      {"type": "Council Mission (Escort/VIP)", "objective": "Deliver/extract a VIP safely to the Skyranger evac, or bomb defusal / asset recovery; scripted special objectives."},
+      {"type": "UFO Crash Site", "objective": "Skyranger lands away from a downed UFO; advance on foot, clear scattered aliens, breach the UFO hull (aliens hide inside)."},
+      {"type": "UFO Landing Site", "objective": "Same as crash site but the UFO is intact/operational; assault and clear."},
+      {"type": "Alien Base Assault", "objective": "Story mission unlocked by the Skeleton Key (Outsider Shard); descend into the alien base and clear it."},
+      {"type": "XCOM Base Defense (Enemy Within)", "objective": "Defend your own base (Delta section) against waves of aliens 10-20 days after the base assault."},
+      {"type": "Overseer Crash Site", "objective": "Late-game: down the Overseer UFO (via Hyperwave Relay), fight the toughest roster incl. first Ethereal guarding the Ethereal Device."},
+      {"type": "Final / Temple Ship (Site Recon)", "objective": "Assault the alien mothership; kill the Uber Ethereal to win the campaign."}
+    ],
+    "XCOM2": [
+      {"type": "Guerrilla Ops", "objective": "Counter a Dark Event; TIMED. Reward = scientist/engineer/supplies/intel/soldier. Objective varies (hack/sabotage/destroy/kill VIP)."},
+      {"type": "Supply Raid", "objective": "Hit a sabotaged ADVENT supply convoy/UFO. NOT timed, starts in concealment. Kill all hostiles to win."},
+      {"type": "Retaliation", "objective": "X2's terror analog: defend a resistance settlement; rescue civilians, kill the Faceless infiltrators, stop ADVENT. Losing cuts supply income (doesn't lose territory)."},
+      {"type": "VIP Rescue", "objective": "Reach and extract a friendly VIP to the evac zone before the turn timer expires."},
+      {"type": "VIP Capture/Interrogation", "objective": "Knock out and carry off an enemy VIP (or kill them) for intel."},
+      {"type": "Council Mission (Neutralize/Extract VIP)", "objective": "Special-objective ops, 12-turn timer (rescue/extract/neutralize target)."},
+      {"type": "Hack/Sabotage (Device)", "objective": "Reach and hack a workstation/relay (TIMED, often tight) or arm a charge."},
+      {"type": "Alien Facility Assault (Blacksite / Facility)", "objective": "NOT timed, starts in concealment. Arm an X4 charge at the facility objective, then EVAC all soldiers. Blacksite is the first story facility (yields the vial)."},
+      {"type": "Avenger Defense", "objective": "Your mobile HQ (the Avenger) is shot down; defend it, destroy the ADVENT power relays/turrets, survive enemy reinforcements."},
+      {"type": "Final / Fortress (Broadcast the Truth + Avatar)", "objective": "Two-stage end mission: assault the ADVENT Network Tower / Fortress and kill the final Avatar boss."},
+      {"type": "(WOTC) Chosen Stronghold / Lost & Abandoned", "objective": "WOTC additions: assault a Chosen's lair to permanently kill them; The Lost (zombie hordes) appear on ruined-city maps."}
+    ],
+    "design_note": "Two-axis taxonomy that ports cleanly: AXIS A = objective (kill-all / extract-VIP / hack / destroy-objective / defend-zone). AXIS B = constraints (timed vs untimed, concealed-start vs hot-start, reinforcements yes/no).",
+    "sources": [
+      "https://xcom.fandom.com/wiki/Missions_(XCOM:_Enemy_Unknown)",
+      "https://www.ufopaedia.org/index.php/Missions_(EU2012)",
+      "https://xcom.fandom.com/wiki/Missions_(XCOM_2)",
+      "https://www.ufopaedia.org/index.php/Missions_(XCOM2)",
+      "https://xcom2.wiki.fextralife.com/Guerrilla+Ops",
+      "https://xcom.fandom.com/wiki/Alien_Base_Assault",
+      "https://www.ufopaedia.org/index.php/XCOM_Base_Defense_(EU2012)"
+    ]
+  },
+
+  "objectives": {
+    "win_condition_templates": [
+      {"id": "eliminate_all", "rule": "Kill every hostile on the map. Default for UFO/supply-raid/abduction.", "timed": false},
+      {"id": "extract_vip", "rule": "Move VIP unit into the EVAC zone tile(s) and trigger evac. VIP must survive.", "timed": "usually"},
+      {"id": "capture_vip", "rule": "Reduce enemy VIP to 0 HP non-lethally (stun) OR kill, then carry the body to evac.", "timed": "usually"},
+      {"id": "hack_terminal", "rule": "Reach a workstation, spend an action to hack; success roll vs hack defense. Often must hold position while a timer counts.", "timed": true},
+      {"id": "destroy_objective", "rule": "Plant an X4 charge on / shoot the objective (relay, device, transmitter) to destroy it.", "timed": "varies"},
+      {"id": "defend_zone", "rule": "Keep a zone/object alive while waves spawn; survive N turns or destroy all spawners (Avenger Defense, Base Defense).", "timed": "wave-based"},
+      {"id": "evac_under_timer", "rule": "All surviving soldiers must reach the evac zone before the turn counter hits 0; un-evac'd soldiers are LOST (captured/killed).", "timed": true}
+    ],
+    "turn_timer_convention_X2": {
+      "guerrilla_ops": "6-8 turns",
+      "council_vip_missions": "12 turns",
+      "concept": "A descending counter shown top-of-screen. On reaching 0 the objective fails (relay activates / VIP lost / squad wipes). Hack-a-device timers are notably tight in early game.",
+      "wotc_modifiers": [
+        "Campaign option doubles ALL turn limits.",
+        "Resistance faction perks can grant +2 turns and 'timer only starts after concealment is broken'.",
+        "Whenever a Chosen appears, the mission timer FREEZES until the Chosen is defeated."
+      ],
+      "evac_timer": "After the main objective, a separate evac countdown begins; each soldier not evac'd by 0 is counted as lost."
+    },
+    "EU_note": "EU base game is largely UNtimed (you can overwatch-crawl). Timed pressure is the signature X2 change that forces aggression. For Void Skirmish, expose a per-mission 'turn_limit' field (null = untimed).",
+    "sources": [
+      "https://xcom.fandom.com/wiki/Turn_(XCOM_2)",
+      "https://www.ufopaedia.org/index.php/Missions_(XCOM2)",
+      "https://gamefaqs.gamespot.com/boards/191291-xcom-2/75779798"
+    ]
+  },
+
+  "cover": {
+    "EU2012": {
+      "no_cover": {"effect": "Target grants attacker +50% CRIT chance (100% with 'Absolutely Critical' Second Wave option). No defense bonus.", "hud": "no shield icon"},
+      "half_cover": {"defense": "+20 (attacker -20% to hit)", "hud": "half shield"},
+      "full_cover": {"defense": "+40 (attacker -40% to hit)", "hud": "full shield"},
+      "flanked": {"effect": "Attacker on a flanking angle (cover line does not divide them from target) IGNORES the cover defense bonus AND gets the +50% crit bonus.", "hud": "cover icon turns YELLOW"},
+      "hunker_down": {"effect": "Doubles current cover bonus (half->effectively +40, full->effectively +80 vs hit) and the unit cannot be crit while hunkered; consumes the turn.", "note": "EU hunker = cover x2; X2 hunker uses flat +30 def +50 dodge instead"},
+      "height_advantage": {"aim_bonus": "+20 Aim for the unit on higher ground vs a lower target", "sniper_extra": "Snipers with 'Damn Good Ground' add +10 Aim and +10 Defense vs lower-elevation enemies on top of the base +20"},
+      "cover_must_be_adjacent": "Defense only applies when standing directly next to the cover object and the cover's edge plane divides you from the shooter. Step away = bonus lost.",
+      "destructible": "Most cover is destructible. Large objects (trees, statues, mausoleums, vehicles) take 2 hits; they often DEGRADE from full->half after hit 1, destroyed on hit 2. Fire spreads and disintegrates objects over time. Some alien-green objects, platforms, stairs, ramps, large liquid tanks are INDESTRUCTIBLE."
+    },
+    "XCOM2": {
+      "low_cover": {"defense": "+20 Defense", "hud": "half shield"},
+      "high_cover": {"defense": "+40 Defense", "hud": "full shield"},
+      "hunker_down": {"defense": "+30 Defense (on top of cover) AND +50 Dodge", "note": "flat values, NOT a doubling like EU"},
+      "flanked": {"effect": "Attacker ignores the target's cover defense AND gains +50% crit (some sources state +40 crit for the no-cover/flank case in X2). Innate Defense and ability/equipment defense (Smoke, Ghost/Wraith) are NOT ignored by flanking.", "hud": "successful flank shows a YELLOW shield vs the usual red"},
+      "high_ground": {"aim_bonus": "+20 Aim (one-time) for the elevated attacker vs lower target"},
+      "destructible": "Cover is fully destructible (core of the plot+parcel pitch). Explosives SHRED cover and can collapse buildings."
+    },
+    "implementable_model": {
+      "to_hit_formula": "finalHit% = shooterAim - targetDefense + rangeMod + heightMod(+20 if higher) + abilityMods; cover contributes -20 (low) or -40 (high) via targetDefense.",
+      "crit_model": "If attacker flanks target OR target has no cover: critChance += 50 (EU) / +50 or +40 (X2). Hunker/innate defense still applies.",
+      "key_EU_vs_X2_diff": "Hunker: EU doubles cover; X2 = flat +30 Def +50 Dodge. Dodge (a graze mechanic) exists in X2, NOT EU."
+    },
+    "sources": [
+      "https://www.ufopaedia.org/index.php/Cover_(EU2012)",
+      "https://www.ufopaedia.org/index.php/Chance_to_Hit_(EU2012)",
+      "https://xcom.fandom.com/wiki/Cover_(XCOM_2)",
+      "https://xcom.fandom.com/wiki/Cover",
+      "https://strategywiki.org/wiki/XCOM_2/Aim_Bonuses",
+      "https://steamcommunity.com/app/268500/discussions/0/135508489632229447/"
+    ]
+  },
+
+  "action_economy": {
+    "actions_per_unit_per_turn": 2,
+    "rules": [
+      "MOVE + MOVE = Dash: spend both actions on movement to cover ~2x the single-move range. Ends turn.",
+      "MOVE + SHOOT: move once, then attack. Attacking (firing primary) normally ENDS the turn even if it was the first action.",
+      "SHOOT FIRST = turn ends: most attacks consume all remaining actions (a 'turn-ending' action). Exceptions exist via abilities (EU Heavy 'Bullet Swarm', X2 'Run and Gun', pistol 'Quickdraw/Lightning Hands', sniper 'Death from Above' kills at lower elevation cost 1 and don't end turn).",
+      "OVERWATCH: 1 action, but immediately ends the turn. Unit takes a reaction shot at the first enemy that moves into its LOS during the enemy turn.",
+      "HUNKER DOWN: 1 action that ends turn; gain the hunker defense bonus.",
+      "RELOAD: costs 1 action.",
+      "FREE actions: some abilities (Spider/Wraith grapple, swapping items in some versions, certain class perks like 'Salvo', 'Quickdraw') don't consume an action."
+    ],
+    "movement_range_display": {
+      "blue_move": "First action point reach = highlighted in BLUE. Moving within blue range still leaves 1 action (can shoot/overwatch/hunker after).",
+      "yellow_move": "Second action point reach (the DASH ring) = highlighted in YELLOW/amber. Moving into yellow range consumes BOTH actions; cannot act further.",
+      "implementable": "Compute two flood-fill ranges from the unit: R1 = movePoints (blue tiles), R2 = 2*movePoints (yellow tiles). Render path cost so the player sees exactly where the blue->yellow boundary is."
+    },
+    "x2_overwatch_notes": [
+      "Ever Vigilant (Specialist): if you spent BOTH actions moving (dashed), auto-enter Overwatch at end of turn.",
+      "Overwatch default aim multiplier 0.7 (0.6 vs a dashing enemy) — see overwatch section."
+    ],
+    "sources": [
+      "https://steamcommunity.com/app/268500/discussions/0/2747650363454055835/",
+      "https://xcom.fandom.com/wiki/Overwatch_(XCOM_2)",
+      "https://www.ufopaedia.org/index.php/Action_System",
+      "https://steamcommunity.com/app/268500/discussions/0/366298942110338752/"
+    ]
+  },
+
+  "classes": {
+    "rank_ladder": ["Rookie", "Squaddie", "Corporal", "Sergeant", "Lieutenant", "Captain", "Major", "Colonel"],
+    "rank_notes": "Rookie = unclassed; on first promotion to Squaddie the soldier gains a class + its signature ability. Each subsequent rank offers (usually) a choice of 2 abilities (one perk per rank picked; the other is forgone). XP comes from kills + mission completion. At Sergeant the soldier earns a random class/gender nickname. 8 ranks total.",
+    "EU2012": {
+      "Assault": {
+        "role": "Run-and-gun flanker / close-range crit / alien capture",
+        "Squaddie": "Run & Gun (fire or Overwatch after Dashing; 2-turn cooldown)",
+        "Corporal": ["Tactical Sense (+5 Def per visible enemy, max +20)", "Aggression (+10% crit per visible enemy, max +30%)"],
+        "Sergeant": ["Lightning Reflexes (forces first reaction shot vs this unit each turn to miss)", "Close & Personal (+30% crit vs adjacent; EW: first shot within 4 tiles is free)"],
+        "Lieutenant": ["Flush (+30 Aim shot, 50% dmg, forces target out of cover)", "Rapid Fire (two shots at one target, each -15 Aim)"],
+        "Captain": ["Close Combat Specialist (free reaction shot vs any enemy within 4 tiles, no Overwatch needed)", "Bring 'Em On (+1 crit dmg per visible enemy, up to +5)"],
+        "Major": "Extra Conditioning (bonus HP scaling with armor weight)",
+        "Colonel": ["Resilience (immune to crits)", "Killer Instinct (Run & Gun also grants +50% crit damage that turn)"]
+      },
+      "Heavy": {
+        "role": "Explosives / suppression / anti-armor / area denial",
+        "Squaddie": "Fire Rocket (launcher rocket, once per mission, can't move first; 6 dmg)",
+        "Corporal": ["Bullet Swarm (firing primary as FIRST action no longer ends turn)", "Holo-Targeting (shooting/suppressing a target gives allies +10 Aim vs it)"],
+        "Sergeant": ["Shredder Rocket (+33% damage taken by all hit, 4 turns; weaker blast, 4 dmg)", "Suppression (-30 Aim on target + reaction fire if it moves)"],
+        "Lieutenant": ["HEAT Ammo (+100% vs robotic; EW: +50%)", "Rapid Reaction (second reaction shot if first Overwatch shot hits)"],
+        "Captain": ["Grenadier (carry 2 grenades in 1 slot; EW: +1 grenade dmg)", "Danger Zone (+2 tile radius on rockets & suppression)"],
+        "Major": "Will to Survive (-2 to all normal damage when in cover & not flanked)",
+        "Colonel": ["Rocketeer (+1 standard rocket per battle)", "Mayhem (bonus dmg by weapon tech to Suppression & all AoE)"]
+      },
+      "Support": {
+        "role": "Medic / smoke / suppression / mobility buffs",
+        "Squaddie": "Smoke Grenade (+20 Def to all units in cloud, lasts through enemy turn; once/mission)",
+        "Corporal": ["Sprinter (+3 movement tiles)", "Covering Fire (reaction shots trigger on enemy ATTACKS too; EW: fires before enemy attacks)"],
+        "Sergeant": ["Field Medic (medikit 3 uses/battle)", "Smoke and Mirrors (+1 smoke use; EW: +2, total 3)"],
+        "Lieutenant": ["Revive (medikit revives critically-wounded to 33% HP)", "Rifle Suppression (pin target, -30 Aim, reaction fire)"],
+        "Captain": ["Dense Smoke (+area, +20 more Def in smoke)", "Combat Drugs (smoke also gives +20 Will, +10% crit, +20 Aim)"],
+        "Major": "Deep Pockets (+1 item slot; EW: +1 use on all limited items)",
+        "Colonel": ["Savior (medikits heal +4)", "Sentinel (two reaction shots per Overwatch)"]
+      },
+      "Sniper": {
+        "role": "Long-range precision / Squadsight overwatch / pistol off-class",
+        "Squaddie": "Headshot (+30% crit + bonus crit dmg by tech; 2-turn cooldown)",
+        "Corporal": ["Snap Shot (may fire/Overwatch after moving, -20 Aim; EW: -10)", "Squadsight (fire at any ally's visible target; EW: can't crit those unless via Headshot)"],
+        "Sergeant": ["Gunslinger (+2 pistol damage)", "Damn Good Ground (+10 Aim & +10 Def vs lower-elevation enemies, stacks with the +20 height aim)"],
+        "Lieutenant": ["Disabling Shot (malfunction target weapon, no crit; 2-turn cd)", "Battle Scanner (throw a 2-turn vision source, 2/battle)"],
+        "Captain": ["Executioner (+10 Aim vs targets under 50% HP)", "Opportunist (no Aim penalty on reaction shots + reaction shots CAN crit)"],
+        "Major": "Low Profile (partial cover counts as full)",
+        "Colonel": ["In The Zone (killing a flanked/uncovered target with rifle costs no action)", "Double Tap (use both actions for two Standard/Headshot/Disable shots if no move; 1-turn cd)"]
+      }
+    },
+    "XCOM2": {
+      "Ranger": {
+        "role": "Sword melee + scout/concealment OR close shotgun assault",
+        "Squaddie": "Slash (melee sword attack within move range; first attack of Reaper/Bladestorm can't miss)",
+        "specializations": ["Scout (Phantom/conceal branch)", "Assault (shotgun branch)"],
+        "Corporal": ["Phantom (stay concealed when squad is revealed = scout)", "Blademaster (+2 sword damage)"],
+        "Sergeant": ["Shadowstrike (+25 Aim & +25 crit while concealed)", "Shadowstep (does not trigger overwatch / reaction fire)"],
+        "Lieutenant": ["Conceal (re-enter concealment once/mission)", "Run and Gun (extra action after dashing; 3-turn cooldown)"],
+        "Captain": ["Implacable (a kill grants a free move action that turn)", "Bladestorm (free sword attack vs any enemy that enters/starts adjacent)"],
+        "Major": ["Deep Cover (auto-hunker if you didn't attack)", "Untouchable (a kill grants Untouchable: next attack vs you that turn deals 0)"],
+        "Colonel": ["Rapid Fire (fire twice at one enemy, each shot a small aim penalty)", "Reaper (chain melee: each melee kill grants another action; first hit can't miss)"]
+      },
+      "Grenadier": {
+        "role": "Grenade launcher AoE + armor-shred cannon",
+        "Squaddie": "Launch Grenade (throw grenades farther/wider via launcher)",
+        "specializations": ["Demolitions Expert (grenade branch)", "Heavy Gunner (cannon branch)"],
+        "Corporal": ["Blast Padding (+armor vs explosives, -33% explosive dmg taken)", "Shredder (cannon shots SHRED armor)"],
+        "Sergeant": ["Demolition (volley that destroys target cover)", "Suppression (pin target, reaction fire, -aim)"],
+        "Lieutenant": ["Heavy Ordnance (+1 use of the grenade in the grenade-only slot)", "Holo Targeting (cannon shot hit OR miss marks target: allies +Aim)"],
+        "Captain": ["Volatile Mix (+2 grenade damage, +1 radius)", "Chain Shot (-15 aim shot; on hit, fire a second time)"],
+        "Major": ["Salvo (launching/throwing grenades or heavy weapon no longer ends turn)", "Hail of Bullets (guaranteed-hit cannon shot)"],
+        "Colonel": ["Saturation Fire (cone barrage hitting multiple, destroys cover)", "Rupture (guaranteed crit + permanent +damage debuff on target)"]
+      },
+      "Specialist": {
+        "role": "GREMLIN drone: remote hack/heal/defense buff + overwatch support",
+        "Squaddie": "Aid Protocol (send GREMLIN to ally: +Def until next turn; +20/+30/+40 by Gremlin Mk I/II/III)",
+        "specializations": ["Battle Medic (heal branch)", "Combat Hacker (offense/hack branch)"],
+        "Corporal": ["Medical Protocol (GREMLIN remote heal/stabilize, 1 charge; +1 with medikit)", "Combat Protocol (GREMLIN guaranteed dmg jolt: 2-3/3-4/4-5 by Mk, double vs robots)"],
+        "Sergeant": ["Revival Protocol (GREMLIN removes mental status from ally)", "Haywire Protocol (hack robotic enemies to stun/control)"],
+        "Lieutenant": ["Field Medic (+2 medikit charges)", "Scanning Protocol (GREMLIN reveals an area instantly)"],
+        "Captain": ["Covering Fire (Overwatch triggers on enemy attacks, not just moves)", "Threat Assessment (Aid Protocol target also gets free Overwatch / Covering Fire)"],
+        "Major": ["Ever Vigilant (if you spent all actions moving, auto-Overwatch)", "Guardian (chance for extra Overwatch shots on each hit)"],
+        "Colonel": ["Restoration (GREMLIN flies to and heals every squadmate)", "Capacitor Discharge (GREMLIN AoE electric burst, dmg+stun, once/mission, +vs robots)"]
+      },
+      "Sharpshooter": {
+        "role": "Sniper-rifle Squadsight overwatch OR pistol gunslinger",
+        "Squaddie": "Squadsight (target enemies in any squadmate's sight; sniper rifle, with aim/crit penalty at extreme range)",
+        "specializations": ["Sniper (rifle branch)", "Gunslinger (pistol branch)"],
+        "Corporal": ["Long Watch (Overwatch can trigger at Squadsight range)", "Return Fire (free pistol shot when targeted by enemy fire)"],
+        "Sergeant": ["Deadeye (high-damage shot at a small aim penalty)", "Lightning Hands (free pistol shot that doesn't end turn)"],
+        "Lieutenant": ["Death from Above (killing a LOWER-elevation enemy with rifle costs 1 action & doesn't end turn)", "Quickdraw (first-action pistol shot doesn't end turn)"],
+        "Captain": ["Kill Zone (cone reaction-shot vs any enemy moving/attacking in it; ammo-limited)", "Faceoff (fire pistol once at EVERY visible enemy)"],
+        "Major": ["Steady Hands (+10 Aim/+10 crit if you didn't move last turn)", "Aim (Hunker Down also gives +20 Aim to first shot next turn)"],
+        "Colonel": ["Serial (chained rifle kills: each kill refunds the action to keep firing)", "Fan Fire (fire pistol 3x at one target)"]
+      },
+      "psi_operative_note": "X2 also has a 5th unlockable PSI OPERATIVE (trained in the Psi Lab, not promoted by kills) with abilities like Soulfire, Insanity, Domination, Void Rift, Stasis. EU's psionic analog is any soldier who passes the Psi Lab gift test."
+    },
+    "implementable_note": "Model a class as: {signature (Squaddie), then 6 rank tiers each = a 2-option choice}. Store as data; the engine just unlocks abilities at rank thresholds. A 'build' = the array of choices.",
+    "sources": [
+      "https://www.ufopaedia.org/index.php/Assault_(EU2012)",
+      "https://www.ufopaedia.org/index.php/Heavy_(EU2012)",
+      "https://www.ufopaedia.org/index.php/Support_(EU2012)",
+      "https://www.ufopaedia.org/index.php/Sniper_(EU2012)",
+      "https://www.ufopaedia.org/index.php/Ranger_(XCOM2)",
+      "https://www.ufopaedia.org/index.php/Grenadier_(XCOM2)",
+      "https://www.ufopaedia.org/index.php/Specialist_(XCOM2)",
+      "https://www.ufopaedia.org/index.php/Sharpshooter_(XCOM2)",
+      "https://xcom.fandom.com/wiki/Soldier_(XCOM:_Enemy_Unknown)"
+    ]
+  },
+
+  "weapons_armor": {
+    "tier_progression": {
+      "EU_weapons": ["Ballistic/Conventional", "Laser", "Plasma"],
+      "X2_weapons": ["Conventional", "Magnetic (Mag)", "Beam (Plasma)"],
+      "EU_armor": ["Body Armor (none/baseline)", "Carapace Armor", "Skeleton Suit", "Ghost Armor", "Titan Armor", "Archangel Armor", "+ EW: MEC suits & Psi Armor"],
+      "X2_armor": ["Kevlar (baseline)", "Predator (plated)", "Warden (powered)", "+ specialized: Spider/Wraith (light), E.X.O./W.A.R. (heavy)"]
+    },
+    "EU_weapon_damage_base_crit_critchance": {
+      "_note": "Base = normal hit range; ActualCrit = actual in-mission crit damage (bold value more likely); CritChance is the weapon's innate crit %.",
+      "pistols": {"Pistol": "1-2 (crit 2-4, 0% crit, unlimited ammo)", "Laser Pistol": "1-3 (crit 3-5, 10%)", "Plasma Pistol": "2-4 (crit 5-7, 0%)"},
+      "rifles_assault_support_rookie": {"Assault Rifle": "2-4 (crit 5-7, 10%)", "Laser Rifle": "4-6 (crit 8-10, 10%)", "Light Plasma Rifle": "4-6 (crit 8-10, 10%, +10 Aim)", "Plasma Rifle": "6-8 (crit 11-13, 10%)"},
+      "shotguns_assault": {"Shotgun": "3-5 (crit 6-8, 20%, short range)", "Laser Scatter": "5-7 (crit 9-11, 20%)", "Alloy Cannon": "8-10 (crit 14-16, 20%)"},
+      "lmg_heavy": {"LMG": "3-5 (crit 6-8, 0%)", "Heavy Laser": "5-7 (crit 9-11, 0%)", "Heavy Plasma": "8-10 (crit 14-16, 0%)"},
+      "sniper": {"Sniper Rifle": "3-5 (crit 6-8, 25%, long range, limited move)", "Laser Sniper Rifle": "5-7 (crit 9-11, 30%)", "Plasma Sniper Rifle": "8-10 (crit 14-16, 35%)"},
+      "explosives": {"Frag Grenade": "3 dmg, radius (250 terrain dmg)", "Alien Grenade": "5 dmg", "Rocket Launcher": "6 dmg, big blast", "Blaster Launcher": "9 dmg, guided"}
+    },
+    "X2_weapon_damage_base_crit_critchance": {
+      "_note": "Base = normal; ActualCrit shown; CritChance innate; Mod Slots = weapon attachment slots.",
+      "rifles": {"Assault Rifle": "3-5 (crit 5-7, 0%, 1 slot)", "Mag Rifle": "5-7 (crit 8-10, 0%, 2 slots)", "Plasma Rifle": "7-9 (crit 11-13, 0%, 2 slots)"},
+      "shotguns": {"Shotgun": "4-6 (crit 7-9, 10%, 1 slot)", "Shard Gun": "6-8 (crit 10-12, 15%, 2)", "Storm Gun": "8-10 (crit 13-15, 20%, 2)"},
+      "cannons_grenadier": {"Cannon": "4-6 (crit 6-8, 0%, shred 1)", "Mag Cannon": "6-8 (crit 9-11, shred 2)", "Beam Cannon": "8-10 (crit 12-14, shred 3)"},
+      "sniper_rifles": {"Sniper Rifle": "4-6 (crit 6-8, 10%, unlimited range)", "Gauss Rifle": "6-8 (crit 9-11, 10%)", "Plasma Lance": "8-10 (crit 12-14, 10%)"},
+      "pistols": {"Pistol": "2-3 (0%)", "Mag Pistol": "3-4", "Beam Pistol": "3-6 (0%)"},
+      "swords_ranger": {"Sword/Machete": "3-5 (10% crit)", "Arc Blade": "4-6 (15%, 25% stun)", "Fusion Blade": "5-7 (20%, burn)"},
+      "gremlin_specialist": {"Gremlin Mk I": "Combat 2 organic / 3-4 mech, Aid +20 Def", "Mk II": "4 / 7-8, +20 Hack, Aid +30", "Mk III": "6 / 10-11, +40 Hack, Aid +40"},
+      "grenades": {"Frag Grenade": "3-4 dmg, radius 3, shred 1, destroys cover", "Plasma Grenade": "5-6 dmg, shred 2", "Flashbang": "0 dmg, disorients (no cover destroy)", "Gas Grenade": "3-4 poison"}
+    },
+    "X2_armor_stats": {
+      "Kevlar": "baseline, no HP/armor/dodge bonus, 1 utility slot",
+      "Predator (plated)": "+HP, 2 utility slots, cheap",
+      "Warden (powered)": "+8 HP, +2 Armor, +1 utility slot",
+      "Spider Suit (light)": "grapple/wall-scale as a FREE action",
+      "Wraith Suit (light, advanced)": "+6 HP, +2 Mobility, Phase (walk through walls, 2 charges, free action)",
+      "E.X.O. Suit (heavy)": "+HP, +Armor, mounts 1 heavy weapon (e.g. rocket launcher)",
+      "W.A.R. Suit (heavy, advanced)": "more HP/armor, mounts heavy weapon, shredstorm/proving-ground unlock"
+    },
+    "EU_armor_concept": {
+      "Body Armor": "baseline +HP",
+      "Carapace Armor": "research tier 1, more HP",
+      "Skeleton Suit": "grappling hook (vertical mobility), +Def, light",
+      "Ghost Armor": "temporary invisibility, grapple, +Def",
+      "Titan Armor": "heavy, big HP, immune to fire/poison/critical-wound-ish",
+      "Archangel Armor": "FLIGHT",
+      "note": "EW adds MEC exosuit chassis (Paladin/Sentinel/Goliath) and gene-mods; out of scope for a basic rebuild."
+    },
+    "armor_mechanic_X2": "X2 adds an ARMOR stat (flat damage reduction, e.g. Warden +2 = first 2 damage blocked per hit unless SHREDDED). EU has no flat-armor-points reduction in the base game; it uses HP + Defense. Implement Armor as flat post-mitigation subtraction with a 'shred' counter.",
+    "implementable_progression": "3 weapon tiers x damage step of roughly +2 base per tier. X2 conventional 3-5 -> mag 5-7 -> beam 7-9 (assault rifle line) is a clean +2 ramp you can copy verbatim.",
+    "sources": [
+      "https://www.ufopaedia.org/index.php/Weapons_(EU2012)",
+      "https://www.ufopaedia.org/index.php/Weapons_(XCOM2)",
+      "https://xcom.fandom.com/wiki/Weapons_(XCOM_2)",
+      "https://xcom.fandom.com/wiki/Armors_(XCOM_2)",
+      "https://www.ufopaedia.org/index.php/Armor_(XCOM2)",
+      "http://www.vigaroe.com/2019/12/xcom-2-equipment-analysis-armor.html"
+    ]
+  },
+
+  "enemies_pods": {
+    "pod_system": {
+      "concept": "Enemies are grouped into PODS that patrol together and stay DORMANT (not acting) until an unconcealed XCOM soldier gains line-of-sight on a pod member. That moment = ACTIVATION.",
+      "pod_size": "Typically 3 (commonly 1 leader + 2 followers; some pods 2 or scale up by mission difficulty/force level).",
+      "activation_sequence": [
+        "On first sight, the pod plays a reveal cinematic and gets a FREE 'scatter' move toward cover (a one-time repositioning that does NOT cost their upcoming turn).",
+        "They then act normally on the NEXT enemy turn.",
+        "X2 specifically: pods SPREAD OUT on first activation so they can't all be killed by one grenade/AoE — a deliberate anti-cheese change from EU where pods clustered."
+      ],
+      "leader_follower": "Pod leaders buff/command followers. A lone surviving follower will try to rejoin another pod.",
+      "x2_alert_states": {
+        "green": "Concealed/unaware. A pod activated while green takes only DEFENSIVE actions (hunker/overwatch), no offense.",
+        "yellow": "Aware of XCOM via sound (gunfire/explosions/dead allies) but not yet activated; moves toward the disturbance, may take opportunistic shots.",
+        "red": "Fully activated/engaged; full offensive AI."
+      },
+      "implementable_recipe": "Each pod = {units[], patrol_path, state: dormant}. On any XCOM unit gaining LOS to a pod unit while NOT concealed -> state=activated, run scatter-to-nearest-cover for each member (free), set them to act next enemy turn. Track per-pod alert (green/yellow/red) to gate offense."
+    },
+    "ai_targeting": {
+      "priorities": "AI scores destinations/actions by: (1) can I FLANK a visible XCOM soldier (ignore their cover + crit) -> high value; (2) move to a tile that gives ME cover vs the most threats; (3) lowest-effective-HP / most-exposed target; (4) use signature ability (Sectoid psi, Viper bind, Archon pinions) when no good flank exists.",
+      "intentional_imperfection": "Firaxis deliberately under-tunes the flank-avoidance so the player CAN out-position the AI; it is beatable by design.",
+      "reinforcement_behavior": "X2 drops ADVENT reinforcements via gunship at telegraphed tiles (a flare marker the turn before) on many timed missions."
+    },
+    "roster_EU": [
+      {"name": "Sectoid", "gimmick": "MIND MERGE: links to another Sectoid granting it +HP/crit; if the initiator dies, the linked unit dies too. Early-game psi."},
+      {"name": "Sectoid Commander", "gimmick": "Mind Control an XCOM soldier; Psi Panic; Mindfray."},
+      {"name": "Floater / Heavy Floater", "gimmick": "FLIES to high ground for aim+def, can airdrop anywhere (costs turn); Heavy adds Bombard/launch."},
+      {"name": "Thin Man", "gimmick": "Leaps walls/rooftops; POISON spit (AoE) + leaves a poison cloud on death (damage-over-time, -Aim, -movement)."},
+      {"name": "Muton / Muton Elite / Berserker", "gimmick": "Tanky, throws grenades, Intimidate; Berserker charges into melee; weak to psi."},
+      {"name": "Cyberdisc", "gimmick": "Robotic; closed saucer <-> open assault form; DEATH BLOSSOM close-range AoE; escorts Drones."},
+      {"name": "Drone", "gimmick": "Small flying robot, repairs Cyberdiscs, weak beam."},
+      {"name": "Chryssalid", "gimmick": "Fast 4-legged MELEE; high move, poison; kills a civilian/soldier -> implants -> corpse becomes a ZOMBIE that hatches a new Chryssalid in ~3 turns."},
+      {"name": "Zombie", "gimmick": "Slow melee; if not killed within 3 turns of spawning, births a Chryssalid."},
+      {"name": "Sectopod", "gimmick": "Huge armored robot; cannon (line/penetrating dmg) + Cluster Bomb; very high HP."},
+      {"name": "Ethereal / Uber Ethereal", "gimmick": "Top-tier psi: Mind Control, Psi Panic, Rift (wide AoE psi), reflect; final boss."},
+      {"name": "Outsider", "gimmick": "Crystalline UFO guardian; shatters into a shard on death (early game)."},
+      {"name": "Mechtoid (EW)", "gimmick": "Sectoid-piloted mech; twin plasma; gains shield if mind-merged."}
+    ],
+    "roster_X2": [
+      {"name": "ADVENT Trooper", "gimmick": "Basic grunt; rifle; the bread-and-butter pod follower."},
+      {"name": "ADVENT Officer", "gimmick": "Mark Target (buffs allies' aim vs the marked soldier); tankier than Trooper."},
+      {"name": "ADVENT Stun Lancer", "gimmick": "Rushes into MELEE with a stun baton (stuns/dazes a soldier, skipping their turn)."},
+      {"name": "ADVENT MEC", "gimmick": "Robotic mech; micro-missiles + heavy fire; hackable; high HP + armor."},
+      {"name": "ADVENT Shieldbearer", "gimmick": "Casts Energy Shield granting nearby allies temporary +HP shield."},
+      {"name": "ADVENT Purifier (WOTC)", "gimmick": "Flamethrower; explodes on death."},
+      {"name": "ADVENT Priest (WOTC)", "gimmick": "Psi: Mind Control, Stasis, Holy Warrior."},
+      {"name": "Sectoid (X2)", "gimmick": "Bigger, psionic: PSI REANIMATE (raise a dead body as a zombie), Mindspin (random panic/MC/disorient); killing the Sectoid frees its thralls."},
+      {"name": "Viper", "gimmick": "BIND (tongue-pull a soldier in, then crush/immobilize until freed by allies); POISON spit AoE."},
+      {"name": "Muton (X2)", "gimmick": "Tank; grenades; COUNTERATTACK vs melee; bayonet."},
+      {"name": "Archon", "gimmick": "Flying (high Dodge); BLAZING PINIONS (telegraphed AoE rocket rain next turn); Battle Frenzy (+1 action for 2 turns when hit)."},
+      {"name": "Andromedon", "gimmick": "Two-stage tank: acid attacks; when the body dies a robotic ANDROMEDON SHELL stands up and keeps fighting (second health bar)."},
+      {"name": "Gatekeeper", "gimmick": "Floating sphere; opens to fire a powerful beam; can REANIMATE nearby corpses; armored shell when closed."},
+      {"name": "Sectopod (X2)", "gimmick": "Two-tile-tall robot; High Stance (extra reach/range); Lightning Field AoE + Wrath Cannon line shot; huge HP + armor."},
+      {"name": "Faceless", "gimmick": "Disguised as a civilian on Retaliation maps; transforms into a melee blob when approached."},
+      {"name": "The Lost (WOTC)", "gimmick": "Zombie HORDES on ruined-city maps; weak but endless; killing one with a shot grants a free 'Lost Headshot' bonus action."},
+      {"name": "The Chosen (WOTC) - Assassin/Hunter/Warlock", "gimmick": "Recurring named rival bosses that invade missions, can KIDNAP soldiers, learn your weaknesses, get stronger over the campaign; each has unique powers (Assassin = stealth/sword, Hunter = sniper/grapple, Warlock = psi/summon). Defeating them at their Stronghold removes them permanently; their presence FREEZES mission timers."}
+    ],
+    "sources": [
+      "https://xcom.fandom.com/wiki/Pod_(XCOM_2)",
+      "https://steamcommunity.com/app/268500/discussions/0/364041776196273323/",
+      "https://www.ufopaedia.org/index.php/Tactics_(XCOM2)",
+      "https://xcom.fandom.com/wiki/Aliens_(XCOM:_Enemy_Unknown)",
+      "https://xcom.fandom.com/wiki/Aliens_(XCOM_2)",
+      "http://www.vigaroe.com/2020/05/xcom-2-analysis-general-enemy-intro.html",
+      "https://xcom.fandom.com/wiki/Chryssalid_(XCOM:_Enemy_Unknown)"
+    ]
+  },
+
+  "overwatch": {
+    "core_mechanic": "Set a unit to Overwatch (1 action, ends turn). During the ENEMY turn, when a hostile MOVES into the unit's line of sight/range, the unit fires a reaction shot.",
+    "EU_behavior": "All units on Overwatch fire simultaneously at the first valid mover. One reaction shot per Overwatch (unless 'Sentinel'/'Rapid Reaction' grant a 2nd). Reaction shots normally cannot crit (unless Sniper 'Opportunist').",
+    "X2_behavior": "Overwatch shots trigger IN SEQUENCE: each watcher fires in turn, and if the first kills the mover, the next watcher picks a new valid target, until no valid targets remain. One shot per watcher per trigger.",
+    "aim_penalty": {
+      "X2_multiplier": "Reaction (Overwatch) shots apply a 0.7x multiplier to final hit chance vs a normally-moving enemy, and 0.6x vs a DASHING enemy (harder to hit).",
+      "EU_penalty": "Reaction shots take an aim penalty; Sniper 'Opportunist' removes it (and lets them crit). 'Lightning Reflexes' (Assault) forces the first reaction shot each turn to MISS.",
+      "trigger_rule": "Only triggers on MOVEMENT by default. 'Covering Fire' (Specialist/Support) lets Overwatch also trigger on enemy ATTACKS."
+    },
+    "concealment_ambush_X2": {
+      "concept": "X2 missions often START in CONCEALMENT (squad invisible). You can pre-position the whole squad on Overwatch, then break concealment to spring a squad-wide AMBUSH.",
+      "key_rule": "Overwatch shots fired during an ambush from concealment do NOT incur the normal reaction aim penalty (they hit at full accuracy) — making the ambush devastating. This is the signature X2 opening play.",
+      "concealment_break": "You stay concealed inside the enemy 'spotted/red' zone UNLESS you (1) fire, (2) move into a detection tile, or (3) get flanked. Rangers with Phantom stay concealed even after the squad is revealed."
+    },
+    "implementable_model": "On Overwatch: store {watcher, triggered:false}. During enemy movement resolution, for each tile an enemy enters, check LOS+range to each non-triggered watcher; first valid -> fire reactionShot with hit = baseHit * (isAmbush ? 1.0 : (isDashing ? 0.6 : 0.7)). EU: resolve all watchers vs first mover; X2: resolve watchers sequentially, re-targeting on kill.",
+    "sources": [
+      "https://xcom.fandom.com/wiki/Overwatch_(XCOM_2)",
+      "https://www.ufopaedia.org/index.php/Overwatch_(XCOM2)",
+      "https://xcom.fandom.com/wiki/Reaction_Shot",
+      "https://steamcommunity.com/app/268500/discussions/0/412448158152937357/"
+    ]
+  },
+
+  "pathfinding": {
+    "grid": "Square tile grid, multi-level (height/floors). Movement is tile-to-tile.",
+    "algorithm": "A* on the tile graph. Each unit has Mobility -> movement points = tiles reachable in ONE action (the blue range). Dash = a second action -> ~2x tiles (yellow range).",
+    "costs": {
+      "orthogonal_step": "1 tile",
+      "diagonal_step": "treated effectively as 1 tile in XCOM's display (XCOM is generous with diagonals; it does NOT use a strict sqrt(2)=1.41 cost in the standard movement preview — diagonals are roughly 1). For Void Skirmish, choose: (a) XCOM-style diagonal=1 (more reach), or (b) classic 1/1.41 octile for stricter geometry.",
+      "blocked_tiles": "Tiles occupied by ANY unit (friend or foe) are impassable. Full-cover objects/walls block movement; low cover is passable-around. Closed doors must be opened (free as part of move).",
+      "vertical": "Climbing ledges, ladders, drainpipes, and using grapples/zip-lines moves between height levels; these consume movement but are pathable. Falling from height is possible."
+    },
+    "path_preview": "Hovering a destination draws a PATH LINE across tiles and shows the tile-by-tile route; the destination tile shows the cover state it will grant. Blue dotted line = within 1 action; yellow/amber = requires dash (2 actions). The UI shows whether the move ends turn.",
+    "implementable_recipe": "Per unit: floodFill(start, movePoints) = blue set; floodFill(start, 2*movePoints) minus blue = yellow set. On hover, A* from start to cursor over the union; render the polyline + per-segment cost; if cursor in yellow set, flag 'dash (ends turn)'. Mark occupied tiles and full-cover/wall edges as blocked; allow climb edges with their cost.",
+    "sources": [
+      "https://steamcommunity.com/app/200510/discussions/0/611702631237396406/",
+      "https://www.ufopaedia.org/index.php/Movement",
+      "https://www.ufopaedia.org/index.php/Cover_(EU2012)"
+    ]
+  },
+
+  "hud": {
+    "layout": {
+      "bottom_squad_cards": "Each squad member shown as a card/portrait along the BOTTOM edge: name/rank, HP pips/bar, current ability cooldowns, status icons (overwatch eye, hunkered, wounded, concealed). Click a card to select that unit.",
+      "selected_unit_ability_bar": "When a unit is selected, its actions appear as a row of buttons (Move, Fire, Overwatch, Hunker Down, Reload, class abilities, items/grenades) usually bottom-center, each with hotkeys.",
+      "shot_targeting_cursor": "When aiming, each valid enemy shows a large HIT % and below it the CRIT % (and in X2 also DODGE/graze chance). Cycling targets (Tab) re-rolls these per target.",
+      "hit_breakdown": "Hovering the hit % expands a BREAKDOWN: base aim, +/- range, - target cover (-20/-40), + flank/height, +crit sources, -overwatch penalty. (Vanilla X2 shows the % prominently; the detailed numeric breakdown is partly mod-enhanced, but the core hit%+crit% is always shown.)",
+      "cover_shield_icons": "Each unit displays a SHIELD icon indicating cover: half-shield = low cover, full-shield = high cover, no shield = exposed. Color: friendly cover = light blue, enemy cover = red, FLANKED = yellow shield.",
+      "enemy_tracker": "A count of remaining enemies ('X enemies' / enemy portraits along the TOP), with revealed-enemy icons; activated pods are highlighted.",
+      "turn_banner": "Large center banner announces 'XCOM TURN' / 'ALIEN TURN' (and 'ENEMY ACTIVATED!' on pod reveal). Timed missions show a COUNTDOWN (turns remaining) top-of-screen.",
+      "overwatch_eye": "Units on Overwatch show an EYE icon above them / on their card.",
+      "movement_ranges": "Blue tile highlight = 1-action move, yellow/amber tile highlight = dash (2-action) reach; red = enemy threat/overwatch zones (in some modes)."
+    },
+    "implementable_priority": [
+      "1) Big readable HIT% + CRIT% on the targeted enemy (the single most important UI element).",
+      "2) Per-unit cover shield (none/half/full, recolor yellow on flank).",
+      "3) Blue vs yellow move-range overlay.",
+      "4) Overwatch eye + hunker icon on units/cards.",
+      "5) Enemies-remaining count + turn banner + (if timed) turn counter."
+    ],
+    "sources": [
+      "https://xcom.fandom.com/wiki/Cover_(XCOM_2)",
+      "https://www.ufopaedia.org/index.php/Cover_(EU2012)",
+      "https://www.nexusmods.com/xcom2/mods/172",
+      "https://steamcommunity.com/app/200510/discussions/0/864948300049031398"
+    ]
+  },
+
+  "lighting_art": {
+    "direction": {
+      "palette": "Tactical scenes use a deliberately DESATURATED, slightly cool/gritty palette so unit silhouettes, the tile grid, and cover read clearly against the environment. Color is used sparingly for signal (XCOM teal/cyan UI, alien plasma green, red enemy markers).",
+      "time_of_day_weather": "Maps vary by time of day (day, dusk, night) and weather/biome (rain, fog, snow, desert, neon-lit ADVENT city), giving visual variety across the procedural/handcrafted pool while keeping the same readable tactical framing.",
+      "key_light": "A strong directional KEY LIGHT (sun/moon) plus localized practicals (streetlights, fires, plasma) provides dramatic contrast and casts the shadows that sell the 3D height. Night maps lean on pooled artificial light.",
+      "fog_atmosphere": "Atmospheric fog/haze adds depth and mood and softens distant geometry (also helps performance/readability by de-emphasizing out-of-play areas)."
+    },
+    "camera": {
+      "type": "3/4 'isometric-ish' but a true 3D ORBITABLE tactical camera: rotate in 90-degree steps (or free in some setups), tilt, and ZOOM between a high tactical overview and a low cinematic angle.",
+      "tactical_zoom": "Pulled-out tactical view shows the grid + cover; firing/abilities cut to a closer dynamic 'action cam' for impact, then return.",
+      "level_slicing": "On multi-floor maps the camera/roofs cut away (roof-removal / floor slicing) so you can always see your units inside buildings."
+    },
+    "readability_rules": [
+      "Keep the GRID legible: cover props sit on tile anchors, not mid-tile clutter.",
+      "Silhouette > detail: soldiers and aliens have strong readable silhouettes and team-color accents.",
+      "Reserve saturated color for actionable info (hit/crit, cover shields, threat zones, objective markers).",
+      "Cut-away roofs + camera rotation guarantee no unit is ever fully occluded."
+    ],
+    "implementable_priority": "For a browser engine: (1) orbit-in-90s + zoom tactical camera, (2) one strong directional light + ambient + soft shadows, (3) roof/floor cull when camera looks into a building, (4) desaturated environment LUT with bright UI overlay colors, (5) a couple of time-of-day lighting presets (day/dusk/night) you can assign per mission for variety. (Ties to existing ForgeFlow FPS perf rules: strip GLB-embedded lights, DPR cap ~1.5, shadow map ~1024.)",
+    "sources": [
+      "https://en.wikipedia.org/wiki/XCOM_2",
+      "https://gdcvault.com/play/1025387/Plot-and-Parcel-Procedural-Level",
+      "https://gamerant.com/xcom-2-procedural-level-detail/"
+    ]
+  },
+
+  "story": {
+    "EU2012": "Aliens launch a global invasion. The shadowy multinational COUNCIL activates XCOM, an elite paramilitary defense org, and puts YOU (the Commander) in charge. You manage a hidden underground base, research alien tech (autopsies, interrogations, plasma, psionics), build satellite coverage to detect UFOs, shoot them down with interceptors, and deploy a small squad of soldiers to clear crash sites, abductions, and terror attacks — racing to stop the alien plan before panicked nations abandon the project. It climaxes assaulting the alien Temple Ship and killing the Uber Ethereal.",
+    "XCOM2": "The aliens WON. Twenty years after XCOM's defeat, Earth is ruled by ADVENT — a slick alien-collaborator regime that masks human experimentation behind utopian gene-therapy propaganda. XCOM is now a scrappy guerrilla RESISTANCE operating from the AVENGER, a captured alien supply craft turned mobile HQ. You run hit-and-run ops against ADVENT (sabotage, VIP rescues, supply raids, blacksite assaults), build a resistance network, and uncover/stop the alien 'Avatar Project' before the doomsday clock fills. War of the Chosen adds three rival Resistance factions (Reapers, Skirmishers, Templars) and the CHOSEN — three named alien hunters who personally pursue your soldiers across the campaign.",
+    "theming_for_void_skirmish": "Either premise ports cleanly to a sci-fi tactics frame: (A) 'last-stand defenders vs an alien incursion' (EU energy: you're outgunned, every soldier matters, permadeath stakes), or (B) 'underdog resistance vs an occupying regime' (X2 energy: concealment ambushes, timed strikes, mobile base). The resistance framing (B) better motivates the concealment/ambush + timed-mission loop that makes X2 tactically distinctive.",
+    "sources": [
+      "https://en.wikipedia.org/wiki/XCOM:_Enemy_Unknown",
+      "https://en.wikipedia.org/wiki/XCOM_2"
+    ]
+  }
+}

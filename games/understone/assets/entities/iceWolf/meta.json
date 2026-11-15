@@ -1,0 +1,14 @@
+{
+  "size": 64,
+  "animations": {
+    "bark": {
+      "frames": 6
+    },
+    "fast-walk": {
+      "frames": 8
+    },
+    "idle": {
+      "frames": 8
+    }
+  }
+}

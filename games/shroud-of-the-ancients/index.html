@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shroud of the Ancients — Act I</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:#0a0e1a;
+    font-family:'Lexend',system-ui,-apple-system,sans-serif;color:#fff;}
+  #game-container{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+  canvas{image-rendering:pixelated;image-rendering:crisp-edges;}
+</style>
+<!-- Phaser 3.90 — used by Pass 2 -->
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+</head>
+<body>
+<div id="game-container"></div>
+<!-- 2026-05-11 — Pass 2 rebuild. The old game.js / levels.json procgen
+     stack was structurally broken (Level 1 unwinnable). Pass 2 replaces
+     it with a hand-authored Act 1: shroud_act1_data.js (rooms/enemies/
+     NPCs/items) + pass2.js (scenes/combat/HUD). Old game.js kept on
+     disk for reference but no longer loaded.
+     Cache-bust pattern mirrors the React games' wrapper so iframe
+     reloads always fetch the latest gameplay code. -->
+<script>document.write('<scr'+'ipt src="shroud_act1_data.js?v='+Date.now()+'"></scr'+'ipt>');</script>
+<script>document.write('<scr'+'ipt src="pass2.js?v='+Date.now()+'"></scr'+'ipt>');</script>
+</body>
+</html>

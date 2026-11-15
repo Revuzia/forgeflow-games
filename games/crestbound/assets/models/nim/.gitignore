@@ -1,0 +1,7 @@
+# build intermediates (regenerable from _tools/blender/nim)
+_work/*.blend
+_work/*.blend1
+_work/*.log
+_work/nim_ao.png
+_work/sheet/
+_work/runstrip/

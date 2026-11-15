@@ -1,0 +1,5 @@
+state after boot: keep
+  [verdant-1] measurement pass (no screenshots)
+  verdant-1  frames=281 shots=0 pullIns>1.5m=2 ndcMax=(0.17,inf) inSolid=0 wallFill=5 worstOcc=0.06s
+  [verdant-1] screenshot pass
+wrote C:\Users\TestRun\Claude Claw\forgeflow-games\games\crestbound\_shots\cam\camshots.json

@@ -1,0 +1,81 @@
+{
+ "name": "stair_module",
+ "file": "stair_module.glb",
+ "kind": "architecture",
+ "bytes": 576884,
+ "tris": 1912,
+ "tris_budget": 3000,
+ "tris_ok": true,
+ "bones": 0,
+ "clips": [],
+ "bounds": {
+  "min": [
+   -2.185,
+   -0.205,
+   -1.136
+  ],
+  "max": [
+   2.185,
+   1.445,
+   1.136
+  ],
+  "size": [
+   4.37,
+   1.649,
+   2.272
+  ]
+ },
+ "pivot": "centre of the XZ footprint, at the FOOT height (buildStairs p): lowest riser at glTF -Z, climbs toward +Z",
+ "front": "+Z (glTF) \u2014 the face that looks into the room",
+ "materials": [
+  "stair_module",
+  "stair_module_stripe"
+ ],
+ "nodes": [
+  "stair_module"
+ ],
+ "textures": {
+  "atlas": 2048,
+  "maps": [
+   "albedo (sRGB, webp)",
+   "normal (tangent, OpenGL +Y, webp)",
+   "orm (R=occlusion G=roughness B=metallic, webp)"
+  ]
+ },
+ "notes": [
+  "4 risers x 0.30 (< TUNE.stepUp 0.45), run 0.46, width 4.0: identical to keep.js GRAND_STAIR flights",
+  "brass nose inlays are on the stair_module_stripe material slot (weak keep-gold emissive) for the leading-edge law",
+  "timber stringers carved with scroll bosses; chain modules every 1.84 m of run / 1.20 m of rise"
+ ],
+ "reimport": {
+  "meshes": [
+   "stair_module"
+  ],
+  "tris": 1912,
+  "bones": 0,
+  "clips": [],
+  "images": [
+   [
+    "stair_module_albedo",
+    2048,
+    2048
+   ],
+   [
+    "stair_module_normal",
+    2048,
+    2048
+   ],
+   [
+    "stair_module_orm",
+    2048,
+    2048
+   ]
+  ],
+  "materials": [
+   "stair_module",
+   "stair_module_stripe"
+  ]
+ },
+ "reimport_ok": true,
+ "seconds": 124.1
+}

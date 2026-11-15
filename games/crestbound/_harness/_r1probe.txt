@@ -1,0 +1,33 @@
+== EVERY mesh whose world XZ is on the lake ice (|x|<12.5, |z-44|<12.5), y 1.2..4 ==
+[["Mesh", 1, 5, 2.7, 45.7, ""], ["Mesh", 1, 0, 2.7, 55.1, ""], ["Mesh", 1, 6, 3, 34.1, "cb.signatlas"], ["Mesh", 1, 6, 3, 34.1, ""], ["Mesh", 1, 6, 3, 34.1, "cb.wood.rime"], ["Mesh", 1, 0, 1.5, 55, "cb.marble.rime"], ["Mesh", 1, 0, 1.5, 55, "em_e62f28a:2.40:0:1"], ["crestPool", 1, 0, 1.3, 44, "glow_gffd04a:radial:0.7:2.2:0.62"]]
+
+== INSTANCED meshes anywhere, with their instance count and material ==
+[["fx.particles", 226, "", true, 4], ["fx.decals", 0, "", true, 4], ["inst", 14, "cb.ice.rime", false, 180], ["inst", 14, "cb.cloth.rime", false, 180], ["inst", 18, "", true, 24], ["props:sign:0", 1, "cb.wood.rime", true, 576], ["props:post:0", 13, "cb.wood.rime", true, 300], ["props:post:1", 13, "cb.metal.rime", true, 480], ["props:lantern:0", 4, "cb.metal.rime", true, 3048], ["props:panel:0", 4, "cb.ice.rime", true, 132], ["props:barrel:0", 1, "cb.wood.rime", true, 504], ["props:crate:0", 2, "cb.wood.rime", true, 132], ["props:snowdrift:0", 15, "cb.snow.rime", true, 1044], ["props:snowdrift:1", 15, "em_ed8f4ff:0.50:0:1", true, 480], ["props:monolith:0", 1, "cb.ice.rime", true, 396], ["props:pillar:0", 1, "cb.ice.rime", true, 672], ["props:banner:0", 2, "cb.metal.rime", true, 2328], ["props:flagpole:0", 3, "cb.ice.rime", true, 576], ["props:buttress:0", 1, "cb.ice.rime", true, 672], ["props:icicle:0", 4, "cb.ice.rime", true, 462], ["props:icicle:1", 4, "em_ed8f4ff:1.10:0:1", true, 2688], ["inst", 5, "cb.cp.pad", true, 315], ["inst", 5, "", true, 969], ["inst", 5, "", true, 146], ["inst", 5, "", true, 4], ["inst", 5, "", true, 38], ["coins", 3, "cb.gold.coin.rime", true, 2088], ["coins.far", 111, "cb.gold.coin.rime", true, 420], ["sigils", 8, "cb.sigil", true, 4224], ["sigilBadgePlates", 8, "cb.badgeplate", true, 480], ["sigilBadgeNumerals", 8, "cb.badgeatlas", true, 12], ["chain", 18, "cb.metal.rime", true, 480]]
+
+== where are the first 40 instances of each instanced mesh with 'drift' or 'deco' in it? ==
+[["props:post:0", 13, 1, [[-3.1, 2.2, 54.6]]], ["props:post:1", 13, 1, [[-3.1, 2.2, 54.6]]], ["props:lantern:0", 4, 1, [[-1.5, 3.5, 56.2]]], ["coins", 3, 3, [[0, 2.2, 55], [0, 2.3, 52], [0, 2.3, 49]]], ["coins.far", 111, 14, [[8.4, 2.2, 42], [7.4, 2.4, 44.4], [5, 2.2, 45.4], [2.6, 2.3, 44.4], [1.6, 2.4, 42], [2.6, 2.2, 39.6], [5, 2.4, 38.6], [7.4, 2.3, 39.6], [7.4, -1.2, 42], [6.2, -1, 44.1], [3.8, -1.2, 44.1], [2.6, -1.1, 42]]], ["sigils", 8, 1, [[5, -0.4, 42]]], ["sigilBadgePlates", 8, 1, [[5, 0.2, 42]]], ["sigilBadgeNumerals", 8, 1, [[5, 0.2, 42]]]]
+
+== particle system objects ==
+[["Points", "Points", 220, true], ["Points", "Points", 95, true], ["Points", "Points", 19, true], ["Points", "Points", 24, true], ["crestHalo", "Sprite", 4, true], ["crestHalo", "Sprite", 4, false], ["crestHalo", "Sprite", 4, false], ["crestHalo", "Sprite", 4, false], ["crestHalo", "Sprite", 4, false], ["crestHalo", "Sprite", 4, false], ["crestHalo", "Sprite", 4, true]]
+
+== BREAKABLE hazards ==
+[{"i": 4, "kind": "breakable", "p": [5, 1.15, 42], "drop": "coins", "trig": "ice-hole-open", "broken": false, "cols": [true], "onPound": "undefined", "keys": ["h", "def", "index", "kind", "colliders", "kills", "volumes", "cullable", "far", "broken", "errCount", "cx", "cy", "cz", "radius"]}, {"i": 7, "kind": "breakable", "p": [-27.2, 9.45, 2.9], "drop": "crest", "trig": "hay-wall-broken", "broken": false, "cols": [true], "onPound": "undefined", "keys": ["h", "def", "index", "kind", "colliders", "kills", "volumes", "cullable", "far", "broken", "errCount", "cx", "cy", "cz", "radius"]}]
+
+== hazard kinds ==
+{"ice": 4, "breakable": 2, "pendulum": 3, "jumppad": 1, "sinker": 4, "vanish": 6, "mover": 1, "rings": 1}
+
+== water volumes ==
+[["water", 0, -0.4, 44, 13, 1.4, 13], ["trigger", 0, 27, -48, 2.6, 2.6, 0.65], ["trigger", 15.28, 26.15, -38.44, 2.6, 2.6, 0.65], ["trigger", 21.99, 25.13, -28.89, 2.6, 2.6, 0.65], ["trigger", 16.35, 23.8, -19.33, 2.6, 2.6, 0.65], ["trigger", 1.53, 22.05, -9.78, 2.6, 2.6, 0.65], ["trigger", -14.14, 19.83, -0.22, 2.6, 2.6, 0.65], ["trigger", -21.88, 17.13, 9.33, 2.6, 2.6, 0.65], ["trigger", -17.34, 14.02, 18.89, 2.6, 2.6, 0.65], ["trigger", -3.06, 10.59, 28.44, 2.6, 2.6, 0.65], ["trigger", 12.93, 7, 38, 2.6, 2.6, 0.65], ["ladder", -16, 5.83, 20, 2.21, 3.06, 2.21], ["checkpoint", 0, 2.5, 58.5, 2.15, 1.9, 2.15], ["checkpoint", 0, 2.5, 30, 2.15, 1.9, 2.15], ["checkpoint", 0, 5.8, 3, 2.15, 1.9, 2.15], ["checkpoint", 14, 11.3, -22, 2.15, 1.9, 2.15], ["checkpoint", 0, 16.2, -42, 2.15, 1.9, 2.15], ["trigger", -1.8, 24.1, -49.6, 0.85, 1.15, 0.85], ["trigger", 40, 13.8, -32, 0.85, 1.15, 0.85]]
+
+== POUND the plug dead centre ==
+  before: {"gstate": "playing", "course": "rime-1", "pos": [5, 2, 42], "vel": [0, -0.19, 0], "pstate": "idle", "grounded": true, "facing": 0, "surface": "snow", "inWater": false, "submerged": false, "climbing": false, "camYaw": 0, "camPitch": 0.22, "camDist": 6.8, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false}
+  sequence: ['idle@2', 'idle@2', 'idle@2', 'idle@2', 'idle@2', 'idle@2', 'idle@2', 'idle@2', 'idle@2', 'idle@2', 'poundHang@2.09', 'poundHang@2.09', 'poundHang@2.09', 'poundHang@2.09', 'poundHang@2.09', 'poundHang@2.09', 'poundHang@2.09']
+  after: {"gstate": "playing", "course": "rime-1", "pos": [5, 2.09, 42], "vel": [0, 0, 0], "pstate": "poundHang", "grounded": false, "facing": 0, "surface": "normal", "inWater": false, "submerged": false, "climbing": false, "camYaw": 0, "camPitch": 0.22, "camDist": 6.8, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false}
+  breakable now: [[[5, 1.15, 42], false, [true], null], [[-27.2, 9.45, 2.9], false, [true], null]]
+  flags: [["ice-hole-open", null], ["gnasher-freed", null], ["hay-wall-broken", null]]
+
+== ring positions vs the ground under them ==
+[[{"pt": [0, 27, -48], "ground": 15.1, "clear": 11.9}, {"pt": [15.28, 26.15, -38.44], "ground": 13.88, "clear": 12.27}, {"pt": [21.99, 25.13, -28.89], "ground": 4.71, "clear": 20.42}, {"pt": [16.35, 23.8, -19.33], "ground": 10.2, "clear": 13.6}, {"pt": [1.53, 22.05, -9.78], "ground": 6.65, "clear": 15.4}, {"pt": [-14.14, 19.83, -0.22], "ground": 5.14, "clear": 14.69}, {"pt": [-21.88, 17.13, 9.33], "ground": 4.85, "clear": 12.28}, {"pt": [-17.34, 14.02, 18.89], "ground": 3.18, "clear": 10.84}, {"pt": [-3.06, 10.59, 28.44], "ground": 1.62, "clear": 8.97}, {"pt": [12.93, 7, 38], "ground": 1.4, "clear": 5.6}]]
+
+== the FROST COTTAGE spawn sign: is it a collider the camera can see? ==
+[["?", "ice", [5, 1.15, 49.75], [1.5, 0.15, 7.25], true], ["?", "ice", [9.75, 1.15, 44], [3.25, 0.15, 13], true]]

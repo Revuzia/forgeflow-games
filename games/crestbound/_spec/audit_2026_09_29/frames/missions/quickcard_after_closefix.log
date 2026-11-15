@@ -1,0 +1,7 @@
+title: True
+keep: True
+cycle 0: walk {"frames": 11, "state": "card", "pos": [-18.65, -0.0, -6], "near": 0, "dwell": 0} card True -> Escape -> {"state": "keep", "on": false, "leaving": true}
+cycle 1: card True | after 4 right: MISSION 5 OF 7  ·  A WARDEN | THE WARDEN OF THE RIDGE | cardMission(before enter) None
+ENTER -> {"state": "cinematic", "mission": "boss", "on": false}
+page errors: 0 []
+exit 0

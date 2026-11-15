@@ -1,0 +1,77 @@
+{
+ "name": "bookcase",
+ "file": "bookcase.glb",
+ "kind": "prop",
+ "bytes": 378284,
+ "tris": 1772,
+ "tris_budget": 3000,
+ "tris_ok": true,
+ "bones": 0,
+ "clips": [],
+ "bounds": {
+  "min": [
+   -0.95,
+   0.0,
+   -0.315
+  ],
+  "max": [
+   0.95,
+   2.5,
+   0.315
+  ],
+  "size": [
+   1.9,
+   2.5,
+   0.63
+  ]
+ },
+ "pivot": "base centre of the plinth; back at glTF -Z 0.28, front at +Z 0.28 (keep.js bookcase deco 1.8 x 2.5 x 0.55)",
+ "front": "+Z (glTF) \u2014 the face that looks into the room",
+ "materials": [
+  "bookcase"
+ ],
+ "nodes": [
+  "bookcase"
+ ],
+ "textures": {
+  "atlas": 1024,
+  "maps": [
+   "albedo (sRGB, webp)",
+   "normal (tangent, OpenGL +Y, webp)",
+   "orm (R=occlusion G=roughness B=metallic, webp)"
+  ]
+ },
+ "notes": [
+  "oak carcass with cornice + plinth; 4 shelves of individually coloured books (per-book rnd -> palette)"
+ ],
+ "reimport": {
+  "meshes": [
+   "bookcase"
+  ],
+  "tris": 1772,
+  "bones": 0,
+  "clips": [],
+  "images": [
+   [
+    "bookcase_albedo",
+    1024,
+    1024
+   ],
+   [
+    "bookcase_normal",
+    1024,
+    1024
+   ],
+   [
+    "bookcase_orm",
+    1024,
+    1024
+   ]
+  ],
+  "materials": [
+   "bookcase"
+  ]
+ },
+ "reimport_ok": true,
+ "seconds": 46.5
+}

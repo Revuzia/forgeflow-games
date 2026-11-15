@@ -1,0 +1,383 @@
+{
+  "port": 58454,
+  "clip": "clip",
+  "times": [
+    0.3,
+    1.0,
+    1.6
+  ],
+  "files": {
+    "gt_src": {
+      "t0.30": {
+        "ok": true,
+        "loadMs": 222,
+        "skinnedMeshes": 3,
+        "maxBones": 69,
+        "clips": [
+          "Armature|mixamo.com|Layer0:207:0.067",
+          "clip:207:2.033"
+        ],
+        "box": {
+          "min": [
+            -0.411,
+            -0.0669,
+            -0.0453
+          ],
+          "max": [
+            0.3865,
+            0.9074,
+            1.0881
+          ]
+        },
+        "programs": 1,
+        "pageErrors": [
+          "console.error: Failed to load resource: the server responded with a status of 404 (File not found)"
+        ]
+      },
+      "t1.00": {
+        "ok": true,
+        "loadMs": 232,
+        "skinnedMeshes": 3,
+        "maxBones": 69,
+        "clips": [
+          "Armature|mixamo.com|Layer0:207:0.067",
+          "clip:207:2.033"
+        ],
+        "box": {
+          "min": [
+            -0.3962,
+            -0.0494,
+            0.1484
+          ],
+          "max": [
+            0.368,
+            0.8278,
+            1.08
+          ]
+        },
+        "programs": 1,
+        "pageErrors": []
+      },
+      "t1.60": {
+        "ok": true,
+        "loadMs": 117,
+        "skinnedMeshes": 3,
+        "maxBones": 69,
+        "clips": [
+          "Armature|mixamo.com|Layer0:207:0.067",
+          "clip:207:2.033"
+        ],
+        "box": {
+          "min": [
+            -0.4295,
+            -0.0029,
+            -0.0886
+          ],
+          "max": [
+            0.3784,
+            1.5844,
+            0.6583
+          ]
+        },
+        "programs": 1,
+        "pageErrors": []
+      }
+    },
+    "gt_A_meshopt": {
+      "t0.30": {
+        "ok": true,
+        "loadMs": 142,
+        "skinnedMeshes": 3,
+        "maxBones": 69,
+        "clips": [
+          "Armature|mixamo.com|Layer0:207:0.067",
+          "clip:207:2.033"
+        ],
+        "box": {
+          "min": [
+            -0.4108,
+            -0.0669,
+            -0.0453
+          ],
+          "max": [
+            0.3866,
+            0.9074,
+            1.088
+          ]
+        },
+        "programs": 1,
+        "pageErrors": []
+      },
+      "t1.00": {
+        "ok": true,
+        "loadMs": 211,
+        "skinnedMeshes": 3,
+        "maxBones": 69,
+        "clips": [
+          "Armature|mixamo.com|Layer0:207:0.067",
+          "clip:207:2.033"
+        ],
+        "box": {
+          "min": [
+            -0.3962,
+            -0.0493,
+            0.1486
+          ],
+          "max": [
+            0.368,
+            0.8277,
+            1.0799
+          ]
+        },
+        "programs": 1,
+        "pageErrors": []
+      },
+      "t1.60": {
+        "ok": true,
+        "loadMs": 198,
+        "skinnedMeshes": 3,
+        "maxBones": 69,
+        "clips": [
+          "Armature|mixamo.com|Layer0:207:0.067",
+          "clip:207:2.033"
+        ],
+        "box": {
+          "min": [
+            -0.4292,
+            -0.0031,
+            -0.0884
+          ],
+          "max": [
+            0.3787,
+            1.5842,
+            0.6584
+          ]
+        },
+        "programs": 1,
+        "pageErrors": []
+      }
+    },
+    "gt_C_resize_webp_meshopt": {
+      "t0.30": {
+        "ok": true,
+        "loadMs": 100,
+        "skinnedMeshes": 3,
+        "maxBones": 69,
+        "clips": [
+          "Armature|mixamo.com|Layer0:207:0.067",
+          "clip:207:2.033"
+        ],
+        "box": {
+          "min": [
+            -0.4108,
+            -0.0669,
+            -0.0453
+          ],
+          "max": [
+            0.3866,
+            0.9074,
+            1.088
+          ]
+        },
+        "programs": 1,
+        "pageErrors": []
+      },
+      "t1.00": {
+        "ok": true,
+        "loadMs": 139,
+        "skinnedMeshes": 3,
+        "maxBones": 69,
+        "clips": [
+          "Armature|mixamo.com|Layer0:207:0.067",
+          "clip:207:2.033"
+        ],
+        "box": {
+          "min": [
+            -0.3962,
+            -0.0493,
+            0.1486
+          ],
+          "max": [
+            0.368,
+            0.8277,
+            1.0799
+          ]
+        },
+        "programs": 1,
+        "pageErrors": []
+      },
+      "t1.60": {
+        "ok": true,
+        "loadMs": 150,
+        "skinnedMeshes": 3,
+        "maxBones": 69,
+        "clips": [
+          "Armature|mixamo.com|Layer0:207:0.067",
+          "clip:207:2.033"
+        ],
+        "box": {
+          "min": [
+            -0.4292,
+            -0.0031,
+            -0.0884
+          ],
+          "max": [
+            0.3787,
+            1.5842,
+            0.6584
+          ]
+        },
+        "programs": 1,
+        "pageErrors": []
+      }
+    },
+    "gt_D_optimize": {
+      "t0.30": {
+        "ok": true,
+        "loadMs": 201,
+        "skinnedMeshes": 3,
+        "maxBones": 69,
+        "clips": [
+          "Armature|mixamo.com|Layer0:207:0.067",
+          "clip:207:2.033"
+        ],
+        "box": {
+          "min": [
+            -0.4108,
+            -0.0669,
+            -0.0453
+          ],
+          "max": [
+            0.3866,
+            0.9074,
+            1.088
+          ]
+        },
+        "programs": 1,
+        "pageErrors": []
+      },
+      "t1.00": {
+        "ok": true,
+        "loadMs": 70,
+        "skinnedMeshes": 3,
+        "maxBones": 69,
+        "clips": [
+          "Armature|mixamo.com|Layer0:207:0.067",
+          "clip:207:2.033"
+        ],
+        "box": {
+          "min": [
+            -0.3963,
+            -0.0494,
+            0.1487
+          ],
+          "max": [
+            0.3679,
+            0.8276,
+            1.0799
+          ]
+        },
+        "programs": 1,
+        "pageErrors": []
+      },
+      "t1.60": {
+        "ok": true,
+        "loadMs": 219,
+        "skinnedMeshes": 3,
+        "maxBones": 69,
+        "clips": [
+          "Armature|mixamo.com|Layer0:207:0.067",
+          "clip:207:2.033"
+        ],
+        "box": {
+          "min": [
+            -0.4292,
+            -0.0031,
+            -0.0884
+          ],
+          "max": [
+            0.3787,
+            1.5842,
+            0.6584
+          ]
+        },
+        "programs": 1,
+        "pageErrors": []
+      }
+    }
+  },
+  "diff": {
+    "gt_A_meshopt_vs_gt_src_t0.30": {
+      "silhouette_iou": 0.99876,
+      "silhouette_px_src": 67589,
+      "silhouette_px_var": 67589,
+      "silhouette_xor_px": 84,
+      "rgb_mean_absdiff_inside": 0.56,
+      "rgb_px_over32_inside_pct": 0.006
+    },
+    "gt_A_meshopt_vs_gt_src_t1.00": {
+      "silhouette_iou": 0.99959,
+      "silhouette_px_src": 61209,
+      "silhouette_px_var": 61210,
+      "silhouette_xor_px": 25,
+      "rgb_mean_absdiff_inside": 0.36,
+      "rgb_px_over32_inside_pct": 0.0
+    },
+    "gt_A_meshopt_vs_gt_src_t1.60": {
+      "silhouette_iou": 0.99735,
+      "silhouette_px_src": 102957,
+      "silhouette_px_var": 102946,
+      "silhouette_xor_px": 273,
+      "rgb_mean_absdiff_inside": 0.763,
+      "rgb_px_over32_inside_pct": 0.008
+    },
+    "gt_C_resize_webp_meshopt_vs_gt_src_t0.30": {
+      "silhouette_iou": 0.99876,
+      "silhouette_px_src": 67589,
+      "silhouette_px_var": 67589,
+      "silhouette_xor_px": 84,
+      "rgb_mean_absdiff_inside": 2.719,
+      "rgb_px_over32_inside_pct": 0.028
+    },
+    "gt_C_resize_webp_meshopt_vs_gt_src_t1.00": {
+      "silhouette_iou": 0.99959,
+      "silhouette_px_src": 61209,
+      "silhouette_px_var": 61210,
+      "silhouette_xor_px": 25,
+      "rgb_mean_absdiff_inside": 3.1,
+      "rgb_px_over32_inside_pct": 0.049
+    },
+    "gt_C_resize_webp_meshopt_vs_gt_src_t1.60": {
+      "silhouette_iou": 0.99735,
+      "silhouette_px_src": 102957,
+      "silhouette_px_var": 102946,
+      "silhouette_xor_px": 273,
+      "rgb_mean_absdiff_inside": 2.661,
+      "rgb_px_over32_inside_pct": 0.065
+    },
+    "gt_D_optimize_vs_gt_src_t0.30": {
+      "silhouette_iou": 0.99864,
+      "silhouette_px_src": 67589,
+      "silhouette_px_var": 67601,
+      "silhouette_xor_px": 92,
+      "rgb_mean_absdiff_inside": 2.953,
+      "rgb_px_over32_inside_pct": 0.043
+    },
+    "gt_D_optimize_vs_gt_src_t1.00": {
+      "silhouette_iou": 0.99931,
+      "silhouette_px_src": 61209,
+      "silhouette_px_var": 61205,
+      "silhouette_xor_px": 42,
+      "rgb_mean_absdiff_inside": 3.42,
+      "rgb_px_over32_inside_pct": 0.059
+    },
+    "gt_D_optimize_vs_gt_src_t1.60": {
+      "silhouette_iou": 0.99736,
+      "silhouette_px_src": 102957,
+      "silhouette_px_var": 102943,
+      "silhouette_xor_px": 272,
+      "rgb_mean_absdiff_inside": 2.906,
+      "rgb_px_over32_inside_pct": 0.078
+    }
+  }
+}

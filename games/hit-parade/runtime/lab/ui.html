@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>HIT PARADE - UI lab</title>
+<style>
+  html, body { margin: 0; height: 100%; height: 100dvh; overflow: hidden; overscroll-behavior: none; background: #0b0b10; }
+  #lab-stage { position: fixed; inset: 0; overflow: hidden; }
+  /* a painted stand-in for the 3D bout behind the HUD (lab only): busy, saturated, lit like the Rust Theater */
+  #lab-bg { position: absolute; inset: 0;
+    background:
+      radial-gradient(40% 30% at 18% 38%, rgba(255, 170, 60, .55), transparent 70%),
+      radial-gradient(40% 30% at 82% 36%, rgba(255, 150, 50, .45), transparent 70%),
+      linear-gradient(180deg, transparent 0 64%, rgba(0, 0, 0, .55) 64% 65%, #4a4038 65% 100%),
+      repeating-linear-gradient(0deg, rgba(0, 0, 0, .45) 0 2px, transparent 2px 26px),
+      repeating-linear-gradient(90deg, rgba(0, 0, 0, .35) 0 2px, transparent 2px 58px),
+      linear-gradient(180deg, #2f5fb8 0%, #22418a 60%, #1a2c5c 100%); }
+  #lab-bg .fighter { position: absolute; bottom: 30%; width: 14%; height: 44%; border-radius: 40% 40% 12% 12%;
+    background: linear-gradient(180deg, #f2c29a 0 16%, #ffd21a 16% 52%, #1b1b26 52% 100%); box-shadow: 8px 8px 0 rgba(0,0,0,.35); }
+  #lab-bg .fighter.p1 { left: 30%; }
+  #lab-bg .fighter.p2 { right: 30%; background: linear-gradient(180deg, #c89070 0 16%, #d32f2f 16% 52%, #22223a 52% 100%); }
+  #lab-ui { position: absolute; inset: 0; }
+  #lab-showcase { position: fixed; pointer-events: none; z-index: 41; display: none; }
+  #lab-showcase img { position: absolute; left: 50%; bottom: 0; height: 100%; transform: translateX(-50%); filter: drop-shadow(8px 8px 0 rgba(0,0,0,.45)); }
+</style>
+</head>
+<body>
+<div id="lab-stage"><div id="lab-bg"><div class="fighter p1"></div><div class="fighter p2"></div></div><div id="lab-ui"></div></div>
+<div id="lab-showcase"></div>
+<script type="module" src="../src/lab/ui.ts"></script>
+</body>
+</html>

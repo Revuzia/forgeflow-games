@@ -1,0 +1,114 @@
+/* DYEFIELD — STATS UI (_spec/CONTRACT_STATS.md §S8): the CAREER panel body + the achievement toast.
+   Built on the styles.css tokens (--ink, --cream, --paper, --display, --body, --edge, --drop) and the menus' gutters
+   (--gl / --gr / --top / --gb, set on .dfm by menus.css — fallbacks here for a mount outside the menus). */
+
+/* ───────── CAREER panel ───────── */
+.dfc-panel { position: absolute; left: var(--gl, 24px); right: var(--gr, 24px);
+  top: calc(var(--top, 24px) + clamp(86px, 12vh, 104px)); bottom: calc(16px + var(--gb, 0px));
+  overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y;
+  pointer-events: auto; padding: 4px 6px 18px 2px; font-family: var(--body); color: var(--ink); scrollbar-width: thin; }
+.dfc-panel * { box-sizing: border-box; }
+.dfc-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; max-width: 1180px; margin: 0 auto; }
+@media (min-width: 700px) {
+  .dfc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dfc-grid > .wide, .dfc-grid > .dfc-acct { grid-column: 1 / -1; }
+}
+.dfc-acct { margin: 0; padding: 9px 16px; border-radius: 999px; background: rgba(10, 20, 44, .72); color: var(--cream);
+  font: 800 14px/1.25 var(--body); letter-spacing: .01em; border: 3px solid var(--ink); justify-self: start; max-width: 100%; }
+.dfc-acct[data-state="account"]::before { content: '✔ '; color: #43d17a; }
+.dfc-card { background: var(--cream); border: 4px solid var(--ink); border-radius: 22px; box-shadow: 0 7px 0 var(--ink);
+  padding: 12px 16px 14px; min-width: 0; }
+.dfc-sec { margin: 0 0 8px; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; outline: none;
+  font: 400 17px/1 var(--display); letter-spacing: .12em; color: var(--ink); border-radius: 8px; scroll-margin: 12px; }
+.dfc-sec:focus-visible, .dfc-sec:focus { box-shadow: 0 0 0 3px var(--sun, #ffa84a); }
+.dfc-foot { margin: 6px 0 0; font: 700 12px/1.2 var(--body); color: rgba(20, 32, 58, .62); }
+
+.dfc-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.dfc-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px 12px; border-radius: 18px;
+  background: var(--cream); border: 4px solid var(--ink); box-shadow: 0 6px 0 var(--ink); min-width: 0; }
+.dfc-tile b { font: 400 clamp(26px, 3vw, 40px)/1 var(--display); color: var(--ink); white-space: nowrap; }
+.dfc-tile small { font: 900 11.5px/1 var(--body); letter-spacing: .14em; color: rgba(20, 32, 58, .7); white-space: nowrap; }
+
+.dfc-modegrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.dfc-mode { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 14px; background: var(--paper, #fdf1dc);
+  border: 3px solid var(--ink); min-width: 0; }
+.dfc-mode small { font: 900 11px/1 var(--body); letter-spacing: .1em; color: rgba(20, 32, 58, .72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dfc-mode b { font: 400 22px/1 var(--display); white-space: nowrap; }
+
+.dfc-rows { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 12px; margin: 0; }
+.dfc-rows dt { font: 700 14px/1.25 var(--body); color: rgba(20, 32, 58, .82); min-width: 0; }
+.dfc-rows dd { margin: 0; font: 400 17px/1.15 var(--display); text-align: right; white-space: nowrap; }
+
+.dfc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dfc-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.dfc-list img { display: block; border: 2px solid var(--ink); border-radius: 9px; background: #d6f1fb; object-fit: cover; }
+.dfc-list img.kit { width: 44px; height: 30px; object-fit: contain; }
+.dfc-list img.map { width: 58px; height: 32px; }
+.dfc-list .nm { font: 800 14px/1.2 var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dfc-list b { font: 400 17px/1 var(--display); white-space: nowrap; }
+
+.dfc-online { margin: 0; font: 400 20px/1.2 var(--display); }
+
+.dfc-achsum { font: 800 13px/1 var(--body); letter-spacing: .02em; color: rgba(20, 32, 58, .8); white-space: nowrap; }
+.dfc-achgrid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.dfc-ach { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 14px;
+  border: 3px solid var(--ink); background: #fff; min-width: 0; }
+.dfc-ach .chip, .df-ach-toast .chip { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; flex: none;
+  background: var(--tier, #cd7f32); border: 2px solid var(--ink); color: var(--ink); font: 400 15px/1 var(--display); }
+.dfc-ach .txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dfc-ach .txt b { font: 400 15px/1.1 var(--display); letter-spacing: .01em; }
+.dfc-ach .txt small { font: 700 11.5px/1.25 var(--body); color: rgba(20, 32, 58, .72); }
+.dfc-ach .xp { font: 900 12px/1 var(--body); white-space: nowrap; }
+.dfc-ach.locked { opacity: .45; background: #efe6d4; }
+.dfc-ach.locked .chip { background: #b9b2a3; }
+
+.dfc-recent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.dfc-rec { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) auto auto minmax(0, .9fr) auto; align-items: center; gap: 10px;
+  padding: 5px 10px; border-radius: 12px; background: #fff; border: 2px solid var(--ink); font: 700 13px/1.2 var(--body); }
+.dfc-rec span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.dfc-rec img.kit { width: 34px; height: 22px; object-fit: contain; }
+.dfc-rec .res { font: 400 15px/1 var(--display); letter-spacing: .04em; }
+.dfc-rec.win .res { color: #138a45; }
+.dfc-rec.loss .res { color: #b8313a; }
+.dfc-rec .sc { font: 400 16px/1 var(--display); text-align: right; }
+
+/* phone landscape (the menus' max-height 500 px band): the screen flows as a column (header, then this body) and the body
+   scrolls inside itself — the same treatment menus.css gives its other sub-screens */
+@media (max-height: 500px) {
+  .dfm-screen.dfm-s-career:not([hidden]) { display: flex; flex-direction: column; gap: 6px;
+    padding: var(--top) var(--gr) calc(8px + var(--gb)) var(--gl); overflow: hidden; }
+  .dfm-s-career .dfc-panel { position: relative; inset: auto; left: auto; right: auto; top: auto; bottom: auto; flex: 1 1 auto; min-height: 0; padding-bottom: 10px; }
+  .dfc-card { border-width: 3px; border-radius: 16px; box-shadow: 0 5px 0 var(--ink); padding: 9px 12px 11px; }
+  .dfc-tile { border-width: 3px; box-shadow: 0 4px 0 var(--ink); padding: 7px 4px 8px; }
+  .dfc-tile b { font-size: 24px; }
+  .dfc-grid { gap: 10px; }
+}
+@media (max-width: 520px) {
+  .dfc-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dfc-rec { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+  .dfc-rec .ar, .dfc-rec .st { display: none; }
+}
+
+/* ───────── achievement toast ───────── */
+.df-ach-toast { position: absolute; left: 50%; top: max(10px, env(safe-area-inset-top, 0px)); transform: translateX(-50%);
+  width: min(420px, 92vw); height: 60px; z-index: 35; pointer-events: none; display: flex; align-items: center; gap: 12px;
+  padding: 8px 14px 8px 10px; border-radius: 18px; background: var(--cream); color: var(--ink); border: 4px solid var(--ink);
+  box-shadow: 0 5px 0 var(--ink); font-family: var(--body); overflow: hidden; }
+.df-ach-toast[hidden] { display: none; }
+.df-ach-toast .chip { width: 36px; height: 36px; font-size: 18px; }
+.df-ach-toast .txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
+.df-ach-toast .txt small { font: 900 10.5px/1 var(--body); letter-spacing: .18em; color: rgba(20, 32, 58, .7); }
+.df-ach-toast .txt b { font: 400 19px/1.05 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.df-ach-toast .xp { flex: none; font: 400 18px/1 var(--display); color: #138a45; white-space: nowrap; }
+.df-ach-toast .xp.local { font: 800 12px/1.1 var(--body); color: rgba(20, 32, 58, .75); max-width: 92px; white-space: normal; text-align: right; }
+.df-ach-toast[data-tier="note"] { justify-content: center; }
+.df-ach-toast.in { animation: dfAchIn .32s cubic-bezier(.2, 1.4, .4, 1); }
+.df-ach-toast.in.rm { animation: dfAchFade .25s linear; }
+@keyframes dfAchIn { from { opacity: 0; transform: translate(-50%, -18px) scale(.94); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+@keyframes dfAchFade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .df-ach-toast.in { animation: dfAchFade .25s linear; } }
+@media (max-height: 500px) {
+  .df-ach-toast { height: 50px; border-width: 3px; box-shadow: 0 4px 0 var(--ink); padding: 6px 12px 6px 8px; }
+  .df-ach-toast .chip { width: 30px; height: 30px; font-size: 15px; }
+  .df-ach-toast .txt b { font-size: 16px; }
+}

@@ -1,0 +1,1137 @@
+{
+ "log": [
+  "boot state: keep",
+  "goto ember-2 cp=None -> playing ember-2 [0, 6, 47]",
+  "seesaw before anyone stands on it: {\"deg\": 0, \"q\": [0, 0, 0, 1], \"cy\": 20.05, \"keys\": [\"index\", \"errCount\", \"cx\", \"cy\", \"cz\", \"radius\"]}",
+  "--- seesaw during the crossing ---",
+  "   t= 27.75 pz= -15.10 py= 20.30  seesaw deg=0 cy=20.05",
+  "   t= 27.85 pz= -15.92 py= 20.30  seesaw deg=0 cy=20.05",
+  "   t= 28.00 pz= -17.27 py= 20.30  seesaw deg=0 cy=20.05",
+  "   t= 28.15 pz= -18.62 py= 20.29  seesaw deg=0 cy=20.05",
+  "   t= 28.34 pz= -20.27 py= 19.34  seesaw deg=0 cy=20.05",
+  "   t= 28.44 pz= -21.17 py= 18.17  seesaw deg=0 cy=20.05",
+  "   t= 28.54 pz= -22.07 py= 16.54  seesaw deg=0 cy=20.05",
+  "   t= 28.69 pz= -23.42 py= 13.24  seesaw deg=0 cy=20.05",
+  "   t= 28.90 pz= -25.29 py=  6.93  seesaw deg=0 cy=20.05",
+  "   t= 29.09 pz= -25.69 py=  5.23  seesaw deg=0 cy=20.05",
+  "   t= 29.27 pz= -25.89 py=  5.31  seesaw deg=0 cy=20.05",
+  "   t= 29.46 pz= -27.04 py=  5.65  seesaw deg=0 cy=20.05",
+  "   t= 29.61 pz= -28.39 py=  5.94  seesaw deg=0 cy=20.05",
+  "   t= 29.79 pz= -30.04 py=  6.36  seesaw deg=0 cy=20.05",
+  "   t= 30.31 pz= -34.68 py=  8.22  seesaw deg=0 cy=20.05",
+  "   t= 30.54 pz= -36.77 py=  8.77  seesaw deg=0 cy=20.05",
+  "   t= 30.68 pz= -38.04 py=  9.01  seesaw deg=0 cy=20.05",
+  "   t= 30.83 pz= -39.38 py=  9.22  seesaw deg=0 cy=20.05",
+  "   t= 31.06 pz= -41.37 py=  9.48  seesaw deg=0 cy=20.05",
+  "   t= 31.31 pz= -43.58 py=  9.70  seesaw deg=0 cy=20.05",
+  "   t= 31.50 pz= -45.20 py=  9.80  seesaw deg=0 cy=20.05",
+  "   t= 31.74 pz= -47.38 py=  9.87  seesaw deg=0 cy=20.05",
+  "   grate 00 solid=True player y=6.08 ps=idle [['index', 58], ['errCount', 0], ['cx', 8], ['cy', 20.1], ['cz', 1.5], ['radius', 2.34]]",
+  "   grate 01 solid=True player y=6.08 ps=idle [['index', 58], ['errCount', 0], ['cx', 8], ['cy', 20.1], ['cz', 1.5], ['radius', 2.34]]",
+  "   grate 02 solid=True player y=6.08 ps=idle [['index', 58], ['errCount', 0], ['cx', 8], ['cy', 20.1], ['cz', 1.5], ['radius', 2.34]]",
+  "   grate 03 solid=False player y=6.08 ps=idle [['index', 58], ['errCount', 0], ['cx', 8], ['cy', 20.1], ['cz', 1.5], ['radius', 2.34]]",
+  "   grate 04 solid=False player y=6.08 ps=idle [['index', 58], ['errCount', 0], ['cx', 8], ['cy', 20.1], ['cz', 1.5], ['radius', 2.34]]",
+  "   grate 05 solid=True player y=6.08 ps=idle [['index', 58], ['errCount', 0], ['cx', 8], ['cy', 20.1], ['cz', 1.5], ['radius', 2.34]]",
+  "   grate 06 solid=True player y=6.08 ps=idle [['index', 58], ['errCount', 0], ['cx', 8], ['cy', 20.1], ['cz', 1.5], ['radius', 2.34]]",
+  "   grate 07 solid=True player y=6.08 ps=idle [['index', 58], ['errCount', 0], ['cx', 8], ['cy', 20.1], ['cz', 1.5], ['radius', 2.34]]",
+  "   grate 08 solid=False player y=6.08 ps=idle [['index', 58], ['errCount', 0], ['cx', 8], ['cy', 20.1], ['cz', 1.5], ['radius', 2.34]]",
+  "   grate 09 solid=True player y=6.08 ps=idle [['index', 58], ['errCount', 0], ['cx', 8], ['cy', 20.1], ['cz', 1.5], ['radius', 2.34]]",
+  "   grate 10 solid=True player y=6.08 ps=idle [['index', 58], ['errCount', 0], ['cx', 8], ['cy', 20.1], ['cz', 1.5], ['radius', 2.34]]",
+  "   grate 11 solid=True player y=6.08 ps=idle [['index', 58], ['errCount', 0], ['cx', 8], ['cy', 20.1], ['cz', 1.5], ['radius', 2.34]]",
+  "   grate 12 solid=False player y=6.08 ps=idle [['index', 58], ['errCount', 0], ['cx', 8], ['cy', 20.1], ['cz', 1.5], ['radius', 2.34]]",
+  "   grate 13 solid=False player y=6.08 ps=idle [['index', 58], ['errCount', 0], ['cx', 8], ['cy', 20.1], ['cz', 1.5], ['radius', 2.34]]",
+  "   grate 14 solid=True player y=6.08 ps=idle [['index', 58], ['errCount', 0], ['cx', 8], ['cy', 20.1], ['cz', 1.5], ['radius', 2.34]]",
+  "   grate 15 solid=True player y=6.08 ps=idle [['index', 58], ['errCount', 0], ['cx', 8], ['cy', 20.1], ['cz', 1.5], ['radius', 2.34]]",
+  "roof deck west edge: {\"t\": 55.74, \"st\": \"playing\", \"p\": [-6.92, 20.3, -50], \"v\": [0, -0.19, 0], \"ps\": \"idle\", \"gnd\": true, \"jc\": 0, \"sp\": 0, \"surf\": \"normal\", \"water\": false, \"sub\": false, \"deaths\": 0, \"cp\": 4, \"crests\": 0, \"coins\": 2, \"sig\": 0, \"cam\": [0, 0.22, 6.78]}",
+  "  fly board 1: jump-at [-4.2, 25.19, -50] -> [-6.89, 32.6, -50] ps=idle riding=True deaths=0",
+  "  watch riding the gondola up -> [-17.02, 8.36, -50] idle",
+  "    ride y 8.36..27.05 end [-17.02, 8.36, -50] states ['fall', 'hardLand', 'idle']",
+  "    crown step -> [-13.02, 9.37, -50.01] ps=idle (crown deck top 34.90)"
+ ],
+ "res": {
+  "seesaw_tilt": [
+   {
+    "t": 27.75,
+    "p": [
+     8,
+     20.3,
+     -15.1
+    ],
+    "ps": "run",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 27.85,
+    "p": [
+     8,
+     20.3,
+     -15.92
+    ],
+    "ps": "run",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 28,
+    "p": [
+     8,
+     20.3,
+     -17.27
+    ],
+    "ps": "run",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 28.15,
+    "p": [
+     8,
+     20.29,
+     -18.62
+    ],
+    "ps": "fall",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 28.34,
+    "p": [
+     8,
+     19.34,
+     -20.27
+    ],
+    "ps": "fall",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 28.44,
+    "p": [
+     8,
+     18.17,
+     -21.17
+    ],
+    "ps": "fall",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 28.54,
+    "p": [
+     8,
+     16.54,
+     -22.07
+    ],
+    "ps": "fall",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 28.69,
+    "p": [
+     8,
+     13.24,
+     -23.42
+    ],
+    "ps": "fall",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 28.9,
+    "p": [
+     8,
+     6.93,
+     -25.29
+    ],
+    "ps": "fall",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 29.09,
+    "p": [
+     8,
+     5.23,
+     -25.69
+    ],
+    "ps": "hardLand",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 29.27,
+    "p": [
+     8,
+     5.31,
+     -25.89
+    ],
+    "ps": "run",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 29.46,
+    "p": [
+     7.99,
+     5.65,
+     -27.04
+    ],
+    "ps": "run",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 29.61,
+    "p": [
+     7.98,
+     5.94,
+     -28.39
+    ],
+    "ps": "run",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 29.79,
+    "p": [
+     7.99,
+     6.36,
+     -30.04
+    ],
+    "ps": "run",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 30.31,
+    "p": [
+     8.18,
+     8.22,
+     -34.68
+    ],
+    "ps": "run",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 30.54,
+    "p": [
+     8.38,
+     8.77,
+     -36.77
+    ],
+    "ps": "run",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 30.68,
+    "p": [
+     8.53,
+     9.01,
+     -38.04
+    ],
+    "ps": "run",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 30.83,
+    "p": [
+     8.71,
+     9.22,
+     -39.38
+    ],
+    "ps": "run",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 31.06,
+    "p": [
+     9.03,
+     9.48,
+     -41.37
+    ],
+    "ps": "run",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 31.31,
+    "p": [
+     9.45,
+     9.7,
+     -43.58
+    ],
+    "ps": "run",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 31.5,
+    "p": [
+     9.8,
+     9.8,
+     -45.2
+    ],
+    "ps": "run",
+    "deg": 0,
+    "cy": 20.05
+   },
+   {
+    "t": 31.74,
+    "p": [
+     10.12,
+     9.87,
+     -47.38
+    ],
+    "ps": "run",
+    "deg": 0,
+    "cy": 20.05
+   }
+  ],
+  "seesaw_keys": [
+   "index",
+   "errCount",
+   "cx",
+   "cy",
+   "cz",
+   "radius"
+  ],
+  "grate_cycle": [
+   {
+    "i": 0,
+    "solid": true,
+    "nums": [
+     [
+      "index",
+      58
+     ],
+     [
+      "errCount",
+      0
+     ],
+     [
+      "cx",
+      8
+     ],
+     [
+      "cy",
+      20.1
+     ],
+     [
+      "cz",
+      1.5
+     ],
+     [
+      "radius",
+      2.34
+     ]
+    ],
+    "py": 6.08,
+    "ps": "idle",
+    "png": "02_02_grate_00_SOLID.png"
+   },
+   {
+    "i": 1,
+    "solid": true,
+    "nums": [
+     [
+      "index",
+      58
+     ],
+     [
+      "errCount",
+      0
+     ],
+     [
+      "cx",
+      8
+     ],
+     [
+      "cy",
+      20.1
+     ],
+     [
+      "cz",
+      1.5
+     ],
+     [
+      "radius",
+      2.34
+     ]
+    ],
+    "py": 6.08,
+    "ps": "idle",
+    "png": "03_02_grate_01_SOLID.png"
+   },
+   {
+    "i": 2,
+    "solid": true,
+    "nums": [
+     [
+      "index",
+      58
+     ],
+     [
+      "errCount",
+      0
+     ],
+     [
+      "cx",
+      8
+     ],
+     [
+      "cy",
+      20.1
+     ],
+     [
+      "cz",
+      1.5
+     ],
+     [
+      "radius",
+      2.34
+     ]
+    ],
+    "py": 6.08,
+    "ps": "idle",
+    "png": "04_02_grate_02_SOLID.png"
+   },
+   {
+    "i": 3,
+    "solid": false,
+    "nums": [
+     [
+      "index",
+      58
+     ],
+     [
+      "errCount",
+      0
+     ],
+     [
+      "cx",
+      8
+     ],
+     [
+      "cy",
+      20.1
+     ],
+     [
+      "cz",
+      1.5
+     ],
+     [
+      "radius",
+      2.34
+     ]
+    ],
+    "py": 6.08,
+    "ps": "idle",
+    "png": "05_02_grate_03_GONE.png"
+   },
+   {
+    "i": 4,
+    "solid": false,
+    "nums": [
+     [
+      "index",
+      58
+     ],
+     [
+      "errCount",
+      0
+     ],
+     [
+      "cx",
+      8
+     ],
+     [
+      "cy",
+      20.1
+     ],
+     [
+      "cz",
+      1.5
+     ],
+     [
+      "radius",
+      2.34
+     ]
+    ],
+    "py": 6.08,
+    "ps": "idle",
+    "png": "06_02_grate_04_GONE.png"
+   },
+   {
+    "i": 5,
+    "solid": true,
+    "nums": [
+     [
+      "index",
+      58
+     ],
+     [
+      "errCount",
+      0
+     ],
+     [
+      "cx",
+      8
+     ],
+     [
+      "cy",
+      20.1
+     ],
+     [
+      "cz",
+      1.5
+     ],
+     [
+      "radius",
+      2.34
+     ]
+    ],
+    "py": 6.08,
+    "ps": "idle",
+    "png": "07_02_grate_05_SOLID.png"
+   },
+   {
+    "i": 6,
+    "solid": true,
+    "nums": [
+     [
+      "index",
+      58
+     ],
+     [
+      "errCount",
+      0
+     ],
+     [
+      "cx",
+      8
+     ],
+     [
+      "cy",
+      20.1
+     ],
+     [
+      "cz",
+      1.5
+     ],
+     [
+      "radius",
+      2.34
+     ]
+    ],
+    "py": 6.08,
+    "ps": "idle",
+    "png": "08_02_grate_06_SOLID.png"
+   },
+   {
+    "i": 7,
+    "solid": true,
+    "nums": [
+     [
+      "index",
+      58
+     ],
+     [
+      "errCount",
+      0
+     ],
+     [
+      "cx",
+      8
+     ],
+     [
+      "cy",
+      20.1
+     ],
+     [
+      "cz",
+      1.5
+     ],
+     [
+      "radius",
+      2.34
+     ]
+    ],
+    "py": 6.08,
+    "ps": "idle",
+    "png": "09_02_grate_07_SOLID.png"
+   },
+   {
+    "i": 8,
+    "solid": false,
+    "nums": [
+     [
+      "index",
+      58
+     ],
+     [
+      "errCount",
+      0
+     ],
+     [
+      "cx",
+      8
+     ],
+     [
+      "cy",
+      20.1
+     ],
+     [
+      "cz",
+      1.5
+     ],
+     [
+      "radius",
+      2.34
+     ]
+    ],
+    "py": 6.08,
+    "ps": "idle",
+    "png": "10_02_grate_08_GONE.png"
+   },
+   {
+    "i": 9,
+    "solid": true,
+    "nums": [
+     [
+      "index",
+      58
+     ],
+     [
+      "errCount",
+      0
+     ],
+     [
+      "cx",
+      8
+     ],
+     [
+      "cy",
+      20.1
+     ],
+     [
+      "cz",
+      1.5
+     ],
+     [
+      "radius",
+      2.34
+     ]
+    ],
+    "py": 6.08,
+    "ps": "idle",
+    "png": "11_02_grate_09_SOLID.png"
+   },
+   {
+    "i": 10,
+    "solid": true,
+    "nums": [
+     [
+      "index",
+      58
+     ],
+     [
+      "errCount",
+      0
+     ],
+     [
+      "cx",
+      8
+     ],
+     [
+      "cy",
+      20.1
+     ],
+     [
+      "cz",
+      1.5
+     ],
+     [
+      "radius",
+      2.34
+     ]
+    ],
+    "py": 6.08,
+    "ps": "idle",
+    "png": "12_02_grate_10_SOLID.png"
+   },
+   {
+    "i": 11,
+    "solid": true,
+    "nums": [
+     [
+      "index",
+      58
+     ],
+     [
+      "errCount",
+      0
+     ],
+     [
+      "cx",
+      8
+     ],
+     [
+      "cy",
+      20.1
+     ],
+     [
+      "cz",
+      1.5
+     ],
+     [
+      "radius",
+      2.34
+     ]
+    ],
+    "py": 6.08,
+    "ps": "idle",
+    "png": "13_02_grate_11_SOLID.png"
+   },
+   {
+    "i": 12,
+    "solid": false,
+    "nums": [
+     [
+      "index",
+      58
+     ],
+     [
+      "errCount",
+      0
+     ],
+     [
+      "cx",
+      8
+     ],
+     [
+      "cy",
+      20.1
+     ],
+     [
+      "cz",
+      1.5
+     ],
+     [
+      "radius",
+      2.34
+     ]
+    ],
+    "py": 6.08,
+    "ps": "idle",
+    "png": "14_02_grate_12_GONE.png"
+   },
+   {
+    "i": 13,
+    "solid": false,
+    "nums": [
+     [
+      "index",
+      58
+     ],
+     [
+      "errCount",
+      0
+     ],
+     [
+      "cx",
+      8
+     ],
+     [
+      "cy",
+      20.1
+     ],
+     [
+      "cz",
+      1.5
+     ],
+     [
+      "radius",
+      2.34
+     ]
+    ],
+    "py": 6.08,
+    "ps": "idle",
+    "png": "15_02_grate_13_GONE.png"
+   },
+   {
+    "i": 14,
+    "solid": true,
+    "nums": [
+     [
+      "index",
+      58
+     ],
+     [
+      "errCount",
+      0
+     ],
+     [
+      "cx",
+      8
+     ],
+     [
+      "cy",
+      20.1
+     ],
+     [
+      "cz",
+      1.5
+     ],
+     [
+      "radius",
+      2.34
+     ]
+    ],
+    "py": 6.08,
+    "ps": "idle",
+    "png": "16_02_grate_14_SOLID.png"
+   },
+   {
+    "i": 15,
+    "solid": true,
+    "nums": [
+     [
+      "index",
+      58
+     ],
+     [
+      "errCount",
+      0
+     ],
+     [
+      "cx",
+      8
+     ],
+     [
+      "cy",
+      20.1
+     ],
+     [
+      "cz",
+      1.5
+     ],
+     [
+      "radius",
+      2.34
+     ]
+    ],
+    "py": 6.08,
+    "ps": "idle",
+    "png": "17_02_grate_15_SOLID.png"
+   }
+  ],
+  "roof_west_edge": {
+   "p": [
+    -6.92,
+    20.3,
+    -50
+   ],
+   "ps": "idle",
+   "gnd": true
+  },
+  "fly_board": [
+   {
+    "try": 1,
+    "at": [
+     -4.2,
+     25.19,
+     -50
+    ],
+    "after": [
+     -6.89,
+     32.6,
+     -50
+    ],
+    "ps": "idle",
+    "riding": true,
+    "deaths": 0,
+    "ride": {
+     "ymin": 8.36,
+     "ymax": 27.05,
+     "end": [
+      -17.02,
+      8.36,
+      -50
+     ],
+     "path": [
+      [
+       58.53,
+       [
+        -16.18,
+        27.05,
+        -50
+       ],
+       "fall"
+      ],
+      [
+       58.63,
+       [
+        -16.22,
+        25.72,
+        -50
+       ],
+       "fall"
+      ],
+      [
+       58.78,
+       [
+        -16.28,
+        22.86,
+        -50
+       ],
+       "fall"
+      ],
+      [
+       58.88,
+       [
+        -16.32,
+        20.39,
+        -50
+       ],
+       "fall"
+      ],
+      [
+       59.03,
+       [
+        -16.37,
+        15.81,
+        -50
+       ],
+       "fall"
+      ],
+      [
+       59.18,
+       [
+        -16.43,
+        10.19,
+        -50
+       ],
+       "fall"
+      ],
+      [
+       59.38,
+       [
+        -16.96,
+        8.38,
+        -50
+       ],
+       "hardLand"
+      ],
+      [
+       59.62,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       59.84,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       60.03,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       60.28,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       60.49,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       60.72,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       60.94,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       61.13,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       61.38,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       61.54,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       61.78,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       62.15,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       62.44,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       63.08,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       63.28,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       63.47,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       63.63,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       63.82,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       64.01,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       64.23,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ],
+      [
+       64.41,
+       [
+        -17.02,
+        8.36,
+        -50
+       ],
+       "idle"
+      ]
+     ]
+    },
+    "crown": {
+     "end": [
+      -13.02,
+      9.37,
+      -50.01
+     ],
+     "ps": "idle",
+     "deaths": 0
+    }
+   }
+  ]
+ },
+ "console": [
+  "warning: [Course ember-2] props.js had no entry for: girders, pipes, slabs, antennae, fins"
+ ]
+}

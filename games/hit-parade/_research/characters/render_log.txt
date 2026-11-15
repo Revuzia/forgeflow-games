@@ -1,0 +1,92 @@
+=== run 2026-09-29 20:45:23: 80 files in 10 chunks
+chunk 00 rc=0 56s files=10
+[roster] OK Aj tris 8050 tex 4 4096x4096 5.6MB h 1.861 T-pose 11.4s
+[roster] OK Arissa tris 8970 tex 3 1024x1024 3.6MB h 1.796 T-pose 1.2s
+[roster] OK Brute tris 31301 tex 18 2048x2048 18.6MB h 2.182 T-pose 2.5s
+[roster] OK Castle Guard 02 tris 4421 tex 3 1024x1024 4.7MB h 2.179 T-pose 1.0s
+[roster] OK Ch01_nonPBR tris 42818 tex 4 4096x4096 49.9MB h 1.764 T-pose 4.6s
+[roster] OK Ch02_nonPBR tris 53460 tex 6 4096x4096 45.1MB h 1.764 T-pose 4.2s
+[roster] OK Ch03_nonPBR tris 28106 tex 4 4096x4096 18.6MB h 1.664 T-pose 2.9s
+[roster] OK Ch05_nonPBR tris 47768 tex 12 4096x4096 112.3MB h 1.833 A-pose 8.1s
+[roster] OK Ch06_nonPBR tris 53878 tex 8 4096x4096 49.5MB h 1.827 T-pose 8.1s
+[roster] OK Ch07_nonPBR tris 52838 tex 6 4096x4096 45.1MB h 1.752 T-pose 5.7s
+chunk 01 rc=0 48s files=6
+[roster] OK Ch08_nonPBR tris 56258 tex 10 4096x4096 80.4MB h 1.781 T-pose 12.8s
+[roster] OK Ch09_nonPBR tris 31292 tex 4 4096x4096 31.1MB h 1.607 T-pose 3.4s
+[roster] OK Ch10_nonPBR tris 49593 tex 8 4096x4096 103.0MB h 1.773 T-pose 8.7s
+[roster] OK Ch15_nonPBR tris 46301 tex 9 4096x4096 107.7MB h 1.816 T-pose 7.0s
+[roster] OK Ch16_nonPBR tris 57914 tex 8 4096x4096 48.7MB h 1.774 T-pose 7.1s
+[roster] OK Ch17_nonPBR tris 53738 tex 6 4096x4096 59.5MB h 1.788 T-pose 5.2s
+chunk 02 rc=0 49s files=8
+[roster] OK Ch19_nonPBR tris 42278 tex 4 4096x4096 49.3MB h 1.611 T-pose 9.4s
+[roster] OK Ch20_nonPBR tris 49867 tex 4 4096x4096 47.6MB h 1.786 T-pose 3.7s
+[roster] OK Ch21_nonPBR tris 59192 tex 6 4096x4096 47.7MB h 1.759 T-pose 5.0s
+[roster] OK Ch22_nonPBR tris 54961 tex 6 4096x4096 53.8MB h 1.752 T-pose 4.9s
+[roster] OK Ch23_nonPBR tris 52551 tex 5 4096x4096 48.3MB h 1.793 T-pose 5.1s
+[roster] OK Ch24_nonPBR tris 24780 tex 4 4096x4096 49.6MB h 1.752 T-pose 3.9s
+[roster] OK Ch25_nonPBR tris 44278 tex 8 4096x4096 77.2MB h 1.772 T-pose 7.9s
+[roster] OK Ch26_nonPBR tris 48229 tex 6 4096x4096 51.0MB h 1.783 T-pose 5.5s
+chunk 03 rc=0 48s files=6
+[roster] OK Ch29_nonPBR tris 37098 tex 4 4096x4096 64.2MB h 1.598 T-pose 12.1s
+[roster] OK Ch31_nonPBR tris 50266 tex 5 4096x4096 48.9MB h 1.782 T-pose 4.8s
+[roster] OK Ch33_nonPBR tris 54938 tex 6 4096x4096 49.4MB h 1.784 T-pose 5.1s
+[roster] OK Ch34_nonPBR tris 49407 tex 4 4096x4096 24.6MB h 1.699 T-pose 3.7s
+[roster] OK Ch35_nonPBR tris 41171 tex 12 4096x4096 133.8MB h 1.794 T-pose 12.2s
+[roster] OK Ch39_nonPBR tris 32098 tex 4 4096x4096 38.5MB h 1.777 T-pose 5.0s
+chunk 04 rc=0 68s files=5
+[roster] OK Ch40_nonPBR tris 59197 tex 9 4096x4096 107.3MB h 1.855 T-pose 21.9s
+[roster] OK Ch42_nonPBR tris 50187 tex 5 4096x4096 49.0MB h 1.801 T-pose 6.9s
+[roster] OK Ch44_nonPBR tris 46108 tex 10 4096x4096 91.5MB h 1.898 T-pose 13.1s
+[roster] OK Ch45_nonPBR tris 29012 tex 5 2048x2048 14.4MB h 1.85 T-pose 3.3s
+[roster] OK Ch49_nonPBR tris 54668 tex 8 4096x4096 109.0MB h 1.787 T-pose 15.9s
+chunk 05 rc=0 57s files=10
+[roster] OK Ch50_nonPBR tris 35860 tex 10 4096x4096 114.4MB h 1.775 T-pose 27.7s
+[roster] OK Demon T Wiezzorek tris 16318 tex 3 2048x2048 9.3MB h 2.218 T-pose 1.8s
+[roster] OK Ely By K.Atienza tris 14808 tex 4 1024x1024 3.9MB h 1.79 T-pose 1.1s
+[roster] OK Erika Archer With Bow Arrow tris 21006 tex 9 2048x2048 22.6MB h 1.808 T-pose 2.8s
+[roster] OK Erika Archer tris 20526 tex 5 2048x2048 17.5MB h 1.801 T-pose 2.4s
+[roster] OK Eve By J.Gonzales tris 27207 tex 3 2048x2048 13.4MB h 1.391 T-pose 2.0s
+[roster] OK Exo Gray tris 31696 tex 7 2048x2048 28.3MB h 1.798 T-pose 3.3s
+[roster] OK Ganfaul M Aure tris 13799 tex 1 2048x2048 5.9MB h 2.122 T-pose 1.1s
+[roster] OK Girlscout T Masuyama tris 14991 tex 4 2048x2048 17.4MB h 2.014 T-pose 2.3s
+[roster] OK Heraklios By A. Dizon tris 12380 tex 4 2048x2048 15.9MB h 1.877 T-pose 3.8s
+chunk 06 rc=0 72s files=10
+[roster] OK Kachujin G Rosales tris 12609 tex 4 2048x2048 16.9MB h 2.077 T-pose 35.3s
+[roster] OK Knight D Pelegrini tris 13124 tex 3 2048x2048 9.4MB h 2.066 T-pose 2.0s
+[roster] OK Lola B Styperek tris 9825 tex 3 1024x1024 3.1MB h 1.994 T-pose 2.6s
+[roster] OK Maria J J Ong tris 14566 tex 3 2048x2048 13.9MB h 1.753 T-pose 2.9s
+[roster] OK Maria WProp J J Ong tris 14646 tex 3 2048x2048 13.9MB h 1.753 T-pose 3.2s
+[roster] OK Maw J Laygo tris 13910 tex 4 2048x2048 11.7MB h 2.379 T-pose 5.0s
+[roster] OK Medea By M. Arrebola tris 17754 tex 4 1024x1024 3.5MB h 0.165 T-pose 4.0s
+[roster] OK Mutant tris 11271 tex 2 2048x2048 15.2MB h 1.861 T-pose 3.0s
+[roster] OK Nightshade J Friedrich tris 12999 tex 4 2048x2048 14.5MB h 2.348 T-pose 3.1s
+[roster] OK Paladin J Nordstrom tris 14660 tex 3 2048x2048 7.6MB h 1.725 T-pose 3.2s
+chunk 07 rc=0 39s files=10
+[roster] OK Paladin WProp J Nordstrom tris 14990 tex 3 2048x2048 7.6MB h 1.725 T-pose 10.1s
+[roster] OK Parasite L Starkie tris 10856 tex 4 2048x2048 14.3MB h 2.028 T-pose 1.9s
+[roster] OK Peasant Girl tris 5036 tex 3 1024x1024 4.2MB h 2.033 T-pose 1.1s
+[roster] OK Peasant Man tris 4631 tex 3 1024x1024 3.0MB h 2.047 T-pose 1.3s
+[roster] OK Pirate By P. Konstantinov tris 23530 tex 3 2048x2048 5.7MB h 0.647 T-pose 2.5s
+[roster] OK Prisoner B Styperek tris 12128 tex 3 2048x2048 10.2MB h 2.032 T-pose 2.6s
+[roster] OK Pumpkinhulk L Shaw tris 9620 tex 2 2048x2048 12.1MB h 2.04 T-pose 2.6s
+[roster] OK Skeletonzombie T Avelange tris 12486 tex 5 2048x2048 15.9MB h 2.062 T-pose 3.3s
+[roster] OK Sporty Granny tris 10728 tex 4 2048x2048 3.5MB h 1.951 T-pose 5.4s
+[roster] OK Survivor A Lusth tris 10969 tex 4 2048x2048 17.6MB h 2.086 T-pose 4.1s
+chunk 08 rc=0 72s files=10
+[roster] OK Swat tris 19450 tex 6 1024x1024 4.2MB h 1.78 T-pose 23.4s
+[roster] OK Ty tris 5638 tex 7 2048x2048 3.9MB h 2.116 T-pose 4.2s
+[roster] OK Uriel A Plotexia tris 11146 tex 2 2048x2048 6.2MB h 2.053 T-pose 5.6s
+[roster] OK Vampire A Lusth tris 15021 tex 5 2048x2048 14.2MB h 2.114 T-pose 6.1s
+[roster] OK Vanguard By T. Choonyung tris 11376 tex 3 1024x1024 4.1MB h 1.832 T-pose 4.8s
+[roster] OK Warrok W Kurniawan tris 12626 tex 3 2048x2048 10.6MB h 2.383 T-pose 4.7s
+[roster] OK Warzombie F Pedroso tris 14934 tex 3 2048x2048 12.2MB h 2.081 T-pose 3.1s
+[roster] OK Whiteclown N Hallin tris 9714 tex 3 2048x2048 5.6MB h 2.048 T-pose 3.4s
+[roster] OK Yaku J Ignite tris 8144 tex 4 2048x2048 18.5MB h 2.061 T-pose 5.1s
+[roster] OK Zombiegirl W Kurniawan tris 7448 tex 4 2048x2048 14.4MB h 2.066 T-pose 4.0s
+chunk 09 rc=0 36s files=5
+[roster] OK akai_e_espiritu tris 10386 tex 2 2048x2048 3.3MB h 2.005 T-pose 17.3s
+[roster] OK castle_guard_01 tris 4531 tex 3 1024x1024 4.7MB h 2.116 T-pose 0.8s
+[roster] OK copzombie_l_actisdato tris 9845 tex 4 2048x2048 19.6MB h 2.044 T-pose 3.3s
+[roster] OK exo_red tris 31696 tex 7 2048x2048 30.3MB h 1.798 T-pose 4.7s
+[roster] OK goblin_d_shareyko tris 13280 tex 3 2048x2048 16.8MB h 2.1 T-pose 3.0s
+unfinished after retries: []

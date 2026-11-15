@@ -1,0 +1,77 @@
+{
+ "name": "bench",
+ "file": "bench.glb",
+ "kind": "prop",
+ "bytes": 142576,
+ "tris": 808,
+ "tris_budget": 3000,
+ "tris_ok": true,
+ "bones": 0,
+ "clips": [],
+ "bounds": {
+  "min": [
+   -1.1,
+   0.0,
+   -0.24
+  ],
+  "max": [
+   1.1,
+   0.46,
+   0.24
+  ],
+  "size": [
+   2.2,
+   0.46,
+   0.48
+  ]
+ },
+ "pivot": "base centre; 2.2 x 0.42 m, seat at 0.46 m (keep.js bench deco 2.2 x 0.64 x 0.72 - scale to taste)",
+ "front": "+Z (glTF) \u2014 the face that looks into the room",
+ "materials": [
+  "bench"
+ ],
+ "nodes": [
+  "bench"
+ ],
+ "textures": {
+  "atlas": 512,
+  "maps": [
+   "albedo (sRGB, webp)",
+   "normal (tangent, OpenGL +Y, webp)",
+   "orm (R=occlusion G=roughness B=metallic, webp)"
+  ]
+ },
+ "notes": [
+  "refectory bench: chamfered oak top, arched trestle ends, through-pegged stretcher"
+ ],
+ "reimport": {
+  "meshes": [
+   "bench"
+  ],
+  "tris": 808,
+  "bones": 0,
+  "clips": [],
+  "images": [
+   [
+    "bench_albedo",
+    512,
+    512
+   ],
+   [
+    "bench_normal",
+    512,
+    512
+   ],
+   [
+    "bench_orm",
+    512,
+    512
+   ]
+  ],
+  "materials": [
+   "bench"
+  ]
+ },
+ "reimport_ok": true,
+ "seconds": 24.5
+}

@@ -1,0 +1,12 @@
+{
+  "title": "CHROMA HIDE",
+  "slug": "chroma-hide",
+  "short_description": "A hide-and-seek painting game — paint your blank-white body to melt into the stage, hold a pose, and hide in plain sight while seekers hunt with a gun and limited ammo.",
+  "description": "CHROMA HIDE inverts hide-and-seek: instead of finding an unfindable crack, Hiders paint their own pure-white 3D bodies — freehand brush, eyedropper, metallic and roughness sliders — to blend into the room, pick a pose, and hide right out in the open. Seekers stalk the map in first or third person with a gun and a strict ammo economy (miss and you lose a shot; run dry and the hiders win), because seeing you isn't enough — they have to hit you. Score points for lingering in a seeker's line of sight without being caught, whistle to bait them closer, drop decoy clones, and survive the timer. Play solo against AI, or online with friends. Modes: Normal, Infection, Double, and Reverse Chicken Race.",
+  "genre": "party",
+  "sub_genre": "hide-and-seek",
+  "difficulty": "easy",
+  "status": "draft",
+  "controls_keyboard": "WASD move · Mouse look · F paint mode · SPACE eyedropper · LMB paint / fire · RMB brush size (paint) / 3rd-person (seek) · MMB orbit body · R pose · 1 whistle · 3 x-ray · V shadow",
+  "tags": ["party", "hide-and-seek", "painting", "multiplayer", "3d", "social", "casual", "creative"]
+}

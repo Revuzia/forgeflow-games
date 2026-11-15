@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+@layer base {
+  body {
+    @apply bg-surface-900 text-gray-100 font-body antialiased;
+    /* Soft colour wash behind every page (orange top-left, cyan top-right, violet low) */
+    background-image:
+      radial-gradient(900px 520px at 6% -4%, rgba(255, 136, 0, 0.11), transparent 62%),
+      radial-gradient(820px 520px at 96% 0%, rgba(0, 212, 255, 0.09), transparent 62%),
+      radial-gradient(900px 600px at 50% 105%, rgba(168, 85, 247, 0.07), transparent 65%);
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    background: rgba(255, 136, 0, 0.3);
+    color: white;
+  }
+
+  ::-webkit-scrollbar {
+    @apply w-2;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-surface-900;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-surface-600 rounded-full hover:bg-surface-500;
+  }
+}
+
+@layer components {
+  .game-card {
+    @apply relative rounded-2xl overflow-hidden bg-surface-800 border border-surface-600/40
+           transition-all duration-300 cursor-pointer;
+  }
+  .game-card:hover,
+  .game-card:focus-visible {
+    @apply -translate-y-1.5;
+    border-color: color-mix(in srgb, var(--accent, #ff8800) 75%, transparent);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 30px color-mix(in srgb, var(--accent, #ff8800) 28%, transparent);
+  }
+
+  .section-title {
+    @apply font-display font-bold text-xl sm:text-2xl text-gray-100 tracking-tight;
+  }
+
+  .surface-panel {
+    @apply rounded-2xl border border-surface-600/40 bg-surface-800/80;
+  }
+
+  .nav-link {
+    @apply relative px-3 py-2 text-sm font-medium text-gray-300 whitespace-nowrap transition-colors;
+  }
+  .nav-link:hover { @apply text-white; }
+  .nav-link::after {
+    content: "";
+    position: absolute; left: 0.75rem; right: 0.75rem; bottom: 2px; height: 2px; border-radius: 2px;
+    background: var(--nav-accent, #ff8800);
+    transform: scaleX(0); transform-origin: left; transition: transform 0.2s ease;
+  }
+  .nav-link:hover::after,
+  .nav-link[aria-current="page"]::after { transform: scaleX(1); }
+
+  .btn-primary {
+    @apply px-6 py-3 font-display font-bold rounded-xl
+           transition-all duration-200 active:scale-95;
+    background: linear-gradient(135deg, #ff8800, #ff5500);
+    color: white;
+    box-shadow: 0 4px 15px rgba(255, 136, 0, 0.3);
+  }
+  .btn-primary:hover {
+    box-shadow: 0 6px 25px rgba(255, 136, 0, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 bg-surface-700 text-gray-100 font-display font-semibold rounded-xl
+           border border-surface-600 transition-all duration-200;
+  }
+  .btn-secondary:hover {
+    border-color: rgba(255, 136, 0, 0.4);
+    color: white;
+  }
+
+  .category-pill {
+    @apply px-4 py-2 rounded-full text-sm font-medium bg-surface-700 text-gray-300
+           border border-surface-600/50 transition-all duration-200 cursor-pointer whitespace-nowrap;
+  }
+  .category-pill:hover {
+    border-color: rgba(255, 136, 0, 0.4);
+    color: #ff8800;
+  }
+  .category-pill.active {
+    background: rgba(255, 136, 0, 0.1);
+    color: #ff8800;
+    border-color: rgba(255, 136, 0, 0.4);
+  }
+}
+
+/* Carousels hide their scrollbar (the arrow buttons and touch scrolling drive them). */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+/* Keyboard users get a visible focus ring everywhere. */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid #ff8800;
+  outline-offset: 2px;
+}
+
+/* Respect "reduce motion": the pulsing glow and lift/zoom effects stop. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; }
+  .game-card:hover { transform: none; }
+}
+
+/* Ad rails (see src/components/ads/AdRails.tsx). Hidden unless the viewport is
+   wide enough to keep every ad clear of the game canvas. Rendered only when ads
+   are enabled, so this costs nothing while they are off. */
+.ffg-rail { display: none; z-index: 5; }
+@media (min-width: 1640px) { .ffg-rail-right { display: block; } }
+@media (min-width: 1900px) { .ffg-rail-left { display: block; } }

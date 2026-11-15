@@ -1,0 +1,240 @@
+{
+ "setup": {
+  "ok": true,
+  "realm": "cold",
+  "test": true,
+  "leashM": 30
+ },
+ "A synthetic stale-id (lane replicate)": {
+  "spawn": {
+   "id": 4,
+   "ax": 48.94,
+   "az": -47.92,
+   "bx": 48.94,
+   "bz": -47.92,
+   "hpMax": 1200,
+   "kind": "mini"
+  },
+  "oldId": 4,
+  "newId": 4,
+  "hpMax": 1200,
+  "hpBeforeLeash": 120,
+  "dealtOnStale": 1000000000,
+  "staleSlotAfter": 0,
+  "newHp": 0,
+  "leashReturns": 0,
+  "state": "idle",
+  "kills": 1,
+  "trace": [
+   {
+    "f": 0,
+    "bossId": 4,
+    "leashReturns": 0,
+    "staleSlot": 0,
+    "hp": 120
+   },
+   {
+    "f": 1,
+    "bossId": 4,
+    "leashReturns": 0,
+    "staleSlot": 0,
+    "hp": 120
+   },
+   {
+    "f": 2,
+    "bossId": 4,
+    "leashReturns": 0,
+    "staleSlot": 0,
+    "hp": 120
+   },
+   {
+    "f": 3,
+    "bossId": 4,
+    "leashReturns": 0,
+    "staleSlot": 0,
+    "hp": 120
+   },
+   {
+    "f": 4,
+    "bossId": 4,
+    "leashReturns": 0,
+    "staleSlot": 0,
+    "hp": 120
+   }
+  ]
+ },
+ "B real bolt across re-seat": {
+  "spawn": {
+   "id": 5,
+   "ax": 102.38,
+   "az": -80.13,
+   "bx": 102.38,
+   "bz": -80.13,
+   "hpMax": 1200,
+   "kind": "mini"
+  },
+  "oldId": 5,
+  "newId": 6,
+  "boltSlot": 0,
+  "boltAirborneAtYank": 1,
+  "boltPosAtYank": [
+   82.09,
+   -80.13
+  ],
+  "bossPosAtShot": [
+   102.38,
+   -80.13
+  ],
+  "bossPosAfterReseat": [
+   102.38,
+   119.87
+  ],
+  "hpPreShot": 60,
+  "newHp": 300,
+  "damageCalls": 0,
+  "staleIdCalls": 0,
+  "staleIdDetail": [],
+  "callTags": {},
+  "seat": [
+   {
+    "ev": "despawn",
+    "id": 5,
+    "t": 2.56
+   },
+   {
+    "ev": "spawn",
+    "id": 6,
+    "t": 2.56
+   },
+   {
+    "ev": "spawn",
+    "id": 7,
+    "t": 3.209
+   },
+   {
+    "ev": "spawn",
+    "id": 8,
+    "t": 4.794
+   }
+  ],
+  "leashReturns": 1,
+  "state": "live",
+  "kills": 1
+ },
+ "B2 control: same bolt, no leash": {
+  "hpPreShot": 60,
+  "hpAfter": 54.9,
+  "boltHits": 1,
+  "boltDetail": [
+   {
+    "id": 9,
+    "live": true,
+    "dealt": 5.08,
+    "tag": "bolt",
+    "t": 6.875
+   }
+  ],
+  "staleIdCalls": 0,
+  "leashReturns": 1
+ },
+ "C TAB target across re-seat": {
+  "oldId": 12,
+  "newId": 12,
+  "trace": [
+   {
+    "f": 0,
+    "targetId": 12,
+    "bossId": 12,
+    "changed": false,
+    "leash": 1
+   },
+   {
+    "f": 1,
+    "targetId": 12,
+    "bossId": 12,
+    "changed": false,
+    "leash": 1
+   },
+   {
+    "f": 2,
+    "targetId": 12,
+    "bossId": 12,
+    "changed": false,
+    "leash": 1
+   },
+   {
+    "f": 3,
+    "targetId": 12,
+    "bossId": 12,
+    "changed": false,
+    "leash": 1
+   },
+   {
+    "f": 4,
+    "targetId": 12,
+    "bossId": 12,
+    "changed": false,
+    "leash": 1
+   },
+   {
+    "f": 5,
+    "targetId": 12,
+    "bossId": 12,
+    "changed": false,
+    "leash": 1
+   },
+   {
+    "f": 6,
+    "targetId": 12,
+    "bossId": 12,
+    "changed": false,
+    "leash": 1
+   },
+   {
+    "f": 7,
+    "targetId": 12,
+    "bossId": 12,
+    "changed": false,
+    "leash": 1
+   }
+  ],
+  "clearedWithinFrames": -1,
+  "everPointedAtRetiredId": false
+ },
+ "D wave latch across re-seat": {
+  "control": {
+   "oldId": 14,
+   "newId": 14,
+   "waveHitsBeforeYank": 0,
+   "waveHitsTotal": 0,
+   "waveDetail": [],
+   "staleIdCalls": 0,
+   "tags": {},
+   "leashReturns": 1
+  },
+  "reseat": {
+   "oldId": 18,
+   "newId": 19,
+   "waveHitsBeforeYank": 0,
+   "waveHitsTotal": 0,
+   "waveDetail": [],
+   "staleIdCalls": 0,
+   "tags": {},
+   "leashReturns": 2
+  }
+ },
+ "E kill after re-seat": {
+  "oldId": 21,
+  "newId": 22,
+  "kind": "realm",
+  "hpMax": 2000,
+  "hpAfterLeash": 600,
+  "regenFrac": 0.2,
+  "dealtOnNewId": 1000000000,
+  "kills": 2,
+  "state": "idle",
+  "portalOpen": true,
+  "leashReturns": 3
+ },
+ "pageerrors": []
+}

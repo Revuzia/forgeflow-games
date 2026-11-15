@@ -1,0 +1,44 @@
+  [1/36] default_port.png
+  [2/36] sunElevation_3_port.png
+  [3/36] sunElevation_8_port.png
+  [4/36] sunElevation_13_port.png
+  [5/36] sunElevation_25_port.png
+  [6/36] sunElevation_40_port.png
+  [7/36] sunAzimuth_40_port.png
+  [8/36] sunAzimuth_118_port.png
+  [9/36] sunAzimuth_250_port.png
+  [10/36] windDirection_0_port.png
+  [11/36] windDirection_42_port.png
+  [12/36] windDirection_150_port.png
+  !! sssStrength=0.3 FAILED: target never became ready
+  [14/36] sssStrength_2.0_port.png
+  [15/36] sssRadius_0.3_port.png
+  [16/36] sssRadius_2.0_port.png
+  [17/36] detailNormalStrength_0_port.png
+  [18/36] detailNormalStrength_2.0_port.png
+  [19/36] macroHeightScale_0.4_port.png
+  [20/36] macroHeightScale_1.8_port.png
+  [21/36] sastrugiStrength_0.4_port.png
+  [22/36] sastrugiStrength_1.8_port.png
+  [23/36] deformDepth_0.3_port.png
+  [24/36] deformDepth_2.5_port.png
+  [25/36] deformBerm_0.3_port.png
+  [26/36] deformBerm_2.5_port.png
+  [27/36] exposure_0.05_port.png
+  [28/36] exposure_0.105_port.png
+  [29/36] exposure_0.3_port.png
+  [30/36] tonemap_agx_port.png
+  [31/36] tonemap_aces_port.png
+  [32/36] tonemap_none_port.png
+  [33/36] fogDensity_0_port.png
+  [34/36] fogDensity_0.02_port.png
+  [35/36] mountainHeight_0_port.png
+  [36/36] mountainHeight_2400_port.png
+
+35/36 -> C:\Users\TestRun\Claude Claw\forgeflow-games\games\snowflow\_harness\..\_shots\sweep
+  [1/4] macroHeightScale_0.4_far_port.png
+  [2/4] macroHeightScale_1.8_far_port.png
+  [3/4] mountainHeight_0_far_port.png
+  [4/4] mountainHeight_2400_far_port.png
+
+4/4 -> C:\Users\TestRun\Claude Claw\forgeflow-games\games\snowflow\_harness\..\_shots\sweep

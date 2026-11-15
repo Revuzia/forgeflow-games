@@ -1,0 +1,2569 @@
+{
+ "area": "ember-1",
+ "defects": [
+  {
+   "where": "ember-1 BEAT 2, the flame catwalk, standing at (0, 3.00, 10.60) facing the first vent at z=8",
+   "did": "forced the vent cycle to its ON phase (course clock 1.02) and looked at the jet from a player's standing distance, then at its OFF phase (clock 2.59)",
+   "happened": "the jet is a PALE SALMON-PINK translucent cone with a white-hot core and visible horizontal mesh banding, flaring WIDER at the top than at its base. It reads as a searchlight beam or a plastic funnel, not as fire: no orange/red gradient, no ember particles in the column, no soot, no visible flicker. The three POUR jets seen in the same frame at the top of the screen are worse - three flat pale-pink/white vertical slabs.",
+   "should": "a flame curtain should read as FIRE at a glance - hot orange/red core to yellow tips, soot/ember particles, a flicker, and it should be narrowest where it leaves the vent, not widest at the top",
+   "png": "_shots/play_ember-1/113_vent1_closeup_ON.png (also 109_catwalk_t0.2_vent1_ON.png, and the POUR slabs at the top of 113/114)",
+   "seg": "1"
+  },
+  {
+   "where": "ember-1 BEAT 2, the flame catwalk, vents at (0,3.05,8), (0,3.05,2), (0,3.05,-4)",
+   "did": "stood on the catwalk with the vents OFF (clock 2.59) and looked north down the spine",
+   "happened": "each vent is dressed as a giant IRON PUNCH-BOWL - a stacked wedding-cake basin about 4 m across and 2.5-3 m tall - standing in the middle of a catwalk that is only 4.00 m wide. Nim's head reaches about half the drum's height. With the vent off there is nothing that says 'hazard': it reads as scenery, and it hides the rest of the catwalk and the junction deck behind it.",
+   "should": "a floor vent on a walkway should be a flush grille/nozzle in the deck (the def is p y = CAT_TOP + 0.05, i.e. authored AT deck level), not a chest-high basin wider than the walkway; and it should be marked hot even when idle",
+   "png": "_shots/play_ember-1/114_vent1_closeup_OFF.png",
+   "seg": "1"
+  },
+  {
+   "where": "ember-1, respawn at the yard checkpoint (0, 4.60, 41) after dying in vent 1",
+   "did": "walked into the firing vent, died, and watched the 662 ms respawn land back at the yard pad",
+   "happened": "Nim's scarf snaps into a large RIGID PALE PLANK jutting out at ~45 degrees from his chest, roughly as long as he is tall, and holds that shape. It reads as a broken mesh, not cloth.",
+   "should": "the scarf is a 7-link verlet chain (contract 13) - after a teleport/respawn it should be re-seeded at the neck and hang, not snap to a rigid slab",
+   "png": "_shots/play_ember-1/115_vent_walkthrough_result.png",
+   "seg": "1"
+  },
+  {
+   "where": "ember-1 BEAT 1, the obsidian shore, walking west of the swept track around (-8.4, 3.06, 35.9)",
+   "did": "walked off the coin track toward the west shore and looked north at the lake edge",
+   "happened": "the shoreline is a HARD STRAIGHT BLACK-EDGED SEAM: featureless near-black terrain meets blown-out yellow-white lava on a single straight polygon line with no blend, no shore glow and no foam/crust band. The terrain itself carries no visible texture at all at this distance - it is a flat dark brown plane. A hard-edged yellow light-pool disc from a brazier is also stamped on the ground at the right of the frame with a visibly banded rim.",
+   "should": "lava meeting a shore should have a cooling/crust band and a light falloff, and the walked surface should carry enough texture to read as ground",
+   "png": "_shots/play_ember-1/106_quay_head.png",
+   "seg": "1"
+  },
+  {
+   "where": "ember-1 BEAT 2, cp-junction (0, 3.00, -7.50) - the checkpoint you respawn to for the whole raft field",
+   "did": "loaded the course at cp-junction and stood still at the default camera yaw 0 (no orbit input at all), then orbited to yaw -0.48",
+   "happened": "the follow camera sits INSIDE the third flame vent's basin. A grey rim torus wraps the bottom two thirds of the frame, the vent drum stands directly between the camera and Nim, and Nim's legs and the whole catwalk ahead are hidden. At yaw -0.48 he is hidden almost entirely. This is the FIRST FRAME after every death in the raft field.",
+   "should": "CONTRACT 12 says the camera pulls in on a raycast hit and the hero is never occluded > 0.3 s; a checkpoint 3.5 m from a chest-high prop should not spawn the camera inside it",
+   "png": "_shots/play_ember-1/201_junction_spawn.png and 206_raft_R1_sinking.png",
+   "note": "reproduced independently in the older critic run _shots/ember-1/cp2.png (2026-09-05), same station, same torus",
+   "seg": "2"
+  },
+  {
+   "where": "ember-1 BEAT 2, the junction sign board at (0, ~4.5, -12.8)",
+   "did": "stood on the junction deck and read the board",
+   "happened": "the board carries three lines. The two authored at size 0.24 ('THE RAFTS SINK WHEN' / 'YOU STAND ON THEM') are wrapped onto two lines and rendered SMALL; the aside authored at size 0.20 ('so do not stand on them') is rendered on one line and comes out VISIBLY LARGER than the two lines above it, sits on the panel's bottom frame with its descenders crossing it, and its first and last words break past the panel's inner border.",
+   "should": "the headline should read larger than the aside; the long line's wrap should not shrink it below the line it is meant to dominate, and no line should sit on the frame",
+   "png": "_shots/play_ember-1/_crop_206_sign.png (from 206_raft_R1_sinking.png), also _crop_205_sign.png",
+   "seg": "2"
+  },
+  {
+   "where": "ember-1 BEAT 2, the quay pedestal at (-6, 3.00, 16), seen from the shore at (-8.4, 3.06, 35.9)",
+   "did": "walked the shore and looked north at the quay",
+   "happened": "the pedestal's `glow: GOLD` renders as a PERFECTLY STRAIGHT, HARD-EDGED, OPAQUE GOLD COLUMN of constant width shooting about 15 m into the sky. It reads as a solid gold pipe stuck in the deck, not as a light shaft, and it is hard-clipped where the catwalk rail crosses it.",
+   "should": "a pedestal beacon should be a soft, tapering, additive shaft that fades out with height and does not z-clip against thin geometry",
+   "png": "_shots/play_ember-1/_crop_108_beam.png (from 108_race_sign.png)",
+   "seg": "1"
+  },
+  {
+   "where": "ember-1 BEAT 2, the flame catwalk, standing anywhere from the quay mouth (z 12) to z 10.6",
+   "did": "stood at the catwalk mouth - where the spawn sign tells you to 'WATCH ONE, THEN WALK' - and looked north down the spine at four different points of the vent cycle",
+   "happened": "the FIRST vent's basin completely occludes the rest of the catwalk: vents 2 and 3, the junction deck, the sigil spur and the raft field are all hidden behind it in every one of the five frames. The course's own tutorial instruction ('watch one, then walk', 'it glows before it blows') cannot be followed, because from the only place you can safely stand you can see exactly one vent and nothing past it.",
+   "should": "the vent props should sit low enough (they are authored at deck level, p y = CAT_TOP + 0.05) to leave the corridor readable from the entrance",
+   "png": "_shots/play_ember-1/109_catwalk_t0.2_vent1_ON.png, 111, 112, 151_catwalkA_start_frozen.png",
+   "seg": "1b"
+  },
+  {
+   "where": "ember-1 BEAT 1, the whole southern shore, walked from the spawn (0, 4.60, 45) west and north to (-8.4, 3.06, 35.9)",
+   "did": "walked about 15 m off the swept track and looked around at ground level",
+   "happened": "the shore is a completely FEATURELESS smooth brown-grey gradient - no texture, no grain, no rock, no debris, no crack, no visible cart track - across roughly 40 m of walked ground. The authored `paths` (swept cart tracks) do not read at all. The only ground detail in frame is a hard-edged, visibly banded yellow light-pool disc from a brazier.",
+   "should": "the walked surface of the first beat of a course should carry surface detail; the terrain paths are authored to be the lines the coins take and should be visible as lines",
+   "png": "_shots/play_ember-1/108_race_sign.png and 107_quay_pedestal.png",
+   "seg": "1"
+  },
+  {
+   "where": "ember-1, the lava lake (the single 130 x 65 m `lava` hazard at y 0), seen from the shore, the junction and the raft field",
+   "did": "looked at the lake from six different stations across three segments",
+   "happened": "the lake reads as a BRIGHT MUSTARD-YELLOW SAND FLAT with dark mud blotches. It is LIGHTER in value than the iron decks standing on it, so the fire is the palest thing in the frame and the walkways are the darkest - the reading is inverted. There is no flow, no crust, no cooling skin, no bright/dark cracking, and no glow gradient at the shore.",
+   "should": "molten rock should be the most saturated thing on screen with a dark crust and hot cracks, and the decks over it should read lighter than it, not darker",
+   "png": "_shots/play_ember-1/205_raft_field_from_junction.png, 204_hat_pickup.png, 201_junction_spawn.png",
+   "seg": "2"
+  },
+  {
+   "where": "ember-1 BEAT 4, the smelter belt, standing on it at (43.93, 6.30, -31.50), surface 'conveyor'",
+   "did": "teleported on to the east end of the belt, faced west along it (camera yaw 1.57) and held W for fourteen seconds - the walk the course asks for, because sigil 3 sits mid-belt at (32, 7.60, -31.50) and the sign says THE BELT RUNS AGAINST YOU",
+   "happened": "Nim plays the RUN cycle on the spot: the dev readout says `player run / run`, `grounded true`, `surface conveyor`, `vel 0.00, -0.19, -0.00`, `speed 0.00`. In fourteen seconds of held W he moved 0.43 m - the wrong way. The belt exactly cancels a 9 m/s run (`power` is only 4.5), so sigil 3 cannot be walked to along the belt at all.",
+   "should": "speedRun 9.0 against a 4.5 m/s belt should net about 4.5 m/s; and CONTRACT 11 says the run cycle must never play on the spot - that is what the `bonk` state is for",
+   "png": "_shots/play_ember-1/305_belt_against_flow.png",
+   "seg": "3"
+  },
+  {
+   "where": "ember-1 BEAT 4, the smelter belt, teleported to its middle at (38, 6.6, -31.5) with NO INPUT AT ALL",
+   "did": "stood on the belt and pressed nothing for 2.4 s",
+   "happened": "the belt carried Nim off the deck and killed him - the run ends with deaths 1 and the hero back on cp-smelter at (31, 6.00, -34.00). The belt spans x 30..46 and the deck only x 28..48, so it delivers you to a deck edge with about 2 m of runway either side.",
+   "should": "a belt a player is meant to cross should not be a no-input death; and if it is, the deck needs a lip/rail at the end it feeds",
+   "png": "_shots/play_ember-1/304_belt_stand.png",
+   "note": "DIRECTION MISMATCH also observed and worth a look: the belt's cyan chevrons point EAST (+X) in every frame, while the course data authors `dir: [-1, 0, 0]` (west). The base-yard belt is authored `dir: [1, 0, 0]` and its chevrons also point east, so one of the two is drawn wrong. Measured push direction is being re-checked in _play_e1b.py --seg 10.",
+   "seg": "3"
+  },
+  {
+   "where": "ember-1 BEAT 6, ROUTE C - the wall-kick flue, its instruction sign at (-10.1, 8.60, -33.4)",
+   "did": "walked from cp-crucible to the flue's west face, the only side you can approach it from (its east face is 0.10 m off the crucible wall), and looked at the sign",
+   "happened": "the sign reads as an UNREADABLE dark ribbed panel - a rectangle of wavy dark-brown marks with no legible letters. The def is `rot: [0, 1.35, 0]`, which points the plate's face EAST, into the crucible; from the base yard you are looking at its BACK. ROUTE C's only instruction ('KICK ONE WALL, THEN THE OTHER') therefore cannot be read by anyone standing where the route starts.",
+   "should": "the sign should face the approach - west, into the base yard - and read as light lettering on a dark plate like every other board in the course does",
+   "png": "_shots/play_ember-1/_crop_505_sign_back.png (from 505_flue_sign.png)",
+   "seg": "5"
+  },
+  {
+   "where": "ember-1 BEAT 6, the crucible and the flue, seen from cp-crucible (-12, 6.00, -30)",
+   "did": "stood on the base-yard checkpoint and looked at the vessel and the flue",
+   "happened": "the crucible's 15.6 m wall renders as a FLAT, FEATURELESS DARK RED-BROWN SLAB with almost no surface detail - it reads as a painted barn wall - and the flue tower beside it renders PALE TAN with vertical plank seams, i.e. as sandstone or timber. Both are authored `mat: 'metal'` (vessel tint 0x6b6f76 IRON, flue tint 0x565b62). Nothing in the set piece reads as iron. The flue's 1.40 m door is a narrow unframed dark slot in the tan wall that is easy to walk straight past - I did, twice.",
+   "should": "an iron crucible should read as iron - panel seams, rivets, heat staining - and the one doorway into ROUTE C should be framed so it reads as a way in",
+   "png": "_shots/play_ember-1/502_flue_from_yard.png and 504_flue_inside.png and 505_flue_sign.png",
+   "seg": "5"
+  },
+  {
+   "where": "ember-1 BEAT 6, the wall-kick flue interior, floor 6.40, ledge 15.40 (9.00 m of climb)",
+   "did": "stood on the flue floor and played the authored climb - one jump then four alternating wall kicks, aiming at x -9.5 and x -6.5 in turn",
+   "happened": "the best height reached was 8.80 m on the FIRST kick (state 'wallkick'), then every following attempt lost height: 7.06, 6.78, 7.58, and back to the floor at 6.40 with jumpCount 0. The full trace is (6.40 idle) (7.74 fall) (8.80 wallkick) (7.06 fall) (6.78 fall) (7.58 fall) (6.40 idle). One kick in six landed; the climb never got past 2.40 m of the 9.00 m it needs.",
+   "should": "the authored line is one jump plus four kicks at +2.00 m each in a 3.00 m shaft, inside the contract's 3.40 m limit - it should chain",
+   "png": "_shots/play_ember-1/506_flue_kick_attempt.png",
+   "note": "driver caveat: my kick timing is scripted, not human, so this is evidence the window is tight rather than proof it is impossible - but a scripted 90 ms press into the wall followed by jump is close to what a player does, and five of six kicks did not fire",
+   "seg": "5"
+  },
+  {
+   "where": "ember-1 BEAT 6, INSIDE the wall-kick flue at (-8.10, 6.40, -34.00) - a 3.00 m square shaft, the whole of ROUTE C",
+   "did": "stood on the flue floor between the two walls I am supposed to kick, with no camera input",
+   "happened": "the camera snaps to a near-top-down over-the-head view about a metre from Nim's skull. His HEAD fills a third of the screen, his body is a stub beneath it, and NEITHER WALL of the shaft is visible. You cannot see what you are kicking off, how high you are, or where the exit ledge is. This is why five of my six wall kicks did not fire.",
+   "should": "CONTRACT 12 says a shaft is answered by tilting over-the-head and then UP THE SHAFT with `dist` held at or above TUNE.cam.minDist (1.60) - the tilt happens but the pull-in does not stop, and the up-the-shaft part never arrives",
+   "png": "_shots/play_ember-1/506_flue_kick_attempt.png",
+   "seg": "5"
+  },
+  {
+   "where": "ember-1 BEAT 6, the flue interior walls (authored `mat: 'metal'`, tint 0x565b62)",
+   "did": "looked at the shaft walls from the flue floor",
+   "happened": "the walls render as bright orange TIMBER with vertical wood grain - long streaky fibres running floor to ceiling. Inside an iron foundry's crucible flue.",
+   "should": "metal",
+   "png": "_shots/play_ember-1/506_flue_kick_attempt.png",
+   "seg": "5"
+  },
+  {
+   "where": "ember-1 BEAT 6/7, the flue ledge and the west end of the level-3 walk, standing at (-9.00, 15.40, -30.40)",
+   "did": "stepped off the flue ledge on to the level-3 walk (a 25 m x 3 m grate with a rail) and looked east down it",
+   "happened": "the camera collapses to a near-top-down close-up about 1.5 m over Nim's head - the frame is the top of his skull and his goggles. You cannot see the walk, the pour, the sweeping chain bar at (9, 15.70, -30.40), or where you are going. This is the SECOND place on the crucible ascent where the camera does this (the other is inside the flue shaft), and both are on the required climb to the crest.",
+   "should": "a 3 m wide walk with a rail should hold a normal follow camera at TUNE.cam.dist 6.8 behind the hero",
+   "png": "_shots/play_ember-1/601_walk3_from_west.png",
+   "seg": "6"
+  },
+  {
+   "where": "ember-1 BEAT 7, THE POUR, standing in the west lane of the level-3 walk at (-6.03, 15.00, -30.40) while it fires",
+   "did": "forced the pour cycle ON (clock 0.60) and looked at the curtain from about 3 m",
+   "happened": "the curtain is a FLAT PALE-ORANGE SLAB filling the whole left half of the frame - hard-edged, near-uniform in value, with a mottled dark speckle that reads as wet sand or gravel. No vertical motion, no hot core, no cooler edge, no glow falloff into the deck. It is the same surface look as the lava lake, stood on end. Standing under it does kill (deaths 0 -> 1 at t 30.15), so the hazard works; it just does not read as falling metal.",
+   "should": "the set piece of the course should read as a 16 m curtain of molten iron - a hot white-yellow core, streaming vertical motion, spatter where it lands, and a soft glow gradient",
+   "png": "_shots/play_ember-1/604_pour_t0.5_pour_ON.png",
+   "seg": "6"
+  },
+  {
+   "where": "ember-1 BEAT 7, the pour sign at (-9.4, 16.70 / 16.30, -29.0)",
+   "did": "stood on the level-3 walk under the sign and read it",
+   "happened": "same fault as the junction board: the aside authored at size 0.20 ('the ends of this walk are dry') renders VISIBLY LARGER than the two lines above it authored at 0.24 ('SHE POURS EVERY' / 'THIRTY SECONDS'), because the long line wrapped and got scaled down. The board also sits directly overhead from the walk, so it is clipped by the top of the frame from where you stand.",
+   "should": "the headline should read larger than the aside, and a board on a 3 m walk should be readable without looking up",
+   "png": "_shots/play_ember-1/604_pour_t0.5_pour_ON.png (top of frame)",
+   "seg": "6"
+  },
+  {
+   "where": "ember-1, Nim's scarf, seen at the flue floor, the level-3 walk and after every respawn",
+   "did": "looked at the hero from the default follow camera in four different places",
+   "happened": "the scarf renders as a RIGID PALE PLANK hanging straight down/out from his chest, about as long as he is tall, with square ends. It never moves like cloth in any frame I took.",
+   "should": "CONTRACT 13: a 7-link verlet chain with gravity, wind and velocity drag",
+   "png": "_shots/play_ember-1/604_pour_t0.5_pour_ON.png, 506_flue_kick_attempt.png, 115_vent_walkthrough_result.png",
+   "seg": "6"
+  },
+  {
+   "where": "ember-1 BEAT 9, the slag pit, standing at (-30.84, 6.00, -34.00) - inside the Warden's 9 m arena, about 1.2 m from it and visibly clipping into its body",
+   "did": "walked over the chain bridge into the pit, walked right up to the Warden and then STOOD COMPLETELY STILL for five seconds, pressing nothing",
+   "happened": "NOTHING. Two frames 4.73 s apart (course clock 13.65 and 18.38) show the Warden in the identical pose at the identical position with Nim's head and back intersecting its torso. No telegraph, no stomp shockwave, no charge, no contact damage: deaths 0 -> 0. It is inert. The `boss` crest ('THE WARDEN OF THE SLAG PIT') spawns when the Warden dies, so that crest is unobtainable if this is the live behaviour.",
+   "should": "CONTRACT 23: a 3-hit mini-boss with readable telegraphs - stomp shockwave, charge, dizzy 2.5 s after a charge hits a wall",
+   "png": "_shots/play_ember-1/710_warden_close.png and 711_warden_stand_still.png",
+   "seg": "7"
+  },
+  {
+   "where": "ember-1 BEAT 9, the slag pit floor - a 22 x 22 m obsidian platform at (-32, 5.5, -34)",
+   "did": "stood on it and looked across the Warden's charge lane",
+   "happened": "the pit floor renders as a PURE BLACK PLANE with two or three orange specks. Against the bright lava lake behind it you cannot see the floor's extent, the Warden's charge lane, the monoliths, the lavaRock scatter, or where the edge is - and the edge is the wall the Warden's charge is supposed to break itself on.",
+   "should": "an arena you fight a boss in has to be legible; obsidian at 3.5:1 against the fog band is the contract's own floor",
+   "png": "_shots/play_ember-1/710_warden_close.png",
+   "seg": "7"
+  },
+  {
+   "where": "ember-1 BEAT 7, the level-3 walk at (-4.79, 15.00, -30.40), with the west-lane bumbler",
+   "did": "stood still on the walk while the bumbler patrolled into me",
+   "happened": "the bumbler's body visibly INTERSECTS Nim's arm in two frames and nothing happens - no knockback, no stun, no state change (idle/idle), deaths 0. Its hat is also a black felt bowler rather than the iron helmet the course notes describe.",
+   "should": "CONTRACT 23: side contact = knockback 6 m/s + 0.4 s stun. On a 3 m walk 15 m over the base yard that knockback IS the hazard",
+   "png": "_shots/play_ember-1/606_pour_t10.0_pour_off.png and 603_pour_t28.2_pour_warn.png",
+   "seg": "6"
+  },
+  {
+   "where": "ember-1 BEAT 4, the smelter house at (41, 8.5, -37)",
+   "did": "stood on cp-smelter and looked at the building",
+   "happened": "its two windows are FLAT SOLID PALE-YELLOW RECTANGLES with a thin border - no glass, no depth, no light spill on the deck. They read as placeholder quads. The crusher above the belt reads as a stack of dark discs on a pole - a chimney or a pile of tyres - not as a crusher head.",
+   "should": "hard rule 1, no naked primitives; and a lethal crusher should read as a crusher",
+   "png": "_shots/play_ember-1/301_smelter_spawn.png",
+   "seg": "3"
+  },
+  {
+   "where": "ember-1 BEAT 6, cp-crucible (-12, 6.00, -30) - the checkpoint that precedes the flue, both flights and the pour",
+   "did": "stood on the checkpoint pad and looked around for the way up",
+   "happened": "there is no legible route up from here. You see a featureless dark red slab (the vessel), a tan tower (the flue) with an unframed 1.4 m slot in it, and a conveyor. The east flight is 23 m away behind the vessel and the west flight starts three storeys up. Nothing in frame says 'climb here'.",
+   "should": "the checkpoint before the ascent should show the ascent",
+   "png": "_shots/play_ember-1/501_base_yard_spawn.png and 502_flue_from_yard.png",
+   "seg": "5"
+  },
+  {
+   "where": "ember-1 BEAT 8, INSIDE the crucible vessel - the base-yard grate at y 6.00 enclosed by the four vessel walls (x -5.2/+5.2, z -32.8/-43.2, tops at RIM 21.60)",
+   "did": "stepped off the crane gantry over the vessel's open mouth (the gantry crosses it at z -42.4..-38.8 and the sign says STEP OFF FOR THE RIM - YOU CANNOT STEP BACK) and landed inside the pot at (-4.00, 6.00, -40.49)",
+   "happened": "you are in a sealed 8.8 x 8.8 m box with 15.6 m walls on all four sides, a grate floor, no ladder, no exit and no light. The camera jams against the inner wall so half the frame is a red streaked surface at arm's length. The only way out is to wait for the 30 s pour to incinerate you. I walked the floor and found no opening.",
+   "should": "either the mouth should not be an open drop from the gantry, or the pot needs an exit - a hatch, a ladder, the flue, or a kill volume that resolves it immediately instead of after a 30 s wait",
+   "png": "_shots/play_ember-1/610_crest_collect.png, 702_bucket_t0.png, 701_bucket_orbit_from_crown.png",
+   "note": "a controlled escape test is queued as _play_e1b.py --seg 11 and writes traces.crucible_pot into _playreports/ember-1.json",
+   "seg": "6"
+  },
+  {
+   "where": "ember-1 BEAT 8, the crucible's inner and outer walls at close range",
+   "did": "stood beside them inside the pot and on the base yard",
+   "happened": "the `metal` surface reads as a coarse RADIAL RED FIBRE - brushed felt or carpet - when the camera is within a couple of metres, and as a flat untextured red slab from any distance. There is no seam, rivet, plate line, weld or heat stain anywhere on a 15.6 m iron vessel.",
+   "should": "iron",
+   "png": "_shots/play_ember-1/702_bucket_t0.png and 610_crest_collect.png",
+   "seg": "7"
+  },
+  {
+   "where": "ember-1 BEAT 5, the east gantry head at (40, 6.00, 16)",
+   "did": "stood at the head of ROUTE B and looked down the 50 m gantry at three points of the beam cycle",
+   "happened": "a machine arch and the 'THE LONG WAY - NO RAFTS, TWO BEAMS' board sit across the gantry about 2.5 m ahead and hide the entire run behind them. Neither pulse beam (z 8 and z -6) is visible from the head, so you commit to a fifty-metre timed corridor without being able to see the timing you are supposed to read. Same shape of problem as the flame catwalk.",
+   "should": "the sign that tells you there are two beams should not be the thing that hides them",
+   "png": "_shots/play_ember-1/403_beam_t0.2_beam1_ON.png and 404_beam_t1.9_beam2_ON.png",
+   "seg": "4"
+  },
+  {
+   "where": "ember-1 BEAT 2, the flame catwalk, three timed runs from the quay at (0, 3.2, 12.5) to the junction",
+   "did": "sprinted the whole spine with W held, starting the run at three different points of the 4.0 s vent cycle (course clock 1.5, 2.6 and 3.4), sampling every 120 ms",
+   "happened": "one run in three crossed. The t 2.6 start crossed clean to z -9.37 in about 2.5 s; the t 1.5 start died at z 2.40 (vent 2, clock 3.03) and the t 3.4 start died at z 8.03 (vent 1, clock 4.23), both cause 'lava', both card 'INCINERATED'. The timing itself is fair - each death was a run straight into a jet that was already firing. What is not fair is that from the entrance the first vent's basin hides the other two, so those two deaths could not have been avoided by looking, which is exactly what the course's own signs tell you to do.",
+   "should": "a timing gauntlet has to be observable from its entrance",
+   "png": "_shots/play_ember-1/151_catwalkA_start_frozen.png (the view you get) plus traces catwalk_run_t1.5 / t2.6 / t3.4 in _playreports/ember-1.json",
+   "seg": "9"
+  },
+  {
+   "where": "ember-1 BEAT 2, standing on the flame catwalk at (0, 3.00, 0.00), 2 m south of vent 2",
+   "did": "stood still on the catwalk's centre line with the default follow camera and no orbit input",
+   "happened": "NIM IS COMPLETELY HIDDEN. Only the crown of his head shows over the vent basin's rim. The basin is visibly WIDER THAN THE CATWALK - the deck's own rails pass behind it on both sides and the bowl overhangs them - and its rim stands above the hero's head. Vent 1's basin is stacked behind it, so the whole northward view is two bowls. The 'IT GLOWS BEFORE IT BLOWS' board behind them is an unreadable smudge from here.",
+   "should": "the hero must not be occluded for more than 0.3 s (camcheck's own rule), and a deck-level vent (authored at CAT_TOP + 0.05) should not be a chest-high basin wider than the deck",
+   "png": "_shots/play_ember-1/904_catwalk_stand_still.png",
+   "seg": "9"
+  },
+  {
+   "where": "ember-1, the checkpoint flash and the death flash",
+   "did": "ran into cp-junction at speed and, separately, died to the pour",
+   "happened": "both events wash the ENTIRE screen to a near-white pale orange for long enough to be caught in a screenshot. On the checkpoint you lose the frame exactly as you arrive at the raft field, which is the next thing you need to read. In a course whose whole palette is already blown-out yellow-orange, two full-screen white washes are a lot.",
+   "should": "a checkpoint confirmation should not blank the frame at the moment the player needs it",
+   "png": "_shots/play_ember-1/902_catwalk_run_t2.6.png (checkpoint) and 607_pour_stand_result.png (death)",
+   "seg": "9"
+  },
+  {
+   "where": "ember-1, beacon light shafts - the quay pedestal at (-6, 3.00, 16) and a cyan shaft rising near the junction",
+   "did": "looked at them from the shore and from the catwalk",
+   "happened": "both render as HARD-EDGED OPAQUE COLUMNS of constant width - a gold pipe and a pale-blue pipe - shooting 10-15 m up and clipping abruptly against thin geometry rather than fading.",
+   "should": "soft additive shafts that taper and fade with height",
+   "png": "_shots/play_ember-1/_crop_108_beam.png and 904_catwalk_stand_still.png",
+   "seg": "9"
+  },
+  {
+   "where": "ember-1 BEAT 4, the smelter conveyor at (38, 6.15, -31.5), 16 m long, `power: 4.5`, `dir: [-1,0,0]`",
+   "did": "measured it three ways in two separate sessions: standing on it with no input, running EAST along it for 1.8 s, and running WEST along it for 1.8 s and again for 14 s",
+   "happened": "NO INPUT: carried off the deck and killed, twice, in about 2 s (deaths 1->2 in one run, and in the other the hero ended on cp-smelter with a death logged). RUNNING EAST: 3.91 m in 1.8 s = 2.17 m/s, ending in `skid` with vel 1.24. RUNNING WEST: 3.27 m while airborne in one attempt and, in a clean grounded 14 s attempt, 0.43 m total with the dev readout reading `run / run`, `grounded true`, `surface conveyor`, `speed 0.00`. A 9 m/s run against a 4.5 m/s belt should net 4.5 m/s one way and 13.5 the other; it nets 2.17 and 0.00.",
+   "should": "the belt should be a 4.5 m/s offset on the hero's own speed, not a near-total brake in both directions",
+   "png": "_shots/play_ember-1/305_belt_against_flow.png; numbers in _playreports/ember-1.json traces.belts",
+   "seg": "10"
+  },
+  {
+   "where": "ember-1 BEAT 8, inside the crucible vessel at (-1, 6.00, -38) - dropped in off the crane gantry",
+   "did": "landed on the base-yard grate inside the pot, then tried to get out four ways: faced each wall in turn and held W with a jump tap every 250 ms for 3.5 s",
+   "happened": "NO WAY OUT FOUND. Best heights reached were 8.50, 9.82, 9.95 and 14.80 m against a rim at 21.60 - two of the four registered a `wallkick`, so kicks DO fire off the vessel's inner walls, but the chain never got within seven metres of the rim. I then sat in the pot through the pour window and was not killed either (deaths 0 -> 0), so the 'wait to be incinerated' exit did not fire in the sampled window. A player who steps off the gantry over the mouth - which the gantry crosses, and which the course's own sign invites you to step off - is stuck with no exit and no death.",
+   "should": "either the mouth is not an open drop from the gantry, or the pot has an exit, or falling into it kills immediately",
+   "png": "_shots/play_ember-1/1104_pot_escape_attempts.png, 610_crest_collect.png, 702_bucket_t0.png; numbers in _playreports/ember-1.json traces.crucible_pot",
+   "note": "DIAGNOSTIC PAIRING for the fix lane: the SAME scripted kick pattern that reached +8.80 m off the vessel's inner walls only reached +2.40 m inside the 3.00 m flue - and the flue is where the camera goes over-the-head and hides both walls. That points at the flue camera, not at the kick tuning.",
+   "seg": "11"
+  },
+  {
+   "where": "ember-1 BEAT 4, the two breakable ingot crates at (34.6, 6.85, -31.5) and (43.0, 6.85, -31.5)",
+   "did": "ground-pounded both from 2 m directly above (held crouch for 1.4 s in the air), and separately tapped crouch from 1.9 m above the first one earlier in the session",
+   "happened": "neither crate broke and no coins dropped - coins 3 -> 3 on both, and the hero ended standing ON TOP of the crate at y 7.40, state idle. Both are authored `drop: 'coins'`.",
+   "should": "CONTRACT 11: a ground pound breaks `breakable` colliders",
+   "png": "_shots/play_ember-1/1009_crate_pound_x35.png and 1010_crate_pound_x43.png",
+   "note": "CONFOUND: the 1.4 s attempts were made with __dev.freezeHazards(true) on, which may suppress the break. The earlier live attempt used a 400 ms crouch tap that may not have registered as a pound. Re-test with the clock running and a full pound before treating this as confirmed.",
+   "seg": "10"
+  },
+  {
+   "where": "ember-1 BEAT 4, the crusher over the smelter belt at (38, 9.00, -31.5), authored s [3.6, 2.0, 3.0]",
+   "did": "stood at (38, 6.00, -27) and photographed the whole 4.2 s beat at clock 0.0 / 0.8 / 1.4 / 2.0 / 2.6 / 3.4",
+   "happened": "what renders is a SLIM VERTICAL COLUMN OF STACKED DARK RINGS about a metre wide and five metres tall hanging under a brown block. It reads as a chimney or an exhaust stack, not as a 3.6 x 3.0 m crusher head, and nothing about it says lethal.",
+   "should": "a lethal crusher should read as a broad descending press at the authored footprint, hot-emissive on its kill face per the readability law",
+   "png": "_shots/play_ember-1/1006_crusher_beat_t2.0.png and 307_crusher_t1.6_crusher_down.png",
+   "seg": "10"
+  },
+  {
+   "where": "ember-1 BEAT 10, THE IRON HAT AND THE LAVA WALK - the metal power taken at (-4, 3.90, -9), walking west off the junction deck toward the islet at (-26, 1.90, -14)",
+   "did": "walked on to the iron hat (power went to {id:'metal', t:19.62}, helmet on, HUD timer running), then stepped off the junction deck's west edge on to the lava with 18.3 seconds of the power still on the clock",
+   "happened": "DIED INSTANTLY. Killed at (-8.78, -0.02, -10.56) with `power: {id:'metal', t:18.2567}` still live. The metal power does not make lava survivable. The course file says in as many words that it should: 'the iron hat on the junction deck makes lava non-lethal for twenty seconds (player.power === metal ignores kind lava), and this is the only thing in the works that asks for it'.",
+   "should": "twenty seconds of walking on fire - which is the ONLY reason the islet, the `metal`-type crest 'THE IRON HAT' and its three coins exist",
+   "png": "_shots/play_ember-1/1201_hat_from_deck.png, 1202_hat_on.png, 1203_lavawalk_end.png",
+   "note": "CONSEQUENCE: the islet at (-26, 0.05, -14) is unreachable, the seventh crest ('THE IRON HAT', type `power`) is unobtainable, and its three coins are permanently stranded. That is one of the seven crests of this course gone.",
+   "seg": "12"
+  }
+ ],
+ "worked": [
+  "Entering ember-1 through the real loader and at every one of the five checkpoints works: cp0 yard, cp1 quay, cp2 junction, cp3 smelter, cp4 crucible all place the hero on solid ground at the authored height, the HUD checkpoint pip reads the right index, and the pad ring is unmistakable.",
+  "Death, rewind and respawn work and feel quick: 481-662 ms measured respawns, a readable 'INCINERATED' card with a REWIND indicator, and the hero comes back on the last checkpoint pad.",
+  "The flame vents DO kill, and fairly: walking the catwalk into vent 1 with the clock at 0 killed at course clock 0.70, i.e. exactly when the warn window ended and the jet fired - the telegraph window was survivable throughout.",
+  "The POUR kills on schedule: standing in the pour lane at (0, 15.00, -30.40) died at t 30.15, on the 30 s beat.",
+  "The IRON HAT (metal power) pickup works end to end: walking on to it at (-4, 3.90, -9) flipped power from null to {id:'metal'}, put a metal helmet on Nim, raised a 'METAL HAT / 20 SECONDS' toast and a live METAL timer bar in the HUD.",
+  "The spawn board is genuinely readable from the spawn pad: 'MAGMA WORKS / THE VENTS FIRE ON A CYCLE / WATCH ONE, THEN WALK / EVERY DECK IS IRON / EVERYTHING ELSE IS FIRE' all legible, and it is placed off to the right so it does not cover the hero.",
+  "Every deck's safe-edge stripe reads: the cyan leading-edge line on the catwalk, junction, rafts, gantry, smelter deck, base yard and level-3 walk is the clearest navigation signal in the course.",
+  "The east gantry (ROUTE B) is walkable end to end: 25 m from z 15 to z -9.93 at full run speed 9.00 through both pulse beam lines, zero deaths, six coins picked up on the way. Its sign 'THE LONG WAY / NO RAFTS, TWO BEAMS' is readable from the gantry head.",
+  "The smelter jump pad fires: measured launch velocity (4.41, 15.92, 7.86), speed 9.01, state jump1 - it throws you properly.",
+  "Coins collect on contact with a magnet feel and the HUD counter rolls up; the sigil pips light in the HUD when one is taken (sig 0 -> 1 observed).",
+  "The junction/catwalk/base-yard signage that DOES face the player reads well at a player's standing distance: 'IT GLOWS BEFORE IT BLOWS', 'THE LONG WAY - NO RAFTS, TWO BEAMS', 'THE BELT RUNS AGAINST YOU - JUMP THE INGOTS'.",
+  "The vent basins do NOT block the catwalk - pushing north from z 11.9, 11.2, 10.6, 10.0, 9.4 and 8.8 all carried the hero past the vent-1 station at z 8, so the props are an occlusion problem, not a collision one.",
+  "The vent basins carry NO collider at all: the broadphase around the catwalk holds exactly four boxes (the spine 4x18, the sigil spur 3x3, the junction deck 12x8, and the bumbler), so the props are an occlusion problem only - the walkway itself is clean.",
+  "The flame catwalk IS crossable at run speed: one of three blind timed sprints crossed the 21 m spine in about 2.5 s without a scratch, and both failures were honest run-into-a-firing-jet deaths.",
+  "Standing still for nine seconds at (0, 3.00, 0) - between vents 2 and 3, inside the bumbler's patrol box - killed nothing: deaths 2 -> 2, state idle throughout. Nothing on the catwalk hurts a player who is not moving through a jet.",
+  "The crucible RIM walk works: walked it from (-5.2, 22.0, -38) south to (-5.23, 21.60, -32.74) picking up 3 rim coins, no falls, and the west stair flight reads clearly from up there.",
+  "Coin, sigil and crest markers are all distinguishable: gold spinning discs, a red disc with a numbered black hex, and a gold ring on a chain.",
+  "THE CRANE-HOOK CREST WORKS when you approach it along the gantry: from (-9, 25.20, -40.6) walking east to (-4.53, 25.20, -40.6) collected it (crests 0 -> 1) and raised the COURSE CLEAR card - 'CREST ON THE CRANE HOOK / MAGMA WORKS - EMBER FOUNDRY', seven crest pips with one lit, 0:34.932 FIRST CLEAR, a crests/coins/sigils/deaths tally and STAY / RETURN TO KEEP with keyboard hints. That card is genuinely good: storybook glass, confetti, nothing that looks like a debug overlay.",
+  "The crane gantry itself is solid ground at the authored 25.20 and walks normally end to end.",
+  "The death card is clear and specific: a full-screen desaturate-and-iris with 'INCINERATED' and a REWIND indicator, and the respawn lands 428-662 ms later on the right pad."
+ ],
+ "blocked": [
+  "The nine slag rafts were not crossed end to end. Two scripted attempts failed at raft 1-4: hopping raft to raft with a short run-up drops you in the lava (the junction-to-R1 gap is 1.30 m at -0.15 m and needs a moving jump). A continuous run-and-jump crossing (_play_e1b.py --seg 2c) was queued but had not returned when this report was written - its result lands in _playreports/ember-1.json under traces.raftrun_0/1.",
+  "The crane-hook CREST was never actually collected. Both attempts teleported to z -37, which is off the crane gantry (its deck is z -42.4 .. -38.8), so the hero fell into the crucible instead. _play_e1b.py --seg 11 re-runs it from (-9, 25.7, -40.6) and also tests whether the crucible interior is escapable; it had not returned in time.",
+  "The Warden, the chain bridge into the slag pit, the bucket orbit, the rim walk and the iron-hat LAVA WALK to the islet were queued as segment 7 and had not returned when this report was written.",
+  "The two crucible stair flights (east 30 risers 6.00->15.00, west 34 risers 15.00->25.20) were never climbed on foot - segment 8 died on a Chrome crash at load ('Target page, context or browser has been closed') and was re-queued.",
+  "Sigil 8 on the east pylon spur was not reached: the gantry's east edge (x 41.8) to the spur's west edge (x 43.0) is a 1.20 m gap over open lava and my walk driver does not jump. That is normal platforming, not a defect - but nobody has confirmed the hop lands.",
+  "Sigil 3 could not be reached at all, because of the conveyor defect above; sigil 4 (flue ledge) could not be reached because the flue climb never got past 2.40 m of its 9.00 m.",
+  "Audio was never assessed - the driver runs headless with no way to hear the vent, crusher, pour or death stingers.",
+  "The flame hazard objects expose no `.mesh`, so I could not measure the vent basins' true dimensions from the page - the size claims in this report are read off screenshots against the 4.00 m catwalk width, not from geometry.",
+  "The two breakable ingot crates would not break: pounded from 2 m up at x 34.6 and x 43.0 and coins stayed at 3 -> 3 both times, with the hero ending stood on top of the crate at y 7.40. One of the two attempts had hazards frozen, which may be the reason - it needs a controlled re-test with the clock running before this is called a defect.",
+  "The crusher's own beat was photographed at six clock points but I never let it hit me, so I cannot say whether its kill face is fair.",
+  "THE RAFT FIELD WAS NEVER CROSSED, in seven attempts across three approaches. From the honest approach lane (x 4.4 on the junction deck, five and a half metres of straight run-up, W held throughout, jump tapped on every grounded frame) three runs landed cleanly on raft 1 and then all three died at almost exactly the same point in the R1->R2 gap: (6.58, -0.02, -19.58), (6.43, -0.04, -19.71), (6.57, -0.09, -19.64). I do NOT claim the field is broken - a scripted driver spends 0.4-0.6 s per decision and the whole design is 'never stop', so R1 (delay 0.6 s, speed 1.9) had already started under me. It needs a human or a frame-stepped driver to settle. The sinker itself demonstrably works: standing on R1 sank it and incinerated me.",
+  "The east and west crucible stair flights were still never climbed. The retried segment 8 booted but my approach points were wrong: the east-flight attempt was dragged west by the base-yard belt on to the conveyor at (-6.38, 6.30, -31.72), and the level-3 teleport at x 9 put me inside the sweeping chain bar at (9, 15.70, -30.4) and killed me. Every reading in that segment is at y 6.00, i.e. on the base yard. The west flight IS visible and reads as a proper stair in _shots/play_ember-1/705_rim_walk.png, but nobody has walked either flight."
+ ],
+ "played": "EMBER-1 \"MAGMA WORKS\" \u2014 what I actually did, in order.\n\nI drove the shipped page headless at ?dev=1&quality=low&autoscale=0 through\n_harness/_play_e1.py + _play_e1b.py (thirteen scripted segments, real\nKeyboardEvents through window, player.__test.state() sampled every 110-250 ms,\n119 PNGs into _shots/play_ember-1/). Every segment clicked NEW GAME on the real\ntitle, called __dev.unlockAll(), then entered ember-1 through the real loader at\na named checkpoint. Teleports were used only to travel; every station was then\nwalked on foot.\n\nBEAT 1 \u2014 THE SHORE. Spawned at (0, 4.60, 45) on the yard flat. Read the MAGMA\nWORKS board (legible from the pad and from 3 m). Walked the swept track north\npicking up the trail coins, then off-track west to (-8.4, 3.06, 35.9) to look at\nthe shore and the lake edge, then back to the quay.\n\nBEAT 2 \u2014 THE QUAY AND THE FLAME CATWALK. Took cp-quay. Looked at the quay\npedestal and the race-start board. Stood at the catwalk mouth (z 12 and z 10.6)\nand forced the vent cycle to clock 0.2 / 1.6 / 2.9 / 3.6 and to a firing/idle\npair, photographing each. Walked straight into vent 1 with the clock at 0 and\ndied at clock 0.70 (deaths 0 -> 1) - the warn window held all the way to the\njet. Froze the hazards and pushed north from twelve different z positions to\nfind out whether the vent props block the deck (they do not), then queried the\nbroadphase: four colliders in the whole catwalk band, none of them a vent.\nFinally ran the spine three times from the quay at clock 1.5 / 2.6 / 3.4 \u2014\ncrossed once, died twice, both times running into a jet already lit. Stood\nstill at (0, 3.00, 0) for nine seconds between vents 2 and 3 with the bumbler\npatrolling: nothing.\n\nBEAT 2 (cont.) \u2014 THE JUNCTION AND THE IRON HAT. Took cp-junction. Read the\nraft board. Walked on to the METAL HAT at (-4, 3.90, -9): power flipped from\nnull to metal, helmet on, 20 s HUD timer.\n\nBEAT 3 \u2014 THE RAFT FIELD. Four attempts. Two raft-by-raft hops from (0, -11)\nand two continuous run-and-jump crossings from (0, -12.4). All four ended in\nthe lava between the junction and rafts 1-4. Stood on R1 at (4.4, 2.85, -16)\nand let it take me down: it sank and INCINERATED me. A fifth attempt from the\nproper approach lane (x 4.4, five and a half metres of straight run-up) was\nqueued as segment 2d.\n\nBEAT 4 \u2014 THE SMELTER. Took cp-smelter. Read both belt boards. Stood on the\ngreen jump pad and measured the launch (vel 4.41, 15.92, 7.86 \u2014 it fires).\nStood on the belt with no input at all and was carried off the deck and killed.\nStood on it holding W west for fourteen seconds and did not move at all. Forced\nthe crusher through its beat at clock 0.1 / 1.6 / 2.4. Pounded a breakable\ncrate from above.\n\nBEAT 5 \u2014 THE EAST GANTRY (ROUTE B). Stood at the gantry head at (40, 6, 16),\nforced both pulse beams through their cycle, then ran the 25 m from z 15 to\nz -9.93 at full speed through both beam lines: no deaths, six coins. Tried to\nwalk to sigil 8 on the pylon spur and fell in the 1.2 m gap (it needs a hop).\n\nBEAT 6 \u2014 THE CRUCIBLE AND THE FLUE (ROUTE C). Took cp-crucible. Walked toward\nthe flue and ran into the west wall twice looking for the 1.4 m door. Read (or\ntried to read) the KICK ONE WALL sign. Stood on the flue floor at (-8.1, 6.40,\n-34) and played the authored climb \u2014 one jump plus four alternating wall kicks \u2014\nsix times; best height 8.80 m of the 9.00 m needed, and I ended back on the\nfloor.\n\nBEAT 7 \u2014 THE POUR. Stood on the level-3 walk at (-9, 15.40, -30.4) and at\n(-6.03, 15.00, -30.4) and forced the 30 s pour through warn / on / mid / off.\nStood in the pour lane at (0, 15.00, -30.4) and was killed at clock 30.15.\nWalked the walk east to (6, 15, -30.4) to look at the sweeping chain bar.\n\nBEAT 8 \u2014 THE CROWN. Reached the crane gantry twice; both times the approach\nput me over the crucible's open mouth instead and I fell inside the vessel, and\nwalked its floor at y 6.00 looking for a way out. Walked the RIM from\n(-5.2, 22.0, -38) south to (-5.23, 21.60, -32.74), taking three rim coins.\nLooked at the bucket orbit from the crown at clock 0 / 2 / 4.\n\nBEAT 9 \u2014 THE SLAG PIT. Crossed the chain bridge from (-16, 6.6, -34), walked\nto (-26, -34) and then right up to the Warden at (-30.84, 6.00, -34) \u2014 close\nenough to clip into it \u2014 and stood completely still for five seconds.\n\nBEAT 10 \u2014 THE IRON HAT AND THE ISLET. Re-entered at cp-junction, took the hat\nand set off west across the lava for the islet at (-26, 1.90, -14).",
+ "traces": {
+  "R1_sink": [
+   [
+    4.49,
+    3,
+    "idle",
+    1
+   ],
+   [
+    4.69,
+    3,
+    "idle",
+    1
+   ],
+   [
+    4.93,
+    3,
+    "idle",
+    1
+   ],
+   [
+    5.21,
+    3,
+    "idle",
+    1
+   ],
+   [
+    5.44,
+    3,
+    "idle",
+    1
+   ],
+   [
+    5.69,
+    3,
+    "idle",
+    1
+   ],
+   [
+    6,
+    3,
+    "idle",
+    1
+   ],
+   [
+    6.37,
+    3,
+    "idle",
+    1
+   ],
+   [
+    6.9,
+    3,
+    "idle",
+    1
+   ],
+   [
+    7.34,
+    3,
+    "idle",
+    1
+   ],
+   [
+    7.49,
+    3,
+    "idle",
+    1
+   ],
+   [
+    7.72,
+    3,
+    "idle",
+    1
+   ],
+   [
+    7.81,
+    3,
+    "idle",
+    1
+   ],
+   [
+    7.99,
+    3,
+    "idle",
+    1
+   ],
+   [
+    8.24,
+    3,
+    "idle",
+    1
+   ],
+   [
+    8.43,
+    3,
+    "idle",
+    1
+   ]
+  ],
+  "catwalk_frozen": [
+   [
+    0,
+    11.55,
+    "run",
+    0
+   ],
+   [
+    0,
+    10.3,
+    "run",
+    0
+   ],
+   [
+    0,
+    8.5,
+    "run",
+    0
+   ],
+   [
+    0,
+    7.6,
+    "run",
+    0
+   ],
+   [
+    0,
+    5.8,
+    "run",
+    0
+   ],
+   [
+    0,
+    4.45,
+    "run",
+    0
+   ],
+   [
+    0,
+    3.1,
+    "run",
+    0
+   ],
+   [
+    0,
+    2.2,
+    "run",
+    0
+   ],
+   [
+    0,
+    0.85,
+    "run",
+    0
+   ],
+   [
+    0,
+    -0.5,
+    "run",
+    0
+   ],
+   [
+    0,
+    -1.85,
+    "run",
+    0
+   ],
+   [
+    0,
+    -3.57,
+    "dead",
+    1
+   ]
+  ],
+  "catwalk_push": [
+   {
+    "from": 11.9,
+    "to": 8.71,
+    "x": 0,
+    "ps": "idle"
+   },
+   {
+    "from": 11.200000000000001,
+    "to": 5.23,
+    "x": 0,
+    "ps": "idle"
+   },
+   {
+    "from": 10.6,
+    "to": 7.33,
+    "x": 0,
+    "ps": "idle"
+   },
+   {
+    "from": 10.0,
+    "to": 7.18,
+    "x": 0,
+    "ps": "idle"
+   },
+   {
+    "from": 9.4,
+    "to": 6.62,
+    "x": 0,
+    "ps": "skid"
+   },
+   {
+    "from": 8.8,
+    "to": 7.82,
+    "x": 0,
+    "ps": "idle"
+   },
+   {
+    "from": 8.0,
+    "to": 8,
+    "x": 0,
+    "ps": "land"
+   },
+   {
+    "from": 5.4,
+    "to": 5.36,
+    "x": 0,
+    "ps": "fall"
+   },
+   {
+    "from": 3.4,
+    "to": 3.31,
+    "x": 0,
+    "ps": "land"
+   },
+   {
+    "from": 1.4,
+    "to": -0.9,
+    "x": 0,
+    "ps": "skid"
+   },
+   {
+    "from": -2.6,
+    "to": -3.57,
+    "x": 0,
+    "ps": "dead"
+   },
+   {
+    "from": -4.6,
+    "to": 13.47,
+    "x": 0,
+    "ps": "skid"
+   }
+  ],
+  "catwalk_colliders": [
+   {
+    "c": [
+     0,
+     2.85,
+     2
+    ],
+    "h": [
+     2,
+     0.15,
+     9
+    ],
+    "solid": true,
+    "surface": "normal",
+    "group": "world"
+   },
+   {
+    "c": [
+     -5,
+     2.85,
+     4
+    ],
+    "h": [
+     1.5,
+     0.15,
+     1.5
+    ],
+    "solid": true,
+    "surface": "normal",
+    "group": "world"
+   },
+   {
+    "c": [
+     0,
+     2.85,
+     -9
+    ],
+    "h": [
+     6,
+     0.15,
+     4
+    ],
+    "solid": true,
+    "surface": "normal",
+    "group": "world"
+   },
+   {
+    "c": [
+     -4,
+     3.39,
+     -0.61
+    ],
+    "h": [
+     0.38,
+     0.4,
+     0.38
+    ],
+    "solid": true,
+    "surface": "bounce",
+    "group": "critter"
+   }
+  ],
+  "catwalk_live": [
+   [
+    11.14,
+    "run",
+    2
+   ],
+   [
+    10.5,
+    "run",
+    2
+   ],
+   [
+    9.6,
+    "run",
+    2
+   ],
+   [
+    8.7,
+    "run",
+    2
+   ],
+   [
+    7.8,
+    "run",
+    2
+   ],
+   [
+    6,
+    "run",
+    2
+   ],
+   [
+    5.1,
+    "run",
+    2
+   ],
+   [
+    4.2,
+    "run",
+    2
+   ],
+   [
+    2.4,
+    "dead",
+    3
+   ]
+  ],
+  "rafts": [
+   {
+    "raft": 1,
+    "target": [
+     4.4,
+     -16.0
+    ],
+    "p": [
+     0.11,
+     3.53,
+     -11.12
+    ],
+    "ps": "jump1",
+    "gnd": false,
+    "surf": "normal",
+    "deaths": 0
+   },
+   {
+    "raft": 2,
+    "target": [
+     8.8,
+     -18.9
+    ],
+    "p": [
+     2.6,
+     3.04,
+     -13.5
+    ],
+    "ps": "fall",
+    "gnd": false,
+    "surf": "normal",
+    "deaths": 0
+   },
+   {
+    "raft": 3,
+    "target": [
+     13.4,
+     -21.5
+    ],
+    "p": [
+     6.86,
+     2.8,
+     -14.06
+    ],
+    "ps": "fall",
+    "gnd": false,
+    "surf": "normal",
+    "deaths": 0
+   },
+   {
+    "raft": 4,
+    "target": [
+     17.2,
+     -25.1
+    ],
+    "p": [
+     0,
+     3,
+     -7.5
+    ],
+    "ps": "idle",
+    "gnd": true,
+    "surf": "normal",
+    "deaths": 1
+   }
+  ],
+  "jumppad": {
+   "apex": 7.31,
+   "trace": [
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ],
+    [
+     7.31,
+     "jump1"
+    ]
+   ]
+  },
+  "flue_kicks": [
+   [
+    6.4,
+    "idle",
+    1
+   ],
+   [
+    7.74,
+    "fall",
+    1
+   ],
+   [
+    8.8,
+    "wallkick",
+    1
+   ],
+   [
+    7.06,
+    "fall",
+    1
+   ],
+   [
+    6.78,
+    "fall",
+    2
+   ],
+   [
+    7.58,
+    "fall",
+    1
+   ],
+   [
+    6.4,
+    "idle",
+    0
+   ]
+  ],
+  "flames": [
+   {
+    "p": [
+     0,
+     3.05,
+     8
+    ],
+    "mesh": null
+   },
+   {
+    "p": [
+     0,
+     3.05,
+     2
+    ],
+    "mesh": null
+   },
+   {
+    "p": [
+     0,
+     3.05,
+     -4
+    ],
+    "mesh": null
+   },
+   {
+    "p": [
+     -3,
+     21,
+     -30.4
+    ],
+    "mesh": null
+   },
+   {
+    "p": [
+     0,
+     21,
+     -30.4
+    ],
+    "mesh": null
+   },
+   {
+    "p": [
+     3,
+     21,
+     -30.4
+    ],
+    "mesh": null
+   }
+  ],
+  "catwalk_run_t1.5": {
+   "crossed": false,
+   "cause": "lava",
+   "end": [
+    0,
+    3,
+    15
+   ],
+   "trace": [
+    [
+     1.79,
+     12.44,
+     "run",
+     0
+    ],
+    [
+     1.94,
+     11.63,
+     "run",
+     0
+    ],
+    [
+     2.4,
+     7.5,
+     "run",
+     0
+    ],
+    [
+     2.53,
+     6.3,
+     "run",
+     0
+    ],
+    [
+     2.58,
+     5.85,
+     "run",
+     0
+    ],
+    [
+     2.63,
+     5.4,
+     "run",
+     0
+    ],
+    [
+     2.73,
+     4.5,
+     "run",
+     0
+    ],
+    [
+     2.88,
+     3.15,
+     "run",
+     0
+    ],
+    [
+     3.03,
+     2.4,
+     "dead",
+     1
+    ]
+   ]
+  },
+  "catwalk_run_t2.6": {
+   "crossed": true,
+   "cause": "lava",
+   "end": [
+    0,
+    3,
+    -9.37
+   ],
+   "trace": [
+    [
+     2.7,
+     12.44,
+     "run",
+     1
+    ],
+    [
+     2.75,
+     12.27,
+     "run",
+     1
+    ],
+    [
+     2.8,
+     12,
+     "run",
+     1
+    ],
+    [
+     2.92,
+     11.03,
+     "run",
+     1
+    ],
+    [
+     3.02,
+     10.13,
+     "run",
+     1
+    ],
+    [
+     3.12,
+     9.23,
+     "run",
+     1
+    ],
+    [
+     3.17,
+     8.78,
+     "run",
+     1
+    ],
+    [
+     3.22,
+     8.33,
+     "run",
+     1
+    ],
+    [
+     3.31,
+     7.5,
+     "run",
+     1
+    ],
+    [
+     3.51,
+     5.7,
+     "run",
+     1
+    ],
+    [
+     3.65,
+     4.43,
+     "run",
+     1
+    ],
+    [
+     3.81,
+     3.78,
+     "bonk",
+     1
+    ],
+    [
+     4.05,
+     3.76,
+     "bonk",
+     1
+    ],
+    [
+     4.1,
+     3.7,
+     "run",
+     1
+    ],
+    [
+     4.2,
+     3.26,
+     "run",
+     1
+    ],
+    [
+     4.2,
+     3.26,
+     "run",
+     1
+    ],
+    [
+     4.25,
+     2.88,
+     "run",
+     1
+    ],
+    [
+     4.3,
+     2.44,
+     "run",
+     1
+    ],
+    [
+     4.35,
+     1.99,
+     "run",
+     1
+    ],
+    [
+     4.35,
+     1.99,
+     "run",
+     1
+    ],
+    [
+     4.45,
+     1.09,
+     "run",
+     1
+    ],
+    [
+     4.5,
+     0.64,
+     "run",
+     1
+    ],
+    [
+     4.6,
+     -0.26,
+     "run",
+     1
+    ],
+    [
+     4.6,
+     -0.26,
+     "run",
+     1
+    ],
+    [
+     4.7,
+     -1.16,
+     "run",
+     1
+    ],
+    [
+     4.75,
+     -1.61,
+     "run",
+     1
+    ],
+    [
+     4.85,
+     -2.51,
+     "run",
+     1
+    ],
+    [
+     5.04,
+     -4.24,
+     "run",
+     1
+    ],
+    [
+     5.14,
+     -5.14,
+     "run",
+     1
+    ],
+    [
+     5.41,
+     -7.46,
+     "run",
+     1
+    ],
+    [
+     5.46,
+     -7.91,
+     "run",
+     1
+    ],
+    [
+     5.56,
+     -8.81,
+     "run",
+     1
+    ]
+   ]
+  },
+  "catwalk_run_t3.4": {
+   "crossed": false,
+   "cause": "lava",
+   "end": [
+    0,
+    3,
+    -7.5
+   ],
+   "trace": [
+    [
+     3.59,
+     12.27,
+     "run",
+     1
+    ],
+    [
+     3.76,
+     10.95,
+     "run",
+     1
+    ],
+    [
+     3.88,
+     9.9,
+     "run",
+     1
+    ],
+    [
+     3.93,
+     9.45,
+     "run",
+     1
+    ],
+    [
+     4.08,
+     8.1,
+     "run",
+     1
+    ],
+    [
+     4.23,
+     8.03,
+     "dead",
+     2
+    ]
+   ]
+  },
+  "catwalk_stand": [
+   [
+    3.8,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    4.0,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    4.1,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    4.4,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    5.3,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    5.6,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    5.8,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    6.0,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    6.2,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    6.4,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    6.8,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    7.2,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    7.4,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    7.5,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    7.7,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    7.8,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    8.0,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    8.1,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    8.2,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    8.4,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    8.6,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    8.7,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    8.9,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ],
+   [
+    9.0,
+    [
+     0,
+     3,
+     0
+    ],
+    "idle",
+    2
+   ]
+  ],
+  "raftrun_0": {
+   "reached": 0,
+   "end": [
+    0,
+    3,
+    -7.5
+   ],
+   "deaths": [
+    0,
+    1
+   ],
+   "trace": [
+    [
+     0,
+     3,
+     -12.4,
+     "idle",
+     0
+    ],
+    [
+     0.53,
+     4.47,
+     -12.84,
+     "fall",
+     0
+    ],
+    [
+     0.71,
+     4.4,
+     -12.98,
+     "fall",
+     0
+    ],
+    [
+     1.08,
+     3.92,
+     -13.28,
+     "fall",
+     0
+    ],
+    [
+     1.93,
+     1,
+     -13.98,
+     "fall",
+     0
+    ],
+    [
+     2.11,
+     0.05,
+     -14.12,
+     "dead",
+     1
+    ]
+   ]
+  },
+  "raftrun_1": {
+   "reached": 0,
+   "end": [
+    0,
+    3,
+    -7.5
+   ],
+   "deaths": [
+    1,
+    2
+   ],
+   "trace": [
+    [
+     0,
+     3,
+     -12.4,
+     "idle",
+     1
+    ],
+    [
+     0.35,
+     3.99,
+     -12.69,
+     "jump1",
+     1
+    ],
+    [
+     0.71,
+     3.77,
+     -12.98,
+     "fall",
+     1
+    ],
+    [
+     0.9,
+     3.49,
+     -13.13,
+     "fall",
+     1
+    ],
+    [
+     1.29,
+     2.99,
+     -13.46,
+     "fall",
+     1
+    ],
+    [
+     1.83,
+     2.63,
+     -13.9,
+     "fall",
+     1
+    ],
+    [
+     2.33,
+     0.23,
+     -16.13,
+     "wallslide",
+     1
+    ],
+    [
+     2.34,
+     0.03,
+     -16.37,
+     "dead",
+     2
+    ]
+   ]
+  },
+  "R1_stand": [
+   [
+    3.14,
+    2.85,
+    "idle",
+    true,
+    2
+   ],
+   [
+    3.19,
+    2.85,
+    "idle",
+    true,
+    2
+   ],
+   [
+    3.24,
+    2.85,
+    "idle",
+    true,
+    2
+   ],
+   [
+    3.34,
+    2.85,
+    "idle",
+    true,
+    2
+   ],
+   [
+    3.39,
+    2.85,
+    "idle",
+    true,
+    2
+   ],
+   [
+    3.49,
+    2.85,
+    "idle",
+    true,
+    2
+   ],
+   [
+    3.59,
+    0.54,
+    "fall",
+    false,
+    2
+   ],
+   [
+    3.69,
+    0.02,
+    "dead",
+    false,
+    3
+   ]
+  ],
+  "conveyor_defs": [
+   {
+    "p": [
+     38,
+     6.15,
+     -31.5
+    ],
+    "s": [
+     16,
+     0.3,
+     3
+    ],
+    "dir": [
+     -1,
+     0,
+     0
+    ],
+    "power": 4.5,
+    "push": null,
+    "cols": [
+     {
+      "c": [
+       38,
+       6.15,
+       -31.5
+      ],
+      "surface": "conveyor",
+      "vel": null
+     }
+    ]
+   },
+   {
+    "p": [
+     -2,
+     6.15,
+     -30
+    ],
+    "s": [
+     14,
+     0.3,
+     3
+    ],
+    "dir": [
+     1,
+     0,
+     0
+    ],
+    "power": 5,
+    "push": null,
+    "cols": [
+     {
+      "c": [
+       -2,
+       6.15,
+       -30
+      ],
+      "surface": "conveyor",
+      "vel": null
+     }
+    ]
+   }
+  ],
+  "belts": {
+   "smelter": {
+    "name": "smelter belt",
+    "idle": {
+     "from": [
+      38,
+      12.35,
+      -31.5
+     ],
+     "to": [
+      31,
+      6,
+      -34
+     ],
+     "dx": -7,
+     "deaths": [
+      1,
+      2
+     ],
+     "trace": [
+      [
+       38,
+       -31.5,
+       "idle",
+       "normal",
+       1
+      ],
+      [
+       38,
+       -31.5,
+       "idle",
+       "normal",
+       1
+      ],
+      [
+       38,
+       -31.5,
+       "idle",
+       "normal",
+       1
+      ],
+      [
+       38,
+       -31.5,
+       "idle",
+       "normal",
+       1
+      ],
+      [
+       38,
+       -31.5,
+       "land",
+       "conveyor",
+       1
+      ],
+      [
+       37.36,
+       -31.5,
+       "idle",
+       "conveyor",
+       1
+      ],
+      [
+       37.32,
+       -31.5,
+       "dead",
+       "conveyor",
+       2
+      ],
+      [
+       31,
+       -34,
+       "fall",
+       "normal",
+       2
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       2
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       2
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       2
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       2
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       2
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       2
+      ]
+     ]
+    },
+    "east": {
+     "from": [
+      38,
+      6.51,
+      -31.5
+     ],
+     "to": [
+      41.91,
+      6.3,
+      -31.58
+     ],
+     "dx": 3.91,
+     "state": "skid",
+     "speed": [
+      1.24,
+      -0.19,
+      -0.16
+     ],
+     "deaths": [
+      2,
+      2
+     ]
+    },
+    "west": {
+     "from": [
+      37.97,
+      12.35,
+      -31.5
+     ],
+     "to": [
+      34.7,
+      11.99,
+      -31.5
+     ],
+     "dx": -3.27,
+     "state": "fall",
+     "speed": [
+      -6.77,
+      -5.94,
+      0
+     ],
+     "deaths": [
+      2,
+      2
+     ]
+    }
+   },
+   "baseyard": {
+    "name": "base-yard belt",
+    "idle": {
+     "from": [
+      31,
+      6,
+      -34
+     ],
+     "to": [
+      31,
+      6,
+      -34
+     ],
+     "dx": 0,
+     "deaths": [
+      3,
+      3
+     ],
+     "trace": [
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       3
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       3
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       3
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       3
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       3
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       3
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       3
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       3
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       3
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       3
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       3
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       3
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       3
+      ],
+      [
+       31,
+       -34,
+       "idle",
+       "normal",
+       3
+      ]
+     ]
+    },
+    "east": {
+     "from": [
+      31,
+      6,
+      -34
+     ],
+     "to": [
+      27.44,
+      5.95,
+      -32.93
+     ],
+     "dx": -3.56,
+     "state": "fall",
+     "speed": [
+      -4.5,
+      -2.11,
+      1.39
+     ],
+     "deaths": [
+      4,
+      4
+     ]
+    },
+    "west": {
+     "from": [
+      31,
+      6,
+      -34
+     ],
+     "to": [
+      26.66,
+      5.66,
+      -32.96
+     ],
+     "dx": -4.34,
+     "state": "fall",
+     "speed": [
+      -8.63,
+      -5.56,
+      2.12
+     ],
+     "deaths": [
+      5,
+      5
+     ]
+    }
+   }
+  },
+  "crucible_pot": {
+   "north": {
+    "end": [
+     -4.02,
+     9.82,
+     -40.16
+    ],
+    "state": "fall",
+    "deaths": 0
+   },
+   "south": {
+    "end": [
+     1.21,
+     14.8,
+     -35.58
+    ],
+    "state": "wallkick",
+    "deaths": 0
+   },
+   "east": {
+    "end": [
+     4.02,
+     8.5,
+     -39.84
+    ],
+    "state": "fall",
+    "deaths": 0
+   },
+   "west": {
+    "end": [
+     -2.23,
+     9.95,
+     -33.98
+    ],
+    "state": "wallkick",
+    "deaths": 0
+   }
+  },
+  "raft2_0": {
+   "reached": 1,
+   "end": [
+    0,
+    3,
+    -7.5
+   ],
+   "deaths": [
+    0,
+    1
+   ],
+   "trace": [
+    [
+     4.4,
+     3,
+     -9.32,
+     "run",
+     0
+    ],
+    [
+     4.4,
+     3.82,
+     -10.22,
+     "jump1",
+     0
+    ],
+    [
+     4.4,
+     3.99,
+     -11.12,
+     "jump1",
+     0
+    ],
+    [
+     4.4,
+     3.77,
+     -12.02,
+     "fall",
+     0
+    ],
+    [
+     4.4,
+     3.49,
+     -12.47,
+     "fall",
+     0
+    ],
+    [
+     4.4,
+     3,
+     -13.32,
+     "land",
+     0
+    ],
+    [
+     4.4,
+     3.91,
+     -14.62,
+     "jump2",
+     0
+    ],
+    [
+     4.42,
+     4.09,
+     -15.09,
+     "jump2",
+     0
+    ],
+    [
+     4.49,
+     4.18,
+     -15.59,
+     "jump2",
+     0
+    ],
+    [
+     4.58,
+     4.19,
+     -16.08,
+     "fall",
+     0
+    ],
+    [
+     4.72,
+     4.08,
+     -16.56,
+     "fall",
+     0
+    ],
+    [
+     5.08,
+     3.53,
+     -17.49,
+     "fall",
+     0
+    ],
+    [
+     5.57,
+     2.52,
+     -18.37,
+     "fall",
+     0
+    ],
+    [
+     5.86,
+     1.84,
+     -18.78,
+     "fall",
+     0
+    ],
+    [
+     6.17,
+     1.05,
+     -19.17,
+     "fall",
+     0
+    ],
+    [
+     6.58,
+     -0.02,
+     -19.58,
+     "dead",
+     1
+    ]
+   ]
+  },
+  "raft2_1": {
+   "reached": 1,
+   "end": [
+    0,
+    3,
+    -7.5
+   ],
+   "deaths": [
+    1,
+    2
+   ],
+   "trace": [
+    [
+     4.4,
+     3,
+     -8.87,
+     "run",
+     1
+    ],
+    [
+     4.4,
+     4.2,
+     -10.67,
+     "jump1",
+     1
+    ],
+    [
+     4.4,
+     4.18,
+     -11.12,
+     "fall",
+     1
+    ],
+    [
+     4.4,
+     3.46,
+     -12.47,
+     "fall",
+     1
+    ],
+    [
+     4.4,
+     3,
+     -12.91,
+     "land",
+     1
+    ],
+    [
+     4.4,
+     4.77,
+     -14.71,
+     "jump2",
+     1
+    ],
+    [
+     4.42,
+     4.85,
+     -15.18,
+     "jump2",
+     1
+    ],
+    [
+     4.48,
+     4.84,
+     -15.69,
+     "fall",
+     1
+    ],
+    [
+     4.77,
+     4.38,
+     -16.88,
+     "fall",
+     1
+    ],
+    [
+     5.39,
+     2.86,
+     -18.32,
+     "fall",
+     1
+    ],
+    [
+     5.66,
+     2.12,
+     -18.77,
+     "fall",
+     1
+    ],
+    [
+     5.97,
+     1.27,
+     -19.19,
+     "fall",
+     1
+    ],
+    [
+     6.31,
+     0.31,
+     -19.59,
+     "fall",
+     1
+    ],
+    [
+     6.43,
+     -0.04,
+     -19.71,
+     "dead",
+     2
+    ]
+   ]
+  },
+  "raft2_2": {
+   "reached": 1,
+   "end": [
+    0,
+    3,
+    -7.5
+   ],
+   "deaths": [
+    2,
+    3
+   ],
+   "trace": [
+    [
+     4.4,
+     3,
+     -9.32,
+     "run",
+     2
+    ],
+    [
+     4.4,
+     4.2,
+     -11.12,
+     "jump1",
+     2
+    ],
+    [
+     4.4,
+     4.18,
+     -11.57,
+     "fall",
+     2
+    ],
+    [
+     4.4,
+     4.06,
+     -12.02,
+     "fall",
+     2
+    ],
+    [
+     4.4,
+     3.46,
+     -12.92,
+     "fall",
+     2
+    ],
+    [
+     4.4,
+     2.87,
+     -14.22,
+     "land",
+     2
+    ],
+    [
+     4.4,
+     3.85,
+     -15.08,
+     "jump2",
+     2
+    ],
+    [
+     4.48,
+     4.12,
+     -16.01,
+     "jump2",
+     2
+    ],
+    [
+     4.58,
+     4.12,
+     -16.46,
+     "fall",
+     2
+    ],
+    [
+     4.71,
+     4.02,
+     -16.91,
+     "fall",
+     2
+    ],
+    [
+     5.08,
+     3.47,
+     -17.77,
+     "fall",
+     2
+    ],
+    [
+     5.57,
+     2.45,
+     -18.56,
+     "fall",
+     2
+    ],
+    [
+     6.51,
+     0.08,
+     -19.59,
+     "fall",
+     2
+    ],
+    [
+     6.57,
+     -0.09,
+     -19.64,
+     "dead",
+     3
+    ]
+   ]
+  },
+  "lava_walk": [
+   [
+    -6.48,
+    2.98,
+    -10.1,
+    "fall",
+    "normal",
+    0,
+    true
+   ],
+   [
+    -6.98,
+    2.75,
+    -10.2,
+    "fall",
+    "normal",
+    0,
+    true
+   ],
+   [
+    -7.33,
+    2.45,
+    -10.27,
+    "fall",
+    "normal",
+    0,
+    true
+   ],
+   [
+    -8.02,
+    1.51,
+    -10.4,
+    "fall",
+    "normal",
+    0,
+    true
+   ],
+   [
+    -8.37,
+    0.87,
+    -10.47,
+    "fall",
+    "normal",
+    0,
+    true
+   ],
+   [
+    -8.78,
+    -0.02,
+    -10.56,
+    "dead",
+    "normal",
+    1,
+    true
+   ]
+  ]
+ },
+ "driver_notes": [
+  "SEG1 spawn on the obsidian shore, yard flat",
+  "coin trail yard->quay collected 2 coins (1 -> 3)",
+  "swell arc jump -> coins 3",
+  "flame vent phases photographed from the catwalk mouth",
+  "walked the catwalk straight through the vent line, deaths 0 -> 1",
+  "SEG2 start at cp-junction (0, 3.0, -7.5)",
+  "SEG1b walk the flame catwalk end to end, quay z 12 -> junction z -9",
+  "SEG2b raft crossing R1..R9",
+  "SEG3 start at cp-smelter",
+  "SEG5 crucible base yard, flue, flue ledge",
+  "SEG6 the pour, the crown, the crane hook crest",
+  "SEG4 ROUTE B: east ore bank -> gantry -> beams -> smelter deck",
+  "SEG7 bucket orbit, rim, warden pit, iron-hat lava walk",
+  "SEG9 catwalk colliders + a real timed run from the quay to the junction",
+  "SEG2c the nine slag rafts, run-and-jump, W held throughout",
+  "SEG10 conveyors: what they actually do to a player",
+  "SEG11 crane gantry crest + the crucible interior",
+  "SEG8 climb the crucible on foot: east flight -> walk3 -> west flight -> crown",
+  "SEG2d raft crossing from the proper approach lane (x 4.4)",
+  "SEG12 iron hat -> lava walk -> the islet at (-26, 1.90, -14)"
+ ],
+ "console": {
+  "1": [],
+  "2": [],
+  "1b": [],
+  "2b": [],
+  "3": [],
+  "5": [],
+  "6": [],
+  "8": [],
+  "4": [],
+  "7": [],
+  "9": [],
+  "2c": [],
+  "10": [],
+  "11": [],
+  "2d": [],
+  "12": []
+ }
+}

@@ -1,0 +1,2813 @@
+{
+ "generated": "2026-09-29",
+ "method": "Every model below was imported in Blender 5.1.2 headless (tools/research/env_render_models.py); tris = evaluated loop triangles; dims_m = world bounding box as imported (Synty FBX import at 0.01 scale); textures sizes read with PIL. Every recommendation was checked on a rendered contact sheet in sheets/.",
+ "style_direction": "hand-painted stylised PBR (Quaternius MegaKits + GYP + Blink + Tidal Flask FANTASTIC + Japan Village semi-real props), graded saturated; flat-colour toon kits (SICS, Synty, polyperfect, Kenney) only for background/far silhouettes.",
+ "sets": {
+  "1_rust_theater": {
+   "verdict": "STRONG - library covers walls, doors, torches, curtains, chains; stage lights + proscenium arch + seating are the gaps",
+   "textures": [
+    {
+     "label": "GYP Wall_Rock_01 BLUE (painted stone wall - closest match to the reference's blue brick)",
+     "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Rock/Wall_Rock_01_Blue_Albedo.tif",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Rock/Wall_Rock_01_Normal.tif",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA"
+    },
+    {
+     "label": "QMV T_Brick (light grey brick; multiply-tint blue in shader)",
+     "albedo": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_Brick_BaseColor.png",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_Brick_Normal.png",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "rough": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_Brick_Roughness.png",
+     "rough_size": [
+      2048,
+      2048
+     ],
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read"
+    },
+    {
+     "label": "GYP Wall_Brick_Damaged_01 (plaster with exposed brick - condemned look)",
+     "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Damaged/Wall_Brick_Damaged_01_Albedo.tif",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Damaged/Wall_Brick_Damaged_01_Normal.tif",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA"
+    },
+    {
+     "label": "QMV T_UnevenBrick (stone floor/wall)",
+     "albedo": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_UnevenBrick_BaseColor.png",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_UnevenBrick_Normal.png",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "rough": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_UnevenBrick_Roughness.png",
+     "rough_size": [
+      2048,
+      2048
+     ],
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read"
+    },
+    {
+     "label": "FANTASTIC PlanksLong_01 v1 (stage floorboards)",
+     "albedo": {
+      "cache_package": "F:/games/unity-asset-cache/Tidal Flask Studios/3D ModelsPropsInterior/FANTASTIC - Interior Pack.unitypackage",
+      "package_pathname": "Assets/Fantastic Interior Pack/2d/textures/T_ENV_MOD_Interior_PlanksLong_01_v1_BC.png",
+      "nested_package": "nested: Assets/FANTASTIC - Interior Pack/URP_FANTASTIC_Interior_Pack.unitypackage"
+     },
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": {
+      "cache_package": "F:/games/unity-asset-cache/Tidal Flask Studios/3D ModelsPropsInterior/FANTASTIC - Interior Pack.unitypackage",
+      "package_pathname": "Assets/Fantastic Interior Pack/2d/textures/T_ENV_MOD_Interior_PlanksLong_01_N.png",
+      "nested_package": "nested: Assets/FANTASTIC - Interior Pack/URP_FANTASTIC_Interior_Pack.unitypackage"
+     },
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA"
+    },
+    {
+     "label": "GYP Wall_Wood_01 (wood wall)",
+     "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Wood/Wall_Wood_01_Albedo.tif",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Wall/Wood/Wall_Wood_01_Normal.tif",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA"
+    },
+    {
+     "label": "GYP Door_Wood_01 BLUE / RED (door plank atlas, asset UVs)",
+     "albedo": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Door/Door_Wood_01/Door_Wood_01_Blue_Albedo.tif",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/GYP Studios__Stylized Fantasy City - Exterior Modular/Assets/Stylized Fantasy City - Exterior Modular/Textures/Door/Door_Wood_01/Door_Wood_01_Normal.tif",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA"
+    },
+    {
+     "label": "Blink Stone_Gate",
+     "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Stone_Gate/Stone_Gate_BaseColor.png",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Stone_Gate/Stone_Gate_Normal.png",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Stone_Gate/Stone_Gate_Roughness.png",
+     "rough_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA",
+     "note": "art-deco gold-on-black panel: proscenium/trim"
+    },
+    {
+     "label": "FANTASTIC T_PROP_fabrics (curtain cloth, red)",
+     "albedo": {
+      "cache_package": "F:/games/unity-asset-cache/Tidal Flask Studios/3D ModelsPropsInterior/FANTASTIC - Interior Pack.unitypackage",
+      "package_pathname": "Assets/Fantastic Interior Pack/2d/textures/T_PROP_fabrics_interior_BC.png",
+      "nested_package": "nested: Assets/FANTASTIC - Interior Pack/URP_FANTASTIC_Interior_Pack.unitypackage"
+     },
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA"
+    },
+    {
+     "label": "QMV T_RockTrim + T_WoodTrim trim sheets",
+     "albedo": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_RockTrim_BaseColor.png",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/Textures/T_RockTrim_Normal.png",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read"
+    }
+   ],
+   "models": [
+    {
+     "id": "qmv_Wall_UnevenBrick_Straight",
+     "path": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/glTF/Wall_UnevenBrick_Straight.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 56,
+     "dims_m": [
+      2.0,
+      0.406,
+      3.123
+     ],
+     "textures_loaded": [
+      "T_Plaster_BaseColor 2048x2048",
+      "T_Plaster_Normal 2048x2048",
+      "T_Plaster_ORM 2048x2048",
+      "T_UnevenBrick_BaseColor 2048x2048",
+      "T_UnevenBrick_Normal 2048x2048",
+      "T_UnevenBrick_Roughness 2048x2048",
+      "T_WoodTrim_BaseColor 2048x2048",
+      "T_WoodTrim_Normal 2048x2048",
+      "T_WoodTrim_Roughness 2048x2048"
+     ],
+     "preview_png": "renders/set1/qmv_Wall_UnevenBrick_Straight.png"
+    },
+    {
+     "id": "qmv_Wall_UnevenBrick_Door_Round",
+     "path": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/glTF/Wall_UnevenBrick_Door_Round.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 136,
+     "dims_m": [
+      2.0,
+      0.406,
+      3.123
+     ],
+     "textures_loaded": [
+      "T_Plaster_BaseColor 2048x2048",
+      "T_Plaster_Normal 2048x2048",
+      "T_Plaster_ORM 2048x2048",
+      "T_UnevenBrick_BaseColor 2048x2048",
+      "T_UnevenBrick_Normal 2048x2048",
+      "T_UnevenBrick_Roughness 2048x2048",
+      "T_WoodTrim_BaseColor 2048x2048",
+      "T_WoodTrim_Normal 2048x2048",
+      "T_WoodTrim_Roughness 2048x2048"
+     ],
+     "preview_png": "renders/set1/qmv_Wall_UnevenBrick_Door_Round.png"
+    },
+    {
+     "id": "qmv_DoorFrame_Round_Brick",
+     "path": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/glTF/DoorFrame_Round_Brick.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 2046,
+     "dims_m": [
+      1.603,
+      0.477,
+      2.586
+     ],
+     "textures_loaded": [
+      "T_RockTrim_BaseColor 2048x2048",
+      "T_RockTrim_Normal 2048x2048",
+      "T_RockTrim_ORM 2048x2048"
+     ],
+     "preview_png": "renders/set1/qmv_DoorFrame_Round_Brick.png"
+    },
+    {
+     "id": "qmv_Door_4_Flat",
+     "path": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/glTF/Door_4_Flat.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 1044,
+     "dims_m": [
+      1.118,
+      0.209,
+      2.092
+     ],
+     "textures_loaded": [
+      "T_MetalOrnaments_BaseColor 1024x1024",
+      "T_MetalOrnaments_Roughness 512x512",
+      "T_WoodTrim_BaseColor 2048x2048",
+      "T_WoodTrim_Normal 2048x2048",
+      "T_WoodTrim_Roughness 2048x2048"
+     ],
+     "preview_png": "renders/set1/qmv_Door_4_Flat.png"
+    },
+    {
+     "id": "qmv_Door_1_Round",
+     "path": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/glTF/Door_1_Round.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 470,
+     "dims_m": [
+      1.12,
+      0.121,
+      2.318
+     ],
+     "textures_loaded": [
+      "T_WoodTrim_BaseColor 2048x2048",
+      "T_WoodTrim_Normal 2048x2048",
+      "T_WoodTrim_Roughness 2048x2048"
+     ],
+     "preview_png": "renders/set1/qmv_Door_1_Round.png"
+    },
+    {
+     "id": "qmv_Floor_UnevenBrick",
+     "path": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/glTF/Floor_UnevenBrick.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 4,
+     "dims_m": [
+      2.0,
+      2.0,
+      0.02
+     ],
+     "textures_loaded": [
+      "T_UnevenBrick_BaseColor 2048x2048",
+      "T_UnevenBrick_Normal 2048x2048",
+      "T_UnevenBrick_Roughness 2048x2048"
+     ],
+     "preview_png": "renders/set1/qmv_Floor_UnevenBrick.png"
+    },
+    {
+     "id": "qmv_Floor_WoodDark",
+     "path": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/glTF/Floor_WoodDark.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 32,
+     "dims_m": [
+      2.0,
+      2.0,
+      0.02
+     ],
+     "textures_loaded": [
+      "T_WoodTrim_BaseColor 2048x2048",
+      "T_WoodTrim_Normal 2048x2048",
+      "T_WoodTrim_Roughness 2048x2048"
+     ],
+     "preview_png": "renders/set1/qmv_Floor_WoodDark.png"
+    },
+    {
+     "id": "qmv_Wall_Arch",
+     "path": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/glTF/Wall_Arch.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 196,
+     "dims_m": [
+      2.0,
+      0.064,
+      3.0
+     ],
+     "textures_loaded": [
+      "T_WoodTrim_BaseColor 2048x2048",
+      "T_WoodTrim_Normal 2048x2048",
+      "T_WoodTrim_Roughness 2048x2048"
+     ],
+     "preview_png": "renders/set1/qmv_Wall_Arch.png"
+    },
+    {
+     "id": "qmv_Prop_MetalFence_Ornament",
+     "path": "F:/games/forgeflow-games-assets/3d-models/medieval-village-mega/Medieval Village MegaKit[Standard]/glTF/Prop_MetalFence_Ornament.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 3988,
+     "dims_m": [
+      1.952,
+      0.156,
+      2.852
+     ],
+     "textures_loaded": [
+      "T_MetalOrnaments_BaseColor 1024x1024",
+      "T_MetalOrnaments_Roughness 512x512"
+     ],
+     "preview_png": "renders/set1/qmv_Prop_MetalFence_Ornament.png"
+    },
+    {
+     "id": "qfp_Torch_Metal",
+     "path": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Exports/glTF/Torch_Metal.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 970,
+     "dims_m": [
+      0.223,
+      0.388,
+      0.648
+     ],
+     "textures_loaded": [
+      "T_Trim_Metal_BaseColor 2048x2048",
+      "T_Trim_Metal_Normal 2048x2048",
+      "T_Trim_Metal_ORM 2048x2048"
+     ],
+     "preview_png": "renders/set1/qfp_Torch_Metal.png"
+    },
+    {
+     "id": "qfp_Lantern_Wall",
+     "path": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Exports/glTF/Lantern_Wall.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 2822,
+     "dims_m": [
+      0.357,
+      1.302,
+      1.337
+     ],
+     "textures_loaded": [
+      "T_Trim_Metal_BaseColor 2048x2048",
+      "T_Trim_Metal_Normal 2048x2048",
+      "T_Trim_Metal_ORM 2048x2048"
+     ],
+     "preview_png": "renders/set1/qfp_Lantern_Wall.png"
+    },
+    {
+     "id": "qfp_Chandelier",
+     "path": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Exports/glTF/Chandelier.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 5680,
+     "dims_m": [
+      1.303,
+      1.303,
+      1.458
+     ],
+     "textures_loaded": [
+      "T_Trim_Furniture_BaseColor 2048x2048",
+      "T_Trim_Furniture_Normal 2048x2048",
+      "T_Trim_Furniture_ORM 2048x2048",
+      "T_Trim_Metal_BaseColor 2048x2048",
+      "T_Trim_Metal_Normal 2048x2048",
+      "T_Trim_Metal_ORM 2048x2048",
+      "T_Trim_Props_BaseColor 2048x2048",
+      "T_Trim_Props_Normal 2048x2048",
+      "T_Trim_Props_ORM 2048x2048"
+     ],
+     "preview_png": "renders/set1/qfp_Chandelier.png"
+    },
+    {
+     "id": "qfp_Cage_Small",
+     "path": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Exports/glTF/Cage_Small.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 4588,
+     "dims_m": [
+      0.855,
+      0.884,
+      0.805
+     ],
+     "textures_loaded": [
+      "T_Trim_Metal_BaseColor 2048x2048",
+      "T_Trim_Metal_Normal 2048x2048",
+      "T_Trim_Metal_ORM 2048x2048"
+     ],
+     "preview_png": "renders/set1/qfp_Cage_Small.png"
+    },
+    {
+     "id": "qfp_Chain_Coil",
+     "path": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Exports/glTF/Chain_Coil.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 3744,
+     "dims_m": [
+      1.07,
+      0.908,
+      0.087
+     ],
+     "textures_loaded": [
+      "T_Trim_Metal_BaseColor 2048x2048",
+      "T_Trim_Metal_Normal 2048x2048",
+      "T_Trim_Metal_ORM 2048x2048"
+     ],
+     "preview_png": "renders/set1/qfp_Chain_Coil.png"
+    },
+    {
+     "id": "qfp_Barrel",
+     "path": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Exports/glTF/Barrel.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 824,
+     "dims_m": [
+      0.698,
+      0.698,
+      0.898
+     ],
+     "textures_loaded": [
+      "T_Trim_Furniture_BaseColor 2048x2048",
+      "T_Trim_Furniture_Normal 2048x2048",
+      "T_Trim_Furniture_ORM 2048x2048",
+      "T_Trim_Metal_BaseColor 2048x2048",
+      "T_Trim_Metal_Normal 2048x2048",
+      "T_Trim_Metal_ORM 2048x2048"
+     ],
+     "preview_png": "renders/set1/qfp_Barrel.png"
+    },
+    {
+     "id": "qfp_Crate_Metal",
+     "path": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Exports/glTF/Crate_Metal.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 2738,
+     "dims_m": [
+      0.864,
+      0.866,
+      0.868
+     ],
+     "textures_loaded": [
+      "T_Trim_Furniture_BaseColor 2048x2048",
+      "T_Trim_Furniture_Normal 2048x2048",
+      "T_Trim_Furniture_ORM 2048x2048",
+      "T_Trim_Metal_BaseColor 2048x2048",
+      "T_Trim_Metal_Normal 2048x2048",
+      "T_Trim_Metal_ORM 2048x2048"
+     ],
+     "preview_png": "renders/set1/qfp_Crate_Metal.png"
+    },
+    {
+     "id": "qfp_WeaponStand",
+     "path": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Exports/glTF/WeaponStand.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 2084,
+     "dims_m": [
+      1.386,
+      0.983,
+      1.109
+     ],
+     "textures_loaded": [
+      "T_Trim_Furniture_BaseColor 2048x2048",
+      "T_Trim_Furniture_Normal 2048x2048",
+      "T_Trim_Furniture_ORM 2048x2048",
+      "T_Trim_Metal_BaseColor 2048x2048",
+      "T_Trim_Metal_Normal 2048x2048",
+      "T_Trim_Metal_ORM 2048x2048"
+     ],
+     "preview_png": "renders/set1/qfp_WeaponStand.png"
+    },
+    {
+     "id": "qfp_Banner_1_Cloth",
+     "path": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Exports/glTF/Banner_1_Cloth.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 138,
+     "dims_m": [
+      0.81,
+      0.057,
+      2.246
+     ],
+     "textures_loaded": [
+      "T_Trim_Cloth_BaseColor 2048x2048",
+      "T_Trim_Cloth_Normal 2048x2048",
+      "T_Trim_Cloth_ORM 2048x2048",
+      "T_Trim_Metal_BaseColor 2048x2048",
+      "T_Trim_Metal_Normal 2048x2048",
+      "T_Trim_Metal_ORM 2048x2048"
+     ],
+     "preview_png": "renders/set1/qfp_Banner_1_Cloth.png"
+    },
+    {
+     "id": "qfp_Bucket_Metal",
+     "path": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Exports/glTF/Bucket_Metal.gltf",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 540,
+     "dims_m": [
+      0.485,
+      0.449,
+      0.365
+     ],
+     "textures_loaded": [
+      "T_Trim_Metal_BaseColor 2048x2048",
+      "T_Trim_Metal_Normal 2048x2048",
+      "T_Trim_Metal_ORM 2048x2048"
+     ],
+     "preview_png": "renders/set1/qfp_Bucket_Metal.png"
+    },
+    {
+     "id": "fant_curtain_01",
+     "cache_package": "F:/games/unity-asset-cache/Tidal Flask Studios/3D ModelsPropsInterior/FANTASTIC - Interior Pack.unitypackage",
+     "package_pathname": "Assets/Fantastic Interior Pack/3d/PROPS/SM_PROP_curtain_interior_01.fbx",
+     "nested_package": "nested: Assets/FANTASTIC - Interior Pack/URP_FANTASTIC_Interior_Pack.unitypackage",
+     "licence": "Unity Asset Store EULA",
+     "tris": 108,
+     "dims_m": [
+      0.856,
+      0.161,
+      2.168
+     ],
+     "textures_loaded": [
+      "T_PROP_fabrics_interior_BC.png 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/Fantastic Interior Pack/2d/textures/T_PROP_fabrics_interior_BC.png",
+     "preview_png": "renders/cache/fant_curtain_01.png"
+    },
+    {
+     "id": "fant_curtain_02_01",
+     "cache_package": "F:/games/unity-asset-cache/Tidal Flask Studios/3D ModelsPropsInterior/FANTASTIC - Interior Pack.unitypackage",
+     "package_pathname": "Assets/Fantastic Interior Pack/3d/PROPS/SM_PROP_curtain_interior_02_01.fbx",
+     "nested_package": "nested: Assets/FANTASTIC - Interior Pack/URP_FANTASTIC_Interior_Pack.unitypackage",
+     "licence": "Unity Asset Store EULA",
+     "tris": 188,
+     "dims_m": [
+      0.856,
+      0.181,
+      2.169
+     ],
+     "textures_loaded": [
+      "T_PROP_fabrics_interior_BC.png.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/Fantastic Interior Pack/2d/textures/T_PROP_fabrics_interior_BC.png",
+     "preview_png": "renders/cache/fant_curtain_02_01.png"
+    },
+    {
+     "id": "fant_curtain_03",
+     "cache_package": "F:/games/unity-asset-cache/Tidal Flask Studios/3D ModelsPropsInterior/FANTASTIC - Interior Pack.unitypackage",
+     "package_pathname": "Assets/Fantastic Interior Pack/3d/PROPS/SM_PROP_curtain_interior_03.fbx",
+     "nested_package": "nested: Assets/FANTASTIC - Interior Pack/URP_FANTASTIC_Interior_Pack.unitypackage",
+     "licence": "Unity Asset Store EULA",
+     "tris": 182,
+     "dims_m": [
+      0.854,
+      0.176,
+      2.16
+     ],
+     "textures_loaded": [
+      "T_PROP_fabrics_interior_BC.png 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/Fantastic Interior Pack/2d/textures/T_PROP_fabrics_interior_BC.png",
+     "preview_png": "renders/cache/fant_curtain_03.png"
+    },
+    {
+     "id": "fant_curtain_04",
+     "cache_package": "F:/games/unity-asset-cache/Tidal Flask Studios/3D ModelsPropsInterior/FANTASTIC - Interior Pack.unitypackage",
+     "package_pathname": "Assets/Fantastic Interior Pack/3d/PROPS/SM_PROP_curtain_interior_04.fbx",
+     "nested_package": "nested: Assets/FANTASTIC - Interior Pack/URP_FANTASTIC_Interior_Pack.unitypackage",
+     "licence": "Unity Asset Store EULA",
+     "tris": 122,
+     "dims_m": [
+      0.854,
+      0.176,
+      0.647
+     ],
+     "textures_loaded": [
+      "T_PROP_fabrics_interior_BC.png.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/Fantastic Interior Pack/2d/textures/T_PROP_fabrics_interior_BC.png",
+     "preview_png": "renders/cache/fant_curtain_04.png"
+    },
+    {
+     "id": "fant_curtainrod",
+     "cache_package": "F:/games/unity-asset-cache/Tidal Flask Studios/3D ModelsPropsInterior/FANTASTIC - Interior Pack.unitypackage",
+     "package_pathname": "Assets/Fantastic Interior Pack/3d/PROPS/SM_PROP_curtainrod_interior.fbx",
+     "nested_package": "nested: Assets/FANTASTIC - Interior Pack/URP_FANTASTIC_Interior_Pack.unitypackage",
+     "licence": "Unity Asset Store EULA",
+     "tris": 152,
+     "dims_m": [
+      2.584,
+      0.125,
+      0.108
+     ],
+     "textures_loaded": [
+      "T_PROP_metal_interior_BC.png 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/Fantastic Interior Pack/2d/textures/T_PROP_metal_interior_BC.png",
+     "preview_png": "renders/cache/fant_curtainrod.png"
+    },
+    {
+     "id": "qmd_Arch_Door",
+     "path": "F:/games/forgeflow-games-assets/3d-models/modular-dungeon/.Updated Modular Dungeon - May 2019/FBX/Arch_Door.fbx",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 1220,
+     "dims_m": [
+      2.4211,
+      0.3296,
+      3.19
+     ],
+     "textures_loaded": [],
+     "preview_png": "renders/set1/qmd_Arch_Door.png"
+    },
+    {
+     "id": "qmd_Trapdoor",
+     "path": "F:/games/forgeflow-games-assets/3d-models/modular-dungeon/.Updated Modular Dungeon - May 2019/FBX/Trapdoor.fbx",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 504,
+     "dims_m": [
+      1.7413,
+      1.7,
+      0.2152
+     ],
+     "textures_loaded": [],
+     "preview_png": "renders/set1/qmd_Trapdoor.png"
+    },
+    {
+     "id": "qmd_Cobweb",
+     "path": "F:/games/forgeflow-games-assets/3d-models/modular-dungeon/.Updated Modular Dungeon - May 2019/FBX/Cobweb.fbx",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 1108,
+     "dims_m": [
+      1.2059,
+      0.9109,
+      0.7547
+     ],
+     "textures_loaded": [],
+     "preview_png": "renders/set1/qmd_Cobweb.png"
+    },
+    {
+     "id": "qmd_Arch_bars",
+     "path": "F:/games/forgeflow-games-assets/3d-models/modular-dungeon/.Updated Modular Dungeon - May 2019/FBX/Arch_bars.fbx",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 1603,
+     "dims_m": [
+      2.4783,
+      0.0303,
+      3.3881
+     ],
+     "textures_loaded": [],
+     "preview_png": "renders/set1/qmd_Arch_bars.png"
+    },
+    {
+     "id": "qmd_Spikes",
+     "path": "F:/games/forgeflow-games-assets/3d-models/modular-dungeon/.Updated Modular Dungeon - May 2019/FBX/Spikes.fbx",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 504,
+     "dims_m": [
+      1.7645,
+      1.7645,
+      1.1755
+     ],
+     "textures_loaded": [],
+     "preview_png": "renders/set1/qmd_Spikes.png"
+    },
+    {
+     "id": "qmd_Torch",
+     "path": "F:/games/forgeflow-games-assets/3d-models/modular-dungeon/.Updated Modular Dungeon - May 2019/FBX/Torch.fbx",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 386,
+     "dims_m": [
+      0.2783,
+      0.4376,
+      1.1506
+     ],
+     "textures_loaded": [],
+     "preview_png": "renders/set1/qmd_Torch.png"
+    },
+    {
+     "id": "astro_Door_RectangleTall",
+     "path": "F:/games/unity-assets/Astrofish Games__DETAILED - Medieval Village/Assets/ASTROFISH_GAMES/MEDIEVAL_SERIES/MEDIEVAL_VILLAGE_HD/_Assets/Doors/Mods/Medieval_Door_RectangleTall.FBX",
+     "licence": "Unity Asset Store EULA",
+     "tris": 1476,
+     "dims_m": [
+      1.306,
+      0.295,
+      2.564
+     ],
+     "textures_loaded": [
+      "Medieval_Doors_ALBEDO_4k.tif 4096x4096"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Astrofish Games__DETAILED - Medieval Village/Assets/ASTROFISH_GAMES/MEDIEVAL_SERIES/MEDIEVAL_VILLAGE_HD/_Assets/Doors/Mats/Medieval_Doors_ALBEDO_4k.tif",
+     "preview_png": "renders/set1/astro_Door_RectangleTall.png",
+     "note": "photoreal/dark - alt only; clashes with the painted kit"
+    },
+    {
+     "id": "astro_IronFixtures_TorchBracket",
+     "path": "F:/games/unity-assets/Astrofish Games__DETAILED - Medieval Village/Assets/ASTROFISH_GAMES/MEDIEVAL_SERIES/MEDIEVAL_VILLAGE_HD/_Assets/Iron/Mods/Medieval_IronFixtures_TorchBracket.FBX",
+     "licence": "Unity Asset Store EULA",
+     "tris": 1255,
+     "dims_m": [
+      0.429,
+      0.674,
+      1.045
+     ],
+     "textures_loaded": [
+      "Medieval_IronFixtures_All_ALBEDO_4k.tif 4096x4096"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Astrofish Games__DETAILED - Medieval Village/Assets/ASTROFISH_GAMES/MEDIEVAL_SERIES/MEDIEVAL_VILLAGE_HD/_Assets/Iron/Mats/Medieval_IronFixtures_All_ALBEDO_4k.tif",
+     "preview_png": "renders/set1/astro_IronFixtures_TorchBracket.png",
+     "note": "photoreal alt"
+    }
+   ],
+   "hdri": [
+    {
+     "id": "ph_afrikaans_church_interior",
+     "path": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-hdris/afrikaans_church_interior/afrikaans_church_interior_2k.hdr",
+     "size": [
+      2048,
+      1024
+     ],
+     "mean_lum_512x256": 0.7336,
+     "p99_lum_512x256": 3.883,
+     "licence": "CC0 (Poly Haven)",
+     "preview_png": "renders/hdri/ph_afrikaans_church_interior.png",
+     "note": "dark red interior with arches - theatre-like fill"
+    },
+    {
+     "id": "ph_abandoned_workshop_02",
+     "path": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-hdris/abandoned_workshop_02/abandoned_workshop_02_2k.hdr",
+     "size": [
+      2048,
+      1024
+     ],
+     "mean_lum_512x256": 0.7004,
+     "p99_lum_512x256": 12.761,
+     "licence": "CC0 (Poly Haven)",
+     "preview_png": "renders/hdri/ph_abandoned_workshop_02.png",
+     "note": "dim vaulted derelict"
+    },
+    {
+     "id": "ph_anniversary_lounge",
+     "path": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-hdris/anniversary_lounge/anniversary_lounge_2k.hdr",
+     "size": [
+      2048,
+      1024
+     ],
+     "mean_lum_512x256": 0.6544,
+     "p99_lum_512x256": 11.239,
+     "licence": "CC0 (Poly Haven)",
+     "preview_png": "renders/hdri/ph_anniversary_lounge.png",
+     "note": "warm lamp-lit interior"
+    }
+   ],
+   "vfx_masks": [
+    "F:/games/forgeflow-games-assets/_downloaded/light-masks/Default/circle_a_streaks.png (512x512, CC0 Kenney) - stage-light gobo/cookie",
+    "F:/games/unity-assets/Deko__Animated Fire Textures/Assets/Animated FireTextures/Textures/TorchFire01.png (1024x1024 flipbook, EULA) - torch flame",
+    "F:/games/unity-assets/CamelotVFX__CamelotVFX Fire Smoke/Assets/CamelotVFX_ Fire&Smoke/Sprite_Sheets/Fire_Sprites_v1.png (4096x4096, EULA)"
+   ],
+   "thin_procedural": [
+    "stage spotlights/fresnels (no usable model: LPU Spotlight 204 tris flat-colour; VPStudio lamps preview mis-textured)",
+    "proscenium arch + torn curtain drape at stage scale (FANTASTIC curtains are 2.2 m, 108-188 tris)",
+    "theatre seating rows / balcony rail"
+   ]
+  },
+  "2_butcher_block": {
+   "verdict": "THIN - no white ceramic tile, no brushed steel, no meat hooks, no hanging carcasses, no walk-in freezer",
+   "textures": [
+    {
+     "label": "Blink Boss_Floor_1",
+     "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_1/Boss_Floor_1_BaseColor.png",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_1/Boss_Floor_1_Normal.png",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_1/Boss_Floor_1_Roughness.png",
+     "rough_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA",
+     "note": "black/white marble checker - kitchen floor"
+    },
+    {
+     "label": "GEN floor_marble",
+     "albedo": "F:/games/forgeflow-games-assets/generated-materials/floor_marble_albedo.webp",
+     "albedo_size": [
+      1024,
+      1024
+     ],
+     "normal": "F:/games/forgeflow-games-assets/generated-materials/floor_marble_normal.webp",
+     "normal_size": [
+      1024,
+      1024
+     ],
+     "rough": "F:/games/forgeflow-games-assets/generated-materials/floor_marble_rough.webp",
+     "rough_size": [
+      1024,
+      1024
+     ],
+     "licence": "original (xAI-generated for ForgeFlow) - no third-party licence",
+     "note": "white marble blocks - closest thing to white tile"
+    },
+    {
+     "label": "PolyHaven anti_slip_concrete",
+     "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/anti_slip_concrete/diffuse.jpg",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/anti_slip_concrete/rough.jpg",
+     "rough_size": [
+      2048,
+      2048
+     ],
+     "licence": "CC0 (Poly Haven)",
+     "note": "dotted non-slip concrete floor (no normal map in the local download; displacement.jpg + ao.jpg present)"
+    },
+    {
+     "label": "JapanVillage JP_Ceiling",
+     "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Celling/JP_Ceiling_A.tga",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Celling/JP_Ceiling_N.tga",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA",
+     "note": "plain white plaster"
+    },
+    {
+     "label": "QFP T_Trim_Metal (grey metal trim sheet)",
+     "albedo": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Textures/T_Trim_Metal_BaseColor.png",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Textures/T_Trim_Metal_Normal.png",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read"
+    }
+   ],
+   "models": [
+    {
+     "id": "mno_Fridge_1",
+     "cache_package": "F:/games/unity-asset-cache/Mnostva Art/3D ModelsPropsInterior/BIG PACK Cozy Cartoon Rooms Interiors.unitypackage",
+     "package_pathname": "Assets/Mnostva_Art/Meshes/Interiors/Fridge_1.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 666,
+     "dims_m": [
+      1.109,
+      0.856,
+      2.077
+     ],
+     "textures_loaded": [
+      "Cartoon_Room_Texture_2048.png 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/Mnostva_Art/Textures/Cartoon_Room_Texture_2048.png",
+     "preview_png": "renders/cache/mno_Fridge_1.png"
+    },
+    {
+     "id": "mno_Fridge_2",
+     "cache_package": "F:/games/unity-asset-cache/Mnostva Art/3D ModelsPropsInterior/BIG PACK Cozy Cartoon Rooms Interiors.unitypackage",
+     "package_pathname": "Assets/Mnostva_Art/Meshes/Interiors/Fridge_2.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 586,
+     "dims_m": [
+      1.097,
+      0.793,
+      2.147
+     ],
+     "textures_loaded": [
+      "Cartoon_Room_Texture_2048.png 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/Mnostva_Art/Textures/Cartoon_Room_Texture_2048.png",
+     "preview_png": "renders/cache/mno_Fridge_2.png"
+    },
+    {
+     "id": "mno_Fridge_4",
+     "cache_package": "F:/games/unity-asset-cache/Mnostva Art/3D ModelsPropsInterior/BIG PACK Cozy Cartoon Rooms Interiors.unitypackage",
+     "package_pathname": "Assets/Mnostva_Art/Meshes/Interiors/Fridge_4.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 716,
+     "dims_m": [
+      1.109,
+      1.075,
+      2.077
+     ],
+     "textures_loaded": [
+      "Cartoon_Room_Texture_2048.png 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/Mnostva_Art/Textures/Cartoon_Room_Texture_2048.png",
+     "preview_png": "renders/cache/mno_Fridge_4.png"
+    },
+    {
+     "id": "mno_Gas_stove_1",
+     "cache_package": "F:/games/unity-asset-cache/Mnostva Art/3D ModelsPropsInterior/BIG PACK Cozy Cartoon Rooms Interiors.unitypackage",
+     "package_pathname": "Assets/Mnostva_Art/Meshes/Interiors/Gas_stove_1.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 4816,
+     "dims_m": [
+      1.048,
+      1.051,
+      1.01
+     ],
+     "textures_loaded": [
+      "Cartoon_Room_Texture_2048.png 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/Mnostva_Art/Textures/Cartoon_Room_Texture_2048.png",
+     "preview_png": "renders/cache/mno_Gas_stove_1.png"
+    },
+    {
+     "id": "mno_Kitchen_Cabinet_3",
+     "cache_package": "F:/games/unity-asset-cache/Mnostva Art/3D ModelsPropsInterior/BIG PACK Cozy Cartoon Rooms Interiors.unitypackage",
+     "package_pathname": "Assets/Mnostva_Art/Meshes/Interiors/Kitchen_Cabinet_3.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 890,
+     "dims_m": [
+      1.106,
+      0.76,
+      0.978
+     ],
+     "textures_loaded": [
+      "Cartoon_Room_Texture_2048.png 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/Mnostva_Art/Textures/Cartoon_Room_Texture_2048.png",
+     "preview_png": "renders/cache/mno_Kitchen_Cabinet_3.png"
+    },
+    {
+     "id": "mno_Kitchen_Hood_1",
+     "cache_package": "F:/games/unity-asset-cache/Mnostva Art/3D ModelsPropsInterior/BIG PACK Cozy Cartoon Rooms Interiors.unitypackage",
+     "package_pathname": "Assets/Mnostva_Art/Meshes/Interiors/Kitchen_Hood_1.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 356,
+     "dims_m": [
+      1.249,
+      0.616,
+      1.762
+     ],
+     "textures_loaded": [
+      "Cartoon_Room_Texture_2048.png 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/Mnostva_Art/Textures/Cartoon_Room_Texture_2048.png",
+     "preview_png": "renders/cache/mno_Kitchen_Hood_1.png"
+    },
+    {
+     "id": "fant_meat",
+     "cache_package": "F:/games/unity-asset-cache/Tidal Flask Studios/3D ModelsPropsInterior/FANTASTIC - Interior Pack.unitypackage",
+     "package_pathname": "Assets/Fantastic Interior Pack/3d/PROPS/SM_PROP_meat_interior.fbx",
+     "nested_package": "nested: Assets/FANTASTIC - Interior Pack/URP_FANTASTIC_Interior_Pack.unitypackage",
+     "licence": "Unity Asset Store EULA",
+     "tris": 64,
+     "dims_m": [
+      0.239,
+      0.338,
+      0.07
+     ],
+     "textures_loaded": [
+      "T_PROP_items_interior_01_BC.png.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/Fantastic Interior Pack/2d/textures/T_PROP_items_interior_01_BC.png",
+     "preview_png": "renders/cache/fant_meat.png"
+    },
+    {
+     "id": "fant_knife",
+     "cache_package": "F:/games/unity-asset-cache/Tidal Flask Studios/3D ModelsPropsInterior/FANTASTIC - Interior Pack.unitypackage",
+     "package_pathname": "Assets/Fantastic Interior Pack/3d/PROPS/SM_PROP_knife_interior.fbx",
+     "nested_package": "nested: Assets/FANTASTIC - Interior Pack/URP_FANTASTIC_Interior_Pack.unitypackage",
+     "licence": "Unity Asset Store EULA",
+     "tris": 68,
+     "dims_m": [
+      0.043,
+      0.296,
+      0.01
+     ],
+     "textures_loaded": [
+      "T_PROP_weapon_interior_BC.png 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/Fantastic Interior Pack/2d/textures/T_PROP_weapon_interior_BC.png",
+     "preview_png": "renders/cache/fant_knife.png"
+    },
+    {
+     "id": "fant_safe_door",
+     "cache_package": "F:/games/unity-asset-cache/Tidal Flask Studios/3D ModelsPropsInterior/FANTASTIC - Interior Pack.unitypackage",
+     "package_pathname": "Assets/Fantastic Interior Pack/3d/PROPS/SM_PROP_safe_door_interior.fbx",
+     "nested_package": "nested: Assets/FANTASTIC - Interior Pack/URP_FANTASTIC_Interior_Pack.unitypackage",
+     "licence": "Unity Asset Store EULA",
+     "tris": 396,
+     "dims_m": [
+      0.527,
+      0.19,
+      0.725
+     ],
+     "textures_loaded": [
+      "T_PROP_metal_interior_BC.png 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/Fantastic Interior Pack/2d/textures/T_PROP_metal_interior_BC.png",
+     "preview_png": "renders/cache/fant_safe_door.png"
+    },
+    {
+     "id": "jp_JP_Water_Heater",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Props/JP_Water_Heater.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 2426,
+     "dims_m": [
+      0.186,
+      0.514,
+      0.787
+     ],
+     "textures_loaded": [
+      "JP_Meters_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Meters/JP_Meters_A.tga",
+     "preview_png": "renders/local2/jp_JP_Water_Heater.png"
+    },
+    {
+     "id": "jp_JP_Propane",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Environment/JP_Propane.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 1348,
+     "dims_m": [
+      0.434,
+      0.434,
+      0.836
+     ],
+     "textures_loaded": [
+      "JP_Lamp_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Lamp/JP_Lamp_A.tga",
+     "preview_png": "renders/local2/jp_JP_Propane.png"
+    },
+    {
+     "id": "thb_TH_Shipping_Metal_Crate_01A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsIndustrial/Toon Harbor Pack.unitypackage",
+     "package_pathname": "Assets/Toon Harbor Pack/Models/TH_Shipping_Metal_Crate_01A.fbx",
+     "nested_package": "nested: Assets/Toon Harbor Pack/BuiltIn_Toon Harbor Pack_6000.0.32.unitypackage",
+     "licence": "Unity Asset Store EULA",
+     "tris": 198,
+     "dims_m": [
+      2.0,
+      2.0161,
+      1.9943
+     ],
+     "textures_loaded": [
+      "Atlas_1A_D.psd 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Harbor Pack/Textures/Atlas_1A_D.psd",
+     "preview_png": "renders/cache/thb_TH_Shipping_Metal_Crate_01A.png"
+    },
+    {
+     "id": "lpu_Meat_Haunch_A",
+     "cache_package": "F:/games/unity-asset-cache/polyperfect/3D ModelsProps/Low Poly Ultimate Pack.unitypackage",
+     "package_pathname": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Meshes_M/Tribal_M/SM_Meat_Haunch_A.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 92,
+     "dims_m": [
+      0.685,
+      0.275,
+      0.255
+     ],
+     "textures_loaded": [
+      "Atlas_Albedo_LPUP.png 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/polyperfect/Low Poly Ultimate Pack/Textures/Atlas_Albedo_LPUP.png",
+     "preview_png": "renders/cache/lpu_Meat_Haunch_A.png",
+     "note": "92 tris - background only"
+    },
+    {
+     "id": "fant_hook_01",
+     "cache_package": "F:/games/unity-asset-cache/Tidal Flask Studios/3D ModelsPropsInterior/FANTASTIC - Interior Pack.unitypackage",
+     "package_pathname": "Assets/Fantastic Interior Pack/3d/PROPS/SM_PROP_hook_interior_01.fbx",
+     "nested_package": "nested: Assets/FANTASTIC - Interior Pack/URP_FANTASTIC_Interior_Pack.unitypackage",
+     "licence": "Unity Asset Store EULA",
+     "tris": 94,
+     "dims_m": [
+      0.185,
+      0.156,
+      0.208
+     ],
+     "textures_loaded": [
+      "T_PROP_metal_interior_BC.png 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/Fantastic Interior Pack/2d/textures/T_PROP_metal_interior_BC.png",
+     "preview_png": "renders/cache/fant_hook_01.png",
+     "note": "wall COAT hook 0.2 m - NOT a meat hook"
+    }
+   ],
+   "hdri": [
+    {
+     "id": "ph_abandoned_factory_canteen_01",
+     "path": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-hdris/abandoned_factory_canteen_01/abandoned_factory_canteen_01_2k.hdr",
+     "size": [
+      2048,
+      1024
+     ],
+     "mean_lum_512x256": 0.6501,
+     "p99_lum_512x256": 6.048,
+     "licence": "CC0 (Poly Haven)",
+     "preview_png": "renders/hdri/ph_abandoned_factory_canteen_01.png",
+     "note": "cool white canteen - best kitchen fill"
+    },
+    {
+     "id": "ph_abandoned_tiled_room",
+     "path": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-hdris/abandoned_tiled_room/abandoned_tiled_room_2k.hdr",
+     "size": [
+      2048,
+      1024
+     ],
+     "mean_lum_512x256": 0.6564,
+     "p99_lum_512x256": 18.795,
+     "licence": "CC0 (Poly Haven)",
+     "preview_png": "renders/hdri/ph_abandoned_tiled_room.png",
+     "note": "despite the name, previews as a tan/wood derelict room"
+    }
+   ],
+   "thin_procedural": [
+    "white subway/square tile (procedural grout shader + per-tile tint + grime mask)",
+    "brushed stainless steel counters/prep tables (bevelled boxes + anisotropic brushed-steel shader)",
+    "meat hooks on rails + chains (simple torus/curve metal)",
+    "hanging carcass / meat sides (organic - hardest; needs sculpt or generator, not in library)",
+    "walk-in freezer door + strip curtain",
+    "cooking-show counter set with host desk"
+   ]
+  },
+  "3_wheel_of_pain": {
+   "verdict": "VERY THIN - no game-show hardware in the library; textures only",
+   "textures": [
+    {
+     "label": "Blink Dwarven_Casting_Wall",
+     "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Dwarven_Casting_Wall/Dwarven_Casting_Wall_BaseColor.png",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Dwarven_Casting_Wall/Dwarven_Casting_Wall_Normal.png",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Dwarven_Casting_Wall/Dwarven_Casting_Wall_Roughness.png",
+     "rough_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA",
+     "note": "dark with glowing orange/teal zigzag bands - retro game-show wall"
+    },
+    {
+     "label": "Blink Golden_Wall",
+     "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Golden_Wall/Golden_Wall_BaseColor.png",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Golden_Wall/Golden_Wall_Normal.png",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Golden_Wall/Golden_Wall_Roughness.png",
+     "rough_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA",
+     "note": "orange geometric - 70s/80s show panel"
+    },
+    {
+     "label": "Blink Boss_Floor_1",
+     "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_1/Boss_Floor_1_BaseColor.png",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_1/Boss_Floor_1_Normal.png",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_1/Boss_Floor_1_Roughness.png",
+     "rough_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA",
+     "note": "checker floor"
+    },
+    {
+     "label": "GameBuffs Marble_Surface_20",
+     "albedo": {
+      "cache_package": "F:/games/unity-asset-cache/Game Buffs/Textures Materials/25 Free Stylized Textures - Grass Ground Floors Walls More.unitypackage",
+      "package_pathname": "Assets/Game Buffs/Free Stylized Textures/Textures/Marble_Surface_20/Marble_Surface_20_Albedo.png"
+     },
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": {
+      "cache_package": "F:/games/unity-asset-cache/Game Buffs/Textures Materials/25 Free Stylized Textures - Grass Ground Floors Walls More.unitypackage",
+      "package_pathname": "Assets/Game Buffs/Free Stylized Textures/Textures/Marble_Surface_20/Marble_Surface_20_Normal.png"
+     },
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA",
+     "note": "white marble + gold veins - glossy show floor"
+    },
+    {
+     "label": "Blink Stone_Gate",
+     "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Stone_Gate/Stone_Gate_BaseColor.png",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Stone_Gate/Stone_Gate_Normal.png",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Stone_Gate/Stone_Gate_Roughness.png",
+     "rough_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA",
+     "note": "deco panel"
+    },
+    {
+     "label": "GameBuffs Roman_Patterned_Floor_1",
+     "albedo": {
+      "cache_package": "F:/games/unity-asset-cache/Game Buffs/Textures Materials/100 Stylized Historical Textures - Medieval Egyptian Roman More.unitypackage",
+      "package_pathname": "Assets/Game Buffs/Stylized Historical Textures/Textures/Roman_Patterned_Floor_1/Roman_Patterned_Floor_1_Albedo.png"
+     },
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": {
+      "cache_package": "F:/games/unity-asset-cache/Game Buffs/Textures Materials/100 Stylized Historical Textures - Medieval Egyptian Roman More.unitypackage",
+      "package_pathname": "Assets/Game Buffs/Stylized Historical Textures/Textures/Roman_Patterned_Floor_1/Roman_Patterned_Floor_1_Normal.png"
+     },
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA",
+     "note": "gold pattern - podium tops"
+    }
+   ],
+   "models": [
+    {
+     "id": "lpu_Trophy_Gold_Big",
+     "cache_package": "F:/games/unity-asset-cache/polyperfect/3D ModelsProps/Low Poly Ultimate Pack.unitypackage",
+     "package_pathname": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Meshes_M/Furniture_M/SM_Trophy_Gold_Big.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 232,
+     "dims_m": [
+      0.356,
+      0.276,
+      0.38
+     ],
+     "textures_loaded": [
+      "Atlas_Albedo_LPUP.png 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/polyperfect/Low Poly Ultimate Pack/Textures/Atlas_Albedo_LPUP.png",
+     "preview_png": "renders/cache/lpu_Trophy_Gold_Big.png",
+     "note": "flat-colour low poly - background only"
+    },
+    {
+     "id": "lpu_Stage_Truss",
+     "cache_package": "F:/games/unity-asset-cache/polyperfect/3D ModelsProps/Low Poly Ultimate Pack.unitypackage",
+     "package_pathname": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Meshes_M/Music_M/SM_Stage_Truss.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 240,
+     "dims_m": [
+      0.5,
+      0.5,
+      2.03
+     ],
+     "textures_loaded": [
+      "Atlas_Albedo_LPUP.png 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/polyperfect/Low Poly Ultimate Pack/Textures/Atlas_Albedo_LPUP.png",
+     "preview_png": "renders/cache/lpu_Stage_Truss.png",
+     "note": "flat-colour low poly - background only"
+    },
+    {
+     "id": "lpu_Stage_Platform_Big",
+     "cache_package": "F:/games/unity-asset-cache/polyperfect/3D ModelsProps/Low Poly Ultimate Pack.unitypackage",
+     "package_pathname": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Meshes_M/Music_M/SM_Stage_Platform_Big.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 68,
+     "dims_m": [
+      4.0,
+      2.0,
+      2.0
+     ],
+     "textures_loaded": [
+      "Atlas_Albedo_LPUP.png 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/polyperfect/Low Poly Ultimate Pack/Textures/Atlas_Albedo_LPUP.png",
+     "preview_png": "renders/cache/lpu_Stage_Platform_Big.png",
+     "note": "flat-colour low poly - background only"
+    },
+    {
+     "id": "lpu_Light_Moving",
+     "cache_package": "F:/games/unity-asset-cache/polyperfect/3D ModelsProps/Low Poly Ultimate Pack.unitypackage",
+     "package_pathname": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Meshes_M/Music_M/SM_Light_Moving.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 314,
+     "dims_m": [
+      0.41,
+      0.301,
+      0.666
+     ],
+     "textures_loaded": [
+      "Atlas_Albedo_LPUP.png 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/polyperfect/Low Poly Ultimate Pack/Textures/Atlas_Albedo_LPUP.png",
+     "preview_png": "renders/cache/lpu_Light_Moving.png",
+     "note": "flat-colour low poly - background only"
+    },
+    {
+     "id": "lpu_Spotlight",
+     "cache_package": "F:/games/unity-asset-cache/polyperfect/3D ModelsProps/Low Poly Ultimate Pack.unitypackage",
+     "package_pathname": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Meshes_M/Music_M/SM_Spotlight.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 204,
+     "dims_m": [
+      0.611,
+      0.615,
+      0.693
+     ],
+     "textures_loaded": [
+      "Atlas_Albedo_LPUP.png 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/polyperfect/Low Poly Ultimate Pack/Textures/Atlas_Albedo_LPUP.png",
+     "preview_png": "renders/cache/lpu_Spotlight.png",
+     "note": "flat-colour low poly - background only"
+    },
+    {
+     "id": "lpu_Tv_Camera",
+     "cache_package": "F:/games/unity-asset-cache/polyperfect/3D ModelsProps/Low Poly Ultimate Pack.unitypackage",
+     "package_pathname": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Meshes_M/Electronics_M/SM_Tv_Camera.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 338,
+     "dims_m": [
+      0.268,
+      0.624,
+      0.286
+     ],
+     "textures_loaded": [
+      "Atlas_Albedo_LPUP.png 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/polyperfect/Low Poly Ultimate Pack/Textures/Atlas_Albedo_LPUP.png",
+     "preview_png": "renders/cache/lpu_Tv_Camera.png",
+     "note": "flat-colour low poly - background only"
+    },
+    {
+     "id": "lpu_Microphone_Stand",
+     "cache_package": "F:/games/unity-asset-cache/polyperfect/3D ModelsProps/Low Poly Ultimate Pack.unitypackage",
+     "package_pathname": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Meshes_M/Music_M/SM_Microphone_Stand.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 264,
+     "dims_m": [
+      0.646,
+      0.794,
+      1.406
+     ],
+     "textures_loaded": [
+      "Atlas_Albedo_LPUP.png 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/polyperfect/Low Poly Ultimate Pack/Textures/Atlas_Albedo_LPUP.png",
+     "preview_png": "renders/cache/lpu_Microphone_Stand.png",
+     "note": "flat-colour low poly - background only"
+    },
+    {
+     "id": "mno_Neon_Sign_4",
+     "cache_package": "F:/games/unity-asset-cache/Mnostva Art/3D ModelsPropsInterior/BIG PACK Cozy Cartoon Rooms Interiors.unitypackage",
+     "package_pathname": "Assets/Mnostva_Art/Meshes/Interiors/Neon_Sign_4.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 1849,
+     "dims_m": [
+      0.875,
+      0.034,
+      0.835
+     ],
+     "textures_loaded": [
+      "Cartoon_Room_Texture_2048.png 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/Mnostva_Art/Textures/Cartoon_Room_Texture_2048.png",
+     "preview_png": "renders/cache/mno_Neon_Sign_4.png",
+     "note": "fixed English slogan - retexture/replace text"
+    },
+    {
+     "id": "tcy_Billboard_4A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsUrban/Toon City.unitypackage",
+     "package_pathname": "Assets/Toon Series/Toon City/Models/Billboard_4A.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 564,
+     "dims_m": [
+      3.3424,
+      3.3424,
+      13.7888
+     ],
+     "textures_loaded": [
+      "Building_18A_D.psd.001 128x128"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Series/Toon City/Textures/Building_18A_D.psd",
+     "preview_png": "renders/cache/tcy_Billboard_4A.png",
+     "note": "novelty cup sign"
+    },
+    {
+     "id": "qmd_Trapdoor",
+     "path": "F:/games/forgeflow-games-assets/3d-models/modular-dungeon/.Updated Modular Dungeon - May 2019/FBX/Trapdoor.fbx",
+     "licence": "CC0 (Quaternius) - License_Standard.txt / License.txt read",
+     "tris": 504,
+     "dims_m": [
+      1.7413,
+      1.7,
+      0.2152
+     ],
+     "textures_loaded": [],
+     "preview_png": "renders/set1/qmd_Trapdoor.png",
+     "note": "medieval style - wrong era"
+    }
+   ],
+   "hdri": [
+    {
+     "id": "ph_aft_lounge",
+     "path": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-hdris/aft_lounge/aft_lounge_2k.hdr",
+     "size": [
+      2048,
+      1024
+     ],
+     "mean_lum_512x256": 0.8219,
+     "p99_lum_512x256": 10.072,
+     "licence": "CC0 (Poly Haven)",
+     "preview_png": "renders/hdri/ph_aft_lounge.png",
+     "note": "dark room with bright lamps"
+    },
+    {
+     "id": "ph_adams_place_bridge",
+     "path": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-hdris/adams_place_bridge/adams_place_bridge_2k.hdr",
+     "size": [
+      2048,
+      1024
+     ],
+     "mean_lum_512x256": 1.2977,
+     "p99_lum_512x256": 45.668,
+     "licence": "CC0 (Poly Haven)",
+     "preview_png": "renders/hdri/ph_adams_place_bridge.png",
+     "note": "dark with bright strip lights"
+    }
+   ],
+   "thin_procedural": [
+    "GIANT SPINNING WHEEL (hero prop: segmented disc, bulb-ringed rim, pegs, flapper, emissive segment labels - fully procedural)",
+    "contestant podiums (bevelled + emissive name panels)",
+    "trapdoors (flush floor panels, hazard stripes, hinge animation)",
+    "light rigs / truss + marquee bulb strips (instanced)",
+    "glossy black stage floor with LED strips (shader)",
+    "audience bleachers"
+   ]
+  },
+  "4_channel13_rooftop": {
+   "verdict": "GOOD - Japan Village + SICS Toon City cover AC units, tanks, vents, antenna, billboards, railings; rain + neon tubes procedural",
+   "textures": [
+    {
+     "label": "PolyHaven bitumen",
+     "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/bitumen/diffuse.jpg",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/bitumen/rough.jpg",
+     "rough_size": [
+      2048,
+      2048
+     ],
+     "licence": "CC0 (Poly Haven)",
+     "note": "roof felt with roll bands (no normal map in the local download; displacement.jpg + ao.jpg present)"
+    },
+    {
+     "label": "PolyHaven asphalt_02",
+     "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_02/diffuse.jpg",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_02/rough.jpg",
+     "rough_size": [
+      2048,
+      2048
+     ],
+     "licence": "CC0 (Poly Haven)",
+     "note": "grey with cracks (no normal map in the local download; displacement.jpg + ao.jpg present)"
+    },
+    {
+     "label": "PolyHaven asphalt_pit_lane",
+     "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_pit_lane/diffuse.jpg",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asphalt_pit_lane/rough.jpg",
+     "rough_size": [
+      2048,
+      2048
+     ],
+     "licence": "CC0 (Poly Haven)",
+     "note": "dark (no normal map in the local download; displacement.jpg + ao.jpg present)"
+    },
+    {
+     "label": "GameBuffs Cracked_Asphalt_5",
+     "albedo": {
+      "cache_package": "F:/games/unity-asset-cache/Game Buffs/Textures Materials/25 Free Stylized Textures - Grass Ground Floors Walls More.unitypackage",
+      "package_pathname": "Assets/Game Buffs/Free Stylized Textures/Textures/Cracked_Asphalt_5/Cracked_Asphalt_5_Albedo.png"
+     },
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": {
+      "cache_package": "F:/games/unity-asset-cache/Game Buffs/Textures Materials/25 Free Stylized Textures - Grass Ground Floors Walls More.unitypackage",
+      "package_pathname": "Assets/Game Buffs/Free Stylized Textures/Textures/Cracked_Asphalt_5/Cracked_Asphalt_5_Normal.png"
+     },
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA",
+     "note": "stylised cracked asphalt"
+    },
+    {
+     "label": "PolyHaven asbestos_sheet_02",
+     "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asbestos_sheet_02/diffuse.jpg",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asbestos_sheet_02/rough.jpg",
+     "rough_size": [
+      2048,
+      2048
+     ],
+     "licence": "CC0 (Poly Haven)",
+     "note": "grey corrugated sheet (no normal map in the local download; displacement.jpg + ao.jpg present)"
+    },
+    {
+     "label": "JapanVillage JP_Concrete",
+     "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Concrete/JP_Concrete_A.tga",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Concrete/JP_Concrete_N.tga",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA"
+    },
+    {
+     "label": "JapanVillage JP_Red_Brick",
+     "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Red_Brick/JP_Red_Brick_A.tga",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Red_Brick/JP_Red_Brick_N.tga",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA",
+     "note": "parapet brick"
+    },
+    {
+     "label": "JapanVillage JP_Road_Hatches",
+     "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Road_Hatches/JP_Road_Hatches_A.tga",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Road_Hatches/JP_Road_Hatches_N.tga",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA",
+     "note": "vent/manhole/grate decal atlas (asset UVs)"
+    }
+   ],
+   "models": [
+    {
+     "id": "jp_JP_Conditioner_01",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Environment/JP_Conditioner_01.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 1946,
+     "dims_m": [
+      0.377,
+      0.76,
+      0.556
+     ],
+     "textures_loaded": [
+      "JP_Conditioner_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Conditioner/JP_Conditioner_A.tga",
+     "preview_png": "renders/local2/jp_JP_Conditioner_01.png"
+    },
+    {
+     "id": "jp_JP_Conditioner_03",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Environment/JP_Conditioner_03.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 2164,
+     "dims_m": [
+      0.378,
+      0.707,
+      0.58
+     ],
+     "textures_loaded": [
+      "JP_Conditioner_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Conditioner/JP_Conditioner_A.tga",
+     "preview_png": "renders/local2/jp_JP_Conditioner_03.png"
+    },
+    {
+     "id": "jp_JP_Conditioner_05",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Environment/JP_Conditioner_05.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 2193,
+     "dims_m": [
+      0.468,
+      0.744,
+      0.565
+     ],
+     "textures_loaded": [
+      "JP_Conditioner_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Conditioner/JP_Conditioner_A.tga",
+     "preview_png": "renders/local2/jp_JP_Conditioner_05.png"
+    },
+    {
+     "id": "jp_JP_Conditioner_07",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Environment/JP_Conditioner_07.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 1423,
+     "dims_m": [
+      0.554,
+      0.76,
+      0.572
+     ],
+     "textures_loaded": [
+      "JP_Conditioner_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Conditioner/JP_Conditioner_A.tga",
+     "preview_png": "renders/local2/jp_JP_Conditioner_07.png"
+    },
+    {
+     "id": "jp_JP_Propane",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Environment/JP_Propane.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 1348,
+     "dims_m": [
+      0.434,
+      0.434,
+      0.836
+     ],
+     "textures_loaded": [
+      "JP_Lamp_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Lamp/JP_Lamp_A.tga",
+     "preview_png": "renders/local2/jp_JP_Propane.png"
+    },
+    {
+     "id": "jp_JP_Water_Heater",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Props/JP_Water_Heater.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 2426,
+     "dims_m": [
+      0.186,
+      0.514,
+      0.787
+     ],
+     "textures_loaded": [
+      "JP_Meters_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Meters/JP_Meters_A.tga",
+     "preview_png": "renders/local2/jp_JP_Water_Heater.png"
+    },
+    {
+     "id": "jp_JP_Electric_Meter_01",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Props/JP_Electric_Meter_01.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 640,
+     "dims_m": [
+      0.1,
+      0.274,
+      0.539
+     ],
+     "textures_loaded": [
+      "JP_Meters_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Meters/JP_Meters_A.tga",
+     "preview_png": "renders/local2/jp_JP_Electric_Meter_01.png"
+    },
+    {
+     "id": "jp_JP_Gas_Meter_01",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Props/JP_Gas_Meter_01.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 2612,
+     "dims_m": [
+      0.133,
+      0.173,
+      0.989
+     ],
+     "textures_loaded": [
+      "JP_Meters_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Meters/JP_Meters_A.tga",
+     "preview_png": "renders/local2/jp_JP_Gas_Meter_01.png"
+    },
+    {
+     "id": "jp_JP_Electric_Post_01",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Street/JP_Electric_Post_01.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 1084,
+     "dims_m": [
+      0.344,
+      2.185,
+      8.983
+     ],
+     "textures_loaded": [
+      "JP_Electric_Post_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Electric_Post/JP_Electric_Post_A.tga",
+     "preview_png": "renders/local2/jp_JP_Electric_Post_01.png"
+    },
+    {
+     "id": "jp_JP_Railing",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Street/JP_Railing.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 212,
+     "dims_m": [
+      0.093,
+      1.283,
+      0.694
+     ],
+     "textures_loaded": [
+      "JP_Box_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Box/JP_Box_A.tga",
+     "preview_png": "renders/local2/jp_JP_Railing.png"
+    },
+    {
+     "id": "jp_JP_Fence_Metal_4m",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Street/JP_Fence_Metal_4m.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 504,
+     "dims_m": [
+      0.095,
+      5.0,
+      0.876
+     ],
+     "textures_loaded": [
+      "JP_Fence_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Fence/JP_Fence_A.tga",
+     "preview_png": "renders/local2/jp_JP_Fence_Metal_4m.png"
+    },
+    {
+     "id": "jp_JP_Hatch_01",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Street/JP_Hatch_01.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 54,
+     "dims_m": [
+      0.717,
+      0.717,
+      0.085
+     ],
+     "textures_loaded": [
+      "JP_Road_Hatches_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Road_Hatches/JP_Road_Hatches_A.tga",
+     "preview_png": "renders/local2/jp_JP_Hatch_01.png"
+    },
+    {
+     "id": "jp_JP_Grid_01",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/House/House_Object/JP_Grid_01.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 1040,
+     "dims_m": [
+      0.243,
+      2.0,
+      0.485
+     ],
+     "textures_loaded": [
+      "JP_Trim_Sheet_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Trim_Sheet_01/JP_Trim_Sheet_A.tga",
+     "preview_png": "renders/local2/jp_JP_Grid_01.png"
+    },
+    {
+     "id": "jp_JP_Cable_Mounting_01",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Props/JP_Cable_Mounting_01.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 798,
+     "dims_m": [
+      0.081,
+      0.251,
+      0.302
+     ],
+     "textures_loaded": [
+      "JP_Meters_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Meters/JP_Meters_A.tga",
+     "preview_png": "renders/local2/jp_JP_Cable_Mounting_01.png"
+    },
+    {
+     "id": "tcy_Water_Tank_1A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsUrban/Toon City.unitypackage",
+     "package_pathname": "Assets/Toon Series/Toon City/Models/Water_Tank_1A.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 335,
+     "dims_m": [
+      3.2507,
+      3.2507,
+      6.6545
+     ],
+     "textures_loaded": [
+      "Road_1A_D.psd.001 128x128"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Series/Toon City/Textures/Road_1A_D.psd",
+     "preview_png": "renders/cache/tcy_Water_Tank_1A.png",
+     "note": "flat toon style"
+    },
+    {
+     "id": "tcy_Water_Tank_1B",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsUrban/Toon City.unitypackage",
+     "package_pathname": "Assets/Toon Series/Toon City/Models/Water_Tank_1B.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 335,
+     "dims_m": [
+      3.2507,
+      3.2507,
+      6.6545
+     ],
+     "textures_loaded": [
+      "Road_1A_D.psd.001 128x128"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Series/Toon City/Textures/Road_1A_D.psd",
+     "preview_png": "renders/cache/tcy_Water_Tank_1B.png",
+     "note": "flat toon style"
+    },
+    {
+     "id": "tcy_Air_Vent_1A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsUrban/Toon City.unitypackage",
+     "package_pathname": "Assets/Toon Series/Toon City/Models/Air_Vent_1A.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 335,
+     "dims_m": [
+      1.9757,
+      1.9753,
+      2.195
+     ],
+     "textures_loaded": [
+      "Building_10A_D.psd 128x128"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Series/Toon City/Textures/Building_10A_D.psd",
+     "preview_png": "renders/cache/tcy_Air_Vent_1A.png",
+     "note": "flat toon style"
+    },
+    {
+     "id": "tcy_Antenna_1A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsUrban/Toon City.unitypackage",
+     "package_pathname": "Assets/Toon Series/Toon City/Models/Antenna_1A.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 476,
+     "dims_m": [
+      3.2912,
+      2.558,
+      16.6876
+     ],
+     "textures_loaded": [
+      "Road_1A_D.psd.001 128x128"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Series/Toon City/Textures/Road_1A_D.psd",
+     "preview_png": "renders/cache/tcy_Antenna_1A.png",
+     "note": "flat toon style"
+    },
+    {
+     "id": "tcy_Billboard_1A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsUrban/Toon City.unitypackage",
+     "package_pathname": "Assets/Toon Series/Toon City/Models/Billboard_1A.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 107,
+     "dims_m": [
+      1.6116,
+      0.4319,
+      3.2534
+     ],
+     "textures_loaded": [
+      "Road_1A_D.psd.001 128x128"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Series/Toon City/Textures/Road_1A_D.psd",
+     "preview_png": "renders/cache/tcy_Billboard_1A.png",
+     "note": "flat toon style"
+    },
+    {
+     "id": "tcy_Billboard_3A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsUrban/Toon City.unitypackage",
+     "package_pathname": "Assets/Toon Series/Toon City/Models/Billboard_3A.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 261,
+     "dims_m": [
+      3.1596,
+      10.4,
+      7.2
+     ],
+     "textures_loaded": [
+      "Advertising_1A_D.psd.001 128x128"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Series/Toon City/Textures/Advertising_1A_D.psd",
+     "preview_png": "renders/cache/tcy_Billboard_3A.png",
+     "note": "flat toon style"
+    },
+    {
+     "id": "tcy_Emergency_Stairs_1A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsUrban/Toon City.unitypackage",
+     "package_pathname": "Assets/Toon Series/Toon City/Models/Emergency_Stairs_1A.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 210,
+     "dims_m": [
+      3.2,
+      8.4,
+      4.45
+     ],
+     "textures_loaded": [
+      "Building_10A_D.psd 128x128"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Series/Toon City/Textures/Building_10A_D.psd",
+     "preview_png": "renders/cache/tcy_Emergency_Stairs_1A.png",
+     "note": "flat toon style"
+    },
+    {
+     "id": "tcy_Skylight_1A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsUrban/Toon City.unitypackage",
+     "package_pathname": "Assets/Toon Series/Toon City/Models/Skylight_1A.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 70,
+     "dims_m": [
+      3.4,
+      7.4,
+      1.2943
+     ],
+     "textures_loaded": [
+      "Building_10A_D.psd 128x128"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Series/Toon City/Textures/Building_10A_D.psd",
+     "preview_png": "renders/cache/tcy_Skylight_1A.png",
+     "note": "flat toon style"
+    },
+    {
+     "id": "tcy_Industrial_Ventilation_1A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsUrban/Toon City.unitypackage",
+     "package_pathname": "Assets/Toon Series/Toon City/Models/Industrial_Ventilation_1A.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 434,
+     "dims_m": [
+      5.4439,
+      5.375,
+      2.0396
+     ],
+     "textures_loaded": [
+      "Road_1A_D.psd.001 128x128"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Series/Toon City/Textures/Road_1A_D.psd",
+     "preview_png": "renders/cache/tcy_Industrial_Ventilation_1A.png",
+     "note": "flat toon style"
+    },
+    {
+     "id": "tcy_Light_Projector_1A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsUrban/Toon City.unitypackage",
+     "package_pathname": "Assets/Toon Series/Toon City/Models/Light_Projector_1A.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 70,
+     "dims_m": [
+      3.3556,
+      1.2986,
+      0.7106
+     ],
+     "textures_loaded": [
+      "Road_1A_D.psd.001 128x128"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Series/Toon City/Textures/Road_1A_D.psd",
+     "preview_png": "renders/cache/tcy_Light_Projector_1A.png",
+     "note": "flat toon style"
+    },
+    {
+     "id": "thb_TH_Roof_Service_Entrance_01A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsIndustrial/Toon Harbor Pack.unitypackage",
+     "package_pathname": "Assets/Toon Harbor Pack/Models/TH_Roof_Service_Entrance_01A.fbx",
+     "nested_package": "nested: Assets/Toon Harbor Pack/BuiltIn_Toon Harbor Pack_6000.0.32.unitypackage",
+     "licence": "Unity Asset Store EULA",
+     "tris": 340,
+     "dims_m": [
+      2.6,
+      4.6,
+      2.625
+     ],
+     "textures_loaded": [
+      "Atlas_1A_D.psd 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Harbor Pack/Textures/Atlas_1A_D.psd",
+     "preview_png": "renders/cache/thb_TH_Roof_Service_Entrance_01A.png",
+     "note": "flat toon style"
+    },
+    {
+     "id": "thb_TH_Pipe_Cluster_01A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsIndustrial/Toon Harbor Pack.unitypackage",
+     "package_pathname": "Assets/Toon Harbor Pack/Models/TH_Pipe_Cluster_01A.fbx",
+     "nested_package": "nested: Assets/Toon Harbor Pack/BuiltIn_Toon Harbor Pack_6000.0.32.unitypackage",
+     "licence": "Unity Asset Store EULA",
+     "tris": 520,
+     "dims_m": [
+      1.5808,
+      5.69,
+      1.3347
+     ],
+     "textures_loaded": [
+      "Atlas_1A_D.psd 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Harbor Pack/Textures/Atlas_1A_D.psd",
+     "preview_png": "renders/cache/thb_TH_Pipe_Cluster_01A.png",
+     "note": "flat toon style"
+    },
+    {
+     "id": "syc_Prop_Billboard_Roof_01",
+     "cache_package": "F:/games/unity-asset-cache/Synty Studios/3D ModelsEnvironmentsUrban/POLYGON - City Pack - Art by Synty.unitypackage",
+     "package_pathname": "Assets/Synty/PolygonCity/Models/SM_Prop_Billboard_Roof_01.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 674,
+     "dims_m": [
+      0.0443,
+      0.0161,
+      0.0306
+     ],
+     "textures_loaded": [
+      "PolygonCity_01.png 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/Synty/PolygonCity/Textures/PolygonCity_01.png",
+     "preview_png": "renders/cache/syc_Prop_Billboard_Roof_01.png",
+     "note": "flat toon style"
+    },
+    {
+     "id": "syc_Bld_Roof_Access_01",
+     "cache_package": "F:/games/unity-asset-cache/Synty Studios/3D ModelsEnvironmentsUrban/POLYGON - City Pack - Art by Synty.unitypackage",
+     "package_pathname": "Assets/Synty/PolygonCity/Models/SM_Bld_Roof_Access_01.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 410,
+     "dims_m": [
+      0.0276,
+      0.0285,
+      0.0274
+     ],
+     "textures_loaded": [
+      "PolygonCity_01.png 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/Synty/PolygonCity/Textures/PolygonCity_01.png",
+     "preview_png": "renders/cache/syc_Bld_Roof_Access_01.png",
+     "note": "flat toon style"
+    },
+    {
+     "id": "lpu_Water_Tower_Big",
+     "cache_package": "F:/games/unity-asset-cache/polyperfect/3D ModelsProps/Low Poly Ultimate Pack.unitypackage",
+     "package_pathname": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Meshes_M/Buildings_M/SM_Water_Tower_Big.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 746,
+     "dims_m": [
+      12.241,
+      10.628,
+      34.67
+     ],
+     "textures_loaded": [
+      "Atlas_Albedo_LPUP.png 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/polyperfect/Low Poly Ultimate Pack/Textures/Atlas_Albedo_LPUP.png",
+     "preview_png": "renders/cache/lpu_Water_Tower_Big.png",
+     "note": "12 m tall, 746 tris - far skyline only"
+    },
+    {
+     "id": "tcy_Billboard_2A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsUrban/Toon City.unitypackage",
+     "package_pathname": "Assets/Toon Series/Toon City/Models/Billboard_2A.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 634,
+     "dims_m": [
+      2.0,
+      10.5592,
+      10.2
+     ],
+     "textures_loaded": [
+      "Logo_1A_D.psd.001 2000x800"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Series/Toon City/Textures/Logo_1A_D.psd",
+     "preview_png": "renders/cache/tcy_Billboard_2A.png",
+     "note": "AVOID: carries the SICS brand logo"
+    }
+   ],
+   "hdri": [
+    {
+     "id": "jp_Sky_Night_4a",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/HDRI/JP_Sky_Night_4a.exr",
+     "size": [
+      4096,
+      2048
+     ],
+     "mean_lum_512x256": 0.0504,
+     "p99_lum_512x256": 0.2,
+     "licence": "Unity Asset Store EULA",
+     "preview_png": "renders/hdri/jp_Sky_Night_4a.png",
+     "note": "ONLY night sky in the library: purple starry dusk, sunset glow on horizon (EXR 4096x2048, 91.7 MB file)"
+    },
+    {
+     "id": "acr_Toon_sky_79",
+     "path": "F:/games/unity-assets/Acronym__20 HDRI Someones Skys - Anime - VOL 4/Assets/Someone's Sky's - Anime - HDRI - VOL. 4/Cubemaps/Toon_sky_79.hdr",
+     "size": [
+      8192,
+      4096
+     ],
+     "mean_lum_512x256": 0.1494,
+     "p99_lum_512x256": 0.57,
+     "licence": "Unity Asset Store EULA",
+     "preview_png": "renders/hdri/acr_Toon_sky_79.png",
+     "note": "dusk toon sky - LDR (max 0.8), backdrop only"
+    },
+    {
+     "id": "acr_Toon_sky_80",
+     "path": "F:/games/unity-assets/Acronym__20 HDRI Someones Skys - Anime - VOL 4/Assets/Someone's Sky's - Anime - HDRI - VOL. 4/Cubemaps/Toon_sky_80.hdr",
+     "size": [
+      8192,
+      4096
+     ],
+     "mean_lum_512x256": 0.1837,
+     "p99_lum_512x256": 0.593,
+     "licence": "Unity Asset Store EULA",
+     "preview_png": "renders/hdri/acr_Toon_sky_80.png",
+     "note": "dusk toon sky - LDR"
+    }
+   ],
+   "thin_procedural": [
+    "rain (particles + wet-floor roughness/ripple normal)",
+    "neon tube signs (emissive tube along spline - show logo 'CHANNEL 13' must be original)",
+    "distant city skyline cards (Kenney low-detail buildings need the colormap wired - 4 GLBs rendered magenta = missing texture)",
+    "roof parapet walls (modular box + JP_Red_Brick/JP_Concrete)"
+   ]
+  },
+  "5_control_room": {
+   "verdict": "MIXED - pipes/tanks/valves/cables/meters covered; CRT monitor banks, boiler, metal grating floor are gaps",
+   "textures": [
+    {
+     "label": "Blink Cracked_Concrete_Floor",
+     "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Cracked_Concrete_Floor/Cracked_Concrete_Floor_BaseColor.png",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Cracked_Concrete_Floor/Cracked_Concrete_Floor_Normal.png",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Cracked_Concrete_Floor/Cracked_Concrete_Floor_Roughness.png",
+     "rough_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA"
+    },
+    {
+     "label": "PolyHaven asbestos_sheet",
+     "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asbestos_sheet/diffuse.jpg",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/asbestos_sheet/rough.jpg",
+     "rough_size": [
+      2048,
+      2048
+     ],
+     "licence": "CC0 (Poly Haven)",
+     "note": "rusty-brown corrugated sheet (no normal map in the local download; displacement.jpg + ao.jpg present)"
+    },
+    {
+     "label": "JapanVillage JP_Concrete",
+     "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Concrete/JP_Concrete_A.tga",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Concrete/JP_Concrete_N.tga",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA"
+    },
+    {
+     "label": "JapanVillage JP_Road_Hatches",
+     "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Road_Hatches/JP_Road_Hatches_A.tga",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Road_Hatches/JP_Road_Hatches_N.tga",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA",
+     "note": "grate/manhole decals"
+    },
+    {
+     "label": "JapanVillage JP_Meters",
+     "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Meters/JP_Meters_A.tga",
+     "albedo_size": [
+      2048,
+      2048
+     ],
+     "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Meters/JP_Meters_N.tga",
+     "normal_size": [
+      2048,
+      2048
+     ],
+     "licence": "Unity Asset Store EULA",
+     "note": "panel/meter atlas"
+    },
+    {
+     "label": "GEN bronze_worn",
+     "albedo": "F:/games/forgeflow-games-assets/generated-materials/bronze_worn_albedo.webp",
+     "albedo_size": [
+      1024,
+      1024
+     ],
+     "normal": "F:/games/forgeflow-games-assets/generated-materials/bronze_worn_normal.webp",
+     "normal_size": [
+      1024,
+      1024
+     ],
+     "rough": "F:/games/forgeflow-games-assets/generated-materials/bronze_worn_rough.webp",
+     "rough_size": [
+      1024,
+      1024
+     ],
+     "licence": "original (xAI-generated for ForgeFlow) - no third-party licence",
+     "note": "brass fittings"
+    }
+   ],
+   "models": [
+    {
+     "id": "thb_TH_Giant_Pipe_Straight_Regular_01A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsIndustrial/Toon Harbor Pack.unitypackage",
+     "package_pathname": "Assets/Toon Harbor Pack/Models/TH_Giant_Pipe_Straight_Regular_01A.fbx",
+     "nested_package": "nested: Assets/Toon Harbor Pack/BuiltIn_Toon Harbor Pack_6000.0.32.unitypackage",
+     "licence": "Unity Asset Store EULA",
+     "tris": 224,
+     "dims_m": [
+      2.0,
+      6.0,
+      2.0
+     ],
+     "textures_loaded": [
+      "Atlas_1A_D.psd 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Harbor Pack/Textures/Atlas_1A_D.psd",
+     "preview_png": "renders/cache/thb_TH_Giant_Pipe_Straight_Regular_01A.png"
+    },
+    {
+     "id": "thb_TH_Giant_Pipe_Corner_Side_01A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsIndustrial/Toon Harbor Pack.unitypackage",
+     "package_pathname": "Assets/Toon Harbor Pack/Models/TH_Giant_Pipe_Corner_Side_01A.fbx",
+     "nested_package": "nested: Assets/Toon Harbor Pack/BuiltIn_Toon Harbor Pack_6000.0.32.unitypackage",
+     "licence": "Unity Asset Store EULA",
+     "tris": 464,
+     "dims_m": [
+      3.0,
+      3.0,
+      2.0
+     ],
+     "textures_loaded": [
+      "Atlas_1A_D.psd 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Harbor Pack/Textures/Atlas_1A_D.psd",
+     "preview_png": "renders/cache/thb_TH_Giant_Pipe_Corner_Side_01A.png"
+    },
+    {
+     "id": "thb_TH_Pipe_Cluster_01A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsIndustrial/Toon Harbor Pack.unitypackage",
+     "package_pathname": "Assets/Toon Harbor Pack/Models/TH_Pipe_Cluster_01A.fbx",
+     "nested_package": "nested: Assets/Toon Harbor Pack/BuiltIn_Toon Harbor Pack_6000.0.32.unitypackage",
+     "licence": "Unity Asset Store EULA",
+     "tris": 520,
+     "dims_m": [
+      1.5808,
+      5.69,
+      1.3347
+     ],
+     "textures_loaded": [
+      "Atlas_1A_D.psd 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Harbor Pack/Textures/Atlas_1A_D.psd",
+     "preview_png": "renders/cache/thb_TH_Pipe_Cluster_01A.png"
+    },
+    {
+     "id": "thb_TH_Liquid_Tank_01A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsIndustrial/Toon Harbor Pack.unitypackage",
+     "package_pathname": "Assets/Toon Harbor Pack/Models/TH_Liquid_Tank_01A.fbx",
+     "nested_package": "nested: Assets/Toon Harbor Pack/BuiltIn_Toon Harbor Pack_6000.0.32.unitypackage",
+     "licence": "Unity Asset Store EULA",
+     "tris": 1114,
+     "dims_m": [
+      3.0238,
+      3.5119,
+      7.2649
+     ],
+     "textures_loaded": [
+      "Atlas_1A_D.psd 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Harbor Pack/Textures/Atlas_1A_D.psd",
+     "preview_png": "renders/cache/thb_TH_Liquid_Tank_01A.png"
+    },
+    {
+     "id": "thb_TH_Metal_Stairs_01A",
+     "cache_package": "F:/games/unity-asset-cache/SICS Games/3D ModelsEnvironmentsIndustrial/Toon Harbor Pack.unitypackage",
+     "package_pathname": "Assets/Toon Harbor Pack/Models/TH_Metal_Stairs_01A.fbx",
+     "nested_package": "nested: Assets/Toon Harbor Pack/BuiltIn_Toon Harbor Pack_6000.0.32.unitypackage",
+     "licence": "Unity Asset Store EULA",
+     "tris": 184,
+     "dims_m": [
+      1.2896,
+      2.57,
+      2.0
+     ],
+     "textures_loaded": [
+      "Atlas_1A_D.psd 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/Toon Harbor Pack/Textures/Atlas_1A_D.psd",
+     "preview_png": "renders/cache/thb_TH_Metal_Stairs_01A.png"
+    },
+    {
+     "id": "syd_Gen_Bld_Pipe_Valve_01",
+     "cache_package": "F:/games/unity-asset-cache/Synty Studios/3D ModelsEnvironmentsDungeons/POLYGON - Dungeons Pack - Art by Synty.unitypackage",
+     "package_pathname": "Assets/Synty/PolygonGeneric/Models/SM_Gen_Bld_Pipe_Valve_01.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 194,
+     "dims_m": [
+      0.3869,
+      0.2147,
+      0.3869
+     ],
+     "textures_loaded": [
+      "PolygonDungeon_01_A.png 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/Synty/PolygonDungeon/Textures/Alternatives/PolygonDungeon_01_A.png",
+     "preview_png": "renders/cache/syd_Gen_Bld_Pipe_Valve_01.png"
+    },
+    {
+     "id": "syd_Env_Grate_Ground_01",
+     "cache_package": "F:/games/unity-asset-cache/Synty Studios/3D ModelsEnvironmentsDungeons/POLYGON - Dungeons Pack - Art by Synty.unitypackage",
+     "package_pathname": "Assets/Synty/PolygonDungeon/Models/SM_Env_Grate_Ground_01.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 448,
+     "dims_m": [
+      0.0111,
+      0.0109,
+      0.0025
+     ],
+     "textures_loaded": [
+      "PolygonDungeon_01_A.png 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/Synty/PolygonDungeon/Textures/Alternatives/PolygonDungeon_01_A.png",
+     "preview_png": "renders/cache/syd_Env_Grate_Ground_01.png"
+    },
+    {
+     "id": "syd_Env_Door_Bars_01",
+     "cache_package": "F:/games/unity-asset-cache/Synty Studios/3D ModelsEnvironmentsDungeons/POLYGON - Dungeons Pack - Art by Synty.unitypackage",
+     "package_pathname": "Assets/Synty/PolygonDungeon/Models/SM_Env_Door_Bars_01.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 1186,
+     "dims_m": [
+      0.0135,
+      0.0025,
+      0.0217
+     ],
+     "textures_loaded": [
+      "PolygonDungeon_01_A.png 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/Synty/PolygonDungeon/Textures/Alternatives/PolygonDungeon_01_A.png",
+     "preview_png": "renders/cache/syd_Env_Door_Bars_01.png"
+    },
+    {
+     "id": "syd_Gen_Prop_Chain_01",
+     "cache_package": "F:/games/unity-asset-cache/Synty Studios/3D ModelsEnvironmentsDungeons/POLYGON - Dungeons Pack - Art by Synty.unitypackage",
+     "package_pathname": "Assets/Synty/PolygonGeneric/Models/SM_Gen_Prop_Chain_01.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 896,
+     "dims_m": [
+      0.0924,
+      0.0807,
+      2.2929
+     ],
+     "textures_loaded": [
+      "PolygonDungeon_01_A.png 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/Synty/PolygonDungeon/Textures/Alternatives/PolygonDungeon_01_A.png",
+     "preview_png": "renders/cache/syd_Gen_Prop_Chain_01.png"
+    },
+    {
+     "id": "vpw_Cable_trunk",
+     "cache_package": "F:/games/unity-asset-cache/VPStudio 3d/3D ModelsEnvironmentsIndustrial/Wires pack.unitypackage",
+     "package_pathname": "Assets/VP.studio3d/Wire_pack/Models/Cable_trunk.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 1759,
+     "dims_m": [
+      3.2299,
+      0.5988,
+      1.5366
+     ],
+     "textures_loaded": [
+      "wires_l_wire_AlbedoTransparency.png 4096x4096"
+     ],
+     "albedo_used_for_preview": "Assets/VP.studio3d/Wire_pack/Textures/wire/wires_l_wire_AlbedoTransparency.png",
+     "preview_png": "renders/cache/vpw_Cable_trunk.png"
+    },
+    {
+     "id": "vpw_Bunch_of_wires",
+     "cache_package": "F:/games/unity-asset-cache/VPStudio 3d/3D ModelsEnvironmentsIndustrial/Wires pack.unitypackage",
+     "package_pathname": "Assets/VP.studio3d/Wire_pack/Models/Bunch_of_wires.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 1548,
+     "dims_m": [
+      0.7845,
+      0.8033,
+      0.1852
+     ],
+     "textures_loaded": [
+      "wires_l_wire_AlbedoTransparency.png 4096x4096"
+     ],
+     "albedo_used_for_preview": "Assets/VP.studio3d/Wire_pack/Textures/wire/wires_l_wire_AlbedoTransparency.png",
+     "preview_png": "renders/cache/vpw_Bunch_of_wires.png"
+    },
+    {
+     "id": "vpw_Damaged_wires",
+     "cache_package": "F:/games/unity-asset-cache/VPStudio 3d/3D ModelsEnvironmentsIndustrial/Wires pack.unitypackage",
+     "package_pathname": "Assets/VP.studio3d/Wire_pack/Models/Damaged_wires.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 683,
+     "dims_m": [
+      1.0107,
+      0.8428,
+      0.6326
+     ],
+     "textures_loaded": [
+      "wires_l_wire_AlbedoTransparency.png 4096x4096"
+     ],
+     "albedo_used_for_preview": "Assets/VP.studio3d/Wire_pack/Textures/wire/wires_l_wire_AlbedoTransparency.png",
+     "preview_png": "renders/cache/vpw_Damaged_wires.png"
+    },
+    {
+     "id": "vpw_Counter",
+     "cache_package": "F:/games/unity-asset-cache/VPStudio 3d/3D ModelsEnvironmentsIndustrial/Wires pack.unitypackage",
+     "package_pathname": "Assets/VP.studio3d/Wire_pack/Models/Counter.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 86,
+     "dims_m": [
+      0.2245,
+      0.1176,
+      0.2245
+     ],
+     "textures_loaded": [
+      "wires_l_wire_AlbedoTransparency.png 4096x4096"
+     ],
+     "albedo_used_for_preview": "Assets/VP.studio3d/Wire_pack/Textures/wire/wires_l_wire_AlbedoTransparency.png",
+     "preview_png": "renders/cache/vpw_Counter.png"
+    },
+    {
+     "id": "jp_JP_Electric_Meter_01",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Props/JP_Electric_Meter_01.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 640,
+     "dims_m": [
+      0.1,
+      0.274,
+      0.539
+     ],
+     "textures_loaded": [
+      "JP_Meters_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Meters/JP_Meters_A.tga",
+     "preview_png": "renders/local2/jp_JP_Electric_Meter_01.png"
+    },
+    {
+     "id": "jp_JP_Gas_Meter_01",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Props/JP_Gas_Meter_01.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 2612,
+     "dims_m": [
+      0.133,
+      0.173,
+      0.989
+     ],
+     "textures_loaded": [
+      "JP_Meters_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Meters/JP_Meters_A.tga",
+     "preview_png": "renders/local2/jp_JP_Gas_Meter_01.png"
+    },
+    {
+     "id": "jp_JP_Cable_Mounting_01",
+     "path": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Models/Props/JP_Cable_Mounting_01.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 798,
+     "dims_m": [
+      0.081,
+      0.251,
+      0.302
+     ],
+     "textures_loaded": [
+      "JP_Meters_A.tga.001 2048x2048"
+     ],
+     "albedo_used_for_preview": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/Environment/JP_Meters/JP_Meters_A.tga",
+     "preview_png": "renders/local2/jp_JP_Cable_Mounting_01.png"
+    },
+    {
+     "id": "jpc_speaker01_1",
+     "cache_package": "F:/games/unity-asset-cache/SbbUtutuya/3D ModelsEnvironments/Japanese School Classroom.unitypackage",
+     "package_pathname": "Assets/JP_School classroom_V2/Meshes/speaker01_1.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 68,
+     "dims_m": [
+      0.45,
+      0.2013,
+      0.34
+     ],
+     "textures_loaded": [
+      "speaker01_1.png 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/JP_School classroom_V2/Textures/speaker01_1.png",
+     "preview_png": "renders/cache/jpc_speaker01_1.png"
+    },
+    {
+     "id": "jpc_screen01_1",
+     "cache_package": "F:/games/unity-asset-cache/SbbUtutuya/3D ModelsEnvironments/Japanese School Classroom.unitypackage",
+     "package_pathname": "Assets/JP_School classroom_V2/Meshes/screen01_1.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 596,
+     "dims_m": [
+      1.9,
+      0.15,
+      2.4146
+     ],
+     "textures_loaded": [
+      "screen01_1.png 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/JP_School classroom_V2/Textures/screen01_1.png",
+     "preview_png": "renders/cache/jpc_screen01_1.png"
+    },
+    {
+     "id": "lpu_Television_Old",
+     "cache_package": "F:/games/unity-asset-cache/polyperfect/3D ModelsProps/Low Poly Ultimate Pack.unitypackage",
+     "package_pathname": "Assets/polyperfect/Low Poly Ultimate Pack/_M/Meshes_M/Electronics_M/SM_Television_Old.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 108,
+     "dims_m": [
+      0.7,
+      0.361,
+      0.491
+     ],
+     "textures_loaded": [
+      "Atlas_Albedo_LPUP.png 1024x1024"
+     ],
+     "albedo_used_for_preview": "Assets/polyperfect/Low Poly Ultimate Pack/Textures/Atlas_Albedo_LPUP.png",
+     "preview_png": "renders/cache/lpu_Television_Old.png",
+     "note": "CRT but 108 tris flat-colour - reject for hero"
+    },
+    {
+     "id": "mno_TV_1",
+     "cache_package": "F:/games/unity-asset-cache/Mnostva Art/3D ModelsPropsInterior/BIG PACK Cozy Cartoon Rooms Interiors.unitypackage",
+     "package_pathname": "Assets/Mnostva_Art/Meshes/Interiors/TV_1.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 2070,
+     "dims_m": [
+      0.843,
+      0.398,
+      1.029
+     ],
+     "textures_loaded": [
+      "Cartoon_Room_Texture_2048.png 2048x2048"
+     ],
+     "albedo_used_for_preview": "Assets/Mnostva_Art/Textures/Cartoon_Room_Texture_2048.png",
+     "preview_png": "renders/cache/mno_TV_1.png",
+     "note": "cartoon pastel TV - reject"
+    },
+    {
+     "id": "vpl_Lamp_5",
+     "cache_package": "F:/games/unity-asset-cache/VPStudio 3d/3D ModelsEnvironmentsIndustrial/Best Lamps pack.unitypackage",
+     "package_pathname": "Assets/VP.studio3d/Lamp_pack/Models/Lamp_5.fbx",
+     "licence": "Unity Asset Store EULA",
+     "tris": 2214,
+     "dims_m": [
+      0.5488,
+      0.5431,
+      1.7284
+     ],
+     "textures_loaded": [
+      "lamp_l_Lamp_AlbedoTransparency.png 4096x4096"
+     ],
+     "albedo_used_for_preview": "Assets/VP.studio3d/Lamp_pack/Textures/Lamp/lamp_l_Lamp_AlbedoTransparency.png",
+     "preview_png": "renders/cache/vpl_Lamp_5.png",
+     "note": "industrial pendant lamp 2214 tris - preview mis-textured (orange patches), verify UVs before use"
+    }
+   ],
+   "hdri": [
+    {
+     "id": "ph_abandoned_garage",
+     "path": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-hdris/abandoned_garage/abandoned_garage_2k.hdr",
+     "size": [
+      2048,
+      1024
+     ],
+     "mean_lum_512x256": 0.5991,
+     "p99_lum_512x256": 4.848,
+     "licence": "CC0 (Poly Haven)",
+     "preview_png": "renders/hdri/ph_abandoned_garage.png",
+     "note": "dark industrial"
+    },
+    {
+     "id": "ph_aircraft_workshop_01",
+     "path": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-hdris/aircraft_workshop_01/aircraft_workshop_01_2k.hdr",
+     "size": [
+      2048,
+      1024
+     ],
+     "mean_lum_512x256": 0.4302,
+     "p99_lum_512x256": 2.987,
+     "licence": "CC0 (Poly Haven)",
+     "preview_png": "renders/hdri/ph_aircraft_workshop_01.png",
+     "note": "industrial with machinery"
+    },
+    {
+     "id": "ph_abandoned_bakery",
+     "path": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-hdris/abandoned_bakery/abandoned_bakery_2k.hdr",
+     "size": [
+      2048,
+      1024
+     ],
+     "mean_lum_512x256": 0.703,
+     "p99_lum_512x256": 3.452,
+     "licence": "CC0 (Poly Haven)",
+     "preview_png": "renders/hdri/ph_abandoned_bakery.png",
+     "note": "dark derelict interior"
+    }
+   ],
+   "thin_procedural": [
+    "CRT MONITOR BANKS (hero: rounded-box CRT with curved emissive screen, scanline shader, instanced racks - Poly Haven Television_01 is a broken stub)",
+    "boiler (riveted cylinder + gauges + firebox glow; Toon Harbor Liquid_Tank is a stand-in)",
+    "metal grating / catwalk floor (alpha-cut grate shader) + diamond plate",
+    "host's control desk / mixing console",
+    "steam vents (particles)"
+   ]
+  }
+ },
+ "fonts_hud": {
+  "note": "Google-CSS woff2 subsets: the Latin file is NOT the last-numbered one - use the paths below (checked via fontTools cmap). Every family in _downloaded/fonts ships weight 400 only.",
+  "display_primary": {
+   "family": "Bungee",
+   "path": "F:/games/forgeflow-games-assets/_downloaded/fonts/Bungee/Bungee_02.woff2",
+   "licence": "SIL OFL 1.1",
+   "use": "LIVE bug, show logo, SCORE in slanted frame"
+  },
+  "display_digits": {
+   "family": "Russo One",
+   "path": "F:/games/forgeflow-games-assets/_downloaded/fonts/Russo_One/Russo_One_01.woff2",
+   "licence": "SIL OFL 1.1",
+   "use": "score digits, combo counter"
+  },
+  "display_condensed": {
+   "family": "Bebas Neue",
+   "path": "F:/games/forgeflow-games-assets/_downloaded/fonts/Bebas_Neue/Bebas_Neue_01.woff2",
+   "licence": "SIL OFL 1.1",
+   "use": "round/timer, labels, lower-thirds"
+  },
+  "caption_comic": {
+   "family": "Acme",
+   "path": "F:/games/unity-assets/Danil Chernyaev__2D Platformer Tileset/Assets/2D Platformer Tileset/Simple UI Pack/Font/Acme-Regular.ttf",
+   "licence": "SIL OFL 1.1 (Acme is a Google Font)",
+   "use": "host/announcer captions"
+  },
+  "body": {
+   "family": "Oswald 400",
+   "path": "F:/games/forgeflow-games-assets/_downloaded/fonts/Oswald/Oswald_02.woff2",
+   "licence": "SIL OFL 1.1",
+   "use": "captions, menus"
+  },
+  "body_alt": [
+   {
+    "family": "Nunito 800",
+    "path": "C:/Users/TestRun/Claude Claw/forgeflow-games/games/dyefield/dist/assets/nunito-latin-800-normal-Dz8SOQK_.woff2",
+    "licence": "SIL OFL 1.1",
+    "use": "readable menus/settings"
+   },
+   {
+    "family": "Liberation Sans",
+    "path": "F:/games/unity-assets/ArtZombie__Skill Icon PackCartoon01/Assets/TextMesh Pro/Fonts/LiberationSans.ttf",
+    "licence": "SIL OFL 1.1",
+    "use": "fallback"
+   }
+  ],
+  "screens": [
+   {
+    "family": "VT323",
+    "path": "F:/games/forgeflow-games-assets/_downloaded/fonts/VT323/VT323_00.woff2",
+    "licence": "SIL OFL 1.1",
+    "use": "CRT monitor text (control room)"
+   },
+   {
+    "family": "Press Start 2P",
+    "path": "F:/games/forgeflow-games-assets/_downloaded/fonts/Press_Start_2P/Press_Start_2P_00.woff2",
+    "licence": "SIL OFL 1.1",
+    "use": "retro scoreboard"
+   },
+   {
+    "family": "Share Tech Mono",
+    "path": "F:/games/unity-assets/Alchemist Lab__Sci Fi windows/Assets/AlchemistUITools/SciFiContent/Fonts/ShareTechMono-Regular.ttf",
+    "licence": "SIL OFL 1.1 (Google Font)",
+    "use": "data readouts"
+   }
+  ],
+  "avoid": [
+   "Alchemist Lab bundle fonts with unverified third-party licences: Agency_FB, Sonic_XB_dBT, Space_BdBt, Starliner-BTN, Amputa_Bangiz (its comma renders as a cat-face glyph), Ticker_Tape, Neuropol_Medium, CafeParisC, Demun_Lotion, BEDR-CYR, Picaresque_Two, Potra, cristal, quazi_mode, rod, start"
+  ],
+  "input_prompts": {
+   "path": "F:/games/forgeflow-games-assets/_downloaded/input-prompts",
+   "licence": "CC0 (Kenney Input Prompts 1.4.1)",
+   "counts_default_png": {
+    "Keyboard & Mouse": 243,
+    "Xbox Series": 99,
+    "PlayStation Series": 134,
+    "Touch": 28,
+    "Generic": 36,
+    "Flairs": 93
+   },
+   "png_size": [
+    64,
+    64
+   ],
+   "also": "matching SVG per icon + kenney_input_*.ttf glyph fonts + spritesheets (_sheet_default.png/.xml)"
+  },
+  "mobile_controls": {
+   "path": "F:/games/forgeflow-games-assets/_downloaded/mobile-controls",
+   "licence": "CC0 (Kenney Mobile Controls 1.0)",
+   "counts_default_png": {
+    "Style A..H": "46 each",
+    "Icons": 42,
+    "Highlights A/B": "26 each"
+   },
+   "svg": 462,
+   "elements": "buttons (circle/square/diamond/hexagon/bean, wide variants), dpads, joystick pads + nubs"
+  }
+ },
+ "library_facts": {
+  "polyhaven_textures": "40 sets, alphabetical slice aerial_asphalt_01..bitumen; diffuse/rough/ao/displacement only (no normal)",
+  "polyhaven_hdris": "40, abandoned_bakery..anniversary_lounge; 2k all, 4k for first 20",
+  "polyhaven_models": "40 folders, all .gltf stubs with missing .bin/textures - unusable",
+  "unity_assets_extracted": "66 packs, publishers 1..G only; H..Z live only as .unitypackage in F:/games/unity-asset-cache",
+  "unity_models_index": "1409 GLBs from 10 packs only",
+  "corrupt_cache": [
+   "VPStudio 3d/3D ModelsEnvironmentsIndustrial/Ventilation System pack.unitypackage - gzip ends before end-of-stream (truncated download)",
+   "Magic Pig Games * - several entries are 0-byte .tmp.json (incomplete downloads)"
+  ],
+  "decals": "essentially none: no blood splat, graffiti, posters or stains anywhere; only JP_Grunge_Mask.tga (2048x2048, RGB-packed masks, alpha empty) and Blink Cracked_Concrete"
+ }
+}

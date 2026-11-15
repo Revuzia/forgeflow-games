@@ -51,7 +51,7 @@ export const MAPS = {
     grade: { exposure: 0.72, ground: 0.6, water: 0.6 } },
   ashgrid:   { name: "Savanna", theme: "savanna", sky: "#e5cf9f", zenith: "#6585ab", cloud: 0.54, fog: 0.0019, themeColor: "#e0854a", water: false,
     sun: { pos: [-120, 105, 45], color: 0xffe6b4, intensity: 2.25 }, hemi: { sky: 0xf0e3c4, ground: 0xb59a63, intensity: 1.15 },
-    grade: { exposure: 0.80, ground: 0.6, water: 0.6 }, w10Light: { hemi: 0.6, sun: 1.18, contrast: 0.7 }, w10Grass: 1.7 },   // (W10 R2A: the flattest map - its open ground got the least of the hemisphere cut)
+    grade: { exposure: 0.80, ground: 0.6, water: 0.6 }, w10Light: { hemi: 0.6, sun: 1.18, contrast: 1.0 }, w10Grass: 1.7 },   // (W10 R2A: the flattest map - its open ground got the least of the hemisphere cut and the full contrast curve)
   deepwood:  { name: "Deepwood", theme: "forest", sky: "#acc5dc", zenith: "#506e9b", cloud: 0.72, fog: 0.0020, themeColor: "#7fb069", water: true,
     sun: { pos: [-60, 150, -80], color: 0xfff6e6, intensity: 1.95 }, hemi: { sky: 0xd2e7ff, ground: 0x63705a, intensity: 1.35 },
     grade: { exposure: 1.14, ground: 0.6, water: 0.6 } },
@@ -1227,7 +1227,7 @@ function grassAt(mapId, h, x, z, seed) {
   if (mapId === "isla_viva") return sm(2.2, 3.0, h) * (1 - sm(32.5, 34, h));                     // (sand < 2.2 m, volcano rock > 34 m)
   if (mapId === "ashgrid") {
     const edge = fbm(x / 260, z / 260, seed + 61, 2, 2, 0.5) * 120, desert = Math.max(0, Math.min(1, (x - 40 + edge) / 320));
-    return sm(0.5, 1.3, h) * (1 - sm(26.5, 28, h)) * (1 - sm(0.3, 0.7, desert));                // (dry wash < 0.5 m, bluffs > 28 m, the desert east)
+    return sm(0.5, 1.3, h) * (1 - sm(26.5, 28, h)) * (1 - sm(0.8, 0.97, desert));               // (dry wash < 0.5 m, bluffs > 28 m, the open dunes of the desert east: its savanna-to-desert blend keeps dry grass)
   }
   if (mapId === "deepwood") {
     const edge = fbm(x / 240, z / 240, seed + 91, 2, 2, 0.5) * 90, snow = Math.max(0, Math.min(1, (-z - 100 + edge) / 260));

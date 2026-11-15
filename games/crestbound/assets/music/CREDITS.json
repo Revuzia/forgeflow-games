@@ -1,0 +1,89 @@
+{
+ "music": [
+  {
+   "cue": "keep",
+   "title": "The Maple Sprout",
+   "pack": "The Hero's Path (Free 16bit Adventure Game Music)",
+   "author": "Florian Stracker",
+   "source": "Unity Asset Store (F:/games/unity-asset-cache/Florian Stracker/AudioMusic/The Heros Path Free 16bit Adventure Game Music.unitypackage)",
+   "license": "Unity Asset Store End User License Agreement (Standard Unity Asset Store EULA)",
+   "registry": "Florian Stracker/The Heros Path Free 16bit Adventure Game Music/07_The_Maple_Sprout",
+   "mood": "hub: D major, no drums, no bass, warm plucked line"
+  },
+  {
+   "cue": "verdant",
+   "title": "Valley Grounds",
+   "pack": "The Hero's Path (Free 16bit Adventure Game Music)",
+   "author": "Florian Stracker",
+   "source": "Unity Asset Store (F:/games/unity-asset-cache/Florian Stracker/AudioMusic/The Heros Path Free 16bit Adventure Game Music.unitypackage)",
+   "license": "Unity Asset Store End User License Agreement (Standard Unity Asset Store EULA)",
+   "registry": "Florian Stracker/The Heros Path Free 16bit Adventure Game Music/02_Valley_Grounds",
+   "mood": "bright and bouncy: G major, busiest pulse, bass + drums"
+  },
+  {
+   "cue": "ember",
+   "title": "Besiege the Castle",
+   "pack": "The Hero's Path (Free 16bit Adventure Game Music)",
+   "author": "Florian Stracker",
+   "source": "Unity Asset Store (F:/games/unity-asset-cache/Florian Stracker/AudioMusic/The Heros Path Free 16bit Adventure Game Music.unitypackage)",
+   "license": "Unity Asset Store End User License Agreement (Standard Unity Asset Store EULA)",
+   "registry": "Florian Stracker/The Heros Path Free 16bit Adventure Game Music/08_Besiege_the_Castle",
+   "mood": "driving and hot: A minor, marching block-chord stabs, heavy low end"
+  },
+  {
+   "cue": "rime",
+   "title": "Sleep In",
+   "pack": "The Hero's Path (Free 16bit Adventure Game Music)",
+   "author": "Florian Stracker",
+   "source": "Unity Asset Store (F:/games/unity-asset-cache/Florian Stracker/AudioMusic/The Heros Path Free 16bit Adventure Game Music.unitypackage)",
+   "license": "Unity Asset Store End User License Agreement (Standard Unity Asset Store EULA)",
+   "registry": "Florian Stracker/The Heros Path Free 16bit Adventure Game Music/04_Sleep_In",
+   "mood": "airy and cold: no drums, no bass, thin legato lines"
+  },
+  {
+   "cue": "azure",
+   "title": "Breaking the Chains",
+   "pack": "The Hero's Path (Free 16bit Adventure Game Music)",
+   "author": "Florian Stracker",
+   "source": "Unity Asset Store (F:/games/unity-asset-cache/Florian Stracker/AudioMusic/The Heros Path Free 16bit Adventure Game Music.unitypackage)",
+   "license": "Unity Asset Store End User License Agreement (Standard Unity Asset Store EULA)",
+   "registry": "Florian Stracker/The Heros Path Free 16bit Adventure Game Music/03_Breaking_the_Chains",
+   "mood": "flowing and bright: B-flat major, legato melody over a steady pulse"
+  },
+  {
+   "cue": "boss",
+   "title": "Battle to the Blood",
+   "pack": "The Hero's Path (Free 16bit Adventure Game Music)",
+   "author": "Florian Stracker",
+   "source": "Unity Asset Store (F:/games/unity-asset-cache/Florian Stracker/AudioMusic/The Heros Path Free 16bit Adventure Game Music.unitypackage)",
+   "license": "Unity Asset Store End User License Agreement (Standard Unity Asset Store EULA)",
+   "registry": "Florian Stracker/The Heros Path Free 16bit Adventure Game Music/06_Battle_to_the_Blood",
+   "mood": "boss: G minor, 172 bpm, the densest cue"
+  },
+  {
+   "cue": "fanfare",
+   "title": "Key Item Obtained 1",
+   "pack": "8-Bit RPG Adventure Music Pack",
+   "author": "Chris Kohler",
+   "source": "Unity Asset Store (F:/games/unity-asset-cache/Chris Kohler/AudioMusicElectronic8bit/8-Bit RPG Adventure Music Pack.unitypackage)",
+   "license": "Unity Asset Store End User License Agreement (Standard Unity Asset Store EULA)",
+   "registry": "Chris Kohler/8-Bit RPG Adventure Music Pack/Jingle_Key_Item_Obtained_1",
+   "mood": "crest get: 3.7 s jingle resolving on a major third"
+  },
+  {
+   "cue": "clear",
+   "title": "Level Clear 2",
+   "pack": "8-Bit RPG Adventure Music Pack",
+   "author": "Chris Kohler",
+   "source": "Unity Asset Store (F:/games/unity-asset-cache/Chris Kohler/AudioMusicElectronic8bit/8-Bit RPG Adventure Music Pack.unitypackage)",
+   "license": "Unity Asset Store End User License Agreement (Standard Unity Asset Store EULA)",
+   "registry": "Chris Kohler/8-Bit RPG Adventure Music Pack/Jingle_Level_Clear_2",
+   "mood": "course clear: 4.2 s jingle resolving on C major"
+  }
+ ],
+ "lines": [
+  "Music: “The Maple Sprout”, “Valley Grounds”, “Besiege the Castle”, “Sleep In”, “Breaking the Chains”, “Battle to the Blood” from “The Hero's Path (Free 16bit Adventure Game Music)” by Florian Stracker (Unity Asset Store)",
+  "Music: “Key Item Obtained 1”, “Level Clear 2” from “8-Bit RPG Adventure Music Pack” by Chris Kohler (Unity Asset Store)"
+ ],
+ "registry": "C:/Users/TestRun/Claude Claw/state/music_assignments.json (slug crestbound)"
+}

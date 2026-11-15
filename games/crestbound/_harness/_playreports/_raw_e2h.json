@@ -1,0 +1,510 @@
+{
+ "log": [
+  "boot state: keep",
+  "goto ember-2 cp=None -> playing ember-2 [0, 6, 47]",
+  "  hop grate 1      -> [7.64, 6.05, 3.08] d=1.62 ps=hardLand water=False deaths=0",
+  "    off the catwalk before grate 2 - restarting from cp3",
+  "  hop grate 2      -> [4.37, 6.6, 0.83] d=6.45 ps=idle water=False deaths=0",
+  "  hop grate 3      -> [8, 3.01, -15.24] d=4.74 ps=fall water=False deaths=0",
+  "  hop seesaw       -> [8, 20.3, -15.02] d=1.48 ps=idle water=False deaths=0",
+  "  hop platform C   -> [2.23, 10.11, -19.62] d=2.89 ps=fall water=False deaths=0",
+  "  hop grate 4      -> [2, 8.65, -34.01] d=5.01 ps=hardLand water=False deaths=0",
+  "  hop platform D   -> [2, 20.3, -34.78] d=0.22 ps=idle water=False deaths=0",
+  "SEESAW walk: [8, 13.21, -13.5] -> [-2.12, 1.58, -18.41] ; y range 0.85..10.35 states ['fall', 'swim', 'swimDive'] deaths 0",
+  "  run_to [-6, -8.1] onto the south plate -> [-6, 3.4, -8] d=0.10 ARRIVED deaths+0",
+  "south plate: [-6, 3.4, -7.98] ps=idle surf='normal' y(top should be 3.40)",
+  "  hop vanish grate -> [-6.65, 1.06, -15.52] d=1.65 ps=swimDive water=True deaths=0",
+  "    retry vanish grate (d=1.65 water=True)",
+  "  hop vanish grate -> [-6, 3.4, -13.22] d=0.78 ps=idle water=False deaths=0",
+  "  hop north plate  -> [-6, 3.4, -19.85] d=0.05 ps=idle water=False deaths=0",
+  "dropped into the channel: {\"t\": 15.2, \"st\": \"playing\", \"p\": [3.23, 0.88, -14], \"v\": [-2.84, -2.03, 0], \"ps\": \"swim\", \"gnd\": false, \"jc\": 0, \"sp\": 2.84, \"surf\": \"normal\", \"water\": true, \"sub\": true, \"deaths\": 0, \"cp\": 1, \"crests\": 0, \"coins\": 15, \"sig\": 1, \"cam\": [0, 0.22, 6.79]}",
+  "  watch floating in the current, no input -> [-18.79, 1.41, -14] swimIdle",
+  "CURRENT drift: [0.97, 0.54, -14] -> [-19, 1.41, -14] = -2.22 m/s west ; y 1.41 (water surface should be 2.70)",
+  "SINK: y [0.77, 0.55, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]",
+  "after 6 strokes: [-23.32, 1.81, -14.97] ps=swimDive sub=False",
+  "  run_to [-43, -14] swim to the pump jetty -> [-44.54, 3.5, -14] d=1.54 ARRIVED deaths+0",
+  "JETTY: [-40, 3.5, -14] -> [-44.54, 3.5, -14] ps=idle water=False (jetty top 3.50)"
+ ],
+ "res": {
+  "catwalk": [
+   {
+    "tag": "grate 1",
+    "target": [
+     8,
+     1.5
+    ],
+    "end": [
+     7.64,
+     6.05,
+     3.08
+    ],
+    "d": 1.62,
+    "ps": "hardLand",
+    "water": false,
+    "deaths": 0,
+    "y": 6.05
+   },
+   {
+    "tag": "grate 2",
+    "target": [
+     8,
+     -4.5
+    ],
+    "end": [
+     4.37,
+     6.6,
+     0.83
+    ],
+    "d": 6.45,
+    "ps": "idle",
+    "water": false,
+    "deaths": 0,
+    "y": 6.6
+   },
+   {
+    "tag": "grate 3",
+    "target": [
+     8,
+     -10.5
+    ],
+    "end": [
+     8,
+     3.01,
+     -15.24
+    ],
+    "d": 4.74,
+    "ps": "fall",
+    "water": false,
+    "deaths": 0,
+    "y": 3.01
+   },
+   {
+    "tag": "seesaw",
+    "target": [
+     8,
+     -16.5
+    ],
+    "end": [
+     8,
+     20.3,
+     -15.02
+    ],
+    "d": 1.48,
+    "ps": "idle",
+    "water": false,
+    "deaths": 0,
+    "y": 20.3
+   },
+   {
+    "tag": "platform C",
+    "target": [
+     2,
+     -22.5
+    ],
+    "end": [
+     2.23,
+     10.11,
+     -19.62
+    ],
+    "d": 2.89,
+    "ps": "fall",
+    "water": false,
+    "deaths": 0,
+    "y": 10.11
+   },
+   {
+    "tag": "grate 4",
+    "target": [
+     2,
+     -29.0
+    ],
+    "end": [
+     2,
+     8.65,
+     -34.01
+    ],
+    "d": 5.01,
+    "ps": "hardLand",
+    "water": false,
+    "deaths": 0,
+    "y": 8.65
+   },
+   {
+    "tag": "platform D",
+    "target": [
+     2,
+     -35.0
+    ],
+    "end": [
+     2,
+     20.3,
+     -34.78
+    ],
+    "d": 0.22,
+    "ps": "idle",
+    "water": false,
+    "deaths": 0,
+    "y": 20.3
+   }
+  ],
+  "seesaw": {
+   "a": [
+    8,
+    13.21,
+    -13.5
+   ],
+   "b": [
+    -2.12,
+    1.58,
+    -18.41
+   ],
+   "path": [
+    [
+     27.07,
+     [
+      8,
+      10.35,
+      -13.62
+     ],
+     "fall"
+    ],
+    [
+     27.16,
+     [
+      8,
+      7.62,
+      -13.88
+     ],
+     "fall"
+    ],
+    [
+     27.28,
+     [
+      8,
+      2.92,
+      -14.46
+     ],
+     "fall"
+    ],
+    [
+     27.36,
+     [
+      7.97,
+      2.17,
+      -14.85
+     ],
+     "swimDive"
+    ],
+    [
+     27.46,
+     [
+      7.86,
+      1.72,
+      -15.32
+     ],
+     "swimDive"
+    ],
+    [
+     27.51,
+     [
+      7.78,
+      1.53,
+      -15.55
+     ],
+     "swimDive"
+    ],
+    [
+     27.66,
+     [
+      7.44,
+      1.07,
+      -16.24
+     ],
+     "swimDive"
+    ],
+    [
+     27.76,
+     [
+      7.14,
+      0.85,
+      -16.69
+     ],
+     "swim"
+    ],
+    [
+     27.86,
+     [
+      6.78,
+      0.95,
+      -17.05
+     ],
+     "swim"
+    ],
+    [
+     28.01,
+     [
+      6.14,
+      1.14,
+      -17.59
+     ],
+     "swim"
+    ],
+    [
+     28.06,
+     [
+      5.9,
+      1.21,
+      -17.76
+     ],
+     "swim"
+    ],
+    [
+     28.21,
+     [
+      5.1,
+      1.43,
+      -18.26
+     ],
+     "swim"
+    ],
+    [
+     28.33,
+     [
+      4.37,
+      1.52,
+      -18.42
+     ],
+     "swim"
+    ],
+    [
+     28.48,
+     [
+      3.47,
+      1.55,
+      -18.44
+     ],
+     "swim"
+    ],
+    [
+     28.67,
+     [
+      2.12,
+      1.57,
+      -18.43
+     ],
+     "swim"
+    ],
+    [
+     28.92,
+     [
+      0.21,
+      1.57,
+      -18.44
+     ],
+     "swim"
+    ],
+    [
+     29.07,
+     [
+      -1,
+      1.58,
+      -18.45
+     ],
+     "swim"
+    ],
+    [
+     29.26,
+     [
+      -2.12,
+      1.58,
+      -18.44
+     ],
+     "swim"
+    ],
+    [
+     29.41,
+     [
+      -2.12,
+      1.58,
+      -18.43
+     ],
+     "swim"
+    ],
+    [
+     29.48,
+     [
+      -2.12,
+      1.58,
+      -18.43
+     ],
+     "swim"
+    ],
+    [
+     29.63,
+     [
+      -2.12,
+      1.58,
+      -18.42
+     ],
+     "swim"
+    ],
+    [
+     29.73,
+     [
+      -2.12,
+      1.58,
+      -18.42
+     ],
+     "swim"
+    ]
+   ],
+   "deaths": 0
+  },
+  "south_plate": {
+   "end": [
+    -6,
+    3.4,
+    -7.98
+   ],
+   "ps": "idle",
+   "surf": "normal"
+  },
+  "channel_hops": [
+   {
+    "tag": "vanish grate",
+    "end": [
+     -6,
+     3.4,
+     -13.22
+    ],
+    "d": 0.78,
+    "water": false,
+    "ps": "idle",
+    "tries": 2
+   },
+   {
+    "tag": "north plate",
+    "end": [
+     -6,
+     3.4,
+     -19.85
+    ],
+    "d": 0.05,
+    "water": false,
+    "ps": "idle",
+    "tries": 1
+   }
+  ],
+  "current": {
+   "a": [
+    0.97,
+    0.54,
+    -14
+   ],
+   "b": [
+    -19,
+    1.41,
+    -14
+   ],
+   "mps": -2.22,
+   "ys": [
+    0.57,
+    0.61,
+    0.66,
+    0.71,
+    0.74,
+    0.77,
+    0.81,
+    0.83,
+    0.91,
+    0.96,
+    1.03,
+    1.09,
+    1.13,
+    1.19,
+    1.25,
+    1.27,
+    1.33,
+    1.37,
+    1.41,
+    1.41,
+    1.41,
+    1.41,
+    1.41,
+    1.41,
+    1.41,
+    1.41
+   ],
+   "states": [
+    "swimIdle"
+   ],
+   "sub": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ]
+  },
+  "sink": [
+   0.77,
+   0.55,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5
+  ],
+  "surface": {
+   "end": [
+    -23.32,
+    1.81,
+    -14.97
+   ],
+   "ps": "swimDive",
+   "sub": false
+  },
+  "jetty": {
+   "start": [
+    -40,
+    3.5,
+    -14
+   ],
+   "end": [
+    -44.54,
+    3.5,
+    -14
+   ],
+   "ps": "idle",
+   "water": false,
+   "arrived": true
+  }
+ },
+ "console": [
+  "warning: [Course ember-2] props.js had no entry for: girders, pipes, slabs, antennae, fins"
+ ]
+}
