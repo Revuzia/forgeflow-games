@@ -23,7 +23,9 @@
 //   B1  the global budget: 80 combat events in one tick never hold more than 32 pooled voices
 //   B2  heals (closing AUD-C5): a lifesteal heal (self, the tick of its own damage) is silent; a fighter's heal of >= 5 %
 //       of its max HP chimes once, the ticks of its chain (another heal on it within 1.2 s) do not, the next chain
-//       does; a small heal (< 5 %) and a heal on a Wick are silent
+//       does; a small heal (< 5 %) and a heal on a Wick are silent. (orch1 AUD-O3) a foe's heal and an ally's 12+ m from
+//       you are silent, one team's heals in one tick are one chime, 10 heals 1.3 s apart chime 2-4 times (6 a minute, burst
+//       2), and a 30 % heal sounds on an empty bucket
 //   B5  an enemy fighter's death plays enemyDown (not when YOU scored it: the takedown cue carries that); a ward's end
 //       wardOut, a summon's summonOut; the lamp item's cast wardSet (not the shared summon cue); the music's dead state
 //       follows your fighter (closing AUD-C6, AUD-C9, AUD-C4)
@@ -249,8 +251,10 @@ await batch([{ e: 'announce', key: 'objective_taken', team: 0, params: { unit: '
 await batch([{ e: 'damage', src: 2, dst: 1, amount: 30, dtype: 'physical', crit: false }]);
 const hitOnYou = ctx.started[ctx.started.length - 1];
 let node = hitOnYou; while (node && node.kind !== 'gain') node = node.outs[0];
-// the voice gain joins the threat path, directly or through its per-play variation stage (max SFX-3: one more gain node)
-const threatRoute = node?.outs[0] === eng.threat || (node?.outs[0]?.kind === 'gain' && node.outs[0].outs[0] === eng.threat);
+// the voice gain joins the threat path, directly or through its per-play variation stage (max SFX-3: one more gain node);
+// since orch1 AUD-O1 a hit landing on you joins the priority sub-bus (past the leveller), which no duck touches either
+const unducked = (x) => x === eng.threat || x === eng.prio;
+const threatRoute = unducked(node?.outs[0]) || (node?.outs[0]?.kind === 'gain' && unducked(node.outs[0].outs[0]));
 const until = eng.announcer.until;
 const mid = tLine + 0.3;
 const lineNode = voiceStarts()[voiceStarts().length - 1];
@@ -363,6 +367,36 @@ if (first !== 1) failures.push(`B2: a 10 % heal played ${first} chimes (want 1)`
 if (chain !== 0) failures.push(`B2: a heal chain's later ticks played ${chain} chimes (want 0)`);
 if (next !== 1) failures.push(`B2: a heal 2 s after the chain played ${next} chimes (want 1)`);
 if (small !== 0) failures.push(`B2: a small heal / a Wick's heal played ${small} chimes (want 0)`);
+// (orch1 AUD-O3) the 5v5 heal budget: yours at 5 %, an ally's at 10 % within 12 m of you, never a foe's; one token
+// bucket (6 a minute, burst 2), one chime per team within 1 s, a heal of >= 25 % bypassing both
+{
+  ctx.advance(30);                                                   // the bucket full again (burst 2)
+  s0 = ctx.started.length;
+  await batch([{ e: 'heal', src: 2, dst: 2, amount: 90 }]);          // a foe's 15 %: silent (E[2] maxHp unset → also silent)
+  E[2].maxHp = 600; ctx.advance(2);
+  await batch([{ e: 'heal', src: 3, dst: 2, amount: 90 }]);          // a foe's 15 % with a max HP: silent
+  const foe = heals();
+  ctx.advance(2); E[4].x = 125;
+  await batch([{ e: 'heal', src: 1, dst: 4, amount: 90 }]);          // an ally's 15 %, 25 m away: silent
+  const far = heals() - foe;
+  ctx.advance(2); E[4].x = 98;
+  await batch([{ e: 'heal', src: 4, dst: 1, amount: 36 }, { e: 'heal', src: 1, dst: 4, amount: 90 }]);   // yours 6 % + an ally's 15 %, one tick: one chime
+  const merged = heals() - foe - far;
+  // the bucket: 10 of your 6 % heals 1.3 s apart (past the chain and the team merge) chime ~ burst + 13 s x 0.1 / s
+  ctx.advance(30);
+  const b0 = heals();
+  for (let k = 0; k < 10; k++) { ctx.advance(1.3); await batch([{ e: 'heal', src: 4, dst: 1, amount: 36 }]); }
+  const bucket = heals() - b0;
+  ctx.advance(1.3);
+  await batch([{ e: 'heal', src: 4, dst: 1, amount: 180 }]);         // 30 %: past the empty bucket
+  const big = heals() - b0 - bucket;
+  report.B2.o3 = { foe, far, merged, bucketOf10: bucket, bigBypass: big };
+  if (foe) failures.push(`B2 (AUD-O3): a foe's heal played ${foe} chimes (want 0)`);
+  if (far) failures.push(`B2 (AUD-O3): an ally's heal 25 m away played ${far} chimes (want 0)`);
+  if (merged !== 1) failures.push(`B2 (AUD-O3): two of one team's heals in one tick played ${merged} chimes (want 1)`);
+  if (bucket < 2 || bucket > 4) failures.push(`B2 (AUD-O3): 10 heals 1.3 s apart played ${bucket} chimes (want 2-4: burst 2 + 6 a minute)`);
+  if (big !== 1) failures.push(`B2 (AUD-O3): a 30 % heal on an empty bucket played ${big} chimes (want 1)`);
+}
 
 // B3 — the soft clip
 let shaper = null;
