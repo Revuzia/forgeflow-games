@@ -568,6 +568,16 @@
     "L": 20,
     "C": 18,
     "k": 0.6
+   },
+   {
+    "why": "orch1 FU-2 / units_gate P2: the pale linen shirt (coat texels L* >= 50) a cool olive-grey, so the warm sun no longer reads the whole top as honey in the harm band; the honey stays on the mask, hands and pots",
+    "parts": [
+     "coat"
+    ],
+    "minL": 50,
+    "hex": "#6B6E5C",
+    "L": 66,
+    "C": 5
    }
   ],
   "reserveModes": {
