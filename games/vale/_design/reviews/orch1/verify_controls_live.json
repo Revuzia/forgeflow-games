@@ -1,0 +1,1636 @@
+{
+ "verifier": "orch1 adversarial verifier, LIVE browser lens (headless Chrome 1920x1080, real CDP mouse/keys, practice RIFT match with sparring partner, structures off, harness heal)",
+ "target": "clicks and pathing fix round 4, commit 098ac7436, ruling 38",
+ "owner_complaint": "path finding issues as far as clicking. it starts to run around on its own almost. also its hard to target specific minions/targets. i thought clicking shift and attack was a thing to make it easier, especially for archer or caster?",
+ "at": "2026-11-15T03:35:24-06:00",
+ "build": "local dev server (vite, localhost:5190) on HEAD 3ec4d0c19, no src changes vs HEAD; src/input last changed in 9c6e8f99d (includes 098ac7436)",
+ "harness": "_harness/verify_controls_orch.mjs (copy of verify_controls_r4.mjs: every scenario starts after >= 4:05 of match time; fighters-only raised to 8 trials). Per-fighter raw reports: _harness/_reports/controls_orch_<fighter>.json; shots _harness/_shots/controls_orch_<fighter>_*.png (both gitignored)",
+ "pass": false,
+ "score": 6.5,
+ "verdict": "Targeting is fixed: plain right-click, Shift+right-click, A+left-click and Z fighters-only picks were right in every trial, across 2 archers and 2 casters, after 4 min. There was also zero movement without a command over ~62k traced frames. The pathing half of the owner complaint still reproduces live, so this fails. A held right button through a packed lane fight (dunsom, 8:15, ally tower plus a standing ally wave between hero and point) ping-ponged the hero back and forth ~1.5 m with 5 reversals in 4 s. It never gained ground, and the order gave up 8.4 m short of the held point. A second held move was pinned against a wall by an enemy clump: it crawled at ~0.25 m/s for 4 s and ended 2.7 m short. To a player this reads as \"runs around on its own\" and \"stops short\", the exact complaint. Ruling 38 claims 0 such cases in packed fights after 3:55.",
+ "blockers": [
+  {
+   "id": "HOLD-DITHER",
+   "severity": "blocker",
+   "fighter": "dunsom",
+   "scenario": "holdThroughWave trial 3 (right button held perfectly still on an open walkable point past the wave, not on any pick box)",
+   "matchTime": "~8:15 (sim t 494.2-498.2)",
+   "intended": {
+    "x": 69.48,
+    "y": 50.66,
+    "straight_m": 8.05
+   },
+   "actual": {
+    "endDist_m": 8.37,
+    "reached": false,
+    "path_m": 9.13,
+    "reversals_ge_0.5m": 5,
+    "regress_m": 1.45,
+    "moveCmds": 8,
+    "distinctPts": 1
+   },
+   "observed": "x oscillates 61.66 <-> 63.20 at constant y 53.8 with a ~1 s period (one no-progress watchdog window), e.g. 63.18 (495.70) -> 61.66 (496.17) -> 63.20 (496.73) -> 61.87 (497.13) -> 63.14 (497.77) -> 61.74 (498.23), then order 0 (give-up after 4 windows). The held button re-sent the same point every ~530 ms (correct), but the sim never made progress. The relaxed pocket-escape lane (up to 2 m back) appears to be re-chosen every window and alternates with the forward lane.",
+   "trace_sampled": [
+    [
+     494.17,
+     62.09,
+     53.85,
+     0,
+     "idle"
+    ],
+    [
+     494.27,
+     62.31,
+     53.83,
+     1,
+     "move"
+    ],
+    [
+     494.4,
+     62.51,
+     53.81,
+     1,
+     "move"
+    ],
+    [
+     494.53,
+     62.55,
+     53.79,
+     1,
+     "move"
+    ],
+    [
+     494.63,
+     62.58,
+     53.79,
+     1,
+     "move"
+    ],
+    [
+     494.73,
+     62.6,
+     53.78,
+     1,
+     "move"
+    ],
+    [
+     494.87,
+     62.63,
+     53.72,
+     1,
+     "move"
+    ],
+    [
+     495,
+     62.69,
+     53.68,
+     1,
+     "move"
+    ],
+    [
+     495.1,
+     62.73,
+     53.66,
+     1,
+     "move"
+    ],
+    [
+     495.23,
+     62.77,
+     53.63,
+     1,
+     "idle"
+    ],
+    [
+     495.33,
+     62.77,
+     53.63,
+     1,
+     "idle"
+    ],
+    [
+     495.47,
+     62.87,
+     53.66,
+     1,
+     "move"
+    ],
+    [
+     495.57,
+     62.97,
+     53.74,
+     1,
+     "move"
+    ],
+    [
+     495.7,
+     63.18,
+     53.82,
+     1,
+     "move"
+    ],
+    [
+     495.8,
+     62.85,
+     53.83,
+     1,
+     "move"
+    ],
+    [
+     495.93,
+     62.4,
+     53.85,
+     1,
+     "move"
+    ],
+    [
+     496.07,
+     61.96,
+     53.87,
+     1,
+     "move"
+    ],
+    [
+     496.17,
+     61.66,
+     53.82,
+     1,
+     "move"
+    ],
+    [
+     496.3,
+     61.92,
+     53.85,
+     1,
+     "move"
+    ],
+    [
+     496.43,
+     62.36,
+     53.83,
+     1,
+     "move"
+    ],
+    [
+     496.53,
+     62.69,
+     53.8,
+     1,
+     "move"
+    ],
+    [
+     496.63,
+     63.03,
+     53.77,
+     1,
+     "move"
+    ],
+    [
+     496.73,
+     63.2,
+     53.79,
+     1,
+     "move"
+    ],
+    [
+     496.87,
+     62.76,
+     53.82,
+     1,
+     "move"
+    ],
+    [
+     497,
+     62.31,
+     53.85,
+     1,
+     "move"
+    ],
+    [
+     497.13,
+     61.87,
+     53.87,
+     1,
+     "move"
+    ],
+    [
+     497.27,
+     61.9,
+     53.85,
+     1,
+     "move"
+    ],
+    [
+     497.4,
+     62.35,
+     53.83,
+     1,
+     "move"
+    ],
+    [
+     497.53,
+     62.8,
+     53.79,
+     1,
+     "move"
+    ],
+    [
+     497.63,
+     63.12,
+     53.77,
+     1,
+     "move"
+    ],
+    [
+     497.77,
+     63.14,
+     53.78,
+     1,
+     "move"
+    ],
+    [
+     497.9,
+     62.7,
+     53.81,
+     1,
+     "move"
+    ],
+    [
+     498,
+     62.36,
+     53.84,
+     1,
+     "move"
+    ],
+    [
+     498.13,
+     61.92,
+     53.87,
+     1,
+     "move"
+    ],
+    [
+     498.23,
+     61.74,
+     53.83,
+     0,
+     "idle"
+    ],
+    [
+     498.37,
+     61.74,
+     53.83,
+     0,
+     "idle"
+    ],
+    [
+     498.5,
+     61.74,
+     53.83,
+     0,
+     "idle"
+    ],
+    [
+     498.6,
+     61.74,
+     53.83,
+     0,
+     "idle"
+    ],
+    [
+     498.73,
+     61.74,
+     53.83,
+     0,
+     "idle"
+    ],
+    [
+     498.87,
+     61.74,
+     53.83,
+     0,
+     "idle"
+    ]
+   ],
+   "shot": "_harness/_shots/controls_orch_dunsom_19_holdwave_3_BAD.png (after release: hero at the ally tower base, blue wave standing to the east)",
+   "note": "The harness releases the button as soon as the order hits 0. Per ruling 38 the next re-send would restart the move, so under a real held button this dither would most likely resume rather than stop."
+  }
+ ],
+ "majors": [
+  {
+   "id": "HOLD-PINNED-CRAWL",
+   "severity": "major",
+   "fighter": "dunsom",
+   "scenario": "holdThroughWave trial 1 (cursor re-aimed at a fixed ground point, ~8:10)",
+   "intended": {
+    "x": 69.98,
+    "y": 50.52,
+    "straight_m": 7.52
+   },
+   "actual": {
+    "endDist_m": 2.66,
+    "reached": false,
+    "secs": 8.73,
+    "path_m": 6.51
+   },
+   "observed": "after closing to ~3.4 m the hero crept 0.02-0.03 m per 0.13 s for ~4 s along y=50.5, pressed against the north lane wall by an enemy minion clump, with 17 re-sends. It then idled into auto-attack 2.7 m short. Shot _harness/_shots/controls_orch_dunsom_18_holdwave_1_BAD.png."
+  },
+  {
+   "id": "HOLD-REGRESS",
+   "severity": "minor",
+   "fighter": "dunsom/ulkro",
+   "observed": "re-aimed holds through the wave stepped back 1.16 m (dunsom #0, 1 reversal) and 0.68 m (ulkro #2, 2 reversals) mid-route, though both reached the point."
+  }
+ ],
+ "minors": [
+  "tunlan held-still through wave ended 1.68 m short (crawled the last 1.5 m, order ended; inside the crowd, within tolerance of a crowded point).",
+  "dunsom hold-along-wall stepped back 0.33 m from the face (harness bar 0.3).",
+  "ulkro plain move through wave: 0.51 m of movement after arrival (shoved by bodies after the order ended; not an uncommanded order).",
+  "lisvel Shift-hold attack-move: 1 windup cancelled with a single command sent, so no re-send caused it; most likely the target died mid-windup. Plausible, not confirmed."
+ ],
+ "harness_artifacts_not_defects": [
+  "tunlan plain near-miss 4/8/12 px: 7/8 each. All 3 misses have the minion drifting 7-12 px away between planning and the CDP click (gapPlanned 4/8/12 -> gapAtClick 16.7/15.4/21.4); the pick rule agreed with the result in 3/3.",
+  "dunsom 24 px control: 5/6, because the minion walked into slop range before the click (gapAtClick 7.1); rule-consistent."
+ ],
+ "coverage_gaps": [
+  "hold-steer along walls: the left/right screen-direction faces were skipped on all 4 fighters (\"no long face\"); only ahead/behind were tested (8 trials).",
+  "dunsom: plain through-wave, held-still (HR) and Shift-hold all skipped (\"no clear point past the wave\": the late waves were too packed for the point finder). tunlan through-wave 4/4 skipped.",
+  "Shift+right-click trials re-used the same screen point for some trials (6 distinct points of 8 for lisvel/ulkro/dunsom, 5 of 7 for tunlan)."
+ ],
+ "per_fighter": {
+  "lisvel": {
+   "hero": {
+    "def": "lisvel",
+    "team": 0,
+    "range": 5.9
+   },
+   "matchTimeAtStart_s": 246.0,
+   "error": null,
+   "plainRightClickNearMiss": {
+    "off0": "6/6 (rule-consistent 6/6)",
+    "off4": "8/8 (rule-consistent 8/8)",
+    "off8": "8/8 (rule-consistent 8/8)",
+    "off12": "8/8 (rule-consistent 8/8)",
+    "off24": "6/6 (rule-consistent 6/6)"
+   },
+   "zFightersOnly": "8/8",
+   "shiftRightClickCluster": "8/8 (skips 0)",
+   "aLeftClick": "8/8",
+   "wallClicks": {
+    "n": 16,
+    "allEnded": true,
+    "maxAway_max": 0.31,
+    "worstVsStraightStop": 0.05,
+    "postArrive_max": 0
+   },
+   "holdAlongWall": [
+    {
+     "dir": "left",
+     "skip": "no long face",
+     "slidAlong": null,
+     "stepBackFromWall": null,
+     "endToRelease": null,
+     "postArrive": null,
+     "cmdsWhileStill": null
+    },
+    {
+     "dir": "right",
+     "skip": "no long face",
+     "slidAlong": null,
+     "stepBackFromWall": null,
+     "endToRelease": null,
+     "postArrive": null,
+     "cmdsWhileStill": null
+    },
+    {
+     "dir": "ahead",
+     "skip": null,
+     "slidAlong": 5.75,
+     "stepBackFromWall": 0.24,
+     "endToRelease": 0.91,
+     "postArrive": 0,
+     "cmdsWhileStill": 0
+    },
+    {
+     "dir": "behind",
+     "skip": null,
+     "slidAlong": 4.79,
+     "stepBackFromWall": 0.2,
+     "endToRelease": 1.01,
+     "postArrive": 0,
+     "cmdsWhileStill": 0
+    }
+   ],
+   "holdThroughWave": [
+    {
+     "still": false,
+     "skip": null,
+     "straight": 10.27,
+     "path": 10.92,
+     "endDist": 0.1,
+     "reached": true,
+     "regress": 0.05,
+     "maxAway": 0,
+     "distinctPts": 5,
+     "moveCmds": 8
+    },
+    {
+     "still": null,
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "reached": null,
+     "regress": null,
+     "maxAway": null,
+     "distinctPts": null,
+     "moveCmds": null
+    },
+    {
+     "still": false,
+     "skip": null,
+     "straight": 7.93,
+     "path": 8.85,
+     "endDist": 0.11,
+     "reached": true,
+     "regress": 0.08,
+     "maxAway": 0,
+     "distinctPts": 3,
+     "moveCmds": 6
+    },
+    {
+     "still": null,
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "reached": null,
+     "regress": null,
+     "maxAway": null,
+     "distinctPts": null,
+     "moveCmds": null
+    },
+    {
+     "still": null,
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "reached": null,
+     "regress": null,
+     "maxAway": null,
+     "distinctPts": null,
+     "moveCmds": null
+    },
+    {
+     "still": true,
+     "skip": null,
+     "straight": 8.43,
+     "path": 9.23,
+     "endDist": 0.01,
+     "reached": true,
+     "regress": 0,
+     "maxAway": 0,
+     "distinctPts": 1,
+     "moveCmds": 7
+    }
+   ],
+   "throughWavePlain": [
+    {
+     "skip": null,
+     "straight": 9.42,
+     "walked": 10.69,
+     "reversals": 0,
+     "endDist": 0,
+     "ended": true,
+     "postArrivePath": 0
+    },
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "walked": null,
+     "reversals": null,
+     "endDist": null,
+     "ended": null,
+     "postArrivePath": null
+    },
+    {
+     "skip": null,
+     "straight": 7.38,
+     "walked": 6.59,
+     "reversals": 0,
+     "endDist": 1.51,
+     "ended": true,
+     "postArrivePath": 0.01
+    },
+    {
+     "skip": null,
+     "straight": 10.62,
+     "walked": 12.97,
+     "reversals": 0,
+     "endDist": 0.06,
+     "ended": true,
+     "postArrivePath": 0.01
+    }
+   ],
+   "holdStill": [
+    {
+     "skip": null,
+     "straight": 7.2,
+     "path": 10.78,
+     "endDist": 0,
+     "sends": 5,
+     "distinctPts": 1,
+     "ended": true,
+     "postArrive": 0
+    },
+    {
+     "skip": null,
+     "straight": 7.26,
+     "path": 7.56,
+     "endDist": 0.04,
+     "sends": 4,
+     "distinctPts": 1,
+     "ended": true,
+     "postArrive": 0
+    },
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "sends": null,
+     "distinctPts": null,
+     "ended": null,
+     "postArrive": null
+    },
+    {
+     "skip": null,
+     "straight": 0.04,
+     "path": 0.01,
+     "endDist": 0.03,
+     "sends": 1,
+     "distinctPts": 1,
+     "ended": true,
+     "postArrive": 0.006
+    }
+   ],
+   "shiftHold": [
+    {
+     "skip": null,
+     "ruleAtClick": "ground",
+     "sends": 1,
+     "plainMoves": 0,
+     "switches": 1,
+     "swingsStarted": 5,
+     "swingsCancelled": 1,
+     "maxAway": 0
+    },
+    {
+     "skip": null,
+     "ruleAtClick": "ground",
+     "sends": 10,
+     "plainMoves": 0,
+     "switches": 1,
+     "swingsStarted": 4,
+     "swingsCancelled": 0,
+     "maxAway": 0
+    },
+    {
+     "skip": null,
+     "ruleAtClick": 14932,
+     "sends": 0,
+     "plainMoves": 0,
+     "switches": 1,
+     "swingsStarted": 4,
+     "swingsCancelled": 0,
+     "maxAway": 0
+    },
+    {
+     "skip": null,
+     "ruleAtClick": 21,
+     "sends": 0,
+     "plainMoves": 0,
+     "switches": 1,
+     "swingsStarted": 4,
+     "swingsCancelled": 0,
+     "maxAway": 0
+    }
+   ],
+   "uncommandedMovement": {
+    "totalDist": 0,
+    "nFlips": 0,
+    "samples": 15491,
+    "commands": 260,
+    "episodes": 0
+   },
+   "harnessFlags": [
+    {
+     "scenario": "shiftHold",
+     "bad": [
+      "1 windups cancelled during the held attack-move"
+     ],
+     "g": {
+      "x": 64.45,
+      "y": 9.23
+     },
+     "ruleAtClick": "ground",
+     "sends": 1,
+     "plainMoves": 0,
+     "attackCmds": [],
+     "targets": [
+      12847,
+      14928
+     ],
+     "switches": 1,
+     "swingsStarted": 5,
+     "swingsCancelled": 1,
+     "maxAway": 0,
+     "orders": [
+      0,
+      2
+     ]
+    }
+   ]
+  },
+  "ulkro": {
+   "hero": {
+    "def": "ulkro",
+    "team": 0,
+    "range": 5.4
+   },
+   "matchTimeAtStart_s": 247.2,
+   "error": null,
+   "plainRightClickNearMiss": {
+    "off0": "6/6 (rule-consistent 6/6)",
+    "off4": "8/8 (rule-consistent 8/8)",
+    "off8": "8/8 (rule-consistent 8/8)",
+    "off12": "8/8 (rule-consistent 8/8)",
+    "off24": "6/6 (rule-consistent 6/6)"
+   },
+   "zFightersOnly": "8/8",
+   "shiftRightClickCluster": "8/8 (skips 0)",
+   "aLeftClick": "8/8",
+   "wallClicks": {
+    "n": 16,
+    "allEnded": true,
+    "maxAway_max": 0,
+    "worstVsStraightStop": 0.04,
+    "postArrive_max": 0
+   },
+   "holdAlongWall": [
+    {
+     "dir": "left",
+     "skip": "no long face",
+     "slidAlong": null,
+     "stepBackFromWall": null,
+     "endToRelease": null,
+     "postArrive": null,
+     "cmdsWhileStill": null
+    },
+    {
+     "dir": "right",
+     "skip": "no long face",
+     "slidAlong": null,
+     "stepBackFromWall": null,
+     "endToRelease": null,
+     "postArrive": null,
+     "cmdsWhileStill": null
+    },
+    {
+     "dir": "ahead",
+     "skip": null,
+     "slidAlong": 5.35,
+     "stepBackFromWall": 0.24,
+     "endToRelease": 0.93,
+     "postArrive": 0,
+     "cmdsWhileStill": 0
+    },
+    {
+     "dir": "behind",
+     "skip": null,
+     "slidAlong": 5.41,
+     "stepBackFromWall": 0.24,
+     "endToRelease": 0.86,
+     "postArrive": 0,
+     "cmdsWhileStill": 0
+    }
+   ],
+   "holdThroughWave": [
+    {
+     "still": null,
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "reached": null,
+     "regress": null,
+     "maxAway": null,
+     "distinctPts": null,
+     "moveCmds": null
+    },
+    {
+     "still": false,
+     "skip": null,
+     "straight": 7.63,
+     "path": 8.97,
+     "endDist": 0.12,
+     "reached": true,
+     "regress": 0.08,
+     "maxAway": 0,
+     "distinctPts": 8,
+     "moveCmds": 9
+    },
+    {
+     "still": false,
+     "skip": null,
+     "straight": 10.41,
+     "path": 12.87,
+     "endDist": 0.17,
+     "reached": true,
+     "regress": 0.68,
+     "maxAway": 0.07,
+     "distinctPts": 11,
+     "moveCmds": 15
+    },
+    {
+     "still": true,
+     "skip": null,
+     "straight": 8.26,
+     "path": 8.62,
+     "endDist": 0.01,
+     "reached": true,
+     "regress": 0,
+     "maxAway": 0,
+     "distinctPts": 1,
+     "moveCmds": 4
+    },
+    {
+     "still": null,
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "reached": null,
+     "regress": null,
+     "maxAway": null,
+     "distinctPts": null,
+     "moveCmds": null
+    },
+    {
+     "still": null,
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "reached": null,
+     "regress": null,
+     "maxAway": null,
+     "distinctPts": null,
+     "moveCmds": null
+    }
+   ],
+   "throughWavePlain": [
+    {
+     "skip": null,
+     "straight": 8.33,
+     "walked": 9.15,
+     "reversals": 0,
+     "endDist": 0,
+     "ended": true,
+     "postArrivePath": 0
+    },
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "walked": null,
+     "reversals": null,
+     "endDist": null,
+     "ended": null,
+     "postArrivePath": null
+    },
+    {
+     "skip": null,
+     "straight": 6.87,
+     "walked": 7.3,
+     "reversals": 0,
+     "endDist": 0.01,
+     "ended": true,
+     "postArrivePath": 0.51
+    },
+    {
+     "skip": null,
+     "straight": 7.02,
+     "walked": 7.2,
+     "reversals": 0,
+     "endDist": 0.03,
+     "ended": true,
+     "postArrivePath": 0
+    }
+   ],
+   "holdStill": [
+    {
+     "skip": null,
+     "straight": 3.69,
+     "path": 3.75,
+     "endDist": 0,
+     "sends": 1,
+     "distinctPts": 1,
+     "ended": true,
+     "postArrive": 0
+    },
+    {
+     "skip": null,
+     "straight": 11.45,
+     "path": 14.92,
+     "endDist": 0.02,
+     "sends": 9,
+     "distinctPts": 1,
+     "ended": true,
+     "postArrive": 0
+    },
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "sends": null,
+     "distinctPts": null,
+     "ended": null,
+     "postArrive": null
+    },
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "sends": null,
+     "distinctPts": null,
+     "ended": null,
+     "postArrive": null
+    }
+   ],
+   "shiftHold": [
+    {
+     "skip": "no clear point past the wave",
+     "ruleAtClick": null,
+     "sends": null,
+     "plainMoves": null,
+     "switches": null,
+     "swingsStarted": null,
+     "swingsCancelled": null,
+     "maxAway": null
+    },
+    {
+     "skip": "no clear point past the wave",
+     "ruleAtClick": null,
+     "sends": null,
+     "plainMoves": null,
+     "switches": null,
+     "swingsStarted": null,
+     "swingsCancelled": null,
+     "maxAway": null
+    },
+    {
+     "skip": "no clear point past the wave",
+     "ruleAtClick": null,
+     "sends": null,
+     "plainMoves": null,
+     "switches": null,
+     "swingsStarted": null,
+     "swingsCancelled": null,
+     "maxAway": null
+    },
+    {
+     "skip": null,
+     "ruleAtClick": 16777,
+     "sends": 0,
+     "plainMoves": 0,
+     "switches": 1,
+     "swingsStarted": 4,
+     "swingsCancelled": 0,
+     "maxAway": 0
+    }
+   ],
+   "uncommandedMovement": {
+    "totalDist": 0,
+    "nFlips": 0,
+    "samples": 17892,
+    "commands": 263,
+    "episodes": 0
+   },
+   "harnessFlags": [
+    {
+     "scenario": "throughWave",
+     "bad": [
+      "kept moving after arrival"
+     ],
+     "straight": 6.867631420492975,
+     "wpath": 7.304338430582491,
+     "endDist": 0.007660853302077881,
+     "maxAway": 0
+    }
+   ]
+  },
+  "tunlan": {
+   "hero": {
+    "def": "tunlan",
+    "team": 0,
+    "range": 5.2
+   },
+   "matchTimeAtStart_s": 246.4,
+   "error": null,
+   "plainRightClickNearMiss": {
+    "off0": "6/6 (rule-consistent 6/6)",
+    "off4": "7/8 (rule-consistent 8/8)",
+    "off8": "7/8 (rule-consistent 8/8)",
+    "off12": "7/8 (rule-consistent 8/8)",
+    "off24": "6/6 (rule-consistent 6/6)"
+   },
+   "zFightersOnly": "8/8",
+   "shiftRightClickCluster": "7/7 (skips 1)",
+   "aLeftClick": "8/8",
+   "wallClicks": {
+    "n": 16,
+    "allEnded": true,
+    "maxAway_max": 0,
+    "worstVsStraightStop": 0.04,
+    "postArrive_max": 0
+   },
+   "holdAlongWall": [
+    {
+     "dir": "left",
+     "skip": "no long face",
+     "slidAlong": null,
+     "stepBackFromWall": null,
+     "endToRelease": null,
+     "postArrive": null,
+     "cmdsWhileStill": null
+    },
+    {
+     "dir": "right",
+     "skip": "no long face",
+     "slidAlong": null,
+     "stepBackFromWall": null,
+     "endToRelease": null,
+     "postArrive": null,
+     "cmdsWhileStill": null
+    },
+    {
+     "dir": "ahead",
+     "skip": null,
+     "slidAlong": 4.43,
+     "stepBackFromWall": 0.19,
+     "endToRelease": 1.35,
+     "postArrive": 0,
+     "cmdsWhileStill": 0
+    },
+    {
+     "dir": "behind",
+     "skip": null,
+     "slidAlong": 4.77,
+     "stepBackFromWall": 0.22,
+     "endToRelease": 1.03,
+     "postArrive": 0,
+     "cmdsWhileStill": 0
+    }
+   ],
+   "holdThroughWave": [
+    {
+     "still": null,
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "reached": null,
+     "regress": null,
+     "maxAway": null,
+     "distinctPts": null,
+     "moveCmds": null
+    },
+    {
+     "still": false,
+     "skip": null,
+     "straight": 7.73,
+     "path": 8.03,
+     "endDist": 0.17,
+     "reached": true,
+     "regress": 0.12,
+     "maxAway": 0,
+     "distinctPts": 3,
+     "moveCmds": 6
+    },
+    {
+     "still": false,
+     "skip": null,
+     "straight": 8.65,
+     "path": 11.18,
+     "endDist": 0.09,
+     "reached": true,
+     "regress": 0,
+     "maxAway": 0,
+     "distinctPts": 3,
+     "moveCmds": 7
+    },
+    {
+     "still": true,
+     "skip": null,
+     "straight": 10.85,
+     "path": 12.11,
+     "endDist": 1.68,
+     "reached": false,
+     "regress": 0.12,
+     "maxAway": 0.01,
+     "distinctPts": 1,
+     "moveCmds": 10
+    },
+    {
+     "still": null,
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "reached": null,
+     "regress": null,
+     "maxAway": null,
+     "distinctPts": null,
+     "moveCmds": null
+    },
+    {
+     "still": true,
+     "skip": null,
+     "straight": 10.84,
+     "path": 13.06,
+     "endDist": 0,
+     "reached": true,
+     "regress": 0,
+     "maxAway": 0,
+     "distinctPts": 1,
+     "moveCmds": 7
+    }
+   ],
+   "throughWavePlain": [
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "walked": null,
+     "reversals": null,
+     "endDist": null,
+     "ended": null,
+     "postArrivePath": null
+    },
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "walked": null,
+     "reversals": null,
+     "endDist": null,
+     "ended": null,
+     "postArrivePath": null
+    },
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "walked": null,
+     "reversals": null,
+     "endDist": null,
+     "ended": null,
+     "postArrivePath": null
+    },
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "walked": null,
+     "reversals": null,
+     "endDist": null,
+     "ended": null,
+     "postArrivePath": null
+    }
+   ],
+   "holdStill": [
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "sends": null,
+     "distinctPts": null,
+     "ended": null,
+     "postArrive": null
+    },
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "sends": null,
+     "distinctPts": null,
+     "ended": null,
+     "postArrive": null
+    },
+    {
+     "skip": null,
+     "straight": 6.73,
+     "path": 6.7,
+     "endDist": 0.03,
+     "sends": 3,
+     "distinctPts": 1,
+     "ended": true,
+     "postArrive": 0
+    },
+    {
+     "skip": null,
+     "straight": 8.21,
+     "path": 11.51,
+     "endDist": 0,
+     "sends": 6,
+     "distinctPts": 1,
+     "ended": true,
+     "postArrive": 0
+    }
+   ],
+   "shiftHold": [
+    {
+     "skip": null,
+     "ruleAtClick": "ground",
+     "sends": 10,
+     "plainMoves": 0,
+     "switches": 2,
+     "swingsStarted": 4,
+     "swingsCancelled": 0,
+     "maxAway": 0
+    },
+    {
+     "skip": null,
+     "ruleAtClick": 15200,
+     "sends": 0,
+     "plainMoves": 0,
+     "switches": 1,
+     "swingsStarted": 2,
+     "swingsCancelled": 0,
+     "maxAway": 0
+    },
+    {
+     "skip": null,
+     "ruleAtClick": 15221,
+     "sends": 0,
+     "plainMoves": 0,
+     "switches": 1,
+     "swingsStarted": 3,
+     "swingsCancelled": 0,
+     "maxAway": 0
+    },
+    {
+     "skip": "no clear point past the wave",
+     "ruleAtClick": null,
+     "sends": null,
+     "plainMoves": null,
+     "switches": null,
+     "swingsStarted": null,
+     "swingsCancelled": null,
+     "maxAway": null
+    }
+   ],
+   "uncommandedMovement": {
+    "totalDist": 0,
+    "nFlips": 0,
+    "samples": 13651,
+    "commands": 267,
+    "episodes": 0
+   },
+   "harnessFlags": [
+    {
+     "scenario": "near",
+     "off": 4,
+     "intended": 5488,
+     "moving": true,
+     "sent": "move",
+     "ok": false,
+     "ruleAtClick": "move",
+     "consistent": true,
+     "gapPlanned": 4.01,
+     "gapAtClick": 16.66,
+     "at": [
+      1716,
+      251
+     ],
+     "side": 1,
+     "extra": 0
+    },
+    {
+     "scenario": "near",
+     "off": 8,
+     "intended": 4184,
+     "moving": true,
+     "sent": "move",
+     "ok": false,
+     "ruleAtClick": "move",
+     "consistent": true,
+     "gapPlanned": 8.01,
+     "gapAtClick": 15.36,
+     "at": [
+      746,
+      483
+     ],
+     "side": 1,
+     "extra": 0
+    },
+    {
+     "scenario": "near",
+     "off": 12,
+     "intended": 6872,
+     "moving": true,
+     "sent": "move",
+     "ok": false,
+     "ruleAtClick": "move",
+     "consistent": true,
+     "gapPlanned": 12,
+     "gapAtClick": 21.42,
+     "at": [
+      1828,
+      301
+     ],
+     "side": 1,
+     "extra": 0
+    }
+   ]
+  },
+  "dunsom": {
+   "hero": {
+    "def": "dunsom",
+    "team": 0,
+    "range": 5.2
+   },
+   "matchTimeAtStart_s": 246.1,
+   "error": null,
+   "plainRightClickNearMiss": {
+    "off0": "6/6 (rule-consistent 6/6)",
+    "off4": "8/8 (rule-consistent 8/8)",
+    "off8": "8/8 (rule-consistent 8/8)",
+    "off12": "8/8 (rule-consistent 8/8)",
+    "off24": "5/6 (rule-consistent 6/6)"
+   },
+   "zFightersOnly": "8/8",
+   "shiftRightClickCluster": "8/8 (skips 0)",
+   "aLeftClick": "8/8",
+   "wallClicks": {
+    "n": 16,
+    "allEnded": true,
+    "maxAway_max": 0,
+    "worstVsStraightStop": 0.22,
+    "postArrive_max": 0
+   },
+   "holdAlongWall": [
+    {
+     "dir": "left",
+     "skip": "no long face",
+     "slidAlong": null,
+     "stepBackFromWall": null,
+     "endToRelease": null,
+     "postArrive": null,
+     "cmdsWhileStill": null
+    },
+    {
+     "dir": "right",
+     "skip": "no long face",
+     "slidAlong": null,
+     "stepBackFromWall": null,
+     "endToRelease": null,
+     "postArrive": null,
+     "cmdsWhileStill": null
+    },
+    {
+     "dir": "ahead",
+     "skip": null,
+     "slidAlong": 5.81,
+     "stepBackFromWall": 0.33,
+     "endToRelease": 1.04,
+     "postArrive": 0,
+     "cmdsWhileStill": 0
+    },
+    {
+     "dir": "behind",
+     "skip": null,
+     "slidAlong": 4.76,
+     "stepBackFromWall": 0.21,
+     "endToRelease": 1.03,
+     "postArrive": 0,
+     "cmdsWhileStill": 0
+    }
+   ],
+   "holdThroughWave": [
+    {
+     "still": false,
+     "skip": null,
+     "straight": 7.72,
+     "path": 13.01,
+     "endDist": 0.17,
+     "reached": true,
+     "regress": 1.16,
+     "maxAway": 0,
+     "distinctPts": 10,
+     "moveCmds": 13
+    },
+    {
+     "still": false,
+     "skip": null,
+     "straight": 7.52,
+     "path": 6.51,
+     "endDist": 2.66,
+     "reached": false,
+     "regress": 0.02,
+     "maxAway": 0,
+     "distinctPts": 7,
+     "moveCmds": 17
+    },
+    {
+     "still": null,
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "reached": null,
+     "regress": null,
+     "maxAway": null,
+     "distinctPts": null,
+     "moveCmds": null
+    },
+    {
+     "still": true,
+     "skip": null,
+     "straight": 8.05,
+     "path": 9.13,
+     "endDist": 8.37,
+     "reached": false,
+     "regress": 1.45,
+     "maxAway": 0.44,
+     "distinctPts": 1,
+     "moveCmds": 8
+    },
+    {
+     "still": null,
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "reached": null,
+     "regress": null,
+     "maxAway": null,
+     "distinctPts": null,
+     "moveCmds": null
+    },
+    {
+     "still": null,
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "reached": null,
+     "regress": null,
+     "maxAway": null,
+     "distinctPts": null,
+     "moveCmds": null
+    }
+   ],
+   "throughWavePlain": [
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "walked": null,
+     "reversals": null,
+     "endDist": null,
+     "ended": null,
+     "postArrivePath": null
+    },
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "walked": null,
+     "reversals": null,
+     "endDist": null,
+     "ended": null,
+     "postArrivePath": null
+    },
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "walked": null,
+     "reversals": null,
+     "endDist": null,
+     "ended": null,
+     "postArrivePath": null
+    },
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "walked": null,
+     "reversals": null,
+     "endDist": null,
+     "ended": null,
+     "postArrivePath": null
+    }
+   ],
+   "holdStill": [
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "sends": null,
+     "distinctPts": null,
+     "ended": null,
+     "postArrive": null
+    },
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "sends": null,
+     "distinctPts": null,
+     "ended": null,
+     "postArrive": null
+    },
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "sends": null,
+     "distinctPts": null,
+     "ended": null,
+     "postArrive": null
+    },
+    {
+     "skip": "no clear point past the wave",
+     "straight": null,
+     "path": null,
+     "endDist": null,
+     "sends": null,
+     "distinctPts": null,
+     "ended": null,
+     "postArrive": null
+    }
+   ],
+   "shiftHold": [
+    {
+     "skip": "no clear point past the wave",
+     "ruleAtClick": null,
+     "sends": null,
+     "plainMoves": null,
+     "switches": null,
+     "swingsStarted": null,
+     "swingsCancelled": null,
+     "maxAway": null
+    },
+    {
+     "skip": "no clear point past the wave",
+     "ruleAtClick": null,
+     "sends": null,
+     "plainMoves": null,
+     "switches": null,
+     "swingsStarted": null,
+     "swingsCancelled": null,
+     "maxAway": null
+    },
+    {
+     "skip": "no clear point past the wave",
+     "ruleAtClick": null,
+     "sends": null,
+     "plainMoves": null,
+     "switches": null,
+     "swingsStarted": null,
+     "swingsCancelled": null,
+     "maxAway": null
+    },
+    {
+     "skip": "no clear point past the wave",
+     "ruleAtClick": null,
+     "sends": null,
+     "plainMoves": null,
+     "switches": null,
+     "swingsStarted": null,
+     "swingsCancelled": null,
+     "maxAway": null
+    }
+   ],
+   "uncommandedMovement": {
+    "totalDist": 0,
+    "nFlips": 0,
+    "samples": 14671,
+    "commands": 244,
+    "episodes": 0
+   },
+   "harnessFlags": [
+    {
+     "scenario": "near",
+     "off": 24,
+     "intended": 7053,
+     "moving": true,
+     "sent": 7053,
+     "ok": false,
+     "ruleAtClick": 7053,
+     "consistent": true,
+     "gapPlanned": 24.02,
+     "gapAtClick": 7.12,
+     "at": [
+      1114,
+      551
+     ],
+     "side": -1,
+     "extra": 0
+    },
+    {
+     "scenario": "holdWall",
+     "bad": [
+      "stepped back from the wall > 0.3 m"
+     ],
+     "tEnd": 457.8666666666667,
+     "dir": "ahead",
+     "faceDist": 3.55,
+     "localGapAfterTouch": 0,
+     "touched": true,
+     "cmds": 11,
+     "kinds": [
+      "move"
+     ],
+     "stepBackFromWall": 0.33,
+     "slidAlong": 5.81,
+     "cursorTravel": 5.6,
+     "ended": true,
+     "endToRelease": 1.04,
+     "maxAwayFromRelease": 0,
+     "postArrive": 0,
+     "cmdsWhileStill": 0
+    },
+    {
+     "scenario": "holdThroughWave",
+     "bad": [
+      "ended > 2 m from the held point"
+     ],
+     "still": false,
+     "g": {
+      "x": 69.98,
+      "y": 50.52
+     },
+     "straight": 7.52,
+     "path": 6.51,
+     "endDist": 2.66,
+     "maxAway": 0,
+     "regress": 0.02,
+     "reached": false,
+     "secs": 8.73,
+     "cmds": 17,
+     "kinds": [
+      "move"
+     ],
+     "cursorOverEnemyFrames": 23,
+     "ended": true,
+     "postArrive": 0.078,
+     "moveCmds": 17,
+     "distinctPts": 7
+    },
+    {
+     "scenario": "holdThroughWave",
+     "bad": [
+      "ended > 2 m from the held point"
+     ],
+     "still": true,
+     "g": {
+      "x": 69.48,
+      "y": 50.66
+     },
+     "straight": 8.05,
+     "path": 9.13,
+     "endDist": 8.37,
+     "maxAway": 0.44,
+     "regress": 1.45,
+     "reached": false,
+     "secs": 4.07,
+     "cmds": 8,
+     "kinds": [
+      "move"
+     ],
+     "cursorOverEnemyFrames": 0,
+     "ended": true,
+     "postArrive": 0,
+     "moveCmds": 8,
+     "distinctPts": 1
+    }
+   ]
+  }
+ },
+ "totals": {
+  "plainNearMiss_4_8_12px": "93/96 (all 3 misses rule-consistent harness latency)",
+  "plainCentre": "24/24",
+  "control24px": "23/24 (rule-consistent)",
+  "shiftRightClickCluster": "31/31",
+  "aLeftClick": "32/32",
+  "zFightersOnly": "32/32",
+  "wallClicks": "64/64 ended; max moved-away 0.31 m; worst end vs straight-stop +0.22 m (dunsom behind-face); 0 post-arrival drift",
+  "holdAlongWall": "8 run (ahead/behind), all slid 4.4-5.8 m along, 0 commands while still; 8 skipped",
+  "holdThroughWave": "13 run, 10 reached; 1 dither blocker, 1 pinned crawl 2.66 m short, 1 1.68 m short",
+  "uncommandedMovement": "0 m and 0 uncommanded order starts over 61,705 traced frames, 1,034 commands"
+ },
+ "fix_direction": "Stop the no-progress watchdog from alternating between the relaxed back-off lane and the forward lane. Commit to the escape lane for at least its length, or forbid a lane whose first leg reverses the previous window's. Treat standing allies at a structure as pass-around bodies. Add a live probe that fails on >= 3 reversals of 0.5 m legs in any 4 s of a held move. Re-run _harness/verify_controls_orch.mjs dunsom (and a seed loop) after the fix."
+}
