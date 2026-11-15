@@ -9,6 +9,7 @@ seed 7), turned into bar rows (PLAN.md "Lane R2A" acceptance bars; the audit val
     python _harness/p23/waterlook.py --disk --plant flat-light       # the W9 hemisphere / sun, no contrast curve   - MUST FAIL light
     python _harness/p23/waterlook.py --disk --plant dim-rooms        # the rooms without the W10 indoor lift       - MUST FAIL light: interiors
     python _harness/p23/waterlook.py --disk --plant sea-edge         # the sea translucent past the map edge        - MUST FAIL light: far-sea edge
+    python _harness/p23/waterlook.py --disk --plant lip-static       # foam on the static level, not the bobbing one - MUST FAIL shore lip
     python _harness/p23/waterlook.py --disk --plant sparse-grass     # the blade cell 0.56 -> 1.4 m                 - MUST FAIL grass
     python _harness/p23/waterlook.py --disk --plant grass-on-low     # the blade layer built on low too             - MUST FAIL low-identical
     python _harness/p23/waterlook.py --disk --plant grass-on-sand    # the blades without the grass-ness mask (on beaches) - MUST FAIL grass-sand
@@ -93,6 +94,8 @@ PLANTS = {
     "dim-rooms": [(RP + "maps.js", [("const HG_INDOOR = (mapId === \"deepwood\" ? 0.95 : 0.8) * (W10V ? (K.w10Indoor || W10_INDOOR) : 1);", "const HG_INDOOR = (mapId === \"deepwood\" ? 0.95 : 0.8);")])],
     # sea-edge = the sea plane translucent past the map edge (no opaque fade): the sky dome shows through, a hard straight step - MUST FAIL far-sea edge
     "sea-edge": [(RP + "maps.js", [("    diffuseColor.a = mix( diffuseColor.a, 1.0, smoothstep( -240.0, -20.0, lout ) );", "")])],
+    # lip-static = the foam / depth terms on the STATIC water level (the bobbing mesh not followed): the lip slides off the shore - MUST FAIL shore lip
+    "lip-static": [(RP + "maps.js", [("if (W10V && LCFX) LCU.uLcWater.value.x = water.position.y;", "")])],
     "sparse-grass": [(RP + "maps.js", [("lamps: 4, grassR: 30, grassC: 0.56,", "lamps: 4, grassR: 30, grassC: 1.4,")])],
     # grass-on-low = the blade layer (and the ground lattice texture it stands on) built on the low tier too
     "grass-on-low": [(RP + "maps.js", [("lamps: 0, grassR: 0, grassC: 1,", "lamps: 0, grassR: 30, grassC: 0.56,"),
@@ -175,9 +178,10 @@ RENDER_JS = r"""([spec, hide, pts]) => { const W = window.__LC__.W, T = W.THREE,
 # the map's clock pinned for a deterministic frame (water bob, cloud drift, wind): every map updater run once at t
 SETTLE_JS = r"""(t) => { const W = window.__LC__.W; for (const fn of (W._mapUpdaters || [])) { try { fn(0.6, t); } catch (e) {} } return (W._mapUpdaters || []).length; }"""
 
-# shore transects across the waterline: points every 0.1 m from 20 m inland to 6 m out, 9 transects 3 m apart; [x, y, z, t (m seaward), above (m)]
+# shore transects across the waterline: points every 0.1 m from 20 m inland to 14 m out (was 6 m: at the bob's trough the waterline of a flat beach
+# moves ~6 m seaward and left 3 transects with no waterline at all - read as '0 m of foam'), 9 transects 3 m apart; [x, y, z, t (m seaward), above (m)]
 TRANSECT_JS = r"""([sx, sz, dx, dz]) => { const W = window.__LC__.W, M = W.map, wy = M.waterY, wl = M.water ? M.water.position.y : wy; const px = -dz, pz = dx; const out = [];
-  for (let k = -4; k <= 4; k++) { const row = []; for (let i = -200; i <= 60; i++) { const t = i * 0.1, x = sx + px * k * 3 + dx * t, z = sz + pz * k * 3 + dz * t; const g = M.heightAt(x, z);
+  for (let k = -4; k <= 4; k++) { const row = []; for (let i = -200; i <= 140; i++) { const t = i * 0.1, x = sx + px * k * 3 + dx * t, z = sz + pz * k * 3 + dz * t; const g = M.heightAt(x, z);
     row.push([x, Math.max(g, wl), z, t, g - wl]); } out.push(row); }   // (above: metres over the LIVE surface - the drawn waterline at this clock)
   return out; }"""
 
@@ -596,8 +600,10 @@ def shore_measure(a, b, tr):
                 elif r[0] - tw > 0.25:
                     break
             n = (tw - first + 0.1) if first is not None else 0.0
-        widths.append(round(n, 2))
-    return {"deepRef": round(ref, 4) if ref is not None else None, "foamWidths": widths, "foamMedian": float(np.median(widths)) if widths else None,
+        else:
+            n = None                                     # no waterline on this transect (in frame): never a pass of the lip row
+        widths.append(round(n, 2) if n is not None else None)
+    return {"deepRef": round(ref, 4) if ref is not None else None, "foamWidths": widths, "foamMedian": float(np.median([w for w in widths if w is not None])) if any(w is not None for w in widths) else None,
             "wetRatios": [round(x, 3) for x in wets], "wetMedian": float(np.median(wets)) if wets else None}
 
 
@@ -775,6 +781,10 @@ def main():
                 v.check("shore: at the bob's crest, still level AND trough (map clock %s): foam band from the waterline 0.5-2.0 m wide (median of 9 transects); wet band (0.05-0.9 m above the water / 1.2-2.0 m) <= 0.85"
                         % ", ".join("%.3f" % t for t in SHORE_T), ok,
                         {m: {t: {k: c.get(k) for k in ("foamMedian", "wetMedian", "foamWidths", "deepRef")} for t, c in x.items()} for m, x in sh.items()}, "0.5-2.0 m; <= 0.85, every clock")
+                # the lip on EVERY transect (not the median): a shore that loses its lip on part of the beach for part of every bob is a fail
+                ok = bool(sh) and all(len(x) == len(SHORE_T) and all(len(c.get("foamWidths") or []) == 9 and all(w is not None and w >= 0.3 for w in c["foamWidths"]) for c in x.values()) for x in sh.values())
+                v.check("shore lip: every one of the 9 transects has a foam run >= 0.3 m from the waterline at the bob's crest, still level AND trough", ok,
+                        {m: {t: c.get("foamWidths") for t, c in x.items()} for m, x in sh.items()}, ">= 0.3 m, 9 of 9, every clock")
         if "storm" in want:
             se = {m: R.get(m, {}).get("stormEarly") for m in maps}
             if not all(x and x["early"] for x in se.values()):
