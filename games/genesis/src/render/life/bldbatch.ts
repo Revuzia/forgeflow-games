@@ -18,6 +18,7 @@ import { BLD_INST_PER_ROW, makeBuildingDepthMaterial, makeBuildingMaterial } fro
 import { perfSwitch } from '../perfswitch.ts';
 import { ringIntercept } from '../bufring.ts';
 import { texUpload } from '../uploadsched.ts';
+import { frustumFromProjection } from '../shaders/revz.ts';
 
 /** PERF F21 (session 9): geometry PAGES of a fixed size instead of one batch whose buffers double; `?bldpage=0` = old */
 const PAGED = perfSwitch('bldpage');
@@ -223,7 +224,7 @@ export class BldPage {
   private readonly fs = new Sphere();
 
   /** PERF F19: this pass's multi-draw lists over an identity draw -> instance table (see the constructor) */
-  private prepareDraws(camera: { projectionMatrix: Matrix4; matrixWorldInverse: Matrix4 }, geometry: BufferGeometry): void {
+  private prepareDraws(camera: { projectionMatrix: Matrix4; matrixWorldInverse: Matrix4; reversedDepth?: boolean }, geometry: BufferGeometry): void {
     const mesh = this.mesh as unknown as {
       _instanceInfo: { visible: boolean; active: boolean; geometryIndex: number }[];
       _geometryInfo: { start: number; count: number }[];
@@ -243,7 +244,7 @@ export class BldPage {
     const index = geometry.getIndex();
     const bpe = index === null ? 1 : index.array.BYTES_PER_ELEMENT;
     const cull = mesh.perObjectFrustumCulled;
-    if (cull) this.frustum.setFromProjectionMatrix(this.fm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(mesh.matrixWorld));
+    if (cull) frustumFromProjection(this.frustum, this.fm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(mesh.matrixWorld), camera);
     const sph = this.sph, f = this.frustum, sp = this.fs;
     for (let i = 0; i < n; i++) {
       const it = info[i];

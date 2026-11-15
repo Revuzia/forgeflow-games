@@ -10,6 +10,7 @@
 // GPU's renderer string. Costs nothing unless recording (the hooks are one branch).
 
 import { perfSwitch, perfSwitchLine } from './perfswitch.ts';
+import { revzReport } from './shaders/revz.ts';
 import { gpuMem } from './gpumem.ts';
 import { BOOT_PROBES, GPU_PROBE, probeLine, type ProbeResult } from './gpuprobe.ts';
 import { FREEZE, freezeLine } from './freeze.ts';
@@ -503,6 +504,7 @@ export class PerfRecorder {
     L.push('NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps');
     if (env) L.push(`gpu: ${env.gpu} | preset ${env.preset} | canvas ${env.canvas} | dpr ${env.dpr}${env.extra ? ' | ' + env.extra : ''}`);
     L.push(`perf fixes (A/B switches, effective): ${perfSwitchLine() || 'none'}`);
+    for (const l of revzReport()) L.push(l);
     {
       const pm = (globalThis.performance as unknown as { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
       const dm = typeof navigator !== 'undefined' ? (navigator as unknown as { deviceMemory?: number }).deviceMemory : undefined;

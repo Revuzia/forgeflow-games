@@ -63,6 +63,7 @@ export interface ShadowUniforms {
 }
 
 import { perfSwitch } from '../perfswitch.ts';
+import { standardDepth } from '../shaders/revz.ts';
 
 const SH_STRIP = !perfSwitch('shcolour', false);
 const _corners: Vector3[] = Array.from({ length: 8 }, () => new Vector3());
@@ -117,12 +118,14 @@ export class SunShadows {
   /** allocate the depth atlas on the GPU now, so samplers bound to it are valid before the first shadow pass */
   init(renderer: WebGLRenderer): void {
     const prev = renderer.getRenderTarget();
+    standardDepth(renderer, true);
     renderer.setRenderTarget(this.rt);
     this.stripColour(renderer);
     renderer.setClearColor(0xffffff, 1);
     renderer.clear(true, true, false);
     renderer.setClearColor(0x000000, 1);
     renderer.setRenderTarget(prev);
+    standardDepth(renderer, false);
   }
 
   /**
@@ -256,12 +259,14 @@ export class SunShadows {
     if (!cam) return Promise.resolve(scene);
     const prevTarget = renderer.getRenderTarget();
     swap(true);
+    standardDepth(renderer, true);
     try {
       renderer.setRenderTarget(this.rt);
       return renderer.compileAsync(scene, cam);
     } finally {
       swap(false);
       renderer.setRenderTarget(prevTarget);
+      standardDepth(renderer, false);
     }
   }
 
@@ -270,6 +275,8 @@ export class SunShadows {
     const prevTarget = renderer.getRenderTarget();
     const prevAuto = renderer.autoClear;
     swap(true);
+    // (reversed-Z main pass: the cascades keep standard depth — shaders/revz.ts — so the atlas is what it was)
+    standardDepth(renderer, true);
     renderer.setRenderTarget(this.rt);
     this.stripColour(renderer);
     this.rt.scissorTest = false;
@@ -293,6 +300,7 @@ export class SunShadows {
     renderer.setClearColor(0x000000, 1);
     swap(false);
     renderer.setRenderTarget(prevTarget);
+    standardDepth(renderer, false);
   }
 
   dispose(): void {

@@ -13,7 +13,8 @@ import { siltLensClear } from './planet/silt.ts';
 import {
   Frustum, Matrix3, Matrix4, MeshBasicMaterial, NoToneMapping, PerspectiveCamera, Quaternion, Scene, Vector2, Vector3, Vector4, WebGLRenderer, type IUniform, type Texture, type WebGLRenderTarget,
 } from 'three';
-import { depthClamp, enableConservativeDepth, enableOrthoDepth } from './shaders/zcons.ts';
+import { depthClamp, enableConservativeDepth, enableOrthoDepth, ZCONS } from './shaders/zcons.ts';
+import { CAM_FAR, CAM_NEAR, REVZ, chooseDepthMode, confirmDepthMode, frustumFromProjection } from './shaders/revz.ts';
 import type { WorldView, PlanetView } from '../client/worldview.ts';
 import { PlanetVisual } from './planet/planetview.ts';
 import { syncPlanetVisuals } from './planet/planetsync.ts';
@@ -223,10 +224,23 @@ export class Renderer {
     this.canvas = canvas;
     // (scripted captures and probes: the renderer's uniforms, read-only by convention — e.g. the clouds' uLensClear)
     (globalThis as { __GENESIS_R__?: unknown }).__GENESIS_R__ = this;
+    // (ROADMAP step 8, shaders/revz.ts) the depth path is decided on the canvas's own context before three exists:
+    // reversed-Z float depth with EXT_clip_control (no shader writes gl_FragDepth), else the logarithmic depth buffer.
+    // The attributes are the ones three would ask for; three then takes this very context.
+    let ctx: WebGL2RenderingContext | null = null;
+    try {
+      ctx = canvas.getContext('webgl2', {
+        alpha: false, depth: true, stencil: false, antialias: false, premultipliedAlpha: true, preserveDrawingBuffer: false,
+        powerPreference: 'high-performance', failIfMajorPerformanceCaveat: false,
+      }) as WebGL2RenderingContext | null;
+    } catch { ctx = null; }
+    const revz = chooseDepthMode(ctx);
     this.three = new WebGLRenderer({
-      canvas, antialias: false, alpha: false, depth: true, stencil: false, logarithmicDepthBuffer: true,
+      canvas, ...(ctx ? { context: ctx } : {}), antialias: false, alpha: false, depth: true, stencil: false,
+      logarithmicDepthBuffer: !revz, reversedDepthBuffer: revz,
       powerPreference: 'high-performance', preserveDrawingBuffer: false,
     });
+    confirmDepthMode(this.three);
     // (PERF s14) the live GPU memory audit from the first allocation on (the perf report's 'gpu mem' lines)
     try { gpuMem.install(this.three.getContext() as WebGL2RenderingContext); } catch { /* unaudited */ }
     setRingGL(this.three.getContext() as WebGL2RenderingContext);
@@ -235,7 +249,9 @@ export class Renderer {
     // (PERF s15) GPU bytes by owner: three's texture lookups name each texture allocation, the scene walk each array
     try { gpuMem.attach(this.three); } catch { /* unattributed */ }
     gpuMem.ownerProbe = () => sceneOwners(this.scene);
-    enableConservativeDepth(this.three, Z_CONS);
+    // (reversed-Z has no log chunks to bound: zcons is the log path's early depth only)
+    if (REVZ.on) { ZCONS.on = false; ZCONS.why = 'not needed: reversed-Z depth'; perfSwitchNote('zcons', '0(revz)'); }
+    else enableConservativeDepth(this.three, Z_CONS);
     enableOrthoDepth();
     { const sp = wantSpanUploads(this.three); perfSwitchNote('span', sp ? '1' : '0'); installSpanUploads(sp); }
     if (PRE_UPLOAD) installTexturePreUpload();
@@ -246,7 +262,9 @@ export class Renderer {
     this.three.shadowMap.enabled = false;
     // stats cover the whole frame (every pass), reset manually at the start of render()
     this.three.info.autoReset = false;
-    this.camera = new PerspectiveCamera(50, 16 / 9, 0.05, 2e7);
+    this.camera = new PerspectiveCamera(50, 16 / 9, CAM_NEAR, CAM_FAR);
+    // (three reverses a camera's projection at its first draw; ours is read before that: the frustum, uInvProj)
+    if (REVZ.on) { (this.camera as unknown as { _reversedDepth: boolean })._reversedDepth = true; this.camera.updateProjectionMatrix(); }
     this.camera.matrixAutoUpdate = true;
     this.shadows = new SunShadows(this.quality.shadowMapSize);
     this.shadows.init(this.three);
@@ -407,7 +425,7 @@ export class Renderer {
     // near 0.05 m / far 2·10⁷ m for every view: the logarithmic depth buffer keeps precision across the whole range
     cam.updateMatrixWorld(true);
     _proj.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
-    this.frustum.setFromProjectionMatrix(_proj);
+    frustumFromProjection(this.frustum, _proj, cam);
 
     perfmon.begin('planets');
     this.syncPlanets(view);
