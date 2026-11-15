@@ -1,9 +1,10 @@
 {
  "probe": "latency_probe",
- "at": "2026-11-15T20:03:02.471Z",
+ "at": "2026-11-15T20:34:12.004Z",
  "n": 12,
  "load1": {
-  "start": 13.42
+  "start": 2.38,
+  "end": 1.94
  },
  "quiet": null,
  "targets": {
@@ -11,11 +12,420 @@
   "uiMsAt60": 33.4,
   "motionMs": 50
  },
- "move": [],
- "slot": [],
- "summary": {},
- "pass": null,
- "errors": [
-  "page.evaluate: TypeError: Cannot read properties of null (reading 'actors')\n    at eval (eval at <anonymous> (eval at evaluate (:370:30)), <anonymous>:1:134)\n    at eval (eval at evaluate (:370:30), <anonymous>:1:36)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\n    at vale (/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/pw.mjs:58:15)\n    at waitFor (/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/pw.mjs:65:15)\n    at /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/latency_probe.mjs:46:9"
- ]
+ "move": [
+  {
+   "i": 0,
+   "marker": {
+    "ms": 7.600000023841858,
+    "frames": 1
+   },
+   "motion": {
+    "ms": 7.600000023841858,
+    "frames": 1
+   },
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle"
+  },
+  {
+   "i": 1,
+   "marker": {
+    "ms": 2.400000035762787,
+    "frames": 1
+   },
+   "motion": {
+    "ms": 19.5,
+    "frames": 2
+   },
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle"
+  },
+  {
+   "i": 2,
+   "marker": {
+    "ms": 4.799999952316284,
+    "frames": 1
+   },
+   "motion": {
+    "ms": 4.799999952316284,
+    "frames": 1
+   },
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle"
+  },
+  {
+   "i": 3,
+   "marker": {
+    "ms": 6.300000011920929,
+    "frames": 1
+   },
+   "motion": {
+    "ms": 22,
+    "frames": 2
+   },
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle"
+  },
+  {
+   "i": 4,
+   "marker": {
+    "ms": 6.5,
+    "frames": 1
+   },
+   "motion": {
+    "ms": 6.5,
+    "frames": 1
+   },
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle"
+  },
+  {
+   "i": 5,
+   "marker": {
+    "ms": 4.299999952316284,
+    "frames": 1
+   },
+   "motion": {
+    "ms": 21,
+    "frames": 2
+   },
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle"
+  },
+  {
+   "i": 6,
+   "marker": {
+    "ms": 3.099999964237213,
+    "frames": 1
+   },
+   "motion": {
+    "ms": 3.099999964237213,
+    "frames": 1
+   },
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle"
+  },
+  {
+   "i": 7,
+   "marker": {
+    "ms": 2.399999976158142,
+    "frames": 1
+   },
+   "motion": {
+    "ms": 21.399999976158142,
+    "frames": 2
+   },
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle"
+  },
+  {
+   "i": 8,
+   "marker": {
+    "ms": 5.100000023841858,
+    "frames": 1
+   },
+   "motion": {
+    "ms": 5.100000023841858,
+    "frames": 1
+   },
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle"
+  },
+  {
+   "i": 9,
+   "marker": {
+    "ms": 5.5,
+    "frames": 1
+   },
+   "motion": {
+    "ms": 22.600000023841858,
+    "frames": 2
+   },
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle"
+  },
+  {
+   "i": 10,
+   "marker": {
+    "ms": 5,
+    "frames": 1
+   },
+   "motion": {
+    "ms": 5,
+    "frames": 1
+   },
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle"
+  },
+  {
+   "i": 11,
+   "marker": {
+    "ms": 4.699999988079071,
+    "frames": 1
+   },
+   "motion": {
+    "ms": 21.69999998807907,
+    "frames": 2
+   },
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle"
+  }
+ ],
+ "slot": [
+  {
+   "i": 0,
+   "marker": null,
+   "motion": null,
+   "flash": {
+    "ms": 28.80000001192093,
+    "frames": 2
+   },
+   "aim": {
+    "ms": 17.5,
+    "frames": 2
+   },
+   "frameMs": 16.7,
+   "baseKey": "idle",
+   "flashOnKey": null,
+   "flashFrom": "confirm click"
+  },
+  {
+   "i": 1,
+   "marker": null,
+   "motion": null,
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle",
+   "flashOnKey": null,
+   "flashFrom": null
+  },
+  {
+   "i": 2,
+   "marker": null,
+   "motion": null,
+   "flash": {
+    "ms": 32.30000001192093,
+    "frames": 2
+   },
+   "aim": {
+    "ms": 2.899999976158142,
+    "frames": 1
+   },
+   "frameMs": 16.7,
+   "baseKey": "idle",
+   "flashOnKey": null,
+   "flashFrom": "confirm click"
+  },
+  {
+   "i": 3,
+   "marker": null,
+   "motion": null,
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle",
+   "flashOnKey": null,
+   "flashFrom": null
+  },
+  {
+   "i": 4,
+   "marker": null,
+   "motion": null,
+   "flash": {
+    "ms": 29,
+    "frames": 2
+   },
+   "aim": {
+    "ms": 16.600000023841858,
+    "frames": 2
+   },
+   "frameMs": 16.7,
+   "baseKey": "idle",
+   "flashOnKey": null,
+   "flashFrom": "confirm click"
+  },
+  {
+   "i": 5,
+   "marker": null,
+   "motion": null,
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle",
+   "flashOnKey": null,
+   "flashFrom": null
+  },
+  {
+   "i": 6,
+   "marker": null,
+   "motion": null,
+   "flash": {
+    "ms": 30.5,
+    "frames": 2
+   },
+   "aim": {
+    "ms": 17.600000023841858,
+    "frames": 1
+   },
+   "frameMs": 16.7,
+   "baseKey": "idle",
+   "flashOnKey": null,
+   "flashFrom": "confirm click"
+  },
+  {
+   "i": 7,
+   "marker": null,
+   "motion": null,
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle",
+   "flashOnKey": null,
+   "flashFrom": null
+  },
+  {
+   "i": 8,
+   "marker": null,
+   "motion": null,
+   "flash": {
+    "ms": 30.399999976158142,
+    "frames": 2
+   },
+   "aim": {
+    "ms": 18,
+    "frames": 2
+   },
+   "frameMs": 16.7,
+   "baseKey": "idle",
+   "flashOnKey": null,
+   "flashFrom": "confirm click"
+  },
+  {
+   "i": 9,
+   "marker": null,
+   "motion": null,
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle",
+   "flashOnKey": null,
+   "flashFrom": null
+  },
+  {
+   "i": 10,
+   "marker": null,
+   "motion": null,
+   "flash": {
+    "ms": 28.30000001192093,
+    "frames": 2
+   },
+   "aim": {
+    "ms": 15.600000023841858,
+    "frames": 1
+   },
+   "frameMs": 16.7,
+   "baseKey": "idle",
+   "flashOnKey": null,
+   "flashFrom": "confirm click"
+  },
+  {
+   "i": 11,
+   "marker": null,
+   "motion": null,
+   "flash": null,
+   "aim": null,
+   "frameMs": 16.7,
+   "baseKey": "idle",
+   "flashOnKey": null,
+   "flashFrom": null
+  }
+ ],
+ "summary": {
+  "frameMs": 16.7,
+  "fps": 59.9,
+  "moveMarker": {
+   "n": 12,
+   "p50Ms": 5,
+   "p95Ms": 7.6,
+   "p95Frames": 1
+  },
+  "moveMotion": {
+   "n": 12,
+   "p50Ms": 19.5,
+   "p95Ms": 22.6
+  },
+  "slotFlash": {
+   "n": 6,
+   "p50Ms": 30.4,
+   "p95Ms": 32.3,
+   "p95Frames": 2
+  },
+  "aim": {
+   "n": 6,
+   "p50Ms": 17.5,
+   "p95Ms": 18,
+   "p95Frames": 2
+  },
+  "verdict": {
+   "moveMarkerUi": true,
+   "slotFlashUi": true,
+   "aimUi": true,
+   "moveMotion": true,
+   "frameIntervalOk": true
+  }
+ },
+ "pass": false,
+ "errors": [],
+ "quietAtEnd": {
+  "at": "2026-11-15T20:35:33.935Z",
+  "load1": 1.94,
+  "outsideChromeGpu": [
+   {
+    "pid": 1680,
+    "cpu": 0
+   },
+   {
+    "pid": 20868,
+    "cpu": 0
+   },
+   {
+    "pid": 70761,
+    "cpu": 0
+   }
+  ],
+  "outsideChromeGpuCpu": 0,
+  "heavyOthers": [
+   "slot1: run:node _harness/probe_audio_runtime.mjs match --queue bridge_standard --seed 11 --out _",
+   "slot2: run:node _harness/probe_audio_runtime.mjs match --queue rift_coop --seed 11 --out _harnes"
+  ],
+  "quiet": false,
+  "reasons": [
+   "heavy slot held: slot1: run:node _harness/probe_audio_runtime.mjs match --queue bridge_standard --seed 11 --out _; slot2: run:node _harness/probe_audio_runtime.mjs match --queue rift_coop --seed 11 --out _harnes"
+  ]
+ },
+ "validity": "NOT a valid idle measurement (machine not verified quiet; run with --require-quiet)"
 }
