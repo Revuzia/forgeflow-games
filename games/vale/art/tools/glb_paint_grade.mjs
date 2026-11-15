@@ -370,35 +370,85 @@ if (args.includes('--reserve-cap')) {
       console.log(`reserve-cap ${name}: ${(100 * hit.length / used).toFixed(2)} % -> knee ${knee} slope ${k.toFixed(3)} (${moved} texels, knee)`);
       continue;
     }
-    // orch1 W1-B (FU-2, the Odrum bone-mask lesson): texels move in tiers, cheapest (nearest the 0.4 line) first within
-    // each: 0 the UV gutter (no triangle covers it: invisible padding), 1 the painted islands, 2 the protected texels
-    // (--joint head islands and --reserve-protect masks: faces, masks, hands). Tiers 0-1 take the band's mode; a
-    // protected texel is only ever trimmed to --protect-sat (default 0.375: hue and value kept, the honey stays honey)
-    // and only when tiers 0-1 cannot meet the aim on their own.
+    // orch1 W1-B (FU-2, the Odrum bone-mask lesson): texels move in tiers. 0 the UV gutter (no triangle covers it:
+    // invisible padding) moves whole (every band texel, so the WebP's chroma subsampling has no unmoved neighbour to
+    // pull it back), 1 the painted islands cheapest-first (--reserve-islands-all: every one, whole regions again), 2 the
+    // protected texels (--joint head islands, --reserve-protect masks: faces, masks, hands) never change hue or value:
+    // if tiers 0-1 cannot pay the aim, one smooth saturation knee over the whole protected region (above
+    // --protect-knee, default 0.30, compressed by one slope so only the aim's share stays over 0.4, the last at
+    // --protect-ceil 0.385), so a honey mask keeps its hue, value and texture and loses a few % of chroma at most.
+    const gutMode = opt('--reserve-gutter-mode', how === 'sat' ? 'sat' : 'lo');
     const tier = new Uint8Array(W * H);
     if (protect || jointMask || island) {
       for (let p = 0; p < W * H; p++) tier[p] = (protect && protect[p]) || (jointMask && jointMask[p]) ? 2 : island && !island[p] ? 0 : 1;
     } else tier.fill(1);
     hit.sort((x, y) => tier[x[0]] - tier[y[0]] || x[1] - y[1]);
-    const protSat = Number(opt('--protect-sat', 0.375));
     const tally = [0, 0, 0];
-    for (const [p] of hit.slice(0, excess)) {
+    const allow = Math.floor(cap * used);
+    const n01 = hit.filter(([p]) => tier[p] < 2).length;
+    const n2 = hit.length - n01;
+    const nGut = hit.filter(([p]) => tier[p] === 0).length;
+    // how many unprotected texels move: all the gutter (when tiered) and as many islands as the aim needs (or all)
+    let moveN = island ? Math.max(nGut, Math.min(n01, excess)) : Math.min(n01, excess);
+    if (args.includes('--reserve-islands-all')) moveN = n01;
+    for (const [p] of hit.slice(0, moveN)) {
       const [h, s, v] = hsv(p);
       tally[tier[p]]++;
-      if (tier[p] === 2) {
-        const c = v * protSat, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = v - c;
-        const [r1, g1, b1] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
-        data[p * C] = Math.round(r1 + m); data[p * C + 1] = Math.round(g1 + m); data[p * C + 2] = Math.round(b1 + m);
-        continue;
-      }
-      const ns = how === 'sat' ? Number(opt('--reserve-sat', 0.3)) : s;
-      const nh = how === 'sat' ? h : how === 'lo' ? (a - margin + 360) % 360 : how === 'hi' ? b + margin : (h < (a + b) / 2 ? a - margin + 360 : b + margin) % 360;
+      const hw = tier[p] === 0 ? gutMode : how;
+      const ns = hw === 'sat' ? Number(opt('--reserve-sat', 0.3)) : s;
+      const nh = hw === 'sat' ? h : hw === 'lo' ? (a - margin + 360) % 360 : hw === 'hi' ? b + margin : (h < (a + b) / 2 ? a - margin + 360 : b + margin) % 360;
       // HSV -> RGB at the new hue / saturation, the value kept
       const c = v * ns, x = c * (1 - Math.abs(((nh / 60) % 2) - 1)), m = v - c;
       const [r1, g1, b1] = nh < 60 ? [c, x, 0] : nh < 120 ? [x, c, 0] : nh < 180 ? [0, c, x] : nh < 240 ? [0, x, c] : nh < 300 ? [x, 0, c] : [c, 0, x];
       data[p * C] = Math.round(r1 + m); data[p * C + 1] = Math.round(g1 + m); data[p * C + 2] = Math.round(b1 + m);
     }
-    console.log(`reserve-cap ${name}: ${(100 * hit.length / used).toFixed(2)} % -> ${(100 * (hit.length - excess) / used).toFixed(2)} % (${excess} texels, ${how}; gutter ${tally[0]}, islands ${tally[1]}, protected trimmed ${tally[2]})`);
+    // the WebP encode re-saturates and re-hues near-band texels (Odrum: 6 % aimed, 15-19 % decoded): a whole-region
+    // move also takes the near misses, so no neighbour pulls a moved texel back. The gutter: every texel within 6 deg
+    // below / 10 deg above the band at s > 0.25; --reserve-islands-all islands: every band texel at s > 0.3.
+    if (island) {
+      for (let p = 0; p < W * H; p++) {
+        const t = tier[p];
+        if (t === 2 || (t === 1 && !args.includes('--reserve-islands-all'))) continue;
+        const [h, s, v] = hsv(p);
+        const hw = t === 0 ? gutMode : how;
+        // the gutter on one side: every texel from 25 deg under the band to 10 over it lands on that side's edge (no
+        // moved texel sits beside an unmoved one across the band, whose average the encoder would put back in it)
+        const lo = t === 0 ? (hw === 'hi' ? a : a - 25) : a, hi = t === 0 ? (hw === 'lo' ? b + 10 : b + 25) : b;
+        const sm = t === 0 ? 0.2 : 0.3;
+        if (h < lo || h > hi || s <= sm) continue;
+        if (t === 0 && hw === 'lo' && h <= a - margin) continue;
+        if (t === 0 && hw === 'hi' && h >= b + margin) continue;
+        const nh = hw === 'lo' ? (a - margin + 360) % 360 : hw === 'hi' ? b + margin : (h < (a + b) / 2 ? a - margin + 360 : b + margin) % 360;
+        if (hw === 'sat' || Math.abs(nh - h) < 0.5) continue;
+        const c = v * s, x = c * (1 - Math.abs(((nh / 60) % 2) - 1)), m = v - c;
+        const [r1, g1, b1] = nh < 60 ? [c, x, 0] : nh < 120 ? [x, c, 0] : nh < 180 ? [0, c, x] : nh < 240 ? [0, x, c] : nh < 300 ? [x, 0, c] : [c, 0, x];
+        data[p * C] = Math.round(r1 + m); data[p * C + 1] = Math.round(g1 + m); data[p * C + 2] = Math.round(b1 + m);
+      }
+    }
+    const left = n01 - moveN;
+    let knee2 = '';
+    if (n2 && left + n2 > allow) {
+      const keep = Math.max(0, allow - left);              // protected texels that may stay over 0.4
+      const ps = hit.filter(([p]) => tier[p] === 2).map(([, s]) => s).sort((x, y) => y - x);
+      const kn = Number(opt('--protect-knee', 0.3)), ce = Number(opt('--protect-ceil', 0.385));
+      const t = keep > 0 ? ps[keep - 1] : 0.4;
+      const k = Math.min(1, (ce - kn) / Math.max(1e-3, t - kn));
+      for (let p = 0; p < W * H; p++) {
+        if (tier[p] !== 2) continue;
+        const [h, s, v] = hsv(p);
+        if (s <= kn || v <= 2) continue;
+        const out = h < a ? a - h : h > b ? h - b : 0;
+        const w = out >= 6 ? 0 : out <= 0 ? 1 : 1 - out / 6;
+        if (!w) continue;
+        const ns = s + w * ((kn + (s - kn) * k) - s);
+        const c = v * ns, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = v - c;
+        const [r1, g1, b1] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+        data[p * C] = Math.round(r1 + m); data[p * C + 1] = Math.round(g1 + m); data[p * C + 2] = Math.round(b1 + m);
+        tally[2]++;
+      }
+      knee2 = `, protected knee ${kn} slope ${k.toFixed(3)} (max s ${ps[0]?.toFixed(3)} -> ${(kn + ((ps[0] ?? kn) - kn) * k).toFixed(3)})`;
+    }
+    console.log(`reserve-cap ${name}: ${(100 * hit.length / used).toFixed(2)} % -> aim ${(100 * cap).toFixed(1)} % (${how}; gutter ${tally[0]}, islands ${tally[1]} of ${n01 - nGut}, protected ${n2} in band, ${tally[2]} softened${knee2})`);
   }
 }
 const old = tex.getImage().byteLength;

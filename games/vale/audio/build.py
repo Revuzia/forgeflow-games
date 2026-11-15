@@ -23,7 +23,8 @@ Exit 1 if any non-music cue in audio.json has no recipe, or a rendered cue fails
   duration   outside the recipe's window
   limiter    gain reduction above the recipe's budget (a sound pushed so far it loses its transient)
   edges      a click at the start or end (first sample / last 2 ms above -50 dBFS), DC above -54 dBFS
-  loop seam  (loops) a burst of >6 kHz energy across the wrap (codec splatter or a step)
+  loop seam  (loops) a burst of >6 kHz energy across the wrap (codec splatter or a step); SEAM-HOLE a continuous
+             loop (median 10 ms RMS over -70 dBFS) with more than 5 ms of digital silence (under -80 dBFS) at its seam
   m4a        the .m4a decode: M4A-LEN not sample-exact to the .ogg's, M4A-LOUD more than 1 LU (dB) from the .ogg's
              measurement, M4A-TP above -1.0 dBTP, M4A-SEAM a loop seam burst as above
 Contract gates (every build, over the shipped files in audio/out; `--gates` runs only these):
@@ -150,6 +151,27 @@ def edge_levels(x: np.ndarray) -> tuple[float, float]:
     return db_(first), db_(last)
 
 
+SEAM_HOLE_MAX_MS = 5.0        # (orch1) a continuous loop's longest digital-silence run across its seam
+SEAM_SILENT_DBFS = -80.0      # … a run of samples under this (both channels)
+SEAM_CONTINUOUS_DBFS = -70.0  # … in a loop whose median 10 ms RMS is above this (a sparse loop of chirps is silent by design)
+
+
+def seam_hole_ms(x: np.ndarray) -> float | None:
+    """(orch1, verify_ambience minors) the run of digital silence (every channel under SEAM_SILENT_DBFS) that touches a
+    continuous loop's seam, in ms (the canopy's last 60 ms and first 25 ms were zero: a 110 ms dropout every 12 s);
+    None for a sparse loop (median 10 ms RMS under SEAM_CONTINUOUS_DBFS)."""
+    xs = stereo(x)
+    n = xs.shape[1]
+    w = ns_(0.01)
+    e = np.mean(xs[:, : (n // w) * w].reshape(xs.shape[0], -1, w) ** 2, axis=(0, 2))
+    if 10 * np.log10(np.median(e) + 1e-30) < SEAM_CONTINUOUS_DBFS:
+        return None
+    q = np.max(np.abs(xs), axis=0) < 10 ** (SEAM_SILENT_DBFS / 20)
+    head = int(np.argmin(q)) if not q.all() else n
+    tail = int(np.argmin(q[::-1])) if not q.all() else n
+    return float(min(n, head + tail) / SR * 1000.0)
+
+
 def seam_ratio(x: np.ndarray) -> float:
     """Loop seam: >6 kHz energy in 2 ms windows across the wrap, over the loop's median window. A clean
     seam is ~1; codec splatter or a step shows as a burst (a sparse crackle in the loop can reach a few)."""
@@ -251,6 +273,9 @@ def render(cid: str, files: list[str]) -> list[dict]:
             row['seam'] = seam_ratio(dec)
             if row['seam'] > 6.0:
                 flags.append('SEAM')
+            row['seamHoleMs'] = seam_hole_ms(dec)
+            if row['seamHoleMs'] is not None and row['seamHoleMs'] > SEAM_HOLE_MAX_MS:
+                flags.append(f"SEAM-HOLE{row['seamHoleMs']:.0f}ms")
         if spec.instant:
             row['on20'] = env_onset_ms(dec, -20.0)
             if row['on20'] > INSTANT_MS:
@@ -267,6 +292,9 @@ def render(cid: str, files: list[str]) -> list[dict]:
             row['m4a_seam'] = seam_ratio(dm)
             if row['m4a_seam'] > 6.0:
                 flags.append('M4A-SEAM')
+            row['m4a_seamHoleMs'] = seam_hole_ms(dm)
+            if row['m4a_seamHoleMs'] is not None and row['m4a_seamHoleMs'] > SEAM_HOLE_MAX_MS:
+                flags.append(f"M4A-SEAM-HOLE{row['m4a_seamHoleMs']:.0f}ms")
         row['flags'] = flags
         rows.append(row)
     return rows
@@ -469,7 +497,9 @@ BED_LOW_OVER_QUIET_DB = 6.0
 AMB_EMIT_UNDER_MUSIC_LU = 12.0
 AMB_BUSY_N = 2
 AMB_BUSY_UNDER_MUSIC_LU = 8.0
-AMB_WASH = ('amb_rift_canopy', 'amb_rift_water', 'amb_bridge_updraft', 'amb_lamp_flame')
+# (orch1, verify_ambience minors) the FRAY lantern's paper was a continuous high rustle (59 % above 2 kHz) the gates
+# never read: every continuous texture loop is a wash
+AMB_WASH = ('amb_rift_canopy', 'amb_rift_water', 'amb_bridge_updraft', 'amb_lamp_flame', 'amb_fray_lantern')
 AMB_WASH_HF_MAX = 0.25
 AMB_WASH_SWELL_LU = 5.0
 # ruling 37 round 2: the standard covers EVERY looping cue on the ambience bus, not only content's audio.ambience. An
@@ -530,7 +560,29 @@ def contract_gates(contract: dict) -> tuple[list[str], dict]:
     rep['snap'] = srep
     jf, jrep = impact_id_gate(contract)
     rep['impactId'] = jrep
-    return fails + pf + af + kf + xf + hf + ef + wf + sf + jf, rep
+    lf, lrep = seam_gate(contract)
+    rep['seams'] = lrep
+    return fails + pf + af + kf + xf + hf + ef + wf + sf + jf + lf, rep
+
+
+def seam_gate(contract: dict) -> tuple[list[str], dict]:
+    """(orch1) every shipped loop on the ambience / sfx buses, both formats: no digital-silence run over
+    SEAM_HOLE_MAX_MS at its seam (seam_hole_ms; a sparse loop is exempt)."""
+    fails: list[str] = []
+    rep: dict = {}
+    for c, d in contract['cues'].items():
+        if not d.get('loop') or d.get('bus') == 'music':
+            continue
+        for f in d['files']:
+            for path in (out_path(f), os.path.splitext(out_path(f))[0] + '.m4a'):
+                if not os.path.exists(path):
+                    continue
+                h = seam_hole_ms(decode(path))
+                rep[os.path.relpath(path, OUT)] = None if h is None else round(h, 1)
+                if h is not None and h > SEAM_HOLE_MAX_MS:
+                    fails.append(f'seams: {c} ({os.path.relpath(path, OUT)}) has {h:.0f} ms of digital silence at its loop seam '
+                                 f'(want <= {SEAM_HOLE_MAX_MS:g})')
+    return fails, rep
 
 
 # ── max2: the hits' snap, the per-ability impacts, the shop's crisp clicks ────────────────────────
