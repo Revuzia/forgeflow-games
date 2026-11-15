@@ -21,7 +21,7 @@
 // Deterministic: no rng, only sim time and positions.
 
 import { WEAPON_NAMES, slotOf } from "../weapons/weapon_data.js";
-import { grant, normalise, autoEquip, owns } from "./loadout.js";
+import { grant, normalise, autoEquip, owns, walkoverTakes } from "./loadout.js";
 
 const PICKUP_R = 1.3;
 const PICKUP_DY = 1.8;
@@ -150,6 +150,8 @@ export function makeLoot(sim, content, mapId, mode) {
       if (n <= 0) return null;
       return { ok: true, kind: "ammo", equipped: false, gained: n, slot: -1 };
     }
+    // [heavy weapons] shared slots: never trade a loaded gun for a same-tier rival by walking over it
+    if (!owns(body, it.weapon) && !walkoverTakes(body, it.weapon)) return null;
     const r = grant(sim, body, it.weapon, { mag: it.mag, reserve: it.reserve, equip: owns(body, it.weapon) ? false : autoEquip(body, it.weapon) }, who);
     return r.ok ? r : null;
   }

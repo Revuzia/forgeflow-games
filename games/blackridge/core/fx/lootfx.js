@@ -11,6 +11,7 @@ import * as THREE from "three";
 
 const COLORS = {
   warden: 0xffc15a, vesper: 0x62e2ff, breaker: 0xff7a3a, corvus: 0xb890ff, pike: 0xf2f2f2, ammo: 0x6dff8a,
+  bastion: 0xffe27a, anvil: 0xff5a4a, // [heavy weapons]
 };
 
 function gradTex(kind) {

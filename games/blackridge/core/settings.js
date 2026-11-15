@@ -101,6 +101,7 @@ export const SCHEMA = {
   minimap:    { kind: "enum", options: ONOFF, default: "on" },   // read by the minimap lane
   minimapSize:{ kind: "enum", options: ["small", "medium", "large"], default: "medium" },
   killcam:    { kind: "enum", options: ONOFF, default: "on" },   // read by render/killcam.js (hook)
+  fpBody:     { kind: "enum", options: ONOFF, default: "on" },   // [integration v150] chars/fp_body.js
   subtitles:  { kind: "enum", options: ONOFF, default: "on" },
   subSize:    { kind: "enum", options: ["small", "medium", "large"], default: "medium" },
   // [polish v149] where teammates' callouts appear: the team-chat strip

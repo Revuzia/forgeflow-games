@@ -567,6 +567,7 @@ export function makeMission(content, emit) {
       if (p._m) p._m = null; // movement state resets (re-init next tick)
       sim.internal.projectiles.length = 0;
       sim.internal.grenades.length = 0;
+      if (sim.internal.rockets) sim.internal.rockets.length = 0; // [heavy weapons]
       enterBeat(sim, beatNum, { fromCheckpoint: true });
     },
 

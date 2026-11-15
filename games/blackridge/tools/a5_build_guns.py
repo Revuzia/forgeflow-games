@@ -36,6 +36,9 @@ link = _g["link"]; shade_smooth = _g["shade_smooth"]; _bm_cone = _g["_bm_cone"]
 GAME = _g["GAME"]; OUT_DIR = _g["OUT_DIR"]; PREV_DIR = _g["PREV_DIR"]
 
 ONLY = [a for a in _ARGV if not a.startswith("--")]
+# [heavy weapons] preview cameras for the new guns (a4 VIEW: posHip / zAds, glTF camera space)
+_g["VIEW"].setdefault("bastion", {"posHip": (0.125, -0.165, -0.47), "zAds": -0.30})
+_g["VIEW"].setdefault("anvil", {"posHip": (0.135, -0.17, -0.42), "zAds": -0.20})
 NO_PREVIEW = "--no-preview" in _ARGV
 
 
@@ -1198,6 +1201,326 @@ def gun_pike():
             "rail_top": 0.0735, "by1": 0.186, "br": 0.0074}
 
 
+# ===========================================================================
+# [heavy weapons 2026-11-14] HX-60 BASTION (belt-fed LMG) + KR-5 ANVIL (launcher)
+# ===========================================================================
+# Original designs in the house hard-surface language (no real product traced):
+#   BASTION - a tall stamped-steel receiver with a hinged feed cover (rail + factory
+#     red dot on it), a heavy fluted barrel inside a ventilated shroud-handguard, gas
+#     tube + folded bipod under the front, a 100-round box hanging under the LEFT of
+#     the receiver (node "mag" - the reload moves it) with its belt chute rising into
+#     the feed port, a fixed skeletal stock. Gunsmith parts live IN this GLB as
+#     `bastion__<id>` nodes (+ __SIGHT / __MUZZLE empties) - weapon_meshes.mountParts
+#     reads the gun's own children as well as attachments.glb.
+#   ANVIL - a ribbed composite tube with a flared back-blast venturi, a fire-control
+#     block + pistol grip under it, a fore-stock pad (same seat as the Warden's
+#     handguard so the support hand needs no new rig), folding irons on the LEFT of
+#     the tube (the eye rides beside the tube, not over it: posAds x = -sight x), and
+#     the rocket's warhead standing out of the muzzle (node "mag" = the round).
+# Build frame like every gun: +Y muzzle, +Z up, +X right, origin = pistol grip.
+
+def gun_bastion():
+    bz = 0.066
+    hw = 0.0175
+    ry0, ry1 = -0.100, 0.150
+    z0, z1 = bz - 0.040, bz + 0.026                  # receiver bottom / top (under the cover)
+
+    def recv(bm):
+        prism_y(bm, [(-hw, z0 + 0.006), (-hw + 0.006, z0), (hw - 0.006, z0), (hw, z0 + 0.006),
+                     (hw, z1), (-hw, z1)], ry0, ry1)
+        rbox(bm, -hw - 0.0015, hw + 0.0015, ry1 - 0.030, ry1, z0 - 0.002, z1)          # trunnion block
+        for yy in (ry0 + 0.020, ry0 + 0.120, ry1 - 0.015):                              # rivet rows
+            for zz in (z0 + 0.010, z1 - 0.010):
+                cyl_x(bm, yy, zz, -hw - 0.0012, hw + 0.0012, 0.0022, seg=10)
+
+    def recv_cut(bm):
+        rbox(bm, hw - 0.004, hw + 0.004, ry0 + 0.060, ry0 + 0.130, bz - 0.012, bz + 0.010)  # ejection port (right)
+        rbox(bm, -hw - 0.004, -hw + 0.004, 0.010, 0.075, bz - 0.006, bz + 0.016)            # feed port (left)
+    part("receiver", recv, COL["steel"], "metal", bevel=0.0014, cut=recv_cut)
+
+    # feed cover: hinged at the rear, carries the rail
+    cz1 = z1 + 0.016
+
+    def cover(bm):
+        prism_y(bm, [(-hw - 0.001, z1 - 0.001), (hw + 0.001, z1 - 0.001), (hw + 0.001, cz1 - 0.004),
+                     (hw - 0.004, cz1), (-hw + 0.004, cz1), (-hw - 0.001, cz1 - 0.004)], ry0 + 0.010, 0.128)
+        cyl_x(bm, ry0 + 0.012, z1 + 0.004, -hw - 0.003, hw + 0.003, 0.0050, seg=14)        # hinge
+        rbox(bm, hw, hw + 0.006, 0.100, 0.118, z1 - 0.003, cz1 - 0.003)                    # cover latch
+    part("feed_cover", cover, COL["anod"], "metal", bevel=0.0012)
+    rail_top = pic_rail("rail", ry0 + 0.020, 0.124, cz1)
+
+    # charging handle (right, forward)
+    def ch(bm):
+        rbox(bm, hw, hw + 0.004, 0.040, 0.120, bz - 0.004, bz + 0.002)                     # slot rail
+        cyl_x(bm, 0.090, bz - 0.001, hw + 0.002, hw + 0.026, 0.0045, seg=14)
+        cyl_x(bm, 0.090, bz - 0.001, hw + 0.024, hw + 0.034, 0.0070, seg=16)
+    part("charging_handle", ch, COL["anod"], "metal", bevel=0.0008)
+
+    # fire control: trigger housing + grip (same AR grip seat as the Warden: top at z 0.014)
+    def tg(bm):
+        prism_x(bm, [(-0.030, z0 + 0.001), (0.065, z0 + 0.001), (0.065, 0.016), (0.040, 0.010),
+                     (-0.016, 0.010), (-0.030, 0.018)], -0.0125, 0.0125)
+    part("trigger_housing", tg, COL["poly"], "poly", bevel=0.0018)
+    trigger_group(-0.006, 0.052, 0.014)
+    ar_grip(0.014, COL["poly"])
+
+    roll_mark("marks_receiver", [("ZAROV ARMS", 0.0034, bz + 0.012),
+                                 ("HX-60 BASTION", 0.0046, bz + 0.002),
+                                 ("CAL 7.62x51", 0.0030, bz - 0.008),
+                                 ("SER BX-60214", 0.0026, bz - 0.016)], -hw - 0.0015, -0.030)
+
+    # barrel shroud-handguard (vented octagon) + heavy fluted barrel + gas block / tube
+    hg0, hg1, hr = ry1 - 0.002, 0.430, 0.0300
+    mlok_handguard(hg0, hg1, bz, hr, COL["anod"], name="handguard", slot_rows=(1, 2, 5, 6))
+    by1, br = 0.700, 0.0120
+
+    def barrel(bm):
+        cyl_y(bm, 0, bz, hg1 - 0.030, by1, br * 1.08, br, seg=24)
+        rbox(bm, -0.0140, 0.0140, hg1 + 0.010, hg1 + 0.036, bz - 0.030, bz + 0.013)       # gas block
+        cyl_y(bm, 0, bz - 0.022, hg1 - 0.010, hg1 + 0.150, 0.0060, seg=14)                 # gas tube
+        rbox(bm, -0.010, 0.010, by1 - 0.060, by1 - 0.040, bz - 0.006, bz + 0.024)          # front sight base
+        prism_x(bm, [(by1 - 0.054, bz + 0.024), (by1 - 0.046, bz + 0.024), (by1 - 0.048, bz + 0.036),
+                     (by1 - 0.052, bz + 0.036)], -0.0012, 0.0012)
+
+    def bcut(bm):
+        for k in range(6):                                                                 # flutes
+            a = 2 * math.pi * k / 6
+            x, z = math.sin(a) * (br + 0.0005), bz + math.cos(a) * (br + 0.0005)
+            rbox(bm, x - 0.0018, x + 0.0018, hg1 + 0.050, by1 - 0.070, z - 0.0018, z + 0.0018)
+    part("barrel", barrel, COL["steel"], "metal", "dressing", bevel=0.0008, cut=bcut)
+
+    # carry handle over the barrel (folded flat) + folded bipod under the gas tube
+    def carry(bm):
+        rbox(bm, -0.010, 0.010, 0.300, 0.318, bz + hr - 0.002, bz + hr + 0.010)
+        cyl_y(bm, 0, bz + hr + 0.016, 0.300, 0.395, 0.0075, seg=16)
+    part("carry_handle", carry, COL["poly"], "grip", "dressing", bevel=0.0015)
+
+    def bipod(bm):
+        rbox(bm, -0.018, 0.018, hg1 + 0.040, hg1 + 0.060, bz - 0.040, bz - 0.024)          # bipod block
+        for sx in (-1, 1):
+            cyl_y(bm, sx * 0.012, bz - 0.036, hg1 + 0.055, hg1 + 0.215, 0.0050, seg=12)    # legs, folded fwd
+            rbox(bm, sx * 0.012 - 0.006, sx * 0.012 + 0.006, hg1 + 0.205, hg1 + 0.222, bz - 0.044, bz - 0.030)
+    part("bipod", bipod, COL["anod"], "metal", "dressing", bevel=0.0010)
+    flash_hider(by1 - 0.002, 0.780, bz, br * 1.45)
+
+    # fixed skeletal stock + buttpad
+    tz = bz - 0.012
+
+    def stock(bm):
+        prism_x(bm, [(ry0 + 0.004, z1 - 0.004), (-0.200, tz + 0.034), (-0.336, tz + 0.036), (-0.346, tz + 0.028),
+                     (-0.346, tz - 0.080), (-0.330, tz - 0.090), (-0.270, tz - 0.066), (-0.160, tz - 0.030),
+                     (ry0 + 0.004, z0 + 0.004)], -0.0170, 0.0170)
+
+    def stock_cut(bm):
+        prism_x(bm, [(-0.150, tz + 0.014), (-0.300, tz + 0.016), (-0.300, tz - 0.046), (-0.190, tz - 0.020)],
+                -0.030, 0.030)
+    part("stock", stock, COL["poly"], "grip", bevel=0.0028, seg=3, angle=25, cut=stock_cut)
+
+    def pad(bm):
+        rbox(bm, -0.0190, 0.0190, -0.360, -0.346, tz - 0.092, tz + 0.038)
+    part("buttpad", pad, COL["rubber"], "rubber", bevel=0.0030, seg=2)
+
+    # the 100-round box, under the LEFT of the receiver, with its belt chute (node "mag")
+    bx0, bx1 = -0.080, -0.010
+    by0, by1b = 0.012, 0.112
+    bzt = z0 - 0.004
+
+    def box(bm):
+        rbox(bm, bx0, bx1, by0, by1b, bzt - 0.090, bzt)
+        rbox(bm, bx0 - 0.002, bx1 + 0.002, by0 - 0.002, by1b + 0.002, bzt - 0.094, bzt - 0.084)    # floor lip
+        rbox(bm, bx0 + 0.010, bx1 - 0.008, by0 + 0.030, by1b - 0.030, bzt - 0.002, bzt + 0.004)    # latch
+        # chute: a short belt guide rising to the feed port
+        prism_y(bm, [(-0.030, bzt - 0.004), (-0.012, bzt - 0.004), (-hw + 0.003, bz - 0.004),
+                     (-hw - 0.010, bz + 0.010)], 0.016, 0.070)
+
+    def box_cut(bm):
+        for k in range(3):                                                                # pressed ribs
+            zz = bzt - 0.022 - k * 0.022
+            rbox(bm, bx0 - 0.004, bx0 + 0.0012, by0 + 0.012, by1b - 0.012, zz - 0.003, zz + 0.003)
+    part("ammo_box", box, COL["odg"], "poly", "mag", bevel=0.0020, seg=2, angle=28, cut=box_cut)
+
+    def belt(bm):
+        for k in range(5):                                                                # rounds on the belt
+            yy = 0.022 + k * 0.010
+            zz = bzt + 0.006 + k * 0.004
+            cyl_x(bm, yy, zz, -0.032 + k * 0.003, -0.016 + k * 0.001, 0.0040, seg=10)
+    part("belt", belt, COL["brass"], "metal", "mag", bevel=0.0004, seg=1)
+
+    # factory optic: red dot on the cover rail
+    sz = rail_top + 0.0325
+    reddot(0.020, rail_top, sz, node="optic")
+
+    # ---- gunsmith parts IN this GLB --------------------------------------------------
+    extra = []
+    n = "bastion__suppressor"
+    L, R = 0.180, 0.0235
+    att_can(by1 - 0.002, L, bz, R, br * 1.45, n)
+    extra.append((n + "__MUZZLE", (0.0, by1 - 0.002 + L, bz)))
+    n = "bastion__grip"
+    att_grip(0.330, bz - hr, n)
+    n = "bastion__holo"
+    hz = rail_top + 0.0335
+    att_holo("bastion", 0.010, rail_top, hz, n)
+    extra.append((n + "__SIGHT", (0.0, 0.0, hz)))
+    return {"bore_z": bz, "sight_z": sz, "muzzle_y": 0.780, "eject": (hw + 0.004, ry0 + 0.095, bz - 0.001),
+            "focus": (0.06, bz - 0.02), "rail_top": rail_top, "extra_empties": extra}
+
+
+def gun_anvil():
+    tz = 0.104                     # tube axis
+    tr = 0.043                     # tube radius
+    y0t, y1t = -0.400, 0.560       # tube body
+    # the eye rides BESIDE the tube: folding irons on its left
+    # (in-game ADS check: at x -0.064 / z 0.126 the tube filled the right half of the picture)
+    SX, SZ = -0.088, 0.150         # sight line (x, z)
+
+    def tube(bm):
+        cyl_y(bm, 0, tz, y0t, y1t, tr, tr, seg=36)
+        cyl_y(bm, 0, tz, y0t - 0.075, y0t, tr * 1.32, tr * 1.02, seg=36)          # venturi flare
+        cyl_y(bm, 0, tz, y1t, y1t + 0.016, tr * 1.10, tr * 1.10, seg=36)          # muzzle ring
+        for yy in (y0t + 0.030, -0.120, 0.120, 0.380):                            # reinforcing bands
+            tube_ring_y(bm, 0, tz, yy, yy + 0.014, tr - 0.0005, tr + 0.0030, seg=36)
+
+    def tube_cut(bm):
+        cyl_y(bm, 0, tz, y0t - 0.090, y0t + 0.040, tr * 0.92, tr * 0.80, seg=32)  # open back end
+        cyl_y(bm, 0, tz, y1t - 0.010, y1t + 0.030, tr * 0.94, seg=32)            # muzzle bore
+    part("tube", tube, COL["odg"], "poly", bevel=0.0016, seg=2, angle=26, cut=tube_cut, wear=0.7)
+
+    # fire-control block joining tube and grip (same AR grip seat as the Warden)
+    def fcu(bm):
+        prism_x(bm, [(-0.050, 0.016), (0.080, 0.016), (0.090, tz - tr + 0.010), (-0.060, tz - tr + 0.010)],
+                -0.0150, 0.0150)
+        rbox(bm, -0.022, 0.022, -0.040, 0.070, tz - tr - 0.002, tz - tr + 0.012)  # tube saddle
+    part("fire_control", fcu, COL["poly"], "poly", bevel=0.0018)
+    trigger_group(-0.006, 0.052, 0.014)
+    ar_grip(0.014, COL["poly"])
+
+    def safety(bm):
+        cyl_x(bm, 0.000, 0.034, -0.0185, -0.0150, 0.0050, seg=14)
+        rbox(bm, -0.0200, -0.0170, -0.004, 0.012, 0.032, 0.036)
+    part("safety", safety, COL["steel"], "metal", bevel=0.0006)
+
+    # fore-stock pad: the support hand's seat (centre z 0.062, flat 0.027 = the Warden's)
+    def fore(bm):
+        ngon_y(bm, 0.0, 0.062, 0.150, 0.330, 0.027 / math.cos(math.pi / 8), 8)
+        rbox(bm, -0.014, 0.014, 0.160, 0.320, 0.070, tz - tr + 0.004)             # web to the tube
+    part("forestock", fore, COL["poly"], "grip", bevel=0.0020, seg=2, angle=24)
+
+    # shoulder pad under the rear of the tube
+    def shoulder(bm):
+        prism_y(bm, [(-0.030, tz - tr - 0.020), (0.030, tz - tr - 0.020), (0.036, tz - tr + 0.008),
+                     (-0.036, tz - tr + 0.008)], -0.300, -0.170)
+    part("shoulder_pad", shoulder, COL["rubber"], "rubber", bevel=0.0030, seg=2)
+
+    # folding irons on a left-side bracket: rear aperture behind the grip, front post ahead
+    def irons(bm):
+        for yy in (-0.060, 0.300):
+            prism_y(bm, [(-tr * 0.70, tz - 0.004), (-tr * 0.70, tz + 0.012), (SX + 0.004, SZ - 0.008),
+                         (SX - 0.004, SZ - 0.012)], yy - 0.010, yy + 0.010)
+        tube_ring_y(bm, SX, SZ, -0.062, -0.058, 0.0045, 0.0078, seg=28)          # rear aperture
+        prism_x(bm, [(0.296, SZ - 0.012), (0.304, SZ - 0.012), (0.3015, SZ), (0.2985, SZ)],
+                SX - 0.0011, SX + 0.0011)                                         # front post
+        for x0 in (SX - 0.0085, SX + 0.0055):                                     # post wings
+            prism_x(bm, [(0.294, SZ - 0.012), (0.306, SZ - 0.012), (0.304, SZ + 0.004), (0.296, SZ + 0.004)],
+                    x0, x0 + 0.003)
+    part("irons", irons, COL["anod"], "metal", "dressing", bevel=0.0005, seg=1)
+
+    def post_tip(bm):
+        cyl_y(bm, SX, SZ - 0.0008, 0.2978, 0.2984, 0.0009, seg=10)
+    part("front_lume", post_tip, (0.62, 0.78, 0.58), "lume", "dressing", bevel=0)
+
+    roll_mark("marks_tube", [("ZAROV ARMS", 0.0050, tz + 0.012),
+                             ("KR-5 ANVIL", 0.0070, tz - 0.004),
+                             ("BACK BLAST AREA", 0.0042, tz - 0.020)], -tr - 0.0004, -0.240)
+
+    # the ROUND (node "mag"): warhead out of the muzzle, motor section inside the tube
+    def rocket(bm):
+        cyl_y(bm, 0, tz, y1t - 0.100, y1t + 0.040, tr * 0.86, tr * 0.86, seg=28)       # motor / sabot
+        cyl_y(bm, 0, tz, y1t + 0.040, y1t + 0.100, tr * 0.86, tr * 0.98, seg=28)       # warhead body
+        cyl_y(bm, 0, tz, y1t + 0.100, y1t + 0.175, tr * 0.98, tr * 0.36, seg=28)       # ogive
+        cyl_y(bm, 0, tz, y1t + 0.175, y1t + 0.200, tr * 0.36, tr * 0.10, seg=20)       # nose
+    part("rocket", rocket, COL["odg"], "poly", "mag", bevel=0.0012, seg=2, angle=24, wear=0.5)
+
+    def band(bm):
+        tube_ring_y(bm, 0, tz, y1t + 0.060, y1t + 0.072, tr * 0.90, tr * 0.995, seg=28)
+        cyl_y(bm, 0, tz, y1t + 0.196, y1t + 0.206, tr * 0.11, tr * 0.04, seg=12)       # fuze tip
+    part("rocket_band", band, lin((150, 130, 62)), "metal", "mag", bevel=0.0004, seg=1)
+
+    # ---- gunsmith: the laser, on the right of the fore-stock web
+    extra = []
+    n = "anvil__laser"
+    bp = att_laser(0.0255, 0.250, 0.078, n, length=0.060)
+    extra.append((n + "__BEAM", bp))
+    return {"bore_z": tz, "sight_z": SZ, "sight_x": SX, "muzzle_y": y1t + 0.016,
+            "eject": (0.03, -0.30, tz), "focus": (0.10, tz - 0.02), "rail_top": tz + tr, "extra_empties": extra}
+
+
+# ---------------------------------------------------------------------------
+# [heavy weapons] THIRD-PERSON meshes: assets/weapons/wpn3p_<wid>.glb
+# ---------------------------------------------------------------------------
+# The same authored parts (no arms, no gunsmith nodes, no glass/dot/marks),
+# joined, decimated to a few thousand triangles, vertex colour only (no textures):
+# core/weapons/world_weapon.js gives vertex-coloured 3P kinds a plain gunmetal
+# material. Frame: origin at the grip, barrel down -Z after the Y-up export.
+# usage: blender ... --python tools/a5_build_guns.py -- 3p:bastion 3p:anvil
+def build_3p(wid, ratio=0.22):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    PARTS.clear()
+    _TEX.clear()
+    info = gun_bastion() if wid == "bastion" else gun_anvil()
+    m = bpy.data.materials.new("wpn3p")
+    m.use_nodes = True
+    b = next(n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    b.inputs["Base Color"].default_value = (0.3, 0.3, 0.3, 1)
+    objs = []
+    for o, node in PARTS:
+        if not o.data.vertices or "__" in node or o["a5_mat"] in ("dot", "glass", "lume", "mark"):
+            continue
+        paint(o)
+        o.data.materials.clear()
+        o.data.materials.append(m)
+        objs.append(o)
+    for so in bpy.context.selected_objects:
+        so.select_set(False)
+    for o in objs:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = objs[0]
+    bpy.ops.object.join()
+    j = bpy.context.view_layer.objects.active
+    j.name = "wpn3p_" + wid
+    j.data.name = j.name
+    dm = j.modifiers.new("dec", "DECIMATE")
+    dm.ratio = ratio
+    bpy.ops.object.modifier_apply(modifier=dm.name)
+    tm = j.modifiers.new("tri", "TRIANGULATE")
+    bpy.ops.object.modifier_apply(modifier=tm.name)
+    shade_smooth(j, 40)
+    tris = len(j.data.polygons)
+    for o in bpy.context.scene.objects:
+        o.select_set(o is j)
+    out = os.path.join(OUT_DIR, "wpn3p_%s.glb" % wid)
+    bpy.ops.export_scene.gltf(
+        filepath=out, export_format="GLB", use_selection=True,
+        export_animations=False, export_skins=False, export_morph=False,
+        export_apply=True, export_yup=True, export_tangents=False, export_texcoords=False,
+        export_vertex_color="NAME", export_vertex_color_name="Col", export_all_vertex_colors=False)
+    import shutil, subprocess
+    gt = shutil.which("gltf-transform")
+    before = os.path.getsize(out)
+    r = None
+    if gt:
+        for attempt in range(3):
+            r = subprocess.run([gt, "draco", out, out, "--quantize-position", "14",
+                                "--quantize-normal", "8", "--quantize-color", "8", "--encode-speed", "0"],
+                               capture_output=True, text=True, shell=(os.name == "nt"))
+            if r.returncode == 0:
+                break
+    rep = {"weapon": "wpn3p_" + wid, "tris": tris, "bytes_raw": before, "bytes": os.path.getsize(out),
+           "draco": bool(r is not None and r.returncode == 0)}
+    print("A5GUN3P " + json.dumps(rep))
+    return rep
+
+
 SPECS = {
     "warden": dict(bore_z=0.062, recv=(-0.104, 0.090), magwell=(0.060, 0.118), handguard=(0.090, 0.405),
                    hg_r=0.0270, barrel_end=0.620, muzzle="a2", muzzle_end=0.683, sight_z=0.126,
@@ -1258,6 +1581,21 @@ A5_POSE = {
         ("L", (-0.050, 0.315, 0.018), (0.82, 0.48, -0.31), (0.35, 0.0, 0.94),
          {"elbow_world": (-0.55, -0.44, -0.71), "curl": (40, 70, 35), "thumb_rot": (0, 0, 5, 5)}),
     ],
+    # [heavy weapons] both new guns share the Warden's AR grip seat (grip top z 0.014),
+    # so the trigger hand is the Warden's; the support hand sits on each gun's own seat
+    # (Bastion: shroud underside 0.066-0.030 = 0.036; Anvil: fore-stock pad 0.062-0.027)
+    "bastion": [
+        ("R", (0.040, -0.075, -0.040), (0.0, 1.0, 0.15), (-1.0, 0.0, 0.05),
+         {"index_curl": (12, 16, 8), "elbow_world": (0.35, -0.70, -0.62)}),
+        ("L", (-0.054, 0.285, 0.012), (0.82, 0.48, -0.31), (0.35, 0.0, 0.94),
+         {"elbow_world": (-0.55, -0.42, -0.72), "curl": (38, 68, 34), "thumb_rot": (0, 0, 5, 5)}),
+    ],
+    "anvil": [
+        ("R", (0.040, -0.075, -0.040), (0.0, 1.0, 0.15), (-1.0, 0.0, 0.05),
+         {"index_curl": (12, 16, 8), "elbow_world": (0.35, -0.70, -0.62)}),
+        ("L", (-0.050, 0.245, 0.012), (0.82, 0.48, -0.31), (0.35, 0.0, 0.94),
+         {"elbow_world": (-0.55, -0.42, -0.72), "curl": (40, 70, 35), "thumb_rot": (0, 0, 5, 5)}),
+    ],
     "pike": [
         ("R", (0.028, -0.066, 0.004), (0.0, 0.90, -0.43), (-1.0, 0.0, 0.0),
          {"index_curl": (8, 12, 6), "elbow_world": (0.30, -0.74, -0.60), "sleeve_r0": 0.033, "sleeve_r": 0.040}),
@@ -1279,6 +1617,10 @@ def build(wid):
         info = gun_breaker()
     elif wid == "pike":
         info = gun_pike()
+    elif wid == "bastion":
+        info = gun_bastion()
+    elif wid == "anvil":
+        info = gun_anvil()
     else:
         raise SystemExit("unknown weapon " + wid)
 
@@ -1319,7 +1661,11 @@ def build(wid):
     bz, sz = info["bore_z"], info["sight_z"]
     mz = bpy.data.objects.new("SOCKET_muzzle", None); mz.location = (0, info["muzzle_y"], bz); link(mz)
     ej = bpy.data.objects.new("SOCKET_eject", None); ej.location = info["eject"]; link(ej)
-    sg = bpy.data.objects.new("SOCKET_sight", None); sg.location = (0, 0, sz); link(sg)
+    sg = bpy.data.objects.new("SOCKET_sight", None); sg.location = (info.get("sight_x", 0.0), 0, sz); link(sg)
+    # [heavy weapons] in-GLB gunsmith empties (<wid>__<att>__SIGHT|MUZZLE|BEAM)
+    xe = []
+    for nm, loc in info.get("extra_empties", []):
+        e = bpy.data.objects.new(nm, None); e.location = loc; link(e); xe.append(e)
 
     tris = sum(len(p.vertices) - 2 for o in joined for p in o.data.polygons)
     print("A5GUN %s: %d tris in %s" % (wid, tris, [o.name for o in joined]))
@@ -1340,7 +1686,7 @@ def build(wid):
         studio(wid, joined, arms, info.get("focus"))
 
     out = os.path.join(OUT_DIR, f"{wid}.glb")
-    allo = joined + arms + [mz, ej, sg]
+    allo = joined + arms + [mz, ej, sg] + xe
     for o in bpy.context.scene.objects:
         o.select_set(False)
     for o in allo:
@@ -1370,6 +1716,12 @@ def build(wid):
     try:
         import shutil, subprocess
         gt = shutil.which("gltf-transform")
+        if gt and wid in ("bastion", "anvil"):
+            # [heavy weapons] 1.2 MB lane budget: the shared detail/normal maps re-encoded at
+            # WebP q62 (-138 KB a gun, measured) BEFORE Draco, so no mesh is decoded lossy
+            r = subprocess.run([gt, "webp", out, out, "--quality", "62"],
+                               capture_output=True, text=True, shell=(os.name == "nt"))
+            print("A5WEBP %s: rc %d, %d bytes" % (wid, r.returncode, os.path.getsize(out)))
         if gt:
             before = os.path.getsize(out)
             for attempt in range(3):           # the CLI occasionally exits non-zero on a cold npx start
@@ -1382,7 +1734,7 @@ def build(wid):
                                                     "" if r.returncode == 0 else " FAILED " + (r.stderr or "")[-200:]))
     except Exception as ex:
         print("A5DRACO error:", ex)
-    rep = {"weapon": wid, "sightY": round(sz, 4), "muzzle": [0, round(bz, 4), round(-info["muzzle_y"], 4)],
+    rep = {"weapon": wid, "sightY": round(sz, 4), "sightX": round(info.get("sight_x", 0.0), 4), "muzzle": [0, round(bz, 4), round(-info["muzzle_y"], 4)],
            "eject": [round(info["eject"][0], 4), round(info["eject"][2], 4), round(-info["eject"][1], 4)],
            "tris": tris, "bytes": os.path.getsize(out)}
     print("A5BUILD " + json.dumps(rep))
@@ -1506,7 +1858,7 @@ def studio(wid, joined, arms, focus=None):
 # ("optic", "muzzle", "irons") so the viewmodel can swap them for these.
 # Ids mirror core/sim/attachments.js GUNSMITH.weapons[*].slots.
 # usage: blender ... --python tools/a5_build_guns.py -- attachments
-ATT_EYE = {"warden": 0.27, "vesper": 0.25, "corvus": 0.34, "breaker": 0.15, "pike": 0.34}  # eye->grip at ADS (posAds.z)
+ATT_EYE = {"warden": 0.27, "vesper": 0.25, "corvus": 0.34, "breaker": 0.15, "pike": 0.34, "bastion": 0.30}  # eye->grip at ADS (posAds.z)
 ATT = {}          # node -> {"sight": z|None, "muzzle": (y, z)|None, "beam": (x, y, z)|None}
 
 
@@ -1994,5 +2346,6 @@ def build_knife():
 
 
 ids = ONLY or ["warden", "vesper", "corvus", "breaker", "pike"]
-reports = [build_attachments() if w == "attachments" else build_knife() if w == "knife" else build(w) for w in ids]
+reports = [build_attachments() if w == "attachments" else build_knife() if w == "knife"
+           else build_3p(w[3:]) if w.startswith("3p:") else build(w) for w in ids]
 print("A5DONE " + json.dumps(reports))

@@ -14,6 +14,8 @@
 import * as THREE from "three";
 import { loadBody, createActor } from "./actor.js";
 import { validateAnimMap } from "./anim_map.js";
+// [a11] operator variety: per-operator gear + body recolour on the shared skeleton
+import { loadOperatorKit, dressActor, lookFor, actorIdOf, accentFor, setAccent } from "./operator_looks.js";
 // The silhouette ids the shared grounding pool draws its contact shadow AND
 // its wet-ground reflection from. A character must ground as a PERSON — the
 // generic ellipse is itself a named placeholder defect (VT §1).
@@ -138,11 +140,15 @@ export function createSoldiers(ctx) {
   });
   if (ctx.onChange) ctx.onChange("colorblind", () => {
     const cb = ctx.teamColors();
+    const sim = ctx.sim();
     for (const rec of actors.values()) {
       const a = rec && rec.actor;
       if (a && a._rimSide) a.setRim(cb ? cb[a._rimSide] : a._rimAuthored, 0.4);
+      // [a11] gear team accent follows the CVD palette too
+      if (a && a._gear && sim) setAccent(a, accentFor(sim.state, rec.team));
     }
   });
+  let opKit = null;               // [a11] operator gear kit (null until loaded / on failure)
   const pendingSpawns = [];       // spawn events that arrived before protos
   const protos = {};              // bodyName -> proto
   const wpnProtos = {};           // kind -> Group proto
@@ -226,7 +232,7 @@ export function createSoldiers(ctx) {
       // would mean a hitch or a gunless bot. The archetype kinds go first so the
       // starting guns are ready earliest; the rest are ~60-100 KB Draco each.
       const kinds = [...new Set([...names.map(archWpnKind), ...WPN_KINDS])];
-      const steps = bodies.length + kinds.length + 1;
+      const steps = bodies.length + kinds.length + 2;
       let done = 0;
       const tick = () => { done++; if (onProgress) onProgress(done / steps); };
 
@@ -254,6 +260,18 @@ export function createSoldiers(ctx) {
         tick();
       }
 
+      // [a11] operator looks: gear GLB + body mask. Optional — a failure leaves
+      // every operator in the plain soldier look and flags the fallback.
+      try {
+        opKit = await loadOperatorKit();
+      } catch (e) {
+        console.error("[soldiers] operator gear failed:", e);
+        (window.__FFG_FALLBACKS__ = window.__FFG_FALLBACKS__ || []).push(
+          { lane: "A11", asset: "assets/chars/op_gear.glb", reason: String(e) });
+        opKit = null;
+      }
+      tick();
+
       // CONTRACT GATE (runs at load): every semantic anim must resolve to a
       // loaded clip on every loaded body. Throws — a dangling clip is a build
       // failure, never a frozen soldier on stage.
@@ -269,6 +287,14 @@ export function createSoldiers(ctx) {
         staging.position.set(0, -500, 0);
         for (const b of bodies) if (protos[b]) staging.add(protos[b].scene);
         for (const k of kinds) if (wpnProtos[k]) staging.add(wpnProtos[k]);
+        // [a11] one dressed operator so the gear program (skinned, vertex colour)
+        // compiles here, never mid-match
+        let warmActor = null;
+        if (opKit && protos.soldier) {
+          warmActor = createActor(protos.soldier);
+          dressActor(warmActor, opKit, protos.soldier, 1, "#808080");
+          staging.add(warmActor.root);
+        }
         ctx.scene.add(staging);
         if (ctx.renderer.compileAsync) {
           await ctx.renderer.compileAsync(staging, ctx.camera, ctx.scene);
@@ -282,6 +308,7 @@ export function createSoldiers(ctx) {
         ctx.renderer.setRenderTarget(prevRT);
         rt.dispose();
         ctx.scene.remove(staging);
+        if (warmActor) warmActor.dispose();
         // protos were reparented into staging — detach them back to limbo
         for (const b of bodies) if (protos[b]) protos[b].scene.removeFromParent();
         for (const k of kinds) if (wpnProtos[k]) wpnProtos[k].removeFromParent();
@@ -328,6 +355,20 @@ export function createSoldiers(ctx) {
       // loadBody already pushed the fallback flag; nothing more to report here
     }
     actor.setTint(archTint(d.archetype));
+    // [a11] operator look — deterministic from the roster identity (killcam ghosts
+    // resolve to the same roster slot, so the replay shows the same operator).
+    // Soldier body only (the juggernaut keeps its own silhouette). BEFORE the
+    // weapon attach: the look's scale must be in place when the grip is measured.
+    // Matches only: the campaign cast keeps its authored look (its frames and
+    // gate baselines are unchanged). Drop the `st.match` term to dress it too.
+    let spawnTeam = null;
+    const st = sim && sim.state;
+    if (opKit && bodyName === "soldier" && proto && st && st.match) {
+      const b0 = st && st.bots ? st.bots.find((x) => x.id === d.botId) : null;
+      spawnTeam = b0 ? b0.team : null;
+      const look = lookFor(st, actorIdOf(st, d.botId, b0), d.botId);
+      dressActor(actor, opKit, proto, look, accentFor(st, spawnTeam));
+    }
     // W11 faction rim (C29f wave-5 / pvp_design §3.1): matches only — the
     // campaign never sets a rim, so its frames are unchanged (Amendment A2).
     // Rule: friend-or-foe FROM THE HUMAN'S SEAT, which is what the read is
@@ -373,6 +414,7 @@ export function createSoldiers(ctx) {
     const rec = {
       botId: d.botId,
       archetype: d.archetype,
+      team: spawnTeam,
       // Parsed ONCE at spawn (the grounding write runs every frame for every
       // live actor and must not allocate). Same value actor.setTint() used.
       tintHex: (() => {

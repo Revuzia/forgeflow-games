@@ -105,6 +105,7 @@ export const SPRINT_OUT_S = {
   smg: [0.160, 0.240], pistol: [0.130, 0.195],
   ar: [0.210, 0.315], dmr: [0.290, 0.435],
   shotgun: [0.190, 0.285],
+  lmg: [0.330, 0.495], launcher: [0.380, 0.570],
 };
 
 export function eyeHeight(stance, sliding) {
@@ -716,6 +717,11 @@ export function stepActorWeapon(sim, who, vc, dt) {
       w.mag--;
       w.state = "firing";
       w.stateT = 0;
+      // [heavy weapons] a single-round launcher reloads on its own once the rocket is
+      // away (after the launch settles) — a dry click to start it would be busywork
+      if (w.mag === 0 && weapon.projectile && w.reserve > 0) {
+        if (isP && m) m.autoReloadAt = t + 0.45; else w._autoReloadAt = t + 0.45;
+      }
       fireShot(sim, who, weapon, origin, dir, sim.rng.spread);
       // [gunsmith] RAPID FIRE carries the sub-tick remainder through a held burst, so
       // its rpm is the real cadence instead of being rounded up to whole 60 Hz ticks

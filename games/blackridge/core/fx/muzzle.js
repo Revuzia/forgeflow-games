@@ -143,6 +143,12 @@ const PROFILE = {
   // pistol: quick and snappy
   pike: { size: 0.108, bright: 1.15, life: [0.040, 0.015], cells: CELLS_GEN,
     tint: [0.92, 0.80], grow: 0.32, light: 1, puffs: 1, botMult: BOT_SIZE_MULT },
+  // [heavy weapons] belt-fed LMG: a rifle flash, a touch bigger and longer
+  bastion: { size: 0.15, bright: 1.05, life: [0.060, 0.022], cells: CELLS_GEN,
+    tint: [0.92, 0.78], grow: 0.48, light: 1.1, puffs: 1, botMult: BOT_SIZE_MULT },
+  // launcher: the motor lighting — big, orange, long, with a smoke burst
+  anvil: { size: 0.36, bright: 0.75, life: [0.13, 0.04], cells: CELLS_BLAST,
+    tint: [0.70, 0.38], grow: 0.9, light: 1.6, puffs: 3, botMult: 1.6, ignoreFirst: true },
   // pump shotgun: a wide, violent, orange blast — core + side spray + fireball
   breaker: { size: 0.31, bright: 0.55, life: [0.088, 0.024], cells: CELLS_BLAST,
     tint: [0.62, 0.30], grow: 0.75, light: 1.4, puffs: 2, botMult: 1.9, ignoreFirst: true,

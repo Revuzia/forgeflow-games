@@ -125,6 +125,24 @@ export const GUNSMITH = {
       optics: { irons: { adsFov: 60, adsTime: 1 }, reddot: { adsFov: 57, adsTime: 1.06 } },
       extmag: 17,
     },
+    // [heavy weapons] the belt-fed LMG: no muzzle brake to swap, a top-cover rail for a
+    // holo, a fore grip under the bipod block, the long box. Its parts are authored IN
+    // assets/weapons/bastion.glb as `bastion__<id>` nodes (weapon_meshes.mountParts
+    // reads the gun's own children as well as attachments.glb).
+    bastion: {
+      factory: { optic: "reddot", muzzle: "flash" },
+      slots: { optic: ["reddot", "holo"], muzzle: ["flash", "suppressor"],
+               under: ["grip"], mag: ["extmag"], receiver: ["rapidfire"] },
+      optics: { reddot: { adsFov: 54, adsTime: 1 }, holo: { adsFov: 49, adsTime: 1.06 } },
+      extmag: 150,
+    },
+    // the launcher takes almost nothing: a laser on the tube rail (hip-fire and
+    // sprint-out help) and that is all. Every other slot is EMPTY by design.
+    anvil: {
+      factory: { optic: "irons" },
+      slots: { optic: ["irons"], muzzle: [], under: ["laser"], mag: [], receiver: [] },
+      optics: { irons: { adsFov: 50, adsTime: 1 } },
+    },
   },
 };
 
@@ -193,7 +211,7 @@ export function validateBuild(weaponId, b) {
   const bySlot = {};
   for (const id of inA) {
     const a = ATTACHMENTS[id];
-    if (!spec || !a || spec.slots[a.slot].indexOf(id) < 0 || bySlot[a.slot]) { fixed++; continue; }
+    if (!spec || !a || !spec.slots[a.slot] || spec.slots[a.slot].indexOf(id) < 0 || bySlot[a.slot]) { fixed++; continue; }
     if (spec.factory[a.slot] === id) { fixed++; continue; } // the factory part is not an attachment
     bySlot[a.slot] = id;
   }
@@ -247,7 +265,7 @@ export function opponentBuild(hash, seed, actorId, weaponId, role, salt) {
     const s = slots[i];
     const pool = likes[s] || [null];
     const id = pool[hash(seed, actorId, 50 + i + 7 * (salt | 0)) % pool.length];
-    if (id && spec.slots[s].indexOf(id) >= 0 && spec.factory[s] !== id) picks.push(id);
+    if (id && spec.slots[s] && spec.slots[s].indexOf(id) >= 0 && spec.factory[s] !== id) picks.push(id);
   }
   const camoRoll = hash(seed, actorId, 60 + (salt | 0)) % (CAMO_IDS.length + 4);
   const camo = camoRoll < CAMO_IDS.length ? CAMO_IDS[camoRoll] : null;
@@ -322,7 +340,7 @@ function buildEffective(base, weaponId, attach) {
   }
   if (hip !== 1) { t.spread.hip = base.spread.hip * hip; t.spread.hipDeg = r4(base.spread.hipDeg * hip); }
   if (sprintOut !== 1) t.sprintOutMult = r4(sprintOut);
-  if (move !== 1) t.moveMult = r4(move);
+  if (move !== 1) t.moveMult = r4((base.moveMult != null ? base.moveMult : 1) * move); // on top of a heavy gun's own weight
   if (adsMove !== 1) t.adsMoveMult = r4((base.adsMoveMult != null ? base.adsMoveMult : 0.6) * adsMove);
   if (reload !== 1) {
     t.reloadS = r4(base.reloadS * reload);
