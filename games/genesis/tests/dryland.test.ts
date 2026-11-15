@@ -1,7 +1,7 @@
 // GENESIS — Lane B (world sim): buildings sit on dry land.
 // The owner's test world (scenario babel, seed 307987276, the town 'Rubolhin by the Lake') had 35 of its 168 finished
-// buildings standing in 0.3-2.1 m of lake water at year 0: placement asked only the building's own cell, and the water
-// lies between cell centres as the grid interpolates it. world.ts dryAt now asks the point and the whole footprint;
+// buildings standing in 0.3-4 m of lake water at year 0: placement asked only the building's own cell, and between
+// cell centres the ground runs down under the lake's flat level. world.ts dryAt now asks the point and the footprint;
 // buildings.ts floodSweep ruins, once a day, a finished building the water has reached (old saves are put right by it).
 //   1. placement: on that seed and two more, no finished non-dock building stands in more than STANDING_WATER_MAX at
 //      year 0, and none stands in it for more than a day over the first DRYLAND_YEARS (default 0.25) years;
@@ -70,22 +70,31 @@ test('dry land: the owner world (babel 307987276, Rubolhin by the Lake) — no f
   const town = p0.people!.settlements.find((s) => s.name === 'Rubolhin by the Lake')!;
   const houses = p0.people!.of(town.id).filter((b) => b.progress >= 1 && !(b.flags & BuildingFlag.ruined) && x0.c.buildings.list[b.type].function === 'shelter');
   assert.ok(houses.length >= 2);
-  // a dry cell beside deep water, near the town: 0.4 of the way to the water cell's centre is still the dry cell's
-  let dry = -1, lake = -1;
-  for (const c of p0.cellsNear(town.pos, 600).slice().sort((a, b) => a - b)) {
-    if (!dryCell(p0, c) || f.water[c] > 0.01) continue;
-    for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) { const o = g.nbr[e]; if (f.water[o] > 1.5 && lake < 0) { dry = c; lake = o; } }
-    if (dry >= 0) break;
-  }
-  assert.ok(dry >= 0, 'a lake shore by the town');
-  const at = (t: number): [number, number, number] => {
+  // a dry cell beside deep water, near the town, and how far toward the water cell's centre (still the dry cell's own
+  // ground: under half way) a house stands well in the lake
+  const mix = (dry: number, lake: number, t: number): [number, number, number] => {
     const v = [0, 1, 2].map((k) => P[dry * 3 + k] * (1 - t) + P[lake * 3 + k] * t);
     const l = Math.hypot(v[0], v[1], v[2]);
     return [v[0] / l, v[1] / l, v[2] / l];
   };
+  let dry = -1, lake = -1, tt = 0;
+  for (const c of p0.cellsNear(town.pos, 800).slice().sort((a, b) => a - b)) {
+    if (dry >= 0) break;
+    if (!dryCell(p0, c) || f.water[c] > 0.01) continue;
+    for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1] && dry < 0; e++) {
+      const o = g.nbr[e];
+      if (f.water[o] < 1.5) continue;
+      for (const t of [0.3, 0.35, 0.4, 0.45]) {
+        const q = mix(c, o, t);
+        if (p0.cellAt(q) === c && waterDepthAt(p0, q) > 0.6 && waterDepthAt(p0, mix(c, o, t - 0.05)) > 0.6) { dry = c; lake = o; tt = t; break; }
+      }
+    }
+  }
+  assert.ok(dry >= 0, 'a lake shore by the town');
+  const at = (t: number) => mix(dry, lake, t);
   const [house, dock] = houses;
-  house.pos = at(0.4); house.cell = dry;
-  dock.pos = at(0.35); dock.cell = dry; dock.type = dockT;
+  house.pos = at(tt); house.cell = dry;
+  dock.pos = at(tt - 0.05); dock.cell = dry; dock.type = dockT;
   // the very thing the old rule passed: the house's own cell is dry ground, and it stands in the lake
   assert.equal(p0.cellAt(house.pos), dry);
   assert.ok(isLand(p0, dry) && f.water[dry] <= SITE_WET_MAX, 'its cell is dry (the old test)');

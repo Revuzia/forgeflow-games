@@ -62,7 +62,10 @@ test('arc scenario: save at year 40, load, run to year 80 equals a straight run 
   const straight = fresh();
   const yr = yearTicks(straight.sim);
   const seen = { cached: 0 };
+  const trace: string[] = [], trace2: string[] = [];
+  const TR = !!process.env.ARC_TRACE; // ARC_TRACE=1: hash every day of the second half in both runs and name the first day that differs
   const watch = (sim: Sim): void => {
+    if (TR && sim.u.tick > 40 * yr) trace.push(sim.hash());
     // the epithet cache agrees with the uncached scan on every sampled step (every day to year 3, then each year)
     const p = sim.u.planets[0];
     if (sim.u.tick < 3 * yr || sim.u.tick % yr < Math.max(60, Math.round(p.st.dayHours * 60))) {
@@ -81,7 +84,8 @@ test('arc scenario: save at year 40, load, run to year 80 equals a straight run 
   const hashStraight = straight.sim.hash();
   assert.ok(seen.cached > 50);
   // ... and the load of that save, run on to year 80
-  drive(b, 80 * yr);
+  drive(b, 80 * yr, TR ? (sim) => { trace2.push(sim.hash()); } : undefined);
+  if (TR) { const i = trace.findIndex((h, k) => h !== trace2[k]); console.log('ARC_TRACE first differing day after year 40:', i, 'of', trace.length); }
   assert.equal(b.sim.hash(), hashStraight, 'the loaded run reaches the same hash at year 80');
   assert.deepEqual(b.log, straight.log, 'the same scripted acts at the same times');
 

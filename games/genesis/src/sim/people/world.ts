@@ -6,6 +6,8 @@ import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
 import { hashFloat } from '../core/rng.ts';
 import { BASE_WALK, dayTicks } from './defs.ts';
+import { newHit } from '../grid/icogrid.ts';
+import { curveMargin, curvedSurface, MAX_GRAD } from '../grid/surface.ts';
 
 /** unit vector of a cell centre */
 export function cellPos(p: Planet, c: number, out: number[] = [0, 0, 0]): number[] {
@@ -213,17 +215,16 @@ export function isLand(p: Planet, c: number): boolean {
 }
 
 // ───────────────────────────── dry ground (Lane B: buildings sit on dry land) ─────────────────────────────
-// A cell's water is its depth at the cell centre; between centres the water lies as the grid interpolates it (the
-// renderer draws the sheet from that same interpolation: render/life/buildings.ts samples it under a footprint, and
-// ocean.ts draws a level that is linear over each triangle). A house in a dry cell beside a 2 m lake cell therefore
-// stood in up to 2 m of water: the placement rules below asked only the cell (babel seed 307987276, 'Rubolhin by the
-// Lake': 35 of 168 finished buildings in more than 0.3 m at year 0).
+// A cell's water is its depth at the cell centre. Between centres the ground runs down toward a lake cell's bed and the
+// lake's level runs flat out over it (the renderer draws exactly that: fieldpack.ts waterLevel, ocean.ts), so a house
+// in a dry cell beside a lake cell can stand metres deep: the placement rules asked only the cell (babel seed
+// 307987276, 'Rubolhin by the Lake': 31 of 168 finished buildings in more than 0.3 m at year 0, the worst in 4 m).
 
 /** water (m) above which nothing is built and no band settles: a film or a puddle is ground, more is not */
 export const SITE_WET_MAX = 0.15;
-/** water (m) allowed under a new building's footprint: next to none — a lake's margin moves a hand or two with the rains
- * (seed 307987276: 0.15 m in the first three days), and a house begun with 0.15 m at its wall was lost to the sweep
- * at 0.3 m that same week; from 0.05 m the margin has 0.25 m to rise first */
+/** water (m) allowed under a new building's footprint with the standing water SITE_FREEBOARD higher than it is: next
+ * to none. A lake's margin moves a hand or two with the rains (seed 307987276: 0.15-0.4 m in a new world's first three
+ * days), and a house begun with 0.15 m at its wall was lost to the sweep at 0.3 m that same week */
 export const FOOT_WET_MAX = 0.05;
 /** water (m) under a finished building's footprint above which it is lost (buildings.ts floodSweep, daily); also the
  * depth at which the renderer calls a footprint wet (render/life/buildings.ts place()) and a site is given up */
@@ -241,9 +242,50 @@ export function dryCell(p: Planet, c: number): boolean {
   return isLand(p, c) && p.f.water[c] <= SITE_WET_MAX;
 }
 
-/** water depth (m) at unit vector `pos`: the cells' depths as the grid interpolates them between their centres */
-export function waterDepthAt(p: Planet, pos: ArrayLike<number>): number {
-  return p.grid.sample(p.f.water, pos[0], pos[1], pos[2]);
+/** water (m) from which the renderer calls a cell wet (render/planet/fieldpack.ts WET) and a shore cell's drawn level
+ * is held under its own ground (ibid.): mirrored here so the sim asks about the water that is drawn */
+const DRAWN_WET = 0.02, SHORE_UNDER = 0.05;
+
+/**
+ * The level (m above the datum) of the water sheet at cell c as it is DRAWN (render/planet/fieldpack.ts, case 'A'): a
+ * wet cell's own surface; a dry cell beside water carries its wet neighbours' mean level, held just under its own
+ * ground (so a sea stays flat up to the shoreline the ground cuts in it); a cell with no water near sits `inland`
+ * metres under its ground. `rise` lifts the standing water (a wet cell's level) by that much: the lake a hand higher.
+ */
+function drawnLevel(p: Planet, c: number, inland: number, rise: number): number {
+  const f = p.f, g = p.grid;
+  const sc = f.surface[c];
+  if (f.water[c] > DRAWN_WET) return sc + f.water[c] + rise;
+  let sum = 0, k = 0;
+  for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
+    const o = g.nbr[e];
+    if (f.water[o] > DRAWN_WET) { sum += f.surface[o] + f.water[o]; k++; }
+  }
+  return k > 0 ? Math.min(sum / k + rise, sc - SHORE_UNDER) : sc - inland;
+}
+
+const _wh = newHit();
+
+/**
+ * Water depth (m) at unit vector `pos`: how far the water sheet stands over the ground there — both as they are drawn
+ * and walked on. The ground is the ground function's surface (grid/surface.ts curvedSurface: the cells' heights curved
+ * between their centres; without its metre-scale detail relief — the drawn sheet drapes over those bumps as a film,
+ * ocean.ts, and a 5 cm rain film over a hollow of the relief is not half a metre of water); the sheet is the cells'
+ * drawn levels (drawnLevel) blended over the grid triangle, as ocean.ts draws it. Not the cells' depths blended: beside
+ * a deep cell that reads metres of water on a shore that stands well clear of it (and a town on a low spit between
+ * deep cells, the test worlds' Aru, found no ground at all). `rise` (m) asks the same of the standing water that much
+ * higher.
+ */
+export function waterDepthAt(p: Planet, pos: ArrayLike<number>, rise = 0): number {
+  const h = p.grid.locate(pos[0], pos[1], pos[2], _wh);
+  const f = p.f;
+  // (no water at any corner of the triangle: nothing is drawn here)
+  if (f.water[h.a] <= DRAWN_WET && f.water[h.b] <= DRAWN_WET && f.water[h.c] <= DRAWN_WET) return 0;
+  const src = p.ground();
+  const inland = 4 + 2 * curveMargin(p.grid, p.st.radius, MAX_GRAD);
+  const level = drawnLevel(p, h.a, inland, rise) * h.wa + drawnLevel(p, h.b, inland, rise) * h.wb + drawnLevel(p, h.c, inland, rise) * h.wc;
+  const d = level - curvedSurface(src, h, pos[0], pos[1], pos[2]);
+  return d > 0 ? d : 0;
 }
 
 /** the points of a footprint that are asked for water: the eight compass points of its edge (the centre besides) */
@@ -252,23 +294,23 @@ const _foot: number[] = [0, 0, 0];
 
 /**
  * The deepest water (m) under a building at `pos` with a footprint of radius `footprint` metres: at its own point and
- * round the footprint's edge (the depth is linear over each grid triangle, so over a footprint smaller than a cell its
- * greatest value lies on the edge or at the building's own cell centre, which the callers ask as the cell).
+ * at eight points round the footprint's edge. `rise` as in waterDepthAt.
  */
-export function standingWater(p: Planet, pos: ArrayLike<number>, footprint = 0): number {
-  let d = waterDepthAt(p, pos);
+export function standingWater(p: Planet, pos: ArrayLike<number>, footprint = 0, rise = 0): number {
+  let d = waterDepthAt(p, pos, rise);
   if (footprint > 0) {
     const R = p.st.radius;
     for (let k = 0; k < FOOT_RING; k++) {
       offsetPoint(pos, footprint, k * (Math.PI * 2 / FOOT_RING), R, _foot);
-      const w = waterDepthAt(p, _foot);
+      const w = waterDepthAt(p, _foot, rise);
       if (w > d) d = w;
     }
   }
   return d;
 }
 
-/** metres a building's cell must stand above the level of any water standing beside it */
+/** metres a building's ground must stand above the level of the water standing beside it (its cell: aboveWater; its
+ * footprint: dryAt asks standingWater with the water this much higher) */
 export const SITE_FREEBOARD = 0.3;
 
 /**
@@ -289,12 +331,12 @@ export function aboveWater(p: Planet, c: number): boolean {
 
 /**
  * Dry ground for a building at `pos` (in cell `cell`): the cell is land under no more than a film (dryCell) and stands
- * clear of the water beside it (aboveWater), and there is next to no water (FOOT_WET_MAX) at the point itself or
- * anywhere under a footprint of radius `footprint` metres. THE test of every building placement (buildings.ts findSite
+ * clear of the water beside it (aboveWater), and there would be next to no water (FOOT_WET_MAX) at the point itself or
+ * anywhere under a footprint of radius `footprint` metres were the water SITE_FREEBOARD higher. THE test of every building placement (buildings.ts findSite
  * and its edge search); docks, shipyards and lighthouses, which stand at the water, ask only their own cell (dryCell).
  */
 export function dryAt(p: Planet, pos: ArrayLike<number>, footprint = 0, cell: number = p.cellAt(pos)): boolean {
-  return dryCell(p, cell) && aboveWater(p, cell) && standingWater(p, pos, footprint) <= FOOT_WET_MAX;
+  return dryCell(p, cell) && aboveWater(p, cell) && standingWater(p, pos, footprint, SITE_FREEBOARD) <= FOOT_WET_MAX;
 }
 
 const _heapC: number[] = [];
