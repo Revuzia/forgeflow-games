@@ -1,0 +1,13 @@
+lanternwalk n=16  caps/match 0.38 (caps by team 4:2, team-0 match share 56%)  carried 4% both 0% (carrier holding near stand 0% of carried time)
+            carrier deaths 15 (0.9/match) by quarter home [10,3,2,0]  could score 15/15  killer order {"attack":10,"defend":1,"lane":4}  killer->carrier's stand median 53 m, killer->carrier 6 m  own mates within 15 m 0.07
+            top killer reasons attack/CUTOFF_INFEASIBLE 6, attack/ATTACK_FLAG 4, lane/LANE_QUOTA 4, defend/DEFEND_STAND 1
+            drops 0.9/match: re-grabbed by the carrier's side 0.1, returned by touch 0.8  escorts: samples 229, median distance to carrier 13.4 m, ahead of carrier 49%
+switchyard  n=16  caps/match 1.50 (caps by team 12:12, team-0 match share 50%)  carried 22% both 3% (carrier holding near stand 27% of carried time)
+            carrier deaths 50 (3.1/match) by quarter home [22,19,5,4]  could score 41/50  killer order {"attack":29,"lane":15,"intercept":3,"defend":3}  killer->carrier's stand median 51 m, killer->carrier 9 m  own mates within 15 m 0.28
+            top killer reasons attack/ATTACK_FLAG 18, lane/LANE_QUOTA 15, attack/CUTOFF_INFEASIBLE 11, defend/DEFEND_STAND 3, intercept/HUNT 2, intercept/CUTOFF_FEASIBLE 1
+            drops 3.1/match: re-grabbed by the carrier's side 0.3, returned by touch 2.9  escorts: samples 1112, median distance to carrier 15.6 m, ahead of carrier 51%
+saltmarket  n=16  caps/match 0.00 (caps by team 0:0, team-0 match share 50%)  carried 2% both 2% (carrier holding near stand 172% of carried time)
+            carrier deaths 0 (0.0/match) by quarter home [0,0,0,0]  could score 0/0  killer order {}  killer->carrier's stand median - m, killer->carrier - m  own mates within 15 m 0.00
+            top killer reasons 
+            drops 0.0/match: re-grabbed by the carrier's side 0.0, returned by touch 0.0  escorts: samples 0, median distance to carrier - m, ahead of carrier 0%
+ctf_probe --even (one SLATE operator benched)  secs=180 seeds=16  AI avg 0.338 ms/tick  OBJ 0.037 ms/tick  wall 130 s

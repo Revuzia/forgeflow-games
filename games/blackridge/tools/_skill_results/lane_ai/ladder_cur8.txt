@@ -1,0 +1,5 @@
+lanternwalk ladder n=8 ended 8/8  finished 8/8 @182s  top rung 11/11  knife-rung time 38 s/match, swings there 2.3/match  kills/min 23.7
+switchyard  ladder n=8 ended 8/8  finished 8/8 @191s  top rung 11/11  knife-rung time 28 s/match, swings there 2.6/match  kills/min 21.6
+saltmarket  ladder n=8 ended 8/8  finished 8/8 @162s  top rung 11/11  knife-rung time 30 s/match, swings there 2.5/match  kills/min 26.4
+
+mode_probe  secs=240 seeds=8  AI avg 0.392 ms/tick  wall 210 s

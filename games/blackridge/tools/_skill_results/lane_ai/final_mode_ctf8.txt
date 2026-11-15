@@ -1,0 +1,5 @@
+lanternwalk ctf    n=8 ended 8/8  drops by quarter of the way home [17,12,6,4]  caps/match 2.63 (first@47s)  a flag carried 39% of the time, both 6%  captured 2.6 dropped_death 4.9 returned_matchEnd 0.1 returned_touch 4.1 revealed 3.4 taken_ground 0.6 taken_stand 7.3
+switchyard  ctf    n=8 ended 8/8  drops by quarter of the way home [13,9,1,5]  caps/match 2.13 (first@60s)  a flag carried 38% of the time, both 14%  captured 2.1 dropped_death 3.5 returned_stalemate 0.3 returned_touch 3.0 revealed 3.0 taken_ground 0.5 taken_stand 5.4
+saltmarket  ctf    n=8 ended 8/8  drops by quarter of the way home [3,11,1,2]  caps/match 1.38 (first@58s)  a flag carried 26% of the time, both 1%  captured 1.4 dropped_death 2.1 returned_touch 2.0 revealed 2.4 taken_ground 0.1 taken_stand 3.5
+
+mode_probe  secs=180 seeds=8  AI avg 0.386 ms/tick  wall 212 s

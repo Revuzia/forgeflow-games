@@ -292,8 +292,9 @@ export function followPath(sim, nav, bot, brain, dt) {
   // 2026-11 review: the human body counts too (it was invisible to this
   // loop, so team-mates walked through the player and parked in the doorway
   // the player stood in), and a body AHEAD in the same direction of travel is
-  // queued behind instead of squeezed past: a 1-tick hold while a lower-id
-  // body (or the player) is < 0.75 m ahead inside a 40 deg cone and not
+  // queued behind instead of squeezed past (2026-11: 0.85 m / 0.67 s, was
+  // 0.75 m / 0.4 s; meridian squad overlaps while travelling 41 -> 27): a 1-tick hold while a lower-id
+  // body (or the player) is < 0.85 m ahead inside a 40 deg cone and not
   // walking toward us. Lower id never yields to higher, so a queue cannot
   // deadlock; head-on meetings are left to the lateral separation below.
   const pl = sim.state.player;
@@ -313,7 +314,7 @@ export function followPath(sim, nav, bot, brain, dt) {
       rx += -dz * sg * w; rz += dx * sg * w;
     } else {
       rx += (ex / d) * w; rz += (ez / d) * w;
-      if (!yieldTo && d < 0.75 && (o === pl || o.id < bot.id)) {
+      if (!yieldTo && d < 0.85 && (o === pl || o.id < bot.id)) {
         const ahead = -(ex * dx + ez * dz) / d; // cos of the angle to o vs travel
         if (ahead > 0.77) {
           const ov = o.vel || [0, 0, 0];
@@ -322,7 +323,7 @@ export function followPath(sim, nav, bot, brain, dt) {
       }
     }
   }
-  if (yieldTo && (brain.yieldN | 0) < 24) { // never more than 0.4 s in a row
+  if (yieldTo && (brain.yieldN | 0) < 40) { // never more than 0.67 s in a row
     brain.yieldN = (brain.yieldN | 0) + 1;
     brain.mvActive = false;
     brain.yielding = true;

@@ -564,7 +564,15 @@ function think(sim, nav, squad, bot, t) {
       // still turn him; sight still goes straight to combat (above).
       const objT = bot._obj;
       const stim0 = P.lastKnown || P.heardAt;
-      const onTask = objT && objT.anchor && objT.priority >= 0.6 && stim0 &&
+      // 2026-11 (ASCENT regression): NOT in the every-man-for-himself modes
+      // (FFA, ASCENT) — there the solo pass's hunt / lane anchor is not a task
+      // to protect, and distant gunfire is exactly where the next kill is (an
+      // expert follows it). The rule cut ASCENT's kill rate 25-30 -> 22-26 /
+      // min and stretched the ladder 159/149/151 -> 179-208 s (mode_probe,
+      // 8 seeds x 240 s with and without it).
+      const mId = sim.state.match ? sim.state.match.modeId : null;
+      const soloMode = mId === "ffa" || mId === "ladder";
+      const onTask = !soloMode && objT && objT.anchor && objT.priority >= 0.6 && stim0 &&
         hdist(bot.pos, stim0) > 25 && t - (bot.lastHitT ?? -9) > 2;
       if (P.awareness >= 0.5 && !onTask) {
         const stim = P.lastKnown || P.heardAt;
@@ -599,7 +607,7 @@ function think(sim, nav, squad, bot, t) {
             const sp = nav.openSpot(goal, 2.0, 1);
             if (sp && inLeash(obj.leash, sp)) goal = sp;
           }
-          setGoal(nav, sim, brain, bot, goal, false);
+          setGoal(nav, sim, brain, bot, goal, !!obj.sprint);
         }
       } else if (!bot.patrol && !brain.floorAnchor) {
         // W3 PATROL FLOOR (plan Part 4.2): with the campaign's authored
@@ -1618,6 +1626,9 @@ function act(sim, nav, squad, bot, dt, t) {
     if (!route && brain.goal && !brain.arrived) {
       // W3 patrol floor / H4: routeless idle bots walk their wander goals
       followPath(sim, nav, bot, brain, c, dt);
+      // 2026-11 CTF team play: a runner order (objective.js o.sprint) runs at
+      // the base sprint the human has; the last 5 m are walked (arrival)
+      if (obj && obj.sprint && obj.anchor && hdist(bot.pos, brain.goal) > 5) c.sprint = true;
       desYaw = brain.moveYaw != null ? brain.moveYaw : brain.curYaw;
       moving = true;
       brain.anchorYaw = desYaw;
@@ -1730,11 +1741,17 @@ function act(sim, nav, squad, bot, dt, t) {
     // reaction latch, tokens and fire policy still gate every pull).
     // Scoped to the flag carrier / returner (the objective layer stays
     // remove-only for every other order — objective.selftest AC-32).
+    // 2026-11 CTF team play: + a carrier that has just been HIT shoots back at
+    // the visible shooter out to 45 m. It used to keep sprinting under fire
+    // from 25-35 m (beyond the walk-and-shoot range) and never answered
+    // (ctf_probe trace: 110 -> 0 hp over 4 s, zero shots back).
+    const dTb = tb ? hdist(bot.pos, tb.pos) : 1e9;
     brain.fireOnMove = !!(objPress && obj && (obj.role === "carry" || obj.role === "return") &&
-      visibleFresh && tb && hdist(bot.pos, tb.pos) <= 25);
+      visibleFresh && tb && (dTb <= 25 || (obj.role === "carry" && dTb <= 45 && t - (bot.lastHitT ?? -9) <= 2.5)));
     if (!brain.arrived && brain.goal && !wantHold) {
       followPath(sim, nav, bot, brain, c, dt);
-      c.sprint = brain.sprintMove && hdist(bot.pos, brain.goal) > 6 && !brain.fireOnMove;
+      c.sprint = (brain.sprintMove || !!(obj && obj.sprint && objPress && !visibleFresh)) &&
+        hdist(bot.pos, brain.goal) > 6 && !brain.fireOnMove;
       desYaw = brain.moveYaw != null ? brain.moveYaw : brain.curYaw;
       moving = true;
       turnRate = 5.6;

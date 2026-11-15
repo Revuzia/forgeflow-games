@@ -1,0 +1,13 @@
+lanternwalk n=16  caps/match 0.56 (caps by team 5:4, team-0 match share 53%)  carried 7% both 0% (carrier holding near stand 3% of carried time)
+            carrier deaths 14 (0.9/match) by quarter home [6,6,2,0]  could score 13/14  killer order {"attack":6,"defend":1,"lane":7}  killer->carrier's stand median 51 m, killer->carrier 19 m  own mates within 15 m 0.36
+            top killer reasons lane/LANE_QUOTA 7, attack/ATTACK_FLAG 4, attack/CUTOFF_INFEASIBLE 2, defend/DEFEND_STAND 1
+            drops 0.9/match: re-grabbed by the carrier's side 0.1, returned by touch 0.8  escorts: samples 460, median distance to carrier 23.3 m, ahead of carrier 56%
+switchyard  n=16  caps/match 1.69 (caps by team 14:13, team-0 match share 50%)  carried 37% both 9% (carrier holding near stand 57% of carried time)
+            carrier deaths 102 (6.4/match) by quarter home [28,28,27,19]  could score 53/102  killer order {"lane":59,"attack":29,"defend":4,"intercept":7,"carry":3}  killer->carrier's stand median 38 m, killer->carrier 7 m  own mates within 15 m 0.33
+            top killer reasons lane/LANE_QUOTA 59, attack/ATTACK_FLAG 15, attack/CUTOFF_INFEASIBLE 14, intercept/HUNT 6, defend/DEFEND_STAND 3, carry/HOLD_NEAR_STAND 3
+            drops 6.4/match: re-grabbed by the carrier's side 0.5, returned by touch 5.8  escorts: samples 1630, median distance to carrier 15.9 m, ahead of carrier 41%
+saltmarket  n=16  caps/match 1.31 (caps by team 11:10, team-0 match share 53%)  carried 32% both 3% (carrier holding near stand 21% of carried time)
+            carrier deaths 64 (4.0/match) by quarter home [13,35,7,9]  could score 37/64  killer order {"lane":21,"attack":23,"carry":15,"intercept":5}  killer->carrier's stand median 57 m, killer->carrier 7 m  own mates within 15 m 0.34
+            top killer reasons lane/LANE_QUOTA 21, attack/ATTACK_FLAG 17, carry/HOLD_NEAR_STAND 15, attack/CUTOFF_INFEASIBLE 6, intercept/CUTOFF_FEASIBLE 5
+            drops 4.0/match: re-grabbed by the carrier's side 0.6, returned by touch 3.3  escorts: samples 2064, median distance to carrier 23.9 m, ahead of carrier 54%
+ctf_probe --even (one SLATE operator benched)  secs=180 seeds=16  AI avg 0.367 ms/tick  OBJ 0.043 ms/tick  wall 137 s

@@ -592,7 +592,7 @@ def pic_rail(name, y0, y1, z_base, half_w=0.0105, node="base", col=None):
 
 
 def reddot(y, rail_top, sight_z, half_w=0.0165, win_h=0.0125, node="dressing"):
-    """Holographic / red-dot optic (2026-11-13): a clamp, a hooded window frame you look
+    """Red-dot (open reflex) optic (2026-11-13; reshaped 2026-11-15): a clamp, a lens frame you look
     THROUGH (no lens geometry: nothing to tint or fog the sight picture) and one
     emissive dot sitting exactly on the sight line. At ADS the eye is on that line by
     construction (SOCKET_sight), so the dot is the point of aim; it rides the gun
@@ -601,51 +601,36 @@ def reddot(y, rail_top, sight_z, half_w=0.0165, win_h=0.0125, node="dressing"):
     top = sight_z + win_h + 0.0035
     iw = half_w - 0.0030
 
-    # (2026-11-14 guns pass) was a clamp + a plain hooded box + a battery block: in-game it
-    # read as "a black box with a hole". Now a hooded box sight's real anatomy (the gunsmith
-    # calls it RED DOT; its HOLO is att_holo in attachments.glb): a chamfered
-    # housing whose hood rakes forward into a sun visor, a rear control deck under the
-    # window carrying two rubber buttons (the face the eye sees at ADS), a side battery
-    # cap, a cross-bolt nut and QD lever on the base, grip grooves down the hood sides.
+    # (2026-11-15 hold pass) the gunsmith sells this as "RED DOT — compact reflex sight, one
+    # clean dot, small window", but since 11-14 it was a long hooded box: in-game it read as a
+    # holographic sight, the same silhouette as the HOLO next to it. Now an OPEN reflex sight:
+    # a low clamp + emitter deck at the rear and ONE thin shield-shaped lens frame at the front
+    # (no hood, no side walls — you see through and past it), a windage button on the right.
+    # The HOLO (att_holo) stays the long boxed housing with the wide window and ring reticle.
+    hw = half_w - 0.0025                                  # frame outer half-width (~28 mm wide)
+    fy0, fy1 = y + 0.006, y + 0.0105                      # frame depth along the bore
+    ftop = sight_z + win_h + 0.0025
+
     def body(bm):
-        rbox(bm, -0.0130, 0.0130, y - 0.030, y + 0.028, rail_top - 0.004, z0)                 # base / clamp
-        cyl_x(bm, y + 0.010, rail_top - 0.0005, 0.0130, 0.0185, 0.0046, seg=6)                  # cross-bolt hex nut
-        prism_x(bm, [(y - 0.024, rail_top - 0.001), (y + 0.004, rail_top - 0.001), (y + 0.006, z0 - 0.0005),
-                     (y - 0.026, z0 - 0.0005)], -0.0160, -0.0130)                              # QD lever (left)
-        # hood: chamfered octagon section; the top rakes forward over the window as a visor
-        prism_y(bm, [(-half_w, z0 - 0.001), (half_w, z0 - 0.001), (half_w, top - 0.005), (half_w - 0.005, top),
-                     (-half_w + 0.005, top), (-half_w, top - 0.005)], y - 0.016, y + 0.020)
-        prism_x(bm, [(y + 0.019, top - 0.0035), (y + 0.031, top - 0.0020), (y + 0.031, top - 0.0005),
-                     (y + 0.019, top)], -half_w + 0.004, half_w - 0.004)                       # sun visor
-        for sx in (-1, 1):                                                                       # window cheeks
-            prism_x(bm, [(y + 0.019, z0 - 0.001), (y + 0.027, z0 - 0.001), (y + 0.031, top - 0.0035),
-                         (y + 0.019, top - 0.0035)],
-                    sx * half_w - (0.0035 if sx > 0 else 0.0), sx * half_w + (0.0 if sx > 0 else 0.0035))
-        # rear control deck under the window + two rubber buttons facing the eye
-        prism_x(bm, [(y - 0.031, z0 - 0.001), (y - 0.016, z0 - 0.001), (y - 0.016, sight_z - win_h - 0.0010),
-                     (y - 0.026, sight_z - win_h - 0.0010), (y - 0.031, sight_z - win_h - 0.0045)],
-                -half_w + 0.0015, half_w - 0.0015)
-        cyl_x(bm, y - 0.004, z0 + 0.0075, half_w - 0.0005, half_w + 0.0032, 0.0060, seg=20)    # battery cap (right)
-        cyl_x(bm, y - 0.004, z0 + 0.0075, half_w + 0.0030, half_w + 0.0040, 0.0050, seg=20)
+        rbox(bm, -0.0120, 0.0120, y - 0.024, y + 0.014, rail_top - 0.004, z0)                 # base / clamp
+        cyl_x(bm, y - 0.006, rail_top - 0.0005, 0.0120, 0.0175, 0.0044, seg=6)                  # cross-bolt nut
+        # emitter deck: low, sloping up toward the lens, its top well under the window
+        prism_x(bm, [(y - 0.024, z0 - 0.001), (y + 0.012, z0 - 0.001), (y + 0.012, sight_z - win_h - 0.0012),
+                     (y - 0.008, sight_z - win_h - 0.0030), (y - 0.024, z0 + 0.0040)], -0.0110, 0.0110)
+        # shield lens frame: square shoulders at the base, chamfered crown
+        prism_y(bm, [(-hw, z0 - 0.001), (hw, z0 - 0.001), (hw, ftop - 0.0060), (hw - 0.0045, ftop),
+                     (-hw + 0.0045, ftop), (-hw, ftop - 0.0060)], fy0, fy1)
+        cyl_x(bm, y - 0.006, z0 + 0.0045, 0.0110, 0.0145, 0.0034, seg=16)                      # windage (right)
 
     def cut(bm):
-        prism_y(bm, [(-iw, sight_z - win_h), (iw, sight_z - win_h), (iw, sight_z + win_h - 0.003),
-                     (iw - 0.003, sight_z + win_h), (-iw + 0.003, sight_z + win_h), (-iw, sight_z + win_h - 0.003)],
+        iw = hw - 0.0024
+        prism_y(bm, [(-iw, sight_z - win_h), (iw, sight_z - win_h), (iw, sight_z + win_h - 0.0045),
+                     (iw - 0.0040, sight_z + win_h), (-iw + 0.0040, sight_z + win_h), (-iw, sight_z + win_h - 0.0045)],
                 y - 0.040, y + 0.040)                                                           # the window
-        for k in range(4):                                                                       # hood grip grooves
-            zz = z0 + 0.003 + k * 0.0032
-            if zz + 0.0012 < sight_z - win_h - 0.001:
-                rbox(bm, -half_w - 0.002, -half_w + 0.0007, y - 0.012, y + 0.016, zz, zz + 0.0012)
-                rbox(bm, half_w - 0.0007, half_w + 0.002, y - 0.012, y + 0.016, zz, zz + 0.0012)
-    part("optic_body", body, COL["optic"], "optic", node, bevel=0.0008, seg=2, angle=25, cut=cut)
+    part("optic_body", body, COL["optic"], "optic", node, bevel=0.0007, seg=2, angle=25, cut=cut)
 
-    def buttons(bm):
-        for xx in (-0.0055, 0.0055):
-            cyl_y(bm, xx, z0 + 0.0060, y - 0.0335, y - 0.0300, 0.0026, seg=14)
-    part("optic_buttons", buttons, COL["rubber"], "rubber", node, bevel=0.0005, seg=1)
-
-    def dot(bm):
-        cyl_y(bm, 0.0, sight_z, y + 0.0100, y + 0.0104, 0.00095, seg=12)
+    def dot(bm):                                          # on the lens plane, on the sight line
+        cyl_y(bm, 0.0, sight_z, y + 0.0080, y + 0.0084, 0.00095, seg=12)
     part("optic_dot", dot, (1.0, 0.05, 0.03), "dot", node, bevel=0)
 
 
@@ -1146,9 +1131,14 @@ def gun_ar(spec):
 def gun_breaker():
     """Pump-action 12 ga (Mossberg 590 / 870 lines) with a semi-pistol-grip stock."""
     bz = 0.088
+    # (2026-11-15 hold pass) the receiver's top is CROWNED: 45-degree shoulders fall from an
+    # 18 mm flat (the rib's seat) to the 35 mm flanks. At ADS the receiver is the lower sight
+    # picture 17-36 cm out; the old square top read as one flat dark slab under the ring. Now
+    # the eye looks down a narrow lit top that tapers in perspective into the barrel rib,
+    # with the shoulders shading off either side.
     def recv(bm):
-        prism_x(bm, [(-0.012, 0.030), (0.172, 0.030), (0.176, 0.040), (0.176, 0.104), (0.168, 0.112),
-                     (0.010, 0.112), (-0.012, 0.104)], -0.0175, 0.0175)
+        prism_y(bm, [(-0.0175, 0.030), (0.0175, 0.030), (0.0175, 0.100), (0.0090, 0.1120),
+                     (-0.0090, 0.1120), (-0.0175, 0.100)], -0.012, 0.176)
     def recv_cut(bm):
         rbox(bm, 0.012, 0.030, 0.060, 0.135, 0.068, 0.098)        # ejection port (right)
         rbox(bm, -0.010, 0.010, 0.050, 0.150, 0.020, 0.038)       # loading port (bottom)
@@ -1790,15 +1780,18 @@ A5_POSE = {
         ("L", (-0.050, 0.245, 0.012), (0.82, 0.48, -0.31), (0.35, 0.0, 0.94),
          {"elbow_world": (-0.55, -0.42, -0.72), "curl": (40, 70, 35), "thumb_rot": (0, 0, 5, 5)}),
     ],
-    # (2026-11-14 guns pass) elbows dropped: the forearms ran almost straight back at the
-    # eye (-0.74/-0.66 rearward), so at the hip the camera looked down the sleeves at the
-    # wrist cuffs — two dark tubes ending in tan "mittens". Steeper forearms show the
-    # backs and sides of the gloves from above, like the long guns' support hand.
+    # (2026-11-15 hold pass) a real two-handed duty grip: strong hand HIGH on the backstrap
+    # (web under the beavertail), forearm in line with the slide; the support hand on the
+    # off grip panel with its fingers wrapped over the strong hand's, thumbs forward along
+    # the frame. The arms run out at arm's length (posAds z -0.52, was -0.38), so the
+    # pistol reads as a pistol and the gloves shrink in the frame with it. Wrist bends
+    # (A4WRIST) 84/101 deg -> 38/45 deg; the old steep forearms hung the wrists off the gun.
     "pike": [
-        ("R", (0.028, -0.066, 0.004), (0.0, 0.90, -0.43), (-1.0, 0.0, 0.0),
-         {"index_curl": (8, 12, 6), "elbow_world": (0.34, -0.50, -0.80), "sleeve_r0": 0.034, "sleeve_r": 0.042}),
-        ("L", (-0.043, -0.026, 0.000), (0.1, 0.7, -0.7), (1.0, 0.0, 0.0),
-         {"elbow_world": (-0.44, -0.44, -0.78), "curl": (50, 70, 40), "thumb_rot": (0, 0, 5, 5),
+        ("R", (0.020, -0.066, 0.012), (-0.14, 0.95, -0.27), (-1.0, 0.0, 0.0),
+         {"index_curl": (4, 8, 4), "curl": (64, 86, 46), "thumb_rot": (8, 0, 4, 2),
+          "elbow_world": (0.20, -0.90, -0.38), "sleeve_r0": 0.034, "sleeve_r": 0.042}),
+        ("L", (-0.036, -0.032, -0.016), (0.36, 0.84, -0.40), (0.92, 0.0, 0.38),
+         {"elbow_world": (-0.30, -0.88, -0.36), "curl": (56, 76, 42), "thumb_rot": (4, 0, 2, 2),
           "sleeve_r0": 0.034, "sleeve_r": 0.042}),
     ],
 }

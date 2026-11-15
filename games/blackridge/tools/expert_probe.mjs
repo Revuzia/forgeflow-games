@@ -38,7 +38,7 @@ const SECS = parseFloat(argOf("--secs", "240"));
 const DIFF = argOf("--difficulty", "expert");
 const DET = argv.includes("--det");
 const JSON_OUT = argOf("--json", null);
-const WHY = argv.includes("--why"); const WHYM = new Map(); const WHYX = [];
+const WHY = argv.includes("--why"); const WHYM = new Map(); const WHYX = []; const FIRST = new Map();
 
 const S = await import(u("core/sim/sim.js"));
 const MATCH = await import(u("core/match/match.js"));
@@ -110,6 +110,7 @@ function runMatch(mapId, mode, seed) {
       const t = sim.state.time;
       for (const b of sim.state.bots) {
         if (!b.alive) { win.delete(b.id); lastHead.delete(b.id); stuck.delete(b.id); continue; }
+        if (WHY && !FIRST.has(b.id)) FIRST.set(b.id, t);
         const br = b._brain, sp = Math.hypot(b.vel[0], b.vel[2]);
         // path-following stuck: a path is active, the brain commands movement, < 0.3 m in 3 s
         let w = win.get(b.id);
@@ -143,9 +144,11 @@ function runMatch(mapId, mode, seed) {
             mv.idleWall++;
             if (WHY) {
               const o = b._obj, br2 = b._brain;
-              const k = `${b.state}|${o ? o.role + "/" + o.anchorKind + "/p" + (o.priority || 0).toFixed(2) : "-"}|clr${nav.clearAt(b.pos)}|${br2 && br2.arrived ? "arrived" : "notArrived"}|idle${br2 && br2.idleSinceT > 0 ? Math.min(9, Math.floor(sim.state.time - br2.idleSinceT)) : "-"}`;
+              if (!FIRST.has(b.id)) FIRST.set(b.id, sim.state.time);
+              const age = sim.state.time - FIRST.get(b.id);
+              const k = `${b.state}|${o ? o.role + "/" + o.anchorKind + "/p" + (o.priority || 0).toFixed(2) : "-"}|clr${nav.clearAt(b.pos)}|${br2 && br2.arrived ? "arrived" : "notArrived"}|idle${br2 && br2.idleSinceT > 0 ? Math.min(9, Math.floor(sim.state.time - br2.idleSinceT)) : "-"}|age${age < 1 ? "<1" : age < 3 ? "<3" : "3+"}|goal${br2 && br2.goal ? (br2.path ? "P" + br2.path.length : "noPath") : "-"}${br2 && br2.yielding ? "|yield" : ""}`;
               WHYM.set(k, (WHYM.get(k) || 0) + 1);
-              if (WHYX.length < 10 && sim.state.time > 20) { const bx = sim.world.capsuleBlocked(b.pos[0], b.pos[1], b.pos[2], 0.62, 1.7); WHYX.push({ t: +sim.state.time.toFixed(1), id: b.id, k, pos: b.pos.map((v) => +v.toFixed(2)), goal: br2 && br2.goal && br2.goal.map((v) => +v.toFixed(2)), anchor: o && o.anchor && o.anchor.map((v) => +v.toFixed(2)), box: bx && bx.id, goalClr: br2 && br2.goal ? nav.clearAt(br2.goal) : null }); }
+              if (WHYX.length < 12 && sim.state.time > (process.env.WHYT ? +process.env.WHYT : 20) && (!process.env.WHYK || k.includes(process.env.WHYK))) { const bx = sim.world.capsuleBlocked(b.pos[0], b.pos[1], b.pos[2], 0.62, 1.7); WHYX.push({ t: +sim.state.time.toFixed(1), id: b.id, k, pos: b.pos.map((v) => +v.toFixed(2)), goal: br2 && br2.goal && br2.goal.map((v) => +v.toFixed(2)), anchor: o && o.anchor && o.anchor.map((v) => +v.toFixed(2)), box: bx && bx.id, goalClr: br2 && br2.goal ? nav.clearAt(br2.goal) : null, mv: br2 && br2.mvActive, pathI: br2 && br2.pathI, wp: br2 && br2.path && br2.path[br2.pathI] && br2.path[br2.pathI].map((v) => +v.toFixed(2)), loot: br2 && br2.lootUntil > sim.state.time, detour: br2 && br2.detourUntil > sim.state.time, think: br2 && +(sim.state.time - br2.lastThinkT).toFixed(2), cmd: b.cmd && [+b.cmd.moveX.toFixed(2), +b.cmd.moveZ.toFixed(2)], yld: br2 && br2.yielding }); }
             }
           }
         }

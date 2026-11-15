@@ -1075,6 +1075,10 @@ export function makeSfx(env) {
     }
     if (d.hit && d.hit.pos && d.hit.surface) impact(d.hit, d);
     if (d.shooter === "P" && d.hit && d.hit.entity != null && !d.pen) {
+      // [feel v153] the KILLING round: the sim emits death BEFORE this shot, so
+      // onDeath() has already played the kill thock (which carries its own tick).
+      // Playing the hit tick as well flammed the two cues; the kill replaces it.
+      if (killCue.victim === d.hit.entity && Number.isFinite(t) && Math.abs(t - killCue.t) <= 0.07) return;
       const cue = feedbackFor(d, t, d.hit.part === "head");
       if (cue === 3) {
         // three or more pellets landed: a low "fat hit" under the tick
@@ -1427,6 +1431,7 @@ export function makeSfx(env) {
     env.ctx.suppress = Math.min(1, (env.ctx.suppress || 0) + 0.3);
   }
 
+  const killCue = { victim: null, t: -9 };
   function onDeath(d) {
     if (!d) return;
     if (d.victim === "P") {
@@ -1439,6 +1444,9 @@ export function makeSfx(env) {
     if (d.attacker === "P" && d.victim !== "P") {
       // kill thock (§4.1): heavier than the hit tick — see killThock()
       killThock(!!d.headshot);
+      // SIM time (the shot handler's t is sim time; audio.js hands death no t)
+      const sm = env.ctx && env.ctx.sim && env.ctx.sim();
+      killCue.victim = d.victim; killCue.t = sm && sm.state ? sm.state.time : -9;
     }
     if (d.victim !== "P" && d.pos) {
       const out = env.spatial(d.pos, 35);

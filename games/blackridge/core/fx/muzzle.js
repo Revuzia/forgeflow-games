@@ -41,6 +41,7 @@
 import * as THREE from "three";
 import * as WD from "../weapons/weapon_data.js";
 import { VM_LAYER } from "../weapons/viewmodel.js";
+import { botMuzzle } from "./muzzle_socket.js";
 
 const FIRST = WD.FIRST_SHOT ||
   { gapS: 0.5, flashScaleMult: 1.2, flashIntensityMult: 1.25, fullTracer: true };
@@ -601,6 +602,9 @@ export function makeMuzzle(env) {
       out[2] = o[2] + dir[2] * 0.5 + (rz / rl) * 0.1;
       return;
     }
+    // [feel v153] a bot's flash belongs on its GUN, not 0.6 m in front of its
+    // eyes (the sim fires from the eye): read the held model's muzzle socket.
+    if (botMuzzle(d.shooter, out)) return;
     out[0] = o[0] + dir[0] * 0.6;
     out[1] = o[1] + dir[1] * 0.6;
     out[2] = o[2] + dir[2] * 0.6;
@@ -647,9 +651,17 @@ export function makeMuzzle(env) {
       const P = (d.suppressed ? PROFILE.vesper : d.weaponId === "vesper" ? PROFILE_DEFAULT : PROFILE[d.weaponId]) || PROFILE_DEFAULT;
       const first = !!d.firstShot && !P.ignoreFirst;
       const isPlayer = d.shooter === "P";
-      const base = P.size
+      let base = P.size
         * (first ? (FIRST.flashScaleMult || 1.2) : 1)
         * (isPlayer ? 1 : P.botMult);
+      // [feel v153] a third-person flash seen from over the shooter's shoulder
+      // (kill cam, a teammate beside you) was sized for 10-40 m: at 1-3 m its
+      // side flare covered the shooter AND the shot. Shrink it up close.
+      if (!isPlayer && env.cam) {
+        const c = env.cam.position;
+        const dc = Math.hypot(_mz[0] - c.x, _mz[1] - c.y, _mz[2] - c.z);
+        if (dc < 3.5) base *= 0.4 + 0.6 * Math.max(0, (dc - 1) / 2.5);
+      }
       const pool = isPlayer ? poolVm : poolWorld;
       const dir = d.dir || [0, 0, 0];
       const hb = P.bright;

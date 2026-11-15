@@ -485,7 +485,11 @@ async function _prepWeaponProto(kind) {
 // guns, and measure the support-hand hold height off the geometry (same rule as above).
 function _prepAuthored(kind, m) {
   m.rotation.y = Math.PI;
-  const gripShiftZ = kind in WPN_GRIP_SHIFT ? WPN_GRIP_SHIFT[kind] : 0.06;
+  // [hold pass 2026-11-15] the authored guns sit at their TRUE grip: the bot's hold
+  // (core/chars/hold.js) places the gun from the body and IKs the palm onto the grip,
+  // so the old arm-clearance shift (+0.06 long guns, -0.045 for the Meshy pump gun)
+  // would only put the palm 6 cm off the grip.
+  const gripShiftZ = 0;
   m.position.set(0, 0, -gripShiftZ); // true grip at z = -shift (the convention _makeWorldModel undoes)
   m.updateMatrixWorld(true);
   const done = new Set();
@@ -514,7 +518,20 @@ function _prepAuthored(kind, m) {
     }
   });
   ys.sort((a, b) => a - b);
+  // muzzle: the mean of the farthest-forward 2 cm band (proto frame, +Z forward)
+  let mx = 0, my = 0, mn = 0;
+  m.traverse((o) => {
+    if (!o.isMesh) return;
+    const posA = o.geometry.attributes.position;
+    const step = Math.max(1, Math.floor(posA.count / 3000));
+    for (let i = 0; i < posA.count; i += step) {
+      wp.fromBufferAttribute(posA, i).applyMatrix4(o.matrixWorld);
+      if (wp.z > zF - 0.02) { mx += wp.x; my += wp.y; mn++; }
+    }
+  });
   const g = new THREE.Group();
+  g.userData.brKind = kind;
+  g.userData.brMuzzle = mn ? [mx / mn, my / mn, zF] : [0, 0.05, zF];
   g.userData.brHold = ys.length ? ys[Math.floor(ys.length * 0.25)] : 0.05;
   g.userData.brGripShiftZ = gripShiftZ;
   g.userData.brOneHand = WPN_ONE_HAND[kind] ? 1 : 0;   // the authored Pike is one-handed too

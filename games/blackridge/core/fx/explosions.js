@@ -612,12 +612,16 @@ export function makeExplosions(env, pools, decals) {
           continue;
         }
         _q.setFromAxisAngle(_X, -Math.PI / 2);
-        const s = Math.max(0.2, rSize[i] * u);
+        // [feel v153] a shock front decelerates: ease-out radius, and a fade that
+        // is gone well before it reaches full size — the linear 0.45 s ring read
+        // as a flat tan donut sliding across the street (tripmine kill cam)
+        const e = 1 - (1 - u) * (1 - u) * (1 - u);
+        const s = Math.max(0.2, rSize[i] * e);
         _p.set(rPos[i3], rPos[i3 + 1], rPos[i3 + 2]);
         _s.set(s, s, 1);
         _m.compose(_p, _q, _s);
         ring.mesh.setMatrixAt(i, _m);
-        const k = 1 - u;
+        const k = 0.65 * (1 - u) * (1 - u);
         _c.setRGB(rCol[i3] * k, rCol[i3 + 1] * k, rCol[i3 + 2] * k);
         ring.mesh.setColorAt(i, _c);
         touched = true;

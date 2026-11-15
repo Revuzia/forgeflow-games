@@ -68,7 +68,7 @@
     },
     {
       "path": "assets/chars/wpn3p_ar.glb",
-      "bytes": 45184,
+      "bytes": 45192,
       "kind": "generated",
       "license": "Original (authored procedurally in tools/a5_build_guns.py)",
       "source": "tools/a5_build_guns.py 3p:warden (2026-11-14: replaces the last-circle Meshy scan at this path)"

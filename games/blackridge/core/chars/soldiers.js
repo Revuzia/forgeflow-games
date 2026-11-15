@@ -28,7 +28,7 @@ import { SHAPE } from "../fx/grounding.js";
 // pistol | shotgun; weapon id -> kind via WPN_KIND (all five R4 ids).
 // ---------------------------------------------------------------------------
 import {
-  WPN_GLB, WPN_KIND, WPN_KINDS, prepWeaponProto, createSupportHandIK,
+  WPN_GLB, WPN_KIND, WPN_KINDS, prepWeaponProto, WORLD_WEAPON_INFO,
 } from "../weapons/world_weapon.js";
 
 import { CAMOS } from "../sim/attachments.js";
@@ -45,6 +45,11 @@ const _camoMat = new Map();        // material.uuid|camo -> tinted clone
 let _supGeo = null, _supMat = null;
 function muzzleOf(kind, wpn) {
   if (_muzzleOf.has(kind)) return _muzzleOf.get(kind);
+  // [hold pass] the bot proto's barrel runs along +Z (world_weapon.js), so the old
+  // "farthest -Z band" below found the BUTT and hung the can off the stock. The
+  // generated protos record their own muzzle (userData.brMuzzle, +Z frame).
+  const bm = wpn.userData && wpn.userData.brMuzzle;
+  if (bm) { const m = { x: bm[0], y: bm[1], z: bm[2], fwd: 1 }; _muzzleOf.set(kind, m); return m; }
   wpn.updateMatrixWorld(true);
   const inv = wpn.matrixWorld.clone().invert(); // points in the GUN's local frame
   let minZ = Infinity;
@@ -95,12 +100,83 @@ function dressWorldWeapon(wpn, kind, weaponId, build) {
       }
       const can = new THREE.Mesh(_supGeo, _supMat);
       can.name = "__3p_suppressor__";
-      can.position.set(mz.x, mz.y, mz.z - 0.075);
+      can.position.set(mz.x, mz.y, mz.fwd ? mz.z + 0.075 : mz.z - 0.075);
       can.castShadow = true;
       wpn.add(can);
     }
   }
 }
+// ---------------------------------------------------------------------------
+// [hold pass 2026-11-15] DEAD / DROPPED. A soldier who dies lets go of his gun:
+// the 3P model leaves the hand at its current world pose, falls and comes to rest
+// lying on its side. The sim already drops every gun but the pistol as LOOT at a
+// deterministic spot beside the corpse (core/sim/loot.js onDeath: 0.35 m at angle
+// id * 2.399963), and the loot renderer draws that item from the instant of death,
+// so the falling gun lands ON that spot and then hands over to the loot model
+// (hidden once landed). A pistol, or a body with no matching loot item (kill-cam
+// ghosts replay without loot), keeps its gun on the ground beside it.
+// ---------------------------------------------------------------------------
+const _dq0 = new THREE.Quaternion(), _dq1 = new THREE.Quaternion(), _dqz = new THREE.Quaternion();
+const _dY = new THREE.Vector3(0, 1, 0), _dZ = new THREE.Vector3(0, 0, 1);
+function startDrop(ctx, rec, bot, st) {
+  const w = rec.wpn;
+  if (!w || !w.parent || rec.drop) return;
+  w.updateWorldMatrix(true, false);
+  ctx.scene.attach(w);                       // keeps the world pose (and scale ~1)
+  w.position.z += 0;                         // (the fire kick lived in position.z)
+  const x0 = w.position.x, y0 = w.position.y, z0 = w.position.z;
+  const id = bot ? bot.id : rec.botId;
+  // the loot spot (loot.js onDeath), else a short toss to the shooter's right
+  let tx, tz, loot = false;
+  const wid = bot && bot.weapon ? bot.weapon.id : null;
+  if (bot && st && Array.isArray(st.loot) && wid && wid !== "pike") {
+    const ang = (id * 2.399963) % (Math.PI * 2);
+    tx = bot.pos[0] + Math.cos(ang) * 0.35; tz = bot.pos[2] + Math.sin(ang) * 0.35;
+    loot = true;
+  } else {
+    const ry = rec.yaw;
+    tx = x0 - Math.cos(ry) * 0.25 + Math.sin(ry) * 0.15;
+    tz = z0 + Math.sin(ry) * 0.25 + Math.cos(ry) * 0.15;
+  }
+  const gy = (ctx.colliders && ctx.colliders.groundY) ? ctx.colliders.groundY(tx, tz) : (bot ? bot.pos[1] : 0);
+  const info = wid && WORLD_WEAPON_INFO[wid];
+  const rest = gy + Math.min(0.07, ((info && info.width) || 0.06) * 0.5 + 0.004);
+  // flight time from the hand height with a small upward pop
+  const vy0 = 0.6, h = Math.max(0.05, y0 - rest);
+  const T = (vy0 + Math.sqrt(vy0 * vy0 + 2 * 9.81 * h)) / 9.81;
+  // final pose: barrel level, lying on its LEFT side (+X gun-left -> down),
+  // yawed the way the gun was pointing
+  _dZ.set(0, 0, 1).applyQuaternion(w.quaternion);
+  const yaw = Math.atan2(_dZ.x, _dZ.z) + (((id * 37) % 7) - 3) * 0.12;
+  const qEnd = new THREE.Quaternion().setFromAxisAngle(_dY, yaw)
+    .multiply(_dqz.setFromAxisAngle(_dZ.set(0, 0, 1), -Math.PI / 2));
+  rec.drop = {
+    t: 0, T, x0, y0, z0, tx, tz, rest, vy0,
+    q0: w.quaternion.clone(), q1: qEnd, loot, hideAt: T + 0.12,
+  };
+}
+function stepDrop(rec, dt) {
+  const d = rec.drop, w = rec.wpn;
+  if (!d || !w || d.done) return;
+  d.t = Math.min(d.T + 1, d.t + dt);
+  const u = Math.min(1, d.t / d.T);
+  w.position.set(
+    d.x0 + (d.tx - d.x0) * u,
+    Math.max(d.rest, d.y0 + d.vy0 * Math.min(d.t, d.T) - 4.905 * Math.min(d.t, d.T) * Math.min(d.t, d.T)),
+    d.z0 + (d.tz - d.z0) * u);
+  // tumble toward the resting pose (ease-in: it turns as it falls)
+  w.quaternion.slerpQuaternions(d.q0, d.q1, u * u * (3 - 2 * u));
+  if (d.t >= d.T) {
+    w.position.y = d.rest;
+    if (d.loot && d.t >= d.hideAt) { w.visible = false; d.done = true; }
+    else if (!d.loot) d.done = true;
+  }
+}
+function endDrop(rec) {
+  if (rec.drop && rec.wpn) rec.wpn.removeFromParent();
+  rec.drop = null;
+}
+
 function bodyBuild(bot) {
   const id = bot && bot.weapon && bot.weapon.id;
   const b = id && bot.kit && bot.kit.builds ? bot.kit.builds[id] : null;
@@ -448,6 +524,7 @@ export function createSoldiers(ctx) {
   function removeActor(botId) {
     const rec = actors.get(botId);
     if (!rec) return;
+    endDrop(rec);
     const G = grounding();
     if (G && rec.shadow >= 0) G.free(rec.shadow);
     rec.shadow = -1;
@@ -459,6 +536,7 @@ export function createSoldiers(ctx) {
     const G = grounding();
     for (const rec of actors.values()) {
       if (G && rec.shadow >= 0) G.free(rec.shadow);
+      endDrop(rec);
       rec.actor.dispose();
     }
     actors.clear();
@@ -521,6 +599,9 @@ export function createSoldiers(ctx) {
     // a crouched victim enters the fall where the hips pass his crouch height
     // (there is no crouch death clip in the budget) — never stands up to die
     rec.actor.playOnce(v, { fade: 0.09, timeScale: ts, fromHipsY: crouched ? 0.74 : null });
+    // [hold pass] the gun leaves his hand as he goes down
+    rec.dropAt = viewT + 0.12;
+    rec.dropBot = bot || null;
     // Bodies persist ≥ 20 s (VT §7 / D6 permanence): nothing here removes the
     // actor — it stays until its bot leaves sim.state (checkpoint restore) or
     // mission:start clears the cast.
@@ -659,6 +740,7 @@ export function createSoldiers(ctx) {
               rec.deathPlayed = true;
               rec.actor.lifeGain = 0;   // late-joined corpse: no life layer
               rec.actor.playOnce(b.anim === "death_b" ? "death_b" : "death_a", { fade: 0, timeScale: 1000 });
+              rec.dropAt = viewT; rec.dropBot = b;
             }
           }
         }
@@ -674,7 +756,7 @@ export function createSoldiers(ctx) {
         const actor = rec.actor;
 
         // ---- held-weapon model follows the sim (PVP racks change it mid-life)
-        if (bot.weapon && bot.weapon.id) {
+        if (bot.weapon && bot.weapon.id && !rec.drop && !rec.deathPlayed) {
           const want = WPN_KIND[bot.weapon.id] || null;
           if (want && want !== actor._wpnKind && wpnProtos[want]) {
             // attachWeapon() only ADDS a holder on the hand bone — it never
@@ -869,8 +951,12 @@ export function createSoldiers(ctx) {
         const flashing = viewT < rec.flashUntil;
         if (flashing !== rec.flashOn) { rec.flashOn = flashing; actor.setFlash(flashing); }
 
+        // ---- [hold pass] dead: drop the gun, then let it fall
+        if (rec.dropAt != null && !rec.drop && viewT >= rec.dropAt) startDrop(ctx, rec, rec.dropBot || bot, st);
+        if (rec.drop) stepDrop(rec, dtAnim);
         // ---- weapon fire kick (cosmetic; decays fast)
-        if (rec.wpn && rec.kick > 0.001) {
+        if (rec.drop) { /* the gun is on the floor */ }
+        else if (rec.wpn && rec.kick > 0.001) {
           rec.wpn.position.z = -0.02 * rec.kick;
           rec.kick *= Math.exp(-22 * dtAnim);
         } else if (rec.wpn && rec.wpn.position.z !== 0) {
@@ -907,17 +993,10 @@ export function createSoldiers(ctx) {
             actor.aimBlend(pitch, yawDelta, want);
           }
           actor.update(rec.skipAcc);
-          // One-hand-class weapon (the GS-9 Pike — every PVP bot's starting gun):
-          // the rifle clips leave the support hand ~0.19 m past a pistol's
-          // muzzle, so after the actor's own grip solve the left arm is IK'd
-          // onto the pistol grip (world_weapon.js createSupportHandIK).
-          if (rec.ik === undefined) rec.ik = createSupportHandIK(actor.root);
-          if (rec.ik) {
-            rec.ik.solve(rec.wpn,
-              bot.alive && !rec.deathPlayed && !actor.throwing &&
-                rec.wpn && rec.wpn.userData.brOneHand ? 1 : 0,
-              rec.skipAcc > 0 ? rec.skipAcc : dtAnim);
-          }
+          // [hold pass 2026-11-15] the pistol's support-hand IK (world_weapon.js
+          // createSupportHandIK) is retired: actor.js's weapon-first hold
+          // (core/chars/hold.js) solves both arms for every weapon, the Pike's
+          // two-handed wrap included.
           rec.skipAcc = 0;
         }
 

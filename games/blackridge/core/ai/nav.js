@@ -347,6 +347,9 @@ export function bakeNav(colliders, opts = {}) {
   // that axis (<= 0.3 m, same cell). Anchors were cell-quantised: switchyard's
   // 1.0 m rw_n_a / ya_3 gap was crossed 0.37 m off one face and 0.63 m off the
   // other (hug% hot spot: 741 of 4906 hug ticks on that one wall).
+  // free width of the lane each anchor sits in (min over the two axes), for
+  // the narrow-slit price below; 9 = not in a lane
+  const slitW = new Float32Array(nodeX.length).fill(9);
   {
     const LANE_W = 1.7, BAND = 0.36;
     const blocks = (b, y) => !(b.max[1] <= y + STEP + 0.01 || b.min[1] >= y + CLEAR_H || b.kind === "step");
@@ -367,6 +370,7 @@ export function bakeNav(colliders, opts = {}) {
           if (b.min[2] >= z0 - 0.01 && b.min[2] < hiZ) hiZ = b.min[2];
         }
       }
+      slitW[n] = Math.min(hi - lo, hiZ - loZ);
       let x = x0, z = z0;
       if (hi - lo < LANE_W) x = (lo + hi) * 0.5;
       if (hiZ - loZ < LANE_W) z = (loZ + hiZ) * 0.5;
@@ -723,6 +727,13 @@ export function bakeNav(colliders, opts = {}) {
   }
   const wallPen = new Float32Array(N);
   for (let i = 0; i < N; i++) wallPen[i] = clr[i] < WALL_PEN.length ? WALL_PEN[clr[i]] : 0;
+  // 2026-11: a slit barely wider than the 0.70 m capsule (lanternwalk's
+  // 0.72 m n_hoard_w / van gap) stays walkable, but A* prices each step into
+  // it at (1 + SLIT_PEN) x its length (~4.5 m extra per 0.75 m cell): a route
+  // squeezes through only when the way round is that much longer. Squeezing a slit grazes both faces every
+  // tick (nav_probe: one gap carried most of lanternwalk's hug% and skipWP).
+  const SLIT_W = 0.9, SLIT_PEN = 6.0;
+  for (let i = 0; i < N && i < slitW.length; i++) if (slitW[i] < SLIT_W) wallPen[i] += SLIT_PEN;
 
   mark("clearance");
   // ---- reachability: flood fill from seeds; unreachable floors dropped

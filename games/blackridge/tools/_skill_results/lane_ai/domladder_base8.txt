@@ -1,0 +1,8 @@
+lanternwalk dom    n=8 ended 8/8  held 65.9% (empty 34.1%)  flips/min 2.12  pts/min 57.5  owned 79.6%
+lanternwalk ladder n=8 ended 8/8  finished 8/8 @182s  top rung 11/11  knife-rung time 38 s/match, swings there 2.3/match  kills/min 23.7
+switchyard  dom    n=8 ended 8/8  held 80.4% (empty 19.6%)  flips/min 2.07  pts/min 57.7  owned 79.9%
+switchyard  ladder n=8 ended 8/8  finished 8/8 @191s  top rung 12/11  knife-rung time 28 s/match, swings there 2.6/match  kills/min 21.6
+saltmarket  dom    n=8 ended 8/8  held 85.2% (empty 14.8%)  flips/min 1.94  pts/min 60.6  owned 83.8%
+saltmarket  ladder n=8 ended 8/8  finished 8/8 @162s  top rung 11/11  knife-rung time 30 s/match, swings there 2.5/match  kills/min 26.4
+
+mode_probe  secs=240 seeds=8  AI avg 0.144 ms/tick  wall 200 s

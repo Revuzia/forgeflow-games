@@ -1,0 +1,21 @@
+
+lanternwalk tdm: 1304 trigger pulls, hit 33%; kills 78, mean TTK 1.45 s, median 0.67 s, pulls/kill 5.5
+  pulls with the muzzle->chest line BLOCKED by geometry: 41% (hit 23%; of those head in view 95%, nothing in view 2% of all pulls); target not in shooter's view: 0%; target crouched: 7%
+  shooter moving >1 m/s: 7% (hit 34%); target moving >2 m/s: 52% (hit 35%)
+  clear-line pulls by range: 0-8m 3% hit 64% | 8-15m 6% hit 46% | 15-25m 18% hit 52% | 25-40m 29% hit 31% | 40-60m 3% hit 14% | 60-+m 0% hit 0%
+  by weapon class: pistol 842 (hit 33%), shotgun 3 (hit 67%), ar 393 (hit 30%), smg 54 (hit 43%), dmr 12 (hit 42%)
+  while SEEING its target (sampled 10 Hz): firing 7%, reaction window 23%, burst pause 26%, reloading 4%, moving too fast to fire 10%, other (token / turn / gates) 31%
+
+switchyard tdm: 732 trigger pulls, hit 61%; kills 105, mean TTK 0.76 s, median 0.47 s, pulls/kill 3.4
+  pulls with the muzzle->chest line BLOCKED by geometry: 4% (hit 52%; of those head in view 66%, nothing in view 1% of all pulls); target not in shooter's view: 0%; target crouched: 1%
+  shooter moving >1 m/s: 7% (hit 59%); target moving >2 m/s: 51% (hit 61%)
+  clear-line pulls by range: 0-8m 20% hit 69% | 8-15m 36% hit 65% | 15-25m 33% hit 57% | 25-40m 7% hit 43% | 40-60m 0% hit 100% | 60-+m 0% hit 0%
+  by weapon class: pistol 510 (hit 60%), shotgun 16 (hit 88%), dmr 15 (hit 60%), ar 159 (hit 60%), smg 32 (hit 72%)
+  while SEEING its target (sampled 10 Hz): firing 5%, reaction window 46%, burst pause 21%, reloading 1%, moving too fast to fire 7%, other (token / turn / gates) 19%
+
+saltmarket tdm: 1085 trigger pulls, hit 49%; kills 122, mean TTK 0.64 s, median 0.37 s, pulls/kill 4.1
+  pulls with the muzzle->chest line BLOCKED by geometry: 11% (hit 13%; of those head in view 57%, nothing in view 5% of all pulls); target not in shooter's view: 4%; target crouched: 2%
+  shooter moving >1 m/s: 3% (hit 31%); target moving >2 m/s: 44% (hit 56%)
+  clear-line pulls by range: 0-8m 7% hit 79% | 8-15m 25% hit 55% | 15-25m 47% hit 52% | 25-40m 9% hit 42% | 40-60m 1% hit 7% | 60-+m 0% hit 0%
+  by weapon class: ar 379 (hit 58%), pistol 623 (hit 42%), smg 82 (hit 65%), shotgun 1 (hit 100%)
+  while SEEING its target (sampled 10 Hz): firing 8%, reaction window 41%, burst pause 24%, reloading 2%, moving too fast to fire 6%, other (token / turn / gates) 19%

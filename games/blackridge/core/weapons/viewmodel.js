@@ -900,8 +900,14 @@ export function createViewmodel(ctx) {
     const side = kickSide > 0 ? 1 : KICK.altRollMult;
     kickSide = -kickSide;
 
-    K.rotX.v += vmK * KICK.rotXPerKick * gv;          // muzzle climbs
-    K.posY.v += vmK * KICK.posYPerKick * gv;          // gun rides up
+    // (2026-11-15 hold pass) view.adsRiseMult: at full ADS the gun's CLIMB (pitch + rise) is
+    // scaled separately from its drive back, so a heavy kick (Breaker) goes back into the
+    // shoulder and the felt kick lives in the camera punch — the receiver no longer rises
+    // over the target. 1 (or absent) = unchanged.
+    const ar = (w.view && w.view.adsRiseMult != null) ? w.view.adsRiseMult : 1;
+    const gr = gv * (1 - adsEase * (1 - ar));
+    K.rotX.v += vmK * KICK.rotXPerKick * gr;          // muzzle climbs
+    K.posY.v += vmK * KICK.posYPerKick * gr;          // gun rides up
     K.posZ.v += vmP * KICK.posZPerPunch * gv;         // gun drives back into the eye
     K.rotZ.v += vmK * KICK.rotZPerKick * gv * side;   // torque roll, alternating
     K.rotY.v -= vmK * KICK.rotYPerKick * gv * side;   // opposite lateral swing

@@ -159,7 +159,10 @@ function runMatch(mapId, mode, seed) {
         if (a.kind === "human") continue;
         const tr = ms.tier ? ms.tier[a.actorId] : null;
         if (tr == null) continue;
-        if (tr > acc.topRung) acc.topRung = tr;
+        // tier === tiers.length once an operator FINISHES (ladder.js) - that is
+        // the last rung completed, not a rung of its own (was "top rung 12/11")
+        const trR = Math.min(tr, ms.tiers.length - 1);
+        if (trR > acc.topRung) acc.topRung = trR;
         if (ms.tiers[tr] && ms.tiers[tr].knife) { ev._onKnife.add(a.who); if (a.alive) acc.knifeS += DT6; }
       }
       acc.rungs = ms.tiers.length;

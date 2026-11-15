@@ -87,7 +87,7 @@ const HOLD_MAX = 1.2;           // overtime (no respawn): hold the end, then orb
 const SKIP_ARM = 0.3;
 // [fx v152] 0.40 -> 0.50 side, 0.10 -> 0.16 up: the killer's back filled the
 // middle third of the frame and his head sat on the line of fire
-const SHOULDER_BACK = 0.95, SHOULDER_SIDE = 0.50, SHOULDER_UP = 0.16;
+const SHOULDER_BACK = 0.95, SHOULDER_SIDE = 0.60, SHOULDER_UP = 0.22; // [integration v153] gun is at the cheek now
 const EYE_STAND = 1.62, EYE_CROUCH = 1.10;   // = core/sim/player.js MOVE
 const HIDE_POS = [0, -900, 0];  // where live actors are parked during a replay
 const FLASH_S = 0.16;
@@ -666,7 +666,11 @@ export function createKillCam(ctx) {
         dir: [a[o + S.DX], a[o + S.DY], a[o + S.DZ]],
         // [fx v152] every replayed round draws a tracer (the story is the shot)
         // EXCEPT a rocket launch: the rocket itself flies (grenadefx replay feed)
-        hit, tracer: (sf & SF.ROCKET) === 0, firstShot: (sf & SF.FIRST) !== 0, pellet,
+        // [feel v153] ...but only the KILLER's rounds (and every burst's first
+        // round, the live rule): with every bot's every round lit, the measured
+        // replay carried 9-16 tracers at once and the lethal shot drowned in them
+        hit, tracer: (sf & SF.ROCKET) === 0 && (slot === rp.killer || (sf & SF.FIRST) !== 0),
+        firstShot: (sf & SF.FIRST) !== 0, pellet,
         rocket: (sf & SF.ROCKET) !== 0, suppressed: (sf & SF.SUPP) !== 0,
         replay: true,
       };
@@ -1454,6 +1458,10 @@ body.kc-on #mh-killcam,body.kc-on #ld-root,body.kc-on #hud > *{visibility:hidden
     },
     isActive() { return driving; },
     isReplaying() { return mode === "replay" || mode === "final"; },
+    // [feel v153] the replay clock's advance THIS frame (rate-scaled; 0 while
+    // held/paused). fx.js ages the effects the replay re-emits on it, so smoke
+    // and sparks move at replay speed in the slow-motion stretch.
+    fxDt() { return rp.anDt; },
     setFailsafeMs(ms) { failsafeMs = Math.max(FINAL_FAILSAFE_MS, +ms || FINAL_FAILSAFE_MS); },
     skip() { if (replaying()) { skipReq = true; rp.wall = Math.max(rp.wall, SKIP_ARM); } },
     reset() {

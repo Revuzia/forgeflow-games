@@ -1135,6 +1135,20 @@ export function createHud(ctx) {
     threat.appendChild(a);
     arcs.push({ el: a, t: -9, deg: 0, live: false, dir: null, lastOp: "", lastTr: "" });
   }
+  // [feel v153] NEAR-MISS cue: the sim's `whiz` event (a hostile round passing
+  // within 3 m of your head) had only a sound and a vignette squeeze — no
+  // direction. A thin pale sliver of the same crescent, inside the red ring,
+  // flicks in on the side the round passed and is gone in 0.35 s. Pale, never
+  // red: red is damage, this is "you are being shot at".
+  const whizArcs = [];
+  for (let i = 0; i < 3; i++) {
+    const a = document.createElement("div");
+    a.className = "a10-arc a10-whiz";
+    a.innerHTML = `<svg viewBox="0 0 400 400"><path d="${arcPath}" fill="#e8e8e4" fill-opacity=".85" ` +
+      `stroke="rgba(0,0,0,.45)" stroke-width="1"/></svg>`;
+    threat.appendChild(a);
+    whizArcs.push({ el: a, t: -9, deg: 0, k: 0, pos: null, live: false, lastOp: "", lastTr: "" });
+  }
   root.appendChild(threat);
 
   // grenade warning ----------------------------------------------------------
@@ -1366,6 +1380,7 @@ export function createHud(ctx) {
     st.tallies.hitmarkers = 0; st.tallies.killfeed = 0;
     for (const r of feedRows) { r.live = false; r.el.style.opacity = "0"; }
     for (const a of arcs) a.live = false;
+    for (const w of whizArcs) w.live = false;
     hideDebrief();
   }
 
@@ -1415,6 +1430,19 @@ export function createHud(ctx) {
     for (const w of wedges) if (w.t < wslot.t) wslot = w;
     wslot.t = t;
     wslot.bearing = norm360((Math.atan2((d.dir || [0, 0, 1])[0], -(d.dir || [0, 0, 1])[2])) * DEG);
+  }
+
+  // [feel v153] near-miss crack: {pos, dist} from ballistics (dist < 3 m)
+  function onWhiz(d) {
+    if (!d || !d.pos) return;
+    const sim = ctx.sim(); if (!sim || !sim.state.player.alive) return;
+    const t = simNow();
+    const k = Math.max(0.25, Math.min(1, 1.15 - (d.dist || 0) / 3));
+    let slot = whizArcs[0];
+    for (const w of whizArcs) if (w.t < slot.t) slot = w;
+    slot.live = true; slot.t = t; slot.k = k;
+    slot.pos = slot.pos || [0, 0, 0];
+    slot.pos[0] = d.pos[0]; slot.pos[1] = d.pos[1]; slot.pos[2] = d.pos[2];
   }
 
   function onDeath(d) {
@@ -1785,6 +1813,19 @@ export function createHud(ctx) {
       if (os !== a.lastOp) { a.lastOp = os; a.el.style.opacity = os; }
       if (ts !== a.lastTr) { a.lastTr = ts; a.el.style.transform = ts; }
     }
+    // [feel v153] near-miss slivers: 0.35 s, inside the damage ring, pale
+    for (const w of whizArcs) {
+      if (!w.live) { if (w.lastOp !== "0") { w.lastOp = "0"; w.el.style.opacity = "0"; } continue; }
+      const age = t - w.t;
+      if (age > 0.35 || age < 0 || !p.alive) { w.live = false; w.lastOp = "0"; w.el.style.opacity = "0"; continue; }
+      const deg = relDegTo(sim, w.pos);
+      const alpha = 0.55 * w.k * (age < 0.08 ? 1 : 1 - (age - 0.08) / 0.27);
+      const sc = 0.80 + 0.06 * Math.min(1, age / 0.35);
+      const os = alpha.toFixed(2);
+      const ts = `rotate(${deg.toFixed(1)}deg) scale(${sc.toFixed(3)},${(sc * 0.94).toFixed(3)})`;
+      if (os !== w.lastOp) { w.lastOp = os; w.el.style.opacity = os; }
+      if (ts !== w.lastTr) { w.lastTr = ts; w.el.style.transform = ts; }
+    }
 
     // ---- grenade warning (§5.9: icon + direction arrow within 6 m).
     // [polish v149] reads the LIVE projectiles (view-only) so the arrow tracks
@@ -2078,6 +2119,7 @@ export function createHud(ctx) {
     attach(bridge) {
       bridge.register("shot", onShot);
       bridge.register("hurt", onHurt);
+      bridge.register("whiz", onWhiz); // [feel v153] near-miss direction cue
       bridge.register("death", onDeath);
       bridge.register("objective", onObjective);
       bridge.register("zonecap", (d) => zoneHud.onZone(d, simNow())); // [lane dom]

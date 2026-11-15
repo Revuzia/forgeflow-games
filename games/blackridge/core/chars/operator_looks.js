@@ -38,13 +38,17 @@ const GHOST_BASE = 900000, GHOST_SLOTS = 16;   // = core/render/killcam.js (slot
 
 // cloth: rgb tint on luminance, a = camo contrast (1 keeps the pattern, 0 = solid);
 // k = how far the cloth moves to the new palette (0 = the authored multicam)
+// (2026-11-15 hold pass) value spread widened for the 30 m read: recon and sharp lifted
+// (pale), breach and scout pushed darker, signal greener — one step each, so a squad
+// reads as six people at range without any look drifting toward a team colour (the
+// team read stays on the rim + armband + band accents, core/team_color.js)
 export const LOOKS = [
   { id: "line",   scale: 1.00, k: 0.00, top: [1, 1, 1, 1],          low: [1, 1, 1, 1],          skin: [1.00, 1.00, 1.00] },
-  { id: "recon",  scale: 0.97, k: 0.88, top: [1.42, 1.13, 0.78, 0.75], low: [1.30, 1.06, 0.76, 0.8], skin: [0.62, 0.50, 0.42] },
-  { id: "breach", scale: 1.04, k: 0.92, top: [0.62, 0.64, 0.68, 0.35], low: [0.52, 0.54, 0.58, 0.3], skin: [0.82, 0.74, 0.66] },
-  { id: "signal", scale: 1.00, k: 0.80, top: [0.78, 1.10, 0.62, 0.85], low: [0.70, 0.95, 0.58, 0.85], skin: [1.06, 1.00, 0.96] },
-  { id: "scout",  scale: 0.98, k: 0.86, top: [0.92, 0.98, 1.12, 0.9],  low: [0.62, 0.66, 0.76, 0.8], skin: [0.46, 0.37, 0.31] },
-  { id: "sharp",  scale: 1.02, k: 0.85, top: [1.10, 1.12, 0.72, 0.5],  low: [1.30, 1.12, 0.86, 0.6], skin: [0.92, 0.86, 0.80] },
+  { id: "recon",  scale: 0.97, k: 0.90, top: [1.58, 1.26, 0.86, 0.75], low: [1.40, 1.14, 0.80, 0.8], skin: [0.62, 0.50, 0.42] },
+  { id: "breach", scale: 1.04, k: 0.94, top: [0.50, 0.52, 0.56, 0.35], low: [0.44, 0.46, 0.50, 0.3], skin: [0.82, 0.74, 0.66] },
+  { id: "signal", scale: 1.00, k: 0.84, top: [0.72, 1.14, 0.56, 0.85], low: [0.66, 0.98, 0.54, 0.85], skin: [1.06, 1.00, 0.96] },
+  { id: "scout",  scale: 0.98, k: 0.88, top: [0.84, 0.90, 1.04, 0.9],  low: [0.54, 0.58, 0.68, 0.8], skin: [0.46, 0.37, 0.31] },
+  { id: "sharp",  scale: 1.02, k: 0.87, top: [1.24, 1.24, 0.80, 0.5],  low: [1.40, 1.20, 0.92, 0.6], skin: [0.92, 0.86, 0.80] },
 ];
 export const LOOK_COUNT = LOOKS.length;
 const FLATTEN_REF = 0.075;   // linear luminance a solid-colour cloth settles on

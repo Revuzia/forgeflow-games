@@ -102,7 +102,22 @@ export function assign(ctx) {
     return n;
   };
   const contactsNear = (z) => (ctx.gid ? api.comms.contactWeightNear(ctx.gid, t, z.pos[0], z.pos[2], CONTACT_NEAR_M) : 0);
-  const threatened = (z) => z.owner === team && (z.contested || (z.capTeam === enemy && z.prog > 0));
+  // 2026-11: a held zone is also threatened the moment a team-mate dies on
+  // it (public killfeed, the last 8 s): the holder was shot from outside the
+  // ring, and the attackers walk in next. Responders used to be sent only once
+  // the enemy bar was already filling — 5 s to neutralise, and they arrived
+  // after it (dom_probe: most lost zones were "holder killed").
+  const holderLost = (z) => {
+    for (const d of api.deathRing) {
+      if (d.team !== team || t - d.t > 8) continue;
+      if (api.hdist(d.pos, z.pos) <= z.r + 4) return true;
+    }
+    return false;
+  };
+  // under attack NOW (contested / enemy bar filling): the holder's own hot
+  // posture; threatened (+ a holder just lost): the slot table's responders
+  const underAttack = (z) => z.owner === team && (z.contested || (z.capTeam === enemy && z.prog > 0));
+  const threatened = (z) => underAttack(z) || (z.owner === team && holderLost(z));
 
   // the zone the human is working (teammates come and help)
   let humanZone = null;
@@ -301,7 +316,7 @@ export function assign(ctx) {
       continue;
     }
     // defend / respond: a spot inside our ring, facing the enemy's side
-    const hot = threatened(z);
+    const hot = underAttack(z);
     let spot = ringSpot(z, k, hot ? 1.5 : 2.4, enemyRef[0], enemyRef[2]);
     // where inside the ring: a cover node inside it that hides the holder
     // from the enemy's side, if the ring has one (k-th best, so two holders
