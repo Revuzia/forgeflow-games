@@ -80,3 +80,4 @@ comes by itself; it needs pride seeded or a god act.
   The full 40 -> 80 form (ARC_LONG=1) was not re-run after the fix (about 50 min); the first-differing day was 200 in it, and
   that day is now clean.
 - The default test is now the short form (~60-75 s on a loaded box; save y5, end y8).
+- Final gate: slot.sh npm run check EXIT 0 (detban, typecheck, 1004 tests pass); npm run build see report.
