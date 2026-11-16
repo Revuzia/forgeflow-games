@@ -1430,8 +1430,10 @@ try {
         const best = (a) => [...a].sort((x, y) => x - y)[0];
         const rLite = best(l.sixLite) / best(l.two), rFull = best(l.sixFull) / best(l.two);
         PG.lite = { ...l, rLite, rFull };
-        check(l.liteVerts === 2562 && rLite <= 1.2, 'RD-06: 6 pieces (chunks on the lite 2562-vertex mesh) vs 2 wholes frame ratio at most 1.2 (SwiftShader, best of 3)',
-          `lite x${rLite.toFixed(3)} (chunks not lite x${rFull.toFixed(3)}), chunk vertices ${l.liteVerts}`);
+        // (round 2, the orchestrator's RD-06 option a: a lite piece of a quarter of the body or less draws 1442 vertices, a bigger one 2562;
+        // the six test pieces are sixths. The bar is unchanged.)
+        check(l.liteVerts === 1442 && rLite <= 1.2, 'RD-06: 6 pieces (sixths: chunks on the lite 1442-vertex mesh, no halo quad) vs 2 wholes frame ratio at most 1.2 (SwiftShader, best of 3)',
+          `lite x${rLite.toFixed(3)} (chunks not lite x${rFull.toFixed(3)}), chunk vertices ${l.liteVerts}, draw calls two ${l.calls[0]} / six lite ${l.calls[1]} / six full ${l.calls[2]}; ms two ${l.two.map((v) => v.toFixed(1))}, six lite ${l.sixLite.map((v) => v.toFixed(1))}`);
       }
       if (ON('homeview')) {
         const cam = await gp.evaluate((sp) => window.__RV__.pg.cameraAutonomy(sp), SPECIES);

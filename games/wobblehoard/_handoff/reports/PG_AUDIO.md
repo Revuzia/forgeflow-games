@@ -211,3 +211,100 @@ sound like, then what counts as WRONG.
   audio is never told the tier (LIFE's attention applies the phone caps).
 - The yarn ball and the felt ball share one ball voice (`prop` carries no size).
 - Nothing has been listened to. The first-listen checklist above is for the verifier and the owner.
+
+---
+
+# Round 2 (engineer 3, 2026-11-16; scope: S2 and S3 audio in my lane)
+The cut-off round-2 engineer left nothing at HEAD 7efee6677 (no audio file, no report line changed since 8dc806641): I started from
+round 1's state. Constraint for this run: no edit under src/physics, src/shell, src/ui, src/input or vite.config.ts (requests below).
+
+## Round 2 status table (update after every step)
+| Step | What | State |
+|---|---|---|
+| R2-1 | contract (PLAYGROUND audio block, additive, optional): `prop.size`, `creature.echoes`, `setAmbience.weather`; docs for the held kinds and the place key | DONE, tsc clean |
+| R2-2 | music.ts: `MusicStyle` gains optional `tau`, `echo`, `thin` (absent = today's note: `home` unchanged); styles shore, ridge, garden, bath, bench, roof, hollow, cloud; ROOM_KINDS `thing` | WRITTEN, tsc clean |
+| R2-3 | `src/audio/things.ts` (away chunk, re-exported by ambience.ts): chime, bell, splash, crunch, rustle, boing, tick, whoosh strikes + `heldNoise` (rustle / whoosh held, dead-man) | WRITTEN, tsc clean |
+| R2-4 | ambience.ts: 8 new recipes in RECIPES, `AMB_ALIAS` (PlaceDef.ambience ids -> place ids), `AmbEnv.barAt` for recipes, `weather()`, helpers `layer`, `WeatherClock`, `patterCurve` | WRITTEN, tsc clean |
+| R2-5 | places/ripple.ts, frostbell.ts, rainleaf.ts (S2), fizzwell.ts, cogwhistle.ts, lanternroof.ts, echohollow.ts, cloudloft.ts (S3) | WRITTEN, tsc clean |
+| R2-6 | life_voices.ts: prop() routes every PROP_SOUND kind (strikes; rustle / whoosh held); tick on the music's eighth grid; `size` to the ball; `echoes: 2` second repeat; engine: away() exposes STRIKE / heldNoise, AmbHost.barAt, setAmbience weather | WRITTEN, tsc clean |
+| R2-7 | props.ts ballBump: size sets pitch (0.22/r)^2 and length (felt 230 Hz, yarn 193 Hz) | WRITTEN, tsc clean |
+| R2-8a | probe_chatter: 10 new rows (IDS: every PROP_SOUND kind has a voice, every thing sound in the place data has one, every place's ambience and music id resolve; PITCH: data notes D pentatonic, snap within a semitone; STYLE: 10 styles keep FIELD_NEXT's drifts, each favours its fields, home has no tau/echo/thin, ridge thins 34.9%; AMB: WeatherClock 9..14 s and the shell's 30 s lead, patter curve 213 ticks for 240 asked) | DONE: `node _harness/probe_chatter.ts` **42/42 ok** |
+| R2-8b | life_checks.mjs `r2Checks`: THINGS (7 rows), ECHO (1) | DONE 1st run: **9/9 PASS** (THINGS, ECHO, page), port 5367 freed. The auto-budget row then rewritten to count admitted strikes from the engine's throttle counter (onsets cannot be counted under 2.5 s bell rings: the first version measured 2 onsets, a meaningless pass) |
+| R2-8c | `--only=BOX,STYLE2,THINGS` run: **12/12 PASS** (STYLE2: home set explicitly diff 1.86e-7; the 8 styles -0.9..+1.1 dB of home's level, peaks -18.1..-15.3 dBFS; THINGS auto budget 50 of 320 admitted). BOX found a real bug: the Music Box tune clamped steps +2 and +3 onto D7 (bars 2 and 4: 93 98 98 98 95). **Fixed** in props.ts (anchor E6 instead of A6), and BOX now also checks the written contour and, with the music on from 30 s, each note against the scale of the field musicClock says is sounding | DONE |
+| R2-8d | `--only=BOX,AMB2,AU-03` run 1: **11/19**. PASS: BOX 3/3 after the fix (25 notes on D pentatonic, contour as written; music on from 30 s over fields 0 and 2, every note in its field's scale), the weather rows (Frostbell gust +21.4 dB, Rainleaf shower off -11.3 dB), AU-03 ripple (12.2 dB / 12.8 LU) and rainleaf (32.1 / 16.6), the cabin AU-03. Every bed is 14.3..23.3 dB under the music (RMS) and audible (-45.3..-54.3 dBFS). FAIL: 7 beds' node count (+17..+31 against a bar of 14) and AU-03 over Frostbell (K 8.5 LU, toss, in a gust) | DONE |
+| R2-8e | fixes: (1) the node rows were partly the harness: the page's node counters are module-wide and a render that ends with sources still scheduled leaves its count behind (a scratch run showed cloudloft at a constant 9 nodes for 225 samples, where the row said +17), so each bed is now measured against a no-bed run made right before it (same bar, 14); (2) a real excess: drips, pops and the shore's fizz made 2 nodes a bubble 0.4 s ahead (ripple peaked at +21..+31): they now share one `BubbleChannel` per bed (1 oscillator + 1 gain for the bed's life, each bubble an automation); the bench's rare spring is 2 nodes instead of a 6-node boing; (3) Frostbell gust peak -21 -> -25 dB (AU-03 K) | WRITTEN, tsc clean |
+| R2-8f | re-run `--only=AMB2`: **14/14 PASS**. Beds under the music (RMS / K): ripple -15.4/-14.8, frostbell -20.3/-17.4, rainleaf -21.3/-17.8, fizzwell -19.3/-18.7, cogwhistle -23.5/-25.1, lanternroof -14.3/-13.8, echohollow -19.8/-20.2, cloudloft -17.9/-15.1 dB (bar -6); bed levels -45.3..-54.5 dBFS RMS; nodes over the no-bed run +9..+14 (lanternroof +14 = 9 steady + a 5-node paper rustle; bar 14). Frostbell follows the shell's gust +17.3 dB; Rainleaf shower off -11.3 dB. AU-03 over the S2 beds (18 placements each, weather on at 6 and 20 s): ripple 12.2 dB / 12.8 LU, rainleaf 32.3 / 16.6, frostbell 17.0 / 12.6 | DONE |
+| R2-9 | full `probe_audio.mjs --port=5367` regression | running (port 5367 held) |
+| R2-9 | full `probe_audio.mjs --port=5367` | pending |
+
+## Round 2 sizes (14.3 one-file rolldown, minified ES, imports external; `scratchpad/pg_audio/size.mjs`; measured after R2-7)
+(Re-measured after R2-8e: ambience.ts 7 142 (+680, BubbleChannel), so the away chunk's audio is 12.4 KB; places/ripple 1 000, rainleaf 804,
+fizzwell 883, cogwhistle 1 389 (its own 2-node spring), echohollow 614; engine, music, life voices unchanged.)
+| Module | Bytes | Chunk |
+|---|---|---|
+| engine.ts | 16 560 (HEAD-before-PLAYGROUND 13 641, +2 919; round 1 +2 766) | first load |
+| chain.ts | 2 462 (+468, unchanged this round) | first load |
+| music.ts | 17 425 (+2 471; round 1 +1 314: the 8 styles and tau / echo / thin add 1.16 KB) | first load |
+| **first-load share** | **5 858 B = 5.7 KB of the 8 KB cap** (round 1: 4.4 KB) | |
+| life_voices.ts 5 793 (+808: the thing routing, the held kinds, echoes), creature.ts 6 048, props.ts 4 982 | **16.8 KB** | the life voices lazy chunk (T1 must name it; round 1's request stands) |
+| ambience.ts 6 462 (+1 786: 8 recipe entries, AMB_ALIAS, weather, helpers) + things.ts 5 222 (new) | **11.7 KB** of the away chunk's 90 (with render's 7.9 KB: 19.6 KB) | away |
+| places/ripple 975, frostbell 1 200, rainleaf 779, fizzwell 858, cogwhistle 889, lanternroof 784, echohollow 588, cloudloft 739 | 0.6..1.2 KB each | each place's own chunk (budget 4 to 6 KB: under it; the shared pieces live in the away chunk) |
+
+## Round 2 contract additions (src/contracts.ts PLAYGROUND audio block; additive, optional; tsc clean)
+- `prop(p).size?`: the thing's size in m (a ball its radius, THINGS size[0]): felt ball 0.22 -> 230 Hz, yarn ball 0.24 -> 193 Hz (pitch
+  (0.22 / r)^2, body length (r / 0.22)^2): measured 234 / 196 Hz, 3.07 semitones apart. The doc also names the held kinds (ball roll, creak,
+  rustle, whoosh with `key` + `held`); every other kind is a strike.
+- `creature(p).echoes?`: 2 while the Echo Stone is on (PLACES 4.9 "every voice echoes twice"): a second scheduled repeat at +440 ms, 12 dB
+  under the first (measured 440.2 ms, -12.0 dB); no DelayNode. The backstop counts such a phrase as 2 voices (one echo: 1.5).
+- `setAmbience(p).weather?`: 0..1, the place's weather event starting now (a Wind Gap gust, a Surf Edge wave, the Rainleaf shower on 1 /
+  off 0, the Fizzwell Tap running 1 / off 0, a Lanternroof or Cloudloft gust). Without it each recipe keeps its own seeded timer (the
+  physics everyS ranges from the place data); after one, the shell leads for 30 s. The place key may be the place id or PlaceDef.ambience.
+
+## Round 2 requests to other lanes (I may not edit src/shell, src/physics, src/ui, src/input, vite.config.ts this run)
+- **PG_SHELL:** (1) `prop({ ..., size: thing.size[0] })` for every ball (felt, yarn, pebble, cloud, steel marble) so balls sound apart;
+  (2) every `drainStrikes` quad to `prop({ kind: thing.sound, intensity, note: thing.notes[part], auto: cause !== 0, pan })` (chimes, bells,
+  crystals: `note` = that part's MIDI note; pads: kind boing); (3) held motion every frame while it moves: the Shake Pine `prop({ kind: 11
+  rustle, key: prop, held: speed 0..1 })`, the slides and rides (Glide Ramp, Soap Slide, Stone Slide, Swirl Ride, Updraft) `prop({ kind: 12
+  whoosh, key, held })`; a splash on each water entry `prop({ kind: 4 })`, a snow print `prop({ kind: 5 crunch, auto: true })`; the cogs
+  and the wind-up key `prop({ kind: 9 tick })` (audio puts it on the music's eighth grid); (4) `setAmbience({ weather })` when physics starts
+  a gust or a wave, and 1 / 0 when the Rainleaf shower or the Fizzwell Tap turns on / off; (5) `creature({ echo: true, echoes: 2 })` while
+  the Echo Stone's 20 s run, `echo: true` everywhere else in Echo Hollow; (6) `loadAmbience(place.id)` (or place.ambience) when the place
+  opens, `setMusicStyle(place.music)` on arrival; (7) a cold place's voice pitch x 2^(-1/12) (Frostbell) as round 1 said.
+- **PG_PHYSICS:** nothing new needed; `drainStrikes` causes 0 / 1 / 2 are what audio's budget keys on. If a gust or a wave start could be
+  read (an event or a phase), the shell can forward it as `weather`.
+- **Orchestrator (T1, vite.config.ts):** name the life voices chunk (16.8 KB now) as round 1 asked; the away chunk now holds
+  `audio/things.ts` too (imported by `audio/ambience.ts`); the eight new `audio/places/<id>.ts` are one dynamic import each from
+  `ambience.ts` and belong with their place chunk.
+
+## First-listen checklist, round 2 additions (nobody has heard any of these; for the verifier and the owner)
+- **chime** (Shell Chimes D5 E5 F#5 A5 B5; Singing Crystals): a clear, glassy "ting" ringing about 1.5 s, a slightly metallic overtone
+  that dies first. WRONG: out of tune with the music, a doorbell, a hard click at the strike.
+- **bell** (Icicle Bells A4 D5 E5 A5; the Little Bell): rounder and longer than the chime (about 2.5 s), softly bright. WRONG: a church
+  bell, a sour (minor-third) bell colour, a ring that sounds after the music has moved on for many seconds.
+- **splash**: a short watery "splsh" falling in pitch, then a few tiny bubble blips. WRONG: a toilet flush, white-noise hiss, a long tail.
+- **crunch**: dry snow under a step, 0.1..0.2 s of small grains. WRONG: gravel, paper crumpling, a click train.
+- **rustle**: leaves or a pine branch shaken, a high soft flutter; held while the Shake Pine shakes, stopping when it stops. WRONG: radio
+  static, a steady hiss, a creature scurrying.
+- **boing**: a soft low spring "boing" that dips and wobbles back, with a little puff of air. WRONG: a cartoon sproing, a buzzy twang.
+- **tick**: a small clean clock tick, alternating tick / tock, landing on the music's beat. WRONG: a metronome beep, a tick off the beat.
+- **whoosh**: air rising and falling over about a second; held, following a slide or a ride. WRONG: a jet, a sweep that sounds synthetic.
+- **The felt ball and the yarn ball:** both soft thuds; the yarn ball a little lower and fuller. WRONG: indistinguishable, rubbery.
+- **The Echo Stone:** for 20 s each voice comes back twice, the second softer and darker. WRONG: more than two repeats, flanging.
+- **Music Box tune (fixed this round):** the tune sits around E6 now and keeps its shape (round 1's version repeated its top note D7
+  in bars 2 and 4). WRONG: a phrase stuck on one high note.
+- **Ripple Shore:** slow low surf, a wave every 7..10 s, a faint fizz as it draws back, a quiet wandering breeze. No gulls. WRONG: a
+  storm, a loop you can hear, any bird.
+- **Frostbell Ridge:** near silence with a faint high air, a gust every 9..14 s, rarely a far, soft bell note. WRONG: a howling wind, a
+  constant hiss, the far bell out of key.
+- **Rainleaf Garden:** dense soft rain patter, drips like small bubbles, a leaf rustle; the patter fades when the shower stops (on 40 s,
+  off 30 s). WRONG: frying-pan sizzle, frogs, a hiss with no texture.
+- **Fizzwell Tub:** soft lapping, bubble pops; the Tap's stream only while it runs. WRONG: a bathroom echo, a drain gurgle.
+- **Cogwhistle Bench:** a soft clock ticking on the music's beat, a faint lamp hum on low D, a rare soft spring. WRONG: a hum that buzzes
+  or beats against the music, ticks drifting off the beat.
+- **Lanternroof:** night gusts, paper lanterns rustling with them, a very low far city hum. WRONG: cars, horns, sirens, a rumble that
+  sounds like traffic.
+- **Echo Hollow:** drips with two echoes each, a very quiet cave tone on D. WRONG: a drone louder than the drips, a metallic echo.
+- **Cloudloft:** a high, soft wind and slow whooshes. WRONG: a gale, a jet.
+- **Music styles:** shore and cloud lighter (more lift / glow chords), ridge sparser (about a third of the mallet notes rest), garden
+  homely, bath rounder (a softer top), bench drier (no mallet echo, shorter), roof soft and dusky, hollow long tails and a fuller echo.
+  WRONG: any key or tempo other than Home's (D, 66 BPM), a style you cannot tell from Home after a minute.

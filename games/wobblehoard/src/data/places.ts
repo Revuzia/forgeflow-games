@@ -57,7 +57,8 @@ export interface ZoneDef extends Area { readonly id: string; readonly kind: numb
  *  [r, half thickness, 0]; a pool [r (or hx), surfaceY, 0 (or hz)]; mech 0 (a patch or zone thing) its area [r, 0, 0] or [hx, 0, hz].
  *  A ramp slopes DOWN toward its local +x (yaw points downhill): its top (where the player sets a rider) is at local -x, its foot at +x.
  *  A thing of several parts (chimes, bells, crystals, lanterns: p.n parts spaced evenly over p.span metres along its yaw axis; the puff pads:
- *  p.x1, p.z1, p.x2, p.z2 for parts 1 and 2) keeps its parts in that order (PropWorldLike's prop order). p holds the mechanism parameters
+ *  p.x1, p.z1, p.x2, p.z2 for parts 1 and 2) keeps its parts in that order (PropWorldLike's prop order); a row with p.curve bows that many
+ *  metres toward its local +z at the middle (a parabola; the Singing Crystals curve toward the room). p holds the mechanism parameters
  *  (MECH_RANGES' names; angles in degrees). useSpot: where a body stands to use it (a ring: its inner spot; the swing and rides: their
  *  riders' spots come from p.rider or the seat); peek: S13's two spots [lx, lz, rx, rz]; push: a swing's S11 push spot. */
 export interface ThingDef { readonly id: ThingId; readonly place: PlaceId; readonly mech: number; readonly x: number; readonly z: number; readonly yaw: number;

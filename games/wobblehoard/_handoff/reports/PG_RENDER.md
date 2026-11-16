@@ -181,3 +181,50 @@ first move something out (for example the place framing's camera branch, or `Tab
 - 10:22 baseline tsc exit 0. 10:37 step 1 written. 10:41 node 27/27. 10:47 browser run 1 (emote, pose, homeview): 19 ok, RD-06 FAIL.
 - 10:50 looks and setPlayBounds; tsc briefly red from `src/audio/ambience.ts` (PG_AUDIO's file, being written), clean a minute later.
 - Places: run 2 (dark cabin), run 3 (spot pool), run 4 (pink room), run 5 (palette fixed), run 6 = final sweep, 23 ok / 3 FAIL.
+
+## Round 2 (engineer 2 of round 2, started 2026-11-16 15:48 UTC from HEAD 7efee6677)
+No render-lane file changed since 8dc806641 (`git log -- src/render _harness/renderview _harness/browser_render.mjs`): the cut-off first
+round-2 engineer left no render edits, so this round starts from round 1's tree. Baseline tsc exit 0.
+Scope (orchestrator): RD-17 framing re-stated (body CENTRES plus radius inside the safe insets; a bubble is not part of the fit and is clamped
+on screen into the safe frame instead); chunk naming (lifelook.ts with the life chunk, place.ts with the away chunk, places/<id>.ts each its own);
+(1) RD-06; (2) cabin luminance toward 0.20 and a clear marshmallow toast; (3) reaction-cell particle presets as stage members, EMOTE style 3;
+(4) S2 places Ripple Shore, Frostbell Ridge, Rainleaf Garden; (5) re-run gallery, ceremony, flash and cut sections once on the final tree.
+Constraint: nothing under src/physics, src/shell, src/ui, src/input or vite.config.ts is edited this round (requests go below).
+
+| # | Step | State | Evidence |
+|---|---|---|---|
+| R0 | read brief, report, other lanes' requests | done 15:48 | |
+| R1 | RD-17 re-stated and implemented (node): framing by body CENTRES plus radius, the bubble clamped on screen with its tail turned to its body, the place lens rule; EMOTE style 3 | done 16:25 (node 35 ok / 0 FAIL; browser rows re-stated, run below) | below |
+
+### R1. RD-17: the orchestrator's model, as built (and the one thing it needed beyond the model)
+**Model (re-stated RD-17 rows, `src/render/placeview.ts` header and node N6):** for a body whose CENTRE stands anywhere in the bounds, the
+column from the ground under it to its top (2 x R, R = the largest body's 0.625) lies inside the HUD safe insets; laterally the centre does
+(a body at a side edge may sit up to half its width past the side inset). A bubble is not in the fit: `emotes.ts` clamps it into the safe frame,
+where it slides along the edge (held down by the top inset it also slides toward the frame's middle, off its body's face, by as much as it
+was pushed, at most 2.4 radii) and its tail, or a wish's trailing dots, turns to point at its squishy (new instanced attribute `iT`; exactly
+0 when the bubble is not displaced, so undisplaced bubbles are today's pixels). **Written reason:** whole bodies cannot meet the bars on the
+tall layout: the front row spans the bounds plus one body's width in the 314 px between a phone's side insets, so a 1 m squishy is at most
+314 / (2.5 + 2 x 0.5) = 89.7 px there (node N6e), under the 100 px bar whatever the pitch, aim or distance.
+**The lens (needed beyond the model, my decision, please confirm):** on the WIDE layout at 1280 x 800 the model gives only 135.4 px at
+mid-depth with the stage's 35 degree lens (bar 150): there the middle row is 2.4 m behind the front row, and perspective (not the fit) binds.
+Every model I tried tops out under 150 at 35 degrees (centres only 138.5, ground and centre only 147.8; only the bare floor rectangle with no
+body height at all reaches 154.5). So `fitPlace` takes the WIDEST lens of [35, 30, 26, 23, 21, 19] degrees whose best framing meets RD-17's
+bars with a 1% margin (the live camera eases onto the fit), else the stage's 35 degrees; the stage sets `camera.fov` from the fit in a place
+and back to 35 at Home (Home's lens never changes). Results (node N6, assumed insets): **tall 390 x 844: 35 deg, pitch 0.35, 14.0 m: 120.6 px
+front / 96.2 px mid (bars 100 / 80); wide 1280 x 800: 19 deg, pitch 0.50, 16.0 m: 176.4 front / 152.6 px mid (bar 150)**; every wider lens
+misses (35: 135.4, 30: 139.9, 26: 144.4, 23: 147.6, 21: 150.1 under the 1% margin). The fit takes about 30 ms a lens (node), at most six
+lenses, memoised for the last four frames. The look at 19 degrees is flatter (a long lens): judged on the screenshots below.
+**EMOTE style 3** (LIFE's WISH_DOT): `emote(..., style 3, ...)` now draws the wish as its 14 px still dot (it was clamped to style 2, a group
+bubble). Node N3i (clamp and tail), N3j (style 3).
+| R2 | RD-06: a lite piece of a quarter of the body or less draws the frequency-12 mesh (1442 vertices; 2562 above a quarter), and a lite chunk draws no core halo quad (its glow stays in the jelly's analytic halo) | done 16:47: **x1.139 / x1.157 / x1.149 in 3 runs (bar 1.2)** | below |
+
+### R2. RD-06 (the report's options a and c; the bar is unchanged)
+`src/render/bodyview.ts` `fineFreqFor` (a lite body: frequency 12 at frac <= 0.25, else the low tier's 16) and `src/render/core.ts` `noHalo` (set for
+a lite chunk). The harness row's vertex sub-condition is re-stated from `=== 2562` to `=== 1442` for its sixths (the orchestrator chose option
+a, which is exactly that). Three separate runs, `node _harness/browser_render.mjs --only=pose` (logs `scratch/pg_render/r2_rd06_{1,2,3}.log`),
+each the best of 3 inside the run, SwiftShader, med, 1280 x 800: **lite x1.139, x1.157, x1.149** (chunks not lite x1.497, x1.393, x1.414);
+draw calls: two wholes 28, six pieces lite 56, six pieces not lite 66; render ms (two / six lite) 647-720 / 737-807, 656-720 / 759-1018,
+667-827 / 767-1026. RD-05 in the same runs: x0.017 / x0.018 / x0.021, 0 fine updates asleep; RD-11 0.000 px. 0 console problems.
+Option b (one instanced draw for every piece's decals) was not needed and not built.
+| R3 | first-load bytes: the 29 GLSL comments inside material.ts's shader strings (COLOR, EMISSIVE, GRAIN stages; 3.1 KB shipped as text) moved into `${/* ... */ ''}` interpolations, which the minifier folds away; the shader code is unchanged (`scratch/pg_render/cmp.mjs`: 0 of 10 template strings differ once comments and blank lines are set aside) | done 16:58: material.ts 20 033 -> 16 883 B | bytes table at the end |
+| R4 | toast look (FN-02): golden on the heat side (0.35..1.15 of the look by facing), a few browner patches fixed to the skin, amber lifted 6% (was 18%: beige); cabin palette: warm honey boards (amber-cream deeper; the dusk-amber boards read magenta), grey stone (ink-cream), lighter under-roof, a warmer, stronger fill | code done 17:00, judged in the place run below | |

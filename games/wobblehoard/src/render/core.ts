@@ -71,6 +71,8 @@ export class Core {
   private comp = 0;
   private lite = false;
   calm = false;
+  /** PLAYGROUND (RD-06): a lite chunk draws no halo quad (its glow stays in the jelly's analytic halo, uCoreAmt). */
+  noHalo = false;
   /** Multiplier on the core's size (blob and halo): the body's own pop-in scale, so a result popping out of a capsule at 0.55x does not
    *  wear a full-size halo around a small body (it read as a big saturated aura at the burst peak). */
   sizeMul = 1;
@@ -155,7 +157,7 @@ export class Core {
     this.blobMat.uniforms.uTime.value = time;
     const hs = (0.28 + 0.4 * this.glow) * st.haloMul * (1 + 0.7 * k) * (this.lite ? 0.85 : 1) * pulse * b;
     // same soft knee as the jelly's inner glow: past 0.5 the halo keeps growing, slowly, so stacked glows saturate in hue instead of whiting out
-    this.halo.set(c.x, c.y, c.z, r * (3.4 + 0.3 * k) * st.haloSize, hs < 0.5 ? hs : 0.5 + (hs - 0.5) / (1 + (hs - 0.5) / 0.4));
+    this.halo.set(c.x, c.y, c.z, r * (3.4 + 0.3 * k) * st.haloSize, this.noHalo ? 0 : hs < 0.5 ? hs : 0.5 + (hs - 0.5) / (1 + (hs - 0.5) / 0.4));
   }
 
   dispose(): void {

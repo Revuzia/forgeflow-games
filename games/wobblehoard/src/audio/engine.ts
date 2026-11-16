@@ -373,7 +373,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
     drop: () => { dropped++; },
     throttle: (k, n) => { throttled[k] = (throttled[k] ?? 0) + n; },
     started: (k) => { started[k] = (started[k] ?? 0) + 1; },
-    away: () => (away && amb ? { creak: away.creak, puff: (t: number) => amb?.puff(t) } : null),
+    away: () => (away && amb ? { creak: away.creak, puff: (t: number) => amb?.puff(t), strike: away.STRIKE, held: away.heldNoise } : null),
   };
 
   /** Make the place's bed match the wanted state (setAmbience, mute, pause, the Place sounds slider). */
@@ -846,6 +846,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
           amb = m.createAmbience({
             ctx: () => (ready() ? ctx : null), now: () => (ctx && !disposed ? ctx.currentTime : null), out: () => (chain ? chain.ambience : null),
             ok: () => !settings.muted && !paused && settings.ambience > 0.001, rng: makeRng((pgRng() * 4294967296) >>> 0),
+            barAt: (t) => (musicInst ? musicInst.barAt(t) : null),
           });
           amb.set(ambWant);
         }
@@ -859,6 +860,8 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       if (p.on !== undefined) ambWant.on = p.on === true;
       if (p.volume !== undefined) { settings.ambience = c01(p.volume, settings.ambience); if (chain) chain.apply(settings); }
       if (amb) { try { amb.set(ambWant); } catch { /* closed */ } syncAmb(); }
+      // PG_AUDIO round 2: the place's weather event now (a gust, a wave, the shower or the tap on / off)
+      if (amb && typeof p.weather === 'number' && Number.isFinite(p.weather)) { try { amb.weather(p.weather); } catch { /* closed */ } }
     },
 
     detailStats() {

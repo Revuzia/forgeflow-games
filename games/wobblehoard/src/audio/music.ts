@@ -134,6 +134,8 @@ export const ROOM_KINDS: Readonly<Record<string, number>> = {
   // PLAYGROUND: a thing the PLAYER struck (cause 0) may make room; a sound that moved by itself never calls registerFx at all, and
   // the creature voices ('creature') are never here (LIFE 8.4: the music never dips for chatter)
   ball: ROOM_DB,
+  // PG_AUDIO round 2: every other place thing the player struck (chime, bell, splash, crunch, rustle, boing, tick, whoosh)
+  thing: ROOM_DB,
 };
 /** Held voices: each update holds its depth this long plus the activity tail ROOM_TAIL_S (so a rubbing squish that dips
  *  and swells frame by frame keeps the deepest dip instead of tremoloing the music). Held requests are rounded (depth down
@@ -280,11 +282,38 @@ export const FIELD_BARS: readonly (readonly [number, number])[] = [[8, 0.35], [1
  * (AU-07). A style only re-weights the next field (pick() draws exactly one number whatever the weights), so the composer's stream
  * never shifts. `lp` (Hz) puts a gentle low-pass on each mallet note (a warmer, darker felt).
  */
-export interface MusicStyle { readonly next: readonly (readonly (readonly [number, number])[])[]; readonly lp: number }
+export interface MusicStyle {
+  readonly next: readonly (readonly (readonly [number, number])[])[];
+  readonly lp: number;
+  /** PG_AUDIO round 2 (optional; absent = today's note): `tau` scales each mallet partial's decay (longer tails > 1, drier < 1); `echo`
+   *  scales the mallet's own scheduled echo (0 = dry: the echo partials are not built); `thin` 0..1 = the share of mallet notes left out
+   *  at play time (a sparser mallet), chosen by the note's own seed hash, never by a composer draw, so the score's stream never shifts. */
+  readonly tau?: number;
+  readonly echo?: number;
+  readonly thin?: number;
+}
 export const MUSIC_STYLES: Readonly<Record<string, MusicStyle>> = {
   home: { next: FIELD_NEXT, lp: 0 },
   // Hearthlog Cabin: more dusk and home fields (the fireside evening), a warmer low-passed mallet
   cabin: { next: [[[1, 0.15], [2, 0.6], [3, 0.25]], [[0, 0.55], [2, 0.35], [3, 0.1]], [[1, 0.15], [3, 0.2], [0, 0.65]], [[0, 0.55], [2, 0.45]]], lp: 1500 },
+  // PG_AUDIO round 2 (PLACES 4.3..4.10 "Music style"). Every row keeps FIELD_NEXT's own drifts (only the weights move), so a style can
+  // never return to the field it just left and pick() still draws one number. Fields: 0 home, 1 lift, 2 dusk, 3 glow.
+  // Ripple Shore: more lift and glow
+  shore: { next: [[[1, 0.5], [2, 0.1], [3, 0.4]], [[0, 0.35], [2, 0.1], [3, 0.55]], [[1, 0.5], [3, 0.3], [0, 0.2]], [[0, 0.7], [2, 0.3]]], lp: 0 },
+  // Frostbell Ridge: glow and home, a sparser mallet (a third of the notes rest)
+  ridge: { next: [[[1, 0.2], [2, 0.2], [3, 0.6]], [[0, 0.6], [2, 0.15], [3, 0.25]], [[1, 0.15], [3, 0.45], [0, 0.4]], [[0, 0.75], [2, 0.25]]], lp: 0, thin: 0.35 },
+  // Rainleaf Garden: home and lift
+  garden: { next: [[[1, 0.6], [2, 0.2], [3, 0.2]], [[0, 0.65], [2, 0.2], [3, 0.15]], [[1, 0.4], [3, 0.2], [0, 0.4]], [[0, 0.75], [2, 0.25]]], lp: 0 },
+  // Fizzwell Tub: the glow field, a rounder mallet (its top softened, a little longer)
+  bath: { next: [[[1, 0.25], [2, 0.2], [3, 0.55]], [[0, 0.35], [2, 0.15], [3, 0.5]], [[1, 0.2], [3, 0.55], [0, 0.25]], [[0, 0.65], [2, 0.35]]], lp: 2200, tau: 1.15 },
+  // Cogwhistle Bench: the lift field, a drier mallet (no echo, shorter)
+  bench: { next: [[[1, 0.65], [2, 0.15], [3, 0.2]], [[0, 0.55], [2, 0.25], [3, 0.2]], [[1, 0.6], [3, 0.15], [0, 0.25]], [[0, 0.7], [2, 0.3]]], lp: 0, tau: 0.7, echo: 0 },
+  // Lanternroof: the dusk field, a soft mallet
+  roof: { next: [[[1, 0.2], [2, 0.6], [3, 0.2]], [[0, 0.3], [2, 0.55], [3, 0.15]], [[1, 0.2], [3, 0.3], [0, 0.5]], [[0, 0.4], [2, 0.6]]], lp: 1700 },
+  // Echo Hollow: the glow field, longer note tails, a fuller echo (still scheduled, no DelayNode)
+  hollow: { next: [[[1, 0.25], [2, 0.2], [3, 0.55]], [[0, 0.35], [2, 0.15], [3, 0.5]], [[1, 0.2], [3, 0.55], [0, 0.25]], [[0, 0.65], [2, 0.35]]], lp: 0, tau: 1.7, echo: 1.6 },
+  // Cloudloft: lift and glow
+  cloud: { next: [[[1, 0.45], [2, 0.1], [3, 0.45]], [[0, 0.35], [2, 0.1], [3, 0.55]], [[1, 0.5], [3, 0.3], [0, 0.2]], [[0, 0.6], [2, 0.4]]], lp: 0 },
 };
 
 /** Rhythm cells: eighth-note slots (0..7) inside a bar. About two thirds start on the downbeat; the rest are lazy
@@ -534,7 +563,8 @@ function padChord(ctx: Ctx, dest: AudioNode, t: number, endT: number, field: Fie
  * and the octave again ECHO_S later at ECHO_LEVEL, panned to the other side (scheduled, not a DelayNode: see MusicBed).
  * Node lifetime ~2.2 s at 600 Hz.
  */
-function mallet(ctx: Ctx, dest: AudioNode, t: number, f: number, vel: number, pan: number, seed: number, styleLp = 0): { bag: Bag; end: number } {
+function mallet(ctx: Ctx, dest: AudioNode, t: number, f: number, vel: number, pan: number, seed: number, st?: MusicStyle): { bag: Bag; end: number } {
+  const styleLp = st ? st.lp : 0, tauK = st?.tau ?? 1, echoK = st?.echo ?? 1;
   const r = makeRng(seed);
   const bag = new Bag(ctx, dest, 'mallet', pan);
   // PLAYGROUND style (MusicStyle.lp): a warmer felt. Only when asked, so `home` builds exactly today's note (AU-07).
@@ -552,10 +582,10 @@ function mallet(ctx: Ctx, dest: AudioNode, t: number, f: number, vel: number, pa
   const parts: readonly (readonly [number, number, number, number])[] = [[1, 1, 1, 1], [2, 0.16, 0.45, 1], [3.98, 0.07, 0.18, 0]];
   for (const [ratio, lvl, tm, echoes] of parts) {
     const fq = f * ratio * (1 + 0.002 * (r() - 0.5));
-    const T = tau * tm;
-    for (let k = 0; k <= echoes; k++) {
+    const T = tau * tm * tauK;
+    for (let k = 0; k <= (echoK > 0 ? echoes : 0); k++) {
       const u = k ? te : t;
-      const a = A * lvl * (k ? ECHO_LEVEL : 1);
+      const a = A * lvl * (k ? ECHO_LEVEL * echoK : 1);
       const e = u + 0.004 + 5 * T;
       const o = bag.osc('sine', fq, u, e + 0.03);
       const g = bag.gain(0);
@@ -596,7 +626,7 @@ export interface MusicLogEntry {
   field: number;
   vel: number;
   /** Not played: the live-note cap was full, the note was already late, or a tune held the melody (PLAYGROUND musicBox). */
-  dropped?: 'cap' | 'late' | 'quiet';
+  dropped?: 'cap' | 'late' | 'quiet' | 'thin';
 }
 
 /** A room hold (makeRoom): the dip `db` (melody scale) from `at` until `until`, going down with time constant `atk`. */
@@ -791,7 +821,10 @@ export class MusicBed {
       const p = padChord(this.ctx, this.padIn, t, e.end, FIELDS[e.field], e.seed, this.pr);
       this.groups.push(p.bag); end = p.end; this.stats.pads++;
     } else if (e.kind === 'mallet') {
-      const m = mallet(this.ctx, this.melBus, t, midiHz(e.midi) * this.pr, e.vel, e.pan, e.seed, this.composer.style.lp);
+      const st = this.composer.style;
+      // a sparser style leaves some notes out at play time, by the note's own seed (no composer draw): never the score's stream
+      if (st.thin && ((Math.imul(e.seed ^ 0x2c1b3c6d, 0x297a2d39) >>> 0) / 4294967296) < st.thin) { this.stats.quiet++; this.logIt(e, t, t, 'thin'); return; }
+      const m = mallet(this.ctx, this.melBus, t, midiHz(e.midi) * this.pr, e.vel, e.pan, e.seed, st.lp || st.tau || st.echo !== undefined ? st : undefined);
       this.groups.push(m.bag); end = m.end; this.stats.notes++;
     } else {
       // the game's Minnaert bubble, tuned (musicBubble): a small upward settle centred on the note, a slightly longer ring
@@ -804,7 +837,7 @@ export class MusicBed {
     if (this.groups.length > 16) this.groups = this.groups.filter((g) => g.alive);
   }
 
-  private logIt(e: Pending, t: number, end: number, dropped?: 'cap' | 'late' | 'quiet'): void {
+  private logIt(e: Pending, t: number, end: number, dropped?: 'cap' | 'late' | 'quiet' | 'thin'): void {
     if (!this.log) return;
     const midi = e.kind === 'pad' ? FIELDS[e.field].pad.slice() : [e.midi];
     this.log.push({ t, end, kind: e.kind, midi, field: e.field, vel: e.vel, ...(dropped ? { dropped } : {}) });

@@ -1,7 +1,9 @@
 // Cloudloft (cloudloft, idx 9): its PlaceDef, both layouts and the channel of every reaction cell of PLACES 4.10 (D-80). Owned by PG_DATA.
 // A LAZY module: loaded with its place through loadPlaceDef('cloudloft') (D-69); never imported statically by boot, places.ts, life.ts or quests.ts.
-// Positions: the WIDE layout as PLACES 4.10 writes it (design intent; DT-01 not yet clean); the TALL layout is a FIRST DRAFT (the wide arrangement squeezed into the
-// tall frame), NOT yet laid under P7: its slice (S2 / S3) re-lays both with DT-01 and reports every move (PG_DATA brief).
+// Positions (S3, PG_DATA round 2): WIDE is PLACES 4.10 with three moves (DT-01 0 problems: the updraft's Puff Pad 0.497 m, still wholly in the
+// updraft; the Cloud Nest 0.283 m, inside the walls' rectangle; the Cloud Ball 0.328 m, clear of the Kite Swing's push spot) and new spawn
+// spots; TALL is still a FIRST DRAFT: the three Puff Pads keep one triangle 4.4 m wide in both layouts (p.x1..z2), which the tall frame cannot
+// hold, while PLACES 4.10 also says "in a triangle 1.6 m apart": back to the designer (report: _handoff/reports/PG_DATA.md, round 2).
 // The cells' words do not ship (D-69): `reactions` is packed [target, family, tag, chan, arg] (target: a thing index, or 100 + a zone index;
 // tag 0 P, 1 L, 2 S, 3 B; chan a CHANNEL id of life.ts), unpacked once at load by places.ts cells().
 import type { PlaceDef } from './places.ts';
@@ -20,15 +22,15 @@ export const PLACE: PlaceDef = {
     { id: 'sun', kind: ZONE.warm, strength: 0.4, shape: 'box', x: 0, z: 0, hx: 3.4, hz: 2.4 },
   ],
   things: [
-    { id: 'puffpads', place: 'cloudloft', mech: MECH.pad, x: 2.2, z: -0.8, yaw: 0, size: [0.45, 0.05, 0], mu: 1, p: { n: 3, x1: -2.2, z1: -0.6, x2: 0, z2: -1.9, gain: 1.25, apex: 0.35, travel: 0.1, maxBounces: 5 }, ride: false, verb: V.BOUNCE, icon: E.star, look: 'puff', sound: S.boing },
+    { id: 'puffpads', place: 'cloudloft', mech: MECH.pad, x: 2.61, z: -0.52, yaw: 0, size: [0.45, 0.05, 0], mu: 1, p: { n: 3, x1: -2.2, z1: -0.6, x2: 0, z2: -1.9, gain: 1.25, apex: 0.35, travel: 0.1, maxBounces: 5 }, ride: false, verb: V.BOUNCE, icon: E.star, look: 'puff', sound: S.boing },
     { id: 'updraft', place: 'cloudloft', mech: 0, x: 2.2, z: -0.8, yaw: 0, size: [1, 0, 0], mu: 1, p: {  }, ride: false, zone: 'updraft', verb: V.STEP, icon: E.swirl, look: 'updraft', sound: S.whoosh },
     { id: 'kiteswing', place: 'cloudloft', mech: MECH.swing, x: -2.4, z: 1.1, yaw: 0, size: [0.09, 0.9, 0], mu: 0.9, p: { rope: 1.4, pivotY: 1.62, limit: 30, seatY: 0.22, damping: 0.25 }, ride: true, push: [-0.4, 1.1], verb: V.SWING, icon: E.star, look: 'kite', sound: S.creak },
     { id: 'sunbowarch', place: 'cloudloft', mech: MECH.bar, x: -1.75, z: -1.95, yaw: 0, size: [0.16, 1.6, 1.3], mu: 0.8, p: { arch: 1, width: 1.6, height: 1.3 }, ride: false, verb: V.STEP, icon: E.sparkle, look: 'sunbow', sound: 0 },
-    { id: 'cloudnest', place: 'cloudloft', mech: MECH.ring, x: 2.6, z: 1.3, yaw: -2.678, size: [0.95, 0.1, 115], mu: 0.9, p: { segments: 5, way: 0.6 }, ride: false, useSpot: [2.6, 1.3], verb: V.NAP, icon: E.zzz, look: 'cloudnest', sound: 0 },
-    { id: 'cloudball', place: 'cloudloft', mech: MECH.ball, x: -0.9, z: 1.7, yaw: 0, size: [0.26, 0, 0], mu: 0.8, p: { mass: 0.12, rollDamp: 0.8, updraftCatch: 1 }, ride: false, verb: V.ROLL, icon: E.ball, look: 'cloudball', sound: S.ball },
+    { id: 'cloudnest', place: 'cloudloft', mech: MECH.ring, x: 2.32, z: 1.26, yaw: -2.678, size: [0.95, 0.1, 115], mu: 0.9, p: { segments: 5, way: 0.6 }, ride: false, useSpot: [2.32, 1.26], verb: V.NAP, icon: E.zzz, look: 'cloudnest', sound: 0 },
+    { id: 'cloudball', place: 'cloudloft', mech: MECH.ball, x: -0.97, z: 2.02, yaw: 0, size: [0.26, 0, 0], mu: 0.8, p: { mass: 0.12, rollDamp: 0.8, updraftCatch: 1 }, ride: false, verb: V.ROLL, icon: E.ball, look: 'cloudball', sound: S.ball },
   ],
   bounds: { shape: 'box', x: 0, z: 0, hx: 3.4, hz: 2.4, round: 0.8 }, walls: [],
-  pad: [0, 0, 1.2], spawn: [[-0.6, 0.65], [0.8, 0.45], [-1.15, -0.55], [0.7, -0.75], [-0.1, 1.75], [1.45, 1.75]],
+  pad: [0, 0, 1.2], spawn: [[-0.575, 0.525], [1.725, -1.575], [1.275, 0.725], [0.525, -0.625], [-0.825, -0.775], [0.225, 1.575]],
   tall: { // FIRST DRAFT (S2 / S3 re-lay)
     bounds: { shape: 'box', x: 0, z: 0, hx: 1.25, hz: 3, round: 0.4 }, walls: [],
     spawn: [[-0.4, -0.6], [0.4, 0], [-0.4, 0.6], [0.4, 1.2], [-0.4, 1.8]],

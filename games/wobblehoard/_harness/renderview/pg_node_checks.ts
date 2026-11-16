@@ -3,14 +3,15 @@
 // Rows (ids are this file's own; the RD rows they back are named): N1 visibleTableAt against three's own projection (RD-16's exact box) and the
 // spec's projection numbers; N2 bubble colours (RD-04: ink and every accent at 3:1 or better on the cream fill); N3 bubble layout and motion
 // (RD-04 size and insets, RD-09 Calm / reduced motion fades only, never a grow, nothing bobs); N4 the render pose (limits, identity at 0,
-// Calm <= 2 Hz, RD-11's CPU twin); N5 Home's things (arrival scale-in, quiet fade, parked = not drawn, keepsakes).
+// Calm <= 2 Hz, RD-11's CPU twin); N5 Home's things (arrival scale-in, quiet fade, parked = not drawn, keepsakes); N6 the place framing (RD-17,
+// re-stated in round 2 to the orchestrator's model: body CENTRES plus radius inside the insets, the bubble clamped on screen, the lens rule).
 import * as THREE from 'three';
 import { visibleTableAt } from '../../src/render/homeview.ts';
 import { Emotes, EMOTE_COLOURS, EMOTE_ACCENT, type EmoteFrame } from '../../src/render/emotes.ts';
 import { RenderPose } from '../../src/render/pose.ts';
 import { HomeKit, HOME_BALL, HOME_MUSICBOX, HOME_SHELF } from '../../src/render/homekit.ts';
 import type { EnvHub } from '../../src/render/env.ts';
-import { fitPlayBounds } from '../../src/render/placeview.ts';
+import { fitPlayBounds, fitPlace, PLACE_FOVS } from '../../src/render/placeview.ts';
 
 let pass = 0, fail = 0;
 const row = (id: string, ok: boolean, msg: string): void => { if (ok) pass++; else fail++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${id} ${msg}`); };
@@ -108,6 +109,26 @@ const row = (id: string, ok: boolean, msg: string): void => { if (ok) pass++; el
   row('N3f', q.minScaleQuiet === 1 && q.maxScale === 1, `Calm or reduced motion: scale stays exactly 1 (a fade only; a re-glance is an opacity lift) (min ${q.minScaleQuiet}, max ${q.maxScale})`);
   row('N3g', ph.bob === 0 && q.bob === 0, `nothing bobs: a wish bubble holds still (largest move ${Math.max(ph.bob, q.bob).toFixed(3)} px)`);
   row('N3h', ph.count >= 1 && q.count >= 1, `the think bubble is still up after 40 s, as its still dot (instances drawn ${ph.count})`);
+  // round 2 (RD-17's model): a bubble is clamped into the safe frame and its tail turns to point at its body; a free bubble's tail is 0 exactly;
+  // style 3 (LIFE's WISH_DOT) is the still dot
+  {
+    const w = 390, h = 844, em = new Emotes(), cam = new THREE.PerspectiveCamera(35, w / h, 0.1, 200);
+    cam.position.set(0, 0.42 + 9 * Math.sin(0.4), 9 * Math.cos(0.4)); cam.lookAt(0, 0.42, 0); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
+    // body 0 free in the middle; body 1 far back at the right edge (its anchor above the top inset and under the right column); body 2 a wish dot
+    const bodies = [[0, 0, 1.15], [2.2, -9, 1.6], [-0.5, 0.5, 1.15]];
+    const f: EmoteFrame = { camera: cam, cssW: w, cssH: h, dpr: 2, safe: { top: 151, right: 60, bottom: 170, left: 16 }, capX: 0, capY: 0, capR: 0, ceremony: false, quiet: false, phone: true,
+      anchor(id, out) { const b = bodies[id]; if (!b) return false; out[0] = b[0]; out[1] = b[2]; out[2] = b[1]; return true; } };
+    em.show(0, 0, 4, 0, 5, 0, 0); em.show(1, 1, 5, 0, 5, 0, 0); em.show(2, 2, 22, 3, 0, 0, 0);
+    for (let i = 0; i < 60; i++) em.update(1 / 60, f);
+    const A = em.slots[0], B = em.slots[1], D = em.slots[2];
+    const v = new THREE.Vector3(2.2, 1.6, -9).project(cam), ax = (v.x * 0.5 + 0.5) * w, ay = (1 - (v.y * 0.5 + 0.5)) * h;
+    const inB = B.x - B.r >= 16 - 0.5 && B.x + B.r <= w - 60 + 0.5 && B.y - B.r >= 151 - 0.5;
+    const tailDir = [Math.sin(B.tail), Math.cos(B.tail)], toAnchor = [ax - B.x, ay - B.y], n = Math.hypot(toAnchor[0], toAnchor[1]);
+    const cosE = (tailDir[0] * toAnchor[0] + tailDir[1] * toAnchor[1]) / Math.max(1e-6, n);
+    row('N3i', A.tail === 0 && inB && B.shown && cosE > 0.9999 && Math.abs(B.tail) > 0.05,
+      `a bubble is clamped into the safe frame (anchor at ${ax.toFixed(0)}, ${ay.toFixed(0)} px; bubble at ${B.x.toFixed(0)}, ${B.y.toFixed(0)}) with its tail turned ${(B.tail * 180 / Math.PI).toFixed(1)} deg toward its body (cos ${cosE.toFixed(5)}); a free bubble's tail is 0 (${A.tail})`);
+    row('N3j', D.on && D.style === 1 && D.dot, `style 3 (WISH_DOT) shows a wish as its still dot (style ${D.style}, dot ${D.dot})`);
+  }
 }
 
 /* ── N4: the render pose ── */
@@ -168,18 +189,41 @@ const row = (id: string, ok: boolean, msg: string): void => { if (ok) pass++; el
   k.dispose();
 }
 
-/* ── N6: the place framing (setPlayBounds, RD-17's numbers): the cabin's layouts, PLACES 4.2 ── */
+/* ── N6: the place framing (setPlayBounds, RD-17), re-stated in round 2 (PG_RENDER.md "Round 2"): the orchestrator's model frames bodies by
+ *  their CENTRES plus radius (each corner centre's column from the ground to its top, 2 x R 0.625, inside the insets; laterally the centre); a
+ *  bubble is not in the fit (N3h: it is clamped into the safe frame with its tail toward its body). Why: whole bodies could not meet the bars
+ *  (N6d proves the front-row bound). The lens: the widest of PLACE_FOVS that meets the bars (N6e). Every PlaceDef's layouts are 1.25 x 3.0
+ *  (tall) and 3.4 x 2.4 (wide), so one row per frame covers every place. ── */
 {
-  const tall = fitPlayBounds(0, 0, 1.25, 3.0, 35, 390, 844, 151, 60, 170, 16);
-  const wide = fitPlayBounds(0, 0, 3.4, 2.4, 35, 1280, 800, 120, 24, 150, 24);
-  const wideOnPhone = fitPlayBounds(0, 0, 3.4, 2.4, 35, 390, 844, 151, 60, 170, 16);
-  const f = (p: ReturnType<typeof fitPlayBounds>): string => p ? `pitch ${p.pitch.toFixed(3)} rad, distance ${p.dist.toFixed(2)} m, aim z ${p.aimZ.toFixed(2)}: front ${p.frontPx.toFixed(1)} px, mid ${p.midPx.toFixed(1)} px` : 'no fit';
+  const INS = { phone: [151, 60, 170, 16], desk: [120, 24, 150, 24] } as const;
+  const tall = fitPlace(0, 0, 1.25, 3.0, 390, 844, ...INS.phone);
+  const wide = fitPlace(0, 0, 3.4, 2.4, 1280, 800, ...INS.desk);
+  const wideOnPhone = fitPlayBounds(0, 0, 3.4, 2.4, 35, 390, 844, ...INS.phone);
+  const f = (p: ReturnType<typeof fitPlayBounds>): string => p ? `lens ${p.fov} deg, pitch ${p.pitch.toFixed(3)} rad, distance ${p.dist.toFixed(2)} m, aim (${p.aimX.toFixed(2)}, ${p.aimY.toFixed(2)}, ${p.aimZ.toFixed(2)}): front ${p.frontPx.toFixed(1)} px, mid ${p.midPx.toFixed(1)} px` : 'no fit';
   console.log(`     tall 1.25 x 3.0 on 390x844: ${f(tall)}`);
   console.log(`     wide 3.4 x 2.4 on 1280x800: ${f(wide)}`);
-  console.log(`     wide 3.4 x 2.4 framed whole on 390x844: ${f(wideOnPhone)}`);
+  console.log(`     (wide 3.4 x 2.4 framed whole on 390x844, 35 deg: ${f(wideOnPhone)}; not a layout any frame uses)`);
   row('N6a', !!tall && tall.frontPx >= 100 && tall.midPx >= 80, `RD-17 tall layout on 390x844: a 1 m squishy at least 100 px at the front and 80 px mid (${tall ? tall.frontPx.toFixed(1) + ' / ' + tall.midPx.toFixed(1) : 'none'})`);
   row('N6b', !!wide && wide.midPx >= 150, `RD-17 wide layout on 1280x800: at least 150 px at mid-depth (${wide ? wide.midPx.toFixed(1) : 'none'})`);
   row('N6c', !!tall && tall.pitch >= 0.15 && tall.pitch <= 0.9 && !!wide && wide.pitch >= 0.15 && wide.pitch <= 0.9, 'both framings inside the allowed pitch 0.15 to 0.9 rad (P8)');
+  // the model itself, in three's own projection: every corner centre's ground point and top (2 x 0.625) inside the safe frame
+  let worst = Infinity;
+  for (const [fr, w, h, ins, b] of [[tall, 390, 844, INS.phone, [1.25, 3.0]], [wide, 1280, 800, INS.desk, [3.4, 2.4]]] as const) {
+    if (!fr) continue;
+    const cam = new THREE.PerspectiveCamera(fr.fov, w / h, 0.1, 200);
+    cam.position.set(fr.aimX, fr.aimY + fr.dist * Math.sin(fr.pitch), fr.aimZ + fr.dist * Math.cos(fr.pitch)); cam.lookAt(fr.aimX, fr.aimY, fr.aimZ); cam.updateMatrixWorld();
+    for (const x of [-b[0], b[0]]) for (const z of [-b[1], b[1]]) for (const y of [0, 1.25]) {
+      const v = new THREE.Vector3(x, y, z).project(cam), sx = (v.x * 0.5 + 0.5) * w, sy = (1 - (v.y * 0.5 + 0.5)) * h;
+      worst = Math.min(worst, sx - ins[3], w - ins[1] - sx, sy - ins[0], h - ins[2] - sy);
+    }
+  }
+  row('N6d', worst >= -0.01, `the model (three's projection): every corner centre's ground point and top inside the safe insets in both layouts (worst margin ${worst.toFixed(2)} px)`);
+  // why whole bodies could not pass: the front row's width bound (the bounds plus a body's own width in the phone's 314 px between its side insets)
+  const bound = (390 - 60 - 16) / (2 * 1.25 + 2 * 0.5);
+  row('N6e', bound < 100, `whole bodies (R 0.5) cannot meet the tall front bar: front px <= 314 / (2.5 + 1.0) = ${bound.toFixed(1)} (the reason for the round-2 model)`);
+  // the lens rule: the tall frame keeps the stage's 35 degrees; the wide frame takes the widest lens that meets the bar, and no wider lens does
+  const wider = wide ? PLACE_FOVS.filter((v) => v > wide.fov).map((v) => fitPlayBounds(0, 0, 3.4, 2.4, v, 1280, 800, ...INS.desk)!) : [];
+  row('N6f', !!tall && tall.fov === 35 && !!wide && wider.every((q) => !q.meets), `the lens: tall ${tall?.fov} deg (the stage's own); wide ${wide?.fov} deg, every wider lens misses the bar with the fit's 1% margin (${wider.map((q) => q.fov + ': ' + q.midPx.toFixed(1)).join(', ')})`);
 }
 
 console.log(`\npg_node_checks: ${pass} ok, ${fail} FAIL`);

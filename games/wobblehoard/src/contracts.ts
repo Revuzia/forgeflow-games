@@ -739,6 +739,18 @@ export interface StageLike {
   /** PLAYGROUND (Home, QUESTS.md 10): the keepsakes on the Keepsake Shelf, a 20-bit set in keepsake bit order; a newly set bit drops into
    *  its place (Calm or reduced motion: it fades in). */
   setKeepsakes?(mask: number): void;
+  /** PLAYGROUND (PG_RENDER round 2, D-80): a reaction cell's particle preset (a cell whose channel is CHANNEL.PARTICLE): `kind` is its
+   *  src/data/life.ts PARTICLE id: 1 steam (wisps rising off the skin, normal blend), 2 embers (warm sparks), 4 drips (drops falling off the
+   *  skin), 5 bubbles (a soft cling of small bubbles rising off the skin), 9 puff (a soft burst at the base in the place's ground tone).
+   *  It follows body `bodyId` for lifeS seconds (bodyId -1: at the world point x, y, z), amount 0..1 scales the rate. Every particle counts
+   *  against LIFE.md 10.1's autonomy budget (24 a second on a phone, 48 on a desktop; 8 / 16 in Calm), none with reduced motion; the stage
+   *  keeps that budget itself. Only in a place (false at Home, for another kind, or with 8 presets running). Zero allocation. */
+  reactFx?(kind: number, bodyId: number, x: number, y: number, z: number, amount: number, lifeS: number): boolean;
+  /** PLAYGROUND (PG_RENDER round 2): a thing's own effect in the place in use: kind 1 = its puff (`thing` = its PlaceDef.things index: the
+   *  Singing Kettle's steam puff when it whistles, the hearth's fire puff on a tap, the Shake Pine's snow puff, the Drip Leaf's shower);
+   *  kind 2 with thing -1 = the place's finale spectacle at `amount` 0..1 (0 ends it; the cabin's fire swells and its embers rise; Calm or
+   *  reduced motion: a slow glow). False when the place draws no such effect. */
+  thingFx?(thing: number, kind: number, amount: number): boolean;
 }
 
 /* ── PLAYGROUND audio (src/audio; PLAYGROUND_BUILD.md 10) ── */
@@ -764,8 +776,10 @@ export interface SquishAudio {
    *  backstop ChatterLimiter refuses it. PG_AUDIO addition (2026-11-16, additive): `sing` = a sung phrase (SING, the duet, a finale): its
    *  degrees are pentatonic steps from D (LIFE's REST_TONES), placed in the voice's octave and re-voiced onto the sounding field's rest
    *  tones; absent = a spoken phrase, degrees from the voice's own snapped note. A piece's `pitch` is pitchRatio x popSize(frac)
-   *  ((0.5 / frac)^0.4, audio/cut.ts), and a cold place's voice is the pitch x 2^(-1/12): the caller folds both into `pitch`. */
-  creature?(p: { phrase: Float32Array; n: number; flavour: number; register: number; pitch: number; pan: number; level: number; group?: number; echo?: boolean; at?: number; sing?: boolean }): boolean;
+   *  ((0.5 / frac)^0.4, audio/cut.ts), and a cold place's voice is the pitch x 2^(-1/12): the caller folds both into `pitch`.
+   *  PG_AUDIO round 2 (2026-11-16, additive): `echoes` = 2 while the Echo Stone is on (PLACES 4.9: "for 20 s every voice echoes twice"):
+   *  a second scheduled repeat at +440 ms, -24 dB, darker still (no DelayNode); absent or 1 = the one repeat of `echo`; ignored without echo. */
+  creature?(p: { phrase: Float32Array; n: number; flavour: number; register: number; pitch: number; pan: number; level: number; group?: number; echo?: boolean; at?: number; sing?: boolean; echoes?: number }): boolean;
   /** PLAYGROUND (PG_AUDIO addition, 2026-11-16, additive): the player is touching (a finger down, a grab or a carry; never a lock alone,
    *  D-84). The shell calls it on each change. While true and until 0.6 s after false, the chatter ducks 6 dB and the backstop allows
    *  at most 1 syllable a second (LIFE 8.4, AU-13). */
@@ -784,12 +798,19 @@ export interface SquishAudio {
   loadAmbience?(place: string): Promise<boolean>;
   /** PLAYGROUND: the place's ambience bed (null = none): crossfades about 2 s on a change; follows mute, pause and setPaused. Never asks
    *  for room; takes its own shallow dip under player effects. */
-  setAmbience?(p: { place?: string | null; on?: boolean; volume?: number }): void;
+  /** PG_AUDIO round 2 (2026-11-16, additive): `weather` 0..1 = the place's weather event starting NOW, sent by the shell when physics
+   *  starts one (a Wind Gap gust, a wave on the Surf Edge, the shower turning on (1) or off (0)): the bed's gust, swell or patter follows
+   *  it. Without these calls each recipe keeps its own seeded timer; with them (any in the last 30 s) it follows the shell's. The place
+   *  key may be the place id ('ripple') or its PlaceDef.ambience id ('shore'). */
+  setAmbience?(p: { place?: string | null; on?: boolean; volume?: number; weather?: number }): void;
   /** PLAYGROUND: a thing's sound: kind id (src/data/places.ts PROP_SOUND: ball, creak, chime, splash, crunch, crackle, boing, bell, tick,
    *  kettle, rustle, whoosh), intensity 0..1, a D major pentatonic MIDI note for tuned things, pan, auto = moved by itself or by a squishy
    *  (never makes room in the music; budgeted), key = prop index for held voices (a creaking rocker), held = 0..1 for a held voice.
-   *  The caller reuses one `p` object; audio keeps no reference to it. */
-  prop?(p: { kind: number; intensity: number; note?: number; pan?: number; auto: boolean; key?: number; held?: number }): void;
+   *  The caller reuses one `p` object; audio keeps no reference to it. PG_AUDIO round 2 (2026-11-16, additive): `size` = the thing's
+   *  size in m (a ball its radius, THINGS size[0]: the felt ball 0.22, the yarn ball 0.24): a bigger ball is lower and longer, so two
+   *  balls sound apart; absent = 0.22. For a held voice (`key` + `held`) the kinds are ball (a roll), creak (a hinge), rustle (a shaking
+   *  branch) and whoosh (a slide or a ride); every other kind is a strike. */
+  prop?(p: { kind: number; intensity: number; note?: number; pan?: number; auto: boolean; key?: number; held?: number; size?: number }): void;
   /** PLAYGROUND: the Music Box tune (tune 0 or absent: 8 bars, 29.1 s at 66 BPM; at most one start per 40 s, a second tap stops it) and the Singing Kettle's
    *  whistle (1 bar, 3.6 s; by itself every 45 to 90 s, never within 60 s of a Music Box tune): while one plays the music bed mutes its own
    *  mallets so two melodies never clash. With no input, tunes sound at most 20% of a 10-minute cabin visit (AU-14). The kettle is

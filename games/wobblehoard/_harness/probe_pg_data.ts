@@ -27,7 +27,7 @@ const note = (id: string, what: string): void => console.log(`info ${id} ${what}
 const f2 = (v: number): string => v.toFixed(2);
 const D2R = Math.PI / 180;
 /** The places whose layouts DT-01 must pass now (S0 / S1). S2 adds ripple, frostbell, rainleaf; S3 the other five. */
-const STRICT_PLACES: readonly PlaceId[] = ['home', 'hearthlog'];
+const STRICT_PLACES: readonly PlaceId[] = ['home', 'hearthlog', 'ripple', 'frostbell', 'rainleaf', 'fizzwell', 'cogwhistle', 'lanternroof'];
 
 const DEFS: PlaceDef[] = [];
 for (const id of PLACE_IDS) DEFS.push(((await import(`../src/data/place_${id}.ts`)) as { PLACE: PlaceDef }).PLACE);
@@ -74,7 +74,11 @@ const swingSweep = (t: ThingDef): number => (t.p.rope ?? 0) * Math.sin((t.p.limi
 function footprints(t: ThingDef, x: number, z: number, yaw: number): Shape[] {
   const c = Math.cos(yaw), s = Math.sin(yaw), at = (u: number, v = 0): [number, number] => [x + u * c - v * s, z + u * s + v * c];
   switch (t.mech) {
-    case MECH.block: case MECH.seesaw: return [{ k: 'box', x, z, hx: t.size[0], hz: t.size[2], yaw }];
+    case MECH.block: { // a row of p.n blocks (the Singing Crystals): spaced evenly over p.span along the yaw axis, bowed p.curve toward local +z at the middle
+      const n = t.p.n ?? 1, span = t.p.span ?? 0, cv = t.p.curve ?? 0, out: Shape[] = [];
+      for (let i = 0; i < n; i++) { const w = n > 1 ? 2 * i / (n - 1) - 1 : 0, [px, pz] = at(w * span / 2, cv * (1 - w * w)); out.push({ k: 'box', x: px, z: pz, hx: t.size[0], hz: t.size[2], yaw }); }
+      return out; }
+    case MECH.seesaw: return [{ k: 'box', x, z, hx: t.size[0], hz: t.size[2], yaw }];
     case MECH.ramp: return [{ k: 'box', x, z, hx: t.size[0] * Math.cos((t.p.angle ?? 0) * D2R), hz: t.size[2], yaw }];
     case MECH.bar: {
       if (t.p.arch) { const w = (t.p.width ?? 1.6) / 2, [ax, az] = at(-w), [bx, bz] = at(w); return [{ k: 'disc', x: ax, z: az, r: t.size[0] }, { k: 'disc', x: bx, z: bz, r: t.size[0] }]; }
@@ -116,6 +120,16 @@ const inRound = (x: number, z: number, b: Area & { round: number }): boolean => 
   return (qx <= 0 || qz <= 0) ? (Math.abs(x - b.x) <= hx + 1e-9 && Math.abs(z - b.z) <= hz + 1e-9) : Math.hypot(qx, qz) <= r + 1e-9;
 };
 const PHYS_ZONES: readonly number[] = [ZONE.water, ZONE.current, ZONE.wind, ZONE.updraft, ZONE.magnet];
+/** Is (x, z) at a water zone's full depth: inside it and at least `ramp` from every OPEN edge (an edge with a wall on it has no ramp). */
+function fullDepth(x: number, z: number, a: Area, ramp: number, walls: Shape[]): boolean {
+  if (a.shape === 'disc') return Math.hypot(x - a.x, z - a.z) <= (a.r ?? 0) - ramp + 1e-9;
+  const hx = a.hx ?? 0, hz = a.hz ?? 0;
+  const edges: [number, number, number][] = [[a.x - hx, a.z, Math.abs(x - (a.x - hx))], [a.x + hx, a.z, Math.abs(x - (a.x + hx))], [a.x, a.z - hz, Math.abs(z - (a.z - hz))], [a.x, a.z + hz, Math.abs(z - (a.z + hz))]];
+  if (Math.abs(x - a.x) > hx + 1e-9 || Math.abs(z - a.z) > hz + 1e-9) return false;
+  return edges.every(([mx, mz, d]) => walls.some((w) => dist(mx, mz, w) <= 0.05) || d >= ramp - 1e-9);
+}
+/** The ramps whose foot PLACES puts somewhere: the Glide Ramp ends at the ice (4.4), the Soap Slide down in the water (4.6). */
+const RAMP_FOOT: Readonly<Record<string, 'ice' | 'water'>> = { glideramp: 'ice', soapslide: 'water' };
 function checkPlace(P: PlaceDef, tall: boolean): string[] {
   const probs: string[] = [], L = tall ? P.tall : P;
   const pos = P.things.map((t, i) => tall ? P.tall.things[i] : { x: t.x, z: t.z, yaw: t.yaw, use: t.useSpot, peek: t.peek, push: t.push });
@@ -140,6 +154,10 @@ function checkPlace(P: PlaceDef, tall: boolean): string[] {
     }
     for (const s of fp[i]) { const d = dist(0, 0, s); if (d < 1.2 - 1e-9) probs.push(`${t.id} in the pad (${f2(d)} m from its centre)`); }
     if (!isMoving(t) && fp[i].length && pos[i].z > 1.3 && heightOf(t) > 0.4 + 1e-9) probs.push(`${t.id} in the front band is ${f2(heightOf(t))} m tall (at most 0.4)`);
+    // a chime set's frame or rail is static and stands at least at its hang height (M10: 0.30..0.70 m), so P7's low front band holds none
+    if (t.mech === MECH.chime && pos[i].z > 1.3 && (t.p.hang ?? 0.5) > 0.4 + 1e-9) probs.push(`${t.id} in the front band: its static frame stands ${f2(t.p.hang ?? 0.5)} m tall (at most 0.4)`);
+    // likewise a swing hangs from a frame, beam or line at its pivot height (M8: 1.5 m and more), so none stands in the front band either
+    if (t.mech === MECH.swing && pos[i].z > 1.3) probs.push(`${t.id} in the front band: its pivot frame stands ${f2(t.p.pivotY ?? (t.p.rope ?? 0) + 0.2)} m tall (at most 0.4)`);
     // rides and their spots
     if (t.mech === MECH.swing) {
       const sw = swingSweep(t), c = Math.cos(pos[i].yaw), s = Math.sin(pos[i].yaw);
@@ -157,14 +175,26 @@ function checkPlace(P: PlaceDef, tall: boolean): string[] {
       if (walls.length) for (const sg of [-1, 1]) { const g = wallGap(pos[i].x + sg * t.size[0] * c, pos[i].z + sg * t.size[0] * s); if (g < 0.6 - 1e-9) probs.push(`${t.id} board end ${f2(g)} m from a wall (0.6)`); }
     }
     // every other ride's seat and rider spots (the brief's DT-01 list; D-91 / PLACES rev 4 (3): every ride keeps its rider's whole path inside
-    // the bounds): a ramp's path from its top to its foot (local +x is downhill, places.ts ThingDef), a mound's top, a floater's centre, each with
-    // a rider of R 0.625 clear of the walls and 0.625 m from every other collider (R2: the probe had checked swings and seesaws only)
-    if (t.ride && t.mech === MECH.ramp) { const c = Math.cos(pos[i].yaw), s = Math.sin(pos[i].yaw), h = t.size[0] * Math.cos((t.p.angle ?? 0) * D2R);
-      for (let k = 0; k <= 10; k++) { const u = -h + 2 * h * k / 10; bodyOK(`${t.id} rider`, pos[i].x + u * c, pos[i].z + u * s, i); } }
+    // the bounds): a ramp's path from its top rider spot to its foot (local +x is downhill, places.ts ThingDef), a mound's top, a floater's
+    // centre, each with a rider of R 0.625 clear of the walls and 0.625 m from every other collider (R2: the probe had checked swings and
+    // seesaws only). The ramp's top rider spot is its top end less the SMALLEST body's radius (0.40 m, shape.ts 68): the farthest up a set
+    // body's centre can sit on the board (a centre at the very edge would hang half the body off the ramp), as the swing and seesaw rows take
+    // the rider's centre (the seat; p.rider inside the board's ends); the smallest radius makes the path the longest.
+    if (t.ride && t.mech === MECH.ramp) { const c = Math.cos(pos[i].yaw), s = Math.sin(pos[i].yaw), h = t.size[0] * Math.cos((t.p.angle ?? 0) * D2R), top = -(h - 0.4);
+      for (let k = 0; k <= 10; k++) { const u = top + (h - top) * k / 10; bodyOK(`${t.id} rider`, pos[i].x + u * c, pos[i].z + u * s, i); } }
     if (t.ride && (t.mech === MECH.mound || t.mech === MECH.floater)) bodyOK(`${t.id} rider`, pos[i].x, pos[i].z, i);
-    // a floater lies in a water zone deep enough to float in (PLACES 2.1 M12; shallow water, at most 0.12 m, gives drag only, 2.2)
-    if (t.mech === MECH.floater && !P.zones.some((zd, k) => zd.kind === ZONE.water && (zd.surfaceY ?? 0) > 0.12 + 1e-9
-      && fp[i].every((sh) => outline(sh).every(([x, z]) => dist(x, z, areaShape(tall ? P.tall.zones[k] : zd)) <= 1e-9)))) probs.push(`${t.id} floater not wholly inside a deep water zone`);
+    // where a ramp's foot must land (PLACES 4.4 the Glide Ramp "ending at the ice"; 4.6 the Soap Slide "down into the water"), in each layout
+    const foot = RAMP_FOOT[t.id];
+    if (t.mech === MECH.ramp && foot) { const h = t.size[0] * Math.cos((t.p.angle ?? 0) * D2R), fx = pos[i].x + h * Math.cos(pos[i].yaw), fz = pos[i].z + h * Math.sin(pos[i].yaw);
+      const areas = foot === 'ice' ? P.patches.map((pd, k) => pd.ice ? (tall ? P.tall.patches[k] : pd) : null) : P.zones.map((zd, k) => zd.kind === ZONE.water ? (tall ? P.tall.zones[k] : zd) : null);
+      if (!areas.some((a) => a && dist(fx, fz, areaShape(a)) <= 1e-9)) probs.push(`${t.id} foot (${f2(fx)}, ${f2(fz)}) is not on the ${foot === 'ice' ? 'ice' : 'water'}`); }
+    // a floater lies wholly in a water zone deep enough to float in (PLACES 2.1 M12 "in a water zone"; shallow water, at most 0.12 m, gives
+    // drag only, 2.2), and its centre (where a floating body rests in the ring or against the raft) at the zone's FULL depth: the physics
+    // depth ramp (P4, `ZoneDef.ramp`) makes a floating body a sitter (PLAYGROUND_BUILD 8.7). The ramp lies along the water's open edges only,
+    // not where the zone meets a wall (PLACES 4.6: the bath's ramp is "from its front edge"; its back and sides are the tub)
+    if (t.mech === MECH.floater && !P.zones.some((zd, k) => { const a = tall ? P.tall.zones[k] : zd;
+      return zd.kind === ZONE.water && (zd.surfaceY ?? 0) > 0.12 + 1e-9 && fp[i].every((sh) => outline(sh).every(([x, z]) => dist(x, z, areaShape(a)) <= 1e-9))
+        && fullDepth(pos[i].x, pos[i].z, a, zd.ramp ?? 0, walls); })) probs.push(`${t.id} floater not wholly in a deep water zone with its centre at full depth (past the edge ramp)`);
     // a pool IS its water zone (M6): the thing stands where its own zone is, in each layout
     if (t.mech === MECH.pool) { const k = P.zones.findIndex((zd) => ownsArea(t.zone, zd.id)), a = k < 0 ? null : tall ? P.tall.zones[k] : P.zones[k];
       if (!a || Math.hypot(a.x - pos[i].x, a.z - pos[i].z) > 1e-6) probs.push(`${t.id} pool does not stand on its own water zone`); }
@@ -173,7 +203,9 @@ function checkPlace(P: PlaceDef, tall: boolean): string[] {
       // the gap waypoint as LIFE lays it (src/life/world.ts copyPlace: p.way, default 0.6, outside the ring's radius along its yaw)
       const way = t.size[0] + (t.p.way ?? 0.6), g = [pos[i].x + Math.cos(pos[i].yaw) * way, pos[i].z + Math.sin(pos[i].yaw) * way];
       bodyOK(`${t.id} gap waypoint`, g[0], g[1], i);
-      if (!inRound(pos[i].x, pos[i].z, b)) probs.push(`${t.id} inner spot outside the bounds`);
+      // its inner spot (where a napper curls up): inside the bounds with a body clear of the walls and of every OTHER collider (a ball left
+      // in the nest, say); its own segments are the clear inner radius below
+      bodyOK(`${t.id} inner spot`, pos[i].x, pos[i].z, i);
       if (t.size[0] - t.size[1] < 0.625 - 1e-9) probs.push(`${t.id} clear inner radius ${f2(t.size[0] - t.size[1])} m holds no body of R 0.625`);
     }
     if (pos[i].use && t.mech !== MECH.ring) bodyOK(`${t.id} use spot`, pos[i].use![0], pos[i].use![1], i);
@@ -492,11 +524,11 @@ const SL = SPECIES_LIFE as Readonly<Record<SpeciesId, { place: PlaceId; thing: s
 /* ═══════════════════════════════ DT-09: a title's verb matches its rule's event (VISIT exempt); a hint matches its count ═══════════════════════════════ */
 {
   /** The reviewed keyword table: an event kind and the words a title may use for it (printed below for review by hand). Engineer 2's review
-   *  (2026-11-16) added three words for three QUESTS 6 titles: USE "down" (I7 "Down the glide ramp": sliding down it, USE SLIDE), USE "scale"
-   *  (E3 "Crystal scale": a scale is played by ringing the crystals in turn, PLACES 4.9; a noun title, noted for the designer), SOCIAL "roll"
-   *  (U7 "Roll the cloud ball": S12 pass the ball, "each in turn boops the ball toward the other", LIFE 6.1). */
+   *  (2026-11-16) added words for QUESTS 6 titles: USE "down" (I7 "Down the glide ramp": sliding down it, USE SLIDE), SOCIAL "roll" (U7 "Roll
+   *  the cloud ball": S12 pass the ball, "each in turn boops the ball toward the other", LIFE 6.1). Round 2 took USE "scale" out again: E3's
+   *  noun title "Crystal scale" is now "Ring the crystals" (Q7: a title says what you do), so no title needs it. */
   const KW: Record<number, RegExp> = {
-    [EV.TOUCH]: /squeeze|stretch/i, [EV.USE]: /play|roll|chase|answer|kettle|ring|slide|whee|ride|round|boing|bounce|tap|wind|marble|magnet|sing|ding|light|lantern|vane|star|echo|swing|push|machine|fireside|down|scale/i,
+    [EV.TOUCH]: /squeeze|stretch/i, [EV.USE]: /play|roll|chase|answer|kettle|ring|slide|whee|ride|round|boing|bounce|tap|wind|marble|magnet|sing|ding|light|lantern|vane|star|echo|swing|push|machine|fireside|down/i,
     [EV.CAPSULE]: /capsule/i, [EV.SOCIAL]: /hello|nap|push|rocker|teeter|song|sing|snuggle|pass|peekaboo|squirt|nuzzle|snug|follow|leader|copy|parade|echo|turn|machine|swing|roll/i,
     [EV.UI]: /bubble/i, [EV.WISH]: /wish/i, [EV.REACT]: /cozy|toast|golden|pool|frosty|zoom|ice|snow|pine|splash|shower|soak|float|sit|fizz|moon|hold on|breeze|glow|water|fire|way|react|drift|tap/i,
     [EV.PIECES]: /bits/i, [EV.DISCOVER]: /loves|best friends/i, [EV.FRIEND]: /friends/i, [EV.PHOTO]: /picture|rain stops/i };

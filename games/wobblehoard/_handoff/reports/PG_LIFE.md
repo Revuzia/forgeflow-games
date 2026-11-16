@@ -134,3 +134,227 @@ src/physics, src/shell, src/ui, src/input, vite.config.ts).
 | R2/e3 step | What | State |
 |---|---|---|
 | 0 | read brief, report, specs (LIFE 3-6, 9-12; QUESTS 8), all src/life + probe, other lanes' requests | DONE 14:15 |
+| 1 | LF-02 zero allocation: every double off the call boundaries; diagnosis of the residual | DONE as far as code can go; LF-02 still FAIL (see below) 15:40 |
+
+#### Step 1, LF-02 (engineer 3)
+What was done (all in src/life; tsc clean; every other probe row unchanged):
+- Geometry takes no double arguments: a query point in `w.f[F.PX]`, `w.f[F.PZ]` for `inBounds(w, shrinkMm)`, `inKeepOut(w, s, k, growMm)`,
+  `inAreaAt(w, patch, k)`, `zoneStrengthAt(w, k)`, `clearOfThings`; distances come back as integers (`d2c` / `d2t` / `d2p` in cm², `dmm` in
+  mm); `inArea`, `dist2`, social's `dist` and `inBoundsAt`, `distChars`, `strongestZone` are gone.
+- `setBeh(w, i, b, scoreMilli, durMs)`, `startUse/Bask/Nap(..., scoreMilli)`, `baskScore` returns milli, `touching(..., slackMm)`,
+  `freeTarget(..., maxRMm)`; voice.ts plans phrases with `syl(w, h, k, syl, deg, len10, gapMs)` on a running `w.f[F.T]` (same timings),
+  `toNextBarMs(w)`, `m32n(st, n)` (the species motifs are bit-identical: floor(x n) as before); attention's `onScreen4` counts quarters;
+  `MOVER_CAP` / `UNIT_CAP` tables with `tierOf(s)`; `clamp01` calls inlined as Math.min / Math.max.
+- **Two V8 boxing sources found by bisection** (heap sampling with `--no-turbo-inlining`, scratch `pg_life3/hp.ts`, `hp2.mjs`): (1) a phi of a
+  computed double and an imported constant (`last > -1e8 ? Math.min(0.5, tb - last) : THINK_S` in `think`: TurboFan keeps the phi tagged and
+  boxes the computed side every think; about 40 KB per 1000 ticks alone); (2) the world's scalar doubles in object fields: the world literal
+  has about 240 properties, all out of object, and `lastT` showed as a Smi in `%DebugPrint`, i.e. a tagged field: every store of a double
+  allocated. The world's scalar doubles now live in `w.f` (`F.LAST_T`, `T0`, `UNITS`, `MUSIC_ON`, `NEW_WISH`, `SONG`); attention's token
+  buckets in `a.g` (Float64Array); `a.unitCap` / `a.allowance` stay public fields but are written only when they change.
+- Numbers (`node _harness/probe_life.ts`, the LF-02 row: 1000-tick windows after the probe's 3-pass replay warm-up): start of round 2
+  161 024 to 188 952 B; now **58 368 to 127 128 B**. The same windows measured after the whole probe has run (scratch `pg_life3/alloc.ts`):
+  101 to 132 KB before, **29 to 74 KB** now.
+
+**Why LF-02 still fails, plainly:** what remains is not LIFE allocating objects; it is V8 boxing doubles in functions that are still in the
+baseline tier. Evidence: (a) in an isolated process (`node _harness/probe_life.ts --lf02 --passes=N`, the same replay design, new in this
+round), the residual falls as the warm-up lengthens: 30 passes 11 to 26 KB per window, **100 passes 0.2 to 8.3 KB** (default V8 flags);
+with V8's TurboFan tier-up lowered (`--invocation-count-for-turbofan=50`) 100 passes give **32, 1264, 48, 0, 208, 144 B**; (b) `--trace-opt`
+at the start of the measured windows lists the functions not yet optimized: the rare ones (startBask, startNap, startZone, startLove,
+runBask, rideThink, freeTarget, leanTo, besides, sway, comeBackTarget, wishThink, ...), and the heap profile's remaining sites are exactly
+those (for example `startBask < Math.sin`: the builtin returns a HeapNumber when called from baseline code); (c) node 22 ships TurboFan
+without Maglev and tiers up after about 3000 calls; a branch taken a few times a minute never gets there in a probe-length warm-up
+(Chrome tiers up with Maglev at about 400 calls, so the browser's steady state is closer to the isolated long-warm-up number).
+So the 0 B bar over 6000 ticks after a short warm-up cannot pass in node 22 for any code with float math in rare branches, whatever LIFE
+does. **For the orchestrator:** either re-specify LF-02 as "no allocation once the code on the measured path is optimized" (measured in a
+process of its own after a long replay warm-up: today 0 to 1.3 KB per 1000 ticks with eager tier-up, 0.2 to 8 KB without), or accept the
+residual (at 60 fps the default-tier worst case is about 7 KB/s of short-lived HeapNumbers, a scavenge every few seconds at most). I did
+not change the bar or the measurement of the checked row. `--heavy` now prints the isolated 30- and 100-pass numbers as info rows.
+| 2 | LF-13 huff rows | DONE 16:05: 3 rows ok (and a new row for the second trigger) |
+
+#### Step 2, LF-13 (engineer 3)
+Cause (scratch repro `pg_life3/dbg_spot.ts`, engineer 1's `pg_life/dbg5.ts`): `huffScene` set `huffDue` inside runUse, and in the same think
+`choose` consumed it at its 0.5 against everything else (a notice of the rolling ball at 0.9 always won), so the huff was lost; a separate
+"the huff shows now" bypass in `behave` contradicted LIFE 4's utility choice. Fix: the scene event keeps B16 a candidate at its 0.5 for 3 s
+(`huffDue` counts 30 thinks down), so the huff shows once what it was doing ends (in the probe: the notice, then the huff at +1.6 s); the
+bypass is gone; `huffT` (the comfort trigger, S09) is set when the huff really starts. A touch ends it with a happy squint at once and the
+giggle bubble and voice at the release (B08's afterglow takes the giggle 100% after a huff: a held squishy shows no bubble, L2). **The
+second trigger is now built:** a napper walking to a ring (the Snug Basket) that another squishy takes first gives up that nap (cooldown 5 s)
+and the huff is a candidate (`ringTaker`). Probe rows (all ok): the static table; none in the first 60 s; one huff after 60 s, B16 measured
+per think lasts 3.00 s (bar 3 s + one think); a touch ends it (B16 ended, squint, giggle bubble +1.50 s after the touch, through the 2.5 s
+per-character bubble gap); NEW: the taken Snug Basket gives a huff (+0.1 s). The rows stage the scene with other candidates scoring 0.5 or
+more on cooldown, the same way the boop rows do: the huff's 0.5 is LIFE 4's and loses to a notice, a bask or a zone reaction.
+| 3 | LF-09 balance: the definition, then the tuning | DONE 16:55: both rows ok (seed 51); 4 more seeds as info |
+
+#### Step 3, LF-09 (engineer 3)
+**What counts as a "thing use" (written before tuning; my reading of LIFE.md, put in the probe's comment):** one completed by-itself use of
+a thing in LIFE 5.3's sense: a USE event in LIFE's output with `a` = the squishy and `b` != PLAYER (254) whose verb is a mechanism use. In the
+cabin that is a boop of the Yarn Ball (B04, or the squishy's own turn in an S12 pass game: USE ROLL; QUESTS 4's USE is "a use completes", so
+each boop counts) and a nap settled on a nap thing (the Snug Basket ring or the Snooze Rug patch: USE NAP, LIFE 5.3's ring and rug rows; a
+nap beside a sleeping friend off the rug is not a thing use). **Not counted:** B18's USE LISTEN (answering the kettle's whistle): LIFE 5.3's
+switch row says a squishy never uses a switch, "it watches, and answers a tune", and B18 is "answer a thing"; moments around a thing (S06
+singing by the kettle) and zone reactions (a bask in the hearth's warmth, B05) are not uses either. Round 1's probe counted every USE event,
+LISTEN included (that inflated it: 3 LISTENs for one squishy).
+What the diagnosis found (scratch `pg_life3/lf09.ts` seeds 51..58 with timelines, `lf09b.ts` time shares and an instrumented endBeh):
+1. **Greets lost:** S01's once-per-visit bit was set when a greet *started*; a walk-up greet that found no mover token (med: moverCap 1)
+   ended at once and the pair counted as greeted with no SOCIAL GREET. Now an aborted once-per-visit moment (greet, mirror, duet, twirl)
+   gives its bit back, and a walk-up waits up to 6 s for the token. And (my reading of S01) an ungreeted pair of wholes starts no other pair
+   moment (round 1's probe run had BOOP, SING, PILE, COPY between 0 and 2 and never their greet). 6 of 6 pairs in all 8 seeds, by about 45 s.
+2. **A use restarted itself:** `startUse` capped the running score at 1.0 while a favourite ball scores up to 1.2, so `choose` restarted
+   the same use every few thinks (behT0 reset; one squishy sat 86 s in B04 phase 0). The running behaviour is now never restarted by its own
+   fresh score, and the cap is gone.
+3. **B02 noise:** every small gait hop of a hopping neighbour counted as "a land within 1.5 m" (0.9), and the ball a squishy was walking to
+   counted as "a thing moving": 54 of the B04 interruptions in 8 runs. A noticeable landing is now one that is not LIFE's own hop (no hop by
+   that body in the 0.6 s before), and the thing a squishy is using is not news to it (my reading of B02).
+4. **The probe host lost the ball:** the kinematic host let the yarn ball roll out of the cabin (z 3.1 to 4.1 against hz 2.4) after its first
+   boop, so no later B04 could find a use point. The host now keeps the ball inside the layout's bounds with the rim bounce 0.35 (PLACES P5,
+   P7; PH-05: the ball never leaves through a wall). This is a fixture fix, not a LIFE change.
+5. **Pacing (tuning, my reading):** the dozy nap trigger needs rest > 0.6 (round 1: 0.45; a dozy squishy that wakes on the basket napped 3
+   times in 5 min); `USES_FULL = 2` (world.ts): after 2 by-itself thing uses this visit a squishy starts no more by its play or its dozy
+   trait and no S12 pass (a nap from real tiredness, rest > 0.75, a player-asked use and FIRST_PLAY still come); with play over 0.8 (LIFE 3's
+   "at 0.8: a thing use") B04 reaches its ball from anywhere in the place, not only within 3 m.
+Result (`node _harness/probe_life.ts`): **LF-09 ok, ok**: 6 of 6 pairs, 4 nappers, thing uses 2 / 3 / 2 / 2 (seed 51). Other seeds (info row and
+scratch): 52: 3/2/2/3, 54: 2/2/2/3, 55: 3/2/3/3, 56: 3/3/2/2, 57: 2/3/2/2, 58: 2/3/3/3 all in; **53: 2/2/0/2 out** (Capnap napped twice beside
+friends off the rug and its two B04s ran past the 5 minutes). So 7 of 8 seeds hold; the balance stays chaotic and the row checks seed 51.
+Side fix: S07 at Home no longer sends a SCOOT to where the body already is (the row leans in place: LF-06's Home segment rule).
+Probe after step 3: 81 ok, 1 FAIL (LF-02); probe_life_imports all ok.
+| 4 | the friend wish and its input `lifeSetFriends` | DONE 17:20: 4 new FW rows ok |
+
+#### Step 4, the friend wish (engineer 3)
+**New additive input (a LIFE value in `src/life/step.ts`, not a contract member):**
+`lifeSetFriends(w: LifeWorld, speciesIdx: number, friendMask: Uint32Array): void` — for species `speciesIdx` (catalog idx, 0..63), the
+species it may wish to see, a 2-word bit mask by catalog idx: **every species at Friends or closer with it, plus its authored best friend
+only once its F3 is found** (so a wish never gives the riddle away, QUESTS 8). Call it on a journal change (a FRIEND level reached, F3 found,
+a load or backfill), never per frame; it allocates nothing. LIFE adds the other two conditions itself: the friend is owned (`lifeSetJournal`'s
+`owned`) and not out now.
+- **For PG_SHELL (the LIFE host):** after `lifeSetJournal`, call `lifeSetFriends` for each owned species whose mask changed (or all 50 at load).
+  A friend wish's `lifeWishOf` is `[WISH_KIND.FRIEND (4), the friend's species idx]` (the card: "Crimpo wants to see Thumbly."; the bubble is
+  the snug glyph, the friend's tier gem is the render's). **A SOCIAL GREET with `thing = -2` is the friend wish's grant greet: write it to
+  the ring with `v = -1`** (no friendship points; the reducer already reads `v < 0` that way, quests.ts 533) and thing -1.
+- **For PG_QUESTS:** the producer side of the friend wish is built: WISH SHOWN (kind FRIEND), then WISH GRANTED when the wisher greets or
+  nuzzles a squishy of that species (LIFE's `wishFromEvents`). The grant is by SELF from LIFE's point of view; QUESTS 8 says a friend wish's
+  grant is by PLAYER (the player brought the friend out): the host should tag a GRANTED of kind FRIEND as by PLAYER. When the pair has not
+  greeted this visit (the usual case: a squishy brought out starts with fresh pair rows), the grant comes with the pair's normal greet
+  (1 point, as for any friend brought out); only when the pair greeted already this visit does an extra greet happen for the grant
+  (S01's once-per-visit limit ignored, thing = -2, no points). That is my reading of "the grant's greet ignores S01's once-per-visit limit
+  and gives no friendship points".
+- The wisher walks over to greet the friend from anywhere in the place (score 1.2, above the greet-first rule).
+**Found on the way, fixed:** the natural wish scheduler ran only at the end of `choose` *after a new behaviour had started and left the
+squishy idle* (an early return skipped it on a plain idle think), so natural wishes and re-glances almost never ran. `wishThink` now runs on
+every idle think outside a moment. LF-14 and LF-25 still pass (8 wishes in 20 min, gaps 120 s overall, 240 s a squishy, 2 re-glances).
+Probe rows (all ok): FW shown (Crimpo wishes to see Dollop at +180 s, lifeWishOf [4, 0], its snug think bubble); none for a species not
+owned, one out, or one not in the mask; brought out: greeted +6.9 s and granted at that greet; the grant greet once more with thing -2 when
+the pair greeted already. Probe: 85 ok, 1 FAIL (LF-02).
+| 5 | LF-18 water exit; probe rows for the S2 FLOAT, WADE, SPLASH, SHIVER, FROST producers | DONE 17:45: 2 LF-18 rows + 4 LF-21 rows ok |
+| 6 | the S2 raised-hop switch `lifeSetHops` | DONE 17:55: 1 row ok |
+
+#### Step 5, LF-18 and the S2 REACT rows (engineer 3)
+- **LF-18 built** (brain.ts `behave` + `dryTarget`): after 30 s in water (`BRAIN.waterMaxS`, by itself or set there by the player; the timer is
+  `inWaterT`, set while the centre is in a water zone or the IN_WATER flag is on) a squishy that may move heads out by SCOOT (travelTo, never
+  moveTo; a floater too) to the nearest dry spot: 16 directions x 0.5 to 3.5 m, the first point out of every water zone by R + 0.1 m, inside the
+  bounds shrunk by R + 0.2 m and clear of the keep-outs (deterministic, no draw); it runs as B11's travel (BEH.COMEBACK) and retries each think
+  until it has a mover token. B06 starts nowhere in water (round 1). HELD, RIDE (a raft) and a moment come first.
+- The probe host now marks IN_WATER for a body in a water zone and lets a body float (not GROUNDED) with `add(..., { float: true })`.
+- Rows (PG_DATA's Ripple Shore and Frostbell Ridge, wide, from LIFE's real output): LF-18 wader and floater in the Rock Pool, tired and not
+  playful, bask / use / wander on cooldown for 30 s (the whole-place Sun would otherwise walk it out first, which also satisfies LF-18): exit
+  SCOOT to a dry spot at 30.0 s, out of the water at 35.0 s, 0 wet nap ticks. LF-21: WADE (grounded, surface 0.28) and FLOAT (not grounded)
+  once per visit with thing = the Rock Pool (12; a squishy that comes out inside a zone enters it at once, 3.1, so both fire at 0.0 s);
+  SPLASH: four landings in the Surf Edge (three 1 s apart, one 5 s later) give 2 events 8 s apart with thing -1 (the Surf Edge has no owning
+  thing, so it differs from the Rock Pool: LF-21's "the Rock Pool and the Surf Edge give different things"); Frostbell's whole-place Mountain
+  Cold 0.6: SHIVER only for the jelly gel (Dollop), thing -1, and FROST at 16.6 s for both (0.5 / 0.03), thing -1.
+- **Open question for PG_DATA / the designer (not changed):** Frostbell's Steam Pool lies inside the whole-place Mountain Cold, and LIFE 3.1
+  says frost falls only while its rising cause is absent; LIFE integrates frost up whenever any cold zone covers the centre, so in the Steam
+  Pool (warm 1.0) frost does not fall today. If the pool is meant to thaw (a remedy), either the Steam Pool's warmth should mask the cold
+  zone at its centre or LIFE 3.1 should say warmth wins; I did not guess.
+
+#### Step 6, the S2 raised hops (engineer 3)
+`lifeSetHops(w, raisedFamilies)` (step.ts; a bit per MATERIAL_FAMILY_IDS index): a whole of a raised family hops at its `GAITS.vyS2` (no S1
+cap); every other family stays at min(vyS1, 0.84); pieces keep the S1 cap in every slice (LIFE 5.2: apex 3.5 cm); Calm x 0.6 as before. **For
+PG_SHELL:** call it once with the slice (0 in S1; in S2 the mask of families PH-01 passed with `auto` landings), never per frame. Row ok:
+Dollop (jelly gel) max vy 1.20 raised, Boingle (firm silicone, not in the mask) 0.84, a Dollop piece 0.64, mask 0 back to 0.80, Calm 0.72.
+| 7 | S05 parade, P04 join in, the curious one walks over after a cut | DONE 18:40: 3 new rows ok; probe 95 ok / 1 FAIL (LF-02), 4.0 s |
+
+#### Step 7 (engineer 3)
+- **S05 parade** (social.ts, moment id `MOM.PARADE` = 19 inside LIFE; its SOCIAL sub is PARADE): a curious one (curious > 0.5) within 2 m
+  sees a leader hop; when the leader's bouncy is 0.6 or more and another idle, free whole stands within 2.5 m of it, the moment is a parade
+  (score copy + 0.1; in a place only: at Home targets must stay on the framed segments). Members: the leader first (the star bubble), then
+  the curious one and up to two more. Turn by turn, one mover at a time: the leader glides about 1.2 m on (12 headings 30 degrees apart from
+  the line's heading turned 60 degrees a leg, 1.2 then 0.8 m, inside the shrunk bounds, clear of the keep-outs and of every body), then each
+  in turn glides up behind the one in front (0.7 m between centres, never overlapping: at least the two radii + 0.1), a chirp at each turn;
+  two legs (my reading of "the loop is done"), at most 45 s. A parade that found no room for its first leg ends without an event. SOCIAL
+  PARADE: a = the leader, b = the second, n2 = the members (the reducer gives +1 per neighbour pair).
+- **P04 join in** (brain.ts `joinCandidate`): a face piece within 2 m of a whole that booped a ball in the last 4 s (LIFE 9's window), and
+  within 3 m of the ball, copies the use (0.9): its group follows (P01) and hops together (P03); the PIECES record carries n at a new high.
+  **Fixed on the way:** a piece's USE went out as PIECES with sub = the bare verb (ROLL = 1, the same number as REACT FLOAT); it is now
+  `PIECES_USE + verb` (64 + verb, data/quests.ts), as the reducer reads it. And a piece group joining a whole's use is no longer "taken from"
+  (the huff's take test is for wholes only; pieces never huff).
+- **The most curious walks over after a cut** (LIFE 9): at a CUT touch the most curious other whole gets `lookAt` (the cut whole's slot = its
+  pieces' group key) for 20 s; once it may move (the Cut tool's quiet holds wholes) it walks (B13 WATCH, phase 1, score 1.0) to a spot
+  beside the face piece (0.9 m, or the two radii + 0.3) inside the shrunk bounds and clear of the keep-outs, then watches it 3 s with a wow
+  bubble. Not at Home (the segment rule: it watches from its slot). A walking-over squishy is not free for other moments.
+- Rows (all ok): S05 PARADE n 3, leader slot 0, 4 glides, 0 frames over moverCap, 0 double moments; P04 PIECES (sub 65 = PIECES_USE + ROLL)
+  n 1 at +7.3 s on the Yarn Ball; LIFE 9: Dollop from 4.47 m to 0.84 m of the face piece within 20 s of the quiet lifting, gazing at it.
+| 8 | size (last): cheap and safe reductions | DONE 19:30: 108 312 -> **97 864 B** minified; the 75 KB target is NOT reached |
+| 9 | QU-16 answer for PG_QUESTS; autonomy-off naps | DONE 19:40 |
+
+#### Step 8, size (engineer 3; measured as round 1: `pg_life3/bytes.mjs` = round 1's `pg_life/bytes.mjs`, each module bundled alone by rolldown, every import external, minified)
+Before the size work, with this round's features: **108 312 B** (round 1 ended at 101 401). After: **97 864 B min, 39 820 B gzip** (world 9 402,
+traits 1 138, attention 6 660, voice 4 256, act 6 092, looks 8 023, social 17 484, wish 6 858, brain 29 255, step 8 696).
+- **LifeWorld's field names shortened** (227 fields, 2 343 references, renamed with the TypeScript 6 language service's findRenameLocations,
+  scratch `pg_life3/tools/rename.cjs`, the map in `pg_life3/tools/LifeWorld.map.json`; precise: every reference in the program, the probe
+  included): 108 312 -> 98 925. Kept: `species` (PG_AUDIO's `_harness/audioview/life_checks.mjs` writes `w.species`), `f`, `att`, `movers`,
+  `def`, `home`, `seed`, `visit`, `layout`, `placeIdx`, `bodyScale`, `night`, `maxChars` and every name of 3 letters or fewer. **LifeWorld is
+  internal: hosts use the functions** (`lifeAttention`, `lifeDebug`, `lifeWishOf`, ...). The probe was updated by the same rename; every row
+  gave the same numbers before and after (identical decisions).
+- Dead code: 8 never-used fields (hopsLeft, tossN, rideSeen, noticeSrc, zoneIn, mX, mZ, leaderIdleT), 12 unused time reads, looks.ts' dead
+  FAM_MOCHI / FAM_SLIME branch. Repeated patterns as tiny integer-only helpers: `say` (27 calls), `voice` (23), `qT` (15), `noLean` (16),
+  `freeSpot` (6). Together 98 925 -> 97 681 (the autonomy-off nap of step 9 added 183).
+- **Why not 75 KB, plainly:** what is left is code, not names: property names are now about 12 KB of the 98 KB, the import / export lists of
+  the per-module measure 8.5 KB (5.5 imports, 3.0 exports; they vanish in a real bundle), `/* @__PURE__ */` annotations 0.8 KB. Reaching 75 KB
+  needs about 23 KB less logic: a table-driven behaviour runner instead of brain.ts' per-behaviour functions, the moment state machines of
+  social.ts folded into a few shared turn-by-turn steps, enum objects (BEH, EMOTE, STYLE, PHRASE, LIFE_FLAG) destructured to locals. Those
+  are rewrites of tested behaviour, not cheap and safe, and I did not start them at the end of a run. The D-92 overflow rule decides.
+
+#### Step 9 (engineer 3)
+- **PG_QUESTS asked to confirm QU-16's "needs autonomy" set against LF-24.** LIFE today: BOOP, NUZZLE, COPY, PARADE, SNUGGLE, PASS, PEEK and
+  COMFORT start only when the squishy may move (`canMove`), so none happens with autonomy off: **confirmed**. GREET within 1.6 m (a lean),
+  CHAT, SING, MIRROR (a sway), DUET, TWIRL (a turn each, then a sway), TEETER and PUSH (rides the player set) still happen. **PILE:** round 1
+  started no nap at all with autonomy off (B06 sat inside the may-move branch), so no PILE; now (LIFE 5.6: sleeping moves nothing) a squishy
+  with autonomy off naps where it is on the same triggers, so piles still form when two nappers touch: QU-16's set is right for PILE too.
+  The autonomy-off branch is evaluated only when the squishy may not move, so an autonomy-on think draws its noise in the same order as
+  before (LF-09's seed 51 depends on it). LF-24 rows still ok (0 motion intents with autonomy off).
+
+## STATE AT ENGINEER 3's STOP (2026-11-16 ~19:45 UTC). `npx tsc --noEmit -p tsconfig.json` CLEAN.
+Commands: `node _harness/probe_life.ts` (exit 1: **95 ok, 1 FAIL (LF-02)**, 3.8 s), `node _harness/probe_life_imports.ts` (all LF-12 rows ok),
+`node _harness/probe_chatter.ts` (PG_AUDIO's, imports voice.ts: 31/31 ok). `--heavy` adds LF-01 over 600 s, LF-14 over 30 min and the isolated
+LF-02 measurements. Nothing of mine is running.
+The five rows of the scope: LF-09 x2 ok, LF-13 x2 ok (+1 new row), **LF-02 still FAIL** (58 to 105 KB per 1000 ticks in the probe; down from
+161 to 189 KB; the remainder is V8 baseline-tier boxing in rarely run functions, step 1). New rows this round (all ok): 4 FW (friend wish),
+2 LF-18, 4 LF-21 (FLOAT, WADE, SPLASH, SHIVER + FROST), LIFE 5.2 raised hops, S05 parade, P04 join in, LIFE 9 walk over.
+
+### New API (all LIFE values in src/life/step.ts, additive; no contract change)
+- `lifeSetFriends(w, speciesIdx, friendMask: Uint32Array)` (step 4); `lifeSetHops(w, raisedFamilies)` (step 6).
+- Event conventions added: SOCIAL GREET `thing = -2` = the friend wish's grant greet (write `v = -1`, thing -1 to the ring); a piece group's
+  USE as PIECES now has `sub = PIECES_USE + verb` (64 + verb) as data/quests.ts defines (it was the bare verb).
+
+### Requests to other lanes
+- **PG_SHELL (LIFE host):** call `lifeSetFriends` after `lifeSetJournal` for each owned species whose mask changed (all at load): the mask is
+  every species at Friends or closer with it plus its best friend once its F3 is found; write SOCIAL GREET with thing -2 as `v = -1`; tag a
+  WISH GRANTED of kind FRIEND as by PLAYER (QUESTS 8); call `lifeSetHops(w, 0)` in S1 and `lifeSetHops(w, maskOfFamiliesPH01Passed)` in S2;
+  LifeWorld's fields were renamed (internal): read nothing from `w` but through the functions. The CUT touch kind on the whole before the
+  shell removes it is what starts the curious one's walk-over (LIFE 9). No request touches src/shell code in this repo.
+- **PG_PHYS:** none new. (LF-18 relies on `scootTo` gliding a floating body, PH-15, as specified; the probe host only models it.)
+- **PG_DATA / the designer:** the Steam Pool (Frostbell) lies inside the whole-place Mountain Cold, and frost "falls only while its rising
+  cause is absent" (LIFE 3.1), so frost does not fall in the Steam Pool today: decide whether its warmth masks the cold (step 5).
+- **PG_QUESTS:** the friend wish's producer side is built (step 4); QU-16 confirmed (step 9).
+- **PG_AUDIO:** (1) the syllable budget still charges every syllable at a phrase's start (`voiceOk`), so three singers x 4 notes exceed the
+  burst: not changed this round (out of my scope's time); (2) LOVED's degree 4 is now commented as "4 pentatonic steps up (a sixth): the
+  contract's range caps it".
+
+### Not done (plainly)
+- **LF-02** still fails its bar (step 1 for the numbers and the proposal to re-specify it as the optimized steady state).
+- **Size:** 97.9 KB, not 75 KB (step 8).
+- LF-09 holds for the probe's seed 51 and, at the stop, 5 of 7 other seeds (52, 55, 56, 57, 58 in; 53: 2/2/0/2 and 54: 2/1/2/3 out; the
+  info row prints 52 to 55 on every run). The balance stays chaotic: small changes move single squishies across the 2..3 band.
+- Not built from the S1/S2 list: SOAK by water (S2 rain/water look rows not probed), GLIDE (ice, S2: no producer), the squirt game's LIFE
+  part beyond SQUIRTED, the snow cap from standing on snow, B19 gusts in a real place (S3), S05 copying a thing use by a whole (P04 copies a
+  use; a whole's S05 copies hops), the 3-tosses "dizzy" beyond 5 s of grace, B17 comfort's "a greet from the other ends a huff".

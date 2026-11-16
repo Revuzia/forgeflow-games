@@ -137,7 +137,8 @@ export const LOOK_RATES = {
   toast: { rise: 0.04, cap: 0.75, fallWarm: 0.01, fall: 0.01 },
 } as const satisfies Record<keyof typeof LOOK, { rise: number; cap: number; fallWarm: number; fall: number }>;
 /** The host's lifeAddLook amounts (LIFE 3.1, PLACES 4.2 to 4.4, S14): look id, amount, radius m (0 = the target only), seconds it lasts.
- *  The kettle's steam: PLACES 4.2 writes 1.2 m, LIFE 3.1 0.6 m; this table follows the thing's own page (PLACES 4.2), reported to the designer. */
+ *  The kettle's steam reaches 1.2 m: PLACES 4.2 wins over LIFE 3.1's "within 0.6 m" (the orchestrator's ruling, 2026-11-16, PG_DATA round 2);
+ *  the host applies it to every body within `r` of the kettle. */
 export const LOOK_ADD = {
   pinePuff: { look: LOOK.snow, amount: 0.5, r: 0.7, thing: 'shakepine' },
   snowball: { look: LOOK.snow, amount: 0.3, r: 0, thing: 'snowball' },

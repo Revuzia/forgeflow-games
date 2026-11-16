@@ -263,7 +263,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   const playB = new Float64Array(4);
   let play: PlayFrame | null = null;
   function refitPlay(): void {
-    play = placeHost && Number.isFinite(playB[2]) && playB[2] > 0 ? placeHost.fit(playB[0], playB[1], playB[2], playB[3], camera.fov, cssW, cssH, safe.top, safe.right, safe.bottom, safe.left) : null;
+    play = placeHost && Number.isFinite(playB[2]) && playB[2] > 0 ? placeHost.fit(playB[0], playB[1], playB[2], playB[3], cssW, cssH, safe.top, safe.right, safe.bottom, safe.left) : null;
     if (play) { tYaw = 0; tPitch = play.pitch; tZoom = 1; }
   }
   // ---- PLAYGROUND places (the away chunk src/render/place.ts, which swaps, poses and frames a place; one look chunk per place) ----
@@ -613,7 +613,10 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     yaw += (tYaw - yaw) * k;
     pitch += (tPitch - pitch) * k;
     zoomF += (tZoom - zoomF) * k;
-    // PLAYGROUND (a place, P8): the camera frames the play bounds of the layout in use, fitted once (setPlayBounds); it never follows a body
+    // PLAYGROUND (a place, P8): the camera frames the play bounds of the layout in use, fitted once (setPlayBounds) with its lens (placeview.ts:
+    // the widest that meets RD-17); it never follows a body. Home keeps the 35 degree lens.
+    const fv = play ? play.fov : 35;
+    if (camera.fov !== fv) { camera.fov = fv; camera.updateProjectionMatrix(); }
     if (play) {
       const kt = 1 - Math.exp(-dt * 6);
       tgt.x += (play.aimX - tgt.x) * kt; tgt.y += (play.aimY - tgt.y) * kt; tgt.z += (play.aimZ - tgt.z) * kt;
@@ -721,6 +724,8 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   const placeCtx: StageCtx = {
     renderer, scene, table, key, rim, fill, views: () => views, heat,
     setSkyBand: (r, g, b) => emotes?.setSky(r, g, b),
+    body(id, out) { const v = viewById(id); if (!v || !v.visible) return false; const c = v.proxy.center; out[0] = c.x; out[1] = c.y; out[2] = c.z; out[3] = v.liveRadius; return true; },
+    phone: () => coarsePointer || Math.min(cssW, cssH) < 600,
   };
   /** What the bubbles need this frame (one reused object). */
   const emoteFrame: EmoteFrame = {
@@ -957,7 +962,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       // PLAYGROUND: eyes seen through another body's jelly are depth-faded (RD-12), Home's things, the bubbles (after the camera moved)
       fadeOccludedEyes(d);
       if (home) home.update(d, quiet);
-      if (placeHost) placeHost.update(d, time, quiet, reducedMotion, tier === 'high' ? 0 : tier === 'med' ? 1 : 2, propPoses, propCount, propThing);
+      if (placeHost) placeHost.update(d, time, quiet, reducedMotion, tier === 'high' ? 0 : tier === 'med' ? 1 : 2, propPoses, propCount, propThing, director.active);
       if (emotes) { fillEmoteFrame(quiet); emotes.update(d, emoteFrame); }
       // Back-to-front order of the translucent jellies. Their meshes sit at the origin with world-space vertices, so three's own
       // transparent / transmissive sort sees one depth for all of them and falls back to creation order (a back body painted over a front
@@ -1115,6 +1120,8 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       if (isHome) { playB.set([0, 0, NaN, NaN]); play = null; }
       return placeHost ? placeHost.enter(placeCtx, isHome ? null : id, camera.aspect < 0.9 ? 1 : 0) : true;
     },
+    reactFx(kind, bodyId, x, y, z, amount, lifeS) { return !!placeHost?.react(kind, bodyId, x, y, z, amount, lifeS); },
+    thingFx(thing, kind, amount) { return !!placeHost?.thingFx(thing, kind, amount); },
     setPlayBounds(cx, cz, hx, hz) {
       // (a non-finite or empty bounds clears it: Home's framing again)
       if ([cx, cz, hx, hz].every(Number.isFinite) && hx > 0 && hz > 0) playB.set([cx, cz, hx, hz]); else playB.set([0, 0, NaN, NaN]);

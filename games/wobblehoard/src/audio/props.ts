@@ -23,7 +23,10 @@ export const TUNE_BARS = [8, 1];
 export function ballBump(ctx: Ctx, out: AudioNode, t0: number, p: { rng: Rng; intensity: number; size?: number; pan?: number; soft?: number }): VoiceGroup {
   const t = Math.max(0, fin(t0, 0)), i = clamp(fin(p.intensity, 0.5), 0, 1), r = p.rng;
   const bag = new Bag(ctx, out, 'prop', fin(p.pan, 0));
-  const f = (230 / (clamp(fin(p.size, 0.22), 0.1, 0.4) / 0.22)) * (1 + 0.04 * (r() - 0.5));
+  // round 2: size sets the ball apart (prop size): pitch goes as (0.22 / r)^2 and the thump lasts longer for a bigger ball, so the felt
+  // ball (0.22, 230 Hz) and the yarn ball (0.24, 193 Hz, a fuller, slower thud) are 3 semitones and a few ms of body apart
+  const sz = clamp(fin(p.size, 0.22), 0.1, 0.4) / 0.22;
+  const f = (230 / (sz * sz)) * (1 + 0.04 * (r() - 0.5));
   const A = dbToGain(-30 + 16 * Math.sqrt(i)) * clamp(fin(p.soft, 1), 0, 1);
   const o = bag.osc('sine', f, t, t + 0.25);
   o.setPeriodicWave(harmonicWave(ctx, 'ball', [1, 0.25, 0.06]));
@@ -33,13 +36,14 @@ export function ballBump(ctx: Ctx, out: AudioNode, t0: number, p: { rng: Rng; in
   o.connect(g); g.connect(bag.head);
   g.gain.setValueAtTime(0, t);
   g.gain.linearRampToValueAtTime(A, t + 0.003);
-  g.gain.setTargetAtTime(0, t + 0.003, 0.03 + 0.02 * i);
+  g.gain.setTargetAtTime(0, t + 0.003, (0.03 + 0.02 * i) * sz * sz);
   const n = bag.noise(r, t, t + 0.06), lp = bag.biquad('lowpass', 700 + 1500 * i, 0.6), ng = bag.gain(0);
   n.connect(lp); lp.connect(ng); ng.connect(bag.head);
   ng.gain.setValueAtTime(0, t);
   ng.gain.linearRampToValueAtTime(A * 0.4, t + 0.002);
   ng.gain.setTargetAtTime(0, t + 0.002, 0.008);
   bag.endTime = t + 0.27;
+  if (sz > 1) { o.stop(t + 0.25 * sz * sz); bag.endTime = t + 0.25 * sz * sz + 0.02; }
   return bag;
 }
 
@@ -176,12 +180,13 @@ export class TuneVoice {
       if (t >= until) break;
       this.i++;
       if (t >= this.stopped) continue;
-      // the field's scale from F#5 to D7; the anchor is the scale note nearest A6, so the tune sits an octave over the mallet
+      // the field's scale from F#5 to D7; the anchor is the scale note nearest E6, so the tune's whole span (-2..+3 steps) fits
+      // under D7 (round 2 fix: an A6 anchor clamped steps +2 and +3 both onto D7, flattening bars 2 and 4 into repeated top notes)
       const mel = FIELDS[this.fieldAt(t)]?.mel ?? FIELDS[0].mel;
       const sc: number[] = [];
       for (let k = 78; k <= 98; k++) if (mel.includes(pcOf(k))) sc.push(k);
       let a = 0;
-      for (let k = 1; k < sc.length; k++) if (Math.abs(sc[k] - 93) < Math.abs(sc[a] - 93)) a = k;
+      for (let k = 1; k < sc.length; k++) if (Math.abs(sc[k] - 88) < Math.abs(sc[a] - 88)) a = k;
       this.push(tine(this.ctx, this.out, t, sc[clamp(a + step, 0, sc.length - 1)], vel));
     }
     if (this.bags.length > 8) this.bags = this.bags.filter((b) => b.alive);

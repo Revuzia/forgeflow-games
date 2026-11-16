@@ -12,8 +12,9 @@
 // and 30 s (a 0.2 s grow), then rests as its still dot. **Calm or reduced motion (each on its own): every motion is a fade** (in and out 0.25 s,
 // a re-glance is a 0.2 s opacity lift, never a grow). Never a flash (alpha only), nothing bobs or pulses.
 // Anchor: the tail tip just above the body's top (1.3 x rest radius above its centre, or its top + 0.15 R if that is higher), clamped inside
-// the HUD safe insets, stacked upward when two overlap, slid clear of a waiting capsule; hidden while a ceremony plays (the reveal plate) and
-// for a body off the frame. The stage only draws: LIFE's attention budget decides what reaches emote(). Zero allocation per frame.
+// the HUD safe insets (a bubble is not part of a place's framing, RD-17 round 2: it slides along the safe frame's edge, its tail or a wish's
+// trailing dots turned to keep pointing at its squishy), stacked upward when two overlap, slid clear of a waiting capsule; hidden while a
+// ceremony plays (the reveal plate) and for a body off the frame. Style 3 (LIFE's WISH_DOT) is a wish drawn as its still dot. The stage only draws: LIFE's attention budget decides what reaches emote(). Zero allocation per frame.
 import * as THREE from 'three';
 import { oklchToLinear, linearToOklch, type Rgb } from './oklch.ts';
 import { PALETTE } from './table.ts';
@@ -41,12 +42,14 @@ const VERT = /* glsl */`
 attribute vec4 iA;   // centre (ndc x, y), radius (ndc x, y)
 attribute vec4 iB;   // icon, style, alpha, scale
 attribute vec4 iC;   // dots, flags, radius in CSS px, icon size over bubble size
+attribute float iT;  // the tail's turn from straight down toward its body (radians; 0 = the bubble sits right over its anchor)
 varying vec2 vP;
 varying vec4 vB;
 varying vec4 vC;
+varying vec2 vT;
 void main() {
   vP = position.xy * ${EXT.toFixed(2)};
-  vB = iB; vC = iC;
+  vB = iB; vC = iC; vT = vec2(cos(iT), sin(iT));
   gl_Position = vec4(iA.xy + position.xy * ${EXT.toFixed(2)} * iA.zw * iB.w, 0.0, 1.0);
 }
 `;
@@ -56,6 +59,7 @@ precision highp float;
 varying vec2 vP;
 varying vec4 vB;
 varying vec4 vC;
+varying vec2 vT;
 uniform vec3 uCream, uPlum, uInk, uAmber, uLagoon, uCoral, uDusk, uSky;
 #define PI 3.14159265
 float sdSeg(vec2 p, vec2 a, vec2 b) { vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return length(pa - ba * h); }
@@ -175,9 +179,11 @@ void main() {
   float ow = 0.75 / max(vC.z, 1.0);   // half the 1.5 CSS px outline, in bubble units (vC.z = the radius in CSS px)
   // the bubble's outline shape
   float body = length(p) - 1.0;
-  if (!dotOnly && style == 0) body = smin(body, sdTri(p, vec2(-0.32, -0.8), vec2(0.32, -0.8), vec2(0.0, -1.34)), 0.1);
+  // the tail (and a wish's trailing dots) turned toward the body: a bubble clamped into the safe frame slides along its edge and still points
+  vec2 pt = vec2(vT.x * p.x + vT.y * p.y, -vT.y * p.x + vT.x * p.y);
+  if (!dotOnly && style == 0) body = smin(body, sdTri(pt, vec2(-0.32, -0.8), vec2(0.32, -0.8), vec2(0.0, -1.34)), 0.1);
   float sh = body;
-  if (!dotOnly && style == 1) sh = min(min(sh, length(p - vec2(-0.66, -1.04)) - 0.17), length(p - vec2(-0.98, -1.34)) - 0.1);
+  if (!dotOnly && style == 1) sh = min(min(sh, length(pt - vec2(-0.66, -1.04)) - 0.17), length(pt - vec2(-0.98, -1.34)) - 0.1);
   float fill = clamp(0.5 - sh / aa, 0.0, 1.0);
   float line = clamp(0.5 - (abs(sh) - ow) / aa, 0.0, 1.0);
   if (!dotOnly && style == 2) line = max(line, clamp(0.5 - (abs(length(p) - 0.82) - ow * 0.8) / aa, 0.0, 1.0));
@@ -233,8 +239,10 @@ class Slot {
   x = 0; y = 0; r = 0; alpha = 0; scale = 1; shown = false;
   /** Stacking offset (CSS px upward): its target, and the eased value drawn (a change glides, it never jumps). */
   liftT = 0; lift = 0;
-  /** Sort key: the anchor's screen y (nearer bodies are lower on screen and keep their spot). */
-  ay = 0;
+  /** Sort key: the anchor's screen y (nearer bodies are lower on screen and keep their spot); and its x. */
+  ay = 0; ax = 0;
+  /** The tail's turn toward the anchor (radians, 0 = straight down). */
+  tail = 0;
   dot = false;
   /** The icon's size over the bubble's. */
   ir = 0.61;
@@ -265,6 +273,7 @@ export class Emotes {
   private readonly aA: THREE.InstancedBufferAttribute;
   private readonly aB: THREE.InstancedBufferAttribute;
   private readonly aC: THREE.InstancedBufferAttribute;
+  private readonly aT: THREE.InstancedBufferAttribute;
   private readonly tmp = new Float32Array(3);
   private readonly v = new THREE.Vector3();
   private readonly order: Slot[] = [];
@@ -279,7 +288,8 @@ export class Emotes {
     this.aA = new THREE.InstancedBufferAttribute(new Float32Array(EMOTE_SLOTS * 4), 4).setUsage(THREE.DynamicDrawUsage);
     this.aB = new THREE.InstancedBufferAttribute(new Float32Array(EMOTE_SLOTS * 4), 4).setUsage(THREE.DynamicDrawUsage);
     this.aC = new THREE.InstancedBufferAttribute(new Float32Array(EMOTE_SLOTS * 4), 4).setUsage(THREE.DynamicDrawUsage);
-    this.geo.setAttribute('iA', this.aA); this.geo.setAttribute('iB', this.aB); this.geo.setAttribute('iC', this.aC);
+    this.aT = new THREE.InstancedBufferAttribute(new Float32Array(EMOTE_SLOTS), 1).setUsage(THREE.DynamicDrawUsage);
+    this.geo.setAttribute('iA', this.aA); this.geo.setAttribute('iB', this.aB); this.geo.setAttribute('iC', this.aC); this.geo.setAttribute('iT', this.aT);
     this.geo.instanceCount = 0;
     const c = EMOTE_COLOURS, col = (v: Rgb) => ({ value: new THREE.Color().setRGB(v[0], v[1], v[2], THREE.LinearSRGBColorSpace) });
     // each icon's accent, picked in the shader by its id (a constant table: no texture)
@@ -314,10 +324,13 @@ export class Emotes {
   show(slot: number, bodyId: number, icon: number, style: number, lifeS: number, dots: number, flags: number): void {
     const s = this.slots[slot | 0];
     if (!s || !Number.isFinite(slot)) return;
-    const same = s.on && s.outAge < 0 && s.body === bodyId && s.icon === icon && s.style === style;
-    s.body = bodyId; s.icon = Math.max(0, Math.min(24, Math.floor(icon) || 0)); s.style = Math.max(0, Math.min(2, Math.floor(style) || 0));
+    // style 3 (LIFE's WISH_DOT, set by the attention budget) = a wish drawn as its still dot (the same as flags bit 1)
+    let st = Math.floor(style) || 0, fl = Math.floor(flags) || 0;
+    if (st === 3) { st = 1; fl |= 2; }
+    const same = s.on && s.outAge < 0 && s.body === bodyId && s.icon === icon && s.style === st;
+    s.body = bodyId; s.icon = Math.max(0, Math.min(24, Math.floor(icon) || 0)); s.style = Math.max(0, Math.min(2, st));
     s.lifeS = Number.isFinite(lifeS) && lifeS > 0 ? lifeS : 1.6;
-    s.dots = Math.max(0, Math.min(3, Math.floor(dots) || 0)); s.flags = Math.floor(flags) || 0;
+    s.dots = Math.max(0, Math.min(3, Math.floor(dots) || 0)); s.flags = fl;
     s.dot = (s.flags & 2) !== 0;
     if (same) { s.age = Math.min(s.age, 0.15); return; }   // a re-show of the same bubble (a wish tapped or focused): it grows again, no pop
     s.on = true; s.age = 0; s.outAge = -1; s.lift = 0; s.liftT = 0;
@@ -355,7 +368,7 @@ export class Emotes {
       const d = s.dot ? DOT_PX : s.style === 2 ? Math.max(MIN_PX, base[0] * GROUP_K) : base[0];
       s.r = d / 2; s.ir = base[1] / base[0];
       // the tail tip sits at the anchor: the bubble's centre is a radius and a tail above it
-      s.x = ax; s.ay = ay; s.y = ay - s.r * (s.dot ? 1.2 : 1.34);
+      s.x = ax; s.ax = ax; s.ay = ay; s.y = ay - s.r * (s.dot ? 1.2 : 1.34);
       // motion: alpha and scale (Calm or reduced motion: fades only, never a grow)
       let a = 1, sc = 1;
       if (f.quiet) {
@@ -403,7 +416,12 @@ export class Emotes {
         if (dx * dx + dy * dy < gap * gap) x = f.capX + (dx >= 0 ? 1 : -1) * Math.sqrt(Math.max(0, gap * gap - dy * dy));
       }
       x = Math.min(xHi - r, Math.max(xLo + r, x));
+      const yWant = y;
       y = Math.min(yHi - r, Math.max(yLo + r, y));
+      // held down by the top inset (a back body near the frame's top): it slides along the edge toward the frame's middle, off its body's
+      // face, by as much as it was pushed down (at most 2.4 radii); its tail turns to keep pointing at the body
+      const push = y - yWant;
+      if (push > 0.5 * r) x = Math.min(xHi - r, Math.max(xLo + r, x + (x < W / 2 ? 1 : -1) * Math.min(push, 2.4 * r)));
       // no room above (the top inset held it down onto a bubble already placed): beside it instead, toward the side with more room
       for (let pass = 0; pass < 2; pass++) for (let j = 0; j < i; j++) {
         const o = order[j], dx = x - o.x, dy = y - o.y, gap = r + o.r * Math.max(1, o.scale) + 3;
@@ -414,6 +432,10 @@ export class Emotes {
         x = Math.min(xHi - r, Math.max(xLo + r, nx));
       }
       s.x = x; s.y = y;
+      // the tail turns toward the anchor when the clamps moved the bubble off it (exactly 0 when they did not: today's pixels)
+      const tdx = s.ax - x, tdy = s.ay - y;
+      s.tail = Math.abs(tdx) < 0.01 && tdy > 0 ? 0 : Math.atan2(tdx, tdy);
+      (this.aT.array as Float32Array)[n] = s.tail;
       const i4 = n * 4;
       A[i4] = (x / W) * 2 - 1; A[i4 + 1] = 1 - (y / H) * 2; A[i4 + 2] = (s.r / W) * 2; A[i4 + 3] = (s.r / H) * 2;
       B[i4] = s.icon; B[i4 + 1] = s.style; B[i4 + 2] = s.alpha; B[i4 + 3] = s.scale;
@@ -421,7 +443,7 @@ export class Emotes {
       n++;
     }
     this.geo.instanceCount = n;
-    this.aA.needsUpdate = true; this.aB.needsUpdate = true; this.aC.needsUpdate = true;
+    this.aA.needsUpdate = true; this.aB.needsUpdate = true; this.aC.needsUpdate = true; this.aT.needsUpdate = true;
     this.mesh.visible = n > 0 && this.inPhoto;
   }
 

@@ -11,6 +11,18 @@ import { SYL as DATA_SYL, SALTS } from '../src/data/life.ts';
 import { PROP_SOUND } from '../src/data/places.ts';
 import { SYL_LEN } from '../src/life/voice.ts';
 import { mulberry32 } from '../src/core/rng.ts';
+import { STRIKE, snapPenta } from '../src/audio/things.ts';
+import { AMB_ALIAS, WeatherClock, ambKey, patterCurve } from '../src/audio/ambience.ts';
+import { PLACE as P_HOME } from '../src/data/place_home.ts';
+import { PLACE as P_HEARTH } from '../src/data/place_hearthlog.ts';
+import { PLACE as P_RIPPLE } from '../src/data/place_ripple.ts';
+import { PLACE as P_FROST } from '../src/data/place_frostbell.ts';
+import { PLACE as P_RAIN } from '../src/data/place_rainleaf.ts';
+import { PLACE as P_FIZZ } from '../src/data/place_fizzwell.ts';
+import { PLACE as P_COG } from '../src/data/place_cogwhistle.ts';
+import { PLACE as P_ROOF } from '../src/data/place_lanternroof.ts';
+import { PLACE as P_HOLLOW } from '../src/data/place_echohollow.ts';
+import { PLACE as P_CLOUD } from '../src/data/place_cloudloft.ts';
 
 const rows: { id: string; name: string; ok: boolean; v: string }[] = [];
 const row = (id: string, name: string, ok: boolean, v: unknown): void => { rows.push({ id, name, ok, v: String(v) }); };
@@ -157,6 +169,57 @@ row('IDS', "MusicStyle 'home' is today's FIELD_NEXT, no mallet filter (AU-07)", 
   const share = (style: string): number[] => { const c = new Composer(5); c.style = STYLES[style]; const n = [0, 0, 0, 0]; for (let b = 0; b < 4000; b++) n[c.nextBar().field]++; return n.map((v) => v / 4000); };
   const h = share('home'), cb = share('cabin');
   row('STYLE', "cabin: more dusk + home bars than the home style (4000 bars)", cb[0] + cb[2] > h[0] + h[2] + 0.1, `home ${h.map((v) => v.toFixed(2)).join('/')}, cabin ${cb.map((v) => v.toFixed(2)).join('/')}`);
+}
+
+/* ── round 2 (S2, S3): the place things, the beds and the styles every place names ── */
+{
+  const PLACES = [P_HOME, P_HEARTH, P_RIPPLE, P_FROST, P_RAIN, P_FIZZ, P_COG, P_ROOF, P_HOLLOW, P_CLOUD];
+  const elsewhere = [PROP.ball, PROP.creak, PROP.crackle, PROP.kettle];
+  const kinds = Object.values(PROP).filter((k) => !elsewhere.includes(k as never));
+  row('IDS', 'every PROP_SOUND kind has a voice: ball, creak, crackle and kettle as before, the other 8 in things.ts STRIKE (and nothing else)', kinds.every((k) => typeof STRIKE[k] === 'function') && Object.keys(STRIKE).length === kinds.length, Object.keys(STRIKE).join(','));
+  const used = new Set<number>(); for (const pl of PLACES) for (const th of pl.things) if (th.sound) used.add(th.sound);
+  row('IDS', 'every thing sound the place data names has a voice', [...used].every((k) => elsewhere.includes(k as never) || typeof STRIKE[k] === 'function'), [...used].sort((x, y) => x - y).join(','));
+  const amb = PLACES.filter((pl) => pl.ambience !== 'none');
+  row('IDS', "every place's ambience id and place id resolve to its recipe (AMB_ALIAS); Home has none", amb.every((pl) => ambKey(pl.ambience) === pl.id && ambKey(pl.id) === pl.id) && ambKey('home') === '' && ambKey('none') === '' && Object.keys(AMB_ALIAS).length === 9, amb.map((pl) => `${pl.ambience}->${ambKey(pl.ambience)}`).join(' '));
+  row('IDS', "every place's music style exists in MUSIC_STYLES", PLACES.every((pl) => Object.prototype.hasOwnProperty.call(MUSIC_STYLES, pl.music)), PLACES.map((pl) => pl.music).join(','));
+  // the tuned things' notes are D major pentatonic already (snapPenta leaves them), and the snap moves any note at most a semitone
+  const notes: number[] = []; for (const pl of PLACES) for (const th of pl.things) if ((th as { notes?: number[] }).notes) notes.push(...((th as { notes?: number[] }).notes as number[]));
+  let snapOk = true; for (let m = 48; m <= 100; m++) { const q = snapPenta(m); if (!PENTA.includes(((q % 12) + 12) % 12) || Math.abs(q - m) > 1) snapOk = false; }
+  row('PITCH', 'chime / bell / crystal notes in the place data are D pentatonic (unchanged by the snap); any note snaps within a semitone', notes.length >= 15 && notes.every((m) => snapPenta(m) === m) && snapOk, notes.join(','));
+  // every style keeps FIELD_NEXT's drifts (weights only move), sums to 1, and a non-home style draws the same number of composer numbers
+  let drift = true;
+  for (const [k, st] of Object.entries(STYLES)) for (let f = 0; f < 4; f++) {
+    const a = st.next[f].map((q) => q[0]).sort().join(), b = FIELD_NEXT[f].map((q) => q[0]).sort().join();
+    if (a !== b || Math.abs(st.next[f].reduce((s2, q) => s2 + q[1], 0) - 1) > 1e-9) { drift = false; console.log('style', k, f); }
+  }
+  row('STYLE', `all ${Object.keys(STYLES).length} styles keep FIELD_NEXT's drifts (never back to the field just left), weights sum to 1`, drift && Object.keys(STYLES).length === 10, Object.keys(STYLES).join(','));
+  const share = (style: string): number[] => { const c = new Composer(5); c.style = STYLES[style]; const n = [0, 0, 0, 0]; for (let b2 = 0; b2 < 4000; b2++) n[c.nextBar().field]++; return n.map((v) => v / 4000); };
+  const h = share('home');
+  // PLACES' "Music style" lines: which fields each style favours (more bars than home's share of them)
+  const want: Record<string, number[]> = { shore: [1, 3], ridge: [3, 0], garden: [0, 1], bath: [3], bench: [1], roof: [2], hollow: [3], cloud: [1, 3] };
+  const res: string[] = []; let fav = true;
+  for (const [k, fs] of Object.entries(want)) { const sh = share(k); const ok = fs.reduce((s2, f) => s2 + sh[f] - h[f], 0) > 0.08; if (!ok) fav = false; res.push(`${k} ${sh.map((v) => v.toFixed(2)).join('/')}`); }
+  row('STYLE', 'each place style favours the fields PLACES names (their share over home\'s by > 0.08; 4000 bars)', fav, `home ${h.map((v) => v.toFixed(2)).join('/')}; ${res.join('; ')}`);
+  const optional = Object.entries(STYLES).filter(([k]) => k !== 'home').every(([, st]) => st.lp >= 0 && (st.tau ?? 1) > 0 && (st.echo ?? 1) >= 0 && (st.thin ?? 0) < 0.5);
+  row('STYLE', "home keeps no tau / echo / thin (today's note); the place styles' values are in range", optional && STYLES.home.tau === undefined && STYLES.home.echo === undefined && STYLES.home.thin === undefined, 'ok');
+  // the ridge's thinning: the note-seed hash leaves out about thin of the notes, and no composer draw is involved
+  let drop = 0; for (let sd = 1; sd <= 20000; sd++) if ((Math.imul((sd * 2654435761) ^ 0x2c1b3c6d, 0x297a2d39) >>> 0) / 4294967296 < (STYLES.ridge.thin ?? 0)) drop++;
+  row('STYLE', 'ridge: the sparser mallet leaves out about 35% of notes by the note seed hash (20000 seeds)', Math.abs(drop / 20000 - 0.35) < 0.02, (drop / 20000).toFixed(3));
+}
+{
+  // WeatherClock: the own timer spaces events lo..hi; a shell event takes the lead for 30 s
+  const r = mulberry32(7), W = new WeatherClock(0, 9, 14, r), ev: number[] = [];
+  W.run(0, 100, r, (t) => ev.push(t));
+  const gaps = ev.slice(1).map((t, i) => t - ev[i]);
+  const W2 = new WeatherClock(0, 9, 14, mulberry32(7)), ev2: number[] = [];
+  W2.heard(20); W2.run(0, 100, mulberry32(8), (t) => ev2.push(t));
+  row('AMB', 'own gust timer every 9..14 s; after a shell weather event at 20 s nothing of its own until 50 s', gaps.every((g) => g >= 9 && g <= 14) && ev.length >= 6 && ev2.every((t) => t < 20 || t > 50), `${ev.length} gusts, gaps ${Math.min(...gaps).toFixed(1)}..${Math.max(...gaps).toFixed(1)}; with the shell ${ev2.map((t) => t.toFixed(0)).join(',')}`);
+  // patterCurve: Poisson micro-ticks at the asked rate, in one curve (no node a tick)
+  let curve: Float32Array | null = null, dur = 0;
+  const pm = { setValueCurveAtTime: (c: Float32Array, _t: number, d: number) => { curve = c; dur = d; } } as unknown as AudioParam;
+  patterCurve(pm, 0, 4, 60, 0.1, 0.6, mulberry32(9));
+  let peaks = 0; const c = curve as unknown as Float32Array; for (let i = 1; i < c.length - 1; i++) if (c[i] > c[i - 1] * 1.5 + 1e-6 && c[i] >= c[i + 1]) peaks++;
+  row('AMB', 'rain patter: 60 ticks a second for 4 s in one gain curve (240 +- 20%), peak <= 0.1', Math.abs(peaks - 240) <= 48 && Math.max(...c) <= 0.1 + 1e-9 && dur > 3.99, `${peaks} ticks, peak ${Math.max(...c).toFixed(3)}`);
 }
 
 /* ── AU-14: a 10-minute cabin visit with no input ── */

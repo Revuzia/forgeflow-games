@@ -40,11 +40,11 @@ export interface LifeVoiceHost {
   throttle(kind: string, n: number): void;
   started(kind: string): void;
   /** The away chunk's thing voices, once a place's ambience has loaded (null before). */
-  away(): { creak: typeof import('./ambience.ts').creak; puff(t: number): void } | null;
+  away(): { creak: typeof import('./ambience.ts').creak; puff(t: number): void; strike: typeof import('./ambience.ts').STRIKE; held: typeof import('./ambience.ts').heldNoise } | null;
 }
 
-type CreatureP = { phrase: Float32Array; n: number; flavour: number; register: number; pitch: number; pan: number; level: number; group?: number; echo?: boolean; at?: number; sing?: boolean };
-type PropP = { kind: number; intensity: number; note?: number; pan?: number; auto: boolean; key?: number; held?: number };
+type CreatureP = { phrase: Float32Array; n: number; flavour: number; register: number; pitch: number; pan: number; level: number; group?: number; echo?: boolean; at?: number; sing?: boolean; echoes?: number };
+type PropP = { kind: number; intensity: number; note?: number; pan?: number; auto: boolean; key?: number; held?: number; size?: number };
 
 export interface LifeVoices {
   creature(p: CreatureP): boolean;
@@ -164,10 +164,12 @@ export function createLifeVoices(h: LifeVoiceHost): LifeVoices {
       if (!n) return false;
       for (let i = 0; i < n * 4; i++) syl[i] = fin(p.phrase[i], 0);
       const reg = p.register === 1 ? 1 : 0, group = clamp(Math.floor(fin(p.group, 1)), 1, 3), echo = p.echo === true;
+      // the Echo Stone (PLACES 4.9): a second repeat at twice the delay, 12 dB under the first
+      const echo2 = echo && Math.floor(fin(p.echoes, 1)) >= 2;
       const t = c.currentTime, t0 = clamp(fin(p.at, 0), t + LOOKAHEAD, t + 4);
       if (t0 < h.ceremonyUntil() + 1) { h.throttle('chatter', 1); return false; }                       // ceremonies + 1 s (AU-09)
       const len = phraseLen(syl, n);
-      if (!chatLimiter.admit(t0, sylStarts(syl, n), len + (echo ? ECHO_S : 0), echo ? 1.5 : 1, touchingAt(t))) { h.throttle('chatter', 1); return false; }
+      if (!chatLimiter.admit(t0, sylStarts(syl, n), len + (echo ? (echo2 ? 2 : 1) * ECHO_S : 0), echo ? (echo2 ? 2 : 1.5) : 1, touchingAt(t))) { h.throttle('chatter', 1); return false; }
       const out = bus();
       if (!out) return false;
       h.sweepSteal();
@@ -179,6 +181,11 @@ export function createLifeVoices(h: LifeVoiceHost): LifeVoices {
         const ea = amp * dbToGain(ECHO_DB);
         h.register(creaturePhrase(c, out.norm, t0 + ECHO_S, { ...base, amp: ea, echo: true }));
         spans.push({ t0: t0 + ECHO_S, end: t0 + ECHO_S + len, w: ea / WHOLE_PEAK });
+        if (echo2) {
+          const eb = ea * dbToGain(ECHO_DB);
+          h.register(creaturePhrase(c, out.norm, t0 + 2 * ECHO_S, { ...base, amp: eb, echo: true }));
+          spans.push({ t0: t0 + 2 * ECHO_S, end: t0 + 2 * ECHO_S + len, w: eb / WHOLE_PEAK });
+        }
       }
       planNorm(t);
       return true;
@@ -242,12 +249,34 @@ export function createLifeVoices(h: LifeVoiceHost): LifeVoices {
         return;
       }
       if (kind === PROP.crackle && aw) { h.started('puff'); aw.puff(c.currentTime); return; }   // the fire puffs up: a swell of the bed
-      if (kind !== PROP.ball) { h.drop(); return; }   // chime, bell, splash, ... arrive with S2 and S3
+      if ((kind === PROP.rustle || kind === PROP.whoosh) && aw && p.key !== undefined && p.held !== undefined) {
+        // a shaking branch or a ride, held while it moves (round 2), with the same dead-man switch
+        if (h.muted()) return;
+        const key = (kind === PROP.rustle ? 2000 : 3000) + Math.floor(fin(p.key, 0)), lv = c01(p.held, 0);
+        let v = held.get(key);
+        if (!v || !v.alive || v.dying) {
+          held.delete(key);
+          if (lv < 0.05) return;
+          const a = h.accept(kind === PROP.rustle ? 'rustle' : 'whoosh', '');
+          if (!a) return;
+          v = aw.held(a.c, ch.plain, a.t0, h.rng, pan, kind === PROP.rustle ? 'rustle' : 'whoosh') as unknown as HeldProp;
+          h.register(v);
+          held.set(key, v);
+        }
+        v.update(lv, c.currentTime, pan);
+        return;
+      }
+      const sv = kind === PROP.ball ? null : aw ? aw.strike[kind] : undefined;
+      if (sv === undefined) { h.drop(); return; }      // a place thing before the away chunk is here, or an unknown kind
       if (auto && !autoLimiter.admit(c.currentTime, 1, 0.25)) { h.throttle('auto', 1); return; }
-      const a = h.accept(auto ? 'propAuto' : 'ball', auto ? '' : 'pop');
+      const a = h.accept(auto ? 'propAuto' : sv ? 'thing' : 'ball', auto ? '' : 'pop');
       if (!a) return;
-      const g = ballBump(a.c, ch.plain, a.t0, { rng: h.rng, intensity: c01(p.intensity, 0.5), pan, soft: auto ? 0.6 : 1 });
-      if (auto) h.register(g); else h.registerFx(g, 'ball', a.t0);   // a sound that moved by itself never asks the music for room
+      const I = c01(p.intensity, 0.5), soft = auto ? 0.6 : 1;
+      let t0 = a.t0;
+      if (kind === PROP.tick) { const b = h.barAt(t0); if (b) t0 = b.barT + Math.ceil((t0 - b.barT) / SLOT_S - 1e-9) * SLOT_S; }   // on the music's eighth grid
+      const g = sv ? sv(a.c, ch.plain, t0, { rng: h.rng, intensity: I, note: p.note, pan, soft, size: p.size })
+        : ballBump(a.c, ch.plain, t0, { rng: h.rng, intensity: I, pan, soft, size: p.size });
+      if (auto) h.register(g); else h.registerFx(g, sv ? 'thing' : 'ball', t0);   // a sound that moved by itself never asks the music for room
     },
 
     autoThud(p) {

@@ -135,6 +135,7 @@ export class BodyView {
     this.jelly.mesh.renderOrder = 10;
     this.core = new Core(genome, this.palette, this.scale, this.style);
     this.core.setLite(!spec.transmission);
+    this.core.noHalo = lite && chunk;   // RD-06: a lite chunk's core glow stays in the jelly shader's own halo term (one draw fewer)
     this.face = new Face(this.proxy, genome, this.jelly, hub);
     this.face.pose = this.pose;
     this.fx = new Fx(genome, this.palette, this.jelly.mapper, spec, this.scale, this.style);
@@ -177,8 +178,10 @@ export class BodyView {
     this.applyPoolColour();
   }
 
-  /** The fine mesh's geodesic frequency: the tier's, or the low tier's for a lite body (AddBodyOpts.lite: 2562 vertices). */
-  private fineFreqFor(spec: TierSpec): number { return this.lite ? Math.min(spec.fineFreq, TIERS.low.fineFreq) : spec.fineFreq; }
+  /** The fine mesh's geodesic frequency: the tier's, or for a lite body (AddBodyOpts.lite, RD-06) the low tier's 2562 vertices, and 1442
+   *  (frequency 12) for a piece of a quarter of the body or less (a small chunk is at most 0.63 of the whole's radius: the same vertex
+   *  spacing on screen as a whole's low mesh). */
+  private fineFreqFor(spec: TierSpec): number { return this.lite ? Math.min(spec.fineFreq, this.frac0 <= 0.25 ? 12 : TIERS.low.fineFreq) : spec.fineFreq; }
 
   applyQuality(spec: TierSpec): void {
     this.spec = spec;

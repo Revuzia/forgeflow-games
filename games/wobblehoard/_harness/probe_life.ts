@@ -2,6 +2,8 @@
 // kinematic host (scoots glide, hops lift for their airtime, a ball rolls when a body pushes into it). No physics, no browser.
 // Run: node _harness/probe_life.ts [--heavy] [--verbose]   (exit 1 on any failure; the default run stays a few seconds)
 import v8 from 'node:v8';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import type { LifeSnapshot, LifeIntents, LifeEvents } from '../src/contracts.ts';
 import type { Genome } from '../src/core/genome.ts';
 import { speciesBaseGenome, CATALOG } from '../src/data/catalog.ts';
@@ -9,10 +11,13 @@ import { SPECIES } from '../src/data/species.ts';
 import type { PlaceDef } from '../src/data/places.ts';
 import { PLACE as HOME } from '../src/data/place_home.ts';
 import { PLACE as CABIN } from '../src/data/place_hearthlog.ts';
+import { PLACE as RIPPLE } from '../src/data/place_ripple.ts';
+import { PLACE as FROSTBELL } from '../src/data/place_frostbell.ts';
 import { THING_IDS, ZONE, MECH } from '../src/data/places.ts';
 import { INTENT, LIFE_FLAG, LIFE_EV, SCRIPT, TOUCH, REACT_KIND, SOCIAL_KIND, WISH_KIND, LOOK, TRAIT_MEDIANS, EMOTE, THING_KIND, USE_VERB } from '../src/data/life.ts';
-import { WISH_STATE } from '../src/data/quests.ts';
-import { createLifeWorld, lifeSetPlace, lifeSetHome, lifeAdd, lifeRemove, lifeStep, lifeScript, lifeSetJournal, lifeSetPair, lifeLooks, lifeAddLook,
+import { WISH_STATE, PIECES_USE } from '../src/data/quests.ts';
+import { MATERIAL_FAMILY_IDS } from '../src/data/materials.ts';
+import { createLifeWorld, lifeSetPlace, lifeSetHome, lifeAdd, lifeRemove, lifeStep, lifeScript, lifeSetJournal, lifeSetPair, lifeSetFriends, lifeSetHops, lifeLooks, lifeAddLook,
   lifeWishOf, lifePhrase, lifeMotif, lifeAttention, createAttention, attentionFilter, motionGate, unitCapOf, moverCapOf, CAPS, traitsOf, HUFF_TRIGGERS,
   PHRASE_BUBBLE, BEH, STYLE } from '../src/life/step.ts';
 import type { LifeWorld } from '../src/life/step.ts';
@@ -55,7 +60,9 @@ const TID = (id: string): number => THING_IDS.indexOf(id as (typeof THING_IDS)[n
 /** A tiny kinematic host: it applies SCOOT, HOP, SETTLE and CANCEL, rolls the ball, fills the snapshot (rows = slots), computes the units
  *  (awake whole 1.0, piece 0.22, sleeper 0.03), puts still bodies to sleep after 1.5 s, and logs every intent and event. */
 interface Body { on: boolean; x: number; z: number; vx: number; vz: number; r: number; tx: number; tz: number; sp: number; scoot: boolean; air: number;
-  still: number; asleep: boolean; kind: number; group: number; species: number; family: number; flags: number; frac: number; homeX: number; homeZ: number }
+  still: number; asleep: boolean; kind: number; group: number; species: number; family: number; flags: number; frac: number; homeX: number; homeZ: number;
+  /** in a water zone this body floats (not grounded), as the physics' float table says for its family (S2) */
+  float: boolean }
 interface Log { t: number; kind: number; who: number; a: number; b: number; c: number; d: number; e: number; icon: number; style: number; delay: number }
 interface EvLog { t: number; kind: number; sub: number; a: number; b: number; n2: number; thing: number }
 class Sim {
@@ -68,13 +75,13 @@ class Sim {
     this.w = createLifeWorld(seed, 16); this.def = def; this.layout = layout; this.fps = fps; this.scale = scale;
     lifeSetPlace(this.w, def.idx, 1, def, layout, scale);
     for (let i = 0; i < 16; i++) this.bodies.push({ on: false, x: 0, z: 0, vx: 0, vz: 0, r: 0.5, tx: 0, tz: 0, sp: 0, scoot: false, air: 0, still: 0, asleep: false, kind: 0,
-      group: i, species: 0, family: 0, flags: 0, frac: 1, homeX: NaN, homeZ: NaN });
+      group: i, species: 0, family: 0, flags: 0, frac: 1, homeX: NaN, homeZ: NaN, float: false });
   }
-  add(slot: number, species: string, x: number, z: number, opts: { kind?: 0 | 1 | 2; group?: number; isNew?: boolean; seed?: number; r?: number; frac?: number; asleep?: boolean } = {}): void {
+  add(slot: number, species: string, x: number, z: number, opts: { kind?: 0 | 1 | 2; group?: number; isNew?: boolean; seed?: number; r?: number; frac?: number; asleep?: boolean; float?: boolean } = {}): void {
     const g = G(species, opts.seed ?? (7 + slot * 101));
     const b = this.bodies[slot];
     Object.assign(b, { on: true, x, z, vx: 0, vz: 0, r: opts.r ?? 0.5, tx: x, tz: z, scoot: false, air: 0, still: 0, asleep: opts.asleep ?? false, kind: opts.kind ?? 0,
-      group: opts.group ?? slot, species: SP(species), family: 0, frac: opts.frac ?? 1, homeX: NaN, homeZ: NaN });
+      group: opts.group ?? slot, species: SP(species), family: 0, frac: opts.frac ?? 1, homeX: NaN, homeZ: NaN, float: opts.float ?? false });
     lifeAdd(this.w, slot, g, opts.kind ?? 0, opts.group ?? slot, 0, opts.isNew ?? false);
   }
   home(slot: number, x: number, z: number): void { this.bodies[slot].homeX = x; this.bodies[slot].homeZ = z; lifeSetHome(this.w, slot, x, z); }
@@ -107,6 +114,7 @@ class Sim {
         if (z.strength > best) { best = z.strength; const ti = this.def.things.findIndex((t) => t.zone === z.id); zt = ti >= 0 ? TID(this.def.things[ti].id) : -1; }
       }
       s.zoneMask[i] = mask; s.zoneThing[i] = zt;
+      if (b.on && (mask & (1 << ZONE.water)) !== 0) { s.flags[i] |= LIFE_FLAG.IN_WATER; if (b.float && b.air <= 0) s.flags[i] &= ~LIFE_FLAG.GROUNDED; }
       if (b.on) units += b.asleep ? 0.03 : b.kind === 0 ? 1 : 0.22;
     }
     s.units = units;
@@ -162,6 +170,14 @@ class Sim {
     if (this.ball >= 0) {
       const v = Math.hypot(this.ballVX, this.ballVZ);
       if (v > 1e-4) { this.ballX += this.ballVX * dt; this.ballZ += this.ballVZ * dt; this.ballMoved += v * dt; const k = Math.exp(-0.6 * dt); this.ballVX *= k; this.ballVZ *= k; if (v < 0.01) { this.ballVX = 0; this.ballVZ = 0; } }
+      // in a place the ball stays inside the layout's rounded bounds: the walls and the rim bounce of 0.35 (PLACES P5 and P7, PH-05); at Home
+      // the host leaves it free (the corral rectangle is the shell's)
+      if (this.def.unit !== 'slot') {
+        const bd = this.layout === 1 ? this.def.tall.bounds : this.def.bounds, br = this.def.things.find((t) => t.mech === MECH.ball)?.size[0] ?? 0.22;
+        const hx = (bd.hx ?? 3.4) - br, hz = (bd.hz ?? 2.4) - br;
+        if (Math.abs(this.ballX - bd.x) > hx) { this.ballX = bd.x + Math.sign(this.ballX - bd.x) * hx; this.ballVX *= -0.35; }
+        if (Math.abs(this.ballZ - bd.z) > hz) { this.ballZ = bd.z + Math.sign(this.ballZ - bd.z) * hz; this.ballVZ *= -0.35; }
+      }
     }
   }
   step(): void {
@@ -249,8 +265,8 @@ function watchGate(sim: Sim, rows: { movers: number; moment: number; wake: numbe
   if (w.movers > cap) rows.movers++;
   const seen = new Set<number>();
   for (let m = 0; m < 8; m++) {
-    if (!w.mKind[m]) continue;
-    for (let k = 0; k < w.mN[m]; k++) { const j = w.mMem[m * 6 + k]; if (j < 0) continue; if (seen.has(j) || w.moment[j] !== m) rows.moment++; seen.add(j); }
+    if (!w.mK[m]) continue;
+    for (let k = 0; k < w.mN[m]; k++) { const j = w.mM[m * 6 + k]; if (j < 0) continue; if (seen.has(j) || w.moo[j] !== m) rows.moment++; seen.add(j); }
   }
 }
 function runWatched(sim: Sim, seconds: number, rows: { movers: number; moment: number; wake: number; maxUnits: number }): void {
@@ -285,8 +301,8 @@ if (!LF02_CHILD) for (const [layout, label] of [[0, 'wide'], [1, 'tall']] as con
     !!use && use.t - t0 <= 10 && use.sub === USE_VERB.ROLL && sim.ballMoved >= 0.2, use ? `use at +${(use.t - t0).toFixed(2)} s` : 'no use');
   check('FN-01', `${label}: its first bubble within 10 s of the 6 s release (a question bubble as it notices the ball)`, !!bubble && bubble.t - t0 <= 10, bubble ? `icon ${bubble.icon} at +${(bubble.t - t0).toFixed(2)} s` : 'none');
   lifeScript(sim.w, 0, SCRIPT.FIRST_PLAY, 0);
-  const before = sim.w.nextUse[0];
-  check('LF-19', `${label}: FIRST_PLAY fires at most once (a second call changes nothing)`, before === -1 && sim.w.nextUse[0] === -1);
+  const before = sim.w.nU[0];
+  check('LF-19', `${label}: FIRST_PLAY fires at most once (a second call changes nothing)`, before === -1 && sim.w.nU[0] === -1);
 }
 if (!LF02_CHILD) {
   const sim = home(5, ['dollop'], 0);
@@ -366,6 +382,7 @@ if (!LF02_CHILD) {
 }
 
 export { Sim, cabin, home, mkSnapshot, mkIntents, mkEvents, check, info, G, SP, TID, HEAVY, VERBOSE };
+export type { EvLog };
 
 /* ───────────────────────────── the end (sections below are appended in order) ───────────────────────────── */
 
@@ -399,9 +416,7 @@ function lf02Measure(passes: number, warm: number, n: number): { wins: number[];
   const newUsed = (): number => { for (const sp of v8.getHeapSpaceStatistics()) if (sp.space_name === 'new_space') return sp.space_used_size; return NaN; };
   const base: number[] = []; for (let k = 0; k < 6; k++) { const u0 = newUsed(); base.push(newUsed() - u0); }
   const b0 = base[5], wins: number[] = [];
-  (globalThis as { lf02Hook?: () => void }).lf02Hook?.();
   for (let wdw = 0; wdw < n / 1000; wdw++) { const u0 = newUsed(); replay(rep, warm + wdw * 1000, warm + (wdw + 1) * 1000); wins.push(newUsed() - u0 - b0); }
-  (globalThis as { lf02Done?: () => void }).lf02Done?.();
   // LIFE's own looks calls
   const lo = new Float32Array(6);
   const looksLoop = (m: number): void => { for (let k = 0; k < m; k++) { lifeLooks(rep, k & 7, lo); lifeAddLook(rep, k & 7, LOOK.wet, 0.0001, -1); } };
@@ -419,7 +434,35 @@ if (!LF02_CHILD) {
   const rec = crowd(31); rec.keepLog = false;
   const snaps: LifeSnapshot[] = [];
   for (let f = 0; f < WARM + N; f++) { rec.frame++; rec.t = rec.frame / rec.fps; rec.fill(); snaps.push(cloneSnap(rec.s)); lifeStep(rec.w, rec.s, rec.out, rec.ev); rec.apply(1 / rec.fps); }
+  // LF-02: replay the same snapshots into fresh worlds (identical decisions): three warm the JIT over the whole run, a fourth one is
+  // measured over windows of 1000 ticks (new-space growth; a window with a GC is negative and skipped), like probe_collection's C08
   const out = mkIntents(), ev = mkEvents();
+  const newUsed = (): number => { for (const sp of v8.getHeapSpaceStatistics()) if (sp.space_name === 'new_space') return sp.space_used_size; return NaN; };
+  const replay = (w: LifeWorld, a: number, b: number): void => { for (let f = a; f < b; f++) lifeStep(w, snaps[f], out, ev); };
+  for (let pass = 0; pass < 3; pass++) replay(crowd(31).w, 0, WARM + N);
+  const rep = crowd(31);
+  replay(rep.w, 0, WARM);
+  const base: number[] = []; for (let k = 0; k < 6; k++) { const u0 = newUsed(); base.push(newUsed() - u0); }
+  const b0 = base[5], wins: number[] = [];
+  for (let wdw = 0; wdw < N / 1000; wdw++) { const u0 = newUsed(); replay(rep.w, WARM + wdw * 1000, WARM + (wdw + 1) * 1000); wins.push(newUsed() - u0 - b0); }
+  const pos = wins.filter((d) => d >= 0);
+  check('LF-02', `lifeStep allocates 0 B over ${N} ticks at 16 characters after warm-up (new-space growth per 1000-tick window: ${wins.join(', ')} B; a window with a GC is negative)`,
+    pos.length >= 3 && pos.every((d) => d <= 64), `max ${Math.max(...pos)} B`);
+  // LIFE's own looks calls
+  const lw = rep.w, lo = new Float32Array(6);
+  const looksLoop = (n: number): void => { for (let k = 0; k < n; k++) { lifeLooks(lw, k & 7, lo); lifeAddLook(lw, k & 7, LOOK.wet, 0.0001, -1); } };
+  looksLoop(50000);
+  const lw2: number[] = []; for (let k = 0; k < 4; k++) { const u0 = newUsed(); looksLoop(20000); lw2.push(newUsed() - u0 - b0); }
+  const dl = Math.min(...lw2.filter((d) => d > -4096)); // a window with a GC is far below 0; -64..64 is the measurement's own noise
+  check('LF-20', `lifeLooks and lifeAddLook allocate 0 B (20 000 calls each, best of 4 windows: ${lw2.join(', ')} B)`, dl <= 64);
+  // the same measurement in a process of its own after a long warm-up (--heavy): how the residual falls as the JIT tiers up
+  if (HEAVY) {
+    for (const passes of [30, 100]) {
+      const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), '--lf02', `--passes=${passes}`], { encoding: 'utf8', timeout: 120000 });
+      const line = (r.stdout ?? '').split('\n').find((l) => l.startsWith('LF02 '));
+      info('LF-02', `isolated process, ${passes} replay passes of the same ${WARM + N} ticks before the measured world (V8 default tiers): ${line ? line.slice(5) : 'no result ' + (r.stderr ?? '').slice(0, 200)}`);
+    }
+  }
   // LF-03: the cost per tick, a fresh world replaying the same snapshots
   const tw = crowd(31), times: number[] = [];
   for (let f = 0; f < WARM + N; f++) { const t0 = performance.now(); lifeStep(tw.w, snaps[f], out, ev); const dt = performance.now() - t0; if (f >= WARM) times.push(dt); }
@@ -478,12 +521,12 @@ if (!LF02_CHILD) {
   // a boop on low and med is a soft boop (the target stays asleep, its wobble a render wiggle); on high a physics boop
   for (const tier of [0, 1, 2]) {
     const sim = cabin(47, ['boingle', 'puddlo'], tier); sim.kettle = false;
-    sim.w.traits[0] = 0.95; sim.w.play[0] = 0.9;
+    sim.w.tr[0] = 0.95; sim.w.pl[0] = 0.9;
     sim.bodies[0].x = 0.4; sim.bodies[0].z = 0.3; sim.bodies[1].x = 1.45; sim.bodies[1].z = 0.3; sim.bodies[1].asleep = true;
-    lifeSetPair(sim.w, 0, 1, 1, false); sim.w.pairGreet[1] = 1;
+    lifeSetPair(sim.w, 0, 1, 1, false); sim.w.pG[1] = 1;
     // keep only the boop: no other moment kinds or uses
-    sim.w.cool.fill(1e9); sim.w.traits[2] = 0; sim.w.traits[1] = 0; sim.w.traits[3] = 0; sim.w.traits[5 + 2] = 0; sim.w.traits[5 + 3] = 0;
-    for (let k = 0; k < 16; k++) sim.w.cool[k * 26 + 21] = -1e9;
+    sim.w.coo.fill(1e9); sim.w.tr[2] = 0; sim.w.tr[1] = 0; sim.w.tr[3] = 0; sim.w.tr[5 + 2] = 0; sim.w.tr[5 + 3] = 0;
+    for (let k = 0; k < 16; k++) sim.w.coo[k * 26 + 21] = -1e9;
     const rows = { movers: 0, moment: 0, wake: 0, maxUnits: -9 };
     runWatched(sim, 40, rows);
     const boop = sim.events(LIFE_EV.SOCIAL, SOCIAL_KIND.BOOP)[0];
@@ -497,28 +540,38 @@ if (!LF02_CHILD) {
   }
 }
 
-/* LF-09: a 5-minute cabin visit on med with 4 wholes and no input; the pairs become Met after their greet (the reducer's FRIEND -> lifeSetPair) */
-if (!LF02_CHILD) {
-  const sim = cabin(51, ['dollop', 'crimpo', 'capnap', 'puddlo'], 1);
+/* LF-09: a 5-minute cabin visit on med with 4 wholes and no input; the pairs become Met after their greet (the reducer's FRIEND -> lifeSetPair).
+ * "A thing use" (written down in the report, round 2): one completed by-itself use of a thing in LIFE 5.3's sense, i.e. a USE event with a = the
+ * squishy and b != PLAYER whose verb is a mechanism use: a boop of the Yarn Ball (B04, or the squishy's turn in an S12 pass: ROLL) or a nap
+ * settled on a nap thing (the Snug Basket, the Snooze Rug: NAP). B18's USE LISTEN (answering the kettle's whistle) is not a use: LIFE 5.3's
+ * switch row says a squishy never uses a switch, "it watches, and answers a tune". */
+function lf09Run(seed: number, rows: { movers: number; moment: number; wake: number; maxUnits: number } | null): { sim: Sim; uses: number[]; greets: Set<string>; begun: Set<number> } {
+  const sim = cabin(seed, ['dollop', 'crimpo', 'capnap', 'puddlo'], 1);
   const end = sim.frame + 300 * 60;
   const begun = new Set<number>();
   let lastEv = 0;
   while (sim.frame < end) {
-    sim.step(); watchGate(sim, gateRows);
+    sim.step(); if (rows) watchGate(sim, rows);
     for (let i = 0; i < 4; i++) begun.add(sim.w.beh[i]);
     for (; lastEv < sim.evs.length; lastEv++) { const e = sim.evs[lastEv]; if (e.kind === LIFE_EV.SOCIAL && e.sub === SOCIAL_KIND.GREET) lifeSetPair(sim.w, e.a, e.b, 1, false); }
   }
   const greets = new Set(sim.events(LIFE_EV.SOCIAL, SOCIAL_KIND.GREET).map((e) => `${Math.min(e.a, e.b)}-${Math.max(e.a, e.b)}`));
-  const naps = sim.events(LIFE_EV.USE, USE_VERB.NAP).length + sim.events(LIFE_EV.SOCIAL, SOCIAL_KIND.PILE).length;
+  const uses = [0, 1, 2, 3].map((i) => sim.events(LIFE_EV.USE).filter((e) => e.a === i && e.b !== 254 && e.sub !== USE_VERB.LISTEN).length);
+  return { sim, uses, greets, begun };
+}
+if (!LF02_CHILD) {
+  const { sim, uses, greets, begun } = lf09Run(51, gateRows);
   const napStarts = [0, 1, 2, 3].filter((i) => sim.log.some((l) => l.who === i && l.kind === INTENT.EXPRESS && l.a === 2 && l.b === 1)).length;
-  const uses = [0, 1, 2, 3].map((i) => sim.events(LIFE_EV.USE).filter((e) => e.a === i).length);
   const verbs = [0, 1, 2, 3].map((i) => sim.events(LIFE_EV.USE).filter((e) => e.a === i).map((e) => Object.keys(USE_VERB).find((k) => USE_VERB[k as keyof typeof USE_VERB] === e.sub)).join('+'));
-  info('LF-09', `the uses by verb: ${verbs.join(' | ')}`);
+  info('LF-09', `the USE events by verb (LISTEN listed, not counted): ${verbs.join(' | ')}`);
   const social: Record<string, number> = {};
-  for (const e of sim.events(LIFE_EV.SOCIAL)) social[Object.keys(SOCIAL_KIND).find((k) => SOCIAL_KIND[k as keyof typeof SOCIAL_KIND] === e.sub) ?? e.sub] = (social[Object.keys(SOCIAL_KIND).find((k) => SOCIAL_KIND[k as keyof typeof SOCIAL_KIND] === e.sub) ?? e.sub] ?? 0) + 1;
-  info('LF-09', `5-minute cabin visit, 4 wholes, med, no input: SOCIAL ${JSON.stringify(social)}, uses per squishy ${uses.join('/')}, nap starts ${napStarts}, behaviours seen ${[...begun].sort((a, b) => a - b).join(',')}`);
+  for (const e of sim.events(LIFE_EV.SOCIAL)) { const k = Object.keys(SOCIAL_KIND).find((q) => SOCIAL_KIND[q as keyof typeof SOCIAL_KIND] === e.sub) ?? String(e.sub); social[k] = (social[k] ?? 0) + 1; }
+  info('LF-09', `5-minute cabin visit, 4 wholes, med, no input: SOCIAL ${JSON.stringify(social)}, thing uses per squishy ${uses.join('/')}, nap starts ${napStarts}, behaviours seen ${[...begun].sort((a, b) => a - b).join(',')}`);
   check('LF-09', `every pair greets (${greets.size} of 6 pairs) and at least 1 nap (${napStarts} nappers)`, greets.size === 6 && napStarts >= 1);
-  check('LF-09', `each squishy 2 to 3 thing uses (USE events: ${uses.join(' / ')})`, uses.every((u) => u >= 2 && u <= 3));
+  check('LF-09', `each squishy 2 to 3 thing uses (ball boops and naps on a nap thing: ${uses.join(' / ')})`, uses.every((u) => u >= 2 && u <= 3));
+  const spread: string[] = [];
+  for (const seed of [52, 53, 54, 55]) { const r = lf09Run(seed, null); spread.push(`seed ${seed}: ${r.greets.size}/6 pairs, uses ${r.uses.join('/')}${r.uses.every((u) => u >= 2 && u <= 3) && r.greets.size === 6 ? '' : ' (out)'}`); }
+  info('LF-09', `the same visit with other seeds (not checked; the balance is chaotic): ${spread.join('; ')}`);
 }
 if (!LF02_CHILD) check('LF-10', `movers never exceed the tier's moverCap in the scenarios above (${gateRows.movers} frames over)`, gateRows.movers === 0);
 if (!LF02_CHILD) check('LF-11', `no character is in two joint moments at once (${gateRows.moment} violations)`, gateRows.moment === 0);
@@ -538,7 +591,7 @@ if (!LF02_CHILD) {
         const l = sim.log[lastLog.i];
         if (l.kind !== INTENT.SCOOT) continue;
         n++;
-        if (!inB(CABIN, layout, l.a, l.b, 0)) { outside++; offs.push(`${l.who}:b${sim.w.beh[l.who]}m${sim.w.moment[l.who] >= 0 ? sim.w.mKind[sim.w.moment[l.who]] : 0}@${l.a.toFixed(2)},${l.b.toFixed(2)}`); }
+        if (!inB(CABIN, layout, l.a, l.b, 0)) { outside++; offs.push(`${l.who}:b${sim.w.beh[l.who]}m${sim.w.moo[l.who] >= 0 ? sim.w.mK[sim.w.moo[l.who]] : 0}@${l.a.toFixed(2)},${l.b.toFixed(2)}`); }
         const beh = sim.w.beh[l.who];
         if (beh === BEH.WANDER || beh === BEH.COMEBACK) {
           free++;
@@ -553,7 +606,7 @@ if (!LF02_CHILD) {
   let homeBad = 0, homeN = 0; const homeOffs: string[] = [];
   for (const [layout, nOut] of [[0, 3], [1, 3], [0, 2], [1, 1]] as const) {
     const sim = home(63 + nOut, ['dollop', 'crimpo', 'capnap'].slice(0, nOut), layout);
-    for (let i = 0; i < nOut; i++) sim.w.play[i] = 0.7;
+    for (let i = 0; i < nOut; i++) sim.w.pl[i] = 0.7;
     let li = 0;
     const end = sim.frame + 120 * 60;
     while (sim.frame < end) {
@@ -576,12 +629,12 @@ if (!LF02_CHILD) {
           let u = L > 0 ? ((l.a - p[0]) * vx + (l.b - p[1]) * vz) / L : 0; u = Math.max(0, Math.min(1, u));
           best = Math.min(best, Math.hypot(l.a - p[0] - vx * u, l.b - p[1] - vz * u));
         }
-        if (best > 0.01 + 0.06) { homeBad++; homeOffs.push(`${l.who}:b${sim.w.beh[l.who]}m${sim.w.moment[l.who] >= 0 ? sim.w.mKind[sim.w.moment[l.who]] : 0}@${l.a.toFixed(2)},${l.b.toFixed(2)} off ${best.toFixed(2)}`); }
+        if (best > 0.01 + 0.06) { homeBad++; homeOffs.push(`${l.who}:b${sim.w.beh[l.who]}m${sim.w.moo[l.who] >= 0 ? sim.w.mK[sim.w.moo[l.who]] : 0}@${l.a.toFixed(2)},${l.b.toFixed(2)} off ${best.toFixed(2)}`); }
       }
     }
   }
   check('LF-06', `Home: every SCOOT target lies on a segment between two framed points (home slots, arrived things' use spots, the ball; ${homeBad} of ${homeN} off by more than 0.07 m, the ball's live position allowing its 0.06 m roll in a tick)`, homeBad === 0 && homeN > 0, homeOffs.join(' '));
-  const one = home(65, ['dollop'], 1); one.w.play[0] = 0.9; one.run(60);
+  const one = home(65, ['dollop'], 1); one.w.pl[0] = 0.9; one.run(60);
   check('LF-06', 'Home, one squishy on a portrait phone: no wander at all (B03 does not fire)', !one.log.some((l) => l.kind === INTENT.SCOOT && one.w.beh[l.who] === BEH.WANDER));
 }
 
@@ -654,10 +707,10 @@ if (!LF02_CHILD) {
   const stage = (at: number): Sim => {
     const sim = cabin(81, ['dollop', 'boingle'], 2); sim.kettle = false;
     sim.run(at);
-    const w = sim.w, ball = w.globalToLocal[TID('yarnball')];
-    for (let m = 0; m < 8; m++) w.mKind[m] = 0; w.moment.fill(-1); w.cool[0 * 26 + BEH.HUFF] = -1e9;
-    w.beh[0] = BEH.USE; w.tThing[0] = ball; w.phase[0] = 1; w.behT0[0] = sim.t; w.behScore[0] = 1;
-    w.beh[1] = BEH.USE; w.tThing[1] = ball; w.phase[1] = 2; w.behT0[1] = sim.t; w.behScore[1] = 1;
+    const w = sim.w, ball = w.gTL[TID('yarnball')];
+    for (let m = 0; m < 8; m++) w.mK[m] = 0; w.moo.fill(-1); w.coo[0 * 26 + BEH.HUFF] = -1e9;
+    w.beh[0] = BEH.USE; w.tT[0] = ball; w.ph[0] = 1; w.bT[0] = sim.t; w.bSc[0] = 1;
+    w.beh[1] = BEH.USE; w.tT[1] = ball; w.ph[1] = 2; w.bT[1] = sim.t; w.bSc[1] = 1;
     sim.ballX = -1.35; sim.ballZ = 1.9; sim.ballVX = 0; sim.ballVZ = 0; sim.bodies[1].x = -1.35; sim.bodies[1].z = 1.15; sim.bodies[1].asleep = false;
     sim.s.thingBusy.fill(1);
     const orig = sim.fill.bind(sim); sim.fill = () => { orig(); for (let k = 0; k < sim.s.nThings; k++) if (sim.s.thingId[k] === TID('yarnball')) sim.s.thingBusy[k] = 1; };
@@ -665,14 +718,39 @@ if (!LF02_CHILD) {
   };
   const early = stage(20); early.run(2);
   check('LF-13', 'never in a session\'s first 60 s (a take at 20 s gives no huff)', !early.intents(INTENT.EMOTE).some((l) => l.icon === EMOTE.puff));
-  const late = stage(70); const t0 = late.t; late.run(5);
-  const puff = late.intents(INTENT.EMOTE).find((l) => l.icon === EMOTE.puff && l.t >= t0);
-  const huffEnd = (() => { for (let f = 0; f < 0; f++); return 0; })(); void huffEnd;
-  check('LF-13', 'after 60 s the take gives one huff (a puff bubble), and B16 lasts at most 3 s', !!puff && late.w.beh[0] !== BEH.HUFF);
-  const late2 = stage(70); late2.run(0.3);
-  const was = late2.w.beh[0] === BEH.HUFF;
-  late2.extraFlags[0] = LIFE_FLAG.TOUCHED; late2.run(0.2);
-  check('LF-13', 'any touch ends the huff (it turns into a giggle)', was && late2.w.beh[0] !== BEH.HUFF && late2.intents(INTENT.EMOTE).some((l) => l.icon === EMOTE.giggle && l.who === 0));
+  // the take after 60 s: B16 is a utility candidate (0.5) for 3 s after the scene event, so it shows once what it was doing ends (a notice
+  // of the moving ball first); every B16 lasts at most 3 s (measured per think, 0.1 s)
+  const late = stage(70); const t0 = late.t;
+  let huffS = 0, maxHuff = 0, huffs = 0, prev = false;
+  for (let f = 0; f < 8 * 60; f++) { late.step(); const on = late.w.beh[0] === BEH.HUFF; if (on) { huffS += 1 / 60; if (!prev) huffs++; } else huffS = 0; maxHuff = Math.max(maxHuff, huffS); prev = on; }
+  const puff = late.intents(INTENT.EMOTE).find((l) => l.icon === EMOTE.puff && l.t >= t0 && l.who === 0);
+  const huffEv = late.intents(INTENT.VOICE).find((l) => l.icon === 10 && l.t >= t0 && l.who === 0);
+  check('LF-13', `after 60 s the take gives one huff (B16 ${huffs}x, its puff bubble ${puff ? `at +${(puff.t - t0).toFixed(1)} s` : 'dropped by the budget'}, its low coo ${huffEv ? 'yes' : 'no'}), and B16 lasts at most 3 s (longest ${maxHuff.toFixed(2)} s)`,
+    huffs === 1 && !!puff && maxHuff <= 3 + 0.1 + 1e-6);
+  const late2 = stage(70);
+  let waited = 0; while (late2.w.beh[0] !== BEH.HUFF && waited < 6 * 60) { late2.step(); waited++; }
+  late2.run(1); // a second into the huff the player touches it (the puff bubble's own 2.5 s gap is the budget's)
+  const was = late2.w.beh[0] === BEH.HUFF, tTouch = late2.t;
+  late2.extraFlags[0] = LIFE_FLAG.TOUCHED; late2.run(0.3);
+  const ended = late2.w.beh[0] !== BEH.HUFF, squint = late2.intents(INTENT.EXPRESS, 0).some((l) => l.t >= tTouch && l.a === 1);
+  late2.extraFlags[0] = 0; late2.run(2); // a held squishy shows no bubble (L2): the giggle shows at the release, as its afterglow (P1)
+  const gig = late2.intents(INTENT.EMOTE).find((l) => l.icon === EMOTE.giggle && l.who === 0 && l.t >= tTouch);
+  check('LF-13', `any touch ends the huff (it turns into a giggle): huffing ${was} at +${(waited / 60).toFixed(1)} s; touched: B16 ended ${ended}, a happy squint ${squint}, the giggle bubble at the release ${gig ? `+${(gig.t - tTouch).toFixed(2)} s` : 'none'}`,
+    was && ended && squint && !!gig);
+  // the second scene event: another squishy took the spot it was walking to (the Snug Basket a napper was heading for)
+  const spot = cabin(87, ['capnap', 'dollop'], 2); spot.kettle = false; spot.run(70);
+  {
+    const w = spot.w, bk = w.gTL[TID('snugbasket')];
+    for (let m = 0; m < 8; m++) w.mK[m] = 0; w.moo.fill(-1); w.coo[0 * 26 + BEH.HUFF] = -1e9;
+    w.beh[0] = BEH.NAP; w.ph[0] = 1; w.tT[0] = bk; w.tC[0] = -1; w.uS[0] = 1; w.bT[0] = spot.t; w.bE[0] = spot.t + 60; w.bSc[0] = 0.8;
+    w.tx[0] = w.tWX[bk]; w.tz[0] = w.tWZ[bk]; spot.bodies[0].x = 0.4; spot.bodies[0].z = -0.3;
+    w.b1[0] = 0; w.zSe[0] = 0xffff; // no zone reaction pending (it would outrank the huff's 0.5)
+    for (const b of [BEH.BASK, BEH.USE, BEH.WANDER, BEH.NAP, BEH.MOMENT]) w.coo[0 * 26 + b] = 1e9; // nor a bask, use, wander or moment (0.5 and up)
+    spot.bodies[1].x = -1.8; spot.bodies[1].z = -0.45; w.beh[1] = BEH.NAP; w.ph[1] = 2; w.tT[1] = bk; w.bE[1] = spot.t + 60;
+  }
+  const ts0 = spot.t; spot.run(5);
+  const spotPuff = spot.intents(INTENT.EMOTE).find((l) => l.icon === EMOTE.puff && l.who === 0 && l.t >= ts0);
+  check('LF-13', `another squishy took the spot it was walking to (the Snug Basket): it stops walking there and huffs (${spotPuff ? `puff at +${(spotPuff.t - ts0).toFixed(1)} s` : 'no huff'})`, !!spotPuff);
   // LF-23 RIDE: set on the rocker, still on it 15 s later with no input; a lone rider's star (P1); a touch ends it
   const r = cabin(83, ['thumbly', 'capnap'], 1); const rk = CABIN.things.find((t) => t.id === 'rockerboard')!;
   r.bodies[0].x = rk.x - 0.75; r.bodies[0].z = rk.z; r.extraFlags[0] = LIFE_FLAG.RIDE | LIFE_FLAG.ON_PROP;
@@ -688,7 +766,7 @@ if (!LF02_CHILD) {
   const moving = a.log.filter((l) => [INTENT.SCOOT, INTENT.HOP, INTENT.GLIDE, INTENT.SQUASH].includes(l.kind as 2)).length;
   const kept = ['GAZE', 'POSE', 'EMOTE', 'VOICE'].map((k) => a.log.filter((l) => l.kind === INTENT[k as 'GAZE']).length);
   check('LF-24', `autonomy off: 0 hops, scoots, glides and squash poses in 60 s (${moving}); gaze ${kept[0]}, render poses ${kept[1]}, bubbles ${kept[2]}, voices ${kept[3]} stay`, moving === 0 && kept.every((k) => k > 0));
-  lifeScript(a.w, 0, SCRIPT.PLAY_WITH, a.w.globalToLocal[TID('yarnball')]);
+  lifeScript(a.w, 0, SCRIPT.PLAY_WITH, a.w.gTL[TID('yarnball')]);
   const tp = a.t; a.run(12);
   const asked = a.log.filter((l) => l.t > tp && (l.kind === INTENT.SCOOT || l.kind === INTENT.HOP));
   const byPlayer = a.evs.find((e) => e.t > tp && e.kind === LIFE_EV.USE && e.a === 0 && e.b === 254);
@@ -701,7 +779,7 @@ if (!LF02_CHILD) {
   const journal = (sim: Sim, open: number, kinds: number): void => lifeSetJournal(sim.w, new Uint32Array(2), open, new Uint32Array(4), kinds);
   // FIRST_WISH with no Dollop owned: the slot the shell names; no natural wish before it (a touch wish due before 2:30)
   const a = home(91, ['glugbean', 'capnap'], 0); journal(a, 1, THING_KIND.ball | THING_KIND.note);
-  a.w.play[0] = 0.95; a.w.play[1] = 0.95; a.run(150);
+  a.w.pl[0] = 0.95; a.w.pl[1] = 0.95; a.run(150);
   const before = a.events(LIFE_EV.WISH, WISH_STATE.SHOWN).length;
   lifeScript(a.w, 1, SCRIPT.FIRST_WISH, 0); a.run(3);
   const shown = a.events(LIFE_EV.WISH, WISH_STATE.SHOWN);
@@ -738,26 +816,123 @@ if (!LF02_CHILD) {
   check('LF-19', 'SQUIRTED: the target\'s wow, then its giggle', sq.some((l) => l.kind === INTENT.EMOTE && l.icon === EMOTE.wow) && sq.some((l) => l.kind === INTENT.VOICE && l.icon === 15));
   // LF-14 and LF-25: natural wishes over 20 minutes at Home with 3 out (Hearthlog open: the first wish has shown)
   const h = home(101, ['dollop', 'glugbean', 'capnap'], 0); journal(h, 0b11, THING_KIND.ball);
-  for (let i = 0; i < 3; i++) h.w.play[i] = 0.9;
+  for (let i = 0; i < 3; i++) h.w.pl[i] = 0.9;
   const mins = HEAVY ? 30 : 20, wishT: number[][] = [[], [], []]; let maxOpen = 0, maxFull = 0, glanceMax = 0, thingOk = true;
   const end = h.frame + mins * 60 * 60;
   let li = 0;
   while (h.frame < end) {
     h.step();
-    for (let i = 0; i < 3; i++) h.w.play[i] = Math.max(h.w.play[i], 0.85);
-    let open = 0; for (let i = 0; i < 3; i++) if (h.w.wishKind[i]) open++;
+    for (let i = 0; i < 3; i++) h.w.pl[i] = Math.max(h.w.pl[i], 0.85);
+    let open = 0; for (let i = 0; i < 3; i++) if (h.w.wK[i]) open++;
     maxOpen = Math.max(maxOpen, open);
     maxFull = Math.max(maxFull, h.w.att.wishOwner >= 0 ? 1 : 0);
-    for (let i = 0; i < 3; i++) glanceMax = Math.max(glanceMax, h.w.wishGlance[i]);
+    for (let i = 0; i < 3; i++) glanceMax = Math.max(glanceMax, h.w.wG[i]);
     for (; li < h.evs.length; li++) { const e = h.evs[li]; if (e.kind === LIFE_EV.WISH && e.sub === WISH_STATE.SHOWN) { wishT[e.a].push(e.t); const o = new Int32Array(2); lifeWishOf(h.w, e.a, o); if (o[0] === WISH_KIND.THING && (o[1] & ~THING_KIND.ball) !== 0) thingOk = false; } }
     // grant place wishes now and then (a trip), so new ones can come
-    if (h.frame % (90 * 60) === 0) for (let i = 0; i < 3; i++) if (h.w.wishKind[i]) { h.w.wishKind[i] = 0; }
+    if (h.frame % (90 * 60) === 0) for (let i = 0; i < 3; i++) if (h.w.wK[i]) { h.w.wK[i] = 0; }
   }
   const all = wishT.flat().sort((x, y) => x - y);
   const gapAny = all.slice(1).reduce((m, t, k) => Math.min(m, t - all[k]), 1e9), gapSelf = Math.min(...wishT.map((ts) => ts.slice(1).reduce((m, t, k) => Math.min(m, t - ts[k]), 1e9)));
   check('LF-14', `${mins} min, 3 out: ${all.length} wishes; at most 1 open a squishy and ${maxOpen} open in all (<= 3), the wish slot holds one (${maxFull}), gaps ${gapAny === 1e9 ? '-' : gapAny.toFixed(0)} s overall (>= 120) and ${gapSelf === 1e9 ? '-' : gapSelf.toFixed(0)} s a squishy (>= 180), at most 2 re-glances (${glanceMax})`,
     all.length >= 2 && maxOpen <= 3 && gapAny >= 120 - 1e-6 && gapSelf >= 180 - 1e-6 && glanceMax <= 2);
   check('LF-25', 'thing wishes target only the kinds in the thing-kind mask (here: ball only)', thingOk);
+}
+
+/* ───────────────────────────── round 2: S05's parade, P04 join in, the curious one walks over after a cut ───────────────────────────── */
+if (!LF02_CHILD) {
+  // S05 parade: a leader with bouncy >= 0.6 hops, a curious one within 2 m sees it, a third idle whole is near: turn by turn, one mover at a time
+  const p = cabin(141, ['boingle', 'dollop', 'crimpo', 'capnap'], 1); p.kettle = false;
+  const pos = [[0.2, 0.4], [-0.8, 0.6], [0.7, 1.2], [2.6, -0.5]];
+  pos.forEach(([x, z], k) => { p.bodies[k].x = x; p.bodies[k].z = z; });
+  p.run(12); // the arrival, the greets and Crimpo's love of its place (B10) pass first
+  const pw = p.w;
+  pw.tr[0 * 5 + 0] = 0.9; pw.tr[1 * 5 + 1] = 0.95; for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) if (a !== b) { pw.pG[Math.min(a, b) * 16 + Math.max(a, b)] = 1; lifeSetPair(pw, a, b, 1, false); }
+  for (const k of [0, 1, 2]) for (const bh of [BEH.USE, BEH.NAP, BEH.BASK, BEH.WANDER, BEH.MOMENT]) pw.coo[k * 26 + bh] = 1e9;
+  const pRows = { movers: 0, moment: 0, wake: 0, maxUnits: -9 };
+  const tp0 = p.t;
+  // the staging: the leader hops every 0.5 s until a moment takes it, and the trio's 20 s pair cooldowns are kept clear (other moments
+  // between them would otherwise block the copy for 20 s each)
+  for (let f = 0; f < 90 * 60; f++) {
+    if (f % 30 === 0 && pw.moo[0] < 0 && p.events(LIFE_EV.SOCIAL, SOCIAL_KIND.PARADE).length === 0) { pw.lHT[0] = p.t; for (const q of [1, 2, 18]) pw.pCo[q] = -1e9; }
+    p.step(); watchGate(p, pRows);
+  }
+  const par = p.events(LIFE_EV.SOCIAL, SOCIAL_KIND.PARADE)[0];
+  const pScoots = par ? p.intents(INTENT.SCOOT).filter((l) => l.t >= tp0 && l.t <= par.t && l.who <= 2).length : 0;
+  check('S05', `a little parade: 3 or more, a leader with bouncy >= 0.6, turn by turn (${par ? `PARADE n ${par.n2}, leader slot ${par.a}, ${pScoots} glides` : 'no PARADE'}), one mover at a time (${pRows.movers} frames over moverCap), no character in two moments (${pRows.moment})`,
+    !!par && par.n2 >= 3 && par.a === 0 && pScoots >= 3 && pRows.movers === 0 && pRows.moment === 0);
+  // P04 join in: a whole boops the ball near a cut squishy's group; the face piece copies the use as a group: one PIECES record, sub PIECES_USE + ROLL
+  const j = new Sim(143, CABIN, 0); j.s.place = 1; j.s.tier = 2; CABIN.things.forEach((t) => j.addThing(t.id, t.x, t.z));
+  const ball = CABIN.things.find((t) => t.id === 'yarnball')!;
+  j.add(0, 'dollop', ball.x + 0.9, ball.z - 0.3); j.add(5, 'pastrel', ball.x - 0.6, ball.z - 1.2, { seed: 11 });
+  j.run(15); lifeRemove(j.w, 5); j.bodies[5].on = false; // the cut (it has been out a while): the whole goes, its pieces come (they saw what it saw)
+  j.add(1, 'pastrel', ball.x - 0.4, ball.z - 1.0, { kind: 1, group: 5, frac: 0.4, r: 0.36, seed: 11 });
+  for (let k = 2; k < 4; k++) j.add(k, 'pastrel', ball.x - 0.9 + (k - 2) * 0.4, ball.z - 1.3, { kind: 2, group: 5, frac: 0.3, r: 0.3, seed: 11 });
+  j.run(2.5);
+  const jw = j.w, bl = jw.gTL[TID('yarnball')];
+  const tj0 = j.t; jw.tU[bl] = 0; jw.tUT[bl] = j.t; // the whole just booped the ball
+  j.run(12);
+  const join = j.events(LIFE_EV.PIECES).filter((e) => e.t >= tj0 && e.sub === PIECES_USE + USE_VERB.ROLL);
+  check('P04', `join in: the face piece copies a nearby whole's ball use as a group (${join.map((e) => `PIECES ROLL n ${e.n2} +${(e.t - tj0).toFixed(1)} s`).join(', ') || 'none'}; a use's PIECES sub is PIECES_USE + verb, ${PIECES_USE + USE_VERB.ROLL})`,
+    join.length >= 1 && join[0].a === 1 && join[0].thing === TID('yarnball'));
+  // after a cut, the most curious other whole walks over to look (once the Cut tool is put away: its quiet holds the wholes)
+  const c = cabin(145, ['crimpo', 'dollop', 'capnap'], 2); c.kettle = false;
+  c.bodies[0].x = -2.2; c.bodies[0].z = 1.2; c.bodies[1].x = 2.2; c.bodies[1].z = 0.4; c.bodies[2].x = 2.6; c.bodies[2].z = -1.0;
+  c.run(2);
+  c.w.tr[1 * 5 + 1] = 0.95; c.w.tr[2 * 5 + 1] = 0.2;
+  c.touch[0] = TOUCH.CUT; c.s.quiet = true; c.run(0.2);
+  lifeRemove(c.w, 0); c.bodies[0].on = false;
+  c.add(5, 'crimpo', -2.2, 1.2, { kind: 1, group: 0, frac: 0.5, r: 0.4, seed: c.w.gs[0] }); c.add(6, 'crimpo', -1.6, 1.4, { kind: 2, group: 0, frac: 0.5, r: 0.4, seed: c.w.gs[0] });
+  c.run(2); const d0 = Math.hypot(c.bodies[1].x - c.bodies[5].x, c.bodies[1].z - c.bodies[5].z);
+  c.s.quiet = false; const tc0 = c.t;
+  let d1 = 99, gazed = false, li = c.log.length;
+  for (let f = 0; f < 20 * 60; f++) {
+    c.step();
+    d1 = Math.min(d1, Math.hypot(c.bodies[1].x - c.bodies[5].x, c.bodies[1].z - c.bodies[5].z));
+    for (; li < c.log.length; li++) { const l = c.log[li]; if (l.who === 1 && l.kind === INTENT.GAZE && Math.hypot(l.a - c.bodies[5].x, l.c - c.bodies[5].z) < 0.3) gazed = true; }
+  }
+  check('LIFE 9', `after a cut the most curious other whole walks over to look (Dollop: ${d0.toFixed(2)} m from the face piece while the Cut tool's quiet holds it, nearest ${d1.toFixed(2)} m in the 20 s after; it gazes at the piece ${gazed})`,
+    d1 < d0 - 1 && d1 < 1.7 && gazed);
+}
+
+/* ───────────────────────────── the friend wish (QUESTS 8; lifeSetFriends, round 2) ───────────────────────────── */
+if (!LF02_CHILD) {
+  const bit = (sp: number): Uint32Array => { const m = new Uint32Array(2); m[sp >>> 5] |= 1 << (sp & 31); return m; };
+  const owned = (ids: string[]): Uint32Array => { const m = new Uint32Array(2); for (const id of ids) { const k = SP(id); m[k >>> 5] |= 1 << (k & 31); } return m; };
+  const friendRun = (ownedIds: string[], friendOut: boolean, maskOn: boolean): { sim: Sim; shown: EvLog | undefined; wo: Int32Array } => {
+    const sim = home(121, friendOut ? ['crimpo', 'glugbean', 'dollop'] : ['crimpo', 'glugbean'], 0);
+    lifeSetJournal(sim.w, owned(ownedIds), 0b11, new Uint32Array(4), THING_KIND.ball);
+    if (maskOn) lifeSetFriends(sim.w, SP('crimpo'), bit(SP('dollop')));
+    const end = sim.frame + 400 * 60;
+    let shown: EvLog | undefined;
+    const wo = new Int32Array(2);
+    while (sim.frame < end && !shown) {
+      sim.w.co[0] = 0.95; sim.w.pl[0] = 0.2; sim.w.re[0] = 0.1; for (let i = 1; i < 3; i++) { sim.w.co[i] = 0.1; sim.w.pl[i] = 0.2; }
+      sim.step();
+      shown = sim.events(LIFE_EV.WISH, WISH_STATE.SHOWN).find((e) => e.a === 0);
+      if (shown) lifeWishOf(sim.w, 0, wo);
+    }
+    return { sim, shown, wo };
+  };
+  const yes = friendRun(['crimpo', 'glugbean', 'dollop'], false, true);
+  check('FW', `a friend wish: company over 0.8, its friend (lifeSetFriends) owned and on the shelf: Crimpo wishes to see Dollop (${yes.shown ? `+${yes.shown.t.toFixed(0)} s, lifeWishOf [${yes.wo.join(', ')}]` : 'none'}; its snug bubble ${yes.sim.intents(INTENT.EMOTE, 0).some((l) => l.icon === EMOTE.snug && l.style === STYLE.THINK) ? 'yes' : 'no'})`,
+    !!yes.shown && yes.wo[0] === WISH_KIND.FRIEND && yes.wo[1] === SP('dollop'));
+  const none = [friendRun(['crimpo', 'glugbean'], false, true), friendRun(['crimpo', 'glugbean', 'dollop'], true, true), friendRun(['crimpo', 'glugbean', 'dollop'], false, false)]
+    .map((r) => { const w = new Int32Array(2); return r.shown && lifeWishOf(r.sim.w, 0, w) && w[0] === WISH_KIND.FRIEND ? 1 : 0; });
+  check('FW', `no friend wish for a species not owned, one that is out, or one not in its lifeSetFriends mask (Friends or closer, or the best friend once F3: ${none.join('/')})`, none.every((n) => n === 0));
+  // the grant: the friend comes out (the player brings it); the wisher greets it from wherever it is and the wish is granted
+  const g = yes.sim; const tg = g.t;
+  g.add(2, 'dollop', 1.3, 0.2); g.home(2, 1.3, 0.2);
+  g.run(20);
+  const granted = g.events(LIFE_EV.WISH, WISH_STATE.GRANTED).find((e) => e.a === 0 && e.t >= tg);
+  const greet = g.events(LIFE_EV.SOCIAL, SOCIAL_KIND.GREET).find((e) => e.t >= tg && ((e.a === 0 && e.b === 2) || (e.a === 2 && e.b === 0)));
+  check('FW', `brought out, the friend is greeted and the wish is granted (${greet ? `greet +${(greet.t - tg).toFixed(1)} s` : 'no greet'}, ${granted ? `granted +${(granted.t - tg).toFixed(1)} s` : 'not granted'})`, !!greet && !!granted);
+  // the grant greet ignores S01's once per visit and gives no friendship points (SOCIAL thing = -2 for the host)
+  const h = friendRun(['crimpo', 'glugbean', 'dollop'], false, true).sim;
+  h.add(2, 'dollop', 1.3, 0.2); h.home(2, 1.3, 0.2);
+  h.w.pG[0 * 16 + 2] = 1; // this pair greeted already this visit
+  const th = h.t; h.run(20);
+  const again = h.events(LIFE_EV.SOCIAL, SOCIAL_KIND.GREET).find((e) => e.t >= th && (e.a === 0 || e.b === 0));
+  check('FW', `when the pair greeted already this visit, the grant greet comes once more with thing = -2 (no points: the host sets v = -1) (${again ? `thing ${again.thing}` : 'no greet'})`, !!again && again.thing === -2 && h.events(LIFE_EV.WISH, WISH_STATE.GRANTED).some((e) => e.a === 0 && e.t >= th));
 }
 
 /* ───────────────────────────── LF-20 looks, LF-21 REACT from LIFE's real output ───────────────────────────── */
@@ -799,8 +974,67 @@ if (!LF02_CHILD) {
   check('LF-21', `TOAST at 0.5 for the marshmallow (${toast.length}), and it hops back from the heat once toast passes 0.6 (${hopBack})`, fam('cushlet') !== 'marshmallow' || (toast.length === 1 && toast[0].thing === TID('hearth') && hopBack));
   check('LF-21', `RISE (mochi dough's warm pose 1.06 reached in warmth 0.6+: ${rise.length}) and OOZE (slime goo's 0.82: ${ooze.length})`, (fam('kneadle') !== 'mochidough' || rise.length === 1) && (fam('gloopsy') !== 'slimegoo' || ooze.length === 1));
   // water (Ripple Shore's data): FLOAT and WADE give the zone's own thing, so the Rock Pool and the Surf Edge give different things
-  info('LF-21', 'not run in S0/S1 (their places and producers are S2/S3): FLOAT, WADE, SOAK by water, GLIDE, SPLASH, DRIFT, LIFT, RATTLE, GLOW, GAZE_SKY, PRINT, SHOWER, FIZZ (the trigger code for LIFT, RATTLE, GLOW, SHOWER, FIZZ, SPLASH, FLOAT, WADE is in looks.ts, unchecked; GLIDE, DRIFT, GAZE_SKY, PRINT have no producer yet)');
-  info('LF-18', 'S2 (water): the 30 s water exit and "never naps in water" (the nap part is in: B06 never starts in a water zone); the exit is NOT built yet');
+  // S2's places (PG_DATA's Ripple Shore and Frostbell Ridge, wide): the water and cold producers from LIFE's real output
+  const s2 = (def: PlaceDef, seed: number): Sim => { const sim = new Sim(seed, def, 0); sim.s.place = def.idx; sim.s.tier = 1; def.things.forEach((t) => sim.addThing(t.id, t.x, t.z)); sim.kettle = false; return sim; };
+  const inWater = (def: PlaceDef, x: number, z: number): boolean => def.zones.some((zn) => zn.kind === ZONE.water && (zn.shape === 'disc' ? Math.hypot(x - zn.x, z - zn.z) <= (zn.r ?? 0) : Math.abs(x - zn.x) <= (zn.hx ?? 0) && Math.abs(z - zn.z) <= (zn.hz ?? 0)));
+  const pool = RIPPLE.zones.find((zn) => zn.id === 'rockpool')!;
+  for (const float of [false, true]) {
+    const r = s2(RIPPLE, 131 + (float ? 1 : 0));
+    r.add(0, 'dollop', pool.x, pool.z, { float });
+    // alone, not playful (no wander), tired (it would nap if it could, never in water), its bask and use on cooldown for 30 s (the Sun is
+    // a whole-place warm zone: a bask would walk it out first): it stays until its 30 s
+    for (const bh of [BEH.BASK, BEH.USE, BEH.WANDER]) r.w.coo[0 * 26 + bh] = 30;
+    let out = -1, napWet = 0, exitScoot = -1;
+    const end = r.frame + 60 * 60; let li = 0;
+    while (r.frame < end) {
+      if (r.t < 30) { r.w.re[0] = 0.9; r.w.pl[0] = 0; }
+      r.step();
+      const b = r.bodies[0], wet = inWater(RIPPLE, b.x, b.z);
+      if (wet && r.w.beh[0] === BEH.NAP) napWet++;
+      for (; li < r.log.length; li++) { const l = r.log[li]; if (exitScoot < 0 && l.who === 0 && l.kind === INTENT.SCOOT && !inWater(RIPPLE, l.a, l.b) && l.t >= 29) exitScoot = l.t; }
+      if (out < 0 && !wet) out = r.t;
+    }
+    const fl = r.events(LIFE_EV.REACT, float ? REACT_KIND.FLOAT : REACT_KIND.WADE).filter((e) => e.a === 0);
+    check('LF-18', `(S2, Ripple Shore) a ${float ? 'floater' : 'wader'} in the Rock Pool heads out by SCOOT within 30 s by itself (exit scoot at ${exitScoot.toFixed(1)} s to a dry spot, out of the water at ${out.toFixed(1)} s) and never naps there (${napWet} wet nap ticks)`,
+      exitScoot >= 30 && exitScoot <= 30.2 && out > 0 && out <= 40 && napWet === 0);
+    check('LF-21', `(S2) ${float ? 'FLOAT: in the Rock Pool, not grounded' : 'WADE: in the Rock Pool (surface 0.28 m), grounded'} for 1 s, once per visit, its thing the Rock Pool (${fl.map((e) => `${e.t.toFixed(1)} s thing ${e.thing}`).join(', ') || 'none'})`,
+      fl.length === 1 && fl[0].thing === TID('rockpool') && fl[0].t <= 1.4);
+  }
+  // SPLASH: a hop that lands in the shallow Surf Edge (surface 0.06 m): an event, 5 s cooldown, its thing the zone's (none: -1, not the Rock Pool)
+  {
+    const r = s2(RIPPLE, 135), edge = RIPPLE.zones.find((zn) => zn.id === 'surfedge')!;
+    r.add(0, 'crimpo', 1.0, edge.z); r.run(2);
+    for (let k = 0; k < 3; k++) { r.bodies[0].air = 0.18; r.run(1.0); }
+    r.run(5); r.bodies[0].air = 0.18; r.run(1.0);
+    const sp = r.events(LIFE_EV.REACT, REACT_KIND.SPLASH).filter((e) => e.a === 0);
+    check('LF-21', `(S2) SPLASH: landings in the Surf Edge (four hops: three 1 s apart, one 5 s later) give events 5 s apart (${sp.map((e) => e.t.toFixed(1)).join(', ')} s), thing ${sp[0]?.thing} (the Surf Edge has no owning thing; the Rock Pool gives ${TID('rockpool')})`,
+      sp.length === 2 && sp[1].t - sp[0].t >= 5 && sp.every((e) => e.thing === -1));
+  }
+  // Frostbell's whole-place Mountain Cold (0.6): SHIVER for a family with shiver after 2 s, FROST at 0.5 (0.03 a s: about 17 s), thing -1
+  {
+    const r = s2(FROSTBELL, 137);
+    r.add(0, 'dollop', -0.6, 0.6); r.add(1, 'crimpo', 0.85, 0.85); r.physics = false;
+    r.run(25);
+    const sh = r.events(LIFE_EV.REACT, REACT_KIND.SHIVER), fr = r.events(LIFE_EV.REACT, REACT_KIND.FROST);
+    const lo = new Float32Array(6); lifeLooks(r.w, 0, lo);
+    check('LF-21', `(S2, Frostbell) SHIVER in the whole-place cold for 2 s, only for a family with shiver (${sh.map((e) => `slot ${e.a} ${e.t.toFixed(1)} s thing ${e.thing}`).join(', ')}), FROST at 0.5 (${fr.map((e) => `slot ${e.a} ${e.t.toFixed(1)} s`).join(', ')}; frost ${lo[0].toFixed(2)} at 25 s), both with thing -1`,
+      sh.length === 1 && sh[0].a === 0 && sh[0].thing === -1 && sh[0].t <= 2.3 && fr.length === 2 && fr.every((e) => e.thing === -1 && Math.abs(e.t - 0.5 / 0.03) < 0.5));
+  }
+  // S2's raised hops (LIFE 5.2, D-07): lifeSetHops raises a family's hop to its vyS2 once PH-01 passed; pieces keep the S1 cap; 0 returns to S1
+  {
+    const hopRun = (mask: number, calm: boolean): { whole: number; other: number; piece: number } => {
+      const r = new Sim(139, CABIN, 0); r.s.place = 1; r.s.tier = 2; r.s.calm = calm; CABIN.things.forEach((t) => r.addThing(t.id, t.x, t.z));
+      r.add(0, 'dollop', -1, 0.6); r.add(1, 'boingle', 1, 0.6); r.add(2, 'dollop', 0.2, 1.5, { kind: 1, group: 9, frac: 0.3, r: 0.32, seed: 5 });
+      lifeSetHops(r.w, mask); r.run(90);
+      const vy = (who: number): number => Math.max(0, ...r.intents(INTENT.HOP, who).map((l) => l.b));
+      return { whole: vy(0), other: vy(1), piece: vy(2) };
+    };
+    const jg = 1 << MATERIAL_FAMILY_IDS.indexOf('jellygel');
+    const up = hopRun(jg, false), off = hopRun(0, false), calm = hopRun(jg, true);
+    check('LIFE 5.2', `(S2) lifeSetHops raises the jelly gel whole's hop to vyS2 1.2 (max vy ${up.whole.toFixed(2)}); firm silicone not raised stays at the S1 cap (${up.other.toFixed(2)} <= 0.84); a piece keeps the S1 cap (${up.piece.toFixed(2)}); mask 0 back to S1 (${off.whole.toFixed(2)}); Calm x 0.6 (${calm.whole.toFixed(2)})`,
+      up.whole > 0.84 && up.whole <= 1.2 + 1e-6 && up.other <= 0.84 + 1e-6 && up.piece <= 0.84 + 1e-6 && off.whole <= 0.84 + 1e-6 && calm.whole <= 1.2 * 0.6 + 1e-6);
+  }
+  info('LF-21', 'not run yet (S2 / S3 producers): SOAK by water, GLIDE, DRIFT, LIFT, RATTLE, GLOW, GAZE_SKY, PRINT, SHOWER, FIZZ (the trigger code for LIFT, RATTLE, GLOW, SHOWER, FIZZ is in looks.ts, unchecked; GLIDE, DRIFT, GAZE_SKY, PRINT have no producer yet); FLOAT, WADE, SPLASH, SHIVER, FROST are checked above with S2 data');
   info('LF-15', "friendship's pace (20 a pair a day, levels at 12 and 40, 128 rows, eviction) is the reducer's (PG_QUESTS); LIFE's side: lifeSetPair levels gate chat (Met), duet and nuzzle-for-every-pair (Friends), twirl (Close)");
 }
 

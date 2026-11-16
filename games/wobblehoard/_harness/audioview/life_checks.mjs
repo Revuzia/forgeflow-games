@@ -430,6 +430,180 @@ async function propChecks(page, check, want, extra) {
   check('PROPS', "the kettle's whistle (music off: the home field) sits on D, A and E within 10 cents", okN, notes.map((m) => m.toFixed(2)).join(', '), 'rest tones');
 }
 
+/* ═══════════════════════════════ round 2 (S2, S3): place things, the eight beds, the styles, the Music Box's key, the double echo ═══════════════════════════════ */
+
+const KIND = { chime: 3, splash: 4, crunch: 5, boing: 7, bell: 8, tick: 9, rustle: 11, whoosh: 12 };
+const BEDS = ['ripple', 'frostbell', 'rainleaf', 'fizzwell', 'cogwhistle', 'lanternroof', 'echohollow', 'cloudloft'];
+const STYLES2 = ['shore', 'ridge', 'garden', 'bath', 'bench', 'roof', 'hollow', 'cloud'];
+const D_MAJOR = [2, 4, 6, 7, 9, 11, 1];
+
+async function r2Checks(page, check, want, extra) {
+  const msPeak = (x, a, b) => dbOf(peakOf(x, Math.round(a * SR), Math.round(b * SR)));
+  const msDb = (x, a, b) => { let s2 = 0, n = 0; for (let i = Math.round(a * SR); i < Math.min(x.length, Math.round(b * SR)); i++) { s2 += x[i] * x[i]; n++; } return 10 * Math.log10(Math.max(s2 / Math.max(n, 1), 1e-30)); };
+  const finite = (x) => { for (let i = 0; i < x.length; i++) if (!Number.isFinite(x[i])) return false; return true; };
+  const onsetAfter = (x, t, thr) => { for (let i = Math.round(t * SR); i < x.length; i++) if (Math.abs(x[i]) > thr) return i / SR; return NaN; };
+  /* ── THINGS: every strike voice, its level, its length and its end ── */
+  if (want('THINGS')) {
+    const names = Object.keys(KIND), ev = [];
+    names.forEach((k, i) => ev.push({ t: 1 + 3 * i, op: 'prop', a: { kind: KIND[k], intensity: 0.8, auto: false, note: k === 'bell' ? 69 : 81, pan: 0.2 } }));
+    const R = await run(page, { secs: 1 + 3 * names.length + 0.5, seed: 121, musicOn: false, taps: true, preload: true, ambience: 'ripple', want: ['fx'], events: ev, recordReturns: true });
+    const fx = dec(R.stems.fx);
+    const rows = names.map((k, i) => ({ k, pk: msPeak(fx, 1 + 3 * i, 1 + 3 * i + 2.7), tail: msPeak(fx, 1 + 3 * i + 2.75, 1 + 3 * i + 3) }));
+    extra.r2things = rows;
+    check('THINGS', 'the 8 place thing strikes (chime, splash, crunch, boing, bell, tick, rustle, whoosh) at intensity 0.8 through the engine: peak -40..-8 dBFS, silent (< -70) 2.75 s after', rows.every((q) => q.pk >= -40 && q.pk <= -8 && q.tail < -70) && finite(fx) && R.errors === 0, rows.map((q) => `${q.k} ${f1(q.pk)}/${f1(q.tail)}`).join(', '), '-40..-8, < -70');
+    // tuned: chime and bell land on their D pentatonic note (the fundamental, 50..400 ms after the strike)
+    const ev2 = [[3, 74], [3, 81], [8, 69], [8, 76], [3, 70]].map(([kind, note], i) => ({ t: 1 + 3 * i, op: 'prop', a: { kind, note, intensity: 0.7, auto: false } }));
+    const T = await run(page, { secs: 16.5, seed: 122, musicOn: false, taps: true, preload: true, ambience: 'ripple', want: ['fx'], events: ev2 });
+    const tx = dec(T.stems.fx);
+    const tr = pitchTrack(tx, SR, { win: 4096, hop: 480, fLo: 300, fHi: 1200, relDb: 9, floorDb: -80 });
+    const got = ev2.map((e, i) => midiOfHz(trackAt(tr, 1 + 3 * i + 0.06, 1 + 3 * i + 0.4)));
+    const wantN = [74, 81, 69, 76, 69];   // 70 (A#4) snaps down to A4 (69)
+    check('THINGS', 'chime and bell ring on their note within 10 cents (D5, A5 chimes; A4, E5 bells; an off-key 70 snaps to A4)', got.every((m, i) => Math.abs(m - wantN[i]) <= 0.1), got.map((m) => m.toFixed(2)).join(', '), wantN.join(', '));
+  }
+  if (want('THINGS')) {
+    // autonomous strikes (a body or the weather) never move the music; the player's chime makes room
+    const auto = [];
+    const ks = Object.values(KIND);
+    for (let t = 4, k = 0; t < 20; t += 0.05, k++) auto.push({ t, op: 'prop', a: { kind: ks[k % ks.length], intensity: 0.6, auto: true, note: 74 } });
+    const X = await run(page, { secs: 24, seed: 123, musicOn: true, taps: true, preload: true, ambience: 'ripple', want: ['music'], events: [] });
+    const Y = await run(page, { secs: 24, seed: 123, musicOn: true, taps: true, preload: true, ambience: 'ripple', want: ['music', 'fx'], events: auto });
+    const a = dec(X.stems.music), b = dec(Y.stems.music), fy = dec(Y.stems.fx);
+    let mx = 0; for (let i = 0; i < a.length; i++) mx = Math.max(mx, Math.abs(a[i] - b[i]));
+    // admitted = requests - the engine's own 'auto' throttle count (onsets cannot be counted under 2.5 s bell rings)
+    const adm = auto.length - (Y.final?.throttled?.auto ?? 0);
+    check('THINGS', 'autonomous thing strikes (20 a second for 16 s, every kind) never move the music; at most 3 a second admitted (the auto budget)', mx <= 5e-5 && peakOf(fy) > 1e-3 && adm <= 3 * 16 + 3 && adm >= 30, `music max |diff| ${mx.toExponential(2)}; ${adm} of ${auto.length} admitted; fx peak ${f1(dbOf(peakOf(fy)))} dBFS`, '<= 5e-5, 30..51');
+    const P = await run(page, { secs: 12, seed: 124, musicOn: true, taps: true, preload: true, ambience: 'ripple', want: ['music'], events: [{ t: 6, op: 'prop', a: { kind: 3, note: 78, intensity: 0.8, auto: false } }] });
+    const pm = dec(P.stems.music);
+    const dip = 10 * Math.log10((rmsOf(pm, 6.2 * SR, 9 * SR) ** 2 + 1e-30) / (rmsOf(a, 6.2 * SR, 9 * SR) ** 2 + 1e-30));
+    check('THINGS', "a chime the player struck makes room in the music (ROOM_KINDS 'thing'; 6.2..9 s against the same music untouched)", dip <= -10, `${f1(dip)} dB`, '<= -10 dB');
+  }
+  if (want('THINGS')) {
+    // the tick lands on the music's eighth grid (musicClock's bar), struck at odd times
+    const ev = [];
+    for (let i = 0; i < 6; i++) { const t = 3.137 + 1.71 * i; ev.push({ t, op: 'clock', a: {} }); ev.push({ t, op: 'prop', a: { kind: 9, intensity: 0.9, auto: false } }); }
+    const R = await run(page, { secs: 14, seed: 125, musicOn: true, taps: true, preload: true, ambience: 'cogwhistle', want: ['fx'], events: ev, recordReturns: true });
+    const fx = dec(R.stems.fx), clocks = (R.rets ?? []).filter((q) => q[1] === 'clock');
+    const offs = clocks.map((q) => { const on = onsetAfter(fx, q[5], 1e-3); const k = (on - q[4]) / E; return Math.abs(k - Math.round(k)) * E * 1000; });
+    check('THINGS', 'a tick lands on the music\'s eighth grid (onset against musicClock\'s bar start, 6 strikes at odd times)', clocks.length === 6 && clocks.every((q) => q[2]) && offs.every((o) => o <= 2), offs.map((o) => o.toFixed(2)).join(', ') + ' ms', '<= 2 ms');
+    // held rustle and whoosh follow their updates and stop by themselves
+    const held = [];
+    for (let t = 2; t < 4; t += 1 / 60) held.push({ t, op: 'prop', a: { kind: 11, key: 4, held: 0.8, intensity: 0, auto: true } });
+    for (let t = 6; t < 8; t += 1 / 60) held.push({ t, op: 'prop', a: { kind: 12, key: 6, held: 0.7, intensity: 0, auto: false } });
+    const H = await run(page, { secs: 10, seed: 126, musicOn: false, taps: true, preload: true, ambience: 'frostbell', want: ['fx'], events: held });
+    const hf = dec(H.stems.fx);
+    check('THINGS', 'held rustle (the Shake Pine) and whoosh (a slide) sound while updated and are silent 0.3 s after the last update', msPeak(hf, 2.5, 3.9) > -60 && msPeak(hf, 4.3, 5.9) < -80 && msPeak(hf, 6.5, 7.9) > -60 && msPeak(hf, 8.3, 10) < -80, `rustle ${f1(msPeak(hf, 2.5, 3.9))} then ${f1(msPeak(hf, 4.3, 5.9))}; whoosh ${f1(msPeak(hf, 6.5, 7.9))} then ${f1(msPeak(hf, 8.3, 10))} dBFS`, 'on, then silent');
+    // the felt ball and the yarn ball sound apart (prop size)
+    const B = await run(page, { secs: 4, seed: 127, musicOn: false, taps: true, preload: true, want: ['fx'], events: [{ t: 1, op: 'prop', a: { kind: 1, intensity: 0.8, auto: false, size: 0.22 } }, { t: 2.5, op: 'prop', a: { kind: 1, intensity: 0.8, auto: false, size: 0.24 } }] });
+    const bf = dec(B.stems.fx);
+    const pk = (t) => { const nf = 16384, sp = frameSpectrum(bf, Math.round(t * SR), 4800, nf), df = SR / nf; let bk = 0, bv = -1; for (let k = Math.floor(120 / df); k < 400 / df; k++) if (sp[k] > bv) { bv = sp[k]; bk = k; } return bk * df; };
+    const fF = pk(1.0), fY = pk(2.5), st = 12 * Math.log2(fF / fY);
+    check('THINGS', 'the felt ball (r 0.22) and the yarn ball (r 0.24) are at least 2 semitones apart, the yarn ball lower', st >= 2 && st <= 4.5, `felt ${f1(fF)} Hz, yarn ${f1(fY)} Hz: ${st.toFixed(2)} semitones`, '2..4.5');
+  }
+  /* ── AMB2: the eight new beds: under the music, audible, few nodes, the shell's weather ── */
+  if (want('AMB2')) {
+    // the node counters are module-wide in the page: a render that ends with sources still scheduled leaves its count behind (their
+    // 'ended' never fires), so each bed is measured against a no-bed run made right before it (same leftovers), not one shared baseline
+    const rows = [];
+    for (const pl of BEDS) {
+      const A = await run(page, { secs: 52, seed: 131, musicOn: true, taps: true, preload: true, ambience: pl, want: ['music', 'ambience'] });
+      const mu = dec(A.stems.music), am = dec(A.stems.ambience);
+      const d = msDb(am, 10, 52) - msDb(mu, 10, 52), dk = msDb(kWeight(am), 10, 52) - msDb(kWeight(mu), 10, 52);
+      const N0 = await run(page, { secs: 30, seed: 130, musicOn: false, taps: true, preload: true, want: ['ambience'], events: [] });
+      const B = await run(page, { secs: 30, seed: 132, musicOn: false, taps: true, preload: true, ambience: pl, want: ['ambience'] });
+      let extraN = 0;
+      for (const q of B.statLog) if (q[0] >= 5) { const z = N0.statLog.find((y) => y[0] >= q[0]); if (z) extraN = Math.max(extraN, q[3] - z[3]); }
+      const bx = dec(B.stems.ambience);
+      rows.push({ pl, d, dk, lvl: msDb(am, 10, 52), extraN, ok: finite(am) && finite(bx) && A.errors === 0 && B.errors === 0, peak: dbOf(peakOf(bx)) });
+    }
+    extra.r2beds = rows;
+    for (const q of rows) check('AMB2', `${q.pl} bed at least 6 dB under the music long term (10..52 s, default sliders), audible, at most 14 nodes over the no-bed run`, q.ok && q.d <= -6 && q.dk <= -6 && q.lvl > -75 && q.extraN <= 14 && q.peak < -12, `${f1(q.d)} dB RMS, ${f1(q.dk)} dB K; bed ${f1(q.lvl)} dBFS RMS, peak ${f1(q.peak)}; nodes +${q.extraN}`, '<= -6, > -75 dBFS, <= 14');
+    // the shell's weather: a Frostbell gust at 15 s, then nothing of the bed's own for 30 s
+    const W = await run(page, { secs: 30, seed: 133, musicOn: false, taps: true, preload: true, ambience: 'frostbell', want: ['ambience'], events: [{ t: 15, op: 'setAmbience', a: { weather: 1 } }] });
+    const wx = dec(W.stems.ambience);
+    const g = msDb(wx, 15.4, 17) - msDb(wx, 20, 29);
+    check('AMB2', 'Frostbell follows the shell: setAmbience({ weather: 1 }) at 15 s is a gust (15.4..17 s against 20..29 s, when the bed\'s own gusts wait)', g >= 12, `${f1(g)} dB`, '>= 12 dB');
+    // Rainleaf: the shower off (weather 0) at 5 s quiets the patter
+    const S = await run(page, { secs: 16, seed: 134, musicOn: false, taps: true, preload: true, ambience: 'rainleaf', want: ['ambience'], events: [{ t: 0.5, op: 'setAmbience', a: { weather: 1 } }, { t: 5, op: 'setAmbience', a: { weather: 0 } }] });
+    const sx = dec(S.stems.ambience);
+    const sd = msDb(sx, 9, 15.5) - msDb(sx, 3.5, 4.9);
+    check('AMB2', 'Rainleaf: the shower turned off (weather 0 at 5 s) leaves the patter at least 6 dB quieter by 9 s', sd <= -6, `${f1(sd)} dB`, '<= -6 dB');
+  }
+  /* ── AU-03 over the S2 beds (the loudest new beds in the effects' band) ── */
+  if (want('AMB2')) {
+    for (const pl of ['ripple', 'rainleaf', 'frostbell']) {
+      const { ev, spans } = placements(141, 4, 34);
+      const R = await run(page, { secs: 36, seed: 142, musicOn: false, taps: true, preload: true, ambience: pl, want: ['fx', 'ambience'], events: [...ev, { t: 6, op: 'setAmbience', a: { weather: 1 } }, { t: 20, op: 'setAmbience', a: { weather: 1 } }] });
+      const fx = dec(R.stems.fx), am = dec(R.stems.ambience);
+      const fxK = kWeight(fx), bgK = kWeight(am);
+      const rows = spans.map((sp) => ({ kind: sp.kind, at: sp.at, ...separation(fx, am, fxK, bgK, sp.at, sp.at + sp.len) }));
+      const wi = rows.reduce((p2, q) => (q.inband < p2.inband ? q : p2)), wk = rows.reduce((p2, q) => (q.K < p2.K ? q : p2));
+      check('AU-03', `player effects over the ${pl} bed (its weather on at 6 s and 20 s): in-band >= 8 dB and K-weighted >= 10 LU (${rows.length} placements)`, wi.inband >= 8 && wk.K >= 10, `worst in-band ${f1(wi.inband)} dB (${wi.kind}); worst K ${f1(wk.K)} LU (${wk.kind})`, '>= 8 dB, >= 10 LU');
+    }
+  }
+  /* ── STYLE2: the eight place styles play in key and level; 'home' set explicitly is today's music ── */
+  if (want('STYLE2')) {
+    const H = await run(page, { secs: 30, seed: 151, musicOn: true, taps: true, preload: true, want: ['music'], events: [] });
+    const H2 = await run(page, { secs: 30, seed: 151, musicOn: true, taps: true, preload: true, want: ['music'], events: [{ t: 0.02, op: 'setMusicStyle', a: 'home' }] });
+    const h = dec(H.stems.music), h2 = dec(H2.stems.music);
+    let mx = 0; for (let i = 0; i < h.length; i++) mx = Math.max(mx, Math.abs(h[i] - h2[i]));
+    check('STYLE2', "setMusicStyle('home') is today's music (the same render, within AU-07's chain-free tolerance)", mx <= 5e-5, `max |diff| ${mx.toExponential(2)}`, '<= 5e-5');
+    const hl = msDb(h, 4, 30), rows = [];
+    for (const st of STYLES2) {
+      const R = await run(page, { secs: 30, seed: 151, musicOn: true, taps: true, preload: true, want: ['music'], events: [{ t: 0.02, op: 'setMusicStyle', a: st }] });
+      const x = dec(R.stems.music);
+      rows.push({ st, d: msDb(x, 4, 30) - hl, pk: dbOf(peakOf(x)), ok: finite(x) && R.errors === 0, quiet: R.final?.music?.stats?.quiet ?? null });
+    }
+    extra.r2styles = rows;
+    check('STYLE2', 'each place style plays (finite, no error) within -9..+2 dB of the home style\'s level and peaks under -3 dBFS', rows.every((q) => q.ok && q.d >= -9 && q.d <= 2 && q.pk < -3), rows.map((q) => `${q.st} ${f1(q.d)}/${f1(q.pk)}`).join(', '), '-9..+2 dB, < -3 dBFS');
+  }
+  /* ── BOX: the Music Box's tune is on key ── */
+  if (want('BOX')) {
+    const R = await run(page, { secs: 33, seed: 161, musicOn: false, taps: true, preload: true, want: ['fx'], events: [{ t: 2, op: 'musicBox', a: { on: true } }] });
+    const fx = dec(R.stems.fx);
+    const t0 = onsetAfter(fx, 1.9, 1e-3);
+    const tr = pitchTrack(fx, SR, { win: 2048, hop: 240, fLo: 600, fHi: 2600, relDb: 12, floorDb: -80 });
+    // the tune's onsets: every eighth slot where the fx stem jumps (25 notes); the pitch 30..200 ms after each
+    const ons = [];
+    for (let k = 0; k < 64; k++) { const t = t0 + k * E; const a = rmsOf(fx, Math.round((t + 0.005) * SR), Math.round((t + 0.03) * SR)), b = rmsOf(fx, Math.round((t - 0.03) * SR), Math.round((t - 0.005) * SR)); if (a > 1e-4 && a > b * 1.6) ons.push(t); }
+    const ms = ons.map((t) => midiOfHz(trackAt(tr, t + 0.03, t + 0.2)));
+    const okP = ms.every((m) => Number.isFinite(m) && Math.abs(m - Math.round(m)) <= 0.1 && PENTA.includes(((Math.round(m) % 12) + 12) % 12));
+    check('BOX', 'the Music Box tune with the music off (the home field): every note on D major pentatonic within 10 cents, on the eighth grid', ons.length >= 20 && okP, `${ons.length} notes: ${ms.map((m) => m.toFixed(2)).join(' ')}`, '>= 20 notes, D E F# A B');
+    // no clamping at the top of the range: the tune keeps its shape (adjacent notes with different steps stay different notes)
+    const STEPS = [0, 2, 1, 0, -1, 0, -2, 0, 2, 3, 2, 1, 2, 3, 2, 1, 0, 1, 0, -1, -2, 0, 1, -1, 0];
+    let shape = ms.length === STEPS.length;
+    if (shape) for (let i = 1; i < ms.length; i++) if (Math.sign(Math.round(ms[i]) - Math.round(ms[i - 1])) !== Math.sign(STEPS[i] - STEPS[i - 1])) shape = false;
+    check('BOX', 'the tune keeps its contour (every step up, down or same as written; nothing clamped at the top of its range)', shape, `${ms.length} notes`, 'the written contour');
+    // with the music on, from 30 s (the first field lasts 29..58 s, so the tune most likely crosses a field change): each note in the
+    // scale of the field musicClock says is sounding
+    const clk = []; for (let t = 29; t < 62; t += 0.25) clk.push({ t, op: 'clock', a: {} });
+    const M = await run(page, { secs: 62, seed: 162, musicOn: true, taps: true, preload: true, want: ['fx'], events: [{ t: 30, op: 'musicBox', a: { on: true } }, ...clk], recordReturns: true });
+    const mf = dec(M.stems.fx);
+    const m0 = onsetAfter(mf, 29.9, 1e-3), tm = pitchTrack(mf, SR, { win: 2048, hop: 240, fLo: 600, fHi: 2600, relDb: 12, floorDb: -80 });
+    const ons2 = [];
+    for (let k = 0; k < 64; k++) { const t = m0 + k * E; const a = rmsOf(mf, Math.round((t + 0.005) * SR), Math.round((t + 0.03) * SR)), b = rmsOf(mf, Math.round((t - 0.03) * SR), Math.round((t - 0.005) * SR)); if (a > 1e-4 && a > b * 1.6) ons2.push(t); }
+    const ms2 = ons2.map((t) => midiOfHz(trackAt(tm, t + 0.03, t + 0.2)));
+    const MEL = [[2, 4, 6, 9, 11], [7, 9, 11, 1, 2, 6], [11, 2, 4, 6, 9], [9, 11, 1, 4, 6]];
+    const cl = (M.rets ?? []).filter((q) => q[1] === 'clock' && q[2]);
+    const fieldAt = (t) => { let f = -1; for (const q of cl) if (q[5] <= t + 1e-6) f = q[3]; return f; };
+    const fs = ons2.map((t) => fieldAt(t));
+    const okF = ms2.every((m, i) => Number.isFinite(m) && Math.abs(m - Math.round(m)) <= 0.1 && fs[i] >= 0 && MEL[fs[i]].includes(((Math.round(m) % 12) + 12) % 12) && D_MAJOR.includes(((Math.round(m) % 12) + 12) % 12));
+    check('BOX', 'with the music on (from 30 s): every note within 10 cents in the scale of the field sounding (musicClock), all in D major', ons2.length >= 20 && okF, `${ons2.length} notes over fields ${[...new Set(fs)].join(',')}: ${ms2.map((m, i) => `${m.toFixed(2)}@${fs[i]}`).join(' ')}`, 'field scale');
+  }
+  /* ── ECHO: the Echo Stone's double echo (creature echoes: 2) ── */
+  if (want('ECHO')) {
+    const ph = (o) => ({ t: 1, op: 'creature', a: phrase([[3, 0, 0, 1]], { at: 0, ...o }) });
+    const r0 = await run(page, { secs: 3, seed: 171, musicOn: false, taps: true, preload: true, want: ['chatter'], events: [ph({})] });
+    const r1 = await run(page, { secs: 3, seed: 171, musicOn: false, taps: true, preload: true, want: ['chatter'], events: [ph({ echo: true })] });
+    const r2 = await run(page, { secs: 3, seed: 171, musicOn: false, taps: true, preload: true, want: ['chatter'], events: [ph({ echo: true, echoes: 2 })] });
+    const x0 = dec(r0.stems.chatter), x1 = dec(r1.stems.chatter), x2 = dec(r2.stems.chatter);
+    const e1 = x1.map((v, i) => v - x0[i]), e2 = x2.map((v, i) => v - x1[i]);
+    const pm = peakOf(x0), on0 = onsetAfter(x0, 0.5, pm * 0.02), on2 = onsetAfter(e2, 0.5, pm * 0.002);
+    const lv = dbOf(rmsOf(e2, Math.round((on2 + 0.03) * SR), Math.round((on2 + 0.19) * SR))) - dbOf(rmsOf(e1, Math.round((on0 + 0.22 + 0.03) * SR), Math.round((on0 + 0.22 + 0.19) * SR)));
+    const after = dbOf(peakOf(x2, Math.round((on0 + 0.44 + 0.3) * SR)));
+    check('ECHO', 'the Echo Stone (echoes: 2): a second repeat at +440 ms, 12 dB under the first (within 1.5 dB), then silence', Math.abs(on2 - on0 - 0.44) <= 0.003 && Math.abs(lv + 12) <= 1.5 && after < -90, `lag ${((on2 - on0) * 1000).toFixed(1)} ms, ${f1(lv)} dB, after ${f1(after)} dBFS`, '440 ms, -12 dB');
+  }
+}
+
 /* ═══════════════════════════════ the checks ═══════════════════════════════ */
 
 export async function lifeChecks({ page, check, OUT, only = null }) {
@@ -465,6 +639,7 @@ export async function lifeChecks({ page, check, OUT, only = null }) {
   try { await auChecks(page, check, want, extra); } catch (e) { check('run', 'the AU checks ran to the end', false, String(e && e.stack || e).slice(0, 400), 'no exception'); }
   try { await s1Checks(page, check, want, extra); } catch (e) { check('run', 'the S1 checks ran to the end', false, String(e && e.stack || e).slice(0, 400), 'no exception'); }
   try { await propChecks(page, check, want, extra); } catch (e) { check('run', 'the thing-voice checks ran to the end', false, String(e && e.stack || e).slice(0, 400), 'no exception'); }
+  try { await r2Checks(page, check, want, extra); } catch (e) { check('run', 'the round-2 checks (S2, S3) ran to the end', false, String(e && e.stack || e).slice(0, 400), 'no exception'); }
   return extra;
 }
 

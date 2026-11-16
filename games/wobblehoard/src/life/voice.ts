@@ -69,8 +69,8 @@ export function lifeMotif(speciesIdx: number, out: Float32Array): number {
 export function lifePhrase(w: LifeWorld, intent: number, out: Float32Array): number {
   const h = intent | 0;
   if (h < 0 || h >= PHRASE_CAP) return 0;
-  const n = w.phraseN[h];
-  for (let j = 0; j < n * 4 && j < out.length; j++) out[j] = w.phrase[h * 16 + j];
+  const n = w.pN2[h];
+  for (let j = 0; j < n * 4 && j < out.length; j++) out[j] = w.phh[h * 16 + j];
   return n;
 }
 
@@ -78,14 +78,14 @@ export function lifePhrase(w: LifeWorld, intent: number, out: Float32Array): num
  *  Integers only cross the call (LF-02). */
 function syl(w: LifeWorld, h: number, k: number, s: number, deg: number, len10: number, gapMs: number): void {
   const o = h * 16 + k * 4, t = w.f[F.T];
-  w.phrase[o] = s; w.phrase[o + 1] = deg < -4 ? -4 : deg > 4 ? 4 : deg; w.phrase[o + 2] = t; w.phrase[o + 3] = len10 * 0.1;
+  w.phh[o] = s; w.phh[o + 1] = deg < -4 ? -4 : deg > 4 ? 4 : deg; w.phh[o + 2] = t; w.phh[o + 3] = len10 * 0.1;
   w.f[F.T] = t + SYL_LEN[s] * len10 * 0.1 + gapMs * 0.001;
 }
 
 /** Plan a phrase for character `who` into the next handle; w.f[F.T] = its length (s); returns the handle. `partner` is the other voice of a
  *  call and answer or a duet (-1 none); `arg` is the singer index (SING), the bar (SING: 0 or 1) in bits 4+, or the caller's handle (ANSWER). */
 export function planPhrase(w: LifeWorld, who: number, phrase: number, partner: number, arg: number): number {
-  const h = w.phraseHead; w.phraseHead = (h + 1) % PHRASE_CAP;
+  const h = w.pHe; w.pHe = (h + 1) % PHRASE_CAP;
   const sp = w.species[who] < NS ? w.species[who] : 0;
   const s0 = MOTIF_SYL[sp * 3], s1 = MOTIF_SYL[sp * 3 + 1], s2 = MOTIF_SYL[sp * 3 + 2];
   const i1 = MOTIF_INT[sp * 2], i2 = MOTIF_INT[sp * 2 + 1];
@@ -128,7 +128,7 @@ export function planPhrase(w: LifeWorld, who: number, phrase: number, partner: n
     case PHRASE.PURR: syl(w, h, 0, SYL.purr, (arg & 1) ? 2 : 0, 15, 0); n = 1; break;
     default: syl(w, h, 0, s0, 0, 10, 0); n = 1;
   }
-  w.phraseN[h] = n;
+  w.pN2[h] = n;
   return h;
 }
 
@@ -139,13 +139,18 @@ export function emitVoice(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, who: 
   const k = pushIntent(w, out, INTENT.VOICE, who);
   if (k < 0) return false;
   const h = planPhrase(w, who, phrase, partner, arg);
-  out.icon[k] = phrase; out.a[k] = h; out.b[k] = w.kind[who] === 0 ? 0 : 1; out.c[k] = groupN > 0 ? (groupN > 3 ? 3 : groupN) : 1;
-  out.d[k] = w.phraseN[h]; out.e[k] = w.f[F.T]; out.delayS[k] = delayMs * 0.001;
+  out.icon[k] = phrase; out.a[k] = h; out.b[k] = w.ki[who] === 0 ? 0 : 1; out.c[k] = groupN > 0 ? (groupN > 3 ? 3 : groupN) : 1;
+  out.d[k] = w.pN2[h]; out.e[k] = w.f[F.T]; out.delayS[k] = delayMs * 0.001;
   out.prio[k] = cls === 1 ? 3 : cls === 2 ? 2 : 1;
   const sx = s.sx[who], sy = s.sy[who];
   if (sx === sx) out.prio[k] += 1 - Math.min(1, Math.sqrt((sx - 0.5) * (sx - 0.5) + (sy - 0.5) * (sy - 0.5)) / 0.7071);
-  out.groupKey[k] = w.kind[who] === 0 ? -1 : w.group[who];
+  out.groupKey[k] = w.ki[who] === 0 ? -1 : w.gr[who];
   return true;
+}
+
+/** A solo phrase (no partner, arg 0, a whole's register) of class cls after delayMs. */
+export function voice(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, who: number, phrase: number, delayMs: number, cls: number): boolean {
+  return emitVoice(w, s, out, who, phrase, delayMs, -1, 0, cls, 0);
 }
 
 /** Milliseconds (an integer) from the think's sim time to the next bar line of the 66 BPM grid (LIFE 8.4: a singer enters on the next

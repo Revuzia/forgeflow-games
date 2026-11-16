@@ -29,6 +29,10 @@ export const BEH = {
   CHEER: 14, ZONE: 15, HUFF: 16, COMFORT: 17, ANSWER: 18, HOLDON: 19, RIDE: 20, MOMENT: 21, FOLLOW: 22, HUDDLE: 23, HOPTOG: 24, JOIN: 25,
 } as const;
 export const NBEH = 26;
+/** (my reading of LF-09's "2 to 3 thing uses" in a 5-minute visit) after USES_FULL by-itself thing uses this visit (USE events: a ball boop,
+ *  a nap on a nap thing; w.usesVisit) a squishy starts no more uses by its play or its dozy trait, nor an S12 pass; a nap from real
+ *  tiredness (rest > 0.75), a player-asked use and FIRST_PLAY still come. */
+export const USES_FULL = 2;
 
 /** Scratch float slots in w.f (named, so no helper returns a double). NOW = the sim time of the think (or of the per-call pass) every brain
  *  function reads, instead of taking it as a parameter (a double argument to a call V8 does not inline is boxed: LF-02); DT = the think's dt;
@@ -44,86 +48,92 @@ export interface LifeWorld {
   /* the place (lifeSetPlace, D-89) */
   placeIdx: number; visit: number; layout: number; bodyScale: number; def: PlaceDef | null; home: boolean; night: boolean;
   /** bounds of the layout in use: shape 0 disc (a = r), 1 rounded box (a, b half sizes, round). */
-  bShape: number; bx: number; bz: number; ba: number; bb: number; bround: number;
-  nThingDefs: number;
-  thingGlobal: Int16Array; thingMech: Uint8Array; thingX: Float32Array; thingZ: Float32Array; thingYaw: Float32Array;
-  thingS0: Float32Array; thingS1: Float32Array; thingS2: Float32Array;
-  thingUseX: Float32Array; thingUseZ: Float32Array; thingPeek: Float32Array; thingPushX: Float32Array; thingPushZ: Float32Array;
-  thingWayX: Float32Array; thingWayZ: Float32Array; thingRider: Float32Array; thingRide: Uint8Array; thingSwitch: Uint8Array;
-  thingZone: Int8Array; thingPatch: Int8Array; thingKind: Uint8Array; thingIcon: Uint8Array; thingVerb: Uint8Array; thingFromN: Uint8Array;
+  bS: number; bx: number; bz: number; ba: number; bb: number; br: number;
+  nTD: number;
+  tG: Int16Array; tM: Uint8Array; tX: Float32Array; tZ: Float32Array; tY: Float32Array;
+  tS: Float32Array; tS1: Float32Array; tS2: Float32Array;
+  tUX: Float32Array; tUZ: Float32Array; tP: Float32Array; tPX: Float32Array; tPZ: Float32Array;
+  tWX: Float32Array; tWZ: Float32Array; tR: Float32Array; tRi: Uint8Array; tSw: Uint8Array;
+  tZo: Int8Array; tPa: Int8Array; tK: Uint8Array; tI: Uint8Array; tV: Uint8Array; tFN: Uint8Array;
   /** place-global thing index -> place-local index (-1 = not this place's) */
-  globalToLocal: Int8Array;
-  nZones: number; zoneKind: Uint8Array; zoneStr: Float32Array; zoneShape: Uint8Array; zoneX: Float32Array; zoneZ: Float32Array;
-  zoneR: Float32Array; zoneHX: Float32Array; zoneHZ: Float32Array; zoneYaw: Float32Array; zoneFall0: Float32Array; zoneFall1: Float32Array;
-  zoneSurf: Float32Array; zoneGlow: Uint8Array; zoneThing: Int8Array; zoneShower: Uint8Array;
-  nPatches: number; patchShape: Uint8Array; patchX: Float32Array; patchZ: Float32Array; patchR: Float32Array; patchHX: Float32Array;
-  patchHZ: Float32Array; patchYaw: Float32Array; patchNap: Uint8Array; patchIce: Uint8Array; patchThing: Int8Array; patchSand: Uint8Array;
+  gTL: Int8Array;
+  nZ: number; zK: Uint8Array; zS: Float32Array; zSh: Uint8Array; zX: Float32Array; zZ: Float32Array;
+  zR: Float32Array; zH: Float32Array; zHZ: Float32Array; zY: Float32Array; zF0: Float32Array; zF1: Float32Array;
+  zSu: Float32Array; zG: Uint8Array; zT: Int8Array; zSo: Uint8Array;
+  nP: number; pS: Uint8Array; pX: Float32Array; pZ: Float32Array; pR: Float32Array; pH: Float32Array;
+  pHZ: Float32Array; pY: Float32Array; pN: Uint8Array; pI: Uint8Array; pT: Int8Array; pSa: Uint8Array;
   /** Home's home slots (lifeSetHome, D-87): NaN = none */
-  homeX: Float32Array; homeZ: Float32Array;
+  hX: Float32Array; hZ: Float32Array;
   /* characters */
-  active: Uint8Array; kind: Uint8Array; group: Int8Array; species: Uint8Array; family: Uint8Array; gseed: Uint32Array; warmth: Uint8Array;
-  isNew: Uint8Array; addT: Float64Array; signature: Uint8Array; pitch: Float32Array;
+  ac: Uint8Array; ki: Uint8Array; gr: Int8Array; species: Uint8Array; fa: Uint8Array; gs: Uint32Array; wa: Uint8Array;
+  iN: Uint8Array; aT: Float64Array; si: Uint8Array; pi: Float32Array;
   /** 5 traits per character: bouncy, curious, cuddly, chatty, dozy (LIFE 2) */
-  traits: Float32Array;
-  play: Float32Array; company: Float32Array; rest: Float32Array;
+  tr: Float32Array;
+  pl: Float32Array; co: Float32Array; re: Float32Array;
   /** 6 looks per character (LOOK order) and whether each reached 0.5 this visit (for DRY) */
-  looks: Float32Array; lookHigh: Uint8Array;
+  lo: Float32Array; lH: Uint8Array;
   rng: Uint32Array;
-  tick: Float64Array; lastThink: Float64Array;
-  beh: Uint8Array; phase: Uint8Array; behT0: Float64Array; behEnd: Float64Array; behNext: Float64Array;
-  tx: Float32Array; tz: Float32Array; tSpeed: Float32Array; tThing: Int8Array; tChar: Int8Array;
-  progD: Float32Array; progT: Float64Array;
-  cool: Float64Array;
-  moving: Uint8Array; wakeClaimT: Float64Array;
-  hopNextT: Float64Array; lastHopT: Float64Array; hopsLeft: Uint8Array; chain: Uint8Array;
-  held: Uint8Array; releaseT: Float64Array; lastTouch: Int8Array; touchStartT: Float64Array; tossT: Float64Array; tossN: Uint8Array;
-  graceUntil: Float64Array; rideUntil: Float64Array; rideThing: Int8Array; rideStarT: Float64Array; rideSeen: Uint8Array;
-  seenThings: Uint32Array; seenChars: Uint16Array; noticeT: Float64Array; noticeSrc: Int16Array;
-  zoneIn: Uint16Array; zoneSeen: Uint16Array; zoneInT: Float64Array;
-  reactKey: Int16Array; reactN: Uint8Array; reactCool: Float64Array;
-  inWaterT: Float64Array; airT: Float64Array; poseT: Float64Array; prevAir: Uint8Array;
-  lastJoyT: Float64Array; lastNoticeT: Float64Array; favPlaceT: Float64Array;
-  expr: Uint8Array; exprAmt: Float32Array; sqS: Float32Array; poseKey: Float32Array;
-  gazeKind: Uint8Array;
-  lastEmoteT: Float64Array; lastEmoteIcon: Uint8Array; iconT: Float64Array;
-  huffT: Float64Array; huffFrom: Int8Array;
-  wishKind: Uint8Array; wishTarget: Int16Array; wishT: Float64Array; wishLastNewT: Float64Array; wishGlance: Uint8Array; touchWishT: Float64Array;
-  warmLookT: Float64Array; playWith: Int8Array; nextUse: Int8Array; firstPlay: Uint8Array;
-  pairLevel: Uint8Array; pairBest: Uint8Array; pairGreet: Uint8Array; pairChats: Uint8Array; pairCool: Float64Array; pairNear: Uint8Array;
-  onceVisit: Uint32Array;
-  moment: Int8Array;
+  ti: Float64Array; lT: Float64Array;
+  beh: Uint8Array; ph: Uint8Array; bT: Float64Array; bE: Float64Array; bN: Float64Array;
+  tx: Float32Array; tz: Float32Array; tSp: Float32Array; tT: Int8Array; tC: Int8Array;
+  pD: Float32Array; pT1: Float64Array;
+  coo: Float64Array;
+  mo: Uint8Array; wCT: Float64Array;
+  hNT: Float64Array; lHT: Float64Array; ch: Uint8Array;
+  he: Uint8Array; rT: Float64Array; lTo: Int8Array; tST: Float64Array; tT1: Float64Array; 
+  gU: Float64Array; rU: Float64Array; rTh: Int8Array; rST: Float64Array; 
+  sT: Uint32Array; sC: Uint16Array; nT: Float64Array; 
+  zSe: Uint16Array; zIT: Float64Array;
+  rK: Int16Array; rN: Uint8Array; rC: Float64Array;
+  iWT: Float64Array; aT1: Float64Array; pT2: Float64Array; pA: Uint8Array;
+  lJT: Float64Array; lNT: Float64Array; fPT: Float64Array;
+  ex: Uint8Array; eA: Float32Array; sqS: Float32Array; pK: Float32Array;
+  gK: Uint8Array;
+  lET: Float64Array; lEI: Uint8Array; iT: Float64Array;
+  hT: Float64Array; hF: Int8Array;
+  /** after a cut, the most curious other whole walks over to look (9): the cut whole's slot (its pieces' group key) and until when */
+  lA: Int8Array; lU: Float64Array;
+  wK: Uint8Array; wT: Int16Array; wT1: Float64Array; wLNT: Float64Array; wG: Uint8Array; tWT: Float64Array;
+  wLT: Float64Array; pW: Int8Array; nU: Int8Array; fP: Uint8Array;
+  pL: Uint8Array; pB: Uint8Array; pG: Uint8Array; pC: Uint8Array; pCo: Float64Array; pNe: Uint8Array;
+  oV: Uint32Array;
+  moo: Int8Array;
   /** zone sensing per character (each think): the warm, cold and wet (rain, shower, splash) strengths at its centre, the zone indices of the
    *  strongest warm / cold zone and of the water, wind and updraft zones it is in (-1 none); a B15 entry due (zone index + 1); "entered at
    *  once" (it came out, arrived or was cut inside a zone: no crossing needed, 3.1) */
-  zWarm: Float32Array; zCold: Float32Array; zWet: Float32Array; zWarmK: Int8Array; zColdK: Int8Array; zWaterK: Int8Array; zWindK: Int8Array;
-  zUpK: Int8Array; b15Zone: Int8Array; enterAtOnce: Uint8Array; onNap: Int8Array; onSand: Uint8Array;
+  zW: Float32Array; zC: Float32Array; zWe: Float32Array; zWK: Int8Array; zCK: Int8Array; zWK1: Int8Array; zWK2: Int8Array;
+  zUK: Int8Array; b1: Int8Array; eAO: Uint8Array; oN: Int8Array; oS: Uint8Array;
   /** the behaviour's score when it started (the running one keeps +0.15), the arrival due (B09), the shy arrival's end */
-  behScore: Float32Array; arrivePending: Uint8Array; shyUntil: Float64Array; partnerWaitT: Float64Array;
+  bSc: Float32Array; aP: Uint8Array; sU: Float64Array; pWT: Float64Array;
   /** per-call bookkeeping of the player's touch and landings, and the pending one-shot behaviours */
-  afterglowDue: Uint8Array; watchDue: Int8Array; cheerDue: Uint8Array; huffDue: Uint8Array; landT: Float64Array; airCall: Uint8Array;
-  addPending: Uint8Array; noticeTarget: Int16Array; useStage: Uint8Array; ridePrev: Uint8Array; usesVisit: Uint8Array;
+  aD: Uint8Array; wD: Int8Array; cD: Uint8Array; hD: Uint8Array; lT1: Float64Array; aC: Uint8Array;
+  aPe: Uint8Array; nTa: Int16Array; uS: Uint8Array; rP: Uint8Array; uV: Uint8Array;
   /** per place-local thing: the last squishy that used it and when (B16's "another squishy took the ball") */
-  thingUser: Int8Array; thingUseT: Float64Array;
+  tU: Int8Array; tUT: Float64Array;
   /** lifeAddLook's REACT events wait here for the next lifeStep (it has no event list): slot, REACT kind, thing */
-  pendN: number; pendSlot: Int8Array; pendKind: Uint8Array; pendThing: Int16Array;
+  pN1: number; pSl: Int8Array; pKi: Uint8Array; pTh: Int16Array;
   /* joint moments */
-  mKind: Uint8Array; mN: Uint8Array; mMem: Int8Array; mT0: Float64Array; mEnd: Float64Array; mPhase: Uint8Array; mTurn: Uint8Array;
-  mNext: Float64Array; mStep: Uint8Array; mThing: Int8Array; mX: Float32Array; mZ: Float32Array; mSoft: Uint8Array; mRide: Uint8Array;
-  mCount: Uint8Array;
+  mK: Uint8Array; mN: Uint8Array; mM: Int8Array; mT0: Float64Array; mE: Float64Array; mP: Uint8Array; mT: Uint8Array;
+  mNe: Float64Array; mS: Uint8Array; mTh: Int8Array; mSo: Uint8Array; mR: Uint8Array;
+  mC: Uint8Array;
   /* groups (pieces): per group key 0..31 */
-  cutT: Float64Array; cutPending: Uint8Array; groupHighKey: Int16Array; groupHighN: Uint8Array; groupEmoteT: Float64Array;
-  pieceUseT: Float64Array; leaderIdleT: Float64Array;
+  cT: Float64Array; cP: Uint8Array; gHK: Int16Array; gHN: Uint8Array; gET: Float64Array;
+  pUT: Float64Array; 
   /* journal (lifeSetJournal) */
-  owned: Uint32Array; openPlaces: number; favKnown: Uint32Array; thingKinds: number;
+  ow: Uint32Array; oP: number; fK: Uint32Array; tKi: number;
+  /** lifeSetFriends: per species idx (2 words, 64 species), the species it may wish to see: Friends or closer, or its best friend once F3 */
+  fr: Uint32Array;
+  /** lifeSetHops: the families (bit per MATERIAL_FAMILY_IDS index) whose S2 raised hop passed PH-01 (0 = every family at the S1 cap) */
+  hR: number;
   /* scripts */
-  firstPlayDone: number; firstWishDone: number; firstWishPending: number; firstWishSlot: number; firstWishDeadline: number; poseOn: number;
-  cheerCause: number; squirtDue: Uint8Array;
+  fPD: number; fWD: number; fWP: number; fWS: number; fWDe: number; pO: number;
+  cC: number; sD: Uint8Array;
   /* per-call */
-  musicPrev: number;
-  rowOfLocal: Int8Array; thingPrevX: Float32Array; thingPrevZ: Float32Array; thingPrevS: Float32Array; thingMovedT: Float64Array;
-  bumpT: Float64Array; bumpWith: Int8Array; movers: number; nOut: number;
+  mPr: number;
+  rOL: Int8Array; tPX1: Float32Array; tPZ1: Float32Array; tPS: Float32Array; tMT: Float64Array;
+  bT1: Float64Array; bW: Int8Array; movers: number; nO: number;
   /* intents bookkeeping */
-  perChar: Uint8Array; phrase: Float32Array; phraseN: Uint8Array; phraseHead: number;
+  pCh: Uint8Array; phh: Float32Array; pN2: Uint8Array; pHe: number;
   f: Float64Array;
   att: Attention;
 }
@@ -134,60 +144,60 @@ export function createLifeWorld(seed: number, maxChars: number): LifeWorld {
   const w: LifeWorld = {
     seed: seed >>> 0, maxChars: Math.min(CAP, Math.max(1, maxChars | 0)),
     placeIdx: 0, visit: 0, layout: 0, bodyScale: 1, def: null, home: true, night: false,
-    bShape: 0, bx: 0, bz: 0, ba: 3.4, bb: 3.4, bround: 0,
-    nThingDefs: 0, thingGlobal: new Int16Array(T), thingMech: u8(T), thingX: f32(T), thingZ: f32(T), thingYaw: f32(T),
-    thingS0: f32(T), thingS1: f32(T), thingS2: f32(T),
-    thingUseX: f32(T), thingUseZ: f32(T), thingPeek: f32(T * 4), thingPushX: f32(T), thingPushZ: f32(T),
-    thingWayX: f32(T), thingWayZ: f32(T), thingRider: f32(T), thingRide: u8(T), thingSwitch: u8(T),
-    thingZone: i8(T), thingPatch: i8(T), thingKind: u8(T), thingIcon: u8(T), thingVerb: u8(T), thingFromN: u8(T),
-    globalToLocal: new Int8Array(THING_IDS.length + 2).fill(-1),
-    nZones: 0, zoneKind: u8(MAX_ZONES), zoneStr: f32(MAX_ZONES), zoneShape: u8(MAX_ZONES), zoneX: f32(MAX_ZONES), zoneZ: f32(MAX_ZONES),
-    zoneR: f32(MAX_ZONES), zoneHX: f32(MAX_ZONES), zoneHZ: f32(MAX_ZONES), zoneYaw: f32(MAX_ZONES), zoneFall0: f32(MAX_ZONES), zoneFall1: f32(MAX_ZONES),
-    zoneSurf: f32(MAX_ZONES), zoneGlow: u8(MAX_ZONES), zoneThing: i8(MAX_ZONES), zoneShower: u8(MAX_ZONES),
-    nPatches: 0, patchShape: u8(MAX_PATCHES), patchX: f32(MAX_PATCHES), patchZ: f32(MAX_PATCHES), patchR: f32(MAX_PATCHES), patchHX: f32(MAX_PATCHES),
-    patchHZ: f32(MAX_PATCHES), patchYaw: f32(MAX_PATCHES), patchNap: u8(MAX_PATCHES), patchIce: u8(MAX_PATCHES), patchThing: i8(MAX_PATCHES), patchSand: u8(MAX_PATCHES),
-    homeX: f32(n).fill(NaN), homeZ: f32(n).fill(NaN),
-    active: u8(n), kind: u8(n), group: i8(n), species: u8(n), family: u8(n), gseed: new Uint32Array(n), warmth: u8(n),
-    isNew: u8(n), addT: f64(n), signature: u8(n), pitch: f32(n),
-    traits: f32(n * 5), play: f32(n), company: f32(n), rest: f32(n), looks: f32(n * 6), lookHigh: u8(n),
-    rng: new Uint32Array(n), tick: f64(n), lastThink: f64(n),
-    beh: u8(n), phase: u8(n), behT0: f64(n), behEnd: f64(n), behNext: f64(n),
-    tx: f32(n), tz: f32(n), tSpeed: f32(n), tThing: i8(n).fill(-1), tChar: i8(n).fill(-1), progD: f32(n), progT: f64(n),
-    cool: nanF64(n * NBEH), moving: u8(n), wakeClaimT: nanF64(n),
-    hopNextT: f64(n), lastHopT: nanF64(n), hopsLeft: u8(n), chain: u8(n),
-    held: u8(n), releaseT: nanF64(n), lastTouch: i8(n).fill(-1), touchStartT: nanF64(n), tossT: nanF64(n * 3), tossN: u8(n),
-    graceUntil: nanF64(n), rideUntil: nanF64(n), rideThing: i8(n).fill(-1), rideStarT: nanF64(n), rideSeen: u8(n),
-    seenThings: new Uint32Array(n * 2), seenChars: new Uint16Array(n), noticeT: nanF64(n * 48), noticeSrc: new Int16Array(n).fill(-1),
-    zoneIn: new Uint16Array(n), zoneSeen: new Uint16Array(n), zoneInT: nanF64(n * MAX_ZONES),
-    reactKey: new Int16Array(n * 48).fill(-1), reactN: u8(n), reactCool: nanF64(n * 24),
-    inWaterT: nanF64(n), airT: nanF64(n), poseT: nanF64(n), prevAir: u8(n),
-    lastJoyT: nanF64(n), lastNoticeT: nanF64(n), favPlaceT: nanF64(n),
-    expr: u8(n), exprAmt: f32(n), sqS: f32(n).fill(1), poseKey: f32(n * 4), gazeKind: u8(n),
-    lastEmoteT: nanF64(n), lastEmoteIcon: u8(n), iconT: nanF64(n * 25),
-    huffT: nanF64(n), huffFrom: i8(n).fill(-1),
-    wishKind: u8(n), wishTarget: new Int16Array(n).fill(-1), wishT: nanF64(n), wishLastNewT: nanF64(n), wishGlance: u8(n), touchWishT: nanF64(n),
-    warmLookT: nanF64(n), playWith: i8(n).fill(-1), nextUse: i8(n).fill(-1), firstPlay: u8(n),
-    pairLevel: u8(n * n), pairBest: u8(n * n), pairGreet: u8(n * n), pairChats: u8(n * n), pairCool: nanF64(n * n), pairNear: u8(n * n),
-    onceVisit: new Uint32Array(n),
-    moment: i8(n).fill(-1),
-    zWarm: f32(n), zCold: f32(n), zWet: f32(n), zWarmK: i8(n).fill(-1), zColdK: i8(n).fill(-1), zWaterK: i8(n).fill(-1), zWindK: i8(n).fill(-1),
-    zUpK: i8(n).fill(-1), b15Zone: i8(n), enterAtOnce: u8(n), onNap: i8(n).fill(-1), onSand: u8(n),
-    behScore: f32(n), arrivePending: u8(n), shyUntil: nanF64(n), partnerWaitT: nanF64(n),
-    afterglowDue: u8(n), watchDue: i8(n).fill(-1), cheerDue: u8(n), huffDue: u8(n), landT: nanF64(n), airCall: u8(n),
-    addPending: u8(n), noticeTarget: new Int16Array(n).fill(-1), useStage: u8(n), ridePrev: u8(n), usesVisit: u8(n),
-    thingUser: i8(MAX_THINGS).fill(-1), thingUseT: nanF64(MAX_THINGS),
-    pendN: 0, pendSlot: i8(16), pendKind: u8(16), pendThing: new Int16Array(16),
-    mKind: u8(MAX_MOMENTS), mN: u8(MAX_MOMENTS), mMem: i8(MAX_MOMENTS * MAX_MEMBERS).fill(-1), mT0: f64(MAX_MOMENTS), mEnd: f64(MAX_MOMENTS),
-    mPhase: u8(MAX_MOMENTS), mTurn: u8(MAX_MOMENTS), mNext: f64(MAX_MOMENTS), mStep: u8(MAX_MOMENTS), mThing: i8(MAX_MOMENTS).fill(-1),
-    mX: f32(MAX_MOMENTS), mZ: f32(MAX_MOMENTS), mSoft: u8(MAX_MOMENTS), mRide: u8(MAX_MOMENTS), mCount: u8(MAX_MOMENTS),
-    cutT: nanF64(32), cutPending: u8(32), groupHighKey: new Int16Array(32 * 8).fill(-1), groupHighN: u8(32 * 8), groupEmoteT: nanF64(32),
-    pieceUseT: nanF64(n), leaderIdleT: nanF64(32),
-    owned: new Uint32Array(2), openPlaces: 1, favKnown: new Uint32Array(4), thingKinds: 0,
-    firstPlayDone: 0, firstWishDone: 0, firstWishPending: 0, firstWishSlot: -1, firstWishDeadline: 0, poseOn: 0,
-    cheerCause: -1, squirtDue: u8(n), musicPrev: 0,
-    rowOfLocal: i8(T).fill(-1), thingPrevX: f32(T).fill(NaN), thingPrevZ: f32(T).fill(NaN), thingPrevS: f32(T).fill(NaN), thingMovedT: nanF64(T),
-    bumpT: nanF64(n), bumpWith: i8(n).fill(-1), movers: 0, nOut: 0,
-    perChar: u8(n), phrase: f32(PHRASE_CAP * 16), phraseN: u8(PHRASE_CAP), phraseHead: 0,
+    bS: 0, bx: 0, bz: 0, ba: 3.4, bb: 3.4, br: 0,
+    nTD: 0, tG: new Int16Array(T), tM: u8(T), tX: f32(T), tZ: f32(T), tY: f32(T),
+    tS: f32(T), tS1: f32(T), tS2: f32(T),
+    tUX: f32(T), tUZ: f32(T), tP: f32(T * 4), tPX: f32(T), tPZ: f32(T),
+    tWX: f32(T), tWZ: f32(T), tR: f32(T), tRi: u8(T), tSw: u8(T),
+    tZo: i8(T), tPa: i8(T), tK: u8(T), tI: u8(T), tV: u8(T), tFN: u8(T),
+    gTL: new Int8Array(THING_IDS.length + 2).fill(-1),
+    nZ: 0, zK: u8(MAX_ZONES), zS: f32(MAX_ZONES), zSh: u8(MAX_ZONES), zX: f32(MAX_ZONES), zZ: f32(MAX_ZONES),
+    zR: f32(MAX_ZONES), zH: f32(MAX_ZONES), zHZ: f32(MAX_ZONES), zY: f32(MAX_ZONES), zF0: f32(MAX_ZONES), zF1: f32(MAX_ZONES),
+    zSu: f32(MAX_ZONES), zG: u8(MAX_ZONES), zT: i8(MAX_ZONES), zSo: u8(MAX_ZONES),
+    nP: 0, pS: u8(MAX_PATCHES), pX: f32(MAX_PATCHES), pZ: f32(MAX_PATCHES), pR: f32(MAX_PATCHES), pH: f32(MAX_PATCHES),
+    pHZ: f32(MAX_PATCHES), pY: f32(MAX_PATCHES), pN: u8(MAX_PATCHES), pI: u8(MAX_PATCHES), pT: i8(MAX_PATCHES), pSa: u8(MAX_PATCHES),
+    hX: f32(n).fill(NaN), hZ: f32(n).fill(NaN),
+    ac: u8(n), ki: u8(n), gr: i8(n), species: u8(n), fa: u8(n), gs: new Uint32Array(n), wa: u8(n),
+    iN: u8(n), aT: f64(n), si: u8(n), pi: f32(n),
+    tr: f32(n * 5), pl: f32(n), co: f32(n), re: f32(n), lo: f32(n * 6), lH: u8(n),
+    rng: new Uint32Array(n), ti: f64(n), lT: f64(n),
+    beh: u8(n), ph: u8(n), bT: f64(n), bE: f64(n), bN: f64(n),
+    tx: f32(n), tz: f32(n), tSp: f32(n), tT: i8(n).fill(-1), tC: i8(n).fill(-1), pD: f32(n), pT1: f64(n),
+    coo: nanF64(n * NBEH), mo: u8(n), wCT: nanF64(n),
+    hNT: f64(n), lHT: nanF64(n), ch: u8(n),
+    he: u8(n), rT: nanF64(n), lTo: i8(n).fill(-1), tST: nanF64(n), tT1: nanF64(n * 3), 
+    gU: nanF64(n), rU: nanF64(n), rTh: i8(n).fill(-1), rST: nanF64(n), 
+    sT: new Uint32Array(n * 2), sC: new Uint16Array(n), nT: nanF64(n * 48), 
+    zSe: new Uint16Array(n), zIT: nanF64(n * MAX_ZONES),
+    rK: new Int16Array(n * 48).fill(-1), rN: u8(n), rC: nanF64(n * 24),
+    iWT: nanF64(n), aT1: nanF64(n), pT2: nanF64(n), pA: u8(n),
+    lJT: nanF64(n), lNT: nanF64(n), fPT: nanF64(n),
+    ex: u8(n), eA: f32(n), sqS: f32(n).fill(1), pK: f32(n * 4), gK: u8(n),
+    lET: nanF64(n), lEI: u8(n), iT: nanF64(n * 25),
+    hT: nanF64(n), hF: i8(n).fill(-1), lA: i8(n).fill(-1), lU: nanF64(n),
+    wK: u8(n), wT: new Int16Array(n).fill(-1), wT1: nanF64(n), wLNT: nanF64(n), wG: u8(n), tWT: nanF64(n),
+    wLT: nanF64(n), pW: i8(n).fill(-1), nU: i8(n).fill(-1), fP: u8(n),
+    pL: u8(n * n), pB: u8(n * n), pG: u8(n * n), pC: u8(n * n), pCo: nanF64(n * n), pNe: u8(n * n),
+    oV: new Uint32Array(n),
+    moo: i8(n).fill(-1),
+    zW: f32(n), zC: f32(n), zWe: f32(n), zWK: i8(n).fill(-1), zCK: i8(n).fill(-1), zWK1: i8(n).fill(-1), zWK2: i8(n).fill(-1),
+    zUK: i8(n).fill(-1), b1: i8(n), eAO: u8(n), oN: i8(n).fill(-1), oS: u8(n),
+    bSc: f32(n), aP: u8(n), sU: nanF64(n), pWT: nanF64(n),
+    aD: u8(n), wD: i8(n).fill(-1), cD: u8(n), hD: u8(n), lT1: nanF64(n), aC: u8(n),
+    aPe: u8(n), nTa: new Int16Array(n).fill(-1), uS: u8(n), rP: u8(n), uV: u8(n),
+    tU: i8(MAX_THINGS).fill(-1), tUT: nanF64(MAX_THINGS),
+    pN1: 0, pSl: i8(16), pKi: u8(16), pTh: new Int16Array(16),
+    mK: u8(MAX_MOMENTS), mN: u8(MAX_MOMENTS), mM: i8(MAX_MOMENTS * MAX_MEMBERS).fill(-1), mT0: f64(MAX_MOMENTS), mE: f64(MAX_MOMENTS),
+    mP: u8(MAX_MOMENTS), mT: u8(MAX_MOMENTS), mNe: f64(MAX_MOMENTS), mS: u8(MAX_MOMENTS), mTh: i8(MAX_MOMENTS).fill(-1),
+    mSo: u8(MAX_MOMENTS), mR: u8(MAX_MOMENTS), mC: u8(MAX_MOMENTS),
+    cT: nanF64(32), cP: u8(32), gHK: new Int16Array(32 * 8).fill(-1), gHN: u8(32 * 8), gET: nanF64(32),
+    pUT: nanF64(n), 
+    ow: new Uint32Array(2), oP: 1, fK: new Uint32Array(4), tKi: 0, fr: new Uint32Array(128), hR: 0,
+    fPD: 0, fWD: 0, fWP: 0, fWS: -1, fWDe: 0, pO: 0,
+    cC: -1, sD: u8(n), mPr: 0,
+    rOL: i8(T).fill(-1), tPX1: f32(T).fill(NaN), tPZ1: f32(T).fill(NaN), tPS: f32(T).fill(NaN), tMT: nanF64(T),
+    bT1: nanF64(n), bW: i8(n).fill(-1), movers: 0, nO: 0,
+    pCh: u8(n), phh: f32(PHRASE_CAP * 16), pN2: u8(PHRASE_CAP), pHe: 0,
     f: f64(24),
     att: createAttention(),
   };
@@ -207,51 +217,51 @@ export function copyPlace(w: LifeWorld, def: PlaceDef, layout: number): void {
   const tall = layout === 1 && def.tall ? def.tall : null;
   const sc = def.unit === 'slot' ? w.bodyScale : 1;
   const b = tall ? tall.bounds : def.bounds;
-  w.bShape = b.shape === 'disc' ? 0 : 1; w.bx = b.x * sc; w.bz = b.z * sc;
-  w.ba = b.shape === 'disc' ? (b.r ?? 3.4) : (b.hx ?? 3.4); w.bb = b.shape === 'disc' ? (b.r ?? 3.4) : (b.hz ?? 2.4); w.bround = b.round ?? 0;
-  w.globalToLocal.fill(-1);
-  const nt = Math.min(MAX_THINGS, def.things.length); w.nThingDefs = nt;
+  w.bS = b.shape === 'disc' ? 0 : 1; w.bx = b.x * sc; w.bz = b.z * sc;
+  w.ba = b.shape === 'disc' ? (b.r ?? 3.4) : (b.hx ?? 3.4); w.bb = b.shape === 'disc' ? (b.r ?? 3.4) : (b.hz ?? 2.4); w.br = b.round ?? 0;
+  w.gTL.fill(-1);
+  const nt = Math.min(MAX_THINGS, def.things.length); w.nTD = nt;
   for (let k = 0; k < nt; k++) {
     const t = def.things[k], sp = tall ? tall.things[k] : null;
-    const g = THING_IDS.indexOf(t.id); w.thingGlobal[k] = g; if (g >= 0) w.globalToLocal[g] = k;
-    w.thingMech[k] = t.mech; w.thingX[k] = (sp ? sp.x : t.x) * sc; w.thingZ[k] = (sp ? sp.z : t.z) * sc; w.thingYaw[k] = sp ? sp.yaw : t.yaw;
-    w.thingS0[k] = t.size[0]; w.thingS1[k] = t.size[1]; w.thingS2[k] = t.size[2];
+    const g = THING_IDS.indexOf(t.id); w.tG[k] = g; if (g >= 0) w.gTL[g] = k;
+    w.tM[k] = t.mech; w.tX[k] = (sp ? sp.x : t.x) * sc; w.tZ[k] = (sp ? sp.z : t.z) * sc; w.tY[k] = sp ? sp.yaw : t.yaw;
+    w.tS[k] = t.size[0]; w.tS1[k] = t.size[1]; w.tS2[k] = t.size[2];
     const use = sp ? sp.use : t.useSpot;
-    if (use) { w.thingUseX[k] = use[0] * sc; w.thingUseZ[k] = use[1] * sc; }
-    else if (t.mech === MECH.ring) { w.thingUseX[k] = w.thingX[k]; w.thingUseZ[k] = w.thingZ[k]; }
-    else { w.thingUseX[k] = NaN; w.thingUseZ[k] = NaN; }
+    if (use) { w.tUX[k] = use[0] * sc; w.tUZ[k] = use[1] * sc; }
+    else if (t.mech === MECH.ring) { w.tUX[k] = w.tX[k]; w.tUZ[k] = w.tZ[k]; }
+    else { w.tUX[k] = NaN; w.tUZ[k] = NaN; }
     const pk = sp ? sp.peek : t.peek;
-    for (let j = 0; j < 4; j++) w.thingPeek[k * 4 + j] = pk ? pk[j] * sc : NaN;
+    for (let j = 0; j < 4; j++) w.tP[k * 4 + j] = pk ? pk[j] * sc : NaN;
     const ps = sp ? sp.push : t.push;
-    w.thingPushX[k] = ps ? ps[0] * sc : NaN; w.thingPushZ[k] = ps ? ps[1] * sc : NaN;
+    w.tPX[k] = ps ? ps[0] * sc : NaN; w.tPZ[k] = ps ? ps[1] * sc : NaN;
     if (t.mech === MECH.ring) {
-      const way = (t.p.way ?? 0.6) + t.size[0], yaw = w.thingYaw[k];
-      w.thingWayX[k] = w.thingX[k] + Math.cos(yaw) * way; w.thingWayZ[k] = w.thingZ[k] + Math.sin(yaw) * way;
-    } else { w.thingWayX[k] = NaN; w.thingWayZ[k] = NaN; }
-    w.thingRider[k] = t.p.rider ?? 0; w.thingRide[k] = t.ride ? 1 : 0;
-    w.thingSwitch[k] = t.switch ? SWITCH[t.switch] : 0;
-    w.thingIcon[k] = t.icon; w.thingVerb[k] = t.verb; w.thingKind[k] = KIND_OF_ICON[t.icon] ?? 0;
-    w.thingFromN[k] = (sp ? sp.fromN : undefined) ?? t.fromN ?? 0;
-    w.thingZone[k] = -1; w.thingPatch[k] = -1;
+      const way = (t.p.way ?? 0.6) + t.size[0], yaw = w.tY[k];
+      w.tWX[k] = w.tX[k] + Math.cos(yaw) * way; w.tWZ[k] = w.tZ[k] + Math.sin(yaw) * way;
+    } else { w.tWX[k] = NaN; w.tWZ[k] = NaN; }
+    w.tR[k] = t.p.rider ?? 0; w.tRi[k] = t.ride ? 1 : 0;
+    w.tSw[k] = t.switch ? SWITCH[t.switch] : 0;
+    w.tI[k] = t.icon; w.tV[k] = t.verb; w.tK[k] = KIND_OF_ICON[t.icon] ?? 0;
+    w.tFN[k] = (sp ? sp.fromN : undefined) ?? t.fromN ?? 0;
+    w.tZo[k] = -1; w.tPa[k] = -1;
   }
-  const nz = Math.min(MAX_ZONES, def.zones.length); w.nZones = nz;
+  const nz = Math.min(MAX_ZONES, def.zones.length); w.nZ = nz;
   for (let k = 0; k < nz; k++) {
     const z = def.zones[k], a = tall ? tall.zones[k] : z;
-    w.zoneKind[k] = z.kind; w.zoneStr[k] = z.strength; w.zoneShape[k] = a.shape === 'disc' ? 0 : 1;
-    w.zoneX[k] = a.x * sc; w.zoneZ[k] = a.z * sc; w.zoneR[k] = a.r ?? 0; w.zoneHX[k] = a.hx ?? 0; w.zoneHZ[k] = a.hz ?? 0; w.zoneYaw[k] = a.yaw ?? 0;
-    w.zoneFall0[k] = z.falloff ? z.falloff[0] : -1; w.zoneFall1[k] = z.falloff ? z.falloff[1] : 1;
-    w.zoneSurf[k] = z.surfaceY ?? 0; w.zoneGlow[k] = z.glow ? 1 : 0; w.zoneShower[k] = z.shower ? 1 : 0;
-    w.zoneThing[k] = -1;
-    for (let t = 0; t < nt; t++) if (ownsArea(def.things[t].zone, z.id)) { w.zoneThing[k] = t; if (w.thingZone[t] < 0) w.thingZone[t] = k; break; }
+    w.zK[k] = z.kind; w.zS[k] = z.strength; w.zSh[k] = a.shape === 'disc' ? 0 : 1;
+    w.zX[k] = a.x * sc; w.zZ[k] = a.z * sc; w.zR[k] = a.r ?? 0; w.zH[k] = a.hx ?? 0; w.zHZ[k] = a.hz ?? 0; w.zY[k] = a.yaw ?? 0;
+    w.zF0[k] = z.falloff ? z.falloff[0] : -1; w.zF1[k] = z.falloff ? z.falloff[1] : 1;
+    w.zSu[k] = z.surfaceY ?? 0; w.zG[k] = z.glow ? 1 : 0; w.zSo[k] = z.shower ? 1 : 0;
+    w.zT[k] = -1;
+    for (let t = 0; t < nt; t++) if (ownsArea(def.things[t].zone, z.id)) { w.zT[k] = t; if (w.tZo[t] < 0) w.tZo[t] = k; break; }
   }
-  const np = Math.min(MAX_PATCHES, def.patches.length); w.nPatches = np;
+  const np = Math.min(MAX_PATCHES, def.patches.length); w.nP = np;
   for (let k = 0; k < np; k++) {
     const p = def.patches[k], a = tall ? tall.patches[k] : p;
-    w.patchShape[k] = a.shape === 'disc' ? 0 : 1; w.patchX[k] = a.x * sc; w.patchZ[k] = a.z * sc; w.patchR[k] = (a.r ?? 0) * (def.unit === 'slot' ? 1 : 1);
-    w.patchHX[k] = a.hx ?? 0; w.patchHZ[k] = a.hz ?? 0; w.patchYaw[k] = a.yaw ?? 0;
-    w.patchNap[k] = p.nap ? 1 : 0; w.patchIce[k] = p.ice ? 1 : 0; w.patchSand[k] = p.id.indexOf('sand') >= 0 ? 1 : 0;
-    w.patchThing[k] = -1;
-    for (let t = 0; t < nt; t++) if (ownsArea(def.things[t].patch, p.id)) { w.patchThing[k] = t; if (w.thingPatch[t] < 0) w.thingPatch[t] = k; break; }
+    w.pS[k] = a.shape === 'disc' ? 0 : 1; w.pX[k] = a.x * sc; w.pZ[k] = a.z * sc; w.pR[k] = (a.r ?? 0) * (def.unit === 'slot' ? 1 : 1);
+    w.pH[k] = a.hx ?? 0; w.pHZ[k] = a.hz ?? 0; w.pY[k] = a.yaw ?? 0;
+    w.pN[k] = p.nap ? 1 : 0; w.pI[k] = p.ice ? 1 : 0; w.pSa[k] = p.id.indexOf('sand') >= 0 ? 1 : 0;
+    w.pT[k] = -1;
+    for (let t = 0; t < nt; t++) if (ownsArea(def.things[t].patch, p.id)) { w.pT[k] = t; if (w.tPa[t] < 0) w.tPa[t] = k; break; }
   }
 }
 
@@ -265,22 +275,22 @@ export function d2p(w: LifeWorld, s: LifeSnapshot, i: number): number { const dx
 /** The distance between characters i and j in mm (an integer). */
 export function dmm(s: LifeSnapshot, i: number, j: number): number { const dx = s.x[i] - s.x[j], dz = s.z[i] - s.z[j]; return (Math.sqrt(dx * dx + dz * dz) * 1000) | 0; }
 
-/** Is the query point inside zone k (patch 0) or patch k (patch 1)? (a disc of r, or a box of hx, hz turned by yaw) */
-export function inAreaAt(w: LifeWorld, patch: number, k: number): boolean {
-  const dx = w.f[F.PX] - (patch ? w.patchX[k] : w.zoneX[k]), dz = w.f[F.PZ] - (patch ? w.patchZ[k] : w.zoneZ[k]);
-  if ((patch ? w.patchShape[k] : w.zoneShape[k]) === 0) { const r = patch ? w.patchR[k] : w.zoneR[k]; return dx * dx + dz * dz <= r * r; }
-  const yaw = patch ? w.patchYaw[k] : w.zoneYaw[k], c = Math.cos(yaw), sn = Math.sin(yaw);
-  return Math.abs(dx * c + dz * sn) <= (patch ? w.patchHX[k] : w.zoneHX[k]) && Math.abs(dz * c - dx * sn) <= (patch ? w.patchHZ[k] : w.zoneHZ[k]);
+/** Is the query point inside zone k (patch 0) or patch k (patch 1) grown by growMm / 1000 m? (a disc of r, or a box of hx, hz turned by yaw) */
+export function inAreaAt(w: LifeWorld, patch: number, k: number, growMm: number): boolean {
+  const dx = w.f[F.PX] - (patch ? w.pX[k] : w.zX[k]), dz = w.f[F.PZ] - (patch ? w.pZ[k] : w.zZ[k]), g = growMm * 0.001;
+  if ((patch ? w.pS[k] : w.zSh[k]) === 0) { const r = (patch ? w.pR[k] : w.zR[k]) + g; return dx * dx + dz * dz <= r * r; }
+  const yaw = patch ? w.pY[k] : w.zY[k], c = Math.cos(yaw), sn = Math.sin(yaw);
+  return Math.abs(dx * c + dz * sn) <= (patch ? w.pH[k] : w.zH[k]) + g && Math.abs(dz * c - dx * sn) <= (patch ? w.pHZ[k] : w.zHZ[k]) + g;
 }
 
 /** Zone k's strength at the query point into w.f[F.S] (0 outside); with a falloff [full radius, edge strength] it falls evenly to the edge. */
 export function zoneStrengthAt(w: LifeWorld, k: number): void {
   w.f[F.S] = 0;
-  if (!inAreaAt(w, 0, k)) return;
-  let s = w.zoneStr[k];
-  if (w.zoneShape[k] === 0 && w.zoneFall0[k] >= 0) {
-    const dx = w.f[F.PX] - w.zoneX[k], dz = w.f[F.PZ] - w.zoneZ[k], d = Math.sqrt(dx * dx + dz * dz), r0 = w.zoneFall0[k], r1 = w.zoneR[k];
-    if (d > r0 && r1 > r0) s = s + (w.zoneFall1[k] - s) * ((d - r0) / (r1 - r0));
+  if (!inAreaAt(w, 0, k, 0)) return;
+  let s = w.zS[k];
+  if (w.zSh[k] === 0 && w.zF0[k] >= 0) {
+    const dx = w.f[F.PX] - w.zX[k], dz = w.f[F.PZ] - w.zZ[k], d = Math.sqrt(dx * dx + dz * dz), r0 = w.zF0[k], r1 = w.zR[k];
+    if (d > r0 && r1 > r0) s = s + (w.zF1[k] - s) * ((d - r0) / (r1 - r0));
   }
   w.f[F.S] = s;
 }
@@ -288,12 +298,12 @@ export function zoneStrengthAt(w: LifeWorld, k: number): void {
 /** Is the query point inside the place's bounds shrunk by shrinkMm / 1000 m (a rounded box: the corner circle of radius `round`)? */
 export function inBounds(w: LifeWorld, shrinkMm: number): boolean {
   const shrink = shrinkMm * 0.001, dx = w.f[F.PX] - w.bx, dz = w.f[F.PZ] - w.bz;
-  if (w.bShape === 0) { const r = w.ba - shrink; return r > 0 && dx * dx + dz * dz <= r * r; }
+  if (w.bS === 0) { const r = w.ba - shrink; return r > 0 && dx * dx + dz * dz <= r * r; }
   const hx = w.ba - shrink, hz = w.bb - shrink;
   if (hx <= 0 || hz <= 0) return false;
   const ax = Math.abs(dx), az = Math.abs(dz);
   if (ax > hx || az > hz) return false;
-  const rr = w.bround - shrink;
+  const rr = w.br - shrink;
   if (rr <= 0) return true;
   const cx = hx - rr, cz = hz - rr;
   if (ax <= cx || az <= cz) return true;
@@ -303,25 +313,31 @@ export function inBounds(w: LifeWorld, shrinkMm: number): boolean {
 /** Is the query point inside thing k's keep-out (its footprint grown by growMm / 1000 m)? Patch and walk-on things (rug, pad, turntable,
  *  pool) have none. */
 export function inKeepOut(w: LifeWorld, s: LifeSnapshot, k: number, growMm: number): boolean {
-  const m = w.thingMech[k], g = growMm * 0.001;
-  let tx = w.thingX[k], tz = w.thingZ[k];
-  const row = w.rowOfLocal[k];
+  const m = w.tM[k], g = growMm * 0.001;
+  let tx = w.tX[k], tz = w.tZ[k];
+  const row = w.rOL[k];
   if (row >= 0) { tx = s.thingX[row]; tz = s.thingZ[row]; }
   else if (s.nThings > 0 || w.home) return false; // not out now (Home's things arrive one by one)
   if (m === 0 || m === MECH.pad || m === MECH.turntable || m === MECH.pool) return false;
-  const dx = w.f[F.PX] - tx, dz = w.f[F.PZ] - tz, s0 = w.thingS0[k], s1 = w.thingS1[k];
+  const dx = w.f[F.PX] - tx, dz = w.f[F.PZ] - tz, s0 = w.tS[k], s1 = w.tS1[k];
   if (m === MECH.ball || m === MECH.mound || m === MECH.chime) { const r = s0 + g; return dx * dx + dz * dz <= r * r; }
   if (m === MECH.ring) return Math.abs(Math.sqrt(dx * dx + dz * dz) - s0) <= s1 + g;
-  const yaw = w.thingYaw[k], c = Math.cos(yaw), sn = Math.sin(yaw), lx = Math.abs(dx * c + dz * sn), lz = Math.abs(dz * c - dx * sn);
+  const yaw = w.tY[k], c = Math.cos(yaw), sn = Math.sin(yaw), lx = Math.abs(dx * c + dz * sn), lz = Math.abs(dz * c - dx * sn);
   if (m === MECH.swing) return lx <= 0.7 + s1 * 0.5 + g && lz <= s1 * 0.5 + g;
   if (m === MECH.bar) return lx <= s1 * 0.5 + g && lz <= s0 + g;
-  return lx <= s0 + g && lz <= w.thingS2[k] + g;
+  return lx <= s0 + g && lz <= w.tS2[k] + g;
 }
 /** Is the query point clear of every thing's keep-out grown by growMm? */
 export function clearOfThings(w: LifeWorld, s: LifeSnapshot, growMm: number): boolean {
-  for (let k = 0; k < w.nThingDefs; k++) if (inKeepOut(w, s, k, growMm)) return false;
+  for (let k = 0; k < w.nTD; k++) if (inKeepOut(w, s, k, growMm)) return false;
   return true;
 }
+/** The query point becomes the target point (w.f[F.X], w.f[F.Z]). */
+export function qT(w: LifeWorld): void { w.f[F.PX] = w.f[F.X]; w.f[F.PZ] = w.f[F.Z]; }
+/** No lean: the pose lean (w.f[F.X2], w.f[F.Z2]) is 0 (also a hop straight up). */
+export function noLean(w: LifeWorld): void { w.f[F.X2] = 0; w.f[F.Z2] = 0; }
+/** Is the query point a free target for character i: inside the bounds shrunk by R + 0.2 m and clear of every keep-out (0.4 m, R + 0.05)? */
+export function freeSpot(w: LifeWorld, s: LifeSnapshot, i: number): boolean { return inBounds(w, shrinkMm(s, i)) && clearOfThings(w, s, keepMm(s, i)); }
 /** A free target's keep-out growth for a body of radius r: 0.4 m, and at least R + 0.05 m (mm). */
 export function keepMm(s: LifeSnapshot, i: number): number { return s.r[i] + 0.05 > 0.4 ? ((s.r[i] + 0.05) * 1000) | 0 : 400; }
 /** The shrink R + 0.2 m of a free target for character i (mm). */
@@ -343,16 +359,16 @@ export function rnd(w: LifeWorld, i: number): number {
 export const U16 = 1 / 65536;
 
 export function seedChar(w: LifeWorld, i: number): void {
-  w.rng[i] = (w.gseed[i] ^ SALTS.life ^ Math.imul(w.visit + 1, 0x85ebca6b)) >>> 0;
+  w.rng[i] = (w.gs[i] ^ SALTS.life ^ Math.imul(w.visit + 1, 0x85ebca6b)) >>> 0;
 }
 
 /* ───────────────────────────── intents and events (the hot path) ───────────────────────────── */
 
 /** Append an intent for character `who`; returns its index or -1 (the list is full, or a runaway character passed 12 in one call). */
 export function pushIntent(w: LifeWorld, out: LifeIntents, kind: number, who: number): number {
-  if (out.n >= out.kind.length || w.perChar[who] >= 12) return -1;
+  if (out.n >= out.kind.length || w.pCh[who] >= 12) return -1;
   const k = out.n++;
-  w.perChar[who]++;
+  w.pCh[who]++;
   out.kind[k] = kind; out.who[k] = who; out.delayS[k] = 0;
   out.a[k] = 0; out.b[k] = 0; out.c[k] = 0; out.d[k] = 0; out.e[k] = 0;
   out.icon[k] = 0; out.style[k] = 0; out.prio[k] = 0; out.groupKey[k] = -1; out.dots[k] = 0;

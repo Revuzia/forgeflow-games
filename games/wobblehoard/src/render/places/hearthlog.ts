@@ -7,7 +7,8 @@
 // data module's (PlaceDef = wide, PlaceDef.tall = tall). Statics are batched per material into instanced draws (RD-08: at most 60 calls).
 // Token colours only (place.ts tok(): OKLCH mixes of the eight). Mean luminance about 0.20 (RD-13 measures it).
 import * as THREE from 'three';
-import { type PlaceLook, type PlaceBuilt, type PropKit, type PlaceLight, Emitter, tok, col } from '../place.ts';
+import { type PlaceLook, type PlaceBuilt, type PropKit, type PlaceLight, Emitter, tok, col, sp } from '../place.ts';
+import { Particles } from '../particles.ts';
 import type { PanelDef } from '../env.ts';
 import PLACE from '../../data/place_hearthlog.ts';
 
@@ -116,7 +117,7 @@ const LOOK: PlaceLook = {
       // the firelight: low at the hearth, spreading across the room (a wide soft cone, not a pool on the floor)
       key: tok('amber', 'coral', 0.18), keyI: 140, keyPos: [fire.x, 1.0, fire.z - 0.1], keyAim: [fire.x * 0.15, 0.0, fire.z + 3.0], keyAngle: 1.35,
       rim: tok('lagoon', 'cream', 0.15), rimI: 1.6, rimDir: layout === 0 ? [0.55, 0.35, -0.76] : [-0.3, 0.4, -0.87],
-      fillSky: tok('dusk', 'amber', 0.4), fillGround: tok('plum', 'amber', 0.3), fillI: 3.2,
+      fillSky: tok('amber', 'cream', 0.5, 0.9), fillGround: tok('dusk', 'amber', 0.5), fillI: 4.2,
       keyTint: [1.0, 0.66, 0.36],
     };
   },
@@ -136,7 +137,7 @@ const LOOK: PlaceLook = {
     // materials (token mixes)
     // (warm browns are amber-cream mixes taken deeper: an amber-plum mix slides through red in OKLCH and read pink)
     const logA = kit.mat('logA', tok('plum', 'dusk', 0.3, 1.45), 0.85), logB = kit.mat('logB', tok('dusk', 'plum', 0.3, 1.1), 0.85);
-    const stone = kit.mat('stone', tok('dusk', 'cream', 0.4, 1.0), 0.95, 0.3), stoneDark = kit.mat('stoneDark', tok('ink'), 1.0, 0.05);
+    const stone = kit.mat('stone', tok('ink', 'cream', 0.5), 0.95, 0.3), stoneDark = kit.mat('stoneDark', tok('ink'), 1.0, 0.05);
     const wood = kit.mat('wood', tok('amber', 'cream', 0.45, 0.5), 0.7), woodLight = kit.mat('woodLight', tok('amber', 'cream', 0.5, 0.66), 0.6);
     const cushion = kit.mat('cushion', tok('coral', 'plum', 0.45, 0.9), 0.95, 0.15), pillow = kit.mat('pillow', tok('cream', 'coral', 0.2), 0.9, 0.2);
     const yarn = kit.mat('yarn', tok('coral', 'plum', 0.15), 0.95, 0.15), metal = kit.mat('metal', tok('dusk', 'cream', 0.35), 0.35, 0.9);
@@ -144,7 +145,8 @@ const LOOK: PlaceLook = {
     const unitBox = kit.box(1, 1, 1), unitCylX = kit.geo('cylX', () => new THREE.CylinderGeometry(1, 1, 1, 12).rotateZ(Math.PI / 2)), unitCyl = kit.cyl(1, 1, 1, 12);
 
     // ---- the floor boards (one big plane, top at y = 0) ----
-    const floorMat = kit.mat('floor', tok('dusk', 'amber', 0.15, 0.85), 0.8, 0.3);
+    // (round 2: warm honey boards, an amber-cream mix taken deeper: the dusk-amber boards read magenta and held the room at 0.07 luminance)
+    const floorMat = kit.mat('floor', tok('amber', 'cream', 0.5, 0.6), 0.75, 0.3);
     floorMat.onBeforeCompile = (sh) => {
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;').replace('#include <color_fragment>', BOARDS);
@@ -180,7 +182,7 @@ const LOOK: PlaceLook = {
     }
     const back = walls.find((w) => (w.hx ?? 0) > (w.hz ?? 0))!, backZ = back.z + (back.hz ?? 0.15);
     // backdrop cards: the dark under-roof above and behind the walls (low poly, renderOrder -99..-51)
-    const cardMat = kit.mat('card', tok('ink', 'plum', 0.25, 0.7), 1.0, 0.0);
+    const cardMat = kit.mat('card', tok('plum', 'dusk', 0.3, 0.9), 1.0, 0.0);
     const card = (x: number, y: number, z: number, w: number, h: number, ry: number, order: number): void => {
       const c = kit.mesh(kit.geo(`card${w},${h}`, () => new THREE.PlaneGeometry(w, h)), cardMat, x, y, z, order); c.rotation.y = ry; g.add(c);
     };
@@ -211,12 +213,19 @@ const LOOK: PlaceLook = {
     g.add(fire);
     const fz = tall ? PLACE.tall.zones[0] : PLACE.zones[0];
     const fireP = [fz.x, 0.25, fz.z - 0.35] as const;
+    const EMB: [number, number, number] = [1, 0.55, 0.12];
     const embers = new Emitter([24, 16, 8], false, (p, r) => {
-      p.emit({ x: h.x + (r() - 0.5) * 0.5, y: 0.35, z: h.z + fd / 2 + 0.12, vx: (r() - 0.5) * 0.12, vy: 0.45 + r() * 0.35, vz: 0.05 + r() * 0.08, life: 1.4 + r() * 1.2, size: 0.012 + r() * 0.01,
-        r: 1.0, g: 0.45 + r() * 0.25, b: 0.12, a: 0.9, drag: 0.4, fade: 1 });
+      EMB[1] = 0.45 + r() * 0.25;
+      p.emit(sp(h.x + (r() - 0.5) * 0.5, 0.35, h.z + fd / 2 + 0.12, (r() - 0.5) * 0.12, 0.45 + r() * 0.35, 0.05 + r() * 0.08, 1.4 + r() * 1.2, 0.012 + r() * 0.01, EMB, 0.9, 0.4));
     }, 9);
     g.add(embers.particles.mesh);
     kit.own(embers);
+    // the firelight on the floorboards in front of the hearth (additive, follows the fire's strength)
+    const glowU = { uAmt: { value: 1 }, uCol: { value: col(tok('amber', 'coral', 0.25, 0.75)) } };
+    const glowMat = kit.own(new THREE.ShaderMaterial({ vertexShader: UV_VERT, fragmentShader: 'varying vec2 vUv; uniform float uAmt; uniform vec3 uCol; void main(){ vec2 q = vUv * 2.0 - 1.0; float r = length(q); float a = (1.0 - smoothstep(0.0, 1.0, r)) * (1.0 - smoothstep(0.0, 1.0, r)) * uAmt; gl_FragColor = vec4(uCol * a * 0.5, 1.0); }',
+      uniforms: glowU, toneMapped: false, depthWrite: false, blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor, blendEquationAlpha: THREE.AddEquation, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor }));
+    const fglow = kit.mesh(kit.geo('fglow', () => new THREE.PlaneGeometry(3.2, 2.2).rotateX(-Math.PI / 2)), glowMat, h.x, 0.006, h.z + fd / 2 + 1.0, -45);
+    g.add(fglow);
 
     // ---- the Rocker Board (a mover: the board on its pivot; a static wedge under it) ----
     const rk = spot(1), rd = PLACE.things[1], piv = rd.p.pivot ?? 0.24;
@@ -242,7 +251,7 @@ const LOOK: PlaceLook = {
     B.add('logB', unitCylX, logB, 0, pivY + 0.1, sw.z, 2 * inX, 0.11, 0.11);
     const seat = new THREE.Group(); seat.position.set(sw.x, pivY - ropeL, sw.z); seat.rotation.y = -sw.yaw;
     const seatMesh = kit.mesh(kit.capsule(seatR, seatL), wood, 0, 0, 0, 2); seatMesh.rotation.x = Math.PI / 2; seat.add(seatMesh);   // the seat lies across the swing's travel
-    const pil = kit.mesh(kit.sphere(0.2, 16, 10), pillow, 0, 0.1, 0, 2); pil.scale.set(0.75, 0.35, 1.6); seat.add(pil);
+    const pil = kit.mesh(kit.sphere(0.2, 16, 10), pillow, 0, 0.12, 0, 2); pil.scale.set(1.15, 0.55, 1.7); seat.add(pil);   // a fat cushion that reads end-on
     // two ropes from the seat's ends up to the one pivot under the beam (a V: the hinge is a single axis)
     for (const side of [-1, 1]) {
       const o = side * (seatL / 2 - 0.05), len = Math.hypot(o, ropeL);
@@ -276,16 +285,39 @@ const LOOK: PlaceLook = {
     B.flush(kit, g);
     const sh = kit.shadowMesh(); if (sh) g.add(sh);
 
+    // the kettle's steam puff when it whistles (thingFx 5): wisps out of the spout, normal blend
+    const steam = kit.own(new Particles(40, 34, true)); g.add(steam.mesh);
+    const spoutX = kt.x + kr * 1.05 + 0.08, spoutY = sy + kr * 1.05 + 0.06;
+    const STM: [number, number, number] = [0.93, 0.92, 0.9];
+    let puffK = 0, puffAcc = 0, fireK = 0, finale = 0, finaleNow = 0;
     const movers: (THREE.Object3D | null)[] = [null, board, ball, seat, null, null];
-    let t = 0;
+    let t = 0, q = false, rm = false;
     return {
       group: g, movers, moverKind: [0, 1, 1, 1, 0, 0], heat: [fireP[0], fireP[1], fireP[2]],
       update(dt, time, quiet, reduced, tier) {
-        t += dt;
+        t += dt; q = quiet; rm = reduced;
         const m = reduced ? 0 : quiet ? 0.3 : 1;
         winU.uTime.value = t; winU.uMotion.value = m;
         fireU.uTime.value = t; fireU.uMotion.value = m;
-        embers.update(dt, time, quiet, reduced, tier);
+        // the finale (a slow glow in Calm or with reduced motion: eased over 3 s, no extra embers) and the fire puff (0.7 s)
+        finaleNow += (finale - finaleNow) * (1 - Math.exp(-dt * (quiet || reduced ? 0.7 : 2.5)));
+        fireK = Math.max(0, fireK - dt / (quiet || reduced ? 2.0 : 0.7));
+        const swell = 1 + 0.6 * finaleNow + 0.5 * fireK;
+        fireU.uAmt.value = swell; glowU.uAmt.value = 0.85 + 0.15 * Math.sin(t * 5.3 * m) * Math.sin(t * 2.1 * m + 1) * m + 0.6 * finaleNow + 0.4 * fireK;
+        embers.update(dt, time, quiet, reduced, tier, quiet || reduced ? 1 : 1 + 2.5 * finaleNow + 4 * fireK);
+        if (puffK > 0 && !reduced) {
+          puffAcc += dt * (puffK > 3.2 ? 40 : 6) * (quiet ? 0.3 : 1);
+          while (puffAcc >= 1) { puffAcc -= 1; const r1 = embers.rnd(), r2 = embers.rnd(); steam.emit(sp(spoutX, spoutY, kt.z + (r1 - 0.5) * 0.04, 0.18 + 0.1 * r2, 0.25 + 0.2 * r1, (r2 - 0.5) * 0.08, 1.2 + 0.6 * r1, 0.05 + 0.04 * r2, STM, 0.4, 0.8)); }
+        }
+        puffK = Math.max(0, puffK - dt);
+        steam.update(dt, time);
+      },
+      thingFx(thing, kind, amount) {
+        if (kind === 2 && thing === -1) { finale = amount; return true; }
+        if (kind !== 1) return false;
+        if (thing === 5) { puffK = 3.6; puffAcc = 0; return true; }   // the whistle's bar: a burst, then a thin trail
+        if (thing === 0) { fireK = Math.max(fireK, q || rm ? 0.5 : 1) * amount + (1 - amount) * fireK; return true; }
+        return false;
       },
       dispose() { g.removeFromParent(); },
     };

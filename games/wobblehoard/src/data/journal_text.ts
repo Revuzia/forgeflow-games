@@ -98,7 +98,7 @@ export const QUEST_TEXT: readonly (readonly [string, string])[] = [
   ['Who loves the night?', 'Find a squishy that loves it here.'], // L10
   ['Hello, hello, hello', 'Go to Echo Hollow.'], // E1
   ['Glow bath', 'Two squishies glow in the Glow Pool.'], // E2
-  ['Crystal scale', 'Ring three different crystals.'], // E3
+  ['Ring the crystals', 'Ring three different crystals.'], // E3 (QUESTS 6 wrote the noun "Crystal scale"; Q7: a title says what you do; R2)
   ['Wake the echo', 'Tap the Echo Stone.'], // E4
   ['Echo talk', 'A squishy answers its own echo.'], // E5
   ['Glowing bits', 'Cut a squishy into three in the glow.'], // E6

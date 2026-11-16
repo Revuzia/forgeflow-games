@@ -232,9 +232,9 @@ export function makePg(E: PgEnv) {
       return { awakeMs: awake, asleepMs: asleep, ratio: asleep / awake, fineWhileAsleep: f1 - f0 };
     },
     /** RD-06: 6 pieces (chunks lite) against 2 wholes, frame ms; and the same with the chunks NOT lite (today's x1.32..1.45). */
-    liteCost(rounds = 3): { two: number[]; sixLite: number[]; sixFull: number[]; liteVerts: number } {
+    liteCost(rounds = 3): { two: number[]; sixLite: number[]; sixFull: number[]; liteVerts: number; calls: number[] } {
       const g = speciesBaseGenome(CATALOG[0].id, 1);
-      const out = { two: [] as number[], sixLite: [] as number[], sixFull: [] as number[], liteVerts: 0 };
+      const out = { two: [] as number[], sixLite: [] as number[], sixFull: [] as number[], liteVerts: 0, calls: [0, 0, 0] };
       const build = (six: boolean, lite: boolean): void => {
         S.clearBodies();
         const bs: StubBody[] = [];
@@ -251,6 +251,7 @@ export function makePg(E: PgEnv) {
       };
       for (let r = 0; r < rounds; r++) for (const [six, lite] of [[false, false], [true, true], [true, false]] as const) {
         build(six, lite); S.render();
+        out.calls[six ? (lite ? 1 : 2) : 0] = S.stats().drawCalls;
         const ms = E.timeRender(3);
         (six ? (lite ? out.sixLite : out.sixFull) : out.two).push(ms);
       }

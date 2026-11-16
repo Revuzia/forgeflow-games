@@ -7,34 +7,34 @@ import type { LifeSnapshot, LifeIntents, LifeEvents } from '../contracts.ts';
 import { SOCIAL_KIND, LIFE_EV, LIFE_FLAG, EMOTE, SOCIAL } from '../data/life.ts';
 import { MECH } from '../data/places.ts';
 import type { LifeWorld } from './world.ts';
-import { CAP, F, MAX_MOMENTS, MAX_MEMBERS, BEH, pushEvent, pairIdx, rnd, U16, dmm, inBounds, shrinkMm } from './world.ts';
-import { gateStart, gateFits, stopMove, travelTo, travelStep, emitHop, emitPose, clearPose, emitGaze, emitEmote, emitExpr, emitScoot,
-  HELD_BITS } from './act.ts';
+import { CAP, F, MAX_MOMENTS, MAX_MEMBERS, BEH, USES_FULL, pushEvent, pairIdx, rnd, U16, dmm, inBounds, shrinkMm, keepMm, clearOfThings, noLean, qT, freeSpot } from './world.ts';
+import { gateStart, gateFits, stopMove, travelTo, travelStep, emitHop, emitPose, clearPose, emitGaze, emitEmote, emitExpr, emitScoot, HELD_BITS, say } from './act.ts';
 import { MOVER_CAP, tierOf, UNIT, STYLE } from './attention.ts';
-import { emitVoice, PHRASE, toNextBarMs, BAR_S } from './voice.ts';
+import { emitVoice, PHRASE, toNextBarMs, BAR_S, voice } from './voice.ts';
 import { TRAIT } from './traits.ts';
 
 export const S = SOCIAL_KIND;
+const WISH_FRIEND = 4; // WISH_KIND.FRIEND
 /** Moment ids (S01..S18 = 1..18), as LIFE 6.1 numbers them; the SOCIAL event's sub is SOCIAL[id - 1].kind (S05 is COPY or PARADE). */
 export const MOM = { GREET: 1, CHAT: 2, BOOP: 3, NUZZLE: 4, COPY: 5, SING: 6, SNUGGLE: 7, PILE: 8, COMFORT: 9, TEETER: 10, PUSH: 11, PASS: 12,
-  PEEK: 13, SQUIRT: 14, MIRROR: 15, ECHO: 16, DUET: 17, TWIRL: 18 } as const;
+  PEEK: 13, SQUIRT: 14, MIRROR: 15, ECHO: 16, DUET: 17, TWIRL: 18, PARADE: 19 } as const;
 /** Pair bits of the once-per-visit moments. */
 const PB = { GREET: 1, MIRROR: 2, DUET: 4, TWIRL: 8 } as const;
 
-export function mem(w: LifeWorld, m: number, k: number): number { return w.mMem[m * MAX_MEMBERS + k]; }
+export function mem(w: LifeWorld, m: number, k: number): number { return w.mM[m * MAX_MEMBERS + k]; }
 
 /** Is character j free to join a moment (not HELD, not in a moment, idle-ish, not napping, not on a ride unless allowed)? */
 export function isFree(w: LifeWorld, s: LifeSnapshot, j: number, rideOk: boolean): boolean {
-  if (j < 0 || j >= s.n || !w.active[j] || w.moment[j] >= 0) return false;
+  if (j < 0 || j >= s.n || !w.ac[j] || w.moo[j] >= 0) return false;
   if ((s.flags[j] & HELD_BITS) !== 0) return false;
   if (!rideOk && (s.flags[j] & LIFE_FLAG.RIDE) !== 0) return false;
   const b = w.beh[j];
   // the still, short behaviours (notice, watch, answer) give way to a moment; a wander stops for it
-  return b === BEH.NONE || b === BEH.IDLE || b === BEH.WANDER || b === BEH.NOTICE || b === BEH.WATCH || b === BEH.ANSWER || (rideOk && b === BEH.RIDE);
+  return b === BEH.NONE || b === BEH.IDLE || b === BEH.WANDER || b === BEH.NOTICE || (b === BEH.WATCH && w.ph[j] !== 1) || b === BEH.ANSWER || (rideOk && b === BEH.RIDE);
 }
 
 function freeSlot(w: LifeWorld): number {
-  for (let m = 0; m < MAX_MOMENTS; m++) if (w.mKind[m] === 0) return m;
+  for (let m = 0; m < MAX_MOMENTS; m++) if (w.mK[m] === 0) return m;
   return -1;
 }
 
@@ -43,10 +43,10 @@ export function startMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, kin
   const tb = w.f[F.NOW];
   const m = freeSlot(w);
   if (m < 0) return -1;
-  if (a < 0 || w.moment[a] >= 0 || (b >= 0 && w.moment[b] >= 0) || (c >= 0 && w.moment[c] >= 0)) return -1;
-  w.mKind[m] = kind; w.mN[m] = 0; w.mT0[m] = tb; w.mEnd[m] = tb + 60; w.mPhase[m] = 0; w.mTurn[m] = 0; w.mNext[m] = tb; w.mStep[m] = 0;
-  w.mThing[m] = -1; w.mSoft[m] = 0; w.mRide[m] = 0; w.mCount[m] = 0;
-  for (let k = 0; k < MAX_MEMBERS; k++) w.mMem[m * MAX_MEMBERS + k] = -1;
+  if (a < 0 || w.moo[a] >= 0 || (b >= 0 && w.moo[b] >= 0) || (c >= 0 && w.moo[c] >= 0)) return -1;
+  w.mK[m] = kind; w.mN[m] = 0; w.mT0[m] = tb; w.mE[m] = tb + 60; w.mP[m] = 0; w.mT[m] = 0; w.mNe[m] = tb; w.mS[m] = 0;
+  w.mTh[m] = -1; w.mSo[m] = 0; w.mR[m] = 0; w.mC[m] = 0;
+  for (let k = 0; k < MAX_MEMBERS; k++) w.mM[m * MAX_MEMBERS + k] = -1;
   addMember(w, out, m, a);
   if (b >= 0) addMember(w, out, m, b);
   if (c >= 0) addMember(w, out, m, c);
@@ -54,43 +54,49 @@ export function startMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, kin
 }
 export function addMember(w: LifeWorld, out: LifeIntents, m: number, j: number): boolean {
   const tb = w.f[F.NOW];
-  if (j < 0 || w.moment[j] >= 0 || w.mN[m] >= MAX_MEMBERS) return false;
-  if (w.moving[j]) stopMove(w, out, j);
-  w.mMem[m * MAX_MEMBERS + w.mN[m]++] = j; w.moment[j] = m; w.beh[j] = BEH.MOMENT; w.phase[j] = 0; w.behT0[j] = tb;
+  if (j < 0 || w.moo[j] >= 0 || w.mN[m] >= MAX_MEMBERS) return false;
+  if (w.mo[j]) stopMove(w, out, j);
+  w.mM[m * MAX_MEMBERS + w.mN[m]++] = j; w.moo[j] = m; w.beh[j] = BEH.MOMENT; w.ph[j] = 0; w.bT[j] = tb;
   return true;
 }
 
 /** End moment m: release its members (stop their motion, clear their poses), optionally emitting its SOCIAL event. */
 export function endMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, m: number, emit: boolean): void {
   const tb = w.f[F.NOW];
-  const kind = w.mKind[m];
+  const kind = w.mK[m];
   if (kind === 0) return;
   const n = w.mN[m], a = mem(w, m, 0), b = n > 1 ? mem(w, m, 1) : -1;
   if (emit) {
-    let sub = SOCIAL[kind - 1].kind;
-    if (kind === MOM.COPY && n >= 3) sub = S.PARADE;
-    pushEvent(ev, LIFE_EV.SOCIAL, sub, a, b, n, w.mThing[m] >= 0 ? w.thingGlobal[w.mThing[m]] : -1);
-    for (let k = 0; k < n; k++) { const j = mem(w, m, k); if (j >= 0) { w.company[j] = Math.max(0, w.company[j] - 0.5); w.lastJoyT[j] = tb; } }
-    if (a >= 0 && b >= 0) w.pairCool[pairIdx(a, b)] = tb + 20;
+    const sub = kind === MOM.PARADE ? S.PARADE : SOCIAL[kind - 1].kind;
+    pushEvent(ev, LIFE_EV.SOCIAL, sub, a, b, n, kind === MOM.GREET && w.mSo[m] === 2 ? -2 : w.mTh[m] >= 0 ? w.tG[w.mTh[m]] : -1);
+    for (let k = 0; k < n; k++) { const j = mem(w, m, k); if (j >= 0) { w.co[j] = Math.max(0, w.co[j] - 0.5); w.lJT[j] = tb; } }
+    if (a >= 0 && b >= 0) w.pCo[pairIdx(a, b)] = tb + 20;
+  } else if (a >= 0 && b >= 0) {
+    // a once-per-visit moment that never happened (its walk-up found no mover token, a touch ended it) is not spent
+    const pi = pairIdx(a, b);
+    if (kind === MOM.GREET && w.mSo[m] !== 2) w.pG[pi] &= ~PB.GREET;
+    else if (kind === MOM.MIRROR) w.pG[pi] &= ~PB.MIRROR;
+    else if (kind === MOM.DUET) w.pG[pi] &= ~PB.DUET;
+    else if (kind === MOM.TWIRL) w.pG[pi] &= ~PB.TWIRL;
   }
   for (let k = 0; k < n; k++) {
     const j = mem(w, m, k);
     if (j < 0) continue;
-    if (w.moving[j]) stopMove(w, out, j);
+    if (w.mo[j]) stopMove(w, out, j);
     if ((s.flags[j] & HELD_BITS) === 0) clearPose(w, s, out, j);
-    w.moment[j] = -1; w.beh[j] = BEH.IDLE; w.phase[j] = 0; w.behT0[j] = tb; w.behScore[j] = 0.1;
-    if ((s.flags[j] & LIFE_FLAG.RIDE) !== 0 && (kind === MOM.TEETER || kind === MOM.PUSH)) { w.beh[j] = BEH.RIDE; w.rideUntil[j] = tb; }
+    w.moo[j] = -1; w.beh[j] = BEH.IDLE; w.ph[j] = 0; w.bT[j] = tb; w.bSc[j] = 0.1;
+    if ((s.flags[j] & LIFE_FLAG.RIDE) !== 0 && (kind === MOM.TEETER || kind === MOM.PUSH)) { w.beh[j] = BEH.RIDE; w.rU[j] = tb; }
   }
   if (kind === MOM.PUSH || kind === MOM.TEETER) w.att.allowance = 0;
-  w.mKind[m] = 0; w.mN[m] = 0;
+  w.mK[m] = 0; w.mN[m] = 0;
 }
 
 /** A member was touched (HELD): the moment ends for everyone; the others wait 2 s, then a small "your turn" hop (5.5). */
 export function abortFor(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, j: number): void {
   const tb = w.f[F.NOW];
-  const m = w.moment[j];
+  const m = w.moo[j];
   if (m < 0) return;
-  for (let k = 0; k < w.mN[m]; k++) { const o = mem(w, m, k); if (o >= 0 && o !== j) w.partnerWaitT[o] = tb + 2; }
+  for (let k = 0; k < w.mN[m]; k++) { const o = mem(w, m, k); if (o >= 0 && o !== j) w.pWT[o] = tb + 2; }
   endMoment(w, s, out, ev, m, false);
 }
 
@@ -102,73 +108,88 @@ function idle(w: LifeWorld, j: number): boolean { const b = w.beh[j]; return b =
 export function socialPick(w: LifeWorld, s: LifeSnapshot, i: number, canMove: boolean): number {
   const tb = w.f[F.NOW];
   w.f[F.A] = 0; w.f[F.B] = -1; w.f[F.C] = -1;
-  if (w.kind[i] === 2 || !isFree(w, s, i, false)) return 0;
-  const tr = i * 5, whole = w.kind[i] === 0;
-  let best = 0, bs = 0, bp = -1, nIdle = 0, happy = tb - w.lastJoyT[i] < 8;
+  if (w.ki[i] === 2 || !isFree(w, s, i, false)) return 0;
+  const tr = i * 5, whole = w.ki[i] === 0;
+  let best = 0, bs = 0, bp = -1, nIdle = 0, happy = tb - w.lJT[i] < 8;
   for (let j = 0; j < s.n; j++) {
-    if (j === i || !w.active[j]) continue;
+    if (j === i || !w.ac[j]) continue;
     // S11 push the swing: any other squishy within 2.5 m of a rider the player set on a swing (the rider is RIDE, not free)
-    if (canMove && (s.flags[j] & LIFE_FLAG.RIDE) !== 0 && w.moment[j] < 0 && (s.flags[j] & HELD_BITS) === 0 && dmm(s, i, j) < 3300) {
-      const rt = w.rideThing[j];
-      if (rt >= 0 && w.thingMech[rt] === MECH.swing && w.thingPushX[rt] === w.thingPushX[rt] && 0.8 > bs) { bs = 0.8; best = MOM.PUSH; bp = j; }
+    if (canMove && (s.flags[j] & LIFE_FLAG.RIDE) !== 0 && w.moo[j] < 0 && (s.flags[j] & HELD_BITS) === 0 && dmm(s, i, j) < 3300) {
+      const rt = w.rTh[j];
+      if (rt >= 0 && w.tM[rt] === MECH.swing && w.tPX[rt] === w.tPX[rt] && 0.8 > bs) { bs = 0.8; best = MOM.PUSH; bp = j; }
       continue;
     }
     if (!isFree(w, s, j, false)) continue;
-    const d = dmm(s, i, j) * 0.001, p = pairIdx(i, j), lvl = w.pairLevel[p], cool = tb < w.pairCool[p];
-    if (d < 2.5 && idle(w, j) && w.kind[j] !== 2) { nIdle++; if (tb - w.lastJoyT[j] < 8) happy = true; }
-    if (w.kind[j] === 2) continue;
+    const d = dmm(s, i, j) * 0.001, p = pairIdx(i, j), lvl = w.pL[p], cool = tb < w.pCo[p];
+    if (d < 2.5 && idle(w, j) && w.ki[j] !== 2) { nIdle++; if (tb - w.lJT[j] < 8) happy = true; }
+    if (w.ki[j] === 2) continue;
     let sc = 0, k = 0;
     // S01 greet: another whole within 1.6 m (+0.5 m for a shy newcomer), not greeted this visit
     // (my reading: in the first 60 s of a visit the party says hello before anything else, so every pair greets; a pair farther than 1.6 m
     // walks over first, one mover at a time)
-    const early = tb - w.addT[i] < 60 && tb - w.addT[j] < 60 ? 1 : 0;
-    if (whole && w.kind[j] === 0 && (w.pairGreet[p] & PB.GREET) === 0 && d < 1.6 + (tb < w.shyUntil[i] || tb < w.shyUntil[j] ? 0.5 : 0)) { sc = early ? 1.15 : 0.85; k = MOM.GREET; }
-    else if (whole && canMove && w.kind[j] === 0 && (w.pairGreet[p] & PB.GREET) === 0 && d < 1.2 + 1.0 * w.traits[tr + TRAIT.curious] + 2.6 && idle(w, j) && tb >= w.shyUntil[i]) { sc = early ? 1.1 : 0.6; k = MOM.GREET; }
-    if (!cool && idle(w, i) && idle(w, j)) {
+    const early = tb - w.aT[i] < 60 && tb - w.aT[j] < 60 ? 1 : 0;
+    const ungreeted = whole && w.ki[j] === 0 && (w.pG[p] & PB.GREET) === 0;
+    // the friend wish (QUESTS 8): the wisher goes to greet the squishy it wished to see, from anywhere in the place; when this pair has
+    // greeted already this visit, that greet comes once more (the grant greet: no friendship points, SOCIAL thing = -2 for the host)
+    const wished = whole && w.ki[j] === 0 && w.wK[i] === WISH_FRIEND && w.wT[i] === w.species[j];
+    if (wished && (canMove || d < 1.6)) { sc = 1.2; k = MOM.GREET; }
+    else if (ungreeted && d < 1.6 + (tb < w.sU[i] || tb < w.sU[j] ? 0.5 : 0)) { sc = early ? 1.15 : 0.85; k = MOM.GREET; }
+    else if (ungreeted && canMove && d < 1.2 + 1.0 * w.tr[tr + TRAIT.curious] + 2.6 && idle(w, j) && tb >= w.sU[i]) { sc = early ? 1.1 : 0.6; k = MOM.GREET; }
+    // (my reading of S01: two wholes say hello before they play together, so an ungreeted pair starts no other pair moment; LF-09)
+    if (!cool && !ungreeted && idle(w, i) && idle(w, j)) {
       // S15 twin dance
-      if (whole && w.kind[j] === 0 && w.species[j] === w.species[i] && d < 2 && (w.pairGreet[p] & PB.MIRROR) === 0 && 0.9 > sc) { sc = 0.9; k = MOM.MIRROR; }
+      if (whole && w.ki[j] === 0 && w.species[j] === w.species[i] && d < 2 && (w.pG[p] & PB.MIRROR) === 0 && 0.9 > sc) { sc = 0.9; k = MOM.MIRROR; }
       // S02 chat
-      if (whole && w.kind[j] === 0 && lvl >= 1 && d < 1.5 && w.pairChats[p] < 3) { const v = 0.35 + 0.3 * w.traits[tr + TRAIT.chatty]; if (v > sc) { sc = v; k = MOM.CHAT; } }
+      if (whole && w.ki[j] === 0 && lvl >= 1 && d < 1.5 && w.pC[p] < 3) { const v = 0.35 + 0.3 * w.tr[tr + TRAIT.chatty]; if (v > sc) { sc = v; k = MOM.CHAT; } }
       // S03 boop
-      if (w.traits[tr + TRAIT.bouncy] > 0.6 && d < 1.2 && canMove) { const v = 0.35 + 0.3 * w.traits[tr + TRAIT.bouncy] * w.play[i]; if (v > sc) { sc = v; k = MOM.BOOP; } }
+      if (w.tr[tr + TRAIT.bouncy] > 0.6 && d < 1.2 && canMove) { const v = 0.35 + 0.3 * w.tr[tr + TRAIT.bouncy] * w.pl[i]; if (v > sc) { sc = v; k = MOM.BOOP; } }
       // S04 nuzzle
-      if (d < 1.0 + s.r[i] + s.r[j] - 0.9 + 0.9 && d < 1.0 + 0.2 && (lvl >= 2 || w.traits[tr + TRAIT.cuddly] >= 0.6 || w.traits[j * 5 + TRAIT.cuddly] >= 0.6) && canMove) {
-        const v = 0.4 + 0.3 * w.traits[tr + TRAIT.cuddly]; if (v > sc) { sc = v; k = MOM.NUZZLE; } }
+      if (d < 1.0 + s.r[i] + s.r[j] - 0.9 + 0.9 && d < 1.0 + 0.2 && (lvl >= 2 || w.tr[tr + TRAIT.cuddly] >= 0.6 || w.tr[j * 5 + TRAIT.cuddly] >= 0.6) && canMove) {
+        const v = 0.4 + 0.3 * w.tr[tr + TRAIT.cuddly]; if (v > sc) { sc = v; k = MOM.NUZZLE; } }
       // S17 duet / S18 twirl (once per visit)
-      if (whole && w.kind[j] === 0 && lvl >= 2 && (w.pairGreet[p] & PB.DUET) === 0 && d < 2.5 && 0.5 > sc) { sc = 0.5; k = MOM.DUET; }
-      if (whole && w.kind[j] === 0 && lvl >= 3 && (w.pairGreet[p] & PB.TWIRL) === 0 && d < 2 && 0.55 > sc) { sc = 0.55; k = MOM.TWIRL; }
-      // S05 copy: a curious one sees a hop or a thing use within 2 m
-      if (w.traits[tr + TRAIT.curious] > 0.5 && d < 2 && tb - w.lastHopT[j] < 1 && canMove) { const v = 0.45 + 0.3 * w.traits[tr + TRAIT.curious]; if (v > sc) { sc = v; k = MOM.COPY; } }
+      if (whole && w.ki[j] === 0 && lvl >= 2 && (w.pG[p] & PB.DUET) === 0 && d < 2.5 && 0.5 > sc) { sc = 0.5; k = MOM.DUET; }
+      if (whole && w.ki[j] === 0 && lvl >= 3 && (w.pG[p] & PB.TWIRL) === 0 && d < 2 && 0.55 > sc) { sc = 0.55; k = MOM.TWIRL; }
+      // S05 copy: a curious one sees a hop within 2 m; with a third idle whole near a leader with bouncy >= 0.6, a little parade (in a place)
+      if (w.tr[tr + TRAIT.curious] > 0.5 && d < 2 && tb - w.lHT[j] < 1 && canMove) {
+        const v = 0.45 + 0.3 * w.tr[tr + TRAIT.curious];
+        if (v > sc) { sc = v; k = MOM.COPY; }
+        if (!w.home && whole && w.ki[j] === 0 && w.tr[j * 5 + TRAIT.bouncy] >= 0.6 && paradeThird(w, s, i, j) >= 0 && v + 0.1 > sc) { sc = v + 0.1; k = MOM.PARADE; }
+      }
       // S12 pass the ball: two within 2.5 m of a ball, one bouncy > 0.5
-      if (canMove && (w.traits[tr + TRAIT.bouncy] > 0.5 || w.traits[j * 5 + TRAIT.bouncy] > 0.5) && w.play[i] > 0.4) {
+      if (canMove && (w.tr[tr + TRAIT.bouncy] > 0.5 || w.tr[j * 5 + TRAIT.bouncy] > 0.5) && w.pl[i] > 0.4 && w.uV[i] < USES_FULL && w.uV[j] < USES_FULL) {
         const ball = ballNear(w, s, i, j);
-        if (ball >= 0) { const v = 0.5 + 0.3 * w.play[i]; if (v > sc) { sc = v; k = MOM.PASS; } }
+        if (ball >= 0) { const v = 0.5 + 0.3 * w.pl[i]; if (v > sc) { sc = v; k = MOM.PASS; } }
       }
       // S13 peekaboo
-      if (canMove && whole && d < 3) { const pk = peekThing(w, s, i, j); if (pk >= 0) { const v = 0.4 + 0.3 * w.traits[tr + TRAIT.curious]; if (v > sc) { sc = v; k = MOM.PEEK; } } }
+      if (canMove && whole && d < 3) { const pk = peekThing(w, s, i, j); if (pk >= 0) { const v = 0.4 + 0.3 * w.tr[tr + TRAIT.curious]; if (v > sc) { sc = v; k = MOM.PEEK; } } }
     }
     // S09 comfort (B17): a Met-or-closer friend within 2.5 m chilly, soaked or just huffed; cuddly > 0.4
-    if (whole && lvl >= 1 && d < 2.5 && w.traits[tr + TRAIT.cuddly] > 0.4 && tb >= w.cool[i * 26 + BEH.COMFORT] && canMove &&
-      (w.looks[j * 6] > 0.5 || w.looks[j * 6 + 2] > 0.5 || tb - w.huffT[j] < 5) && 0.85 > sc) { sc = 0.85; k = MOM.COMFORT; }
+    if (whole && lvl >= 1 && d < 2.5 && w.tr[tr + TRAIT.cuddly] > 0.4 && tb >= w.coo[i * 26 + BEH.COMFORT] && canMove &&
+      (w.lo[j * 6] > 0.5 || w.lo[j * 6 + 2] > 0.5 || tb - w.hT[j] < 5) && 0.85 > sc) { sc = 0.85; k = MOM.COMFORT; }
     if (k !== 0 && sc > bs) { bs = sc; best = k; bp = j; }
   }
   // S06 sing together: a tune plays (Music Box, the kettle) and 2+ idle within 2.5 m of it, or 2 chatty friends, once per 2 min per place
   if (tb - w.f[F.SONG] >= 120 && idle(w, i) && nIdle >= 1) {
     let v = 0;
     if (s.musicBoxOn && tuneNear(w, s, i)) v = 0.8;
-    else if (w.traits[tr + TRAIT.chatty] > 0.6 && friendChattyNear(w, s, i)) v = 0.45;
+    else if (w.tr[tr + TRAIT.chatty] > 0.6 && friendChattyNear(w, s, i)) v = 0.45;
     if (v > bs) { bs = v; best = MOM.SING; bp = -1; }
   }
   // S07 snuggle: 3 or more idle (not napping) within 2.5 m, any one of them happy
-  if (canMove && nIdle >= 2 && happy && idle(w, i) && 0.55 > bs && tb >= w.cool[i * 26 + BEH.MOMENT]) { bs = 0.55; best = MOM.SNUGGLE; bp = -1; }
+  if (canMove && nIdle >= 2 && happy && idle(w, i) && 0.55 > bs && tb >= w.coo[i * 26 + BEH.MOMENT]) { bs = 0.55; best = MOM.SNUGGLE; bp = -1; }
   w.f[F.A] = bs; w.f[F.B] = bp;
   return best;
 }
 
+/** Another idle, free whole within 2.5 m of the leader j (not i), or -1: a parade needs 3 or more (S05). */
+function paradeThird(w: LifeWorld, s: LifeSnapshot, i: number, j: number): number {
+  for (let k = 0; k < s.n; k++) if (k !== i && k !== j && w.ki[k] === 0 && isFree(w, s, k, false) && idle(w, k) && dmm(s, j, k) < 2500) return k;
+  return -1;
+}
 function ballNear(w: LifeWorld, s: LifeSnapshot, i: number, j: number): number {
-  for (let k = 0; k < w.nThingDefs; k++) {
-    if (w.thingMech[k] !== MECH.ball) continue;
-    const r = w.rowOfLocal[k];
+  for (let k = 0; k < w.nTD; k++) {
+    if (w.tM[k] !== MECH.ball) continue;
+    const r = w.rOL[k];
     if (r < 0) continue;
     const bx = s.thingX[r], bz = s.thingZ[r];
     const di = Math.sqrt((s.x[i] - bx) * (s.x[i] - bx) + (s.z[i] - bz) * (s.z[i] - bz)), dj = Math.sqrt((s.x[j] - bx) * (s.x[j] - bx) + (s.z[j] - bz) * (s.z[j] - bz));
@@ -177,29 +198,29 @@ function ballNear(w: LifeWorld, s: LifeSnapshot, i: number, j: number): number {
   return -1;
 }
 function peekThing(w: LifeWorld, s: LifeSnapshot, i: number, j: number): number {
-  for (let k = 0; k < w.nThingDefs; k++) {
-    if (!(w.thingPeek[k * 4] === w.thingPeek[k * 4])) continue;
-    if (w.home && w.rowOfLocal[k] < 0) continue;
-    const tx = w.thingX[k], tz = w.thingZ[k];
+  for (let k = 0; k < w.nTD; k++) {
+    if (!(w.tP[k * 4] === w.tP[k * 4])) continue;
+    if (w.home && w.rOL[k] < 0) continue;
+    const tx = w.tX[k], tz = w.tZ[k];
     const di = Math.sqrt((s.x[i] - tx) * (s.x[i] - tx) + (s.z[i] - tz) * (s.z[i] - tz)), dj = Math.sqrt((s.x[j] - tx) * (s.x[j] - tx) + (s.z[j] - tz) * (s.z[j] - tz));
     if (di < 3 && dj < 3) return k;
   }
   return -1;
 }
 export function tuneThing(w: LifeWorld, s: LifeSnapshot): number {
-  for (let k = 0; k < w.nThingDefs; k++) if (w.thingSwitch[k] === 3 && (!w.home || w.rowOfLocal[k] >= 0)) return k;
+  for (let k = 0; k < w.nTD; k++) if (w.tSw[k] === 3 && (!w.home || w.rOL[k] >= 0)) return k;
   return -1;
 }
 function tuneNear(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
   const k = tuneThing(w, s);
   if (k < 0) return w.home; // Home: the Music Box is the tune wherever it stands in view
-  const r = w.rowOfLocal[k], tx = r >= 0 ? s.thingX[r] : w.thingX[k], tz = r >= 0 ? s.thingZ[r] : w.thingZ[k];
+  const r = w.rOL[k], tx = r >= 0 ? s.thingX[r] : w.tX[k], tz = r >= 0 ? s.thingZ[r] : w.tZ[k];
   return (s.x[i] - tx) * (s.x[i] - tx) + (s.z[i] - tz) * (s.z[i] - tz) < 2.5 * 2.5 + (w.home ? 4 : 0);
 }
 function friendChattyNear(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
   for (let j = 0; j < s.n; j++) {
-    if (j === i || !w.active[j] || w.kind[j] !== 0) continue;
-    if (w.pairLevel[pairIdx(i, j)] >= 2 && w.traits[j * 5 + TRAIT.chatty] > 0.6 && dmm(s, i, j) < 2500 && idle(w, j)) return true;
+    if (j === i || !w.ac[j] || w.ki[j] !== 0) continue;
+    if (w.pL[pairIdx(i, j)] >= 2 && w.tr[j * 5 + TRAIT.chatty] > 0.6 && dmm(s, i, j) < 2500 && idle(w, j)) return true;
   }
   return false;
 }
@@ -214,26 +235,33 @@ export function beginPicked(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev:
     if (m < 0) return false;
     const maxN = kind === MOM.SING ? 6 : 4;
     for (let j = 0; j < s.n && w.mN[m] < maxN; j++) {
-      if (j === i || !w.active[j] || w.kind[j] === 2 || !isFree(w, s, j, false) || !idle(w, j)) continue;
+      if (j === i || !w.ac[j] || w.ki[j] === 2 || !isFree(w, s, j, false) || !idle(w, j)) continue;
       if (dmm(s, i, j) < (kind === MOM.SING && w.home ? 4500 : 2500)) addMember(w, out, m, j);
     }
     if (w.mN[m] < (kind === MOM.SNUGGLE ? 3 : 2)) { endMoment(w, s, out, ev, m, false); return false; }
-    if (kind === MOM.SING) { w.f[F.SONG] = tb; w.mThing[m] = tuneThing(w, s); }
+    if (kind === MOM.SING) { w.f[F.SONG] = tb; w.mTh[m] = tuneThing(w, s); }
     return true;
   }
   if (p < 0) return false;
-  if (kind === MOM.PUSH) { m = startMoment(w, s, out, kind, i, p, -1); if (m >= 0) { w.mThing[m] = w.rideThing[p]; w.mRide[m] = 1; } return m >= 0; }
+  if (kind === MOM.PARADE) { // the leader first (member 0), then the curious one, then up to two more idle wholes near the leader
+    m = startMoment(w, s, out, kind, p, i, paradeThird(w, s, i, p));
+    if (m < 0) return false;
+    const q = paradeThird(w, s, i, p);
+    if (q >= 0) addMember(w, out, m, q);
+    return true;
+  }
+  if (kind === MOM.PUSH) { m = startMoment(w, s, out, kind, i, p, -1); if (m >= 0) { w.mTh[m] = w.rTh[p]; w.mR[m] = 1; } return m >= 0; }
   m = startMoment(w, s, out, kind, i, p, -1);
   if (m < 0) return false;
-  if (kind === MOM.PASS) w.mThing[m] = ballNear(w, s, i, p);
-  if (kind === MOM.PEEK) w.mThing[m] = peekThing(w, s, i, p);
+  if (kind === MOM.PASS) w.mTh[m] = ballNear(w, s, i, p);
+  if (kind === MOM.PEEK) w.mTh[m] = peekThing(w, s, i, p);
   const pi = pairIdx(i, p);
-  if (kind === MOM.GREET) w.pairGreet[pi] |= PB.GREET;
-  if (kind === MOM.MIRROR) w.pairGreet[pi] |= PB.MIRROR;
-  if (kind === MOM.DUET) w.pairGreet[pi] |= PB.DUET;
-  if (kind === MOM.TWIRL) w.pairGreet[pi] |= PB.TWIRL;
-  if (kind === MOM.CHAT) w.pairChats[pi]++;
-  if (kind === MOM.COMFORT) w.cool[i * 26 + BEH.COMFORT] = tb + 30;
+  if (kind === MOM.GREET) { if ((w.pG[pi] & PB.GREET) !== 0) w.mSo[m] = 2; else w.pG[pi] |= PB.GREET; } // mSoft 2: the grant greet
+  if (kind === MOM.MIRROR) w.pG[pi] |= PB.MIRROR;
+  if (kind === MOM.DUET) w.pG[pi] |= PB.DUET;
+  if (kind === MOM.TWIRL) w.pG[pi] |= PB.TWIRL;
+  if (kind === MOM.CHAT) w.pC[pi]++;
+  if (kind === MOM.COMFORT) w.coo[i * 26 + BEH.COMFORT] = tb + 30;
   return true;
 }
 
@@ -243,155 +271,155 @@ function face(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, j: num
   w.f[F.X] = s.x[j]; w.f[F.Z] = s.z[j]; emitGaze(w, out, i, 1);
 }
 function leanTo(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, j: number, ampMilli: number): void {
-  const tb = w.f[F.NOW];
   const dx = s.x[j] - s.x[i], dz = s.z[j] - s.z[i], d = Math.sqrt(dx * dx + dz * dz) || 1;
   w.f[F.X2] = dx / d * ampMilli * 0.001; w.f[F.Z2] = dz / d * ampMilli * 0.001; w.f[F.A] = 0; w.f[F.B] = 0;
   emitPose(w, s, out, i, 0);
 }
 function sway(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, ampMilli: number, hzMilli: number, beat: number): void {
-  const tb = w.f[F.NOW];
-  w.f[F.X2] = 0; w.f[F.Z2] = 0; w.f[F.A] = ampMilli * 0.001; w.f[F.B] = hzMilli * 0.001;
+  noLean(w); w.f[F.A] = ampMilli * 0.001; w.f[F.B] = hzMilli * 0.001;
   emitPose(w, s, out, i, beat);
 }
 /** Put the approach point beside j (gap mm between the bodies) on the line from j to i into w.f[F.X], w.f[F.Z]. At Home it lies on the
  *  segment between the two home slots (framed points, D-87); in a place, inside the bounds (else on the side toward the middle). */
 function besides(w: LifeWorld, s: LifeSnapshot, i: number, j: number, gapMm: number): void {
   const r = s.r[i] + s.r[j] + gapMm * 0.001;
-  if (w.home && w.homeX[i] === w.homeX[i] && w.homeX[j] === w.homeX[j]) {
-    const dx = w.homeX[i] - w.homeX[j], dz = w.homeZ[i] - w.homeZ[j], d = Math.sqrt(dx * dx + dz * dz);
-    if (d <= r || d < 1e-6) { w.f[F.X] = w.homeX[i]; w.f[F.Z] = w.homeZ[i]; return; }
-    w.f[F.X] = w.homeX[j] + dx / d * r; w.f[F.Z] = w.homeZ[j] + dz / d * r;
+  if (w.home && w.hX[i] === w.hX[i] && w.hX[j] === w.hX[j]) {
+    const dx = w.hX[i] - w.hX[j], dz = w.hZ[i] - w.hZ[j], d = Math.sqrt(dx * dx + dz * dz);
+    if (d <= r || d < 1e-6) { w.f[F.X] = w.hX[i]; w.f[F.Z] = w.hZ[i]; return; }
+    w.f[F.X] = w.hX[j] + dx / d * r; w.f[F.Z] = w.hZ[j] + dz / d * r;
     return;
   }
   let dx = s.x[i] - s.x[j], dz = s.z[i] - s.z[j], d = Math.sqrt(dx * dx + dz * dz) || 1;
   w.f[F.X] = s.x[j] + dx / d * r; w.f[F.Z] = s.z[j] + dz / d * r;
-  w.f[F.PX] = w.f[F.X]; w.f[F.PZ] = w.f[F.Z];
+  qT(w);
   if (!inBounds(w, 0)) {
     dx = w.bx - s.x[j]; dz = w.bz - s.z[j]; d = Math.sqrt(dx * dx + dz * dz) || 1;
     w.f[F.X] = s.x[j] + dx / d * r; w.f[F.Z] = s.z[j] + dz / d * r;
   }
 }
 function asleepUnitsMilli(w: LifeWorld, s: LifeSnapshot, j: number): number {
-  return (s.flags[j] & LIFE_FLAG.ASLEEP) !== 0 ? (w.kind[j] === 0 ? 970 : 190) : 0;
+  return (s.flags[j] & LIFE_FLAG.ASLEEP) !== 0 ? (w.ki[j] === 0 ? 970 : 190) : 0;
 }
 
 /** The ride allowance of moment m's riders (D-85: their units are added to unitCap while it runs), x 1000. */
 function rideAllowance(w: LifeWorld, s: LifeSnapshot, m: number): number {
   let a = 0;
-  for (let k = 0; k < w.mN[m]; k++) { const j = mem(w, m, k); if (j >= 0 && (s.flags[j] & LIFE_FLAG.RIDE) !== 0) a += w.kind[j] === 0 ? 1000 : 220; }
+  for (let k = 0; k < w.mN[m]; k++) { const j = mem(w, m, k); if (j >= 0 && (s.flags[j] & LIFE_FLAG.RIDE) !== 0) a += w.ki[j] === 0 ? 1000 : 220; }
   return a;
 }
 
 /** Advance moment m (called on its first member's think). Moves one character at a time. */
 export function updateMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, m: number): void {
   const tb = w.f[F.NOW];
-  const kind = w.mKind[m], a = mem(w, m, 0), b = w.mN[m] > 1 ? mem(w, m, 1) : -1, n = w.mN[m];
-  if (tb >= w.mEnd[m]) { endMoment(w, s, out, ev, m, w.mPhase[m] >= 1 && w.mStep[m] !== 1); return; }
+  const kind = w.mK[m], a = mem(w, m, 0), b = w.mN[m] > 1 ? mem(w, m, 1) : -1, n = w.mN[m];
+  if (tb >= w.mE[m]) { endMoment(w, s, out, ev, m, w.mP[m] >= 1 && w.mS[m] !== 1); return; }
   // a traveller (one mover at a time) keeps checking its arrival
-  if (w.mStep[m] === 1) {
-    const j = mem(w, m, w.mTurn[m]);
-    if (j >= 0) { const r = travelStep(w, s, out, j, contactMm(w, s, m, j)); if (r !== 0) { stopMove(w, out, j); w.mStep[m] = 2; w.mNext[m] = tb; } }
-    if (w.mStep[m] === 1) return;
+  if (w.mS[m] === 1) {
+    const j = mem(w, m, w.mT[m]);
+    if (j >= 0) { const r = travelStep(w, s, out, j, contactMm(w, s, m, j)); if (r !== 0) { stopMove(w, out, j); w.mS[m] = 2; w.mNe[m] = tb; } }
+    if (w.mS[m] === 1) return;
   }
-  if (tb < w.mNext[m]) return;
+  if (tb < w.mNe[m]) return;
   switch (kind) {
     case MOM.GREET: {
-      if (w.mPhase[m] === 0 && w.mStep[m] === 0 && dmm(s, a, b) > 1650) {
+      if (w.mP[m] === 0 && w.mS[m] === 0 && dmm(s, a, b) > 1650) {
         besides(w, s, a, b, 300);
-        w.mTurn[m] = 0; w.mEnd[m] = tb + 15;
-        if (travelTo(w, s, out, a, 0, 0)) { w.mStep[m] = 1; return; }
-        endMoment(w, s, out, ev, m, false); return;
+        w.mT[m] = 0;
+        if (travelTo(w, s, out, a, 0, 0)) { w.mS[m] = 1; w.mE[m] = tb + 15; return; }
+        // no mover token now (one mover at a time): wait for it a little, still and reserved, then give up
+        if (tb - w.mT0[m] > 6) endMoment(w, s, out, ev, m, false); else w.mNe[m] = tb + 0.3;
+        return;
       }
-      if (w.mPhase[m] === 0) {
+      if (w.mP[m] === 0) {
         face(w, s, out, a, b); face(w, s, out, b, a);
-        emitEmote(w, s, out, a, EMOTE.hello, STYLE.SAY, w.isNew[a] || w.isNew[b] ? 1 : 2, 0, 0, 1);
-        emitEmote(w, s, out, b, EMOTE.hello, STYLE.SAY, w.isNew[a] || w.isNew[b] ? 1 : 2, 0, 0, 1);
-        emitVoice(w, s, out, a, PHRASE.GREET, 0, -1, 0, 2, 0);
+        emitEmote(w, s, out, a, EMOTE.hello, STYLE.SAY, w.iN[a] || w.iN[b] ? 1 : 2, 0, 0, 1);
+        emitEmote(w, s, out, b, EMOTE.hello, STYLE.SAY, w.iN[a] || w.iN[b] ? 1 : 2, 0, 0, 1);
+        voice(w, s, out, a, PHRASE.GREET, 0, 2);
         const call = w.f[F.T];
         rnd(w, a);
         emitVoice(w, s, out, b, PHRASE.ANSWER, ((call + 0.35 + 0.35 * w.f[F.G]) * 1000) | 0, a, rnd(w, b) & 1, 2, 0);
         // one hello hop toward it (or a lean)
         const dx = s.x[b] - s.x[a], dz = s.z[b] - s.z[a], d = Math.sqrt(dx * dx + dz * dz) || 1;
         w.f[F.X2] = dx / d; w.f[F.Z2] = dz / d;
-        if (gateStart(w, s, a, 0, 0) && emitHop(w, s, out, a, 0, 1000)) w.mStep[m] = 3; else { stopMove(w, out, a); leanTo(w, s, out, a, b, 60); }
-        w.mPhase[m] = 1; w.mEnd[m] = tb + 2.5; w.mNext[m] = tb + 0.8;
-      } else if (w.mStep[m] === 3) { stopMove(w, out, a); w.mStep[m] = 0; }
+        if (gateStart(w, s, a, 0, 0) && emitHop(w, s, out, a, 0, 1000)) w.mS[m] = 3; else { stopMove(w, out, a); leanTo(w, s, out, a, b, 60); }
+        w.mP[m] = 1; w.mE[m] = tb + 2.5; w.mNe[m] = tb + 0.8;
+      } else if (w.mS[m] === 3) { stopMove(w, out, a); w.mS[m] = 0; }
       return;
     }
     case MOM.CHAT: {
-      if (w.mPhase[m] === 0) {
+      if (w.mP[m] === 0) {
         leanTo(w, s, out, a, b, 50); leanTo(w, s, out, b, a, 50); face(w, s, out, a, b); face(w, s, out, b, a);
-        emitEmote(w, s, out, a, EMOTE.hello, STYLE.SAY, 2, 0, 0, 0);
+        say(w, s, out, a, EMOTE.hello, 2, 0);
         const turns = 2 + (rnd(w, a) & 1);
         let at = 0;
         for (let k = 0; k < turns; k++) {
           emitVoice(w, s, out, k & 1 ? b : a, PHRASE.CHAT, (at * 1000) | 0, k & 1 ? a : b, rnd(w, a) & 1, 2, 0);
           at += w.f[F.T] + 0.45;
         }
-        w.mPhase[m] = 1; w.mEnd[m] = tb + Math.max(3, Math.min(5, at + 0.5)); w.mNext[m] = w.mEnd[m];
+        w.mP[m] = 1; w.mE[m] = tb + Math.max(3, Math.min(5, at + 0.5)); w.mNe[m] = w.mE[m];
       }
       return;
     }
     case MOM.BOOP: {
-      if (w.mPhase[m] === 0) { // physics boop only where both bodies and their touching pair fit (D-85); else a soft boop
+      if (w.mP[m] === 0) { // physics boop only where both bodies and their touching pair fit (D-85); else a soft boop
         const extra = asleepUnitsMilli(w, s, b) + 250;
-        w.mSoft[m] = gateFits(w, s, a, extra, 0) ? 0 : 1;
+        w.mSo[m] = gateFits(w, s, a, extra, 0) ? 0 : 1;
         face(w, s, out, a, b);
-        besides(w, s, a, b, w.mSoft[m] ? 50 : 150);
+        besides(w, s, a, b, w.mSo[m] ? 50 : 150);
         if (!travelTo(w, s, out, a, 0, 0)) { endMoment(w, s, out, ev, m, false); return; }
-        w.mPhase[m] = 1; w.mStep[m] = 1; w.mTurn[m] = 0; w.mEnd[m] = tb + 12; w.mNext[m] = tb + 0.1;
-        emitVoice(w, s, out, a, PHRASE.NOTICE, 0, -1, 0, 2, 0);
+        w.mP[m] = 1; w.mS[m] = 1; w.mT[m] = 0; w.mE[m] = tb + 12; w.mNe[m] = tb + 0.1;
+        voice(w, s, out, a, PHRASE.NOTICE, 0, 2);
         return;
       }
-      if (w.mPhase[m] === 1 && w.mStep[m] === 2) {
-        if (w.mSoft[m]) { // the last centimetres at 0.04 m/s: the target stays asleep
+      if (w.mP[m] === 1 && w.mS[m] === 2) {
+        if (w.mSo[m]) { // the last centimetres at 0.04 m/s: the target stays asleep
           besides(w, s, a, b, 0);
           travelTo(w, s, out, a, 1, 0);
-          w.mPhase[m] = 2; w.mStep[m] = 1; w.mNext[m] = tb + 0.1; w.mEnd[m] = tb + 4;
+          w.mP[m] = 2; w.mS[m] = 1; w.mNe[m] = tb + 0.1; w.mE[m] = tb + 4;
         } else {
           const dx = s.x[b] - s.x[a], dz = s.z[b] - s.z[a], d = Math.sqrt(dx * dx + dz * dz) || 1;
           w.f[F.X2] = dx / d; w.f[F.Z2] = dz / d;
           w.f[F.UNITS] += asleepUnitsMilli(w, s, b) * 0.001 + UNIT.pair;
           if (gateStart(w, s, a, 0, 0)) emitHop(w, s, out, a, 400, 1000);
-          w.mPhase[m] = 3; w.mNext[m] = tb + 0.5;
+          w.mP[m] = 3; w.mNe[m] = tb + 0.5;
         }
         return;
       }
-      if (w.mPhase[m] === 2 && w.mStep[m] === 2) w.mPhase[m] = 3;
-      if (w.mPhase[m] === 3) {
+      if (w.mP[m] === 2 && w.mS[m] === 2) w.mP[m] = 3;
+      if (w.mP[m] === 3) {
         stopMove(w, out, a);
         // the target's wobble: physics (it was hit) or a render wiggle of 0.05 R at 3 Hz (2 Hz Calm) for 0.6 s
-        if (w.mSoft[m]) sway(w, s, out, b, 50, s.calm || s.reducedMotion ? 2000 : 3000, 0);
-        emitEmote(w, s, out, b, EMOTE.giggle, STYLE.SAY, 2, 0, 0, 0);
-        emitVoice(w, s, out, a, PHRASE.NOTICE, 0, -1, 0, 2, 0);
-        emitVoice(w, s, out, b, PHRASE.GIGGLE, 300, -1, 0, 2, 0);
-        w.mPhase[m] = 4; w.mEnd[m] = tb + 0.7; w.mNext[m] = w.mEnd[m];
+        if (w.mSo[m]) sway(w, s, out, b, 50, s.calm || s.reducedMotion ? 2000 : 3000, 0);
+        say(w, s, out, b, EMOTE.giggle, 2, 0);
+        voice(w, s, out, a, PHRASE.NOTICE, 0, 2);
+        voice(w, s, out, b, PHRASE.GIGGLE, 300, 2);
+        w.mP[m] = 4; w.mE[m] = tb + 0.7; w.mNe[m] = w.mE[m];
       }
       return;
     }
     case MOM.NUZZLE: case MOM.COMFORT: {
-      if (w.mPhase[m] === 0) {
+      if (w.mP[m] === 0) {
         face(w, s, out, a, b); face(w, s, out, b, a);
         besides(w, s, a, b, 60);
         if (!travelTo(w, s, out, a, 0, 0)) { endMoment(w, s, out, ev, m, false); return; }
-        w.mPhase[m] = 1; w.mStep[m] = 1; w.mTurn[m] = 0; w.mEnd[m] = tb + 15; w.mNext[m] = tb + 0.1;
+        w.mP[m] = 1; w.mS[m] = 1; w.mT[m] = 0; w.mE[m] = tb + 15; w.mNe[m] = tb + 0.1;
         return;
       }
-      if (w.mPhase[m] === 1 && w.mStep[m] === 2) { besides(w, s, a, b, 0); travelTo(w, s, out, a, 1, 0); w.mPhase[m] = 2; w.mStep[m] = 1; w.mNext[m] = tb + 0.1; return; }
-      if (w.mPhase[m] === 2 && w.mStep[m] === 2) {
+      if (w.mP[m] === 1 && w.mS[m] === 2) { besides(w, s, a, b, 0); travelTo(w, s, out, a, 1, 0); w.mP[m] = 2; w.mS[m] = 1; w.mNe[m] = tb + 0.1; return; }
+      if (w.mP[m] === 2 && w.mS[m] === 2) {
         leanTo(w, s, out, a, b, 100); leanTo(w, s, out, b, a, 100);
-        const p = pairIdx(a, b), badge = w.pairBest[p] || w.pairLevel[p] >= 3 ? 1 : 0;
-        emitEmote(w, s, out, a, EMOTE.snug, STYLE.SAY, 2, badge, w.pairLevel[p] >= 2 ? 1 : 0, 0);
-        if (kind === MOM.NUZZLE) { emitVoice(w, s, out, a, PHRASE.PURR, 0, b, 0, 2, 0); emitVoice(w, s, out, b, PHRASE.PURR, 400, a, w.pairLevel[p] >= 2 ? 1 : 0, 2, 0); }
+        const p = pairIdx(a, b), badge = w.pB[p] || w.pL[p] >= 3 ? 1 : 0;
+        emitEmote(w, s, out, a, EMOTE.snug, STYLE.SAY, 2, badge, w.pL[p] >= 2 ? 1 : 0, 0);
+        if (kind === MOM.NUZZLE) { emitVoice(w, s, out, a, PHRASE.PURR, 0, b, 0, 2, 0); emitVoice(w, s, out, b, PHRASE.PURR, 400, a, w.pL[p] >= 2 ? 1 : 0, 2, 0); }
         else { emitVoice(w, s, out, a, PHRASE.COMFORT, 0, b, 0, 2, 0); emitVoice(w, s, out, b, PHRASE.HUM, 600, a, 1, 2, 0); }
-        w.mPhase[m] = 3; w.mEnd[m] = tb + (kind === MOM.COMFORT ? 3 : 3 + 3 * (rnd(w, a) * U16)); w.mNext[m] = tb + (kind === MOM.COMFORT ? 2.4 : 99);
+        w.mP[m] = 3; w.mE[m] = tb + (kind === MOM.COMFORT ? 3 : 3 + 3 * (rnd(w, a) * U16)); w.mNe[m] = tb + (kind === MOM.COMFORT ? 2.4 : 99);
         return;
       }
-      if (w.mPhase[m] === 3 && kind === MOM.COMFORT) { emitEmote(w, s, out, b, EMOTE.sparkle, STYLE.SAY, 2, 0, 1, 0); w.mNext[m] = 1e9; }
+      if (w.mP[m] === 3 && kind === MOM.COMFORT) { emitEmote(w, s, out, b, EMOTE.sparkle, STYLE.SAY, 2, 0, 1, 0); w.mNe[m] = 1e9; }
       return;
     }
     case MOM.MIRROR: case MOM.TWIRL: {
-      if (w.mPhase[m] === 0) {
+      if (w.mP[m] === 0) {
         emitEmote(w, s, out, a, kind === MOM.MIRROR ? EMOTE.sparkle : EMOTE.snug, STYLE.SAY, 2, kind === MOM.TWIRL ? 1 : 0, 1, 1);
         if (kind === MOM.MIRROR) emitEmote(w, s, out, b, EMOTE.sparkle, STYLE.SAY, 2, 0, 1, 1);
         emitVoice(w, s, out, a, kind === MOM.MIRROR ? PHRASE.HUM : PHRASE.DUET, 0, b, 0, 2, 0);
@@ -399,30 +427,30 @@ export function updateMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev
         // together only where moverCap is 2 or more and both fit; otherwise a mirrored render sway (it still counts)
         const two = MOVER_CAP[tierOf(s)] >= 2 && gateFits(w, s, a, asleepUnitsMilli(w, s, b), 0) && gateStart(w, s, a, asleepUnitsMilli(w, s, b), 0) && gateStart(w, s, b, 0, 0);
         if (two) {
-          w.f[F.X2] = 0; w.f[F.Z2] = 0; emitHop(w, s, out, a, 0, 800); emitHop(w, s, out, b, 0, 800); w.mSoft[m] = 0;
-        } else { stopMove(w, out, a); stopMove(w, out, b); sway(w, s, out, a, 40, 1500, 1); sway(w, s, out, b, 40, 1500, 1); w.mSoft[m] = 1; }
-        w.mPhase[m] = 1; w.mEnd[m] = tb + (kind === MOM.MIRROR ? 4 : 3); w.mNext[m] = tb + 1;
+          noLean(w); emitHop(w, s, out, a, 0, 800); emitHop(w, s, out, b, 0, 800); w.mSo[m] = 0;
+        } else { stopMove(w, out, a); stopMove(w, out, b); sway(w, s, out, a, 40, 1500, 1); sway(w, s, out, b, 40, 1500, 1); w.mSo[m] = 1; }
+        w.mP[m] = 1; w.mE[m] = tb + (kind === MOM.MIRROR ? 4 : 3); w.mNe[m] = tb + 1;
         return;
       }
-      if (!w.mSoft[m] && w.mPhase[m] < 3) { w.f[F.X2] = 0; w.f[F.Z2] = 0; emitHop(w, s, out, a, 0, 800); emitHop(w, s, out, b, 0, 800); w.mPhase[m]++; w.mNext[m] = tb + 1; }
-      else if (!w.mSoft[m]) { stopMove(w, out, a); stopMove(w, out, b); w.mNext[m] = 1e9; }
+      if (!w.mSo[m] && w.mP[m] < 3) { noLean(w); emitHop(w, s, out, a, 0, 800); emitHop(w, s, out, b, 0, 800); w.mP[m]++; w.mNe[m] = tb + 1; }
+      else if (!w.mSo[m]) { stopMove(w, out, a); stopMove(w, out, b); w.mNe[m] = 1e9; }
       return;
     }
     case MOM.DUET: {
-      if (w.mPhase[m] === 0) {
+      if (w.mP[m] === 0) {
         const wait = toNextBarMs(w) * 0.001;
         sway(w, s, out, a, 30, 1100, 1); sway(w, s, out, b, 30, 1100, 1);
-        emitEmote(w, s, out, a, EMOTE.snug, STYLE.SAY, 2, w.pairBest[pairIdx(a, b)], 1, 1);
+        emitEmote(w, s, out, a, EMOTE.snug, STYLE.SAY, 2, w.pB[pairIdx(a, b)], 1, 1);
         emitVoice(w, s, out, a, PHRASE.DUET, toNextBarMs(w), b, 0, 2, 0);
         emitVoice(w, s, out, b, PHRASE.DUET, toNextBarMs(w), a, 1, 2, 0);
-        w.mPhase[m] = 1; w.mEnd[m] = tb + wait + 2 * BAR_S; w.mNext[m] = w.mEnd[m];
+        w.mP[m] = 1; w.mE[m] = tb + wait + 2 * BAR_S; w.mNe[m] = w.mE[m];
       }
       return;
     }
     case MOM.SING: {
-      if (w.mPhase[m] === 0) {
+      if (w.mP[m] === 0) {
         const waitMs = toNextBarMs(w), wait = waitMs * 0.001, voiced = s.phone ? 2 : 3;
-        emitEmote(w, s, out, a, EMOTE.note, STYLE.SAY, 2, 0, 0, 1);
+        say(w, s, out, a, EMOTE.note, 2, 1);
         for (let k = 0; k < n; k++) {
           const j = mem(w, m, k);
           sway(w, s, out, j, 30, 1100, 1);
@@ -431,163 +459,199 @@ export function updateMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev
             emitVoice(w, s, out, j, PHRASE.SING, waitMs + ((BAR_S * 1000) | 0), -1, k + 16, 2, 0);
           }
         }
-        w.mPhase[m] = 1; w.mEnd[m] = tb + wait + 2 * BAR_S; w.mNext[m] = w.mEnd[m];
+        w.mP[m] = 1; w.mE[m] = tb + wait + 2 * BAR_S; w.mNe[m] = w.mE[m];
       }
       return;
     }
     case MOM.SNUGGLE: {
       // gather into a row, one mover at a time (each a glide to beside the one before, then a contact approach at 0.04 m/s)
-      if (w.mPhase[m] === 0) { emitEmote(w, s, out, a, EMOTE.snug, STYLE.SAY, 2, 0, 0, 1); w.mPhase[m] = 1; w.mTurn[m] = 1; w.mStep[m] = 0; w.mEnd[m] = tb + 40; }
-      if (w.mPhase[m] === 1) {
-        const k = w.mTurn[m];
+      if (w.mP[m] === 0) { say(w, s, out, a, EMOTE.snug, 2, 1); w.mP[m] = 1; w.mT[m] = 1; w.mS[m] = 0; w.mE[m] = tb + 40; }
+      if (w.mP[m] === 1) {
+        const k = w.mT[m];
         if (k >= n) { // the row formed: lean in contact 6 s (render)
           for (let q = 0; q < n; q++) { const j = mem(w, m, q), o = mem(w, m, q > 0 ? q - 1 : 1); if (o >= 0) leanTo(w, s, out, j, o, 60); }
-          emitVoice(w, s, out, a, PHRASE.HUM, 0, -1, 0, 2, 0);
-          w.mPhase[m] = 2; w.mEnd[m] = tb + 8; w.mNext[m] = 1e9;
+          voice(w, s, out, a, PHRASE.HUM, 0, 2);
+          w.mP[m] = 2; w.mE[m] = tb + 8; w.mNe[m] = 1e9;
           return;
         }
         const j = mem(w, m, k), prev = mem(w, m, k - 1);
-        if (w.mStep[m] === 0) {
+        if (w.mS[m] === 0) {
           // beside the previous one along x (the row runs across the view)
           const side = k & 1 ? 1 : -1, r = s.r[j] + s.r[prev] + 0.06;
           w.f[F.X] = s.x[prev] + side * r; w.f[F.Z] = s.z[prev];
-          w.f[F.PX] = w.f[F.X]; w.f[F.PZ] = w.f[F.Z];
+          qT(w);
           if (!w.home && !inBounds(w, shrinkMm(s, j))) { w.f[F.X] = s.x[prev] - side * r; w.f[F.PX] = w.f[F.X]; }
           if (!w.home && !inBounds(w, shrinkMm(s, j))) { // neither side fits: toward the middle
             const mx = w.bx - s.x[prev], mz = w.bz - s.z[prev], md = Math.sqrt(mx * mx + mz * mz) || 1;
             w.f[F.X] = s.x[prev] + mx / md * r; w.f[F.Z] = s.z[prev] + mz / md * r;
           }
-          if (w.home) { w.f[F.X] = s.x[j]; w.f[F.Z] = s.z[j]; } // Home: everyone already sits at a framed spot; the row leans in place
-          if (travelTo(w, s, out, j, 0, 0)) { w.mStep[m] = 1; w.mNext[m] = tb + 0.1; } else w.mNext[m] = tb + 0.5;
+          if (w.home) { w.mS[m] = 2; return; } // Home: everyone already sits at a framed spot; the row leans in place (no scoot, D-87)
+          if (travelTo(w, s, out, j, 0, 0)) { w.mS[m] = 1; w.mNe[m] = tb + 0.1; } else w.mNe[m] = tb + 0.5;
           return;
         }
-        if (w.mStep[m] === 2) { w.mTurn[m] = k + 1; w.mStep[m] = 0; w.mNext[m] = tb + 0.1; }
+        if (w.mS[m] === 2) { w.mT[m] = k + 1; w.mS[m] = 0; w.mNe[m] = tb + 0.1; }
       }
       return;
     }
     case MOM.COPY: {
       // the copier repeats the leader's hop 0.6 s later, 3 copies, one mover at a time
-      if (w.mPhase[m] === 0) { emitEmote(w, s, out, a, EMOTE.star, STYLE.SAY, 2, 0, 0, 1); w.mPhase[m] = 1; w.mCount[m] = 0; }
-      const c = w.mCount[m];
-      if (c >= 6) { w.mEnd[m] = tb; w.mPhase[m] = 2; return; }
+      if (w.mP[m] === 0) { say(w, s, out, a, EMOTE.star, 2, 1); w.mP[m] = 1; w.mC[m] = 0; }
+      const c = w.mC[m];
+      if (c >= 6) { w.mE[m] = tb; w.mP[m] = 2; return; }
       const j = c & 1 ? a : b; // b leads (it hopped first), a copies
       stopMove(w, out, c & 1 ? b : a);
-      w.f[F.X2] = 0; w.f[F.Z2] = 0;
+      noLean(w);
       if (gateStart(w, s, j, 0, 0)) { emitHop(w, s, out, j, 0, 700); emitVoice(w, s, out, j, PHRASE.NOTICE, 0, -1, c & 1, 2, 0); }
-      w.mCount[m] = c + 1; w.mNext[m] = tb + (c & 1 ? 1.0 : 0.6); w.mEnd[m] = tb + 4;
+      w.mC[m] = c + 1; w.mNe[m] = tb + (c & 1 ? 1.0 : 0.6); w.mE[m] = tb + 4;
+      return;
+    }
+    case MOM.PARADE: {
+      // a little parade (S05), turn by turn: the leader glides about 1.2 m on, then each in turn glides up behind the one in front (0.7 m
+      // between centres, never overlapping), a chirp at each turn; two legs, the heading turning 60 degrees a leg; one mover at a time
+      if (w.mP[m] === 0) { say(w, s, out, a, EMOTE.star, 2, 1); w.mP[m] = 1; w.mT[m] = 0; w.mS[m] = 0; w.mC[m] = 0; w.mE[m] = tb + 45; }
+      if (w.mS[m] === 2) {
+        w.mS[m] = 0; w.mT[m]++;
+        if (w.mT[m] >= n) { w.mT[m] = 0; if (++w.mC[m] >= 2) { w.mE[m] = tb; return; } }
+      }
+      const t = w.mT[m], j = mem(w, m, t);
+      if (t === 0) {
+        // the leader's leg: from the last one in the line through the leader, turned 60 degrees a leg; the first free spot of 6 headings
+        const last = mem(w, m, n - 1);
+        let hx = s.x[a] - s.x[last], hz = s.z[a] - s.z[last], hl = Math.sqrt(hx * hx + hz * hz);
+        if (hl < 0.01) { hx = 1; hz = 0; hl = 1; }
+        let ok = false;
+        for (let q = 0; q < 24 && !ok; q++) { // 12 headings from the turned one (30 degrees apart), 1.2 m then 0.8 m
+          const ang = Math.atan2(hz, hx) + w.mC[m] * Math.PI / 3 + (q % 12) * Math.PI / 6, l = q < 12 ? 1.2 : 0.8;
+          w.f[F.X] = s.x[a] + Math.cos(ang) * l; w.f[F.Z] = s.z[a] + Math.sin(ang) * l;
+          qT(w);
+          ok = freeSpot(w, s, a);
+          for (let o = 0; o < s.n && ok; o++) if (o !== a && w.ac[o]) { const ox = s.x[o] - w.f[F.X], oz = s.z[o] - w.f[F.Z], rr = s.r[o] + s.r[a] + 0.1; if (ox * ox + oz * oz < rr * rr) ok = false; }
+        }
+        if (!ok) { if (w.mC[m] === 0) endMoment(w, s, out, ev, m, false); else w.mE[m] = tb; return; } // no room: a parade that never went is no parade
+      } else {
+        const fr = mem(w, m, t - 1), gap = s.r[fr] + s.r[j] + 0.1 > 0.7 ? s.r[fr] + s.r[j] + 0.1 : 0.7;
+        let dx = s.x[j] - s.x[fr], dz = s.z[j] - s.z[fr], dl = Math.sqrt(dx * dx + dz * dz);
+        if (dl < 0.01) { dx = -1; dz = 0; dl = 1; }
+        w.f[F.X] = s.x[fr] + dx / dl * gap; w.f[F.Z] = s.z[fr] + dz / dl * gap;
+        qT(w);
+        if (!inBounds(w, shrinkMm(s, j))) { w.mS[m] = 2; return; } // no room behind: it waits its turn where it is
+      }
+      w.mT[m] = t;
+      if (travelTo(w, s, out, j, 0, 0)) { w.mS[m] = 1; emitVoice(w, s, out, j, PHRASE.NOTICE, 0, -1, t & 1, 3, 0); }
+      w.mNe[m] = tb + 0.3;
       return;
     }
     case MOM.PASS: {
-      const k = w.mThing[m], row = k >= 0 ? w.rowOfLocal[k] : -1;
-      if (row < 0 || w.mCount[m] >= 3) { w.mEnd[m] = tb; if (w.mCount[m] >= 1) w.mPhase[m] = 1; return; }
-      const j = w.mCount[m] & 1 ? b : a, o = j === a ? b : a;
-      if (w.mStep[m] === 0) {
-        if (w.mCount[m] === 0) emitEmote(w, s, out, a, EMOTE.ball, STYLE.SAY, 2, 0, 0, 1);
-        const bx = s.thingX[row], bz = s.thingZ[row], br = w.thingS0[k];
+      const k = w.mTh[m], row = k >= 0 ? w.rOL[k] : -1;
+      if (row < 0 || w.mC[m] >= 3) { w.mE[m] = tb; if (w.mC[m] >= 1) w.mP[m] = 1; return; }
+      const j = w.mC[m] & 1 ? b : a, o = j === a ? b : a;
+      if (w.mS[m] === 0) {
+        if (w.mC[m] === 0) say(w, s, out, a, EMOTE.ball, 2, 1);
+        const bx = s.thingX[row], bz = s.thingZ[row], br = w.tS[k];
         // toward the partner; at Home along the segment from its home slot through the ball (framed points, D-87)
-        const fx = w.home && w.homeX[j] === w.homeX[j] ? bx + (bx - w.homeX[j]) : s.x[o], fz = w.home && w.homeX[j] === w.homeX[j] ? bz + (bz - w.homeZ[j]) : s.z[o];
+        const fx = w.home && w.hX[j] === w.hX[j] ? bx + (bx - w.hX[j]) : s.x[o], fz = w.home && w.hX[j] === w.hX[j] ? bz + (bz - w.hZ[j]) : s.z[o];
         const dx = fx - bx, dz = fz - bz, d = Math.sqrt(dx * dx + dz * dz) || 1;
         w.f[F.X] = bx - dx / d * (s.r[j] + br + 0.03); w.f[F.Z] = bz - dz / d * (s.r[j] + br + 0.03);
-        w.f[F.PX] = w.f[F.X]; w.f[F.PZ] = w.f[F.Z];
-        if (!w.home && !inBounds(w, 0)) { w.mCount[m] = 3; return; }
-        w.mTurn[m] = j === a ? 0 : 1;
-        if (travelTo(w, s, out, j, 0, 0)) { w.mStep[m] = 1; w.mNext[m] = tb + 0.1; w.mPhase[m] = 1; w.mEnd[m] = tb + 25; } else w.mNext[m] = tb + 0.5;
+        qT(w);
+        if (!w.home && !inBounds(w, 0)) { w.mC[m] = 3; return; }
+        w.mT[m] = j === a ? 0 : 1;
+        if (travelTo(w, s, out, j, 0, 0)) { w.mS[m] = 1; w.mNe[m] = tb + 0.1; w.mP[m] = 1; w.mE[m] = tb + 25; } else w.mNe[m] = tb + 0.5;
         return;
       }
-      if (w.mStep[m] === 2) {
+      if (w.mS[m] === 2) {
         const bx = s.thingX[row], bz = s.thingZ[row];
-        const fx = w.home && w.homeX[j] === w.homeX[j] ? bx + (bx - w.homeX[j]) : s.x[o], fz = w.home && w.homeX[j] === w.homeX[j] ? bz + (bz - w.homeZ[j]) : s.z[o];
+        const fx = w.home && w.hX[j] === w.hX[j] ? bx + (bx - w.hX[j]) : s.x[o], fz = w.home && w.hX[j] === w.hX[j] ? bz + (bz - w.hZ[j]) : s.z[o];
         const dx = fx - bx, dz = fz - bz, d = Math.sqrt(dx * dx + dz * dz) || 1;
         w.f[F.X2] = dx / d; w.f[F.Z2] = dz / d;
         if (gateStart(w, s, j, 0, 0) && !emitHop(w, s, out, j, 400, 1000)) {
           // a non-hopper glides the last centimetres into it (to the ball's centre: the far end of its framed segment at Home)
-          w.f[F.X] = bx - dx / d * (s.r[j] + w.thingS0[k] - 0.06); w.f[F.Z] = bz - dz / d * (s.r[j] + w.thingS0[k] - 0.06);
-          w.f[F.PX] = w.f[F.X]; w.f[F.PZ] = w.f[F.Z];
+          w.f[F.X] = bx - dx / d * (s.r[j] + w.tS[k] - 0.06); w.f[F.Z] = bz - dz / d * (s.r[j] + w.tS[k] - 0.06);
+          qT(w);
           if (w.home || inBounds(w, 0)) emitScoot(w, out, j, 300, 0);
         }
-        emitVoice(w, s, out, j, PHRASE.NOTICE, 0, -1, 0, 3, 0);
-        pushEvent(ev, LIFE_EV.USE, w.thingVerb[k], j, -1, 1, w.thingGlobal[k]);
-        w.mCount[m]++; w.mStep[m] = 3; w.mNext[m] = tb + 2.5;
+        voice(w, s, out, j, PHRASE.NOTICE, 0, 3);
+        pushEvent(ev, LIFE_EV.USE, w.tV[k], j, -1, 1, w.tG[k]);
+        if (w.uV[j] < 255) w.uV[j]++;
+        w.mC[m]++; w.mS[m] = 3; w.mNe[m] = tb + 2.5;
         return;
       }
-      if (w.mStep[m] === 3) { stopMove(w, out, j); w.mStep[m] = 0; }
+      if (w.mS[m] === 3) { stopMove(w, out, j); w.mS[m] = 0; }
       return;
     }
     case MOM.PEEK: {
-      const k = w.mThing[m];
-      if (k < 0) { w.mEnd[m] = tb; return; }
-      if (w.mPhase[m] === 0) { emitEmote(w, s, out, a, EMOTE.question, STYLE.SAY, 2, 0, 0, 1); w.mPhase[m] = 1; w.mTurn[m] = 0; w.mStep[m] = 0; w.mEnd[m] = tb + 40; }
-      if (w.mPhase[m] === 1) {
-        const t = w.mTurn[m];
-        if (t >= 2) { w.mPhase[m] = 2; w.mCount[m] = 0; w.mNext[m] = tb; w.mEnd[m] = tb + 4.2; emitVoice(w, s, out, a, PHRASE.NOTICE, 0, -1, 1, 2, 0); return; }
+      const k = w.mTh[m];
+      if (k < 0) { w.mE[m] = tb; return; }
+      if (w.mP[m] === 0) { say(w, s, out, a, EMOTE.question, 2, 1); w.mP[m] = 1; w.mT[m] = 0; w.mS[m] = 0; w.mE[m] = tb + 40; }
+      if (w.mP[m] === 1) {
+        const t = w.mT[m];
+        if (t >= 2) { w.mP[m] = 2; w.mC[m] = 0; w.mNe[m] = tb; w.mE[m] = tb + 4.2; emitVoice(w, s, out, a, PHRASE.NOTICE, 0, -1, 1, 2, 0); return; }
         const j = t === 0 ? a : b;
-        if (w.mStep[m] === 0) {
-          w.f[F.X] = w.thingPeek[k * 4 + t * 2]; w.f[F.Z] = w.thingPeek[k * 4 + t * 2 + 1];
-          if (travelTo(w, s, out, j, 0, 0)) { w.mStep[m] = 1; w.mNext[m] = tb + 0.1; } else w.mNext[m] = tb + 0.5;
+        if (w.mS[m] === 0) {
+          w.f[F.X] = w.tP[k * 4 + t * 2]; w.f[F.Z] = w.tP[k * 4 + t * 2 + 1];
+          if (travelTo(w, s, out, j, 0, 0)) { w.mS[m] = 1; w.mNe[m] = tb + 0.1; } else w.mNe[m] = tb + 0.5;
           return;
         }
-        if (w.mStep[m] === 2) { w.mTurn[m] = t + 1; w.mStep[m] = 0; w.mNext[m] = tb; }
+        if (w.mS[m] === 2) { w.mT[m] = t + 1; w.mS[m] = 0; w.mNe[m] = tb; }
         return;
       }
       // lean out and back, 2 or 3 times (render), then a sparkle and a giggle
-      const c = w.mCount[m];
-      if (c < 6) { const dir = c & 1 ? 0 : 80; w.f[F.X2] = dir * 0.001; w.f[F.Z2] = 0; w.f[F.A] = 0; w.f[F.B] = 0; emitPose(w, s, out, a, 0); w.f[F.X2] = -dir * 0.001; emitPose(w, s, out, b, 0); w.mCount[m] = c + 1; w.mNext[m] = tb + 0.6; }
-      else { emitEmote(w, s, out, b, EMOTE.sparkle, STYLE.SAY, 2, 0, 0, 0); emitVoice(w, s, out, b, PHRASE.GIGGLE, 0, -1, 0, 2, 0); w.mNext[m] = 1e9; }
+      const c = w.mC[m];
+      if (c < 6) { const dir = c & 1 ? 0 : 80; w.f[F.X2] = dir * 0.001; w.f[F.Z2] = 0; w.f[F.A] = 0; w.f[F.B] = 0; emitPose(w, s, out, a, 0); w.f[F.X2] = -dir * 0.001; emitPose(w, s, out, b, 0); w.mC[m] = c + 1; w.mNe[m] = tb + 0.6; }
+      else { say(w, s, out, b, EMOTE.sparkle, 2, 0); voice(w, s, out, b, PHRASE.GIGGLE, 0, 2); w.mNe[m] = 1e9; }
       return;
     }
     case MOM.TEETER: {
       // small hops in turn (both already awake on a moving prop: only a mover token, no body to wake)
-      if (w.mPhase[m] === 0) { emitEmote(w, s, out, a, EMOTE.swirl, STYLE.SAY, 2, 0, 0, 1); w.mPhase[m] = 1; w.mEnd[m] = tb + 6 + 6 * (rnd(w, a) * U16); w.mCount[m] = 0; }
-      const j = w.mCount[m] & 1 ? b : a;
+      if (w.mP[m] === 0) { say(w, s, out, a, EMOTE.swirl, 2, 1); w.mP[m] = 1; w.mE[m] = tb + 6 + 6 * (rnd(w, a) * U16); w.mC[m] = 0; }
+      const j = w.mC[m] & 1 ? b : a;
       stopMove(w, out, j === a ? b : a);
-      w.f[F.X2] = 0; w.f[F.Z2] = 0;
-      if (gateStart(w, s, j, 0, rideAllowance(w, s, m)) && emitHop(w, s, out, j, 0, 700)) emitVoice(w, s, out, j, PHRASE.GIGGLE, 0, -1, 0, 3, 0);
-      w.mCount[m]++; w.mNext[m] = tb + 1.1;
+      noLean(w);
+      if (gateStart(w, s, j, 0, rideAllowance(w, s, m)) && emitHop(w, s, out, j, 0, 700)) voice(w, s, out, j, PHRASE.GIGGLE, 0, 3);
+      w.mC[m]++; w.mNe[m] = tb + 1.1;
       return;
     }
     case MOM.PUSH: {
       // the pusher (a) walks to the swing's push spot (it wakes on the ride allowance) and pushes the seat 3 times
-      const k = w.mThing[m];
-      if (k < 0 || (s.flags[b] & LIFE_FLAG.RIDE) === 0) { w.mEnd[m] = tb; return; }
+      const k = w.mTh[m];
+      if (k < 0 || (s.flags[b] & LIFE_FLAG.RIDE) === 0) { w.mE[m] = tb; return; }
       { const al = rideAllowance(w, s, m) * 0.001; if (w.att.allowance !== al) w.att.allowance = al; }
-      if (w.mPhase[m] === 0) {
-        emitEmote(w, s, out, a, EMOTE.star, STYLE.SAY, 2, 0, 0, 1);
-        w.f[F.X] = w.thingPushX[k]; w.f[F.Z] = w.thingPushZ[k];
-        if (!travelTo(w, s, out, a, 0, rideAllowance(w, s, m))) { w.mNext[m] = tb + 0.5; if (tb - w.mT0[m] > 10) w.mEnd[m] = tb; return; }
-        w.mPhase[m] = 1; w.mStep[m] = 1; w.mTurn[m] = 0; w.mEnd[m] = tb + 30; w.mNext[m] = tb + 0.1;
+      if (w.mP[m] === 0) {
+        say(w, s, out, a, EMOTE.star, 2, 1);
+        w.f[F.X] = w.tPX[k]; w.f[F.Z] = w.tPZ[k];
+        if (!travelTo(w, s, out, a, 0, rideAllowance(w, s, m))) { w.mNe[m] = tb + 0.5; if (tb - w.mT0[m] > 10) w.mE[m] = tb; return; }
+        w.mP[m] = 1; w.mS[m] = 1; w.mT[m] = 0; w.mE[m] = tb + 30; w.mNe[m] = tb + 0.1;
         return;
       }
-      if (w.mStep[m] === 2) {
-        if (w.mCount[m] >= 3) { w.mEnd[m] = tb; return; }
+      if (w.mS[m] === 2) {
+        if (w.mC[m] >= 3) { w.mE[m] = tb; return; }
         // a push: glide 0.55 m toward the pivot as the seat comes back, then back to the spot
-        const px = w.thingPushX[k], pz = w.thingPushZ[k], dx = w.thingX[k] - px, dz = w.thingZ[k] - pz, d = Math.sqrt(dx * dx + dz * dz) || 1;
-        const out1 = (w.mCount[m] & 1) === 0 && w.mSoft[m] === 0;
+        const px = w.tPX[k], pz = w.tPZ[k], dx = w.tX[k] - px, dz = w.tZ[k] - pz, d = Math.sqrt(dx * dx + dz * dz) || 1;
+        const out1 = (w.mC[m] & 1) === 0 && w.mSo[m] === 0;
         w.f[F.X] = out1 ? px + dx / d * 0.55 : px; w.f[F.Z] = out1 ? pz + dz / d * 0.55 : pz;
         emitScoot(w, out, a, 350, 0);
-        if (out1) { emitVoice(w, s, out, b, PHRASE.COMFORT, 400, -1, 0, 3, 0); w.mSoft[m] = 1; }
-        else { w.mSoft[m] = 0; w.mCount[m]++; }
-        w.mNext[m] = tb + 1.2;
+        if (out1) { voice(w, s, out, b, PHRASE.COMFORT, 400, 3); w.mSo[m] = 1; }
+        else { w.mSo[m] = 0; w.mC[m]++; }
+        w.mNe[m] = tb + 1.2;
       }
       return;
     }
-    default: w.mEnd[m] = tb;
+    default: w.mE[m] = tb;
   }
 }
 
 function contactMm(w: LifeWorld, s: LifeSnapshot, m: number, j: number): number {
-  return w.mKind[m] === MOM.PUSH ? 80 : 60;
+  return w.mK[m] === MOM.PUSH ? 80 : 60;
 }
 
 /** S10 teeter: two characters the player set on the same seesaw (both RIDE) start it from either rider's think. */
 export function tryTeeter(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number): boolean {
-  const tb = w.f[F.NOW];
-  const k = w.rideThing[i];
-  if (k < 0 || w.thingMech[k] !== MECH.seesaw || w.moment[i] >= 0) return false;
+  const k = w.rTh[i];
+  if (k < 0 || w.tM[k] !== MECH.seesaw || w.moo[i] >= 0) return false;
   for (let j = 0; j < s.n; j++) {
-    if (j === i || !w.active[j] || w.moment[j] >= 0 || w.rideThing[j] !== k || (s.flags[j] & LIFE_FLAG.RIDE) === 0) continue;
+    if (j === i || !w.ac[j] || w.moo[j] >= 0 || w.rTh[j] !== k || (s.flags[j] & LIFE_FLAG.RIDE) === 0) continue;
     if ((s.flags[j] & HELD_BITS) !== 0) continue;
     const m = startMoment(w, s, out, MOM.TEETER, i, j, -1);
-    if (m >= 0) { w.mThing[m] = k; w.mRide[m] = 1; return true; }
+    if (m >= 0) { w.mTh[m] = k; w.mR[m] = 1; return true; }
   }
   return false;
 }

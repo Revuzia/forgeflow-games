@@ -186,17 +186,13 @@ const COLOR_STAGE = /* glsl */`
   float jBd = sin(vRest.y * 10.0 + 1.4 * whNoise3(vRest * 2.5 + uSeed * 9.0) + uSeed.y * 6.2832);
   diffuseColor.rgb = mix(diffuseColor.rgb, uPatA, smoothstep(0.15, 0.55, jBd) * uPatStrength);
 #endif
-  // rarity: Epic's two-tone gradient body (a second hue blooms toward the top). The diffuse mix alone barely shows on a translucent body
-  // (the transmission carries its colour) or on a frosted one (the glow does): jTwo also tints the absorption and adds a little light
-  jTwo = 0.7 * uTwoTone * smoothstep(-0.15, 0.85, vRest.y + 0.3 * whNoise3(vRest * 2.0 + uSeed * 5.0));
+  ${/* rarity: Epic's two-tone gradient body (a second hue blooms toward the top). The diffuse mix alone barely shows on a translucent body (the transmission carries its colour) or on a frosted one (the glow does): jTwo also tints the absorption and adds a little light */ ''}jTwo = 0.7 * uTwoTone * smoothstep(-0.15, 0.85, vRest.y + 0.3 * whNoise3(vRest * 2.0 + uSeed * 5.0));
   diffuseColor.rgb = mix(diffuseColor.rgb, uTone2Col, jTwo);
-  // merge ceremony: the parents' colours swirl together (lineage)
-  float jMixSw = smoothstep(-0.2, 0.6, sin(atan(vRest.z, vRest.x) * 2.0 + vRest.y * 6.0 + uTime * 0.9 + 1.3 * whNoise3(vRest * 2.5)));
+  ${/* merge ceremony: the parents' colours swirl together (lineage) */ ''}float jMixSw = smoothstep(-0.2, 0.6, sin(atan(vRest.z, vRest.x) * 2.0 + vRest.y * 6.0 + uTime * 0.9 + 1.3 * whNoise3(vRest * 2.5)));
   jMix = uMixAmt * jMixSw;
   diffuseColor.rgb = mix(diffuseColor.rgb, uMixCol, jMix);
 {
-  // strain < 1 = compressed edges; the dent depth term catches local presses (edge lengths barely change in a dent)
-  float jComp = max(clamp((1.0 - vStrain) * 5.0, 0.0, 1.0), smoothstep(0.0, 0.8, vDisp.x));
+  ${/* strain < 1 = compressed edges; the dent depth term catches local presses (edge lengths barely change in a dent) */ ''}float jComp = max(clamp((1.0 - vStrain) * 5.0, 0.0, 1.0), smoothstep(0.0, 0.8, vDisp.x));
   float jStr = max(clamp((vStrain - 1.0) * 4.0, 0.0, 1.0), 0.8 * smoothstep(0.1, 0.9, vDisp.y));
   jBlush = clamp((jComp + uCompress * 0.55) * uBlushAmt, 0.0, 1.0);
   jPale = clamp((jStr + uStretch * 0.5) * uBlushAmt * uPaleMul, 0.0, 1.0);
@@ -220,7 +216,8 @@ ${THREE.ShaderChunk.transmission_fragment
 
 // PLAYGROUND looks (the block gated on uLook, LIFE 3.1): toast turns the side facing the heat point golden brown at the same brightness, the
 // body's own glow too (a lavender marshmallow must read toasted, not pink; never burnt); wet darkens, saturates and shines; frost lays a pale
-// crystalline crust, strongest at the rim. Every look at 0 skips the block (RD-02: today's pixels).
+// crystalline crust, strongest at the rim. Every look at 0 skips the block (RD-02: today's pixels). Round 2: toast is golden on the heat side
+// (0.35..1.15 of the look by how squarely the skin faces the heat) with a few browner patches fixed to the skin (rest-space noise), never black.
 const EMISSIVE_STAGE = /* glsl */`
 {
   vec3 jV = normalize(cameraPosition - vWPos);
@@ -229,8 +226,9 @@ const EMISSIVE_STAGE = /* glsl */`
   float jFres = pow(1.0 - jNdv, 3.4);
   float jToast = 0.0;
   if (uLook.x + uLook.y + uLook.w > 0.0) {
-    float jTo = uLook.w * (uHeat.w > 0.5 ? 0.7 + 0.3 * smoothstep(-0.25, 0.85, dot(jN, normalize(uHeat.xyz - vWPos))) : 0.8);
-    totalDiffuse = mix(totalDiffuse, vec3(dot(totalDiffuse, vec3(0.2126, 0.7152, 0.0722))) * uToastCol * 1.35, jTo);
+    float jTo = min(1.0, uLook.w * (uHeat.w > 0.5 ? 0.35 + 0.8 * smoothstep(-0.2, 0.8, dot(jN, normalize(uHeat.xyz - vWPos))) : 0.8));
+    float jSpot = smoothstep(0.52, 0.78, whNoise3(vRest * 7.0)) * smoothstep(0.35, 0.9, jTo);
+    totalDiffuse = mix(totalDiffuse, vec3(dot(totalDiffuse, vec3(0.2126, 0.7152, 0.0722))) * uToastCol * (1.3 - 0.5 * jSpot), jTo);
     jToast = jTo;
     float jLu = dot(totalDiffuse, vec3(0.2126, 0.7152, 0.0722));
     totalDiffuse = max(mix(vec3(jLu), totalDiffuse, 1.0 + 0.35 * uLook.y) * (1.0 - 0.25 * uLook.y), 0.0);
@@ -251,61 +249,47 @@ const EMISSIVE_STAGE = /* glsl */`
   float jAlong = dot(jToC, jRd);
   vec3 jPerp = jToC - jRd * jAlong;
   float jHalo = exp(-dot(jPerp, jPerp) / (uCoreRadius * uCoreRadius)) * smoothstep(-0.1, 0.25, jAlong);
-  // soft knee above 0.45: a bright (high-tier, high-coreGlow, squeezed) core keeps rising but saturates in its own hue, never clips to white
-  float jC = jHalo * uCoreAmt;
+  ${/* soft knee above 0.45: a bright (high-tier, high-coreGlow, squeezed) core keeps rising but saturates in its own hue, never clips to white */ ''}float jC = jHalo * uCoreAmt;
   jC = jC < 0.45 ? jC : 0.45 + (jC - 0.45) / (1.0 + (jC - 0.45) / 0.35);
-  // the core's light reaches the skin THROUGH the jelly: its crisp heart keeps the core colour, the wide fringe takes on the body's own
-  // hue (a gold heart in a ruby goo reads ruby around it, not orange all over; RENDER-3 gallery: bright cores had turned every warm
-  // Legendary into the same orange fireball)
-  vec3 jBodyN = diffuseColor.rgb / max(max(diffuseColor.r, diffuseColor.g), max(diffuseColor.b, 1e-3));
+  ${/* the core's light reaches the skin THROUGH the jelly: its crisp heart keeps the core colour, the wide fringe takes on the body's own hue (a gold heart in a ruby goo reads ruby around it, not orange all over; RENDER-3 gallery: bright cores had turned every warm Legendary into the same orange fireball) */ ''}vec3 jBodyN = diffuseColor.rgb / max(max(diffuseColor.r, diffuseColor.g), max(diffuseColor.b, 1e-3));
   vec3 jCore = uCoreCol * jC * (0.55 + 0.45 * jNdv) * mix(jBodyN, vec3(1.0), 0.35 + 0.65 * jHalo);
   vec3 jExtra = vec3(0.0);
-  if (uAurora > 0.001) {          // Legendary: slow aurora CURTAINS drifting inside the body, sodium amber low -> rose -> lagoon high
+  if (uAurora > 0.001) { ${/* Legendary: slow aurora CURTAINS drifting inside the body, sodium amber low -> rose -> lagoon high */ ''}
     float jw = whNoise3(vRest * 1.5 + vec3(0.0, uTime * 0.05, uTime * 0.03));
     float jcur = 0.5 + 0.5 * sin(atan(vRest.z, vRest.x) * 3.0 + 2.4 * jw + vRest.y * 1.5 + uTime * 0.12);
-    jcur = jcur * jcur * jcur;                                                   // soft folds, no hard stripe edges
+    jcur = jcur * jcur * jcur; ${/* soft folds, no hard stripe edges */ ''}
     float jh = smoothstep(-0.6, 0.1, vRest.y) * (1.0 - smoothstep(0.45, 1.0, vRest.y));
     float jg = clamp(vRest.y * 0.8 + 0.45 + 0.25 * jw, 0.0, 1.0);
     vec3 jaur = mix(vec3(1.0, 0.5, 0.06), vec3(1.0, 0.22, 0.42), smoothstep(0.0, 0.55, jg));
     jaur = mix(jaur, vec3(0.12, 0.8, 0.78), smoothstep(0.5, 1.0, jg));
     jExtra += jaur * jcur * jh * (0.08 + 0.26 * (1.0 - jFres)) * uAurora;
   }
-  if (uIri > 0.001) {             // Mythic: thin-film iridescence, the hue slides with the view angle
+  if (uIri > 0.001) { ${/* Mythic: thin-film iridescence, the hue slides with the view angle */ ''}
     vec3 jfilm = 0.5 + 0.5 * cos(6.2832 * (vec3(0.0, 0.33, 0.67) + jNdv * 1.35 + vRest.y * 0.25 + uTime * 0.03));
     jExtra += jfilm * (0.08 + 0.9 * jFres) * 0.55 * uIri;
     totalSpecular *= mix(vec3(1.0), 0.55 + jfilm, 0.6 * uIri);
   }
-  jExtra += uTone2Col * jTwo * (0.1 + 0.25 * (1.0 - jFres));            // Epic two-tone: the second hue also glows a little from inside
-  // contact glow (stage B5, "touch the light"): a soft bloom of the CORE's colour where a fingertip presses, on top of the pressure blush
-  vec3 jTd0 = vWPos - uTouch0.xyz, jTd1 = vWPos - uTouch1.xyz;
+  jExtra += uTone2Col * jTwo * (0.1 + 0.25 * (1.0 - jFres)); ${/* Epic two-tone: the second hue also glows a little from inside */ ''}
+  ${/* contact glow (stage B5, "touch the light"): a soft bloom of the CORE's colour where a fingertip presses, on top of the pressure blush */ ''}vec3 jTd0 = vWPos - uTouch0.xyz, jTd1 = vWPos - uTouch1.xyz;
   float jTouch = uTouch0.w * exp(-dot(jTd0, jTd0) / (uTouchR * uTouchR)) + uTouch1.w * exp(-dot(jTd1, jTd1) / (uTouchR * uTouchR));
   jTouch = min(jTouch, 1.2);
-  // (kept apart from the jelly's own light: the low tier's deepen / saturate pass below must not recolour it, it is the same bloom on every tier)
-  vec3 jTouchE = mix(uTouchCol, vec3(1.0, 0.95, 0.85), 0.35 * jTouch) * jTouch * (0.5 + 0.5 * jNdv) * 1.15;
-  // CUT: a thin warm seam along the cut plane (a band, brightest at its centre line) and the bridge's glow spot; zero when unused
-  float jSeamD = (dot(vWPos, uSeam.xyz) - uSeam.w) / max(uSeamW, 1e-4);
+  ${/* (kept apart from the jelly's own light: the low tier's deepen / saturate pass below must not recolour it, it is the same bloom on every tier) */ ''}vec3 jTouchE = mix(uTouchCol, vec3(1.0, 0.95, 0.85), 0.35 * jTouch) * jTouch * (0.5 + 0.5 * jNdv) * 1.15;
+  ${/* CUT: a thin warm seam along the cut plane (a band, brightest at its centre line) and the bridge's glow spot; zero when unused */ ''}float jSeamD = (dot(vWPos, uSeam.xyz) - uSeam.w) / max(uSeamW, 1e-4);
   vec3 jSd = vWPos - uSpot.xyz;
-  // the seam: a hot thin core line with a soft warm falloff either side, brightest where the skin faces you
-  float jSeam = uSeamAmt * (exp(-jSeamD * jSeamD) + 0.3 * exp(-jSeamD * jSeamD / 9.0)) + uSpot.w * exp(-dot(jSd, jSd) / max(uSpotR * uSpotR, 1e-6));
+  ${/* the seam: a hot thin core line with a soft warm falloff either side, brightest where the skin faces you */ ''}float jSeam = uSeamAmt * (exp(-jSeamD * jSeamD) + 0.3 * exp(-jSeamD * jSeamD / 9.0)) + uSpot.w * exp(-dot(jSd, jSd) / max(uSpotR * uSpotR, 1e-6));
   jTouchE += uSeamCol * min(jSeam, 1.3) * (0.55 + 0.45 * jNdv) * 2.4;
-  jExtra += uTierCol * uTierAmt * (0.25 + 0.9 * jFres + 0.5 * jHalo);   // the tier "tell": light drifting toward the result colour
-  jExtra += uMixCol * jMix * (0.16 + 0.3 * (1.0 - jFres));             // merge lineage: the other parents' colours swirl through as light
+  jExtra += uTierCol * uTierAmt * (0.25 + 0.9 * jFres + 0.5 * jHalo); ${/* the tier "tell": light drifting toward the result colour */ ''}
+  jExtra += uMixCol * jMix * (0.16 + 0.3 * (1.0 - jFres)); ${/* merge lineage: the other parents' colours swirl through as light */ ''}
   totalEmissiveRadiance += jRim + jScat + jCore + jExtra;
   if (jToast > 0.0) totalEmissiveRadiance = mix(totalEmissiveRadiance, vec3(dot(totalEmissiveRadiance, vec3(0.2126, 0.7152, 0.0722))) * uToastCol * 1.35, 0.85 * jToast);
   #ifdef WH_LOW
-    // low tier: no transmission target, so the body carries its own colour (a base glow) and is only lightly see-through
-    totalDiffuse *= 0.16;   // the transmissive tiers keep only ~10% of the direct diffuse; the glow below stands in for the rest
-    // fake depth for the transmission-less tier: a thick centre is deeper and more saturated, and the core glows through it
-    // (the fake depth deepens the body's OWN hue: it leaned fully on the blush colour, whose hue differs from the body's for many species, so the whole body took the blush hue on
-    // the phone: pink dough coral, crimson jelly violet, cream beads ochre. A third of blush is kept: it is the pressed-skin warmth.)
-    vec3 jDeepCol = mix(diffuseColor.rgb, uBlushCol, 0.35);
+    ${/* low tier: no transmission target, so the body carries its own colour (a base glow) and is only lightly see-through */ ''}totalDiffuse *= 0.16; ${/* the transmissive tiers keep only ~10% of the direct diffuse; the glow below stands in for the rest */ ''}
+    ${/* fake depth for the transmission-less tier: a thick centre is deeper and more saturated, and the core glows through it (the fake depth deepens the body's OWN hue: it leaned fully on the blush colour, whose hue differs from the body's for many species, so the whole body took the blush hue on the phone: pink dough coral, crimson jelly violet, cream beads ochre. A third of blush is kept: it is the pressed-skin warmth.) */ ''}vec3 jDeepCol = mix(diffuseColor.rgb, uBlushCol, 0.35);
     totalEmissiveRadiance += (diffuseColor.rgb * (0.2 + 0.16 * jWrap) + jDeepCol * (0.34 * pow(jNdv, 1.4)) * (1.0 - 0.35 * jWrap)) * 0.68;
-    float jLow = smoothstep(0.45, -0.7, vRest.y) * (1.0 - 0.5 * jFres);   // the lower body is where the core glow sits behind thick jelly
+    float jLow = smoothstep(0.45, -0.7, vRest.y) * (1.0 - 0.5 * jFres); ${/* the lower body is where the core glow sits behind thick jelly */ ''}
     vec3 jDeep = jDeepCol / max(max(jDeepCol.r, jDeepCol.g), max(jDeepCol.b, 1e-3));
     totalEmissiveRadiance = mix(totalEmissiveRadiance, totalEmissiveRadiance * jDeep * 1.15, 0.85 * jLow);
-    // without the transmission pass's absorption the glow reads paler than med/high at the same pose (measured +8..12% in G and B):
-    // a saturation lift on the jelly's own light closes most of that gap for free (specular highlights stay white)
-    totalEmissiveRadiance = max(mix(vec3(dot(totalEmissiveRadiance, vec3(0.2126, 0.7152, 0.0722))), totalEmissiveRadiance, 1.0 + 0.3 * (1.0 - jLow)), 0.0);
+    ${/* without the transmission pass's absorption the glow reads paler than med/high at the same pose (measured +8..12% in G and B): a saturation lift on the jelly's own light closes most of that gap for free (specular highlights stay white) */ ''}totalEmissiveRadiance = max(mix(vec3(dot(totalEmissiveRadiance, vec3(0.2126, 0.7152, 0.0722))), totalEmissiveRadiance, 1.0 + 0.3 * (1.0 - jLow)), 0.0);
     float jSpec = dot(totalSpecular, vec3(0.3333));
     diffuseColor.a = clamp(mix(uAlphaBase, 1.0, jFres) + jSpec * 0.45, 0.0, 1.0);
   #endif
@@ -338,12 +322,9 @@ const GRAIN_STAGE = /* glsl */`
 #define GRAIN_AMP 0.022
 if (uGrain > 0.001) {
   vec3 jq = vRest * uGrainFreq;
-  // fade the grain out before it aliases (cells smaller than ~3 px: a far or small body, the phone's low tier)
-  float jFade = 1.0 - smoothstep(0.2, 0.45, length(fwidth(jq)));
+  ${/* fade the grain out before it aliases (cells smaller than ~3 px: a far or small body, the phone's low tier) */ ''}float jFade = 1.0 - smoothstep(0.2, 0.45, length(fwidth(jq)));
   if (jFade > 0.0) {
-    // height in world units, slope = its screen derivative over the surface's own screen derivative (a real bump, any distance)
-    // pores / powder: two octaves of noise; a bead bed: round caps, one per cell (beads pressing up under the skin)
-    float jH = uBeads > 0.5 ? jBeadH(jq) * 1.6 : whNoise3(jq) + 0.5 * whNoise3(jq * 2.3 + 4.1);
+    ${/* height in world units, slope = its screen derivative over the surface's own screen derivative (a real bump, any distance) pores / powder: two octaves of noise; a bead bed: round caps, one per cell (beads pressing up under the skin) */ ''}float jH = uBeads > 0.5 ? jBeadH(jq) * 1.6 : whNoise3(jq) + 0.5 * whNoise3(jq * 2.3 + 4.1);
     jH *= uGrain * uCoreRadius * GRAIN_AMP * jFade;
     vec3 jPx = dFdx(-vViewPosition), jPy = dFdy(-vViewPosition);
     vec2 jdH = vec2(dFdx(jH) / max(length(jPx), 1e-6), dFdy(jH) / max(length(jPy), 1e-6));
@@ -359,9 +340,10 @@ if (uGrain > 0.001) {
  */
 const KEY_TINT: Rgb = [1.0, 0.74, 0.42];
 /** PLAYGROUND looks, token mixes (src/ui/theme.ts amber 0xffb347, cream 0xfff1d6, lagoon 0x59d6e6), linear: toast multiplies the lit body by
- *  the amber token lifted 18% toward white (a golden brown that never burns); frost is the cream token with a quarter of lagoon. */
+ *  the amber token lifted 6% toward white (a golden brown that never burns, with a few browner patches at x0.8 of it); frost is the cream
+ *  token with a quarter of lagoon. */
 const tokLin = (h: number): Rgb => [16, 8, 0].map((sh) => { const v = ((h >> sh) & 255) / 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }) as Rgb;
-const TOAST_TINT: Rgb = tokLin(0xffb347).map((v) => v + (1 - v) * 0.18) as Rgb;
+const TOAST_TINT: Rgb = tokLin(0xffb347).map((v) => v + (1 - v) * 0.06) as Rgb;   // (round 2: 0.18 read beige, not golden: FN-02)
 const FROST_COL: Rgb = ((c: Rgb, l: Rgb): Rgb => [0, 1, 2].map((i) => c[i] * 0.75 + l[i] * 0.25) as Rgb)(tokLin(0xfff1d6), tokLin(0x59d6e6));
 /** Transmission share kept by the most opaque family (cap 0.3: slow-rise foam, putty); rises to 1 at cap 1. */
 const OPAQUE_KEEP = 0.3;
