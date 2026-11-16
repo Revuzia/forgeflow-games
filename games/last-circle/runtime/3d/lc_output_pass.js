@@ -244,6 +244,9 @@ export const LCOutputShader = {
         // below it a shadow keeps its uncurved tone and detail; from the lower mid-tones up (the ground's own shade and light) it is the full curve
         vec3 l0 = sqrt( clamp( gl_FragColor.rgb, 0.0, 1.0 ) );
         lp = mix( l0, lp, smoothstep( vec3( 0.05 ), vec3( 0.25 ), l0 ) );
+        // and the deepest shadows are lifted a little (x1.18 in this space below ~4 / 255, fading out by ~40 / 255): the lower fill left a shaded red-brick
+        // wall at 12-20 / 255 (interiorcheck: a doorway view 36 % under 16 / 255); the ground's spread and the drop view's mean move < 0.001
+        lp *= 1.0 + 0.18 * ( 1.0 - smoothstep( vec3( 0.05 ), vec3( 0.2 ), l0 ) );
         gl_FragColor.rgb = lp * lp;
       }
 

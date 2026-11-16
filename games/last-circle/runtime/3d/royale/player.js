@@ -266,9 +266,10 @@ let _rimFarNow = RIM_FAR;
 // (W10 R1B, combat finding 7 step 1) skin / cloth roughness derived from the albedo in the body shader: ONE shared knob,
 // 1 on desktop medium+, 0 on low and touch (the W9 look, roughness as authored)
 const SHEEN_K = { value: 1 };
-// (W10 R2A fix5) the characters' DIRECT specular x 1 / the map's W10 sun boost (maps.js W._w10Sun: Savanna 1.18, others 1.12; 1 on low / touch): the
-// world's stronger sun lights the body's diffuse as before, but the skin's highlight stays at the W10 R1 sun's - else the pink-plastic skin of the
-// W9 tip came back (w10_gunhold sheen c_near 0.63 x the W9 tip, bar 0.6). Indirect (environment) specular untouched.
+// (W10 R2A fix5) the characters' DIRECT specular x 1 / (the map's W10 sun boost x the contrast curve's lift of a skin highlight, ~1 + 0.3 x its
+// strength) (maps.js W._w10Sun / W._w10Con: Savanna 1.26 / 1.0, others 1.12 / 0.4; 1 on low / touch): the world's stronger sun and curve light the
+// body's diffuse as before, but the skin's highlight on screen stays at the W10 R1 light's - else the pink-plastic skin of the W9 tip came back
+// (w10_gunhold sheen c_near 0.63 x the W9 tip with the sun alone divided out, bar 0.6). Indirect (environment) specular untouched.
 const SPEC_K = { value: 1 };
 const RIM_ALLY_NEAR = 0.30, RIM_ALLY_FAR = 0.45;
 const RIM_GAIN = { value: 0.8 };
@@ -2185,7 +2186,7 @@ function deskHi(W) {
 function rimSync(W) {
   const hi = deskHi(W);
   SHEEN_K.value = hi ? 1 : 0;
-  SPEC_K.value = hi && W._w10Sun > 0.05 ? 1 / W._w10Sun : 1;
+  SPEC_K.value = hi && W._w10Sun > 0.05 ? 1 / (W._w10Sun * (1 + 0.3 * (W._w10Con || 0))) : 1;
   const rf = hi ? RIM_FAR_DESK : RIM_FAR;
   if (rf === _rimFarNow) return;
   _rimFarNow = rf;

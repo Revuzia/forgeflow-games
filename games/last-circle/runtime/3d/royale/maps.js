@@ -1599,7 +1599,7 @@ export async function buildMap(W, mapId) {
     // W10 R2A (visuals 5, desktop medium+): less flat fill, more sun - shadowed sides and hills read again (per map: K.w10Light)
     const lw = W10V ? (K.w10Light || W10_LIGHT) : null;
     kn.sun.intensity = sunK.intensity * (lw ? lw.sun : 1); kn.sun.color.setHex(sunK.color);
-    W._w10Sun = lw ? lw.sun : 1;        // (fix5) player.js holds the characters' direct specular at the W10 R1 sun's (zSpK = 1 / this): the world's sun boost is not a glossier skin
+    W._w10Sun = lw ? lw.sun : 1; W._w10Con = lw ? (K.w10Light && K.w10Light.contrast != null ? K.w10Light.contrast : W10_CONTRAST) : 0;        // (fix5) player.js holds the characters' direct specular at the W10 R1 sun's (zSpK = 1 / this): the world's sun boost is not a glossier skin
     kn.sun.position.set(sunK.pos[0], sunK.pos[1], sunK.pos[2]);
     let hemi = null; W.scene.traverse((o) => { if (o.isHemisphereLight) hemi = o; });
     if (hemi) { hemi.intensity = hemiK.intensity * (lw ? lw.hemi : 1); hemi.color.setHex(hemiK.sky); hemi.groundColor.setHex(hemiK.ground); }
