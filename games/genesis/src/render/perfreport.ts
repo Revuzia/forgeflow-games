@@ -9,6 +9,7 @@
 // percentiles, hitches over 50 ms with what was happening in them, GPU ms per pass, canvas / DPR / preset and the
 // GPU's renderer string. Costs nothing unless recording (the hooks are one branch).
 
+import { triStats } from './tristats.ts';
 import { perfSwitch, perfSwitchLine } from './perfswitch.ts';
 import { revzReport } from './shaders/revz.ts';
 import { gpuMem } from './gpumem.ts';
@@ -352,6 +353,7 @@ export class PerfRecorder {
     this.recording = true;
     this.report = '';
     this.glTrace.reset();
+    triStats.reset();
     this.syncMs = new Map();
     this.probes = [];
     this.lastProbe = -1e9;
@@ -535,6 +537,7 @@ export class PerfRecorder {
       L.push(`pass ms (passsync: gl.finish per pass, mean per frame): ${[...this.syncMs].map(([k, v]) => `${k} ${f1(v / n)}`).join(' · ')}`);
     }
     L.push(`render: draws ${Math.round(mean(F.map((r) => r.draws)))} (max ${Math.max(...F.map((r) => r.draws))}) tris ${f1(mean(F.map((r) => r.tris)) / 1e6)}M shadow ${f1(mean(F.map((r) => r.shadowTris)) / 1e6)}M | patches built ${F.reduce((a, r) => a + r.built, 0)} | new programs ${F.reduce((a, r) => a + r.programs, 0)}`);
+    L.push(...triStats.lines());
     if (this.glTrace.stats.size) L.push(...this.glTrace.lines(this.frames.length));
     // (PERF s14) the page's live GPU memory, by kind, the largest objects and the buffer size classes
     try { L.push(...gpuMem.lines()); } catch { /* none */ }

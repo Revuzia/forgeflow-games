@@ -39,6 +39,8 @@ const CAM = {
   town: { mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 90, tilt: 60, hour, blend: 0 },
   low: { mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 160, tilt: 12, hour, blend: 0 },
   ridge: { mode: 'orbit', poi: 'peak', dist: 1800, tilt: 30, hour: 17.6, blend: 0 },
+  coast: { mode: 'surface', poi: 'coast', alt: 40, pitch: -3, hour, blend: 0 },
+  land: { mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 150, tilt: 22, hour, blend: 0 },
   shore: { mode: 'orbit', poi: 'coast', dist: 260, tilt: 55, hour, blend: 0 },
   forest: { mode: 'orbit', poi: 'forest', dist: 200, tilt: 50, hour, blend: 0 },
 };
@@ -55,6 +57,7 @@ for (const v of String(opts.views ?? 'town,forest').split(',')) {
   } else await page.screenshot({ path: join(OUT, `${tag}-${v}.png`) });
   const st = await page.evaluate(() => { const s = globalThis.__GENESIS_R__.stats; return `tris scene ${s.sceneTris} shadow ${s.shadowTris} alt ${s.altitude?.toFixed?.(0)}`; });
   console.log('view', v, st);
+  console.log('  tri', await page.evaluate(() => { const t = globalThis.__GENESIS_TRI__; return t ? [...t.last].sort((x, y) => y[1] - x[1]).map(([k, n]) => `${k} ${(n / 1e6).toFixed(2)}M`).join(' · ') + ` | px ${t.pixels} shtexels ${t.shadowTexels}` : 'none'; }));
 }
 console.log('page errors', errors.length, errors.slice(0, 5));
 console.log('gl messages', glmsgs.length, glmsgs.slice(0, 8));

@@ -17,6 +17,7 @@ import { depthClamp, enableConservativeDepth, enableOrthoDepth, ZCONS } from './
 import { CAM_FAR, CAM_NEAR, REVZ, chooseDepthMode, confirmDepthMode, frustumFromProjection } from './shaders/revz.ts';
 import type { WorldView, PlanetView } from '../client/worldview.ts';
 import { PlanetVisual } from './planet/planetview.ts';
+import { triStats } from './tristats.ts';
 import { OVERDRAW, ZPRE, ZPRE_LAYER, overdrawPatch } from './overdraw.ts';
 import { syncPlanetVisuals } from './planet/planetsync.ts';
 import { SunShadows } from './planet/lights.ts';
@@ -271,6 +272,7 @@ export class Renderer {
     if (REVZ.on) { (this.camera as unknown as { _reversedDepth: boolean })._reversedDepth = true; this.camera.updateProjectionMatrix(); }
     this.camera.matrixAutoUpdate = true;
     this.shadows = new SunShadows(this.quality.shadowMapSize);
+    triStats.install(this.three);
     this.shadows.init(this.three);
     // the AO's sun-share estimate reads the cascaded sun shadow
     this.gtao.bindShadows(this.shadows.uniforms as unknown as Record<string, IUniform>);
@@ -564,6 +566,7 @@ export class Renderer {
     flushUploads(r);
     perfmon.end('uploads');
     perfmon.begin('shadows');
+    triStats.pass = 'shadow';
     const callsPre = r.info.render.calls, trisPre = r.info.render.triangles;
     if (primaryVis) primaryVis.uniforms.uShadowOn.value = wantShadows ? 1 : 0;
     if (wantShadows && primaryVis) {
@@ -585,6 +588,7 @@ export class Renderer {
     const callsShadow = r.info.render.calls, trisShadow = r.info.render.triangles;
     perfmon.end('shadows');
     perfmon.begin('scene');
+    triStats.pass = 'scene';
 
     // ── opaque scene → HDR ──
     const post = this.post;
@@ -623,6 +627,7 @@ export class Renderer {
     }
     const callsScene = r.info.render.calls, trisScene = r.info.render.triangles;
     perfmon.end('scene');
+    triStats.endFrame(post.w * post.h, this.shadows.cascades * (this.shadows.size / 2) ** 2);
     perfmon.begin('post');
     // contact shadows (GTAO, Medium+) from the OPAQUE depth, before the water is drawn: computed after the water, the
     // sheet's edge against the beach was a crease it darkened — a dashed black line along every waterline — and the

@@ -1673,3 +1673,46 @@ long press frame-rate independent. Report after 1-2 verified.
 - ROUND 10 ASK (Ultra, landing spot, same window): base; tshade=all; tshade=nonoise; tshade=albedo; tshade=nosurf;
   tshade=noveg; tshade=nofloor; tshade=novor; vshade=all; bshade=all; wshade=all; tshade=all&vshade=all&bshade=all&
   wshade=all; zpre=1; zpre=1&revz=1 (look: holes in the ground?); hide=veg; one overdraw screenshot.
+### SESSION 19b — lead: (1) triangle density, (2) tcache
+- BUILT: `src/render/tristats.ts` — triangles per frame BY LAYER and PASS. WebGLRenderer.renderBufferDirect is wrapped
+  once; each draw's triangles (three's own counter) go to the layer of the drawn object (nearest named ancestor:
+  terrain, water, trees = vegetation-near, fartrees = vegetation-far, cover, buildings, roads, life, other) under the
+  pass (scene = the opaque pass, shadow). The perf report prints two lines after `render:`:
+  `tris by layer, scene (xM = y per px): trees ... · fartrees ... · terrain ...` and the same for shadow per shadow
+  texel (cascades x (atlas/2)^2). Always on (one Map update per draw call). Probe: `globalThis.__GENESIS_TRI__.last`.
+- MEASURED LOCALLY (probe-s19 --quality=ultra --size=1686x963, babel 307987276, flat=1 + post off to make SwiftShader
+  fast; counts do not depend on the material; settle 15 frames, so the terrain may not be fully landed; tri.log):
+  view land (town from 150 m, tilt 22):  scene 2.83 M = 1.7 / px: trees 1.56 · fartrees 1.11 · terrain 0.08 · buildings 0.04
+                                        shadow 6.89 M: fartrees 4.45 · trees 2.24 · terrain 0.21
+  view coast (surface, 40 m, pitch -3): scene 2.92 M = 1.8 / px: fartrees 0.98 · trees 0.95 · terrain 0.88 · cover 0.08
+                                        shadow 9.25 M: fartrees 3.93 · trees 2.71 · terrain 2.60
+  -> TREES are 65-95 % of the scene triangles and ~70 % of the shadow triangles; terrain is at most a third.
+  (The Mac's landing spot drew ~3x these totals; round 10's report now prints its own split.)
+- WHERE THE LOD ALREADY IS SCREEN-DRIVEN (read from the code):
+  * terrain: split distance K x patch size, K = hPx / (2 tan(fov/2) x pixelError x PATCH_RES): a patch edge spans
+    64-128 px on Ultra (pixelError 4), a lattice edge 2-4 px FACE ON; sub-pixel only by foreshortening at grazing
+    angles (and the silhouette factor silK refines grazing patches further).
+  * far trees: by projected height (FAR_PX: 5-sided 2-ring hull above 12-18 px, 4-sided 1-ring below, gone under
+    3-6 px): ~15-35 triangles for a tree 3-18 px tall. Already near 1 triangle per few pixels; the count is the
+    number of TREES (tens of thousands).
+  * near trees: by DISTANCE only (vegetation.ts: lod0 < 0.16 x range, lod1 < 0.42 x range, LOD_BAND). The one layer not
+    screen-driven. At 1686x963 a 15 m tree is ~115 px at the lod0 edge and ~45 px at the lod1 edge.
+- NO `?tridens` SWITCH BUILT, and why (so nobody builds the wrong thing):
+  * a pixel-driven near-tree LOD that never goes below today's detail only pays in SMALL windows (bands scale with
+    pxPerRad / the 1080p reference): at the Mac's 963 px it would move the bands by ~10 %. Pulling the bands in
+    further than that is a lower-detail tree at the same size on screen: a quality change that needs the owner's eye,
+    not an 'identical' change.
+  * ROUND 9's own data argues AGAINST triangles as the main term: the 600x363 window (13 % of the pixels) was 5.2x
+    faster, but near-tree triangles do not fall with the window (distance LOD) and they are half the scene. A
+    triangle-bound frame would not have sped up that much. Cost follows PIXELS: large-triangle overdraw with heavy
+    shaders — stacked alpha-tested leaf cards and grass (each layer runs the vegetation shader and its shadow taps,
+    then maybe discards; no early-Z with log depth unless zcons works on Metal), and the terrain under all of it.
+    This corrects the weight I put on micro-triangles at the top of SESSION 19: they multiply the far-tree and
+    grazing-terrain shading, but round 10 must show the split (tshade / vshade / hide=veg / the overdraw shot / the
+    new tris lines) before LOD work is chosen.
+  * candidates once round 10 is in, in the order I would try them: (a) vegetation depth prepass with the existing
+    alpha-tested depth twins (VEG_DEPTH_FRAG discards as the colour shader does) + depthFunc EQUAL colour pass under
+    revz / zcons: the leaf shader then runs once per visible pixel instead of once per card layer; (b) shadow pass:
+    far-tree casters as the 4-sided hull in cascades 2-3 (4 M -> ~2 M shadow triangles; shadow of a tree a few
+    texels wide); (c) the terrain cache (design above).
+- (2) `?tcache=1`: NOT STARTED beyond the design above.
