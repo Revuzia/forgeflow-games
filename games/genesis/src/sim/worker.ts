@@ -321,7 +321,7 @@ function handle(m: ToWorker): void {
       const packs = Array.isArray(opts.mods) ? (opts.mods as ContentPack[]) : mods;
       mods = packs;
       // (the build posts how far it is: the boot bar follows the real build — PUNCH P21)
-      sim = new Sim({ seed: m.seed >>> 0, scenario: m.scenario, content: mods, overrides: (opts.overrides as Record<string, unknown>) ?? undefined, onProgress: (stage, frac) => post({ type: 'progress', stage, frac }) });
+      sim = new Sim({ seed: m.seed >>> 0, scenario: m.scenario, content: mods, overrides: (opts.overrides as Record<string, unknown>) ?? undefined, bound: opts.bound !== false, onProgress: (stage, frac) => post({ type: 'progress', stage, frac }) });
       if (typeof opts.speed === 'number') speed = Math.max(0, opts.speed);
       wantGrad = opts.grad === true;
       resetSent();

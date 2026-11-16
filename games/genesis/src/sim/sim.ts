@@ -40,6 +40,7 @@
 // unchanged (same hashes). Fidelity at 1000x vs 1x over five game years, by year and deaths by cause: CONTRACT §5
 // (push 3 round 2; _harness/scratch/perf3/r2/curves.ts + cmp12.ts, 1x twin perturbed once as the noise yardstick).
 
+import { setBound } from './god/reach.ts';
 import type { Command, CommandResult, FieldName, PlanetSnap, SimEvent, Snapshot } from './types.ts';
 import { BASE_PACK } from '../data/index.ts';
 import { loadContent, RUNTIME_PACK, type Content, type ContentPack } from './content.ts';
@@ -92,6 +93,9 @@ export interface SimOptions {
   overrides?: Record<string, unknown>;
   /** how far building the world is (stage, 0..1; world/scenarios.ts BuildOptions.onProgress) */
   onProgress?: (stage: string, frac: number) => void;
+  /** POWERS-GROWTH: belief bounds the god's power in this new world (the game's new-game path sets it; a bare headless
+   *  Sim, like every old save, is unbound) */
+  bound?: boolean;
 }
 
 export interface SnapshotOptions {
@@ -159,6 +163,7 @@ export class Sim {
     } else {
       this.content = loadContent([BASE_PACK, ...(opts.content ?? [])]);
       this.u = buildScenario(this.content, opts.scenario, opts.seed >>> 0, { overrides: opts.overrides, onProgress: opts.onProgress });
+      if (opts.bound) setBound(this.u, true, true);
     }
     this.registry = buildRegistry();
     registerTimeScale(this.registry); // SIM perf push 2: the logged speed level (perf/lapse.ts)

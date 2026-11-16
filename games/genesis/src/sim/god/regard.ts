@@ -27,6 +27,7 @@
 //
 // Natural disasters are read as the god's only by people whose faith in it is above 0.3.
 
+import { reachSeen } from './reach.ts';
 import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
 import type { Settlement } from '../people/state.ts';
@@ -358,6 +359,9 @@ export function witnessAct(p: Planet, pos: ArrayLike<number>, radius: number, ki
   const natural = !!ctx?.natural;
   const wrathful = currentWrath() !== null;
   const cruel = cruelty(currentWrath() ?? (u ? wrathLaw(u) : WRATH_DEFAULT));
+  // POWERS-GROWTH v3 (b), bound worlds only: trust and fear go hand in hand. Mercy does not wipe fear, a warned or
+  // provoked harm does not cost trust, and cruelty costs half the trust it does in an unbound world.
+  const hand = !!u && g === 0 && u.god.bound;
   // what the act is to each settlement (decided once per call)
   const cls = new Map<number, { kind: string; foretold: boolean; provoked: boolean; mercy: boolean; favour: boolean; kept: number; fK: number; tK: number }>();
   const classify = (sid: number) => {
@@ -405,11 +409,11 @@ export function witnessAct(p: Planet, pos: ArrayLike<number>, radius: number, ki
       if (o.kind === 'help' || o.kind === 'mercy') {
         dF = 0.15 * mk * (1 + KEPT_GAIN * o.kept);
         dT = 0.25 * mk * a * (0.5 + pi) * (1 + KEPT_GAIN * o.kept);
-        if (o.mercy) { dFe = -0.1 * mk; dT *= 1.5; dL = 0.05 * mag; }
+        if (o.mercy) { dFe = hand ? 0 : -0.1 * mk; dT *= 1.5; dL = 0.05 * mag; }
       } else if (o.kind === 'harm') {
         if (o.foretold) { dF = 0.2 * mk; dFe = 0.3 * mk * fk; }
-        else if (o.provoked) { dF = 0.2 * mk; dFe = 0.3 * mk * fk; dT = -0.05 * mk; }
-        else { dF = 0.15 * mk; dFe = 0.35 * mk * fk; dT = -0.2 * mk * cruel; dL = -0.05 * mag * cruel; }
+        else if (o.provoked) { dF = 0.2 * mk; dFe = 0.3 * mk * fk; dT = hand ? 0 : -0.05 * mk; }
+        else { dF = 0.15 * mk; dFe = 0.35 * mk * fk; dT = -0.2 * mk * cruel * (hand ? 0.5 : 1); dL = -0.05 * mag * cruel; }
         dFe *= o.fK; dT *= o.tK;
       } else {
         dF = 0.25 * mk;
@@ -453,6 +457,8 @@ export function witnessAct(p: Planet, pos: ArrayLike<number>, radius: number, ki
     const mk = _d[j * 5 + 4];
     if (Math.abs(mk) >= 0.15) A.remember(s, mk < 0 ? MEMK.fear : MEMK.miracle, tick, -1);
   }
+  // POWERS-GROWTH: a town counts toward the god's standing once it has seen the god act (not nature, not a rival)
+  if (hand && u && !natural) for (const sid of [...cls.keys()].sort((q, w) => q - w)) if (sid >= 0) reachSeen(u, p.id, sid);
   // the act's record: which settlements saw it and what it was to them
   if (ctx) {
     for (const [sid, o] of cls) {

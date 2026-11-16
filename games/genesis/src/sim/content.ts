@@ -487,6 +487,11 @@ export interface PowerDef {
   /** parameter schema for the UI (what the player can tune) */
   schema: Record<string, PowerParamDef>;
   target: (typeof POWER_TARGETS)[number];
+  /** POWERS-GROWTH: the band it belongs to (0 the maker's hands .. 4 world-shaping), its worship price in a bound world
+   *  (x size; `cost` stays the legacy restraint cost), and `free`: never charged (the clock, the Hand, the answers, the basics) */
+  tier?: number;
+  price?: number;
+  free?: boolean;
   synonyms: string[];
   desc: string;
   /** worship cost and cooldown (ticks) in restraint mode; never charged by default (CONTRACT §1 pillar 1) */

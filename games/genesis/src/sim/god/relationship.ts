@@ -15,6 +15,7 @@
 //   views        SettlementView.regard / prayers / prophet / sacred, MoverBlock.flags2 (prophet, sheltering, pilgrim,
 //                called), Snapshot.regard / wrath; queries regard, prayers, prophets, sacred, omens, sigils
 
+import { credit, reachView } from './reach.ts';
 import type { CommandRegistry, Args, ParamSchema } from './commands.ts';
 import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
@@ -445,9 +446,12 @@ function godsFeast(x: PCtx, st: Settlement): void {
     r.since.feast = g.from;
     moveSettlement(x, st, { faith: 0.03, loyalty: 0.03 });
     const w = Math.round(0.5 * Math.max(1, g.came.length) * 100) / 100;
-    st.worshipBy[0] = Math.round((st.worshipBy[0] + w) * 100) / 100;
-    st.worship = st.worshipBy[0];
-    x.ps.worship[0] = Math.round((x.ps.worship[0] + w) * 100) / 100;
+    if (u.god.bound) credit(u, x.p, st.id, w);
+    else {
+      st.worshipBy[0] = Math.round((st.worshipBy[0] + w) * 100) / 100;
+      st.worship = st.worshipBy[0];
+      x.ps.worship[0] = Math.round((x.ps.worship[0] + w) * 100) / 100;
+    }
     relStat(u, 'worship.feast', w);
     relStat(u, 'feasts');
     tell(u, x.p, 'festival.god', vars(x, st), st, [settlementRef(x, st)], 1);
@@ -718,9 +722,12 @@ function offerings(x: PCtx, st: Settlement): void {
   const took = storeTake(st, food, Math.min(st.store[food] * share, surplus * P * share));
   if (took <= 0) return;
   const w = Math.round(took * 0.5 * 100) / 100;
-  st.worshipBy[0] = Math.round((st.worshipBy[0] + w) * 100) / 100;
-  st.worship = st.worshipBy[0];
-  x.ps.worship[0] = Math.round((x.ps.worship[0] + w) * 100) / 100;
+  if (u.god.bound) credit(u, x.p, st.id, w);
+  else {
+    st.worshipBy[0] = Math.round((st.worshipBy[0] + w) * 100) / 100;
+    st.worship = st.worshipBy[0];
+    x.ps.worship[0] = Math.round((x.ps.worship[0] + w) * 100) / 100;
+  }
   relStat(u, 'worship.offering', w);
   const r = srel(u, x.p.id, st.id);
   if (r.since.offered === undefined) tell(u, x.p, 'offering', vars(x, st), st, [settlementRef(x, st)], 1);
@@ -799,7 +806,7 @@ export function relSnapGlobal(u: Universe): { regard: number; wrath: number } {
   return { regard: regardOf(u, 0), wrath: wrathLaw(u) };
 }
 
-export const REL_QUERIES = ['regard', 'prayers', 'prophets', 'sacred', 'omens', 'sigils', 'hearts', 'towers', 'defiance', 'covenants', 'ages', 'story'];
+export const REL_QUERIES = ['regard', 'prayers', 'prophets', 'sacred', 'omens', 'sigils', 'hearts', 'towers', 'defiance', 'covenants', 'ages', 'story', 'reach'];
 
 /** the stroke descriptions of the sigils, for the UI team's recogniser templates (hook H8) */
 export const SIGIL_STROKES: Record<string, string> = {
@@ -843,6 +850,7 @@ export function relQuery(u: Universe, q: string, args: Record<string, unknown>):
     case 'covenants': return covenantsQuery(u, args);
     case 'ages': return agesQuery(u, args);
     case 'story': return storyQuery(u, args);
+    case 'reach': return reachView(u);
     case 'sigils': {
       const bySigil: Record<string, { power: string; name: string; command: string; stroke: string }[]> = {};
       for (const pw of u.content.powers.list) if (pw.sigil) (bySigil[pw.sigil] ??= []).push({ power: pw.id, name: pw.name, command: pw.command, stroke: SIGIL_STROKES[pw.sigil] ?? '' });

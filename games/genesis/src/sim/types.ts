@@ -601,6 +601,9 @@ export interface Snapshot {
   restraint: boolean;
   /** god stats: worship pool per god (0 = player) */
   worship: number[];
+  /** POWERS-GROWTH (god/reach.ts): the god's standing, the Following, the trust and fear bars, the pool and its cap;
+   *  present only in a bound world */
+  reach?: import('./god/reach.ts').ReachView;
   /** additive (LIVING RELATIONSHIP): how the people of every world see the player god, −1 feared … +1 trusted */
   regard?: number;
   /** additive (LIVING RELATIONSHIP): the wrath law, 0 gentle … 0.3 survivable (default) … 1 total destruction */

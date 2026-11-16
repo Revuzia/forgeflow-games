@@ -74,6 +74,7 @@ export function spendWorship(u: Universe, god: number, amount: number, first?: P
 export function miraclePotency(u: Universe, p: Planet, god: number, cost: number): number {
   const base = u.god.law('miracles.potency');
   if (cost <= 0) return base;
+  if (god === 0 && u.god.bound) return base; // POWERS-GROWTH: a bound god paid the price up front (god/reach.ts)
   if (u.settings.restraint) return base; // in restraint the cost was already paid up front (restraintCheck)
   const spent = spendWorship(u, god, cost * 0.5, p);
   return base * (1 + 0.5 * Math.min(1, spent / Math.max(1e-6, cost * 0.5)));

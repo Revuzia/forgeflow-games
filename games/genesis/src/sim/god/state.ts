@@ -386,6 +386,14 @@ export function emptyRel(): RelState {
 }
 
 /** ARC §6.1: the saved form of rel — keys of annals, godActs, defied, told and memory.peak sorted */
+function reachJson(r: ReachState): ReachState {
+  const roads: ReachState['roads'] = {};
+  for (const k of Object.keys(r.roads).sort()) roads[k] = sortKeys(r.roads[k]);
+  const towns: ReachState['towns'] = {};
+  for (const k of Object.keys(r.towns).sort()) towns[k] = r.towns[k];
+  return { ...r, seen: sortKeys(r.seen), towns, roads, peopled: sortKeys(r.peopled) };
+}
+
 function relJson(rel: RelState): RelState {
   const st: Record<string, SettlementRel> = {};
   for (const k of Object.keys(rel.st).sort()) {
@@ -479,6 +487,24 @@ export interface GodJson {
   windsOn?: Record<string, WindsOn>;
   /** LIVING §3: the people and their god (absent in saves before 1.5) */
   rel?: RelState;
+  /** POWERS-GROWTH: the god's standing and the people's giving (absent in a world that was never bound) */
+  reach?: ReachState;
+}
+
+/**
+ * POWERS-GROWTH v3 (god/reach.ts). Present only once a world has been bound; kept for good after that. Counts are whole
+ * numbers, worship in hundredths. `seen`: "<planet>:<settlement>" -> tick of the last god-0 act witnessed there;
+ * `towns`: the day's measure m, what was given g, the part ff given by the road of fear, the part fd left at the door by those who fear;
+ * `roads`: planet -> agent id -> 1 trust, 2 fear, 3 both; `peopled`: planets a person has ever lived on.
+ */
+export interface ReachState {
+  tier: number; best: number; up: number; down: number; popMax: number;
+  f: number; believers: number; trust: number; fear: number; both: number;
+  inc: number; incT: number; incF: number; day: number;
+  seen: Record<string, number>;
+  towns: Record<string, { m: number; g: number; ff: number; fd: number }>;
+  roads: Record<string, Record<string, number>>;
+  peopled: Record<string, number>;
 }
 
 export function emptyRuntime(): RuntimeContent {
@@ -526,6 +552,10 @@ export class GodState {
   windsOn: Record<string, WindsOn> = {};
   /** LIVING §3: the people and their god — records, prayers, prophets, prophecies, sacred places, omens */
   rel: RelState = emptyRel();
+  /** POWERS-GROWTH (god/reach.ts): undefined until the world is first bound */
+  reach?: ReachState;
+  /** belief bounds the god's power here: KEY PRESENCE, never law() (which reads 1 for a missing key) */
+  get bound(): boolean { return 'reach.bound' in this.laws; }
   /** transient: witness tally at the start of a command (auto-witness), the command in flight */
   witnessMark = 0;
 
@@ -536,6 +566,7 @@ export class GodState {
       runtime: this.runtime, laws: sortKeys(this.laws), settlementLaws: sortKeys(this.settlementLaws), lastGod: sortKeys(this.lastGod),
       rng: this.rng.save().map((x) => x >>> 0), speedRequest: this.speedRequest, stats: sortKeys(this.stats),
       winds: this.winds, windsOn: sortKeys(this.windsOn), rel: relJson(this.rel),
+      ...(this.reach ? { reach: reachJson(this.reach) } : {}),
     })) as GodJson;
   }
 
@@ -560,6 +591,7 @@ export class GodState {
     if (j.rng) g.rng.load(j.rng);
     g.speedRequest = j.speedRequest ?? -1;
     g.stats = { ...(j.stats ?? {}) };
+    if (j.reach) g.reach = copy(j.reach);
     g.winds = copy(j.winds ?? []);
     g.windsOn = copy(j.windsOn ?? {});
     g.rel = { ...emptyRel(), ...copy(j.rel ?? emptyRel()) };

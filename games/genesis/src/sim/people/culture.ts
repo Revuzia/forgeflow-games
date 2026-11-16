@@ -20,6 +20,7 @@
 //              polities form a relation, and the chronicle tells it — strangely when the others are another species.
 //   readings   a settlement that saw the god act tells what it made of it ("They call it a blessing").
 
+import { credit } from '../god/reach.ts';
 import type { PCtx } from './ctx.ts';
 import type { Household, Settlement } from './state.ts';
 import type { Planet } from '../world/planet.ts';
@@ -252,6 +253,8 @@ export function addWorship(x: PCtx, st: Settlement, s: number, amount: number): 
   let g = -1, bv = 0.05;
   for (let k = 0; k < GODS; k++) { const v = A.love[s * GODS + k] + A.fear[s * GODS + k] * 0.5; if (v > bv) { bv = v; g = k; } }
   if (g < 0) return;
+  // POWERS-GROWTH: in a bound world the player god's pool is filled only through the town's daily measure and the cap
+  if (g === 0 && x.u.god.bound) { credit(x.u, x.p, st.id, amount); return; }
   st.worshipBy[g] = Math.round((st.worshipBy[g] + amount) * 100) / 100;
   if (g === 0) st.worship = st.worshipBy[0];
   x.ps.worship[g] = Math.round((x.ps.worship[g] + amount) * 100) / 100;
@@ -408,8 +411,11 @@ function sacrifice(x: PCtx, st: Settlement, beast: boolean): void {
     what = x.c.items.list[food].name.toLowerCase();
   }
   for (const s of x.ps.members.get(st.id) ?? []) x.A.fear[s * GODS] = Math.min(1, x.A.fear[s * GODS] + 0.01);
-  st.worshipBy[0] = Math.round((st.worshipBy[0] + 5) * 100) / 100;
-  x.ps.worship[0] = Math.round((x.ps.worship[0] + 5) * 100) / 100;
+  if (x.u.god.bound) credit(x.u, x.p, st.id, Math.min(5, 0.1 * (x.ps.members.get(st.id)?.length ?? 0)));
+  else {
+    st.worshipBy[0] = Math.round((st.worshipBy[0] + 5) * 100) / 100;
+    x.ps.worship[0] = Math.round((x.ps.worship[0] + 5) * 100) / 100;
+  }
   if (x.ps.firsts[`sacrifice:${st.id}`] === undefined) {
     x.ps.firsts[`sacrifice:${st.id}`] = x.tick;
     tell(x.u, x.p, 'sacrifice', vars(x, st, -1, { item: what }), st, [settlementRef(x, st)], 1);

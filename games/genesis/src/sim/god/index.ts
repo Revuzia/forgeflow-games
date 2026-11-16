@@ -9,6 +9,7 @@
 // revolt, migration away), forestry. Rival gods act through the same registry the player uses. (LIVING §3.5: the
 // creature is gone.)
 
+import { reachDaily, reachView, type ReachView } from './reach.ts';
 import type { CommandRegistry } from './commands.ts';
 import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
@@ -80,6 +81,7 @@ export function godTick(u: Universe, reg: CommandRegistry, t: number): void {
     const day = Math.max(60, Math.round(p.st.dayHours * 60));
     if (ts % day === 911 % day) { naturalDisasters(u, p); faithDaily(u, p); relationshipDaily(u, p); forestryDaily(u, p); materialsDaily(u, p); }
   }
+  if (g.bound && t % 1440 === 917) reachDaily(u); // POWERS-GROWTH: the count, the standing, the day's measures
   if (t % 60 === 37 && g.gods.length > 1) rivalsStep(u, reg);
 }
 
@@ -113,8 +115,9 @@ export function godSnapPlanet(u: Universe, p: Planet, snap: PlanetSnap): void {
 }
 
 /** the god's global parts of a snapshot (LIVING §3.5: `Snapshot.creatures` is never sent; the client reads it optionally) */
-export function godSnapGlobal(u: Universe): { hand: HandView | null; regard: number; wrath: number } {
-  return { hand: handView(u), ...relSnapGlobal(u) };
+export function godSnapGlobal(u: Universe): { hand: HandView | null; regard: number; wrath: number; reach?: ReachView } {
+  // (POWERS-GROWTH: the standing, the two bars and the pool, only in a bound world: an unbound snapshot is unchanged)
+  return { hand: handView(u), ...relSnapGlobal(u), ...(u.god.bound ? { reach: reachView(u) } : {}) };
 }
 
 function overlayMovers(u: Universe, p: Planet, b: MoverBlock): void {

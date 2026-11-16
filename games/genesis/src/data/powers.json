@@ -49,7 +49,9 @@
    "witness": {
     "wonder": 0.25,
     "radius": 400
-   }
+   },
+   "tier": 0,
+   "price": 2
   },
   {
    "id": "lower",
@@ -98,7 +100,9 @@
    "witness": {
     "wonder": 0.25,
     "radius": 400
-   }
+   },
+   "tier": 0,
+   "price": 2
   },
   {
    "id": "flatten",
@@ -152,7 +156,9 @@
    "witness": {
     "wonder": 0.15,
     "radius": 300
-   }
+   },
+   "tier": 0,
+   "price": 2
   },
   {
    "id": "smooth",
@@ -199,7 +205,9 @@
    "witness": {
     "wonder": 0.1,
     "radius": 300
-   }
+   },
+   "tier": 0,
+   "price": 2
   },
   {
    "id": "roughen",
@@ -253,7 +261,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 300
-   }
+   },
+   "tier": 0,
+   "price": 2
   },
   {
    "id": "crater",
@@ -301,7 +311,9 @@
     "harm": 0.5,
     "wonder": 0.3,
     "radius": 600
-   }
+   },
+   "tier": 0,
+   "price": 5
   },
   {
    "id": "mountains",
@@ -355,7 +367,9 @@
    "witness": {
     "wonder": 0.6,
     "radius": 1500
-   }
+   },
+   "tier": 0,
+   "price": 10
   },
   {
    "id": "dig-sea",
@@ -403,7 +417,9 @@
    "witness": {
     "wonder": 0.5,
     "radius": 1200
-   }
+   },
+   "tier": 0,
+   "price": 10
   },
   {
    "id": "paint-sand",
@@ -453,7 +469,9 @@
     "wonder": 0.2,
     "harm": 0,
     "radius": 400
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "paint-snow",
@@ -505,7 +523,9 @@
     "wonder": 0.2,
     "harm": 0,
     "radius": 400
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "paint-soil",
@@ -556,7 +576,9 @@
     "wonder": 0.2,
     "harm": 0,
     "radius": 400
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "paint-ash",
@@ -605,7 +627,9 @@
     "wonder": 0.2,
     "harm": 0,
     "radius": 400
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "paint-ice",
@@ -655,7 +679,9 @@
     "wonder": 0.2,
     "harm": 0,
     "radius": 400
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "paint-rock",
@@ -704,7 +730,9 @@
     "wonder": 0.2,
     "harm": 0,
     "radius": 400
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "paint-lava",
@@ -753,7 +781,9 @@
     "wonder": 0.2,
     "harm": 0.3,
     "radius": 400
-   }
+   },
+   "tier": 0,
+   "price": 8
   },
   {
    "id": "pin-biome",
@@ -793,7 +823,9 @@
     "sanctuary"
    ],
    "desc": "Pin a region's biome so it never drifts back.",
-   "cost": 3
+   "cost": 3,
+   "tier": 0,
+   "price": 2
   },
   {
    "id": "pour-water",
@@ -843,7 +875,9 @@
     "help": 0.2,
     "wonder": 0.2,
     "radius": 400
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "take-water",
@@ -889,7 +923,9 @@
     "harm": 0.1,
     "wonder": 0.2,
     "radius": 400
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "drain",
@@ -928,7 +964,9 @@
    "witness": {
     "wonder": 0.3,
     "radius": 500
-   }
+   },
+   "tier": 0,
+   "price": 4
   },
   {
    "id": "rain",
@@ -984,7 +1022,10 @@
     "help": 0.25,
     "wonder": 0.15,
     "radius": 800
-   }
+   },
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "flood",
@@ -1031,7 +1072,9 @@
    "witness": {
     "harm": 0.6,
     "radius": 800
-   }
+   },
+   "tier": 2,
+   "price": 30
   },
   {
    "id": "tsunami-wave",
@@ -1082,7 +1125,9 @@
    "witness": {
     "harm": 0.8,
     "radius": 1200
-   }
+   },
+   "tier": 3,
+   "price": 50
   },
   {
    "id": "raise-seas",
@@ -1120,7 +1165,9 @@
    "cost": 40,
    "witness": {
     "wonder": 0.4
-   }
+   },
+   "tier": 3,
+   "price": 50
   },
   {
    "id": "lower-seas",
@@ -1158,7 +1205,9 @@
    "cost": 40,
    "witness": {
     "wonder": 0.4
-   }
+   },
+   "tier": 3,
+   "price": 50
   },
   {
    "id": "spring",
@@ -1204,7 +1253,9 @@
     "help": 0.3,
     "wonder": 0.3,
     "radius": 400
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "river",
@@ -1256,7 +1307,9 @@
     "help": 0.2,
     "wonder": 0.4,
     "radius": 800
-   }
+   },
+   "tier": 0,
+   "price": 8
   },
   {
    "id": "water-miracle",
@@ -1300,7 +1353,9 @@
    "desc": "Rain for the thirsty: rain, a pool, damp fields, fires put out.",
    "cost": 10,
    "cooldown": 60,
-   "sigil": "drop"
+   "sigil": "drop",
+   "tier": 1,
+   "price": 10
   },
   {
    "id": "weather-thunderstorm",
@@ -1358,7 +1413,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 900
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "weather-snow",
@@ -1419,7 +1476,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 900
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "weather-blizzard",
@@ -1477,7 +1536,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 900
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "weather-hail",
@@ -1534,7 +1595,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 900
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "weather-fog",
@@ -1592,7 +1655,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 900
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "weather-sandstorm",
@@ -1650,7 +1715,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 900
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "weather-ashfall",
@@ -1708,7 +1775,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 900
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "weather-acid-rain",
@@ -1765,7 +1834,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 900
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "weather-blood-rain",
@@ -1824,7 +1895,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 900
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "weather-heatwave",
@@ -1882,7 +1955,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 900
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "weather-cold-snap",
@@ -1941,7 +2016,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 900
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "weather-aurora-storm",
@@ -1999,7 +2076,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 900
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "weather-monsoon",
@@ -2057,7 +2136,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 900
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "weather-overcast",
@@ -2116,7 +2197,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 900
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "weather-clear",
@@ -2174,7 +2257,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 900
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "clear-skies",
@@ -2220,7 +2305,9 @@
     "help": 0.1,
     "wonder": 0.2,
     "radius": 900
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "world-weather",
@@ -2248,7 +2335,9 @@
    "cost": 60,
    "witness": {
     "wonder": 0.5
-   }
+   },
+   "tier": 3,
+   "price": 75
   },
   {
    "id": "hold-season",
@@ -2284,7 +2373,9 @@
    "cost": 60,
    "witness": {
     "wonder": 0.5
-   }
+   },
+   "tier": 3,
+   "price": 75
   },
   {
    "id": "storm-miracle",
@@ -2329,7 +2420,9 @@
    "desc": "Call a thunderstorm down.",
    "cost": 15,
    "cooldown": 90,
-   "sigil": "anvil"
+   "sigil": "anvil",
+   "tier": 2,
+   "price": 15
   },
   {
    "id": "lightning",
@@ -2374,7 +2467,10 @@
    "desc": "Strike with lightning: one tree, one roof, one person (fire, fear, glass in the dunes).",
    "cost": 10,
    "cooldown": 60,
-   "sigil": "fork"
+   "sigil": "fork",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "calm",
@@ -2420,7 +2516,9 @@
    "desc": "Stillness: storms disperse, fires die, fear eases, anger cools.",
    "cost": 15,
    "cooldown": 90,
-   "sigil": "ripple"
+   "sigil": "ripple",
+   "tier": 2,
+   "price": 15
   },
   {
    "id": "invent-weather",
@@ -2497,7 +2595,9 @@
    "witness": {
     "wonder": 0.7,
     "radius": 1000
-   }
+   },
+   "tier": 2,
+   "price": 25
   },
   {
    "id": "set-hour",
@@ -2531,7 +2631,9 @@
    "cost": 10,
    "witness": {
     "wonder": 0.5
-   }
+   },
+   "tier": 2,
+   "price": 10
   },
   {
    "id": "day-length",
@@ -2561,7 +2663,9 @@
    "cost": 40,
    "witness": {
     "wonder": 0.4
-   }
+   },
+   "tier": 3,
+   "price": 50
   },
   {
    "id": "freeze-sun",
@@ -2590,7 +2694,9 @@
    "cost": 80,
    "witness": {
     "wonder": 0.9
-   }
+   },
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "year-length",
@@ -2619,7 +2725,9 @@
    "cost": 40,
    "witness": {
     "wonder": 0.3
-   }
+   },
+   "tier": 3,
+   "price": 50
   },
   {
    "id": "axial-tilt",
@@ -2649,7 +2757,9 @@
    "cost": 60,
    "witness": {
     "wonder": 0.4
-   }
+   },
+   "tier": 4,
+   "price": 60
   },
   {
    "id": "speed",
@@ -2677,7 +2787,10 @@
     "pause",
     "time speed"
    ],
-   "desc": "How fast time runs."
+   "desc": "How fast time runs.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "step",
@@ -2716,7 +2829,10 @@
     "fast forward",
     "let time pass"
    ],
-   "desc": "Let time pass."
+   "desc": "Let time pass.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "rewind",
@@ -2751,7 +2867,10 @@
     "undo time",
     "turn back time"
    ],
-   "desc": "Turn time back to an earlier moment."
+   "desc": "Turn time back to an earlier moment.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "edit-past",
@@ -2789,7 +2908,10 @@
     "rewrite history",
     "what if"
    ],
-   "desc": "Insert an act at an earlier moment and live the world forward again."
+   "desc": "Insert an act at an earlier moment and live the world forward again.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "add-air",
@@ -2821,7 +2943,9 @@
    "cost": 100,
    "witness": {
     "wonder": 0.8
-   }
+   },
+   "tier": 0,
+   "price": 40
   },
   {
    "id": "remove-air",
@@ -2852,7 +2976,9 @@
    "witness": {
     "harm": 0.8,
     "wonder": 0.5
-   }
+   },
+   "tier": 4,
+   "price": 200
   },
   {
    "id": "atmosphere",
@@ -2912,7 +3038,9 @@
    "cost": 100,
    "witness": {
     "wonder": 0.5
-   }
+   },
+   "tier": 0,
+   "price": 40
   },
   {
    "id": "star-kind",
@@ -2944,7 +3072,9 @@
    "witness": {
     "wonder": 1,
     "harm": 0.3
-   }
+   },
+   "tier": 4,
+   "price": 500
   },
   {
    "id": "star-brightness",
@@ -2981,7 +3111,9 @@
    "cost": 200,
    "witness": {
     "wonder": 0.8
-   }
+   },
+   "tier": 4,
+   "price": 200
   },
   {
    "id": "gravity",
@@ -3011,7 +3143,9 @@
    "cost": 100,
    "witness": {
     "wonder": 0.6
-   }
+   },
+   "tier": 4,
+   "price": 100
   },
   {
    "id": "magnetism",
@@ -3040,7 +3174,9 @@
    "cost": 60,
    "witness": {
     "wonder": 0.4
-   }
+   },
+   "tier": 3,
+   "price": 75
   },
   {
    "id": "spin",
@@ -3070,7 +3206,9 @@
    "cost": 60,
    "witness": {
     "wonder": 0.5
-   }
+   },
+   "tier": 4,
+   "price": 60
   },
   {
    "id": "warmth",
@@ -3101,7 +3239,9 @@
    "cost": 80,
    "witness": {
     "wonder": 0.4
-   }
+   },
+   "tier": 0,
+   "price": 40
   },
   {
    "id": "move-world",
@@ -3149,7 +3289,9 @@
    "cooldown": 1440,
    "witness": {
     "wonder": 0.9
-   }
+   },
+   "tier": 4,
+   "price": 300
   },
   {
    "id": "birth-world",
@@ -3198,7 +3340,9 @@
    ],
    "desc": "A new world of any kind at any orbit, bare or green, with a people on it if you like.",
    "cost": 1000,
-   "cooldown": 2880
+   "cooldown": 2880,
+   "tier": 4,
+   "price": 1000
   },
   {
    "id": "crack-world",
@@ -3231,7 +3375,9 @@
    "witness": {
     "harm": 1,
     "wonder": 0.8
-   }
+   },
+   "tier": 4,
+   "price": 1500
   },
   {
    "id": "erase-world",
@@ -3259,7 +3405,9 @@
    ],
    "desc": "Unmake a world and all on it.",
    "cost": 3000,
-   "cooldown": 4320
+   "cooldown": 4320,
+   "tier": 4,
+   "price": 3000
   },
   {
    "id": "add-moon",
@@ -3304,7 +3452,9 @@
    "cost": 300,
    "witness": {
     "wonder": 0.7
-   }
+   },
+   "tier": 4,
+   "price": 300
   },
   {
    "id": "moon-fall",
@@ -3341,7 +3491,9 @@
    ],
    "desc": "A moon breaks its orbit and falls.",
    "cost": 1500,
-   "cooldown": 4320
+   "cooldown": 4320,
+   "tier": 4,
+   "price": 1500
   },
   {
    "id": "seed-species",
@@ -3386,7 +3538,9 @@
    "cost": 100,
    "witness": {
     "wonder": 0.4
-   }
+   },
+   "tier": 0,
+   "price": 40
   },
   {
    "id": "plant",
@@ -3439,7 +3593,10 @@
     "help": 0.1,
     "wonder": 0.15,
     "radius": 400
-   }
+   },
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "forest",
@@ -3490,7 +3647,9 @@
    "witness": {
     "wonder": 0.3,
     "radius": 600
-   }
+   },
+   "tier": 0,
+   "price": 4
   },
   {
    "id": "forest-miracle",
@@ -3534,7 +3693,9 @@
    "desc": "A grove springs up; those who see it may learn forestry.",
    "cost": 15,
    "cooldown": 90,
-   "sigil": "sprout"
+   "sigil": "sprout",
+   "tier": 2,
+   "price": 15
   },
   {
    "id": "paint-biome",
@@ -3582,7 +3743,9 @@
    "witness": {
     "wonder": 0.3,
     "radius": 600
-   }
+   },
+   "tier": 0,
+   "price": 4
   },
   {
    "id": "animals",
@@ -3623,7 +3786,9 @@
    "witness": {
     "wonder": 0.25,
     "radius": 400
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "invent-animal",
@@ -3666,7 +3831,9 @@
    "witness": {
     "wonder": 0.7,
     "radius": 600
-   }
+   },
+   "tier": 2,
+   "price": 30
   },
   {
    "id": "cull",
@@ -3714,7 +3881,9 @@
    "witness": {
     "harm": 0.2,
     "radius": 400
-   }
+   },
+   "tier": 0,
+   "price": 4
   },
   {
    "id": "breed",
@@ -3763,7 +3932,9 @@
    "witness": {
     "help": 0.1,
     "radius": 400
-   }
+   },
+   "tier": 0,
+   "price": 4
   },
   {
    "id": "extinct",
@@ -3791,7 +3962,9 @@
    "cost": 60,
    "witness": {
     "harm": 0.3
-   }
+   },
+   "tier": 3,
+   "price": 75
   },
   {
    "id": "kill-area",
@@ -3838,7 +4011,9 @@
    ],
    "desc": "Everything in the area dies.",
    "cost": 50,
-   "cooldown": 240
+   "cooldown": 240,
+   "tier": 2,
+   "price": 50
   },
   {
    "id": "heal-area",
@@ -3872,7 +4047,9 @@
     "mend"
    ],
    "desc": "Heal everyone and everything in an area.",
-   "cost": 20
+   "cost": 20,
+   "tier": 2,
+   "price": 20
   },
   {
    "id": "heal-miracle",
@@ -3919,7 +4096,9 @@
    "desc": "Mend the sick and hurt; it can start medicine.",
    "cost": 20,
    "cooldown": 120,
-   "sigil": "knot"
+   "sigil": "knot",
+   "tier": 2,
+   "price": 20
   },
   {
    "id": "food-miracle",
@@ -3966,7 +4145,9 @@
    "desc": "Food falls into the store (they may refuse it).",
    "cost": 15,
    "cooldown": 90,
-   "sigil": "basket"
+   "sigil": "basket",
+   "tier": 2,
+   "price": 15
   },
   {
    "id": "fertility",
@@ -4011,7 +4192,9 @@
    "desc": "Increase: fields swell, herds breed, couples have children.",
    "cost": 25,
    "cooldown": 150,
-   "sigil": "seed"
+   "sigil": "seed",
+   "tier": 2,
+   "price": 25
   },
   {
    "id": "bless",
@@ -4052,7 +4235,9 @@
     "favour"
    ],
    "desc": "Health, harvests and joy.",
-   "cost": 20
+   "cost": 20,
+   "tier": 2,
+   "price": 20
   },
   {
    "id": "curse",
@@ -4097,7 +4282,9 @@
     "blight them"
    ],
    "desc": "Blight, sickness and gloom.",
-   "cost": 30
+   "cost": 30,
+   "tier": 2,
+   "price": 30
   },
   {
    "id": "people",
@@ -4162,7 +4349,9 @@
    "witness": {
     "wonder": 0.4,
     "radius": 300
-   }
+   },
+   "tier": 0,
+   "price": 25
   },
   {
    "id": "move-person",
@@ -4196,7 +4385,9 @@
     "set down elsewhere"
    ],
    "desc": "Set a person down elsewhere.",
-   "cost": 2
+   "cost": 2,
+   "tier": 0,
+   "price": 1
   },
   {
    "id": "possess",
@@ -4230,7 +4421,10 @@
     "ride"
    ],
    "desc": "Look out through a person's eyes: they do what you order.",
-   "cost": 10
+   "cost": 10,
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "possess-move",
@@ -4265,7 +4459,10 @@
     "go to",
     "walk there"
    ],
-   "desc": "Walk the person you possess somewhere."
+   "desc": "Walk the person you possess somewhere.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "possess-act",
@@ -4332,7 +4529,10 @@
     "fish",
     "hunt"
    ],
-   "desc": "Make the person you possess do something."
+   "desc": "Make the person you possess do something.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "kill-person",
@@ -4361,7 +4561,9 @@
     "smite her"
    ],
    "desc": "Kill a person.",
-   "cost": 5
+   "cost": 5,
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "heal-person",
@@ -4389,7 +4591,10 @@
     "make whole"
    ],
    "desc": "Heal a person.",
-   "cost": 3
+   "cost": 3,
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "disciple",
@@ -4441,7 +4646,9 @@
     "make a disciple"
    ],
    "desc": "Call a person to the god: one of the Called, with a standing order (they follow it as far as they are loyal).",
-   "cost": 20
+   "cost": 20,
+   "tier": 1,
+   "price": 20
   },
   {
    "id": "disciple-order",
@@ -4488,7 +4695,10 @@
     "order the called",
     "order disciples"
    ],
-   "desc": "Give the Called a standing order."
+   "desc": "Give the Called a standing order.",
+   "tier": 1,
+   "price": 0,
+   "free": true
   },
   {
    "id": "inspire",
@@ -4517,7 +4727,9 @@
     "enlighten"
    ],
    "desc": "A flash of insight, zeal and skill.",
-   "cost": 15
+   "cost": 15,
+   "tier": 1,
+   "price": 15
   },
   {
    "id": "age-person",
@@ -4553,7 +4765,9 @@
     "rejuvenate"
    ],
    "desc": "Age (or rejuvenate) a person.",
-   "cost": 5
+   "cost": 5,
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "rename-person",
@@ -4584,7 +4798,10 @@
     "call him",
     "call her"
    ],
-   "desc": "Give a person a new name."
+   "desc": "Give a person a new name.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "found",
@@ -4614,7 +4831,9 @@
    "witness": {
     "wonder": 0.3,
     "radius": 300
-   }
+   },
+   "tier": 0,
+   "price": 5
   },
   {
    "id": "raze",
@@ -4647,7 +4866,9 @@
    ],
    "desc": "Throw a settlement down.",
    "cost": 80,
-   "cooldown": 480
+   "cooldown": 480,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "gift",
@@ -4683,7 +4904,9 @@
     "send them"
    ],
    "desc": "Give a settlement things (they may refuse).",
-   "cost": 5
+   "cost": 5,
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "wood-miracle",
@@ -4728,7 +4951,9 @@
    "desc": "Timber piles up in the store.",
    "cost": 8,
    "cooldown": 48,
-   "sigil": "log"
+   "sigil": "log",
+   "tier": 1,
+   "price": 8
   },
   {
    "id": "split",
@@ -4760,7 +4985,9 @@
     "exodus"
    ],
    "desc": "Split a settlement in two.",
-   "cost": 30
+   "cost": 30,
+   "tier": 2,
+   "price": 30
   },
   {
    "id": "merge",
@@ -4792,7 +5019,9 @@
     "join together"
    ],
    "desc": "Merge one settlement into another.",
-   "cost": 30
+   "cost": 30,
+   "tier": 2,
+   "price": 30
   },
   {
    "id": "peace",
@@ -4826,7 +5055,9 @@
     "reconcile"
    ],
    "desc": "Make two warring peoples lay down their arms.",
-   "cost": 30
+   "cost": 30,
+   "tier": 2,
+   "price": 30
   },
   {
    "id": "war",
@@ -4860,7 +5091,9 @@
     "fight"
    ],
    "desc": "Set two peoples at war.",
-   "cost": 30
+   "cost": 30,
+   "tier": 2,
+   "price": 30
   },
   {
    "id": "rename-settlement",
@@ -4893,7 +5126,10 @@
     "rename the village",
     "call the town"
    ],
-   "desc": "Give a settlement a new name."
+   "desc": "Give a settlement a new name.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "teach",
@@ -4943,7 +5179,9 @@
    "witness": {
     "wonder": 0.3,
     "radius": 300
-   }
+   },
+   "tier": 1,
+   "price": 20
   },
   {
    "id": "teach-miracle",
@@ -4998,7 +5236,9 @@
    "desc": "Insight: a settlement grasps the next thing it could.",
    "cost": 30,
    "cooldown": 180,
-   "sigil": "eye"
+   "sigil": "eye",
+   "tier": 2,
+   "price": 30
   },
   {
    "id": "forget",
@@ -5031,7 +5271,9 @@
     "mute"
    ],
    "desc": "Make a person forget (or fall silent).",
-   "cost": 10
+   "cost": 10,
+   "tier": 2,
+   "price": 10
   },
   {
    "id": "introduce-item",
@@ -5077,7 +5319,9 @@
    "witness": {
     "wonder": 0.3,
     "radius": 300
-   }
+   },
+   "tier": 2,
+   "price": 15
   },
   {
    "id": "introduce-idea",
@@ -5115,7 +5359,9 @@
    "witness": {
     "wonder": 0.3,
     "radius": 300
-   }
+   },
+   "tier": 2,
+   "price": 15
   },
   {
    "id": "introduce-artifact",
@@ -5161,7 +5407,9 @@
    "witness": {
     "wonder": 0.3,
     "radius": 300
-   }
+   },
+   "tier": 2,
+   "price": 15
   },
   {
    "id": "introduce-animal",
@@ -5205,7 +5453,9 @@
    "witness": {
     "wonder": 0.3,
     "radius": 300
-   }
+   },
+   "tier": 2,
+   "price": 15
   },
   {
    "id": "introduce-crop",
@@ -5245,7 +5495,9 @@
    "witness": {
     "wonder": 0.3,
     "radius": 300
-   }
+   },
+   "tier": 2,
+   "price": 15
   },
   {
    "id": "introduce-disease",
@@ -5292,7 +5544,9 @@
    "witness": {
     "wonder": 0.3,
     "radius": 300
-   }
+   },
+   "tier": 2,
+   "price": 15
   },
   {
    "id": "introduce-people",
@@ -5338,7 +5592,9 @@
    "witness": {
     "wonder": 0.3,
     "radius": 300
-   }
+   },
+   "tier": 2,
+   "price": 15
   },
   {
    "id": "introduce-substance",
@@ -5377,7 +5633,9 @@
    "witness": {
     "wonder": 0.3,
     "radius": 300
-   }
+   },
+   "tier": 2,
+   "price": 15
   },
   {
    "id": "withdraw",
@@ -5417,7 +5675,9 @@
     "remove"
    ],
    "desc": "Take back a thing or an idea.",
-   "cost": 10
+   "cost": 10,
+   "tier": 2,
+   "price": 10
   },
   {
    "id": "invent-thing",
@@ -5445,7 +5705,9 @@
     "new thing"
    ],
    "desc": "A thing the world never had (and the craft to make it).",
-   "cost": 20
+   "cost": 20,
+   "tier": 2,
+   "price": 20
   },
   {
    "id": "invent-idea",
@@ -5499,7 +5761,9 @@
     "discover"
    ],
    "desc": "An idea the world never had, with an effect.",
-   "cost": 30
+   "cost": 30,
+   "tier": 2,
+   "price": 30
   },
   {
    "id": "ignite",
@@ -5548,7 +5812,9 @@
     "harm": 0.5,
     "wonder": 0.2,
     "radius": 500
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "extinguish",
@@ -5587,7 +5853,9 @@
    "witness": {
     "help": 0.3,
     "radius": 500
-   }
+   },
+   "tier": 0,
+   "price": 2
   },
   {
    "id": "fire-miracle",
@@ -5632,7 +5900,9 @@
    "desc": "Kindling: light their hearths; they may learn to keep fire.",
    "cost": 8,
    "cooldown": 48,
-   "sigil": "flame"
+   "sigil": "flame",
+   "tier": 1,
+   "price": 8
   },
   {
    "id": "fireball",
@@ -5678,7 +5948,9 @@
    "desc": "The falling flame: it burns, it can kill — and it teaches fire.",
    "cost": 20,
    "cooldown": 120,
-   "sigil": "trail"
+   "sigil": "trail",
+   "tier": 2,
+   "price": 20
   },
   {
    "id": "disaster-meteor",
@@ -5750,7 +6022,9 @@
    "desc": "A stone from the sky: a blinding fall, a crater, a ring of fire, iron in the ashes.",
    "cost": 80,
    "cooldown": 120,
-   "sigil": "fall"
+   "sigil": "fall",
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-meteor-shower",
@@ -5818,7 +6092,9 @@
    ],
    "desc": "A night of falling stars: many small stones burn down across a wide land.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-comet",
@@ -5885,7 +6161,9 @@
    ],
    "desc": "A great comet hangs in the sky for days — then strikes: a crater wider than a town, fire, dust that dims the sun.",
    "cost": 400,
-   "cooldown": 720
+   "cooldown": 720,
+   "tier": 4,
+   "price": 400
   },
   {
    "id": "disaster-swarm",
@@ -5953,7 +6231,9 @@
    ],
    "desc": "A locust cloud darkens the sky and strips every field it crosses.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-volcano",
@@ -6021,7 +6301,9 @@
    ],
    "desc": "The ground splits and a mountain of fire pours lava and ash over the land.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-supervolcano",
@@ -6089,7 +6371,9 @@
    ],
    "desc": "A caldera tens of kilometres wide opens: ash buries the land, the sky goes dark for a year.",
    "cost": 400,
-   "cooldown": 720
+   "cooldown": 720,
+   "tier": 4,
+   "price": 400
   },
   {
    "id": "disaster-quake",
@@ -6158,7 +6442,9 @@
    ],
    "desc": "The ground shakes: weak walls fall first, slopes slide, the coast may send back a wave.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-sinkhole",
@@ -6225,7 +6511,9 @@
    ],
    "desc": "The ground opens and swallows what stood on it.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-rift",
@@ -6293,7 +6581,9 @@
    ],
    "desc": "A crack runs across the land, lava welling in its floor.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-flood",
@@ -6362,7 +6652,9 @@
    ],
    "desc": "Rivers burst their banks and the low places drown.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-tsunami",
@@ -6429,7 +6721,9 @@
    ],
    "desc": "A wall of water rises from the sea and runs inland.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-drought",
@@ -6497,7 +6791,9 @@
    ],
    "desc": "No rain for weeks: wells sink, crops wither, the herds wander off.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-hurricane",
@@ -6565,7 +6861,9 @@
    ],
    "desc": "A great spiral storm comes off the sea: wind, rain, and a surge of water at the coast.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-tornado",
@@ -6633,7 +6931,9 @@
    ],
    "desc": "A twisting funnel walks across the land, flinging roofs, trees and people.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-wildfire",
@@ -6702,7 +7002,9 @@
    ],
    "desc": "Fire runs through dry country faster than people can flee.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-firestorm",
@@ -6770,7 +7072,9 @@
    ],
    "desc": "Fire makes its own wind: a storm of flame that nothing in its path survives.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-plague",
@@ -6839,7 +7143,9 @@
    ],
    "desc": "A sickness passes from hand to hand through the towns.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-blight",
@@ -6907,7 +7213,9 @@
    ],
    "desc": "A rot spreads through fields and woods.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-infestation",
@@ -6976,7 +7284,9 @@
    ],
    "desc": "Rats and weevils swarm the granaries and the fields.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-solar-flare",
@@ -7044,7 +7354,9 @@
    ],
    "desc": "The star throws off a storm of light: skies burn with auroras, the day side is scorched.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-impact-winter",
@@ -7112,7 +7424,9 @@
    ],
    "desc": "Dust hides the sun: a year of cold and failed harvests.",
    "cost": 400,
-   "cooldown": 720
+   "cooldown": 720,
+   "tier": 4,
+   "price": 400
   },
   {
    "id": "disaster-gravity-slip",
@@ -7181,7 +7495,9 @@
    ],
    "desc": "For a while the world lets go: people, beasts and loose things drift up — and fall.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-magnetic-storm",
@@ -7249,7 +7565,9 @@
    ],
    "desc": "The world's shield flickers: auroras at noon, birds lost, a rain of hard light.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-eclipse",
@@ -7318,7 +7636,9 @@
    ],
    "desc": "Something stands before the sun for a whole year. Cold, dark, and the end of the world foretold.",
    "cost": 400,
-   "cooldown": 720
+   "cooldown": 720,
+   "tier": 4,
+   "price": 400
   },
   {
    "id": "disaster-moon-fall",
@@ -7387,7 +7707,9 @@
    ],
    "desc": "A moon breaks its orbit and falls: tides tear the coasts for days, then it strikes.",
    "cost": 400,
-   "cooldown": 720
+   "cooldown": 720,
+   "tier": 4,
+   "price": 400
   },
   {
    "id": "disaster-rogue-flyby",
@@ -7456,7 +7778,9 @@
    ],
    "desc": "A wandering world passes close: tides, quakes, a long night of strange light, a bent orbit.",
    "cost": 400,
-   "cooldown": 720
+   "cooldown": 720,
+   "tier": 4,
+   "price": 400
   },
   {
    "id": "disaster-acid-rain",
@@ -7523,7 +7847,9 @@
    ],
    "desc": "Rain that burns leaves, pocks stone and stings the skin.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-ice-age",
@@ -7591,7 +7917,9 @@
    ],
    "desc": "The cold comes down from the poles and does not leave: glaciers, frozen seas, short summers.",
    "cost": 400,
-   "cooldown": 720
+   "cooldown": 720,
+   "tier": 4,
+   "price": 400
   },
   {
    "id": "disaster-heat-wave",
@@ -7659,7 +7987,9 @@
    ],
    "desc": "Weeks of killing heat: the old and the weak fall, fields burn brown.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-dust-bowl",
@@ -7727,7 +8057,9 @@
    ],
    "desc": "Overworked land dries and blows away; black blizzards bury the farms.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-glass-storm",
@@ -7794,7 +8126,9 @@
    ],
    "desc": "Lightning walks the dunes all night; morning finds the sand fused into rivers of glass.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-overgrowth",
@@ -7862,7 +8196,9 @@
    ],
    "desc": "The green goes mad: vines split walls, forest swallows fields and roads in days.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-leviathan",
@@ -7929,7 +8265,9 @@
    ],
    "desc": "A wall of water far taller than the swell around it runs along the coast, smashing boats and harbours and flooding the shore.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-forgetting-fog",
@@ -7997,7 +8335,9 @@
    ],
    "desc": "A grey mist settles and people walk out of it not knowing what they knew. Only what is written survives.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "disaster-stampede",
@@ -8064,7 +8404,9 @@
    ],
    "desc": "The herds panic: a thundering river of beasts tramples fields, fences and anyone in the way.",
    "cost": 80,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 100
   },
   {
    "id": "cancel-disaster",
@@ -8105,7 +8447,10 @@
     "enough",
     "halt"
    ],
-   "desc": "Stop a live disaster."
+   "desc": "Stop a live disaster.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "scale-disaster",
@@ -8151,7 +8496,9 @@
     "weaker"
    ],
    "desc": "Make a live disaster bigger or smaller.",
-   "cost": 20
+   "cost": 20,
+   "tier": 3,
+   "price": 25
   },
   {
    "id": "move-disaster",
@@ -8200,7 +8547,9 @@
     "send the storm away"
    ],
    "desc": "Move a live disaster or set it heading.",
-   "cost": 20
+   "cost": 20,
+   "tier": 3,
+   "price": 25
   },
   {
    "id": "freeze-disaster",
@@ -8241,7 +8590,9 @@
     "suspend"
    ],
    "desc": "Freeze a live disaster mid-flight.",
-   "cost": 20
+   "cost": 20,
+   "tier": 3,
+   "price": 25
   },
   {
    "id": "meteor-miracle",
@@ -8281,7 +8632,9 @@
    ],
    "desc": "Call a star down on a place.",
    "cost": 40,
-   "cooldown": 240
+   "cooldown": 240,
+   "tier": 2,
+   "price": 40
   },
   {
    "id": "grab",
@@ -8365,7 +8718,10 @@
     "hold",
     "take up"
    ],
-   "desc": "Lift anything: a person, an animal, a tree, a rock, an item, a hut."
+   "desc": "Lift anything: a person, an animal, a tree, a rock, an item, a hut.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "throw",
@@ -8411,7 +8767,10 @@
    "witness": {
     "wonder": 0.2,
     "radius": 300
-   }
+   },
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "release",
@@ -8454,7 +8813,10 @@
     "release",
     "drop it"
    ],
-   "desc": "Let go of what the Touch holds."
+   "desc": "Let go of what the Touch holds.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "place",
@@ -8479,7 +8841,10 @@
     "put down",
     "put"
    ],
-   "desc": "Set what the Touch holds down gently."
+   "desc": "Set what the Touch holds down gently.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "drop",
@@ -8495,7 +8860,10 @@
    "synonyms": [
     "drop"
    ],
-   "desc": "Drop what the Touch holds."
+   "desc": "Drop what the Touch holds.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "slap",
@@ -8561,7 +8929,10 @@
     "rebuke",
     "smite lightly"
    ],
-   "desc": "Rebuke: hurts a person, cracks a wall."
+   "desc": "Rebuke: hurts a person, cracks a wall.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "stroke",
@@ -8627,7 +8998,10 @@
     "pat",
     "soothe"
    ],
-   "desc": "Soothe: comforts and heals a little."
+   "desc": "Soothe: comforts and heals a little.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "shield",
@@ -8680,7 +9054,9 @@
    "desc": "A ward nothing can pass: disasters, fire, thrown things.",
    "cost": 30,
    "cooldown": 180,
-   "sigil": "arch"
+   "sigil": "arch",
+   "tier": 2,
+   "price": 30
   },
   {
    "id": "cast",
@@ -8741,7 +9117,9 @@
    ],
    "desc": "Draw any sigil by name (rain, storm, lightning, stillness, the grove, mending, plenty, increase, timber, insight, kindling, the falling flame, ward, meteor).",
    "cost": 10,
-   "cooldown": 60
+   "cooldown": 60,
+   "tier": 1,
+   "price": 10
   },
   {
    "id": "set-law",
@@ -8772,7 +9150,9 @@
    "cost": 50,
    "witness": {
     "wonder": 0.4
-   }
+   },
+   "tier": 3,
+   "price": 63
   },
   {
    "id": "restraint",
@@ -8796,7 +9176,10 @@
     "hard mode",
     "cost"
    ],
-   "desc": "Restraint mode: worship costs and cooldowns."
+   "desc": "Restraint mode: worship costs and cooldowns.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "rival",
@@ -8840,7 +9223,10 @@
     "false god",
     "enemy god"
    ],
-   "desc": "Add an AI god that acts through the same powers."
+   "desc": "Add an AI god that acts through the same powers.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "rival-remove",
@@ -8870,7 +9256,10 @@
     "remove the god",
     "kill the god"
    ],
-   "desc": "Remove a rival god."
+   "desc": "Remove a rival god.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "give-law",
@@ -8917,7 +9306,9 @@
     "rule"
    ],
    "desc": "Give a settlement a law: peace, worship, learning, labour ...",
-   "cost": 30
+   "cost": 30,
+   "tier": 2,
+   "price": 30
   },
   {
    "id": "natural-disasters",
@@ -8942,7 +9333,10 @@
     "calm nature",
     "violent nature"
    ],
-   "desc": "How often nature sends disasters on its own."
+   "desc": "How often nature sends disasters on its own.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "species-law",
@@ -8973,7 +9367,9 @@
     "more children"
    ],
    "desc": "Set a species' fertility, lifespan, speed, size ...",
-   "cost": 50
+   "cost": 50,
+   "tier": 3,
+   "price": 63
   },
   {
    "id": "pave",
@@ -9030,7 +9426,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 300
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "move-settlement",
@@ -9085,7 +9483,9 @@
    "witness": {
     "wonder": 0.8,
     "radius": 600
-   }
+   },
+   "tier": 2,
+   "price": 40
   },
   {
    "id": "build",
@@ -9140,7 +9540,9 @@
     "wonder": 0.5,
     "help": 0.3,
     "radius": 400
-   }
+   },
+   "tier": 0,
+   "price": 8
   },
   {
    "id": "role",
@@ -9197,7 +9599,9 @@
    "witness": {
     "wonder": 0.3,
     "radius": 200
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "treaty",
@@ -9250,7 +9654,9 @@
     "wonder": 0.3,
     "help": 0.2,
     "radius": 400
-   }
+   },
+   "tier": 2,
+   "price": 10
   },
   {
    "id": "sway-belief",
@@ -9319,7 +9725,9 @@
    "witness": {
     "wonder": 0.3,
     "radius": 400
-   }
+   },
+   "tier": 1,
+   "price": 12
   },
   {
    "id": "silence-town",
@@ -9366,7 +9774,9 @@
     "harm": 0.4,
     "wonder": 0.3,
     "radius": 400
-   }
+   },
+   "tier": 2,
+   "price": 10
   },
   {
    "id": "cure",
@@ -9421,7 +9831,9 @@
    "witness": {
     "help": 0.6,
     "radius": 500
-   }
+   },
+   "tier": 0,
+   "price": 4
   },
   {
    "id": "tame",
@@ -9476,7 +9888,9 @@
     "wonder": 0.3,
     "help": 0.2,
     "radius": 500
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "wind",
@@ -9540,7 +9954,9 @@
    "witness": {
     "wonder": 0.15,
     "radius": 2000
-   }
+   },
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "repeal",
@@ -9598,7 +10014,9 @@
    "witness": {
     "wonder": 0.2,
     "radius": 300
-   }
+   },
+   "tier": 0,
+   "price": 2
   },
   {
    "id": "forbid",
@@ -9643,7 +10061,9 @@
    "witness": {
     "wonder": 0.4,
     "radius": 300
-   }
+   },
+   "tier": 1,
+   "price": 6
   },
   {
    "id": "disaster-random",
@@ -9699,7 +10119,9 @@
    ],
    "desc": "Fate chooses: a disaster drawn at random, weighted toward what the place could suffer on its own.",
    "cost": 40,
-   "cooldown": 120
+   "cooldown": 120,
+   "tier": 3,
+   "price": 50
   },
   {
    "id": "save",
@@ -9725,7 +10147,10 @@
     "quick save",
     "save progress"
    ],
-   "desc": "Keep the world as it is now (the host saves it)."
+   "desc": "Keep the world as it is now (the host saves it).",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "load",
@@ -9751,7 +10176,10 @@
     "quick load",
     "restore the save"
    ],
-   "desc": "Go back to the last save (the host loads it)."
+   "desc": "Go back to the last save (the host loads it).",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "resume",
@@ -9774,7 +10202,10 @@
     "let time run",
     "go to normal speed"
    ],
-   "desc": "Let time run again at its own pace."
+   "desc": "Let time run again at its own pace.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "birth",
@@ -9816,7 +10247,9 @@
    "witness": {
     "wonder": 0.3,
     "radius": 300
-   }
+   },
+   "tier": 0,
+   "price": 2
   },
   {
    "id": "launch-ship",
@@ -9874,7 +10307,9 @@
    "witness": {
     "wonder": 0.6,
     "radius": 900
-   }
+   },
+   "tier": 4,
+   "price": 400
   },
   {
    "id": "recall-ship",
@@ -9900,7 +10335,10 @@
     "turn the ship back",
     "forbid the launch"
    ],
-   "desc": "Stop a ship being built, or turn one between the worlds back for home."
+   "desc": "Stop a ship being built, or turn one between the worlds back for home.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "destroy-ship",
@@ -9933,7 +10371,9 @@
     "harm": 0.6,
     "wonder": 0.6,
     "radius": 1500
-   }
+   },
+   "tier": 4,
+   "price": 300
   },
   {
    "id": "star-flare",
@@ -9964,7 +10404,9 @@
    "witness": {
     "harm": 0.2,
     "wonder": 0.8
-   }
+   },
+   "tier": 4,
+   "price": 500
   },
   {
    "id": "prophet-call",
@@ -9996,7 +10438,9 @@
     "a voice for me"
    ],
    "desc": "Mark a grown person as your prophet: they speak for you, read your signs, foretell — and are believed as far as you make their words true.",
-   "cost": 20
+   "cost": 20,
+   "tier": 0,
+   "price": 10
   },
   {
    "id": "prophet-foretell",
@@ -10047,7 +10491,9 @@
     "promise"
    ],
    "desc": "Speak through your prophet: \"rain will come in two days\". Then make it true — or their word, and yours, is worth less.",
-   "cost": 5
+   "cost": 5,
+   "tier": 0,
+   "price": 3
   },
   {
    "id": "prophet-abandon",
@@ -10074,7 +10520,10 @@
     "forsake the prophet",
     "false prophet"
    ],
-   "desc": "Turn from a prophet: their credibility falls, and the town hears that the god has left them."
+   "desc": "Turn from a prophet: their credibility falls, and the town hears that the god has left them.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "omen",
@@ -10126,7 +10575,9 @@
    ],
    "desc": "A sign over a town, made with your own powers — an eclipse, a comet, a rainbow, a lightning strike, a spring rising. Their prophet reads it to them.",
    "cost": 10,
-   "cooldown": 60
+   "cooldown": 60,
+   "tier": 1,
+   "price": 10
   },
   {
    "id": "omen-rainbow",
@@ -10159,7 +10610,10 @@
     "bow in the sky"
    ],
    "desc": "A rainbow after rain, the sun low behind them: a promise where they trust you, a reprieve where they fear you.",
-   "cost": 4
+   "cost": 4,
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "omen-eclipse",
@@ -10194,7 +10648,9 @@
    ],
    "desc": "The sun darkens for a while: hardship foretold, or the god's anger.",
    "cost": 20,
-   "cooldown": 240
+   "cooldown": 240,
+   "tier": 2,
+   "price": 20
   },
   {
    "id": "sacred-place",
@@ -10233,7 +10689,9 @@
     "holy mountain"
    ],
    "desc": "Make a spring, a grove, a peak or a site sacred: shrines rise there, pilgrims come.",
-   "cost": 10
+   "cost": 10,
+   "tier": 1,
+   "price": 10
   },
   {
    "id": "sacred-animal",
@@ -10265,7 +10723,9 @@
     "totem"
    ],
    "desc": "A real animal a town reveres: hunting it is taboo there.",
-   "cost": 5
+   "cost": 5,
+   "tier": 1,
+   "price": 5
   },
   {
    "id": "answer-prayer",
@@ -10297,7 +10757,10 @@
     "grant their prayer",
     "grant the prayer"
    ],
-   "desc": "Do what a town is praying for — rain, food, mending, warmth, protection, rebuilding."
+   "desc": "Do what a town is praying for — rain, food, mending, warmth, protection, rebuilding.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "wrath",
@@ -10328,7 +10791,10 @@
     "be merciful",
     "be terrible"
    ],
-   "desc": "How hard your harm falls: 0 gentle, 0.3 survivable (the default), 1 total destruction allowed."
+   "desc": "How hard your harm falls: 0 gentle, 0.3 survivable (the default), 1 total destruction allowed.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "tower-confuse",
@@ -10346,7 +10812,10 @@
     "confuse the builders",
     "scatter the builders"
    ],
-   "desc": "The builders of the rising tower can no longer understand each other: they scatter and speak apart."
+   "desc": "The builders of the rising tower can no longer understand each other: they scatter and speak apart.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "tower-strike",
@@ -10364,7 +10833,10 @@
     "bring down the tower",
     "fell the tower"
    ],
-   "desc": "Bring the tower down. How hard it falls follows your wrath."
+   "desc": "Bring the tower down. How hard it falls follows your wrath.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "tower-warn",
@@ -10382,7 +10854,10 @@
     "send my prophet to the tower",
     "warn the tower"
    ],
-   "desc": "Your prophet goes to the foot of the tower and tells the builders to go home. You need a prophet among them."
+   "desc": "Your prophet goes to the foot of the tower and tells the builders to go home. You need a prophet among them.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "tower-let",
@@ -10400,7 +10875,10 @@
     "leave the tower",
     "let them build"
    ],
-   "desc": "Do nothing against the tower, and let the builders know it."
+   "desc": "Do nothing against the tower, and let the builders know it.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "vow-no-flood",
@@ -10419,7 +10897,10 @@
     "never again by water",
     "promise no more floods"
    ],
-   "desc": "To the survivors of a great destruction: you will never again destroy them by water."
+   "desc": "To the survivors of a great destruction: you will never again destroy them by water.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "vow-spare-the-many",
@@ -10438,7 +10919,10 @@
     "never again so many",
     "promise to spare the many"
    ],
-   "desc": "To the survivors: you will never again take so many."
+   "desc": "To the survivors: you will never again take so many.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "vow-gentle",
@@ -10457,7 +10941,10 @@
     "always gentle",
     "promise to be gentle"
    ],
-   "desc": "To the survivors: your harm will always fall gently."
+   "desc": "To the survivors: your harm will always fall gently.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "vow-warn-first",
@@ -10476,7 +10963,10 @@
     "always warn first",
     "promise to warn first"
    ],
-   "desc": "To the survivors: you will never strike unwarned."
+   "desc": "To the survivors: you will never strike unwarned.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "vow-none",
@@ -10494,7 +10984,10 @@
     "make no promise",
     "decline the covenant"
    ],
-   "desc": "The survivors wait, and then go back to their fields."
+   "desc": "The survivors wait, and then go back to their fields.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "answer-wrath",
@@ -10520,7 +11013,10 @@
     "answer them with lightning",
     "answer defiance with lightning"
    ],
-   "desc": "Answer a defiant town with a bolt that falls beside them, not on them. How hard it falls follows your wrath."
+   "desc": "Answer a defiant town with a bolt that falls beside them, not on them. How hard it falls follows your wrath.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "answer-mercy",
@@ -10546,7 +11042,10 @@
     "answer them with bread",
     "answer defiance with bread"
    ],
-   "desc": "Answer a defiant town by sending them bread."
+   "desc": "Answer a defiant town by sending them bread.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "answer-sign",
@@ -10572,7 +11071,10 @@
     "answer them with a sign",
     "answer defiance with a sign"
    ],
-   "desc": "Answer a defiant town with a sign over it."
+   "desc": "Answer a defiant town with a sign over it.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   },
   {
    "id": "answer-patience",
@@ -10598,7 +11100,10 @@
     "answer them with patience",
     "answer defiance with patience"
    ],
-   "desc": "Let a defiant town rage, and do nothing. They remember it."
+   "desc": "Let a defiant town rage, and do nothing. They remember it.",
+   "tier": 0,
+   "price": 0,
+   "free": true
   }
  ]
 }

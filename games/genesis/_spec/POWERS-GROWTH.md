@@ -1,6 +1,29 @@
-# GENESIS — POWERS-GROWTH v2: the god grows as belief grows, by two roads, and spends what the people gather (binding spec, final draft for owner sign-off)
+# GENESIS — POWERS-GROWTH v3: the god grows as belief grows, by two roads that go hand in hand, and every power is paid for from what the people gather (binding spec; stage 1 built)
 
-Lead designer, 2026-11-15. This replaces v1 whole. v1 was approved "all recommended"; v2 changes what the three new rulings require, and what two reviews of the v2 draft found. Changed sections are marked **(v2)**. Nothing here has been built or run: every number is a first calibration, and stage 0 (§9) measures before anything is fixed. No files were written; this text is the whole deliverable.
+**v3, 2026-11-16.** This amends v2 in place for the owner's rulings of 2026-11-16 (first and second set) and for what stage 0 measured. Changed text is marked **(v3)**; where a (v2) passage and a (v3) passage disagree, v3 rules. Stage 1 (the sim core: `src/sim/god/reach.ts`, the gate, the pool, save, queries, `tier` / `price` / `free` on every power) is built and tested; the numbers in §3 are the built `REACH` table and the probe results in §8 are measured, not estimated. What is specified but not yet built is listed in §9.
+
+The 2026-11-16 rulings (verbatim):
+- (d) *"i dont think just the basic powers should cost worship, i think all should. obviously larger powers may require more worship - of course this all heals over time."*
+- (e) *"trust and fear can be shown on a bar perhaps - also trust shouldnt wipe fear or vice versa, they can go hand in hand. fear is like the negative version to earn trust, and worship is the positive version - depends on the kind of g-d you want to be."*
+- (f) slow pacing: Whispered in the first session, Known after a few hours of play, Most High only in a long game.
+- (g) second set: *"yes things that arent powers over the world should be free. but also very basic spells should be free as well. the pool cannot refill without believers though"*
+
+**What v3 changes, in brief (v3)**
+
+| Area | v2 | v3 |
+|---|---|---|
+| What costs worship | bands 1 to 4, plus a short list of "heavy hands" | **every power**, by size (`price` in `powers.json`), except the free list (§3.2) |
+| What is free | most of band 0 | what is not a power over the world (the clock, save and load, the camera, possession's movement, the Hand, names, the settings, every story answer) and **five very basic spells**: `rain`, `heal-person`, `plant`, `lightning`, `omen-rainbow` |
+| Refilling | a "least gift" of `4 + 0.1 F` a day | **no income without believers.** The pool refills only from the people's rites. No least gift, no trickle |
+| No dead end | the least gift | the free basics (a small help, a small harm, a small wonder), the starting pool of a new world (40), free clay, and no charge on a failed cast (§3.6) |
+| The two roads | one road at a time | **a person may be on both.** Neither erases the other, in the count or in the sim (§2.1, §4) |
+| A person on both roads | n/a | counts 2, the same as on one road: a mixed god is neither weaker nor stronger (§2.1) |
+| Trust and fear in the UI | words only | **two bars** on the god's card (§6) |
+| Belief no one witnessed | counted | **does not count**: a town counts once it has seen the god act (§2.1) |
+| Pace | Known in days 5 to 25 | holds of 1 / 30 / 150 / 360 days and lines of 3 / 30 / 150 / 500 (§3.1, arithmetic in §5) |
+| Terror **(v3)** | Above fear 0.80 a person gives less, down to four fifths at 1.0. The count is not touched | Fear fades by itself |
+
+Lead designer, 2026-11-15 (v2 text follows, amended in place). v1 was approved "all recommended"; v2 changed what three rulings required and what two reviews found.
 
 The owner's rulings (verbatim):
 - 2026-11-15, first: *"powers should reveal as faith/etc. develops - or something like that. i believe black and white works like this where the main player gets stronger and can perform bigger miracles the more people that believe in him - this is a great way to keep players pushing through."*
@@ -51,45 +74,48 @@ Code facts this builds on (read, not run):
    - ARC §0.1 "no points" and §5.3 "no score": worship is a store the god spends, shown as a gauge on the god's card, and the Following is shown as the people's count toward the next name. Neither is totalled, ranked or shown at an ending.
    - Old saves and the sandbox setting keep the old rule.
 
-## 1. The rule in plain words (v2)
+## 1. The rule in plain words (v3)
 - The people give the god a **standing**, in five steps: **Unknown, Whispered, Known, Worshipped, Most High**.
 - Each standing opens a **band** of powers by scale: the maker's hands, signs, local miracles, regional acts, world-shaping acts.
-- The standing comes from the **Following**: how many grown, living people believe. A believer who trusts the god, or who fears the god, counts twice.
-- Believers **gather worship** every day by their own rites. Each town has a daily measure it can give; connected towns and towns the god has lately been seen in give more.
-- Powers above the maker's hands **cost worship**. When the pool is empty the god waits, or works with the free hands, until the people have given again.
-- The 14 sigil miracles grow **wider** with each standing above their own.
-- Standing rises one step at a time when the Following is large enough and has held. It falls one step when the Following has stayed well below the line for most of a year. Spending never lowers standing.
+- The standing comes from the **Following**: how many grown, living people, in towns that have seen the god act, believe. A believer who trusts the god, or fears the god, or both, counts twice.
+- **Trust and fear go hand in hand.** One person, and one people, can hold both. Neither wipes the other out.
+- Believers **gather worship** every day by their own rites. Each town has a daily measure it can give. **With no believers nothing is gathered.**
+- **Every power costs worship, by its size**, and the pool heals as the people give again. A handful of very basic spells, the Hand, the clock and every story answer cost nothing.
+- Standing rises one step at a time when the Following has held at the next line long enough. It falls one step when the Following has stayed well below the line for a year. Spending never lowers standing.
 - A world no people have ever lived on is free clay: everything works on it, at no cost.
-- Tower answers, defiance answers, covenant vows, prayer answers, the Hand (with `slap` and `stroke`) and time are never out of reach and never cost anything.
+- A cast that fails, or is refused, costs nothing.
 
 ## 2. The measure (v2)
 Player god only (g = 0), all worlds, in agent index order. Inputs are existing per-person fields: `A.faith`, `A.love` (the UI says trust), `A.fear`, and the child flag.
 
-### 2.1 The two roads
+### 2.1 The two roads (v3)
 
 | Term | Definition |
 |---|---|
-| believer | a living, **grown** person (not `AgentFlag.child`) with `faith >= 0.30 - 1e-4` (the tolerance `defiance.ts` already uses on these float32 columns). Counts 1 |
-| on the road of trust | a believer whose trust reached `REACH.trustLine` (0.50) with `love >= fear`. Stays on it while `love >= REACH.trustKeep` (0.50) |
-| on the road of fear | a believer whose fear reached `REACH.fearLine` (0.35) with `fear > love`. Stays on it while `fear >= REACH.fearKeep` (0.04) |
-| Following **F** | believers + those on a road, a whole number. A person on a road counts 2 in total |
-| popMax | the highest grown population seen, minimum 12. It eases down by 2% of itself a year toward the present population (§2.2) |
+| a town the god is known in | a living settlement in which a god-0 act has been witnessed (not a natural event, not a rival's act). Stamped in the witness path (`reachSeen`), dropped when the town falls |
+| believer | a living, **grown** person (not `AgentFlag.child`) of such a town with `faith >= 0.30 - 1e-4`. Counts 1 |
+| on the road of trust | a believer whose trust (`love`) is at `REACH.trustLine` (0.50) or more. Stays on it while `love >= REACH.trustKeep` (0.50) |
+| on the road of fear | a believer whose fear is at `REACH.fearLine` (0.35) or more. Stays on it while `fear >= REACH.fearKeep` (0.04) |
+| on both | both of the above at once. Allowed, common under mixed play, and under severe play once a struck town rallies |
+| Following **F** | the sum over believers of `1 + min(1, onTrust + onFear)`. A believer on one road counts 2; **on both roads, still 2** |
+| popMax | the highest grown population seen, minimum 12, easing down 2% of itself a year toward the present population |
 | Share **S** | `F / (2 x popMax)` |
 
-- A person is on one road at a time. A person on a road moves to the other only when the other value reaches its line and is the larger; a tie goes to trust. A mixed world needs no rule: every person adds to the same F.
+- **How a person on both roads counts (v3).** Each road contributes 1 on top of the believer's own 1, and the sum of the two contributions is capped at 1. So n people on trust plus n on fear, 2n people on one road, and 2n people on both all give F = 4n. A mixed god is not weaker than a pure one, and holding both cannot be farmed for more. The two **bars** (§6) each count everyone on their road, so a person on both lengthens both bars.
+- **Belief no one witnessed does not count (v3).** Stage 0 showed that with no acts at all a people still comes to believe (`babel` reached F >= 200 by day 43 with a silent god). Under v3 such a town counts for nothing until the god has been seen in it once. After that, everything its people come to believe counts, including children born into the faith when they are grown. Measured: a silent god stays Unknown with F = 0 for 48 days on `shore` (§8).
 - Faith is required on both roads. Fear without belief counts for nothing, and so does goodwill without belief.
-- **Why the keep lines differ.** In the existing sim fear fades 4.5% a day unseen (1% seen) and trust 0.5% a day. With one line each, a silent god would lose a feared following in about 18 days and a trusted one in about 67. The low `fearKeep` holds a person on the road of fear for about 65 days from fear 0.8, so the two roads last the same time unattended. Faith itself (1% a day unseen) then ends both at about 70 days. `regard.ts` rates are not changed. Stage 0 sets `fearKeep` so the two hold times match within 15%.
-- There is **no terror cliff** in the count. A terrified believer still counts 2. Terror lowers what they give (§3.6), by a taper.
-- Road membership is one byte per person (`A.road`: 0 none, 1 trust, 2 fear), present only in bound worlds (§7.2).
+- **Why the keep lines differ.** Fear fades 4.5% a day unseen and trust 0.5%. The low `fearKeep` holds a person on the road of fear about as long as trust holds unattended. `regard.ts` decay rates are not changed.
+- There is **no terror cliff**. A terrified believer still counts 2, and gives a fifth less at fear 1.0 (§3.6).
+- Road membership is kept per person as a bit mask (1 trust, 2 fear, 3 both) in `reach.roads[planet][agent id]`, written only in bound worlds, rebuilt at every count.
 - Not read: loyalty, regard, hearts, `worshipBy`.
-- Counted once per game day in `relDaily`. While the standing is Unknown, also counted at the end of any tick in which a god-0 act was witnessed.
-- One wonder gives +0.25 faith, under the line. A person becomes a believer on the second witnessed act. This is deliberate.
+- Counted once per game day (every 1 440 ticks) in `reachDaily`.
+
 
 ### 2.2 Why neither road can be farmed
 - **Killing unbelievers** does not raise S in any useful time: popMax eases down only 2% a year. The dead count for nothing and give nothing. (The easing exists so a people that starved back from 40 to 15 through no act of the god is not shut out of the share path for good.)
-- **Making people** does not raise F. When belief bounds the god, a person made by the god's hand (`people`, `birth`, `introduce-people`) starts with no regard for god 0: faith, trust and fear 0 (the `freshen` inheritance of 0.6 x the town's mean faith is kept for children born to the people). A made person must be won like anyone, and meanwhile raises popMax. Children never count. The makers are also heavy hands (§3.2).
+- **Making people** does not raise F. When belief bounds the god, a person made by the god's hand (`people`, `birth`, `introduce-people`) starts with no regard for god 0: faith, trust and fear 0 (the `freshen` inheritance of 0.6 x the town's mean faith is kept for children born to the people). A made person must be won like anyone, and meanwhile raises popMax. Children never count. The makers are priced like every power (§3.2).
 - **Building temples** does not multiply a hamlet. When bound, a temple's place factor is `1 + min(1, grown believers in the town / 20)`, so a temple is worth 2 only with a congregation of 20. Shrine 1, hearth 0.5, else 0.3, as today.
-- **Terror** is tapered: a person's gift is whole up to fear 0.80 and falls in a straight line to nothing at fear 1.0. The existing 0.35 cap on what one act can move a town's mean fear still applies.
+- **Terror** is tapered **(v3)**: a person's gift is whole up to fear 0.80 and falls in a straight line to four fifths at fear 1.0 (`REACH.terror` 0.2). v2 let it fall to nothing; the probe showed that this ended the road of fear's income under steady severity (0.1 a day against 40 for help), which contradicts ruling (e). The town's daily measure is what stops terror farming.
 - **Cruelty** already costs trust and loyalty and raises defiance; a defiant town counts 0 and gives nothing. The existing flight from a feared god removes people.
 - **Bribery** has the same kind of ceiling: trust tapers over its upper half (`riseTrust`), and one act cannot move a town's mean trust by more than 0.35.
 - **Worship cannot be drawn out by the god's acts.** Each town has a daily measure (§3.6). Hardship prayers, prayers started by the god walking among the people, by possession or by a disciple's order, and repeated rites all pay into the same measure and stop paying when it is full. A hundred lightning strokes, or a starving town praying all day, gather no more than a calm town at its evening worship.
@@ -107,19 +133,21 @@ All four are applied at the moment worship is credited (§7.3), not after the fa
 
 ## 3. Standings and bands
 
-### 3.1 Thresholds (`REACH` table in `src/sim/god/reach.ts`; `REACH.scale`, default 1, multiplies every F number)
+### 3.1 Thresholds (v3) (`REACH` table in `src/sim/god/reach.ts`, as built)
 
-| Tier | Standing | Rises when | Held for | Band |
+| Tier | Standing | The line | Held for | Band |
 |---|---|---|---|---|
 | 0 | Unknown | always | - | the maker's hands |
-| 1 | Whispered | F >= 3 | 0 days | signs |
-| 2 | Known | F >= 20, or S >= 0.35 | 2 days | local miracles |
-| 3 | Worshipped | F >= 70, or S >= 0.60 with F >= 30 | 3 days | regional acts |
-| 4 | Most High | F >= 200, or S >= 0.80 with F >= 60 | 6 days | world-shaping acts |
+| 1 | Whispered | F >= 3 | 1 day | signs |
+| 2 | Known | F >= 30, or S >= 0.50 with F >= 12 | 30 days | local miracles |
+| 3 | Worshipped | F >= 150, or S >= 0.70 with F >= 60 | 150 days | regional acts |
+| 4 | Most High | F >= 500, or S >= 0.85 with F >= 200 | 360 days | world-shaping acts |
 
-- **Fall:** F below 0.7 x the tier's number **and** S below 0.7 x its share, for 10 days in a row. Then one step down, and the count starts again. Whispered has no share number: it falls on F below 0.7 x 3 (F of 2 or less) alone.
+- **The hold.** Each day the line of the next standing is met, `up` grows by `clamp(F / line, 1, 2)` days: a Following twice the line holds twice as fast, never faster. A day under the line takes 2 held days back (never below 0). The standing rises when `up` reaches the hold, and `up` starts again from 0.
+- **Fall, with grace:** F below 0.7 x the tier's line **and** the share path below 0.7 x its numbers, for 12 days in a row (one game year). Then one step down, and the count starts again. A single day back above the fall line ends the count. `reach.falling` is emitted on the first day, `reach.fell` on the step.
 - A fall cancels nothing already running.
 - `minWrath` 0.85 on the largest disasters still applies on top, unchanged.
+- The arithmetic of the pace is in §5; the measured times are in §8.
 
 ### 3.2 Bands (v2) (new `tier` field on all 229 entries of `src/data/powers.json`; counts 110 + 13 + 39 + 45 + 22)
 
@@ -137,18 +165,24 @@ All four are applied at the moment worship is credited (§7.3), not after the fa
 - Laws (6): `wrath restraint rival rival-remove natural-disasters repeal`
 - Signs (18): `omen-rainbow answer-prayer prophet-call prophet-foretell prophet-abandon tower-confuse tower-strike tower-warn tower-let vow-no-flood vow-spare-the-many vow-gentle vow-warn-first vow-none answer-wrath answer-mercy answer-sign answer-patience`
 
-**Heavy hands (new in v2; §10 decision 5).** Ruling (c) says the god cannot cast without limit, and a review showed that free tier 0 could otherwise drown, burn or starve a town, make believers and raise temples at no cost. So, when belief bounds the god, the tier 0 powers below stay in reach at every standing but are **priced at their existing data cost** in the cases given. They are free while the standing is Unknown, on free clay, and on any world with no living person (so a dead world can always be re-seeded).
+**Every power has a price; a short list is free (v3; replaces v2's "heavy hands").** Each entry of `powers.json` now carries `tier`, `price` (worship, in a bound world) and, on the free list, `free: true`. The old `cost` field is unchanged and is still what the legacy restraint mode charges (§3.7), so no unbound world moves. The fields are written by `_harness/probes/reach-tag-powers.mjs` (idempotent).
 
-| Group | Powers | Priced when |
-|---|---|---|
-| Makers of people | `people` (50) `birth` (4) `found` (10) `age-person` (5) `breed` (8) | aimed at a peopled world |
-| Worship places | `build` of a shrine (20) or temple-kind building (60); other buildings keep data cost 15 and stay free | aimed at a peopled world |
-| Hostile weather | `weather-acid-rain weather-blood-rain weather-blizzard weather-hail weather-heatwave weather-cold-snap weather-sandstorm weather-ashfall weather-monsoon` (6 each) | the painted area touches a living settlement's bounds |
-| Unmaking the ground | `dig-sea` (20) `pour-water` (5) `crater` (10) `lower` (4) `take-water` (5) `drain` (8) `cull` (8) | the target is within a living settlement's bounds (for `cull`, its herds) |
-| World air and heat | `add-air` `atmosphere` (100) `warmth` (80) | aimed at a peopled world |
+| Band | `price` rule | Cheapest | Median | Costliest |
+|---|---|---|---|---|
+| 0 hands | half the old cost, at least 1, at most 40 | 1 (`move-person`) | 3 | 40 (`add-air`, `atmosphere`, `warmth`, `seed-species`) |
+| 1 signs | the old cost | 5 | 10 | 20 |
+| 2 local | the old cost | 10 | 20 | 50 (`kill-area`) |
+| 3 regional | the old cost x 1.25 | 25 | 100 | 100 |
+| 4 world | the old cost | 60 | 400 | 3 000 (`erase-world`) |
 
-- **Always free, everywhere** (the floor): help `rain gift heal-person cure plant`; harm `lightning ignite kill-person`; wonder `omen-rainbow weather-aurora-storm`; the warned road `prophet-call prophet-foretell`; the Hand; time; all answers. Content test enforces that this set holds help, harm, wonder and foretelling.
-- **Free harms are single-target and cannot be chained.** When bound, `REACH.freeCooldown` applies per power: `lightning` 60 min (its data value), `ignite` 30, `kill-person` 30. No free help carries a cooldown. Content test: every free harm is single-target and cooled; no free power harms an area.
+- **Size.** The price is multiplied by `max(1, radius / the power's default radius)`, by `max(1, power)` for a cast, and by `max(1, scale)` for a disaster, then by `restraint.costScale`. A brush twice as wide costs twice.
+- **The free list (47), by the owner's second ruling of 2026-11-16.**
+  - Not powers over the world: `speed step rewind edit-past save load resume` (the clock, save and load), the camera (not a power), `possess possess-move possess-act` (the god's own body), the Hand `grab throw release place drop slap stroke`, `rename-person rename-settlement`, the settings `wrath restraint natural-disasters rival rival-remove`, `cancel-disaster`, `recall-ship`, `prophet-abandon`, `disciple-order`.
+  - The story answers: `answer-prayer`, `tower-confuse tower-strike tower-warn tower-let`, `vow-no-flood vow-spare-the-many vow-gentle vow-warn-first vow-none`, `answer-wrath answer-mercy answer-sign answer-patience`. A deed an answer fires through the registry is part of the answer and is not gated or charged.
+  - **The very basic spells (5):** `rain` (a small help), `heal-person` (a small help to one), `plant`, `lightning` (a small harm), `omen-rainbow` (a small wonder). These are the smallest acts of band 0 that earn belief by each road, so a god with an empty pool and no believers can always begin again.
+- **The free spells cannot be chained.** In a bound world they carry `REACH.freeCooldown`: `rain` 60 minutes, `lightning` 60, `heal-person` 30, `omen-rainbow` 240. `plant` has none.
+- Content rule (tested): every power that is not free has a price above 0; no band-0 price exceeds the starting pool (40); the cheapest price of each band is no lower than that of the band below.
+
 
 **Tier 1, signs (13)**
 `omen sacred-place sacred-animal disciple disciple-order inspire teach forbid sway-belief cast water-miracle fire-miracle wood-miracle`
@@ -184,140 +218,86 @@ All four are applied at the moment worship is credited (§7.3), not after the fa
 - The god may cast a power from the **next** band up by paying **3 x** its price. Its data `cooldown` then applies, doubled.
 - It never reaches into the Most High band.
 - It is a price multiplier inside the one charge function (§3.7).
-- It only works when 3 x the price fits under the cap. At Known (cap 320 or more) a disaster at 240 fits. At Whispered (cap about 89) the local miracles up to 29 fit.
+- It only works when 3 x the price fits under the cap **(v3)**: at Unknown (cap 40 or more) a sign at 30 fits; at Known (cap 350 at F 30) a regional act at 300 fits; local miracles from Whispered fit up to 29.
 
 ### 3.6 The gathered resource: worship (v2)
 
 **One pool.** The existing worship pool (`ps.worship[0]`, per planet, summed by `worshipOf`) is the one thing spent. Trust and fear both fill it (§10 decision 1).
 
-**One rite, one formula, both roads.** When bound, what one person's rite is worth is:
+**The town's daily measure (v3, as built).** Once a day, in `reachDaily`, each town the god is known in gets:
 
-`rite(p) = 2.5 x faith x (1 + 0.5 x onRoad) x place x (0.5 + piety) x calm x roadYield`
+`measure = REACH.rite (1.0) x attended x place x (sum over its believers of faith x (1.5 if on a road, else 1) x (0.5 + piety) x calm)`
 
 | Part | Meaning |
 |---|---|
-| onRoad | 1 if the person is on either road (§2.1), else 0. Holding both trust and fear pays no more than holding one |
-| place | the town's best finished worship place: temple `1 + min(1, grown believers / 20)`, shrine 1, hearth 0.5, else 0.3 |
-| calm | 1 up to fear 0.80, falling in a straight line to 0 at fear 1.0 |
-| roadYield | `REACH.trustYield` or `REACH.fearYield` (both 1.0), the two knobs stage 0 uses to equalise the roads |
+| on a road | either road, or both: the same 1.5. Trust and fear pay alike at equal faith, and holding both pays no more than one |
+| place | the town's best finished worship place: temple `1 + min(1, believers / 20)`, shrine 1, hearth 0.5, else 0.3 |
+| calm | 1 up to fear 0.80, falling in a straight line to 0.8 at fear 1.0 |
+| attended | 1.0 if a god-0 act was witnessed in the town within the last 3 days, else 0.5 |
 
-- When bound, `worshipYield` returns this in place of today's `faith + 0.5 fear` formula, and `addWorship` credits the god `worshipYield` chose (one selection rule, `faith + 0.5 x max(love, fear)`, floor 0.05). Unbound worlds keep today's two rules untouched.
-
-**The town's daily measure.** Once a day, in `reachDaily`, each town gets:
-
-`measure = attended x link x modifier x (sum of rite(p) over its counted believers)`
-
-- Every source below credits through one function, `credit()` (§7.3), which pays only what is left of the town's measure that day and only what fits under the cap. The rest is not paid.
+- **One writer.** In a bound world the player god's pool is written only by `credit(u, planet, town, amount)`: `paid = min(amount, measure - given today, cap - pool)`. The four existing writers (`addWorship` for prayer, evening worship and sermons; `offerings`; `godsFeast`; `sacrifice`, which pays `0.1 x members`, at most 5) call it. Their own formulas are unchanged; the measure is what bounds and equalises them.
 - So the measure is the most a town can give in a day whatever happens in it. All farms by repetition end here (§2.2).
-- **attended:** 1.0 if a god-0 act was witnessed in the town within the last 3 days (the stamp the faith decay already reads), else 0.5. A world left on fast-forward gathers at half and loses believers to the existing decay.
-- **modifier:** §2.3.
+- **The offering at the door.** Fear keeps people from the evening worship, so at the day's end `reachDaily` pays, through `credit`, the part of the measure owed by the town's believers on the road of fear, as far as the day's rites left it unfilled. This is the v2 "threshold offering" in its accounting form; the visible task (`TASK.offer`: a portion left at the shrine door before dusk) is stage 3 and changes no number.
+- **Both roads earn (v3, measured).** `shore`, day 12, one seed: the measure was 38.0 a day under help, 35.3 under severity, 38.4 mixed, and each was filled within 1%. Over a long run severity earns less only because it kills (§8).
+- The day's giving is tallied by road for the UI: a believer on trust gives by trust, on fear by fear, on both half by each (`gathered.trust`, `gathered.fear`).
+- **No income without believers (v3, owner ruling g).** There is no least gift and no trickle. A town with no believers has no measure, and a god with no believers gathers nothing. Tested: empty pool, no believers, three days: the pool is still 0.
+- **"As the people connect"** (stage 3, not built; until then the link is 1). Each town's measure is multiplied by its link, `1 + 0.15 x (T + P + K)`, from 1.00 to 1.45: T = `min(1, st.traded / 30)`; P = 1 if pilgrims left from or arrived at the town within the last year; K = `min(1, n / 3)` for n other living towns it knows in which at least half the grown people are believers. Worked out in `reachDaily`; a day's credits use the value stored the day before. It reads no trust or fear, so it favours neither road.
 
-**Sources (all exist except the threshold offering; all pay into the town's measure)**
+**Income, measured.** About 1.6 worship a day per believer on a road at a shrine (`shore`: 38 a day from 23 believers; `babel`: 250 to 480 a day from 190 to 260 believers), so roughly `0.8 x F`. `REACH.rite` is the one knob.
 
-| Source | Who | Paid | Road counted as |
+**The cap (v3).** The pool holds at most `capBase[tier] + 3 x F`:
+
+| Standing | capBase | Cap at the line | Costliest power of the band |
 |---|---|---|---|
-| Evening worship | those the existing dusk roll draws (unchanged roll) | `rite(p)` | the person's |
-| Prayer (need, hardship, matins, kneeling at the god's passing, possession, a disciple's order) | anyone praying | `rite(p)` at place 0.5 | the person's |
-| Sermon | a prophet preaching | `rite(p) x (1 + credibility)` | the prophet's |
-| Offering of surplus | a town with a temple-kind building and food to spare | `0.5 x food taken`, share `0.05 x max(mean loyalty, mean fear of its believers)` | trust if mean trust >= mean fear, else fear |
-| Feast of the gods (`godsFeast`) | towns with mean trust 0.5 or more | `0.5 x attendance`, as today | trust |
-| Sacrifice (`sacrifice()`) | towns whose mean fear exceeds trust by 0.3, with a temple-kind building, 30% of days | `0.1 x grown members`, at most 5 (today: a flat 5) | fear |
-| **Threshold offering** (new) | a believer on the road of fear, by roll `0.5 faith + 0.3 fear` (hash of id and day) | `rite(p)`; x1.25 if the town has food to spare and the person burns 0.1 of a food item | fear |
+| Unknown | 40 | 40 | 40 |
+| Whispered | 80 | 89 | 20 |
+| Known | 260 | 350 | 50 |
+| Worshipped | 640 | 1 090 | 100 |
+| Most High | 2 600 | 4 100 | 3 000 |
 
-- **The threshold offering** answers the evening worship that fear keeps people from. One hour before the dusk window, the person walks to the shrine, temple or hearth, leaves a portion at the door and goes home (10 ticks of work).
-  - It is a new task, `TASK.offer`, appended to the task enum and used only in bound worlds. It is **not** `TASK.worship`.
-  - It is not entered in `vespers.went`, so `dusk.today`, `dusk.low` and the emptied shrine at dusk (ARC §1.2) do not move.
-  - The heart-sign reader (`arc.ts`) maps it to the existing fear sign, never to `pray` (ARC §1.3).
-  - The existing dusk roll then runs unchanged for everyone. A person may do both; the town's measure stops double pay.
-- The feast pays only the trust road and the sacrifice only the fear road. Both are inside the measure and both are in the 15% equality target.
-- The sacrifice's `+0.01 fear` to the town is kept.
+- The cap is enforced **at each credit**. Worship gathered while the pool is full is lost. If a fall lowers the cap below what is held, nothing is taken away; the pool gathers no more until it has been spent down.
+- **A new world's pool (v3).** A brand-new bound world starts with `REACH.start` = 40 worship (the Unknown cap): enough for any one basic power, or a dozen small ones. A world bound later by the setting keeps what it had and is given nothing.
+- **A first gift.** The first time ever the god reaches a standing, the pool is given one typical cast of the new band (10, 20, 100, 400), under the cap. `reach.best` only goes up, so it cannot be farmed.
 
-**"As the people connect."** Each town's measure is multiplied by its **link**, `1 + 0.15 x (T + P + K)`, from 1.00 to 1.45. It is worked out in `reachDaily` and stored; a day's credits use the value stored the day before.
+**Prices** are in §3.2. A power is charged once per command. Its data `cooldown` applies after a cast that succeeds.
 
-| Part | Meaning | Value |
-|---|---|---|
-| T, trade | the town's rolling traded value (`st.traded`, already decays 3% a day) | `min(1, traded / 30)` |
-| P, pilgrims | pilgrims left from or arrived at the town within the last year | 0 or 1 |
-| K, kin in the faith | other living towns this town knows in which at least half the grown people are believers | `min(1, towns / 3)` |
+**A cast that fails costs nothing (built).** `chargeCheck` runs in the registry's `before` hook and changes nothing; `chargeCommit` runs in `after` and only when the handler returned ok. A refusal by the gate, a covenant refusal, a bad target or "no such idea" spends no worship and starts no cooldown.
 
-- Link reads no trust or fear, so it favours neither road.
-- Founding many hamlets does not multiply anything: the measure is a sum over people, the sacrifice is per member, and K is capped at 3 towns.
+**Always free.** The free list of §3.2; free clay (§3.4); plumbing commands; rival gods' acts and natural disasters.
 
-**The least gift.** Once a day, for the god as a whole: if the day's total gathering on all worlds is below `4 + 0.1 x F` (total F) and at least one believer lives, the difference is credited to the world with the most believers (lowest id on a tie), under the cap. It is outside the town measures. One believer on each of many worlds earns it once.
+**Answering by deed.** As v2: the first god-0 act on a town with an open defiance or Tower question is free and ungated up to tier 2, once per open question (stage 6). Built now: any command a handler dispatches itself (an answer firing its deed) is never gated or charged.
 
-**Income, first calibration.** A town's measure is about `1.0 x F` a day at a shrine (faith 0.5, piety 0.5) and up to twice that at a full temple. Stage 0 measures how much of the measure each road fills without help, and sets the two yields.
+**Time is free.** As v2. The cap, the halved giving of unattended towns and the fading of belief bound what fast-forward can gather.
 
-**The cap.** The pool holds at most `capBase[tier] + 3 x F`:
+**No dead end: the guarantee, with numbers (v3)**
+1. **The free basics always work**, at any standing, with an empty pool: `rain` (help), `lightning` (harm), `omen-rainbow` (wonder), `heal-person`, `plant`. Each is witnessed, so each can make believers on its road.
+2. **Believers refill the pool.** Tested from the worst case (`tests/reach-charge.test.ts`): pool 0, every person's faith, trust and fear set to 0, only the three free spells cast (about four a day each as their cooldowns allow). Believers appear, the standing leaves Unknown and the pool is above 0 within 12 game days; a priced power is then cast.
+3. **A new world starts with 40**, so the first acts on a peopled world are not all free spells.
+4. **Free clay is free.** A world no one has lived on takes every power at no cost, at any standing (a tier 4 act only while no world is peopled). A dead world can be re-seeded: `people` costs 25, under the Unknown cap, and the free spells above earn it.
+5. **A failed or refused cast charges nothing** and starts no cooldown. The pool never goes below zero. There is no debt, no upkeep and no decay.
+6. Nothing already running is cancelled for want of worship. Spending never lowers standing, and a low pool never causes a fall.
+7. What is NOT promised any more: income with no believers. A god who has spent everything and lost every believer has the free spells, and nothing else, until someone believes again. That is the owner's ruling (g).
 
-| Standing | capBase | Cap at the threshold F | Cap at the fall line (0.7 x) | Costliest power of the band |
-|---|---|---|---|---|
-| Unknown | 40 | 40 | - | 100 (heavy hands, free at Unknown) |
-| Whispered | 80 | 89 | 86 | 20 |
-| Known | 260 | 320 | 302 | 60 |
-| Worshipped | 640 | 850 | 787 | 80 |
-| Most High | 2 600 | 3 200 | 3 020 | 3 000 (`erase-world`) |
-
-- The cap is enforced **at each credit**: `paid = min(amount, town measure left, max(0, cap - total pool))`, added to the crediting planet's pool. Nothing is taken back later.
-- Worship gathered while the pool is full is lost. The gauge is simply full.
-- If a fall lowers the cap below what is held, nothing is taken away. The pool gathers no more until it has been spent down.
-- Content test: no power costs more than the cap at its own band's **fall line**, and every heavy hand costs no more than the Whispered cap.
-
-**Prices.** The price of a power is its `cost` in `powers.json` x `restraint.costScale` (default 1) x `REACH.priceScale[tier]` (default 1 each; the stage 0 knob for the real-time wait). Its `cooldown` (ticks) applies after a cast that succeeds.
-
-| Band | Charged? | Cheapest | Typical (median) | Costliest | Cooldowns in data |
-|---|---|---|---|---|---|
-| 0 hands | only the heavy hands, on settled ground | 4 | 6 | 100 | `lightning` 60 min; `REACH.freeCooldown` |
-| 1 signs | yes | 5 | 10 | 20 | 30 to 60 min on six |
-| 2 local | yes | 10 | 20 | 60 | 1 to 4 h on fourteen |
-| 3 regional | yes | 20 | 80 | 80 | 2 h on disasters, 8 h on two |
-| 4 world | yes | 60 | 400 | 3 000 | 12 h to 3 days |
-
-- `disciple-order` (tier 1) has no cost in data and stays free. Prayers and sermons it starts pay into the town's measure like any other.
-- A power is charged once per command. Held brushes must charge per stroke, not per frame (§7.8).
-- **A cast that fails costs nothing.** The charge is checked before the handler and taken only after it succeeds (§7.3). A covenant refusal, a bad target or "no people here" spends no worship and starts no cooldown.
-
-**Always free.** The free floor of tier 0 (§3.2); all story answers; time, save and load; free clay; plumbing commands; rival gods' acts and natural disasters.
-
-**Answering by deed.** ARC §3.3 classifies the god's answer from its first deed on the town and shows no answer menu. So the **first god-0 act on a town with an open defiance (within the 10-day grace) or an open Tower decision is free and ungated up to tier 2**, once per open question. An `omen` as a sign, or a `food-miracle` as mercy, can always be given, whatever the pool or standing. Commands the arc code sends itself carry `origin: 'arc'` and are neither gated nor charged; the client boundary strips that field from player commands.
-
-**A first gift.** The first time ever the god reaches a standing (tier above `reach.best`), the pool is given one typical cast of the new band: 10, 20, 80, 400. `reach.best` only goes up and survives every change of the setting (§7.6), so it cannot be farmed.
-
-**Time is free, and the spec says so.** `speed` is tier 0, so waiting can be shortened by fast-forward. What bounds it:
-- The cap: a full pool gathers nothing, so fast-forward cannot hoard beyond one cap.
-- Attendance: unattended towns give half, and faith and fear fade, so a long fast-forward shrinks the Following.
-- Cooldowns run in game time; the largest are 3 days.
-- This is accepted as the limit of the challenge rather than hidden (§10 decision 6). Stage 0 records the default play speed and sets `REACH.priceScale` and the least gift so that, **at the default speed, the wait for the cheapest power of the open band from an empty pool is 3 to 8 real minutes**, at every standing.
-
-**No death spiral: the guarantee, with numbers**
-1. Every act that makes a believer on either road is on the free floor: `rain`, `gift`, `heal-person`, `lightning`, `ignite`, `omen-rainbow`, `prophet-call`. An empty pool never stops the god being seen.
-2. Worship comes from the people's own rites. The pool refills with no action by the player.
-3. The least gift is `4 + 0.1 x F` a day while one believer lives. From an empty pool the cheapest power of the open band is affordable from that alone within 3 game days: Whispered 10 / 4.3 = 2.3 days; Known 10 / 6 = 1.7; Worshipped 20 / 11 = 1.8; Most High 60 / 24 = 2.5.
-4. With no believers the standing is Unknown, where the whole of tier 0 is free, heavy hands included. A world with no living person can always be re-seeded for nothing.
-5. The pool never goes below zero. There is no debt, no upkeep and no decay. A refused or failed cast charges nothing.
-6. Nothing already running is cancelled for want of worship.
-7. Spending never lowers standing, and a low pool never causes a fall.
-8. Hunger stops only the offering of surplus, the sacrifice and the burnt portion. Evening worship, prayer, the threshold offering and the least gift need no food.
-9. An open defiance or Tower question can always be answered by deed, free (above).
 
 ### 3.7 One system with restraint mode (v2)
-`restraintCheck` in `belief.ts` becomes two functions, `chargeCheck` and `chargeCommit` (§7.3). There is one price list, one pool and one refusal path. The setting has three positions, and one legacy state:
+**(v3, as built)** One hook in `powers.ts` is the one charge path. In a bound world god 0 goes through `chargeCheck` / `chargeCommit` (`reach.ts`), which use the same pool, the same `cooldowns` map, the same `restraint.costScale` law and the same refusal channel as `restraintCheck`; rivals, and everyone in an unbound world, go through `restraintCheck` exactly as before. The setting has three positions, and one legacy state:
 
 | Setting | `'reach.bound' in laws` | `settings.restraint` | What is charged |
 |---|---|---|---|
 | **Unbound** (sandbox; all old saves) | no | off | nothing; every power open; bonus potency as today |
-| **Belief bounds my power** (new games) | yes | off | tiers 1 to 4 and the heavy hands for god 0; reaching beyond at 3 x |
-| **Strict** | yes | on | as above, and every tier 0 power that carries a cost is charged everywhere; rivals pay as they do today |
+| **Belief bounds my power** (new games) | yes | off | **(v3)** every power for god 0 except the free list; reaching beyond at 3 x |
+| **Strict** | yes | on | **(v3)** as above; rivals pay as they do today. With every power already priced, Strict adds only the rivals' costs (stage 4 decides whether to keep the position) |
 | *Restraint (old save)* | no | on | exactly today's behaviour: everything charged, nothing gated, no cap, no measure, no least gift |
 
 - The legacy state cannot be chosen. The settings control shows it as a fourth, read-only label, "Restraint (old save)". Moving the control off it is one-way, and the control says so before it moves.
-- In Strict the least gift still applies, and `gift`, `ignite`, `omen-rainbow` have their cost waived, so the guarantee holds there too.
+- **(v3)** There is no least gift in any position. The free list is free in Strict too.
 
 ## 4. What can be lost, and the floor (v2)
 
 | Cause | What happens | Way back |
 |---|---|---|
 | The god is unseen | Faith fades 1% a day (0.3% if seen in the last 3 days). The town's measure halves after 3 days. Both roads hold about 65 to 70 days, then F drops | Be seen: any witnessed act |
-| The pool is spent | Bands 1 to 4 and the heavy hands wait. The free floor and all answers still work | The people give again every day; at least `4 + 0.1 x F` |
+| The pool is spent **(v3)** | Every priced power waits. The free list and all answers still work | The people give again every day, up to their measure. With no believers: the free spells, until someone believes |
 | Pride, the Tower | A proud town's road counts become single. All four Tower answers stay free | Pride ending by any road restores the count |
 | Open defiance | The town counts 0 and gives nothing until answered or lapsed. The first deed in answer is free | Any answer |
 | Terror | Above fear 0.80 a person gives less, and nothing at 1.0. The count is not touched | Fear fades by itself |
@@ -327,10 +307,26 @@ All four are applied at the moment worship is credited (§7.3), not after the fa
 | Open Rebellion (unbuilt) | Rebel towns count 0 and give nothing | Answer it; climb again |
 
 **The floor**
-- The free floor of tier 0 is never lost and never charged.
+- The free list (§3.2) is never lost and never charged.
 - Arc answers are exempt at every standing and free, including when an answer fires a higher-band power internally.
 - A fall is one step per 10 days at most, and it is announced when the count starts.
 - `reach.best` is remembered for the Book and the first gift. It does not hold powers open.
+
+**Trust and fear go hand in hand: what changes in the sim, in bound worlds only (v3, ruling e).**
+
+A review of `regard.ts` found three places where one value is moved down by an act that raises the other. In an **unbound** world all three stay exactly as tuned for the arc (tested: the mercy rule still eases fear there). In a **bound** world, for god 0:
+
+| Where (`witnessAct`) | Unbound (unchanged) | Bound (v3) | Why |
+|---|---|---|---|
+| Mercy: help within 3 days after the god's harm | fear `- 0.10 x m` | fear is not moved | help must not wipe fear; fear fades only by its own daily decay |
+| A harm the town provoked | trust `- 0.05 x m` | trust is not moved | a deserved harm must not wipe trust |
+| A harm that was foretold | trust not moved | the same | already so |
+| Unprovoked harm (cruelty) | trust `- 0.20 x m x cruelty`, loyalty `- 0.05` | trust `- 0.10 x m x cruelty`; loyalty as before | cruelty still has a price, at half: this is the people's judgment of an unjust act, not fear erasing trust (§10, decision 3) |
+
+- Not changed anywhere: the daily decays (fear 4.5% / 1%, trust 0.5%), the 0.35 per-act budget, the rally of a struck town (which already raises trust beside fear), `keptBy`, the hearts, pride, defiance. So every arc number in an unbound world stands, and ARC tests are untouched.
+- Measured in bound worlds (§8): under mixed play the whole believing town of `shore` is on **both** roads by day 12 (23 on trust, 21 on fear, 21 on both), and stays so. Under severity alone a struck town that rallies is on both roads by day 24. Under help alone no one fears.
+- Both roads earn standing (the count, §2.1) and worship (the measure, §3.6) by the same formulas.
+
 
 **What remains unequal between the roads, stated plainly (§10 decision 3).** The existing sim treats the two differently in ways this spec does not remove:
 
@@ -343,36 +339,60 @@ All four are applied at the moment worship is credited (§7.3), not after the fa
 
 The probes of §8 require the two roads within 15% on standing, income and sustainable casts. If stage 0 cannot reach that with the knobs above, the lead reports the gap to the owner before stage 1 rather than hiding it in a yield.
 
-## 5. The first hour (v2)
-Game time is given first because the real time depends on play speed. The default play speed was not checked; stage 0 records it.
+## 5. The pace (v3): the arithmetic, and what a session looks like
+
+**What stage 0 found.** With today's rates any act crosses F >= 3, 20 and 70 inside 1 to 2 game days, 10 to 20 times faster than wanted, because one witnessed act gives +0.15 to +0.25 faith to a whole town and the believer line is 0.30. A silent god also gains believers (`babel` F >= 200 by day 43).
+
+**What v3 does about it, without touching `regard.ts`.**
+1. Belief no one witnessed does not count (§2.1). A silent god stays Unknown.
+2. The believer line stays at 0.30. Raising it would not help: faith reaches 0.55 for a whole town in a day.
+3. The pace is carried by the **hold** and by **larger lines**. A town can be converted in two days, but the name spreads only as fast as the belief lasts.
+
+**The arithmetic.** Clock: 1 day = 1 440 ticks = 24 real minutes at 1x; 1 year = 12 days. Real time below assumes the player averages about 5x over a session (1 real hour is about 12 game days, one game year); at a steady 1x multiply the hours by 5.
+
+| Standing | Line | Hold | Earliest (F at twice the line: hold / 2) | Typical (F at 1 to 1.5 x the line) | Real time at about 5x |
+|---|---|---|---|---|---|
+| Whispered | F 3 | 1 day | day 1 to 2: the count is daily, and two or three witnessed acts make 3 believers | day 1 to 4 | the first 10 to 20 minutes; the first session |
+| Known | F 30 | 30 days | day 2 + 15 = day 17 | day 2 + 20 to 30 = day 22 to 32 | 1.5 to 3 hours |
+| Worshipped | F 150 | 150 days | day 17 + 75 = day 92 (year 8) | day 120 to 180 (year 10 to 15) | 8 to 15 hours |
+| Most High | F 500 | 360 days | day 92 + 180 = day 272 (year 23) | day 450 or more (year 38 or more), and only for a people of 250 grown or a people of 100 grown nearly all on a road | 23 hours at the very least; a long game |
+
+- A one-town world of 23 grown people (`shore`) tops out at F = 46: Known by the F line (speed 46 / 30 = 1.5, so 20 days), Worshipped only after the people have grown past 30 grown (S >= 0.70 needs F >= 60). That is intended: a greater name needs a greater people.
+- The measured times (§8) match: Whispered day 1 to 4, Known day 17 to 29, Worshipped day 92 to 94 on `babel`, Most High not reached in 35 years on `babel`.
+- The one knob for pace is `REACH.hold`. Halving it halves every time above.
+
+**A session, peopled world (`shore`)**
 
 | When | Standing | What the player has and sees |
 |---|---|---|
-| Start, empty world (`barren`, `sandbox`) | Unknown, free clay | Everything works and costs nothing. The card reads "No one lives here yet." |
-| Start, peopled (`shore`, 30 people) | Unknown | All 110 hands free. Card: "No one knows you yet. Whispered when three believe." |
-| Second witnessed act (day 1 to 3) | Whispered | Three witnesses pass faith 0.30. Signs open, and the first gift (10 worship) pays for the first omen at once |
-| Days 3 to 12 | Whispered | The gauge fills by about 4 to 8 a day. A sign every day or two; free acts in between. The player learns that the people fill the gauge |
-| Days 5 to 25 (target: within year 1 to 3) | Known | 20 follow. Local miracles open with a gift of 20. About one local miracle a day can be kept up |
-| Target: year 6 to 15 | toward Worshipped | Card: "Worshipped when 70 follow (41 now)." The player deepens belief, lets towns grow, and sees linked towns give more. A disaster can be reached for early at 240 |
-| Target: a generation, 25 years or more | Most High | About one world-shaping act every two days; `erase-world` takes more than a year of saving |
+| Start | Unknown | Pool 40 of 40. Every band-0 power works and costs a little; the five basic spells cost nothing. Card: "No one knows you yet. Whispered when three believe." |
+| Day 1 to 4 | Whispered | Signs open; a first gift of 10. The pool begins to fill from the people's rites (3 to 5 a day at first, about 38 a day once the town believes) |
+| Day 4 to 20 | Whispered | The card shows the hold filling: "Known when 30 have followed for a season (12 of 30 days)." A sign and several small acts a day can be kept up |
+| Day 20 to 30 | Known | Local miracles open with a gift of 20. About two local miracles a day can be kept up in a town of 23 believers |
+| Years 8 to 15 | Worshipped | Needs a larger people or several towns |
+| Year 25 and later | Most High | A long game |
 
-- `fewhands` (12 people): Known at F >= 9 by the share path. Worshipped needs F >= 30, so the people must first grow past 15.
-- Developed scenarios start with a standing for a limited time and with the pool half full (§7.5).
+- Empty worlds (`barren`, `sandbox`): free clay. Everything works and costs nothing. The card reads "No one lives here yet."
 
 ## 6. UI (v2)
 No new screen. Every power is always shown.
 
-- **The god's card (`ui/hud.ts:495-546`).** One thin gauge under the existing worship number (held against the cap) and one line: "They call you the Whispered. 14 follow, most in trust, some in fear." Below it the next step: "Known when 20 follow." While a fall is counting: "Fewer speak your name. Nine days."
-- **Trust and fear are told in words, never as two numbers or a bar** (§10 decision 7): "all in trust", "most in trust, some in fear", "as many in fear as in trust", and the mirror forms. This keeps it from reading as an alignment tally. The Following and the worship pool are numbers, because the player needs them to plan.
-- **Gauge tooltip.** "Worship 46 of 89. The people gave 9 yesterday, more in trust than in fear."
+- **The god's card (`ui/hud.ts:495-546`) (v3).** Four things, in this order:
+  1. **The standing name**: "They call you the Whispered." Below it the next step and its hold: "Known when 30 follow (14 now)." or "Known when they have followed a season: 12 of 30 days." While a fall is counting: "Fewer speak your name. Nine days."
+  2. **The worship gauge**: one thin gauge under the existing worship number, held against the cap ("46 of 89").
+  3. **Two bars, side by side or stacked: Trust and Fear (v3, ruling e).** Each is the part of the grown people who believe and are on that road (`trustShare`, `fearShare`, 0 to 1). They are independent: both can be full at once, and a person on both roads lengthens both. Labels are the plain words "Trust" and "Fear".
+  4. Nothing else. **No alignment meter, no single bar running from one to the other, no "good", "evil", "kind", "cruel", "light" or "dark" anywhere**, and the two bars are never subtracted, compared or coloured as right and wrong. Suggested colours: the existing trust and fear hues of the heart signs.
+- The Following and the worship pool are numbers, because the player needs them to plan. The bars carry no number; their tooltip says "23 trust you" / "21 fear you" / "21 of them both".
+
+- **Gauge tooltip.** "Worship 46 of 89. The people gave 9 yesterday, 6 in trust and 3 in fear." With no believers: "No one gives to you yet."
 - **Spending.** The existing floating "-15 worship" on the card now shows on every paid cast.
-- **Power card (`ui/tools.ts`, beside `renderNeed`).** One cost line: "Costs 15 worship." Free powers say nothing. A heavy hand: "Free on empty ground. Among the people: 6 worship." One band up: "Beyond your reach. Reach for it: 240 worship." Sigils: "Wider at your standing: x1.5." On cooldown: the existing "still gathering strength" line.
+- **Power card (`ui/tools.ts`, beside `renderNeed`) (v3).** One cost line on every priced power: "Costs 15 worship." Wider or stronger than the default: "Costs 30 worship at this size." Free powers say "Free." One band up: "Beyond your standing: 300 worship." On cooldown: the existing "still gathering strength" line. On free clay: "Free on empty ground."
 - **Three states in the wheel (`ui/radial.ts` `layPowers`) and the palette (`ui/palette.ts`).**
   - Open and affordable: normal.
   - Open but not affordable: new class `gn-rad-poor`, cost numeral dimmed. Tooltip: "Storm needs 15 worship. 9 is gathered. About a day more."
   - Locked: class `gn-rad-locked`, dimmed, with a small mark of the standing needed. Tooltip: "Beyond your reach. Opens when you are Worshipped: 70 follow."
   - Newly opened powers pulse once.
-- **Refusals** come from the sim as sentences, so wheel, gesture, freeform and typed commands read the same. The wait is `ceil((price - pool) / yesterday's income)` days. If yesterday's income was zero: "No one gives to you yet. Be seen."
+- **Refusals** come from the sim as sentences (built), so wheel, gesture, freeform and typed commands read the same: "Beyond your reach. Plenty opens when you are Known: 30 follow, 0 now." / "Gift needs 3 worship; 2 is gathered. About a day more." With no believers: "... No one gives to you yet. Be seen: rain, a stroke of lightning and the rainbow are always yours."
 - **`ui/powers.ts`.** `lockedBy(p)`, `reachShort(p)`, `priceOf(p)`, `affordable(p)` beside `minWrathOf` and `wrathShort`, fed by `powersQuery`.
 - **Town popover (`ui/living.ts`).** "22 of 30 believe, most in trust. They gave 12 yesterday." Plus, as they apply: "They have given all they will today." / "Trade and pilgrims carry your name here." / "You have not been seen here; they give less." / "They count for nothing while they defy you."
 - **Moments.** A toast, one pulse and a Book line on each rise or fall. One new SFX cue. The approved music is untouched.
@@ -387,6 +407,18 @@ Chronicle lines (ARC §0.3 voice, each at most 140 characters), for example:
 - "Fewer speak of the god now. In {town} the stone stands bare."
 
 ## 7. Sim contract (v2)
+
+### 7.0 What stage 1 built, where it differs from the v2 contract below (v3)
+The v2 text of §7.1 to §7.8 stands except as listed here; the code is the reference.
+- **Files.** `reach.ts` exports `REACH`, `isBound`, `setBound(u, on, fresh)`, `reachSeen`, `credit(u, planet, sid, amount)`, `reachDaily(u)`, `capOf`, `priceOf(u, power, cmd)`, `chargeCheck`, `chargeCommit`, `reachView`, `reachPowerView`. `restraintCheck` is not split: it stays the unbound and rival path, and the hook in `powers.ts` chooses.
+- **The switch** is `GodState.bound` (`'reach.bound' in laws`). `SimOptions.bound` binds a brand-new world and gives the starting pool; the worker passes `bound: options.bound !== false`, so a new game is bound and a bare headless `Sim` (every existing test) is not.
+- **State.** `GodState.reach?: { tier, best, up, down, popMax, f, believers, trust, fear, both, inc, incT, incF, day, seen, towns, roads, peopled }`. `seen["planet:town"]` is the tick of the last witnessed god-0 act; `towns["planet:town"] = { m, g, ff, fd }` is the day's measure, what was given, the part given by fear and the part owed at the door; `roads[planet][agent id]` is the bit mask; `peopled[planet]` marks free clay as used. Roads are in the god state, not a per-agent column, so `SAVE_MINOR` is unchanged and an unbound save is byte-identical.
+- **The daily pass** runs for the god as a whole at `tick % 1440 === 917`, after which the measures for the coming day are set.
+- **Command** `meta.reach { bound }` (plumbing). **Events** `reach.rose { from, to, f, name }`, `reach.fell { from, to, f, name }`, `reach.falling { days, tier }`, `worship.spent { power, amount, beyond }`, `reach.unbound {}`. No `worship.short`: a refusal changes nothing and emits nothing; the sentence is the command result.
+- **Query** `reach` (and `Snapshot.reach`, present only when bound): `{ bound, tier, standing, best, following, believers, trust, fear, both, trustShare, fearShare, share, pool, cap, gathered: { total, trust, fear }, measure, given, next: { tier, standing, f, share, shareF, held, hold } | null, falling }`.
+- **`powersQuery`** carries each power's `tier`, `price`, `free` always, and when bound `priceNow` (with 3 x if beyond), `locked`, `beyond`, `affordable`, `reason` (the plain sentence, or null) and `readyAt`.
+- **Nested commands.** A command dispatched by a handler (a prayer or defiance answer firing its deed) is never gated or charged. This covers the arc's own casts; the `origin: 'arc'` flag of v2 is not needed for them.
+
 
 ### 7.1 Files
 - New `src/sim/god/reach.ts`: the `REACH` table (thresholds, lines, keeps, yields, caps, price scales, free cooldowns, the heavy-hand list); `isBound(u)`; `followingOf(u)`; `reachDaily(u)` (roads, count, rise and fall, popMax easing, link, town measures, least gift); `rite(x, s, st)`; `credit(x, st, amount, road)`; `reachAllows`, `reachPower`, `capOf(u)`, `linkOf(x, st)`, `priceOf(u, power, cmd, p)`.
@@ -477,6 +509,32 @@ Whole-number counting in agent index order, once a day (plus the Unknown-standin
 - `content.test.ts`: every power has a tier; counts are 110 / 13 / 39 / 45 / 22; the free floor holds help, harm, wonder and foretelling; no free power harms an area; the `barren` creation chain is all free; no price above the cap at its band's fall line; every tier 1 to 4 power has a cost or is on the free list.
 - Unchanged because unbound: `omnipotence.test.ts`, `determinism.test.ts`, `arc-determinism.test.ts`, `save-continue.test.ts`. Add one bound save-continue case (saved mid-day, with a part-used measure) and one bound determinism case that includes spending.
 
+**Stage 1 tests and the pacing probe, as built (v3)**
+
+Tests: `tests/reach-measure.test.ts` (the measure; un-witnessed belief; both roads and the both-roads case; mixed equals pure; keep lines; bound-only regard changes; rise, hold, grace and fall with events), `tests/reach-charge.test.ts` (starting pool; price by size; tiers and prices on all 229 powers; out of reach, unaffordable and failed casts cost nothing; the free list and free cooldowns; free clay; the unbound sandbox; the no-dead-end run from an empty pool and no believers), `tests/reach-save.test.ts` (an unbound world writes no reach state and loads unbound; the setting; determinism of two bound runs; a mid-day save with a part-used measure continues tick for tick).
+
+Probe: `node _harness/probes/reach-pacing.ts <scenario> <help|severe|mixed|free|none> <seed> [days] [n]`. The scripted god acts twice a game day (severe: once) at the largest town and takes the first act of its list the gate allows, so it plays inside its standing and its pool. Planet `n = 20`. Day each standing was first reached:
+
+| World | God | Seeds | Whispered | Known | Worshipped | Most High | Notes at the end of the run |
+|---|---|---|---|---|---|---|---|
+| target (§5) | | | day 1 to 6 | day 17 to 60 | day 92 to 300 | day 272 at the earliest; a long game | |
+| `shore` (30 people) | help | 1, 2, 3 | 2, 2, 2 | 22, 22, 22 | not in 60 days (people too few) | - | day 60: F 46 to 50, all on trust, gathering 39 to 40 a day |
+| `shore` | severe | 1, 2, 3 | 2, 2, 2 | 26, 29, 25 | - | - | day 60: people 14 to 20 of 30, F 20, 10 on both roads, gathering 13 a day |
+| `shore` | mixed | 1, 2, 3 | 1, 1, 1 | 21, 21, 21 | - | - | day 60: F 34 to 50, every believer on both roads, gathering 23 to 32 a day |
+| `shore` | free spells only | 1, 2 | 1, 1 | 23, 22 | - | - | never spent; pool 386 |
+| `shore` | silent | 1, 2 | never | never | - | - | F 0 for 60 days, pool unchanged at 40 |
+| `babel` (370 people, 4 towns) | help | 1 | 4 | 19 | 94 | not in 420 days | day 420: F 476, 204 on trust, 66 on fear, pool at its cap of 2 068 |
+| `babel` | severe | 1 | 2 | 17 | 92 | not in 200 days | day 192: people 256 of 368, F 305, 124 on trust, 113 on fear |
+| `babel` | mixed | 1 | 3 | 18 | 94 | not in 200 days | day 192: F 378, 188 on trust, 100 on fear, 99 on both |
+
+- Against the owner's pace: Whispered in the first session (day 1 to 4: 24 to 96 minutes at 1x, the first minutes at speed); Known after a few hours (day 17 to 29: 1.5 to 2.5 hours at about 5x, 7 to 12 hours at a steady 1x); Most High only in a long game (not reached in 35 game years by a people of 400).
+- The three kinds of god reach each standing within 1 to 7 days of each other. Severity is the slower and poorer road only because it kills: `shore` loses a third to a half of its people in 60 days at one harsh act a day.
+- **Known gap:** on `babel` the pool sits at its cap from year 1 (gathering 250 to 480 a day against the probe's spending of about 32 a day). In a large believing world worship is plentiful; the challenge of running out is felt in small worlds and early. `REACH.rite` (1.0) is the knob (§10, decision 2).
+- Runs are single-seed on `babel`; the v2 probe list below still stands for stage 7 with 8 seeds.
+
+**The v2 probe list (for stage 7; targets superseded by §5 where they give days)**
+
+
 **Seeded probes (`_harness/probes/reach.ts`, 8 seeds per LIVING §6.4)**
 
 Four scripted gods: **the keeper of trust** (helps and answers prayers), **the keeper of fear** (warned punishments at default wrath, nobody killed by intent), **the mixed god** (alternates by town), **the god of harm then mercy** (strikes, then helps the same town).
@@ -511,6 +569,9 @@ Tuning order if a target fails: for pace, `REACH.scale`; for road balance in the
 
 ## 9. Build order (v2)
 
+**(v3) Status.** Built in one stint as "stage 1, the sim core": all of v2 stage 1 (measure, roads, standings, state, save, query, events, switch), stage 2 (the `tier`, `price`, `free` tags), the core of stage 3 (`credit`, the town measure, attended, the cap, the first gift, temple factor, sacrifice and feast through `credit`, the door offering in its accounting form) and the core of stage 4 (`chargeCheck` / `chargeCommit`, prices by size, reaching beyond, the free list and its cooldowns, free clay, nested-command exemption).
+**Not built yet:** the link factor, the visible `TASK.offer`, the `templeWanted` fear clause, the made-person rule, miracle widening by standing (§3.3), the Strict position, the pride / defiance / broken-covenant modifiers and the first-deed rule (§2.3, §3.6), scenario start standings (§7.5), audio cues, and all UI (§6). The table below is the v2 order and still names where each belongs.
+
 | Stage | Work | Model |
 |---|---|---|
 | 0 | Measurement probes only, no gameplay change. For the four scripted gods on four scenarios, 8 seeds: per day, believers, on each road, F; worship per source (including sacrifice and feast) and per town; prayers per person per day, by cause; attendance, loyalty and temple rate by road; trade, pilgrim and known-town values; days each road holds unattended. Record the default play speed. Fix §3.1, the lines and keeps, the two yields, the cap table and the price scales. Report to the owner if the roads cannot be brought within 15% | opus |
@@ -522,34 +583,33 @@ Tuning order if a target fails: for pace, `REACH.scale`; for road balance in the
 | 6 | Arc hooks (pride, defiance, broken covenant on count and measure), chronicle lines, Book line, SFX cue, scenario start standings and pools, the bound ARC §1 probe | sonnet, opus review of the arc hooks |
 | 7 | Full probe pass against §8, tuning, spec edits to CONTRACT pillars 1 and 3, §8.8 and §11.4, ARC §0.1, §0.5, §5.3 and §8.7, and STATUS | opus |
 
-## 10. Open decisions for the owner (v2)
+## 10. Open decisions for the owner (v3)
 
-Decisions 1 to 5 of v1 are settled ("all recommended") and `slap` and `stroke` are kept. Eight new ones:
+The v2 decisions are settled by the rulings of 2026-11-16 (1 to 4 and 6 to 8 "all recommended"; 5 changed to "every power costs"; trust and fear as two bars). Four remain from v3:
 
-1. **One pool or two.** *Recommended: one pool, called worship, filled by both roads.* Two pools would make every cast a choice of payer and would make a mixed world weaker than a pure one.
-2. **The words.** The roads are "in trust" and "in fear"; the resource is "worship". *Recommended: accept.* This is also where to correct my reading of "fear and benevolence".
-3. **How equal is equal.** The two roads are built to give the same standing, income and casts within 15%, and to last the same time when the god is silent. Fear stays the faster road to start, and a feared people may still flee or burn a shrine, which a trusted people do not. *Recommended: accept this as "equally strong".* The other choice is to change the fear and trust rates in the sim itself, which would move every arc number already tuned.
-4. **Restraint becomes "Strict".** The old toggle becomes the third position of one setting. Old saves that had it on keep it under a read-only label. *Recommended: yes.*
-5. **Heavy hands.** v1's free band was approved before ruling (c). As drafted, a short list of the maker's hands costs worship when used among the people: making people, raising shrines and temples, hostile weather over a town, digging or flooding inside a town, changing a peopled world's air and heat (§3.2). Single acts of help, harm and wonder stay free. *Recommended: yes.* Without it the god can drown or burn a town, and make followers, without limit. The other choice is to keep all 110 free and accept that the pool limits only the larger half of the powers.
-6. **Fast-forward shortens the wait.** Time controls are free, so a player can speed the clock while the people gather. The cap, the halved giving of unattended towns and the fading of belief bound it, and the prices are set for a wait of 3 to 8 real minutes at normal speed. *Recommended: accept.* The other choice is to make gathering slow down at high speed, which breaks the deterministic clock rule.
-7. **Trust and fear in words, not numbers.** The card says "most in trust, some in fear" rather than "nine in trust, five in fear", so it does not read as an alignment tally. The Following and the worship gauge stay as numbers. *Recommended: yes.*
-8. **Leaving the bounds.** A player may switch to Unbound at any time; it is the sandbox. *Recommended: allow it, and write one line in the Book of Ages when it happens.*
+1. **The five free spells.** `rain`, `heal-person`, `plant`, `lightning`, `omen-rainbow`, each with a short wait between casts. *Recommended: accept.* They are the smallest help, harm and wonder, and they are what lets a god with nothing begin again. Adding `gift` or `ignite` would make early play looser; removing `lightning` would leave the road of fear without a free start.
+2. **How plentiful worship is.** As built, a believing town gives about 1.6 a day per believer. A small world can run dry in a day of heavy casting; a large devout world (`babel`) keeps its pool full. *Recommended: keep for now and halve `REACH.rite` after the UI is in and the owner has played an hour*, because the right value is a feel question.
+3. **Cruelty still costs trust, at half.** In bound worlds help no longer lowers fear and a deserved or foretold harm no longer lowers trust. An unprovoked harm still lowers trust, by half of what it does today. *Recommended: accept*: it is the people's judgment of injustice, and without it "the people act, the god reacts" has no teeth. The other choice is no trust loss at all from any harm.
+4. **The pace numbers.** Holds of 1 / 30 / 150 / 360 game days give Known in about 20 to 30 game days and Worshipped at about year 8 at the earliest. In real time that depends on the speed the owner plays at (§5 assumes about 5x on average). *Recommended: accept, and tell the lead the usual play speed*; `REACH.hold` scales everything.
+
+Also to confirm (lead's reading, built as read): possession, renaming, the settings (`wrath`, `natural-disasters`, rival gods) and `cancel-disaster` are on the free list as "not powers over the world".
+
 
 ---------------------------------------------------------------------------------------------------------------------
 
-## Summary for the owner
+## Summary for the owner (v3)
 1. The god still grows as belief grows: five standings, Unknown to Most High, each opening a larger band of powers.
-2. There are two roads to standing: people who believe and trust the god, and people who believe and fear the god. Each counts double, and a mixed world simply adds up.
-3. Both roads need belief first, both are built to be equally strong within 15%, and neither is called good or evil.
-4. The people gather worship every day by their own rites: evening worship and prayer, or an offering left in fear at the shrine door.
-5. Each town has a daily measure it can give. Nothing the god does (tormenting a town, walking among it, ordering prayers) can draw out more.
-6. Towns that trade, send pilgrims and know other believing towns give up to 45% more. Towns the god has not been seen in for three days give half.
-7. Signs, miracles and disasters cost worship, so the god can run out and must wait for the people to give again.
-8. Single acts of help, harm and wonder, the Hand with `slap` and `stroke`, and every story answer are always free.
-9. New, and needing your answer: a short list of the basic powers (making people, raising temples, hostile weather or digging inside a town) costs worship when used among the people.
-10. You can never be stuck: an empty pool refills by itself, the cheapest power of your band is back within three game days, and a failed cast costs nothing.
-11. Old saves load unbound and unchanged, and the full sandbox stays a setting. Nothing is built yet; stage 0 measures before numbers are fixed.
-12. Eight decisions need your answer (§10). I recommend yes to all eight; numbers 3, 5 and 6 are the ones to read.
+2. There are two roads, trust and fear, and they go hand in hand: one person can trust and fear the god at once, and neither wipes the other out.
+3. A believer on either road, or on both, counts double. A god who is both kind and severe is exactly as strong as one who is only kind or only severe.
+4. Belief only counts in towns that have seen you act. A silent god stays Unknown.
+5. Every power costs worship, more for bigger powers and for bigger sizes of the same power.
+6. Free: the clock, save and load, the camera, the Hand, every story answer, and five very basic spells (rain, heal one person, plant, a stroke of lightning, a rainbow).
+7. The pool heals only from believers. Each town gives up to a daily measure; with no believers nothing comes in.
+8. You can never be stuck: the free spells make believers by either road, a new world starts with 40 worship, an empty world is free clay, and a failed cast costs nothing.
+9. The pace is slow on purpose: Whispered in the first session, Known after about 20 to 30 game days, Worshipped after about 8 game years, Most High only in a long game with a large people.
+10. The card will show your standing name, the worship gauge and two bars, Trust and Fear. No alignment meter and no good or evil words.
+11. Old saves load unbound and unchanged; the sandbox stays a setting. The sim core is built and tested; the UI is not.
+12. Four decisions need your answer (§10). I recommend yes to all four.
 
 ---------------------------------------------------------------------------------------------------------------------
 

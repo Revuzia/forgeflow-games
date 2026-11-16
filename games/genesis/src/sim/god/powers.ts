@@ -15,6 +15,7 @@ import type { CommandRegistry, Args } from './commands.ts';
 import { witnessCounter } from '../people/culture.ts';
 import { godAct, restraintCheck } from './belief.ts';
 import { actor } from './util.ts';
+import { chargeCheck, chargeCommit, reachPowerView, type Charge } from './reach.ts';
 
 /** parameters every command understands without declaring them (places, the world, the actor) */
 const UNIVERSAL = new Set(['pos', 'lat', 'lon', 'cell', 'planet', 'god']);
@@ -63,6 +64,7 @@ export function gesturePowers(c: Content): Record<string, string[]> {
 export function powersQuery(u: Universe): Record<string, unknown>[] {
   return u.content.powers.list.map((pw) => ({
     ...pw,
+    ...reachPowerView(u, pw),
     // (fix r2 #12, LIVING §3.7: a planet-scale disaster needs the wrath slider at huge — the palette says so)
     ...(pw.command === 'disaster.spawn' && typeof pw.params?.kind === 'string' && u.content.disasters.find(pw.params.kind)?.minWrath !== undefined
       ? { minWrath: u.content.disasters.find(pw.params.kind)!.minWrath } : {}),
@@ -78,20 +80,34 @@ function registryIds(u: Universe, name: string): string[] {
 /** commands that are camera / client / system plumbing, not god acts (never charged, never witnessed) */
 // ('time.scale' is the worker's logged speed level — perf/lapse.ts: a speed preset change is not a god act; SIM perf
 // push 3)
-const PLUMBING = new Set(['focus', 'hand.move', 'hand.pose', 'freeform', 'set', 'meta.restraint', 'meta.save', 'meta.load', 'time.speed', 'time.step', 'time.rewind', 'time.edit-past', 'time.scale', 'god.seen']);
+const PLUMBING = new Set(['focus', 'hand.move', 'hand.pose', 'freeform', 'set', 'meta.restraint', 'meta.reach', 'meta.save', 'meta.load', 'time.speed', 'time.step', 'time.rewind', 'time.edit-past', 'time.scale', 'god.seen']);
 
 /** install the registry hooks: restraint before, witnessing after (idempotent per registry) */
 export function installPowerHooks(reg: CommandRegistry): void {
   const marks: number[] = [];
+  // POWERS-GROWTH: one charge path. In a bound world god 0 pays through the reach gate (checked here, taken in `after`
+  // only when the handler succeeded); rivals, and every god in an unbound world, go through restraintCheck as before.
+  // A command a handler dispatches itself (an answer firing its deed) is part of the outer act: never gated or charged.
+  const pend: (Charge | null)[] = [];
   reg.before.push((u: Universe, cmd: Command, p: Planet): CommandResult | null => {
     marks.push(witnessCounter.n);
+    const nested = pend.length > 0;
+    pend.push(null);
     if (PLUMBING.has(cmd.k)) return null;
-    const why = restraintCheck(u, powerOf(u.content, cmd), actor(cmd), p);
-    if (why) { marks.pop(); return { ok: false, msg: why }; }
+    let why: string | null = null;
+    if (u.god.bound && actor(cmd) === 0) {
+      if (!nested) {
+        const c = chargeCheck(u, cmd, powerOf(u.content, cmd), p);
+        if (typeof c === 'string') why = c; else pend[pend.length - 1] = c;
+      }
+    } else why = restraintCheck(u, powerOf(u.content, cmd), actor(cmd), p);
+    if (why) { marks.pop(); pend.pop(); return { ok: false, msg: why }; }
     return null;
   });
   reg.after.push((u: Universe, cmd: Command, p: Planet, res: CommandResult, a: Args) => {
     const mark = marks.pop() ?? witnessCounter.n;
+    const ch = pend.pop() ?? null;
+    if (ch && res.ok) chargeCommit(u, ch, p);
     if (!res.ok || PLUMBING.has(cmd.k)) return;
     u.god.stat('acts');
     // the handler let people see it already: nothing more to do

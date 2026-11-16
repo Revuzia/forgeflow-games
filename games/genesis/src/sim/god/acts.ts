@@ -3,6 +3,7 @@
 // bless, curse), inspiring a person, laws given to a settlement, introductions beyond the peoples' own channels
 // (a substance, a law, a people), and restraint mode.
 
+import { setBound } from './reach.ts';
 import type { CommandRegistry, ParamSchema, Args } from './commands.ts';
 import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
@@ -535,6 +536,11 @@ export function registerActCommands(r: CommandRegistry): void {
     u.settings.restraint = a.on !== false;
     return ok(u.settings.restraint ? 'Restraint: your powers now cost worship and need time to gather.' : 'Omnipotence restored: every power, anywhere, now.');
   }, { desc: 'Restraint mode (worship costs and cooldowns)', category: 'Laws', params: { on: { type: 'boolean', default: true } } });
+  // POWERS-GROWTH: the setting. Bound: belief bounds the god's power (standing, worship prices). Unbound: the sandbox.
+  r.register('meta.reach', ({ u }, a) => {
+    setBound(u, a.bound !== false);
+    return ok(u.god.bound ? 'Belief bounds your power: what the people give, you may spend.' : 'Unbound: every power, anywhere, now.');
+  }, { desc: 'Whether belief bounds the god (standing and worship prices) or the world is a sandbox', category: 'Laws', params: { bound: { type: 'boolean', default: true } } });
 }
 
 export { insertSorted };
