@@ -1,0 +1,54 @@
+{
+  "camera": {
+    "pitchDeg": 52.0,
+    "vfovDeg": 26.0,
+    "distance": 28.5,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "light": "fighter key view 225/45 x0.9 sun + map_rift sky ambient, PBR Neutral + vale_grade_01"
+  },
+  "fighters": {
+    "dunsom": {
+      "glb": "art/out/fighters/dunsom/dunsom.glb",
+      "idleAction": "idle",
+      "facings": {
+        "270": {
+          "heightPx": 168,
+          "valueBands": {
+            "top": 63.7,
+            "mid": 56.4,
+            "bottom": 28.7
+          },
+          "accentPct": 1.23,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.23
+        },
+        "90": {
+          "heightPx": 153,
+          "valueBands": {
+            "top": 73.1,
+            "mid": 42.5,
+            "bottom": 34.1
+          },
+          "accentPct": 2.91,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.91
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.91,
+      "accentOk": true
+    }
+  },
+  "facings": [
+    270,
+    90
+  ],
+  "pairs": [],
+  "silhouetteOk": true,
+  "sheet": "art/renders/lineup/dunsom_fp2_probe.png",
+  "seconds": 7.4
+}

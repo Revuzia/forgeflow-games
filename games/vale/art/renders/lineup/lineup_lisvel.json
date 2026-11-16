@@ -1,0 +1,361 @@
+{
+  "camera": {
+    "pitchDeg": 52.0,
+    "vfovDeg": 26.0,
+    "distance": 28.5,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "light": "fighter key view 225/45 x0.9 sun + map_rift sky ambient, PBR Neutral + vale_grade_01"
+  },
+  "fighters": {
+    "lisvel": {
+      "glb": "art/out/fighters/lisvel/lisvel.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 119,
+          "valueBands": {
+            "top": 65.5,
+            "mid": 40.6,
+            "bottom": 24.6
+          },
+          "accentPct": 1.27,
+          "accentTopHalfShare": 0.562,
+          "accentTopHalfPctOfFighter": 0.71
+        },
+        "90": {
+          "heightPx": 118,
+          "valueBands": {
+            "top": 62.0,
+            "mid": 35.8,
+            "bottom": 14.3
+          },
+          "accentPct": 1.26,
+          "accentTopHalfShare": 0.578,
+          "accentTopHalfPctOfFighter": 0.73
+        },
+        "180": {
+          "heightPx": 132,
+          "valueBands": {
+            "top": 74.6,
+            "mid": 45.7,
+            "bottom": 12.6
+          },
+          "accentPct": 1.73,
+          "accentTopHalfShare": 0.576,
+          "accentTopHalfPctOfFighter": 1.0
+        },
+        "270": {
+          "heightPx": 123,
+          "valueBands": {
+            "top": 64.2,
+            "mid": 39.7,
+            "bottom": 12.4
+          },
+          "accentPct": 1.63,
+          "accentTopHalfShare": 0.544,
+          "accentTopHalfPctOfFighter": 0.89
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 1.73,
+      "accentOk": false
+    },
+    "odrum": {
+      "glb": "art/out/fighters/odrum/odrum.glb",
+      "idleAction": "idle.001",
+      "facings": {
+        "0": {
+          "heightPx": 113,
+          "valueBands": {
+            "top": 55.9,
+            "mid": 43.7,
+            "bottom": 16.3
+          },
+          "accentPct": 1.16,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.16
+        },
+        "90": {
+          "heightPx": 159,
+          "valueBands": {
+            "top": 49.7,
+            "mid": 39.1,
+            "bottom": 31.8
+          },
+          "accentPct": 1.87,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.87
+        },
+        "180": {
+          "heightPx": 114,
+          "valueBands": {
+            "top": 52.1,
+            "mid": 36.1,
+            "bottom": 12.3
+          },
+          "accentPct": 1.4,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.4
+        },
+        "270": {
+          "heightPx": 158,
+          "valueBands": {
+            "top": 51.9,
+            "mid": 47.7,
+            "bottom": 40.0
+          },
+          "accentPct": 1.43,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.43
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 1.87,
+      "accentOk": true
+    },
+    "ulkro": {
+      "glb": "art/out/fighters/ulkro/ulkro.glb",
+      "idleAction": "idle.002",
+      "facings": {
+        "0": {
+          "heightPx": 132,
+          "valueBands": {
+            "top": 52.7,
+            "mid": 37.2,
+            "bottom": 15.3
+          },
+          "accentPct": 0.04,
+          "accentTopHalfShare": 0.0,
+          "accentTopHalfPctOfFighter": 0.0
+        },
+        "90": {
+          "heightPx": 123,
+          "valueBands": {
+            "top": 48.3,
+            "mid": 34.0,
+            "bottom": 22.7
+          },
+          "accentPct": 0.03,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.03
+        },
+        "180": {
+          "heightPx": 115,
+          "valueBands": {
+            "top": 50.0,
+            "mid": 36.7,
+            "bottom": 17.6
+          },
+          "accentPct": 0.16,
+          "accentTopHalfShare": 0.714,
+          "accentTopHalfPctOfFighter": 0.11
+        },
+        "270": {
+          "heightPx": 129,
+          "valueBands": {
+            "top": 53.2,
+            "mid": 37.8,
+            "bottom": 34.9
+          },
+          "accentPct": 0.11,
+          "accentTopHalfShare": 0.25,
+          "accentTopHalfPctOfFighter": 0.03
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 0.16,
+      "accentOk": false
+    },
+    "vashil": {
+      "glb": "art/out/fighters/vashil/vashil.glb",
+      "idleAction": "idle.003",
+      "facings": {
+        "0": {
+          "heightPx": 150,
+          "valueBands": {
+            "top": 74.3,
+            "mid": 50.9,
+            "bottom": 26.2
+          },
+          "accentPct": 1.48,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.48
+        },
+        "90": {
+          "heightPx": 161,
+          "valueBands": {
+            "top": 75.1,
+            "mid": 49.3,
+            "bottom": 26.5
+          },
+          "accentPct": 1.49,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.49
+        },
+        "180": {
+          "heightPx": 151,
+          "valueBands": {
+            "top": 76.0,
+            "mid": 53.4,
+            "bottom": 34.1
+          },
+          "accentPct": 0.64,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.64
+        },
+        "270": {
+          "heightPx": 151,
+          "valueBands": {
+            "top": 74.0,
+            "mid": 57.8,
+            "bottom": 30.5
+          },
+          "accentPct": 1.48,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.48
+        }
+      },
+      "valueGradientOk": true,
+      "valueGradientMonotone": true,
+      "accentPctMax": 1.49,
+      "accentOk": false
+    }
+  },
+  "facings": [
+    0,
+    90,
+    180,
+    270
+  ],
+  "pairs": [
+    {
+      "a": "lisvel",
+      "b": "odrum",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.426,
+        "90": 0.481,
+        "180": 0.373,
+        "270": 0.492
+      },
+      "iou64Max": 0.492,
+      "iou64_norm": {
+        "0": 0.293,
+        "90": 0.19,
+        "180": 0.358,
+        "270": 0.172
+      },
+      "iou64NormMax": 0.358,
+      "ok": true
+    },
+    {
+      "a": "lisvel",
+      "b": "ulkro",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.518,
+        "90": 0.574,
+        "180": 0.487,
+        "270": 0.582
+      },
+      "iou64Max": 0.582,
+      "iou64_norm": {
+        "0": 0.441,
+        "90": 0.269,
+        "180": 0.342,
+        "270": 0.224
+      },
+      "iou64NormMax": 0.441,
+      "ok": true
+    },
+    {
+      "a": "lisvel",
+      "b": "vashil",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.456,
+        "90": 0.428,
+        "180": 0.449,
+        "270": 0.475
+      },
+      "iou64Max": 0.475,
+      "iou64_norm": {
+        "0": 0.496,
+        "90": 0.257,
+        "180": 0.437,
+        "270": 0.268
+      },
+      "iou64NormMax": 0.496,
+      "ok": true
+    },
+    {
+      "a": "odrum",
+      "b": "ulkro",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.484,
+        "90": 0.622,
+        "180": 0.543,
+        "270": 0.646
+      },
+      "iou64Max": 0.646,
+      "iou64_norm": {
+        "0": 0.282,
+        "90": 0.584,
+        "180": 0.205,
+        "270": 0.632
+      },
+      "iou64NormMax": 0.632,
+      "ok": true
+    },
+    {
+      "a": "odrum",
+      "b": "vashil",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.461,
+        "90": 0.513,
+        "180": 0.453,
+        "270": 0.532
+      },
+      "iou64Max": 0.532,
+      "iou64_norm": {
+        "0": 0.362,
+        "90": 0.512,
+        "180": 0.366,
+        "270": 0.529
+      },
+      "iou64NormMax": 0.529,
+      "ok": true
+    },
+    {
+      "a": "ulkro",
+      "b": "vashil",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.491,
+        "90": 0.534,
+        "180": 0.549,
+        "270": 0.567
+      },
+      "iou64Max": 0.567,
+      "iou64_norm": {
+        "0": 0.433,
+        "90": 0.563,
+        "180": 0.398,
+        "270": 0.597
+      },
+      "iou64NormMax": 0.597,
+      "ok": true
+    }
+  ],
+  "silhouetteOk": true,
+  "sheet": "art/renders/lineup/lineup_lisvel.png",
+  "seconds": 34.7
+}

@@ -1,0 +1,153 @@
+{
+  "camera": {
+    "pitchDeg": 52.0,
+    "vfovDeg": 26.0,
+    "distance": 28.5,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "light": "fighter key view 225/45 x0.9 sun + map_rift sky ambient, PBR Neutral + vale_grade_01"
+  },
+  "fighters": {
+    "nurrow": {
+      "glb": "art/out/fighters/nurrow/nurrow.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 126,
+          "valueBands": {
+            "top": 70.9,
+            "mid": 49.3,
+            "bottom": 20.7
+          },
+          "accentPct": 1.25,
+          "accentTopHalfShare": 0.829,
+          "accentTopHalfPctOfFighter": 1.04
+        },
+        "90": {
+          "heightPx": 149,
+          "valueBands": {
+            "top": 61.8,
+            "mid": 42.8,
+            "bottom": 37.1
+          },
+          "accentPct": 1.26,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.26
+        },
+        "180": {
+          "heightPx": 136,
+          "valueBands": {
+            "top": 61.1,
+            "mid": 34.6,
+            "bottom": 30.9
+          },
+          "accentPct": 0.67,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.67
+        },
+        "270": {
+          "heightPx": 133,
+          "valueBands": {
+            "top": 68.2,
+            "mid": 32.3,
+            "bottom": 20.1
+          },
+          "accentPct": 1.09,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.09
+        }
+      },
+      "valueGradientOk": true,
+      "valueGradientMonotone": true,
+      "accentPctMax": 1.26,
+      "accentOk": false
+    },
+    "rishal": {
+      "glb": "../../../../../../private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/4e79f165-d0b0-4b1f-a3d3-f4bc44cd631b/scratchpad/nr/rishal.glb",
+      "idleAction": "idle.001",
+      "facings": {
+        "0": {
+          "heightPx": 139,
+          "valueBands": {
+            "top": 67.0,
+            "mid": 41.6,
+            "bottom": 21.1
+          },
+          "accentPct": 0.11,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.11
+        },
+        "90": {
+          "heightPx": 131,
+          "valueBands": {
+            "top": 67.7,
+            "mid": 31.9,
+            "bottom": 22.2
+          },
+          "accentPct": 1.22,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.22
+        },
+        "180": {
+          "heightPx": 121,
+          "valueBands": {
+            "top": 53.0,
+            "mid": 25.1,
+            "bottom": 21.8
+          },
+          "accentPct": 0.29,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.29
+        },
+        "270": {
+          "heightPx": 117,
+          "valueBands": {
+            "top": 62.3,
+            "mid": 32.6,
+            "bottom": 21.2
+          },
+          "accentPct": 1.5,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.5
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 1.5,
+      "accentOk": false
+    }
+  },
+  "facings": [
+    0,
+    90,
+    180,
+    270
+  ],
+  "pairs": [
+    {
+      "a": "nurrow",
+      "b": "rishal",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.475,
+        "90": 0.464,
+        "180": 0.436,
+        "270": 0.455
+      },
+      "iou64Max": 0.475,
+      "iou64_norm": {
+        "0": 0.391,
+        "90": 0.486,
+        "180": 0.543,
+        "270": 0.431
+      },
+      "iou64NormMax": 0.543,
+      "ok": true
+    }
+  ],
+  "silhouetteOk": true,
+  "sheet": "art/renders/lineup/nurrow_fix2.png",
+  "seconds": 6.7
+}

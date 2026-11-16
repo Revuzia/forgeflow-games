@@ -1,0 +1,136 @@
+{
+  "camera": {
+    "pitchDeg": 52.0,
+    "vfovDeg": 26.0,
+    "distance": 28.5,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "light": "fighter key view 225/45 x0.9 sun + map_rift sky ambient, PBR Neutral + vale_grade_01"
+  },
+  "fighters": {
+    "burdam_pre": {
+      "glb": "art/.cache/max2_pre/burdam.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 177,
+          "valueBands": {
+            "top": 29.8,
+            "mid": 36.6,
+            "bottom": 22.6
+          },
+          "accentPct": 1.71,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.71,
+          "sigPct": 18.61
+        },
+        "90": {
+          "heightPx": 159,
+          "valueBands": {
+            "top": 55.2,
+            "mid": 24.2,
+            "bottom": 17.7
+          },
+          "accentPct": 2.3,
+          "accentTopHalfShare": 0.842,
+          "accentTopHalfPctOfFighter": 1.94,
+          "sigPct": 14.14
+        },
+        "180": {
+          "heightPx": 134,
+          "valueBands": {
+            "top": 46.2,
+            "mid": 28.7,
+            "bottom": 20.0
+          },
+          "accentPct": 1.3,
+          "accentTopHalfShare": 0.895,
+          "accentTopHalfPctOfFighter": 1.16,
+          "sigPct": 19.82
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": false,
+      "accentPctMax": 2.3,
+      "sigPctMean": 17.52,
+      "accentOk": false
+    },
+    "burdam_zone": {
+      "glb": "art/out/fighters/burdam/burdam.glb",
+      "idleAction": "idle.001",
+      "facings": {
+        "0": {
+          "heightPx": 177,
+          "valueBands": {
+            "top": 29.6,
+            "mid": 39.1,
+            "bottom": 21.5
+          },
+          "accentPct": 1.71,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.71,
+          "sigPct": 35.05
+        },
+        "90": {
+          "heightPx": 159,
+          "valueBands": {
+            "top": 54.7,
+            "mid": 26.9,
+            "bottom": 16.4
+          },
+          "accentPct": 2.3,
+          "accentTopHalfShare": 0.842,
+          "accentTopHalfPctOfFighter": 1.94,
+          "sigPct": 29.94
+        },
+        "180": {
+          "heightPx": 134,
+          "valueBands": {
+            "top": 48.6,
+            "mid": 30.7,
+            "bottom": 16.9
+          },
+          "accentPct": 1.3,
+          "accentTopHalfShare": 0.895,
+          "accentTopHalfPctOfFighter": 1.16,
+          "sigPct": 38.0
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": false,
+      "accentPctMax": 2.3,
+      "sigPctMean": 34.33,
+      "accentOk": false
+    }
+  },
+  "facings": [
+    0,
+    90,
+    180
+  ],
+  "pairs": [
+    {
+      "a": "burdam_pre",
+      "b": "burdam_zone",
+      "sameFighter": true,
+      "iou64": {
+        "0": 1.0,
+        "90": 1.0,
+        "180": 1.0
+      },
+      "iou64Max": 1.0,
+      "iou64_norm": {
+        "0": 1.0,
+        "90": 1.0,
+        "180": 1.0
+      },
+      "iou64NormMax": 1.0,
+      "ok": true
+    }
+  ],
+  "silhouetteOk": true,
+  "sheet": "art/renders/lineup/max2_u1_zoning_burdam.png",
+  "seconds": 12.2
+}

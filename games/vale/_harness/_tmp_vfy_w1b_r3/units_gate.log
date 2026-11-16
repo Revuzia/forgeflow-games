@@ -1,0 +1,59 @@
+run seed 7 seating 0 half 0: 10 fighters, 9 s, load 6.14 9.46 9.52
+run seed 7 seating 0 half 1: 6 fighters, 17 s, load 5.65 9.25 9.45
+run seed 7 seating 1 half 0: 10 fighters, 26 s, load 6.29 9.26 9.45
+run seed 7 seating 1 half 1: 6 fighters, 35 s, load 6.10 9.12 9.39
+run seed 7 seating 2 half 0: 10 fighters, 44 s, load 6.41 9.08 9.38
+run seed 7 seating 2 half 1: 6 fighters, 53 s, load 6.30 9.01 9.35
+run seed 11 seating 0 half 0: 10 fighters, 63 s, load 6.31 8.93 9.32
+run seed 11 seating 0 half 1: 6 fighters, 72 s, load 7.28 9.06 9.36
+run seed 11 seating 1 half 0: 10 fighters, 81 s, load 6.62 8.86 9.29
+run seed 11 seating 1 half 1: 6 fighters, 90 s, load 6.58 8.78 9.25
+run seed 11 seating 2 half 0: 10 fighters, 98 s, load 6.37 8.70 9.22
+run seed 11 seating 2 half 1: 6 fighters, 107 s, load 6.66 8.69 9.21
+run seed 23 seating 0 half 0: 10 fighters, 116 s, load 6.73 8.64 9.19
+run seed 23 seating 0 half 1: 6 fighters, 124 s, load 6.51 8.56 9.15
+run seed 23 seating 1 half 0: 10 fighters, 132 s, load 6.35 8.46 9.11
+run seed 23 seating 1 half 1: 6 fighters, 140 s, load 5.83 8.28 9.04
+run seed 23 seating 2 half 0: 10 fighters, 148 s, load 5.52 8.17 9.00
+run seed 23 seating 2 half 1: 6 fighters, 159 s, load 7.48 8.51 9.11
+{
+ "pass": false,
+ "fails": 15,
+ "seconds": 159,
+ "known": {
+  "Vashil-Dunsom dE 6.3": {
+   "dEMin": 28.9,
+   "dEMedian": 43.1,
+   "fail": false
+  },
+  "Ardit helm in the ally band": {
+   "topHsv": [
+    183.2,
+    0.657,
+    0.4
+   ],
+   "crownHsv": [
+    187.5,
+    0.2,
+    0.573
+   ],
+   "inAlly": false
+  }
+ }
+}
+FAIL {"gate":"P1 pair","a":"burdam","b":"kemdo","dE":22.1,"dHue":9.9,"runA":"7/0","runB":"7/0"}
+FAIL {"gate":"P1 pair","a":"ilsheta","b":"sukri","dE":24.3,"dHue":15.3,"runA":"7/1","runB":"7/0"}
+FAIL {"gate":"P1 pair","a":"kemdo","b":"tunlan","dE":19.9,"dHue":24.6,"runA":"7/0","runB":"7/0"}
+FAIL {"gate":"P1 pair","a":"nurrow","b":"sukri","dE":13.2,"dHue":18.3,"runA":"7/0","runB":"7/0"}
+FAIL {"gate":"P1 pair","a":"nurrow","b":"tunlan","dE":7.8,"dHue":9.3,"runA":"7/0","runB":"7/0"}
+FAIL {"gate":"P1 pair","a":"sukri","b":"tunlan","dE":18.6,"dHue":27.6,"runA":"7/0","runB":"7/0"}
+FAIL {"gate":"P3 value band (top25)","fighter":"burdam","valueBands":{"top":62.5,"mid":26.2,"bottom":12.8},"bible":[70,85]}
+FAIL {"gate":"P4 crown break","fighter":"ilsheta","crown":{"dL":1.4,"dHue":0,"breakRuns":0,"break":false}}
+FAIL {"gate":"P4 crown break","fighter":"marund","crown":{"dL":2,"dHue":1.1,"breakRuns":0,"break":false}}
+FAIL {"gate":"P4 crown break","fighter":"nurrow","crown":{"dL":1.3,"dHue":1.5,"breakRuns":0,"break":false}}
+FAIL {"gate":"P4 crown break","fighter":"rishal","crown":{"dL":3.9,"dHue":0,"breakRuns":3,"break":false}}
+FAIL {"gate":"P3 value band (top25)","fighter":"sukri","valueBands":{"top":87.5,"mid":62.4,"bottom":14.2},"bible":[70,85]}
+FAIL {"gate":"P4 crown break","fighter":"sukri","crown":{"dL":2.6,"dHue":1.2,"breakRuns":0,"break":false}}
+FAIL {"gate":"P3 value band (top25)","fighter":"tunlan","valueBands":{"top":85.1,"mid":42.6,"bottom":14.6},"bible":[70,85]}
+FAIL {"gate":"P4 crown break","fighter":"vashil","crown":{"dL":0.4,"dHue":2.1,"breakRuns":0,"break":false}}
+exit 1

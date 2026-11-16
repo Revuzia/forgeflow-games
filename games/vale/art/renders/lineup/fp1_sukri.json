@@ -1,0 +1,651 @@
+{
+  "camera": {
+    "pitchDeg": 52.0,
+    "vfovDeg": 26.0,
+    "distance": 28.5,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "light": "fighter key view 225/45 x0.9 sun + map_rift sky ambient, PBR Neutral + vale_grade_01"
+  },
+  "fighters": {
+    "sukri": {
+      "glb": "art/out/fighters/sukri/sukri.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 102,
+          "valueBands": {
+            "top": 79.6,
+            "mid": 46.2,
+            "bottom": 28.0
+          },
+          "accentPct": 0.05,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.05
+        },
+        "90": {
+          "heightPx": 131,
+          "valueBands": {
+            "top": 79.1,
+            "mid": 57.9,
+            "bottom": 29.4
+          },
+          "accentPct": 0.22,
+          "accentTopHalfShare": 0.0,
+          "accentTopHalfPctOfFighter": 0.0
+        },
+        "180": {
+          "heightPx": 113,
+          "valueBands": {
+            "top": 74.0,
+            "mid": 54.8,
+            "bottom": 28.7
+          },
+          "accentPct": 0.08,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.08
+        },
+        "270": {
+          "heightPx": 148,
+          "valueBands": {
+            "top": 64.7,
+            "mid": 61.6,
+            "bottom": 25.4
+          },
+          "accentPct": 0.1,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.1
+        }
+      },
+      "valueGradientOk": true,
+      "valueGradientMonotone": true,
+      "accentPctMax": 0.22,
+      "accentOk": false
+    },
+    "sukri_stillwater": {
+      "glb": "art/out/fighters/sukri/sukri_stillwater.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 102,
+          "valueBands": {
+            "top": 81.5,
+            "mid": 44.5,
+            "bottom": 34.0
+          },
+          "accentPct": 0.05,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.05
+        },
+        "90": {
+          "heightPx": 131,
+          "valueBands": {
+            "top": 80.5,
+            "mid": 58.5,
+            "bottom": 36.0
+          },
+          "accentPct": 0.22,
+          "accentTopHalfShare": 0.0,
+          "accentTopHalfPctOfFighter": 0.0
+        },
+        "180": {
+          "heightPx": 113,
+          "valueBands": {
+            "top": 76.0,
+            "mid": 55.5,
+            "bottom": 31.6
+          },
+          "accentPct": 0.08,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.08
+        },
+        "270": {
+          "heightPx": 148,
+          "valueBands": {
+            "top": 65.0,
+            "mid": 63.6,
+            "bottom": 29.9
+          },
+          "accentPct": 0.1,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.1
+        }
+      },
+      "clipsFrom": "sukri",
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 0.22,
+      "accentOk": false
+    },
+    "sukri_shadeprint": {
+      "glb": "art/out/fighters/sukri/sukri_shadeprint.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 102,
+          "valueBands": {
+            "top": 79.1,
+            "mid": 44.8,
+            "bottom": 29.3
+          },
+          "accentPct": 0.05,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.05
+        },
+        "90": {
+          "heightPx": 131,
+          "valueBands": {
+            "top": 79.2,
+            "mid": 60.0,
+            "bottom": 29.8
+          },
+          "accentPct": 0.22,
+          "accentTopHalfShare": 0.0,
+          "accentTopHalfPctOfFighter": 0.0
+        },
+        "180": {
+          "heightPx": 113,
+          "valueBands": {
+            "top": 75.7,
+            "mid": 58.7,
+            "bottom": 27.7
+          },
+          "accentPct": 0.08,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.08
+        },
+        "270": {
+          "heightPx": 148,
+          "valueBands": {
+            "top": 68.6,
+            "mid": 64.5,
+            "bottom": 25.6
+          },
+          "accentPct": 0.1,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.1
+        }
+      },
+      "clipsFrom": "sukri",
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 0.22,
+      "accentOk": false
+    },
+    "hesmi": {
+      "glb": "art/out/fighters/hesmi/hesmi.glb",
+      "idleAction": "idle.001",
+      "facings": {
+        "0": {
+          "heightPx": 181,
+          "valueBands": {
+            "top": 60.7,
+            "mid": 45.9,
+            "bottom": 16.7
+          },
+          "accentPct": 1.84,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.84
+        },
+        "90": {
+          "heightPx": 179,
+          "valueBands": {
+            "top": 64.4,
+            "mid": 37.4,
+            "bottom": 16.4
+          },
+          "accentPct": 2.63,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.63
+        },
+        "180": {
+          "heightPx": 147,
+          "valueBands": {
+            "top": 67.2,
+            "mid": 38.2,
+            "bottom": 18.8
+          },
+          "accentPct": 2.64,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.64
+        },
+        "270": {
+          "heightPx": 174,
+          "valueBands": {
+            "top": 65.6,
+            "mid": 46.9,
+            "bottom": 20.2
+          },
+          "accentPct": 2.6,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.6
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.64,
+      "accentOk": true
+    },
+    "ulkro": {
+      "glb": "art/out/fighters/ulkro/ulkro.glb",
+      "idleAction": "idle.002",
+      "facings": {
+        "0": {
+          "heightPx": 132,
+          "valueBands": {
+            "top": 52.7,
+            "mid": 37.2,
+            "bottom": 15.3
+          },
+          "accentPct": 0.04,
+          "accentTopHalfShare": 0.0,
+          "accentTopHalfPctOfFighter": 0.0
+        },
+        "90": {
+          "heightPx": 123,
+          "valueBands": {
+            "top": 48.3,
+            "mid": 34.0,
+            "bottom": 22.7
+          },
+          "accentPct": 0.03,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.03
+        },
+        "180": {
+          "heightPx": 115,
+          "valueBands": {
+            "top": 50.0,
+            "mid": 36.7,
+            "bottom": 17.6
+          },
+          "accentPct": 0.16,
+          "accentTopHalfShare": 0.714,
+          "accentTopHalfPctOfFighter": 0.11
+        },
+        "270": {
+          "heightPx": 129,
+          "valueBands": {
+            "top": 53.2,
+            "mid": 37.8,
+            "bottom": 34.9
+          },
+          "accentPct": 0.11,
+          "accentTopHalfShare": 0.25,
+          "accentTopHalfPctOfFighter": 0.03
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 0.16,
+      "accentOk": false
+    },
+    "marund": {
+      "glb": "art/out/fighters/marund/marund.glb",
+      "idleAction": "idle.003",
+      "facings": {
+        "0": {
+          "heightPx": 153,
+          "valueBands": {
+            "top": 58.0,
+            "mid": 43.5,
+            "bottom": 18.2
+          },
+          "accentPct": 2.72,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.72
+        },
+        "90": {
+          "heightPx": 182,
+          "valueBands": {
+            "top": 62.0,
+            "mid": 39.1,
+            "bottom": 17.9
+          },
+          "accentPct": 2.26,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.26
+        },
+        "180": {
+          "heightPx": 165,
+          "valueBands": {
+            "top": 58.6,
+            "mid": 38.0,
+            "bottom": 20.1
+          },
+          "accentPct": 1.35,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.35
+        },
+        "270": {
+          "heightPx": 178,
+          "valueBands": {
+            "top": 61.5,
+            "mid": 38.6,
+            "bottom": 16.5
+          },
+          "accentPct": 2.41,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.41
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.72,
+      "accentOk": true
+    }
+  },
+  "facings": [
+    0,
+    90,
+    180,
+    270
+  ],
+  "pairs": [
+    {
+      "a": "sukri",
+      "b": "sukri_stillwater",
+      "sameFighter": true,
+      "iou64": {
+        "0": 1.0,
+        "90": 1.0,
+        "180": 1.0,
+        "270": 1.0
+      },
+      "iou64Max": 1.0,
+      "iou64_norm": {
+        "0": 1.0,
+        "90": 1.0,
+        "180": 1.0,
+        "270": 1.0
+      },
+      "iou64NormMax": 1.0,
+      "ok": true
+    },
+    {
+      "a": "sukri",
+      "b": "sukri_shadeprint",
+      "sameFighter": true,
+      "iou64": {
+        "0": 1.0,
+        "90": 1.0,
+        "180": 1.0,
+        "270": 1.0
+      },
+      "iou64Max": 1.0,
+      "iou64_norm": {
+        "0": 1.0,
+        "90": 1.0,
+        "180": 1.0,
+        "270": 1.0
+      },
+      "iou64NormMax": 1.0,
+      "ok": true
+    },
+    {
+      "a": "sukri",
+      "b": "hesmi",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.439,
+        "90": 0.53,
+        "180": 0.568,
+        "270": 0.523
+      },
+      "iou64Max": 0.568,
+      "iou64_norm": {
+        "0": 0.543,
+        "90": 0.705,
+        "180": 0.592,
+        "270": 0.597
+      },
+      "iou64NormMax": 0.705,
+      "ok": true
+    },
+    {
+      "a": "sukri",
+      "b": "ulkro",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.466,
+        "90": 0.504,
+        "180": 0.48,
+        "270": 0.52
+      },
+      "iou64Max": 0.52,
+      "iou64_norm": {
+        "0": 0.389,
+        "90": 0.516,
+        "180": 0.419,
+        "270": 0.606
+      },
+      "iou64NormMax": 0.606,
+      "ok": true
+    },
+    {
+      "a": "sukri",
+      "b": "marund",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.486,
+        "90": 0.44,
+        "180": 0.491,
+        "270": 0.458
+      },
+      "iou64Max": 0.491,
+      "iou64_norm": {
+        "0": 0.602,
+        "90": 0.705,
+        "180": 0.684,
+        "270": 0.59
+      },
+      "iou64NormMax": 0.705,
+      "ok": true
+    },
+    {
+      "a": "sukri_stillwater",
+      "b": "sukri_shadeprint",
+      "sameFighter": false,
+      "iou64": {
+        "0": 1.0,
+        "90": 1.0,
+        "180": 1.0,
+        "270": 1.0
+      },
+      "iou64Max": 1.0,
+      "iou64_norm": {
+        "0": 1.0,
+        "90": 1.0,
+        "180": 1.0,
+        "270": 1.0
+      },
+      "iou64NormMax": 1.0,
+      "ok": false
+    },
+    {
+      "a": "sukri_stillwater",
+      "b": "hesmi",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.439,
+        "90": 0.53,
+        "180": 0.568,
+        "270": 0.523
+      },
+      "iou64Max": 0.568,
+      "iou64_norm": {
+        "0": 0.543,
+        "90": 0.705,
+        "180": 0.592,
+        "270": 0.597
+      },
+      "iou64NormMax": 0.705,
+      "ok": true
+    },
+    {
+      "a": "sukri_stillwater",
+      "b": "ulkro",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.466,
+        "90": 0.504,
+        "180": 0.48,
+        "270": 0.52
+      },
+      "iou64Max": 0.52,
+      "iou64_norm": {
+        "0": 0.389,
+        "90": 0.516,
+        "180": 0.419,
+        "270": 0.606
+      },
+      "iou64NormMax": 0.606,
+      "ok": true
+    },
+    {
+      "a": "sukri_stillwater",
+      "b": "marund",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.486,
+        "90": 0.44,
+        "180": 0.491,
+        "270": 0.458
+      },
+      "iou64Max": 0.491,
+      "iou64_norm": {
+        "0": 0.602,
+        "90": 0.705,
+        "180": 0.684,
+        "270": 0.59
+      },
+      "iou64NormMax": 0.705,
+      "ok": true
+    },
+    {
+      "a": "sukri_shadeprint",
+      "b": "hesmi",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.439,
+        "90": 0.53,
+        "180": 0.568,
+        "270": 0.523
+      },
+      "iou64Max": 0.568,
+      "iou64_norm": {
+        "0": 0.543,
+        "90": 0.705,
+        "180": 0.592,
+        "270": 0.597
+      },
+      "iou64NormMax": 0.705,
+      "ok": true
+    },
+    {
+      "a": "sukri_shadeprint",
+      "b": "ulkro",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.466,
+        "90": 0.504,
+        "180": 0.48,
+        "270": 0.52
+      },
+      "iou64Max": 0.52,
+      "iou64_norm": {
+        "0": 0.389,
+        "90": 0.516,
+        "180": 0.419,
+        "270": 0.606
+      },
+      "iou64NormMax": 0.606,
+      "ok": true
+    },
+    {
+      "a": "sukri_shadeprint",
+      "b": "marund",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.486,
+        "90": 0.44,
+        "180": 0.491,
+        "270": 0.458
+      },
+      "iou64Max": 0.491,
+      "iou64_norm": {
+        "0": 0.602,
+        "90": 0.705,
+        "180": 0.684,
+        "270": 0.59
+      },
+      "iou64NormMax": 0.705,
+      "ok": true
+    },
+    {
+      "a": "hesmi",
+      "b": "ulkro",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.305,
+        "90": 0.324,
+        "180": 0.404,
+        "270": 0.352
+      },
+      "iou64Max": 0.404,
+      "iou64_norm": {
+        "0": 0.505,
+        "90": 0.568,
+        "180": 0.589,
+        "270": 0.545
+      },
+      "iou64NormMax": 0.589,
+      "ok": true
+    },
+    {
+      "a": "hesmi",
+      "b": "marund",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.7,
+        "90": 0.645,
+        "180": 0.601,
+        "270": 0.612
+      },
+      "iou64Max": 0.7,
+      "iou64_norm": {
+        "0": 0.652,
+        "90": 0.612,
+        "180": 0.741,
+        "270": 0.565
+      },
+      "iou64NormMax": 0.741,
+      "ok": true
+    },
+    {
+      "a": "ulkro",
+      "b": "marund",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.312,
+        "90": 0.246,
+        "180": 0.294,
+        "270": 0.27
+      },
+      "iou64Max": 0.312,
+      "iou64_norm": {
+        "0": 0.421,
+        "90": 0.475,
+        "180": 0.545,
+        "270": 0.474
+      },
+      "iou64NormMax": 0.545,
+      "ok": true
+    }
+  ],
+  "silhouetteOk": false,
+  "sheet": "art/renders/lineup/fp1_sukri.png",
+  "seconds": 47.9
+}
