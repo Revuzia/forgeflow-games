@@ -54,7 +54,13 @@ async function section(name, fn) {
   currentSection = name;
   console.log(`\n== ${name}`);
   const t0 = Date.now();
-  try { await fn(); } catch (e) { check(`${name}: section ran to the end`, false, String(e && e.message ? e.message : e).split('\n')[0]); }
+  try { await fn(); } catch (e) {
+    const msg = String(e && e.message ? e.message : e);
+    check(`${name}: section ran to the end`, false, msg.split('\n')[0]);
+    // Playwright's call log says WHY an action timed out (not visible, not stable, another element receives the pointer): print it
+    const more = msg.split('\n').slice(1, 14).filter((l) => l.trim());
+    if (more.length) console.log(more.map((l) => '     | ' + l.slice(0, 220)).join('\n'));
+  }
   console.log(`   (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
