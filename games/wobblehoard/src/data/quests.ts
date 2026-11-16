@@ -5,7 +5,7 @@
 // Imports life.ts and places.ts only (no cycle: life.ts never imports this module); never src/core/quests.ts.
 import type { SpeciesId } from './catalog.ts';
 import type { PlaceId, ThingId } from './places.ts';
-import { PLACE_IDS, THING_IDS, MECH } from './places.ts';
+import { PLACE_IDS, THING_IDS } from './places.ts';
 import { TOUCH, WISH_KIND, REACT_KIND, SOCIAL_KIND, USE_VERB } from './life.ts';
 
 /* ═══════════════════════════════════════ event ids (QUESTS 4; contracts.ts PlayEventRing) ═══════════════════════════════════════ */
@@ -219,6 +219,14 @@ export const CHAPTERS: readonly ChapterDef[] = [
   { idx: 9, place: 9, opens: 72, finale: 97, keepsake: 9, gift: false },
   { idx: 10, place: -1, opens: 'finales', n: 2, finale: 107, keepsake: 10, gift: true },
 ];
+/** The REACT kinds that find each family fact (QUESTS 9: F1 a LOVE, F4 water, F5 warm, F6 cold, F7 ground); DT-15 checks each has a trigger. */
+export const FACT_REACTS: Readonly<Record<number, readonly number[]>> = {
+  [FACT.PLACE]: [REACT_KIND.LOVE],
+  [FACT.WATER]: [REACT_KIND.FLOAT, REACT_KIND.WADE, REACT_KIND.SOAK, REACT_KIND.SPLASH],
+  [FACT.WARM]: [REACT_KIND.WARM, REACT_KIND.TOAST, REACT_KIND.RISE, REACT_KIND.OOZE],
+  [FACT.COLD]: [REACT_KIND.FROST, REACT_KIND.SHIVER, REACT_KIND.SNOWCAP, REACT_KIND.HOLD_ON],
+  [FACT.GROUND]: [REACT_KIND.GLIDE, REACT_KIND.PRINT],
+};
 /** A finale opens at FINALE_AT of its chapter's 7 main quests (Q6); Home's opens when the first wish shows. */
 export const FINALE_AT = 5;
 /** How a keepsake is found (QUESTS 10). */
@@ -250,8 +258,6 @@ export const GIFT = { lifetime: 5, perDay: 1, idPrefix: 'jg-', origin: 'restock'
  *  new wish, the first wish 60 s after the first reveal (at most at 5:00 of play), 40% of place and thing wishes point at an undiscovered
  *  favourite, a touch wish at most once per 10 min, a by-PLAYER nap / song / thing / warm grant needs the player's act in the last 10 s. */
 export const WISH_RULES = { open: 1, onScreen: 1, kept: 3, perSquishyS: 180, anyS: 120, firstAfterRevealS: 60, firstLatestS: 300, favShare: 0.4, touchEveryS: 600, playerWindowS: 10 } as const;
-/** The mechanism each wish-glyph kind stands for beyond icons (unused by the reducer: the kinds come from ThingDef.icon, THING_KINDS). */
-export const RIDE_MECHS: readonly number[] = [MECH.ramp, MECH.seesaw, MECH.swing, MECH.floater, MECH.mound];
 
 /* ═══════════════════════════════════════ Home's text (D-42: the tracker needs it before the lazy text) ═══════════════════════════════════════ */
 

@@ -28,7 +28,7 @@ export const PLACE: PlaceDef = {
     { id: 'stoneslide', place: 'echohollow', mech: MECH.ramp, x: 2.9, z: 1.2, yaw: 1.571, size: [1, 0.08, 0.45], mu: 0.15, p: { angle: 14, top: 0.5, rails: 1 }, ride: true, verb: V.SLIDE, icon: E.star, look: 'stone', sound: S.whoosh },
     { id: 'mossbed', place: 'echohollow', mech: 0, x: -2.2, z: 1, yaw: 0, size: [1, 0, 0], mu: 1, p: {  }, ride: false, patch: 'mossbed', verb: V.NAP, icon: E.zzz, look: 'moss', sound: 0 },
     { id: 'echostone', place: 'echohollow', mech: MECH.block, x: 0.8, z: 1.7, yaw: 0, size: [0.25, 0.2, 0.25], mu: 0.8, p: { boostS: 20 }, ride: false, switch: 'echo', verb: V.SWITCH, icon: E.hello, look: 'echostone', sound: 0 },
-    { id: 'humrock', place: 'echohollow', mech: MECH.mound, x: -0.6, z: -2, yaw: 0, size: [0.9, 0.25, 0], mu: 0.7, p: {  }, ride: false, peek: [-1.922, -2, 0.722, -2], verb: V.LEAN, icon: E.question, look: 'rock', sound: 0 },
+    { id: 'humrock', place: 'echohollow', mech: MECH.mound, x: -0.6, z: -2, yaw: 0, size: [0.9, 0.25, 0], mu: 0.7, p: {  }, ride: true, peek: [-1.922, -2, 0.722, -2], verb: V.LEAN, icon: E.question, look: 'rock', sound: 0 },
   ],
   bounds: { shape: 'box', x: 0, z: 0, hx: 3.4, hz: 2.4, round: 0.8 }, walls: [],
   pad: [0, 0, 1.2], spawn: [[-0.55, 0.6], [0.8, 0.55], [-1.1, -0.7], [0.45, -1], [-0.2, 1.85], [1.75, 1]],

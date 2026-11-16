@@ -21,11 +21,11 @@ export const PLACE: PlaceDef = {
   ],
   things: [
     { id: 'rockpool', place: 'ripple', mech: MECH.pool, x: 2.3, z: -1.1, yaw: 0, size: [1.3, 0.28, 0], mu: 1, p: {  }, ride: false, zone: 'rockpool', verb: V.WADE, icon: E.droplet, look: 'rockpool', sound: S.splash },
-    { id: 'bobring', place: 'ripple', mech: MECH.floater, x: 2.3, z: -1.1, yaw: 0, size: [0.45, 0.08, 0], mu: 0.6, p: { segments: 6, bob: 0.03, bobHz: 0.3 }, ride: false, verb: V.FLOAT_ON, icon: E.bubbles, look: 'bobring', sound: S.splash },
+    { id: 'bobring', place: 'ripple', mech: MECH.floater, x: 2.3, z: -1.1, yaw: 0, size: [0.45, 0.08, 0], mu: 0.6, p: { segments: 6, bob: 0.03, bobHz: 0.3 }, ride: true, verb: V.FLOAT_ON, icon: E.bubbles, look: 'bobring', sound: S.splash },
     { id: 'driftlog', place: 'ripple', mech: MECH.bar, x: -2.4, z: -1.4, yaw: 0, size: [0.18, 2, 0], mu: 0.9, p: {  }, ride: false, peek: [-4.1, -1.4, -0.7, -1.4], verb: V.LEAN, icon: E.question, look: 'driftwood', sound: 0 },
     { id: 'shellchimes', place: 'ripple', mech: MECH.chime, x: -2.8, z: 0.6, yaw: 1.571, size: [0.08, 0.2, 0], mu: 0.6, p: { n: 5, span: 1.2, hang: 0.5, limit: 25, damping: 0.8, postR: 0.08 }, ride: false, notes: [74, 76, 78, 81, 83], verb: V.RING, icon: E.bell, look: 'shells', sound: S.chime },
     { id: 'pebbleball', place: 'ripple', mech: MECH.ball, x: 0.9, z: 1.6, yaw: 0, size: [0.22, 0, 0], mu: 0.8, p: { mass: 0.3, rollDamp: 1.2 }, ride: false, verb: V.ROLL, icon: E.ball, look: 'pebble', sound: S.ball },
-    { id: 'sandmound', place: 'ripple', mech: MECH.mound, x: -1.2, z: -1.9, yaw: 0, size: [0.9, 0.25, 0], mu: 0.7, p: {  }, ride: false, verb: V.SLIDE, icon: E.swirl, look: 'sand', sound: S.crunch },
+    { id: 'sandmound', place: 'ripple', mech: MECH.mound, x: -1.2, z: -1.9, yaw: 0, size: [0.9, 0.25, 0], mu: 0.7, p: {  }, ride: true, verb: V.SLIDE, icon: E.swirl, look: 'sand', sound: S.crunch },
   ],
   bounds: { shape: 'box', x: 0, z: 0, hx: 3.4, hz: 2.4, round: 0.8 }, walls: [],
   pad: [0, 0, 1.2], spawn: [[-0.4, 0.75], [0.95, 0.15], [-1.05, -0.5], [0.45, -1], [-1.95, 0.85], [1.75, 1.1]],

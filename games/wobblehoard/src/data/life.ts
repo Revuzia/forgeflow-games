@@ -139,12 +139,12 @@ export const LOOK_RATES = {
 /** The host's lifeAddLook amounts (LIFE 3.1, PLACES 4.2 to 4.4, S14): look id, amount, radius m (0 = the target only), seconds it lasts.
  *  The kettle's steam: PLACES 4.2 writes 1.2 m, LIFE 3.1 0.6 m; this table follows the thing's own page (PLACES 4.2), reported to the designer. */
 export const LOOK_ADD = {
-  pinePuff: { look: LOOK.snow, amount: 0.5, r: 0.7 },
-  snowball: { look: LOOK.snow, amount: 0.3, r: 0 },
-  kettleSteam: { look: LOOK.wet, amount: 0.2, r: 1.2, forS: 4 },
-  squirtTarget: { look: LOOK.wet, amount: 0.3, r: 0 },
-  squirtFoam: { look: LOOK.soak, amount: -0.4, r: 0 },
-} as const;
+  pinePuff: { look: LOOK.snow, amount: 0.5, r: 0.7, thing: 'shakepine' },
+  snowball: { look: LOOK.snow, amount: 0.3, r: 0, thing: 'snowball' },
+  kettleSteam: { look: LOOK.wet, amount: 0.2, r: 1.2, forS: 4, thing: 'kettle' },
+  squirtTarget: { look: LOOK.wet, amount: 0.3, r: 0, thing: '' },
+  squirtFoam: { look: LOOK.soak, amount: -0.4, r: 0, thing: '' },
+} as const satisfies Record<string, { look: number; amount: number; r: number; forS?: number; thing: ThingId | '' }>;
 /** Needs (LIFE 3): start levels each time a squishy comes out, rise and fall per s of sim time (x (0.5 + the trait)), the thresholds. */
 export const NEEDS = {
   start: { play: 0.3, company: 0.3, rest: 0.2 },
