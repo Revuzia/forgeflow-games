@@ -63,6 +63,11 @@ infinite band edge is issued as such (wallCols' -Infinity), player.js supportA /
 look measure counts the reads of the REAL hasCollidersNear (a c.dead read tap) instead of a replica's, a wrong answer failing the row.
 Under --plant the collider-load row judges only the queries that plant breaks (query-flood: steer/move/support; look-*: look), so a control is caught by
 ITS measure, never by a row that is red for another reason.
+W10 R1A pass 5 (orchestrator ruling 2026-11-15, LIKE FOR LIKE on matched points; no bar changed): collider-load is judged at the SAME world points on
+both builds (the union of both builds' footprint centres), collider-load-home compares home interiors with home interiors (each build's own homes'
+centres, same x1.25), and collider-load-frame replays BOTH builds' 600-frame streams on both builds (the candidate-stream-only ratio is printed as INFO);
+calls per frame, district calls and errors are unchanged. Three sessions per map (candidate, baseline, candidate at the baseline's points / stream).
+Plant furn-dup (every home's furniture colliders doubled) -> collider-load and collider-load-home FAIL; house-dup stays collider-load-frame's control.
 Exit 0 pass / 1 fail / 2 could-not-judge.
 """
 from __future__ import annotations
@@ -88,9 +93,10 @@ PLANT_ROWS = {"query-flood": {"collider-load", "collider-load-frame"}, "district
               # (R3) the look measure's own controls: hasCollidersNear builds and scans the whole r-list (same answers, the list's cost), or answers true
               "look-flood": {"collider-load"}, "look-true": {"collider-load"},
               # (W10 R1A pass 5, orchestrator ruling 2026-11-15) the matched rows' real-density control: every furnished house's FURNITURE colliders added
-              # again (W.map.addDynamicCollider) - a home whose furniture costs twice what it does: the matched battery, the home-interior row and the
-              # matched replay must all FAIL
-              "furn-dup": {"collider-load", "collider-load-home", "collider-load-frame"}}
+              # again (W.map.addDynamicCollider) - a home whose furniture costs twice what it does: the matched battery and the home-interior row must FAIL
+              # (measured ashgrid s7: steer p95 x1.364 / home steer mean x1.655). The matched replay reads it x1.147 (most of a match's queries are outside
+              # homes): its control stays house-dup (every house collider doubled)
+              "furn-dup": {"collider-load", "collider-load-home"}}
 # (R3) under a plant the collider-load row is judged on the queries that plant breaks ONLY: the steer query is over the bar on the R3 head (game work,
 # bots.js wallCols), so judging the whole row would let a control "fail" on steer while its own measure saw nothing. Without --plant: all four queries.
 PLANT_QUERIES = {"query-flood": ("steer", "move", "support"), "look-flood": ("look",), "look-true": ("look",), "furn-dup": ("steer", "move", "support")}

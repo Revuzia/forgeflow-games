@@ -31,6 +31,10 @@ honest; the _v<N> suffix is the view-spec version; --no-cache re-measures): the 
 --plant NAME changes the CANDIDATE after the match is loaded (never a file): extra-calls adds 60 always-drawn meshes (+60 calls), extra-tris
 adds 10 always-drawn 82k-triangle spheres (IcosahedronGeometry detail 63 = 20 x 64^2 faces, +820k); since the Wave-7 completion round both are SIZED FROM THE BASELINES (at least those numbers): the candidate may be lighter than
 the baseline, and a plant that cannot reach "+40 calls / x1.25" proves nothing; in plant mode only the designated row counts and exit 1 = the planted cost was seen.
+W10 R1A pass 5 (orchestrator ruling 2026-11-15, like for like; no bar changed): the candidate's drop view is drawn from the BASELINE's drop camera
+(the same world position on both builds: the cached baseline view's spec), and the candidate's own default drop view is measured too ('landing') and
+judged absolutely - tris-landing: its triangles <= x1.25 (phone x1.20) the heaviest baseline view (drop / street / endgame); drop-view-calls reads it.
+Plant furn-tris: every house inside / furniture chunk draws +30 % of its own triangles -> tris-vs-baseline or tris-landing FAILS.
 Exit 0 pass / 1 fail / 2 could-not-judge (server refused, a match load timed out, a view measured nothing).
 """
 from __future__ import annotations
