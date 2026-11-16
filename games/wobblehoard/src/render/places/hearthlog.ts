@@ -117,7 +117,7 @@ const LOOK: PlaceLook = {
       // the firelight: low at the hearth, spreading across the room (a wide soft cone, not a pool on the floor)
       key: tok('amber', 'coral', 0.18), keyI: 140, keyPos: [fire.x, 1.0, fire.z - 0.1], keyAim: [fire.x * 0.15, 0.0, fire.z + 3.0], keyAngle: 1.35,
       rim: tok('lagoon', 'cream', 0.15), rimI: 1.6, rimDir: layout === 0 ? [0.55, 0.35, -0.76] : [-0.3, 0.4, -0.87],
-      fillSky: tok('amber', 'cream', 0.5, 0.9), fillGround: tok('dusk', 'amber', 0.5), fillI: 4.2,
+      fillSky: tok('amber', 'cream', 0.5, 0.9), fillGround: tok('dusk', 'amber', 0.5), fillI: 5.0,
       keyTint: [1.0, 0.66, 0.36],
     };
   },
@@ -136,11 +136,11 @@ const LOOK: PlaceLook = {
     const walls = tall ? PLACE.tall.walls : PLACE.walls;
     // materials (token mixes)
     // (warm browns are amber-cream mixes taken deeper: an amber-plum mix slides through red in OKLCH and read pink)
-    const logA = kit.mat('logA', tok('plum', 'dusk', 0.3, 1.45), 0.85), logB = kit.mat('logB', tok('dusk', 'plum', 0.3, 1.1), 0.85);
+    const logA = kit.mat('logA', tok('plum', 'dusk', 0.3, 1.55), 0.85), logB = kit.mat('logB', tok('dusk', 'plum', 0.3, 1.2), 0.85);
     const stone = kit.mat('stone', tok('ink', 'cream', 0.5), 0.95, 0.3), stoneDark = kit.mat('stoneDark', tok('ink'), 1.0, 0.05);
     const wood = kit.mat('wood', tok('amber', 'cream', 0.45, 0.5), 0.7), woodLight = kit.mat('woodLight', tok('amber', 'cream', 0.5, 0.66), 0.6);
     const cushion = kit.mat('cushion', tok('coral', 'plum', 0.45, 0.9), 0.95, 0.15), pillow = kit.mat('pillow', tok('cream', 'coral', 0.2), 0.9, 0.2);
-    const yarn = kit.mat('yarn', tok('coral', 'plum', 0.15), 0.95, 0.15), metal = kit.mat('metal', tok('dusk', 'cream', 0.35), 0.35, 0.9);
+    const yarn = kit.mat('yarn', tok('coral', 'plum', 0.15), 0.95, 0.15), metal = kit.mat('metal', tok('coral', 'amber', 0.55, 0.72), 0.3, 0.9);   // a copper kettle
     const rope = kit.mat('rope', tok('amber', 'cream', 0.5, 0.85), 0.95, 0.1);
     const unitBox = kit.box(1, 1, 1), unitCylX = kit.geo('cylX', () => new THREE.CylinderGeometry(1, 1, 1, 12).rotateZ(Math.PI / 2)), unitCyl = kit.cyl(1, 1, 1, 12);
 
@@ -186,7 +186,10 @@ const LOOK: PlaceLook = {
     const card = (x: number, y: number, z: number, w: number, h: number, ry: number, order: number): void => {
       const c = kit.mesh(kit.geo(`card${w},${h}`, () => new THREE.PlaneGeometry(w, h)), cardMat, x, y, z, order); c.rotation.y = ry; g.add(c);
     };
-    card(0, WALL_H + 2.2, backZ - 0.32, 2 * (back.hx ?? 3) + 1.2, 4.4, 0, -60);
+    // the back wall's upper logs and the gable above the room (an unlit card of log bands, darker upward: the tall frame sees above the walls)
+    const upU = { uA: { value: col(tok('plum', 'dusk', 0.3, 1.05)) }, uB: { value: col(tok('dusk', 'plum', 0.3, 0.85)) }, uTop: { value: col(tok('ink', 'plum', 0.3, 0.9)) } };
+    g.add(kit.card('void main(){ float y = vUv.y * 4.4; float b = fract(y / 0.3); float k = mod(floor(y / 0.3), 2.0); vec3 c = mix(uA, uB, k) * (0.55 + 0.45 * sin(3.14159 * b)); c = mix(c, uTop, smoothstep(0.15, 0.9, vUv.y)); gl_FragColor = vec4(c, 1.0);\n#include <colorspace_fragment>\n}',
+      upU, 2 * (back.hx ?? 3) + 1.2, 4.4, 0, WALL_H + 2.2, backZ - 0.32, 0, -60));
     const sideX = Math.abs(walls.find((w) => (w.hz ?? 0) > (w.hx ?? 0))!.x) + 0.32;
     card(-sideX, WALL_H + 2.2, 0, 10, 4.4, Math.PI / 2, -59); card(sideX, WALL_H + 2.2, 0, 10, 4.4, -Math.PI / 2, -58);
 
@@ -277,7 +280,8 @@ const LOOK: PlaceLook = {
     const kt = spot(5), kd = PLACE.things[5], [sx, sy, sz] = [kd.size[0] * 2, kd.size[1] * 2, kd.size[2] * 2], kr = kd.p.kettleR ?? 0.22;
     B.add('stone', unitBox, stone, kt.x, sy / 2, kt.z, sx, sy, sz);
     g.add(kit.mesh(kit.sphere(kr, 20, 14), metal, kt.x, sy + kr * 0.85, kt.z, 2));
-    const spout = kit.mesh(kit.cyl(0.025, 0.045, 0.2, 8), metal, kt.x + kr * 0.95, sy + kr * 0.95, kt.z, 2); spout.rotation.z = -0.9; g.add(spout);
+    const sdir = kt.x > 0 ? -1 : 1;   // the spout faces the room (its steam must not vanish into the side wall)
+    const spout = kit.mesh(kit.cyl(0.025, 0.045, 0.2, 8), metal, kt.x + sdir * kr * 0.95, sy + kr * 0.95, kt.z, 2); spout.rotation.z = -0.9 * sdir; g.add(spout);
     const handle = kit.mesh(kit.geo('khandle', () => new THREE.TorusGeometry(kr * 0.75, 0.018, 6, 20, Math.PI)), metal, kt.x, sy + kr * 1.55, kt.z, 2); g.add(handle);
     kit.shadow(kt.x, kt.z, sx * 0.7, sz * 0.7, 0.3);
     kit.shadow(h.x, h.z, fw * 0.6, fd * 0.8, 0.35);
@@ -287,7 +291,7 @@ const LOOK: PlaceLook = {
 
     // the kettle's steam puff when it whistles (thingFx 5): wisps out of the spout, normal blend
     const steam = kit.own(new Particles(40, 34, true)); g.add(steam.mesh);
-    const spoutX = kt.x + kr * 1.05 + 0.08, spoutY = sy + kr * 1.05 + 0.06;
+    const spoutX = kt.x + sdir * (kr * 1.05 + 0.08), spoutY = sy + kr * 1.05 + 0.06;
     const STM: [number, number, number] = [0.93, 0.92, 0.9];
     let puffK = 0, puffAcc = 0, fireK = 0, finale = 0, finaleNow = 0;
     const movers: (THREE.Object3D | null)[] = [null, board, ball, seat, null, null];
@@ -307,7 +311,7 @@ const LOOK: PlaceLook = {
         embers.update(dt, time, quiet, reduced, tier, quiet || reduced ? 1 : 1 + 2.5 * finaleNow + 4 * fireK);
         if (puffK > 0 && !reduced) {
           puffAcc += dt * (puffK > 3.2 ? 40 : 6) * (quiet ? 0.3 : 1);
-          while (puffAcc >= 1) { puffAcc -= 1; const r1 = embers.rnd(), r2 = embers.rnd(); steam.emit(sp(spoutX, spoutY, kt.z + (r1 - 0.5) * 0.04, 0.18 + 0.1 * r2, 0.25 + 0.2 * r1, (r2 - 0.5) * 0.08, 1.2 + 0.6 * r1, 0.05 + 0.04 * r2, STM, 0.4, 0.8)); }
+          while (puffAcc >= 1) { puffAcc -= 1; const r1 = embers.rnd(), r2 = embers.rnd(); steam.emit(sp(spoutX, spoutY, kt.z + (r1 - 0.5) * 0.04, sdir * (0.18 + 0.1 * r2), 0.25 + 0.2 * r1, 0.05 + (r2 - 0.5) * 0.08, 1.2 + 0.6 * r1, 0.07 + 0.06 * r2, STM, 0.5, 0.8)); }
         }
         puffK = Math.max(0, puffK - dt);
         steam.update(dt, time);

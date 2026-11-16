@@ -19,7 +19,7 @@ const SNOW = /* glsl */`
   vec2 p = vWP.xz;
   float fw = max(length(fwidth(p)), 1e-5);
   float n = pFbm(p * 1.7);
-  vec3 c = mix(uShade, uSnow, 0.55 + 0.45 * n) * (0.95 + 0.07 * pN(p * vec2(0.7, 2.4)));
+  vec3 c = mix(uShade, uSnow, 0.84 + 0.16 * n) * (0.97 + 0.05 * pN(p * vec2(0.7, 2.4)));
   vec2 q = p * 34.0;
   float s = step(0.982, pH(floor(q))) * (1.0 - smoothstep(0.2, 0.42, length(fract(q) - 0.5))) * (1.0 - smoothstep(0.004, 0.014, fw));
   diffuseColor.rgb = c + uSpark * s;
@@ -29,9 +29,8 @@ const ICE = /* glsl */`
   vec2 p = vWP.xz - uC.xy;
   float r = length(p) / uC.z;
   float fw = max(length(fwidth(vWP.xz)), 1e-5);
-  float cr = abs(pN(p * 2.2) - 0.5);
-  float crack = (1.0 - smoothstep(0.0, 0.025 + fw * 2.0, cr)) * (1.0 - smoothstep(0.02, 0.06, fw));
-  vec3 c = mix(uDeep, uPale, 0.15 * pFbm(p * 3.0) + 0.35 * crack);
+  float st = smoothstep(0.55, 1.0, sin((p.x + p.y * 0.6) * 2.4 + pN(p * 1.5) * 2.0)) * 0.3;
+  vec3 c = mix(uDeep, uPale, 0.12 * pFbm(p * 3.0) + st);
   diffuseColor.rgb = mix(c, uPale, smoothstep(0.82, 1.0, r) * 0.8);
 `;
 // the mountains: three ranges of plum and dusk peaks, the far ones hazier, snow on their tops
@@ -39,16 +38,15 @@ const MOUNTAINS = /* glsl */`
 void main() {
   vec3 c = vec3(0.0); float a = 0.0;
   for (int l = 0; l < 3; l++) {
-    float fl = float(l), sc = 3.0 + fl * 2.5;
+    float fl = float(l), sc = 16.0 + fl * 9.0;
     float x = vUv.x * sc + fl * 4.7;
     float i = floor(x), f = fract(x);
-    float h0 = 0.25 + 0.4 * pH(vec2(i, fl)), h1 = 0.25 + 0.4 * pH(vec2(i + 1.0, fl));
-    float pk = mix(h0, h1, smoothstep(0.0, 1.0, f)) * (1.0 - 0.18 * fl) + 0.06 * (pN(vec2(x * 4.0, fl)) - 0.5);
-    float base = 0.62 - 0.22 * fl;
-    pk = pk * base + 0.04;
+    float hp = 0.45 + 0.55 * pH(vec2(i, fl)), sk = 0.3 + 0.4 * pH(vec2(i, fl + 7.0));
+    float pk = hp * (f < sk ? f / sk : (1.0 - f) / (1.0 - sk)) + 0.04 * (pN(vec2(x * 6.0, fl)) - 0.5);
+    pk = pk * (0.78 - 0.2 * fl) + 0.12 + 0.08 * fl;
     if (vUv.y < pk && a < 0.5) {
       vec3 m = mix(uNear, uFar, fl / 2.0);
-      m = mix(m, uCap, smoothstep(pk - 0.05, pk - 0.01, vUv.y) * smoothstep(0.25, 0.4, pk));
+      m = mix(m, uCap, smoothstep(pk - 0.12, pk - 0.08, vUv.y + 0.03 * pN(vec2(x * 11.0, fl))) * smoothstep(0.2, 0.32, pk));
       c = m; a = 1.0;
     }
   }
@@ -63,17 +61,17 @@ const LOOK: PlaceLook = {
   skyBand: tok('lagoon', 'cream', 0.3, 0.9),
   sky: {
     uZenith: tok('lagoon', 'dusk', 0.4, 0.68), uInk: tok('lagoon', 'dusk', 0.25, 0.8), uPlum: tok('lagoon', 'cream', 0.45, 0.92), uHorizon: tok('cream', 'lagoon', 0.15, 0.95),
-    uGlowWarm: tok('cream', 'amber', 0.3, 0.45), uGlowCool: tok('lagoon', 'lagoon', 0, 0.2), uBase: tok('cream', 'lagoon', 0.25, 0.72), uWarm: tok('cream', 'cream', 0, 0.04),
+    uGlowWarm: tok('cream', 'amber', 0.3, 0.45), uGlowCool: tok('lagoon', 'lagoon', 0, 0.2), uBase: tok('lagoon', 'dusk', 0.25, 0.95), uWarm: tok('cream', 'cream', 0, 0.04),
     uFogNear: 10, uFogFar: 40,
   },
   light(layout: 0 | 1): PlaceLight {
     void layout;
     return {
       // the low cream sun from the left, long light across the snow
-      key: tok('cream', 'amber', 0.2), keyI: 640, keyPos: [-7.5, 3.6, 4.0], keyAim: [0.5, 0, -0.5], keyAngle: 1.1,
+      key: tok('cream'), keyI: 470, keyPos: [-7.5, 3.6, 4.0], keyAim: [0.5, 0, -0.5], keyAngle: 1.1,
       rim: tok('lagoon', 'cream', 0.3), rimI: 2.2, rimDir: [0.45, 0.5, -0.75],
-      fillSky: tok('lagoon', 'dusk', 0.3), fillGround: tok('cream', 'lagoon', 0.3, 0.8), fillI: 2.2,
-      keyTint: [1.0, 0.94, 0.82],
+      fillSky: tok('lagoon', 'dusk', 0.3), fillGround: tok('lagoon', 'cream', 0.15, 0.8), fillI: 2.0,
+      keyTint: [1.0, 0.97, 0.9],
     };
   },
   panels: [
@@ -90,17 +88,17 @@ const LOOK: PlaceLook = {
     const th = (i: number): { x: number; z: number; yaw: number } => (tall ? T.things[i] : PLACE.things[i]);
     const pond = tall ? T.patches[0] : PLACE.patches[0], steamZ = tall ? T.zones[1] : PLACE.zones[1];
     // ---- materials ----
-    const snowU = { uSnow: { value: col(tok('cream', 'lagoon', 0.12, 0.8)) }, uShade: { value: col(tok('lagoon', 'dusk', 0.45, 1.25)) }, uSpark: { value: col(tok('cream', 'lagoon', 0.2, 0.6)) } };
+    const snowU = { uSnow: { value: col(tok('cream', 'cream', 0, 0.64)) }, uShade: { value: col(tok('lagoon', 'dusk', 0.4, 1.12)) }, uSpark: { value: col(tok('cream', 'lagoon', 0.2, 0.6)) } };
     const snow = kit.surface('snow', [1, 1, 1], 0.9, SNOW, snowU, 0.3);
-    const snowPlain = kit.mat('snowPlain', tok('cream', 'lagoon', 0.15, 0.78), 0.85, 0.35);
-    const ice = kit.mat('iceProp', tok('lagoon', 'cream', 0.45, 0.82), 0.12, 0.9), wood = kit.mat('wood', tok('amber', 'cream', 0.45, 0.42), 0.85, 0.2);
+    const snowPlain = kit.mat('snowPlain', tok('cream', 'cream', 0, 0.66), 0.85, 0.35);
+    const ice = kit.mat('iceProp', tok('lagoon', 'cream', 0.12, 1.08), 0.12, 0.9), wood = kit.mat('wood', tok('amber', 'cream', 0.45, 0.42), 0.85, 0.2);
     const pine = kit.mat('pine', tok('lagoon', 'ink', 0.62), 0.9, 0.2), stringM = kit.mat('string', tok('cream', 'dusk', 0.3, 0.8), 0.9, 0.1);
     const unitCyl = kit.cyl(1, 1, 1, 12), unitCylX = kit.geo('cylX', () => new THREE.CylinderGeometry(1, 1, 1, 12).rotateZ(Math.PI / 2)), unitBox = kit.box(1, 1, 1);
 
     // ---- the ground (snow) and the mountains ----
     g.add(kit.ground(snow));
-    const mU = { uNear: { value: col(tok('plum', 'dusk', 0.35, 1.25)) }, uFar: { value: col(tok('dusk', 'lagoon', 0.4, 1.1)) }, uCap: { value: col(tok('cream', 'lagoon', 0.2, 0.86)) } };
-    g.add(kit.card(MOUNTAINS, mU, 110, 22, 0, 9.5, -42, 0, -70));
+    const mU = { uNear: { value: col(tok('dusk', 'lagoon', 0.3, 1.15)) }, uFar: { value: col(tok('lagoon', 'dusk', 0.35, 1.05)) }, uCap: { value: col(tok('lagoon', 'cream', 0.12, 1.1)) } };
+    g.add(kit.card(MOUNTAINS, mU, 80, 14, 0, 5.2, tall ? -15 : -13, 0, -70));
 
     // ---- the Ice Pond: dark gloss with cracks and a frosted rim (flush: no collider, y 0.004) ----
     const iceU = { uC: { value: new THREE.Vector4(pond.x, pond.z, pond.r ?? 1.4, 0) }, uDeep: { value: col(tok('dusk', 'lagoon', 0.45, 0.62)) }, uPale: { value: col(tok('cream', 'lagoon', 0.3, 0.85)) } };
@@ -153,7 +151,7 @@ const LOOK: PlaceLook = {
     const arc = 2 * Math.PI - gap, segArc = arc / nSeg;
     for (let i = 0; i < nSeg; i++) {
       const a = gap / 2 + segArc * (i + 0.5) + sn.yaw, len = 2 * ringR * Math.sin(segArc / 2) + segR * 1.6;
-      B.add('drift', unitCylX, snowPlain, sn.x + Math.cos(a) * ringR, segR * 1.05, sn.z + Math.sin(a) * ringR, len, segR * 1.35, segR * 1.6, yawQ(-a + Math.PI / 2));
+      B.add('drift', kit.sphere(1, 18, 10), snowPlain, sn.x + Math.cos(a) * ringR, segR * 0.6, sn.z + Math.sin(a) * ringR, len * 0.62, segR * 1.9, segR * 1.75, yawQ(-a + Math.PI / 2));
     }
     kit.shadow(sn.x, sn.z, ringR * 0.9, ringR * 0.9, 0.22);
 

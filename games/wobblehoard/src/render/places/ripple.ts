@@ -63,7 +63,7 @@ const LOOK: PlaceLook = {
     void layout;
     return {
       // the low gold sun from the front right, a wide soft cone over the whole cove
-      key: tok('cream', 'amber', 0.45), keyI: 820, keyPos: [5.5, 5.0, 6.5], keyAim: [0, 0, -0.5], keyAngle: 1.2,
+      key: tok('cream', 'amber', 0.45), keyI: 640, keyPos: [5.5, 5.0, 6.5], keyAim: [0, 0, -0.5], keyAngle: 1.2,
       rim: tok('lagoon', 'cream', 0.2), rimI: 2.4, rimDir: [-0.35, 0.45, -0.82],
       fillSky: tok('lagoon', 'cream', 0.45), fillGround: tok('amber', 'cream', 0.5, 0.8), fillI: 2.6,
       keyTint: [1.0, 0.86, 0.62],
@@ -85,14 +85,14 @@ const LOOK: PlaceLook = {
     const pool = zn(0), surf = zn(1), wet = tall ? T.patches[0] : PLACE.patches[0];
     const shore = surf.z - (surf.hz ?? 0.25);
     // ---- materials ----
-    const sandU = { uSand: { value: col(tok('amber', 'cream', 0.55, 0.8)) }, uWetC: { value: col(tok('amber', 'cream', 0.45, 0.5)) },
+    const sandU = { uSand: { value: col(tok('amber', 'cream', 0.55, 0.63)) }, uWetC: { value: col(tok('amber', 'cream', 0.45, 0.5)) },
       uWet: { value: new THREE.Vector4(wet.x, wet.z, wet.hx ?? 3.4, wet.hz ?? 0.35) }, uPool: { value: new THREE.Vector4(pool.x, pool.z, pool.r ?? 1.3, 0) } };
     const sand = kit.surface('sand', [1, 1, 1], 0.95, SAND, sandU, 0.25);
     const rock = kit.mat('rock', tok('ink', 'dusk', 0.35, 1.05), 0.9, 0.25), drift = kit.mat('drift', tok('amber', 'cream', 0.7, 0.66), 0.9, 0.2);
     const coral = kit.mat('ring', tok('coral', 'amber', 0.15), 0.6, 0.35), cream = kit.mat('cream', tok('cream', 'amber', 0.15, 0.95), 0.6, 0.35);
     const shellM = kit.mat('shell', tok('cream', 'coral', 0.3), 0.5, 0.4), stringM = kit.mat('string', tok('cream', 'amber', 0.2, 0.8), 0.9, 0.1);
     const pebble = kit.mat('pebble', tok('ink', 'cream', 0.5, 0.9), 0.55, 0.35);
-    const unitIco = kit.geo('ico', () => new THREE.IcosahedronGeometry(1, 0)), unitCyl = kit.cyl(1, 1, 1, 12);
+    const unitIco = kit.geo('ico', () => new THREE.IcosahedronGeometry(1, 1)), unitCyl = kit.cyl(1, 1, 1, 12);
     const unitCylX = kit.geo('cylX', () => new THREE.CylinderGeometry(1, 1, 1, 12).rotateZ(Math.PI / 2));
 
     // ---- the ground (sand), the sea, the far headlands ----

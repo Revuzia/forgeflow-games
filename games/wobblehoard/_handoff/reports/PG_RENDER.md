@@ -9,7 +9,11 @@ fresh lane. Scope of this run: build-order step 0 and slice S0, then whatever of
 `npx tsc --noEmit -p tsconfig.json`, `node _harness/renderview/pg_node_checks.ts` (light, under 1 s), and
 `node _harness/browser_render.mjs --only=emote,pose,homeview,place` (one heavy job, about 6 minutes, port 5364).
 
-## Status (end of this run: tsc clean; node 28 ok / 2 FAIL (RD-17 twin rows); browser 23 ok / 3 FAIL (RD-06, RD-17 x2), 0 console problems)
+**Round 2 (2026-11-16 15:48 to 19:xx UTC) is at the END of this file ("Round 2"): read it first; the round-1 tables below are history.**
+Round 2 re-run commands: `npx tsc --noEmit -p tsconfig.json`, `node _harness/renderview/pg_node_checks.ts` (35 rows),
+`node _harness/browser_render.mjs --only=place` (about 9 minutes, all four places) and `--only=pose` (RD-05, RD-06, RD-11).
+
+## Status (end of ROUND 1: tsc clean; node 28 ok / 2 FAIL (RD-17 twin rows); browser 23 ok / 3 FAIL (RD-06, RD-17 x2), 0 console problems)
 | # | Step | State | Evidence |
 |---|---|---|---|
 | 0 | read the brief, the specs (PB 2, 7, 9, 13, 14, 18, 23; PLACES 1, 2.3, 3, 4.1, 4.2; LIFE 5.1, 7, 9, L7, L8; UI tokens), maps/RENDER.md, the SHELL_4 seams | done | |
@@ -228,3 +232,144 @@ draw calls: two wholes 28, six pieces lite 56, six pieces not lite 66; render ms
 Option b (one instanced draw for every piece's decals) was not needed and not built.
 | R3 | first-load bytes: the 29 GLSL comments inside material.ts's shader strings (COLOR, EMISSIVE, GRAIN stages; 3.1 KB shipped as text) moved into `${/* ... */ ''}` interpolations, which the minifier folds away; the shader code is unchanged (`scratch/pg_render/cmp.mjs`: 0 of 10 template strings differ once comments and blank lines are set aside) | done 16:58: material.ts 20 033 -> 16 883 B | bytes table at the end |
 | R4 | toast look (FN-02): golden on the heat side (0.35..1.15 of the look by facing), a few browner patches fixed to the skin, amber lifted 6% (was 18%: beige); cabin palette: warm honey boards (amber-cream deeper; the dusk-amber boards read magenta), grey stone (ink-cream), lighter under-roof, a warmer, stronger fill | code done 17:00, judged in the place run below | |
+| R5 | D-80 reaction presets as stage members: `reactFx(kind, bodyId, x, y, z, amount, lifeS)` (life.ts PARTICLE ids 1 steam, 2 embers, 4 drips, 5 bubbles, 9 puff; follows its body; LIFE 10.1's budget kept by the stage: 48 / s desktop, 24 phone, a third in Calm, none with reduced motion) and `thingFx(thing, kind, amount)` (kind 1 a thing's puff: the kettle's steam, the hearth's fire puff, the pine's snow puff, the drip leaf's shower; thing -1 kind 2 the finale: the cabin's fire swells and its embers rise, Calm or reduced motion a slow glow; Rainleaf's rain stops) | code done 17:45; browser run below | contracts.ts PG_RENDER additions |
+| R6 | S2 places' visuals (`src/render/places/{ripple,frostbell,rainleaf}.ts`, both layouts from PG_DATA's laid layouts) and the shared kit (`place.ts`: water surfaces, ground surfaces, backdrop cards, Batch, zero-allocation emits, movers per PART, the ceremony dim) | code done 17:45; browser run below | |
+
+### Place run 1 (17:50, `--only=place`, log `scratch/pg_render/r2_place_1.log`): what it found, and what changed before run 2
+- Every place booted; RD-08 22 to 30 calls; RD-17 all eight frames passed (tall 120.6 / 96.2 px at 35 deg; wide 152.6 px mid at 19 deg; the
+  model's worst margin 0.0 px on the live camera); RD-07 12 swaps over the four places: programs 18 -> 19, textures 4 -> 4, geometries 23 -> 24.
+- Cabin luminance **0.152 tall / 0.186 wide** (round 1: 0.066 / 0.069). Ripple 0.329 tall but 0.447 wide; Frostbell 0.433 / 0.472 (bar 0.35);
+  Rainleaf 0.139 / 0.131.
+- Bugs: the water surface shader did not compile (a template placeholder left the token `NOISE` in the GLSL: no pool or puddle drew; the
+  console row failed); the preset test ran while the stage was still in a place (its "not at Home" sub-row); the particle budget was a token
+  bucket whose burst let a 2 s window exceed the per-second cap in Calm (17.5 / s against 16).
+- Judged by eye: the cabin's wide view at the 19 deg lens reads well (a diorama look, warm boards, the hearth's light on the floor); the tall
+  frame showed a black void above the back wall; the kettle read pink; the marshmallow at toast 0.6 still read lavender (the hearth is behind
+  the bodies, so the camera sees the side AWAY from the heat, which my first stronger-contrast toast left at 0.35 of the look). Frostbell: the
+  far ground and the ramp read olive / mint (OKLCH cream-to-lagoon mixes pass through green), the mountains sat too far back to show (only a
+  flat purple band), the nest read as pipes. Rainleaf: too many orange fallen-leaf flecks.
+- Fixes before run 2: the water GLSL; the preset test goes Home first; the budget is a sliding 1 s window (the last 48 particle times: ANY
+  second holds at most the cap; a puff's burst fits in it); Ripple's sand x0.9 and its key 820 -> 740; Frostbell's snow L 0.7, key 520, the
+  far ground and the ice from lagoon (no cream-lagoon mid mixes), the mountains closer (z -13 / -15) and lighter with real snow caps, the nest
+  as overlapping drift ellipsoids; Rainleaf's flecks rarer and darker, a warmer loam; the cabin: an upper back wall and gable card (log bands
+  darkening upward) instead of the void, a copper kettle (coral-amber), and the **toast covers the whole body at 0.8 of the look plus up to
+  0.45 more on the heat side**, its browner patches darken both the lit skin and the body's own glow (jToB); and the S2 **sand and snow
+  looks** (uLook.z sand grains on the lower body; `uSnowL` a snow cap on up-facing skin, matte), which round 1 carried but did not draw.
+
+### Place run 2 (18:10, log `r2_place_2.log`): 3 FAIL, all RD-13 (Frostbell 0.376 tall / 0.393 wide; Ripple wide 0.411); the rest ok
+- Fixed by run 2: the water draws (the Rock Pool, the Steam Pool and the puddles), 0 console problems; D-80 starts every preset in a place and
+  none at Home; the budget measured 29.0 / s (8 presets, desktop, cap 48) and exactly 16.0 / s in Calm (cap 16); RD-07 programs 19 -> 19,
+  textures 4 -> 4, geometries 24 -> 24 over 12 swaps.
+- Judged by eye: FN-02's marshmallow STILL read lavender at toast 0.6. Cause: a foam's colour is mostly its sheen and scatter, which the
+  diffuse and glow mixes barely move; the toast now tints the whole outgoing light last (0.9 x its weight). Presets: too faint at the wide
+  framing (bigger, stronger steam, drips and bubbles); the kettle's steam left its spout INTO the side wall (the spout now faces the room).
+  Frostbell: olive blotches in the snow (a cream-lagoon tint mixed with the blue shade), cracks too big; now plain cream snow with a blue-dusk
+  shade, finer cracks, pointy peaks (16 to 25 per card). Rainleaf: the stones read pink (dusk-cream passes through pink), the loam purple,
+  the moss and the puddles read alike (blue discs with a hard rim); now dusk-lagoon stones, an umber loam (coral-amber taken deep), moss and
+  leaves from lagoon-amber mixes (a garden green, an OKLCH token mix), puddles with a soft rim and no foam line. Ripple: sand x0.92 again,
+  smoother rocks (an icosahedron of detail 1).
+
+### Bytes at the end of round 2 (14.3's one-file method; `scratch/pg_render/size.mjs`, HEAD = 7efee6677)
+| Module | Chunk | HEAD | now | delta |
+|---|---|---|---|---|
+| `render/stage.ts` | first load | 22 878 | 23 223 | +345 (the lens, `reactFx` / `thingFx`, the body lookup) |
+| `render/material.ts` | first load | 20 033 | 17 676 | **-2 357** (GLSL comments out of the shipped text -3 150; toast, sand, snow +793) |
+| `render/bodyview.ts` | first load | 9 172 | 9 233 | +61 |
+| `render/core.ts` | first load | 4 323 | 4 347 | +24 |
+| **render first-load share** (against 1e5a1159, round 1's method) | | 15 918 | **13 991** | **13.7 KB of 16 (2.4 KB left)** |
+| `render/emotes.ts` (+ `homekit.ts` 7 293, `lifelook.ts` 217) | lazy `lifelook`: **the life chunk** | 16 805 | 17 612 | +807 (the tail turn, style 3): 25.1 KB in all |
+| `render/place.ts` + `placeview.ts` | **the away chunk** | 8 078 | 16 146 | +8 068: **15.8 KB of 90** (PG_AUDIO's bed not counted by me) |
+| `render/places/hearthlog.ts` | the cabin chunk | 11 814 | 13 681 | with `audio/places/hearthlog.ts` 2 681 + `data/place_hearthlog.ts` 3 936: **20.3 KB of 45** |
+| `render/places/ripple.ts` (new) | Ripple's chunk | 0 | 7 551 | with audio 1 000 + data 3 686: **12.0 KB of 45** |
+| `render/places/frostbell.ts` (new) | Frostbell's chunk | 0 | 7 938 | with audio 1 200 + data 4 134: **12.0 KB of 45** |
+| `render/places/rainleaf.ts` (new) | Rainleaf's chunk | 0 | 8 055 | with audio 804 + data 3 746: **12.3 KB of 45** |
+Chunk naming (orchestrator, for vite.config.ts): `src/render/lifelook.ts` (and the emotes / homekit it imports) with the life chunk;
+`src/render/place.ts` (and `placeview.ts`) with the away chunk; `src/render/places/<id>.ts` each its own place chunk.
+
+### Place run 4 = the final place sweep (18:40, `node _harness/browser_render.mjs --only=place`, log `scratch/pg_render/r2_place_4.log`): **ALL RENDER CHECKS PASSED**, 0 console problems
+Chunk hashes (git hash-object): place.ts db43c34b0e, placeview.ts f496cee3e6, places/hearthlog.ts e33f811770, ripple.ts e50012912d, frostbell.ts d1cd6e0c9b, rainleaf.ts 696d72c9b1.
+| Place | Layout / frame | RD-01 | RD-08 calls (set and props, no body) | RD-13 luminance (bar 0.35) | RD-17 a 1 m squishy (lens) | RD-17 model margin |
+|---|---|---|---|---|---|---|
+| Hearthlog Cabin | tall 390 x 844 | ok | 30 | 0.155 (round 1: 0.066) | 120.6 front / 96.2 mid px (35 deg) | 0.0 px |
+| Hearthlog Cabin | wide 1280 x 800 | ok | 30 | 0.186 (round 1: 0.069) | 176.4 front / 152.6 mid px (19 deg) | 0.0 px |
+| Ripple Shore | tall | ok | 28 | 0.267 | 120.6 / 96.2 (35) | 0.0 |
+| Ripple Shore | wide | ok | 28 | 0.342 | 176.4 / 152.6 (19) | 0.0 |
+| Frostbell Ridge | tall | ok | 29 | 0.306 | 120.6 / 96.2 (35) | 0.0 |
+| Frostbell Ridge | wide | ok | 29 | 0.328 | 176.4 / 152.6 (19) | 0.0 |
+| Rainleaf Garden | tall | ok | 22 | 0.123 | 120.6 / 96.2 (35) | 0.0 |
+| Rainleaf Garden | wide | ok | 22 | 0.121 | 176.4 / 152.6 (19) | 0.0 |
+(Every PlaceDef's layouts are the same bounds, 1.25 x 3.0 tall and 3.4 x 2.4 wide, so RD-17's numbers are the same in every place.)
+- D-80 presets: steam, drips, bubbles and embers started on four bodies, the kettle's puff and the hearth's fire puff: all true; at Home false.
+  LIFE 10.1 budget: 8 presets at full amount, 29.0 particles / s on a desktop (cap 48), **16.0 / s in Calm (cap 16)**.
+- RD-07: 12 swaps (Home -> each of the four places in turn -> Home): programs 19 -> 19, textures 4 -> 4, geometries 24 -> 24.
+- The bubble clamp in a place (tall Ripple, the largest body at the back-right corner): inside the safe frame. Its tail was 0.0 deg: at the
+  final framing that bubble had room above (the corner top sits on the inset line, the bubble rises from it to y 293 px); node N3i proves
+  the clamp and the tail turn on a body whose anchor is above the top inset.
+- Shots (`_shots/render/pg/`): `cabin_{tall_phone,wide_desktop}.png`, `ripple_*`, `frostbell_*`, `rainleaf_*`, `fn02_fireplace.png`,
+  `presets_bodies.png`, `presets_things.png`, `bubble_clamp_phone.png`.
+
+**My judgement of the final shots (a verifier must redo it):** the cabin now reads as a warm firelit room: honey boards with the hearth's light
+pooled in front of it, grey stone, a copper kettle, plum and dusk logs, a gable of darker logs instead of the void on the tall frame. The
+marshmallow at toast 0.6 reads toasted (a warm brown-gold with browner patches), clearly different from its lavender self; it reads more
+brown-beige than bright gold. The 19 deg lens on the wide frame gives a calm diorama look; I find it better than the 35 deg one for a
+party, but it is flatter. Ripple: a golden cove, a deep sea with surf lines, the Rock Pool's teal water inside dark rocks with the coral life
+ring, the log, the chimes; the driftwood log on the tall layout is seen end-on (its data yaw lies it along z) and reads as a stump; the chime
+frame is thin. Frostbell: cream snow with blue shade, a glossy blue ice pond, a cyan ice ramp with rails, a blue-teal pine with snow, the
+steam pool in its snow bank, snow drifts for the nest; the snow still shows faint warm mottling under the cream key, and the mountains are
+only a strip at the top of the tall frame (under the HUD inset). Rainleaf: dark umber loam, green giant leaves, coral mushrooms, moss-green
+bouncer, dark plum puddles, violet-grey stones, rain streaks; the leaves on the teeter and the drip leaf read pale mint. The presets are
+subtle at this framing (the kettle's steam and the embers read; drips and bubbles are small).
+
+### Decisions a reader should know (round 2; each is also in the code's header comment)
+- **RD-17's model and the lens** (R1 above): bodies by their centres plus radius; the bubble clamped on screen (its tail turned to its body,
+  held-down bubbles slide toward the frame's middle); a place camera takes the widest lens of 35 / 30 / 26 / 23 / 21 / 19 deg that meets the
+  bars with a 1% margin. **The orchestrator should confirm the 19 deg lens on wide desktop frames**: it is the only way I found to reach 150 px
+  at mid-depth on 1280 x 800 without letting back bodies' tops under the HUD.
+- **Movers by part:** a thing's props in PropWorldLike's order drive its parts in order (`PlaceBuilt.movers[k]` may be an array). Chimes and
+  bells: one part each (the part's pose is the bell's centre and orientation; its string runs `hang` up its local +y to the pivot). The Shake
+  Pine: part 0 the trunk (not drawn as a mover), part 1 the branch. The Bob Ring, the balls, the rocker, the leaf teeter, the moss pad: part 0.
+- **Assumed heights PG_PHYS must match or tell me:** the chime and bell rails at y 0.95 m (each part hangs `p.hang` below it); the Shake
+  Pine's branch centre at its pivot height `p.pivotY` + half its length out from the trunk; the Moss Bouncer's pad top at its half thickness.
+- **Water:** one translucent surface per water zone after the jellies (depth test on, no depth write); a disc's edge ring hides the side (the
+  Rock Pool's rocks, the Steam Pool's snow bank; a puddle fades at its rim); the Surf Edge's 0.06 -> 0.12 m swell is the render's own slow
+  clock (8.5 s), not synchronised with physics' wave. `setBodyWater` is NOT implemented: the surface itself tints what is below the line.
+- **Weather:** spray motes (additive), flakes and rain (normal blend), the steam pool's wisps, the drip leaf's drips; caps by tier, x0.3 in
+  Calm, none with reduced motion; Rainleaf's showers are the render's own 40 s on / 30 s off clock (the physics `shower` zone has its own).
+- **The ceremony dim** (PLACES 2.3): the place host eases the three lights to (1 - ceremonyDim) while `director.active`, 1.2 s each way
+  (Ripple and Frostbell 0.3, the cabin and Rainleaf 0). Not measured by RD-03 per place (not done, below).
+- **Toast** tints the whole outgoing light last (see R4 / run 2); **sand** grains on the lower body (`uLook.z`), **snow** a matte cap on
+  up-facing skin (`uSnowL`, setBodyLook's fifth value). Every look at 0 skips the block (RD-02 by construction, not measured).
+- **The particle budget** is a sliding one-second window kept by the stage (`ReactFx`), so the shell need not count preset particles.
+
+## Requests to other lanes (round 2)
+- **PG_SHELL** (src/shell is frozen this round; for the next shell round): (1) a reaction cell with `chan === CHANNEL.PARTICLE`: call
+  `stage.reactFx(arg, bodyId, 0, 0, 0, amount, lifeS)` (arg is the PARTICLE id; 1 steam, 2 embers, 4 drips, 5 bubbles, 9 puff are drawn; 3
+  sparkles, 6 strands, 7 glow, 8 ripple return false); (2) `stage.thingFx(thing, 1, 1)` when the kettle whistles (thing 5 at the cabin, with
+  `audio.musicBox({ on: true, tune: 1 })`), on a hearth tap (thing 0), on a Shake Pine shake (Frostbell thing 6, with its `lifeAddLook` snow
+  puff) and on a Drip Leaf tap (Rainleaf thing 3); `thingFx(-1, 2, amount)` for the finale (0 ends it; Rainleaf's ends the rain); (3)
+  `setBodyLook(id, frost, wet, sand, toast, snow)`: sand and snow are now drawn; (4) `setPlayBounds` with the layout's bounds: the stage
+  picks the lens itself; nothing else changes for the shell. (5) Round 1's requests stand (setAutonomyFraming, setHomeThing, setKeepsakes,
+  bindProps with propThing, setBodyAsleep, setBodyBreath, emote flags, setEmotesInPhoto, loadPlace / setPlace).
+- **PG_PHYS** (src/physics frozen this round): the assumed heights above (chime / bell rails 0.95 m; the pine's parts trunk then branch);
+  a prop pose's xyz = the part's centre, its quaternion the part's orientation (round 1's request stands).
+- **PG_DATA:** nothing blocking. Ripple's tall layout lies the Driftwood Log along z, which the camera sees end-on (it reads as a stump):
+  a yaw near 0 would read better if DT-01 allows.
+- **Orchestrator:** confirm the place lens (19 deg on 1280 x 800 wide); accept the two new optional StageLike members `reactFx` and
+  `thingFx` (contracts.ts PG_RENDER additions); name `render/places/{ripple,frostbell,rainleaf}.ts` as their places' chunks.
+
+## Not done (round 2, plainly)
+- **Finales of the S2 places:** Ripple's sunset and Frostbell's stars over a snuggle are NOT built (`thingFx(-1, 2)` returns false there);
+  Rainleaf's finale only stops the rain (its "five drips in key" are not choreographed); the cabin's finale (the fire swells, embers rise;
+  Calm: a slow glow) is built but not checked in a browser.
+- **Marks** (`stampMark`, the ring buffer of prints, trails, dust, dents and glows) are NOT built: the contract member has no stage
+  implementation yet, so no place shows prints. **`setBodyWater`** (the under-the-waterline tint member) is not implemented (the surface
+  tints what is below it by itself). RD-15 (water: the surface draws over the right bodies, the tint below the line, the edge ring hides the
+  side) has screenshots only (`frostbell_wide_desktop.png`: a body standing in the Steam Pool), no row.
+- **RD-03 per place** (the flash gate with the ceremony dim easing over 1.0 s or more in each place) is not run; the dim is built (1.2 s each
+  way) but unmeasured. **RD-02** (looks at 0 are pixel-identical to v4) is still by construction only (the toast, sand and snow lines are
+  skipped at 0), not measured against a v4 reference.
+- **The Wind Gap's snow streaks**, the Surf Edge's wave synchronised with physics, and Rainleaf's shower synchronised with the physics
+  `shower` zone are render-only clocks, not driven by the shell.
+- **Frostbell's look** still shows faint warm mottling in the snow under its cream key; its mountains show only as a strip on the tall frame.
+  Ripple's tall Driftwood Log reads as a stump (its data yaw). Both are look issues, not check failures.
+- No full render sweep (the 52-minute run): only the sections named in "Final run" below and `place` ran on this tree.

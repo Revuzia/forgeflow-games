@@ -284,11 +284,16 @@ export function makePg(E: PgEnv) {
       E.tick([], 90, 1 / 60, false);
       S.render(); const st0 = S.stats();
       const spawn = L.spawn as readonly (readonly [number, number])[];
+      const pid: number[] = [];
       for (let k = 0; k < n; k++) {
         const g = speciesBaseGenome(species[k % species.length], 1 + k), bb = E.makeBody(g);
-        S.addBody!(bb, g, { tier: 'common', position: { x: spawn[k][0], y: 0, z: spawn[k][1] } });
+        pid.push(S.addBody!(bb, g, { tier: 'common', position: { x: spawn[k][0], y: 0, z: spawn[k][1] } }));
         bodies.push(bb);
       }
+      // the place's looks on two bodies (S2: sand and wet at the shore, snow and frost on the ridge, wet in the garden)
+      if (id === 'ripple') { S.setBodyLook!(pid[1], 0, 0, 0.85, 0, 0); S.setBodyLook!(pid[2], 0, 0.7, 0, 0, 0); }
+      if (id === 'frostbell') { S.setBodyLook!(pid[1], 0, 0, 0, 0, 0.85); S.setBodyLook!(pid[2], 0.6, 0, 0, 0, 0); }
+      if (id === 'rainleaf') S.setBodyLook!(pid[1], 0, 0.8, 0, 0, 0);
       E.tick(bodies, 120, 1 / 60, false);
       // measured size of a 1 m squishy (1 m across, at half a metre up) at the front edge and the middle of the bounds
       const w1 = (z: number): number => { const a = toPx(b.x - 0.5, 0.5, z), c = toPx(b.x + 0.5, 0.5, z); return c[0] - a[0]; };
@@ -319,6 +324,7 @@ export function makePg(E: PgEnv) {
      */
     async presets(): Promise<{ png: string; pngThings: string; started: boolean[]; perS: number; perSCalm: number; home: boolean }> {
       pg.insets('desktop');
+      pg.home(); E.tick([], 2, 1 / 60, false);
       const home = S.reactFx!(1, 0, 0, 0, 0, 1, 2);   // at Home: false (only in a place)
       await S.loadPlace!('hearthlog'); S.setPlace!('hearthlog', 0.05);
       const b = CABIN.bounds; S.setPlayBounds!(b.x, b.z, b.hx ?? 3, b.hz ?? 2);
@@ -346,7 +352,7 @@ export function makePg(E: PgEnv) {
         const e0 = fx.soft.emitted + fx.glow.emitted + fx.soft.dropped + fx.glow.dropped;
         E.tick(bodies, 120, 1 / 60, false);
         const e1 = fx.soft.emitted + fx.glow.emitted + fx.soft.dropped + fx.glow.dropped;
-        return (e1 - e0) / 2;
+        return (e1 - e0) / 2;   // (a sliding 1 s window: any second holds at most the cap, so two seconds hold at most twice it)
       };
       const perS = await rate(false), perSCalm = await rate(true);
       S.setCalmEffects(false); fx.clear();
@@ -363,7 +369,7 @@ export function makePg(E: PgEnv) {
       S.clearBodies(); bodies = [];
       const spots = [[b.x + (b.hx ?? 1.25), b.z - (b.hz ?? 3)], [b.x - (b.hx ?? 1.25), b.z - (b.hz ?? 3) + 0.4], [0, 0]];
       const ids3: number[] = [];
-      spots.forEach((p, k) => { const g = speciesBaseGenome(['wisplet', 'chunkle', 'dollop'][k], 2 + k), bb = E.makeBody(g); ids3.push(S.addBody!(bb, g, { tier: 'common', position: { x: p[0], y: 0, z: p[1] } })); bodies.push(bb); });
+      spots.forEach((p, k) => { const g = speciesBaseGenome([speciesOfRadius(0.625), 'chunkle', 'dollop'][k], 2 + k), bb = E.makeBody(g); ids3.push(S.addBody!(bb, g, { tier: 'common', position: { x: p[0], y: 0, z: p[1] } })); bodies.push(bb); });
       E.tick(bodies, 60, 1 / 60, false);
       S.emote!(0, ids3[0], 6, 0, 5, 0, 1); S.emote!(1, ids3[1], 22, 1, 0, 0, 0); S.emote!(2, ids3[2], 2, 0, 5, 0, 0);
       E.tick(bodies, 40, 1 / 60, false);

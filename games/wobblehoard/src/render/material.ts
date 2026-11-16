@@ -97,6 +97,9 @@ export interface JellyUniforms {
   uHeat: { value: THREE.Vector4 };
   uToastCol: { value: THREE.Color };
   uFrostCol: { value: THREE.Color };
+  /** Round 2 (S2): the sand look's grains (an amber-cream token mix) and the snow cap's amount (setBodyLook's fifth value). */
+  uSandCol: { value: THREE.Color };
+  uSnowL: { value: number };
 }
 
 const lin = (c: Rgb): THREE.Color => new THREE.Color().setRGB(c[0], c[1], c[2], THREE.LinearSRGBColorSpace);
@@ -140,7 +143,8 @@ uniform vec4 uSeam, uSpot;
 uniform float uSeamAmt, uSeamW, uSpotR;
 uniform vec3 uSeamCol;
 uniform vec4 uLook, uHeat;
-uniform vec3 uToastCol, uFrostCol;
+uniform vec3 uToastCol, uFrostCol, uSandCol;
+uniform float uSnowL;
 vec3 jBumpN(vec3 surf_pos, vec3 surf_norm, vec2 dHdxy, float faceDirection) {
   vec3 vSigmaX = normalize(dFdx(surf_pos.xyz));
   vec3 vSigmaY = normalize(dFdy(surf_pos.xyz));
@@ -217,18 +221,20 @@ ${THREE.ShaderChunk.transmission_fragment
 // PLAYGROUND looks (the block gated on uLook, LIFE 3.1): toast turns the side facing the heat point golden brown at the same brightness, the
 // body's own glow too (a lavender marshmallow must read toasted, not pink; never burnt); wet darkens, saturates and shines; frost lays a pale
 // crystalline crust, strongest at the rim. Every look at 0 skips the block (RD-02: today's pixels). Round 2: toast is golden on the heat side
-// (0.35..1.15 of the look by how squarely the skin faces the heat) with a few browner patches fixed to the skin (rest-space noise), never black.
+// (0.8..1.25 of the look, the most on the side facing the heat: the hearth is behind the party, so the camera sees the side away from it) with a
+// few browner patches fixed to the skin (rest-space noise), never black; it tints the whole outgoing light last (a foam's colour is mostly its
+// sheen and scatter, which the diffuse and glow mixes alone barely moved: FN-02 read lavender at toast 0.6).
 const EMISSIVE_STAGE = /* glsl */`
+float jToast = 0.0, jToB = 1.3;
 {
   vec3 jV = normalize(cameraPosition - vWPos);
   vec3 jN = transformNormalByInverseViewMatrix(normal, viewMatrix);
   float jNdv = clamp(dot(jN, jV), 0.0, 1.0);
   float jFres = pow(1.0 - jNdv, 3.4);
-  float jToast = 0.0;
-  if (uLook.x + uLook.y + uLook.w > 0.0) {
-    float jTo = min(1.0, uLook.w * (uHeat.w > 0.5 ? 0.35 + 0.8 * smoothstep(-0.2, 0.8, dot(jN, normalize(uHeat.xyz - vWPos))) : 0.8));
-    float jSpot = smoothstep(0.52, 0.78, whNoise3(vRest * 7.0)) * smoothstep(0.35, 0.9, jTo);
-    totalDiffuse = mix(totalDiffuse, vec3(dot(totalDiffuse, vec3(0.2126, 0.7152, 0.0722))) * uToastCol * (1.3 - 0.5 * jSpot), jTo);
+  if (uLook.x + uLook.y + uLook.z + uLook.w + uSnowL > 0.0) {
+    float jTo = min(1.0, uLook.w * (uHeat.w > 0.5 ? 0.8 + 0.45 * smoothstep(-0.3, 0.8, dot(jN, normalize(uHeat.xyz - vWPos))) : 1.0));
+    jToB = 1.3 - 0.5 * smoothstep(0.52, 0.78, whNoise3(vRest * 7.0)) * smoothstep(0.3, 0.8, jTo);
+    totalDiffuse = mix(totalDiffuse, vec3(dot(totalDiffuse, vec3(0.2126, 0.7152, 0.0722))) * uToastCol * jToB, jTo);
     jToast = jTo;
     float jLu = dot(totalDiffuse, vec3(0.2126, 0.7152, 0.0722));
     totalDiffuse = max(mix(vec3(jLu), totalDiffuse, 1.0 + 0.35 * uLook.y) * (1.0 - 0.25 * uLook.y), 0.0);
@@ -236,6 +242,12 @@ const EMISSIVE_STAGE = /* glsl */`
     float jFr = uLook.x * (0.35 + 0.65 * jFres) * (0.7 + 0.3 * whNoise3(vRest * 38.0));
     totalDiffuse = mix(totalDiffuse, uFrostCol * 0.5, 0.45 * jFr);
     totalEmissiveRadiance += uFrostCol * jFr * 0.12 + uToastCol * jTo * 0.03;
+    vec3 jKL = uKeyCol * (0.3 + 0.6 * clamp(dot(jN, uKeyDir) * 0.5 + 0.5, 0.0, 1.0)) + 0.12;
+    float jSa = uLook.z * smoothstep(0.3, -0.55, vRest.y) * smoothstep(0.42, 0.6, whNoise3(vRest * 24.0));
+    totalDiffuse = mix(totalDiffuse, uSandCol * jKL * 0.5, 0.85 * jSa);
+    float jSn = uSnowL * smoothstep(0.75 - 0.6 * uSnowL, 0.95 - 0.5 * uSnowL, jN.y + 0.18 * whNoise3(vRest * 8.0));
+    totalDiffuse = mix(totalDiffuse, uFrostCol * jKL * 0.62, jSn);
+    totalSpecular *= 1.0 - 0.7 * jSn;
   }
   float jRimSide = clamp(dot(jN, uRimDir) * 0.6 + 0.5, 0.0, 1.0);
   vec3 jRim = (uRimCol * (0.08 + 2.2 * jRimSide * jRimSide) + uGlowCol * 0.4) * jFres * uRimAmt;
@@ -281,7 +293,7 @@ const EMISSIVE_STAGE = /* glsl */`
   jExtra += uTierCol * uTierAmt * (0.25 + 0.9 * jFres + 0.5 * jHalo); ${/* the tier "tell": light drifting toward the result colour */ ''}
   jExtra += uMixCol * jMix * (0.16 + 0.3 * (1.0 - jFres)); ${/* merge lineage: the other parents' colours swirl through as light */ ''}
   totalEmissiveRadiance += jRim + jScat + jCore + jExtra;
-  if (jToast > 0.0) totalEmissiveRadiance = mix(totalEmissiveRadiance, vec3(dot(totalEmissiveRadiance, vec3(0.2126, 0.7152, 0.0722))) * uToastCol * 1.35, 0.85 * jToast);
+  if (jToast > 0.0) totalEmissiveRadiance = mix(totalEmissiveRadiance, vec3(dot(totalEmissiveRadiance, vec3(0.2126, 0.7152, 0.0722))) * uToastCol * jToB, jToast);
   #ifdef WH_LOW
     ${/* low tier: no transmission target, so the body carries its own colour (a base glow) and is only lightly see-through */ ''}totalDiffuse *= 0.16; ${/* the transmissive tiers keep only ~10% of the direct diffuse; the glow below stands in for the rest */ ''}
     ${/* fake depth for the transmission-less tier: a thick centre is deeper and more saturated, and the core glows through it (the fake depth deepens the body's OWN hue: it leaned fully on the blush colour, whose hue differs from the body's for many species, so the whole body took the blush hue on the phone: pink dough coral, crimson jelly violet, cream beads ochre. A third of blush is kept: it is the pressed-skin warmth.) */ ''}vec3 jDeepCol = mix(diffuseColor.rgb, uBlushCol, 0.35);
@@ -296,6 +308,7 @@ const EMISSIVE_STAGE = /* glsl */`
   totalEmissiveRadiance += jTouchE;
 }
 vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;
+if (jToast > 0.0) outgoingLight = mix(outgoingLight, vec3(dot(outgoingLight, vec3(0.2126, 0.7152, 0.0722))) * uToastCol * jToB * 0.92, 0.9 * jToast);
 `;
 
 /**
@@ -345,6 +358,8 @@ const KEY_TINT: Rgb = [1.0, 0.74, 0.42];
 const tokLin = (h: number): Rgb => [16, 8, 0].map((sh) => { const v = ((h >> sh) & 255) / 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }) as Rgb;
 const TOAST_TINT: Rgb = tokLin(0xffb347).map((v) => v + (1 - v) * 0.06) as Rgb;   // (round 2: 0.18 read beige, not golden: FN-02)
 const FROST_COL: Rgb = ((c: Rgb, l: Rgb): Rgb => [0, 1, 2].map((i) => c[i] * 0.75 + l[i] * 0.25) as Rgb)(tokLin(0xfff1d6), tokLin(0x59d6e6));
+/** The sand look's grains: amber and cream tokens, 40 / 60 (linear). */
+const SAND_COL: Rgb = ((a: Rgb, c: Rgb): Rgb => [0, 1, 2].map((i) => a[i] * 0.4 + c[i] * 0.6) as Rgb)(tokLin(0xffb347), tokLin(0xfff1d6));
 /** Transmission share kept by the most opaque family (cap 0.3: slow-rise foam, putty); rises to 1 at cap 1. */
 const OPAQUE_KEEP = 0.3;
 /** White-balance strength: a clear jelly (its colour is the transmission's) takes a little, an opaque skin (its colour is its lit diffuse) the most. */
@@ -415,7 +430,7 @@ export class JellyMaterials {
       uSeamCol: { value: lin(seamColour(genomePalette(genome).core)) }, uSpot: { value: new THREE.Vector4(0, -10, 0, 0) }, uSpotR: { value: 0.15 * scale },
       uPose: { value: new THREE.Vector4(0, 0, 0, 0) }, uPoseC: { value: new THREE.Vector4(0, 0, 0, 1) },
       uLook: { value: new THREE.Vector4(0, 0, 0, 0) }, uHeat: { value: new THREE.Vector4(0, 0, 0, 0) },
-      uToastCol: { value: lin(TOAST_TINT) }, uFrostCol: { value: lin(FROST_COL) },
+      uToastCol: { value: lin(TOAST_TINT) }, uFrostCol: { value: lin(FROST_COL) }, uSandCol: { value: lin(SAND_COL) }, uSnowL: { value: 0 },
     };
     this.palette = palette;
     this.scale = scale;

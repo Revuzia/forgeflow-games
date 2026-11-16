@@ -84,7 +84,7 @@ export const UV_VERT = 'varying vec2 vUv; varying vec3 vWP; void main(){ vUv = u
 export const NOISE = 'float pH(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); } float pN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(pH(i), pH(i + vec2(1.0, 0.0)), f.x), mix(pH(i + vec2(0.0, 1.0)), pH(i + vec2(1.0, 1.0)), f.x), f.y); } float pFbm(vec2 p){ return 0.65 * pN(p) + 0.35 * pN(p * 2.13 + 7.1); }';
 /** The water surface (one translucent draw per water zone, after the jellies: depth test on, depth write off): deep toward the middle, a
  *  sky mirror at grazing angles, slow ripples (uMotion: 1, 0.3 in Calm, 0 with reduced motion), a foam band at the edge (uFoam). */
-const WATER_FRAG = `varying vec2 vUv; varying vec3 vWP; uniform float uTime, uMotion, uFoam, uAlpha, uBox; uniform vec3 uDeep, uShallow, uSkyC, uFoamC; ${'NOISE'}
+const WATER_FRAG = `varying vec2 vUv; varying vec3 vWP; uniform float uTime, uMotion, uFoam, uAlpha, uBox; uniform vec3 uDeep, uShallow, uSkyC, uFoamC; ${NOISE}
 void main(){
   vec2 q = vUv * 2.0 - 1.0;
   float e = uBox > 0.5 ? vUv.y : 1.0 - length(q);   // a box's foam edge is its front (toward the camera, +z); a disc's its rim
@@ -97,9 +97,9 @@ void main(){
   c += uFoamC * smoothstep(0.62, 0.9, rip) * 0.18;
   float foam = uFoam * (1.0 - smoothstep(0.0, 0.12 + 0.05 * rip, e));
   c = mix(c, uFoamC, foam * 0.85);
-  gl_FragColor = vec4(c, clamp(uAlpha + 0.3 * fr + foam * 0.6, 0.0, 1.0) * smoothstep(0.0, 0.02, e + 0.02));
+  gl_FragColor = vec4(c, clamp(uAlpha + 0.3 * fr + foam * 0.6, 0.0, 1.0) * (uFoam > 0.0 ? smoothstep(0.0, 0.02, e + 0.02) : smoothstep(0.0, 0.3, e)));
   #include <colorspace_fragment>
-}`.replace("${'NOISE'}", NOISE);
+}`;
 
 /** Particle spec reused for every emit (zero allocation per frame). */
 export const SP: EmitSpec = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, life: 1, size: 0.02, kind: 0, r: 1, g: 1, b: 1, a: 1, drag: 0, grav: 0, fade: 1 };
@@ -284,13 +284,16 @@ export interface JellyLight { keyDir: THREE.Vector3; rimDir: THREE.Vector3; keyC
  * blend: the weather twin), 2 embers (warm sparks rising, additive), 4 drips (drops running off and falling), 5 bubbles (a soft cling of small
  * bubbles that rise off the skin), 9 puff (a soft burst at the base: sand, snow or dust in the place's own tone). A preset follows its body
  * (the stage's body lookup) for lifeS seconds. Every particle counts against LIFE 10.1's autonomy budget (24 a second on a phone, 48 on a
- * desktop; 8 / 16 in Calm), a token bucket here; none with reduced motion. Zero allocation per frame.
+ * desktop; 8 / 16 in Calm), kept as a sliding one-second window (the times of the last 48 particles: in ANY second at most that many; a
+ * puff's burst fits inside it); none with reduced motion. Zero allocation per frame.
  */
 export class ReactFx {
   readonly soft = new Particles(96, 34, true);
   readonly glow = new Particles(32, 33, false);
   private readonly src = new Float32Array(8 * 8);   // kind, body, x, y, z, amount, left s, accumulator
-  private bucket = 0;
+  private readonly times = new Float64Array(48).fill(-1e9);
+  private head = 0;
+  private clock = 0;
   private seed = 0x9e3779b9 | 0;
   /** The place's puff tone (linear; sand, snow, loam). */
   puffC: Rgb = [0.8, 0.7, 0.55];
@@ -313,8 +316,8 @@ export class ReactFx {
   }
   clear(): void { this.src.fill(0); this.soft.clear(); this.glow.clear(); }
   update(dt: number, time: number, quiet: boolean, reduced: boolean, phone: boolean, ctx: StageCtx | null): void {
-    const rate = (phone ? 24 : 48) * (quiet ? 1 / 3 : 1);
-    this.bucket = Math.min(rate, this.bucket + rate * dt);
+    const rate = Math.round((phone ? 24 : 48) * (quiet ? 1 / 3 : 1)), T = this.times;
+    this.clock += dt;
     const S = this.src, r = this.rnd, a = this.at;
     for (let i = 0; i < 8; i++) {
       const o = i * 8;
@@ -326,13 +329,14 @@ export class ReactFx {
       if (kind !== 9) S[o + 7] += dt * amt * (kind === 1 ? 9 : kind === 2 ? 7 : kind === 4 ? 7 : 6);
       while (S[o + 7] >= 1) {
         S[o + 7] -= 1;
-        if (reduced || this.bucket < 1) continue;   // over the autonomy budget (or reduced motion): this particle is not drawn
-        this.bucket -= 1;
+        // over the autonomy budget (the rate-th most recent particle less than 1 s ago) or reduced motion: this particle is not drawn
+        if (reduced || this.clock - T[(this.head - rate + 48) % 48] < 1) continue;
+        T[this.head] = this.clock; this.head = (this.head + 1) % 48;
         const th = r() * 6.2832, ca = Math.cos(th), sa = Math.sin(th);
-        if (kind === 1) this.soft.emit(sp(cx + ca * R * 0.35 * r(), cy + R * 0.85, cz + sa * R * 0.35 * r(), ca * 0.04, 0.22 + 0.15 * r(), sa * 0.04, 1.3 + 0.6 * r(), R * (0.12 + 0.08 * r()), [0.92, 0.9, 0.86], 0.32, 0.5));
+        if (kind === 1) this.soft.emit(sp(cx + ca * R * 0.35 * r(), cy + R * 0.85, cz + sa * R * 0.35 * r(), ca * 0.04, 0.22 + 0.15 * r(), sa * 0.04, 1.3 + 0.6 * r(), R * (0.2 + 0.12 * r()), STEAM_C, 0.42, 0.5));
         else if (kind === 2) this.glow.emit(sp(cx + ca * R * 0.5, cy + R * 0.3, cz + sa * R * 0.5, ca * 0.08, 0.4 + 0.3 * r(), sa * 0.08, 1.0 + 0.6 * r(), 0.014 + 0.008 * r(), [1.0, 0.5 + 0.2 * r(), 0.14], 0.9, 0.4));
-        else if (kind === 4) this.soft.emit(sp(cx + ca * R * 0.8, cy - R * 0.1 * r(), cz + sa * R * 0.8, ca * 0.05, -0.1, sa * 0.05, 0.55, 0.016, [0.62, 0.86, 0.95], 0.85, 0, 7, 2, 2));
-        else if (kind === 5) this.soft.emit(sp(cx + ca * R * 0.95, cy + R * (r() - 0.6), cz + sa * R * 0.95, ca * 0.03, 0.12 + 0.08 * r(), sa * 0.03, 1.1 + 0.5 * r(), 0.018 + 0.016 * r(), [0.86, 0.95, 0.98], 0.55, 0.8));
+        else if (kind === 4) this.soft.emit(sp(cx + ca * R * 0.8, cy - R * 0.1 * r(), cz + sa * R * 0.8, ca * 0.05, -0.1, sa * 0.05, 0.55, 0.026, DRIP_C, 0.95, 0, 7, 2, 2));
+        else if (kind === 5) this.soft.emit(sp(cx + ca * R * 0.95, cy + R * (r() - 0.6), cz + sa * R * 0.95, ca * 0.03, 0.12 + 0.08 * r(), sa * 0.03, 1.1 + 0.5 * r(), 0.03 + 0.025 * r(), BUBBLE_C, 0.75, 0.8));
         else this.soft.emit(sp(cx + ca * R * 0.9, 0.04, cz + sa * R * 0.9, ca * (0.35 + 0.3 * r()), 0.12 + 0.12 * r(), sa * (0.35 + 0.3 * r()), 0.6 + 0.3 * r(), 0.05 + 0.04 * r(), this.puffC, 0.5, 3.5));
       }
       if (kind === 9) S[o + 7] = 0;
@@ -341,6 +345,9 @@ export class ReactFx {
   }
   dispose(): void { this.soft.dispose(); this.glow.dispose(); }
 }
+
+/** The presets' colours (linear): steam cream, drips and bubbles lagoon-cream mixes. */
+const STEAM_C = tok('cream', 'cream', 0, 0.97), DRIP_C = tok('lagoon', 'cream', 0.25), BUBBLE_C = tok('lagoon', 'cream', 0.15, 1.05);
 
 /** The host: loads place looks, swaps one in (sky, ground, light, environment, things) and out, poses its movers, frames its bounds. */
 export class PlaceHost {

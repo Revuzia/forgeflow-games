@@ -18,8 +18,8 @@ const LOAM = /* glsl */`
   float crumb = pN(p * 23.0) * (1.0 - smoothstep(0.01, 0.04, fw));
   vec3 c = uLoam * (0.8 + 0.3 * n + 0.12 * crumb);
   c = mix(c, uDamp, smoothstep(0.45, 0.7, d) * 0.6);
-  float fl = step(0.93, pH(floor(p * 4.0))) * (1.0 - smoothstep(0.18, 0.3, length(fract(p * 4.0) - 0.5))) * (1.0 - smoothstep(0.03, 0.08, fw));
-  diffuseColor.rgb = mix(c, uFleck, fl * 0.7);
+  float fl = step(0.975, pH(floor(p * 4.0))) * (1.0 - smoothstep(0.18, 0.3, length(fract(p * 4.0) - 0.5))) * (1.0 - smoothstep(0.03, 0.08, fw));
+  diffuseColor.rgb = mix(c, uFleck, fl * 0.55);
 `;
 // the leaf (a teeter board, the drip leaf): a teal leaf with a paler midrib and veins, its outline cut by the uv (alpha test)
 const LEAF = /* glsl */`
@@ -95,14 +95,14 @@ const LOOK: PlaceLook = {
     const zn = (i: number): { x: number; z: number; r?: number } => (tall ? T.zones[i] : PLACE.zones[i]);
     const stonesP = tall ? T.patches[0] : PLACE.patches[0];
     // ---- materials ----
-    const loamU = { uLoam: { value: col(tok('plum', 'ink', 0.35, 1.05)) }, uDamp: { value: col(tok('dusk', 'ink', 0.5, 0.95)) }, uFleck: { value: col(tok('coral', 'amber', 0.4, 0.62)) } };
+    const loamU = { uLoam: { value: col(tok('coral', 'amber', 0.45, 0.33)) }, uDamp: { value: col(tok('plum', 'ink', 0.4, 0.95)) }, uFleck: { value: col(tok('coral', 'plum', 0.35, 0.72)) } };
     const loam = kit.surface('loam', [1, 1, 1], 0.55, LOAM, loamU, 0.55);
-    const stone = kit.mat('stone', tok('dusk', 'cream', 0.3, 0.72), 0.7, 0.4), pebble = kit.mat('pebble', tok('ink', 'cream', 0.45, 0.85), 0.6, 0.35);
-    const moss = kit.surface('moss', [1, 1, 1], 0.95, '  float n = pFbm(vWP.xz * 9.0); diffuseColor.rgb = mix(uM1, uM2, n);', { uM1: { value: col(tok('lagoon', 'ink', 0.55)) }, uM2: { value: col(tok('lagoon', 'felt', 0.35, 1.05)) } }, 0.15);
+    const stone = kit.mat('stone', tok('dusk', 'ink', 0.5, 1.3), 0.7, 0.4), pebble = kit.mat('pebble', tok('ink', 'cream', 0.45, 0.85), 0.6, 0.35);
+    const moss = kit.surface('moss', [1, 1, 1], 0.95, '  float n = pFbm(vWP.xz * 9.0); diffuseColor.rgb = mix(uM1, uM2, n);', { uM1: { value: col(tok('lagoon', 'amber', 0.4, 0.5)) }, uM2: { value: col(tok('lagoon', 'amber', 0.45, 0.68)) } }, 0.15);
     const stalkM = kit.mat('stalk', tok('lagoon', 'ink', 0.5, 1.05), 0.7, 0.3), pod = kit.mat('pod', tok('coral', 'amber', 0.45, 0.82), 0.55, 0.35), podRib = kit.mat('podRib', tok('amber', 'cream', 0.4, 0.62), 0.6, 0.3);
     const leafU = { uRib: { value: col(tok('lagoon', 'cream', 0.4, 0.95)) } };
     const leafMat = (key: string): THREE.MeshStandardMaterial => {
-      const m = kit.mat(key, tok('lagoon', 'ink', 0.4, 1.05), 0.45, 0.6);
+      const m = kit.mat(key, tok('lagoon', 'amber', 0.3, 0.68), 0.45, 0.6);
       m.side = THREE.DoubleSide;
       m.onBeforeCompile = (sh) => {
         Object.assign(sh.uniforms, leafU);
@@ -117,7 +117,7 @@ const LOOK: PlaceLook = {
 
     // ---- the ground (loam) and the garden behind ----
     g.add(kit.ground(loam));
-    const gU = { uLeaf: { value: col(tok('lagoon', 'ink', 0.5, 0.95)) }, uLeafFar: { value: col(tok('lagoon', 'dusk', 0.55, 0.8)) }, uRib: { value: col(tok('lagoon', 'cream', 0.3, 0.75)) },
+    const gU = { uLeaf: { value: col(tok('lagoon', 'amber', 0.3, 0.5)) }, uLeafFar: { value: col(tok('lagoon', 'dusk', 0.45, 0.66)) }, uRib: { value: col(tok('lagoon', 'cream', 0.3, 0.75)) },
       uStem: { value: col(tok('cream', 'dusk', 0.3, 0.8)) }, uCap: { value: col(tok('coral', 'plum', 0.2, 0.95)) }, uMist: { value: col(tok('dusk', 'lagoon', 0.35, 0.75)) } };
     const backZ = tall ? -5.4 : -4.4;
     g.add(kit.card(GARDEN, gU, 30, 4.5, 0, 2.2, backZ, 0, -70));
@@ -128,7 +128,7 @@ const LOOK: PlaceLook = {
     const puddles: { u: Record<string, { value: number }> }[] = [];
     for (let k = 1; k <= 3; k++) {
       const z = zn(k), sy = PLACE.zones[k].surfaceY ?? 0.07;
-      const w = kit.water('disc', z.x, z.z, z.r ?? 0.6, 0, 0, sy, tok('plum', 'ink', 0.4), tok('dusk', 'plum', 0.4, 0.9), tok('plum', 'dusk', 0.5, 1.2), tok('lagoon', 'cream', 0.4), 0.25, 0.62);
+      const w = kit.water('disc', z.x, z.z, z.r ?? 0.6, 0, 0, sy, tok('plum', 'ink', 0.5), tok('plum', 'ink', 0.35), tok('plum', 'dusk', 0.5, 1.15), tok('lagoon', 'cream', 0.4), 0, 0.5);
       g.add(w.mesh); puddles.push(w);
     }
 

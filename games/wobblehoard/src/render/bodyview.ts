@@ -259,7 +259,7 @@ export class BodyView {
     // PLAYGROUND looks: eased toward their targets; exactly 0 once settled at 0 (the shader then skips the block)
     { const L = this.look, N = this.lookNow, k = 1 - Math.exp(-dt * 2.5);
       for (let i = 0; i < 5; i++) { N[i] += (L[i] - N[i]) * k; if (L[i] === 0 && N[i] < 1e-4) N[i] = 0; }
-      u.uLook.value.set(N[0], N[1], N[2], N[3]); }
+      u.uLook.value.set(N[0], N[1], N[2], N[3]); u.uSnowL.value = N[4]; }
     if (!this.chunk) this.face.update(dt, time, pointer, camera, this.smComp, m.fingers > 0 || m.grabbed ? Math.max(0, rate) : rate, m.fingers > 0 || m.grabbed);
     // CUT seam: eased in (~0.1 s) and out (~0.2 s): a glow, never a step
     // (calm: the stage's glowK halves every cut light, and the seam takes a further x0.45: the jelly shader's seam term saturates (tone mapped), so a plain half of a

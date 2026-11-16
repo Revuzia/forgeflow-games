@@ -234,7 +234,7 @@ round 1's state. Constraint for this run: no edit under src/physics, src/shell, 
 | R2-8d | `--only=BOX,AMB2,AU-03` run 1: **11/19**. PASS: BOX 3/3 after the fix (25 notes on D pentatonic, contour as written; music on from 30 s over fields 0 and 2, every note in its field's scale), the weather rows (Frostbell gust +21.4 dB, Rainleaf shower off -11.3 dB), AU-03 ripple (12.2 dB / 12.8 LU) and rainleaf (32.1 / 16.6), the cabin AU-03. Every bed is 14.3..23.3 dB under the music (RMS) and audible (-45.3..-54.3 dBFS). FAIL: 7 beds' node count (+17..+31 against a bar of 14) and AU-03 over Frostbell (K 8.5 LU, toss, in a gust) | DONE |
 | R2-8e | fixes: (1) the node rows were partly the harness: the page's node counters are module-wide and a render that ends with sources still scheduled leaves its count behind (a scratch run showed cloudloft at a constant 9 nodes for 225 samples, where the row said +17), so each bed is now measured against a no-bed run made right before it (same bar, 14); (2) a real excess: drips, pops and the shore's fizz made 2 nodes a bubble 0.4 s ahead (ripple peaked at +21..+31): they now share one `BubbleChannel` per bed (1 oscillator + 1 gain for the bed's life, each bubble an automation); the bench's rare spring is 2 nodes instead of a 6-node boing; (3) Frostbell gust peak -21 -> -25 dB (AU-03 K) | WRITTEN, tsc clean |
 | R2-8f | re-run `--only=AMB2`: **14/14 PASS**. Beds under the music (RMS / K): ripple -15.4/-14.8, frostbell -20.3/-17.4, rainleaf -21.3/-17.8, fizzwell -19.3/-18.7, cogwhistle -23.5/-25.1, lanternroof -14.3/-13.8, echohollow -19.8/-20.2, cloudloft -17.9/-15.1 dB (bar -6); bed levels -45.3..-54.5 dBFS RMS; nodes over the no-bed run +9..+14 (lanternroof +14 = 9 steady + a 5-node paper rustle; bar 14). Frostbell follows the shell's gust +17.3 dB; Rainleaf shower off -11.3 dB. AU-03 over the S2 beds (18 placements each, weather on at 6 and 20 s): ripple 12.2 dB / 12.8 LU, rainleaf 32.3 / 16.6, frostbell 17.0 / 12.6 | DONE |
-| R2-9 | full `probe_audio.mjs --port=5367` regression | running (port 5367 held) |
+| R2-9 | full `node _harness/probe_audio.mjs --port=5367` regression, code frozen | **DONE: 723/723 PASS, exit 0** (round 1's 696 + 27 round-2 rows; log `scratchpad/pg_audio/r2_full.log`); port 5367 freed, no process of mine left |
 | R2-9 | full `probe_audio.mjs --port=5367` | pending |
 
 ## Round 2 sizes (14.3 one-file rolldown, minified ES, imports external; `scratchpad/pg_audio/size.mjs`; measured after R2-7)
@@ -308,3 +308,27 @@ fizzwell 883, cogwhistle 1 389 (its own 2-node spring), echohollow 614; engine, 
 - **Music styles:** shore and cloud lighter (more lift / glow chords), ridge sparser (about a third of the mallet notes rest), garden
   homely, bath rounder (a softer top), bench drier (no mallet echo, shorter), roof soft and dusky, hollow long tails and a fuller echo.
   WRONG: any key or tempo other than Home's (D, 66 BPM), a style you cannot tell from Home after a minute.
+
+## State at the end of round 2
+`npx tsc --noEmit -p tsconfig.json`: no error in any file of mine (at the last check the only 3 errors were in `src/render/place.ts`, PG_RENDER's
+file mid-edit, importing render place modules that do not exist yet). `node _harness/probe_chatter.ts` **42/42 ok**.
+`node _harness/probe_audio.mjs --port=5367` **723/723 PASS** (every round-1 row still passes: AU-07's 19 renders included, so `home` and
+every existing seeded render are unchanged by the styles' new optional fields).
+
+## Not done in round 2 (say it plainly)
+- **Nothing has been listened to by a human.** The first-listen checklist above (round 1 and round 2 parts) is current.
+- **Nothing is wired:** every new voice, bed, style, `size`, `echoes` and `weather` waits for PG_SHELL (requests above); I could not touch
+  src/shell this run. Until then the places are silent in the game; the harness drives them.
+- **The finale spectacles' sounds** of the S2 / S3 places (sunset, stars, rainstop's five drips in key, bubble column, machine tune,
+  lantern song, crystal scale, sunrise) are not built. Most are "everyone sings" (creature `sing`) plus a look; rainstop's drips and the
+  machine tune's four-note figure would need a small `finale(id)` member: not designed yet.
+- **The turning cog's held tick** is not built: `tick` is a strike (on the music's eighth grid); a wound cog would need the shell to
+  strike it each eighth, or a held tick voice.
+- **The steel marble** shares the felt ball's thud (only its size, 0.2 m, makes it higher); a metal "clack" would need a material id in
+  `prop()` (not added: the round asked for size only).
+- **Coverage gaps:** the AU-03 separation was checked over the three S2 beds only (not the five S3 beds, which are quieter in RMS but not
+  measured); pause / mute freeing and the 2.5 s seam are checked on the cabin bed only (the same `AmbienceBed` class); the new node row
+  covers the eight new beds, not the cabin (whose crackles are still 2 nodes each, round 1 measured +11 at one instant).
+- **The `weather` timing** is followed only once the shell forwards physics' gust / wave / shower starts; until then the beds run their
+  own seeded timers with the place data's ranges, so a bed gust and a physics gust can be out of step.
+- AU-05's phone cap and AU-08's LIFE-planner provenance are as round 1 left them.
