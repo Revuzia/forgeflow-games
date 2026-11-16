@@ -24,7 +24,7 @@ import type { Gait } from '../data/life.ts';
 import { MATERIAL_FAMILY_IDS } from '../data/materials.ts';
 import type { LifeWorld } from './world.ts';
 import { pushIntent, F, CAP } from './world.ts';
-import { WAKE, UNIT, GATE_TOL, moverCapOf, unitCapOf, STYLE } from './attention.ts';
+import { WAKE, UNIT, GATE_TOL, moverCapOf, unitCapOf, UNIT_CAP, STYLE } from './attention.ts';
 
 export const HELD_BITS = LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.LOCKED;
 const TWO_PI = Math.PI * 2;
@@ -58,7 +58,7 @@ export function gateStart(w: LifeWorld, s: LifeSnapshot, i: number, extraMilli: 
   let delta = extraMilli * 0.001;
   if ((s.flags[i] & LIFE_FLAG.ASLEEP) !== 0) delta += w.kind[i] === 0 ? WAKE.whole : WAKE.piece;
   if (delta > 0) {
-    const cap = unitCapOf(s.tier) + allowanceMilli * 0.001;
+    const cap = UNIT_CAP[s.tier < 0 ? 0 : s.tier > 2 ? 2 : s.tier | 0] + allowanceMilli * 0.001;
     if (s.units + w.unitsAdd + delta > cap + GATE_TOL) return false;
     w.unitsAdd += delta;
     if ((s.flags[i] & LIFE_FLAG.ASLEEP) !== 0) w.wakeClaimT[i] = s.t;
@@ -75,7 +75,7 @@ export function gateFits(w: LifeWorld, s: LifeSnapshot, i: number, extraMilli: n
   let delta = extraMilli * 0.001;
   if (!w.moving[i] && (s.flags[i] & LIFE_FLAG.ASLEEP) !== 0) delta += w.kind[i] === 0 ? WAKE.whole : WAKE.piece;
   if (delta <= 0) return true;
-  return s.units + w.unitsAdd + delta <= unitCapOf(s.tier) + allowanceMilli * 0.001 + GATE_TOL;
+  return s.units + w.unitsAdd + delta <= UNIT_CAP[s.tier < 0 ? 0 : s.tier > 2 ? 2 : s.tier | 0] + allowanceMilli * 0.001 + GATE_TOL;
 }
 /** Release character i's mover token and its travel driver. */
 export function stopMove(w: LifeWorld, out: LifeIntents, i: number): void {
@@ -114,7 +114,8 @@ export function emitScoot(w: LifeWorld, out: LifeIntents, i: number, speedMilli:
 
 /** A hop of character i toward the direction (w.f[F.X2], w.f[F.Z2]) (unit or zero) at horizontal speed hMilli / 1000 m/s; vy from its gait,
  *  x scaleMilli / 1000 (pieces x 0.8, Calm x 0.6). False (no intent) when its family never hops, its memory is busy, or within its hop gap. */
-export function emitHop(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, hMilli: number, scaleMilli: number, tb: number): boolean {
+export function emitHop(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, hMilli: number, scaleMilli: number): boolean {
+  const tb = w.f[F.NOW];
   const f = w.family[i];
   if (!G_HOPS[f]) return false;
   if (!motionAllowed(w, s, i)) return false;
@@ -146,7 +147,8 @@ export function emitSquash(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: n
 
 /** A render pose: lean (w.f[F.X2], w.f[F.Z2]) rest radii, sway amplitude w.f[F.A] at w.f[F.B] Hz, phase from sim time (or the beat when
  *  beat = 1). Never re-sent identical. Calm or reduced motion: no wiggle or sway above 2 Hz (LF-17). */
-export function emitPose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, tb: number, beat: number): boolean {
+export function emitPose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, beat: number): boolean {
+  const tb = w.f[F.NOW];
   let lx = w.f[F.X2], lz = w.f[F.Z2], amp = w.f[F.A], hz = w.f[F.B];
   const L = Math.sqrt(lx * lx + lz * lz);
   if (L > 0.1) { lx *= 0.1 / L; lz *= 0.1 / L; }
@@ -164,9 +166,10 @@ export function emitPose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: num
   return true;
 }
 /** Release the render pose (all 0). */
-export function clearPose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, tb: number): void {
+export function clearPose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number): void {
+  const tb = w.f[F.NOW];
   w.f[F.X2] = 0; w.f[F.Z2] = 0; w.f[F.A] = 0; w.f[F.B] = 0;
-  emitPose(w, s, out, i, tb, 0);
+  emitPose(w, s, out, i, 0);
 }
 
 /** Gaze: kind 0 = back to the pointer, 1 = at the point (w.f[F.X], w.f[F.Z]) at height 0.4, 2 = at the camera. */
@@ -209,7 +212,8 @@ export function groupCount(w: LifeWorld, i: number): number {
  *  events within 0.5 s merge into it (LF-08). flags bit 0 = the sparkle badge; friend 1 = a friend pair (+0.3); first 1 = a first-time event
  *  (+0.2). The budget (attention.ts) decides. */
 export function emitEmote(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, icon: number, style: number, cls: number, flags: number,
-  friend: number, first: number, tb: number): boolean {
+  friend: number, first: number): boolean {
+  const tb = w.f[F.NOW];
   if ((s.flags[i] & HELD_BITS) !== 0 && cls !== 1) return false;
   let st = style, key = -1, dots = 0, c = cls;
   if (w.kind[i] !== 0) {
@@ -243,7 +247,8 @@ export { EMOTE };
 
 /** Start travelling character i to (w.f[F.X], w.f[F.Z]) at its gait's glide speed (contact = 1: the contact approach at 0.04 m/s). Asks the
  *  motion gate (with `allowanceMilli` of ride allowance); false = no token now (nothing emitted). */
-export function travelTo(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, tb: number, contact: number, allowanceMilli: number): boolean {
+export function travelTo(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, contact: number, allowanceMilli: number): boolean {
+  const tb = w.f[F.NOW];
   if (!motionAllowed(w, s, i)) return false;
   if (!gateStart(w, s, i, 0, allowanceMilli)) return false;
   const tx = w.f[F.X], tz = w.f[F.Z];
@@ -255,14 +260,15 @@ export function travelTo(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: num
   w.progD[i] = d; w.progT[i] = tb; w.hopNextT[i] = tb + 0.3;
   if (d > 0.01) { w.f[F.X2] = dx / d * 0.05; w.f[F.Z2] = dz / d * 0.05; } else { w.f[F.X2] = 0; w.f[F.Z2] = 0; }
   w.f[F.A] = 0; w.f[F.B] = 0;
-  emitPose(w, s, out, i, tb, 0);
+  emitPose(w, s, out, i, 0);
   w.f[F.X] = tx; w.f[F.Z] = tz;
   return true;
 }
 
 /** Each think while travelling: 0 going, 1 arrived (within `arriveMm` mm of the target), 2 blocked (no 2 cm of progress in 2 s). The gait
  *  overlay: a small hop per step for hopping families (never closer than the hop gap; Calm: a chain of at most 3). */
-export function travelStep(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, tb: number, arriveMm: number): number {
+export function travelStep(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, arriveMm: number): number {
+  const tb = w.f[F.NOW];
   const dx = w.tx[i] - s.x[i], dz = w.tz[i] - s.z[i], d = Math.sqrt(dx * dx + dz * dz);
   if (d <= arriveMm * 0.001) return 1;
   if (tb - w.progT[i] >= 2) {
@@ -274,7 +280,7 @@ export function travelStep(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: n
     const step = G_STEPS[f] > 0 ? 1 / G_STEPS[f] : 2;
     w.f[F.X2] = 0; w.f[F.Z2] = 0;
     const calmChain = (s.calm || s.reducedMotion) && w.chain[i] >= HOP.calmChain;
-    if (!calmChain && emitHop(w, s, out, i, 0, 600, tb)) w.chain[i]++;
+    if (!calmChain && emitHop(w, s, out, i, 0, 600)) w.chain[i]++;
     w.hopNextT[i] = tb + (step > G_GAP[f] ? step : G_GAP[f]);
   }
   return 0;

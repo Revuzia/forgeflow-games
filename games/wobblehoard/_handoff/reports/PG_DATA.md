@@ -240,3 +240,33 @@ two-way value import would be a cycle (probe_genome's module-graph row).
   one-file rolldown build per module.
 - **The probe_species row of the node suite** has no result (my timeout stopped it); probe_softbody's G1 hostile fuzz failure is physics'.
 - I did not re-derive LIFE's numbers that are not in my tables (the motion gate, the caps), nor check how PG_LIFE / PG_SHELL read these tables.
+
+## Round 2 (engineer 3, started 2026-11-16, HEAD 8dc806641)
+Scope: (1) DT-01 Home's camera tripwire fails on HEAD; (2) slice S2 (Ripple Shore, Frostbell Ridge, Rainleaf Garden) both layouts at 0 DT-01
+problems, every reaction cell read back against PLACES.md, their quests / wishes / facts against QUESTS.md, and the designer notes resolved;
+(3) S3 as far as it gets. Constraint for this run: nothing under `src/physics`, `src/shell`, `src/ui`, `src/input` or `vite.config.ts` is edited
+(newer code is on the owner's PC); requests for those lanes are written below.
+
+As found: `npx tsc --noEmit -p tsconfig.json` clean (1.4 s); `node _harness/probe_pg_data.ts` (1.6 s) **exit 1** on one row:
+`FAIL DT-01 Home ... stage.ts camera changed (fov 35, pitch NaN, TARGET_Y 0.42, slots 5/5, missing: )`. Every other row ok; S2 / S3 DT-01
+PENDING counts unchanged from engineer 2 (ripple 8 / 14, frostbell 8 / 10, rainleaf 4 / 9, fizzwell 4 / 6, cogwhistle 5 / 11, lanternroof 14 / 21,
+echohollow 8 / 10, cloudloft 11 / 46). No request to PG_DATA is open in the other PG_* reports (PG_RENDER: "nothing blocking"; PG_QUESTS: an
+optional note that `THING_PLACE` / `PLACE_CAPS` could move to data, QU-14 already cross-checks them).
+
+### R2 step 1: DT-01 Home's camera tripwire re-read against HEAD's stage.ts (probe only; no data changed) - DONE
+- Cause: PG_RENDER moved the rig's start pitch into `const REST_PITCH = 0.27` (stage.ts 111; `let yaw = 0, pitch = REST_PITCH` at 278), so the
+  probe's literal regex read NaN. What else changed in the camera (git diff 1965cd2c2..8dc806641 -- src/render/stage.ts): with LIFE at Home
+  (`autoFraming`) every body is framed at its mat slot (`framePoint`: the k-th whole body at slot k x bodyScale), one body is aimed at its slot x 0.6
+  and its rest centre height (`restAim`: `p.restCy`), and `visibleTable()` reports the rest framing at REST_PITCH. That is the slot-body model
+  the probe already used (bodies at the slots, round, R = 0.5 x scale, restCy = R): **the framing did not really change**, so no Home spot was
+  re-laid.
+- Probe change (`_harness/probe_pg_data.ts` `stageModel()`): the pitch is resolved through `REST_PITCH`'s own `const` when the rig names it
+  (a literal still works); all 7 old snippets stay required, and 9 new ones are pinned: the slot framing (`sl = camera.aspect < 0.9 ? MAT_SLOTS_TALL
+  : MAT_SLOTS_WIDE`, `slotXZ = sl[i] x bodyScale`), restAim's aim (x / z x 0.6, `restCy` height), the `autoFraming && !p.playerMoving` branch,
+  the one-body reach (restHalfW x 1.06 + 0.05 x scale), `fitDistance`, and visibleTable's distance and `REST_PITCH`. Nothing was loosened.
+- Teeth (scratch `pg_data/mut2/`, a copy of the probe reading a mutated copy of stage.ts; the repo untouched): REST_PITCH 0.30 -> FAIL "pitch
+  0.3"; slots not x bodyScale -> FAIL "missing: slotXZ.x ..."; aim x 1.0 -> FAIL "missing: aimOut.x ..."; the rig back to a literal 0.27 -> ok;
+  tall slots moved to z -1.1 -> the model reads the new slots and re-checks every spot (ok: still clear), as in round 1.
+- Result: `node _harness/probe_pg_data.ts` **exit 0** (1.6 s). Home row, slot gap at the worst scale, identical to round 1's table: TALL Felt
+  Ball 0.10, Music Box 0.76, Rug walk-on, Lamp 0.28, Shelf 0.28, Pad 0.74; WIDE 0.08, 0.29, walk-on, 1.33, 0.73, 0.29; all "ok".
+  `npx tsc --noEmit -p tsconfig.json` clean. HUD insets: still the assumed table (no measured one exists yet; grep of src / reports).

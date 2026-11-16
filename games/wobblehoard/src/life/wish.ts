@@ -60,27 +60,29 @@ export function canShow(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
 }
 
 /** Show wish (kind, target) on character i: B07 (face the camera, one small hop or a still pulse), the think bubble (P1), the asking phrase. */
-export function showWish(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number, kind: number, target: number, tb: number): void {
+export function showWish(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number, kind: number, target: number): void {
+  const tb = w.f[F.NOW];
   w.wishKind[i] = kind; w.wishTarget[i] = target; w.wishT[i] = tb; w.wishGlance[i] = 0; w.wishLastNewT[i] = tb; w.lastNewWishT = tb;
   if (kind === WISH_KIND.TOUCH) w.touchWishT[i] = tb;
   if (w.moving[i]) stopMove(w, out, i);
   w.beh[i] = BEH.WISH; w.phase[i] = 0; w.behT0[i] = tb; w.behEnd[i] = tb + 2; w.behScore[i] = 0.7;
   emitGaze(w, out, i, 2);
   w.f[F.X2] = 0; w.f[F.Z2] = 0;
-  if (gateStart(w, s, i, 0, 0)) { if (!emitHop(w, s, out, i, 0, 700, tb)) stopMove(w, out, i); else w.phase[i] = 1; }
-  emitEmote(w, s, out, i, wishIcon(w, i), STYLE.THINK, 1, 0, 0, 1, tb);
+  if (gateStart(w, s, i, 0, 0)) { if (!emitHop(w, s, out, i, 0, 700)) stopMove(w, out, i); else w.phase[i] = 1; }
+  emitEmote(w, s, out, i, wishIcon(w, i), STYLE.THINK, 1, 0, 0, 1);
   emitVoice(w, s, out, i, PHRASE.WISH, 0, -1, 0, 1, 0);
   pushEvent(ev, LIFE_EV.WISH, WISH_STATE.SHOWN, i, -1, 1, kind === WISH_KIND.RIDE ? target : -1);
 }
 
 /** The natural wish scheduler for character i (QUESTS 8). True when it showed one. */
-export function wishThink(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number, tb: number): boolean {
+export function wishThink(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number): boolean {
+  const tb = w.f[F.NOW];
   // re-glances (8 s and 30 s after showing; then the still dot)
   if (w.wishKind[i] !== 0) {
     const age = tb - w.wishT[i];
     if ((w.wishGlance[i] === 0 && age >= WISH.reglance1) || (w.wishGlance[i] === 1 && age >= WISH.reglance2)) {
       w.wishGlance[i]++;
-      if ((s.flags[i] & HELD_BITS) === 0) emitEmote(w, s, out, i, wishIcon(w, i), STYLE.THINK, 1, 0, 0, 0, tb);
+      if ((s.flags[i] & HELD_BITS) === 0) emitEmote(w, s, out, i, wishIcon(w, i), STYLE.THINK, 1, 0, 0, 0);
     }
     return false;
   }
@@ -94,16 +96,16 @@ export function wishThink(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: L
   rnd(w, i);
   const u = w.f[F.G];
   // touch: play > 0.6, its loved touch is a squeeze or a pull, at most once per 10 min
-  if (w.play[i] > 0.6 && w.signature[i] >= 2 && tb - w.touchWishT[i] >= WISH.touchEveryS && u < 0.5) { showWish(w, s, out, ev, i, WISH_KIND.TOUCH, w.signature[i], tb); return true; }
+  if (w.play[i] > 0.6 && w.signature[i] >= 2 && tb - w.touchWishT[i] >= WISH.touchEveryS && u < 0.5) { showWish(w, s, out, ev, i, WISH_KIND.TOUCH, w.signature[i]); return true; }
   // warm up or dry off: frost or soak over 0.7 for 20 s
   if (w.looks[i * 6] > 0.7 || w.looks[i * 6 + 2] > 0.7) { if (w.warmLookT[i] < -1e8) w.warmLookT[i] = tb; } else w.warmLookT[i] = -1e9;
-  if (w.warmLookT[i] > -1e8 && tb - w.warmLookT[i] >= WISH.warmForS) { showWish(w, s, out, ev, i, WISH_KIND.WARM, 0, tb); return true; }
+  if (w.warmLookT[i] > -1e8 && tb - w.warmLookT[i] >= WISH.warmForS) { showWish(w, s, out, ev, i, WISH_KIND.WARM, 0); return true; }
   // a nap: rest > 0.8, no nap spot within 2 m
-  if (w.rest[i] > 0.8 && !napSpotNear(w, s, i)) { showWish(w, s, out, ev, i, WISH_KIND.NAP, 0, tb); return true; }
+  if (w.rest[i] > 0.8 && !napSpotNear(w, s, i)) { showWish(w, s, out, ev, i, WISH_KIND.NAP, 0); return true; }
   // a ride: play > 0.7 next to a ride, at most one ride wish open in a place
   if (w.play[i] > 0.7) {
     const r = rideNear(w, s, i);
-    if (r >= 0 && !rideWishOpen(w)) { showWish(w, s, out, ev, i, WISH_KIND.RIDE, w.thingGlobal[r], tb); return true; }
+    if (r >= 0 && !rideWishOpen(w)) { showWish(w, s, out, ev, i, WISH_KIND.RIDE, w.thingGlobal[r]); return true; }
   }
   if (w.play[i] > 0.8) {
     // a place (40% its favourite while undiscovered and open) or a kind of thing (only kinds in the mask)
@@ -112,7 +114,7 @@ export function wishThink(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: L
       let target = -1;
       if (favPlaceOpen && fp !== w.placeIdx && !favKnownBit(w, sp, 0) && rnd(w, i) * U16 < 0.4) target = fp;
       else target = pickOpenPlace(w, i);
-      if (target >= 0) { showWish(w, s, out, ev, i, WISH_KIND.PLACE, target, tb); return true; }
+      if (target >= 0) { showWish(w, s, out, ev, i, WISH_KIND.PLACE, target); return true; }
     } else {
       const here = kindsHere(w);
       const ft = FAV_THING[sp], fl = ft >= 0 ? w.globalToLocal[ft] : -1;
@@ -120,11 +122,11 @@ export function wishThink(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: L
       // its favourite thing (its kind), only once its favourite place is open, 40% while undiscovered
       if (favPlaceOpen && !favKnownBit(w, sp, 1) && rnd(w, i) * U16 < 0.4) bit = favKindBit(ft) & w.thingKinds;
       if (bit === 0) bit = pickKind(w, i, w.thingKinds & ~here);
-      if (bit !== 0 || fl >= 0) { if (bit === 0) bit = w.thingKind[fl] & w.thingKinds; if (bit !== 0) { showWish(w, s, out, ev, i, WISH_KIND.THING, bit, tb); return true; } }
+      if (bit !== 0 || fl >= 0) { if (bit === 0) bit = w.thingKind[fl] & w.thingKinds; if (bit !== 0) { showWish(w, s, out, ev, i, WISH_KIND.THING, bit); return true; } }
     }
   }
   // a song: chatty > 0.6, company > 0.5
-  if (w.traits[tr + TRAIT.chatty] > 0.6 && w.company[i] > 0.5 && u > 0.7) { showWish(w, s, out, ev, i, WISH_KIND.SONG, 0, tb); return true; }
+  if (w.traits[tr + TRAIT.chatty] > 0.6 && w.company[i] > 0.5 && u > 0.7) { showWish(w, s, out, ev, i, WISH_KIND.SONG, 0); return true; }
   return false;
 }
 
@@ -176,19 +178,21 @@ function rideNear(w: LifeWorld, s: LifeSnapshot, i: number): number {
 function rideWishOpen(w: LifeWorld): boolean { for (let j = 0; j < CAP; j++) if (w.active[j] && w.wishKind[j] === WISH_KIND.RIDE) return true; return false; }
 
 /** Grant character i's open wish: the WISH GRANTED event, the thank-you trill and a sparkle; the think bubble clears. */
-export function grantWish(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number, tb: number): void {
+export function grantWish(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number): void {
+  const tb = w.f[F.NOW];
   if (w.wishKind[i] === 0) return;
   pushEvent(ev, LIFE_EV.WISH, WISH_STATE.GRANTED, i, -1, 1, w.wishKind[i] === WISH_KIND.RIDE ? w.wishTarget[i] : -1);
   w.wishKind[i] = 0; w.wishTarget[i] = -1; w.lastJoyT[i] = tb;
   emitClear(w, out, i, STYLE.THINK);
   if (i < s.n) {
-    emitEmote(w, s, out, i, EMOTE.sparkle, STYLE.SAY, 1, 0, 0, 1, tb);
+    emitEmote(w, s, out, i, EMOTE.sparkle, STYLE.SAY, 1, 0, 0, 1);
     emitVoice(w, s, out, i, PHRASE.GRANTED, 300, -1, 0, 1, 0);
   }
 }
 
 /** Check the grant conditions that LIFE can see on its own (nap, song, warm-up, touch, ride, a thing of the kind used or reacted to). */
-export function wishCheck(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number, tb: number): void {
+export function wishCheck(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number): void {
+  const tb = w.f[F.NOW];
   const k = w.wishKind[i];
   if (k === 0) return;
   let ok = false;
@@ -197,11 +201,12 @@ export function wishCheck(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: L
   else if (k === WISH_KIND.TOUCH) { const t = s.touchKind[i]; ok = t === 5 || t === 6; }
   else if (k === WISH_KIND.RIDE) ok = (s.flags[i] & LIFE_FLAG.RIDE) !== 0 && w.rideThing[i] >= 0 && w.thingGlobal[w.rideThing[i]] === w.wishTarget[i];
   else if (k === WISH_KIND.PLACE) ok = w.placeIdx === w.wishTarget[i];
-  if (ok) grantWish(w, s, out, ev, i, tb);
+  if (ok) grantWish(w, s, out, ev, i);
 }
 
 /** After the tick's events: a thing wish is granted by any USE or REACT of that character whose thing has the kind; a song wish by a SING. */
-export function wishFromEvents(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, tb: number): void {
+export function wishFromEvents(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents): void {
+  const tb = w.f[F.NOW];
   const n = ev.n;
   for (let e = 0; e < n; e++) {
     const kd = ev.kind[e];
@@ -209,11 +214,11 @@ export function wishFromEvents(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, 
       const i = ev.a[e];
       if (i >= CAP || w.wishKind[i] !== WISH_KIND.THING || ev.thing[e] < 0) continue;
       const loc = w.globalToLocal[ev.thing[e]];
-      if (loc >= 0 && (w.thingKind[loc] & w.wishTarget[i]) !== 0) grantWish(w, s, out, ev, i, tb);
+      if (loc >= 0 && (w.thingKind[loc] & w.wishTarget[i]) !== 0) grantWish(w, s, out, ev, i);
     } else if (kd === LIFE_EV.SOCIAL && ev.sub[e] === 7) {
-      for (let j = 0; j < CAP; j++) if (w.active[j] && w.wishKind[j] === WISH_KIND.SONG && w.moment[j] >= 0 && w.mKind[w.moment[j]] === 6) grantWish(w, s, out, ev, j, tb);
+      for (let j = 0; j < CAP; j++) if (w.active[j] && w.wishKind[j] === WISH_KIND.SONG && w.moment[j] >= 0 && w.mKind[w.moment[j]] === 6) grantWish(w, s, out, ev, j);
       const a = ev.a[e];
-      if (a < CAP && w.wishKind[a] === WISH_KIND.SONG) grantWish(w, s, out, ev, a, tb);
+      if (a < CAP && w.wishKind[a] === WISH_KIND.SONG) grantWish(w, s, out, ev, a);
     }
   }
 }
@@ -221,7 +226,8 @@ export function wishFromEvents(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, 
 /** FIRST_WISH (D-70): the wisher the shell named, else Dollop if out, else a Hearthlog fan out, else the party member out longest; it ignores
  *  the 120 s and 180 s gaps. At the 5:00 backstop (deadline) with nobody able to show it, it rests in the Journal at once: a WISH SHOWN
  *  record with b = 254 (rested, not shown) so the shell opens Hearthlog all the same. */
-export function firstWishThink(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, tb: number): void {
+export function firstWishThink(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents): void {
+  const tb = w.f[F.NOW];
   if (!w.firstWishPending) return;
   // the wisher the shell named (D-70) shows it; if it is only busy in a moment it waits; it is replaced only when held, gone or off screen
   const named = w.firstWishSlot;
@@ -232,7 +238,7 @@ export function firstWishThink(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, 
   if (who < 0) { let best = -1, bt = 1e18; for (let j = 0; j < s.n; j++) if (w.active[j] && w.kind[j] === 0 && canShow(w, s, j) && w.addT[j] < bt) { bt = w.addT[j]; best = j; } who = best; }
   if (who >= 0) {
     if (w.wishKind[who] !== 0) { emitClear(w, out, who, STYLE.THINK); w.wishKind[who] = 0; }
-    showWish(w, s, out, ev, who, WISH_KIND.PLACE, HEARTHLOG, tb);
+    showWish(w, s, out, ev, who, WISH_KIND.PLACE, HEARTHLOG);
     w.firstWishPending = 0; w.firstWishDone = 1;
     return;
   }

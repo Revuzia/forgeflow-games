@@ -30,11 +30,15 @@ export function unitCapOf(tier: number, f: number = PHONE_FACTOR): number {
   const floor = UNIT.whole + UNIT.sleeper * (CHAR_CAP.wholes[t] - 1);
   return formula > floor ? formula : floor;
 }
+/** unitCap and moverCap at F = PHONE_FACTOR per tier, computed once by the formula (the hot path reads these: a double returned from a call
+ *  is boxed, LF-02). */
+export const UNIT_CAP = new Float64Array(3);
 /** moverCap = max(1, floor(unitCap)) (with the tolerance, so 1.999.. counts as 2). */
 export function moverCapOf(tier: number, f: number = PHONE_FACTOR): number {
   const m = Math.floor(unitCapOf(tier, f) + GATE_TOL);
   return m < 1 ? 1 : m;
 }
+for (let t = 0; t < 3; t++) UNIT_CAP[t] = unitCapOf(t);
 
 /* ───────────────────────────── the caps of 10.1 ───────────────────────────── */
 
@@ -93,7 +97,7 @@ export function motionGate(a: Attention, s: LifeSnapshot, k: number): boolean {
 export function motionGateWake(a: Attention, s: LifeSnapshot, k: number, units: number, delta: number, allowance: number): boolean {
   if (!motionGate(a, s, k)) return false;
   if (delta <= 0) return true;
-  a.unitCap = unitCapOf(s.tier);
+  a.unitCap = UNIT_CAP[s.tier < 0 ? 0 : s.tier > 2 ? 2 : s.tier | 0];
   return units + delta <= a.unitCap + allowance + GATE_TOL;
 }
 

@@ -18,12 +18,12 @@ import { SCRIPT, LIFE_FLAG, SPECIES_LIFE } from '../data/life.ts';
 import { speciesIdx, familyOf } from '../data/catalog.ts';
 import { MATERIAL_FAMILY_IDS } from '../data/materials.ts';
 import type { LifeWorld } from './world.ts';
-import { CAP, BEH, THINK_S, STAGGER_S, MAX_ZONES, MAX_MOMENTS, MAX_MEMBERS, createLifeWorld, copyPlace, seedChar, pairIdx } from './world.ts';
+import { CAP, BEH, F, THINK_S, STAGGER_S, MAX_ZONES, MAX_MOMENTS, MAX_MEMBERS, createLifeWorld, copyPlace, seedChar, pairIdx } from './world.ts';
 import { traitsOf, signatureCode } from './traits.ts';
 import { senseZones, integrate, reactZones, addLook, resetNeedsLooks, emitReact, cutReacts } from './looks.ts';
 import { touchPass, behave } from './brain.ts';
 import { wishCheck, wishFromEvents, firstWishThink, wishOf, THING_ICON_KIND } from './wish.ts';
-import { attentionFilter, moverCapOf, unitCapOf, WAKE } from './attention.ts';
+import { attentionFilter, moverCapOf, unitCapOf, UNIT_CAP, WAKE } from './attention.ts';
 import type { Attention } from './attention.ts';
 import { emitEmote } from './act.ts';
 import { emitVoice, PHRASE as PH } from './voice.ts';
@@ -191,26 +191,28 @@ export function lifeStep(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Li
   }
   w.movers = movers;
   const a = w.att;
-  a.movers = movers; a.moverCap = moverCapOf(s.tier); a.unitCap = unitCapOf(s.tier);
+  a.movers = movers; a.moverCap = moverCapOf(s.tier); a.unitCap = UNIT_CAP[s.tier < 0 ? 0 : s.tier > 2 ? 2 : s.tier | 0];
   let anyRideMoment = false;
   for (let m = 0; m < MAX_MOMENTS; m++) if (w.mKind[m] === 10 || w.mKind[m] === 11) anyRideMoment = true;
   if (!anyRideMoment) a.allowance = 0;
+  // every brain function reads the time from w.f[F.NOW] (LF-02): the per-call passes run at the snapshot's t, each think at its boundary
+  w.f[F.NOW] = t;
   // lifeAddLook's REACTs (every time, with the source thing)
   for (let p = 0; p < w.pendN; p++) {
     const i = w.pendSlot[p];
-    if (i >= 0 && i < CAP && w.active[i]) emitReact(w, s, ev, i, w.pendKind[p], w.pendThing[p], t, 1);
+    if (i >= 0 && i < CAP && w.active[i]) emitReact(w, s, ev, i, w.pendKind[p], w.pendThing[p], 1);
   }
   w.pendN = 0;
   // the player's touch (HELD in the same step), releases, touch kinds, landings
   touchPass(w, s, out, ev);
   // a cut inside a zone: one PIECES record per zone REACT the new group stands in, at the cut
-  for (let g = 0; g < 32; g++) if (w.cutPending[g]) { w.cutPending[g] = 0; cutReacts(w, s, ev, g, t); }
+  for (let g = 0; g < 32; g++) if (w.cutPending[g]) { w.cutPending[g] = 0; cutReacts(w, s, ev, g); }
   // deferred scripts: CHEER (up to two near the cause), SQUIRTED (the target's wow, then its giggle)
   if (w.cheerCause >= 0) { cheerNear(w, s, w.cheerCause); w.cheerCause = -1; }
   for (let i = 0; i < s.n && i < CAP; i++) if (w.squirtDue[i]) {
     w.squirtDue[i] = 0;
     if (!w.active[i]) continue;
-    emitEmote(w, s, out, i, EMOTE.wow, 0, 1, 0, 0, 1, t);
+    emitEmote(w, s, out, i, EMOTE.wow, 0, 1, 0, 0, 1);
     emitVoice(w, s, out, i, PH.NOTICE, 0, -1, 0, 1, 0);
     emitVoice(w, s, out, i, PH.GIGGLE, 800, -1, 0, 1, 0);
   }
@@ -223,27 +225,29 @@ export function lifeStep(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Li
       if (tb <= t + 1e-9 && tb < bt) { bt = tb; best = i; }
     }
     if (best < 0) break;
-    think(w, s, out, ev, best, bt);
+    w.f[F.NOW] = bt;
+    think(w, s, out, ev, best);
     w.tick[best]++;
     const off = best * STAGGER_S;
     if (t - (w.tick[best] * THINK_S + off) > MAX_CATCHUP * THINK_S) w.tick[best] = Math.ceil((t - off) / THINK_S - 1e-9);
   }
   // thing and song wishes granted by this tick's events
-  wishFromEvents(w, s, out, ev, t);
+  w.f[F.NOW] = t;
+  wishFromEvents(w, s, out, ev);
   attentionFilter(a, s, out);
   w.lastT = t;
 }
 
-function think(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number, tb: number): void {
-  const last = w.lastThink[i];
-  const dt = last > -1e8 ? Math.min(0.5, tb - last) : THINK_S;
+function think(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number): void {
+  const tb = w.f[F.NOW], last = w.lastThink[i];
+  w.f[F.DT] = last > -1e8 ? Math.min(0.5, tb - last) : THINK_S;
   w.lastThink[i] = tb;
-  senseZones(w, s, i, tb);
-  integrate(w, s, ev, i, tb, dt);
-  reactZones(w, s, ev, i, tb);
-  if (w.firstWishPending) firstWishThink(w, s, out, ev, tb);
-  wishCheck(w, s, out, ev, i, tb);
-  behave(w, s, out, ev, i, tb);
+  senseZones(w, s, i);
+  integrate(w, s, ev, i);
+  reactZones(w, s, ev, i);
+  if (w.firstWishPending) firstWishThink(w, s, out, ev);
+  wishCheck(w, s, out, ev, i);
+  behave(w, s, out, ev, i);
 }
 
 function cheerNear(w: LifeWorld, s: LifeSnapshot, cause: number): void {

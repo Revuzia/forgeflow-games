@@ -30,8 +30,9 @@ export const BEH = {
 } as const;
 export const NBEH = 26;
 
-/** Scratch float slots in w.f (named, so no helper returns a double). */
-export const F = { X: 0, Z: 1, D: 2, X2: 3, Z2: 4, S: 5, T: 6, A: 7, B: 8, C: 9, E: 10, G: 11 } as const;
+/** Scratch float slots in w.f (named, so no helper returns a double). NOW = the sim time of the think (or of the per-call pass) every brain
+ *  function reads, instead of taking it as a parameter (a double argument to a call V8 does not inline is boxed: LF-02); DT = the think's dt. */
+export const F = { X: 0, Z: 1, D: 2, X2: 3, Z2: 4, S: 5, T: 6, A: 7, B: 8, C: 9, E: 10, G: 11, NOW: 12, DT: 13 } as const;
 
 export interface LifeWorld {
   seed: number; maxChars: number;

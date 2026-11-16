@@ -107,3 +107,18 @@ struct-field names survive minification (`w.thingUseX` etc.); a field-name mangl
   a wish's still dot (the budget sets it); icon 0 clears.
 - PG_RENDER: style 3 (wish dot) needs a draw (14 px still dot) or the shell maps it.
 - The kettle steam radius: LOOK_ADD uses PLACES' 1.2 m (PG_DATA's note); LIFE takes whatever the host adds.
+
+
+## Round 2 (engineer 2, started 2026-11-16 11:31 UTC, from HEAD 8dc806641)
+Scope (orchestrator): (1) the five failing probe_life rows honestly (LF-02, LF-09 x2, LF-13 x2); (2) the friend wish's input
+(`lifeSetFriends`) and the friend wish; (3) S05 parade, P04 join-in, the curious one walking over after a cut, LF-18 water exit, the S2
+raised-hop switch, probe rows for the FLOAT / WADE / SPLASH / SHIVER / FROST producers; (4) size LAST: src/life <= 75 KB minified (round 1's
+measure: `pg_life/bytes.mjs`, each module bundled alone with rolldown, every import external, minified), every probe row still passing.
+Constraint: no edits under src/physics, src/shell, src/ui, src/input or vite.config.ts (owner's unmerged code); requests go here.
+Scratch: `/tmp/claude-0/-home-user-forgeflow-games/2d4e12a5-0f4d-5239-bdda-16316c996a1a/scratchpad/pg_life2/`.
+Start state re-measured at 11:31: tsc clean (1.5 s); `node _harness/probe_life.ts` 76 ok / 5 FAIL (2.9 s): LF-02 (max 245 952 B per 1000
+ticks), LF-09 (4 of 6 pairs greet; uses 3/3/3/5), LF-13 (the staged take gives no huff; so the touch row fails too).
+
+| R2 step | What | State |
+|---|---|---|
+| 0 | read brief, report, SESSION3, LIFE.md all, QUESTS 4/8, PB 18 rows, all src/life + probe; other lanes' requests | DONE 11:31 |

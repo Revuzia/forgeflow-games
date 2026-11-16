@@ -210,9 +210,10 @@ function checkPlace(P: PlaceDef, tall: boolean): string[] {
   return probs;
 }
 
-/* ── Home's row: the camera model of src/render/stage.ts (the slots 87-88, fov 35, pitch 0.27, TARGET_Y 0.42, fitDistance and framingFor
- *    255-330, the aim 520-535), settled at its target framing (yaw 0, zoom 1), round bodies of R = 0.5 x scale. Built from stage.ts's text: a
- *    constant that moves fails the row, so the model is re-checked. ── */
+/* ── Home's row: the camera model of src/render/stage.ts (the slots 87-88, fov 35 at 199, REST_PITCH 0.27 at 111, TARGET_Y 0.42 at 149,
+ *    fitDistance 325, framePoint / framingFor 343-408 with LIFE's slot framing, restAim 604-610 and the aim 640-653, visibleTable 1088-1096),
+ *    settled at its target framing (yaw 0, zoom 1), round bodies of R = 0.5 x scale (restCy = R). Built from stage.ts's text: a constant or a
+ *    snippet that moves fails the row, so the model is re-checked. ── */
 /** The HUD insets per frame (CSS px). The UI overhaul fills this table with the measured ones (PLAYGROUND_BUILD 11.13); until then these are
  *  the earlier fixer's (390 x 844: S+104 = 151 top, 170 bottom, 16 left, 60 right; 1280 x 800: 120 / 150 / 24 / 24). */
 const HUD_INSETS = { phone: { W: 390, H: 844, t: 151, b: 170, l: 16, r: 60 }, desktop: { W: 1280, H: 800, t: 120, b: 150, l: 24, r: 24 } } as const;
@@ -221,9 +222,21 @@ function stageModel(): { ok: boolean; why: string; TALL: number[][]; WIDE: numbe
   const st = readFileSync(resolve(ROOT, 'src/render/stage.ts'), 'utf8');
   const arr = (name: string): number[][] => { const m = new RegExp(`${name}[^=]*=\\s*(\\[\\[[^;]*\\]\\]);`).exec(st); return m ? (JSON.parse(m[1]) as number[][]) : []; };
   const WIDE = arr('MAT_SLOTS_WIDE'), TALL = arr('MAT_SLOTS_TALL');
-  const fov = Number(/new THREE\.PerspectiveCamera\((\d+(?:\.\d+)?)/.exec(st)?.[1]), pitch = Number(/let yaw = 0, pitch = ([\d.]+)/.exec(st)?.[1]), ty = Number(/const TARGET_Y = ([\d.]+)/.exec(st)?.[1]);
+  // The rig's start pitch is either a literal or (PG_RENDER, HEAD 8dc806641) the named constant REST_PITCH, which visibleTable() also uses: the
+  // identifier is resolved from its own `const`, so a change of either the literal or the constant still fails the row.
+  const pm = /let yaw = 0, pitch = (REST_PITCH|[\d.]+)/.exec(st)?.[1];
+  const pitch = Number(pm === 'REST_PITCH' ? /const REST_PITCH = ([\d.]+)/.exec(st)?.[1] : pm);
+  const fov = Number(/new THREE\.PerspectiveCamera\((\d+(?:\.\d+)?)/.exec(st)?.[1]), ty = Number(/const TARGET_Y = ([\d.]+)/.exec(st)?.[1]);
   const need = ['Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect))', 'v.proxy.restRadius * 1.25, v.restHalfW * 1.12', "(camera.aspect < 0.9 ? 0.12 : 0.35)", '(solo ? 0.06 : 0.1)',
-    'wx = mx; wz = mz * 0.8; wy = TARGET_Y * bodyScale', 'wx = c.x * 0.6; wz = c.z * 0.6', 'Math.max(0, c.y - TARGET_Y * camScale) * 0.7'];
+    'wx = mx; wz = mz * 0.8; wy = TARGET_Y * bodyScale', 'wx = c.x * 0.6; wz = c.z * 0.6', 'Math.max(0, c.y - TARGET_Y * camScale) * 0.7',
+    // HEAD 8dc806641 (D-37, RD-14): with LIFE at Home (autoFraming) every body is framed at its mat slot (the k-th whole body at the k-th slot,
+    // x bodyScale) and one body is aimed at its slot x 0.6 and its rest centre height: exactly the slot bodies this model places. The one-body
+    // reach (restHalfW x 1.06 + 0.05 x scale; no dome for the model's round body) and the rest pitch of visibleTable are pinned too.
+    'const sl = camera.aspect < 0.9 ? MAT_SLOTS_TALL : MAT_SLOTS_WIDE', 'slotXZ.x = sl[i][0] * bodyScale; slotXZ.z = sl[i][1] * bodyScale',
+    'aimOut.x = slotXZ.x * 0.6; aimOut.z = slotXZ.z * 0.6', 'aimOut.y = TARGET_Y * scale + Math.max(0, p.restCy * p.growth - TARGET_Y * scale) * 0.7',
+    'if (autoFraming && !p.playerMoving)', '((p1.restHalfW * (p1.style.dome > 0 ? 1.34 : 1.06) + 0.05 * p1.scale) * p1.growth) / hwPer',
+    'const fitDistance = (): number => camScale * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect))',
+    'const dist = f.want * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect))', 'visibleTableAt(ax, ay, az, dist, REST_PITCH, camera.fov'];
   const missing = need.filter((s) => !st.includes(s));
   const ok = WIDE.length === 5 && TALL.length === 5 && fov === 35 && pitch === 0.27 && ty === 0.42 && missing.length === 0;
   return { ok, why: ok ? '' : `stage.ts camera changed (fov ${fov}, pitch ${pitch}, TARGET_Y ${ty}, slots ${WIDE.length}/${TALL.length}, missing: ${missing.join(' | ')})`, TALL, WIDE, fov, pitch, ty };

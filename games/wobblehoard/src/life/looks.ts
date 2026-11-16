@@ -37,7 +37,8 @@ const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
 /* ───────────────────────────── zone sensing ───────────────────────────── */
 
 /** Which zones character i stands in (its centre), how warm, cold and wet it is there, and a B15 entry due (first entry this visit). */
-export function senseZones(w: LifeWorld, s: LifeSnapshot, i: number, tb: number): void {
+export function senseZones(w: LifeWorld, s: LifeSnapshot, i: number): void {
+  const tb = w.f[F.NOW];
   const x = s.x[i], z = s.z[i], mask = s.zoneMask[i];
   let warm = 0, cold = 0, wet = 0, wk = -1, ck = -1, wat = -1, wind = -1, up = -1;
   for (let k = 0; k < w.nZones && k < MAX_ZONES; k++) {
@@ -98,7 +99,8 @@ function markReacted(w: LifeWorld, i: number, kind: number, thing: number): void
 /** Emit REACT `kind` for character i with `thing` (once per visit per thing, or per event after its cooldown; force = a lifeAddLook or a
  *  scripted start that always emits). A piece's REACT becomes a PIECES record at each new high of its group's count. Returns true when the
  *  character's REACT happened (emitted or counted). */
-export function emitReact(w: LifeWorld, s: LifeSnapshot, ev: LifeEvents, i: number, kind: number, thing: number, tb: number, force: number): boolean {
+export function emitReact(w: LifeWorld, s: LifeSnapshot, ev: LifeEvents, i: number, kind: number, thing: number, force: number): boolean {
+  const tb = w.f[F.NOW];
   const tr = TRIGGER_OF[kind];
   const visit = tr >= 0 ? TR_VISIT[tr] : 1;
   if (!force) {
@@ -170,7 +172,8 @@ function condHolds(w: LifeWorld, s: LifeSnapshot, i: number, tr: number): boolea
 
 /** The time-bound REACT triggers (zone stays, water, airborne, poses): fire whatever behaviour wins (LF-21). LOOK_UP crossings are in
  *  integrateLooks; BEHAVIOUR rows (HOLD_ON, LOVE) are emitted by the behaviour that starts. */
-export function reactZones(w: LifeWorld, s: LifeSnapshot, ev: LifeEvents, i: number, tb: number): void {
+export function reactZones(w: LifeWorld, s: LifeSnapshot, ev: LifeEvents, i: number): void {
+  const tb = w.f[F.NOW];
   for (let tr = 0; tr < NT; tr++) {
     const cond = TR_COND[tr];
     if (cond === REACT_COND.LOOK_UP || cond === REACT_COND.BEHAVIOUR || cond === REACT_COND.LOOK_DRY || cond === REACT_COND.GLIDE ||
@@ -181,18 +184,19 @@ export function reactZones(w: LifeWorld, s: LifeSnapshot, ev: LifeEvents, i: num
     if (cond === REACT_COND.POSE_AT) { if (tb - w.poseT[i] < 3) continue; }
     else if (TR_FOR[tr] > 0 && (since < -1e8 || tb - since < TR_FOR[tr] - 1e-6)) continue;
     const thing = TR_THING[tr] === 0 ? zoneThingOf(w, s, i, k) : TR_THING[tr] === 1 ? s.patchThing[i] : -1;
-    emitReact(w, s, ev, i, TR_KIND[tr], thing, tb, 0);
+    emitReact(w, s, ev, i, TR_KIND[tr], thing, 0);
   }
   // a landing in shallow water (SPLASH)
   const air = (s.flags[i] & LIFE_FLAG.AIRBORNE) !== 0 ? 1 : 0;
-  if (w.prevAir[i] && !air && w.zWaterK[i] >= 0 && w.zoneSurf[w.zWaterK[i]] < 0.12) emitReact(w, s, ev, i, REACT_KIND.SPLASH, zoneThingOf(w, s, i, w.zWaterK[i]), tb, 0);
+  if (w.prevAir[i] && !air && w.zWaterK[i] >= 0 && w.zoneSurf[w.zWaterK[i]] < 0.12) emitReact(w, s, ev, i, REACT_KIND.SPLASH, zoneThingOf(w, s, i, w.zWaterK[i]), 0);
   w.prevAir[i] = air;
 }
 
 /* ───────────────────────────── needs and looks ───────────────────────────── */
 
 /** Integrate character i's needs and looks over dt (s of sim time) and emit the looks' REACT crossings (LIFE 3, 3.1). */
-export function integrate(w: LifeWorld, s: LifeSnapshot, ev: LifeEvents, i: number, tb: number, dt: number): void {
+export function integrate(w: LifeWorld, s: LifeSnapshot, ev: LifeEvents, i: number): void {
+  const tb = w.f[F.NOW], dt = w.f[F.DT];
   const fl = s.flags[i], held = (fl & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.LOCKED)) !== 0;
   const t5 = i * 5, napping = w.beh[i] === 6 && w.phase[i] >= 2;
   const fam = w.family[i];
@@ -245,15 +249,15 @@ export function integrate(w: LifeWorld, s: LifeSnapshot, ev: LifeEvents, i: numb
     else L[o + 5] = Math.max(0, L[o + 5] - LOOK_RATES.toast.fall * dt);
   }
   // REACT at the 0.5 crossing (once per visit, thing = its zone; SNOWCAP's natural crossing has no source: -1)
-  if (before0 < 0.5 && L[o] >= 0.5) emitReact(w, s, ev, i, REACT_KIND.FROST, zoneThingOf(w, s, i, w.zColdK[i]), tb, 0);
-  if (before2 < 0.5 && L[o + 2] >= 0.5) emitReact(w, s, ev, i, REACT_KIND.SOAK, w.zWet[i] > 0 && w.zWaterK[i] < 0 ? -1 : zoneThingOf(w, s, i, w.zWaterK[i]), tb, 0);
-  if (before4 < 0.5 && L[o + 4] >= 0.5) emitReact(w, s, ev, i, REACT_KIND.SNOWCAP, -1, tb, 0);
-  if (before5 < 0.5 && L[o + 5] >= 0.5) emitReact(w, s, ev, i, REACT_KIND.TOAST, zoneThingOf(w, s, i, w.zWarmK[i]), tb, 0);
+  if (before0 < 0.5 && L[o] >= 0.5) emitReact(w, s, ev, i, REACT_KIND.FROST, zoneThingOf(w, s, i, w.zColdK[i]), 0);
+  if (before2 < 0.5 && L[o + 2] >= 0.5) emitReact(w, s, ev, i, REACT_KIND.SOAK, w.zWet[i] > 0 && w.zWaterK[i] < 0 ? -1 : zoneThingOf(w, s, i, w.zWaterK[i]), 0);
+  if (before4 < 0.5 && L[o + 4] >= 0.5) emitReact(w, s, ev, i, REACT_KIND.SNOWCAP, -1, 0);
+  if (before5 < 0.5 && L[o + 5] >= 0.5) emitReact(w, s, ev, i, REACT_KIND.TOAST, zoneThingOf(w, s, i, w.zWarmK[i]), 0);
   // DRY: soak or wet falls under 0.1 inside a warm zone after reaching 0.5
   if (L[o + 1] >= 0.5) w.lookHigh[i] |= 2;
   if (L[o + 2] >= 0.5) w.lookHigh[i] |= 4;
   if (warm > 0 && (((w.lookHigh[i] & 2) && before1 >= 0.1 && L[o + 1] < 0.1) || ((w.lookHigh[i] & 4) && before2 >= 0.1 && L[o + 2] < 0.1))) {
-    emitReact(w, s, ev, i, REACT_KIND.DRY, zoneThingOf(w, s, i, w.zWarmK[i]), tb, 0);
+    emitReact(w, s, ev, i, REACT_KIND.DRY, zoneThingOf(w, s, i, w.zWarmK[i]), 0);
   }
   if (FAM_MOCHI < 0 || FAM_SLIME < 0) return;
 }
@@ -278,9 +282,10 @@ export function resetNeedsLooks(w: LifeWorld, i: number): void {
 }
 
 /** The cut inside a zone (D-73): at the cut, each zone REACT the new group stands in, once, as PIECES with the pieces inside it. */
-export function cutReacts(w: LifeWorld, s: LifeSnapshot, ev: LifeEvents, g: number, tb: number): void {
+export function cutReacts(w: LifeWorld, s: LifeSnapshot, ev: LifeEvents, g: number): void {
+  const tb = w.f[F.NOW];
   let lead = -1;
-  for (let j = 0; j < CAP; j++) if (w.active[j] && w.kind[j] !== 0 && w.group[j] === g && j < s.n) { senseZonesAtOnce(w, s, j, tb); if (lead < 0 || w.kind[j] === 1) lead = j; }
+  for (let j = 0; j < CAP; j++) if (w.active[j] && w.kind[j] !== 0 && w.group[j] === g && j < s.n) { senseZonesAtOnce(w, s, j); if (lead < 0 || w.kind[j] === 1) lead = j; }
   if (lead < 0) return;
   for (let tr = 0; tr < NT; tr++) {
     const cond = TR_COND[tr];
@@ -299,7 +304,8 @@ export function cutReacts(w: LifeWorld, s: LifeSnapshot, ev: LifeEvents, g: numb
     if (n > 0) piecesHigh(w, ev, lead, TR_KIND[tr], thing, n);
   }
 }
-function senseZonesAtOnce(w: LifeWorld, s: LifeSnapshot, j: number, tb: number): void {
+function senseZonesAtOnce(w: LifeWorld, s: LifeSnapshot, j: number): void {
+  const tb = w.f[F.NOW];
   w.enterAtOnce[j] = 1;
-  senseZones(w, s, j, tb);
+  senseZones(w, s, j);
 }
