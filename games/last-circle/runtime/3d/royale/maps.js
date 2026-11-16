@@ -6660,7 +6660,17 @@ export async function buildMap(W, mapId) {
         }
         const ox = (x0 + x1) / 2, oz = (z0 + z1) / 2, ex = (x1 - x0) / 2, ez = (z1 - z0) / 2;
         // a tilted rock's top is its PEAK, not the high corner of its outline: lift the box top by the tilt at the peak
-        const pk = p.peak, pdy = tg && pk ? tg.tx * ((pk[0] * c + pk[1] * sn) * sc) + tg.tz * ((-pk[0] * sn + pk[1] * c) * sc) : 0;
+        const pk = p.peak, pdyPk = tg && pk ? tg.tx * ((pk[0] * c + pk[1] * sn) * sc) + tg.tz * ((-pk[0] * sn + pk[1] * c) * sc) : 0;
+        // (W10 R1A / collisioncheck clip isla_viva rocks) a LEANED rock part's drawn top is not always over its table peak: the lean lifts the side it leans
+        // toward, and a low flat part's highest drawn point moves there (isla_viva s7 cover rocks leaned 4-15 deg: drawn 0.55-0.60 m over their ground while
+        // the peak's lift read 0.45-0.50, so they were taken for steps, their boxes cut to 0.04-0.48 m and the capsule walked 0.4-1.0 m into the drawn rock).
+        // The table's `lean` vertices (bake_prop_colliders.mjs: the candidates for the highest vertex under a lean) give the drawn top under THIS lean.
+        let pdy = pdyPk;
+        if (tg && p.lean && p.lean.length) {
+          let hi = -Infinity, raw = -Infinity;
+          for (const q of p.lean) { const u = q[0] * sc, w = q[1] * sc, y = q[2] * sc + tg.tx * (u * c + w * sn) + tg.tz * (-u * sn + w * c); if (y > hi) hi = y; if (q[2] > raw) raw = q[2]; }
+          pdy = Math.max(pdyPk, hi - raw * sc);
+        }
         const y0 = yLo(ox, oz, ex, ez), y1 = p.byScale ? it.y + top + pdy : hullBoxTop(it, x0, x1, z0, z1, y0, it.y + top + pdy, p.hull, sc, c, sn, pk);
         colliders.push(mkCollider("box", it.x + x0, it.x + x1, y0, y1, it.z + z0, it.z + z1, -1, kind, idx, hp));
       }
@@ -6680,7 +6690,7 @@ export async function buildMap(W, mapId) {
   // ground right under its own peak read 0.46 m "over its ground", was taken for a step, and its box top dropped 1.01 m - to 0.50 m UNDER the ground at its own centre: a
   // buried box, and a drawn rock with no wall. A part is a step only if its drawn top is under HULL_STEP_PART over the ground under its PEAK as well (the drawn top is AT
   // the peak: that is where a walker meets it); otherwise it keeps its full height, as before a89bee66. (No peak in the table: the box centre.)
-  const HULL_STEP = 0.52, HULL_STEP_PART = 0.58, HULL_RING = 0.5;
+  const HULL_STEP = 0.52, HULL_STEP_PART = 0.58, HULL_RING = 0.5, HULL_STEP_UP = 0.55, HULL_SKIRT = 0.02;   // HULL_STEP_UP = player.js STEP_UP; HULL_SKIRT: the table hull's buried skirt reads the mean ground under a part up to 2 cm high (isla_viva s7 rock 65: 0.542 vs 0.551 under the drawn band)
   function hullBoxTop(it, x0, x1, z0, z1, y0, topY, hull, sc, c, sn, pk) {
     let gm = 0;
     for (const q of hull) { const u = q[0] * sc, w = q[1] * sc; gm += heightAt0(it.x + u * c + w * sn, it.z - u * sn + w * c); }
@@ -6696,7 +6706,12 @@ export async function buildMap(W, mapId) {
       const g = heightAt0(x, z);
       if (g < gl) gl = g;
     }
-    return Math.max(y0 + 0.05, Math.min(topY, gl + HULL_STEP));
+    // (W10 R1A) a part drawn at or over the mover's STEP_UP above the mean ground under it is a body a walker meets, not a step, whatever the 0.58 rule above
+    // decided for its 1-3 cm misreads: its box is never cut under STEP_UP (+1 cm) over the ground at its own centre (isla_viva s7 rock 42: drawn 0.565 m,
+    // cut to 0.48 m - a step box under a drawn body, clip 0.53 m); such a box may stand up to HULL_SKIRT + 1 cm over the part's top to read as a body over the
+    // ground at its centre (rock 65: drawn 0.551 m over the drawn band's ground, its peak 0.539 m over the box centre's)
+    const gc = heightAt0(it.x + (x0 + x1) / 2, it.z + (z0 + z1) / 2), keep = topY - gm >= HULL_STEP_UP - HULL_SKIRT ? Math.min(Math.max(topY, gc + HULL_STEP_UP + 0.01), topY + HULL_SKIRT + 0.01) : -Infinity;
+    return Math.max(y0 + 0.05, keep, Math.min(topY, gl + HULL_STEP));
   }
   function mergePartsByMaterial(meshes) {
     const byMat = new Map(), out = [];
