@@ -30,6 +30,8 @@ Buildings, street props, cars, furniture and wall modules are repacked offline (
 ## Textures and particles (assets/tex/, assets/fx/)
 - Ground and road textures (1024 px, resized from the 2K diffuse maps, colour unchanged): Poly Haven, CC0 — https://polyhaven.com/a/aerial_asphalt_01 (road_asphalt), https://polyhaven.com/a/asphalt_04 (sidewalk_concrete), https://polyhaven.com/a/aerial_grass_rock (ground_grass_rock), https://polyhaven.com/a/aerial_beach_01 (ground_beach), https://polyhaven.com/a/aerial_sand (ground_sand). Licence: https://polyhaven.com/license
 - Particle textures (spark, puff, glow, tracer): derived from Kenney "Light Masks" 1.0 — CC0 — https://kenney.nl/assets/light-masks (shape_e, shape_c, shape_a, streaks_composed_e)
+- Wave 10 round 2: assets/tex/water_normal.jpg - downscaled to 512 px from the three.js examples texture waternormals.jpg (github.com/mrdoob/three.js, examples/textures/waternormals.jpg), MIT License, Copyright (c) 2010-2026 three.js authors.
+- Wave 10 round 2: assets/tex/water_foam.png - original, generated in-house by _harness/p23/make_water_foam.py (tileable Worley cell walls + periodic value noise, seed 7); CC0, no attribution required. (It replaces the earlier lettier/3d-game-shaders-for-beginners foam image, whose image files are not licensed for reuse, so no BSD-3 line applies.)
 
 ## Animation clips (assets/chars/clips/) and the ram-air canopy (assets/props/canopy.glb) — look + feel wave 4, lane ART-A
 - Shared character clips `assets/chars/clips/<clip>.glb` (idle, walk, run, death, hit, dance, cheer, jump, swim, crouch, rifle_idle, rifle_walk, rifle_run, rifle_reload, rifle_crouch): the same clips the five per-skin `assets/chars/meshy/<skin>_<clip>.glb` files carry, de-duplicated into one file per clip (bone-translation / scale tracks removed, rotations stored as 16-bit normalised values; measured error 0.0033 degrees). No new source material; the licence is unchanged.
@@ -47,6 +49,8 @@ Buildings, street props, cars, furniture and wall modules are repacked offline (
 ## Audio
 - SFX: Kenney interface-sounds / impact-sounds / rpg-audio packs — CC0
 - Parity waves P1-P3 (2026-10, 86 new files, all CC0 1.0, $0): hit / shield / shield-break / explosion one-shots built from Kenney "Impact Sounds" 1.0 and "Interface Sounds" 1.0 (https://kenney.nl/assets/impact-sounds, https://kenney.nl/assets/interface-sounds); mid / far gun layers and the DMR / burst reports from The Free Firearm Sound Library (https://opengameart.org/content/the-free-firearm-sound-library, files https://github.com/buddingmonkey/FreeFirearmsSFXLibrary); vocals by Potapooo (Freesound), qubodup, thebardofblasphemy, Nocturnal_Vanguard (OpenGameArt) and mvVoiceActing (Freesound); footsteps from Fantozzi, TinyWorlds, rubberduck, Peludo (OpenGameArt) and Kenney Impact Sounds. Every file with its source URL and licence: `AUDIO_SOURCES.md` section 6 and `assets/audio/sfx/P1B-SOURCES.txt` / `P23-SOURCES.txt`.
+- Sound effects (Wave 10): Sonniss GDC 2024 Game Audio Bundle - Pole Position Production, Dramatic Cat, Systematic Sound, Nick McMahan, Justsoundeffects, InMotionAudio, BluezoneCorp, Sonic Bat, Rescopic Sound (royalty-free Sonniss #GameAudioGDC licence; cut and mixed takes, no attribution required, credited anyway). Per-file sources are in AUDIO_SOURCES.md.
+- Sound effects (Wave 10): Kenney - RPG Audio, Impact Sounds, Interface Sounds (CC0 1.0).
 
 (Keep this file shipped with the game per CC-BY attribution requirements.)
 

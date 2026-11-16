@@ -3,6 +3,36 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-11-15 — Wave 10 round 2: water, sky and light; recorded sound
+
+Round 2 of Wave 10 (plan `F:/lc_p23/w10/PLAN.md`). This release carries lanes R2A (`w10-r2-water-light`) and R2B (`w10-r2-sound`),
+merged onto the W10 integration branch `w10` (cut from master cbf0a1ff1). Lane R1A (homes) is still not merged. No world change:
+`MAP_GEN_VERSION` stays 8.
+
+Wave 10 round 2 (R2A water, sky and light; desktop medium and up only, low and phones unchanged):
+- Water: two counter-scrolling wave-normal layers (a third on high / ultra), sky fresnel, a clamped sun glint, and an in-house foam band about 1 m wide that follows the bobbing surface, so it stays on the waterline at crest and trough. Caustics on the seabed, and a murky, softened view from under the water.
+- Wet sand: a thin swash line at the waterline when seen from the air (no dark halo round the coasts, and low islets stay light sand). Close up there is a wider wet band and a darker shallow seabed.
+- Far sea: the sea turns opaque toward the map edge, so the drop view no longer shows a hard straight colour edge.
+- Storm wall: hidden until circle 1 starts closing, then fades in over 4 s; it fades out with camera distance from 700 to 1100 m.
+- Light: hemisphere fill about -28 % and sun about +12 %, with a gentle contrast curve in the output pass. Each map has its own balance, and furnished rooms get a per-map lift so interiors stay at least as bright as before on all 3 maps.
+- Dense near grass: thin blade cards in 2.4 m clumps within 30 m, one draw call, coloured by the ground. They grow on grass only: never on beaches, dunes, dry washes, mud, snow or rock.
+- Swim splashes (a ring on water entry and on each stroke, plus a short wake) and textured sky islands.
+- Gate w10_waterlook (23 rows) with 12 planted-fault controls; the stormfx_fx meshopt round trip can be judged again (fixture rebuilt in the repo).
+
+Wave 10 round 2 (R2B, sound):
+- Every beep that stood in for a physical action is now recorded foley: loot pickup, chests, heals, prop breaks, supply drops, grenades, movement, water.
+- Reloads have their own recorded set per weapon class (pistol, rifle, shotgun shell-by-shell, sniper bolt, launcher), and the near-silent weapon swap is now audible.
+- Each map has two recorded ambience layers (Deepwood forest edge and canopy wind, Isla Viva shore waves and light wind, Ashgrid dry field and plains wind). Under a roof the ambience is muffled and about 6 dB quieter. Deepwood's snow stage drops the birdsong layer.
+- Water has a recorded entry splash, swim strokes and an underwater bed. Events that used to make no sound now do (weapon drop, heal and reload cancel, smoke fade, storm phase surge, storm kill, squad eliminated). The W9 storm siren stays, with a recorded wind surge under it.
+- A per-clip loudness table keeps every take within 2 dB of its family, so footsteps on dirt and water are no longer 7 dB louder than on grass.
+- Memory: only the current map's ambience stays decoded, one-shots decode lazily (bounded cache), and files with no high-frequency content are held at 16 or 24 kHz. Decoded sound memory the new files add to a session is bounded at 9.47 MB (8.86 MB peak observed by the census).
+- Door sounds stay silent as on the live build: they belong to Wave 9 round 2, which was not built.
+- Gate w10_sfx (19 rows) with 15 planted faults and a W10-base control; p23_audiotap gains amb-level / amb-spectrum / indoor rows with 3 planted faults.
+
+Integrator:
+- gate.py registers w10_waterlook and w10_sfx, their 12 + 15 planted faults, the base controls (waterlook --rev cbf0a1ff, sfxcheck --rev cbf0a1ff1) and the 3 new p23_audiotap plants.
+- Not judged by any agent: nobody played the game in motion or listened to the sound. The water / wet-sand look was judged from still shots and gate rows, the sound by measurement only. An owner look and listening pass is still open.
+
 ## 2026-11-13 — Wave 10 round 1: guns in hand (LIVE ?v=1794658791)
 
 Round 1 of Wave 10 (plan `F:/lc_p23/w10/PLAN.md`). This release carries lane R1B (guns in hand) only; lane R1A (homes) continues on

@@ -239,6 +239,11 @@ export const LCOutputShader = {
       if ( lcGrade.x > 0.0 ) {
         vec3 lp = sqrt( clamp( gl_FragColor.rgb, 0.0, 1.0 ) );
         lp = mix( lp, lp * lp * ( 3.0 - 2.0 * lp ), lcGrade.x );
+        // (W10 R2A fix5) the toe is kept: the smoothstep's slope is 0 at black, so at full strength a shadow at 50 / 255 went to 11 / 255 (the Savanna street
+        // shadow read black, furnished rooms' dark share 0.36-0.48). The curve fades in over the deep shadows (sqrt-space 0.05-0.25 = about 4-70 / 255):
+        // below it a shadow keeps its uncurved tone and detail; from the lower mid-tones up (the ground's own shade and light) it is the full curve
+        vec3 l0 = sqrt( clamp( gl_FragColor.rgb, 0.0, 1.0 ) );
+        lp = mix( l0, lp, smoothstep( vec3( 0.05 ), vec3( 0.25 ), l0 ) );
         gl_FragColor.rgb = lp * lp;
       }
 

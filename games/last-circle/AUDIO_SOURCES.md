@@ -146,7 +146,7 @@ Legend — **Verified?** ✅ = I read the licence on the source page **this sess
 | TinyWorlds Forest Ambience (OGA) | CC0 | 🟡 | Yes | None |
 | OGA "Beach Ocean Waves" (jasinski) | CC0 on OGA; **upstream Freesound file 18363 never checked** | ❌ upstream | Probably | None |
 | JC Sounds Nature Ambient Pack Vol 1 | CC-BY 4.0 | 🟡 | Yes, with credit | ⚠️ no author-specified string |
-| Sonniss GDC Bundle | Proprietary royalty-free | 🟡 | Yes-but | No CC licence; redistribution restricted |
+| Sonniss GDC Bundle | Proprietary royalty-free (GDC 2024 terms on disk) | ✅ (W10 R2B) | **Yes - in use since W10 R2B** | No CC licence. Use as cut / mixed takes inside the game is allowed (restriction b); raw pack files are never shipped. See the W10 R2B section. |
 | PixelLoops Ultimate Ambient (itch, paid) | **Marketing phrases only** | ❌ | Unknown | Unknown |
 | OGA "CC0 Sounds Library" / "Ambient Sounds" collections | **No licence field — curator assertion** | ❌ | **Per-item only** | Per-item |
 
@@ -162,7 +162,7 @@ Legend — **Verified?** ✅ = I read the licence on the source page **this sess
 | **Graywavstudio — AK-47 Noises base pack** | Zero licence information anywhere; default is all-rights-reserved. Also contains **no gunshots at all**, only mechanical foley, despite ranking on "gunsounds" tags. |
 | **SoundBiterSFX's packs on OpenGameArt** | **CC-BY-SA 4.0** — share-alike fails your bar. Same author's same material is plain CC-BY 4.0 on Freesound. Take the Freesound URL, never the OGA one. |
 | **OGA "CC0 Sounds Library" (ETTiNGRiNDER) / "Ambient Sounds" (OwlishMedia)** https://opengameart.org/content/cc0-sounds-library | These are **collections**, not submissions. No licence field on the page — the "CC0" in the title is one curator's assertion about *other people's* uploads. This is precisely the failure mode the brief warns about. Usable as a discovery index only. |
-| **Sonniss GDC Game Audio Bundle** | Not a Creative Commons licence, so it fails the stated bar. Its terms prohibit redistribution *"as standalone files"* — and a browser game serves its `.ogg` assets as separately-fetchable static files over HTTP. That is close enough to the prohibited case to need a lawyer's read, which isn't worth it when CC0 covers the need. |
+| **Sonniss GDC Game Audio Bundle** - **SUPERSEDED 2026-11-14 (W10 R2B): no longer rejected, see the W10 R2B section.** Wave 10 PLAN R2B sanctions it as a free-licence source, and the GDC 2024 licence on disk (`F:/games/forgeflow-games-assets/sonniss-gdc2024/LICENSE.txt`, restriction b) says the sounds *"may be sold as incorporated into licensee project"*; every shipped file is a cut or mix, never a pack file as it comes. The original (pre-W10) reasoning follows, kept for the record: | Not a Creative Commons licence, so it fails the stated bar. Its terms prohibit redistribution *"as standalone files"* — and a browser game serves its `.ogg` assets as separately-fetchable static files over HTTP. That is close enough to the prohibited case to need a lawyer's read, which isn't worth it when CC0 covers the need. |
 | **PixelLoops "Ultimate Game Ambient Sound Effects Pack"** (paid, $3.59) | Terms are two marketing phrases on a storefront ("Royalty Free", "Commercial Use Allowed"), no licence text, no CC identifier. You cannot establish the actual terms without buying it first. Content fit is excellent, so if you want it: **get the licence text in writing from the seller before purchase.** Also — this is a >$0 spend and needs the approval gate regardless. |
 
 ### Conditional — CC-BY, acceptable only if you accept the obligation
@@ -336,3 +336,122 @@ games to reference its itch.io page - a request, not a licence term); Kenney.
 | step_metal_001.ogg | Kenney footstep_concrete_001 + impactTin_medium_001 (-1 dB) + impactMetal_light_002 (rate 0.8, -11 dB), layered | https://kenney.nl/assets/impact-sounds | CC0 1.0 |
 | step_metal_002.ogg | Kenney footstep_concrete_002 + impactTin_medium_002 (-1 dB) + impactMetal_light_003 (rate 0.8, -11 dB), layered | https://kenney.nl/assets/impact-sounds | CC0 1.0 |
 | step_metal_003.ogg | Kenney footstep_concrete_003 + impactTin_medium_003 (-1 dB) + impactMetal_light_004 (rate 0.8, -11 dB), layered | https://kenney.nl/assets/impact-sounds | CC0 1.0 |
+
+---
+
+## W10 R2B - recorded ambience, foley, reloads, water (2026-11-14)
+
+99 new files in `assets/audio/sfx/` (1,473,220 B after fix 3), mono 48 kHz Ogg Vorbis, cut / mixed / levelled / encoded deterministically by
+`F:/lc_p23/w10/r2/R2B/build1/tools/build_w10_sfx.py` (dev-only, never shipped) from free packs already on F: - no spend. Two licences:
+
+- **Kenney CC0 1.0** (rpg-audio, impact-sounds, interface-sounds; `F:/games/forgeflow-games-assets/<pack>/License.txt`): public domain, no attribution needed (credited anyway).
+- **Sonniss GDC 2024 Game Audio Bundle** (`F:/games/forgeflow-games-assets/sonniss-gdc2024/LICENSE.txt`): royalty-free, commercial use, may ship embedded in a game, no attribution required; NOT CC0 - the raw library may not be redistributed or used for AI training. Each file below is a cut / mix inside the game build, never a raw pack file. Credited in CREDITS.md anyway. The integrator adds that line at merge; its exact text is in the lane R2B fix 3 hand-over (lane R2B does not edit CREDITS.md). This supersedes the pre-W10 Sonniss reject in section 3 and the licence-ledger row in section 2.
+
+**FINAL (2026-11-15, W10 R2B fix 3).** This section is the final source list for Wave 10 round 2 sound. Fix 3 changed four files (rows marked "fix 3"): the launcher report is now the RPG launch charge at natural speed, the Savanna bed is a second cut of the open-plain meadow recording, and the smoke vent is 3.0 s. Fix 3 added no new source pack: the only Sonniss library it added is `Pole Position - The Warfare 2 Library/RPG - FIRING AND IMPACT ...`, from the same bundle and licence. The CREDITS.md lines are in the integrator hand-over (state of lane R2B fix 3). Lane R2B does not edit CREDITS.md.
+
+**Deferred, not in this list:** door open / close / slam sounds. They belong to Wave 9 round 2 lane R2A (door sounds, PLAN W10 "already planned in Wave 9"), which was not built (the owner paused Wave 9 after round 1); W10 R2B adds no door sound and doors stay silent as on the live build. No other sound is pending.
+
+Selection note: the takes were chosen from measured structure (onset lists, loudness windows, spectral centroid), not by ear - no listening test was possible in the build lane.
+The per-clip loudness trims live in `runtime/3d/royale/audio.js` CLIP_DB (generated by `tools/loudtable.py`). Checked by `_harness/p23/sfxcheck.py` (licence row).
+
+| file | bytes | source | licence |
+|---|---|---|---|
+| rl_pistol_out_0.ogg | 5541 | Sonniss GDC 2024: Pole Position - Desert Eagle .44/Desert Eagle - VAR SFX - Magazine In and Out - Take 3 - MKH8060.wav (event 1 @1.30 s) | Sonniss GDC 2024 licence |
+| rl_pistol_out_1.ogg | 5380 | Sonniss GDC 2024: Pole Position - Desert Eagle .44/Desert Eagle - VAR SFX - Magazine In and Out - Take 3 - MKH8060.wav (event 11 @8.85 s) | Sonniss GDC 2024 licence |
+| rl_pistol_in_0.ogg | 5340 | Sonniss GDC 2024: Pole Position - Desert Eagle .44/Desert Eagle - VAR SFX - Magazine In and Out - Take 3 - MKH8060.wav (event 7 @4.92 s) | Sonniss GDC 2024 licence |
+| rl_pistol_in_1.ogg | 5256 | Sonniss GDC 2024: Pole Position - Desert Eagle .44/Desert Eagle - VAR SFX - Magazine In and Out - Take 3 - MKH8060.wav (event 19 @14.39 s) | Sonniss GDC 2024 licence |
+| rl_pistol_slide_0.ogg | 5655 | Sonniss GDC 2024: Pole Position - Desert Eagle .44/Desert Eagle - VAR SFX - Magazine In and Out - Take 3 - MKH8060.wav (event 24 @17.31 s) | Sonniss GDC 2024 licence |
+| rl_rifle_out_0.ogg | 8694 | Sonniss GDC 2024: Dramatic Cat - SVD Dragunov/GUNMech_SVD Dragunov 7.62×54R SOURCE Magazine Insert Slow_DRCA_DRAG_CO-100K.wav (event 2 @3.26 s) | Sonniss GDC 2024 licence |
+| rl_rifle_out_1.ogg | 6931 | Sonniss GDC 2024: Dramatic Cat - SVD Dragunov/GUNMech_SVD Dragunov 7.62×54R SOURCE Magazine Insert Slow_DRCA_DRAG_CO-100K.wav (event 7 @9.27 s) | Sonniss GDC 2024 licence |
+| rl_rifle_in_0.ogg | 3950 | Sonniss GDC 2024: Dramatic Cat - SVD Dragunov/GUNMech_SVD Dragunov 7.62×54R SOURCE Magazine Insert Slow_DRCA_DRAG_CO-100K.wav (event 4 @4.09 s) | Sonniss GDC 2024 licence |
+| rl_rifle_in_1.ogg | 4121 | Sonniss GDC 2024: Dramatic Cat - SVD Dragunov/GUNMech_SVD Dragunov 7.62×54R SOURCE Magazine Insert Slow_DRCA_DRAG_CO-100K.wav (event 9 @9.92 s) | Sonniss GDC 2024 licence |
+| rl_rifle_rack_0.ogg | 4296 | Sonniss GDC 2024: Pole Position - Beretta 1201 F/Beretta 1201F - VAR SFX - Failed Racking Movements - MS Decoded - MKH418S.wav (event 6 @6.02 s) | Sonniss GDC 2024 licence |
+| rl_rifle_rack_1.ogg | 5025 | Sonniss GDC 2024: Pole Position - Beretta 1201 F/Beretta 1201F - VAR SFX - Failed Racking Movements - MS Decoded - MKH418S.wav (event 3 @3.71 s) | Sonniss GDC 2024 licence |
+| rl_shell_0.ogg | 6120 | Sonniss GDC 2024: Pole Position - Colt Python .357 Magnum/Colt Python 357 Magnum - VAR SFX - Loading Gun - CO100K.wav (event 1 @0.54 s) | Sonniss GDC 2024 licence |
+| rl_shell_1.ogg | 3705 | Sonniss GDC 2024: Pole Position - Colt Python .357 Magnum/Colt Python 357 Magnum - VAR SFX - Loading Gun - CO100K.wav (event 15 @15.81 s) | Sonniss GDC 2024 licence |
+| rl_shell_2.ogg | 3781 | Sonniss GDC 2024: Pole Position - Colt Python .357 Magnum/Colt Python 357 Magnum - VAR SFX - Loading Gun - CO100K.wav (event 5 @3.95 s) | Sonniss GDC 2024 licence |
+| rl_pump_0.ogg | 10398 | Sonniss GDC 2024: Pole Position - Franchi SPAS-12 Combat Shotgun/SPAS-12 - VAR SFX - Pump Action Fast - Close - MS - MKH418s.wav (0.17-1.00 s, back + forward) | Sonniss GDC 2024 licence |
+| rl_pump_1.ogg | 9673 | Sonniss GDC 2024: Pole Position - Franchi SPAS-12 Combat Shotgun/SPAS-12 - VAR SFX - Pump Action Fast - Close - MS - MKH418s.wav (2.08-2.75 s, back + forward) | Sonniss GDC 2024 licence |
+| rl_bolt_open_0.ogg | 4557 | Sonniss GDC 2024: Pole Position - Lynx 50 Cal Sniper Rifle/Lynx 50 - VAR SFX - Shell Ejections - Take 2 - CO100k.wav (event 5 @9.44 s) | Sonniss GDC 2024 licence |
+| rl_bolt_open_1.ogg | 5686 | Sonniss GDC 2024: Pole Position - Lynx 50 Cal Sniper Rifle/Lynx 50 - VAR SFX - Shell Ejections - Take 2 - CO100k.wav (event 15 @17.65 s) | Sonniss GDC 2024 licence |
+| rl_bolt_close_0.ogg | 4514 | Sonniss GDC 2024: Pole Position - Lynx 50 Cal Sniper Rifle/Lynx 50 - VAR SFX - Shell Ejections - Take 2 - CO100k.wav (event 1 @2.47 s) | Sonniss GDC 2024 licence |
+| rl_bolt_close_1.ogg | 5918 | Sonniss GDC 2024: Pole Position - Lynx 50 Cal Sniper Rifle/Lynx 50 - VAR SFX - Shell Ejections - Take 2 - CO100k.wav (event 21 @25.36 s) | Sonniss GDC 2024 licence |
+| rl_break_open_0.ogg | 5017 | Sonniss GDC 2024: Pole Position - Smith & Wesson .38 Chiefs Special Model 60/Smith & Wesson 60 - VAR SFX - Open Close Revovler with Shells - XY - RSM191.wav (event 0 @0.70 s) | Sonniss GDC 2024 licence |
+| rl_break_close_0.ogg | 3793 | Sonniss GDC 2024: Pole Position - Smith & Wesson .38 Chiefs Special Model 60/Smith & Wesson 60 - VAR SFX - Open Close Revovler with Shells - XY - RSM191.wav (event 6 @8.68 s) | Sonniss GDC 2024 licence |
+| rl_break_close_1.ogg | 4883 | Sonniss GDC 2024: Pole Position - Smith & Wesson .38 Chiefs Special Model 60/Smith & Wesson 60 - VAR SFX - Open Close Revovler with Shells - XY - RSM191.wav (event 4 @5.57 s) | Sonniss GDC 2024 licence |
+| rl_ln_shell_0.ogg | 6521 | Sonniss GDC 2024: Dramatic Cat - Saiga-12/GUNMech_Saiga 12 Cal.12 SOURCE Chamber Eject Bullet_DRCA_SG12_MKH416.wav (event 0 @0.28 s) | Sonniss GDC 2024 licence |
+| rl_ln_shell_1.ogg | 9862 | Sonniss GDC 2024: Dramatic Cat - Saiga-12/GUNMech_Saiga 12 Cal.12 SOURCE Chamber Eject Bullet_DRCA_SG12_MKH416.wav (event 2 @4.28 s) | Sonniss GDC 2024 licence |
+| equip_0.ogg | 9463 | Kenney: rpg-audio/Audio/clothBelt.ogg + Kenney: rpg-audio/Audio/metalLatch.ogg (-8 dB @90 ms) | Kenney CC0 1.0 |
+| equip_1.ogg | 6971 | Kenney: rpg-audio/Audio/cloth3.ogg + Kenney: rpg-audio/Audio/metalClick.ogg (-6 dB @70 ms) | Kenney CC0 1.0 |
+| equip_2.ogg | 8325 | Kenney: rpg-audio/Audio/clothBelt2.ogg + Kenney: rpg-audio/Audio/metalLatch.ogg (-9 dB @110 ms) | Kenney CC0 1.0 |
+| dry_fire_0.ogg | 4927 | Sonniss GDC 2024: Pole Position - Beretta 1201 F/Beretta 1201F - VAR SFX - Failed Racking Movements - MS Decoded - MKH418S.wav (event 10 @12.18 s) | Sonniss GDC 2024 licence |
+| dry_fire_1.ogg | 4846 | Sonniss GDC 2024: Pole Position - Beretta 1201 F/Beretta 1201F - VAR SFX - Failed Racking Movements - MS Decoded - MKH418S.wav (event 11 @12.40 s) | Sonniss GDC 2024 licence |
+| rl_cancel_0.ogg | 6102 | Kenney: rpg-audio/Audio/cloth4.ogg | Kenney CC0 1.0 |
+| shot_launcher_0.ogg | 7308 | Sonniss GDC 2024: Pole Position - The Warfare 2 Library/RPG - FIRING AND IMPACT - Through Car Roof Hit Metal - XY - MKH8040.wav (launch charge 0.300-0.575 s, left channel, natural speed, 70 ms fade before the impact; fix 3 replaces the 1.45x howitzer take) | Sonniss GDC 2024 licence |
+| shot_launcher_1.ogg | 7268 | Sonniss GDC 2024: Pole Position - The Warfare 2 Library/RPG - FIRING AND IMPACT - Through Car Roof Hit Metal - XY - MKH8040.wav (launch charge 0.300-0.575 s, right channel, natural speed, 70 ms fade before the impact; fix 3 replaces the 1.45x howitzer take) | Sonniss GDC 2024 licence |
+| gren_throw_0.ogg | 7372 | Sonniss GDC 2024: Rescopic Sound - Distinct Whooshes/WHSH_Airy-Whoosh Wind Gust 11_RSCPC_DW.wav (1.20-1.75 s, hp 300 Hz) | Sonniss GDC 2024 licence |
+| gren_throw_1.ogg | 7349 | Sonniss GDC 2024: Rescopic Sound - Distinct Whooshes/WHSH_Deviant-Whoosh Flabby Slow 09_RSCPC_DW.wav (1.50-2.05 s, hp 300 Hz) | Sonniss GDC 2024 licence |
+| gren_pin_0.ogg | 4785 | Kenney: rpg-audio/Audio/metalLatch.ogg (1.25x speed) | Kenney CC0 1.0 |
+| gren_bounce_0.ogg | 4254 | Kenney: impact-sounds/Audio/impactMetal_medium_000.ogg | Kenney CC0 1.0 |
+| gren_bounce_1.ogg | 3867 | Kenney: impact-sounds/Audio/impactMetal_medium_001.ogg | Kenney CC0 1.0 |
+| gren_bounce_2.ogg | 4024 | Kenney: impact-sounds/Audio/impactTin_medium_002.ogg | Kenney CC0 1.0 |
+| pickup_0.ogg | 5366 | Kenney: rpg-audio/Audio/handleSmallLeather.ogg | Kenney CC0 1.0 |
+| pickup_1.ogg | 5397 | Kenney: rpg-audio/Audio/handleSmallLeather2.ogg | Kenney CC0 1.0 |
+| pickup_2.ogg | 7877 | Kenney: rpg-audio/Audio/clothBelt2.ogg | Kenney CC0 1.0 |
+| chest_open_0.ogg | 7308 | Kenney: rpg-audio/Audio/creak1.ogg + Kenney: impact-sounds/Audio/impactWood_light_000.ogg (@420 ms -4 dB) | Kenney CC0 1.0 |
+| chest_open_1.ogg | 8399 | Kenney: rpg-audio/Audio/creak2.ogg + Kenney: impact-sounds/Audio/impactWood_light_002.ogg (@600 ms -4 dB) | Kenney CC0 1.0 |
+| heal_start_0.ogg | 5878 | Sonniss GDC 2024: InMotionAudio - Torn T-Shirt/CLOTHRip_CottonRips13_InMotionAudio_TornTShirt.wav (whole) | Sonniss GDC 2024 licence |
+| heal_start_1.ogg | 11540 | Sonniss GDC 2024: InMotionAudio - Torn T-Shirt/CLOTHRip_CottonRips44_InMotionAudio_TornTShirt.wav (whole) | Sonniss GDC 2024 licence |
+| heal_done_0.ogg | 4549 | Sonniss GDC 2024: InMotionAudio - Mask Foley/FOLYMisc_BluePPEMask_Elastic09_InMotionAudio_MaskFoley.wav (event 2 @1.11 s, elastic snap) | Sonniss GDC 2024 licence |
+| heal_done_1.ogg | 9281 | Kenney: rpg-audio/Audio/clothBelt.ogg | Kenney CC0 1.0 |
+| prop_break_0.ogg | 9475 | Sonniss GDC 2024: InMotionAudio - Wood/WOODBrk_Snap09_InMotionAudio_Wood.wav (0.28-1.00 s) + Kenney: impact-sounds/Audio/impactWood_heavy_000.ogg (@250 ms -3 dB) | Sonniss GDC 2024 licence + Kenney CC0 1.0 |
+| prop_break_1.ogg | 5849 | Kenney: impact-sounds/Audio/impactWood_heavy_002.ogg + Kenney: impact-sounds/Audio/impactPlank_medium_003.ogg (@70 ms -3 dB) | Kenney CC0 1.0 |
+| drop_open_0.ogg | 9819 | Kenney: rpg-audio/Audio/metalLatch.ogg + Sonniss GDC 2024: Mechanical Wave - Torturing Metal/METLCrsh_Drop Fall Metal Rattle Scrap Debris_06_MWSFX_TM.wav (whole @120 ms -4 dB) | Sonniss GDC 2024 licence + Kenney CC0 1.0 |
+| drop_land_0.ogg | 6693 | Sonniss GDC 2024: Pole Position - The Metal Hit Sweeteners Library/Toolbox - DROP.wav (event 1) + Sonniss GDC 2024: Pole Position - The Metal Hit Sweeteners Library/Oil Barrel - HIT - Hammer - Take 2.wav (event 0 -6 dB) | Sonniss GDC 2024 licence |
+| drop_land_1.ogg | 7446 | Sonniss GDC 2024: Pole Position - The Metal Hit Sweeteners Library/Toolbox - DROP.wav (event 5) + Sonniss GDC 2024: Pole Position - The Metal Hit Sweeteners Library/Oil Barrel - HIT - Hammer - Take 2.wav (event 3 -6 dB) | Sonniss GDC 2024 licence |
+| body_fall_0.ogg | 6070 | Kenney: impact-sounds/Audio/impactSoft_heavy_000.ogg + Kenney: rpg-audio/Audio/cloth2.ogg (-6 dB) | Kenney CC0 1.0 |
+| body_fall_1.ogg | 6113 | Kenney: impact-sounds/Audio/impactSoft_heavy_002.ogg + Kenney: rpg-audio/Audio/cloth2.ogg (-6 dB) | Kenney CC0 1.0 |
+| hurt_thud_0.ogg | 5153 | Kenney: impact-sounds/Audio/impactPunch_medium_000.ogg | Kenney CC0 1.0 |
+| hurt_thud_1.ogg | 5979 | Kenney: impact-sounds/Audio/impactPunch_medium_002.ogg | Kenney CC0 1.0 |
+| weapon_drop_0.ogg | 4719 | Kenney: impact-sounds/Audio/impactMetal_light_003.ogg + Kenney: impact-sounds/Audio/impactSoft_medium_000.ogg (-3 dB) | Kenney CC0 1.0 |
+| weapon_drop_1.ogg | 4123 | Kenney: impact-sounds/Audio/impactMetal_light_004.ogg + Kenney: impact-sounds/Audio/impactSoft_medium_002.ogg (-3 dB) | Kenney CC0 1.0 |
+| smoke_pop_0.ogg | 4084 | Kenney: impact-sounds/Audio/impactTin_medium_000.ogg | Kenney CC0 1.0 |
+| smoke_hiss_0.ogg | 27025 | Sonniss GDC 2024: Justsoundeffects - Water in Motion/WATRFizz_Fizzing Effervescent Tablets 03_JSE_WIM_Mono.wav (6.0-9.0 s, hp 1.8 kHz, 0.8 s fade; fix 3 cut from 5.5 s for the decoded-memory budget) | Sonniss GDC 2024 licence |
+| smoke_fade_0.ogg | 12998 | Sonniss GDC 2024: Rescopic Sound - Distinct Whooshes/WHSH_Airy-Whoosh Wind Gust 11_RSCPC_DW.wav (0.6-2.6 s, lp 2.5 kHz) | Sonniss GDC 2024 licence |
+| scope_0.ogg | 4522 | Sonniss GDC 2024: Pole Position - Beretta 1201 F/Beretta 1201F - VAR SFX - Failed Racking Movements - MS Decoded - MKH418S.wav (event 4 @4.43 s) | Sonniss GDC 2024 licence |
+| scope_1.ogg | 4423 | Sonniss GDC 2024: Pole Position - Beretta 1201 F/Beretta 1201F - VAR SFX - Failed Racking Movements - MS Decoded - MKH418S.wav (event 13 @17.62 s) | Sonniss GDC 2024 licence |
+| chute_open_0.ogg | 13681 | Sonniss GDC 2024: Pole Position - The Skydiving and Parachute Library/Parachutist - EXT - PARACHUTE DEPLOY - Distant 3 - RSM191.wav (0.15-1.60 s) | Sonniss GDC 2024 licence |
+| chute_cut_0.ogg | 7080 | Kenney: rpg-audio/Audio/knifeSlice.ogg + Kenney: rpg-audio/Audio/cloth3.ogg (@50 ms -4 dB) | Kenney CC0 1.0 |
+| launch_whoosh_0.ogg | 13208 | Sonniss GDC 2024: Rescopic Sound - Distinct Whooshes/WHSH_Pure SciFi-Whoosh Fast 03_RSCPC_DW.wav (whole) | Sonniss GDC 2024 licence |
+| whiz_0.ogg | 4206 | Sonniss GDC 2024: Rescopic Sound - Distinct Whooshes/WHSH_Airy-Whoosh Wind Gust 11_RSCPC_DW.wav (1.55-1.66 s, hp 2 kHz) | Sonniss GDC 2024 licence |
+| whiz_1.ogg | 4255 | Sonniss GDC 2024: Rescopic Sound - Distinct Whooshes/WHSH_Watery-Whoosh FIzzy Fast 03_RSCPC_DW.wav (1.20-1.31 s, hp 2 kHz) | Sonniss GDC 2024 licence |
+| storm_surge_0.ogg | 18253 | Sonniss GDC 2024: Pole Position - Wind In Trees/Wind - Cherry Tree - Strong - Bed - On Ground - ORTF - CMC6.wav (70.0-72.6 s, lp 1.6 kHz, 0.6 s swell in, 1.2 s out) | Sonniss GDC 2024 licence |
+| storm_surge_1.ogg | 18225 | Sonniss GDC 2024: Pole Position - Wind In Trees/Wind - Cherry Tree - Strong - Bed - On Ground - ORTF - CMC6.wav (110.0-112.6 s, lp 1.6 kHz, 0.6 s swell in, 1.2 s out) | Sonniss GDC 2024 licence |
+| storm_zap_0.ogg | 6801 | Sonniss GDC 2024: BluezoneCorp - High Voltage/Bluezone_BC0299_electricity_surge_discharge_electrical_arc_crackling_002_01.wav (0.40-0.85 s) | Sonniss GDC 2024 licence |
+| storm_zap_1.ogg | 7691 | Sonniss GDC 2024: BluezoneCorp - High Voltage/Bluezone_BC0299_electricity_texture_sizzling_crackling_006.wav (0.60-1.05 s) | Sonniss GDC 2024 licence |
+| splash_0.ogg | 23520 | Sonniss GDC 2024: InMotionAudio - Submerge/WATRImpt_Impact20_InMotionAudio_Submerge.wav (whole) | Sonniss GDC 2024 licence |
+| splash_1.ogg | 17332 | Sonniss GDC 2024: BluezoneCorp - Designed Water/Bluezone_BC0298_designed_water_impact_006.wav (0-1.9 s) | Sonniss GDC 2024 licence |
+| swim_0.ogg | 11944 | Sonniss GDC 2024: Justsoundeffects - Water in Motion/WATRMvmt_Soft Movement 01_JSE_WIM.wav (event 1 5.09-5.99 s) | Sonniss GDC 2024 licence |
+| swim_1.ogg | 11710 | Sonniss GDC 2024: Justsoundeffects - Water in Motion/WATRMvmt_Soft Movement 01_JSE_WIM.wav (event 2 9.14-10.04 s) | Sonniss GDC 2024 licence |
+| swim_2.ogg | 11932 | Sonniss GDC 2024: Justsoundeffects - Water in Motion/WATRMvmt_Soft Movement 01_JSE_WIM.wav (event 3 13.12-14.02 s) | Sonniss GDC 2024 licence |
+| swim_3.ogg | 10766 | Sonniss GDC 2024: Justsoundeffects - Water in Motion/WATRMvmt_Soft Movement 01_JSE_WIM.wav (event 4 17.34-18.24 s) | Sonniss GDC 2024 licence |
+| uw_bed_0.ogg | 51136 | Sonniss GDC 2024: Justsoundeffects - Water in Motion/WATRUndwtr_Evolving Underwater Bubbles_JSE_WIM.wav (seamless 10 s loop from 28.5 s, lp 1.8 kHz) | Sonniss GDC 2024 licence |
+| jump_0.ogg | 8278 | Kenney: rpg-audio/Audio/cloth1.ogg + Kenney: rpg-audio/Audio/beltHandle1.ogg (-8 dB) | Kenney CC0 1.0 |
+| jump_1.ogg | 7350 | Kenney: rpg-audio/Audio/cloth3.ogg + Kenney: rpg-audio/Audio/beltHandle2.ogg (-8 dB) | Kenney CC0 1.0 |
+| land_0.ogg | 6425 | Kenney: rpg-audio/Audio/footstep05.ogg + Kenney: rpg-audio/Audio/cloth2.ogg (-5 dB) | Kenney CC0 1.0 |
+| land_1.ogg | 6336 | Kenney: rpg-audio/Audio/footstep06.ogg + Kenney: rpg-audio/Audio/cloth4.ogg (-5 dB) | Kenney CC0 1.0 |
+| land_2.ogg | 8100 | Kenney: rpg-audio/Audio/footstep08.ogg + Kenney: rpg-audio/Audio/cloth1.ogg (-5 dB) | Kenney CC0 1.0 |
+| land_hard_0.ogg | 9106 | Kenney: impact-sounds/Audio/impactPunch_heavy_000.ogg + Kenney: rpg-audio/Audio/footstep06.ogg (-2 dB) + Kenney: rpg-audio/Audio/clothBelt.ogg (-8 dB) | Kenney CC0 1.0 |
+| land_hard_1.ogg | 9204 | Kenney: impact-sounds/Audio/impactPunch_heavy_003.ogg + Kenney: rpg-audio/Audio/footstep09.ogg (-2 dB) + Kenney: rpg-audio/Audio/clothBelt.ogg (-8 dB) | Kenney CC0 1.0 |
+| mantle_0.ogg | 6290 | Kenney: impact-sounds/Audio/impactSoft_medium_001.ogg + Kenney: rpg-audio/Audio/cloth2.ogg (-4 dB) | Kenney CC0 1.0 |
+| mantle_1.ogg | 6321 | Kenney: impact-sounds/Audio/impactSoft_medium_003.ogg + Kenney: rpg-audio/Audio/cloth2.ogg (-4 dB) | Kenney CC0 1.0 |
+| slide_0.ogg | 8856 | Sonniss GDC 2024: InMotionAudio - Mask Foley/FOLYMisc_FabricMask_Movement06_InMotionAudio_MaskFoley.wav (0.3-1.05 s) + Kenney: rpg-audio/Audio/footstep03.ogg (-6 dB) | Sonniss GDC 2024 licence + Kenney CC0 1.0 |
+| slide_1.ogg | 8929 | Sonniss GDC 2024: InMotionAudio - Mask Foley/FOLYMisc_FabricMask_Movement06_InMotionAudio_MaskFoley.wav (2.2-2.95 s) + Kenney: rpg-audio/Audio/footstep07.ogg (-6 dB) | Sonniss GDC 2024 licence + Kenney CC0 1.0 |
+| slide_end_0.ogg | 6272 | Kenney: rpg-audio/Audio/footstep02.ogg + Kenney: rpg-audio/Audio/cloth4.ogg (-4 dB) | Kenney CC0 1.0 |
+| ui_alert_0.ogg | 3494 | Kenney: interface-sounds/Audio/bong_001.ogg | Kenney CC0 1.0 |
+| amb_forest_bed.ogg | 125780 | Sonniss GDC 2024: Justsoundeffects - Forest Ambiences/AMBForst_Spring Afternoon Edge of Mixed Forest Yellowhammer Eurasian Blackcap Tree Pipit Insects_JSE_FA.wav (seamless 20 s loop from 41.0 s, 1.5 s equal-power seam) | Sonniss GDC 2024 licence |
+| amb_forest_wind.ogg | 102365 | Sonniss GDC 2024: Pole Position - Wind In Trees/Wind - Oak - Calm - Close - Inside Canopy - XY - MKH8060.wav (seamless 16 s loop from 78.0 s, 1.5 s equal-power seam) | Sonniss GDC 2024 licence |
+| amb_tropical_bed.ogg | 123197 | Sonniss GDC 2024: Nick McMahan - Cascadia Shore Waves/WATRSurf_Ocean Medium to Large Rocks 02 Loop_Cascadia Shore Waves.wav (seamless 20 s loop from 65.5 s, 1.5 s equal-power seam) | Sonniss GDC 2024 licence |
+| amb_tropical_wind.ogg | 99461 | Sonniss GDC 2024: Pole Position - Wind In Trees/Wind - Aspen - Gusts - Close - Inside Canopy - XY - MKH8060.wav (seamless 16 s loop from 65.5 s, 1.5 s equal-power seam, lp 2 kHz) | Sonniss GDC 2024 licence |
+| amb_savanna_bed.ogg | 170845 | Sonniss GDC 2024: Systematic Sound - General Ambience Series - Rural Countryside 01/AMBRurl_Meadow Open Plane Windy Deep Rumble_SYSO_SYSO011-1.wav (seamless 20 s loop from 150.0 s, 1.5 s equal-power seam; fix 3 replaces the Field Wheat take, which measured as hiss: 2-12 kHz flatness 0.986) | Sonniss GDC 2024 licence |
+| amb_savanna_wind.ogg | 103307 | Sonniss GDC 2024: Systematic Sound - General Ambience Series - Rural Countryside 01/AMBRurl_Meadow Open Plane Windy Deep Rumble_SYSO_SYSO011-1.wav (seamless 16 s loop from 212.5 s, 1.5 s equal-power seam) | Sonniss GDC 2024 licence |
