@@ -378,6 +378,7 @@ function checkHouse(H, HGmod, MAN) {
       for (const bi of p.parts) { const b = H.boxes[bi]; for (let a = 0; a < 3; a++) { mn[a] = Math.min(mn[a], b.min[a]); mx[a] = Math.max(mx[a], b.max[a]); } }
       let cn = [Infinity, Infinity, Infinity], cx = [-Infinity, -Infinity, -Infinity];
       for (const g of p.cols) for (let a = 0; a < 3; a++) { cn[a] = Math.min(cn[a], g.min[a]); cx[a] = Math.max(cx[a], g.max[a]); }
+      // REASON (W10 R1A): no mover fits under a collider < 1.54 m over the floor, so a part beneath it needs no collider of its own (control: [vis-col relaxation]).
       // (W10 R1A) a group wholly under another of the piece, whose underside is lower over the floor than the crouched capsule (1.54 m), is not a
       // collider (buildCatalog colKeep): the colliders' AABB keeps the parts' footprint and top exactly and may only start higher; a part outside every
       // collider must lie wholly under (in plan, and below the underside of) one that a crouched mover cannot pass beneath
@@ -1454,6 +1455,22 @@ else if (require.main === module) (async () => {
       let msg = "no wide furniture box in the house";
       if (c) { c.maxX -= 0.1; msg = furnColErr(H, HGmod, cols) || "no error raised"; }
       ok(c && /not the union/.test(msg) && s1 - s0 < nPiece, "negative control [vis-col]: a merged furniture collider 10 cm short of the pieces it covers is caught (the house's " + nPiece + " piece boxes collide as " + (s1 - s0) + ")", msg); }
+    // (W10 R1A pass 5) the control of vis-col's one relaxation (a part wholly under a collider whose underside is < 1.54 m over the floor: no crouched
+    // mover fits beneath, so buildCatalog keeps no collider for it): that collider's underside lifted to 1.60 m over the floor - a gap a crouched mover
+    // could take - must be caught as "part outside its colliders"
+    { let H = null, pc = null, g = null;
+      for (let i = 0; i < Math.min(PS.length, 120) && !H; i++) {
+        const h = HGmod.generate(PS[i]), fy = h.floors.map((f) => f.y);
+        for (const p of h.furniture) { if (p.src === "kit" || p.deco || !p.cols || !p.parts) continue;
+          for (const bi of p.parts) { const b = h.boxes[bi];
+            if (p.cols.some((q) => b.min[0] >= q.min[0] - TOL && b.min[1] >= q.min[1] - TOL && b.min[2] >= q.min[2] - TOL && b.max[0] <= q.max[0] + TOL && b.max[1] <= q.max[1] + TOL && b.max[2] <= q.max[2] + TOL)) continue;
+            const q = p.cols.find((q) => b.min[0] >= q.min[0] - TOL && b.min[2] >= q.min[2] - TOL && b.max[0] <= q.max[0] + TOL && b.max[2] <= q.max[2] + TOL && b.max[1] <= q.min[1] + TOL && q.min[1] - fy[p.floor] < 1.54);
+            if (q) { H = h; pc = p; g = q; break; } }
+          if (H) break; } }
+      let errs = ["no piece in " + Math.min(PS.length, 120) + " parcels uses the relaxation"];
+      if (H && checkHouse(H, HGmod, MAN).some((e) => e.includes("part outside its colliders"))) errs = ["the house fails before the plant"];
+      else if (H) { g.min[1] = H.floors[pc.floor].y + 1.60; try { errs = checkHouse(H, HGmod, MAN); } catch (e) { errs = ["threw: " + e.message]; } }
+      ok(errs.some((e) => e.includes("part outside its colliders")), "negative control [vis-col relaxation]: a " + (pc ? pc.cat : "?") + " collider lifted to 1.60 m over the floor (a crouched mover fits under) leaves its part uncovered - caught", errs.slice(0, 2).join(" | ") || "no error raised"); }
     const p2 = Object.assign({}, PS[0], { theme: "city", storeys: 2 });
     ok(fnv(JSON.stringify(HGmod.generate(p2))) !== fnv(JSON.stringify(HGmod.generate(Object.assign({}, p2, { seed: (p2.seed + 1) >>> 0 })))), "negative control [determinism]: a different seed gives a different house (the hash compare bites)");
   }
