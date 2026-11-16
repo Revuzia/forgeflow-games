@@ -690,7 +690,7 @@
      0.79
     ],
     "hex": "#948ABE",
-    "L": 52,
+    "L": 56,
     "C": 4,
     "k": 1.0
    },
@@ -977,43 +977,13 @@
   "islandGrow": 4,
   "zones": [
    {
-    "why": "orch1 UNITS2: the straw brim a deeper honey straw (the far brim leads the top-down read)",
+    "why": "orch1 UNITS2: the pale straw cone a touch less saturated and a hair yellower (the top read HSV 36-39 at S 0.39-0.40 on the reserved harm band edge, and sat 17 deg from Sukri). No crown zone: a dark crown reads as the ground's shadow and drops out of the units_gate silhouette, a pale one pushed the top quarter over L* 85 (P4 crown break left open)",
     "parts": [
      "hat_cone"
     ],
-    "cyls": [
-     [
-      -0.01,
-      0.0,
-      0.3,
-      0.6,
-      1.6,
-      2.0
-     ]
-    ],
     "hex": "#A68E5C",
-    "L": 58,
-    "C": 16
-   },
-   {
-    "why": "orch1 UNITS2: crown break (P4: the straw disc read one value from rim to crown, dL 1.3): the cone round the knob a pale bleached straw over the deeper brim (a dark crown reads as the ground's shadow at the game camera, units_gate drops it)",
-    "parts": [
-     "hat_cone"
-    ],
-    "cyls": [
-     [
-      -0.01,
-      0.0,
-      0.0,
-      0.3,
-      1.6,
-      2.0
-     ]
-    ],
-    "hex": "#A68E5C",
-    "L": 88,
-    "C": 12,
-    "k": 0.5
+    "L": 74,
+    "C": 22
    }
   ]
  }
