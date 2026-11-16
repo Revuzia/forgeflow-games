@@ -6,6 +6,7 @@
 // Acts: 2 per game day (every half day) at the largest living town, rotating through the behaviour's list.
 import { Sim } from '../../src/sim/sim.ts';
 import { GODS } from '../../src/sim/people/defs.ts';
+import { AgentFlag } from '../../src/sim/types.ts';
 
 const [scen = 'default', beh = 'none', seedS = '1', yearsS = '10', nS = '20'] = process.argv.slice(2);
 const seed = Number(seedS), years = Number(yearsS);
@@ -44,6 +45,7 @@ function target() {
 }
 const sum = (): number => ps.settlements.reduce((a, s) => a + (s.worshipBy?.[0] ?? 0), 0);
 
+const road = new Map<number, number>(); // spec 2.1 hysteresis: id -> 1 trust, 2 fear (trustLine .50 keep .50, fearLine .35 keep .04)
 let popMax = 12, actN = 0, actOk = 0, acted = 0, nextAct = 0;
 const cross: Record<string, number> = { F3: -1, F20: -1, F70: -1, F200: -1, R3: -1, R20: -1, R70: -1, R200: -1 };
 const rows: number[][] = [];
@@ -62,6 +64,7 @@ for (let d = 1; d <= days; d++) {
     }
     sim.step(Math.round(day / 2));
   }
+  let rT = 0, rF = 0, gp = 0, bel = 0;
   let pop = 0, F = 0, f30 = 0, f55 = 0, e30 = 0, e55 = 0, l30 = 0, l55 = 0, fe30 = 0, fe55 = 0, fl30 = 0, fl55 = 0;
   for (let s = 0; s < A.hi; s++) {
     if (!A.alive[s]) continue;
@@ -70,11 +73,28 @@ for (let d = 1; d <= days; d++) {
     if (f >= 0.3) f30++; if (f >= 0.55) f55++;
     if (e >= 0.3) e30++; if (e >= 0.55) e55++;
     if (l >= 0.3) l30++; if (l >= 0.55) l55++;
+    if (!(A.flags[s] & AgentFlag.child)) {
+      gp++;
+      const id = A.id[s], cur = road.get(id) ?? 0;
+      if (f >= 0.2999) {
+        bel++;
+        let nr = cur;
+        if (cur === 1 && l < 0.5) nr = 0; else if (cur === 2 && e < 0.04) nr = 0;
+        if (nr === 0 || cur !== nr || true) {
+          const tOk = l >= 0.5 && l >= e, fOk = e >= 0.35 && e > l;
+          if (nr === 0) nr = tOk ? 1 : fOk ? 2 : 0;
+          else if (nr === 2 && tOk) nr = 1; else if (nr === 1 && fOk) nr = 2;
+        }
+        road.set(id, nr);
+        if (nr === 1) rT++; else if (nr === 2) rF++;
+      } else road.delete(id);
+    }
     if (f >= 0.3 && e >= 0.3) fe30++; if (f >= 0.55 && e >= 0.55) fe55++;
     if (f >= 0.3 && l >= 0.3) fl30++; if (f >= 0.55 && l >= 0.55) fl55++;
   }
-  F = f30 + f55;
-  popMax = Math.max(popMax, pop);
+  F = bel + rT + rF; // v2 F: grown believers + those on a road
+  const Fv1 = f30 + f55;
+  popMax = Math.max(popMax, gp);
   const S = F / (2 * popMax);
   const th: [string, number, boolean][] = [['3', 3, F >= 3], ['20', 20, F >= 20 || S >= 0.35], ['70', 70, F >= 70 || (S >= 0.6 && F >= 30)], ['200', 200, F >= 200 || (S >= 0.8 && F >= 60)]];
   for (const [k, n, ok] of th) {
@@ -85,7 +105,7 @@ for (let d = 1; d <= days; d++) {
     const gen = sum();
     let sh = 0, tp = 0;
     for (const b of ps.buildings) if (b.progress >= 1) { if (b.type === SHRINE) sh++; else if (b.type === TEMPLE) tp++; }
-    rows.push([pop, f30, f55, e30, e55, l30, l55, fe30, fe55, fl30, fl55, Math.round(gen * 100) / 100, Math.round(ps.worship[0] * 100) / 100, sh, tp, F, Math.round(S * 1000) / 1000, popMax]);
+    rows.push([pop, f30, f55, e30, e55, l30, l55, fe30, fe55, fl30, fl55, Math.round(gen * 100) / 100, Math.round(ps.worship[0] * 100) / 100, sh, tp, F, Math.round(S * 1000) / 1000, popMax, rT, rF, bel, Fv1, ps.settlements.filter((q) => q.fallen < 0 && !q.band).length]);
     void lastGen; lastGen = gen;
   }
 }

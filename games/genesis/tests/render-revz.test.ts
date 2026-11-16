@@ -76,3 +76,20 @@ test('revz: a frustum from a reversed projection culls like the standard one', (
   }
   assert.ok(inside > 50 && inside < n - 50, `a real mix of inside / outside (${inside}/${n})`);
 });
+
+test('revz: the view ray un-projected through the near plane is the same in both conventions (decals, vfx, rainbow, clouds, gtao)', () => {
+  // the shaders' `uInvProj * vec4(ndc.xy, GENESIS_NDC_NEAR, 1.0)`: NEAR = -1 with the standard projection, +1 reversed
+  const std = new PerspectiveCamera(50, 16 / 9, CAM_NEAR, CAM_FAR);
+  const rev = new PerspectiveCamera(50, 16 / 9, CAM_NEAR, CAM_FAR);
+  (rev as unknown as { _reversedDepth: boolean })._reversedDepth = true;
+  std.updateProjectionMatrix(); rev.updateProjectionMatrix();
+  for (const [x, y] of [[0, 0], [-1, -1], [1, 1], [0.37, -0.81], [-0.999, 0.5]]) {
+    const a = new Vector3(x, y, -1).applyMatrix4(std.projectionMatrixInverse);
+    const b = new Vector3(x, y, 1).applyMatrix4(rev.projectionMatrixInverse);
+    assert.ok(a.z < 0 && b.z < 0, 'in front of the eye');
+    assert.ok(a.distanceTo(b) < 1e-6 * a.length(), `same near-plane point at ndc ${x}, ${y}`);
+    // and what the OLD constant did with a reversed projection: a point BEHIND the eye (why every site changed)
+    const wrong = new Vector3(x, y, -1).applyMatrix4(rev.projectionMatrixInverse);
+    assert.ok(wrong.z > 0, 'ndc z = -1 un-projects behind the eye when reversed');
+  }
+});
