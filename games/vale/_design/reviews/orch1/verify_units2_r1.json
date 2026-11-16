@@ -1,0 +1,40 @@
+{
+  "lane": "UNITS2",
+  "round": 1,
+  "verifier": "independent adversarial colour + sensitivity verifier (opus)",
+  "at": "2026-11-16 (US Central)",
+  "head": "e1633b630 (GLBs via wip syncs 395c26ddf..17d627ff2); baseline = W1-B head 72cd0f20e",
+  "pass": false,
+  "score": 5.0,
+  "safeToShip": false,
+  "blockers": [
+    "Ilsheta's face texels were regraded: the pale mask with amber eyes is now solid teal (the 'hood' part zone covers the face island). Face texels changed on 96.7 % of my head-skinned forward-facing mask (mean |dRGB| 118). In three r186 the face is a flat teal oval the same hue as the hood, the eyes no longer read, and the zone edge is stair-stepped across the face. Lane rule 'never head or face geometry or face texels' is broken, the face reads as blank or alien at 128 px, and it no longer matches the silver-masked portrait or splash. Evidence: _harness/_tmp_vfy_units2_ab/ab_ilsheta.jpg and ilsheta_face_albedo_base_vs_head.png",
+    "units_gate does not pass outright: FAIL, 7 fails over 3 seeds x 3 seatings (Done-when bar)"
+  ],
+  "doneWhen": {
+    "unitsGatePass": {"holds": false, "evidence": "my run _design/reviews/orch1/evidence/units/verify_units2_r1.json (+ _sheet.png): seeds 7,11,23 x 3 seatings, 16/16 fighters seen 9/9, 0 errors, 441 s. FAIL, 7 fails, identical to the implementer's units2_final: P1 near-neutral ardit-hesmi 18.7, hesmi-rishal 15.9, nurrow-rishal 20.0 (19.96); P3 hesmi 69.7; P4 nurrow dL 0.7, rishal 3.5, sukri 5.8. The W1-B head had 15 fails under the old rule (25 under ruling 45)."},
+    "clearedFromBrief": {"holds": "partly", "evidence": "all 6 chromatic P1 pairs clear; P3 burdam 70.2, sukri 80.6, tunlan 79.3 now pass; P4 ilsheta, marund, vashil now pass; hesmi-ilsheta dEMin is no longer the worst pair; ardit-ervet passes on the hue gap (dEMin 11.8, hue gap about 119 deg). Still open: P4 nurrow, rishal, sukri; hesmi P3; the Odrum gourd ring patch and the warmer honey mask were not done (Odrum GLB is byte-identical to the base)."},
+    "ruling32Harm": {"holds": true, "evidence": "harm-band share of the base albedo, max(8-bit PIL-style, float HSV): burdam 6.96 % (float), sukri 6.72, marund 5.09, kemdo 4.78, tunlan 4.32, odrum 4.96; all others <= 1.2 %. Every lane GLB <= 7 %. Other bands: rishal tritanAltRose 6.70 (base 6.66), hesmi heal 4.32 (base 1.36), sukri heal 2.17 (base 0)."},
+    "glbBudget": {"holds": true, "evidence": "KiB: rishal 1161.8, burdam 1159.4, vashil 1158.4, sukri 1157.8, tunlan 1155.1, marund 1153.8, ilsheta 1153.1, nurrow 1152.1, ardit 1152.0, kemdo 1149.4, odrum 1148.2, hesmi 1125.5; all <= 1172"},
+    "triangles": {"holds": true, "evidence": "index-accessor triangle counts identical to 72cd0f20e for all 12 GLBs. perf_1080 --prod seed 23 was not re-run, by the implementer or by me; the peak should be unchanged because the geometry is the same."},
+    "facesUnaltered": {"holds": false, "evidence": "head texel diff vs 72cd0f20e (head-skinned triangles; my 'face' mask is the forward-facing lower 60 % of the head, a crude mask that also catches hood and helm fronts): ilsheta face 96.7 % of texels changed by more than 12 levels, mean 118 (a real face change, confirmed by render); sukri 36.6 % (render shows hood rim only; the wooden face is unchanged); vashil 33 % (hood; face unchanged); ardit 55.6 %, kemdo 38 %, nurrow 32 % (hood or wrap fronts; faces unchanged in render); tunlan 0.03 %, hesmi 2.8 %, burdam 0.7 %, odrum 0."},
+    "sensitivityRenders": {"holds": false, "evidence": "three r186 sheets, base vs HEAD, of all 11 changed fighters: gameplay camera 8 facings 1:1, 3/4 close-ups, plus 128 and 64 px downsamples: _harness/_tmp_vfy_units2_ab/ab_<fighter>.jpg. Ilsheta is the blocker above. The other 10 show no new skull, bone, mannequin or glowing-eye read. Rishal's pale helm face, Kemdo's face wrap and Tunlan's carved face are unchanged from the base."},
+    "teamReadability": {"holds": true, "evidence": "no top median in the ally band (P2 clean). Ally-band share of the top cluster: hesmi 0.164, rishal 0.114, dunsom 0.077, ardit 0.058; all others <= 0.042. Tunlan top HSV 232 at S 0.32 and Ardit top HSV 189.7 sit outside 200-225."},
+    "readsAsItselfVsCards": {"holds": false, "evidence": "Ilsheta's portrait and splash show a cream hood and a silver mask; in game she now has a deep teal hood, a teal face and a teal chimney. Burdam's tunic is baby pink with blotchy brown lower patches, where the card shows warm cream and tan. Sukri's hood is split into a pale crown and deep green with a hard horizontal line. The others still match their cards' families."}
+  },
+  "qualityRegressions": [
+    "Sukri hood: a hard horizontal value split, and the zone's UV seam shows as a jagged blue-grey zigzag line on the pale crown in the close views",
+    "Burdam tunic: a pink-and-brown blotchy pattern on the lower tunic in the close views; the top-down read is oxblood",
+    "Ilsheta mantle: a hard horizontal box cut between the teal top and the white lower mantle",
+    "Hesmi: hard cream blotches on the shoulder blocks and the leg shards (the W1-B plan asked for the cream creases to be baked out)",
+    "Rishal shoulder wing regraded red, with visible box-zone seams"
+  ],
+  "gateCodeChange": "_harness/units_gate.mjs diff vs 72cd0f20e is limited to the near-neutral P1 rule (NEUTRAL_C 15, NEUTRAL_DE 20, the fail type 'P1 near-neutral pair') plus doc comments, as ruling 45 says. Ruling 45 is recorded in owner_rulings.md. content/version.json is 2026.11.7.",
+  "implementerClaimsChecked": "gate numbers reproduce exactly (7 fails, the same values). GLB sizes, triangle counts and harm <= 7 % reproduce; my burdam harm is 6.96 % float against the implementer's 6.92. The claim 'no head geometry was touched' holds (triangles unchanged), but the face texels were touched on Ilsheta, and the implementer made no face renders that would have caught it.",
+  "fixNext": [
+    "Ilsheta: take the face island out of the hood zone (a notParts/face exclusion or the head-texel mask from W1-B fix 3) and restore the pale mask and amber eyes byte-for-byte from 72cd0f20e; keep the teal on the hood fabric only",
+    "Smooth or feather the Sukri hood split and the Ilsheta mantle cut; repad the Sukri crown seam (gutterFill)",
+    "Burdam: one even oxblood tunic without the blotchy lower patches",
+    "Close the remaining 7 units_gate fails (Hesmi P3 and its three near-neutral pairs; the crown break on Nurrow, Rishal and Sukri), or take a lead ruling on the measurement limits the implementer found"
+  ]
+}

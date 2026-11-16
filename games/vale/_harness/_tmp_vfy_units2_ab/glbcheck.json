@@ -1,0 +1,430 @@
+{
+ "nurrow": {
+  "kib": 1152.1,
+  "kibBase": 1135.6,
+  "tris": 21151,
+  "trisBase": 21151,
+  "reserved": {
+   "ally": 0,
+   "harm": 0.82,
+   "tritanAltRose": 0.15,
+   "heal": 0
+  },
+  "reservedBase": {
+   "ally": 0,
+   "harm": 2.09,
+   "tritanAltRose": 0.21,
+   "heal": 0
+  },
+  "all": {
+   "texels": 4191790,
+   "meanAbs": 7.52,
+   "shareGt12": 0.2001
+  },
+  "headNonFace": {
+   "texels": 342597,
+   "meanAbs": 14.84,
+   "shareGt12": 0.4885
+  },
+  "face": {
+   "texels": 44865,
+   "meanAbs": 11.17,
+   "shareGt12": 0.3208
+  },
+  "materialsChanged": [
+   {
+    "name": "body"
+   }
+  ]
+ },
+ "tunlan": {
+  "kib": 1155.1,
+  "kibBase": 1154.3,
+  "tris": 21228,
+  "trisBase": 21228,
+  "reserved": {
+   "ally": 0,
+   "harm": 4.41,
+   "tritanAltRose": 0,
+   "heal": 0
+  },
+  "reservedBase": {
+   "ally": 0,
+   "harm": 4,
+   "tritanAltRose": 0,
+   "heal": 0
+  },
+  "all": {
+   "texels": 4194304,
+   "meanAbs": 12.72,
+   "shareGt12": 0.2907
+  },
+  "headNonFace": {
+   "texels": 875937,
+   "meanAbs": 34.05,
+   "shareGt12": 0.7513
+  },
+  "face": {
+   "texels": 48796,
+   "meanAbs": 1.37,
+   "shareGt12": 0.0003
+  },
+  "materialsChanged": []
+ },
+ "sukri": {
+  "kib": 1157.8,
+  "kibBase": 1154.2,
+  "tris": 16260,
+  "trisBase": 16260,
+  "reserved": {
+   "ally": 0,
+   "harm": 6.73,
+   "tritanAltRose": 0,
+   "heal": 2.17
+  },
+  "reservedBase": {
+   "ally": 0,
+   "harm": 7.8,
+   "tritanAltRose": 0,
+   "heal": 0
+  },
+  "all": {
+   "texels": 4194304,
+   "meanAbs": 9.62,
+   "shareGt12": 0.0753
+  },
+  "headNonFace": {
+   "texels": 228055,
+   "meanAbs": 67.14,
+   "shareGt12": 0.5877
+  },
+  "face": {
+   "texels": 63391,
+   "meanAbs": 41.04,
+   "shareGt12": 0.3657
+  },
+  "materialsChanged": []
+ },
+ "kemdo": {
+  "kib": 1149.4,
+  "kibBase": 1146.1,
+  "tris": 18389,
+  "trisBase": 18389,
+  "reserved": {
+   "ally": 0,
+   "harm": 4.79,
+   "tritanAltRose": 0,
+   "heal": 0
+  },
+  "reservedBase": {
+   "ally": 0,
+   "harm": 4.94,
+   "tritanAltRose": 0,
+   "heal": 0
+  },
+  "all": {
+   "texels": 4194304,
+   "meanAbs": 3.46,
+   "shareGt12": 0.0473
+  },
+  "headNonFace": {
+   "texels": 183945,
+   "meanAbs": 17.32,
+   "shareGt12": 0.4362
+  },
+  "face": {
+   "texels": 27511,
+   "meanAbs": 15.06,
+   "shareGt12": 0.3814
+  },
+  "materialsChanged": []
+ },
+ "burdam": {
+  "kib": 1159.4,
+  "kibBase": 1159.1,
+  "tris": 20448,
+  "trisBase": 20448,
+  "reserved": {
+   "ally": 0,
+   "harm": 7.42,
+   "tritanAltRose": 0.09,
+   "heal": 0
+  },
+  "reservedBase": {
+   "ally": 0,
+   "harm": 8.41,
+   "tritanAltRose": 0,
+   "heal": 0
+  },
+  "all": {
+   "texels": 4194303,
+   "meanAbs": 13.91,
+   "shareGt12": 0.1433
+  },
+  "headNonFace": {
+   "texels": 57847,
+   "meanAbs": 2.26,
+   "shareGt12": 0.0065
+  },
+  "face": {
+   "texels": 9351,
+   "meanAbs": 3,
+   "shareGt12": 0.0068
+  },
+  "materialsChanged": []
+ },
+ "ilsheta": {
+  "kib": 1153.1,
+  "kibBase": 1153.9,
+  "tris": 18272,
+  "trisBase": 18272,
+  "reserved": {
+   "ally": 0.25,
+   "harm": 0.01,
+   "tritanAltRose": 0,
+   "heal": 0.89
+  },
+  "reservedBase": {
+   "ally": 0.21,
+   "harm": 0.02,
+   "tritanAltRose": 0,
+   "heal": 0
+  },
+  "all": {
+   "texels": 4194280,
+   "meanAbs": 26.02,
+   "shareGt12": 0.2883
+  },
+  "headNonFace": {
+   "texels": 135341,
+   "meanAbs": 123.1,
+   "shareGt12": 0.9746
+  },
+  "face": {
+   "texels": 39419,
+   "meanAbs": 117.78,
+   "shareGt12": 0.9669
+  },
+  "materialsChanged": [
+   {
+    "name": "gem_chimglass",
+    "before": [
+     0.6514056921005249,
+     0.7454043626785278,
+     0.8069523572921753,
+     0.4000000059604645
+    ],
+    "after": [
+     0.03,
+     0.17,
+     0.13,
+     0.8
+    ]
+   }
+  ]
+ },
+ "marund": {
+  "kib": 1153.8,
+  "kibBase": 1154.4,
+  "tris": 18725,
+  "trisBase": 18725,
+  "reserved": {
+   "ally": 0,
+   "harm": 5.21,
+   "tritanAltRose": 0.01,
+   "heal": 0.28
+  },
+  "reservedBase": {
+   "ally": 0,
+   "harm": 5.12,
+   "tritanAltRose": 0.01,
+   "heal": 0.07
+  },
+  "all": {
+   "texels": 4194284,
+   "meanAbs": 3.15,
+   "shareGt12": 0.0942
+  },
+  "headNonFace": {
+   "texels": 527060,
+   "meanAbs": 12.98,
+   "shareGt12": 0.5659
+  },
+  "face": {
+   "texels": 43450,
+   "meanAbs": 4.38,
+   "shareGt12": 0.1887
+  },
+  "materialsChanged": []
+ },
+ "rishal": {
+  "kib": 1161.8,
+  "kibBase": 1159.1,
+  "tris": 20354,
+  "trisBase": 20354,
+  "reserved": {
+   "ally": 1.12,
+   "harm": 0.42,
+   "tritanAltRose": 6.7,
+   "heal": 0
+  },
+  "reservedBase": {
+   "ally": 1.13,
+   "harm": 0.32,
+   "tritanAltRose": 6.66,
+   "heal": 0
+  },
+  "all": {
+   "texels": 4194304,
+   "meanAbs": 6.09,
+   "shareGt12": 0.0724
+  },
+  "headNonFace": {
+   "texels": 128619,
+   "meanAbs": 22.09,
+   "shareGt12": 0.6637
+  },
+  "face": {
+   "texels": 26941,
+   "meanAbs": 6.46,
+   "shareGt12": 0.1791
+  },
+  "materialsChanged": []
+ },
+ "vashil": {
+  "kib": 1158.4,
+  "kibBase": 1152,
+  "tris": 22946,
+  "trisBase": 22946,
+  "reserved": {
+   "ally": 0.03,
+   "harm": 0.05,
+   "tritanAltRose": 0.01,
+   "heal": 0
+  },
+  "reservedBase": {
+   "ally": 0.02,
+   "harm": 0.06,
+   "tritanAltRose": 0,
+   "heal": 0
+  },
+  "all": {
+   "texels": 4194304,
+   "meanAbs": 6.96,
+   "shareGt12": 0.094
+  },
+  "headNonFace": {
+   "texels": 266994,
+   "meanAbs": 39.59,
+   "shareGt12": 0.595
+  },
+  "face": {
+   "texels": 35681,
+   "meanAbs": 30.32,
+   "shareGt12": 0.3298
+  },
+  "materialsChanged": []
+ },
+ "hesmi": {
+  "kib": 1125.5,
+  "kibBase": 1114.4,
+  "tris": 19883,
+  "trisBase": 19883,
+  "reserved": {
+   "ally": 0.17,
+   "harm": 0.02,
+   "tritanAltRose": 0.01,
+   "heal": 4.32
+  },
+  "reservedBase": {
+   "ally": 0.18,
+   "harm": 0.02,
+   "tritanAltRose": 0.02,
+   "heal": 1.36
+  },
+  "all": {
+   "texels": 4194299,
+   "meanAbs": 8.44,
+   "shareGt12": 0.115
+  },
+  "headNonFace": {
+   "texels": 100337,
+   "meanAbs": 9.5,
+   "shareGt12": 0.3387
+  },
+  "face": {
+   "texels": 11953,
+   "meanAbs": 3.53,
+   "shareGt12": 0.0279
+  },
+  "materialsChanged": []
+ },
+ "ardit": {
+  "kib": 1152,
+  "kibBase": 1155.2,
+  "tris": 21149,
+  "trisBase": 21149,
+  "reserved": {
+   "ally": 0.71,
+   "harm": 1.11,
+   "tritanAltRose": 0,
+   "heal": 0
+  },
+  "reservedBase": {
+   "ally": 1.13,
+   "harm": 1.05,
+   "tritanAltRose": 0,
+   "heal": 0.01
+  },
+  "all": {
+   "texels": 4194041,
+   "meanAbs": 4.44,
+   "shareGt12": 0.1301
+  },
+  "headNonFace": {
+   "texels": 91513,
+   "meanAbs": 17.41,
+   "shareGt12": 0.7842
+  },
+  "face": {
+   "texels": 11035,
+   "meanAbs": 12.87,
+   "shareGt12": 0.5555
+  },
+  "materialsChanged": []
+ },
+ "odrum": {
+  "kib": 1148.2,
+  "kibBase": 1148.2,
+  "tris": 19544,
+  "trisBase": 19544,
+  "reserved": {
+   "ally": 0,
+   "harm": 5.04,
+   "tritanAltRose": 0,
+   "heal": 0
+  },
+  "reservedBase": {
+   "ally": 0,
+   "harm": 5.04,
+   "tritanAltRose": 0,
+   "heal": 0
+  },
+  "all": {
+   "texels": 4194226,
+   "meanAbs": 0,
+   "shareGt12": 0
+  },
+  "headNonFace": {
+   "texels": 351784,
+   "meanAbs": 0,
+   "shareGt12": 0
+  },
+  "face": {
+   "texels": 59865,
+   "meanAbs": 0,
+   "shareGt12": 0
+  },
+  "materialsChanged": []
+ }
+}
