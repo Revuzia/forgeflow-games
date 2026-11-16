@@ -228,6 +228,56 @@ WATCH_JS = r"""([ids]) => { const M = window.__LC__.W.map, out = [];
       const e = [R.cx, R.y + 1.6, R.cz];
       out.push({ id: H.id, room: R.id, specs: [0, 1.5708, 3.1416, 4.7124].map((yw) => e.concat([R.cx + Math.sin(yw) * 6, R.y + 1.55, R.cz + Math.cos(yw) * 6, 70])) }); } }
   return out; }"""
+# fix6: interiorcheck's OWN views of the rooms it read darkest (the verifier of fix5: the watch house seen from this gate's 4 level headings read
+# 28.0 / 255 on the R2A merge while interiorcheck read 21.39 there - not the same cameras). A separate Chrome per entry stands up exactly what
+# interiorcheck does (PRACTICE match, seed 7, its page probe probe_interior*.js, the door-leaf adapter on the match source, its seeded 10-house
+# sample) and renders the watched houses through its own views(): every room entrance (door / stair top) and the room centre x 4 headings, from the
+# player's third-person camera. Watched: interiorcheck's darkest rooms on the R2A merge (match isla_viva volcano_rim@p54 f0r1 / f0r2; ashgrid's
+# downtown houses of its sample), housegen ashgrid s7h2 (f0r3 23.25 / dark 0.48) and the fixture house (kitchen dark 0.36).
+IC_WATCH = [("match", "isla_viva", ["volcano_rim@p54"]), ("match", "ashgrid", ["downtown@p4", "downtown@p27", "downtown@p44"]),
+            ("housegen", "ashgrid", ["s7h2"]), ("fixture", "ashgrid", None)]          # None = every injected house
+
+
+def part_icwatch(args, plant, v, shots):
+    import interiorcheck as IC
+    out = []
+    for src, map_id, ids in IC_WATCH:
+        with C.Session(args, "w10_waterlook_ic") as s:
+            plant(s)
+            s.boot()
+            s.start_match(mode="practice", seed=SEED, map_id=map_id, guard=True)
+            s.freeze_loop()
+            s.js("() => { const p = window.__LC__.W.player; return !!p; }")
+            s.js(IC.read(IC.LIB)); s.js(IC.read(IC.FIX))
+            if os.path.exists(IC.HGA):
+                s.js(IC.read(IC.HGA))
+            s.js(IC.read(IC.PAGE))
+            setup = s.js("(o) => window.__LCINT_PAGE__.setup(o)", {"source": src, "plant": None, "seed": SEED, "exposeRecords": False})
+            if setup and setup.get("error"):
+                out.append({"src": src, "map": map_id, "error": setup["error"]})
+                continue
+            if src == "match":
+                s.js("(o) => (" + IC.LEAF_JS + ")(o)", {"plant": None, "layer": IC.LEAF_LAYER})
+            hl = s.js("(o) => window.__LCINT_PAGE__.houses(o)", {"max": 10, "seed": SEED})
+            lst = [h["id"] for h in (hl.get("list") or [])]
+            for i, hid in enumerate(lst):
+                if ids is not None and hid not in ids:
+                    continue
+                vw = s.js("([i, n]) => window.__LCINT_PAGE__.views(i, { shots: n })", [i, 2])
+                for k, sh in enumerate(vw.pop("shots", [])):
+                    save(sh["url"], shots, "ic_%s_%s_%s.png" % (src, map_id, sh["name"].replace("@", "_").replace(".", "_")))
+                for e in vw.get("entrances", []) + vw.get("centres", []):
+                    out.append({"src": src, "map": map_id, "house": hid, "room": e["room"], "view": e.get("from") or e.get("yaw"),
+                                "mean": e["luma"]["mean"], "dark": e["luma"]["dark"]})
+            got = sorted(set(o["house"] for o in out if o.get("src") == src and o.get("map") == map_id and o.get("house")))
+            miss = [h for h in (ids or []) if h not in got] if ids else ([] if got else ["(no injected house)"])
+            if miss:
+                out.append({"src": src, "map": map_id, "error": "watched house(s) not in interiorcheck's sample: %s (sample %s)" % (miss, lst)})
+            print("  [icwatch %s %s] %d views of %s; darkest %s" % (src, map_id, sum(1 for o in out if o.get("src") == src and o.get("map") == map_id and "mean" in o), got,
+                  sorted([(o["mean"], o["dark"], o["house"], o["room"], o["view"]) for o in out if o.get("src") == src and o.get("map") == map_id and "mean" in o])[:2]), flush=True)
+    return out
+
+
 ROOMS_JS = r"""([poi]) => { const W = window.__LC__.W, M = W.map; const P = M.pois.find((p) => p.id === poi) || M.pois[0]; const hs = (M.houses || []).map((H, i) => [H, i]);
   hs.sort((a, b) => Math.hypot(a[0].cx - P.x, a[0].cz - P.z) - Math.hypot(b[0].cx - P.x, b[0].cz - P.z));
   const out = [];
@@ -831,6 +881,8 @@ def main():
                     s.step_frames(6, 1 / 30, render=True)
                     progs.append(["isla_viva %s" % tier, p0, L.programs(s)])
                     diag.append(s.diagnostics())
+        if "light" in want:
+            R["icWatch"] = part_icwatch(args, plant, v, shots)
         R["programs"] = progs
         # ---------------- base numbers
         base = None
@@ -944,13 +996,16 @@ def main():
                 vw = [(m, x["house"], j, w) for m in maps for x in (R.get(m, {}).get("interiors") or []) for j, w in enumerate(x.get("views") or [])]
                 vw += [(m, "%s %s" % (w["house"], w["room"]), w["view"], w) for m in maps for w in ((R.get(m, {}).get("interiorsWatch") or {}).get("views") or [])]
                 wmis = [m for m in maps if (R.get(m, {}).get("interiorsWatch") or {}).get("want") and not R[m]["interiorsWatch"]["views"]]
+                icw = R.get("icWatch") or []
+                vw += [(w["map"], "interiorcheck %s %s %s" % (w["src"], w["house"], w["room"]), w["view"], w) for w in icw if "mean" in w]
+                wmis += [w["error"] for w in icw if "error" in w] or ([] if icw else ["interiorcheck views: none rendered"])
                 bad = [q for q in vw if q[3]["mean"] < 25.0 or q[3]["dark"] > 0.30]
                 worst = sorted(vw, key=lambda q: q[3]["mean"])[:3]
                 wdk = sorted(vw, key=lambda q: -q[3]["dark"])[:3]
                 if not vw or wmis:
                     v.cnj("light: interiors darkest view", "no per-view numbers (a build measured before fix5) or a watch house not found: %s" % wmis)
                 else:
-                    v.check("light: interiors darkest view - every view of every room (4 headings, 3 houses per map + the watch houses' ground-floor rooms) mean luma >= 25 / 255 and dark share (< 16 / 255) <= 30 % (interiorcheck's bar)",
+                    v.check("light: interiors darkest view - every view of every room (4 headings, 3 houses per map + the watch houses' ground-floor rooms + interiorcheck's own views of its darkest houses: match isla_viva volcano_rim@p54, ashgrid downtown, housegen s7h2, the fixture) mean luma >= 25 / 255 and dark share (< 16 / 255) <= 30 % (interiorcheck's bar)",
                             not bad, {"views": len(vw), "bad": bad[:6], "darkestMean": worst, "darkestShare": wdk}, ">= 25 / 255, <= 0.30")
         if "grass" in want:
             gr = {m: R.get(m, {}).get("grass") for m in maps}
