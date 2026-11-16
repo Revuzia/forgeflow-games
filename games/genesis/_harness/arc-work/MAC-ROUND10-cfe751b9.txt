@@ -1,0 +1,39 @@
+GENESIS Mac ROUND 10, build cfe751b9 (all 20 headers say "cfe751b9+dirty built 2026-11-16T16:53Z"). Full reports attached.
+Clean Chrome, 1686x963 render, Ultra, every run landed at 59.7 m.
+Reference base = 1.8 fps (runs 4/8/12/16); runs 1 and 20, at the start and end, gave 1.2.
+
+run switch                                       fps  p50/p95 ms
+ 1  base                                         1.2  768/1600
+ 2  tshade=all                                   4.7  217/234    2.6x faster
+ 3  tshade=nonoise                               2.6  399/417    1.4x
+ 4  base                                         1.8  566/584
+ 5  tshade=albedo                                1.6  617/683    no gain
+ 6  tshade=nosurf                                3.9  251/268    2.2x faster
+ 7  tshade=noveg                                 1.9  517/600
+ 8  base                                         1.8  550/618
+ 9  tshade=nofloor                               1.6  633/700
+10  tshade=novor                                 1.5  683/750
+11  vshade=all                                   2.0  516/600
+12  base                                         1.8  566/634
+13  bshade=all                                   1.8  551/617
+14  wshade=all                                   1.6  632/699
+15  tshade=all&vshade=all&bshade=all&wshade=all  5.8  169/185    3.2x faster
+16  base                                         1.8  550/616
+17  hide=veg                                     1.6  633/1267   no gain
+18  zpre=1                                       1.8  550/1135
+19  zpre=1&revz=1                                1.5  667/781
+20  base                                         1.2  867/950
+
+The cost is the terrain's surface shading: tshade=all 2.6x, nosurf 2.2x, nonoise 1.4x.
+  Unlit ground (albedo) gains nothing, so the cost is in the surface/noise part, not the lighting.
+Trees, buildings and water shading are within noise. Removing all trees and plants (hide=veg) gains nothing.
+
+LOOK CHECKS
+Run 18 zpre=1: matches base. No holes, no missing patches.
+Run 19 zpre=1&revz=1: matches base. No holes, no missing patches.
+No flicker seen (at ~1.7 fps only single frames could be compared).
+
+OVERDRAW: mostly dark orange (1-2 layers).
+  Brightest on the tree canopy along the hill crests and on the trunk/stalk clusters.
+  The terrain triangle edges show as a bright wire mesh.
+  No large bright block, so overdraw is not the main cost.
