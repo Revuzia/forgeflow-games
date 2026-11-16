@@ -4222,6 +4222,11 @@ const DECK_DROP = 1.4;            // the floor ends where the support under the 
 const DECK_HOP = 1.25;            // a wall up to this high is hopped; a higher one blocks the heading
 const DECK_NOROUTE_S = 3.0;       // a path request answered "no route" this recently counts (requestPath sets bb.noRouteT)
 const DECK_RETRY_S = 1.0;         // a roof exit is looked for at most this often
+// (W10 R1A fix6, roofland ashgrid seed 22: s9's glide ended on a 79 m tower top - one flat box, its edge 0.3 m away - and it stood there 40 s: the
+// exit refused every edge as a drop over walkDrop, and edgeGuard held the walk at the lip.) A drop this high is the one a player takes with the canopy:
+// a bot falling faster than 12 m/s more than 14 m over its support opens it (player.js, C-FALL; chuteRescue asks the same from 12 m) after ~3.3 m of
+// fall, and a canopy touchdown is never a fall. 26 m = 3.3 m of fall + 14 m + 2.4 m of a probe's travel at 12 m/s + margin. Only a roof EXIT path walks it.
+const DECK_CANOPY_H = 26;
 const HELD_STUCK_S = 1.0;         // held this long (the wall guard / hold-still, not counting a bot that is walking) = the hard-stuck branch of moveToward, whatever the goal-distance timer says
 const HELD_TICKS = 15;             // sim ticks (60 Hz) the wall guard must have held a bot before a route (and on a deck a roof exit) is looked for
 const HELD_RETRY_S = 1.0;         // ... and at most this often
@@ -4268,9 +4273,9 @@ function deckExitPoint(W, a, preferYaw) {
         if (W.map.heightAt(x + dx * 1.5, z + dz * 1.5) < wy + 0.4) break;      // the ground under the edge is water
         // (P23, C-FALL) with fall damage a drop is not free: never an edge that kills (walkDrop: a quarter of the hp left), and a lower edge is preferred
         // (+0.5 a hit point). Without fall damage in the sim: Infinity / 0, the old choice.
-        const drop = h - sup;
-        if (drop > walkDrop(a)) break;
-        const cost = s + Math.abs(off) * 6 + fallDmgForDrop(drop) * 0.5;
+        const drop = h - sup, canopy = drop >= DECK_CANOPY_H;
+        if (drop > walkDrop(a) && !canopy) break;
+        const cost = s + Math.abs(off) * 6 + (canopy ? 20 : fallDmgForDrop(drop) * 0.5);      // (fix6) a canopy edge is the last choice: any walkable edge first
         if (cost < best) { best = cost; _dkx.x = x + dx * 2.0; _dkx.z = z + dz * 2.0; _dkx.d = s; }
         break;
       }
@@ -5551,6 +5556,8 @@ function edgeGuard(W, b) {
       // the lip, the next leg along it) was held at the look-ahead's 4.8 m, every look, and never reached the corner (probe_match isla_viva seed 5:
       // s19 held at (-69.6, -78) heading for the corner (-71.6, -77.6) of a route north along a 8.4 m face - 3-4 stuck episodes). It WALKS to the
       // corner (no sprint, the next look 0.25 s on); past the corner the next leg's heading is looked at as any other.
+      // (W10 R1A fix6) ...and a roof EXIT path walks off an edge too high to fall: the canopy opens on the way down (DECK_CANOPY_H)
+      if (bb.path && bb.path.exit && (k <= 3 && a.pos.y - sup > lim ? a.pos.y - sup : runTop - sup) >= DECK_CANOPY_H) return;
       if (EDGE_TURN && routeTurnsBefore(W, b, wx, wz, 0.8 * ((runTop === runTop ? kTop : k) - 1), elevated)) { inp.sprint = false; bb.edgeWalkUntil = W.t + 0.3; nav.st.edgeTurns++; return; }
       bb.edgeBanX = wx; bb.edgeBanZ = wz; bb.edgeBanUntil = W.t + 0.6;
       inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false;
