@@ -213,3 +213,15 @@
   use, or fear and benevolence. both technically show g-d's existence."
 - A SPENDABLE RESOURCE (verbatim): "i like the idea of GATHERING BELIEF or FEAR as the game goes on and the npcs connect, this way you
   cannot infinitely cast/use skills, you can run out and need to regain adding a challenge. like you said 'spend worship'."
+
+## Owner rulings 2026-11-16 — POWERS-GROWTH v2 decisions
+- "all recommended" on v2 §10 decisions 1-4, 6-8, and on: slow pacing (Whispered in the first session, Known after a few hours,
+  Most High only in a long game), towers may begin naturally in large prosperous towns (about half of long games), "be kind" maps to
+  no power, difficulty medium, the four new scenarios.
+- Decision 5 CHANGED (verbatim): "i dont think just the basic powers should cost worship, i think all should. obviously larger powers
+  may require more worship - of course this all heals over time."  => EVERY power costs worship, scaled by size; the pool refills over time.
+- (verbatim) "trust and fear can be shown on a bar perhaps - also trust shouldnt wipe fear or vice versa, they can go hand in hand.
+  fear is like the negative version to earn trust, and worship is the positive version - depends on the kind of g-d you want to be."
+  => show trust and fear as two bars; neither erases the other (a person, and a people, can hold both); both earn the god's power.
+- Lead's reading, to confirm with the owner: time controls, camera, save/load and the story answers (Tower, defiance, covenant, prayer
+  answers) stay free, because they are not powers over the world but the god's replies and the game's clock.
