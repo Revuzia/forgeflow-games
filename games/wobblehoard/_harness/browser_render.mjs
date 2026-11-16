@@ -1461,30 +1461,49 @@ try {
     }
   }
 
-  // ---- PLAYGROUND S1 (PG_RENDER): section place: Hearthlog Cabin in both layouts (RD-01 boots clean, RD-07 swaps, RD-08 draw calls,
-  // RD-13 luminance, RD-17 on-screen size measured on the live camera) and FN-02's fireplace scene. ----
+  // ---- PLAYGROUND S1 / S2 (PG_RENDER): section place: Hearthlog Cabin, Ripple Shore, Frostbell Ridge and Rainleaf Garden in both layouts
+  // (RD-01 boots clean, RD-07 swaps, RD-08 draw calls, RD-13 luminance, RD-17 on-screen size measured on the live camera, re-stated in round 2
+  // to the orchestrator's model: body centres plus radius inside the insets, the bubble clamped on screen), FN-02's fireplace scene, D-80's
+  // reaction presets and the things' own effects with LIFE 10.1's particle budget, and a bubble clamped into the safe frame in a place.
+  // --places=a,b limits the places (default all four). ----
   if (ON('place')) {
     const PGOUT = resolve(OUT, 'pg');
     mkdirSync(PGOUT, { recursive: true });
     const bodyQ = BODY === 'auto' ? '' : BODY;
     const PL = (report.place = {});
+    const PLACE_IDS = typeof flag('places', '') === 'string' && flag('places', '') ? String(flag('places', '')).split(',') : ['hearthlog', 'ripple', 'frostbell', 'rainleaf'];
     for (const [label, vp, kind] of [['phone', { width: 390, height: 844 }, 'phone'], ['desktop', { width: 1280, height: 800 }, 'desktop']]) {
       const pctx2 = await browser.newContext({ viewport: vp, deviceScaleFactor: 1 });
       const { page: lp, bad: lbad } = await openView(pctx2, `quality=med&body=${bodyQ}`, `place-${label}`, [/GPU stall due to ReadPixels/i]);
-      const r = await lp.evaluate((k) => window.__RV__.pg.placeShot(k, 4), kind);
-      writeFileSync(resolve(PGOUT, `cabin_${r.layout}_${label}.png`), b64(r.png));
-      PL[label] = { layout: r.layout, setCalls: r.setCalls, setTris: r.setTris, luma: r.luma, frontPx: r.frontPx, midPx: r.midPx, info: r.info };
-      check(r.ok, `RD-01 ${label}: the cabin loads and is set (${r.layout} layout)`);
-      check(r.setCalls <= 60, `RD-08 ${label}: the cabin's set and props (${r.layout}) at most 60 draw calls`, `${r.setCalls} calls (the felt-less frame with no body: sky, set, props, shadows, embers; med tier draws opaque twice), ${r.setTris} triangles`);
-      check(r.luma <= 0.35, `RD-13 ${label}: the play area's mean linear luminance at most 0.35 (${r.layout})`, `${r.luma.toFixed(3)} (PLACES 4.2: about 0.20)`);
-      const bar = r.layout === 'tall' ? r.frontPx >= 100 && r.midPx >= 80 : r.midPx >= 150;
-      check(bar, `RD-17 ${label}: a 1 m squishy on screen (${r.layout}: ${r.layout === 'tall' ? '100 px front, 80 px mid' : '150 px mid'})`, `front ${r.frontPx.toFixed(1)} px, mid ${r.midPx.toFixed(1)} px (whole bodies framed inside the insets: see PG_RENDER.md, spec conflict)`);
+      for (const id of PLACE_IDS) {
+        const r = await lp.evaluate(([k, pid]) => window.__RV__.pg.placeShot(k, 4, undefined, pid), [kind, id]);
+        const name = id === 'hearthlog' ? 'cabin' : id;
+        writeFileSync(resolve(PGOUT, `${name}_${r.layout}_${label}.png`), b64(r.png));
+        PL[`${id}:${label}`] = { layout: r.layout, setCalls: r.setCalls, setTris: r.setTris, luma: r.luma, frontPx: r.frontPx, midPx: r.midPx, fov: r.fov, margin: r.margin, info: r.info };
+        check(r.ok, `RD-01 ${id} ${label}: the place loads and is set (${r.layout} layout)`);
+        check(r.setCalls <= 60, `RD-08 ${id} ${label}: the set and props (${r.layout}) at most 60 draw calls`, `${r.setCalls} calls (the felt-less frame with no body: sky, set, props, shadows, weather; med tier draws opaque twice), ${r.setTris} triangles`);
+        check(r.luma <= 0.35, `RD-13 ${id} ${label}: the play area's mean linear luminance at most 0.35 (${r.layout})`, `${r.luma.toFixed(3)}`);
+        const bar = r.layout === 'tall' ? r.frontPx >= 100 && r.midPx >= 80 : r.midPx >= 150;
+        check(bar, `RD-17 ${id} ${label}: a 1 m squishy on screen (${r.layout}: ${r.layout === 'tall' ? '100 px front, 80 px mid' : '150 px mid'})`, `front ${r.frontPx.toFixed(1)} px, mid ${r.midPx.toFixed(1)} px, lens ${r.fov} deg`);
+        check(r.margin >= -1, `RD-17 ${id} ${label}: the round-2 model on the live camera: every corner centre's ground point and top (1.25 m) inside the insets`, `worst margin ${r.margin.toFixed(1)} px`);
+      }
+      if (label === 'phone') {
+        const bc = await lp.evaluate(() => window.__RV__.pg.bubbleClamp('ripple'));
+        writeFileSync(resolve(PGOUT, `bubble_clamp_phone.png`), b64(bc.png));
+        check(bc.inside, 'RD-17 (round 2): a bubble over a body at the back corner of the tall bounds is clamped inside the safe frame, its tail turned to its body', `bubble at ${bc.at.map((v) => v.toFixed(0)).join(', ')} px, tail ${(bc.tail * 180 / Math.PI).toFixed(1)} deg`);
+      }
       if (label === 'desktop') {
         const f = await lp.evaluate(() => window.__RV__.pg.fireplace());
         writeFileSync(resolve(PGOUT, `fn02_fireplace.png`), b64(f.png));
-        const sw = await lp.evaluate(() => window.__RV__.pg.placeSwaps(10));
+        const pr = await lp.evaluate(() => window.__RV__.pg.presets());
+        writeFileSync(resolve(PGOUT, `presets_bodies.png`), b64(pr.png)); writeFileSync(resolve(PGOUT, `presets_things.png`), b64(pr.pngThings));
+        PL.presets = { started: pr.started, perS: pr.perS, perSCalm: pr.perSCalm, home: pr.home };
+        check(pr.started.every(Boolean) && pr.home === false, "D-80: the reaction presets start in a place (steam, drips, bubbles, embers on four bodies; the kettle's puff, the hearth's fire puff) and not at Home",
+          `started ${pr.started.join(', ')}; at Home ${pr.home}`);
+        check(pr.perS <= 48 + 1 && pr.perS >= 20 && pr.perSCalm <= 16 + 1, 'LIFE 10.1: reaction particles per second at most 48 on a desktop, 16 in Calm (8 presets at full amount)', `${pr.perS.toFixed(1)} / s, Calm ${pr.perSCalm.toFixed(1)} / s`);
+        const sw = await lp.evaluate(() => window.__RV__.pg.placeSwaps(12));
         PL.swaps = sw;
-        check(sw.after.every((v, i) => Math.abs(v - sw.base[i]) <= 2), 'RD-07: 10 place swaps (Home -> cabin -> Home): programs, textures and geometries back to Home\'s baseline +-2',
+        check(sw.after.every((v, i) => Math.abs(v - sw.base[i]) <= 2), 'RD-07: 12 place swaps (Home -> each place in turn -> Home): programs, textures and geometries back to Home\'s baseline +-2',
           `programs ${sw.base[0]} -> ${sw.after[0]}, textures ${sw.base[1]} -> ${sw.after[1]}, geometries ${sw.base[2]} -> ${sw.after[2]}`);
       }
       report.problems.push(...lbad);

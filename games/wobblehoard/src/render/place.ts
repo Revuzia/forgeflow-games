@@ -253,6 +253,12 @@ export class Emitter {
     while (this.acc >= 1) { this.acc -= 1; if (this.particles.count < cap) this.spawn(this.particles, this.rnd); }
     this.particles.update(dt, time);
   }
+  /** A burst of n at once (a puff, a shower), through the same caps: x0.3 in Calm, none with reduced motion. */
+  burst(n: number, quiet: boolean, reduced: boolean, tier: number): void {
+    if (reduced) return;
+    const cap = Math.round(this.caps[Math.max(0, Math.min(2, tier))] * (quiet ? 0.3 : 1)), k = Math.round(n * (quiet ? 0.3 : 1));
+    for (let i = 0; i < k && this.particles.count < cap; i++) this.spawn(this.particles, this.rnd);
+  }
   dispose(): void { this.particles.dispose(); }
 }
 

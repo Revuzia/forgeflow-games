@@ -144,6 +144,8 @@ export interface StageDev extends Omit<StageLike, keyof RoundTwo | keyof StageEx
   /** (dev) load the lazy LIFE look now (bubbles, Home's things). */
   loadLifeLook(): Promise<void>;
   readonly autoFraming: boolean;
+  /** (dev) the place host (null before the first trip): the harness reads its reaction presets. */
+  readonly placeHost: PlaceHost | null;
 }
 
 const TARGET_Y = 0.42;
@@ -1171,6 +1173,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       /** (dev) the lazy LIFE look (bubbles and Home's things) loads now; resolves when it is ready. */
       loadLifeLook: { value: (): Promise<void> => { needLife(); return lifeLoad ?? Promise.resolve(); } },
       autoFraming: { get: () => autoFraming },
+      placeHost: { get: () => placeHost },
       memory: { value: () => { const i = renderer.info; return { geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs ? i.programs.length : 0, calls: i.render.calls, triangles: i.render.triangles }; } },
       loseContext: {
         value: () => {
