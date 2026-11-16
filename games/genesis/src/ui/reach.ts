@@ -63,14 +63,35 @@ export function powerState(p: Power): PowerState {
   return 'open';
 }
 
-/** the cost line on a power card, or null in an unbound world (no costs) */
-export function costLine(p: Power): string | null {
+/** the size a cast is aimed at: the brush radius, and a power or scale value when the card sets one */
+export interface CastSize { radius?: number; power?: number; scale?: number }
+
+/**
+ * The price at the chosen size, as the sim charges it (reach.ts priceOf): price x (radius / default radius, at least 1) x
+ * power x scale; a free spell is free at its own size only, wider it costs half its old cost x size. Null: unbound.
+ */
+export function sizedPrice(p: Power, size: CastSize = {}): number | null {
   if (p.priceNow === undefined) return null;
-  if (p.free && !(p.priceNow > 0)) return 'Free.';
-  if (!(p.priceNow > 0)) return 'Free.';
-  if (p.beyond) return `Beyond your standing: ${money(p.priceNow)} worship.`;
-  if (p.price !== undefined && p.priceNow > p.price + 1e-9) return `Costs ${money(p.priceNow)} worship at this size.`;
-  return `Costs ${money(p.priceNow)} worship.`;
+  const def = typeof p.params.radius === 'number' ? p.params.radius : p.schema.radius?.default;
+  let k = 1;
+  if (typeof size.radius === 'number' && typeof def === 'number' && def > 0) k *= Math.max(1, size.radius / def);
+  if (typeof size.power === 'number') k *= Math.max(1, size.power);
+  if (typeof size.scale === 'number' && p.command === 'disaster.spawn') k *= Math.max(1, size.scale);
+  const mult = p.beyond ? 3 : 1;
+  if (p.free) return k > 1 && (p.cost ?? 0) > 0 ? Math.round(Math.max(1, Math.round((p.cost ?? 0) / 2)) * k * 100) / 100 : p.priceNow;
+  const base = p.price ?? p.priceNow / mult;
+  return Math.round(base * k * mult * 100) / 100;
+}
+
+/** the cost line on a power card, or null in an unbound world (no costs); `size` prices the cast at its chosen size */
+export function costLine(p: Power, size: CastSize = {}): string | null {
+  const now = sizedPrice(p, size);
+  if (now === null) return null;
+  if (!(now > 0)) return 'Free.';
+  if (p.beyond) return `Beyond your standing: ${money(now)} worship.`;
+  const base = p.free ? 0 : p.price;
+  if (base === undefined || now > base + 1e-9) return `Costs ${money(now)} worship at this size.`;
+  return `Costs ${money(now)} worship.`;
 }
 
 /** the tooltip for a wheel slot or palette row in the poor or locked state (null when open) */

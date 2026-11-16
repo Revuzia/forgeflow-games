@@ -45,7 +45,11 @@ test('the cost line: free, priced, wider, beyond; none in an unbound world', () 
   assert.equal(costLine(P()), null);
   assert.equal(costLine(P({ free: true, price: 0, priceNow: 0 })), 'Free.');
   assert.equal(costLine(P({ price: 15, priceNow: 15 })), 'Costs 15 worship.');
-  assert.equal(costLine(P({ price: 15, priceNow: 30 })), 'Costs 30 worship at this size.');
+  assert.equal(costLine(P({ price: 15, priceNow: 15, params: { radius: 100 } }), { radius: 200 }), 'Costs 30 worship at this size.');
+  // a free spell is free at its own size, priced wider (half its old cost x size)
+  const ign = P({ free: true, price: 0, priceNow: 0, cost: 10, params: { radius: 60 } });
+  assert.equal(costLine(ign, { radius: 60 }), 'Free.');
+  assert.equal(costLine(ign, { radius: 600 }), 'Costs 50 worship at this size.');
   assert.equal(costLine(P({ price: 100, priceNow: 300, beyond: true })), 'Beyond your standing: 300 worship.');
 });
 

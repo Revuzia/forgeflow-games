@@ -21,7 +21,7 @@
 // Setting a people down warns at the cursor where they could not live: no air to breathe, deep water, too cold (they
 // would freeze) or too hot — from the cell's temperature and the species' own tolerance (it never refuses: the god may).
 
-import { costLine } from './reach.ts';
+import { costLine, type CastSize } from './reach.ts';
 import type { Command, CommandResult, EntityRef } from '../sim/types.ts';
 import type { GroundHit, UiHost } from './host.ts';
 import type { ParamSpec, Power, ToolMode } from './powers.ts';
@@ -264,7 +264,7 @@ export class Tools {
       const r = p.schema.radius;
       const lo = Math.max(R_MIN, r.min ?? R_MIN), hi = Math.min(R_MAX, r.max ?? R_MAX);
       const keys = [this.key('tool.smaller'), this.key('tool.bigger')].filter(Boolean).join(' ');
-      this.cardBody.append(this.row('radius', 'Brush', slider({ min: lo, max: hi, step: 1, value: clamp(this.brushRadius, lo, hi), log: true, fmt: (v) => fmtDist(v), on: (v) => { this.brushRadius = v; } }), keys, 'Brush size (also Ctrl + wheel)'));
+      this.cardBody.append(this.row('radius', 'Brush', slider({ min: lo, max: hi, step: 1, value: clamp(this.brushRadius, lo, hi), log: true, fmt: (v) => fmtDist(v), on: (v) => { this.brushRadius = v; this.updateCost(); } }), keys, 'Brush size (also Ctrl + wheel)'));
     }
     const miss = new Set(missingRequired(p, this.values));
     for (const [k, s] of cardParams(p)) {
@@ -285,8 +285,9 @@ export class Tools {
       this.renderNeed();
     }
     // POWERS-GROWTH §6: one cost line on every priced power; a locked one says why (nothing at all in an unbound world)
-    const cl = costLine(p);
-    if (cl !== null) this.cardBody.append(h('div', { class: 'gn-tool-cost', data: { key: 'reach-cost' }, text: p.locked ? (p.reason ?? 'Beyond your reach.') : cl }));
+    this.costEl = null;
+    const cl = costLine(p, this.castSize(p));
+    if (cl !== null) { this.costEl = h('div', { class: 'gn-tool-cost', data: { key: 'reach-cost' }, text: p.locked ? (p.reason ?? 'Beyond your reach.') : cl }); this.cardBody.append(this.costEl); }
     else if (this.host.view.restraint && p.cost) this.cardBody.append(h('div', { class: 'gn-tool-cost', text: `Restraint: costs ${p.cost} worship${p.cooldown ? `, then rests ${Math.round(p.cooldown / 60)} h` : ''}.` }));
     this.moreBtn.hidden = !extra;
     this.moreBtn.textContent = this.view.more ? 'Fewer settings' : `More settings (${extra})`;
@@ -301,6 +302,20 @@ export class Tools {
    * A power the sim refuses below a wrath (fix r2 #19: comet, supervolcano, gravity slip, moon-fall need huge): the card
    * says so before the cast, not after, and offers to raise this one cast's wrath to it (the law stays where it is).
    */
+  private costEl: HTMLElement | null = null;
+  /** the size the armed cast is aimed at: the brush, and a power or scale the card sets */
+  private castSize(p: Power): CastSize {
+    const num = (v: unknown) => (typeof v === 'number' ? v : undefined);
+    return { radius: radiusParam(p) ? this.brushRadius : undefined, power: num(this.values.power), scale: num(this.values.scale) };
+  }
+  /** the cost line follows the chosen size (a free spell cast wider is priced) */
+  private updateCost(): void {
+    const p = this.armed;
+    if (!this.costEl || !p) return;
+    const cl = costLine(p, this.castSize(p));
+    if (cl !== null && !p.locked) this.costEl.textContent = cl;
+  }
+
   private renderNeed(): void {
     const el = this.needEl, p = this.armed;
     if (!el || !p) return;
@@ -332,7 +347,7 @@ export class Tools {
 
   private control(k: string, s: ParamSpec): HTMLElement | null {
     const v = this.values[k];
-    const set = (x: unknown) => { if (x === undefined) delete this.values[k]; else this.values[k] = x; if (k === 'wrath') this.renderNeed(); };
+    const set = (x: unknown) => { if (x === undefined) delete this.values[k]; else this.values[k] = x; if (k === 'wrath') this.renderNeed(); this.updateCost(); };
     if (s.type === 'number' || s.type === 'int') {
       const p = this.armed!;
       const known = this.host.powers.defaultOf(p, k);
@@ -861,6 +876,7 @@ export class Tools {
     if (!p || !r) return;
     const lo = Math.max(R_MIN, r.min ?? R_MIN), hi = Math.min(R_MAX, r.max ?? R_MAX);
     this.brushRadius = clamp(this.brushRadius * f, lo, hi);
+    this.updateCost();
     this.renderCard('radius');
   }
 
