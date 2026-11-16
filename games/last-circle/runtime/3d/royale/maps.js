@@ -51,7 +51,7 @@ export const MAPS = {
     grade: { exposure: 0.72, ground: 0.6, water: 0.6 }, w10Indoor: 1.32 },
   ashgrid:   { name: "Savanna", theme: "savanna", sky: "#e5cf9f", zenith: "#6585ab", cloud: 0.54, fog: 0.0019, themeColor: "#e0854a", water: false,
     sun: { pos: [-120, 105, 45], color: 0xffe6b4, intensity: 2.25 }, hemi: { sky: 0xf0e3c4, ground: 0xb59a63, intensity: 1.15 },
-    grade: { exposure: 0.80, ground: 0.6, water: 0.6 }, w10Light: { hemi: 0.6, sun: 1.18, contrast: 1.0 }, w10Indoor: 1.8, w10Grass: 1.7 },   // (W10 R2A: the flattest map - its open ground got the least of the hemisphere cut and the full contrast curve)
+    grade: { exposure: 0.80, ground: 0.6, water: 0.6 }, w10Light: { hemi: 0.6, sun: 1.26, contrast: 1.0 }, w10Indoor: 1.8, w10Grass: 1.7 },   // (W10 R2A: the flattest map - its open ground got the least of the hemisphere cut and the full contrast curve)
   deepwood:  { name: "Deepwood", theme: "forest", sky: "#acc5dc", zenith: "#506e9b", cloud: 0.72, fog: 0.0020, themeColor: "#7fb069", water: true,
     sun: { pos: [-60, 150, -80], color: 0xfff6e6, intensity: 1.95 }, hemi: { sky: 0xd2e7ff, ground: 0x63705a, intensity: 1.35 },
     grade: { exposure: 1.14, ground: 0.6, water: 0.6 } },
@@ -1599,6 +1599,7 @@ export async function buildMap(W, mapId) {
     // W10 R2A (visuals 5, desktop medium+): less flat fill, more sun - shadowed sides and hills read again (per map: K.w10Light)
     const lw = W10V ? (K.w10Light || W10_LIGHT) : null;
     kn.sun.intensity = sunK.intensity * (lw ? lw.sun : 1); kn.sun.color.setHex(sunK.color);
+    W._w10Sun = lw ? lw.sun : 1; W._w10Con = lw ? (K.w10Light && K.w10Light.contrast != null ? K.w10Light.contrast : W10_CONTRAST) : 0;        // (fix5) player.js holds the characters' direct specular at the W10 R1 sun's (zSpK = 1 / this): the world's sun boost is not a glossier skin
     kn.sun.position.set(sunK.pos[0], sunK.pos[1], sunK.pos[2]);
     let hemi = null; W.scene.traverse((o) => { if (o.isHemisphereLight) hemi = o; });
     if (hemi) { hemi.intensity = hemiK.intensity * (lw ? lw.hemi : 1); hemi.color.setHex(hemiK.sky); hemi.groundColor.setHex(hemiK.ground); }
