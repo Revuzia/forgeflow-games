@@ -296,7 +296,9 @@ export class TeamBrain {
     if (k.kind !== 'rift') { this.guard.clear(); return; }
     for (const [p, g] of this.guard) {
       const e = w.players[p]?.ent;
-      if (!e || !e.alive || e.hp < e.maxHp * 0.25 || now > g.until) this.guard.delete(p);
+      // (a post whose structure has fallen is over at once: its defenders stood at the rubble while the next structure
+      // of the base fell 20 m away — owner_rulings 42)
+      if (!e || !e.alive || e.hp < e.maxHp * 0.25 || now > g.until || !this.ownStanding(g.sid)) this.guard.delete(p);
     }
     const laning = now < 840 && !this.rush && !this.stage && this.phase !== 'late';
     // (from 25:00 the game is closing: a structure gets as many defenders as it has divers, not one more — long death timers

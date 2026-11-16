@@ -16,6 +16,8 @@
 //                   no defender within 16 m while 2+ of the team are alive)   ≤ 45 / 35 / 20 %
 //                   base intrusions left without 2 defenders for 20 s, per game  ≤ 3 / 1.5 / 1
 //                   recalls to defend (a recall started 45 m+ from an open base intrusion)  adept + veteran > 0
+//                   inner or base structures taken by Wicks alone (no enemy fighter within 15 m) while two of the team
+//                   above 60 % health stood within 16 m, per game  ≤ 2 / 1.6 / 1.1 (owner_rulings 42)
 //   peel            episodes with an ally within 12 m: no response ≤ 30 / 24 / 22 %, every helper walked away ≤ 20 / 16 / 16.5 %
 //   sneak           gank approach (and lurk) time visible to the enemy ≤ 15 % (adept, veteran; the strike is reported);
 //                   ganks struck from a lurk (mid game on): adept + veteran > 0
@@ -334,6 +336,11 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
             const c = cls(s.def.id); let def = 0, alive = 0;
             for (const pl of w.players) { const f = pl.ent; if (f && f.alive && f.team === st.team) { alive++; if ((f.x - st.x) ** 2 + (f.y - st.y) ** 2 <= 20 * 20) def++; } }
             add(C, `fall.${c}`); if (def === 0 && alive >= 2) add(C, `fall.${c}.noDefender`);
+            // (owner_rulings 42: a structure taken by Wicks alone while two fit defenders stood beside it)
+            let foes = 0, fit = 0;
+            for (const pl of w.players) { const f = pl.ent; if (!f || !f.alive) continue; const d2 = (f.x - st.x) ** 2 + (f.y - st.y) ** 2;
+              if (f.team !== st.team && d2 <= 15 * 15) foes++; else if (f.team === st.team && d2 <= 16 * 16 && f.hp > f.maxHp * 0.6) fit++; }
+            if (foes === 0 && fit >= 2) add(C, `fall.${c}.wicksOverFit`);
           }
           break;
         }
@@ -611,7 +618,7 @@ function gates(runs: TierRun[]): string[] {
   for (const r of runs) { const b = (by[r.diff] ??= { rift: [], fray: [] }); for (const g of r.games) { if (g.mode === 'rift') b.rift.push(g); else if (g.mode === 'fray') b.fray.push(g); } }
   // (bars: the diagnosis baseline of e5ea2bac1 in owner_rulings 40, beaten with room for an 8-seed window's noise)
   const T = { undef: { novice: 0.45, adept: 0.35, veteran: 0.20 }, unans: { novice: 3, adept: 1.5, veteran: 1 }, noResp: { novice: 0.30, adept: 0.24, veteran: 0.22 },
-    left: { novice: 0.20, adept: 0.16, veteran: 0.165 }, roamVis: { novice: 0.25, adept: 0.15, veteran: 0.15 } } as const;
+    left: { novice: 0.20, adept: 0.16, veteran: 0.165 }, wicksOver: { novice: 2, adept: 1.6, veteran: 1.1 }, roamVis: { novice: 0.25, adept: 0.15, veteran: 0.15 } } as const;
   const undefShare: Record<string, number> = {}, noRespShare: Record<string, number> = {};
   for (const diff of ['novice', 'adept', 'veteran'] as const) {
     const b = by[diff];
@@ -624,6 +631,9 @@ function gates(runs: TierRun[]): string[] {
       line(undefShare[diff] <= T.undef[diff], `${diff} base defence: inner+base fighter siege with no defender in 16 m`, pct(undefShare[diff]), `≤ ${pct(T.undef[diff])}`);
       const un = sum(R, 'base.intrusion.unanswered') / R.length;
       line(un <= T.unans[diff], `${diff} base defence: intrusions unanswered per game`, un.toFixed(2), `≤ ${T.unans[diff]}`);
+      // (owner_rulings 42: an inner or base structure taken by Wicks alone with two fit defenders within 16 m)
+      const wo = (sum(R, 'fall.inner.wicksOverFit') + sum(R, 'fall.base.wicksOverFit')) / R.length;
+      line(wo <= T.wicksOver[diff], `${diff} base defence: inner+base falls to Wicks alone beside two fit defenders, per game`, wo.toFixed(2), `≤ ${T.wicksOver[diff]}`);
       // (recalls to defend are pooled over adept and veteran below: a few a window, a tier's own count is noise)
       rpt(`${diff} recalls to defend`, String(sum(R, 'base.recallToDefend')));
       const wh = sum(R, 'peel.withHelpers');

@@ -1137,9 +1137,12 @@ export class Bot extends BotBase implements BotController {
     const a = this.protectAlly, d = this.protectDiver, e = this.e;
     if (!a || !d || !a.alive || !d.alive || !this.isNoticed(d)) { this.execLaneOrPush(); return; }
     this.peelVictim = a; this.peelDiver = d;
-    this.pFight = d; this.pAggro = 0.9; this.pFarm = 0; this.pDive = false;
-    this.pMove = true; this.pMoveX = d.x; this.pMoveY = d.y;
     const tank = this.prof.style === 'frontline' || this.prof.style === 'warden' || this.support;
+    // (owner_rulings 42: a healthy frontline, or anyone fit beside a partner about to fall, follows the diver under its tower —
+    // standing off at the tower's edge while the partner died there was no peel at all)
+    const dive = !this.lanePhase() && this.hpF > 0.6 && (tank || a.hp < a.maxHp * 0.4) && !this.towerAggro;
+    this.pFight = d; this.pAggro = 0.9; this.pFarm = 0; this.pDive = dive;
+    this.pMove = true; this.pMoveX = d.x; this.pMoveY = d.y;
     const contact = dhypot(d.x - a.x, d.y - a.y) <= d.stats.range + d.radius + a.radius + 1.5;
     // (a body-block is for a partner I stand beside; from farther off the diver is reached faster than the gap between them)
     // (only a melee diver can be blocked: a ranged one shoots past the body, so the tank goes at it instead)
@@ -1178,12 +1181,15 @@ export class Bot extends BotBase implements BotController {
       const sc = f.hp + Math.sqrt(this.dist2(f, e.x, e.y)) * 40 - (inR ? 5000 : 0);
       if (sc < bs) { bs = sc; t = f; inside = inR; }
     }
+    // (owner_rulings 42: a partner dived at the post is the post's fight — its diver first)
+    const pd = this.protectDiver;
+    if (pd && pd.alive && this.isNoticed(pd) && this.dist2(pd, g.x, g.y) <= 15 * 15) { t = pd; inside = true; }
     const nA = this.alliesNear(g.x, g.y, 15);
     // (fight the diver under the tower, never in front of it — unless we have the bodies there, or the post does not shoot)
     if (t && (g.reach === 0 || inside || nA > nE || this.adv >= 0.58)) {
       this.pFight = t; this.pDive = false;
       this.pMove = true; this.pMoveX = t.x; this.pMoveY = t.y;
-      this.waveGuard();
+      this.waveGuard(this.holdsWave(g.cls));
       return;
     }
     let sx = g.standX, sy = g.standY;
@@ -1201,7 +1207,7 @@ export class Bot extends BotBase implements BotController {
     }
     this.pMove = true; this.pMoveX = sx; this.pMoveY = sy;
     this.selfDefense();
-    this.waveGuard();
+    this.waveGuard(this.holdsWave(g.cls));
   }
 
   // ── lane AI G3: the gank approach ─────────────────────────────────────────────────────────────
@@ -1349,7 +1355,16 @@ export class Bot extends BotBase implements BotController {
       if (s < bs) { bs = s; t = f; }
     }
     if (t && this.adv >= 0.38) { this.pFight = t; this.pDive = false; }
-    this.waveGuard();
+    // (owner_rulings 42: at a structure of ours the defender holds it against the wave, as at a post)
+    let atStruct = false;
+    // (an outer Needle in the laning phase is the road's to hold: the wave stacked there is laning — standing in it there kept
+    // the first structure up past 12:00)
+    if (this.k.kind === 'rift') for (const st of this.perc.allyStructs) {
+      if (!st.alive || this.dist2(st, e.x, e.y) > sq(st.stats.range + st.radius + 3)) continue;
+      const info = this.m.structInfo(st);
+      if (info && this.holdsWave(b.classOf(info))) { atStruct = true; break; }
+    }
+    this.waveGuard(atStruct);
   }
 
   /**
@@ -1359,9 +1374,29 @@ export class Bot extends BotBase implements BotController {
    * reach of an enemy wave that could kill me within 6 s unless something of mine covers me, and
    * walk away once Wicks that would finish me within 8 s have turned on me.
    */
-  private waveGuard(): void {
+  /** owner_rulings 42: does a defender at a structure of this class hold it against the wave — an inner or base structure, an
+   *  outer one after the laning phase (in it the stacked wave at an outer Needle is the road's laning), and from 25:00 only the
+   *  base (a late game's inner Needles fall to waves as death timers decide it; holding them too drew it out past the pace bar) */
+  private holdsWave(cls: number): boolean {
+    if (this.now >= 1500) return cls >= 2;
+    return cls >= 1 || this.now >= LANE_PHASE_END;
+  }
+
+  private waveGuard(hold = false): void {
     const e = this.e;
     const ehp = e.hp + e.shield;
+    // (owner_rulings 42: a defender posted to a structure holds it against the wave — the wave's blows are shared with the
+    // partners beside me and the structure covers me whatever the wave's size; it backs off only once the Wicks on me would
+    // finish me within 4 s. Two full-health defenders used to stand 8 m off a Lantern while a stacked wave took it)
+    if (hold && this.k.kind === 'rift') {
+      if (this.unitDps > 0) { if (ehp / this.unitDps >= 4) return; }
+      else {
+        let pot = 0, mates = 1;
+        for (const u of this.perc.enemyUnits) if (u.alive && u.kind === 'minion' && u.attackDef && this.dist2(u, e.x, e.y) <= sq(WICK_REACH + 1.5)) pot += mitigated(u, e, u.stats.ad, u.attackDef.damageType) * u.stats.attackSpeed;
+        for (const a of this.perc.allyFighters) if (a !== e && a.alive && this.dist2(a, e.x, e.y) <= 8 * 8) mates++;
+        if (pot / mates * 5 <= ehp || this.hpF > 0.6) return;
+      }
+    }
     // (W4 G1 refix, RIFT: three roads stack waves while the team is elsewhere; BRIDGE's one road always has the
     // team on it, so its guard stays the front-of-the-wave one its G5 pacing was measured with)
     const rift = this.k.kind === 'rift';
