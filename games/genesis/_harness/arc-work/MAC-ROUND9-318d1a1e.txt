@@ -1,0 +1,24 @@
+GENESIS Mac ROUND 9, build 318d1a1e. Full reports and chrome-gpu.txt attached.
+ANSWER: it is the GPU shading pixels. Chrome's GPU process is NOT using up a CPU core.
+
+PART 1 (Ultra, landing spot, 3 readings 10 s apart)
+  a. Chrome Helper (GPU) %CPU:      2.4 | 2.5 | 2.5
+  b. Chrome Helper (Renderer) %CPU: 6.6 | 4.2 | 14.0
+  c. GPU History: about full (92% | 100% | 99% busy; 17% with nothing running)
+  d. powermetrics: skipped (sudo needs a password)
+
+RUNS  #  preset   render     fps  p50/p95 ms  GPU helper %CPU  GPU busy %
+      1  Ultra    1686x963   1.7  599/634     2.8 3.2 2.1      99 99 99
+      2  Low      1265x722   6.2  152/185     3.4 3.1 3.1      97 99 100
+      3  Ultra    1686x963   1.6  601/634
+      4  Medium   1517x867   3.5  284/301
+      5  Ultra    1686x963   1.5  684/715
+      6  High     1686x963   3.8  267/284
+      7  Ultra in a 600x450 window (render 600x363)  9.0 fps  116/133 ms  (GPU still 98-99% busy)
+  Main thread is 4-6% of wall time on full-size runs.
+  High is 2.4x faster than Ultra at the same resolution, so Ultra-only effects cost about 60% of the frame.
+  With 13% of the pixels, the tiny window runs 5.6x faster.
+
+chrome://gpu: Chrome 157.0.8103.78, ANGLE Metal on Apple M5 (macOS 27.2.1), Skia Graphite/Dawn-Metal.
+  Only "Download Report to File" exists in this Chrome; that report's text is attached.
+LOW FEEL: CHOPPY, about 7.8 fps while panning. Better than Ultra's slideshow, not smooth.
