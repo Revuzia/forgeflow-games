@@ -484,7 +484,8 @@ export class Bot extends BotBase implements BotController {
     // bias, right for the mid game, left veteran laners with fewer takedowns than adept ones on every real-seat window)
     const edgy = this.lanePhase();
     // (lane AI G5: alone with enemies unaccounted for in the fog, a fighter leaves a fight 10 points of health sooner)
-    const thr = this.prof.retreatHp + (edgy ? this.diff.riftRetreatBias ?? this.diff.retreatBias : this.diff.retreatBias) + (lastLife ? 0.15 : 0) + (this.adv < 0.4 && !tolled ? 0.08 : 0) - (tolled ? 0.05 : 0) + (this.exposed ? 0.1 : 0);
+    const thr = this.prof.retreatHp + (edgy ? this.diff.riftRetreatBias ?? this.diff.retreatBias : this.diff.retreatBias) + (lastLife ? 0.15 : 0) + (this.adv < 0.4 && !tolled ? 0.08 : 0) - (tolled ? 0.05 : 0) + (this.exposed ? 0.1 : 0) +
+      (kind === 'rift' && !edgy && !!b && b.gleamLead >= 2000 ? this.diff.aheadCaution : 0);
     let best: Mode = this.mode, bestS = -1;
     const consider = (m: Mode, s: number): void => {
       if (s <= 0) return;

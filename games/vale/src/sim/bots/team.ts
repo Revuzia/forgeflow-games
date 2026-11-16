@@ -162,6 +162,8 @@ export class TeamBrain {
   /** enemy fighters not seen for a while (danger of pushing deep) */
   missing = 0;
   /** lane AI G1: fighters posted to threatened own structures */
+  /** the scoreboard's Gleam lead (ours minus theirs, public; two-team modes) */
+  gleamLead = 0;
   readonly guard = new Map<PlayerId, Guard>();
   /** defenders that handed a post on (busy elsewhere: a siege, a fight, a trip home), not asked again until then */
   readonly guardDeclined = new Map<PlayerId, number>();
@@ -615,6 +617,7 @@ export class TeamBrain {
     // a lead to press: the scoreboard's Gleam (two-team modes)
     let lead = 0;
     for (const t of w.teams) lead += t.team === this.team ? t.gold : -t.gold;
+    this.gleamLead = lead;
     // (objectiveSense: a lead is pressed by fighters fit to press it — as many above 45 % health as the enemy has up)
     let fit = 0;
     for (const p of w.players) if (p && p.team === this.team && p.ent && p.ent.alive && p.ent.hp >= p.ent.maxHp * 0.45) fit++;

@@ -103,6 +103,9 @@ export interface DifficultyProfile {
   readonly peelChance: number;
   /** peel: a frontline or warden steps between the partner and the diver */
   readonly peelBodyBlock: boolean;
+  /** playing from ahead (RIFT, after the laning phase): with the team 2,000 Gleam or more ahead a fighter leaves a fight
+   *  this much health sooner — a lead is kept by not dying, not spent on a coin-flip under a tower */
+  readonly aheadCaution: number;
   /** peel in the laning phase: a road partner hit hard (not held) is a dive only below this share of its health — above it
    *  the duo's trade is laning */
   readonly peelLaneHp: number;
@@ -156,7 +159,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     decisionNoise: 0.2, focusDiscipline: 0.05, abilityEvery: 1.3,
     macroDelay: 22, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
     objectiveLead: 10, objectiveEven: 0, contests: false, objectiveSense: false,
-    defendMatch: 0.5, recallDefend: 'none', defendHold: 4, peelChance: 0.3, peelBodyBlock: false, peelLaneHp: 0.5, lurkMax: 0, avoidVision: false,
+    defendMatch: 0.5, recallDefend: 'none', defendHold: 4, peelChance: 0.3, peelBodyBlock: false, peelLaneHp: 0.5, aheadCaution: 0, lurkMax: 0, avoidVision: false,
     flank: false, riskCap: Infinity, burstRetreat: false, splitPush: false, groupFollowFloor: 0, visionSetup: false,
     longshadeTtk: 0, crossTrade: false, objectiveEvenLate: 0.35, ccChain: 0, threatCc: false, adaptiveBuild: false, thirdParty: 0,
   },
@@ -168,7 +171,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     decisionNoise: 0.06, focusDiscipline: 0.65, abilityEvery: 0.3,
     macroDelay: 2.5, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
     objectiveLead: 30, objectiveEven: 0.55, contests: true, objectiveSense: false,
-    defendMatch: 1, recallDefend: 'base', defendHold: 6, peelChance: 0.7, peelBodyBlock: true, peelLaneHp: 0.5, lurkMax: 4, avoidVision: false,
+    defendMatch: 1, recallDefend: 'base', defendHold: 6, peelChance: 0.7, peelBodyBlock: true, peelLaneHp: 0.5, aheadCaution: 0.08, lurkMax: 4, avoidVision: false,
     flank: false, riskCap: 1.5, burstRetreat: true, splitPush: false, groupFollowFloor: 0.9, visionSetup: true,
     longshadeTtk: 45, crossTrade: false, objectiveEvenLate: 0, ccChain: 0.5, threatCc: false, adaptiveBuild: true, thirdParty: 0.6,
   },
@@ -179,7 +182,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     decisionNoise: 0.03, focusDiscipline: 1, abilityEvery: 0.2,
     macroDelay: 0, convertsLeads: true, leadGleam: 1500, readsWaves: true,
     objectiveLead: 50, objectiveEven: 0.68, contests: true, objectiveSense: true,
-    defendMatch: 1, recallDefend: 'inner', defendHold: 6, peelChance: 1, peelBodyBlock: true, peelLaneHp: 0.65, lurkMax: 8, avoidVision: true,
+    defendMatch: 1, recallDefend: 'inner', defendHold: 6, peelChance: 1, peelBodyBlock: true, peelLaneHp: 0.65, aheadCaution: 0.05, lurkMax: 8, avoidVision: true,
     flank: true, riskCap: 1.5, burstRetreat: true, splitPush: true, groupFollowFloor: 1, visionSetup: true,
     longshadeTtk: 45, crossTrade: true, objectiveEvenLate: 0, ccChain: 1, threatCc: true, adaptiveBuild: true, thirdParty: 1,
   },
