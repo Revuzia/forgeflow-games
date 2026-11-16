@@ -49,6 +49,11 @@ const SNAP_STUCK_GAIN = 1;
 const SNAP_STUCK_R = 3;
 const SNAP_STUCK = 2;
 const SNAP_STUCK_M = 2;
+/** … it replaces a pick A made when it is this much (m) nearer the click (ruling 42) */
+const SNAP_STUCK_BETTER = 0.5;
+/** … its flood runs at most this far (m of route; a candidate beyond is confirmed with the planner, SNAP_STUCK_SEARCHES) */
+const SNAP_STUCK_FLOOD = 60;
+const SNAP_STUCK_SEARCHES = 8;
 /** route confirmations per snap (the flood prices the rest; candidates in straight line of walk cost one march) */
 const SNAP_SEARCHES = 6;
 /** candidates further (m) than this from the walker are only taken in straight line of walk (the flood is bounded
@@ -541,24 +546,45 @@ export class NavGrid {
         gx = px; gy = py; picked = true;
         break;
       }
-      // C: the straight walk barely moves the walker (it stands against the obstacle): the way round to an open point
-      // beside the click, so a click never does nothing while such a point is in reach
-      if (!picked && d0 - dB < SNAP_STUCK_GAIN) {
-        let tries = 0;
-        for (let k = 0; k < cand.length && tries < SNAP_SEARCHES; k++) {
-          const i = cand[k];
-          const px = ((i % this.w) + 0.5) * c, py = (Math.floor(i / this.w) + 0.5) * c;
-          if ((px - x) * (px - x) + (py - y) * (py - y) > SNAP_STUCK_R * SNAP_STUCK_R) break;   // cand is nearest-first
+      // C: the straight walk barely moves the walker (it stands against the obstacle): the way round to the open point
+      // nearest the click within SNAP_STUCK_R, so a click never does nothing while such a point is in reach. It runs
+      // whatever A found (orch1 r3: A's pick in line of walk, 0.25 m nearer than the wall stop, shut C out and the hero
+      // walked 3.4 m to end 7.8 m from a click 0.3 m from an open cell); it wins when it is SNAP_STUCK_BETTER nearer the
+      // click than A's pick. Every candidate is priced by one unbounded-direction flood (the way round may step away
+      // from the click), nearest first, so the nearest reachable one is taken, never just one of the first few tried.
+      if (d0 - dB < SNAP_STUCK_GAIN) {
+        const dPick = picked ? Math.sqrt((gx - x) * (gx - x) + (gy - y) * (gy - y)) : Infinity;
+        const lim = Math.min(SNAP_STUCK_R, dPick - SNAP_STUCK_BETTER);
+        let n = 0, capMax = 0;
+        for (; n < cand.length; n++) {
+          const i = cand[n], px = ((i % this.w) + 0.5) * c, py = (Math.floor(i / this.w) + 0.5) * c;
+          if ((px - x) * (px - x) + (py - y) * (py - y) >= lim * lim) break;   // cand is nearest-first
           const D = Math.sqrt((px - sx) * (px - sx) + (py - sy) * (py - sy));
-          const capS = D * SNAP_STUCK + SNAP_STUCK_M;
-          tries++;
-          route.length = 0;
-          if (!this.boundedPath(sx, sy, px, py, route, r, capS)) continue;
-          const ex = route[route.length - 2], ey = route[route.length - 1];
-          if (Math.abs(ex - px) + Math.abs(ey - py) > 1e-6) continue;
-          if (polyLen(sx, sy, route, 0) > capS) continue;
-          gx = px; gy = py;
-          break;
+          capMax = Math.max(capMax, D * SNAP_STUCK + SNAP_STUCK_M);
+        }
+        if (n > 0) {
+          const floodMax = Math.min(capMax * 1.09 + c, SNAP_STUCK_FLOOD);
+          this.flood(sx, sy, floodMax);
+          let tries = 0;
+          for (let k = 0; k < n; k++) {
+            const i = cand[k];
+            const px = ((i % this.w) + 0.5) * c, py = (Math.floor(i / this.w) + 0.5) * c;
+            const D = Math.sqrt((px - sx) * (px - sx) + (py - sy) * (py - sy));
+            const capS = D * SNAP_STUCK + SNAP_STUCK_M;
+            const g = this.closedGen[i] === this.gen ? this.g[i] * c : Infinity;
+            // the flood priced it out of reach (it ran far enough for this bound), or clearly within it
+            if (g > capS * 1.09 + slack && capS * 1.09 + c <= floodMax) continue;
+            if (g <= capS - slack) { gx = px; gy = py; break; }
+            if (tries >= SNAP_STUCK_SEARCHES) continue;
+            tries++;
+            route.length = 0;
+            if (!this.boundedPath(sx, sy, px, py, route, r, capS)) continue;
+            const ex = route[route.length - 2], ey = route[route.length - 1];
+            if (Math.abs(ex - px) + Math.abs(ey - py) > 1e-6) continue;
+            if (polyLen(sx, sy, route, 0) > capS) continue;
+            gx = px; gy = py;
+            break;
+          }
         }
       }
     }
