@@ -1,0 +1,46 @@
+{
+  "verifier": "orch1 adversarial verifier, LIVE browser lens, lane controls round 2 (headless Chrome 1920x1080, real CDP mouse and keys, practice RIFT with a sparring partner, structures off, harness heal; :5190 dev server serving the branch)",
+  "target": "commit 0d702eca4 (ruling 41) plus the earlier wip-synced attack-in-place / nav / creep fixes; src unchanged since except bots files (e2c4925e5)",
+  "at": "2026-11-16T04:10-06:00",
+  "pass": true,
+  "score": 7.6,
+  "harness": {
+    "shoot": "_harness/_tmp_vfy_owner15r2_shoot.mjs <fighter> -> _harness/_reports/owner15r2_shoot_<f>.json",
+    "moveShootAndZ": "_harness/_tmp_vfy_ctl_r2live_moveshoot.mjs <fighter> -> _reports/ctl_r2live_moveshoot_<f>.json (attack start timed from the command, sim trace)",
+    "path": "_harness/_tmp_vfy_owner15r2_path.mjs <fighter> -> _reports/owner15r2_path_<f>.json",
+    "holdAndClickThroughWave": "_harness/_tmp_vfy_ctl_r2live_holdwave.mjs <fighter> [START_T=330|420] [CLICK=1] -> _reports/ctl_r2live_{holdwave,clickwave}_<f>[_late].json (per-frame order/path/lane/watchdog/bodies-touching timeline on failures)",
+    "minions": "_harness/_tmp_vfy_owner15r2_minwatch.mjs and _tmp_vfy_owner15r2_minjam.mjs --mode rift|bridge --seed 3|7 --min 25; _tmp_vfy_ctl_r2live_wickdump.mjs replays one flagged Wick",
+    "shots": "_harness/_shots/owner15_controls_r2_*.png (gitignored)"
+  },
+  "shoot": {
+    "fighters": ["lisvel", "ulkro", "tunlan", "dunsom", "ervet"],
+    "enemyInRange": "15/15 sent attackAt with the enemy, attack started on it, hero drift 0",
+    "emptyGround8Dirs": "40/40 attackAt, an attack started every time (aimed throw or the meant enemy in range), max drift 0.09 m (dunsom, one shove), never a move order",
+    "holdSweep": "5/5: 33-36 distinct aim points over 7-10 s, 5-6 attacks at attack speed (0.64-0.74/s), drift 0, no aimed attack after release",
+    "letGoOfShift": "5/5 stop (only the end message, no further owed attack)",
+    "whileMoving": "30/30: hero stops within 0 m of the command tick, first attack starts at cooldown end (0.03 s when ready, else = cooldown left)",
+    "fog": "hidden enemies are never sent as the target (ulkro: click on hidden 1187 sent visible 1188); far-dark ground throws in place",
+    "zFightersOnly": "20/20 sent fighters:true; no targeted attack ever started on a minion under the order (an aimed throw instead)",
+    "regressions": "5/5 each: plain left-click sends nothing (select only); right-click ground moves ~3.46 m; right-click enemy attacks it; Shift+right-click and A-click attack-move or attack the unit",
+    "aimLine": "visible while Shift held (owner15_controls_r2_*_AIM_line.png)",
+    "uncommandedMovement": "0 idle-drift episodes, 0 uncommanded order starts over ~120k traced frames (10 runs)"
+  },
+  "pathing": {
+    "wallClicks": "70 clicks by walls (5 fighters): every move ended 0-1.17 m from an unwalkable click point (open edge) and 0-0.16 m from a walkable one; none left the hero standing; 3 clicks were on an enemy structure under an attack cursor and attacked it (correct)",
+    "holdSteer": "drag-arc ends 0.04-0.22 m from release, a still held cursor sends 1 order and never walks the hero on",
+    "clickThroughWave": "instrumented 33 single right-clicks (early and 5:30-7:45): max 1.62 m short, 0 reversals; uninstrumented path harness 23: 2 ended > 2 m short (tunlan 4.16 m, ervet 2.36 m with 2 reversals), goal crowding not measured there",
+    "holdThroughWave": "instrumented 82 held moves (early and 5:30-8:15): ranged 0 > 2 m short (max 0.61 m), regress <= 1.15 m, reversals <= 1; melee ervet 2/20 ended 2.5-3.0 m short pinned by 4 enemy Wicks touching it, order still alive, re-sent every 0.5 s, no dithering (boxed-in, ruling 41); uninstrumented path harness: ulkro 6.68 m and ervet 4.17 m short with only 1 command over the 6 s hold (no retries means the click was not a ground move: most likely an enemy stepped under the cursor and it became an attack; not reproduced in 82 instrumented holds)",
+    "unitPicks": "center 29/30, near-miss 30/34, Shift+RMB 48/49, A-click 39/40, gap 48/49 (moving units; misses consistent with harness click latency, same rate as round 1)"
+  },
+  "minions": {
+    "riftMid25min": "seeds 3 and 7, 25 min each: 0 stuck Wicks (no enemy within 9 m) anywhere; nothing jammed near the mid first towers",
+    "jams": "RIFT s3: 2 brightwick jams in top/bot fights (7 s; 17 s boxed behind its own glimwicks with order attack, then engaged - the creep step-out did not fire, minor); RIFT s7: 2 x 6 s top-lane jams of one brightwick",
+    "bridge": "seeds 3/7: 1 flagged episode was a chase-and-leash-return (replayed, not stuck); the rest are the 6 s after the match ended (sim frozen)"
+  },
+  "problems": [
+    "minor: 2/23 uninstrumented plain right-clicks through a lane wave ended 2.4 m (ervet, 2 reversals) and 4.2 m (tunlan) short; 0/33 instrumented repeats did",
+    "minor: melee holding a move into an enemy wave can be pinned 2.5-3 m short by enemy Wick bodies for several seconds (boxed-in, genre collision)",
+    "minor: Z + Shift + left-click on a minion throws an aimed shot that still hits the minion in its path (ruling 39 says the throw hits the first enemy it meets)",
+    "minor: a melee Wick stood 15 s behind its own ranged Wicks in a top-lane fight without the creep step-out firing"
+  ]
+}
