@@ -1,0 +1,152 @@
+/* The secondary screens (UI.md 6, 8 B4b): Settings, How to play, Credits. This sheet ships in the later-* chunk with them (not first-play). The kit (kit.css) skins the controls, so this file only
+   PLACES things: colour comes from the --k-* roles (base.css / a11y.css decide Calm, contrast-more, forced-colors), size and shape from the --wh-* tokens. No `transition: all`; a
+   movement animates transform, a fade animates opacity, each with its own duration token so Calm keeps the fades and drops the movement. The @keyframes ov-* live in overlay.css. */
+
+/* ================= Settings: a side panel (wide, strip), a bottom sheet (stack), the whole screen (tiny) ================= */
+.panel {
+  position: fixed; z-index: var(--wh-z-panel);
+  top: calc(var(--safe-t) + 68px); right: calc(var(--safe-r) + var(--k-gutter));
+  width: min(380px, calc(100vw - 2 * var(--k-gutter) - var(--safe-l) - var(--safe-r)));
+  max-height: calc(100dvh - var(--safe-t) - 80px - var(--dk-bottom) - var(--dk-h));   /* it ends 12 px above the dock: the tools and Table | Float stay reachable while it is open */
+  touch-action: pan-y; box-shadow: var(--wh-e3);
+  visibility: hidden; opacity: 0; transform: translateX(14px);
+  transition: opacity var(--k-fd-3) linear, transform var(--k-mv-3) var(--wh-ease), visibility 0s linear var(--k-fd-3);
+}
+.panel[data-open="true"] { visibility: visible; opacity: 1; transform: none; transition-delay: 0s; }
+.panel-title:focus { outline: none; }
+.panel .k-panel-body { gap: var(--wh-s4); padding: var(--wh-s1) var(--wh-s4) var(--wh-s5); }
+
+.set-group { display: grid; gap: var(--wh-s2); min-width: 0; }
+.panel .k-group-title { margin: 0 var(--wh-s2); }
+.set-card { display: grid; min-width: 0; background: var(--k-surface); border: var(--k-bd-q); border-radius: var(--wh-r-card); box-shadow: inset 0 1px 0 var(--wh-rim), var(--wh-e1); }
+.set-item { min-width: 0; padding: var(--wh-s1) var(--wh-s4); }
+.set-item + .set-item { border-top: var(--k-bd-q); }
+.set-item[hidden] { display: none; }
+.set-item .k-switch { padding-left: 0; padding-right: 0; }
+.set-item .k-slider-head { padding-top: var(--wh-s2); }
+.row-label { min-width: 0; overflow-wrap: anywhere; }
+.row-value { flex: none; }
+.set-item > .row-hint { margin: calc(-1 * var(--wh-s1)) 0 var(--wh-s2); }
+.row-hint { margin: 0; font: var(--wh-w-mid) var(--wh-fs-small)/1.35 var(--wh-font-ui); color: var(--k-fg-dim); overflow-wrap: anywhere; }
+.panel-body > .row-hint { margin: 0 var(--wh-s2); font-size: var(--wh-fs-label); }
+.panel-body > .saved { text-align: center; }
+/* a segmented row: the label above, the control under it; the track is the panel tone so the faces read on the card */
+.set-seg { display: grid; gap: var(--wh-s2); padding-top: var(--wh-s3); padding-bottom: var(--wh-s3); }
+.set-seg .row-label { font: var(--wh-w-bold) var(--wh-fs-body)/1.2 var(--wh-font-ui); }
+.set-seg .k-seg { background: var(--k-panel); }
+.set-link { width: 100%; justify-content: flex-start; gap: var(--wh-s3); min-height: 52px; margin: var(--wh-s1) 0; text-align: left; }
+.set-link .row-label { flex: 1 1 auto; font: var(--wh-w-bold) var(--wh-fs-body)/1.2 var(--wh-font-ui); }
+.set-chev { color: var(--k-fg-dim); width: 20px; height: 20px; }
+/* the Keys line is for a keyboard: a fine pointer, or after a key was used */
+.keys { display: none; }
+body[data-kbd="1"] .keys { display: block; }
+@media (pointer: fine) { .keys { display: block; } }
+
+/* strip (a phone held sideways): the panel starts under the tool row */
+body[data-layout="strip"] .panel { top: calc(var(--safe-t) + 66px); max-height: calc(100dvh - var(--safe-t) - var(--safe-b) - 74px); }
+body[data-layout="strip"] .panel .k-panel-body { gap: var(--wh-s3); }
+/* stack (a phone held upright, a tablet upright): a bottom sheet that scrolls inside itself; the squishy stays visible above it */
+body[data-layout="stack"] .panel {
+  top: auto; bottom: 0; left: 0; right: 0; width: min(520px, 100%); max-height: 58dvh; margin-inline: auto; transform: translateY(105%);
+  padding-bottom: var(--safe-b); border-radius: var(--wh-r-panel) var(--wh-r-panel) 0 0; border-bottom: 0;
+}
+body[data-layout="stack"] .panel[data-open="true"] { transform: none; }
+body[data-layout="stack"] .panel .k-panel-grip { display: block; }
+body[data-layout="stack"] .panel .k-panel-head { min-height: 56px; padding-top: var(--wh-s1); padding-bottom: var(--wh-s1); }
+body[data-layout="stack"][data-settings="open"] #stage { transform: translateY(-21dvh); }
+/* tiny (the portal phone, 358x201): the whole screen */
+body[data-layout="tiny"] .panel { top: 0; right: 0; bottom: 0; left: 0; width: auto; max-height: none; border-radius: 0; border: 0; box-shadow: none; transform: translateY(8px); padding-bottom: var(--safe-b); }
+body[data-layout="tiny"] .panel[data-open="true"] { transform: none; }
+body[data-layout="tiny"] :is(.panel, .scr) .k-panel-head {   /* (6 px above the close button: its focus ring and lift would be clipped by the screen's top edge) */
+  min-height: calc(var(--wh-hit) + var(--safe-t) + 6px); padding: calc(var(--safe-t) + 6px) calc(var(--safe-r) + var(--wh-s3)) 0 calc(var(--safe-l) + var(--wh-s4));
+}
+body[data-layout="tiny"] .panel-title.jl { --jl-cap: 26px; }
+body[data-layout="tiny"] .panel .k-panel-body { gap: var(--wh-s3); padding: 2px calc(var(--safe-r) + var(--wh-s3)) var(--wh-s4) calc(var(--safe-l) + var(--wh-s3)); }
+body[data-layout="tiny"] .set-item { padding-left: var(--wh-s3); padding-right: var(--wh-s3); }
+body[data-layout="tiny"] .set-link { min-height: var(--wh-hit); }
+
+/* ================= the reading screens (How to play, Credits): a card, a sheet, a strip card, the whole screen ================= */
+.scr-scrim { grid-template-rows: minmax(0, 1fr); animation: ov-fade var(--k-fd-3) linear backwards; }   /* the one row is the scrim's own height: a tall screen scrolls inside itself instead of overflowing the centred row */
+.scr { width: min(560px, 100%); max-height: 100%; min-height: 0; animation: ov-move-up var(--k-mv-3) var(--wh-ease-spring) backwards; }
+.scr-body { gap: var(--wh-s4); padding-top: var(--wh-s1); padding-bottom: var(--wh-s5); }
+body[data-layout="wide"][data-density="short"] .scr-howto { width: min(760px, 100%); }
+body[data-layout="wide"][data-density="short"] .guide-cards { grid-template-columns: 1fr 1fr; }
+body[data-layout="stack"] .scr-scrim { align-items: end; padding: 0; }
+body[data-layout="stack"] .scr .k-panel-grip { display: block; }
+body[data-layout="strip"] .scr { width: min(760px, 100%); }
+body[data-layout="strip"] .scr-body { gap: var(--wh-s3); padding-bottom: var(--wh-s4); }
+@media (min-width: 700px) { body[data-layout="strip"] .guide-cards { grid-template-columns: 1fr 1fr; } }
+body[data-layout="tiny"] .scr-scrim { padding: 0; }
+body[data-layout="tiny"] .scr-title.jl { --jl-cap: 26px; }
+
+/* ---- How to play ---- */
+.guide-cards { display: grid; gap: var(--wh-s3); min-width: 0; }
+.guide-card { display: flex; align-items: center; gap: var(--wh-s4); padding: var(--wh-s3) var(--wh-s4); }
+.guide-art-box { flex: none; width: 72px; height: 56px; }
+.guide-art { display: block; width: 72px; height: 56px; overflow: visible; }
+.guide-copy { min-width: 0; }
+.guide-card .k-card-title { margin-bottom: var(--wh-s1); }
+body[data-layout="tiny"] .guide-card { gap: var(--wh-s3); padding: var(--wh-s2) var(--wh-s3); }
+body[data-layout="tiny"] :is(.guide-art-box, .guide-art) { width: 54px; height: 42px; }
+body[data-layout="tiny"] .guide-card .k-card-text { font-size: var(--wh-fs-label); }
+/* the pictures */
+.ga-ink { stroke: var(--k-ink); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.ga-amber { fill: var(--wh-amber); }
+.ga-lagoon { fill: var(--wh-lagoon); }
+.ga-cream { fill: var(--wh-cream); }
+.ga-plum { fill: var(--wh-plum-bright); }
+.ga-surface { fill: var(--k-surface); }
+.ga-edge { stroke: var(--k-edge); stroke-width: 2; }
+.ga-shadow { fill: var(--k-ink); opacity: .35; }
+.ga-shade { fill: none; stroke: var(--wh-amber-deep); stroke-width: 4; stroke-linecap: round; opacity: .85; }
+.ga-gloss { fill: none; stroke: var(--wh-gloss); stroke-width: 3; stroke-linecap: round; opacity: .8; }
+.ga-cream-line { fill: none; stroke: var(--wh-cream); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.ga-track { fill: none; stroke: var(--wh-track); stroke-width: 6; }
+.ga-ring { fill: none; stroke: var(--wh-amber); stroke-width: 6; stroke-linecap: round; }
+.ga-dock { fill: var(--k-panel); stroke: var(--k-edge); stroke-width: 2; }
+.ga-line { fill: none; stroke: var(--wh-cream); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.ga-amber + .ga-line { stroke: var(--k-ink); }
+/* the disclosures (Keyboard, Licences) */
+.guide-keys, .credits-licences { min-width: 0; background: var(--k-surface); border: var(--k-bd-q); border-radius: var(--wh-r-card); }
+.guide-keys > summary, .credits-licences > summary {
+  display: flex; align-items: center; gap: var(--wh-s3); min-height: 52px; padding: 0 var(--wh-s4); cursor: pointer; list-style: none;
+  font: var(--wh-w-bold) var(--wh-fs-body)/1.2 var(--wh-font-ui); color: var(--k-fg); border-radius: var(--wh-r-card);
+}
+.guide-keys > summary::-webkit-details-marker, .credits-licences > summary::-webkit-details-marker { display: none; }
+.guide-keys > summary:focus-visible, .credits-licences > summary:focus-visible, .credits-text:focus-visible { outline: var(--k-ring-w) solid var(--k-ring); outline-offset: var(--k-ring-off); box-shadow: 0 0 0 var(--k-halo-spread) var(--k-halo); }
+.guide-chev { margin-left: auto; width: 20px; height: 20px; color: var(--k-fg-dim); transition: transform var(--k-mv-2) var(--wh-ease); }
+.guide-keys[open] .guide-chev, .credits-licences[open] .guide-chev { transform: rotate(180deg); }
+.guide-table { width: 100%; border-collapse: collapse; margin: 0 0 var(--wh-s2); }
+.guide-table th, .guide-table td { padding: var(--wh-s2) var(--wh-s4); text-align: left; vertical-align: middle; border-top: var(--k-bd-q); font: var(--wh-w-mid) var(--wh-fs-small)/1.3 var(--wh-font-ui); }
+.gk-keys { width: 1%; white-space: nowrap; }
+.gk-keys .k-kbd + .k-kbd, .gk-keys .k-kbd + .gk-plain, .gk-keys .gk-plain + .k-kbd { margin-left: var(--wh-s1); }
+.gk-plain { font-weight: var(--wh-w-bold); color: var(--k-fg-dim); }
+.gk-does { color: var(--k-fg); overflow-wrap: anywhere; }
+
+/* ---- Credits ---- */
+.credits-hero { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--wh-s2) var(--wh-s3); }
+.credits-made { margin: 0; font: var(--wh-w-bold) var(--wh-fs-lead)/1.2 var(--wh-font-ui); }
+.credits-version { display: inline-flex; align-items: center; min-height: var(--wh-chip-h); padding: 0 var(--wh-s3); font: var(--wh-w-bold) var(--wh-fs-label)/1 var(--wh-font-ui); letter-spacing: .02em; font-variant-numeric: tabular-nums; color: var(--k-fg); background: var(--k-surface); border: 1px solid var(--k-edge); border-radius: var(--wh-r-pill); }
+.credits-craft { margin: 0; font: var(--wh-w-mid) var(--wh-fs-body)/var(--wh-lh-body) var(--wh-font-ui); overflow-wrap: anywhere; }
+.credits-built { display: grid; gap: var(--wh-s2); min-width: 0; }
+.credits-built .k-group-title { margin: 0 var(--wh-s2); }
+.credits-list { display: grid; gap: var(--wh-s2); margin: 0; padding: 0; list-style: none; }
+.credits-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px var(--wh-s3); padding: var(--wh-s3) var(--wh-s4); }
+.credits-name { font: var(--wh-w-bold) var(--wh-fs-body)/1.2 var(--wh-font-ui); overflow-wrap: anywhere; }
+.credits-licence { justify-self: end; padding: 2px var(--wh-s2); font: var(--wh-w-bold) var(--wh-fs-label)/1.2 var(--wh-font-ui); letter-spacing: .02em; color: var(--k-fg); border: 1px solid var(--k-edge); border-radius: var(--wh-r-chip); }
+.credits-what { grid-column: 1 / -1; font: var(--wh-w-mid) var(--wh-fs-small)/1.3 var(--wh-font-ui); color: var(--k-fg-dim); }
+.credits-privacy { display: flex; align-items: flex-start; gap: var(--wh-s3); margin: 0; padding: var(--wh-s3) var(--wh-s4); font: var(--wh-w-mid) var(--wh-fs-small)/var(--wh-lh-body) var(--wh-font-ui); background: var(--k-surface); border: var(--k-bd-q); border-radius: var(--wh-r-card); }
+.credits-privacy .k-icon { color: var(--k-info); margin-top: 1px; }
+.credits-privacy span { min-width: 0; overflow-wrap: anywhere; }
+.credits-text { max-height: 12em; margin: 0 var(--wh-s2) var(--wh-s2); padding: var(--wh-s2) var(--wh-s2) var(--wh-s3); overflow: auto; overscroll-behavior: contain; touch-action: pan-y; border-radius: var(--wh-r-chip); }
+.credits-text p { margin: 0 0 var(--wh-s2); font: var(--wh-w-mid) var(--wh-fs-label)/1.4 var(--wh-font-ui); color: var(--k-fg-dim); overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; }
+.credits-text .credits-text-head { font-weight: var(--wh-w-bold); color: var(--k-fg); }
+
+@media (hover: hover) {
+  .guide-keys > summary:hover, .credits-licences > summary:hover { background: var(--k-surface-hi); }
+}
+/* forced colours: the art is decorative (system colours apply); the disclosure keeps a real border from the roles */
+@media (forced-colors: active) {
+  .ga-ink, .ga-edge, .ga-dock, .ga-line, .ga-cream-line, .ga-ring, .ga-track, .ga-gloss, .ga-shade { stroke: CanvasText; }
+  .ga-amber, .ga-lagoon, .ga-cream, .ga-plum, .ga-surface { fill: Canvas; }
+}

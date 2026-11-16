@@ -5,8 +5,9 @@
 //     tack x stringiness (resolveMaterial(...).physics): three long threads for sticky stretch and slime, one short wisp for gel; a strand
 //     also snaps by the clock (a thread thins as it ages) because the shell only holds the pieces a hand's width apart. Calm effects halve
 //     it. Drawn with the tack-strand renderer (strands.ts StrandTube) between two moving anchors.
-//   * the RECONNECT BRIDGE (StageLike.setBridge): a glowing neck of the jelly between two bodies, as thick as the smaller body's waist,
-//     flaring where it joins each body, with a soft warm glow spot on each body where it joins (uSpot). It is there from the moment the
+//   * the RECONNECT BRIDGE (StageLike.setBridge): a glowing neck of the jelly between two bodies, anchored at the middle of the two cut faces when the bodies are the
+//     two sides of a cut (the live cap centroids), flaring to the face where it joins each one and thin at the waist, in the jelly's own deeper colour,
+//     with a soft warm glow spot on each body where it joins (uSpot). It is there from the moment the
 //     shell asks for it (the shell's own t eases in slowly, the pieces close within a fraction of a second: a neck that waited for t would
 //     only show once the bodies already overlap), and sinks into the bodies as they merge.
 //   * the CUT SEAM itself lives in the jelly shader (uSeam, BodyView.setSeam); this file only carries a seam over from a body that was cut
@@ -15,11 +16,12 @@
 // down further for a second after a granted ceremony flash (the FlashGovernor). Zero per-frame allocation once the pools exist.
 import * as THREE from 'three';
 import type { BodyView } from './bodyview.ts';
+import type { CapInfo } from './jelly.ts';
 import type { EnvHub } from './env.ts';
 import { StrandTube, type StrandEvent } from './strands.ts';
 
-const SEG = 24;          // rings along a tube
-const RAD = 12;           // vertices around
+const SEG = 40;          // rings along a tube (a bridge flares to a cut face and thins to a waist within a hand's width: 24 rings read as steps)
+const RAD = 20;           // vertices around (a bridge flares to a cut face's size: 12 sides read as a polygon)
 const SNAP_S = 0.16;     // a snapped strand's halves spring back over this long
 /** Threads per parting (the tack decides how many are used) and where each hangs on the cut faces: [sideways, up] as a tilt of the facing direction. */
 const PART_STRANDS = 3;
@@ -60,6 +62,20 @@ function facingVertex(v: BodyView, dx: number, dy: number, dz: number): number {
   for (let i = 0; i < n; i++) {
     const d = (P[i * 3] - c.x) * dx + (P[i * 3 + 1] - c.y) * dy + (P[i * 3 + 2] - c.z) * dz;
     if (d > bd) { bd = d; best = i; }
+  }
+  return best;
+}
+
+/** The live cut face of `v` whose outward normal looks along (dx, dy, dz) (a unit vector; dot >= 0.55): the face a neck to the other side of the cut leaves from. null for a body with none. */
+function capToward(v: BodyView, dx: number, dy: number, dz: number): CapInfo | null {
+  if (!v.isPiece) return null;
+  const caps = v.jelly.caps;
+  let best: CapInfo | null = null, bd = 0.55;
+  for (let k = 0; k < caps.length; k++) {
+    const c = caps[k];
+    if (!c.live || !(c.area > 1e-6)) continue;
+    const d = c.nx * dx + c.ny * dy + c.nz * dz;
+    if (d > bd) { bd = d; best = c; }
   }
   return best;
 }
@@ -111,6 +127,8 @@ interface Bridge {
   /** Tube ends (inside each body), the skin points where it joins each body, the gap between them along the axis, the live radii. */
   ax: number; ay: number; az: number; bx: number; by: number; bz: number;
   sx: number; sy: number; sz: number; tx: number; ty: number; tz: number; gap: number; ra: number; rb: number;
+  /** The radius the neck flares to where it meets the faces (0 = no cut faces: the old skin-to-skin neck), last frame. */
+  fr: number;
 }
 
 export class CutFx {
@@ -207,10 +225,11 @@ export class CutFx {
       if (tt <= 0 || a === b) return;
       const tube = this.take();
       if (!tube) return;
-      br = { tube, a, b, target: 0, amt: 0, fading: false, ax: 0, ay: 0, az: 0, bx: 0, by: 0, bz: 0, sx: 0, sy: 0, sz: 0, tx: 0, ty: 0, tz: 0, gap: 0, ra: a.liveRadius, rb: b.liveRadius };
+      br = { tube, a, b, target: 0, amt: 0, fading: false, ax: 0, ay: 0, az: 0, bx: 0, by: 0, bz: 0, sx: 0, sy: 0, sz: 0, tx: 0, ty: 0, tz: 0, gap: 0, ra: a.liveRadius, rb: b.liveRadius, fr: 0 };
       this.bridges.push(br);
-      const c = a.palette.body;
-      tube.paint(c[0], c[1], c[2], 0.88, 0, 0, 0);
+      // the jelly's own deeper colour (the body colour and its absorption colour), a little see-through: the neck is a piece of the squishy, not a pale pill
+      const c = a.palette.body, at = a.palette.attenuation;
+      tube.paint(c[0] + (at[0] - c[0]) * 0.85, c[1] + (at[1] - c[1]) * 0.85, c[2] + (at[2] - c[2]) * 0.85, 0.74, 0, 0, 0);
     }
     // present at once (see the header): the shell's t only decides how it ends
     br.target = tt > 0 ? Math.max(tt, 0.72) : 0; br.fading = false;
@@ -324,33 +343,40 @@ export class CutFx {
       // the bodies' CURRENT sizes (a giver shrinks into the receiver while they reconnect)
       if (live) { b.ra = b.a.liveRadius; b.rb = b.b.liveRadius; }
       const R = Math.min(b.ra, b.rb), a = b.amt;
-      const rEnd = R * (0.22 + 0.33 * a), rMid = Math.min(rEnd, R * (0.12 + 0.4 * a));
       if (live) {
-        // between the two facing skins, reaching into each body (the neck grows OUT of the jelly)
+        // between the two facing sides, reaching into each body (the neck grows OUT of the jelly): from the middle of the cut face when the two are the sides of a cut, else from the skin
         axis(b.a, b.b, d);
-        const ia = facingVertex(b.a, d[0], d[1], d[2]), ib = facingVertex(b.b, -d[0], -d[1], -d[2]);
-        const P = b.a.proxy.positions, Q = b.b.proxy.positions;
-        const ax = P[ia * 3], ay = P[ia * 3 + 1], az = P[ia * 3 + 2], bx = Q[ib * 3], by = Q[ib * 3 + 1], bz = Q[ib * 3 + 2];
+        const capA = capToward(b.a, d[0], d[1], d[2]), capB = capToward(b.b, -d[0], -d[1], -d[2]), P = b.a.proxy.positions, Q = b.b.proxy.positions;
+        let ax: number, ay: number, az: number, bx: number, by: number, bz: number;
+        if (capA) { ax = capA.cx; ay = capA.cy; az = capA.cz; } else { const ia = facingVertex(b.a, d[0], d[1], d[2]); ax = P[ia * 3]; ay = P[ia * 3 + 1]; az = P[ia * 3 + 2]; }
+        if (capB) { bx = capB.cx; by = capB.cy; bz = capB.cz; } else { const ib = facingVertex(b.b, -d[0], -d[1], -d[2]); bx = Q[ib * 3]; by = Q[ib * 3 + 1]; bz = Q[ib * 3 + 2]; }
+        b.fr = capA && capB ? 0.72 * Math.min(Math.sqrt(capA.area / Math.PI), Math.sqrt(capB.area / Math.PI)) : 0;
         b.gap = (bx - ax) * d[0] + (by - ay) * d[1] + (bz - az) * d[2];
-        const ea = Math.min(0.6 * b.ra, rEnd * 1.1), eb = Math.min(0.6 * b.rb, rEnd * 1.1);
+        const rE = b.fr > 0 ? b.fr * (0.5 + 0.5 * a) : R * (0.22 + 0.33 * a), ea = Math.min(0.6 * b.ra, rE * 1.1), eb = Math.min(0.6 * b.rb, rE * 1.1);
         b.ax = ax - d[0] * ea; b.ay = ay - d[1] * ea; b.az = az - d[2] * ea;
         b.bx = ax + d[0] * (Math.max(0, b.gap) + eb); b.by = ay + d[1] * (Math.max(0, b.gap) + eb); b.bz = az + d[2] * (Math.max(0, b.gap) + eb);
         b.sx = ax; b.sy = ay; b.sz = az; b.tx = bx; b.ty = by; b.tz = bz;
       }
+      // the neck: it flares to (nearly) the face where it leaves each body and thins to a waist between them (a gooey bridge, not a pill); without cut faces the old skin-to-skin rule
+      const faced = b.fr > 0;
+      const rEnd = faced ? b.fr * (0.5 + 0.5 * a) : R * (0.22 + 0.33 * a), rMid = faced ? rEnd * (0.62 - 0.2 * a) : Math.min(rEnd, R * (0.12 + 0.4 * a));
       // overlapping bodies are already joined: the neck sinks into them (no tube poking out of a merged blob)
       const vis = smooth01(-0.25 * R, 0.02 * R, b.gap) * Math.min(1, a * 6);
       const r = b.tube.radii;
+      const ea = Math.min(0.6 * b.ra, rEnd * 1.1), eb = Math.min(0.6 * b.rb, rEnd * 1.1), gp = Math.max(b.gap, 0), Lt = ea + gp + eb;
       for (let s = 0; s <= SEG; s++) {
-        const u = s / SEG, w = Math.pow(Math.sin(Math.PI * u), 1.4);
-        r[s] = (rEnd + (rMid - rEnd) * w) * vis;
+        // t: 0 at the face of a, 1 at the face of b (< 0 / > 1 inside the bodies: the full end radius there, hidden by the jelly)
+        const t = Math.min(1, Math.max(0, (s / SEG * Lt - ea) / Math.max(gp, 1e-3)));
+        const w = faced ? Math.pow(1 - Math.sin(Math.PI * t), 1.8) : 1 - Math.pow(Math.sin(Math.PI * s / SEG), 1.4);
+        r[s] = (rMid + (rEnd - rMid) * w) * vis;
       }
-      { const lt = Math.hypot(b.bx - b.ax, b.by - b.ay, b.bz - b.az) || 1, ea = Math.min(0.6 * b.ra, rEnd * 1.1), eb = Math.min(0.6 * b.rb, rEnd * 1.1); capEnds(r, Math.min(0.45, ea / lt), Math.max(0.55, 1 - eb / lt)); }
+      { const lt = Math.hypot(b.bx - b.ax, b.by - b.ay, b.bz - b.az) || 1; capEnds(r, Math.min(0.45, ea / lt), Math.max(0.55, 1 - eb / lt)); }
       b.tube.build(b.ax, b.ay, b.az, b.bx, b.by, b.bz, 0);
       b.tube.mesh.visible = vis > 0.01;
       // the glow: warm light inside the neck, and a soft spot on each body where it joins; capped, eased, governed
       const g = 0.55 * a * calmK * govK;
       const sc = b.a.mats.uniforms.uSeamCol.value;
-      b.tube.mat.emissive.setRGB(sc.r * g * 0.9, sc.g * g * 0.9, sc.b * g * 0.9, THREE.LinearSRGBColorSpace);
+      b.tube.mat.emissive.setRGB(sc.r * g * 0.34, sc.g * g * 0.34, sc.b * g * 0.34, THREE.LinearSRGBColorSpace);
       // (a fading bridge dims its spots with it: a surviving body's spot never drops out in one frame)
       if (!b.a.isDisposed) b.a.setSpot(b.sx, b.sy, b.sz, g * 0.8);
       if (!b.b.isDisposed) b.b.setSpot(b.tx, b.ty, b.tz, g * 0.8);

@@ -1,0 +1,8 @@
+/* B5 kit page only: scenes that hold the REAL Hoard (its panels are position: fixed, so the scene is their containing block) and static specimens. */
+.kp-hoardscene { transform: translateZ(0); }
+.kp-plate-static { position: relative; width: 100%; min-height: 150px; display: grid; place-items: center; }
+.kp-plate-static .plate { position: static; transform: none; opacity: 1; visibility: visible; }
+.kp-narrow { width: min(320px, 100%); }
+.kp-narrow .out { }
+/* the game still loads styles.css, whose global `select` rule (Settings) leaks into any select: mimicked here so the sheet shows the Hoard's select as the game does (B4 may delete the global rule) */
+select { min-width: 130px; padding: 0 38px 0 14px; font-size: 15px; font-weight: 800; }

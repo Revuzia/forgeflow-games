@@ -1,0 +1,88 @@
+/* WOBBLEHOARD UI base (UI.md 3). The SEMANTIC layer: every kit component reads these --k-* roles, never a raw colour.
+   The raw tokens (--wh-*) are installed on :root by theme.ts (an inline style, which beats any :root rule in a sheet), so the roles live on
+   <body> and a11y.css overrides them per mode (Calm, contrast-more, forced-colors, Quality low). No hex colour appears in this file. */
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+/* hidden from the picture, kept for the accessibility tree: the class, and the labels that leave a compact bar / dock (their selectors beat any later rule of the kit) */
+.sr-only,
+.opts:is([data-labels="icon"], [data-labels="tight"]) .opts-btn--ic > .opts-label,
+.opts[data-labels="tight"] .opts-seg .k-seg-face > span,
+.opts:not([data-labels="long"]) .snap-tint-word,
+.dock:not([data-form="full"]) .dock-tool-label, .dock:not([data-form="full"]) .dock-hoard .hoard-btn-word { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+body {
+  /* ---- colour roles ---- */
+  --k-fg: var(--wh-cream);
+  --k-fg-dim: var(--wh-cream-dim);
+  --k-ink: var(--wh-ink);
+  --k-surface: var(--wh-surface2);          /* an OPAQUE tool / control surface: glass is for containers only */
+  --k-surface-hi: var(--wh-surface3);
+  --k-panel: var(--wh-panel);
+  --k-container: var(--wh-glass);           /* the translucent container tone (at most 4 on screen, UI.md 3.3) */
+  --k-scrim: var(--wh-scrim);
+  --k-edge: var(--wh-edge);
+  --k-edge-quiet: var(--wh-panel-edge);
+  --k-bd-q: 1px solid var(--k-edge-quiet);   /* the quiet 1 px border, written once (the sheets use it 16 times; K05 counts every character). It resolves here, on <body>, so the mode blocks of a11y.css that change --k-edge-quiet carry it along */
+  --k-edge-hot: var(--wh-amber);
+  --k-track: var(--wh-track);
+  --k-accent: var(--wh-amber);
+  --k-sel-fill: var(--wh-sel-tint);
+  --k-sel-fg: var(--wh-cream);
+  --k-sel-edge: var(--wh-amber);
+  --k-danger: var(--wh-danger);
+  --k-danger-edge: var(--wh-coral);
+  --k-ok: var(--wh-ok);
+  --k-info: var(--wh-lagoon);
+  --k-warn: var(--wh-amber);
+  --k-trophy: var(--wh-medal-gold);
+  --k-disabled-fill: var(--wh-track);
+  --k-disabled-fg: var(--wh-cream-dim);
+  /* ---- the gel (primary buttons) and its coral variant ---- */
+  --k-gel-image: linear-gradient(180deg, var(--wh-gel-hi) 0%, var(--wh-amber) 52%, var(--wh-amber-deep) 100%);
+  --k-gel-fill: var(--wh-amber);
+  --k-gel-fg: var(--wh-ink);
+  --k-gel-border: 0 solid transparent;
+  --k-gel-lip: 0 4px 0 var(--wh-lip);
+  --k-gel-lip-down: 0 1px 0 var(--wh-lip);
+  --k-coral-image: linear-gradient(180deg, var(--wh-coral-hi) 0%, var(--wh-coral) 52%, var(--wh-coral-lo) 100%);
+  --k-coral-fill: var(--wh-coral);
+  --k-coral-lip: 0 4px 0 var(--wh-coral-lip);
+  --k-coral-lip-down: 0 1px 0 var(--wh-coral-lip);
+  --k-gloss-a: 1;                            /* 0 in contrast-more / forced-colors */
+  --k-wash: var(--wh-wash);
+  /* ---- switch, slider ---- */
+  --k-sw-off: var(--wh-track);
+  --k-sw-on: var(--wh-amber);
+  --k-sw-thumb-off: var(--wh-cream);
+  --k-sw-thumb-on: var(--wh-ink);
+  --k-sw-tick-on: var(--wh-cream);
+  --k-fill-on: var(--wh-amber);
+  --k-fill-off: var(--wh-track);
+  --k-slider-thumb: var(--wh-cream);
+  /* ---- focus ring: 3 px lagoon, offset 2, inside a 2 px ink halo (lagoon vs white is only 1.72) ---- */
+  --k-ring: var(--wh-ring);
+  --k-halo: var(--wh-ring-halo);
+  --k-ring-w: var(--wh-ring-w);
+  --k-ring-off: var(--wh-ring-off);
+  --k-halo-spread: calc(var(--k-ring-w) + var(--k-ring-off) + 2px);
+  /* ---- glass and the jelly type (the hooks the modes flip) ---- */
+  --k-backdrop: blur(8px) saturate(1.15);    /* none in contrast-more, forced-colors, Quality low */
+  --k-jelly-svg: block;                      /* B2: display of the jelly SVG; none = real system text shows instead */
+  /* ---- motion: MOVE durations collapse and FADE durations settle under Calm; idle animations are named here so Calm can set them to none ---- */
+  --k-mv-1: var(--wh-t-1); --k-mv-2: var(--wh-t-2); --k-mv-3: var(--wh-t-3); --k-mv-4: var(--wh-t-4);
+  --k-fd-1: var(--wh-t-1); --k-fd-2: var(--wh-t-2); --k-fd-3: var(--wh-t-3); --k-fd-4: var(--wh-t-4);
+  --k-an-dots: k-dots;
+  --k-an-breathe: k-breathe;
+  --k-an-wobble: k-wobble;
+  --k-gutter: var(--wh-gutter);
+}
+@media (max-width: 380px) { body { --k-gutter: var(--wh-gutter-narrow); } }
+
+/* ---- type roles: the sizes, weights and line heights are the --wh-fs-* / --wh-w-* / --wh-lh-* tokens (UI.md 3.2); a screen sets them where it needs them (the kit page's own sheet has the specimen classes) ---- */
+
+/* ---- icons ---- */
+.k-icon { width: 24px; height: 24px; flex: none; display: block; }
+.k-icon--sm { width: 20px; height: 20px; }
+.k-icon--lg { width: 32px; height: 32px; }
+.k-icon.k-fill { fill: currentColor; }

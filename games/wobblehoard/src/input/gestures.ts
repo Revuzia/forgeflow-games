@@ -13,7 +13,9 @@
 //   down on empty space with a FINGER or a PEN, or the right/middle mouse button anywhere ... ORBIT   drag
 //   a LEFT mouse click on empty space .................................. nothing (owner decision 2026-10-06: with a mouse only the right button turns the view)
 //   wheel, or two fingers on empty space ............................... ZOOM
-//   two fingers on the body ............................................ two body fingers: slots 0 and 1 (max 2)
+//   up to five fingers on the body ..................................... five body fingers: slots 0 to 4 (LOCK.md decision 3). A TOUCH finger (not Space's
+//                                                                     synthetic one) takes the first free slot of the first `host.slots()` (5 when the body
+//                                                                     offers them, else the old 2); everything else (mouse, pen, scripted pointer, Space) only 0 and 1
 //   cancel / lost capture ............................................... everything is released cleanly
 //
 // SHIFT (owner decision 2026-10-06). `PointerSample.shift` is read ONCE, by the move that commits a press to a pull. If the other body slot is
@@ -21,7 +23,9 @@
 // grabbed on that slot (`grab` with `mirrorOf`), and every later move sets its target from the real pointer reflected through the LIVE centre.
 // Slot busy (Space's synthetic finger, a second touch) or nothing hit = the plain single pull, silently. A gesture never changes mode midway:
 // Shift released later keeps the mirror, Shift pressed later does nothing; up / cancel / cancelAll / a lost body release both grabs once each.
-import type { V3 } from '../contracts.ts';
+import type { Slot, V3 } from '../contracts.ts';
+
+export type { Slot };
 
 export interface BodyHit { point: V3; normal: V3; dir: V3; vertex: number }
 /** The body's silhouette disc in screen px (centre of mass projected, radius ~ rest radius projected). */
@@ -33,9 +37,14 @@ export interface GestureHost {
   bodyScreen(): ScreenDisc | null;
   /** World point under the pixel on the camera-facing plane through `through` (pull target); null if the ray is parallel. */
   planePoint(x: number, y: number, through: V3): V3 | null;
+  /** How many finger slots the body under the fingers offers: 5 (a body that locks, LOCK.md), else the old 2. Absent = 5. Read at every touch press. */
+  slots?(): number;
 }
 
-export type Slot = 0 | 1;
+/** The slots a touch finger may take (LOCK.md decision 3); mouse, pen and scripted pointers keep to the first two. */
+export const TOUCH_SLOTS = 5;
+const POINTER_SLOTS = 2;
+
 export type GestureKind = 'tap' | 'squish' | 'rub' | 'pull' | 'orbit' | 'pinch';
 
 export type GestureAction =
@@ -96,6 +105,9 @@ export interface GestureSnapshot {
 
 export interface Gestures {
   pointerDown(s: PointerSample): void;
+  /** A press that did its work already (it let a locked lobe go, LOCK.md decision 2): the pointer is known and ignored, so its moves and its up are swallowed and
+   *  nothing else starts under it. A duplicate id is cleaned up first, as in pointerDown. */
+  consume(s: PointerSample): void;
   pointerMove(s: PointerSample): void;
   pointerUp(s: PointerSample): void;
   /** pointercancel / lostpointercapture: release without classifying. */
@@ -141,6 +153,12 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
 
   /** a slot is busy while a body pointer owns it, or holds it as its mirrored second grab (a Shift pull) */
   const slotFree = (s: Slot): boolean => { for (const p of ptrs.values()) if (p.kind === 'body' && (p.slot === s || p.mslot === s)) return false; return true; };
+  /** the first free slot this pointer may take, or null: a real touch finger (id >= 0: Space's synthetic one is -1000) may use the first host.slots() of the five, everything else the first two */
+  function freeSlot(s: PointerSample): Slot | null {
+    const n = s.type === 'touch' && s.id >= 0 ? Math.max(POINTER_SLOTS, Math.min(TOUCH_SLOTS, Math.floor(host.slots ? host.slots() : TOUCH_SLOTS))) : POINTER_SLOTS;
+    for (let k = 0; k < n; k++) if (slotFree(k as Slot)) return k as Slot;
+    return null;
+  }
 
   function pressureAt(p: Ptr, t: number): number {
     const s = smooth01((t - p.t0 - cfg.tapMs) / cfg.rampMs);
@@ -269,7 +287,7 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
       const button = s.button ?? 0;
       const hit = button === 0 ? host.hitTest(s.x, s.y) : null;
       if (hit) {
-        const slot: Slot | null = slotFree(0) ? 0 : slotFree(1) ? 1 : null;
+        const slot = freeSlot(s);
         if (slot === null) { ptrs.set(s.id, { ...base, kind: 'ignored', mode: 'ignored', slot: 0, hit: null }); return; }
         const p: Ptr = { ...base, kind: 'body', mode: 'press', slot, hit, pressure: cfg.tapPressure };
         ptrs.set(s.id, p);
@@ -291,6 +309,13 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
         emit({ type: 'gesture', kind: 'pinch', pointer: s.id });
       }
       ptrs.set(s.id, p);
+    },
+
+    consume(s) {
+      if (!finite(s)) return;
+      const dup = ptrs.get(s.id);
+      if (dup) releasePtr(dup, true);
+      ptrs.set(s.id, { id: s.id, x: s.x, y: s.y, sx: s.x, sy: s.y, t0: s.t, tLast: s.t, squish: false, pressure: 0, orbitAnnounced: false, mslot: -1, mthrough: null, kind: 'ignored', mode: 'ignored', slot: 0, hit: null });
     },
 
     pointerMove(s) {

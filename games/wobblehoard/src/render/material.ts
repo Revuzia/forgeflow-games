@@ -100,6 +100,12 @@ export interface JellyUniforms {
   /** Round 2 (S2): the sand look's grains (an amber-cream token mix) and the snow cap's amount (setBodyLook's fifth value). */
   uSandCol: { value: THREE.Color };
   uSnowL: { value: number };
+  // CUT2 (8.4): the cut-face look, one set per view (family constants from capLookOf; the 12 family looks fill the same slots later). Inert for a whole (vCap.x = 0).
+  uCapRough: { value: number };
+  uCapCoat: { value: number };
+  uCapTint: { value: number };
+  uCapDepth: { value: number };
+  uCapGlow: { value: number };
 }
 
 const lin = (c: Rgb): THREE.Color => new THREE.Color().setRGB(c[0], c[1], c[2], THREE.LinearSRGBColorSpace);
@@ -108,10 +114,25 @@ export function seamColour(core: Rgb): Rgb {
   return [1.0 * 0.75 + core[0] * 0.25, 0.62 * 0.75 + core[1] * 0.25, 0.34 * 0.75 + core[2] * 0.25];
 }
 
+/**
+ * CUT2 (8.4) ONE cut-face look for every family, derived from the family's existing look parameters (the 12 hand-tuned family looks of the spec's table replace this in R2, same slots):
+ * a clear family's face is a glossy window as deep as the piece behind it, an opaque one (foam, marshmallow, putty, mochi, beads) a matte, paler, shallower face.
+ */
+export function capLookOf(look: ResolvedLook): { rough: number; coat: number; tint: number; depth: number; glow: number } {
+  const opq = Math.max(0, Math.min(1, (0.6 - look.translucency) / 0.5));   // 0 clear .. 1 opaque
+  return { rough: Math.max(0.05, Math.min(0.95, look.roughness + 0.03)), coat: 1 - 0.9 * opq, tint: 0.05 + 0.4 * opq, depth: 1 - 0.7 * opq, glow: 1 - 0.5 * opq };
+}
+
 const VERT_PARS = /* glsl */`
 attribute float aStrain;
 attribute vec3 aRest;
 attribute vec2 aDisp;
+attribute vec2 aCap;
+attribute vec3 aCapP;
+attribute float aCapD;
+varying vec2 vCap;
+varying vec3 vCapP;
+varying float vCapD;
 varying vec2 vDisp;
 varying float vStrain;
 varying vec3 vRest;
@@ -124,6 +145,9 @@ ${POSE_VERT}
 vStrain = aStrain;
 vDisp = aDisp;
 vRest = aRest;
+vCap = aCap;
+vCapP = aCapP;
+vCapD = aCapD;
 vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
 `;
 
@@ -132,6 +156,10 @@ varying float vStrain;
 varying vec2 vDisp;
 varying vec3 vRest;
 varying vec3 vWPos;
+varying vec2 vCap;
+varying vec3 vCapP;
+varying float vCapD;
+uniform float uCapRough, uCapCoat, uCapTint, uCapDepth, uCapGlow;
 uniform float uTime, uCompress, uStretch, uBlushAmt, uPatStrength, uCoreAmt, uCoreRadius, uRimAmt, uScatter, uAlphaBase;
 uniform vec3 uBlushCol, uPaleCol, uPatA, uPatB, uRimCol, uGlowCol, uKeyCol, uCoreCol, uSeed, uRimDir, uKeyDir, uCoreWorld;
 uniform float uAurora, uIri, uTwoTone, uTierAmt, uTierTint, uMixAmt;
@@ -154,6 +182,7 @@ vec3 jBumpN(vec3 surf_pos, vec3 surf_norm, vec2 dHdxy, float faceDirection) {
   vec3 vGrad = sign(fDet) * (dHdxy.x * R1 + dHdxy.y * R2);
   return normalize(abs(fDet) * surf_norm - vGrad);
 }
+float jCap = 0.0;
 float jBlush = 0.0;
 float jTwo = 0.0;
 float jPale = 0.0;
@@ -179,6 +208,7 @@ float jSpeckleLayer(vec3 d, float scale, float seed) {
 
 const COLOR_STAGE = /* glsl */`
 #include <color_fragment>
+  jCap = vCap.x > 0.5 ? 1.0 : 0.0;   // constant over a triangle (a fine triangle never straddles two classes)
 #if WH_PATTERN == 1
   float jSp = max(jSpeckleLayer(vRest, 5.5, uSeed.x * 17.0), 0.85 * jSpeckleLayer(vRest + 3.1, 9.5, uSeed.y * 17.0));
   diffuseColor.rgb = mix(diffuseColor.rgb, uPatB, jSp * uPatStrength);
@@ -202,6 +232,7 @@ const COLOR_STAGE = /* glsl */`
   jPale = clamp((jStr + uStretch * 0.5) * uBlushAmt * uPaleMul, 0.0, 1.0);
   diffuseColor.rgb = mix(diffuseColor.rgb, uBlushCol, jBlush * 0.75);
   diffuseColor.rgb = mix(diffuseColor.rgb, uPaleCol, jPale * 0.6);
+  diffuseColor.rgb = mix(diffuseColor.rgb, uPaleCol, jCap * uCapTint);   // a cut face: the paler inside of the squishy
   diffuseColor.rgb = mix(diffuseColor.rgb, uTierCol, uTierTint);
   diffuseColor.rgb *= uWB;
 }
@@ -211,6 +242,8 @@ const COLOR_STAGE = /* glsl */`
 const TRANSMISSION = /* glsl */`
 float jNdv0 = clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0);
 float jThick = (0.32 + 0.68 * jNdv0) * (1.0 - 0.55 * jPale + 0.12 * jBlush);
+float jThickCap = clamp(0.25 + 0.75 * vCapD * uCapDepth, 0.2, 1.0) * (1.0 - 0.55 * jPale + 0.12 * jBlush);   // a cut face is a window as deep as the piece behind it (aCapD)
+jThick = mix(jThick, jThickCap, jCap);
 float jAtt = (1.0 + 1.8 * jPale) / (1.0 + 0.9 * jBlush);
 ${THREE.ShaderChunk.transmission_fragment
     .replace('material.attenuationColor = attenuationColor;', 'material.attenuationColor = min(mix(mix(attenuationColor, uTone2Col, jTwo), uTierCol, uTierTint) * uWB, vec3(1.0));')
@@ -288,10 +321,13 @@ float jToast = 0.0, jToB = 1.3;
   ${/* (kept apart from the jelly's own light: the low tier's deepen / saturate pass below must not recolour it, it is the same bloom on every tier) */ ''}vec3 jTouchE = mix(uTouchCol, vec3(1.0, 0.95, 0.85), 0.35 * jTouch) * jTouch * (0.5 + 0.5 * jNdv) * 1.15;
   ${/* CUT: a thin warm seam along the cut plane (a band, brightest at its centre line) and the bridge's glow spot; zero when unused */ ''}float jSeamD = (dot(vWPos, uSeam.xyz) - uSeam.w) / max(uSeamW, 1e-4);
   vec3 jSd = vWPos - uSpot.xyz;
-  ${/* the seam: a hot thin core line with a soft warm falloff either side, brightest where the skin faces you */ ''}float jSeam = uSeamAmt * (exp(-jSeamD * jSeamD) + 0.3 * exp(-jSeamD * jSeamD / 9.0)) + uSpot.w * exp(-dot(jSd, jSd) / max(uSpotR * uSpotR, 1e-6));
+  // the seam: a hot thin core line with a soft warm falloff either side, brightest where the skin faces you
+  float jSeam = uSeamAmt * (exp(-jSeamD * jSeamD) + 0.3 * exp(-jSeamD * jSeamD / 9.0)) + uSpot.w * exp(-dot(jSd, jSd) / max(uSpotR * uSpotR, 1e-6));
+  jSeam *= 1.0 - jCap;   // the skin seam band is never drawn on a cut face
   jTouchE += uSeamCol * min(jSeam, 1.3) * (0.55 + 0.45 * jNdv) * 2.4;
-  jExtra += uTierCol * uTierAmt * (0.25 + 0.9 * jFres + 0.5 * jHalo); ${/* the tier "tell": light drifting toward the result colour */ ''}
-  jExtra += uMixCol * jMix * (0.16 + 0.3 * (1.0 - jFres)); ${/* merge lineage: the other parents' colours swirl through as light */ ''}
+  jExtra += uGlowCol * jCap * pow(clamp(vCap.y, 0.0, 1.0), 3.0) * 0.5 * uCapGlow;   // the rim of a cut face catches the light
+  jExtra += uTierCol * uTierAmt * (0.25 + 0.9 * jFres + 0.5 * jHalo);   // the tier "tell": light drifting toward the result colour
+  jExtra += uMixCol * jMix * (0.16 + 0.3 * (1.0 - jFres));             // merge lineage: the other parents' colours swirl through as light
   totalEmissiveRadiance += jRim + jScat + jCore + jExtra;
   if (jToast > 0.0) totalEmissiveRadiance = mix(totalEmissiveRadiance, vec3(dot(totalEmissiveRadiance, vec3(0.2126, 0.7152, 0.0722))) * uToastCol * jToB, jToast);
   #ifdef WH_LOW
@@ -303,7 +339,7 @@ float jToast = 0.0, jToB = 1.3;
     totalEmissiveRadiance = mix(totalEmissiveRadiance, totalEmissiveRadiance * jDeep * 1.15, 0.85 * jLow);
     ${/* without the transmission pass's absorption the glow reads paler than med/high at the same pose (measured +8..12% in G and B): a saturation lift on the jelly's own light closes most of that gap for free (specular highlights stay white) */ ''}totalEmissiveRadiance = max(mix(vec3(dot(totalEmissiveRadiance, vec3(0.2126, 0.7152, 0.0722))), totalEmissiveRadiance, 1.0 + 0.3 * (1.0 - jLow)), 0.0);
     float jSpec = dot(totalSpecular, vec3(0.3333));
-    diffuseColor.a = clamp(mix(uAlphaBase, 1.0, jFres) + jSpec * 0.45, 0.0, 1.0);
+    diffuseColor.a = clamp(mix(uAlphaBase, 1.0, jFres) + jSpec * 0.45 + 0.1 * jCap, 0.0, 1.0);   // (a face is a little more opaque: the window must not look empty)
   #endif
   totalEmissiveRadiance += jTouchE;
 }
@@ -333,7 +369,7 @@ const GRAIN_FREQ: Record<string, number> = { slowrise: 30, marshmallow: 18, moch
 const GRAIN_STAGE = /* glsl */`
 #include <normal_fragment_maps>
 #define GRAIN_AMP 0.022
-if (uGrain > 0.001) {
+if (uGrain > 0.001 && jCap < 0.5) {
   vec3 jq = vRest * uGrainFreq;
   ${/* fade the grain out before it aliases (cells smaller than ~3 px: a far or small body, the phone's low tier) */ ''}float jFade = 1.0 - smoothstep(0.2, 0.45, length(fwidth(jq)));
   if (jFade > 0.0) {
@@ -431,6 +467,7 @@ export class JellyMaterials {
       uPose: { value: new THREE.Vector4(0, 0, 0, 0) }, uPoseC: { value: new THREE.Vector4(0, 0, 0, 1) },
       uLook: { value: new THREE.Vector4(0, 0, 0, 0) }, uHeat: { value: new THREE.Vector4(0, 0, 0, 0) },
       uToastCol: { value: lin(TOAST_TINT) }, uFrostCol: { value: lin(FROST_COL) }, uSandCol: { value: lin(SAND_COL) }, uSnowL: { value: 0 },
+      uCapRough: { value: 0.12 }, uCapCoat: { value: 1 }, uCapTint: { value: 0 }, uCapDepth: { value: 1 }, uCapGlow: { value: 1 },
     };
     this.palette = palette;
     this.scale = scale;
@@ -453,6 +490,7 @@ export class JellyMaterials {
     u.uPaleMul.value = Math.min(1.3, Math.max(0.2, lk.stretchPale / 0.75));
     u.uGrain.value = lk.grain;
     u.uGrainFreq.value = GRAIN_FREQ[this.familyId] ?? 24;
+    { const cl = capLookOf(lk); u.uCapRough.value = cl.rough; u.uCapCoat.value = cl.coat; u.uCapTint.value = cl.tint; u.uCapDepth.value = cl.depth; u.uCapGlow.value = cl.glow; }
     u.uAurora.value = s.aurora; u.uIri.value = s.iri; u.uTwoTone.value = s.twoTone;
     u.uTierCol.value.setRGB(s.tell[0], s.tell[1], s.tell[2], THREE.LinearSRGBColorSpace);
     const pc = this.palette.core, k = s.coreTint * tintShare(s.tell, this.palette);
@@ -541,6 +579,8 @@ export class JellyMaterials {
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', '#include <common>\n' + FRAG_PARS)
         .replace('#include <color_fragment>', COLOR_STAGE)
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = mix(roughnessFactor, uCapRough, jCap);   // a cut face: matte-to-glossy by the family (capLookOf)')
+        .replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n#ifdef USE_CLEARCOAT\n  material.clearcoat *= mix(1.0, uCapCoat, jCap);\n#endif')
         .replace('#include <normal_fragment_maps>', GRAIN_STAGE)
         .replace('#include <transmission_fragment>', TRANSMISSION)
         .replace('vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;', EMISSIVE_STAGE)
@@ -548,8 +588,9 @@ export class JellyMaterials {
         // page's CSS background showed through the jelly (lighter halos, holes in toDataURL captures). The jelly's pixels are opaque.
         .replace('#include <opaque_fragment>', '#include <opaque_fragment>\n#ifndef WH_LOW\n  gl_FragColor.a = 1.0;\n#endif');
     };
-    // v5 (PLAYGROUND): the render pose in the vertex stage (uPose / uPoseC: all 0 = v4's vertex bit for bit)
-    m.customProgramCacheKey = () => `wh-jelly-v5-${this.pattern}-${low ? 'low' : 'full'}`;
+    // v6 (merge of PLAYGROUND v5 = the render pose in the vertex stage (uPose / uPoseC: all 0 = v4's vertex bit for bit) and CUT2 v5 = the cut-face class (aCap / jCap)):
+    // both sides had bumped v4 to v5 for different programs, so the merged program takes a key distinct from both
+    m.customProgramCacheKey = () => `wh-jelly-v6-${this.pattern}-${low ? 'low' : 'full'}`;
     return m;
   }
 

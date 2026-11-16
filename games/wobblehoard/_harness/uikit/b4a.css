@@ -1,0 +1,14 @@
+/* B4a kit page: the overlays are fixed-position in the game; on the sheet each one is contained (a transformed ancestor becomes their containing block). */
+.kp-contain { position: relative; overflow: hidden; transform: translateZ(0); isolation: isolate; border-radius: 12px; }
+.kp-contain .errorcard { position: absolute; }
+.kp-contain--card { height: 520px; width: min(100%, 520px); background: var(--wh-felt); }
+.kp-contain .k-scrim { position: absolute; }
+.kp-toasts { display: grid; gap: 10px; justify-items: start; }
+.kp-toasts .k-toast { animation: none; }
+.kp-scene-b4 { position: relative; overflow: hidden; transform: translateZ(0); isolation: isolate; background: radial-gradient(120% 90% at 50% 64%, var(--wh-felt) 0%, var(--wh-ink) 72%); }
+.kp-scene-b4 .kp-top { position: absolute; z-index: 3; left: 16px; right: 16px; top: 12px; height: 44px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; pointer-events: none; }
+.kp-scene-b4 .kp-top-btns { display: flex; gap: 8px; pointer-events: auto; }
+body[data-layout="strip"] .kp-scene-b4 .kp-top { top: 8px; }
+body[data-layout="tiny"] .kp-scene-b4 .kp-top { top: 6px; left: 12px; right: 12px; }
+@media (max-width: 699px) { body[data-layout="strip"] .kp-scene-b4 .kp-fs { display: none; } }
+.kp-scene-b4 .kp-blob { position: absolute; border-radius: 50% 50% 46% 46% / 62% 62% 38% 38%; background: radial-gradient(circle at 40% 30%, var(--wh-gel-hi), var(--wh-amber) 55%, var(--wh-amber-deep)); opacity: .9; }

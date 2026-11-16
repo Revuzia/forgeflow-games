@@ -46,13 +46,16 @@ export type SoftEventKind =
   | 'snap'     // a pull was let go (intensity = the pull level released, 0..1: 1 = the family's maxPull; see above)
   | 'bump';    // CUT / B2 (optional): this body hit another body (intensity = relative impact speed 0..1; at = contact point)
 
+/** LOCK (_spec/LOCK.md): a finger / grab slot. 0 and 1 are the mouse and the first two fingers as ever; 2 to 4 are only used by touch fingers on phones. */
+export type Slot = 0 | 1 | 2 | 3 | 4;
+
 export interface SoftEvent {
   kind: SoftEventKind;
   at: V3;            // world-space point of the event
   normal: V3;        // outward surface normal there (unit)
   intensity: number; // 0..1, see kinds above
   heldFor: number;   // seconds (release / snap), else 0
-  finger: number;    // 0 or 1 (-1 for 'land')
+  finger: number;    // the slot 0..4 (-1 for 'land'); LOCK: a 'snap' of releaseLock carries the slot the lock was grabbed with
 }
 
 /** Continuous readouts, valid after step(). Audio drives its squelch from these, the renderer drives the blush and the eyes. */
@@ -63,7 +66,7 @@ export interface SoftMetrics {
   volume: number;           // current enclosed volume / rest volume (should stay ~1)
   kinetic: number;          // 0..1 normalised internal jiggle energy (0 = settled)
   grounded: boolean;        // resting on the table (always false in float mode unless it touches it)
-  fingers: number;          // number of fingers currently down (0..2)
+  fingers: number;          // number of fingers currently down (0..5; LOCK widened it from 0..2)
   grabbed: boolean;
   /** Round 2 (PHYS fills these in; consumers must treat undefined as 0). */
   press?: number;           // 0..1 deepest current finger indentation (fraction of restRadius * max safe depth). Unlike `compression` this is non-zero for a single-finger dent, so audio/haptics/FX should drive from max(compression, press)
@@ -77,10 +80,13 @@ export interface SoftMetrics {
   pull?: number;
   /** Stage B item B3 (optional): true while a pull past the body's maximum has picked it up off the mat and the hand carries it
    *  (SoftBody: a grab target asked for more than 1.15 x maxPull, by a LONE hand: while two fingers are on the body, a pinch, a press with
-   *  a pull, a pull from both sides, it is stretched to its maximum and stays on the mat, and stays so until every finger is up). Letting go
+   *  a pull, a pull from both sides, it is stretched to its maximum and stays on the mat, and stays so until every finger is up; lockGrab on a
+   *  carried body of a lone hand puts it back and locks the stretch, LOCK fix 2026-10-09). Letting go
    *  throws it with the hand's velocity and fires a full 'snap' (intensity 1); it then flies, lands ('land') and squashes.
    *  metrics.grounded is false while carried. */
   carried?: boolean;
+  /** LOCK (optional; _spec/LOCK.md): how many lobes are locked in place (lockGrab); 0 when none. A locked lobe counts as a hand (the twoHanded rule). */
+  locked?: number;
 }
 
 export interface RayHit { point: V3; normal: V3; vertex: number; t: number }
@@ -94,13 +100,42 @@ export interface FingerDownArgs {
 /* CUT (_spec/CUT.md, owner request 2026-10-06): slice a squishy into pieces and reconnect them. Every member below is optional. */
 /** A cut plane in the body's world space. The 'a' side is where dot(p - point, normal) >= 0. */
 export interface CutPlane { point: V3; normal: V3 }
+/* ── CUT2 (TRUE CUT, _spec/CUT2.md): a piece is the real part of the squishy on its side of the cut planes ── */
+export interface Quat { x: number; y: number; z: number; w: number }
+
+/** A plane in the WHOLE squishy's rest frame W (origin = the whole's rest centre of mass, axes = its rest axes, metres). Side A: n . p >= d. Shell -> PHYS. */
+export interface RestPlane { id: number; n: V3; d: number }
+/** Which part of the whole a body is, as the shell says it: a union of convex cells; a cell is a list of signed plane ids (+id side A, -id side B) whose
+ *  intersection, with the species silhouette, is that cell. cells [[]] (or no region) = the whole. `planes` holds every plane the cells name.
+ *  THIS BUILD asks for exactly ONE cell (a node of the cut tree); the list is kept so a union builder (tuning item T9) needs no contract change. */
+export interface PieceRegion {
+  planes: RestPlane[]; cells: number[][];
+  /** CUT3 leg 3 (additive): which connected part of the cell this body is, when the cell's region (the species cut by the cell's half-spaces) is made of several separate parts (a star's tips taken by
+   *  one plane). An opaque token: the shell copies the `part` of the CutPlan.partList entry it builds the body for, and never invents one. Absent = the cell is one body (every plain piece). */
+  part?: number;
+}
+/** PHYS -> RENDER: one bounding plane of a cell, in W; the piece lies where dot(n, p) <= d; n is a UNIT vector pointing OUT of the piece. The two faces of one cut carry
+ *  the same id with opposite n and d. A literal +id (side A of RestPlane k) is { n: -n_k, d: -d_k, id }; -id is { n: n_k, d: d_k, id }. */
+export interface CutPlaneRest { n: V3; d: number; id: number }
+export interface PieceInfo {
+  /** The uncut squishy's DETAIL-3 rest mesh (the same values as `new SoftBody(genome).restLocal`), the SAME array objects for every piece of one squishy
+   *  (pieces are grouped by this identity). `radius` = its restRadius. NOT the physics' internal detail-4 source solid. */
+  readonly whole: { readonly restLocal: Float32Array; readonly indices: Uint32Array; readonly radius: number };
+  /** restLocal_piece[i] = (the same material point in W) - offset. Composes for nested cuts. */
+  readonly offset: V3;
+  /** Piece coordinates: the centre the piece was re-meshed from; the mesh is star-shaped about it. */
+  readonly rayOrigin: V3;
+  /** The piece is the union of these convex cells (ONE cell in this build); each cell is the intersection of its planes. A fresh whole has [[]]. A merge publishes a NEW immutable PieceInfo. */
+  readonly cells: ReadonlyArray<ReadonlyArray<CutPlaneRest>>;
+}
+
 /** Construction options for one piece of a cut squishy (passed as SoftBodyCtor opts.piece). */
 export interface PieceOpts {
   /** Volume as a fraction of the whole squishy, 0.125..1; the rest shape is scaled by cbrt(frac). */
   frac: number;
   /** true: an eyeless rounded chunk with a flat cut face toward cutNormal that rounds over by the family's memory (CUT.md 1);
    *  false: the face piece, i.e. the species silhouette scaled to frac. */
-  chunk: boolean;
+  chunk?: boolean;   // CUT2: now optional; ignored when `region` is given (the shell passes `chunk: false` or nothing)
   /** World-space outward normal of the fresh cut face. */
   cutNormal?: V3;
   /** Initial centre of mass (m) and velocity (m/s). SoftBody: the piece is placed with its centre at `at` (never below its own resting
@@ -110,6 +145,39 @@ export interface PieceOpts {
    *  ({ frac: 1, chunk: false, at }, the shell's play mat) stays at its spot instead of being glided into the play body (physics round 3). */
   at?: V3;
   vel?: V3;
+  /** CUT2: absent = the old build (a whole at `at`, a scaled whole, or a legacy chunk). With `region`, `chunk` and `cutNormal` are ignored and `at` is EXACT (the constructor does not lift the piece). */
+  region?: PieceRegion;
+  /** CUT2: the parent's best-fit rotation: the child is born in the parent's pose (particles rotated about the parent's centre). */
+  frame?: Quat;
+}
+
+/** CUT3 leg 3 (additive): one body a cut makes, see CutPlan.partList. */
+export interface CutPart {
+  side: 0 | 1;                           // 0 = side A (the literal +id of the new plane), 1 = side B (-id)
+  part?: number;                         // the token for PieceRegion.part of this body's region (undefined = none)
+  frac: number;                          // share of THIS body's volume; the entries sum to 1 (1e-9)
+  off: V3;                               // its rest origin in this body's rest-local frame, as offA / offB (the exact mass centroid once built)
+  vel: V3;                               // mean world velocity of its material
+  aspect: number;                        // as aspectA
+}
+/** CUT2: the cut's plan, filled by SoftBody.planCut (pure, no allocation). */
+export interface CutPlan {
+  rest: { n: V3; d: number };            // the plane in W (normal toward side A); the physics latches it. prepareCut's retry ladder may shift d by at most 0.012 R0 and then updates every field below in the same step
+  fa: number;                            // share of THIS body's volume on side A, from the REST clip (= what is built, to 1e-12)
+  offA: V3; offB: V3;                    // each child's rest origin in THIS body's rest-local frame: world = center + R(frame) . off
+  velA: V3; velB: V3;                    // mean world velocity of each half of the current mesh (the shell subtracts the velocity the neck added)
+  aspectA: number; aspectB: number;      // sqrt(smallest / largest covariance eigenvalue) of each child, 0..1 (1 = ball, 0.1 = pancake)
+  sound: boolean;                        // false: a child is not one body (the cut would split off two separate parts)
+  soundPending?: boolean;                // true: only the cheap centroid test has run (sound is provisional)
+  /** CUT3 leg 3 (additive, INPUT): the shell sets this to true when it builds one body per `partList` entry. Absent or false: a side that falls into several separate parts is refused as before (`sound` false, the 'loose' line), so a shell that does not know parts never meets one. */
+  acceptParts?: boolean;
+  /** CUT3 leg 3 (additive): the number of bodies the cut makes: 2 (the pair A, B) or more when a side is made of several separate parts (a star's tips, both ears). */
+  parts?: number;
+  /** CUT3 leg 3 (additive): present when `parts` > 2 or the cut body itself carries a `region.part`: the bodies to build, side A's parts (ordered by their lowest mesh vertex) then side B's. The shell builds one
+   *  body per entry: region = this cut's cell with the literal +id (side 0) or -id (side 1) and `part` = the entry's token, frac = parent.frac x entry.frac, placed at off, velocity vel. Absent: the plain pair.
+   *  (The entries are reused objects: read them, do not keep them across planCut calls.) `fa`, `offA`, `velA` ... keep their meaning for side A as a whole. */
+  partList?: CutPart[];
+  built: boolean;                        // true: both children are cached and offA/offB are exact (otherwise estimated from the clipped centroids, <= 0.04 R0)
 }
 
 export interface SoftBodyLike {
@@ -131,18 +199,29 @@ export interface SoftBodyLike {
   /** Ray vs the current surface. Origin/dir in world space; dir need not be normalised. */
   raycast(origin: V3, dir: V3): RayHit | null;
 
-  // fingers: ids 0 and 1 (two fingers = pinch). The body owns the depth ramp so squeezing feels the same on every device.
-  fingerDown(id: 0 | 1, a: FingerDownArgs): void;
+  // fingers: slots 0 to 4 (two fingers = pinch; 2 to 4 only for touch fingers, LOCK). The body owns the depth ramp so squeezing feels the same on every device.
+  fingerDown(id: Slot, a: FingerDownArgs): void;
   /** Target press depth 0..1 (fraction of the max safe depth). The body eases toward it; the input layer ramps it with hold time. */
-  fingerPressure(id: 0 | 1, target: number): void;
+  fingerPressure(id: Slot, target: number): void;
   /** Slide the contact: world-space point on the surface under the pointer (from a fresh raycast). */
-  fingerMove(id: 0 | 1, point: V3): void;
+  fingerMove(id: Slot, point: V3): void;
   fingerUp(id: 0 | 1): void;
 
   /** Pull: attach the vertices around `vertex` to a world target; move it; let go (-> springs back, emits 'snap'). */
-  grab(id: 0 | 1, vertex: number, target: V3): void;
-  grabMove(id: 0 | 1, target: V3): void;
+  grab(id: Slot, vertex: number, target: V3): void;
+  grabMove(id: Slot, target: V3): void;
   grabRelease(id: 0 | 1): void;
+
+  /* LOCK (optional, additive; _spec/LOCK.md). A pull that is FULLY stretched (pull level >= 0.95) can be locked where it is. */
+  /** Lock the pull held on grab `slot`: true when it locked (that grab has a pull level >= 0.95, the body is not carried, and there is room: at most 6 locks, 4 on low quality).
+   *  The patch keeps its goal at the locked target, the grab slot is freed (the pointer is free to pull another lobe), and the time since the grab keeps counting.
+   *  False (nothing changes) when the grab is not fully stretched, there is none, the body is carried, or the limit is reached. */
+  lockGrab?(slot: number): boolean;
+  /** Let a lock go (index from lockAt / the lock list, or 'all'): the lobe snaps back and fires the normal 'snap' event per lock, heldFor = the WHOLE hold since the grab,
+   *  intensity = the pull level, finger = the slot it was grabbed with, so the meter pays it as a pull. An index that is not a lock does nothing. */
+  releaseLock?(index: number | 'all'): void;
+  /** Which lock's patch is the world point on (nearest locked vertex within the patch radius), or -1. The shell calls it for a press to see whether it lands on a locked lobe. */
+  lockAt?(point: V3): number;
 
   /**
    * Ceremony drivers (round 2, OPTIONAL: PHYS implements them; the renderer feature-detects and falls back to a procedural
@@ -169,7 +248,25 @@ export interface SoftBodyLike {
    *  volume within 3 % (6 % for the air-bleed families). On the table the waist sits at the bottom of the cross-section (the foot stays down);
    *  the neck band is in the contact fold limit while it forms. Swap in the pieces at t = 1: HELD at t = 1 for a second, 12 of 100 bodies
    *  crease past 120 degrees. */
-  setNeck?(plane: CutPlane | null, t: number): void;
+  setNeck?(plane: CutPlane | null, t: number, depth?: number): void;   // CUT2: optional depth 0..1 (1 = today's waist 0.3; 0.35 = a groove); the first call with t > 0 latches the rest plane
+  /** CUT2: a body that is a real part of a squishy publishes it; absent on a whole squishy. */
+  readonly piece?: PieceInfo;
+  /** CUT2: mean edge length (m): a pair's contact skin is 0.25 (meanEdgeA + meanEdgeB). */
+  readonly meanEdge?: number;
+  /** CUT2: 0..1 progress of a running setRegion morph, 0 otherwise; the render cross-fades the old cut faces to skin by it. */
+  readonly morphT?: number;
+  /** CUT2: pure; fills `out`, no allocation, <= 4 ms. 'at': the plane as given. 'median': ignore plane.point, find the offset along plane.normal that halves the volume.
+   *  'latched': reuse the rest plane latched by setNeck and recompute only velA, velB. false when the plane misses the body. */
+  planCut?(plane: CutPlane, out: CutPlan, mode?: 'at' | 'median' | 'latched'): boolean;
+  /** CUT2: after a successful planCut, build the two children in time slices (once per neck step, 3 ms); true when both are cached, false while stages remain,
+   *  'thin' | 'loose' when the cut is refused. `maxStages` caps the work per call (tests pass it with budgetMs = Infinity). */
+  prepareCut?(budgetMs: number, maxStages?: number): boolean | 'thin' | 'loose';
+  /** CUT2: put a freshly built piece (before its first step) at world `at` with velocity `vel` and rotation `frame`, exactly (no lift), and re-home it. */
+  placeAt?(at: V3, vel: V3, frame?: Quat): void;
+  /** CUT2: morph the rest shape AND volume to `region` (the one cell of a join's node) over `seconds`; at the end the body commits in place and publishes a new `piece`. [[]] = the original. */
+  setRegion?(region: PieceRegion, seconds: number): void;
+  /** CUT2: build the target of a join in time slices, once per step while a join is armed; true when cached. */
+  prepareRegion?(region: PieceRegion, budgetMs: number, maxStages?: number): boolean;
   /** Grow or shrink the rest volume smoothly to a new fraction of the whole over `seconds` (reconnect growth, the giver's shrink). */
   setFrac?(frac: number, seconds: number): void;
   /** Soft body-to-body contact (stage B item B2) against `others` this frame: pushes particles apart on both sides and emits 'bump'.
@@ -192,7 +289,7 @@ export interface SoftBodyLike {
    * Optional (PHYS addition): the fingertip sphere of finger `id` in world space (centre, radius, eased depth 0..1), or null
    * when that finger has no tip. For a finger ghost / contact FX. Allocates, so call it once per frame at most.
    */
-  tip?(id: 0 | 1): { x: number; y: number; z: number; r: number; depth: number } | null;
+  tip?(id: Slot): { x: number; y: number; z: number; r: number; depth: number } | null;
   /** Optional (PHYS addition): pay the JIT warm-up now (once, at load) so the first touches do not hitch; leaves the body's state bit-identical. */
   warmUp?(): void;
 }
@@ -210,6 +307,8 @@ export interface AudioSettings {
   /** Round 3 (optional): music bed volume 0..1, relative to master (it sits under the master gain). 0.45 = the designed level
    *  (about -29 dBFS long-term at master 1), 1 = +6 dB over that, 0 = off (nothing is scheduled). Default 0.45. */
   music?: number;
+  /** UI v3 (optional): interface sounds (SquishAudio.ui) on or off. Default on. The shell passes Settings.uiSounds. */
+  uiSounds?: boolean;
 }
 
 export interface SquishVoiceHandle {
@@ -218,6 +317,9 @@ export interface SquishVoiceHandle {
   /** Fade out and free the nodes. `atTime` (AudioContext time) lets offline renders script the end; live use omits it. */
   end(fadeS?: number, atTime?: number): void;
 }
+
+/** UI v3 (_spec/UI.md 7): the interface sound kinds; soft sine / triangle sounds on one pentatonic scale, quieter than the toy. */
+export type UiKind = 'tick' | 'press' | 'select' | 'on' | 'off' | 'open' | 'close' | 'back' | 'error' | 'toast' | 'trophy' | 'sticker';
 
 export interface SquishAudio {
   readonly ready: boolean;
@@ -277,6 +379,8 @@ export interface SquishAudio {
   /** CUT (optional): two pieces flowed back together (a gloopy "blorp" sized by the merged fraction); all = the Reconnect-all
    *  flourish as the squishy becomes whole again. */
   rejoin?(p: { frac: number; all?: boolean; pan?: number; calm?: boolean; /** the squishy's own pitch ratio (genome size); default 1 */ pitch?: number }): void;
+  /** UI v3 (optional): an interface sound. Procedural, rate-limited per kind, mute-aware, dropped before the first unlock (UI.md 7). */
+  ui?(p: { kind: UiKind; calm?: boolean }): void;
   /** Harness readout for the round-3 parts: music scheduler state and cost, and how many calls the rate limiters swallowed. */
   detailStats?(): {
     music: { on: boolean; playing: boolean; sessions: number; field: number; liveNotes: number; maxLiveNotes: number; notes: number; dropped: number; ticks: number; tickMsMean: number; tickMsMax: number; tickMsRecentP99: number; tickMsRecentMax: number; ducked: boolean; volume: number };
@@ -301,7 +405,9 @@ export interface AddBodyOpts {
   tier?: TierName;
   /** Render-space offset of the body (the simulated body itself keeps its own origin; the stage draws it here). */
   position?: V3;
-  /** CUT (optional): a piece without a face (an eyeless chunk of the same jelly). Default false. */
+  /** CUT2 (optional): hint only: the stage infers it from body.piece. */
+  piece?: boolean;
+  /** CUT (optional, @deprecated by CUT2): a piece without a face (an eyeless chunk of the same jelly), honoured only for a body without `piece`. Default false. */
   chunk?: boolean;
 }
 
@@ -378,7 +484,13 @@ export interface StageLike {
   spawnFx(kind: FxKind, at: V3, intensity: number): void;
   /** CUT (optional): a thin warm seam glow along `plane` on body `bodyId` while it necks; t 0..1 (0 or a null plane clears it).
    *  A glow, never a flash: the flash governor applies. */
-  setCutSeam?(bodyId: number, plane: CutPlane | null, t: number): void;
+  setCutSeam?(bodyId: number, plane: CutPlane | null, t: number, opts?: { from?: V3; to?: V3 }): void;   // CUT2: optional 4th parameter: the swipe's two ends on the plane (world space)
+  /** CUT2 (optional): make an existing view the one the camera follows (tier-styled); removeBody(primary) is then allowed. Lets a cut change the play body WITHOUT setBody. */
+  setPrimaryBody?(id: number): void;
+  /** CUT2 (optional): build and dispose one hidden piece view so the first real cut does not pay it. */
+  warmPieces?(): void;
+  /** CUT2 (optional): the two eye centres of a WHOLE body's face, in the rest-local frame of the whole; null for a body without a face. */
+  eyeAnchors?(id: number): { left: V3; right: V3 } | null;
   /** CUT (optional): the reconnect bridge, a glowing neck between two bodies; t 0..1 (0 clears). */
   setBridge?(aId: number, bId: number, t: number): void;
   dispose(): void;
@@ -417,6 +529,9 @@ export interface StageLike {
    *  stretches between them as they separate and snaps (long for sticky stretch and slime, barely there for gel; shorter in calm),
    *  render-owned from here; `onStrand` reports it with bodyId = aId. Unknown ids are ignored. */
   partPieces?(aId: number, bId: number): void;
+  /** LOCK (optional; _spec/LOCK.md): draw a thin marker ring at each locked lobe. `points` = the world points of the locked patches (at most 6), handed every sim step while there are locks and once empty when
+   *  the last goes; the array is the caller's own and is rewritten in place (read it, do not keep it). Calm: a still, softer ring; a glow, never a flash. */
+  setLockMarkers?(points: readonly V3[]): void;
 }
 
 /* ───────────────────────────── shell (src/main.ts, input, ui) ───────────────────────────── */
@@ -442,6 +557,8 @@ export interface Settings {
   fastOpen?: boolean;
   /** Single-key shortcuts (G gravity, M mute) on or off (WCAG 2.1.4). Default on. */
   shortcuts?: boolean;
+  /** UI v3: interface sounds (tick, press, select ...) on or off. Default on (UI.md 7). */
+  uiSounds?: boolean;
 }
 
 /** `window.__WH__`, exposed only when the URL has ?dev=1. Deterministic stepping makes screenshots and probes reproducible. */

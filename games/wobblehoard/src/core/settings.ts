@@ -91,8 +91,8 @@ export function defaultSettings(env: SettingsEnv = detectEnv()): Settings {
 export type ResolvedSettings = Required<Settings>;
 
 /** Defaults of the optional round-2 fields (SOUND.md round 3: music 0.45; DESIGN 6.6: calm follows reduced motion). */
-export function optionalDefaults(env: SettingsEnv): Pick<ResolvedSettings, 'music' | 'extraSquish' | 'calm' | 'skipAnimations' | 'fastOpen' | 'shortcuts'> {
-  return { music: 0.45, extraSquish: false, calm: env.reducedMotion, skipAnimations: false, fastOpen: false, shortcuts: true };
+export function optionalDefaults(env: SettingsEnv): Pick<ResolvedSettings, 'music' | 'extraSquish' | 'calm' | 'skipAnimations' | 'fastOpen' | 'shortcuts' | 'uiSounds'> {
+  return { music: 0.45, extraSquish: false, calm: env.reducedMotion, skipAnimations: false, fastOpen: false, shortcuts: true, uiSounds: true };
 }
 
 /** Fill the optional fields the player never chose with their defaults. Never throws. */
@@ -101,13 +101,13 @@ export function resolveSettings(s: Settings, env: SettingsEnv): ResolvedSettings
   return {
     volume: s.volume, squishBoost: s.squishBoost, haptics: s.haptics, shake: s.shake, gravity: s.gravity, quality: s.quality,
     music: s.music ?? d.music, extraSquish: s.extraSquish ?? d.extraSquish, calm: s.calm ?? d.calm,
-    skipAnimations: s.skipAnimations ?? d.skipAnimations, fastOpen: s.fastOpen ?? d.fastOpen, shortcuts: s.shortcuts ?? d.shortcuts,
+    skipAnimations: s.skipAnimations ?? d.skipAnimations, fastOpen: s.fastOpen ?? d.fastOpen, shortcuts: s.shortcuts ?? d.shortcuts, uiSounds: s.uiSounds ?? d.uiSounds,
   };
 }
 
-export const SETTING_KEYS = ['volume', 'squishBoost', 'haptics', 'shake', 'gravity', 'quality', 'music', 'extraSquish', 'calm', 'skipAnimations', 'fastOpen', 'shortcuts'] as const;
+export const SETTING_KEYS = ['volume', 'squishBoost', 'haptics', 'shake', 'gravity', 'quality', 'music', 'extraSquish', 'calm', 'skipAnimations', 'fastOpen', 'shortcuts', 'uiSounds'] as const;
 const OPTIONAL_UNITS = ['music'] as const;
-const OPTIONAL_BOOLS = ['extraSquish', 'calm', 'skipAnimations', 'fastOpen', 'shortcuts'] as const;
+const OPTIONAL_BOOLS = ['extraSquish', 'calm', 'skipAnimations', 'fastOpen', 'shortcuts', 'uiSounds'] as const;
 
 const unit = (v: unknown, fallback: number): number =>
   typeof v === 'number' && Number.isFinite(v) ? clamp(v, 0, 1) : fallback;

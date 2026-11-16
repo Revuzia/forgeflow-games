@@ -43,6 +43,8 @@ export interface Capsules {
   readonly onTable: boolean;
   readonly opening: boolean;
   readonly holding: boolean;
+  /** this pointer is the one holding the capsule (game.ts input.isDown: the DOM glue forwards a pointer's moves only while somebody owns it) */
+  holds(id: number): boolean;
   /** pointer routing: true = the capsule took this pointer */
   pointerDown(id: number, x: number, y: number): boolean;
   pointerMove(id: number, x: number, y: number): boolean;
@@ -142,6 +144,7 @@ export function createCapsules(d: CapsulesDeps): Capsules {
     get onTable() { return !!cap && cap.landed; },
     get opening() { return opening; },
     get holding() { return hold !== null; },
+    holds: (id) => hold !== null && hold.id === id,
     pointerDown(id, x, y) {
       if (!cap || opening || busy()) return false;
       let hit = false;

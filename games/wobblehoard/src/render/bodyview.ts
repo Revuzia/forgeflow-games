@@ -3,7 +3,7 @@
 // BodyProxy (offset + puppet) instead of the raw body, owns its GPU objects and disposes them all in dispose().
 // Shared across views: the environment (EnvHub), the unit decal quad, and the compiled shader programs (same cache keys).
 import * as THREE from 'three';
-import type { FxKind, SoftBodyLike, TierName, V3 } from '../contracts.ts';
+import type { FxKind, PieceInfo, SoftBodyLike, TierName, V3 } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
 import { BodyProxy } from './bodyproxy.ts';
 import { Core } from './core.ts';
@@ -11,7 +11,12 @@ import { Decals, type Footprint } from './decals.ts';
 import type { EnvHub } from './env.ts';
 import { Face } from './face.ts';
 import { Fx } from './fx.ts';
+import { FrameHold } from './framing.ts';
 import { JellyView } from './jelly.ts';
+import { LOD_TUNING } from './lod.ts';
+import { isCutPiece } from './pieceBuild.ts';
+import { buildPieceEyes } from './pieceEyes.ts';
+import { wholeRefFor } from './wholeRef.ts';
 import { JellyMaterials } from './material.ts';
 import { renderPalette, type JellyPalette } from './oklch.ts';
 import type { TierSpec } from './quality.ts';
@@ -23,6 +28,8 @@ import { TIERS } from './quality.ts';
 type TipSphere = { x: number; y: number; z: number; r: number; depth: number };
 /** Calm effects: the cut seam's strength on top of the stage's calm halving (see update). */
 const CALM_SEAM = 0.45;
+/** CUT3 small-piece look (lod 1): the share of the ember a piece must hold to draw the ember's blob (a sliver draws none; the jelly's own glow still carries it). */
+const LOD_MIN_KEPT = 0.06;
 
 export class BodyView {
   readonly id: number;
@@ -74,6 +81,30 @@ export class BodyView {
    * no face, and the squishy's world-space tier FX (aura, dome, pillar, motes, stars) stay with the face piece.
    */
   readonly chunk: boolean;
+  /**
+   * CUT2 (_spec/CUT2.md 8): this body is a REAL part of a squishy (body.piece with at least one cut plane): its fine mesh is a subdivision of its sim triangles with the cut face as its own
+   * class, its size follows the WHOLE (scale, no setFrac growth), it draws just the eyes it holds (pieceEyes.ts; a Face with none has no mesh) and the part of the ember it holds (Core.setPiece).
+   * A body without `piece` takes today's code path unchanged; `chunk` is honoured only then.
+   */
+  readonly isPiece: boolean;
+  /** SR2: this body's held extent for the band framing (framing.ts). */
+  readonly hold = new FrameHold();
+  /**
+   * CUT3 (lod.ts, _spec/CUT3.md 3): 0 = everything; 1 = one of the MANY small pieces (the stage keeps the LOD_TUNING.fullViews largest views at 0, set every frame): its table shadow and
+   * light pool fade out (and stop drawing), it has no tier FX / glitter / bubbles / aura, and a mini among many draws no ember (a piece's ember: the stage lets the two that hold the most draw it). Its jelly and its
+   * eyes are drawn as always; a finger on it still strings.
+   */
+  private lodNow = 0;
+  get lod(): number { return this.lodNow; }
+  setLod(l: 0 | 1): void {
+    if (l === this.lodNow) return;
+    this.lodNow = l;
+    this.decals.wanted = l === 0;
+    this.fx.group.visible = l === 0;
+    this.rarity.group.visible = l === 0 && !this.chunk;
+    this.core.minKept = l === 0 ? 0.002 : LOD_MIN_KEPT;
+    this.core.setHidden(l === 1 && !this.isPiece);   // (a small mini among many: no ember blob / halo; a true piece draws the ember it really holds)
+  }
   /** 0..1, set by the stage every frame: every CUT glow on this body is held down by it (calm effects, a recent ceremony flash). */
   glowK = 1;
   // CUT seam (setCutSeam): the plane in the BODY's world space (the render offset is added per frame), eased strength
@@ -117,12 +148,14 @@ export class BodyView {
   private lastCx = NaN; private lastCz = NaN;
 
   constructor(id: number, inner: SoftBodyLike, genome: Genome, tier: TierName, spec: TierSpec, hub: EnvHub, quad: THREE.BufferGeometry, owned: boolean, chunk = false, lite = false) {
-    this.id = id; this.genome = genome; this.tier = tier; this.style = TIER_STYLES[tier]; this.spec = spec; this.owned = owned; this.chunk = chunk;
+    this.id = id; this.genome = genome; this.tier = tier; this.style = TIER_STYLES[tier]; this.spec = spec; this.owned = owned;
+    this.isPiece = isCutPiece(inner.piece);
+    this.chunk = chunk && !this.isPiece;
     this.lite = lite;
     this.frac0 = typeof inner.frac === 'number' && Number.isFinite(inner.frac) && inner.frac > 0 ? inner.frac : 1;
     this.proxy = new BodyProxy(inner);
     this.palette = renderPalette(genome);
-    this.scale = inner.restRadius / 0.5;
+    this.scale = (this.isPiece ? (inner.piece as { whole: { radius: number } }).whole.radius : inner.restRadius) / 0.5;   // (a piece keeps the WHOLE's scale: eye, core, bubble and seam sizes do not shrink with it)
     // the rest silhouette's horizontal reach from the centre (a wide dumpling or a long bean reaches well past restRadius): framing
     let hw = inner.restRadius;
     { const P = inner.positions, c = inner.center; for (let i = 0; i < P.length; i += 3) { const d = Math.hypot(P[i] - c.x, P[i + 2] - c.z); if (d > hw) hw = d; } }
@@ -135,9 +168,10 @@ export class BodyView {
     this.jelly.mesh.renderOrder = 10;
     this.core = new Core(genome, this.palette, this.scale, this.style);
     this.core.setLite(!spec.transmission);
-    this.core.noHalo = lite && chunk;   // RD-06: a lite chunk's core glow stays in the jelly shader's own halo term (one draw fewer)
-    this.face = new Face(this.proxy, genome, this.jelly, hub);
-    this.face.pose = this.pose;
+    this.core.noHalo = lite && this.chunk;   // RD-06: a lite chunk's core glow stays in the jelly shader's own halo term (one draw fewer)
+    this.hubRef = hub;
+    this.face = this.makeFace(hub);   // (makeFace hands the face the render pose, PLAYGROUND)
+    this.core.setPiece(this.proxy.piece);
     this.fx = new Fx(genome, this.palette, this.jelly.mapper, spec, this.scale, this.style);
     this.decals = new Decals(quad);
     this.applyPoolColour();
@@ -145,7 +179,7 @@ export class BodyView {
     this.strands = new TackStrands(hub, this.palette.body, this.palette.pale);
     this.group.add(this.jelly.mesh, this.core.group, this.face.group, this.fx.group, this.decals.shadow, this.decals.pool, this.rarity.group, this.strands.group);
     this.group.frustumCulled = false;
-    if (chunk) { this.faceHidden = true; this.face.group.visible = false; this.rarity.group.visible = false; }
+    if (this.chunk) { this.faceHidden = true; this.face.group.visible = false; this.rarity.group.visible = false; }
     this.update(0, 0, null, null, 0, 0);
   }
 
@@ -206,6 +240,7 @@ export class BodyView {
     // PLAYGROUND: a sleeping body is frozen, so its fine mesh (the bulk of a view's CPU) keeps last frame's evaluation (RD-05); a touch wakes it
     // first in physics, and the shell clears the flag (a finger on a body flagged asleep re-evaluates anyway)
     if (!this.asleep || m.fingers > 0 || m.grabbed || this.fineUpdates === 0) { j.update(); this.fineUpdates++; }
+    if (this.isPiece && body.piece !== this.facePiece) this.rebuildFace();   // a merge published a NEW PieceInfo: which eyes and how much ember this piece holds changed
     // the player-caused-motion latch (RD-14, D-37): a finger or a grab sets it; it clears once the body has been still for 0.4 s
     {
       const c = body.center, ddx = c.x - this.lastCx, ddz = c.z - this.lastCz;   // (no Math.hypot: it boxes its arguments)
@@ -227,10 +262,10 @@ export class BodyView {
     this.smComp += (rawSq - this.smComp) * (1 - Math.exp(-dt * 14));
     this.smStretch += (Math.max(m.stretch, j.pull * 0.6 * this.grabGate) - this.smStretch) * (1 - Math.exp(-dt * 10));
     // CUT: a piece growing or shrinking (setFrac: a reconnect) keeps its core, glows and contact light in proportion
-    const fr = this.proxy.inner.frac, fs = typeof fr === 'number' && Number.isFinite(fr) && fr > 0 ? Math.min(3, Math.max(0.3, Math.cbrt(fr / this.frac0))) : 1;
+    const fr = this.proxy.inner.frac, fs = !this.isPiece && typeof fr === 'number' && Number.isFinite(fr) && fr > 0 ? Math.min(3, Math.max(0.3, Math.cbrt(fr / this.frac0))) : 1;   // (a true piece never scales with frac: a merge is a rest-shape morph)
     this.core.sizeMul = this.proxy.scale * fs;
     this.sizeK = fs * this.proxy.scale; this.fracK = fs;
-    this.core.update(body, dt, time, this.smComp);
+    this.core.update(body, dt, time, this.smComp, j.caps);
     const u = this.mats.uniforms;
     u.uTime.value = time;
     u.uCompress.value = this.smComp;
@@ -260,7 +295,7 @@ export class BodyView {
     { const L = this.look, N = this.lookNow, k = 1 - Math.exp(-dt * 2.5);
       for (let i = 0; i < 5; i++) { N[i] += (L[i] - N[i]) * k; if (L[i] === 0 && N[i] < 1e-4) N[i] = 0; }
       u.uLook.value.set(N[0], N[1], N[2], N[3]); u.uSnowL.value = N[4]; }
-    if (!this.chunk) this.face.update(dt, time, pointer, camera, this.smComp, m.fingers > 0 || m.grabbed ? Math.max(0, rate) : rate, m.fingers > 0 || m.grabbed);
+    if (!this.chunk && this.face.eyeCount > 0) this.face.update(dt, time, pointer, camera, this.smComp, m.fingers > 0 || m.grabbed ? Math.max(0, rate) : rate, m.fingers > 0 || m.grabbed);   // (a piece squints and widens with ITS OWN compression)
     // CUT seam: eased in (~0.1 s) and out (~0.2 s): a glow, never a step
     // (calm: the stage's glowK halves every cut light, and the seam takes a further x0.45: the jelly shader's seam term saturates (tone mapped), so a plain half of a
     // glow that was already clipped to white read exactly as bright as the full one, VERIFY_RENDER_B B-m3)
@@ -272,7 +307,7 @@ export class BodyView {
     u.uSeamAmt.value = this.seamAmt;
     u.uSeamW.value = 0.03 * this.scale * fs;
     u.uSpotR.value = 0.16 * this.scale * fs;
-    this.fx.update(dt, time, body);
+    if (this.lodNow === 0) this.fx.update(dt, time, body);   // (CUT3: a small piece among many draws no FX: no glitter, no bubbles, no dust)
     const tell = Math.min(1, Math.max(0, this.extraPoolTell)) * Math.min(1, this.extraPool * 2);
     if (tell !== this.poolTellNow) {   // the ceremony light on the table, in the tier colour (no allocation: the setter copies)
       this.poolTellNow = tell;
@@ -291,20 +326,62 @@ export class BodyView {
       this.fx.spawn('bubbles', this.snapAt, 0);
     }
     if (camera) this.rarity.frameFit = Math.min(1, Math.max(0.72, camera.aspect / 0.75));
-    this.rarity.update(dt, time, body, fp.rx, fp.rz, floatT, this.frameRoom);
+    if (this.lodNow === 0) this.rarity.update(dt, time, body, fp.rx, fp.rz, floatT, this.frameRoom);
   }
 
   private readonly snapAt = { x: 0, y: 0, z: 0 };
+
+  private hubRef: EnvHub | null = null;
+  /** The PieceInfo the current face was built from (CUT2): a merge publishes a NEW one and the face (which eyes this piece holds) is built again, once. */
+  private facePiece: PieceInfo | undefined;
+  /** The face of this view: a whole's (both eyes), or for a piece just the eyes it holds, from the whole's eye placement (wholeRef.ts / pieceEyes.ts). */
+  private makeFace(hub: EnvHub): Face {
+    const pc = this.proxy.piece, pb = this.jelly.pb;
+    this.facePiece = pc;
+    let f: Face;
+    if (this.isPiece && pc && pb) {
+      const w = pc.whole;
+      const ref = wholeRefFor({ vertexCount: (w.restLocal.length / 3) | 0, indices: w.indices, restLocal: w.restLocal }, w.radius, this.genome);
+      f = new Face(this.proxy, this.genome, this.jelly, hub, buildPieceEyes(this.proxy.restLocal, this.proxy.indices, pc, pb, ref));
+    } else f = new Face(this.proxy, this.genome, this.jelly, hub, undefined, this.faceLod);
+    f.pose = this.pose;   // PLAYGROUND: the eye anchors ride the render pose (a rebuilt piece face keeps it)
+    return f;
+  }
+  /** CUT3: a small mini (a complete copy, not a true piece; body scale under 0.7) draws its eyes from a coarser dome in one pass: sqrt of its size, 0.4 .. 1 (a whole stays 1 and two passes, exactly as before). */
+  private get faceLod(): { domeQ: number; singlePass: boolean } | undefined {
+    const s = this.scale;
+    return this.isPiece || !(s < 0.7) || !LOD_TUNING.enabled ? undefined : { domeQ: Math.max(0.4, Math.min(1, Math.sqrt(s))), singlePass: true };
+  }
+  private rebuildFace(): void {
+    const old = this.face;
+    this.face = this.makeFace(this.hubRef as EnvHub);
+    old.group.removeFromParent(); old.dispose();
+    this.group.add(this.face.group);
+    this.core.setPiece(this.proxy.piece);
+  }
 
   /** CUT seam (stage.setCutSeam): the plane in the body's world space, t 0..1 (0 or a null plane: the glow eases out). */
   setSeam(plane: { point: V3; normal: V3 } | null, t: number): void {
     const n = plane?.normal, p = plane?.point;
     const l = n ? Math.sqrt(n.x * n.x + n.y * n.y + n.z * n.z) : 0;
     if (!n || !p || !(l > 1e-6) || !Number.isFinite(l) || !Number.isFinite(p.x + p.y + p.z) || !(t > 0)) { this.seamTarget = 0; return; }
+    // face-aware (CUT2 8.5): a plane that IS one of this piece's live cut faces never lights the skin band (a face lies at distance 0 of its own plane: the band's gaussian would light all
+    // of it at about ten times the thin line's strength). The face's own sheen channel is task R2.
+    if (this.isPiece && this.planeIsFace(n.x / l, n.y / l, n.z / l, (n.x * p.x + n.y * p.y + n.z * p.z) / l)) { this.seamTarget = 0; return; }
     this.seamN.set(n.x / l, n.y / l, n.z / l);
     this.seamD = this.seamN.x * p.x + this.seamN.y * p.y + this.seamN.z * p.z;
     const x = Math.min(1, t / 0.45);
     this.seamTarget = 0.9 * x * x * (3 - 2 * x);   // rises with the waist, full well before the pieces part
+  }
+  /** Does the plane (unit normal, offset in the body's world space) coincide with one of the live cut faces: |cos| >= 0.97 and the face centroid within 0.03 R0 of the plane? */
+  private planeIsFace(nx: number, ny: number, nz: number, d: number): boolean {
+    const off = this.proxy.offset, r0 = this.scale * 0.5, shift = nx * off.x + ny * off.y + nz * off.z;
+    for (const c of this.jelly.caps) {
+      if (!c.live) continue;
+      if (Math.abs(nx * c.nx + ny * c.ny + nz * c.nz) < 0.97) continue;
+      if (Math.abs(nx * c.cx + ny * c.cy + nz * c.cz - shift - d) <= 0.03 * r0) return true;
+    }
+    return false;
   }
   /** The seam of the body this piece was cut from, carried over at its current strength, fading out (render world space). */
   carrySeam(nx: number, ny: number, nz: number, d: number, amt: number): void {

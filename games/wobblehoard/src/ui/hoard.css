@@ -1,444 +1,349 @@
-/* Squish Keeper Hoard (SHELL-2b): the HUD entry, the shelf panel, the detail card, the gift and today panes, the merge pad and Tidy-up.
-   Tokens only (--wh-*), system fonts, inline SVG. Imported by src/shell/hudBinding.ts (src/ui/hoard/** may import only .ts modules). */
-
-/* ---------- HUD: Hoard button, mat chip, capsule dock ---------- */
-.hud-slot { display: flex; gap: 8px; align-items: end; }
-.hoard-btn, .mat-chip {
-  position: relative; min-height: var(--tap); display: inline-flex; align-items: center; gap: 8px;
-  padding: 6px 14px 6px 10px; border-radius: 16px; border: 1px solid var(--wh-edge);
-  background: var(--wh-panel); color: var(--wh-cream); font: inherit; font-weight: 800; cursor: pointer;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, .35); touch-action: manipulation;
-}
-.hoard-btn:hover, .mat-chip:hover { border-color: var(--wh-amber); }
-.hoard-btn[aria-expanded="true"] { border-color: var(--wh-amber); color: var(--wh-amber); }
-.hoard-btn .hoard-glyph { width: 26px; height: 26px; }
-.hoard-btn-text { display: grid; line-height: 1.05; text-align: left; }
-.hoard-btn-word { font-size: 15px; }
-.hoard-btn-count { font-size: 12px; font-weight: 700; color: var(--wh-cream-dim); }
-.hoard-btn-dot { position: absolute; top: -4px; right: -4px; width: 12px; height: 12px; border-radius: 50%; background: var(--wh-coral); border: 2px solid var(--wh-ink); display: none; }
-.hoard-btn[data-dot="true"] .hoard-btn-dot { display: block; }
-body:not([data-calm="true"]) .hoard-btn[data-dot="true"] .hoard-btn-dot { animation: wh-dot 2.4s ease-in-out infinite; }
-@keyframes wh-dot { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 90, 77, .55); } 50% { box-shadow: 0 0 0 6px rgba(255, 90, 77, 0); } }
-.mat-chip { padding: 6px 12px; font-size: 14px; }
-.mat-chip-n { min-width: 22px; padding: 1px 6px; border-radius: 999px; background: var(--wh-amber); color: var(--wh-ink); font-size: 13px; text-align: center; }
-
-.capsule-pips { display: inline-flex; gap: 3px; align-items: center; }
-.capsule-pips:empty { display: none; }
-.pip { width: 9px; height: 13px; border-radius: 5px; background: var(--wh-ink); opacity: .55; }
-.pip.first { opacity: 1; box-shadow: 0 0 0 2px rgba(20, 16, 42, .25); }
-.capsule-btn[data-full="true"] { box-shadow: 0 3px 0 var(--wh-amber-deep), 0 0 0 3px var(--wh-cream); }
-
-@media (max-width: 480px) {
-  .hud-bottom { grid-template-columns: minmax(0, 1fr) auto auto; }
-  .hoard-btn { padding: 6px 8px; gap: 4px; }
-  .hoard-btn-word { display: none; }
-  .hoard-btn-count { font-size: 11px; }
-  .mat-chip > span:first-child { display: none; }
-}
-@media (max-width: 380px) {
-  .capsule-btn-label { display: none; }
-  .hoard-btn-count { display: none; }
-}
-/* SHELL-4 (screenshot review, _shots/shell/hint_capsule_390x844.png): while a capsule waits, the Open button joins the bottom row and squeezed the
-   name tag to "Dol..." with its tier word running on under the Hoard button. On a phone the Hoard button then drops its "1 of 50" count (the
-   Hoard says it), and the tier word is cut off INSIDE the tag (an ellipsis) instead of sliding under the next button. */
-@media (max-width: 480px) {
-  .hud-bottom:has(.capsule-btn:not([hidden])) .hoard-btn-count { display: none; }
-}
-.nametag { overflow: hidden; }
-.nametag-tier { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-/* SHELL-4 (third engineer, section hint-capsule at 390 x 844): even so, the word "Open" (69 px) left the tag 109 px and cut its tier word to "COMMO…".
-   From 381 to 480 px, while a capsule waits, the button shows its capsule pips instead of the word, as it already does under 381 px (its aria-label,
-   "Open a capsule (n waiting)", names it for assistive tech), and the tag gets about 25 px back. */
-@media (max-width: 480px) and (min-width: 381px) {
-  .hud-bottom:has(.capsule-btn:not([hidden])) .capsule-btn-label { display: none; }
-  .hud-bottom:has(.capsule-btn:not([hidden])) .capsule-pips:not(:empty) { display: inline-flex; }
-}
-
-/* ---------- the panel ---------- */
-.hoard {
-  position: fixed; z-index: 7;
-  top: calc(var(--safe-t) + 64px); bottom: calc(var(--safe-b) + 18px);
-  left: 50%; transform: translateX(-50%);
-  width: min(880px, calc(100vw - 2 * var(--gutter) - var(--safe-l) - var(--safe-r)));
-  display: grid; grid-template-rows: auto auto auto minmax(0, 1fr);
-  border-radius: 22px; background: var(--wh-panel); border: 1px solid var(--wh-panel-edge);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, .55); overflow: hidden;
-  touch-action: pan-y; -webkit-user-select: none; user-select: none;
-}
+/* Squish Keeper Hoard (UI.md 6, B5): the cabinet panel, the detail card, gift and today panes, the merge pad with its hold-to-merge button, Tidy-up
+   and the reveal plate. The look is the kit's: the roles of base.css (--k-*), kit classes where an element carries them (k-btn k-gel k-chip k-tier
+   k-frame k-switch k-group-title), tokens (--wh-*) for colour, radius and elevation; spacing and type use the UI.md 3.2 scale (4 8 12 16 24 32 48 |
+   12 14 16 18 22 28). Only the Hoard's own layout lives here (the plinth, the double-rim tier frame, the hold fill). Selector names the browser
+   harness keys on are kept (.hoard .plinth .hcard .hmerge .hold-btn .fchip .tool-seg .seg-btn ...). The HUD's Hoard button and the mat chip are
+   hud.css's. Imported by src/shell/hudBinding.ts. Forms: desktop panel + card | phone full-screen sheet (< 640 px) | short heights (<= 440 px). */
+body { --hd-t: env(safe-area-inset-top, 0px); --hd-r: env(safe-area-inset-right, 0px); --hd-b: env(safe-area-inset-bottom, 0px); --hd-l: env(safe-area-inset-left, 0px);
+  --hd-lift: inset 0 1px 0 var(--wh-rim), var(--wh-e1); --hd-tile: inset 0 1px 0 var(--wh-rim), 0 0 0 2px var(--k-ink), var(--wh-e1); --hd-sel: inset 0 0 0 1px var(--k-sel-edge), var(--wh-e1);
+  --k-cavity: var(--wh-ink); --k-an-hoard: hoard-in; --k-an-hcard: hcard-in; --k-an-hmerge: hmerge-in; }
+body[data-calm="true"] { --k-an-hoard: none; --k-an-hcard: none; --k-an-hmerge: none; }
+@media (prefers-reduced-motion: reduce) { body:not([data-calm="false"]) { --k-an-hoard: none; --k-an-hcard: none; --k-an-hmerge: none; } }
 /* the panel is modal: the HUD and a reveal plate under it would only peek out around its edges */
-body[data-hoard="open"] .hud, body[data-hoard="open"] .plate, body[data-hoard="card"] .plate, body[data-hoard="open"] .dev { visibility: hidden; }
-.hoard-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 12px 14px 8px 20px; }
-.hoard-head-l { display: flex; align-items: baseline; gap: 10px; }
-.hoard-title { margin: 0; font-size: 24px; font-weight: 900; letter-spacing: .02em; }
-.hoard-title:focus { outline: none; }
-.hoard-ledger { padding: 2px 9px; border-radius: 999px; border: 1px dashed var(--wh-edge); color: var(--wh-cream-dim); font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
-.hoard-head-c { display: grid; gap: 4px; justify-items: end; }
-.hoard-count { margin: 0; font-size: 14px; font-weight: 800; color: var(--wh-cream-dim); }
-.hoard-bar { width: min(220px, 100%); height: 8px; border-radius: 99px; background: var(--wh-track); overflow: hidden; }
-.hoard-bar-fill { display: block; height: 100%; width: calc(var(--fill, 0) * 100%); background: var(--wh-amber); border-radius: 99px; }
-.hoard-note { display: flex; align-items: center; gap: 8px; margin: 0 14px 6px 20px; padding: 8px 8px 8px 14px; border-radius: 14px; background: var(--wh-track); }
-.hoard-note-text { margin: 0; flex: 1; font-size: 14px; }
-.hoard-note-chip { display: inline-block; margin-top: 2px; color: var(--wh-cream-dim); font-weight: 700; }
-.icon-btn.small { width: var(--tap); height: var(--tap); border-radius: 12px; }
-.hoard-tabs { display: flex; gap: 4px; padding: 0 14px; border-bottom: 1px solid var(--wh-panel-edge); }
-.hoard-tab {
-  position: relative; min-height: var(--tap); padding: 8px 14px; border: 0; border-bottom: 3px solid transparent; background: none;
-  color: var(--wh-cream-dim); font: inherit; font-weight: 800; font-size: 15px; cursor: pointer;
-}
-.hoard-tab[aria-selected="true"] { color: var(--wh-cream); border-bottom-color: var(--wh-amber); }
-.hoard-tab-dot { display: none; width: 8px; height: 8px; margin-left: 6px; border-radius: 50%; background: var(--wh-coral); vertical-align: middle; }
-.hoard-tab[data-dot="true"] .hoard-tab-dot { display: inline-block; }
-.hoard-body { overflow-y: auto; overscroll-behavior: contain; padding: 12px 20px 20px; }
-.hoard-pane:focus { outline: none; }
+body[data-hoard="open"] .hud, body[data-hoard="open"] .plate, body[data-hoard="card"] .plate, body[data-hoard="open"] .dev, body[data-hoard="card"] .hint { visibility: hidden; }   /* (the card leaves the HUD around it, but the hint line would run under its edge) */
+:where(.hoard, .hcard, .hmerge, .plate) { color: var(--k-fg); font: 600 var(--wh-fs-small)/1.4 var(--wh-font-ui); }
+:where(.hoard, .hcard, .hmerge, .plate) :where(p, h3, ul) { margin: 0; }
+svg.k-icon[width="16"] { width: 16px; height: 16px; }
 
-/* tools */
-.hoard-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
-.tool-btn, .seg-btn, .act-btn, .fchip, .link-btn, .cta-btn {
-  min-height: var(--tap); padding: 8px 14px; border-radius: 14px; font: inherit; font-weight: 800; font-size: 14px; cursor: pointer; touch-action: manipulation;
+/* ---- type roles: one definition each (UI.md 3.2: 12 caps label | 14 | 16 | 18 | 22 | 28; weights 600 and 800) ---- */
+.hoard-ledger, .plinth-tier, .gift-tier, .shelf-done, .plate-banner, .out-new, .out-up, .plinth-new, .hmerge-sub, .out-tier, .out-from, .slot-change, .pick-why, .copy-tag, .tool-n { font-weight: 800; font-size: var(--wh-fs-label); line-height: 1.3; }
+.hoard-ledger, .plinth-tier, .gift-tier, .shelf-done, .plate-banner, .out-new, .out-up, .plinth-new, .hmerge-sub { letter-spacing: .08em; text-transform: uppercase; }
+.hoard-count, .shelf-count, .tool-sort, .tool-select, .hcard-facts, .hcard-live, .gift-own, .task-n, .task-state, .hoard-empty-hint, .hmerge-warn, .hmerge-status, .plate-chip, .plate-nick, .slot-word, .act-note.playing, .plinth-name, .plinth-sub, .out { font-weight: 800; }
+.hoard-count, .shelf-count, .task-n, .out-p, .tool-n { font-variant-numeric: tabular-nums; }
+.hoard-ledger, .hoard-count, .shelf-count, .tool-sort, .plinth-tier, .gift-tier, .hoard-note-chip, .hoard-showing, .hcard-facts, .hcard-feel, .hcard-odds, .hcard-hint, .act-note, .hmerge-rule, .hmerge-help, .hmerge-note, .task-n, .task-state, .out-tier, .out-from, .out-odds, .gift-sub, .pick-why, .slot-empty, .tool-select-chev, .mark { color: var(--k-fg-dim); }
+.hoard-ledger { padding: 3px 10px; border: 1px dashed var(--k-edge); border-radius: var(--wh-r-pill); }
+.hoard-note-text, .hoard-showing, .hcard-blurb, .hcard-feel, .hcard-odds, .hcard-hint, .act-note, .hmerge-rule, .hmerge-lines, .hmerge-help, .hmerge-note, .gift-lead, .gift-sub { font-weight: 600; }
+.hcard-blurb, .gift-lead, .gift-sub, .task-text, .out-name, .out-p { font-size: var(--wh-fs-body); }
+.task-text, .out-name, .out-p, .hmerge-lines li.lead, .gift-name, .gift-big, .hmodal-text, .plate-name, .hold-btn { font-weight: 800; }
+.gift-name, .hmerge-lines li.lead, .hold-btn { font-size: var(--wh-fs-lead); }
+.gift-big, .hmodal-text { font-size: var(--wh-fs-h3); line-height: 1.25; }
+.plate-name { font-size: var(--wh-fs-h2); line-height: 1.15; }
+/* the gel face (amber gradient, ink text): every small sticker and the selected tab / view button share it */
+.shelf-done, .plinth-new, .copy-tag.keeper, .out-new, .gift-check, .plate-chip[data-kind="new"], .hoard-tab.k-gel, .tool-seg .seg-btn.k-gel { color: var(--k-gel-fg); background-color: var(--k-gel-fill); background-image: var(--k-gel-image); border: var(--k-gel-border); }
+.shelf-done, .plinth-new, .out-new, .out-up, .plate-banner, .plate-chip { border-radius: var(--wh-r-pill); }
+.out-up, .plate-banner { color: var(--k-gel-fg); background-color: var(--k-coral-fill); background-image: var(--k-coral-image); }
+.hoard-bar, .task-bar { height: 12px; overflow: hidden; background: var(--k-fill-off); border: 1px solid var(--k-edge); border-radius: var(--wh-r-pill); }
+.hoard-bar-fill, .task-fill { display: block; height: 100%; background-color: var(--k-fill-on); background-image: var(--k-gel-image); clip-path: inset(0 calc((1 - var(--fill, 0)) * 100%) 0 0 round 999px); }
+
+/* ================= the panel ================= */
+.hoard {
+  position: fixed; z-index: var(--wh-z-panel); top: calc(var(--hd-t) + 64px); bottom: calc(var(--hd-b) + 18px); left: 50%; transform: translateX(-50%);
+  width: min(880px, calc(100vw - 2 * var(--k-gutter) - var(--hd-l) - var(--hd-r))); display: flex; flex-direction: column; overflow: hidden;
+  background: var(--k-panel); border: var(--k-bd-q); border-radius: var(--wh-r-panel); box-shadow: var(--wh-e3);
+  touch-action: pan-y; -webkit-user-select: none; user-select: none; animation: var(--k-an-hoard) var(--wh-t-3) var(--wh-ease);
 }
-.tool-btn, .seg-btn, .act-btn, .fchip { border: 1px solid var(--wh-edge); background: var(--wh-track); color: var(--wh-cream); }
-.tool-btn:hover, .seg-btn:hover, .act-btn:hover, .fchip:hover { border-color: var(--wh-amber); }
-.tool-btn[aria-expanded="true"], .seg-btn[aria-pressed="true"], .fchip[aria-pressed="true"] { background: var(--wh-amber); color: var(--wh-ink); border-color: var(--wh-amber); }
-.tool-btn:disabled, .act-btn:disabled, .cta-btn:disabled { opacity: .5; cursor: default; border-color: var(--wh-panel-edge); }
-.tool-n { margin-left: 6px; padding: 0 7px; border-radius: 99px; background: var(--wh-ink); color: var(--wh-amber); font-size: 12px; }
+/* a roomy desktop: the panel is as tall as its pane (the Gift and Today panes are short), up to the screen */
+@media (min-width: 641px) and (min-height: 441px) { .hoard { bottom: auto; max-height: calc(100dvh - var(--hd-t) - var(--hd-b) - 82px); } }
+@keyframes hoard-in { from { opacity: 0; transform: translate(-50%, 14px); } }
+@keyframes hcard-in { from { opacity: 0; transform: translateX(18px); } }
+@keyframes hmerge-in { from { opacity: 0; transform: translate(-50%, calc(-50% + 14px)); } }
+.hoard > * { flex: none; }
+.hoard-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; min-height: 64px; padding: 8px 12px 8px 24px; }
+.hoard-head-l { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.hoard-title:focus, .hmerge-title:focus, .hcard-name:focus, .hoard-pane:focus { outline: none; }
+.hoard-head-c { display: grid; gap: 6px; justify-items: end; min-width: 0; }
+.hoard-count { white-space: nowrap; }
+.hoard-bar { width: min(240px, 100%); }
+.hoard-note { display: flex; align-items: center; gap: 12px; margin: 0 24px 8px; padding: 8px 8px 8px 16px; background: var(--k-track); border-radius: var(--wh-r-card); }
+.hoard-note-text { flex: 1; }
+.hoard-note-text strong { font-weight: 800; }
+.hoard-note-ok { flex: none; }
+/* tabs: a segmented set, the selected one is the gel */
+.hoard-tabs { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; margin: 0 24px 12px; padding: 3px; background: var(--k-surface); border: 1px solid var(--k-edge); border-radius: var(--wh-r-card); }
+.hoard-tab, .tool-seg .seg-btn { --k-sh: 0 0 0 0 transparent; min-width: 0; border-radius: var(--wh-r-btn); }
+.hoard-tab:not(.k-gel), .tool-seg .seg-btn:not(.k-gel) { background: transparent; border-color: transparent; }
+.hoard-tab.k-gel, .tool-seg .seg-btn.k-gel { --k-sh: var(--wh-e1); min-height: 44px; padding: 0 8px; }
+.hoard-tab { gap: 8px; padding: 0 8px; font-size: var(--wh-fs-small); }
+.hoard-tab-icon { width: 20px; height: 20px; }
+.hoard-tab-dot { display: none; position: absolute; top: 4px; left: calc(50% + 36px); width: 10px; height: 10px; background: var(--wh-coral); border-radius: 50%; box-shadow: 0 0 0 2px var(--k-ink); }
+.hoard-tab[data-dot="true"] .hoard-tab-dot { display: block; }
+.hoard-body { --px: 24px; --pb: 24px; flex: 1 1 auto; min-height: 0; padding: 4px 24px 24px; overflow-y: auto; overscroll-behavior: contain; }
+
+/* ================= tools, filters ================= */
+.hoard-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.tool-btn[aria-expanded="true"] { --k-sh: var(--hd-sel); color: var(--k-sel-fg); background: var(--k-sel-fill); border-color: var(--k-sel-edge); }
 .tool-btn.tidy { margin-left: auto; }
-.tool-sort { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 800; color: var(--wh-cream-dim); }
-.tool-select { min-height: var(--tap); padding: 6px 10px; border-radius: 12px; border: 1px solid var(--wh-edge); background: var(--wh-track); color: var(--wh-cream); font: inherit; font-weight: 700; }
-.tool-seg { display: inline-flex; gap: 0; }
-.tool-seg .seg-btn:first-child { border-radius: 14px 0 0 14px; }
-.tool-seg .seg-btn:last-child { border-radius: 0 14px 14px 0; border-left: 0; }
-.hoard-filters { display: grid; gap: 6px; margin: 0 0 12px; padding: 10px 12px 12px; border-radius: 16px; background: var(--wh-ink); }
-.fgroup { margin: 4px 0 0; font-size: 12px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; color: var(--wh-amber); }
-.fchips { display: flex; flex-wrap: wrap; gap: 6px; }
-.fchip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; }
-.fchip-n { font-weight: 700; opacity: .85; }
-.link-btn { justify-self: start; border: 0; background: none; color: var(--wh-lagoon); text-decoration: underline; padding: 8px 4px; }
-.link-btn:disabled { opacity: .45; text-decoration: none; }
+.tool-n { min-width: 22px; padding: 0 6px; color: var(--k-accent); line-height: 22px; text-align: center; background: var(--k-cavity); border-radius: var(--wh-r-pill); }
+.tool-sort { display: inline-flex; align-items: center; gap: 8px; line-height: 1; }
+.tool-select-wrap { position: relative; display: inline-grid; }
+.tool-select { -webkit-appearance: none; appearance: none; font-family: inherit; font-size: var(--wh-fs-small); min-height: 44px; margin: 0; padding: 0 36px 0 12px; color: var(--k-fg); background: var(--k-surface); border: 1px solid var(--k-edge); border-radius: var(--wh-r-btn); box-shadow: var(--hd-lift); cursor: pointer; }
+.tool-select-chev { position: absolute; top: 50%; right: 10px; margin-top: -10px; pointer-events: none; }
+.tool-seg { display: inline-grid; grid-auto-flow: column; gap: 2px; padding: 3px; background: var(--k-surface); border: 1px solid var(--k-edge); border-radius: var(--wh-r-btn); }
+.tool-seg .seg-btn { padding: 0 12px; border-radius: var(--wh-r-chip); }
+.hoard-filters { display: grid; gap: 8px; margin: 0 0 12px; padding: 12px 16px 8px; background: var(--k-surface); border: var(--k-bd-q); border-radius: var(--wh-r-card); }
+.fgroup { margin-top: 4px; }
+.fchip { min-height: 44px; }   /* 44 visual here: a thumb, and the harness's 44 x 44 row, read the element's own box */
+.fchip::after { display: none; }
+.link-btn { justify-self: start; background: none; border: 0; font: inherit; }
+.link-btn:disabled { color: var(--k-disabled-fg); text-decoration: none; cursor: not-allowed; }
 .gem-sm { width: 16px; height: 16px; flex: none; }
 .gem-md { width: 22px; height: 22px; flex: none; }
-.hoard-showing { margin: 0 0 8px; font-size: 13px; color: var(--wh-cream-dim); }
-.hoard-empty-hint { margin: 0 0 10px; padding: 10px 14px; border-radius: 14px; background: var(--wh-track); font-weight: 700; }
-.hoard-none { display: grid; justify-items: center; gap: 6px; padding: 30px 0; color: var(--wh-cream-dim); }
+.hoard-showing { margin-bottom: 8px; }
+.hoard-empty-hint { margin-bottom: 12px; padding: 12px 16px; background: var(--k-track); border-radius: var(--wh-r-card); }
+.hoard-none { display: grid; justify-items: center; gap: 8px; padding: 32px 0; color: var(--k-fg-dim); }
 
-/* the cabinet */
-.cabinet { display: grid; gap: 6px; }
-.shelf-head { display: flex; align-items: center; gap: 8px; margin: 10px 0 2px; }
-.shelf-title { margin: 0; font-size: 15px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-.shelf-count { font-size: 13px; color: var(--wh-cream-dim); font-weight: 700; }
-.shelf-done { padding: 1px 9px; border-radius: 99px; background: var(--wh-amber); color: var(--wh-ink); font-size: 12px; font-weight: 900; }
-.shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; padding: 10px; border-radius: 16px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .03), rgba(0, 0, 0, .18)); border-bottom: 4px solid var(--wh-panel-edge); }
+/* ================= the cabinet: tier shelves of plinths ================= */
+.cabinet { display: grid; gap: 4px; }
+.shelf-head { display: flex; align-items: center; gap: 12px; min-width: 0; margin: 16px 0 8px; }
+.shelf-done { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 2px 10px 2px 6px; }
+/* a shelf is a dark recess with a lip: the plinths stand lit inside it */
+.shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 12px; padding: 16px 12px; background: var(--k-cavity); border-radius: var(--wh-r-card); box-shadow: 0 4px 0 var(--k-edge-quiet); }
 .plinth-cell { display: grid; }
-.plinth {
-  position: relative; display: grid; justify-items: center; align-content: start; gap: 2px; min-height: 124px; padding: 8px 6px 8px;
-  border-radius: 16px; border: 2px solid var(--wh-panel-edge); background: var(--wh-ink); color: var(--wh-cream); font: inherit; cursor: pointer;
-}
-.plinth:hover { border-color: var(--wh-amber); }
-.plinth[data-tier="uncommon"] { border-color: color-mix(in srgb, var(--wh-lagoon) 55%, var(--wh-panel-edge)); }
-.plinth[data-tier="rare"] { border-color: var(--wh-edge); }
-.plinth[data-tier="epic"] { border-color: color-mix(in srgb, var(--wh-coral) 60%, var(--wh-panel-edge)); }
-.plinth[data-tier="legendary"] { border-color: color-mix(in srgb, var(--wh-amber) 70%, var(--wh-panel-edge)); }
-.plinth[data-tier="mythic"] { border-color: var(--wh-cream-dim); }
-.plinth[data-owned="false"] { background: transparent; border-style: dashed; }
-.plinth[data-owned="false"] .plinth-name { color: var(--wh-cream-dim); }
-.plinth-gem { position: absolute; top: 6px; left: 6px; width: 18px; height: 18px; }
-.plinth-new { position: absolute; top: 7px; right: 7px; width: 11px; height: 11px; border-radius: 50%; background: var(--wh-coral); }
-.plinth-icon { width: 64px; height: 64px; margin-top: 4px; }
-.plinth-name { font-size: 14px; font-weight: 800; line-height: 1.15; text-align: center; overflow-wrap: anywhere; }
-.plinth-sub { min-height: 16px; font-size: 12px; font-weight: 800; color: var(--wh-amber); }
-.plinth[data-owned="false"] .plinth-sub { color: var(--wh-cream-dim); font-weight: 700; }
-.plinth-marks { position: absolute; bottom: 6px; right: 8px; display: flex; gap: 2px; }
-.mark { font-size: 13px; line-height: 1; }
+.plinth, .gift, .copy, .slot { margin: 0; color: var(--k-fg); font: inherit; cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; background-color: var(--k-surface); box-shadow: var(--k-sh);
+  transition: transform var(--k-mv-2) var(--wh-ease-spring), box-shadow var(--k-mv-2) var(--wh-ease), background-color var(--k-fd-2) var(--wh-ease), border-color var(--k-fd-2) var(--wh-ease); }
+.plinth:active, .gift:active, .copy:active, .slot:active { transform: scale(.97); transition-duration: var(--k-mv-1); }
+@media (hover: hover) { .plinth:hover, .gift:hover, .copy:hover, .slot:hover { transform: translateY(-2px); } .plinth:active:hover, .gift:active:hover, .copy:active:hover, .slot:active:hover { transform: scale(.97); } }
+.tool-select:focus-visible, .copy:focus-visible, .slot:focus-visible, .plinth:focus-visible, .gift:focus-visible { outline: var(--k-ring-w) solid var(--k-ring); outline-offset: var(--k-ring-off); box-shadow: var(--k-sh, 0 0 0 0 transparent), 0 0 0 var(--k-halo-spread) var(--k-halo); }
+.plinth:focus-visible, .gift:focus-visible { transform: translateY(-2px); }
+.plinth { --k-sh: var(--hd-tile); position: relative; display: grid; justify-items: center; align-content: start; gap: 2px; width: 100%; min-height: 140px; padding: 28px 6px 10px; border-radius: var(--wh-r-card);
+  background-image: radial-gradient(circle at 50% 44%, color-mix(in srgb, var(--k-tier) 24%, transparent), transparent 66%); }
+.plinth[data-owned="false"], .plinth[data-owned="false"].k-frame { --k-sh: 0 0 0 0 transparent; color: var(--k-fg-dim); background-color: transparent; background-image: none; border-width: 2px; border-style: dashed; }
+/* Common's frame is cream, the loudest colour of the cabinet on its most numerous tier: softened toward the surface (still >= 3:1 on the panel) so the squishies lead */
+.plinth[data-tier="common"], .gift[data-tier="common"], .hcard[data-tier="common"], .plate[data-tier="common"] { --k-tier: color-mix(in srgb, var(--wh-tier-common) 62%, var(--k-surface)); }
+.plinth-gem { position: absolute; top: 7px; left: 7px; width: 20px; height: 20px; }
+.plinth-new { position: absolute; top: 7px; right: 7px; padding: 1px 8px; }
+.plinth-icon { width: 64px; height: 64px; margin-top: 2px; }
+.plinth-name { min-width: 0; font-size: var(--wh-fs-small); line-height: 1.15; text-align: center; overflow-wrap: break-word; }
+.plinth-sub { min-height: 16px; color: var(--k-accent); font-size: var(--wh-fs-label); }
+.plinth[data-owned="false"] .plinth-sub { color: var(--k-fg-dim); }
+.cabinet[data-view="cabinet"] .plinth-tier { display: none; }   /* the shelf's heading carries gem + word; a flat grid needs them on every plinth */
+.plinth-marks { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 2px; }
+.mark { display: inline-grid; }
 .mark.heart { color: var(--wh-coral); }
-.mark.clock { color: var(--wh-lagoon); }
+.mark.clock { color: var(--k-info); }
 .sp-icon { display: block; }
-.sp-sil { fill: var(--wh-edge); opacity: .55; }
-.sp-shadow { fill: #000; opacity: .28; }
+.sp-sil { fill: var(--k-edge); opacity: .55; }
+.sp-shadow { fill: var(--k-ink); opacity: .4; }
 
-/* ---------- the card (desktop: a right column beside the live squishy) ---------- */
+/* ================= the card (desktop: a right column beside the live squishy) ================= */
 .hcard {
-  position: fixed; z-index: 7; top: calc(var(--safe-t) + 64px); right: calc(var(--safe-r) + var(--gutter)); bottom: calc(var(--safe-b) + 96px);
-  width: min(380px, calc(100vw - 2 * var(--gutter))); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
-  display: grid; align-content: start; gap: 8px; padding: 12px 16px 18px; border-radius: 22px;
-  background: var(--wh-panel); border: 1px solid var(--wh-panel-edge); box-shadow: 0 24px 60px rgba(0, 0, 0, .55);
+  position: fixed; z-index: var(--wh-z-panel); top: calc(var(--hd-t) + 64px); right: calc(var(--hd-r) + var(--k-gutter)); bottom: calc(var(--hd-b) + 96px); width: min(380px, calc(100vw - 2 * var(--k-gutter)));
+  display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 12px; padding: 12px 16px 16px; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
+  background: var(--k-panel); border-radius: var(--wh-r-panel); box-shadow: 0 0 0 2px var(--k-ink), var(--wh-e3); animation: var(--k-an-hcard) var(--wh-t-3) var(--wh-ease);
 }
-.hcard-top { display: flex; justify-content: space-between; align-items: center; }
-.hcard-title { display: flex; align-items: center; gap: 10px; }
-.hcard-name { margin: 0; font-size: 28px; font-weight: 900; }
-.hcard-name:focus { outline: none; }
-.hcard-facts { margin: -4px 0 0; font-size: 14px; font-weight: 800; color: var(--wh-cream-dim); }
-.hcard-live { margin: 0; padding: 8px 12px; border-radius: 12px; background: var(--wh-track); font-size: 14px; font-weight: 700; }
-.hcard-blurb { margin: 0; font-size: 16px; }
-.hcard-feel { margin: 0; font-size: 14px; color: var(--wh-cream-dim); }
-.hcard-feel strong { color: var(--wh-cream); }
-.hcard-odds, .hcard-hint { margin: 0; font-size: 13px; color: var(--wh-cream-dim); }
-.hcard-pic { display: grid; place-items: center; padding: 6px 0; }
+.hcard-top { display: flex; align-items: center; justify-content: space-between; }
+.hcard-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.hcard-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; line-height: 1.2; }
+.hcard-live { display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--k-fg); background: var(--k-track); border-radius: var(--wh-r-btn); }
+.hcard-live .k-icon { color: var(--k-info); }
+.hcard-feel strong { color: var(--k-fg); font-weight: 800; }
+.hcard-pic { display: grid; place-items: center; padding: 8px 0; background: radial-gradient(circle, color-mix(in srgb, var(--k-tier) 20%, transparent), transparent 62%); }
 .hcard-icon { width: 120px; height: 120px; }
-.hcard-sub { margin: 6px 0 0; font-size: 12px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; color: var(--wh-amber); }
-.hcard-strip { display: flex; flex-wrap: wrap; gap: 6px; }
-.copy {
-  position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; min-height: var(--tap);
-  padding: 6px 10px 6px 6px; border-radius: 14px; border: 2px solid var(--wh-panel-edge); background: var(--wh-ink); color: var(--wh-cream);
-  font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; text-align: left; flex: 1 1 150px;
-}
-.copy[aria-checked="true"] { border-color: var(--wh-amber); }
-.copy .mark.heart { position: absolute; top: 3px; right: 6px; }
-.copy-tags { color: var(--wh-cream-dim); }
-.swatch { width: 30px; height: 30px; border-radius: 50%; flex: none; background: radial-gradient(circle at 36% 30%, var(--sw-a, #fff) 0%, var(--sw-b, #888) 55%, var(--sw-c, #444) 100%); box-shadow: inset 0 -2px 4px rgba(0, 0, 0, .3); }
-.hcard-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-.act-btn { display: inline-flex; align-items: center; gap: 6px; }
-.act-btn.primary, .cta-btn { border: 0; background: var(--wh-amber); color: var(--wh-ink); box-shadow: 0 3px 0 var(--wh-amber-deep); }
-.act-btn[aria-pressed="true"] { border-color: var(--wh-coral); }
-.act-note { flex-basis: 100%; margin: -2px 0 0; font-size: 13px; color: var(--wh-cream-dim); }
+.hcard-sub { margin-top: 8px; }
+.hcard-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.copy { --k-sh: var(--hd-lift); position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; min-height: 44px; padding: 6px 12px 6px 6px; text-align: left; border: 2px solid var(--k-edge-quiet); border-radius: var(--wh-r-btn); }
+.copy[aria-checked="true"], .gift[aria-checked="true"], .slot[aria-expanded="true"] { --k-sh: var(--hd-sel); color: var(--k-sel-fg); background-color: var(--k-sel-fill); border-color: var(--k-sel-edge); }
+.copy .mark { position: absolute; top: 4px; right: 6px; }
+.copy-tags { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.copy-tag { padding: 1px 8px; color: var(--k-fg); background: var(--k-track); border: var(--k-bd-q); border-radius: var(--wh-r-pill); }
+.swatch { flex: none; width: 30px; height: 30px; border: 2px solid var(--k-ink); border-radius: 50%; background: radial-gradient(circle at 36% 30%, var(--sw-a, var(--wh-cream)) 0%, var(--sw-b, var(--wh-edge)) 55%, var(--sw-c, var(--wh-dusk)) 100%); }
+/* the primary action stays in reach (F2): the card's actions, the merge pad's hold button and the gift's Take button are pinned to the foot of their scroller while the rest scrolls; the scroller sets --px / --pb to its own padding */
+.hcard-actions, .hmerge-foot, .gift-foot { position: sticky; bottom: calc(var(--pb, 16px) * -1); z-index: 1; margin: 8px calc(var(--px, 16px) * -1) calc(var(--pb, 16px) * -1); padding: 12px var(--px, 16px) var(--pb, 16px); background: var(--k-panel); border-top: var(--k-bd-q); }
+.hcard-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.act-btn .k-icon { width: 20px; height: 20px; }
+.act-note { flex-basis: 100%; margin-top: -2px; line-height: 1.3; }
+.act-note.playing { flex-basis: auto; margin: 0; padding: 8px 12px; color: var(--k-fg); background: var(--k-track); border-radius: var(--wh-r-btn); }
 
-/* ---------- gift + today ---------- */
-.gift-lead { margin: 4px 0 14px; font-size: 16px; }
-.gift-big { margin: 18px 0 4px; font-size: 22px; font-weight: 900; text-align: center; }
-.gift-sub { margin: 0; text-align: center; color: var(--wh-cream-dim); }
-.gift-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
-.gift {
-  position: relative; display: grid; justify-items: center; gap: 2px; padding: 12px 6px 12px; border-radius: 18px;
-  border: 2px solid var(--wh-panel-edge); background: var(--wh-ink); color: var(--wh-cream); font: inherit; cursor: pointer;
-}
-.gift[aria-checked="true"] { border-color: var(--wh-amber); box-shadow: 0 0 0 3px rgba(255, 179, 71, .25); }
+/* ================= gift + today ================= */
+.gift-title { margin: 4px 0; }
+.gift-lead { margin-bottom: 16px; }
+.gift-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+.gift { --k-sh: var(--hd-tile); position: relative; display: grid; justify-items: center; align-content: start; gap: 2px; min-height: 176px; padding: 28px 6px 14px; text-align: center; border-radius: var(--wh-r-card);
+  background-image: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--k-tier) 22%, transparent), transparent 66%); }
 .gift-icon { width: 84px; height: 84px; }
-.gift-name { font-size: 16px; font-weight: 900; }
-.gift-tier { font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--wh-cream-dim); }
-.gift-own { font-size: 13px; font-weight: 800; color: var(--wh-amber); }
-.cta-btn { padding: 10px 22px; font-size: 16px; }
-.cta-btn.small { padding: 8px 16px; font-size: 14px; }
-.tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-.task { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: center; padding: 12px 14px; border-radius: 16px; background: var(--wh-ink); }
-.task-text { margin: 0; grid-column: 1 / -1; font-size: 16px; font-weight: 800; }
-.task-bar { height: 10px; border-radius: 99px; background: var(--wh-track); overflow: hidden; }
-.task-fill { display: block; height: 100%; width: calc(var(--fill, 0) * 100%); background: var(--wh-lagoon); border-radius: 99px; }
-.task[data-done="true"] .task-fill { background: var(--wh-amber); }
-.task-n { margin: 0; font-size: 14px; font-weight: 800; color: var(--wh-cream-dim); }
-.task-state { margin: 0; grid-column: 1 / -1; font-size: 14px; color: var(--wh-cream-dim); }
-.task .cta-btn { grid-column: 1 / -1; justify-self: start; }
+.gift-name { min-width: 0; line-height: 1.2; overflow-wrap: break-word; }
+.gift-own { color: var(--k-accent); }
+.gift-check { position: absolute; top: 7px; right: 7px; display: none; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 50%; }
+.gift[aria-checked="true"] .gift-check { display: grid; }
+.gift-foot { display: grid; justify-items: center; gap: 8px; }
+.gift-foot .cta-btn { min-width: 240px; }
+.gift-why:empty { display: none; }
+.gift-done { display: grid; justify-items: center; gap: 8px; padding: 32px 0; text-align: center; }
+.gift-done .k-icon { color: var(--k-accent); }
+.tasks { display: grid; gap: 12px; padding: 0; list-style: none; }
+.task { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; padding: 16px; background: var(--k-surface); border: var(--k-bd-q); border-radius: var(--wh-r-card); box-shadow: var(--hd-lift); }
+.task-text { line-height: 1.3; }
+.task-bar { grid-column: 1 / -1; }
+.task-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px 2px 6px; color: var(--k-fg-dim); font-weight: 800; font-size: var(--wh-fs-label); line-height: 1.3; border: 1px solid var(--k-edge); border-radius: var(--wh-r-pill); }
+.task-chip:not(:has(.k-icon)) { padding-left: 10px; }
+.task-chip[data-state="ready"] { color: var(--k-gel-fg); background-color: var(--k-gel-fill); background-image: var(--k-gel-image); border: var(--k-gel-border); }
+.task-chip[data-state="collected"] .k-icon { color: var(--k-ok); }
+.task-fill { background-color: var(--k-info); background-image: none; }
+.task[data-done="true"] .task-fill { background-color: var(--k-fill-on); background-image: var(--k-gel-image); }
+.task-state { grid-column: 1 / -1; line-height: 1.3; }
+.task .cta-btn { grid-column: 2; justify-self: end; }
 
-/* ---------- merge pad + Tidy-up ---------- */
-.hmerge-scrim { position: fixed; inset: 0; z-index: 9; background: rgba(10, 6, 24, .62); }
-.hmerge {
-  position: fixed; z-index: 10; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  width: min(560px, calc(100vw - 2 * var(--gutter))); max-height: calc(100dvh - var(--safe-t) - var(--safe-b) - 32px);
-  overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
-  display: grid; gap: 10px; padding: 14px 18px 18px; border-radius: 22px;
-  background: var(--wh-panel); border: 1px solid var(--wh-panel-edge); box-shadow: 0 30px 80px rgba(0, 0, 0, .6);
-}
-.hmerge-head { display: flex; justify-content: space-between; align-items: center; }
-.hmerge-title { margin: 0; font-size: 22px; font-weight: 900; }
-.hmerge-title:focus { outline: none; }
-.hmerge-rule { margin: 0; color: var(--wh-cream-dim); font-size: 14px; }
-.hmerge-slots { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
-.slot {
-  display: grid; justify-items: center; gap: 2px; min-width: 104px; min-height: 96px; padding: 10px; border-radius: 18px;
-  border: 2px dashed var(--wh-edge); background: var(--wh-ink); color: var(--wh-cream); font: inherit; font-weight: 800; cursor: pointer;
-}
-.slot .swatch { width: 46px; height: 46px; }
-.slot[aria-expanded="true"] { border-color: var(--wh-amber); border-style: solid; }
-.slot-word { font-size: 14px; }
-.slot-change { font-size: 12px; color: var(--wh-lagoon); text-decoration: underline; }
-.slot-plus { font-size: 26px; font-weight: 900; color: var(--wh-cream-dim); }
-.hmerge-pick { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border-radius: 14px; background: var(--wh-ink); }
-.pick { display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap); padding: 6px 10px 6px 6px; border-radius: 12px; border: 1px solid var(--wh-edge); background: var(--wh-track); color: var(--wh-cream); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
-.pick[aria-selected="true"] { border-color: var(--wh-amber); }
-.pick:disabled { opacity: .7; cursor: default; }
-.pick-why { padding: 1px 8px; border-radius: 99px; background: var(--wh-ink); color: var(--wh-cream-dim); }
-.hmerge-lines { margin: 0; padding: 0 0 0 18px; display: grid; gap: 3px; font-size: 14px; }
-.hmerge-lines li.lead { font-size: 16px; font-weight: 900; color: var(--wh-amber); list-style: none; margin-left: -18px; }
-.hmerge-sub { margin: 4px 0 0; font-size: 12px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; color: var(--wh-cream-dim); }
-.hmerge-outs { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 260px; overflow-y: auto; }
-.out { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto auto; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border-radius: 12px; background: var(--wh-ink); font-size: 14px; }
-.out[data-up="true"] { box-shadow: inset 3px 0 0 var(--wh-amber); }
-.out[data-best="true"] { box-shadow: inset 3px 0 0 var(--wh-coral); }
-.out.stop { display: block; padding: 8px 12px; color: var(--wh-cream-dim); }
-.out-icon { width: 36px; height: 36px; }
-.out-name { font-weight: 800; overflow-wrap: anywhere; }
-.out-tier, .out-from, .out-odds { font-size: 12px; color: var(--wh-cream-dim); font-weight: 700; }
-.out-new, .out-up { padding: 1px 7px; border-radius: 99px; font-size: 11px; font-weight: 900; letter-spacing: .06em; }
-.out-new { background: var(--wh-amber); color: var(--wh-ink); }
-.out-up { background: var(--wh-coral); color: var(--wh-ink); }
-.out-p { font-weight: 900; font-variant-numeric: tabular-nums; }
-.hmerge-warn { margin: 0; padding: 8px 12px; border-radius: 12px; background: var(--wh-track); font-weight: 700; }
-.hmerge-foot { display: grid; justify-items: center; gap: 4px; margin-top: 4px; }
-.hmerge-help { margin: 0; font-size: 13px; color: var(--wh-cream-dim); }
-.hmerge-status { margin: 0; min-height: 1em; text-align: center; font-weight: 800; color: var(--wh-amber); }
-.hmerge-toggle { display: inline-flex; align-items: center; gap: 10px; min-height: var(--tap); font-weight: 800; cursor: pointer; }
-.hmerge-toggle input { width: 22px; height: 22px; accent-color: var(--wh-amber); }
-.hold-btn {
-  position: relative; overflow: hidden; min-width: 240px; min-height: 56px; padding: 12px 26px; border-radius: 18px; border: 0;
-  background: var(--wh-track); color: var(--wh-cream); font: inherit; font-size: 18px; font-weight: 900; cursor: pointer;
-  box-shadow: inset 0 0 0 2px var(--wh-amber); touch-action: none;
-}
-.hold-btn:disabled { opacity: .45; cursor: default; box-shadow: inset 0 0 0 2px var(--wh-panel-edge); }
-.hold-fill { position: absolute; inset: 0; transform-origin: left center; transform: scaleX(var(--hold, 0)); background: var(--wh-amber); }
-.hold-label { position: relative; }
-.hold-btn[data-holding="true"] .hold-label { color: var(--wh-ink); }
-.hmodal { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; gap: 14px; padding: 24px; background: color-mix(in srgb, var(--wh-panel) 96%, transparent); text-align: center; }
-.hmodal-text { margin: 0; font-size: 20px; font-weight: 900; }
-.hmodal-acts { display: flex; gap: 10px; justify-content: center; }
+/* ================= merge pad + Tidy-up ================= */
+.hmerge-scrim { position: fixed; inset: 0; z-index: var(--wh-z-modal); background: var(--k-scrim); }
+.hmerge { position: fixed; z-index: var(--wh-z-modal); left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; width: min(560px, calc(100vw - 2 * var(--k-gutter))); max-height: calc(100dvh - var(--hd-t) - var(--hd-b) - 32px); padding: 8px 24px 24px; --px: 24px; --pb: 24px;
+  overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; background: var(--k-panel); border: var(--k-bd-q); border-radius: var(--wh-r-panel); box-shadow: var(--wh-e3); animation: var(--k-an-hmerge) var(--wh-t-3) var(--wh-ease); }
+.hmerge-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; }
+.hmerge-slots { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
+.slot { --k-sh: var(--hd-lift); display: grid; justify-items: center; gap: 4px; min-width: 120px; min-height: 104px; padding: 12px; font-weight: 800; border: 2px dashed var(--k-edge); border-radius: var(--wh-r-card); }
+.slot .swatch, .slot-empty { width: 46px; height: 46px; }
+.slot[aria-expanded="true"] { border-style: solid; }
+.slot-empty { display: grid; place-items: center; border: 2px dashed var(--k-edge); border-radius: 50%; }
+.slot-change { color: var(--k-info); text-decoration: underline; text-underline-offset: 3px; }
+.slot-plus { display: grid; color: var(--k-fg-dim); }
+.hmerge-pick { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; background: var(--k-cavity); border-radius: var(--wh-r-card); }
+.pick { gap: 8px; padding: 0 12px 0 6px; }
+.pick[aria-selected="true"] { --k-sh: var(--hd-sel); background: var(--k-sel-fill); border-color: var(--k-sel-edge); }
+.pick-why { padding: 1px 8px; background: var(--k-track); border-radius: var(--wh-r-pill); }
+.hmerge-lines { display: grid; gap: 4px; padding-left: 18px; }
+.hmerge-lines li.lead { margin-left: -18px; color: var(--k-accent); line-height: 1.3; list-style: none; }
+.hmerge-sub { margin-top: 8px; color: var(--k-accent); }
+.hmerge-sub.hmerge-note { margin: 0; font: 600 var(--wh-fs-small)/1.4 var(--wh-font-ui); letter-spacing: 0; text-transform: none; }
+.hmerge-outs { display: grid; gap: 6px; max-height: 280px; padding: 0; overflow-y: auto; list-style: none; }
+/* a row: the name keeps at least 12 characters of its own line; tier, chances and tags wrap UNDER it when the row is full */
+.out { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-height: 44px; padding: 6px 12px 6px 8px; font-weight: 600; line-height: 1.3; background: var(--k-surface); border-radius: var(--wh-r-btn); }
+.out[data-up="true"], .out[data-best="true"] { padding-inline-start: 4px; border-inline-start: 4px solid var(--k-accent); }
+.out[data-best="true"] { border-inline-start-color: var(--k-danger-edge); }
+.out.stop { display: block; padding: 8px 12px; color: var(--k-fg-dim); }
+.out-icon { flex: none; width: 36px; height: 36px; }
+.out-name { flex: 1 1 12ch; min-width: 12ch; line-height: 1.2; overflow-wrap: break-word; }
+.out-from { display: inline-flex; align-items: center; gap: 2px; }
+.out-odds { flex: 1 0 100%; font-size: var(--wh-fs-small); font-weight: 600; }
+.out-new, .out-up { padding: 1px 8px; }
+.out-p { margin-left: auto; line-height: 1; }
+.hmerge-warn { padding: 8px 12px; line-height: 1.4; background: var(--k-track); border-radius: var(--wh-r-btn); }
+.hmerge-foot { display: grid; justify-items: center; gap: 6px; margin-top: 4px; }
+.hmerge-status { min-height: 1.4em; color: var(--k-accent); text-align: center; }
+.hmerge-toggle { justify-content: flex-start; gap: 12px; flex-direction: row-reverse; }
+/* hold to merge: the label is a DUAL LAYER (UI.md 6). The base is cream on the track (11.18:1); .merge-fill repeats the text in ink on amber (10.37:1),
+   clipped to the part the hold has filled (--p), so every glyph reads whatever the fill is. The fill layer is aria-hidden. */
+.hold-btn { --p: 0; min-width: 260px; min-height: 64px; padding: 0 32px; overflow: hidden; contain: paint; background: var(--k-track); border: 2px solid var(--k-edge-hot); border-radius: var(--wh-r-card); touch-action: none; }
+.hold-label { position: relative; z-index: 0; }
+.merge-fill { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; padding: 0 32px; color: var(--k-gel-fg); pointer-events: none; background-color: var(--k-gel-fill); background-image: var(--k-gel-image); clip-path: inset(0 calc((1 - var(--p)) * 100%) 0 0); }
+.hold-btn:disabled .merge-fill { display: none; }
+.hmodal { position: absolute; inset: 0; z-index: 1; display: grid; place-content: center; gap: 16px; padding: 24px; text-align: center; background: var(--k-panel); }
+.hmodal-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
 
-/* ---------- phones: full-screen sheet; the card is a bottom sheet with the squishy above it ---------- */
+/* ================= the reveal plate (DESIGN 6.3 B3 / 6.4 T4): a tier-framed plate, top centre; the live region speaks it ================= */
+.plate { position: fixed; z-index: var(--wh-z-bar); left: 50%; top: calc(var(--hd-t) + 70px); transform: translate(-50%, -10px); display: grid; justify-items: center; gap: 4px; min-width: min(260px, calc(100vw - 2 * var(--k-gutter))); max-width: calc(100vw - 2 * var(--k-gutter)); padding: 12px 24px 14px;
+  text-align: center; background: var(--k-panel); border-radius: var(--wh-r-card); box-shadow: 0 0 0 2px var(--k-ink), var(--wh-e2); pointer-events: none !important; opacity: 0; visibility: hidden;
+  transition: opacity var(--k-fd-3) var(--wh-ease), transform var(--k-mv-3) var(--wh-ease-spring), visibility 0s linear var(--k-fd-3); }
+.plate[data-show="true"] { opacity: 1; visibility: visible; transform: translate(-50%, 0); transition-delay: 0s; }
+@media (min-width: 820px) and (min-height: 441px) { .plate { top: calc(var(--hd-t) + 10px); } }   /* wide: the top row's middle is free */
+.plate-banner { padding: 2px 14px; }
+.plate-row { display: flex; gap: 6px; }
+.plate-chip { padding: 2px 12px; letter-spacing: .08em; }
+.plate-chip[data-kind="new"] { box-shadow: var(--wh-e1); transform: rotate(-3deg); }
+.plate-chip[data-kind="spare"] { border: 1px solid var(--k-edge); }
+.plate-name { min-width: 0; overflow-wrap: anywhere; }
+.plate-tierline { display: flex; align-items: center; gap: 8px; }
+.plate .gem-lg { width: 26px; height: 26px; }
+.plate-nick[hidden], .plate-banner[hidden] { display: none; }
+@media (max-width: 480px) { .plate-name { font-size: var(--wh-fs-h3); } }
+/* the card form is TIER-SCALED (F1): the tier word grows with the tier (revealPlate.ts picks the jelly size), the rim glows from Rare up, Legendary and Mythic are wider and roomier with a bigger gem */
+.plate[data-tier="rare"], .plate[data-tier="epic"] { min-width: min(300px, calc(100vw - 2 * var(--k-gutter))); padding: 16px 32px 18px; box-shadow: 0 0 0 2px var(--k-ink), var(--wh-e2), 0 0 20px color-mix(in srgb, var(--k-tier) 55%, transparent); }
+.plate[data-tier="legendary"], .plate[data-tier="mythic"] { min-width: min(340px, calc(100vw - 2 * var(--k-gutter))); padding: 20px 40px 22px; box-shadow: 0 0 0 2px var(--k-ink), var(--wh-e2), 0 0 40px 6px color-mix(in srgb, var(--k-tier) 80%, transparent); }
+.plate:is([data-tier="legendary"], [data-tier="mythic"]) .gem-lg { width: 40px; height: 40px; }
+/* the LINE form (revealPlate.ts data-form="line": tiny, strip, the portal's desktop box, a short phone): the plate REPLACES the dock row (UI.md 4.2): one line over the row itself, above the dock in z, same box (gem, tier, species, New). It never covers the squishy. */
+.plate[data-form="line"] { z-index: var(--wh-z-panel); top: auto; bottom: var(--dk-bottom); display: flex; align-items: center; justify-content: center; gap: 8px; width: min(calc(100vw - 2 * var(--k-gutter)), 560px); min-width: 0; height: var(--dk-h); padding: 0 12px; }
+.plate[data-form="line"] :is(.plate-banner, .plate-nick) { display: none; }
+.plate[data-form="line"] .plate-tierline { flex: none; order: 1; gap: 4px; }
+.plate[data-form="line"] .plate-name { flex: 1 1 0; order: 2; min-width: 0; overflow: hidden; font-size: var(--wh-fs-body); text-overflow: ellipsis; white-space: nowrap; }
+.plate[data-form="line"] .plate-row { flex: none; order: 3; }
+.plate[data-form="line"] .gem-lg { width: 22px; height: 22px; }
+.plate[data-form="line"] .plate-chip { padding: 0 8px; font-size: var(--wh-fs-label); }
+body[data-layout="tiny"] .plate .gem-lg { width: 20px; height: 20px; } body[data-layout="tiny"] .plate-tier { --jl-cap: 14px; }
+
+/* ================= narrow: the tools are two rows, the practice note is short ================= */
+@media (max-width: 480px) {
+  .hoard-tools { display: grid; grid-template-columns: auto minmax(0, 1fr); }
+  .tool-sort { min-width: 0; }
+  .tool-select-wrap { display: block; flex: 1 1 0; min-width: 0; }
+  .tool-select { width: 100%; }
+  .hoard-tools .tool-btn.tidy { justify-self: end; }
+  .hoard-note-chip { display: none; }
+}
+
+/* ================= phones: a full-screen sheet; the card and the pad are bottom sheets with the squishy above them ================= */
 @media (max-width: 640px) {
-  .hoard { top: 0; bottom: 0; left: 0; transform: none; width: 100%; border-radius: 0; border: 0;
-    padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l); }
-  .hoard-head { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; min-height: 56px; padding: 8px 8px 6px 16px; gap: 4px 10px; }
-  .hoard-head-c { grid-column: 1; grid-row: 2; justify-items: start; grid-auto-flow: column; align-items: center; gap: 10px; }
+  body { --k-an-hoard: hoard-sheet-in; --k-an-hcard: hoard-sheet-in; --k-an-hmerge: hoard-sheet-in; }
+  .hoard { top: 0; bottom: 0; left: 0; width: 100%; padding: var(--hd-t) var(--hd-r) var(--hd-b) var(--hd-l); border: 0; border-radius: 0; box-shadow: none; transform: none; }
+  .hoard-head { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 4px 12px; min-height: 56px; padding: 8px 8px 6px 16px; }
+  .hoard-head-c { grid-column: 1; grid-row: 2; grid-template-columns: auto auto; grid-auto-flow: column; justify-items: start; align-items: center; gap: 12px; }
   .hoard-close { grid-column: 2; grid-row: 1; }
-  .hoard-bar { width: 120px; }
-  .hoard-note { margin: 0 12px 6px; }
-  .hoard-tabs { padding: 0 8px; }
-  .hoard-tab { padding: 8px 10px; font-size: 14px; }
-  .hoard-body { padding: 10px 12px 16px; }
+  .hoard-bar { width: 100px; }
+  .hoard-note, .hoard-tabs { margin: 0 12px 8px; }
+  .hoard-body { --px: 12px; --pb: 16px; padding: 4px 12px 16px; }
   .hoard-tools .tool-btn.tidy { margin-left: 0; }
-  .shelf { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); padding: 8px; gap: 6px; }
-  .plinth { min-height: 116px; }
+  .shelf { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; padding: 12px 10px; }
+  .plinth { min-height: 132px; }
   .plinth-icon { width: 56px; height: 56px; }
-  .hcard { top: auto; left: 0; right: 0; bottom: 0; width: 100%; max-height: 56dvh; border-radius: 22px 22px 0 0; border-bottom: 0;
-    padding: 10px calc(var(--safe-r) + 14px) calc(var(--safe-b) + 14px) calc(var(--safe-l) + 14px); }
+  .hcard { top: auto; right: 0; bottom: 0; left: 0; width: 100%; max-height: 56dvh; padding: 10px calc(var(--hd-r) + 14px) calc(var(--hd-b) + 14px) calc(var(--hd-l) + 14px); border-bottom: 0; border-radius: var(--wh-r-panel) var(--wh-r-panel) 0 0; }
   body[data-hoard="card"] #stage { transform: translateY(-20dvh); }
   body[data-hoard="card"] .hud { visibility: hidden; }
-  .hcard-name { font-size: 24px; }
-  .gift-row { gap: 6px; }
+  .hcard-strip { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .hcard-top { order: -4; } .hcard-title { order: -3; } .hcard-facts { order: -2; }
+  .gift-row { gap: 8px; }
+  .gift { padding: 26px 4px 12px; }
   .gift-icon { width: 64px; height: 64px; }
-  .hmerge { top: auto; bottom: 0; left: 0; transform: none; width: 100%; max-height: 92dvh; border-radius: 22px 22px 0 0;
-    padding: 12px calc(var(--safe-r) + 14px) calc(var(--safe-b) + 16px) calc(var(--safe-l) + 14px); }
-  .hold-btn { width: 100%; }
+  .gift-name { font-size: var(--wh-fs-body); }
+  .gift-tier { letter-spacing: .03em; }   /* "UNCOMMON" fits a 87 px card at 320 wide */
+  .hmerge { --px: 14px; --pb: calc(var(--hd-b) + 16px); top: auto; bottom: 0; left: 0; width: 100%; max-height: 92dvh; padding: 8px calc(var(--hd-r) + 14px) calc(var(--hd-b) + 16px) calc(var(--hd-l) + 14px); border-radius: var(--wh-r-panel) var(--wh-r-panel) 0 0; transform: none; }
+  .hold-btn { width: 100%; min-width: 0; }
 }
-@media (max-height: 420px) {
-  .hoard { top: calc(var(--safe-t) + 8px); bottom: calc(var(--safe-b) + 8px); }
-  .hcard { top: calc(var(--safe-t) + 8px); bottom: calc(var(--safe-b) + 8px); }
+@keyframes hoard-sheet-in { from { opacity: 0; transform: translateY(18px); } }
+@media (max-width: 640px) and (min-height: 261px) { .hcard-actions { position: static; order: -1; margin: 0; padding: 0; background: none; border: 0; } }
+/* short screens (a landscape phone, the portal phone, and the portal's desktop box, 888 x 500): the title, the tabs and the close button share one row; the shelf keeps the room (F3) */
+@media (max-height: 440px), (min-width: 641px) and (max-height: 560px) {
+  .hoard { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); align-items: center; }
+  .hoard-head { display: contents; }
+  .hoard-head-l { grid-area: 1 / 1; padding: 4px 0 4px 16px; }
+  .hoard-head-c, .hoard-note { display: none; }
+  .hoard-tabs { grid-area: 1 / 2; margin: 4px 8px; }
+  .hoard-close { grid-area: 1 / 3; margin-right: 6px; }
+  .hoard-body { grid-area: 2 / 1 / 3 / 4; align-self: stretch; }
+  .hmerge { max-height: calc(100dvh - var(--hd-t) - var(--hd-b) - 16px); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .hoard-btn-dot { animation: none !important; }
+@media (max-height: 440px) {
+  .hoard { top: calc(var(--hd-t) + 8px); bottom: calc(var(--hd-b) + 8px); }
+  .hcard { top: calc(var(--hd-t) + 8px); bottom: calc(var(--hd-b) + 8px); }
+  .hoard-tools .tool-btn > span:not(.tool-n) { display: none; }   /* Filters and Tidy up are icons here (their names are aria-labels) */
+  .hoard-tools .tool-btn { padding: 0 12px; }
 }
-
-/* ---------- the quick switcher (HUD, above the name tag) ---------- */
-.qswitch { position: absolute; left: calc(var(--safe-l) + var(--gutter)); bottom: calc(var(--safe-b) + 86px); display: flex; gap: 6px; pointer-events: auto; }
-.qs-btn {
-  width: 48px; height: 48px; padding: 3px; border-radius: 50%; border: 2px solid var(--wh-panel-edge); background: var(--wh-panel);
-  cursor: pointer; display: grid; place-items: center; box-shadow: 0 6px 16px rgba(0, 0, 0, .35); touch-action: manipulation;
+@media (max-width: 640px) and (max-height: 440px) { .hoard { top: 0; bottom: 0; } }
+/* a landscape phone: the card is a right column (a bottom sheet would leave no screen); the stage steps left so the squishy stays in view beside it */
+@media (max-width: 640px) and (max-height: 440px) and (orientation: landscape) {
+  .hcard { top: calc(var(--hd-t) + 8px); right: calc(var(--hd-r) + 8px); bottom: calc(var(--hd-b) + 8px); left: auto; width: min(320px, 56vw); max-height: none; padding: 12px; border-bottom: 3px solid var(--k-tier); border-radius: var(--wh-r-panel); }
+  body[data-hoard="card"] #stage { transform: translateX(-18vw); }
 }
-.qs-btn:hover { border-color: var(--wh-amber); }
-.qs-btn[data-tier="uncommon"] { border-color: color-mix(in srgb, var(--wh-lagoon) 70%, var(--wh-panel-edge)); }
-.qs-btn[data-tier="rare"] { border-color: var(--wh-edge); }
-.qs-btn[data-tier="epic"] { border-color: color-mix(in srgb, var(--wh-coral) 70%, var(--wh-panel-edge)); }
-.qs-btn[data-tier="legendary"] { border-color: var(--wh-amber); }
-.qs-btn[data-tier="mythic"] { border-color: var(--wh-cream); }
-.qs-icon { width: 38px; height: 38px; }
-body[data-ceremony] .qswitch, body[data-hoard="open"] .qswitch, body[data-hoard="card"] .qswitch, body[data-toys="open"] .qswitch { visibility: hidden; }
-@media (max-width: 900px) { body[data-switch="true"] .hint { bottom: calc(var(--safe-b) + 146px); } }
-/* a phone: the five switcher buttons (44 px targets) and the ring's state line ("Squishies are resting, ...") share one height, so the
-   state line narrows to the ring's column and wraps; the capsule button keeps its word "Open" but drops the little capsule pips (the
-   ring's "x2" says how many wait), so the name tag keeps room for the squishy's name. Under 381 px the word goes and the pips stay. */
-@media (max-width: 480px) {
-  .qswitch { gap: 4px; }
-  .qs-btn { width: 44px; height: 44px; padding: 2px; }
-  .qs-icon { width: 34px; height: 34px; }
-  body[data-switch="true"] .meter-state { max-width: 112px; text-align: right; }
-}
-@media (max-width: 480px) and (min-width: 381px) {
-  .capsule-pips { display: none; }
-  .capsule-btn { padding: 0 13px; }
-}
-@media (max-width: 480px) {
-  .hud-bottom { gap: 7px; }
-  .nametag { padding: 7px 10px 8px; }
-  .nametag-name { font-size: 17px; }
-  .hoard-btn { padding: 6px 8px 6px 6px; }
-}
-@media (max-width: 359px) {
-  .qs-btn:nth-child(n+5) { display: none; }
-  body[data-switch="true"] .meter-state { max-width: 100px; }
+/* the portal phone (358 x 201): the tabs are icons, the tools are icons around the Sort select, the plinths get the rest */
+@media (max-height: 260px) {
+  .hoard-ledger, .hoard-tab-text, .tool-sort-label, .tool-seg, .hoard-showing { display: none; }
+  .hoard-tools { display: flex; flex-wrap: nowrap; }
+  .tool-sort { flex: 1 1 0; min-width: 0; }
+  .hoard-tab-dot { left: calc(50% + 8px); }
+  .hcard { --px: 12px; --pb: 12px; width: min(320px, 72vw); }   /* wide enough for Hearted and Merge side by side: one row of actions is the foot */
+  .act-note.playing { display: none; }
+  .shelf-head { margin: 8px 0 4px; }
+  .hoard-tools { margin-bottom: 4px; }
+  .hmerge-help { display: none; }
+  .hold-btn, .gift-foot .cta-btn { min-height: 44px; }
+  .gift-why { display: none; }   /* (the button keeps the reason in aria-describedby; the cards need the room) */
+  .hcard-actions, .hmerge-foot, .gift-foot { padding-top: 8px; }
 }
 
-/* ---------- the toy tray (FUN.md 1): the Toys button beside the Hoard button, a small menu above it ---------- */
-.toys-btn {
-  position: relative; min-height: var(--tap); min-width: var(--tap); display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 12px 6px 8px; border-radius: 16px; border: 1px solid var(--wh-edge);
-  background: var(--wh-panel); color: var(--wh-cream); font: inherit; font-weight: 800; font-size: 15px; cursor: pointer;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, .35); touch-action: manipulation;
-}
-.toys-btn:hover, .toys-btn[aria-expanded="true"] { border-color: var(--wh-amber); }
-.toys-btn:not([data-tool="hand"]) { border-color: var(--wh-amber); color: var(--wh-amber); }
-.toys-btn-icon { display: inline-grid; place-items: center; }
-.tool-icon { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.toys {
-  position: fixed; z-index: 7; left: 50%; bottom: calc(var(--safe-b) + 78px); transform: translateX(-50%);
-  width: min(300px, calc(100vw - 2 * var(--gutter))); padding: 10px; border-radius: 18px;
-  background: var(--wh-panel); border: 1px solid var(--wh-edge); box-shadow: 0 14px 36px rgba(0, 0, 0, .5); pointer-events: auto;
-}
-.toys[hidden] { display: none; }
-.toys-title { margin: 2px 6px 8px; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--wh-cream-dim); }
-.toys-list { display: grid; gap: 6px; }
-.toy {
-  display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 12px; border-radius: 12px; width: 100%; text-align: left;
-  border: 1px solid transparent; background: var(--wh-track); color: var(--wh-cream); font: inherit; cursor: pointer;
-}
-.toy:hover, .toy:focus-visible { border-color: var(--wh-amber); }
-.toy[aria-checked="true"] { border-color: var(--wh-amber); background: color-mix(in srgb, var(--wh-amber) 16%, var(--wh-track)); }
-.toy[aria-checked="true"] .tool-icon { color: var(--wh-amber); }
-.toy-text { display: grid; gap: 1px; }
-.toy-label { font-weight: 900; font-size: 16px; }
-.toy-hint { font-size: 13px; color: var(--wh-cream-dim); }
+/* no jelly drawing (forced-colors, contrast more): the real text shows in system 800 and must fit a narrow card or pad heading */
+@media (forced-colors: active), (prefers-contrast: more) { .hcard-name > .jl-text, .hmerge-title > .jl-text { overflow-wrap: anywhere; font-size: min(calc(var(--jl-cap) * .9), 28px); } }
 
-/* ---------- the Cut tool: its bar, the blade line, a crosshair over the stage ---------- */
-body[data-tool="cut"] #stage, body[data-tool="cut"] #stage:active { cursor: crosshair; }
-body[data-tool="cut"] .qswitch, body[data-tool="cut"] .hint, body[data-tool="snap"] .hint, body[data-toys="open"] .hint { visibility: hidden; }   /* (the open tray covers the middle of the hint pill: only its two ends peeked out) */
-.cutbar {
-  position: fixed; z-index: 5; left: 50%; bottom: calc(var(--safe-b) + 84px); transform: translateX(-50%);
-  width: min(560px, calc(100vw - 2 * var(--gutter))); padding: 10px 12px; border-radius: 16px;
-  background: var(--wh-panel); border: 1px solid var(--wh-edge); box-shadow: 0 10px 28px rgba(0, 0, 0, .45); pointer-events: auto;
+/* ================= modes: forced-colors (system colours, a tick or word for every state) ================= */
+@media (forced-colors: active) {
+  body { --k-cavity: Canvas; }
+  .hoard-tab.k-gel, .tool-seg .seg-btn.k-gel, .tool-btn[aria-expanded="true"], .copy[aria-checked="true"], .gift[aria-checked="true"], .slot[aria-expanded="true"], .pick[aria-selected="true"] { forced-color-adjust: none; color: HighlightText; background: Highlight; border-color: Highlight; }
+  .merge-fill, .hoard-bar-fill, .task-fill, .gift-check, .shelf-done, .copy-tag.keeper, .plinth-new, .out-new, .out-up, .plate-chip[data-kind="new"], .plate-banner { forced-color-adjust: none; color: HighlightText; background: Highlight; }
+  .hoard-tab-dot { forced-color-adjust: none; background: CanvasText; }
+  .plinth, .gift, .copy, .slot, .hcard, .plate { border-color: ButtonText; }
 }
-.cutbar[hidden] { display: none; }
-.cutbar-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.cutbar-text { margin: 0 2px 8px; font-weight: 800; font-size: 14px; }
-.cutbar-count { font-size: 13px; font-weight: 800; color: var(--wh-amber); white-space: nowrap; }
-.cutbar-acts { display: flex; flex-wrap: wrap; gap: 8px; }
-.cutbar-acts .act-btn { min-height: var(--tap); }
-.cutbar-acts .act-btn[aria-disabled="true"] { opacity: .5; cursor: default; }
-.blade { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 4; pointer-events: none !important; overflow: visible; }
-.blade-glow { stroke: var(--wh-amber); stroke-width: 9; stroke-linecap: round; opacity: .3; }
-.blade-line { stroke: var(--wh-cream); stroke-width: 2; stroke-linecap: round; }
-
-/* ---------- Snap (photo mode): no HUD, a small bar, the backdrop tint over the live canvas ---------- */
-body[data-tool="snap"] .hud, body[data-tool="snap"] .plate, body[data-tool="snap"] .toast, body[data-tool="snap"] .sparks,
-body[data-tool="snap"] .net-banner, body[data-tool="snap"] .play-target, body[data-tool="snap"] .toys { visibility: hidden; }
-.snap-tint { position: fixed; inset: 0; pointer-events: none; mix-blend-mode: soft-light; }
-.snap-tint[hidden] { display: none; }
-.snap-shade { position: fixed; inset: 0; z-index: 6; pointer-events: none !important; background: var(--wh-ink); opacity: 0; transition: opacity .22s ease-out; }
-.snap-shade[data-on="true"] { opacity: .28; transition-duration: .08s; }
-.snapbar {
-  position: fixed; z-index: 7; left: 50%; bottom: calc(var(--safe-b) + 16px); transform: translateX(-50%);
-  width: min(520px, calc(100vw - 2 * var(--gutter))); padding: 10px 12px 12px; border-radius: 18px;
-  background: var(--wh-panel); border: 1px solid var(--wh-edge); box-shadow: 0 12px 30px rgba(0, 0, 0, .45); pointer-events: auto;
-}
-.snapbar[hidden] { display: none; }
-.snapbar-text { margin: 0 2px 8px; font-size: 13px; font-weight: 700; color: var(--wh-cream-dim); }
-.snapbar-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-.snapbar-label { font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--wh-cream-dim); }
-.snap-tints { display: flex; gap: 6px; flex-wrap: wrap; }
-.snap-tint-btn {
-  display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap); padding: 4px 12px 4px 6px; border-radius: 999px;
-  border: 1px solid var(--wh-edge); background: var(--wh-track); color: var(--wh-cream); font: inherit; font-weight: 800; font-size: 14px; cursor: pointer;
-}
-.snap-tint-btn[aria-checked="true"] { border-color: var(--wh-amber); box-shadow: 0 0 0 2px color-mix(in srgb, var(--wh-amber) 45%, transparent); }
-.snap-swatch { width: 26px; height: 26px; border-radius: 50%; background: var(--sw); border: 2px solid var(--wh-cream); }
-.snapbar-acts { display: flex; gap: 8px; }
-.snapbar-acts .cta-btn { flex: 1; }
-@media (prefers-reduced-motion: reduce) { .snap-shade { display: none; } }
-body[data-calm="true"] .snap-shade { display: none; }
-
-/* ---------- phones: the bottom row gains the Toys button (icon only) and the Hoard button shows its glyph and count ---------- */
-@media (max-width: 480px) {
-  .toys-btn { padding: 6px 9px; }
-  .toys-btn-word { display: none; }
-}
-@media (max-width: 380px) {
-  .hoard-btn .hoard-glyph { width: 22px; height: 22px; }
-}
-
-/* the ring's state line would peek out under the desktop card's bottom edge: the card says what matters there */
-@media (min-width: 640px) { body[data-hoard="card"] .meter-state { visibility: hidden; } }

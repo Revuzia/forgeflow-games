@@ -160,6 +160,11 @@ export function createBodyHost(o: BodyHostOptions): BodyHost {
       const d = bodyScreen();
       return d ? { x: d.x, y: d.y } : null;
     },
+    // LOCK: a body that can lock has the five finger slots (the two features landed together in the physics: contracts.ts "LOCK"); an older body keeps the two it always had
+    slots() {
+      const b = o.body();
+      return b && typeof b.lockGrab === 'function' ? 5 : 2;
+    },
     ndcOf(p) {
       const cam = refresh();
       return cam ? projectToNdc(cam, world(p)) : null;

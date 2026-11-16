@@ -64,12 +64,7 @@ export interface TierStyle {
   gem: GemShape;
   /** Number of points of the gem (circle = 0). */
   gemPoints: number;
-  /** UI frame colour token (hex from CONTRACT.md section 7; Rare is the lifted dusk-violet so the frame reads on the ink background; Mythic cycles `prismHex`). */
-  frameHex: string;
-  /** The colour of the light that leaks through the capsule cracks at B1 (DESIGN 6.3): "the tell". */
-  tellHex: string;
-  /** Mythic only: the colours the prism frame and dome slowly cycle through (never faster than 0.25 Hz). */
-  prismHex?: readonly string[];
+  // The tier colours (the UI frame, the crack tell, the Mythic prism cycle) live in src/ui/theme.ts TIERS only (UI.md 3.1, K13: raw hex = 0 elsewhere).
   /** Numeric knobs for the tier FX pass, all 0 for Common. Magnitudes are relative; the render lane owns the final scale. */
   fx: {
     /** 0..1 added rim-light strength on the body. */
@@ -125,43 +120,42 @@ const style = (s: TierStyle): TierStyle => s;
 export const TIER_STYLE: Readonly<Record<TierId, TierStyle>> = {
   common: style({
     id: 'common', name: 'Common', body: 'plain-jelly', core: 'dim', aura: 'contact-shadow', sparkle: 'none', idle: 'blink-breathe',
-    gem: 'circle', gemPoints: 0, frameHex: '#fff1d6', tellHex: '#ffe6b8',
+    gem: 'circle', gemPoints: 0,
     fx: { rimHalo: 0, motes: 0, glitterBoost: 0, corePulseHz: 0, ringPulseHz: 0, pillar: false, iridescence: 0, satellites: 0, constellationPoints: 0 },
     reveal: { openSeconds: 1.6, openSecondsRepeat: 0.8, mergeSeconds: 2.2, preRollSeconds: 0, motes: 12, glitter: 0, specialParticles: 0, rings: 0, cameraPushPercent: 0, cameraArcDegrees: 0, timeScale: 1, timeScaleMs: 0, audioDuckMs: 0 },
     haptic: [12], soundKey: 'bloop',
   }),
   uncommon: style({
     id: 'uncommon', name: 'Uncommon', body: 'more-translucent', core: 'warm', aura: 'tinted-light-pool', sparkle: 'few-flecks', idle: 'blink-breathe',
-    gem: 'diamond', gemPoints: 4, frameHex: '#59d6e6', tellHex: '#59d6e6',
+    gem: 'diamond', gemPoints: 4,
     fx: { rimHalo: 0.1, motes: 0, glitterBoost: 0.15, corePulseHz: 0, ringPulseHz: 0, pillar: false, iridescence: 0, satellites: 0, constellationPoints: 0 },
     reveal: { openSeconds: 2.0, openSecondsRepeat: 0.8, mergeSeconds: 2.6, preRollSeconds: 0, motes: 24, glitter: 6, specialParticles: 0, rings: 0, cameraPushPercent: 2, cameraArcDegrees: 0, timeScale: 1, timeScaleMs: 0, audioDuckMs: 0 },
     haptic: [12, 60, 8], soundKey: 'bloop-chime-third',
   }),
   rare: style({
     id: 'rare', name: 'Rare', body: 'deep-transmission', core: 'glowing-seed', aura: 'soft-rim-halo', sparkle: 'moderate-glitter', idle: 'core-pulse-slow',
-    gem: 'hexagon', gemPoints: 6, frameHex: '#8a67b8', tellHex: '#a07be0',
+    gem: 'hexagon', gemPoints: 6,
     fx: { rimHalo: 0.45, motes: 0, glitterBoost: 0.4, corePulseHz: 0.4, ringPulseHz: 0, pillar: false, iridescence: 0, satellites: 0, constellationPoints: 0 },
     reveal: { openSeconds: 2.6, openSecondsRepeat: 0, mergeSeconds: 3.2, preRollSeconds: 0.3, motes: 40, glitter: 12, specialParticles: 0, rings: 1, cameraPushPercent: 4, cameraArcDegrees: 6, timeScale: 1, timeScaleMs: 0, audioDuckMs: 0 },
     haptic: [10, 50, 14, 50, 18], soundKey: 'bell-cluster-fifth',
   }),
   epic: style({
     id: 'epic', name: 'Epic', body: 'two-tone-gradient', core: 'bloom', aura: 'orbiting-motes-caustic-ring', sparkle: 'glitter-drifts-up', idle: 'motes-trail',
-    gem: 'star4', gemPoints: 4, frameHex: '#ff5a4d', tellHex: '#ff5a4d',
+    gem: 'star4', gemPoints: 4,
     fx: { rimHalo: 0.6, motes: 4, glitterBoost: 0.65, corePulseHz: 0.3, ringPulseHz: 0, pillar: false, iridescence: 0, satellites: 0, constellationPoints: 0 },
     reveal: { openSeconds: 3.2, openSecondsRepeat: 0, mergeSeconds: 3.8, preRollSeconds: 0.5, motes: 70, glitter: 0, specialParticles: 24, rings: 2, cameraPushPercent: 6, cameraArcDegrees: 10, timeScale: 0.6, timeScaleMs: 250, audioDuckMs: 0 },
     haptic: [14, 40, 18, 40, 22, 40, 26, 80, 30], soundKey: 'saw-swell-arp',
   }),
   legendary: style({
     id: 'legendary', name: 'Legendary', body: 'aurora-gradient', core: 'bright-pillar', aura: 'pulsing-floor-ring', sparkle: 'dense-glitter-spark-trail', idle: 'settle-wobble-ring',
-    gem: 'star6', gemPoints: 6, frameHex: '#ffb347', tellHex: '#ffb347',
+    gem: 'star6', gemPoints: 6,
     fx: { rimHalo: 0.8, motes: 5, glitterBoost: 0.9, corePulseHz: 0.25, ringPulseHz: 0.25, pillar: true, iridescence: 0, satellites: 0, constellationPoints: 0 },
     reveal: { openSeconds: 3.9, openSecondsRepeat: 0, mergeSeconds: 4.5, preRollSeconds: 0.8, motes: 120, glitter: 0, specialParticles: 24, rings: 3, cameraPushPercent: 8, cameraArcDegrees: 15, timeScale: 0.5, timeScaleMs: 350, audioDuckMs: 0 },
     haptic: [10, 20, 14, 20, 18, 20, 22, 20, 26, 20, 30, 120, 45], soundKey: 'choir-pad-bells',
   }),
   mythic: style({
     id: 'mythic', name: 'Mythic', body: 'thin-film-iridescence', core: 'prism', aura: 'light-dome-satellites', sparkle: 'fixed-star-constellation', idle: 'hum-glow-breathe',
-    gem: 'prism8', gemPoints: 8, frameHex: '#e9f4ff', tellHex: '#d8c8ff',
-    prismHex: ['#59d6e6', '#a07be0', '#ff8fb0', '#ffd27a'],
+    gem: 'prism8', gemPoints: 8,
     fx: { rimHalo: 1, motes: 0, glitterBoost: 1, corePulseHz: 0.2, ringPulseHz: 0, pillar: false, iridescence: 1, satellites: 2, constellationPoints: 24 },
     reveal: { openSeconds: 4.5, openSecondsRepeat: 0, mergeSeconds: 5.2, preRollSeconds: 1.0, motes: 200, glitter: 0, specialParticles: 24, rings: 3, cameraPushPercent: 10, cameraArcDegrees: 25, timeScale: 0.4, timeScaleMs: 500, audioDuckMs: 250 },
     haptic: [10, 25, 12, 25, 14, 25, 16, 25, 18, 25, 20, 25, 22, 250, 60, 60, 60], soundKey: 'mythic-motif',

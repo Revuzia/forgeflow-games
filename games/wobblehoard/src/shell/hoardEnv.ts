@@ -12,6 +12,10 @@ import type { Rgb } from '../render/oklch.ts';
 import { h } from '../ui/dom.ts';
 import { gemSvg } from '../ui/gem.ts';
 import type { HoardEnv } from '../ui/hoard/types.ts';
+import { icon } from '../ui/icons.ts';
+import { fitJelly, jelly, setJelly } from '../ui/jelly/jelly.ts';
+import type { JellyOpts } from '../ui/jelly/jelly.ts';
+import '../ui/jelly/jelly.css';
 import { speciesIcon } from '../ui/speciesIcon.ts';
 import type { ItemView } from './collectionPort.ts';
 import type { Game } from './game.ts';
@@ -46,6 +50,13 @@ export function createHoardEnv(g: Game, d: HoardEnvDeps): HoardEnv {
     ({ itemId: it.id, genome: it.genome, tier: it.tier as TierName, isNew, copies, nickname: null, quickEligible: quick });
   return {
     collection: g.hoard,
+    // the kit's icons and the jelly lettering (UI.md 3.3, 5): src/ui/hoard/** reaches them only through here
+    kit: {
+      glyph: (name, cls, o) => icon(name, cls, o),
+      jelly: (text, o) => jelly(text, o as JellyOpts),
+      setJelly: (el, text, o) => setJelly(el, text, o as Omit<JellyOpts, 'tag'>),
+      fit: (el, maxW) => fitJelly(el, maxW),
+    },
     species(id) {
       const s = getSpecies(id);
       if (!s) return null;

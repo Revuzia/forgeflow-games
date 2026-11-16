@@ -7,7 +7,7 @@
 import type { CapsuleHandle, CapsuleRevealSpec, CeremonyBeat, CeremonyHandle, CeremonyHooks, MergeCeremonySpec, SoftBodyLike, SoftEvent, StageLike, TierName } from '../../src/contracts.ts';
 import { createApp } from '../../src/app.ts';
 import type { App } from '../../src/app.ts';
-import { makeStarterGenome, encodeGenome, decodeGenome } from '../../src/core/genome.ts';
+import { makeStarterGenome, encodeGenome } from '../../src/core/genome.ts';
 import type { Genome } from '../../src/core/genome.ts';
 import { SETTINGS_KEY, defaultSettings, loadSettings, memoryStorage, resolveSettings, saveSettings } from '../../src/core/settings.ts';
 import { speciesBaseGenome, tierOf } from '../../src/data/catalog.ts';
@@ -567,13 +567,14 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
 
 /* ───────────────────────── 5d. CUT & RECONNECT, the shell side (CUT.md 1, 2, 4; cut.ts) against cut-capable mock bodies ───────────────────────── */
 {
-  const { createCutter, PIECE_MIN, JOIN_ALL_S, JOIN_HOLD_S, JOIN_S, NECK_DEFAULT_S, NECK_HOLD_S, HOME_MAX_S, SETTLE_S } = await import('../../src/shell/cut.ts');
+  const { createCutter, SHARE_EPS, JOIN_ALL_S, JOIN_HOLD_S, JOIN_S, NECK_DEFAULT_S, NECK_HOLD_S, HOME_MAX_S, supportAlong } = await import('../../src/shell/cut.ts');
   const { createBodyManager } = await import('../../src/shell/bodies.ts');
   const { createMockBody } = await import('../mocks.ts');
   type V = { x: number; y: number; z: number };
-  type CutMock = ReturnType<typeof createMockBody> & { frac: number; piece: { frac: number; chunk: boolean; cutNormal?: V; at?: V } | null; necks: number; lastNeck: number; trembles: number[]; fracCalls: Array<[number, number]>; moved: number; whole: boolean; held: boolean };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the mock keeps the PieceOpts it was built with in `piece`; CUT2 gave SoftBodyLike its own `piece?: PieceInfo`, so this field is untyped here (the whole cut mock is replaced by S4)
+  type CutMock = ReturnType<typeof createMockBody> & { frac: number; piece: any; necks: number; lastNeck: number; trembles: number[]; fracCalls: Array<[number, number]>; moved: number; whole: boolean; held: boolean };
   /** a mock body that can be cut: a sphere of radius 0.5 cbrt(frac) at its centre; measureCut is the exact sphere-cap share */
-  const cutBody = (g: Genome, o: { at?: V; piece?: { frac: number; chunk: boolean; cutNormal?: V; at?: V } } = {}): CutMock => {
+  const cutBody = (g: Genome, o: { at?: V; piece?: { frac: number; chunk?: boolean; cutNormal?: V; at?: V } } = {}): CutMock => {
     const b = createMockBody(g) as CutMock;
     const frac = o.piece?.frac ?? 1, at = o.piece?.at ?? o.at ?? null;
     const k = Math.cbrt(frac);
@@ -594,7 +595,7 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
       return (Math.PI * hgt * hgt * (3 * R - hgt) / 3) / (4 / 3 * Math.PI * R * R * R);
     };
     m.setNeck = (pl: unknown, t: number) => { if (pl) { b.necks++; b.lastNeck = t; } else b.lastNeck = 0; };
-    m.setFrac = (f: number, sec: number) => { b.fracCalls.push([f, sec]); b.frac = Math.min(1, Math.max(PIECE_MIN, f)); };
+    m.setFrac = (f: number, sec: number) => { b.fracCalls.push([f, sec]); b.frac = Math.min(1, Math.max(SHARE_EPS, f)); };
     m.tremble = (a: number) => { b.trembles.push(a); };
     // moveTo: a spring toward the point on the table (the mock slides 1.5 m/s while stepped, horizontally, like the physics on the table)
     let goal: V | null = null;
@@ -644,7 +645,7 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   };
   const neckMs = (NECK_DEFAULT_S + NECK_HOLD_S) * 1000 + 120;
 
-  // X01: a centre cut (Split in two) makes two pieces whose shares sum to 1; the face piece is the play body, the other an eyeless chunk
+  // X01: a centre cut (Split in two) makes two pieces whose shares sum to 1; the anchor is the play body, the other an eyeless twin
   {
     const r = rigCut();
     const notices: string[] = [];
@@ -664,32 +665,34 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     check('X01 shell: Split in two necks (setNeck + setCutSeam every step, audio cut start), then two pieces whose shares sum to 1 (0.5 %); built with PieceOpts of those shares',
       res === 'cut' && necking && fr.length === 2 && Math.abs(fr[0] + fr[1] - 1) < 0.005 && starts.length === 1 && seps.length === 1 && play.piece !== null && Math.abs(play.piece.frac - fr[0]) < 1e-9,
       `${res}; fracs ${fr.map((f) => f.toFixed(3)).join(' + ')}; seams ${r.seams.length}; audio ${r.audioCalls.map((c) => `${c[0]}:${c[1].phase ?? ''}`).join(',')}`);
-    check('X03 shell: the face piece is the PLAY body (same identity, no chunk), the other piece is an eyeless chunk on the mat (AddBodyOpts.chunk); partPieces(a, b) once',
-      play !== playBefore && play.piece?.chunk === false && xs.length === 1 && xs[0].piece === true && (xs[0].body as CutMock).piece?.chunk === true && r.chunks.at(-1) === true && r.parts.length === 1 && r.app.identity.itemId === idBefore.itemId && r.app.identity.genome === idBefore.genome,
-      JSON.stringify({ chunks: r.chunks, parts: r.parts, extras: xs.length }));
+    // RE-SPECIFIED because the owner changed the design on 2026-10-08 (CUT2.md 14): there is no face piece and no chunk. Both are peers: no chunk flag reaches the stage; the play body is the larger child; identity unchanged; partPieces once.
+    check('X03 shell: both pieces are peers: no chunk flag reaches the stage (AddBodyOpts.chunk is never passed), the play body is the LARGER child (a new body, same identity and genome), the other is the one extra on the mat; partPieces(a, b) once',
+      play !== playBefore && play.piece?.chunk === false && xs.length === 1 && xs[0].piece === true && (xs[0].body as CutMock).piece?.chunk === false && r.chunks.length >= 1 && r.chunks.every((c) => c === false) && fr[0] >= fr[1] - 1e-9 && r.parts.length === 1 && r.app.identity.itemId === idBefore.itemId && r.app.identity.genome === idBefore.genome,
+      JSON.stringify({ chunkFlags: r.chunks, parts: r.parts, extras: xs.length, fracs: fr }));
     check('CUT audio: cut({ start }) and cut({ separate }) carry the smaller piece\'s share of the WHOLE, the family and calm; no strand() for the parting (NOTES_FOR_SHELL_CUT)',
       Math.abs((seps[0][1].frac as number) - Math.min(...fr)) < 1e-9 && typeof starts[0][1].family === 'string' && typeof starts[0][1].neckS === 'number' && starts[0][1].calm === false && !r.audioCalls.some((c) => c[0] === 'strand'));
     check('CUT: the cut says it in the live region ("Cut into 2 pieces."), a haptic tick, and the Hoard, the mat and the history do not see a piece',
       notices.includes('Cut into 2 pieces.') && r.w.haptics.rec.count('poke') >= 1 && r.app.hoard.items().length === items0 && r.app.mat.count === 1 && r.app.history.current === null,
       JSON.stringify({ notices, items: r.app.hoard.items().length, mat: r.app.mat.count }));
-    // X06: cutting paid nothing; a poke (a tap) on the chunk pays nothing, like a tap on a whole squishy; a squeeze held 1.2 s and released on it pays through collection.feed like one on a whole squishy
-    // RE-SPECIFIED (owner decision 2026-10-06, "short taps pay nothing"): this row used a poke and asserted it paid ("sp > 0"); a tap pays 0 now, so the row proves the chunk's feed path with a held
-    // squeeze instead and adds that its poke pays 0 (same intent: the chunk's touches reach the meter exactly like the whole squishy's).
+    // X06: cutting paid nothing; a poke (a tap) on the twin pays nothing, like a tap on a whole squishy; a squeeze held 1.2 s and released on it pays through collection.feed like one on a whole squishy
+    // RE-SPECIFIED (owner decision 2026-10-06, "short taps pay nothing"): this row used a poke and asserted it paid ("sp > 0"); a tap pays 0 now, so the row proves the twin's feed path with a held
+    // squeeze instead and adds that its poke pays 0 (same intent: the twin's touches reach the meter exactly like the whole squishy's).
     const fill0 = r.app.hoard.meter().sp;
-    const chunk = xs[0].body as CutMock;
-    chunk.queue({ kind: 'poke', intensity: 0.5 });
+    const twin = xs[0].body as CutMock;
+    twin.queue({ kind: 'poke', intensity: 0.5 });
     run2(r.w, r.app, 50);
     const afterPoke = r.app.hoard.meter().sp;
-    chunk.queue({ kind: 'release', intensity: 0.5, heldFor: 1.2 });
+    twin.queue({ kind: 'release', intensity: 0.5, heldFor: 1.2 });
     run2(r.w, r.app, 50);
-    check('X06 shell: cutting fed the meter nothing; a poke (a tap) on a chunk pays nothing and a squeeze held 1.2 s on it pays through collection.feed, both like on a whole squishy', fill0 === 0 && afterPoke === 0 && r.app.hoard.meter().sp > 0, `sp before ${fill0}, after the poke ${afterPoke}, after the squeeze ${r.app.hoard.meter().sp}`);
-    // the stopgap for checkpoint 47's self-launching chunks: a new chunk is held at its spot (moveTo) and let go after SETTLE_S
-    const heldNow = chunk.held, facePiece = r.app.body as unknown as CutMock;
-    run2(r.w, r.app, (SETTLE_S + 0.1) * 1000);
-    check('CUT: a new chunk is held at its spot (moveTo, a little apart from its twin) and let go after SETTLE_S; the face piece is not held',
-      heldNow && chunk.moved >= 1 && !chunk.held && !facePiece.held, `held ${heldNow} -> ${chunk.held}, face held ${facePiece.held}`);
-    // the touch-to-join: a finger on the chunk held against the face piece for JOIN_HOLD_S joins them (a bridge, setFrac up / down, rejoin)
-    const C = chunk.center as V, F = play.center as V;
+    check('X06 shell: cutting fed the meter nothing; a poke (a tap) on a twin pays nothing and a squeeze held 1.2 s on it pays through collection.feed, both like on a whole squishy', fill0 === 0 && afterPoke === 0 && r.app.hoard.meter().sp > 0, `sp before ${fill0}, after the poke ${afterPoke}, after the squeeze ${r.app.hoard.meter().sp}`);
+    // DELETED + REPLACED (CUT2.md 6.5, 14): 'a new chunk is held at its spot (moveTo ...) and let go after SETTLE_S' - the owner changed the design on 2026-10-08: the closed loop of the chunk build is gone.
+    // This mock world cuts Minis (the mock has no planCut): the minis are born with an outward velocity and nobody holds them. The clean style's scripted parting (both pieces moveTo +-0.5 g s for PART_S, symmetric, released
+    // after, none when |n.y| >= 0.75, a finger ends it) is checked on the real SoftBody in cutter_checks.ts, section parting, and in node_checks 7g (X19).
+    const anchorBody = r.app.body as unknown as CutMock;
+    run2(r.w, r.app, 900);
+    check('CUT (Minis): the new minis are not steered: no moveTo on either piece (the closed loop of the chunk build is gone; the scripted parting is the clean style\'s)', twin.moved === 0 && !twin.held && anchorBody.moved === 0 && !anchorBody.held, `moved ${twin.moved}/${anchorBody.moved}, held ${twin.held}/${anchorBody.held}`);
+    // the touch-to-join: a finger on the twin held against the anchor for JOIN_HOLD_S joins them (a bridge, setFrac up / down, rejoin)
+    const C = twin.center as V, F = play.center as V;
     C.x = F.x + 0.6; C.y = F.y; C.z = F.z;
     r.app.input.pointerDown({ id: 70, x: 400, y: 300, t: r.w.clock.t });   // a press somewhere: the cutter is asked about the active body below
     r.app.input.pointerUp({ id: 70, x: 400, y: 300, t: r.w.clock.t });
@@ -703,16 +706,17 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const W = world({ tier: 'low' });
     const st = W.w.stage;
     let active: SoftBodyLike | null = null, touching = false, t = 0, matOut = 0;
+    let dragV: V | null = null;   // the drag of the finger's grab on the active body (null = no grab: a tap, a press, a squeeze or a rub)
     const notices: string[] = [];
     const body0 = W.w.deps.createBody(g0);
     const bm = createBodyManager({ createBody: W.w.deps.createBody, stage: st, initial: { body: body0, identity: { genome: g0, tier: 'common', itemId: 'it-1', nickname: null } }, beforeSwap() {}, afterSwap() {}, report: (e) => { throw e; } });
     const ct = createCutter({
       bodies: bm, stage: st, audio: W.w.audio, haptics: W.w.haptics, createBody: W.w.deps.createBody, quality: () => 'low', calm: () => false, gravity: () => true,
-      simTime: () => t, viewport: () => ({ w: 800, h: 600 }), activeBody: () => active ?? bm.body, touching: () => touching, beforeChange() {}, clearMat: () => { const n = matOut; matOut = 0; return n; },
-      panOf: () => 0, say: (s2) => notices.push(s2), report: (e) => { throw e; },
+      simTime: () => t, viewport: () => ({ w: 800, h: 600 }), activeBody: () => active ?? bm.body, touching: () => touching, drag: (out) => { if (!dragV || !touching) return false; out.x = dragV.x; out.y = dragV.y; out.z = dragV.z; return true; }, beforeChange() {}, clearMat: () => { const n = matOut; matOut = 0; return n; },
+      panOf: () => 0, say: (s2) => notices.push(s2), report: (e) => { throw e; }, ceiling: 4,
     });
     const step = (sec: number): void => { for (let i = 0; i < Math.round(sec * 60); i++) { t += 1 / 60; ct.update(1 / 60); } };
-    // X02: an edge cut that would leave under 1/8 is refused (a wobble, a line), nothing changes
+    // X02, RE-SPECIFIED because the owner removed the limit on 2026-10-09 (CUT3.md 2.1): an edge cut that leaves under 1/8 is no longer refused ("Too small to cut there"): it CUTS, the smaller part is a crumb
     const b0 = bm.body as CutMock;
     const edge = { point: { x: 0.5 * 0.9, y: 0.4, z: 0 }, normal: { x: 1, y: 0, z: 0 } };
     const fEdge = (b0 as unknown as { measureCut(p: unknown): number }).measureCut(edge);
@@ -724,54 +728,87 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const top = proj({ x: 0.47, y: 0.85, z: 0 }), bot = proj({ x: 0.47, y: -0.05, z: 0 });
     matOut = 2;
     const rEdge = ct.swipe(top.x, top.y, bot.x, bot.y);
-    check('X02 shell: a cut that would leave a piece under 1/8 of the whole is refused ("Too small to cut there..."), with a wobble; nothing is replaced and the mat is not touched',
-      fEdge < PIECE_MIN && rEdge === 'small' && ct.pieces === 1 && b0.trembles.length === 1 && notices.some((n) => /Too small/.test(n)) && matOut === 2, `${rEdge}; share ${fEdge.toFixed(3)}; ${notices.join(' | ')}`);
-    step(0.4);
-    check('CUT: the refusal wobble ends by itself (tremble back to 0)', b0.trembles.at(-1) === 0, b0.trembles.join());
+    step(NECK_DEFAULT_S + NECK_HOLD_S + 0.05);
+    const fEdgeKept = ct.fracs().slice().sort((p, q) => p - q);
+    check('X02 shell (RE-SPECIFIED, the owner removed the limit on 2026-10-09): a swipe along the very edge that leaves under 1/8 of the whole is NO LONGER refused: it cuts a small piece off (no "Too small" line, no wobble), the shares sum to 1',
+      fEdge < 0.125 && rEdge === 'cut' && ct.pieces === 2 && b0.trembles.length === 0 && !notices.some((n) => /Too small|as small as it gets|as many pieces/.test(n)) && Math.abs(fEdgeKept[0] - fEdge) < 0.02 && Math.abs(fEdgeKept[0] + fEdgeKept[1] - 1) < 1e-9, `${rEdge}; share ${fEdge.toFixed(3)}; fracs ${fEdgeKept.map((f) => f.toFixed(4)).join('+')}; ${notices.join(' | ')}`);
     // a short swipe and a miss
     check('CUT: a swipe shorter than 24 px is not a cut; a swipe beside the squishy misses', ct.swipe(400, 300, 410, 300) === 'short' && ct.swipe(20, 20, 20, 120) === 'miss');
-    // cut down to the low-quality limit of 4 pieces: each Split in two cuts the largest piece; the 5th is refused
+    // (this mock world cuts MINIS: the mock bodies have no planCut.) The safety ceiling is lowered to 4 by the test dep `ceiling` (the real one is 64, checked in cutter_checks): each Split in two cuts the largest
+    // piece after the edge crumb above; the one past the ceiling is refused with the kind line. RE-SPECIFIED, the owner removed the limits (6 pieces, 4 on low, no piece under 1/8) on 2026-10-09.
     const res: string[] = [];
-    for (let i = 0; i < 4; i++) { res.push(ct.splitInTwo()); step(NECK_DEFAULT_S + NECK_HOLD_S + 0.05); }
-    check('X02 shell (limits): at low quality the squishy makes at most 4 pieces; the next cut is refused ("That\'s as many pieces as it can make."); the first cut put the mat squishies back',
-      res.slice(0, 3).join() === 'cut,cut,cut' && res[3] === 'limit' && ct.pieces === 4 && notices.some((n) => /as many pieces/.test(n)) && matOut === 0 && notices.some((n) => /went back on the shelf/.test(n)), `${res.join()} pieces ${ct.pieces} ${ct.fracs().map((f) => f.toFixed(3)).join('+')}`);
+    for (let i = 0; i < 3; i++) { res.push(ct.splitInTwo()); step(NECK_DEFAULT_S + NECK_HOLD_S + 0.05); }
+    check('X02 shell (the ceiling, test dep ceiling 4; RE-SPECIFIED 2026-10-09): the pieces stop at the ceiling; the next cut is refused with the KIND line ("That is a lot of pieces" kind line, cutText.lotOfPieces), with a wobble; the first cut put the mat squishies back',
+      res.slice(0, 2).join() === 'cut,cut' && res[2] === 'limit' && ct.pieces === 4 && ct.maxPieces === 4 && !ct.canSplit && notices.at(-1) === "That's a lot of pieces! Reconnect some to keep cutting." && matOut === 0 && notices.some((n) => /went back on the shelf/.test(n)), `${res.join()} pieces ${ct.pieces} ${ct.fracs().map((f) => f.toFixed(3)).join('+')}`);
+    step(0.4);
+    check('CUT: the refusal wobble ends by itself (tremble back to 0)', ct.fracs().length === 4 && [bm.body, ...bm.extras.map((x) => x.body)].some((b3) => (b3 as CutMock).trembles.length > 0) && [bm.body, ...bm.extras.map((x) => x.body)].every((b3) => (b3 as CutMock).trembles.length === 0 || (b3 as CutMock).trembles.at(-1) === 0));
     const sum = ct.fracs().reduce((a2, b2) => a2 + b2, 0);
-    check('X01 shell: after three cuts the shares still sum to exactly 1, every piece at least 1/8, one face piece (the play body) and three chunks',
-      Math.abs(sum - 1) < 1e-9 && ct.fracs().every((f) => f >= PIECE_MIN - 1e-9) && bm.extras.filter((x) => x.piece).length === 3 && (bm.body as CutMock).piece?.chunk === false, `sum ${sum}`);
-    // X03: the face goes with the side holding the eyes' anchor (the body's front, +z): a cut across z puts the face on the front piece
-    // the touch-to-join: a finger on a chunk held against the face piece for JOIN_HOLD_S starts the join; the bridge rises; rejoin at the end
-    const face = bm.body as CutMock, chunk = bm.extras.find((x) => x.piece)!.body as CutMock;
-    (chunk.center as V).x = (face.center as V).x + 0.55; (chunk.center as V).y = (face.center as V).y; (chunk.center as V).z = (face.center as V).z;
-    active = chunk; touching = true;
+    check('X01 shell: after three cuts the shares still sum to exactly 1 and every piece is positive (the edge crumb included; no 1/8 minimum since 2026-10-09); RE-SPECIFIED 2026-10-08: four peers (the play body is the one anchor, three extra pieces), none built with a chunk flag (the regions as leaves of one tree: cutter_checks.ts, section nested, on the real clean engine)',
+      Math.abs(sum - 1) < 1e-9 && ct.fracs().every((f) => f > 0) && bm.extras.filter((x) => x.piece).length === 3 && (bm.body as CutMock).piece?.chunk === false && bm.extras.every((x) => (x.body as CutMock).piece?.chunk === false), `sum ${sum}`);
+    // the touch-to-join: a finger on a twin held against the anchor for JOIN_HOLD_S starts the join; the bridge rises; rejoin at the end
+    const anchor = bm.body as CutMock, twin = bm.extras.find((x) => x.piece)!.body as CutMock;
+    /** stand a mock piece with its centre at `at`, its skin (the vertices) carried along; the SURFACE gap to `to` along +x is then `gap` (the first version of this check moved only the centre, so the support read -1 m) */
+    const standBeside = (b: CutMock, to: CutMock, sign: 1 | -1, gap: number): void => {
+      const rb = supportAlong(b, { x: -sign, y: 0, z: 0 }), rt = supportAlong(to, { x: sign, y: 0, z: 0 });
+      const nx = (to.center as V).x + sign * (rt + rb + gap), ny = (to.center as V).y, nz = (to.center as V).z;
+      const c = b.center as V, dx = nx - c.x, dy = ny - c.y, dz = nz - c.z;
+      for (let i = 0; i < b.vertexCount; i++) { b.positions[i * 3] += dx; b.positions[i * 3 + 1] += dy; b.positions[i * 3 + 2] += dz; }
+      c.x = nx; c.y = ny; c.z = nz;
+    };
+    standBeside(twin, anchor, 1, 0.02);
+    active = twin; touching = true;
     const contactsBefore = bm.contactBodies;
+    // A-F2 (SHELL-4 fix 1, VERIFY_SHELL4_A): a finger that merely RESTS on a piece lying against its twin must never join them, however long it stays
+    // (the pieces close up to touching within ~3 s of a cut on most species): no grab at all (a tap, a press, a squeeze, a rub), a pull AWAY from the other
+    // piece, and a pull across or upward; only a drag TOWARD the other piece (below) starts the 0.4 s hold
+    const gap0 = (() => { const a = twin.center as V, b = anchor.center as V; return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) - supportAlong(anchor, { x: 1, y: 0, z: 0 }) - supportAlong(twin, { x: -1, y: 0, z: 0 }); })();
+    const radiusTwin = supportAlong(twin, { x: -1, y: 0, z: 0 });
+    dragV = null;
+    step(JOIN_HOLD_S * 3);
+    const restJoin = ct.busy;
+    dragV = { x: 0.3, y: 0, z: 0 };
+    step(JOIN_HOLD_S * 3);
+    const awayJoin = ct.busy;
+    dragV = { x: 0, y: 0.3, z: 0.25 };
+    step(JOIN_HOLD_S * 3);
+    const acrossJoin = ct.busy;
+    dragV = { x: -0.1 * radiusTwin, y: 0, z: 0 };
+    step(JOIN_HOLD_S * 3);
+    const nudgeJoin = ct.busy;
+    touching = false; dragV = null; step(0.2);
+    const letGoRest = ct.busy;
+    check(`A-F2 shell: a finger resting on a piece that TOUCHES its twin (skin gap ${gap0.toFixed(3)} m, under TOUCH_GAP) for 1.2 s never joins them: no grab (tap, press, squeeze, rub), a pull away, a pull across and up, and a nudge of a tenth of its radius toward it all leave 4 pieces; neither does letting go`,
+      gap0 > 0.005 && gap0 < 0.03 && !restJoin && !awayJoin && !acrossJoin && !nudgeJoin && !letGoRest && ct.pieces === 4, JSON.stringify({ gap0: +gap0.toFixed(3), restJoin, awayJoin, acrossJoin, nudgeJoin, letGoRest, pieces: ct.pieces }));
+    touching = true;
+    dragV = { x: -0.8 * radiusTwin, y: 0.1, z: 0 };   // a drag INTO the anchor: the hand moved 0.8 of the twin's radius toward it
     step(JOIN_HOLD_S * 0.5);
     const early = ct.busy;
     step(JOIN_HOLD_S * 0.6);
     const joining = ct.busy;
     const contactsJoining = bm.contactBodies;
-    touching = false;
+    touching = false; dragV = null;
     step(JOIN_S + 0.05);
     const rj = W.audioCalls.filter((c) => c[0] === 'rejoin');
     check('CUT reconnect: the piece flowing in is a ghost (out of body-to-body contact, so it cannot shove the receiver away); the rest still collide',
       contactsBefore === 4 && contactsJoining === 3 && bm.contactBodies === 3, `contacts ${contactsBefore} -> ${contactsJoining} -> ${bm.contactBodies}`);
-    check('CUT reconnect: a chunk held against the face piece for 0.4 s flows in (bridge, setFrac up on the face piece and down on the chunk, moveTo); then 3 pieces, rejoin({ frac: the merged share })',
-      !early && joining && ct.pieces === 3 && W.bridges.some((b2) => b2[2] > 0.5) && face.fracCalls.length >= 1 && chunk.fracCalls.length >= 1 && chunk.moved > 0 && rj.length === 1 && Math.abs((rj[0][1].frac as number) - ct.fracs()[0]) < 1e-9,
+    check('CUT reconnect: a twin DRAGGED into the anchor and held against it for 0.4 s flows in (bridge, setFrac up on the anchor and down on the twin, moveTo); then 3 pieces, rejoin({ frac: the merged share })',
+      !early && joining && ct.pieces === 3 && W.bridges.some((b2) => b2[2] > 0.5) && anchor.fracCalls.length >= 1 && twin.fracCalls.length >= 1 && twin.moved > 0 && rj.length === 1 && Math.abs((rj[0][1].frac as number) - ct.fracs()[0]) < 1e-9,
       `pieces ${ct.pieces}, rejoin ${JSON.stringify(rj.map((c) => c[1].frac))}, fracs ${ct.fracs().map((f) => f.toFixed(3)).join('+')}`);
     // let go while touching: joins at once (no 0.4 s wait)
     const c2 = bm.extras.find((x) => x.piece)!.body as CutMock;
-    (c2.center as V).x = (bm.body.center as V).x - 0.5; (c2.center as V).y = (bm.body.center as V).y; (c2.center as V).z = (bm.body.center as V).z;
-    active = c2; touching = true; step(0.1); touching = false; step(1 / 60);
+    standBeside(c2, bm.body as CutMock, -1, 0.02);
+    active = c2; touching = true; dragV = { x: 0.8 * supportAlong(c2, { x: 1, y: 0, z: 0 }), y: 0, z: 0 }; step(0.1); touching = false; dragV = null; step(1 / 60);
     const letGo = ct.busy;
     step(JOIN_S + 0.05);
-    check('CUT reconnect: letting go of a piece while it touches another joins them at once', letGo && ct.pieces === 2, `pieces ${ct.pieces}`);
-    // X04: Reconnect all flows every piece into the face piece over 1.2 s; the result is a fresh WHOLE body of the same genome
+    check('CUT reconnect: letting go of a piece that was DRAGGED into another, while they touch, joins them at once', letGo && ct.pieces === 2, `pieces ${ct.pieces}`);
+    // X04: Reconnect all flows every piece into the anchor over 1.2 s; the result is a fresh WHOLE body of the same genome
     const before = bm.body;
     const okAll = ct.reconnectAll(true);
     step(JOIN_ALL_S * 0.5);
     const mid = ct.busy && ct.pieces === 2;
     step(JOIN_ALL_S * 0.5 + 0.05);
     const all = W.audioCalls.filter((c) => c[0] === 'rejoin' && c[1].all === true);
-    // the face piece ended up off the middle (the mock's pieces sit at their lobes): it glides home first, then the swap happens there
+    // the anchor ended up off the middle (the mock's pieces sit at their lobes): it glides home first, then the swap happens there
     const gliding = ct.busy && (ct.pieces as number) === 1 && bm.extras.length === 0 && bm.body === before;
     const offBy = Math.hypot((bm.body.center as V).x, (bm.body.center as V).z);
     step(HOME_MAX_S + 0.05);
@@ -779,28 +816,12 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     check('X04 shell: Reconnect all (1.2 s) ends whole: one body, a FRESH whole body of the same genome (no piece options), frac 1; rejoin({ frac: 1, all: true }) once; "Whole again."',
       okAll && mid && (ct.pieces as number) === 1 && fresh !== before && fresh.piece === null && fresh.frac === 1 && bm.identity.genome === g0 && bm.extras.length === 0 && all.length === 1 && all[0][1].frac === 1 && notices.at(-1) === 'Whole again.',
       `pieces ${ct.pieces}, extras ${bm.extras.length}, notices ${notices.slice(-2).join(' | ')}`);
-    check('CUT: whole again at the MIDDLE of the table: an off-centre face piece glides home (moveTo, busy, still the same body) before the swap; the whole body is built without `at`',
+    check('CUT: whole again at the MIDDLE of the table: an off-centre anchor glides home (moveTo, busy, still the same body) before the swap; the whole body is built without `at`',
       gliding && offBy > 0.06 && !ct.busy && Math.hypot((fresh.center as V).x, (fresh.center as V).z) < 1e-9 && fresh.piece === null,
       `gliding ${gliding}, off ${offBy.toFixed(3)}, busy ${ct.busy}`);
     check('CUT: nothing to reconnect when whole (reconnectAll answers false)', ct.reconnectAll(true) === false && !ct.busy);
-    // X03: the face goes with the side that holds the eyes' anchor (the front, a little above the middle): a level swipe above the eyes
-    // makes the TOP a chunk and the bottom the face piece; a swipe right of the middle keeps the face on the (left) side holding the anchor
-    const cw = { ...(bm.body.center as V) };
-    const hi1 = proj({ x: cw.x - 0.6, y: cw.y + 0.22, z: cw.z }), hi2 = proj({ x: cw.x + 0.6, y: cw.y + 0.22, z: cw.z });
-    const rTop = ct.swipe(hi1.x, hi1.y, hi2.x, hi2.y);
-    step(NECK_DEFAULT_S + NECK_HOLD_S + 0.05);
-    const faceT = bm.body as CutMock, chunkT = bm.extras.find((x) => x.piece)?.body as CutMock | undefined;
-    const topOk = rTop === 'cut' && !!chunkT && faceT.piece?.chunk === false && chunkT.piece?.chunk === true && (faceT.piece?.at?.y ?? 9) < (chunkT.piece?.at?.y ?? -9);
-    ct.reconnectAll(false);
-    const cr = { ...(bm.body.center as V) };
-    const r1 = proj({ x: cr.x + 0.16, y: cr.y + 0.45, z: cr.z }), r2 = proj({ x: cr.x + 0.16, y: cr.y - 0.45, z: cr.z });
-    const dbg = { c: cr, frac: (bm.body as CutMock).frac };
-    const rRight = ct.swipe(r1.x, r1.y, r2.x, r2.y);
-    step(NECK_DEFAULT_S + NECK_HOLD_S + 0.05);
-    const faceR = bm.body as CutMock, chunkR = bm.extras.find((x) => x.piece)?.body as CutMock | undefined;
-    const rightOk = rRight === 'cut' && !!chunkR && faceR.piece?.chunk === false && (faceR.piece?.at?.x ?? 9) < (chunkR.piece?.at?.x ?? -9) && (faceR.piece?.frac ?? 0) > (chunkR.piece?.frac ?? 1);
-    check('X03 shell: the face piece is the side holding the eyes\' anchor: a level cut above the eyes makes the top a chunk; a cut right of the middle keeps the face on the left (larger) side',
-      topOk && rightOk, JSON.stringify({ rTop, faceAtY: faceT.piece?.at?.y, chunkAtY: chunkT?.piece?.at?.y, rRight, faceX: faceR.piece?.at?.x, chunkX: chunkR?.piece?.at?.x, dbg, notice: notices.at(-1) }));
+    // DELETED (CUT2.md 14): 'X03 shell: the face piece is the side holding the eyes anchor' - the owner changed the design on 2026-10-08: pieces are peers, no piece is "the face". Both halves carry the eyes that sit on their side:
+    // X03' (the first Split in two leaves one eye on each half) is in cut_checks.ts (node, the plane the shell computes against the eye centres) and cut_browser.mjs (the real stage).
     ct.reconnectAll(false);
   }
 
@@ -837,7 +858,23 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     r.app.hoard.flush();
     const stored = Object.keys(mem.dump?.() ?? {}).map((k) => `${k}=${mem.getItem(k)}`).join('\n');
     check('X05 shell: the Hoard never sees a piece (items unchanged through every cut and reconnect), and nothing about pieces or fractions is stored',
-      r.app.hoard.items().length === items.length && stored.length > 0 && !/piece|chunk|frac/i.test(stored), `items ${items.length} -> ${r.app.hoard.items().length}; ${stored.length} chars stored`);
+      r.app.hoard.items().length === items.length && stored.length > 0 && !/piece|chunk|frac|region|cells|planes/i.test(stored), `items ${items.length} -> ${r.app.hoard.items().length}; ${stored.length} chars stored`);
+    // U07 / CUT3.md 5 (2026-10-09, no piece limit): the leave paths reconnect first at 24 pieces too, the meter pays nothing for 23 cuts and the Hoard never sees a piece
+    {
+      const sp0 = r.app.hoard.meter().sp, n0 = r.app.hoard.items().length;
+      for (let i = 0; i < 23; i++) { r.app.cut.splitInTwo(); run2(r.w, r.app, neckMs); }
+      const had = r.app.cut.pieces, paid = r.app.hoard.meter().sp, itemsDuring = r.app.hoard.items().length;
+      const res24: Record<string, boolean> = {};
+      r.app.setHidden(true); r.w.clock.t += 61_000; r.app.setHidden(false);
+      res24.hidden = r.app.cut.pieces === 1 && r.app.bodies.extras.length === 0;
+      for (let i = 0; i < 23; i++) { r.app.cut.splitInTwo(); run2(r.w, r.app, neckMs); }
+      res24.again = r.app.cut.pieces === 24;
+      const other2 = items.find((it) => it.id !== r.app.identity.itemId)!;
+      r.app.switchTo(other2.id);
+      res24.switch = r.app.cut.pieces === 1 && r.app.bodies.extras.length === 0 && r.app.identity.itemId === other2.id;
+      check('U07 shell (CUT3): 23 cuts make 24 pieces, the meter paid nothing and the Hoard saw none; the tab hidden over 60 s and a switch of squishy each reconnect all 24 first (one body, nothing on the mat)',
+        had === 24 && paid === sp0 && itemsDuring === n0 && Object.values(res24).every(Boolean), JSON.stringify({ had, sp: [sp0, paid], items: [n0, itemsDuring], res24 }));
+    }
     // tool state: Cut and Snap route the pointer away from the gestures; Escape-level setTool('hand') restores them
     r.app.setTool('cut');
     const fd0 = (r.app.body as CutMock).rec.count('fingerDown');
@@ -851,6 +888,67 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     check('tools: with Cut a swipe over the squishy cuts it (no finger reaches a body); with Snap a drag orbits the camera (no finger either)',
       r.app.tool === 'snap' && swiped === 2 && (r.app.body as CutMock).rec.count('fingerDown') === 0 && fd0 === 0 && orbits >= 1, `pieces after the swipe ${swiped}, orbits ${orbits}`);
     r.app.setTool('hand');
+    // SHELL-4 fix round 1 (VERIFY_SHELL4_A F5 / F6 / F4, B F1 / F2): src/input/pointer.ts forwards a pointermove to the game only while input.isDown(id); isDown used to answer for the Hand's gesture
+    // machine alone, so with REAL pointer events Snap's drag-to-turn and pinch did nothing and the Cut blade stayed a dot (the hook and these rows call game.input directly and never saw it). Every owner of a
+    // pressed pointer must answer: the Cut blade, a Snap drag (not a left mouse button), and a release (hidden tab, panel) must clear the stale ones.
+    {
+      r.app.setTool('cut');
+      const blades: Array<{ x1: number; y1: number } | null> = [];
+      r.app.on('blade', (b) => blades.push(b ? { x1: b.x1, y1: b.y1 } : null));
+      r.app.input.pointerDown({ id: 91, x: c.x - 60, y: c.y - 50, t: r.w.clock.t, type: 'mouse', button: 0 });
+      const bladeDown = r.app.input.isDown(91);
+      r.app.input.pointerMove({ id: 91, x: c.x + 40, y: c.y + 30, t: r.w.clock.t, type: 'mouse' });
+      const followed = blades.at(-1)?.x1 === c.x + 40;
+      r.app.suspend('hidden'); r.app.unsuspend('hidden');   // the shell's own release, no pointerup
+      const bladeAfterRelease = r.app.input.isDown(91), bladeCleared = blades.at(-1) === null;
+      r.app.input.pointerDown({ id: 92, x: c.x - 60, y: c.y - 50, t: r.w.clock.t, type: 'mouse', button: 2 });
+      const rightMouseInCut = r.app.input.isDown(92);   // a right drag in the Cut tool is nothing: not a blade
+      r.app.setTool('snap');
+      r.app.input.pointerDown({ id: 93, x: c.x, y: c.y, t: r.w.clock.t, type: 'mouse', button: 0 });
+      const leftMouse = r.app.input.isDown(93);
+      r.app.input.pointerDown({ id: 94, x: c.x, y: c.y, t: r.w.clock.t, type: 'mouse', button: 2 });
+      const rightMouse = r.app.input.isDown(94);
+      r.app.input.pointerUp({ id: 94, x: c.x, y: c.y, t: r.w.clock.t, type: 'mouse' });
+      const afterUp = r.app.input.isDown(94);
+      r.app.input.pointerDown({ id: 95, x: c.x, y: c.y, t: r.w.clock.t, type: 'touch' });
+      const finger = r.app.input.isDown(95);
+      const o0 = r.w.stage.rec.count('orbit');
+      r.app.input.pointerMove({ id: 95, x: c.x + 30, y: c.y, t: r.w.clock.t, type: 'touch' });
+      const orbited = r.w.stage.rec.count('orbit') > o0;
+      r.app.suspend('hidden'); r.app.unsuspend('hidden');
+      const afterRelease = r.app.input.isDown(95);
+      r.app.setTool('hand');
+      check('input.isDown answers for every owner of a pressed pointer (pointer.ts forwards moves only while it does): the Cut blade (and its line follows the move), a Snap right-mouse drag and a finger but not a left mouse button; up, cancel and a release (hidden tab) clear them',
+        bladeDown && followed && !bladeAfterRelease && bladeCleared && !rightMouseInCut && !leftMouse && rightMouse && finger && orbited && !afterUp && !afterRelease,
+        JSON.stringify({ bladeDown, followed, bladeAfterRelease, bladeCleared, rightMouseInCut, leftMouse, rightMouse, finger, orbited, afterUp, afterRelease }));
+    }
+    // SHELL-4 fix round 2 (VERIFY_SHELL4_A_R1 N1): a swipe in progress when a Reconnect all (or a join, or a parting) animation ends must not be dropped. The swap that ends the animation calls beforeChange /
+    // beforeSwap (fingers off the bodies), and since fix round 1 that also cleared the blade: the line vanished at that moment and the finished swipe cut nothing. The shell's own releases (hidden tab, a
+    // panel, a ceremony, a switch) still clear it (the row above).
+    {
+      r.app.setTool('cut');
+      r.app.cut.reconnectAll(false);   // (the rows above left it cut: start from a whole squishy)
+      cutTwo();
+      const two = r.app.cut.pieces === 2;
+      r.app.cut.reconnectAll(true);
+      run2(r.w, r.app, 300);
+      const blades2: Array<{ x1: number; y1: number } | null> = [];
+      const cuts: string[] = [];
+      r.app.on('blade', (b) => blades2.push(b ? { x1: b.x1, y1: b.y1 } : null));
+      r.app.on('cut', (res) => cuts.push(String(res)));
+      r.app.input.pointerDown({ id: 96, x: c.x - 60, y: c.y - 120, t: r.w.clock.t, type: 'mouse', button: 0 });
+      const downWhileBusy = r.app.cut.busy && r.app.input.isDown(96) && blades2.at(-1) !== null;
+      let waited = 0;
+      while (r.app.cut.busy && waited < 6000) { run2(r.w, r.app, 100); waited += 100; }   // the join, the glide home and the swap to a whole body
+      const survived = !r.app.cut.busy && r.app.cut.pieces === 1 && r.app.input.isDown(96) && blades2.at(-1) !== null && !blades2.includes(null);
+      r.app.input.pointerMove({ id: 96, x: c.x - 40, y: c.y + 120, t: r.w.clock.t, type: 'mouse' });
+      r.app.input.pointerUp({ id: 96, x: c.x - 40, y: c.y + 120, t: r.w.clock.t, type: 'mouse' });
+      run2(r.w, r.app, neckMs);
+      check('N1 shell: a swipe that is in progress when a Reconnect all animation ends is NOT dropped: the blade line stays through the swap to the whole body, and the finished swipe cuts it (2 pieces)',
+        two && downWhileBusy && survived && cuts.at(-1) === 'cut' && r.app.cut.pieces === 2,
+        JSON.stringify({ two, downWhileBusy, survived, waitedMs: waited, cuts, bladeEvents: blades2.map((b) => (b ? 'line' : 'null')), pieces: r.app.cut.pieces }));
+      r.app.setTool('hand');
+    }
     r.app.dispose();
   }
 }
@@ -1157,7 +1255,7 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
 /* ───────────────────────── 7g. SHELL-4: the Cut tool on the REAL SoftBody (the mock bodies of 5d prove the logic; this proves it against the real physics' measureCut / setNeck / pieces / setFrac) ───────────────────────── */
 {
   const { SoftBody } = await import('../../src/physics/softbody.ts');
-  const { createCutter, SETTLE_GAP, SETTLE_S, supportAlong, JOIN_ALL_S, BRIDGE_HOLD_S } = await import('../../src/shell/cut.ts');
+  const { createCutter, PART_GAP_DEFAULT, PART_S_DEFAULT, supportAlong, JOIN_ALL_S, BRIDGE_HOLD_S } = await import('../../src/shell/cut.ts');
   void createCutter;
   const g = makeStarterGenome();
   const w = createMockWorld({ storage: null });
@@ -1196,22 +1294,28 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   const face = app.body as unknown as InstanceType<typeof SoftBody>;
   const xs = app.bodies.extras.filter((x) => x.piece);
   const frameFace = (face as unknown as { frac?: number }).frac;
-  check('X01 real physics (node, through the whole game): Split in two necks (the real setNeck), then two real pieces whose shares sum to 1 (0.5 %); the face piece is the PLAY body (a new SoftBody built as a piece, same identity), the other an eyeless chunk on the mat (AddBodyOpts.chunk)',
-    r1 === 'cut' && necking && f2.length === 2 && Math.abs(f2[0] + f2[1] - 1) < 0.005 && face !== whole0 && Math.abs((frameFace ?? 0) - f2[0]) < 1e-6 && xs.length === 1 && chunkFlags.at(-1) === true && app.identity.itemId === id0.itemId && app.identity.genome === id0.genome,
-    `${r1}; fracs ${f2.map((f) => f.toFixed(3)).join(' + ')}; neck ${necking}; extras ${xs.length}`);
-  // the parting gap: a chunk is steered to SETTLE_GAP of room from its twin (the strands need it) and let go after SETTLE_S
-  const gapOf = (): number => { const a = app.body, b = xs[0].body; const dx = a.center.x - b.center.x, dy = a.center.y - b.center.y, dz = a.center.z - b.center.z, d = Math.hypot(dx, dy, dz), u = { x: dx / d, y: dy / d, z: dz / d }; return d - supportAlong(b, u) - supportAlong(a, { x: -u.x, y: -u.y, z: -u.z }); };
-  go(0.5 * 1000);
-  const gapHeld = gapOf();
-  go(SETTLE_S * 1000);
-  check(`parting gap: the new chunk is steered to a surface gap of ${SETTLE_GAP} m from its twin (strands need room: it was 0 .. 0.03 m with a fixed 0.06 m offset from the lobes); measured ${gapHeld.toFixed(3)} m 0.5 s after the cut, then it is let go after SETTLE_S`,
-    Math.abs(gapHeld - SETTLE_GAP) < 0.04 && !(xs[0].body as unknown as { moveOn?: boolean }).moveOn, `gap ${gapHeld.toFixed(3)} m, still steered after SETTLE_S: ${(xs[0].body as unknown as { moveOn?: boolean }).moveOn}`);
+  check('X01 real physics (node, through the whole game): Split in two necks (the real setNeck), then two real pieces whose shares sum to 1 (0.5 %); RE-SPECIFIED 2026-10-08: both are peers built as pieces of the cut (PieceInfo, no chunk flag ever reaches the stage), the play body is the LARGER one (a new SoftBody, same identity), the other is the one extra',
+    r1 === 'cut' && necking && f2.length === 2 && Math.abs(f2[0] + f2[1] - 1) < 0.005 && face !== whole0 && Math.abs((frameFace ?? 0) - f2[0]) < 1e-6 && f2[0] >= f2[1] - 1e-9 && xs.length === 1 && chunkFlags.every((c) => c === false) && !!face.piece && !!xs[0].body.piece && app.identity.itemId === id0.itemId && app.identity.genome === id0.genome,
+    `${r1}; fracs ${f2.map((f) => f.toFixed(3)).join(' + ')}; neck ${necking}; extras ${xs.length}; stage chunk flags ${JSON.stringify(chunkFlags)}`);
+  // X19, RE-SPECIFIED because the owner changed the design on 2026-10-08 (the closed loop of SETTLE_GAP / SETTLE_S is gone, CUT2.md 6.5): the scripted parting opens the pair by G = PART_GAP x (R0 / 0.5) +-20 % by PART_S and holds to 4 s (drift under 1 cm)
+  const relXZ = (): { x: number; z: number } => { const a = app.body.center, b = xs[0].body.center; return { x: a.x - b.x, z: a.z - b.z }; };
+  const rel0 = relXZ(), hl0 = Math.hypot(rel0.x, rel0.z) || 1, hd = { x: rel0.x / hl0, z: rel0.z / hl0 };
+  const openNow = (): number => { const r = relXZ(); return (r.x - rel0.x) * hd.x + (r.z - rel0.z) * hd.z; };
+  const Gw = PART_GAP_DEFAULT * (whole0.restRadius / 0.5);
+  go(PART_S_DEFAULT * 1000);
+  const openAtPS = openNow();
+  go(4000 - PART_S_DEFAULT * 1000);
+  const open4 = openNow();
+  check(`X19 parting: the scripted parting opens the pair to G ${Gw.toFixed(3)} m +-20 % by PART_S ${PART_S_DEFAULT} s (measured ${openAtPS.toFixed(3)} m) and holds to 4 s (drift under 1 cm; measured ${(open4 - openAtPS).toFixed(3)} m)`,
+    Math.abs(openAtPS - Gw) <= 0.2 * Gw && Math.abs(open4 - openAtPS) < 0.01, `G ${Gw.toFixed(3)}, at PART_S ${openAtPS.toFixed(3)}, at 4 s ${open4.toFixed(3)}`);
   check('X06 real physics: cutting paid the meter nothing and the Hoard saw no piece', app.hoard.meter().sp === fill0 && app.hoard.items().length === items0 && app.mat.count === 1, `sp ${fill0} -> ${app.hoard.meter().sp}`);
-  // more cuts, then the refusal numbers on the real physics (a cut that would leave a piece under 1/8 is refused: the whole's edge)
+  // a second Split in two on the real physics. RE-SPECIFIED because the owner removed the piece limit on 2026-10-09 (it was the limit of 2 pieces, refused in words, from 2026-10-08): the second press now just makes 3 pieces
+  // (the largest piece halved: 0.5 + 0.25 + 0.25); deeper nesting: cutter_checks.ts, section nested and u01
   const r2 = app.cut.splitInTwo(); settleIdle(); go(500);
-  const f3 = app.cut.fracs();
-  check('X01 real physics: a second Split in two (the biggest piece) makes 3 pieces, shares sum to 1, none under 1/8', r2 === 'cut' && f3.length === 3 && Math.abs(f3.reduce((s, f) => s + f, 0) - 1) < 0.005 && f3.every((f) => f >= 0.125 - 1e-6), `${r2}; ${f3.map((f) => f.toFixed(3)).join(' + ')}`);
-  // Reconnect all: the bridge is held in view (the chunks' skins stay apart BRIDGE_HOLD_S), every chunk flows into the face piece, a FRESH whole body of the same genome replaces it
+  const f3 = app.cut.fracs(), sum3 = f3.reduce((s, f) => s + f, 0);
+  check('X01 real physics (RE-SPECIFIED 2026-10-09, no limit): a second Split in two (the biggest piece) makes 3 pieces, shares sum to 1, all positive, the biggest piece was the one halved (0.5 + 0.25 + 0.25 within a few percent)',
+    Math.abs(sum3 - 1) < 0.005 && f3.every((f) => f > 0)&& r2 === 'cut' && f3.length === 3 && Math.max(...f3) < 0.56 && Math.min(...f3) > 0.2, `${r2}; ${f3.map((f) => f.toFixed(3)).join(' + ')}`);
+  // Reconnect all: the bridge is held in view (the pieces' skins stay apart BRIDGE_HOLD_S), every piece flows into the anchor, a FRESH whole body of the same genome replaces it
   const bridgeCalls0 = bridges.length;
   const started = app.cut.reconnectAll(true);
   const gaps: number[] = [];
@@ -1226,46 +1330,84 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   check(`X04 real physics: Reconnect all ends whole: one body, a FRESH whole SoftBody (frac 1, not a piece) of the same genome, no piece on the mat; "Whole again."; rejoin({ all }) once; the bridge was drawn every step (${bridges.length - bridgeCalls0} setBridge calls)`,
     started && app.cut.pieces === 1 && app.bodies.extras.length === 0 && fw !== face && (fw as unknown as { frac?: number }).frac === 1 && app.identity.genome === id0.genome && notices.includes('Whole again.') && calls.filter((c) => c[0] === 'rejoin' && c[1].all === true).length === 1 && bridges.length - bridgeCalls0 >= 20,
     `pieces ${app.cut.pieces}, extras ${app.bodies.extras.length}, notices ${notices.join(' | ')}`);
-  check(`Reconnect all keeps the glowing bridge in view: the skins of some chunk stay more than 2 % of the radius apart for ${apart.toFixed(2)} s (>= BRIDGE_HOLD_S ${BRIDGE_HOLD_S} s; it was 0.02 s when the pieces were already overlapping at the start of the join)`, apart >= BRIDGE_HOLD_S - 0.02, `${apart.toFixed(2)} s of ${gaps.length / 60} s`);
+  check(`Reconnect all keeps the glowing bridge in view: the skins of some piece stay more than 2 % of the radius apart for ${apart.toFixed(2)} s (>= BRIDGE_HOLD_S ${BRIDGE_HOLD_S} s; it was 0.02 s when the pieces were already overlapping at the start of the join)`, apart >= BRIDGE_HOLD_S - 0.02, `${apart.toFixed(2)} s of ${gaps.length / 60} s`);
   // leaving reconnects, on the real physics: a switch to another genome while cut
   app.cut.splitInTwo(); settleIdle(); go(300);
   const cutAgain = app.cut.pieces;
   app.setGenome(speciesBaseGenome('twangle', 1));
-  check('X05 real physics: a switch of squishy while cut reconnects first (the new squishy is whole, nothing left on the mat, the Hoard unchanged)', cutAgain === 2 && app.cut.pieces === 1 && app.bodies.extras.length === 0 && app.hoard.items().length=== items0, `pieces ${cutAgain} -> ${app.cut.pieces}`);
-  // (SHELL-4, found in the browser: section cut-flash) Split in two ALONE reaches the 6-piece limit at med quality: from four quarters the next press makes two exact
-  // eighths (the halving plane is balanced by measureCut, and a side a hair under 1/8 is snapped onto it: SIZE_TOL). It was refused ("That piece is as small as it
-  // gets.") whenever the real measure of a quarter read 0.498 through its centre, while the button stayed on.
-  {
-    go(800);
-    const rs: string[] = [];
-    for (let i = 0; i < 6 && app.cut.pieces < 6; i++) { rs.push(app.cut.splitInTwo()); settleIdle(); go(1000 / 60); }   // RAPID: the next press one frame after the parting, as a player taps it
-    const f6 = app.cut.fracs();
-    check('Split in two alone (the keyboard path) reaches the 6-piece limit on the real SoftBody: five presses, five cuts, shares sum to 1 (0.5 %), none under 1/8',
-      rs.length === 5 && rs.every((r) => r === 'cut') && app.cut.pieces === 6 && Math.abs(f6.reduce((s, f) => s + f, 0) - 1) < 0.005 && f6.every((f) => f >= 0.125 - 1e-9),
-      `${rs.join(',')}; ${f6.map((f) => f.toFixed(4)).join(' + ')}`);
-    app.cut.reconnectAll(false); go(300);
-  }
-  // (SHELL-4, third engineer, found in the browser: section cut-flash, NORMAL effects) the same with the camera turned to the side, as the stage frames the pieces:
-  // the bisection booked the quarters a hair under 1/4 (0.2499) and a quarter can then never be halved without a piece under 1/8, so from 5 pieces every press
-  // was refused "That piece is as small as it gets." while the button was on (old code, this pose: cut,cut,cut,cut,small,small). Split in two now books exact
-  // halves once the bisection has found the half (HALF_TOL), so the shares are exactly 1/2, 1/4, 1/8.
-  {
-    const cam = (w.stage as unknown as { camera: { position: { x: number; y: number; z: number; set(x: number, y: number, z: number): void }; lookAt(x: number, y: number, z: number): void; updateMatrixWorld(f?: boolean): void } }).camera;
-    const p0 = { x: cam.position.x, y: cam.position.y, z: cam.position.z };
-    cam.position.set(-1.5, 1.4, 4.2); cam.lookAt(0, 0.3, 0); cam.updateMatrixWorld(true);
-    app.setGenome(decodeGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA')!);   // the browser cut-flash squishy
-    go(800);
-    const rs: string[] = [];
-    for (let i = 0; i < 7; i++) { while (app.cut.busy) go(2000 / 60); if (app.cut.pieces >= 6) break; rs.push(app.cut.splitInTwo()); go(2000 / 60); }
-    while (app.cut.busy) go(2000 / 60);
-    const f6 = app.cut.fracs();
-    check('Split in two alone under a turned camera (-1.5, 1.4, 4.2), the cut-flash squishy, reaches 6 pieces: five presses, five cuts, the shares are EXACT halves (1/2, 1/4, 1/8: every share a power of 1/2 within 1e-9), sum 1, none under 1/8',
-      rs.length === 5 && rs.every((r) => r === 'cut') && app.cut.pieces === 6 && f6.every((f) => [0.125, 0.25, 0.5].some((q) => Math.abs(f - q) < 1e-9)) && Math.abs(f6.reduce((s, f) => s + f, 0) - 1) < 1e-9,
-      `${rs.join(',')}; ${f6.map((f) => f.toFixed(4)).join(' + ')}`);
-    app.cut.reconnectAll(false); go(300);
-    cam.position.set(p0.x, p0.y, p0.z); cam.lookAt(0, 0.35, 0); cam.updateMatrixWorld(true);
-  }
+  check('X05 real physics: a switch of squishy while cut reconnects first (the new squishy is whole, nothing left on the mat, the Hoard unchanged)', cutAgain === 2 && app.cut.pieces === 1 && app.bodies.extras.length === 0 && app.hoard.items().length === items0, `pieces ${cutAgain} -> ${app.cut.pieces}`);
   app.dispose();
+}
+
+/* ───────────────────────── 7h. SHELL-4 fix round 2 (VERIFY_SHELL4 A-F3 / A-F7), RE-SPECIFIED because the owner changed the design on 2026-10-08: where do the pieces of a cut GO, and how big are they, on the REAL physics (the TRUE cut) ───────────────────────── */
+// Both verifiers measured the same failures with the shell untouched by them: a level swipe threw the top piece up to 55 m on putty, gummy, firm silicone, pop dome, slow-rise and bead families, the first
+// Split in two left some pieces 6 .. 13 % off their share, and the neck of a firm / putty body threw the whole body up 3x its height. The legacy chunk rows are gone (CUT2.md 14: replaced by X13 and L9 in PHYS's
+// probe_flush.ts); what stays runs the TRUE cut through the whole game: the highest centre of any piece after a level swipe and after Split in two, and the volumes against the shares.
+{
+  const { SoftBody } = await import('../../src/physics/softbody.ts');
+  const Ctor = SoftBody as unknown as new (g: Genome, o?: unknown) => SoftBodyLike & { center: { x: number; y: number; z: number } };
+  const volOf = (b: SoftBodyLike): number => {
+    const P = b.positions as Float32Array, I = b.indices as Uint32Array; let v = 0;
+    for (let t = 0; t < I.length; t += 3) { const a = I[t] * 3, c = I[t + 1] * 3, d = I[t + 2] * 3; v += P[a] * (P[c + 1] * P[d + 2] - P[c + 2] * P[d + 1]) - P[a + 1] * (P[c] * P[d + 2] - P[c + 2] * P[d]) + P[a + 2] * (P[c] * P[d + 1] - P[c + 1] * P[d]); }
+    return v / 6;
+  };
+  // (1) DELETED: 'A-F3 real physics: a chunk alone with its flat cut face down, up or sideways stays on the table' built the legacy chunk (PieceOpts.chunk with cutNormal). The owner changed the design on 2026-10-08:
+  //     there is no chunk any more; CUT2.md 14 says section 7h is replaced by X13 and L9 (PHYS: _harness/probe_flush.ts L1 = the swap flow on 50 species x 3 planes, L9 nested) and the legacy chunk rows are deleted, not left green on a scaled whole.
+  // (2) through the whole game: a level swipe through the middle (the top piece is the one that flew) and Split in two; the highest centre of any piece in 8 s, and (Split in two) the pieces' volumes against their shares 1.8 s after
+  const through = (id: string, mode: 'level' | 'split'): { hi: number; pieces: number; volErr: number } => {
+    const w = createMockWorld({ storage: null });
+    const st = w.stage as unknown as Record<string, unknown>;
+    let vid = 100;
+    st.primaryBodyId = () => 1; st.setBodyTier = () => {}; st.setCalmEffects = () => {}; st.addBody = () => ++vid; st.removeBody = () => {}; st.setCutSeam = () => {}; st.setBridge = () => {}; st.partPieces = () => {};
+    st.stats = () => ({ drawCalls: 0, triangles: 0, tier: 'high', frameMsEma: 0 });
+    const au = w.audio as unknown as Record<string, unknown>; au.cut = () => {}; au.rejoin = () => {};
+    w.deps.createBody = ((gg: Genome, o?: { at?: { x: number; y: number; z: number }; piece?: unknown }) => (o?.piece ? new Ctor(gg, { piece: o.piece }) : o?.at ? new Ctor(gg, { piece: { frac: 1, chunk: false, at: o.at } }) : new Ctor(gg))) as typeof w.deps.createBody;
+    const now = (): number => 1_700_000_000_000 + w.clock.t;
+    const app = createApp({ ...w.deps, collection: createCollection({ storage: null, profile: null, now, random: () => 0.4 }), epochNow: now, genome: speciesBaseGenome(id as never, 1) });
+    app.resize(800, 600, 1); app.setPhase('play');
+    const go = (ms: number): void => { let left = ms; while (left > 1e-9) { const d = Math.min(1000 / 60, left); w.clock.t += d; app.frame(w.clock.t); left -= d; } };
+    go(1500);
+    const V0 = volOf(app.body);
+    const b = app.host.bodyScreen()!;
+    const r = mode === 'level' ? app.cut.swipe(b.x - 1.6 * b.r, b.y, b.x + 1.6 * b.r, b.y + 6) : app.cut.splitInTwo();
+    if (r !== 'cut') { app.dispose(); return { hi: -1, pieces: 0, volErr: -1 }; }
+    let hi = 0, volErr = 0;
+    for (let t = 0; t < 8000; t += 1000 / 60) {
+      go(1000 / 60);
+      for (const bb of [app.body, ...app.bodies.extras.map((x) => x.body)]) hi = Math.max(hi, bb.center.y);
+      if (mode === 'split' && Math.abs(t - 2200) < 9) {   // about 1.8 s after the parting (the neck takes 0.3 s)
+        const bodies = [app.body, ...app.bodies.extras.filter((x) => x.piece).map((x) => x.body)], fr = app.cut.fracs();
+        volErr = Math.max(...bodies.map((bb, i) => Math.abs(volOf(bb) / (fr[i] * V0) - 1)));
+      }
+    }
+    const pieces = app.cut.pieces;
+    app.dispose();
+    return { hi, pieces, volErr };
+  };
+  const rowsL: string[] = [];
+  let hiLevel = 0, badL = '';
+  for (const id of ['kneadle', 'thudge', 'prismelo', 'boingle', 'diademo']) {
+    const o = through(id, 'level');
+    rowsL.push(`${id} ${o.hi.toFixed(2)}`);
+    if (o.hi < 0 || o.pieces !== 2) badL += ` ${id}: no cut`;
+    if (o.hi > hiLevel) hiLevel = o.hi;
+  }
+  check('A-F3 real physics (node, through the whole game): after a LEVEL swipe through the middle no piece of kneadle / thudge (putty), prismelo (gummy), boingle (firm silicone) or diademo (pop dome) rises above 2.5 m in 8 s (the highest centre of any piece)',
+    hiLevel < 2.5 && badL === '', `${rowsL.join(', ')} m${badL}; as found kneadle 12.74, prismelo 24.5, boingle 14.66, diademo 45.98`);
+  const rowsS: string[] = [], vrows: string[] = [];
+  let hiSplit = 0, vWorst = 0, badS = '';
+  for (const id of ['dollop', 'boingle', 'caromel', 'chunkle', 'thudge', 'capnap', 'burrbin', 'crumbit', 'slumbrel', 'rattlebead']) {
+    const o = through(id, 'split');
+    rowsS.push(`${id} ${o.hi.toFixed(2)}`); vrows.push(`${id} ${(o.volErr * 100).toFixed(1)} %`);
+    if (o.hi < 0 || o.pieces !== 2) badS += ` ${id}: no cut`;
+    if (o.hi > hiSplit) hiSplit = o.hi;
+    if (o.volErr > vWorst) vWorst = o.volErr;
+  }
+  // (the neck: the whole body, still one body, was thrown up 3 x its height by the goal's centroid drift; the highest centre of any body in the 8 s after Split in two)
+  check('A-F3 real physics (node, through the whole game): after Split in two nothing rises above 1.0 m in 8 s on boingle / caromel (firm silicone), chunkle (gummy), thudge (putty), capnap, slumbrel (slow-rise), burrbin, crumbit, rattlebead (beads) and dollop: the neck no longer throws the body up',
+    hiSplit < 1.0 && badS === '', `${rowsS.join(', ')} m${badS}; as found boingle 1.65, capnap 1.59, caromel 1.29, chunkle 1.16`);
+  check('A-F7 real physics (node, through the whole game): 1.8 s after Split in two the mesh volume of each piece is within 6 % of its share (X01) on the bead-squeeze and slow-rise species that were 6.6 .. 11.4 % off (capnap, burrbin, crumbit, slumbrel, rattlebead) and on dollop and the firm / putty / gummy ones',
+    vWorst <= 0.06, `${vrows.join(', ')}; as found capnap 6.7, burrbin 11.4, crumbit 9.4, slumbrel 9.1, rattlebead 10.5`);
 }
 
 /* ───────────────────────── 8. the collection module through the port: meter feed, events, table cap ───────────────────────── */

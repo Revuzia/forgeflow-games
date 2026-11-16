@@ -12,6 +12,8 @@
 import type { SoftBodyLike, StageLike, TierName, V3 } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
 import { getSpecies, tierOf } from '../data/catalog.ts';
+import { ContactPlanner } from '../physics/broad.ts';
+import type { PlannerStats } from '../physics/broad.ts';
 
 /** Who the play body is: the genome and, when it is a collection item, its id and nickname. */
 export interface PlayIdentity {
@@ -31,7 +33,7 @@ export interface PlayIdentity {
  *  `id` is the stage's view id (it changes on a re-add). */
 export interface ExtraBody {
   id: number; body: SoftBodyLike; genome: Genome; tier: TierName; itemId: string | null; position: V3; shared: boolean;
-  /** CUT (cut.ts): a piece of the play squishy (an eyeless chunk), not a squishy brought out of the Hoard; the mat ignores it */
+  /** CUT (cut.ts): a piece of the play squishy (a real part of it, or a Minis copy), not a squishy brought out of the Hoard; the mat ignores it */
   piece?: boolean;
 }
 
@@ -52,10 +54,16 @@ export interface BodyManager {
   /** Move the extras that stand APART to new render offsets (in order; shared ones keep their place): their views are re-added there;
    *  the physics bodies are kept. */
   placeExtras(positions: readonly V3[]): void;
+  /** CUT2 3.5: make a piece that is an extra the PLAY body (the anchor) without rebuilding any view: the stage re-points its primary view (setPrimaryBody) and the previous play body leaves the mat
+   *  (its view is removed). Identity (genome, item, nickname, tier) is unchanged and nothing is announced. false, and nothing changes, when `body` is not an extra or the stage cannot re-point
+   *  its primary (an old stage: the caller falls back to swapTo, which shows every view again). */
+  promote(body: SoftBodyLike): boolean;
   /** the stage's view id of a body (the play body: the stage's primary; an extra: its id), or null */
   viewIdOf(body: SoftBodyLike): number | null;
   /** bodies that push against each other every step (body.collide; 0 when fewer than two can) */
   readonly contactBodies: number;
+  /** CUT3: the contact planner's numbers of the last step (bodies, how many were awake, the awake particles, the pairs it handed to collide against the pairs a pairwise loop would test), for the debug hook and the harness */
+  readonly contactStats: Readonly<PlannerStats>;
   /** A ghost takes no part in body-to-body contact (a cut piece flowing into another must not shove it away); off again with false.
    *  A body that leaves the manager stops being a ghost. */
   setGhost(body: SoftBodyLike, on: boolean): void;
@@ -67,7 +75,8 @@ export interface BodyManagerDeps {
   createBody(genome: Genome): SoftBodyLike;
   stage: StageLike;
   initial: { body: SoftBodyLike; identity: PlayIdentity };
-  beforeSwap(): void;
+  /** silent: see afterSwap (the swipe in hand is not about any body, so a silent swap leaves it alone) */
+  beforeSwap(silent: boolean): void;
   /** silent: the same squishy in another body (a cut piece, whole again): no identity announcement, no history note */
   afterSwap(identity: PlayIdentity, body: SoftBodyLike, silent: boolean): void;
   report(e: unknown): void;
@@ -90,25 +99,28 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
   let body = d.initial.body;
   let identity = d.initial.identity;
   const extras: ExtraBody[] = [];
-  // stage B2: who collides with whom, rebuilt when the mat or the play body changes (so a step allocates nothing)
-  let contacts: Array<{ b: SoftBodyLike; others: SoftBodyLike[] }> = [];
+  // stage B2: who collides with whom, rebuilt when the mat or the play body changes (so a step allocates nothing). CUT3: the contact pass of a frame is ONE call of the planner (physics/broad.ts): bounding spheres,
+  // sort and sweep, sleeping pairs skipped, so 64 pieces do not cost 2,016 pair tests a frame; for two bodies its calls are exactly the pairwise loop's (PHYS: bit-identical).
+  let contacts: SoftBodyLike[] = [];
+  const planner = new ContactPlanner();
   const ghosts = new Set<SoftBodyLike>();
   const rebuildContacts = (): void => {
     for (const g of ghosts) if (g !== body && !extras.some((x) => x.body === g)) ghosts.delete(g);
     const all: SoftBodyLike[] = [];
     if (typeof body.collide === 'function' && !ghosts.has(body)) all.push(body);
     for (const x of extras) if (x.shared && typeof x.body.collide === 'function' && !ghosts.has(x.body)) all.push(x.body);
-    contacts = all.length >= 2 ? all.map((b) => ({ b, others: all.filter((o) => o !== b) })) : [];
+    contacts = all.length >= 2 ? all : [];
   };
 
   /** viaStage: hand the body to the stage first (setBody may throw: then the play body is unchanged and the error propagates). */
   /** (re)show one extra's view at its position; false when the stage cannot */
   const showExtra = (x: ExtraBody): boolean => {
     if (!d.stage.addBody) return false;
-    try { x.id = d.stage.addBody(x.body, x.genome, x.piece ? { tier: x.tier, position: x.position, chunk: true } : { tier: x.tier, position: x.position }); return x.id >= 0; } catch (e) { d.report(e); return false; }
+    // (a piece of a cut squishy is a peer: the stage infers what it is from body.piece, and a scaled copy (Minis) has its own face; `piece` is only a hint)
+    try { x.id = d.stage.addBody(x.body, x.genome, x.piece ? { tier: x.tier, position: x.position, piece: true } : { tier: x.tier, position: x.position }); return x.id >= 0; } catch (e) { d.report(e); return false; }
   };
   const commit = (b: SoftBodyLike, id: PlayIdentity, viaStage: boolean, silent = false): void => {
-    try { d.beforeSwap(); } catch (e) { d.report(e); }
+    try { d.beforeSwap(silent); } catch (e) { d.report(e); }
     if (viaStage) d.stage.setBody(b, id.genome);   // setBody = clearBodies + addBody: the mat's views go with it ...
     body = b;
     identity = id;
@@ -157,19 +169,36 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
         showExtra(x);
       }
     },
+    promote(b) {
+      const i = extras.findIndex((x) => x.body === b);
+      if (i < 0 || b === body || typeof d.stage.setPrimaryBody !== 'function') return false;
+      const x = extras[i];
+      let oldView: number | null = null;
+      try { oldView = d.stage.primaryBodyId?.() ?? null; } catch { /* an old stage */ }
+      try { d.beforeSwap(true); } catch (e) { d.report(e); }
+      try { d.stage.setPrimaryBody(x.id); } catch (e) { d.report(e); return false; }
+      extras.splice(i, 1);
+      if (oldView !== null && oldView !== x.id) { try { d.stage.removeBody?.(oldView); } catch (e) { d.report(e); } }
+      body = b;
+      styleTier(d.stage, identity.tier);
+      rebuildContacts();
+      try { d.afterSwap(identity, body, true); } catch (e) { d.report(e); }
+      return true;
+    },
     viewIdOf(b) {
       if (b === body) { try { return d.stage.primaryBodyId?.() ?? null; } catch { return null; } }
       const x = extras.find((e) => e.body === b);
       return x ? x.id : null;
     },
     get contactBodies() { return contacts.length; },
+    get contactStats() { return planner.stats; },
     setGhost(b, on) {
       if (on === ghosts.has(b)) return;
       if (on) ghosts.add(b); else ghosts.delete(b);
       rebuildContacts();
     },
     step(dt) {
-      for (let i = 0; i < contacts.length; i++) { const c = contacts[i]; try { c.b.collide!(c.others); } catch (e) { d.report(e); } }
+      if (contacts.length >= 2) { try { planner.run(contacts); } catch (e) { d.report(e); } }
       body.step(dt);
       for (let i = 0; i < extras.length; i++) extras[i].body.step(dt);
     },

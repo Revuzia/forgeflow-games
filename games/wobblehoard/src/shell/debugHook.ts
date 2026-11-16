@@ -1,7 +1,7 @@
 // DEV ONLY: window.__WH__ (DebugHook, contracts.ts) + the sound-lab API + the shell's dev extras. Never in a production bundle:
 // src/shell/boot.ts imports this module dynamically behind `import.meta.env.DEV` (so Vite drops it from `vite build`), and the node probes
 // reach it through src/app.ts. Audit findings 6 / 20: this hook is scripted input, which must not ship once the meter pays squish points.
-import type { DebugHook, SoftEvent, SoftMetrics, TierName } from '../contracts.ts';
+import type { DebugHook, SoftEvent, SoftMetrics, TierName, V3 } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
 import { decodeGenome, encodeGenome, genomeFromParam, pitchRatio } from '../core/genome.ts';
 import { MERGE_COST } from '../core/merge.ts';
@@ -9,8 +9,8 @@ import { TIERS, tierIndex } from '../core/rarity.ts';
 import { SPECIES_BY_TIER, getSpecies, speciesBaseGenome, tierOf } from '../data/catalog.ts';
 import type { SpeciesId } from '../data/catalog.ts';
 import type { Game } from './game.ts';
-import { faceAnchor } from './cut.ts';
 import { TUNING } from './feel.ts';
+import { bestMultiSwipe, tipSwipe, toPx } from './cutProbe.ts';
 
 export interface LabApi {
   play(kind: 'poke' | 'squish' | 'release' | 'land' | 'pop' | 'blend'): void;
@@ -52,17 +52,13 @@ export interface ShellDevApi {
   /** SHELL-2b: the practice shelf as the harness checks it */
   hoardState(): { owned: number; items: Array<{ id: string; species: string; name: string; tier: string; seen: boolean; fav: boolean; locked: boolean; origin: string }>; restockClaimed: boolean; tasks: Array<{ id: string; text: string; progress: number; target: number; done: boolean; claimed: boolean }>; mergesToday: number; credits: number; tidyPairs: number; tidyPairsAll: number };
   /** the toy tray and the Cut tool: the tool in hand, whether the physics can cut, the pieces and their shares of the whole */
-  tools(): { tool: string; cutSupported: boolean; pieces: number; fracs: number[]; busy: boolean; maxPieces: number; extras: number; pieceViews: number; body: { x: number; y: number; z: number; r: number; frac: number; top: number }; cam: { x: number; y: number; z: number } | null; look: { yaw: number; pitch: number } | null };
+  tools(): { tool: string; cutSupported: boolean; pieces: number; fracs: number[]; busy: boolean; maxPieces: number; extras: number; pieceViews: number; body: { x: number; y: number; z: number; r: number; frac: number; top: number }; cam: { x: number; y: number; z: number } | null };
   /** a Cut-tool swipe from (x0, y0) to (x1, y1), 0..1 over the canvas like pointerDown (the result: 'cut', 'miss', 'small', ...) */
   cutSwipe(x0: number, y0: number, x1: number, y1: number): string;
   /** the play mat's frame-time guard in ms (mat.ts FRAME_BUSY_MS by default); the harness lifts it on SwiftShader */
   matBusyMs(ms: number): void;
   /** move the collection's epoch clock one day ahead (the dev skew): a new UTC day for the meter's daily cap, the gift, tasks and merges */
   nextDay(): boolean;
-  /** move the collection's epoch clock `ms` ahead (the dev skew; true when there is one): rows that compare two paying touches make each one
-   *  fresh this way (the meter's freshness rule reads the epoch clock, i.e. wall time, so a stepped row on a fast machine squeezed again
-   *  within tau and was paid less: SHELL-4 cut-x X06, 0.0367 vs 0.0500) */
-  clockAhead(ms: number): boolean;
   /** feed synthetic touches through the REAL collection.feed path until today's task `id` is done (clock pushed ahead like fill) */
   doTask(id: string): boolean;
   /** the next collection.merge answers this refusal (test seam for the pad's refusal handling, e.g. 'odds_changed') */
@@ -84,21 +80,32 @@ export interface ShellDevApi {
   spyStart(): void;
   spyReset(): void;
   spyCalls(): { audio: Record<string, { n: number; last: unknown }>; haptics: Record<string, number> };
-  /** SHELL-4: the cut pieces as the physics sees them: per piece its share, centre, radius and the SURFACE gap to the face piece along the line
-   *  between the centres (negative = overlapping); the face piece first. Zeroes when there is nothing cut. */
-  /** the stage's dev views: how many bodies are drawn, how many of them with a face (a chunk has none) */
+  /** SHELL-4: the cut pieces as the physics sees them: per piece its share, centre, radius and the SURFACE gap to the play body (piece 0, the anchor) along the line
+   *  between the centres (negative = overlapping); the play body first, `anchor` marks it (every piece is a peer: there is no chunk). Empty when nothing is cut. */
+  /** the stage's dev views: how many bodies are drawn, how many carry a face and how many the stage flags as the legacy eyeless chunk (none in the true cut: pieces are peers; the count stays so a regression shows) */
   stageViews(): { total: number; faces: number; chunks: number } | null;
-  pieceGaps(at?: { x: number; y: number; z: number } | null): Array<{ frac: number; chunk: boolean; x: number; y: number; z: number; r: number; gap: number | null; top: number; near: number }>;
-  /** where the eyes sit on the play body (cut.ts faceAnchor, world space): the Cut tool keeps the face on the side that holds it */
-  faceAnchor(): { x: number; y: number; z: number };
-  /** SHELL-4 X04: remember the play body's REST shape (restLocal), genome, radius and mesh size now (before a cut) */
-  restSnapshot(): { genomeCode: string; n: number; restRadius: number };
-  /** SHELL-4 X04: the play body now against the snapshot: the same genome, mesh and radius, the RMS of the rest positions' difference over the
-   *  snapshot's radius, its share of the whole and whether it is a piece build (null without a snapshot) */
-  restCompare(): { sameGenome: boolean; n: [number, number]; radiusRatio: number; rmsR0: number; frac: number; piece: boolean } | null;
-  /** SHELL-4 X07: every piece of the play squishy (the face piece first) on the real mat: the lowest particle above the table (m), its highest, every
-   *  coordinate finite, and how many ordered pairs have one piece's centre inside another's skin (a tunnel) */
-  pieceHealth(): { pieces: number; lowest: number[]; top: number[]; finite: boolean; centreInside: number };
+  pieceGaps(at?: { x: number; y: number; z: number } | null): Array<{ frac: number; anchor: boolean; x: number; y: number; z: number; r: number; gap: number | null; top: number; near: number }>;
+  /** CUT3 (join rows): the cut tree as the Cutter keeps it: per piece its share, the literals of its cell (the path from the root), whether it is the anchor, and its world centre. Empty when whole. */
+  cutRegions(): Array<{ frac: number; cells: number[]; anchor: boolean; x: number; y: number; z: number; part: number }>;
+  /** CUT3 (U02 / U04 / U06): Split in two on the largest piece, like the button ('cut', 'limit', 'busy', ...) */
+  cutSplit(): string;
+  /** CUT3 (U04, browser): lower the safety ceiling to n pieces (null restores 64), so the kind line is reached without 63 cuts */
+  setCutCeiling(n: number | null): void;
+  /** CUT3 (the harness reports to the owner, nothing is hidden): the safety ceiling, how many times its kind line was said, how many pieces the last cut made, the last result of a swipe or Split in two,
+   *  the pieces now, and the physics' load: particles of every piece, of the awake ones (a sleeping piece takes no solver steps), and how many pieces sleep */
+  cutInfo(): { ceiling: number; ceilingHits: number; lastParts: number; lastResult: string | null; pieces: number; particles: number; awakeParticles: number; sleeping: number; contact: { bodies: number; awake: number; pairs: number; skippedAsleep: number; naivePairs: number; tests: number } };
+  /** CUT3 (U02 / U03, the browser rows): a screen swipe (CSS px over the canvas) across the tip of the LARGEST piece in rest direction `dir` (a species recipe's feature direction), perpendicular to its axis as the camera
+   *  sees it, `f` (0.4) of the way from the body's radius to the apex; null when it is no tip or points at the camera. */
+  tipSwipe(dir: V3, f?: number): { x0: number; y0: number; x1: number; y1: number } | null;
+  /** CUT3 (U03): the screen swipe whose plane leaves the most separate parts on the LARGEST piece (a grid search on its mesh), and that count by an independent connected-parts count; null when none leaves three */
+  multiSwipe(): { x0: number; y0: number; x1: number; y1: number; parts: number } | null;
+  /** CUT3 (U02 / U06): every piece, the play body first: share, particles, whether it sleeps, centre, lowest and highest point (world y), and its position among the separate parts one side of a cut made (-1: alone on its side) */
+  pieceStates(): Array<{ frac: number; particles: number; sleeping: boolean; x: number; y: number; z: number; low: number; top: number; part: number; sx: number; sy: number }>;
+  /** CUT-B S4: the cut style of the Cutter ('clean' | 'minis'); false and no change while the squishy is cut (the harness switches to Minis for the low-quality limit rows) */
+  setCutStyle(style: 'clean' | 'minis'): boolean;
+  /** CUT-A gate (S5a): every drawn view, the play body first: whether it is a true cut piece and the eyes it draws (world centre, the share of the eye
+   *  this view holds, the screen position in CSS px). Dev only (the stage's dev `eyeCentres`); null when the stage offers none. */
+  eyeViews(): Array<{ id: number; piece: boolean; eyes: Array<{ x: number; y: number; z: number; share: number; sx: number; sy: number }> }> | null;
 }
 
 export type ShellDebugHook = DebugHook & { shell: ShellDevApi };
@@ -119,7 +126,6 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
   const { audio } = game;
   let labHold: { handle: ReturnType<typeof audio.squishStart>; t0: number } | null = null;
   let labEndAt = -1;
-  let restSnap: { code: string; rest: Float64Array; n: number; r: number } | null = null;   // restSnapshot / restCompare (X04)
 
   game.onStep((_dt, t) => {
     if (labHold) {
@@ -160,6 +166,8 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
   const px = (x: number, y: number): { x: number; y: number } => ({ x: x * vp().w, y: y * vp().h });
   const debugId = (id: number): number => -1 - id;
   const lastDebugPx: Record<number, { x: number; y: number }> = {};
+  /** the largest piece of the play squishy (the play body when whole) */
+  const largestPiece = (): typeof game.bodies.body => { let b = game.bodies.body; for (const x of game.bodies.extras) if (x.piece && (x.body.frac ?? 1) > (b.frac ?? 1) + 1e-9) b = x.body; return b; };
   const postShot = o.postShot ?? (async (name: string, dataUrl: string) => {
     const r = await fetch(`./__shot/${encodeURIComponent(name)}`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: dataUrl });
     return (await r.json()) as { ok: boolean; path?: string };
@@ -254,28 +262,14 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
     },
     matBusyMs: (ms) => game.mat.setBusyLimit(ms),
     tools: () => {
-      // the camera's VIEW direction as yaw / pitch (radians): a turn of the view changes it; the camera following a drifting body (a translation) does not
-      const lookOf = (): { yaw: number; pitch: number } | null => {
-        const k = game.stage.camera as unknown as { updateMatrixWorld?: () => void; matrixWorld?: { elements: ArrayLike<number> } } | null;
-        if (!k?.matrixWorld) return null;
-        try { k.updateMatrixWorld?.(); } catch { /* ignore */ }
-        const e = k.matrixWorld.elements, fx = -e[8], fy = -e[9], fz = -e[10];
-        return { yaw: Math.atan2(-fx, -fz), pitch: Math.asin(Math.max(-1, Math.min(1, -fy))) };
-      };
       const b = game.bodies.body, c = b.center, cam = (game.stage.camera as unknown as { position?: { x: number; y: number; z: number } } | null)?.position;
       return {
         tool: game.tool, cutSupported: game.cut.supported, pieces: game.cut.pieces, fracs: game.cut.fracs(), busy: game.cut.busy, maxPieces: game.cut.maxPieces,
         extras: game.bodies.extras.length, pieceViews: game.bodies.extras.filter((x) => x.piece).length,
         body: { x: c.x, y: c.y, z: c.z, r: b.restRadius, frac: b.frac ?? 1, top: topOf(b) }, cam: cam ? { x: cam.x, y: cam.y, z: cam.z } : null,
-        look: lookOf(),
       };
     },
     cutSwipe: (x0, y0, x1, y1) => { const v = vp(); return game.cut.swipe(x0 * v.w, y0 * v.h, x1 * v.w, y1 * v.h); },
-    clockAhead(ms) {
-      if (!o.skew || !(ms >= 0)) return false;
-      o.skew.ms += ms;
-      return true;
-    },
     nextDay() {
       if (!o.skew) return false;
       o.skew.ms += 86_400_000;
@@ -375,43 +369,54 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
       const vs = (game.stage as unknown as { views?: Array<{ chunk?: boolean }> }).views;
       return vs ? { total: vs.length, faces: vs.filter((v) => !v.chunk).length, chunks: vs.filter((v) => !!v.chunk).length } : null;
     },
-    faceAnchor: () => faceAnchor(game.bodies.body),
-    restSnapshot() {
-      const b = game.bodies.body;
-      restSnap = { code: encodeGenome(game.genome), rest: Float64Array.from(b.restLocal), n: b.vertexCount, r: b.restRadius };
-      return { genomeCode: restSnap.code, n: restSnap.n, restRadius: restSnap.r };
+    setCutStyle: (style) => game.cut.setStyle(style),
+    cutSplit: () => game.cut.splitInTwo(),
+    setCutCeiling: (n) => game.cut.setCeilingForTest(n),
+    tipSwipe(dir, f) {
+      const b = largestPiece(); const cam = game.stage.camera;
+      try { cam.updateMatrixWorld(); } catch { /* ignore */ }
+      const t = tipSwipe(b, cam as never, vp(), dir, f);
+      return t ? { x0: t.x0, y0: t.y0, x1: t.x1, y1: t.y1 } : null;
     },
-    restCompare() {
-      if (!restSnap) return null;
-      const b = game.bodies.body, R = b.restLocal, S = restSnap.rest;
-      let s = 0;
-      const m = Math.min(R.length, S.length);
-      for (let i = 0; i < m; i++) s += (R[i] - S[i]) ** 2;
-      const rms = R.length === S.length ? Math.sqrt(s / Math.max(1, m / 3)) / restSnap.r : Infinity;
-      return { sameGenome: encodeGenome(game.genome) === restSnap.code, n: [restSnap.n, b.vertexCount], radiusRatio: b.restRadius / restSnap.r, rmsR0: rms, frac: b.frac ?? 1, piece: game.cut.isPiece(b) || (b.frac ?? 1) < 1 };
+    multiSwipe() {
+      const b = largestPiece(); const cam = game.stage.camera;
+      try { cam.updateMatrixWorld(); } catch { /* ignore */ }
+      // only lines a finger can draw: every sampled point is over the stage canvas (not the wordmark, the HUD or the Cut bar)
+      const ok = (x: number, y: number): boolean => { try { const el = document.elementFromPoint(x, y); return !!el && el.tagName === 'CANVAS'; } catch { return true; } };
+      return bestMultiSwipe(b, cam as never, vp(), ok);
     },
-    pieceHealth() {
-      const all = [game.bodies.body, ...game.bodies.extras.filter((x) => x.piece).map((x) => x.body)];
-      let finite = true, inside = 0;
-      const lowest: number[] = [], top: number[] = [];
-      for (const b of all) {
-        let lo = Infinity, hi = -Infinity;
-        for (let i = 0; i < b.vertexCount * 3; i++) if (!Number.isFinite(b.positions[i])) finite = false;
-        for (let i = 0; i < b.vertexCount; i++) { const y = b.positions[i * 3 + 1]; if (y < lo) lo = y; if (y > hi) hi = y; }
-        lowest.push(lo); top.push(hi);
-      }
-      for (const a of all) for (const o of all) {
-        if (a === o) continue;
-        const dx = a.center.x - o.center.x, dy = a.center.y - o.center.y, dz = a.center.z - o.center.z, d = Math.hypot(dx, dy, dz);
-        if (d < 1e-9) { inside++; continue; }
-        // a's centre is inside o when o's skin reaches past it along the line from o's centre to a's
-        const ux = dx / d, uy = dy / d, uz = dz / d;
-        let reach = -Infinity;
-        for (let i = 0; i < o.vertexCount; i++) reach = Math.max(reach, (o.positions[i * 3] - o.center.x) * ux + (o.positions[i * 3 + 1] - o.center.y) * uy + (o.positions[i * 3 + 2] - o.center.z) * uz);
-        if (reach > d) inside++;
-      }
-      return { pieces: all.length, lowest, top, finite, centreInside: inside };
+    cutInfo() {
+      const all = [game.bodies.body, ...game.bodies.extras.filter((x) => x.piece).map((x) => x.body)] as Array<typeof game.bodies.body & { sleeping?: boolean; awakeParticles?: number }>;
+      let particles = 0, awake = 0, sleeping = 0;
+      for (const b of all) { particles += b.vertexCount; if (b.sleeping === true) sleeping++; else awake += typeof b.awakeParticles === 'number' ? b.awakeParticles : b.vertexCount; }
+      const cs = game.bodies.contactStats;   // the contact planner's last step: pairs handed to collide against the pairs a pairwise loop would test
+      return { ...game.cut.info, pieces: game.cut.pieces, particles, awakeParticles: awake, sleeping, contact: { bodies: cs.bodies, awake: cs.awake, pairs: cs.pairs, skippedAsleep: cs.skippedAsleep, naivePairs: cs.naivePairs, tests: cs.tests } };
     },
+    pieceStates() {
+      const all = [game.bodies.body, ...game.bodies.extras.filter((x) => x.piece).map((x) => x.body)] as Array<typeof game.bodies.body & { sleeping?: boolean }>;
+      const parts = game.cut.regions().map((r) => r.part);
+      return all.map((b, i) => {
+        let low = Infinity;
+        for (let k = 0; k < b.vertexCount; k++) low = Math.min(low, b.positions[k * 3 + 1]);
+        const c = b.center;
+        const sp = toPx(game.stage.camera as never, vp(), c);   // where its centre is on the screen (CSS px over the canvas; -1: behind the camera)
+        return { frac: b.frac ?? 1, particles: b.vertexCount, sleeping: b.sleeping === true, x: c.x, y: c.y, z: c.z, low, top: topOf(b), part: parts[i] ?? -1, sx: sp ? sp.x : -1, sy: sp ? sp.y : -1 };
+      });
+    },
+    eyeViews() {
+      const st = game.stage as unknown as { views?: Array<{ id: number; isPiece?: boolean }>; eyeCentres?: (id: number) => Array<{ x: number; y: number; z: number; share: number }> };
+      if (!st.views || !st.eyeCentres) return null;
+      const cam = game.stage.camera, v = vp();
+      try { cam.updateMatrixWorld(); } catch { /* ignore */ }
+      const e = cam.matrixWorldInverse.elements, m = cam.projectionMatrix.elements;
+      const proj = (p: { x: number; y: number; z: number }): { x: number; y: number } => {
+        const vx = e[0] * p.x + e[4] * p.y + e[8] * p.z + e[12], vy = e[1] * p.x + e[5] * p.y + e[9] * p.z + e[13], vz = e[2] * p.x + e[6] * p.y + e[10] * p.z + e[14];
+        const cx = m[0] * vx + m[4] * vy + m[8] * vz + m[12], cy = m[1] * vx + m[5] * vy + m[9] * vz + m[13], cw = m[3] * vx + m[7] * vy + m[11] * vz + m[15];
+        return cw > 1e-6 ? { x: (cx / cw * 0.5 + 0.5) * v.w, y: (0.5 - cy / cw * 0.5) * v.h } : { x: -1, y: -1 };
+      };
+      return st.views.map((x) => ({ id: x.id, piece: !!x.isPiece, eyes: st.eyeCentres!(x.id).map((c) => ({ ...c, ...(() => { const s = proj(c); return { sx: s.x, sy: s.y }; })() })) }));
+    },
+    cutRegions: () => (typeof game.cut.regions === 'function' ? game.cut.regions() : []),
     pieceGaps(at) {
       const face = game.bodies.body;
       const all = [face, ...game.bodies.extras.filter((x) => x.piece).map((x) => x.body)];
@@ -430,7 +435,7 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
           const dx = c.x - f.x, dy = c.y - f.y, dz = c.z - f.z, d = Math.hypot(dx, dy, dz);
           if (d > 1e-9) { const ux = dx / d, uy = dy / d, uz = dz / d; gap = d - support(face, ux, uy, uz) - support(b, -ux, -uy, -uz); }
         }
-        return { frac: b.frac ?? 1, chunk: i > 0, x: c.x, y: c.y, z: c.z, r: b.restRadius * Math.cbrt(b.frac ?? 1), gap, top: topOf(b), near: at ? nearest(b, at) : 0 };
+        return { frac: b.frac ?? 1, anchor: i === 0, x: c.x, y: c.y, z: c.z, r: b.restRadius * Math.cbrt(b.frac ?? 1), gap, top: topOf(b), near: at ? nearest(b, at) : 0 };
       });
     },
   };

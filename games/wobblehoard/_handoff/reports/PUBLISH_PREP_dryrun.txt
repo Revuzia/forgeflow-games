@@ -1,0 +1,23 @@
+Deploying game: squish-keeper
+  Source: C:\Users\TestRun\AppData\Local\Temp\claude\pubprep\build\games\wobblehoard\dist
+  Files: 18
+[dry-run] Would upload to R2 and upsert Supabase
+[dry-run] Upload order for squish-keeper (hashed build (entry ./assets/index-C8coRjKe.js): the runtime/**/*.js critical rule does not apply):
+  [plan] 001 body  squish-keeper/credits.txt
+  [plan] 002 body  squish-keeper/thumbnail.png
+  [plan] 003 body  squish-keeper/assets/catalog-B5lW9iPw.js
+  [plan] 004 body  squish-keeper/assets/engine-DWOECidO.js
+  [plan] 005 body  squish-keeper/assets/index-C8coRjKe.js
+  [plan] 006 body  squish-keeper/assets/index-Dg1H0CjU.css
+  [plan] 007 body  squish-keeper/assets/later-photo-4urDBUgL.js
+  [plan] 008 body  squish-keeper/assets/later-photo-B12ZsIoM.css
+  [plan] 009 body  squish-keeper/assets/later-screens-BOg3K_kW.js
+  [plan] 010 body  squish-keeper/assets/later-screens-CRMHbVaZ.css
+  [plan] 011 body  squish-keeper/assets/later-trophies-BIK-xNfI.js
+  [plan] 012 body  squish-keeper/assets/later-trophies-BwpZC19R.css
+  [plan] 013 body  squish-keeper/assets/rarity-3KSwYZm1.js
+  [plan] 014 body  squish-keeper/assets/stage-Cp5-g9ux.js
+  [plan] 015 body  squish-keeper/assets/ui-CYilR6wp.js
+  [plan] 016 entry squish-keeper/index.html  [critical]
+  [plan] 017 meta  squish-keeper/game_meta.json  [critical]
+[dry-run] 17 file(s) would upload; last: index.html then game_meta.json; 1 unchanged vs manifest skipped; 0 dev-only withheld; 2 critical

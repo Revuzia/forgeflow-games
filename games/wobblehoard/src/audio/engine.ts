@@ -7,6 +7,10 @@
 //    LOOKAHEAD_S ahead by a TICK_MS timer that only runs while music plays; it ducks itself (slowly) under the ceremonies and
 //    makes room (a fast dip, music.ts ROOM_*) under every effect voice, the held squish and strand by their own level.
 //    New interaction voices bump / lift / toss / strand (interact.ts); bump is rate-limited, strand is held.
+//  - UI v3 (_spec/UI.md 7): ui({ kind, calm }) plays one of twelve soft interface sounds (ui.ts). Dropped before the first unlock(),
+//    while muted or with the Settings uiSounds switch off (silent, not counted), during a ceremony (except toast and trophy), when
+//    the kind's own gap has not passed, and when a higher-priority one is still in its protected window. One interface voice at a
+//    time (a new one crossfades the old over 5 ms). It draws nothing from the engine's random streams.
 import type { SquishAudio, AudioSettings, SquishVoiceHandle, TierName } from '../contracts.ts';
 import { clamp } from '../core/rng.ts';
 import { c01, fin, liveNodeCount, makeRng, noiseBuffer, type VoiceGroup } from './dsp.ts';
@@ -21,6 +25,7 @@ import { BumpLimiter, bump, lift, strand, strandSnap, toss, type StrandVoice } f
 import { CutLimiter, cutFrac, cutPop, cutSlice, neckLen, rejoin as rejoinVoice } from './cut.ts';
 import type { LifeVoices, LifeVoiceHost } from './life_voices.ts';
 import type { Ambience } from './ambience.ts';
+import { UI_CEREMONY_GRACE_S, UI_KINDS, UI_PRIORITY, UI_PROTECT_S, UI_STEAL_FADE_S, UiLimiter, isUiKind, uiVoice } from './ui.ts';
 
 export const MAX_VOICES = 24;
 /** Hard ceiling including voices that are fading out after being stolen. */
@@ -75,6 +80,10 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
   const settings: AudioSettings & { music: number; chatter: number; ambience: number } = { master: 0.8, squishBoost: 0, muted: false, music: MUSIC_DEFAULT, chatter: CHATTER_DEFAULT, ambience: AMBIENCE_DEFAULT };
   const started: Record<string, number> = {};
   for (const k of KINDS) started[k] = 0;
+  // UI v3 (UI.md 7): `ui` counts every interface sound, `ui:<kind>` each of the twelve (own keys, no engine random draw: adding
+  // them left every other voice's variation exactly as it was)
+  started.ui = 0;
+  for (const k of UI_KINDS) started['ui:' + k] = 0;
   const groups: VoiceGroup[] = [];
   const order = new Map<VoiceGroup, number>();
   let serial = 0;
@@ -105,7 +114,16 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
   /** The last 128 tick costs (ms): detailStats() reports their p99 and max (the cumulative max also counts JIT warm-up). */
   const tickRing = new Float64Array(128);
   const bumpLimiter = new BumpLimiter();
-  const throttled: Record<string, number> = { bump: 0, strand: 0, cut: 0, rejoin: 0 };
+  /* UI v3 (ui.ts): the interface sounds. `ui` = calls the per-kind gap swallowed, `uiBusy` = a lower-priority sound met a higher one
+   * still in its protected window, `uiCeremony` = dropped because a ceremony voice was playing (toast and trophy are exempt). */
+  const throttled: Record<string, number> = { bump: 0, strand: 0, cut: 0, rejoin: 0, ui: 0, uiBusy: 0, uiCeremony: 0 };
+  const uiLimiter = new UiLimiter();
+  /** The Settings uiSounds switch (AudioSettings has no such field: it arrives through setSettings, default on). */
+  let uiOn = true;
+  /** The one interface voice that may be sounding (a new one crossfades it), its priority and the end of its protected window. */
+  let uiV: { g: VoiceGroup; prio: number; until: number } | null = null;
+  /** Context time until which a ceremony (capsule beats, reveal, merge) is playing or has just ended: the interface stays quiet. */
+  let ceremonyUntil = -Infinity;
   let strandV: StrandVoice | null = null;
   /* CUT: one limiter for the slice, the separation pop and the rejoin; the slice is monophonic (a new one fades the last) */
   const cutLimiter = new CutLimiter();
@@ -232,6 +250,13 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
     register(g);
     musicRoom(kind, g, t0);
     if (amb) { try { amb.dip(t0, (Number.isFinite(g.endTime) ? g.endTime : t0 + 0.5) + 0.3); } catch { /* closed */ } }
+  }
+
+  /** A ceremony voice that ends at `endT` (context time) keeps the interface sounds quiet until UI_CEREMONY_GRACE_S after it
+   *  (never more than 20 s ahead of now). */
+  function ceremonyHold(endT: number): void {
+    const e = Math.min(fin(endT, 0) + UI_CEREMONY_GRACE_S, now() + 20);
+    if (e > ceremonyUntil) ceremonyUntil = e;
   }
 
   function prune(): void {
@@ -480,6 +505,9 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       if (s.music !== undefined) settings.music = c01(s.music, settings.music);
       if (s.chatter !== undefined) settings.chatter = c01(s.chatter, settings.chatter);
       if (s.ambience !== undefined) settings.ambience = c01(s.ambience, settings.ambience);
+      // UI v3: the Settings "UI sounds" switch rides along (a boolean; AudioSettings does not declare it)
+      const ui = (s as { uiSounds?: unknown }).uiSounds;
+      if (typeof ui === 'boolean') { uiOn = ui; if (!ui && uiV) { try { uiV.g.kill(0.02); } catch { /* gone */ } uiV = null; } }
       if (chain) chain.apply(settings);
       if (settings.muted) killAll(0.03);
       syncMusic();
@@ -602,6 +630,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
         else g = capsuleBurst(a.c, chain!.plain, t0, { ...base, tier: asTier(p.tier) });
         registerFx(g, 'capsule', a.t0);
         musicDuck(g.endTime);
+        ceremonyHold(g.endTime);
       } catch { dropped++; }
     },
 
@@ -619,6 +648,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
         });
         register(g);
         musicDuck(g.endTime);
+        ceremonyHold(g.endTime);
         pumpLater(g);
       } catch { dropped++; }
     },
@@ -636,6 +666,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       } catch { dropped++; return NOOP_MERGE; }
       register(v);
       musicDuck(v.endTime);
+      ceremonyHold(v.endTime);
       pumpLater(v);
       let done = false;
       return {
@@ -649,13 +680,14 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
               tier: asTier(q?.tier), tierUp: q?.tierUp === true, mythicVariant: fin(q?.mythicVariant, 0),
               durationS: q?.durationS === undefined ? undefined : fin(q.durationS, NaN),
             });
-            if (g) { register(g); musicDuck(g.endTime); pumpLater(g); }
+            if (g) { register(g); musicDuck(g.endTime); ceremonyHold(g.endTime); pumpLater(g); }
           } catch { dropped++; }
         },
         stop() {
           if (done) return;
           done = true;
           try { v.stop(0.15); } catch { /* ignore */ }
+          ceremonyUntil = Math.min(ceremonyUntil, now() + 0.15 + UI_CEREMONY_GRACE_S);   // an aborted charge no longer holds the interface
         },
       };
     },
@@ -862,6 +894,34 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       if (amb) { try { amb.set(ambWant); } catch { /* closed */ } syncAmb(); }
       // PG_AUDIO round 2: the place's weather event now (a gust, a wave, the shower or the tap on / off)
       if (amb && typeof p.weather === 'number' && Number.isFinite(p.weather)) { try { amb.weather(p.weather); } catch { /* closed */ } }
+    },
+
+    /* ───── UI v3 (_spec/UI.md 7; ui.ts) ───── */
+
+    ui(p) {
+      const kind = p?.kind;
+      if (!isUiKind(kind)) { dropped++; return; }
+      if (!ctx || disposed) { dropped++; return; }                 // before the first unlock(): nothing is created, nothing counted
+      if (!ready()) { dropped++; tryResume(); return; }
+      if (!uiOn || settings.muted) return;                        // the player's choice: silent and not counted
+      const t = ctx.currentTime;
+      if (kind !== 'toast' && kind !== 'trophy' && t < ceremonyUntil) { throttled.uiCeremony++; return; }
+      const prio = UI_PRIORITY[kind];
+      const cur = uiV && uiV.g.alive && !uiV.g.dying ? uiV : null;
+      if (cur && t < cur.until && prio < cur.prio) { throttled.uiBusy++; return; }
+      if (!uiLimiter.admit(kind, perfS())) { throttled.ui = uiLimiter.throttled; return; }
+      sweep();
+      // one interface voice at a time: the old one fades over UI_STEAL_FADE_S, which is never longer than a note's rise, so the
+      // crossfade's sum stays under the louder of the two (the peak bound of ui.ts)
+      if (cur) cur.g.kill(UI_STEAL_FADE_S);
+      stealIfNeeded();
+      const t0 = t + LOOKAHEAD;
+      try {
+        const g = uiVoice(ctx, chain!.plain, t0, { kind, calm: p.calm === true });
+        register(g);
+        uiV = { g, prio, until: t0 + UI_PROTECT_S[kind] };
+        started.ui++; started['ui:' + kind]++;
+      } catch { dropped++; }
     },
 
     detailStats() {

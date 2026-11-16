@@ -1,6 +1,7 @@
 // navigator.vibrate wrapper. A no-op when unsupported (iOS Safari, desktop) or switched off in Settings.
 // Pulses: poke 8 ms tick, squeeze = low-rate pulse scaled by how fast it is being squeezed, release 18 ms thump, pop 6 ms; the DESIGN 6.7
-// patterns (meter full, capsule landing, tier reveals, merge rumble) go through pattern().
+// patterns (meter full, capsule landing, tier reveals, merge rumble) go through pattern(). UI v3: uiTap() is the light interface tap
+// (10 ms; a double pulse for error / trophy / ready), coarse pointer + Settings only.
 
 export interface Haptics {
   /** navigator.vibrate exists */
@@ -15,7 +16,16 @@ export interface Haptics {
   cancel(): void;
   /** A raw vibrate pattern (ms on, off, on, ...): the DESIGN 6.7 tier patterns and the merge rumble. Optional so older mocks compile. */
   pattern?(p: readonly number[]): void;
+  /** UI v3 (UI.md 7): a light interface tap (a 10 ms tick; a double pulse for 'error', 'trophy', 'ready'). Only on a coarse pointer
+   *  (a finger) and only while Settings haptics are on. Optional so older mocks compile. */
+  uiTap?(kind?: UiTapKind): void;
 }
+
+/** UI v3: the interface tap kinds (milliseconds, on / off / on). */
+export type UiTapKind = 'tap' | 'error' | 'trophy' | 'ready';
+export const UI_TAP_HAPTIC: Readonly<Record<UiTapKind, number | readonly number[]>> = {
+  tap: 10, error: [10, 50, 10], trophy: [10, 50, 14], ready: [10, 60, 10],
+};
 
 /** DESIGN 6.7 haptic patterns (milliseconds, on/off alternating). */
 export const TIER_HAPTICS: Readonly<Record<'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'mythic', readonly number[]>> = {
@@ -48,6 +58,8 @@ export interface HapticsOptions {
   vibrate?: ((pattern: number | number[]) => boolean) | null;
   enabled?: boolean;
   now?: () => number;
+  /** UI v3: is the primary pointer a finger? Gates uiTap only. Default: the `(pointer: coarse)` media query. */
+  coarse?: () => boolean;
 }
 
 export const HAPTIC_MS = { poke: 8, release: 18, pop: 6, squeezeMin: 3, squeezeMax: 14 } as const;
@@ -63,8 +75,13 @@ function defaultVibrate(): ((p: number | number[]) => boolean) | null {
   return null;
 }
 
+function defaultCoarse(): boolean {
+  try { return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches; } catch { return false; }
+}
+
 export function createHaptics(opts: HapticsOptions = {}): Haptics {
   const vibrate = opts.vibrate === undefined ? defaultVibrate() : opts.vibrate;
+  const coarse = opts.coarse ?? defaultCoarse;
   const now = opts.now ?? (() => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
   let enabled = opts.enabled ?? true;
   let lastSqueeze = -1e9;
@@ -103,6 +120,11 @@ export function createHaptics(opts: HapticsOptions = {}): Haptics {
     pattern(p) {
       if (!vibrate || !enabled || !p.length) return;
       try { if (vibrate(p.map((v) => Math.max(0, Math.min(1000, Math.round(v)))))) buzzing = true; } catch { /* ignore */ }
+    },
+    uiTap(kind = 'tap') {
+      if (!vibrate || !enabled || !coarse()) return;
+      const p = UI_TAP_HAPTIC[kind] ?? UI_TAP_HAPTIC.tap;
+      try { if (vibrate(typeof p === 'number' ? p : p.slice())) buzzing = true; } catch { /* ignore */ }
     },
   };
 }

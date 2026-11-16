@@ -1,5 +1,8 @@
-// Hold to confirm (MERGE 3.1 step 4): a button that fills a ring over `ms` while it is held by a pointer, or by Enter / Space; letting go
-// early cancels and nothing happens. The fill is a CSS custom property set through the CSSOM (CSP-safe), the label stays text.
+// Hold to confirm (MERGE 3.1 step 4): a button that fills over `ms` while it is held by a pointer, or by Enter / Space; letting go early
+// cancels and nothing happens. The fill is a CSS custom property set through the CSSOM (CSP-safe).
+// The label is a DUAL LAYER (UI.md 6, R18): the real text (cream on the track, the accessible name) and, clipped to the filled part by `--p`,
+// the same text in ink on amber, `aria-hidden` (.merge-fill). A glyph the edge of the fill passes through is cream on the track on one side and
+// ink on amber on the other: both read (the old ink-on-track label measured 1.48:1 while the button filled).
 import { h } from '../dom.ts';
 
 export interface HoldButton {
@@ -12,11 +15,17 @@ export interface HoldButton {
 
 export function createHoldButton(label: string, ms: number, onDone: () => void, cls = 'hold-btn'): HoldButton {
   const text = h('span', { class: 'hold-label', text: label });
-  const el = h('button', { class: cls, attrs: { type: 'button', 'data-holding': 'false' } }, h('span', { class: 'hold-fill', attrs: { 'aria-hidden': 'true' } }), text);
+  const inkText = h('span', { class: 'merge-fill-text', text: label });
+  const fill = h('span', { class: 'merge-fill', attrs: { 'aria-hidden': 'true' } }, inkText);
+  const el = h('button', { class: cls, attrs: { type: 'button', 'data-holding': 'false' } }, text, fill);
   // the hold completes on the CLOCK (a timer, and checked again at the release), not on painted frames: a slow device (or a page whose
-  // frames take a second) still merges after a real 0.5 s hold; animation frames only draw the ring
+  // frames take a second) still merges after a real 0.5 s hold; animation frames only draw the fill
   let t0 = 0, raf = 0, timer = 0, holding = false, by: 'pointer' | 'key' | null = null;
-  const set = (p: number): void => { el.style.setProperty('--hold', String(Math.max(0, Math.min(1, p)))); };
+  const set = (p: number): void => {
+    const v = String(Math.max(0, Math.min(1, p)));
+    el.style.setProperty('--hold', v);
+    el.style.setProperty('--p', v);
+  };
   const stop = (): void => { holding = false; by = null; cancelAnimationFrame(raf); raf = 0; clearTimeout(timer); timer = 0; el.dataset.holding = 'false'; set(0); };
   const finish = (): void => { if (!holding) return; stop(); onDone(); };
   const tick = (): void => {
@@ -45,12 +54,12 @@ export function createHoldButton(label: string, ms: number, onDone: () => void, 
   });
   el.addEventListener('keyup', (e) => { if ((e.key === 'Enter' || e.key === ' ') && by === 'key') release(); });
   el.addEventListener('blur', () => { if (by === 'key') stop(); });
-  // a click without a hold (a quick tap, or Enter pressed and released at once) explains the hold instead of doing nothing silently
+  // a click without a hold (a quick tap, or Enter pressed and released at once) does nothing: the line under the button explains the hold
   el.addEventListener('click', (e) => { e.preventDefault(); });
   set(0);
   return {
     el,
-    setLabel(t) { text.textContent = t; },
+    setLabel(t) { text.textContent = t; inkText.textContent = t; },
     setDisabled(on) { el.disabled = on; if (on) stop(); },
     cancel: stop,
   };

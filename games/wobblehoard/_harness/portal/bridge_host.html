@@ -1,0 +1,116 @@
+<!doctype html><meta charset="utf-8"><title>SQUISH KEEPER portal stand-in</title>
+<style>
+html,body{margin:0;background:#111;color:#cfc;font:12px/1.35 Consolas,monospace}
+#bar{padding:4px 8px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+#bar button{font:inherit}
+#stage{padding:0 8px}
+iframe{border:1px solid #333;display:block;background:#000}
+#log{max-height:30vh;overflow:auto;padding:4px 8px;white-space:pre;color:#9c9}
+</style>
+<body>
+<div id="bar">
+  <b>SQUISH KEEPER portal stand-in (local, no network)</b>
+  <span>mode: <b id="mode"></b></span>
+  <button id="bIn">sign in (push identity)</button>
+  <button id="bOut">sign out (push identity)</button>
+  <span id="count"></span>
+</div>
+<div id="stage"></div>
+<script>
+/* Stands in for forgeflowgames.com (src/lib/gameBridge.ts in the main checkout) for SQUISH KEEPER. Copied in spirit from Blocktooth's
+   _harness/portal/bridge_host.html; models the bridge as _handoff/design/PUBLISH_CHECKLIST_SHORT.md section 2 describes it:
+     * only an iframe embedded in THIS page is served (event.source is the frame's window); replies go to the sender's origin
+     * forgeflow:whoami       -> forgeflow:identity {_reqId, signedIn, id, username, avatar_url, level}   (answered for guests too)
+     * forgeflow:achievement  -> RPC unlock_achievement: signed in only; an unknown (unseeded) slug is dropped; idempotent; XP = the row's points
+     * forgeflow:score / game_over / level_complete / save / load / anything else: RECORDED (a check can prove the game never sends them)
+     * sign-in and sign-out are PUSHED as an unsolicited forgeflow:identity (no _reqId), like onAuthStateChange
+   Query params (all optional):
+     mode=signed|guest|silent  signed (default): whoami -> signedIn:true; guest: signedIn:false; silent: never answers (the pre-bridge live portal)
+     game=<url>                the iframe src (default ../../index.html?dev=1, i.e. the vite dev server of this folder)
+     size=WxH                  the iframe box (default 888x500, the portal desktop; use 358x201 for the portal phone)
+     sandbox=<tokens>|none     the iframe sandbox (default = the portal's GamePlayer.tsx string)
+     allow=<features>          the iframe allow (default = the portal's string)
+   window.__BRIDGE (read by portal_check.mjs):
+     log[]       every message: {i, t, dir:'in'|'out', type, fromGame, origin, msg}
+     unlocked    {slug: {points, at}} what the "server" accepted;  xp = sum of points;  dupes / unknown / dropped = what it refused
+     setMode(m)  switch mode; signed / guest also PUSH forgeflow:identity
+   No network, no keys: every reply is canned. The only fetch is this repo's own achievements.json (to know which slugs are "seeded"). */
+const Q = new URLSearchParams(location.search);
+const PORTAL_SANDBOX = 'allow-scripts allow-same-origin allow-pointer-lock allow-popups allow-modals allow-forms';
+const PORTAL_ALLOW = 'autoplay; fullscreen; gamepad; pointer-lock';
+const USER = { id: '00000000-0000-4000-8000-0000005b0055', username: 'sk_tester_name', avatar_url: 'https://example.invalid/avatar.png', level: 3 };
+const B = window.__BRIDGE = {
+  mode: Q.get('mode') || 'signed',
+  log: [], t0: performance.now(),
+  seeded: null, unlocked: {}, xp: 0, dupes: 0, unknown: [], dropped: [],
+  USER,
+  setMode(m) { B.mode = m; paint(); if (m === 'signed' || m === 'guest') send(identity(null)); },
+};
+const frame = document.createElement('iframe');
+function identity(reqId) {
+  const signed = B.mode === 'signed';
+  const o = { type: 'forgeflow:identity', signedIn: signed, id: signed ? USER.id : null,
+              username: signed ? USER.username : null, avatar_url: signed ? USER.avatar_url : null, level: signed ? USER.level : null };
+  if (reqId !== null && reqId !== undefined) o._reqId = reqId;
+  return o;
+}
+function clone(v) { try { return JSON.parse(JSON.stringify(v)); } catch (_) { return String(v); } }
+function rec(dir, msg, e) {
+  B.log.push({ i: B.log.length, t: Math.round(performance.now() - B.t0), dir, type: msg && msg.type,
+               fromGame: e ? e.source === frame.contentWindow : true, origin: e ? e.origin : null, msg: clone(msg) });
+  paint();
+  const line = (dir === 'in' ? '<- ' : '-> ') + (msg && msg.type) + ' ' + JSON.stringify(clone(msg)).slice(0, 200);
+  const L = document.getElementById('log'); if (L) { L.textContent += line + '\n'; L.scrollTop = 1e9; }
+}
+function send(msg, target, origin) {
+  const w = target || frame.contentWindow; if (!w) return;
+  rec('out', msg, null);
+  w.postMessage(msg, origin || '*');
+}
+function paint() {
+  const m = document.getElementById('mode'); if (m) m.textContent = B.mode;
+  const c = document.getElementById('count'); if (c) c.textContent = B.log.filter((x) => x.dir === 'in').length + ' messages in, ' + Object.keys(B.unlocked).length + ' unlocked, ' + B.xp + ' XP';
+}
+addEventListener('message', (e) => {
+  const m = e.data;
+  if (!m || typeof m !== 'object' || typeof m.type !== 'string' || !m.type.startsWith('forgeflow:')) return;
+  rec('in', m, e);
+  if (e.source !== frame.contentWindow) return;          // the portal only serves its own embedded game frame
+  const reply = (o) => send(o, e.source, e.origin || '*');
+  switch (m.type) {
+    case 'forgeflow:whoami':
+      if (B.mode === 'silent') return;                    // the pre-bridge portal never answers
+      reply(identity(m._reqId === undefined ? null : m._reqId));
+      break;
+    case 'forgeflow:achievement': {
+      const slug = typeof m.achievementSlug === 'string' ? m.achievementSlug : null;
+      if (B.mode !== 'signed' || slug === null) { B.dropped.push(slug); break; }            // guests and silent sessions are dropped
+      if (B.seeded && !B.seeded[slug]) { B.unknown.push(slug); break; }                       // unlock_achievement: unknown slug -> dropped, so SEED FIRST
+      if (B.unlocked[slug]) { B.dupes++; break; }                                              // idempotent
+      const points = B.seeded ? B.seeded[slug].points : 0;
+      B.unlocked[slug] = { points, at: Math.round(performance.now() - B.t0) };
+      B.xp += points;
+      break;
+    }
+    default: break;                                       // score / game_over / save / load ...: recorded only
+  }
+});
+document.getElementById('bIn').onclick = () => B.setMode('signed');
+document.getElementById('bOut').onclick = () => B.setMode('guest');
+const sb = Q.has('sandbox') ? Q.get('sandbox') : PORTAL_SANDBOX;
+if (sb !== 'none') frame.setAttribute('sandbox', sb);
+frame.setAttribute('allow', Q.has('allow') ? Q.get('allow') : PORTAL_ALLOW);
+frame.title = 'SQUISH KEEPER';
+const sz = /^(\d{2,4})x(\d{2,4})$/.exec(Q.get('size') || '888x500') || ['', '888', '500'];
+frame.width = sz[1]; frame.height = sz[2];
+frame.style.width = sz[1] + 'px'; frame.style.height = sz[2] + 'px';
+document.getElementById('stage').appendChild(frame);
+const L = document.createElement('div'); L.id = 'log'; document.body.appendChild(L);
+window.__frame = frame;
+paint();
+// which slugs are "seeded" (the real portal needs the owner's yes to seed them): this repo's own file; if it cannot be read, every slug is accepted
+fetch('../../src/data/achievements.json').then((r) => r.json()).then((j) => {
+  const s = {}; for (const a of j.achievements) s[a.slug] = { points: a.points, tier: a.tier };
+  B.seeded = s;
+}).catch(() => { B.seeded = null; }).finally(() => { frame.src = Q.get('game') || '../../index.html?dev=1'; });
+</script>

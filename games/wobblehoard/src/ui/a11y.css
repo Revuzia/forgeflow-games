@@ -1,0 +1,71 @@
+/* WOBBLEHOARD accessibility modes (UI.md 7, W8). These are TOKEN hooks, not component rules: every kit class reads the --k-* roles
+   from base.css, so a mode is one block here and every component inherits it. The roles live on <body> because the theme tokens
+   are inline styles on :root (which no sheet rule on :root can beat). Load order: base.css, kit.css, a11y.css.
+   Modes: Calm (body[data-calm="true"], or prefers-reduced-motion unless the player set it to false) | Quality low (body[data-quality="low"]) |
+          prefers-contrast: more | forced-colors: active. */
+
+/* ---- Calm: MOVE durations collapse (~0), FADE durations settle at 140 ms, every idle animation is named "none", the gloss holds still ---- */
+body[data-calm="true"] {
+  --k-mv-1: .01ms; --k-mv-2: .01ms; --k-mv-3: .01ms; --k-mv-4: .01ms;
+  --k-fd-1: var(--wh-t-2); --k-fd-2: var(--wh-t-2); --k-fd-3: var(--wh-t-2); --k-fd-4: var(--wh-t-2);
+  --k-an-dots: none; --k-an-breathe: none; --k-an-wobble: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  body:not([data-calm="false"]) {
+    --k-mv-1: .01ms; --k-mv-2: .01ms; --k-mv-3: .01ms; --k-mv-4: .01ms;
+    --k-fd-1: var(--wh-t-2); --k-fd-2: var(--wh-t-2); --k-fd-3: var(--wh-t-2); --k-fd-4: var(--wh-t-2);
+    --k-an-dots: none; --k-an-breathe: none; --k-an-wobble: none;
+  }
+}
+/* Calm keeps the state change visible without movement: a pressed or hovered control changes tone, it does not travel or squash */
+body[data-calm="true"] :is(.k-btn, .k-chip, .k-gel):active, body[data-calm="true"] .k-btn:focus-visible { transform: none; }
+body[data-calm="true"] .k-btn:active { background-color: var(--k-surface-hi); }
+body[data-calm="true"] .k-gel:active { filter: brightness(.92); }
+@media (hover: hover) { body[data-calm="true"] .k-btn:hover { transform: none; } }
+
+/* ---- Quality low: solid containers, no blur (UI.md 3.3: backdrop-filter is solid in Quality low) ---- */
+body[data-quality="low"] { --k-container: var(--wh-panel); --k-backdrop: none; }
+
+/* ---- prefers-contrast: more: no backdrop-filter, solid panel, 4 px ring, gloss and jelly off, edges and text at their strongest ---- */
+@media (prefers-contrast: more) {
+  body {
+    --k-container: var(--wh-panel); --k-backdrop: none; --k-gloss-a: 0; --k-ring-w: 4px; --k-jelly-svg: none;
+    --k-edge: var(--wh-cream-dim); --k-edge-quiet: var(--wh-edge); --k-fg-dim: var(--wh-cream);
+    --k-sel-edge: var(--wh-cream); --k-sw-off: var(--wh-surface2); --k-fill-off: var(--wh-surface2);
+    --k-disabled-fg: var(--wh-cream-dim); --k-wash: transparent;
+  }
+}
+
+/* ---- forced-colors: active (W8): system colours only, a real border on every control, selection by Highlight, on / off by a tick.
+        Gradients and glass are dropped; the ring is an outline (box-shadow does not survive) ---- */
+@media (forced-colors: active) {
+  body {
+    --k-fg: CanvasText; --k-fg-dim: CanvasText; --k-ink: CanvasText;
+    --k-surface: ButtonFace; --k-surface-hi: ButtonFace; --k-panel: Canvas; --k-container: Canvas; --k-scrim: Canvas;
+    --k-edge: ButtonText; --k-edge-quiet: ButtonText; --k-edge-hot: Highlight; --k-track: ButtonFace; --k-accent: Highlight;
+    --k-sel-fill: Highlight; --k-sel-fg: HighlightText; --k-sel-edge: Highlight;
+    --k-danger: CanvasText; --k-danger-edge: CanvasText; --k-ok: CanvasText; --k-info: CanvasText; --k-warn: CanvasText; --k-trophy: CanvasText;
+    --k-disabled-fill: Canvas; --k-disabled-fg: GrayText;
+    --k-gel-image: none; --k-gel-fill: ButtonFace; --k-gel-fg: ButtonText; --k-gel-border: 2px solid ButtonText; --k-gel-lip: 0 0 0 0 transparent; --k-gel-lip-down: 0 0 0 0 transparent;
+    --k-coral-image: none; --k-coral-fill: ButtonFace; --k-coral-lip: 0 0 0 0 transparent; --k-coral-lip-down: 0 0 0 0 transparent;
+    --k-gloss-a: 0; --k-wash: transparent; --k-backdrop: none; --k-jelly-svg: none;
+    --k-sw-off: Canvas; --k-sw-on: Highlight; --k-sw-thumb-off: ButtonText; --k-sw-thumb-on: HighlightText; --k-sw-tick-on: Highlight;
+    --k-fill-on: Highlight; --k-fill-off: Canvas; --k-slider-thumb: ButtonText;
+    --k-ring: Highlight; --k-halo: Canvas; --k-ring-w: 3px;
+  }
+  .k-btn:focus-visible, .k-chip:focus-visible, .k-card[tabindex]:focus-visible, .k-link:focus-visible { box-shadow: none; }
+  .k-switch-input:checked ~ .k-switch-ui, .k-seg-input:checked ~ .k-seg-face { forced-color-adjust: none; }
+  .k-seg-input:checked ~ .k-seg-face { background-color: Highlight; color: HighlightText; border-color: Highlight; }
+  .k-switch-input:checked ~ .k-switch-ui { background-color: Highlight; border-color: Highlight; }
+  .k-switch-input:checked ~ .k-switch-ui .k-switch-thumb { background-color: HighlightText; color: Highlight; }
+  /* a selected control is Highlight on HighlightText; Chromium puts a Canvas backplate behind text on an authored Highlight fill (black text on black),
+     so these opt out of the adjustment and carry their own system-colour pair */
+  .k-btn:not(.k-gel)[aria-pressed="true"], .k-btn:not(.k-gel)[aria-current="true"], .k-chip[aria-pressed="true"], .k-card[aria-pressed="true"], .k-card[aria-current="true"] {
+    forced-color-adjust: none; background-color: Highlight; color: HighlightText; border-color: Highlight;
+  }
+  .k-chip[aria-pressed="true"] .k-chip-n { color: HighlightText; }
+  .k-dot { forced-color-adjust: none; background-color: ButtonText; }
+  .k-progress-fill { forced-color-adjust: none; background-color: Highlight; background-image: none; }
+  .k-slider::-webkit-slider-runnable-track { background: linear-gradient(90deg, Highlight var(--fill), Canvas var(--fill)); forced-color-adjust: none; }
+  .k-tier .k-icon { color: CanvasText; }
+}

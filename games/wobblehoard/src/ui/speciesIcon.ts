@@ -3,13 +3,15 @@
 // the same function the soft body is built from) seen from the play camera's angle, filled with the species' own palette
 // (render/oklch.ts genomePalette of catalog speciesTemplateGenome: the colour the renderer draws), with its core glow, a soft gloss and
 // its eyes. Cost: about 400 restPoint evaluations per species, once (cached as path data; each call clones a few SVG nodes).
-// The silhouette variant (an unowned species) is the same outline in one flat tone.
+// The silhouette variant (an unowned species) is the same outline in one flat tone (hoard.css .sp-sil). Colours that are not the species' own
+// (the eyes, the gloss) come from theme.ts.
 import type { Genome } from '../core/genome.ts';
 import { SPECIES, getSpecies, speciesTemplateGenome } from '../data/catalog.ts';
 import type { SpeciesId } from '../data/catalog.ts';
 import { restPoint } from '../physics/shape.ts';
 import { genomePalette, linearToSrgb } from '../render/oklch.ts';
 import type { Rgb } from '../render/oklch.ts';
+import { PALETTE } from './theme.ts';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const VIEW = 96;
@@ -115,11 +117,11 @@ export function speciesIcon(species: string, opts: { silhouette?: boolean; cls?:
   const shadow = el('ellipse', { cx: d.cx, cy: d.cy + d.r * 0.92, rx: d.r * 0.78, ry: d.r * 0.12, class: 'sp-shadow' });
   const body = el('path', { d: outline, fill: `url(#${id}b)` });
   const core = el('circle', { cx: d.cx, cy: d.cy + d.r * 0.12, r: d.r * 0.55, fill: `url(#${id}c)` });
-  const gloss = el('ellipse', { cx: d.cx - d.r * 0.32, cy: d.cy - d.r * 0.42, rx: d.r * 0.24, ry: d.r * 0.13, fill: '#ffffff', 'fill-opacity': d.gloss.toFixed(2), transform: `rotate(-28 ${(d.cx - d.r * 0.32).toFixed(1)} ${(d.cy - d.r * 0.42).toFixed(1)})` });
+  const gloss = el('ellipse', { cx: d.cx - d.r * 0.32, cy: d.cy - d.r * 0.42, rx: d.r * 0.24, ry: d.r * 0.13, fill: PALETTE.cream, 'fill-opacity': d.gloss.toFixed(2), transform: `rotate(-28 ${(d.cx - d.r * 0.32).toFixed(1)} ${(d.cy - d.r * 0.42).toFixed(1)})` });
   svg.append(defs, shadow, body, core, gloss);
   for (const [x, y, r] of d.eyes) {
-    svg.append(el('ellipse', { cx: x.toFixed(1), cy: y.toFixed(1), rx: r.toFixed(1), ry: (r * 1.12).toFixed(1), fill: '#1b1030' }));
-    svg.append(el('circle', { cx: (x - r * 0.32).toFixed(1), cy: (y - r * 0.38).toFixed(1), r: (r * 0.3).toFixed(1), fill: '#ffffff' }));
+    svg.append(el('ellipse', { cx: x.toFixed(1), cy: y.toFixed(1), rx: r.toFixed(1), ry: (r * 1.12).toFixed(1), fill: PALETTE.ink }));
+    svg.append(el('circle', { cx: (x - r * 0.32).toFixed(1), cy: (y - r * 0.38).toFixed(1), r: (r * 0.3).toFixed(1), fill: PALETTE.cream }));
   }
   return svg;
 }

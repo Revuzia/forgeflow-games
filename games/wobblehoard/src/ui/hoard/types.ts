@@ -16,8 +16,21 @@ export interface SpeciesWords {
   laneIdx: number;
 }
 
+/** The UI kit's pieces the Hoard draws with (ui/icons.ts, ui/jelly): they come through the env because src/ui/hoard/** may import only dom.ts and theme.ts. */
+export interface HoardKit {
+  /** a kit icon (24 grid, stroke 2, currentColor, decorative); an unknown name draws nothing */
+  glyph(name: string, cls?: string, o?: { fill?: boolean; size?: number }): SVGSVGElement;
+  /** a jelly word: a real element of `tag` holding the text (its accessible name) and the drawing; `tone` = a jelly tone or a tier id */
+  jelly(text: string, o?: { size?: 'sm' | 'md' | 'lg' | 'xl'; tone?: string; tag?: 'span' | 'div' | 'p' | 'h1' | 'h2' | 'h3' }): HTMLElement;
+  setJelly(el: HTMLElement, text: string, o?: { size?: 'sm' | 'md' | 'lg' | 'xl'; tone?: string }): void;
+  /** shrink a jelly element's cap height until its drawing is at most `maxW` px wide (floor 14); 0 where nothing is laid out yet */
+  fit(el: HTMLElement, maxW: number): number;
+}
+
 export interface HoardEnv {
   readonly collection: Collection;
+  /** the kit icons and the jelly lettering */
+  readonly kit: HoardKit;
   species(id: string): SpeciesWords | null;
   /** the six feel lanes in filter order */
   readonly lanes: readonly string[];

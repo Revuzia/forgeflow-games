@@ -1,0 +1,264 @@
+/* WOBBLEHOARD HUD styles (UI.md 4, 8; B3a moved them here, B3c rebuilt the layout): everything the play HUD draws around the toolbar (toolbar.css, optionsBar.css): the top row
+   (brand, sound, settings), the info row (name plate, [ring][Open]), the hint, the squishy's key target, the mat chip, the quick switcher, the Cut blade and Snap's
+   backdrop. The layouts are `body[data-layout]` (layout.ts: wide | strip | stack | tiny) and the dock's measures come from toolbar.css (--dk-h, --dk-bottom, --dk-opt-h).
+   Load order: styles.css, hud.css, base, kit, a11y, then the toolbar and options CSS (toolbar.ts imports them), hoard.css (hudBinding.ts). Tokens only (--wh-*, --k-*). */
+
+/* ---------- HUD ---------- */
+.hud {
+  position: fixed;
+  inset: 0;
+  z-index: 3;   /* above the squishy's focus ring (.play-target, 2): the ring never draws over the hint or the buttons */
+  pointer-events: none !important;
+  padding: calc(var(--safe-t) + 12px) calc(var(--safe-r) + var(--gutter)) calc(var(--safe-b) + 14px) calc(var(--safe-l) + var(--gutter));
+  transition: opacity .4s ease;
+}
+.hud[data-active="false"] { visibility: hidden; opacity: 0; }
+/* the top row: the brand (wide, and stack from 600 px) left, Sound and Settings right (B4: Full screen, Sound, Menu); y 12..56 wide and stack, 8..52 strip, 6..50 tiny */
+.hud-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: var(--tap); pointer-events: none; }
+.hud-actions { display: flex; gap: 8px; margin-left: auto; pointer-events: auto; }
+.hud-actions .k-btn[aria-expanded="true"] { --k-sh: inset 0 0 0 1px var(--k-sel-edge), var(--wh-e1); background: var(--k-sel-fill); border-color: var(--k-sel-edge); color: var(--k-sel-fg); }
+/* the top row is [Full screen, Sound, Menu]; on a strip under 700 px wide (568x320, 632x355) the tools share the row and Full screen steps out (UI.md 4.2) */
+@media (max-width: 699px) { body[data-layout="strip"] .hud-actions button[aria-label="Full screen"] { display: none; } }
+body[data-layout="strip"] .hud { padding-top: calc(var(--safe-t) + 8px); }
+body[data-layout="tiny"] .hud { padding-top: calc(var(--safe-t) + 6px); padding-left: calc(var(--safe-l) + 12px); padding-right: calc(var(--safe-r) + 12px); }
+
+/* the brand: the jelly SQUISH KEEPER at its small size (hud.ts; real text inside, the drawing is aria-hidden). The page's one h1 once the title has left. */
+/* where the brand does not show (phone stack, strip, tiny, Snap) it stays the page's h1 for a screen reader: out of the flow and clipped, never display:none (K14) */
+.hud-top .wordmark { position: absolute; clip-path: inset(50%); flex: none; min-width: 0; margin: 0; pointer-events: auto; }
+body[data-layout="wide"] .hud-top .wordmark { position: static; clip-path: none; }
+@media (min-width: 600px) { body[data-layout="stack"] .hud-top .wordmark { position: static; clip-path: none; } }
+
+/* ---------- the info row: name plate left, [ring][Open] right; the dock stands between them (wide) or above/below (stack, strip, tiny) ---------- */
+.hud-bottom {
+  position: absolute;
+  left: calc(var(--safe-l) + var(--gutter));
+  right: calc(var(--safe-r) + var(--gutter));
+  bottom: var(--dk-bottom);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--wh-s2);
+  pointer-events: none;
+}
+/* the middle slot holds the Hoard button in the strip layout only (layout.ts bindHoard); everywhere else it is just the mat chip's parent */
+.hud-slot { display: contents; }
+body[data-layout="strip"] .hud-slot { display: flex; flex: none; align-items: center; gap: var(--wh-s2); pointer-events: auto; }
+/* wide: half of the dock's width (full form, then the compact form of the portal box) keeps the name plate and the ring clear of the tray */
+body { --dk-half: 0px; }
+body[data-layout="wide"] { --dk-half: 276px; }
+body[data-layout="wide"][data-density="short"] { --dk-half: 150px; }
+body[data-layout="wide"] .nametag { max-width: calc(50% - var(--dk-half) - var(--wh-s3)); }
+/* stack: the info row is a 56 high row 8 above the dock; an options bar REPLACES it (Cut, Snap) */
+body[data-layout="stack"] .hud-bottom { bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-s2)); height: 56px; align-items: center; }
+body[data-layout="stack"]:is([data-tool="cut"], [data-tool="snap"]) .hud-bottom { display: none; }
+/* strip: [Name | Hoard | ring Open] along the bottom, the tools along the top */
+body[data-layout="strip"] .hud-bottom { bottom: calc(var(--safe-b) + 8px); height: 52px; align-items: center; }
+/* tiny: only [ring][Open], bottom right; an options bar takes its place (the tray steps aside, toolbar.css) */
+body[data-layout="tiny"] .hud-bottom { left: auto; right: calc(var(--safe-r) + 12px); height: var(--dk-h); align-items: center; }
+body[data-layout="tiny"] .nametag { display: none; }
+body[data-layout="tiny"]:is([data-tool="cut"], [data-tool="snap"]) .meter-cluster { display: none; }
+
+.nametag {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 14px 7px;
+  border-radius: var(--wh-r-card);   /* the glass is the kit's (.k-glass, added in hud.ts) */
+  pointer-events: none;
+}
+.nametag-name { font-size: var(--wh-fs-lead); font-weight: 800; letter-spacing: .02em; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nametag-line { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--wh-fs-label); font-weight: 800; color: var(--wh-cream-dim); }
+.nametag-tier { letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
+.nametag-nick { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--wh-cream); font-weight: 600; }
+/* meter ring (COLLECTION 9.7) + the capsule button (the DOM twin of the 3D capsule, 9.4). Skin from the kit roles (UI.md 3.3, 6): the ring is an opaque surface, the
+   Open button the gel; the pair stands in one glass container ([ring][Open]: the DOM is Open, ring; `order` swaps them). A capsule waiting (R15): the ring glows, Open breathes
+   twice and keeps a steady amber halo, under Calm the halo is steady and the ring says "Ready". With no capsule waiting the ring stands alone, without the container. */
+.meter-cluster {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--wh-s2);
+  padding: 4px 4px 4px 8px;
+  border-radius: var(--wh-r-panel);
+  pointer-events: none;
+}
+.meter-cluster:not(:has(.capsule-btn:not([hidden]))) { padding: 0; background: none; border-color: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.meter {
+  order: -1; position: relative; width: 48px; height: 48px; border-radius: 50%; background: var(--k-surface); border: 1px solid var(--k-edge);
+  box-shadow: inset 0 1px 0 var(--wh-rim), var(--wh-e1); transition: box-shadow var(--k-fd-3) var(--wh-ease);
+}
+body[data-layout="tiny"] .meter { width: 40px; height: 40px; }
+body[data-layout="tiny"] .meter-cluster { padding: 2px 2px 2px 6px; gap: var(--wh-s2); }
+body[data-layout="tiny"] .k-btn.capsule-btn { min-width: 0; padding: 0 var(--wh-s3); }
+.meter-svg { width: 100%; height: 100%; display: block; }
+.meter-track { fill: none; stroke: var(--k-track); stroke-width: 5; }
+.meter-fill { fill: none; stroke: var(--k-accent); stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset .4s ease-out; }
+.meter-glyph { fill: color-mix(in srgb, var(--k-fg) 18%, transparent); stroke: var(--k-fg); stroke-width: 1.6; }
+.meter-seam { stroke: var(--k-fg); stroke-width: 1.4; opacity: .7; }
+.meter[data-full="true"] { box-shadow: inset 0 1px 0 var(--wh-rim), var(--wh-e1), 0 0 0 2px color-mix(in srgb, var(--k-accent) 55%, transparent), 0 0 16px 1px color-mix(in srgb, var(--k-accent) 38%, transparent); }
+.meter[data-full="true"] .meter-glyph { fill: color-mix(in srgb, var(--k-accent) 55%, transparent); stroke: var(--k-accent); }
+.meter-count {
+  position: absolute; right: -6px; top: -6px; min-width: 26px; padding: 2px 6px; border-radius: var(--wh-r-pill);
+  background: var(--k-accent); color: var(--k-ink); font: var(--wh-fb-small); text-align: center;
+}
+.meter-count:empty { display: none; }
+.meter-cluster .meter-count { right: auto; left: -8px; top: -8px; }   /* the ring is the cluster's left half: the count badge sits on its outer corner, clear of the Open button */
+.meter-ready { display: none; position: absolute; inset: 0; place-items: center; font: var(--wh-fb-label); color: var(--k-fg); letter-spacing: .02em; }
+body[data-calm="true"] .meter[data-full="true"] .meter-ready { display: grid; }
+body[data-calm="true"] .meter[data-full="true"] :is(.meter-glyph, .meter-seam) { opacity: 0; }
+.meter-cluster[data-state="resting"] .meter-fill, .meter-cluster[data-state="done"] .meter-fill { stroke: var(--k-fg-dim); }
+/* visible XP (FUN.md 2): the pending arc of a held squeeze or stretch (lighter, under the fill), the bank, the glow, the sparks */
+.meter-fill[data-instant="true"] { transition: none; }
+.meter-pending { fill: none; stroke: var(--k-fg); stroke-width: 5; stroke-linecap: round; opacity: 0; transition: opacity .18s linear; }
+.meter[data-pending="true"] .meter-pending { opacity: .62; }
+.meter[data-bank="paid"] .meter-pending { opacity: 0; transition: opacity .3s linear .62s; }
+.meter[data-bank="none"] .meter-pending { opacity: 0; transition: opacity .3s linear; }
+.meter[data-glow="catch"] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--wh-amber) 55%, transparent), 0 0 18px 2px color-mix(in srgb, var(--wh-amber) 45%, transparent); transition-duration: .08s; }
+.meter[data-glow="soft"] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--wh-amber) 45%, transparent), 0 0 26px 8px color-mix(in srgb, var(--wh-amber) 38%, transparent); transition-duration: .3s; }
+.sparks { position: fixed; inset: 0; z-index: var(--wh-z-bar); pointer-events: none !important; overflow: hidden; contain: strict; }
+.spark {
+  position: absolute; left: -11px; top: -4px; width: 22px; height: 8px; border-radius: var(--wh-r-kbd); opacity: 0; will-change: transform, opacity;
+  background: linear-gradient(to left, var(--wh-cream) 0 30%, var(--wh-amber) 58%, color-mix(in srgb, var(--wh-amber) 0%, transparent));
+  box-shadow: 0 0 10px 2px color-mix(in srgb, var(--wh-amber) 55%, transparent);
+}
+.meter-state {
+  position: absolute; right: 0; bottom: calc(100% + 6px); width: max-content;
+  margin: 0; max-width: min(46vw, 260px); padding: 4px var(--wh-s3); border-radius: var(--wh-r-chip); text-align: right;
+  background: var(--k-container); border: var(--k-bd-q);
+  font: var(--wh-w-bold) var(--wh-fs-label)/1.3 var(--wh-font-ui); color: var(--k-fg);
+}
+.meter-state[hidden] { display: none; }
+.k-btn.capsule-btn { pointer-events: auto; padding: 0 var(--wh-s4); font-size: var(--wh-fs-lead); }   /* (compound: kit.css loads after this file and would win a tie) */
+.capsule-btn[data-ready="true"] {
+  --k-sh: var(--k-gel-lip), var(--wh-e2), 0 0 0 3px color-mix(in srgb, var(--k-accent) 55%, transparent), 0 0 22px 2px color-mix(in srgb, var(--k-accent) 40%, transparent);
+  animation: var(--k-an-breathe) 1.3s ease-in-out 2;   /* breathes twice, then the halo stays; Calm sets the name to none */
+}
+.capsule-btn-count:empty { display: none; }
+.capsule-btn-count { min-width: 22px; padding: 1px 6px; border-radius: var(--wh-r-pill); background: var(--k-ink); color: var(--k-accent); font-size: var(--wh-fs-small); text-align: center; }
+.capsule-pips { display: none; }   /* the Open button is the word and the count badge */
+.capsule-btn[data-full="true"] { --k-sh: var(--k-gel-lip), var(--wh-e2), 0 0 0 3px var(--k-fg); }   /* the table is full: a cream rim */
+
+/* ---------- the hint: one line above the info row (wide: above the dock); at 380 px and under it hangs under the top row; not drawn in tiny ---------- */
+.hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-s4));
+  transform: translateX(calc(-50% + var(--hint-dx, 0px)));   /* --hint-dx: hudBinding.ts slides the pill clear of a waiting capsule */
+  margin: 0;
+  width: max-content;
+  max-width: calc(100vw - 2 * var(--gutter) - var(--safe-l) - var(--safe-r));
+  padding: var(--wh-s2) var(--wh-s4);
+  border-radius: var(--wh-r-pill);
+  background: var(--k-container);   /* the kit's translucent container tone, no blur (the four glass containers are the top group, dock, info row and toast) */
+  border: var(--k-bd-q);
+  box-shadow: var(--wh-e1);
+  color: var(--k-fg);
+  font: var(--wh-w-mid) var(--wh-fs-small)/1.3 var(--wh-font-ui);   /* 600: body weight (the 800 pill was 11 px wider and no longer slid clear of the capsule at 568x320) */
+  text-align: center;
+  text-wrap: balance;
+  pointer-events: none;
+  transition: opacity var(--k-fd-4) linear, transform var(--k-mv-4) var(--wh-ease);
+}
+.hint[data-show="false"] { opacity: 0; transform: translate(calc(-50% + var(--hint-dx, 0px)), 8px); }
+.hint[data-yield="true"] { opacity: 0; }   /* no room beside the capsule on a tiny screen: the pill waits */
+body[data-ceremony] .hint, body[data-settings="open"] .hint, body[data-layout="stack"][data-offline="true"] .hint { opacity: 0; }   /* (stack, offline: the "Waiting for connection" chip stands where the pill ends) */
+body[data-layout="stack"] .hint { bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-s2) + 56px + var(--wh-s2)); }
+body[data-layout="stack"][data-tall="true"][data-switch="true"] .hint { bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-s2) + 56px + var(--wh-s2) + var(--wh-hit) + var(--wh-s2)); }
+@media (max-width: 380px) { body[data-layout="stack"] .hint { top: calc(var(--safe-t) + 64px); bottom: auto; } }   /* 320x568: y 64..100, under the top row */
+body[data-layout="strip"] .hint { bottom: calc(var(--safe-b) + 8px + 52px + var(--wh-s2)); padding: 7px var(--wh-s3); }
+body[data-layout="tiny"] .hint { display: none; }
+
+/* the squishy's keyboard target (src/ui/playTarget.ts): invisible until it has keyboard focus, then a ring around the squishy */
+.play-target {
+  position: fixed; left: 0; top: 0; width: 120px; height: 120px; border-radius: 50%;
+  pointer-events: none !important; outline: none; z-index: 2;
+}
+.play-target[data-placed="false"] { visibility: hidden; }
+.play-target:focus-visible { box-shadow: 0 0 0 3px var(--wh-lagoon), 0 0 0 6px color-mix(in srgb, var(--wh-ink) 70%, transparent); }
+body[data-phase="title"] .play-target, body[data-phase="error"] .play-target { visibility: hidden; }
+@media (max-width: 380px) {
+  .nametag { padding: 5px 10px 6px; }
+  .nametag-name { font-size: var(--wh-fs-body); }
+  .meter-state { max-width: 40vw; font-size: var(--wh-fs-label); }
+  /* the tag's second line (gem, tier word, nickname) never spills out of the tag: a short name with a long tier word ("UNCOMMON") was 3 px wider than the 120 px tag at 320 px (SHELL-4); what does not fit wraps and is clipped, so the gem always shows */
+  .nametag-tier { letter-spacing: .05em; }
+  .nametag-line { flex-wrap: wrap; max-height: 16px; overflow: hidden; }
+}
+/* reduced motion: the HUD's part of the block that styles.css keeps for the title, panel and plate */
+@media (prefers-reduced-motion: reduce) {
+  .meter-fill { transition: none; }
+  .meter, .meter-pending { transition-duration: .2s !important; transition-delay: 0s !important; }
+  .sparks { display: none; }
+  .hint, .hint[data-show="false"] { transform: translateX(calc(-50% + var(--hint-dx, 0px))) !important; transition: opacity .2s linear; }
+  .hud { transition-duration: .15s; }
+}
+
+/* ---------- the Hoard button's dot and the mat chip (the button's skin is toolbar.css `.dock-hoard`; its DOM is ui/hoard/panel.ts's) ---------- */
+.hoard-btn { position: relative; touch-action: manipulation; }
+.hoard-btn-dot { position: absolute; top: -4px; right: -4px; width: 12px; height: 12px; border-radius: 50%; background: var(--wh-coral); border: 2px solid var(--wh-ink); display: none; }
+.hoard-btn[data-dot="true"] .hoard-btn-dot { display: block; }
+body:not([data-calm="true"]) .hoard-btn[data-dot="true"] .hoard-btn-dot { animation: wh-dot 2.4s ease-in-out infinite; }
+@keyframes wh-dot { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--wh-coral) 55%, transparent); } 50% { box-shadow: 0 0 0 6px transparent; } }
+/* "Put back n" (squishies out of the Hoard on the mat): a kit button (hudBinding adds `k-btn`). In the strip layout it stands beside the Hoard button; elsewhere it hangs
+   above the info row, right-aligned (the switcher is on the left) */
+.mat-chip { pointer-events: auto; padding: 0 var(--wh-s3); font-size: var(--wh-fs-small); }
+body:not([data-layout="strip"]) .mat-chip { position: absolute; right: 0; bottom: calc(100% + var(--wh-s2)); }
+.mat-chip-n { min-width: 22px; padding: 1px 6px; border-radius: 999px; background: var(--wh-amber); color: var(--wh-ink); font-size: var(--wh-fs-label); text-align: center; }
+@media (max-width: 380px) { .mat-chip > span:first-child { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .hoard-btn-dot { animation: none !important; }
+}
+
+/* ---------- the quick switcher (UI.md 4.2, R12): a row of round tier-rimmed buttons (wide, tall stack), or [<] 1/6 [>] folded (stack under 700 high);
+   not drawn in strip and tiny ([ and ] stay). The rim is the double rim of the tiers: 3 px tier colour + 2 px ink, with the tier word in the button's name. ---------- */
+.qswitch { position: absolute; left: calc(var(--safe-l) + var(--gutter)); bottom: calc(var(--dk-bottom) + 72px); display: flex; gap: var(--wh-s2); pointer-events: auto; }
+.qs-row { display: flex; gap: 6px; }
+.k-btn.qs-btn {
+  --k-sh: 0 0 0 2px var(--k-ink), var(--wh-e1);
+  width: var(--wh-hit); height: var(--wh-hit); padding: 0; border-radius: 50%; border: 3px solid var(--k-tier, var(--k-edge));
+}
+.qs-icon { width: 30px; height: 30px; }
+.qs-fold { display: none; align-items: center; gap: var(--wh-s1); }
+.qs-count { min-width: 3.2ch; text-align: center; font: var(--wh-fb-small-1); color: var(--k-fg); font-variant-numeric: tabular-nums; }
+body[data-layout="stack"]:not([data-tall="true"]) .qs-row { display: none; }
+body[data-layout="stack"]:not([data-tall="true"]) .qs-fold { display: flex; }
+/* the fold takes the free left of the top row (stack has no brand there): the info row cannot hold plate + fold + ring + Open at 320 */
+body[data-layout="stack"]:not([data-tall="true"]) .qswitch { top: calc(var(--safe-t) + 12px); bottom: auto; }
+body[data-layout="stack"][data-tall="true"] .qswitch { bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-s2) + 56px + var(--wh-s2)); }   /* above the 56 high info row, which sits 8 above the dock */
+body[data-layout="strip"] .qswitch, body[data-layout="tiny"] .qswitch { display: none; }
+body[data-ceremony] .qswitch, body[data-hoard="open"] .qswitch, body[data-hoard="card"] .qswitch { visibility: hidden; }
+/* a phone: the five switcher buttons (44 px targets) and the ring's state line ("Squishies are resting, ...") share one height, so the
+   state line narrows to the ring's column and wraps */
+@media (max-width: 480px) {
+  .qs-row { gap: 4px; }
+  body[data-switch="true"] .meter-state { max-width: 112px; text-align: right; }
+}
+@media (max-width: 359px) {
+  .qs-btn:nth-child(n+5) { display: none; }
+  body[data-switch="true"] .meter-state { max-width: 100px; }
+}
+
+/* ---------- the Cut tool: the blade line and a crosshair over the stage (its bar is optionsBar.css) ---------- */
+body[data-tool="cut"] #stage, body[data-tool="cut"] #stage:active { cursor: crosshair; }
+body[data-tool="cut"] .qswitch, body[data-tool="cut"] .hint, body[data-tool="snap"] .hint { visibility: hidden; }
+.blade { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: var(--wh-z-bar); pointer-events: none !important; overflow: visible; }
+.blade-glow { stroke: var(--wh-amber); stroke-width: 9; stroke-linecap: round; opacity: .3; }
+.blade-line { stroke: var(--wh-cream); stroke-width: 2; stroke-linecap: round; }
+
+/* ---------- Snap (photo mode): the brand, name plate, ring, hint, switcher and chip step aside (UI.md 4.1); the dock, its backdrop bar and the top buttons stay.
+   The backdrop tint lies over the live canvas (its bar is optionsBar.css) ---------- */
+body[data-tool="snap"] .hud-top .wordmark { position: absolute; clip-path: inset(50%); }
+body[data-tool="snap"] :is(.nametag, .meter-cluster, .qswitch, .mat-chip), body[data-tool="snap"] :is(.plate, .toast, .sparks, .net-banner, .play-target) { visibility: hidden; }
+.snap-tint { position: fixed; inset: 0; pointer-events: none; mix-blend-mode: soft-light; }
+.snap-tint[hidden] { display: none; }
+.snap-shade { position: fixed; inset: 0; z-index: var(--wh-z-dock); pointer-events: none !important; background: var(--wh-ink); opacity: 0; transition: opacity .22s ease-out; }
+.snap-shade[data-on="true"] { opacity: .28; transition-duration: .08s; }
+@media (prefers-reduced-motion: reduce) { .snap-shade { display: none; } }
+body[data-calm="true"] .snap-shade { display: none; }
+
+/* the ring's state line sits above the ring, where the Cut bar ends on a phone: it peeked out from behind its edges (VERIFY B-U2). The bar is transient; the live region keeps saying the state. */
+body[data-tool="cut"] .meter-state { visibility: hidden; }
+/* the ring's state line would peek out under the desktop card's bottom edge: the card says what matters there */
+@media (min-width: 640px) { body[data-hoard="card"] .meter-state { visibility: hidden; } }

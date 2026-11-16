@@ -63,6 +63,8 @@ import type { Gain, GainKind, Pending } from './xp.ts';
 import { createPending, gainOf } from './xp.ts';
 
 export type Phase = 'boot' | 'title' | 'play' | 'error';
+/** LOCK: the polite live-region lines (spoken only: the click and the marker are for the eyes and ears of the player who did it). Nothing is said when nothing locked. */
+export const LOCK_LINES = { locked: 'Locked in place.', lockedMany: (held: number): string => `Locked. ${held} held.`, letGo: 'Let go.', letGoAll: 'Let go of all.' } as const;
 /** The toy tray's tools (FUN.md 1): the Hand (poke, squish, stretch), the Cut tool (CUT.md), Snap (photo mode: drags orbit, nothing pokes). */
 export type Tool = 'hand' | 'cut' | 'snap';
 /** A tab hidden longer than this reconnects a cut squishy when it comes back (CUT.md 2.2). */
@@ -104,6 +106,15 @@ export interface InputPort {
   skip(): boolean;
   /** pointer / key input currently reaches the play body (phase play, no ceremony, nothing suspended) */
   readonly live: boolean;
+  /**
+   * LOCK (_spec/LOCK.md): a Shift tap. Locks every pull held right now where it is, but only the ones that are fully stretched (pull level at least 0.95, the body decides);
+   * the lobe stays held, the mouse is free. A body that cannot lock, a pull below the bar, no pull at all, or input not live: nothing happens, no sound. Returns how many locked.
+   */
+  lock(): number;
+  /** lobes locked now, across the play body and the squishies on the mat */
+  readonly locks: number;
+  /** let every lock go (Esc): each lobe snaps back and pays as a pull. True when there was any (then the caller consumes the key); false when input is not live or nothing was locked. */
+  releaseLocks(): boolean;
 }
 
 export interface GameDeps {
@@ -155,7 +166,7 @@ export interface ShellEvents {
   tool: (t: Tool) => void;
   /** the Cut tool's blade: a swipe in progress over the canvas (CSS px), or its end (null) */
   blade: (b: { x0: number; y0: number; x1: number; y1: number } | null) => void;
-  /** a SWIPE ended: what happened (the cutter says the line itself). Only the swipe emits it: the Cut bar's Split in two and Reconnect all call the cutter directly (hudBinding.ts) */
+  /** a swipe, a Split in two or a Reconnect all ended: what happened (the cutter says the line itself) */
   cut: (r: CutResult | 'joined') => void;
 }
 
@@ -341,11 +352,39 @@ export function createGame(deps: GameDeps): Game {
   const panOfNdc = (x: number): number => clamp(x * TUNING.panMax, -TUNING.panMax, TUNING.panMax);
   const panOfPoint = (p: V3): number => { const n = host.ndcOf(p); return n ? panOfNdc(n.x) : 0; };
 
+  // LOCK: every body a lock may sit on (Esc and leaving release them all); one reusable list, no allocation per call
+  const lockBodies: SoftBodyLike[] = [];
+  const allLockBodies = (): readonly SoftBodyLike[] => {
+    lockBodies.length = 0;
+    lockBodies.push(bodies.body);
+    const xs = bodies.extras;
+    for (let i = 0; i < xs.length; i++) lockBodies.push(xs[i].body);
+    return lockBodies;
+  };
   const driver: Driver = createDriver({
-    body: activeBody, stage, simTime: () => simTime, stepCount: () => stepCount, panOfPoint,
+    body: activeBody, bodies: allLockBodies, stage, simTime: () => simTime, stepCount: () => stepCount, panOfPoint,
     extraSquish: () => S().extraSquish, interact: () => emit('interaction'), dirty: () => { needsRender = true; }, report,
   });
   const gestures: Gestures = createGestures(host, (a) => driver.onAction(a));
+
+  // ---- LOCK (_spec/LOCK.md): the stage's thin markers on the locked lobes, and the lock click
+  const lockMarkers: V3[] = [];   // the points handed to stage.setLockMarkers: one array, rewritten in place (no allocation per step)
+  let lockMarkerN = 0;            // markers the stage was told about last
+  let lockOn = false;             // locks exist (so the step keeps the markers on their lobes)
+  const markerOffset = (b: SoftBodyLike): V3 => { const xs = bodies.extras; for (let i = 0; i < xs.length; i++) if (xs[i].body === b) return xs[i].position; return ORIGIN; };
+  /** put the markers where the lobes are held now; the stage is told only while there are markers or just after the last one went (stage.setLockMarkers is optional: the render lane adds it) */
+  function syncLockMarkers(): void {
+    const n = driver.fillMarkers(lockMarkers, markerOffset);
+    lockOn = n > 0;
+    if (n === 0 && lockMarkerN === 0) return;
+    lockMarkerN = n;
+    const st = stage as StageLike & { setLockMarkers?(points: V3[]): void };
+    if (typeof st.setLockMarkers === 'function') { try { st.setLockMarkers(lockMarkers); } catch (e) { report(e); } }
+  }
+  /** the lock click ('on') and the let-go click ('off') of the player's own actions; a body replaced or put away by the shell lets go silently */
+  function lockSound(kind: 'on' | 'off'): void {
+    try { audio.ui?.({ kind, calm: S().calm }); } catch (e) { report(e); }
+  }
 
   const feedback: Feedback = createFeedback({
     audio, haptics, stage, touch: driver.touch, timers, body: activeBody, genome: activeGenome,
@@ -358,7 +397,7 @@ export function createGame(deps: GameDeps): Game {
   bodies = createBodyManager({
     createBody: deps.createBody, stage, report,
     initial: { body: body0, identity: { genome: genome0, tier: tierOfGenome(genome0), itemId: playItem0 ? playItem0.id : genomeEquals(genome0, instance.genome) ? instance.id : null, nickname: playItem0 ? null : nicknameOf(genome0) } },
-    beforeSwap() { releaseEverything(); },
+    beforeSwap(silent) { releaseEverything(silent); },   // (a silent swap is the same squishy in another body: a cut piece, whole again: the swipe in hand goes on)
     afterSwap(id, b, silent) {
       if (!focusing && !silent) history.note(id.itemId);   // a card preview is not a switch
       b.gravity = S().gravity;
@@ -414,8 +453,8 @@ export function createGame(deps: GameDeps): Game {
     bodies, stage, audio, haptics, createBody: deps.createBody,
     quality: () => { try { return stage.stats().tier; } catch { return 'low'; } },
     calm: () => S().calm, gravity: () => S().gravity, simTime: () => simTime, viewport: () => viewport,
-    activeBody, touching: () => driver.touch.contact(),
-    beforeChange: () => { releaseEverything(); active = null; },
+    activeBody, touching: () => driver.touch.contact(), drag: (out) => driver.touch.dragOf(out),
+    beforeChange: () => { releaseEverything(true); active = null; },   // (a piece is replaced or removed: the fingers on the bodies let go, the swipe in hand does not)
     clearMat: () => { const n = mat.count - 1; try { mat.clear(); } catch (e) { report(e); } return n; },
     panOf: (p) => panOfPoint(p),
     say: (t) => emit('notice', t),
@@ -437,6 +476,7 @@ export function createGame(deps: GameDeps): Game {
     else { try { capsules.sync(); } catch (e) { report(e); } }
     needsRender = true;
     emit('tool', tool);
+    if (tool === 'cut') { try { cut.prewarm(); } catch (e) { report(e); } }   // get the first cut ready (a no-op until the true cut; CUT2.md 6.1)
   }
   // the Cut tool's swipe, and Snap's drag-to-orbit (every other gesture is paused while those tools are in hand)
   let blade: { id: number; x0: number; y0: number; x1: number; y1: number } | null = null;
@@ -486,9 +526,21 @@ export function createGame(deps: GameDeps): Game {
   }
 
   // ---------------------------------------------------------------- release / lifecycle
-  function releaseEverything(): void {
+  /** Fingers off every body, voices ended, timers and holds cleared. `keepSwipe`: the release is only about the BODIES (a cut piece is replaced, a join
+   *  ends): the swipe in hand (the Cut blade) and Snap's drags are not about any body and go on (SHELL-4 fix 2, VERIFY N1: a swipe in progress when a
+   *  Reconnect all or join animation ended lost its blade and cut nothing). The shell's own releases (tab hidden, a panel, a ceremony, a switch) clear them.
+   *  `keepLocks`: LOCK.md locks are not fingers; only a pause (setPaused) keeps them, every other release lets them go. */
+  function releaseEverything(keepSwipe = false, keepLocks = false): void {
     try { gestures.cancelAll(clock.now()); } catch (e) { report(e); }
+    // a swipe or a Snap drag cut short by this release (tab hidden, a panel, a ceremony) must not stay half-made: its pointerup may never come,
+    // and a stale blade ignored the next swipe by another finger (SHELL-4 fix 1, VERIFY A-F4)
+    if (!keepSwipe) {
+      if (blade) { blade = null; try { emit('blade', null); } catch (e) { report(e); } }
+      snapDrag.clear();
+    }
     driver.releaseBody();
+    // LOCK (LOCK.md rule 3): leaving lets every locked lobe go first (it snaps back and pays as a pull). Only a pause keeps them (the Menu, a reading screen, a tab hidden a short while).
+    if (!keepLocks) { try { driver.releaseLocks(); syncLockMarkers(); } catch (e) { report(e); } }
     try { feedback.endAll(0.05); } catch (e) { report(e); }
     timers.clear();
     try { haptics.cancel(); } catch (e) { report(e); }
@@ -501,7 +553,7 @@ export function createGame(deps: GameDeps): Game {
     const before = reasons.size > 0;
     if (on) reasons.add(reason); else reasons.delete(reason);
     const after = reasons.size > 0;
-    if (on) releaseEverything();
+    if (on) releaseEverything(false, true);   // (a pause lets go of the fingers and grabs, not of the locks: they hold through the Menu and a short hide)
     if (before !== after) {
       if (!after) lastTs = null; // no dt spike on the way back
       try { audio.setPaused?.(after); } catch (e) { report(e); }
@@ -553,6 +605,7 @@ export function createGame(deps: GameDeps): Game {
     stepCount++;
     driver.notePress();
     drain();
+    if (lockOn || lockMarkerN > 0) syncLockMarkers();   // LOCK: the markers follow the held lobes (the body jiggles)
     timers.run(simTime);
     feedback.update(dt);
     try { cut.update(dt); } catch (e) { report(e); }
@@ -615,6 +668,15 @@ export function createGame(deps: GameDeps): Game {
       if (tool === 'snap') { if (p.type === 'mouse' && (p.button ?? 0) === 0) return; snapDrag.set(p.id, { x: p.x, y: p.y }); emit('interaction'); return; }   // a mouse turns the view with the RIGHT button only (owner decision 2026-10-06)
       if ((p.button ?? 0) === 0 && capsules.pointerDown(p.id, p.x, p.y)) { emit('interaction'); return; }
       if (bodies.extras.length && gestures.activeCount() === 0 && !driver.touch.contact()) pickBody(p.x, p.y);
+      // LOCK.md decision 2: a LEFT press that lands on a locked lobe lets it go (it snaps back and pays as a pull); the press does nothing else (no poke, no new pull)
+      if ((p.button ?? 0) === 0 && driver.lockCount() > 0) {
+        const hit = host.hitTest(p.x, p.y);
+        if (hit && driver.releaseLockAt(hit.point)) {
+          gestures.consume({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t), button: 0, type: p.type });
+          lockSound('off'); syncLockMarkers(); emit('interaction'); emit('notice', LOCK_LINES.letGo);
+          return;
+        }
+      }
       gestures.pointerDown({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t), button: p.button ?? 0, type: p.type, ...shiftOf(p) });
     },
     pointerMove(p) {
@@ -666,9 +728,26 @@ export function createGame(deps: GameDeps): Game {
     orbitBy(dx, dy) { if (inputLive()) { emit('interaction'); driver.onAction({ type: 'orbit', dx, dy }); } },
     zoomBy(n) { if (inputLive()) { emit('interaction'); driver.onAction({ type: 'zoom', delta: n, source: 'wheel' }); } },
     screenCentre: () => host.screenCentre(),
-    isDown: (id) => gestures.isActive(id),
+    // every owner of a pressed pointer must answer here: src/input/pointer.ts forwards a pointermove only while isDown(id), else it is a hover.
+    // The gesture machine owns the Hand's presses; the Cut tool's blade, Snap's drags and a held capsule take theirs before it (SHELL-4 fix 1: Snap's
+    // drag-to-turn and pinch and the blade line did nothing with real events because only the gesture machine answered)
+    isDown: (id) => gestures.isActive(id) || snapDrag.has(id) || (blade !== null && blade.id === id) || capsules.holds(id),
     skip: () => ceremonies.tapSkip(),
     get live() { return inputLive(); },
+    lock() {
+      if (!inputLive() || tool !== 'hand') return 0;
+      const n = driver.lockPulls();
+      if (n > 0) { lockSound('on'); syncLockMarkers(); const held = driver.lockCount(); emit('notice', held > 1 ? LOCK_LINES.lockedMany(held) : LOCK_LINES.locked); }
+      return n;
+    },
+    get locks() { return driver.lockCount(); },
+    releaseLocks() {
+      if (!inputLive()) return false;
+      const held = driver.lockCount();
+      const any = driver.releaseLocks();
+      if (any) { lockSound('off'); syncLockMarkers(); emit('notice', held > 1 ? LOCK_LINES.letGoAll : LOCK_LINES.letGo); }
+      return any;
+    },
   };
 
   // ---------------------------------------------------------------- body swaps (atomic) and the Hoard seams
@@ -811,7 +890,10 @@ export function createGame(deps: GameDeps): Game {
     unlockAudio,
     setHidden(h) {
       if (h && !reasons.has('hidden')) hiddenAt = now();
-      if (!h && reasons.has('hidden') && now() - hiddenAt > HIDDEN_RECONNECT_MS) { try { cut.reconnectAll(false); } catch (e) { report(e); } }
+      if (!h && reasons.has('hidden') && now() - hiddenAt > HIDDEN_RECONNECT_MS) {
+        try { cut.reconnectAll(false); } catch (e) { report(e); }
+        try { driver.releaseLocks(); syncLockMarkers(); } catch (e) { report(e); }   // LOCK.md rule 3: a tab hidden more than 60 s lets the locks go (no sound: the player did not do it)
+      }
       setPaused('hidden', h);
     },
     suspend(r) { setPaused(r, true); },
