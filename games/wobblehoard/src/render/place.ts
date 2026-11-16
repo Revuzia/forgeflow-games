@@ -87,7 +87,7 @@ export const NOISE = 'float pH(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.
 const WATER_FRAG = `varying vec2 vUv; varying vec3 vWP; uniform float uTime, uMotion, uFoam, uAlpha, uBox; uniform vec3 uDeep, uShallow, uSkyC, uFoamC; ${'NOISE'}
 void main(){
   vec2 q = vUv * 2.0 - 1.0;
-  float e = uBox > 0.5 ? 1.0 - vUv.y : 1.0 - length(q);
+  float e = uBox > 0.5 ? vUv.y : 1.0 - length(q);   // a box's foam edge is its front (toward the camera, +z); a disc's its rim
   vec3 V = normalize(cameraPosition - vWP);
   float fr = pow(1.0 - clamp(V.y, 0.0, 1.0), 3.0);
   float t = uTime * uMotion;
