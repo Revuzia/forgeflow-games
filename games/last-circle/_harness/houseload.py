@@ -86,10 +86,14 @@ PLANT_ROWS = {"query-flood": {"collider-load", "collider-load-frame"}, "district
               # (W9 R1A 1b) the like-for-like row's real-density control: every furnished house's colliders added again (W.map.addDynamicCollider)
               "house-dup": {"collider-load-frame"},
               # (R3) the look measure's own controls: hasCollidersNear builds and scans the whole r-list (same answers, the list's cost), or answers true
-              "look-flood": {"collider-load"}, "look-true": {"collider-load"}}
+              "look-flood": {"collider-load"}, "look-true": {"collider-load"},
+              # (W10 R1A pass 5, orchestrator ruling 2026-11-15) the matched rows' real-density control: every furnished house's FURNITURE colliders added
+              # again (W.map.addDynamicCollider) - a home whose furniture costs twice what it does: the matched battery, the home-interior row and the
+              # matched replay must all FAIL
+              "furn-dup": {"collider-load", "collider-load-home", "collider-load-frame"}}
 # (R3) under a plant the collider-load row is judged on the queries that plant breaks ONLY: the steer query is over the bar on the R3 head (game work,
 # bots.js wallCols), so judging the whole row would let a control "fail" on steer while its own measure saw nothing. Without --plant: all four queries.
-PLANT_QUERIES = {"query-flood": ("steer", "move", "support"), "look-flood": ("look",), "look-true": ("look",)}
+PLANT_QUERIES = {"query-flood": ("steer", "move", "support"), "look-flood": ("look",), "look-true": ("look",), "furn-dup": ("steer", "move", "support")}
 FRAMES = 600
 
 WRAP_JS = r"""(plant) => {
@@ -101,6 +105,11 @@ WRAP_JS = r"""(plant) => {
   // (W.map.addDynamicCollider, the C3 API) - every query near a house returns twice its share -> collider-load-frame (the like-for-like replay) FAILS
   if (plant === 'house-dup' && M.addDynamicCollider) { let n = 0; for (const H of (M.houses || [])) { if (!H || !H.cols) continue;
     for (let i = H.cols[0], e = H.cols[0] + H.cols[2]; i < e; i++) { const c = M.colliders[i]; if (c && !c.dead && c.kind === 'box') { M.addDynamicCollider(c.minX, c.maxX, c.minY, c.maxY, c.minZ, c.maxZ); n++; } } }
+    st.planted = n; }
+  if (plant === 'furn-dup' && M.addDynamicCollider) { let n = 0; for (const H of (M.houses || [])) { if (!H || !H.cols) continue;
+    const lf = H.leafCols || [0, 0];
+    for (let i = H.cols[0] + H.cols[1], e = H.cols[0] + H.cols[2]; i < e; i++) { if (i >= lf[0] && i < lf[0] + lf[1]) continue; const c = M.colliders[i];
+      if (c && !c.dead && c.kind === 'box') { M.addDynamicCollider(c.minX, c.maxX, c.minY, c.maxY, c.minZ, c.maxZ); n++; } } }
     st.planted = n; }
   const dummies = [];
   if (plant === 'query-flood') for (let i = 0; i < 64; i++) dummies.push({ kind: 'box', minX: 9e5 + i, maxX: 9e5 + i + 0.1, minY: -9e5, maxY: -9e5 + 0.1, minZ: 9e5, maxZ: 9e5 + 0.1, dir: -1, prop: null, idx: -1, hp: 0, dead: true, _qs: 0 });
@@ -145,7 +154,9 @@ REPLAY_JS = r"""(rec) => {
 
 BATTERY_JS = r"""([pts, Q]) => {
   const W = window.__LC__.W, M = W.map, K = W.SIM;
-  const fp = pts || ((M.city && M.city.footprints) || []).map((a) => [(a[0] + a[2]) / 2, (a[1] + a[3]) / 2]);
+  // (W10 R1A pass 5) pts 'homes': the centre of every home (use 'house') of THIS build - the home-interior vs home-interior row
+  const fp = pts === 'homes' ? (M.houses || []).filter((H) => H && H.use === 'house').map((H) => [H.cx, H.cz])
+    : (pts || ((M.city && M.city.footprints) || []).map((a) => [(a[0] + a[2]) / 2, (a[1] + a[3]) / 2]));
   const out = { points: fp.length, q: {}, notes: [] };
   const DT = 1 / 60, h = K.PLAYERK.height, reach = K.MOVE.sprint * DT * Math.SQRT2;
   const fn = (pre, exprs, tag) => { try { return new Function('K', 'reach', 'a', 'x', 'z', 'y', 'h', 'dt', 'g', (pre || '') + '\n; return [' + exprs.join(', ') + '];'); }
@@ -226,13 +237,15 @@ BATTERY_JS = r"""([pts, Q]) => {
     } finally {
       for (const [c, d, v0] of tapped) { const cur = c.dead; delete c.dead; if (d) Object.defineProperty(c, 'dead', Object.assign({}, d, { value: cur })); else if (cur !== undefined) c.dead = cur; }
     }
+    const raw = ns.slice();
     ns.sort((a, b) => a - b);
     const sum = ns.reduce((a, b) => a + b, 0);
     out.q[q.key] = { mode: q.mode, r: [...rs].slice(0, 4), sites: q.sites.map((st) => st.at + (st.band ? ' band' : '')), bandedQueries: banded, occMismatch: q.mode === 'occ' ? occBad + emptyBad : null, occEmptyChecked: q.mode === 'occ' ? emptyN : null,
                      occTap: q.mode === 'occ' ? tap : null, occReadsVsReplica: q.mode === 'occ' ? occReadDiff : null,
-                     n: ns.length, mean: ns.length ? +(sum / ns.length).toFixed(2) : null, p95: ns.length ? ns[Math.min(ns.length - 1, Math.floor(ns.length * 0.95))] : null, max: ns.length ? ns[ns.length - 1] : null };
+                     raw, n: ns.length, mean: ns.length ? +(sum / ns.length).toFixed(2) : null, p95: ns.length ? ns[Math.min(ns.length - 1, Math.floor(ns.length * 0.95))] : null, max: ns.length ? ns[ns.length - 1] : null };
   }
   out.pts = pts ? null : fp;
+  out.ownPts = ((M.city && M.city.footprints) || []).map((a) => [(a[0] + a[2]) / 2, (a[1] + a[3]) / 2]);
   out.colliders = (M.colliders || []).length;
   return out;
 }"""
@@ -484,19 +497,23 @@ def measure(args, label, map_id, rev, plant, Q, pts=None, stream=None):
         s.freeze_loop()
         res["wrap"] = s.js(WRAP_JS, plant)
         res["battery"] = s.js(BATTERY_JS, [pts, Q])
+        if pts is not None:      # (W10 R1A pass 5) this build at its OWN footprint centres too (the matched rows take the union of both builds' points)
+            res["batteryOwn"] = s.js(BATTERY_JS, [None, Q])
+        res["home"] = s.js(BATTERY_JS, ["homes", Q])      # (W10 R1A pass 5) home interiors: this build's own homes
         res["draws"] = s.js(DRAWS_JS, plant)
         s.js("() => { const st = window.__LC__.W.map.__hl; st.on = true; st.calls = 0; st.ret = 0; st.b = {}; st.rec = []; }")
         s.step_frames(FRAMES, 1 / 60, render=False)
         res["match"] = s.js("(n) => { const st = window.__LC__.W.map.__hl; st.on = false; return { frames: n, calls: st.calls, ret: st.ret, callsPerFrame: +(st.calls / n).toFixed(1), retPerFrame: +(st.ret / n).toFixed(1), buckets: st.b, t: +window.__LC__.W.t.toFixed(1), alive: window.__LC__.W.actors.filter((x) => x.alive !== false && !x.dead).length }; }", FRAMES)
-        if stream is None:      # the candidate: its own stream is the one both builds answer
-            stream = s.js("() => { const st = window.__LC__.W.map.__hl, r = st.rec; st.rec = null; return r; }")
-            res["stream"] = stream
-        else:
-            s.js("() => { window.__LC__.W.map.__hl.rec = null; return 1; }")
-        rp = s.js(REPLAY_JS, stream)
-        rp["frames"] = FRAMES
-        rp["retPerFrame"] = round(rp["ret"] / FRAMES, 1)
-        res["replay"] = rp
+        own = s.js("() => { const st = window.__LC__.W.map.__hl, r = st.rec; st.rec = null; return r; }")
+        res["stream"] = own      # (W10 R1A pass 5) every build's own stream is kept: the matched replay answers BOTH builds' streams on both builds
+        rps = []
+        for stm in ([stream] if stream is not None else []) + [own]:
+            rp = s.js(REPLAY_JS, stm)
+            rp["frames"] = FRAMES
+            rp["retPerFrame"] = round(rp["ret"] / FRAMES, 1)
+            rps.append(rp)
+        res["replay"] = rps[0]       # the given stream (the candidate's, as before), else the build's own
+        res["replayOwn"] = rps[-1]
         res["planted"] = s.js("() => window.__LC__.W.map.__hl.planted || 0")
         d = s.diagnostics()
         res["problems"] = C.diag_problems(d, rig=False)
@@ -528,59 +545,87 @@ def main_fn(v, args):
             return
         v.check(name, ok, detail, expect=expect)
 
+    def stat(arr):
+        a = sorted(arr)
+        return (round(sum(a) / len(a), 2) if a else None), (a[min(len(a) - 1, int(len(a) * 0.95))] if a else None)
+
+    def load_rows(m, rowname, cq, bq, judged, points_note, bad_occ_src):
+        """(W10 R1A pass 5) one ratio row over per-query count lists: look / steer mean AND p95, move / support mean <= x RATIO_MAX"""
+        rows, over, ok = {}, [], True
+        for r in ("look", "steer", "move", "support"):
+            cm_, cp_ = stat(cq[r]); bm_, bp_ = stat(bq[r])
+            rm = cm_ / bm_ if bm_ else (1.0 if not cm_ else 99.0)
+            rows[r] = {"mean": cm_, "baseMean": bm_, "ratio": round(rm, 3), "p95": cp_, "baseP95": bp_, "n": [len(cq[r]), len(bq[r])]}
+            if rm > RATIO_MAX:
+                over.append("%s mean x%.3f" % (r, rm))
+            ok = ok and (rm <= RATIO_MAX or r not in judged)
+            if r in ("look", "steer"):
+                rp = cp_ / bp_ if bp_ else (1.0 if not cp_ else 99.0)
+                rows[r]["p95ratio"] = round(rp, 3)
+                if rp > RATIO_MAX:
+                    over.append("%s p95 x%.3f" % (r, rp))
+                ok = ok and (rp <= RATIO_MAX or r not in judged)
+        bad_occ = {k: e["occMismatch"] for b_ in bad_occ_src for k, e in b_["q"].items() if e.get("occMismatch") and k in judged}
+        if bad_occ:
+            chk("%s [%s]" % (rowname, m), False, {"wrongAnswers": bad_occ, "overBar": over, "byQuery": rows, "points": points_note},
+                expect="W.map.hasCollidersNear answers as the scan's truth, and the collider counts <= x%.2f" % RATIO_MAX)
+        else:
+            chk("%s [%s]" % (rowname, m), ok, {"overBar": over, "judgedQueries": list(judged), "points": points_note, "byQuery": rows},
+                expect="look and steer mean and p95, move and support mean: colliders <= x%.2f the baseline (%s) - %s" % (RATIO_MAX, bsha[:8], points_note))
+
     probs = []
     for m in maps:
+        # (W10 R1A pass 5, orchestrator ruling 2026-11-15: LIKE FOR LIKE on MATCHED points) three sessions per map: the candidate (its own footprint
+        # centres, its homes, its own 600-frame stream), the baseline (the candidate's points + its own, its homes, both streams), the candidate again
+        # (the baseline's points and stream). The ratio rows compare the two builds at the SAME world points - the union of both builds' footprint
+        # centres - and on the SAME query load - both builds' streams replayed on both; bigger homes standing where the other build has open ground count
+        # on both sides. A home-interior vs home-interior row compares each build's own homes. Absolute rows (calls per frame, district calls, errors) and
+        # the live per-frame numbers are unchanged.
+        judged = PLANT_QUERIES.get(plant, ("look", "steer", "move", "support")) if plant else ("look", "steer", "move", "support")
         cand = measure(args, clabel, m, crev, plant, QC)
         pts = cand["battery"].pop("pts")
         stream = cand.pop("stream")
         base = measure(args, "baseline %s" % bsha[:8], m, bsha, None, QB, pts, stream)
-        print("  [%s] like-for-like replay of the candidate's %d calls: candidate %s returned/frame, baseline %s (live: %s vs %s)%s" % (
-            m, cand["replay"]["calls"], cand["replay"]["retPerFrame"], base["replay"]["retPerFrame"], cand["match"]["retPerFrame"], base["match"]["retPerFrame"],
-            ("; planted %d colliders" % cand["planted"]) if cand.get("planted") else ""), flush=True)
-        v.data[m] = {"candidate": cand, "baseline": base}
+        bpts = base["batteryOwn"].pop("pts")
+        bstream = base.pop("stream")
+        cand2 = measure(args, clabel + " (baseline points)", m, crev, plant, QC, bpts, bstream)
+        cand2.pop("stream", None)
+        print("  [%s] replay: candidate stream %d calls -> candidate %s / baseline %s returned/frame; baseline stream %d calls -> candidate %s / baseline %s (live: %s vs %s)%s" % (
+            m, cand["replay"]["calls"], cand["replay"]["retPerFrame"], base["replay"]["retPerFrame"], base["replayOwn"]["calls"], cand2["replay"]["retPerFrame"], base["replayOwn"]["retPerFrame"],
+            cand["match"]["retPerFrame"], base["match"]["retPerFrame"], ("; planted %d colliders" % cand["planted"]) if cand.get("planted") else ""), flush=True)
         cb, bb = cand["battery"], base["battery"]
-        if not cb["points"]:
-            v.cnj("collider-load [%s]" % m, "no building footprint on this map (W.map.city.footprints empty): nothing to query")
+        if not cb["points"] or not base["batteryOwn"]["points"]:
+            v.cnj("collider-load [%s]" % m, "no building footprint on this map in one build (W.map.city.footprints empty): nothing to query")
         else:
-            rows = {}
-            ok = True
-            over = []          # (R3) which query is over the bar (the row names it: a plant must be caught by ITS measure)
-            judged = PLANT_QUERIES.get(plant, ("look", "steer", "move", "support")) if plant else ("look", "steer", "move", "support")
-            bad_occ = [k for k, e in cb["q"].items() if e.get("occMismatch") and k in judged]
-            for r in ("look", "steer", "move", "support"):
-                c, b = cb["q"][r], bb["q"][r]
-                rm = c["mean"] / b["mean"] if b["mean"] else (1.0 if not c["mean"] else 99.0)
-                rows[r] = {"query": "%s r %s" % (c["mode"], c["r"]), "baseQuery": "%s r %s" % (b["mode"], b["r"]), "sites": c["sites"], "bandedQueries": c["bandedQueries"],
-                           "mean": c["mean"], "baseMean": b["mean"], "ratio": round(rm, 3), "p95": c["p95"], "baseP95": b["p95"], "max": c["max"], "baseMax": b["max"]}
-                if c.get("mode") == "occ":
-                    rows[r]["realReadsTapped"], rows[r]["pointsWhereRealReadsDifferFromReplica"] = c.get("occTap"), c.get("occReadsVsReplica")
-                    rows[r]["wrongAnswers"], rows[r]["emptyPointsChecked"] = c.get("occMismatch"), c.get("occEmptyChecked")
-                if rm > RATIO_MAX:
-                    over.append("%s mean x%.3f" % (r, rm))
-                ok = ok and (rm <= RATIO_MAX or r not in judged)
-                if r in ("look", "steer"):
-                    rp = c["p95"] / b["p95"] if b["p95"] else (1.0 if not c["p95"] else 99.0)
-                    rows[r]["p95ratio"] = round(rp, 3)
-                    if rp > RATIO_MAX:
-                        over.append("%s p95 x%.3f" % (r, rp))
-                    ok = ok and (rp <= RATIO_MAX or r not in judged)
-            if bad_occ:
-                # (R3) W.map.hasCollidersNear gave a WRONG answer (not "== a live collider meets the square") at these points: the look is broken - FAIL
-                chk("collider-load [%s]" % m, False, {"wrongAnswers": {k: cb["q"][k]["occMismatch"] for k in bad_occ}, "overBar": over, "judgedQueries": list(judged), "points": cb["points"], "byQuery": rows, "notes": cb["notes"]},
-                    expect="W.map.hasCollidersNear answers as the scan's truth at every footprint centre, and the collider counts <= x%.2f" % RATIO_MAX)
-            else:
-                chk("collider-load [%s]" % m, ok, {"overBar": over, "judgedQueries": list(judged), "points": cb["points"], "colliders": [cb["colliders"], bb["colliders"]], "notes": cb["notes"], "byQuery": rows},
-                    expect="look (bots' look-around) and steer mean and p95, move and support mean: colliders <= x%.2f the baseline (%s, its own call sites) at the same %d footprint centres" % (RATIO_MAX, bsha[:8], cb["points"]))
+            cq = {r: cb["q"][r]["raw"] + cand2["battery"]["q"][r]["raw"] for r in ("look", "steer", "move", "support")}
+            bq = {r: bb["q"][r]["raw"] + base["batteryOwn"]["q"][r]["raw"] for r in ("look", "steer", "move", "support")}
+            load_rows(m, "collider-load", cq, bq, judged, "the same %d world points on both builds (%d candidate + %d baseline footprint centres)" % (len(cq["look"]), cb["points"], base["batteryOwn"]["points"]),
+                      [cb, cand2["battery"]])
+        ch, bh = cand["home"], base["home"]
+        if not ch["points"] or not bh["points"]:
+            v.cnj("collider-load-home [%s]" % m, "no home (use 'house') in one build: %d / %d" % (ch["points"], bh["points"]))
+        else:
+            load_rows(m, "collider-load-home", {r: ch["q"][r]["raw"] for r in ch["q"]}, {r: bh["q"][r]["raw"] for r in bh["q"]}, judged,
+                      "home interior vs home interior: the centres of the candidate's %d homes vs the baseline's %d" % (ch["points"], bh["points"]), [ch])
+        for d_ in (cand, base, cand2):
+            for k_ in ("battery", "batteryOwn", "home"):
+                for e_ in ((d_.get(k_) or {}).get("q") or {}).values():
+                    e_.pop("raw", None)
+        v.data[m] = {"candidate": cand, "baseline": base, "candidateAtBaselinePoints": cand2}
         cm, bm = cand["match"], base["match"]
         cr, br = cand["replay"], base["replay"]
-        rr = cr["retPerFrame"] / br["retPerFrame"] if br["retPerFrame"] else 99.0
+        c2r, bor = cand2["replay"], base["replayOwn"]
+        cret, bret = cr["ret"] + c2r["ret"], br["ret"] + bor["ret"]
+        rr = cret / bret if bret else 99.0
+        r1 = cr["retPerFrame"] / br["retPerFrame"] if br["retPerFrame"] else 99.0
         rl = cm["retPerFrame"] / bm["retPerFrame"] if bm["retPerFrame"] else 99.0
-        chk("collider-load-frame [%s]" % m, rr <= RATIO_MAX and cm["callsPerFrame"] <= QC_CALLS_MAX and cr["calls"] == br["calls"] == cm["calls"],
-            {"retPerFrame": cr["retPerFrame"], "baseRetPerFrame": br["retPerFrame"], "ratio": round(rr, 3), "replayedCalls": [cr["calls"], br["calls"], cm["calls"]],
+        chk("collider-load-frame [%s]" % m, rr <= RATIO_MAX and cm["callsPerFrame"] <= QC_CALLS_MAX and cr["calls"] == br["calls"] == cm["calls"] and c2r["calls"] == bor["calls"],
+            {"retPerFrame": round(cret / (2 * FRAMES), 1), "baseRetPerFrame": round(bret / (2 * FRAMES), 1), "ratio": round(rr, 3),
+             "candidateStreamOnlyRatioInfo": round(r1, 3), "replayedCalls": [cr["calls"], br["calls"], cm["calls"], c2r["calls"], bor["calls"]],
              "callsPerFrame": cm["callsPerFrame"], "baseCallsPerFrame": bm["callsPerFrame"], "planted": cand.get("planted", 0),
              "liveRetPerFrame": [cm["retPerFrame"], bm["retPerFrame"]], "liveRatioInfo": round(rl, 3), "alive": [cm["alive"], bm["alive"]],
-             "buckets": cr["buckets"], "baseBuckets": br["buckets"], "liveBuckets": cm["buckets"], "liveBaseBuckets": bm["buckets"]},
-            expect="colliders returned per frame <= x%.2f the baseline on the SAME query stream (the candidate's %d-frame match, every call replayed against both builds' maps), "
+             "buckets": cr["buckets"], "baseBuckets": br["buckets"]},
+            expect="colliders returned per frame <= x%.2f the baseline on the SAME query load (BOTH builds' %d-frame match streams, every call replayed against both builds' maps), "
                    "calls per frame <= %d in the candidate's own match" % (RATIO_MAX, FRAMES, QC_CALLS_MAX))
         cd, bd = cand["draws"], base["draws"]
         if not cd["districts"]:

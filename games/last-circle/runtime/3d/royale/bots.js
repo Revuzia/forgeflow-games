@@ -485,7 +485,7 @@ class Blackboard {
       // hd*: the heal retreat heading + the heading banned after a pin. unstickT: last pinned-in-a-fight recovery.
       this.progKind = 0; this.wallCols = []; this.wallT = -99; this.wallX = 0; this.wallZ = 0; this.wallY = 0; this.wallLo = 0; this.wallHi = 0; this.wallAny = false;
       // (R2 movers) trap*: the loop breaker's anchor / clock / recent trips; esc*: the committed break-out goal (see trapBreak)
-      this.trapX = 0; this.trapZ = 0; this.trapT = -99; this.trapN = 0; this.trapLastT = -99; this.escX = 0; this.escZ = 0; this.escUntil = -99;
+      this.trapX = 0; this.trapZ = 0; this.trapT = -99; this.trapN = 0; this.trapLastT = -99; this.escX = 0; this.escZ = 0; this.escUntil = -99; this.paceT = -99; this.px0 = 0; this.px1 = 0; this.pz0 = 0; this.pz1 = 0;
       this.hdX = 0; this.hdZ = 0; this.hdT = -99; this.healSide = 1; this.hdBadX = 0; this.hdBadZ = 0; this.hdBadUntil = 0; this.unstickT = -99; this.hdHold = -1;
       this.slideX = 0; this.slideZ = 0; this.slideUntil = -99; this.slideFlips = 0; this.routeId = null; this.pinX = 0; this.pinZ = 0; this.pinT = 0; this.pinIntent = 0; this.pinN = 0;
       this.fightTarget = undefined; this.fightT = 0; this.aimHigh = false; this.errPhase = 0; this.closeInUntil = 0;
@@ -1731,6 +1731,7 @@ function coverShieldId(a) {
   return mini && a.shield < 50 ? "mini_shield" : big ? "big_shield" : null;
 }
 function startHeal(W, a) {
+  if (SWIM_NO_HEAL && a.swimming) return false;      // (W10 R1A pass 5) no heal in deep water: the shore first (see the loop breaker)
   // (P23, LC-20) calm (5 s since the last hit, no target): the minis first while they still add (cap 50), then the big ones - the whole bar
   // ends up full. Under fire: the old order (the big shield first: the most bar per second).
   const calm = a.brain && !a.brain.bb.target && W.t - (a.lastDamageT || -99) > 5;
@@ -1985,6 +1986,10 @@ function actTail(W, b, dt) {
   // reaches its 12 s. This one keeps ONE anchor while the bot stays within TRAP_R of it, and a bot that is travelling (a goal more than TRAP_GOAL_M away)
   // yet has not left that disc in TRAP_S has met a trap: it breaks out at once (trapBreak). Fights, heals, chests and emotes are exempt, as above.
   const mt = bb.moveTo;
+  // (W10 R1A pass 5) A SWIMMER DOES NOT CHANNEL A HEAL: a heal started on the bank goes on in the water, and the breaker exempts a healing bot - probe_match
+  // --swimcheck deepwood seed 1, s48 in deep water at (542, 110) healed for 3.1 of its 4 s in the pen and was never looked at. A channel in deep water
+  // is cancelled (it costs nothing: player.js finishHeal takes the item) and none is started there (startHeal, the cover shield): the shore first.
+  if (SWIM_NO_HEAL && a.swimming && a.healing && W.cancelHeal) W.cancelHeal(W, a);
   let tq = 0;
   // (W9 R1B, swimmer trapBreak) swimmers are no longer exempt: deepwood seed 1 s4 spent 3 of its 4 stuck episodes swimming at (52.5, 74.5) in LOOT,
   // its goal 10.8 m off - the breaker never looked at it. trapBreak's water branch (swimExit) hauls it out or swims it away instead.
@@ -1992,8 +1997,29 @@ function actTail(W, b, dt) {
     const gx = mt.x - a.pos.x, gz = mt.z - a.pos.z, ax = a.pos.x - bb.trapX, az = a.pos.z - bb.trapZ;
     if (gx * gx + gz * gz > TRAP_GOAL_M * TRAP_GOAL_M && ax * ax + az * az <= TRAP_R * TRAP_R) tq = W.t - bb.trapT >= TRAP_S ? 2 : 1;
   }
-  if (tq === 2) trapBreak(W, b);
-  if (tq !== 1) { bb.trapX = a.pos.x; bb.trapZ = a.pos.z; bb.trapT = W.t; }
+  // (W10 R1A pass 5) ... and a bot PACING: back and forth across more than the disc (probe_match --sweep ashgrid seed 6, s29 in the shed at (445, 77.6):
+  // its goal 40-60 m south through the shed's back wall, no route, it slid 5.3-5.5 m along the wall and back - every 3 s window left the 3 m disc and
+  // re-anchored it, 5 stuck episodes in 13 s). The box of its feet since the pace anchor: a travelling bot whose box stays within TRAP_PACE_M (its
+  // diagonal) for TRAP_PACE_S has met the same trap (a walker covers 20+ m in that time).
+  let tp = false;
+  let trav = false;
+  if (TRAP_PACE && MOVING_STATES[b.state] && mt && !bb.chestId && !a.healing && !a.emoting && W.t >= bb.escUntil) {
+    const gx = mt.x - a.pos.x, gz = mt.z - a.pos.z;
+    trav = gx * gx + gz * gz > TRAP_GOAL_M * TRAP_GOAL_M;
+  }
+  if (trav) {
+    if (bb.paceT < 0) { bb.paceT = W.t; bb.px0 = bb.px1 = a.pos.x; bb.pz0 = bb.pz1 = a.pos.z; }
+    if (a.pos.x < bb.px0) bb.px0 = a.pos.x; if (a.pos.x > bb.px1) bb.px1 = a.pos.x; if (a.pos.z < bb.pz0) bb.pz0 = a.pos.z; if (a.pos.z > bb.pz1) bb.pz1 = a.pos.z;
+    const ex = bb.px1 - bb.px0, ez = bb.pz1 - bb.pz0;
+    if (ex * ex + ez * ez > TRAP_PACE_M * TRAP_PACE_M) { bb.paceT = W.t; bb.px0 = bb.px1 = a.pos.x; bb.pz0 = bb.pz1 = a.pos.z; }
+    else if (W.t - bb.paceT >= TRAP_PACE_S && tq !== 2) { tp = true; nav.st.trapPace = (nav.st.trapPace || 0) + 1; }
+  } else bb.paceT = -99;
+  if (tq === 2 || tp) { trapBreak(W, b); bb.paceT = -99; }
+  // (W10 R1A pass 5) a goal re-picked in place (moveTo null for a think: the progress test parked the item) keeps the disc and its clock - probe_match
+  // --sweep deepwood seed 2, s8 swimming against a bank at (35.3, 59): parked at 3 s, re-anchored, tripped 3 s later: 2 swim episodes, not 1
+  const repick = TRAP_KEEP_ON_REPICK && tq === 0 && !mt && MOVING_STATES[b.state] && !bb.chestId && !a.healing && !a.emoting && W.t >= bb.escUntil &&
+    (a.pos.x - bb.trapX) * (a.pos.x - bb.trapX) + (a.pos.z - bb.trapZ) * (a.pos.z - bb.trapZ) <= TRAP_R * TRAP_R;
+  if (tq !== 1 && !repick) { bb.trapX = a.pos.x; bb.trapZ = a.pos.z; bb.trapT = W.t; }
 }
 const MOVING_STATES = { LOOT: 1, ROTATE: 1, PUSH: 1, WANDER: 1, HUNT: 1, FLEE: 1, SUPPLY: 1, CLOSEIN: 1, FOLLOW: 1, PING: 1, ASSIST: 1 };
 /** (K2) the point (x, y = feet, z) lies inside the footprint of a solid box that spans the body above the step-up (a ramp never counts: its own rules hold) */
@@ -2230,6 +2256,11 @@ const TRAP_GOAL_M = 6.0;          // ... when its goal lies further off than thi
 const TRAP_ESC_S = 6.0;           // the break-out goal is held this long (or until reached)
 const TRAP_AGAIN_S = 30.0;        // a second trip within this long: the exits the first one tried did not work - walk away along a free heading instead
 const TRAP_WALK_M = 12.0;         // ... this far
+const SWIM_NO_HEAL = true;       // (W10 R1A pass 5) bots: no heal channel while swimming
+const TRAP_KEEP_ON_REPICK = true;   // (W10 R1A pass 5) the loop breaker's disc survives a goal re-pick
+const TRAP_PACE = true;          // (W10 R1A pass 5) the pace box (see the loop breaker)
+const TRAP_PACE_M = 6.0;         // ... a travelling bot whose feet stay inside a box this big (diagonal) ...
+const TRAP_PACE_S = 5.0;         // ... this long is trapped
 /** (R2 movers) Break a trapped bot out, deterministically (no rng draw), and COMMIT to it for TRAP_ESC_S (moveTowardQ walks the break-out goal instead of
  *  the state's goal: the state's next think re-picking the same goal used to throw the exit path away on the next frame). The goal, first that exists:
  *    1. on a roof / wall top / ledge (feet DECK_AGL over the ground, no ceiling): off the lowest open edge it may walk off (deckExitPoint: edgeGuard's
@@ -3997,7 +4028,57 @@ function houseExitFrom(gi, sx, sy, sz) {
     p = gridPath(sx, sy, sz, LT[0], LT[2], LT[1]);
     if (p) { p.partial = true; p.hop = true; }
   }
+  // (W10 R1A pass 5) the grid refuses the START: a bot in a corner pocket of a furnished room that the game's capsule walks into along a strip narrower
+  // than the grid's fat capsule (probe_match --sweep ashgrid seed 5, s15 in outpost@p22's bedroom corner (235, 267.6): every plan and the trap breaker's
+  // house exit came back empty, held 4 x 3 s). The room's own walk area (housegen rooms[].walk: where the generator's walker went) is walked rect by rect
+  // to the doorway of the room graph's way out, then on through it.
+  if (!p && !navMiss) { p = walkRectExit(gi, L0, sx, sz); if (p) nav.st.walkExits = (nav.st.walkExits || 0) + 1; }
   if (p) nav.st.houseExits++;
+  return p;
+}
+const WALK_EXIT = true;
+/** (W10 R1A pass 5) A route out of room gi along its walk rects (axis-aligned [x0, z0, x1, z1], the generator's capsule-centre floor) to the doorway / stair
+ *  end of link L (roomRoute's first link out of gi): breadth-first over rects that share an edge (>= 0.1 m of it), a waypoint at the middle of each shared
+ *  edge, then the link's inner point and the point past it (linkTarget). null: no walk data, the bot outside the walk area (by 0.3 m), or no chain. */
+function walkRectExit(gi, L, sx, sz) {
+  if (!WALK_EXIT || !L) return null;
+  const R = IND.R[gi], wk = R.r.walk;
+  if (!wk || wk.length < 2) return null;
+  linkTarget(gi, L);
+  const ox = LT[0], oy = LT[1], oz = LT[2];
+  let ix = ox, iz = oz;                                     // the inner point: a doorway's centre 0.6 m back into this room; a stair's end as it is
+  if (L.d) { const d = L.d, out = d.kind !== "interior" || d.rooms[0] === R.r.id ? 1 : -1; ix = d.x - d.nx * out * 0.6; iz = d.z - d.nz * out * 0.6; }
+  const dist = (q, x, z) => Math.hypot(Math.max(q[0] - x, 0, x - q[2]), Math.max(q[1] - z, 0, z - q[3]));
+  let s = -1, sd = 0.3, t = -1, td = 1e9;
+  for (let k = 0; k < wk.length; k++) { const a = dist(wk[k], sx, sz), b = dist(wk[k], ix, iz); if (a < sd) { sd = a; s = k; } if (b < td) { td = b; t = k; } }
+  if (s < 0 || t < 0 || td > 1.5) return null;
+  const prev = new Int16Array(wk.length).fill(-2);
+  prev[s] = -1;
+  const q = [s];
+  for (let qi = 0; qi < q.length && prev[t] === -2; qi++) {
+    const A = wk[q[qi]];
+    for (let k = 0; k < wk.length; k++) {
+      if (prev[k] !== -2) continue;
+      const B = wk[k], ox2 = Math.min(A[2], B[2]) - Math.max(A[0], B[0]), oz2 = Math.min(A[3], B[3]) - Math.max(A[1], B[1]);
+      if (ox2 < -1e-3 || oz2 < -1e-3 || Math.max(ox2, oz2) < 0.1) continue;     // touching along an edge (or overlapping), not at a corner
+      prev[k] = q[qi]; q.push(k);
+    }
+  }
+  if (prev[t] === -2) return null;
+  const chain = [];
+  for (let k = t; k >= 0; k = prev[k]) chain.push(k);
+  chain.reverse();
+  const p = [], S0 = wk[s];
+  // (first into the start rect: a bot up to 0.3 m outside the walk area stands behind a piece, and the first edge is not in its line)
+  p.push({ x: Math.min(S0[2], Math.max(S0[0], sx)), y: null, z: Math.min(S0[3], Math.max(S0[1], sz)), k: 0 });
+  for (let i = 1; i < chain.length; i++) {
+    const A = wk[chain[i - 1]], B = wk[chain[i]];
+    p.push({ x: (Math.max(A[0], B[0]) + Math.min(A[2], B[2])) / 2, y: null, z: (Math.max(A[1], B[1]) + Math.min(A[3], B[3])) / 2, k: 0 });
+  }
+  const T = wk[t];
+  p.push({ x: Math.min(T[2], Math.max(T[0], ix)), y: null, z: Math.min(T[3], Math.max(T[1], iz)), k: 0 });
+  p.push({ x: ox, y: L.s ? oy : null, z: oz, k: 0 });
+  p.partial = true; p.hop = true; p.exit = true; p.walk = true;
   return p;
 }
 
@@ -4339,6 +4420,9 @@ function moveTowardQ(W, b, dt, sprint, ty) {
     if (bb.path.nav) {
       // (Wave 7) a GRID route: 7B1's follower rule (see navConsume), not the window planner's 1.6 m + wall-probe rule
       if (navConsume(a, bb.path, dwp)) bb.path.shift();
+    } else if (bb.path.walk) {
+      // (W10 R1A pass 5) a walk-rect route (walkRectExit) threads a strip of free floor 0.25-1 m wide between pieces: each point is reached, not cut
+      if (dwp < (bb.path.length <= 1 ? 1.0 : 0.35)) bb.path.shift();
     } else if (dwp < 1.6 && !(wp0.y != null && Math.abs(a.pos.y - wp0.y) > ARRIVE_DY)) {
       // (Wave 5) CORNER-CUT PROTECTION. A waypoint is a corner the planner hugged (0.3 m off the wall), and 1.6 m is a long
       // way from one: shifting it at 1.6 m turned the bot onto the straight line to the NEXT waypoint through the building
@@ -5949,7 +6033,7 @@ function coverStepQ(W, b, dt, tp, seen) {
     // (P23, LC-20) ...and to put a cell in: a shield item that still adds, no hit for 0.8 s -> pop it behind the wall and hold the wall until it is in
     else if (!a.healing && !bb.nadeS && a.shield < 100 && W.t - (a.lastDamageT || -99) > 0.8 && !(bb.healBlockedUntil > W.t)) {
       const cid = coverShieldId(a);
-      if (cid && W.useConsumable(a, cid)) bb.coverUntil = Math.max(bb.coverUntil, W.t + useSOf(cid) + 0.25);
+      if (cid && !(SWIM_NO_HEAL && a.swimming) && W.useConsumable(a, cid)) bb.coverUntil = Math.max(bb.coverUntil, W.t + useSOf(cid) + 0.25);
     }
     return true;
   }

@@ -6658,6 +6658,15 @@ export async function buildMap(W, mapId) {
             if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z;
           }
         }
+        // (W10 R1A pass 5) a rock TILTED to its ground plane leans: its up axis is the plane's normal (-tx, 1, -tz) / L, so a vertex h over the base stands
+        // h (-tx, -tz) / L off its untilted spot - downhill. The outline above is the untilted one: at 30-35 degrees the drawn rock at body height stood up
+        // to 0.6 m out of its box on the downhill side (collisioncheck clip isla_viva rocks p95 0.19 m, 4 % over 25 cm). The box takes the lean of the
+        // body band (to ROCK_LEAN_BAND over the base, or the part's top) on that side; the uphill side stays where the base outline puts it.
+        if (tg && ROCK_LEAN) {
+          const L = Math.sqrt(1 + tg.tx * tg.tx + tg.tz * tg.tz), hb = Math.min(top, ROCK_LEAN_BAND), lx = -tg.tx / L * hb, lz = -tg.tz / L * hb;
+          if (lx < 0) x0 += lx; else x1 += lx;
+          if (lz < 0) z0 += lz; else z1 += lz;
+        }
         const ox = (x0 + x1) / 2, oz = (z0 + z1) / 2, ex = (x1 - x0) / 2, ez = (z1 - z0) / 2;
         // a tilted rock's top is its PEAK, not the high corner of its outline: lift the box top by the tilt at the peak
         const pk = p.peak, pdy = tg && pk ? tg.tx * ((pk[0] * c + pk[1] * sn) * sc) + tg.tz * ((-pk[0] * sn + pk[1] * c) * sc) : 0;
@@ -6681,6 +6690,7 @@ export async function buildMap(W, mapId) {
   // buried box, and a drawn rock with no wall. A part is a step only if its drawn top is under HULL_STEP_PART over the ground under its PEAK as well (the drawn top is AT
   // the peak: that is where a walker meets it); otherwise it keeps its full height, as before a89bee66. (No peak in the table: the box centre.)
   const HULL_STEP = 0.52, HULL_STEP_PART = 0.58, HULL_RING = 0.5;
+  const ROCK_LEAN = true, ROCK_LEAN_BAND = 1.9;        // (W10 R1A pass 5) a tilted rock's box takes its lean over the body band (see the hull part)
   function hullBoxTop(it, x0, x1, z0, z1, y0, topY, hull, sc, c, sn, pk) {
     let gm = 0;
     for (const q of hull) { const u = q[0] * sc, w = q[1] * sc; gm += heightAt0(it.x + u * c + w * sn, it.z - u * sn + w * c); }
