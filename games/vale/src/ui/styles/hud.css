@@ -719,3 +719,24 @@
 .hud .afr.plate { background: none; box-shadow: none; border-style: solid; border-width: 0; border-color: transparent;
   border-image-source: url('../art/hud/plate.webp'); border-image-slice: 56 fill; border-image-width: calc(16 * var(--px)); border-image-outset: calc(3 * var(--px)); border-image-repeat: stretch; }
 .hud .krow.plate { background: linear-gradient(90deg, rgba(14, 17, 22, 0.94), rgba(22, 26, 33, 0.9)); box-shadow: inset 0 1px 0 rgba(237, 230, 214, 0.08), 0 2px 8px rgba(0, 0, 0, 0.4); border-radius: 3px; }
+
+/* ── W2-E CUX-14: 1366 x 768 layout fixes outside the HUD proper (screens.css is another lane's file, so the overrides live here) ──
+   Postgame Scoreboard: at heights up to 800 px both teams fit one screen (compact banner, 1-line player cells, tight rows).
+   Draft: the "What you hover…" helper line gets its own row above the filter row. */
+@media (max-height: 800px) {
+  .pg:has(.score) .pg__banner { padding: 2px 0 4px; gap: 2px; }
+  .pg:has(.score) .pg__title { font-size: 44px; line-height: 1; }
+  .pg:has(.score) .pg__sub { display: none; }
+  .pg:has(.score) .pg__body { padding-top: 6px; }
+  .score { gap: 8px; }
+  .score__cap { padding: 4px 12px 3px; }
+  .score__table th { padding: 2px 8px; }
+  .score__table td { padding: 1px 8px; }
+  .pgrow__names { flex-direction: row; align-items: baseline; gap: 8px; }
+  .pgrow__names > .t-caption { overflow: hidden; text-overflow: ellipsis; }
+  .pgrow__who .portrait { width: 26px; height: 26px; }
+  .itemslot { width: 22px; height: 22px; }
+}
+.phase__text { padding-bottom: 6px; }
+.phase__text > p.muted { white-space: normal; max-width: 48ch; }
+.draft__top { padding-bottom: 6px; }

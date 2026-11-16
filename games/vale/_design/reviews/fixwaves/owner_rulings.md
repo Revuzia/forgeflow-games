@@ -483,3 +483,7 @@ The owner (2026-11-15): "the bots need to be much smarter, they need to defend t
 ## Owner note, 2026-11-16 (fighter colours)
 
 The owner said on 2026-11-16: "fight colours are fine with 7.3". The W1-B colour pass on Odrum, Ardit, Dunsom, Ulkro and Hesmi (verify_w1b_r3, 7.3, no sensitivity problem) is accepted as it stands and may ship.
+
+## Lane UNITS2 closed at the accepted 7.3 pass, 2026-11-16 (orch1 UNITS2 fix 2)
+
+The owner repeated on 2026-11-16 that the fighter colours are fine at 7.3, so the UNITS2 colour pass stops here and is not continued against units_gate. HEAD was shipping the UNITS2 round-1 GLBs (e1633b630, verify_units2_r1 and r2 both 5.0), which the owner never accepted and which carry a sensitivity blocker: Ilsheta's face regraded to solid teal (blank face). The lane therefore returns its shipped files to the accepted W1-B state 72cd0f20e (verify_w1b_r3, 7.3, no sensitivity problem): the 11 base GLBs ardit, burdam, hesmi, ilsheta, kemdo, marund, nurrow, rishal, sukri, tunlan and vashil (byte-identical to 72cd0f20e, Ilsheta's original pale mask and amber eyes back), art/tools/zone_grades.json and art/tools/zone_grade.py (so a re-apply after a rebuild reproduces exactly the shipped GLBs; the unverified fix-1 recipe the wip syncs committed is gone), and tokens.json units.hueWheel. Ruling 45 stays as the gate rule in units_gate.mjs; the W1-B pass measures 15 fails under the old rule (w1b_f3_final), and those, plus the near-neutral pairs ruling 45 adds, are left open by owner acceptance, not relaxed. Content version 2026.11.8.
