@@ -1,0 +1,11411 @@
+{
+ "mode": "rift",
+ "diff": "adept",
+ "seed": 11,
+ "shots": [
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_01_t4min_busiest.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_02_dither_p1.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_03_fight1_2v3.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_04_fight2_3v3.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_05_fight3_3v2.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_06_objective_sunsplinter.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_07_fight4_2v3.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_08_t8min_busiest.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_09_overextend_arrived.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_10_overextend_gank_p5.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_11_overextend_low.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_12_fight5_2v3.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_13_fight6_2v3.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_14_dither_p6.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_15_dive_engage.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_16_dive_disengage.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_17_dive_died.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_18_dither_p7.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_19_t12min_busiest.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_20_push_at_needle_outer.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_21_t16min_busiest.png",
+  "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/shots/vfy_ai44_r1b_rift_adept_s11_22_push_at_needle_inner.png"
+ ],
+ "lineup": [
+  {
+   "player": 0,
+   "team": 0,
+   "fighter": "ervet",
+   "role": "shadehold",
+   "controller": "human"
+  },
+  {
+   "player": 1,
+   "team": 0,
+   "fighter": "odrum",
+   "role": "grovehunter",
+   "controller": "bot"
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "fighter": "burdam",
+   "role": "dialcross",
+   "controller": "bot"
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "fighter": "marund",
+   "role": "shaftlight",
+   "controller": "bot"
+  },
+  {
+   "player": 4,
+   "team": 0,
+   "fighter": "vashil",
+   "role": "lampglass",
+   "controller": "bot"
+  },
+  {
+   "player": 5,
+   "team": 1,
+   "fighter": "kemdo",
+   "role": "shadehold",
+   "controller": "bot"
+  },
+  {
+   "player": 6,
+   "team": 1,
+   "fighter": "tunlan",
+   "role": "grovehunter",
+   "controller": "bot"
+  },
+  {
+   "player": 7,
+   "team": 1,
+   "fighter": "hesmi",
+   "role": "dialcross",
+   "controller": "bot"
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "fighter": "rishal",
+   "role": "shaftlight",
+   "controller": "bot"
+  },
+  {
+   "player": 9,
+   "team": 1,
+   "fighter": "dunsom",
+   "role": "lampglass",
+   "controller": "bot"
+  }
+ ],
+ "endT": 1517.4,
+ "ended": true,
+ "result": {
+  "winningTeam": 1,
+  "reason": "core",
+  "duration": 1517.4
+ },
+ "players": [
+  {
+   "player": 0,
+   "team": 0,
+   "role": "shadehold",
+   "k": 2,
+   "d": 8,
+   "a": 0,
+   "cs": 70,
+   "gold": 7441,
+   "placement": 2
+  },
+  {
+   "player": 1,
+   "team": 0,
+   "role": "grovehunter",
+   "k": 2,
+   "d": 3,
+   "a": 1,
+   "cs": 102,
+   "gold": 8729,
+   "placement": 2
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "role": "dialcross",
+   "k": 1,
+   "d": 6,
+   "a": 1,
+   "cs": 79,
+   "gold": 7454,
+   "placement": 2
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "role": "shaftlight",
+   "k": 2,
+   "d": 5,
+   "a": 4,
+   "cs": 59,
+   "gold": 7383,
+   "placement": 2
+  },
+  {
+   "player": 4,
+   "team": 0,
+   "role": "lampglass",
+   "k": 1,
+   "d": 2,
+   "a": 5,
+   "cs": 75,
+   "gold": 7456,
+   "placement": 2
+  },
+  {
+   "player": 5,
+   "team": 1,
+   "role": "shadehold",
+   "k": 3,
+   "d": 3,
+   "a": 4,
+   "cs": 93,
+   "gold": 8914,
+   "placement": 1
+  },
+  {
+   "player": 6,
+   "team": 1,
+   "role": "grovehunter",
+   "k": 5,
+   "d": 1,
+   "a": 8,
+   "cs": 66,
+   "gold": 9600,
+   "placement": 1
+  },
+  {
+   "player": 7,
+   "team": 1,
+   "role": "dialcross",
+   "k": 1,
+   "d": 2,
+   "a": 10,
+   "cs": 78,
+   "gold": 8534,
+   "placement": 1
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "role": "shaftlight",
+   "k": 7,
+   "d": 6,
+   "a": 11,
+   "cs": 44,
+   "gold": 9479,
+   "placement": 1
+  },
+  {
+   "player": 9,
+   "team": 1,
+   "role": "lampglass",
+   "k": 6,
+   "d": 0,
+   "a": 7,
+   "cs": 81,
+   "gold": 9640,
+   "placement": 1
+  }
+ ],
+ "timeline": [
+  {
+   "t": 303,
+   "s": "team fight 2v3 at (84,98)"
+  },
+  {
+   "t": 384,
+   "s": "team fight 3v3 at (80,84)"
+  },
+  {
+   "t": 394,
+   "s": "team fight 3v2 at (85,86)"
+  },
+  {
+   "t": 402.8,
+   "s": "OBJECTIVE sunsplinter by team 0: 3 takers present, 1 contesting"
+  },
+  {
+   "t": 441,
+   "s": "team fight 2v3 at (82,96)"
+  },
+  {
+   "t": 442.1,
+   "s": "structure needle_outer (team 0) fell"
+  },
+  {
+   "t": 455,
+   "s": "OVEREXTEND start: walking alone to (106,27)"
+  },
+  {
+   "t": 482,
+   "s": "OVEREXTEND: arrived, farming alone"
+  },
+  {
+   "t": 508.2,
+   "s": "OVEREXTEND: enemy p5 (shadehold) arrived within 10 m; hidden from us 100 % of its last 10 s; we were visible to them 100 %"
+  },
+  {
+   "t": 533.8,
+   "s": "OVEREXTEND: low (30 %), running home"
+  },
+  {
+   "t": 544,
+   "s": "team fight 2v3 at (101,94)"
+  },
+  {
+   "t": 546,
+   "s": "OVEREXTEND end: fled"
+  },
+  {
+   "t": 547,
+   "s": "team fight 2v3 at (98,100)"
+  },
+  {
+   "t": 650,
+   "s": "DIVE: looking for the enemy carry beside its support"
+  },
+  {
+   "t": 690.8,
+   "s": "DIVE: engaging carry p8 with support p9 11.0 m from it"
+  },
+  {
+   "t": 691,
+   "s": "DIVE: disengaging (hp 12 %, carry alive 100 %)"
+  },
+  {
+   "t": 692,
+   "s": "DIVE: died"
+  },
+  {
+   "t": 692,
+   "s": "DIVE end: died in dive"
+  },
+  {
+   "t": 854,
+   "s": "team fight 3v3 at (85,86)"
+  },
+  {
+   "t": 880,
+   "s": "team fight 3v2 at (89,83)"
+  },
+  {
+   "t": 915,
+   "s": "PUSH: pushing the middle road into the enemy base"
+  },
+  {
+   "t": 955,
+   "s": "PUSH: at needle_outer, 2 own Wicks with us"
+  },
+  {
+   "t": 960.1,
+   "s": "structure needle_outer (team 1) fell"
+  },
+  {
+   "t": 961.8,
+   "s": "PUSH: at needle_inner, 3 own Wicks with us"
+  },
+  {
+   "t": 965.5,
+   "s": "structure needle_outer (team 0) fell"
+  },
+  {
+   "t": 984.2,
+   "s": "PUSH: low at needle_inner, backing off"
+  },
+  {
+   "t": 986.6,
+   "s": "PUSH: died"
+  },
+  {
+   "t": 1001.7,
+   "s": "structure needle_inner (team 1) fell"
+  },
+  {
+   "t": 1016.6,
+   "s": "PUSH: healed, back to it"
+  },
+  {
+   "t": 1033,
+   "s": "team fight 3v3 at (105,24)"
+  },
+  {
+   "t": 1078.3,
+   "s": "OBJECTIVE sunsplinter by team 1: 5 takers present, 0 contesting"
+  },
+  {
+   "t": 1081.2,
+   "s": "PUSH: at lantern, 0 own Wicks with us"
+  },
+  {
+   "t": 1098.4,
+   "s": "PUSH: low at lantern, backing off"
+  },
+  {
+   "t": 1102.4,
+   "s": "PUSH: died"
+  },
+  {
+   "t": 1133.9,
+   "s": "structure needle_outer (team 1) fell"
+  },
+  {
+   "t": 1134.8,
+   "s": "PUSH: healed, back to it"
+  },
+  {
+   "t": 1153,
+   "s": "team fight 3v2 at (131,85)"
+  },
+  {
+   "t": 1175.2,
+   "s": "PUSH end: time"
+  },
+  {
+   "t": 1194.5,
+   "s": "structure needle_inner (team 0) fell"
+  },
+  {
+   "t": 1231.4,
+   "s": "structure needle_outer (team 0) fell"
+  },
+  {
+   "t": 1248,
+   "s": "structure needle_outer (team 1) fell"
+  },
+  {
+   "t": 1248.2,
+   "s": "structure needle_inner (team 0) fell"
+  },
+  {
+   "t": 1259,
+   "s": "team fight 2v4 at (48,57)"
+  },
+  {
+   "t": 1264,
+   "s": "team fight 2v5 at (53,56)"
+  },
+  {
+   "t": 1272.9,
+   "s": "structure lantern (team 0) fell"
+  },
+  {
+   "t": 1300,
+   "s": "OVEREXTEND start: walking alone to (108,66)"
+  },
+  {
+   "t": 1304,
+   "s": "team fight 3v2 at (28,51)"
+  },
+  {
+   "t": 1329,
+   "s": "OVEREXTEND: arrived, farming alone"
+  },
+  {
+   "t": 1329.1,
+   "s": "structure needle_inner (team 0) fell"
+  },
+  {
+   "t": 1341.4,
+   "s": "OVEREXTEND: enemy p5 (shadehold) arrived within 10 m; hidden from us 100 % of its last 10 s; we were visible to them 7 %"
+  },
+  {
+   "t": 1345.8,
+   "s": "OVEREXTEND: enemy p7 (dialcross) arrived within 10 m; hidden from us 90 % of its last 10 s; we were visible to them 45 %"
+  },
+  {
+   "t": 1349.2,
+   "s": "OVEREXTEND: low (27 %), running home"
+  },
+  {
+   "t": 1356.8,
+   "s": "OVEREXTEND: died"
+  },
+  {
+   "t": 1356.8,
+   "s": "OVEREXTEND end: died"
+  },
+  {
+   "t": 1369,
+   "s": "team fight 4v2 at (34,57)"
+  },
+  {
+   "t": 1395,
+   "s": "DIVE: looking for the enemy carry beside its support"
+  },
+  {
+   "t": 1412.5,
+   "s": "structure lantern (team 0) fell"
+  },
+  {
+   "t": 1418.2,
+   "s": "DIVE: died"
+  },
+  {
+   "t": 1418.2,
+   "s": "DIVE end: died before"
+  },
+  {
+   "t": 1436,
+   "s": "team fight 2v3 at (29,55)"
+  },
+  {
+   "t": 1460,
+   "s": "team fight 3v2 at (19,53)"
+  },
+  {
+   "t": 1469,
+   "s": "team fight 3v2 at (14,52)"
+  },
+  {
+   "t": 1473,
+   "s": "structure lantern (team 0) fell"
+  },
+  {
+   "t": 1473.7,
+   "s": "structure needle_bell (team 0) fell"
+  },
+  {
+   "t": 1479,
+   "s": "team fight 4v2 at (24,53)"
+  },
+  {
+   "t": 1483,
+   "s": "team fight 4v2 at (26,51)"
+  },
+  {
+   "t": 1488,
+   "s": "team fight 3v2 at (33,51)"
+  },
+  {
+   "t": 1489.6,
+   "s": "structure needle_bell (team 0) fell"
+  },
+  {
+   "t": 1496,
+   "s": "team fight 4v4 at (23,54)"
+  },
+  {
+   "t": 1517.4,
+   "s": "structure hourbell (team 0) fell"
+  }
+ ],
+ "scenarios": {
+  "overextend": [
+   {
+    "kind": "overextend",
+    "t0": 455,
+    "spot": [
+     106,
+     27
+    ],
+    "arrived": 482,
+    "approaches": [
+     {
+      "player": 5,
+      "role": "shadehold",
+      "arrived": 508.2,
+      "hiddenShare": 1,
+      "meVisShare": 1,
+      "from": 32.8,
+      "minD": 0.1
+     },
+     {
+      "player": 6,
+      "role": "grovehunter",
+      "minD": 14.9
+     },
+     {
+      "player": 7,
+      "role": "dialcross",
+      "minD": 22.9
+     },
+     {
+      "player": 8,
+      "role": "shaftlight",
+      "minD": 64.6
+     },
+     {
+      "player": 9,
+      "role": "lampglass",
+      "minD": 62.6
+     }
+    ],
+    "hp0": null,
+    "ended": true,
+    "fled": 533.8,
+    "result": "fled",
+    "meVisShare": 0.6
+   },
+   {
+    "kind": "overextend",
+    "t0": 1300,
+    "spot": [
+     108,
+     66
+    ],
+    "arrived": 1329,
+    "approaches": [
+     {
+      "player": 5,
+      "role": "shadehold",
+      "arrived": 1341.4,
+      "hiddenShare": 1,
+      "meVisShare": 0.07,
+      "from": 40.5,
+      "minD": 0.8
+     },
+     {
+      "player": 6,
+      "role": "grovehunter",
+      "minD": 8
+     },
+     {
+      "player": 7,
+      "role": "dialcross",
+      "arrived": 1345.8,
+      "hiddenShare": 0.9,
+      "meVisShare": 0.45,
+      "from": 38.1,
+      "minD": 0.4
+     },
+     {
+      "player": 8,
+      "role": "shaftlight",
+      "minD": 23
+     },
+     {
+      "player": 9,
+      "role": "lampglass",
+      "minD": 3.6
+     }
+    ],
+    "hp0": null,
+    "ended": true,
+    "fled": 1349.2,
+    "result": "died",
+    "meVisShare": 0.58
+   }
+  ],
+  "dive": [
+   {
+    "kind": "dive",
+    "t0": 650,
+    "target": null,
+    "engaged": 690.8,
+    "supportHits": [
+     0.5
+    ],
+    "peelers": [
+     9
+    ],
+    "allHitters": [
+     9
+    ],
+    "ended": true,
+    "road": [
+     92,
+     97
+    ],
+    "lastX": 87.29943704018987,
+    "lastY": 95.9137493492742,
+    "carryP": 8,
+    "suppP": 9,
+    "carryId": 9,
+    "suppId": 10,
+    "hp0": 0.14162950362330382,
+    "fled": 691,
+    "result": "died in dive"
+   },
+   {
+    "kind": "dive",
+    "t0": 1395,
+    "target": null,
+    "engaged": null,
+    "supportHits": [],
+    "peelers": [],
+    "allHitters": [],
+    "ended": true,
+    "road": [
+     92,
+     97
+    ],
+    "lastX": 60.171818077979175,
+    "lastY": 57.74620834781865,
+    "result": "died before"
+   }
+  ],
+  "push": [
+   {
+    "kind": "push",
+    "t0": 915,
+    "road": [
+     [
+      115,
+      55
+     ],
+     [
+      124,
+      57.8
+     ],
+     [
+      138,
+      52.2
+     ],
+     [
+      148.5,
+      55
+     ],
+     [
+      155,
+      55
+     ]
+    ],
+    "ended": true,
+    "deaths": 2,
+    "reached": [
+     "needle_outer",
+     "needle_inner",
+     "lantern"
+    ],
+    "lastAlive": true,
+    "name": "the middle road",
+    "dur": 260,
+    "backing": null,
+    "result": "time"
+   }
+  ]
+ },
+ "idle": [
+  {
+   "player": 1,
+   "t0": 207,
+   "t1": 236,
+   "x": 62,
+   "y": 68,
+   "atOwnStructure": false,
+   "hp": 1074
+  },
+  {
+   "player": 6,
+   "t0": 1188,
+   "t1": 1223,
+   "x": 137,
+   "y": 89,
+   "atOwnStructure": true,
+   "hp": 1758
+  },
+  {
+   "player": 7,
+   "t0": 1207,
+   "t1": 1223,
+   "x": 137,
+   "y": 89,
+   "atOwnStructure": true,
+   "hp": 1317
+  }
+ ],
+ "dither": [
+  {
+   "player": 1,
+   "t0": 266,
+   "t1": 275,
+   "x": 64,
+   "y": 39,
+   "path": 29,
+   "net": 2.2,
+   "trace": [
+    [
+     63,
+     41,
+     30,
+     27,
+     "move",
+     100
+    ],
+    [
+     62,
+     44,
+     30,
+     27,
+     "move",
+     100
+    ],
+    [
+     61,
+     47,
+     30,
+     28,
+     "move",
+     100
+    ],
+    [
+     60,
+     51,
+     31,
+     28,
+     "move",
+     100
+    ],
+    [
+     60,
+     54,
+     30,
+     28,
+     "move",
+     100
+    ],
+    [
+     60,
+     52,
+     31,
+     28,
+     "move",
+     100
+    ],
+    [
+     61,
+     48,
+     31,
+     27,
+     "move",
+     100
+    ],
+    [
+     62,
+     45,
+     29,
+     27,
+     "move",
+     100
+    ],
+    [
+     63,
+     42,
+     28,
+     27,
+     "move",
+     100
+    ],
+    [
+     64,
+     39,
+     27,
+     25,
+     "move",
+     100
+    ]
+   ]
+  },
+  {
+   "player": 6,
+   "t0": 612,
+   "t1": 623,
+   "x": 147,
+   "y": 70,
+   "path": 28,
+   "net": 2.9,
+   "trace": [
+    [
+     150,
+     71,
+     69,
+     75,
+     "move",
+     100
+    ],
+    [
+     147,
+     74,
+     67,
+     74,
+     "move",
+     100
+    ],
+    [
+     144,
+     76,
+     65,
+     72,
+     "move",
+     100
+    ],
+    [
+     145,
+     76,
+     65,
+     71,
+     "move",
+     100
+    ],
+    [
+     146,
+     72,
+     65,
+     69,
+     "move",
+     100
+    ],
+    [
+     147,
+     69,
+     67,
+     67,
+     "move",
+     100
+    ],
+    [
+     148,
+     66,
+     66,
+     65,
+     "move",
+     100
+    ],
+    [
+     149,
+     64,
+     65,
+     64,
+     "move",
+     100
+    ],
+    [
+     148,
+     67,
+     69,
+     68,
+     "move",
+     100
+    ],
+    [
+     147,
+     70,
+     71,
+     69,
+     "move",
+     100
+    ]
+   ]
+  },
+  {
+   "player": 7,
+   "t0": 688,
+   "t1": 700,
+   "x": 130,
+   "y": 54,
+   "path": 29,
+   "net": 1.2,
+   "trace": [
+    [
+     128,
+     54,
+     40,
+     39,
+     "move",
+     100
+    ],
+    [
+     125,
+     54,
+     36,
+     35,
+     "move",
+     100
+    ],
+    [
+     121,
+     54,
+     33,
+     31,
+     "move",
+     100
+    ],
+    [
+     118,
+     54,
+     28,
+     28,
+     "move",
+     100
+    ],
+    [
+     115,
+     54,
+     25,
+     24,
+     "move",
+     100
+    ],
+    [
+     118,
+     54,
+     29,
+     25,
+     "move",
+     100
+    ],
+    [
+     122,
+     54,
+     29,
+     25,
+     "move",
+     100
+    ],
+    [
+     125,
+     54,
+     30,
+     25,
+     "move",
+     100
+    ],
+    [
+     129,
+     54,
+     32,
+     26,
+     "move",
+     100
+    ],
+    [
+     130,
+     54,
+     33,
+     25,
+     "move",
+     100
+    ]
+   ]
+  },
+  {
+   "player": 8,
+   "t0": 1102,
+   "t1": 1111,
+   "x": 133,
+   "y": 54,
+   "path": 17,
+   "net": 0.6,
+   "trace": [
+    [
+     133,
+     53,
+     19,
+     55,
+     "move",
+     84
+    ],
+    [
+     136,
+     54,
+     29,
+     58,
+     "move",
+     84
+    ],
+    [
+     140,
+     54,
+     30,
+     62,
+     "move",
+     84
+    ],
+    [
+     141,
+     53,
+     30,
+     63,
+     "idle",
+     86
+    ],
+    [
+     141,
+     53,
+     30,
+     63,
+     "idle",
+     86
+    ],
+    [
+     141,
+     53,
+     30,
+     62,
+     "idle",
+     86
+    ],
+    [
+     141,
+     53,
+     30,
+     62,
+     "idle",
+     86
+    ],
+    [
+     140,
+     53,
+     29,
+     60,
+     "move",
+     86
+    ],
+    [
+     137,
+     54,
+     27,
+     54,
+     "move",
+     87
+    ],
+    [
+     133,
+     54,
+     24,
+     47,
+     "move",
+     87
+    ]
+   ]
+  }
+ ],
+ "lowHp": [
+  {
+   "player": 4,
+   "team": 0,
+   "t0": 73,
+   "x0": 85,
+   "y0": 91,
+   "home0": 85,
+   "foes0": 2,
+   "hp0": 0.2,
+   "nf0": 2.7,
+   "recalled": false,
+   "ent": 5,
+   "outcome": "retreated",
+   "hp4": 0.16,
+   "homeGain": 13.8,
+   "nf4": 6.6,
+   "attackers": 2
+  },
+  {
+   "player": 4,
+   "team": 0,
+   "t0": 78,
+   "x0": 68,
+   "y0": 94,
+   "home0": 71,
+   "foes0": 1,
+   "hp0": 0.16,
+   "nf0": 7.3,
+   "recalled": false,
+   "ent": 5,
+   "outcome": "recalling",
+   "hp4": 0.17,
+   "homeGain": 2.9,
+   "nf4": 22.9,
+   "attackers": 0
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 96,
+   "x0": 89,
+   "y0": 100,
+   "home0": 85,
+   "foes0": 1,
+   "hp0": 0.24,
+   "nf0": 4.4,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "recalling",
+   "hp4": 0.14,
+   "homeGain": 10.8,
+   "nf4": 14.7,
+   "attackers": 1
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 141,
+   "x0": 85,
+   "y0": 99,
+   "home0": 89,
+   "foes0": 2,
+   "hp0": 0.23,
+   "nf0": 2.9,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "died",
+   "attackers": 1
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 194,
+   "x0": 101,
+   "y0": 95,
+   "home0": 73,
+   "foes0": 2,
+   "hp0": 0.19,
+   "nf0": 2.5,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "retreated",
+   "hp4": 0.04,
+   "homeGain": 11.7,
+   "nf4": 7.1,
+   "attackers": 2
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "t0": 200,
+   "x0": 105,
+   "y0": 93,
+   "home0": 104,
+   "foes0": 1,
+   "hp0": 0.14,
+   "nf0": 2.7,
+   "recalled": false,
+   "ent": 4,
+   "outcome": "died",
+   "attackers": 0
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 198,
+   "x0": 113,
+   "y0": 92,
+   "home0": 61,
+   "foes0": 1,
+   "hp0": 0.04,
+   "nf0": 7.1,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "recalling",
+   "hp4": 0.05,
+   "homeGain": 5.1,
+   "nf4": 21.8,
+   "attackers": 0
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 223,
+   "x0": 73,
+   "y0": 15,
+   "home0": 76,
+   "foes0": 1,
+   "hp0": 0.24,
+   "nf0": 4.7,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "retreated",
+   "hp4": 0.22,
+   "homeGain": 3.4,
+   "nf4": 9.5,
+   "attackers": 1
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 227,
+   "x0": 69,
+   "y0": 15,
+   "home0": 72,
+   "foes0": 1,
+   "hp0": 0.22,
+   "nf0": 9.6,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "retreated",
+   "hp4": 0.21,
+   "homeGain": 3.6,
+   "nf4": 8.1,
+   "attackers": 0
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 231,
+   "x0": 64,
+   "y0": 14,
+   "home0": 68,
+   "foes0": 1,
+   "hp0": 0.21,
+   "nf0": 8.2,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "stayed",
+   "hp4": 0.15,
+   "homeGain": -1.8,
+   "nf4": 2.8,
+   "attackers": 1
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 235,
+   "x0": 67,
+   "y0": 17,
+   "home0": 70,
+   "foes0": 1,
+   "hp0": 0.15,
+   "nf0": 3.4,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "recalling",
+   "hp4": 0.11,
+   "homeGain": 7.9,
+   "nf4": 12.9,
+   "attackers": 0
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 267,
+   "x0": 86,
+   "y0": 98,
+   "home0": 87,
+   "foes0": 2,
+   "hp0": 0.24,
+   "nf0": 2.3,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "died",
+   "attackers": 2
+  },
+  {
+   "player": 5,
+   "team": 1,
+   "t0": 276,
+   "x0": 70,
+   "y0": 12,
+   "home0": 101,
+   "foes0": 1,
+   "hp0": 0.24,
+   "nf0": 3,
+   "recalled": false,
+   "ent": 6,
+   "outcome": "stayed",
+   "hp4": 0.08,
+   "homeGain": -0.1,
+   "nf4": 3.6,
+   "attackers": 1
+  },
+  {
+   "player": 5,
+   "team": 1,
+   "t0": 280,
+   "x0": 71,
+   "y0": 11,
+   "home0": 101,
+   "foes0": 1,
+   "hp0": 0.08,
+   "nf0": 3.6,
+   "recalled": false,
+   "ent": 6,
+   "outcome": "retreated",
+   "hp4": 0.07,
+   "homeGain": 13.2,
+   "nf4": 3.8,
+   "attackers": 0
+  },
+  {
+   "player": 5,
+   "team": 1,
+   "t0": 284,
+   "x0": 84,
+   "y0": 13,
+   "home0": 88,
+   "foes0": 1,
+   "hp0": 0.07,
+   "nf0": 2.7,
+   "recalled": false,
+   "ent": 6,
+   "outcome": "died",
+   "attackers": 0
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 302,
+   "x0": 75,
+   "y0": 52,
+   "home0": 66,
+   "foes0": 1,
+   "hp0": 0.22,
+   "nf0": 2.7,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "recalling",
+   "hp4": 0.12,
+   "homeGain": 10.9,
+   "nf4": 14.1,
+   "attackers": 1
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 309,
+   "x0": 64,
+   "y0": 51,
+   "home0": 55,
+   "foes0": 1,
+   "hp0": 0.12,
+   "nf0": 9.8,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "retreated",
+   "hp4": 0.16,
+   "homeGain": 51.4,
+   "nf4": 68.4,
+   "attackers": 0
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "t0": 313,
+   "x0": 62,
+   "y0": 92,
+   "home0": 66,
+   "foes0": 3,
+   "hp0": 0.23,
+   "nf0": 6.6,
+   "recalled": false,
+   "ent": 4,
+   "outcome": "stayed",
+   "hp4": 0.24,
+   "homeGain": -3.7,
+   "nf4": 11,
+   "attackers": 2
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "t0": 317,
+   "x0": 66,
+   "y0": 95,
+   "home0": 70,
+   "foes0": 1,
+   "hp0": 0.24,
+   "nf0": 9.8,
+   "recalled": false,
+   "ent": 4,
+   "outcome": "stayed",
+   "hp4": 0.26,
+   "homeGain": -2.5,
+   "nf4": 8.8,
+   "attackers": 0
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "t0": 343,
+   "x0": 65,
+   "y0": 95,
+   "home0": 69,
+   "foes0": 1,
+   "hp0": 0.24,
+   "nf0": 7.3,
+   "recalled": false,
+   "ent": 4,
+   "outcome": "recalling",
+   "hp4": 0.19,
+   "homeGain": 8.9,
+   "nf4": 15.6,
+   "attackers": 0
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 388,
+   "x0": 78,
+   "y0": 83,
+   "home0": 88,
+   "foes0": 3,
+   "hp0": 0.23,
+   "nf0": 2.7,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "died",
+   "attackers": 2
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 398,
+   "x0": 79,
+   "y0": 56,
+   "home0": 70,
+   "foes0": 1,
+   "hp0": 0.24,
+   "nf0": 1.1,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "retreated",
+   "hp4": 0.26,
+   "homeGain": 7,
+   "nf4": 3.4,
+   "attackers": 2
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 414,
+   "x0": 83,
+   "y0": 52,
+   "home0": 74,
+   "foes0": 2,
+   "hp0": 0.18,
+   "nf0": 0.7,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "died",
+   "attackers": 2
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 432,
+   "x0": 59,
+   "y0": 13,
+   "home0": 66,
+   "foes0": 1,
+   "hp0": 0.25,
+   "nf0": 10,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "stayed",
+   "hp4": 0.26,
+   "homeGain": -2.5,
+   "nf4": 1.3,
+   "attackers": 0
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 436,
+   "x0": 60,
+   "y0": 11,
+   "home0": 68,
+   "foes0": 1,
+   "hp0": 0.22,
+   "nf0": 2,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "recalling",
+   "hp4": 0.21,
+   "homeGain": 12.6,
+   "nf4": 23.1,
+   "attackers": 1
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 444,
+   "x0": 82,
+   "y0": 95,
+   "home0": 89,
+   "foes0": 2,
+   "hp0": 0.25,
+   "nf0": 1.4,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "died",
+   "attackers": 1
+  },
+  {
+   "player": 5,
+   "team": 1,
+   "t0": 465,
+   "x0": 62,
+   "y0": 15,
+   "home0": 107,
+   "foes0": 1,
+   "hp0": 0.21,
+   "nf0": 6.6,
+   "recalled": false,
+   "ent": 6,
+   "outcome": "stayed",
+   "hp4": 0.22,
+   "homeGain": 0.3,
+   "nf4": 1.1,
+   "attackers": 1
+  },
+  {
+   "player": 5,
+   "team": 1,
+   "t0": 469,
+   "x0": 61,
+   "y0": 18,
+   "home0": 107,
+   "foes0": 1,
+   "hp0": 0.22,
+   "nf0": 1.4,
+   "recalled": false,
+   "ent": 6,
+   "outcome": "stayed",
+   "hp4": 0.23,
+   "homeGain": -1.7,
+   "nf4": 6.6,
+   "attackers": 0
+  },
+  {
+   "player": 5,
+   "team": 1,
+   "t0": 474,
+   "x0": 62,
+   "y0": 13,
+   "home0": 108,
+   "foes0": 1,
+   "hp0": 0.23,
+   "nf0": 6.8,
+   "recalled": false,
+   "ent": 6,
+   "outcome": "recalling",
+   "hp4": 0.24,
+   "homeGain": 2.7,
+   "nf4": 14.3,
+   "attackers": 0
+  },
+  {
+   "player": 7,
+   "team": 1,
+   "t0": 480,
+   "x0": 89,
+   "y0": 54,
+   "home0": 72,
+   "foes0": 1,
+   "hp0": 0.25,
+   "nf0": 2.5,
+   "recalled": false,
+   "ent": 8,
+   "outcome": "stayed",
+   "hp4": 0.2,
+   "homeGain": 0,
+   "nf4": 7.2,
+   "attackers": 1
+  },
+  {
+   "player": 7,
+   "team": 1,
+   "t0": 484,
+   "x0": 89,
+   "y0": 54,
+   "home0": 72,
+   "foes0": 1,
+   "hp0": 0.2,
+   "nf0": 7.5,
+   "recalled": false,
+   "ent": 8,
+   "outcome": "stayed",
+   "hp4": 0.21,
+   "homeGain": 2.2,
+   "nf4": 5.9,
+   "attackers": 0
+  },
+  {
+   "player": 7,
+   "team": 1,
+   "t0": 488,
+   "x0": 91,
+   "y0": 54,
+   "home0": 70,
+   "foes0": 1,
+   "hp0": 0.21,
+   "nf0": 5.9,
+   "recalled": false,
+   "ent": 8,
+   "outcome": "stayed",
+   "hp4": 0.09,
+   "homeGain": -0.5,
+   "nf4": 6.2,
+   "attackers": 1
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 491,
+   "x0": 90,
+   "y0": 54,
+   "home0": 81,
+   "foes0": 1,
+   "hp0": 0.23,
+   "nf0": 1,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "recalling",
+   "hp4": 0.18,
+   "homeGain": 6.2,
+   "nf4": 16.2,
+   "attackers": 1
+  },
+  {
+   "player": 7,
+   "team": 1,
+   "t0": 493,
+   "x0": 91,
+   "y0": 53,
+   "home0": 70,
+   "foes0": 1,
+   "hp0": 0.09,
+   "nf0": 6.8,
+   "recalled": false,
+   "ent": 8,
+   "outcome": "recalling",
+   "hp4": 0.13,
+   "homeGain": 8.8,
+   "nf4": 17.4,
+   "attackers": 0
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 536,
+   "x0": 100,
+   "y0": 30,
+   "home0": 95,
+   "foes0": 1,
+   "hp0": 0.25,
+   "nf0": 4.4,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "retreated",
+   "hp4": 0.25,
+   "homeGain": 14.2,
+   "nf4": 7.1,
+   "attackers": 1
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 540,
+   "x0": 92,
+   "y0": 96,
+   "home0": 81,
+   "foes0": 2,
+   "hp0": 0.19,
+   "nf0": 2.5,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "retreated",
+   "hp4": 0.07,
+   "homeGain": 8.6,
+   "nf4": 5.4,
+   "attackers": 1
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 544,
+   "x0": 100,
+   "y0": 94,
+   "home0": 72,
+   "foes0": 2,
+   "hp0": 0.07,
+   "nf0": 5.8,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "recalling",
+   "hp4": 0.08,
+   "homeGain": 4.4,
+   "nf4": 10.3,
+   "attackers": 0
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "t0": 552,
+   "x0": 93,
+   "y0": 97,
+   "home0": 94,
+   "foes0": 2,
+   "hp0": 0.24,
+   "nf0": 4.4,
+   "recalled": false,
+   "ent": 4,
+   "outcome": "retreated",
+   "hp4": 0.19,
+   "homeGain": 13,
+   "nf4": 7.5,
+   "attackers": 2
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "t0": 557,
+   "x0": 78,
+   "y0": 95,
+   "home0": 81,
+   "foes0": 2,
+   "hp0": 0.19,
+   "nf0": 7.5,
+   "recalled": false,
+   "ent": 4,
+   "outcome": "retreated",
+   "hp4": 0.05,
+   "homeGain": 11.4,
+   "nf4": 7.3,
+   "attackers": 1
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 557,
+   "x0": 61,
+   "y0": 19,
+   "home0": 64,
+   "foes0": 1,
+   "hp0": 0.25,
+   "nf0": 1.1,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "stayed",
+   "hp4": 0.21,
+   "homeGain": -1,
+   "nf4": 6.2,
+   "attackers": 1
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "t0": 561,
+   "x0": 66,
+   "y0": 94,
+   "home0": 69,
+   "foes0": 2,
+   "hp0": 0.05,
+   "nf0": 7.3,
+   "recalled": false,
+   "ent": 4,
+   "outcome": "recalling",
+   "hp4": 0.07,
+   "homeGain": 9.4,
+   "nf4": 15.7,
+   "attackers": 0
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 561,
+   "x0": 59,
+   "y0": 14,
+   "home0": 65,
+   "foes0": 1,
+   "hp0": 0.21,
+   "nf0": 5.4,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "stayed",
+   "hp4": 0.21,
+   "homeGain": -0.9,
+   "nf4": 5.8,
+   "attackers": 0
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 565,
+   "x0": 60,
+   "y0": 14,
+   "home0": 66,
+   "foes0": 1,
+   "hp0": 0.21,
+   "nf0": 6.3,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "stayed",
+   "hp4": 0.22,
+   "homeGain": -8.2,
+   "nf4": 11.3,
+   "attackers": 0
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 572,
+   "x0": 72,
+   "y0": 13,
+   "home0": 76,
+   "foes0": 1,
+   "hp0": 0.23,
+   "nf0": 9.7,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "stayed",
+   "hp4": 0.23,
+   "homeGain": -0.7,
+   "nf4": 11.5,
+   "attackers": 0
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 579,
+   "x0": 72,
+   "y0": 12,
+   "home0": 77,
+   "foes0": 1,
+   "hp0": 0.24,
+   "nf0": 9.7,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "stayed",
+   "hp4": 0.25,
+   "homeGain": 0.4,
+   "nf4": 5.3,
+   "attackers": 1
+  },
+  {
+   "player": 5,
+   "team": 1,
+   "t0": 581,
+   "x0": 74,
+   "y0": 12,
+   "home0": 97,
+   "foes0": 2,
+   "hp0": 0.24,
+   "nf0": 2.2,
+   "recalled": false,
+   "ent": 6,
+   "outcome": "retreated",
+   "hp4": 0.17,
+   "homeGain": 12,
+   "nf4": 6.8,
+   "attackers": 1
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 583,
+   "x0": 73,
+   "y0": 13,
+   "home0": 77,
+   "foes0": 1,
+   "hp0": 0.25,
+   "nf0": 5.3,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "retreated",
+   "hp4": 0.25,
+   "homeGain": -2.9,
+   "nf4": 15.7,
+   "attackers": 0
+  },
+  {
+   "player": 5,
+   "team": 1,
+   "t0": 585,
+   "x0": 86,
+   "y0": 15,
+   "home0": 85,
+   "foes0": 1,
+   "hp0": 0.17,
+   "nf0": 6.8,
+   "recalled": false,
+   "ent": 6,
+   "outcome": "retreated",
+   "hp4": 0.17,
+   "homeGain": 13.2,
+   "nf4": 7.2,
+   "attackers": 0
+  },
+  {
+   "player": 5,
+   "team": 1,
+   "t0": 590,
+   "x0": 101,
+   "y0": 16,
+   "home0": 71,
+   "foes0": 1,
+   "hp0": 0.17,
+   "nf0": 7.2,
+   "recalled": false,
+   "ent": 6,
+   "outcome": "recalling",
+   "hp4": 0.18,
+   "homeGain": 5.1,
+   "nf4": 20.1,
+   "attackers": 0
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 603,
+   "x0": 76,
+   "y0": 54,
+   "home0": 67,
+   "foes0": 1,
+   "hp0": 0.25,
+   "nf0": 2.8,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "retreated",
+   "hp4": 0.03,
+   "homeGain": 5.5,
+   "nf4": 9.6,
+   "attackers": 1
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 607,
+   "x0": 70,
+   "y0": 51,
+   "home0": 61,
+   "foes0": 1,
+   "hp0": 0.03,
+   "nf0": 9.8,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "recalling",
+   "hp4": 0.03,
+   "homeGain": 2,
+   "nf4": 13.9,
+   "attackers": 0
+  },
+  {
+   "player": 1,
+   "team": 0,
+   "t0": 619,
+   "x0": 80,
+   "y0": 61,
+   "home0": 72,
+   "foes0": 1,
+   "hp0": 0.24,
+   "nf0": 7.2,
+   "recalled": false,
+   "ent": 2,
+   "outcome": "retreated",
+   "hp4": 0.11,
+   "homeGain": 10.9,
+   "nf4": 13.9,
+   "attackers": 0
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 631,
+   "x0": 99,
+   "y0": 13,
+   "home0": 100,
+   "foes0": 1,
+   "hp0": 0.25,
+   "nf0": 3.8,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "retreated",
+   "hp4": 0.22,
+   "homeGain": 10.1,
+   "nf4": 12.9,
+   "attackers": 1
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 639,
+   "x0": 91,
+   "y0": 99,
+   "home0": 83,
+   "foes0": 1,
+   "hp0": 0.16,
+   "nf0": 8.5,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "retreated",
+   "hp4": 0.17,
+   "homeGain": 8.5,
+   "nf4": 10.1,
+   "attackers": 1
+  },
+  {
+   "player": 9,
+   "team": 1,
+   "t0": 654,
+   "x0": 85,
+   "y0": 98,
+   "home0": 88,
+   "foes0": 2,
+   "hp0": 0.22,
+   "nf0": 3.1,
+   "recalled": false,
+   "ent": 10,
+   "outcome": "recalling",
+   "hp4": 0.22,
+   "homeGain": 7.9,
+   "nf4": 13.6,
+   "attackers": 1
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "t0": 654,
+   "x0": 81,
+   "y0": 96,
+   "home0": 83,
+   "foes0": 2,
+   "hp0": 0.24,
+   "nf0": 5.2,
+   "recalled": false,
+   "ent": 4,
+   "outcome": "retreated",
+   "hp4": 0.18,
+   "homeGain": 4.5,
+   "nf4": 7.5,
+   "attackers": 1
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "t0": 658,
+   "x0": 75,
+   "y0": 96,
+   "home0": 78,
+   "foes0": 1,
+   "hp0": 0.18,
+   "nf0": 7.7,
+   "recalled": false,
+   "ent": 4,
+   "outcome": "recalling",
+   "hp4": 0.2,
+   "homeGain": 7.6,
+   "nf4": 12,
+   "attackers": 1
+  },
+  {
+   "player": 7,
+   "team": 1,
+   "t0": 663,
+   "x0": 82,
+   "y0": 53,
+   "home0": 80,
+   "foes0": 1,
+   "hp0": 0.23,
+   "nf0": 6.9,
+   "recalled": false,
+   "ent": 8,
+   "outcome": "recalling",
+   "hp4": 0.21,
+   "homeGain": 6.7,
+   "nf4": 19.4,
+   "attackers": 1
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 690,
+   "x0": 87,
+   "y0": 98,
+   "home0": 90,
+   "foes0": 1,
+   "hp0": 0.23,
+   "nf0": 1,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "died",
+   "attackers": 2
+  },
+  {
+   "player": 4,
+   "team": 0,
+   "t0": 703,
+   "x0": 83,
+   "y0": 95,
+   "home0": 84,
+   "foes0": 1,
+   "hp0": 0.16,
+   "nf0": 5.1,
+   "recalled": false,
+   "ent": 5,
+   "outcome": "retreated",
+   "hp4": 0.17,
+   "homeGain": 9.1,
+   "nf4": 12.7,
+   "attackers": 1
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "t0": 711,
+   "x0": 85,
+   "y0": 94,
+   "home0": 85,
+   "foes0": 2,
+   "hp0": 0.17,
+   "nf0": 2.2,
+   "recalled": false,
+   "ent": 4,
+   "outcome": "died",
+   "attackers": 2
+  },
+  {
+   "player": 4,
+   "team": 0,
+   "t0": 713,
+   "x0": 72,
+   "y0": 94,
+   "home0": 75,
+   "foes0": 1,
+   "hp0": 0.18,
+   "nf0": 9.7,
+   "recalled": false,
+   "ent": 5,
+   "outcome": "retreated",
+   "hp4": 0.5,
+   "homeGain": 70.6,
+   "nf4": 53.6,
+   "attackers": 0
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 719,
+   "x0": 96,
+   "y0": 58,
+   "home0": 88,
+   "foes0": 1,
+   "hp0": 0.24,
+   "nf0": 2,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "retreated",
+   "hp4": 0.28,
+   "homeGain": 13.8,
+   "nf4": 2.4,
+   "attackers": 1
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 723,
+   "x0": 82,
+   "y0": 56,
+   "home0": 74,
+   "foes0": 1,
+   "hp0": 0.25,
+   "nf0": 2.7,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "retreated",
+   "hp4": 0.14,
+   "homeGain": 12.5,
+   "nf4": 4.9,
+   "attackers": 1
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 727,
+   "x0": 69,
+   "y0": 59,
+   "home0": 61,
+   "foes0": 1,
+   "hp0": 0.14,
+   "nf0": 5.4,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "recalling",
+   "hp4": 0.15,
+   "homeGain": 0.8,
+   "nf4": 16.7,
+   "attackers": 0
+  },
+  {
+   "player": 5,
+   "team": 1,
+   "t0": 759,
+   "x0": 75,
+   "y0": 11,
+   "home0": 97,
+   "foes0": 1,
+   "hp0": 0.23,
+   "nf0": 2.8,
+   "recalled": false,
+   "ent": 6,
+   "outcome": "retreated",
+   "hp4": 0.16,
+   "homeGain": 6.9,
+   "nf4": 6.6,
+   "attackers": 1
+  },
+  {
+   "player": 5,
+   "team": 1,
+   "t0": 763,
+   "x0": 81,
+   "y0": 14,
+   "home0": 90,
+   "foes0": 1,
+   "hp0": 0.16,
+   "nf0": 6.6,
+   "recalled": false,
+   "ent": 6,
+   "outcome": "retreated",
+   "hp4": 0.17,
+   "homeGain": 13.6,
+   "nf4": 6.5,
+   "attackers": 0
+  },
+  {
+   "player": 5,
+   "team": 1,
+   "t0": 767,
+   "x0": 96,
+   "y0": 16,
+   "home0": 76,
+   "foes0": 1,
+   "hp0": 0.17,
+   "nf0": 6.5,
+   "recalled": false,
+   "ent": 6,
+   "outcome": "retreated",
+   "hp4": 0.04,
+   "homeGain": 5.5,
+   "nf4": 6.6,
+   "attackers": 1
+  },
+  {
+   "player": 5,
+   "team": 1,
+   "t0": 771,
+   "x0": 103,
+   "y0": 16,
+   "home0": 70,
+   "foes0": 1,
+   "hp0": 0.04,
+   "nf0": 7.3,
+   "recalled": false,
+   "ent": 6,
+   "outcome": "recalling",
+   "hp4": 0.04,
+   "homeGain": 2.8,
+   "nf4": 24.9,
+   "attackers": 0
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 782,
+   "x0": 78,
+   "y0": 100,
+   "home0": 95,
+   "foes0": 2,
+   "hp0": 0.24,
+   "nf0": 1.9,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "stayed",
+   "hp4": 0.05,
+   "homeGain": 2.1,
+   "nf4": 2.4,
+   "attackers": 2
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 786,
+   "x0": 82,
+   "y0": 100,
+   "home0": 91,
+   "foes0": 2,
+   "hp0": 0.05,
+   "nf0": 3.7,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "recalling",
+   "hp4": 0.05,
+   "homeGain": 14.1,
+   "nf4": 13.5,
+   "attackers": 0
+  },
+  {
+   "player": 4,
+   "team": 0,
+   "t0": 791,
+   "x0": 81,
+   "y0": 97,
+   "home0": 84,
+   "foes0": 1,
+   "hp0": 0.23,
+   "nf0": 2.8,
+   "recalled": false,
+   "ent": 5,
+   "outcome": "retreated",
+   "hp4": 0.11,
+   "homeGain": 15.4,
+   "nf4": 13.6,
+   "attackers": 1
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "t0": 811,
+   "x0": 85,
+   "y0": 92,
+   "home0": 85,
+   "foes0": 1,
+   "hp0": 0.24,
+   "nf0": 2.6,
+   "recalled": false,
+   "ent": 4,
+   "outcome": "retreated",
+   "hp4": 0.14,
+   "homeGain": 7.4,
+   "nf4": 17.4,
+   "attackers": 1
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 815,
+   "x0": 83,
+   "y0": 53,
+   "home0": 75,
+   "foes0": 1,
+   "hp0": 0.25,
+   "nf0": 5.1,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "retreated",
+   "hp4": 0.25,
+   "homeGain": 9.9,
+   "nf4": 18.6,
+   "attackers": 1
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 859,
+   "x0": 84,
+   "y0": 86,
+   "home0": 84,
+   "foes0": 2,
+   "hp0": 0.2,
+   "nf0": 4.6,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "retreated",
+   "hp4": 0.08,
+   "homeGain": 2.4,
+   "nf4": 6.4,
+   "attackers": 2
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 864,
+   "x0": 90,
+   "y0": 94,
+   "home0": 81,
+   "foes0": 1,
+   "hp0": 0.08,
+   "nf0": 6.4,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "retreated",
+   "hp4": 0.06,
+   "homeGain": 12.8,
+   "nf4": 9,
+   "attackers": 1
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 868,
+   "x0": 105,
+   "y0": 93,
+   "home0": 68,
+   "foes0": 1,
+   "hp0": 0.06,
+   "nf0": 9,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "retreated",
+   "hp4": 0.06,
+   "homeGain": 10.6,
+   "nf4": 12.9,
+   "attackers": 0
+  },
+  {
+   "player": 1,
+   "team": 0,
+   "t0": 973,
+   "x0": 65,
+   "y0": 87,
+   "home0": 65,
+   "foes0": 3,
+   "hp0": 0.19,
+   "nf0": 1,
+   "recalled": false,
+   "ent": 2,
+   "outcome": "died",
+   "attackers": 3
+  },
+  {
+   "player": 6,
+   "team": 1,
+   "t0": 978,
+   "x0": 122,
+   "y0": 59,
+   "home0": 40,
+   "foes0": 1,
+   "hp0": 0.24,
+   "nf0": 1.4,
+   "recalled": false,
+   "ent": 7,
+   "outcome": "died",
+   "attackers": 1
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 984,
+   "x0": 122,
+   "y0": 59,
+   "home0": 113,
+   "foes0": 1,
+   "hp0": 0.24,
+   "nf0": 1.3,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "died",
+   "attackers": 1
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 1039,
+   "x0": 108,
+   "y0": 11,
+   "home0": 108,
+   "foes0": 4,
+   "hp0": 0.22,
+   "nf0": 1.1,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "died",
+   "attackers": 3
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "t0": 1042,
+   "x0": 100,
+   "y0": 12,
+   "home0": 101,
+   "foes0": 5,
+   "hp0": 0.22,
+   "nf0": 1.2,
+   "recalled": false,
+   "ent": 4,
+   "outcome": "died",
+   "attackers": 5
+  },
+  {
+   "player": 4,
+   "team": 0,
+   "t0": 1051,
+   "x0": 82,
+   "y0": 25,
+   "home0": 79,
+   "foes0": 4,
+   "hp0": 0.22,
+   "nf0": 1.4,
+   "recalled": false,
+   "ent": 5,
+   "outcome": "died",
+   "attackers": 2
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 1099,
+   "x0": 123,
+   "y0": 52,
+   "home0": 115,
+   "foes0": 1,
+   "hp0": 0.24,
+   "nf0": 2.5,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "died",
+   "attackers": 2
+  },
+  {
+   "player": 9,
+   "team": 1,
+   "t0": 1153,
+   "x0": 132,
+   "y0": 84,
+   "home0": 42,
+   "foes0": 2,
+   "hp0": 0.22,
+   "nf0": 1.1,
+   "recalled": false,
+   "ent": 10,
+   "outcome": "retreated",
+   "hp4": 0.13,
+   "homeGain": 13.1,
+   "nf4": 12.9,
+   "attackers": 2
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 1159,
+   "x0": 133,
+   "y0": 86,
+   "home0": 129,
+   "foes0": 3,
+   "hp0": 0.25,
+   "nf0": 4.6,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "died",
+   "attackers": 2
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 1158,
+   "x0": 130,
+   "y0": 87,
+   "home0": 45,
+   "foes0": 2,
+   "hp0": 0.25,
+   "nf0": 1.1,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "retreated",
+   "hp4": 0.05,
+   "homeGain": 5.9,
+   "nf4": 9.7,
+   "attackers": 2
+  },
+  {
+   "player": 4,
+   "team": 0,
+   "t0": 1168,
+   "x0": 116,
+   "y0": 72,
+   "home0": 109,
+   "foes0": 1,
+   "hp0": 0.24,
+   "nf0": 2.1,
+   "recalled": false,
+   "ent": 5,
+   "outcome": "retreated",
+   "hp4": 0.24,
+   "homeGain": 3.6,
+   "nf4": 6.6,
+   "attackers": 1
+  },
+  {
+   "player": 4,
+   "team": 0,
+   "t0": 1173,
+   "x0": 112,
+   "y0": 70,
+   "home0": 105,
+   "foes0": 1,
+   "hp0": 0.25,
+   "nf0": 6.7,
+   "recalled": false,
+   "ent": 5,
+   "outcome": "recalling",
+   "hp4": 0.25,
+   "homeGain": 1.1,
+   "nf4": 18.6,
+   "attackers": 0
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 1261,
+   "x0": 50,
+   "y0": 57,
+   "home0": 41,
+   "foes0": 5,
+   "hp0": 0.24,
+   "nf0": 1.2,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "died",
+   "attackers": 3
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "t0": 1263,
+   "x0": 51,
+   "y0": 57,
+   "home0": 42,
+   "foes0": 5,
+   "hp0": 0.23,
+   "nf0": 1.8,
+   "recalled": false,
+   "ent": 4,
+   "outcome": "died",
+   "attackers": 4
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 1275,
+   "x0": 45,
+   "y0": 51,
+   "home0": 37,
+   "foes0": 4,
+   "hp0": 0.2,
+   "nf0": 1.8,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "died",
+   "attackers": 4
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 1274,
+   "x0": 45,
+   "y0": 52,
+   "home0": 116,
+   "foes0": 3,
+   "hp0": 0.25,
+   "nf0": 1.1,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "retreated",
+   "hp4": 0.19,
+   "homeGain": 8.9,
+   "nf4": 2.2,
+   "attackers": 2
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 1278,
+   "x0": 55,
+   "y0": 53,
+   "home0": 107,
+   "foes0": 2,
+   "hp0": 0.19,
+   "nf0": 2.2,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "retreated",
+   "hp4": 0.2,
+   "homeGain": 7.7,
+   "nf4": 13,
+   "attackers": 0
+  },
+  {
+   "player": 1,
+   "team": 0,
+   "t0": 1283,
+   "x0": 42,
+   "y0": 54,
+   "home0": 34,
+   "foes0": 3,
+   "hp0": 0.24,
+   "nf0": 2.1,
+   "recalled": false,
+   "ent": 2,
+   "outcome": "retreated",
+   "hp4": 0.03,
+   "homeGain": 8.9,
+   "nf4": 3.9,
+   "attackers": 3
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 1328,
+   "x0": 40,
+   "y0": 86,
+   "home0": 44,
+   "foes0": 1,
+   "hp0": 0.19,
+   "nf0": 9.4,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "retreated",
+   "hp4": 0.12,
+   "homeGain": 12.9,
+   "nf4": 14.6,
+   "attackers": 1
+  },
+  {
+   "player": 6,
+   "team": 1,
+   "t0": 1340,
+   "x0": 42,
+   "y0": 89,
+   "home0": 124,
+   "foes0": 2,
+   "hp0": 0.23,
+   "nf0": 6,
+   "recalled": false,
+   "ent": 7,
+   "outcome": "retreated",
+   "hp4": 0,
+   "homeGain": 9.9,
+   "nf4": 14,
+   "attackers": 2
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 1350,
+   "x0": 109,
+   "y0": 64,
+   "home0": 100,
+   "foes0": 1,
+   "hp0": 0.22,
+   "nf0": 3.6,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "retreated",
+   "hp4": 0.13,
+   "homeGain": 8.7,
+   "nf4": 3.7,
+   "attackers": 1
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 1353,
+   "x0": 25,
+   "y0": 52,
+   "home0": 137,
+   "foes0": 1,
+   "hp0": 0.2,
+   "nf0": 5.2,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "died",
+   "attackers": 0
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 1354,
+   "x0": 100,
+   "y0": 58,
+   "home0": 91,
+   "foes0": 1,
+   "hp0": 0.13,
+   "nf0": 3.7,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "died",
+   "attackers": 1
+  },
+  {
+   "player": 5,
+   "team": 1,
+   "t0": 1384,
+   "x0": 24,
+   "y0": 52,
+   "home0": 137,
+   "foes0": 3,
+   "hp0": 0.2,
+   "nf0": 2.1,
+   "recalled": false,
+   "ent": 6,
+   "outcome": "died",
+   "attackers": 3
+  },
+  {
+   "player": 9,
+   "team": 1,
+   "t0": 1381,
+   "x0": 33,
+   "y0": 54,
+   "home0": 128,
+   "foes0": 4,
+   "hp0": 0.24,
+   "nf0": 3.2,
+   "recalled": false,
+   "ent": 10,
+   "outcome": "recalling",
+   "hp4": 0.25,
+   "homeGain": 15.5,
+   "nf4": 17.3,
+   "attackers": 0
+  },
+  {
+   "player": 7,
+   "team": 1,
+   "t0": 1388,
+   "x0": 25,
+   "y0": 51,
+   "home0": 136,
+   "foes0": 4,
+   "hp0": 0.22,
+   "nf0": 3.1,
+   "recalled": false,
+   "ent": 8,
+   "outcome": "died",
+   "attackers": 3
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 1398,
+   "x0": 49,
+   "y0": 53,
+   "home0": 40,
+   "foes0": 1,
+   "hp0": 0.23,
+   "nf0": 2.3,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "recalling",
+   "hp4": 0.25,
+   "homeGain": 9.9,
+   "nf4": 12.3,
+   "attackers": 1
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 1416,
+   "x0": 61,
+   "y0": 57,
+   "home0": 52,
+   "foes0": 2,
+   "hp0": 0.16,
+   "nf0": 3.9,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "died",
+   "attackers": 2
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 1434,
+   "x0": 36,
+   "y0": 59,
+   "home0": 28,
+   "foes0": 3,
+   "hp0": 0.23,
+   "nf0": 2.9,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "died",
+   "attackers": 3
+  },
+  {
+   "player": 8,
+   "team": 1,
+   "t0": 1438,
+   "x0": 26,
+   "y0": 53,
+   "home0": 136,
+   "foes0": 2,
+   "hp0": 0.25,
+   "nf0": 4.1,
+   "recalled": false,
+   "ent": 9,
+   "outcome": "retreated",
+   "hp4": 0.13,
+   "homeGain": 10.9,
+   "nf4": 11.5,
+   "attackers": 1
+  },
+  {
+   "player": 6,
+   "team": 1,
+   "t0": 1442,
+   "x0": 29,
+   "y0": 55,
+   "home0": 133,
+   "foes0": 2,
+   "hp0": 0.23,
+   "nf0": 3.1,
+   "recalled": false,
+   "ent": 7,
+   "outcome": "recalling",
+   "hp4": 0.05,
+   "homeGain": 10,
+   "nf4": 10.7,
+   "attackers": 1
+  },
+  {
+   "player": 4,
+   "team": 0,
+   "t0": 1443,
+   "x0": 22,
+   "y0": 57,
+   "home0": 13,
+   "foes0": 2,
+   "hp0": 0.24,
+   "nf0": 8.2,
+   "recalled": false,
+   "ent": 5,
+   "outcome": "retreated",
+   "hp4": 0.12,
+   "homeGain": 2.9,
+   "nf4": 13.5,
+   "attackers": 1
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "t0": 1452,
+   "x0": 26,
+   "y0": 52,
+   "home0": 18,
+   "foes0": 1,
+   "hp0": 0.17,
+   "nf0": 2.6,
+   "recalled": false,
+   "ent": 4,
+   "outcome": "retreated",
+   "hp4": 0.03,
+   "homeGain": 7.4,
+   "nf4": 9.7,
+   "attackers": 1
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "t0": 1457,
+   "x0": 19,
+   "y0": 53,
+   "home0": 10,
+   "foes0": 1,
+   "hp0": 0.03,
+   "nf0": 10,
+   "recalled": false,
+   "ent": 4,
+   "outcome": "died",
+   "attackers": 0
+  },
+  {
+   "player": 5,
+   "team": 1,
+   "t0": 1476,
+   "x0": 24,
+   "y0": 53,
+   "home0": 138,
+   "foes0": 4,
+   "hp0": 0.16,
+   "nf0": 1.1,
+   "recalled": false,
+   "ent": 6,
+   "outcome": "retreated",
+   "hp4": 0.17,
+   "homeGain": 12.3,
+   "nf4": 12.1,
+   "attackers": 1
+  },
+  {
+   "player": 7,
+   "team": 1,
+   "t0": 1483,
+   "x0": 26,
+   "y0": 51,
+   "home0": 136,
+   "foes0": 4,
+   "hp0": 0.23,
+   "nf0": 4.1,
+   "recalled": false,
+   "ent": 8,
+   "outcome": "retreated",
+   "hp4": 0.23,
+   "homeGain": 11.2,
+   "nf4": 12.6,
+   "attackers": 1
+  },
+  {
+   "player": 7,
+   "team": 1,
+   "t0": 1488,
+   "x0": 35,
+   "y0": 51,
+   "home0": 127,
+   "foes0": 1,
+   "hp0": 0.23,
+   "nf0": 9.8,
+   "recalled": false,
+   "ent": 8,
+   "outcome": "stayed",
+   "hp4": 0.2,
+   "homeGain": -4.8,
+   "nf4": 5.8,
+   "attackers": 1
+  },
+  {
+   "player": 0,
+   "team": 0,
+   "t0": 1493,
+   "x0": 20,
+   "y0": 52,
+   "home0": 12,
+   "foes0": 1,
+   "hp0": 0.22,
+   "nf0": 8,
+   "recalled": false,
+   "ent": 1,
+   "outcome": "died",
+   "attackers": 0
+  },
+  {
+   "player": 7,
+   "team": 1,
+   "t0": 1492,
+   "x0": 29,
+   "y0": 52,
+   "home0": 132,
+   "foes0": 4,
+   "hp0": 0.2,
+   "nf0": 5.2,
+   "recalled": false,
+   "ent": 8,
+   "outcome": "retreated",
+   "hp4": 0.19,
+   "homeGain": 5,
+   "nf4": 13.1,
+   "attackers": 2
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 1494,
+   "x0": 23,
+   "y0": 58,
+   "home0": 15,
+   "foes0": 1,
+   "hp0": 0.24,
+   "nf0": 3.5,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "retreated",
+   "hp4": 0,
+   "homeGain": 3.4,
+   "nf4": 3.6,
+   "attackers": 2
+  },
+  {
+   "player": 4,
+   "team": 0,
+   "t0": 1496,
+   "x0": 17,
+   "y0": 53,
+   "home0": 9,
+   "foes0": 1,
+   "hp0": 0.23,
+   "nf0": 5.8,
+   "recalled": false,
+   "ent": 5,
+   "outcome": "died",
+   "attackers": 0
+  },
+  {
+   "player": 2,
+   "team": 0,
+   "t0": 1498,
+   "x0": 18,
+   "y0": 60,
+   "home0": 11,
+   "foes0": 1,
+   "hp0": 0,
+   "nf0": 3.7,
+   "recalled": false,
+   "ent": 3,
+   "outcome": "died",
+   "attackers": 0
+  },
+  {
+   "player": 1,
+   "team": 0,
+   "t0": 1503,
+   "x0": 18,
+   "y0": 53,
+   "home0": 10,
+   "foes0": 2,
+   "hp0": 0.11,
+   "nf0": 1,
+   "recalled": false,
+   "ent": 2,
+   "outcome": "died",
+   "attackers": 1
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "t0": 1501,
+   "x0": 17,
+   "y0": 52,
+   "home0": 9,
+   "foes0": 2,
+   "hp0": 0.25,
+   "nf0": 6.3,
+   "recalled": false,
+   "ent": 4,
+   "outcome": "retreated",
+   "hp4": 0.35,
+   "homeGain": 6.3,
+   "nf4": 13.2,
+   "attackers": 0
+  },
+  {
+   "player": 3,
+   "team": 0,
+   "t0": 1513,
+   "x0": 11,
+   "y0": 49,
+   "home0": 6,
+   "foes0": 2,
+   "hp0": 0.24,
+   "nf0": 4,
+   "recalled": false,
+   "ent": 4,
+   "outcome": "retreated",
+   "hp4": 0.44,
+   "homeGain": 3,
+   "nf4": 2,
+   "attackers": 2
+  }
+ ],
+ "deaths": [
+  {
+   "t": 143,
+   "player": 8,
+   "team": 1,
+   "allies": 1,
+   "foes": 2,
+   "side": "own half",
+   "x": 89,
+   "y": 97,
+   "assists": 1
+  },
+  {
+   "t": 201,
+   "player": 3,
+   "team": 0,
+   "allies": 1,
+   "foes": 1,
+   "side": "enemy half",
+   "x": 101,
+   "y": 94,
+   "assists": 1
+  },
+  {
+   "t": 269,
+   "player": 8,
+   "team": 1,
+   "allies": 1,
+   "foes": 2,
+   "side": "enemy half",
+   "x": 83,
+   "y": 98,
+   "assists": 1
+  },
+  {
+   "t": 284,
+   "player": 5,
+   "team": 1,
+   "allies": 0,
+   "foes": 2,
+   "side": "enemy half",
+   "x": 85,
+   "y": 13,
+   "assists": 0
+  },
+  {
+   "t": 389,
+   "player": 8,
+   "team": 1,
+   "allies": 2,
+   "foes": 3,
+   "side": "enemy half",
+   "x": 80,
+   "y": 84,
+   "assists": 2
+  },
+  {
+   "t": 416,
+   "player": 2,
+   "team": 0,
+   "allies": 0,
+   "foes": 2,
+   "side": "own half",
+   "x": 81,
+   "y": 54,
+   "assists": 1
+  },
+  {
+   "t": 445,
+   "player": 8,
+   "team": 1,
+   "allies": 1,
+   "foes": 2,
+   "side": "enemy half",
+   "x": 79,
+   "y": 95,
+   "assists": 1
+  },
+  {
+   "t": 692,
+   "player": 0,
+   "team": 0,
+   "allies": 1,
+   "foes": 2,
+   "side": "enemy half",
+   "x": 87,
+   "y": 96,
+   "assists": 1
+  },
+  {
+   "t": 712,
+   "player": 3,
+   "team": 0,
+   "allies": 1,
+   "foes": 2,
+   "side": "own half",
+   "x": 84,
+   "y": 96,
+   "assists": 1
+  },
+  {
+   "t": 883,
+   "player": 0,
+   "team": 0,
+   "allies": 0,
+   "foes": 0,
+   "side": "own half",
+   "x": 64,
+   "y": 52,
+   "assists": 0
+  },
+  {
+   "t": 906,
+   "player": 8,
+   "team": 1,
+   "allies": 4,
+   "foes": 0,
+   "side": "own half",
+   "x": 94,
+   "y": 81,
+   "assists": 0
+  },
+  {
+   "t": 975,
+   "player": 1,
+   "team": 0,
+   "allies": 0,
+   "foes": 3,
+   "side": "own half",
+   "x": 61,
+   "y": 84,
+   "assists": 2
+  },
+  {
+   "t": 980,
+   "player": 6,
+   "team": 1,
+   "allies": 1,
+   "foes": 1,
+   "side": "own half",
+   "x": 121,
+   "y": 58,
+   "assists": 0
+  },
+  {
+   "t": 986,
+   "player": 0,
+   "team": 0,
+   "allies": 0,
+   "foes": 1,
+   "side": "enemy half",
+   "x": 117,
+   "y": 59,
+   "assists": 0
+  },
+  {
+   "t": 1040,
+   "player": 2,
+   "team": 0,
+   "allies": 2,
+   "foes": 5,
+   "side": "enemy half",
+   "x": 107,
+   "y": 9,
+   "assists": 2
+  },
+  {
+   "t": 1044,
+   "player": 3,
+   "team": 0,
+   "allies": 1,
+   "foes": 5,
+   "side": "enemy half",
+   "x": 97,
+   "y": 13,
+   "assists": 4
+  },
+  {
+   "t": 1053,
+   "player": 4,
+   "team": 0,
+   "allies": 0,
+   "foes": 5,
+   "side": "own half",
+   "x": 81,
+   "y": 28,
+   "assists": 4
+  },
+  {
+   "t": 1102,
+   "player": 0,
+   "team": 0,
+   "allies": 1,
+   "foes": 1,
+   "side": "enemy half",
+   "x": 114,
+   "y": 53,
+   "assists": 1
+  },
+  {
+   "t": 1160,
+   "player": 2,
+   "team": 0,
+   "allies": 1,
+   "foes": 4,
+   "side": "enemy half",
+   "x": 134,
+   "y": 87,
+   "assists": 2
+  },
+  {
+   "t": 1263,
+   "player": 0,
+   "team": 0,
+   "allies": 1,
+   "foes": 5,
+   "side": "own half",
+   "x": 50,
+   "y": 56,
+   "assists": 4
+  },
+  {
+   "t": 1264,
+   "player": 3,
+   "team": 0,
+   "allies": 2,
+   "foes": 5,
+   "side": "own half",
+   "x": 52,
+   "y": 57,
+   "assists": 4
+  },
+  {
+   "t": 1276,
+   "player": 2,
+   "team": 0,
+   "allies": 2,
+   "foes": 4,
+   "side": "own half",
+   "x": 44,
+   "y": 51,
+   "assists": 3
+  },
+  {
+   "t": 1286,
+   "player": 5,
+   "team": 1,
+   "allies": 0,
+   "foes": 0,
+   "side": "enemy half",
+   "x": 21,
+   "y": 45,
+   "assists": 0
+  },
+  {
+   "t": 1287,
+   "player": 1,
+   "team": 0,
+   "allies": 1,
+   "foes": 3,
+   "side": "own half",
+   "x": 33,
+   "y": 51,
+   "assists": 3
+  },
+  {
+   "t": 1294,
+   "player": 7,
+   "team": 1,
+   "allies": 2,
+   "foes": 1,
+   "side": "enemy half",
+   "x": 31,
+   "y": 51,
+   "assists": 0
+  },
+  {
+   "t": 1355,
+   "player": 8,
+   "team": 1,
+   "allies": 0,
+   "foes": 1,
+   "side": "enemy half",
+   "x": 30,
+   "y": 52,
+   "assists": 0
+  },
+  {
+   "t": 1357,
+   "player": 0,
+   "team": 0,
+   "allies": 0,
+   "foes": 1,
+   "side": "enemy half",
+   "x": 91,
+   "y": 58,
+   "assists": 1
+  },
+  {
+   "t": 1385,
+   "player": 5,
+   "team": 1,
+   "allies": 1,
+   "foes": 4,
+   "side": "enemy half",
+   "x": 29,
+   "y": 51,
+   "assists": 3
+  },
+  {
+   "t": 1391,
+   "player": 7,
+   "team": 1,
+   "allies": 0,
+   "foes": 4,
+   "side": "enemy half",
+   "x": 29,
+   "y": 51,
+   "assists": 3
+  },
+  {
+   "t": 1418,
+   "player": 0,
+   "team": 0,
+   "allies": 1,
+   "foes": 2,
+   "side": "own half",
+   "x": 60,
+   "y": 58,
+   "assists": 1
+  },
+  {
+   "t": 1435,
+   "player": 2,
+   "team": 0,
+   "allies": 1,
+   "foes": 3,
+   "side": "own half",
+   "x": 35,
+   "y": 59,
+   "assists": 2
+  },
+  {
+   "t": 1457,
+   "player": 3,
+   "team": 0,
+   "allies": 3,
+   "foes": 1,
+   "side": "own half",
+   "x": 19,
+   "y": 53,
+   "assists": 0
+  },
+  {
+   "t": 1495,
+   "player": 0,
+   "team": 0,
+   "allies": 4,
+   "foes": 1,
+   "side": "own half",
+   "x": 17,
+   "y": 52,
+   "assists": 0
+  },
+  {
+   "t": 1498,
+   "player": 4,
+   "team": 0,
+   "allies": 3,
+   "foes": 1,
+   "side": "own half",
+   "x": 12,
+   "y": 52,
+   "assists": 1
+  },
+  {
+   "t": 1498,
+   "player": 2,
+   "team": 0,
+   "allies": 2,
+   "foes": 2,
+   "side": "own half",
+   "x": 18,
+   "y": 60,
+   "assists": 1
+  },
+  {
+   "t": 1504,
+   "player": 1,
+   "team": 0,
+   "allies": 1,
+   "foes": 2,
+   "side": "own half",
+   "x": 18,
+   "y": 53,
+   "assists": 1
+  }
+ ],
+ "objectives": [
+  {
+   "t": 139,
+   "unit": "resinback",
+   "team": 0,
+   "takers": 0,
+   "enemies": 2,
+   "major": false
+  },
+  {
+   "t": 146,
+   "unit": "resinback",
+   "team": 1,
+   "takers": 2,
+   "enemies": 0,
+   "major": false
+  },
+  {
+   "t": 156,
+   "unit": "glasshorn",
+   "team": 0,
+   "takers": 0,
+   "enemies": 1,
+   "major": false
+  },
+  {
+   "t": 163,
+   "unit": "glasshorn",
+   "team": 1,
+   "takers": 2,
+   "enemies": 1,
+   "major": false
+  },
+  {
+   "t": 403,
+   "unit": "sunsplinter",
+   "team": 0,
+   "takers": 3,
+   "enemies": 1,
+   "major": true
+  },
+  {
+   "t": 457,
+   "unit": "resinback",
+   "team": 1,
+   "takers": 2,
+   "enemies": 1,
+   "major": false
+  },
+  {
+   "t": 495,
+   "unit": "glasshorn",
+   "team": 0,
+   "takers": 1,
+   "enemies": 2,
+   "major": false
+  },
+  {
+   "t": 685,
+   "unit": "resinback",
+   "team": 0,
+   "takers": 2,
+   "enemies": 0,
+   "major": false
+  },
+  {
+   "t": 738,
+   "unit": "resinback",
+   "team": 1,
+   "takers": 3,
+   "enemies": 0,
+   "major": false
+  },
+  {
+   "t": 789,
+   "unit": "glasshorn",
+   "team": 0,
+   "takers": 2,
+   "enemies": 0,
+   "major": false
+  },
+  {
+   "t": 973,
+   "unit": "resinback",
+   "team": 1,
+   "takers": 3,
+   "enemies": 1,
+   "major": false
+  },
+  {
+   "t": 1068,
+   "unit": "glasshorn",
+   "team": 0,
+   "takers": 1,
+   "enemies": 0,
+   "major": false
+  },
+  {
+   "t": 1078,
+   "unit": "sunsplinter",
+   "team": 1,
+   "takers": 5,
+   "enemies": 0,
+   "major": true
+  },
+  {
+   "t": 1273,
+   "unit": "lantern",
+   "team": 1,
+   "takers": 0,
+   "enemies": 0,
+   "major": false
+  },
+  {
+   "t": 1412,
+   "unit": "lantern",
+   "team": 1,
+   "takers": 0,
+   "enemies": 0,
+   "major": false
+  },
+  {
+   "t": 1473,
+   "unit": "lantern",
+   "team": 1,
+   "takers": 0,
+   "enemies": 0,
+   "major": false
+  }
+ ],
+ "fights": 21,
+ "fightSizeAvg": 5.9,
+ "sieges": [
+  {
+   "def": "needle_outer",
+   "team": 0,
+   "t0": 106,
+   "t1": 128,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 1,
+   "defMax": 1,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 170,
+   "t1": 172,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 1,
+   "defMax": 1,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 183,
+   "t1": 200,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 1,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 183,
+   "t1": 201,
+   "attackers": 1,
+   "maxAtt": 2,
+   "defAt0": 2,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 218,
+   "t1": 218,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 1,
+   "defMax": 1,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 0,
+   "t0": 235,
+   "t1": 235,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 1,
+   "defMax": 1,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 0,
+   "t0": 246,
+   "t1": 246,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 0,
+   "defMax": 0,
+   "firstDefT": null,
+   "hp0": 1,
+   "hp1": 0.84,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 0,
+   "t0": 264,
+   "t1": 279,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 0,
+   "defMax": 2,
+   "firstDefT": 3,
+   "hp0": 0.46,
+   "hp1": 0.31,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 0,
+   "t0": 312,
+   "t1": 315,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 2,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 0,
+   "t0": 294,
+   "t1": 319,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 1,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 0,
+   "t0": 326,
+   "t1": 338,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 1,
+   "defMax": 1,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 319,
+   "t1": 341,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 1,
+   "defMax": 1,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 0.92,
+   "fell": false,
+   "attackerHasMe": true
+  },
+  {
+   "def": "needle_outer",
+   "team": 0,
+   "t0": 360,
+   "t1": 360,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 2,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 0.68,
+   "hp1": 0.68,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 0,
+   "t0": 417,
+   "t1": 442,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 1,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 0.31,
+   "hp1": 0,
+   "fell": true,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 469,
+   "t1": 477,
+   "attackers": 1,
+   "maxAtt": 2,
+   "defAt0": 1,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 488,
+   "t1": 501,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 1,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 523,
+   "t1": 533,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 1,
+   "defMax": 1,
+   "firstDefT": 0,
+   "hp0": 0.92,
+   "hp1": 0.92,
+   "fell": false,
+   "attackerHasMe": true
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 533,
+   "t1": 541,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 1,
+   "defMax": 1,
+   "firstDefT": 0,
+   "hp0": 0.7,
+   "hp1": 0.61,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 0,
+   "t0": 562,
+   "t1": 564,
+   "attackers": 2,
+   "maxAtt": 2,
+   "defAt0": 2,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 0.68,
+   "hp1": 0.68,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 0,
+   "t0": 621,
+   "t1": 621,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 2,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 0.68,
+   "hp1": 0.68,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 613,
+   "t1": 625,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 0,
+   "defMax": 1,
+   "firstDefT": 5,
+   "hp0": 0.92,
+   "hp1": 0.34,
+   "fell": false,
+   "attackerHasMe": true
+  },
+  {
+   "def": "needle_outer",
+   "team": 0,
+   "t0": 636,
+   "t1": 652,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 0,
+   "defMax": 1,
+   "firstDefT": 3,
+   "hp0": 1,
+   "hp1": 0.54,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 699,
+   "t1": 704,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 1,
+   "defMax": 1,
+   "firstDefT": 0,
+   "hp0": 0.54,
+   "hp1": 0.07,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_inner",
+   "team": 0,
+   "t0": 708,
+   "t1": 739,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 0,
+   "defMax": 2,
+   "firstDefT": 14,
+   "hp0": 1,
+   "hp1": 0.57,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 0,
+   "t0": 758,
+   "t1": 758,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 2,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 0.23,
+   "hp1": 0.23,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 0,
+   "t0": 763,
+   "t1": 773,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 2,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 0.54,
+   "hp1": 0.46,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 0,
+   "t0": 783,
+   "t1": 785,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 2,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 0.46,
+   "hp1": 0.46,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 806,
+   "t1": 806,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 1,
+   "defMax": 1,
+   "firstDefT": 0,
+   "hp0": 0.34,
+   "hp1": 0.34,
+   "fell": false,
+   "attackerHasMe": true
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 869,
+   "t1": 873,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 1,
+   "defMax": 1,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 895,
+   "t1": 895,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 0,
+   "defMax": 0,
+   "firstDefT": null,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 906,
+   "t1": 915,
+   "attackers": 1,
+   "maxAtt": 2,
+   "defAt0": 1,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 0.75,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 957,
+   "t1": 960,
+   "attackers": 1,
+   "maxAtt": 4,
+   "defAt0": 0,
+   "defMax": 0,
+   "firstDefT": null,
+   "hp0": 0.04,
+   "hp1": 0,
+   "fell": true,
+   "attackerHasMe": true
+  },
+  {
+   "def": "needle_outer",
+   "team": 0,
+   "t0": 962,
+   "t1": 965,
+   "attackers": 3,
+   "maxAtt": 3,
+   "defAt0": 0,
+   "defMax": 0,
+   "firstDefT": null,
+   "hp0": 0.23,
+   "hp1": 0,
+   "fell": true,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_inner",
+   "team": 1,
+   "t0": 964,
+   "t1": 986,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 0,
+   "defMax": 2,
+   "firstDefT": 9,
+   "hp0": 1,
+   "hp1": 0.1,
+   "fell": false,
+   "attackerHasMe": true
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 1017,
+   "t1": 1042,
+   "attackers": 1,
+   "maxAtt": 3,
+   "defAt0": 1,
+   "defMax": 5,
+   "firstDefT": 0,
+   "hp0": 0.34,
+   "hp1": 0.12,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 1,
+   "t0": 1125,
+   "t1": 1133,
+   "attackers": 3,
+   "maxAtt": 3,
+   "defAt0": 0,
+   "defMax": 0,
+   "firstDefT": null,
+   "hp0": 0.75,
+   "hp1": 0,
+   "fell": true,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_inner",
+   "team": 1,
+   "t0": 1144,
+   "t1": 1161,
+   "attackers": 2,
+   "maxAtt": 2,
+   "defAt0": 0,
+   "defMax": 4,
+   "firstDefT": 3,
+   "hp0": 1,
+   "hp1": 0.35,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_outer",
+   "team": 0,
+   "t0": 1218,
+   "t1": 1231,
+   "attackers": 1,
+   "maxAtt": 3,
+   "defAt0": 0,
+   "defMax": 0,
+   "firstDefT": null,
+   "hp0": 0.46,
+   "hp1": 0,
+   "fell": true,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_inner",
+   "team": 0,
+   "t0": 1239,
+   "t1": 1248,
+   "attackers": 2,
+   "maxAtt": 3,
+   "defAt0": 0,
+   "defMax": 0,
+   "firstDefT": null,
+   "hp0": 0.92,
+   "hp1": 0,
+   "fell": true,
+   "attackerHasMe": false
+  },
+  {
+   "def": "lantern",
+   "team": 0,
+   "t0": 1251,
+   "t1": 1272,
+   "attackers": 1,
+   "maxAtt": 3,
+   "defAt0": 0,
+   "defMax": 2,
+   "firstDefT": 6,
+   "hp0": 1,
+   "hp1": 0,
+   "fell": true,
+   "attackerHasMe": false
+  },
+  {
+   "def": "hourbell",
+   "team": 0,
+   "t0": 1277,
+   "t1": 1292,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 0,
+   "defMax": 1,
+   "firstDefT": 15,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_bell",
+   "team": 0,
+   "t0": 1276,
+   "t1": 1293,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 0,
+   "defMax": 1,
+   "firstDefT": 16,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_bell",
+   "team": 0,
+   "t0": 1274,
+   "t1": 1294,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 0,
+   "defMax": 1,
+   "firstDefT": 11,
+   "hp0": 1,
+   "hp1": 0.9,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_bell",
+   "team": 0,
+   "t0": 1316,
+   "t1": 1316,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 2,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 0.9,
+   "hp1": 0.9,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_bell",
+   "team": 0,
+   "t0": 1315,
+   "t1": 1320,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 3,
+   "defMax": 3,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_inner",
+   "team": 0,
+   "t0": 1321,
+   "t1": 1329,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 1,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 0.61,
+   "hp1": 0,
+   "fell": true,
+   "attackerHasMe": false
+  },
+  {
+   "def": "hourbell",
+   "team": 0,
+   "t0": 1349,
+   "t1": 1353,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 2,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_bell",
+   "team": 0,
+   "t0": 1347,
+   "t1": 1354,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 2,
+   "defMax": 2,
+   "firstDefT": 0,
+   "hp0": 0.9,
+   "hp1": 0.85,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_bell",
+   "team": 0,
+   "t0": 1348,
+   "t1": 1354,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 2,
+   "defMax": 4,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "hourbell",
+   "team": 0,
+   "t0": 1383,
+   "t1": 1388,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 3,
+   "defMax": 4,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_bell",
+   "team": 0,
+   "t0": 1378,
+   "t1": 1390,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 4,
+   "defMax": 4,
+   "firstDefT": 0,
+   "hp0": 0.85,
+   "hp1": 0.83,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_bell",
+   "team": 0,
+   "t0": 1379,
+   "t1": 1390,
+   "attackers": 1,
+   "maxAtt": 2,
+   "defAt0": 4,
+   "defMax": 4,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_bell",
+   "team": 0,
+   "t0": 1436,
+   "t1": 1473,
+   "attackers": 1,
+   "maxAtt": 2,
+   "defAt0": 3,
+   "defMax": 4,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 0,
+   "fell": true,
+   "attackerHasMe": false
+  },
+  {
+   "def": "needle_bell",
+   "team": 0,
+   "t0": 1436,
+   "t1": 1489,
+   "attackers": 1,
+   "maxAtt": 3,
+   "defAt0": 3,
+   "defMax": 4,
+   "firstDefT": 0,
+   "hp0": 0.83,
+   "hp1": 0,
+   "fell": true,
+   "attackerHasMe": false
+  },
+  {
+   "def": "hourbell",
+   "team": 0,
+   "t0": 1468,
+   "t1": 1482,
+   "attackers": 1,
+   "maxAtt": 2,
+   "defAt0": 3,
+   "defMax": 4,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": 1,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "hourbell",
+   "team": 0,
+   "t0": 1492,
+   "t1": 1517,
+   "attackers": 1,
+   "maxAtt": 3,
+   "defAt0": 5,
+   "defMax": 5,
+   "firstDefT": 0,
+   "hp0": 1,
+   "hp1": null,
+   "fell": false,
+   "attackerHasMe": false
+  },
+  {
+   "def": "lantern",
+   "team": 0,
+   "t0": 1513,
+   "t1": 1517,
+   "attackers": 1,
+   "maxAtt": 1,
+   "defAt0": 0,
+   "defMax": 0,
+   "firstDefT": null,
+   "hp0": 1,
+   "hp1": null,
+   "fell": false,
+   "attackerHasMe": false
+  }
+ ],
+ "coreW": [
+  {
+   "t": 264,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 46,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 25.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 1,
+     "d": 19.7,
+     "st": "move",
+     "hp": 99
+    },
+    {
+     "p": 3,
+     "d": 90.7,
+     "st": "move",
+     "hp": 72
+    }
+   ]
+  },
+  {
+   "t": 265,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 42,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 22.8,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 1,
+     "d": 22.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 89.1,
+     "st": "move",
+     "hp": 71
+    }
+   ]
+  },
+  {
+   "t": 266,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 38,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 19.8,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 1,
+     "d": 25.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 87.3,
+     "st": "idle",
+     "hp": 65
+    }
+   ]
+  },
+  {
+   "t": 267,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 37,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 17,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 1,
+     "d": 28.2,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 87.3,
+     "st": "attack",
+     "hp": 62
+    }
+   ]
+  },
+  {
+   "t": 268,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 34,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 13.8,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 1,
+     "d": 31.3,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 269,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 31,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 10.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 1,
+     "d": 34.5,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 324,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 99,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 3.2,
+     "st": "attack",
+     "hp": 100
+    },
+    {
+     "p": 6,
+     "d": 61.1,
+     "st": "move",
+     "hp": 89
+    },
+    {
+     "p": 7,
+     "d": 65.3,
+     "st": "move",
+     "hp": 98
+    },
+    {
+     "p": 8,
+     "d": 89.2,
+     "st": "idle",
+     "hp": 72
+    },
+    {
+     "p": 9,
+     "d": 85.5,
+     "st": "recall",
+     "hp": 69
+    }
+   ]
+  },
+  {
+   "t": 325,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 97,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 3.2,
+     "st": "idle",
+     "hp": 100
+    },
+    {
+     "p": 6,
+     "d": 58.8,
+     "st": "move",
+     "hp": 89
+    },
+    {
+     "p": 7,
+     "d": 62.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 89.1,
+     "st": "move",
+     "hp": 69
+    },
+    {
+     "p": 9,
+     "d": 85.5,
+     "st": "recall",
+     "hp": 69
+    }
+   ]
+  },
+  {
+   "t": 326,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 95,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 3.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 6,
+     "d": 56.6,
+     "st": "move",
+     "hp": 89
+    },
+    {
+     "p": 7,
+     "d": 59.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 89,
+     "st": "move",
+     "hp": 73
+    },
+    {
+     "p": 9,
+     "d": 85.5,
+     "st": "recall",
+     "hp": 69
+    }
+   ]
+  },
+  {
+   "t": 327,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 92,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 8.7,
+     "st": "attack",
+     "hp": 96
+    },
+    {
+     "p": 6,
+     "d": 55.2,
+     "st": "move",
+     "hp": 90
+    },
+    {
+     "p": 7,
+     "d": 56.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 89.4,
+     "st": "move",
+     "hp": 73
+    },
+    {
+     "p": 9,
+     "d": 67.4,
+     "st": "idle",
+     "hp": 78
+    }
+   ]
+  },
+  {
+   "t": 328,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 92,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 8.2,
+     "st": "idle",
+     "hp": 100
+    },
+    {
+     "p": 6,
+     "d": 56.5,
+     "st": "move",
+     "hp": 90
+    },
+    {
+     "p": 7,
+     "d": 54.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 89.9,
+     "st": "move",
+     "hp": 73
+    },
+    {
+     "p": 9,
+     "d": 67.4,
+     "st": "idle",
+     "hp": 90
+    }
+   ]
+  },
+  {
+   "t": 360,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 68,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 85.5,
+     "st": "attack",
+     "hp": 70
+    },
+    {
+     "p": 1,
+     "d": 7.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 39.3,
+     "st": "move",
+     "hp": 76
+    },
+    {
+     "p": 3,
+     "d": 60.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 4.9,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 434,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 26,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 29.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 84.1,
+     "st": "move",
+     "hp": 69
+    },
+    {
+     "p": 4,
+     "d": 79.3,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 435,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 22,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 25.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 84.4,
+     "st": "move",
+     "hp": 62
+    },
+    {
+     "p": 4,
+     "d": 80.2,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 436,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 19,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 22.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 83.8,
+     "st": "move",
+     "hp": 60
+    },
+    {
+     "p": 4,
+     "d": 81.3,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 437,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 19,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 18.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 81.9,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 438,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 14,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 15.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 81.9,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 441,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 4,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 18,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 63.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 82.1,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 442,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 0,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 20.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 60.8,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 82.6,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 533,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 70,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 6,
+     "d": 35.4,
+     "st": "move",
+     "hp": 90
+    },
+    {
+     "p": 7,
+     "d": 6,
+     "st": "idle",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 44.5,
+     "st": "move",
+     "hp": 94
+    }
+   ]
+  },
+  {
+   "t": 534,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 66,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 6,
+     "d": 32.2,
+     "st": "move",
+     "hp": 90
+    },
+    {
+     "p": 7,
+     "d": 5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 44.8,
+     "st": "cast",
+     "hp": 94
+    }
+   ]
+  },
+  {
+   "t": 535,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 66,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 6,
+     "d": 29.1,
+     "st": "move",
+     "hp": 90
+    },
+    {
+     "p": 7,
+     "d": 4.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 46.4,
+     "st": "move",
+     "hp": 94
+    }
+   ]
+  },
+  {
+   "t": 536,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 64,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 6,
+     "d": 26,
+     "st": "move",
+     "hp": 90
+    },
+    {
+     "p": 7,
+     "d": 5.6,
+     "st": "idle",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 47.9,
+     "st": "move",
+     "hp": 95
+    }
+   ]
+  },
+  {
+   "t": 537,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 63,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 6,
+     "d": 22.6,
+     "st": "move",
+     "hp": 91
+    },
+    {
+     "p": 7,
+     "d": 4.4,
+     "st": "idle",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 48.1,
+     "st": "attack",
+     "hp": 91
+    }
+   ]
+  },
+  {
+   "t": 538,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 62,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 6,
+     "d": 24.1,
+     "st": "move",
+     "hp": 91
+    },
+    {
+     "p": 7,
+     "d": 5.7,
+     "st": "idle",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 48.1,
+     "st": "attack",
+     "hp": 92
+    }
+   ]
+  },
+  {
+   "t": 540,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 61,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 6,
+     "d": 26,
+     "st": "move",
+     "hp": 91
+    },
+    {
+     "p": 7,
+     "d": 11.6,
+     "st": "move",
+     "hp": 98
+    },
+    {
+     "p": 9,
+     "d": 47.7,
+     "st": "attack",
+     "hp": 87
+    }
+   ]
+  },
+  {
+   "t": 615,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 87,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 26.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 6,
+     "d": 68.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 92.5,
+     "st": "idle",
+     "hp": 77
+    },
+    {
+     "p": 9,
+     "d": 76.3,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 616,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 83,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 23.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 6,
+     "d": 66.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 92.1,
+     "st": "stunned",
+     "hp": 69
+    },
+    {
+     "p": 9,
+     "d": 76.2,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 617,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 74,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 19.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 6,
+     "d": 64.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 91.5,
+     "st": "move",
+     "hp": 61
+    },
+    {
+     "p": 9,
+     "d": 76.8,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 618,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 70,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 16.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 6,
+     "d": 62.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 77.5,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 619,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 62,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 12.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 6,
+     "d": 61.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 78.5,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 620,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 58,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 9.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 6,
+     "d": 63.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 79.6,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 621,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 53,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 6.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 6,
+     "d": 65.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 80.8,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 622,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 47,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 3.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 6,
+     "d": 67.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 82.1,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 623,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 43,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 3.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 6,
+     "d": 69,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 82.3,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 624,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 40,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 6.8,
+     "st": "dash",
+     "hp": 100
+    },
+    {
+     "p": 6,
+     "d": 69.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 81.7,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 625,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 35,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 9.3,
+     "st": "idle",
+     "hp": 97
+    },
+    {
+     "p": 6,
+     "d": 70.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 82.1,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 638,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 99,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 51.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 18.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 49.4,
+     "st": "move",
+     "hp": 60
+    },
+    {
+     "p": 4,
+     "d": 51.8,
+     "st": "move",
+     "hp": 86
+    }
+   ]
+  },
+  {
+   "t": 639,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 95,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 48.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 15.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 52,
+     "st": "move",
+     "hp": 86
+    }
+   ]
+  },
+  {
+   "t": 640,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 92,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 45.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 12.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 52,
+     "st": "move",
+     "hp": 87
+    }
+   ]
+  },
+  {
+   "t": 641,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 86,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 42.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 9.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 52.2,
+     "st": "attack",
+     "hp": 87
+    }
+   ]
+  },
+  {
+   "t": 642,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 81,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 41.8,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 7.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 52.6,
+     "st": "attack",
+     "hp": 84
+    }
+   ]
+  },
+  {
+   "t": 643,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 77,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 41.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 4.8,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 52.6,
+     "st": "idle",
+     "hp": 84
+    }
+   ]
+  },
+  {
+   "t": 644,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 73,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 41,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 2.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 52.6,
+     "st": "attack",
+     "hp": 84
+    }
+   ]
+  },
+  {
+   "t": 645,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 70,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 57.6,
+     "st": "idle",
+     "hp": 65
+    },
+    {
+     "p": 1,
+     "d": 40.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 3.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 53.2,
+     "st": "move",
+     "hp": 84
+    }
+   ]
+  },
+  {
+   "t": 646,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 65,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 57.6,
+     "st": "idle",
+     "hp": 81
+    },
+    {
+     "p": 1,
+     "d": 40.8,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 1.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 51.7,
+     "st": "move",
+     "hp": 83
+    }
+   ]
+  },
+  {
+   "t": 647,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 61,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 57,
+     "st": "move",
+     "hp": 96
+    },
+    {
+     "p": 1,
+     "d": 38.8,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 1.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 50,
+     "st": "move",
+     "hp": 83
+    }
+   ]
+  },
+  {
+   "t": 648,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 59,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 54.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 1,
+     "d": 36.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 3.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 48.5,
+     "st": "move",
+     "hp": 84
+    }
+   ]
+  },
+  {
+   "t": 649,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 54,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 51.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 1,
+     "d": 33.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 9.3,
+     "st": "idle",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 47.7,
+     "st": "attack",
+     "hp": 84
+    }
+   ]
+  },
+  {
+   "t": 699,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 54,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 57.7,
+     "st": "move",
+     "hp": 64
+    },
+    {
+     "p": 7,
+     "d": 15,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 40,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 37.8,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 700,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 49,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 59.9,
+     "st": "move",
+     "hp": 64
+    },
+    {
+     "p": 7,
+     "d": 11.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 42,
+     "st": "move",
+     "hp": 91
+    },
+    {
+     "p": 9,
+     "d": 39.2,
+     "st": "move",
+     "hp": 90
+    }
+   ]
+  },
+  {
+   "t": 701,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 45,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 61.9,
+     "st": "move",
+     "hp": 64
+    },
+    {
+     "p": 7,
+     "d": 8.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 39.5,
+     "st": "move",
+     "hp": 92
+    },
+    {
+     "p": 9,
+     "d": 41.7,
+     "st": "move",
+     "hp": 85
+    }
+   ]
+  },
+  {
+   "t": 702,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 38,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 64.3,
+     "st": "move",
+     "hp": 64
+    },
+    {
+     "p": 7,
+     "d": 6.7,
+     "st": "idle",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 39.3,
+     "st": "idle",
+     "hp": 92
+    },
+    {
+     "p": 9,
+     "d": 43.7,
+     "st": "cast",
+     "hp": 86
+    }
+   ]
+  },
+  {
+   "t": 703,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 36,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 66.3,
+     "st": "move",
+     "hp": 65
+    },
+    {
+     "p": 7,
+     "d": 5.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 38.3,
+     "st": "dash",
+     "hp": 92
+    },
+    {
+     "p": 9,
+     "d": 44.6,
+     "st": "attack",
+     "hp": 81
+    }
+   ]
+  },
+  {
+   "t": 704,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 30,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 68.4,
+     "st": "move",
+     "hp": 65
+    },
+    {
+     "p": 7,
+     "d": 4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 34.7,
+     "st": "attack",
+     "hp": 92
+    },
+    {
+     "p": 9,
+     "d": 44.6,
+     "st": "attack",
+     "hp": 77
+    }
+   ]
+  },
+  {
+   "t": 718,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 99,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 41.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 1,
+     "d": 29.4,
+     "st": "move",
+     "hp": 91
+    },
+    {
+     "p": 4,
+     "d": 47.6,
+     "st": "idle",
+     "hp": 67
+    }
+   ]
+  },
+  {
+   "t": 719,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 95,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 37.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 1,
+     "d": 25.8,
+     "st": "move",
+     "hp": 91
+    },
+    {
+     "p": 4,
+     "d": 47.6,
+     "st": "idle",
+     "hp": 82
+    }
+   ]
+  },
+  {
+   "t": 720,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 89,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 34,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 1,
+     "d": 22.3,
+     "st": "move",
+     "hp": 91
+    },
+    {
+     "p": 4,
+     "d": 47.8,
+     "st": "move",
+     "hp": 96
+    }
+   ]
+  },
+  {
+   "t": 721,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 83,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 30.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 1,
+     "d": 18.7,
+     "st": "move",
+     "hp": 91
+    },
+    {
+     "p": 4,
+     "d": 48.3,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 722,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 78,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 29.8,
+     "st": "idle",
+     "hp": 100
+    },
+    {
+     "p": 1,
+     "d": 15.2,
+     "st": "move",
+     "hp": 91
+    },
+    {
+     "p": 4,
+     "d": 49.1,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 723,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 71,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 27.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 1,
+     "d": 12.5,
+     "st": "move",
+     "hp": 92
+    },
+    {
+     "p": 4,
+     "d": 50.1,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 724,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 68,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 23.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 1,
+     "d": 8.9,
+     "st": "move",
+     "hp": 92
+    },
+    {
+     "p": 4,
+     "d": 51.4,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 725,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 60,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 20.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 1,
+     "d": 4.1,
+     "st": "cast",
+     "hp": 92
+    },
+    {
+     "p": 4,
+     "d": 52.9,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 726,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 57,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 17.2,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 1,
+     "d": 7,
+     "st": "move",
+     "hp": 85
+    },
+    {
+     "p": 4,
+     "d": 54.5,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 758,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 23,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 82.8,
+     "st": "move",
+     "hp": 84
+    },
+    {
+     "p": 2,
+     "d": 37.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 5,
+     "st": "attack",
+     "hp": 95
+    },
+    {
+     "p": 4,
+     "d": 3,
+     "st": "idle",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 765,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 54,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 2,
+     "d": 2.6,
+     "st": "attack",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 41.5,
+     "st": "move",
+     "hp": 98
+    },
+    {
+     "p": 4,
+     "d": 42.7,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 766,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 52,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 2,
+     "d": 2.6,
+     "st": "attack",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 44.4,
+     "st": "move",
+     "hp": 98
+    },
+    {
+     "p": 4,
+     "d": 45.4,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 767,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 52,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 2,
+     "d": 2.6,
+     "st": "idle",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 44.5,
+     "st": "idle",
+     "hp": 99
+    },
+    {
+     "p": 4,
+     "d": 46.3,
+     "st": "idle",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 768,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 52,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 2,
+     "d": 2.8,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 44.5,
+     "st": "idle",
+     "hp": 99
+    },
+    {
+     "p": 4,
+     "d": 46.3,
+     "st": "idle",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 770,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 50,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 2,
+     "d": 4.9,
+     "st": "attack",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 44.5,
+     "st": "idle",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 46.3,
+     "st": "idle",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 772,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 48,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 47.6,
+     "st": "move",
+     "hp": 61
+    },
+    {
+     "p": 2,
+     "d": 5.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 44.9,
+     "st": "idle",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 45.8,
+     "st": "attack",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 773,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 46,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 45.7,
+     "st": "move",
+     "hp": 63
+    },
+    {
+     "p": 2,
+     "d": 5.4,
+     "st": "attack",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 44.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 46.3,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 806,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 34,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 5.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 6,
+     "d": 34.7,
+     "st": "move",
+     "hp": 97
+    },
+    {
+     "p": 8,
+     "d": 66.5,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 908,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 98,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 20.6,
+     "st": "move",
+     "hp": 90
+    }
+   ]
+  },
+  {
+   "t": 909,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 93,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 17.3,
+     "st": "move",
+     "hp": 86
+    }
+   ]
+  },
+  {
+   "t": 910,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 90,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 17.6,
+     "st": "idle",
+     "hp": 80
+    },
+    {
+     "p": 9,
+     "d": 67.4,
+     "st": "idle",
+     "hp": 63
+    }
+   ]
+  },
+  {
+   "t": 912,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 85,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 15.8,
+     "st": "move",
+     "hp": 69
+    },
+    {
+     "p": 9,
+     "d": 67.4,
+     "st": "idle",
+     "hp": 88
+    }
+   ]
+  },
+  {
+   "t": 913,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 82,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 16.3,
+     "st": "attack",
+     "hp": 67
+    },
+    {
+     "p": 9,
+     "d": 64.9,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 914,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 79,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 16.1,
+     "st": "dash",
+     "hp": 67
+    },
+    {
+     "p": 9,
+     "d": 61.4,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 915,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 77,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 15.5,
+     "st": "move",
+     "hp": 63
+    },
+    {
+     "p": 9,
+     "d": 57.9,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 957,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 4,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 45.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 54,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 54.2,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 53.2,
+     "st": "idle",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 959,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 1,
+   "att": 4,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 43.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 55.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 56.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 54.7,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 960,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 1,
+   "att": 4,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 42.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 57.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 58.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 56.6,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 963,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 20,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 64.6,
+     "st": "move",
+     "hp": 81
+    },
+    {
+     "p": 1,
+     "d": 22.6,
+     "st": "idle",
+     "hp": 89
+    },
+    {
+     "p": 2,
+     "d": 54.4,
+     "st": "move",
+     "hp": 66
+    },
+    {
+     "p": 3,
+     "d": 53.3,
+     "st": "move",
+     "hp": 99
+    },
+    {
+     "p": 4,
+     "d": 53.7,
+     "st": "move",
+     "hp": 80
+    }
+   ]
+  },
+  {
+   "t": 964,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 12,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 65.8,
+     "st": "move",
+     "hp": 81
+    },
+    {
+     "p": 1,
+     "d": 21.1,
+     "st": "move",
+     "hp": 89
+    },
+    {
+     "p": 2,
+     "d": 51.7,
+     "st": "move",
+     "hp": 67
+    },
+    {
+     "p": 3,
+     "d": 51.5,
+     "st": "move",
+     "hp": 99
+    },
+    {
+     "p": 4,
+     "d": 52.9,
+     "st": "move",
+     "hp": 81
+    }
+   ]
+  },
+  {
+   "t": 965,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 4,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 68.8,
+     "st": "move",
+     "hp": 81
+    },
+    {
+     "p": 1,
+     "d": 18.2,
+     "st": "move",
+     "hp": 89
+    },
+    {
+     "p": 2,
+     "d": 48.1,
+     "st": "move",
+     "hp": 67
+    },
+    {
+     "p": 3,
+     "d": 48,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 49.4,
+     "st": "move",
+     "hp": 81
+    }
+   ]
+  },
+  {
+   "t": 966,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 97,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 32.8,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 71.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 72.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 69.7,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 967,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 95,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 34.2,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 73,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 75.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 72.8,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 968,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 86,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 32.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 70,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 70.8,
+     "st": "dash",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 75.1,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 969,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 77,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 30.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 69.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 65.7,
+     "st": "cast",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 72.6,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 970,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 69,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 29.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 67.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 66.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 71.5,
+     "st": "attack",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 971,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 58,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 26.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 67.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 66.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 9,
+     "d": 70.8,
+     "st": "attack",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 972,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 51,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 23.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 68.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 65.4,
+     "st": "move",
+     "hp": 98
+    },
+    {
+     "p": 9,
+     "d": 70.8,
+     "st": "attack",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 973,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 47,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 21.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 68.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 64.4,
+     "st": "attack",
+     "hp": 98
+    },
+    {
+     "p": 9,
+     "d": 70.8,
+     "st": "attack",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 974,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 36,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 19.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 65.3,
+     "st": "attack",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 68.7,
+     "st": "attack",
+     "hp": 97
+    },
+    {
+     "p": 9,
+     "d": 70.8,
+     "st": "attack",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 975,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 29,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 17.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 64.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 68.3,
+     "st": "move",
+     "hp": 97
+    },
+    {
+     "p": 9,
+     "d": 70,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 976,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 25,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 16.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 61.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 64.7,
+     "st": "move",
+     "hp": 98
+    },
+    {
+     "p": 9,
+     "d": 66.9,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 977,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 22,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 16.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 59,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 61.2,
+     "st": "move",
+     "hp": 98
+    },
+    {
+     "p": 9,
+     "d": 63.9,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 980,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 20,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 9.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 49.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 50.8,
+     "st": "move",
+     "hp": 98
+    },
+    {
+     "p": 9,
+     "d": 54.3,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 981,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 17,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 4.1,
+     "st": "dash",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 50.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 47.3,
+     "st": "move",
+     "hp": 98
+    },
+    {
+     "p": 9,
+     "d": 55.4,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 983,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 15,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 1.7,
+     "st": "attack",
+     "hp": 87
+    },
+    {
+     "p": 7,
+     "d": 51.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 40.9,
+     "st": "move",
+     "hp": 98
+    },
+    {
+     "p": 9,
+     "d": 56.7,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 984,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 12,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 1.7,
+     "st": "attack",
+     "hp": 88
+    },
+    {
+     "p": 7,
+     "d": 48.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 8,
+     "d": 38,
+     "st": "move",
+     "hp": 99
+    },
+    {
+     "p": 9,
+     "d": 53.3,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1036,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 33,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 4.6,
+     "st": "move",
+     "hp": 61
+    },
+    {
+     "p": 6,
+     "d": 5.4,
+     "st": "idle",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 15.2,
+     "st": "move",
+     "hp": 77
+    },
+    {
+     "p": 8,
+     "d": 9.3,
+     "st": "move",
+     "hp": 99
+    },
+    {
+     "p": 9,
+     "d": 19.1,
+     "st": "move",
+     "hp": 89
+    }
+   ]
+  },
+  {
+   "t": 1037,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 28,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 6,
+     "d": 3,
+     "st": "stunned",
+     "hp": 84
+    },
+    {
+     "p": 7,
+     "d": 11.7,
+     "st": "move",
+     "hp": 77
+    },
+    {
+     "p": 8,
+     "d": 3.4,
+     "st": "dash",
+     "hp": 91
+    },
+    {
+     "p": 9,
+     "d": 16.1,
+     "st": "move",
+     "hp": 89
+    }
+   ]
+  },
+  {
+   "t": 1038,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 26,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 6,
+     "d": 3.9,
+     "st": "attack",
+     "hp": 84
+    },
+    {
+     "p": 7,
+     "d": 8.3,
+     "st": "move",
+     "hp": 77
+    },
+    {
+     "p": 8,
+     "d": 5.2,
+     "st": "idle",
+     "hp": 91
+    },
+    {
+     "p": 9,
+     "d": 12.6,
+     "st": "move",
+     "hp": 89
+    }
+   ]
+  },
+  {
+   "t": 1039,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 21,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 6,
+     "d": 3.8,
+     "st": "move",
+     "hp": 84
+    },
+    {
+     "p": 7,
+     "d": 5.5,
+     "st": "move",
+     "hp": 77
+    },
+    {
+     "p": 8,
+     "d": 5.2,
+     "st": "attack",
+     "hp": 91
+    },
+    {
+     "p": 9,
+     "d": 9.2,
+     "st": "move",
+     "hp": 90
+    }
+   ]
+  },
+  {
+   "t": 1040,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 16,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 6,
+     "d": 3.7,
+     "st": "move",
+     "hp": 85
+    },
+    {
+     "p": 7,
+     "d": 4.8,
+     "st": "move",
+     "hp": 77
+    },
+    {
+     "p": 8,
+     "d": 5.4,
+     "st": "move",
+     "hp": 89
+    },
+    {
+     "p": 9,
+     "d": 6.6,
+     "st": "cast",
+     "hp": 90
+    }
+   ]
+  },
+  {
+   "t": 1041,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 14,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 6,
+     "d": 3.7,
+     "st": "attack",
+     "hp": 85
+    },
+    {
+     "p": 7,
+     "d": 8.3,
+     "st": "move",
+     "hp": 77
+    },
+    {
+     "p": 8,
+     "d": 6.8,
+     "st": "move",
+     "hp": 89
+    },
+    {
+     "p": 9,
+     "d": 4.9,
+     "st": "cast",
+     "hp": 90
+    }
+   ]
+  },
+  {
+   "t": 1125,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 75,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 68.6,
+     "st": "attack",
+     "hp": 98
+    },
+    {
+     "p": 6,
+     "d": 68.7,
+     "st": "attack",
+     "hp": 84
+    },
+    {
+     "p": 7,
+     "d": 63.2,
+     "st": "attack",
+     "hp": 81
+    },
+    {
+     "p": 8,
+     "d": 43.9,
+     "st": "move",
+     "hp": 88
+    },
+    {
+     "p": 9,
+     "d": 64.8,
+     "st": "attack",
+     "hp": 82
+    }
+   ]
+  },
+  {
+   "t": 1127,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 68,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 68.6,
+     "st": "attack",
+     "hp": 98
+    },
+    {
+     "p": 6,
+     "d": 68.7,
+     "st": "attack",
+     "hp": 84
+    },
+    {
+     "p": 7,
+     "d": 63.2,
+     "st": "attack",
+     "hp": 81
+    },
+    {
+     "p": 8,
+     "d": 42.5,
+     "st": "move",
+     "hp": 88
+    },
+    {
+     "p": 9,
+     "d": 64.8,
+     "st": "attack",
+     "hp": 82
+    }
+   ]
+  },
+  {
+   "t": 1128,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 59,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 66.8,
+     "st": "move",
+     "hp": 98
+    },
+    {
+     "p": 6,
+     "d": 68.4,
+     "st": "move",
+     "hp": 77
+    },
+    {
+     "p": 7,
+     "d": 60.8,
+     "st": "move",
+     "hp": 81
+    },
+    {
+     "p": 8,
+     "d": 40.2,
+     "st": "move",
+     "hp": 89
+    },
+    {
+     "p": 9,
+     "d": 63.9,
+     "st": "move",
+     "hp": 69
+    }
+   ]
+  },
+  {
+   "t": 1129,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 52,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 64,
+     "st": "move",
+     "hp": 99
+    },
+    {
+     "p": 6,
+     "d": 65.3,
+     "st": "move",
+     "hp": 78
+    },
+    {
+     "p": 7,
+     "d": 57.5,
+     "st": "move",
+     "hp": 82
+    },
+    {
+     "p": 8,
+     "d": 37.5,
+     "st": "move",
+     "hp": 89
+    },
+    {
+     "p": 9,
+     "d": 60.6,
+     "st": "move",
+     "hp": 69
+    }
+   ]
+  },
+  {
+   "t": 1130,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 40,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 60.5,
+     "st": "move",
+     "hp": 99
+    },
+    {
+     "p": 6,
+     "d": 62.3,
+     "st": "move",
+     "hp": 72
+    },
+    {
+     "p": 7,
+     "d": 54.2,
+     "st": "move",
+     "hp": 82
+    },
+    {
+     "p": 8,
+     "d": 34.8,
+     "st": "move",
+     "hp": 89
+    },
+    {
+     "p": 9,
+     "d": 57.4,
+     "st": "move",
+     "hp": 69
+    }
+   ]
+  },
+  {
+   "t": 1131,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 32,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 57.1,
+     "st": "move",
+     "hp": 99
+    },
+    {
+     "p": 6,
+     "d": 62.5,
+     "st": "move",
+     "hp": 72
+    },
+    {
+     "p": 7,
+     "d": 50.9,
+     "st": "move",
+     "hp": 82
+    },
+    {
+     "p": 8,
+     "d": 31.4,
+     "st": "move",
+     "hp": 89
+    },
+    {
+     "p": 9,
+     "d": 55,
+     "st": "move",
+     "hp": 69
+    }
+   ]
+  },
+  {
+   "t": 1132,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 23,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 53.8,
+     "st": "move",
+     "hp": 99
+    },
+    {
+     "p": 6,
+     "d": 64.5,
+     "st": "move",
+     "hp": 72
+    },
+    {
+     "p": 7,
+     "d": 48.5,
+     "st": "move",
+     "hp": 82
+    },
+    {
+     "p": 8,
+     "d": 27.9,
+     "st": "move",
+     "hp": 89
+    },
+    {
+     "p": 9,
+     "d": 52.4,
+     "st": "cast",
+     "hp": 69
+    }
+   ]
+  },
+  {
+   "t": 1133,
+   "def": "needle_outer",
+   "team": 1,
+   "hp": 13,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 50.6,
+     "st": "move",
+     "hp": 99
+    },
+    {
+     "p": 6,
+     "d": 61,
+     "st": "move",
+     "hp": 72
+    },
+    {
+     "p": 7,
+     "d": 45.4,
+     "st": "move",
+     "hp": 82
+    },
+    {
+     "p": 8,
+     "d": 24.5,
+     "st": "move",
+     "hp": 89
+    },
+    {
+     "p": 9,
+     "d": 50.9,
+     "st": "move",
+     "hp": 69
+    }
+   ]
+  },
+  {
+   "t": 1145,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 97,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 63.7,
+     "st": "attack",
+     "hp": 96
+    },
+    {
+     "p": 6,
+     "d": 44.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 32.8,
+     "st": "move",
+     "hp": 84
+    },
+    {
+     "p": 9,
+     "d": 21.8,
+     "st": "move",
+     "hp": 69
+    }
+   ]
+  },
+  {
+   "t": 1146,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 95,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 63.8,
+     "st": "move",
+     "hp": 96
+    },
+    {
+     "p": 6,
+     "d": 40.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 31.4,
+     "st": "move",
+     "hp": 84
+    },
+    {
+     "p": 9,
+     "d": 18.8,
+     "st": "move",
+     "hp": 69
+    }
+   ]
+  },
+  {
+   "t": 1147,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 86,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 62.1,
+     "st": "move",
+     "hp": 96
+    },
+    {
+     "p": 6,
+     "d": 37,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 28.9,
+     "st": "move",
+     "hp": 84
+    },
+    {
+     "p": 9,
+     "d": 15.6,
+     "st": "cast",
+     "hp": 69
+    }
+   ]
+  },
+  {
+   "t": 1148,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 76,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 58.8,
+     "st": "move",
+     "hp": 96
+    },
+    {
+     "p": 6,
+     "d": 33.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 27.6,
+     "st": "cast",
+     "hp": 84
+    }
+   ]
+  },
+  {
+   "t": 1149,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 71,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 59.4,
+     "st": "move",
+     "hp": 96
+    },
+    {
+     "p": 6,
+     "d": 30.2,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 27.7,
+     "st": "move",
+     "hp": 85
+    }
+   ]
+  },
+  {
+   "t": 1150,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 68,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 62.9,
+     "st": "move",
+     "hp": 97
+    },
+    {
+     "p": 6,
+     "d": 26.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 30,
+     "st": "attack",
+     "hp": 85
+    }
+   ]
+  },
+  {
+   "t": 1151,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 66,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 62.3,
+     "st": "move",
+     "hp": 97
+    },
+    {
+     "p": 6,
+     "d": 23.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 29.2,
+     "st": "attack",
+     "hp": 84
+    }
+   ]
+  },
+  {
+   "t": 1152,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 61,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 58.8,
+     "st": "move",
+     "hp": 97
+    },
+    {
+     "p": 6,
+     "d": 19.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 7,
+     "d": 27,
+     "st": "move",
+     "hp": 83
+    }
+   ]
+  },
+  {
+   "t": 1158,
+   "def": "needle_inner",
+   "team": 1,
+   "hp": 60,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 5,
+     "d": 38.8,
+     "st": "move",
+     "hp": 98
+    },
+    {
+     "p": 6,
+     "d": 8.3,
+     "st": "attack",
+     "hp": 97
+    },
+    {
+     "p": 7,
+     "d": 12.8,
+     "st": "move",
+     "hp": 76
+    }
+   ]
+  },
+  {
+   "t": 1227,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 43,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 42,
+     "st": "move",
+     "hp": 68
+    },
+    {
+     "p": 1,
+     "d": 41.2,
+     "st": "cast",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 42.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 39.9,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1228,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 36,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 42.5,
+     "st": "cast",
+     "hp": 68
+    },
+    {
+     "p": 1,
+     "d": 41.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 42.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 41.1,
+     "st": "attack",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1229,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 28,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 40.3,
+     "st": "move",
+     "hp": 70
+    },
+    {
+     "p": 1,
+     "d": 42.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 42.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 41.4,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1230,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 17,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 38.1,
+     "st": "move",
+     "hp": 70
+    },
+    {
+     "p": 1,
+     "d": 40.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 41.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 42.2,
+     "st": "attack",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1231,
+   "def": "needle_outer",
+   "team": 0,
+   "hp": 3,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 36.4,
+     "st": "move",
+     "hp": 70
+    },
+    {
+     "p": 1,
+     "d": 38.2,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 38.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 42.3,
+     "st": "attack",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1240,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 85,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 50.5,
+     "st": "move",
+     "hp": 72
+    },
+    {
+     "p": 1,
+     "d": 49.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 62.6,
+     "st": "idle",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 37.3,
+     "st": "move",
+     "hp": 62
+    },
+    {
+     "p": 4,
+     "d": 61.8,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1241,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 78,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 53.9,
+     "st": "move",
+     "hp": 72
+    },
+    {
+     "p": 1,
+     "d": 52,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 63.3,
+     "st": "idle",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 36.9,
+     "st": "cast",
+     "hp": 63
+    },
+    {
+     "p": 4,
+     "d": 62.6,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1242,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 65,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 57.2,
+     "st": "move",
+     "hp": 72
+    },
+    {
+     "p": 1,
+     "d": 54.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 65.5,
+     "st": "idle",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 36.7,
+     "st": "move",
+     "hp": 63
+    },
+    {
+     "p": 4,
+     "d": 64.7,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1243,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 55,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 53.9,
+     "st": "move",
+     "hp": 72
+    },
+    {
+     "p": 1,
+     "d": 55.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 62.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 37,
+     "st": "move",
+     "hp": 64
+    },
+    {
+     "p": 4,
+     "d": 61.6,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1244,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 47,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 50.6,
+     "st": "move",
+     "hp": 72
+    },
+    {
+     "p": 1,
+     "d": 55,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 59.4,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 37.5,
+     "st": "move",
+     "hp": 64
+    },
+    {
+     "p": 4,
+     "d": 58.1,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1245,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 34,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 46.9,
+     "st": "move",
+     "hp": 73
+    },
+    {
+     "p": 1,
+     "d": 52.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 56,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 38.5,
+     "st": "move",
+     "hp": 65
+    },
+    {
+     "p": 4,
+     "d": 54.8,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1246,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 22,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 43.3,
+     "st": "move",
+     "hp": 73
+    },
+    {
+     "p": 1,
+     "d": 49.8,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 52.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 51.5,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1247,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 11,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 39.6,
+     "st": "move",
+     "hp": 73
+    },
+    {
+     "p": 1,
+     "d": 46.2,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 49.2,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 47.9,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1248,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 4,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 36,
+     "st": "move",
+     "hp": 73
+    },
+    {
+     "p": 1,
+     "d": 42.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 45.6,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 44.4,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1255,
+   "def": "lantern",
+   "team": 0,
+   "hp": 96,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 22.8,
+     "st": "move",
+     "hp": 74
+    },
+    {
+     "p": 1,
+     "d": 47.2,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 50.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 49.3,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1256,
+   "def": "lantern",
+   "team": 0,
+   "hp": 90,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 19.2,
+     "st": "move",
+     "hp": 75
+    },
+    {
+     "p": 1,
+     "d": 50.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 54.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 52.8,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1257,
+   "def": "lantern",
+   "team": 0,
+   "hp": 85,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 15.7,
+     "st": "move",
+     "hp": 75
+    },
+    {
+     "p": 1,
+     "d": 48.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 54.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 50.1,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1258,
+   "def": "lantern",
+   "team": 0,
+   "hp": 77,
+   "att": 3,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 13.7,
+     "st": "move",
+     "hp": 67
+    },
+    {
+     "p": 1,
+     "d": 44.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 51.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 46.6,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1259,
+   "def": "lantern",
+   "team": 0,
+   "hp": 68,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 41.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 47.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 43.2,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1260,
+   "def": "lantern",
+   "team": 0,
+   "hp": 62,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 38.1,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 44,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 39.8,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1265,
+   "def": "lantern",
+   "team": 0,
+   "hp": 29,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 26.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 27.8,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 28,
+     "st": "cast",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1266,
+   "def": "lantern",
+   "team": 0,
+   "hp": 27,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 23,
+     "st": "idle",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 23.9,
+     "st": "dash",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 27.1,
+     "st": "idle",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1267,
+   "def": "lantern",
+   "team": 0,
+   "hp": 19,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 19.6,
+     "st": "move",
+     "hp": 98
+    },
+    {
+     "p": 2,
+     "d": 22.1,
+     "st": "move",
+     "hp": 86
+    },
+    {
+     "p": 4,
+     "d": 27,
+     "st": "attack",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1268,
+   "def": "lantern",
+   "team": 0,
+   "hp": 13,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 16.3,
+     "st": "move",
+     "hp": 91
+    },
+    {
+     "p": 2,
+     "d": 20.8,
+     "st": "move",
+     "hp": 77
+    },
+    {
+     "p": 4,
+     "d": 26.6,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1269,
+   "def": "lantern",
+   "team": 0,
+   "hp": 12,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 14.1,
+     "st": "move",
+     "hp": 92
+    },
+    {
+     "p": 2,
+     "d": 18.1,
+     "st": "move",
+     "hp": 68
+    },
+    {
+     "p": 4,
+     "d": 26.5,
+     "st": "attack",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1271,
+   "def": "lantern",
+   "team": 0,
+   "hp": 8,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 13.2,
+     "st": "attack",
+     "hp": 88
+    },
+    {
+     "p": 4,
+     "d": 25.5,
+     "st": "attack",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1272,
+   "def": "lantern",
+   "team": 0,
+   "hp": 4,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 13.2,
+     "st": "attack",
+     "hp": 89
+    },
+    {
+     "p": 4,
+     "d": 24.4,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1277,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 98,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 27.6,
+     "st": "move",
+     "hp": 61
+    },
+    {
+     "p": 4,
+     "d": 32.7,
+     "st": "attack",
+     "hp": 92
+    }
+   ]
+  },
+  {
+   "t": 1279,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 97,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 4,
+     "d": 33.5,
+     "st": "move",
+     "hp": 92
+    }
+   ]
+  },
+  {
+   "t": 1280,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 95,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 4,
+     "d": 30.1,
+     "st": "move",
+     "hp": 93
+    }
+   ]
+  },
+  {
+   "t": 1281,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 93,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 4,
+     "d": 27.9,
+     "st": "attack",
+     "hp": 93
+    }
+   ]
+  },
+  {
+   "t": 1283,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 92,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 4,
+     "d": 27.9,
+     "st": "attack",
+     "hp": 93
+    }
+   ]
+  },
+  {
+   "t": 1291,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 91,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 4,
+     "d": 23.3,
+     "st": "move",
+     "hp": 65
+    }
+   ]
+  },
+  {
+   "t": 1293,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 90,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 11.1,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1322,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 53,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 63.8,
+     "st": "move",
+     "hp": 70
+    },
+    {
+     "p": 2,
+     "d": 7.6,
+     "st": "stunned",
+     "hp": 74
+    },
+    {
+     "p": 3,
+     "d": 33.4,
+     "st": "idle",
+     "hp": 75
+    },
+    {
+     "p": 4,
+     "d": 41.4,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1324,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 21,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 69.6,
+     "st": "move",
+     "hp": 71
+    },
+    {
+     "p": 1,
+     "d": 37.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 6.4,
+     "st": "move",
+     "hp": 75
+    },
+    {
+     "p": 3,
+     "d": 34.7,
+     "st": "move",
+     "hp": 76
+    },
+    {
+     "p": 4,
+     "d": 34.4,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1325,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 9,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 72.6,
+     "st": "move",
+     "hp": 71
+    },
+    {
+     "p": 1,
+     "d": 33.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 8,
+     "st": "attack",
+     "hp": 77
+    },
+    {
+     "p": 3,
+     "d": 35.2,
+     "st": "attack",
+     "hp": 75
+    },
+    {
+     "p": 4,
+     "d": 30.9,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1326,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 6,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 75.7,
+     "st": "move",
+     "hp": 71
+    },
+    {
+     "p": 1,
+     "d": 30.2,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 2,
+     "d": 9.1,
+     "st": "attack",
+     "hp": 72
+    },
+    {
+     "p": 3,
+     "d": 35.1,
+     "st": "cast",
+     "hp": 69
+    },
+    {
+     "p": 4,
+     "d": 27.3,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1329,
+   "def": "needle_inner",
+   "team": 0,
+   "hp": 1,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 79.7,
+     "st": "move",
+     "hp": 72
+    },
+    {
+     "p": 1,
+     "d": 19.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 17,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1349,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 88,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 38.9,
+     "st": "attack",
+     "hp": 97
+    },
+    {
+     "p": 2,
+     "d": 10.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 37.5,
+     "st": "idle",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1351,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 86,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 32.8,
+     "st": "move",
+     "hp": 97
+    },
+    {
+     "p": 2,
+     "d": 5.5,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 8.8,
+     "st": "move",
+     "hp": 69
+    },
+    {
+     "p": 4,
+     "d": 31.1,
+     "st": "move",
+     "hp": 98
+    }
+   ]
+  },
+  {
+   "t": 1352,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 85,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 29.7,
+     "st": "move",
+     "hp": 97
+    },
+    {
+     "p": 2,
+     "d": 6.9,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 3,
+     "d": 6,
+     "st": "move",
+     "hp": 70
+    },
+    {
+     "p": 4,
+     "d": 28.3,
+     "st": "cast",
+     "hp": 96
+    }
+   ]
+  },
+  {
+   "t": 1383,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 83,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 1,
+     "d": 10.6,
+     "st": "move",
+     "hp": 71
+    },
+    {
+     "p": 4,
+     "d": 9.2,
+     "st": "attack",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1441,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 81,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 3.8,
+     "st": "move",
+     "hp": 91
+    }
+   ]
+  },
+  {
+   "t": 1442,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 80,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 4.5,
+     "st": "idle",
+     "hp": 91
+    }
+   ]
+  },
+  {
+   "t": 1442,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 99,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 6.1,
+     "st": "idle",
+     "hp": 91
+    }
+   ]
+  },
+  {
+   "t": 1443,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 77,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 5.8,
+     "st": "attack",
+     "hp": 90
+    }
+   ]
+  },
+  {
+   "t": 1443,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 97,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 6.8,
+     "st": "attack",
+     "hp": 90
+    }
+   ]
+  },
+  {
+   "t": 1444,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 74,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 5.7,
+     "st": "move",
+     "hp": 81
+    }
+   ]
+  },
+  {
+   "t": 1444,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 95,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 7.6,
+     "st": "move",
+     "hp": 81
+    }
+   ]
+  },
+  {
+   "t": 1445,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 71,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 4.1,
+     "st": "attack",
+     "hp": 79
+    }
+   ]
+  },
+  {
+   "t": 1445,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 94,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 7.2,
+     "st": "attack",
+     "hp": 79
+    }
+   ]
+  },
+  {
+   "t": 1446,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 92,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 8.8,
+     "st": "move",
+     "hp": 77
+    }
+   ]
+  },
+  {
+   "t": 1447,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 69,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 6.9,
+     "st": "attack",
+     "hp": 76
+    }
+   ]
+  },
+  {
+   "t": 1448,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 89,
+   "att": 1,
+   "fitOwn": []
+  },
+  {
+   "t": 1449,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 67,
+   "att": 1,
+   "fitOwn": []
+  },
+  {
+   "t": 1449,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 88,
+   "att": 1,
+   "fitOwn": []
+  },
+  {
+   "t": 1450,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 65,
+   "att": 1,
+   "fitOwn": []
+  },
+  {
+   "t": 1450,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 85,
+   "att": 1,
+   "fitOwn": []
+  },
+  {
+   "t": 1451,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 84,
+   "att": 1,
+   "fitOwn": []
+  },
+  {
+   "t": 1452,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 63,
+   "att": 1,
+   "fitOwn": []
+  },
+  {
+   "t": 1453,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 61,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 12.1,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1456,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 59,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 3,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1457,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 57,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 2.1,
+     "st": "dash",
+     "hp": 93
+    }
+   ]
+  },
+  {
+   "t": 1458,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 55,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 2.3,
+     "st": "move",
+     "hp": 94
+    }
+   ]
+  },
+  {
+   "t": 1459,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 52,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 4,
+     "st": "cast",
+     "hp": 94
+    }
+   ]
+  },
+  {
+   "t": 1460,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 51,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 5,
+     "st": "cast",
+     "hp": 94
+    },
+    {
+     "p": 4,
+     "d": 14.2,
+     "st": "move",
+     "hp": 66
+    }
+   ]
+  },
+  {
+   "t": 1461,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 48,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 6.6,
+     "st": "dash",
+     "hp": 77
+    },
+    {
+     "p": 4,
+     "d": 10.8,
+     "st": "move",
+     "hp": 70
+    }
+   ]
+  },
+  {
+   "t": 1462,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 47,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 0,
+     "d": 4.4,
+     "st": "attack",
+     "hp": 62
+    },
+    {
+     "p": 4,
+     "d": 7.3,
+     "st": "move",
+     "hp": 70
+    }
+   ]
+  },
+  {
+   "t": 1465,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 81,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 4,
+     "d": 9.5,
+     "st": "move",
+     "hp": 71
+    }
+   ]
+  },
+  {
+   "t": 1466,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 45,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 4,
+     "d": 8.6,
+     "st": "move",
+     "hp": 71
+    }
+   ]
+  },
+  {
+   "t": 1467,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 77,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 4,
+     "d": 11.5,
+     "st": "idle",
+     "hp": 71
+    }
+   ]
+  },
+  {
+   "t": 1468,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 43,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 4,
+     "d": 8.4,
+     "st": "move",
+     "hp": 71
+    }
+   ]
+  },
+  {
+   "t": 1468,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 61,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 4,
+     "d": 11,
+     "st": "move",
+     "hp": 71
+    }
+   ]
+  },
+  {
+   "t": 1469,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 46,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 4,
+     "d": 10.4,
+     "st": "move",
+     "hp": 71
+    }
+   ]
+  },
+  {
+   "t": 1470,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 34,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 2,
+     "d": 14.3,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 8,
+     "st": "cast",
+     "hp": 71
+    }
+   ]
+  },
+  {
+   "t": 1471,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 16,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 2,
+     "d": 13,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 6,
+     "st": "move",
+     "hp": 72
+    }
+   ]
+  },
+  {
+   "t": 1472,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 8,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 2,
+     "d": 10.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 6.1,
+     "st": "attack",
+     "hp": 72
+    }
+   ]
+  },
+  {
+   "t": 1473,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 2,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 2,
+     "d": 8.2,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 6.1,
+     "st": "attack",
+     "hp": 72
+    }
+   ]
+  },
+  {
+   "t": 1474,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 41,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 2,
+     "d": 2.1,
+     "st": "attack",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 4.3,
+     "st": "attack",
+     "hp": 72
+    }
+   ]
+  },
+  {
+   "t": 1476,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 39,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 2,
+     "d": 2.7,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 4.3,
+     "st": "idle",
+     "hp": 72
+    }
+   ]
+  },
+  {
+   "t": 1478,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 37,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 2,
+     "d": 6.2,
+     "st": "move",
+     "hp": 100
+    },
+    {
+     "p": 4,
+     "d": 4.9,
+     "st": "attack",
+     "hp": 72
+    }
+   ]
+  },
+  {
+   "t": 1489,
+   "def": "needle_bell",
+   "team": 0,
+   "hp": 5,
+   "att": 1,
+   "fitOwn": []
+  },
+  {
+   "t": 1493,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 99,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 3.4,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1494,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 98,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 4.5,
+     "st": "cast",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1495,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 98,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 7.4,
+     "st": "move",
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "t": 1498,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 95,
+   "att": 1,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 6.1,
+     "st": "move",
+     "hp": 88
+    }
+   ]
+  },
+  {
+   "t": 1499,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 91,
+   "att": 2,
+   "fitOwn": []
+  },
+  {
+   "t": 1501,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 87,
+   "att": 2,
+   "fitOwn": []
+  },
+  {
+   "t": 1502,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 85,
+   "att": 2,
+   "fitOwn": []
+  },
+  {
+   "t": 1503,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 83,
+   "att": 2,
+   "fitOwn": []
+  },
+  {
+   "t": 1504,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 80,
+   "att": 2,
+   "fitOwn": []
+  },
+  {
+   "t": 1505,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 75,
+   "att": 2,
+   "fitOwn": []
+  },
+  {
+   "t": 1506,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 70,
+   "att": 2,
+   "fitOwn": []
+  },
+  {
+   "t": 1507,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 65,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 5.9,
+     "st": "move",
+     "hp": 64
+    }
+   ]
+  },
+  {
+   "t": 1508,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 60,
+   "att": 2,
+   "fitOwn": [
+    {
+     "p": 3,
+     "d": 4,
+     "st": "move",
+     "hp": 64
+    }
+   ]
+  },
+  {
+   "t": 1509,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 57,
+   "att": 2,
+   "fitOwn": []
+  },
+  {
+   "t": 1510,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 55,
+   "att": 2,
+   "fitOwn": []
+  },
+  {
+   "t": 1511,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 49,
+   "att": 2,
+   "fitOwn": []
+  },
+  {
+   "t": 1512,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 44,
+   "att": 2,
+   "fitOwn": []
+  },
+  {
+   "t": 1513,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 36,
+   "att": 2,
+   "fitOwn": []
+  },
+  {
+   "t": 1514,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 28,
+   "att": 2,
+   "fitOwn": []
+  },
+  {
+   "t": 1515,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 23,
+   "att": 2,
+   "fitOwn": []
+  },
+  {
+   "t": 1516,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 14,
+   "att": 3,
+   "fitOwn": []
+  },
+  {
+   "t": 1517,
+   "def": "hourbell",
+   "team": 0,
+   "hp": 6,
+   "att": 3,
+   "fitOwn": []
+  }
+ ],
+ "beelines": [
+  {
+   "t": 61,
+   "hunter": 4,
+   "target": 6,
+   "d0": 54,
+   "d1": 43,
+   "hiddenFor": 60,
+   "hunterAt": [
+    85,
+    97
+   ],
+   "targetAt": [
+    122,
+    76
+   ]
+  },
+  {
+   "t": 123,
+   "hunter": 1,
+   "target": 6,
+   "d0": 59,
+   "d1": 49,
+   "hiddenFor": 123,
+   "hunterAt": [
+    66,
+    78
+   ],
+   "targetAt": [
+    115,
+    74
+   ]
+  },
+  {
+   "t": 126,
+   "hunter": 6,
+   "target": 1,
+   "d0": 51,
+   "d1": 37,
+   "hiddenFor": 126,
+   "hunterAt": [
+    106,
+    74
+   ],
+   "targetAt": [
+    69,
+    78
+   ]
+  },
+  {
+   "t": 132,
+   "hunter": 8,
+   "target": 1,
+   "d0": 60,
+   "d1": 45,
+   "hiddenFor": 131,
+   "hunterAt": [
+    111,
+    96
+   ],
+   "targetAt": [
+    69,
+    78
+   ]
+  },
+  {
+   "t": 141,
+   "hunter": 2,
+   "target": 6,
+   "d0": 44,
+   "d1": 33,
+   "hiddenFor": 141,
+   "hunterAt": [
+    78,
+    54
+   ],
+   "targetAt": [
+    103,
+    76
+   ]
+  },
+  {
+   "t": 246,
+   "hunter": 4,
+   "target": 6,
+   "d0": 59,
+   "d1": 44,
+   "hiddenFor": 48,
+   "hunterAt": [
+    78,
+    98
+   ],
+   "targetAt": [
+    109,
+    67
+   ]
+  },
+  {
+   "t": 296,
+   "hunter": 1,
+   "target": 6,
+   "d0": 60,
+   "d1": 46,
+   "hiddenFor": 97,
+   "hunterAt": [
+    82,
+    38
+   ],
+   "targetAt": [
+    93,
+    83
+   ]
+  },
+  {
+   "t": 297,
+   "hunter": 3,
+   "target": 6,
+   "d0": 27,
+   "d1": 16,
+   "hiddenFor": 99,
+   "hunterAt": [
+    76,
+    96
+   ],
+   "targetAt": [
+    89,
+    86
+   ]
+  },
+  {
+   "t": 375,
+   "hunter": 6,
+   "target": 4,
+   "d0": 59,
+   "d1": 40,
+   "hiddenFor": 10,
+   "hunterAt": [
+    113,
+    60
+   ],
+   "targetAt": [
+    78,
+    79
+   ]
+  },
+  {
+   "t": 375,
+   "hunter": 3,
+   "target": 8,
+   "d0": 57,
+   "d1": 41,
+   "hiddenFor": 13,
+   "hunterAt": [
+    57,
+    61
+   ],
+   "targetAt": [
+    95,
+    78
+   ]
+  },
+  {
+   "t": 376,
+   "hunter": 6,
+   "target": 1,
+   "d0": 58,
+   "d1": 38,
+   "hiddenFor": 9,
+   "hunterAt": [
+    111,
+    63
+   ],
+   "targetAt": [
+    78,
+    80
+   ]
+  },
+  {
+   "t": 376,
+   "hunter": 3,
+   "target": 9,
+   "d0": 48,
+   "d1": 37,
+   "hiddenFor": 6,
+   "hunterAt": [
+    59,
+    63
+   ],
+   "targetAt": [
+    76,
+    97
+   ]
+  },
+  {
+   "t": 460,
+   "hunter": 2,
+   "target": 6,
+   "d0": 58,
+   "d1": 45,
+   "hiddenFor": 18,
+   "hunterAt": [
+    75,
+    56
+   ],
+   "targetAt": [
+    106,
+    89
+   ]
+  },
+  {
+   "t": 501,
+   "hunter": 9,
+   "target": 4,
+   "d0": 52,
+   "d1": 34,
+   "hiddenFor": 6,
+   "hunterAt": [
+    126,
+    89
+   ],
+   "targetAt": [
+    93,
+    100
+   ]
+  },
+  {
+   "t": 538,
+   "hunter": 6,
+   "target": 1,
+   "d0": 60,
+   "d1": 49,
+   "hiddenFor": 60,
+   "hunterAt": [
+    105,
+    74
+   ],
+   "targetAt": [
+    55,
+    72
+   ]
+  },
+  {
+   "t": 593,
+   "hunter": 3,
+   "target": 9,
+   "d0": 59,
+   "d1": 41,
+   "hiddenFor": 8,
+   "hunterAt": [
+    46,
+    91
+   ],
+   "targetAt": [
+    86,
+    95
+   ]
+  },
+  {
+   "t": 601,
+   "hunter": 1,
+   "target": 6,
+   "d0": 28,
+   "d1": 14,
+   "hiddenFor": 6,
+   "hunterAt": [
+    84,
+    44
+   ],
+   "targetAt": [
+    96,
+    52
+   ]
+  },
+  {
+   "t": 639,
+   "hunter": 7,
+   "target": 2,
+   "d0": 33,
+   "d1": 19,
+   "hiddenFor": 33,
+   "hunterAt": [
+    65,
+    51
+   ],
+   "targetAt": [
+    47,
+    56
+   ]
+  },
+  {
+   "t": 677,
+   "hunter": 2,
+   "target": 6,
+   "d0": 42,
+   "d1": 28,
+   "hiddenFor": 8,
+   "hunterAt": [
+    78,
+    56
+   ],
+   "targetAt": [
+    95,
+    78
+   ]
+  },
+  {
+   "t": 683,
+   "hunter": 8,
+   "target": 1,
+   "d0": 40,
+   "d1": 30,
+   "hiddenFor": 12,
+   "hunterAt": [
+    92,
+    98
+   ],
+   "targetAt": [
+    69,
+    78
+   ]
+  },
+  {
+   "t": 687,
+   "hunter": 9,
+   "target": 1,
+   "d0": 59,
+   "d1": 43,
+   "hiddenFor": 16,
+   "hunterAt": [
+    110,
+    96
+   ],
+   "targetAt": [
+    71,
+    78
+   ]
+  },
+  {
+   "t": 693,
+   "hunter": 3,
+   "target": 6,
+   "d0": 59,
+   "d1": 41,
+   "hiddenFor": 24,
+   "hunterAt": [
+    67,
+    94
+   ],
+   "targetAt": [
+    102,
+    73
+   ]
+  },
+  {
+   "t": 700,
+   "hunter": 2,
+   "target": 7,
+   "d0": 29,
+   "d1": 19,
+   "hiddenFor": 35,
+   "hunterAt": [
+    101,
+    51
+   ],
+   "targetAt": [
+    120,
+    54
+   ]
+  },
+  {
+   "t": 739,
+   "hunter": 4,
+   "target": 8,
+   "d0": 50,
+   "d1": 36,
+   "hiddenFor": 23,
+   "hunterAt": [
+    54,
+    96
+   ],
+   "targetAt": [
+    88,
+    83
+   ]
+  },
+  {
+   "t": 800,
+   "hunter": 7,
+   "target": 1,
+   "d0": 43,
+   "d1": 32,
+   "hiddenFor": 14,
+   "hunterAt": [
+    92,
+    57
+   ],
+   "targetAt": [
+    60,
+    60
+   ]
+  },
+  {
+   "t": 827,
+   "hunter": 8,
+   "target": 1,
+   "d0": 59,
+   "d1": 48,
+   "hiddenFor": 42,
+   "hunterAt": [
+    93,
+    99
+   ],
+   "targetAt": [
+    59,
+    65
+   ]
+  },
+  {
+   "t": 893,
+   "hunter": 5,
+   "target": 1,
+   "d0": 46,
+   "d1": 35,
+   "hiddenFor": 10,
+   "hunterAt": [
+    88,
+    60
+   ],
+   "targetAt": [
+    65,
+    86
+   ]
+  },
+  {
+   "t": 893,
+   "hunter": 6,
+   "target": 1,
+   "d0": 48,
+   "d1": 34,
+   "hiddenFor": 10,
+   "hunterAt": [
+    97,
+    77
+   ],
+   "targetAt": [
+    65,
+    86
+   ]
+  },
+  {
+   "t": 910,
+   "hunter": 2,
+   "target": 7,
+   "d0": 31,
+   "d1": 20,
+   "hiddenFor": 29,
+   "hunterAt": [
+    80,
+    60
+   ],
+   "targetAt": [
+    89,
+    79
+   ]
+  },
+  {
+   "t": 928,
+   "hunter": 9,
+   "target": 2,
+   "d0": 57,
+   "d1": 43,
+   "hiddenFor": 12,
+   "hunterAt": [
+    125,
+    90
+   ],
+   "targetAt": [
+    83,
+    82
+   ]
+  },
+  {
+   "t": 930,
+   "hunter": 9,
+   "target": 1,
+   "d0": 60,
+   "d1": 42,
+   "hiddenFor": 47,
+   "hunterAt": [
+    118,
+    93
+   ],
+   "targetAt": [
+    78,
+    79
+   ]
+  },
+  {
+   "t": 939,
+   "hunter": 7,
+   "target": 1,
+   "d0": 55,
+   "d1": 45,
+   "hiddenFor": 56,
+   "hunterAt": [
+    117,
+    95
+   ],
+   "targetAt": [
+    75,
+    78
+   ]
+  },
+  {
+   "t": 947,
+   "hunter": 8,
+   "target": 1,
+   "d0": 57,
+   "d1": 40,
+   "hiddenFor": 65,
+   "hunterAt": [
+    110,
+    96
+   ],
+   "targetAt": [
+    75,
+    78
+   ]
+  },
+  {
+   "t": 972,
+   "hunter": 8,
+   "target": 2,
+   "d0": 45,
+   "d1": 31,
+   "hiddenFor": 11,
+   "hunterAt": [
+    64,
+    84
+   ],
+   "targetAt": [
+    82,
+    59
+   ]
+  },
+  {
+   "t": 972,
+   "hunter": 8,
+   "target": 3,
+   "d0": 45,
+   "d1": 33,
+   "hiddenFor": 12,
+   "hunterAt": [
+    64,
+    84
+   ],
+   "targetAt": [
+    83,
+    58
+   ]
+  },
+  {
+   "t": 972,
+   "hunter": 8,
+   "target": 4,
+   "d0": 46,
+   "d1": 34,
+   "hiddenFor": 13,
+   "hunterAt": [
+    64,
+    84
+   ],
+   "targetAt": [
+    83,
+    56
+   ]
+  },
+  {
+   "t": 1057,
+   "hunter": 5,
+   "target": 1,
+   "d0": 57,
+   "d1": 42,
+   "hiddenFor": 52,
+   "hunterAt": [
+    84,
+    42
+   ],
+   "targetAt": [
+    55,
+    73
+   ]
+  },
+  {
+   "t": 1057,
+   "hunter": 7,
+   "target": 1,
+   "d0": 57,
+   "d1": 45,
+   "hiddenFor": 52,
+   "hunterAt": [
+    84,
+    38
+   ],
+   "targetAt": [
+    55,
+    73
+   ]
+  },
+  {
+   "t": 1057,
+   "hunter": 8,
+   "target": 1,
+   "d0": 54,
+   "d1": 44,
+   "hiddenFor": 52,
+   "hunterAt": [
+    84,
+    41
+   ],
+   "targetAt": [
+    55,
+    73
+   ]
+  },
+  {
+   "t": 1069,
+   "hunter": 9,
+   "target": 0,
+   "d0": 35,
+   "d1": 24,
+   "hiddenFor": 9,
+   "hunterAt": [
+    87,
+    31
+   ],
+   "targetAt": [
+    99,
+    52
+   ]
+  },
+  {
+   "t": 1192,
+   "hunter": 8,
+   "target": 0,
+   "d0": 60,
+   "d1": 39,
+   "hiddenFor": 7,
+   "hunterAt": [
+    119,
+    52
+   ],
+   "targetAt": [
+    82,
+    63
+   ]
+  },
+  {
+   "t": 1192,
+   "hunter": 9,
+   "target": 0,
+   "d0": 44,
+   "d1": 33,
+   "hiddenFor": 7,
+   "hunterAt": [
+    108,
+    44
+   ],
+   "targetAt": [
+    82,
+    63
+   ]
+  },
+  {
+   "t": 1233,
+   "hunter": 3,
+   "target": 9,
+   "d0": 54,
+   "d1": 44,
+   "hiddenFor": 6,
+   "hunterAt": [
+    86,
+    93
+   ],
+   "targetAt": [
+    71,
+    52
+   ]
+  },
+  {
+   "t": 1235,
+   "hunter": 1,
+   "target": 9,
+   "d0": 38,
+   "d1": 28,
+   "hiddenFor": 9,
+   "hunterAt": [
+    66,
+    25
+   ],
+   "targetAt": [
+    72,
+    52
+   ]
+  },
+  {
+   "t": 1259,
+   "hunter": 6,
+   "target": 1,
+   "d0": 43,
+   "d1": 32,
+   "hiddenFor": 30,
+   "hunterAt": [
+    61,
+    66
+   ],
+   "targetAt": [
+    70,
+    35
+   ]
+  },
+  {
+   "t": 1259,
+   "hunter": 6,
+   "target": 4,
+   "d0": 44,
+   "d1": 34,
+   "hiddenFor": 22,
+   "hunterAt": [
+    61,
+    66
+   ],
+   "targetAt": [
+    71,
+    34
+   ]
+  },
+  {
+   "t": 1259,
+   "hunter": 7,
+   "target": 1,
+   "d0": 42,
+   "d1": 31,
+   "hiddenFor": 30,
+   "hunterAt": [
+    58,
+    63
+   ],
+   "targetAt": [
+    70,
+    35
+   ]
+  },
+  {
+   "t": 1259,
+   "hunter": 7,
+   "target": 4,
+   "d0": 43,
+   "d1": 32,
+   "hiddenFor": 22,
+   "hunterAt": [
+    58,
+    63
+   ],
+   "targetAt": [
+    71,
+    34
+   ]
+  },
+  {
+   "t": 1260,
+   "hunter": 6,
+   "target": 2,
+   "d0": 45,
+   "d1": 35,
+   "hiddenFor": 23,
+   "hunterAt": [
+    60,
+    65
+   ],
+   "targetAt": [
+    73,
+    32
+   ]
+  },
+  {
+   "t": 1260,
+   "hunter": 7,
+   "target": 2,
+   "d0": 45,
+   "d1": 34,
+   "hiddenFor": 23,
+   "hunterAt": [
+    58,
+    62
+   ],
+   "targetAt": [
+    73,
+    32
+   ]
+  },
+  {
+   "t": 1332,
+   "hunter": 1,
+   "target": 8,
+   "d0": 50,
+   "d1": 32,
+   "hiddenFor": 52,
+   "hunterAt": [
+    31,
+    82
+   ],
+   "targetAt": [
+    63,
+    86
+   ]
+  },
+  {
+   "t": 1332,
+   "hunter": 4,
+   "target": 8,
+   "d0": 47,
+   "d1": 31,
+   "hiddenFor": 52,
+   "hunterAt": [
+    32,
+    81
+   ],
+   "targetAt": [
+    63,
+    86
+   ]
+  },
+  {
+   "t": 1340,
+   "hunter": 5,
+   "target": 0,
+   "d0": 35,
+   "d1": 15,
+   "hiddenFor": 6,
+   "hunterAt": [
+    122,
+    58
+   ],
+   "targetAt": [
+    108,
+    65
+   ]
+  },
+  {
+   "t": 1340,
+   "hunter": 7,
+   "target": 0,
+   "d0": 45,
+   "d1": 26,
+   "hiddenFor": 6,
+   "hunterAt": [
+    133,
+    57
+   ],
+   "targetAt": [
+    108,
+    65
+   ]
+  },
+  {
+   "t": 1495,
+   "hunter": 3,
+   "target": 5,
+   "d0": 32,
+   "d1": 13,
+   "hiddenFor": 39,
+   "hunterAt": [
+    22,
+    55
+   ],
+   "targetAt": [
+    36,
+    54
+   ]
+  }
+ ],
+ "structFalls": [
+  {
+   "t": 442,
+   "def": "needle_outer",
+   "team": 0
+  },
+  {
+   "t": 960,
+   "def": "needle_outer",
+   "team": 1
+  },
+  {
+   "t": 966,
+   "def": "needle_outer",
+   "team": 0
+  },
+  {
+   "t": 1002,
+   "def": "needle_inner",
+   "team": 1
+  },
+  {
+   "t": 1134,
+   "def": "needle_outer",
+   "team": 1
+  },
+  {
+   "t": 1194,
+   "def": "needle_inner",
+   "team": 0
+  },
+  {
+   "t": 1231,
+   "def": "needle_outer",
+   "team": 0
+  },
+  {
+   "t": 1248,
+   "def": "needle_outer",
+   "team": 1
+  },
+  {
+   "t": 1248,
+   "def": "needle_inner",
+   "team": 0
+  },
+  {
+   "t": 1273,
+   "def": "lantern",
+   "team": 0
+  },
+  {
+   "t": 1329,
+   "def": "needle_inner",
+   "team": 0
+  },
+  {
+   "t": 1412,
+   "def": "lantern",
+   "team": 0
+  },
+  {
+   "t": 1473,
+   "def": "lantern",
+   "team": 0
+  },
+  {
+   "t": 1474,
+   "def": "needle_bell",
+   "team": 0
+  },
+  {
+   "t": 1490,
+   "def": "needle_bell",
+   "team": 0
+  },
+  {
+   "t": 1517,
+   "def": "hourbell",
+   "team": 0
+  }
+ ],
+ "faults": [],
+ "logs": []
+}

@@ -1,0 +1,97 @@
+{
+  "verifier": "lane AI, independent verifier round 1 (ruling 44 build, commit 3b44a0a56)",
+  "date": "2026-11-16 12:50 CST",
+  "pass": false,
+  "score": 5.5,
+  "safeToShip": false,
+  "blockers": [],
+  "method": {
+    "arms": "Three trees built from 3b44a0a56. head = HEAD. e2c = HEAD with src/sim/bots from e2c4925e5 (round-1 bots). pre = HEAD with src/sim/bots from 0aeac587b (c85476cb6^, pre-lane). Only src/sim/bots differs; the HEAD tactics probe was used in all three. Scratch: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vai44/",
+    "sim": "probe_sim_bot_tactics, fresh seeds 501-564: 64 RIFT games per tier (cut at 30:00) plus 24 FRAY per tier, and 24 BRIDGE per tier. 3 arms x 3 tiers is 1,512 games. Paired per seed, mean +- SE of the paired difference. HEAD full soak (--full --lineup shuffle) on seeds 1-20 and 21-40. Pre-lane soak (RIFT adept + veteran, --lineup shuffle) on seeds 1-20 and 21-40. Full probe suite (run_probes.ts) at HEAD. All heavy runs went through heavy.py.",
+    "live": "Real Chrome on my own frozen vite (port 5331, HEAD tree; catalog from dist-catalog, content equal to HEAD except version.json). Seat 0 is a scripted player that overextends, invades the jungle, dives the carry beside its support, and pushes the middle road into the base. The previous verifier's harness was extended with a per-second core-hit monitor (coreW: every fit own fighter's distance and state while an own structure loses health to fighters). Runs: RIFT veteran s5, RIFT veteran s11, RIFT adept s11 and FRAY veteran s9. Three earlier attempts were lost to infrastructure (frozen-vite TTL, catalog 404, disk full) and re-run.",
+    "files": "_harness/_tmp_vfy_ai_live.mjs, _tmp_vfy_ai_brain.js, _tmp_vfy_ai_brain_r1b.js, _tmp_vfy_ai_pair.py, _tmp_vfy_ai_an_live.py, _tmp_vfy_ai_r44_pair_rf.txt (full paired table), _tmp_vfy_ai_r44_vfy_ai44_*.json (live reports)"
+  },
+  "items": {
+    "1_blocker_core_idle": {
+      "verdict": "FIXED (no blocker)",
+      "facts": [
+        "Live RIFT veteran s5 (the blocker seed), same script: no fit fighter idled beside a hit structure, and every Bell Needle or Lantern siege had defenders at its start (Lantern 1593-1667: 2 at start, 4 at most). The match reached the 28:00 cap with the core standing, so the exact t1365-1398 window did not recur (the timeline diverges under the new bots). In that window the only sieges were on inner Needles, met by 1-4 defenders.",
+        "Sim, fit fighters idle within 25 m of an inner or base structure under fighter attack (s a game), paired n=64. Novice: pre 10.9, e2c 14.8, head 4.0. Adept: pre 6.2, e2c 16.2, head 1.3. Veteran: pre 6.3, e2c 15.8, head 0.8. Head vs pre: -6.9+-1.3 / -4.9+-0.8 / -5.5+-0.7.",
+        "Fit fighters away and not coming while the base is hit (s a game). Novice: pre 32.8, head 11.2. Adept: pre 12.6, head 1.7. Veteran: pre 14.9, head 0.9. All z < -5.",
+        "Live adept s11: the Bell Needle hit at 21:17 by 1 attacker was first met after 11-16 s; defenders came from 28-34 m and were moving in, not idle. The final Hourbell fall came after lost team fights, with no fit defender alive."
+      ]
+    },
+    "2_base_defence_every_tier": {
+      "verdict": "NOT MET",
+      "facts": [
+        "Inner+base falls to Wicks alone beside fit defenders (a game), pre -> head. Novice 0.70 -> 0.73 (not better). Adept 1.06 -> 1.48: inner +0.33+-0.12 (z +2.7), base +0.09+-0.14 (worse). Veteran 0.73 -> 0.84 (+0.11, within noise, not better). Required: better at every tier.",
+        "Unanswered base intrusions (a game), pre -> head. Novice 1.78 -> 1.38 (-0.41+-0.21, z -1.9, within 2 SE). Adept 0.95 -> 0.33 (-0.63+-0.11). Veteran 1.23 -> 0.19 (-1.05+-0.16).",
+        "Siege response, 2-defender base response mean (s), pre -> head. Novice 4.25+-0.41 -> 3.68+-0.33. Adept 2.88+-0.33 -> 1.58+-0.18. Veteran 3.74+-0.42 -> 1.88+-0.25.",
+        "Inner first-answer latency (s), pre -> head. Novice 3.56 -> 7.47, worse (n 44/40, answered episodes only). Adept 6.56 -> 4.63. Veteran 4.73 -> 3.64.",
+        "Inner+base fighter siege with no defender in 16 m (s a game) improved at every tier. Novice: inner 7.9 -> 5.3, base 7.3 -> 0.9. Adept: inner 8.6 -> 5.4, base 7.1 -> 1.1. Veteran: inner 9.7 -> 2.5, base 4.4 -> 0.7.",
+        "Veteran structure falls (a game): inner 3.86 -> 3.06 and base 6.31 -> 4.89 (z -5.0 and -4.8).",
+        "Tier gating, HEAD mirrored soak with lineup shuffle. Veteran beats novice 39/40 (seeds 1-20) and 38/40 (seeds 21-40); bar 85 %. Veteran beats adept 27/40 (67.5 %) and 33/40 (82.5 %); bar 65 %. Both pass. Seeds 1-20 is 2.5 points over the bar."
+      ]
+    },
+    "3_peel": {
+      "verdict": "MET in sim, mixed live",
+      "facts": [
+        "Designated peeler turns on the diver: adept 96.3 % +- 0.3 within 2.5 s (n 3,110); veteran 93.4 % +- 0.5 within 1.5 s (n 2,348). Bar 80 %.",
+        "It lands a blow, hold, heal or shield within 1.5 s at veteran: 59 % (e2c arm, same probe). Turning on the diver is not the same as landing on it.",
+        "Peel no-response, pre -> head (n=64): veteran 25.5 -> 23.0 a game (z -2.1); adept 23.5 -> 26.8 (z +2.7, more dive episodes).",
+        "Live veteran s5 dive at 10:29: the carry fell to 11 % and the diver escaped at 63 %. Live adept s11: the diver died within 1 s."
+      ]
+    },
+    "4_sneak_collapse": {
+      "verdict": "MOSTLY MET",
+      "facts": [
+        "Veteran lone-enemy collapse (2+ within 15 s): 73.6 % +- 1.3 (n 1,097); Dialwood 88.4 %, roads 67.7 %.",
+        "Invaders seen 8 s alone in the Dialwood hit within 20 s: veteran 98.7 % of 76, adept 87.1 % of 31.",
+        "Invader punishes per game, veteran: pre 0.50, e2c 0.34, head 1.17 (z +3.8).",
+        "Live veteran s11: my 8:00 jungle invasion drew 2 enemies (dialcross, then grovehunter) within 15-19 s, and I died. The previous build sent nobody in 70 s.",
+        "Gank approach time visible to the enemy: adept 7.8 %, veteran 9.6 % (bar 15 %).",
+        "Fog honesty: hidden casts 0 of about 560k unseen in every tier and arm. The perception lists are visibleMask-filtered; thinkGuard uses tp.enemyFighters (seen only) and own-structure health.",
+        "Ganks struck from a lurk: 0.22 (adept) and 0.05 (veteran) a game. Nothing new was built for strikes from outside the target's vision."
+      ]
+    },
+    "5_self_preservation": {
+      "verdict": "NOT MET",
+      "facts": [
+        "FRAY under 25 % with a foe within 10 m, still beside one 4 s later: adept 71.6 % (bar 60), veteran 70.9 % (bar 50); FAIL. Low-health stays a game, pre -> head: adept 43.8 -> 50.9 (z +2.7), veteran 43.6 -> 49.4 (z +2.6). Worse than pre-lane.",
+        "Live FRAY veteran s9: of 153 low-health episodes, 99 stayed, 18 retreated and 36 died. The previous build read 98 of 150.",
+        "RIFT low stays a game, pre -> head: adept 27.0 -> 32.5 (z +5.0), novice 36.2 -> 41.4 (z +4.3), veteran 26.4 -> 27.4 (n.s.).",
+        "Full-HP dither (a game): novice 5.50 (bar 3), adept 1.95 (bar 1.5), veteran 3.28 (bar 1); FAIL at all three. Veteran improved from pre 5.22 (z -5.0); novice and adept did not change significantly.",
+        "Objective takes with 1 of ours against 3+ of theirs within 22 m (a game): novice 0.33, adept 0.58 (pre 0.42), veteran 0.27 (pre 0.34). Not zero."
+      ]
+    },
+    "6_pace": {
+      "verdict": "NOT MET",
+      "facts": [
+        "HEAD soak, RIFT adept: p90 32.8 min on seeds 1-20 (FAIL) and 30.1 min on seeds 21-40 (pass); median 25.9 and 26.0.",
+        "Pre-lane bots, same harness: adept p90 27.9 and 26.8; median 23.5 and 22.9.",
+        "Tactics A/B, mean RIFT length (min, cut at 30), pre -> head: novice +2.6+-0.6, adept +3.5+-0.5, veteran +2.0+-0.6.",
+        "Live: both veteran matches (s5, s11) hit the 28:00 cap with no core fallen."
+      ]
+    },
+    "7_gate": {
+      "verdict": "NOT MET",
+      "facts": [
+        "Default probe_sim_bot_tactics (48 RIFT + 24 FRAY a tier) at HEAD in the full suite: FAIL on 6 gates, matching the implementer's count. The runner's truncated tail shows veteran dither 3.06 (bar 1) and veteran FRAY stays 69.6 % (bar 50); the implementer lists the other four as dither novice and adept, FRAY adept, and veteran Wick falls 1.17.",
+        "On fresh seeds 501-564 (64 + 24 a tier): FAIL on 5 gates (dither x3, FRAY stays adept and veteran). Veteran Wick-falls read 0.84 here against 1.17 at the commit's default seeds, so that bar still swings across seed windows."
+      ]
+    }
+  },
+  "probe_suite_head": "70/76 pass. Failing: probe_sim_bot_tactics; probe_sim_bot_soak quick (laners in lane veteran 63.6 %, bar 65 %); probe_sim_click_waves, probe_sim_core_orders, probe_sim_minion_lane_line and probe_sim_waves. The last four are other lanes' movement and Wick probes, not attributed to bots.",
+  "soak_head_full": "Seeds 1-20: 5 enforced FAIL. These are laners in lane (adept 65.9 % / veteran 64.0 %, bar 65 %), adept shadehold takedowns before 14:00 (0.95, bar 1), veteran shaftlight level-6 median (8.0 min), adept pace p90 (32.8 min) and FRAY nurrow placement (3.27). Seeds 21-40: 3 enforced FAIL (laners in lane 65.6 / 63.8 %, BRIDGE median 14.8 min, FRAY nurrow 3.18). Pre-lane bots on the same RIFT harness pass laners in lane (68.4 / 66.6 % and 68.0 / 67.3 %), adept shadehold takedowns (1.60), shaftlight level 6 (7.6 min) and pace. All of these are regressions against pre-lane.",
+  "bridge": "BRIDGE, 24 paired games a tier: no significant change on any measure (all |z| < 1.8).",
+  "problems": [
+    "Item 2 not met: falls to Wicks beside fit defenders are not better than pre-lane at any tier. Adept is worse, 1.06 -> 1.48 a game (inner z +2.7). Novice unanswered intrusions are within noise (z -1.9).",
+    "Item 5 not met: FRAY low-health stays are 71-72 % against bars of 60 / 50 % and worse than pre-lane. Dither fails all three tiers. 1-against-3 objective takes run 0.27-0.58 a game.",
+    "Item 6 not met: RIFT adept p90 is 32.8 min on seeds 1-20. Games run 2-3.5 min longer than with pre-lane bots (pre-lane adept p90 27.9 / 26.8).",
+    "Item 7 not met: the lane's own tactics gate fails 5-6 bars at the commit.",
+    "Laning regressed against pre-lane. Laners in lane fall from 68 % to 64-66 % (soak gate FAIL at both seed sets). Adept shadehold early takedowns 1.60 -> 0.95, and the veteran duo-road level-6 median 7.6 -> 8.0 min.",
+    "Novice inner first-answer latency got worse (3.6 -> 7.5 s, small n).",
+    "Only one RIFT match per configuration was played live, through sim Commands rather than mouse and keyboard. The blocker window is not reproducible frame-for-frame under the new bots, so the core-defence evidence for that seed is the analogous late-game base sieges plus the sim A/B."
+  ],
+  "summary": "The blocker is fixed. A fit fighter idling beside a hit structure dropped from 6-11 s a game (pre-lane) to 0.8-4 s, and fit-and-away while the base is hit dropped from 13-33 s to 1-11 s. Veteran and adept answer base intrusions far better, base falls are down at veteran, peel turn-on rates clear 80 %, and jungle invaders are punished. Fog honesty holds (0 hidden casts) and difficulty separation holds. Against round 1's bots (e2c) HEAD is better on almost every measure. Against the pre-lane bots it is worse on several player-visible measures: Wick falls beside defenders (adept), FRAY low-health stays, laners-in-lane, adept early shadehold takedowns and match length (adept p90 32.8 min, pre-lane 27.9). Of the seven numbered requirements, items 2, 5, 6 and 7 are not met."
+}
