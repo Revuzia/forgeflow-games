@@ -1,0 +1,360 @@
+{
+ "21": {
+  "on": {
+   "failed": [
+    "[bridge] BRIDGE games ending in sudden death: 11/40 (27.5 %)",
+    "[pace] RIFT adept match length p90: 34.0 min (median 25.7)",
+    "[fray] FRAY: every fighter's mean placement, adept + veteran pooled (fighters with \u2265 100 games: 16/16): best nurrow 3.31, worst odrum 7.19; outside: nurrow 3.31"
+   ],
+   "watch": {
+    "shadehold adept": {
+     "value": "1.00",
+     "pass": true
+    },
+    "shadehold veteran": {
+     "value": "1.20",
+     "pass": true
+    },
+    "first ult adept": {
+     "value": "none",
+     "pass": true
+    },
+    "vet beats novice": {
+     "value": "35/40 (87.5 %)",
+     "pass": true
+    },
+    "vet beats adept": {
+     "value": "30/40 (75.0 %)",
+     "pass": true
+    },
+    "BRIDGE median": {
+     "value": "16.6 min",
+     "pass": true
+    },
+    "BRIDGE sudden": {
+     "value": "11/40 (27.5 %)",
+     "pass": false
+    },
+    "RIFT adept p90": {
+     "value": "34.0 min (median 25.7)",
+     "pass": false
+    },
+    "laners in lane": {
+     "value": "adept 67.0 % / veteran 65.2 %",
+     "pass": true
+    }
+   }
+  },
+  "off": {
+   "failed": [
+    "[fray] FRAY: every fighter's mean placement, adept + veteran pooled (fighters with \u2265 100 games: 16/16): best nurrow 3.21, worst sukri 7.30; outside: nurrow 3.21"
+   ],
+   "watch": {
+    "shadehold adept": {
+     "value": "1.65",
+     "pass": true
+    },
+    "shadehold veteran": {
+     "value": "1.65",
+     "pass": true
+    },
+    "first ult adept": {
+     "value": "none",
+     "pass": true
+    },
+    "vet beats novice": {
+     "value": "36/40 (90.0 %)",
+     "pass": true
+    },
+    "vet beats adept": {
+     "value": "27/40 (67.5 %)",
+     "pass": true
+    },
+    "BRIDGE median": {
+     "value": "15.3 min",
+     "pass": true
+    },
+    "BRIDGE sudden": {
+     "value": "4/40 (10.0 %)",
+     "pass": true
+    },
+    "RIFT adept p90": {
+     "value": "27.5 min (median 25.2)",
+     "pass": true
+    },
+    "laners in lane": {
+     "value": "adept 67.1 % / veteran 66.3 %",
+     "pass": true
+    }
+   }
+  }
+ },
+ "41": {
+  "on": {
+   "failed": [
+    "[laning] laners in lane, 1:00\u201314:00: adept 66.4 % / veteran 64.8 %",
+    "[fray] FRAY: every fighter's mean placement, adept + veteran pooled (fighters with \u2265 100 games: 16/16): best nurrow 3.29, worst odrum 7.07; outside: nurrow 3.29"
+   ],
+   "watch": {
+    "shadehold adept": {
+     "value": "1.20",
+     "pass": true
+    },
+    "shadehold veteran": {
+     "value": "1.65",
+     "pass": true
+    },
+    "first ult adept": {
+     "value": "none",
+     "pass": true
+    },
+    "vet beats novice": {
+     "value": "36/40 (90.0 %)",
+     "pass": true
+    },
+    "vet beats adept": {
+     "value": "28/40 (70.0 %)",
+     "pass": true
+    },
+    "BRIDGE median": {
+     "value": "15.8 min",
+     "pass": true
+    },
+    "BRIDGE sudden": {
+     "value": "3/40 (7.5 %)",
+     "pass": true
+    },
+    "RIFT adept p90": {
+     "value": "31.0 min (median 26.2)",
+     "pass": true
+    },
+    "laners in lane": {
+     "value": "adept 66.4 % / veteran 64.8 %",
+     "pass": false
+    }
+   }
+  },
+  "off": {
+   "failed": [
+    "[early] RIFT adept: credited takedowns by 10:00 a game (both teams): 5.90",
+    "[early] RIFT adept: median longest stretch without a fighter death from 3:00: 3.2 min",
+    "[balance] real-seat win rate, 40 decided same-tier RIFT games, lineup shuffle: whole 95 % interval outside 40\u201360 %: hesmi 78.6 %, burdam 17.6 % (rates 17.6 %\u201378.6 %; point outside 40\u201360: hesmi 78.6 %, odrum 67.9 %, ervet 66.7 %, vashil 66.7 %, ardit 61.5 %, ulkro 30.0 %, rishal 27.3 %, burdam 17.6 %; interval wholly inside: 0/16)",
+    "[fray] FRAY: every fighter's mean placement, adept + veteran pooled (fighters with \u2265 100 games: 16/16): best nurrow 3.41, worst sukri 7.16; outside: nurrow 3.41, burdam 3.44"
+   ],
+   "watch": {
+    "shadehold adept": {
+     "value": "1.00",
+     "pass": true
+    },
+    "shadehold veteran": {
+     "value": "1.25",
+     "pass": true
+    },
+    "first ult adept": {
+     "value": "none",
+     "pass": true
+    },
+    "vet beats novice": {
+     "value": "34/40 (85.0 %)",
+     "pass": true
+    },
+    "vet beats adept": {
+     "value": "32/40 (80.0 %)",
+     "pass": true
+    },
+    "BRIDGE median": {
+     "value": "15.5 min",
+     "pass": true
+    },
+    "BRIDGE sudden": {
+     "value": "5/40 (12.5 %)",
+     "pass": true
+    },
+    "RIFT adept p90": {
+     "value": "29.0 min (median 23.8)",
+     "pass": true
+    },
+    "laners in lane": {
+     "value": "adept 66.8 % / veteran 65.4 %",
+     "pass": true
+    }
+   }
+  }
+ },
+ "61": {
+  "on": {
+   "failed": [
+    "[laning] laners in lane, 1:00\u201314:00: adept 67.2 % / veteran 64.9 %"
+   ],
+   "watch": {
+    "shadehold adept": {
+     "value": "1.55",
+     "pass": true
+    },
+    "shadehold veteran": {
+     "value": "1.55",
+     "pass": true
+    },
+    "first ult adept": {
+     "value": "none",
+     "pass": true
+    },
+    "vet beats novice": {
+     "value": "38/40 (95.0 %)",
+     "pass": true
+    },
+    "vet beats adept": {
+     "value": "29/40 (72.5 %)",
+     "pass": true
+    },
+    "BRIDGE median": {
+     "value": "15.4 min",
+     "pass": true
+    },
+    "BRIDGE sudden": {
+     "value": "3/40 (7.5 %)",
+     "pass": true
+    },
+    "RIFT adept p90": {
+     "value": "29.8 min (median 25.7)",
+     "pass": true
+    },
+    "laners in lane": {
+     "value": "adept 67.2 % / veteran 64.9 %",
+     "pass": false
+    }
+   }
+  },
+  "off": {
+   "failed": [],
+   "watch": {
+    "shadehold adept": {
+     "value": "1.25",
+     "pass": true
+    },
+    "shadehold veteran": {
+     "value": "1.15",
+     "pass": true
+    },
+    "first ult adept": {
+     "value": "none",
+     "pass": true
+    },
+    "vet beats novice": {
+     "value": "36/40 (90.0 %)",
+     "pass": true
+    },
+    "vet beats adept": {
+     "value": "33/40 (82.5 %)",
+     "pass": true
+    },
+    "BRIDGE median": {
+     "value": "15.8 min",
+     "pass": true
+    },
+    "BRIDGE sudden": {
+     "value": "3/40 (7.5 %)",
+     "pass": true
+    },
+    "RIFT adept p90": {
+     "value": "29.1 min (median 25.0)",
+     "pass": true
+    },
+    "laners in lane": {
+     "value": "adept 66.4 % / veteran 66.2 %",
+     "pass": true
+    }
+   }
+  }
+ },
+ "81": {
+  "on": {
+   "failed": [
+    "[difficulty] veteran beats novice (mirrored): 33/40 (82.5 %)",
+    "[bridge] BRIDGE median length: 14.5 min",
+    "[balance] real-seat win rate, 40 decided same-tier RIFT games, lineup shuffle: whole 95 % interval outside 40\u201360 %: burdam 20.6 % (rates 20.6 %\u201372.2 %; point outside 40\u201360: ervet 72.2 %, hesmi 71.4 %, odrum 66.7 %, rishal 65.0 %, vashil 28.6 %, ulkro 23.1 %, burdam 20.6 %; interval wholly inside: 0/16)"
+   ],
+   "watch": {
+    "shadehold adept": {
+     "value": "1.20",
+     "pass": true
+    },
+    "shadehold veteran": {
+     "value": "1.05",
+     "pass": true
+    },
+    "first ult adept": {
+     "value": "none",
+     "pass": true
+    },
+    "vet beats novice": {
+     "value": "33/40 (82.5 %)",
+     "pass": false
+    },
+    "vet beats adept": {
+     "value": "34/40 (85.0 %)",
+     "pass": true
+    },
+    "BRIDGE median": {
+     "value": "14.5 min",
+     "pass": false
+    },
+    "BRIDGE sudden": {
+     "value": "5/40 (12.5 %)",
+     "pass": true
+    },
+    "RIFT adept p90": {
+     "value": "31.4 min (median 24.5)",
+     "pass": true
+    },
+    "laners in lane": {
+     "value": "adept 68.3 % / veteran 66.2 %",
+     "pass": true
+    }
+   }
+  },
+  "off": {
+   "failed": [
+    "[early] RIFT veteran: median longest stretch without a fighter death from 3:00: 3.2 min"
+   ],
+   "watch": {
+    "shadehold adept": {
+     "value": "1.10",
+     "pass": true
+    },
+    "shadehold veteran": {
+     "value": "1.35",
+     "pass": true
+    },
+    "first ult adept": {
+     "value": "none",
+     "pass": true
+    },
+    "vet beats novice": {
+     "value": "36/40 (90.0 %)",
+     "pass": true
+    },
+    "vet beats adept": {
+     "value": "30/40 (75.0 %)",
+     "pass": true
+    },
+    "BRIDGE median": {
+     "value": "16.3 min",
+     "pass": true
+    },
+    "BRIDGE sudden": {
+     "value": "6/40 (15.0 %)",
+     "pass": true
+    },
+    "RIFT adept p90": {
+     "value": "31.0 min (median 24.8)",
+     "pass": true
+    },
+    "laners in lane": {
+     "value": "adept 67.4 % / veteran 66.8 %",
+     "pass": true
+    }
+   }
+  }
+ }
+}

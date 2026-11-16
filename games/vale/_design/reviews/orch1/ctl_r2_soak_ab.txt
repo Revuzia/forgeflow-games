@@ -1,0 +1,63 @@
+== seeds 21-40
+  on: 3 enforced gates fail
+      FAIL [bridge] BRIDGE games ending in sudden death: 11/40 (27.5 %)
+      FAIL [pace] RIFT adept match length p90: 34.0 min (median 25.7)
+      FAIL [fray] FRAY: every fighter's mean placement, adept + veteran pooled (fighters with ≥ 100 games: 16/16): best nurrow 3.31, worst odrum 7.19; outside: n
+  off: 1 enforced gates fail
+      FAIL [fray] FRAY: every fighter's mean placement, adept + veteran pooled (fighters with ≥ 100 games: 16/16): best nurrow 3.21, worst sukri 7.30; outside: n
+    shadehold adept    on 1.00                                                           off 1.65
+    shadehold veteran  on 1.20                                                           off 1.65
+    first ult adept    on none                                                           off none
+    vet beats novice   on 35/40 (87.5 %)                                                 off 36/40 (90.0 %)
+    vet beats adept    on 30/40 (75.0 %)                                                 off 27/40 (67.5 %)
+    BRIDGE median      on 16.6 min                                                       off 15.3 min
+    BRIDGE sudden      on 11/40 (27.5 %) FAIL                                            off 4/40 (10.0 %)
+    RIFT adept p90     on 34.0 min (median 25.7) FAIL                                    off 27.5 min (median 25.2)
+    laners in lane     on adept 67.0 % / veteran 65.2 %                                  off adept 67.1 % / veteran 66.3 %
+== seeds 41-60
+  on: 2 enforced gates fail
+      FAIL [laning] laners in lane, 1:00–14:00: adept 66.4 % / veteran 64.8 %
+      FAIL [fray] FRAY: every fighter's mean placement, adept + veteran pooled (fighters with ≥ 100 games: 16/16): best nurrow 3.29, worst odrum 7.07; outside: n
+  off: 4 enforced gates fail
+      FAIL [early] RIFT adept: credited takedowns by 10:00 a game (both teams): 5.90
+      FAIL [early] RIFT adept: median longest stretch without a fighter death from 3:00: 3.2 min
+      FAIL [balance] real-seat win rate, 40 decided same-tier RIFT games, lineup shuffle: whole 95 % interval outside 40–60 %: hesmi 78.6 %, burdam 17.6 % (rates
+      FAIL [fray] FRAY: every fighter's mean placement, adept + veteran pooled (fighters with ≥ 100 games: 16/16): best nurrow 3.41, worst sukri 7.16; outside: n
+    shadehold adept    on 1.20                                                           off 1.00
+    shadehold veteran  on 1.65                                                           off 1.25
+    first ult adept    on none                                                           off none
+    vet beats novice   on 36/40 (90.0 %)                                                 off 34/40 (85.0 %)
+    vet beats adept    on 28/40 (70.0 %)                                                 off 32/40 (80.0 %)
+    BRIDGE median      on 15.8 min                                                       off 15.5 min
+    BRIDGE sudden      on 3/40 (7.5 %)                                                   off 5/40 (12.5 %)
+    RIFT adept p90     on 31.0 min (median 26.2)                                         off 29.0 min (median 23.8)
+    laners in lane     on adept 66.4 % / veteran 64.8 % FAIL                             off adept 66.8 % / veteran 65.4 %
+== seeds 61-80
+  on: 1 enforced gates fail
+      FAIL [laning] laners in lane, 1:00–14:00: adept 67.2 % / veteran 64.9 %
+  off: 0 enforced gates fail
+    shadehold adept    on 1.55                                                           off 1.25
+    shadehold veteran  on 1.55                                                           off 1.15
+    first ult adept    on none                                                           off none
+    vet beats novice   on 38/40 (95.0 %)                                                 off 36/40 (90.0 %)
+    vet beats adept    on 29/40 (72.5 %)                                                 off 33/40 (82.5 %)
+    BRIDGE median      on 15.4 min                                                       off 15.8 min
+    BRIDGE sudden      on 3/40 (7.5 %)                                                   off 3/40 (7.5 %)
+    RIFT adept p90     on 29.8 min (median 25.7)                                         off 29.1 min (median 25.0)
+    laners in lane     on adept 67.2 % / veteran 64.9 % FAIL                             off adept 66.4 % / veteran 66.2 %
+== seeds 81-100
+  on: 3 enforced gates fail
+      FAIL [difficulty] veteran beats novice (mirrored): 33/40 (82.5 %)
+      FAIL [bridge] BRIDGE median length: 14.5 min
+      FAIL [balance] real-seat win rate, 40 decided same-tier RIFT games, lineup shuffle: whole 95 % interval outside 40–60 %: burdam 20.6 % (rates 20.6 %–72.2 %
+  off: 1 enforced gates fail
+      FAIL [early] RIFT veteran: median longest stretch without a fighter death from 3:00: 3.2 min
+    shadehold adept    on 1.20                                                           off 1.10
+    shadehold veteran  on 1.05                                                           off 1.35
+    first ult adept    on none                                                           off none
+    vet beats novice   on 33/40 (82.5 %) FAIL                                            off 36/40 (90.0 %)
+    vet beats adept    on 34/40 (85.0 %)                                                 off 30/40 (75.0 %)
+    BRIDGE median      on 14.5 min FAIL                                                  off 16.3 min
+    BRIDGE sudden      on 5/40 (12.5 %)                                                  off 6/40 (15.0 %)
+    RIFT adept p90     on 31.4 min (median 24.5)                                         off 31.0 min (median 24.8)
+    laners in lane     on adept 68.3 % / veteran 66.2 %                                  off adept 67.4 % / veteran 66.8 %

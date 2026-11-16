@@ -1,0 +1,122 @@
+bot soak r2off2_s81: 160 matches in 298 s
+games 160; bot faults 0
+
+RIFT adept: 20 games
+  length median 24.8 min (mean 25.5, 20.0–33.5); sudden 0
+  Wicks dying ≤ 14:00: 19633 — fighter 8778, minion 8256, structure 2595, monster 4; fighters last-hit 44.7 %
+  solo-laner cs@10 52.4; laners in lane 67.4 % of alive time 1:00–14:00; fighter deaths 705, to Wicks/monsters with no enemy fighter 1.0 %
+   shadehold   cs@10  47.6 cs@14  66.3 lvl@10 9.2 lvl@15 11.4 deaths 3.1 recalls/25m 6.7
+               modes lane 62.3 · return 10.1 · push 6.5 · recall 5.8 · retreat 5.1 · allin 4.5 · trade 4.5 · defend 1.1 · teamfight 0
+   grovehunter cs@10  22.1 cs@14  30.8 lvl@10 8.3 lvl@15 10.6 deaths 3.3 recalls/25m 6.5
+               modes farm 54.9 · roam 13.7 · objective 10.4 · allin 6.3 · recall 5.7 · defend 4.4 · retreat 2.6 · protect 1.1 · teamfight 0.7
+   dialcross   cs@10  57.1 cs@14  83.0 lvl@10 9.1 lvl@15 11.3 deaths 2.7 recalls/25m 8.9
+               modes lane 60.2 · return 11.4 · recall 8.5 · push 5.5 · trade 5 · retreat 4.9 · allin 3.8 · defend 0.7 · teamfight 0
+   shaftlight  cs@10  31.9 cs@14  48.9 lvl@10 6.5 lvl@15 8.4 deaths 4.8 recalls/25m 7.2
+               modes lane 41.6 · return 13.8 · objective 9.4 · allin 7.5 · recall 7 · retreat 5.5 · teamfight 4.7 · trade 4.1 · push 4.1
+   lampglass   cs@10  13.9 cs@14  19.9 lvl@10 6.7 lvl@15 8.4 deaths 3.8 recalls/25m 6.6
+               modes lane 43.5 · return 11.7 · objective 9.6 · allin 8.6 · recall 6.5 · retreat 4.6 · teamfight 4.3 · push 3.8 · trade 3.7
+  fighter deaths by final blow: fighter 577, minion 84, structure 26, monster 10, minion(alone) 6, monster(alone) 1, structure(alone) 1
+  monster-alone deaths: sunsplinter 1
+  Wicks finished by Wicks, nearest other-team fighter (far: beyond 14 m): A:here/lane 16.1 %, shadehold/lane 6.4 %, A:away/return 5.6 %, dialcross/lane 4.4 %, L:reach:cd-none 3.9 %, lampglass/lane 3.2 %, A:here/allin 3.2 %, A:here/trade 2.8 %, L:near 2.8 %, A:away/recall 2.3 %, L:reach:cd-minion-dead 2.3 %, L:reach:idle-o1 2.2 %, A:here/push 2.1 %, far:dialcross/lane 1.9 %, far:grovehunter/farm 1.9 %, shaftlight/lane 1.7 %, A:away/objective 1.6 %, A:here/retreat 1.6 %, L:tower 1.6 %, A:here/recall 1.5 %, A:away/lane 1.3 %, A:dead 1.1 %, shadehold/push 1.1 %, dialcross/trade 1.0 %, shadehold/trade 1.0 %, L:far 0.9 %, shadehold/allin 0.8 %, dialcross/allin 0.8 %, lampglass/allin 0.8 %, far:lampglass/objective 0.7 %, L:reach:cd-minion-alive 0.7 %, L:reach:idle-o0 0.6 %, shaftlight/allin 0.6 %, far:shaftlight/objective 0.6 %, far:shadehold/return 0.6 %, A:here/objective 0.6 %, far:shadehold/lane 0.5 %, shadehold/retreat 0.5 %, far:dialcross/recall 0.5 %, lampglass/trade 0.5 %
+  alone deaths by role/mode/phase: dialcross/retreat/mid 2, shaftlight/retreat/mid 2, grovehunter/objective/lane 1, shaftlight/retreat/lane 1, lampglass/retreat/late 1
+
+RIFT veteran: 20 games
+  length median 23.4 min (mean 24.1, 18.0–30.1); sudden 0
+  Wicks dying ≤ 14:00: 19678 — minion 8223, fighter 8861, structure 2591, monster 3; fighters last-hit 45.0 %
+  solo-laner cs@10 50.3; laners in lane 66.8 % of alive time 1:00–14:00; fighter deaths 545, to Wicks/monsters with no enemy fighter 0.6 %
+   shadehold   cs@10  44.1 cs@14  63.0 lvl@10 9.1 lvl@15 11.4 deaths 2.3 recalls/25m 7.3
+               modes lane 61.9 · return 9.9 · recall 5.9 · retreat 5.6 · push 5 · trade 4.9 · allin 4.5 · defend 2.1 · teamfight 0.1
+   grovehunter cs@10  23.4 cs@14  32.5 lvl@10 8.3 lvl@15 10.8 deaths 2.5 recalls/25m 7.2
+               modes farm 57.1 · roam 16.1 · objective 7.8 · recall 6.2 · allin 5.6 · retreat 2.5 · protect 1.7 · push 1.1 · defend 1
+   dialcross   cs@10  56.5 cs@14  83.8 lvl@10 9.0 lvl@15 11.3 deaths 2.0 recalls/25m 9.3
+               modes lane 58.6 · return 11.4 · recall 8.6 · trade 6.3 · retreat 4.9 · push 4.4 · allin 3.5 · defend 2.2 · teamfight 0
+   shaftlight  cs@10  33.5 cs@14  52.8 lvl@10 6.7 lvl@15 8.6 deaths 4.0 recalls/25m 7.4
+               modes lane 40.9 · return 12.8 · objective 7.6 · allin 7.3 · recall 6.6 · retreat 5.9 · trade 5.8 · teamfight 5.2 · push 4.8
+   lampglass   cs@10  14.6 cs@14  20.3 lvl@10 6.9 lvl@15 8.6 deaths 2.9 recalls/25m 7.8
+               modes lane 42 · return 11 · allin 7.9 · objective 7.8 · recall 6 · trade 4.7 · retreat 4.7 · teamfight 4.5 · push 4.5
+  fighter deaths by final blow: fighter 438, minion 82, structure 15, monster 6, minion(alone) 3, structure(alone) 1
+  Wicks finished by Wicks, nearest other-team fighter (far: beyond 14 m): A:here/lane 15.9 %, shadehold/lane 6.4 %, A:away/return 5.3 %, dialcross/lane 4.4 %, L:reach:cd-none 3.2 %, L:near 3.1 %, A:here/trade 3.1 %, lampglass/lane 3.0 %, A:here/allin 2.8 %, far:grovehunter/farm 2.2 %, L:reach:idle-o1 2.2 %, A:away/recall 2.2 %, L:reach:cd-minion-dead 2.1 %, A:here/push 1.8 %, A:here/recall 1.8 %, A:here/retreat 1.8 %, shaftlight/lane 1.7 %, far:dialcross/lane 1.6 %, L:tower 1.5 %, A:away/objective 1.4 %, L:far 1.3 %, A:dead 1.2 %, A:away/lane 1.2 %, dialcross/trade 1.2 %, shadehold/allin 1.0 %, shadehold/push 0.9 %, shadehold/trade 0.8 %, L:reach:cd-minion-alive 0.8 %, A:away/push 0.8 %, far:shadehold/return 0.7 %, L:reach:idle-o0 0.7 %, far:lampglass/objective 0.7 %, lampglass/trade 0.6 %, A:here/teamfight 0.6 %, dialcross/recall 0.6 %, lampglass/allin 0.6 %, shaftlight/allin 0.6 %, shadehold/recall 0.6 %, dialcross/allin 0.6 %, far:shadehold/lane 0.6 %
+  alone deaths by role/mode/phase: dialcross/retreat/mid 1, shaftlight/retreat/late 1, lampglass/retreat/late 1
+  laning objective (sunsplinter) first take after its spawn: median 1.3 min
+
+early fights RIFT adept (20 games, lineup shuffle): takedowns ≤ 10:00 6.55 a game (none in 0), ≤ 14:00 10.45; first blood median 2.6 min; longest no-death stretch from 3:00 median 2.8 min; shadehold takedowns ≤ 14:00 1.10; level at 8:00 shadehold 8.2 · grovehunter 7.2 · dialcross 8.0 · shaftlight 5.6 · lampglass 5.8
+  first ult median (min) per fighter: lisvel 8.6 · ilsheta 8.6 · ulkro 8.2 · odrum 7.9 · marund 7.6 · sukri 6.8 · ardit 6.5 · ervet 5.3 · vashil 5.1 · kemdo 5.1 · dunsom 5.1 · nurrow 5.1 · burdam 5.0 · rishal 5.0 · tunlan 4.8 · hesmi 4.8
+  laning objective (sunsplinter) first take after its spawn: median 1.3 min
+
+early fights RIFT veteran (20 games, lineup shuffle): takedowns ≤ 10:00 7.55 a game (none in 0), ≤ 14:00 10.15; first blood median 2.4 min; longest no-death stretch from 3:00 median 3.2 min; shadehold takedowns ≤ 14:00 1.35; level at 8:00 shadehold 8.1 · grovehunter 7.2 · dialcross 8.1 · shaftlight 5.7 · lampglass 6.1
+  first ult median (min) per fighter: odrum 8.7 · lisvel 8.0 · ilsheta 7.9 · ulkro 7.6 · sukri 7.5 · marund 7.4 · ardit 6.2 · dunsom 6.0 · burdam 6.0 · kemdo 5.1 · ervet 4.8 · nurrow 4.7 · vashil 4.5 · rishal 4.5 · hesmi 4.3 · tunlan 4.0
+
+micro novice: skillshots hit 50.4 % of 6849 · telegraphs dodged 9.3 % of 4690 (read from the caster's windup 13.7 % of 2165; walkable after the tier's reaction 19.3 % of 57) · deaths after ≥ 1.5 s under the retreat threshold outside retreat 2.3 % of 639 · attacks on the lowest-EHP fighter in reach 83.7 % of 5725 · health at recall start median 32.0 %, under 30 % 47.7 % of 1578 · skillshots by target tier: → veteran 50.4 % of 6849
+vision novice: lamps set 10.3 a game (this tier's seats), games with none 0/40
+
+micro adept: skillshots hit 75.9 % of 19889 · telegraphs dodged 27.3 % of 14691 (read from the caster's windup 25.2 % of 6549; walkable after the tier's reaction 41.5 % of 7411) · deaths after ≥ 1.5 s under the retreat threshold outside retreat 4.1 % of 1333 · attacks on the lowest-EHP fighter in reach 79.4 % of 15262 · health at recall start median 26.0 %, under 30 % 56.6 % of 4126 · skillshots by target tier: → veteran 71.5 % of 9783, → adept 80.1 % of 10106
+vision adept: lamps set 25.1 a game (this tier's seats), games with none 0/60
+
+micro veteran: skillshots hit 80.6 % of 28114 · telegraphs dodged 48.5 % of 19147 (read from the caster's windup 48.4 % of 8668; walkable after the tier's reaction 65.4 % of 11468) · deaths after ≥ 1.5 s under the retreat threshold outside retreat 8.8 % of 1572 · attacks on the lowest-EHP fighter in reach 79.4 % of 19783 · health at recall start median 29.0 %, under 30 % 50.1 % of 6315 · skillshots by target tier: → adept 83.0 % of 9846, → novice 84.8 % of 8690, → veteran 74.2 % of 9578
+vision veteran: lamps set 21.8 a game (this tier's seats), games with none 0/100
+
+items by role at min(25:00, end): finished held · Gleam earned by play · in finished items · unspent · spent on consumables
+   adept dialcross      3.02 ·  9389 ·  6758 ·   489 ·  628
+   adept grovehunter    2.77 ·  8175 ·  6229 ·   387 ·  913
+   adept lampglass      2.33 ·  7053 ·  4565 ·   475 · 1414
+   adept shadehold      2.90 ·  8441 ·  6475 ·   493 ·  491
+   adept shaftlight     2.88 ·  8878 ·  6235 ·   519 ·  642
+   veteran dialcross    2.80 ·  8442 ·  6255 ·   577 ·  618
+   veteran grovehunter  2.50 ·  7565 ·  5593 ·   538 ·  871
+   veteran lampglass    2.05 ·  6488 ·  3973 ·   603 · 1340
+   veteran shadehold    2.63 ·  7692 ·  5853 ·   712 ·  492
+   veteran shaftlight   2.73 ·  8311 ·  5916 ·   719 ·  680
+   games reaching 25:00: 18/40, finished held at 25:00 2.83
+
+items: finished bought lampblack_lens 114, focal_lens 85, shadowpin 78, lampblack_edge 67, lampblack_coat 67, kindly_lamp 57, deepglass_rod 54, almslamp 49, glass_veil 47, hourcleaver 45, quarry_pick 41, splitlight_bow 40, inkglass_rod 39, dialcutter 37, glintmail 36, noonglass 33, warning_bell 32, ironstone_mantle 27, bellrope 26, dawnspur 22, sunstring 21, shelter_lamp 18, resin_maul 17, seatstone 12, hourstring 11, shadecut 6, afterlight 5, needlefall 4, watchbell 4, stillhour 4, callstone 2; never: -
+
+mirror veteran vs novice: veteran wins 36/40; kills per game 15.8 vs 9.1; median length 22.5 min
+
+mirror veteran vs adept: veteran wins 30/40; kills per game 15.4 vs 16.0; median length 24.5 min
+
+BRIDGE: 40 games; length median 16.3 min (10.9–25.8); ended in sudden death 6; cores fallen with chain standing 0; reasons {"core":40}
+
+RIFT pace (full games): adept median 24.8 mean 25.5 p90 31.0 max 33.5 min (n 20, sudden 0) / veteran median 23.4 mean 24.1 p90 29.3 max 30.1 min (n 20, sudden 0)
+
+balance (CL-g4, report; 40 decided same-tier RIFT games, lineup shuffle): odrum 70.8 % [50.8 %–85.1 %] n24 · dunsom 69.2 % [50.0 %–83.5 %] n26 · ervet 66.7 % [43.7 %–83.7 %] n18 · marund 63.6 % [43.0 %–80.3 %] n22 · ardit 57.7 % [38.9 %–74.5 %] n26 · kemdo 53.6 % [35.8 %–70.5 %] n28 · vashil 50.0 % [26.8 %–73.2 %] n14 · burdam 47.1 % [31.5 %–63.3 %] n34 · sukri 46.9 % [30.9 %–63.6 %] n32 · lisvel 43.3 % [27.4 %–60.8 %] n30 · hesmi 42.9 % [26.5 %–60.9 %] n28 · ilsheta 42.3 % [25.5 %–61.1 %] n26 · tunlan 40.0 % [21.9 %–61.3 %] n20 · nurrow 38.5 % [22.4 %–57.5 %] n26 · ulkro 38.5 % [22.4 %–57.5 %] n26 · rishal 35.0 % [18.1 %–56.7 %] n20
+  outside the 45–55 % design band with 95 % confidence: none
+
+kill credit (g1): fighter deaths finished by a Wick, Needle or monster — adept 120 credited to the top-damage enemy fighter, 8 executed (no enemy fighter in the window) / veteran 103 credited to the top-damage enemy fighter, 4 executed (no enemy fighter in the window)
+
+gates:
+  PASS [laning] Wicks dying ≤ 14:00 last-hit by fighters: adept 44.7 % / veteran 45.0 % (target ≥ 42 % (owner_rulings 15))
+  PASS [laning] solo-laner cs at 10:00: adept 52.4 / veteran 50.3 (target ≥ 45)
+  PASS [laning] laners in lane, 1:00–14:00: adept 67.4 % / veteran 66.8 % (target ≥ 65 %)
+  PASS [laning] fighter deaths to Wicks/monsters, no enemy fighter: adept 1.0 % / veteran 0.6 % (target ≤ 5 %)
+  PASS [jungle] jungler level gap to solo laners at 15:00: adept 0.81 / veteran 0.57 (target ≤ 1.5)
+  PASS [jungle] grovehunter deaths per game vs the laner roles' highest: adept 3.3 vs 4.8 / veteran 2.5 vs 4.0 (target ≤)
+  PASS [structures] median first structure (RIFT): adept 9.5 min / veteran 9.4 min (target 9–12 min)
+  PASS [early] RIFT adept: laning objective first taken after its spawn, median: 1.3 min (target ≤ 3 min)
+  PASS [early] RIFT adept: credited takedowns by 10:00 a game (both teams): 6.55 (target ≥ 6)
+  PASS [early] RIFT adept: games with no takedown by 10:00: 0/20 (target ≤ 1 in 20)
+  PASS [early] RIFT adept: median longest stretch without a fighter death from 3:00: 2.8 min (target ≤ 3 min)
+  PASS [early] RIFT adept: shadehold takedowns before 14:00 a game: 1.10 (target ≥ 1)
+  PASS [early] RIFT adept: fighters with a median first ult after 10:00 (≥ 3 games; never = game length): none (target none)
+  PASS [early] RIFT adept: cores fallen before 16:00: 0 (target at most 1 in 100 games, none before 14:00 (owner_rulings 21))
+  PASS [early] RIFT adept: duo road (shaftlight) level 6, median: 7.8 min (target ≤ 8:00)
+  PASS [early] RIFT veteran: laning objective first taken after its spawn, median: 1.3 min (target ≤ 3 min)
+  PASS [early] RIFT veteran: credited takedowns by 10:00 a game (both teams): 7.55 (target ≥ 6)
+  PASS [early] RIFT veteran: games with no takedown by 10:00: 0/20 (target ≤ 1 in 20)
+  FAIL [early] RIFT veteran: median longest stretch without a fighter death from 3:00: 3.2 min (target ≤ 3 min)
+  PASS [early] RIFT veteran: shadehold takedowns before 14:00 a game: 1.35 (target ≥ 1)
+  PASS [early] RIFT veteran: fighters with a median first ult after 10:00 (≥ 3 games; never = game length): none (target none)
+  PASS [early] RIFT veteran: cores fallen before 16:00: 0 (target at most 1 in 100 games, none before 14:00 (owner_rulings 21))
+  PASS [early] RIFT veteran: duo road (shaftlight) level 6, median: 7.7 min (target ≤ 8:00)
+  PASS [micro, report only] skillshot hit rate at adept targets: veteran vs adept shooters: 83.0 % vs 80.1 % (target veteran ≥ adept)
+  PASS [items] finished items held per player at min(25:00, end): 2.66 (target ≥ 2.5)
+  PASS [items] finished items bought at least once: 100.0 % (31/31) (target ≥ 80 %)
+  PASS [items] anti-heal item families: 3 (lampblack_edge, lampblack_coat, lampblack_lens) (target ≥ 1)
+  PASS [items] builds answer the enemy team: players buying an anti-heal piece, ≥ 2 enemy healers vs fewer: 89.1 % of 220 vs 28.9 % of 180 (target more than twice as often)
+  PASS [items] fighters whose first two finished items vary: 100.0 % of 16 (target ≥ 50 %)
+  PASS [difficulty] veteran beats novice (mirrored): 36/40 (90.0 %) (target ≥ 85 %)
+  PASS [difficulty] veteran beats adept (mirrored): 30/40 (75.0 %) (target ≥ 65 %)
+  PASS [bridge] BRIDGE games ending in sudden death: 6/40 (15.0 %) (target ≤ 25 %)
+  PASS [bridge] BRIDGE cores fallen with their chain standing: 0 (target 0)
+  PASS [bridge] BRIDGE median length: 16.3 min (target 15–18 min)
+  PASS [pace] RIFT adept match length p90: 31.0 min (median 24.8) (target ≤ 32 min)
+  PASS [balance, report only] real-seat win rate, 40 decided same-tier RIFT games, lineup shuffle: whole 95 % interval outside 40–60 %: none (rates 35.0 %–70.8 %; point outside 40–60: odrum 70.8 %, dunsom 69.2 %, ervet 66.7 %, marund 63.6 %, nurrow 38.5 %, ulkro 38.5 %, rishal 35.0 %; interval wholly inside: 0/16) (target none (owner_rulings 22))
