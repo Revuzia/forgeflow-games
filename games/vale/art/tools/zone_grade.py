@@ -147,7 +147,81 @@ def zone_mask(sid: str, glb: str, z: dict, size: tuple, tmp: str, i: int) -> str
         from part_lab import srgb_to_lab
         L = srgb_to_lab(glb_image(glb, "_base") / 255.0)[..., 0]
         m &= (L <= z.get("maxL", 101)) & (L >= z.get("minL", -1))
+    # orch1 UNITS2 fix 1 (verify_units2_r1 blocker: Ilsheta's face island is labelled "chimney" in her part map, so the
+    # chimney zone turned the pale mask teal): keepUV [u0, v0, u1, v1] UV rects (0-1, v down as in the albedo) no zone
+    # may touch, whatever its parts or boxes say: faces and masks stay the bake's texels
+    for u0, v0, u1, v1 in z.get("keepUV", []):
+        m[int(v0 * H):int(np.ceil(v1 * H)), int(u0 * W):int(np.ceil(u1 * W))] = False
+    if "slab" in z:              # a ramp's slab (expand_ramps): the zone's texels inside one z slab or one ring
+        ax, a, b = z["slab"]
+        g = geomask([[-9, -9, a, 9, 9, b]], [], "slab") if ax == "z" else \
+            geomask([], [[z["ramp"].get("cx", 0), z["ramp"].get("cy", 0), a, b, -9, 9]], "slab")
+        m &= g
     Image.fromarray((m * 255).astype("uint8")).save(out)
+    return out
+
+
+def _lab_hex(L: float, a: float, b: float) -> str:
+    """CIELAB (D65) -> sRGB hex (clipped)"""
+    fy = (L + 16) / 116
+    fi = lambda t: t ** 3 if t > 6 / 29 else (116 * t - 16) / (24389 / 27)
+    x, y, zz = fi(fy + a / 500) * 0.95047, fi(fy), fi(fy - b / 200) * 1.08883
+    rgb = (3.2406 * x - 1.5372 * y - 0.4986 * zz, -0.9689 * x + 1.8758 * y + 0.0415 * zz, 0.0557 * x - 0.204 * y + 1.057 * zz)
+    g = lambda v: 12.92 * v if v <= 0.0031308 else 1.055 * v ** (1 / 2.4) - 0.055
+    return "#" + "".join(f"{int(round(max(0.0, min(1.0, g(max(0.0, v)))) * 255)):02X}" for v in rgb)
+
+
+def _hex_ab(hexs: str) -> tuple:
+    """the unit CIELAB (a, b) direction of a hex colour (its hue angle)"""
+    from part_lab import srgb_to_lab
+    h = hexs.lstrip("#")
+    lab = srgb_to_lab(np.array([[[int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]]]))[0, 0]
+    n = float(np.hypot(lab[1], lab[2])) or 1.0
+    return lab[1] / n, lab[2] / n
+
+
+def expand_ramps(zones: list, keep_uv: list) -> list:
+    """orch1 UNITS2 fix 1 (verify_units2_r1: hard horizontal two-tone splits on Sukri's hood and Ilsheta's mantle): a zone
+    with "ramp" {"axis": "z" | "r", "from": t0, "to": t1, "n": N, "hex", "L", "C" [, "cx", "cy"]} is graded as a stepped
+    gradient: the zone's own hex / L / C below t0 (inside r0 for "r", rings round (cx, cy)), the ramp's hex / L / C past
+    t1, and N slabs in between, each at the CIELAB (L, a, b) interpolated at its centre (N = 8 slabs of a few cm read as
+    one smooth fade at the game camera and in close views). The recipe's keepUV rects apply to every zone."""
+    out = []
+    for z in zones:
+        z = dict(z)
+        if keep_uv:
+            z["keepUV"] = list(z.get("keepUV", [])) + list(keep_uv)
+        rp = z.get("ramp")
+        if not rp:
+            out.append(z)
+            continue
+        t0, t1, n = float(rp["from"]), float(rp["to"]), int(rp.get("n", 8))
+        a0, b0 = _hex_ab(z["hex"])
+        a1, b1 = _hex_ab(rp.get("hex", z["hex"]))
+        A0 = np.array([z["L"], a0 * z["C"], b0 * z["C"]], float)
+        A1 = np.array([rp.get("L", z["L"]), a1 * rp.get("C", z["C"]), b1 * rp.get("C", z["C"])], float)
+        edges = [t0 + (t1 - t0) * i / n for i in range(n + 1)]
+        lo, hi = min(t0, t1), max(t0, t1)
+        for i in range(n + 2):           # slab 0: beyond t0 (start colour); n + 1: beyond t1 (end colour)
+            if i == 0:
+                a, b = (-9.0, lo) if t1 > t0 else (hi, 9.0)
+                f = 0.0
+            elif i == n + 1:
+                a, b = (hi, 9.0) if t1 > t0 else (-9.0, lo)
+                f = 1.0
+            else:
+                a, b = sorted((edges[i - 1], edges[i]))
+                f = (i - 0.5) / n
+            if rp.get("axis", "z") == "r":
+                a = max(a, 0.0)
+                if b <= a:
+                    continue
+            lab = A0 + (A1 - A0) * f
+            C = float(np.hypot(lab[1], lab[2]))
+            s = {k: v for k, v in z.items() if k not in ("hex", "L", "C", "why")}
+            s.update(slab=[rp.get("axis", "z"), round(a, 4), round(b, 4)], L=round(float(lab[0]), 2), C=round(C, 2),
+                     hex=_lab_hex(60.0, lab[1] / max(C, 1e-6) * 30, lab[2] / max(C, 1e-6) * 30))
+            out.append(s)
     return out
 
 
@@ -170,7 +244,7 @@ def grade(sid: str, glb: str | None = None, dry: bool = False, fresh: float = 0.
     before = os.path.getsize(glb)
     with tempfile.TemporaryDirectory() as tmp:
         tint = []
-        for i, z in enumerate(rec["zones"]):
+        for i, z in enumerate(expand_ramps(rec["zones"], rec.get("keepUV", []))):
             m = zone_mask(sid, glb, z, (W, H), tmp, i)
             tint += ["--part-tint", f"{m}:{z['hex']}:{z['L']}:{z['C']}" + (f":{z['k']}" if "k" in z else "")]
         if dry:

@@ -1,4 +1,4 @@
-// probe (lane SIM, Wicks, ruling 44): marching Wicks walk the drawn lane line, not chords between its vertices.
+// probe (lane SIM, Wicks, ruling 46): marching Wicks walk the drawn lane line, not chords between its vertices.
 // Owner 2026-11-15: "they dont follow the traight path and move slightly under the path and come back around ... at
 // the top lane closer to the 2nd tower". Diagnosis _design/reviews/orch1/wobble_diagnosis.md: followLane aimed at the
 // vertex ~9 m ahead (corner cut 0.5-0.7 m at the 12-20 deg bends by the inner needle), every column aimed at the same
@@ -25,7 +25,7 @@
 //                     overshoots past the line reported; episodes cut short by a new fight are dropped)
 //   B5 timing         idle, waves 1-3: the first tick a Wick of the wave is within rim + 8 m of each of its own towers
 //                     on its road (the march), and the wave's first Wick-on-Wick damage per road (first contact): within ±0.5 s of BASE (the
-//                     values at c20d06630, before ruling 44). --record prints the table instead.
+//                     values at c20d06630, before ruling 46). --record prints the table instead.
 //   B7 lantern        (reported) free Wicks walking a nav detour (e.path) in their first 20 m of arc, no enemy in aggro
 //   B6 determinism    RIFT idle seed 7 twice (3 min): identical x,y trace hash.
 //   node _harness/probe_sim_minion_lane_line.ts [--seeds 3,7,11,19,23,31] [--maps rift,bridge] [--scen idle,bots]
@@ -55,7 +55,7 @@ const built = buildContent(defaultOptions({ check: true, allowMissingAssets: tru
 if (!built.catalog) { console.log('SKIP content build failed'); process.exit(77); }
 const catalog: CatalogT = built.catalog;
 
-// B5 baseline (idle, the 6-seed means at c20d06630, before ruling 44): `map|road|t<team>|w<wave>|<own tower>` the wave
+// B5 baseline (idle, the 6-seed means at c20d06630, before ruling 46): `map|road|t<team>|w<wave>|<own tower>` the wave
 // reaching the tower, `map|road|w<wave>|contact` its first Wick-on-Wick damage (seconds)
 const BASE: Record<string, number> = {
   'bridge|road_span|t0|w1|a_span_needle_inner': 24.67, 'bridge|road_span|t0|w1|a_span_needle_outer': 29.63, 'bridge|road_span|t0|w2|a_span_needle_inner': 49.67,
