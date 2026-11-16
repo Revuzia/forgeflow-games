@@ -1818,3 +1818,58 @@ long press frame-rate independent. Report after 1-2 verified.
 - Connect with the owner's long-standing visual bug "a rippled water sheet lies over the hills at the landing spot, trunks
   showing through" (rounds 2-8): water sheets are being shaded over land. Fixing where water is drawn is both the visual
   fix and a large part of the water cost; the water fragment shader's noise needs the same treatment as the terrain's.
+
+### SESSION 20 — `?tnoise=tex` PROOF, GATE, OPEN ITEMS, NEXT (written 22:25Z; continues the SESSION 20 block above)
+- PROOF (SwiftShader, babel 307987276, high 640x360, speed 0; probe `_harness/arc-work/probe-s20.mjs` = trees / cover /
+  clouds / shadows / post / water OFF in both A and B so the ground itself is compared; sheets A | B | x4 diff by
+  `_harness/arc-work/sheet-s20.py`; all in _harness/scratch/arc/perf/s20/: sheet-a (town, meadow), sheet-b (rake, floor),
+  sheet-c (top-down meadow, peak, desert), sheet-d (far, orbit), sheet-e (rock, sand2), sheet-edits. LOOKED AT: a b c e edits).
+  Every run: 0 page errors, 0 shader / GL messages (only three's KHR_parallel_shader_compile notice).
+  The two noises are different REALISATIONS of the same function, so the pixel diff is NOT at the animation floor and
+  cannot be; what must match is the statistics. detail = std of (image - 9x9 box blur):
+  view     mean|d|  mean RGB base / tex                      detail base / tex
+  town      6.14   102.2 116.7 78.3 / 102.2 116.6 79.1       5.53 / 5.56
+  meadow    9.78   101.7 117.4 68.9 / 102.1 117.2 69.0       4.91 / 4.93    (14 m orbit: near ground)
+  rake      6.31    98.3 116.4 72.3 /  98.3 116.4 72.3       3.69 / 3.79    (sun at 17.9 h: bump)
+  floor     8.01    29.6  22.7 13.8 /  29.5  22.5 13.4       4.60 / 4.54    (forest floor, trees hidden)
+  rock      3.75   216.0 214.0 213.0 / 215.9 214.0 213.0     6.40 / 6.39    (snowy summit, 40 m; settle 24)
+  graze     6.09   102.2 116.0 68.7 / 102.1 116.1 68.9       4.96 / 5.01
+  peak      4.68   103.9 123.8 143.8 / 103.7 123.7 143.8     8.54 / 8.50    (rock + snow, 500 m)
+  desert    6.13   197.2 172.6 142.6 / 197.3 172.7 142.7     3.61 / 3.59    (sand ripples)
+  far       2.70    66.5  85.6 99.3 /  66.5  85.6 99.3       6.71 / 6.69    (2600 m)
+  orbit     0.59     7.7   9.7 12.6 /   7.7   9.7 12.6       7.06 / 7.06
+  sand2    14.11   120.3 111.3 94.0 / 120.0 111.4 94.5       9.80 / 7.54    <- OPEN, see below
+  No texel facets, no grid, no visible repeat in any looked-at crop; ripples, grass strokes, snow grain, strata read
+  the same. (The first `rock` pair differed by a straight-edged blue facet in BASE: an unsettled patch at settle 12;
+  re-run at settle 24 = the row above.)
+- OPEN (not resolved, say so to the owner's eye): the layered-rock coast (`sand2`, coast poi, 120 m; and the 30 m
+  `sand` view of the same place, detail 4.54 / 3.92) has LOWER local contrast with tex: fewer dark ledge lines. Mean
+  colour is equal. Either this spot's realisation of the low-frequency `layered` mask, or systematic for the strata.
+  Not decided: one place, two views. NEXT: 3-4 other cliff / strata places (camera lat / lon along the coast), base vs
+  tex; if systematic, look at rk_joints' warp (3 snoise at 0.55 / sp) and rkLayered first.
+- NOT RUN: `tnoise=tex256` (builds, never booted); the full picture with trees / shadows / water on (only the fast set-up);
+  motion (a pan: does any term swim or pop? it should not, the volume is static in the body frame).
+- EDITS / LAYERS with tnoise=tex (sheet-edits.png, orbit 220 m over the town): paint snow 60 m -> the snow sheet shows
+  at once; crater -> dust + new ground; paint sand, paint lava -> lava glow, fire, burnt rim; +600 ticks -> night, still
+  drawn. 0 errors. (tnoise touches no field, only the noise function, so nothing here can go stale.) Wet ground was
+  not tested on its own.
+- LOCAL SPEED, for what SwiftShader is worth (CPU, not the M5): the same 11 views took 2660 s with base and ~900 s
+  with tex.
+- GATE: `bash _harness/slot.sh npm run check` 1047 pass 0 fail (s20/check1.log); `npm run build` exit 0 (s20/build-prod.log).
+- ROUND ASK: base; `tnoise=tex`; `tnoise=tex256` (look only: compile + repeat); `tshade=nonoise` again as the bound;
+  the five `tshade=nonoise,<block>` pairs listed above. LOOK: near meadow under a low sun (facets?), a cliff coast
+  (strata contrast), far land from ~2 km (rows of repeated blobs?).
+- NEXT, in order (lead's added scope after round 13: terrain surface ~370 ms, WATER ~100 ms (~30 with wshade=all)):
+  1. `?wnoise=tex` — the same macro for the water fragment (ocean.ts): `import { TNOISE_GLSL-like }`; noisetex.ts
+     must then build the volume when EITHER switch is on (make `TNOISE` the terrain flag and add `WNOISE`, both
+     feeding ensureTNoise's `if (!(TNOISE || WNOISE))`), and export the GLSL unconditionally (today it is '' when
+     tnoise is off). CAUTION: water noise is ANIMATED (uTime in the argument): a tiled volume is fine for that, but
+     check where the water uses snoiseGrad / its own gradient for normals: the quadratic interpolant has a continuous
+     gradient, yet a normal taken by finite differences of taps 1 texel apart is smoother than analytic: compare glints.
+  2. WATER OVER LAND (owner since round 2: a rippled sheet over the hills at the landing spot, trunks through it):
+     the terrain varyings already carry waterLevel / groundHeight (vF4.y, vF4.w); find in ocean.ts how a water patch
+     is emitted and whether its fragment has the ground height (fieldtex) — discard where ground > water level +
+     margin, or better do not emit patches whose every vertex is dry. Proof: landing view before / after (babel
+     307987276, 59.7 m, 5.1 km west of Amonshis) with `overdraw=1` and normal.
+  3. `?tcache=1` (design in SESSION 19 PART B) only if round 14 shows tnoise=tex + the non-noise block cuts leave the
+     terrain far above nosurf.
