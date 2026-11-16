@@ -54,7 +54,7 @@ export const MAPS = {
     grade: { exposure: 0.80, ground: 0.6, water: 0.6 }, w10Light: { hemi: 0.6, sun: 1.26, contrast: 1.0 }, w10Indoor: 1.8, w10Grass: 1.7 },   // (W10 R2A: the flattest map - its open ground got the least of the hemisphere cut and the full contrast curve)
   deepwood:  { name: "Deepwood", theme: "forest", sky: "#acc5dc", zenith: "#506e9b", cloud: 0.72, fog: 0.0020, themeColor: "#7fb069", water: true,
     sun: { pos: [-60, 150, -80], color: 0xfff6e6, intensity: 1.95 }, hemi: { sky: 0xd2e7ff, ground: 0x63705a, intensity: 1.35 },
-    grade: { exposure: 1.14, ground: 0.6, water: 0.6 } },
+    grade: { exposure: 1.14, ground: 0.6, water: 0.6 }, w10Grass: 1.15 },   // (fix5: with the curve's toe kept, Deepwood's dark forest blades read less against its ground - a little taller)
 };
 // W10 R2A (visuals 5): the desktop medium+ light balance - hemisphere fill x0.72, sun x1.12 (a map may override with its own `w10Light`) - and the
 // gentle contrast S-curve the output pass lays over it (lcGrade.x; 0 = off = bit-identical). Low and touch keep the W10 R1 numbers exactly.
