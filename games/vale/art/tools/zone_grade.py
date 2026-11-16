@@ -111,8 +111,10 @@ def zone_mask(sid: str, glb: str, z: dict, size: tuple, tmp: str, i: int) -> str
         # orch1 W1-B fix round 2 (verify_w1b_r2 UV-seam lines): the part map misses the outermost texel ring of many
         # islands (texels a triangle covers but the map labels -1), which kept the pre-grade cream at every island
         # edge; unlabelled texels take a labelled neighbour's part (3 rings), the gutter beyond is re-padded later
+        # (tint zones only: a reserveProtect mask (i 99) stays the map's own texels, else the re-padded gutter ring
+        # round a face would join the protected tier and the reserve cap would knee the face itself)
         part = pm["part"].copy()
-        for _ in range(3):
+        for _ in range(3 if i != 99 else 0):
             for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
                 nb = np.roll(part, (dy, dx), axis=(0, 1))
                 hole = (part < 0) & (nb >= 0)

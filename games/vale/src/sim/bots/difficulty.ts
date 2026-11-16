@@ -169,7 +169,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     macroDelay: 2.5, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
     objectiveLead: 30, objectiveEven: 0.55, contests: true, objectiveSense: false,
     defendMatch: 1, recallDefend: 'base', defendHold: 6, peelChance: 0.7, peelBodyBlock: true, peelLaneHp: 0.5, lurkMax: 4, avoidVision: false,
-    flank: false, riskCap: 1.75, burstRetreat: true, splitPush: false, groupFollowFloor: 0.9, visionSetup: true,
+    flank: false, riskCap: 1.5, burstRetreat: true, splitPush: false, groupFollowFloor: 0.9, visionSetup: true,
     longshadeTtk: 45, crossTrade: false, objectiveEvenLate: 0, ccChain: 0.5, threatCc: false, adaptiveBuild: true, thirdParty: 0.6,
   },
   veteran: {
