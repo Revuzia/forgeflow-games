@@ -1530,3 +1530,21 @@ long press frame-rate independent. Report after 1-2 verified.
     `?bufring=0`, `?freshland=0`, `?watershare=0`, `?pagenormal=0`, `?hdrmerge=0`, `?prefetchkeep=0`,
     `?orthodepth=0`, `?pagepool=0`, `?patchworker=0`; `?hide=life` / `?hide=terrain` / `?water=0` / `?decals=0` to
     name the layer.
+- AFTER THE FIX (distB = fix + revz + pagerelease; g-gl.log revz=0, g-gr*.log revz=1; shots gl-*, gr-*, sheet-g*.png):
+  the same cut sequence town -> towndecal -> shore -> town on the log path: NO triangle in any shot (it was in 2 of 2
+  such sequences on distA with revz=0 and in 1 of 1 with revz=1 (er-shore, er-shore-2): not a depth matter).
+  revz=1 vs revz=0 town on distB: 3.78/255 (3.58% px > 16; foliage sway + the lake sheet's edge), hand ring drawn in both.
+- NOT image-proven: decals under revz. The injected decals (probe --views=towndecal) drew in NEITHER mode (the probe's
+  injection, not the renderer: nothing to compare). What stands for them: the only thing revz changes for decals /
+  vfx / rainbow / screenfx is the near-plane ray, tests/render-revz.test.ts (6th test: same ray in both conventions;
+  the old constant un-projects behind the eye when reversed), and their depth input is the linear copy the water,
+  clouds and AO pairs already agree on. Roads: none close enough in these views to judge z-fighting.
+- Seen in BOTH modes and not from this session: the lake by Rubolhin first draws as a rectangular translucent sheet
+  over the grass (a coarse water patch) before the fine patches land (sheet-g.png) — the owner's round-7 item D.
+- GATE: check2.log (after the upsched fix): npm run check 1004 pass, 0 fail, EXIT 0; npm run build exit 0. (check1,
+  before the fix: 1001 pass, 1 fail = tests/arc-determinism, the arc lane's.) The 6th revz test was added after
+  check2: node --test tests/render-revz.test.ts 6/6, tsc clean.
+- NEXT: Mac round 8 on this build: read the two `depth:` header lines; ABAB `?revz=0` vs default, `?pagerelease=0`
+  vs default over 3 loads in one tab (GPU process / tab MB); the triangles should be gone (`?upsched=0` if not).
+  Then step 9 (shcache). Open: a decal image pair under revz (fix the probe's injection or fire a real miracle);
+  roads close-up pair; the tab's JS heap of a bfcache-kept page (app lane: drop the world on pagehide).
