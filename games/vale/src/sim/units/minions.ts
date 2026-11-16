@@ -149,7 +149,7 @@ function spawnWave(w: World, st: WaveState, n: number, at: number): void {
  *  `look` m further along the line (LANE_LOOK, or LANE_REJOIN × its distance off its column line when further out),
  *  offset by its column slot along the left normal of the segment the carrot lies on. Writes carrot; returns false
  *  when the carrot runs past the lane end (the Wick then holds the end itself). Only + − × ÷ √ (deterministic). */
-const carrot = { x: 0, y: 0, lx: 0, ly: 0, sx: 0, sy: 0, ex: 0, ey: 0 };
+const carrot = { x: 0, y: 0, lx: 0, ly: 0, sx: 0, sy: 0, ssx: 0, ssy: 0, ex: 0, ey: 0 };
 function laneCarrot(e: Entity, m: MinionState): boolean {
   const p = m.path, last = p.length - 1;
   // the segment it last reached and the one before it (a Wick pulled back past a vertex measures its way back from where
@@ -172,6 +172,8 @@ function laneCarrot(e: Entity, m: MinionState): boolean {
   // … and the line LANE_SCOUT m further on (the end at most): what stands on the line is seen that far out
   const end = !along(p, at.k, at.t, LANE_SCOUT);
   carrot.sx = end ? p[p.length - 1][0] : at.x; carrot.sy = end ? p[p.length - 1][1] : at.y;
+  // its own column's line that far out: a lantern beside the road that reaches into the column is seen coming
+  carrot.ssx = end ? carrot.sx : at.x + at.nx * m.slot; carrot.ssy = end ? carrot.sy : at.y + at.ny * m.slot;
   // the way round is planned to the end of that segment (one route, as straight as the vertex allows)
   carrot.ex = end ? carrot.sx : p[at.k][0]; carrot.ey = end ? carrot.sy : p[at.k][1];
   return true;
@@ -212,11 +214,16 @@ function followLane(w: World, e: Entity, m: MinionState): void {
     if (!w.nav.lineOfWalk(carrot.lx, carrot.ly, carrot.sx, carrot.sy, r)) {
       tx = carrot.ex; ty = carrot.ey;
       if (walking && m.lastWpX === tx && m.lastWpY === ty) return;
-    } else if (!w.nav.lineOfWalk(e.x, e.y, tx, ty, r)) {
+    } else {
       // where the road narrows (a lantern or needle beside it) the column squeezes onto the line itself: a slot the
-      // walker cannot walk straight to would send it round on a nav detour
-      if (m.slot !== 0 && w.nav.lineOfWalk(e.x, e.y, carrot.lx, carrot.ly, r)) { tx = carrot.lx; ty = carrot.ly; }
-      else if (detour) return;
+      // walker cannot walk straight to would send it round on a nav detour; a slot line blocked LANE_SCOUT m ahead
+      // squeezes it in before it gets there (the outer column brushed a lantern's disc and stepped round it)
+      const direct = w.nav.lineOfWalk(e.x, e.y, tx, ty, r);
+      const narrows = m.slot !== 0 && !w.nav.lineOfWalk(tx, ty, carrot.ssx, carrot.ssy, r);
+      if (!direct || narrows) {
+        if (m.slot !== 0 && w.nav.lineOfWalk(e.x, e.y, carrot.lx, carrot.ly, r)) { tx = carrot.lx; ty = carrot.ly; }
+        else if (!direct && detour) return;
+      }
     }
     m.lastWpX = tx; m.lastWpY = ty;
     issueMove(w, e, tx, ty, true);

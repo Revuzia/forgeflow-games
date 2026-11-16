@@ -115,7 +115,7 @@ function PlayerCell(p: { p: PlayerView }): JSX.Element {
         {down ? <span class="hscore__resp num" title={cv.t('hud.dead.respawn', 'Back in {t}', { t: `${Math.ceil(p.p.respawnIn)} s` })}>{Math.ceil(p.p.respawnIn)}</span> : null}
       </span>
       <span class="hscore__names">
-        <span class="t-body-s">{p.p.player === model.you ? `${p.p.name}` : p.p.name}</span>
+        <span class="t-body-s hscore__nm">{p.p.name}{p.p.player === model.you ? <span class="chip chip--line hscore__you">{cv.t('common.you', 'You')}</span> : null}</span>
         <span class="t-caption muted">{f?.name}{role ? ` · ${role.name}` : ''}</span>
       </span>
     </td>
@@ -171,6 +171,7 @@ function FrayRow(p: { p: PlayerView; place: number }): JSX.Element {
 }
 
 // ── death recap ──────────────────────────────────────────────────────────────────────────────────
+const RECAP_ROWS = 3;
 interface Source { key: string; name: string; def: string; total: number; byType: Record<'phys' | 'magic' | 'true', number>; abilities: Map<string, number>; last: number }
 
 export function DeathRecap(): JSX.Element | null {
@@ -180,6 +181,7 @@ export function DeathRecap(): JSX.Element | null {
   // r12 B4: the open recap re-renders when its countdown's whole second changes, not every sim tick
   useViewKey(() => { const r = model.recap.peek(); return r && r.open ? Math.ceil(model.me?.respawnIn ?? 0) : -1; });
   const sources = useMemo(() => (rc ? groupLog(rc.log) : []), [rc]);
+  const [all, setAll] = useState(false);       // W2-E CUX-4: the top 3 sources by default, the rest behind '+N more'
   if (!rc || !rc.open) return null;
   const me = model.me;
   const deathAt = rc.log.length ? rc.log[rc.log.length - 1].t : 0;
@@ -203,9 +205,10 @@ export function DeathRecap(): JSX.Element | null {
       </header>
       {sources.length ? (
         <>
+          <div class="recap__list">
           <p class="t-caption muted">{cv.t('recap.window', 'Damage taken in the last 15 s')}</p>
           <ol class="recap__rows">
-            {sources.map((s) => {
+            {(all ? sources : sources.slice(0, RECAP_ROWS)).map((s) => {
               const f = cv.fighter(s.def);
               const abil = [...new Set([...s.abilities.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([id]) => (id ? sourceName(cv, index, id) : cv.t('recap.basic', 'Basic attack'))))];
               return (
@@ -222,10 +225,12 @@ export function DeathRecap(): JSX.Element | null {
               );
             })}
           </ol>
+          {sources.length > RECAP_ROWS ? <button type="button" class="hbtn hbtn--s recap__more" onClick={() => setAll(!all)}>{all ? cv.t('recap.fewer', 'Show fewer') : cv.t('recap.more', '+{n} more', { n: sources.length - RECAP_ROWS })}</button> : null}
+          </div>
           <footer class="recap__foot">
             <span class="t-label num">{cv.t('recap.total', 'Total {n}', { n: fmtInt(total) })}</span>
             <span class="recap__types">
-              {(['phys', 'magic', 'true'] as const).map((t) => types[t] > 0 ? <span class={`dchip dchip--${t} num t-caption`} title={cv.t(`dmg.${t}_tip`, '')}>{cv.t(`dmg.${t}`, t)} {fmtInt(types[t])}</span> : null)}
+              {(['phys', 'magic', 'true'] as const).map((t) => types[t] > 0 ? <span class={`dchip dchip--${t} num t-caption`} title={cv.t(`dmg.${t}_tip`, '')}><span>{cv.t(`dmg.${t}`, t)}</span><b>{fmtInt(types[t])}</b></span> : null)}
             </span>
             {rc.held >= 0.1 ? <p class="t-body-s recap__held num">{cv.t('recap.held', 'Held for {t} of the last 15 s.', { t: `${rc.held.toFixed(1)} s` })}</p> : null}
             {tipKey ? <p class="t-body-s recap__tip">{cv.t(tipKey, '')}{span <= 2 ? ` ${cv.t('recap.tip.burst', 'It all landed inside {t}.', { t: `${Math.max(0.1, span).toFixed(1)} s` })}` : ''}</p> : null}

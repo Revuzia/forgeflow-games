@@ -77,6 +77,20 @@ const SCAN = () => {
       out.push({ kind: clippedByAnc ? 'outside-scroll-ancestor' : 'outside-viewport', el: label(el), text: txt(el), rect: [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)], vw, vh });
     }
   }
+  // W2-E CUX-4: positioned plates (fixed / absolute boxes of 40 px or more) that run past the viewport, and a recap over the Dial Bar.
+  // World-layer marks (.hudworld) and full-bleed backdrops are not plates.
+  for (const el of document.querySelectorAll('body *')) {
+    if (out.length >= 120) break;
+    const cs = getComputedStyle(el);
+    if (cs.position !== 'fixed' && cs.position !== 'absolute') continue;
+    if (['CANVAS', 'SVG', 'svg', 'IMG', 'PATH'].includes(el.tagName) || el.closest('.hudworld,.is-leaving,[inert]')) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 40 || r.height < 40 || !visibleIn(el)) continue;
+    if (r.width >= vw - 2 && r.height >= vh - 2) continue;
+    if (r.right > vw + 1 || r.bottom > vh + 1 || r.left < -1 || r.top < -1) out.push({ kind: 'outside-viewport-plate', el: label(el), text: txt(el).slice(0, 40), rect: [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)], vw, vh });
+  }
+  { const rc = document.querySelector('.recap'), db = document.querySelector('.dbar');
+    if (rc && db) { const a = rc.getBoundingClientRect(), b = db.getBoundingClientRect(); if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1) out.push({ kind: 'recap-over-dialbar', el: 'section.recap', rect: [Math.round(a.left), Math.round(a.top), Math.round(a.right), Math.round(a.bottom)], dialbar: [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)] }); } }
   const de = document.documentElement;
   return { findings: out, minFont: minFont === 999 ? null : { px: minFont, el: minFontEl }, textNodes: nText, docScroll: { w: de.scrollWidth, h: de.scrollHeight, vw, vh } };
 };
