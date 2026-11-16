@@ -1,0 +1,43 @@
+{
+ "lane": "UNITS2",
+ "round": 2,
+ "verifier": "independent, adversarial colour and sensitivity",
+ "date": "2026-11-16",
+ "pass": false,
+ "score": 5.0,
+ "safeToShip": false,
+ "summary": "Fix round 1 made no change to any shipped lane file. The implementer stopped on purpose, citing the owner's acceptance of the W1-B pass at 7.3 (owner note in owner_rulings.md, commit e5dba838d). HEAD still ships the UNITS2 round-1 fighter GLBs. Verifier r1 failed those GLBs, and they still carry the Ilsheta teal-face blocker. units_gate was re-run on HEAD: FAIL with 7 fails, the same set as r1.",
+ "blockers": [
+  "Ilsheta's face is still solid teal. art/out/fighters at HEAD is git tree 30cfd8004, byte-identical to e1633b630, the tree verify_units2_r1 failed. That verifier found the face texels changed on 96.7 % of the forward-facing mask (mean |dRGB| 118). The face reads as blank and no longer matches the portrait or splash. The lane did not fix it.",
+  "units_gate does not pass outright. It FAILs with 7 fails over seeds 7/11/23 x 3 seatings (the Done-when bar)."
+ ],
+ "problems": [
+  "No lane commit in fix round 1. The version is not bumped, npm run content was not run, and there is no perf_1080 run.",
+  "art/tools/zone_grades.json and art/tools/zone_grade.py at HEAD no longer match the shipped GLBs. The wip syncs 5efc67c14 and 4d358b58b (12:46 and 13:06) committed the implementer's in-progress fix-1 recipe: keepUV on Ilsheta's mask, 8-step z ramps on Sukri's hood and Ilsheta's mantle, and expand_ramps / _lab_hex in zone_grade.py. The implementer says it 'restored zone_grades.json to HEAD', but HEAD already holds those edits (+163 / -89 lines against 2205b70cb). The GLBs were never regraded with them. A later zone_grade re-apply after a rebuild would ship an unverified recipe.",
+  "The owner accepted the W1-B pass (72cd0f20e) at 7.3. HEAD ships the UNITS2 round-1 GLBs for 11 fighters instead: ardit, burdam, hesmi, ilsheta, kemdo, marund, nurrow, rishal, sukri, tunlan and vashil. The lead must decide whether to restore those GLBs and zone_grades.json to 72cd0f20e or to apply the Ilsheta keepUV face fix. The verifier did not edit either, because the role does not allow it."
+ ],
+ "gate": {
+  "command": "VALE_URL=http://localhost:5297 (own vite, stopped after) heavy.py run -- node _harness/units_gate.mjs --seeds 7,11,23 --seatings 3 --tag vfy_units2_r2",
+  "result": "FAIL",
+  "fails": 7,
+  "seconds": 479,
+  "runErrors": "1 of 18 runs timed out (seed 7 seating 0 half 0); no fighter capture fail, so every fighter was seen",
+  "failList": [
+   "P1 near-neutral ardit-hesmi dE 18.3 (r1 18.7)",
+   "P1 near-neutral hesmi-rishal dE 15.9",
+   "P1 near-neutral nurrow-rishal dE 20.0 (19.96 in r1)",
+   "P3 hesmi top25 L* 69.7 (band 70-85)",
+   "P4 crown break nurrow dL 0.7",
+   "P4 crown break rishal dL 3.5",
+   "P4 crown break sukri dL 5.8"
+  ],
+  "known": "Vashil-Dunsom dE min 27.2 (passes); Ardit helm HSV 189.7 is not in the ally band",
+  "output": "_design/reviews/orch1/evidence/units/vfy_units2_r2.json"
+ },
+ "unchangedFromR1": "Fighter GLBs are byte-identical to r1 (same git tree), so the r1 measures still hold: every GLB is at most 1162 KiB, ruling 32 harm is at most 6.96 %, triangle counts are unchanged, and the look renders in _harness/_tmp_vfy_units2_ab/ are unchanged. No new renders were needed to see that the Ilsheta blocker stands.",
+ "evidence": [
+  "git rev-parse e1633b630:games/vale/art/out/fighters == HEAD:games/vale/art/out/fighters == 30cfd80040c15f48d83d9bc65a0dee49c3c082f4",
+  "git diff --stat 2205b70cb HEAD -- lane files: only art/tools/zone_grade.py and art/tools/zone_grades.json changed (wip sync), no GLB",
+  "_harness/_tmp_vfy_units2_ab/ab_ilsheta.jpg, ilsheta_face_albedo_base_vs_head.png (r1)"
+ ]
+}
