@@ -1281,10 +1281,13 @@ export function generate(parcel, opts) {
         const k = a < b ? a + "|" + b : b + "|" + a;
         if (cand.has(k)) nb.push(b);
       }
-      if (home && a === root) nb.sort((x, y) => (R[y].kind === "kitchen" ? 1 : 0) - (R[x].kind === "kitchen" ? 1 : 0) || x - y);     // (the front room's doorway: to the kitchen first - its dining set may stand here)
+      if (home && a === root) nb.sort((x, y) => (R[y].kind === "kitchen" ? 1 : 0) - (R[x].kind === "kitchen" ? 1 : 0) || x - y);
+      // (W10 R1A pass 5: a small hall a stair lands in - a nook kept as the landing - opens into its BIGGEST neighbour: the chain then ends in the smaller room, which
+      // can take the house's bath)
+      if (home && LANDING_HALL && a === root && R[root].kind === "hall" && !R[root].hall) nb.sort((x, y) => R[y].cells.length - R[x].cells.length || x - y);     // (the front room's doorway: to the kitchen first - its dining set may stand here)
       for (const b of nb) {
         if (seen[b]) continue;
-        if (home && a === root && rootDeg >= (R[root].cells.length <= 5 ? 1 : 2) && !R[root].hall && !(LANDING_HALL && R[root].kind === "hall")) { if (!held.some((h) => h[1] === b)) held.push([a, b]); continue; }
+        if (home && a === root && rootDeg >= (R[root].cells.length <= 5 ? 1 : 2) && !R[root].hall) { if (!held.some((h) => h[1] === b)) held.push([a, b]); continue; }
         if (home && a !== root && R[a].cells.length <= 5 && (deg[a] || 0) >= 1 && !R[a].hall) { if (!held.some((h) => h[1] === b)) held.push([a, b]); continue; }
         if (a === root) rootDeg++;
         deg[a] = (deg[a] || 0) + 1;
@@ -1964,10 +1967,11 @@ export function generate(parcel, opts) {
     const zoneOf = (g, Z) => (g.along === "u" ? [g.o0 - 0.1, g.line - Z, g.o1 + 0.1, g.line + Z] : [g.line - Z, g.o0 - 0.1, g.line + Z, g.o1 + 0.1]);
     const order = doors.map((d, k) => [d, k]).filter(([d]) => doorSide.has(d));
     order.sort((a, b) => (a[0].kind === "interior" ? 1 : 0) - (b[0].kind === "interior" ? 1 : 0) || a[1] - b[1]);
-    // (W10 R1A pass 5) a home's hall doorways (an entry / landing hall, an inner hall) are open (no leaves): a room is read from its hall door, and two open leaves 1.13 m into a 5 m wide room hid half of it
+    // (W10 R1A pass 5) a home's hall doorways are open (no leaves): a room is read from its hall door, and two open leaves 1.13 m into a 5 m wide room hid half of it
     // (housegen_demo_looks view-lived-cover: 0.17-0.18 with them, 0.25-0.33 without). Every other interior door keeps the hash rule (a door is leafed only
     // when its hash is under LEAF_SHARE - the selftest's leaves row)
-    const hallDoor = (d) => home && LANDING_HALL && d.kind === "interior" && [d.a, d.b].some((ri) => ri != null && floors[d.floor].regs[ri] && (floors[d.floor].regs[ri].landingHall || floors[d.floor].regs[ri].kind === "hall"));
+    const hallDoor = (d) => home && LANDING_HALL && d.kind === "interior" && ([d.a, d.b].some((ri) => ri != null && floors[d.floor].regs[ri] && floors[d.floor].regs[ri].landingHall) ||
+      [d.a, d.b].map((ri) => ri != null && floors[d.floor].regs[ri] ? floors[d.floor].regs[ri].kind : null).sort().join("|") === "kitchen|living");     // (and the kitchen's doorway to the living room: an open kitchen-diner passage)
     for (const [d, k] of order) {
       if (hallDoor(d) || (d.kind === "interior" && leafHash(P.id + ".d" + k) >= LEAF_SHARE)) continue;
       const g = doorGeo(d), side = doorSide.get(d), f = d.floor, sf = s[f], face = g.line + side * JAMB;
