@@ -18,6 +18,8 @@
 // ambient is the sky's SH irradiance + sky-LUT reflections — so sunsets redden the ground, the night side is dark,
 // and every planet in a system view is lit from its own side.
 
+import { ZPRE } from '../overdraw.ts';
+import { shadeCut } from '../shaders/shadecut.ts';
 import {
   Matrix3, Matrix4, MeshStandardMaterial, ShaderMaterial, Vector2, Vector3, Vector4, Color, type IUniform, type Texture,
 } from 'three';
@@ -56,12 +58,24 @@ export function paletteFor(kind: string): Palette {
   }
 }
 
+/**
+ * PERF s19 bisection `?tshade=` (shaders/shadecut.ts: nonoise novor fbm1 noshadow all) plus the terrain's own cuts:
+ *   nojoints  no rock joint blocks (rk_joints)     noveg    no grass / shrub / canopy / crop layers
+ *   nolayers  no snow sand ash lava wet ice burnt road fire layers       nofloor  no forest floor (groundfloor.ts)
+ *   nobump    no bump / micro normal               nocloudsh  no cloud shadow lookup
+ *   nolight   no sun / moon / sky lighting block   nosurf   a constant surface (lighting cost only)
+ *   albedo    the unlit albedo (surface cost only; lighting is dead code)
+ */
+export const TSHADE = shadeCut('tshade');
+const TS_DEFS = ['nojoints', 'noveg', 'nolayers', 'nofloor', 'nobump', 'nocloudsh', 'nolight', 'nosurf', 'albedo'].filter((k) => TSHADE.has(k)).map((k) => `#define TS_${k.toUpperCase()}`).join('\n');
 const TERRAIN_FRAG_PARS = /* glsl */ `
 ${NOISE_GLSL}
 ${ATMO_PARS}
 ${SKY_LOOKUP}
 ${CLOUD_DENSITY_GLSL}
 ${SHADOW_GLSL}
+${TS_DEFS}
+${TSHADE.glsl}
 varying vec3 vBodyPos;
 varying vec3 vBodyN;
 varying vec4 vF0;  // snow sand soil ash
@@ -130,6 +144,9 @@ float cloudShadowAt(vec3 P, vec3 sunB) {
   return max(exp(-dens * thick * 0.7), 0.3 * (1.0 - 0.65 * overcastAt(q)));
 }
 
+#ifdef TS_NOCLOUDSH
+#define cloudShadowAt(a, b) 1.0
+#endif
 // perturb a view-space normal by the screen-space gradient of a height field (metres)
 vec3 bumpNormal(vec3 surfPos, vec3 n, float h) {
   vec3 sx = dFdx(surfPos);
@@ -160,6 +177,9 @@ vec3 rk_joints(vec3 P, vec3 up, vec3 Nb, float sp, float fw, float tiltK, float 
   // two steep joint sets in fixed body-frame directions (~73° apart), and the BEDDING as level courses: its coordinate
   // is the height itself with a gentle regional dip, so beds run along the contours everywhere on the sphere (ledges
   // on a cliff, not stripes)
+#ifdef TS_NOJOINTS
+  g = vec3(0.0); return vec3(0.5, 0.5, 0.5);
+#endif
   const vec3 J1 = vec3(0.788, 0.0, 0.616);
   const vec3 J2 = vec3(-0.35, 0.21, 0.913);
   const vec3 DIP = vec3(0.37, -0.55, 0.75);
@@ -295,6 +315,12 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   float grass = vF2.x, shrub = vF2.y, tree = vF2.z, crop = vF2.w;
   float temp = vF3.x, moist = vF3.y, road = vF3.z, fire = vF3.w;
   float hG = vF4.w;
+#ifdef TS_NOVEG
+  grass = 0.0; shrub = 0.0; tree = 0.0; crop = 0.0;
+#endif
+#ifdef TS_NOLAYERS
+  snow = 0.0; sand = 0.0; ash = 0.0; lava = 0.0; wetF = 0.0; ice = 0.0; burnt = 0.0; road = 0.0; fire = 0.0;
+#endif
   float uw = vF4.y - hG;   // water above this ground point (m), negative on land
   // airless follows the actual air (a barren world the player breathed on grows soil and lichen), the palette the kind
   bool airless = uHasAtmo < 0.5;
@@ -776,7 +802,11 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       float reliefAA = aaF(fw * 2.5, 1.0 / scale);
       vb = mix(vb, crownH * 1.6 * reliefAA + leaf * 0.15, tw * (1.0 - inst));
       vao *= mix(1.0, mix(0.62, 1.0, crown), tw * reliefAA * (1.0 - inst));
+#ifdef TS_NOFLOOR
+      if (false) {
+#else
       if (inst > 0.0) {
+#endif
         // the forest floor (groundfloor.ts): litter / duff, twigs, roots, stones, moss, canopy sky occlusion — wherever
         // the instanced trees really shade the ground (ff_canopy), not only where the cell's tree field is high
         float shadeK = ff_canopy(P, up, Nb, dot(up, uSunDirBody)) * smoothstep(0.01, 0.05, tree);
@@ -1584,11 +1614,16 @@ ${GROUND_VERT_MAIN}
 
 const FRAG_SURFACE = /* glsl */ `
   float tFw = length(fwidth(vBodyPos));
+#ifdef TS_NOSURF
+  TSurf ts; ts.albedo = vec3(0.3, 0.34, 0.2); ts.rough = 0.85; ts.bump = 0.0; ts.ao = 1.0; ts.emis = vec3(0.0); ts.glint = 0.0; ts.microG = vec3(0.0); ts.sky = 1.0; ts.sward = 0.0;
+#else
   TSurf ts = evalTerrain(vBodyPos, normalize(vBodyN), tFw, length(vViewPosition));
+#endif
   diffuseColor.rgb = ts.albedo;
 `;
 
 const FRAG_LIGHT = /* glsl */ `
+#ifndef TS_NOLIGHT
   {
     vec3 Pb = vBodyPos;
     float rP = length(Pb);
@@ -1678,9 +1713,11 @@ const FRAG_LIGHT = /* glsl */ `
       RE_Direct(moonL, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight);
     }
   }
+#endif
 `;
 
 const FRAG_AMBIENT = /* glsl */ `
+#ifndef TS_NOLIGHT
   {
     vec3 upB = normalize(vBodyPos);
     mat3 viewToBody = transpose(uBodyToView);
@@ -1731,6 +1768,7 @@ const FRAG_AMBIENT = /* glsl */ `
     // (three applies the environment BRDF — Fresnel and roughness — to this radiance itself)
     radiance += skyRadiance(upB, rB, uSunDirBody) * specOcc * horizonK * (1.0 - uwAK);
   }
+#endif
 `;
 
 const FRAG_EMISSIVE = /* glsl */ `
@@ -1854,17 +1892,44 @@ export function makeTerrainMaterial(shared: Record<string, IUniform>, level: num
       .replace('#include <clipping_planes_pars_vertex>', `#include <clipping_planes_pars_vertex>\n${VERT_PARS}`)
       .replace('#include <beginnormal_vertex>', VERT_MAIN)
       .replace('#include <begin_vertex>', 'vec3 transformed = tPos;');
+    if (ZPRE) shader.vertexShader = shader.vertexShader.replace('void main() {', ZPRE_INVARIANT);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <clipping_planes_pars_fragment>', `#include <clipping_planes_pars_fragment>\nuniform float uRadius;\n${TERRAIN_FRAG_PARS}`)
       .replace('#include <map_fragment>', FRAG_SURFACE)
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = ts.rough;')
       .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = 0.0;')
-      .replace('#include <normal_fragment_maps>', 'if (uDebug < 2.5 || uDebug > 3.5) { normal = bumpNormal(-vViewPosition, normal, ts.bump); normal = normalize(normal - uBodyToView * ts.microG); }')
+      .replace('#include <normal_fragment_maps>', TSHADE.has('nobump') ? '' : 'if (uDebug < 2.5 || uDebug > 3.5) { normal = bumpNormal(-vViewPosition, normal, ts.bump); normal = normalize(normal - uBodyToView * ts.microG); }')
       .replace('#include <emissivemap_fragment>', FRAG_EMISSIVE)
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${FRAG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${FRAG_AMBIENT}`);
+    if (TSHADE.has('albedo')) shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', 'outgoingLight = ts.albedo * 0.6;\n#include <opaque_fragment>');
   };
-  mat.customProgramCacheKey = () => 'genesis-terrain-v3';
+  mat.customProgramCacheKey = () => `genesis-terrain-v3${TSHADE.key}${ZPRE ? '-zpre' : ''}`;
+  return mat;
+}
+
+/** (zpre) both programs must compute the same position and log depth to the bit: `invariant` on both outputs */
+const ZPRE_INVARIANT = 'invariant gl_Position;\n#ifdef USE_LOGARITHMIC_DEPTH_BUFFER\ninvariant vFragDepth;\n#endif\nvoid main() {';
+const ZPRE_FRAG = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_fragment>
+void main() {
+#include <logdepthbuf_fragment>
+  gl_FragColor = vec4(0.0);
+}
+`;
+/**
+ * PERF s19 `?zpre=1`: the terrain's depth-only twin for the colour pass's prepass — the SAME vertex shader as the
+ * terrain material (not the shadow caster's, which lowers the ground), an empty fragment shader, no colour writes.
+ */
+export function makeTerrainZpreMaterial(shared: Record<string, IUniform>, terrain: MeshStandardMaterial): MeshStandardMaterial {
+  const mat = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, metalness: 0, colorWrite: false });
+  mat.userData.uMorph = terrain.userData.uMorph;
+  mat.onBeforeCompile = (shader, r) => {
+    terrain.onBeforeCompile(shader, r);
+    shader.fragmentShader = ZPRE_FRAG;
+  };
+  mat.customProgramCacheKey = () => 'genesis-terrain-zpre';
   return mat;
 }
 

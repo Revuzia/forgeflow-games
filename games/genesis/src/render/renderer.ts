@@ -17,6 +17,7 @@ import { depthClamp, enableConservativeDepth, enableOrthoDepth, ZCONS } from './
 import { CAM_FAR, CAM_NEAR, REVZ, chooseDepthMode, confirmDepthMode, frustumFromProjection } from './shaders/revz.ts';
 import type { WorldView, PlanetView } from '../client/worldview.ts';
 import { PlanetVisual } from './planet/planetview.ts';
+import { OVERDRAW, ZPRE, ZPRE_LAYER, overdrawPatch } from './overdraw.ts';
 import { syncPlanetVisuals } from './planet/planetsync.ts';
 import { SunShadows } from './planet/lights.ts';
 import { makeWaterSceneUniforms } from './planet/ocean.ts';
@@ -202,6 +203,8 @@ export class Renderer {
   private readonly camQInv = new Quaternion();
   private readonly photoSettings: PostSettings = { bloom: 0, godRays: true, fxaa: true, grain: 0, vignette: 0, flare: 1, exposureBias: 0, manualExposure: 0 };
   readonly planets = new Map<number, PlanetVisual>();
+  /** PERF s19 `?zpre=1`: the probe's in-page A/B (false = skip the prepass this frame) */
+  zpreOn = true;
   readonly waterScene: Record<string, IUniform> = makeWaterSceneUniforms();
   readonly settings: PostSettings = { bloom: 0.045, godRays: true, fxaa: true, grain: 0.02, vignette: 0.22, flare: 1, exposureBias: 0, manualExposure: 0 };
   readonly stats: RenderStats = {
@@ -601,7 +604,17 @@ export class Renderer {
         if (SW_HIDE.has('terrain')) for (const m of hv.terrainMats) m.visible = false;
       }
       if (SW_FLAT) this.scene.overrideMaterial = _flatMat ??= new MeshBasicMaterial({ color: 0x7a7a72 });
+      if (OVERDRAW) overdrawPatch(this.scene);
+      // (PERF s19 `?zpre=1`: the terrain's depth first, with its depth-only twin; then the colour pass as it is)
+      const zpre = ZPRE && this.zpreOn && !SW_FLAT && !OVERDRAW && primaryVis && !SW_HIDE.has('terrain') ? primaryVis : null;
+      if (zpre) {
+        zpre.swapZpre(true); cam.layers.set(ZPRE_LAYER);
+        r.render(this.scene, cam);
+        cam.layers.set(0); zpre.swapZpre(false);
+        r.autoClear = false;
+      }
       r.render(this.scene, cam);
+      r.autoClear = true;
       this.scene.overrideMaterial = null;
       if (hv && was) {
         hv.vegetation.group.visible = was[0]; hv.groundCover.group.visible = was[1]; hv.life.group.visible = was[2];

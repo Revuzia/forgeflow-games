@@ -18,6 +18,9 @@
 // Lighting matches the vegetation / terrain: this planet's sun through the transmittance LUT, cascaded and cloud
 // shadows, sky irradiance and sky reflections (windows mirror the sky by day), plus three's point lights (fires).
 
+import { shadeCut } from '../shaders/shadecut.ts';
+/** PERF s19 bisection `?bshade=` (shaders/shadecut.ts): nonoise novor fbm1 noshadow all */
+const BSHADE = shadeCut('bshade');
 import { BackSide, DoubleSide, FrontSide, MeshStandardMaterial, ShaderMaterial, type IUniform } from 'three';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
@@ -165,6 +168,7 @@ ${ATMO_PARS}
 ${SKY_LOOKUP}
 ${CLOUD_DENSITY_GLSL}
 ${SHADOW_GLSL}
+${BSHADE.glsl}
 uniform mat3 uBodyToView;
 uniform vec3 uSunDirBody;
 uniform vec3 uSunDirView;
@@ -750,7 +754,7 @@ export function makeBuildingMaterial(shared: Record<string, IUniform>, doubleSid
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${FRAG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${FRAG_AMBIENT}`);
   };
-  mat.customProgramCacheKey = () => 'genesis-building-v7';
+  mat.customProgramCacheKey = () => 'genesis-building-v7' + BSHADE.key;
   return mat;
 }
 

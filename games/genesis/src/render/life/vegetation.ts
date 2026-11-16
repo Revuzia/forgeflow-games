@@ -21,6 +21,9 @@
 //     Per tree: snow on the branches, fire char (a past fire's scar or the fire burning there now), leaf fall of
 //     deciduous species from late autumn to spring. Trees cast shadows.
 
+import { shadeCut } from '../shaders/shadecut.ts';
+/** PERF s19 bisection `?vshade=` (shaders/shadecut.ts): nonoise novor fbm1 noshadow all */
+const VSHADE = shadeCut('vshade');
 import { uploadPrefix } from '../upload.ts';
 import { ringify, ringMark, ringOf } from '../bufring.ts';
 import { FREEZE } from '../freeze.ts';
@@ -359,6 +362,7 @@ ${ATMO_PARS}
 ${SKY_LOOKUP}
 ${CLOUD_DENSITY_GLSL}
 ${SHADOW_GLSL}
+${VSHADE.glsl}
 uniform mat3 uBodyToView;
 uniform vec3 uSunDirBody;
 uniform vec3 uSunDirView;
@@ -612,7 +616,7 @@ ${LEAF_ALPHA}
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${VEG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${VEG_AMBIENT}`);
   };
-  mat.customProgramCacheKey = () => (far?.layer ? 'genesis-veg-v13-far' : 'genesis-veg-v12');
+  mat.customProgramCacheKey = () => (far?.layer ? 'genesis-veg-v13-far' : 'genesis-veg-v12') + VSHADE.key;
   return mat;
 }
 

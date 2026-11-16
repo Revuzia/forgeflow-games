@@ -25,6 +25,9 @@
 //   * Geometry: a thin sheet leaning on a slope is a shore triangle's interpolated level, not water: discarded. Between
 //     two wet basins at different levels the level steps under the rim instead of tilting a pane between them.
 
+import { shadeCut } from '../shaders/shadecut.ts';
+/** PERF s19 bisection `?wshade=` (shaders/shadecut.ts): nonoise novor fbm1 noshadow all */
+const WSHADE = shadeCut('wshade');
 import { Matrix4, ShaderMaterial, Vector2, Vector4, type IUniform } from 'three';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
@@ -172,6 +175,7 @@ ${ATMO_PARS}
 ${SKY_LOOKUP}
 ${CLOUD_DENSITY_GLSL}
 ${SHADOW_GLSL}
+${WSHADE.glsl}
 ${WAVES_GLSL}
 #include <logdepthbuf_pars_fragment>
 uniform mat3 uBodyToView;

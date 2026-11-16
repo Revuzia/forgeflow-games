@@ -20,6 +20,7 @@
 // Detail relief: detailNoise (src/sim/grid/noise.ts) with Noise3(planet seed) — the function the CPU ground uses —
 // baked per vertex, band-limited per level so coarse patches do not alias, at full strength from ~1 m spacing down.
 
+import { ZPRE, ZPRE_LAYER } from '../overdraw.ts';
 import {
   BatchedMesh, BufferAttribute, BufferGeometry, Float32BufferAttribute, Uint16BufferAttribute, Sphere, Vector3, Frustum, type Mesh, type Group,
   type Material, type Matrix4,
@@ -975,6 +976,7 @@ export class ChunkLOD {
       b = new PatchBatch(water ? this.mats.water(level) : this.mats.terrain(level), water ? 2 : 0, `${water ? 'water' : 'terrain'}-L${level}`, this.group, this.pagePool,
         !water && WATER_SHARE ? this.mats.water(level) : null);
       if (!water && this.castShadows) b.setLayer(1, true);
+      if (!water && ZPRE) b.setLayer(ZPRE_LAYER, true);
       list[level] = b;
     }
     return b;

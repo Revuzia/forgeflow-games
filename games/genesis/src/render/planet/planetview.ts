@@ -12,7 +12,8 @@ import type { SunShadows } from './lights.ts';
 import { FieldTextures } from './fieldtex.ts';
 import { ChunkLOD } from './chunks.ts';
 import { DirFieldCube } from './dirtex.ts';
-import { kindCode, makePlanetUniforms, makeTerrainDepthMaterial, makeTerrainMaterial, paletteFor, type PlanetShaderUniforms } from './terrainmat.ts';
+import { kindCode, makePlanetUniforms, makeTerrainDepthMaterial, makeTerrainMaterial, makeTerrainZpreMaterial, paletteFor, type PlanetShaderUniforms } from './terrainmat.ts';
+import { ZPRE } from '../overdraw.ts';
 import { makeOceanMaterial } from './ocean.ts';
 import { FAR_PX, PX_PER_RAD, Vegetation } from '../life/vegetation.ts';
 import { GroundCover } from '../life/groundcover.ts';
@@ -75,6 +76,8 @@ export class PlanetVisual {
   readonly atmo = new AtmosphereModel();
   readonly uniforms: PlanetShaderUniforms;
   readonly terrainMats: MeshStandardMaterial[] = [];
+  /** PERF s19 `?zpre=1`: per level, the terrain material's depth-only twin (same vertex shader) */
+  private zpreMats: MeshStandardMaterial[] = [];
   readonly depthMats: ShaderMaterial[] = [];
   readonly waterMats: ShaderMaterial[] = [];
   cloudCube: DirFieldCube | null = null;
@@ -149,6 +152,7 @@ export class PlanetVisual {
       const m = makeTerrainMaterial(shared, L);
       this.terrainMats.push(m);
       this.depthMats.push(makeTerrainDepthMaterial(shared, m));
+      if (ZPRE) this.zpreMats.push(makeTerrainZpreMaterial(shared, m));
       this.waterMats.push(makeOceanMaterial(shared, m.userData.uMorph as IUniform, deps.waterScene));
     }
     return this.terrainMats[level];
@@ -287,7 +291,16 @@ export class PlanetVisual {
     }
   }
 
+  /** PERF s19 `?zpre=1`: swap the terrain to / from its depth-only twins (the prepass) */
+  swapZpre(on: boolean): void {
+    for (const p of this.lod.selected) {
+      if (!p.mesh) continue;
+      p.mesh.material = on ? this.zpreMats[p.level] : this.terrainMats[p.level];
+    }
+  }
+
   dispose(): void {
+    for (const m of this.zpreMats) m.dispose();
     this.lod.dispose();
     this.vegetation.dispose();
     this.groundCover.dispose();
