@@ -1,0 +1,13 @@
+import path from "node:path";
+import { pathToFileURL, fileURLToPath } from "node:url";
+const [map, seed, hid] = process.argv.slice(2);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const { makeEnv } = await import(pathToFileURL(path.join(HERE, "..", "world_env.mjs")).href);
+const E = await makeEnv({ root: path.resolve(HERE, "..", "..") });
+const { buildMap } = await E.importMaps();
+const M = await buildMap(E.makeW(+seed), map);
+const H = M.houses.find((h) => h.id === hid);
+console.log(H.W, H.D, H.storeys, H.theme, JSON.stringify(H.parcel || null).slice(0, 300));
+for (const r of H.rooms) console.log(r.id, r.kind, r.area, r.floor, JSON.stringify(r.cells || []).slice(0, 120));
+for (const d of H.doors) console.log(d.id, d.kind, d.floor, (d.rooms || []).join("|"));
+process.exit(0);
